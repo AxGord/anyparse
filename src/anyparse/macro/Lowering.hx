@@ -239,11 +239,36 @@ class Lowering {
 			// `emitStarFieldSteps`. Emitting them here too would produce
 			// duplicate `expectLit` calls, so we skip struct-level lead/trail
 			// emission whenever the field is a Star.
+			//
+			// For an @:optional field, the lead literal is parsed via
+			// `matchLit` as part of the peek-conditional block, not as a
+			// preceding unconditional `expectLit` — the peek IS the commit
+			// point. So the lead emission is also skipped for optional
+			// fields, and the peek + conditional sub-rule call are emitted
+			// together inside the field-value switch below.
 			final kwLead:Null<String> = readMetaString(child, ':kw');
 			final leadText:Null<String> = readMetaString(child, ':lead');
 			final trailText:Null<String> = readMetaString(child, ':trail');
 			final isStar:Bool = child.kind == Star;
-			if (!isStar) {
+			final isOptional:Bool = child.annotations.get('base.optional') == true;
+			if (isOptional && child.kind != Ref) {
+				Context.fatalError(
+					'Lowering: @:optional is only supported on Ref-shaped struct fields (field "$fieldName")',
+					Context.currentPos()
+				);
+			}
+			if (isOptional && trailText != null) {
+				// A trail on an optional field would have to live inside
+				// the peek branch — the current session only supports
+				// lead-only optional fields. Reject explicitly rather than
+				// silently drop the trail; defer until a real grammar
+				// needs it.
+				Context.fatalError(
+					'Lowering: @:optional combined with @:trail is deferred (field "$fieldName")',
+					Context.currentPos()
+				);
+			}
+			if (!isStar && !isOptional) {
 				if (kwLead != null) {
 					parseSteps.push(macro skipWs(ctx));
 					parseSteps.push(macro expectKw(ctx, $v{kwLead}));
@@ -256,6 +281,43 @@ class Lowering {
 			final localName:String = '_f_$fieldName';
 			parseSteps.push(macro skipWs(ctx));
 			switch child.kind {
+				case Ref if (isOptional):
+					if (kwLead != null) {
+						Context.fatalError(
+							'Lowering: @:optional combined with @:kw is deferred — field "$fieldName"',
+							Context.currentPos()
+						);
+					}
+					if (leadText == null) {
+						Context.fatalError(
+							'Lowering: @:optional struct field "$fieldName" requires @:lead',
+							Context.currentPos()
+						);
+					}
+					final refName:String = child.annotations.get('base.ref');
+					final subCall:Expr = {
+						expr: ECall(macro $i{'parse${simpleName(refName)}'}, [macro ctx]),
+						pos: Context.currentPos(),
+					};
+					final fieldCT:ComplexType = child.annotations.get('base.fieldType');
+					// skipWs was already pushed above; `matchLit` sees a
+					// whitespace-trimmed cursor. On hit, consume the lead and
+					// parse the sub-rule; on miss, leave the cursor alone and
+					// store null. No backtracking over the sub-rule body —
+					// the lead literal is the commit point (see D24).
+					final valueExpr:Expr = macro if (matchLit(ctx, $v{leadText})) {
+						skipWs(ctx);
+						$subCall;
+					} else null;
+					parseSteps.push({
+						expr: EVars([{
+							name: localName,
+							type: fieldCT,
+							expr: valueExpr,
+							isFinal: true,
+						}]),
+						pos: Context.currentPos(),
+					});
 				case Ref:
 					final refName:String = child.annotations.get('base.ref');
 					final callExpr:Expr = {
@@ -278,7 +340,10 @@ class Lowering {
 			}
 			// Per-field trail. Skipped for Star fields — `emitStarFieldSteps`
 			// already emitted the close literal as part of the loop wrappers.
-			if (!isStar && trailText != null) {
+			// Also skipped for optional fields — a trail on an optional
+			// should live inside the peek branch, which is not supported in
+			// this session (the grammar has no such case yet).
+			if (!isStar && !isOptional && trailText != null) {
 				parseSteps.push(macro skipWs(ctx));
 				parseSteps.push(macro expectLit(ctx, $v{trailText}));
 			}
@@ -406,6 +471,24 @@ class Lowering {
 		final raw:Bool = hasMeta(node, ':rawString');
 		final decodeExpr:Expr = switch underlying {
 			case 'Float': macro Std.parseFloat(_matched);
+			case 'Int':
+				// `Std.parseInt` returns `Null<Int>` — in strict null
+				// safety the implicit coercion to `Int` is disallowed.
+				// The regex gate above already guarantees `_matched` is
+				// all digits, so the null branch is truly unreachable,
+				// but we still guard it explicitly rather than force an
+				// unsafe cast. Abstracts with `from Int` (e.g.
+				// `HxIntLit`) unify with the narrowed `Int` value.
+				macro {
+					final _v:Null<Int> = Std.parseInt(_matched);
+					if (_v == null) {
+						throw new anyparse.runtime.ParseError(
+							new anyparse.runtime.Span(ctx.pos, ctx.pos),
+							'invalid int literal'
+						);
+					}
+					_v;
+				};
 			case 'String' if (raw): macro _matched;
 			case 'String': macro decodeJsonString(_matched);
 			case _:

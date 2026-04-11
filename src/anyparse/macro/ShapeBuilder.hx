@@ -6,6 +6,8 @@ import haxe.macro.Expr;
 import haxe.macro.Type;
 import anyparse.core.ShapeTree;
 
+using Lambda;
+
 /**
  * Pass 1 of the macro pipeline — shape analysis. Turns a
  * `haxe.macro.Type` into a map of top-level rule name → `ShapeNode`.
@@ -148,10 +150,45 @@ class ShapeBuilder {
 		child.annotations.set('base.fieldName', fieldName);
 		child.annotations.set('base.fieldType', Context.toComplexType(t));
 		if (meta != null) child.annotations.set('base.meta', meta);
+		// Optionality must be documented on both axes so a reader of the
+		// grammar source spots it without cross-referencing — `@:optional`
+		// on the field AND `Null<T>` on the type. `shapeFieldType` marks
+		// the child node when it unwraps a `Null<T>` wrapper; this check
+		// enforces bidirectional agreement.
+		final hasOptMeta:Bool = meta != null && meta.exists(e -> e.name == ':optional');
+		final hasOptShape:Bool = child.annotations.get('base.optional') == true;
+		if (hasOptShape && !hasOptMeta) {
+			Context.fatalError(
+				'ShapeBuilder: field "$fieldName" has type Null<T> but is missing @:optional meta',
+				Context.currentPos()
+			);
+		}
+		if (hasOptMeta && !hasOptShape) {
+			Context.fatalError(
+				'ShapeBuilder: field "$fieldName" has @:optional but type is not Null<T>',
+				Context.currentPos()
+			);
+		}
 		return child;
 	}
 
 	private function shapeFieldType(t:Type):ShapeNode {
+		// Null<T> → unwrap + optional marker. `Null<T>` appears as
+		// `TAbstract(Null, [inner])` in macro types; unwrap it here so
+		// the rest of `shapeFieldType` sees the inner type normally.
+		// The optionality is surfaced via a `base.optional=true`
+		// annotation on the resulting node, paired with the
+		// `@:optional` meta check in `shapeField`.
+		switch t {
+			case TAbstract(ref, params):
+				final a:AbstractType = ref.get();
+				if (a.pack.length == 0 && a.name == 'Null' && params.length == 1) {
+					final inner:ShapeNode = shapeFieldType(params[0]);
+					inner.annotations.set('base.optional', true);
+					return inner;
+				}
+			case _:
+		}
 		// Array<T> → Star
 		switch t {
 			case TInst(ref, params):

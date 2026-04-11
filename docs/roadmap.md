@@ -101,6 +101,22 @@ Sessions should align with phase boundaries — start a new Claude Code session 
 - Grammar package `src/anyparse/grammar/haxe/`: `HaxeFormat` (TextFormat stub, known debt pending `LanguageFormat` interface), `HxIdentLit` (identifier terminal with `@:rawString`), `HxTypeRef`, `HxVarDecl`, `HxFnDecl`, `HxClassMember`, `HxClassDecl` (root typedef), `HaxeFastParser` marker class.
 - `test/unit/HaxeFirstSliceTest.hx` — 10 tests covering empty/single/multi/mixed members, irregular whitespace, word-boundary rejection of `classy`, and other rejection cases. 621 tests green on neko/js/interp.
 
+**Phase 3 multi-decl slice — what landed (2026-04-11, after skeleton)**:
+- `anyparse.grammar.haxe.HxDecl` — single-branch enum (ClassDecl) for top-level declarations; future typedef/enum/abstract/interface branches hang off it.
+- `anyparse.grammar.haxe.HxModule` — module root typedef wrapping `Array<HxDecl>` with no wrappers; drives the EOF-terminated Star loop variant in `Lowering.emitStarFieldSteps`.
+- `anyparse.grammar.haxe.HaxeModuleFastParser` — second marker class alongside `HaxeFastParser`, validating that the pattern scales to multiple grammar roots in a single package.
+- `Lowering.emitStarFieldSteps` — three termination modes now coexist: close-peek (trail only), sep-peek with empty-list precheck (trail + sep), and EOF (no trail). `@:sep` without `@:trail` is rejected at compile time.
+- `test/unit/HaxeModuleSliceTest.hx` — 10 tests covering empty/single/multi/mixed modules, whitespace variance, and trailing-garbage / incomplete-last-decl rejections. 650 tests green.
+
+**Phase 3 expression-atom slice — what landed (2026-04-11, after multi-decl)**:
+- `anyparse.grammar.haxe.HxIntLit` — positive-integer terminal (`@:re('[0-9]+')`), Int underlying.
+- `anyparse.grammar.haxe.HxExpr` — atom enum with four constructors in source order: `IntLit(HxIntLit)`, `@:lit('true','false') BoolLit(Bool)`, `@:lit('null') NullLit`, `IdentExpr(HxIdentLit)`. Operators, calls, field access, FloatLit, and StringLit are deferred.
+- `ShapeBuilder.shapeFieldType` — unwraps `Null<T>` on typedef fields into a `base.optional=true` annotation on the inner node; `shapeField` enforces bidirectional `@:optional` ↔ `Null<T>` consistency via `Context.fatalError`.
+- `Lowering.lowerStruct` — new `case Ref if (isOptional):` branch emits a `matchLit` peek + conditional `parseX(ctx)` call, wrapping the result in `final _f_x:Null<T> = if (matchLit(...)) { skipWs; parseX(ctx); } else null;`. Per-field lead and trail emission skipped for optional fields; `@:optional @:kw` and `@:optional @:trail` rejected at compile time as deferred.
+- `Lowering.lowerTerminal` — decoder switch gained an `Int` row via `Std.parseInt` with an explicit null guard. Third entry alongside `Float` and `String`; meets D20's exit trigger for the closed decoder table.
+- `anyparse.grammar.haxe.HxVarDecl` — third field `@:optional @:lead('=') var init:Null<HxExpr>;` wires expression atoms into the class-member grammar.
+- `test/unit/HxExprSliceTest.hx` — 12 tests covering absent init, each atom type, whitespace around `=`, empty-init rejection, missing-semicolon rejection, mixed class members, and multi-decl through the module root. 691 assertions green on neko/js/interp.
+
 **Non-deliverables for the skeleton slice**:
 - Expressions, operators, Pratt strategy.
 - Function parameters, function bodies with statements.
