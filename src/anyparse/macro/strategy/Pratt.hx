@@ -31,9 +31,11 @@ import anyparse.core.Strategy;
  *    through the existing Cases 1–4 of `lowerEnumBranch`.
  *  - `parseXxx(ctx, ?minPrec = 0)` — the precedence-climbing loop
  *    that calls `parseXxxAtom` for the left operand, then tries each
- *    Pratt operator in declaration order (longest-first is the
- *    grammar author's responsibility — when two operators share a
- *    prefix, list the longer one first).
+ *    Pratt operator in a longest-first dispatch chain. `Lowering`
+ *    sorts the operator branches by literal length descending before
+ *    emitting the chain, so `<=` is attempted before `<` regardless
+ *    of how the grammar author orders the branches — declaration
+ *    order is a readability choice, not a correctness constraint.
  *
  * Scope of the Phase 3 Pratt slice:
  *  - Binary infix only. No prefix, postfix, calls, field access,

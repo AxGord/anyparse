@@ -3,6 +3,7 @@ import unit.HaxeFirstSliceTest;
 import unit.HaxeModuleSliceTest;
 import unit.HxExprSliceTest;
 import unit.HxPrattSliceTest;
+import unit.HxPrattOpsTest;
 import unit.JsonParserTest;
 import unit.JsonMacroParserTest;
 import unit.JsonWriterTest;
@@ -29,6 +30,7 @@ class RunTests {
 		runner.addCase(new HaxeModuleSliceTest());
 		runner.addCase(new HxExprSliceTest());
 		runner.addCase(new HxPrattSliceTest());
+		runner.addCase(new HxPrattOpsTest());
 		runner.addCase(new SpanTest());
 		runner.addCase(new ParseErrorTest());
 		runner.addCase(new InputTest());

@@ -139,10 +139,11 @@ class Lowering {
 	 *   while (true) {
 	 *       skipWs(ctx);
 	 *       final _savedPos = ctx.pos;
-	 *       // Try each operator in declaration order. Grammar authors
-	 *       // must list longer operators before their prefixes when two
-	 *       // operators share a lexical prefix (`==` before `=`), since
-	 *       // the loop picks the first match.
+	 *       // Operators are dispatched longest-first — the branches
+	 *       // are sorted by literal length descending before the
+	 *       // chain is folded, so `<=` is tried before `<` and the
+	 *       // naive `matchLit` cannot eat a short prefix of a longer
+	 *       // operator. Declaration order is irrelevant to dispatch.
 	 *       if (matchLit(ctx, "<op1>")) { ... }
 	 *       else if (matchLit(ctx, "<op2>")) { ... }
 	 *       else break;
@@ -170,6 +171,22 @@ class Lowering {
 		final prattBranches:Array<ShapeNode> = [
 			for (b in node.children) if (b.annotations.get('pratt.prec') != null) b
 		];
+		// Longest-match sort: longer operator literals come first in the
+		// generated dispatch chain so `<=` is attempted before `<` (and
+		// `>=` before `>`). Without this, `matchLit(ctx, "<")` succeeds on
+		// input `<=`, consumes one char, and leaves `=` stranded for the
+		// right operand parser to trip over. The sort is a Lowering-level
+		// policy — `matchLit` stays a naive prefix match everywhere else
+		// (enum-branch Case 1 `expectLit`, struct lead/trail, Case 4 array
+		// loops) where ambiguity cannot arise because the literal is fixed
+		// at macro time. Order among equal-length operators is semantically
+		// irrelevant (no length-N operator is a prefix of another length-N
+		// operator in a well-formed grammar), so `Array.sort` suffices.
+		prattBranches.sort((a, b) -> {
+			final la:Int = (a.annotations.get('pratt.op') : String).length;
+			final lb:Int = (b.annotations.get('pratt.op') : String).length;
+			return lb - la;
+		});
 		// Fold the operator chain into a nested if/else if tree. Each leaf
 		// branch consumes the operator literal (already matched at the
 		// peek), enforces `minPrec`, parses the right operand by recursing
