@@ -1,15 +1,16 @@
 package anyparse.grammar.haxe;
 
 /**
- * Haxe expression grammar — bitwise/shift compound assigns on top of
- * the arithmetic-compound-assigns slice.
+ * Haxe expression grammar — unary-prefix operators on top of the
+ * bitwise/shift compound-assigns slice.
  *
- * Six atom constructors plus thirty-one binary-operator constructors
- * across nine precedence levels. Atoms are the leaf shapes a single
- * call to `parseHxExprAtom` resolves; operator branches carry
- * `@:infix(op, prec)` (or `@:infix(op, prec, 'Right')`) metadata so
- * the Pratt strategy sees them and `Lowering` generates a
- * precedence-climbing loop wrapping the atom parser.
+ * Six atom constructors plus three unary-prefix constructors plus
+ * thirty-one binary-operator constructors across nine precedence
+ * levels. Atoms and prefix branches are both resolved by a single
+ * call to `parseHxExprAtom`; operator branches carry `@:infix(op,
+ * prec)` (or `@:infix(op, prec, 'Right')`) metadata so the Pratt
+ * strategy sees them and `Lowering` generates a precedence-climbing
+ * loop wrapping the atom parser.
  *
  * **Atom branches** — all leaves, no operators:
  *
@@ -34,9 +35,28 @@ package anyparse.grammar.haxe;
  *    parens. The inner call re-enters `parseHxExpr` at `minPrec = 0`
  *    (default), so parens fully reset precedence and any operator
  *    is allowed inside the group.
- *  - `IdentExpr` — bare identifier (`other`). **Must appear last**:
- *    the identifier regex is permissive and would otherwise match
- *    `null` / `true` / `false` as bare identifiers.
+ *  - `IdentExpr` — bare identifier (`other`). **Must appear last**
+ *    among the pure atom branches: the identifier regex is permissive
+ *    and would otherwise match `null` / `true` / `false` as bare
+ *    identifiers.
+ *
+ * **Prefix branches** — unary operators, symbolic only. Each
+ * `@:prefix(op)` ctor consumes its literal, recurses into the atom
+ * parser for the operand, and constructs itself around the result.
+ * Prefix binds tighter than any binary infix because the recursion
+ * targets the atom function, not the Pratt loop — so `-x * 2` parses
+ * as `Mul(Neg(x), 2)`, not `Neg(Mul(x, 2))`. Prefix has no precedence
+ * value: all three operators share "one atom consumed, one ctor
+ * built", and nesting (`--x`, `!!x`, `-!x`) falls out of the same
+ * recursion-into-atom pattern with no extra machinery. Prefix
+ * branches sit after the pure atoms in source order so the regex- and
+ * literal-based atom branches get first attempt on input like `-5`
+ * (FloatLit/IntLit fail on the leading `-`, then the prefix branch
+ * consumes it and recurses).
+ *
+ *  - `Neg` — `-` unary minus.
+ *  - `Not` — `!` logical not.
+ *  - `BitNot` — `~` bitwise not.
  *
  * **Operator branches** — all binary infix. Each `@:infix(op, prec)`
  * carries the operator literal and its precedence; higher precedence
@@ -77,9 +97,8 @@ package anyparse.grammar.haxe;
  * precedence table, that slice revisits the numbering.
  *
  * **Still deferred**: `??=` waits for `??`. Ternary `? :`, `??`,
- * `=>`, unary prefix (`-x`, `!x`, `~x`), postfix (`f()`, `o.x`,
- * `a[i]`), `new T(...)` — each is a separate concept a future Pratt
- * slice addresses.
+ * `=>`, postfix (`f()`, `o.x`, `a[i]`), `new T(...)` — each is a
+ * separate concept a future slice addresses.
  */
 @:peg
 enum HxExpr {
@@ -98,6 +117,15 @@ enum HxExpr {
 	ParenExpr(inner:HxExpr);
 
 	IdentExpr(v:HxIdentLit);
+
+	@:prefix('-')
+	Neg(operand:HxExpr);
+
+	@:prefix('!')
+	Not(operand:HxExpr);
+
+	@:prefix('~')
+	BitNot(operand:HxExpr);
 
 	@:infix('*', 9)
 	Mul(left:HxExpr, right:HxExpr);

@@ -121,7 +121,18 @@ class Lowering {
 		final branches:Array<ShapeNode> = atomsOnly
 			? [for (b in node.children) if (b.annotations.get('pratt.prec') == null) b]
 			: node.children;
-		final branchExprs:Array<Expr> = [for (branch in branches) tryBranch(branch, typePath)];
+		// `recurseFnName` is the name of the function whose body we are
+		// currently generating — the atom function for Pratt-enabled enums
+		// and the single rule function for plain enums. `lowerEnumBranch`
+		// threads it into the prefix classifier case so a `@:prefix`
+		// branch's operand parses as another call to the same function,
+		// not as a full expression (which for a Pratt enum would recurse
+		// into the climbing loop and give the wrong tree shape for
+		// `-x * 2`).
+		final recurseFnName:String = atomsOnly
+			? 'parse${simpleName(typePath)}Atom'
+			: 'parse${simpleName(typePath)}';
+		final branchExprs:Array<Expr> = [for (branch in branches) tryBranch(branch, typePath, recurseFnName)];
 		final failExpr:Expr = macro throw new anyparse.runtime.ParseError(
 			new anyparse.runtime.Span(ctx.pos, ctx.pos),
 			$v{'expected ${simpleName(typePath)}'}
@@ -243,18 +254,80 @@ class Lowering {
 		};
 	}
 
-	private function tryBranch(branch:ShapeNode, typePath:String):Expr {
-		final body:Expr = lowerEnumBranch(branch, typePath);
+	private function tryBranch(branch:ShapeNode, typePath:String, recurseFnName:String):Expr {
+		final body:Expr = lowerEnumBranch(branch, typePath, recurseFnName);
 		return macro {
 			final _savedPos:Int = ctx.pos;
 			try $body catch (_e:anyparse.runtime.ParseError) ctx.pos = _savedPos;
 		};
 	}
 
-	private function lowerEnumBranch(branch:ShapeNode, typePath:String):Expr {
+	private function lowerEnumBranch(branch:ShapeNode, typePath:String, recurseFnName:String):Expr {
 		final ctor:String = branch.annotations.get('base.ctor');
 		final ctorPath:Array<String> = packOf(typePath).concat([simpleName(typePath), ctor]);
 		final ctorRef:Expr = MacroStringTools.toFieldExpr(ctorPath);
+
+		// Case 5: unary-prefix branch. A `@:prefix("-")` annotated ctor
+		// with a single `Ref` child that references the same enum. The
+		// body consumes the prefix literal, recurses into `recurseFnName`
+		// (the function currently being generated — atom function for
+		// Pratt enums, whole enum for plain enums), and builds the ctor
+		// around the returned operand. This case must run BEFORE the
+		// existing Cases 1/2/4/3, because a prefix branch structurally
+		// matches Case 3 ("single `Ref` child, no `@:lit`") and Case 3
+		// would emit a body with no `expectLit` — an unguarded recursive
+		// call into the main expression rule that never consumes input
+		// and infinite-loops.
+		//
+		// The recursive call deliberately targets `recurseFnName` (the
+		// atom function for Pratt enums), not the Pratt loop: the operand
+		// of a prefix is a single atom (possibly another prefix), not a
+		// whole expression. `-x * 2` parses as `Mul(Neg(x), 2)` because
+		// the atom returned to the outer Pratt loop is already `Neg(x)`,
+		// and the loop then picks up `* 2` around it.
+		//
+		// Word-like prefix operators are rejected at compile time: the
+		// body uses `expectLit` with no word-boundary check, which would
+		// wrongly accept `notx` for `not`. When a grammar needs word-like
+		// prefix ops, extend Case 5 to route through `expectKw` the same
+		// way Cases 1 and 2 dispatch by `endsWithWordChar`.
+		final prefixOp:Null<String> = branch.annotations.get('prefix.op');
+		if (prefixOp != null) {
+			final children:Array<ShapeNode> = branch.children;
+			if (children.length != 1 || children[0].kind != Ref) {
+				Context.fatalError(
+					'Lowering: @:prefix branch must have exactly one Ref child (the operand)',
+					Context.currentPos()
+				);
+			}
+			final refName:String = children[0].annotations.get('base.ref');
+			final enumSimple:String = simpleName(typePath);
+			if (simpleName(refName) != enumSimple) {
+				Context.fatalError(
+					'Lowering: @:prefix operand must reference the same enum ($enumSimple)',
+					Context.currentPos()
+				);
+			}
+			if (endsWithWordChar(prefixOp)) {
+				Context.fatalError(
+					'Lowering: @:prefix operator must be symbolic (word-like prefix ops not supported yet): "$prefixOp"',
+					Context.currentPos()
+				);
+			}
+			final operandCT:ComplexType = TPath({pack: packOf(typePath), name: enumSimple, params: []});
+			final recurseCall:Expr = {
+				expr: ECall(macro $i{recurseFnName}, [macro ctx]),
+				pos: Context.currentPos(),
+			};
+			final ctorCall:Expr = {expr: ECall(ctorRef, [macro _operand]), pos: Context.currentPos()};
+			return macro {
+				skipWs(ctx);
+				expectLit(ctx, $v{prefixOp});
+				skipWs(ctx);
+				final _operand:$operandCT = $recurseCall;
+				return $ctorCall;
+			};
+		}
 
 		// Classify branch shape.
 		final litList:Null<Array<String>> = branch.annotations.get('lit.litList');
