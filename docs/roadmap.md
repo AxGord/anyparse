@@ -55,21 +55,33 @@ Sessions should align with phase boundaries — start a new Claude Code session 
 
 **Exit condition**: the hand-written JSON parser runs on the new runtime, the hand-written JSON writer reads from JsonFormat, all 288 tests pass on neko/js/interp, and the macro foundation is ready to be plugged into. First commit made.
 
-## Phase 2: First macro-generated parser
+## Phase 2: First macro-generated parser — DONE (2026-04-11)
 
-**Goal**: write the `@:build` macro and use it to regenerate the JSON parser and writer from the existing `JValue` enum definition. The hand-written versions remain in the repo as regression baselines.
+**Goal**: write the `@:build` macro and use it to regenerate the JSON parser from the existing `JValue` enum definition. The hand-written version remains in the repo as a regression baseline. Writer regeneration is deferred (see Phase 3).
 
 **Deliverables**:
-- The macro entry point that reads a type annotated with `@:peg @:schema(Format)` and produces generated parser/writer classes.
-- `BaseShape` analysis: `Type → ShapeTree`.
-- `Lit` strategy: handles `@:lit`, `@:lead`, `@:trail`, `@:wrap`, `@:sep`.
-- `Re` strategy: handles `@:re` on abstracts.
-- `Skip` strategy: cross-cutting whitespace via `LoweringCtx.skipStack`.
-- `Codegen`: `CoreIR → haxe.macro.Expr` for Fast mode. Tolerant mode is stubbed.
-- JSON regenerated via macro. New tests assert that macro-generated parser matches hand-written output on the entire regression corpus.
-- Parallel test targets: `test.hxml` now runs both hand-written and macro-generated test suites.
+- ✅ The macro entry point — `anyparse.macro.Build.buildParser(TargetType)` applied to a marker class `JValueFastParser`. Placing `@:build` on the enum itself was attempted first but Haxe's enum-constructor information is not available at `@:build` time on the enum — the marker-class pattern bypasses that.
+- ✅ `ShapeBuilder` — worklist-based `haxe.macro.Type → ShapeTree` pass covering enum / typedef-to-anon / abstract with `@:re` / `Array<T>` / named-type Ref / std-primitive Terminal.
+- ✅ `Lit` strategy — owns `@:lit` / `@:lead` / `@:trail` / `@:wrap` / `@:sep`. Multi-literal `@:lit("true","false")` for a single `Bool` field is recognised and lowered to an `Alt` of Lit nodes that map matched literal → identifier-named Bool value.
+- ✅ `Re` strategy — owns `@:re`. Pairs with a fixed per-underlying-type decoder table (`Float → Std.parseFloat`, `String → decodeJsonString`) that Codegen emits after the regex match.
+- ✅ `Skip` strategy — owns `@:ws`. Turns on inline `skipWs(ctx)` insertion before every literal and regex match in the grammar.
+- ✅ `StrategyRegistry` — topological sort by `runsAfter` / `runsBefore` with duplicate-meta detection. Runs the annotate pass in deterministic order.
+- ✅ `Lowering` + `Codegen` — directly emit Haxe `Expr` for each rule's function body (using the `Empty`, `Seq`, `Alt`, `Star`, `Opt`, `Ref`, `Lit`, `Re` primitives conceptually without going through a serialized CoreIR IR) and wrap into `Field`s plus the runtime helpers (`skipWs`, `matchLit`, `expectLit`, `decodeJsonString`) and static `EReg` fields.
+- ✅ Fast-mode-only codegen. Tolerant mode is stubbed — the Phase-1 `ParseResult`/`Node` types remain unused in generated code.
+- ✅ `JValue` annotated with `@:peg` + `@:schema(JsonFormat)` + `@:ws` + per-ctor `@:lit` / `@:lead` / `@:trail` / `@:sep`. `JString(v:JStringLit)` / `JNumber(v:JNumberLit)` use transparent abstracts over `String` / `Float` so existing test literals compile unchanged.
+- ✅ `JEntry` rewritten with explicit `var`-form typedef fields so that field-level `@:lead(':')` is accepted.
+- ✅ `JsonParserTestBase` extracted as an abstract base; `JsonParserTest` and `JsonMacroParserTest` are thin subclasses differing only in the `parseJson` hook. `JsonMacroRoundTripTest` mirrors `JsonRoundTripTest` but parses through `JValueFastParser`.
+- ✅ 585 tests green on neko, js, and interp (the original 328 plus the macro parity and macro round-trip suites).
 
-**Exit condition**: macro-generated `JValue` parser passes all 288 existing tests plus new "parity with hand-written" tests.
+**Exit condition**: met. Hand-written and macro-generated JSON parsers produce identical results across the full existing corpus and the seeded-random round-trip corpus on all three targets.
+
+**Non-deliverables for this phase** (explicitly deferred):
+- Writer regeneration (`JValueFastWriter`) — Phase 2b or Phase 3, driven by real pain points from Phase 3.
+- Tolerant-mode codegen.
+- Pratt / Indent / Binary / Capture / Recovery strategies.
+- Cross-family IR work.
+- `@:decode` metadata — replaced by the closed decoder table in Phase 2; can be generalised later.
+- `Build`/`Bind`/`Host`/`ExprRef`/`Decode` CoreIR primitives in the codegen path — present in `core/CoreIR.hx` as types but not consumed by the Phase 2 emitter; adopted when Phase 3 needs them.
 
 ## Phase 3: Haxe grammar and formatter replacement
 

@@ -1,6 +1,8 @@
 package anyparse.core;
 
 #if macro
+import anyparse.core.ShapeTree;
+
 /**
  * Strategy plugin contract. A strategy is a Haxe class that knows how
  * to turn a piece of annotated grammar into CoreIR. Every strategy

@@ -1,7 +1,9 @@
 import unit.DocRendererTest;
 import unit.JsonParserTest;
+import unit.JsonMacroParserTest;
 import unit.JsonWriterTest;
 import unit.JsonRoundTripTest;
+import unit.JsonMacroRoundTripTest;
 import unit.SpanTest;
 import unit.ParseErrorTest;
 import unit.InputTest;
@@ -15,8 +17,10 @@ class RunTests {
 		var runner = new utest.Runner();
 		runner.addCase(new DocRendererTest());
 		runner.addCase(new JsonParserTest());
+		runner.addCase(new JsonMacroParserTest());
 		runner.addCase(new JsonWriterTest());
 		runner.addCase(new JsonRoundTripTest());
+		runner.addCase(new JsonMacroRoundTripTest());
 		runner.addCase(new SpanTest());
 		runner.addCase(new ParseErrorTest());
 		runner.addCase(new InputTest());
