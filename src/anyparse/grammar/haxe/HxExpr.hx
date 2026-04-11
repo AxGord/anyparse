@@ -1,10 +1,10 @@
 package anyparse.grammar.haxe;
 
 /**
- * Haxe expression grammar — bitwise, shifts, and arithmetic compound
- * assigns on top of the parens + right-assoc slice.
+ * Haxe expression grammar — bitwise/shift compound assigns on top of
+ * the arithmetic-compound-assigns slice.
  *
- * Six atom constructors plus twenty-five binary-operator constructors
+ * Six atom constructors plus thirty-one binary-operator constructors
  * across nine precedence levels. Atoms are the leaf shapes a single
  * call to `parseHxExprAtom` resolves; operator branches carry
  * `@:infix(op, prec)` (or `@:infix(op, prec, 'Right')`) metadata so
@@ -52,27 +52,23 @@ package anyparse.grammar.haxe;
  *  - prec 5 — `==` `!=` `<=` `>=` `<` `>` (comparison, left-assoc)
  *  - prec 4 — `&&` (logical and, left-assoc)
  *  - prec 3 — `||` (logical or, left-assoc)
- *  - prec 1 — `=` `+=` `-=` `*=` `/=` `%=` (assignment, **right-assoc**)
- *
- * Prior slices shipped `* / %` at prec 7 and `+ -` at prec 6; this
- * slice renumbers them upward (9 and 8) to open the 6/7 slots for
- * bitwise and shift. Test assertions check parse trees, not absolute
- * precedence integers, so the renumbering is transparent — relative
- * ordering is preserved for every pre-existing operator pair, and
- * every existing precedence test continues to assert the same shape.
+ *  - prec 1 — `=` `+=` `-=` `*=` `/=` `%=` `<<=` `>>=` `>>>=` `|=`
+ *    `&=` `^=` (assignment, **right-assoc**)
  *
  * Declaration order inside each precedence level puts longer literals
- * first (`<=` before `<`, `>>>` before `>>` before `>`) for human
- * readability. Correctness does NOT depend on this order —
- * `Lowering.lowerPrattLoop` sorts operators by literal length
+ * first (`<=` before `<`, `>>>` before `>>` before `>`, `>>>=` before
+ * `>>=`) for human readability. Correctness does NOT depend on this
+ * order — `Lowering.lowerPrattLoop` sorts operators by literal length
  * descending before emitting the dispatch chain, so the generated
  * parser always attempts the longer prefix first regardless of how
  * the grammar author orders the branches. Without that sort, input
  * `a <= b` would parse as `Lt(a, <error>)` because the naive
  * `matchLit(ctx, "<")` consumes one character and strands the `=`.
  * Same story for `<<` vs `<`, `>>>` vs `>>` vs `>`, `&&` vs `&`,
- * `||` vs `|`, `*=` vs `*`, and every other shared-prefix pair —
- * each conflict is resolved at macro time by the length-desc sort.
+ * `||` vs `|`, `*=` vs `*`, `>>>=` vs `>>>` vs `>>=` vs `>>`, `<<=`
+ * vs `<<` vs `<=`, `|=` vs `||`, `&=` vs `&&`, and every other
+ * shared-prefix pair — each conflict is resolved at macro time by
+ * the length-desc sort.
  *
  * Precedence 2 is deliberately free for a future ternary / `??` /
  * `=>` slot decision — each of those is a separate concept the
@@ -80,12 +76,10 @@ package anyparse.grammar.haxe;
  * if ternary ultimately needs to sit below assignments in the Haxe
  * precedence table, that slice revisits the numbering.
  *
- * **Still deferred**: bitwise/shift compound assigns (`|= &= ^= <<=
- * >>= >>>=`) follow in slice β — same right-assoc concept as
- * shipped `+= -= *= /= %=`, no new macro work. `??=` waits for `??`.
- * Ternary `? :`, `??`, `=>`, unary prefix (`-x`, `!x`, `~x`),
- * postfix (`f()`, `o.x`, `a[i]`), `new T(...)` — each is a separate
- * concept a future Pratt slice addresses.
+ * **Still deferred**: `??=` waits for `??`. Ternary `? :`, `??`,
+ * `=>`, unary prefix (`-x`, `!x`, `~x`), postfix (`f()`, `o.x`,
+ * `a[i]`), `new T(...)` — each is a separate concept a future Pratt
+ * slice addresses.
  */
 @:peg
 enum HxExpr {
@@ -179,4 +173,22 @@ enum HxExpr {
 
 	@:infix('%=', 1, 'Right')
 	ModAssign(left:HxExpr, right:HxExpr);
+
+	@:infix('<<=', 1, 'Right')
+	ShlAssign(left:HxExpr, right:HxExpr);
+
+	@:infix('>>>=', 1, 'Right')
+	UShrAssign(left:HxExpr, right:HxExpr);
+
+	@:infix('>>=', 1, 'Right')
+	ShrAssign(left:HxExpr, right:HxExpr);
+
+	@:infix('|=', 1, 'Right')
+	BitOrAssign(left:HxExpr, right:HxExpr);
+
+	@:infix('&=', 1, 'Right')
+	BitAndAssign(left:HxExpr, right:HxExpr);
+
+	@:infix('^=', 1, 'Right')
+	BitXorAssign(left:HxExpr, right:HxExpr);
 }

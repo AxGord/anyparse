@@ -19,19 +19,32 @@ import anyparse.runtime.ParseError;
  * `prec + 1` for left-associative, so same-prec chains fold right
  * instead of left.
  *
- * Two shipping waves share this file:
+ * Three shipping waves share this file:
  *  - parens + right-assoc slice: `=`, `+=`, `-=`.
  *  - bitwise + shifts + arithmetic compound assigns slice: `*=`,
  *    `/=`, `%=`. Same right-assoc concept, same prec 1, no new
  *    macro work — only new ctors on `HxExpr`.
+ *  - bitwise/shift compound assigns slice (β): `<<=`, `>>=`, `>>>=`,
+ *    `|=`, `&=`, `^=`. Again same right-assoc concept, same prec 1,
+ *    zero macro changes. Purpose of the slice is to validate that
+ *    the D33 longest-match sort disambiguates the dense new conflict
+ *    set (`>>>=`/`>>>`/`>>=`/`>>`/`>=`, `<<=`/`<<`/`<=`, `|=`/`||`,
+ *    `&=`/`&&`) without any code change — every test below that
+ *    looks like a "base op still works" regression guard is in fact
+ *    the spot check for that sort.
  *
  * Grammar coverage in this file:
- *  - `a = 1`, `a += 1`, `a -= 1`, `a *= 1`, `a /= 1`, `a %= 1` —
- *    per-op smoke for each assignment ctor.
+ *  - `a = 1`, `a += 1`, `a -= 1`, `a *= 1`, `a /= 1`, `a %= 1`,
+ *    `a <<= 1`, `a >>= 1`, `a >>>= 1`, `a |= 1`, `a &= 1`, `a ^= 1`
+ *    — per-op smoke for each of the twelve assignment ctors.
  *  - `a = b = 1` — right-fold: `Assign(a, Assign(b, 1))`.
  *  - `a += b -= 1` — mixed-op right-fold (first wave).
  *  - `a *= b /= 1` — mixed-op right-fold (second wave).
- *  - `a *= b += 1` — cross-wave right-fold, proves the two batches
+ *  - `a *= b += 1` — cross-wave right-fold, proves wave-1 and
+ *    wave-2 compose inside a single chain.
+ *  - `a |= b &= c` — bitwise right-fold (third wave).
+ *  - `a <<= b >>= c` — shift right-fold (third wave).
+ *  - `a += b *= c ^= 1` — triple-wave right-fold, proves waves 1+2+3
  *    compose inside a single chain.
  *  - `a = b + 1` — `+` binds tighter than `=`.
  *  - `a + 1 = 2` — lowest-precedence proof: `=` at prec 1 sits
@@ -45,8 +58,19 @@ import anyparse.runtime.ParseError;
  *    atom with no same-prec chain. The real right-associativity
  *    proof is the `a = b = 1` test above.
  *  - `a = b == c` — `==` binds tighter than `=`.
+ *  - `a |= b << 2` — `<<` at prec 7 binds tighter than `|=` at
+ *    prec 1 (third-wave cross-precedence with a higher level).
+ *  - `a >>= b + 1` — `+` at prec 8 binds tighter than `>>=` at
+ *    prec 1 (third-wave cross-precedence against a different higher
+ *    level).
+ *  - `a << b`, `a >> b`, `a | b` — regression guards that shipping
+ *    the 3-char `>>=`/`<<=` and 2-char `|=`/`&=` compound assigns
+ *    did not accidentally shadow the shorter base operators under
+ *    the D33 longest-match sort.
  *  - `a = (b = c)` — cross-concept smoke with the parens slice.
  *  - `a = ;` — missing right operand rejected.
+ *  - `a >>>= ;` — missing right operand rejected for a 4-char op,
+ *    proving the longest-match commit still reaches the RHS parse.
  */
 class HxAssignSliceTest extends Test {
 
@@ -263,6 +287,219 @@ class HxAssignSliceTest extends Test {
 			case null, _:
 				Assert.fail('expected MulAssign(a, AddAssign(b, 1)), got ${decl.init}');
 		}
+	}
+
+	public function testShlAssign():Void {
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a <<= 1; }');
+		switch decl.init {
+			case ShlAssign(IdentExpr(l), IntLit(r)):
+				Assert.equals('a', (l : String));
+				Assert.equals(1, (r : Int));
+			case null, _:
+				Assert.fail('expected ShlAssign(IdentExpr(a), IntLit(1)), got ${decl.init}');
+		}
+	}
+
+	public function testShrAssign():Void {
+		// `a >>= 1` — 3-char longest-match validates that `>>=`
+		// (len 3) wins over `>>` (len 2) and `>=` (len 2). A
+		// failing D33 sort would produce `Shr(a, Lt(...))` or
+		// similar nonsense and this test would fail loudly.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a >>= 1; }');
+		switch decl.init {
+			case ShrAssign(IdentExpr(l), IntLit(r)):
+				Assert.equals('a', (l : String));
+				Assert.equals(1, (r : Int));
+			case null, _:
+				Assert.fail('expected ShrAssign(IdentExpr(a), IntLit(1)), got ${decl.init}');
+		}
+	}
+
+	public function testUShrAssign():Void {
+		// `a >>>= 1` — 4-char longest-match validates that `>>>=`
+		// (len 4) wins over `>>>` (len 3), `>>=` (len 3), `>>` (len
+		// 2), `>=` (len 2), and `>` (len 1). Densest prefix-conflict
+		// set in the grammar; the D33 sort is exercised maximally
+		// by this one input.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a >>>= 1; }');
+		switch decl.init {
+			case UShrAssign(IdentExpr(l), IntLit(r)):
+				Assert.equals('a', (l : String));
+				Assert.equals(1, (r : Int));
+			case null, _:
+				Assert.fail('expected UShrAssign(IdentExpr(a), IntLit(1)), got ${decl.init}');
+		}
+	}
+
+	public function testBitOrAssign():Void {
+		// `a |= 1` — validates that `|=` (len 2) wins over `|`
+		// (len 1) AND is disambiguated from `||` (len 2, same
+		// length but different text).
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a |= 1; }');
+		switch decl.init {
+			case BitOrAssign(IdentExpr(l), IntLit(r)):
+				Assert.equals('a', (l : String));
+				Assert.equals(1, (r : Int));
+			case null, _:
+				Assert.fail('expected BitOrAssign(IdentExpr(a), IntLit(1)), got ${decl.init}');
+		}
+	}
+
+	public function testBitAndAssign():Void {
+		// `a &= 1` — validates that `&=` (len 2) wins over `&`
+		// (len 1) AND is disambiguated from `&&` (len 2, same
+		// length but different text).
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a &= 1; }');
+		switch decl.init {
+			case BitAndAssign(IdentExpr(l), IntLit(r)):
+				Assert.equals('a', (l : String));
+				Assert.equals(1, (r : Int));
+			case null, _:
+				Assert.fail('expected BitAndAssign(IdentExpr(a), IntLit(1)), got ${decl.init}');
+		}
+	}
+
+	public function testBitXorAssign():Void {
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a ^= 1; }');
+		switch decl.init {
+			case BitXorAssign(IdentExpr(l), IntLit(r)):
+				Assert.equals('a', (l : String));
+				Assert.equals(1, (r : Int));
+			case null, _:
+				Assert.fail('expected BitXorAssign(IdentExpr(a), IntLit(1)), got ${decl.init}');
+		}
+	}
+
+	public function testShlBaseStillWorks():Void {
+		// `a << b` — regression guard that adding the 3-char `<<=`
+		// did not accidentally shadow the 2-char `<<` base op.
+		// Outside an assignment context, the D33 sort still chooses
+		// the longest matching prefix at the input position, and
+		// `b` after `<< ` is not `=`, so `<<` wins.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a << b; }');
+		switch decl.init {
+			case Shl(IdentExpr(l), IdentExpr(r)):
+				Assert.equals('a', (l : String));
+				Assert.equals('b', (r : String));
+			case null, _:
+				Assert.fail('expected Shl(a, b), got ${decl.init}');
+		}
+	}
+
+	public function testShrBaseStillWorks():Void {
+		// `a >> b` — same story as testShlBaseStillWorks, for the
+		// right-shift family. Adding `>>=`/`>>>=` must not steal
+		// input from `>>`.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a >> b; }');
+		switch decl.init {
+			case Shr(IdentExpr(l), IdentExpr(r)):
+				Assert.equals('a', (l : String));
+				Assert.equals('b', (r : String));
+			case null, _:
+				Assert.fail('expected Shr(a, b), got ${decl.init}');
+		}
+	}
+
+	public function testBitOrBaseStillWorks():Void {
+		// `a | b` — regression guard for the bitwise `|` base op
+		// after adding the 2-char `|=` compound assign.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a | b; }');
+		switch decl.init {
+			case BitOr(IdentExpr(l), IdentExpr(r)):
+				Assert.equals('a', (l : String));
+				Assert.equals('b', (r : String));
+			case null, _:
+				Assert.fail('expected BitOr(a, b), got ${decl.init}');
+		}
+	}
+
+	public function testBitwiseAssignRightAssocChain():Void {
+		// a |= b &= c → BitOrAssign(a, BitAndAssign(b, c)). Wave-3
+		// homogeneous right-fold, proving the new bitwise compound
+		// assigns join the existing prec 1 chain.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a |= b &= c; }');
+		switch decl.init {
+			case BitOrAssign(IdentExpr(a), BitAndAssign(IdentExpr(b), IdentExpr(c))):
+				Assert.equals('a', (a : String));
+				Assert.equals('b', (b : String));
+				Assert.equals('c', (c : String));
+			case null, _:
+				Assert.fail('expected BitOrAssign(a, BitAndAssign(b, c)), got ${decl.init}');
+		}
+	}
+
+	public function testShiftAssignRightAssocChain():Void {
+		// a <<= b >>= c → ShlAssign(a, ShrAssign(b, c)). Wave-3
+		// right-fold on the shift-assign family. Exercises the
+		// densest prefix-conflict set (3-char `>>=` inside a chain)
+		// under a real fold.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a <<= b >>= c; }');
+		switch decl.init {
+			case ShlAssign(IdentExpr(a), ShrAssign(IdentExpr(b), IdentExpr(c))):
+				Assert.equals('a', (a : String));
+				Assert.equals('b', (b : String));
+				Assert.equals('c', (c : String));
+			case null, _:
+				Assert.fail('expected ShlAssign(a, ShrAssign(b, c)), got ${decl.init}');
+		}
+	}
+
+	public function testTripleWaveCompoundChain():Void {
+		// a += b *= c ^= 1 → AddAssign(a, MulAssign(b, BitXorAssign(c, 1))).
+		// Three waves of compound assigns composing inside one
+		// Pratt chain — first wave (`+=`), second wave (`*=`),
+		// third wave (`^=`). All sit at prec 1 right-assoc, so
+		// the fold direction is uniform and the loop does not
+		// care which session introduced each ctor.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a += b *= c ^= 1; }');
+		switch decl.init {
+			case AddAssign(IdentExpr(a), MulAssign(IdentExpr(b), BitXorAssign(IdentExpr(c), IntLit(one)))):
+				Assert.equals('a', (a : String));
+				Assert.equals('b', (b : String));
+				Assert.equals('c', (c : String));
+				Assert.equals(1, (one : Int));
+			case null, _:
+				Assert.fail('expected AddAssign(a, MulAssign(b, BitXorAssign(c, 1))), got ${decl.init}');
+		}
+	}
+
+	public function testBitOrAssignWithRhsShift():Void {
+		// a |= b << 2 → BitOrAssign(a, Shl(b, 2)). `<<` at prec 7
+		// binds tighter than `|=` at prec 1, so the inner recursion
+		// folds `b << 2` before returning to the outer compound
+		// assign. Cross-prec check against a higher level.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a |= b << 2; }');
+		switch decl.init {
+			case BitOrAssign(IdentExpr(a), Shl(IdentExpr(b), IntLit(two))):
+				Assert.equals('a', (a : String));
+				Assert.equals('b', (b : String));
+				Assert.equals(2, (two : Int));
+			case null, _:
+				Assert.fail('expected BitOrAssign(a, Shl(b, 2)), got ${decl.init}');
+		}
+	}
+
+	public function testShiftAssignWrapsAdditiveRhs():Void {
+		// a >>= b + 1 → ShrAssign(a, Add(b, 1)). `+` at prec 8 binds
+		// tighter than `>>=` at prec 1. Cross-prec check against a
+		// different higher level than testBitOrAssignWithRhsShift.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a >>= b + 1; }');
+		switch decl.init {
+			case ShrAssign(IdentExpr(a), Add(IdentExpr(b), IntLit(one))):
+				Assert.equals('a', (a : String));
+				Assert.equals('b', (b : String));
+				Assert.equals(1, (one : Int));
+			case null, _:
+				Assert.fail('expected ShrAssign(a, Add(b, 1)), got ${decl.init}');
+		}
+	}
+
+	public function testRejectsShiftAssignWithoutRhs():Void {
+		// `a >>>= ;` — the 4-char compound assign matches, skipWs
+		// runs, and then the right-hand `parseHxExpr` fails on the
+		// `;` terminator. Symmetric to `testRejectsAssignWithoutRhs`
+		// for the longest compound-assign literal in the grammar.
+		Assert.raises(() -> HaxeFastParser.parse('class Foo { var x:Int = a >>>= ; }'), ParseError);
 	}
 
 	private function parseSingleVarDecl(source:String):HxVarDecl {
