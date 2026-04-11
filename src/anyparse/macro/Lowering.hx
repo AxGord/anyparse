@@ -154,11 +154,18 @@ class Lowering {
 	 * Each matched branch checks the operator's precedence against
 	 * `minPrec`: if it falls below, the matched literal is rolled back and
 	 * the loop breaks — the operator belongs to an outer caller. Otherwise
-	 * the right operand is parsed by recursing into `parseXxx` itself with
-	 * an elevated `minPrec` (prec + 1 for left-associative, prec for
-	 * right-associative — the slice supports only left in this session),
-	 * and `left` is replaced with a freshly constructed ctor call built
-	 * from the matched branch.
+	 * the right operand is parsed by recursing into `parseXxx` itself at
+	 * an elevated `minPrec`, and `left` is replaced with a freshly
+	 * constructed ctor call built from the matched branch.
+	 *
+	 * Associativity is read from the `pratt.assoc` annotation on each
+	 * branch (written by `Pratt.annotate`). Left-associative branches
+	 * recurse at `prec + 1`, so a second same-prec operator fails the
+	 * inner gate and is re-taken by the outer loop iteration, folding
+	 * left. Right-associative branches recurse at `prec`, so a second
+	 * same-prec operator is absorbed by the inner recursion, folding
+	 * right. The per-branch choice is baked in at macro time — no
+	 * runtime switch on associativity.
 	 */
 	private function lowerPrattLoop(node:ShapeNode, typePath:String, simple:String):Expr {
 		final returnCT:ComplexType = TPath({pack: packOf(typePath), name: simple, params: []});
@@ -190,14 +197,16 @@ class Lowering {
 		// Fold the operator chain into a nested if/else if tree. Each leaf
 		// branch consumes the operator literal (already matched at the
 		// peek), enforces `minPrec`, parses the right operand by recursing
-		// into `parseXxx` at `prec + 1` (left-associative only in this
-		// slice), and rebuilds `left` as the matched ctor call.
+		// into `parseXxx` at `prec + 1` for left-associative branches or
+		// `prec` for right-associative branches, and rebuilds `left` as
+		// the matched ctor call.
 		var opChain:Expr = macro _matched = false;
 		for (i in 0...prattBranches.length) {
 			final branch:ShapeNode = prattBranches[prattBranches.length - 1 - i];
 			final opText:String = branch.annotations.get('pratt.op');
 			final precValue:Int = branch.annotations.get('pratt.prec');
-			final nextMinPrec:Int = precValue + 1; // left-associative only
+			final assocValue:String = branch.annotations.get('pratt.assoc');
+			final nextMinPrec:Int = assocValue == 'Right' ? precValue : precValue + 1;
 			final ctor:String = branch.annotations.get('base.ctor');
 			final ctorPath:Array<String> = packOf(typePath).concat([simple, ctor]);
 			final ctorRef:Expr = MacroStringTools.toFieldExpr(ctorPath);

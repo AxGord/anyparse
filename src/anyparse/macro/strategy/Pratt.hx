@@ -13,12 +13,18 @@ import anyparse.core.Strategy;
  * Pratt strategy — owns operator-precedence metadata on enum branches.
  *
  * Metadata handled:
- *  - `@:infix("+", 6)` — the branch describes a binary infix operator
- *                       with the given literal and precedence. Higher
- *                       precedence binds tighter. Associativity is
- *                       left-by-default in this slice; a third argument
- *                       for right-associative operators is deferred
- *                       until a real grammar needs it (see D27).
+ *  - `@:infix("+", 6)`               — binary infix operator with the
+ *                                      given literal and precedence.
+ *                                      Defaults to left-associative.
+ *  - `@:infix("=", 1, "Right")`      — same, explicitly right-associative.
+ *                                      The optional third argument must
+ *                                      be the string literal `"Left"`
+ *                                      or `"Right"`. Omitting it means
+ *                                      left-associative.
+ *
+ * Higher precedence binds tighter. Associativity controls how chains
+ * of same-precedence operators fold: left-associative yields
+ * `(a + b) + c`, right-associative yields `a = (b = c)`.
  *
  * The strategy is annotate-only. It writes `pratt.op`, `pratt.prec`,
  * and `pratt.assoc` onto the branch `ShapeNode` and returns `null`
@@ -39,9 +45,9 @@ import anyparse.core.Strategy;
  *
  * Scope of the Phase 3 Pratt slice:
  *  - Binary infix only. No prefix, postfix, calls, field access,
- *    index access, `new`, or parenthesised expressions.
- *  - Left-associative only. Right-associative operators require
- *    a third `@:infix` argument and are deferred.
+ *    index access, or `new`.
+ *  - Both left- and right-associative. Right-assoc shipped with
+ *    the assignment slice (`=` / `+=` / `-=`).
  *  - Operator literals are symbolic — word-boundary checks for
  *    word-like operators (e.g. `instanceof`) come when the first
  *    grammar needs them.
@@ -74,8 +80,11 @@ class Pratt implements Strategy {
 		final meta:Null<Metadata> = node.annotations.get('base.meta');
 		if (meta == null) return;
 		for (entry in meta) if (entry.name == ':infix') {
-			if (entry.params.length != 2) {
-				Context.fatalError('@:infix expects exactly two arguments: "op" and precedence:Int', entry.pos);
+			if (entry.params.length < 2 || entry.params.length > 3) {
+				Context.fatalError(
+					'@:infix expects two or three arguments: "op", precedence:Int, and optional associativity ("Left"/"Right")',
+					entry.pos
+				);
 			}
 			final opText:String = switch entry.params[0].expr {
 				case EConst(CString(s, _)): s;
@@ -89,9 +98,20 @@ class Pratt implements Strategy {
 					Context.fatalError('@:infix second argument must be an integer literal', entry.params[1].pos);
 					throw 'unreachable';
 			};
+			final assocValue:String = if (entry.params.length == 3) {
+				switch entry.params[2].expr {
+					case EConst(CString(s, _)) if (s == 'Left' || s == 'Right'): s;
+					case _:
+						Context.fatalError(
+							'@:infix third argument must be the string literal "Left" or "Right"',
+							entry.params[2].pos
+						);
+						throw 'unreachable';
+				}
+			} else 'Left';
 			node.annotations.set('pratt.op', opText);
 			node.annotations.set('pratt.prec', precValue);
-			node.annotations.set('pratt.assoc', 'Left');
+			node.annotations.set('pratt.assoc', assocValue);
 		}
 	}
 

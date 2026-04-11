@@ -1,14 +1,15 @@
 package anyparse.grammar.haxe;
 
 /**
- * Haxe expression grammar — Pratt slice with expanded operator set.
+ * Haxe expression grammar — Pratt slice with parens and right-assoc
+ * assignments on top of the expanded operator set.
  *
- * Five atom constructors plus thirteen binary-operator constructors
- * across five precedence levels. Atoms are literal values a single
+ * Six atom constructors plus sixteen binary-operator constructors
+ * across six precedence levels. Atoms are the leaf shapes a single
  * call to `parseHxExprAtom` resolves; operator branches carry
- * `@:infix(op, prec)` metadata so the Pratt strategy sees them and
- * `Lowering` generates a precedence-climbing loop wrapping the atom
- * parser.
+ * `@:infix(op, prec)` (or `@:infix(op, prec, 'Right')`) metadata so
+ * the Pratt strategy sees them and `Lowering` generates a
+ * precedence-climbing loop wrapping the atom parser.
  *
  * **Atom branches** — all leaves, no operators:
  *
@@ -24,19 +25,31 @@ package anyparse.grammar.haxe;
  *    does not eagerly consume `true`.
  *  - `NullLit` — `null`. Same word-boundary treatment via `expectKw`
  *    in the single-`@:lit` zero-arg case.
+ *  - `ParenExpr` — parenthesised expression `(inner)`. The
+ *    `@:wrap('(', ')')` metadata is handled by the `Lit` strategy,
+ *    which writes `lit.leadText = '('` and `lit.trailText = ')'`.
+ *    `Lowering.lowerEnumBranch` Case 3 (single-`Ref` wrapping) reads
+ *    both and emits the `expectLit('(') → parseHxExpr → expectLit(')')`
+ *    sequence — no Lowering-level change was needed to support
+ *    parens. The inner call re-enters `parseHxExpr` at `minPrec = 0`
+ *    (default), so parens fully reset precedence and any operator
+ *    is allowed inside the group.
  *  - `IdentExpr` — bare identifier (`other`). **Must appear last**:
  *    the identifier regex is permissive and would otherwise match
  *    `null` / `true` / `false` as bare identifiers.
  *
- * **Operator branches** — all binary infix, left-associative. Each
- * `@:infix(op, prec)` carries the operator literal and its precedence;
- * higher precedence binds tighter. Five levels are populated:
+ * **Operator branches** — all binary infix. Each `@:infix(op, prec)`
+ * carries the operator literal and its precedence; higher precedence
+ * binds tighter. The optional third argument `'Left'` / `'Right'`
+ * selects associativity (default is left). Six precedence levels
+ * are populated:
  *
- *  - prec 7 — `*` `/` `%` (multiplicative)
- *  - prec 6 — `+` `-` (additive)
- *  - prec 5 — `==` `!=` `<=` `>=` `<` `>` (comparison)
- *  - prec 4 — `&&` (logical and)
- *  - prec 3 — `||` (logical or)
+ *  - prec 7 — `*` `/` `%` (multiplicative, left-assoc)
+ *  - prec 6 — `+` `-` (additive, left-assoc)
+ *  - prec 5 — `==` `!=` `<=` `>=` `<` `>` (comparison, left-assoc)
+ *  - prec 4 — `&&` (logical and, left-assoc)
+ *  - prec 3 — `||` (logical or, left-assoc)
+ *  - prec 1 — `=` `+=` `-=` (assignment, **right-assoc**)
  *
  * Declaration order inside each precedence level puts longer literals
  * first (`<=` before `<`) for human readability. Correctness does NOT
@@ -47,17 +60,19 @@ package anyparse.grammar.haxe;
  * input `a <= b` would parse as `Lt(a, <error>)` because the naive
  * `matchLit(ctx, "<")` consumes one character and strands the `=`.
  *
- * Precedences 2 and 1 are intentionally left free for future right-
- * associative operators (`??` at 2, ternary at 1) so adding them will
- * not require renumbering the current set. `minPrec` defaults to 0
- * at the outer caller, so every operator at prec >= 1 is always
- * reachable.
+ * Precedence 2 is deliberately free for a future ternary / `??` /
+ * `=>` slot decision — each of those is a separate concept the
+ * corresponding slice will land. Prec 1 is claimed by assignments;
+ * if ternary ultimately needs to sit below assignments in the Haxe
+ * precedence table, that slice revisits the numbering (the exit
+ * criterion for this decision).
  *
- * **Still deferred**: right-associative operators (`=`, `+=`, `??`,
- * `=>`, `? :`), unary prefix (`-x`, `!x`), postfix (`f()`, `o.x`,
- * `a[i]`), parenthesised groups `(a + b)`, bitwise (`& | ^`), shifts
- * (`<< >> >>>`), `new T(...)`. Each is a separate concept the next
- * Pratt slice(s) will address.
+ * **Still deferred**: `*=` / `/=` / `%=` (same right-assoc concept,
+ * next session), bitwise-assignments (`|= &= ^= <<= >>= >>>= ??=`,
+ * blocked on bitwise/shift ops), ternary `? :`, `??`, `=>`, unary
+ * prefix (`-x`, `!x`), postfix (`f()`, `o.x`, `a[i]`), bitwise
+ * (`& | ^`), shifts (`<< >> >>>`), `new T(...)`. Each is a separate
+ * concept a future Pratt slice addresses.
  */
 @:peg
 enum HxExpr {
@@ -71,6 +86,9 @@ enum HxExpr {
 
 	@:lit('null')
 	NullLit;
+
+	@:wrap('(', ')')
+	ParenExpr(inner:HxExpr);
 
 	IdentExpr(v:HxIdentLit);
 
@@ -112,4 +130,13 @@ enum HxExpr {
 
 	@:infix('||', 3)
 	Or(left:HxExpr, right:HxExpr);
+
+	@:infix('=', 1, 'Right')
+	Assign(left:HxExpr, right:HxExpr);
+
+	@:infix('+=', 1, 'Right')
+	AddAssign(left:HxExpr, right:HxExpr);
+
+	@:infix('-=', 1, 'Right')
+	SubAssign(left:HxExpr, right:HxExpr);
 }
