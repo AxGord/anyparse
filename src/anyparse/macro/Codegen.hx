@@ -37,6 +37,7 @@ class Codegen {
 		}
 		fields.push(skipWsField());
 		fields.push(matchLitField());
+		fields.push(matchKwField());
 		fields.push(expectLitField());
 		fields.push(expectKwField());
 		fields.push(decodeJsonStringField());
@@ -78,11 +79,30 @@ class Codegen {
 	// -------- per-rule fields --------
 
 	private static function ruleField(rule:GeneratedRule):Field {
+		// Pratt-loop rules take an extra `minPrec:Int = 0` parameter so the
+		// loop can know when to stop climbing precedence. Every other rule
+		// takes just the context. The default value keeps external call
+		// sites (`parseHxExpr(ctx)` from other rules) unchanged.
+		//
+		// The default-value-is-enough-for-optional form (`minPrec:Int = 0`,
+		// no `opt: true`) keeps the parameter typed as non-nullable `Int`.
+		// `opt: true` with a default value still widens the type to
+		// `Null<Int>` under strict null safety — which would make the
+		// `_savedPos` rollback branch's `precValue < minPrec` comparison
+		// fail the null-safety binop check inside the generated parser.
+		final args:Array<FunctionArg> = [{name: 'ctx', type: macro : anyparse.runtime.Parser}];
+		if (rule.hasMinPrec) {
+			args.push({
+				name: 'minPrec',
+				type: macro : Int,
+				value: macro 0,
+			});
+		}
 		return {
 			name: rule.fnName,
 			access: [APrivate, AStatic],
 			kind: FFun({
-				args: [{name: 'ctx', type: macro : anyparse.runtime.Parser}],
+				args: args,
 				ret: rule.returnCT,
 				expr: rule.body,
 			}),
@@ -160,6 +180,49 @@ class Codegen {
 							'expected "' + lit + '"'
 						);
 					}
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * `matchKw` is the peek variant of `expectKw`: on a successful match
+	 * AND a passing word-boundary check it consumes the literal and
+	 * returns `true`; on either failure it rewinds `ctx.pos` to the
+	 * pre-call position and returns `false`. Used by enum-branch Case 2
+	 * (multi-`@:lit` on a Bool arg) where the dispatch is a sequence of
+	 * `if (matchKw(...)) return Ctor(value)` attempts and a partial
+	 * match on the prefix of an identifier (`trueish`) must not consume
+	 * `true`. Symbolic literals route through plain `matchLit` — the
+	 * word-boundary check is emitted only when the literal ends with a
+	 * word character, determined at macro time by `Lowering`.
+	 */
+	private static function matchKwField():Field {
+		return {
+			name: 'matchKw',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [
+					{name: 'ctx', type: macro : anyparse.runtime.Parser},
+					{name: 'keyword', type: macro : String},
+				],
+				ret: macro : Bool,
+				expr: macro {
+					final _savedPos:Int = ctx.pos;
+					if (!matchLit(ctx, keyword)) return false;
+					if (ctx.pos < ctx.input.length) {
+						final c:Int = ctx.input.charCodeAt(ctx.pos);
+						final isWord:Bool = (c >= 'a'.code && c <= 'z'.code)
+							|| (c >= 'A'.code && c <= 'Z'.code)
+							|| (c >= '0'.code && c <= '9'.code)
+							|| c == '_'.code;
+						if (isWord) {
+							ctx.pos = _savedPos;
+							return false;
+						}
+					}
+					return true;
 				},
 			}),
 			pos: Context.currentPos(),

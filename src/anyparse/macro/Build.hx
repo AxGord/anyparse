@@ -9,6 +9,7 @@ import anyparse.core.LoweringCtx;
 import anyparse.core.Mode;
 import anyparse.macro.strategy.Kw;
 import anyparse.macro.strategy.Lit;
+import anyparse.macro.strategy.Pratt;
 import anyparse.macro.strategy.Re;
 import anyparse.macro.strategy.Skip;
 
@@ -66,6 +67,7 @@ class Build {
 		final registry:StrategyRegistry = new StrategyRegistry();
 		registry.register(new Kw());
 		registry.register(new Lit());
+		registry.register(new Pratt());
 		registry.register(new Re());
 		registry.register(new Skip());
 		registry.prepare();

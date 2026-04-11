@@ -43,37 +43,178 @@ class Lowering {
 
 	public function generate():Array<GeneratedRule> {
 		final rules:Array<GeneratedRule> = [];
-		for (typePath => node in shape.rules) rules.push(lowerRule(typePath, node));
+		for (typePath => node in shape.rules) for (rule in lowerRule(typePath, node)) rules.push(rule);
 		return rules;
 	}
 
-	private function lowerRule(typePath:String, node:ShapeNode):GeneratedRule {
-		final simpleName:String = simpleName(typePath);
-		final fnName:String = 'parse$simpleName';
-		final returnCT:ComplexType = TPath({pack: packOf(typePath), name: simpleName, params: []});
-		final body:Expr = switch node.kind {
-			case Alt: lowerEnum(node, typePath);
-			case Seq: lowerStruct(node, typePath);
-			case Terminal: lowerTerminal(node, typePath, simpleName);
+	private function lowerRule(typePath:String, node:ShapeNode):Array<GeneratedRule> {
+		final simple:String = simpleName(typePath);
+		final fnName:String = 'parse$simple';
+		final returnCT:ComplexType = TPath({pack: packOf(typePath), name: simple, params: []});
+		// `eregByRule` is populated as a side-effect of `lowerTerminal`, so
+		// every branch that builds the body must run before we read back
+		// the registered eregs. The loop-vs-atom Pratt split hangs the
+		// eregs off the loop rule (which is the public entry point for
+		// the enum); the atom sub-rule has none of its own.
+		return switch node.kind {
+			case Alt if (hasPrattBranch(node)):
+				// Pratt-enabled enum: emit two rules sharing the same return type.
+				//  * `parseXxx(ctx, ?minPrec = 0)` — the precedence-climbing loop
+				//    (primary public entry; the regular `parse` wrapper calls it).
+				//  * `parseXxxAtom(ctx)` — the atoms-only dispatcher covering the
+				//    non-infix enum branches through the existing Cases 1–4 of
+				//    `lowerEnumBranch`. The Pratt loop calls this for the left
+				//    operand, then repeatedly for every right operand as long as
+				//    the next peeked operator's precedence meets `minPrec`.
+				//
+				// The two rules deliberately share a return type but differ in
+				// signature: the loop rule takes `?minPrec` so recursion inside
+				// the loop can climb levels, whereas external callers
+				// (`parseHxVarDecl` → `parseHxExpr(ctx)`) drop the parameter via
+				// its default value, keeping every other rule's call sites
+				// untouched.
+				final loopBody:Expr = lowerPrattLoop(node, typePath, simple);
+				final atomBody:Expr = lowerEnum(node, typePath, /* atomsOnly */ true);
+				final eregs:Array<GeneratedRule.EregSpec> = collectEregs(typePath);
+				final loopRule:GeneratedRule = new GeneratedRule(fnName, returnCT, loopBody, eregs, true);
+				final atomRule:GeneratedRule = new GeneratedRule('${fnName}Atom', returnCT, atomBody, [], false);
+				[loopRule, atomRule];
+			case Alt:
+				final body:Expr = lowerEnum(node, typePath, false);
+				[new GeneratedRule(fnName, returnCT, body, collectEregs(typePath))];
+			case Seq:
+				final body:Expr = lowerStruct(node, typePath);
+				[new GeneratedRule(fnName, returnCT, body, collectEregs(typePath))];
+			case Terminal:
+				final body:Expr = lowerTerminal(node, typePath, simple);
+				[new GeneratedRule(fnName, returnCT, body, collectEregs(typePath))];
 			case _:
 				Context.fatalError('Lowering: cannot lower top-level ${node.kind} for $typePath', Context.currentPos());
 				throw 'unreachable';
 		};
+	}
+
+	private function collectEregs(typePath:String):Array<GeneratedRule.EregSpec> {
 		final eregs:Array<GeneratedRule.EregSpec> = [];
 		if (eregByRule.exists(typePath)) eregs.push(eregByRule.get(typePath));
-		return new GeneratedRule(fnName, returnCT, body, eregs);
+		return eregs;
+	}
+
+	private static function hasPrattBranch(node:ShapeNode):Bool {
+		for (branch in node.children) if (branch.annotations.get('pratt.prec') != null) return true;
+		return false;
 	}
 
 	// -------- enum rule --------
 
-	private function lowerEnum(node:ShapeNode, typePath:String):Expr {
-		final branchExprs:Array<Expr> = [for (branch in node.children) tryBranch(branch, typePath)];
+	/**
+	 * Lower an enum `ShapeNode` into the body of its `parseXxx` function.
+	 *
+	 * `atomsOnly` controls whether Pratt-annotated branches (those with a
+	 * `pratt.prec` annotation) are included. A normal enum rule includes
+	 * every branch (`atomsOnly = false`); the atom function emitted for a
+	 * Pratt-enabled enum skips the infix branches, because the Pratt loop
+	 * owns their construction and must not let `tryBranch` attempt to
+	 * parse a `left/right` pair that has no standalone meaning.
+	 */
+	private function lowerEnum(node:ShapeNode, typePath:String, atomsOnly:Bool):Expr {
+		final branches:Array<ShapeNode> = atomsOnly
+			? [for (b in node.children) if (b.annotations.get('pratt.prec') == null) b]
+			: node.children;
+		final branchExprs:Array<Expr> = [for (branch in branches) tryBranch(branch, typePath)];
 		final failExpr:Expr = macro throw new anyparse.runtime.ParseError(
 			new anyparse.runtime.Span(ctx.pos, ctx.pos),
 			$v{'expected ${simpleName(typePath)}'}
 		);
 		final statements:Array<Expr> = branchExprs.concat([failExpr]);
 		return macro $b{statements};
+	}
+
+	/**
+	 * Lower the Pratt-loop body for a `@:infix`-annotated enum. The body
+	 * implements a standard precedence-climbing loop:
+	 *
+	 * ```
+	 *   var left = parseXxxAtom(ctx);
+	 *   while (true) {
+	 *       skipWs(ctx);
+	 *       final _savedPos = ctx.pos;
+	 *       // Try each operator in declaration order. Grammar authors
+	 *       // must list longer operators before their prefixes when two
+	 *       // operators share a lexical prefix (`==` before `=`), since
+	 *       // the loop picks the first match.
+	 *       if (matchLit(ctx, "<op1>")) { ... }
+	 *       else if (matchLit(ctx, "<op2>")) { ... }
+	 *       else break;
+	 *   }
+	 *   return left;
+	 * ```
+	 *
+	 * Each matched branch checks the operator's precedence against
+	 * `minPrec`: if it falls below, the matched literal is rolled back and
+	 * the loop breaks — the operator belongs to an outer caller. Otherwise
+	 * the right operand is parsed by recursing into `parseXxx` itself with
+	 * an elevated `minPrec` (prec + 1 for left-associative, prec for
+	 * right-associative — the slice supports only left in this session),
+	 * and `left` is replaced with a freshly constructed ctor call built
+	 * from the matched branch.
+	 */
+	private function lowerPrattLoop(node:ShapeNode, typePath:String, simple:String):Expr {
+		final returnCT:ComplexType = TPath({pack: packOf(typePath), name: simple, params: []});
+		final loopFnName:String = 'parse$simple';
+		final atomFnName:String = 'parse${simple}Atom';
+		final atomCall:Expr = {
+			expr: ECall(macro $i{atomFnName}, [macro ctx]),
+			pos: Context.currentPos(),
+		};
+		final prattBranches:Array<ShapeNode> = [
+			for (b in node.children) if (b.annotations.get('pratt.prec') != null) b
+		];
+		// Fold the operator chain into a nested if/else if tree. Each leaf
+		// branch consumes the operator literal (already matched at the
+		// peek), enforces `minPrec`, parses the right operand by recursing
+		// into `parseXxx` at `prec + 1` (left-associative only in this
+		// slice), and rebuilds `left` as the matched ctor call.
+		var opChain:Expr = macro _matched = false;
+		for (i in 0...prattBranches.length) {
+			final branch:ShapeNode = prattBranches[prattBranches.length - 1 - i];
+			final opText:String = branch.annotations.get('pratt.op');
+			final precValue:Int = branch.annotations.get('pratt.prec');
+			final nextMinPrec:Int = precValue + 1; // left-associative only
+			final ctor:String = branch.annotations.get('base.ctor');
+			final ctorPath:Array<String> = packOf(typePath).concat([simple, ctor]);
+			final ctorRef:Expr = MacroStringTools.toFieldExpr(ctorPath);
+			final rightCall:Expr = {
+				expr: ECall(macro $i{loopFnName}, [macro ctx, macro $v{nextMinPrec}]),
+				pos: Context.currentPos(),
+			};
+			final ctorCall:Expr = {
+				expr: ECall(ctorRef, [macro left, macro _right]),
+				pos: Context.currentPos(),
+			};
+			final branchBody:Expr = macro {
+				if ($v{precValue} < minPrec) {
+					ctx.pos = _savedPos;
+					_matched = false;
+				} else {
+					skipWs(ctx);
+					final _right:$returnCT = $rightCall;
+					left = $ctorCall;
+				}
+			};
+			opChain = macro if (matchLit(ctx, $v{opText})) $branchBody else $opChain;
+		}
+		return macro {
+			var left:$returnCT = $atomCall;
+			while (true) {
+				skipWs(ctx);
+				final _savedPos:Int = ctx.pos;
+				var _matched:Bool = true;
+				$opChain;
+				if (!_matched) break;
+			}
+			return left;
+		};
 	}
 
 	private function tryBranch(branch:ShapeNode, typePath:String):Expr {
@@ -96,23 +237,52 @@ class Lowering {
 		final trailText:Null<String> = branch.annotations.get('lit.trailText');
 		final sepText:Null<String> = branch.annotations.get('lit.sepText');
 
-		// Case 1: zero-arg ctor with @:lit(single).
+		// Case 1: zero-arg ctor with @:lit(single). When the literal ends
+		// with a word character (`null`, `true`, `default`, …), emit the
+		// word-boundary-checking `expectKw` instead of `expectLit`, so a
+		// partial match on the prefix of a longer identifier (`nullable`,
+		// `trueish`) is rejected and the try/catch wrapper in `tryBranch`
+		// rolls back to the next branch. Symbolic literals (`;`, `=`, `{`)
+		// route through plain `expectLit` — a word boundary after them
+		// would falsely reject sequences like `;foo`.
 		if (litList != null && litList.length == 1 && children.length == 0) {
 			final lit:String = litList[0];
+			final expectCall:Expr = endsWithWordChar(lit)
+				? macro expectKw(ctx, $v{lit})
+				: macro expectLit(ctx, $v{lit});
 			return macro {
 				skipWs(ctx);
-				expectLit(ctx, $v{lit});
+				$expectCall;
 				return $ctorRef;
 			};
 		}
 
-		// Case 2: single-arg ctor with @:lit(multi) — literals map to ident values of the field type.
+		// Case 2: single-arg ctor with @:lit(multi) — literals map to
+		// ident values of the field type. When the first literal ends
+		// with a word character, emit `matchKw` (peek + word-boundary)
+		// for every dispatch; mixed symbolic / word-like literal sets
+		// inside the same `@:lit(...)` are rejected at macro time since
+		// their dispatch semantics would be inconsistent.
 		if (litList != null && litList.length > 1 && children.length == 1) {
+			final wordLike:Bool = endsWithWordChar(litList[0]);
+			for (lit in litList) {
+				if (endsWithWordChar(lit) != wordLike) {
+					Context.fatalError(
+						'Lowering: multi-@:lit set mixes word-like and symbolic literals: ${litList.join(", ")}',
+						Context.currentPos()
+					);
+				}
+			}
+			final matchFnName:String = wordLike ? 'matchKw' : 'matchLit';
 			final attempts:Array<Expr> = [];
 			for (lit in litList) {
 				final valueExpr:Expr = {expr: EConst(CIdent(lit)), pos: Context.currentPos()};
 				final call:Expr = {expr: ECall(ctorRef, [valueExpr]), pos: Context.currentPos()};
-				attempts.push(macro if (matchLit(ctx, $v{lit})) return $call);
+				final matchCall:Expr = {
+					expr: ECall(macro $i{matchFnName}, [macro ctx, macro $v{lit}]),
+					pos: Context.currentPos(),
+				};
+				attempts.push(macro if ($matchCall) return $call);
 			}
 			final failExpr:Expr = macro throw new anyparse.runtime.ParseError(
 				new anyparse.runtime.Span(ctx.pos, ctx.pos),
@@ -523,6 +693,23 @@ class Lowering {
 			};
 		}
 		return null;
+	}
+
+	/**
+	 * Returns true if the literal's last character is a word character
+	 * (`[A-Za-z0-9_]`). Used by `lowerEnumBranch` Cases 1 and 2 to decide
+	 * between `expectLit` / `matchLit` and their word-boundary-enforcing
+	 * `expectKw` / `matchKw` counterparts for `@:lit`-annotated branches.
+	 * An empty literal returns false — the branch would be nonsense, and
+	 * the surrounding shape checks reject it before this helper runs.
+	 */
+	private static function endsWithWordChar(lit:String):Bool {
+		if (lit.length == 0) return false;
+		final c:Int = lit.charCodeAt(lit.length - 1);
+		return (c >= 'a'.code && c <= 'z'.code)
+			|| (c >= 'A'.code && c <= 'Z'.code)
+			|| (c >= '0'.code && c <= '9'.code)
+			|| c == '_'.code;
 	}
 
 	private static function hasMeta(node:ShapeNode, tag:String):Bool {

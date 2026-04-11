@@ -1,39 +1,52 @@
 package anyparse.grammar.haxe;
 
 /**
- * Haxe expression atom grammar — the atom-only slice.
+ * Haxe expression grammar — Pratt slice.
  *
- * Four constructors, all leaves (no operators, no calls, no field
- * access). They cover the literal atoms that a Pratt expression
- * parser will eventually wrap in precedence-driven operator nodes:
+ * Five atom constructors and four binary-operator constructors. The
+ * atoms are literal values that a single call to `parseHxExprAtom`
+ * resolves; the operator branches carry `@:infix` metadata so the
+ * Pratt strategy sees them and `Lowering` generates a precedence-
+ * climbing loop that wraps the atom parser.
  *
- *  - `IntLit` — positive integer literal (`42`)
- *  - `BoolLit` — `true` / `false`
- *  - `NullLit` — `null`
- *  - `IdentExpr` — bare identifier (`other`)
+ * **Atom branches** — all leaves, no operators:
  *
- * `FloatLit` and `StringLit` are deliberately deferred. `FloatLit`
- * shares an `IntLit` prefix (`3` of `3.14`) and wants a branch-
- * ordering / lookahead fix that belongs with the Pratt slice.
- * `StringLit` wants real Haxe escape semantics (different from JSON)
- * and should ride with a format-contributed decoder table.
+ *  - `FloatLit` — decimal with mandatory fractional part (`3.14`,
+ *    `1.0e-3`). **Must appear before `IntLit`**: the enum-branch
+ *    try-loop iterates in source order, and `3.14` has to be
+ *    matched as one float, not as `IntLit(3)` followed by stray
+ *    `.14`. A bare `42` fails the float regex on the missing `.`
+ *    and rolls back to `IntLit`.
+ *  - `IntLit` — positive integer (`42`).
+ *  - `BoolLit` — `true` / `false`. The `@:lit` multi-literal case
+ *    in `Lowering` now emits `matchKw` (word-boundary aware) rather
+ *    than `matchLit`, so `var x = trueish;` no longer eagerly
+ *    consumes `true` and leaves stray `ish`.
+ *  - `NullLit` — `null`. Same word-boundary treatment via
+ *    `expectKw` in the single-`@:lit` zero-arg case.
+ *  - `IdentExpr` — bare identifier (`other`). **Must appear last**:
+ *    the identifier regex is permissive and would otherwise match
+ *    `null` / `true` / `false` as bare identifiers.
  *
- * **Branch order matters.** The enum-branch try-loop in the generated
- * parser iterates children in source order. `NullLit` and `BoolLit`
- * must appear before `IdentExpr`, otherwise `IdentExpr` eagerly
- * matches `null` / `true` / `false` as bare identifiers. `IntLit`
- * is kept at the top because it is unambiguous with the others
- * (digits never start a keyword or an identifier).
+ * **Operator branches** — all binary infix, left-associative. The
+ * `@:infix` metadata carries the operator literal and its precedence;
+ * higher precedence binds tighter. Multiplicative `*` and `/` are at
+ * precedence 7, additive `+` and `-` at 6, mirroring Haxe's standard
+ * operator table.
  *
- * **Known debt:** word-boundary enforcement for `BoolLit` / `NullLit`
- * is deferred. Multi-`@:lit` and zero-arg `@:lit` currently emit
- * bare `matchLit` without a trailing word-boundary check, so
- * `trueish` would partial-match `true` and leave `ish`. This is
- * acceptable for the current test corpus; close when a real
- * collision appears (see known debt #7 in session_state.md).
+ *  - `Add`, `Sub` at prec 6
+ *  - `Mul`, `Div` at prec 7
+ *
+ * Associativity is left-only in this slice. Right-associative
+ * operators (`=`, `??`), unary prefix (`-x`, `!x`), function calls,
+ * field access, parenthesised groups, and the remaining binary
+ * operators (`==`, `!=`, `<`, `<=`, `&&`, `||`, `|`, `&`, `^`, `<<`,
+ * `>>`, `>>>`, `%`, `...`, `=>`) are deferred to later Pratt slices.
  */
 @:peg
 enum HxExpr {
+
+	FloatLit(v:HxFloatLit);
 
 	IntLit(v:HxIntLit);
 
@@ -44,4 +57,16 @@ enum HxExpr {
 	NullLit;
 
 	IdentExpr(v:HxIdentLit);
+
+	@:infix('+', 6)
+	Add(left:HxExpr, right:HxExpr);
+
+	@:infix('-', 6)
+	Sub(left:HxExpr, right:HxExpr);
+
+	@:infix('*', 7)
+	Mul(left:HxExpr, right:HxExpr);
+
+	@:infix('/', 7)
+	Div(left:HxExpr, right:HxExpr);
 }

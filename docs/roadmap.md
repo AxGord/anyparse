@@ -117,6 +117,18 @@ Sessions should align with phase boundaries — start a new Claude Code session 
 - `anyparse.grammar.haxe.HxVarDecl` — third field `@:optional @:lead('=') var init:Null<HxExpr>;` wires expression atoms into the class-member grammar.
 - `test/unit/HxExprSliceTest.hx` — 12 tests covering absent init, each atom type, whitespace around `=`, empty-init rejection, missing-semicolon rejection, mixed class members, and multi-decl through the module root. 691 assertions green on neko/js/interp.
 
+**Phase 3 Pratt slice — what landed (2026-04-11, after expression-atom)**:
+- `anyparse.macro.strategy.Pratt` — new annotate-only strategy owning `@:infix("op", prec)`. Writes `pratt.op`, `pratt.prec`, and `pratt.assoc` onto enum-branch ShapeNodes. Associativity defaults to `Left` — right-associative operators deferred.
+- `Lowering.lowerRule` — now returns `Array<GeneratedRule>` so a single Pratt-enabled enum emits two sibling functions: `parseXxx(ctx, minPrec = 0)` (the precedence-climbing loop, flagged `hasMinPrec`) and `parseXxxAtom(ctx)` (the atoms-only dispatcher). Non-Pratt enums still emit exactly one rule, so every other grammar path is unchanged.
+- `Lowering.lowerPrattLoop` — new function that folds the Pratt branches into a nested `if / else if` operator dispatch. Each branch checks `precValue < minPrec` for rollback, recurses into the loop at `prec + 1` for the right operand, and rebuilds `left` as the branch's ctor call.
+- `Lowering.lowerEnum` — gained an `atomsOnly` flag that filters out branches with `pratt.prec` so the atom function sees only leaves.
+- `Lowering.lowerEnumBranch` Cases 1 and 2 — word-boundary aware: when a `@:lit` literal ends with a word character the generator emits `expectKw` / `matchKw` instead of `expectLit` / `matchLit`. Closes known debt #7. Multi-`@:lit` sets that mix word-like and symbolic literals are now a compile-time error.
+- `Codegen` — new `matchKw(ctx, keyword):Bool` runtime helper (peek + word-boundary check with rollback on failure). `ruleField` now emits an additional `minPrec:Int = 0` parameter on rules flagged `hasMinPrec`; the default-value-only form (no `opt: true`) keeps the parameter as non-nullable `Int` under strict null safety.
+- `GeneratedRule` — new `hasMinPrec:Bool` field so Codegen knows which rules need the Pratt parameter.
+- `anyparse.grammar.haxe.HxFloatLit` — new Float terminal with `@:re('[0-9]+\\.[0-9]+(?:[eE][-+]?[0-9]+)?')`. Reuses the existing `Float` decoder row in `Lowering.lowerTerminal`; no new row needed.
+- `anyparse.grammar.haxe.HxExpr` — five atom branches (`FloatLit` before `IntLit`, then BoolLit / NullLit / IdentExpr) plus four binary-infix branches (`Add`/`Sub` at prec 6, `Mul`/`Div` at prec 7). Branch source order drives both atom dispatch and operator precedence-mixing: FloatLit before IntLit lets `3.14` land correctly without leaving a stray `.14`.
+- `test/unit/HxPrattSliceTest.hx` — 19 tests: each operator alone, precedence mixing (`1 + 2 * 3`, `2 * 3 + 1`, `1 + 2 * 3 + 4`), left-associativity (`1 + 2 + 3`, `10 - 3 - 2`), FloatLit with and without exponent, float-plus-int, bare-int after FloatLit rollback, `trueish` / `nullable` / `falsey` word-boundary rejections, trailing-operator rejection, ident + int, and end-to-end via HaxeModuleFastParser. 746 assertions green on neko/js/interp (691 baseline + 55 new).
+
 **Non-deliverables for the skeleton slice**:
 - Expressions, operators, Pratt strategy.
 - Function parameters, function bodies with statements.
