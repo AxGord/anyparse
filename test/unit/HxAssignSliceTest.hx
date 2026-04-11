@@ -12,21 +12,30 @@ import anyparse.runtime.ParseError;
 /**
  * Phase 3 assignment-slice tests for the macro-generated Haxe parser.
  *
- * Covers the first right-associative Pratt operators landed together
- * with the parens slice: `=`, `+=`, `-=`, all at precedence 1. The
- * `Pratt.annotate` strategy gained an optional third `@:infix` arg
+ * Covers the right-associative Pratt operators at precedence 1. The
+ * `Pratt.annotate` strategy accepts an optional third `@:infix` arg
  * (`'Left'` / `'Right'`, default `'Left'`), and `Lowering.lowerPrattLoop`
  * picks `nextMinPrec = prec` for right-associative branches instead of
  * `prec + 1` for left-associative, so same-prec chains fold right
  * instead of left.
  *
- * Grammar coverage in this slice:
- *  - `a = 1`, `a += 1`, `a -= 1` — per-op smoke for each new ctor.
+ * Two shipping waves share this file:
+ *  - parens + right-assoc slice: `=`, `+=`, `-=`.
+ *  - bitwise + shifts + arithmetic compound assigns slice: `*=`,
+ *    `/=`, `%=`. Same right-assoc concept, same prec 1, no new
+ *    macro work — only new ctors on `HxExpr`.
+ *
+ * Grammar coverage in this file:
+ *  - `a = 1`, `a += 1`, `a -= 1`, `a *= 1`, `a /= 1`, `a %= 1` —
+ *    per-op smoke for each assignment ctor.
  *  - `a = b = 1` — right-fold: `Assign(a, Assign(b, 1))`.
- *  - `a += b -= 1` — mixed-op right-fold.
+ *  - `a += b -= 1` — mixed-op right-fold (first wave).
+ *  - `a *= b /= 1` — mixed-op right-fold (second wave).
+ *  - `a *= b += 1` — cross-wave right-fold, proves the two batches
+ *    compose inside a single chain.
  *  - `a = b + 1` — `+` binds tighter than `=`.
  *  - `a + 1 = 2` — lowest-precedence proof: `=` at prec 1 sits
- *    below `+` at prec 6, so the `+` subtree folds first and the
+ *    below `+` at prec 8, so the `+` subtree folds first and the
  *    whole `a + 1` ends up on the left of the `=`. The result has
  *    an `Add` as its `Assign` lvalue, which is semantically
  *    nonsensical but structurally correct — a later semantic pass
@@ -112,7 +121,7 @@ class HxAssignSliceTest extends Test {
 	}
 
 	public function testAssignBindsLooserThanAdd():Void {
-		// a = b + 1 → Assign(a, Add(b, 1)). `+` at prec 6 binds
+		// a = b + 1 → Assign(a, Add(b, 1)). `+` at prec 8 binds
 		// tighter than `=` at prec 1, so the inner recursion folds
 		// the whole `b + 1` before returning to the outer assign.
 		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a = b + 1; }');
@@ -127,7 +136,7 @@ class HxAssignSliceTest extends Test {
 	}
 
 	public function testAssignWrapsAdditiveLvalue():Void {
-		// a + 1 = 2 → Assign(Add(a, 1), 2). `+` at prec 6 binds
+		// a + 1 = 2 → Assign(Add(a, 1), 2). `+` at prec 8 binds
 		// tighter than `=` at prec 1, so `a + 1` folds first inside
 		// the inner loop; then the `=` at prec 1 is accepted by the
 		// outer loop because its prec (1) is >= minPrec (0, the
@@ -187,6 +196,73 @@ class HxAssignSliceTest extends Test {
 		// then the right-hand `parseHxExpr` tries every atom branch
 		// and fails on the `;` terminator.
 		Assert.raises(() -> HaxeFastParser.parse('class Foo { var x:Int = a = ; }'), ParseError);
+	}
+
+	public function testMulAssign():Void {
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a *= 1; }');
+		switch decl.init {
+			case MulAssign(IdentExpr(l), IntLit(r)):
+				Assert.equals('a', (l : String));
+				Assert.equals(1, (r : Int));
+			case null, _:
+				Assert.fail('expected MulAssign(IdentExpr(a), IntLit(1)), got ${decl.init}');
+		}
+	}
+
+	public function testDivAssign():Void {
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a /= 1; }');
+		switch decl.init {
+			case DivAssign(IdentExpr(l), IntLit(r)):
+				Assert.equals('a', (l : String));
+				Assert.equals(1, (r : Int));
+			case null, _:
+				Assert.fail('expected DivAssign(IdentExpr(a), IntLit(1)), got ${decl.init}');
+		}
+	}
+
+	public function testModAssign():Void {
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a %= 1; }');
+		switch decl.init {
+			case ModAssign(IdentExpr(l), IntLit(r)):
+				Assert.equals('a', (l : String));
+				Assert.equals(1, (r : Int));
+			case null, _:
+				Assert.fail('expected ModAssign(IdentExpr(a), IntLit(1)), got ${decl.init}');
+		}
+	}
+
+	public function testMulDivRightAssocChain():Void {
+		// a *= b /= 1 → MulAssign(a, DivAssign(b, 1)). Second-wave
+		// mixed-op right-fold. Same semantics as `testMixedRightAssocChain`,
+		// different ctor pair, proves that `*=` and `/=` join the
+		// existing assignment chain correctly.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a *= b /= 1; }');
+		switch decl.init {
+			case MulAssign(IdentExpr(a), DivAssign(IdentExpr(b), IntLit(one))):
+				Assert.equals('a', (a : String));
+				Assert.equals('b', (b : String));
+				Assert.equals(1, (one : Int));
+			case null, _:
+				Assert.fail('expected MulAssign(a, DivAssign(b, 1)), got ${decl.init}');
+		}
+	}
+
+	public function testCrossWaveCompoundChain():Void {
+		// a *= b += 1 → MulAssign(a, AddAssign(b, 1)). Cross-wave
+		// chain: the outer operator is from the second slice (`*=`)
+		// and the inner is from the first slice (`+=`). Both sit at
+		// prec 1 right-assoc, so the fold direction is the same and
+		// the Pratt loop composes them without knowing they were
+		// introduced in different sessions.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a *= b += 1; }');
+		switch decl.init {
+			case MulAssign(IdentExpr(a), AddAssign(IdentExpr(b), IntLit(one))):
+				Assert.equals('a', (a : String));
+				Assert.equals('b', (b : String));
+				Assert.equals(1, (one : Int));
+			case null, _:
+				Assert.fail('expected MulAssign(a, AddAssign(b, 1)), got ${decl.init}');
+		}
 	}
 
 	private function parseSingleVarDecl(source:String):HxVarDecl {

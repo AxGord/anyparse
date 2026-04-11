@@ -1,11 +1,11 @@
 package anyparse.grammar.haxe;
 
 /**
- * Haxe expression grammar — Pratt slice with parens and right-assoc
- * assignments on top of the expanded operator set.
+ * Haxe expression grammar — bitwise, shifts, and arithmetic compound
+ * assigns on top of the parens + right-assoc slice.
  *
- * Six atom constructors plus sixteen binary-operator constructors
- * across six precedence levels. Atoms are the leaf shapes a single
+ * Six atom constructors plus twenty-five binary-operator constructors
+ * across nine precedence levels. Atoms are the leaf shapes a single
  * call to `parseHxExprAtom` resolves; operator branches carry
  * `@:infix(op, prec)` (or `@:infix(op, prec, 'Right')`) metadata so
  * the Pratt strategy sees them and `Lowering` generates a
@@ -41,37 +41,50 @@ package anyparse.grammar.haxe;
  * **Operator branches** — all binary infix. Each `@:infix(op, prec)`
  * carries the operator literal and its precedence; higher precedence
  * binds tighter. The optional third argument `'Left'` / `'Right'`
- * selects associativity (default is left). Six precedence levels
- * are populated:
+ * selects associativity (default is left). Nine precedence levels
+ * are populated, following the Haxe reference table (shifts tighter
+ * than bitwise, bitwise tighter than comparison):
  *
- *  - prec 7 — `*` `/` `%` (multiplicative, left-assoc)
- *  - prec 6 — `+` `-` (additive, left-assoc)
+ *  - prec 9 — `*` `/` `%` (multiplicative, left-assoc)
+ *  - prec 8 — `+` `-` (additive, left-assoc)
+ *  - prec 7 — `<<` `>>` `>>>` (shift, left-assoc)
+ *  - prec 6 — `|` `&` `^` (bitwise, left-assoc)
  *  - prec 5 — `==` `!=` `<=` `>=` `<` `>` (comparison, left-assoc)
  *  - prec 4 — `&&` (logical and, left-assoc)
  *  - prec 3 — `||` (logical or, left-assoc)
- *  - prec 1 — `=` `+=` `-=` (assignment, **right-assoc**)
+ *  - prec 1 — `=` `+=` `-=` `*=` `/=` `%=` (assignment, **right-assoc**)
+ *
+ * Prior slices shipped `* / %` at prec 7 and `+ -` at prec 6; this
+ * slice renumbers them upward (9 and 8) to open the 6/7 slots for
+ * bitwise and shift. Test assertions check parse trees, not absolute
+ * precedence integers, so the renumbering is transparent — relative
+ * ordering is preserved for every pre-existing operator pair, and
+ * every existing precedence test continues to assert the same shape.
  *
  * Declaration order inside each precedence level puts longer literals
- * first (`<=` before `<`) for human readability. Correctness does NOT
- * depend on this order — `Lowering.lowerPrattLoop` sorts operators by
- * literal length descending before emitting the dispatch chain, so the
- * generated parser always attempts the longer prefix first regardless
- * of how the grammar author orders the branches. Without that sort,
- * input `a <= b` would parse as `Lt(a, <error>)` because the naive
+ * first (`<=` before `<`, `>>>` before `>>` before `>`) for human
+ * readability. Correctness does NOT depend on this order —
+ * `Lowering.lowerPrattLoop` sorts operators by literal length
+ * descending before emitting the dispatch chain, so the generated
+ * parser always attempts the longer prefix first regardless of how
+ * the grammar author orders the branches. Without that sort, input
+ * `a <= b` would parse as `Lt(a, <error>)` because the naive
  * `matchLit(ctx, "<")` consumes one character and strands the `=`.
+ * Same story for `<<` vs `<`, `>>>` vs `>>` vs `>`, `&&` vs `&`,
+ * `||` vs `|`, `*=` vs `*`, and every other shared-prefix pair —
+ * each conflict is resolved at macro time by the length-desc sort.
  *
  * Precedence 2 is deliberately free for a future ternary / `??` /
  * `=>` slot decision — each of those is a separate concept the
  * corresponding slice will land. Prec 1 is claimed by assignments;
  * if ternary ultimately needs to sit below assignments in the Haxe
- * precedence table, that slice revisits the numbering (the exit
- * criterion for this decision).
+ * precedence table, that slice revisits the numbering.
  *
- * **Still deferred**: `*=` / `/=` / `%=` (same right-assoc concept,
- * next session), bitwise-assignments (`|= &= ^= <<= >>= >>>= ??=`,
- * blocked on bitwise/shift ops), ternary `? :`, `??`, `=>`, unary
- * prefix (`-x`, `!x`), postfix (`f()`, `o.x`, `a[i]`), bitwise
- * (`& | ^`), shifts (`<< >> >>>`), `new T(...)`. Each is a separate
+ * **Still deferred**: bitwise/shift compound assigns (`|= &= ^= <<=
+ * >>= >>>=`) follow in slice β — same right-assoc concept as
+ * shipped `+= -= *= /= %=`, no new macro work. `??=` waits for `??`.
+ * Ternary `? :`, `??`, `=>`, unary prefix (`-x`, `!x`, `~x`),
+ * postfix (`f()`, `o.x`, `a[i]`), `new T(...)` — each is a separate
  * concept a future Pratt slice addresses.
  */
 @:peg
@@ -92,20 +105,38 @@ enum HxExpr {
 
 	IdentExpr(v:HxIdentLit);
 
-	@:infix('*', 7)
+	@:infix('*', 9)
 	Mul(left:HxExpr, right:HxExpr);
 
-	@:infix('/', 7)
+	@:infix('/', 9)
 	Div(left:HxExpr, right:HxExpr);
 
-	@:infix('%', 7)
+	@:infix('%', 9)
 	Mod(left:HxExpr, right:HxExpr);
 
-	@:infix('+', 6)
+	@:infix('+', 8)
 	Add(left:HxExpr, right:HxExpr);
 
-	@:infix('-', 6)
+	@:infix('-', 8)
 	Sub(left:HxExpr, right:HxExpr);
+
+	@:infix('<<', 7)
+	Shl(left:HxExpr, right:HxExpr);
+
+	@:infix('>>>', 7)
+	UShr(left:HxExpr, right:HxExpr);
+
+	@:infix('>>', 7)
+	Shr(left:HxExpr, right:HxExpr);
+
+	@:infix('|', 6)
+	BitOr(left:HxExpr, right:HxExpr);
+
+	@:infix('&', 6)
+	BitAnd(left:HxExpr, right:HxExpr);
+
+	@:infix('^', 6)
+	BitXor(left:HxExpr, right:HxExpr);
 
 	@:infix('==', 5)
 	Eq(left:HxExpr, right:HxExpr);
@@ -139,4 +170,13 @@ enum HxExpr {
 
 	@:infix('-=', 1, 'Right')
 	SubAssign(left:HxExpr, right:HxExpr);
+
+	@:infix('*=', 1, 'Right')
+	MulAssign(left:HxExpr, right:HxExpr);
+
+	@:infix('/=', 1, 'Right')
+	DivAssign(left:HxExpr, right:HxExpr);
+
+	@:infix('%=', 1, 'Right')
+	ModAssign(left:HxExpr, right:HxExpr);
 }

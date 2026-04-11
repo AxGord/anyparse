@@ -2,6 +2,7 @@ import unit.DocRendererTest;
 import unit.HaxeFirstSliceTest;
 import unit.HaxeModuleSliceTest;
 import unit.HxAssignSliceTest;
+import unit.HxBitwiseSliceTest;
 import unit.HxExprSliceTest;
 import unit.HxParenSliceTest;
 import unit.HxPrattSliceTest;
@@ -35,6 +36,7 @@ class RunTests {
 		runner.addCase(new HxPrattOpsTest());
 		runner.addCase(new HxParenSliceTest());
 		runner.addCase(new HxAssignSliceTest());
+		runner.addCase(new HxBitwiseSliceTest());
 		runner.addCase(new SpanTest());
 		runner.addCase(new ParseErrorTest());
 		runner.addCase(new InputTest());

@@ -87,8 +87,8 @@ class HxPrattSliceTest extends Test {
 	}
 
 	public function testPrecedenceAddMul():Void {
-		// 1 + 2 * 3 → Add(1, Mul(2, 3)) — `*` has precedence 7,
-		// `+` has precedence 6; the higher-precedence operator
+		// 1 + 2 * 3 → Add(1, Mul(2, 3)) — `*` has precedence 9,
+		// `+` has precedence 8; the higher-precedence operator
 		// binds tighter to its operands.
 		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = 1 + 2 * 3; }');
 		switch decl.init {
@@ -117,7 +117,7 @@ class HxPrattSliceTest extends Test {
 
 	public function testLeftAssocAdd():Void {
 		// 1 + 2 + 3 → Add(Add(1, 2), 3) — left-associative.
-		// The operator at prec 6 recurses at minPrec 7, so the
+		// The operator at prec 8 recurses at minPrec 9, so the
 		// second `+` fails the gate and is taken by the outer
 		// loop iteration instead of the inner recursion.
 		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = 1 + 2 + 3; }');

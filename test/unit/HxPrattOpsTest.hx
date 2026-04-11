@@ -13,10 +13,10 @@ import anyparse.runtime.ParseError;
  * Phase 3 Pratt-operator-expansion tests for the macro-generated
  * Haxe parser.
  *
- * Covers the nine new binary-infix operators added alongside the
- * baseline `+ - * /` set: `%` at prec 7, the six comparison
- * operators (`== != <= >= < >`) at prec 5, `&&` at prec 4, and `||`
- * at prec 3. Also guards the longest-match sort inside
+ * Covers the nine binary-infix operators added alongside the
+ * baseline `+ - * /` set: `%` at prec 9 (multiplicative), the six
+ * comparison operators (`== != <= >= < >`) at prec 5, `&&` at prec
+ * 4, and `||` at prec 3. Also guards the longest-match sort inside
  * `Lowering.lowerPrattLoop` that disambiguates `<=` vs `<` and
  * `>=` vs `>` at dispatch time.
  *
@@ -192,7 +192,7 @@ class HxPrattOpsTest extends Test {
 	// -------- cross-level precedence --------
 
 	public function testAddTighterThanEq():Void {
-		// 1 + 2 == 3 → Eq(Add(1, 2), 3). Additive (prec 6) binds
+		// 1 + 2 == 3 → Eq(Add(1, 2), 3). Additive (prec 8) binds
 		// tighter than comparison (prec 5).
 		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = 1 + 2 == 3; }');
 		switch decl.init {
@@ -294,7 +294,7 @@ class HxPrattOpsTest extends Test {
 	// -------- `%` parity with `*` / `/` --------
 
 	public function testModTighterThanAdd():Void {
-		// 10 % 3 + 1 → Add(Mod(10, 3), 1). `%` sits at prec 7 along
+		// 10 % 3 + 1 → Add(Mod(10, 3), 1). `%` sits at prec 9 along
 		// with `*` and `/`, so it binds tighter than `+`.
 		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = 10 % 3 + 1; }');
 		switch decl.init {
