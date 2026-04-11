@@ -17,7 +17,7 @@ Sessions should align with phase boundaries — start a new Claude Code session 
 
 **Exit condition**: 288 tests pass on neko, js, and interp targets. Walking skeleton is committable.
 
-## Phase 1: Macro foundation (in progress)
+## Phase 1: Macro foundation — DONE (2026-04-11)
 
 **Goal**: stabilize the compile-time and runtime API surface that the macro will plug into, without writing the macro itself. This is design work in code form — we are writing interfaces, type declarations, and stub implementations to make sure the macro has a well-defined target.
 
@@ -43,8 +43,8 @@ Sessions should align with phase boundaries — start a new Claude Code session 
 8. ✅ **Refactor hand-written `JsonParser`** to use `Input`/`Parser`/`ParseError` from the new runtime. Hand-written behavior preserved; runtime types validated as usable.
 9. ✅ **Refactor hand-written `JsonWriter`** to read literals and policies from `JsonFormat` instead of hardcoding. No behavior change, only source.
 10. ✅ All 288 existing tests remain green after refactor (plus 27 new foundation tests; 328 passing assertions total on neko, js, and interp targets).
-11. ⬜ Project memory updated with session handoff notes for Phase 2.
-12. ⬜ First commit.
+11. ✅ Project memory updated with session handoff notes for Phase 2 (`session_state.md` carries design decisions D1–D8).
+12. ✅ First commit — initial public release at `AxGord/anyparse` on GitHub (commit `b1cdccf`).
 
 **Non-deliverables for this phase** (explicitly deferred):
 - The `@:build` macro itself — that is Phase 2.
