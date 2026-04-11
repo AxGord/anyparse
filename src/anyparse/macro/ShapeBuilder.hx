@@ -114,7 +114,20 @@ class ShapeBuilder {
 				final node:ShapeNode = new ShapeNode(Seq);
 				node.annotations.set('base.typePath', typePathOfDef(td));
 				node.annotations.set('base.meta', td.meta.get());
-				for (f in a.fields) node.children.push(shapeField(f.name, f.type, f.meta.get()));
+				// AnonType.fields is NOT guaranteed to preserve source declaration
+				// order — on some Haxe builds it comes back in hash/alphabetical
+				// order. The JSON grammar's alphabetical order happened to match
+				// its source order (`key` before `value`) so Phase 2 worked, but
+				// HxClassDecl exposed the bug (`members` sorts before `name`).
+				// Sort by source position explicitly so the parse sequence of
+				// a typedef Seq always matches how the user wrote it.
+				final sorted:Array<ClassField> = a.fields.copy();
+				sorted.sort(function(x:ClassField, y:ClassField):Int {
+					final px:Int = Context.getPosInfos(x.pos).min;
+					final py:Int = Context.getPosInfos(y.pos).min;
+					return px - py;
+				});
+				for (f in sorted) node.children.push(shapeField(f.name, f.type, f.meta.get()));
 				node;
 			case _:
 				Context.fatalError('ShapeBuilder: typedef ${td.name} does not resolve to an anonymous structure', Context.currentPos());

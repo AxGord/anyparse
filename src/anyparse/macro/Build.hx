@@ -7,6 +7,7 @@ import haxe.macro.ExprTools;
 import haxe.macro.Type;
 import anyparse.core.LoweringCtx;
 import anyparse.core.Mode;
+import anyparse.macro.strategy.Kw;
 import anyparse.macro.strategy.Lit;
 import anyparse.macro.strategy.Re;
 import anyparse.macro.strategy.Skip;
@@ -63,6 +64,7 @@ class Build {
 		final shape:ShapeBuilder.ShapeResult = shapeBuilder.build(rootType);
 
 		final registry:StrategyRegistry = new StrategyRegistry();
+		registry.register(new Kw());
 		registry.register(new Lit());
 		registry.register(new Re());
 		registry.register(new Skip());

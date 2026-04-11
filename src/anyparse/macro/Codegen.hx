@@ -38,6 +38,7 @@ class Codegen {
 		fields.push(skipWsField());
 		fields.push(matchLitField());
 		fields.push(expectLitField());
+		fields.push(expectKwField());
 		fields.push(decodeJsonStringField());
 		return fields;
 	}
@@ -158,6 +159,52 @@ class Codegen {
 							new anyparse.runtime.Span(ctx.pos, ctx.pos),
 							'expected "' + lit + '"'
 						);
+					}
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * `expectKw` is `expectLit` plus a trailing word-boundary check. After
+	 * the literal match succeeds it peeks at the next input character and
+	 * throws `ParseError` if it is a word character (`[A-Za-z0-9_]`), so
+	 * that e.g. `class` does not match the prefix of `classify`. Rollback
+	 * of the consumed characters on word-boundary failure is the caller's
+	 * responsibility — the enum-branch `tryBranch` wrapper in `Lowering`
+	 * captures `ctx.pos` before invoking the branch and resets it on any
+	 * thrown `ParseError`, which covers this case automatically.
+	 */
+	private static function expectKwField():Field {
+		return {
+			name: 'expectKw',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [
+					{name: 'ctx', type: macro : anyparse.runtime.Parser},
+					{name: 'keyword', type: macro : String},
+				],
+				ret: macro : Void,
+				expr: macro {
+					if (!matchLit(ctx, keyword)) {
+						throw new anyparse.runtime.ParseError(
+							new anyparse.runtime.Span(ctx.pos, ctx.pos),
+							'expected keyword "' + keyword + '"'
+						);
+					}
+					if (ctx.pos < ctx.input.length) {
+						final c:Int = ctx.input.charCodeAt(ctx.pos);
+						final isWord:Bool = (c >= 'a'.code && c <= 'z'.code)
+							|| (c >= 'A'.code && c <= 'Z'.code)
+							|| (c >= '0'.code && c <= '9'.code)
+							|| c == '_'.code;
+						if (isWord) {
+							throw new anyparse.runtime.ParseError(
+								new anyparse.runtime.Span(ctx.pos, ctx.pos),
+								'expected keyword "' + keyword + '"'
+							);
+						}
 					}
 				},
 			}),

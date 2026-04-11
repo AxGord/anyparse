@@ -122,22 +122,9 @@ class Lowering {
 			return macro $b{body};
 		}
 
-		// Case 3: single-arg ctor wrapping a Ref (no literal glue).
-		if (litList == null && leadText == null && children.length == 1 && children[0].kind == Ref) {
-			final refName:String = children[0].annotations.get('base.ref');
-			final callSub:Expr = {
-				expr: ECall(macro $i{'parse${simpleName(refName)}'}, [macro ctx]),
-				pos: Context.currentPos(),
-			};
-			final ctorCall:Expr = {expr: ECall(ctorRef, [macro _raw]), pos: Context.currentPos()};
-			return macro {
-				skipWs(ctx);
-				final _raw = $callSub;
-				return $ctorCall;
-			};
-		}
-
-		// Case 4: single-arg ctor wrapping Array<Ref> with @:lead/@:trail/@:sep.
+		// Case 4: single-arg ctor wrapping Array<Ref> with @:lead/@:trail and
+		// optional @:sep. No-sep variant terminates the loop by peeking at
+		// the close character instead of consuming a separator between items.
 		if (leadText != null && trailText != null && children.length == 1 && children[0].kind == Star) {
 			final inner:ShapeNode = children[0].children[0];
 			if (inner.kind != Ref) {
@@ -150,28 +137,81 @@ class Lowering {
 				expr: ECall(macro $i{elemFn}, [macro ctx]),
 				pos: Context.currentPos(),
 			};
-			final sepCharCode:Int = sepText != null && sepText.length > 0 ? sepText.charCodeAt(0) : -1;
 			final closeCharCode:Int = trailText.charCodeAt(0);
 			final ctorCall:Expr = {expr: ECall(ctorRef, [macro _items]), pos: Context.currentPos()};
+			if (sepText != null) {
+				final sepCharCode:Int = sepText.charCodeAt(0);
+				return macro {
+					skipWs(ctx);
+					expectLit(ctx, $v{leadText});
+					final _items:Array<$elemCT> = [];
+					skipWs(ctx);
+					if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}) {
+						_items.push($elemCall);
+						skipWs(ctx);
+						while (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
+							ctx.pos++;
+							skipWs(ctx);
+							_items.push($elemCall);
+							skipWs(ctx);
+						}
+					}
+					skipWs(ctx);
+					expectLit(ctx, $v{trailText});
+					return $ctorCall;
+				};
+			}
 			return macro {
 				skipWs(ctx);
 				expectLit(ctx, $v{leadText});
 				final _items:Array<$elemCT> = [];
 				skipWs(ctx);
-				if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}) {
+				while (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}) {
 					_items.push($elemCall);
 					skipWs(ctx);
-					while (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
-						ctx.pos++;
-						skipWs(ctx);
-						_items.push($elemCall);
-						skipWs(ctx);
-					}
 				}
 				skipWs(ctx);
 				expectLit(ctx, $v{trailText});
 				return $ctorCall;
 			};
+		}
+
+		// Case 3 (extended): single-arg ctor wrapping a Ref, with optional
+		// kw/lit lead and optional lit trail. No separator loop — that's
+		// Case 4's domain. The lead can be either a `@:kw("...")` keyword
+		// (word-boundary checked) or a plain `@:lead("...")` literal; only
+		// one of the two is emitted per branch.
+		if (litList == null && children.length == 1 && children[0].kind == Ref) {
+			final refName:String = children[0].annotations.get('base.ref');
+			final callSub:Expr = {
+				expr: ECall(macro $i{'parse${simpleName(refName)}'}, [macro ctx]),
+				pos: Context.currentPos(),
+			};
+			final ctorCall:Expr = {expr: ECall(ctorRef, [macro _raw]), pos: Context.currentPos()};
+			final kwLead:Null<String> = branch.annotations.get('kw.leadText');
+			final steps:Array<Expr> = [macro skipWs(ctx)];
+			if (kwLead != null) {
+				steps.push(macro expectKw(ctx, $v{kwLead}));
+				steps.push(macro skipWs(ctx));
+			} else if (leadText != null) {
+				steps.push(macro expectLit(ctx, $v{leadText}));
+				steps.push(macro skipWs(ctx));
+			}
+			steps.push({
+				expr: EVars([{
+					name: '_raw',
+					type: null,
+					expr: callSub,
+					isFinal: true,
+				}]),
+				pos: Context.currentPos(),
+			});
+			if (trailText != null) {
+				steps.push(macro skipWs(ctx));
+				steps.push(macro expectLit(ctx, $v{trailText}));
+			}
+			steps.push(macro return $ctorCall);
+			return macro $b{steps};
 		}
 
 		Context.fatalError('Lowering: unsupported enum branch shape for ${simpleName(typePath)}.${ctor}', Context.currentPos());
@@ -188,25 +228,60 @@ class Lowering {
 			if (fieldName == null) {
 				Context.fatalError('Lowering: struct field missing base.fieldName', Context.currentPos());
 			}
-			// Per-field @:lead
+			// Per-field prefix: either @:kw (word-boundary checked) or @:lead.
+			// Only one of the two is emitted; @:kw takes priority when both are
+			// present on the same field (the compiler already catches duplicate
+			// ownership at registration time so this is defensive only).
+			//
+			// For a Star field, the @:lead/@:trail pair semantically describes
+			// the surrounding wrappers of the collection and is read directly
+			// from the Star node's own `lit.*` annotations by
+			// `emitStarFieldSteps`. Emitting them here too would produce
+			// duplicate `expectLit` calls, so we skip struct-level lead/trail
+			// emission whenever the field is a Star.
+			final kwLead:Null<String> = readMetaString(child, ':kw');
 			final leadText:Null<String> = readMetaString(child, ':lead');
-			if (leadText != null) {
-				parseSteps.push(macro skipWs(ctx));
-				parseSteps.push(macro expectLit(ctx, $v{leadText}));
+			final trailText:Null<String> = readMetaString(child, ':trail');
+			final isStar:Bool = child.kind == Star;
+			if (!isStar) {
+				if (kwLead != null) {
+					parseSteps.push(macro skipWs(ctx));
+					parseSteps.push(macro expectKw(ctx, $v{kwLead}));
+				} else if (leadText != null) {
+					parseSteps.push(macro skipWs(ctx));
+					parseSteps.push(macro expectLit(ctx, $v{leadText}));
+				}
 			}
-			// Field value
+			// Field value — by kind.
 			final localName:String = '_f_$fieldName';
-			final valueExpr:Expr = lowerFieldValue(child);
 			parseSteps.push(macro skipWs(ctx));
-			parseSteps.push({
-				expr: EVars([{
-					name: localName,
-					type: null,
-					expr: valueExpr,
-					isFinal: true,
-				}]),
-				pos: Context.currentPos(),
-			});
+			switch child.kind {
+				case Ref:
+					final refName:String = child.annotations.get('base.ref');
+					final callExpr:Expr = {
+						expr: ECall(macro $i{'parse${simpleName(refName)}'}, [macro ctx]),
+						pos: Context.currentPos(),
+					};
+					parseSteps.push({
+						expr: EVars([{
+							name: localName,
+							type: null,
+							expr: callExpr,
+							isFinal: true,
+						}]),
+						pos: Context.currentPos(),
+					});
+				case Star:
+					emitStarFieldSteps(child, localName, parseSteps);
+				case _:
+					Context.fatalError('Lowering: struct field kind ${child.kind} not supported', Context.currentPos());
+			}
+			// Per-field trail. Skipped for Star fields — `emitStarFieldSteps`
+			// already emitted the close literal as part of the loop wrappers.
+			if (!isStar && trailText != null) {
+				parseSteps.push(macro skipWs(ctx));
+				parseSteps.push(macro expectLit(ctx, $v{trailText}));
+			}
 			structFields.push({field: fieldName, expr: macro $i{localName}});
 		}
 		final structLiteral:Expr = {expr: EObjectDecl(structFields), pos: Context.currentPos()};
@@ -214,15 +289,73 @@ class Lowering {
 		return macro $b{parseSteps};
 	}
 
-	private function lowerFieldValue(node:ShapeNode):Expr {
-		return switch node.kind {
-			case Ref:
-				final refName:String = node.annotations.get('base.ref');
-				{expr: ECall(macro $i{'parse${simpleName(refName)}'}, [macro ctx]), pos: Context.currentPos()};
-			case _:
-				Context.fatalError('Lowering: field value kind ${node.kind} not supported in Phase 2', Context.currentPos());
-				throw 'unreachable';
+	/**
+	 * Emit the parse steps for a struct field of shape `Star<Ref>`. The
+	 * Star node's own `lit.*` annotations carry the surrounding wrappers
+	 * (`@:lead` open, `@:trail` close, optional `@:sep`). The accumulator
+	 * is declared with the given `localName` so the enclosing `lowerStruct`
+	 * can reference it in the final struct literal.
+	 */
+	private function emitStarFieldSteps(starNode:ShapeNode, localName:String, parseSteps:Array<Expr>):Void {
+		final inner:ShapeNode = starNode.children[0];
+		if (inner.kind != Ref) {
+			Context.fatalError('Lowering: Star struct field must contain a Ref', Context.currentPos());
+		}
+		final elemRefName:String = inner.annotations.get('base.ref');
+		final elemFn:String = 'parse${simpleName(elemRefName)}';
+		final elemCT:ComplexType = TPath({pack: packOf(elemRefName), name: simpleName(elemRefName), params: []});
+		final elemCall:Expr = {
+			expr: ECall(macro $i{elemFn}, [macro ctx]),
+			pos: Context.currentPos(),
 		};
+		final openText:Null<String> = starNode.annotations.get('lit.leadText');
+		final closeText:Null<String> = starNode.annotations.get('lit.trailText');
+		final sepText:Null<String> = starNode.annotations.get('lit.sepText');
+		if (closeText == null) {
+			Context.fatalError('Lowering: Star struct field requires @:trail (close literal) to know when to stop', Context.currentPos());
+		}
+		if (openText != null) {
+			parseSteps.push(macro expectLit(ctx, $v{openText}));
+			parseSteps.push(macro skipWs(ctx));
+		}
+		final accumCT:ComplexType = TPath({pack: [], name: 'Array', params: [TPType(elemCT)]});
+		parseSteps.push({
+			expr: EVars([{
+				name: localName,
+				type: accumCT,
+				expr: macro [],
+				isFinal: true,
+			}]),
+			pos: Context.currentPos(),
+		});
+		final accumRef:Expr = macro $i{localName};
+		final closeCharCode:Int = closeText.charCodeAt(0);
+		if (sepText != null) {
+			final sepCharCode:Int = sepText.charCodeAt(0);
+			parseSteps.push(macro {
+				skipWs(ctx);
+				if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}) {
+					$accumRef.push($elemCall);
+					skipWs(ctx);
+					while (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
+						ctx.pos++;
+						skipWs(ctx);
+						$accumRef.push($elemCall);
+						skipWs(ctx);
+					}
+				}
+			});
+		} else {
+			parseSteps.push(macro {
+				skipWs(ctx);
+				while (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}) {
+					$accumRef.push($elemCall);
+					skipWs(ctx);
+				}
+			});
+		}
+		parseSteps.push(macro skipWs(ctx));
+		parseSteps.push(macro expectLit(ctx, $v{closeText}));
 	}
 
 	// -------- terminal rule --------
@@ -237,8 +370,18 @@ class Lowering {
 		final eregVar:String = '_re_$simple';
 		eregByRule.set(typePath, {varName: eregVar, pattern: pattern});
 
+		// `@:rawString` on a String-underlying Terminal means "the regex
+		// match is already the raw value" — skip the JSON-specific
+		// unquote/unescape helper. Used for identifier-like terminals (Haxe
+		// `HxIdentLit`) where the matched slice IS the identifier text. A
+		// format-contributed decoder table will replace this closed switch
+		// once a third Terminal type demands it (see D13 in session_state.md).
+		// Named `@:rawString` (not bare `@:raw`) to avoid collision with
+		// Haxe's built-in `@:raw` meta for verbatim code injection.
+		final raw:Bool = hasMeta(node, ':rawString');
 		final decodeExpr:Expr = switch underlying {
 			case 'Float': macro Std.parseFloat(_matched);
+			case 'String' if (raw): macro _matched;
 			case 'String': macro decodeJsonString(_matched);
 			case _:
 				Context.fatalError('Lowering: no decoder for underlying type "$underlying"', Context.currentPos());
@@ -272,6 +415,13 @@ class Lowering {
 			};
 		}
 		return null;
+	}
+
+	private static function hasMeta(node:ShapeNode, tag:String):Bool {
+		final meta:Null<Metadata> = node.annotations.get('base.meta');
+		if (meta == null) return false;
+		for (entry in meta) if (entry.name == tag) return true;
+		return false;
 	}
 
 	private static function simpleName(typePath:String):String {

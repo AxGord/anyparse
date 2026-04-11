@@ -83,15 +83,33 @@ Sessions should align with phase boundaries — start a new Claude Code session 
 - `@:decode` metadata — replaced by the closed decoder table in Phase 2; can be generalised later.
 - `Build`/`Bind`/`Host`/`ExprRef`/`Decode` CoreIR primitives in the codegen path — present in `core/CoreIR.hx` as types but not consumed by the Phase 2 emitter; adopted when Phase 3 needs them.
 
-## Phase 3: Haxe grammar and formatter replacement
+## Phase 3: Haxe grammar and formatter replacement — in progress (2026-04-11 skeleton landed)
 
 **Goal**: write the Haxe language grammar on anyparse and use it to build a formatter. This is the first real programming-language grammar and the first practical user-facing tool from this project.
 
 **Deliverables**:
-- `anyparse-grammar-haxe` package (in a subdirectory or separate repo) containing the Haxe grammar as `@:peg` types with metadata.
-- Haxe formatter CLI binary (hxcpp or neko) that takes a `.hx` file and outputs formatted Haxe.
-- Test corpus from the user's haxe-formatter fork: every regression case in that fork's commit history becomes a test case here.
-- Performance benchmark against haxe-formatter on a real Haxe codebase.
+- 🔶 `anyparse.grammar.haxe` package (currently `src/anyparse/grammar/haxe/`, may split to a separate haxelib later) containing the Haxe grammar as `@:peg` types with metadata. **Skeleton landed**: single class declaration with `var name:Type;` and `function name():Type {}` members; `HaxeFormat` singleton; `HaxeFastParser` marker class driving the macro pipeline.
+- ⬜ Haxe formatter CLI binary (hxcpp or neko) that takes a `.hx` file and outputs formatted Haxe.
+- ⬜ Test corpus from the user's haxe-formatter fork: every regression case in that fork's commit history becomes a test case here.
+- ⬜ Performance benchmark against haxe-formatter on a real Haxe codebase.
+
+**Phase 3 skeleton — what landed (2026-04-11)**:
+- `anyparse.macro.strategy.Kw` — new strategy for `@:kw("word")` with word-boundary enforcement; runs before `Lit`, writes `kw.leadText` annotation slot.
+- `Codegen` — new `expectKw` helper (matchLit + word-boundary check) alongside `expectLit`.
+- `Lowering` — Case 3 (single-Ref enum branch) extended with optional kw/lit lead and lit trail; Case 4 (Star enum branch) gained a no-separator loop variant; `lowerStruct` learned per-field `@:kw`/`@:trail` and a `Star<Ref>` field case that delegates to a new `emitStarFieldSteps` helper; `lowerTerminal` recognises `@:rawString` on String terminals to skip the JSON unescape path.
+- `ShapeBuilder.shapeTypedef` — now sorts `AnonType.fields` by source position so typedef Seq child order matches declaration order regardless of the compiler's hash iteration (JSON happened to be alphabetically sorted in source order; HxClassDecl revealed the ordering bug).
+- Grammar package `src/anyparse/grammar/haxe/`: `HaxeFormat` (TextFormat stub, known debt pending `LanguageFormat` interface), `HxIdentLit` (identifier terminal with `@:rawString`), `HxTypeRef`, `HxVarDecl`, `HxFnDecl`, `HxClassMember`, `HxClassDecl` (root typedef), `HaxeFastParser` marker class.
+- `test/unit/HaxeFirstSliceTest.hx` — 10 tests covering empty/single/multi/mixed members, irregular whitespace, word-boundary rejection of `classy`, and other rejection cases. 621 tests green on neko/js/interp.
+
+**Non-deliverables for the skeleton slice**:
+- Expressions, operators, Pratt strategy.
+- Function parameters, function bodies with statements.
+- Modifiers (`public`, `private`, `static`, `inline`, `override`, …), `extends`/`implements`, type parameters.
+- Multi-declaration modules (root is a single class, not an array of top-level decls).
+- Comments, `#if/#else`, `@:meta` on user code.
+- Writer generation, formatter, CLI.
+- haxe-formatter corpus integration.
+- Tolerant-mode codegen.
 
 **Exit condition**: the new formatter matches or exceeds haxe-formatter's output on the user's regression corpus, runs faster, and is thread-safe (validated by running N parallel formatter instances on different files with no data races).
 
