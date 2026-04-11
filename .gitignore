@@ -1,0 +1,6 @@
+bin/
+*.n
+*.n.map
+*.js.map
+.DS_Store
+.claude/

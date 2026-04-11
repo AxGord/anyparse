@@ -1,0 +1,11 @@
+{
+  "name": "anyparse",
+  "license": "MIT",
+  "tags": ["parser", "format", "grammar", "codegen", "macro", "writer", "formatter"],
+  "description": "Declarative parser, writer and pretty-printer library driven by types and metadata. Format and language-agnostic; grammars are plugins.",
+  "version": "0.0.1",
+  "classPath": "src/",
+  "releasenote": "Initial walking skeleton: Doc IR, renderer, hand-written JSON parser and writer, tests.",
+  "contributors": ["AxGord"],
+  "dependencies": {}
+}

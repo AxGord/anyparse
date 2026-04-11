@@ -1,0 +1,164 @@
+# Roadmap
+
+Phased plan from initial scaffold to production-ready platform. Each phase has a concrete goal, deliverables, a success criterion, and an explicit exit condition. A phase is not "done" until the exit condition is met and the project is green.
+
+Sessions should align with phase boundaries — start a new Claude Code session at each phase transition.
+
+## Phase 0: Walking skeleton — DONE
+
+**Goal**: validate that the basic end-to-end shape of the project compiles, runs, and tests across multiple Haxe targets.
+
+**Deliverables**:
+- Project scaffolding: `haxelib.json`, `LICENSE` (MIT), `README.md`, `.gitignore`.
+- Three build configs: `test.hxml` (neko), `test-js.hxml` (js/node), `test-interp.hxml` (Haxe interpreter).
+- Core Doc IR (`anyparse.core.Doc`, `anyparse.core.D`, `anyparse.core.Renderer`) — the Wadler-style pretty-printer foundation.
+- Reference JSON implementation written by hand: `JValue` enum, `JEntry` typedef, `JsonParser`, `JsonWriter`, `JValueTools.equals`.
+- Test suite on utest: unit tests for Doc/Renderer, JsonParser, JsonWriter, plus round-trip tests with a seeded random generator.
+
+**Exit condition**: 288 tests pass on neko, js, and interp targets. Walking skeleton is committable.
+
+## Phase 1: Macro foundation (in progress)
+
+**Goal**: stabilize the compile-time and runtime API surface that the macro will plug into, without writing the macro itself. This is design work in code form — we are writing interfaces, type declarations, and stub implementations to make sure the macro has a well-defined target.
+
+**Deliverables**:
+1. ✅ **CoreIR** (`anyparse.core.CoreIR`) as a Haxe enum with all primitives: Empty, Seq, Alt, Star, Opt, Ref, Lit, Re, And, Not, Capture, Backref, Bind, ExprRef, Build, plus binary primitives Bin/Count/Switch/Decode, plus Host as escape hatch. Each constructor documented with its semantics and lowering intent. Wrapped in `#if macro`.
+2. ✅ **ShapeTree** (`anyparse.core.ShapeTree`) as the neutral intermediate between `haxe.macro.Type` analysis and CoreIR. `ShapeKind` enum plus `ShapeNode` class with `children` and namespaced `annotations` map. Wrapped in `#if macro`.
+3. ✅ **Strategy interface** (`anyparse.core.Strategy`) declaring the plugin contract: `ownedMeta`, `runsAfter`, `runsBefore`, `appliesTo`, `annotate`, `lower`, `runtimeContribution`. Wrapped in `#if macro`.
+4. ✅ **LoweringCtx** (`anyparse.core.LoweringCtx`) with skipStack, captures, indentMode, activeFormat, and `mode:Mode`. Wrapped in `#if macro`.
+5. ✅ **RuntimeContrib** type (`anyparse.core.RuntimeContrib`) for what strategies contribute to the runtime Parser class. Wrapped in `#if macro`.
+6. ✅ **Format interfaces**:
+   - `anyparse.format.Format` — base (name, version, encoding).
+   - `anyparse.format.text.TextFormat` — mapping/sequence/scalar model with literals, policies, escape handling; fields as `(default, null)` properties to allow final-like initializer assignment.
+   - `anyparse.format.binary.BinaryFormat` — stub, declared so the interface hierarchy is visible.
+   - `anyparse.format.text.JsonFormat` — first real `TextFormat` implementation with JSON literals extracted from `JsonWriter`, exposed via `JsonFormat.instance` singleton.
+7. ✅ **Runtime types**:
+   - `anyparse.runtime.Input` — byte/string stream abstraction. `StringInput` as first implementation.
+   - `anyparse.runtime.Span` — byte offsets with lazy line/col resolution via `Position` typedef.
+   - `anyparse.runtime.ParseError` — span, message, expected, severity; extends `haxe.Exception`.
+   - `anyparse.runtime.ParseResult<T>` — wrapper for Tolerant mode.
+   - `anyparse.runtime.Node<T>` — AST metadata wrapper for Tolerant mode (declared, unused in Phase 1).
+   - `anyparse.runtime.Parser` — the runtime context that generated code threads through. Fields: input, pos, errors, cache, indentStack, captures, cancelled.
+   - `anyparse.runtime.ParseCache` — interface plus `NoOpCache` singleton default.
+8. ✅ **Refactor hand-written `JsonParser`** to use `Input`/`Parser`/`ParseError` from the new runtime. Hand-written behavior preserved; runtime types validated as usable.
+9. ✅ **Refactor hand-written `JsonWriter`** to read literals and policies from `JsonFormat` instead of hardcoding. No behavior change, only source.
+10. ✅ All 288 existing tests remain green after refactor (plus 27 new foundation tests; 328 passing assertions total on neko, js, and interp targets).
+11. ⬜ Project memory updated with session handoff notes for Phase 2.
+12. ⬜ First commit.
+
+**Non-deliverables for this phase** (explicitly deferred):
+- The `@:build` macro itself — that is Phase 2.
+- Strategy implementations (PEG descent, Pratt, Indent, Binary) — those come with the macro in Phase 2+.
+- Family IRs — those appear when we have 2+ grammars.
+- Cross-family round-trip test — contract is documented, implementation waits for family IRs.
+- Recovery, cache, cancellation runtime behaviors — interfaces exist, behavior is no-op in Phase 1.
+
+**Exit condition**: the hand-written JSON parser runs on the new runtime, the hand-written JSON writer reads from JsonFormat, all 288 tests pass on neko/js/interp, and the macro foundation is ready to be plugged into. First commit made.
+
+## Phase 2: First macro-generated parser
+
+**Goal**: write the `@:build` macro and use it to regenerate the JSON parser and writer from the existing `JValue` enum definition. The hand-written versions remain in the repo as regression baselines.
+
+**Deliverables**:
+- The macro entry point that reads a type annotated with `@:peg @:schema(Format)` and produces generated parser/writer classes.
+- `BaseShape` analysis: `Type → ShapeTree`.
+- `Lit` strategy: handles `@:lit`, `@:lead`, `@:trail`, `@:wrap`, `@:sep`.
+- `Re` strategy: handles `@:re` on abstracts.
+- `Skip` strategy: cross-cutting whitespace via `LoweringCtx.skipStack`.
+- `Codegen`: `CoreIR → haxe.macro.Expr` for Fast mode. Tolerant mode is stubbed.
+- JSON regenerated via macro. New tests assert that macro-generated parser matches hand-written output on the entire regression corpus.
+- Parallel test targets: `test.hxml` now runs both hand-written and macro-generated test suites.
+
+**Exit condition**: macro-generated `JValue` parser passes all 288 existing tests plus new "parity with hand-written" tests.
+
+## Phase 3: Haxe grammar and formatter replacement
+
+**Goal**: write the Haxe language grammar on anyparse and use it to build a formatter. This is the first real programming-language grammar and the first practical user-facing tool from this project.
+
+**Deliverables**:
+- `anyparse-grammar-haxe` package (in a subdirectory or separate repo) containing the Haxe grammar as `@:peg` types with metadata.
+- Haxe formatter CLI binary (hxcpp or neko) that takes a `.hx` file and outputs formatted Haxe.
+- Test corpus from the user's haxe-formatter fork: every regression case in that fork's commit history becomes a test case here.
+- Performance benchmark against haxe-formatter on a real Haxe codebase.
+
+**Exit condition**: the new formatter matches or exceeds haxe-formatter's output on the user's regression corpus, runs faster, and is thread-safe (validated by running N parallel formatter instances on different files with no data races).
+
+## Phase 4: AS3 grammar and AS3→Haxe transform
+
+**Goal**: write the AS3 grammar and build an AS3→Haxe conversion tool on anyparse's transform framework. This replaces the ax3 tool.
+
+**Deliverables**:
+- `anyparse-grammar-as3` package with full AS3 grammar including E4X via `@:capture`/`@:match`, ASI via `@:commit`, and namespaces.
+- `anyparse.transform` framework with reusable helpers: visitor, query, scope tracking, import manager, type mapping registry, library mapping registry.
+- AS3→Haxe transform written as pure functions on AST. Ports the ~59 filters from ax3's fork, each becoming a declarative transform.
+- CLI tool that reads AS3 source (and optionally SWC or curated Haxe extern stubs for types) and emits Haxe code via the anyparse-generated Haxe writer.
+- Integration test against the user's ax3 corpus (~2000 files): same semantic output as current ax3, or better, and measurably faster.
+
+**Exit condition**: anyparse AS3→Haxe produces output equivalent to or improved over ax3 on the full corpus, runs parallel across cores (vs ax3's 5s for single thread == 5s for 8 threads), and does not require JVM.
+
+## Phase 5: Cross-family foundation
+
+**Goal**: add `CurlyBraceFamilyAst` as the first family IR, and write the structural round-trip test against it. Bring the cross-family contract from theoretical to enforced.
+
+**Deliverables**:
+- `anyparse.family.curly.CurlyBraceFamilyAst` package.
+- Projection from Haxe native AST to curly family IR.
+- Projection from AS3 native AST to curly family IR.
+- Round-trip test: `Haxe → CurlyIR → Haxe` structural equivalence.
+- Round-trip test: `AS3 → CurlyIR → AS3` structural equivalence.
+
+**Exit condition**: both round-trip tests pass. CoreIR has no curly-specific leakage.
+
+## Phase 6: LispFamilyAst and curly↔lisp bridge
+
+**Goal**: add `LispFamilyAst` and the bridge between curly and Lisp families. Validate the full cross-family contract.
+
+**Deliverables**:
+- `anyparse.family.lisp.LispFamilyAst`.
+- First Lisp grammar — likely Clojure-subset since it's closest to curly semantics.
+- `anyparse.bridge.curly-lisp` bridge package.
+- Round-trip test: `Haxe → CurlyIR → LispIR → Clojure → parse → LispIR → CurlyIR → Haxe` with semantic equivalence assertion.
+
+**Exit condition**: the cross-family contract test passes on at least one non-trivial Haxe fragment.
+
+## Phase 7+: Additional grammars and formats
+
+Open-ended. Each new grammar is a package. Candidates in rough priority order:
+
+- **TypeScript** grammar for TS↔Haxe migration scenarios.
+- **YAML block** grammar for config tooling.
+- **XML** grammar using `@:capture`/`@:match` for tag name matching, plus `TagTreeFormat` interface.
+- **MessagePack** / **CBOR** / **protobuf** as binary format examples.
+- **INI**, **TOML** as simple config format examples.
+- **SQL** as an example of a language with a constrained subset.
+
+Each one validates or stress-tests a specific axis of the platform:
+- TypeScript stress-tests: generics and structural types.
+- YAML block stress-tests: indent strategy in production.
+- XML stress-tests: capture/match, attribute vs element handling.
+- MessagePack/CBOR stress-test: binary strategy with tag masks and length prefixes.
+
+## Long-term: Haxe-on-Haxe
+
+The aspirational endpoint. A Haxe compiler implemented in Haxe, using anyparse for the parser/writer/formatter/codegen foundation. Not a planned deliverable — a north star that informs architectural decisions so that we do not accidentally close doors to it.
+
+See the project memory entry `long_term_goal.md` for details.
+
+## How to update this roadmap
+
+When a phase is completed:
+
+1. Change its status header from its current state to "DONE" and add a date.
+2. If the next phase is starting in the same session, mark it "in progress" and add a starting date.
+3. If significant pivots happened, add a note to the phase about what changed and why.
+
+When a phase is in progress:
+
+1. Check off deliverables as they land.
+2. Do not mark the phase "DONE" until the exit condition is met and tests are green.
+3. If a deliverable becomes obsolete, strike it through rather than deleting it, so future readers can see what was dropped and why.
+
+When planning a new phase not yet on this list:
+
+1. Add it at the appropriate position with goal, deliverables, and exit condition in the same shape as existing phases.
+2. Do not add phases that depend on work we have not yet validated — be honest about what must come before.

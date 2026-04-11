@@ -1,0 +1,6 @@
+-cp src
+-cp test
+-lib utest
+-main RunTests
+-js bin/test.js
+--cmd node bin/test.js
