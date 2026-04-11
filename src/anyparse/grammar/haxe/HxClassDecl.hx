@@ -1,10 +1,13 @@
 package anyparse.grammar.haxe;
 
 /**
- * Root grammar type for the Phase 3 Haxe skeleton — a single class
- * declaration in a file. Multi-declaration modules are out of scope:
- * a file with two top-level classes is not valid input for the current
- * parser.
+ * Grammar type for a single Haxe class declaration — the smaller of
+ * the two Phase 3 grammar roots. Kept as a stand-alone root (driven
+ * by `HaxeFastParser`) alongside `HxModule` (driven by
+ * `HaxeModuleFastParser`), which wraps zero or more `HxDecl` branches
+ * for multi-declaration files. Having both roots live on the same
+ * grammar package validates that the marker-class pattern scales to
+ * multiple entry points.
  *
  * Grammar metadata:
  *  - `@:peg` marks this as a grammar entry point.

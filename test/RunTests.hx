@@ -1,5 +1,6 @@
 import unit.DocRendererTest;
 import unit.HaxeFirstSliceTest;
+import unit.HaxeModuleSliceTest;
 import unit.JsonParserTest;
 import unit.JsonMacroParserTest;
 import unit.JsonWriterTest;
@@ -23,6 +24,7 @@ class RunTests {
 		runner.addCase(new JsonRoundTripTest());
 		runner.addCase(new JsonMacroRoundTripTest());
 		runner.addCase(new HaxeFirstSliceTest());
+		runner.addCase(new HaxeModuleSliceTest());
 		runner.addCase(new SpanTest());
 		runner.addCase(new ParseErrorTest());
 		runner.addCase(new InputTest());

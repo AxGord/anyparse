@@ -295,6 +295,21 @@ class Lowering {
 	 * (`@:lead` open, `@:trail` close, optional `@:sep`). The accumulator
 	 * is declared with the given `localName` so the enclosing `lowerStruct`
 	 * can reference it in the final struct literal.
+	 *
+	 * Three termination modes are selected by the metadata on the Star
+	 * node (see D22 in session_state.md):
+	 *
+	 *  - `@:trail("X")` **without** `@:sep` — loop terminates when the
+	 *    next non-whitespace char is the close literal's first char.
+	 *  - `@:trail("X")` **with** `@:sep(",")` — loop terminates when the
+	 *    next char is not a separator. The first element is parsed only
+	 *    when the next char is not already the close char (empty-list
+	 *    case).
+	 *  - No `@:trail` — loop terminates when `ctx.pos` reaches
+	 *    `ctx.input.length`. Used by module-root Star fields where the
+	 *    top level has no close delimiter. `@:sep` combined with no
+	 *    `@:trail` is rejected at compile time because there is no
+	 *    unambiguous way to stop the sep-peek loop at EOF.
 	 */
 	private function emitStarFieldSteps(starNode:ShapeNode, localName:String, parseSteps:Array<Expr>):Void {
 		final inner:ShapeNode = starNode.children[0];
@@ -311,8 +326,8 @@ class Lowering {
 		final openText:Null<String> = starNode.annotations.get('lit.leadText');
 		final closeText:Null<String> = starNode.annotations.get('lit.trailText');
 		final sepText:Null<String> = starNode.annotations.get('lit.sepText');
-		if (closeText == null) {
-			Context.fatalError('Lowering: Star struct field requires @:trail (close literal) to know when to stop', Context.currentPos());
+		if (closeText == null && sepText != null) {
+			Context.fatalError('Lowering: Star struct field with @:sep requires an explicit @:trail close literal', Context.currentPos());
 		}
 		if (openText != null) {
 			parseSteps.push(macro expectLit(ctx, $v{openText}));
@@ -329,6 +344,16 @@ class Lowering {
 			pos: Context.currentPos(),
 		});
 		final accumRef:Expr = macro $i{localName};
+		if (closeText == null) {
+			parseSteps.push(macro {
+				skipWs(ctx);
+				while (ctx.pos < ctx.input.length) {
+					$accumRef.push($elemCall);
+					skipWs(ctx);
+				}
+			});
+			return;
+		}
 		final closeCharCode:Int = closeText.charCodeAt(0);
 		if (sepText != null) {
 			final sepCharCode:Int = sepText.charCodeAt(0);
