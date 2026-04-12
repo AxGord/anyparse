@@ -3,20 +3,29 @@ package anyparse.grammar.haxe;
 /**
  * A top-level declaration in a Haxe module.
  *
- * The Phase 3 multi-decl slice recognises a single form: a class
- * declaration wrapping an `HxClassDecl`. Future branches for
- * `typedef`, `enum`, `abstract`, and `interface` decls will each
- * carry their own introducer keyword via `@:kw` on the constructor.
+ * Four forms are recognised:
+ *  - `ClassDecl` — `class Name { ... }` wrapping an `HxClassDecl`.
+ *  - `TypedefDecl` — `typedef Name = Type;` wrapping an `HxTypedefDecl`.
+ *    Carries `@:trail(';')` because the typedef has no closing brace.
+ *  - `EnumDecl` — `enum Name { ... }` wrapping an `HxEnumDecl`.
+ *  - `InterfaceDecl` — `interface Name { ... }` wrapping an `HxInterfaceDecl`.
  *
- * The `class` keyword itself lives inside `HxClassDecl.name`'s
- * `@:kw('class')` annotation, so the `ClassDecl` branch here has no
- * `@:kw` / `@:lead` — the enclosed sub-rule already consumes it.
- * This keeps `HxClassDecl` usable as a stand-alone parser root in
- * addition to being a module decl, which matters because the
- * original `HaxeFastParser` (rooted on `HxClassDecl`) still exists
- * alongside the new `HaxeModuleFastParser`.
+ * Each branch's introducer keyword lives inside the enclosed sub-rule's
+ * first field via `@:kw`, so the branches here have no `@:kw` — the
+ * sub-rule already consumes it. This keeps each sub-rule usable as a
+ * stand-alone parser root if needed.
+ *
+ * `abstract` declarations are deferred — they have unique syntax
+ * (`(UnderlyingType)`, `from/to`) requiring new patterns.
  */
 @:peg
 enum HxDecl {
 	ClassDecl(decl:HxClassDecl);
+
+	@:trail(';')
+	TypedefDecl(decl:HxTypedefDecl);
+
+	EnumDecl(decl:HxEnumDecl);
+
+	InterfaceDecl(decl:HxInterfaceDecl);
 }

@@ -6,7 +6,10 @@ import anyparse.grammar.haxe.HaxeFastParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxClassMember;
 import anyparse.grammar.haxe.HxDecl;
+import anyparse.grammar.haxe.HxEnumDecl;
 import anyparse.grammar.haxe.HxFnDecl;
+import anyparse.grammar.haxe.HxInterfaceDecl;
+import anyparse.grammar.haxe.HxTypedefDecl;
 import anyparse.grammar.haxe.HxVarDecl;
 
 /**
@@ -48,6 +51,27 @@ class HxTestHelpers extends Test {
 		return switch decl {
 			case ClassDecl(c): c;
 			case _: throw 'expected ClassDecl, got $decl';
+		};
+	}
+
+	private function expectTypedefDecl(decl:HxDecl):HxTypedefDecl {
+		return switch decl {
+			case TypedefDecl(td): td;
+			case _: throw 'expected TypedefDecl, got $decl';
+		};
+	}
+
+	private function expectEnumDecl(decl:HxDecl):HxEnumDecl {
+		return switch decl {
+			case EnumDecl(ed): ed;
+			case _: throw 'expected EnumDecl, got $decl';
+		};
+	}
+
+	private function expectInterfaceDecl(decl:HxDecl):HxInterfaceDecl {
+		return switch decl {
+			case InterfaceDecl(id): id;
+			case _: throw 'expected InterfaceDecl, got $decl';
 		};
 	}
 }

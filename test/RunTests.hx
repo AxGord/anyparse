@@ -10,6 +10,7 @@ import unit.HxPrattOpsTest;
 import unit.HxPostfixSliceTest;
 import unit.HxModifierSliceTest;
 import unit.HxBodySliceTest;
+import unit.HxTopLevelSliceTest;
 import unit.HxParamSliceTest;
 import unit.HxPrefixSliceTest;
 import unit.JsonParserTest;
@@ -47,6 +48,7 @@ class RunTests {
 		runner.addCase(new HxModifierSliceTest());
 		runner.addCase(new HxParamSliceTest());
 		runner.addCase(new HxBodySliceTest());
+		runner.addCase(new HxTopLevelSliceTest());
 		runner.addCase(new SpanTest());
 		runner.addCase(new ParseErrorTest());
 		runner.addCase(new InputTest());
