@@ -1,10 +1,7 @@
 package unit;
 
 import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeFastParser;
-import anyparse.grammar.haxe.HxClassDecl;
-import anyparse.grammar.haxe.HxClassMember;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxVarDecl;
 import anyparse.runtime.ParseError;
@@ -34,11 +31,7 @@ import anyparse.runtime.ParseError;
  *  - `%` binds at the multiplicative level (parity with `*` and `/`)
  *  - rejections for malformed input
  */
-class HxPrattOpsTest extends Test {
-
-	public function new() {
-		super();
-	}
+class HxPrattOpsTest extends HxTestHelpers {
 
 	// -------- per-operator smoke --------
 
@@ -335,18 +328,4 @@ class HxPrattOpsTest extends Test {
 		Assert.raises(() -> HaxeFastParser.parse('class Foo { var x:Bool = <= 1; }'), ParseError);
 	}
 
-	// -------- helpers --------
-
-	private function parseSingleVarDecl(source:String):HxVarDecl {
-		final ast:HxClassDecl = HaxeFastParser.parse(source);
-		Assert.equals(1, ast.members.length);
-		return expectVarMember(ast.members[0].member);
-	}
-
-	private function expectVarMember(member:HxClassMember):HxVarDecl {
-		return switch member {
-			case VarMember(decl): decl;
-			case _: throw 'expected VarMember, got $member';
-		};
-	}
 }

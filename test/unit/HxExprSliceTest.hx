@@ -1,12 +1,9 @@
 package unit;
 
 import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeFastParser;
 import anyparse.grammar.haxe.HaxeModuleFastParser;
 import anyparse.grammar.haxe.HxClassDecl;
-import anyparse.grammar.haxe.HxClassMember;
-import anyparse.grammar.haxe.HxDecl;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxVarDecl;
@@ -29,11 +26,7 @@ import anyparse.runtime.ParseError;
  * Operators, calls, field access, float literals, and string
  * literals are explicitly out of scope for this slice.
  */
-class HxExprSliceTest extends Test {
-
-	public function new() {
-		super();
-	}
+class HxExprSliceTest extends HxTestHelpers {
 
 	public function testVarWithoutInit():Void {
 		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int; }');
@@ -132,25 +125,6 @@ class HxExprSliceTest extends Test {
 		final bVar:HxVarDecl = expectVarMember(b.members[0].member);
 		Assert.equals('y', (bVar.name : String));
 		assertBoolLit(bVar.init, false);
-	}
-
-	private function parseSingleVarDecl(source:String):HxVarDecl {
-		final ast:HxClassDecl = HaxeFastParser.parse(source);
-		Assert.equals(1, ast.members.length);
-		return expectVarMember(ast.members[0].member);
-	}
-
-	private function expectVarMember(member:HxClassMember):HxVarDecl {
-		return switch member {
-			case VarMember(decl): decl;
-			case _: throw 'expected VarMember, got $member';
-		};
-	}
-
-	private function expectClassDecl(decl:HxDecl):HxClassDecl {
-		return switch decl {
-			case ClassDecl(c): c;
-		};
 	}
 
 	private function assertIntLit(expr:Null<HxExpr>, expected:Int):Void {

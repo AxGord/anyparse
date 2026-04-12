@@ -1,12 +1,9 @@
 package unit;
 
 import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeFastParser;
 import anyparse.grammar.haxe.HaxeModuleFastParser;
 import anyparse.grammar.haxe.HxClassDecl;
-import anyparse.grammar.haxe.HxClassMember;
-import anyparse.grammar.haxe.HxDecl;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxVarDecl;
@@ -36,11 +33,7 @@ import anyparse.runtime.ParseError;
  *  - `var x:Int = 1 +;` — operator with no right operand is a
  *    `ParseError` inside `parseHxExprAtom`.
  */
-class HxPrattSliceTest extends Test {
-
-	public function new() {
-		super();
-	}
+class HxPrattSliceTest extends HxTestHelpers {
 
 	public function testAddTwoInts():Void {
 		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = 1 + 2; }');
@@ -276,22 +269,4 @@ class HxPrattSliceTest extends Test {
 		}
 	}
 
-	private function parseSingleVarDecl(source:String):HxVarDecl {
-		final ast:HxClassDecl = HaxeFastParser.parse(source);
-		Assert.equals(1, ast.members.length);
-		return expectVarMember(ast.members[0].member);
-	}
-
-	private function expectVarMember(member:HxClassMember):HxVarDecl {
-		return switch member {
-			case VarMember(decl): decl;
-			case _: throw 'expected VarMember, got $member';
-		};
-	}
-
-	private function expectClassDecl(decl:HxDecl):HxClassDecl {
-		return switch decl {
-			case ClassDecl(c): c;
-		};
-	}
 }

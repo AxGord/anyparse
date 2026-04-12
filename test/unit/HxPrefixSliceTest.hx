@@ -1,12 +1,9 @@
 package unit;
 
 import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeFastParser;
 import anyparse.grammar.haxe.HaxeModuleFastParser;
 import anyparse.grammar.haxe.HxClassDecl;
-import anyparse.grammar.haxe.HxClassMember;
-import anyparse.grammar.haxe.HxDecl;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxVarDecl;
@@ -48,17 +45,8 @@ import anyparse.runtime.ParseError;
  *  - Rejection: `var x:Int = - ;` — `-` consumes but the operand
  *    recursion trips on `;` and raises a ParseError.
  *
- * Helpers `parseSingleVarDecl` and `expectVarMember` are duplicated
- * from sibling `Hx*SliceTest` files. Debt #5b tracks the extraction
- * into `HxExprTestBase extends utest.Test`; this slice deliberately
- * does not fold the refactor in to keep the diff focused on the new
- * Case 5 / `Prefix` strategy.
  */
-class HxPrefixSliceTest extends Test {
-
-	public function new() {
-		super();
-	}
+class HxPrefixSliceTest extends HxTestHelpers {
 
 	public function testNegIdent():Void {
 		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = -a; }');
@@ -257,22 +245,4 @@ class HxPrefixSliceTest extends Test {
 		Assert.raises(() -> HaxeFastParser.parse('class Foo { var x:Int = - ; }'), ParseError);
 	}
 
-	private function parseSingleVarDecl(source:String):HxVarDecl {
-		final ast:HxClassDecl = HaxeFastParser.parse(source);
-		Assert.equals(1, ast.members.length);
-		return expectVarMember(ast.members[0].member);
-	}
-
-	private function expectVarMember(member:HxClassMember):HxVarDecl {
-		return switch member {
-			case VarMember(decl): decl;
-			case _: throw 'expected VarMember, got $member';
-		};
-	}
-
-	private function expectClassDecl(decl:HxDecl):HxClassDecl {
-		return switch decl {
-			case ClassDecl(c): c;
-		};
-	}
 }

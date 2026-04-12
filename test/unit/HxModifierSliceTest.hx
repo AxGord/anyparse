@@ -5,12 +5,10 @@ import anyparse.grammar.haxe.HxMemberDecl;
 import anyparse.grammar.haxe.HxModifier;
 import anyparse.grammar.haxe.HxClassMember;
 import anyparse.grammar.haxe.HxModule;
-import anyparse.grammar.haxe.HxDecl;
 import anyparse.grammar.haxe.HaxeFastParser;
 import anyparse.grammar.haxe.HaxeModuleFastParser;
 import anyparse.runtime.ParseError;
 import utest.Assert;
-import utest.Test;
 
 /**
  * Tests for the modifier slice (slice ε): access and storage modifiers
@@ -19,7 +17,7 @@ import utest.Test;
  * `HxMemberDecl` wrapper typedef, using the try-parse termination mode
  * in `emitStarFieldSteps`.
  */
-class HxModifierSliceTest extends Test {
+class HxModifierSliceTest extends HxTestHelpers {
 
 	public function new() {
 		super();
@@ -189,10 +187,4 @@ class HxModifierSliceTest extends Test {
 		Assert.equals(Static, m.modifiers[1]);
 	}
 
-	private function expectClassDecl(decl:HxDecl):HxClassDecl {
-		return switch decl {
-			case ClassDecl(d): d;
-			case _: throw 'expected ClassDecl';
-		};
-	}
 }

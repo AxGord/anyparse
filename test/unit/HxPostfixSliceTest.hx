@@ -1,12 +1,9 @@
 package unit;
 
 import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeFastParser;
 import anyparse.grammar.haxe.HaxeModuleFastParser;
 import anyparse.grammar.haxe.HxClassDecl;
-import anyparse.grammar.haxe.HxClassMember;
-import anyparse.grammar.haxe.HxDecl;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxVarDecl;
@@ -38,15 +35,8 @@ import anyparse.runtime.ParseError;
  *    `FieldAccess(FieldAccess(a, b), c)`. The loop keeps extending
  *    `left` until no further postfix matches.
  *
- * Helpers `parseSingleVarDecl`, `expectVarMember`, `expectClassDecl`
- * remain inlined per sibling convention; debt #5b still tracks the
- * extraction into a shared `HxExprTestBase`.
  */
-class HxPostfixSliceTest extends Test {
-
-	public function new() {
-		super();
-	}
+class HxPostfixSliceTest extends HxTestHelpers {
 
 	public function testFieldAccessSmoke():Void {
 		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a.b; }');
@@ -509,22 +499,4 @@ class HxPostfixSliceTest extends Test {
 		Assert.raises(() -> HaxeFastParser.parse('class Foo { var x:Int = a[1; }'), ParseError);
 	}
 
-	private function parseSingleVarDecl(source:String):HxVarDecl {
-		final ast:HxClassDecl = HaxeFastParser.parse(source);
-		Assert.equals(1, ast.members.length);
-		return expectVarMember(ast.members[0].member);
-	}
-
-	private function expectVarMember(member:HxClassMember):HxVarDecl {
-		return switch member {
-			case VarMember(decl): decl;
-			case _: throw 'expected VarMember, got $member';
-		};
-	}
-
-	private function expectClassDecl(decl:HxDecl):HxClassDecl {
-		return switch decl {
-			case ClassDecl(c): c;
-		};
-	}
 }

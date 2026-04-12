@@ -1,11 +1,9 @@
 package unit;
 
 import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeModuleFastParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxClassMember;
-import anyparse.grammar.haxe.HxDecl;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.runtime.ParseError;
 
@@ -23,7 +21,7 @@ import anyparse.runtime.ParseError;
  * deferred to later milestones. Empty modules (zero decls) are valid and
  * mirror the existing zero-member class case from the skeleton session.
  */
-class HaxeModuleSliceTest extends Test {
+class HaxeModuleSliceTest extends HxTestHelpers {
 
 	public function new() {
 		super();
@@ -120,9 +118,4 @@ class HaxeModuleSliceTest extends Test {
 		Assert.raises(() -> HaxeModuleFastParser.parse('class Foo {} class Bar'), ParseError);
 	}
 
-	private function expectClassDecl(decl:HxDecl):HxClassDecl {
-		return switch decl {
-			case ClassDecl(c): c;
-		};
-	}
 }

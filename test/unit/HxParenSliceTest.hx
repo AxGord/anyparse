@@ -1,10 +1,7 @@
 package unit;
 
 import utest.Assert;
-import utest.Test;
 import anyparse.grammar.haxe.HaxeFastParser;
-import anyparse.grammar.haxe.HxClassDecl;
-import anyparse.grammar.haxe.HxClassMember;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxVarDecl;
 import anyparse.runtime.ParseError;
@@ -28,11 +25,7 @@ import anyparse.runtime.ParseError;
  *  - `( 1 + 2 )` — whitespace tolerance inside the group.
  *  - `(1 +;` — unmatched-paren rejection.
  */
-class HxParenSliceTest extends Test {
-
-	public function new() {
-		super();
-	}
+class HxParenSliceTest extends HxTestHelpers {
 
 	public function testBareIntInParens():Void {
 		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = (1); }');
@@ -105,16 +98,4 @@ class HxParenSliceTest extends Test {
 		Assert.raises(() -> HaxeFastParser.parse('class Foo { var x:Int = (1 +; }'), ParseError);
 	}
 
-	private function parseSingleVarDecl(source:String):HxVarDecl {
-		final ast:HxClassDecl = HaxeFastParser.parse(source);
-		Assert.equals(1, ast.members.length);
-		return expectVarMember(ast.members[0].member);
-	}
-
-	private function expectVarMember(member:HxClassMember):HxVarDecl {
-		return switch member {
-			case VarMember(decl): decl;
-			case _: throw 'expected VarMember, got $member';
-		};
-	}
 }
