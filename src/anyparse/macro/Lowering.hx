@@ -1022,13 +1022,16 @@ class Lowering {
 	 *    next char is not a separator. The first element is parsed only
 	 *    when the next char is not already the close char (empty-list
 	 *    case).
-	 *  - No `@:trail`, **not last field** — try-parse mode. Loop
-	 *    attempts to parse an element on each iteration; on `ParseError`
-	 *    restores position and breaks. Used by modifier arrays where
-	 *    the loop stops when the next token is not a recognised keyword.
-	 *  - No `@:trail`, **last field** — EOF mode. Loop terminates when
-	 *    `ctx.pos` reaches `ctx.input.length`. Used by module-root Star
-	 *    fields where the top level has no close delimiter.
+	 *  - No `@:trail`, **not last field** (or `@:tryparse`) — try-parse
+	 *    mode. Loop attempts to parse an element on each iteration; on
+	 *    `ParseError` restores position and breaks. Used by modifier
+	 *    arrays where the loop stops when the next token is not a
+	 *    recognised keyword, and by switch-case bodies where the loop
+	 *    stops at the next `case` / `default` / `}` (D49).
+	 *  - No `@:trail`, **last field**, no `@:tryparse` — EOF mode. Loop
+	 *    terminates when `ctx.pos` reaches `ctx.input.length`. Used by
+	 *    module-root Star fields where the top level has no close
+	 *    delimiter.
 	 *
 	 * `@:sep` combined with no `@:trail` is rejected at compile time
 	 * because there is no unambiguous way to stop a sep-peek loop at
@@ -1067,11 +1070,13 @@ class Lowering {
 			pos: Context.currentPos(),
 		});
 		final accumRef:Expr = macro $i{localName};
-		if (closeText == null && !isLastField) {
+		if (closeText == null && (!isLastField || hasMeta(starNode, ':tryparse'))) {
 			// Try-parse mode: loop until element parse fails. Used by
-			// Star fields that are NOT the last field in a struct — the
-			// loop terminates when the next token cannot be parsed as an
-			// element (e.g. a modifier loop stopping at `var`/`function`).
+			// Star fields that are NOT the last field in a struct, OR
+			// by fields annotated with `@:tryparse` (D49) — the loop
+			// terminates when the next token cannot be parsed as an
+			// element (e.g. a modifier loop stopping at `var`/`function`,
+			// or a switch-case body stopping at the next `case`/`default`).
 			parseSteps.push(macro {
 				while (true) {
 					final _savedPos:Int = ctx.pos;

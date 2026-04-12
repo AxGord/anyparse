@@ -38,6 +38,10 @@ package anyparse.grammar.haxe;
  *    parens. The inner call re-enters `parseHxExpr` at `minPrec = 0`
  *    (default), so parens fully reset precedence and any operator
  *    is allowed inside the group.
+ *  - `NewExpr` — `new T(args)` constructor call. The `new` keyword
+ *    is the commit point (`@:kw('new')`); the type name and argument
+ *    list are parsed by `HxNewExpr`. Must appear before `IdentExpr`
+ *    so `new` is not consumed as an identifier.
  *  - `IdentExpr` — bare identifier (`other`). **Must appear last**
  *    among the pure atom branches: the identifier regex is permissive
  *    and would otherwise match `null` / `true` / `false` as bare
@@ -144,8 +148,8 @@ package anyparse.grammar.haxe;
  * every other shared-prefix pair — each conflict is resolved at macro
  * time by the length-desc sort.
  *
- * **Still deferred**: `=>`, `new T(...)` — each is a separate concept
- * a future slice addresses.
+ * **Still deferred**: `=>` — context-dependent (lambda, map literal,
+ * switch case), addressed in a future slice.
  */
 @:peg
 enum HxExpr {
@@ -162,6 +166,9 @@ enum HxExpr {
 
 	@:wrap('(', ')')
 	ParenExpr(inner:HxExpr);
+
+	@:kw('new')
+	NewExpr(expr:HxNewExpr);
 
 	IdentExpr(v:HxIdentLit);
 

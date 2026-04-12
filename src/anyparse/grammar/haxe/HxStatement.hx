@@ -34,6 +34,12 @@ package anyparse.grammar.haxe;
  *    which handles the parenthesised `varName in iterable` clause
  *    and the loop body.
  *
+ *  - `SwitchStmt` — `switch (expr) { cases }` switch statement.
+ *    Dispatched by the `switch` keyword. The expression, case branches,
+ *    and default branch are parsed via `HxSwitchStmt` typedef. Case
+ *    bodies use `@:tryparse` for implicit termination at the next
+ *    `case` / `default` / `}` token (D49).
+ *
  *  - `BlockStmt` — `{ stmts }` block statement. No keyword guard —
  *    dispatched by the `{` literal. Uses Case 4 in
  *    `Lowering.lowerEnumBranch` (Array<Ref> with lead/trail, no sep).
@@ -65,6 +71,9 @@ enum HxStatement {
 
 	@:kw('for')
 	ForStmt(stmt:HxForStmt);
+
+	@:kw('switch')
+	SwitchStmt(stmt:HxSwitchStmt);
 
 	@:lead('{') @:trail('}')
 	BlockStmt(stmts:Array<HxStatement>);
