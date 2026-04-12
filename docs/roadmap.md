@@ -286,6 +286,17 @@ Sessions should align with phase boundaries — start a new Claude Code session 
 - **D53**: `@:unescape` generates inline walk-and-unescape loop from the `@:schema` format's `unescapeChar`. Eliminates grammar-side decoder boilerplate. `@:decode` remains for non-unescape decoders (future hex/base64 terminals).
 - 1935 assertions green on neko (zero new — all existing tests validate identical behavior through the new code path).
 
+**Phase 3 arrow operator + array/map literals slice (slice ξ₁) — what landed (2026-04-12, after slice ν₃)**:
+- `anyparse.grammar.haxe.HxLambdaParam` — new `@:peg` typedef for lambda parameters: `name:HxIdentLit`, `@:optional @:lead(':') type:Null<HxTypeRef>`. Simpler than `HxParam` — type annotation is optional (lambda params use inference).
+- `anyparse.grammar.haxe.HxParenLambda` — new `@:peg` typedef for parenthesised lambda: `@:lead('(') @:trail(')') @:sep(',') params:Array<HxLambdaParam>`, `@:lead('=>') body:HxExpr`. Sep-peek Star with close-char guard handles `()` (zero params). `expectLit('=>')` after `)` is the commit/rollback point for tryBranch.
+- `anyparse.grammar.haxe.HxExpr` — three new branches:
+  - `@:lead('[') @:trail(']') @:sep(',') ArrayExpr(elems:Array<HxExpr>)` — Case 4 atom for array and map literals. No conflict with postfix `IndexAccess` (`@:postfix('[', ']')`) — atom and postfix dispatch are separate loops.
+  - `ParenLambdaExpr(lambda:HxParenLambda)` — Case 3 atom placed before `ParenExpr`. tryBranch tries lambda first; if `=>` absent after `)`, rolls back to ParenExpr. Handles `()`, `(x)`, `(x, y)`, `(x:Int)` forms.
+  - `@:infix('=>', 0, 'Right') Arrow(left:HxExpr, right:HxExpr)` — prec-0 right-associative infix. Handles single-ident lambdas (`x => body`) and map entries (`[k => v]`). D33 longest-match sort resolves `=>` (2ch) vs `=` (1ch).
+- Zero Lowering changes — all three additions use existing patterns (Case 4, Case 3, infix Pratt).
+- `test/unit/HxArrowArraySliceTest.hx` — 23 tests, 78 new assertions. Covers single-ident lambda, paren lambda (zero/single/multi/typed params), array literals (empty/single/multi), map literals, IndexAccess on arrays, right-associativity, assign-vs-arrow disambiguation, ParenExpr fallback, word boundary, module integration, error rejection.
+- 2013 assertions green on neko (1935 baseline + 78 new).
+
 **Non-deliverables for the skeleton slice**:
 - Expressions, operators, Pratt strategy.
 - ~~Function parameters~~ (shipped in slice ζ), ~~function bodies with statements~~ (basic shipped in slice η₁; void return, control-flow statements deferred).
