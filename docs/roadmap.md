@@ -176,9 +176,16 @@ Sessions should align with phase boundaries — start a new Claude Code session 
 - `test/unit/HxParamSliceTest.hx` — 12 new tests: zero/single/two/three params, default values (int, bool, expression), mixed defaults, whitespace tolerance, trailing-comma rejection, missing-type rejection, module-root integration, params with modifiers.
 - 1263 assertions green on neko/js (1196 baseline + 67 new).
 
+**Phase 3 function bodies slice (slice η₁) — what landed (2026-04-12, after slice ζ)**:
+- `anyparse.grammar.haxe.HxStatement` — new `@:peg` enum with three branches: `@:kw('var') @:trail(';') VarStmt(decl:HxVarDecl)`, `@:kw('return') @:trail(';') ReturnStmt(value:HxExpr)`, `@:trail(';') ExprStmt(expr:HxExpr)`. Keyword-dispatched branches first, expression-statement catch-all last. All three are Case 3 in `Lowering.lowerEnumBranch`.
+- `anyparse.grammar.haxe.HxFnDecl` — `@:trail('{}')` on `returnType` replaced with a new `@:lead('{') @:trail('}') var body:Array<HxStatement>` field. Close-peek Star termination mode — same pattern as `HxClassDecl.members`. Empty function bodies `{}` parse as `body: []`.
+- Zero changes to `Lowering.hx`, `Codegen.hx`, `Build.hx`, `ShapeBuilder.hx` — all patterns existed.
+- `test/unit/HxBodySliceTest.hx` — 16 new tests: empty body, single expr-statement, return statement, var statement (with and without init), mixed statements, operators in body, method call, method call chain, assignment, multiple expr-statements, return expression, whitespace tolerance, missing-semicolon rejection, unclosed-brace rejection, module-root integration.
+- 1329 assertions green on neko/js (1263 baseline + 66 new).
+
 **Non-deliverables for the skeleton slice**:
 - Expressions, operators, Pratt strategy.
-- ~~Function parameters~~ (shipped in slice ζ), function bodies with statements.
+- ~~Function parameters~~ (shipped in slice ζ), ~~function bodies with statements~~ (basic shipped in slice η₁; void return, control-flow statements deferred).
 - Modifiers (`public`, `private`, `static`, `inline`, `override`, …), `extends`/`implements`, type parameters.
 - Multi-declaration modules (root is a single class, not an array of top-level decls).
 - Comments, `#if/#else`, `@:meta` on user code.
