@@ -231,6 +231,15 @@ Sessions should align with phase boundaries — start a new Claude Code session 
 - `test/unit/HxSwitchNewSliceTest.hx` — 23 new tests: switch empty/single-case/multiple-cases/default/case+default/empty-body-fall-through/multi-statement-body/nested/expression-subject/call-pattern/whitespace/word-boundary/module/default-multi-stmt/empty-default; new zero-args/multi-args/expr-arg/postfix-chain/in-switch-body/word-boundary/module/whitespace.
 - 1707 assertions green on neko (1605 baseline + 102 new).
 
+**Phase 3 do-while + throw + try-catch slice (slice μ₂) — what landed (2026-04-12, after slice μ₁)**:
+- `anyparse.grammar.haxe.HxDoWhileStmt` — new `@:peg` typedef: `body:HxStatement`, `@:kw('while') @:lead('(') @:trail(')') cond:HxExpr`. First consumer of D50 (`@:kw` + `@:lead` on same struct field).
+- `anyparse.grammar.haxe.HxTryCatchStmt` — new `@:peg` typedef: `body:HxStatement`, `@:tryparse catches:Array<HxCatchClause>`. D49 reuse for try-parse termination on last field.
+- `anyparse.grammar.haxe.HxCatchClause` — new `@:peg` typedef: `@:kw('catch') @:lead('(') name:HxIdentLit`, `@:lead(':') @:trail(')') type:HxTypeRef`, `body:HxStatement`. Second consumer of D50.
+- `anyparse.grammar.haxe.HxStatement` — three new branches: `@:kw('throw') @:trail(';') ThrowStmt(expr:HxExpr)` (Case 3 with kw + trail, zero Lowering changes), `@:kw('do') @:trail(';') DoWhileStmt(stmt:HxDoWhileStmt)`, `@:kw('try') TryCatchStmt(stmt:HxTryCatchStmt)`.
+- `anyparse.macro.Lowering` — `lowerStruct` line 928: `else if (leadText != null)` → `if (leadText != null)` (D50). When both `@:kw` and `@:lead` are present on a non-Star, non-optional struct field, both emit sequentially. Existing consumers unaffected — no field previously combined both.
+- `test/unit/HxDoWhileThrowTryCatchSliceTest.hx` — 19 new tests: throw smoke/expression/block/module/word-boundary; do-while smoke/single-statement/expression-cond/nested/whitespace/word-boundary; try-catch smoke/single-statement/multiple-catches/nested/module/whitespace/word-boundary-try/word-boundary-catch/throw-in-catch.
+- 1800 assertions green on neko (1707 baseline + 93 new).
+
 **Non-deliverables for the skeleton slice**:
 - Expressions, operators, Pratt strategy.
 - ~~Function parameters~~ (shipped in slice ζ), ~~function bodies with statements~~ (basic shipped in slice η₁; void return, control-flow statements deferred).
