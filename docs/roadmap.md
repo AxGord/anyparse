@@ -240,6 +240,27 @@ Sessions should align with phase boundaries — start a new Claude Code session 
 - `test/unit/HxDoWhileThrowTryCatchSliceTest.hx` — 19 new tests: throw smoke/expression/block/module/word-boundary; do-while smoke/single-statement/expression-cond/nested/whitespace/word-boundary; try-catch smoke/single-statement/multiple-catches/nested/module/whitespace/word-boundary-try/word-boundary-catch/throw-in-catch.
 - 1800 assertions green on neko (1707 baseline + 93 new).
 
+**Phase 3 abstract declarations slice (slice θ₂) — what landed (2026-04-12, after slice μ₂)**:
+- `anyparse.grammar.haxe.HxAbstractDecl` — new `@:peg` typedef: `@:kw('abstract') name`, `@:lead('(') @:trail(')') underlyingType`, bare `clauses:Array<HxAbstractClause>` (positional try-parse — first bare Star consumer), `@:lead('{') @:trail('}') members:Array<HxMemberDecl>`.
+- `anyparse.grammar.haxe.HxAbstractClause` — new `@:peg` enum: `@:kw('from') FromClause(type:HxTypeRef)`, `@:kw('to') ToClause(type:HxTypeRef)`. Both Case 3 with kw.
+- `anyparse.grammar.haxe.HxDecl` — `AbstractDecl(decl:HxAbstractDecl)` branch added. All five top-level declaration forms now covered (class, typedef, enum, interface, abstract).
+- Zero Lowering changes — bare Star field try-parse mode already existed.
+- `test/unit/HxAbstractSliceTest.hx` — 17 new tests.
+- 1859 assertions green on neko (1800 baseline + 59 new).
+
+**Phase 3 string literals slice (slice ν₁) — what landed (2026-04-12, after slice θ₂)**:
+- `anyparse.macro.Lowering` — `lowerTerminal` gains `@:decode` meta support (D51). `readMetaString(node, ':decode')` reads a fully-qualified static method path; split on `.`, emitted as `ECall(macro $p{parts}, [macro _matched])`. Priority chain: `@:decode` > `@:rawString` > closed decoder switch. First generalisation of the closed decoder table — grammar-side code names its own decoder function.
+- `anyparse.grammar.haxe.HxStringDecoder` — new runtime decoder class with static `decode(raw:String):String`. Strips surrounding quotes, walks chars, delegates `\X` to `HaxeFormat.instance.unescapeChar`.
+- `anyparse.grammar.haxe.HaxeFormat` — `unescapeChar` gained `case '\''.code` for single-quoted string escape support.
+- `anyparse.grammar.haxe.HxDoubleStringLit` — new terminal abstract: `@:re('"(?:[^"\\\\]|\\\\.)*"') @:decode('anyparse.grammar.haxe.HxStringDecoder.decode')`.
+- `anyparse.grammar.haxe.HxSingleStringLit` — new terminal abstract: `@:re("'(?:[^'\\\\]|\\\\.)*'") @:decode('anyparse.grammar.haxe.HxStringDecoder.decode')`.
+- `anyparse.grammar.haxe.HxExpr` — two new atom branches: `DoubleStringExpr(v:HxDoubleStringLit)`, `SingleStringExpr(v:HxSingleStringLit)`. Both Case 3 (single-Ref, no lead/trail) — zero Lowering changes beyond `@:decode`.
+- Two separate types (not one) so the AST preserves which quote style was used — needed for round-trip writers.
+- `test/unit/HxStringSliceTest.hx` — 15 new tests: double-quoted (empty, simple, spaces, escapes), single-quoted (empty, simple, escapes, dollar sign), concatenation, function args, return statements, whitespace, module integration, rejection of unterminated strings.
+- **D51**: `@:decode` generalises closed decoder table. Grammar-side decoder function, not macro-side. Existing terminals (`HxIdentLit` with `@:rawString`, `HxIntLit`, `HxFloatLit`, `JStringLit`) all unaffected.
+- 1890 assertions green on neko (1859 baseline + 31 new).
+- Non-deliverables: string interpolation (`$var`, `${expr}`), `\0`, `\xNN`, `\uNNNN` hex/unicode escapes, multi-line strings, raw strings.
+
 **Non-deliverables for the skeleton slice**:
 - Expressions, operators, Pratt strategy.
 - ~~Function parameters~~ (shipped in slice ζ), ~~function bodies with statements~~ (basic shipped in slice η₁; void return, control-flow statements deferred).
