@@ -210,6 +210,15 @@ Sessions should align with phase boundaries — start a new Claude Code session 
 - `test/unit/HxControlFlowSliceTest.hx` — 22 new tests: ??= smoke/right-assoc/regression, if with single/block body, if-else, if-else-if-else, expression condition, dangling else, whitespace tolerance, while single/block body, while whitespace, block/empty-block/nested-blocks, module integration, mixed statements, if-with-while body, word-boundary guards (ifx, whiled).
 - 1523 assertions green on neko (1443 baseline + 80 new).
 
+**Phase 3 for + enum ctor params + void return slice (slice λ₁) — what landed (2026-04-12, after slice κ₁)**:
+- `anyparse.grammar.haxe.HxForStmt` — new `@:peg` typedef: `@:lead('(') varName`, `@:kw('in') @:trail(')') iterable`, bare `body:HxStatement`. Zero Lowering changes — `@:kw` + `@:trail` on the same struct field already works in `lowerStruct`.
+- `anyparse.grammar.haxe.HxStatement` — two new branches: `@:kw('for') ForStmt(stmt:HxForStmt)` and `@:kw('return') @:trail(';') VoidReturnStmt`. ForStmt before BlockStmt (keyword-dispatched). VoidReturnStmt after ReturnStmt — tryBranch tries return-with-value first, rolls back to void on expr parse failure.
+- `anyparse.grammar.haxe.HxEnumCtorDecl` — new `@:peg` typedef: `name:HxIdentLit`, `@:lead('(') @:trail(')') @:sep(',') params:Array<HxParam>`. Reuses `HxParam` from function parameters.
+- `anyparse.grammar.haxe.HxEnumCtor` — rewritten from typedef to enum with `@:trail(';') ParamCtor(decl:HxEnumCtorDecl)` and `@:trail(';') SimpleCtor(name:HxIdentLit)`. Source order load-bearing: ParamCtor first (more specific, `(` disambiguates), SimpleCtor as fallback. Zero Lowering changes.
+- `anyparse.macro.Lowering` — Case 0 (zero-arg `@:kw` branches) extended to read `lit.trailText` and emit `skipWs + expectLit(trail)` when trail is present (D48). Existing consumers (modifiers) unaffected — they have no trail. First consumer: `VoidReturnStmt`.
+- `test/unit/HxForEnumVoidSliceTest.hx` — 23 new tests: for with ident/expr/block/nested/whitespace/call-iterable, word-boundary (format/forest), rejection (missing in/close-paren), module integration; enum ctor simple/single-param/multi-param/default-value/mixed/zero-param-vs-bare/whitespace/module; void return bare/before-other/in-block/return-with-value-still-works/module.
+- 1605 assertions green on neko (1523 baseline + 82 new).
+
 **Non-deliverables for the skeleton slice**:
 - Expressions, operators, Pratt strategy.
 - ~~Function parameters~~ (shipped in slice ζ), ~~function bodies with statements~~ (basic shipped in slice η₁; void return, control-flow statements deferred).
