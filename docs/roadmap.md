@@ -297,6 +297,17 @@ Sessions should align with phase boundaries — start a new Claude Code session 
 - `test/unit/HxArrowArraySliceTest.hx` — 23 tests, 78 new assertions. Covers single-ident lambda, paren lambda (zero/single/multi/typed params), array literals (empty/single/multi), map literals, IndexAccess on arrays, right-associativity, assign-vs-arrow disambiguation, ParenExpr fallback, word boundary, module integration, error rejection.
 - 2013 assertions green on neko (1935 baseline + 78 new).
 
+**Phase 3 HaxeWriter slice (slice π₁) — what landed (2026-04-12, after slice ξ₁)**:
+- `anyparse.grammar.haxe.HaxeWriter` — new static class converting `HxModule` AST → Doc IR → formatted Haxe text via `Renderer.render`. First programming-language writer in anyparse. Follows `JsonWriter` static-class pattern (D57). `HaxeWriteOptions` typedef: `indent:String` + `lineWidth:Int`, defaults `\t`/`120` (D56).
+- Precedence-aware parenthesization (D55): `exprToDoc(expr, contextPrec, opt)` threads a precedence context. Binary operator at prec `p` with left-assoc: left operand gets `ctxPrec = p`, right gets `p + 1`. Right-assoc: inverted. When `operatorPrec < contextPrec`, expression wrapped in parens. Constants: `PREC_NONE = -1`, `PREC_TERNARY = 1`, `PREC_POSTFIX = 10`.
+- Layout policy (D58): `D.hardline()` between declarations and statements. `D.group` with `D.softline` around comma-separated lists (params, args, arrays) via shared `sepList` helper — same pattern as `JsonWriter.arrayToDoc`. Binary operators flat (no line-break wrapping in v1).
+- Idempotency round-trip testing (D54): `write(parse(write(parse(source)))) == write(parse(source))`. Avoids implementing deep structural equality on 48 AST types.
+- All 48 AST types and 52 `HxExpr` constructors handled. Covers 5 declaration forms, members with modifiers, 11 statement types, all expression operators, string escaping and interpolation reconstruction.
+- `test/unit/HaxeWriterTest.hx` — 56 golden-file assertions: each declaration type, expression precedence/parenthesization, all statement types, string handling.
+- `test/unit/HaxeRoundTripTest.hx` — 51 curated idempotency round-trip tests covering every AST node type.
+- Zero changes to `Lowering.hx`, `Codegen.hx`, `Build.hx`, `ShapeBuilder.hx` — writer is independent of the macro pipeline.
+- 2123 assertions green on neko/js (2013 baseline + 110 new).
+
 **Non-deliverables for the skeleton slice**:
 - Expressions, operators, Pratt strategy.
 - ~~Function parameters~~ (shipped in slice ζ), ~~function bodies with statements~~ (basic shipped in slice η₁; void return, control-flow statements deferred).
