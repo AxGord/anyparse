@@ -14,6 +14,7 @@ import anyparse.macro.strategy.Pratt;
 import anyparse.macro.strategy.Prefix;
 import anyparse.macro.strategy.Re;
 import anyparse.macro.strategy.Skip;
+import anyparse.macro.strategy.Ternary;
 
 /**
  * `@:build` entry point. Applied to a marker class like
@@ -71,6 +72,7 @@ class Build {
 		registry.register(new Lit());
 		registry.register(new Postfix());
 		registry.register(new Pratt());
+		registry.register(new Ternary());
 		registry.register(new Prefix());
 		registry.register(new Re());
 		registry.register(new Skip());

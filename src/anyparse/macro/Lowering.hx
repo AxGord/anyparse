@@ -150,13 +150,21 @@ class Lowering {
 	}
 
 	private static function hasPrattBranch(node:ShapeNode):Bool {
-		for (branch in node.children) if (branch.annotations.get('pratt.prec') != null) return true;
+		for (branch in node.children) {
+			if (branch.annotations.get('pratt.prec') != null || branch.annotations.get('ternary.op') != null) return true;
+		}
 		return false;
 	}
 
 	private static function hasPostfixBranch(node:ShapeNode):Bool {
 		for (branch in node.children) if (branch.annotations.get('postfix.op') != null) return true;
 		return false;
+	}
+
+	/** Returns the operator literal for a branch in the Pratt dispatch chain.
+	 *  Binary infix branches carry `pratt.op`; ternary branches carry `ternary.op`. */
+	private static function getOperatorText(branch:ShapeNode):String {
+		return (branch.annotations.get('pratt.op') : Null<String>) ?? branch.annotations.get('ternary.op');
 	}
 
 	// -------- enum rule --------
@@ -196,7 +204,7 @@ class Lowering {
 		final branches:Array<ShapeNode> = atomsOnly
 			? [
 				for (b in node.children)
-					if (b.annotations.get('pratt.prec') == null && b.annotations.get('postfix.op') == null) b
+					if (b.annotations.get('pratt.prec') == null && b.annotations.get('postfix.op') == null && b.annotations.get('ternary.op') == null) b
 			]
 			: node.children;
 		final branchExprs:Array<Expr> = [for (branch in branches) tryBranch(branch, typePath, recurseFnName)];
@@ -253,12 +261,13 @@ class Lowering {
 			expr: ECall(macro $i{atomFnName}, [macro ctx]),
 			pos: Context.currentPos(),
 		};
-		final prattBranches:Array<ShapeNode> = [
-			for (b in node.children) if (b.annotations.get('pratt.prec') != null) b
+		final operatorBranches:Array<ShapeNode> = [
+			for (b in node.children)
+				if (b.annotations.get('pratt.prec') != null || b.annotations.get('ternary.op') != null) b
 		];
 		// Longest-match sort: longer operator literals come first in the
 		// generated dispatch chain so `<=` is attempted before `<` (and
-		// `>=` before `>`). Without this, `matchLit(ctx, "<")` succeeds on
+		// `??` before `?`). Without this, `matchLit(ctx, "<")` succeeds on
 		// input `<=`, consumes one char, and leaves `=` stranded for the
 		// right operand parser to trip over. The sort is a Lowering-level
 		// policy — `matchLit` stays a naive prefix match everywhere else
@@ -267,9 +276,12 @@ class Lowering {
 		// at macro time. Order among equal-length operators is semantically
 		// irrelevant (no length-N operator is a prefix of another length-N
 		// operator in a well-formed grammar), so `Array.sort` suffices.
-		prattBranches.sort((a, b) -> {
-			final la:Int = (a.annotations.get('pratt.op') : String).length;
-			final lb:Int = (b.annotations.get('pratt.op') : String).length;
+		// The sort key uses `pratt.op` for binary infix branches and
+		// `ternary.op` for ternary branches — both are operator literals
+		// that compete in the same `matchLit` dispatch chain.
+		operatorBranches.sort((a, b) -> {
+			final la:Int = getOperatorText(a).length;
+			final lb:Int = getOperatorText(b).length;
 			return lb - la;
 		});
 		// Fold the operator chain into a nested if/else if tree. Each leaf
@@ -277,34 +289,68 @@ class Lowering {
 		// peek), enforces `minPrec`, parses the right operand by recursing
 		// into `parseXxx` at `prec + 1` for left-associative branches or
 		// `prec` for right-associative branches, and rebuilds `left` as
-		// the matched ctor call.
+		// the matched ctor call. Ternary branches (detected by `ternary.op`)
+		// parse both middle and right operands at `minPrec = 0` (full
+		// expression) with an `expectLit` separator in between.
 		var opChain:Expr = macro _matched = false;
-		for (i in 0...prattBranches.length) {
-			final branch:ShapeNode = prattBranches[prattBranches.length - 1 - i];
-			final opText:String = branch.annotations.get('pratt.op');
-			final precValue:Int = branch.annotations.get('pratt.prec');
-			final assocValue:String = branch.annotations.get('pratt.assoc');
-			final nextMinPrec:Int = assocValue == 'Right' ? precValue : precValue + 1;
+		for (i in 0...operatorBranches.length) {
+			final branch:ShapeNode = operatorBranches[operatorBranches.length - 1 - i];
 			final ctor:String = branch.annotations.get('base.ctor');
 			final ctorPath:Array<String> = packOf(typePath).concat([simple, ctor]);
 			final ctorRef:Expr = MacroStringTools.toFieldExpr(ctorPath);
-			final rightCall:Expr = {
-				expr: ECall(macro $i{loopFnName}, [macro ctx, macro $v{nextMinPrec}]),
-				pos: Context.currentPos(),
-			};
-			final ctorCall:Expr = {
-				expr: ECall(ctorRef, [macro left, macro _right]),
-				pos: Context.currentPos(),
-			};
-			final branchBody:Expr = macro {
-				if ($v{precValue} < minPrec) {
-					ctx.pos = _savedPos;
-					_matched = false;
-				} else {
-					skipWs(ctx);
-					final _right:$returnCT = $rightCall;
-					left = $ctorCall;
-				}
+			final isTernary:Bool = branch.annotations.get('ternary.op') != null;
+			final opText:String = getOperatorText(branch);
+			final precValue:Int = isTernary
+				? (branch.annotations.get('ternary.prec') : Int)
+				: (branch.annotations.get('pratt.prec') : Int);
+			final branchBody:Expr = if (isTernary) {
+				// Ternary branch: three operands (cond, middle, right).
+				// Both middle and right parse at minPrec=0 (full expression).
+				final sepText:String = branch.annotations.get('ternary.sep');
+				final fullExprCall:Expr = {
+					expr: ECall(macro $i{loopFnName}, [macro ctx, macro $v{0}]),
+					pos: Context.currentPos(),
+				};
+				final ctorCall:Expr = {
+					expr: ECall(ctorRef, [macro left, macro _middle, macro _right]),
+					pos: Context.currentPos(),
+				};
+				macro {
+					if ($v{precValue} < minPrec) {
+						ctx.pos = _savedPos;
+						_matched = false;
+					} else {
+						skipWs(ctx);
+						final _middle:$returnCT = $fullExprCall;
+						skipWs(ctx);
+						expectLit(ctx, $v{sepText});
+						skipWs(ctx);
+						final _right:$returnCT = $fullExprCall;
+						left = $ctorCall;
+					}
+				};
+			} else {
+				// Binary infix branch: two operands (left, right).
+				final assocValue:String = branch.annotations.get('pratt.assoc');
+				final nextMinPrec:Int = assocValue == 'Right' ? precValue : precValue + 1;
+				final rightCall:Expr = {
+					expr: ECall(macro $i{loopFnName}, [macro ctx, macro $v{nextMinPrec}]),
+					pos: Context.currentPos(),
+				};
+				final ctorCall:Expr = {
+					expr: ECall(ctorRef, [macro left, macro _right]),
+					pos: Context.currentPos(),
+				};
+				macro {
+					if ($v{precValue} < minPrec) {
+						ctx.pos = _savedPos;
+						_matched = false;
+					} else {
+						skipWs(ctx);
+						final _right:$returnCT = $rightCall;
+						left = $ctorCall;
+					}
+				};
 			};
 			opChain = macro if (matchLit(ctx, $v{opText})) $branchBody else $opChain;
 		}

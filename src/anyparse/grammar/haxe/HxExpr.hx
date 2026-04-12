@@ -1,13 +1,13 @@
 package anyparse.grammar.haxe;
 
 /**
- * Haxe expression grammar — postfix operators on top of the unary-prefix
- * slice.
+ * Haxe expression grammar — ternary and null-coalescing operators on top
+ * of the postfix + unary-prefix slices.
  *
  * Six atom constructors plus three unary-prefix constructors plus three
- * postfix constructors (field access, index access, call) plus
- * thirty-one binary-operator constructors
- * across nine precedence levels. Atoms, prefix and postfix are all
+ * postfix constructors (field access, index access, call) plus one
+ * ternary operator plus thirty-two binary-operator constructors
+ * across ten precedence levels. Atoms, prefix and postfix are all
  * reached through a single `parseHxExprAtom` call — internally split
  * into `parseHxExprAtom` (the wrapper) and `parseHxExprAtomCore` (the
  * pure leaf + prefix dispatcher) when postfix branches are present.
@@ -100,12 +100,22 @@ package anyparse.grammar.haxe;
  *    `lowerPostfixLoop`'s Star-suffix variant emits the sep-peek
  *    loop — same pattern as Case 4 in `lowerEnumBranch`.
  *
+ * **Ternary branch** — mixfix `? :` operator. `@:ternary('?', ':', 1)`
+ * declares the opening operator, middle separator, and precedence.
+ * `Lowering.lowerPrattLoop` merges it into the operator dispatch chain
+ * alongside binary `@:infix` branches — longest-match sort (D33)
+ * resolves `??` (len 2) vs `?` (len 1) automatically. Both middle
+ * and right operands parse at `minPrec = 0` (full expression), so
+ * right-associativity is inherent: `a ? b : c ? d : e` yields
+ * `Ternary(a, b, Ternary(c, d, e))`. Assignments are accepted in
+ * ternary branches: `a ? b : c = d` yields `Ternary(a, b, Assign(c, d))`.
+ *
  * **Operator branches** — all binary infix. Each `@:infix(op, prec)`
  * carries the operator literal and its precedence; higher precedence
  * binds tighter. The optional third argument `'Left'` / `'Right'`
- * selects associativity (default is left). Nine precedence levels
- * are populated, following the Haxe reference table (shifts tighter
- * than bitwise, bitwise tighter than comparison):
+ * selects associativity (default is left). Ten precedence levels
+ * are populated (0-9, with ternary at 1 and null-coalescing at 2),
+ * following the Haxe reference table:
  *
  *  - prec 9 — `*` `/` `%` (multiplicative, left-assoc)
  *  - prec 8 — `+` `-` (additive, left-assoc)
@@ -114,7 +124,9 @@ package anyparse.grammar.haxe;
  *  - prec 5 — `==` `!=` `<=` `>=` `<` `>` (comparison, left-assoc)
  *  - prec 4 — `&&` (logical and, left-assoc)
  *  - prec 3 — `||` (logical or, left-assoc)
- *  - prec 1 — `=` `+=` `-=` `*=` `/=` `%=` `<<=` `>>=` `>>>=` `|=`
+ *  - prec 2 — `??` (null-coalescing, **right-assoc**)
+ *  - prec 1 — `? :` (ternary, via `@:ternary`)
+ *  - prec 0 — `=` `+=` `-=` `*=` `/=` `%=` `<<=` `>>=` `>>>=` `|=`
  *    `&=` `^=` (assignment, **right-assoc**)
  *
  * Declaration order inside each precedence level puts longer literals
@@ -128,19 +140,13 @@ package anyparse.grammar.haxe;
  * `matchLit(ctx, "<")` consumes one character and strands the `=`.
  * Same story for `<<` vs `<`, `>>>` vs `>>` vs `>`, `&&` vs `&`,
  * `||` vs `|`, `*=` vs `*`, `>>>=` vs `>>>` vs `>>=` vs `>>`, `<<=`
- * vs `<<` vs `<=`, `|=` vs `||`, `&=` vs `&&`, and every other
- * shared-prefix pair — each conflict is resolved at macro time by
- * the length-desc sort.
+ * vs `<<` vs `<=`, `|=` vs `||`, `&=` vs `&&`, `??` vs `?`, and
+ * every other shared-prefix pair — each conflict is resolved at macro
+ * time by the length-desc sort.
  *
- * Precedence 2 is deliberately free for a future ternary / `??` /
- * `=>` slot decision — each of those is a separate concept the
- * corresponding slice will land. Prec 1 is claimed by assignments;
- * if ternary ultimately needs to sit below assignments in the Haxe
- * precedence table, that slice revisits the numbering.
- *
- * **Still deferred**: `??=` waits for `??`. Ternary `? :`, `??`,
- * `=>`, `new T(...)` — each is a separate concept a future slice
- * addresses.
+ * **Still deferred**: `??=` waits for `??` to ship (now shipped —
+ * addable as a trivial prec-0 right-assoc ctor). `=>`, `new T(...)` —
+ * each is a separate concept a future slice addresses.
  */
 @:peg
 enum HxExpr {
@@ -235,39 +241,45 @@ enum HxExpr {
 	@:infix('||', 3)
 	Or(left:HxExpr, right:HxExpr);
 
-	@:infix('=', 1, 'Right')
+	@:infix('??', 2, 'Right')
+	NullCoal(left:HxExpr, right:HxExpr);
+
+	@:ternary('?', ':', 1)
+	Ternary(cond:HxExpr, thenExpr:HxExpr, elseExpr:HxExpr);
+
+	@:infix('=', 0, 'Right')
 	Assign(left:HxExpr, right:HxExpr);
 
-	@:infix('+=', 1, 'Right')
+	@:infix('+=', 0, 'Right')
 	AddAssign(left:HxExpr, right:HxExpr);
 
-	@:infix('-=', 1, 'Right')
+	@:infix('-=', 0, 'Right')
 	SubAssign(left:HxExpr, right:HxExpr);
 
-	@:infix('*=', 1, 'Right')
+	@:infix('*=', 0, 'Right')
 	MulAssign(left:HxExpr, right:HxExpr);
 
-	@:infix('/=', 1, 'Right')
+	@:infix('/=', 0, 'Right')
 	DivAssign(left:HxExpr, right:HxExpr);
 
-	@:infix('%=', 1, 'Right')
+	@:infix('%=', 0, 'Right')
 	ModAssign(left:HxExpr, right:HxExpr);
 
-	@:infix('<<=', 1, 'Right')
+	@:infix('<<=', 0, 'Right')
 	ShlAssign(left:HxExpr, right:HxExpr);
 
-	@:infix('>>>=', 1, 'Right')
+	@:infix('>>>=', 0, 'Right')
 	UShrAssign(left:HxExpr, right:HxExpr);
 
-	@:infix('>>=', 1, 'Right')
+	@:infix('>>=', 0, 'Right')
 	ShrAssign(left:HxExpr, right:HxExpr);
 
-	@:infix('|=', 1, 'Right')
+	@:infix('|=', 0, 'Right')
 	BitOrAssign(left:HxExpr, right:HxExpr);
 
-	@:infix('&=', 1, 'Right')
+	@:infix('&=', 0, 'Right')
 	BitAndAssign(left:HxExpr, right:HxExpr);
 
-	@:infix('^=', 1, 'Right')
+	@:infix('^=', 0, 'Right')
 	BitXorAssign(left:HxExpr, right:HxExpr);
 }
