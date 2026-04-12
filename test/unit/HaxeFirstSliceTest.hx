@@ -47,32 +47,32 @@ class HaxeFirstSliceTest extends Test {
 		final ast:HxClassDecl = HaxeFastParser.parse('class Foo { var x:Int; }');
 		Assert.equals('Foo', (ast.name : String));
 		Assert.equals(1, ast.members.length);
-		assertVarMember(ast.members[0], 'x', 'Int');
+		assertVarMember(ast.members[0].member, 'x', 'Int');
 	}
 
 	public function testClassWithMultipleVars():Void {
 		final ast:HxClassDecl = HaxeFastParser.parse('class Foo { var x:Int; var y:String; var z:Bool; }');
 		Assert.equals('Foo', (ast.name : String));
 		Assert.equals(3, ast.members.length);
-		assertVarMember(ast.members[0], 'x', 'Int');
-		assertVarMember(ast.members[1], 'y', 'String');
-		assertVarMember(ast.members[2], 'z', 'Bool');
+		assertVarMember(ast.members[0].member, 'x', 'Int');
+		assertVarMember(ast.members[1].member, 'y', 'String');
+		assertVarMember(ast.members[2].member, 'z', 'Bool');
 	}
 
 	public function testClassWithOneFunction():Void {
 		final ast:HxClassDecl = HaxeFastParser.parse('class Foo { function bar():Void {} }');
 		Assert.equals('Foo', (ast.name : String));
 		Assert.equals(1, ast.members.length);
-		assertFnMember(ast.members[0], 'bar', 'Void');
+		assertFnMember(ast.members[0].member, 'bar', 'Void');
 	}
 
 	public function testClassWithMixedMembers():Void {
 		final ast:HxClassDecl = HaxeFastParser.parse('class Foo { var count:Int; function tick():Void {} var name:String; }');
 		Assert.equals('Foo', (ast.name : String));
 		Assert.equals(3, ast.members.length);
-		assertVarMember(ast.members[0], 'count', 'Int');
-		assertFnMember(ast.members[1], 'tick', 'Void');
-		assertVarMember(ast.members[2], 'name', 'String');
+		assertVarMember(ast.members[0].member, 'count', 'Int');
+		assertFnMember(ast.members[1].member, 'tick', 'Void');
+		assertVarMember(ast.members[2].member, 'name', 'String');
 	}
 
 	public function testIrregularWhitespace():Void {
@@ -80,8 +80,8 @@ class HaxeFirstSliceTest extends Test {
 		final ast:HxClassDecl = HaxeFastParser.parse(source);
 		Assert.equals('Foo', (ast.name : String));
 		Assert.equals(2, ast.members.length);
-		assertVarMember(ast.members[0], 'x', 'Int');
-		assertFnMember(ast.members[1], 'bar', 'Void');
+		assertVarMember(ast.members[0].member, 'x', 'Int');
+		assertFnMember(ast.members[1].member, 'bar', 'Void');
 	}
 
 	public function testRejectsClassyAsClass():Void {

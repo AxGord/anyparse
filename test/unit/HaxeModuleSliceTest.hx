@@ -77,7 +77,7 @@ class HaxeModuleSliceTest extends Test {
 		final foo:HxClassDecl = expectClassDecl(module.decls[0]);
 		Assert.equals('Foo', (foo.name : String));
 		Assert.equals(1, foo.members.length);
-		final fooMember:HxClassMember = foo.members[0];
+		final fooMember:HxClassMember = foo.members[0].member;
 		switch fooMember {
 			case VarMember(decl):
 				Assert.equals('x', (decl.name : String));
@@ -89,7 +89,7 @@ class HaxeModuleSliceTest extends Test {
 		final bar:HxClassDecl = expectClassDecl(module.decls[1]);
 		Assert.equals('Bar', (bar.name : String));
 		Assert.equals(1, bar.members.length);
-		final barMember:HxClassMember = bar.members[0];
+		final barMember:HxClassMember = bar.members[0].member;
 		switch barMember {
 			case FnMember(decl):
 				Assert.equals('tick', (decl.name : String));

@@ -23,7 +23,7 @@ package anyparse.grammar.haxe;
  * fails and the parser rejects the input).
  *
  * The second field (`members`) is a `Star` field wrapped in `{` / `}`
- * with no separator between items — each `HxClassMember` is
+ * with no separator between items — each `HxMemberDecl` is
  * self-terminating via its own `;` or `{}` tail. `Lowering`'s new
  * separator-less Star path drives that loop until the closing brace.
  */
@@ -32,5 +32,5 @@ package anyparse.grammar.haxe;
 @:ws
 typedef HxClassDecl = {
 	@:kw('class') var name:HxIdentLit;
-	@:lead('{') @:trail('}') var members:Array<HxClassMember>;
+	@:lead('{') @:trail('}') var members:Array<HxMemberDecl>;
 }

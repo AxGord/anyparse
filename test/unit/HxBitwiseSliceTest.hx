@@ -309,7 +309,7 @@ class HxBitwiseSliceTest extends Test {
 		Assert.equals(2, module.decls.length);
 
 		final a:HxClassDecl = expectClassDecl(module.decls[0]);
-		final aVar:HxVarDecl = expectVarMember(a.members[0]);
+		final aVar:HxVarDecl = expectVarMember(a.members[0].member);
 		switch aVar.init {
 			case Shl(IntLit(l), IntLit(r)):
 				Assert.equals(1, (l : Int));
@@ -319,7 +319,7 @@ class HxBitwiseSliceTest extends Test {
 		}
 
 		final b:HxClassDecl = expectClassDecl(module.decls[1]);
-		final bVar:HxVarDecl = expectVarMember(b.members[0]);
+		final bVar:HxVarDecl = expectVarMember(b.members[0].member);
 		switch bVar.init {
 			case BitOr(IntLit(l), IntLit(r)):
 				Assert.equals(3, (l : Int));
@@ -334,7 +334,7 @@ class HxBitwiseSliceTest extends Test {
 	private function parseSingleVarDecl(source:String):HxVarDecl {
 		final ast:HxClassDecl = HaxeFastParser.parse(source);
 		Assert.equals(1, ast.members.length);
-		return expectVarMember(ast.members[0]);
+		return expectVarMember(ast.members[0].member);
 	}
 
 	private function expectVarMember(member:HxClassMember):HxVarDecl {

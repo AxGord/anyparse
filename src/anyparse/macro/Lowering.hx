@@ -641,6 +641,19 @@ class Lowering {
 			};
 		}
 
+		// Case 0: zero-arg ctor with @:kw (no @:lit). Parallel to Case 1
+		// but driven by the Kw strategy annotation instead of the Lit
+		// strategy. Emits `expectKw` with word-boundary enforcement.
+		// Used by modifier enums where each ctor is a bare keyword.
+		final kwLeadBranch:Null<String> = branch.annotations.get('kw.leadText');
+		if (kwLeadBranch != null && branch.children.length == 0 && branch.annotations.get('lit.litList') == null) {
+			return macro {
+				skipWs(ctx);
+				expectKw(ctx, $v{kwLeadBranch});
+				return $ctorRef;
+			};
+		}
+
 		// Classify branch shape.
 		final litList:Null<Array<String>> = branch.annotations.get('lit.litList');
 		final children:Array<ShapeNode> = branch.children;
@@ -915,7 +928,8 @@ class Lowering {
 						pos: Context.currentPos(),
 					});
 				case Star:
-					emitStarFieldSteps(child, localName, parseSteps);
+					final isLastField:Bool = child == node.children[node.children.length - 1];
+					emitStarFieldSteps(child, localName, parseSteps, isLastField);
 				case _:
 					Context.fatalError('Lowering: struct field kind ${child.kind} not supported', Context.currentPos());
 			}
@@ -942,8 +956,8 @@ class Lowering {
 	 * is declared with the given `localName` so the enclosing `lowerStruct`
 	 * can reference it in the final struct literal.
 	 *
-	 * Three termination modes are selected by the metadata on the Star
-	 * node (see D22 in session_state.md):
+	 * Four termination modes are selected by the metadata on the Star
+	 * node and by the `isLastField` flag:
 	 *
 	 *  - `@:trail("X")` **without** `@:sep` — loop terminates when the
 	 *    next non-whitespace char is the close literal's first char.
@@ -951,13 +965,19 @@ class Lowering {
 	 *    next char is not a separator. The first element is parsed only
 	 *    when the next char is not already the close char (empty-list
 	 *    case).
-	 *  - No `@:trail` — loop terminates when `ctx.pos` reaches
-	 *    `ctx.input.length`. Used by module-root Star fields where the
-	 *    top level has no close delimiter. `@:sep` combined with no
-	 *    `@:trail` is rejected at compile time because there is no
-	 *    unambiguous way to stop the sep-peek loop at EOF.
+	 *  - No `@:trail`, **not last field** — try-parse mode. Loop
+	 *    attempts to parse an element on each iteration; on `ParseError`
+	 *    restores position and breaks. Used by modifier arrays where
+	 *    the loop stops when the next token is not a recognised keyword.
+	 *  - No `@:trail`, **last field** — EOF mode. Loop terminates when
+	 *    `ctx.pos` reaches `ctx.input.length`. Used by module-root Star
+	 *    fields where the top level has no close delimiter.
+	 *
+	 * `@:sep` combined with no `@:trail` is rejected at compile time
+	 * because there is no unambiguous way to stop a sep-peek loop at
+	 * EOF or via try-parse.
 	 */
-	private function emitStarFieldSteps(starNode:ShapeNode, localName:String, parseSteps:Array<Expr>):Void {
+	private function emitStarFieldSteps(starNode:ShapeNode, localName:String, parseSteps:Array<Expr>, isLastField:Bool):Void {
 		final inner:ShapeNode = starNode.children[0];
 		if (inner.kind != Ref) {
 			Context.fatalError('Lowering: Star struct field must contain a Ref', Context.currentPos());
@@ -990,7 +1010,27 @@ class Lowering {
 			pos: Context.currentPos(),
 		});
 		final accumRef:Expr = macro $i{localName};
+		if (closeText == null && !isLastField) {
+			// Try-parse mode: loop until element parse fails. Used by
+			// Star fields that are NOT the last field in a struct — the
+			// loop terminates when the next token cannot be parsed as an
+			// element (e.g. a modifier loop stopping at `var`/`function`).
+			parseSteps.push(macro {
+				while (true) {
+					final _savedPos:Int = ctx.pos;
+					try {
+						skipWs(ctx);
+						$accumRef.push($elemCall);
+					} catch (_e:anyparse.runtime.ParseError) {
+						ctx.pos = _savedPos;
+						break;
+					}
+				}
+			});
+			return;
+		}
 		if (closeText == null) {
+			// EOF mode: last field, no trail — loop until end of input.
 			parseSteps.push(macro {
 				skipWs(ctx);
 				while (ctx.pos < ctx.input.length) {

@@ -262,14 +262,14 @@ class HxPrattSliceTest extends Test {
 		Assert.equals(2, module.decls.length);
 
 		final a:HxClassDecl = expectClassDecl(module.decls[0]);
-		final aVar:HxVarDecl = expectVarMember(a.members[0]);
+		final aVar:HxVarDecl = expectVarMember(a.members[0].member);
 		switch aVar.init {
 			case Add(IntLit(_), Mul(IntLit(_), IntLit(_))): Assert.pass();
 			case null, _: Assert.fail('expected Add(_, Mul(_, _)), got ${aVar.init}');
 		}
 
 		final b:HxClassDecl = expectClassDecl(module.decls[1]);
-		final bVar:HxVarDecl = expectVarMember(b.members[0]);
+		final bVar:HxVarDecl = expectVarMember(b.members[0].member);
 		switch bVar.init {
 			case FloatLit(v): Assert.floatEquals(0.5, (v : Float));
 			case null, _: Assert.fail('expected FloatLit(0.5), got ${bVar.init}');
@@ -279,7 +279,7 @@ class HxPrattSliceTest extends Test {
 	private function parseSingleVarDecl(source:String):HxVarDecl {
 		final ast:HxClassDecl = HaxeFastParser.parse(source);
 		Assert.equals(1, ast.members.length);
-		return expectVarMember(ast.members[0]);
+		return expectVarMember(ast.members[0].member);
 	}
 
 	private function expectVarMember(member:HxClassMember):HxVarDecl {

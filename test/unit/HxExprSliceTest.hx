@@ -97,19 +97,19 @@ class HxExprSliceTest extends Test {
 		Assert.equals('Foo', (ast.name : String));
 		Assert.equals(4, ast.members.length);
 
-		final a:HxVarDecl = expectVarMember(ast.members[0]);
+		final a:HxVarDecl = expectVarMember(ast.members[0].member);
 		Assert.equals('a', (a.name : String));
 		Assert.isNull(a.init);
 
-		final b:HxVarDecl = expectVarMember(ast.members[1]);
+		final b:HxVarDecl = expectVarMember(ast.members[1].member);
 		Assert.equals('b', (b.name : String));
 		assertBoolLit(b.init, true);
 
-		final c:HxVarDecl = expectVarMember(ast.members[2]);
+		final c:HxVarDecl = expectVarMember(ast.members[2].member);
 		Assert.equals('c', (c.name : String));
 		assertNullLit(c.init);
 
-		final d:HxVarDecl = expectVarMember(ast.members[3]);
+		final d:HxVarDecl = expectVarMember(ast.members[3].member);
 		Assert.equals('d', (d.name : String));
 		assertIntLit(d.init, 7);
 	}
@@ -122,14 +122,14 @@ class HxExprSliceTest extends Test {
 		final a:HxClassDecl = expectClassDecl(module.decls[0]);
 		Assert.equals('A', (a.name : String));
 		Assert.equals(1, a.members.length);
-		final aVar:HxVarDecl = expectVarMember(a.members[0]);
+		final aVar:HxVarDecl = expectVarMember(a.members[0].member);
 		Assert.equals('x', (aVar.name : String));
 		assertIntLit(aVar.init, 1);
 
 		final b:HxClassDecl = expectClassDecl(module.decls[1]);
 		Assert.equals('B', (b.name : String));
 		Assert.equals(1, b.members.length);
-		final bVar:HxVarDecl = expectVarMember(b.members[0]);
+		final bVar:HxVarDecl = expectVarMember(b.members[0].member);
 		Assert.equals('y', (bVar.name : String));
 		assertBoolLit(bVar.init, false);
 	}
@@ -137,7 +137,7 @@ class HxExprSliceTest extends Test {
 	private function parseSingleVarDecl(source:String):HxVarDecl {
 		final ast:HxClassDecl = HaxeFastParser.parse(source);
 		Assert.equals(1, ast.members.length);
-		return expectVarMember(ast.members[0]);
+		return expectVarMember(ast.members[0].member);
 	}
 
 	private function expectVarMember(member:HxClassMember):HxVarDecl {

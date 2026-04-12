@@ -239,7 +239,7 @@ class HxPrefixSliceTest extends Test {
 		Assert.equals(1, module.decls.length);
 		final cls:HxClassDecl = expectClassDecl(module.decls[0]);
 		Assert.equals(1, cls.members.length);
-		final decl:HxVarDecl = expectVarMember(cls.members[0]);
+		final decl:HxVarDecl = expectVarMember(cls.members[0].member);
 		switch decl.init {
 			case Neg(IntLit(v)): Assert.equals(5, (v : Int));
 			case null, _:
@@ -260,7 +260,7 @@ class HxPrefixSliceTest extends Test {
 	private function parseSingleVarDecl(source:String):HxVarDecl {
 		final ast:HxClassDecl = HaxeFastParser.parse(source);
 		Assert.equals(1, ast.members.length);
-		return expectVarMember(ast.members[0]);
+		return expectVarMember(ast.members[0].member);
 	}
 
 	private function expectVarMember(member:HxClassMember):HxVarDecl {
