@@ -183,6 +183,16 @@ Sessions should align with phase boundaries — start a new Claude Code session 
 - `test/unit/HxBodySliceTest.hx` — 16 new tests: empty body, single expr-statement, return statement, var statement (with and without init), mixed statements, operators in body, method call, method call chain, assignment, multiple expr-statements, return expression, whitespace tolerance, missing-semicolon rejection, unclosed-brace rejection, module-root integration.
 - 1329 assertions green on neko/js (1263 baseline + 66 new).
 
+**Phase 3 top-level forms slice (slice θ) — what landed (2026-04-12, after slice η₁)**:
+- `anyparse.grammar.haxe.HxTypedefDecl` — new `@:peg` typedef: `@:kw('typedef') name`, `@:lead('=') type`. Simplest top-level form — type alias binding.
+- `anyparse.grammar.haxe.HxEnumCtor` — new `@:peg` typedef: `@:trail(';') name`. Zero-arg enum constructors only; constructors with parameters deferred.
+- `anyparse.grammar.haxe.HxEnumDecl` — new `@:peg` typedef: `@:kw('enum') name`, `@:lead('{') @:trail('}') ctors:Array<HxEnumCtor>`. Structurally identical to `HxClassDecl` — close-peek Star field.
+- `anyparse.grammar.haxe.HxInterfaceDecl` — new `@:peg` typedef: `@:kw('interface') name`, `@:lead('{') @:trail('}') members:Array<HxMemberDecl>`. Structural clone of `HxClassDecl` sharing `HxMemberDecl`.
+- `anyparse.grammar.haxe.HxDecl` — three new branches: `@:trail(';') TypedefDecl(decl:HxTypedefDecl)`, `EnumDecl(decl:HxEnumDecl)`, `InterfaceDecl(decl:HxInterfaceDecl)`. TypedefDecl carries `@:trail(';')` because it has no closing brace. All three are Case 3 in `lowerEnumBranch`.
+- Zero changes to `Lowering.hx`, `Codegen.hx`, `Build.hx`, `ShapeBuilder.hx` — all patterns existed.
+- `test/unit/HxTopLevelSliceTest.hx` — 20 new tests: typedef (simple, whitespace, in-module, reject missing equals, reject missing semicolon), enum (empty, single/multiple ctors, whitespace, in-module, reject unclosed), interface (empty, with var, with function, with modifiers, in-module), mixed module, word-boundary rejection for all three keywords.
+- 1390 assertions green on neko/js (1329 baseline + 61 new).
+
 **Non-deliverables for the skeleton slice**:
 - Expressions, operators, Pratt strategy.
 - ~~Function parameters~~ (shipped in slice ζ), ~~function bodies with statements~~ (basic shipped in slice η₁; void return, control-flow statements deferred).
