@@ -9,6 +9,7 @@ import anyparse.core.LoweringCtx;
 import anyparse.core.Mode;
 import anyparse.macro.strategy.Kw;
 import anyparse.macro.strategy.Lit;
+import anyparse.macro.strategy.Postfix;
 import anyparse.macro.strategy.Pratt;
 import anyparse.macro.strategy.Prefix;
 import anyparse.macro.strategy.Re;
@@ -68,6 +69,7 @@ class Build {
 		final registry:StrategyRegistry = new StrategyRegistry();
 		registry.register(new Kw());
 		registry.register(new Lit());
+		registry.register(new Postfix());
 		registry.register(new Pratt());
 		registry.register(new Prefix());
 		registry.register(new Re());

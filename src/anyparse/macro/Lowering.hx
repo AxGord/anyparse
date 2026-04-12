@@ -57,8 +57,36 @@ class Lowering {
 		// eregs off the loop rule (which is the public entry point for
 		// the enum); the atom sub-rule has none of its own.
 		return switch node.kind {
+			case Alt if (hasPrattBranch(node) && hasPostfixBranch(node)):
+				// Pratt + postfix enum: emit three rules.
+				//  * `parseXxx(ctx, ?minPrec = 0)` — the precedence-climbing loop
+				//    (public entry, called via the `parse` wrapper).
+				//  * `parseXxxAtom(ctx)` — the atom WRAPPER. Calls `parseXxxAtomCore`
+				//    to get an underlying atom, then runs `lowerPostfixLoop` around
+				//    the result, applying postfix operators left-recursively. Every
+				//    caller that wants a "complete atom with any attached postfix"
+				//    uses this function — the Pratt loop for left/right operands,
+				//    and Case 5 prefix's operand recursion.
+				//  * `parseXxxAtomCore(ctx)` — the actual tryBranch chain over
+				//    non-operator branches (atoms + prefix). Never called directly
+				//    except by `parseXxxAtom`.
+				//
+				// Prefix's `recurseFnName` targets `parseXxxAtom` (the wrapper),
+				// so `-a.b` parses as `Neg(FieldAccess(a, b))`: prefix's operand
+				// goes through the wrapper, which applies postfix to `a` before
+				// the prefix ctor wraps the result.
+				final wrapperFnName:String = '${fnName}Atom';
+				final coreFnName:String = '${fnName}AtomCore';
+				final loopBody:Expr = lowerPrattLoop(node, typePath, simple);
+				final wrapperBody:Expr = lowerPostfixLoop(node, typePath, simple, coreFnName);
+				final coreBody:Expr = lowerEnum(node, typePath, /* atomsOnly */ true, wrapperFnName);
+				final eregs:Array<GeneratedRule.EregSpec> = collectEregs(typePath);
+				final loopRule:GeneratedRule = new GeneratedRule(fnName, returnCT, loopBody, eregs, true);
+				final wrapperRule:GeneratedRule = new GeneratedRule(wrapperFnName, returnCT, wrapperBody, [], false);
+				final coreRule:GeneratedRule = new GeneratedRule(coreFnName, returnCT, coreBody, [], false);
+				[loopRule, wrapperRule, coreRule];
 			case Alt if (hasPrattBranch(node)):
-				// Pratt-enabled enum: emit two rules sharing the same return type.
+				// Pratt-enabled enum (no postfix): emit two rules sharing the same return type.
 				//  * `parseXxx(ctx, ?minPrec = 0)` — the precedence-climbing loop
 				//    (primary public entry; the regular `parse` wrapper calls it).
 				//  * `parseXxxAtom(ctx)` — the atoms-only dispatcher covering the
@@ -73,14 +101,35 @@ class Lowering {
 				// (`parseHxVarDecl` → `parseHxExpr(ctx)`) drop the parameter via
 				// its default value, keeping every other rule's call sites
 				// untouched.
+				final atomFnName:String = '${fnName}Atom';
 				final loopBody:Expr = lowerPrattLoop(node, typePath, simple);
-				final atomBody:Expr = lowerEnum(node, typePath, /* atomsOnly */ true);
+				final atomBody:Expr = lowerEnum(node, typePath, /* atomsOnly */ true, atomFnName);
 				final eregs:Array<GeneratedRule.EregSpec> = collectEregs(typePath);
 				final loopRule:GeneratedRule = new GeneratedRule(fnName, returnCT, loopBody, eregs, true);
-				final atomRule:GeneratedRule = new GeneratedRule('${fnName}Atom', returnCT, atomBody, [], false);
+				final atomRule:GeneratedRule = new GeneratedRule(atomFnName, returnCT, atomBody, [], false);
 				[loopRule, atomRule];
+			case Alt if (hasPostfixBranch(node)):
+				// Postfix-only enum (no Pratt): emit two rules.
+				//  * `parseXxx(ctx)` — the atom WRAPPER, also the public entry.
+				//    Calls `parseXxxCore` then runs `lowerPostfixLoop` around the
+				//    result.
+				//  * `parseXxxCore(ctx)` — the atom core (tryBranch chain over
+				//    non-postfix branches).
+				//
+				// Prefix's `recurseFnName` targets `parseXxx` — the wrapper — so
+				// any prefix operator's operand flows through postfix application
+				// before the prefix ctor wraps it. This branch is not exercised
+				// by HxExpr (which has both Pratt and postfix), but keeps the
+				// logic general for future postfix-only enums.
+				final coreFnName:String = '${fnName}Core';
+				final wrapperBody:Expr = lowerPostfixLoop(node, typePath, simple, coreFnName);
+				final coreBody:Expr = lowerEnum(node, typePath, /* atomsOnly */ true, fnName);
+				final eregs:Array<GeneratedRule.EregSpec> = collectEregs(typePath);
+				final wrapperRule:GeneratedRule = new GeneratedRule(fnName, returnCT, wrapperBody, eregs, false);
+				final coreRule:GeneratedRule = new GeneratedRule(coreFnName, returnCT, coreBody, [], false);
+				[wrapperRule, coreRule];
 			case Alt:
-				final body:Expr = lowerEnum(node, typePath, false);
+				final body:Expr = lowerEnum(node, typePath, false, fnName);
 				[new GeneratedRule(fnName, returnCT, body, collectEregs(typePath))];
 			case Seq:
 				final body:Expr = lowerStruct(node, typePath);
@@ -105,33 +154,51 @@ class Lowering {
 		return false;
 	}
 
+	private static function hasPostfixBranch(node:ShapeNode):Bool {
+		for (branch in node.children) if (branch.annotations.get('postfix.op') != null) return true;
+		return false;
+	}
+
 	// -------- enum rule --------
 
 	/**
 	 * Lower an enum `ShapeNode` into the body of its `parseXxx` function.
 	 *
-	 * `atomsOnly` controls whether Pratt-annotated branches (those with a
-	 * `pratt.prec` annotation) are included. A normal enum rule includes
-	 * every branch (`atomsOnly = false`); the atom function emitted for a
-	 * Pratt-enabled enum skips the infix branches, because the Pratt loop
-	 * owns their construction and must not let `tryBranch` attempt to
-	 * parse a `left/right` pair that has no standalone meaning.
+	 * `atomsOnly` controls whether operator-shaped branches are excluded.
+	 * When true, both Pratt-annotated (`pratt.prec`) and postfix-annotated
+	 * (`postfix.op`) branches are filtered out — those operators are
+	 * handled by separate generated rules (`lowerPrattLoop` for Pratt,
+	 * `lowerPostfixLoop` for postfix). Prefix branches (`prefix.op`) are
+	 * left in, because prefix is an atom-producing form (consumes one
+	 * operand and builds a value) that belongs alongside the leaf cases.
+	 *
+	 * `recurseFnName` is the name of the function whose body `tryBranch`
+	 * should target as the recursion point for prefix operands. It is
+	 * passed down through `tryBranch` → `lowerEnumBranch` to Case 5
+	 * (unary prefix), where a `@:prefix` branch's operand recursion
+	 * targets this function. The caller picks a name that yields the
+	 * correct binding-tightness:
+	 *
+	 *  - For a plain enum: the function's own name (`parseXxx`).
+	 *  - For a Pratt enum (no postfix): the atom function name
+	 *    (`parseXxxAtom`) — NOT the Pratt loop, so `-x * 2` parses as
+	 *    `Mul(Neg(x), 2)`.
+	 *  - For a Pratt + postfix enum: the atom WRAPPER name
+	 *    (`parseXxxAtom`, which is now the postfix-extended wrapper
+	 *    around `parseXxxAtomCore`) — so prefix's operand gets postfix
+	 *    applied before the prefix ctor wraps it, yielding
+	 *    `Neg(FieldAccess(a, b))` for `-a.b`.
+	 *  - For a postfix-only enum: the wrapper name (`parseXxx` itself,
+	 *    which wraps `parseXxxCore`) — same semantics, prefix's operand
+	 *    gets postfix before the prefix ctor wraps it.
 	 */
-	private function lowerEnum(node:ShapeNode, typePath:String, atomsOnly:Bool):Expr {
+	private function lowerEnum(node:ShapeNode, typePath:String, atomsOnly:Bool, recurseFnName:String):Expr {
 		final branches:Array<ShapeNode> = atomsOnly
-			? [for (b in node.children) if (b.annotations.get('pratt.prec') == null) b]
+			? [
+				for (b in node.children)
+					if (b.annotations.get('pratt.prec') == null && b.annotations.get('postfix.op') == null) b
+			]
 			: node.children;
-		// `recurseFnName` is the name of the function whose body we are
-		// currently generating — the atom function for Pratt-enabled enums
-		// and the single rule function for plain enums. `lowerEnumBranch`
-		// threads it into the prefix classifier case so a `@:prefix`
-		// branch's operand parses as another call to the same function,
-		// not as a full expression (which for a Pratt enum would recurse
-		// into the climbing loop and give the wrong tree shape for
-		// `-x * 2`).
-		final recurseFnName:String = atomsOnly
-			? 'parse${simpleName(typePath)}Atom'
-			: 'parse${simpleName(typePath)}';
 		final branchExprs:Array<Expr> = [for (branch in branches) tryBranch(branch, typePath, recurseFnName)];
 		final failExpr:Expr = macro throw new anyparse.runtime.ParseError(
 			new anyparse.runtime.Span(ctx.pos, ctx.pos),
@@ -259,6 +326,183 @@ class Lowering {
 		return macro {
 			final _savedPos:Int = ctx.pos;
 			try $body catch (_e:anyparse.runtime.ParseError) ctx.pos = _savedPos;
+		};
+	}
+
+	/**
+	 * Lower the postfix-loop body for a `@:postfix`-annotated enum. The
+	 * body runs inside the atom wrapper function and looks like:
+	 *
+	 * ```
+	 *   var left = parseXxxAtomCore(ctx);
+	 *   while (true) {
+	 *       skipWs(ctx);
+	 *       var _matched:Bool = true;
+	 *       if (matchLit(ctx, "(")) { skipWs; expectLit(")"); left = Ctor(left); }
+	 *       else if (matchLit(ctx, "[")) { skipWs; _i = parseXxx(ctx); skipWs; expectLit("]"); left = Ctor(left, _i); }
+	 *       else if (matchLit(ctx, ".")) { skipWs; _f = parseHxIdentLit(ctx); left = Ctor(left, _f); }
+	 *       else _matched = false;
+	 *       if (!_matched) break;
+	 *   }
+	 *   return left;
+	 * ```
+	 *
+	 * There is no precedence gate and no `_savedPos` rollback. Once a
+	 * postfix operator matches, the body commits: a failing inner parse
+	 * (e.g. unclosed `[`) throws `ParseError` upward as a hard error.
+	 * The loop only terminates by exhausting the dispatch chain — none
+	 * of the peeked operators matched, so the postfix-extended atom is
+	 * complete and control returns to the caller (usually the Pratt
+	 * loop, which then tries its own operators around `left`).
+	 *
+	 * Longest-first sort on `postfix.op` (same pattern as `lowerPrattLoop`
+	 * D33) keeps declaration order irrelevant to dispatch. For slice δ1
+	 * the three shipping ops (`.`, `[`, `(`) have unique first characters
+	 * so the sort is a no-op, but the guarantee holds for future
+	 * shared-prefix cases (e.g. hypothetical `?.` vs `?`).
+	 *
+	 * Each branch picks one of three body shapes based on a combination
+	 * of `postfix.close` presence and the branch's children:
+	 *
+	 *  1. **pair-lit (call-no-args)** — 1 child (operand only),
+	 *     `postfix.close` set. Body: expect close literal, build
+	 *     `Ctor(left)`.
+	 *  2. **single-Ref-suffix (field access)** — 2 children (operand +
+	 *     suffix Ref), `postfix.close` absent. Body: parse the suffix
+	 *     Ref, build `Ctor(left, suffix)`. The suffix Ref typically
+	 *     points at a Terminal like `HxIdentLit`.
+	 *  3. **wrap-with-recurse (index access)** — 2 children (operand +
+	 *     inner Ref), `postfix.close` set. Body: parse the inner Ref
+	 *     (typically `SelfType`, a full recursive expression), expect
+	 *     close, build `Ctor(left, inner)`.
+	 *
+	 * Validation of the operand child (must be `Ref` to same enum) and
+	 * symbolic-op check (no word-like postfix ops yet) run at macro
+	 * time — word-like ops would need a word-boundary-aware match helper
+	 * which is not wired for postfix in this slice.
+	 */
+	private function lowerPostfixLoop(node:ShapeNode, typePath:String, simple:String, coreFnName:String):Expr {
+		final returnCT:ComplexType = TPath({pack: packOf(typePath), name: simple, params: []});
+		final enumSimple:String = simple;
+		final selfFnName:String = 'parse$simple';
+		final coreCall:Expr = {
+			expr: ECall(macro $i{coreFnName}, [macro ctx]),
+			pos: Context.currentPos(),
+		};
+		final postfixBranches:Array<ShapeNode> = [
+			for (b in node.children) if (b.annotations.get('postfix.op') != null) b
+		];
+		if (postfixBranches.length == 0) {
+			Context.fatalError('Lowering: lowerPostfixLoop called with no postfix branches', Context.currentPos());
+		}
+		// Longest-first sort — same macro-time policy as lowerPrattLoop (D33).
+		postfixBranches.sort((a, b) -> {
+			final la:Int = (a.annotations.get('postfix.op') : String).length;
+			final lb:Int = (b.annotations.get('postfix.op') : String).length;
+			return lb - la;
+		});
+		// Fold the dispatch chain right-to-left, mirroring lowerPrattLoop.
+		var opChain:Expr = macro _matched = false;
+		for (i in 0...postfixBranches.length) {
+			final branch:ShapeNode = postfixBranches[postfixBranches.length - 1 - i];
+			final op:String = branch.annotations.get('postfix.op');
+			final close:Null<String> = branch.annotations.get('postfix.close');
+			final ctor:String = branch.annotations.get('base.ctor');
+			if (endsWithWordChar(op)) {
+				Context.fatalError(
+					'Lowering: @:postfix operator must be symbolic (word-like postfix ops not supported yet): "$op"',
+					Context.currentPos()
+				);
+			}
+			final children:Array<ShapeNode> = branch.children;
+			if (children.length == 0 || children[0].kind != Ref) {
+				Context.fatalError(
+					'Lowering: @:postfix branch "$ctor" must have operand:$enumSimple as its first argument',
+					Context.currentPos()
+				);
+			}
+			final operandRef:String = children[0].annotations.get('base.ref');
+			if (simpleName(operandRef) != enumSimple) {
+				Context.fatalError(
+					'Lowering: @:postfix operand must reference the same enum ($enumSimple)',
+					Context.currentPos()
+				);
+			}
+			final ctorPath:Array<String> = packOf(typePath).concat([enumSimple, ctor]);
+			final ctorRef:Expr = MacroStringTools.toFieldExpr(ctorPath);
+			final branchBody:Expr = if (children.length == 1) {
+				if (close == null) {
+					Context.fatalError(
+						'Lowering: @:postfix single-child branch "$ctor" requires @:postfix(open, close) pair form',
+						Context.currentPos()
+					);
+					throw 'unreachable';
+				}
+				final ctorCall:Expr = {expr: ECall(ctorRef, [macro left]), pos: Context.currentPos()};
+				macro {
+					skipWs(ctx);
+					expectLit(ctx, $v{close});
+					left = $ctorCall;
+				};
+			} else if (children.length == 2) {
+				final suffix:ShapeNode = children[1];
+				if (suffix.kind != Ref) {
+					Context.fatalError(
+						'Lowering: @:postfix branch "$ctor" second argument must be a Ref',
+						Context.currentPos()
+					);
+					throw 'unreachable';
+				}
+				final suffixRef:String = suffix.annotations.get('base.ref');
+				// For the wrap-with-recurse form, the inner Ref typically points
+				// at SelfType — to force a full expression parse reset we call
+				// `parseXxx` directly (via its public entry) rather than the
+				// atom wrapper. This lets a `[a + b]` index expression contain
+				// arbitrary infix operators. For the single-Ref-suffix form,
+				// the suffix is usually a Terminal like HxIdentLit and the
+				// `parseXxxSuffix` call is just a terminal call.
+				final suffixFn:String = simpleName(suffixRef) == enumSimple
+					? selfFnName
+					: 'parse${simpleName(suffixRef)}';
+				final suffixCall:Expr = {
+					expr: ECall(macro $i{suffixFn}, [macro ctx]),
+					pos: Context.currentPos(),
+				};
+				final suffixCT:ComplexType = TPath({pack: packOf(suffixRef), name: simpleName(suffixRef), params: []});
+				final ctorCall:Expr = {expr: ECall(ctorRef, [macro left, macro _suffix]), pos: Context.currentPos()};
+				if (close == null) {
+					macro {
+						skipWs(ctx);
+						final _suffix:$suffixCT = $suffixCall;
+						left = $ctorCall;
+					};
+				} else {
+					macro {
+						skipWs(ctx);
+						final _suffix:$suffixCT = $suffixCall;
+						skipWs(ctx);
+						expectLit(ctx, $v{close});
+						left = $ctorCall;
+					};
+				}
+			} else {
+				Context.fatalError(
+					'Lowering: @:postfix branch "$ctor" has ${children.length} arguments; expected 1 (pair-lit) or 2 (suffix form)',
+					Context.currentPos()
+				);
+				throw 'unreachable';
+			};
+			opChain = macro if (matchLit(ctx, $v{op})) $branchBody else $opChain;
+		}
+		return macro {
+			var left:$returnCT = $coreCall;
+			while (true) {
+				skipWs(ctx);
+				var _matched:Bool = true;
+				$opChain;
+				if (!_matched) break;
+			}
+			return left;
 		};
 	}
 

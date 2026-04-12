@@ -1,16 +1,18 @@
 package anyparse.grammar.haxe;
 
 /**
- * Haxe expression grammar — unary-prefix operators on top of the
- * bitwise/shift compound-assigns slice.
+ * Haxe expression grammar — postfix operators on top of the unary-prefix
+ * slice.
  *
- * Six atom constructors plus three unary-prefix constructors plus
- * thirty-one binary-operator constructors across nine precedence
- * levels. Atoms and prefix branches are both resolved by a single
- * call to `parseHxExprAtom`; operator branches carry `@:infix(op,
- * prec)` (or `@:infix(op, prec, 'Right')`) metadata so the Pratt
- * strategy sees them and `Lowering` generates a precedence-climbing
- * loop wrapping the atom parser.
+ * Six atom constructors plus three unary-prefix constructors plus three
+ * postfix constructors plus thirty-one binary-operator constructors
+ * across nine precedence levels. Atoms, prefix and postfix are all
+ * reached through a single `parseHxExprAtom` call — internally split
+ * into `parseHxExprAtom` (the wrapper) and `parseHxExprAtomCore` (the
+ * pure leaf + prefix dispatcher) when postfix branches are present.
+ * Operator branches carry `@:infix(op, prec)` (or `@:infix(op, prec,
+ * 'Right')`) metadata so the Pratt strategy sees them and `Lowering`
+ * generates a precedence-climbing loop wrapping the atom parser.
  *
  * **Atom branches** — all leaves, no operators:
  *
@@ -58,6 +60,43 @@ package anyparse.grammar.haxe;
  *  - `Not` — `!` logical not.
  *  - `BitNot` — `~` bitwise not.
  *
+ * **Postfix branches** — left-recursive suffix operators. Each
+ * `@:postfix(op)` or `@:postfix(open, close)` ctor applies to an
+ * already-parsed atom and builds itself around the result. Postfix
+ * lives in the atom wrapper function (`parseHxExprAtom`), which calls
+ * `parseHxExprAtomCore` for the underlying leaf/prefix value and then
+ * repeatedly peeks each postfix op on the accumulator. The loop
+ * terminates when no postfix matches.
+ *
+ * Binding-tightness invariants (locked in by tests in
+ * `HxPostfixSliceTest`):
+ *
+ *  - **Postfix binds tighter than Pratt infix.** `a.b + c` parses as
+ *    `Add(FieldAccess(a, b), c)`, not `FieldAccess(a, Add(b, c))`.
+ *    The Pratt loop calls `parseHxExprAtom`, which returns the
+ *    postfix-extended atom in one step; the `+` is seen only after
+ *    `FieldAccess(a, b)` is already built.
+ *  - **Postfix binds tighter than unary prefix.** `-a.b` parses as
+ *    `Neg(FieldAccess(a, b))`, not `FieldAccess(Neg(a), b)`. The
+ *    prefix ctor `Neg` recurses into the atom wrapper for its
+ *    operand (via `recurseFnName` in `Lowering`), so the wrapper
+ *    applies postfix to `a` before the prefix ctor wraps the result.
+ *  - **Postfix is left-recursive.** `a.b.c` parses as
+ *    `FieldAccess(FieldAccess(a, b), c)` because the postfix loop
+ *    keeps extending `left` until no further postfix matches.
+ *
+ *  - `FieldAccess` — `.name` member access. The suffix is parsed as
+ *    an `HxIdentLit` (the terminal identifier rule), so the field
+ *    name ends up in the ctor as a single identifier string. No
+ *    module path or type parameter syntax yet.
+ *  - `IndexAccess` — `[expr]` index. The inner expression is parsed
+ *    via `parseHxExpr` (not the atom wrapper), resetting precedence
+ *    so arbitrary operators are allowed inside the brackets.
+ *  - `CallNoArgs` — `()` no-argument call. A call with arguments
+ *    (`Call(operand, args:Array<HxExpr>)`) is deferred to slice δ2
+ *    — it needs shared struct-like emission for `Array<Ref>` inside
+ *    an enum-branch postfix shape, which is a separate concept.
+ *
  * **Operator branches** — all binary infix. Each `@:infix(op, prec)`
  * carries the operator literal and its precedence; higher precedence
  * binds tighter. The optional third argument `'Left'` / `'Right'`
@@ -97,8 +136,8 @@ package anyparse.grammar.haxe;
  * precedence table, that slice revisits the numbering.
  *
  * **Still deferred**: `??=` waits for `??`. Ternary `? :`, `??`,
- * `=>`, postfix (`f()`, `o.x`, `a[i]`), `new T(...)` — each is a
- * separate concept a future slice addresses.
+ * `=>`, call with arguments (`Call(operand, args:Array<HxExpr>)`),
+ * `new T(...)` — each is a separate concept a future slice addresses.
  */
 @:peg
 enum HxExpr {
@@ -126,6 +165,15 @@ enum HxExpr {
 
 	@:prefix('~')
 	BitNot(operand:HxExpr);
+
+	@:postfix('.')
+	FieldAccess(operand:HxExpr, field:HxIdentLit);
+
+	@:postfix('[', ']')
+	IndexAccess(operand:HxExpr, index:HxExpr);
+
+	@:postfix('(', ')')
+	CallNoArgs(operand:HxExpr);
 
 	@:infix('*', 9)
 	Mul(left:HxExpr, right:HxExpr);
