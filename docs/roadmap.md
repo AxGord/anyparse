@@ -193,6 +193,14 @@ Sessions should align with phase boundaries — start a new Claude Code session 
 - `test/unit/HxTopLevelSliceTest.hx` — 20 new tests: typedef (simple, whitespace, in-module, reject missing equals, reject missing semicolon), enum (empty, single/multiple ctors, whitespace, in-module, reject unclosed), interface (empty, with var, with function, with modifiers, in-module), mixed module, word-boundary rejection for all three keywords.
 - 1390 assertions green on neko/js (1329 baseline + 61 new).
 
+**Phase 3 ternary + null-coalescing slice (slice ι₁) — what landed (2026-04-12, after slice θ)**:
+- `anyparse.macro.strategy.Ternary` — new annotate-only strategy owning `@:ternary('op', 'sep', prec)`. Writes `ternary.op`, `ternary.sep`, `ternary.prec` annotations. Returns null from `lower()`. Registered in `Build.hx` between Pratt and Prefix.
+- `anyparse.macro.Lowering` — `hasPrattBranch` now also checks `ternary.op`. `lowerEnum` atomsOnly filter excludes `ternary.op` branches. `lowerPrattLoop` collects both `pratt.prec` and `ternary.op` branches into a unified operator dispatch chain via new `getOperatorText` helper. Ternary dispatch emits: `matchLit(op) → prec gate → parseMiddle(minPrec=0) → expectLit(sep) → parseRight(minPrec=0) → Ctor(left, middle, right)`. Binary dispatch unchanged.
+- `anyparse.grammar.haxe.HxExpr` — two new ctors: `@:ternary('?', ':', 1) Ternary(cond, thenExpr, elseExpr)` and `@:infix('??', 2, 'Right') NullCoal(left, right)`. Twelve assignment ctors renumbered from prec 1 to prec 0 (D46). D33 longest-match sort resolves `??` (len 2) vs `?` (len 1).
+- `test/unit/HxTernarySliceTest.hx` — 20 new tests: `??` smoke/right-assoc/precedence, ternary smoke/right-assoc/operators-in-branches, cross-operator interactions (`??` tighter than ternary, assignment in ternary right), integration (return stmt, module root), assignment renumber sanity, rejection tests (missing middle/colon/right).
+- Zero changes to `Codegen.hx`, `ShapeBuilder.hx`, `StrategyRegistry.hx`, runtime.
+- 1443 assertions green on neko (1390 baseline + 53 new).
+
 **Non-deliverables for the skeleton slice**:
 - Expressions, operators, Pratt strategy.
 - ~~Function parameters~~ (shipped in slice ζ), ~~function bodies with statements~~ (basic shipped in slice η₁; void return, control-flow statements deferred).
