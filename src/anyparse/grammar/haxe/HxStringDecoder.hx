@@ -13,8 +13,7 @@ import anyparse.format.text.TextFormat.UnescapeResult;
  * Named by terminal abstracts via `@:decode` metadata so the macro
  * pipeline calls this at runtime instead of the JSON-specific decoder.
  *
- * **Not handled yet**: `\0`, `\xNN`, `\uNNNN` hex/unicode escapes,
- * string interpolation (`$var`, `${expr}`).
+ * **Not handled yet**: `\0`, `\xNN`, `\uNNNN` hex/unicode escapes.
  */
 @:nullSafety(Strict)
 final class HxStringDecoder {
@@ -27,6 +26,34 @@ final class HxStringDecoder {
 			final c:Int = StringTools.fastCodeAt(body, i);
 			if (c == '\\'.code) {
 				final res:UnescapeResult = HaxeFormat.instance.unescapeChar(body, i + 1);
+				buf.addChar(res.char);
+				i += 1 + res.consumed;
+			} else {
+				buf.addChar(c);
+				i++;
+			}
+		}
+		return buf.toString();
+	}
+
+	/**
+	 * Decode a run of literal characters and escape sequences inside a
+	 * single-quoted string. Unlike `decode`, does NOT strip surrounding
+	 * quote characters — the input is already the body segment matched
+	 * by the `HxStringLitSegment` regex.
+	 *
+	 * Processes `\X` escape sequences via `HaxeFormat.instance.unescapeChar`;
+	 * passes all other characters through unchanged.
+	 *
+	 * Named by `HxStringLitSegment` via `@:decode` metadata.
+	 */
+	public static function decodeLiteral(raw:String):String {
+		final buf:StringBuf = new StringBuf();
+		var i:Int = 0;
+		while (i < raw.length) {
+			final c:Int = StringTools.fastCodeAt(raw, i);
+			if (c == '\\'.code) {
+				final res:UnescapeResult = HaxeFormat.instance.unescapeChar(raw, i + 1);
 				buf.addChar(res.char);
 				i += 1 + res.consumed;
 			} else {

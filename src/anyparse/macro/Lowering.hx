@@ -3,6 +3,7 @@ package anyparse.macro;
 #if macro
 import haxe.macro.Context;
 import haxe.macro.Expr;
+import haxe.macro.ExprTools;
 import haxe.macro.MacroStringTools;
 import anyparse.core.LoweringCtx;
 import anyparse.core.ShapeTree;
@@ -56,7 +57,7 @@ class Lowering {
 		// the registered eregs. The loop-vs-atom Pratt split hangs the
 		// eregs off the loop rule (which is the public entry point for
 		// the enum); the atom sub-rule has none of its own.
-		return switch node.kind {
+		final rules:Array<GeneratedRule> = switch node.kind {
 			case Alt if (hasPrattBranch(node) && hasPostfixBranch(node)):
 				// Pratt + postfix enum: emit three rules.
 				//  * `parseXxx(ctx, ?minPrec = 0)` — the precedence-climbing loop
@@ -141,6 +142,15 @@ class Lowering {
 				Context.fatalError('Lowering: cannot lower top-level ${node.kind} for $typePath', Context.currentPos());
 				throw 'unreachable';
 		};
+		// `@:raw` on a grammar type suppresses all `skipWs(ctx)` calls in
+		// the generated parse function(s) for that rule. Used for string
+		// content and other whitespace-sensitive zones where the parser must
+		// NOT consume spaces between tokens. The caller's skipWs (in the
+		// non-raw parent rule) handles whitespace before the raw rule's
+		// entry point; inside the raw rule, every character is significant.
+		if (hasMeta(node, ':raw'))
+			for (rule in rules) rule.body = stripSkipWs(rule.body);
+		return rules;
 	}
 
 	private function collectEregs(typePath:String):Array<GeneratedRule.EregSpec> {
@@ -1199,6 +1209,25 @@ class Lowering {
 			final _matched:String = $i{eregVar}.matched(0);
 			ctx.pos += _matched.length;
 			return $decodeExpr;
+		};
+	}
+
+	// -------- @:raw post-processing --------
+
+	/**
+	 * Recursively replace every `skipWs(ctx)` call in an expression tree
+	 * with an empty block `{}`. Used by `@:raw` rules to suppress
+	 * whitespace skipping without modifying any of the 50+ emission
+	 * sites. Referenced sub-rules (via Ref) are separate generated
+	 * functions — their own skipWs calls are in their own bodies, not
+	 * in this tree, so they are unaffected.
+	 */
+	private static function stripSkipWs(e:Expr):Expr {
+		return switch e.expr {
+			case ECall({expr: EConst(CIdent('skipWs'))}, _):
+				{expr: EBlock([]), pos: e.pos};
+			case _:
+				ExprTools.map(e, stripSkipWs);
 		};
 	}
 

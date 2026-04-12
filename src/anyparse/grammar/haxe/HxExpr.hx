@@ -44,9 +44,14 @@ package anyparse.grammar.haxe;
  *    terminal abstract names the decoder function — a new mechanism
  *    (slice ν₁) that generalises the closed decoder table in
  *    `Lowering.lowerTerminal`.
- *  - `SingleStringExpr` — single-quoted string literal (`'hello'`).
- *    Same escape handling as double-quoted, plus `\'`. Interpolation
- *    (`$var`, `${expr}`) deferred to a later slice.
+ *  - `SingleStringExpr` — single-quoted string literal with
+ *    interpolation (`'hello $name, ${x + 1}!'`). Parsed by a
+ *    declarative grammar: `HxInterpString` typedef wraps
+ *    `Array<HxStringSegment>` between `'` delimiters. Segments are
+ *    `Literal` (plain text + escapes), `Dollar` (`$$` → `$`),
+ *    `Block` (`${expr}` — recursive `HxExpr`), `Ident` (`$name`).
+ *    All string-content rules use `@:raw` to suppress `skipWs` —
+ *    whitespace inside the string is significant.
  *  - `NewExpr` — `new T(args)` constructor call. The `new` keyword
  *    is the commit point (`@:kw('new')`); the type name and argument
  *    list are parsed by `HxNewExpr`. Must appear before `IdentExpr`
@@ -175,7 +180,7 @@ enum HxExpr {
 
 	DoubleStringExpr(v:HxDoubleStringLit);
 
-	SingleStringExpr(v:HxSingleStringLit);
+	SingleStringExpr(v:HxInterpString);
 
 	@:wrap('(', ')')
 	ParenExpr(inner:HxExpr);

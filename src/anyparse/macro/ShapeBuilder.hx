@@ -91,6 +91,7 @@ class ShapeBuilder {
 	private function shapeEnum(e:EnumType):ShapeNode {
 		final node:ShapeNode = new ShapeNode(Alt);
 		node.annotations.set('base.typePath', typePathOfEnum(e));
+		node.annotations.set('base.meta', e.meta.get());
 		for (name in e.names) {
 			final ef:EnumField = e.constructs.get(name);
 			final branch:ShapeNode = new ShapeNode(Seq);

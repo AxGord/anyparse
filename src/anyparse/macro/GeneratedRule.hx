@@ -28,7 +28,7 @@ class GeneratedRule {
 
 	public final fnName:String;
 	public final returnCT:ComplexType;
-	public final body:Expr;
+	public var body:Expr;
 	public final eregs:Array<EregSpec>;
 	public final hasMinPrec:Bool;
 
