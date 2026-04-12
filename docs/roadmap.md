@@ -201,6 +201,15 @@ Sessions should align with phase boundaries — start a new Claude Code session 
 - Zero changes to `Codegen.hx`, `ShapeBuilder.hx`, `StrategyRegistry.hx`, runtime.
 - 1443 assertions green on neko (1390 baseline + 53 new).
 
+**Phase 3 control-flow + ??= slice (slice κ₁) — what landed (2026-04-12, after slice ι₁)**:
+- `anyparse.macro.Lowering` — `case Ref if (isOptional)` in `lowerStruct` extended to accept `@:kw` as a commit point via `matchKw` (D47). Guard changed from two separate checks to one: require at least one of `@:lead` or `@:kw`. Previous `@:optional @:kw` fatalError removed.
+- `anyparse.grammar.haxe.HxIfStmt` — new `@:peg` typedef: `@:lead('(') @:trail(')') cond`, bare `thenBody:HxStatement`, `@:optional @:kw('else') elseBody:Null<HxStatement>`. First consumer of `@:optional @:kw`. Dangling else resolved by construction (greedy else on innermost if).
+- `anyparse.grammar.haxe.HxWhileStmt` — new `@:peg` typedef: `@:lead('(') @:trail(')') cond`, bare `body:HxStatement`. Uses only existing patterns — zero Lowering changes.
+- `anyparse.grammar.haxe.HxStatement` — three new branches: `@:kw('if') IfStmt(stmt:HxIfStmt)`, `@:kw('while') WhileStmt(stmt:HxWhileStmt)`, `@:lead('{') @:trail('}') BlockStmt(stmts:Array<HxStatement>)`. All before the `ExprStmt` catch-all. BlockStmt uses Case 4 (Array<Ref> with lead/trail, no sep, close-peek termination). Zero Lowering changes for WhileStmt and BlockStmt.
+- `anyparse.grammar.haxe.HxExpr` — one new ctor: `@:infix('??=', 0, 'Right') NullCoalAssign`. Purely additive. D33 longest-match resolves `??=` (3) vs `??` (2) vs `?` (1).
+- `test/unit/HxControlFlowSliceTest.hx` — 22 new tests: ??= smoke/right-assoc/regression, if with single/block body, if-else, if-else-if-else, expression condition, dangling else, whitespace tolerance, while single/block body, while whitespace, block/empty-block/nested-blocks, module integration, mixed statements, if-with-while body, word-boundary guards (ifx, whiled).
+- 1523 assertions green on neko (1443 baseline + 80 new).
+
 **Non-deliverables for the skeleton slice**:
 - Expressions, operators, Pratt strategy.
 - ~~Function parameters~~ (shipped in slice ζ), ~~function bodies with statements~~ (basic shipped in slice η₁; void return, control-flow statements deferred).
