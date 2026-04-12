@@ -168,9 +168,17 @@ Sessions should align with phase boundaries — start a new Claude Code session 
 - `test/unit/HxAssignSliceTest.hx` — 15 new tests extending the existing wave-1/wave-2 corpus: 6 per-op smoke (`<<=`, `>>=`, `>>>=`, `|=`, `&=`, `^=`), 3 base-op regression guards (`a << b`, `a >> b`, `a | b` still parse as the base shift/bitwise ctors after the compound ctors land), 2 wave-3 right-fold chains (bitwise `|= &=`, shift `<<= >>=`), 1 triple-wave compound chain (`a += b *= c ^= 1` proving waves 1+2+3 compose), 2 cross-prec interactions (`|=` with RHS shift, `>>=` with RHS additive), 1 rejection (`a >>>= ;` — missing RHS on the longest compound-assign literal).
 - 995 assertions green on neko (946 baseline + 49 new from the 15 new tests). Operator count crosses the debt-#10 reassessment threshold (~30); evaluation of data-driven dispatch deferred until the first non-binary-infix branch (prefix or postfix) lands, so the decision can be made against a heterogeneous loop rather than a denser homogeneous one.
 
+**Phase 3 function params slice (slice ζ) — what landed (2026-04-12, after slice ε)**:
+- `anyparse.grammar.haxe.HxParam` — new `@:peg` typedef with `name:HxIdentLit`, `@:lead(':') type:HxTypeRef`, `@:optional @:lead('=') defaultValue:Null<HxExpr>`. Reuses the `@:optional @:lead` pattern from `HxVarDecl.init`.
+- `anyparse.grammar.haxe.HxFnDecl` — `@:trail('()')` on name replaced with `@:lead('(') @:trail(')') @:sep(',') var params:Array<HxParam>`. First struct Star field in the Haxe grammar using the sep-peek termination mode in `emitStarFieldSteps`. Zero-param functions parse as `params: []`.
+- Zero changes to `Lowering.hx`, `Codegen.hx`, `Build.hx`, `ShapeBuilder.hx` — all infrastructure existed.
+- `test/unit/HxTestHelpers.hx` — new shared test base class with `parseSingleVarDecl`, `parseSingleFnDecl`, `expectVarMember`, `expectFnMember`, `expectClassDecl`. Extracted from 10 test files (debt #5b closed).
+- `test/unit/HxParamSliceTest.hx` — 12 new tests: zero/single/two/three params, default values (int, bool, expression), mixed defaults, whitespace tolerance, trailing-comma rejection, missing-type rejection, module-root integration, params with modifiers.
+- 1263 assertions green on neko/js (1196 baseline + 67 new).
+
 **Non-deliverables for the skeleton slice**:
 - Expressions, operators, Pratt strategy.
-- Function parameters, function bodies with statements.
+- ~~Function parameters~~ (shipped in slice ζ), function bodies with statements.
 - Modifiers (`public`, `private`, `static`, `inline`, `override`, …), `extends`/`implements`, type parameters.
 - Multi-declaration modules (root is a single class, not an array of top-level decls).
 - Comments, `#if/#else`, `@:meta` on user code.
