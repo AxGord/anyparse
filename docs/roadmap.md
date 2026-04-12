@@ -259,7 +259,23 @@ Sessions should align with phase boundaries — start a new Claude Code session 
 - `test/unit/HxStringSliceTest.hx` — 15 new tests: double-quoted (empty, simple, spaces, escapes), single-quoted (empty, simple, escapes, dollar sign), concatenation, function args, return statements, whitespace, module integration, rejection of unterminated strings.
 - **D51**: `@:decode` generalises closed decoder table. Grammar-side decoder function, not macro-side. Existing terminals (`HxIdentLit` with `@:rawString`, `HxIntLit`, `HxFloatLit`, `JStringLit`) all unaffected.
 - 1890 assertions green on neko (1859 baseline + 31 new).
-- Non-deliverables: string interpolation (`$var`, `${expr}`), `\0`, `\xNN`, `\uNNNN` hex/unicode escapes, multi-line strings, raw strings.
+- Non-deliverables: ~~string interpolation (`$var`, `${expr}`)~~ (shipped in slice ν₂), `\0`, `\xNN`, `\uNNNN` hex/unicode escapes, multi-line strings, raw strings.
+
+**Phase 3 string interpolation slice (slice ν₂) — what landed (2026-04-12, after slice ν₁)**:
+- `anyparse.macro.Lowering` — new `@:raw` annotation support (D52). `stripSkipWs(e:Expr):Expr` recursively replaces all `skipWs(ctx)` calls with empty blocks `{}` using `ExprTools.map`. Applied in `lowerRule` as post-processing when `hasMeta(node, ':raw')` is true. Avoids modifying 50+ `skipWs` emission sites. Referenced sub-rules (via Ref) are separate generated functions — unaffected by the stripping.
+- `anyparse.macro.ShapeBuilder` — `shapeEnum` now stores `base.meta = e.meta.get()` on the `Alt` node (was missing — typedef `Seq` and abstract `Terminal` already did this). Required for `hasMeta(node, ':raw')` to find enum-level `@:raw`.
+- `anyparse.macro.GeneratedRule` — `body` field changed from `final` to `var` to allow `@:raw` post-processing.
+- `anyparse.grammar.haxe.HxSingleStringLit` — DELETED. Replaced by declarative grammar types.
+- `anyparse.grammar.haxe.HxInterpString` — new `@:peg @:raw` typedef with `@:lead("'") @:trail("'") var parts:Array<HxStringSegment>`. The `@:raw` boundary between non-raw `HxExpr` and raw string content. Star loop uses close-peek termination on `'` char code.
+- `anyparse.grammar.haxe.HxStringSegment` — new `@:peg @:raw` enum with four branches: `Literal(s:HxStringLitSegment)` (Case 3 Ref to raw terminal), `@:lit("$$") Dollar` (Case 1 zero-arg literal), `@:lead("${") @:trail("}") Block(expr:HxExpr)` (Case 3 recursive Ref — whitespace skipping resumes inside expressions), `@:lead("$") Ident(name:HxIdentLit)` (Case 3 Ref with lead). Branch order matters: Dollar before Block/Ident for `$$` disambiguation.
+- `anyparse.grammar.haxe.HxStringLitSegment` — new `@:raw` terminal abstract with `@:re("(?:[^'\\\\$]|\\\\.)+") @:decode('...HxStringDecoder.decodeLiteral')`. Matches runs of literal chars + escape sequences.
+- `anyparse.grammar.haxe.HxStringDecoder` — added `decodeLiteral(raw:String):String` (same as `decode` but without quote stripping).
+- `anyparse.grammar.haxe.HxExpr` — `SingleStringExpr(v:HxSingleStringLit)` changed to `SingleStringExpr(v:HxInterpString)`.
+- `test/unit/HxStringSliceTest.hx` — 22 single-string tests (was 7): empty, simple, escapes, `$$`, `$ident` (5 variants), `${expr}` (2), mixed segments, `$$$name`, internal whitespace preservation, concatenation, module integration, rejections.
+- **D52**: `@:raw` suppresses `skipWs` for whitespace-sensitive rules. Generalises to comments, regex literals, heredocs in future grammars. Post-processing approach (one function, one check) avoids modifying emission sites.
+- **Gotcha**: metadata string arguments in Haxe are subject to interpolation — `@:lead('${')` triggers it. Must use double-quoted `@:lead("${")`.
+- 1935 assertions green on neko (1890 baseline + 45 new).
+- Non-deliverables: `@:unescape` built-in decoder (engine-side escape handling to replace grammar-side `HxStringDecoder`), `\0`/`\xNN`/`\uNNNN` hex/unicode escapes, `Block.raw` expression type annotation.
 
 **Non-deliverables for the skeleton slice**:
 - Expressions, operators, Pratt strategy.
