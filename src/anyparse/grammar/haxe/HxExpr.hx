@@ -1,12 +1,12 @@
 package anyparse.grammar.haxe;
 
 /**
- * Haxe expression grammar — ternary and null-coalescing operators on top
- * of the postfix + unary-prefix slices.
+ * Haxe expression grammar — arrow operator, array/map literals, ternary,
+ * null-coalescing, and the full infix/prefix/postfix suite.
  *
- * Eight atom constructors plus three unary-prefix constructors plus three
- * postfix constructors (field access, index access, call) plus one
- * ternary operator plus thirty-three binary-operator constructors
+ * Eleven atom constructors plus three unary-prefix constructors plus
+ * three postfix constructors (field access, index access, call) plus
+ * one ternary operator plus thirty-four binary-operator constructors
  * across ten precedence levels. Atoms, prefix and postfix are all
  * reached through a single `parseHxExprAtom` call — internally split
  * into `parseHxExprAtom` (the wrapper) and `parseHxExprAtomCore` (the
@@ -29,6 +29,18 @@ package anyparse.grammar.haxe;
  *    does not eagerly consume `true`.
  *  - `NullLit` — `null`. Same word-boundary treatment via `expectKw`
  *    in the single-`@:lit` zero-arg case.
+ *  - `ArrayExpr` — array / map literal `[elems]`. Uses `@:lead('[')
+ *    @:trail(']') @:sep(',')` — Case 4 in `lowerEnumBranch`, same
+ *    pattern as `BlockStmt`. No conflict with postfix `IndexAccess`
+ *    (`@:postfix('[', ']')`) because atoms and postfix are separate
+ *    dispatch loops. Map literals `[k => v, k2 => v2]` work naturally
+ *    because each element is a full expression and `Arrow` is an infix
+ *    operator inside the element parse.
+ *  - `ParenLambdaExpr` — parenthesised lambda `(params) => body`.
+ *    Wraps `HxParenLambda` typedef. Placed **before** `ParenExpr` so
+ *    `tryBranch` tries lambda first. If `=>` is absent after `)`, the
+ *    parse throws and rolls back to `ParenExpr`. Handles all forms:
+ *    `() => e`, `(x) => e`, `(x, y) => e`, `(x:Int) => e`.
  *  - `ParenExpr` — parenthesised expression `(inner)`. The
  *    `@:wrap('(', ')')` metadata is handled by the `Lit` strategy,
  *    which writes `lit.leadText = '('` and `lit.trailText = ')'`.
@@ -143,7 +155,7 @@ package anyparse.grammar.haxe;
  *  - prec 2 — `??` (null-coalescing, **right-assoc**)
  *  - prec 1 — `? :` (ternary, via `@:ternary`)
  *  - prec 0 — `=` `+=` `-=` `*=` `/=` `%=` `<<=` `>>=` `>>>=` `|=`
- *    `&=` `^=` `??=` (assignment, **right-assoc**)
+ *    `&=` `^=` `??=` `=>` (assignment + arrow, **right-assoc**)
  *
  * Declaration order inside each precedence level puts longer literals
  * first (`<=` before `<`, `>>>` before `>>` before `>`, `>>>=` before
@@ -160,8 +172,13 @@ package anyparse.grammar.haxe;
  * every other shared-prefix pair — each conflict is resolved at macro
  * time by the length-desc sort.
  *
- * **Still deferred**: `=>` — context-dependent (lambda, map literal,
- * switch case), addressed in a future slice.
+ * **Arrow operator (`=>`)**: handled via a hybrid approach. Single-
+ * ident lambdas (`x => body`) and map literal entries (`[k => v]`)
+ * parse naturally through `Arrow` as a prec-0 right-associative
+ * infix operator (D33 longest-match resolves `=>` vs `=`). Multi-
+ * param and zero-param lambdas (`(x, y) => body`, `() => body`)
+ * parse via `ParenLambdaExpr` atom with `tryBranch` backtracking.
+ * Switch case `=>` is deferred.
  */
 @:peg
 enum HxExpr {
@@ -179,6 +196,11 @@ enum HxExpr {
 	DoubleStringExpr(v:HxDoubleStringLit);
 
 	SingleStringExpr(v:HxInterpString);
+
+	@:lead('[') @:trail(']') @:sep(',')
+	ArrayExpr(elems:Array<HxExpr>);
+
+	ParenLambdaExpr(lambda:HxParenLambda);
 
 	@:wrap('(', ')')
 	ParenExpr(inner:HxExpr);
@@ -307,4 +329,7 @@ enum HxExpr {
 
 	@:infix('??=', 0, 'Right')
 	NullCoalAssign(left:HxExpr, right:HxExpr);
+
+	@:infix('=>', 0, 'Right')
+	Arrow(left:HxExpr, right:HxExpr);
 }
