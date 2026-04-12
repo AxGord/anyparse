@@ -17,6 +17,7 @@ import unit.HxForEnumVoidSliceTest;
 import unit.HxSwitchNewSliceTest;
 import unit.HxDoWhileThrowTryCatchSliceTest;
 import unit.HxAbstractSliceTest;
+import unit.HxStringSliceTest;
 import unit.HxParamSliceTest;
 import unit.HxPrefixSliceTest;
 import unit.JsonParserTest;
@@ -61,6 +62,7 @@ class RunTests {
 		runner.addCase(new HxSwitchNewSliceTest());
 		runner.addCase(new HxDoWhileThrowTryCatchSliceTest());
 		runner.addCase(new HxAbstractSliceTest());
+		runner.addCase(new HxStringSliceTest());
 		runner.addCase(new SpanTest());
 		runner.addCase(new ParseErrorTest());
 		runner.addCase(new InputTest());

@@ -1144,16 +1144,24 @@ class Lowering {
 		final eregVar:String = '_re_$simple';
 		eregByRule.set(typePath, {varName: eregVar, pattern: pattern});
 
+		// `@:decode("pkg.Class.method")` on a Terminal abstract names a
+		// static function that decodes the matched string into the
+		// terminal's underlying type. Takes priority over `@:rawString`
+		// and the closed decoder switch. The path is split on `.` and
+		// emitted as `pkg.Class.method(_matched)`.
+		final decodePath:Null<String> = readMetaString(node, ':decode');
+
 		// `@:rawString` on a String-underlying Terminal means "the regex
 		// match is already the raw value" — skip the JSON-specific
-		// unquote/unescape helper. Used for identifier-like terminals (Haxe
-		// `HxIdentLit`) where the matched slice IS the identifier text. A
-		// format-contributed decoder table will replace this closed switch
-		// once a third Terminal type demands it (see D13 in session_state.md).
-		// Named `@:rawString` (not bare `@:raw`) to avoid collision with
-		// Haxe's built-in `@:raw` meta for verbatim code injection.
+		// unquote/unescape helper. Used for identifier-like terminals
+		// (Haxe `HxIdentLit`) where the matched slice IS the identifier
+		// text.
 		final raw:Bool = hasMeta(node, ':rawString');
-		final decodeExpr:Expr = switch underlying {
+
+		final decodeExpr:Expr = if (decodePath != null) {
+			final parts:Array<String> = decodePath.split('.');
+			{expr: ECall(macro $p{parts}, [macro _matched]), pos: Context.currentPos()};
+		} else switch underlying {
 			case 'Float': macro Std.parseFloat(_matched);
 			case 'Int':
 				// `Std.parseInt` returns `Null<Int>` — in strict null

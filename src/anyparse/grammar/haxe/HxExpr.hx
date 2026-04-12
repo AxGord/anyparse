@@ -4,7 +4,7 @@ package anyparse.grammar.haxe;
  * Haxe expression grammar — ternary and null-coalescing operators on top
  * of the postfix + unary-prefix slices.
  *
- * Six atom constructors plus three unary-prefix constructors plus three
+ * Eight atom constructors plus three unary-prefix constructors plus three
  * postfix constructors (field access, index access, call) plus one
  * ternary operator plus thirty-three binary-operator constructors
  * across ten precedence levels. Atoms, prefix and postfix are all
@@ -38,6 +38,15 @@ package anyparse.grammar.haxe;
  *    parens. The inner call re-enters `parseHxExpr` at `minPrec = 0`
  *    (default), so parens fully reset precedence and any operator
  *    is allowed inside the group.
+ *  - `DoubleStringExpr` — double-quoted string literal (`"hello"`).
+ *    Escape sequences (`\"`, `\\`, `\n`, `\r`, `\t`) decoded via
+ *    `HxStringDecoder.decode` at runtime. `@:decode` metadata on the
+ *    terminal abstract names the decoder function — a new mechanism
+ *    (slice ν₁) that generalises the closed decoder table in
+ *    `Lowering.lowerTerminal`.
+ *  - `SingleStringExpr` — single-quoted string literal (`'hello'`).
+ *    Same escape handling as double-quoted, plus `\'`. Interpolation
+ *    (`$var`, `${expr}`) deferred to a later slice.
  *  - `NewExpr` — `new T(args)` constructor call. The `new` keyword
  *    is the commit point (`@:kw('new')`); the type name and argument
  *    list are parsed by `HxNewExpr`. Must appear before `IdentExpr`
@@ -163,6 +172,10 @@ enum HxExpr {
 
 	@:lit('null')
 	NullLit;
+
+	DoubleStringExpr(v:HxDoubleStringLit);
+
+	SingleStringExpr(v:HxSingleStringLit);
 
 	@:wrap('(', ')')
 	ParenExpr(inner:HxExpr);

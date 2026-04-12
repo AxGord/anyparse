@@ -92,6 +92,7 @@ final class HaxeFormat implements TextFormat {
 			case 'n'.code: {char: '\n'.code, consumed: 1};
 			case 'r'.code: {char: '\r'.code, consumed: 1};
 			case 't'.code: {char: '\t'.code, consumed: 1};
+			case '\''.code: {char: '\''.code, consumed: 1};
 			case _: throw new haxe.Exception('invalid escape: \\${String.fromCharCode(esc)}');
 		};
 	}
