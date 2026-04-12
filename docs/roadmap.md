@@ -219,6 +219,18 @@ Sessions should align with phase boundaries — start a new Claude Code session 
 - `test/unit/HxForEnumVoidSliceTest.hx` — 23 new tests: for with ident/expr/block/nested/whitespace/call-iterable, word-boundary (format/forest), rejection (missing in/close-paren), module integration; enum ctor simple/single-param/multi-param/default-value/mixed/zero-param-vs-bare/whitespace/module; void return bare/before-other/in-block/return-with-value-still-works/module.
 - 1605 assertions green on neko (1523 baseline + 82 new).
 
+**Phase 3 switch + new expression slice (slice μ₁) — what landed (2026-04-12, after slice λ₁)**:
+- `anyparse.grammar.haxe.HxSwitchStmt` — new `@:peg` typedef: `@:lead('(') @:trail(')') expr:HxExpr`, `@:lead('{') @:trail('}') cases:Array<HxSwitchCase>`.
+- `anyparse.grammar.haxe.HxSwitchCase` — new `@:peg` enum: `@:kw('case') CaseBranch(branch:HxCaseBranch)`, `@:kw('default') DefaultBranch(branch:HxDefaultBranch)`.
+- `anyparse.grammar.haxe.HxCaseBranch` — new `@:peg` typedef: `@:trail(':') pattern:HxExpr`, `@:tryparse body:Array<HxStatement>`. Pattern parsed as HxExpr (identifiers, literals, call-like patterns work without new types). Body uses `@:tryparse` for implicit termination.
+- `anyparse.grammar.haxe.HxDefaultBranch` — new `@:peg` typedef: `@:lead(':') @:tryparse stmts:Array<HxStatement>`. Colon as `@:lead` on the Star field (not `@:trail` on the branch — branch trail fires after the sub-rule, but colon must precede the body).
+- `anyparse.grammar.haxe.HxNewExpr` — new `@:peg` typedef: `type:HxIdentLit`, `@:lead('(') @:trail(')') @:sep(',') args:Array<HxExpr>`.
+- `anyparse.grammar.haxe.HxExpr` — new atom branch `@:kw('new') NewExpr(expr:HxNewExpr)` before `IdentExpr`. Zero Lowering changes — Case 3 with `@:kw` already works.
+- `anyparse.grammar.haxe.HxStatement` — new branch `@:kw('switch') SwitchStmt(stmt:HxSwitchStmt)` after `ForStmt`, before `BlockStmt`.
+- `anyparse.macro.Lowering` — `emitStarFieldSteps` try-parse guard extended: `closeText == null && (!isLastField || hasMeta(starNode, ':tryparse'))` (D49). Existing consumers without `@:tryparse` unaffected.
+- `test/unit/HxSwitchNewSliceTest.hx` — 23 new tests: switch empty/single-case/multiple-cases/default/case+default/empty-body-fall-through/multi-statement-body/nested/expression-subject/call-pattern/whitespace/word-boundary/module/default-multi-stmt/empty-default; new zero-args/multi-args/expr-arg/postfix-chain/in-switch-body/word-boundary/module/whitespace.
+- 1707 assertions green on neko (1605 baseline + 102 new).
+
 **Non-deliverables for the skeleton slice**:
 - Expressions, operators, Pratt strategy.
 - ~~Function parameters~~ (shipped in slice ζ), ~~function bodies with statements~~ (basic shipped in slice η₁; void return, control-flow statements deferred).
