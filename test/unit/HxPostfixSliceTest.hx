@@ -13,18 +13,17 @@ import anyparse.grammar.haxe.HxVarDecl;
 import anyparse.runtime.ParseError;
 
 /**
- * Phase 3 postfix-slice (δ) tests for the macro-generated Haxe parser.
+ * Phase 3 postfix-slice (δ + δ2) tests for the macro-generated Haxe
+ * parser.
  *
  * Covers three postfix operators — field access `.name`, index access
- * `[expr]`, and no-arg call `()` — added on top of the 31 binary +
- * 3 unary-prefix baseline. A new `Postfix` strategy (annotate-only,
- * `postfix.*` namespace) and a new `lowerPostfixLoop` helper in
- * `Lowering` generate a left-recursive loop around an inner atom-core
- * call. For HxExpr, which has both Pratt and postfix, `lowerRule` now
- * emits THREE functions instead of two: `parseHxExpr` (the Pratt loop
- * — public entry), `parseHxExprAtom` (the new wrapper: calls Core then
- * runs the postfix loop), and `parseHxExprAtomCore` (the old atom body
- * holding the non-operator tryBranch chain over leaves and prefix).
+ * `[expr]`, and function call `f(a, b)` — added on top of the 31
+ * binary + 3 unary-prefix baseline. Slice δ1 shipped the Postfix
+ * strategy, three-function split, and the basic postfix loop with
+ * three shape variants (pair-lit, single-Ref-suffix, wrap-with-recurse).
+ * Slice δ2 replaced `CallNoArgs` with `Call(operand, args:Array<HxExpr>)`
+ * and added the fourth shape variant (Star-suffix with sep-loop) in
+ * `lowerPostfixLoop`.
  *
  * Binding-tightness invariants this file locks in:
  *
@@ -71,12 +70,14 @@ class HxPostfixSliceTest extends Test {
 		}
 	}
 
-	public function testCallNoArgsSmoke():Void {
+	public function testCallZeroArgs():Void {
 		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = f(); }');
 		switch decl.init {
-			case CallNoArgs(IdentExpr(o)): Assert.equals('f', (o : String));
+			case Call(IdentExpr(o), args):
+				Assert.equals('f', (o : String));
+				Assert.equals(0, args.length);
 			case null, _:
-				Assert.fail('expected CallNoArgs(IdentExpr(f)), got ${decl.init}');
+				Assert.fail('expected Call(IdentExpr(f), []), got ${decl.init}');
 		}
 	}
 
@@ -110,14 +111,16 @@ class HxPostfixSliceTest extends Test {
 	}
 
 	public function testCallChain():Void {
-		// `f()()` → CallNoArgs(CallNoArgs(f)). Currying the no-arg
+		// `f()()` → Call(Call(f, []), []). Currying the zero-arg
 		// call case.
 		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = f()(); }');
 		switch decl.init {
-			case CallNoArgs(CallNoArgs(IdentExpr(f))):
+			case Call(Call(IdentExpr(f), inner), outer):
 				Assert.equals('f', (f : String));
+				Assert.equals(0, inner.length);
+				Assert.equals(0, outer.length);
 			case null, _:
-				Assert.fail('expected CallNoArgs(CallNoArgs(f)), got ${decl.init}');
+				Assert.fail('expected Call(Call(f, []), []), got ${decl.init}');
 		}
 	}
 
@@ -149,31 +152,33 @@ class HxPostfixSliceTest extends Test {
 	}
 
 	public function testMixedChainCallField():Void {
-		// `f().x` → FieldAccess(CallNoArgs(f), x). Postfix loop
+		// `f().x` → FieldAccess(Call(f, []), x). Postfix loop
 		// handles mixed shapes as they appear.
 		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = f().x; }');
 		switch decl.init {
-			case FieldAccess(CallNoArgs(IdentExpr(f)), x):
+			case FieldAccess(Call(IdentExpr(f), args), x):
 				Assert.equals('f', (f : String));
+				Assert.equals(0, args.length);
 				Assert.equals('x', (x : String));
 			case null, _:
-				Assert.fail('expected FieldAccess(CallNoArgs(f), x), got ${decl.init}');
+				Assert.fail('expected FieldAccess(Call(f, []), x), got ${decl.init}');
 		}
 	}
 
 	public function testMixedChainFieldCall():Void {
-		// `a.b()` → CallNoArgs(FieldAccess(a, b)). The idiomatic
+		// `a.b()` → Call(FieldAccess(a, b), []). The idiomatic
 		// method-call-on-member case that dominates real Haxe code.
 		// Symmetric to `f().x` (testMixedChainCallField) on the
 		// other combination — the postfix loop extends `left` with
 		// `.b` first, then applies `()` to the result.
 		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a.b(); }');
 		switch decl.init {
-			case CallNoArgs(FieldAccess(IdentExpr(a), b)):
+			case Call(FieldAccess(IdentExpr(a), b), args):
 				Assert.equals('a', (a : String));
 				Assert.equals('b', (b : String));
+				Assert.equals(0, args.length);
 			case null, _:
-				Assert.fail('expected CallNoArgs(FieldAccess(a, b)), got ${decl.init}');
+				Assert.fail('expected Call(FieldAccess(a, b), []), got ${decl.init}');
 		}
 	}
 
@@ -197,14 +202,15 @@ class HxPostfixSliceTest extends Test {
 	}
 
 	public function testPrefixBindsLooserThanCall():Void {
-		// `!f()` → Not(CallNoArgs(f)). Same binding-tightness
-		// invariant verified against the no-arg call form.
+		// `!f()` → Not(Call(f, [])). Same binding-tightness
+		// invariant verified against the zero-arg call form.
 		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = !f(); }');
 		switch decl.init {
-			case Not(CallNoArgs(IdentExpr(f))):
+			case Not(Call(IdentExpr(f), args)):
 				Assert.equals('f', (f : String));
+				Assert.equals(0, args.length);
 			case null, _:
-				Assert.fail('expected Not(CallNoArgs(f)), got ${decl.init}');
+				Assert.fail('expected Not(Call(f, [])), got ${decl.init}');
 		}
 	}
 
@@ -291,6 +297,201 @@ class HxPostfixSliceTest extends Test {
 				Assert.equals('b', (b : String));
 			case null, _:
 				Assert.fail('expected FieldAccess(a, b), got ${decl.init}');
+		}
+	}
+
+	public function testCallSingleArg():Void {
+		// `f(1)` → Call(f, [IntLit(1)]). Simplest non-empty arg list.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = f(1); }');
+		switch decl.init {
+			case Call(IdentExpr(o), args):
+				Assert.equals('f', (o : String));
+				Assert.equals(1, args.length);
+				switch args[0] {
+					case IntLit(v): Assert.equals(1, (v : Int));
+					case null, _: Assert.fail('expected IntLit(1), got ${args[0]}');
+				}
+			case null, _:
+				Assert.fail('expected Call(f, [1]), got ${decl.init}');
+		}
+	}
+
+	public function testCallTwoArgs():Void {
+		// `f(a, b)` → Call(f, [IdentExpr(a), IdentExpr(b)]).
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = f(a, b); }');
+		switch decl.init {
+			case Call(IdentExpr(o), args):
+				Assert.equals('f', (o : String));
+				Assert.equals(2, args.length);
+				switch args[0] {
+					case IdentExpr(v): Assert.equals('a', (v : String));
+					case null, _: Assert.fail('expected IdentExpr(a)');
+				}
+				switch args[1] {
+					case IdentExpr(v): Assert.equals('b', (v : String));
+					case null, _: Assert.fail('expected IdentExpr(b)');
+				}
+			case null, _:
+				Assert.fail('expected Call(f, [a, b]), got ${decl.init}');
+		}
+	}
+
+	public function testCallThreeArgs():Void {
+		// `f(1, 2, 3)` → Call(f, [IntLit(1), IntLit(2), IntLit(3)]).
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = f(1, 2, 3); }');
+		switch decl.init {
+			case Call(IdentExpr(o), args):
+				Assert.equals('f', (o : String));
+				Assert.equals(3, args.length);
+				switch args[0] {
+					case IntLit(v): Assert.equals(1, (v : Int));
+					case null, _: Assert.fail('expected IntLit(1)');
+				}
+				switch args[1] {
+					case IntLit(v): Assert.equals(2, (v : Int));
+					case null, _: Assert.fail('expected IntLit(2)');
+				}
+				switch args[2] {
+					case IntLit(v): Assert.equals(3, (v : Int));
+					case null, _: Assert.fail('expected IntLit(3)');
+				}
+			case null, _:
+				Assert.fail('expected Call(f, [1, 2, 3]), got ${decl.init}');
+		}
+	}
+
+	public function testCallWithExprArgs():Void {
+		// `f(a + 1, b * 2)` → Call(f, [Add(a, 1), Mul(b, 2)]).
+		// Arguments are full expressions — the inner parse enters
+		// `parseHxExpr` (the Pratt loop), resetting precedence.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = f(a + 1, b * 2); }');
+		switch decl.init {
+			case Call(IdentExpr(o), args):
+				Assert.equals('f', (o : String));
+				Assert.equals(2, args.length);
+				switch args[0] {
+					case Add(IdentExpr(a), IntLit(one)):
+						Assert.equals('a', (a : String));
+						Assert.equals(1, (one : Int));
+					case null, _: Assert.fail('expected Add(a, 1), got ${args[0]}');
+				}
+				switch args[1] {
+					case Mul(IdentExpr(b), IntLit(two)):
+						Assert.equals('b', (b : String));
+						Assert.equals(2, (two : Int));
+					case null, _: Assert.fail('expected Mul(b, 2), got ${args[1]}');
+				}
+			case null, _:
+				Assert.fail('expected Call(f, [Add(a, 1), Mul(b, 2)]), got ${decl.init}');
+		}
+	}
+
+	public function testCallChainWithArgs():Void {
+		// `f(1)(2)` → Call(Call(f, [1]), [2]). Chained calls with
+		// arguments — the left-recursive postfix loop applies `(1)`
+		// first, then `(2)` on the result.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = f(1)(2); }');
+		switch decl.init {
+			case Call(Call(IdentExpr(f), inner), outer):
+				Assert.equals('f', (f : String));
+				Assert.equals(1, inner.length);
+				Assert.equals(1, outer.length);
+				switch inner[0] {
+					case IntLit(v): Assert.equals(1, (v : Int));
+					case null, _: Assert.fail('expected IntLit(1)');
+				}
+				switch outer[0] {
+					case IntLit(v): Assert.equals(2, (v : Int));
+					case null, _: Assert.fail('expected IntLit(2)');
+				}
+			case null, _:
+				Assert.fail('expected Call(Call(f, [1]), [2]), got ${decl.init}');
+		}
+	}
+
+	public function testMethodCallWithArgs():Void {
+		// `a.b(1, 2)` → Call(FieldAccess(a, b), [1, 2]). The
+		// idiomatic method-call-with-arguments pattern that dominates
+		// real Haxe code.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a.b(1, 2); }');
+		switch decl.init {
+			case Call(FieldAccess(IdentExpr(a), b), args):
+				Assert.equals('a', (a : String));
+				Assert.equals('b', (b : String));
+				Assert.equals(2, args.length);
+				switch args[0] {
+					case IntLit(v): Assert.equals(1, (v : Int));
+					case null, _: Assert.fail('expected IntLit(1)');
+				}
+				switch args[1] {
+					case IntLit(v): Assert.equals(2, (v : Int));
+					case null, _: Assert.fail('expected IntLit(2)');
+				}
+			case null, _:
+				Assert.fail('expected Call(FieldAccess(a, b), [1, 2]), got ${decl.init}');
+		}
+	}
+
+	public function testCallWithSpaces():Void {
+		// `f( a , b )` — whitespace around arguments and commas.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = f( a , b ); }');
+		switch decl.init {
+			case Call(IdentExpr(o), args):
+				Assert.equals('f', (o : String));
+				Assert.equals(2, args.length);
+				switch args[0] {
+					case IdentExpr(v): Assert.equals('a', (v : String));
+					case null, _: Assert.fail('expected IdentExpr(a)');
+				}
+				switch args[1] {
+					case IdentExpr(v): Assert.equals('b', (v : String));
+					case null, _: Assert.fail('expected IdentExpr(b)');
+				}
+			case null, _:
+				Assert.fail('expected Call(f, [a, b]), got ${decl.init}');
+		}
+	}
+
+	public function testCallInIndex():Void {
+		// `a[f(1)]` → IndexAccess(a, Call(f, [1])). Call inside
+		// index — the index expression recursion enters the Pratt
+		// loop, which returns Call as a postfix-extended atom.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a[f(1)]; }');
+		switch decl.init {
+			case IndexAccess(IdentExpr(a), Call(IdentExpr(f), args)):
+				Assert.equals('a', (a : String));
+				Assert.equals('f', (f : String));
+				Assert.equals(1, args.length);
+				switch args[0] {
+					case IntLit(v): Assert.equals(1, (v : Int));
+					case null, _: Assert.fail('expected IntLit(1)');
+				}
+			case null, _:
+				Assert.fail('expected IndexAccess(a, Call(f, [1])), got ${decl.init}');
+		}
+	}
+
+	public function testRejectsTrailingComma():Void {
+		// `f(a,)` — trailing comma leaves `)` as the next token,
+		// which fails the argument expression parse and throws.
+		Assert.raises(() -> HaxeFastParser.parse('class Foo { var x:Int = f(a,); }'), ParseError);
+	}
+
+	public function testCallInModule():Void {
+		// End-to-end through `HaxeModuleFastParser`. Confirms the
+		// Star-suffix postfix variant ships through the module-root
+		// pipeline.
+		final module:HxModule = HaxeModuleFastParser.parse('class Foo { var x:Int = f(1, 2); }');
+		Assert.equals(1, module.decls.length);
+		final cls:HxClassDecl = expectClassDecl(module.decls[0]);
+		Assert.equals(1, cls.members.length);
+		final decl:HxVarDecl = expectVarMember(cls.members[0]);
+		switch decl.init {
+			case Call(IdentExpr(f), args):
+				Assert.equals('f', (f : String));
+				Assert.equals(2, args.length);
+			case null, _:
+				Assert.fail('expected Call(f, [_, _]), got ${decl.init}');
 		}
 	}
 

@@ -444,6 +444,74 @@ class Lowering {
 					expectLit(ctx, $v{close});
 					left = $ctorCall;
 				};
+			} else if (children.length == 2 && children[1].kind == Star) {
+				// Star-suffix form: `Call(operand:T, args:Array<T>)` with
+				// @:postfix('(', ')') @:sep(','). The Star child wraps
+				// a Ref to the element type. After the open literal is
+				// consumed by the outer matchLit, this branch emits a
+				// sep-peek array loop (same pattern as Case 4 in
+				// lowerEnumBranch) and then expects the close literal.
+				if (close == null) {
+					Context.fatalError(
+						'Lowering: @:postfix Star-suffix branch "$ctor" requires @:postfix(open, close) pair form',
+						Context.currentPos()
+					);
+					throw 'unreachable';
+				}
+				final starNode:ShapeNode = children[1];
+				final inner:ShapeNode = starNode.children[0];
+				if (inner.kind != Ref) {
+					Context.fatalError(
+						'Lowering: @:postfix Star child must be a Ref',
+						Context.currentPos()
+					);
+					throw 'unreachable';
+				}
+				final elemRefName:String = inner.annotations.get('base.ref');
+				final elemFn:String = simpleName(elemRefName) == enumSimple
+					? selfFnName
+					: 'parse${simpleName(elemRefName)}';
+				final elemCall:Expr = {
+					expr: ECall(macro $i{elemFn}, [macro ctx]),
+					pos: Context.currentPos(),
+				};
+				final elemCT:ComplexType = TPath({pack: packOf(elemRefName), name: simpleName(elemRefName), params: []});
+				final closeCharCode:Int = close.charCodeAt(0);
+				final sepText:Null<String> = branch.annotations.get('lit.sepText');
+				final ctorCall:Expr = {expr: ECall(ctorRef, [macro left, macro _args]), pos: Context.currentPos()};
+				if (sepText != null) {
+					final sepCharCode:Int = sepText.charCodeAt(0);
+					macro {
+						skipWs(ctx);
+						final _args:Array<$elemCT> = [];
+						if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}) {
+							_args.push($elemCall);
+							skipWs(ctx);
+							while (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
+								ctx.pos++;
+								skipWs(ctx);
+								_args.push($elemCall);
+								skipWs(ctx);
+							}
+						}
+						skipWs(ctx);
+						expectLit(ctx, $v{close});
+						left = $ctorCall;
+					};
+				} else {
+					// No separator — peek-close loop (same as Case 4 no-sep).
+					macro {
+						skipWs(ctx);
+						final _args:Array<$elemCT> = [];
+						while (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}) {
+							_args.push($elemCall);
+							skipWs(ctx);
+						}
+						skipWs(ctx);
+						expectLit(ctx, $v{close});
+						left = $ctorCall;
+					};
+				}
 			} else if (children.length == 2) {
 				final suffix:ShapeNode = children[1];
 				if (suffix.kind != Ref) {
@@ -487,7 +555,7 @@ class Lowering {
 				}
 			} else {
 				Context.fatalError(
-					'Lowering: @:postfix branch "$ctor" has ${children.length} arguments; expected 1 (pair-lit) or 2 (suffix form)',
+					'Lowering: @:postfix branch "$ctor" has ${children.length} arguments; expected 1 (pair-lit), 2 (suffix/Star form)',
 					Context.currentPos()
 				);
 				throw 'unreachable';

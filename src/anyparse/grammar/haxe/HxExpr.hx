@@ -5,7 +5,8 @@ package anyparse.grammar.haxe;
  * slice.
  *
  * Six atom constructors plus three unary-prefix constructors plus three
- * postfix constructors plus thirty-one binary-operator constructors
+ * postfix constructors (field access, index access, call) plus
+ * thirty-one binary-operator constructors
  * across nine precedence levels. Atoms, prefix and postfix are all
  * reached through a single `parseHxExprAtom` call — internally split
  * into `parseHxExprAtom` (the wrapper) and `parseHxExprAtomCore` (the
@@ -92,10 +93,12 @@ package anyparse.grammar.haxe;
  *  - `IndexAccess` — `[expr]` index. The inner expression is parsed
  *    via `parseHxExpr` (not the atom wrapper), resetting precedence
  *    so arbitrary operators are allowed inside the brackets.
- *  - `CallNoArgs` — `()` no-argument call. A call with arguments
- *    (`Call(operand, args:Array<HxExpr>)`) is deferred to slice δ2
- *    — it needs shared struct-like emission for `Array<Ref>` inside
- *    an enum-branch postfix shape, which is a separate concept.
+ *  - `Call` — `(args)` function/method call. Handles both zero-arg
+ *    `f()` and N-arg `f(a, b, c)` through a single ctor with a
+ *    comma-separated argument list. The `@:sep(',')` on the ctor
+ *    feeds `lit.sepText` on the branch node (via Lit strategy), and
+ *    `lowerPostfixLoop`'s Star-suffix variant emits the sep-peek
+ *    loop — same pattern as Case 4 in `lowerEnumBranch`.
  *
  * **Operator branches** — all binary infix. Each `@:infix(op, prec)`
  * carries the operator literal and its precedence; higher precedence
@@ -136,8 +139,8 @@ package anyparse.grammar.haxe;
  * precedence table, that slice revisits the numbering.
  *
  * **Still deferred**: `??=` waits for `??`. Ternary `? :`, `??`,
- * `=>`, call with arguments (`Call(operand, args:Array<HxExpr>)`),
- * `new T(...)` — each is a separate concept a future slice addresses.
+ * `=>`, `new T(...)` — each is a separate concept a future slice
+ * addresses.
  */
 @:peg
 enum HxExpr {
@@ -172,8 +175,8 @@ enum HxExpr {
 	@:postfix('[', ']')
 	IndexAccess(operand:HxExpr, index:HxExpr);
 
-	@:postfix('(', ')')
-	CallNoArgs(operand:HxExpr);
+	@:postfix('(', ')') @:sep(',')
+	Call(operand:HxExpr, args:Array<HxExpr>);
 
 	@:infix('*', 9)
 	Mul(left:HxExpr, right:HxExpr);
