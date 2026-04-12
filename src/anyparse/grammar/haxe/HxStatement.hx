@@ -3,7 +3,7 @@ package anyparse.grammar.haxe;
 /**
  * Statement grammar for Haxe function bodies.
  *
- * Eight branches in source order — keyword-dispatched branches first,
+ * Eleven branches in source order — keyword-dispatched branches first,
  * block statement next, expression-statement catch-all last:
  *
  *  - `VarStmt` — `var name:Type = init;` local variable declaration.
@@ -40,6 +40,23 @@ package anyparse.grammar.haxe;
  *    bodies use `@:tryparse` for implicit termination at the next
  *    `case` / `default` / `}` token (D49).
  *
+ *  - `ThrowStmt` — `throw expr;` throw statement. Dispatched by the
+ *    `throw` keyword. The expression is parsed and the trailing `;`
+ *    is consumed by the branch's `@:trail`.
+ *
+ *  - `DoWhileStmt` — `do body while (cond);` do-while loop.
+ *    Dispatched by the `do` keyword. The body and parenthesised
+ *    condition are parsed via `HxDoWhileStmt` typedef. The trailing
+ *    `;` is consumed by the branch's `@:trail` (fires after the
+ *    inner typedef). The `cond` field uses `@:kw('while')` +
+ *    `@:lead('(')` on the same field (D50).
+ *
+ *  - `TryCatchStmt` — `try body catch (name:Type) catchBody`.
+ *    Dispatched by the `try` keyword. No trailing `;`. The body and
+ *    catch clauses are parsed via `HxTryCatchStmt` typedef. Catches
+ *    use `@:tryparse` termination (D49). Each catch clause uses
+ *    `@:kw('catch') @:lead('(')` on the same field (D50).
+ *
  *  - `BlockStmt` — `{ stmts }` block statement. No keyword guard —
  *    dispatched by the `{` literal. Uses Case 4 in
  *    `Lowering.lowerEnumBranch` (Array<Ref> with lead/trail, no sep).
@@ -74,6 +91,15 @@ enum HxStatement {
 
 	@:kw('switch')
 	SwitchStmt(stmt:HxSwitchStmt);
+
+	@:kw('throw') @:trail(';')
+	ThrowStmt(expr:HxExpr);
+
+	@:kw('do') @:trail(';')
+	DoWhileStmt(stmt:HxDoWhileStmt);
+
+	@:kw('try')
+	TryCatchStmt(stmt:HxTryCatchStmt);
 
 	@:lead('{') @:trail('}')
 	BlockStmt(stmts:Array<HxStatement>);

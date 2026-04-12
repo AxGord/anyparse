@@ -881,10 +881,10 @@ class Lowering {
 			if (fieldName == null) {
 				Context.fatalError('Lowering: struct field missing base.fieldName', Context.currentPos());
 			}
-			// Per-field prefix: either @:kw (word-boundary checked) or @:lead.
-			// Only one of the two is emitted; @:kw takes priority when both are
-			// present on the same field (the compiler already catches duplicate
-			// ownership at registration time so this is defensive only).
+			// Per-field prefix: @:kw (word-boundary checked) and/or @:lead.
+			// When both are present, both are emitted sequentially — @:kw
+			// first, then @:lead (D50). First consumers:
+			// HxDoWhileStmt.cond and HxCatchClause.name.
 			//
 			// For a Star field, the @:lead/@:trail pair semantically describes
 			// the surrounding wrappers of the collection and is read directly
@@ -925,7 +925,8 @@ class Lowering {
 				if (kwLead != null) {
 					parseSteps.push(macro skipWs(ctx));
 					parseSteps.push(macro expectKw(ctx, $v{kwLead}));
-				} else if (leadText != null) {
+				}
+				if (leadText != null) {
 					parseSteps.push(macro skipWs(ctx));
 					parseSteps.push(macro expectLit(ctx, $v{leadText}));
 				}
