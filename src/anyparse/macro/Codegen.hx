@@ -19,8 +19,8 @@ import haxe.macro.Expr;
  *  - Writing the `parse(source)` public entry point that constructs a
  *    `Parser`, calls the root rule, and verifies trailing input.
  *  - Emitting the per-rule `parseXxx(ctx)` functions.
- *  - Emitting the runtime helpers (`skipWs`, `matchLit`, `expectLit`,
- *    `decodeJsonString`) used by the generated bodies. These are
+ *  - Emitting the runtime helpers (`skipWs`, `matchLit`, `expectLit`)
+ *    used by the generated bodies. These are
  *    deliberately duplicated per generated class rather than pulled
  *    from a shared utility module — each generated parser is
  *    self-contained so swapping or regenerating one parser does not
@@ -40,7 +40,6 @@ class Codegen {
 		fields.push(matchKwField());
 		fields.push(expectLitField());
 		fields.push(expectKwField());
-		fields.push(decodeJsonStringField());
 		return fields;
 	}
 
@@ -269,35 +268,6 @@ class Codegen {
 							);
 						}
 					}
-				},
-			}),
-			pos: Context.currentPos(),
-		};
-	}
-
-	private static function decodeJsonStringField():Field {
-		return {
-			name: 'decodeJsonString',
-			access: [APrivate, AStatic],
-			kind: FFun({
-				args: [{name: 'raw', type: macro : String}],
-				ret: macro : String,
-				expr: macro {
-					final body:String = raw.substring(1, raw.length - 1);
-					final buf:StringBuf = new StringBuf();
-					var i:Int = 0;
-					while (i < body.length) {
-						final c:Int = StringTools.fastCodeAt(body, i);
-						if (c == '\\'.code) {
-							final res = anyparse.format.text.JsonFormat.instance.unescapeChar(body, i + 1);
-							buf.addChar(res.char);
-							i += 1 + res.consumed;
-						} else {
-							buf.addChar(c);
-							i++;
-						}
-					}
-					return buf.toString();
 				},
 			}),
 			pos: Context.currentPos(),

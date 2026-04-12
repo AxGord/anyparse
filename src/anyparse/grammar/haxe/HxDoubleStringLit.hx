@@ -4,11 +4,11 @@ package anyparse.grammar.haxe;
  * Double-quoted Haxe string literal terminal.
  *
  * Matches a complete `"..."` string including the surrounding quotes.
- * Escape sequences (`\"`, `\\`, `\n`, `\r`, `\t`) are decoded at
- * runtime by `HxStringDecoder.decode` via the `@:decode` metadata.
+ * `@:unescape` generates an inline walk-and-unescape loop that strips
+ * the quotes and decodes `\X` sequences via `HaxeFormat.unescapeChar`.
  *
- * A separate type from `HxSingleStringLit` so the AST preserves which
- * quote style the source used — needed for round-trip writers.
+ * A separate type so the AST preserves which quote style the source
+ * used — needed for round-trip writers.
  *
  * `from String to String` keeps test assertion literals compiling
  * without explicit casts.
@@ -16,5 +16,5 @@ package anyparse.grammar.haxe;
  * **Not handled yet**: `\0`, `\xNN`, `\uNNNN` hex/unicode escapes.
  */
 @:re('"(?:[^"\\\\]|\\\\.)*"')
-@:decode('anyparse.grammar.haxe.HxStringDecoder.decode')
+@:unescape
 abstract HxDoubleStringLit(String) from String to String {}

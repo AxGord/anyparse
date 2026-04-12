@@ -11,9 +11,11 @@ package anyparse.grammar.json;
  * `JValueTools.equals` keeps comparing values as plain strings).
  *
  * The `@:re` metadata matches a complete JSON double-quoted string
- * including its surrounding quotes. The generated parser strips the
- * quotes and decodes escape sequences through
- * `JsonFormat.instance.unescapeChar`.
+ * including its surrounding quotes. `@:unescape` tells the macro
+ * pipeline to generate an inline walk-and-unescape loop that strips
+ * the quotes and decodes `\X` sequences via the `@:schema` format's
+ * `unescapeChar`.
  */
 @:re('"(?:[^"\\\\]|\\\\.)*"')
+@:unescape
 abstract JStringLit(String) from String to String {}

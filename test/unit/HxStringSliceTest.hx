@@ -17,7 +17,7 @@ import anyparse.runtime.ParseError;
  *
  * Validates double-quoted and single-quoted string literal atoms wired
  * into `HxExpr`. Double-quoted strings use `HxDoubleStringLit` (flat
- * String via `@:decode`). Single-quoted strings use `HxInterpString`
+ * String via `@:unescape`). Single-quoted strings use `HxInterpString`
  * (declarative grammar: `HxStringSegment` enum with `Literal`, `Dollar`,
  * `Block`, `Ident` branches, parsed between `'` delimiters by the macro
  * pipeline with `@:raw` whitespace suppression).

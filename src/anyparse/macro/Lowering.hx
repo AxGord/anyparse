@@ -1154,33 +1154,57 @@ class Lowering {
 		final eregVar:String = '_re_$simple';
 		eregByRule.set(typePath, {varName: eregVar, pattern: pattern});
 
+		// `@:unescape` on a Terminal abstract generates an inline
+		// walk-and-unescape loop using the `@:schema` format's
+		// `unescapeChar`. Bare `@:unescape` strips surrounding quotes
+		// first; `@:unescape("raw")` uses the matched string as-is.
+		final unescape:Bool = hasMeta(node, ':unescape');
+		final unescapeMode:Null<String> = readMetaString(node, ':unescape');
+
 		// `@:decode("pkg.Class.method")` on a Terminal abstract names a
 		// static function that decodes the matched string into the
-		// terminal's underlying type. Takes priority over `@:rawString`
-		// and the closed decoder switch. The path is split on `.` and
+		// terminal's underlying type. The path is split on `.` and
 		// emitted as `pkg.Class.method(_matched)`.
 		final decodePath:Null<String> = readMetaString(node, ':decode');
 
 		// `@:rawString` on a String-underlying Terminal means "the regex
-		// match is already the raw value" — skip the JSON-specific
-		// unquote/unescape helper. Used for identifier-like terminals
-		// (Haxe `HxIdentLit`) where the matched slice IS the identifier
-		// text.
+		// match is already the raw value" — skip decoding entirely. Used
+		// for identifier-like terminals (Haxe `HxIdentLit`) where the
+		// matched slice IS the identifier text.
 		final raw:Bool = hasMeta(node, ':rawString');
 
-		final decodeExpr:Expr = if (decodePath != null) {
+		if (unescape && decodePath != null)
+			Context.fatalError('Lowering: terminal $typePath has both @:unescape and @:decode', Context.currentPos());
+		if (unescape && raw)
+			Context.fatalError('Lowering: terminal $typePath has both @:unescape and @:rawString', Context.currentPos());
+
+		final decodeExpr:Expr = if (unescape) {
+			final fmtParts:Array<String> = formatInfo.schemaTypePath.split('.');
+			final bodyExpr:Expr = if (unescapeMode == 'raw') macro _matched
+				else macro _matched.substring(1, _matched.length - 1);
+			macro {
+				final _body:String = $e{bodyExpr};
+				final _buf:StringBuf = new StringBuf();
+				var _i:Int = 0;
+				while (_i < _body.length) {
+					final _c:Int = StringTools.fastCodeAt(_body, _i);
+					if (_c == '\\'.code) {
+						final _res:anyparse.format.text.TextFormat.UnescapeResult = $p{fmtParts}.instance.unescapeChar(_body, _i + 1);
+						_buf.addChar(_res.char);
+						_i += 1 + _res.consumed;
+					} else {
+						_buf.addChar(_c);
+						_i++;
+					}
+				}
+				_buf.toString();
+			};
+		} else if (decodePath != null) {
 			final parts:Array<String> = decodePath.split('.');
 			{expr: ECall(macro $p{parts}, [macro _matched]), pos: Context.currentPos()};
 		} else switch underlying {
 			case 'Float': macro Std.parseFloat(_matched);
 			case 'Int':
-				// `Std.parseInt` returns `Null<Int>` — in strict null
-				// safety the implicit coercion to `Int` is disallowed.
-				// The regex gate above already guarantees `_matched` is
-				// all digits, so the null branch is truly unreachable,
-				// but we still guard it explicitly rather than force an
-				// unsafe cast. Abstracts with `from Int` (e.g.
-				// `HxIntLit`) unify with the narrowed `Int` value.
 				macro {
 					final _v:Null<Int> = Std.parseInt(_matched);
 					if (_v == null) {
@@ -1192,7 +1216,9 @@ class Lowering {
 					_v;
 				};
 			case 'String' if (raw): macro _matched;
-			case 'String': macro decodeJsonString(_matched);
+			case 'String':
+				Context.fatalError('Lowering: String terminal $typePath requires @:unescape, @:decode, or @:rawString', Context.currentPos());
+				throw 'unreachable';
 			case _:
 				Context.fatalError('Lowering: no decoder for underlying type "$underlying"', Context.currentPos());
 				throw 'unreachable';
