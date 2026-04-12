@@ -3,6 +3,7 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.grammar.haxe.HaxeFastParser;
+import anyparse.grammar.haxe.HxAbstractDecl;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxClassMember;
 import anyparse.grammar.haxe.HxDecl;
@@ -75,6 +76,13 @@ class HxTestHelpers extends Test {
 		return switch decl {
 			case InterfaceDecl(id): id;
 			case _: throw 'expected InterfaceDecl, got $decl';
+		};
+	}
+
+	private function expectAbstractDecl(decl:HxDecl):HxAbstractDecl {
+		return switch decl {
+			case AbstractDecl(ad): ad;
+			case _: throw 'expected AbstractDecl, got $decl';
 		};
 	}
 
