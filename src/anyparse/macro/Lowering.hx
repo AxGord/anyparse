@@ -922,15 +922,9 @@ class Lowering {
 			parseSteps.push(macro skipWs(ctx));
 			switch child.kind {
 				case Ref if (isOptional):
-					if (kwLead != null) {
+					if (kwLead == null && leadText == null) {
 						Context.fatalError(
-							'Lowering: @:optional combined with @:kw is deferred — field "$fieldName"',
-							Context.currentPos()
-						);
-					}
-					if (leadText == null) {
-						Context.fatalError(
-							'Lowering: @:optional struct field "$fieldName" requires @:lead',
+							'Lowering: @:optional struct field "$fieldName" requires @:lead or @:kw',
 							Context.currentPos()
 						);
 					}
@@ -940,12 +934,16 @@ class Lowering {
 						pos: Context.currentPos(),
 					};
 					final fieldCT:ComplexType = child.annotations.get('base.fieldType');
-					// skipWs was already pushed above; `matchLit` sees a
-					// whitespace-trimmed cursor. On hit, consume the lead and
-					// parse the sub-rule; on miss, leave the cursor alone and
-					// store null. No backtracking over the sub-rule body —
-					// the lead literal is the commit point (see D24).
-					final valueExpr:Expr = macro if (matchLit(ctx, $v{leadText})) {
+					// skipWs was already pushed above. The commit point
+					// peeks the lead literal or keyword — on hit, consume
+					// and parse the sub-rule; on miss, store null. No
+					// backtracking over the sub-rule body (D24). Keywords
+					// use matchKw for word-boundary enforcement (D47).
+					final commitCheck:Expr = if (kwLead != null)
+						macro matchKw(ctx, $v{kwLead})
+					else
+						macro matchLit(ctx, $v{leadText});
+					final valueExpr:Expr = macro if ($commitCheck) {
 						skipWs(ctx);
 						$subCall;
 					} else null;

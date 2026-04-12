@@ -6,7 +6,7 @@ package anyparse.grammar.haxe;
  *
  * Six atom constructors plus three unary-prefix constructors plus three
  * postfix constructors (field access, index access, call) plus one
- * ternary operator plus thirty-two binary-operator constructors
+ * ternary operator plus thirty-three binary-operator constructors
  * across ten precedence levels. Atoms, prefix and postfix are all
  * reached through a single `parseHxExprAtom` call — internally split
  * into `parseHxExprAtom` (the wrapper) and `parseHxExprAtomCore` (the
@@ -127,7 +127,7 @@ package anyparse.grammar.haxe;
  *  - prec 2 — `??` (null-coalescing, **right-assoc**)
  *  - prec 1 — `? :` (ternary, via `@:ternary`)
  *  - prec 0 — `=` `+=` `-=` `*=` `/=` `%=` `<<=` `>>=` `>>>=` `|=`
- *    `&=` `^=` (assignment, **right-assoc**)
+ *    `&=` `^=` `??=` (assignment, **right-assoc**)
  *
  * Declaration order inside each precedence level puts longer literals
  * first (`<=` before `<`, `>>>` before `>>` before `>`, `>>>=` before
@@ -144,9 +144,8 @@ package anyparse.grammar.haxe;
  * every other shared-prefix pair — each conflict is resolved at macro
  * time by the length-desc sort.
  *
- * **Still deferred**: `??=` waits for `??` to ship (now shipped —
- * addable as a trivial prec-0 right-assoc ctor). `=>`, `new T(...)` —
- * each is a separate concept a future slice addresses.
+ * **Still deferred**: `=>`, `new T(...)` — each is a separate concept
+ * a future slice addresses.
  */
 @:peg
 enum HxExpr {
@@ -282,4 +281,7 @@ enum HxExpr {
 
 	@:infix('^=', 0, 'Right')
 	BitXorAssign(left:HxExpr, right:HxExpr);
+
+	@:infix('??=', 0, 'Right')
+	NullCoalAssign(left:HxExpr, right:HxExpr);
 }
