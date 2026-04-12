@@ -3,8 +3,9 @@ package anyparse.grammar.haxe;
 /**
  * Function declaration body for a class member `function`.
  *
- * Shape: `name ( params ) : ReturnType {}` where params is a
- * comma-separated list of `HxParam` entries (possibly empty).
+ * Shape: `name ( params ) : ReturnType { body }` where params is a
+ * comma-separated list of `HxParam` entries (possibly empty) and body
+ * is zero or more statements inside braces.
  *
  * The `function` keyword lives on the enclosing `HxClassMember.FnMember`
  * constructor via `@:kw` — this typedef only describes the inside.
@@ -17,12 +18,16 @@ package anyparse.grammar.haxe;
  * Return type is mandatory with `@:lead(':')`. Optional return type
  * (type inference) is a future slice.
  *
- * Function bodies stay as the fixed literal `{}` via `@:trail('{}')`.
- * Real statement bodies are a future slice (η).
+ * The `body` field uses `@:lead('{') @:trail('}')` which selects the
+ * close-peek termination mode in `emitStarFieldSteps` — same pattern
+ * as `HxClassDecl.members`. Each `HxStatement` branch is
+ * self-terminating via its own `;` trail, so no `@:sep` is needed.
+ * Empty function bodies `{}` parse as an empty array.
  */
 @:peg
 typedef HxFnDecl = {
 	var name:HxIdentLit;
 	@:lead('(') @:trail(')') @:sep(',') var params:Array<HxParam>;
-	@:lead(':') @:trail('{}') var returnType:HxTypeRef;
+	@:lead(':') var returnType:HxTypeRef;
+	@:lead('{') @:trail('}') var body:Array<HxStatement>;
 }
