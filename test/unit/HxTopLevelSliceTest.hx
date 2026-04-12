@@ -71,7 +71,7 @@ class HxTopLevelSliceTest extends HxTestHelpers {
 		final ed:HxEnumDecl = expectEnumDecl(module.decls[0]);
 		Assert.equals('Color', (ed.name : String));
 		Assert.equals(1, ed.ctors.length);
-		Assert.equals('Red', (ed.ctors[0].name : String));
+		Assert.equals('Red', (expectSimpleCtor(ed.ctors[0]) : String));
 	}
 
 	public function testMultipleCtors():Void {
@@ -80,9 +80,9 @@ class HxTopLevelSliceTest extends HxTestHelpers {
 		final ed:HxEnumDecl = expectEnumDecl(module.decls[0]);
 		Assert.equals('Color', (ed.name : String));
 		Assert.equals(3, ed.ctors.length);
-		Assert.equals('Red', (ed.ctors[0].name : String));
-		Assert.equals('Green', (ed.ctors[1].name : String));
-		Assert.equals('Blue', (ed.ctors[2].name : String));
+		Assert.equals('Red', (expectSimpleCtor(ed.ctors[0]) : String));
+		Assert.equals('Green', (expectSimpleCtor(ed.ctors[1]) : String));
+		Assert.equals('Blue', (expectSimpleCtor(ed.ctors[2]) : String));
 	}
 
 	public function testEnumWhitespace():Void {
@@ -90,8 +90,8 @@ class HxTopLevelSliceTest extends HxTestHelpers {
 		Assert.equals(1, module.decls.length);
 		final ed:HxEnumDecl = expectEnumDecl(module.decls[0]);
 		Assert.equals(2, ed.ctors.length);
-		Assert.equals('Red', (ed.ctors[0].name : String));
-		Assert.equals('Green', (ed.ctors[1].name : String));
+		Assert.equals('Red', (expectSimpleCtor(ed.ctors[0]) : String));
+		Assert.equals('Green', (expectSimpleCtor(ed.ctors[1]) : String));
 	}
 
 	public function testEnumInModule():Void {

@@ -10,7 +10,8 @@ package anyparse.grammar.haxe;
  * The `enum` keyword lives on the `name` field via `@:kw('enum')`
  * so the generated parser enforces a word boundary.
  *
- * Enum constructors with parameters are deferred — see `HxEnumCtor`.
+ * Constructors with parameters are supported via `HxEnumCtor.ParamCtor`
+ * which wraps `HxEnumCtorDecl` — see `HxEnumCtor`.
  */
 @:peg
 typedef HxEnumDecl = {

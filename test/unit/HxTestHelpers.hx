@@ -6,8 +6,11 @@ import anyparse.grammar.haxe.HaxeFastParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxClassMember;
 import anyparse.grammar.haxe.HxDecl;
+import anyparse.grammar.haxe.HxEnumCtor;
+import anyparse.grammar.haxe.HxEnumCtorDecl;
 import anyparse.grammar.haxe.HxEnumDecl;
 import anyparse.grammar.haxe.HxFnDecl;
+import anyparse.grammar.haxe.HxIdentLit;
 import anyparse.grammar.haxe.HxInterfaceDecl;
 import anyparse.grammar.haxe.HxTypedefDecl;
 import anyparse.grammar.haxe.HxVarDecl;
@@ -72,6 +75,20 @@ class HxTestHelpers extends Test {
 		return switch decl {
 			case InterfaceDecl(id): id;
 			case _: throw 'expected InterfaceDecl, got $decl';
+		};
+	}
+
+	private function expectSimpleCtor(ctor:HxEnumCtor):HxIdentLit {
+		return switch ctor {
+			case SimpleCtor(name): name;
+			case _: throw 'expected SimpleCtor, got $ctor';
+		};
+	}
+
+	private function expectParamCtor(ctor:HxEnumCtor):HxEnumCtorDecl {
+		return switch ctor {
+			case ParamCtor(decl): decl;
+			case _: throw 'expected ParamCtor, got $ctor';
 		};
 	}
 }

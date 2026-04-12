@@ -691,8 +691,21 @@ class Lowering {
 		// but driven by the Kw strategy annotation instead of the Lit
 		// strategy. Emits `expectKw` with word-boundary enforcement.
 		// Used by modifier enums where each ctor is a bare keyword.
+		// When @:trail is present (e.g. `@:kw('return') @:trail(';')
+		// VoidReturnStmt`), the trail literal is emitted unconditionally
+		// after the keyword (D48).
 		final kwLeadBranch:Null<String> = branch.annotations.get('kw.leadText');
 		if (kwLeadBranch != null && branch.children.length == 0 && branch.annotations.get('lit.litList') == null) {
+			final trailBranch:Null<String> = branch.annotations.get('lit.trailText');
+			if (trailBranch != null) {
+				return macro {
+					skipWs(ctx);
+					expectKw(ctx, $v{kwLeadBranch});
+					skipWs(ctx);
+					expectLit(ctx, $v{trailBranch});
+					return $ctorRef;
+				};
+			}
 			return macro {
 				skipWs(ctx);
 				expectKw(ctx, $v{kwLeadBranch});

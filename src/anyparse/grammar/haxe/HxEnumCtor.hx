@@ -3,15 +3,26 @@ package anyparse.grammar.haxe;
 /**
  * Grammar type for a single enum constructor inside an enum body.
  *
- * Phase 3 skeleton: zero-arg constructors only — `Name;`. The
- * trailing semicolon on the `name` field makes each constructor
- * self-terminating inside the close-peek Star loop of
- * `HxEnumDecl.ctors`.
+ * Two branches, tried in source order via `tryBranch` rollback:
  *
- * Constructors with parameters (`Rgb(r:Int, g:Int, b:Int)`) are
- * deferred to a future slice.
+ *  - `ParamCtor` — `Name(param:Type, ...);` constructor with a
+ *    parenthesised, comma-separated parameter list. Wraps
+ *    `HxEnumCtorDecl` which reuses `HxParam` from function params.
+ *    Tried first because `(` after the name disambiguates it from
+ *    `SimpleCtor`. If `(` is missing, the sub-rule parse fails and
+ *    tryBranch rolls back.
+ *
+ *  - `SimpleCtor` — `Name;` zero-argument constructor. Fallback
+ *    when `ParamCtor` fails.
+ *
+ * Both branches carry `@:trail(';')` — the semicolon is always
+ * present in Haxe enum declarations.
  */
 @:peg
-typedef HxEnumCtor = {
-	@:trail(';') var name:HxIdentLit;
+enum HxEnumCtor {
+	@:trail(';')
+	ParamCtor(decl:HxEnumCtorDecl);
+
+	@:trail(';')
+	SimpleCtor(name:HxIdentLit);
 }
