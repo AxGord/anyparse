@@ -94,6 +94,56 @@ class Build {
 		return fields;
 	}
 
+	public static macro function buildWriter(target:Expr):Array<Field> {
+		final targetTypePath:String = ExprTools.toString(target);
+		final rootType:Type = Context.getType(targetTypePath);
+
+		final rootMeta:Metadata = switch rootType {
+			case TEnum(ref, _): ref.get().meta.get();
+			case TType(ref, _): ref.get().meta.get();
+			case TAbstract(ref, _): ref.get().meta.get();
+			case TInst(ref, _): ref.get().meta.get();
+			case _:
+				Context.fatalError('Build.buildWriter: unsupported target type $targetTypePath', Context.currentPos());
+				throw 'unreachable';
+		};
+
+		final schemaTypePath:String = readSchemaMeta(rootMeta, targetTypePath);
+		final formatInfo:FormatReader.FormatInfo = FormatReader.resolve(schemaTypePath);
+
+		final ctx:LoweringCtx = new LoweringCtx();
+		ctx.mode = Mode.Fast;
+
+		final shapeBuilder:ShapeBuilder = new ShapeBuilder();
+		final shape:ShapeBuilder.ShapeResult = shapeBuilder.build(rootType);
+
+		final registry:StrategyRegistry = new StrategyRegistry();
+		registry.register(new Kw());
+		registry.register(new Lit());
+		registry.register(new Postfix());
+		registry.register(new Pratt());
+		registry.register(new Ternary());
+		registry.register(new Prefix());
+		registry.register(new Re());
+		registry.register(new Skip());
+		registry.prepare();
+		registry.runAnnotate(shape, ctx);
+
+		final writerLowering:WriterLowering = new WriterLowering(shape, formatInfo);
+		final rules:Array<WriterLowering.WriterRule> = writerLowering.generate();
+
+		final rootSimple:String = simpleName(shape.root);
+		final rootReturnCT:ComplexType = TPath({pack: packOf(shape.root), name: rootSimple, params: []});
+		final fields:Array<Field> = WriterCodegen.emit(rules, shape.root, rootReturnCT, formatInfo);
+
+		#if anyparse_dump
+		final printer:haxe.macro.Printer = new haxe.macro.Printer();
+		for (f in fields) Sys.println('// writer field: ${printer.printField(f)}');
+		#end
+
+		return fields;
+	}
+
 	private static function readSchemaMeta(meta:Metadata, targetTypePath:String):String {
 		for (entry in meta) if (entry.name == ':schema') {
 			if (entry.params.length != 1) {
