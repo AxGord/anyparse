@@ -17,5 +17,5 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxNewExpr = {
 	var type:HxIdentLit;
-	@:lead('(') @:trail(')') @:sep(',') var args:Array<HxExpr>;
+	@:lead('(') @:trail(')') @:sep(',') @:trailingComma('trailingCommaArgs') var args:Array<HxExpr>;
 };

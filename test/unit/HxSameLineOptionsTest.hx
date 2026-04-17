@@ -138,6 +138,9 @@ class HxSameLineOptionsTest extends Test {
 			sameLineElse: sameLineElse,
 			sameLineCatch: sameLineCatch,
 			sameLineDoWhile: sameLineDoWhile,
+			trailingCommaArrays: base.trailingCommaArrays,
+			trailingCommaArgs: base.trailingCommaArgs,
+			trailingCommaParams: base.trailingCommaParams,
 		};
 	}
 }

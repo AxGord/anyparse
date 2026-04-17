@@ -81,6 +81,10 @@ final class HaxeFormat implements TextFormat {
 	 *
 	 * Same-line defaults match haxe-formatter's `sameLine` defaults
 	 * (`ifElse`/`tryCatch`/`doWhile` are all same-line by default).
+	 *
+	 * Trailing-comma defaults mirror haxe-formatter's `trailingComma`
+	 * defaults — all groups are `false` by default; the trailing `,`
+	 * only appears when the user opts in per group.
 	 */
 	public var defaultWriteOptions(default, null):HxModuleWriteOptions = {
 		indentChar: Tab,
@@ -92,6 +96,9 @@ final class HaxeFormat implements TextFormat {
 		sameLineElse: true,
 		sameLineCatch: true,
 		sameLineDoWhile: true,
+		trailingCommaArrays: false,
+		trailingCommaArgs: false,
+		trailingCommaParams: false,
 	};
 
 	private function new() {}

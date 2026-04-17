@@ -27,7 +27,7 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxFnDecl = {
 	var name:HxIdentLit;
-	@:lead('(') @:trail(')') @:sep(',') var params:Array<HxParam>;
+	@:lead('(') @:trail(')') @:sep(',') @:trailingComma('trailingCommaParams') var params:Array<HxParam>;
 	@:lead(':') var returnType:HxTypeRef;
 	@:lead('{') @:trail('}') var body:Array<HxStatement>;
 }

@@ -73,6 +73,8 @@ class Renderer {
 					} else {
 						stack.push(new Frame(f.indent, MBreak, inner));
 					}
+				case IfBreak(breakDoc, flatDoc):
+					stack.push(new Frame(f.indent, f.mode, f.mode == MBreak ? breakDoc : flatDoc));
 			}
 		}
 
@@ -111,6 +113,8 @@ class Renderer {
 					while (--j >= 0) local.push(new Frame(f.indent, MFlat, items[j]));
 				case Group(inner):
 					local.push(new Frame(f.indent, MFlat, inner));
+				case IfBreak(_, flatDoc):
+					local.push(new Frame(f.indent, MFlat, flatDoc));
 			}
 		}
 

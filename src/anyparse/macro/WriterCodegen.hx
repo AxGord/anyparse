@@ -177,6 +177,11 @@ class WriterCodegen {
 			docHelper('_dsl', [], macro anyparse.core.Doc.Line('')),
 			docHelper('_dl', [], macro anyparse.core.Doc.Line(' ')),
 			docHelper('_de', [], macro anyparse.core.Doc.Empty),
+			docHelper(
+				'_dib',
+				[{name: 'br', type: macro : anyparse.core.Doc}, {name: 'fl', type: macro : anyparse.core.Doc}],
+				macro anyparse.core.Doc.IfBreak(br, fl)
+			),
 		];
 	}
 
@@ -222,7 +227,14 @@ class WriterCodegen {
 		};
 	}
 
-	/** Separated list in delimiters with fit-or-break layout. */
+	/**
+	 * Separated list in delimiters with fit-or-break layout.
+	 *
+	 * When `trailingComma` is `true`, a trailing `sep` is emitted after
+	 * the last item only when the enclosing Group lays out in break
+	 * mode — an `IfBreak` node carries the conditional. In flat mode
+	 * the trailing position is `Empty`, so short lists render unchanged.
+	 */
 	private static function sepListField():Field {
 		final body:Expr = macro {
 			if (items.length == 0) return _dt(open + close);
@@ -236,6 +248,7 @@ class WriterCodegen {
 				_inner.push(items[_i]);
 				_i++;
 			}
+			if (trailingComma) _inner.push(_dib(_dt(sep), _de()));
 			final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 			return _dg(_dc([_dt(open), _dn(_cols, _dc([_dsl(), _dc(_inner)])), _dsl(), _dt(close)]));
 		};
@@ -249,6 +262,7 @@ class WriterCodegen {
 					{name: 'sep', type: macro : String},
 					{name: 'items', type: macro : Array<anyparse.core.Doc>},
 					{name: 'opt', type: macro : anyparse.format.WriteOptions},
+					{name: 'trailingComma', type: macro : Bool},
 				],
 				ret: macro : anyparse.core.Doc,
 				expr: body,

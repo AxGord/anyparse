@@ -24,6 +24,9 @@ package anyparse.core;
 	                     width of `inner` and commits to flat if it fits within
 	                     the remaining width, otherwise to break.
 	- `Concat(items)`  — sequential concatenation.
+	- `IfBreak(br, fl)`— emit `br` if the enclosing Group is in break mode,
+	                     `fl` if in flat mode. Used for trailing separators
+	                     that should appear only when the list breaks.
 
 	See `D` for builder helpers and `Renderer` for the layout algorithm.
 **/
@@ -34,4 +37,5 @@ enum Doc {
 	Nest(indent:Int, inner:Doc);
 	Group(inner:Doc);
 	Concat(items:Array<Doc>);
+	IfBreak(breakDoc:Doc, flatDoc:Doc);
 }

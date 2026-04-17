@@ -247,6 +247,7 @@ class WriterLowering {
 		};
 
 		final argsAccess:Expr = macro $i{argNames[1]};
+		final tcExpr:Expr = trailingCommaExpr(branch);
 		return macro {
 			final _args = $argsAccess;
 			final _docs:Array<anyparse.core.Doc> = [];
@@ -255,7 +256,7 @@ class WriterLowering {
 				_docs.push($elemCall);
 				_i++;
 			}
-			_dc([$operandCall, sepList($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt)]);
+			_dc([$operandCall, sepList($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr)]);
 		};
 	}
 
@@ -286,6 +287,7 @@ class WriterLowering {
 		if (kwLead != null) parts.push(macro _dt($v{kwLead + ' '}));
 
 		if (sepText != null) {
+			final tcExpr:Expr = trailingCommaExpr(branch);
 			parts.push(macro {
 				final _args = $argsAccess;
 				final _docs:Array<anyparse.core.Doc> = [];
@@ -294,7 +296,7 @@ class WriterLowering {
 					_docs.push($elemCall);
 					_i++;
 				}
-				sepList($v{leadText}, $v{trailText}, $v{sepText}, _docs, opt);
+				sepList($v{leadText}, $v{trailText}, $v{sepText}, _docs, opt, $tcExpr);
 			});
 		} else {
 			parts.push(macro {
@@ -445,6 +447,7 @@ class WriterLowering {
 
 		if (closeText != null && sepText != null) {
 			if (!isFirstField && !isRaw) parts.push(macro _dt(' '));
+			final tcExpr:Expr = trailingCommaExpr(starNode);
 			parts.push(macro {
 				final _arr = $fieldAccess;
 				final _docs:Array<anyparse.core.Doc> = [];
@@ -453,7 +456,7 @@ class WriterLowering {
 					_docs.push($elemCall);
 					_si++;
 				}
-				sepList($v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt);
+				sepList($v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $tcExpr);
 			});
 		} else if (closeText != null) {
 			if (!isFirstField && !isRaw) parts.push(macro _dt(' '));
@@ -593,6 +596,24 @@ class WriterLowering {
 			pos: Context.currentPos(),
 		};
 		return macro (($optFlag) ? _dt(' ') : _dhl());
+	}
+
+	/**
+	 * Return a `Bool`-valued expression for the `trailingComma` argument
+	 * of `sepList`. Returns `macro false` when the node carries no
+	 * `@:trailingComma("flagName")` meta, else `macro opt.<flagName>` so
+	 * the knob is resolved at runtime against the caller's options.
+	 *
+	 * Read from the node that owns the separated list — an enum branch
+	 * (Case 4 Star / postfix Star) or a struct Star field.
+	 */
+	private static function trailingCommaExpr(node:ShapeNode):Expr {
+		final flagName:Null<String> = readMetaString(node, ':trailingComma');
+		if (flagName == null) return macro false;
+		return {
+			expr: EField(macro opt, flagName),
+			pos: Context.currentPos(),
+		};
 	}
 
 	/** Build `_dc([elem1, elem2, ...])` from a macro-time array of Exprs. */
