@@ -1,40 +1,43 @@
 package unit;
 
+import haxe.Exception;
 import utest.Assert;
 import utest.Test;
-// Importing JValue first so its @:build macro defines JValueFastParser
-// before the compiler tries to resolve the next import.
+// Importing JValue first so its `@:build` macros define the sibling
+// Fast parser and Fast writer before the imports below resolve.
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueFastParser;
+import anyparse.grammar.json.JValueFastWriter;
 import anyparse.grammar.json.JValueTools;
-import anyparse.grammar.json.JsonWriter;
 
 /**
- * Macro parity for the round-trip invariant. Takes the same curated
- * cases and seeded-random corpus as `JsonRoundTripTest`, but the parse
- * step goes through the macro-generated `JValueFastParser` rather than
- * the hand-written `JsonParser`.
+ * Round-trip invariant for JSON through the macro pipeline:
+ * `parse(write(ast)) == ast`. Covers a curated set of shapes plus a
+ * seeded-random corpus so regressions in either direction surface
+ * with a reproducible seed.
  */
-class JsonMacroRoundTripTest extends Test {
+@:nullSafety(Strict)
+class JsonFastRoundTripTest extends Test {
 
-	public function new() {
+	public function new():Void {
 		super();
 	}
 
 	private function roundTrip(ast:JValue, ?label:String):Void {
-		final written:String = JsonWriter.write(ast);
+		final written:String = JValueFastWriter.write(ast);
+		final tag:String = label ?? 'case';
 		var reparsed:JValue;
 		try {
 			reparsed = JValueFastParser.parse(written);
-		} catch (e:haxe.Exception) {
-			Assert.fail('parse failed for ${label != null ? label : "case"}: written=<$written>, err=${e.message}');
+		} catch (exception:Exception) {
+			Assert.fail('parse failed for $tag: written=<$written>, err=${exception.message}');
 			return;
 		}
 		Assert.isTrue(JValueTools.equals(ast, reparsed),
-			'round-trip failed for ${label != null ? label : Std.string(ast)}: written=<$written>, reparsed=$reparsed');
+			'round-trip failed for $tag: written=<$written>, reparsed=$reparsed');
 	}
 
-	public function testCuratedCases() {
+	public function testCuratedCases():Void {
 		final cases:Array<JValue> = [
 			JNull,
 			JBool(true),
@@ -81,7 +84,7 @@ class JsonMacroRoundTripTest extends Test {
 		for (i in 0...cases.length) roundTrip(cases[i], 'case[$i]');
 	}
 
-	public function testRandomCases() {
+	public function testRandomCases():Void {
 		final rng:SeededRng = new SeededRng(42);
 		for (i in 0...200) {
 			final ast:JValue = randomValue(rng, 4);
@@ -124,30 +127,29 @@ class JsonMacroRoundTripTest extends Test {
 }
 
 /**
- * Tiny seeded linear congruential generator — kept private to this
- * file, duplicating `JsonRoundTripTest`'s helper to keep the macro
- * parity test self-contained. Shared helpers can be extracted once
- * more suites need them.
+ * Tiny seeded linear congruential generator — private to this file so
+ * random round-trip failures stay reproducible across runs without a
+ * shared helper dependency.
  */
-private class SeededRng {
+private final class SeededRng {
 
-	private var state:Int;
+	private var _state:Int;
 
-	public function new(seed:Int) {
-		this.state = seed;
+	public function new(seed:Int):Void {
+		_state = seed;
 	}
 
-	public function nextInt(max:Int):Int {
-		state = (state * 1103515245 + 12345) & 0x7FFFFFFF;
-		return max == 0 ? 0 : state % max;
+	public inline function nextInt(max:Int):Int {
+		_state = (_state * 1103515245 + 12345) & 0x7FFFFFFF;
+		return max == 0 ? 0 : _state % max;
 	}
 
-	public function nextBool():Bool {
+	public inline function nextBool():Bool {
 		return nextInt(2) == 0;
 	}
 
-	public function nextFloat():Float {
-		state = (state * 1103515245 + 12345) & 0x7FFFFFFF;
-		return state / 2147483647.0;
+	public inline function nextFloat():Float {
+		_state = (_state * 1103515245 + 12345) & 0x7FFFFFFF;
+		return _state / 2147483647.0;
 	}
 }

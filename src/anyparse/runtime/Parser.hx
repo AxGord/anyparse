@@ -1,8 +1,8 @@
 package anyparse.runtime;
 
 /**
- * Runtime parser context threaded through generated and hand-written
- * parsers as the first argument to every helper. Owns everything that
+ * Runtime parser context threaded through generated parsers as the
+ * first argument to every helper. Owns everything that
  * is mutable during a parse — input, position, error accumulator,
  * cache, indent stack, named captures, cancellation callback.
  *

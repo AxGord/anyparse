@@ -4,15 +4,14 @@ package anyparse.grammar.json;
  * Raw JSON AST — the universal schema for JSON, accepting any valid
  * document. Used when the caller does not have a specific typed schema.
  *
- * This enum is also the first grammar driven by the macro pipeline:
- * `@:build(anyparse.macro.Build.build())` triggers the five-pass
- * pipeline that reads the grammar metadata below and emits a sibling
- * class `JValueFastParser` with a static `parse(source):JValue` method
- * behaviorally equivalent to the hand-written `JsonParser`.
+ * This enum is the grammar driving the JSON parser and writer:
+ *  - `JValueFastParser` (marker class, macro-generated via
+ *    `anyparse.macro.Build.buildParser`) — `parse(source):JValue`.
+ *  - `JValueFastWriter` (marker class, macro-generated via
+ *    `anyparse.macro.Build.buildWriter`) — `write(value):String`.
  *
- * The hand-written `JsonParser` remains in the repo as a regression
- * baseline; parity tests assert that the generated parser produces
- * identical results on the full existing test corpus.
+ * Round-trip equivalence (`parse(write(ast)) == ast`) is the regression
+ * invariant — enforced by `JsonFastRoundTripTest`.
  *
  * Metadata layer:
  *  - `@:peg` marks this as a grammar entry point.

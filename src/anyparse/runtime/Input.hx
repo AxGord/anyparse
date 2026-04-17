@@ -1,8 +1,8 @@
 package anyparse.runtime;
 
 /**
- * Byte/character stream abstraction used by generated and hand-written
- * parsers. The runtime never accesses the underlying source directly —
+ * Byte/character stream abstraction used by the generated parsers.
+ * The runtime never accesses the underlying source directly —
  * everything goes through `Input` so we can later swap `StringInput` for
  * `BytesInput`, `FileInput`, or a memory-mapped variant without touching
  * the parser logic.

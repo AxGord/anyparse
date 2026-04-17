@@ -70,13 +70,13 @@ Sessions should align with phase boundaries — start a new Claude Code session 
 - ✅ Fast-mode-only codegen. Tolerant mode is stubbed — the Phase-1 `ParseResult`/`Node` types remain unused in generated code.
 - ✅ `JValue` annotated with `@:peg` + `@:schema(JsonFormat)` + `@:ws` + per-ctor `@:lit` / `@:lead` / `@:trail` / `@:sep`. `JString(v:JStringLit)` / `JNumber(v:JNumberLit)` use transparent abstracts over `String` / `Float` so existing test literals compile unchanged.
 - ✅ `JEntry` rewritten with explicit `var`-form typedef fields so that field-level `@:lead(':')` is accepted.
-- ✅ `JsonParserTestBase` extracted as an abstract base; `JsonParserTest` and `JsonMacroParserTest` are thin subclasses differing only in the `parseJson` hook. `JsonMacroRoundTripTest` mirrors `JsonRoundTripTest` but parses through `JValueFastParser`.
+- ✅ `JsonParserTestBase` extracted as an abstract base; `JsonParserTest` and `JsonMacroParserTest` are thin subclasses differing only in the `parseJson` hook. `JsonMacroRoundTripTest` mirrors `JsonRoundTripTest` but parses through `JValueFastParser`. *(Later removed in Phase 3 slice ρ₂ when the hand-written baseline was retired; the macro parity suite was flattened into `JsonFastParserTest` and `JsonFastRoundTripTest`.)*
 - ✅ 585 tests green on neko, js, and interp (the original 328 plus the macro parity and macro round-trip suites).
 
-**Exit condition**: met. Hand-written and macro-generated JSON parsers produce identical results across the full existing corpus and the seeded-random round-trip corpus on all three targets.
+**Exit condition**: met. Hand-written and macro-generated JSON parsers produce identical results across the full existing corpus and the seeded-random round-trip corpus on all three targets. *(In Phase 3 slice ρ₂ the hand-written `JsonParser` was removed — the macro pipeline is the sole implementation and carries its own round-trip regression corpus.)*
 
 **Non-deliverables for this phase** (explicitly deferred):
-- Writer regeneration (`JValueFastWriter`) — Phase 2b or Phase 3, driven by real pain points from Phase 3.
+- Writer regeneration (`JValueFastWriter`) — shipped in Phase 3 slice ρ₂ together with the removal of `JsonWriter`.
 - Tolerant-mode codegen.
 - Pratt / Indent / Binary / Capture / Recovery strategies.
 - Cross-family IR work.
@@ -307,6 +307,22 @@ Sessions should align with phase boundaries — start a new Claude Code session 
 - `test/unit/HaxeRoundTripTest.hx` — 51 curated idempotency round-trip tests covering every AST node type.
 - Zero changes to `Lowering.hx`, `Codegen.hx`, `Build.hx`, `ShapeBuilder.hx` — writer is independent of the macro pipeline.
 - 2123 assertions green on neko/js (2013 baseline + 110 new).
+
+**Phase 3 macro writer slice (slice ρ₁) — what landed (2026-04-13, after slice π₁)**:
+- `anyparse.macro.Build.buildWriter(RootType)` macro entry point — structural inverse of `buildParser`, driven by the same ShapeBuilder + StrategyRegistry passes.
+- `anyparse.macro.WriterLowering` + `anyparse.macro.WriterCodegen` — pass 3W/4W of the pipeline. Walks the ShapeTree and emits `Doc`-building `haxe.macro.Expr` for each rule; wraps rules into `Field`s; emits Doc wrapper helpers (`_dt`/`_dc`/`_dn`/`_dg`/`_dhl`/`_dsl`/`_dl`/`_de`), layout helpers (`blockBody`/`sepList`), encoding helpers (`formatFloat`/`escapeString`).
+- Covers every grammar shape already supported by the parser: struct fields (`@:kw`/`@:lead`/`@:trail`/`@:optional`), enum branches (all Cases 0–5 plus Pratt infix/prefix/postfix/ternary), Star fields (block / inline / EOF / try-parse), terminals (`@:unescape`/`@:rawString`/Int/Float).
+- Precedence-aware parenthesization (D64) mirroring parser-side D33: `ctxPrec` threaded through the generated writer functions; inner operator at `prec < ctxPrec` wraps in `(...)`.
+- `@:raw` handling: Star fields inside `@:raw` types concatenate segments without whitespace (mirrors the parser's whitespace-skipping suppression for string interpolation).
+- `HxModuleFastWriter` marker class — first `buildWriter` consumer. Idempotency round-trip tests via `HaxeFastWriterRoundTripTest`.
+- 2173 assertions green on neko/js (2123 baseline + 50 new).
+
+**Phase 3 drop-hand-written slice (slice ρ₂) — what landed (2026-04-17, after ar-format binary slice and slice ρ₁)**:
+- `anyparse.grammar.json.JValueFastWriter` — second `Build.buildWriter` consumer, now the only JSON writer in the project.
+- Removed hand-written reference implementations and their mirror tests: `JsonParser`, `JsonWriter`, `HaxeWriter`, `JsonParserTest`, `JsonParserTestBase`, `JsonWriterTest`, `JsonRoundTripTest`, `HaxeWriterTest`, `HaxeRoundTripTest`. Every grammar in the project is now macro-driven — no parallel hand-written baseline.
+- `JsonMacroParserTest` / `JsonMacroRoundTripTest` renamed to `JsonFastParserTest` / `JsonFastRoundTripTest` and flattened (the `JsonParserTestBase` abstract layer lost its second subclass and was removed with it). Round-trip suite now writes via `JValueFastWriter` and parses via `JValueFastParser`, so both directions of the macro pipeline ride on the same regression corpus.
+- No changes to macro pipeline internals. `WriterCodegen.publicEntry`'s current `(value, indent:Int = 4, lineWidth:Int = 120)` signature is kept unchanged — upcoming slice σ introduces the `WriteOptions` typedef and threads it through the generated writer as the replacement.
+- Rationale: the hand-written parsers/writers had served as regression baselines through Phase 2 and the first half of Phase 3. With the macro pipeline proven end-to-end on JSON, Haxe, and the ar binary format, the parallel hand-written copies were net cost: every grammar change needed double-maintenance, and the "library of hand-written reference implementations" framing conflicts with the project's platform positioning.
 
 **Non-deliverables for the skeleton slice**:
 - Expressions, operators, Pratt strategy.

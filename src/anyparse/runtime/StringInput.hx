@@ -3,9 +3,8 @@ package anyparse.runtime;
 /**
  * `Input` implementation backed by a Haxe `String`.
  *
- * First and simplest reference implementation. Used by both the
- * hand-written JSON parser and, in later phases, by macro-generated
- * parsers operating on in-memory strings.
+ * First and simplest reference implementation. Used by the
+ * macro-generated parsers operating on in-memory strings.
  */
 @:nullSafety(Strict)
 final class StringInput implements Input {
