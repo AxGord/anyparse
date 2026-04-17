@@ -24,6 +24,7 @@ import unit.HxParamSliceTest;
 import unit.HxPrefixSliceTest;
 import unit.HxSameLineOptionsTest;
 import unit.HxTrailingCommaOptionsTest;
+import unit.HaxeFormatConfigLoaderTest;
 import unit.HaxeWriterRoundTripTest;
 import unit.JsonParserTest;
 import unit.JsonRoundTripTest;
@@ -67,6 +68,7 @@ class RunTests {
 		runner.addCase(new HxArrowArraySliceTest());
 		runner.addCase(new HxSameLineOptionsTest());
 		runner.addCase(new HxTrailingCommaOptionsTest());
+		runner.addCase(new HaxeFormatConfigLoaderTest());
 		runner.addCase(new HaxeWriterRoundTripTest());
 		runner.addCase(new SpanTest());
 		runner.addCase(new ParseErrorTest());

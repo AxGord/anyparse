@@ -356,6 +356,25 @@ Sessions should align with phase boundaries — start a new Claude Code session 
 - `test/unit/HxTrailingCommaOptionsTest.hx` — 10 tests × 15 assertions: each flag tested in both break states, flat-mode invariance, new-args sharing `trailingCommaArgs`, flag independence, and default-match. 1848 assertions green on neko / js / interp (1833 baseline + 15 new).
 - Deferred from τ₂: rest of the haxe-formatter `trailingComma` surface (type params, anon structs, enum ctor field lists outside params) lands with the grammars that introduce those constructs.
 
+**Phase 3 `hxformat.json` loader slice (slice τ₃) — what landed (2026-04-18, after slice τ₂)**:
+
+- First consumer of the `WriteOptions` infrastructure — closes the dogfood loop: the project's own `JValueParser` reads a real-world `hxformat.json` and maps the recognised fields into `HxModuleWriteOptions` for the project's own `HxModuleWriter`. Own parser feeds own writer through the user-facing formatter-config shape.
+- `anyparse.grammar.haxe.HaxeFormatConfigLoader.loadHxFormatJson(json:String):HxModuleWriteOptions` — all-static utility, no state. Copies `HaxeFormat.instance.defaultWriteOptions`, then overwrites only fields the config explicitly sets. Empty `{}` round-trips to defaults byte-for-byte.
+- Recognised key paths (exactly the knobs `HxModuleWriteOptions` currently exposes):
+  - `indentation.character` — `"tab"` → `(Tab, indentSize=1)`; any string composed entirely of spaces → `(Space, indentSize=length)`; other values ignored.
+  - `indentation.tabWidth` — Int → `tabWidth`.
+  - `wrapping.maxLineLength` — Int → `lineWidth`.
+  - `sameLine.ifElse` / `sameLine.tryCatch` / `sameLine.doWhile` — enum string; `"same"` → `true`, every other value (`"next"` / `"keep"` / `"fitLine"`) → `false`.
+  - `trailingCommas.arrayLiteralDefault` / `callArgumentDefault` / `functionParameterDefault` — enum string; `"yes"` → `true`, every other value (`"no"` / `"keep"` / `"ignore"`) → `false`.
+- Everything not listed is silently ignored (forward-compat). Missing fields fall back to the format singleton's defaults — the loader never raises on valid JSON.
+- Design decisions (from the τ₃ session brief):
+  - Mapper lives in `HaxeFormatConfigLoader`, not as a method on `HaxeFormat` — the format singleton stays pure/readonly; loading is an I/O concern bound to JSON, not a property of the format itself.
+  - Structure is an explicit nested switch over JObject entries (one `apply*` helper per top-level section). Macro-driven schema generation is overkill for ~9 fields and one config format.
+  - `"keep"` / `"ignore"` `trailingCommas` modes map to `false` (lossy). Debt: a `keep` mode would need the writer to see per-node "did the source have a trailing comma" annotations, which require extending the parser's AST; logged against the parser, not the loader.
+- `test/unit/HaxeFormatConfigLoaderTest.hx` — 13 tests × 47 assertions: empty-object defaults, each `sameLine` flag isolated, `keep`/`fitLine` mapping, each `trailingCommas` flag isolated, `keep`/`ignore` mapping, all-spaces indentation, tab-indent keeps tabWidth, `maxLineLength`, unknown-field ignore, end-to-end `parse → load → write` asserting the configured output differs from the defaulted output at the expected sites. 1895 assertions green on neko / js / interp (1848 baseline + 47 new).
+- Smoke test against the AxGord/haxe-formatter fork's actual `hxformat.json`: only `sameLine.*Body` fields are set (body-placement, not keyword-transition — outside our recognised surface), so loader output == defaults. Parses cleanly; validates the silently-ignore-unknown contract against a real file.
+- Deferred from τ₃: surfacing the rest of the haxe-formatter knobs (`wrapping.*` rules, `lineEnds.*`, `emptyLines.*`, `whitespace.*`, `baseTypeHints`, `disableFormatting`, `excludes`) — each will land together with the `HxModuleWriteOptions` field that represents it, plus any renderer debt that field demands.
+
 **Non-deliverables for the skeleton slice**:
 - Expressions, operators, Pratt strategy.
 - ~~Function parameters~~ (shipped in slice ζ), ~~function bodies with statements~~ (basic shipped in slice η₁; void return, control-flow statements deferred).
