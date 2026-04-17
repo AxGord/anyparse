@@ -50,7 +50,7 @@ class WriterLowering {
 				Context.fatalError('WriterLowering: cannot lower ${node.kind} for $typePath', Context.currentPos());
 				throw 'unreachable';
 		};
-		return [{fnName: fnName, valueCT: valueCT, body: body, hasCtxPrec: hasPratt}];
+		return [{fnName: fnName, valueCT: valueCT, body: body, hasCtxPrec: hasPratt, isBinary: false}];
 	}
 
 	// -------- enum rule --------
@@ -608,5 +608,6 @@ typedef WriterRule = {
 	valueCT:ComplexType,
 	body:Expr,
 	hasCtxPrec:Bool,
+	isBinary:Bool,
 };
 #end

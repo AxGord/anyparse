@@ -28,9 +28,11 @@ import haxe.macro.Expr;
  */
 class Codegen {
 
-	public static function emit(rules:Array<GeneratedRule>, rootTypePath:String, rootReturnCT:ComplexType):Array<Field> {
+	public static function emit(
+		rules:Array<GeneratedRule>, rootTypePath:String, rootReturnCT:ComplexType, formatInfo:FormatReader.FormatInfo
+	):Array<Field> {
 		final fields:Array<Field> = [];
-		fields.push(publicEntry(rootTypePath, rootReturnCT));
+		fields.push(formatInfo.isBinary ? binaryEntry(rootTypePath, rootReturnCT) : publicEntry(rootTypePath, rootReturnCT));
 		for (rule in rules) {
 			for (ereg in rule.eregs) fields.push(eregField(ereg));
 			fields.push(ruleField(rule));
@@ -68,6 +70,35 @@ class Codegen {
 			access: [APublic, AStatic],
 			kind: FFun({
 				args: [{name: 'source', type: macro : String}],
+				ret: rootReturnCT,
+				expr: body,
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	private static function binaryEntry(rootTypePath:String, rootReturnCT:ComplexType):Field {
+		final rootFn:String = 'parse${simpleName(rootTypePath)}';
+		final parseCall:Expr = {
+			expr: ECall(macro $i{rootFn}, [macro ctx]),
+			pos: Context.currentPos(),
+		};
+		final body:Expr = macro {
+			final ctx:anyparse.runtime.Parser = new anyparse.runtime.Parser(new anyparse.runtime.BytesInput(source));
+			final _v = $parseCall;
+			if (ctx.pos != ctx.input.length) {
+				throw new anyparse.runtime.ParseError(
+					new anyparse.runtime.Span(ctx.pos, ctx.pos),
+					'trailing data after value'
+				);
+			}
+			return _v;
+		};
+		return {
+			name: 'parse',
+			access: [APublic, AStatic],
+			kind: FFun({
+				args: [{name: 'source', type: macro : haxe.io.Bytes}],
 				ret: rootReturnCT,
 				expr: body,
 			}),

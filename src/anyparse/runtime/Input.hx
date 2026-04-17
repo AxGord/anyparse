@@ -23,4 +23,6 @@ interface Input {
 	function charCodeAt(pos:Int):Int;
 
 	function substring(from:Int, to:Int):String;
+
+	function bytes(from:Int, to:Int):haxe.io.Bytes;
 }

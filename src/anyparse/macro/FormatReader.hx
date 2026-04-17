@@ -15,6 +15,9 @@ typedef FormatInfo = {
 
 	/** Fully qualified type path of the `@:schema` class (e.g. `anyparse.format.text.JsonFormat`). */
 	schemaTypePath:String,
+
+	/** True when the schema class has `encoding = Binary`. */
+	isBinary:Bool,
 };
 
 /**
@@ -40,9 +43,29 @@ class FormatReader {
 				Context.fatalError('@:schema($typePath) must resolve to a class', Context.currentPos());
 				throw 'unreachable';
 		};
+		final isBinary:Bool = detectBinary(cl);
 		return {
-			whitespace: readStringField(cl, 'whitespace'),
+			whitespace: isBinary ? '' : readStringField(cl, 'whitespace'),
 			schemaTypePath: typePath,
+			isBinary: isBinary,
+		};
+	}
+
+	private static function detectBinary(cl:ClassType):Bool {
+		final fields:Array<ClassField> = cl.fields.get();
+		for (f in fields) if (f.name == 'encoding') {
+			final texpr:Null<TypedExpr> = f.expr();
+			if (texpr != null) return extractInt(texpr) == 4; // Encoding.Binary = 4
+		}
+		return false;
+	}
+
+	private static function extractInt(texpr:TypedExpr):Int {
+		return switch texpr.expr {
+			case TConst(TInt(v)): v;
+			case TCast(inner, _): extractInt(inner);
+			case TParenthesis(inner): extractInt(inner);
+			case _: -1;
 		};
 	}
 

@@ -7,6 +7,7 @@ import haxe.macro.ExprTools;
 import haxe.macro.Type;
 import anyparse.core.LoweringCtx;
 import anyparse.core.Mode;
+import anyparse.macro.strategy.Bin;
 import anyparse.macro.strategy.Kw;
 import anyparse.macro.strategy.Lit;
 import anyparse.macro.strategy.Postfix;
@@ -68,6 +69,7 @@ class Build {
 		final shape:ShapeBuilder.ShapeResult = shapeBuilder.build(rootType);
 
 		final registry:StrategyRegistry = new StrategyRegistry();
+		registry.register(new Bin());
 		registry.register(new Kw());
 		registry.register(new Lit());
 		registry.register(new Postfix());
@@ -84,7 +86,7 @@ class Build {
 
 		final rootSimple:String = simpleName(shape.root);
 		final rootReturnCT:ComplexType = TPath({pack: packOf(shape.root), name: rootSimple, params: []});
-		final fields:Array<Field> = Codegen.emit(rules, shape.root, rootReturnCT);
+		final fields:Array<Field> = Codegen.emit(rules, shape.root, rootReturnCT, formatInfo);
 
 		#if anyparse_dump
 		final printer:haxe.macro.Printer = new haxe.macro.Printer();
@@ -118,6 +120,7 @@ class Build {
 		final shape:ShapeBuilder.ShapeResult = shapeBuilder.build(rootType);
 
 		final registry:StrategyRegistry = new StrategyRegistry();
+		registry.register(new Bin());
 		registry.register(new Kw());
 		registry.register(new Lit());
 		registry.register(new Postfix());
@@ -129,8 +132,10 @@ class Build {
 		registry.prepare();
 		registry.runAnnotate(shape, ctx);
 
-		final writerLowering:WriterLowering = new WriterLowering(shape, formatInfo);
-		final rules:Array<WriterLowering.WriterRule> = writerLowering.generate();
+		final rules:Array<WriterLowering.WriterRule> = if (formatInfo.isBinary)
+			new BinaryWriterLowering(shape).generate()
+		else
+			new WriterLowering(shape, formatInfo).generate();
 
 		final rootSimple:String = simpleName(shape.root);
 		final rootReturnCT:ComplexType = TPath({pack: packOf(shape.root), name: rootSimple, params: []});

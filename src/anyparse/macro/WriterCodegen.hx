@@ -29,16 +29,21 @@ class WriterCodegen {
 		formatInfo:FormatReader.FormatInfo
 	):Array<Field> {
 		final fields:Array<Field> = [];
-		fields.push(publicEntry(rootTypePath, rootReturnCT));
-		for (rule in rules) fields.push(ruleField(rule));
-		// Doc wrapper helpers
-		for (f in docHelperFields()) fields.push(f);
-		// Layout helpers
-		fields.push(blockBodyField());
-		fields.push(sepListField());
-		// Encoding helpers
-		fields.push(formatFloatField());
-		fields.push(escapeStringField(formatInfo));
+		if (formatInfo.isBinary) {
+			fields.push(binaryEntry(rootTypePath, rootReturnCT));
+			for (rule in rules) fields.push(binaryRuleField(rule));
+		} else {
+			fields.push(publicEntry(rootTypePath, rootReturnCT));
+			for (rule in rules) fields.push(ruleField(rule));
+			// Doc wrapper helpers
+			for (f in docHelperFields()) fields.push(f);
+			// Layout helpers
+			fields.push(blockBodyField());
+			fields.push(sepListField());
+			// Encoding helpers
+			fields.push(formatFloatField());
+			fields.push(escapeStringField(formatInfo));
+		}
 		return fields;
 	}
 
@@ -64,6 +69,45 @@ class WriterCodegen {
 				],
 				ret: macro : String,
 				expr: body,
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	private static function binaryEntry(rootTypePath:String, rootReturnCT:ComplexType):Field {
+		final rootFn:String = 'write${simpleName(rootTypePath)}';
+		final writeCall:Expr = {
+			expr: ECall(macro $i{rootFn}, [macro value, macro output]),
+			pos: Context.currentPos(),
+		};
+		final body:Expr = macro {
+			final output:haxe.io.BytesOutput = new haxe.io.BytesOutput();
+			$writeCall;
+			return output.getBytes();
+		};
+		return {
+			name: 'write',
+			access: [APublic, AStatic],
+			kind: FFun({
+				args: [{name: 'value', type: rootReturnCT}],
+				ret: macro : haxe.io.Bytes,
+				expr: body,
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	private static function binaryRuleField(rule:WriterLowering.WriterRule):Field {
+		return {
+			name: rule.fnName,
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [
+					{name: 'value', type: rule.valueCT},
+					{name: 'output', type: macro : haxe.io.BytesOutput},
+				],
+				ret: macro : Void,
+				expr: rule.body,
 			}),
 			pos: Context.currentPos(),
 		};

@@ -263,7 +263,9 @@ class ShapeBuilder {
 				isStdPrimitiveAbstract(a) ? a.name : null;
 			case TInst(ref, _):
 				final c:ClassType = ref.get();
-				c.pack.length == 0 && c.name == 'String' ? 'String' : null;
+				if (c.pack.length == 0 && c.name == 'String') 'String'
+				else if (joinPack(c.pack, c.name) == 'haxe.io.Bytes') 'Bytes'
+				else null;
 			case _: null;
 		};
 	}

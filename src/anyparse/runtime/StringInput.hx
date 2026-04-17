@@ -31,4 +31,8 @@ final class StringInput implements Input {
 	public inline function substring(from:Int, to:Int):String {
 		return _source.substring(from, to);
 	}
+
+	public inline function bytes(from:Int, to:Int):haxe.io.Bytes {
+		return haxe.io.Bytes.ofString(_source.substring(from, to));
+	}
 }

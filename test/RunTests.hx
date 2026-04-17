@@ -1,3 +1,4 @@
+import unit.ArParserTest;
 import unit.DocRendererTest;
 import unit.HaxeFirstSliceTest;
 import unit.HaxeModuleSliceTest;
@@ -40,6 +41,7 @@ import unit.InputTest;
 class RunTests {
 	public static function main() {
 		var runner = new utest.Runner();
+		runner.addCase(new ArParserTest());
 		runner.addCase(new DocRendererTest());
 		runner.addCase(new JsonParserTest());
 		runner.addCase(new JsonMacroParserTest());
