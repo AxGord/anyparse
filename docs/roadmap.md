@@ -339,6 +339,14 @@ Sessions should align with phase boundaries — start a new Claude Code session 
 - `test/unit/WriteOptionsTest.hx` — 9 assertions across 4 tests: both writers accept explicit options and produce output identical to the defaults path; both formats expose the expected default values. Regression anchor for the σ surface.
 - 1814 assertions green on neko / js / interp (1805 baseline + 9 new).
 
+**Phase 3 `sameLine` policies slice (slice τ₁) — what landed (2026-04-18, after slice σ)**:
+- `HxModuleWriteOptions` gains three Haxe-specific `Bool` knobs — `sameLineElse`, `sameLineCatch`, `sameLineDoWhile` — corresponding to haxe-formatter's `sameLine.ifElse` / `sameLine.tryCatch` / `sameLine.doWhile`. Defaults (all `true`) live on `HaxeFormat.instance.defaultWriteOptions`, whose declared type widened from the base `WriteOptions` to `HxModuleWriteOptions` so the Haxe-specific fields are present in the defaulted struct.
+- New declarative meta **`@:sameLine("flagName")`** on struct fields — wired in `HxIfStmt.elseBody`, `HxDoWhileStmt.cond`, and the `@:tryparse`-Star `HxTryCatchStmt.catches`. When present, the writer's leading separator before the field's kw/lead token becomes runtime-conditional: `opt.flagName ? _dt(' ') : _dhl()`. Without the meta the separator is a plain space (the existing D61 behaviour).
+- **`WriterLowering.sameLineSeparator(child)` helper** centralises the ternary emission at three sites in `lowerStruct` / `emitWriterStarField`: non-optional kw prefix (Path A — `HxDoWhileStmt.cond`), optional Ref leading space (Path B — `HxIfStmt.elseBody`), try-parse Star per-element separator (Path C — `HxTryCatchStmt.catches`). Path C moves the separator from *between* elements to *before every* element so the first catch's leading separator matches the body→catch boundary.
+- Declarative (not procedural) wiring — the meta points at a bool field by name, grammar-side authors opt individual fields into the mechanism without touching `WriterLowering`. Same shape is reused for τ₂'s `@:trailingComma` (separate slice).
+- Deferred from τ₁: ~~Renderer tab-emission~~ (D66), ~~`lineEnd` / `finalNewline` honoring~~ (D68), Tolerant-mode parser options (not in scope).
+- `test/unit/HxSameLineOptionsTest.hx` — 10 tests × 19 assertions: each flag tested in both states, flag independence, multi-catch coverage, default-match, and all-flags-off idempotency. 1833 assertions green on neko / js (1814 baseline + 19 new).
+
 **Non-deliverables for the skeleton slice**:
 - Expressions, operators, Pratt strategy.
 - ~~Function parameters~~ (shipped in slice ζ), ~~function bodies with statements~~ (basic shipped in slice η₁; void return, control-flow statements deferred).

@@ -14,9 +14,14 @@ package anyparse.grammar.haxe;
  * The `cond` field combines `@:kw('while')` and `@:lead('(')` on the
  * same field — both are emitted sequentially (D50). The `@:trail(')')`
  * closes the parenthesised condition.
+ *
+ * `@:sameLine("sameLineDoWhile")` on `cond` makes the writer's
+ * separator between the body and `while` runtime-switchable: when the
+ * flag is true the separator is a plain space (`} while (…);`); when
+ * false it becomes a hardline (`}\nwhile (…);`).
  */
 @:peg
 typedef HxDoWhileStmt = {
 	var body:HxStatement;
-	@:kw('while') @:lead('(') @:trail(')') var cond:HxExpr;
+	@:kw('while') @:lead('(') @:trail(')') @:sameLine('sameLineDoWhile') var cond:HxExpr;
 };

@@ -13,6 +13,12 @@ package anyparse.grammar.haxe;
  * — the `else` keyword is the commit point; when absent, `elseBody` is
  * null.
  *
+ * `@:sameLine("sameLineElse")` on `elseBody` makes the writer's
+ * separator between the then-body and `else` runtime-switchable: when
+ * the flag is true (haxe-formatter default) the separator is a plain
+ * space (`} else {`); when false it becomes a hardline at the current
+ * indent level (`}\n    else {`).
+ *
  * Dangling else is resolved correctly by construction: the inner `if`
  * greedily consumes the nearest `else`, leaving outer `if`s with no
  * else branch.
@@ -21,5 +27,5 @@ package anyparse.grammar.haxe;
 typedef HxIfStmt = {
 	@:lead('(') @:trail(')') var cond:HxExpr;
 	var thenBody:HxStatement;
-	@:optional @:kw('else') var elseBody:Null<HxStatement>;
+	@:optional @:kw('else') @:sameLine('sameLineElse') var elseBody:Null<HxStatement>;
 };

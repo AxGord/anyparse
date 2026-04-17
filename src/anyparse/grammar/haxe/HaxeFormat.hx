@@ -2,7 +2,6 @@ package anyparse.grammar.haxe;
 
 import anyparse.format.Encoding;
 import anyparse.format.IndentChar;
-import anyparse.format.WriteOptions;
 import anyparse.format.text.FieldLookup;
 import anyparse.format.text.KeySyntax;
 import anyparse.format.text.MissingPolicy;
@@ -74,14 +73,25 @@ final class HaxeFormat implements TextFormat {
 	 * Default `WriteOptions` for Haxe output: tab indent, 4-column tab
 	 * width, terminal newline. Generated Haxe writers use this struct
 	 * when the caller omits the `options` argument to `write()`.
+	 *
+	 * Declared as `HxModuleWriteOptions` (not the base `WriteOptions`)
+	 * so Haxe-specific knobs (`sameLine*` from τ₁, `trailingComma*`
+	 * from τ₂, …) are present in the defaulted struct — generated
+	 * writers cast this value to `HxModuleWriteOptions` at entry.
+	 *
+	 * Same-line defaults match haxe-formatter's `sameLine` defaults
+	 * (`ifElse`/`tryCatch`/`doWhile` are all same-line by default).
 	 */
-	public var defaultWriteOptions(default, null):WriteOptions = {
+	public var defaultWriteOptions(default, null):HxModuleWriteOptions = {
 		indentChar: Tab,
 		indentSize: 1,
 		tabWidth: 4,
 		lineWidth: 120,
 		lineEnd: '\n',
 		finalNewline: true,
+		sameLineElse: true,
+		sameLineCatch: true,
+		sameLineDoWhile: true,
 	};
 
 	private function new() {}

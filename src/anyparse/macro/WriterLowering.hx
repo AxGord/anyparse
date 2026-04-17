@@ -340,9 +340,11 @@ class WriterLowering {
 				continue;
 			}
 
-			// D61: kw prefix — space before kw (unless first), kw text with trailing space
+			// D61: kw prefix — space before kw (unless first), kw text with trailing space.
+			// @:sameLine(flagName) on the child switches the leading space to a
+			// hardline when `opt.<flagName>` is false (τ₁).
 			if (kwLead != null && !isOptional) {
-				if (!isFirstField && !isRaw) parts.push(macro _dt(' '));
+				if (!isFirstField && !isRaw) parts.push(sameLineSeparator(child));
 				parts.push(macro _dt($v{kwLead + ' '}));
 			}
 
@@ -359,11 +361,17 @@ class WriterLowering {
 						expr: ECall(macro $i{writeFn}, [macro _optVal, macro opt]),
 						pos: Context.currentPos(),
 					};
+					// Leading separator is runtime-conditional when @:sameLine
+					// is present — see sameLineSeparator. Split into (sep, kw+' ')
+					// so the sep part can become a hardline (τ₁).
 					final optParts:Array<Expr> = [];
-					if (kwLead != null)
-						optParts.push(macro _dt($v{' ' + kwLead + ' '}));
-					else if (leadText != null)
-						optParts.push(macro _dt($v{' ' + leadText + ' '}));
+					if (kwLead != null) {
+						optParts.push(sameLineSeparator(child));
+						optParts.push(macro _dt($v{kwLead + ' '}));
+					} else if (leadText != null) {
+						optParts.push(sameLineSeparator(child));
+						optParts.push(macro _dt($v{leadText + ' '}));
+					}
 					optParts.push(writeCall);
 					final optBody:Expr = if (optParts.length == 1) optParts[0]
 					else dcCall(optParts);
@@ -463,17 +471,40 @@ class WriterLowering {
 			// Try-parse mode. Emit lead if present (e.g. ':' in default:).
 			if (openText != null)
 				parts.push(macro _dt($v{openText}));
-			parts.push(macro {
-				final _arr = $fieldAccess;
-				final _docs:Array<anyparse.core.Doc> = [];
-				var _si:Int = 0;
-				while (_si < _arr.length) {
-					_docs.push($elemCall);
-					if (_si < _arr.length - 1) _docs.push(_dt(' '));
-					_si++;
-				}
-				_dc(_docs);
-			});
+			final sameLineName:Null<String> = readMetaString(starNode, ':sameLine');
+			if (sameLineName != null) {
+				// @:sameLine on a try-parse Star: each element is preceded by
+				// a runtime-conditional separator (space or hardline), so the
+				// first element's leading separator acts as the boundary with
+				// the preceding struct field (τ₁ — catches against try body).
+				final optFlag:Expr = {
+					expr: EField(macro opt, sameLineName),
+					pos: Context.currentPos(),
+				};
+				parts.push(macro {
+					final _arr = $fieldAccess;
+					final _docs:Array<anyparse.core.Doc> = [];
+					var _si:Int = 0;
+					while (_si < _arr.length) {
+						_docs.push(($optFlag) ? _dt(' ') : _dhl());
+						_docs.push($elemCall);
+						_si++;
+					}
+					_dc(_docs);
+				});
+			} else {
+				parts.push(macro {
+					final _arr = $fieldAccess;
+					final _docs:Array<anyparse.core.Doc> = [];
+					var _si:Int = 0;
+					while (_si < _arr.length) {
+						_docs.push($elemCall);
+						if (_si < _arr.length - 1) _docs.push(_dt(' '));
+						_si++;
+					}
+					_dc(_docs);
+				});
+			}
 		} else {
 			// EOF mode. Emit lead if present.
 			if (openText != null)
@@ -540,6 +571,29 @@ class WriterLowering {
 	}
 
 	// -------- helpers --------
+
+	/**
+	 * Return a Doc-separator expression for the whitespace that precedes
+	 * a struct-field's kw/lead token.
+	 *
+	 * Without `@:sameLine` metadata, emits a plain space (`_dt(' ')`) —
+	 * the existing D61 behaviour. With `@:sameLine("flagName")`, emits a
+	 * ternary that picks between a plain space and a hardline at the
+	 * current indent level based on `opt.<flagName>:Bool`.
+	 *
+	 * Consumed by the three struct-field sites (non-optional kw, optional
+	 * Ref, and try-parse Star) that previously hard-coded `' '` as the
+	 * boundary between a field and the preceding token.
+	 */
+	private static function sameLineSeparator(child:ShapeNode):Expr {
+		final flagName:Null<String> = readMetaString(child, ':sameLine');
+		if (flagName == null) return macro _dt(' ');
+		final optFlag:Expr = {
+			expr: EField(macro opt, flagName),
+			pos: Context.currentPos(),
+		};
+		return macro (($optFlag) ? _dt(' ') : _dhl());
+	}
 
 	/** Build `_dc([elem1, elem2, ...])` from a macro-time array of Exprs. */
 	private static function dcCall(parts:Array<Expr>):Expr {
