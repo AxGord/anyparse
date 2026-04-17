@@ -1,10 +1,11 @@
 package anyparse.macro;
 
 #if macro
+import anyparse.core.ShapeTree;
+import anyparse.format.text.UnknownPolicy;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 import haxe.macro.Type;
-import anyparse.core.ShapeTree;
 
 using Lambda;
 
@@ -48,14 +49,37 @@ class ShapeBuilder {
 	private final pending:Array<{name:String, type:Type}> = [];
 	private final shaped:Map<String, ShapeNode> = new Map();
 	private final inFlight:Array<String> = [];
+	private final formatInfo:Null<FormatReader.FormatInfo>;
 
 	private var rootName:String = '';
 
-	public function new() {}
+	public function new(?formatInfo:FormatReader.FormatInfo) {
+		this.formatInfo = formatInfo;
+	}
 
 	public function build(root:Type):ShapeResult {
 		rootName = qualifiedName(root);
 		enqueue(rootName, root);
+		// Format-declared utility types that Lowering emits calls to
+		// from generated code — enqueue eagerly so the rules exist
+		// even when no user field references them directly:
+		//   - `anyType` is called from the ByName loop's unknown-key
+		//     branch (when `onUnknown == Skip`).
+		//   - `stringType` is called for every mapping key in the
+		//     ByName loop, and by `lowerStringEnumTerminal`. Primitive
+		//     type mappings for `intType`/`floatType`/`boolType`
+		//     enqueue lazily from `shapeFieldType` when a field actually
+		//     references them.
+		if (formatInfo != null) {
+			if (formatInfo.anyType != null && formatInfo.onUnknown == UnknownPolicy.Skip) {
+				final anyType:String = formatInfo.anyType;
+				enqueue(anyType, Context.getType(anyType));
+			}
+			if (formatInfo.stringType != null) {
+				final stringType:String = formatInfo.stringType;
+				enqueue(stringType, Context.getType(stringType));
+			}
+		}
 		while (pending.length > 0) {
 			final job:{name:String, type:Type} = pending.shift();
 			if (shaped.exists(job.name)) continue;
@@ -143,7 +167,64 @@ class ShapeBuilder {
 		node.annotations.set('base.typePath', typePathOfAbstract(a));
 		node.annotations.set('base.meta', a.meta.get());
 		node.annotations.set('base.underlying', primitiveName(a.type));
+		final enumValues:Null<Array<{name:String, value:String}>> = extractStringEnumValues(a);
+		if (enumValues != null) {
+			node.annotations.set('base.stringEnumValues', enumValues);
+			// The string-enum decoder emits a call to the format's
+			// `stringType` terminal to consume the literal before
+			// dispatching to the matched enum value — enqueue it so
+			// the generated parser contains the rule.
+			if (formatInfo != null && formatInfo.stringType != null) {
+				final st:String = formatInfo.stringType;
+				enqueue(st, Context.getType(st));
+			}
+		}
 		return node;
+	}
+
+	/**
+	 * If `a` is an `enum abstract(String)` (new-style `enum` keyword or
+	 * legacy `@:enum` meta), return the declared `name → value` pairs
+	 * parsed from the impl class's static final fields. Returns `null`
+	 * when the abstract is not an enum abstract or its underlying type
+	 * isn't String — callers then fall through to the regex-based
+	 * terminal path.
+	 */
+	private static function extractStringEnumValues(a:AbstractType):Null<Array<{name:String, value:String}>> {
+		if (primitiveNameOrNull(a.type) != 'String') return null;
+		if (!a.meta.has(':enum')) return null;
+		if (a.impl == null) return null;
+		final impl:ClassType = a.impl.get();
+		final values:Array<{name:String, value:String}> = [];
+		for (f in impl.statics.get()) {
+			if (f.kind.match(FMethod(_))) continue;
+			final texpr:Null<TypedExpr> = f.expr();
+			if (texpr == null) continue;
+			final s:Null<String> = extractStringConst(texpr);
+			if (s == null) continue;
+			values.push({name: f.name, value: s});
+		}
+		return values.length == 0 ? null : values;
+	}
+
+	private function primitiveRef(primName:String):Null<String> {
+		if (formatInfo == null) return null;
+		return switch primName {
+			case 'Int': formatInfo.intType;
+			case 'Float': formatInfo.floatType;
+			case 'Bool': formatInfo.boolType;
+			case 'String': formatInfo.stringType;
+			case _: null;
+		};
+	}
+
+	private static function extractStringConst(texpr:TypedExpr):Null<String> {
+		return switch texpr.expr {
+			case TConst(TString(s)): s;
+			case TCast(inner, _): extractStringConst(inner);
+			case TParenthesis(inner): extractStringConst(inner);
+			case _: null;
+		};
 	}
 
 	private function shapeField(fieldName:String, t:Type, meta:Null<Metadata>):ShapeNode {
@@ -174,16 +255,34 @@ class ShapeBuilder {
 	}
 
 	private function shapeFieldType(t:Type):ShapeNode {
-		// Null<T> → unwrap + optional marker. `Null<T>` appears as
-		// `TAbstract(Null, [inner])` in macro types; unwrap it here so
-		// the rest of `shapeFieldType` sees the inner type normally.
-		// The optionality is surfaced via a `base.optional=true`
-		// annotation on the resulting node, paired with the
-		// `@:optional` meta check in `shapeField`.
+		// Evaluate lazy types up front so downstream matchers never see
+		// a `TLazy` thunk. Lazy resolution happens for fields whose
+		// types reference other types in the same module / compilation
+		// unit that haven't been fully typed yet — common for
+		// forward-declared sibling typedefs under a shared `@:build`
+		// invocation.
+		switch t {
+			case TLazy(f): return shapeFieldType(f());
+			case _:
+		}
+		// Null<T> → unwrap + optional marker. `Null<T>` appears either
+		// as `TAbstract(Null, [inner])` or `TType(Null, [inner])` in
+		// macro types depending on Haxe version and context; unwrap
+		// either form here so the rest of `shapeFieldType` sees the
+		// inner type normally. The optionality is surfaced via a
+		// `base.optional=true` annotation on the resulting node,
+		// paired with the `@:optional` meta check in `shapeField`.
 		switch t {
 			case TAbstract(ref, params):
 				final a:AbstractType = ref.get();
 				if (a.pack.length == 0 && a.name == 'Null' && params.length == 1) {
+					final inner:ShapeNode = shapeFieldType(params[0]);
+					inner.annotations.set('base.optional', true);
+					return inner;
+				}
+			case TType(ref, params):
+				final d:DefType = ref.get();
+				if (d.pack.length == 0 && d.name == 'Null' && params.length == 1) {
 					final inner:ShapeNode = shapeFieldType(params[0]);
 					inner.annotations.set('base.optional', true);
 					return inner;
@@ -203,9 +302,24 @@ class ShapeBuilder {
 			case _:
 		}
 		// Std primitive abstracts (Bool/Int/Float/String) — inline Terminal,
-		// do not try to shape them as stand-alone rules.
+		// do not try to shape them as stand-alone rules. BUT: if the
+		// resolved format declares a grammar type for this primitive
+		// (e.g. `JsonFormat.intType = anyparse.grammar.json.JIntLit`),
+		// route the field through that Ref instead. This reuses the
+		// format's decoding logic across every schema bound to the
+		// format and keeps the JSON-family primitive decoders in one
+		// place (the `@:re`-annotated terminal), rather than
+		// duplicating them per generated parser.
 		final prim:Null<String> = primitiveNameOrNull(t);
 		if (prim != null) {
+			final mapped:Null<String> = primitiveRef(prim);
+			if (mapped != null) {
+				final mappedType:Type = Context.getType(mapped);
+				enqueue(mapped, mappedType);
+				final node:ShapeNode = new ShapeNode(Ref);
+				node.annotations.set('base.ref', mapped);
+				return node;
+			}
 			final term:ShapeNode = new ShapeNode(Terminal);
 			term.annotations.set('base.underlying', prim);
 			return term;

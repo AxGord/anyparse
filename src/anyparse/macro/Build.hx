@@ -65,7 +65,7 @@ class Build {
 		final ctx:LoweringCtx = new LoweringCtx();
 		ctx.mode = Mode.Fast;
 
-		final shapeBuilder:ShapeBuilder = new ShapeBuilder();
+		final shapeBuilder:ShapeBuilder = new ShapeBuilder(formatInfo);
 		final shape:ShapeBuilder.ShapeResult = shapeBuilder.build(rootType);
 
 		final registry:StrategyRegistry = new StrategyRegistry();
@@ -124,7 +124,7 @@ class Build {
 		final ctx:LoweringCtx = new LoweringCtx();
 		ctx.mode = Mode.Fast;
 
-		final shapeBuilder:ShapeBuilder = new ShapeBuilder();
+		final shapeBuilder:ShapeBuilder = new ShapeBuilder(formatInfo);
 		final shape:ShapeBuilder.ShapeResult = shapeBuilder.build(rootType);
 
 		final registry:StrategyRegistry = new StrategyRegistry();

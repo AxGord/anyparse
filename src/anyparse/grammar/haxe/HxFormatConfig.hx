@@ -1,0 +1,31 @@
+package anyparse.grammar.haxe;
+
+/**
+ * Declarative schema for the subset of `hxformat.json` keys the
+ * Haxe writer understands. Parsed by the macro-generated
+ * `HxFormatConfigParser` (ByName struct lowering, τ₄) and mapped
+ * into `HxModuleWriteOptions` by `HaxeFormatConfigLoader`.
+ *
+ * Every field is `@:optional` — an empty `{}` config is valid and
+ * produces a `HxFormatConfig` with all-null sections, which the
+ * loader then materialises as `HaxeFormat.instance.defaultWriteOptions`.
+ *
+ * Only four top-level sections are modelled here: the exact ones the
+ * writer currently consumes. Everything else (`lineEnds`, `whitespace`,
+ * `emptyLines`, …) lands with the slice that introduces the matching
+ * `HxModuleWriteOptions` knob — the loader's forward-compat contract
+ * silently drops unknown keys, and the macro parser's
+ * `UnknownPolicy.Skip` inherited from `JsonFormat` enforces that at
+ * compile time.
+ */
+@:peg @:schema(anyparse.format.text.JsonFormat) @:ws
+typedef HxFormatConfig = {
+
+	@:optional var indentation:HxFormatIndentationSection;
+
+	@:optional var wrapping:HxFormatWrappingSection;
+
+	@:optional var sameLine:HxFormatSameLineSection;
+
+	@:optional var trailingCommas:HxFormatTrailingCommasSection;
+};

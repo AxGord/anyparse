@@ -28,6 +28,7 @@ import unit.HaxeFormatConfigLoaderTest;
 import unit.HaxeWriterRoundTripTest;
 import unit.JsonParserTest;
 import unit.JsonRoundTripTest;
+import unit.JsonTypedParserTest;
 import unit.SpanTest;
 import unit.ParseErrorTest;
 import unit.InputTest;
@@ -70,6 +71,7 @@ class RunTests {
 		runner.addCase(new HxTrailingCommaOptionsTest());
 		runner.addCase(new HaxeFormatConfigLoaderTest());
 		runner.addCase(new HaxeWriterRoundTripTest());
+		runner.addCase(new JsonTypedParserTest());
 		runner.addCase(new SpanTest());
 		runner.addCase(new ParseErrorTest());
 		runner.addCase(new InputTest());

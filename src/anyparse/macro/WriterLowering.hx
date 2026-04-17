@@ -566,6 +566,7 @@ class WriterLowering {
 		return switch underlying {
 			case 'Float': macro return _dt(formatFloat(value));
 			case 'Int': macro return _dt(Std.string(value));
+			case 'Bool': macro return _dt(value ? 'true' : 'false');
 			case 'String': macro return _dt(value);
 			case _:
 				Context.fatalError('WriterLowering: no encoder for underlying type "$underlying"', Context.currentPos());

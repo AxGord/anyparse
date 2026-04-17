@@ -884,6 +884,7 @@ class Lowering {
 	// -------- struct rule --------
 
 	private function lowerStruct(node:ShapeNode, typePath:String):Expr {
+		if (shouldLowerByName(node)) return lowerStructByName(node, typePath);
 		final parseSteps:Array<Expr> = [];
 		final structFields:Array<ObjectField> = [];
 		// Binary: @:magic prefix — validate fixed magic bytes before fields.
@@ -1182,6 +1183,8 @@ class Lowering {
 	// -------- terminal rule --------
 
 	private function lowerTerminal(node:ShapeNode, typePath:String, simple:String):Expr {
+		final stringEnumValues:Null<Array<{name:String, value:String}>> = node.annotations.get('base.stringEnumValues');
+		if (stringEnumValues != null) return lowerStringEnumTerminal(node, typePath, simple, stringEnumValues);
 		final pattern:Null<String> = node.annotations.get('re.pattern');
 		if (pattern == null) {
 			Context.fatalError('Lowering: terminal $typePath missing @:re', Context.currentPos());
@@ -1252,6 +1255,7 @@ class Lowering {
 					}
 					_v;
 				};
+			case 'Bool': macro _matched == 'true';
 			case 'String' if (raw): macro _matched;
 			case 'String':
 				Context.fatalError('Lowering: String terminal $typePath requires @:unescape, @:decode, or @:rawString', Context.currentPos());
@@ -1272,6 +1276,221 @@ class Lowering {
 			final _matched:String = $i{eregVar}.matched(0);
 			ctx.pos += _matched.length;
 			return $decodeExpr;
+		};
+	}
+
+	/**
+	 * Lower an `enum abstract(String)` terminal — parses the format's
+	 * string literal, then dispatches to the matching enum value via a
+	 * macro-time switch over the declared `name → value` pairs. Unknown
+	 * strings raise a `ParseError`. No regex is registered — the value
+	 * set is closed at compile time, so a literal switch is both faster
+	 * and cleaner than an `EReg` alternation.
+	 */
+	private function lowerStringEnumTerminal(
+		node:ShapeNode, typePath:String, simple:String, values:Array<{name:String, value:String}>
+	):Expr {
+		final stringType:Null<String> = formatInfo.stringType;
+		if (stringType == null) {
+			Context.fatalError(
+				'Lowering: enum-abstract(String) terminal $typePath requires the format ${formatInfo.schemaTypePath} to declare stringType',
+				Context.currentPos()
+			);
+			throw 'unreachable';
+		}
+		final pack:Array<String> = packOf(typePath);
+		final errMsg:String = 'invalid $simple value';
+		final cases:Array<Case> = [for (v in values) {
+			values: [{expr: EConst(CString(v.value)), pos: Context.currentPos()}],
+			expr: MacroStringTools.toFieldExpr(pack.concat([simple, v.name])),
+		}];
+		final defaultExpr:Expr = macro throw new anyparse.runtime.ParseError(
+			new anyparse.runtime.Span(_errPos, ctx.pos),
+			$v{errMsg} + ': "' + _matched + '"'
+		);
+		final switchExpr:Expr = {expr: ESwitch(macro _matched, cases, defaultExpr), pos: Context.currentPos()};
+		final stringFn:String = 'parse${simpleName(stringType)}';
+		final stringCall:Expr = {expr: ECall(macro $i{stringFn}, [macro ctx]), pos: Context.currentPos()};
+		return macro {
+			skipWs(ctx);
+			final _errPos:Int = ctx.pos;
+			final _matched:String = $stringCall;
+			return $switchExpr;
+		};
+	}
+
+	/**
+	 * True when the struct node should be lowered as a key-dispatched
+	 * (ByName) object. Two conditions must hold: the resolved format
+	 * has `fieldLookup == ByName` and no field on the struct carries
+	 * positional metadata (`@:kw`, `@:lead`, `@:trail`, `@:sep`) or
+	 * binary metadata. The positional Haxe grammar uses anchors to
+	 * describe fixed syntax — those structs stay on the original
+	 * positional codepath even though `HaxeFormat` also declares
+	 * `ByName`. Binary schemas never reach this branch (`isBinary`
+	 * short-circuits `fieldLookup` to a non-ByName default inside
+	 * `FormatReader`).
+	 */
+	private function shouldLowerByName(node:ShapeNode):Bool {
+		if (formatInfo.isBinary) return false;
+		if (formatInfo.fieldLookup != ByName) return false;
+		if (formatInfo.keySyntax != Quoted) return false;
+		if (node.annotations.get('bin.magic') != null) return false;
+		if (node.annotations.get('bin.align') != null) return false;
+		for (child in node.children) {
+			if (readMetaString(child, ':kw') != null) return false;
+			if (readMetaString(child, ':lead') != null) return false;
+			if (readMetaString(child, ':trail') != null) return false;
+			if (readMetaString(child, ':sep') != null) return false;
+		}
+		return true;
+	}
+
+	/**
+	 * Lower a typedef struct as a JSON-style key-dispatched object. The
+	 * generated body emits one `Null<T>` local per field, then runs a
+	 * loop that reads `"key"`, dispatches to the matching field's
+	 * parser, and finally materialises the struct literal. Unknown keys
+	 * are routed by the format's `onUnknown` policy — `Skip` silently
+	 * consumes the value via `_skipJsonValue`, `Error` raises a
+	 * `ParseError` naming the offending key. Non-optional fields are
+	 * checked for null after the loop and raise `ParseError` listing
+	 * the missing name; optional fields retain their `null` default.
+	 */
+	private function lowerStructByName(node:ShapeNode, typePath:String):Expr {
+		final structFields:Array<ObjectField> = [];
+		final declareLocals:Array<Expr> = [];
+		final switchCases:Array<Case> = [];
+		final missingChecks:Array<Expr> = [];
+		for (child in node.children) {
+			final fieldName:Null<String> = child.annotations.get('base.fieldName');
+			if (fieldName == null)
+				Context.fatalError('Lowering: ByName struct field missing base.fieldName', Context.currentPos());
+			final isOptional:Bool = child.annotations.get('base.optional') == true;
+			final fieldCT:Null<ComplexType> = child.annotations.get('base.fieldType');
+			if (fieldCT == null)
+				Context.fatalError('Lowering: ByName struct field "$fieldName" missing base.fieldType', Context.currentPos());
+			final localName:String = '_f_$fieldName';
+			final localCT:ComplexType = isOptional
+				? fieldCT
+				: TPath({pack: [], name: 'Null', params: [TPType(fieldCT)]});
+			declareLocals.push({
+				expr: EVars([{name: localName, type: localCT, expr: macro null, isFinal: false}]),
+				pos: Context.currentPos(),
+			});
+			final parseCall:Expr = byNameFieldParseExpr(child, fieldName);
+			switchCases.push({
+				values: [{expr: EConst(CString(fieldName)), pos: Context.currentPos()}],
+				expr: macro $i{localName} = $parseCall,
+			});
+			if (!isOptional) {
+				final errMsg:String = 'missing required field "$fieldName"';
+				final checkedName:String = '_r_$fieldName';
+				// Two-step unwrap: the `if (... == null) throw` narrows the
+				// local in the subsequent statement, and the `final` re-bind
+				// produces a non-null local that the struct literal can
+				// consume without tripping the object-literal inference
+				// collapsing back to Null<T>.
+				missingChecks.push(macro {
+					if ($i{localName} == null)
+						throw new anyparse.runtime.ParseError(
+							new anyparse.runtime.Span(ctx.pos, ctx.pos),
+							$v{errMsg}
+						);
+				});
+				missingChecks.push({
+					expr: EVars([{
+						name: checkedName,
+						type: fieldCT,
+						expr: macro $i{localName},
+						isFinal: true,
+					}]),
+					pos: Context.currentPos(),
+				});
+				structFields.push({field: fieldName, expr: macro $i{checkedName}});
+			} else {
+				structFields.push({field: fieldName, expr: macro $i{localName}});
+			}
+		}
+		final defaultExpr:Expr = switch formatInfo.onUnknown {
+			case Skip:
+				final anyType:Null<String> = formatInfo.anyType;
+				if (anyType == null) {
+					Context.fatalError(
+						'Lowering: UnknownPolicy.Skip requires the format ${formatInfo.schemaTypePath} to declare anyType (the universal-value grammar type used to consume unknown keys)',
+						Context.currentPos()
+					);
+					throw 'unreachable';
+				}
+				final anyFn:String = 'parse${simpleName(anyType)}';
+				macro {
+					$i{anyFn}(ctx);
+				};
+			case Error: macro throw new anyparse.runtime.ParseError(
+				new anyparse.runtime.Span(ctx.pos, ctx.pos),
+				'unknown field: "' + _key + '"'
+			);
+			case _:
+				Context.fatalError(
+					'Lowering: UnknownPolicy.Store is not supported in ByName mode (schema ${formatInfo.schemaTypePath})',
+					Context.currentPos()
+				);
+				throw 'unreachable';
+		};
+		final switchExpr:Expr = {expr: ESwitch(macro _key, switchCases, defaultExpr), pos: Context.currentPos()};
+		final stringType:Null<String> = formatInfo.stringType;
+		if (stringType == null) {
+			Context.fatalError(
+				'Lowering: ByName struct parsing requires the format ${formatInfo.schemaTypePath} to declare stringType (the grammar type used to parse mapping keys)',
+				Context.currentPos()
+			);
+			throw 'unreachable';
+		}
+		final keyFn:String = 'parse${simpleName(stringType)}';
+		final keyCall:Expr = {expr: ECall(macro $i{keyFn}, [macro ctx]), pos: Context.currentPos()};
+		final closeCharCode:Int = formatInfo.mappingClose.charCodeAt(0);
+		final mappingOpen:String = formatInfo.mappingOpen;
+		final mappingClose:String = formatInfo.mappingClose;
+		final keyValueSep:String = formatInfo.keyValueSep;
+		final entrySep:String = formatInfo.entrySep;
+		final structLiteral:Expr = {expr: EObjectDecl(structFields), pos: Context.currentPos()};
+		final parseSteps:Array<Expr> = [macro skipWs(ctx), macro expectLit(ctx, $v{mappingOpen})];
+		for (d in declareLocals) parseSteps.push(d);
+		parseSteps.push(macro {
+			skipWs(ctx);
+			if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}) {
+				while (true) {
+					skipWs(ctx);
+					final _key:String = $keyCall;
+					skipWs(ctx);
+					expectLit(ctx, $v{keyValueSep});
+					skipWs(ctx);
+					$switchExpr;
+					skipWs(ctx);
+					if (!matchLit(ctx, $v{entrySep})) break;
+				}
+			}
+			skipWs(ctx);
+			expectLit(ctx, $v{mappingClose});
+		});
+		for (c in missingChecks) parseSteps.push(c);
+		parseSteps.push(macro return $structLiteral);
+		return macro $b{parseSteps};
+	}
+
+	private function byNameFieldParseExpr(child:ShapeNode, fieldName:String):Expr {
+		return switch child.kind {
+			case Ref:
+				final refName:String = child.annotations.get('base.ref');
+				final fnName:String = 'parse${simpleName(refName)}';
+				{expr: ECall(macro $i{fnName}, [macro ctx]), pos: Context.currentPos()};
+			case _:
+				Context.fatalError(
+					'Lowering: ByName struct field "$fieldName" has unsupported kind ${child.kind}'
+						+ ' — format ${formatInfo.schemaTypePath} may be missing a primitive type mapping',
+					Context.currentPos()
+				);
+				throw 'unreachable';
 		};
 	}
 

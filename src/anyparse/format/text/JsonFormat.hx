@@ -48,6 +48,26 @@ final class JsonFormat implements TextFormat {
 	public var onMissing(default, null):MissingPolicy = MissingPolicy.Error;
 	public var onUnknown(default, null):UnknownPolicy = UnknownPolicy.Skip;
 
+	/**
+	 * Grammar-type paths for primitive JSON fields. The macro pipeline
+	 * routes `Int` / `Float` / `Bool` / `String` schema fields through
+	 * these named terminals so typed-JSON parsing reuses the standard
+	 * JSON decoders instead of re-implementing them per parser. `null`
+	 * for a slot disables the rewrite — the macro falls back to inline
+	 * primitive handling (binary mode).
+	 */
+	public var intType(default, null):Null<String> = 'anyparse.grammar.json.JIntLit';
+	public var floatType(default, null):Null<String> = 'anyparse.grammar.json.JNumberLit';
+	public var boolType(default, null):Null<String> = 'anyparse.grammar.json.JBoolLit';
+	public var stringType(default, null):Null<String> = 'anyparse.grammar.json.JStringLit';
+
+	/**
+	 * Universal container for "any JSON value". The ByName struct
+	 * codepath routes `UnknownPolicy.Skip` through `parseJValue` and
+	 * discards the result, avoiding a second hand-rolled skipper.
+	 */
+	public var anyType(default, null):Null<String> = 'anyparse.grammar.json.JValue';
+
 	public var intLiteral(default, null):EReg = ~/^-?(?:0|[1-9][0-9]*)/;
 	public var floatLiteral(default, null):EReg = ~/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][-+]?[0-9]+)?/;
 	public var boolLiterals(default, null):Null<BoolLiterals> = {trueLit: 'true', falseLit: 'false'};
