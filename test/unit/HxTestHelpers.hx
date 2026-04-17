@@ -2,7 +2,7 @@ package unit;
 
 import utest.Assert;
 import utest.Test;
-import anyparse.grammar.haxe.HaxeFastParser;
+import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxAbstractDecl;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxClassMember;
@@ -26,13 +26,13 @@ import anyparse.grammar.haxe.HxVarDecl;
 class HxTestHelpers extends Test {
 
 	private function parseSingleVarDecl(source:String):HxVarDecl {
-		final ast:HxClassDecl = HaxeFastParser.parse(source);
+		final ast:HxClassDecl = HaxeParser.parse(source);
 		Assert.equals(1, ast.members.length);
 		return expectVarMember(ast.members[0].member);
 	}
 
 	private function parseSingleFnDecl(source:String):HxFnDecl {
-		final ast:HxClassDecl = HaxeFastParser.parse(source);
+		final ast:HxClassDecl = HaxeParser.parse(source);
 		Assert.equals(1, ast.members.length);
 		return expectFnMember(ast.members[0].member);
 	}

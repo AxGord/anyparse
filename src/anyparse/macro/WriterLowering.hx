@@ -168,7 +168,7 @@ class WriterLowering {
 				final suffixRef:String = children[1].annotations.get('base.ref');
 				final suffixFn:String = 'write${simpleName(suffixRef)}';
 				final suffixCall:Expr = {
-					expr: ECall(macro $i{suffixFn}, [macro $i{argNames[1]}, macro indent]),
+					expr: ECall(macro $i{suffixFn}, [macro $i{argNames[1]}, macro opt]),
 					pos: Context.currentPos(),
 				};
 				final close:String = postfixClose ?? '';
@@ -208,9 +208,9 @@ class WriterLowering {
 			final subFn:String = 'write${simpleName(refName)}';
 			final isSelfRef:Bool = simpleName(refName) == simpleName(typePath);
 			final subCall:Expr = if (isSelfRef && hasPratt)
-				{expr: ECall(macro $i{subFn}, [macro $i{argNames[0]}, macro indent, macro -1]), pos: Context.currentPos()}
+				{expr: ECall(macro $i{subFn}, [macro $i{argNames[0]}, macro opt, macro -1]), pos: Context.currentPos()}
 			else
-				{expr: ECall(macro $i{subFn}, [macro $i{argNames[0]}, macro indent]), pos: Context.currentPos()};
+				{expr: ECall(macro $i{subFn}, [macro $i{argNames[0]}, macro opt]), pos: Context.currentPos()};
 
 			final parts:Array<Expr> = [];
 			if (kwLead != null) parts.push(macro _dt($v{kwLead + ' '}));
@@ -239,7 +239,7 @@ class WriterLowering {
 		final elemFn:String = isSelfRef ? writeFnName : 'write${simpleName(elemRefName)}';
 		final elemSep:String = branch.annotations.get('lit.sepText') ?? ',';
 
-		final elemCallArgs:Array<Expr> = [macro _args[_i], macro indent];
+		final elemCallArgs:Array<Expr> = [macro _args[_i], macro opt];
 		if (isSelfRef && hasPratt) elemCallArgs.push(macro -1);
 		final elemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, elemCallArgs),
@@ -255,7 +255,7 @@ class WriterLowering {
 				_docs.push($elemCall);
 				_i++;
 			}
-			_dc([$operandCall, sepList($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, indent)]);
+			_dc([$operandCall, sepList($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt)]);
 		};
 	}
 
@@ -274,7 +274,7 @@ class WriterLowering {
 		final isSelfRef:Bool = simpleName(elemRefName) == simpleName(typePath);
 		final elemFn:String = isSelfRef ? writeFnName : 'write${simpleName(elemRefName)}';
 
-		final elemCallArgs:Array<Expr> = [macro _args[_i], macro indent];
+		final elemCallArgs:Array<Expr> = [macro _args[_i], macro opt];
 		if (isSelfRef && hasPratt) elemCallArgs.push(macro -1);
 		final elemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, elemCallArgs),
@@ -294,7 +294,7 @@ class WriterLowering {
 					_docs.push($elemCall);
 					_i++;
 				}
-				sepList($v{leadText}, $v{trailText}, $v{sepText}, _docs, indent);
+				sepList($v{leadText}, $v{trailText}, $v{sepText}, _docs, opt);
 			});
 		} else {
 			parts.push(macro {
@@ -305,7 +305,7 @@ class WriterLowering {
 					_docs.push($elemCall);
 					_i++;
 				}
-				blockBody($v{leadText}, $v{trailText}, _docs, indent);
+				blockBody($v{leadText}, $v{trailText}, _docs, opt);
 			});
 		}
 		return if (parts.length == 1) parts[0]
@@ -356,7 +356,7 @@ class WriterLowering {
 					final refName:String = child.annotations.get('base.ref');
 					final writeFn:String = 'write${simpleName(refName)}';
 					final writeCall:Expr = {
-						expr: ECall(macro $i{writeFn}, [macro _optVal, macro indent]),
+						expr: ECall(macro $i{writeFn}, [macro _optVal, macro opt]),
 						pos: Context.currentPos(),
 					};
 					final optParts:Array<Expr> = [];
@@ -376,7 +376,7 @@ class WriterLowering {
 					final refName:String = child.annotations.get('base.ref');
 					final writeFn:String = 'write${simpleName(refName)}';
 					final writeCall:Expr = {
-						expr: ECall(macro $i{writeFn}, [fieldAccess, macro indent]),
+						expr: ECall(macro $i{writeFn}, [fieldAccess, macro opt]),
 						pos: Context.currentPos(),
 					};
 					if (kwLead == null && leadText == null && !isFirstField && !isRaw)
@@ -414,7 +414,7 @@ class WriterLowering {
 		final sepText:Null<String> = starNode.annotations.get('lit.sepText');
 
 		final elemCall:Expr = {
-			expr: ECall(macro $i{elemFn}, [macro _arr[_si], macro indent]),
+			expr: ECall(macro $i{elemFn}, [macro _arr[_si], macro opt]),
 			pos: Context.currentPos(),
 		};
 
@@ -445,7 +445,7 @@ class WriterLowering {
 					_docs.push($elemCall);
 					_si++;
 				}
-				sepList($v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, indent);
+				sepList($v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt);
 			});
 		} else if (closeText != null) {
 			if (!isFirstField && !isRaw) parts.push(macro _dt(' '));
@@ -457,7 +457,7 @@ class WriterLowering {
 					_docs.push($elemCall);
 					_si++;
 				}
-				blockBody($v{openText ?? '{'}, $v{closeText}, _docs, indent);
+				blockBody($v{openText ?? '{'}, $v{closeText}, _docs, opt);
 			});
 		} else if (!isLastField || hasMeta(starNode, ':tryparse')) {
 			// Try-parse mode. Emit lead if present (e.g. ':' in default:).
@@ -548,7 +548,7 @@ class WriterLowering {
 	}
 
 	private static function makeWriteCall(writeFnName:String, valueExpr:Expr, hasPratt:Bool, ctxPrec:Int):Expr {
-		final args:Array<Expr> = [valueExpr, macro indent];
+		final args:Array<Expr> = [valueExpr, macro opt];
 		if (hasPratt) args.push(macro $v{ctxPrec});
 		return {
 			expr: ECall(macro $i{writeFnName}, args),

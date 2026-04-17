@@ -9,4 +9,4 @@ package anyparse.grammar.ar;
  */
 @:build(anyparse.macro.Build.buildWriter(anyparse.grammar.ar.ArArchive))
 @:nullSafety(Strict)
-class ArArchiveFastWriter {}
+class ArArchiveWriter {}

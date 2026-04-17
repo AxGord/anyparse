@@ -1,8 +1,8 @@
 package unit;
 
 import utest.Assert;
-import anyparse.grammar.haxe.HaxeFastParser;
-import anyparse.grammar.haxe.HaxeModuleFastParser;
+import anyparse.grammar.haxe.HaxeParser;
+import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxModule;
@@ -75,18 +75,18 @@ class HxExprSliceTest extends HxTestHelpers {
 	public function testRejectsEmptyInit():Void {
 		// `var x:Int = ;` — the `=` is consumed, the sub-rule
 		// parseHxExpr(ctx) then sees `;` and every branch fails.
-		Assert.raises(() -> HaxeFastParser.parse('class Foo { var x:Int = ; }'), ParseError);
+		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Int = ; }'), ParseError);
 	}
 
 	public function testRejectsMissingSemicolonAfterInit():Void {
 		// `var x:Int = 42` — the VarMember's trailing `;` is missing;
 		// `HxClassMember` fails and the outer loop fails.
-		Assert.raises(() -> HaxeFastParser.parse('class Foo { var x:Int = 42 }'), ParseError);
+		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Int = 42 }'), ParseError);
 	}
 
 	public function testMixedInitInClass():Void {
 		final source:String = 'class Foo { var a:Int; var b:Bool = true; var c:Ty = null; var d:Int = 7; }';
-		final ast:HxClassDecl = HaxeFastParser.parse(source);
+		final ast:HxClassDecl = HaxeParser.parse(source);
 		Assert.equals('Foo', (ast.name : String));
 		Assert.equals(4, ast.members.length);
 
@@ -109,7 +109,7 @@ class HxExprSliceTest extends HxTestHelpers {
 
 	public function testInitAcrossModuleRoot():Void {
 		final source:String = 'class A { var x:Int = 1; } class B { var y:Bool = false; }';
-		final module:HxModule = HaxeModuleFastParser.parse(source);
+		final module:HxModule = HaxeModuleParser.parse(source);
 		Assert.equals(2, module.decls.length);
 
 		final a:HxClassDecl = expectClassDecl(module.decls[0]);

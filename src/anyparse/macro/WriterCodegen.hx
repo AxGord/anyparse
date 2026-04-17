@@ -12,9 +12,12 @@ import haxe.macro.Expr;
  * be plugged into a marker class via `@:build`.
  *
  * What WriterCodegen owns:
- *  - Writing the `write(value, indent, lineWidth)` public entry point
- *    that calls the root write function and hands the Doc to Renderer.
- *  - Emitting the per-rule `writeXxx(value, indent)` functions.
+ *  - Writing the `write(value, ?options)` public entry point that
+ *    resolves options against the format's defaults, calls the root
+ *    write function, and hands the Doc to Renderer.
+ *  - Emitting the per-rule `writeXxx(value, opt)` functions. Internal
+ *    helpers operate on a fully resolved `WriteOptions` struct — no
+ *    nullable fields, no per-call defaulting.
  *  - Emitting Doc wrapper helpers (`_dt`, `_dc`, etc.) that avoid
  *    direct enum constructor calls in macro expressions.
  *  - Emitting layout helpers (`blockBody`, `sepList`) and encoding
@@ -26,15 +29,19 @@ class WriterCodegen {
 		rules:Array<WriterLowering.WriterRule>,
 		rootTypePath:String,
 		rootReturnCT:ComplexType,
-		formatInfo:FormatReader.FormatInfo
+		formatInfo:FormatReader.FormatInfo,
+		optionsTypePath:Null<String>
 	):Array<Field> {
 		final fields:Array<Field> = [];
 		if (formatInfo.isBinary) {
 			fields.push(binaryEntry(rootTypePath, rootReturnCT));
 			for (rule in rules) fields.push(binaryRuleField(rule));
 		} else {
-			fields.push(publicEntry(rootTypePath, rootReturnCT));
-			for (rule in rules) fields.push(ruleField(rule));
+			if (optionsTypePath == null)
+				Context.fatalError('WriterCodegen.emit: text writer requires optionsTypePath', Context.currentPos());
+			final optionsCT:ComplexType = optionsComplexType(optionsTypePath);
+			fields.push(publicEntry(rootTypePath, rootReturnCT, formatInfo, optionsCT));
+			for (rule in rules) fields.push(ruleField(rule, optionsCT));
 			// Doc wrapper helpers
 			for (f in docHelperFields()) fields.push(f);
 			// Layout helpers
@@ -49,14 +56,24 @@ class WriterCodegen {
 
 	// -------- public entry point --------
 
-	private static function publicEntry(rootTypePath:String, rootReturnCT:ComplexType):Field {
+	private static function publicEntry(
+		rootTypePath:String, rootReturnCT:ComplexType,
+		formatInfo:FormatReader.FormatInfo,
+		optionsCT:ComplexType
+	):Field {
 		final rootFn:String = 'write${simpleName(rootTypePath)}';
+		final fmtParts:Array<String> = formatInfo.schemaTypePath.split('.');
+		final defaultOptsExpr:Expr = {
+			expr: EField(macro $p{fmtParts}.instance, 'defaultWriteOptions'),
+			pos: Context.currentPos(),
+		};
 		final writeCall:Expr = {
-			expr: ECall(macro $i{rootFn}, [macro value, macro indent]),
+			expr: ECall(macro $i{rootFn}, [macro value, macro _opt]),
 			pos: Context.currentPos(),
 		};
 		final body:Expr = macro {
-			return anyparse.core.Renderer.render($writeCall, lineWidth);
+			final _opt:$optionsCT = options ?? $defaultOptsExpr;
+			return anyparse.core.Renderer.render($writeCall, _opt.lineWidth);
 		};
 		return {
 			name: 'write',
@@ -64,14 +81,24 @@ class WriterCodegen {
 			kind: FFun({
 				args: [
 					{name: 'value', type: rootReturnCT},
-					{name: 'indent', type: macro : Int, value: macro 4},
-					{name: 'lineWidth', type: macro : Int, value: macro 120},
+					{name: 'options', type: macro : Null<$optionsCT>, value: macro null},
 				],
 				ret: macro : String,
 				expr: body,
 			}),
 			pos: Context.currentPos(),
 		};
+	}
+
+	private static function optionsComplexType(optionsTypePath:String):ComplexType {
+		final simple:String = simpleName(optionsTypePath);
+		final pack:Array<String> = packOf(optionsTypePath);
+		return TPath({pack: pack, name: simple, params: []});
+	}
+
+	private static function packOf(typePath:String):Array<String> {
+		final idx:Int = typePath.lastIndexOf('.');
+		return idx == -1 ? [] : typePath.substring(0, idx).split('.');
 	}
 
 	private static function binaryEntry(rootTypePath:String, rootReturnCT:ComplexType):Field {
@@ -115,10 +142,10 @@ class WriterCodegen {
 
 	// -------- per-rule fields --------
 
-	private static function ruleField(rule:WriterLowering.WriterRule):Field {
+	private static function ruleField(rule:WriterLowering.WriterRule, optionsCT:ComplexType):Field {
 		final args:Array<FunctionArg> = [
 			{name: 'value', type: rule.valueCT},
-			{name: 'indent', type: macro : Int},
+			{name: 'opt', type: optionsCT},
 		];
 		if (rule.hasCtxPrec)
 			args.push({name: 'ctxPrec', type: macro : Int, value: macro -1});
@@ -175,7 +202,8 @@ class WriterCodegen {
 				_items.push(docs[_i]);
 				_i++;
 			}
-			return _dc([_dt(open), _dn(indent, _dc(_items)), _dhl(), _dt(close)]);
+			final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+			return _dc([_dt(open), _dn(_cols, _dc(_items)), _dhl(), _dt(close)]);
 		};
 		return {
 			name: 'blockBody',
@@ -185,7 +213,7 @@ class WriterCodegen {
 					{name: 'open', type: macro : String},
 					{name: 'close', type: macro : String},
 					{name: 'docs', type: macro : Array<anyparse.core.Doc>},
-					{name: 'indent', type: macro : Int},
+					{name: 'opt', type: macro : anyparse.format.WriteOptions},
 				],
 				ret: macro : anyparse.core.Doc,
 				expr: body,
@@ -208,7 +236,8 @@ class WriterCodegen {
 				_inner.push(items[_i]);
 				_i++;
 			}
-			return _dg(_dc([_dt(open), _dn(indent, _dc([_dsl(), _dc(_inner)])), _dsl(), _dt(close)]));
+			final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+			return _dg(_dc([_dt(open), _dn(_cols, _dc([_dsl(), _dc(_inner)])), _dsl(), _dt(close)]));
 		};
 		return {
 			name: 'sepList',
@@ -219,7 +248,7 @@ class WriterCodegen {
 					{name: 'close', type: macro : String},
 					{name: 'sep', type: macro : String},
 					{name: 'items', type: macro : Array<anyparse.core.Doc>},
-					{name: 'indent', type: macro : Int},
+					{name: 'opt', type: macro : anyparse.format.WriteOptions},
 				],
 				ret: macro : anyparse.core.Doc,
 				expr: body,

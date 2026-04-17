@@ -1,7 +1,7 @@
 package unit;
 
 import utest.Assert;
-import anyparse.grammar.haxe.HaxeModuleFastParser;
+import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxCaseBranch;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxDefaultBranch;
@@ -207,7 +207,7 @@ class HxSwitchNewSliceTest extends HxTestHelpers {
 	}
 
 	public function testSwitchInModule():Void {
-		final module:HxModule = HaxeModuleFastParser.parse(
+		final module:HxModule = HaxeModuleParser.parse(
 			'class C { function f():Void { switch (x) { case 1: y; default: z; } } }'
 		);
 		Assert.equals(1, module.decls.length);
@@ -352,7 +352,7 @@ class HxSwitchNewSliceTest extends HxTestHelpers {
 	}
 
 	public function testNewInModule():Void {
-		final module:HxModule = HaxeModuleFastParser.parse(
+		final module:HxModule = HaxeModuleParser.parse(
 			'class C { function f():Void { new Foo(1); } }'
 		);
 		Assert.equals(1, module.decls.length);

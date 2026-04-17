@@ -22,12 +22,13 @@ import unit.HxStringSliceTest;
 import unit.HxArrowArraySliceTest;
 import unit.HxParamSliceTest;
 import unit.HxPrefixSliceTest;
-import unit.HaxeFastWriterRoundTripTest;
-import unit.JsonFastParserTest;
-import unit.JsonFastRoundTripTest;
+import unit.HaxeWriterRoundTripTest;
+import unit.JsonParserTest;
+import unit.JsonRoundTripTest;
 import unit.SpanTest;
 import unit.ParseErrorTest;
 import unit.InputTest;
+import unit.WriteOptionsTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -38,8 +39,8 @@ class RunTests {
 		var runner = new utest.Runner();
 		runner.addCase(new ArParserTest());
 		runner.addCase(new DocRendererTest());
-		runner.addCase(new JsonFastParserTest());
-		runner.addCase(new JsonFastRoundTripTest());
+		runner.addCase(new JsonParserTest());
+		runner.addCase(new JsonRoundTripTest());
 		runner.addCase(new HaxeFirstSliceTest());
 		runner.addCase(new HaxeModuleSliceTest());
 		runner.addCase(new HxExprSliceTest());
@@ -62,10 +63,11 @@ class RunTests {
 		runner.addCase(new HxAbstractSliceTest());
 		runner.addCase(new HxStringSliceTest());
 		runner.addCase(new HxArrowArraySliceTest());
-		runner.addCase(new HaxeFastWriterRoundTripTest());
+		runner.addCase(new HaxeWriterRoundTripTest());
 		runner.addCase(new SpanTest());
 		runner.addCase(new ParseErrorTest());
 		runner.addCase(new InputTest());
+		runner.addCase(new WriteOptionsTest());
 		utest.ui.Report.create(runner);
 		runner.run();
 	}

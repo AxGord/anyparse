@@ -1,8 +1,8 @@
 package unit;
 
 import utest.Assert;
-import anyparse.grammar.haxe.HaxeFastParser;
-import anyparse.grammar.haxe.HaxeModuleFastParser;
+import anyparse.grammar.haxe.HaxeParser;
+import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnDecl;
@@ -78,7 +78,7 @@ class HxArrowArraySliceTest extends HxTestHelpers {
 
 	/** Arrow in return statement. */
 	public function testArrowInReturn():Void {
-		final ast:HxClassDecl = HaxeFastParser.parse('class C { function f():Int { return x => x; } }');
+		final ast:HxClassDecl = HaxeParser.parse('class C { function f():Int { return x => x; } }');
 		final fn:HxFnDecl = expectFnMember(ast.members[0].member);
 		Assert.equals(1, fn.body.length);
 		switch fn.body[0] {
@@ -163,7 +163,7 @@ class HxArrowArraySliceTest extends HxTestHelpers {
 
 	/** `return (x) => x;` -> arrow in return. */
 	public function testParenLambdaInReturn():Void {
-		final ast:HxClassDecl = HaxeFastParser.parse('class C { function f():Int { return (x) => x; } }');
+		final ast:HxClassDecl = HaxeParser.parse('class C { function f():Int { return (x) => x; } }');
 		final fn:HxFnDecl = expectFnMember(ast.members[0].member);
 		Assert.equals(1, fn.body.length);
 		switch fn.body[0] {
@@ -291,7 +291,7 @@ class HxArrowArraySliceTest extends HxTestHelpers {
 	/** Arrow and array parsed through module root. */
 	public function testArrowInModule():Void {
 		final source:String = 'class A { var f:Int = x => x; } class B { var a:Int = [1, 2]; }';
-		final mod:HxModule = HaxeModuleFastParser.parse(source);
+		final mod:HxModule = HaxeModuleParser.parse(source);
 		Assert.equals(2, mod.decls.length);
 		final a:HxClassDecl = expectClassDecl(mod.decls[0]);
 		final b:HxClassDecl = expectClassDecl(mod.decls[1]);
@@ -338,6 +338,6 @@ class HxArrowArraySliceTest extends HxTestHelpers {
 
 	/** Unclosed array `[1, 2` -> rejection. */
 	public function testRejectsUnclosedArray():Void {
-		Assert.raises(() -> HaxeFastParser.parse('class C { var a:Int = [1, 2; }'), ParseError);
+		Assert.raises(() -> HaxeParser.parse('class C { var a:Int = [1, 2; }'), ParseError);
 	}
 }

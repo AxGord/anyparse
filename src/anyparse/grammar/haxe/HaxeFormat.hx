@@ -1,6 +1,8 @@
 package anyparse.grammar.haxe;
 
 import anyparse.format.Encoding;
+import anyparse.format.IndentChar;
+import anyparse.format.WriteOptions;
 import anyparse.format.text.FieldLookup;
 import anyparse.format.text.KeySyntax;
 import anyparse.format.text.MissingPolicy;
@@ -67,6 +69,20 @@ final class HaxeFormat implements TextFormat {
 	public var floatLiteral(default, null):EReg = ~/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][-+]?[0-9]+)?/;
 	public var boolLiterals(default, null):Null<BoolLiterals> = {trueLit: 'true', falseLit: 'false'};
 	public var nullLiteral(default, null):Null<String> = 'null';
+
+	/**
+	 * Default `WriteOptions` for Haxe output: tab indent, 4-column tab
+	 * width, terminal newline. Generated Haxe writers use this struct
+	 * when the caller omits the `options` argument to `write()`.
+	 */
+	public var defaultWriteOptions(default, null):WriteOptions = {
+		indentChar: Tab,
+		indentSize: 1,
+		tabWidth: 4,
+		lineWidth: 120,
+		lineEnd: '\n',
+		finalNewline: true,
+	};
 
 	private function new() {}
 

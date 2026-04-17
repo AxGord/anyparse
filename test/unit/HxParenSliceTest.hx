@@ -1,7 +1,7 @@
 package unit;
 
 import utest.Assert;
-import anyparse.grammar.haxe.HaxeFastParser;
+import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxVarDecl;
 import anyparse.runtime.ParseError;
@@ -95,7 +95,7 @@ class HxParenSliceTest extends HxTestHelpers {
 		// no matching close. `parseHxExprAtom` on the right side of
 		// `+` fails to find any atom and throws, which propagates
 		// out of the enum-branch try/catch and fails the whole parse.
-		Assert.raises(() -> HaxeFastParser.parse('class Foo { var x:Int = (1 +; }'), ParseError);
+		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Int = (1 +; }'), ParseError);
 	}
 
 }

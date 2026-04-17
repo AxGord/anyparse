@@ -1,8 +1,8 @@
 package unit;
 
 import utest.Assert;
-import anyparse.grammar.haxe.HaxeFastParser;
-import anyparse.grammar.haxe.HaxeModuleFastParser;
+import anyparse.grammar.haxe.HaxeParser;
+import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnDecl;
@@ -173,7 +173,7 @@ class HxTernarySliceTest extends HxTestHelpers {
 	// ---- integration ----
 
 	public function testTernaryInReturnStmt():Void {
-		final ast:HxClassDecl = HaxeFastParser.parse('class Foo { function f():Int { return a ? b : c; } }');
+		final ast:HxClassDecl = HaxeParser.parse('class Foo { function f():Int { return a ? b : c; } }');
 		Assert.equals(1, ast.members.length);
 		final fn:HxFnDecl = expectFnMember(ast.members[0].member);
 		Assert.equals(1, fn.body.length);
@@ -188,7 +188,7 @@ class HxTernarySliceTest extends HxTestHelpers {
 	}
 
 	public function testTernaryThroughModuleRoot():Void {
-		final mod:HxModule = HaxeModuleFastParser.parse('class A { var x:Int = a ?? b ? c : d; }');
+		final mod:HxModule = HaxeModuleParser.parse('class A { var x:Int = a ?? b ? c : d; }');
 		Assert.equals(1, mod.decls.length);
 		final cls:HxClassDecl = expectClassDecl(mod.decls[0]);
 		Assert.equals(1, cls.members.length);
@@ -225,14 +225,14 @@ class HxTernarySliceTest extends HxTestHelpers {
 	// ---- rejections ----
 
 	public function testRejectsMissingMiddleAndColon():Void {
-		Assert.raises(() -> HaxeFastParser.parse('class Foo { var x:Int = a ? ; }'), ParseError);
+		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Int = a ? ; }'), ParseError);
 	}
 
 	public function testRejectsMissingColon():Void {
-		Assert.raises(() -> HaxeFastParser.parse('class Foo { var x:Int = a ? b ; }'), ParseError);
+		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Int = a ? b ; }'), ParseError);
 	}
 
 	public function testRejectsMissingRightOperand():Void {
-		Assert.raises(() -> HaxeFastParser.parse('class Foo { var x:Int = a ? b : ; }'), ParseError);
+		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Int = a ? b : ; }'), ParseError);
 	}
 }

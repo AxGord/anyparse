@@ -1,7 +1,7 @@
 package unit;
 
 import utest.Assert;
-import anyparse.grammar.haxe.HaxeModuleFastParser;
+import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxCatchClause;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxDoWhileStmt;
@@ -109,7 +109,7 @@ class HxDoWhileThrowTryCatchSliceTest extends HxTestHelpers {
 	}
 
 	public function testThrowInModule():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('class C { function f():Void { throw 42; } }');
+		final module:HxModule = HaxeModuleParser.parse('class C { function f():Void { throw 42; } }');
 		Assert.equals(1, module.decls.length);
 		final cls:HxClassDecl = expectClassDecl(module.decls[0]);
 		Assert.equals(1, cls.members.length);
@@ -341,7 +341,7 @@ class HxDoWhileThrowTryCatchSliceTest extends HxTestHelpers {
 	}
 
 	public function testTryCatchInModule():Void {
-		final module:HxModule = HaxeModuleFastParser.parse(
+		final module:HxModule = HaxeModuleParser.parse(
 			'class C { function f():Void { try { } catch (ex:Exception) { } } }'
 		);
 		Assert.equals(1, module.decls.length);

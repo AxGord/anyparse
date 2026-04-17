@@ -3,14 +3,14 @@ package unit;
 import utest.Assert;
 import utest.Test;
 // Importing JValue first ensures its `@:build` macro has run before the
-// compiler tries to resolve `JValueFastParser` below — the latter is
+// compiler tries to resolve `JValueParser` below — the latter is
 // contributed by the macro rather than existing as a source file.
 import anyparse.grammar.json.JValue;
-import anyparse.grammar.json.JValueFastParser;
+import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueTools;
 
 /**
- * JSON parser corpus against the macro-generated `JValueFastParser`.
+ * JSON parser corpus against the macro-generated `JValueParser`.
  *
  * The only JSON parser in the project — there is no hand-written
  * reference any more. Every assertion below both locks the macro
@@ -18,14 +18,14 @@ import anyparse.grammar.json.JValueTools;
  * for the slice decisions captured in `docs/roadmap.md`.
  */
 @:nullSafety(Strict)
-class JsonFastParserTest extends Test {
+class JsonParserTest extends Test {
 
 	public function new():Void {
 		super();
 	}
 
 	private function parseEq(input:String, expected:JValue):Void {
-		final actual:JValue = JValueFastParser.parse(input);
+		final actual:JValue = JValueParser.parse(input);
 		Assert.isTrue(JValueTools.equals(expected, actual),
 			'parse of <$input> gave $actual, expected $expected');
 	}
@@ -131,22 +131,22 @@ class JsonFastParserTest extends Test {
 	}
 
 	public function testRejectsTrailingData():Void {
-		Assert.raises(() -> JValueFastParser.parse('42 garbage'));
+		Assert.raises(() -> JValueParser.parse('42 garbage'));
 	}
 
 	public function testRejectsUnclosedString():Void {
-		Assert.raises(() -> JValueFastParser.parse('"unclosed'));
+		Assert.raises(() -> JValueParser.parse('"unclosed'));
 	}
 
 	public function testRejectsUnclosedArray():Void {
-		Assert.raises(() -> JValueFastParser.parse('[1, 2'));
+		Assert.raises(() -> JValueParser.parse('[1, 2'));
 	}
 
 	public function testRejectsUnclosedObject():Void {
-		Assert.raises(() -> JValueFastParser.parse('{"x":1'));
+		Assert.raises(() -> JValueParser.parse('{"x":1'));
 	}
 
 	public function testRejectsInvalidNumber():Void {
-		Assert.raises(() -> JValueFastParser.parse('12abc'));
+		Assert.raises(() -> JValueParser.parse('12abc'));
 	}
 }

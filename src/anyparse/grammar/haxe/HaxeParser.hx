@@ -15,4 +15,4 @@ package anyparse.grammar.haxe;
  */
 @:build(anyparse.macro.Build.buildParser(anyparse.grammar.haxe.HxClassDecl))
 @:nullSafety(Strict)
-class HaxeFastParser {}
+class HaxeParser {}

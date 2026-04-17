@@ -1,6 +1,8 @@
 package anyparse.format.text;
 
 import anyparse.format.Encoding;
+import anyparse.format.IndentChar;
+import anyparse.format.WriteOptions;
 import anyparse.format.text.TextFormat.BlockComment;
 import anyparse.format.text.TextFormat.BoolLiterals;
 import anyparse.format.text.TextFormat.UnescapeResult;
@@ -50,6 +52,20 @@ final class JsonFormat implements TextFormat {
 	public var floatLiteral(default, null):EReg = ~/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][-+]?[0-9]+)?/;
 	public var boolLiterals(default, null):Null<BoolLiterals> = {trueLit: 'true', falseLit: 'false'};
 	public var nullLiteral(default, null):Null<String> = 'null';
+
+	/**
+	 * Default `WriteOptions` for JSON output: 4-space indent, no trailing
+	 * newline. Generated JSON writers use this struct when the caller
+	 * omits the `options` argument to `write()`.
+	 */
+	public var defaultWriteOptions(default, null):WriteOptions = {
+		indentChar: Space,
+		indentSize: 4,
+		tabWidth: 4,
+		lineWidth: 120,
+		lineEnd: '\n',
+		finalNewline: false,
+	};
 
 	private function new() {}
 

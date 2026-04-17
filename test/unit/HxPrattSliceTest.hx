@@ -1,8 +1,8 @@
 package unit;
 
 import utest.Assert;
-import anyparse.grammar.haxe.HaxeFastParser;
-import anyparse.grammar.haxe.HaxeModuleFastParser;
+import anyparse.grammar.haxe.HaxeParser;
+import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxModule;
@@ -216,7 +216,7 @@ class HxPrattSliceTest extends HxTestHelpers {
 		// `1 +` — the `+` literal matches, skipWs runs, and then the
 		// right-hand parseHxExpr tries every atom branch and fails
 		// on the `;` terminator.
-		Assert.raises(() -> HaxeFastParser.parse('class Foo { var x:Int = 1 +; }'), ParseError);
+		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Int = 1 +; }'), ParseError);
 	}
 
 	public function testAddIdentAndInt():Void {
@@ -248,10 +248,10 @@ class HxPrattSliceTest extends HxTestHelpers {
 
 	public function testExprThroughModuleRoot():Void {
 		// Smoke-test the Pratt loop from the module root so the
-		// second marker class (HaxeModuleFastParser) also exercises
+		// second marker class (HaxeModuleParser) also exercises
 		// the new rule pair.
 		final source:String = 'class A { var x:Int = 1 + 2 * 3; } class B { var y:Float = 0.5; }';
-		final module:HxModule = HaxeModuleFastParser.parse(source);
+		final module:HxModule = HaxeModuleParser.parse(source);
 		Assert.equals(2, module.decls.length);
 
 		final a:HxClassDecl = expectClassDecl(module.decls[0]);

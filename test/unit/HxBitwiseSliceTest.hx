@@ -1,8 +1,8 @@
 package unit;
 
 import utest.Assert;
-import anyparse.grammar.haxe.HaxeFastParser;
-import anyparse.grammar.haxe.HaxeModuleFastParser;
+import anyparse.grammar.haxe.HaxeParser;
+import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxModule;
@@ -40,7 +40,7 @@ import anyparse.runtime.ParseError;
  *    slice introduces
  *  - left-associative chains at the two new precedence levels
  *  - rejections for malformed input
- *  - end-to-end through `HaxeModuleFastParser`
+ *  - end-to-end through `HaxeModuleParser`
  */
 class HxBitwiseSliceTest extends HxTestHelpers {
 
@@ -281,15 +281,15 @@ class HxBitwiseSliceTest extends HxTestHelpers {
 
 	public function testRejectsTrailingShl():Void {
 		// `a <<;` — shift matches, right-operand parser fails on `;`.
-		Assert.raises(() -> HaxeFastParser.parse('class Foo { var x:Int = a <<; }'), ParseError);
+		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Int = a <<; }'), ParseError);
 	}
 
 	public function testRejectsTrailingBitAnd():Void {
 		// `a &;` — bitwise matches, right-operand parser fails on `;`.
-		Assert.raises(() -> HaxeFastParser.parse('class Foo { var x:Int = a &; }'), ParseError);
+		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Int = a &; }'), ParseError);
 	}
 
-	// -------- end-to-end through HaxeModuleFastParser --------
+	// -------- end-to-end through HaxeModuleParser --------
 
 	public function testModuleWithShiftAndBitwise():Void {
 		// Prove the two new precedence levels flow through the
@@ -298,7 +298,7 @@ class HxBitwiseSliceTest extends HxTestHelpers {
 		// other a bitwise initializer — the module parser must land
 		// both without cross-talk or trailing-garbage errors.
 		final source:String = 'class A { var x:Int = 1 << 2; } class B { var y:Int = 3 | 4; }';
-		final module:HxModule = HaxeModuleFastParser.parse(source);
+		final module:HxModule = HaxeModuleParser.parse(source);
 		Assert.equals(2, module.decls.length);
 
 		final a:HxClassDecl = expectClassDecl(module.decls[0]);

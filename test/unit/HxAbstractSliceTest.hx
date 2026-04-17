@@ -1,7 +1,7 @@
 package unit;
 
 import utest.Assert;
-import anyparse.grammar.haxe.HaxeModuleFastParser;
+import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxAbstractDecl;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxEnumDecl;
@@ -22,7 +22,7 @@ class HxAbstractSliceTest extends HxTestHelpers {
 	// -- Basic abstract --
 
 	public function testEmptyAbstract():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('abstract Foo(Int) {}');
+		final module:HxModule = HaxeModuleParser.parse('abstract Foo(Int) {}');
 		Assert.equals(1, module.decls.length);
 		final ad:HxAbstractDecl = expectAbstractDecl(module.decls[0]);
 		Assert.equals('Foo', (ad.name : String));
@@ -32,7 +32,7 @@ class HxAbstractSliceTest extends HxTestHelpers {
 	}
 
 	public function testAbstractWhitespace():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('  abstract  Foo  (  Int  )  {  }  ');
+		final module:HxModule = HaxeModuleParser.parse('  abstract  Foo  (  Int  )  {  }  ');
 		Assert.equals(1, module.decls.length);
 		final ad:HxAbstractDecl = expectAbstractDecl(module.decls[0]);
 		Assert.equals('Foo', (ad.name : String));
@@ -44,7 +44,7 @@ class HxAbstractSliceTest extends HxTestHelpers {
 	// -- from/to clauses --
 
 	public function testSingleFrom():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('abstract Foo(Int) from Int {}');
+		final module:HxModule = HaxeModuleParser.parse('abstract Foo(Int) from Int {}');
 		Assert.equals(1, module.decls.length);
 		final ad:HxAbstractDecl = expectAbstractDecl(module.decls[0]);
 		Assert.equals('Foo', (ad.name : String));
@@ -57,7 +57,7 @@ class HxAbstractSliceTest extends HxTestHelpers {
 	}
 
 	public function testSingleTo():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('abstract Foo(Int) to String {}');
+		final module:HxModule = HaxeModuleParser.parse('abstract Foo(Int) to String {}');
 		Assert.equals(1, module.decls.length);
 		final ad:HxAbstractDecl = expectAbstractDecl(module.decls[0]);
 		Assert.equals(1, ad.clauses.length);
@@ -68,7 +68,7 @@ class HxAbstractSliceTest extends HxTestHelpers {
 	}
 
 	public function testFromAndTo():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('abstract Foo(Int) from Int to String {}');
+		final module:HxModule = HaxeModuleParser.parse('abstract Foo(Int) from Int to String {}');
 		Assert.equals(1, module.decls.length);
 		final ad:HxAbstractDecl = expectAbstractDecl(module.decls[0]);
 		Assert.equals(2, ad.clauses.length);
@@ -83,7 +83,7 @@ class HxAbstractSliceTest extends HxTestHelpers {
 	}
 
 	public function testMultipleFromTo():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('abstract Foo(Int) from Int from Float to String to Bool {}');
+		final module:HxModule = HaxeModuleParser.parse('abstract Foo(Int) from Int from Float to String to Bool {}');
 		Assert.equals(1, module.decls.length);
 		final ad:HxAbstractDecl = expectAbstractDecl(module.decls[0]);
 		Assert.equals(4, ad.clauses.length);
@@ -106,7 +106,7 @@ class HxAbstractSliceTest extends HxTestHelpers {
 	}
 
 	public function testClausesWhitespace():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('abstract Foo ( Int )  from  Int  to  String  { }');
+		final module:HxModule = HaxeModuleParser.parse('abstract Foo ( Int )  from  Int  to  String  { }');
 		Assert.equals(1, module.decls.length);
 		final ad:HxAbstractDecl = expectAbstractDecl(module.decls[0]);
 		Assert.equals(2, ad.clauses.length);
@@ -116,7 +116,7 @@ class HxAbstractSliceTest extends HxTestHelpers {
 	// -- Members --
 
 	public function testAbstractWithVar():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('abstract Foo(Int) { var x:Int; }');
+		final module:HxModule = HaxeModuleParser.parse('abstract Foo(Int) { var x:Int; }');
 		Assert.equals(1, module.decls.length);
 		final ad:HxAbstractDecl = expectAbstractDecl(module.decls[0]);
 		Assert.equals(0, ad.clauses.length);
@@ -127,7 +127,7 @@ class HxAbstractSliceTest extends HxTestHelpers {
 	}
 
 	public function testAbstractWithFunction():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('abstract Foo(Int) { function f():Void {} }');
+		final module:HxModule = HaxeModuleParser.parse('abstract Foo(Int) { function f():Void {} }');
 		Assert.equals(1, module.decls.length);
 		final ad:HxAbstractDecl = expectAbstractDecl(module.decls[0]);
 		Assert.equals(1, ad.members.length);
@@ -137,7 +137,7 @@ class HxAbstractSliceTest extends HxTestHelpers {
 	}
 
 	public function testAbstractWithModifiers():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('abstract Foo(Int) { public static inline function f():Void {} }');
+		final module:HxModule = HaxeModuleParser.parse('abstract Foo(Int) { public static inline function f():Void {} }');
 		Assert.equals(1, module.decls.length);
 		final ad:HxAbstractDecl = expectAbstractDecl(module.decls[0]);
 		Assert.equals(1, ad.members.length);
@@ -147,7 +147,7 @@ class HxAbstractSliceTest extends HxTestHelpers {
 	}
 
 	public function testAbstractWithClausesAndMembers():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('abstract Foo(Int) from Int to String { var x:Int; function f():Void {} }');
+		final module:HxModule = HaxeModuleParser.parse('abstract Foo(Int) from Int to String { var x:Int; function f():Void {} }');
 		Assert.equals(1, module.decls.length);
 		final ad:HxAbstractDecl = expectAbstractDecl(module.decls[0]);
 		Assert.equals(2, ad.clauses.length);
@@ -157,7 +157,7 @@ class HxAbstractSliceTest extends HxTestHelpers {
 	// -- Module integration --
 
 	public function testAbstractInModule():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('class Bar {} abstract Foo(Int) {}');
+		final module:HxModule = HaxeModuleParser.parse('class Bar {} abstract Foo(Int) {}');
 		Assert.equals(2, module.decls.length);
 		final cls:HxClassDecl = expectClassDecl(module.decls[0]);
 		Assert.equals('Bar', (cls.name : String));
@@ -167,7 +167,7 @@ class HxAbstractSliceTest extends HxTestHelpers {
 
 	public function testMixedModuleWithAbstract():Void {
 		final source:String = 'class Foo {} abstract Bar(Int) from Int {} enum Color { Red; }';
-		final module:HxModule = HaxeModuleFastParser.parse(source);
+		final module:HxModule = HaxeModuleParser.parse(source);
 		Assert.equals(3, module.decls.length);
 		final cls:HxClassDecl = expectClassDecl(module.decls[0]);
 		Assert.equals('Foo', (cls.name : String));
@@ -181,20 +181,20 @@ class HxAbstractSliceTest extends HxTestHelpers {
 	// -- Word boundary --
 
 	public function testWordBoundaryAbstractly():Void {
-		Assert.raises(() -> HaxeModuleFastParser.parse('abstractly Foo(Int) {}'), ParseError);
+		Assert.raises(() -> HaxeModuleParser.parse('abstractly Foo(Int) {}'), ParseError);
 	}
 
 	// -- Rejections --
 
 	public function testRejectsMissingOpenParen():Void {
-		Assert.raises(() -> HaxeModuleFastParser.parse('abstract Foo Int) {}'), ParseError);
+		Assert.raises(() -> HaxeModuleParser.parse('abstract Foo Int) {}'), ParseError);
 	}
 
 	public function testRejectsMissingCloseParen():Void {
-		Assert.raises(() -> HaxeModuleFastParser.parse('abstract Foo(Int {}'), ParseError);
+		Assert.raises(() -> HaxeModuleParser.parse('abstract Foo(Int {}'), ParseError);
 	}
 
 	public function testRejectsMissingBody():Void {
-		Assert.raises(() -> HaxeModuleFastParser.parse('abstract Foo(Int)'), ParseError);
+		Assert.raises(() -> HaxeModuleParser.parse('abstract Foo(Int)'), ParseError);
 	}
 }

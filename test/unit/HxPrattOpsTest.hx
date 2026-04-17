@@ -1,7 +1,7 @@
 package unit;
 
 import utest.Assert;
-import anyparse.grammar.haxe.HaxeFastParser;
+import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxVarDecl;
 import anyparse.runtime.ParseError;
@@ -318,14 +318,14 @@ class HxPrattOpsTest extends HxTestHelpers {
 
 	public function testRejectsTrailingLt():Void {
 		// `1 <;` — `<` matches, right operand parser fails on `;`.
-		Assert.raises(() -> HaxeFastParser.parse('class Foo { var x:Bool = 1 <; }'), ParseError);
+		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Bool = 1 <; }'), ParseError);
 	}
 
 	public function testRejectsLeadingLtEq():Void {
 		// `<= 1;` — atom parser tries every branch, all fail on `<`
 		// because the identifier regex rejects it and no literal
 		// matches it as an atom.
-		Assert.raises(() -> HaxeFastParser.parse('class Foo { var x:Bool = <= 1; }'), ParseError);
+		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Bool = <= 1; }'), ParseError);
 	}
 
 }

@@ -19,11 +19,11 @@ import anyparse.macro.strategy.Ternary;
 
 /**
  * `@:build` entry point. Applied to a marker class like
- * `JValueFastParser` with the grammar root type as an argument:
+ * `JValueParser` with the grammar root type as an argument:
  *
  * ```haxe
  * @:build(anyparse.macro.Build.buildParser(anyparse.grammar.json.JValue))
- * class JValueFastParser {}
+ * class JValueParser {}
  * ```
  *
  * The marker-class pattern is deliberate: placing `@:build` on the
@@ -96,7 +96,7 @@ class Build {
 		return fields;
 	}
 
-	public static macro function buildWriter(target:Expr):Array<Field> {
+	public static macro function buildWriter(target:Expr, ?options:Expr):Array<Field> {
 		final targetTypePath:String = ExprTools.toString(target);
 		final rootType:Type = Context.getType(targetTypePath);
 
@@ -112,6 +112,14 @@ class Build {
 
 		final schemaTypePath:String = readSchemaMeta(rootMeta, targetTypePath);
 		final formatInfo:FormatReader.FormatInfo = FormatReader.resolve(schemaTypePath);
+
+		final optionsTypePath:Null<String> = extractTypePath(options);
+		if (optionsTypePath == null && !formatInfo.isBinary)
+			Context.fatalError('Build.buildWriter: text writer requires an options typedef — '
+				+ 'use @:build(Build.buildWriter($targetTypePath, <OptionsT>))', Context.currentPos());
+		if (optionsTypePath != null && formatInfo.isBinary)
+			Context.fatalError('Build.buildWriter: binary writer does not accept an options typedef '
+				+ '— drop the second argument', Context.currentPos());
 
 		final ctx:LoweringCtx = new LoweringCtx();
 		ctx.mode = Mode.Fast;
@@ -139,7 +147,7 @@ class Build {
 
 		final rootSimple:String = simpleName(shape.root);
 		final rootReturnCT:ComplexType = TPath({pack: packOf(shape.root), name: rootSimple, params: []});
-		final fields:Array<Field> = WriterCodegen.emit(rules, shape.root, rootReturnCT, formatInfo);
+		final fields:Array<Field> = WriterCodegen.emit(rules, shape.root, rootReturnCT, formatInfo, optionsTypePath);
 
 		#if anyparse_dump
 		final printer:haxe.macro.Printer = new haxe.macro.Printer();
@@ -147,6 +155,17 @@ class Build {
 		#end
 
 		return fields;
+	}
+
+	private static function extractTypePath(e:Null<Expr>):Null<String> {
+		if (e == null) return null;
+		// Haxe passes a null-literal Expr (`EConst(CIdent("null"))`) when the
+		// caller omits an optional macro arg at a `@:build(...)` meta call,
+		// rather than letting the macro see a plain `null` reference.
+		return switch e.expr {
+			case EConst(CIdent('null')): null;
+			case _: ExprTools.toString(e);
+		};
 	}
 
 	private static function readSchemaMeta(meta:Metadata, targetTypePath:String):String {

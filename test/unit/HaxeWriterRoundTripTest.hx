@@ -2,8 +2,8 @@ package unit;
 
 import utest.Assert;
 import utest.Test;
-import anyparse.grammar.haxe.HxModuleFastWriter;
-import anyparse.grammar.haxe.HaxeModuleFastParser;
+import anyparse.grammar.haxe.HxModuleWriter;
+import anyparse.grammar.haxe.HaxeModuleParser;
 
 /**
  * Idempotency round-trip tests for the macro-generated writer.
@@ -12,12 +12,12 @@ import anyparse.grammar.haxe.HaxeModuleFastParser;
  * The first write normalises formatting; the second write must produce
  * identical output, proving the generated writer emits parseable, stable text.
  */
-class HaxeFastWriterRoundTripTest extends Test {
+class HaxeWriterRoundTripTest extends Test {
 
 	private function roundTrip(source:String, ?label:String):Void {
-		final written1:String = HxModuleFastWriter.write(HaxeModuleFastParser.parse(source));
+		final written1:String = HxModuleWriter.write(HaxeModuleParser.parse(source));
 		final written2:String = try {
-			HxModuleFastWriter.write(HaxeModuleFastParser.parse(written1));
+			HxModuleWriter.write(HaxeModuleParser.parse(written1));
 		} catch (e:Dynamic) {
 			Assert.fail("reparse failed for " + (label ?? source) + ": written1=<" + written1 + ">, err=" + e);
 			return;

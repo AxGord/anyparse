@@ -1,7 +1,7 @@
 package unit;
 
 import utest.Assert;
-import anyparse.grammar.haxe.HaxeModuleFastParser;
+import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxEnumCtor;
 import anyparse.grammar.haxe.HxEnumCtorDecl;
@@ -114,7 +114,7 @@ class HxForEnumVoidSliceTest extends HxTestHelpers {
 	}
 
 	public function testForInModule():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('class C { function f():Void { for (x in items) x; } }');
+		final module:HxModule = HaxeModuleParser.parse('class C { function f():Void { for (x in items) x; } }');
 		Assert.equals(1, module.decls.length);
 		final cls:HxClassDecl = expectClassDecl(module.decls[0]);
 		final fn:HxFnDecl = expectFnMember(cls.members[0].member);
@@ -144,7 +144,7 @@ class HxForEnumVoidSliceTest extends HxTestHelpers {
 	// ---- Enum ctor parameters tests ----
 
 	public function testSimpleCtorStillWorks():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('enum Color { Red; Green; Blue; }');
+		final module:HxModule = HaxeModuleParser.parse('enum Color { Red; Green; Blue; }');
 		final ed:HxEnumDecl = expectEnumDecl(module.decls[0]);
 		Assert.equals(3, ed.ctors.length);
 		Assert.equals('Red', (expectSimpleCtor(ed.ctors[0]) : String));
@@ -153,7 +153,7 @@ class HxForEnumVoidSliceTest extends HxTestHelpers {
 	}
 
 	public function testSingleParamCtor():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('enum Option { Some(v:Int); None; }');
+		final module:HxModule = HaxeModuleParser.parse('enum Option { Some(v:Int); None; }');
 		final ed:HxEnumDecl = expectEnumDecl(module.decls[0]);
 		Assert.equals(2, ed.ctors.length);
 		final decl:HxEnumCtorDecl = expectParamCtor(ed.ctors[0]);
@@ -165,7 +165,7 @@ class HxForEnumVoidSliceTest extends HxTestHelpers {
 	}
 
 	public function testMultiParamCtor():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('enum Color { Rgb(r:Int, g:Int, b:Int); }');
+		final module:HxModule = HaxeModuleParser.parse('enum Color { Rgb(r:Int, g:Int, b:Int); }');
 		final ed:HxEnumDecl = expectEnumDecl(module.decls[0]);
 		Assert.equals(1, ed.ctors.length);
 		final decl:HxEnumCtorDecl = expectParamCtor(ed.ctors[0]);
@@ -177,7 +177,7 @@ class HxForEnumVoidSliceTest extends HxTestHelpers {
 	}
 
 	public function testCtorWithDefaultValue():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('enum E { A(x:Int = 0); }');
+		final module:HxModule = HaxeModuleParser.parse('enum E { A(x:Int = 0); }');
 		final ed:HxEnumDecl = expectEnumDecl(module.decls[0]);
 		Assert.equals(1, ed.ctors.length);
 		final decl:HxEnumCtorDecl = expectParamCtor(ed.ctors[0]);
@@ -191,7 +191,7 @@ class HxForEnumVoidSliceTest extends HxTestHelpers {
 	}
 
 	public function testMixedSimpleAndParamCtors():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('enum Expr { Lit(v:Int); Add(a:Int, b:Int); Nil; }');
+		final module:HxModule = HaxeModuleParser.parse('enum Expr { Lit(v:Int); Add(a:Int, b:Int); Nil; }');
 		final ed:HxEnumDecl = expectEnumDecl(module.decls[0]);
 		Assert.equals(3, ed.ctors.length);
 		final lit:HxEnumCtorDecl = expectParamCtor(ed.ctors[0]);
@@ -204,7 +204,7 @@ class HxForEnumVoidSliceTest extends HxTestHelpers {
 	}
 
 	public function testZeroParamCtorVsBareSimple():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('enum E { A(); B; }');
+		final module:HxModule = HaxeModuleParser.parse('enum E { A(); B; }');
 		final ed:HxEnumDecl = expectEnumDecl(module.decls[0]);
 		Assert.equals(2, ed.ctors.length);
 		final a:HxEnumCtorDecl = expectParamCtor(ed.ctors[0]);
@@ -214,7 +214,7 @@ class HxForEnumVoidSliceTest extends HxTestHelpers {
 	}
 
 	public function testEnumCtorWhitespace():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('  enum  E  {  A ( x : Int , y : Int ) ;  B ;  }  ');
+		final module:HxModule = HaxeModuleParser.parse('  enum  E  {  A ( x : Int , y : Int ) ;  B ;  }  ');
 		final ed:HxEnumDecl = expectEnumDecl(module.decls[0]);
 		Assert.equals(2, ed.ctors.length);
 		final a:HxEnumCtorDecl = expectParamCtor(ed.ctors[0]);
@@ -223,7 +223,7 @@ class HxForEnumVoidSliceTest extends HxTestHelpers {
 	}
 
 	public function testEnumCtorInModule():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('class Foo {} enum Option { Some(v:Int); None; }');
+		final module:HxModule = HaxeModuleParser.parse('class Foo {} enum Option { Some(v:Int); None; }');
 		Assert.equals(2, module.decls.length);
 		final ed:HxEnumDecl = expectEnumDecl(module.decls[1]);
 		Assert.equals(2, ed.ctors.length);
@@ -284,7 +284,7 @@ class HxForEnumVoidSliceTest extends HxTestHelpers {
 	}
 
 	public function testVoidReturnInModule():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('class C { function f():Void { return; } }');
+		final module:HxModule = HaxeModuleParser.parse('class C { function f():Void { return; } }');
 		Assert.equals(1, module.decls.length);
 		final cls:HxClassDecl = expectClassDecl(module.decls[0]);
 		final fn:HxFnDecl = expectFnMember(cls.members[0].member);

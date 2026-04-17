@@ -21,7 +21,7 @@ The workhorse. Each test is a small assertion about a specific input-output beha
 
 ```haxe
 function testParsesSimpleObject() {
-  var result = JValueFastParser.parse('{"x":1}');
+  var result = JValueParser.parse('{"x":1}');
   Assert.isTrue(JValueTools.equals(
     JObject([{key: "x", value: JNumber(1)}]),
     result
@@ -71,8 +71,8 @@ function testRandomCases() {
   var rng = new SeededRng(42);
   for (i in 0...200) {
     var ast = randomValue(rng, depth: 4);
-    var written = JValueFastWriter.write(ast);
-    var reparsed = JValueFastParser.parse(written);
+    var written = JValueWriter.write(ast);
+    var reparsed = JValueParser.parse(written);
     Assert.isTrue(JValueTools.equals(ast, reparsed), 'round-trip failed: ast=$ast, written=$written');
   }
 }
@@ -86,7 +86,7 @@ function testRandomCases() {
 
 **Every grammar gets one**. When a new grammar is added, a round-trip test is part of the pull request. No grammar is "done" until it has passing round-trip tests.
 
-Already in place: `test/unit/JsonFastRoundTripTest.hx` with ~30 curated cases plus 200 randomly generated ones (both write and parse go through the macro-generated pipeline).
+Already in place: `test/unit/JsonRoundTripTest.hx` with ~30 curated cases plus 200 randomly generated ones (both write and parse go through the macro-generated pipeline).
 
 ## Layer 4: Cross-family round-trip tests
 

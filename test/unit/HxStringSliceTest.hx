@@ -1,8 +1,8 @@
 package unit;
 
 import utest.Assert;
-import anyparse.grammar.haxe.HaxeFastParser;
-import anyparse.grammar.haxe.HaxeModuleFastParser;
+import anyparse.grammar.haxe.HaxeParser;
+import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnDecl;
@@ -219,7 +219,7 @@ class HxStringSliceTest extends HxTestHelpers {
 
 	/** String in return statement. */
 	public function testStringInReturn():Void {
-		final ast:HxClassDecl = HaxeFastParser.parse('class Foo { function bar():String { return "ok"; } }');
+		final ast:HxClassDecl = HaxeParser.parse('class Foo { function bar():String { return "ok"; } }');
 		final fn:HxFnDecl = expectFnMember(ast.members[0].member);
 		Assert.equals(1, fn.body.length);
 		switch fn.body[0] {
@@ -239,7 +239,7 @@ class HxStringSliceTest extends HxTestHelpers {
 	/** Module-root integration with interpolated single-quoted string. */
 	public function testModuleIntegration():Void {
 		final source:String = "class A { var s:String = \"hello\"; } class B { var t:String = '$name'; }";
-		final mod:HxModule = HaxeModuleFastParser.parse(source);
+		final mod:HxModule = HaxeModuleParser.parse(source);
 		Assert.equals(2, mod.decls.length);
 		final a:HxClassDecl = expectClassDecl(mod.decls[0]);
 		final b:HxClassDecl = expectClassDecl(mod.decls[1]);
@@ -253,12 +253,12 @@ class HxStringSliceTest extends HxTestHelpers {
 
 	/** Unterminated double-quoted string -> rejection. */
 	public function testRejectsUnterminatedDouble():Void {
-		Assert.raises(() -> HaxeFastParser.parse('class Foo { var x:String = "hello; }'), ParseError);
+		Assert.raises(() -> HaxeParser.parse('class Foo { var x:String = "hello; }'), ParseError);
 	}
 
 	/** Unterminated single-quoted string -> rejection. */
 	public function testRejectsUnterminatedSingle():Void {
-		Assert.raises(() -> HaxeFastParser.parse("class Foo { var x:String = 'hello; }"), ParseError);
+		Assert.raises(() -> HaxeParser.parse("class Foo { var x:String = 'hello; }"), ParseError);
 	}
 
 	// -------- assertion helpers --------

@@ -16,4 +16,4 @@ package anyparse.grammar.json;
  */
 @:build(anyparse.macro.Build.buildParser(anyparse.grammar.json.JValue))
 @:nullSafety(Strict)
-class JValueFastParser {}
+class JValueParser {}

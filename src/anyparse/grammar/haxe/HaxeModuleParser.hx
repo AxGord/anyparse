@@ -4,7 +4,7 @@ package anyparse.grammar.haxe;
  * Marker class for the macro-generated Fast-mode parser of
  * `HxModule` — the multi-declaration Haxe module root.
  *
- * Lives alongside the existing `HaxeFastParser` (rooted on
+ * Lives alongside the existing `HaxeParser` (rooted on
  * `HxClassDecl`). Having two marker classes on the same grammar
  * package validates that the marker-class pattern scales to
  * multiple roots: the macro generates a distinct set of
@@ -18,4 +18,4 @@ package anyparse.grammar.haxe;
  */
 @:build(anyparse.macro.Build.buildParser(anyparse.grammar.haxe.HxModule))
 @:nullSafety(Strict)
-class HaxeModuleFastParser {}
+class HaxeModuleParser {}

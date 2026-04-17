@@ -6,8 +6,8 @@ import utest.Test;
 // Importing JValue first so its `@:build` macros define the sibling
 // Fast parser and Fast writer before the imports below resolve.
 import anyparse.grammar.json.JValue;
-import anyparse.grammar.json.JValueFastParser;
-import anyparse.grammar.json.JValueFastWriter;
+import anyparse.grammar.json.JValueParser;
+import anyparse.grammar.json.JValueWriter;
 import anyparse.grammar.json.JValueTools;
 
 /**
@@ -17,18 +17,18 @@ import anyparse.grammar.json.JValueTools;
  * with a reproducible seed.
  */
 @:nullSafety(Strict)
-class JsonFastRoundTripTest extends Test {
+class JsonRoundTripTest extends Test {
 
 	public function new():Void {
 		super();
 	}
 
 	private function roundTrip(ast:JValue, ?label:String):Void {
-		final written:String = JValueFastWriter.write(ast);
+		final written:String = JValueWriter.write(ast);
 		final tag:String = label ?? 'case';
 		var reparsed:JValue;
 		try {
-			reparsed = JValueFastParser.parse(written);
+			reparsed = JValueParser.parse(written);
 		} catch (exception:Exception) {
 			Assert.fail('parse failed for $tag: written=<$written>, err=${exception.message}');
 			return;

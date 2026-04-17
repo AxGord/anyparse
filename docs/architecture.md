@@ -279,7 +279,7 @@ Choosing mode:
 class JValue { ... }
 
 // Use Fast for hot paths:
-var v1 = JValueFastParser.parse(bytes);              // bare JValue
+var v1 = JValueParser.parse(bytes);              // bare JValue
 
 // Use Tolerant for diagnostics and IDE:
 var v2 = JValueTolerantParser.parse(bytes, ctx);     // ParseResult<Node<JValue>>

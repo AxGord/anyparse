@@ -1,7 +1,7 @@
 package unit;
 
 import utest.Assert;
-import anyparse.grammar.haxe.HaxeModuleFastParser;
+import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxEnumDecl;
 import anyparse.grammar.haxe.HxFnDecl;
@@ -23,7 +23,7 @@ class HxTopLevelSliceTest extends HxTestHelpers {
 	// -- Typedef tests --
 
 	public function testSimpleTypedef():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('typedef Foo = Bar;');
+		final module:HxModule = HaxeModuleParser.parse('typedef Foo = Bar;');
 		Assert.equals(1, module.decls.length);
 		final td:HxTypedefDecl = expectTypedefDecl(module.decls[0]);
 		Assert.equals('Foo', (td.name : String));
@@ -31,7 +31,7 @@ class HxTopLevelSliceTest extends HxTestHelpers {
 	}
 
 	public function testTypedefWhitespace():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('  typedef  Foo  =  Bar ;  ');
+		final module:HxModule = HaxeModuleParser.parse('  typedef  Foo  =  Bar ;  ');
 		Assert.equals(1, module.decls.length);
 		final td:HxTypedefDecl = expectTypedefDecl(module.decls[0]);
 		Assert.equals('Foo', (td.name : String));
@@ -39,7 +39,7 @@ class HxTopLevelSliceTest extends HxTestHelpers {
 	}
 
 	public function testTypedefInModule():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('typedef Foo = Bar; class Baz {}');
+		final module:HxModule = HaxeModuleParser.parse('typedef Foo = Bar; class Baz {}');
 		Assert.equals(2, module.decls.length);
 		final td:HxTypedefDecl = expectTypedefDecl(module.decls[0]);
 		Assert.equals('Foo', (td.name : String));
@@ -48,17 +48,17 @@ class HxTopLevelSliceTest extends HxTestHelpers {
 	}
 
 	public function testRejectsTypedefMissingEquals():Void {
-		Assert.raises(() -> HaxeModuleFastParser.parse('typedef Foo Bar;'), ParseError);
+		Assert.raises(() -> HaxeModuleParser.parse('typedef Foo Bar;'), ParseError);
 	}
 
 	public function testRejectsTypedefMissingSemicolon():Void {
-		Assert.raises(() -> HaxeModuleFastParser.parse('typedef Foo = Bar class Baz {}'), ParseError);
+		Assert.raises(() -> HaxeModuleParser.parse('typedef Foo = Bar class Baz {}'), ParseError);
 	}
 
 	// -- Enum tests --
 
 	public function testEmptyEnum():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('enum Color {}');
+		final module:HxModule = HaxeModuleParser.parse('enum Color {}');
 		Assert.equals(1, module.decls.length);
 		final ed:HxEnumDecl = expectEnumDecl(module.decls[0]);
 		Assert.equals('Color', (ed.name : String));
@@ -66,7 +66,7 @@ class HxTopLevelSliceTest extends HxTestHelpers {
 	}
 
 	public function testSingleCtor():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('enum Color { Red; }');
+		final module:HxModule = HaxeModuleParser.parse('enum Color { Red; }');
 		Assert.equals(1, module.decls.length);
 		final ed:HxEnumDecl = expectEnumDecl(module.decls[0]);
 		Assert.equals('Color', (ed.name : String));
@@ -75,7 +75,7 @@ class HxTopLevelSliceTest extends HxTestHelpers {
 	}
 
 	public function testMultipleCtors():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('enum Color { Red; Green; Blue; }');
+		final module:HxModule = HaxeModuleParser.parse('enum Color { Red; Green; Blue; }');
 		Assert.equals(1, module.decls.length);
 		final ed:HxEnumDecl = expectEnumDecl(module.decls[0]);
 		Assert.equals('Color', (ed.name : String));
@@ -86,7 +86,7 @@ class HxTopLevelSliceTest extends HxTestHelpers {
 	}
 
 	public function testEnumWhitespace():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('  enum  Color  {  Red ;  Green ;  }  ');
+		final module:HxModule = HaxeModuleParser.parse('  enum  Color  {  Red ;  Green ;  }  ');
 		Assert.equals(1, module.decls.length);
 		final ed:HxEnumDecl = expectEnumDecl(module.decls[0]);
 		Assert.equals(2, ed.ctors.length);
@@ -95,7 +95,7 @@ class HxTopLevelSliceTest extends HxTestHelpers {
 	}
 
 	public function testEnumInModule():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('class Foo {} enum Color { Red; }');
+		final module:HxModule = HaxeModuleParser.parse('class Foo {} enum Color { Red; }');
 		Assert.equals(2, module.decls.length);
 		final cls:HxClassDecl = expectClassDecl(module.decls[0]);
 		Assert.equals('Foo', (cls.name : String));
@@ -105,13 +105,13 @@ class HxTopLevelSliceTest extends HxTestHelpers {
 	}
 
 	public function testRejectsUnclosedEnum():Void {
-		Assert.raises(() -> HaxeModuleFastParser.parse('enum Color { Red;'), ParseError);
+		Assert.raises(() -> HaxeModuleParser.parse('enum Color { Red;'), ParseError);
 	}
 
 	// -- Interface tests --
 
 	public function testEmptyInterface():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('interface IFoo {}');
+		final module:HxModule = HaxeModuleParser.parse('interface IFoo {}');
 		Assert.equals(1, module.decls.length);
 		final id:HxInterfaceDecl = expectInterfaceDecl(module.decls[0]);
 		Assert.equals('IFoo', (id.name : String));
@@ -119,7 +119,7 @@ class HxTopLevelSliceTest extends HxTestHelpers {
 	}
 
 	public function testInterfaceWithVar():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('interface IFoo { var x:Int; }');
+		final module:HxModule = HaxeModuleParser.parse('interface IFoo { var x:Int; }');
 		Assert.equals(1, module.decls.length);
 		final id:HxInterfaceDecl = expectInterfaceDecl(module.decls[0]);
 		Assert.equals(1, id.members.length);
@@ -129,7 +129,7 @@ class HxTopLevelSliceTest extends HxTestHelpers {
 	}
 
 	public function testInterfaceWithFunction():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('interface IFoo { function f():Void {} }');
+		final module:HxModule = HaxeModuleParser.parse('interface IFoo { function f():Void {} }');
 		Assert.equals(1, module.decls.length);
 		final id:HxInterfaceDecl = expectInterfaceDecl(module.decls[0]);
 		Assert.equals(1, id.members.length);
@@ -139,7 +139,7 @@ class HxTopLevelSliceTest extends HxTestHelpers {
 	}
 
 	public function testInterfaceWithModifiers():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('interface IFoo { public function f():Void {} }');
+		final module:HxModule = HaxeModuleParser.parse('interface IFoo { public function f():Void {} }');
 		Assert.equals(1, module.decls.length);
 		final id:HxInterfaceDecl = expectInterfaceDecl(module.decls[0]);
 		Assert.equals(1, id.members.length);
@@ -149,7 +149,7 @@ class HxTopLevelSliceTest extends HxTestHelpers {
 	}
 
 	public function testInterfaceInModule():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('class Foo {} interface IBar {}');
+		final module:HxModule = HaxeModuleParser.parse('class Foo {} interface IBar {}');
 		Assert.equals(2, module.decls.length);
 		final cls:HxClassDecl = expectClassDecl(module.decls[0]);
 		Assert.equals('Foo', (cls.name : String));
@@ -161,7 +161,7 @@ class HxTopLevelSliceTest extends HxTestHelpers {
 
 	public function testMixedModule():Void {
 		final source:String = 'class Foo {} typedef Bar = Int; enum Color { Red; Green; } interface IBaz {}';
-		final module:HxModule = HaxeModuleFastParser.parse(source);
+		final module:HxModule = HaxeModuleParser.parse(source);
 		Assert.equals(4, module.decls.length);
 
 		final cls:HxClassDecl = expectClassDecl(module.decls[0]);
@@ -180,14 +180,14 @@ class HxTopLevelSliceTest extends HxTestHelpers {
 	}
 
 	public function testWordBoundaryTypedefine():Void {
-		Assert.raises(() -> HaxeModuleFastParser.parse('typedefine Foo = Bar;'), ParseError);
+		Assert.raises(() -> HaxeModuleParser.parse('typedefine Foo = Bar;'), ParseError);
 	}
 
 	public function testWordBoundaryEnumerate():Void {
-		Assert.raises(() -> HaxeModuleFastParser.parse('enumerate Color {}'), ParseError);
+		Assert.raises(() -> HaxeModuleParser.parse('enumerate Color {}'), ParseError);
 	}
 
 	public function testWordBoundaryInterfacing():Void {
-		Assert.raises(() -> HaxeModuleFastParser.parse('interfacing IFoo {}'), ParseError);
+		Assert.raises(() -> HaxeModuleParser.parse('interfacing IFoo {}'), ParseError);
 	}
 }

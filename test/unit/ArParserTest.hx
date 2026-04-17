@@ -1,8 +1,8 @@
 package unit;
 
 import anyparse.grammar.ar.ArArchive;
-import anyparse.grammar.ar.ArArchiveFastParser;
-import anyparse.grammar.ar.ArArchiveFastWriter;
+import anyparse.grammar.ar.ArArchiveParser;
+import anyparse.grammar.ar.ArArchiveWriter;
 import anyparse.grammar.ar.ArEntry;
 import haxe.io.Bytes;
 import utest.Assert;
@@ -67,7 +67,7 @@ class ArParserTest extends utest.Test {
 	}
 
 	public function testParseMinimalAr():Void {
-		final ar:ArArchive = ArArchiveFastParser.parse(buildMinimalAr());
+		final ar:ArArchive = ArArchiveParser.parse(buildMinimalAr());
 		Assert.equals(1, ar.entries.length);
 		final e:ArEntry = ar.entries[0];
 		Assert.equals('hello.txt/', e.name);
@@ -76,14 +76,14 @@ class ArParserTest extends utest.Test {
 	}
 
 	public function testParseTwoEntries():Void {
-		final ar:ArArchive = ArArchiveFastParser.parse(buildTwoEntryAr());
+		final ar:ArArchive = ArArchiveParser.parse(buildTwoEntryAr());
 		Assert.equals(2, ar.entries.length);
 		Assert.equals('abcd', ar.entries[0].data.toString());
 		Assert.equals('xyz', ar.entries[1].data.toString());
 	}
 
 	public function testHeaderFields():Void {
-		final ar:ArArchive = ArArchiveFastParser.parse(buildMinimalAr());
+		final ar:ArArchive = ArArchiveParser.parse(buildMinimalAr());
 		final e:ArEntry = ar.entries[0];
 		Assert.equals(1700000000, e.mtime);
 		Assert.equals(1000, e.ownerId);
@@ -92,8 +92,8 @@ class ArParserTest extends utest.Test {
 	}
 
 	public function testWriteMinimal():Void {
-		final ar:ArArchive = ArArchiveFastParser.parse(buildMinimalAr());
-		final written:Bytes = ArArchiveFastWriter.write(ar);
+		final ar:ArArchive = ArArchiveParser.parse(buildMinimalAr());
+		final written:Bytes = ArArchiveWriter.write(ar);
 		final original:Bytes = buildMinimalAr();
 		Assert.equals(original.length, written.length);
 		Assert.equals(0, original.compare(written));
@@ -101,8 +101,8 @@ class ArParserTest extends utest.Test {
 
 	public function testRoundTripTwoEntries():Void {
 		final original:Bytes = buildTwoEntryAr();
-		final ar:ArArchive = ArArchiveFastParser.parse(original);
-		final written:Bytes = ArArchiveFastWriter.write(ar);
+		final ar:ArArchive = ArArchiveParser.parse(original);
+		final written:Bytes = ArArchiveWriter.write(ar);
 		Assert.equals(original.length, written.length);
 		Assert.equals(0, original.compare(written));
 	}
@@ -117,8 +117,8 @@ class ArParserTest extends utest.Test {
 			data: Bytes.ofString('foobar'),
 		};
 		final archive:ArArchive = {entries: [entry]};
-		final written:Bytes = ArArchiveFastWriter.write(archive);
-		final parsed:ArArchive = ArArchiveFastParser.parse(written);
+		final written:Bytes = ArArchiveWriter.write(archive);
+		final parsed:ArArchive = ArArchiveParser.parse(written);
 		Assert.equals(1, parsed.entries.length);
 		Assert.equals('foobar', parsed.entries[0].data.toString());
 		Assert.equals('test.dat/', parsed.entries[0].name);
@@ -126,6 +126,6 @@ class ArParserTest extends utest.Test {
 
 	public function testRejectsBadMagic():Void {
 		final bad:Bytes = Bytes.ofString('BADMAGIC\nhello');
-		Assert.raises(() -> ArArchiveFastParser.parse(bad));
+		Assert.raises(() -> ArArchiveParser.parse(bad));
 	}
 }

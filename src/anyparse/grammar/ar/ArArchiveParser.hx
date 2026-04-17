@@ -9,4 +9,4 @@ package anyparse.grammar.ar;
  */
 @:build(anyparse.macro.Build.buildParser(anyparse.grammar.ar.ArArchive))
 @:nullSafety(Strict)
-class ArArchiveFastParser {}
+class ArArchiveParser {}

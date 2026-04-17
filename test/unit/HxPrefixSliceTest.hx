@@ -1,8 +1,8 @@
 package unit;
 
 import utest.Assert;
-import anyparse.grammar.haxe.HaxeFastParser;
-import anyparse.grammar.haxe.HaxeModuleFastParser;
+import anyparse.grammar.haxe.HaxeParser;
+import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxModule;
@@ -41,7 +41,7 @@ import anyparse.runtime.ParseError;
  *  - `-(x + 1)` — prefix composes with `ParenExpr`. The parens reset
  *    precedence inside, so `x + 1` folds first, then the outer prefix
  *    wraps the paren atom.
- *  - `var x:Int = -5;` end-to-end through `HaxeModuleFastParser`.
+ *  - `var x:Int = -5;` end-to-end through `HaxeModuleParser`.
  *  - Rejection: `var x:Int = - ;` — `-` consumes but the operand
  *    recursion trips on `;` and raises a ParseError.
  *
@@ -217,13 +217,13 @@ class HxPrefixSliceTest extends HxTestHelpers {
 	}
 
 	public function testNegIntInModule():Void {
-		// End-to-end through `HaxeModuleFastParser` — confirms the
+		// End-to-end through `HaxeModuleParser` — confirms the
 		// new prefix branches ship through the module root pipeline,
-		// not just the isolated `HaxeFastParser`. Both parsers share
+		// not just the isolated `HaxeParser`. Both parsers share
 		// the same `HxExpr` rule because both grammars reference it
 		// via `HxVarDecl.init`, so any macro-pipeline bug in the
 		// prefix classifier would break both identically.
-		final module:HxModule = HaxeModuleFastParser.parse('class Foo { var x:Int = -5; }');
+		final module:HxModule = HaxeModuleParser.parse('class Foo { var x:Int = -5; }');
 		Assert.equals(1, module.decls.length);
 		final cls:HxClassDecl = expectClassDecl(module.decls[0]);
 		Assert.equals(1, cls.members.length);
@@ -242,7 +242,7 @@ class HxPrefixSliceTest extends HxTestHelpers {
 		// regex match), the atom function runs out of branches, and
 		// the failExpr raises a ParseError that propagates out
 		// through the prefix branch's try-wrapper in `tryBranch`.
-		Assert.raises(() -> HaxeFastParser.parse('class Foo { var x:Int = - ; }'), ParseError);
+		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Int = - ; }'), ParseError);
 	}
 
 }

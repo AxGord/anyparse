@@ -8,6 +8,9 @@ package anyparse.grammar.json;
  * self-contained writer class that converts a `JValue` AST back to a
  * formatted JSON string via the Doc IR and Renderer.
  */
-@:build(anyparse.macro.Build.buildWriter(anyparse.grammar.json.JValue))
+@:build(anyparse.macro.Build.buildWriter(
+	anyparse.grammar.json.JValue,
+	anyparse.grammar.json.JValueWriteOptions
+))
 @:nullSafety(Strict)
-class JValueFastWriter {}
+class JValueWriter {}

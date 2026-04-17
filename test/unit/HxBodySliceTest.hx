@@ -1,8 +1,8 @@
 package unit;
 
 import utest.Assert;
-import anyparse.grammar.haxe.HaxeFastParser;
-import anyparse.grammar.haxe.HaxeModuleFastParser;
+import anyparse.grammar.haxe.HaxeParser;
+import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnDecl;
@@ -244,16 +244,16 @@ class HxBodySliceTest extends HxTestHelpers {
 	}
 
 	public function testRejectsMissingSemicolon():Void {
-		Assert.raises(() -> HaxeFastParser.parse('class Foo { function f():Void { 1 } }'), ParseError);
+		Assert.raises(() -> HaxeParser.parse('class Foo { function f():Void { 1 } }'), ParseError);
 	}
 
 	public function testRejectsUnclosedBrace():Void {
-		Assert.raises(() -> HaxeFastParser.parse('class Foo { function f():Void { 1;'), ParseError);
+		Assert.raises(() -> HaxeParser.parse('class Foo { function f():Void { 1;'), ParseError);
 	}
 
 	public function testBodyThroughModuleRoot():Void {
 		final source:String = 'class A { function f():Int { return 1; } } class B { function g():Void { x; } }';
-		final module:HxModule = HaxeModuleFastParser.parse(source);
+		final module:HxModule = HaxeModuleParser.parse(source);
 		Assert.equals(2, module.decls.length);
 
 		final a:HxClassDecl = expectClassDecl(module.decls[0]);

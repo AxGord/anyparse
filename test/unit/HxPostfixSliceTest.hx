@@ -1,8 +1,8 @@
 package unit;
 
 import utest.Assert;
-import anyparse.grammar.haxe.HaxeFastParser;
-import anyparse.grammar.haxe.HaxeModuleFastParser;
+import anyparse.grammar.haxe.HaxeParser;
+import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxModule;
@@ -273,10 +273,10 @@ class HxPostfixSliceTest extends HxTestHelpers {
 	}
 
 	public function testFieldAccessInModule():Void {
-		// End-to-end through `HaxeModuleFastParser`. Confirms the
+		// End-to-end through `HaxeModuleParser`. Confirms the
 		// new Postfix strategy ships through the module-root pipeline
-		// identically to the isolated `HaxeFastParser`.
-		final module:HxModule = HaxeModuleFastParser.parse('class Foo { var x:Int = a.b; }');
+		// identically to the isolated `HaxeParser`.
+		final module:HxModule = HaxeModuleParser.parse('class Foo { var x:Int = a.b; }');
 		Assert.equals(1, module.decls.length);
 		final cls:HxClassDecl = expectClassDecl(module.decls[0]);
 		Assert.equals(1, cls.members.length);
@@ -464,14 +464,14 @@ class HxPostfixSliceTest extends HxTestHelpers {
 	public function testRejectsTrailingComma():Void {
 		// `f(a,)` — trailing comma leaves `)` as the next token,
 		// which fails the argument expression parse and throws.
-		Assert.raises(() -> HaxeFastParser.parse('class Foo { var x:Int = f(a,); }'), ParseError);
+		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Int = f(a,); }'), ParseError);
 	}
 
 	public function testCallInModule():Void {
-		// End-to-end through `HaxeModuleFastParser`. Confirms the
+		// End-to-end through `HaxeModuleParser`. Confirms the
 		// Star-suffix postfix variant ships through the module-root
 		// pipeline.
-		final module:HxModule = HaxeModuleFastParser.parse('class Foo { var x:Int = f(1, 2); }');
+		final module:HxModule = HaxeModuleParser.parse('class Foo { var x:Int = f(1, 2); }');
 		Assert.equals(1, module.decls.length);
 		final cls:HxClassDecl = expectClassDecl(module.decls[0]);
 		Assert.equals(1, cls.members.length);
@@ -490,13 +490,13 @@ class HxPostfixSliceTest extends HxTestHelpers {
 		// the suffix parse for `HxIdentLit` trips on `;` (the regex
 		// `[A-Za-z_][A-Za-z0-9_]*` needs at least one identifier
 		// character). A ParseError propagates out of the commit.
-		Assert.raises(() -> HaxeFastParser.parse('class Foo { var x:Int = a.; }'), ParseError);
+		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Int = a.; }'), ParseError);
 	}
 
 	public function testRejectsUnclosedBracket():Void {
 		// `var x:Int = a[1;` — postfix loop matches `[`, parses
 		// `1` as IntLit, expects `]`, and trips on `;`. Hard error.
-		Assert.raises(() -> HaxeFastParser.parse('class Foo { var x:Int = a[1; }'), ParseError);
+		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Int = a[1; }'), ParseError);
 	}
 
 }

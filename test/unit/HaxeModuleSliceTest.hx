@@ -1,7 +1,7 @@
 package unit;
 
 import utest.Assert;
-import anyparse.grammar.haxe.HaxeModuleFastParser;
+import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxClassMember;
 import anyparse.grammar.haxe.HxModule;
@@ -11,8 +11,8 @@ import anyparse.runtime.ParseError;
  * Phase 3 multi-declaration tests for the macro-generated Haxe module
  * parser.
  *
- * Complements `HaxeFirstSliceTest` (which targets `HaxeFastParser` rooted
- * on `HxClassDecl`) by exercising `HaxeModuleFastParser` rooted on
+ * Complements `HaxeFirstSliceTest` (which targets `HaxeParser` rooted
+ * on `HxClassDecl`) by exercising `HaxeModuleParser` rooted on
  * `HxModule` — the EOF-terminated Star<HxDecl> list that represents a
  * complete `.hx` file's top level.
  *
@@ -28,17 +28,17 @@ class HaxeModuleSliceTest extends HxTestHelpers {
 	}
 
 	public function testEmptyModule():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('');
+		final module:HxModule = HaxeModuleParser.parse('');
 		Assert.equals(0, module.decls.length);
 	}
 
 	public function testEmptyModuleWithWhitespace():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('   \n\t  \n');
+		final module:HxModule = HaxeModuleParser.parse('   \n\t  \n');
 		Assert.equals(0, module.decls.length);
 	}
 
 	public function testSingleClassModule():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('class Foo {}');
+		final module:HxModule = HaxeModuleParser.parse('class Foo {}');
 		Assert.equals(1, module.decls.length);
 		final classDecl:HxClassDecl = expectClassDecl(module.decls[0]);
 		Assert.equals('Foo', (classDecl.name : String));
@@ -46,14 +46,14 @@ class HaxeModuleSliceTest extends HxTestHelpers {
 	}
 
 	public function testTwoClassModule():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('class Foo {} class Bar {}');
+		final module:HxModule = HaxeModuleParser.parse('class Foo {} class Bar {}');
 		Assert.equals(2, module.decls.length);
 		Assert.equals('Foo', (expectClassDecl(module.decls[0]).name : String));
 		Assert.equals('Bar', (expectClassDecl(module.decls[1]).name : String));
 	}
 
 	public function testThreeClassModule():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('class A {} class B {} class C {}');
+		final module:HxModule = HaxeModuleParser.parse('class A {} class B {} class C {}');
 		Assert.equals(3, module.decls.length);
 		Assert.equals('A', (expectClassDecl(module.decls[0]).name : String));
 		Assert.equals('B', (expectClassDecl(module.decls[1]).name : String));
@@ -61,7 +61,7 @@ class HaxeModuleSliceTest extends HxTestHelpers {
 	}
 
 	public function testTwoClassesWithNoSpace():Void {
-		final module:HxModule = HaxeModuleFastParser.parse('class Foo {}class Bar {}');
+		final module:HxModule = HaxeModuleParser.parse('class Foo {}class Bar {}');
 		Assert.equals(2, module.decls.length);
 		Assert.equals('Foo', (expectClassDecl(module.decls[0]).name : String));
 		Assert.equals('Bar', (expectClassDecl(module.decls[1]).name : String));
@@ -69,7 +69,7 @@ class HaxeModuleSliceTest extends HxTestHelpers {
 
 	public function testModuleWithMembers():Void {
 		final source:String = 'class Foo { var x:Int; } class Bar { function tick():Void {} }';
-		final module:HxModule = HaxeModuleFastParser.parse(source);
+		final module:HxModule = HaxeModuleParser.parse(source);
 		Assert.equals(2, module.decls.length);
 
 		final foo:HxClassDecl = expectClassDecl(module.decls[0]);
@@ -99,7 +99,7 @@ class HaxeModuleSliceTest extends HxTestHelpers {
 
 	public function testIrregularWhitespaceBetweenClasses():Void {
 		final source:String = '\n\nclass Foo {}\n\n\tclass Bar {}\n';
-		final module:HxModule = HaxeModuleFastParser.parse(source);
+		final module:HxModule = HaxeModuleParser.parse(source);
 		Assert.equals(2, module.decls.length);
 		Assert.equals('Foo', (expectClassDecl(module.decls[0]).name : String));
 		Assert.equals('Bar', (expectClassDecl(module.decls[1]).name : String));
@@ -109,13 +109,13 @@ class HaxeModuleSliceTest extends HxTestHelpers {
 		// After parsing `class Foo {}`, the EOF-terminated loop tries to
 		// parse another HxDecl starting at `bogus` — that call expects the
 		// `class` keyword and fails with ParseError.
-		Assert.raises(() -> HaxeModuleFastParser.parse('class Foo {} bogus'), ParseError);
+		Assert.raises(() -> HaxeModuleParser.parse('class Foo {} bogus'), ParseError);
 	}
 
 	public function testRejectsIncompleteClass():Void {
 		// Incomplete last decl — the inner class parser fails on the
 		// missing `{}` and the error propagates out of the module loop.
-		Assert.raises(() -> HaxeModuleFastParser.parse('class Foo {} class Bar'), ParseError);
+		Assert.raises(() -> HaxeModuleParser.parse('class Foo {} class Bar'), ParseError);
 	}
 
 }

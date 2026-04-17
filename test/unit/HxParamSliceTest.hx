@@ -1,8 +1,8 @@
 package unit;
 
 import utest.Assert;
-import anyparse.grammar.haxe.HaxeFastParser;
-import anyparse.grammar.haxe.HaxeModuleFastParser;
+import anyparse.grammar.haxe.HaxeParser;
+import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnDecl;
@@ -119,16 +119,16 @@ class HxParamSliceTest extends HxTestHelpers {
 	}
 
 	public function testRejectsTrailingComma():Void {
-		Assert.raises(() -> HaxeFastParser.parse('class Foo { function f(a:Int,):Bool {} }'), ParseError);
+		Assert.raises(() -> HaxeParser.parse('class Foo { function f(a:Int,):Bool {} }'), ParseError);
 	}
 
 	public function testRejectsMissingType():Void {
-		Assert.raises(() -> HaxeFastParser.parse('class Foo { function f(x):Void {} }'), ParseError);
+		Assert.raises(() -> HaxeParser.parse('class Foo { function f(x):Void {} }'), ParseError);
 	}
 
 	public function testParamsThroughModuleRoot():Void {
 		final source:String = 'class A { function f(x:Int):Void {} } class B { function g(a:Int, b:Bool):Int {} }';
-		final module:HxModule = HaxeModuleFastParser.parse(source);
+		final module:HxModule = HaxeModuleParser.parse(source);
 		Assert.equals(2, module.decls.length);
 
 		final a:HxClassDecl = expectClassDecl(module.decls[0]);
@@ -148,7 +148,7 @@ class HxParamSliceTest extends HxTestHelpers {
 	}
 
 	public function testParamsWithModifiers():Void {
-		final ast:HxClassDecl = HaxeFastParser.parse('class Foo { public static function bar(x:Int, y:Int):Void {} }');
+		final ast:HxClassDecl = HaxeParser.parse('class Foo { public static function bar(x:Int, y:Int):Void {} }');
 		Assert.equals(1, ast.members.length);
 		Assert.equals(2, ast.members[0].modifiers.length);
 		final decl:HxFnDecl = expectFnMember(ast.members[0].member);

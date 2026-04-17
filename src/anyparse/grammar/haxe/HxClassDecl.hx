@@ -3,8 +3,8 @@ package anyparse.grammar.haxe;
 /**
  * Grammar type for a single Haxe class declaration — the smaller of
  * the two Phase 3 grammar roots. Kept as a stand-alone root (driven
- * by `HaxeFastParser`) alongside `HxModule` (driven by
- * `HaxeModuleFastParser`), which wraps zero or more `HxDecl` branches
+ * by `HaxeParser`) alongside `HxModule` (driven by
+ * `HaxeModuleParser`), which wraps zero or more `HxDecl` branches
  * for multi-declaration files. Having both roots live on the same
  * grammar package validates that the marker-class pattern scales to
  * multiple entry points.

@@ -2,7 +2,7 @@ package unit;
 
 import utest.Assert;
 import utest.Test;
-import anyparse.grammar.haxe.HaxeFastParser;
+import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxClassMember;
 import anyparse.grammar.haxe.HxFnDecl;
@@ -38,20 +38,20 @@ class HaxeFirstSliceTest extends Test {
 	}
 
 	public function testEmptyClass():Void {
-		final ast:HxClassDecl = HaxeFastParser.parse('class Foo {}');
+		final ast:HxClassDecl = HaxeParser.parse('class Foo {}');
 		Assert.equals('Foo', (ast.name : String));
 		Assert.equals(0, ast.members.length);
 	}
 
 	public function testClassWithOneVar():Void {
-		final ast:HxClassDecl = HaxeFastParser.parse('class Foo { var x:Int; }');
+		final ast:HxClassDecl = HaxeParser.parse('class Foo { var x:Int; }');
 		Assert.equals('Foo', (ast.name : String));
 		Assert.equals(1, ast.members.length);
 		assertVarMember(ast.members[0].member, 'x', 'Int');
 	}
 
 	public function testClassWithMultipleVars():Void {
-		final ast:HxClassDecl = HaxeFastParser.parse('class Foo { var x:Int; var y:String; var z:Bool; }');
+		final ast:HxClassDecl = HaxeParser.parse('class Foo { var x:Int; var y:String; var z:Bool; }');
 		Assert.equals('Foo', (ast.name : String));
 		Assert.equals(3, ast.members.length);
 		assertVarMember(ast.members[0].member, 'x', 'Int');
@@ -60,14 +60,14 @@ class HaxeFirstSliceTest extends Test {
 	}
 
 	public function testClassWithOneFunction():Void {
-		final ast:HxClassDecl = HaxeFastParser.parse('class Foo { function bar():Void {} }');
+		final ast:HxClassDecl = HaxeParser.parse('class Foo { function bar():Void {} }');
 		Assert.equals('Foo', (ast.name : String));
 		Assert.equals(1, ast.members.length);
 		assertFnMember(ast.members[0].member, 'bar', 'Void');
 	}
 
 	public function testClassWithMixedMembers():Void {
-		final ast:HxClassDecl = HaxeFastParser.parse('class Foo { var count:Int; function tick():Void {} var name:String; }');
+		final ast:HxClassDecl = HaxeParser.parse('class Foo { var count:Int; function tick():Void {} var name:String; }');
 		Assert.equals('Foo', (ast.name : String));
 		Assert.equals(3, ast.members.length);
 		assertVarMember(ast.members[0].member, 'count', 'Int');
@@ -77,7 +77,7 @@ class HaxeFirstSliceTest extends Test {
 
 	public function testIrregularWhitespace():Void {
 		final source:String = 'class\n\tFoo\n{\n\tvar\tx\t:\tInt\t;\n\tfunction bar\t():\tVoid\t{}\n}';
-		final ast:HxClassDecl = HaxeFastParser.parse(source);
+		final ast:HxClassDecl = HaxeParser.parse(source);
 		Assert.equals('Foo', (ast.name : String));
 		Assert.equals(2, ast.members.length);
 		assertVarMember(ast.members[0].member, 'x', 'Int');
@@ -88,22 +88,22 @@ class HaxeFirstSliceTest extends Test {
 		// `classy` must not match the `class` keyword — the Kw strategy
 		// enforces a word boundary, so the leading `class` rule fails
 		// and the overall parse fails because no other rule matches.
-		Assert.raises(() -> HaxeFastParser.parse('classy {}'), ParseError);
+		Assert.raises(() -> HaxeParser.parse('classy {}'), ParseError);
 	}
 
 	public function testRejectsMissingClassName():Void {
-		Assert.raises(() -> HaxeFastParser.parse('class { var x:Int; }'), ParseError);
+		Assert.raises(() -> HaxeParser.parse('class { var x:Int; }'), ParseError);
 	}
 
 	public function testRejectsMissingClassBrace():Void {
-		Assert.raises(() -> HaxeFastParser.parse('class Foo var x:Int;'), ParseError);
+		Assert.raises(() -> HaxeParser.parse('class Foo var x:Int;'), ParseError);
 	}
 
 	public function testRejectsUnknownMember():Void {
 		// `let` is not a valid Haxe class-member introducer — the Alt
 		// tries both VarMember and FnMember and both fail their keyword
 		// match, so the loop throws on the first member.
-		Assert.raises(() -> HaxeFastParser.parse('class Foo { let x:Int; }'), ParseError);
+		Assert.raises(() -> HaxeParser.parse('class Foo { let x:Int; }'), ParseError);
 	}
 
 	private function assertVarMember(member:HxClassMember, expectedName:String, expectedType:String):Void {

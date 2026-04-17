@@ -1,8 +1,8 @@
 package unit;
 
 import utest.Assert;
-import anyparse.grammar.haxe.HaxeFastParser;
-import anyparse.grammar.haxe.HaxeModuleFastParser;
+import anyparse.grammar.haxe.HaxeParser;
+import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnDecl;
@@ -280,7 +280,7 @@ class HxControlFlowSliceTest extends HxTestHelpers {
 	// --- integration ---
 
 	public function testIfInModuleRoot():Void {
-		final module:HxModule = HaxeModuleFastParser.parse(
+		final module:HxModule = HaxeModuleParser.parse(
 			'class C { function f():Void { if (x) return 1; else return 2; } }'
 		);
 		Assert.equals(1, module.decls.length);

@@ -5,13 +5,13 @@ package anyparse.grammar.json;
  * document. Used when the caller does not have a specific typed schema.
  *
  * This enum is the grammar driving the JSON parser and writer:
- *  - `JValueFastParser` (marker class, macro-generated via
+ *  - `JValueParser` (marker class, macro-generated via
  *    `anyparse.macro.Build.buildParser`) — `parse(source):JValue`.
- *  - `JValueFastWriter` (marker class, macro-generated via
+ *  - `JValueWriter` (marker class, macro-generated via
  *    `anyparse.macro.Build.buildWriter`) — `write(value):String`.
  *
  * Round-trip equivalence (`parse(write(ast)) == ast`) is the regression
- * invariant — enforced by `JsonFastRoundTripTest`.
+ * invariant — enforced by `JsonRoundTripTest`.
  *
  * Metadata layer:
  *  - `@:peg` marks this as a grammar entry point.
