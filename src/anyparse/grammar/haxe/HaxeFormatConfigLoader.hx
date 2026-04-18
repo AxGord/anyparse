@@ -3,6 +3,7 @@ package anyparse.grammar.haxe;
 import anyparse.format.BodyPolicy;
 import anyparse.format.BracePlacement;
 import anyparse.format.IndentChar;
+import anyparse.format.KeywordPlacement;
 import anyparse.format.WhitespacePolicy;
 
 /**
@@ -28,6 +29,11 @@ import anyparse.format.WhitespacePolicy;
  *   need per-site source-shape tracking the Haxe writer does not yet
  *   carry; treating them as `next` (false) matches the nearest layout
  *   we can currently render.
+ * - `sameLine.elseIf` (ψ₈): enum string — `"same"` (default) maps to
+ *   `KeywordPlacement.Same`, `"next"` maps to `KeywordPlacement.Next`.
+ *   `"keep"` degrades to `Same` (no per-node source-shape tracking).
+ *   The knob only affects the `IfStmt` ctor of `elseBody` — non-if
+ *   else branches still route through `sameLine.elseBody`.
  * - `trailingCommas.arrayLiteralDefault` / `trailingCommas.callArgumentDefault`
  *   / `trailingCommas.functionParameterDefault`: enum string — `"yes"`
  *   maps to `true`, every other value (`"no"`, `"keep"`, `"ignore"`) to
@@ -98,6 +104,7 @@ final class HaxeFormatConfigLoader {
 			doBody: base.doBody,
 			leftCurly: base.leftCurly,
 			objectFieldColon: base.objectFieldColon,
+			elseIf: base.elseIf,
 		};
 		if (cfg.indentation != null) applyIndentation(cfg.indentation, result);
 		if (cfg.wrapping != null) applyWrapping(cfg.wrapping, result);
@@ -137,6 +144,7 @@ final class HaxeFormatConfigLoader {
 		if (section.forBody != null) opt.forBody = bodyPolicyToRuntime(section.forBody);
 		if (section.whileBody != null) opt.whileBody = bodyPolicyToRuntime(section.whileBody);
 		if (section.doWhileBody != null) opt.doBody = bodyPolicyToRuntime(section.doWhileBody);
+		if (section.elseIf != null) opt.elseIf = keywordPlacementToRuntime(section.elseIf);
 	}
 
 	private static function applyTrailingCommas(section:HxFormatTrailingCommasSection, opt:HxModuleWriteOptions):Void {
@@ -188,6 +196,13 @@ final class HaxeFormatConfigLoader {
 			case HxFormatWhitespacePolicy.After | HxFormatWhitespacePolicy.OnlyAfter: WhitespacePolicy.After;
 			case HxFormatWhitespacePolicy.Around: WhitespacePolicy.Both;
 			case _: WhitespacePolicy.None;
+		};
+	}
+
+	private static function keywordPlacementToRuntime(policy:HxFormatKeywordPlacement):KeywordPlacement {
+		return switch policy {
+			case HxFormatKeywordPlacement.Next: KeywordPlacement.Next;
+			case _: KeywordPlacement.Same;
 		};
 	}
 

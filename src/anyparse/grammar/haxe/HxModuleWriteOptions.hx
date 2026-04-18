@@ -2,6 +2,7 @@ package anyparse.grammar.haxe;
 
 import anyparse.format.BodyPolicy;
 import anyparse.format.BracePlacement;
+import anyparse.format.KeywordPlacement;
 import anyparse.format.WhitespacePolicy;
 import anyparse.format.WriteOptions;
 
@@ -79,6 +80,19 @@ import anyparse.format.WriteOptions;
  *    `HxVarDecl.type` / `HxParam.type` / `HxFnDecl.returnType` stays
  *    tight regardless, matching haxe-formatter's hard-coded
  *    `x:Int` / `f():Void` layout.
+ *
+ * Field added in slice ψ₈ (else-if keyword placement):
+ *  - `elseIf` — placement of the nested `if` inside an `else` clause
+ *    when the else branch is itself an if statement. `Same` (default,
+ *    matching haxe-formatter's `sameLine.elseIf: @:default(Same)`)
+ *    keeps the `else if (...)` idiom inline on the same line as
+ *    `else`, overriding the `elseBody=Next` default for the `IfStmt`
+ *    ctor. `Next` moves the nested `if` to the next line at one
+ *    indent level deeper (`} else\n\tif (...) {`), producing the
+ *    layout exercised by `issue_11_else_if_next_line.hxtest`. The
+ *    knob only affects the `IfStmt` ctor of `elseBody` — non-if
+ *    branches (`ExprStmt`, `ReturnStmt`, `BlockStmt`, ...) still
+ *    route through `elseBody`'s `@:bodyPolicy`.
  */
 typedef HxModuleWriteOptions = WriteOptions & {
 	sameLineElse:Bool,
@@ -94,4 +108,5 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	doBody:BodyPolicy,
 	leftCurly:BracePlacement,
 	objectFieldColon:WhitespacePolicy,
+	elseIf:KeywordPlacement,
 };

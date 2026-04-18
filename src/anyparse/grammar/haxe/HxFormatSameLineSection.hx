@@ -16,6 +16,12 @@ package anyparse.grammar.haxe;
  * the body of `do body while (…);`. The JSON key matches haxe-
  * formatter's `sameLine.doWhileBody` field; the loader maps it onto
  * the runtime `doBody` option on `HxModuleWriteOptions`.
+ *
+ * `elseIf` (ψ₈) is a two-value keyword-placement knob for the nested
+ * `if` inside an `else` clause. `"same"` (default) keeps `else if`
+ * inline; `"next"` moves the nested `if` onto its own line at one
+ * indent level deeper. The loader maps this onto the runtime
+ * `elseIf` option on `HxModuleWriteOptions`.
  */
 @:peg typedef HxFormatSameLineSection = {
 
@@ -34,4 +40,6 @@ package anyparse.grammar.haxe;
 	@:optional var whileBody:HxFormatBodyPolicy;
 
 	@:optional var doWhileBody:HxFormatBodyPolicy;
+
+	@:optional var elseIf:HxFormatKeywordPlacement;
 };

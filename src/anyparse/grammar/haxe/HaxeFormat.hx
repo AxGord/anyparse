@@ -4,6 +4,7 @@ import anyparse.format.BodyPolicy;
 import anyparse.format.BracePlacement;
 import anyparse.format.Encoding;
 import anyparse.format.IndentChar;
+import anyparse.format.KeywordPlacement;
 import anyparse.format.WhitespacePolicy;
 import anyparse.format.text.FieldLookup;
 import anyparse.format.text.KeySyntax;
@@ -108,16 +109,20 @@ final class HaxeFormat implements TextFormat {
 	 * defaults — all groups are `false` by default; the trailing `,`
 	 * only appears when the user opts in per group.
 	 *
-	 * Body-placement defaults (ψ₄) are `Same` for `if` / `else` / `for`
-	 * / `while` — non-block bodies stay on the same line as the
-	 * preceding header. Opting into `Next` or `FitLine` requires an
-	 * explicit `hxformat.json` override.
+	 * Body-placement defaults (ψ₄ + ψ₁₀a) are `Next` for every
+	 * `*Body` knob — non-block bodies of `if` / `else` / `for` /
+	 * `while` / `do` sit on the next line, matching haxe-formatter's
+	 * `sameLine.{ifBody,elseBody,forBody,whileBody,doWhileBody}:
+	 * @:default(Next)`. Opting into `Same` (same-line body) or
+	 * `FitLine` requires an explicit `hxformat.json` override.
 	 *
-	 * Exception: `doBody` defaults to `Next` (ψ₅), matching haxe-
-	 * formatter's `sameLine.doWhileBody: @:default(Next)` — the
-	 * corpus reference expects `do` non-block bodies on the next line
-	 * by default, and opting in to same-line requires
-	 * `sameLine.doWhileBody: "same"` in the user's `hxformat.json`.
+	 * `elseIf` (ψ₈) defaults to `Same` — the nested `if` inside an
+	 * `else` clause stays on the same line as `else`, matching
+	 * haxe-formatter's `sameLine.elseIf: @:default(Same)`. This knob
+	 * overrides `elseBody` specifically when the else branch's
+	 * statement is an `IfStmt` — keeping the `else if (...)` idiom
+	 * inline even though `elseBody=Next` would otherwise push the
+	 * nested if to the next line.
 	 *
 	 * Left-curly default (ψ₆) is `Same` — `{` stays on the same line
 	 * as the preceding token (`class F {` / `function f() {`). This
@@ -146,13 +151,14 @@ final class HaxeFormat implements TextFormat {
 		trailingCommaArrays: false,
 		trailingCommaArgs: false,
 		trailingCommaParams: false,
-		ifBody: BodyPolicy.Same,
-		elseBody: BodyPolicy.Same,
-		forBody: BodyPolicy.Same,
-		whileBody: BodyPolicy.Same,
+		ifBody: BodyPolicy.Next,
+		elseBody: BodyPolicy.Next,
+		forBody: BodyPolicy.Next,
+		whileBody: BodyPolicy.Next,
 		doBody: BodyPolicy.Next,
 		leftCurly: BracePlacement.Same,
 		objectFieldColon: WhitespacePolicy.After,
+		elseIf: KeywordPlacement.Same,
 	};
 
 	private function new() {}

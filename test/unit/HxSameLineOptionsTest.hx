@@ -122,6 +122,60 @@ class HxSameLineOptionsTest extends Test {
 		Assert.isTrue(defaults.sameLineDoWhile);
 	}
 
+	public function testSameLineElseTrueSuppressedByNonBlockThenBody():Void {
+		// ψ₉: when thenBody is a non-block statement (ExprStmt here),
+		// sameLineElse=true is suppressed because a lone `else` on the
+		// same line as a semicolon-terminated body has no meaning.
+		// ifBody=Same keeps thenBody on the same line as `if (...)`, so
+		// the separator after `;` is the one ψ₉ shape-awareness fires on.
+		final out:String = writeWithBodyPolicy(
+			'class F { function f():Void { if (x) doA(); else doB(); } }',
+			anyparse.format.BodyPolicy.Same, anyparse.format.BodyPolicy.Same, true
+		);
+		Assert.isTrue(out.indexOf('doA(); else') == -1, 'did not expect `doA(); else` inline in: <$out>');
+		Assert.isTrue(out.indexOf('doA();\n\t\telse') != -1, 'expected hardline before else (non-block then) in: <$out>');
+	}
+
+	public function testSameLineElseTrueHonoredByBlockThenBody():Void {
+		// ψ₉: when thenBody is a block, sameLineElse=true continues to
+		// emit `} else ` inline. This asserts the flag is still live
+		// for block-terminated branches.
+		final out:String = writeWith(
+			'class F { function f():Void { if (x) {} else {} } }',
+			true, true, true
+		);
+		Assert.isTrue(out.indexOf('} else ') != -1, 'expected `} else ` inline (block then) in: <$out>');
+	}
+
+	private function writeWithBodyPolicy(
+		src:String, ifBody:anyparse.format.BodyPolicy, elseBody:anyparse.format.BodyPolicy, sameLineElse:Bool
+	):String {
+		final base:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
+		final opts:HxModuleWriteOptions = {
+			indentChar: base.indentChar,
+			indentSize: base.indentSize,
+			tabWidth: base.tabWidth,
+			lineWidth: base.lineWidth,
+			lineEnd: base.lineEnd,
+			finalNewline: base.finalNewline,
+			sameLineElse: sameLineElse,
+			sameLineCatch: base.sameLineCatch,
+			sameLineDoWhile: base.sameLineDoWhile,
+			trailingCommaArrays: base.trailingCommaArrays,
+			trailingCommaArgs: base.trailingCommaArgs,
+			trailingCommaParams: base.trailingCommaParams,
+			ifBody: ifBody,
+			elseBody: elseBody,
+			forBody: base.forBody,
+			whileBody: base.whileBody,
+			doBody: base.doBody,
+			leftCurly: base.leftCurly,
+			objectFieldColon: base.objectFieldColon,
+			elseIf: base.elseIf,
+		};
+		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+	}
+
 	private function writeWith(src:String, sameLineElse:Bool, sameLineCatch:Bool, sameLineDoWhile:Bool):String {
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), makeOpts(sameLineElse, sameLineCatch, sameLineDoWhile));
 	}
@@ -148,6 +202,7 @@ class HxSameLineOptionsTest extends Test {
 			doBody: base.doBody,
 			leftCurly: base.leftCurly,
 			objectFieldColon: base.objectFieldColon,
+			elseIf: base.elseIf,
 		};
 	}
 }

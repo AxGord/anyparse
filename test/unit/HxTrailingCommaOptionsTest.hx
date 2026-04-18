@@ -160,6 +160,7 @@ class HxTrailingCommaOptionsTest extends Test {
 			doBody: base.doBody,
 			leftCurly: base.leftCurly,
 			objectFieldColon: base.objectFieldColon,
+			elseIf: base.elseIf,
 		};
 	}
 }

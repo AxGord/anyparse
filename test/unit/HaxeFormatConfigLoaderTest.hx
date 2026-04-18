@@ -2,8 +2,10 @@ package unit;
 
 import utest.Assert;
 import utest.Test;
+import anyparse.format.BodyPolicy;
 import anyparse.format.BracePlacement;
 import anyparse.format.IndentChar;
+import anyparse.format.KeywordPlacement;
 import anyparse.format.WhitespacePolicy;
 import anyparse.grammar.haxe.HaxeFormat;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
@@ -216,6 +218,45 @@ class HaxeFormatConfigLoaderTest extends Test {
 		final out:String = HxModuleWriter.write(ast, opts);
 		Assert.isTrue(out.indexOf('{a:0, b:1}') != -1, 'expected tight `{a:0, b:1}` in: <$out>');
 		Assert.isTrue(out.indexOf('var x:Dynamic') != -1, 'var type annotation should stay tight in: <$out>');
+	}
+
+	public function testSameLineElseIfDefaultsToSame():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		Assert.equals(KeywordPlacement.Same, opts.elseIf);
+	}
+
+	public function testSameLineElseIfNextMapsToNext():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"elseIf": "next"}}');
+		Assert.equals(KeywordPlacement.Next, opts.elseIf);
+	}
+
+	public function testSameLineElseIfSameMapsToSame():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"elseIf": "same"}}');
+		Assert.equals(KeywordPlacement.Same, opts.elseIf);
+	}
+
+	public function testSameLineElseIfKeepDegradesToSame():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"elseIf": "keep"}}');
+		Assert.equals(KeywordPlacement.Same, opts.elseIf);
+	}
+
+	public function testSameLineElseIfEndToEnd():Void {
+		final src:String = 'class F { function f():Void { if (a) {} else if (b) {} } }';
+		final configured:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"elseIf": "next"}}');
+		final out:String = HxModuleWriter.write(HaxeModuleParser.parse(src), configured);
+		Assert.isTrue(out.indexOf('else\n\t\t\tif (b)') != -1, 'expected nested if on next line in: <$out>');
+		Assert.isTrue(out.indexOf('} else if (b)') == -1, 'did not expect inline nested if in: <$out>');
+	}
+
+	public function testBodyPolicyDefaultsMatchUpstream():Void {
+		// ψ₁₀a: stock haxe-formatter defaults every non-block body knob
+		// to Next. Verify our defaults align with the empty-config path.
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		Assert.equals(BodyPolicy.Next, opts.ifBody);
+		Assert.equals(BodyPolicy.Next, opts.elseBody);
+		Assert.equals(BodyPolicy.Next, opts.forBody);
+		Assert.equals(BodyPolicy.Next, opts.whileBody);
+		Assert.equals(BodyPolicy.Next, opts.doBody);
 	}
 
 	public function testEndToEndConfigDrivesWriter():Void {

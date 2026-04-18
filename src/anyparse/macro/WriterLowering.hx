@@ -338,6 +338,14 @@ class WriterLowering {
 		// yielding e.g. `\t function` instead of `\tfunction` when
 		// `HxMemberDecl.modifiers` is empty.
 		var prevEmptyCandidate:Null<Expr> = null;
+		// ψ₉: tracks the immediately preceding bare-Ref field that was
+		// wrapped via `bodyPolicyWrap` — the next field's `@:sameLine`
+		// separator must then be shape-aware on the preceding body's
+		// runtime ctor: a block ctor (e.g. `BlockStmt`) respects the
+		// flag (space / hardline), any other ctor forces a hardline
+		// because a lone keyword on the same line as a semicolon-
+		// terminated body has no meaning.
+		var prevBodyField:Null<PrevBodyInfo> = null;
 
 		for (child in node.children) {
 			final fieldName:Null<String> = child.annotations.get('base.fieldName');
@@ -348,6 +356,7 @@ class WriterLowering {
 			final trailText:Null<String> = readMetaString(child, ':trail');
 			final isStar:Bool = child.kind == Star;
 			final isOptional:Bool = child.annotations.get('base.optional') == true;
+			final hasElseIf:Bool = hasMeta(child, ':elseIf');
 
 			final fieldAccess:Expr = {
 				expr: EField(macro value, fieldName),
@@ -357,6 +366,7 @@ class WriterLowering {
 			if (isStar) {
 				emitWriterStarField(child, fieldAccess, parts, child == node.children[node.children.length - 1], typePath, isFirstField, isRaw);
 				prevEmptyCandidate = isBareTryparseStar(child) ? fieldAccess : null;
+				prevBodyField = null;
 				isFirstField = false;
 				continue;
 			}
@@ -365,7 +375,7 @@ class WriterLowering {
 			// @:sameLine(flagName) on the child switches the leading space to a
 			// hardline when `opt.<flagName>` is false (τ₁).
 			if (kwLead != null && !isOptional) {
-				if (!isFirstField && !isRaw) parts.push(sameLineSeparator(child));
+				if (!isFirstField && !isRaw) parts.push(sameLineSeparator(child, prevBodyField));
 				parts.push(macro _dt($v{kwLead + ' '}));
 			}
 
@@ -378,6 +388,7 @@ class WriterLowering {
 
 			// Field value
 			final bodyPolicyFlag:Null<String> = readMetaString(child, ':bodyPolicy');
+			var justWrappedBody:Null<PrevBodyInfo> = null;
 			switch child.kind {
 				case Ref if (isOptional):
 					final refName:String = child.annotations.get('base.ref');
@@ -393,10 +404,10 @@ class WriterLowering {
 					// a runtime-switched separator (Same/Next/FitLine, ψ₄).
 					final optParts:Array<Expr> = [];
 					if (kwLead != null) {
-						optParts.push(sameLineSeparator(child));
+						optParts.push(sameLineSeparator(child, prevBodyField));
 						if (bodyPolicyFlag != null) {
 							optParts.push(macro _dt($v{kwLead}));
-							optParts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, macro _optVal, refName));
+							optParts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, macro _optVal, refName, hasElseIf));
 						} else {
 							optParts.push(macro _dt($v{kwLead + ' '}));
 							optParts.push(writeCall);
@@ -405,7 +416,7 @@ class WriterLowering {
 						if (isTightLead(leadText)) {
 							optParts.push(macro _dt($v{leadText}));
 						} else {
-							optParts.push(sameLineSeparator(child));
+							optParts.push(sameLineSeparator(child, prevBodyField));
 							optParts.push(macro _dt($v{leadText + ' '}));
 						}
 						optParts.push(writeCall);
@@ -433,7 +444,8 @@ class WriterLowering {
 					// `)` trail): the trail emits the token literally and
 					// bodyPolicyWrap replaces the default ` ` separator.
 					if (bodyPolicyFlag != null && kwLead == null && leadText == null && !isRaw) {
-						parts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, fieldAccess, refName));
+						parts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, fieldAccess, refName, hasElseIf));
+						justWrappedBody = {access: fieldAccess, typePath: refName};
 					} else {
 						if (kwLead == null && leadText == null && !isFirstField && !isRaw) {
 							if (prevEmptyCandidate != null)
@@ -453,6 +465,7 @@ class WriterLowering {
 				parts.push(macro _dt($v{trailText}));
 
 			prevEmptyCandidate = null;
+			prevBodyField = justWrappedBody;
 			isFirstField = false;
 		}
 
@@ -637,18 +650,43 @@ class WriterLowering {
 	 * ternary that picks between a plain space and a hardline at the
 	 * current indent level based on `opt.<flagName>:Bool`.
 	 *
-	 * Consumed by the three struct-field sites (non-optional kw, optional
-	 * Ref, and try-parse Star) that previously hard-coded `' '` as the
-	 * boundary between a field and the preceding token.
+	 * ψ₉ opt-in shape-awareness via `@:shapeAware`: when the field also
+	 * carries the `@:shapeAware` meta AND `prevBody` is non-null (the
+	 * immediately preceding struct field was a bare-Ref wrapped via
+	 * `bodyPolicyWrap`) AND the body's enum type has at least one block
+	 * ctor, the emitted separator adds a runtime ctor switch on the
+	 * preceding body's value: block ctors keep the flag-based layout
+	 * (space / hardline), every other ctor forces a hardline. Used by
+	 * `HxIfStmt.elseBody` where a lone `else` on the same line as a
+	 * semicolon-terminated thenBody would collide visually with the
+	 * body's terminator. NOT used by `HxDoWhileStmt.cond`'s `while`
+	 * or `HxTryCatchStmt.catches` — those keywords are part of the
+	 * loop/try structure and stay inline regardless of body shape,
+	 * matching haxe-formatter's `sameLine.doWhile`/`tryCatch` defaults.
+	 *
+	 * Consumed by the two struct-field sites (non-optional kw, optional
+	 * Ref/lead) that previously hard-coded `' '` as the boundary
+	 * between a field and the preceding token. The try-parse Star
+	 * `@:sameLine` site in `emitWriterStarField` has its own inline
+	 * handler (per-element separator, different semantic) and is
+	 * unaffected.
 	 */
-	private static function sameLineSeparator(child:ShapeNode):Expr {
+	private function sameLineSeparator(child:ShapeNode, prevBody:Null<PrevBodyInfo>):Expr {
 		final flagName:Null<String> = readMetaString(child, ':sameLine');
 		if (flagName == null) return macro _dt(' ');
 		final optFlag:Expr = {
 			expr: EField(macro opt, flagName),
 			pos: Context.currentPos(),
 		};
-		return macro (($optFlag) ? _dt(' ') : _dhl());
+		final flagBased:Expr = macro (($optFlag) ? _dt(' ') : _dhl());
+		if (prevBody == null || !hasMeta(child, ':shapeAware')) return flagBased;
+		final blockPatterns:Array<Expr> = collectBlockCtorPatterns(prevBody.typePath);
+		if (blockPatterns.length == 0) return flagBased;
+		final cases:Array<Case> = [
+			{values: blockPatterns, expr: flagBased, guard: null},
+			{values: [macro _], expr: macro _dhl(), guard: null},
+		];
+		return {expr: ESwitch(prevBody.access, cases, null), pos: Context.currentPos()};
 	}
 
 	/**
@@ -760,10 +798,22 @@ class WriterLowering {
 	 * placement knob. This keeps policy targeted at the non-block
 	 * expression-body case where the knob actually shifts layout.
 	 *
+	 * ψ₈: when `hasElseIf` is true, an additional outer-switch case is
+	 * added for the `IfStmt` ctor of `bodyTypePath` that routes to
+	 * `opt.elseIf:KeywordPlacement` — `Same` keeps `else if (...)`
+	 * inline (single space + body) while `Next` moves the nested `if`
+	 * to the next line (hardline + indent + body). This override runs
+	 * regardless of the field's own `@:bodyPolicy` flag value, so
+	 * `elseBody=Next` with `elseIf=Same` still emits `} else if (...)`
+	 * on one line for nested ifs and only pushes non-if else branches
+	 * to the next line.
+	 *
 	 * The case patterns are built as raw `EField` expressions to avoid
 	 * macro-time enum resolution against the `BodyPolicy` abstract.
 	 */
-	private function bodyPolicyWrap(flagName:String, writeCall:Expr, bodyValueExpr:Expr, bodyTypePath:String):Expr {
+	private function bodyPolicyWrap(
+		flagName:String, writeCall:Expr, bodyValueExpr:Expr, bodyTypePath:String, hasElseIf:Bool
+	):Expr {
 		final optFlag:Expr = {
 			expr: EField(macro opt, flagName),
 			pos: Context.currentPos(),
@@ -780,13 +830,27 @@ class WriterLowering {
 		final policySwitch:Expr = {expr: ESwitch(optFlag, policyCases, null), pos: Context.currentPos()};
 
 		final blockPatterns:Array<Expr> = collectBlockCtorPatterns(bodyTypePath);
-		final bodySwitch:Expr = if (blockPatterns.length == 0) policySwitch
-		else {
-			final sameLayout:Expr = macro _dc([_dt(' '), $writeCall]);
-			final outerCases:Array<Case> = [
-				{values: blockPatterns, expr: sameLayout, guard: null},
-				{values: [macro _], expr: policySwitch, guard: null},
+		final ifStmtPattern:Null<Expr> = hasElseIf ? findCtorPattern(bodyTypePath, 'IfStmt') : null;
+		final outerCases:Array<Case> = [];
+		if (ifStmtPattern != null) {
+			final kpPath:Array<String> = ['anyparse', 'format', 'KeywordPlacement'];
+			final kpNextPat:Expr = MacroStringTools.toFieldExpr(kpPath.concat(['Next']));
+			final elseIfCases:Array<Case> = [
+				{values: [kpNextPat], expr: macro _dn(_cols, _dc([_dhl(), $writeCall])), guard: null},
 			];
+			final elseIfSwitch:Expr = {
+				expr: ESwitch(macro opt.elseIf, elseIfCases, macro _dc([_dt(' '), $writeCall])),
+				pos: Context.currentPos(),
+			};
+			outerCases.push({values: [ifStmtPattern], expr: elseIfSwitch, guard: null});
+		}
+		if (blockPatterns.length > 0) {
+			final sameLayout:Expr = macro _dc([_dt(' '), $writeCall]);
+			outerCases.push({values: blockPatterns, expr: sameLayout, guard: null});
+		}
+		final bodySwitch:Expr = if (outerCases.length == 0) policySwitch
+		else {
+			outerCases.push({values: [macro _], expr: policySwitch, guard: null});
 			{expr: ESwitch(bodyValueExpr, outerCases, null), pos: Context.currentPos()};
 		};
 
@@ -830,6 +894,35 @@ class WriterLowering {
 		if (leadText == null || trailText == null) return false;
 		if (branch.children.length != 1) return false;
 		return branch.children[0].kind == Star;
+	}
+
+	/**
+	 * Build a wildcard `case` pattern for the named ctor of a polymorphic
+	 * enum type. Returns `null` when the type is not an enum in the shape
+	 * map or has no branch with the requested name — the caller then
+	 * skips the ctor-specific override.
+	 *
+	 * Used by the ψ₈ `@:elseIf` path to target the `IfStmt(_)` ctor of
+	 * `HxStatement` when rendering the `else` body of `HxIfStmt`.
+	 */
+	private function findCtorPattern(bodyTypePath:String, ctorName:String):Null<Expr> {
+		final rule:Null<ShapeNode> = shape.rules.get(bodyTypePath);
+		if (rule == null || rule.kind != Alt) return null;
+		final simple:String = simpleName(bodyTypePath);
+		final pack:Array<String> = packOf(bodyTypePath);
+		for (branch in rule.children) {
+			final branchCtor:String = branch.annotations.get('base.ctor');
+			if (branchCtor != ctorName) continue;
+			final arity:Int = branch.children.length;
+			final ctorPath:Array<String> = pack.concat([simple, branchCtor]);
+			final ctorRef:Expr = MacroStringTools.toFieldExpr(ctorPath);
+			return if (arity == 0) ctorRef
+			else {
+				final args:Array<Expr> = [for (_ in 0...arity) macro _];
+				{expr: ECall(ctorRef, args), pos: Context.currentPos()};
+			};
+		}
+		return null;
 	}
 
 	/**
@@ -977,5 +1070,18 @@ typedef WriterRule = {
 	body:Expr,
 	hasCtxPrec:Bool,
 	isBinary:Bool,
+};
+
+/**
+ * Carries the runtime-access expression and enum type path of the
+ * immediately preceding bare-Ref struct field whose body was wrapped
+ * via `bodyPolicyWrap`. Consumed by `sameLineSeparator` (ψ₉) to emit
+ * a shape-aware leading separator on the following `@:sameLine`
+ * keyword: block ctors respect the flag, non-block ctors force a
+ * hardline.
+ */
+typedef PrevBodyInfo = {
+	access:Expr,
+	typePath:String,
 };
 #end

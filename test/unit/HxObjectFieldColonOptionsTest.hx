@@ -119,6 +119,7 @@ class HxObjectFieldColonOptionsTest extends Test {
 			doBody: base.doBody,
 			leftCurly: base.leftCurly,
 			objectFieldColon: objectFieldColon,
+			elseIf: base.elseIf,
 		};
 	}
 }

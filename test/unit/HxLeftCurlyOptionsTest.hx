@@ -100,6 +100,7 @@ class HxLeftCurlyOptionsTest extends Test {
 			doBody: base.doBody,
 			leftCurly: leftCurly,
 			objectFieldColon: base.objectFieldColon,
+			elseIf: base.elseIf,
 		};
 	}
 }
