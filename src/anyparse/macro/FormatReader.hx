@@ -64,6 +64,16 @@ typedef FormatInfo = {
 	boolType:Null<String>,
 	stringType:Null<String>,
 	anyType:Null<String>,
+
+	/**
+	 * Star struct field open-delimiters that take a leading space from
+	 * the preceding token. Everything not listed stays tight against
+	 * the previous field — so `main()` / `a[0]` / `new Foo(x)` work by
+	 * default while Haxe-style `class Foo {` keeps its space by
+	 * declaring `['{']`. Empty array (or absent field) means every
+	 * lead is tight, matching JSON-like output.
+	 */
+	spacedLeads:Array<String>,
 };
 
 /**
@@ -107,6 +117,7 @@ class FormatReader {
 			boolType: isBinary ? null : readStringFieldOpt(cl, 'boolType'),
 			stringType: isBinary ? null : readStringFieldOpt(cl, 'stringType'),
 			anyType: isBinary ? null : readStringFieldOpt(cl, 'anyType'),
+			spacedLeads: isBinary ? [] : readStringArrayField(cl, 'spacedLeads'),
 		};
 	}
 
@@ -185,6 +196,37 @@ class FormatReader {
 			case TCast(inner, _): extractString(inner);
 			case TParenthesis(inner): extractString(inner);
 			case _: null;
+		};
+	}
+
+	/**
+	 * Read an `Array<String>` field initializer declared as a literal
+	 * `[...]` at the format class's declaration site. Returns an empty
+	 * array when the field is missing or its initializer cannot be
+	 * reduced to a string-literal list — the consumer then falls back
+	 * to the empty-policy default (everything tight, no leading space).
+	 */
+	private static function readStringArrayField(cl:ClassType, fieldName:String):Array<String> {
+		final fields:Array<ClassField> = cl.fields.get();
+		for (f in fields) if (f.name == fieldName) {
+			final texpr:Null<TypedExpr> = f.expr();
+			if (texpr != null) return extractStringArray(texpr);
+		}
+		return [];
+	}
+
+	private static function extractStringArray(texpr:TypedExpr):Array<String> {
+		return switch texpr.expr {
+			case TArrayDecl(values):
+				final out:Array<String> = [];
+				for (v in values) {
+					final s:Null<String> = extractString(v);
+					if (s != null) out.push(s);
+				}
+				out;
+			case TCast(inner, _): extractStringArray(inner);
+			case TParenthesis(inner): extractStringArray(inner);
+			case _: [];
 		};
 	}
 }

@@ -446,7 +446,7 @@ class WriterLowering {
 		}
 
 		if (closeText != null && sepText != null) {
-			if (!isFirstField && !isRaw) parts.push(macro _dt(' '));
+			if (!isFirstField && !isRaw && isSpacedLead(openText)) parts.push(macro _dt(' '));
 			final tcExpr:Expr = trailingCommaExpr(starNode);
 			parts.push(macro {
 				final _arr = $fieldAccess;
@@ -459,7 +459,7 @@ class WriterLowering {
 				sepList($v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $tcExpr);
 			});
 		} else if (closeText != null) {
-			if (!isFirstField && !isRaw) parts.push(macro _dt(' '));
+			if (!isFirstField && !isRaw && isSpacedLead(openText)) parts.push(macro _dt(' '));
 			parts.push(macro {
 				final _arr = $fieldAccess;
 				final _docs:Array<anyparse.core.Doc> = [];
@@ -615,6 +615,16 @@ class WriterLowering {
 			expr: EField(macro opt, flagName),
 			pos: Context.currentPos(),
 		};
+	}
+
+	/**
+	 * True when the given lead-open string is declared by the format as
+	 * taking a preceding space (e.g. Haxe's `{` block-opens). All other
+	 * open-delimiters (`(`, `[`, etc.) stay tight against the preceding
+	 * token. Evaluated at macro time against `formatInfo.spacedLeads`.
+	 */
+	private function isSpacedLead(openText:Null<String>):Bool {
+		return openText != null && formatInfo.spacedLeads.indexOf(openText) != -1;
 	}
 
 	/** Build `_dc([elem1, elem2, ...])` from a macro-time array of Exprs. */

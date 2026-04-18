@@ -224,4 +224,16 @@ class HaxeWriterRoundTripTest extends Test {
 	function testIfBlock():Void {
 		roundTrip('class F { function f():Void { if (x) { return 1; } } }');
 	}
+
+	function testFunctionNameAdjacentToParen():Void {
+		final out:String = HxModuleWriter.write(HaxeModuleParser.parse('class F { function main():Void {} }'));
+		Assert.isTrue(out.indexOf('main()') != -1, 'expected `main()` (no space) in: <$out>');
+		Assert.isTrue(out.indexOf('main ()') == -1, 'did not expect space before `()` in: <$out>');
+	}
+
+	function testFunctionWithParamsAdjacentToParen():Void {
+		final out:String = HxModuleWriter.write(HaxeModuleParser.parse('class F { function bar(x:Int):Void {} }'));
+		Assert.isTrue(out.indexOf('bar(x') != -1, 'expected `bar(x` (no space) in: <$out>');
+		Assert.isTrue(out.indexOf('bar (') == -1, 'did not expect space before `(` in: <$out>');
+	}
 }

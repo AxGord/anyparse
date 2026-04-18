@@ -68,6 +68,14 @@ final class JsonFormat implements TextFormat {
 	 */
 	public var anyType(default, null):Null<String> = 'anyparse.grammar.json.JValue';
 
+	/**
+	 * Star struct field open-delimiters that take a leading space from
+	 * the preceding token. JSON keeps every open tight (`{"k":"v"}`,
+	 * `[1,2]`) so the list is empty — documented here rather than
+	 * relying on the extractor's default.
+	 */
+	public var spacedLeads(default, null):Array<String> = [];
+
 	public var intLiteral(default, null):EReg = ~/^-?(?:0|[1-9][0-9]*)/;
 	public var floatLiteral(default, null):EReg = ~/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][-+]?[0-9]+)?/;
 	public var boolLiterals(default, null):Null<BoolLiterals> = {trueLit: 'true', falseLit: 'false'};

@@ -64,6 +64,15 @@ final class HaxeFormat implements TextFormat {
 	public var onMissing(default, null):MissingPolicy = MissingPolicy.Error;
 	public var onUnknown(default, null):UnknownPolicy = UnknownPolicy.Error;
 
+	/**
+	 * Star struct field open-delimiters that take a leading space from
+	 * the preceding token. For Haxe only `{` block-opens do — `(` and
+	 * `[` stay tight against the previous identifier, yielding
+	 * `function main()` / `a[0]` / `new Foo(x)` rather than
+	 * `function main ()` / `a [0]` / `new Foo (x)`.
+	 */
+	public var spacedLeads(default, null):Array<String> = ['{'];
+
 	public var intLiteral(default, null):EReg = ~/^-?(?:0|[1-9][0-9]*)/;
 	public var floatLiteral(default, null):EReg = ~/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][-+]?[0-9]+)?/;
 	public var boolLiterals(default, null):Null<BoolLiterals> = {trueLit: 'true', falseLit: 'false'};
