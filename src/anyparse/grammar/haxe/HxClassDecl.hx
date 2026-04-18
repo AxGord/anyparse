@@ -32,5 +32,5 @@ package anyparse.grammar.haxe;
 @:ws
 typedef HxClassDecl = {
 	@:kw('class') var name:HxIdentLit;
-	@:lead('{') @:trail('}') var members:Array<HxMemberDecl>;
+	@:leftCurly @:lead('{') @:trail('}') var members:Array<HxMemberDecl>;
 }

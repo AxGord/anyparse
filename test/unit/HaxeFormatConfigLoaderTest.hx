@@ -2,6 +2,7 @@ package unit;
 
 import utest.Assert;
 import utest.Test;
+import anyparse.format.BracePlacement;
 import anyparse.format.IndentChar;
 import anyparse.grammar.haxe.HaxeFormat;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
@@ -146,6 +147,35 @@ class HaxeFormatConfigLoaderTest extends Test {
 		Assert.equals(defaults.sameLineElse, opts.sameLineElse);
 		Assert.equals(defaults.sameLineCatch, opts.sameLineCatch);
 		Assert.equals(defaults.sameLineDoWhile, opts.sameLineDoWhile);
+	}
+
+	public function testLineEndsLeftCurlyBeforeFlipsToNext():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"lineEnds": {"leftCurly": "before"}}');
+		Assert.equals(BracePlacement.Next, opts.leftCurly);
+	}
+
+	public function testLineEndsLeftCurlyBothFlipsToNext():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"lineEnds": {"leftCurly": "both"}}');
+		Assert.equals(BracePlacement.Next, opts.leftCurly);
+	}
+
+	public function testLineEndsLeftCurlyAfterKeepsSame():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"lineEnds": {"leftCurly": "after"}}');
+		Assert.equals(BracePlacement.Same, opts.leftCurly);
+	}
+
+	public function testLineEndsLeftCurlyNoneDegradesToSame():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"lineEnds": {"leftCurly": "none"}}');
+		Assert.equals(BracePlacement.Same, opts.leftCurly);
+	}
+
+	public function testLineEndsLeftCurlyEndToEnd():Void {
+		final src:String = 'class Main { public static function main() {} }';
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"lineEnds": {"leftCurly": "both"}}');
+		final ast:HxModule = HaxeModuleParser.parse(src);
+		final out:String = HxModuleWriter.write(ast, opts);
+		Assert.isTrue(out.indexOf('class Main\n{') != -1, 'expected `class Main\\n{` in: <$out>');
+		Assert.isTrue(out.indexOf('function main()\n\t{') != -1, 'expected `function main()\\n\\t{` in: <$out>');
 	}
 
 	public function testEndToEndConfigDrivesWriter():Void {

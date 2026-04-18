@@ -1,6 +1,7 @@
 package anyparse.grammar.haxe;
 
 import anyparse.format.BodyPolicy;
+import anyparse.format.BracePlacement;
 import anyparse.format.Encoding;
 import anyparse.format.IndentChar;
 import anyparse.format.text.FieldLookup;
@@ -116,6 +117,13 @@ final class HaxeFormat implements TextFormat {
 	 * corpus reference expects `do` non-block bodies on the next line
 	 * by default, and opting in to same-line requires
 	 * `sameLine.doWhileBody: "same"` in the user's `hxformat.json`.
+	 *
+	 * Left-curly default (ψ₆) is `Same` — `{` stays on the same line
+	 * as the preceding token (`class F {` / `function f() {`). This
+	 * mirrors haxe-formatter's `lineEnds.leftCurly: @:default(After)`
+	 * and keeps pre-ψ₆ byte-identical output. Flipping to `Next`
+	 * requires an explicit `hxformat.json` override
+	 * (`"lineEnds": { "leftCurly": "before" }` or `"both"`).
 	 */
 	public var defaultWriteOptions(default, null):HxModuleWriteOptions = {
 		indentChar: Tab,
@@ -135,6 +143,7 @@ final class HaxeFormat implements TextFormat {
 		forBody: BodyPolicy.Same,
 		whileBody: BodyPolicy.Same,
 		doBody: BodyPolicy.Next,
+		leftCurly: BracePlacement.Same,
 	};
 
 	private function new() {}

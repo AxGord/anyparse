@@ -378,6 +378,7 @@ class HaxeWriterRoundTripTest extends Test {
 			forBody: forBody,
 			whileBody: whileBody,
 			doBody: doBody,
+			leftCurly: base.leftCurly,
 		};
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}

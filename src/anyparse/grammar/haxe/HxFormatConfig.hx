@@ -10,13 +10,15 @@ package anyparse.grammar.haxe;
  * produces a `HxFormatConfig` with all-null sections, which the
  * loader then materialises as `HaxeFormat.instance.defaultWriteOptions`.
  *
- * Only four top-level sections are modelled here: the exact ones the
- * writer currently consumes. Everything else (`lineEnds`, `whitespace`,
- * `emptyLines`, …) lands with the slice that introduces the matching
- * `HxModuleWriteOptions` knob — the loader's forward-compat contract
- * silently drops unknown keys, and the macro parser's
- * `UnknownPolicy.Skip` inherited from `JsonFormat` enforces that at
- * compile time.
+ * Top-level sections modelled here track the `HxModuleWriteOptions`
+ * surface exposed to callers. Everything else (`whitespace`,
+ * `emptyLines`, `baseTypeHints`, …) lands with the slice that
+ * introduces the matching `HxModuleWriteOptions` knob — the loader's
+ * forward-compat contract silently drops unknown keys, and the macro
+ * parser's `UnknownPolicy.Skip` inherited from `JsonFormat` enforces
+ * that at compile time.
+ *
+ * `lineEnds` section added in slice ψ₆ (feeds `opt.leftCurly`).
  */
 @:peg @:schema(anyparse.format.text.JsonFormat) @:ws
 typedef HxFormatConfig = {
@@ -28,4 +30,6 @@ typedef HxFormatConfig = {
 	@:optional var sameLine:HxFormatSameLineSection;
 
 	@:optional var trailingCommas:HxFormatTrailingCommasSection;
+
+	@:optional var lineEnds:HxFormatLineEndsSection;
 };

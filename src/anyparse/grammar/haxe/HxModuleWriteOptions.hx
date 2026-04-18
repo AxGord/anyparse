@@ -1,6 +1,7 @@
 package anyparse.grammar.haxe;
 
 import anyparse.format.BodyPolicy;
+import anyparse.format.BracePlacement;
 import anyparse.format.WriteOptions;
 
 /**
@@ -55,6 +56,16 @@ import anyparse.format.WriteOptions;
  * Policies apply only to non-block bodies: a block body (`{ … }`)
  * carries its own hardlines from `blockBody`, so the separator before
  * `{` is always a single space regardless of the policy.
+ *
+ * Field added in slice ψ₆ (left-curly placement):
+ *  - `leftCurly` — placement of block-opening `{` at every grammar
+ *    site tagged with `@:leftCurly('leftCurly')`. `Same` keeps `{` on
+ *    the same line as the preceding token separated by a single space
+ *    (the current default). `Next` emits `{` on the next line at the
+ *    current indent level, producing the Allman-style layout
+ *    (`class Main\n{`). Only two values are exposed — haxe-formatter's
+ *    `Before` / `Both` collapse to `Next` for our output, and the
+ *    inline `None` shape is not yet supported.
  */
 typedef HxModuleWriteOptions = WriteOptions & {
 	sameLineElse:Bool,
@@ -68,4 +79,5 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	forBody:BodyPolicy,
 	whileBody:BodyPolicy,
 	doBody:BodyPolicy,
+	leftCurly:BracePlacement,
 };

@@ -31,5 +31,5 @@ typedef HxFnDecl = {
 	var name:HxIdentLit;
 	@:lead('(') @:trail(')') @:sep(',') @:trailingComma('trailingCommaParams') var params:Array<HxParam>;
 	@:optional @:lead(':') var returnType:Null<HxTypeRef>;
-	@:lead('{') @:trail('}') var body:Array<HxStatement>;
+	@:leftCurly @:lead('{') @:trail('}') var body:Array<HxStatement>;
 }

@@ -508,7 +508,7 @@ class WriterLowering {
 				sepList($v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $tcExpr);
 			});
 		} else if (closeText != null) {
-			if (!isFirstField && !isRaw && isSpacedLead(openText)) parts.push(macro _dt(' '));
+			if (!isFirstField && !isRaw && isSpacedLead(openText)) parts.push(leftCurlySeparator(starNode));
 			parts.push(macro {
 				final _arr = $fieldAccess;
 				final _docs:Array<anyparse.core.Doc> = [];
@@ -646,6 +646,38 @@ class WriterLowering {
 			pos: Context.currentPos(),
 		};
 		return macro (($optFlag) ? _dt(' ') : _dhl());
+	}
+
+	/**
+	 * Return a Doc-separator expression for the whitespace that precedes
+	 * a Star struct field's opening `{`.
+	 *
+	 * Without `@:leftCurly` metadata, emits a plain space (`_dt(' ')`) —
+	 * the existing pre-ψ₆ behaviour. With `@:leftCurly` present (no
+	 * argument), emits a switch that picks between `_dhl()` (hardline
+	 * at the current indent, placing `{` on its own line) and
+	 * `_dt(' ')` based on `opt.leftCurly:BracePlacement`. The knob
+	 * field name is hard-coded because haxe-formatter's `lineEnds.
+	 * leftCurly` is a single global knob and every tagged grammar site
+	 * maps to the same runtime option. Per-category overrides would
+	 * add their own metas (`@:typeBrace` / `@:blockBrace` / …) with
+	 * their own knob fields, keeping each meta tied to exactly one
+	 * option field.
+	 *
+	 * The `Next` pattern is built as a raw `EField` expression to avoid
+	 * macro-time enum resolution against the `BracePlacement` abstract
+	 * (same precedent as `bodyPolicyWrap`). Everything other than
+	 * `Next` (currently only `Same`) falls through to the default case
+	 * and keeps the space — additional placements can be routed here
+	 * by adding more cases.
+	 */
+	private static function leftCurlySeparator(starNode:ShapeNode):Expr {
+		if (!hasMeta(starNode, ':leftCurly')) return macro _dt(' ');
+		final nextPat:Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BracePlacement', 'Next']);
+		final cases:Array<Case> = [
+			{values: [nextPat], expr: macro _dhl(), guard: null},
+		];
+		return {expr: ESwitch(macro opt.leftCurly, cases, macro _dt(' ')), pos: Context.currentPos()};
 	}
 
 	/**
