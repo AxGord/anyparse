@@ -68,6 +68,14 @@ class Build {
 
 		final shapeBuilder:ShapeBuilder = new ShapeBuilder(formatInfo);
 		final shape:ShapeBuilder.ShapeResult = shapeBuilder.build(rootType);
+		TriviaAnalysis.run(shape);
+
+		#if anyparse_trivia_dump
+		for (name => node in shape.rules) {
+			final bearing:Bool = node.annotations.get('trivia.bearing') == true;
+			Sys.println('// trivia.bearing: $name = $bearing');
+		}
+		#end
 
 		final registry:StrategyRegistry = new StrategyRegistry();
 		registry.register(new Bin());
@@ -127,6 +135,7 @@ class Build {
 
 		final shapeBuilder:ShapeBuilder = new ShapeBuilder(formatInfo);
 		final shape:ShapeBuilder.ShapeResult = shapeBuilder.build(rootType);
+		TriviaAnalysis.run(shape);
 
 		final registry:StrategyRegistry = new StrategyRegistry();
 		registry.register(new Bin());

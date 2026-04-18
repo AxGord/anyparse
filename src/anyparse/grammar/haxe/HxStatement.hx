@@ -101,7 +101,7 @@ enum HxStatement {
 	@:kw('try')
 	TryCatchStmt(stmt:HxTryCatchStmt);
 
-	@:lead('{') @:trail('}')
+	@:lead('{') @:trail('}') @:trivia
 	BlockStmt(stmts:Array<HxStatement>);
 
 	@:trail(';')

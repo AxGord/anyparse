@@ -29,5 +29,5 @@ package anyparse.grammar.haxe;
 @:schema(anyparse.grammar.haxe.HaxeFormat)
 @:ws
 typedef HxModule = {
-	var decls:Array<HxDecl>;
+	@:trivia var decls:Array<HxDecl>;
 }
