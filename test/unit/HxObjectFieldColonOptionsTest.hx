@@ -120,6 +120,7 @@ class HxObjectFieldColonOptionsTest extends Test {
 			leftCurly: base.leftCurly,
 			objectFieldColon: objectFieldColon,
 			elseIf: base.elseIf,
+			fitLineIfWithElse: base.fitLineIfWithElse,
 		};
 	}
 }

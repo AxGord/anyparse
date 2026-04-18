@@ -141,6 +141,7 @@ class HxElseIfOptionsTest extends Test {
 			leftCurly: base.leftCurly,
 			objectFieldColon: base.objectFieldColon,
 			elseIf: elseIf,
+			fitLineIfWithElse: base.fitLineIfWithElse,
 		};
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}
@@ -168,6 +169,7 @@ class HxElseIfOptionsTest extends Test {
 			leftCurly: base.leftCurly,
 			objectFieldColon: base.objectFieldColon,
 			elseIf: elseIf,
+			fitLineIfWithElse: base.fitLineIfWithElse,
 		};
 	}
 }

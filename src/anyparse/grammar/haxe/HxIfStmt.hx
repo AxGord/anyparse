@@ -36,6 +36,18 @@ package anyparse.grammar.haxe;
  * own bodyPolicy, so `else if (...)` stays inline by default even
  * though `elseBody=Next` pushes non-if branches to the next line.
  *
+ * `@:fmt(fitLineIfWithElse)` on BOTH `thenBody` and `elseBody` (ψ₁₂)
+ * gates the `FitLine` body policy on sibling-else presence at runtime:
+ * when `opt.fitLineIfWithElse` is `false` (default) and the `if` has
+ * an `else` clause, the body falls back to `Next` layout (hardline +
+ * indent + body) regardless of the `FitLine` policy. Matches haxe-
+ * formatter's `sameLine.fitLineIfWithElse: @:default(false)` — fitting
+ * one half of an if/else on one line and breaking the other reads as
+ * inconsistent, so the default degrades both halves together. The
+ * macro discovers the sibling field name via `lowerStruct`'s
+ * `optionalBodyFieldName` scan, so only the flag needs to be present
+ * here — no explicit sibling reference.
+ *
  * Dangling else is resolved correctly by construction: the inner `if`
  * greedily consumes the nearest `else`, leaving outer `if`s with no
  * else branch.
@@ -43,6 +55,6 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxIfStmt = {
 	@:lead('(') @:trail(')') var cond:HxExpr;
-	@:fmt(bodyPolicy('ifBody')) var thenBody:HxStatement;
-	@:optional @:kw('else') @:fmt(sameLine('sameLineElse'), shapeAware, bodyPolicy('elseBody'), elseIf) var elseBody:Null<HxStatement>;
+	@:fmt(bodyPolicy('ifBody'), fitLineIfWithElse) var thenBody:HxStatement;
+	@:optional @:kw('else') @:fmt(sameLine('sameLineElse'), shapeAware, bodyPolicy('elseBody'), elseIf, fitLineIfWithElse) var elseBody:Null<HxStatement>;
 };

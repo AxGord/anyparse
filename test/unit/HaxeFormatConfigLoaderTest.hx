@@ -248,6 +248,21 @@ class HaxeFormatConfigLoaderTest extends Test {
 		Assert.isTrue(out.indexOf('} else if (b)') == -1, 'did not expect inline nested if in: <$out>');
 	}
 
+	public function testSameLineFitLineIfWithElseDefaultsToFalse():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		Assert.isFalse(opts.fitLineIfWithElse);
+	}
+
+	public function testSameLineFitLineIfWithElseTrueMapsToTrue():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"fitLineIfWithElse": true}}');
+		Assert.isTrue(opts.fitLineIfWithElse);
+	}
+
+	public function testSameLineFitLineIfWithElseFalseMapsToFalse():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"fitLineIfWithElse": false}}');
+		Assert.isFalse(opts.fitLineIfWithElse);
+	}
+
 	public function testBodyPolicyDefaultsMatchUpstream():Void {
 		// ψ₁₀a: stock haxe-formatter defaults every non-block body knob
 		// to Next. Verify our defaults align with the empty-config path.

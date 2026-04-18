@@ -137,6 +137,13 @@ final class HaxeFormat implements TextFormat {
 	 * (`{a:0}`, i.e. `None`) because the corpus reference expects the
 	 * spaced form. Callers who want byte-identical pre-ψ₇ layout must
 	 * pass `objectFieldColon: WhitespacePolicy.None` explicitly.
+	 *
+	 * `fitLineIfWithElse` default (ψ₁₂) is `false` — when an `if` has
+	 * an `else` and the body policies are `FitLine`, the bodies fall
+	 * back to the `Next` layout instead of flat-or-break. Matches
+	 * haxe-formatter's `sameLine.fitLineIfWithElse: @:default(false)`.
+	 * Flipping to `true` requires an explicit `hxformat.json` override
+	 * (`"sameLine": { "fitLineIfWithElse": true }`).
 	 */
 	public var defaultWriteOptions(default, null):HxModuleWriteOptions = {
 		indentChar: Tab,
@@ -159,6 +166,7 @@ final class HaxeFormat implements TextFormat {
 		leftCurly: BracePlacement.Same,
 		objectFieldColon: WhitespacePolicy.After,
 		elseIf: KeywordPlacement.Same,
+		fitLineIfWithElse: false,
 	};
 
 	private function new() {}

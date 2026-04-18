@@ -346,6 +346,21 @@ class WriterLowering {
 		// because a lone keyword on the same line as a semicolon-
 		// terminated body has no meaning.
 		var prevBodyField:Null<PrevBodyInfo> = null;
+		// ψ₁₂: captures the name of the first `@:optional` sibling that
+		// carries `@:fmt(bodyPolicy(...))` — consumed by children tagged
+		// `@:fmt(fitLineIfWithElse)` to wire a runtime sibling-presence
+		// check into the `FitLine` branch of `bodyPolicyWrap`. In the
+		// current grammar this is `HxIfStmt.elseBody`; the same shape
+		// (pair of bodyPolicy fields, one required, one optional) can
+		// opt in without further macro changes. First-match semantics:
+		// a struct with two optional bodyPolicy siblings would quietly
+		// pick one — no such grammar exists today, and a future case
+		// can disambiguate via an explicit arg on `@:fmt(fitLineIfWithElse)`.
+		var optionalBodyFieldName:Null<String> = null;
+		for (c in node.children) if (c.annotations.get('base.optional') == true && fmtReadString(c, 'bodyPolicy') != null) {
+			optionalBodyFieldName = c.annotations.get('base.fieldName');
+			break;
+		}
 
 		for (child in node.children) {
 			final fieldName:Null<String> = child.annotations.get('base.fieldName');
@@ -388,6 +403,7 @@ class WriterLowering {
 
 			// Field value
 			final bodyPolicyFlag:Null<String> = fmtReadString(child, 'bodyPolicy');
+			final elseFieldName:Null<String> = fmtHasFlag(child, 'fitLineIfWithElse') ? optionalBodyFieldName : null;
 			var justWrappedBody:Null<PrevBodyInfo> = null;
 			switch child.kind {
 				case Ref if (isOptional):
@@ -407,7 +423,7 @@ class WriterLowering {
 						optParts.push(sameLineSeparator(child, prevBodyField));
 						if (bodyPolicyFlag != null) {
 							optParts.push(macro _dt($v{kwLead}));
-							optParts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, macro _optVal, refName, hasElseIf));
+							optParts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, macro _optVal, refName, hasElseIf, elseFieldName));
 						} else {
 							optParts.push(macro _dt($v{kwLead + ' '}));
 							optParts.push(writeCall);
@@ -444,7 +460,7 @@ class WriterLowering {
 					// `)` trail): the trail emits the token literally and
 					// bodyPolicyWrap replaces the default ` ` separator.
 					if (bodyPolicyFlag != null && kwLead == null && leadText == null && !isRaw) {
-						parts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, fieldAccess, refName, hasElseIf));
+						parts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, fieldAccess, refName, hasElseIf, elseFieldName));
 						justWrappedBody = {access: fieldAccess, typePath: refName};
 					} else {
 						if (kwLead == null && leadText == null && !isFirstField && !isRaw) {
@@ -808,11 +824,24 @@ class WriterLowering {
 	 * on one line for nested ifs and only pushes non-if else branches
 	 * to the next line.
 	 *
+	 * ψ₁₂: when `elseFieldName` is non-null (derived from a sibling
+	 * `@:optional` bodyPolicy field captured by `lowerStruct` and gated
+	 * by the field's own `@:fmt(fitLineIfWithElse)` flag), the `FitLine`
+	 * branch is replaced with a runtime ternary that degrades to the
+	 * `Next` layout when `opt.fitLineIfWithElse` is `false` AND the
+	 * sibling is non-null. On the sibling site itself (`elseBody`) the
+	 * runtime check trivially resolves to `opt.fitLineIfWithElse`
+	 * because the emission is already inside the `if (_optVal != null)`
+	 * guard; on the peer site (`thenBody`) the check becomes a real
+	 * lookup on `value.<elseFieldName>`. When `elseFieldName` is null,
+	 * the `FitLine` branch stays byte-identical to pre-ψ₁₂.
+	 *
 	 * The case patterns are built as raw `EField` expressions to avoid
 	 * macro-time enum resolution against the `BodyPolicy` abstract.
 	 */
 	private function bodyPolicyWrap(
-		flagName:String, writeCall:Expr, bodyValueExpr:Expr, bodyTypePath:String, hasElseIf:Bool
+		flagName:String, writeCall:Expr, bodyValueExpr:Expr, bodyTypePath:String, hasElseIf:Bool,
+		elseFieldName:Null<String>
 	):Expr {
 		final optFlag:Expr = {
 			expr: EField(macro opt, flagName),
@@ -822,10 +851,20 @@ class WriterLowering {
 		final samePat:Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Same']));
 		final nextPat:Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Next']));
 		final fitPat:Expr = MacroStringTools.toFieldExpr(bpPath.concat(['FitLine']));
+		final fitExpr:Expr = if (elseFieldName == null) macro _dg(_dn(_cols, _dc([_dl(), $writeCall])));
+		else {
+			final elseAccess:Expr = {
+				expr: EField(macro value, elseFieldName),
+				pos: Context.currentPos(),
+			};
+			macro (opt.fitLineIfWithElse || $elseAccess == null)
+				? _dg(_dn(_cols, _dc([_dl(), $writeCall])))
+				: _dn(_cols, _dc([_dhl(), $writeCall]));
+		}
 		final policyCases:Array<Case> = [
 			{values: [samePat], expr: macro _dc([_dt(' '), $writeCall]), guard: null},
 			{values: [nextPat], expr: macro _dn(_cols, _dc([_dhl(), $writeCall])), guard: null},
-			{values: [fitPat], expr: macro _dg(_dn(_cols, _dc([_dl(), $writeCall]))), guard: null},
+			{values: [fitPat], expr: fitExpr, guard: null},
 		];
 		final policySwitch:Expr = {expr: ESwitch(optFlag, policyCases, null), pos: Context.currentPos()};
 

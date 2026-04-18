@@ -93,6 +93,22 @@ import anyparse.format.WriteOptions;
  *    knob only affects the `IfStmt` ctor of `elseBody` — non-if
  *    branches (`ExprStmt`, `ReturnStmt`, `BlockStmt`, ...) still
  *    route through `elseBody`'s `@:fmt(bodyPolicy(...))`.
+ *
+ * Field added in slice ψ₁₂ (fit-line gate when else is present):
+ *  - `fitLineIfWithElse` — runtime gate on the `FitLine` body policy
+ *    for `if`-statement bodies (both then- and else-branch) when the
+ *    enclosing `if` has an `else` clause. When `false` (default —
+ *    matches haxe-formatter's `sameLine.fitLineIfWithElse:
+ *    @:default(false)`) an `ifBody=FitLine` / `elseBody=FitLine`
+ *    degrades to the `Next` layout (hardline + indent + body) for any
+ *    `if` that carries an `else`, because fitting the two halves on
+ *    separate lines with one fitted and one broken reads as
+ *    inconsistent. When `true`, the `FitLine` policy applies
+ *    unconditionally. The knob is wired through sites tagged with
+ *    `@:fmt(fitLineIfWithElse)` in the grammar — the writer gates at
+ *    macro-lower time via sibling-field introspection, so future
+ *    grammar nodes with a similar then/else pair can opt in by adding
+ *    the same flag without further macro changes.
  */
 typedef HxModuleWriteOptions = WriteOptions & {
 	sameLineElse:Bool,
@@ -109,4 +125,5 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	leftCurly:BracePlacement,
 	objectFieldColon:WhitespacePolicy,
 	elseIf:KeywordPlacement,
+	fitLineIfWithElse:Bool,
 };

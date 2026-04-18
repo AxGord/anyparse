@@ -381,6 +381,7 @@ class HaxeWriterRoundTripTest extends Test {
 			leftCurly: base.leftCurly,
 			objectFieldColon: base.objectFieldColon,
 			elseIf: base.elseIf,
+			fitLineIfWithElse: base.fitLineIfWithElse,
 		};
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}

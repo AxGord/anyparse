@@ -34,6 +34,10 @@ import anyparse.format.WhitespacePolicy;
  *   `"keep"` degrades to `Same` (no per-node source-shape tracking).
  *   The knob only affects the `IfStmt` ctor of `elseBody` — non-if
  *   else branches still route through `sameLine.elseBody`.
+ * - `sameLine.fitLineIfWithElse` (ψ₁₂): boolean — `true` keeps the
+ *   `FitLine` body policy active for `if`s with an `else` clause,
+ *   `false` (default) degrades those bodies to `Next`. Matches haxe-
+ *   formatter's `sameLine.fitLineIfWithElse: @:default(false)`.
  * - `trailingCommas.arrayLiteralDefault` / `trailingCommas.callArgumentDefault`
  *   / `trailingCommas.functionParameterDefault`: enum string — `"yes"`
  *   maps to `true`, every other value (`"no"`, `"keep"`, `"ignore"`) to
@@ -105,6 +109,7 @@ final class HaxeFormatConfigLoader {
 			leftCurly: base.leftCurly,
 			objectFieldColon: base.objectFieldColon,
 			elseIf: base.elseIf,
+			fitLineIfWithElse: base.fitLineIfWithElse,
 		};
 		if (cfg.indentation != null) applyIndentation(cfg.indentation, result);
 		if (cfg.wrapping != null) applyWrapping(cfg.wrapping, result);
@@ -145,6 +150,7 @@ final class HaxeFormatConfigLoader {
 		if (section.whileBody != null) opt.whileBody = bodyPolicyToRuntime(section.whileBody);
 		if (section.doWhileBody != null) opt.doBody = bodyPolicyToRuntime(section.doWhileBody);
 		if (section.elseIf != null) opt.elseIf = keywordPlacementToRuntime(section.elseIf);
+		if (section.fitLineIfWithElse != null) opt.fitLineIfWithElse = section.fitLineIfWithElse;
 	}
 
 	private static function applyTrailingCommas(section:HxFormatTrailingCommasSection, opt:HxModuleWriteOptions):Void {

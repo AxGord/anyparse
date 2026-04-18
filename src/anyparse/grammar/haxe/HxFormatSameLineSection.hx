@@ -22,6 +22,14 @@ package anyparse.grammar.haxe;
  * inline; `"next"` moves the nested `if` onto its own line at one
  * indent level deeper. The loader maps this onto the runtime
  * `elseIf` option on `HxModuleWriteOptions`.
+ *
+ * `fitLineIfWithElse` (ψ₁₂) is a boolean gate on the `FitLine` body
+ * policy for `if`-statement bodies (both then- and else-branch) when
+ * the enclosing `if` carries an `else`. When `false` (default) an
+ * `ifBody=fitLine` / `elseBody=fitLine` degrades to `Next` for such
+ * `if`s; `true` keeps `FitLine` active regardless of the else clause.
+ * The loader maps this onto the runtime `fitLineIfWithElse` option on
+ * `HxModuleWriteOptions`.
  */
 @:peg typedef HxFormatSameLineSection = {
 
@@ -42,4 +50,6 @@ package anyparse.grammar.haxe;
 	@:optional var doWhileBody:HxFormatBodyPolicy;
 
 	@:optional var elseIf:HxFormatKeywordPlacement;
+
+	@:optional var fitLineIfWithElse:Bool;
 };
