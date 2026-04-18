@@ -20,5 +20,5 @@ package anyparse.grammar.haxe;
 typedef HxForStmt = {
 	@:lead('(') var varName:HxIdentLit;
 	@:kw('in') @:trail(')') var iterable:HxExpr;
-	@:bodyPolicy('forBody') var body:HxStatement;
+	@:fmt(bodyPolicy('forBody')) var body:HxStatement;
 };

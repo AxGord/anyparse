@@ -19,11 +19,11 @@ import anyparse.grammar.haxe.HxModuleWriter;
  * branches to their own line; `KeywordPlacement.Next` moves the nested
  * `if` to the next line at one indent level deeper.
  *
- * Wired via `@:elseIf` (no argument — ψ₆ principle) on
+ * Wired via `@:fmt(elseIf)` (no argument — ψ₆ principle) on
  * `HxIfStmt.elseBody`. The override runs at `bodyPolicyWrap` time:
  * when the runtime value matches the `IfStmt(_)` pattern on
  * `HxStatement`, the emission routes to `opt.elseIf` regardless of the
- * field's own `@:bodyPolicy` flag value. Non-if else branches fall
+ * field's own `@:fmt(bodyPolicy(...))` flag value. Non-if else branches fall
  * through to `elseBody`-driven layout.
  */
 @:nullSafety(Strict)

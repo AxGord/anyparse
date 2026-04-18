@@ -15,13 +15,13 @@ package anyparse.format;
  * bodyPolicy applies to it. Produces the `} else\n\tif (...)` layout
  * that issue_11_else_if_next_line exercises.
  *
- * Consumed by the `@:elseIf` writer meta: presence of the meta on an
- * optional `@:kw` body field switches the emission to a ctor-specific
- * override — when the runtime value matches the `IfStmt` ctor (the
- * `else if` idiom), the separator between the keyword and the nested
- * statement is picked from `opt.elseIf`, bypassing the field's own
- * `@:bodyPolicy`. For non-`IfStmt` ctors the behaviour falls through
- * to the normal `@:bodyPolicy`-driven layout.
+ * Consumed by the `@:fmt(elseIf)` writer flag: presence of the flag
+ * on an optional `@:kw` body field switches the emission to a
+ * ctor-specific override — when the runtime value matches the `IfStmt`
+ * ctor (the `else if` idiom), the separator between the keyword and
+ * the nested statement is picked from `opt.elseIf`, bypassing the
+ * field's own `@:fmt(bodyPolicy(...))`. For non-`IfStmt` ctors the
+ * behaviour falls through to the normal bodyPolicy-driven layout.
  *
  * Two values are sufficient because the `else if` idiom only makes
  * sense inline or on the next line — `FitLine` would duplicate the
@@ -33,8 +33,9 @@ package anyparse.format;
  * Format-neutral — lives in `anyparse.format` so grammars for other
  * languages (AS3, C-family, ...) can reuse the same shape for their
  * own keyword-placement knobs (future `ifElse`, `tryCatch`, `doWhile`
- * will each get their own `@:<name>` meta with its own `KeywordPlacement`
- * options field, per the ψ₆ principle of one meta = one options field).
+ * will each get their own `@:fmt(<name>)` flag with its own
+ * `KeywordPlacement` options field, per the ψ₆ principle of one flag =
+ * one options field).
  */
 enum abstract KeywordPlacement(Int) from Int to Int {
 

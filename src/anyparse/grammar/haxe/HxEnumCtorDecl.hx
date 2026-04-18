@@ -18,5 +18,5 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxEnumCtorDecl = {
 	var name:HxIdentLit;
-	@:lead('(') @:trail(')') @:sep(',') @:trailingComma('trailingCommaParams') var params:Array<HxParam>;
+	@:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams')) var params:Array<HxParam>;
 };

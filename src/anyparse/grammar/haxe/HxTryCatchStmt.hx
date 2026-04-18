@@ -15,7 +15,7 @@ package anyparse.grammar.haxe;
  * `HxCatchClause` (i.e. no `catch` keyword found). Without
  * `@:tryparse`, the last-field heuristic would select EOF mode.
  *
- * `@:sameLine("sameLineCatch")` on `catches` makes the writer's
+ * `@:fmt(sameLine("sameLineCatch"))` on `catches` makes the writer's
  * separator between the body and the first catch, and between
  * consecutive catches, runtime-switchable: when the flag is true
  * the separator is a plain space (`} catch (…)`); when false it
@@ -24,5 +24,5 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxTryCatchStmt = {
 	var body:HxStatement;
-	@:tryparse @:sameLine('sameLineCatch') var catches:Array<HxCatchClause>;
+	@:tryparse @:fmt(sameLine('sameLineCatch')) var catches:Array<HxCatchClause>;
 };

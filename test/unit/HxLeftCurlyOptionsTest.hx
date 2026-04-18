@@ -14,7 +14,7 @@ import anyparse.grammar.haxe.HxModuleWriter;
  * as the preceding token; `BracePlacement.Next` moves `{` to the next
  * line at the outer indent, producing Allman-style layout.
  *
- * The knob is wired via `@:leftCurly('leftCurly')` on every Star
+ * The knob is wired via `@:fmt(leftCurly)` on every Star
  * struct field that emits a `{` through `blockBody` — in the Haxe
  * grammar those are `HxClassDecl.members`, `HxInterfaceDecl.members`,
  * `HxAbstractDecl.members`, and `HxFnDecl.body`. One emission site in

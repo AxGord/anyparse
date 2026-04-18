@@ -14,7 +14,7 @@ import anyparse.grammar.haxe.HxModuleWriter;
  *
  * Three independent `Bool` knobs on `HxModuleWriteOptions` — all
  * defaulting to `false` on `HaxeFormat.defaultWriteOptions`. Each knob
- * is wired through the declarative `@:trailingComma("flagName")` meta
+ * is wired through the declarative `@:fmt(trailingComma("flagName"))` knob
  * on the relevant grammar field / enum branch and plumbed to the new
  * `trailingComma:Bool` argument of the generated `sepList` helper.
  *

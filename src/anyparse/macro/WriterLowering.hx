@@ -212,7 +212,7 @@ class WriterLowering {
 			else
 				{expr: ECall(macro $i{subFn}, [macro $i{argNames[0]}, macro opt]), pos: Context.currentPos()};
 
-			// When the sub-struct opens with a bare-Ref @:bodyPolicy field,
+			// When the sub-struct opens with a bare-Ref @:fmt(bodyPolicy(...)) field,
 			// the sub-struct's writer emits the header→body separator via
 			// bodyPolicyWrap (Same/Next/FitLine). Stripping the trailing
 			// space from kwLead here avoids a double space (Same) or
@@ -339,7 +339,7 @@ class WriterLowering {
 		// `HxMemberDecl.modifiers` is empty.
 		var prevEmptyCandidate:Null<Expr> = null;
 		// ψ₉: tracks the immediately preceding bare-Ref field that was
-		// wrapped via `bodyPolicyWrap` — the next field's `@:sameLine`
+		// wrapped via `bodyPolicyWrap` — the next field's `@:fmt(sameLine(...))`
 		// separator must then be shape-aware on the preceding body's
 		// runtime ctor: a block ctor (e.g. `BlockStmt`) respects the
 		// flag (space / hardline), any other ctor forces a hardline
@@ -356,7 +356,7 @@ class WriterLowering {
 			final trailText:Null<String> = readMetaString(child, ':trail');
 			final isStar:Bool = child.kind == Star;
 			final isOptional:Bool = child.annotations.get('base.optional') == true;
-			final hasElseIf:Bool = hasMeta(child, ':elseIf');
+			final hasElseIf:Bool = fmtHasFlag(child, 'elseIf');
 
 			final fieldAccess:Expr = {
 				expr: EField(macro value, fieldName),
@@ -372,7 +372,7 @@ class WriterLowering {
 			}
 
 			// D61: kw prefix — space before kw (unless first), kw text with trailing space.
-			// @:sameLine(flagName) on the child switches the leading space to a
+			// @:fmt(sameLine(flagName)) on the child switches the leading space to a
 			// hardline when `opt.<flagName>` is false (τ₁).
 			if (kwLead != null && !isOptional) {
 				if (!isFirstField && !isRaw) parts.push(sameLineSeparator(child, prevBodyField));
@@ -380,14 +380,14 @@ class WriterLowering {
 			}
 
 			// D61: non-optional lead — no space before lead.
-			// ψ₇: `@:objectFieldColon` on the field switches the emission
+			// ψ₇: `@:fmt(objectFieldColon)` on the field switches the emission
 			// to a runtime-configurable spacing around the lead text; all
 			// other mandatory leads stay tight.
 			if (leadText != null && !isOptional)
 				parts.push(objectFieldColonLead(child, leadText));
 
 			// Field value
-			final bodyPolicyFlag:Null<String> = readMetaString(child, ':bodyPolicy');
+			final bodyPolicyFlag:Null<String> = fmtReadString(child, 'bodyPolicy');
 			var justWrappedBody:Null<PrevBodyInfo> = null;
 			switch child.kind {
 				case Ref if (isOptional):
@@ -397,10 +397,10 @@ class WriterLowering {
 						expr: ECall(macro $i{writeFn}, [macro _optVal, macro opt]),
 						pos: Context.currentPos(),
 					};
-					// Leading separator is runtime-conditional when @:sameLine
+					// Leading separator is runtime-conditional when @:fmt(sameLine(...))
 					// is present — see sameLineSeparator. Split into (sep, kw+' ')
 					// so the sep part can become a hardline (τ₁).
-					// @:bodyPolicy replaces the final ' ' before the body with
+					// @:fmt(bodyPolicy(...)) replaces the final ' ' before the body with
 					// a runtime-switched separator (Same/Next/FitLine, ψ₄).
 					final optParts:Array<Expr> = [];
 					if (kwLead != null) {
@@ -539,9 +539,9 @@ class WriterLowering {
 			// Try-parse mode. Emit lead if present (e.g. ':' in default:).
 			if (openText != null)
 				parts.push(macro _dt($v{openText}));
-			final sameLineName:Null<String> = readMetaString(starNode, ':sameLine');
+			final sameLineName:Null<String> = fmtReadString(starNode, 'sameLine');
 			if (sameLineName != null) {
-				// @:sameLine on a try-parse Star: each element is preceded by
+				// @:fmt(sameLine(...)) on a try-parse Star: each element is preceded by
 				// a runtime-conditional separator (space or hardline), so the
 				// first element's leading separator acts as the boundary with
 				// the preceding struct field (τ₁ — catches against try body).
@@ -645,13 +645,13 @@ class WriterLowering {
 	 * Return a Doc-separator expression for the whitespace that precedes
 	 * a struct-field's kw/lead token.
 	 *
-	 * Without `@:sameLine` metadata, emits a plain space (`_dt(' ')`) —
-	 * the existing D61 behaviour. With `@:sameLine("flagName")`, emits a
+	 * Without `@:fmt(sameLine(...))` metadata, emits a plain space (`_dt(' ')`) —
+	 * the existing D61 behaviour. With `@:fmt(sameLine("flagName"))`, emits a
 	 * ternary that picks between a plain space and a hardline at the
 	 * current indent level based on `opt.<flagName>:Bool`.
 	 *
-	 * ψ₉ opt-in shape-awareness via `@:shapeAware`: when the field also
-	 * carries the `@:shapeAware` meta AND `prevBody` is non-null (the
+	 * ψ₉ opt-in shape-awareness via `@:fmt(shapeAware)`: when the field also
+	 * carries the `@:fmt(shapeAware)` meta AND `prevBody` is non-null (the
 	 * immediately preceding struct field was a bare-Ref wrapped via
 	 * `bodyPolicyWrap`) AND the body's enum type has at least one block
 	 * ctor, the emitted separator adds a runtime ctor switch on the
@@ -667,19 +667,19 @@ class WriterLowering {
 	 * Consumed by the two struct-field sites (non-optional kw, optional
 	 * Ref/lead) that previously hard-coded `' '` as the boundary
 	 * between a field and the preceding token. The try-parse Star
-	 * `@:sameLine` site in `emitWriterStarField` has its own inline
+	 * `@:fmt(sameLine(...))` site in `emitWriterStarField` has its own inline
 	 * handler (per-element separator, different semantic) and is
 	 * unaffected.
 	 */
 	private function sameLineSeparator(child:ShapeNode, prevBody:Null<PrevBodyInfo>):Expr {
-		final flagName:Null<String> = readMetaString(child, ':sameLine');
+		final flagName:Null<String> = fmtReadString(child, 'sameLine');
 		if (flagName == null) return macro _dt(' ');
 		final optFlag:Expr = {
 			expr: EField(macro opt, flagName),
 			pos: Context.currentPos(),
 		};
 		final flagBased:Expr = macro (($optFlag) ? _dt(' ') : _dhl());
-		if (prevBody == null || !hasMeta(child, ':shapeAware')) return flagBased;
+		if (prevBody == null || !fmtHasFlag(child, 'shapeAware')) return flagBased;
 		final blockPatterns:Array<Expr> = collectBlockCtorPatterns(prevBody.typePath);
 		if (blockPatterns.length == 0) return flagBased;
 		final cases:Array<Case> = [
@@ -693,8 +693,8 @@ class WriterLowering {
 	 * Return a Doc-separator expression for the whitespace that precedes
 	 * a Star struct field's opening `{`.
 	 *
-	 * Without `@:leftCurly` metadata, emits a plain space (`_dt(' ')`) —
-	 * the existing pre-ψ₆ behaviour. With `@:leftCurly` present (no
+	 * Without `@:fmt(leftCurly)` metadata, emits a plain space (`_dt(' ')`) —
+	 * the existing pre-ψ₆ behaviour. With `@:fmt(leftCurly)` present (no
 	 * argument), emits a switch that picks between `_dhl()` (hardline
 	 * at the current indent, placing `{` on its own line) and
 	 * `_dt(' ')` based on `opt.leftCurly:BracePlacement`. The knob
@@ -713,7 +713,7 @@ class WriterLowering {
 	 * by adding more cases.
 	 */
 	private static function leftCurlySeparator(starNode:ShapeNode):Expr {
-		if (!hasMeta(starNode, ':leftCurly')) return macro _dt(' ');
+		if (!fmtHasFlag(starNode, 'leftCurly')) return macro _dt(' ');
 		final nextPat:Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BracePlacement', 'Next']);
 		final cases:Array<Case> = [
 			{values: [nextPat], expr: macro _dhl(), guard: null},
@@ -723,7 +723,7 @@ class WriterLowering {
 
 	/**
 	 * Return a Doc expression for a mandatory `@:lead(text)` whose field
-	 * carries the `@:objectFieldColon` writer meta (ψ₇).
+	 * carries the `@:fmt(objectFieldColon)` writer meta (ψ₇).
 	 *
 	 * Without the meta — plain `_dt(leadText)`, matching the pre-ψ₇
 	 * behaviour of the mandatory-lead path: the lead is emitted tight
@@ -758,7 +758,7 @@ class WriterLowering {
 	 * with its own `HxModuleWriteOptions` field.
 	 */
 	private static function objectFieldColonLead(child:ShapeNode, leadText:String):Expr {
-		if (!hasMeta(child, ':objectFieldColon')) return macro _dt($v{leadText});
+		if (!fmtHasFlag(child, 'objectFieldColon')) return macro _dt($v{leadText});
 		final wpPath:Array<String> = ['anyparse', 'format', 'WhitespacePolicy'];
 		final beforePat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Before']));
 		final afterPat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['After']));
@@ -773,7 +773,7 @@ class WriterLowering {
 
 	/**
 	 * Build a Doc expression that wraps a bare-Ref body field with a
-	 * runtime-switched separator driven by `@:bodyPolicy("flagName")`.
+	 * runtime-switched separator driven by `@:fmt(bodyPolicy("flagName"))`.
 	 *
 	 * Reads `opt.<flagName>:BodyPolicy` and dispatches:
 	 *  - `Same`    → `_dc([_dt(' '), body])` — body on the same line,
@@ -803,7 +803,7 @@ class WriterLowering {
 	 * `opt.elseIf:KeywordPlacement` — `Same` keeps `else if (...)`
 	 * inline (single space + body) while `Next` moves the nested `if`
 	 * to the next line (hardline + indent + body). This override runs
-	 * regardless of the field's own `@:bodyPolicy` flag value, so
+	 * regardless of the field's own `@:fmt(bodyPolicy(...))` flag value, so
 	 * `elseBody=Next` with `elseIf=Same` still emits `} else if (...)`
 	 * on one line for nested ifs and only pushes non-if else branches
 	 * to the next line.
@@ -902,7 +902,7 @@ class WriterLowering {
 	 * map or has no branch with the requested name — the caller then
 	 * skips the ctor-specific override.
 	 *
-	 * Used by the ψ₈ `@:elseIf` path to target the `IfStmt(_)` ctor of
+	 * Used by the ψ₈ `@:fmt(elseIf)` path to target the `IfStmt(_)` ctor of
 	 * `HxStatement` when rendering the `else` body of `HxIfStmt`.
 	 */
 	private function findCtorPattern(bodyTypePath:String, ctorName:String):Null<Expr> {
@@ -928,14 +928,14 @@ class WriterLowering {
 	/**
 	 * Return a `Bool`-valued expression for the `trailingComma` argument
 	 * of `sepList`. Returns `macro false` when the node carries no
-	 * `@:trailingComma("flagName")` meta, else `macro opt.<flagName>` so
+	 * `@:fmt(trailingComma("flagName"))` knob, else `macro opt.<flagName>` so
 	 * the knob is resolved at runtime against the caller's options.
 	 *
 	 * Read from the node that owns the separated list — an enum branch
 	 * (Case 4 Star / postfix Star) or a struct Star field.
 	 */
 	private static function trailingCommaExpr(node:ShapeNode):Expr {
-		final flagName:Null<String> = readMetaString(node, ':trailingComma');
+		final flagName:Null<String> = fmtReadString(node, 'trailingComma');
 		if (flagName == null) return macro false;
 		return {
 			expr: EField(macro opt, flagName),
@@ -982,7 +982,7 @@ class WriterLowering {
 
 	/**
 	 * True when `refName` names a Seq (struct) rule whose first field is
-	 * a bare Ref annotated with `@:bodyPolicy` and no `@:kw` / `@:lead`
+	 * a bare Ref annotated with `@:fmt(bodyPolicy(...))` and no `@:kw` / `@:lead`
 	 * of its own. Used by Case 3 enum-branch lowering to decide whether
 	 * to strip the trailing space from a `@:kw` lead — the sub-struct's
 	 * writer will emit the header→body separator via `bodyPolicyWrap`,
@@ -999,7 +999,7 @@ class WriterLowering {
 		if (first.annotations.get('base.optional') == true) return false;
 		if (readMetaString(first, ':kw') != null) return false;
 		if (readMetaString(first, ':lead') != null) return false;
-		return readMetaString(first, ':bodyPolicy') != null;
+		return fmtReadString(first, 'bodyPolicy') != null;
 	}
 
 	/** Build `_dc([elem1, elem2, ...])` from a macro-time array of Exprs. */
@@ -1052,6 +1052,48 @@ class WriterLowering {
 		return false;
 	}
 
+	/**
+	 * Returns true when the node carries `@:fmt(...)` and one of the
+	 * arguments either matches the bare identifier `name` (flag form,
+	 * e.g. `@:fmt(leftCurly)`) or is an `ECall` whose callee is `name`
+	 * (knob form, e.g. `@:fmt(bodyPolicy('foo'))`). Either form counts
+	 * as flag presence — this is the writer-side replacement for the
+	 * pre-ω₂ `hasMeta(node, ':leftCurly')` style reads.
+	 */
+	private static function fmtHasFlag(node:ShapeNode, name:String):Bool {
+		final meta:Null<Metadata> = node.annotations.get('base.meta');
+		if (meta == null) return false;
+		for (entry in meta) if (entry.name == ':fmt') {
+			for (param in entry.params) switch param.expr {
+				case EConst(CIdent(id)) if (id == name): return true;
+				case ECall({expr: EConst(CIdent(id))}, _) if (id == name): return true;
+				case _:
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Looks for a knob-form argument `name('value')` inside any
+	 * `@:fmt(...)` entry on the node and returns the string literal
+	 * value. Returns null when no matching entry is present or when
+	 * the argument shape is not a single string literal. Writer-side
+	 * replacement for the pre-ω₂ `readMetaString(node, ':sameLine')`
+	 * style reads.
+	 */
+	private static function fmtReadString(node:ShapeNode, name:String):Null<String> {
+		final meta:Null<Metadata> = node.annotations.get('base.meta');
+		if (meta == null) return null;
+		for (entry in meta) if (entry.name == ':fmt') {
+			for (param in entry.params) switch param.expr {
+				case ECall({expr: EConst(CIdent(id))}, [{expr: EConst(CString(s, _))}]) if (id == name):
+					return s;
+				case _:
+			}
+		}
+		return null;
+	}
+
 	private static function simpleName(typePath:String):String {
 		final idx:Int = typePath.lastIndexOf('.');
 		return idx == -1 ? typePath : typePath.substring(idx + 1);
@@ -1076,7 +1118,7 @@ typedef WriterRule = {
  * Carries the runtime-access expression and enum type path of the
  * immediately preceding bare-Ref struct field whose body was wrapped
  * via `bodyPolicyWrap`. Consumed by `sameLineSeparator` (ψ₉) to emit
- * a shape-aware leading separator on the following `@:sameLine`
+ * a shape-aware leading separator on the following `@:fmt(sameLine(...))`
  * keyword: block ctors respect the flag, non-block ctors force a
  * hardline.
  */

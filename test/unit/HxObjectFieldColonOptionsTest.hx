@@ -16,7 +16,7 @@ import anyparse.grammar.haxe.HxModuleWriter;
  * three policies (`None` / `Before` / `Both`) expose the remaining
  * single-character-separator spacings.
  *
- * The knob is wired via `@:objectFieldColon` on `HxObjectField.value`
+ * The knob is wired via `@:fmt(objectFieldColon)` on `HxObjectField.value`
  * only — regression tests below assert that type-annotation `:` on
  * `HxVarDecl.type`, `HxParam.type`, and `HxFnDecl.returnType` stay
  * tight (`x:Int`, `f():Void`) regardless of the configured object-field

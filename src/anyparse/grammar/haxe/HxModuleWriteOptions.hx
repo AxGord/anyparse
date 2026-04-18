@@ -61,7 +61,7 @@ import anyparse.format.WriteOptions;
  *
  * Field added in slice ψ₆ (left-curly placement):
  *  - `leftCurly` — placement of block-opening `{` at every grammar
- *    site tagged with `@:leftCurly('leftCurly')`. `Same` keeps `{` on
+ *    site tagged with `@:fmt(leftCurly)`. `Same` keeps `{` on
  *    the same line as the preceding token separated by a single space
  *    (the current default). `Next` emits `{` on the next line at the
  *    current indent level, producing the Allman-style layout
@@ -92,7 +92,7 @@ import anyparse.format.WriteOptions;
  *    layout exercised by `issue_11_else_if_next_line.hxtest`. The
  *    knob only affects the `IfStmt` ctor of `elseBody` — non-if
  *    branches (`ExprStmt`, `ReturnStmt`, `BlockStmt`, ...) still
- *    route through `elseBody`'s `@:bodyPolicy`.
+ *    route through `elseBody`'s `@:fmt(bodyPolicy(...))`.
  */
 typedef HxModuleWriteOptions = WriteOptions & {
 	sameLineElse:Bool,

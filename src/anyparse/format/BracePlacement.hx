@@ -12,14 +12,15 @@ package anyparse.format;
  * indent level, with the body's first line starting one level deeper.
  * Produces the Allman-style layout: `class F\n{\n\tbody\n}`.
  *
- * Consumed by the `@:leftCurly` writer meta: presence of the meta on
- * a `@:lead('{')` Star field switches the leading separator to a
- * runtime check against `opt.leftCurly` on the generated
+ * Consumed by the `@:fmt(leftCurly)` writer flag: presence of the
+ * flag on a `@:lead('{')` Star field switches the leading separator
+ * to a runtime check against `opt.leftCurly` on the generated
  * `WriteOptions` struct — `Same` keeps the plain space, `Next` emits
- * a hardline at the outer indent. The meta takes no arguments because
+ * a hardline at the outer indent. The flag takes no arguments because
  * the knob is global; per-category overrides (type brace vs. block
- * brace vs. object literal) would each introduce their own meta tag
- * rather than reuse this one with different flag names.
+ * brace vs. object literal) would each introduce their own
+ * `@:fmt(<name>)` flag rather than reuse this one with different
+ * options fields.
  *
  * Two values are sufficient because the generated `blockBody` layout
  * already places body content after a hardline and the closing `}` on

@@ -34,5 +34,5 @@ typedef HxAbstractDecl = {
 	@:kw('abstract') var name:HxIdentLit;
 	@:lead('(') @:trail(')') var underlyingType:HxTypeRef;
 	var clauses:Array<HxAbstractClause>;
-	@:leftCurly @:lead('{') @:trail('}') var members:Array<HxMemberDecl>;
+	@:fmt(leftCurly) @:lead('{') @:trail('}') var members:Array<HxMemberDecl>;
 }

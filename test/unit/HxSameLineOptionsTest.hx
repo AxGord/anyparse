@@ -16,7 +16,7 @@ import anyparse.grammar.haxe.HxModuleWriter;
  * whether the follow-up keyword sits on the same line as the preceding
  * `}` (default — matches haxe-formatter's `sameLine` defaults) or is
  * moved to the next line at the current indent level. The declarative
- * `@:sameLine("flagName")` meta on the relevant grammar fields wires
+ * `@:fmt(sameLine("flagName"))` knob on the relevant grammar fields wires
  * each knob to one specific emission site in `WriterLowering`.
  *
  * Each test round-trips a source through the parser, writes it with

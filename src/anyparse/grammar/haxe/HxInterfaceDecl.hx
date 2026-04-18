@@ -17,5 +17,5 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxInterfaceDecl = {
 	@:kw('interface') var name:HxIdentLit;
-	@:leftCurly @:lead('{') @:trail('}') var members:Array<HxMemberDecl>;
+	@:fmt(leftCurly) @:lead('{') @:trail('}') var members:Array<HxMemberDecl>;
 }

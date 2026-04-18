@@ -204,7 +204,7 @@ enum HxExpr {
 
 	SingleStringExpr(v:HxInterpString);
 
-	@:lead('[') @:trail(']') @:sep(',') @:trailingComma('trailingCommaArrays')
+	@:lead('[') @:trail(']') @:sep(',') @:fmt(trailingComma('trailingCommaArrays'))
 	ArrayExpr(elems:Array<HxExpr>);
 
 	ObjectLit(lit:HxObjectLit);
@@ -234,7 +234,7 @@ enum HxExpr {
 	@:postfix('[', ']')
 	IndexAccess(operand:HxExpr, index:HxExpr);
 
-	@:postfix('(', ')') @:sep(',') @:trailingComma('trailingCommaArgs')
+	@:postfix('(', ')') @:sep(',') @:fmt(trailingComma('trailingCommaArgs'))
 	Call(operand:HxExpr, args:Array<HxExpr>);
 
 	@:infix('*', 9)

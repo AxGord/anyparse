@@ -12,10 +12,10 @@ package anyparse.format;
  * fits within `lineWidth`, otherwise breaks to the next line at one
  * indent level deeper.
  *
- * Consumed by the `@:bodyPolicy("flagName")` writer meta: the meta
- * names a `BodyPolicy` field on the generated `WriteOptions` struct
- * and the writer reads it at runtime per node. Format-neutral: the
- * enum lives in `anyparse.format` so grammars for other languages
+ * Consumed by the `@:fmt(bodyPolicy("flagName"))` writer knob: the
+ * argument names a `BodyPolicy` field on the generated `WriteOptions`
+ * struct and the writer reads it at runtime per node. Format-neutral:
+ * the enum lives in `anyparse.format` so grammars for other languages
  * (AS3, Python, …) can reuse the same three-way shape.
  */
 enum abstract BodyPolicy(Int) from Int to Int {
