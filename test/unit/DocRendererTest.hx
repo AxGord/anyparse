@@ -5,6 +5,7 @@ import utest.Test;
 import anyparse.core.Doc;
 import anyparse.core.D;
 import anyparse.core.Renderer;
+import anyparse.format.IndentChar;
 
 /**
 	Tests for the core Doc IR and its renderer. These are the most
@@ -113,5 +114,96 @@ class DocRendererTest extends Test {
 		var result = D.intersperse(items, D.text(","));
 		var doc = D.concat(result);
 		Assert.equals("", Renderer.render(doc, 80));
+	}
+
+	function testRenderWithTabIndent() {
+		// Nest columns align to tabWidth → pure tabs, no trailing spaces.
+		final doc:Doc = D.group(D.concat([
+			D.text("{"),
+			D.nest(4, D.concat([
+				D.softline(),
+				D.text("a"), D.text(","), D.line(),
+				D.text("b"),
+			])),
+			D.softline(),
+			D.text("}"),
+		]));
+		// Force break by narrowing the width.
+		final expected:String = "{\n\ta,\n\tb\n}";
+		Assert.equals(expected, Renderer.render(doc, 5, Tab, 4));
+	}
+
+	function testRenderWithTabIndentNested() {
+		// Two-level Nest(4) + Nest(4) → 8 columns → 2 tabs at the deep level.
+		final inner:Doc = D.nest(4, D.concat([
+			D.softline(),
+			D.text("x"),
+		]));
+		final doc:Doc = D.group(D.concat([
+			D.text("{"),
+			D.nest(4, D.concat([
+				D.softline(),
+				D.text("{"),
+				inner,
+				D.softline(),
+				D.text("}"),
+			])),
+			D.softline(),
+			D.text("}"),
+		]));
+		final expected:String = "{\n\t{\n\t\tx\n\t}\n}";
+		Assert.equals(expected, Renderer.render(doc, 1, Tab, 4));
+	}
+
+	function testRenderWithTabIndentRemainderSpaces() {
+		// Nest column not aligned to tabWidth → floor(n/tw) tabs + remainder spaces.
+		final doc:Doc = D.group(D.concat([
+			D.text("["),
+			D.nest(3, D.concat([
+				D.softline(),
+				D.text("a"),
+			])),
+			D.softline(),
+			D.text("]"),
+		]));
+		// tabWidth=2 → 3 cols → 1 tab + 1 space.
+		final expected:String = "[\n\t a\n]";
+		Assert.equals(expected, Renderer.render(doc, 2, Tab, 2));
+	}
+
+	function testRenderWithCustomLineEnd() {
+		final doc:Doc = D.group(D.concat([
+			D.text("["),
+			D.nest(2, D.concat([
+				D.softline(),
+				D.text("a"),
+			])),
+			D.softline(),
+			D.text("]"),
+		]));
+		final expected:String = "[\r\n  a\r\n]";
+		Assert.equals(expected, Renderer.render(doc, 1, Space, 1, '\r\n'));
+	}
+
+	function testRenderFinalNewlineAppendedWhenMissing() {
+		final doc:Doc = D.text("hello");
+		Assert.equals("hello\n", Renderer.render(doc, 80, Space, 1, '\n', true));
+	}
+
+	function testRenderFinalNewlineNotDuplicated() {
+		// Output already ends in lineEnd from a forced break → no double newline.
+		final doc:Doc = D.group(D.concat([
+			D.text("a"),
+			D.line(),
+			D.text(""),
+		]));
+		final out:String = Renderer.render(doc, 1, Space, 1, '\n', true);
+		Assert.equals("a\n", out);
+	}
+
+	function testRenderFinalNewlineDisabledByDefault() {
+		// Default render(doc, width) must not append a trailing newline.
+		final doc:Doc = D.text("hello");
+		Assert.equals("hello", Renderer.render(doc, 80));
 	}
 }

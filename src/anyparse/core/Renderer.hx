@@ -1,5 +1,7 @@
 package anyparse.core;
 
+import anyparse.format.IndentChar;
+
 /**
 	Layout mode for a `Doc` frame: flat (line breaks become their flat
 	replacement) or broken (line breaks become real newlines).
@@ -39,14 +41,28 @@ private class Frame {
 	grammars expose it as a problem.
 **/
 class Renderer {
-	/** Renders `doc` targeting `width` columns per line. **/
-	public static function render(doc:Doc, width:Int):String {
-		var buf = new StringBuf();
-		var stack:Array<Frame> = [new Frame(0, MBreak, doc)];
-		var col = 0;
+
+	/**
+		Renders `doc` targeting `width` columns per line.
+
+		Defaults (`Space`, `tabWidth=1`, `lineEnd="\n"`, `finalNewline=false`)
+		preserve the behavior of pre-indent-aware callers that just pass
+		`render(doc, width)`.
+	**/
+	public static function render(
+		doc:Doc,
+		width:Int,
+		indentChar:IndentChar = Space,
+		tabWidth:Int = 1,
+		lineEnd:String = '\n',
+		finalNewline:Bool = false
+	):String {
+		final buf:StringBuf = new StringBuf();
+		final stack:Array<Frame> = [new Frame(0, MBreak, doc)];
+		var col:Int = 0;
 
 		while (stack.length > 0) {
-			var f = stack.pop();
+			final f:Frame = stack.pop();
 			switch (f.doc) {
 				case Empty:
 					// nothing
@@ -58,14 +74,14 @@ class Renderer {
 						buf.add(flat);
 						col += flat.length;
 					} else {
-						buf.add("\n");
-						for (_ in 0...f.indent) buf.add(" ");
+						buf.add(lineEnd);
+						writeIndent(buf, f.indent, indentChar, tabWidth);
 						col = f.indent;
 					}
 				case Nest(n, inner):
 					stack.push(new Frame(f.indent + n, f.mode, inner));
 				case Concat(items):
-					var i = items.length;
+					var i:Int = items.length;
 					while (--i >= 0) stack.push(new Frame(f.indent, f.mode, items[i]));
 				case Group(inner):
 					if (fitsFlat(width - col, f.indent, inner)) {
@@ -78,7 +94,27 @@ class Renderer {
 			}
 		}
 
-		return buf.toString();
+		final out:String = buf.toString();
+		if (finalNewline && !StringTools.endsWith(out, lineEnd)) return out + lineEnd;
+		return out;
+	}
+
+	/**
+		Emits `indent` columns worth of leading whitespace. When
+		`indentChar=Tab`, this is `floor(indent / tabWidth)` tabs followed
+		by `indent mod tabWidth` spaces — in the clean case where every
+		`Nest` value is a multiple of `tabWidth`, the remainder is zero
+		and output is pure tabs.
+	**/
+	private static inline function writeIndent(buf:StringBuf, indent:Int, indentChar:IndentChar, tabWidth:Int):Void {
+		if (indentChar == Tab && tabWidth > 0) {
+			final tabs:Int = Std.int(indent / tabWidth);
+			final rem:Int = indent - tabs * tabWidth;
+			for (_ in 0...tabs) buf.add('\t');
+			for (_ in 0...rem) buf.add(' ');
+		} else {
+			for (_ in 0...indent) buf.add(' ');
+		}
 	}
 
 	/**

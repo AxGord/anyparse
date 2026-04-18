@@ -73,7 +73,14 @@ class WriterCodegen {
 		};
 		final body:Expr = macro {
 			final _opt:$optionsCT = options ?? $defaultOptsExpr;
-			return anyparse.core.Renderer.render($writeCall, _opt.lineWidth);
+			return anyparse.core.Renderer.render(
+				$writeCall,
+				_opt.lineWidth,
+				_opt.indentChar,
+				_opt.tabWidth,
+				_opt.lineEnd,
+				_opt.finalNewline
+			);
 		};
 		return {
 			name: 'write',
