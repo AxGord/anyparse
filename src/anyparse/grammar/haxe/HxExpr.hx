@@ -36,6 +36,13 @@ package anyparse.grammar.haxe;
  *    dispatch loops. Map literals `[k => v, k2 => v2]` work naturally
  *    because each element is a full expression and `Arrow` is an infix
  *    operator inside the element parse.
+ *  - `ObjectLit` — anonymous object literal `{name: value, ...}`.
+ *    Wraps `HxObjectLit` typedef. The `@:lead('{')` inside the typedef
+ *    drives `tryBranch` peek — non-`{` input rolls back to the next
+ *    atom candidate. Statement-level ambiguity with `BlockStmt` (also
+ *    `@:lead('{')`) is deferred: only exercised in pure expression
+ *    contexts (fn args, RHS of binops, initializers) where no
+ *    statement parser competes.
  *  - `ParenLambdaExpr` — parenthesised lambda `(params) => body`.
  *    Wraps `HxParenLambda` typedef. Placed **before** `ParenExpr` so
  *    `tryBranch` tries lambda first. If `=>` is absent after `)`, the
@@ -199,6 +206,8 @@ enum HxExpr {
 
 	@:lead('[') @:trail(']') @:sep(',') @:trailingComma('trailingCommaArrays')
 	ArrayExpr(elems:Array<HxExpr>);
+
+	ObjectLit(lit:HxObjectLit);
 
 	ParenLambdaExpr(lambda:HxParenLambda);
 

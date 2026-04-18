@@ -129,6 +129,22 @@ class HaxeWriterRoundTripTest extends Test {
 		roundTrip('class F { function main() { return 1; } }');
 	}
 
+	function testObjectLitEmpty():Void {
+		roundTrip('class F { var x:Dynamic = {}; }');
+	}
+
+	function testObjectLitSingle():Void {
+		roundTrip('class F { var x:Dynamic = {a: 1}; }');
+	}
+
+	function testObjectLitMultiple():Void {
+		roundTrip('class F { var x:Dynamic = {a: 1, b: 2}; }');
+	}
+
+	function testObjectLitNested():Void {
+		roundTrip('class F { var x:Dynamic = {outer: {inner: 1}}; }');
+	}
+
 	function testExprParenLambda():Void {
 		roundTrip('class F { function f():Void { var x:Int = (a:Int) => a + 1; } }');
 	}
