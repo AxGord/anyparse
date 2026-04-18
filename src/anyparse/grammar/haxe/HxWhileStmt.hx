@@ -13,5 +13,5 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxWhileStmt = {
 	@:lead('(') @:trail(')') var cond:HxExpr;
-	var body:HxStatement;
+	@:bodyPolicy('whileBody') var body:HxStatement;
 };

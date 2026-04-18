@@ -1,5 +1,6 @@
 package anyparse.grammar.haxe;
 
+import anyparse.format.BodyPolicy;
 import anyparse.format.WriteOptions;
 
 /**
@@ -31,6 +32,20 @@ import anyparse.format.WriteOptions;
  * Trailing-comma flags have no effect when the list fits on one line:
  * the trailing `,` is emitted only when the enclosing Group lays out
  * in break mode (via the `IfBreak` Doc primitive).
+ *
+ * Fields added in slice ψ₄ (body-placement policies):
+ *  - `ifBody` — placement of the then-branch body when it is not a
+ *    `{}` block. `Same` keeps `if (cond) body;` on one line (the
+ *    current behaviour). `Next` always pushes the body to the next
+ *    line at one indent level deeper. `FitLine` keeps flat if it
+ *    fits within `lineWidth`, otherwise breaks to the next line.
+ *  - `elseBody` — same policy for the else-branch body.
+ *  - `forBody` — same policy for `for (…) body`.
+ *  - `whileBody` — same policy for `while (…) body`.
+ *
+ * Policies apply only to non-block bodies: a block body (`{ … }`)
+ * carries its own hardlines from `blockBody`, so the separator before
+ * `{` is always a single space regardless of the policy.
  */
 typedef HxModuleWriteOptions = WriteOptions & {
 	sameLineElse:Bool,
@@ -39,4 +54,8 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	trailingCommaArrays:Bool,
 	trailingCommaArgs:Bool,
 	trailingCommaParams:Bool,
+	ifBody:BodyPolicy,
+	elseBody:BodyPolicy,
+	forBody:BodyPolicy,
+	whileBody:BodyPolicy,
 };

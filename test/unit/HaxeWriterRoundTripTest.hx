@@ -2,7 +2,10 @@ package unit;
 
 import utest.Assert;
 import utest.Test;
+import anyparse.format.BodyPolicy;
+import anyparse.grammar.haxe.HaxeFormat;
 import anyparse.grammar.haxe.HxModuleWriter;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HaxeModuleParser;
 
 /**
@@ -283,5 +286,78 @@ class HaxeWriterRoundTripTest extends Test {
 		final out:String = HxModuleWriter.write(HaxeModuleParser.parse('class F { var x:Int; }'));
 		Assert.isTrue(out.indexOf('\tvar') != -1, 'expected `\\tvar` (no leading space after indent) in: <$out>');
 		Assert.isTrue(out.indexOf('\t var') == -1, 'did not expect `\\t var` (extra space) in: <$out>');
+	}
+
+	function testIfBodyPolicySame():Void {
+		final out:String = writeWithIfBody('class F { function f() { if (x) doA(); } }', BodyPolicy.Same, 120);
+		Assert.isTrue(out.indexOf('if (x) doA();') != -1, 'expected `if (x) doA();` (same line) in: <$out>');
+	}
+
+	function testIfBodyPolicyNextAlwaysBreaks():Void {
+		final out:String = writeWithIfBody('class F { function f() { if (x) doA(); } }', BodyPolicy.Next, 120);
+		Assert.isTrue(out.indexOf('if (x)\n\t\t\tdoA();') != -1, 'expected `if (x)\\n\\t\\t\\tdoA();` (next line + indent) in: <$out>');
+	}
+
+	function testIfBodyPolicyFitLineStaysFlatWhenFits():Void {
+		final out:String = writeWithIfBody('class F { function f() { if (x) doA(); } }', BodyPolicy.FitLine, 120);
+		Assert.isTrue(out.indexOf('if (x) doA();') != -1, 'expected `if (x) doA();` (fits flat) in: <$out>');
+	}
+
+	function testIfBodyPolicyFitLineBreaksWhenTooLong():Void {
+		final out:String = writeWithIfBody('class F { function f() { if (x) doSomethingVeryLong(); } }', BodyPolicy.FitLine, 20);
+		Assert.isTrue(out.indexOf('if (x)\n\t\t\tdoSomethingVeryLong();') != -1, 'expected broken body in: <$out>');
+	}
+
+	function testForBodyPolicyNextAlwaysBreaks():Void {
+		final out:String = writeWithForBody('class F { function f() { for (i in xs) doA(); } }', BodyPolicy.Next, 120);
+		Assert.isTrue(out.indexOf('for (i in xs)\n\t\t\tdoA();') != -1, 'expected for-body next line in: <$out>');
+	}
+
+	function testWhileBodyPolicyFitLineBreaksWhenTooLong():Void {
+		final out:String = writeWithWhileBody('class F { function f() { while (x) doSomethingVeryLong(); } }', BodyPolicy.FitLine, 20);
+		Assert.isTrue(out.indexOf('while (x)\n\t\t\tdoSomethingVeryLong();') != -1, 'expected while-body break in: <$out>');
+	}
+
+	function testElseBodyPolicyNextBreaksOnlyElseBody():Void {
+		final out:String = writeWithOpts('class F { function f() { if (x) doA(); else doB(); } }', BodyPolicy.Same, BodyPolicy.Next, BodyPolicy.Same, BodyPolicy.Same, 120);
+		Assert.isTrue(out.indexOf('if (x) doA();') != -1, 'expected then-body flat in: <$out>');
+		Assert.isTrue(out.indexOf('else\n\t\t\tdoB();') != -1, 'expected else-body next line in: <$out>');
+	}
+
+	private function writeWithIfBody(src:String, policy:BodyPolicy, lineWidth:Int):String {
+		return writeWithOpts(src, policy, BodyPolicy.Same, BodyPolicy.Same, BodyPolicy.Same, lineWidth);
+	}
+
+	private function writeWithForBody(src:String, policy:BodyPolicy, lineWidth:Int):String {
+		return writeWithOpts(src, BodyPolicy.Same, BodyPolicy.Same, policy, BodyPolicy.Same, lineWidth);
+	}
+
+	private function writeWithWhileBody(src:String, policy:BodyPolicy, lineWidth:Int):String {
+		return writeWithOpts(src, BodyPolicy.Same, BodyPolicy.Same, BodyPolicy.Same, policy, lineWidth);
+	}
+
+	private function writeWithOpts(
+		src:String, ifBody:BodyPolicy, elseBody:BodyPolicy, forBody:BodyPolicy, whileBody:BodyPolicy, lineWidth:Int
+	):String {
+		final base:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
+		final opts:HxModuleWriteOptions = {
+			indentChar: base.indentChar,
+			indentSize: base.indentSize,
+			tabWidth: base.tabWidth,
+			lineWidth: lineWidth,
+			lineEnd: base.lineEnd,
+			finalNewline: base.finalNewline,
+			sameLineElse: base.sameLineElse,
+			sameLineCatch: base.sameLineCatch,
+			sameLineDoWhile: base.sameLineDoWhile,
+			trailingCommaArrays: base.trailingCommaArrays,
+			trailingCommaArgs: base.trailingCommaArgs,
+			trailingCommaParams: base.trailingCommaParams,
+			ifBody: ifBody,
+			elseBody: elseBody,
+			forBody: forBody,
+			whileBody: whileBody,
+		};
+		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}
 }

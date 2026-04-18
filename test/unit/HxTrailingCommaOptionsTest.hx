@@ -153,6 +153,10 @@ class HxTrailingCommaOptionsTest extends Test {
 			trailingCommaArrays: arrays,
 			trailingCommaArgs: args,
 			trailingCommaParams: params,
+			ifBody: base.ifBody,
+			elseBody: base.elseBody,
+			forBody: base.forBody,
+			whileBody: base.whileBody,
 		};
 	}
 }

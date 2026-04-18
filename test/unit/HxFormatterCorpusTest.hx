@@ -128,8 +128,8 @@ class HxFormatterCorpusTest extends Test {
 	 */
 	private static function classifyParseFailure(exception:Exception, input:String):String {
 		final message:String = truncate(exception.message);
-		final parseErr:Null<ParseError> = Std.downcast(exception, ParseError);
-		if (parseErr == null) return message;
+		if (!(exception is ParseError)) return message;
+		final parseErr:ParseError = cast exception;
 		final pos:Int = parseErr.span.from;
 		if (pos < 0 || pos >= input.length) return '$message  @<eof>';
 		return '$message  @"${escape(slice(input, pos, SNIPPET_LEN))}"';

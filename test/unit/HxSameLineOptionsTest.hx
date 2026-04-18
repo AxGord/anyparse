@@ -141,6 +141,10 @@ class HxSameLineOptionsTest extends Test {
 			trailingCommaArrays: base.trailingCommaArrays,
 			trailingCommaArgs: base.trailingCommaArgs,
 			trailingCommaParams: base.trailingCommaParams,
+			ifBody: base.ifBody,
+			elseBody: base.elseBody,
+			forBody: base.forBody,
+			whileBody: base.whileBody,
 		};
 	}
 }

@@ -364,6 +364,7 @@ class WriterLowering {
 				parts.push(macro _dt($v{leadText}));
 
 			// Field value
+			final bodyPolicyFlag:Null<String> = readMetaString(child, ':bodyPolicy');
 			switch child.kind {
 				case Ref if (isOptional):
 					final refName:String = child.annotations.get('base.ref');
@@ -375,10 +376,18 @@ class WriterLowering {
 					// Leading separator is runtime-conditional when @:sameLine
 					// is present — see sameLineSeparator. Split into (sep, kw+' ')
 					// so the sep part can become a hardline (τ₁).
+					// @:bodyPolicy replaces the final ' ' before the body with
+					// a runtime-switched separator (Same/Next/FitLine, ψ₄).
 					final optParts:Array<Expr> = [];
 					if (kwLead != null) {
 						optParts.push(sameLineSeparator(child));
-						optParts.push(macro _dt($v{kwLead + ' '}));
+						if (bodyPolicyFlag != null) {
+							optParts.push(macro _dt($v{kwLead}));
+							optParts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall));
+						} else {
+							optParts.push(macro _dt($v{kwLead + ' '}));
+							optParts.push(writeCall);
+						}
 					} else if (leadText != null) {
 						if (isTightLead(leadText)) {
 							optParts.push(macro _dt($v{leadText}));
@@ -386,8 +395,10 @@ class WriterLowering {
 							optParts.push(sameLineSeparator(child));
 							optParts.push(macro _dt($v{leadText + ' '}));
 						}
+						optParts.push(writeCall);
+					} else {
+						optParts.push(writeCall);
 					}
-					optParts.push(writeCall);
 					final optBody:Expr = if (optParts.length == 1) optParts[0]
 					else dcCall(optParts);
 					parts.push(macro {
@@ -402,13 +413,17 @@ class WriterLowering {
 						expr: ECall(macro $i{writeFn}, [fieldAccess, macro opt]),
 						pos: Context.currentPos(),
 					};
-					if (kwLead == null && leadText == null && !isFirstField && !isRaw) {
-						if (prevEmptyCandidate != null)
-							parts.push(macro ($prevEmptyCandidate.length > 0) ? _dt(' ') : _de());
-						else
-							parts.push(macro _dt(' '));
+					if (bodyPolicyFlag != null && kwLead == null && leadText == null && !isFirstField && !isRaw) {
+						parts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall));
+					} else {
+						if (kwLead == null && leadText == null && !isFirstField && !isRaw) {
+							if (prevEmptyCandidate != null)
+								parts.push(macro ($prevEmptyCandidate.length > 0) ? _dt(' ') : _de());
+							else
+								parts.push(macro _dt(' '));
+						}
+						parts.push(writeCall);
 					}
-					parts.push(writeCall);
 
 				case _:
 					Context.fatalError('WriterLowering: struct field kind ${child.kind} not supported', Context.currentPos());
@@ -615,6 +630,47 @@ class WriterLowering {
 			pos: Context.currentPos(),
 		};
 		return macro (($optFlag) ? _dt(' ') : _dhl());
+	}
+
+	/**
+	 * Build a Doc expression that wraps a bare-Ref body field with a
+	 * runtime-switched separator driven by `@:bodyPolicy("flagName")`.
+	 *
+	 * Reads `opt.<flagName>:BodyPolicy` and dispatches:
+	 *  - `Same`    → `_dc([_dt(' '), body])` — body on the same line,
+	 *                separated by a single space (current behaviour).
+	 *  - `Next`    → `_dn(cols, _dc([_dhl(), body]))` — body on the
+	 *                next line at one indent level deeper.
+	 *  - `FitLine` → `_dg(_dn(cols, _dc([_dl(), body])))` — Group lets
+	 *                the renderer pick flat (space + body) or break
+	 *                (hardline + indent + body) based on `lineWidth`.
+	 *
+	 * `cols` is derived from the same `indentChar`/`indentSize`/
+	 * `tabWidth` triple as `blockBody`, so one-level body indent matches
+	 * a `{}` block's nesting depth.
+	 *
+	 * The case patterns are built as raw `EField` expressions to avoid
+	 * macro-time enum resolution against the `BodyPolicy` abstract.
+	 */
+	private static function bodyPolicyWrap(flagName:String, writeCall:Expr):Expr {
+		final optFlag:Expr = {
+			expr: EField(macro opt, flagName),
+			pos: Context.currentPos(),
+		};
+		final bpPath:Array<String> = ['anyparse', 'format', 'BodyPolicy'];
+		final samePat:Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Same']));
+		final nextPat:Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Next']));
+		final fitPat:Expr = MacroStringTools.toFieldExpr(bpPath.concat(['FitLine']));
+		final cases:Array<Case> = [
+			{values: [samePat], expr: macro _dc([_dt(' '), $writeCall]), guard: null},
+			{values: [nextPat], expr: macro _dn(_cols, _dc([_dhl(), $writeCall])), guard: null},
+			{values: [fitPat], expr: macro _dg(_dn(_cols, _dc([_dl(), $writeCall]))), guard: null},
+		];
+		final switchExpr:Expr = {expr: ESwitch(optFlag, cases, null), pos: Context.currentPos()};
+		return macro {
+			final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+			$switchExpr;
+		};
 	}
 
 	/**

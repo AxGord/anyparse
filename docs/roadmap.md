@@ -375,6 +375,27 @@ Sessions should align with phase boundaries — start a new Claude Code session 
 - Smoke test against the AxGord/haxe-formatter fork's actual `hxformat.json`: only `sameLine.*Body` fields are set (body-placement, not keyword-transition — outside our recognised surface), so loader output == defaults. Parses cleanly; validates the silently-ignore-unknown contract against a real file.
 - Deferred from τ₃: surfacing the rest of the haxe-formatter knobs (`wrapping.*` rules, `lineEnds.*`, `emptyLines.*`, `whitespace.*`, `baseTypeHints`, `disableFormatting`, `excludes`) — each will land together with the `HxModuleWriteOptions` field that represents it, plus any renderer debt that field demands.
 
+**Phase 3 body-placement policies slice (slice ψ₄) — what landed (2026-04-18, after slice ψ₂)**:
+
+- Three-way body-placement policy on non-block bodies of `if`, `for`, `while`. `anyparse.format.BodyPolicy` as a format-neutral enum abstract (`Same` / `Next` / `FitLine`) so future grammars (AS3, Python, …) can reuse the same three-way shape.
+- `@:bodyPolicy("flagName")` meta on bare-Ref struct fields — names a `BodyPolicy` field on the grammar's `WriteOptions` typedef; the writer dispatches on the runtime value. `HxIfStmt.thenBody` → `ifBody`, `HxIfStmt.elseBody` → `elseBody`, `HxForStmt.body` → `forBody`, `HxWhileStmt.body` → `whileBody`.
+- `WriterLowering.bodyPolicyWrap(flagName, writeCall)` replaces the pre-body separator with a three-way `ESwitch`:
+  - `Same` → `_dc([_dt(' '), body])` (current behaviour, fully byte-compatible).
+  - `Next` → `_dn(cols, _dc([_dhl(), body]))` — unconditional hardline + one level deeper, where `cols = indentChar == Space ? indentSize : tabWidth` (same indent logic as `blockBody`).
+  - `FitLine` → `_dg(_dn(cols, _dc([_dl(), body])))` — Group lets the Renderer pick flat (space + body) or break (hardline + indent + body) against `lineWidth`. Uses `_dl()` (soft line flat-as-space) not `_dhl()`.
+- Case patterns on the generated `switch opt.<flagName>` are built via `MacroStringTools.toFieldExpr` so macro-time enum resolution never fires against the `BodyPolicy` abstract (one of the `enum abstract(Int)` macro gotchas logged in `feedback_haxe_macro_gotchas.md`).
+- Optional-Ref branch (`HxIfStmt.elseBody`) splits the existing `_dt("else ")` into `_dt("else")` + `bodyPolicyWrap`, so `@:sameLine('sameLineElse')` still controls the `}` → `else` transition while `@:bodyPolicy('elseBody')` controls the `else` → body transition. Both metas compose cleanly on one field.
+- `HxModuleWriteOptions` gains `ifBody` / `elseBody` / `forBody` / `whileBody:BodyPolicy`. `HaxeFormat.instance.defaultWriteOptions` defaults them to `Same` (current behaviour). `HaxeFormatConfigLoader` maps `sameLine.ifBody` / `elseBody` / `forBody` / `whileBody` via new `HxFormatBodyPolicy` enum abstract (`"same"` / `"next"` / `"fitLine"` / `"keep"`) — `keep` degrades to `Same` (nearest no-surprise fallback until per-node source-shape tracking exists).
+- `test/unit/HaxeWriterRoundTripTest.hx` — 8 new byte-exact tests cover all three policies across `if` / `for` / `while`, plus one `elseBody=Next` + `ifBody=Same` case that proves the two separators compose independently.
+- Pre-slice JS debt closed: `test/unit/HxFormatterCorpusTest.hx` replaces `Std.downcast(exception, ParseError)` (broken under strict null safety once the `#if sys` wrap in ψ₂ exposed it) with `is` + `cast`. `test-js.hxml` green again.
+- Corpus sameline: **7 → 8 pass / 13 → 12 fail / 112 skip-parse / 0 skip-write**. Single net unblock is `fitline_for_long.hxtest` (a long single-statement for-body that `forBody=FitLine` correctly wraps). Most other `sameLine.*Body` fixtures carry additional blockers beyond the body-placement axis — emptyLines preservation (ω), `fitLineIfWithElse` meta-policy, `elseIf` keyword-placement, `doBody` (separate mechanic from `sameLineDoWhile`) — so they require follow-up slices layered on top of this one. 1990 assertions green on neko / js / interp.
+- Explicitly **not** shipped in this slice (each its own slice):
+  - `doBody` on `HxDoWhileStmt` — do-while body placement has semantics distinct from `sameLineDoWhile` (body placement vs. `while` keyword placement relative to the closing `}`). Separate knob.
+  - `fitLineIfWithElse` mega-policy — when an if has an else, does `fitLine` on `ifBody` stay per-body or degrade to unconditional `next`? Two cases (`fitline_if_with_else*`) gated on this.
+  - `elseIf` keyword-placement (`next` vs `same` — different axis from body placement). One case.
+  - Nested-control-flow inside-out break ordering (`fitline_chained_for_if_long`): `for (…) if (…) body;` where only the innermost body should break — our Group algorithm breaks outer-first. Needs either a custom fit algorithm or reshape of the Group nesting. Partial progress in this slice (offset moved from 104 to 71); case stays failing.
+  - Blank-line preservation between statements (ω) — one of the two blockers on `fitline_if`.
+
 **Non-deliverables for the skeleton slice**:
 - Expressions, operators, Pratt strategy.
 - ~~Function parameters~~ (shipped in slice ζ), ~~function bodies with statements~~ (basic shipped in slice η₁; void return, control-flow statements deferred).

@@ -1,5 +1,6 @@
 package anyparse.grammar.haxe;
 
+import anyparse.format.BodyPolicy;
 import anyparse.format.IndentChar;
 
 /**
@@ -72,6 +73,10 @@ final class HaxeFormatConfigLoader {
 			trailingCommaArrays: base.trailingCommaArrays,
 			trailingCommaArgs: base.trailingCommaArgs,
 			trailingCommaParams: base.trailingCommaParams,
+			ifBody: base.ifBody,
+			elseBody: base.elseBody,
+			forBody: base.forBody,
+			whileBody: base.whileBody,
 		};
 		if (cfg.indentation != null) applyIndentation(cfg.indentation, result);
 		if (cfg.wrapping != null) applyWrapping(cfg.wrapping, result);
@@ -104,6 +109,10 @@ final class HaxeFormatConfigLoader {
 		if (section.ifElse != null) opt.sameLineElse = sameLineToBool(section.ifElse);
 		if (section.tryCatch != null) opt.sameLineCatch = sameLineToBool(section.tryCatch);
 		if (section.doWhile != null) opt.sameLineDoWhile = sameLineToBool(section.doWhile);
+		if (section.ifBody != null) opt.ifBody = bodyPolicyToRuntime(section.ifBody);
+		if (section.elseBody != null) opt.elseBody = bodyPolicyToRuntime(section.elseBody);
+		if (section.forBody != null) opt.forBody = bodyPolicyToRuntime(section.forBody);
+		if (section.whileBody != null) opt.whileBody = bodyPolicyToRuntime(section.whileBody);
 	}
 
 	private static function applyTrailingCommas(section:HxFormatTrailingCommasSection, opt:HxModuleWriteOptions):Void {
@@ -121,6 +130,16 @@ final class HaxeFormatConfigLoader {
 
 	private static inline function trailingCommaToBool(policy:HxFormatTrailingCommaPolicy):Bool {
 		return policy == HxFormatTrailingCommaPolicy.Yes;
+	}
+
+	private static function bodyPolicyToRuntime(policy:HxFormatBodyPolicy):BodyPolicy {
+		return switch policy {
+			case HxFormatBodyPolicy.Same: BodyPolicy.Same;
+			case HxFormatBodyPolicy.Next: BodyPolicy.Next;
+			case HxFormatBodyPolicy.FitLine: BodyPolicy.FitLine;
+			case HxFormatBodyPolicy.Keep: BodyPolicy.Same;
+			case _: BodyPolicy.Same;
+		};
 	}
 
 	private static function isAllSpaces(s:String):Bool {

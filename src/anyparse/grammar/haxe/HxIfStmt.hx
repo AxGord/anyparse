@@ -26,6 +26,6 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxIfStmt = {
 	@:lead('(') @:trail(')') var cond:HxExpr;
-	var thenBody:HxStatement;
-	@:optional @:kw('else') @:sameLine('sameLineElse') var elseBody:Null<HxStatement>;
+	@:bodyPolicy('ifBody') var thenBody:HxStatement;
+	@:optional @:kw('else') @:sameLine('sameLineElse') @:bodyPolicy('elseBody') var elseBody:Null<HxStatement>;
 };
