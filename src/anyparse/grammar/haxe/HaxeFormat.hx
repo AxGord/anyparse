@@ -4,6 +4,7 @@ import anyparse.format.BodyPolicy;
 import anyparse.format.BracePlacement;
 import anyparse.format.Encoding;
 import anyparse.format.IndentChar;
+import anyparse.format.WhitespacePolicy;
 import anyparse.format.text.FieldLookup;
 import anyparse.format.text.KeySyntax;
 import anyparse.format.text.MissingPolicy;
@@ -124,6 +125,13 @@ final class HaxeFormat implements TextFormat {
 	 * and keeps pre-ψ₆ byte-identical output. Flipping to `Next`
 	 * requires an explicit `hxformat.json` override
 	 * (`"lineEnds": { "leftCurly": "before" }` or `"both"`).
+	 *
+	 * Object-field colon default (ψ₇) is `After` — `{a: 0}`, matching
+	 * haxe-formatter's `whitespace.objectFieldColonPolicy:
+	 * @:default(After)`. This diverges from the pre-ψ₇ output
+	 * (`{a:0}`, i.e. `None`) because the corpus reference expects the
+	 * spaced form. Callers who want byte-identical pre-ψ₇ layout must
+	 * pass `objectFieldColon: WhitespacePolicy.None` explicitly.
 	 */
 	public var defaultWriteOptions(default, null):HxModuleWriteOptions = {
 		indentChar: Tab,
@@ -144,6 +152,7 @@ final class HaxeFormat implements TextFormat {
 		whileBody: BodyPolicy.Same,
 		doBody: BodyPolicy.Next,
 		leftCurly: BracePlacement.Same,
+		objectFieldColon: WhitespacePolicy.After,
 	};
 
 	private function new() {}

@@ -11,9 +11,17 @@ package anyparse.grammar.haxe;
  * the full operator precedence chain — nested object literals, arrays,
  * calls, conditional expressions all compose through the `@:lead(':')`
  * commit point.
+ *
+ * Slice ψ₇: `@:objectFieldColon` is a writer-side marker (no parser
+ * effect) that switches the `:` emission from the tight default
+ * (`a:b`) to the runtime-configurable spacing controlled by
+ * `HxModuleWriteOptions.objectFieldColon`. Only this site carries the
+ * meta — `HxVarDecl.type` / `HxParam.type` / `HxFnDecl.returnType`
+ * share the same `@:lead(':')` but keep the tight layout
+ * unconditionally (`x:Int`, `f():Void`).
  */
 @:peg
 typedef HxObjectField = {
 	var name:HxIdentLit;
-	@:lead(':') var value:HxExpr;
+	@:objectFieldColon @:lead(':') var value:HxExpr;
 }

@@ -369,9 +369,12 @@ class WriterLowering {
 				parts.push(macro _dt($v{kwLead + ' '}));
 			}
 
-			// D61: non-optional lead — no space before lead
+			// D61: non-optional lead — no space before lead.
+			// ψ₇: `@:objectFieldColon` on the field switches the emission
+			// to a runtime-configurable spacing around the lead text; all
+			// other mandatory leads stay tight.
 			if (leadText != null && !isOptional)
-				parts.push(macro _dt($v{leadText}));
+				parts.push(objectFieldColonLead(child, leadText));
 
 			// Field value
 			final bodyPolicyFlag:Null<String> = readMetaString(child, ':bodyPolicy');
@@ -678,6 +681,56 @@ class WriterLowering {
 			{values: [nextPat], expr: macro _dhl(), guard: null},
 		];
 		return {expr: ESwitch(macro opt.leftCurly, cases, macro _dt(' ')), pos: Context.currentPos()};
+	}
+
+	/**
+	 * Return a Doc expression for a mandatory `@:lead(text)` whose field
+	 * carries the `@:objectFieldColon` writer meta (ψ₇).
+	 *
+	 * Without the meta — plain `_dt(leadText)`, matching the pre-ψ₇
+	 * behaviour of the mandatory-lead path: the lead is emitted tight
+	 * against the preceding and following fields (`foo:bar`), so
+	 * type-annotation colons on `HxVarDecl.type` / `HxParam.type` /
+	 * `HxFnDecl.returnType` stay as `x:Int` / `f():Void`.
+	 *
+	 * With the meta — a runtime switch on `opt.objectFieldColon:
+	 * WhitespacePolicy` that picks a pre-concatenated lead string:
+	 *  - `Before` → `_dt(' ' + leadText)` (space before only).
+	 *  - `After`  → `_dt(leadText + ' ')` (space after only, the default
+	 *               for Haxe — matches haxe-formatter's
+	 *               `whitespace.objectFieldColonPolicy: @:default(After)`).
+	 *  - `Both`   → `_dt(' ' + leadText + ' ')` (space on both sides).
+	 *  - `None`   → default case, `_dt(leadText)` (tight).
+	 *
+	 * Pre-concatenating the text into a single `_dt` (instead of three
+	 * separate Doc atoms) keeps the output identical to the pre-ψ₇ byte
+	 * layout for the `None` case and avoids introducing any new Doc
+	 * boundaries the Renderer might break across.
+	 *
+	 * The case patterns are built as raw `EField` expressions to avoid
+	 * macro-time enum resolution against the `WhitespacePolicy` abstract
+	 * (same precedent as `bodyPolicyWrap` and `leftCurlySeparator`).
+	 *
+	 * The meta tag is consumed field-scope only — sibling mandatory
+	 * leads on the same struct are unaffected. Adding a per-knob meta
+	 * like this one (instead of a global `@:colon(flag)` with multiple
+	 * flag values) follows the ψ₆ principle: one meta = one options
+	 * field. If future slices need a different `:` spacing at another
+	 * grammar site, that site will get its own tag (e.g. `@:switchCaseColon`)
+	 * with its own `HxModuleWriteOptions` field.
+	 */
+	private static function objectFieldColonLead(child:ShapeNode, leadText:String):Expr {
+		if (!hasMeta(child, ':objectFieldColon')) return macro _dt($v{leadText});
+		final wpPath:Array<String> = ['anyparse', 'format', 'WhitespacePolicy'];
+		final beforePat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Before']));
+		final afterPat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['After']));
+		final bothPat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
+		final cases:Array<Case> = [
+			{values: [beforePat], expr: macro _dt($v{' ' + leadText}), guard: null},
+			{values: [afterPat], expr: macro _dt($v{leadText + ' '}), guard: null},
+			{values: [bothPat], expr: macro _dt($v{' ' + leadText + ' '}), guard: null},
+		];
+		return {expr: ESwitch(macro opt.objectFieldColon, cases, macro _dt($v{leadText})), pos: Context.currentPos()};
 	}
 
 	/**

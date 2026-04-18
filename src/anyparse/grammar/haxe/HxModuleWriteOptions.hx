@@ -2,6 +2,7 @@ package anyparse.grammar.haxe;
 
 import anyparse.format.BodyPolicy;
 import anyparse.format.BracePlacement;
+import anyparse.format.WhitespacePolicy;
 import anyparse.format.WriteOptions;
 
 /**
@@ -66,6 +67,18 @@ import anyparse.format.WriteOptions;
  *    (`class Main\n{`). Only two values are exposed — haxe-formatter's
  *    `Before` / `Both` collapse to `Next` for our output, and the
  *    inline `None` shape is not yet supported.
+ *
+ * Field added in slice ψ₇ (object-literal colon spacing):
+ *  - `objectFieldColon` — whitespace around the `:` inside an
+ *    anonymous object literal (`HxObjectField.value`'s lead). `After`
+ *    (default) emits `{a: 0}`, matching haxe-formatter's
+ *    `whitespace.objectFieldColonPolicy: @:default(After)`. `None`
+ *    keeps the tight pre-ψ₇ layout (`{a:0}`). `Before` / `Both` are
+ *    exposed for completeness but uncommon in practice. The knob is
+ *    scoped to `HxObjectField.value` only — type-annotation `:` on
+ *    `HxVarDecl.type` / `HxParam.type` / `HxFnDecl.returnType` stays
+ *    tight regardless, matching haxe-formatter's hard-coded
+ *    `x:Int` / `f():Void` layout.
  */
 typedef HxModuleWriteOptions = WriteOptions & {
 	sameLineElse:Bool,
@@ -80,4 +93,5 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	whileBody:BodyPolicy,
 	doBody:BodyPolicy,
 	leftCurly:BracePlacement,
+	objectFieldColon:WhitespacePolicy,
 };

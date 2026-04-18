@@ -99,6 +99,7 @@ class HxLeftCurlyOptionsTest extends Test {
 			whileBody: base.whileBody,
 			doBody: base.doBody,
 			leftCurly: leftCurly,
+			objectFieldColon: base.objectFieldColon,
 		};
 	}
 }

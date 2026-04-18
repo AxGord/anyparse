@@ -26,6 +26,7 @@ import unit.HxPrefixSliceTest;
 import unit.HxSameLineOptionsTest;
 import unit.HxTrailingCommaOptionsTest;
 import unit.HxLeftCurlyOptionsTest;
+import unit.HxObjectFieldColonOptionsTest;
 import unit.HaxeFormatConfigLoaderTest;
 import unit.HaxeWriterRoundTripTest;
 import unit.HxFormatterCorpusTest;
@@ -74,6 +75,7 @@ class RunTests {
 		runner.addCase(new HxSameLineOptionsTest());
 		runner.addCase(new HxTrailingCommaOptionsTest());
 		runner.addCase(new HxLeftCurlyOptionsTest());
+		runner.addCase(new HxObjectFieldColonOptionsTest());
 		runner.addCase(new HaxeFormatConfigLoaderTest());
 		runner.addCase(new HaxeWriterRoundTripTest());
 		runner.addCase(new HxFormatterCorpusTest());

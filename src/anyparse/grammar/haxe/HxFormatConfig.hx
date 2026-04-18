@@ -19,6 +19,8 @@ package anyparse.grammar.haxe;
  * that at compile time.
  *
  * `lineEnds` section added in slice ψ₆ (feeds `opt.leftCurly`).
+ *
+ * `whitespace` section added in slice ψ₇ (feeds `opt.objectFieldColon`).
  */
 @:peg @:schema(anyparse.format.text.JsonFormat) @:ws
 typedef HxFormatConfig = {
@@ -32,4 +34,6 @@ typedef HxFormatConfig = {
 	@:optional var trailingCommas:HxFormatTrailingCommasSection;
 
 	@:optional var lineEnds:HxFormatLineEndsSection;
+
+	@:optional var whitespace:HxFormatWhitespaceSection;
 };

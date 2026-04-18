@@ -3,6 +3,7 @@ package anyparse.grammar.haxe;
 import anyparse.format.BodyPolicy;
 import anyparse.format.BracePlacement;
 import anyparse.format.IndentChar;
+import anyparse.format.WhitespacePolicy;
 
 /**
  * Loads a haxe-formatter `hxformat.json` config and maps the subset of
@@ -38,11 +39,21 @@ import anyparse.format.IndentChar;
  *   `BracePlacement.Same`. `"none"` degrades because the inline
  *   `{ ... }` shape is not representable by the current two-value
  *   surface without per-node source-shape tracking.
+ * - `whitespace.objectFieldColonPolicy` (ψ₇): enum string —
+ *   `"before"` / `"onlyBefore"` → `WhitespacePolicy.Before`,
+ *   `"after"`  / `"onlyAfter"`  → `WhitespacePolicy.After`,
+ *   `"around"` → `WhitespacePolicy.Both`,
+ *   `"none"` / `"noneBefore"` / `"noneAfter"` → `WhitespacePolicy.None`.
+ *   The `only*` / `none*` values in haxe-formatter encode extra
+ *   semantics about the opposite side; the four-way collapse here
+ *   matches the information content the generated writer actually
+ *   exposes today.
  *
  * Deliberately NOT supported in this slice (no corresponding
  * `HxModuleWriteOptions` field yet): `wrapping.*` beyond
  * `maxLineLength`, other `lineEnds.*` keys (`rightCurly`, `blockCurly`,
- * `objectLiteralCurly`, …), `emptyLines.*`, `whitespace.*`,
+ * `objectLiteralCurly`, …), `emptyLines.*`, other `whitespace.*` keys
+ * (`typeHintColonPolicy`, `ifPolicy`, `forPolicy`, …),
  * `indentation.conditionalPolicy`, `indentation.trailingWhitespace`,
  * `baseTypeHints`, `disableFormatting`, `excludes`. They will land with
  * the slices that introduce the matching knobs.
@@ -86,12 +97,14 @@ final class HaxeFormatConfigLoader {
 			whileBody: base.whileBody,
 			doBody: base.doBody,
 			leftCurly: base.leftCurly,
+			objectFieldColon: base.objectFieldColon,
 		};
 		if (cfg.indentation != null) applyIndentation(cfg.indentation, result);
 		if (cfg.wrapping != null) applyWrapping(cfg.wrapping, result);
 		if (cfg.sameLine != null) applySameLine(cfg.sameLine, result);
 		if (cfg.trailingCommas != null) applyTrailingCommas(cfg.trailingCommas, result);
 		if (cfg.lineEnds != null) applyLineEnds(cfg.lineEnds, result);
+		if (cfg.whitespace != null) applyWhitespace(cfg.whitespace, result);
 		return result;
 	}
 
@@ -139,6 +152,11 @@ final class HaxeFormatConfigLoader {
 		if (section.leftCurly != null) opt.leftCurly = leftCurlyToRuntime(section.leftCurly);
 	}
 
+	private static function applyWhitespace(section:HxFormatWhitespaceSection, opt:HxModuleWriteOptions):Void {
+		if (section.objectFieldColonPolicy != null)
+			opt.objectFieldColon = whitespaceToRuntime(section.objectFieldColonPolicy);
+	}
+
 	private static inline function sameLineToBool(policy:HxFormatSameLinePolicy):Bool {
 		return policy == HxFormatSameLinePolicy.Same;
 	}
@@ -161,6 +179,15 @@ final class HaxeFormatConfigLoader {
 		return switch policy {
 			case HxFormatLeftCurlyPolicy.Before | HxFormatLeftCurlyPolicy.Both: BracePlacement.Next;
 			case _: BracePlacement.Same;
+		};
+	}
+
+	private static function whitespaceToRuntime(policy:HxFormatWhitespacePolicy):WhitespacePolicy {
+		return switch policy {
+			case HxFormatWhitespacePolicy.Before | HxFormatWhitespacePolicy.OnlyBefore: WhitespacePolicy.Before;
+			case HxFormatWhitespacePolicy.After | HxFormatWhitespacePolicy.OnlyAfter: WhitespacePolicy.After;
+			case HxFormatWhitespacePolicy.Around: WhitespacePolicy.Both;
+			case _: WhitespacePolicy.None;
 		};
 	}
 

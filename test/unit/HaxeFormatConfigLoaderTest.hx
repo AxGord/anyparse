@@ -4,6 +4,7 @@ import utest.Assert;
 import utest.Test;
 import anyparse.format.BracePlacement;
 import anyparse.format.IndentChar;
+import anyparse.format.WhitespacePolicy;
 import anyparse.grammar.haxe.HaxeFormat;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
@@ -176,6 +177,45 @@ class HaxeFormatConfigLoaderTest extends Test {
 		final out:String = HxModuleWriter.write(ast, opts);
 		Assert.isTrue(out.indexOf('class Main\n{') != -1, 'expected `class Main\\n{` in: <$out>');
 		Assert.isTrue(out.indexOf('function main()\n\t{') != -1, 'expected `function main()\\n\\t{` in: <$out>');
+	}
+
+	public function testWhitespaceObjectFieldColonDefaultsToAfter():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		Assert.equals(WhitespacePolicy.After, opts.objectFieldColon);
+	}
+
+	public function testWhitespaceObjectFieldColonNoneFlipsToNone():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"objectFieldColonPolicy": "none"}}');
+		Assert.equals(WhitespacePolicy.None, opts.objectFieldColon);
+	}
+
+	public function testWhitespaceObjectFieldColonBeforeFlipsToBefore():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"objectFieldColonPolicy": "before"}}');
+		Assert.equals(WhitespacePolicy.Before, opts.objectFieldColon);
+	}
+
+	public function testWhitespaceObjectFieldColonAroundFlipsToBoth():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"objectFieldColonPolicy": "around"}}');
+		Assert.equals(WhitespacePolicy.Both, opts.objectFieldColon);
+	}
+
+	public function testWhitespaceObjectFieldColonNoneBeforeMapsToNone():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"objectFieldColonPolicy": "noneBefore"}}');
+		Assert.equals(WhitespacePolicy.None, opts.objectFieldColon);
+	}
+
+	public function testWhitespaceObjectFieldColonOnlyAfterMapsToAfter():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"objectFieldColonPolicy": "onlyAfter"}}');
+		Assert.equals(WhitespacePolicy.After, opts.objectFieldColon);
+	}
+
+	public function testWhitespaceObjectFieldColonEndToEnd():Void {
+		final src:String = 'class C { var x:Dynamic = {a: 0, b: 1}; }';
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"objectFieldColonPolicy": "none"}}');
+		final ast:HxModule = HaxeModuleParser.parse(src);
+		final out:String = HxModuleWriter.write(ast, opts);
+		Assert.isTrue(out.indexOf('{a:0, b:1}') != -1, 'expected tight `{a:0, b:1}` in: <$out>');
+		Assert.isTrue(out.indexOf('var x:Dynamic') != -1, 'var type annotation should stay tight in: <$out>');
 	}
 
 	public function testEndToEndConfigDrivesWriter():Void {
