@@ -106,10 +106,16 @@ final class HaxeFormat implements TextFormat {
 	 * defaults — all groups are `false` by default; the trailing `,`
 	 * only appears when the user opts in per group.
 	 *
-	 * Body-placement defaults (ψ₄) are `Same` across the board — non-
-	 * block bodies stay on the same line as the preceding `if (…)` /
-	 * `for (…)` / `while (…)`. Opting into `Next` or `FitLine` requires
-	 * an explicit `hxformat.json` override.
+	 * Body-placement defaults (ψ₄) are `Same` for `if` / `else` / `for`
+	 * / `while` — non-block bodies stay on the same line as the
+	 * preceding header. Opting into `Next` or `FitLine` requires an
+	 * explicit `hxformat.json` override.
+	 *
+	 * Exception: `doBody` defaults to `Next` (ψ₅), matching haxe-
+	 * formatter's `sameLine.doWhileBody: @:default(Next)` — the
+	 * corpus reference expects `do` non-block bodies on the next line
+	 * by default, and opting in to same-line requires
+	 * `sameLine.doWhileBody: "same"` in the user's `hxformat.json`.
 	 */
 	public var defaultWriteOptions(default, null):HxModuleWriteOptions = {
 		indentChar: Tab,
@@ -128,6 +134,7 @@ final class HaxeFormat implements TextFormat {
 		elseBody: BodyPolicy.Same,
 		forBody: BodyPolicy.Same,
 		whileBody: BodyPolicy.Same,
+		doBody: BodyPolicy.Next,
 	};
 
 	private function new() {}

@@ -319,25 +319,45 @@ class HaxeWriterRoundTripTest extends Test {
 	}
 
 	function testElseBodyPolicyNextBreaksOnlyElseBody():Void {
-		final out:String = writeWithOpts('class F { function f() { if (x) doA(); else doB(); } }', BodyPolicy.Same, BodyPolicy.Next, BodyPolicy.Same, BodyPolicy.Same, 120);
+		final out:String = writeWithOpts('class F { function f() { if (x) doA(); else doB(); } }', BodyPolicy.Same, BodyPolicy.Next, BodyPolicy.Same, BodyPolicy.Same, BodyPolicy.Same, 120);
 		Assert.isTrue(out.indexOf('if (x) doA();') != -1, 'expected then-body flat in: <$out>');
 		Assert.isTrue(out.indexOf('else\n\t\t\tdoB();') != -1, 'expected else-body next line in: <$out>');
 	}
 
-	private function writeWithIfBody(src:String, policy:BodyPolicy, lineWidth:Int):String {
-		return writeWithOpts(src, policy, BodyPolicy.Same, BodyPolicy.Same, BodyPolicy.Same, lineWidth);
+	function testDoBodyPolicySame():Void {
+		final out:String = writeWithDoBody('class F { function f() { do doA(); while (x); } }', BodyPolicy.Same, 120);
+		Assert.isTrue(out.indexOf('do doA(); while (x);') != -1, 'expected `do doA(); while (x);` (same line) in: <$out>');
 	}
 
-	private function writeWithForBody(src:String, policy:BodyPolicy, lineWidth:Int):String {
-		return writeWithOpts(src, BodyPolicy.Same, BodyPolicy.Same, policy, BodyPolicy.Same, lineWidth);
+	function testDoBodyPolicyNextAlwaysBreaks():Void {
+		final out:String = writeWithDoBody('class F { function f() { do doA(); while (x); } }', BodyPolicy.Next, 120);
+		Assert.isTrue(out.indexOf('do\n\t\t\tdoA(); while (x);') != -1, 'expected `do\\n\\t\\t\\tdoA(); while (x);` (next line + indent) in: <$out>');
 	}
 
-	private function writeWithWhileBody(src:String, policy:BodyPolicy, lineWidth:Int):String {
-		return writeWithOpts(src, BodyPolicy.Same, BodyPolicy.Same, BodyPolicy.Same, policy, lineWidth);
+	function testDoBodyPolicyFitLineBreaksWhenTooLong():Void {
+		final out:String = writeWithDoBody('class F { function f() { do doSomethingVeryLong(); while (x); } }', BodyPolicy.FitLine, 20);
+		Assert.isTrue(out.indexOf('do\n\t\t\tdoSomethingVeryLong(); while (x);') != -1, 'expected broken do-body in: <$out>');
+	}
+
+	private inline function writeWithIfBody(src:String, policy:BodyPolicy, lineWidth:Int):String {
+		return writeWithOpts(src, policy, BodyPolicy.Same, BodyPolicy.Same, BodyPolicy.Same, BodyPolicy.Same, lineWidth);
+	}
+
+	private inline function writeWithForBody(src:String, policy:BodyPolicy, lineWidth:Int):String {
+		return writeWithOpts(src, BodyPolicy.Same, BodyPolicy.Same, policy, BodyPolicy.Same, BodyPolicy.Same, lineWidth);
+	}
+
+	private inline function writeWithWhileBody(src:String, policy:BodyPolicy, lineWidth:Int):String {
+		return writeWithOpts(src, BodyPolicy.Same, BodyPolicy.Same, BodyPolicy.Same, policy, BodyPolicy.Same, lineWidth);
+	}
+
+	private inline function writeWithDoBody(src:String, policy:BodyPolicy, lineWidth:Int):String {
+		return writeWithOpts(src, BodyPolicy.Same, BodyPolicy.Same, BodyPolicy.Same, BodyPolicy.Same, policy, lineWidth);
 	}
 
 	private function writeWithOpts(
-		src:String, ifBody:BodyPolicy, elseBody:BodyPolicy, forBody:BodyPolicy, whileBody:BodyPolicy, lineWidth:Int
+		src:String, ifBody:BodyPolicy, elseBody:BodyPolicy, forBody:BodyPolicy, whileBody:BodyPolicy, doBody:BodyPolicy,
+		lineWidth:Int
 	):String {
 		final base:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
 		final opts:HxModuleWriteOptions = {
@@ -357,6 +377,7 @@ class HaxeWriterRoundTripTest extends Test {
 			elseBody: elseBody,
 			forBody: forBody,
 			whileBody: whileBody,
+			doBody: doBody,
 		};
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}

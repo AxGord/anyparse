@@ -77,6 +77,7 @@ final class HaxeFormatConfigLoader {
 			elseBody: base.elseBody,
 			forBody: base.forBody,
 			whileBody: base.whileBody,
+			doBody: base.doBody,
 		};
 		if (cfg.indentation != null) applyIndentation(cfg.indentation, result);
 		if (cfg.wrapping != null) applyWrapping(cfg.wrapping, result);
@@ -113,6 +114,7 @@ final class HaxeFormatConfigLoader {
 		if (section.elseBody != null) opt.elseBody = bodyPolicyToRuntime(section.elseBody);
 		if (section.forBody != null) opt.forBody = bodyPolicyToRuntime(section.forBody);
 		if (section.whileBody != null) opt.whileBody = bodyPolicyToRuntime(section.whileBody);
+		if (section.doWhileBody != null) opt.doBody = bodyPolicyToRuntime(section.doWhileBody);
 	}
 
 	private static function applyTrailingCommas(section:HxFormatTrailingCommasSection, opt:HxModuleWriteOptions):Void {

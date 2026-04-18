@@ -43,6 +43,15 @@ import anyparse.format.WriteOptions;
  *  - `forBody` — same policy for `for (…) body`.
  *  - `whileBody` — same policy for `while (…) body`.
  *
+ * Field added in slice ψ₅ (do-while body placement):
+ *  - `doBody` — same three-way policy for the body of `do body while
+ *    (…);`. Default is `Next` (matches haxe-formatter's
+ *    `sameLine.doWhileBody` default) — non-block bodies move to the
+ *    next line unless explicitly overridden via `hxformat.json`. The
+ *    other `*Body` fields default to `Same` to preserve pre-ψ₄ byte-
+ *    identical output; do-while diverges because the corpus reference
+ *    (`sameLine.doWhileBody: next`) expects the break by default.
+ *
  * Policies apply only to non-block bodies: a block body (`{ … }`)
  * carries its own hardlines from `blockBody`, so the separator before
  * `{` is always a single space regardless of the policy.
@@ -58,4 +67,5 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	elseBody:BodyPolicy,
 	forBody:BodyPolicy,
 	whileBody:BodyPolicy,
+	doBody:BodyPolicy,
 };

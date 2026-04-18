@@ -212,8 +212,18 @@ class WriterLowering {
 			else
 				{expr: ECall(macro $i{subFn}, [macro $i{argNames[0]}, macro opt]), pos: Context.currentPos()};
 
+			// When the sub-struct opens with a bare-Ref @:bodyPolicy field,
+			// the sub-struct's writer emits the header→body separator via
+			// bodyPolicyWrap (Same/Next/FitLine). Stripping the trailing
+			// space from kwLead here avoids a double space (Same) or
+			// trailing-space-before-hardline (Next/FitLine). Non-policy
+			// sub-structs keep the pre-ψ₅ `kw ` shape.
+			final stripKwTrailingSpace:Bool = subStructStartsWithBodyPolicy(refName);
 			final parts:Array<Expr> = [];
-			if (kwLead != null) parts.push(macro _dt($v{kwLead + ' '}));
+			if (kwLead != null) {
+				final kwText:String = stripKwTrailingSpace ? kwLead : kwLead + ' ';
+				parts.push(macro _dt($v{kwText}));
+			}
 			if (leadText != null) parts.push(macro _dt($v{leadText}));
 			parts.push(subCall);
 			if (trailText != null) parts.push(macro _dt($v{trailText}));
@@ -383,7 +393,7 @@ class WriterLowering {
 						optParts.push(sameLineSeparator(child));
 						if (bodyPolicyFlag != null) {
 							optParts.push(macro _dt($v{kwLead}));
-							optParts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall));
+							optParts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, macro _optVal, refName));
 						} else {
 							optParts.push(macro _dt($v{kwLead + ' '}));
 							optParts.push(writeCall);
@@ -413,8 +423,14 @@ class WriterLowering {
 						expr: ECall(macro $i{writeFn}, [fieldAccess, macro opt]),
 						pos: Context.currentPos(),
 					};
-					if (bodyPolicyFlag != null && kwLead == null && leadText == null && !isFirstField && !isRaw) {
-						parts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall));
+					// bodyPolicy on a first field: the parent enum-branch
+					// Case 3 strips its kwLead trailing space so the
+					// separator here is the sole transition token. Non-
+					// first-field case (HxIfStmt.thenBody after cond's
+					// `)` trail): the trail emits the token literally and
+					// bodyPolicyWrap replaces the default ` ` separator.
+					if (bodyPolicyFlag != null && kwLead == null && leadText == null && !isRaw) {
+						parts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, fieldAccess, refName));
 					} else {
 						if (kwLead == null && leadText == null && !isFirstField && !isRaw) {
 							if (prevEmptyCandidate != null)
@@ -649,10 +665,20 @@ class WriterLowering {
 	 * `tabWidth` triple as `blockBody`, so one-level body indent matches
 	 * a `{}` block's nesting depth.
 	 *
+	 * Block-bodied values bypass the policy: when `bodyTypePath` is an
+	 * enum whose branches carry `@:lead(openText) @:trail(closeText)` on
+	 * a single Star child (the characteristic of a `blockBody`-rendered
+	 * constructor, e.g. `BlockStmt(@:lead('{') @:trail('}'))`), an outer
+	 * runtime `switch` routes those ctors to a single-space layout —
+	 * matching haxe-formatter's convention that `{ … }` stays on the
+	 * same line as `do` / `if` / `while` / `for` regardless of the
+	 * placement knob. This keeps policy targeted at the non-block
+	 * expression-body case where the knob actually shifts layout.
+	 *
 	 * The case patterns are built as raw `EField` expressions to avoid
 	 * macro-time enum resolution against the `BodyPolicy` abstract.
 	 */
-	private static function bodyPolicyWrap(flagName:String, writeCall:Expr):Expr {
+	private function bodyPolicyWrap(flagName:String, writeCall:Expr, bodyValueExpr:Expr, bodyTypePath:String):Expr {
 		final optFlag:Expr = {
 			expr: EField(macro opt, flagName),
 			pos: Context.currentPos(),
@@ -661,16 +687,64 @@ class WriterLowering {
 		final samePat:Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Same']));
 		final nextPat:Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Next']));
 		final fitPat:Expr = MacroStringTools.toFieldExpr(bpPath.concat(['FitLine']));
-		final cases:Array<Case> = [
+		final policyCases:Array<Case> = [
 			{values: [samePat], expr: macro _dc([_dt(' '), $writeCall]), guard: null},
 			{values: [nextPat], expr: macro _dn(_cols, _dc([_dhl(), $writeCall])), guard: null},
 			{values: [fitPat], expr: macro _dg(_dn(_cols, _dc([_dl(), $writeCall]))), guard: null},
 		];
-		final switchExpr:Expr = {expr: ESwitch(optFlag, cases, null), pos: Context.currentPos()};
+		final policySwitch:Expr = {expr: ESwitch(optFlag, policyCases, null), pos: Context.currentPos()};
+
+		final blockPatterns:Array<Expr> = collectBlockCtorPatterns(bodyTypePath);
+		final bodySwitch:Expr = if (blockPatterns.length == 0) policySwitch
+		else {
+			final sameLayout:Expr = macro _dc([_dt(' '), $writeCall]);
+			final outerCases:Array<Case> = [
+				{values: blockPatterns, expr: sameLayout, guard: null},
+				{values: [macro _], expr: policySwitch, guard: null},
+			];
+			{expr: ESwitch(bodyValueExpr, outerCases, null), pos: Context.currentPos()};
+		};
+
 		return macro {
 			final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-			$switchExpr;
+			$bodySwitch;
 		};
+	}
+
+	/**
+	 * Walk `bodyTypePath`'s rule (expected to be an `Alt`) and collect
+	 * `case` patterns for branches that render via `blockBody` — i.e.
+	 * enum ctors declared with `@:lead(open) @:trail(close)` on a single
+	 * `Star` child. Returns an empty array when `bodyTypePath` is not an
+	 * enum, has no such branches, or is absent from the shape map.
+	 */
+	private function collectBlockCtorPatterns(bodyTypePath:String):Array<Expr> {
+		final rule:Null<ShapeNode> = shape.rules.get(bodyTypePath);
+		if (rule == null || rule.kind != Alt) return [];
+		final simple:String = simpleName(bodyTypePath);
+		final pack:Array<String> = packOf(bodyTypePath);
+		final patterns:Array<Expr> = [];
+		for (branch in rule.children) if (isBlockCtorBranch(branch)) {
+			final ctorName:String = branch.annotations.get('base.ctor');
+			final arity:Int = branch.children.length;
+			final ctorPath:Array<String> = pack.concat([simple, ctorName]);
+			final ctorRef:Expr = MacroStringTools.toFieldExpr(ctorPath);
+			final pattern:Expr = if (arity == 0) ctorRef
+			else {
+				final args:Array<Expr> = [for (_ in 0...arity) macro _];
+				{expr: ECall(ctorRef, args), pos: Context.currentPos()};
+			};
+			patterns.push(pattern);
+		}
+		return patterns;
+	}
+
+	private static function isBlockCtorBranch(branch:ShapeNode):Bool {
+		final leadText:Null<String> = branch.annotations.get('lit.leadText');
+		final trailText:Null<String> = branch.annotations.get('lit.trailText');
+		if (leadText == null || trailText == null) return false;
+		if (branch.children.length != 1) return false;
+		return branch.children[0].kind == Star;
 	}
 
 	/**
@@ -726,6 +800,28 @@ class WriterLowering {
 	 */
 	private function isTightLead(leadText:Null<String>):Bool {
 		return leadText != null && formatInfo.tightLeads.indexOf(leadText) != -1;
+	}
+
+	/**
+	 * True when `refName` names a Seq (struct) rule whose first field is
+	 * a bare Ref annotated with `@:bodyPolicy` and no `@:kw` / `@:lead`
+	 * of its own. Used by Case 3 enum-branch lowering to decide whether
+	 * to strip the trailing space from a `@:kw` lead — the sub-struct's
+	 * writer will emit the header→body separator via `bodyPolicyWrap`,
+	 * so leaving the space in would yield a double space in the `Same`
+	 * case and a dangling space before a hardline in `Next` / `FitLine`.
+	 */
+	private function subStructStartsWithBodyPolicy(refName:String):Bool {
+		final subNode:Null<ShapeNode> = shape.rules.get(refName);
+		if (subNode == null || subNode.kind != Seq) return false;
+		final children:Array<ShapeNode> = subNode.children;
+		if (children.length == 0) return false;
+		final first:ShapeNode = children[0];
+		if (first.kind != Ref) return false;
+		if (first.annotations.get('base.optional') == true) return false;
+		if (readMetaString(first, ':kw') != null) return false;
+		if (readMetaString(first, ':lead') != null) return false;
+		return readMetaString(first, ':bodyPolicy') != null;
 	}
 
 	/** Build `_dc([elem1, elem2, ...])` from a macro-time array of Exprs. */

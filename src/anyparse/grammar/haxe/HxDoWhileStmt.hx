@@ -19,9 +19,14 @@ package anyparse.grammar.haxe;
  * separator between the body and `while` runtime-switchable: when the
  * flag is true the separator is a plain space (`} while (…);`); when
  * false it becomes a hardline (`}\nwhile (…);`).
+ *
+ * `@:bodyPolicy("doBody")` on `body` controls how a non-block body is
+ * placed relative to `do` — same line, always next line, or fit-line
+ * (ψ₅). Block bodies (`{ … }`) always take a single space regardless
+ * of the policy: the `{` carries its own layout via `blockBody`.
  */
 @:peg
 typedef HxDoWhileStmt = {
-	var body:HxStatement;
+	@:bodyPolicy('doBody') var body:HxStatement;
 	@:kw('while') @:lead('(') @:trail(')') @:sameLine('sameLineDoWhile') var cond:HxExpr;
 };

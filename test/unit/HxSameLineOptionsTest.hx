@@ -145,6 +145,7 @@ class HxSameLineOptionsTest extends Test {
 			elseBody: base.elseBody,
 			forBody: base.forBody,
 			whileBody: base.whileBody,
+			doBody: base.doBody,
 		};
 	}
 }
