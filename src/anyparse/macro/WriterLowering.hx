@@ -320,6 +320,14 @@ class WriterLowering {
 		final isRaw:Bool = hasMeta(node, ':raw');
 		final parts:Array<Expr> = [];
 		var isFirstField:Bool = true;
+		// Tracks the immediately preceding field when it was a bare
+		// try-parse Star (no lead/trail/sep) that may produce no output
+		// at runtime. A following bare Ref field must then gate its
+		// leading separator on `prevField.length > 0` — otherwise the
+		// space is emitted even when the Star contributed nothing,
+		// yielding e.g. `\t function` instead of `\tfunction` when
+		// `HxMemberDecl.modifiers` is empty.
+		var prevEmptyCandidate:Null<Expr> = null;
 
 		for (child in node.children) {
 			final fieldName:Null<String> = child.annotations.get('base.fieldName');
@@ -338,6 +346,7 @@ class WriterLowering {
 
 			if (isStar) {
 				emitWriterStarField(child, fieldAccess, parts, child == node.children[node.children.length - 1], typePath, isFirstField, isRaw);
+				prevEmptyCandidate = isBareTryparseStar(child) ? fieldAccess : null;
 				isFirstField = false;
 				continue;
 			}
@@ -393,8 +402,12 @@ class WriterLowering {
 						expr: ECall(macro $i{writeFn}, [fieldAccess, macro opt]),
 						pos: Context.currentPos(),
 					};
-					if (kwLead == null && leadText == null && !isFirstField && !isRaw)
-						parts.push(macro _dt(' '));
+					if (kwLead == null && leadText == null && !isFirstField && !isRaw) {
+						if (prevEmptyCandidate != null)
+							parts.push(macro ($prevEmptyCandidate.length > 0) ? _dt(' ') : _de());
+						else
+							parts.push(macro _dt(' '));
+					}
 					parts.push(writeCall);
 
 				case _:
@@ -405,6 +418,7 @@ class WriterLowering {
 			if (!isOptional && trailText != null)
 				parts.push(macro _dt($v{trailText}));
 
+			prevEmptyCandidate = null;
 			isFirstField = false;
 		}
 
@@ -629,6 +643,22 @@ class WriterLowering {
 	 */
 	private function isSpacedLead(openText:Null<String>):Bool {
 		return openText != null && formatInfo.spacedLeads.indexOf(openText) != -1;
+	}
+
+	/**
+	 * True when the given Star struct field has no `@:lead` / `@:trail`
+	 * / `@:sep`, so its emitted Doc is empty whenever the runtime array
+	 * is empty. The next bare-Ref field's leading separator must then
+	 * be gated on `field.length > 0`, otherwise the writer emits a
+	 * dangling space (`\t function` instead of `\tfunction` when
+	 * `HxMemberDecl.modifiers` is empty).
+	 */
+	private static function isBareTryparseStar(child:ShapeNode):Bool {
+		if (child.kind != Star) return false;
+		final leadText:Null<String> = child.annotations.get('lit.leadText');
+		final trailText:Null<String> = child.annotations.get('lit.trailText');
+		final sepText:Null<String> = child.annotations.get('lit.sepText');
+		return leadText == null && trailText == null && sepText == null;
 	}
 
 	/**

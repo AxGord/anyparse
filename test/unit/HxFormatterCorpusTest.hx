@@ -84,6 +84,12 @@ class HxFormatterCorpusTest extends Test {
 				continue;
 			}
 			final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(tc.config);
+			// .hxtest fixtures strip the file's trailing \n during read
+			// (HxFormatterCorpusHelpers.stripPadNewlines), so the expected
+			// section never carries a trailing newline. Disable the
+			// writer's finalNewline knob to match — comparison would
+			// otherwise show a spurious +1 \n on every byte-exact pass.
+			opts.finalNewline = false;
 			final module:HxModule = try HaxeModuleParser.parse(tc.input) catch (exception:Exception) {
 				skipParse++;
 				final reason:String = classifyParseFailure(exception, tc.input);
@@ -140,10 +146,12 @@ class HxFormatterCorpusTest extends Test {
 	}
 
 	private static function printParseReasons(label:String, reasons:Map<String, Int>):Void {
+		#if sys
 		final entries:Array<{reason:String, count:Int}> = [for (r => c in reasons) {reason: r, count: c}];
 		entries.sort((a, b) -> b.count - a.count);
 		Sys.println('$label skip-parse reasons:');
 		for (entry in entries) Sys.println('  ${entry.count}× ${entry.reason}');
+		#end
 	}
 
 	private static function describeDiff(expected:String, actual:String):String {

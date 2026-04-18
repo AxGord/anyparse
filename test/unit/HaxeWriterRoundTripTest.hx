@@ -272,4 +272,16 @@ class HaxeWriterRoundTripTest extends Test {
 		Assert.isTrue(out.indexOf('(a:Int)') != -1, 'expected `(a:Int)` (tight colon) in: <$out>');
 		Assert.isTrue(out.indexOf('(a : Int)') == -1, 'did not expect spaced `(a : Int)` in: <$out>');
 	}
+
+	function testNoLeadingSpaceBeforeMemberWithoutModifiers():Void {
+		final out:String = HxModuleWriter.write(HaxeModuleParser.parse('class F { function test() {} }'));
+		Assert.isTrue(out.indexOf('\tfunction') != -1, 'expected `\\tfunction` (no leading space after indent) in: <$out>');
+		Assert.isTrue(out.indexOf('\t function') == -1, 'did not expect `\\t function` (extra space) in: <$out>');
+	}
+
+	function testNoLeadingSpaceBeforeVarWithoutModifiers():Void {
+		final out:String = HxModuleWriter.write(HaxeModuleParser.parse('class F { var x:Int; }'));
+		Assert.isTrue(out.indexOf('\tvar') != -1, 'expected `\\tvar` (no leading space after indent) in: <$out>');
+		Assert.isTrue(out.indexOf('\t var') == -1, 'did not expect `\\t var` (extra space) in: <$out>');
+	}
 }
