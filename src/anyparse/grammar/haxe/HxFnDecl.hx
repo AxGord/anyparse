@@ -15,8 +15,10 @@ package anyparse.grammar.haxe;
  * peek close-char for empty list, then sep-separated loop. Zero params
  * yields an empty array.
  *
- * Return type is mandatory with `@:lead(':')`. Optional return type
- * (type inference) is a future slice.
+ * Return type is `@:optional @:lead(':')` — when absent the function
+ * relies on Haxe type inference. The lead `:` is the commit point for
+ * the optional: `matchLit` peeks it, and the sub-rule parse only fires
+ * when the peek hits (D24).
  *
  * The `body` field uses `@:lead('{') @:trail('}')` which selects the
  * close-peek termination mode in `emitStarFieldSteps` — same pattern
@@ -28,6 +30,6 @@ package anyparse.grammar.haxe;
 typedef HxFnDecl = {
 	var name:HxIdentLit;
 	@:lead('(') @:trail(')') @:sep(',') @:trailingComma('trailingCommaParams') var params:Array<HxParam>;
-	@:lead(':') var returnType:HxTypeRef;
+	@:optional @:lead(':') var returnType:Null<HxTypeRef>;
 	@:lead('{') @:trail('}') var body:Array<HxStatement>;
 }

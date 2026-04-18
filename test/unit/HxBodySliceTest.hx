@@ -276,4 +276,28 @@ class HxBodySliceTest extends HxTestHelpers {
 			case null, _: Assert.fail('expected ExprStmt(IdentExpr(x))');
 		}
 	}
+
+	public function testFnDeclNoReturnType():Void {
+		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function main() {} }');
+		Assert.equals('main', (decl.name : String));
+		Assert.isNull(decl.returnType);
+		Assert.equals(0, decl.body.length);
+	}
+
+	public function testFnDeclNoReturnTypeWithBody():Void {
+		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function main() { return 1; } }');
+		Assert.equals('main', (decl.name : String));
+		Assert.isNull(decl.returnType);
+		Assert.equals(1, decl.body.length);
+		switch decl.body[0] {
+			case ReturnStmt(IntLit(v)): Assert.equals(1, (v : Int));
+			case null, _: Assert.fail('expected ReturnStmt(IntLit(1))');
+		}
+	}
+
+	public function testFnDeclOptionalReturnTypeStillAcceptsExplicit():Void {
+		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function main():Void {} }');
+		Assert.equals('main', (decl.name : String));
+		Assert.equals('Void', (decl.returnType.name : String));
+	}
 }

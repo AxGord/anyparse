@@ -121,6 +121,14 @@ class HaxeWriterRoundTripTest extends Test {
 		roundTrip('class F { var x:Int = a => b; }');
 	}
 
+	function testFnDeclNoReturnType():Void {
+		roundTrip('class F { function main() {} }');
+	}
+
+	function testFnDeclNoReturnTypeWithBody():Void {
+		roundTrip('class F { function main() { return 1; } }');
+	}
+
 	function testExprParenLambda():Void {
 		roundTrip('class F { function f():Void { var x:Int = (a:Int) => a + 1; } }');
 	}
