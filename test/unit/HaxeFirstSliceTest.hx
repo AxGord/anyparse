@@ -106,6 +106,44 @@ class HaxeFirstSliceTest extends Test {
 		Assert.raises(() -> HaxeParser.parse('class Foo { let x:Int; }'), ParseError);
 	}
 
+	public function testSkipsLineComment():Void {
+		// Line comments `// ...` consumed by the comment-aware `skipWs`
+		// generated from HaxeFormat's `lineComment` field. Plain-mode
+		// parsers skip-and-discard — source-fidelity comment capture
+		// lives in Trivia-mode variants.
+		final ast:HxClassDecl = HaxeParser.parse('class Foo { // trailing note\n\tvar x:Int; }');
+		Assert.equals('Foo', (ast.name : String));
+		Assert.equals(1, ast.members.length);
+		assertVarMember(ast.members[0].member, 'x', 'Int');
+	}
+
+	public function testSkipsBlockComment():Void {
+		// Block comments `/* ... */` consumed similarly via
+		// `blockComment` open/close delimiters on HaxeFormat.
+		final ast:HxClassDecl = HaxeParser.parse('class /* name */ Foo { /* empty */ }');
+		Assert.equals('Foo', (ast.name : String));
+		Assert.equals(0, ast.members.length);
+	}
+
+	public function testSkipsMultiLineBlockComment():Void {
+		// Block comments may span multiple lines — scanner walks past
+		// interior newlines until it finds the close delimiter.
+		final ast:HxClassDecl = HaxeParser.parse('class Foo {\n\t/*\n\t * multi\n\t * line\n\t */\n\tvar x:Int;\n}');
+		Assert.equals('Foo', (ast.name : String));
+		Assert.equals(1, ast.members.length);
+		assertVarMember(ast.members[0].member, 'x', 'Int');
+	}
+
+	public function testSkipsMixedCommentsAndWhitespace():Void {
+		// Interleaved `//`, `/* */`, whitespace — all collapsed in a
+		// single `skipWs` call between tokens.
+		final source:String = 'class // hdr\n\t/* tag */ Foo /* ok */ {\n\t// field\n\tvar x:Int; // inline\n}';
+		final ast:HxClassDecl = HaxeParser.parse(source);
+		Assert.equals('Foo', (ast.name : String));
+		Assert.equals(1, ast.members.length);
+		assertVarMember(ast.members[0].member, 'x', 'Int');
+	}
+
 	private function assertVarMember(member:HxClassMember, expectedName:String, expectedType:String):Void {
 		switch member {
 			case VarMember(decl):

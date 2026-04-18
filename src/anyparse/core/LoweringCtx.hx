@@ -19,6 +19,13 @@ import anyparse.format.Format;
  *                    vocabulary for `Lit` lowerings.
  * - `mode`         — Fast vs Tolerant; drives whether span tracking,
  *                    error recovery and cache lookups are emitted.
+ * - `trivia`       — when true, the macro synthesizes paired `*T` AST
+ *                    types (struct/enum) for every grammar node that
+ *                    transitively contains a `@:trivia`-annotated Star.
+ *                    The generated parser emits `Trivial<T>` wrappers
+ *                    for those Star elements with `collectTrivia(ctx)`
+ *                    calls between them. Default `false` — existing
+ *                    parsers keep their bare AST shape.
  *
  * Strategies are free to mutate the fields they own, but only while
  * they are in their own `lower` call — the macro framework saves and
@@ -32,6 +39,7 @@ class LoweringCtx {
 	public var indentMode:Null<String> = null;
 	public var activeFormat:Null<Format> = null;
 	public var mode:Mode = Mode.Tolerant;
+	public var trivia:Bool = false;
 
 	public function new() {}
 }

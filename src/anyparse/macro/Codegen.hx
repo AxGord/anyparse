@@ -37,7 +37,7 @@ class Codegen {
 			for (ereg in rule.eregs) fields.push(eregField(ereg));
 			fields.push(ruleField(rule));
 		}
-		fields.push(skipWsField());
+		fields.push(skipWsField(formatInfo));
 		fields.push(matchLitField());
 		fields.push(matchKwField());
 		fields.push(expectLitField());
@@ -152,23 +152,71 @@ class Codegen {
 
 	// -------- runtime helpers --------
 
-	private static function skipWsField():Field {
+	/**
+	 * Generate `skipWs` — the whitespace-and-comment skipper called
+	 * between every terminal match and at the public entry's tail check.
+	 *
+	 * Base behaviour: consume spaces, tabs, LF, CR.
+	 *
+	 * When `formatInfo.commentPatterns` is non-empty (e.g. Haxe with
+	 * `//` and `/* *\/`), each pattern contributes an inline match block:
+	 *  - Line-terminated: consume open literal, scan to next `\n` or
+	 *    EOF (newline itself is left for the next iteration's whitespace
+	 *    branch — keeps blank-line counting trivially derivable from
+	 *    consecutive `\n` consumption for Trivia mode in step 3).
+	 *  - Block-terminated: consume open literal, scan until the close
+	 *    literal matches (`matchLit` consumes it), then resume the loop.
+	 *    No nesting semantics — matches standard C/C++/Java/Haxe block
+	 *    comments; formats that need nesting can add it via a dedicated
+	 *    CommentPattern flag later.
+	 *
+	 * Binary formats skip this entirely (empty patterns plus binary
+	 * entries never call `skipWs`).
+	 */
+	private static function skipWsField(formatInfo:FormatReader.FormatInfo):Field {
+		final body:Expr = buildSkipWsBody(formatInfo.commentPatterns);
 		return {
 			name: 'skipWs',
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{name: 'ctx', type: macro : anyparse.runtime.Parser}],
 				ret: macro : Void,
-				expr: macro {
-					while (ctx.pos < ctx.input.length) {
-						final c:Int = ctx.input.charCodeAt(ctx.pos);
-						if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code) ctx.pos++;
-						else break;
-					}
-				},
+				expr: body,
 			}),
 			pos: Context.currentPos(),
 		};
+	}
+
+	private static function buildSkipWsBody(patterns:Array<FormatReader.CommentPattern>):Expr {
+		final commentStmts:Array<Expr> = [for (p in patterns) commentSkipBlock(p)];
+		return macro while (ctx.pos < ctx.input.length) {
+			final c:Int = ctx.input.charCodeAt(ctx.pos);
+			if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code) {
+				ctx.pos++;
+				continue;
+			}
+			$b{commentStmts};
+			break;
+		};
+	}
+
+	private static function commentSkipBlock(p:FormatReader.CommentPattern):Expr {
+		final open:String = p.open;
+		if (p.lineTerminated) return macro if (matchLit(ctx, $v{open})) {
+			while (ctx.pos < ctx.input.length) {
+				if (ctx.input.charCodeAt(ctx.pos) == '\n'.code) break;
+				ctx.pos++;
+			}
+			continue;
+		}
+		final close:String = p.close;
+		return macro if (matchLit(ctx, $v{open})) {
+			while (ctx.pos < ctx.input.length) {
+				if (matchLit(ctx, $v{close})) break;
+				ctx.pos++;
+			}
+			continue;
+		}
 	}
 
 	private static function matchLitField():Field {

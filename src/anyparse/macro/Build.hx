@@ -45,7 +45,7 @@ import anyparse.macro.strategy.Ternary;
  */
 class Build {
 
-	public static macro function buildParser(target:Expr):Array<Field> {
+	public static macro function buildParser(target:Expr, ?options:Expr):Array<Field> {
 		final targetTypePath:String = ExprTools.toString(target);
 		final rootType:Type = Context.getType(targetTypePath);
 
@@ -64,6 +64,7 @@ class Build {
 
 		final ctx:LoweringCtx = new LoweringCtx();
 		ctx.mode = Mode.Fast;
+		ctx.trivia = readBoolOption(options, 'trivia', false);
 
 		final shapeBuilder:ShapeBuilder = new ShapeBuilder(formatInfo);
 		final shape:ShapeBuilder.ShapeResult = shapeBuilder.build(rootType);
@@ -165,6 +166,40 @@ class Build {
 		return switch e.expr {
 			case EConst(CIdent('null')): null;
 			case _: ExprTools.toString(e);
+		};
+	}
+
+	/**
+	 * Read a `Bool` field from an anonymous-struct Expr passed as a
+	 * `@:build(...)` options argument. When `options` is absent or the
+	 * named field is missing, returns `defaultValue`. When present but
+	 * not a literal `true`/`false`, emits a fatal error — options
+	 * fields are expected to be compile-time constants at the
+	 * meta-call site.
+	 */
+	private static function readBoolOption(options:Null<Expr>, fieldName:String, defaultValue:Bool):Bool {
+		if (options == null) return defaultValue;
+		return switch options.expr {
+			case EConst(CIdent('null')): defaultValue;
+			case EObjectDecl(fields):
+				for (f in fields) if (f.field == fieldName) {
+					switch f.expr.expr {
+						case EConst(CIdent('true')): return true;
+						case EConst(CIdent('false')): return false;
+						case _:
+							Context.fatalError(
+								'Build.buildParser: option "$fieldName" must be a literal `true` or `false`',
+								f.expr.pos
+							);
+					}
+				}
+				defaultValue;
+			case _:
+				Context.fatalError(
+					'Build.buildParser: options argument must be an anonymous-struct literal (e.g. `{trivia: true}`)',
+					options.pos
+				);
+				throw 'unreachable';
 		};
 	}
 

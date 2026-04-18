@@ -86,6 +86,29 @@ typedef FormatInfo = {
 	 * every optional `@:lead`.
 	 */
 	tightLeads:Array<String>,
+
+	/**
+	 * Comment delimiter patterns recognized by the format. Built from the
+	 * format class's `lineComment` and `blockComment` fields. Plain-mode
+	 * parsers skip-and-discard any matching sequence between tokens;
+	 * Trivia-mode parsers additionally capture the content between
+	 * delimiters. Empty when the format has no comments (e.g. JSON).
+	 */
+	commentPatterns:Array<CommentPattern>,
+};
+
+/**
+ * One recognised comment delimiter pair.
+ *
+ * `lineTerminated = true` means the comment runs from `open` until the
+ * next `\n` (or EOF) and `close` is empty. `false` means the comment
+ * runs from `open` until the next occurrence of `close` — may span
+ * multiple lines.
+ */
+typedef CommentPattern = {
+	open:String,
+	close:String,
+	lineTerminated:Bool,
 };
 
 /**
@@ -131,6 +154,52 @@ class FormatReader {
 			anyType: isBinary ? null : readStringFieldOpt(cl, 'anyType'),
 			spacedLeads: isBinary ? [] : readStringArrayField(cl, 'spacedLeads'),
 			tightLeads: isBinary ? [] : readStringArrayField(cl, 'tightLeads'),
+			commentPatterns: isBinary ? [] : readCommentPatterns(cl),
+		};
+	}
+
+	/**
+	 * Build `commentPatterns` by reading the format class's `lineComment`
+	 * (`Null<String>`) and `blockComment` (`Null<{open:String, close:String}>`)
+	 * fields. Missing or `null` fields contribute nothing — a format with
+	 * neither (e.g. JSON) yields an empty array.
+	 */
+	private static function readCommentPatterns(cl:ClassType):Array<CommentPattern> {
+		final out:Array<CommentPattern> = [];
+		final line:Null<String> = readStringFieldOpt(cl, 'lineComment');
+		if (line != null) out.push({open: line, close: '', lineTerminated: true});
+		final block:Null<{open:String, close:String}> = readBlockCommentFieldOpt(cl, 'blockComment');
+		if (block != null) out.push({open: block.open, close: block.close, lineTerminated: false});
+		return out;
+	}
+
+	/**
+	 * Read a `{open:String, close:String}` struct-literal field
+	 * initializer. Returns `null` when the field is missing, `null`, or
+	 * its initializer does not have both sub-fields as string literals.
+	 */
+	private static function readBlockCommentFieldOpt(cl:ClassType, fieldName:String):Null<{open:String, close:String}> {
+		final fields:Array<ClassField> = cl.fields.get();
+		for (f in fields) if (f.name == fieldName) {
+			final texpr:Null<TypedExpr> = f.expr();
+			if (texpr != null) return extractBlockComment(texpr);
+		}
+		return null;
+	}
+
+	private static function extractBlockComment(texpr:TypedExpr):Null<{open:String, close:String}> {
+		return switch texpr.expr {
+			case TObjectDecl(fields):
+				var open:Null<String> = null;
+				var close:Null<String> = null;
+				for (f in fields) switch f.name {
+					case 'open': open = extractString(f.expr);
+					case 'close': close = extractString(f.expr);
+				}
+				if (open != null && close != null) {open: open, close: close} else null;
+			case TCast(inner, _): extractBlockComment(inner);
+			case TParenthesis(inner): extractBlockComment(inner);
+			case _: null;
 		};
 	}
 
