@@ -371,8 +371,12 @@ class WriterLowering {
 						optParts.push(sameLineSeparator(child));
 						optParts.push(macro _dt($v{kwLead + ' '}));
 					} else if (leadText != null) {
-						optParts.push(sameLineSeparator(child));
-						optParts.push(macro _dt($v{leadText + ' '}));
+						if (isTightLead(leadText)) {
+							optParts.push(macro _dt($v{leadText}));
+						} else {
+							optParts.push(sameLineSeparator(child));
+							optParts.push(macro _dt($v{leadText + ' '}));
+						}
 					}
 					optParts.push(writeCall);
 					final optBody:Expr = if (optParts.length == 1) optParts[0]
@@ -625,6 +629,17 @@ class WriterLowering {
 	 */
 	private function isSpacedLead(openText:Null<String>):Bool {
 		return openText != null && formatInfo.spacedLeads.indexOf(openText) != -1;
+	}
+
+	/**
+	 * True when the given optional `@:lead(...)` text is declared by the
+	 * format as tight — no leading separator before it, no trailing
+	 * space after it. Used by the optional-Ref code path so Haxe's
+	 * `:Type` annotation stays compact instead of being wrapped in
+	 * spaces like keyword leads (`else`, `catch`).
+	 */
+	private function isTightLead(leadText:Null<String>):Bool {
+		return leadText != null && formatInfo.tightLeads.indexOf(leadText) != -1;
 	}
 
 	/** Build `_dc([elem1, elem2, ...])` from a macro-time array of Exprs. */

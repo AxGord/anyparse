@@ -260,4 +260,16 @@ class HaxeWriterRoundTripTest extends Test {
 		Assert.isTrue(out.indexOf('bar(x') != -1, 'expected `bar(x` (no space) in: <$out>');
 		Assert.isTrue(out.indexOf('bar (') == -1, 'did not expect space before `(` in: <$out>');
 	}
+
+	function testFunctionReturnTypeTightColon():Void {
+		final out:String = HxModuleWriter.write(HaxeModuleParser.parse('class F { function f():Int { return 1; } }'));
+		Assert.isTrue(out.indexOf('f():Int') != -1, 'expected `f():Int` (tight colon) in: <$out>');
+		Assert.isTrue(out.indexOf(' : Int') == -1, 'did not expect spaced ` : Int` in: <$out>');
+	}
+
+	function testLambdaParamTypeTightColon():Void {
+		final out:String = HxModuleWriter.write(HaxeModuleParser.parse('class F { function f():Void { var x:Int = (a:Int) => a + 1; } }'));
+		Assert.isTrue(out.indexOf('(a:Int)') != -1, 'expected `(a:Int)` (tight colon) in: <$out>');
+		Assert.isTrue(out.indexOf('(a : Int)') == -1, 'did not expect spaced `(a : Int)` in: <$out>');
+	}
 }

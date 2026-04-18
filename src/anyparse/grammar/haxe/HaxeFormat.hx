@@ -73,6 +73,16 @@ final class HaxeFormat implements TextFormat {
 	 */
 	public var spacedLeads(default, null):Array<String> = ['{'];
 
+	/**
+	 * Optional `@:lead(...)` strings that emit tight — no leading
+	 * separator, no trailing space. For Haxe the type-annotation colon
+	 * is the canonical tight lead, so `function f():Int` and
+	 * `var x:Type` keep their compact native layout instead of the
+	 * spaced ` : ` that would be applied to keyword-like leads
+	 * (`else`, `catch`).
+	 */
+	public var tightLeads(default, null):Array<String> = [':'];
+
 	public var intLiteral(default, null):EReg = ~/^-?(?:0|[1-9][0-9]*)/;
 	public var floatLiteral(default, null):EReg = ~/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][-+]?[0-9]+)?/;
 	public var boolLiterals(default, null):Null<BoolLiterals> = {trueLit: 'true', falseLit: 'false'};

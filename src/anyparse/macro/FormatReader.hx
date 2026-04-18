@@ -74,6 +74,18 @@ typedef FormatInfo = {
 	 * lead is tight, matching JSON-like output.
 	 */
 	spacedLeads:Array<String>,
+
+	/**
+	 * Optional-field `@:lead(...)` strings that emit *tight* — no leading
+	 * separator before the lead, no trailing space after it. Default
+	 * optional-Ref layout (e.g. `else <body>`, `catch (...)`) inserts
+	 * ` <lead> ` to keep keywords readable. Tight leads short-circuit
+	 * that pattern for punctuation like Haxe `:` so `function f():Int`
+	 * comes out compact instead of `function f() : Int`. Empty array
+	 * (or absent field) means no tight leads — full spaced layout for
+	 * every optional `@:lead`.
+	 */
+	tightLeads:Array<String>,
 };
 
 /**
@@ -118,6 +130,7 @@ class FormatReader {
 			stringType: isBinary ? null : readStringFieldOpt(cl, 'stringType'),
 			anyType: isBinary ? null : readStringFieldOpt(cl, 'anyType'),
 			spacedLeads: isBinary ? [] : readStringArrayField(cl, 'spacedLeads'),
+			tightLeads: isBinary ? [] : readStringArrayField(cl, 'tightLeads'),
 		};
 	}
 
