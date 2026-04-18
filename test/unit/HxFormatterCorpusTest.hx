@@ -12,6 +12,7 @@ import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
+import anyparse.runtime.ParseError;
 
 /**
  * υ₁ — corpus harness validating the macro-generated `HxModuleWriter`
@@ -40,6 +41,8 @@ class HxFormatterCorpusTest extends Test {
 	private static inline final SAMELINE_SUBDIR:String = 'test/testcases/sameline';
 	private static inline final HXTEST_EXT:String = '.hxtest';
 	private static inline final MAX_DIFF_CONTEXT:Int = 40;
+	private static inline final MAX_REASON_LEN:Int = 120;
+	private static inline final SNIPPET_LEN:Int = 24;
 
 	public function new():Void {
 		super();
@@ -68,6 +71,7 @@ class HxFormatterCorpusTest extends Test {
 		var skipParse:Int = 0;
 		var skipWrite:Int = 0;
 		final failLines:Array<String> = [];
+		final parseReasons:Map<String, Int> = [];
 
 		final names:Array<String> = FileSystem.readDirectory(dir);
 		names.sort((a:String, b:String) -> a < b ? -1 : (a > b ? 1 : 0));
@@ -82,6 +86,9 @@ class HxFormatterCorpusTest extends Test {
 			final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(tc.config);
 			final module:HxModule = try HaxeModuleParser.parse(tc.input) catch (exception:Exception) {
 				skipParse++;
+				final reason:String = classifyParseFailure(exception, tc.input);
+				final prev:Null<Int> = parseReasons[reason];
+				parseReasons[reason] = (prev == null ? 0 : prev) + 1;
 				continue;
 			};
 			final actual:String = try HxModuleWriter.write(module, opts) catch (exception:Exception) {
@@ -100,9 +107,43 @@ class HxFormatterCorpusTest extends Test {
 		Sys.println('$label corpus: $pass pass / $fail fail / $skipParse skip-parse / $skipWrite skip-write / $skipMalformed malformed (total $total)');
 		if (fail > 0) Sys.println('$label fails:');
 		for (line in failLines) Sys.println(line);
+		if (skipParse > 0) printParseReasons(label, parseReasons);
 
 		Assert.isTrue(total > 0, '$label: no cases processed at $dir');
 		#end
+	}
+
+	/**
+	 * Classifies a parse failure into a stable category key suitable
+	 * for aggregation. The raw message alone is too generic (the top-
+	 * level Pratt fan always reports `expected HxDecl`), so we pair it
+	 * with a short snippet of the input at the failure offset. Cases
+	 * that choke on the same feature cluster under the same key.
+	 */
+	private static function classifyParseFailure(exception:Exception, input:String):String {
+		final message:String = truncate(exception.message);
+		final parseErr:Null<ParseError> = Std.downcast(exception, ParseError);
+		if (parseErr == null) return message;
+		final pos:Int = parseErr.span.from;
+		if (pos < 0 || pos >= input.length) return '$message  @<eof>';
+		return '$message  @"${escape(slice(input, pos, SNIPPET_LEN))}"';
+	}
+
+	private static function truncate(s:Null<String>):String {
+		if (s == null || s == '') return '<no message>';
+		return s.length > MAX_REASON_LEN ? s.substr(0, MAX_REASON_LEN) + '...' : s;
+	}
+
+	private static function slice(s:String, from:Int, maxLen:Int):String {
+		final end:Int = from + maxLen < s.length ? from + maxLen : s.length;
+		return s.substring(from, end);
+	}
+
+	private static function printParseReasons(label:String, reasons:Map<String, Int>):Void {
+		final entries:Array<{reason:String, count:Int}> = [for (r => c in reasons) {reason: r, count: c}];
+		entries.sort((a, b) -> b.count - a.count);
+		Sys.println('$label skip-parse reasons:');
+		for (entry in entries) Sys.println('  ${entry.count}× ${entry.reason}');
 	}
 
 	private static function describeDiff(expected:String, actual:String):String {
@@ -118,8 +159,7 @@ class HxFormatterCorpusTest extends Test {
 	}
 
 	private static function snippet(s:String, from:Int):String {
-		final end:Int = from + MAX_DIFF_CONTEXT < s.length ? from + MAX_DIFF_CONTEXT : s.length;
-		return escape(s.substring(from, end));
+		return escape(slice(s, from, MAX_DIFF_CONTEXT));
 	}
 
 	private static function escape(s:String):String {
