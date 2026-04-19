@@ -17,9 +17,13 @@ package anyparse.grammar.haxe;
  * last field (D49). The try-parse loop breaks when the next token
  * is `case`, `default`, or `}` — none of which parse as an
  * `HxStatement`.
+ *
+ * `@:fmt(nestBody)` makes the writer wrap the body Doc in an extra
+ * indent level, so statements drop onto their own line below the
+ * `case pattern:` header at body-indent instead of inline.
  */
 @:peg
 typedef HxCaseBranch = {
 	@:trail(':') var pattern:HxExpr;
-	@:trivia @:tryparse var body:Array<HxStatement>;
+	@:trivia @:tryparse @:fmt(nestBody) var body:Array<HxStatement>;
 };

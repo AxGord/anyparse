@@ -1387,6 +1387,7 @@ class Lowering {
 			);
 		}
 		final tryparse:Bool = hasMeta(starNode, ':tryparse');
+		final nestBody:Bool = fmtHasFlag(starNode, 'nestBody');
 		if (openText != null) {
 			parseSteps.push(macro expectLit(ctx, $v{openText}));
 		}
@@ -1447,6 +1448,45 @@ class Lowering {
 			// uncaptured. The enclosing `@:trivia` Star's next
 			// `collectTrivia` re-scans the same bytes and attaches them
 			// correctly (e.g. as leading of the next sibling element).
+			//
+			// `@:fmt(nestBody)` Stars (case/default bodies) add a trailing-
+			// orphan capture: when parse fails AFTER scanning own-line
+			// comments without a blank-line separator, those comments
+			// belong to THIS body (rendered at body-indent), not to the
+			// next sibling. We stash them in the trailing slots and
+			// advance cursor past the trivia so the enclosing Star does
+			// not re-capture. Comments separated by a blank line still
+			// flow outward via rewind — preserving "blank line = belongs
+			// to next entity" convention.
+			if (nestBody) {
+				parseSteps.push(macro {
+					while (true) {
+						final _savedPos:Int = ctx.pos;
+						final _lead = collectTrivia(ctx);
+						final _afterTriviaPos:Int = ctx.pos;
+						try {
+							final _node:$elemCT = $elemCall;
+							final _trailing:Null<String> = collectTrailing(ctx);
+							$accumRef.push({
+								blankBefore: _lead.blankBefore,
+								leadingComments: _lead.leadingComments,
+								trailingComment: _trailing,
+								node: _node,
+							});
+						} catch (_e:anyparse.runtime.ParseError) {
+							if (!_lead.blankBefore && _lead.leadingComments.length > 0) {
+								$i{trailBBLocal} = _lead.blankBefore;
+								$i{trailLCLocal} = _lead.leadingComments;
+								ctx.pos = _afterTriviaPos;
+							} else {
+								ctx.pos = _savedPos;
+							}
+							break;
+						}
+					}
+				});
+				return;
+			}
 			parseSteps.push(macro {
 				while (true) {
 					final _savedPos:Int = ctx.pos;
@@ -2053,6 +2093,26 @@ class Lowering {
 		final meta:Null<Metadata> = node.annotations.get('base.meta');
 		if (meta == null) return false;
 		for (entry in meta) if (entry.name == tag) return true;
+		return false;
+	}
+
+	/**
+	 * True when the node carries `@:fmt(...)` and one argument matches
+	 * the bare identifier `name` (flag form, e.g. `@:fmt(nestBody)`).
+	 * Parser-side mirror of `WriterLowering.fmtHasFlag` — `@:fmt` is
+	 * primarily a writer namespace, but some flags (like `nestBody`)
+	 * also gate parser behaviour to keep one meta per axis.
+	 */
+	private static function fmtHasFlag(node:ShapeNode, name:String):Bool {
+		final meta:Null<Metadata> = node.annotations.get('base.meta');
+		if (meta == null) return false;
+		for (entry in meta) if (entry.name == ':fmt') {
+			for (param in entry.params) switch param.expr {
+				case EConst(CIdent(id)) if (id == name): return true;
+				case ECall({expr: EConst(CIdent(id))}, _) if (id == name): return true;
+				case _:
+			}
+		}
 		return false;
 	}
 

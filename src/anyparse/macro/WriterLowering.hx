@@ -588,7 +588,17 @@ class WriterLowering {
 				} else {
 					macro _dt(' ');
 				};
-				parts.push(triviaTryparseStarExpr(fieldAccess, elemFn, sepExpr, sameLineName != null));
+				final nestBody:Bool = fmtHasFlag(starNode, 'nestBody');
+				// Trailing slots only carry orphan trivia when nestBody is
+				// on (parser gates capture on the same flag). For catches
+				// the slots remain zero — forward null to keep the writer
+				// path byte-identical to the pre-nestBody shape.
+				final tryparseTrailBB:Null<Expr> = nestBody ? trailBBAccess : null;
+				final tryparseTrailLC:Null<Expr> = nestBody ? trailLCAccess : null;
+				parts.push(triviaTryparseStarExpr(
+					fieldAccess, elemFn, sepExpr, sameLineName != null, nestBody,
+					tryparseTrailBB, tryparseTrailLC
+				));
 				return;
 			}
 			if (closeText != null) {
@@ -1429,40 +1439,80 @@ class WriterLowering {
 	 * cannot share a line with trailing content. Between elements
 	 * without leading comments the separator runs unchanged.
 	 *
-	 * Trailing slots are not consulted — `@:tryparse` rewinds on parse
-	 * failure so orphan trivia flows outward to the enclosing Star.
+	 * Without `@:fmt(nestBody)`, trailing slots are not consulted —
+	 * `@:tryparse` rewinds on parse failure so orphan trivia flows
+	 * outward to the enclosing Star (matches `HxTryCatchStmt.catches`
+	 * behaviour where a comment after the last catch belongs to the
+	 * next statement's leading, not to the catches list).
+	 *
+	 * When `nestBody` is true (`@:fmt(nestBody)`), the whole body Doc
+	 * is wrapped in `_dn(_cols, ...)` — one extra indent level — and
+	 * every element is preceded by a hardline so the body drops to a
+	 * fresh line at inner indent after the preceding field's content
+	 * (e.g. a `case X:` pattern). The parser co-captures trailing
+	 * orphan comments (own-line comments after the last element, with
+	 * no blank-line separator) into the synth trailing slots; the
+	 * writer renders them at body-indent right after the last element.
+	 * Empty bodies with no trailing orphans emit nothing (no stray
+	 * hardline, no dangling nest).
 	 */
-	private static function triviaTryparseStarExpr(fieldAccess:Expr, elemFn:String, sepExpr:Expr, sepBeforeFirst:Bool):Expr {
+	private static function triviaTryparseStarExpr(
+		fieldAccess:Expr, elemFn:String, sepExpr:Expr,
+		sepBeforeFirst:Bool, nestBody:Bool,
+		trailBBAccess:Null<Expr>, trailLCAccess:Null<Expr>
+	):Expr {
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
 			pos: Context.currentPos(),
 		};
 		final sepBeforeFirstExpr:Expr = macro $v{sepBeforeFirst};
+		final nestBodyExpr:Expr = macro $v{nestBody};
+		final trailBB:Expr = trailBBAccess ?? macro false;
+		final trailLC:Expr = trailLCAccess ?? macro ([] : Array<String>);
 		return macro {
 			final _arr = $fieldAccess;
-			final _docs:Array<anyparse.core.Doc> = [];
+			final _trailLC:Array<String> = $trailLC;
+			final _trailBB:Bool = $trailBB;
 			final _sepFirst:Bool = $sepBeforeFirstExpr;
-			var _si:Int = 0;
-			while (_si < _arr.length) {
-				final _t = _arr[_si];
-				if (_t.leadingComments.length > 0) {
-					_docs.push(_dhl());
-					if (_t.blankBefore && _si > 0) _docs.push(_dhl());
-					var _ci:Int = 0;
-					while (_ci < _t.leadingComments.length) {
-						_docs.push(leadingCommentDoc(_t.leadingComments[_ci]));
+			final _nestBody:Bool = $nestBodyExpr;
+			if (_arr.length == 0 && _trailLC.length == 0) _de() else {
+				final _docs:Array<anyparse.core.Doc> = [];
+				var _si:Int = 0;
+				while (_si < _arr.length) {
+					final _t = _arr[_si];
+					if (_t.leadingComments.length > 0) {
 						_docs.push(_dhl());
-						_ci++;
+						if (_t.blankBefore && _si > 0) _docs.push(_dhl());
+						var _ci:Int = 0;
+						while (_ci < _t.leadingComments.length) {
+							_docs.push(leadingCommentDoc(_t.leadingComments[_ci]));
+							_docs.push(_dhl());
+							_ci++;
+						}
+					} else if (_nestBody) {
+						_docs.push(_dhl());
+					} else if (_si > 0 || _sepFirst) {
+						_docs.push($sepExpr);
 					}
-				} else if (_si > 0 || _sepFirst) {
-					_docs.push($sepExpr);
+					final _elem:anyparse.core.Doc = $triviaElemCall;
+					final _tc:Null<String> = _t.trailingComment;
+					_docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDoc(_tc)) : _elem);
+					_si++;
 				}
-				final _elem:anyparse.core.Doc = $triviaElemCall;
-				final _tc:Null<String> = _t.trailingComment;
-				_docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDoc(_tc)) : _elem);
-				_si++;
+				if (_trailLC.length > 0) {
+					var _ti:Int = 0;
+					while (_ti < _trailLC.length) {
+						_docs.push(_dhl());
+						if (_trailBB && _ti == 0 && _arr.length > 0) _docs.push(_dhl());
+						_docs.push(leadingCommentDoc(_trailLC[_ti]));
+						_ti++;
+					}
+				}
+				if (_nestBody) {
+					final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+					_dn(_cols, _dc(_docs));
+				} else _dc(_docs);
 			}
-			_dc(_docs);
 		};
 	}
 

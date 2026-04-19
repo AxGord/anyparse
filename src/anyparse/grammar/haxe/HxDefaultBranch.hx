@@ -14,8 +14,12 @@ package anyparse.grammar.haxe;
  * mode, which would attempt to consume past the next `case` /
  * `default` / `}` token. Try-parse terminates cleanly because none
  * of those tokens parse as an `HxStatement`.
+ *
+ * `@:fmt(nestBody)` makes the writer wrap the body Doc in an extra
+ * indent level, so statements drop onto their own line below the
+ * `default:` header at body-indent instead of inline.
  */
 @:peg
 typedef HxDefaultBranch = {
-	@:lead(':') @:trivia @:tryparse var stmts:Array<HxStatement>;
+	@:lead(':') @:trivia @:tryparse @:fmt(nestBody) var stmts:Array<HxStatement>;
 };
