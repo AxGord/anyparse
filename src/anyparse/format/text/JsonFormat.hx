@@ -101,6 +101,7 @@ final class JsonFormat implements TextFormat {
 		lineWidth: 120,
 		lineEnd: '\n',
 		finalNewline: false,
+		trailingWhitespace: false,
 	};
 
 	private function new() {}

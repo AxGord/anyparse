@@ -147,6 +147,7 @@ class HxTrailingCommaOptionsTest extends Test {
 			lineWidth: lineWidth,
 			lineEnd: base.lineEnd,
 			finalNewline: base.finalNewline,
+			trailingWhitespace: base.trailingWhitespace,
 			sameLineElse: base.sameLineElse,
 			sameLineCatch: base.sameLineCatch,
 			sameLineDoWhile: base.sameLineDoWhile,

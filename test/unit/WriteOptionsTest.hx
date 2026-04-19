@@ -37,6 +37,7 @@ class WriteOptionsTest extends Test {
 			lineWidth: 120,
 			lineEnd: '\n',
 			finalNewline: false,
+			trailingWhitespace: false,
 		};
 		final out:String = JValueWriter.write(ast, opts);
 		Assert.equals(JValueWriter.write(ast), out);

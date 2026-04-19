@@ -57,6 +57,13 @@ class Renderer {
 		trailing tabs on empty rows). Same effect every mature pretty-printer
 		(prettier, black, rustfmt) achieves with a trailing-whitespace strip
 		pass, but in O(1) extra space and a single traversal.
+
+		`trailingWhitespace` inverts that blank-line discard: when `true`,
+		a pending indent left by the prior break-mode `Line` is flushed
+		before the next `lineEnd` instead of being overwritten, so blank
+		rows carry the surrounding block's indent. Opt-in knob driven by
+		`WriteOptions.trailingWhitespace` — haxe-formatter's
+		`indentation.trailingWhitespace: true` layout.
 	**/
 	public static function render(
 		doc:Doc,
@@ -64,7 +71,8 @@ class Renderer {
 		indentChar:IndentChar = Space,
 		tabWidth:Int = 1,
 		lineEnd:String = '\n',
-		finalNewline:Bool = false
+		finalNewline:Bool = false,
+		trailingWhitespace:Bool = false
 	):String {
 		final buf:StringBuf = new StringBuf();
 		final stack:Array<Frame> = [new Frame(0, MBreak, doc)];
@@ -92,6 +100,9 @@ class Renderer {
 						buf.add(flat);
 						col += flat.length;
 					} else {
+						if (trailingWhitespace && pendingIndent >= 0) {
+							writeIndent(buf, pendingIndent, indentChar, tabWidth);
+						}
 						buf.add(lineEnd);
 						pendingIndent = f.indent;
 						col = f.indent;

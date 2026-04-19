@@ -153,6 +153,7 @@ final class HaxeFormat implements TextFormat {
 		lineWidth: 120,
 		lineEnd: '\n',
 		finalNewline: true,
+		trailingWhitespace: false,
 		sameLineElse: SameLinePolicy.Same,
 		sameLineCatch: SameLinePolicy.Same,
 		sameLineDoWhile: SameLinePolicy.Same,

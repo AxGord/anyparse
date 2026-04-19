@@ -49,4 +49,14 @@ typedef WriteOptions = {
 	 * honored once the renderer gains final-newline awareness.
 	 */
 	finalNewline:Bool,
+
+	/**
+	 * When `true`, blank lines between content carry the surrounding
+	 * block's indent rather than rendering bare. Opt-in gate on top of
+	 * the renderer's default deferred-indent, which silently drops
+	 * indent on empty rows. Matches haxe-formatter's
+	 * `indentation.trailingWhitespace` knob; default `false` keeps every
+	 * other corpus case byte-identical.
+	 */
+	trailingWhitespace:Bool,
 };

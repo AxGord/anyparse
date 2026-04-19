@@ -100,7 +100,8 @@ class WriterCodegen {
 				_opt.indentChar,
 				_opt.tabWidth,
 				_opt.lineEnd,
-				_opt.finalNewline
+				_opt.finalNewline,
+				_opt.trailingWhitespace
 			);
 		};
 		return {

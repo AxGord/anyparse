@@ -206,4 +206,34 @@ class DocRendererTest extends Test {
 		final doc:Doc = D.text("hello");
 		Assert.equals("hello", Renderer.render(doc, 80));
 	}
+
+	function testRenderTrailingWhitespaceDisabledByDefault() {
+		// Consecutive break-mode Lines at non-zero indent produce a bare
+		// blank line: the first hardline's pending indent is silently
+		// overwritten by the second, and flushed only when the next text
+		// arrives. This is the pre-ω-trailing-whitespace default.
+		final doc:Doc = D.nest(2, D.concat([
+			D.hardline(),
+			D.text("a"),
+			D.hardline(),
+			D.hardline(),
+			D.text("b"),
+		]));
+		Assert.equals("\n  a\n\n  b", Renderer.render(doc, 80));
+	}
+
+	function testRenderTrailingWhitespaceFlushesIndentOnBlankLines() {
+		// With trailingWhitespace=true the first hardline's pending indent
+		// is flushed before the second hardline's lineEnd, so the blank
+		// row carries the enclosing block's indent.
+		final doc:Doc = D.nest(2, D.concat([
+			D.hardline(),
+			D.text("a"),
+			D.hardline(),
+			D.hardline(),
+			D.text("b"),
+		]));
+		final out:String = Renderer.render(doc, 80, Space, 1, '\n', false, true);
+		Assert.equals("\n  a\n  \n  b", out);
+	}
 }

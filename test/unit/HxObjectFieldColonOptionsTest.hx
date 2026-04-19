@@ -106,6 +106,7 @@ class HxObjectFieldColonOptionsTest extends Test {
 			lineWidth: base.lineWidth,
 			lineEnd: base.lineEnd,
 			finalNewline: base.finalNewline,
+			trailingWhitespace: base.trailingWhitespace,
 			sameLineElse: base.sameLineElse,
 			sameLineCatch: base.sameLineCatch,
 			sameLineDoWhile: base.sameLineDoWhile,
