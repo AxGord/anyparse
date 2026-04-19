@@ -24,5 +24,5 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxTryCatchStmt = {
 	var body:HxStatement;
-	@:tryparse @:fmt(sameLine('sameLineCatch')) var catches:Array<HxCatchClause>;
+	@:trivia @:tryparse @:fmt(sameLine('sameLineCatch')) var catches:Array<HxCatchClause>;
 };

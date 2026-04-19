@@ -21,5 +21,5 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxCaseBranch = {
 	@:trail(':') var pattern:HxExpr;
-	@:tryparse var body:Array<HxStatement>;
+	@:trivia @:tryparse var body:Array<HxStatement>;
 };

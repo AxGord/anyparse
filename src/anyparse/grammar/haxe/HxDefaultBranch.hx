@@ -17,5 +17,5 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxDefaultBranch = {
-	@:lead(':') @:tryparse var stmts:Array<HxStatement>;
+	@:lead(':') @:trivia @:tryparse var stmts:Array<HxStatement>;
 };

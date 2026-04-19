@@ -544,13 +544,14 @@ class WriterLowering {
 		// Trivia Star: the Array element type is Trivial<elemT>, and the
 		// write call targets `_t.node` instead of the raw array element.
 		// Leading/trailing comments and blank-line markers attach around
-		// each element via the generated layout below. Sep / tryparse /
-		// @:raw combinations with @:trivia are rejected by the parser
-		// side upstream — only block-mode (close + no sep) and EOF-mode
-		// (no close, last field) are valid here.
+		// each element via the generated layout below. Sep / @:raw
+		// combinations with @:trivia are rejected by the parser side
+		// upstream — valid modes are block (close + no sep), EOF (no
+		// close, last field), and try-parse (no close, last field,
+		// `@:tryparse`).
 		if (isTriviaStar) {
-			if (sepText != null || hasMeta(starNode, ':tryparse') || isRaw)
-				Context.fatalError('WriterLowering: @:trivia Star does not support @:sep/@:tryparse/@:raw', Context.currentPos());
+			if (sepText != null || isRaw)
+				Context.fatalError('WriterLowering: @:trivia Star does not support @:sep/@:raw', Context.currentPos());
 			// ω-orphan-trivia: Seq-struct call sites drive the trailing
 			// slots synthesised on the paired type. Alt-branch Star call
 			// sites (`HxStatement.BlockStmt`) have no synth slots and
@@ -562,6 +563,27 @@ class WriterLowering {
 			final trailLCAccess:Null<Expr> = fieldName == null
 				? null
 				: {expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_LEADING_SUFFIX), pos: Context.currentPos()};
+			if (hasMeta(starNode, ':tryparse')) {
+				if (closeText != null)
+					Context.fatalError('WriterLowering: @:trivia + @:tryparse must not have @:trail', Context.currentPos());
+				if (!isLastField)
+					Context.fatalError('WriterLowering: @:trivia Star without @:trail must be the last field', Context.currentPos());
+				if (openText != null) parts.push(macro _dt($v{openText}));
+				// sameLine-annotated Stars (catches against try body) emit
+				// the separator before EVERY element — it's the boundary
+				// with the preceding struct field. Non-sameLine Stars
+				// (case / default bodies) emit it only between elements,
+				// matching the plain-mode tryparse writer.
+				final sameLineName:Null<String> = fmtReadString(starNode, 'sameLine');
+				final sepExpr:Expr = if (sameLineName != null) {
+					final optFlag:Expr = {expr: EField(macro opt, sameLineName), pos: Context.currentPos()};
+					sameLinePolicySwitch(optFlag, macro _dt(' '));
+				} else {
+					macro _dt(' ');
+				};
+				parts.push(triviaTryparseStarExpr(fieldAccess, elemFn, sepExpr, sameLineName != null));
+				return;
+			}
 			if (closeText != null) {
 				if (!isFirstField && isSpacedLead(openText)) parts.push(leftCurlySeparator(starNode));
 				parts.push(triviaBlockStarExpr(fieldAccess, trailBBAccess, trailLCAccess, elemFn, openText ?? '{', closeText));
@@ -1370,6 +1392,53 @@ class WriterLowering {
 				}
 				_dc(_docs);
 			}
+		};
+	}
+
+	/**
+	 * Build the Doc expression for a try-parse trivia Star field
+	 * (last field, no `@:trail`, `@:tryparse`). Mirrors the plain-mode
+	 * tryparse layout but threads `Trivial<T>` unwrapping through the
+	 * loop: when an element carries leading comments, the normal
+	 * separator (`sepExpr`) is suppressed in favour of a hardline
+	 * followed by each comment on its own line — line-style comments
+	 * cannot share a line with trailing content. Between elements
+	 * without leading comments the separator runs unchanged.
+	 *
+	 * Trailing slots are not consulted — `@:tryparse` rewinds on parse
+	 * failure so orphan trivia flows outward to the enclosing Star.
+	 */
+	private static function triviaTryparseStarExpr(fieldAccess:Expr, elemFn:String, sepExpr:Expr, sepBeforeFirst:Bool):Expr {
+		final triviaElemCall:Expr = {
+			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
+			pos: Context.currentPos(),
+		};
+		final sepBeforeFirstExpr:Expr = macro $v{sepBeforeFirst};
+		return macro {
+			final _arr = $fieldAccess;
+			final _docs:Array<anyparse.core.Doc> = [];
+			final _sepFirst:Bool = $sepBeforeFirstExpr;
+			var _si:Int = 0;
+			while (_si < _arr.length) {
+				final _t = _arr[_si];
+				if (_t.leadingComments.length > 0) {
+					_docs.push(_dhl());
+					if (_t.blankBefore && _si > 0) _docs.push(_dhl());
+					var _ci:Int = 0;
+					while (_ci < _t.leadingComments.length) {
+						_docs.push(leadingCommentDoc(_t.leadingComments[_ci]));
+						_docs.push(_dhl());
+						_ci++;
+					}
+				} else if (_si > 0 || _sepFirst) {
+					_docs.push($sepExpr);
+				}
+				final _elem:anyparse.core.Doc = $triviaElemCall;
+				final _tc:Null<String> = _t.trailingComment;
+				_docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDoc(_tc)) : _elem);
+				_si++;
+			}
+			_dc(_docs);
 		};
 	}
 

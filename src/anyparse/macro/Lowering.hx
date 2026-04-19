@@ -1357,10 +1357,17 @@ class Lowering {
 	 *    `charCodeAt == closeChar` peek from the plain-mode path.
 	 *  - EOF (`closeText == null`, `isLastField`, no `@:tryparse`) —
 	 *    terminates at `ctx.pos >= ctx.input.length`.
+	 *  - Try-parse (`@:tryparse`, no close) — attempts element parse in
+	 *    a try/catch; on failure rewinds `ctx.pos` to the start of the
+	 *    iteration (before `collectTrivia`) so the enclosing Star
+	 *    re-scans the bytes and attaches trivia to the correct site.
+	 *    Trailing slots stay at defaults — orphan trivia propagates
+	 *    outward, not into `TrailingLeading`.
 	 *
-	 * `@:sep` and `@:tryparse` combined with `@:trivia` are rejected
-	 * upstream in `emitStarFieldSteps` — no current grammar combines
-	 * them and their semantics for trivia capture are undecided.
+	 * `@:sep` combined with `@:trivia` is rejected upstream in
+	 * `emitStarFieldSteps` — no current grammar combines them and its
+	 * semantics for trivia placement (before or after the separator)
+	 * is undecided.
 	 */
 	private function emitTriviaStarFieldSteps(
 		starNode:ShapeNode, localName:String, parseSteps:Array<Expr>, isLastField:Bool,
@@ -1379,12 +1386,7 @@ class Lowering {
 				Context.currentPos()
 			);
 		}
-		if (hasMeta(starNode, ':tryparse')) {
-			Context.fatalError(
-				'Lowering: @:trivia combined with @:tryparse is not supported',
-				Context.currentPos()
-			);
-		}
+		final tryparse:Bool = hasMeta(starNode, ':tryparse');
 		if (openText != null) {
 			parseSteps.push(macro expectLit(ctx, $v{openText}));
 		}
@@ -1407,6 +1409,12 @@ class Lowering {
 		// element and the close literal (or EOF) would be silently
 		// dropped. Paired with the two synth slots on the parent Seq
 		// type (see `TriviaTypeSynth.buildStarTrailingSlots`).
+		//
+		// In `@:tryparse` mode the rewind-on-fail path uncaptures any
+		// trivia the failed iteration had already scanned, so the
+		// trailing slots stay at their zero-initialised defaults — orphan
+		// trivia propagates outward through the enclosing Star's own
+		// `collectTrivia` scan rather than being stashed here.
 		final trailBBLocal:String = trailingBlankBeforeLocalName(localName);
 		final trailLCLocal:String = trailingLeadingLocalName(localName);
 		final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
@@ -1432,6 +1440,34 @@ class Lowering {
 			pos: Context.currentPos(),
 		});
 		final accumRef:Expr = macro $i{localName};
+		if (tryparse) {
+			// Try-parse termination: each iteration saves `ctx.pos` before
+			// `collectTrivia`, attempts the element parse, and rewinds to
+			// the saved pos on failure so the captured trivia is fully
+			// uncaptured. The enclosing `@:trivia` Star's next
+			// `collectTrivia` re-scans the same bytes and attaches them
+			// correctly (e.g. as leading of the next sibling element).
+			parseSteps.push(macro {
+				while (true) {
+					final _savedPos:Int = ctx.pos;
+					final _lead = collectTrivia(ctx);
+					try {
+						final _node:$elemCT = $elemCall;
+						final _trailing:Null<String> = collectTrailing(ctx);
+						$accumRef.push({
+							blankBefore: _lead.blankBefore,
+							leadingComments: _lead.leadingComments,
+							trailingComment: _trailing,
+							node: _node,
+						});
+					} catch (_e:anyparse.runtime.ParseError) {
+						ctx.pos = _savedPos;
+						break;
+					}
+				}
+			});
+			return;
+		}
 		final terminationCheck:Expr = if (closeText != null) {
 			final closeCharCode:Int = closeText.charCodeAt(0);
 			macro ctx.pos >= ctx.input.length || ctx.input.charCodeAt(ctx.pos) == $v{closeCharCode};
