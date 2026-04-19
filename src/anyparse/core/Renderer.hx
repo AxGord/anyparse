@@ -48,6 +48,15 @@ class Renderer {
 		Defaults (`Space`, `tabWidth=1`, `lineEnd="\n"`, `finalNewline=false`)
 		preserve the behavior of pre-indent-aware callers that just pass
 		`render(doc, width)`.
+
+		Indent is emitted lazily: a break-mode `Line` appends `lineEnd` and
+		stores the target indent in `pendingIndent`, flushed to the buffer
+		only when the next content (Text or flat-mode Line) arrives. If
+		another break-mode `Line` fires first, the prior pending indent is
+		silently discarded — this is exactly what blank lines need (no
+		trailing tabs on empty rows). Same effect every mature pretty-printer
+		(prettier, black, rustfmt) achieves with a trailing-whitespace strip
+		pass, but in O(1) extra space and a single traversal.
 	**/
 	public static function render(
 		doc:Doc,
@@ -60,6 +69,7 @@ class Renderer {
 		final buf:StringBuf = new StringBuf();
 		final stack:Array<Frame> = [new Frame(0, MBreak, doc)];
 		var col:Int = 0;
+		var pendingIndent:Int = -1;
 
 		while (stack.length > 0) {
 			final f:Frame = stack.pop();
@@ -67,15 +77,23 @@ class Renderer {
 				case Empty:
 					// nothing
 				case Text(s):
+					if (s.length > 0 && pendingIndent >= 0) {
+						writeIndent(buf, pendingIndent, indentChar, tabWidth);
+						pendingIndent = -1;
+					}
 					buf.add(s);
 					col += s.length;
 				case Line(flat):
 					if (f.mode == MFlat) {
+						if (flat.length > 0 && pendingIndent >= 0) {
+							writeIndent(buf, pendingIndent, indentChar, tabWidth);
+							pendingIndent = -1;
+						}
 						buf.add(flat);
 						col += flat.length;
 					} else {
 						buf.add(lineEnd);
-						writeIndent(buf, f.indent, indentChar, tabWidth);
+						pendingIndent = f.indent;
 						col = f.indent;
 					}
 				case Nest(n, inner):
