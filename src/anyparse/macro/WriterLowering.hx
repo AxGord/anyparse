@@ -77,7 +77,14 @@ class WriterLowering {
 		for (branch in node.children) {
 			final ctor:String = branch.annotations.get('base.ctor');
 			final children:Array<ShapeNode> = branch.children;
-			final argNames:Array<String> = [for (i in 0...children.length) '_v$i'];
+			// ω-close-trailing-alt: in trivia mode, close-peek `@:trivia`
+			// Alt branches grow a positional `closeTrailing:Null<String>`
+			// arg in the synth ctor (`HxStatementT.BlockStmt(stmts, closeTrailing)`).
+			// The ShapeNode tree is unchanged — gate by reading the same
+			// raw `@:trail` meta `TriviaTypeSynth` consults — so the
+			// pattern grows by one binding consumed by `lowerEnumStar`.
+			final extraArgs:Int = ctx.trivia && TriviaTypeSynth.isAltCloseTrailingBranch(branch) ? 1 : 0;
+			final argNames:Array<String> = [for (i in 0...children.length + extraArgs) '_v$i'];
 
 			// Build pattern
 			final ctorPath:Array<String> = ruleCtorPath(typePath, ctor);
@@ -309,14 +316,21 @@ class WriterLowering {
 		if (isTriviaStar) {
 			if (sepText != null)
 				Context.fatalError('WriterLowering: @:trivia Star enum branch does not support @:sep', Context.currentPos());
-			// ω-orphan-trivia / ω-close-trailing: Alt-branch Star has no
-			// synth trailing or close-trailing slots on the paired type
-			// (TriviaTypeSynth only extends Seq types). Pass null so the
-			// writer falls back to pre-slice behaviour — orphan trivia
-			// inside e.g. `BlockStmt({ /*c*/ })` and a same-line comment
-			// after the `}` are still dropped; a dedicated slice would
-			// extend synthesis to Alt ctor args if a fixture demands it.
-			parts.push(triviaBlockStarExpr(argsAccess, null, null, null, elemFn, leadText, trailText));
+			// ω-orphan-trivia: Alt-branch Star still has no synth trailing
+			// orphan slots — `TrailingBlankBefore`/`TrailingLeading` are
+			// Seq-only. Pass null so leftover orphan trivia inside e.g.
+			// `BlockStmt({ /*c*/ })` continues to drop until that synth
+			// is widened.
+			//
+			// ω-close-trailing-alt: same-line trailing comment captured
+			// after the close literal (`} // catch`) IS available — the
+			// synth ctor grew a positional arg (`closeTrailing`) and
+			// `argNames[1]` is its writer-side binding. Plain mode keeps
+			// the pre-slice null path (no extra arg, no extra binding).
+			final trailCloseAccess:Null<Expr> = TriviaTypeSynth.isAltCloseTrailingBranch(branch)
+				? macro $i{argNames[1]}
+				: null;
+			parts.push(triviaBlockStarExpr(argsAccess, null, null, trailCloseAccess, elemFn, leadText, trailText, true));
 		} else if (sepText != null) {
 			final tcExpr:Expr = trailingCommaExpr(branch);
 			parts.push(macro {
@@ -367,6 +381,17 @@ class WriterLowering {
 		// because a lone keyword on the same line as a semicolon-
 		// terminated body has no meaning.
 		var prevBodyField:Null<PrevBodyInfo> = null;
+		// ω-close-trailing-alt: tracks the immediately preceding bare-Ref
+		// body field (any Ref kind, not just bodyPolicy-wrapped) so a
+		// following Star with `@:fmt(sameLine(...))` can emit a runtime
+		// override on its FIRST element's separator: when the prev body's
+		// runtime ctor was a BlockStmt-style branch with a non-null
+		// `closeTrailing` slot, the body's writer already terminated its
+		// output with `\n`, and emitting the normal space separator would
+		// leak a stray ` ` between the indent and the next sibling. The
+		// override emits `_de()` instead. Reset on Star to avoid carrying
+		// across non-Ref siblings.
+		var prevBareRefBody:Null<PrevBodyInfo> = null;
 		// ψ₁₂: captures the name of the first `@:optional` sibling that
 		// carries `@:fmt(bodyPolicy(...))` — consumed by children tagged
 		// `@:fmt(fitLineIfWithElse)` to wire a runtime sibling-presence
@@ -387,6 +412,10 @@ class WriterLowering {
 			final fieldName:Null<String> = child.annotations.get('base.fieldName');
 			if (fieldName == null)
 				Context.fatalError('WriterLowering: struct field missing base.fieldName', Context.currentPos());
+			// Tracker is "prev" — clear at the start so a non-bearing-Ref
+			// field doesn't leak the value set two iterations back.
+			final stalePrevBareRefBody:Null<PrevBodyInfo> = prevBareRefBody;
+			prevBareRefBody = null;
 			final kwLead:Null<String> = readMetaString(child, ':kw');
 			final leadText:Null<String> = readMetaString(child, ':lead');
 			final trailText:Null<String> = readMetaString(child, ':trail');
@@ -400,7 +429,7 @@ class WriterLowering {
 			};
 
 			if (isStar) {
-				emitWriterStarField(child, fieldAccess, parts, child == node.children[node.children.length - 1], typePath, isFirstField, isRaw);
+				emitWriterStarField(child, fieldAccess, parts, child == node.children[node.children.length - 1], typePath, isFirstField, isRaw, stalePrevBareRefBody);
 				prevEmptyCandidate = isBareTryparseStar(child) ? fieldAccess : null;
 				prevBodyField = null;
 				isFirstField = false;
@@ -515,6 +544,14 @@ class WriterLowering {
 						}
 						parts.push(writeCall);
 					}
+					// ω-close-trailing-alt: track ANY bare-Ref body (with or
+					// without bodyPolicy wrap) so the next field can react to
+					// its runtime closeTrailing slot. Only matters when the
+					// target type is trivia-bearing — non-bearing types have
+					// no closeTrailing slot and the override degrades to a
+					// no-op switch returning the default sep.
+					if (ctx.trivia && isTriviaBearing(refName))
+						prevBareRefBody = {access: fieldAccess, typePath: refName};
 
 				case _:
 					Context.fatalError('WriterLowering: struct field kind ${child.kind} not supported', Context.currentPos());
@@ -526,6 +563,13 @@ class WriterLowering {
 
 			prevEmptyCandidate = null;
 			prevBodyField = justWrappedBody;
+			// `prevBareRefBody` was either set above for trivia-bearing
+			// bare-Ref fields (the only case the next sibling can usefully
+			// inspect) or untouched here when the field was a non-Ref kind.
+			// A subsequent Star resets it through the early-continue path,
+			// so non-Star non-bearing fields just fall through with the
+			// stale value cleared in the next loop iteration's bare-Ref
+			// branch (which always assigns) or via the Star reset.
 			isFirstField = false;
 		}
 
@@ -536,7 +580,8 @@ class WriterLowering {
 	/** Emit writer steps for a Star struct field. */
 	private function emitWriterStarField(
 		starNode:ShapeNode, fieldAccess:Expr, parts:Array<Expr>,
-		isLastField:Bool, typePath:String, isFirstField:Bool, isRaw:Bool
+		isLastField:Bool, typePath:String, isFirstField:Bool, isRaw:Bool,
+		prevBareRefBody:Null<PrevBodyInfo> = null
 	):Void {
 		final inner:ShapeNode = starNode.children[0];
 		if (inner.kind != Ref)
@@ -603,9 +648,21 @@ class WriterLowering {
 				// path byte-identical to the pre-nestBody shape.
 				final tryparseTrailBB:Null<Expr> = nestBody ? trailBBAccess : null;
 				final tryparseTrailLC:Null<Expr> = nestBody ? trailLCAccess : null;
+				// ω-close-trailing-alt: when prev field was a bare-Ref to a
+				// trivia-bearing type whose Alt has close-trailing branches
+				// (currently `HxStatement.BlockStmt`), build a runtime
+				// override on the FIRST element's separator. `BlockStmt(_, ct)`
+				// with `ct != null` means the body's writer already
+				// terminated its output with `\n` after the trailing line
+				// comment — the normal space sep would leak ` ` between the
+				// indent and the next sibling (e.g. `catch`). The override
+				// emits `_de()` instead; non-matching ctors fall through.
+				final firstSepOverride:Null<Expr> = sameLineName != null
+					? buildCloseTrailingFirstSepOverride(prevBareRefBody, sepExpr)
+					: null;
 				parts.push(triviaTryparseStarExpr(
 					fieldAccess, elemFn, sepExpr, sameLineName != null, nestBody,
-					tryparseTrailBB, tryparseTrailLC
+					tryparseTrailBB, tryparseTrailLC, firstSepOverride
 				));
 				return;
 			}
@@ -1158,6 +1215,39 @@ class WriterLowering {
 	}
 
 	/**
+	 * ω-close-trailing-alt — runtime override for a Star's first-element
+	 * separator when the immediately preceding struct field was a bare
+	 * Ref to a trivia-bearing type. Iterates the prev body's Alt branches
+	 * looking for close-trailing branches (Star + `@:trail` + `@:trivia`)
+	 * — currently only `HxStatement.BlockStmt`. For each, emits a case
+	 * `BlockStmt(_, _ct)` with guard `_ct != null` mapping to `_de()`
+	 * (the body's writer already terminated with `\n`, so any sep would
+	 * leak ` ` between the indent and the next sibling). The default
+	 * case falls through to `sepExpr`. Returns `null` when no override
+	 * is needed (no prev body, non-bearing target, or no close-trailing
+	 * branches in the Alt) so the caller skips the override path.
+	 */
+	private function buildCloseTrailingFirstSepOverride(prevBareRefBody:Null<PrevBodyInfo>, sepExpr:Expr):Null<Expr> {
+		if (prevBareRefBody == null) return null;
+		final rule:Null<ShapeNode> = shape.rules.get(prevBareRefBody.typePath);
+		if (rule == null || rule.kind != Alt) return null;
+		final cases:Array<Case> = [];
+		for (branch in rule.children) if (TriviaTypeSynth.isAltCloseTrailingBranch(branch)) {
+			final ctorName:String = branch.annotations.get('base.ctor');
+			final ctorPath:Array<String> = ruleCtorPath(prevBareRefBody.typePath, ctorName);
+			final ctorRef:Expr = MacroStringTools.toFieldExpr(ctorPath);
+			final pattern:Expr = {
+				expr: ECall(ctorRef, [macro _, macro _ct]),
+				pos: Context.currentPos(),
+			};
+			cases.push({values: [pattern], guard: macro _ct != null, expr: macro _de()});
+		}
+		if (cases.length == 0) return null;
+		cases.push({values: [macro _], guard: null, expr: sepExpr});
+		return {expr: ESwitch(prevBareRefBody.access, cases, null), pos: Context.currentPos()};
+	}
+
+	/**
 	 * ω-issue-316-curly-both — parallel to `collectBlockCtorPatterns`, but
 	 * partitions the block-ctor branches by whether the branch carries a
 	 * `@:fmt(leftCurly)` flag. Consumed by `bodyPolicyWrap` so block-ctor
@@ -1335,7 +1425,7 @@ class WriterLowering {
 	 */
 	private static function triviaBlockStarExpr(
 		fieldAccess:Expr, trailBBAccess:Null<Expr>, trailLCAccess:Null<Expr>, trailCloseAccess:Null<Expr>,
-		elemFn:String, openText:String, closeText:String
+		elemFn:String, openText:String, closeText:String, appendHardlineAfterTrail:Bool = false
 	):Expr {
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
@@ -1350,17 +1440,29 @@ class WriterLowering {
 		final trailLC:Expr = trailLCAccess ?? macro ([] : Array<String>);
 		// ω-close-trailing: same-line trailing comment captured right
 		// after the close literal (e.g. `} // comment` before the next
-		// sibling). Present only for close-peek Seq-struct Stars; Alt-
-		// branch + EOF sites forward null and degrade to the pre-slice
-		// close emission.
+		// sibling). Present only for close-peek Seq Stars (Seq-struct
+		// + ω-close-trailing-alt's BlockStmt); EOF and try-parse sites
+		// forward null and degrade to the pre-slice close emission.
 		final trailClose:Expr = trailCloseAccess ?? macro (null : Null<String>);
+		// ω-close-trailing-alt: Alt-branch sites pass true so the trailing
+		// line comment is followed by `_dhl()` — line comments terminate
+		// at \n semantically, and the Alt's parent struct may emit a space
+		// sep next (e.g. HxTryCatchStmt.body→catches with sameLineCatch),
+		// which would glue the next sibling onto the same line as the
+		// comment. Seq-struct sites pass false: their close-trailing slot
+		// always lives on the LAST field of its containing struct, where
+		// the parent Star's element separator already supplies a hardline.
+		final trailFollowExpr:Expr = appendHardlineAfterTrail ? macro _parts.push(_dhl()) : macro {};
+		final emptyTrailExpr:Expr = appendHardlineAfterTrail
+			? macro _dc([_dt($v{emptyText}), trailingCommentDoc(_trailClose), _dhl()])
+			: macro _dc([_dt($v{emptyText}), trailingCommentDoc(_trailClose)]);
 		return macro {
 			final _arr = $fieldAccess;
 			final _trailLC:Array<String> = $trailLC;
 			final _trailBB:Bool = $trailBB;
 			final _trailClose:Null<String> = $trailClose;
 			if (_arr.length == 0 && _trailLC.length == 0) {
-				if (_trailClose != null) _dc([_dt($v{emptyText}), _dt(' '), trailingCommentDoc(_trailClose)])
+				if (_trailClose != null) $emptyTrailExpr
 				else _dt($v{emptyText});
 			} else {
 				final _inner:Array<anyparse.core.Doc> = [];
@@ -1393,8 +1495,8 @@ class WriterLowering {
 				final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 				final _parts:Array<anyparse.core.Doc> = [_dt($v{openText}), _dn(_cols, _dc(_inner)), _dhl(), _dt($v{closeText})];
 				if (_trailClose != null) {
-					_parts.push(_dt(' '));
 					_parts.push(trailingCommentDoc(_trailClose));
+					$trailFollowExpr;
 				}
 				_dc(_parts);
 			}
@@ -1487,7 +1589,8 @@ class WriterLowering {
 	private static function triviaTryparseStarExpr(
 		fieldAccess:Expr, elemFn:String, sepExpr:Expr,
 		sepBeforeFirst:Bool, nestBody:Bool,
-		trailBBAccess:Null<Expr>, trailLCAccess:Null<Expr>
+		trailBBAccess:Null<Expr>, trailLCAccess:Null<Expr>,
+		firstSepOverride:Null<Expr> = null
 	):Expr {
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
@@ -1497,6 +1600,13 @@ class WriterLowering {
 		final nestBodyExpr:Expr = macro $v{nestBody};
 		final trailBB:Expr = trailBBAccess ?? macro false;
 		final trailLC:Expr = trailLCAccess ?? macro ([] : Array<String>);
+		// ω-close-trailing-alt: the FIRST element's separator picks
+		// `firstSepOverride` (a runtime switch on the prev body's ctor)
+		// when supplied; otherwise it falls back to `sepExpr` like
+		// every subsequent iteration. Subsequent elements always use
+		// `sepExpr` — closeTrailing is a property of the prev STRUCT
+		// FIELD (the body), not of the prior list element.
+		final firstSepExpr:Expr = firstSepOverride ?? sepExpr;
 		return macro {
 			final _arr = $fieldAccess;
 			final _trailLC:Array<String> = $trailLC;
@@ -1519,8 +1629,10 @@ class WriterLowering {
 						}
 					} else if (_nestBody) {
 						_docs.push(_dhl());
-					} else if (_si > 0 || _sepFirst) {
+					} else if (_si > 0) {
 						_docs.push($sepExpr);
+					} else if (_sepFirst) {
+						_docs.push($firstSepExpr);
 					}
 					final _elem:anyparse.core.Doc = $triviaElemCall;
 					final _tc:Null<String> = _t.trailingComment;

@@ -820,6 +820,15 @@ class Lowering {
 				final wrappedCT:ComplexType = TPath({
 					pack: ['anyparse', 'runtime'], name: 'Trivial', params: [TPType(elemCT)]
 				});
+				// ω-close-trailing-alt: synth ctor of close-peek `@:trivia`
+				// Alt branches (e.g. `HxStatementT.BlockStmt`) carries an
+				// extra positional `closeTrailing:Null<String>` arg captured
+				// here by `collectTrailing(ctx)` right after the close
+				// literal. Plain mode keeps the 1-arg ctor.
+				final ctorCallTrivia:Expr = {
+					expr: ECall(ctorRef, [macro _items, macro _closeTrail]),
+					pos: Context.currentPos(),
+				};
 				return macro {
 					skipWs(ctx);
 					expectLit(ctx, $v{leadText});
@@ -838,7 +847,8 @@ class Lowering {
 					}
 					skipWs(ctx);
 					expectLit(ctx, $v{trailText});
-					return $ctorCall;
+					final _closeTrail:Null<String> = collectTrailing(ctx);
+					return $ctorCallTrivia;
 				};
 			}
 			if (sepText != null) {

@@ -251,7 +251,34 @@ class TriviaTypeSynth {
 			name: (arg.annotations.get('base.fieldName') : String),
 			type: shapeToComplexType(arg, synthPack),
 		}];
+		// ω-close-trailing-alt: close-peek `@:trivia` Alt-branch Stars
+		// (only `HxStatement.BlockStmt` in the current grammar) grow a
+		// positional `closeTrailing:Null<String>` arg alongside the
+		// existing Trivial-wrapped Star array. Mirrors the Seq-struct
+		// close-trailing slot synthesised by `buildStarTrailingSlots`,
+		// but the arg has no field-name prefix — Alt ctors are
+		// positional so the writer reads it via `argNames[1]`.
+		if (isAltCloseTrailingBranch(branch)) {
+			final strCT:ComplexType = TPath({pack: [], name: 'String', params: []});
+			final nullStrCT:ComplexType = TPath({pack: [], name: 'Null', params: [TPType(strCT)]});
+			args.push({name: 'closeTrailing', type: nullStrCT});
+		}
 		return {name: ctorName, kind: FFun({args: args, ret: null, expr: null}), pos: pos, access: []};
+	}
+
+	/**
+	 * True when the branch is a close-peek `@:trivia` Alt-ctor wrapping
+	 * a single Star child — structurally equivalent to the Seq Case 4
+	 * shape that grows a `TrailingClose` slot in `buildStarTrailingSlots`.
+	 * Reads `@:trail` from `base.meta` directly since `arm()` runs
+	 * before the Lit strategy populates `lit.trailText`.
+	 */
+	public static function isAltCloseTrailingBranch(branch:ShapeNode):Bool {
+		if (branch.children.length != 1) return false;
+		final star:ShapeNode = branch.children[0];
+		if (star.kind != Star) return false;
+		if (star.annotations.get('trivia.starCollects') != true) return false;
+		return readMetaString(branch, ':trail') != null;
 	}
 
 	private static function shapeToComplexType(node:ShapeNode, synthPack:Array<String>):ComplexType {

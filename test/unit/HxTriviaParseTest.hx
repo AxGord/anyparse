@@ -119,7 +119,7 @@ class HxTriviaParseTest extends Test {
 		Assert.equals(1, fn.body.length);
 		final inner:anyparse.grammar.haxe.trivia.Pairs.HxStatementT = fn.body[0].node;
 		final stmts:Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch inner {
-			case BlockStmt(stmts): stmts;
+			case BlockStmt(stmts, _): stmts;
 			case _: throw 'expected BlockStmt';
 		};
 		Assert.equals(1, stmts.length);
@@ -269,7 +269,7 @@ class HxTriviaParseTest extends Test {
 		Assert.notNull(elseStmt);
 		final elseStmts:Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>>
 			= switch elseStmt {
-				case BlockStmt(stmts): stmts;
+				case BlockStmt(stmts, _): stmts;
 				case _: throw 'expected BlockStmt';
 			};
 		Assert.equals(1, elseStmts.length);
@@ -312,7 +312,7 @@ class HxTriviaParseTest extends Test {
 		Assert.notNull(elseStmt);
 		final elseStmts:Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>>
 			= switch elseStmt {
-				case BlockStmt(stmts): stmts;
+				case BlockStmt(stmts, _): stmts;
 				case _: throw 'expected BlockStmt';
 			};
 		Assert.equals(1, elseStmts.length);
