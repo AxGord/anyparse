@@ -1,0 +1,171 @@
+package anyparse.macro;
+
+#if macro
+import anyparse.core.ShapeTree;
+import haxe.macro.Context;
+import haxe.macro.Expr;
+
+/**
+ * ω₄c — Atomic synthesis of paired `*T` typedefs / enums for
+ * trivia-bearing grammar rules.
+ *
+ * Every rule that `TriviaAnalysis` marked with `trivia.bearing = true`
+ * gets a sibling type suffixed `T`, placed in a dedicated synth module
+ * at `<rootPack>.trivia.Pairs`. The synthesised types mirror the
+ * originating rules structurally with three mechanical rewrites:
+ *
+ *  1. `Ref` fields/args whose target is itself bearing switch to the
+ *     target's `*T` variant — non-bearing refs (e.g. `HxExpr`,
+ *     `HxIdentLit`) stay unchanged.
+ *  2. `Array<T>` containers whose Star carries `trivia.starCollects`
+ *     wrap the element type in `anyparse.runtime.Trivial<…>` so the
+ *     element's source-fidelity trivia (leading comments, blank-line
+ *     marker, trailing comment) sits alongside the wrapped node.
+ *  3. `Null<T>` wrapping + `@:optional` meta are preserved so downstream
+ *     struct-literal construction in Trivia-mode Lowering compiles
+ *     against the same surface the Plain-mode code compiles against.
+ *
+ * **Why atomic `defineModule`, not per-type `defineType`?** The grammar
+ * reference graph is cyclic — `HxStatementT` references `HxIfStmtT`
+ * which references `HxStatementT`. `defineType` eagerly type-checks
+ * each TypeDefinition's field types on insertion, so the first call
+ * fails the moment it encounters a sibling reference that hasn't been
+ * registered yet. `Context.onTypeNotFound` was investigated as the
+ * cycle-safe alternative but empirically does **not** fire for
+ * references discovered during typing of a callback-returned
+ * TypeDefinition — Haxe only consults the hook for the initial
+ * top-level lookup. `defineModule` takes the whole batch at once and
+ * types them as a single compilation unit, so within-batch cycles
+ * resolve naturally.
+ *
+ * **Access path.** Each synthesised type's canonical name becomes
+ * `<rootPack>.trivia.Pairs.<Leaf>T` — sub-module reference through
+ * the synth module. Consumers import via
+ * `import anyparse.grammar.haxe.trivia.Pairs.HxModuleT;` (direct
+ * short-name alias) or `import anyparse.grammar.haxe.trivia.Pairs;`
+ * followed by `Pairs.HxModuleT`. The separate subpackage keeps the
+ * original grammar package free of generated artefacts.
+ *
+ * `arm(shape)` is called from `Build.buildParser` after
+ * `TriviaAnalysis.run` when `ctx.trivia` is true. Repeated calls with
+ * the same `ShapeResult` are idempotent — the per-name `defined` map
+ * short-circuits already-synthesised types. A future second trivia
+ * grammar would get its own synth module under its own root pack.
+ *
+ * See `feedback_definetype_cycles.md` for the rolled-back ω₄b attempt
+ * and the `onTypeNotFound` probe that led to this pivot.
+ */
+class TriviaTypeSynth {
+
+	private static inline final PAIRED_SUFFIX:String = 'T';
+	private static inline final SYNTH_SUBPACK:String = 'trivia';
+	private static inline final SYNTH_MODULE_LEAF:String = 'Pairs';
+	private static final shapes:Array<ShapeBuilder.ShapeResult> = [];
+	private static final defined:Map<String, Bool> = new Map();
+
+	public static function arm(shape:ShapeBuilder.ShapeResult):Void {
+		if (shapes.indexOf(shape) == -1) shapes.push(shape);
+		final rootPack:Array<String> = packOf(shape.root);
+		final synthPack:Array<String> = rootPack.concat([SYNTH_SUBPACK]);
+		final modulePath:String = synthPack.concat([SYNTH_MODULE_LEAF]).join('.');
+		final paired:Array<TypeDefinition> = [];
+		for (origName => node in shape.rules) {
+			if (node.annotations.get('trivia.bearing') != true) continue;
+			final pairedFqn:String = origName + PAIRED_SUFFIX;
+			if (defined.exists(pairedFqn)) continue;
+			defined.set(pairedFqn, true);
+			paired.push(buildTypeDefinition(origName, node, synthPack));
+		}
+		if (paired.length == 0) return;
+		Context.defineModule(modulePath, paired);
+		#if anyparse_trivia_dump
+		for (td in paired)
+			Sys.println('// trivia.synth: defined ${td.pack.join('.')}.${td.name} in module $modulePath');
+		#end
+	}
+
+	private static function buildTypeDefinition(origName:String, origNode:ShapeNode, synthPack:Array<String>):TypeDefinition {
+		final pairedSimple:String = leafOf(origName) + PAIRED_SUFFIX;
+		final pos:Position = Context.currentPos();
+		return switch origNode.kind {
+			case Seq:
+				final fields:Array<Field> = [for (child in origNode.children) buildStructField(child, pos, synthPack)];
+				final anon:ComplexType = TAnonymous(fields);
+				{pos: pos, pack: synthPack, name: pairedSimple, kind: TDAlias(anon), fields: []};
+			case Alt:
+				final fields:Array<Field> = [for (branch in origNode.children) buildEnumCtor(branch, pos, synthPack)];
+				{pos: pos, pack: synthPack, name: pairedSimple, kind: TDEnum, fields: fields};
+			case _:
+				Context.fatalError('TriviaTypeSynth: unsupported bearing kind ${origNode.kind} for $origName', pos);
+				throw 'unreachable';
+		};
+	}
+
+	private static function buildStructField(child:ShapeNode, pos:Position, synthPack:Array<String>):Field {
+		final fieldName:String = child.annotations.get('base.fieldName');
+		final ct:ComplexType = shapeToComplexType(child, synthPack);
+		final optional:Bool = child.annotations.get('base.optional') == true;
+		final meta:Metadata = optional ? [{name: ':optional', params: [], pos: pos}] : [];
+		return {name: fieldName, kind: FVar(ct), pos: pos, access: [], meta: meta};
+	}
+
+	private static function buildEnumCtor(branch:ShapeNode, pos:Position, synthPack:Array<String>):Field {
+		final ctorName:String = branch.annotations.get('base.ctor');
+		if (branch.children.length == 0) return {name: ctorName, kind: FVar(null), pos: pos, access: []};
+		final args:Array<FunctionArg> = [for (arg in branch.children) {
+			name: (arg.annotations.get('base.fieldName') : String),
+			type: shapeToComplexType(arg, synthPack),
+		}];
+		return {name: ctorName, kind: FFun({args: args, ret: null, expr: null}), pos: pos, access: []};
+	}
+
+	private static function shapeToComplexType(node:ShapeNode, synthPack:Array<String>):ComplexType {
+		return switch node.kind {
+			case Ref:
+				final refName:String = node.annotations.get('base.ref');
+				final base:ComplexType = refIsBearing(refName)
+					? TPath({pack: synthPack, name: leafOf(refName) + PAIRED_SUFFIX, params: []})
+					: TPath({pack: packOf(refName), name: leafOf(refName), params: []});
+				return wrapOptional(node, base);
+			case Star:
+				final elementCT:ComplexType = shapeToComplexType(node.children[0], synthPack);
+				final wrapped:ComplexType = node.annotations.get('trivia.starCollects') == true
+					? TPath({pack: ['anyparse', 'runtime'], name: 'Trivial', params: [TPType(elementCT)]})
+					: elementCT;
+				return wrapOptional(node, TPath({pack: [], name: 'Array', params: [TPType(wrapped)]}));
+			case Terminal:
+				final tp:Null<String> = node.annotations.get('base.typePath');
+				if (tp != null) return wrapOptional(node, TPath({pack: packOf(tp), name: leafOf(tp), params: []}));
+				final under:String = node.annotations.get('base.underlying');
+				return wrapOptional(node, TPath({pack: [], name: under, params: []}));
+			case _:
+				Context.fatalError('TriviaTypeSynth: unexpected node kind ${node.kind} in field-shape', Context.currentPos());
+				throw 'unreachable';
+		};
+	}
+
+	private static inline function wrapOptional(node:ShapeNode, base:ComplexType):ComplexType {
+		return node.annotations.get('base.optional') == true
+			? TPath({pack: [], name: 'Null', params: [TPType(base)]})
+			: base;
+	}
+
+	private static function refIsBearing(refName:String):Bool {
+		for (shape in shapes) {
+			final node:Null<ShapeNode> = shape.rules.get(refName);
+			if (node != null) return node.annotations.get('trivia.bearing') == true;
+		}
+		return false;
+	}
+
+	private static function packOf(qualifiedName:String):Array<String> {
+		final idx:Int = qualifiedName.lastIndexOf('.');
+		return idx == -1 ? [] : qualifiedName.substring(0, idx).split('.');
+	}
+
+	private static function leafOf(qualifiedName:String):String {
+		final idx:Int = qualifiedName.lastIndexOf('.');
+		return idx == -1 ? qualifiedName : qualifiedName.substring(idx + 1);
+	}
+}
+#end

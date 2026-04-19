@@ -10,9 +10,10 @@ package anyparse.runtime;
  * ones, and vice versa.
  *
  * Comment **text** is captured verbatim (no delimiters, no leading space
- * trimming). Comment **style** (`//` line vs `/* */` block) is deliberately
- * NOT stored — that is a writer policy concern, and preserving the source
- * style would leak grammar-author decisions into format-consumer decisions.
+ * trimming). Comment **style** (line-style vs block-style delimiters) is
+ * deliberately NOT stored — that is a writer policy concern, and
+ * preserving the source style would leak grammar-author decisions into
+ * format-consumer decisions.
  *
  * Comment **position** IS stored (leading vs trailing) because it encodes
  * semantically meaningful authorial intent — unit annotations on a value,

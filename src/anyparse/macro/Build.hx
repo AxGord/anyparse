@@ -69,6 +69,7 @@ class Build {
 		final shapeBuilder:ShapeBuilder = new ShapeBuilder(formatInfo);
 		final shape:ShapeBuilder.ShapeResult = shapeBuilder.build(rootType);
 		TriviaAnalysis.run(shape);
+		if (ctx.trivia) TriviaTypeSynth.arm(shape);
 
 		#if anyparse_trivia_dump
 		for (name => node in shape.rules) {
