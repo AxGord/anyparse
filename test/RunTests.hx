@@ -30,6 +30,7 @@ import unit.HxObjectFieldColonOptionsTest;
 import unit.HxElseIfOptionsTest;
 import unit.HxTriviaTypesTest;
 import unit.HxTriviaParseTest;
+import unit.HxTriviaWriteTest;
 import unit.HaxeFormatConfigLoaderTest;
 import unit.HaxeWriterRoundTripTest;
 import unit.HxFormatterCorpusTest;
@@ -82,6 +83,7 @@ class RunTests {
 		runner.addCase(new HxElseIfOptionsTest());
 		runner.addCase(new HxTriviaTypesTest());
 		runner.addCase(new HxTriviaParseTest());
+		runner.addCase(new HxTriviaWriteTest());
 		runner.addCase(new HaxeFormatConfigLoaderTest());
 		runner.addCase(new HaxeWriterRoundTripTest());
 		runner.addCase(new HxFormatterCorpusTest());

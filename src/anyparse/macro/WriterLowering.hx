@@ -4,6 +4,7 @@ package anyparse.macro;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 import haxe.macro.MacroStringTools;
+import anyparse.core.LoweringCtx;
 import anyparse.core.ShapeTree;
 
 /**
@@ -23,10 +24,12 @@ class WriterLowering {
 
 	private final shape:ShapeBuilder.ShapeResult;
 	private final formatInfo:FormatReader.FormatInfo;
+	private final ctx:LoweringCtx;
 
-	public function new(shape:ShapeBuilder.ShapeResult, formatInfo:FormatReader.FormatInfo) {
+	public function new(shape:ShapeBuilder.ShapeResult, formatInfo:FormatReader.FormatInfo, ctx:LoweringCtx) {
 		this.shape = shape;
 		this.formatInfo = formatInfo;
+		this.ctx = ctx;
 	}
 
 	public function generate():Array<WriterRule> {
@@ -37,8 +40,8 @@ class WriterLowering {
 
 	private function lowerRule(typePath:String, node:ShapeNode):Array<WriterRule> {
 		final simple:String = simpleName(typePath);
-		final fnName:String = 'write$simple';
-		final valueCT:ComplexType = TPath({pack: packOf(typePath), name: simple, params: []});
+		final fnName:String = writeFnFor(typePath);
+		final valueCT:ComplexType = ruleValueCT(typePath);
 
 		final hasPratt:Bool = node.kind == Alt && (hasPrattBranch(node) || hasPostfixBranch(node));
 
@@ -56,8 +59,7 @@ class WriterLowering {
 	// -------- enum rule --------
 
 	private function lowerEnum(node:ShapeNode, typePath:String, hasPratt:Bool):Expr {
-		final simple:String = simpleName(typePath);
-		final writeFnName:String = 'write$simple';
+		final writeFnName:String = writeFnFor(typePath);
 
 		// Compute PREC_POSTFIX for Pratt enums: max(all prec values) + 1
 		var precPostfix:Int = 0;
@@ -78,7 +80,7 @@ class WriterLowering {
 			final argNames:Array<String> = [for (i in 0...children.length) '_v$i'];
 
 			// Build pattern
-			final ctorPath:Array<String> = packOf(typePath).concat([simple, ctor]);
+			final ctorPath:Array<String> = ruleCtorPath(typePath, ctor);
 			final ctorRef:Expr = MacroStringTools.toFieldExpr(ctorPath);
 			final pattern:Expr = if (children.length == 0) ctorRef
 			else {
@@ -166,7 +168,7 @@ class WriterLowering {
 				return lowerPostfixStar(branch, typePath, writeFnName, hasPratt, argNames, operandCall);
 			if (children.length == 2) {
 				final suffixRef:String = children[1].annotations.get('base.ref');
-				final suffixFn:String = 'write${simpleName(suffixRef)}';
+				final suffixFn:String = writeFnFor(suffixRef);
 				final suffixCall:Expr = {
 					expr: ECall(macro $i{suffixFn}, [macro $i{argNames[1]}, macro opt]),
 					pos: Context.currentPos(),
@@ -205,7 +207,7 @@ class WriterLowering {
 		// ---- Case 3: single-arg Ref ----
 		if (litList == null && children.length == 1 && children[0].kind == Ref) {
 			final refName:String = children[0].annotations.get('base.ref');
-			final subFn:String = 'write${simpleName(refName)}';
+			final subFn:String = writeFnFor(refName);
 			final isSelfRef:Bool = simpleName(refName) == simpleName(typePath);
 			final subCall:Expr = if (isSelfRef && hasPratt)
 				{expr: ECall(macro $i{subFn}, [macro $i{argNames[0]}, macro opt, macro -1]), pos: Context.currentPos()}
@@ -246,7 +248,7 @@ class WriterLowering {
 		final inner:ShapeNode = starNode.children[0];
 		final elemRefName:String = inner.annotations.get('base.ref');
 		final isSelfRef:Bool = simpleName(elemRefName) == simpleName(typePath);
-		final elemFn:String = isSelfRef ? writeFnName : 'write${simpleName(elemRefName)}';
+		final elemFn:String = isSelfRef ? writeFnName : writeFnFor(elemRefName);
 		final elemSep:String = branch.annotations.get('lit.sepText') ?? ',';
 
 		final elemCallArgs:Array<Expr> = [macro _args[_i], macro opt];
@@ -283,7 +285,7 @@ class WriterLowering {
 		final inner:ShapeNode = starNode.children[0];
 		final elemRefName:String = inner.annotations.get('base.ref');
 		final isSelfRef:Bool = simpleName(elemRefName) == simpleName(typePath);
-		final elemFn:String = isSelfRef ? writeFnName : 'write${simpleName(elemRefName)}';
+		final elemFn:String = isSelfRef ? writeFnName : writeFnFor(elemRefName);
 
 		final elemCallArgs:Array<Expr> = [macro _args[_i], macro opt];
 		if (isSelfRef && hasPratt) elemCallArgs.push(macro -1);
@@ -296,7 +298,12 @@ class WriterLowering {
 		final parts:Array<Expr> = [];
 		if (kwLead != null) parts.push(macro _dt($v{kwLead + ' '}));
 
-		if (sepText != null) {
+		final isTriviaStar:Bool = ctx.trivia && starNode.annotations.get('trivia.starCollects') == true;
+		if (isTriviaStar) {
+			if (sepText != null)
+				Context.fatalError('WriterLowering: @:trivia Star enum branch does not support @:sep', Context.currentPos());
+			parts.push(triviaBlockStarExpr(argsAccess, elemFn, leadText, trailText));
+		} else if (sepText != null) {
 			final tcExpr:Expr = trailingCommaExpr(branch);
 			parts.push(macro {
 				final _args = $argsAccess;
@@ -408,7 +415,7 @@ class WriterLowering {
 			switch child.kind {
 				case Ref if (isOptional):
 					final refName:String = child.annotations.get('base.ref');
-					final writeFn:String = 'write${simpleName(refName)}';
+					final writeFn:String = writeFnFor(refName);
 					final writeCall:Expr = {
 						expr: ECall(macro $i{writeFn}, [macro _optVal, macro opt]),
 						pos: Context.currentPos(),
@@ -448,7 +455,7 @@ class WriterLowering {
 
 				case Ref:
 					final refName:String = child.annotations.get('base.ref');
-					final writeFn:String = 'write${simpleName(refName)}';
+					final writeFn:String = writeFnFor(refName);
 					final writeCall:Expr = {
 						expr: ECall(macro $i{writeFn}, [fieldAccess, macro opt]),
 						pos: Context.currentPos(),
@@ -499,10 +506,33 @@ class WriterLowering {
 			Context.fatalError('WriterLowering: Star struct field must contain a Ref', Context.currentPos());
 
 		final elemRefName:String = inner.annotations.get('base.ref');
-		final elemFn:String = 'write${simpleName(elemRefName)}';
+		final elemFn:String = writeFnFor(elemRefName);
 		final openText:Null<String> = starNode.annotations.get('lit.leadText');
 		final closeText:Null<String> = starNode.annotations.get('lit.trailText');
 		final sepText:Null<String> = starNode.annotations.get('lit.sepText');
+		final isTriviaStar:Bool = ctx.trivia && starNode.annotations.get('trivia.starCollects') == true;
+
+		// Trivia Star: the Array element type is Trivial<elemT>, and the
+		// write call targets `_t.node` instead of the raw array element.
+		// Leading/trailing comments and blank-line markers attach around
+		// each element via the generated layout below. Sep / tryparse /
+		// @:raw combinations with @:trivia are rejected by the parser
+		// side upstream — only block-mode (close + no sep) and EOF-mode
+		// (no close, last field) are valid here.
+		if (isTriviaStar) {
+			if (sepText != null || hasMeta(starNode, ':tryparse') || isRaw)
+				Context.fatalError('WriterLowering: @:trivia Star does not support @:sep/@:tryparse/@:raw', Context.currentPos());
+			if (closeText != null) {
+				if (!isFirstField && isSpacedLead(openText)) parts.push(leftCurlySeparator(starNode));
+				parts.push(triviaBlockStarExpr(fieldAccess, elemFn, openText ?? '{', closeText));
+			} else if (isLastField) {
+				if (openText != null) parts.push(macro _dt($v{openText}));
+				parts.push(triviaEofStarExpr(fieldAccess, elemFn));
+			} else {
+				Context.fatalError('WriterLowering: @:trivia Star without @:trail must be the last field', Context.currentPos());
+			}
+			return;
+		}
 
 		final elemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _arr[_si], macro opt]),
@@ -909,13 +939,11 @@ class WriterLowering {
 	private function collectBlockCtorPatterns(bodyTypePath:String):Array<Expr> {
 		final rule:Null<ShapeNode> = shape.rules.get(bodyTypePath);
 		if (rule == null || rule.kind != Alt) return [];
-		final simple:String = simpleName(bodyTypePath);
-		final pack:Array<String> = packOf(bodyTypePath);
 		final patterns:Array<Expr> = [];
 		for (branch in rule.children) if (isBlockCtorBranch(branch)) {
 			final ctorName:String = branch.annotations.get('base.ctor');
 			final arity:Int = branch.children.length;
-			final ctorPath:Array<String> = pack.concat([simple, ctorName]);
+			final ctorPath:Array<String> = ruleCtorPath(bodyTypePath, ctorName);
 			final ctorRef:Expr = MacroStringTools.toFieldExpr(ctorPath);
 			final pattern:Expr = if (arity == 0) ctorRef
 			else {
@@ -947,13 +975,11 @@ class WriterLowering {
 	private function findCtorPattern(bodyTypePath:String, ctorName:String):Null<Expr> {
 		final rule:Null<ShapeNode> = shape.rules.get(bodyTypePath);
 		if (rule == null || rule.kind != Alt) return null;
-		final simple:String = simpleName(bodyTypePath);
-		final pack:Array<String> = packOf(bodyTypePath);
 		for (branch in rule.children) {
 			final branchCtor:String = branch.annotations.get('base.ctor');
 			if (branchCtor != ctorName) continue;
 			final arity:Int = branch.children.length;
-			final ctorPath:Array<String> = pack.concat([simple, branchCtor]);
+			final ctorPath:Array<String> = ruleCtorPath(bodyTypePath, branchCtor);
 			final ctorRef:Expr = MacroStringTools.toFieldExpr(ctorPath);
 			return if (arity == 0) ctorRef
 			else {
@@ -1039,6 +1065,91 @@ class WriterLowering {
 		if (readMetaString(first, ':kw') != null) return false;
 		if (readMetaString(first, ':lead') != null) return false;
 		return fmtReadString(first, 'bodyPolicy') != null;
+	}
+
+	/**
+	 * Build the Doc expression for a block-mode trivia Star field
+	 * (`@:lead(open) @:trail(close) @:trivia`). Per-element layout:
+	 * hardline baseline, optional extra hardline for `blankBefore`
+	 * (skipped on the first element — the leading `{` already gives the
+	 * break), leading comments each followed by a hardline, the element
+	 * write call, optional trailing line comment. Wrapped in
+	 * `_dc([_dt(open), _dn(cols, _dc(inner)), _dhl(), _dt(close)])` to
+	 * match the Doc shape of the plain-mode `blockBody` helper.
+	 *
+	 * `elemFn` is the `*T`-variant write function (e.g. `writeHxMemberDeclT`)
+	 * — the helper does not itself consult `isTriviaBearing`.
+	 */
+	private static function triviaBlockStarExpr(fieldAccess:Expr, elemFn:String, openText:String, closeText:String):Expr {
+		final triviaElemCall:Expr = {
+			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
+			pos: Context.currentPos(),
+		};
+		final emptyText:String = openText + closeText;
+		return macro {
+			final _arr = $fieldAccess;
+			if (_arr.length == 0) _dt($v{emptyText})
+			else {
+				final _inner:Array<anyparse.core.Doc> = [];
+				var _si:Int = 0;
+				while (_si < _arr.length) {
+					final _t = _arr[_si];
+					_inner.push(_dhl());
+					if (_t.blankBefore && _si > 0) _inner.push(_dhl());
+					var _ci:Int = 0;
+					while (_ci < _t.leadingComments.length) {
+						_inner.push(leadingCommentDoc(_t.leadingComments[_ci]));
+						_inner.push(_dhl());
+						_ci++;
+					}
+					_inner.push($triviaElemCall);
+					final _tc:Null<String> = _t.trailingComment;
+					if (_tc != null) _inner.push(trailingCommentDoc(_tc));
+					_si++;
+				}
+				final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+				_dc([_dt($v{openText}), _dn(_cols, _dc(_inner)), _dhl(), _dt($v{closeText})]);
+			}
+		};
+	}
+
+	/**
+	 * Build the Doc expression for an EOF-mode trivia Star field
+	 * (last field, no `@:trail`). Single hardline between elements
+	 * instead of the plain mode's forced double hardline, with the extra
+	 * hardline driven by each element's `blankBefore` flag. Leading
+	 * comments emit above the element at the outer indent level;
+	 * trailing comment attaches inline after.
+	 */
+	private static function triviaEofStarExpr(fieldAccess:Expr, elemFn:String):Expr {
+		final triviaElemCall:Expr = {
+			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
+			pos: Context.currentPos(),
+		};
+		return macro {
+			final _arr = $fieldAccess;
+			if (_arr.length == 0) _de()
+			else {
+				final _docs:Array<anyparse.core.Doc> = [];
+				var _si:Int = 0;
+				while (_si < _arr.length) {
+					final _t = _arr[_si];
+					if (_si > 0) _docs.push(_dhl());
+					if (_t.blankBefore && _si > 0) _docs.push(_dhl());
+					var _ci:Int = 0;
+					while (_ci < _t.leadingComments.length) {
+						_docs.push(leadingCommentDoc(_t.leadingComments[_ci]));
+						_docs.push(_dhl());
+						_ci++;
+					}
+					_docs.push($triviaElemCall);
+					final _tc:Null<String> = _t.trailingComment;
+					if (_tc != null) _docs.push(trailingCommentDoc(_tc));
+					_si++;
+				}
+				_dc(_docs);
+			}
+		};
 	}
 
 	/** Build `_dc([elem1, elem2, ...])` from a macro-time array of Exprs. */
@@ -1141,6 +1252,43 @@ class WriterLowering {
 	private static function packOf(typePath:String):Array<String> {
 		final idx:Int = typePath.lastIndexOf('.');
 		return idx == -1 ? [] : typePath.substring(0, idx).split('.');
+	}
+
+	// -------- trivia-mode helpers (ω₅) --------
+
+	/**
+	 * True when `ctx.trivia` is active AND the rule at `refName` carries
+	 * `trivia.bearing=true`. The rule-lookup guard returns false for
+	 * non-grammar refs (format primitives the Writer still expects to
+	 * call through their plain `writeXxx` functions).
+	 */
+	private function isTriviaBearing(refName:String):Bool {
+		if (!ctx.trivia) return false;
+		final node:Null<ShapeNode> = shape.rules.get(refName);
+		if (node == null) return false;
+		return node.annotations.get('trivia.bearing') == true;
+	}
+
+	/** `write<name>T` when trivia-bearing, else `write<name>` — every ref fn-name site goes through this. */
+	private function writeFnFor(refName:String):String {
+		final simple:String = simpleName(refName);
+		return isTriviaBearing(refName) ? 'write${simple}T' : 'write$simple';
+	}
+
+	/** Paired `*T` ComplexType in the synth module for bearing rules; plain TPath otherwise. */
+	private function ruleValueCT(refName:String):ComplexType {
+		final simple:String = simpleName(refName);
+		if (isTriviaBearing(refName))
+			return TPath({pack: packOf(refName).concat(['trivia']), name: 'Pairs', sub: simple + 'T', params: []});
+		return TPath({pack: packOf(refName), name: simple, params: []});
+	}
+
+	/** Enum-constructor field-path segments for `toFieldExpr` — routes through the synth module for bearing enums. */
+	private function ruleCtorPath(typePath:String, ctor:String):Array<String> {
+		final simple:String = simpleName(typePath);
+		if (isTriviaBearing(typePath))
+			return packOf(typePath).concat(['trivia', 'Pairs', simple + 'T', ctor]);
+		return packOf(typePath).concat([simple, ctor]);
 	}
 }
 

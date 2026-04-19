@@ -1,4 +1,5 @@
 bin/
+dump/
 *.n
 *.n.map
 *.js.map

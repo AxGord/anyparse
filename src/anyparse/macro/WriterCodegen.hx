@@ -30,7 +30,8 @@ class WriterCodegen {
 		rootTypePath:String,
 		rootReturnCT:ComplexType,
 		formatInfo:FormatReader.FormatInfo,
-		optionsTypePath:Null<String>
+		optionsTypePath:Null<String>,
+		?rootFnName:Null<String>
 	):Array<Field> {
 		final fields:Array<Field> = [];
 		if (formatInfo.isBinary) {
@@ -40,7 +41,8 @@ class WriterCodegen {
 			if (optionsTypePath == null)
 				Context.fatalError('WriterCodegen.emit: text writer requires optionsTypePath', Context.currentPos());
 			final optionsCT:ComplexType = optionsComplexType(optionsTypePath);
-			fields.push(publicEntry(rootTypePath, rootReturnCT, formatInfo, optionsCT));
+			final resolvedRootFn:String = rootFnName ?? ('write' + simpleName(rootTypePath));
+			fields.push(publicEntry(resolvedRootFn, rootReturnCT, formatInfo, optionsCT));
 			for (rule in rules) fields.push(ruleField(rule, optionsCT));
 			// Doc wrapper helpers
 			for (f in docHelperFields()) fields.push(f);
@@ -50,6 +52,11 @@ class WriterCodegen {
 			// Encoding helpers
 			fields.push(formatFloatField());
 			fields.push(escapeStringField(formatInfo));
+			// Trivia helpers (ω₅). Always emitted — unused when
+			// the marker class doesn't opt into `{trivia: true}`,
+			// but cost is two small private-static methods.
+			fields.push(leadingCommentDocField());
+			fields.push(trailingCommentDocField());
 		}
 		return fields;
 	}
@@ -57,11 +64,10 @@ class WriterCodegen {
 	// -------- public entry point --------
 
 	private static function publicEntry(
-		rootTypePath:String, rootReturnCT:ComplexType,
+		rootFn:String, rootReturnCT:ComplexType,
 		formatInfo:FormatReader.FormatInfo,
 		optionsCT:ComplexType
 	):Field {
-		final rootFn:String = 'write${simpleName(rootTypePath)}';
 		final fmtParts:Array<String> = formatInfo.schemaTypePath.split('.');
 		final defaultOptsExpr:Expr = {
 			expr: EField(macro $p{fmtParts}.instance, 'defaultWriteOptions'),
@@ -293,6 +299,55 @@ class WriterCodegen {
 			kind: FFun({
 				args: [{name: 'value', type: macro : Float}],
 				ret: macro : String,
+				expr: body,
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * Render a captured leading-comment body as a Doc text atom. Line
+	 * style (`//body`) for single-line content, block style (`/*body*\/`)
+	 * when the body contains a newline — captured content is verbatim,
+	 * so the two styles are picked at runtime to avoid breaking
+	 * multi-line block comments into malformed line comments.
+	 *
+	 * ω₆ will replace this runtime-auto decision with a policy knob
+	 * (`commentStyleDecl` / `commentStyleStmt`).
+	 */
+	private static function leadingCommentDocField():Field {
+		final body:Expr = macro {
+			return content.indexOf('\n') >= 0
+				? _dt('/*' + content + '*/')
+				: _dt('//' + content);
+		};
+		return {
+			name: 'leadingCommentDoc',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [{name: 'content', type: macro : String}],
+				ret: macro : anyparse.core.Doc,
+				expr: body,
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * Render a captured trailing-comment body as a Doc text atom
+	 * prefixed with a space separator from the preceding element.
+	 * Trailing capture rule guarantees single-line content (block
+	 * comments with an internal newline attach as leading-of-next),
+	 * so line style is always safe.
+	 */
+	private static function trailingCommentDocField():Field {
+		final body:Expr = macro return _dt(' //' + content);
+		return {
+			name: 'trailingCommentDoc',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [{name: 'content', type: macro : String}],
+				ret: macro : anyparse.core.Doc,
 				expr: body,
 			}),
 			pos: Context.currentPos(),

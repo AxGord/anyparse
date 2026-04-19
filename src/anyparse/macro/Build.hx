@@ -111,7 +111,7 @@ class Build {
 		return fields;
 	}
 
-	public static macro function buildWriter(target:Expr, ?options:Expr):Array<Field> {
+	public static macro function buildWriter(target:Expr, ?options:Expr, ?buildOptions:Expr):Array<Field> {
 		final targetTypePath:String = ExprTools.toString(target);
 		final rootType:Type = Context.getType(targetTypePath);
 
@@ -138,10 +138,14 @@ class Build {
 
 		final ctx:LoweringCtx = new LoweringCtx();
 		ctx.mode = Mode.Fast;
+		ctx.trivia = readBoolOption(buildOptions, 'trivia', false);
+		if (ctx.trivia && formatInfo.isBinary)
+			Context.fatalError('Build.buildWriter: {trivia: true} is not supported for binary writers', Context.currentPos());
 
 		final shapeBuilder:ShapeBuilder = new ShapeBuilder(formatInfo);
 		final shape:ShapeBuilder.ShapeResult = shapeBuilder.build(rootType);
 		TriviaAnalysis.run(shape);
+		if (ctx.trivia) TriviaTypeSynth.arm(shape);
 
 		final registry:StrategyRegistry = new StrategyRegistry();
 		registry.register(new Bin());
@@ -159,11 +163,16 @@ class Build {
 		final rules:Array<WriterLowering.WriterRule> = if (formatInfo.isBinary)
 			new BinaryWriterLowering(shape).generate()
 		else
-			new WriterLowering(shape, formatInfo).generate();
+			new WriterLowering(shape, formatInfo, ctx).generate();
 
 		final rootSimple:String = simpleName(shape.root);
-		final rootReturnCT:ComplexType = TPath({pack: packOf(shape.root), name: rootSimple, params: []});
-		final fields:Array<Field> = WriterCodegen.emit(rules, shape.root, rootReturnCT, formatInfo, optionsTypePath);
+		final rootNode:anyparse.core.ShapeTree.ShapeNode = shape.rules.get(shape.root);
+		final rootBearing:Bool = ctx.trivia && rootNode != null && rootNode.annotations.get('trivia.bearing') == true;
+		final rootReturnCT:ComplexType = rootBearing
+			? TPath({pack: packOf(shape.root).concat(['trivia']), name: 'Pairs', sub: rootSimple + 'T', params: []})
+			: TPath({pack: packOf(shape.root), name: rootSimple, params: []});
+		final rootFnName:String = rootBearing ? 'write${rootSimple}T' : 'write$rootSimple';
+		final fields:Array<Field> = WriterCodegen.emit(rules, shape.root, rootReturnCT, formatInfo, optionsTypePath, rootFnName);
 
 		#if anyparse_dump
 		final printer:haxe.macro.Printer = new haxe.macro.Printer();
@@ -203,7 +212,7 @@ class Build {
 						case EConst(CIdent('false')): return false;
 						case _:
 							Context.fatalError(
-								'Build.buildParser: option "$fieldName" must be a literal `true` or `false`',
+								'Build: option "$fieldName" must be a literal `true` or `false`',
 								f.expr.pos
 							);
 					}
@@ -211,7 +220,7 @@ class Build {
 				defaultValue;
 			case _:
 				Context.fatalError(
-					'Build.buildParser: options argument must be an anonymous-struct literal (e.g. `{trivia: true}`)',
+					'Build: options argument must be an anonymous-struct literal (e.g. `{trivia: true}`)',
 					options.pos
 				);
 				throw 'unreachable';
