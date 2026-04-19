@@ -155,9 +155,10 @@ class HxTriviaWriteTest extends Test {
 
 	public function testOrphanMultiLineBlockCommentInEmptyClassBody():Void {
 		final source:String = 'class Main {\n\t/*\n\t\tTODO:\n\t*/\n}';
+		final expected:String = 'class Main {\n\t/*\n\t\tTODO:\n\t */\n}\n';
 		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out:String = HaxeModuleTriviaWriter.write(ast);
-		Assert.equals(source + '\n', out);
+		Assert.equals(expected, out);
 	}
 
 	public function testOrphanCommentAfterLastMemberBlankLine():Void {

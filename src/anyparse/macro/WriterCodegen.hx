@@ -327,14 +327,26 @@ class WriterCodegen {
 	 * so the two styles are picked at runtime to avoid breaking
 	 * multi-line block comments into malformed line comments.
 	 *
+	 * Multi-line block comments whose closing line is whitespace-only
+	 * (captured tail after last `\n` contains only spaces/tabs and does
+	 * not already end with a space) gain a space before `*\/`, matching
+	 * haxe-formatter's javadoc-style close normalization.
+	 *
 	 * ω₆ will replace this runtime-auto decision with a policy knob
 	 * (`commentStyleDecl` / `commentStyleStmt`).
 	 */
 	private static function leadingCommentDocField():Field {
 		final body:Expr = macro {
-			return content.indexOf('\n') >= 0
-				? _dt('/*' + content + '*/')
-				: _dt('//' + content);
+			final _lastNl:Int = content.lastIndexOf('\n');
+			if (_lastNl < 0) return _dt('//' + content);
+			var _tailBlank:Bool = true;
+			for (_i in (_lastNl + 1)...content.length) {
+				final _c:Int = StringTools.fastCodeAt(content, _i);
+				if (_c != ' '.code && _c != '\t'.code) { _tailBlank = false; break; }
+			}
+			final _endsWithSpace:Bool = content.length > 0
+				&& StringTools.fastCodeAt(content, content.length - 1) == ' '.code;
+			return _dt('/*' + content + (_tailBlank && !_endsWithSpace ? ' */' : '*/'));
 		};
 		return {
 			name: 'leadingCommentDoc',
