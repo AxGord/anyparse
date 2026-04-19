@@ -478,7 +478,8 @@ class WriterCodegen {
 	/**
 	 * ω-issue-316 — render the kw→body gap for `@:optional @:kw(...)` Ref
 	 * fields in Trivia mode. Output shape depends on captured trivia:
-	 *  - both slots empty → single space (byte-identical pre-slice).
+	 *  - both slots empty → space when `nextCurly` is `false`, hardline
+	 *    when `true` (byte-identical pre-slice when `false`).
 	 *  - `afterKw != null` → ` //<body>` trailing after the kw, then
 	 *    hardline back to outer indent.
 	 *  - `kwLeading` non-empty → each comment on its own line at the
@@ -487,13 +488,19 @@ class WriterCodegen {
 	 *  - both populated → trailing first (same line as kw), then the
 	 *    own-line leading block, then closing hardline.
 	 *
+	 * `nextCurly` (ω-issue-316-curly-both) only affects the no-trivia
+	 * path. When trivia is captured, the function already emits a
+	 * trailing hardline — adding another would produce a blank row. The
+	 * caller passes `opt.leftCurly == Next` only when the body writeCall
+	 * begins with `{` (block ctor); in every other context, pass `false`.
+	 *
 	 * Caller concatenates the result with the body's writeCall — the
 	 * closing hardline hands control to the Renderer at the parent's
 	 * indent level so the body's lead brace lands there.
 	 */
 	private static function kwGapDocField():Field {
 		final body:Expr = macro {
-			if (afterKw == null && kwLeading.length == 0) return _dt(' ');
+			if (afterKw == null && kwLeading.length == 0) return nextCurly ? _dhl() : _dt(' ');
 			final _parts:Array<anyparse.core.Doc> = [];
 			if (afterKw != null) {
 				_parts.push(_dt(' '));
@@ -518,6 +525,7 @@ class WriterCodegen {
 					{name: 'afterKw', type: macro : Null<String>},
 					{name: 'kwLeading', type: macro : Array<String>},
 					{name: 'cols', type: macro : Int},
+					{name: 'nextCurly', type: macro : Bool},
 				],
 				ret: macro : anyparse.core.Doc,
 				expr: body,

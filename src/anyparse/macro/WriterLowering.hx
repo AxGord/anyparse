@@ -867,6 +867,17 @@ class WriterLowering {
 	 * placement knob. This keeps policy targeted at the non-block
 	 * expression-body case where the knob actually shifts layout.
 	 *
+	 * ω-issue-316-curly-both: block-ctor branches tagged with
+	 * `@:fmt(leftCurly)` (e.g. `HxStatement.BlockStmt`) participate in
+	 * the outer switch with a leftCurly-aware separator — the space
+	 * between the preceding token and the body's `{` flips to a hardline
+	 * at the outer indent when `opt.leftCurly:BracePlacement` is `Next`.
+	 * Threaded through `kwGapDoc`'s `nextCurly` parameter on the
+	 * kw-slot path so captured trivia still renders correctly (kwGapDoc
+	 * already emits a trailing hardline when trivia is present — only
+	 * the no-trivia path is affected by `nextCurly`). Untagged block
+	 * ctors keep the pre-slice single-space layout.
+	 *
 	 * ψ₈: when `hasElseIf` is true, an additional outer-switch case is
 	 * added for the `IfStmt` ctor of `bodyTypePath` that routes to
 	 * `opt.elseIf:KeywordPlacement` — `Same` keeps `else if (...)`
@@ -905,10 +916,34 @@ class WriterLowering {
 		// call that renders any captured after-kw trailing / own-line
 		// leading comments and closes with a hardline. When slots are
 		// absent, fall back to the byte-identical pre-slice `_dt(' ')`.
-		final sameSep:Expr = (afterKwExpr != null && kwLeadingExpr != null)
-			? macro kwGapDoc($afterKwExpr, $kwLeadingExpr, _cols)
+		final hasKwSlots:Bool = afterKwExpr != null && kwLeadingExpr != null;
+		final sameSepNb:Expr = hasKwSlots
+			? macro kwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, false)
 			: macro _dt(' ');
-		final sameLayoutExpr:Expr = macro _dc([$sameSep, $writeCall]);
+		final sameLayoutExpr:Expr = macro _dc([$sameSepNb, $writeCall]);
+		// ω-issue-316-curly-both: block-ctor variant — when the body's
+		// writeCall opens with `{`, the separator before it must honour
+		// `opt.leftCurly`. For kw-slot sites, threaded through
+		// `kwGapDoc`'s `nextCurly` parameter (only affects the no-trivia
+		// path; trivia already emits a trailing hardline). For non-slot
+		// sites, a runtime switch picks between `_dhl()` and `_dt(' ')`.
+		final bpPathLC:Array<String> = ['anyparse', 'format', 'BracePlacement'];
+		final nextPatLC:Expr = MacroStringTools.toFieldExpr(bpPathLC.concat(['Next']));
+		final isNextExpr:Expr = {
+			expr: ESwitch(macro opt.leftCurly, [
+				{values: [nextPatLC], expr: macro true, guard: null},
+			], macro false),
+			pos: Context.currentPos(),
+		};
+		final sameSepBlock:Expr = hasKwSlots
+			? macro kwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, $isNextExpr)
+			: {
+				expr: ESwitch(macro opt.leftCurly, [
+					{values: [nextPatLC], expr: macro _dhl(), guard: null},
+				], macro _dt(' ')),
+				pos: Context.currentPos(),
+			};
+		final blockLayoutExpr:Expr = macro _dc([$sameSepBlock, $writeCall]);
 		final bpPath:Array<String> = ['anyparse', 'format', 'BodyPolicy'];
 		final samePat:Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Same']));
 		final nextPat:Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Next']));
@@ -930,7 +965,7 @@ class WriterLowering {
 		];
 		final policySwitch:Expr = {expr: ESwitch(optFlag, policyCases, null), pos: Context.currentPos()};
 
-		final blockPatterns:Array<Expr> = collectBlockCtorPatterns(bodyTypePath);
+		final blockSplit:{tagged:Array<Expr>, untagged:Array<Expr>} = collectBlockCtorPatternsByLeftCurly(bodyTypePath);
 		final ifStmtPattern:Null<Expr> = hasElseIf ? findCtorPattern(bodyTypePath, 'IfStmt') : null;
 		final outerCases:Array<Case> = [];
 		if (ifStmtPattern != null) {
@@ -945,8 +980,10 @@ class WriterLowering {
 			};
 			outerCases.push({values: [ifStmtPattern], expr: elseIfSwitch, guard: null});
 		}
-		if (blockPatterns.length > 0)
-			outerCases.push({values: blockPatterns, expr: sameLayoutExpr, guard: null});
+		if (blockSplit.untagged.length > 0)
+			outerCases.push({values: blockSplit.untagged, expr: sameLayoutExpr, guard: null});
+		if (blockSplit.tagged.length > 0)
+			outerCases.push({values: blockSplit.tagged, expr: blockLayoutExpr, guard: null});
 		final bodySwitch:Expr = if (outerCases.length == 0) policySwitch
 		else {
 			outerCases.push({values: [macro _], expr: policySwitch, guard: null});
@@ -970,19 +1007,43 @@ class WriterLowering {
 		final rule:Null<ShapeNode> = shape.rules.get(bodyTypePath);
 		if (rule == null || rule.kind != Alt) return [];
 		final patterns:Array<Expr> = [];
-		for (branch in rule.children) if (isBlockCtorBranch(branch)) {
-			final ctorName:String = branch.annotations.get('base.ctor');
-			final arity:Int = branch.children.length;
-			final ctorPath:Array<String> = ruleCtorPath(bodyTypePath, ctorName);
-			final ctorRef:Expr = MacroStringTools.toFieldExpr(ctorPath);
-			final pattern:Expr = if (arity == 0) ctorRef
-			else {
-				final args:Array<Expr> = [for (_ in 0...arity) macro _];
-				{expr: ECall(ctorRef, args), pos: Context.currentPos()};
-			};
-			patterns.push(pattern);
-		}
+		for (branch in rule.children) if (isBlockCtorBranch(branch))
+			patterns.push(branchCtorPattern(bodyTypePath, branch));
 		return patterns;
+	}
+
+	/**
+	 * ω-issue-316-curly-both — parallel to `collectBlockCtorPatterns`, but
+	 * partitions the block-ctor branches by whether the branch carries a
+	 * `@:fmt(leftCurly)` flag. Consumed by `bodyPolicyWrap` so block-ctor
+	 * bodies (`BlockStmt(_)`) can honour `opt.leftCurly:BracePlacement`
+	 * at the body-placement override — tagged patterns emit a
+	 * leftCurly-aware separator, untagged patterns fall back to the
+	 * pre-slice single-space layout.
+	 */
+	private function collectBlockCtorPatternsByLeftCurly(bodyTypePath:String):{tagged:Array<Expr>, untagged:Array<Expr>} {
+		final rule:Null<ShapeNode> = shape.rules.get(bodyTypePath);
+		if (rule == null || rule.kind != Alt) return {tagged: [], untagged: []};
+		final tagged:Array<Expr> = [];
+		final untagged:Array<Expr> = [];
+		for (branch in rule.children) if (isBlockCtorBranch(branch)) {
+			final pattern:Expr = branchCtorPattern(bodyTypePath, branch);
+			if (fmtHasFlag(branch, 'leftCurly')) tagged.push(pattern);
+			else untagged.push(pattern);
+		}
+		return {tagged: tagged, untagged: untagged};
+	}
+
+	private function branchCtorPattern(bodyTypePath:String, branch:ShapeNode):Expr {
+		final ctorName:String = branch.annotations.get('base.ctor');
+		final arity:Int = branch.children.length;
+		final ctorPath:Array<String> = ruleCtorPath(bodyTypePath, ctorName);
+		final ctorRef:Expr = MacroStringTools.toFieldExpr(ctorPath);
+		return if (arity == 0) ctorRef
+		else {
+			final args:Array<Expr> = [for (_ in 0...arity) macro _];
+			{expr: ECall(ctorRef, args), pos: Context.currentPos()};
+		};
 	}
 
 	private static function isBlockCtorBranch(branch:ShapeNode):Bool {
