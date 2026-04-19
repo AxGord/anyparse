@@ -97,7 +97,16 @@ class Renderer {
 						col = f.indent;
 					}
 				case Nest(n, inner):
-					stack.push(new Frame(f.indent + n, f.mode, inner));
+					// Indent only matters when observed (i.e. on a hardline
+					// in MBreak mode). Skip the bump in MFlat — otherwise a
+					// nested Group inside a flat outer Group breaks at the
+					// wrong indent (outer-flat-Nest + inner-Nest stacks).
+					// haxe-formatter's chained-FitLine layout
+					// (`for (...) if (...)\n\t\tbody;`) requires inner-only
+					// indent; canonical Wadler cumulative nesting gives
+					// outer+inner instead.
+					final nextIndent:Int = f.mode == MBreak ? f.indent + n : f.indent;
+					stack.push(new Frame(nextIndent, f.mode, inner));
 				case Concat(items):
 					var i:Int = items.length;
 					while (--i >= 0) stack.push(new Frame(f.indent, f.mode, items[i]));
@@ -165,8 +174,19 @@ class Renderer {
 				case Concat(items):
 					var j = items.length;
 					while (--j >= 0) local.push(new Frame(f.indent, MFlat, items[j]));
-				case Group(inner) | BodyGroup(inner):
+				case Group(inner):
 					local.push(new Frame(f.indent, MFlat, inner));
+				case BodyGroup(_):
+					// Defer nested BodyGroups out of the parent's flat
+					// measurement: a child BodyGroup decides its own
+					// flat/break independently when the renderer reaches
+					// it, so its content must not contribute to the parent
+					// Group's fit budget. This is what lets
+					// `bodyPolicyWrap`'s chained FitLines (e.g.
+					// `forBody=fitLine + ifBody=fitLine`) keep the outer
+					// body inline while the inner body breaks — the canonical
+					// "measure all nested groups flat" would force outer to
+					// break first.
 				case IfBreak(_, flatDoc):
 					local.push(new Frame(f.indent, MFlat, flatDoc));
 			}
