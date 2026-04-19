@@ -384,6 +384,14 @@ class Codegen {
 		final body:Expr = macro {
 			var _blankBefore:Bool = false;
 			final _leading:Array<String> = [];
+			// Drain any trivia that a previous rule captured between an
+			// @:optional @:kw commit and its sub-rule call (slice ω₆b).
+			final _pt = ctx.pendingTrivia;
+			if (_pt != null) {
+				_blankBefore = _pt.blankBefore;
+				for (_c in _pt.leadingComments) _leading.push(_c);
+				ctx.pendingTrivia = null;
+			}
 			var _nl:Int = 0;
 			while (ctx.pos < ctx.input.length) {
 				final c:Int = ctx.input.charCodeAt(ctx.pos);

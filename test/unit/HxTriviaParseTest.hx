@@ -170,4 +170,108 @@ class HxTriviaParseTest extends Test {
 		Assert.equals(1, m.decls[1].leadingComments.length);
 		Assert.equals(' multi\nline ', m.decls[1].leadingComments[0]);
 	}
+
+	/**
+	 * ω₆a — speculative skipWs rewind on optional-kw miss. Previously the
+	 * `@:optional @:kw('else')` check's pre-skipWs unconditionally ate any
+	 * comment sitting between the if-stmt's body terminator and the next
+	 * statement; after the kw missed, that trivia was already gone, so
+	 * the enclosing function-body Star's `collectTrivia` saw nothing and
+	 * the comment vanished.
+	 *
+	 * With rewind, the miss restores pos to pre-skipWs — the outer Star
+	 * loop's `collectTrivia` then captures the comment as a leading of
+	 * the next statement, which is where it semantically belongs.
+	 */
+	public function testCommentBetweenStmtsAfterIfWithoutElsePreserved():Void {
+		final source:String =
+			'class Foo {\n'
+			+ '\tfunction bar() {\n'
+			+ '\t\tif (cond) doFirst();\n'
+			+ '\t\t// between stmts\n'
+			+ '\t\tdoSecond();\n'
+			+ '\t}\n'
+			+ '}';
+		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node {
+			case ClassDecl(decl): decl;
+			case _: throw 'expected ClassDecl';
+		};
+		final fn:anyparse.grammar.haxe.trivia.Pairs.HxFnDeclT = switch cls.members[0].node.member {
+			case FnMember(decl): decl;
+			case _: throw 'expected FnMember';
+		};
+		Assert.equals(2, fn.body.length);
+		Assert.equals(0, fn.body[0].leadingComments.length);
+		Assert.equals(1, fn.body[1].leadingComments.length);
+		Assert.equals(' between stmts', fn.body[1].leadingComments[0]);
+	}
+
+	/**
+	 * ω₆a — trailing comment after an if-stmt without else. The if's
+	 * optional-kw `else` skipWs used to consume the trailing, now it
+	 * rewinds on the miss and the enclosing Star's `collectTrailing`
+	 * captures it on the if-stmt's Trivial wrapper.
+	 */
+	public function testTrailingCommentAfterIfWithoutElsePreserved():Void {
+		final source:String =
+			'class Foo {\n'
+			+ '\tfunction bar() {\n'
+			+ '\t\tif (cond) doIt(); // trailing\n'
+			+ '\t}\n'
+			+ '}';
+		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node {
+			case ClassDecl(decl): decl;
+			case _: throw 'expected ClassDecl';
+		};
+		final fn:anyparse.grammar.haxe.trivia.Pairs.HxFnDeclT = switch cls.members[0].node.member {
+			case FnMember(decl): decl;
+			case _: throw 'expected FnMember';
+		};
+		Assert.equals(1, fn.body.length);
+		Assert.equals(' trailing', fn.body[0].trailingComment);
+	}
+
+	/**
+	 * ω₆b — pendingTrivia carries a comment captured between an
+	 * `@:optional @:kw` commit and its sub-rule call into the sub-rule's
+	 * first `@:trivia` Star. For `else // c\n{ bar; }` the `// c` is
+	 * normalized into leading of the block's first statement.
+	 */
+	public function testCommentAfterElseKwNormalizedIntoBlock():Void {
+		final source:String =
+			'class Foo {\n'
+			+ '\tfunction bar() {\n'
+			+ '\t\tif (cond) { a; } else // after else\n'
+			+ '\t\t{\n'
+			+ '\t\t\tb;\n'
+			+ '\t\t}\n'
+			+ '\t}\n'
+			+ '}';
+		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node {
+			case ClassDecl(decl): decl;
+			case _: throw 'expected ClassDecl';
+		};
+		final fn:anyparse.grammar.haxe.trivia.Pairs.HxFnDeclT = switch cls.members[0].node.member {
+			case FnMember(decl): decl;
+			case _: throw 'expected FnMember';
+		};
+		Assert.equals(1, fn.body.length);
+		final ifStmt:anyparse.grammar.haxe.trivia.Pairs.HxIfStmtT = switch fn.body[0].node {
+			case IfStmt(s): s;
+			case _: throw 'expected IfStmt';
+		};
+		final elseStmt:Null<anyparse.grammar.haxe.trivia.Pairs.HxStatementT> = ifStmt.elseBody;
+		Assert.notNull(elseStmt);
+		final elseStmts:Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>>
+			= switch elseStmt {
+				case BlockStmt(stmts): stmts;
+				case _: throw 'expected BlockStmt';
+			};
+		Assert.equals(1, elseStmts.length);
+		Assert.equals(1, elseStmts[0].leadingComments.length);
+		Assert.equals(' after else', elseStmts[0].leadingComments[0]);
+	}
 }

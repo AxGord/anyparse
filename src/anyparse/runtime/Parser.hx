@@ -28,6 +28,14 @@ final class Parser {
 	public var cache:ParseCache = NoOpCache.instance;
 	public var cancelled:() -> Bool = alwaysFalse;
 
+	/**
+	 * Trivia carry-over slot (slice ω₆b). Generated Trivia-mode parsers
+	 * stash a leading run captured between an `@:optional @:kw` commit
+	 * point and its sub-rule call here; the next `collectTrivia` drains
+	 * it as a prefix. Null outside Trivia-mode builds and between drains.
+	 */
+	public var pendingTrivia:Null<{blankBefore:Bool, leadingComments:Array<String>}> = null;
+
 	public function new(input:Input) {
 		this.input = input;
 	}

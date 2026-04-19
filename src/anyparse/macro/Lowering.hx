@@ -1008,7 +1008,13 @@ class Lowering {
 				&& readMetaString(child, ':lead') == null
 				&& readMetaString(child, ':kw') == null
 				&& ctx.trivia;
-			if (!triviaEofStar) parseSteps.push(macro skipWs(ctx));
+			// Slice ω₆a: an @:optional Ref field takes ownership of its own
+			// pre-field ws handling so the commit-check can rewind over the
+			// just-consumed whitespace (and any comments inside it, in trivia
+			// mode) when the kw/lead miss — that trivia belongs to the next
+			// outer @:trivia Star loop, not to this discarded optional slot.
+			final isOptionalRef:Bool = child.kind == Ref && isOptional;
+			if (!triviaEofStar && !isOptionalRef) parseSteps.push(macro skipWs(ctx));
 			switch child.kind {
 				case Ref if (isOptional):
 					if (kwLead == null && leadText == null) {
@@ -1030,19 +1036,39 @@ class Lowering {
 					final fieldCT:ComplexType = isTriviaBearing(refName)
 						? TPath({pack: [], name: 'Null', params: [TPType(ruleReturnCT(refName))]})
 						: child.annotations.get('base.fieldType');
-					// skipWs was already pushed above. The commit point
-					// peeks the lead literal or keyword — on hit, consume
-					// and parse the sub-rule; on miss, store null. No
+					// The commit point peeks the lead literal or keyword —
+					// on hit, consume and parse the sub-rule; on miss,
+					// rewind pos to before the pre-commit ws scan so any
+					// trivia we just skipped becomes visible again to the
+					// enclosing @:trivia Star's next `collectTrivia`. No
 					// backtracking over the sub-rule body (D24). Keywords
 					// use matchKw for word-boundary enforcement (D47).
 					final commitCheck:Expr = if (kwLead != null)
 						macro matchKw(ctx, $v{kwLead})
 					else
 						macro matchLit(ctx, $v{leadText});
-					final valueExpr:Expr = macro if ($commitCheck) {
+					// Slice ω₆b: in trivia mode, replace the post-commit
+					// `skipWs` with a `collectTrivia` that stashes any
+					// captured leading run into `ctx.pendingTrivia`. The
+					// sub-rule's first @:trivia Star drains it as a
+					// leading-of-first prefix — normalizing e.g. a line
+					// comment between `else` and the block's `{` into a
+					// leading comment of the block's first statement.
+					final innerCommitAction:Expr = ctx.trivia ? macro {
+						final _t = collectTrivia(ctx);
+						if (_t.leadingComments.length > 0 || _t.blankBefore) ctx.pendingTrivia = _t;
+					} : macro skipWs(ctx);
+					final valueExpr:Expr = macro {
+						final _wsPos:Int = ctx.pos;
 						skipWs(ctx);
-						$subCall;
-					} else null;
+						if ($commitCheck) {
+							$innerCommitAction;
+							$subCall;
+						} else {
+							ctx.pos = _wsPos;
+							null;
+						}
+					};
 					parseSteps.push({
 						expr: EVars([{
 							name: localName,
