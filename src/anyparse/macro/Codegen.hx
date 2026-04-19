@@ -365,8 +365,9 @@ class Codegen {
 	/**
 	 * Generate `collectTrivia` — the Trivia-mode twin of `skipWs`. Walks
 	 * horizontal whitespace and newlines as `skipWs` does, but captures
-	 * every recognised comment body (delimiters stripped) into an
-	 * `Array<String>` and sets `blankBefore = true` when two or more
+	 * every recognised comment verbatim (open + body + close delimiters
+	 * included) into an `Array<String>` and sets `blankBefore = true`
+	 * when two or more
 	 * consecutive newlines appear anywhere in the collected run (before
 	 * any comment, between comments, or after the last comment). The
 	 * per-newline counter resets to zero after each comment match so a
@@ -498,14 +499,17 @@ class Codegen {
 
 	/**
 	 * One inline block inside `collectTrivia` for a specific comment
-	 * pattern. Structure mirrors `commentSkipBlock` but captures the
-	 * body into `_leading` and resets the `_nl` newline counter so a
+	 * pattern. Captures the comment VERBATIM — open delimiter + body +
+	 * close delimiter — so the writer can round-trip source style
+	 * without style-guessing heuristics. Line-style returns
+	 * `<open><body>` (no trailing `\n`); block-style returns
+	 * `<open><body><close>`. Resets the `_nl` newline counter so a
 	 * subsequent blank line is still recognised.
 	 */
 	private static function commentCaptureBlock(p:FormatReader.CommentPattern):Expr {
 		final open:String = p.open;
 		if (p.lineTerminated) return macro if (matchLit(ctx, $v{open})) {
-			final _start:Int = ctx.pos;
+			final _start:Int = ctx.pos - $v{open.length};
 			while (ctx.pos < ctx.input.length) {
 				if (ctx.input.charCodeAt(ctx.pos) == '\n'.code) break;
 				ctx.pos++;
@@ -515,13 +519,12 @@ class Codegen {
 			continue;
 		}
 		final close:String = p.close;
-		final closeLen:Int = close.length;
 		return macro if (matchLit(ctx, $v{open})) {
-			final _start:Int = ctx.pos;
+			final _start:Int = ctx.pos - $v{open.length};
 			var _end:Int = ctx.pos;
 			while (ctx.pos < ctx.input.length) {
 				if (matchLit(ctx, $v{close})) {
-					_end = ctx.pos - $v{closeLen};
+					_end = ctx.pos;
 					break;
 				}
 				ctx.pos++;

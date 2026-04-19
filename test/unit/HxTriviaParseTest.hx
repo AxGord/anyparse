@@ -34,7 +34,7 @@ class HxTriviaParseTest extends Test {
 		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		Assert.equals(1, m.decls.length);
 		Assert.equals(1, m.decls[0].leadingComments.length);
-		Assert.equals(' hello world', m.decls[0].leadingComments[0]);
+		Assert.equals('// hello world', m.decls[0].leadingComments[0]);
 		Assert.isFalse(m.decls[0].blankBefore);
 		Assert.isNull(m.decls[0].trailingComment);
 	}
@@ -44,7 +44,7 @@ class HxTriviaParseTest extends Test {
 		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		Assert.equals(1, m.decls.length);
 		Assert.equals(1, m.decls[0].leadingComments.length);
-		Assert.equals(' a block comment ', m.decls[0].leadingComments[0]);
+		Assert.equals('/* a block comment */', m.decls[0].leadingComments[0]);
 	}
 
 	public function testBlankLineBeforeSecondDecl():Void {
@@ -72,7 +72,7 @@ class HxTriviaParseTest extends Test {
 		};
 		Assert.equals(1, cls.members.length);
 		Assert.equals(1, cls.members[0].leadingComments.length);
-		Assert.equals(' member note', cls.members[0].leadingComments[0]);
+		Assert.equals('// member note', cls.members[0].leadingComments[0]);
 	}
 
 	public function testTrailingLineCommentOnMember():Void {
@@ -100,7 +100,7 @@ class HxTriviaParseTest extends Test {
 		};
 		Assert.equals(1, fn.body.length);
 		Assert.equals(1, fn.body[0].leadingComments.length);
-		Assert.equals(' inner', fn.body[0].leadingComments[0]);
+		Assert.equals('// inner', fn.body[0].leadingComments[0]);
 	}
 
 	public function testBlockStmtStatementsCapturedAsTrivial():Void {
@@ -124,7 +124,7 @@ class HxTriviaParseTest extends Test {
 		};
 		Assert.equals(1, stmts.length);
 		Assert.equals(1, stmts[0].leadingComments.length);
-		Assert.equals(' inner block note', stmts[0].leadingComments[0]);
+		Assert.equals('// inner block note', stmts[0].leadingComments[0]);
 	}
 
 	public function testMultipleLeadingComments():Void {
@@ -132,8 +132,8 @@ class HxTriviaParseTest extends Test {
 		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		Assert.equals(1, m.decls.length);
 		Assert.equals(2, m.decls[0].leadingComments.length);
-		Assert.equals(' first', m.decls[0].leadingComments[0]);
-		Assert.equals(' second', m.decls[0].leadingComments[1]);
+		Assert.equals('// first', m.decls[0].leadingComments[0]);
+		Assert.equals('// second', m.decls[0].leadingComments[1]);
 	}
 
 	public function testEmptyModuleYieldsEmptyDecls():Void {
@@ -168,7 +168,7 @@ class HxTriviaParseTest extends Test {
 		Assert.equals(2, m.decls.length);
 		Assert.isNull(m.decls[0].trailingComment);
 		Assert.equals(1, m.decls[1].leadingComments.length);
-		Assert.equals(' multi\nline ', m.decls[1].leadingComments[0]);
+		Assert.equals('/* multi\nline */', m.decls[1].leadingComments[0]);
 	}
 
 	/**
@@ -204,7 +204,7 @@ class HxTriviaParseTest extends Test {
 		Assert.equals(2, fn.body.length);
 		Assert.equals(0, fn.body[0].leadingComments.length);
 		Assert.equals(1, fn.body[1].leadingComments.length);
-		Assert.equals(' between stmts', fn.body[1].leadingComments[0]);
+		Assert.equals('// between stmts', fn.body[1].leadingComments[0]);
 	}
 
 	/**
@@ -307,7 +307,7 @@ class HxTriviaParseTest extends Test {
 		};
 		Assert.isNull(ifStmt.elseBodyAfterKw);
 		Assert.equals(1, ifStmt.elseBodyKwLeading.length);
-		Assert.equals(' between else and block', ifStmt.elseBodyKwLeading[0]);
+		Assert.equals('// between else and block', ifStmt.elseBodyKwLeading[0]);
 		final elseStmt:Null<anyparse.grammar.haxe.trivia.Pairs.HxStatementT> = ifStmt.elseBody;
 		Assert.notNull(elseStmt);
 		final elseStmts:Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>>

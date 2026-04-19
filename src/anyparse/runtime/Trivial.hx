@@ -9,11 +9,14 @@ package anyparse.runtime;
  * that consumes plain statements cannot accidentally receive trivia-wrapped
  * ones, and vice versa.
  *
- * Comment **text** is captured verbatim (no delimiters, no leading space
- * trimming). Comment **style** (line-style vs block-style delimiters) is
- * deliberately NOT stored — that is a writer policy concern, and
- * preserving the source style would leak grammar-author decisions into
- * format-consumer decisions.
+ * Comment **text** is captured verbatim for leading comments — the open
+ * and close delimiters are retained in the string (line-style `//…`,
+ * block-style `/*…*\/`) so the writer can round-trip source style
+ * without style-guessing heuristics. Trailing comments (a single same-
+ * line comment after the node) store the body only, with delimiters
+ * stripped — trailing capture rejects internal newlines, so line style
+ * is always safe at emit time and storing delimiters would just be
+ * noise.
  *
  * Comment **position** IS stored (leading vs trailing) because it encodes
  * semantically meaningful authorial intent — unit annotations on a value,
@@ -29,10 +32,14 @@ package anyparse.runtime;
  *    blanks to max one; grammars that need N>1 (Python PEP8 style)
  *    can promote this to `Int` when they land.
  *  - `leadingComments` — zero or more comments attached above the node,
- *    in source order. Text content only; writer chooses line vs block
- *    style per context policy.
+ *    in source order. Each string carries its open/close delimiters
+ *    verbatim (`// foo` or `/* foo *\/`); the writer emits the captured
+ *    string as-is with one runtime post-process for javadoc-style
+ *    close normalization on multi-line blocks.
  *  - `trailingComment` — a single same-line comment after the node (the
- *    `// seconds` attached to `var timeout = 30;`). Null when absent.
+ *    ` seconds` body of `// seconds` attached to `var timeout = 30;`).
+ *    Body only, delimiters stripped; the writer emits `// <body>`.
+ *    Null when absent.
  *    Only one trailing slot: multiple comments on the same trailing
  *    line are unusual enough to collapse into a single slot.
  *  - `node` — the wrapped AST node itself.

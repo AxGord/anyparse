@@ -322,32 +322,34 @@ class WriterCodegen {
 	}
 
 	/**
-	 * Render a captured leading-comment body as a Doc text atom. Line
-	 * style (`//body`) for single-line content, block style (`/*body*\/`)
-	 * when the body contains a newline — captured content is verbatim,
-	 * so the two styles are picked at runtime to avoid breaking
-	 * multi-line block comments into malformed line comments.
+	 * Render a captured leading-comment atom as a Doc text atom.
+	 * `content` is VERBATIM per `ω-leading-block-style` — it already
+	 * carries its open/close delimiters (`//…` or `/*…*\/`), so line-
+	 * vs-block choice survives round-trip without style guessing.
 	 *
-	 * Multi-line block comments whose closing line is whitespace-only
-	 * (captured tail after last `\n` contains only spaces/tabs and does
-	 * not already end with a space) gain a space before `*\/`, matching
-	 * haxe-formatter's javadoc-style close normalization.
-	 *
-	 * ω₆ will replace this runtime-auto decision with a policy knob
-	 * (`commentStyleDecl` / `commentStyleStmt`).
+	 * One runtime post-process remains: multi-line block comments
+	 * whose closing line is whitespace-only (source tail between the
+	 * last `\n` and the closing `*\/` contains only spaces / tabs and
+	 * does not already end with a space) get a space inserted before
+	 * the closing `*\/` to match haxe-formatter's javadoc-style close
+	 * normalization. Line-style comments and single-line block
+	 * comments emit byte-identical to the captured source.
 	 */
 	private static function leadingCommentDocField():Field {
 		final body:Expr = macro {
+			if (!StringTools.startsWith(content, '/*')) return _dt(content);
 			final _lastNl:Int = content.lastIndexOf('\n');
-			if (_lastNl < 0) return _dt('//' + content);
+			if (_lastNl < 0) return _dt(content);
+			final _closeStart:Int = content.length - 2;
 			var _tailBlank:Bool = true;
-			for (_i in (_lastNl + 1)...content.length) {
+			for (_i in (_lastNl + 1)..._closeStart) {
 				final _c:Int = StringTools.fastCodeAt(content, _i);
 				if (_c != ' '.code && _c != '\t'.code) { _tailBlank = false; break; }
 			}
-			final _endsWithSpace:Bool = content.length > 0
-				&& StringTools.fastCodeAt(content, content.length - 1) == ' '.code;
-			return _dt('/*' + content + (_tailBlank && !_endsWithSpace ? ' */' : '*/'));
+			final _endsWithSpace:Bool = _closeStart > 0
+				&& StringTools.fastCodeAt(content, _closeStart - 1) == ' '.code;
+			if (_tailBlank && !_endsWithSpace) return _dt(content.substring(0, _closeStart) + ' */');
+			return _dt(content);
 		};
 		return {
 			name: 'leadingCommentDoc',
