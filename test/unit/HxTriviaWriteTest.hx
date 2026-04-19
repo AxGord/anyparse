@@ -137,4 +137,40 @@ class HxTriviaWriteTest extends Test {
 		final out:String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals(source + '\n', out);
 	}
+
+	/**
+	 * ω-orphan-trivia — repro for `issue_159_unstable_comment.hxtest`
+	 * (and its block-style sibling `issue_134_comments.hxtest`): a
+	 * class body that contains ONLY a comment (no members) used to
+	 * drop the comment because no member element existed to hang it
+	 * on. Trailing-trivia slots on the Star field now carry these
+	 * orphans through parse → write.
+	 */
+	public function testOrphanLineCommentInEmptyClassBody():Void {
+		final source:String = 'class Main {\n\t// only a comment\n}';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out:String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals(source + '\n', out);
+	}
+
+	public function testOrphanMultiLineBlockCommentInEmptyClassBody():Void {
+		final source:String = 'class Main {\n\t/*\n\t\tTODO:\n\t*/\n}';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out:String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals(source + '\n', out);
+	}
+
+	public function testOrphanCommentAfterLastMemberBlankLine():Void {
+		final source:String = 'class Main {\n\tvar x:Int;\n\n\t// trailing\n}';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out:String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals(source + '\n', out);
+	}
+
+	public function testOrphanCommentAtEndOfFile():Void {
+		final source:String = 'class Main {}\n\n// trailing file comment';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out:String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals(source + '\n', out);
+	}
 }

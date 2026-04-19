@@ -1189,6 +1189,12 @@ class Lowering {
 				structFields.push({field: fieldName + TriviaTypeSynth.BEFORE_KW_NEWLINE_SUFFIX, expr: macro $i{beforeKwNlLocal}});
 				structFields.push({field: fieldName + TriviaTypeSynth.BODY_ON_SAME_LINE_SUFFIX, expr: macro $i{bodyOnSameLineLocal}});
 			}
+			if (ctx.trivia && isStar && child.annotations.get('trivia.starCollects') == true) {
+				final trailBBLocal:String = trailingBlankBeforeLocalName(localName);
+				final trailLCLocal:String = trailingLeadingLocalName(localName);
+				structFields.push({field: fieldName + TriviaTypeSynth.TRAILING_BLANK_BEFORE_SUFFIX, expr: macro $i{trailBBLocal}});
+				structFields.push({field: fieldName + TriviaTypeSynth.TRAILING_LEADING_SUFFIX, expr: macro $i{trailLCLocal}});
+			}
 		}
 		// Binary: @:align — skip to next alignment boundary after all fields.
 		final align:Null<Int> = node.annotations.get('bin.align');
@@ -1395,6 +1401,36 @@ class Lowering {
 			}]),
 			pos: Context.currentPos(),
 		});
+		// ω-orphan-trivia: two mutable locals capture the trivia scanned
+		// on the final iteration (the one that hits the termination
+		// check). Without these, orphan comments between the last
+		// element and the close literal (or EOF) would be silently
+		// dropped. Paired with the two synth slots on the parent Seq
+		// type (see `TriviaTypeSynth.buildStarTrailingSlots`).
+		final trailBBLocal:String = trailingBlankBeforeLocalName(localName);
+		final trailLCLocal:String = trailingLeadingLocalName(localName);
+		final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
+		final arrayStrCT:ComplexType = TPath({
+			pack: [], name: 'Array', params: [TPType(TPath({pack: [], name: 'String', params: []}))]
+		});
+		parseSteps.push({
+			expr: EVars([{
+				name: trailBBLocal,
+				type: boolCT,
+				expr: macro false,
+				isFinal: false,
+			}]),
+			pos: Context.currentPos(),
+		});
+		parseSteps.push({
+			expr: EVars([{
+				name: trailLCLocal,
+				type: arrayStrCT,
+				expr: macro [],
+				isFinal: false,
+			}]),
+			pos: Context.currentPos(),
+		});
 		final accumRef:Expr = macro $i{localName};
 		final terminationCheck:Expr = if (closeText != null) {
 			final closeCharCode:Int = closeText.charCodeAt(0);
@@ -1405,7 +1441,11 @@ class Lowering {
 		parseSteps.push(macro {
 			while (true) {
 				final _lead = collectTrivia(ctx);
-				if ($terminationCheck) break;
+				if ($terminationCheck) {
+					$i{trailBBLocal} = _lead.blankBefore;
+					$i{trailLCLocal} = _lead.leadingComments;
+					break;
+				}
 				final _node:$elemCT = $elemCall;
 				final _trailing:Null<String> = collectTrailing(ctx);
 				$accumRef.push({
@@ -1421,6 +1461,22 @@ class Lowering {
 			parseSteps.push(macro expectLit(ctx, $v{closeText}));
 		}
 	}
+
+	/**
+	 * Name of the `Bool` local that records whether the trailing
+	 * trivia run captured on a `@:trivia` Star's final iteration
+	 * crossed a blank line. Shared between `emitTriviaStarFieldSteps`
+	 * (the producer) and `lowerStruct`'s Seq-child loop (the consumer
+	 * that pushes it into the struct literal).
+	 */
+	public static inline function trailingBlankBeforeLocalName(localName:String):String return '${localName}_trailBB';
+
+	/**
+	 * Name of the `Array<String>` local that records the own-line
+	 * comments captured on a `@:trivia` Star's final iteration (after
+	 * the last element, before the close / EOF).
+	 */
+	public static inline function trailingLeadingLocalName(localName:String):String return '${localName}_trailLC';
 
 	// -------- terminal rule --------
 

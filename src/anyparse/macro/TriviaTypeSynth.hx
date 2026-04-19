@@ -79,6 +79,18 @@ class TriviaTypeSynth {
 	public static inline final BEFORE_KW_NEWLINE_SUFFIX:String = 'BeforeKwNewline';
 	public static inline final BODY_ON_SAME_LINE_SUFFIX:String = 'BodyOnSameLine';
 
+	/**
+	 * ω-orphan-trivia — suffixes for trailing-trivia sibling slots
+	 * synthesised on paired Seq types alongside `@:trivia` Star fields.
+	 * `TrailingLeading` carries the own-line comments captured AFTER
+	 * the last element and BEFORE the close (or EOF); `TrailingBlankBefore`
+	 * records whether the captured run crossed a blank line so the writer
+	 * can reproduce the source's vertical separation between the final
+	 * member and the orphan comments.
+	 */
+	public static inline final TRAILING_BLANK_BEFORE_SUFFIX:String = 'TrailingBlankBefore';
+	public static inline final TRAILING_LEADING_SUFFIX:String = 'TrailingLeading';
+
 	private static inline final PAIRED_SUFFIX:String = 'T';
 	private static inline final SYNTH_SUBPACK:String = 'trivia';
 	private static inline final SYNTH_MODULE_LEAF:String = 'Pairs';
@@ -122,6 +134,13 @@ class TriviaTypeSynth {
 					// consumers read `null` / `[]` with no harm.
 					if (isOptionalKwRef(child))
 						for (extra in buildKwTriviaSlots(child, pos)) fields.push(extra);
+					// ω-orphan-trivia: `@:trivia` Star fields grow two
+					// sibling slots capturing trailing trivia (own-line
+					// comments between the last element and the close /
+					// EOF). Without them a class body like `{ /* orphan */ }`
+					// would lose its comment at parse time.
+					if (isTriviaStarField(child))
+						for (extra in buildStarTrailingSlots(child, pos)) fields.push(extra);
 				}
 				final anon:ComplexType = TAnonymous(fields);
 				{pos: pos, pack: synthPack, name: pairedSimple, kind: TDAlias(anon), fields: []};
@@ -166,6 +185,21 @@ class TriviaTypeSynth {
 			{name: fieldName + KW_LEADING_SUFFIX, kind: FVar(arrayStrCT), pos: pos, access: []},
 			{name: fieldName + BEFORE_KW_NEWLINE_SUFFIX, kind: FVar(boolCT), pos: pos, access: []},
 			{name: fieldName + BODY_ON_SAME_LINE_SUFFIX, kind: FVar(boolCT), pos: pos, access: []},
+		];
+	}
+
+	private static function isTriviaStarField(child:ShapeNode):Bool {
+		return child.kind == Star && child.annotations.get('trivia.starCollects') == true;
+	}
+
+	private static function buildStarTrailingSlots(child:ShapeNode, pos:Position):Array<Field> {
+		final fieldName:String = child.annotations.get('base.fieldName');
+		final strCT:ComplexType = TPath({pack: [], name: 'String', params: []});
+		final arrayStrCT:ComplexType = TPath({pack: [], name: 'Array', params: [TPType(strCT)]});
+		final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
+		return [
+			{name: fieldName + TRAILING_BLANK_BEFORE_SUFFIX, kind: FVar(boolCT), pos: pos, access: []},
+			{name: fieldName + TRAILING_LEADING_SUFFIX, kind: FVar(arrayStrCT), pos: pos, access: []},
 		];
 	}
 
