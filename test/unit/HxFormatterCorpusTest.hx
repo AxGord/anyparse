@@ -47,6 +47,7 @@ class HxFormatterCorpusTest extends Test {
 	private static final _forceBuildWriter:Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
 	private static inline final SAMELINE_SUBDIR:String = 'test/testcases/sameline';
+	private static inline final WHITESPACE_SUBDIR:String = 'test/testcases/whitespace';
 	private static inline final HXTEST_EXT:String = '.hxtest';
 	private static inline final MAX_DIFF_CONTEXT:Int = 40;
 	private static inline final MAX_REASON_LEN:Int = 120;
@@ -58,6 +59,10 @@ class HxFormatterCorpusTest extends Test {
 
 	public function testSameLine():Void {
 		runCategory(SAMELINE_SUBDIR, 'sameline');
+	}
+
+	public function testWhitespace():Void {
+		runCategory(WHITESPACE_SUBDIR, 'whitespace');
 	}
 
 	private function runCategory(subdir:String, label:String):Void {
