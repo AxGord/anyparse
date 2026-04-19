@@ -95,8 +95,13 @@ class Build {
 		final rules:Array<GeneratedRule> = lowering.generate();
 
 		final rootSimple:String = simpleName(shape.root);
-		final rootReturnCT:ComplexType = TPath({pack: packOf(shape.root), name: rootSimple, params: []});
-		final fields:Array<Field> = Codegen.emit(rules, shape.root, rootReturnCT, formatInfo);
+		final rootNode:anyparse.core.ShapeTree.ShapeNode = shape.rules.get(shape.root);
+		final rootBearing:Bool = ctx.trivia && rootNode != null && rootNode.annotations.get('trivia.bearing') == true;
+		final rootReturnCT:ComplexType = rootBearing
+			? TPath({pack: packOf(shape.root).concat(['trivia']), name: 'Pairs', sub: rootSimple + 'T', params: []})
+			: TPath({pack: packOf(shape.root), name: rootSimple, params: []});
+		final rootFnName:String = rootBearing ? 'parse${rootSimple}T' : 'parse$rootSimple';
+		final fields:Array<Field> = Codegen.emit(rules, shape.root, rootReturnCT, formatInfo, ctx.trivia, rootFnName);
 
 		#if anyparse_dump
 		final printer:haxe.macro.Printer = new haxe.macro.Printer();

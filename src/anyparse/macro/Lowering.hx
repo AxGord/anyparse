@@ -50,8 +50,8 @@ class Lowering {
 
 	private function lowerRule(typePath:String, node:ShapeNode):Array<GeneratedRule> {
 		final simple:String = simpleName(typePath);
-		final fnName:String = 'parse$simple';
-		final returnCT:ComplexType = TPath({pack: packOf(typePath), name: simple, params: []});
+		final fnName:String = parseFnName(typePath);
+		final returnCT:ComplexType = ruleReturnCT(typePath);
 		// `eregByRule` is populated as a side-effect of `lowerTerminal`, so
 		// every branch that builds the body must run before we read back
 		// the registered eregs. The loop-vs-atom Pratt split hangs the
@@ -632,7 +632,7 @@ class Lowering {
 
 	private function lowerEnumBranch(branch:ShapeNode, typePath:String, recurseFnName:String):Expr {
 		final ctor:String = branch.annotations.get('base.ctor');
-		final ctorPath:Array<String> = packOf(typePath).concat([simpleName(typePath), ctor]);
+		final ctorPath:Array<String> = ruleCtorPath(typePath, ctor);
 		final ctorRef:Expr = MacroStringTools.toFieldExpr(ctorPath);
 
 		// Case 5: unary-prefix branch. A `@:prefix("-")` annotated ctor
@@ -789,19 +789,58 @@ class Lowering {
 		// optional @:sep. No-sep variant terminates the loop by peeking at
 		// the close character instead of consuming a separator between items.
 		if (leadText != null && trailText != null && children.length == 1 && children[0].kind == Star) {
-			final inner:ShapeNode = children[0].children[0];
+			final starNode:ShapeNode = children[0];
+			final inner:ShapeNode = starNode.children[0];
 			if (inner.kind != Ref) {
 				Context.fatalError('Lowering: Star child must be a Ref in Phase 2', Context.currentPos());
 			}
 			final elemRefName:String = inner.annotations.get('base.ref');
-			final elemFn:String = 'parse${simpleName(elemRefName)}';
-			final elemCT:ComplexType = TPath({pack: packOf(elemRefName), name: simpleName(elemRefName), params: []});
+			final elemFn:String = parseFnName(elemRefName);
+			final elemCT:ComplexType = ruleReturnCT(elemRefName);
 			final elemCall:Expr = {
 				expr: ECall(macro $i{elemFn}, [macro ctx]),
 				pos: Context.currentPos(),
 			};
 			final closeCharCode:Int = trailText.charCodeAt(0);
 			final ctorCall:Expr = {expr: ECall(ctorRef, [macro _items]), pos: Context.currentPos()};
+			// Trivia-mode @:trivia Star in an enum branch (e.g. HxStatement.BlockStmt
+			// marks its stmts Star via the branch-level @:trivia meta propagated to
+			// the Star by TriviaAnalysis). Replace the plain element-push loop with
+			// a collectTrivia → parseElement → collectTrailing pipeline that feeds
+			// Trivial<T> structs into the accumulator. `@:sep` is incompatible with
+			// trivia capture (no @:trivia Star in the current grammar uses it) so
+			// only the close-peek variant is covered here.
+			if (ctx.trivia && starNode.annotations.get('trivia.starCollects') == true) {
+				if (sepText != null) {
+					Context.fatalError(
+						'Lowering: @:trivia on a Star with @:sep is not supported',
+						Context.currentPos()
+					);
+				}
+				final wrappedCT:ComplexType = TPath({
+					pack: ['anyparse', 'runtime'], name: 'Trivial', params: [TPType(elemCT)]
+				});
+				return macro {
+					skipWs(ctx);
+					expectLit(ctx, $v{leadText});
+					final _items:Array<$wrappedCT> = [];
+					while (true) {
+						final _lead = collectTrivia(ctx);
+						if (ctx.pos >= ctx.input.length || ctx.input.charCodeAt(ctx.pos) == $v{closeCharCode}) break;
+						final _node:$elemCT = $elemCall;
+						final _trailing:Null<String> = collectTrailing(ctx);
+						_items.push({
+							blankBefore: _lead.blankBefore,
+							leadingComments: _lead.leadingComments,
+							trailingComment: _trailing,
+							node: _node,
+						});
+					}
+					skipWs(ctx);
+					expectLit(ctx, $v{trailText});
+					return $ctorCall;
+				};
+			}
 			if (sepText != null) {
 				final sepCharCode:Int = sepText.charCodeAt(0);
 				return macro {
@@ -847,7 +886,7 @@ class Lowering {
 		if (litList == null && children.length == 1 && children[0].kind == Ref) {
 			final refName:String = children[0].annotations.get('base.ref');
 			final callSub:Expr = {
-				expr: ECall(macro $i{'parse${simpleName(refName)}'}, [macro ctx]),
+				expr: ECall(macro $i{parseFnName(refName)}, [macro ctx]),
 				pos: Context.currentPos(),
 			};
 			final ctorCall:Expr = {expr: ECall(ctorRef, [macro _raw]), pos: Context.currentPos()};
@@ -956,7 +995,20 @@ class Lowering {
 			}
 			// Field value — by kind.
 			final localName:String = '_f_$fieldName';
-			parseSteps.push(macro skipWs(ctx));
+			// Suppress the pre-field `skipWs` only for a trivia-collecting
+			// Star with no lead literal (HxModule.decls). There the outer
+			// skipWs would discard the file's first leading comments
+			// before the Star loop's `collectTrivia` sees them. When a
+			// lead IS present (HxClassDecl.members `{`, HxFnDecl.body `{`)
+			// the outer skipWs belongs before the lead — comments between
+			// the lead `{` and the first member are captured by
+			// `collectTrivia` inside the loop regardless.
+			final triviaEofStar:Bool = isStar
+				&& child.annotations.get('trivia.starCollects') == true
+				&& readMetaString(child, ':lead') == null
+				&& readMetaString(child, ':kw') == null
+				&& ctx.trivia;
+			if (!triviaEofStar) parseSteps.push(macro skipWs(ctx));
 			switch child.kind {
 				case Ref if (isOptional):
 					if (kwLead == null && leadText == null) {
@@ -967,10 +1019,17 @@ class Lowering {
 					}
 					final refName:String = child.annotations.get('base.ref');
 					final subCall:Expr = {
-						expr: ECall(macro $i{'parse${simpleName(refName)}'}, [macro ctx]),
+						expr: ECall(macro $i{parseFnName(refName)}, [macro ctx]),
 						pos: Context.currentPos(),
 					};
-					final fieldCT:ComplexType = child.annotations.get('base.fieldType');
+					// In trivia mode a bearing ref needs the Null<XxxT> wrap
+					// around the synth `*T` — `base.fieldType` captured the
+					// plain-mode `Null<Xxx>` form at shape-analysis time so we
+					// rebuild it here when the target is bearing; otherwise the
+					// cached annotation is re-used unchanged.
+					final fieldCT:ComplexType = isTriviaBearing(refName)
+						? TPath({pack: [], name: 'Null', params: [TPType(ruleReturnCT(refName))]})
+						: child.annotations.get('base.fieldType');
 					// skipWs was already pushed above. The commit point
 					// peeks the lead literal or keyword — on hit, consume
 					// and parse the sub-rule; on miss, store null. No
@@ -996,7 +1055,7 @@ class Lowering {
 				case Ref:
 					final refName:String = child.annotations.get('base.ref');
 					final callExpr:Expr = {
-						expr: ECall(macro $i{'parse${simpleName(refName)}'}, [macro ctx]),
+						expr: ECall(macro $i{parseFnName(refName)}, [macro ctx]),
 						pos: Context.currentPos(),
 					};
 					parseSteps.push({
@@ -1092,8 +1151,8 @@ class Lowering {
 			Context.fatalError('Lowering: Star struct field must contain a Ref', Context.currentPos());
 		}
 		final elemRefName:String = inner.annotations.get('base.ref');
-		final elemFn:String = 'parse${simpleName(elemRefName)}';
-		final elemCT:ComplexType = TPath({pack: packOf(elemRefName), name: simpleName(elemRefName), params: []});
+		final elemFn:String = parseFnName(elemRefName);
+		final elemCT:ComplexType = ruleReturnCT(elemRefName);
 		final elemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro ctx]),
 			pos: Context.currentPos(),
@@ -1103,6 +1162,16 @@ class Lowering {
 		final sepText:Null<String> = starNode.annotations.get('lit.sepText');
 		if (closeText == null && sepText != null) {
 			Context.fatalError('Lowering: Star struct field with @:sep requires an explicit @:trail close literal', Context.currentPos());
+		}
+		// Trivia-mode branch — @:trivia-annotated Star accumulates
+		// `Trivial<T>` wrappers instead of plain element values. Supports
+		// close-peek mode (HxClassDecl.members / HxFnDecl.body) and EOF
+		// mode (HxModule.decls). `@:sep` and `@:tryparse` combined with
+		// @:trivia are rejected — no current grammar combines them and the
+		// semantics of "trivia around a sep-separated list" are undecided.
+		if (ctx.trivia && starNode.annotations.get('trivia.starCollects') == true) {
+			emitTriviaStarFieldSteps(starNode, localName, parseSteps, isLastField, elemCT, elemCall, openText, closeText);
+			return;
 		}
 		if (openText != null) {
 			parseSteps.push(macro expectLit(ctx, $v{openText}));
@@ -1178,6 +1247,90 @@ class Lowering {
 		}
 		parseSteps.push(macro skipWs(ctx));
 		parseSteps.push(macro expectLit(ctx, $v{closeText}));
+	}
+
+	/**
+	 * Emit the Trivia-mode variant of a Star struct field — each element
+	 * goes through `collectTrivia` (leading comments + blank-before
+	 * detection) before being parsed, then `collectTrailing` probes for
+	 * a same-line comment after the element. The result is pushed into
+	 * `_items:Array<Trivial<elemCT>>` as a struct literal that mirrors
+	 * `Trivial<T>`'s four fields.
+	 *
+	 * Supported termination modes:
+	 *  - Close-peek (`closeText != null`, no `@:sep`) — reuses the
+	 *    `charCodeAt == closeChar` peek from the plain-mode path.
+	 *  - EOF (`closeText == null`, `isLastField`, no `@:tryparse`) —
+	 *    terminates at `ctx.pos >= ctx.input.length`.
+	 *
+	 * `@:sep` and `@:tryparse` combined with `@:trivia` are rejected
+	 * upstream in `emitStarFieldSteps` — no current grammar combines
+	 * them and their semantics for trivia capture are undecided.
+	 */
+	private function emitTriviaStarFieldSteps(
+		starNode:ShapeNode, localName:String, parseSteps:Array<Expr>, isLastField:Bool,
+		elemCT:ComplexType, elemCall:Expr, openText:Null<String>, closeText:Null<String>
+	):Void {
+		if (starNode.annotations.get('lit.sepText') != null) {
+			Context.fatalError(
+				'Lowering: @:trivia on a Star with @:sep is not supported',
+				Context.currentPos()
+			);
+		}
+		if (closeText == null && !isLastField && !hasMeta(starNode, ':tryparse')) {
+			// Defensive — the Star shape would reject on the plain path too.
+			Context.fatalError(
+				'Lowering: @:trivia Star without @:trail requires the field to be terminal',
+				Context.currentPos()
+			);
+		}
+		if (hasMeta(starNode, ':tryparse')) {
+			Context.fatalError(
+				'Lowering: @:trivia combined with @:tryparse is not supported',
+				Context.currentPos()
+			);
+		}
+		if (openText != null) {
+			parseSteps.push(macro expectLit(ctx, $v{openText}));
+		}
+		final wrappedCT:ComplexType = TPath({
+			pack: ['anyparse', 'runtime'], name: 'Trivial', params: [TPType(elemCT)]
+		});
+		final accumCT:ComplexType = TPath({pack: [], name: 'Array', params: [TPType(wrappedCT)]});
+		parseSteps.push({
+			expr: EVars([{
+				name: localName,
+				type: accumCT,
+				expr: macro [],
+				isFinal: true,
+			}]),
+			pos: Context.currentPos(),
+		});
+		final accumRef:Expr = macro $i{localName};
+		final terminationCheck:Expr = if (closeText != null) {
+			final closeCharCode:Int = closeText.charCodeAt(0);
+			macro ctx.pos >= ctx.input.length || ctx.input.charCodeAt(ctx.pos) == $v{closeCharCode};
+		} else {
+			macro ctx.pos >= ctx.input.length;
+		};
+		parseSteps.push(macro {
+			while (true) {
+				final _lead = collectTrivia(ctx);
+				if ($terminationCheck) break;
+				final _node:$elemCT = $elemCall;
+				final _trailing:Null<String> = collectTrailing(ctx);
+				$accumRef.push({
+					blankBefore: _lead.blankBefore,
+					leadingComments: _lead.leadingComments,
+					trailingComment: _trailing,
+					node: _node,
+				});
+			}
+		});
+		if (closeText != null) {
+			parseSteps.push(macro skipWs(ctx));
+			parseSteps.push(macro expectLit(ctx, $v{closeText}));
+		}
 	}
 
 	// -------- terminal rule --------
@@ -1720,6 +1873,44 @@ class Lowering {
 		if (meta == null) return false;
 		for (entry in meta) if (entry.name == tag) return true;
 		return false;
+	}
+
+	// -------- trivia-mode helpers --------
+
+	/**
+	 * True when `ctx.trivia` is active AND the rule at `refName` carries
+	 * `trivia.bearing=true`. The rule-lookup guard returns false for
+	 * non-grammar refs (format primitives the Lowering still expects to
+	 * call through their plain `parse*` functions, e.g. `JIntLit` under
+	 * `HxFormatConfig`).
+	 */
+	private function isTriviaBearing(refName:String):Bool {
+		if (!ctx.trivia) return false;
+		final node:Null<ShapeNode> = shape.rules.get(refName);
+		if (node == null) return false;
+		return node.annotations.get('trivia.bearing') == true;
+	}
+
+	/** `parse<name>T` when trivia-bearing, else `parse<name>` — every ref fn-name site goes through this. */
+	private function parseFnName(refName:String):String {
+		final simple:String = simpleName(refName);
+		return isTriviaBearing(refName) ? 'parse${simple}T' : 'parse$simple';
+	}
+
+	/** Paired `*T` ComplexType in the synth module for bearing rules; plain TPath otherwise. */
+	private function ruleReturnCT(refName:String):ComplexType {
+		final simple:String = simpleName(refName);
+		if (isTriviaBearing(refName))
+			return TPath({pack: packOf(refName).concat(['trivia']), name: 'Pairs', sub: simple + 'T', params: []});
+		return TPath({pack: packOf(refName), name: simple, params: []});
+	}
+
+	/** Enum-constructor field-path segments for `toFieldExpr` — routes through the synth module for bearing enums. */
+	private function ruleCtorPath(typePath:String, ctor:String):Array<String> {
+		final simple:String = simpleName(typePath);
+		if (isTriviaBearing(typePath))
+			return packOf(typePath).concat(['trivia', 'Pairs', simple + 'T', ctor]);
+		return packOf(typePath).concat([simple, ctor]);
 	}
 
 	private static function simpleName(typePath:String):String {

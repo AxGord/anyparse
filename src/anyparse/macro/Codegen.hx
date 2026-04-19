@@ -29,10 +29,13 @@ import haxe.macro.Expr;
 class Codegen {
 
 	public static function emit(
-		rules:Array<GeneratedRule>, rootTypePath:String, rootReturnCT:ComplexType, formatInfo:FormatReader.FormatInfo
+		rules:Array<GeneratedRule>, rootTypePath:String, rootReturnCT:ComplexType,
+		formatInfo:FormatReader.FormatInfo, ?trivia:Bool = false, ?rootFnName:Null<String> = null
 	):Array<Field> {
 		final fields:Array<Field> = [];
-		fields.push(formatInfo.isBinary ? binaryEntry(rootTypePath, rootReturnCT) : publicEntry(rootTypePath, rootReturnCT));
+		fields.push(formatInfo.isBinary
+			? binaryEntry(rootTypePath, rootReturnCT, rootFnName)
+			: publicEntry(rootTypePath, rootReturnCT, rootFnName));
 		for (rule in rules) {
 			for (ereg in rule.eregs) fields.push(eregField(ereg));
 			fields.push(ruleField(rule));
@@ -42,13 +45,17 @@ class Codegen {
 		fields.push(matchKwField());
 		fields.push(expectLitField());
 		fields.push(expectKwField());
+		if (trivia) {
+			fields.push(collectTriviaField(formatInfo));
+			fields.push(collectTrailingField(formatInfo));
+		}
 		return fields;
 	}
 
 	// -------- public entry point --------
 
-	private static function publicEntry(rootTypePath:String, rootReturnCT:ComplexType):Field {
-		final rootFn:String = 'parse${simpleName(rootTypePath)}';
+	private static function publicEntry(rootTypePath:String, rootReturnCT:ComplexType, ?rootFnName:Null<String>):Field {
+		final rootFn:String = rootFnName ?? 'parse${simpleName(rootTypePath)}';
 		final parseCall:Expr = {
 			expr: ECall(macro $i{rootFn}, [macro ctx]),
 			pos: Context.currentPos(),
@@ -77,8 +84,8 @@ class Codegen {
 		};
 	}
 
-	private static function binaryEntry(rootTypePath:String, rootReturnCT:ComplexType):Field {
-		final rootFn:String = 'parse${simpleName(rootTypePath)}';
+	private static function binaryEntry(rootTypePath:String, rootReturnCT:ComplexType, ?rootFnName:Null<String>):Field {
+		final rootFn:String = rootFnName ?? 'parse${simpleName(rootTypePath)}';
 		final parseCall:Expr = {
 			expr: ECall(macro $i{rootFn}, [macro ctx]),
 			pos: Context.currentPos(),
@@ -351,6 +358,174 @@ class Codegen {
 			}),
 			pos: Context.currentPos(),
 		};
+	}
+
+	/**
+	 * Generate `collectTrivia` — the Trivia-mode twin of `skipWs`. Walks
+	 * horizontal whitespace and newlines as `skipWs` does, but captures
+	 * every recognised comment body (delimiters stripped) into an
+	 * `Array<String>` and sets `blankBefore = true` when two or more
+	 * consecutive newlines appear anywhere in the collected run (before
+	 * any comment, between comments, or after the last comment). The
+	 * per-newline counter resets to zero after each comment match so a
+	 * blank line strictly means ≥2 newlines with nothing but spaces/tabs
+	 * between them.
+	 *
+	 * Return shape mirrors `Trivial<T>`'s leading slots so the Star loop
+	 * can splat the result into a struct literal without intermediate
+	 * renaming.
+	 *
+	 * Emitted only when `buildParser` was called with `{trivia: true}`.
+	 * Non-trivia parsers keep `skipWs` as their single whitespace
+	 * handler.
+	 */
+	private static function collectTriviaField(formatInfo:FormatReader.FormatInfo):Field {
+		final commentStmts:Array<Expr> = [for (p in formatInfo.commentPatterns) commentCaptureBlock(p)];
+		final body:Expr = macro {
+			var _blankBefore:Bool = false;
+			final _leading:Array<String> = [];
+			var _nl:Int = 0;
+			while (ctx.pos < ctx.input.length) {
+				final c:Int = ctx.input.charCodeAt(ctx.pos);
+				if (c == '\n'.code) {
+					ctx.pos++;
+					_nl++;
+					if (_nl >= 2) _blankBefore = true;
+					continue;
+				}
+				if (c == ' '.code || c == '\t'.code || c == '\r'.code) {
+					ctx.pos++;
+					continue;
+				}
+				$b{commentStmts};
+				break;
+			}
+			return {blankBefore: _blankBefore, leadingComments: _leading};
+		};
+		return {
+			name: 'collectTrivia',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [{name: 'ctx', type: macro : anyparse.runtime.Parser}],
+				ret: macro : {blankBefore:Bool, leadingComments:Array<String>},
+				expr: body,
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * Generate `collectTrailing` — probe for a single same-line comment
+	 * immediately after a just-parsed Trivia-mode element. Horizontal
+	 * whitespace (`' '`, `'\t'`, `'\r'`) before the comment is consumed
+	 * regardless of whether a comment is found; a newline on the same
+	 * line means no trailing (position is rewound so the outer
+	 * `collectTrivia` picks the newlines up as leading of the next
+	 * element). For block comments, an internal newline disqualifies the
+	 * match — a newline-bearing block is left for the next element's
+	 * leading capture. Returns the comment body (delimiters stripped)
+	 * or `null`.
+	 */
+	private static function collectTrailingField(formatInfo:FormatReader.FormatInfo):Field {
+		final attempts:Array<Expr> = [for (p in formatInfo.commentPatterns) trailingAttemptBlock(p)];
+		final body:Expr = macro {
+			final _savedPos:Int = ctx.pos;
+			while (ctx.pos < ctx.input.length) {
+				final c:Int = ctx.input.charCodeAt(ctx.pos);
+				if (c == ' '.code || c == '\t'.code || c == '\r'.code) {
+					ctx.pos++;
+					continue;
+				}
+				break;
+			}
+			$b{attempts};
+			ctx.pos = _savedPos;
+			return (null : Null<String>);
+		};
+		return {
+			name: 'collectTrailing',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [{name: 'ctx', type: macro : anyparse.runtime.Parser}],
+				ret: macro : Null<String>,
+				expr: body,
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * One inline block inside `collectTrivia` for a specific comment
+	 * pattern. Structure mirrors `commentSkipBlock` but captures the
+	 * body into `_leading` and resets the `_nl` newline counter so a
+	 * subsequent blank line is still recognised.
+	 */
+	private static function commentCaptureBlock(p:FormatReader.CommentPattern):Expr {
+		final open:String = p.open;
+		if (p.lineTerminated) return macro if (matchLit(ctx, $v{open})) {
+			final _start:Int = ctx.pos;
+			while (ctx.pos < ctx.input.length) {
+				if (ctx.input.charCodeAt(ctx.pos) == '\n'.code) break;
+				ctx.pos++;
+			}
+			_leading.push(ctx.input.substring(_start, ctx.pos));
+			_nl = 0;
+			continue;
+		}
+		final close:String = p.close;
+		final closeLen:Int = close.length;
+		return macro if (matchLit(ctx, $v{open})) {
+			final _start:Int = ctx.pos;
+			var _end:Int = ctx.pos;
+			while (ctx.pos < ctx.input.length) {
+				if (matchLit(ctx, $v{close})) {
+					_end = ctx.pos - $v{closeLen};
+					break;
+				}
+				ctx.pos++;
+			}
+			_leading.push(ctx.input.substring(_start, _end));
+			_nl = 0;
+			continue;
+		}
+	}
+
+	/**
+	 * One attempt block inside `collectTrailing` for a specific comment
+	 * pattern. Line-style returns the remainder of the line (without the
+	 * trailing `\n`). Block-style bails on internal newline — the caller
+	 * treats a newline-bearing block comment as leading-of-next.
+	 */
+	private static function trailingAttemptBlock(p:FormatReader.CommentPattern):Expr {
+		final open:String = p.open;
+		if (p.lineTerminated) return macro if (matchLit(ctx, $v{open})) {
+			final _start:Int = ctx.pos;
+			while (ctx.pos < ctx.input.length) {
+				if (ctx.input.charCodeAt(ctx.pos) == '\n'.code) break;
+				ctx.pos++;
+			}
+			return ctx.input.substring(_start, ctx.pos);
+		}
+		final close:String = p.close;
+		final closeLen:Int = close.length;
+		return macro if (matchLit(ctx, $v{open})) {
+			final _start:Int = ctx.pos;
+			var _found:Bool = false;
+			var _end:Int = ctx.pos;
+			while (ctx.pos < ctx.input.length) {
+				final _c:Int = ctx.input.charCodeAt(ctx.pos);
+				if (_c == '\n'.code) break;
+				if (matchLit(ctx, $v{close})) {
+					_end = ctx.pos - $v{closeLen};
+					_found = true;
+					break;
+				}
+				ctx.pos++;
+			}
+			if (_found) return ctx.input.substring(_start, _end);
+			ctx.pos = _savedPos;
+			return (null : Null<String>);
+		}
 	}
 
 	private static function simpleName(typePath:String):String {

@@ -53,8 +53,11 @@ class HxTriviaTypesTest extends Test {
 	public function testMarkerClassBuilds():Void {
 		// Calling parse() proves the @:build pipeline completed without
 		// error — if any stage (TriviaAnalysis, TriviaTypeSynth, Lowering,
-		// Codegen) blew up, this test file would not compile.
-		final m:HxModule = HaxeModuleTriviaParser.parse('class Foo {}');
+		// Codegen) blew up, this test file would not compile. After ω₄d
+		// the return type is the paired `HxModuleT` synth type instead
+		// of Plain-mode `HxModule` because trivia-aware Lowering now
+		// emits `Trivial<T>`-wrapped Star elements.
+		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse('class Foo {}');
 		Assert.equals(1, m.decls.length);
 	}
 
