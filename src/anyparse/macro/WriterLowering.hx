@@ -826,9 +826,15 @@ class WriterLowering {
 	 *                separated by a single space (current behaviour).
 	 *  - `Next`    → `_dn(cols, _dc([_dhl(), body]))` — body on the
 	 *                next line at one indent level deeper.
-	 *  - `FitLine` → `_dg(_dn(cols, _dc([_dl(), body])))` — Group lets
-	 *                the renderer pick flat (space + body) or break
+	 *  - `FitLine` → `_dbg(_dn(cols, _dc([_dl(), body])))` — `BodyGroup`
+	 *                lets the renderer pick flat (space + body) or break
 	 *                (hardline + indent + body) based on `lineWidth`.
+	 *                `BodyGroup` is layout-identical to `Group` but
+	 *                acts as a semantic marker so the trivia writer's
+	 *                `foldTrailingIntoBodyGroup` can splice a trailing
+	 *                line comment into the body's measured content
+	 *                without catching unrelated `Group`s in the tree
+	 *                (e.g. `trailingCommaArgs` inside a call expression).
 	 *
 	 * `cols` is derived from the same `indentChar`/`indentSize`/
 	 * `tabWidth` triple as `blockBody`, so one-level body indent matches
@@ -881,14 +887,14 @@ class WriterLowering {
 		final samePat:Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Same']));
 		final nextPat:Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Next']));
 		final fitPat:Expr = MacroStringTools.toFieldExpr(bpPath.concat(['FitLine']));
-		final fitExpr:Expr = if (elseFieldName == null) macro _dg(_dn(_cols, _dc([_dl(), $writeCall])));
+		final fitExpr:Expr = if (elseFieldName == null) macro _dbg(_dn(_cols, _dc([_dl(), $writeCall])));
 		else {
 			final elseAccess:Expr = {
 				expr: EField(macro value, elseFieldName),
 				pos: Context.currentPos(),
 			};
 			macro (opt.fitLineIfWithElse || $elseAccess == null)
-				? _dg(_dn(_cols, _dc([_dl(), $writeCall])))
+				? _dbg(_dn(_cols, _dc([_dl(), $writeCall])))
 				: _dn(_cols, _dc([_dhl(), $writeCall]));
 		}
 		final policyCases:Array<Case> = [
@@ -1102,9 +1108,9 @@ class WriterLowering {
 						_inner.push(_dhl());
 						_ci++;
 					}
-					_inner.push($triviaElemCall);
+					final _elem:anyparse.core.Doc = $triviaElemCall;
 					final _tc:Null<String> = _t.trailingComment;
-					if (_tc != null) _inner.push(trailingCommentDoc(_tc));
+					_inner.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDoc(_tc)) : _elem);
 					_si++;
 				}
 				final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
@@ -1142,9 +1148,9 @@ class WriterLowering {
 						_docs.push(_dhl());
 						_ci++;
 					}
-					_docs.push($triviaElemCall);
+					final _elem:anyparse.core.Doc = $triviaElemCall;
 					final _tc:Null<String> = _t.trailingComment;
-					if (_tc != null) _docs.push(trailingCommentDoc(_tc));
+					_docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDoc(_tc)) : _elem);
 					_si++;
 				}
 				_dc(_docs);

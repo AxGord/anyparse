@@ -54,9 +54,15 @@ class WriterCodegen {
 			fields.push(escapeStringField(formatInfo));
 			// Trivia helpers (ω₅). Always emitted — unused when
 			// the marker class doesn't opt into `{trivia: true}`,
-			// but cost is two small private-static methods.
+			// but cost is small private-static methods.
 			fields.push(leadingCommentDocField());
 			fields.push(trailingCommentDocField());
+			// ω₆c: BodyGroup trailing-comment folder. Used by
+			// `triviaBlockStarExpr` / `triviaEofStarExpr` to splice
+			// a trailing comment into the body's FitLine measure.
+			fields.push(foldTrailingIntoBodyGroupField());
+			fields.push(foldTrailingRecursiveField());
+			fields.push(appendInsideBodyGroupField());
 		}
 		return fields;
 	}
@@ -186,6 +192,7 @@ class WriterCodegen {
 			docHelper('_dc', [{name: 'items', type: macro : Array<anyparse.core.Doc>}], macro anyparse.core.Doc.Concat(items)),
 			docHelper('_dn', [{name: 'n', type: macro : Int}, {name: 'inner', type: macro : anyparse.core.Doc}], macro anyparse.core.Doc.Nest(n, inner)),
 			docHelper('_dg', [{name: 'inner', type: macro : anyparse.core.Doc}], macro anyparse.core.Doc.Group(inner)),
+			docHelper('_dbg', [{name: 'inner', type: macro : anyparse.core.Doc}], macro anyparse.core.Doc.BodyGroup(inner)),
 			docHelper('_dhl', [], macro anyparse.core.Doc.Line('\n')),
 			docHelper('_dsl', [], macro anyparse.core.Doc.Line('')),
 			docHelper('_dl', [], macro anyparse.core.Doc.Line(' ')),
@@ -347,6 +354,112 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{name: 'content', type: macro : String}],
+				ret: macro : anyparse.core.Doc,
+				expr: body,
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * Splice a trailing Doc atom inside the outermost `BodyGroup`
+	 * reachable by walking the Doc tree from the root. The match is
+	 * "outermost" in the sense that once a `BodyGroup` is found, the
+	 * folder stops descending — nested `BodyGroup`s inside the matched
+	 * one are left alone. Walks `Concat` items right-to-left so the
+	 * `BodyGroup` emitted by `bodyPolicyWrap` at the tail of a bearing
+	 * writer's output is found first.
+	 *
+	 * Purpose: lets the trivia writer's `trailing`-comment attachment
+	 * enter the body's fit/break measurement. Without this, the
+	 * `BodyGroup` measures only its own inner content and picks `flat`
+	 * on bodies that fit without the trailing, producing output that
+	 * overflows once the comment is appended outside.
+	 *
+	 * Fallback: when no `BodyGroup` is found anywhere, returns a plain
+	 * `Concat([doc, trailing])` — the trailing comment appends as a
+	 * sibling, matching the behaviour writers without a FitLine body
+	 * had before this helper was introduced (byte-identical for block
+	 * bodies and simple statements like `VarStmt`/`ReturnStmt`).
+	 */
+	private static function foldTrailingIntoBodyGroupField():Field {
+		final body:Expr = macro {
+			final _folded:Null<anyparse.core.Doc> = _foldTrailingIntoBodyGroup(doc, trailing);
+			return _folded != null ? _folded : _dc([doc, trailing]);
+		};
+		return {
+			name: 'foldTrailingIntoBodyGroup',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [
+					{name: 'doc', type: macro : anyparse.core.Doc},
+					{name: 'trailing', type: macro : anyparse.core.Doc},
+				],
+				ret: macro : anyparse.core.Doc,
+				expr: body,
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	private static function foldTrailingRecursiveField():Field {
+		final body:Expr = macro {
+			switch (doc) {
+				case anyparse.core.Doc.BodyGroup(inner):
+					return _dbg(_appendInsideBodyGroup(inner, trailing));
+				case anyparse.core.Doc.Concat(items):
+					var _i:Int = items.length - 1;
+					while (_i >= 0) {
+						final _folded:Null<anyparse.core.Doc> = _foldTrailingIntoBodyGroup(items[_i], trailing);
+						if (_folded != null) {
+							final _newItems:Array<anyparse.core.Doc> = items.copy();
+							_newItems[_i] = _folded;
+							return _dc(_newItems);
+						}
+						_i--;
+					}
+					return null;
+				case anyparse.core.Doc.Nest(n, inner):
+					final _folded:Null<anyparse.core.Doc> = _foldTrailingIntoBodyGroup(inner, trailing);
+					return _folded != null ? _dn(n, _folded) : null;
+				case _:
+					return null;
+			}
+		};
+		return {
+			name: '_foldTrailingIntoBodyGroup',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [
+					{name: 'doc', type: macro : anyparse.core.Doc},
+					{name: 'trailing', type: macro : anyparse.core.Doc},
+				],
+				ret: macro : Null<anyparse.core.Doc>,
+				expr: body,
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	private static function appendInsideBodyGroupField():Field {
+		final body:Expr = macro {
+			switch (inner) {
+				case anyparse.core.Doc.Nest(n, innerInner):
+					return _dn(n, _appendInsideBodyGroup(innerInner, trailing));
+				case anyparse.core.Doc.Concat(items):
+					return _dc(items.concat([trailing]));
+				case _:
+					return _dc([inner, trailing]);
+			}
+		};
+		return {
+			name: '_appendInsideBodyGroup',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [
+					{name: 'inner', type: macro : anyparse.core.Doc},
+					{name: 'trailing', type: macro : anyparse.core.Doc},
+				],
 				ret: macro : anyparse.core.Doc,
 				expr: body,
 			}),

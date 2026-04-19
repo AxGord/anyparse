@@ -83,7 +83,7 @@ class Renderer {
 				case Concat(items):
 					var i:Int = items.length;
 					while (--i >= 0) stack.push(new Frame(f.indent, f.mode, items[i]));
-				case Group(inner):
+				case Group(inner) | BodyGroup(inner):
 					if (fitsFlat(width - col, f.indent, inner)) {
 						stack.push(new Frame(f.indent, MFlat, inner));
 					} else {
@@ -147,7 +147,7 @@ class Renderer {
 				case Concat(items):
 					var j = items.length;
 					while (--j >= 0) local.push(new Frame(f.indent, MFlat, items[j]));
-				case Group(inner):
+				case Group(inner) | BodyGroup(inner):
 					local.push(new Frame(f.indent, MFlat, inner));
 				case IfBreak(_, flatDoc):
 					local.push(new Frame(f.indent, MFlat, flatDoc));

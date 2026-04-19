@@ -23,6 +23,17 @@ package anyparse.core;
 	- `Group(inner)`   — a unit of fit decision. The renderer measures the flat
 	                     width of `inner` and commits to flat if it fits within
 	                     the remaining width, otherwise to break.
+	- `BodyGroup(inner)` — structurally identical to `Group` but marks a
+	                     "body-level" fit decision emitted by
+	                     `WriterLowering.bodyPolicyWrap`'s `FitLine` branch.
+	                     The trivia writer's trailing-comment folder looks
+	                     specifically for `BodyGroup` when splicing a
+	                     trailing line comment into the body's measured
+	                     content so the Group's flat/break decision
+	                     accounts for the trailing comment width. Renderer
+	                     and `fitsFlat` treat `BodyGroup` identically to
+	                     `Group` — the distinction exists only as a
+	                     semantic marker for consumer-side Doc surgery.
 	- `Concat(items)`  — sequential concatenation.
 	- `IfBreak(br, fl)`— emit `br` if the enclosing Group is in break mode,
 	                     `fl` if in flat mode. Used for trailing separators
@@ -36,6 +47,7 @@ enum Doc {
 	Line(flat:String);
 	Nest(indent:Int, inner:Doc);
 	Group(inner:Doc);
+	BodyGroup(inner:Doc);
 	Concat(items:Array<Doc>);
 	IfBreak(breakDoc:Doc, flatDoc:Doc);
 }
