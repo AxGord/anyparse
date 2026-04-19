@@ -15,9 +15,19 @@ package anyparse.grammar.haxe;
  * parse the next `HxSwitchCase`. Individual case bodies use
  * `@:tryparse` termination (see `HxCaseBranch` and
  * `HxDefaultBranch`).
+ *
+ * `@:trivia` on `cases` makes every element a `Trivial<HxSwitchCaseT>`
+ * in Trivia mode so own-line comments immediately before `case` /
+ * `default` survive round-trip. Inside-body comments (between `case X:`
+ * and the first statement) need a separate `@:trivia` on
+ * `HxCaseBranch.body` / `HxDefaultBranch.stmts` — those are `@:tryparse`
+ * Stars and depend on the tryparse + trivia Lowering path. Transitively
+ * marks `HxSwitchCase` / `HxCaseBranch` / `HxDefaultBranch` as trivia-
+ * bearing via `TriviaAnalysis`'s fixed-point closure, triggering `*T`
+ * synthesis in `TriviaTypeSynth`.
  */
 @:peg
 typedef HxSwitchStmt = {
 	@:lead('(') @:trail(')') var expr:HxExpr;
-	@:lead('{') @:trail('}') var cases:Array<HxSwitchCase>;
+	@:lead('{') @:trail('}') @:trivia var cases:Array<HxSwitchCase>;
 };
