@@ -48,6 +48,7 @@ class Codegen {
 		if (trivia) {
 			fields.push(collectTriviaField(formatInfo));
 			fields.push(collectTrailingField(formatInfo));
+			fields.push(collectTrailingFullField(formatInfo));
 			fields.push(hasNewlineInField());
 		}
 		return fields;
@@ -558,6 +559,84 @@ class Codegen {
 				if (_c == '\n'.code) break;
 				if (matchLit(ctx, $v{close})) {
 					_end = ctx.pos - $v{closeLen};
+					_found = true;
+					break;
+				}
+				ctx.pos++;
+			}
+			if (_found) return ctx.input.substring(_start, _end);
+			ctx.pos = _savedPos;
+			return (null : Null<String>);
+		}
+	}
+
+	/**
+	 * Generate `collectTrailingFull` — structural twin of `collectTrailing`
+	 * that returns the captured comment VERBATIM including its delimiters
+	 * (e.g. `// foo` or `/* foo *\/`). Used exclusively by close-trailing
+	 * slots (ω-close-trailing / ω-close-trailing-alt) where the writer
+	 * must preserve source style — a captured `/* catch *\/` round-trips
+	 * as `/* catch *\/`, not as `// catch` (the pre-slice behaviour of
+	 * feeding the stripped body through the line-style-only
+	 * `trailingCommentDoc`). Per-element and AfterKw slots keep
+	 * `collectTrailing` because their writer helpers deliberately
+	 * normalise to line style — a stronger contract only applies to the
+	 * close-trailing slot.
+	 */
+	private static function collectTrailingFullField(formatInfo:FormatReader.FormatInfo):Field {
+		final attempts:Array<Expr> = [for (p in formatInfo.commentPatterns) trailingFullAttemptBlock(p)];
+		final body:Expr = macro {
+			final _savedPos:Int = ctx.pos;
+			while (ctx.pos < ctx.input.length) {
+				final c:Int = ctx.input.charCodeAt(ctx.pos);
+				if (c == ' '.code || c == '\t'.code || c == '\r'.code) {
+					ctx.pos++;
+					continue;
+				}
+				break;
+			}
+			$b{attempts};
+			ctx.pos = _savedPos;
+			return (null : Null<String>);
+		};
+		return {
+			name: 'collectTrailingFull',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [{name: 'ctx', type: macro : anyparse.runtime.Parser}],
+				ret: macro : Null<String>,
+				expr: body,
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * Twin of `trailingAttemptBlock` that captures the open delimiter +
+	 * body + close delimiter verbatim. Line-style returns `open + body`
+	 * (no trailing `\n`); block-style returns `open + body + close` and
+	 * rejects internal newlines identically to the stripped variant.
+	 */
+	private static function trailingFullAttemptBlock(p:FormatReader.CommentPattern):Expr {
+		final open:String = p.open;
+		if (p.lineTerminated) return macro if (matchLit(ctx, $v{open})) {
+			final _start:Int = ctx.pos - $v{open.length};
+			while (ctx.pos < ctx.input.length) {
+				if (ctx.input.charCodeAt(ctx.pos) == '\n'.code) break;
+				ctx.pos++;
+			}
+			return ctx.input.substring(_start, ctx.pos);
+		}
+		final close:String = p.close;
+		return macro if (matchLit(ctx, $v{open})) {
+			final _start:Int = ctx.pos - $v{open.length};
+			var _found:Bool = false;
+			var _end:Int = ctx.pos;
+			while (ctx.pos < ctx.input.length) {
+				final _c:Int = ctx.input.charCodeAt(ctx.pos);
+				if (_c == '\n'.code) break;
+				if (matchLit(ctx, $v{close})) {
+					_end = ctx.pos;
 					_found = true;
 					break;
 				}

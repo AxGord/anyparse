@@ -823,8 +823,10 @@ class Lowering {
 				// ω-close-trailing-alt: synth ctor of close-peek `@:trivia`
 				// Alt branches (e.g. `HxStatementT.BlockStmt`) carries an
 				// extra positional `closeTrailing:Null<String>` arg captured
-				// here by `collectTrailing(ctx)` right after the close
-				// literal. Plain mode keeps the 1-arg ctor.
+				// here by `collectTrailingFull(ctx)` right after the close
+				// literal. The Full variant keeps comment delimiters so the
+				// writer can round-trip block-vs-line style (ω-trailing-
+				// block-style). Plain mode keeps the 1-arg ctor.
 				final ctorCallTrivia:Expr = {
 					expr: ECall(ctorRef, [macro _items, macro _closeTrail]),
 					pos: Context.currentPos(),
@@ -847,7 +849,7 @@ class Lowering {
 					}
 					skipWs(ctx);
 					expectLit(ctx, $v{trailText});
-					final _closeTrail:Null<String> = collectTrailing(ctx);
+					final _closeTrail:Null<String> = collectTrailingFull(ctx);
 					return $ctorCallTrivia;
 				};
 			}
@@ -1556,10 +1558,13 @@ class Lowering {
 			// ω-close-trailing: capture a same-line trailing comment sitting
 			// right after the close literal (e.g. `} // catch` before the
 			// next `catch` clause). Stored in a synth `<field>TrailingClose`
-			// slot on the paired Seq type; the writer emits `_dt(' ')` +
-			// `trailingCommentDoc(...)` after the close when non-null.
-			// EOF mode and try-parse mode have no close literal and skip
-			// this capture entirely.
+			// slot on the paired Seq type; the writer emits
+			// `trailingCommentDocVerbatim(...)` after the close when non-
+			// null. ω-trailing-block-style: captured via `collectTrailingFull`
+			// (content WITH delimiters) so block-style trailing comments
+			// round-trip as `/* foo */`, not as `// foo`. EOF mode and
+			// try-parse mode have no close literal and skip this capture
+			// entirely.
 			final trailCloseLocal:String = trailingCloseLocalName(localName);
 			final nullStrCT:ComplexType = TPath({
 				pack: [], name: 'Null', params: [TPType(TPath({pack: [], name: 'String', params: []}))]
@@ -1568,7 +1573,7 @@ class Lowering {
 				expr: EVars([{
 					name: trailCloseLocal,
 					type: nullStrCT,
-					expr: macro collectTrailing(ctx),
+					expr: macro collectTrailingFull(ctx),
 					isFinal: true,
 				}]),
 				pos: Context.currentPos(),

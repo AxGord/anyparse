@@ -1443,6 +1443,10 @@ class WriterLowering {
 		// sibling). Present only for close-peek Seq Stars (Seq-struct
 		// + ω-close-trailing-alt's BlockStmt); EOF and try-parse sites
 		// forward null and degrade to the pre-slice close emission.
+		// ω-trailing-block-style: the captured string includes its
+		// delimiters (producer uses `collectTrailingFull`), so the
+		// emission routes through `trailingCommentDocVerbatim` to
+		// preserve block-vs-line style on round-trip.
 		final trailClose:Expr = trailCloseAccess ?? macro (null : Null<String>);
 		// ω-close-trailing-alt: Alt-branch sites pass true so the trailing
 		// line comment is followed by `_dhl()` — line comments terminate
@@ -1454,8 +1458,8 @@ class WriterLowering {
 		// the parent Star's element separator already supplies a hardline.
 		final trailFollowExpr:Expr = appendHardlineAfterTrail ? macro _parts.push(_dhl()) : macro {};
 		final emptyTrailExpr:Expr = appendHardlineAfterTrail
-			? macro _dc([_dt($v{emptyText}), trailingCommentDoc(_trailClose), _dhl()])
-			: macro _dc([_dt($v{emptyText}), trailingCommentDoc(_trailClose)]);
+			? macro _dc([_dt($v{emptyText}), trailingCommentDocVerbatim(_trailClose), _dhl()])
+			: macro _dc([_dt($v{emptyText}), trailingCommentDocVerbatim(_trailClose)]);
 		return macro {
 			final _arr = $fieldAccess;
 			final _trailLC:Array<String> = $trailLC;
@@ -1495,7 +1499,7 @@ class WriterLowering {
 				final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 				final _parts:Array<anyparse.core.Doc> = [_dt($v{openText}), _dn(_cols, _dc(_inner)), _dhl(), _dt($v{closeText})];
 				if (_trailClose != null) {
-					_parts.push(trailingCommentDoc(_trailClose));
+					_parts.push(trailingCommentDocVerbatim(_trailClose));
 					$trailFollowExpr;
 				}
 				_dc(_parts);

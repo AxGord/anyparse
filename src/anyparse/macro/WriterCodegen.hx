@@ -57,6 +57,7 @@ class WriterCodegen {
 			// but cost is small private-static methods.
 			fields.push(leadingCommentDocField());
 			fields.push(trailingCommentDocField());
+			fields.push(trailingCommentDocVerbatimField());
 			// ω₆c: BodyGroup trailing-comment folder. Used by
 			// `triviaBlockStarExpr` / `triviaEofStarExpr` to splice
 			// a trailing comment into the body's FitLine measure.
@@ -371,6 +372,31 @@ class WriterCodegen {
 		final body:Expr = macro return _dt(' //' + content);
 		return {
 			name: 'trailingCommentDoc',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [{name: 'content', type: macro : String}],
+				ret: macro : anyparse.core.Doc,
+				expr: body,
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * Render a captured trailing-comment body as a Doc text atom
+	 * prefixed with a space separator from the preceding element —
+	 * VERBATIM variant that expects `content` to already include its
+	 * delimiters (e.g. `// foo` or `/* foo *\/`). Used by close-trailing
+	 * slots (ω-close-trailing / ω-close-trailing-alt) where the parser
+	 * captures via `collectTrailingFull` so block-vs-line style is
+	 * preserved across a round-trip. Per-element + AfterKw slots keep
+	 * the stripped-body `trailingCommentDoc` helper above — that path
+	 * normalises to line style by construction.
+	 */
+	private static function trailingCommentDocVerbatimField():Field {
+		final body:Expr = macro return _dt(' ' + content);
+		return {
+			name: 'trailingCommentDocVerbatim',
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{name: 'content', type: macro : String}],
