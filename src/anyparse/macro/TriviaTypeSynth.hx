@@ -91,6 +91,16 @@ class TriviaTypeSynth {
 	public static inline final TRAILING_BLANK_BEFORE_SUFFIX:String = 'TrailingBlankBefore';
 	public static inline final TRAILING_LEADING_SUFFIX:String = 'TrailingLeading';
 
+	/**
+	 * ω-close-trailing — suffix for the same-line trailing comment
+	 * captured immediately after a `@:trivia` Star's close literal.
+	 * Synthesised only for close-peek Stars (those with `@:trail`);
+	 * EOF-mode Stars have no close to trail, and `@:trivia + @:tryparse`
+	 * already rejects `@:trail` at compile time. `Null<String>` — `null`
+	 * when the source had no same-line comment after the close.
+	 */
+	public static inline final TRAILING_CLOSE_SUFFIX:String = 'TrailingClose';
+
 	private static inline final PAIRED_SUFFIX:String = 'T';
 	private static inline final SYNTH_SUBPACK:String = 'trivia';
 	private static inline final SYNTH_MODULE_LEAF:String = 'Pairs';
@@ -197,10 +207,28 @@ class TriviaTypeSynth {
 		final strCT:ComplexType = TPath({pack: [], name: 'String', params: []});
 		final arrayStrCT:ComplexType = TPath({pack: [], name: 'Array', params: [TPType(strCT)]});
 		final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
-		return [
+		final fields:Array<Field> = [
 			{name: fieldName + TRAILING_BLANK_BEFORE_SUFFIX, kind: FVar(boolCT), pos: pos, access: []},
 			{name: fieldName + TRAILING_LEADING_SUFFIX, kind: FVar(arrayStrCT), pos: pos, access: []},
 		];
+		// ω-close-trailing: close-peek Stars (those with `@:trail`)
+		// additionally carry a same-line trailing comment captured right
+		// after the close literal. EOF-mode Stars omit this slot —
+		// there's no close to trail. `@:trivia + @:tryparse` already
+		// rejects `@:trail`, so tryparse cannot reach this branch.
+		//
+		// Reads `@:trail` directly from `base.meta` rather than the
+		// Lit-strategy-derived `lit.trailText` annotation: `TriviaTypeSynth.arm`
+		// runs BEFORE `registry.runAnnotate` in `Build.buildParser` /
+		// `buildWriter` (the paired type must exist before Lowering /
+		// WriterLowering reference it), so at this point the Lit pass has
+		// not yet populated `lit.trailText`. Mirrors `isOptionalKwRef`'s
+		// direct-meta read pattern.
+		if (readMetaString(child, ':trail') != null) {
+			final nullStrCT:ComplexType = TPath({pack: [], name: 'Null', params: [TPType(strCT)]});
+			fields.push({name: fieldName + TRAILING_CLOSE_SUFFIX, kind: FVar(nullStrCT), pos: pos, access: []});
+		}
+		return fields;
 	}
 
 	private static function readMetaString(node:ShapeNode, tag:String):Null<String> {

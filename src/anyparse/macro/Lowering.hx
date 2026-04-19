@@ -1194,6 +1194,14 @@ class Lowering {
 				final trailLCLocal:String = trailingLeadingLocalName(localName);
 				structFields.push({field: fieldName + TriviaTypeSynth.TRAILING_BLANK_BEFORE_SUFFIX, expr: macro $i{trailBBLocal}});
 				structFields.push({field: fieldName + TriviaTypeSynth.TRAILING_LEADING_SUFFIX, expr: macro $i{trailLCLocal}});
+				// ω-close-trailing: the synth slot exists only for close-peek
+				// Stars (see `TriviaTypeSynth.buildStarTrailingSlots`). Gate
+				// the push on the Star's own `lit.trailText` annotation so
+				// EOF-mode Stars (e.g. `HxModule.decls`) skip the field.
+				if (child.annotations.get('lit.trailText') != null) {
+					final trailCloseLocal:String = trailingCloseLocalName(localName);
+					structFields.push({field: fieldName + TriviaTypeSynth.TRAILING_CLOSE_SUFFIX, expr: macro $i{trailCloseLocal}});
+				}
 			}
 		}
 		// Binary: @:align — skip to next alignment boundary after all fields.
@@ -1535,6 +1543,26 @@ class Lowering {
 		if (closeText != null) {
 			parseSteps.push(macro skipWs(ctx));
 			parseSteps.push(macro expectLit(ctx, $v{closeText}));
+			// ω-close-trailing: capture a same-line trailing comment sitting
+			// right after the close literal (e.g. `} // catch` before the
+			// next `catch` clause). Stored in a synth `<field>TrailingClose`
+			// slot on the paired Seq type; the writer emits `_dt(' ')` +
+			// `trailingCommentDoc(...)` after the close when non-null.
+			// EOF mode and try-parse mode have no close literal and skip
+			// this capture entirely.
+			final trailCloseLocal:String = trailingCloseLocalName(localName);
+			final nullStrCT:ComplexType = TPath({
+				pack: [], name: 'Null', params: [TPType(TPath({pack: [], name: 'String', params: []}))]
+			});
+			parseSteps.push({
+				expr: EVars([{
+					name: trailCloseLocal,
+					type: nullStrCT,
+					expr: macro collectTrailing(ctx),
+					isFinal: true,
+				}]),
+				pos: Context.currentPos(),
+			});
 		}
 	}
 
@@ -1553,6 +1581,15 @@ class Lowering {
 	 * the last element, before the close / EOF).
 	 */
 	public static inline function trailingLeadingLocalName(localName:String):String return '${localName}_trailLC';
+
+	/**
+	 * Name of the `Null<String>` local that records a same-line
+	 * trailing comment captured right after a close-peek `@:trivia`
+	 * Star's close literal (ω-close-trailing). Only declared in the
+	 * close-peek branch of `emitTriviaStarFieldSteps`; the EOF and
+	 * try-parse branches skip it.
+	 */
+	public static inline function trailingCloseLocalName(localName:String):String return '${localName}_trailClose';
 
 	// -------- terminal rule --------
 

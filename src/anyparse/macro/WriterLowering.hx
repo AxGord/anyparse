@@ -309,13 +309,14 @@ class WriterLowering {
 		if (isTriviaStar) {
 			if (sepText != null)
 				Context.fatalError('WriterLowering: @:trivia Star enum branch does not support @:sep', Context.currentPos());
-			// ω-orphan-trivia: Alt-branch Star has no synth trailing slots
-			// on the paired type (TriviaTypeSynth only extends Seq types).
-			// Pass null so the writer falls back to pre-slice behaviour —
-			// orphan trivia inside e.g. `BlockStmt({ /*c*/ })` is still
-			// dropped; a dedicated slice would extend synthesis to Alt
-			// ctor args if a fixture demands it.
-			parts.push(triviaBlockStarExpr(argsAccess, null, null, elemFn, leadText, trailText));
+			// ω-orphan-trivia / ω-close-trailing: Alt-branch Star has no
+			// synth trailing or close-trailing slots on the paired type
+			// (TriviaTypeSynth only extends Seq types). Pass null so the
+			// writer falls back to pre-slice behaviour — orphan trivia
+			// inside e.g. `BlockStmt({ /*c*/ })` and a same-line comment
+			// after the `}` are still dropped; a dedicated slice would
+			// extend synthesis to Alt ctor args if a fixture demands it.
+			parts.push(triviaBlockStarExpr(argsAccess, null, null, null, elemFn, leadText, trailText));
 		} else if (sepText != null) {
 			final tcExpr:Expr = trailingCommaExpr(branch);
 			parts.push(macro {
@@ -559,10 +560,14 @@ class WriterLowering {
 		if (isTriviaStar) {
 			if (sepText != null || isRaw)
 				Context.fatalError('WriterLowering: @:trivia Star does not support @:sep/@:raw', Context.currentPos());
-			// ω-orphan-trivia: Seq-struct call sites drive the trailing
-			// slots synthesised on the paired type. Alt-branch Star call
-			// sites (`HxStatement.BlockStmt`) have no synth slots and
-			// pass null — writer falls back to pre-slice behaviour.
+			// ω-orphan-trivia / ω-close-trailing: Seq-struct call sites
+			// drive the trailing slots synthesised on the paired type.
+			// Alt-branch Star call sites (`HxStatement.BlockStmt`) have
+			// no synth slots and pass null — writer falls back to pre-
+			// slice behaviour. `TrailingClose` is only synthesised for
+			// close-peek Stars (those with `lit.trailText`); EOF-mode
+			// Stars forward null to preserve the post-loop emission
+			// shape without a dangling slot access.
 			final fieldName:Null<String> = starNode.annotations.get('base.fieldName');
 			final trailBBAccess:Null<Expr> = fieldName == null
 				? null
@@ -570,6 +575,9 @@ class WriterLowering {
 			final trailLCAccess:Null<Expr> = fieldName == null
 				? null
 				: {expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_LEADING_SUFFIX), pos: Context.currentPos()};
+			final trailCloseAccess:Null<Expr> = fieldName == null || closeText == null
+				? null
+				: {expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_CLOSE_SUFFIX), pos: Context.currentPos()};
 			if (hasMeta(starNode, ':tryparse')) {
 				if (closeText != null)
 					Context.fatalError('WriterLowering: @:trivia + @:tryparse must not have @:trail', Context.currentPos());
@@ -603,7 +611,13 @@ class WriterLowering {
 			}
 			if (closeText != null) {
 				if (!isFirstField && isSpacedLead(openText)) parts.push(leftCurlySeparator(starNode));
-				parts.push(triviaBlockStarExpr(fieldAccess, trailBBAccess, trailLCAccess, elemFn, openText ?? '{', closeText));
+				// `openText ?? ''` (was `?? '{'` through ω₅) — when a
+				// close-peek Star has no `@:lead`, the surrounding Seq
+				// emits the open delimiter before this field, so the Star
+				// itself contributes nothing at the open position. Empty
+				// string → `_dt('')` is a no-op, and `emptyText = '' +
+				// closeText` stays format-neutral (invariant #5).
+				parts.push(triviaBlockStarExpr(fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, elemFn, openText ?? '', closeText));
 			} else if (isLastField) {
 				if (openText != null) parts.push(macro _dt($v{openText}));
 				parts.push(triviaEofStarExpr(fieldAccess, trailBBAccess, trailLCAccess, elemFn));
@@ -1320,7 +1334,7 @@ class WriterLowering {
 	 * — the helper does not itself consult `isTriviaBearing`.
 	 */
 	private static function triviaBlockStarExpr(
-		fieldAccess:Expr, trailBBAccess:Null<Expr>, trailLCAccess:Null<Expr>,
+		fieldAccess:Expr, trailBBAccess:Null<Expr>, trailLCAccess:Null<Expr>, trailCloseAccess:Null<Expr>,
 		elemFn:String, openText:String, closeText:String
 	):Expr {
 		final triviaElemCall:Expr = {
@@ -1334,12 +1348,21 @@ class WriterLowering {
 		// real accessors and round-trip orphan comments.
 		final trailBB:Expr = trailBBAccess ?? macro false;
 		final trailLC:Expr = trailLCAccess ?? macro ([] : Array<String>);
+		// ω-close-trailing: same-line trailing comment captured right
+		// after the close literal (e.g. `} // comment` before the next
+		// sibling). Present only for close-peek Seq-struct Stars; Alt-
+		// branch + EOF sites forward null and degrade to the pre-slice
+		// close emission.
+		final trailClose:Expr = trailCloseAccess ?? macro (null : Null<String>);
 		return macro {
 			final _arr = $fieldAccess;
 			final _trailLC:Array<String> = $trailLC;
 			final _trailBB:Bool = $trailBB;
-			if (_arr.length == 0 && _trailLC.length == 0) _dt($v{emptyText})
-			else {
+			final _trailClose:Null<String> = $trailClose;
+			if (_arr.length == 0 && _trailLC.length == 0) {
+				if (_trailClose != null) _dc([_dt($v{emptyText}), _dt(' '), trailingCommentDoc(_trailClose)])
+				else _dt($v{emptyText});
+			} else {
 				final _inner:Array<anyparse.core.Doc> = [];
 				var _si:Int = 0;
 				while (_si < _arr.length) {
@@ -1368,7 +1391,12 @@ class WriterLowering {
 					}
 				}
 				final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-				_dc([_dt($v{openText}), _dn(_cols, _dc(_inner)), _dhl(), _dt($v{closeText})]);
+				final _parts:Array<anyparse.core.Doc> = [_dt($v{openText}), _dn(_cols, _dc(_inner)), _dhl(), _dt($v{closeText})];
+				if (_trailClose != null) {
+					_parts.push(_dt(' '));
+					_parts.push(trailingCommentDoc(_trailClose));
+				}
+				_dc(_parts);
 			}
 		};
 	}
