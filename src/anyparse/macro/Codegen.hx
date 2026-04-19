@@ -48,6 +48,7 @@ class Codegen {
 		if (trivia) {
 			fields.push(collectTriviaField(formatInfo));
 			fields.push(collectTrailingField(formatInfo));
+			fields.push(hasNewlineInField());
 		}
 		return fields;
 	}
@@ -456,6 +457,38 @@ class Codegen {
 			kind: FFun({
 				args: [{name: 'ctx', type: macro : anyparse.runtime.Parser}],
 				ret: macro : Null<String>,
+				expr: body,
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * ω-keep-policy — tiny helper for source-shape capture. Scans the
+	 * input range `[from, to)` for a newline byte; used by the optional-
+	 * kw path in `Lowering.lowerStruct` to populate the synth
+	 * `<field>BeforeKwNewline` / `<field>BodyOnSameLine` slots that
+	 * drive the writer's `Keep` branches. Trivia-mode only.
+	 */
+	private static function hasNewlineInField():Field {
+		final body:Expr = macro {
+			var i:Int = from;
+			while (i < to) {
+				if (input.charCodeAt(i) == '\n'.code) return true;
+				i++;
+			}
+			return false;
+		};
+		return {
+			name: 'hasNewlineIn',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [
+					{name: 'input', type: macro : anyparse.runtime.Input},
+					{name: 'from', type: macro : Int},
+					{name: 'to', type: macro : Int},
+				],
+				ret: macro : Bool,
 				expr: body,
 			}),
 			pos: Context.currentPos(),

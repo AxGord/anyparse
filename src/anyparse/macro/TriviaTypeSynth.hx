@@ -66,6 +66,19 @@ class TriviaTypeSynth {
 	public static inline final AFTER_KW_SUFFIX:String = 'AfterKw';
 	public static inline final KW_LEADING_SUFFIX:String = 'KwLeading';
 
+	/**
+	 * ω-keep-policy — two additional source-shape slots captured
+	 * alongside `AfterKw` / `KwLeading` for the same `@:optional @:kw(...)`
+	 * Ref fields. `BeforeKwNewline` records whether the source had a
+	 * newline between the preceding token and the keyword (consumed by
+	 * `sameLineSeparator`'s `Keep` branch). `BodyOnSameLine` records
+	 * whether the body's first token followed the keyword on the same
+	 * line (consumed by `bodyPolicyWrap`'s `Keep` branch). Both default
+	 * to `false` on the commit-miss path.
+	 */
+	public static inline final BEFORE_KW_NEWLINE_SUFFIX:String = 'BeforeKwNewline';
+	public static inline final BODY_ON_SAME_LINE_SUFFIX:String = 'BodyOnSameLine';
+
 	private static inline final PAIRED_SUFFIX:String = 'T';
 	private static inline final SYNTH_SUBPACK:String = 'trivia';
 	private static inline final SYNTH_MODULE_LEAF:String = 'Pairs';
@@ -140,14 +153,19 @@ class TriviaTypeSynth {
 		final strCT:ComplexType = TPath({pack: [], name: 'String', params: []});
 		final nullStrCT:ComplexType = TPath({pack: [], name: 'Null', params: [TPType(strCT)]});
 		final arrayStrCT:ComplexType = TPath({pack: [], name: 'Array', params: [TPType(strCT)]});
+		final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
 		// Slots are mandatory (no `@:optional`). The parser always
 		// populates them — `AfterKw` gets a captured same-line trailing
 		// or `null`; `KwLeading` gets a list of own-line comments
-		// (possibly empty). Mandatory typing keeps Null-Safety strict
-		// happy in the writer's `kwGapDoc` call.
+		// (possibly empty); `BeforeKwNewline` / `BodyOnSameLine` carry
+		// source-shape booleans for the `Keep` policy branches.
+		// Mandatory typing keeps Null-Safety strict happy in the
+		// writer's `kwGapDoc` / `bodyPolicyWrap` call sites.
 		return [
 			{name: fieldName + AFTER_KW_SUFFIX, kind: FVar(nullStrCT), pos: pos, access: []},
 			{name: fieldName + KW_LEADING_SUFFIX, kind: FVar(arrayStrCT), pos: pos, access: []},
+			{name: fieldName + BEFORE_KW_NEWLINE_SUFFIX, kind: FVar(boolCT), pos: pos, access: []},
+			{name: fieldName + BODY_ON_SAME_LINE_SUFFIX, kind: FVar(boolCT), pos: pos, access: []},
 		];
 	}
 

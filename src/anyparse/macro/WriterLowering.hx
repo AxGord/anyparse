@@ -442,12 +442,18 @@ class WriterLowering {
 					final kwLeadingExpr:Null<Expr> = useTriviaGap
 						? {expr: EField(macro value, fieldName + TriviaTypeSynth.KW_LEADING_SUFFIX), pos: Context.currentPos()}
 						: null;
+					// ω-keep-policy: `<field>BodyOnSameLine:Bool` drives the
+					// `Keep` branch of `bodyPolicyWrap` / policySwitch. Only
+					// synthesised on optional-kw Ref paths in trivia mode.
+					final bodyOnSameLineExpr:Null<Expr> = useTriviaGap
+						? {expr: EField(macro value, fieldName + TriviaTypeSynth.BODY_ON_SAME_LINE_SUFFIX), pos: Context.currentPos()}
+						: null;
 					final optParts:Array<Expr> = [];
 					if (kwLead != null) {
 						optParts.push(sameLineSeparator(child, prevBodyField));
 						if (bodyPolicyFlag != null) {
 							optParts.push(macro _dt($v{kwLead}));
-							optParts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, macro _optVal, refName, hasElseIf, elseFieldName, afterKwExpr, kwLeadingExpr));
+							optParts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, macro _optVal, refName, hasElseIf, elseFieldName, afterKwExpr, kwLeadingExpr, bodyOnSameLineExpr));
 						} else {
 							optParts.push(macro _dt($v{kwLead + ' '}));
 							optParts.push(writeCall);
@@ -608,16 +614,19 @@ class WriterLowering {
 				// a runtime-conditional separator (space or hardline), so the
 				// first element's leading separator acts as the boundary with
 				// the preceding struct field (τ₁ — catches against try body).
+				// Per-element shape is not captured today, so `Keep` degrades
+				// to `Same` at this site (ω-keep-policy).
 				final optFlag:Expr = {
 					expr: EField(macro opt, sameLineName),
 					pos: Context.currentPos(),
 				};
+				final sepExpr:Expr = sameLinePolicySwitch(optFlag, macro _dt(' '));
 				parts.push(macro {
 					final _arr = $fieldAccess;
 					final _docs:Array<anyparse.core.Doc> = [];
 					var _si:Int = 0;
 					while (_si < _arr.length) {
-						_docs.push(($optFlag) ? _dt(' ') : _dhl());
+						_docs.push($sepExpr);
 						_docs.push($elemCall);
 						_si++;
 					}
@@ -710,29 +719,37 @@ class WriterLowering {
 	 *
 	 * Without `@:fmt(sameLine(...))` metadata, emits a plain space (`_dt(' ')`) —
 	 * the existing D61 behaviour. With `@:fmt(sameLine("flagName"))`, emits a
-	 * ternary that picks between a plain space and a hardline at the
-	 * current indent level based on `opt.<flagName>:Bool`.
+	 * switch on `opt.<flagName>:SameLinePolicy` picking between space
+	 * (`Same`), hardline (`Next`), and a runtime slot lookup (`Keep`).
+	 *
+	 * ω-keep-policy: when the field is an `@:optional @:kw(...)` Ref AND
+	 * the writer runs in trivia mode, the field's synth
+	 * `<fieldName>BeforeKwNewline:Bool` slot drives the `Keep` branch —
+	 * `true` emits a hardline (source had the kw on its own line),
+	 * `false` emits a space (source had the kw inline with the preceding
+	 * token). Plain mode / non-kw fields don't carry the slot, so `Keep`
+	 * degrades to `Same`.
 	 *
 	 * ψ₉ opt-in shape-awareness via `@:fmt(shapeAware)`: when the field also
 	 * carries the `@:fmt(shapeAware)` meta AND `prevBody` is non-null (the
 	 * immediately preceding struct field was a bare-Ref wrapped via
 	 * `bodyPolicyWrap`) AND the body's enum type has at least one block
 	 * ctor, the emitted separator adds a runtime ctor switch on the
-	 * preceding body's value: block ctors keep the flag-based layout
-	 * (space / hardline), every other ctor forces a hardline. Used by
-	 * `HxIfStmt.elseBody` where a lone `else` on the same line as a
-	 * semicolon-terminated thenBody would collide visually with the
-	 * body's terminator. NOT used by `HxDoWhileStmt.cond`'s `while`
-	 * or `HxTryCatchStmt.catches` — those keywords are part of the
-	 * loop/try structure and stay inline regardless of body shape,
-	 * matching haxe-formatter's `sameLine.doWhile`/`tryCatch` defaults.
+	 * preceding body's value: block ctors keep the flag-based layout,
+	 * every other ctor forces a hardline. Used by `HxIfStmt.elseBody`
+	 * where a lone `else` on the same line as a semicolon-terminated
+	 * thenBody would collide visually with the body's terminator. NOT
+	 * used by `HxDoWhileStmt.cond`'s `while` or `HxTryCatchStmt.catches`
+	 * — those keywords are part of the loop/try structure and stay
+	 * inline regardless of body shape, matching haxe-formatter's
+	 * `sameLine.doWhile`/`tryCatch` defaults.
 	 *
 	 * Consumed by the two struct-field sites (non-optional kw, optional
 	 * Ref/lead) that previously hard-coded `' '` as the boundary
 	 * between a field and the preceding token. The try-parse Star
 	 * `@:fmt(sameLine(...))` site in `emitWriterStarField` has its own inline
-	 * handler (per-element separator, different semantic) and is
-	 * unaffected.
+	 * handler (per-element separator, different semantic) and routes
+	 * `Keep` to `Same` since there is no per-element source-shape slot.
 	 */
 	private function sameLineSeparator(child:ShapeNode, prevBody:Null<PrevBodyInfo>):Expr {
 		final flagName:Null<String> = fmtReadString(child, 'sameLine');
@@ -741,7 +758,20 @@ class WriterLowering {
 			expr: EField(macro opt, flagName),
 			pos: Context.currentPos(),
 		};
-		final flagBased:Expr = macro (($optFlag) ? _dt(' ') : _dhl());
+		final fieldName:Null<String> = child.annotations.get('base.fieldName');
+		final hasKeepSlot:Bool = ctx.trivia
+			&& fieldName != null
+			&& child.kind == Ref
+			&& child.annotations.get('base.optional') == true
+			&& readMetaString(child, ':kw') != null;
+		final keepExpr:Expr = if (hasKeepSlot) {
+			final slotAccess:Expr = {
+				expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_NEWLINE_SUFFIX),
+				pos: Context.currentPos(),
+			};
+			macro ($slotAccess ? _dhl() : _dt(' '));
+		} else macro _dt(' ');
+		final flagBased:Expr = sameLinePolicySwitch(optFlag, keepExpr);
 		if (prevBody == null || !fmtHasFlag(child, 'shapeAware')) return flagBased;
 		final blockPatterns:Array<Expr> = collectBlockCtorPatterns(prevBody.typePath);
 		if (blockPatterns.length == 0) return flagBased;
@@ -750,6 +780,29 @@ class WriterLowering {
 			{values: [macro _], expr: macro _dhl(), guard: null},
 		];
 		return {expr: ESwitch(prevBody.access, cases, null), pos: Context.currentPos()};
+	}
+
+	/**
+	 * ω-keep-policy — build a runtime switch over `opt.<sameLineFlag>`
+	 * (a `SameLinePolicy` enum abstract). `Next` maps to hardline at
+	 * the current indent, `Keep` routes to the caller-supplied
+	 * `keepExpr` (a slot-based dispatch in the kw-Ref site, a `Same`
+	 * fallback everywhere else), the default case (`Same` and unknown
+	 * values) emits a plain space.
+	 *
+	 * The case patterns are built as raw `EField` expressions to avoid
+	 * macro-time enum resolution against the `SameLinePolicy` abstract
+	 * (same precedent as `bodyPolicyWrap` / `leftCurlySeparator`).
+	 */
+	private static function sameLinePolicySwitch(optFlag:Expr, keepExpr:Expr):Expr {
+		final slpPath:Array<String> = ['anyparse', 'format', 'SameLinePolicy'];
+		final nextPat:Expr = MacroStringTools.toFieldExpr(slpPath.concat(['Next']));
+		final keepPat:Expr = MacroStringTools.toFieldExpr(slpPath.concat(['Keep']));
+		final cases:Array<Case> = [
+			{values: [nextPat], expr: macro _dhl(), guard: null},
+			{values: [keepPat], expr: keepExpr, guard: null},
+		];
+		return {expr: ESwitch(optFlag, cases, macro _dt(' ')), pos: Context.currentPos()};
 	}
 
 	/**
@@ -905,7 +958,8 @@ class WriterLowering {
 	 */
 	private function bodyPolicyWrap(
 		flagName:String, writeCall:Expr, bodyValueExpr:Expr, bodyTypePath:String, hasElseIf:Bool,
-		elseFieldName:Null<String>, ?afterKwExpr:Null<Expr>, ?kwLeadingExpr:Null<Expr>
+		elseFieldName:Null<String>, ?afterKwExpr:Null<Expr>, ?kwLeadingExpr:Null<Expr>,
+		?bodyOnSameLineExpr:Null<Expr>
 	):Expr {
 		final optFlag:Expr = {
 			expr: EField(macro opt, flagName),
@@ -921,6 +975,7 @@ class WriterLowering {
 			? macro kwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, false)
 			: macro _dt(' ');
 		final sameLayoutExpr:Expr = macro _dc([$sameSepNb, $writeCall]);
+		final nextLayoutExpr:Expr = macro _dn(_cols, _dc([_dhl(), $writeCall]));
 		// ω-issue-316-curly-both: block-ctor variant — when the body's
 		// writeCall opens with `{`, the separator before it must honour
 		// `opt.leftCurly`. For kw-slot sites, threaded through
@@ -948,6 +1003,7 @@ class WriterLowering {
 		final samePat:Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Same']));
 		final nextPat:Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Next']));
 		final fitPat:Expr = MacroStringTools.toFieldExpr(bpPath.concat(['FitLine']));
+		final keepPat:Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Keep']));
 		final fitExpr:Expr = if (elseFieldName == null) macro _dbg(_dn(_cols, _dc([_dl(), $writeCall])));
 		else {
 			final elseAccess:Expr = {
@@ -958,12 +1014,23 @@ class WriterLowering {
 				? _dbg(_dn(_cols, _dc([_dl(), $writeCall])))
 				: _dn(_cols, _dc([_dhl(), $writeCall]));
 		}
+		// ω-keep-policy: `Keep` dispatches at runtime between same and
+		// next layouts based on the trivia-mode parser's captured
+		// `<field>BodyOnSameLine:Bool` slot. When the caller did not
+		// forward a slot access (non-kw paths, plain mode), degrade to
+		// `sameLayoutExpr` (matches the pre-slice behaviour when the
+		// loader lossy-mapped `keep` to `Same`). Handled by the outer
+		// `keepPat` case below; a `_` catch-all in `policyCases` would
+		// be unreachable because the outer switch short-circuits Keep.
+		final keepLayoutExpr:Expr = bodyOnSameLineExpr != null
+			? macro ($bodyOnSameLineExpr ? $sameLayoutExpr : $nextLayoutExpr)
+			: sameLayoutExpr;
 		final policyCases:Array<Case> = [
 			{values: [samePat], expr: sameLayoutExpr, guard: null},
-			{values: [nextPat], expr: macro _dn(_cols, _dc([_dhl(), $writeCall])), guard: null},
+			{values: [nextPat], expr: nextLayoutExpr, guard: null},
 			{values: [fitPat], expr: fitExpr, guard: null},
 		];
-		final policySwitch:Expr = {expr: ESwitch(optFlag, policyCases, null), pos: Context.currentPos()};
+		final policySwitch:Expr = {expr: ESwitch(optFlag, policyCases, sameLayoutExpr), pos: Context.currentPos()};
 
 		final blockSplit:{tagged:Array<Expr>, untagged:Array<Expr>} = collectBlockCtorPatternsByLeftCurly(bodyTypePath);
 		final ifStmtPattern:Null<Expr> = hasElseIf ? findCtorPattern(bodyTypePath, 'IfStmt') : null;
@@ -972,7 +1039,7 @@ class WriterLowering {
 			final kpPath:Array<String> = ['anyparse', 'format', 'KeywordPlacement'];
 			final kpNextPat:Expr = MacroStringTools.toFieldExpr(kpPath.concat(['Next']));
 			final elseIfCases:Array<Case> = [
-				{values: [kpNextPat], expr: macro _dn(_cols, _dc([_dhl(), $writeCall])), guard: null},
+				{values: [kpNextPat], expr: nextLayoutExpr, guard: null},
 			];
 			final elseIfSwitch:Expr = {
 				expr: ESwitch(macro opt.elseIf, elseIfCases, sameLayoutExpr),
@@ -989,10 +1056,18 @@ class WriterLowering {
 			outerCases.push({values: [macro _], expr: policySwitch, guard: null});
 			{expr: ESwitch(bodyValueExpr, outerCases, null), pos: Context.currentPos()};
 		};
+		// ω-keep-policy: `Keep` takes precedence over block-ctor and
+		// elseIf overrides — "keep" means preserve source, so the
+		// policy-driven layout shortcuts do not apply. Route the whole
+		// wrap through `keepLayoutExpr` when `opt.<flag> == Keep`.
+		final outerKeepCases:Array<Case> = [
+			{values: [keepPat], expr: keepLayoutExpr, guard: null},
+		];
+		final wrapExpr:Expr = {expr: ESwitch(optFlag, outerKeepCases, bodySwitch), pos: Context.currentPos()};
 
 		return macro {
 			final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-			$bodySwitch;
+			$wrapExpr;
 		};
 	}
 

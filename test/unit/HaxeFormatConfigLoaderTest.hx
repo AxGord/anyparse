@@ -6,6 +6,7 @@ import anyparse.format.BodyPolicy;
 import anyparse.format.BracePlacement;
 import anyparse.format.IndentChar;
 import anyparse.format.KeywordPlacement;
+import anyparse.format.SameLinePolicy;
 import anyparse.format.WhitespacePolicy;
 import anyparse.grammar.haxe.HaxeFormat;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
@@ -54,32 +55,32 @@ class HaxeFormatConfigLoaderTest extends Test {
 
 	public function testSameLineIfElseNextFlipsElse():Void {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"ifElse": "next"}}');
-		Assert.isFalse(opts.sameLineElse);
-		Assert.isTrue(opts.sameLineCatch);
-		Assert.isTrue(opts.sameLineDoWhile);
+		Assert.equals(SameLinePolicy.Next, opts.sameLineElse);
+		Assert.equals(SameLinePolicy.Same, opts.sameLineCatch);
+		Assert.equals(SameLinePolicy.Same, opts.sameLineDoWhile);
 	}
 
 	public function testSameLineTryCatchNextFlipsCatch():Void {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"tryCatch": "next"}}');
-		Assert.isTrue(opts.sameLineElse);
-		Assert.isFalse(opts.sameLineCatch);
-		Assert.isTrue(opts.sameLineDoWhile);
+		Assert.equals(SameLinePolicy.Same, opts.sameLineElse);
+		Assert.equals(SameLinePolicy.Next, opts.sameLineCatch);
+		Assert.equals(SameLinePolicy.Same, opts.sameLineDoWhile);
 	}
 
 	public function testSameLineDoWhileNextFlipsDoWhile():Void {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"doWhile": "next"}}');
-		Assert.isTrue(opts.sameLineElse);
-		Assert.isTrue(opts.sameLineCatch);
-		Assert.isFalse(opts.sameLineDoWhile);
+		Assert.equals(SameLinePolicy.Same, opts.sameLineElse);
+		Assert.equals(SameLinePolicy.Same, opts.sameLineCatch);
+		Assert.equals(SameLinePolicy.Next, opts.sameLineDoWhile);
 	}
 
-	public function testSameLineKeepAndFitLineMapToFalse():Void {
+	public function testSameLineKeepMapsToKeepAndFitLineMapsToSame():Void {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"sameLine": {"ifElse": "keep", "tryCatch": "fitLine", "doWhile": "keep"}}'
 		);
-		Assert.isFalse(opts.sameLineElse);
-		Assert.isFalse(opts.sameLineCatch);
-		Assert.isFalse(opts.sameLineDoWhile);
+		Assert.equals(SameLinePolicy.Keep, opts.sameLineElse);
+		Assert.equals(SameLinePolicy.Same, opts.sameLineCatch);
+		Assert.equals(SameLinePolicy.Keep, opts.sameLineDoWhile);
 	}
 
 	public function testTrailingCommasYesFlipsFlag():Void {

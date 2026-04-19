@@ -3,6 +3,7 @@ package anyparse.grammar.haxe;
 import anyparse.format.BodyPolicy;
 import anyparse.format.BracePlacement;
 import anyparse.format.KeywordPlacement;
+import anyparse.format.SameLinePolicy;
 import anyparse.format.WhitespacePolicy;
 import anyparse.format.WriteOptions;
 
@@ -13,16 +14,18 @@ import anyparse.format.WriteOptions;
  * struct intersection so the macro-generated writer sees a fully
  * populated struct at runtime.
  *
- * Fields added in slice τ₁ (same-line policies):
- *  - `sameLineElse` — when `true`, `else` sits on the same line as
- *    the preceding `}` (e.g. `} else {`); when `false`, `else` moves
- *    to the next line at the current indent level.
- *  - `sameLineCatch` — when `true`, `catch (...)` sits on the same
- *    line as the preceding `}`; when `false`, each `catch` moves to
- *    the next line at the current indent level.
- *  - `sameLineDoWhile` — when `true`, the closing `while (...)` of a
- *    `do … while (…)` loop sits on the same line as the body's
- *    closing `}`; when `false`, `while` moves to the next line.
+ * Fields added in slice τ₁ (same-line policies), promoted to
+ * `SameLinePolicy` in slice ω-keep-policy so `Keep` can drive source-
+ * shape preservation alongside the flat `Same`/`Next` choices:
+ *  - `sameLineElse` — placement of `else` relative to the preceding
+ *    `}`. `Same` emits `} else {` on one line. `Next` moves `else`
+ *    to the next line at the current indent (`}\n\telse {`). `Keep`
+ *    dispatches at runtime from the trivia-mode parser's captured
+ *    `elseBodyBeforeKwNewline` slot; in plain mode `Keep` degrades
+ *    to `Same`.
+ *  - `sameLineCatch` — same three-way shape for `} catch (...)`.
+ *  - `sameLineDoWhile` — same three-way shape for the closing
+ *    `while (...)` of a `do … while (…)` loop.
  *
  * Fields added in slice τ₂ (trailing-comma policies):
  *  - `trailingCommaArrays` — when `true`, array literals that break
@@ -111,9 +114,9 @@ import anyparse.format.WriteOptions;
  *    the same flag without further macro changes.
  */
 typedef HxModuleWriteOptions = WriteOptions & {
-	sameLineElse:Bool,
-	sameLineCatch:Bool,
-	sameLineDoWhile:Bool,
+	sameLineElse:SameLinePolicy,
+	sameLineCatch:SameLinePolicy,
+	sameLineDoWhile:SameLinePolicy,
 	trailingCommaArrays:Bool,
 	trailingCommaArgs:Bool,
 	trailingCommaParams:Bool,

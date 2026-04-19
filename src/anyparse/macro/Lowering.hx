@@ -1022,9 +1022,20 @@ class Lowering {
 			// sibling slots `<field>AfterKw:Null<String>` and
 			// `<field>KwLeading:Array<String>` of the paired type. Writer
 			// consumes them to preserve source layout.
+			//
+			// ω-keep-policy: two additional source-shape booleans captured
+			// on the same path — `_beforeKwNl_<field>` records whether the
+			// whitespace between the preceding token and the kw crossed a
+			// newline; `_bodyOnSameLine_<field>` records whether the body
+			// follows the kw on the same line. Both default to `false` on
+			// the commit-miss path. Landed on synth slots
+			// `<field>BeforeKwNewline:Bool` / `<field>BodyOnSameLine:Bool`
+			// for the writer's `Keep` dispatch.
 			final hasKwTriviaSlots:Bool = isOptionalRef && kwLead != null && ctx.trivia;
 			final afterKwLocal:String = '_afterKw_$fieldName';
 			final kwLeadingLocal:String = '_kwLeading_$fieldName';
+			final beforeKwNlLocal:String = '_beforeKwNl_$fieldName';
+			final bodyOnSameLineLocal:String = '_bodyOnSameLine_$fieldName';
 			if (hasKwTriviaSlots) {
 				parseSteps.push({
 					expr: EVars([{name: afterKwLocal, type: (macro : Null<String>), expr: macro null, isFinal: false}]),
@@ -1032,6 +1043,14 @@ class Lowering {
 				});
 				parseSteps.push({
 					expr: EVars([{name: kwLeadingLocal, type: (macro : Array<String>), expr: macro [], isFinal: false}]),
+					pos: Context.currentPos(),
+				});
+				parseSteps.push({
+					expr: EVars([{name: beforeKwNlLocal, type: (macro : Bool), expr: macro false, isFinal: false}]),
+					pos: Context.currentPos(),
+				});
+				parseSteps.push({
+					expr: EVars([{name: bodyOnSameLineLocal, type: (macro : Bool), expr: macro false, isFinal: false}]),
 					pos: Context.currentPos(),
 				});
 			}
@@ -1070,23 +1089,36 @@ class Lowering {
 					// Post-commit trivia handling branches three ways:
 					//  - Trivia mode + kw: capture same-line trailing into
 					//    `_afterKw_<field>`, route own-line leadings into
-					//    `_kwLeading_<field>` (ω-issue-316).
+					//    `_kwLeading_<field>` (ω-issue-316). Additionally
+					//    capture source-shape booleans into
+					//    `_beforeKwNl_<field>` (pre-kw ws crossed a newline)
+					//    and `_bodyOnSameLine_<field>` (post-kw gap stayed
+					//    on the same line) for the writer's `Keep` branches
+					//    (ω-keep-policy).
 					//  - Trivia mode + lead: ω₆b stash — any captured leading
 					//    run flows into `pendingTrivia` for the sub-rule's
 					//    first @:trivia Star to drain.
 					//  - Plain mode: plain ws skip.
 					final innerCommitAction:Expr = if (hasKwTriviaSlots) macro {
+						final _kwEndPos:Int = ctx.pos;
 						$i{afterKwLocal} = collectTrailing(ctx);
 						final _t = collectTrivia(ctx);
 						for (_c in _t.leadingComments) $i{kwLeadingLocal}.push(_c);
+						$i{bodyOnSameLineLocal} = !hasNewlineIn(ctx.input, _kwEndPos, ctx.pos);
 					} else if (ctx.trivia) macro {
 						final _t = collectTrivia(ctx);
 						if (_t.leadingComments.length > 0 || _t.blankBefore) ctx.pendingTrivia = _t;
 					} else macro skipWs(ctx);
+					final preCommitCapture:Expr = if (hasKwTriviaSlots)
+						macro $i{beforeKwNlLocal} = hasNewlineIn(ctx.input, _wsPos, _kwStartPos);
+					else
+						macro {};
 					final valueExpr:Expr = macro {
 						final _wsPos:Int = ctx.pos;
 						skipWs(ctx);
+						final _kwStartPos:Int = ctx.pos;
 						if ($commitCheck) {
+							$preCommitCapture;
 							$innerCommitAction;
 							$subCall;
 						} else {
@@ -1154,6 +1186,8 @@ class Lowering {
 			if (hasKwTriviaSlots) {
 				structFields.push({field: fieldName + TriviaTypeSynth.AFTER_KW_SUFFIX, expr: macro $i{afterKwLocal}});
 				structFields.push({field: fieldName + TriviaTypeSynth.KW_LEADING_SUFFIX, expr: macro $i{kwLeadingLocal}});
+				structFields.push({field: fieldName + TriviaTypeSynth.BEFORE_KW_NEWLINE_SUFFIX, expr: macro $i{beforeKwNlLocal}});
+				structFields.push({field: fieldName + TriviaTypeSynth.BODY_ON_SAME_LINE_SUFFIX, expr: macro $i{bodyOnSameLineLocal}});
 			}
 		}
 		// Binary: @:align — skip to next alignment boundary after all fields.

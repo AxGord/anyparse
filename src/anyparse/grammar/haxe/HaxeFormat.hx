@@ -5,6 +5,7 @@ import anyparse.format.BracePlacement;
 import anyparse.format.Encoding;
 import anyparse.format.IndentChar;
 import anyparse.format.KeywordPlacement;
+import anyparse.format.SameLinePolicy;
 import anyparse.format.WhitespacePolicy;
 import anyparse.format.text.FieldLookup;
 import anyparse.format.text.KeySyntax;
@@ -152,9 +153,9 @@ final class HaxeFormat implements TextFormat {
 		lineWidth: 120,
 		lineEnd: '\n',
 		finalNewline: true,
-		sameLineElse: true,
-		sameLineCatch: true,
-		sameLineDoWhile: true,
+		sameLineElse: SameLinePolicy.Same,
+		sameLineCatch: SameLinePolicy.Same,
+		sameLineDoWhile: SameLinePolicy.Same,
 		trailingCommaArrays: false,
 		trailingCommaArgs: false,
 		trailingCommaParams: false,

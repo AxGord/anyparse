@@ -4,6 +4,7 @@ import anyparse.format.BodyPolicy;
 import anyparse.format.BracePlacement;
 import anyparse.format.IndentChar;
 import anyparse.format.KeywordPlacement;
+import anyparse.format.SameLinePolicy;
 import anyparse.format.WhitespacePolicy;
 
 /**
@@ -24,11 +25,11 @@ import anyparse.format.WhitespacePolicy;
  * - `indentation.tabWidth`: int → `tabWidth`.
  * - `wrapping.maxLineLength`: int → `lineWidth`.
  * - `sameLine.ifElse` / `sameLine.tryCatch` / `sameLine.doWhile`: enum
- *   string — `"same"` maps to `true`, every other value (`"next"`,
- *   `"keep"`, `"fitLine"`) maps to `false`. `keep` / `fitLine` would
- *   need per-site source-shape tracking the Haxe writer does not yet
- *   carry; treating them as `next` (false) matches the nearest layout
- *   we can currently render.
+ *   string — `"same"` → `SameLinePolicy.Same`, `"next"` →
+ *   `SameLinePolicy.Next`, `"keep"` → `SameLinePolicy.Keep` (reads the
+ *   trivia-mode parser's captured slot at runtime; degrades to `Same`
+ *   in plain mode). `"fitLine"` still collapses to `Same` — no
+ *   `FitLine` branch exists on these keyword-join sites yet.
  * - `sameLine.elseIf` (ψ₈): enum string — `"same"` (default) maps to
  *   `KeywordPlacement.Same`, `"next"` maps to `KeywordPlacement.Next`.
  *   `"keep"` degrades to `Same` (no per-node source-shape tracking).
@@ -141,9 +142,9 @@ final class HaxeFormatConfigLoader {
 	}
 
 	private static function applySameLine(section:HxFormatSameLineSection, opt:HxModuleWriteOptions):Void {
-		if (section.ifElse != null) opt.sameLineElse = sameLineToBool(section.ifElse);
-		if (section.tryCatch != null) opt.sameLineCatch = sameLineToBool(section.tryCatch);
-		if (section.doWhile != null) opt.sameLineDoWhile = sameLineToBool(section.doWhile);
+		if (section.ifElse != null) opt.sameLineElse = sameLineToRuntime(section.ifElse);
+		if (section.tryCatch != null) opt.sameLineCatch = sameLineToRuntime(section.tryCatch);
+		if (section.doWhile != null) opt.sameLineDoWhile = sameLineToRuntime(section.doWhile);
 		if (section.ifBody != null) opt.ifBody = bodyPolicyToRuntime(section.ifBody);
 		if (section.elseBody != null) opt.elseBody = bodyPolicyToRuntime(section.elseBody);
 		if (section.forBody != null) opt.forBody = bodyPolicyToRuntime(section.forBody);
@@ -171,8 +172,12 @@ final class HaxeFormatConfigLoader {
 			opt.objectFieldColon = whitespaceToRuntime(section.objectFieldColonPolicy);
 	}
 
-	private static inline function sameLineToBool(policy:HxFormatSameLinePolicy):Bool {
-		return policy == HxFormatSameLinePolicy.Same;
+	private static function sameLineToRuntime(policy:HxFormatSameLinePolicy):SameLinePolicy {
+		return switch policy {
+			case HxFormatSameLinePolicy.Next: SameLinePolicy.Next;
+			case HxFormatSameLinePolicy.Keep: SameLinePolicy.Keep;
+			case _: SameLinePolicy.Same;
+		};
 	}
 
 	private static inline function trailingCommaToBool(policy:HxFormatTrailingCommaPolicy):Bool {
@@ -184,7 +189,7 @@ final class HaxeFormatConfigLoader {
 			case HxFormatBodyPolicy.Same: BodyPolicy.Same;
 			case HxFormatBodyPolicy.Next: BodyPolicy.Next;
 			case HxFormatBodyPolicy.FitLine: BodyPolicy.FitLine;
-			case HxFormatBodyPolicy.Keep: BodyPolicy.Same;
+			case HxFormatBodyPolicy.Keep: BodyPolicy.Keep;
 			case _: BodyPolicy.Same;
 		};
 	}

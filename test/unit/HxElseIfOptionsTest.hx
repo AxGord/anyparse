@@ -4,6 +4,7 @@ import utest.Assert;
 import utest.Test;
 import anyparse.format.BodyPolicy;
 import anyparse.format.KeywordPlacement;
+import anyparse.format.SameLinePolicy;
 import anyparse.grammar.haxe.HaxeFormat;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -127,7 +128,7 @@ class HxElseIfOptionsTest extends Test {
 			lineWidth: base.lineWidth,
 			lineEnd: base.lineEnd,
 			finalNewline: base.finalNewline,
-			sameLineElse: sameLineElse,
+			sameLineElse: sameLineElse ? SameLinePolicy.Same : SameLinePolicy.Next,
 			sameLineCatch: base.sameLineCatch,
 			sameLineDoWhile: base.sameLineDoWhile,
 			trailingCommaArrays: base.trailingCommaArrays,

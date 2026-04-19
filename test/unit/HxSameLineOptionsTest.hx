@@ -2,6 +2,7 @@ package unit;
 
 import utest.Assert;
 import utest.Test;
+import anyparse.format.SameLinePolicy;
 import anyparse.grammar.haxe.HaxeFormat;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModule;
@@ -117,9 +118,9 @@ class HxSameLineOptionsTest extends Test {
 
 	public function testDefaultsMatchHaxeFormatter():Void {
 		final defaults:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
-		Assert.isTrue(defaults.sameLineElse);
-		Assert.isTrue(defaults.sameLineCatch);
-		Assert.isTrue(defaults.sameLineDoWhile);
+		Assert.equals(SameLinePolicy.Same, defaults.sameLineElse);
+		Assert.equals(SameLinePolicy.Same, defaults.sameLineCatch);
+		Assert.equals(SameLinePolicy.Same, defaults.sameLineDoWhile);
 	}
 
 	public function testSameLineElseTrueSuppressedByNonBlockThenBody():Void {
@@ -158,7 +159,7 @@ class HxSameLineOptionsTest extends Test {
 			lineWidth: base.lineWidth,
 			lineEnd: base.lineEnd,
 			finalNewline: base.finalNewline,
-			sameLineElse: sameLineElse,
+			sameLineElse: boolToSameLine(sameLineElse),
 			sameLineCatch: base.sameLineCatch,
 			sameLineDoWhile: base.sameLineDoWhile,
 			trailingCommaArrays: base.trailingCommaArrays,
@@ -181,6 +182,10 @@ class HxSameLineOptionsTest extends Test {
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), makeOpts(sameLineElse, sameLineCatch, sameLineDoWhile));
 	}
 
+	private static inline function boolToSameLine(v:Bool):SameLinePolicy {
+		return v ? SameLinePolicy.Same : SameLinePolicy.Next;
+	}
+
 	private function makeOpts(sameLineElse:Bool, sameLineCatch:Bool, sameLineDoWhile:Bool):HxModuleWriteOptions {
 		final base:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
 		return {
@@ -190,9 +195,9 @@ class HxSameLineOptionsTest extends Test {
 			lineWidth: base.lineWidth,
 			lineEnd: base.lineEnd,
 			finalNewline: base.finalNewline,
-			sameLineElse: sameLineElse,
-			sameLineCatch: sameLineCatch,
-			sameLineDoWhile: sameLineDoWhile,
+			sameLineElse: boolToSameLine(sameLineElse),
+			sameLineCatch: boolToSameLine(sameLineCatch),
+			sameLineDoWhile: boolToSameLine(sameLineDoWhile),
 			trailingCommaArrays: base.trailingCommaArrays,
 			trailingCommaArgs: base.trailingCommaArgs,
 			trailingCommaParams: base.trailingCommaParams,
