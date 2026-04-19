@@ -220,7 +220,14 @@ class WriterLowering {
 			// space from kwLead here avoids a double space (Same) or
 			// trailing-space-before-hardline (Next/FitLine). Non-policy
 			// sub-structs keep the pre-ψ₅ `kw ` shape.
-			final stripKwTrailingSpace:Bool = subStructStartsWithBodyPolicy(refName);
+			//
+			// Also strip when the sub-struct's first field has a tight
+			// `@:lead` (format-declared in `FormatInfo.tightLeads`, e.g.
+			// `:` for Haxe). HxDefaultBranch opens with `@:lead(':')` —
+			// without the strip we emit `default :` instead of `default:`.
+			// Non-tight leads (`(`, `{`) keep the space — `if (`, `else {`.
+			final stripKwTrailingSpace:Bool = subStructStartsWithBodyPolicy(refName)
+				|| subStructStartsWithTightLead(refName);
 			final parts:Array<Expr> = [];
 			if (kwLead != null) {
 				final kwText:String = stripKwTrailingSpace ? kwLead : kwLead + ' ';
@@ -1270,6 +1277,23 @@ class WriterLowering {
 		if (readMetaString(first, ':kw') != null) return false;
 		if (readMetaString(first, ':lead') != null) return false;
 		return fmtReadString(first, 'bodyPolicy') != null;
+	}
+
+	/**
+	 * True when `refName` names a Seq rule whose first field's `@:lead`
+	 * is declared tight by the format (`FormatInfo.tightLeads`, e.g. `:`
+	 * for Haxe). A `@:kw` that routes into such a sub-struct must not
+	 * emit a trailing word-boundary space — the tight lead wants to
+	 * abut the kw without a space (`default:`, not `default :`). Leads
+	 * that are NOT tight (`(`, `{`) keep the space (`if (`, `else {`).
+	 */
+	private function subStructStartsWithTightLead(refName:String):Bool {
+		final subNode:Null<ShapeNode> = shape.rules.get(refName);
+		if (subNode == null || subNode.kind != Seq) return false;
+		final children:Array<ShapeNode> = subNode.children;
+		if (children.length == 0) return false;
+		final first:ShapeNode = children[0];
+		return isTightLead(readMetaString(first, ':lead'));
 	}
 
 	/**
