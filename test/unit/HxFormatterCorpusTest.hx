@@ -8,19 +8,24 @@ import unit.HxFormatterCorpusHelpers.HxTestCase;
 import sys.FileSystem;
 #end
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
-import anyparse.grammar.haxe.HaxeModuleParser;
-import anyparse.grammar.haxe.HxModule;
+import anyparse.grammar.haxe.HaxeModuleTriviaParser;
+import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
-import anyparse.grammar.haxe.HxModuleWriter;
 import anyparse.runtime.ParseError;
 
 /**
- * υ₁ — corpus harness validating the macro-generated `HxModuleWriter`
- * plus the σ + τ₁ … τ₄ WriteOptions stack against the AxGord/haxe-
- * formatter fork's golden test files. Each `.hxtest` case carries its
- * own `hxformat.json` config alongside paired input/expected Haxe
- * source; this harness runs `parse → write` with that config and
- * compares byte-exactly against `expected`.
+ * υ₁ — corpus harness validating the macro-generated Haxe writer plus
+ * the σ + τ₁ … τ₄ WriteOptions stack against the AxGord/haxe-formatter
+ * fork's golden test files. Each `.hxtest` case carries its own
+ * `hxformat.json` config alongside paired input/expected Haxe source;
+ * this harness runs `parse → write` with that config and compares
+ * byte-exactly against `expected`.
+ *
+ * ω₈ — pivoted to the Trivia pipeline
+ * (`HaxeModuleTriviaParser`/`HaxeModuleTriviaWriter`) so comments and
+ * blank lines survive round-trip. Plain-mode pipeline is still available
+ * on `HaxeModuleParser`/`HxModuleWriter` for layout-only tests that do
+ * not need comment preservation.
  *
  * Category coverage grows one method at a time. This slice lands
  * `sameline/` (132 cases). Subsequent slices add `expressionlevel`,
@@ -37,6 +42,9 @@ import anyparse.runtime.ParseError;
  */
 @:nullSafety(Strict)
 class HxFormatterCorpusTest extends Test {
+
+	private static final _forceBuildParser:Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
+	private static final _forceBuildWriter:Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
 	private static inline final SAMELINE_SUBDIR:String = 'test/testcases/sameline';
 	private static inline final HXTEST_EXT:String = '.hxtest';
@@ -90,14 +98,14 @@ class HxFormatterCorpusTest extends Test {
 			// writer's finalNewline knob to match — comparison would
 			// otherwise show a spurious +1 \n on every byte-exact pass.
 			opts.finalNewline = false;
-			final module:HxModule = try HaxeModuleParser.parse(tc.input) catch (exception:Exception) {
+			final module:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = try HaxeModuleTriviaParser.parse(tc.input) catch (exception:Exception) {
 				skipParse++;
 				final reason:String = classifyParseFailure(exception, tc.input);
 				final prev:Null<Int> = parseReasons[reason];
 				parseReasons[reason] = (prev == null ? 0 : prev) + 1;
 				continue;
 			};
-			final actual:String = try HxModuleWriter.write(module, opts) catch (exception:Exception) {
+			final actual:String = try HaxeModuleTriviaWriter.write(module, opts) catch (exception:Exception) {
 				skipWrite++;
 				continue;
 			};
