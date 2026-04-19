@@ -234,12 +234,12 @@ class HxTriviaParseTest extends Test {
 	}
 
 	/**
-	 * ω₆b — pendingTrivia carries a comment captured between an
-	 * `@:optional @:kw` commit and its sub-rule call into the sub-rule's
-	 * first `@:trivia` Star. For `else // c\n{ bar; }` the `// c` is
-	 * normalized into leading of the block's first statement.
+	 * ω-issue-316a — same-line trailing comment after an `@:optional
+	 * @:kw('else')` commit is captured into the parent paired type's
+	 * `elseBodyAfterKw` slot instead of being folded into the block's
+	 * first statement (which was the ω₆b behavior).
 	 */
-	public function testCommentAfterElseKwNormalizedIntoBlock():Void {
+	public function testSameLineCommentAfterElseKwCapturedOnHxIfStmt():Void {
 		final source:String =
 			'class Foo {\n'
 			+ '\tfunction bar() {\n'
@@ -263,6 +263,8 @@ class HxTriviaParseTest extends Test {
 			case IfStmt(s): s;
 			case _: throw 'expected IfStmt';
 		};
+		Assert.equals(' after else', ifStmt.elseBodyAfterKw);
+		Assert.equals(0, ifStmt.elseBodyKwLeading.length);
 		final elseStmt:Null<anyparse.grammar.haxe.trivia.Pairs.HxStatementT> = ifStmt.elseBody;
 		Assert.notNull(elseStmt);
 		final elseStmts:Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>>
@@ -271,7 +273,49 @@ class HxTriviaParseTest extends Test {
 				case _: throw 'expected BlockStmt';
 			};
 		Assert.equals(1, elseStmts.length);
-		Assert.equals(1, elseStmts[0].leadingComments.length);
-		Assert.equals(' after else', elseStmts[0].leadingComments[0]);
+		Assert.equals(0, elseStmts[0].leadingComments.length);
+	}
+
+	/**
+	 * ω-issue-316b — own-line comments between `else` and the body's
+	 * `{` are captured into `elseBodyKwLeading` instead of leaking into
+	 * the block's first statement as leading.
+	 */
+	public function testOwnLineCommentBetweenElseAndBlockCapturedOnHxIfStmt():Void {
+		final source:String =
+			'class Foo {\n'
+			+ '\tfunction bar() {\n'
+			+ '\t\tif (cond) { a; } else\n'
+			+ '\t\t\t// between else and block\n'
+			+ '\t\t{\n'
+			+ '\t\t\tb;\n'
+			+ '\t\t}\n'
+			+ '\t}\n'
+			+ '}';
+		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node {
+			case ClassDecl(decl): decl;
+			case _: throw 'expected ClassDecl';
+		};
+		final fn:anyparse.grammar.haxe.trivia.Pairs.HxFnDeclT = switch cls.members[0].node.member {
+			case FnMember(decl): decl;
+			case _: throw 'expected FnMember';
+		};
+		final ifStmt:anyparse.grammar.haxe.trivia.Pairs.HxIfStmtT = switch fn.body[0].node {
+			case IfStmt(s): s;
+			case _: throw 'expected IfStmt';
+		};
+		Assert.isNull(ifStmt.elseBodyAfterKw);
+		Assert.equals(1, ifStmt.elseBodyKwLeading.length);
+		Assert.equals(' between else and block', ifStmt.elseBodyKwLeading[0]);
+		final elseStmt:Null<anyparse.grammar.haxe.trivia.Pairs.HxStatementT> = ifStmt.elseBody;
+		Assert.notNull(elseStmt);
+		final elseStmts:Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>>
+			= switch elseStmt {
+				case BlockStmt(stmts): stmts;
+				case _: throw 'expected BlockStmt';
+			};
+		Assert.equals(1, elseStmts.length);
+		Assert.equals(0, elseStmts[0].leadingComments.length);
 	}
 }

@@ -92,4 +92,49 @@ class HxTriviaWriteTest extends Test {
 		final out:String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals('// first decl\nclass A {}\n\n// second decl\nclass B {}\n', out);
 	}
+
+	/**
+	 * ω-issue-316a — same-line trailing comment after `else` kw is
+	 * preserved on the output. The comment lands adjacent to `else`, not
+	 * inside the block.
+	 */
+	public function testSameLineCommentAfterElseRoundTrip():Void {
+		final source:String =
+			'class Foo {\n'
+			+ '\tfunction bar() {\n'
+			+ '\t\tif (cond) {\n'
+			+ '\t\t\ta;\n'
+			+ '\t\t} else // after else\n'
+			+ '\t\t{\n'
+			+ '\t\t\tb;\n'
+			+ '\t\t}\n'
+			+ '\t}\n'
+			+ '}';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out:String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals(source + '\n', out);
+	}
+
+	/**
+	 * ω-issue-316b — own-line comment between `else` and the block's
+	 * `{` is preserved at the body's interior indent on output, while
+	 * the `{` drops back to the outer (body's exterior) indent.
+	 */
+	public function testOwnLineCommentBetweenElseAndBlockRoundTrip():Void {
+		final source:String =
+			'class Foo {\n'
+			+ '\tfunction bar() {\n'
+			+ '\t\tif (cond) {\n'
+			+ '\t\t\ta;\n'
+			+ '\t\t} else\n'
+			+ '\t\t\t// between else and block\n'
+			+ '\t\t{\n'
+			+ '\t\t\tb;\n'
+			+ '\t\t}\n'
+			+ '\t}\n'
+			+ '}';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out:String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals(source + '\n', out);
+	}
 }

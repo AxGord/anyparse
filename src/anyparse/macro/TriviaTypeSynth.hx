@@ -57,6 +57,15 @@ import haxe.macro.Expr;
  */
 class TriviaTypeSynth {
 
+	/**
+	 * ω-issue-316 — suffixes for kw-trivia sibling slots synthesised on
+	 * paired Seq types alongside `@:optional @:kw(...)` Ref fields.
+	 * Exposed so `Lowering` and `WriterLowering` can reference the same
+	 * names without risk of silent divergence.
+	 */
+	public static inline final AFTER_KW_SUFFIX:String = 'AfterKw';
+	public static inline final KW_LEADING_SUFFIX:String = 'KwLeading';
+
 	private static inline final PAIRED_SUFFIX:String = 'T';
 	private static inline final SYNTH_SUBPACK:String = 'trivia';
 	private static inline final SYNTH_MODULE_LEAF:String = 'Pairs';
@@ -89,7 +98,18 @@ class TriviaTypeSynth {
 		final pos:Position = Context.currentPos();
 		return switch origNode.kind {
 			case Seq:
-				final fields:Array<Field> = [for (child in origNode.children) buildStructField(child, pos, synthPack)];
+				final fields:Array<Field> = [];
+				for (child in origNode.children) {
+					fields.push(buildStructField(child, pos, synthPack));
+					// ω-issue-316: `@:optional @:kw(...)` Ref fields grow two
+					// sibling trivia slots — a same-line trailing comment
+					// captured right after the kw (`AfterKw`), and own-line
+					// comments captured between kw and body (`KwLeading`).
+					// Writer consumes these to preserve source layout; absent
+					// consumers read `null` / `[]` with no harm.
+					if (isOptionalKwRef(child))
+						for (extra in buildKwTriviaSlots(child, pos)) fields.push(extra);
+				}
 				final anon:ComplexType = TAnonymous(fields);
 				{pos: pos, pack: synthPack, name: pairedSimple, kind: TDAlias(anon), fields: []};
 			case Alt:
@@ -107,6 +127,41 @@ class TriviaTypeSynth {
 		final optional:Bool = child.annotations.get('base.optional') == true;
 		final meta:Metadata = optional ? [{name: ':optional', params: [], pos: pos}] : [];
 		return {name: fieldName, kind: FVar(ct), pos: pos, access: [], meta: meta};
+	}
+
+	private static function isOptionalKwRef(child:ShapeNode):Bool {
+		if (child.kind != Ref) return false;
+		if (child.annotations.get('base.optional') != true) return false;
+		return readMetaString(child, ':kw') != null;
+	}
+
+	private static function buildKwTriviaSlots(child:ShapeNode, pos:Position):Array<Field> {
+		final fieldName:String = child.annotations.get('base.fieldName');
+		final strCT:ComplexType = TPath({pack: [], name: 'String', params: []});
+		final nullStrCT:ComplexType = TPath({pack: [], name: 'Null', params: [TPType(strCT)]});
+		final arrayStrCT:ComplexType = TPath({pack: [], name: 'Array', params: [TPType(strCT)]});
+		// Slots are mandatory (no `@:optional`). The parser always
+		// populates them — `AfterKw` gets a captured same-line trailing
+		// or `null`; `KwLeading` gets a list of own-line comments
+		// (possibly empty). Mandatory typing keeps Null-Safety strict
+		// happy in the writer's `kwGapDoc` call.
+		return [
+			{name: fieldName + AFTER_KW_SUFFIX, kind: FVar(nullStrCT), pos: pos, access: []},
+			{name: fieldName + KW_LEADING_SUFFIX, kind: FVar(arrayStrCT), pos: pos, access: []},
+		];
+	}
+
+	private static function readMetaString(node:ShapeNode, tag:String):Null<String> {
+		final meta:Null<Metadata> = node.annotations.get('base.meta');
+		if (meta == null) return null;
+		for (entry in meta) if (entry.name == tag) {
+			if (entry.params.length != 1) return null;
+			return switch entry.params[0].expr {
+				case EConst(CString(s, _)): s;
+				case _: null;
+			};
+		}
+		return null;
 	}
 
 	private static function buildEnumCtor(branch:ShapeNode, pos:Position, synthPack:Array<String>):Field {

@@ -63,6 +63,14 @@ class WriterCodegen {
 			fields.push(foldTrailingIntoBodyGroupField());
 			fields.push(foldTrailingRecursiveField());
 			fields.push(appendInsideBodyGroupField());
+			// ω-issue-316: renders the gap between a just-emitted `@:optional
+			// @:kw` and its body (Same-policy / block-ctor path). Picks
+			// `Text(' ')` when no trivia present — byte-identical to the
+			// pre-slice separator; otherwise inlines a same-line trailing
+			// and/or indents own-line leading comments at body interior
+			// indent, closing with a hardline so the body's outer brace
+			// lands at the parent's indent level.
+			fields.push(kwGapDocField());
 		}
 		return fields;
 	}
@@ -459,6 +467,57 @@ class WriterCodegen {
 				args: [
 					{name: 'inner', type: macro : anyparse.core.Doc},
 					{name: 'trailing', type: macro : anyparse.core.Doc},
+				],
+				ret: macro : anyparse.core.Doc,
+				expr: body,
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * ω-issue-316 — render the kw→body gap for `@:optional @:kw(...)` Ref
+	 * fields in Trivia mode. Output shape depends on captured trivia:
+	 *  - both slots empty → single space (byte-identical pre-slice).
+	 *  - `afterKw != null` → ` //<body>` trailing after the kw, then
+	 *    hardline back to outer indent.
+	 *  - `kwLeading` non-empty → each comment on its own line at the
+	 *    body's interior indent (`cols` deeper than outer), then hardline
+	 *    back to outer indent before the body token.
+	 *  - both populated → trailing first (same line as kw), then the
+	 *    own-line leading block, then closing hardline.
+	 *
+	 * Caller concatenates the result with the body's writeCall — the
+	 * closing hardline hands control to the Renderer at the parent's
+	 * indent level so the body's lead brace lands there.
+	 */
+	private static function kwGapDocField():Field {
+		final body:Expr = macro {
+			if (afterKw == null && kwLeading.length == 0) return _dt(' ');
+			final _parts:Array<anyparse.core.Doc> = [];
+			if (afterKw != null) {
+				_parts.push(_dt(' '));
+				_parts.push(_dt('//' + afterKw));
+			}
+			if (kwLeading.length > 0) {
+				final _nested:Array<anyparse.core.Doc> = [];
+				for (_c in kwLeading) {
+					_nested.push(_dhl());
+					_nested.push(leadingCommentDoc(_c));
+				}
+				_parts.push(_dn(cols, _dc(_nested)));
+			}
+			_parts.push(_dhl());
+			return _dc(_parts);
+		};
+		return {
+			name: 'kwGapDoc',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [
+					{name: 'afterKw', type: macro : Null<String>},
+					{name: 'kwLeading', type: macro : Array<String>},
+					{name: 'cols', type: macro : Int},
 				],
 				ret: macro : anyparse.core.Doc,
 				expr: body,

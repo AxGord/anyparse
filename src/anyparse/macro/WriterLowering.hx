@@ -425,12 +425,29 @@ class WriterLowering {
 					// so the sep part can become a hardline (τ₁).
 					// @:fmt(bodyPolicy(...)) replaces the final ' ' before the body with
 					// a runtime-switched separator (Same/Next/FitLine, ψ₄).
+					// ω-issue-316: in Trivia mode, `@:optional @:kw(...)` Ref
+					// children grow per-parent sibling slots `<field>AfterKw`
+					// / `<field>KwLeading` holding captured trivia from the
+					// gap between the kw and the body. Read them off `value`
+					// (the parent struct) and forward to `bodyPolicyWrap`
+					// which injects them into the kw→body separator. The
+					// non-bodyPolicy kwLead path below (`_dt(kwLead + ' ')`)
+					// currently drops these slots — no grammar field exercises
+					// that combination yet, but a future `@:optional @:kw`
+					// without bodyPolicy would lose captured trivia silently.
+					final useTriviaGap:Bool = ctx.trivia && kwLead != null;
+					final afterKwExpr:Null<Expr> = useTriviaGap
+						? {expr: EField(macro value, fieldName + TriviaTypeSynth.AFTER_KW_SUFFIX), pos: Context.currentPos()}
+						: null;
+					final kwLeadingExpr:Null<Expr> = useTriviaGap
+						? {expr: EField(macro value, fieldName + TriviaTypeSynth.KW_LEADING_SUFFIX), pos: Context.currentPos()}
+						: null;
 					final optParts:Array<Expr> = [];
 					if (kwLead != null) {
 						optParts.push(sameLineSeparator(child, prevBodyField));
 						if (bodyPolicyFlag != null) {
 							optParts.push(macro _dt($v{kwLead}));
-							optParts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, macro _optVal, refName, hasElseIf, elseFieldName));
+							optParts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, macro _optVal, refName, hasElseIf, elseFieldName, afterKwExpr, kwLeadingExpr));
 						} else {
 							optParts.push(macro _dt($v{kwLead + ' '}));
 							optParts.push(writeCall);
@@ -877,12 +894,21 @@ class WriterLowering {
 	 */
 	private function bodyPolicyWrap(
 		flagName:String, writeCall:Expr, bodyValueExpr:Expr, bodyTypePath:String, hasElseIf:Bool,
-		elseFieldName:Null<String>
+		elseFieldName:Null<String>, ?afterKwExpr:Null<Expr>, ?kwLeadingExpr:Null<Expr>
 	):Expr {
 		final optFlag:Expr = {
 			expr: EField(macro opt, flagName),
 			pos: Context.currentPos(),
 		};
+		// ω-issue-316: when the caller forwarded kw-trivia slot accesses,
+		// the "Same" separator (`_dt(' ')`) becomes a runtime `kwGapDoc`
+		// call that renders any captured after-kw trailing / own-line
+		// leading comments and closes with a hardline. When slots are
+		// absent, fall back to the byte-identical pre-slice `_dt(' ')`.
+		final sameSep:Expr = (afterKwExpr != null && kwLeadingExpr != null)
+			? macro kwGapDoc($afterKwExpr, $kwLeadingExpr, _cols)
+			: macro _dt(' ');
+		final sameLayoutExpr:Expr = macro _dc([$sameSep, $writeCall]);
 		final bpPath:Array<String> = ['anyparse', 'format', 'BodyPolicy'];
 		final samePat:Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Same']));
 		final nextPat:Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Next']));
@@ -898,7 +924,7 @@ class WriterLowering {
 				: _dn(_cols, _dc([_dhl(), $writeCall]));
 		}
 		final policyCases:Array<Case> = [
-			{values: [samePat], expr: macro _dc([_dt(' '), $writeCall]), guard: null},
+			{values: [samePat], expr: sameLayoutExpr, guard: null},
 			{values: [nextPat], expr: macro _dn(_cols, _dc([_dhl(), $writeCall])), guard: null},
 			{values: [fitPat], expr: fitExpr, guard: null},
 		];
@@ -914,15 +940,13 @@ class WriterLowering {
 				{values: [kpNextPat], expr: macro _dn(_cols, _dc([_dhl(), $writeCall])), guard: null},
 			];
 			final elseIfSwitch:Expr = {
-				expr: ESwitch(macro opt.elseIf, elseIfCases, macro _dc([_dt(' '), $writeCall])),
+				expr: ESwitch(macro opt.elseIf, elseIfCases, sameLayoutExpr),
 				pos: Context.currentPos(),
 			};
 			outerCases.push({values: [ifStmtPattern], expr: elseIfSwitch, guard: null});
 		}
-		if (blockPatterns.length > 0) {
-			final sameLayout:Expr = macro _dc([_dt(' '), $writeCall]);
-			outerCases.push({values: blockPatterns, expr: sameLayout, guard: null});
-		}
+		if (blockPatterns.length > 0)
+			outerCases.push({values: blockPatterns, expr: sameLayoutExpr, guard: null});
 		final bodySwitch:Expr = if (outerCases.length == 0) policySwitch
 		else {
 			outerCases.push({values: [macro _], expr: policySwitch, guard: null});

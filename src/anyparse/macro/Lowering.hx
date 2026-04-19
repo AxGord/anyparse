@@ -1015,6 +1015,26 @@ class Lowering {
 			// outer @:trivia Star loop, not to this discarded optional slot.
 			final isOptionalRef:Bool = child.kind == Ref && isOptional;
 			if (!triviaEofStar && !isOptionalRef) parseSteps.push(macro skipWs(ctx));
+			// ω-issue-316: for `@:optional @:kw(...)` Ref fields in Trivia
+			// mode, declare per-field locals that capture (a) a same-line
+			// trailing comment after the kw and (b) own-line leading comments
+			// between the kw and the body's first token. These land on synth
+			// sibling slots `<field>AfterKw:Null<String>` and
+			// `<field>KwLeading:Array<String>` of the paired type. Writer
+			// consumes them to preserve source layout.
+			final hasKwTriviaSlots:Bool = isOptionalRef && kwLead != null && ctx.trivia;
+			final afterKwLocal:String = '_afterKw_$fieldName';
+			final kwLeadingLocal:String = '_kwLeading_$fieldName';
+			if (hasKwTriviaSlots) {
+				parseSteps.push({
+					expr: EVars([{name: afterKwLocal, type: (macro : Null<String>), expr: macro null, isFinal: false}]),
+					pos: Context.currentPos(),
+				});
+				parseSteps.push({
+					expr: EVars([{name: kwLeadingLocal, type: (macro : Array<String>), expr: macro [], isFinal: false}]),
+					pos: Context.currentPos(),
+				});
+			}
 			switch child.kind {
 				case Ref if (isOptional):
 					if (kwLead == null && leadText == null) {
@@ -1047,17 +1067,22 @@ class Lowering {
 						macro matchKw(ctx, $v{kwLead})
 					else
 						macro matchLit(ctx, $v{leadText});
-					// Slice ω₆b: in trivia mode, replace the post-commit
-					// `skipWs` with a `collectTrivia` that stashes any
-					// captured leading run into `ctx.pendingTrivia`. The
-					// sub-rule's first @:trivia Star drains it as a
-					// leading-of-first prefix — normalizing e.g. a line
-					// comment between `else` and the block's `{` into a
-					// leading comment of the block's first statement.
-					final innerCommitAction:Expr = ctx.trivia ? macro {
+					// Post-commit trivia handling branches three ways:
+					//  - Trivia mode + kw: capture same-line trailing into
+					//    `_afterKw_<field>`, route own-line leadings into
+					//    `_kwLeading_<field>` (ω-issue-316).
+					//  - Trivia mode + lead: ω₆b stash — any captured leading
+					//    run flows into `pendingTrivia` for the sub-rule's
+					//    first @:trivia Star to drain.
+					//  - Plain mode: plain ws skip.
+					final innerCommitAction:Expr = if (hasKwTriviaSlots) macro {
+						$i{afterKwLocal} = collectTrailing(ctx);
+						final _t = collectTrivia(ctx);
+						for (_c in _t.leadingComments) $i{kwLeadingLocal}.push(_c);
+					} else if (ctx.trivia) macro {
 						final _t = collectTrivia(ctx);
 						if (_t.leadingComments.length > 0 || _t.blankBefore) ctx.pendingTrivia = _t;
-					} : macro skipWs(ctx);
+					} else macro skipWs(ctx);
 					final valueExpr:Expr = macro {
 						final _wsPos:Int = ctx.pos;
 						skipWs(ctx);
@@ -1126,6 +1151,10 @@ class Lowering {
 				parseSteps.push(macro expectLit(ctx, $v{trailText}));
 			}
 			structFields.push({field: fieldName, expr: macro $i{localName}});
+			if (hasKwTriviaSlots) {
+				structFields.push({field: fieldName + TriviaTypeSynth.AFTER_KW_SUFFIX, expr: macro $i{afterKwLocal}});
+				structFields.push({field: fieldName + TriviaTypeSynth.KW_LEADING_SUFFIX, expr: macro $i{kwLeadingLocal}});
+			}
 		}
 		// Binary: @:align — skip to next alignment boundary after all fields.
 		final align:Null<Int> = node.annotations.get('bin.align');
