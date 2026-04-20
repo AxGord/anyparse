@@ -1,4 +1,4 @@
-package anyparse.grammar.haxe;
+package anyparse.grammar.haxe.format;
 
 /**
  * `sameLine` section of `hxformat.json`.

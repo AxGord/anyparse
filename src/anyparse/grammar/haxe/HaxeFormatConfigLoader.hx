@@ -8,6 +8,26 @@ import anyparse.format.KeepEmptyLinesPolicy;
 import anyparse.format.KeywordPlacement;
 import anyparse.format.SameLinePolicy;
 import anyparse.format.WhitespacePolicy;
+import anyparse.grammar.haxe.format.HxFormatBodyPolicy;
+import anyparse.grammar.haxe.format.HxFormatClassEmptyLinesConfig;
+import anyparse.grammar.haxe.format.HxFormatCommentEmptyLinesPolicy;
+import anyparse.grammar.haxe.format.HxFormatConfig;
+import anyparse.grammar.haxe.format.HxFormatConfigParser;
+import anyparse.grammar.haxe.format.HxFormatEmptyLinesSection;
+import anyparse.grammar.haxe.format.HxFormatIndentationSection;
+import anyparse.grammar.haxe.format.HxFormatKeepEmptyLinesPolicy;
+import anyparse.grammar.haxe.format.HxFormatKeywordPlacement;
+import anyparse.grammar.haxe.format.HxFormatLeftCurlyPolicy;
+import anyparse.grammar.haxe.format.HxFormatLineEndsSection;
+import anyparse.grammar.haxe.format.HxFormatParenConfigSection;
+import anyparse.grammar.haxe.format.HxFormatParenPolicySection;
+import anyparse.grammar.haxe.format.HxFormatSameLinePolicy;
+import anyparse.grammar.haxe.format.HxFormatSameLineSection;
+import anyparse.grammar.haxe.format.HxFormatTrailingCommaPolicy;
+import anyparse.grammar.haxe.format.HxFormatTrailingCommasSection;
+import anyparse.grammar.haxe.format.HxFormatWhitespacePolicy;
+import anyparse.grammar.haxe.format.HxFormatWhitespaceSection;
+import anyparse.grammar.haxe.format.HxFormatWrappingSection;
 
 /**
  * Loads a haxe-formatter `hxformat.json` config and maps the subset of

@@ -1,4 +1,4 @@
-package anyparse.grammar.haxe;
+package anyparse.grammar.haxe.format;
 
 /**
  * Closed set of values the haxe-formatter

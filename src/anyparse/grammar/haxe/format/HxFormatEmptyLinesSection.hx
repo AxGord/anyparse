@@ -1,4 +1,4 @@
-package anyparse.grammar.haxe;
+package anyparse.grammar.haxe.format;
 
 /**
  * `emptyLines` section of a haxe-formatter `hxformat.json` config.

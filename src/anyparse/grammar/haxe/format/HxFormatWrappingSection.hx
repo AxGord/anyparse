@@ -1,4 +1,4 @@
-package anyparse.grammar.haxe;
+package anyparse.grammar.haxe.format;
 
 /**
  * `wrapping` section of `hxformat.json` — `maxLineLength` maps to

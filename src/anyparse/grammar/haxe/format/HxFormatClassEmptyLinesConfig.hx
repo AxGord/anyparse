@@ -1,4 +1,4 @@
-package anyparse.grammar.haxe;
+package anyparse.grammar.haxe.format;
 
 /**
  * Nested `emptyLines.classEmptyLines` section of a haxe-formatter
