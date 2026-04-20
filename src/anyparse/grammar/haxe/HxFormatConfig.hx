@@ -21,6 +21,9 @@ package anyparse.grammar.haxe;
  * `lineEnds` section added in slice ψ₆ (feeds `opt.leftCurly`).
  *
  * `whitespace` section added in slice ψ₇ (feeds `opt.objectFieldColon`).
+ *
+ * `emptyLines` section added in slice ω-C-empty-lines-doc (feeds
+ * `opt.afterFieldsWithDocComments`).
  */
 @:peg @:schema(anyparse.format.text.JsonFormat) @:ws
 typedef HxFormatConfig = {
@@ -36,4 +39,6 @@ typedef HxFormatConfig = {
 	@:optional var lineEnds:HxFormatLineEndsSection;
 
 	@:optional var whitespace:HxFormatWhitespaceSection;
+
+	@:optional var emptyLines:HxFormatEmptyLinesSection;
 };

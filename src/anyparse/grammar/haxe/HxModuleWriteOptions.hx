@@ -2,6 +2,7 @@ package anyparse.grammar.haxe;
 
 import anyparse.format.BodyPolicy;
 import anyparse.format.BracePlacement;
+import anyparse.format.CommentEmptyLinesPolicy;
 import anyparse.format.KeywordPlacement;
 import anyparse.format.SameLinePolicy;
 import anyparse.format.WhitespacePolicy;
@@ -134,6 +135,25 @@ import anyparse.format.WriteOptions;
  *    macro-lower time via sibling-field introspection, so future
  *    grammar nodes with a similar then/else pair can opt in by adding
  *    the same flag without further macro changes.
+ *
+ * Field added in slice ω-C-empty-lines-doc:
+ *  - `afterFieldsWithDocComments` — blank-line policy for the slot
+ *    adjacent to a class member whose leading trivia carries at least
+ *    one doc comment (leading entry prefixed with `/**`). `One`
+ *    (default, matches haxe-formatter's
+ *    `emptyLines.afterFieldsWithDocComments: @:default(One)`) forces
+ *    exactly one blank line after the doc-commented field regardless
+ *    of source — so a class with a single doc-commented function
+ *    followed by a plain-commented sibling gets a blank line inserted
+ *    between them even when the source had none. `Ignore` honours the
+ *    captured source blank-line count only (pre-slice behaviour).
+ *    `None` strips any blank line between the doc-commented field and
+ *    its successor, even if the source carried one. The knob only
+ *    triggers at sites tagged with
+ *    `@:fmt(afterFieldsWithDocComments)` in the grammar —
+ *    `HxClassDecl.members` is the only current consumer; interface /
+ *    abstract / enum member bodies fall under the same axis but ship
+ *    in follow-up slices when their grammar nodes land the flag.
  */
 typedef HxModuleWriteOptions = WriteOptions & {
 	sameLineElse:SameLinePolicy,
@@ -153,4 +173,5 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	funcParamParens:WhitespacePolicy,
 	elseIf:KeywordPlacement,
 	fitLineIfWithElse:Bool,
+	afterFieldsWithDocComments:CommentEmptyLinesPolicy,
 };

@@ -4,6 +4,7 @@ import utest.Assert;
 import utest.Test;
 import anyparse.format.BodyPolicy;
 import anyparse.format.BracePlacement;
+import anyparse.format.CommentEmptyLinesPolicy;
 import anyparse.format.IndentChar;
 import anyparse.format.KeywordPlacement;
 import anyparse.format.SameLinePolicy;
@@ -11,6 +12,8 @@ import anyparse.format.WhitespacePolicy;
 import anyparse.grammar.haxe.HaxeFormat;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
+import anyparse.grammar.haxe.HaxeModuleTriviaParser;
+import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
@@ -331,5 +334,71 @@ class HaxeFormatConfigLoaderTest extends Test {
 		Assert.isTrue(withDefaults.indexOf('} catch ') != -1, 'default should keep `} catch ` in: <$withDefaults>');
 		Assert.isTrue(configured.indexOf('} else ') == -1, 'ifElse=next should break else in: <$configured>');
 		Assert.isTrue(configured.indexOf('} catch ') == -1, 'tryCatch=next should break catch in: <$configured>');
+	}
+
+	public function testEmptyLinesAfterFieldsWithDocCommentsDefaultsToOne():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		Assert.equals(CommentEmptyLinesPolicy.One, opts.afterFieldsWithDocComments);
+	}
+
+	public function testEmptyLinesAfterFieldsWithDocCommentsIgnoreMapsToIgnore():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"emptyLines": {"afterFieldsWithDocComments": "ignore"}}'
+		);
+		Assert.equals(CommentEmptyLinesPolicy.Ignore, opts.afterFieldsWithDocComments);
+	}
+
+	public function testEmptyLinesAfterFieldsWithDocCommentsNoneMapsToNone():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"emptyLines": {"afterFieldsWithDocComments": "none"}}'
+		);
+		Assert.equals(CommentEmptyLinesPolicy.None, opts.afterFieldsWithDocComments);
+	}
+
+	public function testEmptyLinesAfterFieldsWithDocCommentsOneInsertsBlankLine():Void {
+		// Source has no blank line between the doc-commented function and
+		// the second function — default `One` policy forces a blank line.
+		final src:String = 'class M {\n\t/** */\n\tpublic function a():Void {}\n\tpublic function b():Void {}\n}';
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		opts.finalNewline = false;
+		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		Assert.isTrue(out.indexOf('a():Void {}\n\n\tpublic function b') != -1,
+			'expected blank line between doc-commented a() and b() in: <$out>');
+	}
+
+	public function testEmptyLinesAfterFieldsWithDocCommentsIgnorePreservesSource():Void {
+		// Source has no blank line — `Ignore` policy honours the source
+		// (no blank line in output either).
+		final src:String = 'class M {\n\t/** */\n\tpublic function a():Void {}\n\tpublic function b():Void {}\n}';
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"emptyLines": {"afterFieldsWithDocComments": "ignore"}}'
+		);
+		opts.finalNewline = false;
+		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		Assert.isTrue(out.indexOf('a():Void {}\n\tpublic function b') != -1,
+			'expected tight layout (no blank line) with `ignore` in: <$out>');
+	}
+
+	public function testEmptyLinesAfterFieldsWithDocCommentsNoneStripsBlankLine():Void {
+		// Source HAS a blank line — `None` policy strips it.
+		final src:String = 'class M {\n\t/** */\n\tpublic function a():Void {}\n\n\tpublic function b():Void {}\n}';
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"emptyLines": {"afterFieldsWithDocComments": "none"}}'
+		);
+		opts.finalNewline = false;
+		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		Assert.isTrue(out.indexOf('a():Void {}\n\tpublic function b') != -1,
+			'expected blank line stripped with `none` in: <$out>');
+	}
+
+	public function testEmptyLinesAfterFieldsWithDocCommentsDoesNotFireForNonDocComment():Void {
+		// Leading `/* */` (non-doc block comment) on first fn should NOT
+		// trigger the policy — only `/**`-prefixed comments count.
+		final src:String = 'class M {\n\t/* not doc */\n\tpublic function a():Void {}\n\tpublic function b():Void {}\n}';
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		opts.finalNewline = false;
+		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		Assert.isTrue(out.indexOf('a():Void {}\n\tpublic function b') != -1,
+			'expected no blank line when leading is plain block comment in: <$out>');
 	}
 }

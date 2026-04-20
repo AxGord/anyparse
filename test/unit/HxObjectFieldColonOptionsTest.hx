@@ -124,6 +124,7 @@ class HxObjectFieldColonOptionsTest extends Test {
 			funcParamParens: base.funcParamParens,
 			elseIf: base.elseIf,
 			fitLineIfWithElse: base.fitLineIfWithElse,
+			afterFieldsWithDocComments: base.afterFieldsWithDocComments,
 		};
 	}
 }

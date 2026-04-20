@@ -146,6 +146,7 @@ class HxElseIfOptionsTest extends Test {
 			funcParamParens: base.funcParamParens,
 			elseIf: elseIf,
 			fitLineIfWithElse: base.fitLineIfWithElse,
+			afterFieldsWithDocComments: base.afterFieldsWithDocComments,
 		};
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}
@@ -177,6 +178,7 @@ class HxElseIfOptionsTest extends Test {
 			funcParamParens: base.funcParamParens,
 			elseIf: elseIf,
 			fitLineIfWithElse: base.fitLineIfWithElse,
+			afterFieldsWithDocComments: base.afterFieldsWithDocComments,
 		};
 	}
 }

@@ -2,6 +2,7 @@ package anyparse.grammar.haxe;
 
 import anyparse.format.BodyPolicy;
 import anyparse.format.BracePlacement;
+import anyparse.format.CommentEmptyLinesPolicy;
 import anyparse.format.Encoding;
 import anyparse.format.IndentChar;
 import anyparse.format.KeywordPlacement;
@@ -158,6 +159,14 @@ final class HaxeFormat implements TextFormat {
 	 * haxe-formatter's `sameLine.fitLineIfWithElse: @:default(false)`.
 	 * Flipping to `true` requires an explicit `hxformat.json` override
 	 * (`"sameLine": { "fitLineIfWithElse": true }`).
+	 *
+	 * `afterFieldsWithDocComments` default (ω-C-empty-lines-doc) is
+	 * `One` — one blank line after any class member whose leading
+	 * trivia carries a doc comment. Matches haxe-formatter's
+	 * `emptyLines.afterFieldsWithDocComments: @:default(One)`. Opting
+	 * into `Ignore` (respect source blank-line count) or `None` (strip
+	 * the blank line) requires an explicit `hxformat.json` override
+	 * (`"emptyLines": { "afterFieldsWithDocComments": "ignore" | "none" }`).
 	 */
 	public var defaultWriteOptions(default, null):HxModuleWriteOptions = {
 		indentChar: Tab,
@@ -184,6 +193,7 @@ final class HaxeFormat implements TextFormat {
 		funcParamParens: WhitespacePolicy.None,
 		elseIf: KeywordPlacement.Same,
 		fitLineIfWithElse: false,
+		afterFieldsWithDocComments: CommentEmptyLinesPolicy.One,
 	};
 
 	private function new() {}

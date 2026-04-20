@@ -385,6 +385,7 @@ class HaxeWriterRoundTripTest extends Test {
 			funcParamParens: base.funcParamParens,
 			elseIf: base.elseIf,
 			fitLineIfWithElse: base.fitLineIfWithElse,
+			afterFieldsWithDocComments: base.afterFieldsWithDocComments,
 		};
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}

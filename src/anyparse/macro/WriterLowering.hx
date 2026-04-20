@@ -681,7 +681,11 @@ class WriterLowering {
 				// itself contributes nothing at the open position. Empty
 				// string → `_dt('')` is a no-op, and `emptyText = '' +
 				// closeText` stays format-neutral (invariant #5).
-				parts.push(triviaBlockStarExpr(fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, elemFn, openText ?? '', closeText));
+				final afterDocComments:Bool = fmtHasFlag(starNode, 'afterFieldsWithDocComments');
+				parts.push(triviaBlockStarExpr(
+					fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, elemFn,
+					openText ?? '', closeText, false, afterDocComments
+				));
 			} else if (isLastField) {
 				if (openText != null) parts.push(macro _dt($v{openText}));
 				parts.push(triviaEofStarExpr(fieldAccess, trailBBAccess, trailLCAccess, elemFn));
@@ -1492,7 +1496,8 @@ class WriterLowering {
 	 */
 	private static function triviaBlockStarExpr(
 		fieldAccess:Expr, trailBBAccess:Null<Expr>, trailLCAccess:Null<Expr>, trailCloseAccess:Null<Expr>,
-		elemFn:String, openText:String, closeText:String, appendHardlineAfterTrail:Bool = false
+		elemFn:String, openText:String, closeText:String, appendHardlineAfterTrail:Bool = false,
+		afterFieldsWithDocComments:Bool = false
 	):Expr {
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
@@ -1527,6 +1532,40 @@ class WriterLowering {
 		final emptyTrailExpr:Expr = appendHardlineAfterTrail
 			? macro _dc([_dt($v{emptyText}), trailingCommentDocVerbatim(_trailClose), _dhl()])
 			: macro _dc([_dt($v{emptyText}), trailingCommentDocVerbatim(_trailClose)]);
+		// ω-C-empty-lines-doc: when the grammar field carries
+		// `@:fmt(afterFieldsWithDocComments)`, the per-element loop gates
+		// its blank-line emission on the runtime `opt.afterFieldsWithDocComments`
+		// policy — `One` forces a blank line after any element whose
+		// leading trivia carried a `/**`-prefixed entry, `None` strips
+		// source blank lines adjacent to such an element, `Ignore`
+		// preserves the captured source count. The compile-time gate
+		// keeps JSON / AS3 writers byte-identical — their Star fields
+		// have no `afterFieldsWithDocComments` flag and skip the policy
+		// computation entirely.
+		final blankBeforeExpr:Expr = afterFieldsWithDocComments ? macro {
+			final _policy:anyparse.format.CommentEmptyLinesPolicy = opt.afterFieldsWithDocComments;
+			final _addBlank:Bool = _prevHadDocComment && _policy == anyparse.format.CommentEmptyLinesPolicy.One;
+			final _stripBlank:Bool = _prevHadDocComment && _policy == anyparse.format.CommentEmptyLinesPolicy.None;
+			final _sourceBlank:Bool = _t.blankBefore && !_stripBlank;
+			if (_si > 0 && (_sourceBlank || _addBlank)) _inner.push(_dhl());
+		} : macro {
+			if (_t.blankBefore && _si > 0) _inner.push(_dhl());
+		};
+		final trackDocCommentExpr:Expr = afterFieldsWithDocComments ? macro {
+			var _hasDoc:Bool = false;
+			var _dci:Int = 0;
+			while (_dci < _t.leadingComments.length) {
+				if (StringTools.startsWith(_t.leadingComments[_dci], '/**')) {
+					_hasDoc = true;
+					break;
+				}
+				_dci++;
+			}
+			_prevHadDocComment = _hasDoc;
+		} : macro {};
+		final initDocCommentExpr:Expr = afterFieldsWithDocComments
+			? macro var _prevHadDocComment:Bool = false
+			: macro {};
 		return macro {
 			final _arr = $fieldAccess;
 			final _trailLC:Array<String> = $trailLC;
@@ -1537,17 +1576,19 @@ class WriterLowering {
 				else _dt($v{emptyText});
 			} else {
 				final _inner:Array<anyparse.core.Doc> = [];
+				$initDocCommentExpr;
 				var _si:Int = 0;
 				while (_si < _arr.length) {
 					final _t = _arr[_si];
 					_inner.push(_dhl());
-					if (_t.blankBefore && _si > 0) _inner.push(_dhl());
+					$blankBeforeExpr;
 					var _ci:Int = 0;
 					while (_ci < _t.leadingComments.length) {
 						_inner.push(leadingCommentDoc(_t.leadingComments[_ci]));
 						_inner.push(_dhl());
 						_ci++;
 					}
+					$trackDocCommentExpr;
 					final _elem:anyparse.core.Doc = $triviaElemCall;
 					final _tc:Null<String> = _t.trailingComment;
 					_inner.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDoc(_tc)) : _elem);
