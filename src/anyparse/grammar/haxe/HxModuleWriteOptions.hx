@@ -3,6 +3,7 @@ package anyparse.grammar.haxe;
 import anyparse.format.BodyPolicy;
 import anyparse.format.BracePlacement;
 import anyparse.format.CommentEmptyLinesPolicy;
+import anyparse.format.KeepEmptyLinesPolicy;
 import anyparse.format.KeywordPlacement;
 import anyparse.format.SameLinePolicy;
 import anyparse.format.WhitespacePolicy;
@@ -154,6 +155,23 @@ import anyparse.format.WriteOptions;
  *    `HxClassDecl.members` is the only current consumer; interface /
  *    abstract / enum member bodies fall under the same axis but ship
  *    in follow-up slices when their grammar nodes land the flag.
+ *
+ * Field added in slice ω-C-empty-lines-between-fields:
+ *  - `existingBetweenFields` — two-way policy for the blank-line slot
+ *    between class members when a blank line was present in the
+ *    source. `Keep` (default, matches haxe-formatter's
+ *    `emptyLines.classEmptyLines.existingBetweenFields:
+ *    @:default(Keep)`) honours the captured source blank-line count
+ *    (pre-slice behaviour). `Remove` strips every blank line between
+ *    siblings, independent of source — producing compact, zero-gap
+ *    member bodies. Composes with `afterFieldsWithDocComments` on the
+ *    same slot: `existingBetweenFields=Remove` drops source blanks,
+ *    while `afterFieldsWithDocComments=One` can still re-insert one
+ *    after a doc-commented field. The knob only triggers at sites
+ *    tagged with `@:fmt(existingBetweenFields)` in the grammar —
+ *    `HxClassDecl.members` is the only current consumer; interface /
+ *    abstract / enum member bodies fall under the same axis but ship
+ *    in follow-up slices when their grammar nodes land the flag.
  */
 typedef HxModuleWriteOptions = WriteOptions & {
 	sameLineElse:SameLinePolicy,
@@ -174,4 +192,5 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	elseIf:KeywordPlacement,
 	fitLineIfWithElse:Bool,
 	afterFieldsWithDocComments:CommentEmptyLinesPolicy,
+	existingBetweenFields:KeepEmptyLinesPolicy,
 };

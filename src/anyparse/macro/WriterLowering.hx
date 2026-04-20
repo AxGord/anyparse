@@ -682,9 +682,10 @@ class WriterLowering {
 				// string → `_dt('')` is a no-op, and `emptyText = '' +
 				// closeText` stays format-neutral (invariant #5).
 				final afterDocComments:Bool = fmtHasFlag(starNode, 'afterFieldsWithDocComments');
+				final keepBetweenFields:Bool = fmtHasFlag(starNode, 'existingBetweenFields');
 				parts.push(triviaBlockStarExpr(
 					fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, elemFn,
-					openText ?? '', closeText, false, afterDocComments
+					openText ?? '', closeText, false, afterDocComments, keepBetweenFields
 				));
 			} else if (isLastField) {
 				if (openText != null) parts.push(macro _dt($v{openText}));
@@ -1497,7 +1498,7 @@ class WriterLowering {
 	private static function triviaBlockStarExpr(
 		fieldAccess:Expr, trailBBAccess:Null<Expr>, trailLCAccess:Null<Expr>, trailCloseAccess:Null<Expr>,
 		elemFn:String, openText:String, closeText:String, appendHardlineAfterTrail:Bool = false,
-		afterFieldsWithDocComments:Bool = false
+		afterFieldsWithDocComments:Bool = false, existingBetweenFields:Bool = false
 	):Expr {
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
@@ -1532,20 +1533,34 @@ class WriterLowering {
 		final emptyTrailExpr:Expr = appendHardlineAfterTrail
 			? macro _dc([_dt($v{emptyText}), trailingCommentDocVerbatim(_trailClose), _dhl()])
 			: macro _dc([_dt($v{emptyText}), trailingCommentDocVerbatim(_trailClose)]);
-		// ω-C-empty-lines-doc: when the grammar field carries
-		// `@:fmt(afterFieldsWithDocComments)`, the per-element loop gates
-		// its blank-line emission on the runtime `opt.afterFieldsWithDocComments`
-		// policy — `One` forces a blank line after any element whose
-		// leading trivia carried a `/**`-prefixed entry, `None` strips
-		// source blank lines adjacent to such an element, `Ignore`
-		// preserves the captured source count. The compile-time gate
-		// keeps JSON / AS3 writers byte-identical — their Star fields
-		// have no `afterFieldsWithDocComments` flag and skip the policy
-		// computation entirely.
-		final blankBeforeExpr:Expr = afterFieldsWithDocComments ? macro {
-			final _policy:anyparse.format.CommentEmptyLinesPolicy = opt.afterFieldsWithDocComments;
-			final _addBlank:Bool = _prevHadDocComment && _policy == anyparse.format.CommentEmptyLinesPolicy.One;
-			final _stripBlank:Bool = _prevHadDocComment && _policy == anyparse.format.CommentEmptyLinesPolicy.None;
+		// ω-C-empty-lines-doc / ω-C-empty-lines-between-fields: when the
+		// grammar field carries any of the empty-line flags
+		// (`@:fmt(afterFieldsWithDocComments)`,
+		// `@:fmt(existingBetweenFields)`), the per-element loop gates its
+		// blank-line emission on the corresponding runtime policies —
+		// `afterFieldsWithDocComments.One` forces a blank line after any
+		// element whose leading trivia carried a `/**`-prefixed entry,
+		// `afterFieldsWithDocComments.None` strips source blanks adjacent
+		// to such an element, `existingBetweenFields.Remove` strips every
+		// source blank between siblings regardless of doc-comment status.
+		// The policies compose: a blank line survives only when no active
+		// strip-policy fires AND (the source had one OR the add-policy
+		// fires). The compile-time gate keeps JSON / AS3 writers
+		// byte-identical — their Star fields carry none of the flags and
+		// skip the policy computation entirely.
+		final anyEmptyLinesFlag:Bool = afterFieldsWithDocComments || existingBetweenFields;
+		final stripByDocExpr:Expr = afterFieldsWithDocComments
+			? macro (_prevHadDocComment && opt.afterFieldsWithDocComments == anyparse.format.CommentEmptyLinesPolicy.None)
+			: macro false;
+		final addByDocExpr:Expr = afterFieldsWithDocComments
+			? macro (_prevHadDocComment && opt.afterFieldsWithDocComments == anyparse.format.CommentEmptyLinesPolicy.One)
+			: macro false;
+		final stripByExistingExpr:Expr = existingBetweenFields
+			? macro (opt.existingBetweenFields == anyparse.format.KeepEmptyLinesPolicy.Remove)
+			: macro false;
+		final blankBeforeExpr:Expr = anyEmptyLinesFlag ? macro {
+			final _stripBlank:Bool = $stripByDocExpr || $stripByExistingExpr;
+			final _addBlank:Bool = $addByDocExpr;
 			final _sourceBlank:Bool = _t.blankBefore && !_stripBlank;
 			if (_si > 0 && (_sourceBlank || _addBlank)) _inner.push(_dhl());
 		} : macro {

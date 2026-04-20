@@ -9,7 +9,7 @@ package anyparse.grammar.haxe;
  * `lineCommentsBetweenTypes`, `lineCommentsBetweenFunctions`,
  * `betweenSingleLineTypes`, `beforeRightCurly`, `afterLeftCurly`,
  * `afterReturn`, `beforeBlocks`, `afterBlocks`, `enumAbstractEmptyLines`,
- * `classEmptyLines`, `macroClassEmptyLines`, `externClassEmptyLines`,
+ * `macroClassEmptyLines`, `externClassEmptyLines`,
  * `abstractEmptyLines`, `interfaceEmptyLines`, `enumEmptyLines`,
  * `typedefEmptyLines`, `conditionalsEmptyLines`,
  * `beforeDocCommentEmptyLines`, `afterFileHeaderComment`,
@@ -17,10 +17,19 @@ package anyparse.grammar.haxe;
  * struct parser's `UnknownPolicy.Skip` — they land with the slice that
  * introduces the matching writer knob.
  *
- * Added in slice ω-C-empty-lines-doc (feeds
- * `opt.afterFieldsWithDocComments`).
+ * `afterFieldsWithDocComments` added in slice ω-C-empty-lines-doc
+ * (feeds `opt.afterFieldsWithDocComments`).
+ *
+ * `classEmptyLines` nested section added in slice
+ * ω-C-empty-lines-between-fields (feeds `opt.existingBetweenFields`
+ * through `HxFormatClassEmptyLinesConfig.existingBetweenFields`). Only
+ * the `existingBetweenFields` sub-key is modelled today; the other
+ * per-slot sub-keys (`beginType`, `endType`, `betweenVars`, …) land
+ * with the slices that introduce their matching writer knobs.
  */
 @:peg typedef HxFormatEmptyLinesSection = {
 
 	@:optional var afterFieldsWithDocComments:HxFormatCommentEmptyLinesPolicy;
+
+	@:optional var classEmptyLines:HxFormatClassEmptyLinesConfig;
 };

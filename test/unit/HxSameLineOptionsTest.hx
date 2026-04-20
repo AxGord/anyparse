@@ -178,6 +178,7 @@ class HxSameLineOptionsTest extends Test {
 			elseIf: base.elseIf,
 			fitLineIfWithElse: base.fitLineIfWithElse,
 			afterFieldsWithDocComments: base.afterFieldsWithDocComments,
+			existingBetweenFields: base.existingBetweenFields,
 		};
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}
@@ -218,6 +219,7 @@ class HxSameLineOptionsTest extends Test {
 			elseIf: base.elseIf,
 			fitLineIfWithElse: base.fitLineIfWithElse,
 			afterFieldsWithDocComments: base.afterFieldsWithDocComments,
+			existingBetweenFields: base.existingBetweenFields,
 		};
 	}
 }

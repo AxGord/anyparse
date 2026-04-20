@@ -5,6 +5,7 @@ import anyparse.format.BracePlacement;
 import anyparse.format.CommentEmptyLinesPolicy;
 import anyparse.format.Encoding;
 import anyparse.format.IndentChar;
+import anyparse.format.KeepEmptyLinesPolicy;
 import anyparse.format.KeywordPlacement;
 import anyparse.format.SameLinePolicy;
 import anyparse.format.WhitespacePolicy;
@@ -167,6 +168,15 @@ final class HaxeFormat implements TextFormat {
 	 * into `Ignore` (respect source blank-line count) or `None` (strip
 	 * the blank line) requires an explicit `hxformat.json` override
 	 * (`"emptyLines": { "afterFieldsWithDocComments": "ignore" | "none" }`).
+	 *
+	 * `existingBetweenFields` default (ω-C-empty-lines-between-fields)
+	 * is `Keep` — source blank lines between class members survive
+	 * round-trip, matching haxe-formatter's
+	 * `emptyLines.classEmptyLines.existingBetweenFields:
+	 * @:default(Keep)`. Opting into `Remove` (strip every blank line
+	 * between siblings regardless of source) requires an explicit
+	 * `hxformat.json` override (`"emptyLines": { "classEmptyLines":
+	 * { "existingBetweenFields": "remove" } }`).
 	 */
 	public var defaultWriteOptions(default, null):HxModuleWriteOptions = {
 		indentChar: Tab,
@@ -194,6 +204,7 @@ final class HaxeFormat implements TextFormat {
 		elseIf: KeywordPlacement.Same,
 		fitLineIfWithElse: false,
 		afterFieldsWithDocComments: CommentEmptyLinesPolicy.One,
+		existingBetweenFields: KeepEmptyLinesPolicy.Keep,
 	};
 
 	private function new() {}

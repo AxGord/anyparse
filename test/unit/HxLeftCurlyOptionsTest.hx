@@ -106,6 +106,7 @@ class HxLeftCurlyOptionsTest extends Test {
 			elseIf: base.elseIf,
 			fitLineIfWithElse: base.fitLineIfWithElse,
 			afterFieldsWithDocComments: base.afterFieldsWithDocComments,
+			existingBetweenFields: base.existingBetweenFields,
 		};
 	}
 }

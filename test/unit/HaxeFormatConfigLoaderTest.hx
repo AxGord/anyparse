@@ -6,6 +6,7 @@ import anyparse.format.BodyPolicy;
 import anyparse.format.BracePlacement;
 import anyparse.format.CommentEmptyLinesPolicy;
 import anyparse.format.IndentChar;
+import anyparse.format.KeepEmptyLinesPolicy;
 import anyparse.format.KeywordPlacement;
 import anyparse.format.SameLinePolicy;
 import anyparse.format.WhitespacePolicy;
@@ -400,5 +401,76 @@ class HaxeFormatConfigLoaderTest extends Test {
 		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('a():Void {}\n\tpublic function b') != -1,
 			'expected no blank line when leading is plain block comment in: <$out>');
+	}
+
+	public function testEmptyLinesExistingBetweenFieldsDefaultsToKeep():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		Assert.equals(KeepEmptyLinesPolicy.Keep, opts.existingBetweenFields);
+	}
+
+	public function testEmptyLinesExistingBetweenFieldsKeepMapsToKeep():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"emptyLines": {"classEmptyLines": {"existingBetweenFields": "keep"}}}'
+		);
+		Assert.equals(KeepEmptyLinesPolicy.Keep, opts.existingBetweenFields);
+	}
+
+	public function testEmptyLinesExistingBetweenFieldsRemoveMapsToRemove():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"emptyLines": {"classEmptyLines": {"existingBetweenFields": "remove"}}}'
+		);
+		Assert.equals(KeepEmptyLinesPolicy.Remove, opts.existingBetweenFields);
+	}
+
+	public function testEmptyLinesExistingBetweenFieldsKeepPreservesSourceBlank():Void {
+		// Source has a blank line between the two plain fields — `Keep`
+		// (default) honours it.
+		final src:String = 'class M {\n\tpublic function a():Void {}\n\n\tpublic function b():Void {}\n}';
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		opts.finalNewline = false;
+		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		Assert.isTrue(out.indexOf('a():Void {}\n\n\tpublic function b') != -1,
+			'expected source blank line preserved with `keep` in: <$out>');
+	}
+
+	public function testEmptyLinesExistingBetweenFieldsRemoveStripsSourceBlank():Void {
+		// Source has a blank line — `Remove` policy strips it regardless.
+		final src:String = 'class M {\n\tpublic function a():Void {}\n\n\tpublic function b():Void {}\n}';
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"emptyLines": {"classEmptyLines": {"existingBetweenFields": "remove"}}}'
+		);
+		opts.finalNewline = false;
+		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		Assert.isTrue(out.indexOf('a():Void {}\n\tpublic function b') != -1,
+			'expected source blank line stripped with `remove` in: <$out>');
+	}
+
+	public function testEmptyLinesExistingBetweenFieldsRemoveDoesNotBlockAddByDoc():Void {
+		// Compose with `afterFieldsWithDocComments=One`: the source blank
+		// is stripped by `Remove`, but `One` then re-inserts exactly one
+		// blank after the doc-commented field. Net effect on a source
+		// that already had a blank: idempotent — blank survives.
+		final src:String = 'class M {\n\t/** */\n\tpublic function a():Void {}\n\n\tpublic function b():Void {}\n}';
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"emptyLines": {"classEmptyLines": {"existingBetweenFields": "remove"}}}'
+		);
+		opts.finalNewline = false;
+		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		Assert.isTrue(out.indexOf('a():Void {}\n\n\tpublic function b') != -1,
+			'expected `One`-inserted blank to survive `Remove` strip in: <$out>');
+	}
+
+	public function testEmptyLinesExistingBetweenFieldsRemoveWithIgnoreStripsAll():Void {
+		// `existingBetweenFields=remove` with
+		// `afterFieldsWithDocComments=ignore`: no add-policy fires, so
+		// every source blank gets stripped.
+		final src:String = 'class M {\n\t/** */\n\tpublic function a():Void {}\n\n\tpublic function b():Void {}\n}';
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"emptyLines": {"afterFieldsWithDocComments": "ignore", "classEmptyLines": {"existingBetweenFields": "remove"}}}'
+		);
+		opts.finalNewline = false;
+		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		Assert.isTrue(out.indexOf('a():Void {}\n\tpublic function b') != -1,
+			'expected all source blanks stripped with ignore+remove in: <$out>');
 	}
 }
