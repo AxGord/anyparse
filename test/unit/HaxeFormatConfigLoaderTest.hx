@@ -221,6 +221,49 @@ class HaxeFormatConfigLoaderTest extends Test {
 		Assert.isTrue(out.indexOf('var x:Dynamic') != -1, 'var type annotation should stay tight in: <$out>');
 	}
 
+	public function testWhitespaceTypeHintColonDefaultsToNone():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		Assert.equals(WhitespacePolicy.None, opts.typeHintColon);
+	}
+
+	public function testWhitespaceTypeHintColonAroundMapsToBoth():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"typeHintColonPolicy": "around"}}');
+		Assert.equals(WhitespacePolicy.Both, opts.typeHintColon);
+	}
+
+	public function testWhitespaceTypeHintColonEndToEnd():Void {
+		final src:String = 'class C { var x:Int; function f(p:String):Void {} }';
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"typeHintColonPolicy": "around"}}');
+		final ast:HxModule = HaxeModuleParser.parse(src);
+		final out:String = HxModuleWriter.write(ast, opts);
+		Assert.isTrue(out.indexOf('var x : Int') != -1, 'expected `var x : Int` in: <$out>');
+		Assert.isTrue(out.indexOf('p : String') != -1, 'expected `p : String` in: <$out>');
+		Assert.isTrue(out.indexOf(') : Void') != -1, 'expected `) : Void` in: <$out>');
+	}
+
+	public function testWhitespaceFuncParamParensDefaultsToNone():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		Assert.equals(WhitespacePolicy.None, opts.funcParamParens);
+	}
+
+	public function testWhitespaceFuncParamParensBeforeMapsToBefore():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"parenConfig": {"funcParamParens": {"openingPolicy": "before"}}}}');
+		Assert.equals(WhitespacePolicy.Before, opts.funcParamParens);
+	}
+
+	public function testWhitespaceFuncParamParensEndToEnd():Void {
+		final src:String = 'class C { function f(p:Int):Void {} }';
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"parenConfig": {"funcParamParens": {"openingPolicy": "before"}}}}');
+		final ast:HxModule = HaxeModuleParser.parse(src);
+		final out:String = HxModuleWriter.write(ast, opts);
+		Assert.isTrue(out.indexOf('function f (p:Int)') != -1, 'expected `function f (p:Int)` in: <$out>');
+	}
+
+	public function testWhitespaceParenConfigClosingPolicyIsIgnored():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"parenConfig": {"funcParamParens": {"closingPolicy": "before"}}}}');
+		Assert.equals(WhitespacePolicy.None, opts.funcParamParens);
+	}
+
 	public function testSameLineElseIfDefaultsToSame():Void {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		Assert.equals(KeywordPlacement.Same, opts.elseIf);

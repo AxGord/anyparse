@@ -445,11 +445,12 @@ class WriterLowering {
 			}
 
 			// D61: non-optional lead — no space before lead.
-			// ψ₇: `@:fmt(objectFieldColon)` on the field switches the emission
-			// to a runtime-configurable spacing around the lead text; all
+			// ψ₇ / ω-E-whitespace: `@:fmt(objectFieldColon)` /
+			// `@:fmt(typeHintColon)` on the field switches the emission to
+			// a runtime-configurable spacing around the lead text; all
 			// other mandatory leads stay tight.
 			if (leadText != null && !isOptional)
-				parts.push(objectFieldColonLead(child, leadText));
+				parts.push(whitespacePolicyLead(child, leadText, ['objectFieldColon', 'typeHintColon']));
 
 			// Field value
 			final bodyPolicyFlag:Null<String> = fmtReadString(child, 'bodyPolicy');
@@ -503,7 +504,13 @@ class WriterLowering {
 						}
 					} else if (leadText != null) {
 						if (isTightLead(leadText)) {
-							optParts.push(macro _dt($v{leadText}));
+							// ω-E-whitespace: `@:fmt(typeHintColon)` on
+							// optional-Ref tight leads routes through the same
+							// WhitespacePolicy helper as mandatory leads.
+							// Without the flag the `None` default keeps the
+							// tight `_dt(leadText)` byte-identical to the pre-
+							// flag path (`f():Void`).
+							optParts.push(whitespacePolicyLead(child, leadText, ['typeHintColon']));
 						} else {
 							optParts.push(sameLineSeparator(child, prevBodyField));
 							optParts.push(macro _dt($v{leadText + ' '}));
@@ -707,7 +714,20 @@ class WriterLowering {
 		}
 
 		if (closeText != null && sepText != null) {
-			if (!isFirstField && !isRaw && isSpacedLead(openText)) parts.push(macro _dt(' '));
+			// ω-E-whitespace: spaced leads (`{`) get a plain leading space;
+			// a Star with `@:fmt(funcParamParens)` opts into a runtime-
+			// switched space before its open delim. The two branches are
+			// structurally exclusive so a grammar site that ever combined
+			// them (spaced-lead `{` with a funcParamParens-style flag)
+			// cannot produce a double space.
+			if (!isFirstField && !isRaw) {
+				if (isSpacedLead(openText)) {
+					parts.push(macro _dt(' '));
+				} else {
+					final paramSpace:Null<Expr> = openDelimPolicySpace(starNode, ['funcParamParens']);
+					if (paramSpace != null) parts.push(paramSpace);
+				}
+			}
 			final tcExpr:Expr = trailingCommaExpr(starNode);
 			parts.push(macro {
 				final _arr = $fieldAccess;
@@ -965,43 +985,89 @@ class WriterLowering {
 	}
 
 	/**
-	 * Return a Doc expression for a mandatory `@:lead(text)` whose field
-	 * carries the `@:fmt(objectFieldColon)` writer meta (ψ₇).
+	 * Return a Doc expression that optionally prefixes a Star struct
+	 * field's opening delimiter with a space driven by a
+	 * `WhitespacePolicy` option — the paren counterpart of
+	 * `whitespacePolicyLead`.
 	 *
-	 * Without the meta — plain `_dt(leadText)`, matching the pre-ψ₇
-	 * behaviour of the mandatory-lead path: the lead is emitted tight
-	 * against the preceding and following fields (`foo:bar`), so
-	 * type-annotation colons on `HxVarDecl.type` / `HxParam.type` /
-	 * `HxFnDecl.returnType` stay as `x:Int` / `f():Void`.
+	 * Consumed today by `@:fmt(funcParamParens)` on `HxFnDecl.params` so
+	 * users can opt into `function main ()` via
+	 * `whitespace.parenConfig.funcParamParens.openingPolicy: "before"`
+	 * without affecting call sites, `new T(...)` args, or `(expr)`.
 	 *
-	 * With the meta — a runtime switch on `opt.objectFieldColon:
-	 * WhitespacePolicy` that picks a pre-concatenated lead string:
-	 *  - `Before` → `_dt(' ' + leadText)` (space before only).
-	 *  - `After`  → `_dt(leadText + ' ')` (space after only, the default
-	 *               for Haxe — matches haxe-formatter's
-	 *               `whitespace.objectFieldColonPolicy: @:default(After)`).
-	 *  - `Both`   → `_dt(' ' + leadText + ' ')` (space on both sides).
-	 *  - `None`   → default case, `_dt(leadText)` (tight).
+	 * Returns `null` when the node carries no flag from `flagNames`,
+	 * letting the call site fall through to its pre-slice emission
+	 * (`_dt(' ')` for spaced leads, nothing for tight leads). When a
+	 * flag matches, emits a runtime switch on `opt.<flagName>`:
+	 *  - `Before` / `Both` → `_dt(' ')`.
+	 *  - `None` / `After`  → `_de()` (no-op).
 	 *
-	 * Pre-concatenating the text into a single `_dt` (instead of three
-	 * separate Doc atoms) keeps the output identical to the pre-ψ₇ byte
-	 * layout for the `None` case and avoids introducing any new Doc
-	 * boundaries the Renderer might break across.
-	 *
-	 * The case patterns are built as raw `EField` expressions to avoid
-	 * macro-time enum resolution against the `WhitespacePolicy` abstract
-	 * (same precedent as `bodyPolicyWrap` and `leftCurlySeparator`).
-	 *
-	 * The meta tag is consumed field-scope only — sibling mandatory
-	 * leads on the same struct are unaffected. Adding a per-knob meta
-	 * like this one (instead of a global `@:colon(flag)` with multiple
-	 * flag values) follows the ψ₆ principle: one meta = one options
-	 * field. If future slices need a different `:` spacing at another
-	 * grammar site, that site will get its own tag (e.g. `@:switchCaseColon`)
-	 * with its own `HxModuleWriteOptions` field.
+	 * `After` is accepted for surface parity with
+	 * `WhitespacePolicy` but produces no space here — emitting a space
+	 * after the opening delimiter would require injecting padding
+	 * inside `sepList`, which currently concatenates the open token
+	 * tight against the first element.
 	 */
-	private static function objectFieldColonLead(child:ShapeNode, leadText:String):Expr {
-		if (!fmtHasFlag(child, 'objectFieldColon')) return macro _dt($v{leadText});
+	private static function openDelimPolicySpace(starNode:ShapeNode, flagNames:Array<String>):Null<Expr> {
+		final flagName:Null<String> = firstFmtFlag(starNode, flagNames);
+		if (flagName == null) return null;
+		final wpPath:Array<String> = ['anyparse', 'format', 'WhitespacePolicy'];
+		final beforePat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Before']));
+		final bothPat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
+		final cases:Array<Case> = [
+			{values: [beforePat, bothPat], expr: macro _dt(' '), guard: null},
+		];
+		final optAccess:Expr = {expr: EField(macro opt, flagName), pos: Context.currentPos()};
+		return {expr: ESwitch(optAccess, cases, macro _de()), pos: Context.currentPos()};
+	}
+
+	/**
+	 * Return the first flag name from `flagNames` that is present on
+	 * `node` as an `@:fmt(...)` argument, or `null` if none match.
+	 * Shared lookup for ω-E-whitespace's writer helpers.
+	 */
+	private static function firstFmtFlag(node:ShapeNode, flagNames:Array<String>):Null<String> {
+		for (name in flagNames) if (fmtHasFlag(node, name)) return name;
+		return null;
+	}
+
+	/**
+	 * Return a Doc expression for a `@:lead(text)` whose field carries a
+	 * writer-only whitespace-policy flag. The helper picks the first flag
+	 * from `flagNames` that is present on `child` and emits a runtime
+	 * switch on `opt.<flagName>:WhitespacePolicy`; when no flag matches
+	 * the output is plain `_dt(leadText)`, matching the tight default of
+	 * the mandatory-lead path.
+	 *
+	 * Defined flags today:
+	 *  - `objectFieldColon` (ψ₇) — `HxObjectField.value`'s `@:lead(':')`.
+	 *    Default `After` on `HaxeFormat.instance.defaultWriteOptions`:
+	 *    `{a: 0}`.
+	 *  - `typeHintColon` (ω-E-whitespace) — the three type-annotation
+	 *    colons: `HxVarDecl.type`, `HxParam.type`, `HxFnDecl.returnType`.
+	 *    Default `None` — `x:Int`, `f():Void` stay compact.
+	 *
+	 * Runtime dispatch for each switch (cases built as raw `EField`
+	 * patterns to avoid macro-time enum resolution against
+	 * `WhitespacePolicy`):
+	 *  - `Before` → `_dt(' ' + leadText)`.
+	 *  - `After`  → `_dt(leadText + ' ')`.
+	 *  - `Both`   → `_dt(' ' + leadText + ' ')`.
+	 *  - `None`   → default, `_dt(leadText)` (tight).
+	 *
+	 * Pre-concatenating each case into a single `_dt` (instead of three
+	 * Doc atoms) keeps the output byte-identical to the pre-flag layout
+	 * for the `None` case and avoids introducing Doc boundaries the
+	 * Renderer might break across.
+	 *
+	 * Per-field flags stay scoped to their own grammar sites — sibling
+	 * leads on the same struct are unaffected. Adding a new tag follows
+	 * the ψ₆ principle (one meta = one options field); multiple tags on
+	 * one field are resolved by `flagNames` order.
+	 */
+	private static function whitespacePolicyLead(child:ShapeNode, leadText:String, flagNames:Array<String>):Expr {
+		final flagName:Null<String> = firstFmtFlag(child, flagNames);
+		if (flagName == null) return macro _dt($v{leadText});
 		final wpPath:Array<String> = ['anyparse', 'format', 'WhitespacePolicy'];
 		final beforePat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Before']));
 		final afterPat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['After']));
@@ -1011,7 +1077,8 @@ class WriterLowering {
 			{values: [afterPat], expr: macro _dt($v{leadText + ' '}), guard: null},
 			{values: [bothPat], expr: macro _dt($v{' ' + leadText + ' '}), guard: null},
 		];
-		return {expr: ESwitch(macro opt.objectFieldColon, cases, macro _dt($v{leadText})), pos: Context.currentPos()};
+		final optAccess:Expr = {expr: EField(macro opt, flagName), pos: Context.currentPos()};
+		return {expr: ESwitch(optAccess, cases, macro _dt($v{leadText})), pos: Context.currentPos()};
 	}
 
 	/**

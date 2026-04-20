@@ -101,6 +101,8 @@ class HxLeftCurlyOptionsTest extends Test {
 			doBody: base.doBody,
 			leftCurly: leftCurly,
 			objectFieldColon: base.objectFieldColon,
+			typeHintColon: base.typeHintColon,
+			funcParamParens: base.funcParamParens,
 			elseIf: base.elseIf,
 			fitLineIfWithElse: base.fitLineIfWithElse,
 		};

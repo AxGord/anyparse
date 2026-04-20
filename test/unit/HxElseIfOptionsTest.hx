@@ -142,6 +142,8 @@ class HxElseIfOptionsTest extends Test {
 			doBody: base.doBody,
 			leftCurly: base.leftCurly,
 			objectFieldColon: base.objectFieldColon,
+			typeHintColon: base.typeHintColon,
+			funcParamParens: base.funcParamParens,
 			elseIf: elseIf,
 			fitLineIfWithElse: base.fitLineIfWithElse,
 		};
@@ -171,6 +173,8 @@ class HxElseIfOptionsTest extends Test {
 			doBody: base.doBody,
 			leftCurly: base.leftCurly,
 			objectFieldColon: base.objectFieldColon,
+			typeHintColon: base.typeHintColon,
+			funcParamParens: base.funcParamParens,
 			elseIf: elseIf,
 			fitLineIfWithElse: base.fitLineIfWithElse,
 		};

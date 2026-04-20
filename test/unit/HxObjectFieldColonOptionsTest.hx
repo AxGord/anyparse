@@ -120,6 +120,8 @@ class HxObjectFieldColonOptionsTest extends Test {
 			doBody: base.doBody,
 			leftCurly: base.leftCurly,
 			objectFieldColon: objectFieldColon,
+			typeHintColon: base.typeHintColon,
+			funcParamParens: base.funcParamParens,
 			elseIf: base.elseIf,
 			fitLineIfWithElse: base.fitLineIfWithElse,
 		};

@@ -139,6 +139,19 @@ final class HaxeFormat implements TextFormat {
 	 * spaced form. Callers who want byte-identical pre-ψ₇ layout must
 	 * pass `objectFieldColon: WhitespacePolicy.None` explicitly.
 	 *
+	 * Type-hint colon default (ω-E-whitespace) is `None` — `x:Int`,
+	 * `f():Void`. Matches the pre-slice layout and haxe-formatter's
+	 * `whitespace.typeHintColonPolicy: @:default(None)`. Callers who
+	 * want `x : Int` around the colon must pass `typeHintColon:
+	 * WhitespacePolicy.Both` explicitly (or set
+	 * `whitespace.typeHintColonPolicy: "around"` in `hxformat.json`).
+	 *
+	 * Func-param-parens default (ω-E-whitespace) is `None` — no space
+	 * before the opening `(` of `HxFnDecl.params`. Matches the pre-
+	 * slice layout and haxe-formatter's
+	 * `whitespace.parenConfig.funcParamParens.openingPolicy:
+	 * @:default(None)`.
+	 *
 	 * `fitLineIfWithElse` default (ψ₁₂) is `false` — when an `if` has
 	 * an `else` and the body policies are `FitLine`, the bodies fall
 	 * back to the `Next` layout instead of flat-or-break. Matches
@@ -167,6 +180,8 @@ final class HaxeFormat implements TextFormat {
 		doBody: BodyPolicy.Next,
 		leftCurly: BracePlacement.Same,
 		objectFieldColon: WhitespacePolicy.After,
+		typeHintColon: WhitespacePolicy.None,
+		funcParamParens: WhitespacePolicy.None,
 		elseIf: KeywordPlacement.Same,
 		fitLineIfWithElse: false,
 	};

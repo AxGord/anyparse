@@ -80,9 +80,31 @@ import anyparse.format.WriteOptions;
  *    keeps the tight pre-ψ₇ layout (`{a:0}`). `Before` / `Both` are
  *    exposed for completeness but uncommon in practice. The knob is
  *    scoped to `HxObjectField.value` only — type-annotation `:` on
- *    `HxVarDecl.type` / `HxParam.type` / `HxFnDecl.returnType` stays
- *    tight regardless, matching haxe-formatter's hard-coded
- *    `x:Int` / `f():Void` layout.
+ *    `HxVarDecl.type` / `HxParam.type` / `HxFnDecl.returnType` has its
+ *    own knob (`typeHintColon`, ω-E-whitespace).
+ *
+ * Fields added in slice ω-E-whitespace (type-hint + paren spacing):
+ *  - `typeHintColon` — whitespace around the type-annotation `:` on
+ *    `HxVarDecl.type`, `HxParam.type` and `HxFnDecl.returnType`.
+ *    `None` (default) keeps the tight pre-slice layout
+ *    (`x:Int`, `f():Void`, matching haxe-formatter's default
+ *    `whitespace.typeHintColonPolicy: @:default(None)`). `Both`
+ *    emits `x : Int`, `f() : Void` (matches
+ *    `whitespace.typeHintColonPolicy: "around"`). `Before` / `After`
+ *    are exposed for parity with the policy shape. The knob only
+ *    applies at sites tagged with `@:fmt(typeHintColon)` in the
+ *    grammar; the `:` inside an object literal (ψ₇) keeps its own
+ *    `objectFieldColon` knob.
+ *  - `funcParamParens` — whitespace before the opening `(` of a
+ *    function declaration's parameter list (`HxFnDecl.params`).
+ *    `None` (default) keeps the tight pre-slice layout
+ *    (`function main()`). `Before` / `Both` emit a single space
+ *    before the paren (`function main ()`), matching haxe-formatter's
+ *    `whitespace.parenConfig.funcParamParens.openingPolicy: "before"`.
+ *    `After` is exposed for parity but has no effect yet — the
+ *    writer's `sepList` does not expose a post-open-paren padding
+ *    point. Only `HxFnDecl.params` carries the flag — call sites,
+ *    `new T(...)` args, and `(expr)` ParenExpr stay tight regardless.
  *
  * Field added in slice ψ₈ (else-if keyword placement):
  *  - `elseIf` — placement of the nested `if` inside an `else` clause
@@ -127,6 +149,8 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	doBody:BodyPolicy,
 	leftCurly:BracePlacement,
 	objectFieldColon:WhitespacePolicy,
+	typeHintColon:WhitespacePolicy,
+	funcParamParens:WhitespacePolicy,
 	elseIf:KeywordPlacement,
 	fitLineIfWithElse:Bool,
 };

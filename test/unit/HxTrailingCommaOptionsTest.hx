@@ -161,6 +161,8 @@ class HxTrailingCommaOptionsTest extends Test {
 			doBody: base.doBody,
 			leftCurly: base.leftCurly,
 			objectFieldColon: base.objectFieldColon,
+			typeHintColon: base.typeHintColon,
+			funcParamParens: base.funcParamParens,
 			elseIf: base.elseIf,
 			fitLineIfWithElse: base.fitLineIfWithElse,
 		};

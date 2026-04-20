@@ -29,7 +29,7 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxFnDecl = {
 	var name:HxIdentLit;
-	@:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams')) var params:Array<HxParam>;
-	@:optional @:lead(':') var returnType:Null<HxTypeRef>;
+	@:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams'), funcParamParens) var params:Array<HxParam>;
+	@:optional @:fmt(typeHintColon) @:lead(':') var returnType:Null<HxTypeRef>;
 	@:fmt(leftCurly) @:lead('{') @:trail('}') @:trivia var body:Array<HxStatement>;
 }
