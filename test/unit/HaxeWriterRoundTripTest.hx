@@ -387,6 +387,7 @@ class HaxeWriterRoundTripTest extends Test {
 			fitLineIfWithElse: base.fitLineIfWithElse,
 			afterFieldsWithDocComments: base.afterFieldsWithDocComments,
 			existingBetweenFields: base.existingBetweenFields,
+			beforeDocCommentEmptyLines: base.beforeDocCommentEmptyLines,
 		};
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}

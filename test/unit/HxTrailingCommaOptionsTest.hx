@@ -167,6 +167,7 @@ class HxTrailingCommaOptionsTest extends Test {
 			fitLineIfWithElse: base.fitLineIfWithElse,
 			afterFieldsWithDocComments: base.afterFieldsWithDocComments,
 			existingBetweenFields: base.existingBetweenFields,
+			beforeDocCommentEmptyLines: base.beforeDocCommentEmptyLines,
 		};
 	}
 }

@@ -683,9 +683,10 @@ class WriterLowering {
 				// closeText` stays format-neutral (invariant #5).
 				final afterDocComments:Bool = fmtHasFlag(starNode, 'afterFieldsWithDocComments');
 				final keepBetweenFields:Bool = fmtHasFlag(starNode, 'existingBetweenFields');
+				final beforeDocComments:Bool = fmtHasFlag(starNode, 'beforeDocCommentEmptyLines');
 				parts.push(triviaBlockStarExpr(
 					fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, elemFn,
-					openText ?? '', closeText, false, afterDocComments, keepBetweenFields
+					openText ?? '', closeText, false, afterDocComments, keepBetweenFields, beforeDocComments
 				));
 			} else if (isLastField) {
 				if (openText != null) parts.push(macro _dt($v{openText}));
@@ -1498,7 +1499,8 @@ class WriterLowering {
 	private static function triviaBlockStarExpr(
 		fieldAccess:Expr, trailBBAccess:Null<Expr>, trailLCAccess:Null<Expr>, trailCloseAccess:Null<Expr>,
 		elemFn:String, openText:String, closeText:String, appendHardlineAfterTrail:Bool = false,
-		afterFieldsWithDocComments:Bool = false, existingBetweenFields:Bool = false
+		afterFieldsWithDocComments:Bool = false, existingBetweenFields:Bool = false,
+		beforeDocCommentEmptyLines:Bool = false
 	):Expr {
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
@@ -1533,22 +1535,29 @@ class WriterLowering {
 		final emptyTrailExpr:Expr = appendHardlineAfterTrail
 			? macro _dc([_dt($v{emptyText}), trailingCommentDocVerbatim(_trailClose), _dhl()])
 			: macro _dc([_dt($v{emptyText}), trailingCommentDocVerbatim(_trailClose)]);
-		// ω-C-empty-lines-doc / ω-C-empty-lines-between-fields: when the
-		// grammar field carries any of the empty-line flags
+		// ω-C-empty-lines-doc / ω-C-empty-lines-between-fields /
+		// ω-C-empty-lines-before-doc: when the grammar field carries any
+		// of the empty-line flags
 		// (`@:fmt(afterFieldsWithDocComments)`,
-		// `@:fmt(existingBetweenFields)`), the per-element loop gates its
-		// blank-line emission on the corresponding runtime policies —
+		// `@:fmt(existingBetweenFields)`,
+		// `@:fmt(beforeDocCommentEmptyLines)`), the per-element loop
+		// gates its blank-line emission on the corresponding runtime
+		// policies —
 		// `afterFieldsWithDocComments.One` forces a blank line after any
 		// element whose leading trivia carried a `/**`-prefixed entry,
 		// `afterFieldsWithDocComments.None` strips source blanks adjacent
 		// to such an element, `existingBetweenFields.Remove` strips every
-		// source blank between siblings regardless of doc-comment status.
-		// The policies compose: a blank line survives only when no active
-		// strip-policy fires AND (the source had one OR the add-policy
-		// fires). The compile-time gate keeps JSON / AS3 writers
-		// byte-identical — their Star fields carry none of the flags and
-		// skip the policy computation entirely.
-		final anyEmptyLinesFlag:Bool = afterFieldsWithDocComments || existingBetweenFields;
+		// source blank between siblings regardless of doc-comment status,
+		// `beforeDocCommentEmptyLines.One` forces a blank line before any
+		// element whose own leading trivia starts with a `/**`-prefixed
+		// entry, `beforeDocCommentEmptyLines.None` strips source blanks
+		// adjacent to such an element's leading side. The policies
+		// compose: a blank line survives only when no active strip-policy
+		// fires AND (the source had one OR any add-policy fires). The
+		// compile-time gate keeps JSON / AS3 writers byte-identical —
+		// their Star fields carry none of the flags and skip the policy
+		// computation entirely.
+		final anyEmptyLinesFlag:Bool = afterFieldsWithDocComments || existingBetweenFields || beforeDocCommentEmptyLines;
 		final stripByDocExpr:Expr = afterFieldsWithDocComments
 			? macro (_prevHadDocComment && opt.afterFieldsWithDocComments == anyparse.format.CommentEmptyLinesPolicy.None)
 			: macro false;
@@ -1558,9 +1567,27 @@ class WriterLowering {
 		final stripByExistingExpr:Expr = existingBetweenFields
 			? macro (opt.existingBetweenFields == anyparse.format.KeepEmptyLinesPolicy.Remove)
 			: macro false;
+		final stripByCurrDocExpr:Expr = beforeDocCommentEmptyLines
+			? macro (_currHasDocComment && opt.beforeDocCommentEmptyLines == anyparse.format.CommentEmptyLinesPolicy.None)
+			: macro false;
+		final addByCurrDocExpr:Expr = beforeDocCommentEmptyLines
+			? macro (_currHasDocComment && opt.beforeDocCommentEmptyLines == anyparse.format.CommentEmptyLinesPolicy.One)
+			: macro false;
+		final currHasDocComputeExpr:Expr = beforeDocCommentEmptyLines ? macro {
+			_currHasDocComment = false;
+			var _cdci:Int = 0;
+			while (_cdci < _t.leadingComments.length) {
+				if (StringTools.startsWith(_t.leadingComments[_cdci], '/**')) {
+					_currHasDocComment = true;
+					break;
+				}
+				_cdci++;
+			}
+		} : macro {};
 		final blankBeforeExpr:Expr = anyEmptyLinesFlag ? macro {
-			final _stripBlank:Bool = $stripByDocExpr || $stripByExistingExpr;
-			final _addBlank:Bool = $addByDocExpr;
+			$currHasDocComputeExpr;
+			final _stripBlank:Bool = $stripByDocExpr || $stripByExistingExpr || $stripByCurrDocExpr;
+			final _addBlank:Bool = $addByDocExpr || $addByCurrDocExpr;
 			final _sourceBlank:Bool = _t.blankBefore && !_stripBlank;
 			if (_si > 0 && (_sourceBlank || _addBlank)) _inner.push(_dhl());
 		} : macro {
@@ -1581,6 +1608,9 @@ class WriterLowering {
 		final initDocCommentExpr:Expr = afterFieldsWithDocComments
 			? macro var _prevHadDocComment:Bool = false
 			: macro {};
+		final initCurrDocCommentExpr:Expr = beforeDocCommentEmptyLines
+			? macro var _currHasDocComment:Bool = false
+			: macro {};
 		return macro {
 			final _arr = $fieldAccess;
 			final _trailLC:Array<String> = $trailLC;
@@ -1592,6 +1622,7 @@ class WriterLowering {
 			} else {
 				final _inner:Array<anyparse.core.Doc> = [];
 				$initDocCommentExpr;
+				$initCurrDocCommentExpr;
 				var _si:Int = 0;
 				while (_si < _arr.length) {
 					final _t = _arr[_si];

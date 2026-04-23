@@ -112,13 +112,21 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   `opt.existingBetweenFields`. Default `Keep` preserves source
  *   blank lines between class members; `Remove` strips every blank
  *   line between siblings regardless of source.
+ * - `emptyLines.beforeDocCommentEmptyLines` (ω-C-empty-lines-before-doc):
+ *   enum string — same three-way collapse as
+ *   `afterFieldsWithDocComments` (`"ignore"` / `"none"` / `"one"`),
+ *   routed to `opt.beforeDocCommentEmptyLines`. Default `One` adds one
+ *   blank line before a class member whose leading trivia starts with
+ *   a doc comment even when the source had none; `Ignore` respects the
+ *   captured source blank-line count; `None` strips any blank line
+ *   before such a field.
  *
  * Deliberately NOT supported in this slice (no corresponding
  * `HxModuleWriteOptions` field yet): `wrapping.*` beyond
  * `maxLineLength`, other `lineEnds.*` keys (`rightCurly`, `blockCurly`,
  * `objectLiteralCurly`, …), other `emptyLines.*` keys
  * (`finalNewline`, `maxAnywhereInFile`, `beforePackage`, `afterPackage`,
- * `betweenTypes`, `beforeDocCommentEmptyLines`, per-type-kind sections
+ * `betweenTypes`, per-type-kind sections
  * `macroClassEmptyLines` / `externClassEmptyLines` /
  * `abstractEmptyLines` / `interfaceEmptyLines` / `enumEmptyLines` /
  * `typedefEmptyLines`, other `classEmptyLines.*` sub-keys beyond
@@ -176,6 +184,7 @@ final class HaxeFormatConfigLoader {
 			fitLineIfWithElse: base.fitLineIfWithElse,
 			afterFieldsWithDocComments: base.afterFieldsWithDocComments,
 			existingBetweenFields: base.existingBetweenFields,
+			beforeDocCommentEmptyLines: base.beforeDocCommentEmptyLines,
 		};
 		if (cfg.indentation != null) applyIndentation(cfg.indentation, result);
 		if (cfg.wrapping != null) applyWrapping(cfg.wrapping, result);
@@ -250,6 +259,8 @@ final class HaxeFormatConfigLoader {
 	private static function applyEmptyLines(section:HxFormatEmptyLinesSection, opt:HxModuleWriteOptions):Void {
 		if (section.afterFieldsWithDocComments != null)
 			opt.afterFieldsWithDocComments = commentEmptyLinesToRuntime(section.afterFieldsWithDocComments);
+		if (section.beforeDocCommentEmptyLines != null)
+			opt.beforeDocCommentEmptyLines = commentEmptyLinesToRuntime(section.beforeDocCommentEmptyLines);
 		final classSection:Null<HxFormatClassEmptyLinesConfig> = section.classEmptyLines;
 		if (classSection != null && classSection.existingBetweenFields != null)
 			opt.existingBetweenFields = keepEmptyLinesToRuntime(classSection.existingBetweenFields);

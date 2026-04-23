@@ -177,6 +177,14 @@ final class HaxeFormat implements TextFormat {
 	 * between siblings regardless of source) requires an explicit
 	 * `hxformat.json` override (`"emptyLines": { "classEmptyLines":
 	 * { "existingBetweenFields": "remove" } }`).
+	 *
+	 * `beforeDocCommentEmptyLines` default (ω-C-empty-lines-before-doc)
+	 * is `One` — one blank line before any class member whose leading
+	 * trivia carries a doc comment. Matches haxe-formatter's
+	 * `emptyLines.beforeDocCommentEmptyLines: @:default(One)`. Opting
+	 * into `Ignore` (respect source blank-line count) or `None` (strip
+	 * the blank line) requires an explicit `hxformat.json` override
+	 * (`"emptyLines": { "beforeDocCommentEmptyLines": "ignore" | "none" }`).
 	 */
 	public var defaultWriteOptions(default, null):HxModuleWriteOptions = {
 		indentChar: Tab,
@@ -205,6 +213,7 @@ final class HaxeFormat implements TextFormat {
 		fitLineIfWithElse: false,
 		afterFieldsWithDocComments: CommentEmptyLinesPolicy.One,
 		existingBetweenFields: KeepEmptyLinesPolicy.Keep,
+		beforeDocCommentEmptyLines: CommentEmptyLinesPolicy.One,
 	};
 
 	private function new() {}

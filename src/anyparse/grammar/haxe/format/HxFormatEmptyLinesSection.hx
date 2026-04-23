@@ -11,14 +11,16 @@ package anyparse.grammar.haxe.format;
  * `afterReturn`, `beforeBlocks`, `afterBlocks`, `enumAbstractEmptyLines`,
  * `macroClassEmptyLines`, `externClassEmptyLines`,
  * `abstractEmptyLines`, `interfaceEmptyLines`, `enumEmptyLines`,
- * `typedefEmptyLines`, `conditionalsEmptyLines`,
- * `beforeDocCommentEmptyLines`, `afterFileHeaderComment`,
+ * `typedefEmptyLines`, `conditionalsEmptyLines`, `afterFileHeaderComment`,
  * `betweenMultilineComments`, …) are silently dropped by the ByName
  * struct parser's `UnknownPolicy.Skip` — they land with the slice that
  * introduces the matching writer knob.
  *
  * `afterFieldsWithDocComments` added in slice ω-C-empty-lines-doc
  * (feeds `opt.afterFieldsWithDocComments`).
+ *
+ * `beforeDocCommentEmptyLines` added in slice ω-C-empty-lines-before-doc
+ * (feeds `opt.beforeDocCommentEmptyLines`).
  *
  * `classEmptyLines` nested section added in slice
  * ω-C-empty-lines-between-fields (feeds `opt.existingBetweenFields`
@@ -30,6 +32,8 @@ package anyparse.grammar.haxe.format;
 @:peg typedef HxFormatEmptyLinesSection = {
 
 	@:optional var afterFieldsWithDocComments:HxFormatCommentEmptyLinesPolicy;
+
+	@:optional var beforeDocCommentEmptyLines:HxFormatCommentEmptyLinesPolicy;
 
 	@:optional var classEmptyLines:HxFormatClassEmptyLinesConfig;
 };

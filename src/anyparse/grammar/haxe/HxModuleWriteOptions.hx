@@ -172,6 +172,26 @@ import anyparse.format.WriteOptions;
  *    `HxClassDecl.members` is the only current consumer; interface /
  *    abstract / enum member bodies fall under the same axis but ship
  *    in follow-up slices when their grammar nodes land the flag.
+ *
+ * Field added in slice ω-C-empty-lines-before-doc:
+ *  - `beforeDocCommentEmptyLines` — blank-line policy for the slot
+ *    immediately preceding a class member whose leading trivia starts
+ *    with a doc comment (`/**` prefix). `One` (default, matches haxe-
+ *    formatter's `emptyLines.beforeDocCommentEmptyLines:
+ *    @:default(One)`) forces exactly one blank line before the doc-
+ *    commented field regardless of source — so a plain-commented
+ *    sibling followed by a doc-commented field gets a blank line
+ *    inserted between them even when the source had none. `Ignore`
+ *    honours the captured source blank-line count only (pre-slice
+ *    behaviour). `None` strips any blank line before the doc-commented
+ *    field, even if the source carried one. Mirrors
+ *    `afterFieldsWithDocComments` on the same slot but triggers on the
+ *    next sibling (`_t.leadingComments[0]` starts with `/**`) rather
+ *    than the previous sibling. The knob only triggers at sites tagged
+ *    with `@:fmt(beforeDocCommentEmptyLines)` in the grammar —
+ *    `HxClassDecl.members` is the only current consumer; interface /
+ *    abstract / enum member bodies fall under the same axis but ship
+ *    in follow-up slices when their grammar nodes land the flag.
  */
 typedef HxModuleWriteOptions = WriteOptions & {
 	sameLineElse:SameLinePolicy,
@@ -193,4 +213,5 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	fitLineIfWithElse:Bool,
 	afterFieldsWithDocComments:CommentEmptyLinesPolicy,
 	existingBetweenFields:KeepEmptyLinesPolicy,
+	beforeDocCommentEmptyLines:CommentEmptyLinesPolicy,
 };

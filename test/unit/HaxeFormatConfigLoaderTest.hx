@@ -473,4 +473,92 @@ class HaxeFormatConfigLoaderTest extends Test {
 		Assert.isTrue(out.indexOf('a():Void {}\n\tpublic function b') != -1,
 			'expected all source blanks stripped with ignore+remove in: <$out>');
 	}
+
+	public function testEmptyLinesBeforeDocCommentEmptyLinesDefaultsToOne():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		Assert.equals(CommentEmptyLinesPolicy.One, opts.beforeDocCommentEmptyLines);
+	}
+
+	public function testEmptyLinesBeforeDocCommentEmptyLinesIgnoreMapsToIgnore():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"emptyLines": {"beforeDocCommentEmptyLines": "ignore"}}'
+		);
+		Assert.equals(CommentEmptyLinesPolicy.Ignore, opts.beforeDocCommentEmptyLines);
+	}
+
+	public function testEmptyLinesBeforeDocCommentEmptyLinesNoneMapsToNone():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"emptyLines": {"beforeDocCommentEmptyLines": "none"}}'
+		);
+		Assert.equals(CommentEmptyLinesPolicy.None, opts.beforeDocCommentEmptyLines);
+	}
+
+	public function testEmptyLinesBeforeDocCommentEmptyLinesOneInsertsBlankLine():Void {
+		// Source has no blank line between plain-commented first function
+		// and the doc-commented second function — default `One` policy
+		// forces a blank line before the doc-commented field.
+		final src:String = 'class M {\n\tpublic function a():Void {}\n\t/** */\n\tpublic function b():Void {}\n}';
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		opts.finalNewline = false;
+		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		Assert.isTrue(out.indexOf('a():Void {}\n\n\t/** */\n\tpublic function b') != -1,
+			'expected blank line before doc-commented b() in: <$out>');
+	}
+
+	public function testEmptyLinesBeforeDocCommentEmptyLinesIgnorePreservesSource():Void {
+		// Source has no blank line — `Ignore` policy honours the source
+		// (no blank line in output either). Requires also turning off
+		// `afterFieldsWithDocComments` default to isolate this axis — the
+		// first field has no doc comment so it doesn't fire anyway.
+		final src:String = 'class M {\n\tpublic function a():Void {}\n\t/** */\n\tpublic function b():Void {}\n}';
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"emptyLines": {"beforeDocCommentEmptyLines": "ignore"}}'
+		);
+		opts.finalNewline = false;
+		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		Assert.isTrue(out.indexOf('a():Void {}\n\t/** */\n\tpublic function b') != -1,
+			'expected tight layout (no blank line) with `ignore` in: <$out>');
+	}
+
+	public function testEmptyLinesBeforeDocCommentEmptyLinesNoneStripsBlankLine():Void {
+		// Source HAS a blank line — `None` policy strips it.
+		final src:String = 'class M {\n\tpublic function a():Void {}\n\n\t/** */\n\tpublic function b():Void {}\n}';
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"emptyLines": {"beforeDocCommentEmptyLines": "none"}}'
+		);
+		opts.finalNewline = false;
+		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		Assert.isTrue(out.indexOf('a():Void {}\n\t/** */\n\tpublic function b') != -1,
+			'expected blank line stripped with `none` in: <$out>');
+	}
+
+	public function testEmptyLinesBeforeDocCommentEmptyLinesDoesNotFireForNonDocComment():Void {
+		// Leading `/* */` (non-doc block comment) on second fn should NOT
+		// trigger the policy — only `/**`-prefixed comments count.
+		final src:String = 'class M {\n\tpublic function a():Void {}\n\t/* not doc */\n\tpublic function b():Void {}\n}';
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		opts.finalNewline = false;
+		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		Assert.isTrue(out.indexOf('a():Void {}\n\t/* not doc */\n\tpublic function b') != -1,
+			'expected no blank line when leading is plain block comment in: <$out>');
+	}
+
+	public function testEmptyLinesBeforeDocCommentComposesWithRemove():Void {
+		// issue_208 shape: `existingBetweenFields=remove` +
+		// `afterFieldsWithDocComments=ignore` + default
+		// `beforeDocCommentEmptyLines=One`. Between plain-commented a()
+		// and doc-commented b() the source has no blank — `One` still
+		// inserts one. Between a() and c() (both plain) `remove` strips
+		// the source blank.
+		final src:String = 'class M {\n\tpublic function a():Void {}\n\n\tpublic function c():Void {}\n\t/** */\n\tpublic function b():Void {}\n}';
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"emptyLines": {"afterFieldsWithDocComments": "ignore", "classEmptyLines": {"existingBetweenFields": "remove"}}}'
+		);
+		opts.finalNewline = false;
+		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		Assert.isTrue(out.indexOf('a():Void {}\n\tpublic function c') != -1,
+			'expected blank between a() and c() stripped by `remove` in: <$out>');
+		Assert.isTrue(out.indexOf('c():Void {}\n\n\t/** */\n\tpublic function b') != -1,
+			'expected `One`-inserted blank before doc-commented b() in: <$out>');
+	}
 }
