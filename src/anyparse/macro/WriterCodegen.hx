@@ -323,40 +323,36 @@ class WriterCodegen {
 	}
 
 	/**
-	 * Render a captured leading-comment atom as a Doc text atom.
+	 * Render a captured leading-comment atom as a Doc.
 	 * `content` is VERBATIM per `ω-leading-block-style` — it already
 	 * carries its open/close delimiters (`//…` or `/*…*\/`), so line-
 	 * vs-block choice survives round-trip without style guessing.
 	 *
-	 * One runtime post-process remains: multi-line block comments
-	 * whose closing line is whitespace-only (source tail between the
-	 * last `\n` and the closing `*\/` contains only spaces / tabs and
-	 * does not already end with a space) get a space inserted before
-	 * the closing `*\/` to match haxe-formatter's javadoc-style close
-	 * normalization. Line-style comments and single-line block
-	 * comments emit byte-identical to the captured source.
+	 * Line-style comments and single-line block comments pass through
+	 * as a single `Doc.Text` — there is no handle for re-indent when a
+	 * comment fits on one line.
+	 *
+	 * Multi-line block comments are re-indented by
+	 * `CommentLayout.buildLeadingCommentDoc` so interior lines align
+	 * with the current writer's `indentChar` / `indentSize` /
+	 * `tabWidth` regardless of what the source used. The helper emits
+	 * per-line `Doc.Text` joined by `Doc.Line('\n')`, letting the
+	 * Renderer supply the base indent on each hardline; the helper
+	 * only prefixes the delta (one indent unit for interior, none for
+	 * the closing line, a space for javadoc `* foo` alignment). Also
+	 * subsumes the javadoc-style close-line space-before-`*\/`
+	 * normalization that the pre-reindent helper had.
 	 */
 	private static function leadingCommentDocField():Field {
-		final body:Expr = macro {
-			if (!StringTools.startsWith(content, '/*')) return _dt(content);
-			final _lastNl:Int = content.lastIndexOf('\n');
-			if (_lastNl < 0) return _dt(content);
-			final _closeStart:Int = content.length - 2;
-			var _tailBlank:Bool = true;
-			for (_i in (_lastNl + 1)..._closeStart) {
-				final _c:Int = StringTools.fastCodeAt(content, _i);
-				if (_c != ' '.code && _c != '\t'.code) { _tailBlank = false; break; }
-			}
-			final _endsWithSpace:Bool = _closeStart > 0
-				&& StringTools.fastCodeAt(content, _closeStart - 1) == ' '.code;
-			if (_tailBlank && !_endsWithSpace) return _dt(content.substring(0, _closeStart) + ' */');
-			return _dt(content);
-		};
+		final body:Expr = macro return anyparse.runtime.CommentLayout.buildLeadingCommentDoc(content, opt);
 		return {
 			name: 'leadingCommentDoc',
 			access: [APrivate, AStatic],
 			kind: FFun({
-				args: [{name: 'content', type: macro : String}],
+				args: [
+					{name: 'content', type: macro : String},
+					{name: 'opt', type: macro : anyparse.format.WriteOptions},
+				],
 				ret: macro : anyparse.core.Doc,
 				expr: body,
 			}),
@@ -551,7 +547,7 @@ class WriterCodegen {
 				final _nested:Array<anyparse.core.Doc> = [];
 				for (_c in kwLeading) {
 					_nested.push(_dhl());
-					_nested.push(leadingCommentDoc(_c));
+					_nested.push(leadingCommentDoc(_c, opt));
 				}
 				_parts.push(_dn(cols, _dc(_nested)));
 			}
@@ -567,6 +563,7 @@ class WriterCodegen {
 					{name: 'kwLeading', type: macro : Array<String>},
 					{name: 'cols', type: macro : Int},
 					{name: 'nextCurly', type: macro : Bool},
+					{name: 'opt', type: macro : anyparse.format.WriteOptions},
 				],
 				ret: macro : anyparse.core.Doc,
 				expr: body,

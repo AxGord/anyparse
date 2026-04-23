@@ -1172,7 +1172,7 @@ class WriterLowering {
 		// absent, fall back to the byte-identical pre-slice `_dt(' ')`.
 		final hasKwSlots:Bool = afterKwExpr != null && kwLeadingExpr != null;
 		final sameSepNb:Expr = hasKwSlots
-			? macro kwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, false)
+			? macro kwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, false, opt)
 			: macro _dt(' ');
 		final sameLayoutExpr:Expr = macro _dc([$sameSepNb, $writeCall]);
 		final nextLayoutExpr:Expr = macro _dn(_cols, _dc([_dhl(), $writeCall]));
@@ -1191,7 +1191,7 @@ class WriterLowering {
 			pos: Context.currentPos(),
 		};
 		final sameSepBlock:Expr = hasKwSlots
-			? macro kwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, $isNextExpr)
+			? macro kwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, $isNextExpr, opt)
 			: {
 				expr: ESwitch(macro opt.leftCurly, [
 					{values: [nextPatLC], expr: macro _dhl(), guard: null},
@@ -1630,7 +1630,7 @@ class WriterLowering {
 					$blankBeforeExpr;
 					var _ci:Int = 0;
 					while (_ci < _t.leadingComments.length) {
-						_inner.push(leadingCommentDoc(_t.leadingComments[_ci]));
+						_inner.push(leadingCommentDoc(_t.leadingComments[_ci], opt));
 						_inner.push(_dhl());
 						_ci++;
 					}
@@ -1645,7 +1645,7 @@ class WriterLowering {
 					if (_trailBB && _arr.length > 0) _inner.push(_dhl());
 					var _ti:Int = 0;
 					while (_ti < _trailLC.length) {
-						_inner.push(leadingCommentDoc(_trailLC[_ti]));
+						_inner.push(leadingCommentDoc(_trailLC[_ti], opt));
 						if (_ti < _trailLC.length - 1) _inner.push(_dhl());
 						_ti++;
 					}
@@ -1693,7 +1693,7 @@ class WriterLowering {
 					if (_t.blankBefore && _si > 0) _docs.push(_dhl());
 					var _ci:Int = 0;
 					while (_ci < _t.leadingComments.length) {
-						_docs.push(leadingCommentDoc(_t.leadingComments[_ci]));
+						_docs.push(leadingCommentDoc(_t.leadingComments[_ci], opt));
 						_docs.push(_dhl());
 						_ci++;
 					}
@@ -1707,7 +1707,7 @@ class WriterLowering {
 					if (_trailBB && _arr.length > 0) _docs.push(_dhl());
 					var _ti:Int = 0;
 					while (_ti < _trailLC.length) {
-						_docs.push(leadingCommentDoc(_trailLC[_ti]));
+						_docs.push(leadingCommentDoc(_trailLC[_ti], opt));
 						if (_ti < _trailLC.length - 1) _docs.push(_dhl());
 						_ti++;
 					}
@@ -1781,7 +1781,7 @@ class WriterLowering {
 						if (_t.blankBefore && _si > 0) _docs.push(_dhl());
 						var _ci:Int = 0;
 						while (_ci < _t.leadingComments.length) {
-							_docs.push(leadingCommentDoc(_t.leadingComments[_ci]));
+							_docs.push(leadingCommentDoc(_t.leadingComments[_ci], opt));
 							_docs.push(_dhl());
 							_ci++;
 						}
@@ -1802,7 +1802,7 @@ class WriterLowering {
 					while (_ti < _trailLC.length) {
 						_docs.push(_dhl());
 						if (_trailBB && _ti == 0 && _arr.length > 0) _docs.push(_dhl());
-						_docs.push(leadingCommentDoc(_trailLC[_ti]));
+						_docs.push(leadingCommentDoc(_trailLC[_ti], opt));
 						_ti++;
 					}
 				}

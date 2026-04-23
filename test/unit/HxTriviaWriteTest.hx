@@ -174,4 +174,78 @@ class HxTriviaWriteTest extends Test {
 		final out:String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals(source + '\n', out);
 	}
+
+	/**
+	 * ω-C-reindent — multi-line `/*…*\/` with space-indented interior
+	 * gets re-indented to match writer's `indentChar=Tab`. Reproduces
+	 * `issue_51_adjust_comment_indentation.hxtest`: a block comment
+	 * inside a class body whose interior lines were 8-space indented
+	 * in the source is re-emitted at `1 tab (class body) + 1 tab
+	 * (interior offset) = 2 tabs`.
+	 */
+	public function testMultiLineBlockCommentReindentedFromSpaces():Void {
+		final source:String = 'class Main {\n'
+			+ '    /**\n'
+			+ '        Description\n'
+			+ '         - point A\n'
+			+ '         - point B\n'
+			+ '    **/\n'
+			+ '    static public function main() {}\n'
+			+ '}';
+		final expected:String = 'class Main {\n'
+			+ '\t/**\n'
+			+ '\t\tDescription\n'
+			+ '\t\t - point A\n'
+			+ '\t\t - point B\n'
+			+ '\t**/\n'
+			+ '\tstatic public function main() {}\n'
+			+ '}\n';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out:String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals(expected, out);
+	}
+
+	/**
+	 * ω-C-reindent — javadoc-style ` * foo` interior lines keep their
+	 * single-space alignment after re-indent (startsWithStar branch),
+	 * so `* ` lines land at `currentIndent + " " + "* foo"` rather
+	 * than `currentIndent + indentUnit + "* foo"`.
+	 */
+	public function testMultiLineBlockCommentJavadocStylePreserved():Void {
+		final source:String = 'class Main {\n'
+			+ '\t/**\n'
+			+ '\t * first\n'
+			+ '\t * second\n'
+			+ '\t */\n'
+			+ '\tvar x:Int;\n'
+			+ '}';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out:String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals(source + '\n', out);
+	}
+
+	/**
+	 * ω-C-reindent — two-line `/** … \n cont. *\/` where the
+	 * continuation line's source `\t` prefix is smaller than its
+	 * "interior" level. Reproduces axis-3 of
+	 * `issue_208_additional_unstable_comments.hxtest`: the
+	 * continuation gets `\t\t` on output because the leading
+	 * non-star line triggers `lineIndent = indent + 1` in the
+	 * last-line branch of the re-indent algorithm.
+	 */
+	public function testMultiLineBlockCommentContinuationNonStarIndents():Void {
+		final source:String = 'class Main {\n'
+			+ '\t/** one, two,\n'
+			+ '\tthree. */\n'
+			+ '\tvar x:Int;\n'
+			+ '}';
+		final expected:String = 'class Main {\n'
+			+ '\t/** one, two,\n'
+			+ '\t\tthree. */\n'
+			+ '\tvar x:Int;\n'
+			+ '}\n';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out:String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals(expected, out);
+	}
 }
