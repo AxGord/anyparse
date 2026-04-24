@@ -10,6 +10,7 @@ import unit.HxPrattSliceTest;
 import unit.HxPrattOpsTest;
 import unit.HxPostfixSliceTest;
 import unit.HxModifierSliceTest;
+import unit.HxVarNoTypeSliceTest;
 import unit.HxBodySliceTest;
 import unit.HxTernarySliceTest;
 import unit.HxTopLevelSliceTest;
@@ -66,6 +67,7 @@ class RunTests {
 		runner.addCase(new HxPrefixSliceTest());
 		runner.addCase(new HxPostfixSliceTest());
 		runner.addCase(new HxModifierSliceTest());
+		runner.addCase(new HxVarNoTypeSliceTest());
 		runner.addCase(new HxParamSliceTest());
 		runner.addCase(new HxBodySliceTest());
 		runner.addCase(new HxTernarySliceTest());

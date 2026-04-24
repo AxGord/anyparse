@@ -1,12 +1,11 @@
 package unit;
 
 import utest.Assert;
-import utest.Test;
 import anyparse.format.BodyPolicy;
 import anyparse.grammar.haxe.HaxeFormat;
+import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
-import anyparse.grammar.haxe.HaxeModuleParser;
 
 /**
  * Idempotency round-trip tests for the macro-generated writer.
@@ -15,18 +14,7 @@ import anyparse.grammar.haxe.HaxeModuleParser;
  * The first write normalises formatting; the second write must produce
  * identical output, proving the generated writer emits parseable, stable text.
  */
-class HaxeWriterRoundTripTest extends Test {
-
-	private function roundTrip(source:String, ?label:String):Void {
-		final written1:String = HxModuleWriter.write(HaxeModuleParser.parse(source));
-		final written2:String = try {
-			HxModuleWriter.write(HaxeModuleParser.parse(written1));
-		} catch (e:Dynamic) {
-			Assert.fail("reparse failed for " + (label ?? source) + ": written1=<" + written1 + ">, err=" + e);
-			return;
-		};
-		Assert.equals(written1, written2, "idempotency failed for " + (label ?? source));
-	}
+class HaxeWriterRoundTripTest extends HxTestHelpers {
 
 	function testEmptyModule():Void {
 		roundTrip('', 'empty');

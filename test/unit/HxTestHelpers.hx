@@ -1,7 +1,9 @@
 package unit;
 
+import haxe.Exception;
 import utest.Assert;
 import utest.Test;
+import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxAbstractDecl;
 import anyparse.grammar.haxe.HxClassDecl;
@@ -13,6 +15,7 @@ import anyparse.grammar.haxe.HxEnumDecl;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxIdentLit;
 import anyparse.grammar.haxe.HxInterfaceDecl;
+import anyparse.grammar.haxe.HxModuleWriter;
 import anyparse.grammar.haxe.HxTypedefDecl;
 import anyparse.grammar.haxe.HxVarDecl;
 
@@ -24,6 +27,22 @@ import anyparse.grammar.haxe.HxVarDecl;
  * duplicating these methods in every test file.
  */
 class HxTestHelpers extends Test {
+
+	/**
+	 * Idempotency round-trip check: `write(parse(write(parse(s))))`
+	 * must equal `write(parse(s))`. The first write normalises formatting;
+	 * the second must produce identical output.
+	 */
+	private function roundTrip(source:String, ?label:String):Void {
+		final written1:String = HxModuleWriter.write(HaxeModuleParser.parse(source));
+		final written2:String = try {
+			HxModuleWriter.write(HaxeModuleParser.parse(written1));
+		} catch (exception:Exception) {
+			Assert.fail('reparse failed for ${label ?? source}: written1=<$written1>, err=${exception.message}');
+			return;
+		}
+		Assert.equals(written1, written2, 'idempotency failed for ${label ?? source}');
+	}
 
 	private function parseSingleVarDecl(source:String):HxVarDecl {
 		final ast:HxClassDecl = HaxeParser.parse(source);
