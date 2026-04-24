@@ -6,7 +6,7 @@ package anyparse.grammar.haxe;
  *
  * Fourteen atom constructors plus three unary-prefix constructors plus
  * three postfix constructors (field access, index access, call) plus
- * one ternary operator plus thirty-four binary-operator constructors
+ * one ternary operator plus thirty-five binary-operator constructors
  * across ten precedence levels. Atoms, prefix and postfix are all
  * reached through a single `parseHxExprAtom` call — internally split
  * into `parseHxExprAtom` (the wrapper) and `parseHxExprAtomCore` (the
@@ -156,7 +156,11 @@ package anyparse.grammar.haxe;
  *  - prec 8 — `+` `-` (additive, left-assoc)
  *  - prec 7 — `<<` `>>` `>>>` (shift, left-assoc)
  *  - prec 6 — `|` `&` `^` (bitwise, left-assoc)
- *  - prec 5 — `==` `!=` `<=` `>=` `<` `>` (comparison, left-assoc)
+ *  - prec 5 — `==` `!=` `<=` `>=` `<` `>` (comparison, left-assoc) and
+ *    `...` (interval / range). Tight-spaced in the writer via
+ *    `@:fmt(tight)` on the ctor so `0...n` stays compact; arithmetic
+ *    (`+`, `-`, `*`, `/`) at prec 8-9 binds tighter, so `0...n + 1`
+ *    parses as `0...(n + 1)` matching Haxe's convention.
  *  - prec 4 — `&&` (logical and, left-assoc)
  *  - prec 3 — `||` (logical or, left-assoc)
  *  - prec 2 — `??` (null-coalescing, **right-assoc**)
@@ -293,6 +297,9 @@ enum HxExpr {
 
 	@:infix('>', 5)
 	Gt(left:HxExpr, right:HxExpr);
+
+	@:infix('...', 5) @:fmt(tight)
+	Interval(left:HxExpr, right:HxExpr);
 
 	@:infix('&&', 4)
 	And(left:HxExpr, right:HxExpr);

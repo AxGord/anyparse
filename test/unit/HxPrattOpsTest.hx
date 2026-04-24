@@ -314,6 +314,68 @@ class HxPrattOpsTest extends HxTestHelpers {
 		}
 	}
 
+	// -------- interval `...` --------
+
+	public function testInterval():Void {
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = 0...3; }');
+		switch decl.init {
+			case Interval(IntLit(l), IntLit(r)):
+				Assert.equals(0, (l : Int));
+				Assert.equals(3, (r : Int));
+			case null, _:
+				Assert.fail('expected Interval(0, 3), got ${decl.init}');
+		}
+	}
+
+	public function testIntervalAddTighter():Void {
+		// 0...n + 1 → Interval(0, Add(n, 1)). Prec 5 (interval) sits
+		// below prec 8 (additive), so `+` binds tighter.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = 0...n + 1; }');
+		switch decl.init {
+			case Interval(IntLit(a), Add(IdentExpr(b), IntLit(c))):
+				Assert.equals(0, (a : Int));
+				Assert.equals('n', (b : String));
+				Assert.equals(1, (c : Int));
+			case null, _:
+				Assert.fail('expected Interval(0, Add(n, 1)), got ${decl.init}');
+		}
+	}
+
+	public function testIntervalPostfixTighter():Void {
+		// 0...arr.length → Interval(0, FieldAccess(arr, length)). Postfix
+		// always binds tighter than any Pratt infix.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = 0...arr.length; }');
+		switch decl.init {
+			case Interval(IntLit(a), FieldAccess(IdentExpr(b), c)):
+				Assert.equals(0, (a : Int));
+				Assert.equals('arr', (b : String));
+				Assert.equals('length', (c : String));
+			case null, _:
+				Assert.fail('expected Interval(0, FieldAccess(arr, length)), got ${decl.init}');
+		}
+	}
+
+	public function testIntervalInForLoop():Void {
+		// `for (i in 0...n) a();` — parser-side regression for the
+		// range-literal gap that empirically blocked a handful of corpus
+		// fixtures. Iterable is `HxExpr`; Interval at prec 5 fits
+		// inside the for-head slot.
+		HaxeParser.parse('class Foo { static function f() { for (i in 0...10) a(); } }');
+		Assert.pass();
+	}
+
+	public function testIntervalWriterTight():Void {
+		// Byte-exact: writer emits `0...n` without spaces around `...`.
+		// Routed via `FormatInfo.tightInfixOps` = `['...']` on HaxeFormat
+		// (contrast with `a + b` where `+` gets the default spaced layout).
+		// Use var-init position (no body-policy wrapping) to isolate the
+		// tight-infix output from downstream layout defaults.
+		final src:String = 'class Foo {\n\tvar x:Int = 0...n;\n}\n';
+		final module:anyparse.grammar.haxe.HxModule = anyparse.grammar.haxe.HaxeModuleParser.parse(src);
+		final out:String = anyparse.grammar.haxe.HxModuleWriter.write(module);
+		Assert.equals(src, out);
+	}
+
 	// -------- rejections --------
 
 	public function testRejectsTrailingLt():Void {

@@ -457,6 +457,23 @@ class Lowering {
 			final lb:Int = (b.annotations.get('postfix.op') : String).length;
 			return lb - la;
 		});
+		// Cross-category longer-prefix resolution: a postfix op that is a
+		// strict prefix of another op in the same enum (postfix, infix, or
+		// ternary) must lose to that longer op. Without this, postfix `.`
+		// commits on the first `.` of `...` — then fails to parse a
+		// following HxIdentLit and throws upward, rewinding past the entire
+		// HxVarDecl/HxClassMember/… chain. Collecting ALL op literals on
+		// the enum lets us emit a `!peekLit(longer)` guard per conflict so
+		// the postfix dispatch declines and Pratt picks up the longer op.
+		final allOps:Array<String> = [];
+		for (b in node.children) {
+			final po:Null<String> = b.annotations.get('postfix.op');
+			if (po != null) allOps.push(po);
+			final pr:Null<String> = b.annotations.get('pratt.op');
+			if (pr != null) allOps.push(pr);
+			final tr:Null<String> = b.annotations.get('ternary.op');
+			if (tr != null) allOps.push(tr);
+		}
 		// Fold the dispatch chain right-to-left, mirroring lowerPrattLoop.
 		var opChain:Expr = macro _matched = false;
 		for (i in 0...postfixBranches.length) {
@@ -621,7 +638,16 @@ class Lowering {
 				);
 				throw 'unreachable';
 			};
-			opChain = macro if (matchLit(ctx, $v{op})) $branchBody else $opChain;
+			// Prepend `!peekLit(longerOp)` guards for every op literal that
+			// strictly starts with `op`. Short-circuits so matchLit is not
+			// called when a longer op is about to match.
+			var matchExpr:Expr = macro matchLit(ctx, $v{op});
+			for (other in allOps) {
+				if (other.length > op.length && StringTools.startsWith(other, op)) {
+					matchExpr = macro !peekLit(ctx, $v{other}) && $matchExpr;
+				}
+			}
+			opChain = macro if ($matchExpr) $branchBody else $opChain;
 		}
 		return macro {
 			var left:$returnCT = $coreCall;

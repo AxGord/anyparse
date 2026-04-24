@@ -147,7 +147,13 @@ class WriterLowering {
 			final opText:String = getOperatorText(branch);
 			final leftCtx:Int = assoc == 'Right' ? prec + 1 : prec;
 			final rightCtx:Int = assoc == 'Right' ? prec : prec + 1;
-			final opWithSpaces:String = ' ' + opText + ' ';
+			// `@:fmt(tight)` on the ctor suppresses the default surrounding
+			// spaces. Used by Haxe's interval `...` where `0...n` is the
+			// idiomatic shape — the policy is grammar-level (per-operator),
+			// not format-level, because tightness is a property of the
+			// specific operator literal, not the language as a whole.
+			final isTight:Bool = fmtHasFlag(branch, 'tight');
+			final opWithSpaces:String = isTight ? opText : ' ' + opText + ' ';
 			final leftCall:Expr = makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, leftCtx);
 			final rightCall:Expr = makeWriteCall(writeFnName, macro $i{argNames[1]}, hasPratt, rightCtx);
 			return macro {
