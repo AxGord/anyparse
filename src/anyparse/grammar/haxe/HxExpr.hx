@@ -4,7 +4,7 @@ package anyparse.grammar.haxe;
  * Haxe expression grammar — arrow operator, array/map literals, ternary,
  * null-coalescing, and the full infix/prefix/postfix suite.
  *
- * Eleven atom constructors plus three unary-prefix constructors plus
+ * Fourteen atom constructors plus three unary-prefix constructors plus
  * three postfix constructors (field access, index access, call) plus
  * one ternary operator plus thirty-four binary-operator constructors
  * across ten precedence levels. Atoms, prefix and postfix are all
@@ -219,6 +219,9 @@ enum HxExpr {
 
 	@:kw('if')
 	IfExpr(stmt:HxIfExpr);
+
+	@:kw('switch')
+	SwitchExpr(stmt:HxSwitchStmt);
 
 	IdentExpr(v:HxIdentLit);
 

@@ -184,6 +184,22 @@ class HaxeWriterRoundTripTest extends Test {
 		roundTrip('class F { function f():Int { return if (c) 1 else 2; } }', 'if-expr as return value');
 	}
 
+	function testSwitchExprInReturn():Void {
+		roundTrip('class F { function f():String { return switch (x) { case 1: "a"; case _: "b"; }; } }', 'switch-expr as return value');
+	}
+
+	function testSwitchExprInInit():Void {
+		roundTrip('class F { function f():Void { var y:String = switch (x) { case 1: "a"; case _: "b"; }; } }', 'switch-expr as var init');
+	}
+
+	function testSwitchExprInCall():Void {
+		roundTrip('class F { function f():Void { trace(switch (x) { case 1: "a"; case _: "b"; }); } }', 'switch-expr as call arg');
+	}
+
+	function testSwitchExprInObjectField():Void {
+		roundTrip('class F { function f():Void { var o:Dynamic = {label: switch (x) { case 1: "a"; case _: "b"; }}; } }', 'switch-expr as object-literal value');
+	}
+
 	function testWhileStmt():Void {
 		roundTrip('class F { function f():Void { while (x) return 1; } }');
 	}

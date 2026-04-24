@@ -386,4 +386,77 @@ class HxSwitchNewSliceTest extends HxTestHelpers {
 			case null, _: Assert.fail('expected ExprStmt');
 		}
 	}
+
+	// ---- Switch expression tests ----
+
+	/** Extract the SwitchExpr atom from a return/expr/var-init outer statement. */
+	private function expectSwitchExprRhs(source:String):HxSwitchStmt {
+		final body:Array<HxStatement> = parseBody(source);
+		Assert.equals(1, body.length);
+		return switch body[0] {
+			case ReturnStmt(expr) | ExprStmt(expr):
+				switch expr {
+					case SwitchExpr(stmt): stmt;
+					case null, _: throw 'expected SwitchExpr rhs';
+				}
+			case VarStmt(decl):
+				switch decl.init {
+					case SwitchExpr(stmt): stmt;
+					case null, _: throw 'expected SwitchExpr init';
+				}
+			case null, _: throw 'expected Return/Expr/Var stmt';
+		};
+	}
+
+	public function testSwitchExprInReturn():Void {
+		final sw:HxSwitchStmt = expectSwitchExprRhs(
+			'class C { function f():String { return switch (x) { case 1: "a"; case _: "b"; }; } }'
+		);
+		Assert.equals(2, sw.cases.length);
+	}
+
+	public function testSwitchExprInVarInit():Void {
+		final sw:HxSwitchStmt = expectSwitchExprRhs(
+			'class C { function f():Void { var y:String = switch (x) { case 1: "a"; case _: "b"; }; } }'
+		);
+		Assert.equals(2, sw.cases.length);
+	}
+
+	public function testSwitchExprInCallArg():Void {
+		final body:Array<HxStatement> = parseBody(
+			'class C { function f():Void { trace(switch (x) { case 1: "a"; case _: "b"; }); } }'
+		);
+		Assert.equals(1, body.length);
+		switch body[0] {
+			case ExprStmt(expr):
+				switch expr {
+					case Call(_, args):
+						Assert.equals(1, args.length);
+						switch args[0] {
+							case SwitchExpr(stmt): Assert.equals(2, stmt.cases.length);
+							case null, _: Assert.fail('expected SwitchExpr arg');
+						}
+					case null, _: Assert.fail('expected Call');
+				}
+			case null, _: Assert.fail('expected ExprStmt');
+		}
+	}
+
+	public function testSwitchExprInObjectField():Void {
+		final body:Array<HxStatement> = parseBody(
+			'class C { function f():Void { var o:Dynamic = {label: switch (x) { case 1: "a"; case _: "b"; }}; } }'
+		);
+		Assert.equals(1, body.length);
+	}
+
+	public function testSwitchStmtStillDispatchedAtStmtLevel():Void {
+		// Statement-level `switch` must still hit HxStatement.SwitchStmt (no trailing `;`),
+		// not be absorbed by HxExpr.SwitchExpr + ExprStmt (which requires `;`).
+		final body:Array<HxStatement> = parseBody('class C { function f():Void { switch (x) { case 1: y; } } }');
+		Assert.equals(1, body.length);
+		switch body[0] {
+			case SwitchStmt(_): Assert.pass();
+			case null, _: Assert.fail('expected SwitchStmt at statement level');
+		}
+	}
 }

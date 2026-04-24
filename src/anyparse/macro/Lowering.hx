@@ -264,9 +264,9 @@ class Lowering {
 	 * runtime switch on associativity.
 	 */
 	private function lowerPrattLoop(node:ShapeNode, typePath:String, simple:String):Expr {
-		final returnCT:ComplexType = TPath({pack: packOf(typePath), name: simple, params: []});
-		final loopFnName:String = 'parse$simple';
-		final atomFnName:String = 'parse${simple}Atom';
+		final returnCT:ComplexType = ruleReturnCT(typePath);
+		final loopFnName:String = parseFnName(typePath);
+		final atomFnName:String = '${loopFnName}Atom';
 		final atomCall:Expr = {
 			expr: ECall(macro $i{atomFnName}, [macro ctx]),
 			pos: Context.currentPos(),
@@ -306,7 +306,7 @@ class Lowering {
 		for (i in 0...operatorBranches.length) {
 			final branch:ShapeNode = operatorBranches[operatorBranches.length - 1 - i];
 			final ctor:String = branch.annotations.get('base.ctor');
-			final ctorPath:Array<String> = packOf(typePath).concat([simple, ctor]);
+			final ctorPath:Array<String> = ruleCtorPath(typePath, ctor);
 			final ctorRef:Expr = MacroStringTools.toFieldExpr(ctorPath);
 			final isTernary:Bool = branch.annotations.get('ternary.op') != null;
 			final opText:String = getOperatorText(branch);
@@ -438,9 +438,9 @@ class Lowering {
 	 * which is not wired for postfix in this slice.
 	 */
 	private function lowerPostfixLoop(node:ShapeNode, typePath:String, simple:String, coreFnName:String):Expr {
-		final returnCT:ComplexType = TPath({pack: packOf(typePath), name: simple, params: []});
+		final returnCT:ComplexType = ruleReturnCT(typePath);
 		final enumSimple:String = simple;
-		final selfFnName:String = 'parse$simple';
+		final selfFnName:String = parseFnName(typePath);
 		final coreCall:Expr = {
 			expr: ECall(macro $i{coreFnName}, [macro ctx]),
 			pos: Context.currentPos(),
@@ -484,7 +484,7 @@ class Lowering {
 					Context.currentPos()
 				);
 			}
-			final ctorPath:Array<String> = packOf(typePath).concat([enumSimple, ctor]);
+			final ctorPath:Array<String> = ruleCtorPath(typePath, ctor);
 			final ctorRef:Expr = MacroStringTools.toFieldExpr(ctorPath);
 			final branchBody:Expr = if (children.length == 1) {
 				if (close == null) {
@@ -526,12 +526,12 @@ class Lowering {
 				final elemRefName:String = inner.annotations.get('base.ref');
 				final elemFn:String = simpleName(elemRefName) == enumSimple
 					? selfFnName
-					: 'parse${simpleName(elemRefName)}';
+					: parseFnName(elemRefName);
 				final elemCall:Expr = {
 					expr: ECall(macro $i{elemFn}, [macro ctx]),
 					pos: Context.currentPos(),
 				};
-				final elemCT:ComplexType = TPath({pack: packOf(elemRefName), name: simpleName(elemRefName), params: []});
+				final elemCT:ComplexType = ruleReturnCT(elemRefName);
 				// See struct-field close-peek (emitStarFieldSteps) for why
 				// we flip to full-string `peekLit` when close is multi-byte.
 				final closeCharCode:Int = close.charCodeAt(0);
@@ -592,12 +592,12 @@ class Lowering {
 				// `parseXxxSuffix` call is just a terminal call.
 				final suffixFn:String = simpleName(suffixRef) == enumSimple
 					? selfFnName
-					: 'parse${simpleName(suffixRef)}';
+					: parseFnName(suffixRef);
 				final suffixCall:Expr = {
 					expr: ECall(macro $i{suffixFn}, [macro ctx]),
 					pos: Context.currentPos(),
 				};
-				final suffixCT:ComplexType = TPath({pack: packOf(suffixRef), name: simpleName(suffixRef), params: []});
+				final suffixCT:ComplexType = ruleReturnCT(suffixRef);
 				final ctorCall:Expr = {expr: ECall(ctorRef, [macro left, macro _suffix]), pos: Context.currentPos()};
 				if (close == null) {
 					macro {
@@ -687,7 +687,7 @@ class Lowering {
 					Context.currentPos()
 				);
 			}
-			final operandCT:ComplexType = TPath({pack: packOf(typePath), name: enumSimple, params: []});
+			final operandCT:ComplexType = ruleReturnCT(typePath);
 			final recurseCall:Expr = {
 				expr: ECall(macro $i{recurseFnName}, [macro ctx]),
 				pos: Context.currentPos(),
