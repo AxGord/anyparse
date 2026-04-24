@@ -30,8 +30,10 @@ import anyparse.format.WriteOptions;
  *    Wrap literals (`/*` / `*\/` / `/**` / `**\/`) come from the
  *    enum's `@:lead` / `@:trail` metas — this class never hardcodes
  *    them.
- *  - **Line variant**: for `Javadoc` output → `StarredLine` (canonical
- *    marker fabricated); for `JavadocNoStars` / `Plain` → `PlainLine`.
+ *  - **Line variant**: for `Javadoc` output → `JavadocLine` /
+ *    `JavadocBlankLine` (canonical prefixes declared by
+ *    `@:lead(' * ')` / `@:lit(' *')` on those variants in
+ *    `BlockCommentLine`); for `JavadocNoStars` / `Plain` → `PlainLine`.
  *  - **Indent canonicalization**: source leading ws is reduced via
  *    common-prefix across non-blank lines; remainder becomes the
  *    relative offset carried into the canonical `ws`. Absolute
@@ -43,15 +45,6 @@ import anyparse.format.WriteOptions;
  *    dropped so wrap delimiters sit on their own lines.
  */
 class HaxeCommentNormalizer {
-
-	// Canonical Javadoc line prefixes. These are Haxe-plugin canonical
-	// forms — the one place in the plugin that decides "a starred
-	// content line is written as ` * <content>`, a starred blank
-	// line as ` *`". Parser-side capture is permissive (any ws +
-	// star + optional sep); this is the write-side canonical.
-	private static inline final JAVADOC_MARKER_SPACED:String = '* ';
-	private static inline final JAVADOC_MARKER_BLANK:String = '*';
-	private static inline final JAVADOC_WS:String = ' ';
 
 	public static function normalize(source:BlockComment, opt:WriteOptions):BlockComment {
 		final sourceLines:Array<BlockCommentLine> = switch source {
@@ -103,19 +96,9 @@ class HaxeCommentNormalizer {
 			final sourceWs:String = getLineWs(ln);
 			final relWs:String = sourceWs.length > commonLen ? sourceWs.substr(commonLen) : '';
 			if (withStars) {
-				if (content.length > 0) {
-					result.push(BlockCommentLine.StarredLine({
-						ws: JAVADOC_WS,
-						marker: JAVADOC_MARKER_SPACED,
-						content: relWs + content,
-					}));
-				} else {
-					result.push(BlockCommentLine.StarredLine({
-						ws: JAVADOC_WS,
-						marker: JAVADOC_MARKER_BLANK,
-						content: '',
-					}));
-				}
+				result.push(content.length > 0
+					? BlockCommentLine.JavadocLine(relWs + content)
+					: BlockCommentLine.JavadocBlankLine);
 			} else {
 				result.push(BlockCommentLine.PlainLine({
 					ws: indentUnit + relWs,
@@ -126,10 +109,18 @@ class HaxeCommentNormalizer {
 		return result;
 	}
 
+	// The canonical javadoc variants (`JavadocLine` / `JavadocBlankLine`)
+	// are never produced by the parser — permissive `StarredLine` /
+	// `PlainLine` variants catch everything first, per the declaration
+	// order in `BlockCommentLine`. They only appear as normalizer output
+	// on the way to the writer, so the helpers below never observe them
+	// against source input and can safely reject them.
 	private static function getLineWs(ln:BlockCommentLine):String {
 		return switch ln {
 			case StarredLine(body): body.ws;
 			case PlainLine(body): body.ws;
+			case JavadocLine(_) | JavadocBlankLine:
+				throw 'unreachable: parser does not produce canonical javadoc variants';
 		};
 	}
 
@@ -137,6 +128,8 @@ class HaxeCommentNormalizer {
 		return switch ln {
 			case StarredLine(body): StringTools.rtrim(body.content);
 			case PlainLine(body): StringTools.rtrim(body.content);
+			case JavadocLine(_) | JavadocBlankLine:
+				throw 'unreachable: parser does not produce canonical javadoc variants';
 		};
 	}
 }
