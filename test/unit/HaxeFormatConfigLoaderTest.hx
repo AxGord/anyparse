@@ -359,8 +359,11 @@ class HaxeFormatConfigLoaderTest extends Test {
 	public function testEmptyLinesAfterFieldsWithDocCommentsOneInsertsBlankLine():Void {
 		// Source has no blank line between the doc-commented function and
 		// the second function — default `One` policy forces a blank line.
+		// Disable `betweenFunctions` default to isolate the doc-comment axis.
 		final src:String = 'class M {\n\t/** */\n\tpublic function a():Void {}\n\tpublic function b():Void {}\n}';
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"emptyLines": {"classEmptyLines": {"betweenFunctions": 0}}}'
+		);
 		opts.finalNewline = false;
 		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('a():Void {}\n\n\tpublic function b') != -1,
@@ -369,10 +372,11 @@ class HaxeFormatConfigLoaderTest extends Test {
 
 	public function testEmptyLinesAfterFieldsWithDocCommentsIgnorePreservesSource():Void {
 		// Source has no blank line — `Ignore` policy honours the source
-		// (no blank line in output either).
+		// (no blank line in output either). Disable `betweenFunctions`
+		// default to isolate the doc-comment axis.
 		final src:String = 'class M {\n\t/** */\n\tpublic function a():Void {}\n\tpublic function b():Void {}\n}';
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"emptyLines": {"afterFieldsWithDocComments": "ignore"}}'
+			'{"emptyLines": {"afterFieldsWithDocComments": "ignore", "classEmptyLines": {"betweenFunctions": 0}}}'
 		);
 		opts.finalNewline = false;
 		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
@@ -381,10 +385,11 @@ class HaxeFormatConfigLoaderTest extends Test {
 	}
 
 	public function testEmptyLinesAfterFieldsWithDocCommentsNoneStripsBlankLine():Void {
-		// Source HAS a blank line — `None` policy strips it.
+		// Source HAS a blank line — `None` policy strips it. Disable
+		// `betweenFunctions` default to isolate the doc-comment axis.
 		final src:String = 'class M {\n\t/** */\n\tpublic function a():Void {}\n\n\tpublic function b():Void {}\n}';
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"emptyLines": {"afterFieldsWithDocComments": "none"}}'
+			'{"emptyLines": {"afterFieldsWithDocComments": "none", "classEmptyLines": {"betweenFunctions": 0}}}'
 		);
 		opts.finalNewline = false;
 		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
@@ -394,9 +399,12 @@ class HaxeFormatConfigLoaderTest extends Test {
 
 	public function testEmptyLinesAfterFieldsWithDocCommentsDoesNotFireForNonDocComment():Void {
 		// Leading `/* */` (non-doc block comment) on first fn should NOT
-		// trigger the policy — only `/**`-prefixed comments count.
+		// trigger the policy — only `/**`-prefixed comments count. Disable
+		// `betweenFunctions` default to isolate the doc-comment axis.
 		final src:String = 'class M {\n\t/* not doc */\n\tpublic function a():Void {}\n\tpublic function b():Void {}\n}';
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"emptyLines": {"classEmptyLines": {"betweenFunctions": 0}}}'
+		);
 		opts.finalNewline = false;
 		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('a():Void {}\n\tpublic function b') != -1,
@@ -424,9 +432,13 @@ class HaxeFormatConfigLoaderTest extends Test {
 
 	public function testEmptyLinesExistingBetweenFieldsKeepPreservesSourceBlank():Void {
 		// Source has a blank line between the two plain fields — `Keep`
-		// (default) honours it.
+		// (default) honours it. Disable `betweenFunctions` default to
+		// isolate the `existingBetweenFields` axis (otherwise the generic
+		// gate would inject the blank regardless of `Keep`).
 		final src:String = 'class M {\n\tpublic function a():Void {}\n\n\tpublic function b():Void {}\n}';
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"emptyLines": {"classEmptyLines": {"betweenFunctions": 0}}}'
+		);
 		opts.finalNewline = false;
 		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('a():Void {}\n\n\tpublic function b') != -1,
@@ -435,9 +447,11 @@ class HaxeFormatConfigLoaderTest extends Test {
 
 	public function testEmptyLinesExistingBetweenFieldsRemoveStripsSourceBlank():Void {
 		// Source has a blank line — `Remove` policy strips it regardless.
+		// Disable `betweenFunctions` default to isolate the strip axis
+		// (otherwise the generic gate would re-insert after the strip).
 		final src:String = 'class M {\n\tpublic function a():Void {}\n\n\tpublic function b():Void {}\n}';
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"emptyLines": {"classEmptyLines": {"existingBetweenFields": "remove"}}}'
+			'{"emptyLines": {"classEmptyLines": {"existingBetweenFields": "remove", "betweenFunctions": 0}}}'
 		);
 		opts.finalNewline = false;
 		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
@@ -449,10 +463,11 @@ class HaxeFormatConfigLoaderTest extends Test {
 		// Compose with `afterFieldsWithDocComments=One`: the source blank
 		// is stripped by `Remove`, but `One` then re-inserts exactly one
 		// blank after the doc-commented field. Net effect on a source
-		// that already had a blank: idempotent — blank survives.
+		// that already had a blank: idempotent — blank survives. Disable
+		// `betweenFunctions` default to isolate the Remove+One composition.
 		final src:String = 'class M {\n\t/** */\n\tpublic function a():Void {}\n\n\tpublic function b():Void {}\n}';
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"emptyLines": {"classEmptyLines": {"existingBetweenFields": "remove"}}}'
+			'{"emptyLines": {"classEmptyLines": {"existingBetweenFields": "remove", "betweenFunctions": 0}}}'
 		);
 		opts.finalNewline = false;
 		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
@@ -463,10 +478,11 @@ class HaxeFormatConfigLoaderTest extends Test {
 	public function testEmptyLinesExistingBetweenFieldsRemoveWithIgnoreStripsAll():Void {
 		// `existingBetweenFields=remove` with
 		// `afterFieldsWithDocComments=ignore`: no add-policy fires, so
-		// every source blank gets stripped.
+		// every source blank gets stripped. Disable `betweenFunctions`
+		// default so the generic gate also yields no blank.
 		final src:String = 'class M {\n\t/** */\n\tpublic function a():Void {}\n\n\tpublic function b():Void {}\n}';
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"emptyLines": {"afterFieldsWithDocComments": "ignore", "classEmptyLines": {"existingBetweenFields": "remove"}}}'
+			'{"emptyLines": {"afterFieldsWithDocComments": "ignore", "classEmptyLines": {"existingBetweenFields": "remove", "betweenFunctions": 0}}}'
 		);
 		opts.finalNewline = false;
 		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
@@ -496,9 +512,12 @@ class HaxeFormatConfigLoaderTest extends Test {
 	public function testEmptyLinesBeforeDocCommentEmptyLinesOneInsertsBlankLine():Void {
 		// Source has no blank line between plain-commented first function
 		// and the doc-commented second function — default `One` policy
-		// forces a blank line before the doc-commented field.
+		// forces a blank line before the doc-commented field. Disable
+		// `betweenFunctions` default to isolate the before-doc axis.
 		final src:String = 'class M {\n\tpublic function a():Void {}\n\t/** */\n\tpublic function b():Void {}\n}';
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"emptyLines": {"classEmptyLines": {"betweenFunctions": 0}}}'
+		);
 		opts.finalNewline = false;
 		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('a():Void {}\n\n\t/** */\n\tpublic function b') != -1,
@@ -510,9 +529,11 @@ class HaxeFormatConfigLoaderTest extends Test {
 		// (no blank line in output either). Requires also turning off
 		// `afterFieldsWithDocComments` default to isolate this axis — the
 		// first field has no doc comment so it doesn't fire anyway.
+		// Disable `betweenFunctions` default so the generic gate does not
+		// inject the blank independently of the before-doc axis.
 		final src:String = 'class M {\n\tpublic function a():Void {}\n\t/** */\n\tpublic function b():Void {}\n}';
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"emptyLines": {"beforeDocCommentEmptyLines": "ignore"}}'
+			'{"emptyLines": {"beforeDocCommentEmptyLines": "ignore", "classEmptyLines": {"betweenFunctions": 0}}}'
 		);
 		opts.finalNewline = false;
 		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
@@ -521,10 +542,12 @@ class HaxeFormatConfigLoaderTest extends Test {
 	}
 
 	public function testEmptyLinesBeforeDocCommentEmptyLinesNoneStripsBlankLine():Void {
-		// Source HAS a blank line — `None` policy strips it.
+		// Source HAS a blank line — `None` policy strips it. Disable
+		// `betweenFunctions` default so the generic gate does not
+		// re-insert the blank after the before-doc strip.
 		final src:String = 'class M {\n\tpublic function a():Void {}\n\n\t/** */\n\tpublic function b():Void {}\n}';
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"emptyLines": {"beforeDocCommentEmptyLines": "none"}}'
+			'{"emptyLines": {"beforeDocCommentEmptyLines": "none", "classEmptyLines": {"betweenFunctions": 0}}}'
 		);
 		opts.finalNewline = false;
 		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
@@ -534,9 +557,12 @@ class HaxeFormatConfigLoaderTest extends Test {
 
 	public function testEmptyLinesBeforeDocCommentEmptyLinesDoesNotFireForNonDocComment():Void {
 		// Leading `/* */` (non-doc block comment) on second fn should NOT
-		// trigger the policy — only `/**`-prefixed comments count.
+		// trigger the policy — only `/**`-prefixed comments count. Disable
+		// `betweenFunctions` default to isolate the before-doc axis.
 		final src:String = 'class M {\n\tpublic function a():Void {}\n\t/* not doc */\n\tpublic function b():Void {}\n}';
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"emptyLines": {"classEmptyLines": {"betweenFunctions": 0}}}'
+		);
 		opts.finalNewline = false;
 		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('a():Void {}\n\t/* not doc */\n\tpublic function b') != -1,
@@ -548,14 +574,14 @@ class HaxeFormatConfigLoaderTest extends Test {
 		Assert.equals(0, opts.betweenVars);
 	}
 
-	public function testEmptyLinesBetweenFunctionsDefaultsToZero():Void {
+	public function testEmptyLinesBetweenFunctionsDefaultsToOne():Void {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
-		Assert.equals(0, opts.betweenFunctions);
+		Assert.equals(1, opts.betweenFunctions);
 	}
 
-	public function testEmptyLinesAfterVarsDefaultsToZero():Void {
+	public function testEmptyLinesAfterVarsDefaultsToOne():Void {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
-		Assert.equals(0, opts.afterVars);
+		Assert.equals(1, opts.afterVars);
 	}
 
 	public function testEmptyLinesBetweenVarsMapsToInt():Void {
@@ -593,10 +619,13 @@ class HaxeFormatConfigLoaderTest extends Test {
 	}
 
 	public function testEmptyLinesBetweenFunctionsZeroKeepsTightBetweenFns():Void {
-		// Default `betweenFunctions: 0` — no blank line is inserted
-		// between plain sibling functions.
+		// Explicit `betweenFunctions: 0` override — no blank line is
+		// inserted between plain sibling functions. (Upstream default is
+		// `1`; this test exercises the explicit opt-out.)
 		final src:String = 'class M {\n\tpublic function a():Void {}\n\tpublic function b():Void {}\n}';
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"emptyLines": {"classEmptyLines": {"betweenFunctions": 0}}}'
+		);
 		opts.finalNewline = false;
 		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('a():Void {}\n\tpublic function b') != -1,
@@ -609,10 +638,11 @@ class HaxeFormatConfigLoaderTest extends Test {
 		// `beforeDocCommentEmptyLines=One`. Between plain-commented a()
 		// and doc-commented b() the source has no blank — `One` still
 		// inserts one. Between a() and c() (both plain) `remove` strips
-		// the source blank.
+		// the source blank. Disable `betweenFunctions` default to isolate
+		// the Remove + before-doc-One composition.
 		final src:String = 'class M {\n\tpublic function a():Void {}\n\n\tpublic function c():Void {}\n\t/** */\n\tpublic function b():Void {}\n}';
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"emptyLines": {"afterFieldsWithDocComments": "ignore", "classEmptyLines": {"existingBetweenFields": "remove"}}}'
+			'{"emptyLines": {"afterFieldsWithDocComments": "ignore", "classEmptyLines": {"existingBetweenFields": "remove", "betweenFunctions": 0}}}'
 		);
 		opts.finalNewline = false;
 		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);

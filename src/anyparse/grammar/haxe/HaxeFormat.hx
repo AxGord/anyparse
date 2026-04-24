@@ -187,14 +187,18 @@ final class HaxeFormat implements TextFormat {
 	 * the blank line) requires an explicit `hxformat.json` override
 	 * (`"emptyLines": { "beforeDocCommentEmptyLines": "ignore" | "none" }`).
 	 *
-	 * Inter-member blank-line defaults (ω-interblank) are all `0` —
-	 * `betweenVars`, `betweenFunctions`, and `afterVars` contribute
-	 * nothing to the blank-line gate until explicitly overridden. This
-	 * keeps pre-slice output byte-identical. The default-flip to the
-	 * upstream haxe-formatter values (`betweenFunctions: 1`,
-	 * `afterVars: 1`, `betweenVars: 0`) is deferred to a follow-up
-	 * slice so the corpus and unit-test regressions can be audited
-	 * independently from the plumbing.
+	 * Inter-member blank-line defaults (ω-interblank-defaults) match
+	 * haxe-formatter's `emptyLines.classEmptyLines`:
+	 * `betweenFunctions: 1`, `afterVars: 1`, `betweenVars: 0`. One
+	 * blank line is inserted between two sibling functions, and at a
+	 * `var` → `function` or `function` → `var` transition.
+	 * Consecutive vars stay tight. Opting out of these blank-line
+	 * gates requires an explicit `hxformat.json` override
+	 * (`"emptyLines": { "classEmptyLines": { "betweenFunctions": 0,
+	 * "afterVars": 0 } }`). The defaults were kept at `0` for the
+	 * initial ω-interblank plumbing slice to land the infrastructure
+	 * and audit unit/corpus deltas independently; this slice flips
+	 * them to the upstream values.
 	 */
 	public var defaultWriteOptions(default, null):HxModuleWriteOptions = {
 		indentChar: Tab,
@@ -226,8 +230,8 @@ final class HaxeFormat implements TextFormat {
 		existingBetweenFields: KeepEmptyLinesPolicy.Keep,
 		beforeDocCommentEmptyLines: CommentEmptyLinesPolicy.One,
 		betweenVars: 0,
-		betweenFunctions: 0,
-		afterVars: 0,
+		betweenFunctions: 1,
+		afterVars: 1,
 	};
 
 	private function new() {}

@@ -17,10 +17,13 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
  *  - `betweenFunctions` — both are `function` members.
  *  - `afterVars` — kind switches (`var` → `function` or back).
  *
- * All three default to `0` in this slice; the assertions here verify
- * that the defaults preserve pre-slice output, and that a positive
- * override actually injects the blank line between members even when
- * the source had none. Per-element classification happens via
+ * Defaults (post ω-interblank-defaults) match haxe-formatter:
+ * `betweenVars: 0`, `betweenFunctions: 1`, `afterVars: 1`. A blank
+ * line appears between sibling functions and at var↔function
+ * transitions; consecutive vars stay tight. The assertions here
+ * verify the defaults plus that a positive override actually injects
+ * the blank line between members even when the source had none.
+ * Per-element classification happens via
  * `@:fmt(interMemberBlankLines('member', 'VarMember', 'FnMember'))` on
  * `HxClassDecl.members` — the meta names are wired through
  * `WriterLowering.buildInterMemberClassifyInfo`.
@@ -32,11 +35,11 @@ class HxInterMemberBlankLinesOptionsTest extends Test {
 		super();
 	}
 
-	public function testDefaultsAreZero():Void {
+	public function testDefaultsMatchUpstream():Void {
 		final defaults:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
 		Assert.equals(0, defaults.betweenVars);
-		Assert.equals(0, defaults.betweenFunctions);
-		Assert.equals(0, defaults.afterVars);
+		Assert.equals(1, defaults.betweenFunctions);
+		Assert.equals(1, defaults.afterVars);
 	}
 
 	public function testBetweenFunctionsZeroKeepsTight():Void {
@@ -117,8 +120,8 @@ class HxInterMemberBlankLinesOptionsTest extends Test {
 	public function testConfigLoaderMissingSectionKeepsDefaults():Void {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		Assert.equals(0, opts.betweenVars);
-		Assert.equals(0, opts.betweenFunctions);
-		Assert.equals(0, opts.afterVars);
+		Assert.equals(1, opts.betweenFunctions);
+		Assert.equals(1, opts.afterVars);
 	}
 
 	private inline function writeWith(src:String, betweenVars:Int, betweenFunctions:Int, afterVars:Int):String {

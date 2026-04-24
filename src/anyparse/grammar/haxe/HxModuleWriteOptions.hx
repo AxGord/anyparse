@@ -203,14 +203,16 @@ import anyparse.format.WriteOptions;
  *  - `afterVars` — blank-line count at a var→function or
  *    function→var boundary (the first member that switches kind).
  *
- * All three default to `0` (no blank line inserted regardless of
- * neighbour kind) — the default-flip to haxe-formatter's
- * `betweenFunctions: 1 / afterVars: 1 / betweenVars: 0` is deferred
- * to a follow-up slice (`ω-interblank-defaults`), which will audit
- * unit-test and corpus regressions before flipping. Any positive
- * value currently collapses to a single blank-line contribution —
- * the emission path accepts a boolean add-blank contributor per site,
- * not a count loop. Multi-blank support is a future extension.
+ * Defaults (post ω-interblank-defaults) match haxe-formatter:
+ * `betweenFunctions: 1`, `afterVars: 1`, `betweenVars: 0`. One blank
+ * line is inserted between sibling functions and at var↔function
+ * transitions; consecutive vars stay tight. The plumbing for all
+ * three knobs landed in ω-interblank with defaults of `0` so the
+ * flip could be audited independently; this slice closes that gap.
+ * Any positive value currently collapses to a single blank-line
+ * contribution — the emission path accepts a boolean add-blank
+ * contributor per site, not a count loop. Multi-blank support is a
+ * future extension.
  *
  * Kind classification happens at write time via switch on the
  * element's member-variant field, configured per grammar through the
