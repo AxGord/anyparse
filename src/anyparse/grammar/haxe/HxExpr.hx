@@ -217,6 +217,9 @@ enum HxExpr {
 	@:kw('new')
 	NewExpr(expr:HxNewExpr);
 
+	@:kw('if')
+	IfExpr(stmt:HxIfExpr);
+
 	IdentExpr(v:HxIdentLit);
 
 	@:prefix('-')

@@ -1056,7 +1056,18 @@ class Lowering {
 			// the commit-miss path. Landed on synth slots
 			// `<field>BeforeKwNewline:Bool` / `<field>BodyOnSameLine:Bool`
 			// for the writer's `Keep` dispatch.
-			final hasKwTriviaSlots:Bool = isOptionalRef && kwLead != null && ctx.trivia;
+			// Sidecar slots (<field>AfterKw, <field>KwLeading, <field>BeforeKwNewline,
+			// <field>BodyOnSameLine) only exist on the synth paired `*T` type of
+			// trivia-bearing rules. Non-bearing rules have no paired type and the
+			// plain typedef has no sidecar fields, so emitting the locals +
+			// struct-literal writes for them would reference fields that do not
+			// exist on the target type. First non-bearing consumer of the
+			// `@:optional @:kw(...)` pattern is `HxIfExpr` — the expression-
+			// position `if`. Gating on bearing mirrors every other trivia-
+			// conditional branch in the codegen (`parseFnName`, `ruleReturnCT`,
+			// `ruleCtorPath` all return the plain form for non-bearing refs in
+			// trivia mode).
+			final hasKwTriviaSlots:Bool = isOptionalRef && kwLead != null && ctx.trivia && isTriviaBearing(typePath);
 			final afterKwLocal:String = '_afterKw_$fieldName';
 			final kwLeadingLocal:String = '_kwLeading_$fieldName';
 			final beforeKwNlLocal:String = '_beforeKwNl_$fieldName';

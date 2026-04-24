@@ -458,7 +458,7 @@ class WriterLowering {
 			// @:fmt(sameLine(flagName)) on the child switches the leading space to a
 			// hardline when `opt.<flagName>` is false (τ₁).
 			if (kwLead != null && !isOptional) {
-				if (!isFirstField && !isRaw) parts.push(sameLineSeparator(child, prevBodyField));
+				if (!isFirstField && !isRaw) parts.push(sameLineSeparator(child, prevBodyField, typePath));
 				parts.push(macro _dt($v{kwLead + ' '}));
 			}
 
@@ -512,7 +512,7 @@ class WriterLowering {
 						: null;
 					final optParts:Array<Expr> = [];
 					if (kwLead != null) {
-						optParts.push(sameLineSeparator(child, prevBodyField));
+						optParts.push(sameLineSeparator(child, prevBodyField, typePath));
 						if (bodyPolicyFlag != null) {
 							optParts.push(macro _dt($v{kwLead}));
 							optParts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, macro _optVal, refName, hasElseIf, elseFieldName, afterKwExpr, kwLeadingExpr, bodyOnSameLineExpr));
@@ -530,7 +530,7 @@ class WriterLowering {
 							// flag path (`f():Void`).
 							optParts.push(whitespacePolicyLead(child, leadText, ['typeHintColon']));
 						} else {
-							optParts.push(sameLineSeparator(child, prevBodyField));
+							optParts.push(sameLineSeparator(child, prevBodyField, typePath));
 							optParts.push(macro _dt($v{leadText + ' '}));
 						}
 						optParts.push(writeCall);
@@ -946,7 +946,7 @@ class WriterLowering {
 	 * handler (per-element separator, different semantic) and routes
 	 * `Keep` to `Same` since there is no per-element source-shape slot.
 	 */
-	private function sameLineSeparator(child:ShapeNode, prevBody:Null<PrevBodyInfo>):Expr {
+	private function sameLineSeparator(child:ShapeNode, prevBody:Null<PrevBodyInfo>, typePath:String):Expr {
 		final flagName:Null<String> = fmtReadString(child, 'sameLine');
 		if (flagName == null) return macro _dt(' ');
 		final optFlag:Expr = {
@@ -954,7 +954,15 @@ class WriterLowering {
 			pos: Context.currentPos(),
 		};
 		final fieldName:Null<String> = child.annotations.get('base.fieldName');
+		// Mirror of Lowering's `hasKwTriviaSlots` gate — `<field>BeforeKwNewline`
+		// only exists on the synth paired `*T` type of trivia-bearing enclosing
+		// rules. Non-bearing rules with `@:optional @:kw @:fmt(sameLine(...))`
+		// would otherwise hit an EField on a nonexistent slot. No current
+		// grammar triggers this combo (first non-bearing `@:optional @:kw` is
+		// `HxIfExpr.elseBranch`, which has no `@:fmt(sameLine)`), but closing
+		// the gap preemptively avoids recurrence of the Lowering fix pattern.
 		final hasKeepSlot:Bool = ctx.trivia
+			&& isTriviaBearing(typePath)
 			&& fieldName != null
 			&& child.kind == Ref
 			&& child.annotations.get('base.optional') == true

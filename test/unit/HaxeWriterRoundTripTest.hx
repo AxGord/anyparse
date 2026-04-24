@@ -160,6 +160,30 @@ class HaxeWriterRoundTripTest extends Test {
 		roundTrip('class F { function f():Void { if (x) return 1; else return 2; } }');
 	}
 
+	function testIfExprInInit():Void {
+		roundTrip('class F { function f():Void { var y:Int = if (c) 1 else 2; } }', 'if-expr as var init');
+	}
+
+	function testIfExprInCall():Void {
+		roundTrip('class F { function f():Void { trace(if (c) 1 else 2); } }', 'if-expr as call arg');
+	}
+
+	function testIfExprInObjectField():Void {
+		roundTrip('class F { function f():Void { var o:Dynamic = {label: if (c) 1 else 2}; } }', 'if-expr as object-literal value');
+	}
+
+	function testIfExprNoElse():Void {
+		roundTrip('class F { function f():Void { var y:Int = if (c) 1; } }', 'if-expr without else');
+	}
+
+	function testIfExprElseIfChain():Void {
+		roundTrip('class F { function f():Void { var y:Int = if (a) 1 else if (b) 2 else 3; } }', 'if-expr else-if chain');
+	}
+
+	function testIfExprInReturn():Void {
+		roundTrip('class F { function f():Int { return if (c) 1 else 2; } }', 'if-expr as return value');
+	}
+
 	function testWhileStmt():Void {
 		roundTrip('class F { function f():Void { while (x) return 1; } }');
 	}
