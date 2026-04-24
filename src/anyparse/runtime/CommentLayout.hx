@@ -3,6 +3,8 @@ package anyparse.runtime;
 import anyparse.core.Doc;
 import anyparse.format.IndentChar;
 import anyparse.format.WriteOptions;
+import anyparse.grammar.haxe.BlockCommentBody;
+import anyparse.grammar.haxe.BlockCommentBodyParser;
 
 /**
  * Multi-line block-comment re-indent.
@@ -12,6 +14,13 @@ import anyparse.format.WriteOptions;
  * leading indent of each interior line of a captured `/*…*\/` comment
  * to match the current writer's `indentChar` / `indentSize` /
  * `tabWidth`, independent of what the source used.
+ *
+ * Tokenization is dogfooded through `BlockCommentBodyParser` — the
+ * macro-generated Fast-mode parser for the `BlockCommentBody`
+ * grammar. The parser handles the `/*` / `*\/` delimiters and
+ * `\n`-separated line tokenization; this helper only owns the
+ * transform pipeline (tab↔space swap, min-prefix strip, per-line
+ * emit) and the Doc emit.
  *
  * Emit shape: `Concat([Text("/*"+line0), Line+Text(offset+lineN), …, Line+Text(last+"*\/")])`.
  * The Renderer supplies the base indent on each `Line` from its current
@@ -29,8 +38,8 @@ class CommentLayout {
 	public static function buildLeadingCommentDoc(content:String, opt:WriteOptions):Doc {
 		if (!StringTools.startsWith(content, '/*')) return Doc.Text(content);
 		if (content.indexOf('\n') < 0) return Doc.Text(content);
-		final body:String = content.substring(2, content.length - 2);
-		final lines:Array<String> = body.split('\n');
+		final parsed:BlockCommentBody = BlockCommentBodyParser.parse(content);
+		final lines:Array<String> = [for (l in parsed.lines) (l : String)];
 		final indentUnit:String = opt.indentChar == IndentChar.Tab
 			? '\t'
 			: StringTools.rpad('', ' ', opt.indentSize);
