@@ -417,12 +417,14 @@ class Codegen {
 		final commentStmts:Array<Expr> = [for (p in formatInfo.commentPatterns) commentCaptureBlock(p)];
 		final body:Expr = macro {
 			var _blankBefore:Bool = false;
+			var _newlineBefore:Bool = false;
 			final _leading:Array<String> = [];
 			// Drain any trivia that a previous rule captured between an
 			// @:optional @:kw commit and its sub-rule call (slice ω₆b).
 			final _pt = ctx.pendingTrivia;
 			if (_pt != null) {
 				_blankBefore = _pt.blankBefore;
+				_newlineBefore = _pt.newlineBefore;
 				for (_c in _pt.leadingComments) _leading.push(_c);
 				ctx.pendingTrivia = null;
 			}
@@ -432,6 +434,7 @@ class Codegen {
 				if (c == '\n'.code) {
 					ctx.pos++;
 					_nl++;
+					_newlineBefore = true;
 					if (_nl >= 2) _blankBefore = true;
 					continue;
 				}
@@ -442,14 +445,14 @@ class Codegen {
 				$b{commentStmts};
 				break;
 			}
-			return {blankBefore: _blankBefore, leadingComments: _leading};
+			return {blankBefore: _blankBefore, newlineBefore: _newlineBefore, leadingComments: _leading};
 		};
 		return {
 			name: 'collectTrivia',
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{name: 'ctx', type: macro : anyparse.runtime.Parser}],
-				ret: macro : {blankBefore:Bool, leadingComments:Array<String>},
+				ret: macro : {blankBefore:Bool, newlineBefore:Bool, leadingComments:Array<String>},
 				expr: body,
 			}),
 			pos: Context.currentPos(),

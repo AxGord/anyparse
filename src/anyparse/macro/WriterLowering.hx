@@ -657,8 +657,25 @@ class WriterLowering {
 			if (hasMeta(starNode, ':tryparse')) {
 				if (closeText != null)
 					Context.fatalError('WriterLowering: @:trivia + @:tryparse must not have @:trail', Context.currentPos());
-				if (!isLastField)
-					Context.fatalError('WriterLowering: @:trivia Star without @:trail must be the last field', Context.currentPos());
+				// Non-last-field @:trivia @:tryparse is supported only when
+				// the Star is bare (no `@:lead`). The emitted Doc then
+				// stands alone (empty array → `_de()`), and the next
+				// sibling's leading separator in `lowerStruct` already gates
+				// on `prevEmptyCandidate.length > 0` via the bare-tryparse-
+				// Star tracker, so the space between Star output and next
+				// field never leaks when the Star was empty. Required by
+				// `HxMemberDecl.modifiers` (not last — `member` follows).
+				//
+				// `@:lead` on a non-last bare-tryparse Star would emit the
+				// lead text unconditionally even on empty input, leaking
+				// the literal across an otherwise-empty member position.
+				// Reject loudly until a grammar needs it AND the empty-
+				// input case is gated.
+				if (!isLastField && openText != null)
+					Context.fatalError(
+						'WriterLowering: non-last @:trivia @:tryparse Star must be bare (no @:lead)',
+						Context.currentPos()
+					);
 				if (openText != null) parts.push(macro _dt($v{openText}));
 				// sameLine-annotated Stars (catches against try body) emit
 				// the separator before EVERY element — it's the boundary
@@ -1873,6 +1890,17 @@ class WriterLowering {
 						}
 					} else if (_nestBody) {
 						_docs.push(_dhl());
+					} else if (_si > 0 && _t.newlineBefore) {
+						// ω-cond-mod-newline: preserve a single source newline
+						// between try-parse Star elements. Without this, the
+						// default `sepExpr` (space) would collapse
+						// `#if COND <mods> #end\n\tpublic` (issue_332 V1) down
+						// to `#if COND <mods> #end public` on round-trip,
+						// losing the author's modifier-list line break.
+						// `blankBefore` adds the second hardline for source
+						// gaps of two or more newlines.
+						_docs.push(_dhl());
+						if (_t.blankBefore) _docs.push(_dhl());
 					} else if (_si > 0) {
 						_docs.push($sepExpr);
 					} else if (_sepFirst) {

@@ -881,6 +881,7 @@ class Lowering {
 						final _trailing:Null<String> = collectTrailing(ctx);
 						_items.push({
 							blankBefore: _lead.blankBefore,
+							newlineBefore: _lead.newlineBefore,
 							leadingComments: _lead.leadingComments,
 							trailingComment: _trailing,
 							node: _node,
@@ -1169,7 +1170,12 @@ class Lowering {
 						$i{bodyOnSameLineLocal} = !hasNewlineIn(ctx.input, _kwEndPos, ctx.pos);
 					} else if (ctx.trivia) macro {
 						final _t = collectTrivia(ctx);
-						if (_t.leadingComments.length > 0 || _t.blankBefore) ctx.pendingTrivia = _t;
+						// Stash whenever the captured run carries any signal the
+						// downstream `collectTrivia` would otherwise lose:
+						// comments, blank lines, OR a single newline boundary
+						// (the `newlineBefore` channel — sub-rule's first
+						// `@:trivia` Star element consumes it via `_t.newlineBefore`).
+						if (_t.leadingComments.length > 0 || _t.blankBefore || _t.newlineBefore) ctx.pendingTrivia = _t;
 					} else macro skipWs(ctx);
 					final preCommitCapture:Expr = if (hasKwTriviaSlots)
 						macro $i{beforeKwNlLocal} = hasNewlineIn(ctx.input, _wsPos, _kwStartPos);
@@ -1554,6 +1560,7 @@ class Lowering {
 							final _trailing:Null<String> = collectTrailing(ctx);
 							$accumRef.push({
 								blankBefore: _lead.blankBefore,
+								newlineBefore: _lead.newlineBefore,
 								leadingComments: _lead.leadingComments,
 								trailingComment: _trailing,
 								node: _node,
@@ -1581,6 +1588,7 @@ class Lowering {
 						final _trailing:Null<String> = collectTrailing(ctx);
 						$accumRef.push({
 							blankBefore: _lead.blankBefore,
+							newlineBefore: _lead.newlineBefore,
 							leadingComments: _lead.leadingComments,
 							trailingComment: _trailing,
 							node: _node,
@@ -1616,6 +1624,7 @@ class Lowering {
 				final _trailing:Null<String> = collectTrailing(ctx);
 				$accumRef.push({
 					blankBefore: _lead.blankBefore,
+					newlineBefore: _lead.newlineBefore,
 					leadingComments: _lead.leadingComments,
 					trailingComment: _trailing,
 					node: _node,

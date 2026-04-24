@@ -31,6 +31,13 @@ package anyparse.runtime;
  *    (and most style guides in the Haxe ecosystem) collapse multiple
  *    blanks to max one; grammars that need N>1 (Python PEP8 style)
  *    can promote this to `Int` when they land.
+ *  - `newlineBefore` — at least one source newline preceded the node
+ *    (including the blank-line case where `blankBefore` is also true).
+ *    Semantically the one-newline cousin of `blankBefore`: writers that
+ *    allow elements on the same line by default (`sepExpr = space`)
+ *    consult this to upgrade the separator to a hardline when the source
+ *    had `prevElem\n  elem` — preserving the boundary without forcing a
+ *    blank.
  *  - `leadingComments` — zero or more comments attached above the node,
  *    in source order. Each string carries its open/close delimiters
  *    verbatim (`// foo` or `/* foo *\/`); the writer emits the captured
@@ -51,6 +58,7 @@ package anyparse.runtime;
  */
 typedef Trivial<T> = {
 	var blankBefore:Bool;
+	var newlineBefore:Bool;
 	var leadingComments:Array<String>;
 	var trailingComment:Null<String>;
 	var node:T;
