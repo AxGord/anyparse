@@ -1724,6 +1724,20 @@ class Lowering {
 				throw 'unreachable';
 		};
 
+		// `@:captureGroup(N)` (N >= 1) picks the Nth capture group as the
+		// stored value — position still advances by the full `matched(0)`
+		// length, so any prefix matched but not stored (leading ws, style
+		// markers like `* ` in a `/*...*/` body) is consumed. Default (no
+		// meta) keeps the whole match as both stored value and advance
+		// amount, preserving the existing behaviour for every other
+		// terminal.
+		final captureGroup:Null<Int> = node.annotations.get('re.captureGroup');
+		final matchedValueExpr:Expr = captureGroup == null
+			? macro $i{eregVar}.matched(0)
+			: macro $i{eregVar}.matched($v{captureGroup});
+		final advanceLenExpr:Expr = captureGroup == null
+			? macro _matched.length
+			: macro $i{eregVar}.matched(0).length;
 		return macro {
 			final _rest:String = ctx.input.substring(ctx.pos, ctx.input.length);
 			if (!$i{eregVar}.match(_rest)) {
@@ -1732,8 +1746,8 @@ class Lowering {
 					$v{'expected $simple'}
 				);
 			}
-			final _matched:String = $i{eregVar}.matched(0);
-			ctx.pos += _matched.length;
+			final _matched:String = $matchedValueExpr;
+			ctx.pos += $advanceLenExpr;
 			return $decodeExpr;
 		};
 	}

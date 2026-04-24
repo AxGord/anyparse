@@ -31,7 +31,7 @@ class Re implements Strategy {
 	public var name(default, null):String = 'Re';
 	public var runsAfter(default, null):Array<String> = [];
 	public var runsBefore(default, null):Array<String> = [];
-	public var ownedMeta(default, null):Array<String> = [':re'];
+	public var ownedMeta(default, null):Array<String> = [':re', ':captureGroup'];
 	public var runtimeContribution(default, null):RuntimeContrib = {ctxFields: [], helpers: [], cacheKeyContributors: []};
 
 	public function new() {}
@@ -57,6 +57,21 @@ class Re implements Strategy {
 					throw 'unreachable';
 			};
 			node.annotations.set('re.pattern', pattern);
+		}
+		for (entry in meta) if (entry.name == ':captureGroup') {
+			if (entry.params.length != 1) {
+				Context.fatalError('@:captureGroup expects exactly one integer argument', entry.pos);
+			}
+			final group:Int = switch entry.params[0].expr {
+				case EConst(CInt(s, _)): Std.parseInt(s);
+				case _:
+					Context.fatalError('@:captureGroup argument must be an integer literal', entry.params[0].pos);
+					throw 'unreachable';
+			};
+			if (group < 1) {
+				Context.fatalError('@:captureGroup must be >= 1 (group 0 is the default whole match)', entry.pos);
+			}
+			node.annotations.set('re.captureGroup', group);
 		}
 	}
 
