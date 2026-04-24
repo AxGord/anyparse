@@ -532,7 +532,12 @@ class Lowering {
 					pos: Context.currentPos(),
 				};
 				final elemCT:ComplexType = TPath({pack: packOf(elemRefName), name: simpleName(elemRefName), params: []});
+				// See struct-field close-peek (emitStarFieldSteps) for why
+				// we flip to full-string `peekLit` when close is multi-byte.
 				final closeCharCode:Int = close.charCodeAt(0);
+				final closeNotNextExpr:Expr = close.length == 1
+					? macro ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}
+					: macro ctx.pos < ctx.input.length && !peekLit(ctx, $v{close});
 				final sepText:Null<String> = branch.annotations.get('lit.sepText');
 				final ctorCall:Expr = {expr: ECall(ctorRef, [macro left, macro _args]), pos: Context.currentPos()};
 				if (sepText != null) {
@@ -540,7 +545,7 @@ class Lowering {
 					macro {
 						skipWs(ctx);
 						final _args:Array<$elemCT> = [];
-						if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}) {
+						if ($closeNotNextExpr) {
 							_args.push($elemCall);
 							skipWs(ctx);
 							while (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
@@ -559,7 +564,7 @@ class Lowering {
 					macro {
 						skipWs(ctx);
 						final _args:Array<$elemCT> = [];
-						while (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}) {
+						while ($closeNotNextExpr) {
 							_args.push($elemCall);
 							skipWs(ctx);
 						}
@@ -801,7 +806,15 @@ class Lowering {
 				expr: ECall(macro $i{elemFn}, [macro ctx]),
 				pos: Context.currentPos(),
 			};
+			// See struct-field close-peek (emitStarFieldSteps) for why
+			// we flip to full-string `peekLit` when close is multi-byte.
 			final closeCharCode:Int = trailText.charCodeAt(0);
+			final closeNotNextExpr:Expr = trailText.length == 1
+				? macro ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}
+				: macro ctx.pos < ctx.input.length && !peekLit(ctx, $v{trailText});
+			final closeNextOrEofExpr:Expr = trailText.length == 1
+				? macro ctx.pos >= ctx.input.length || ctx.input.charCodeAt(ctx.pos) == $v{closeCharCode}
+				: macro ctx.pos >= ctx.input.length || peekLit(ctx, $v{trailText});
 			final ctorCall:Expr = {expr: ECall(ctorRef, [macro _items]), pos: Context.currentPos()};
 			// Trivia-mode @:trivia Star in an enum branch (e.g. HxStatement.BlockStmt
 			// marks its stmts Star via the branch-level @:trivia meta propagated to
@@ -837,7 +850,7 @@ class Lowering {
 					final _items:Array<$wrappedCT> = [];
 					while (true) {
 						final _lead = collectTrivia(ctx);
-						if (ctx.pos >= ctx.input.length || ctx.input.charCodeAt(ctx.pos) == $v{closeCharCode}) break;
+						if ($closeNextOrEofExpr) break;
 						final _node:$elemCT = $elemCall;
 						final _trailing:Null<String> = collectTrailing(ctx);
 						_items.push({
@@ -860,7 +873,7 @@ class Lowering {
 					expectLit(ctx, $v{leadText});
 					final _items:Array<$elemCT> = [];
 					skipWs(ctx);
-					if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}) {
+					if ($closeNotNextExpr) {
 						_items.push($elemCall);
 						skipWs(ctx);
 						while (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
@@ -880,7 +893,7 @@ class Lowering {
 				expectLit(ctx, $v{leadText});
 				final _items:Array<$elemCT> = [];
 				skipWs(ctx);
-				while (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}) {
+				while ($closeNotNextExpr) {
 					_items.push($elemCall);
 					skipWs(ctx);
 				}
@@ -1335,12 +1348,27 @@ class Lowering {
 			});
 			return;
 		}
+		// Close-peek entry guard for the Star loop.
+		//
+		// When `closeText` is a single byte, a `charCodeAt` peek is the
+		// fastest way to decide "are we at the close or at an element?".
+		// When `closeText` is longer, the single-byte peek false-positives
+		// on elements whose first byte happens to equal `closeText[0]` —
+		// concretely, `@:trail('*\/')` on a block-comment body lets `*`
+		// appear inside line content, and a `charCodeAt != '*'` guard
+		// skips the Star entirely the moment body begins with `*` (e.g.
+		// `/**` javadoc). The full-string `peekLit` call eats a substring
+		// comparison instead of a byte compare, which is negligible
+		// outside of very hot inner loops.
 		final closeCharCode:Int = closeText.charCodeAt(0);
+		final closeNotNextExpr:Expr = closeText.length == 1
+			? macro ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}
+			: macro ctx.pos < ctx.input.length && !peekLit(ctx, $v{closeText});
 		if (sepText != null) {
 			final sepCharCode:Int = sepText.charCodeAt(0);
 			parseSteps.push(macro {
 				skipWs(ctx);
-				if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}) {
+				if ($closeNotNextExpr) {
 					$accumRef.push($elemCall);
 					skipWs(ctx);
 					while (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
@@ -1354,7 +1382,7 @@ class Lowering {
 		} else {
 			parseSteps.push(macro {
 				skipWs(ctx);
-				while (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}) {
+				while ($closeNotNextExpr) {
 					$accumRef.push($elemCall);
 					skipWs(ctx);
 				}
@@ -1529,8 +1557,13 @@ class Lowering {
 			return;
 		}
 		final terminationCheck:Expr = if (closeText != null) {
+			// See emitStarFieldSteps for why we flip to full-string `peekLit` when
+			// close is multi-byte (single-byte peek false-positives when close's
+			// first byte can legitimately appear inside element content).
 			final closeCharCode:Int = closeText.charCodeAt(0);
-			macro ctx.pos >= ctx.input.length || ctx.input.charCodeAt(ctx.pos) == $v{closeCharCode};
+			closeText.length == 1
+				? macro ctx.pos >= ctx.input.length || ctx.input.charCodeAt(ctx.pos) == $v{closeCharCode}
+				: macro ctx.pos >= ctx.input.length || peekLit(ctx, $v{closeText});
 		} else {
 			macro ctx.pos >= ctx.input.length;
 		};

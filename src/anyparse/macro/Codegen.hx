@@ -42,6 +42,7 @@ class Codegen {
 		}
 		fields.push(skipWsField(formatInfo));
 		fields.push(matchLitField());
+		fields.push(peekLitField());
 		fields.push(matchKwField());
 		fields.push(expectLitField());
 		fields.push(expectKwField());
@@ -244,6 +245,36 @@ class Codegen {
 					if (ctx.input.substring(ctx.pos, ctx.pos + len) != lit) return false;
 					ctx.pos += len;
 					return true;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * Non-consuming `lit` check: returns `true` if `lit` is at `ctx.pos`
+	 * without advancing the cursor. Used by Star entry guards that need
+	 * to distinguish "body continues" from "close delimiter is next"
+	 * when the close's first byte can legitimately appear inside an
+	 * element (e.g. `@:trail('*\/')` with element content that may
+	 * contain `*`). The single-byte `charCodeAt` peek the Star used
+	 * before cannot disambiguate multi-byte close delimiters from
+	 * element content sharing the same first byte.
+	 */
+	private static function peekLitField():Field {
+		return {
+			name: 'peekLit',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [
+					{name: 'ctx', type: macro : anyparse.runtime.Parser},
+					{name: 'lit', type: macro : String},
+				],
+				ret: macro : Bool,
+				expr: macro {
+					final len:Int = lit.length;
+					if (ctx.pos + len > ctx.input.length) return false;
+					return ctx.input.substring(ctx.pos, ctx.pos + len) == lit;
 				},
 			}),
 			pos: Context.currentPos(),
