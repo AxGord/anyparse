@@ -389,14 +389,20 @@ class WriterLowering {
 		final isRaw:Bool = hasMeta(node, ':raw');
 		final parts:Array<Expr> = [];
 		var isFirstField:Bool = true;
-		// Tracks the immediately preceding field when it was a bare
-		// try-parse Star (no lead/trail/sep) that may produce no output
-		// at runtime. A following bare Ref field must then gate its
-		// leading separator on `prevField.length > 0` — otherwise the
-		// space is emitted even when the Star contributed nothing,
-		// yielding e.g. `\t function` instead of `\tfunction` when
-		// `HxMemberDecl.modifiers` is empty.
-		var prevEmptyCandidate:Null<Expr> = null;
+		// Tracks a cumulative bool expr: `true` when ANY preceding
+		// bare-tryparse Star in this struct contributed non-zero output.
+		// A following bare-Ref field gates its leading separator on this
+		// expr — otherwise a stray space leaks when every preceding Star
+		// was empty (e.g. `\t function` instead of `\tfunction` when
+		// `HxMemberDecl.modifiers` is empty). An intervening bare-
+		// tryparse Star ORs its own `length > 0` check into the expr so
+		// the signal propagates across a chain of Stars — required by
+		// ω-member-meta where `meta` (non-empty) is followed by
+		// `modifiers` (empty) is followed by `member`: the member still
+		// needs its leading space because `meta` was non-empty two
+		// fields back. Reset to `null` on any non-Star field, since the
+		// emitted content at that point forms its own boundary.
+		var prevAnyStarNonEmpty:Null<Expr> = null;
 		// ψ₉: tracks the immediately preceding bare-Ref field that was
 		// wrapped via `bodyPolicyWrap` — the next field's `@:fmt(sameLine(...))`
 		// separator must then be shape-aware on the preceding body's
@@ -453,8 +459,47 @@ class WriterLowering {
 			};
 
 			if (isStar) {
+				// ω-member-meta: inter-Star separator. When a non-first
+				// bare-tryparse Star follows another bare-tryparse Star
+				// that may have emitted content, emit a leading separator
+				// gated on BOTH previous non-empty AND this Star non-empty.
+				// Double-gating prevents `@:allow(...)  var x` (double
+				// space) when this Star is empty — the member field's own
+				// leading-separator check still runs afterwards against
+				// the propagated `prevAnyStarNonEmpty`.
+				//
+				// In trivia mode the separator picks `_dhl()` vs `_dt(' ')`
+				// at runtime from the first element's `newlineBefore`
+				// trivia, preserving source-shape across the cross-Star
+				// boundary (e.g. `@:final\n\tstatic` round-trips with the
+				// newline intact instead of collapsing to a space). Plain
+				// mode has no Trivial wrapper, so the double-gated branch
+				// emits a plain space (no newline recovery).
+				if (isBareTryparseStar(child) && !isFirstField && prevAnyStarNonEmpty != null) {
+					final prev:Expr = prevAnyStarNonEmpty;
+					if (ctx.trivia) {
+						parts.push(macro {
+							final _next = $fieldAccess;
+							if ($prev && _next.length > 0)
+								_next[0].newlineBefore ? _dhl() : _dt(' ');
+							else _de();
+						});
+					} else {
+						parts.push(macro ($prev && $fieldAccess.length > 0) ? _dt(' ') : _de());
+					}
+				}
 				emitWriterStarField(child, fieldAccess, parts, child == node.children[node.children.length - 1], typePath, isFirstField, isRaw, stalePrevBareRefBody);
-				prevEmptyCandidate = isBareTryparseStar(child) ? fieldAccess : null;
+				if (isBareTryparseStar(child)) {
+					final thisNonEmpty:Expr = macro $fieldAccess.length > 0;
+					prevAnyStarNonEmpty = prevAnyStarNonEmpty == null
+						? thisNonEmpty
+						: {
+							final prev:Expr = prevAnyStarNonEmpty;
+							macro $prev || $thisNonEmpty;
+						};
+				} else {
+					prevAnyStarNonEmpty = null;
+				}
 				prevBodyField = null;
 				isFirstField = false;
 				continue;
@@ -568,9 +613,10 @@ class WriterLowering {
 						justWrappedBody = {access: fieldAccess, typePath: refName};
 					} else {
 						if (kwLead == null && leadText == null && !isFirstField && !isRaw) {
-							if (prevEmptyCandidate != null)
-								parts.push(macro ($prevEmptyCandidate.length > 0) ? _dt(' ') : _de());
-							else
+							if (prevAnyStarNonEmpty != null) {
+								final prev:Expr = prevAnyStarNonEmpty;
+								parts.push(macro $prev ? _dt(' ') : _de());
+							} else
 								parts.push(macro _dt(' '));
 						}
 						parts.push(writeCall);
@@ -592,7 +638,7 @@ class WriterLowering {
 			if (!isOptional && trailText != null)
 				parts.push(macro _dt($v{trailText}));
 
-			prevEmptyCandidate = null;
+			prevAnyStarNonEmpty = null;
 			prevBodyField = justWrappedBody;
 			// `prevBareRefBody` was either set above for trivia-bearing
 			// bare-Ref fields (the only case the next sibling can usefully
@@ -661,8 +707,8 @@ class WriterLowering {
 				// the Star is bare (no `@:lead`). The emitted Doc then
 				// stands alone (empty array → `_de()`), and the next
 				// sibling's leading separator in `lowerStruct` already gates
-				// on `prevEmptyCandidate.length > 0` via the bare-tryparse-
-				// Star tracker, so the space between Star output and next
+				// on `prevAnyStarNonEmpty` via the bare-tryparse-Star
+				// tracker, so the space between Star output and next
 				// field never leaks when the Star was empty. Required by
 				// `HxMemberDecl.modifiers` (not last — `member` follows).
 				//

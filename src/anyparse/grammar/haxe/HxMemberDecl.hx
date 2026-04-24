@@ -1,34 +1,44 @@
 package anyparse.grammar.haxe;
 
 /**
- * A class member declaration with optional leading modifiers.
+ * A class member declaration with optional leading metadata and
+ * modifiers.
  *
- * Wraps `HxClassMember` (the `var`/`function` dispatch enum) with a
- * preceding `Array<HxModifier>` field. This typedef is the unit that
- * `HxClassDecl.members` iterates over, so modifiers are parsed once
- * before the keyword dispatch — no redundant re-parsing on failed
- * branches.
+ * Wraps `HxClassMember` (the `var`/`function` dispatch enum) with two
+ * preceding Star fields: metadata tags (`@:keep`, `@:overload(...)`,
+ * `@in(true)` …) first, then access/storage modifiers (`public`,
+ * `static`, `#if … #end`, …). This typedef is the unit that
+ * `HxClassDecl.members` iterates over, so both prefix sections are
+ * parsed once before the keyword dispatch — no redundant re-parsing on
+ * failed branches.
  *
- * `modifiers` has no `@:lead`, `@:trail`, or `@:sep` — it uses the
+ * Neither Star carries `@:lead`, `@:trail`, or `@:sep` — both use the
  * try-parse termination mode in `emitStarFieldSteps`: the loop attempts
- * to parse a modifier on each iteration and breaks when the next token
- * is not a recognised modifier keyword. `@:tryparse` is stated
- * explicitly (not inferred from `!isLastField`) because the Trivia-mode
- * path in `emitTriviaStarFieldSteps` requires one of `@:trail`,
- * `isLastField`, or `@:tryparse` to pick a termination mode.
+ * to parse an element on each iteration and breaks when the next token
+ * isn't a recognised start character (`@` for metadata, a reserved
+ * keyword for modifiers). `@:tryparse` is stated explicitly (not
+ * inferred from `!isLastField`) because the Trivia-mode path in
+ * `emitTriviaStarFieldSteps` requires one of `@:trail`, `isLastField`,
+ * or `@:tryparse` to pick a termination mode.
  *
- * `@:trivia` enables per-element trivia capture (leading comments,
- * trailing comment, blank-line and single-newline markers). This is
- * load-bearing for `issue_332_conditional_modifiers` V1 — the fixture
- * expects the newline that follows a `#if COND <mods> #end` conditional
- * modifier before the next real modifier (`#end\n\tpublic`) to round-
- * trip verbatim, which requires the writer to emit a hardline between
- * those two modifiers instead of the default space separator. Without
- * the capture the writer cannot distinguish V1 (newline) from V2
- * (space) — both parse the same modifier list.
+ * `@:trivia` on both Stars enables per-element trivia capture (leading
+ * comments, trailing comment, blank-line and single-newline markers).
+ * This is load-bearing for `issue_332_conditional_modifiers` V1 — the
+ * fixture expects the newline that follows a `#if COND <mods> #end`
+ * conditional modifier before the next real modifier (`#end\n\tpublic`)
+ * to round-trip verbatim, which requires the writer to emit a hardline
+ * between those two modifiers instead of the default space separator.
+ * The same channel carries per-metadata newline markers so `@:allow(Cls)`
+ * followed by `\nvar x` round-trips with the newline preserved.
+ *
+ * The paired-type synth in `TriviaTypeSynth.buildTypeDefinition` handles
+ * two trivia Stars on one Seq by prefixing every slot with the field
+ * name (`metaTrailingLeading`, `modifiersTrailingLeading`, …), so the
+ * two Stars compose without name collision.
  */
 @:peg
 typedef HxMemberDecl = {
+	@:trivia @:tryparse var meta:Array<HxMetadata>;
 	@:trivia @:tryparse var modifiers:Array<HxModifier>;
 	var member:HxClassMember;
 }
