@@ -35,13 +35,16 @@ class CommentLayout {
 		if (!StringTools.startsWith(content, '/*')) return Doc.Text(content);
 		if (content.indexOf('\n') < 0) return Doc.Text(content);
 		final parsed:BlockCommentBody = BlockCommentBodyParser.parse(content);
-		final javadoc:Bool = opt.commentStyle == CommentStyle.Javadoc;
-		final open:String = javadoc ? '/**' : '/*';
-		final close:String = javadoc ? '**/' : '*/';
-		final linePrefix:String = javadoc
-			? ' * '
-			: (opt.indentChar == IndentChar.Tab ? '\t' : StringTools.rpad('', ' ', opt.indentSize));
-		final blankPrefix:String = javadoc ? ' *' : '';
+		final style:CommentStyle = opt.commentStyle;
+		final isDoc:Bool = style == CommentStyle.Javadoc || style == CommentStyle.JavadocNoStars;
+		final withStars:Bool = style == CommentStyle.Javadoc;
+		final open:String = isDoc ? '/**' : '/*';
+		final close:String = isDoc ? '**/' : '*/';
+		final indentUnit:String = opt.indentChar == IndentChar.Tab
+			? '\t'
+			: StringTools.rpad('', ' ', opt.indentSize);
+		final linePrefix:String = withStars ? ' * ' : indentUnit;
+		final blankPrefix:String = withStars ? ' *' : '';
 		final parts:Array<Doc> = [Doc.Text(open)];
 		final last:Int = parsed.lines.length - 1;
 		// A purely-empty first or last line carries nothing but the

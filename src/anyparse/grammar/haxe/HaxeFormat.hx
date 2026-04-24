@@ -195,7 +195,7 @@ final class HaxeFormat implements TextFormat {
 		lineEnd: '\n',
 		finalNewline: true,
 		trailingWhitespace: false,
-		commentStyle: CommentStyle.Javadoc,
+		commentStyle: CommentStyle.JavadocNoStars,
 		sameLineElse: SameLinePolicy.Same,
 		sameLineCatch: SameLinePolicy.Same,
 		sameLineDoWhile: SameLinePolicy.Same,

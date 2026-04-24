@@ -14,8 +14,14 @@ package anyparse.format;
  * - `Javadoc` — `/**` opening, `**\/` closing, each interior line at
  *    `currentIndent + " * " + content`. Classic Haxe / Java doc-block
  *    appearance regardless of what the source used.
+ * - `JavadocNoStars` — `/**` opening, `**\/` closing, each interior
+ *    line at `currentIndent + indentUnit + content` (hybrid: doc-style
+ *    delimiters with plain-indent content). Matches haxe-formatter's
+ *    idiomatic output style for most Haxe doc blocks and is the
+ *    default for `HaxeFormat`.
  */
 enum abstract CommentStyle(Int) from Int to Int {
 	var Plain = 0;
 	var Javadoc = 1;
+	var JavadocNoStars = 2;
 }
