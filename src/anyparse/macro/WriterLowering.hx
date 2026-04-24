@@ -834,17 +834,47 @@ class WriterLowering {
 					_dc(_docs);
 				});
 			} else {
-				parts.push(macro {
-					final _arr = $fieldAccess;
-					final _docs:Array<anyparse.core.Doc> = [];
-					var _si:Int = 0;
-					while (_si < _arr.length) {
-						_docs.push($elemCall);
-						if (_si < _arr.length - 1) _docs.push(_dt(' '));
-						_si++;
-					}
-					_dc(_docs);
-				});
+				// `@:fmt(padBoundaries)` — when the Star is bracketed by
+				// surrounding tokens emitted OUTSIDE this struct (an outer
+				// enum ctor's kwLead / trailText, or a sibling Ref before
+				// it) AND has no own `@:lead`/`@:trail` to carry the space,
+				// the internal-only sep leaves `prevTok<elem1 elem2>nextTok`
+				// glued together. Opting in emits a leading + trailing space
+				// when the array is non-empty, yielding `prevTok elem1 elem2
+				// nextTok`. Empty arrays still degrade to `_de()` (no padding,
+				// no stray space). Format-neutral — any grammar nesting a
+				// padded Star inside a surrounding-token sandwich can adopt
+				// the flag without touching the macro.
+				final padBoundaries:Bool = fmtHasFlag(starNode, 'padBoundaries');
+				if (padBoundaries) {
+					parts.push(macro {
+						final _arr = $fieldAccess;
+						if (_arr.length == 0) _de()
+						else {
+							final _docs:Array<anyparse.core.Doc> = [_dt(' ')];
+							var _si:Int = 0;
+							while (_si < _arr.length) {
+								_docs.push($elemCall);
+								if (_si < _arr.length - 1) _docs.push(_dt(' '));
+								_si++;
+							}
+							_docs.push(_dt(' '));
+							_dc(_docs);
+						}
+					});
+				} else {
+					parts.push(macro {
+						final _arr = $fieldAccess;
+						final _docs:Array<anyparse.core.Doc> = [];
+						var _si:Int = 0;
+						while (_si < _arr.length) {
+							_docs.push($elemCall);
+							if (_si < _arr.length - 1) _docs.push(_dt(' '));
+							_si++;
+						}
+						_dc(_docs);
+					});
+				}
 			}
 		} else {
 			// EOF mode. Emit lead if present.

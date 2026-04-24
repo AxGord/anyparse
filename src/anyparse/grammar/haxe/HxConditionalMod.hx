@@ -21,18 +21,18 @@ package anyparse.grammar.haxe;
  * modifiers until the next token is not a recognised keyword, which in
  * legal input is `#end` — consumed by the outer ctor's `@:trail`.
  *
- * Writer-side output shape today: `#if <cond><modifiers-joined-by-space>#end`.
- * The `#if ` keyword carries a trailing space (from `@:kw` + Case 3's
- * `kwLead + ' '` rule), and modifiers get internal single-space
- * separators (try-parse Star writer), but there is NO space between
- * `cond` and the first modifier, and NO space between the last modifier
- * and `#end`. Corpus parity against haxe-formatter's expected
- * `#if <cond> <modifiers> #end` needs a writer-side boundary-space
- * mechanism and is deferred to a follow-up slice; probe tests here only
- * assert round-trip-idempotent parsing.
+ * Writer-side output shape: `#if <cond> <modifiers> #end`. The `#if `
+ * keyword carries its trailing space from `@:kw` + Case 3's `kwLead + ' '`
+ * rule, modifiers join internally with single spaces, and the
+ * `@:fmt(padBoundaries)` flag on `body` adds a leading + trailing space
+ * around the Star when it is non-empty — closing the cond↔body[0] and
+ * body[last]↔`#end` gaps that the default internal-only sep leaves glued
+ * against the surrounding `#if`/`#end` tokens. Empty `body` degrades to
+ * no padding, so a hypothetical `#if cond #end` stays as-is rather than
+ * gaining a stray space.
  */
 @:peg
 typedef HxConditionalMod = {
 	var cond:HxPpCondLit;
-	@:tryparse var body:Array<HxModifier>;
+	@:tryparse @:fmt(padBoundaries) var body:Array<HxModifier>;
 };
