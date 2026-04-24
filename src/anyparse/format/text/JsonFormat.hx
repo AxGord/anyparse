@@ -1,5 +1,6 @@
 package anyparse.format.text;
 
+import anyparse.format.CommentStyle;
 import anyparse.format.Encoding;
 import anyparse.format.IndentChar;
 import anyparse.format.WriteOptions;
@@ -102,6 +103,7 @@ final class JsonFormat implements TextFormat {
 		lineEnd: '\n',
 		finalNewline: false,
 		trailingWhitespace: false,
+		commentStyle: Plain,
 	};
 
 	private function new() {}

@@ -78,12 +78,16 @@ class HxTriviaWriteTest extends Test {
 	}
 
 	public function testMultiLineBlockCommentStaysBlock():Void {
-		// Multi-line block comment content contains a newline, so the
-		// auto-style heuristic renders it back as a block comment.
+		// Max-dry capture strips leading ws and `*` markers, so the
+		// interior line reduces to `doc` (content only). Writer re-
+		// emits per `HaxeFormat.defaultWriteOptions.commentStyle` —
+		// `Javadoc` by default — yielding `/**…**/` wrap and ` * `
+		// markers irrespective of source shape.
 		final source:String = '/*\n * doc\n */\nclass Foo {}';
+		final expected:String = '/**\n * doc\n**/\nclass Foo {}\n';
 		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out:String = HaxeModuleTriviaWriter.write(ast);
-		Assert.equals('/*\n * doc\n */\nclass Foo {}\n', out);
+		Assert.equals(expected, out);
 	}
 
 	public function testTwoDeclsEachWithLeadingComment():Void {
@@ -154,8 +158,11 @@ class HxTriviaWriteTest extends Test {
 	}
 
 	public function testOrphanMultiLineBlockCommentInEmptyClassBody():Void {
+		// Max-dry: source's leading-ws on interior lines + trailing-ws
+		// before `*/` are stripped at parse time. Writer re-emits at
+		// the default `commentStyle: Javadoc`.
 		final source:String = 'class Main {\n\t/*\n\t\tTODO:\n\t*/\n}';
-		final expected:String = 'class Main {\n\t/*\n\t\tTODO:\n\t */\n}\n';
+		final expected:String = 'class Main {\n\t/**\n\t * TODO:\n\t**/\n}\n';
 		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out:String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals(expected, out);
@@ -176,14 +183,13 @@ class HxTriviaWriteTest extends Test {
 	}
 
 	/**
-	 * ω-C-reindent — multi-line `/*…*\/` with space-indented interior
-	 * gets re-indented to match writer's `indentChar=Tab`. Reproduces
-	 * `issue_51_adjust_comment_indentation.hxtest`: a block comment
-	 * inside a class body whose interior lines were 8-space indented
-	 * in the source is re-emitted at `1 tab (class body) + 1 tab
-	 * (interior offset) = 2 tabs`.
+	 * ω-C-commentStyle — mixed-indent source with different source
+	 * and output indent chars emits with writer's `indentChar=Tab`
+	 * at `base + indentUnit` per interior line. Default
+	 * `commentStyle: Javadoc` wraps output as `/**…**\/` with ` * `
+	 * markers regardless of source shape.
 	 */
-	public function testMultiLineBlockCommentReindentedFromSpaces():Void {
+	public function testMultiLineBlockCommentReindentJavadoc():Void {
 		final source:String = 'class Main {\n'
 			+ '    /**\n'
 			+ '        Description\n'
@@ -194,9 +200,9 @@ class HxTriviaWriteTest extends Test {
 			+ '}';
 		final expected:String = 'class Main {\n'
 			+ '\t/**\n'
-			+ '\t\tDescription\n'
-			+ '\t\t - point A\n'
-			+ '\t\t - point B\n'
+			+ '\t * Description\n'
+			+ '\t * - point A\n'
+			+ '\t * - point B\n'
 			+ '\t**/\n'
 			+ '\tstatic public function main() {}\n'
 			+ '}\n';
@@ -206,12 +212,12 @@ class HxTriviaWriteTest extends Test {
 	}
 
 	/**
-	 * ω-C-reindent — javadoc-style ` * foo` interior lines keep their
-	 * single-space alignment after re-indent (startsWithStar branch),
-	 * so `* ` lines land at `currentIndent + " " + "* foo"` rather
-	 * than `currentIndent + indentUnit + "* foo"`.
+	 * ω-C-commentStyle — source-javadoc (` * foo`) round-trips
+	 * through `commentStyle: Javadoc` as the exact same javadoc
+	 * output. Input style is not echoed — it happens to align
+	 * because the writer default style matches it.
 	 */
-	public function testMultiLineBlockCommentJavadocStylePreserved():Void {
+	public function testMultiLineBlockCommentJavadocRoundTrip():Void {
 		final source:String = 'class Main {\n'
 			+ '\t/**\n'
 			+ '\t * first\n'
@@ -219,33 +225,95 @@ class HxTriviaWriteTest extends Test {
 			+ '\t */\n'
 			+ '\tvar x:Int;\n'
 			+ '}';
+		final expected:String = 'class Main {\n'
+			+ '\t/**\n'
+			+ '\t * first\n'
+			+ '\t * second\n'
+			+ '\t**/\n'
+			+ '\tvar x:Int;\n'
+			+ '}\n';
 		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out:String = HaxeModuleTriviaWriter.write(ast);
-		Assert.equals(source + '\n', out);
+		Assert.equals(expected, out);
 	}
 
 	/**
-	 * ω-C-reindent — two-line `/** … \n cont. *\/` where the
-	 * continuation line's source `\t` prefix is smaller than its
-	 * "interior" level. Reproduces axis-3 of
-	 * `issue_208_additional_unstable_comments.hxtest`: the
-	 * continuation gets `\t\t` on output because the leading
-	 * non-star line triggers `lineIndent = indent + 1` in the
-	 * last-line branch of the re-indent algorithm.
+	 * ω-C-commentStyle — inline content on the opening line wraps
+	 * through the same `commentStyle: Javadoc` path as separate-line
+	 * content. The `/** one, two,` opening collapses to a regular
+	 * first interior line after capture.
 	 */
-	public function testMultiLineBlockCommentContinuationNonStarIndents():Void {
+	public function testMultiLineBlockCommentInlineFirstLine():Void {
 		final source:String = 'class Main {\n'
 			+ '\t/** one, two,\n'
 			+ '\tthree. */\n'
 			+ '\tvar x:Int;\n'
 			+ '}';
 		final expected:String = 'class Main {\n'
-			+ '\t/** one, two,\n'
-			+ '\t\tthree. */\n'
+			+ '\t/**\n'
+			+ '\t * one, two,\n'
+			+ '\t * three.\n'
+			+ '\t**/\n'
 			+ '\tvar x:Int;\n'
 			+ '}\n';
 		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out:String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals(expected, out);
+	}
+
+	/**
+	 * ω-C-commentStyle — explicit `commentStyle: Plain` strips the
+	 * javadoc `*` markers and wraps with plain `/*…*\/` + one
+	 * indent-unit per interior line. Exercises the non-default
+	 * path of the knob.
+	 */
+	public function testMultiLineBlockCommentPlainStyle():Void {
+		final source:String = 'class Main {\n'
+			+ '\t/** first\n'
+			+ '\t    second */\n'
+			+ '\tvar x:Int;\n'
+			+ '}';
+		final expected:String = 'class Main {\n'
+			+ '\t/*\n'
+			+ '\t\tfirst\n'
+			+ '\t\tsecond\n'
+			+ '\t*/\n'
+			+ '\tvar x:Int;\n'
+			+ '}\n';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final base:anyparse.grammar.haxe.HxModuleWriteOptions =
+			anyparse.grammar.haxe.HaxeFormat.instance.defaultWriteOptions;
+		final opts:anyparse.grammar.haxe.HxModuleWriteOptions = {
+			indentChar: base.indentChar,
+			indentSize: base.indentSize,
+			tabWidth: base.tabWidth,
+			lineWidth: base.lineWidth,
+			lineEnd: base.lineEnd,
+			finalNewline: base.finalNewline,
+			trailingWhitespace: base.trailingWhitespace,
+			commentStyle: anyparse.format.CommentStyle.Plain,
+			sameLineElse: base.sameLineElse,
+			sameLineCatch: base.sameLineCatch,
+			sameLineDoWhile: base.sameLineDoWhile,
+			trailingCommaArrays: base.trailingCommaArrays,
+			trailingCommaArgs: base.trailingCommaArgs,
+			trailingCommaParams: base.trailingCommaParams,
+			ifBody: base.ifBody,
+			elseBody: base.elseBody,
+			forBody: base.forBody,
+			whileBody: base.whileBody,
+			doBody: base.doBody,
+			leftCurly: base.leftCurly,
+			objectFieldColon: base.objectFieldColon,
+			typeHintColon: base.typeHintColon,
+			funcParamParens: base.funcParamParens,
+			elseIf: base.elseIf,
+			fitLineIfWithElse: base.fitLineIfWithElse,
+			afterFieldsWithDocComments: base.afterFieldsWithDocComments,
+			existingBetweenFields: base.existingBetweenFields,
+			beforeDocCommentEmptyLines: base.beforeDocCommentEmptyLines,
+		};
+		final out:String = HaxeModuleTriviaWriter.write(ast, opts);
 		Assert.equals(expected, out);
 	}
 }

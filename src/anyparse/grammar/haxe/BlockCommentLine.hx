@@ -3,25 +3,26 @@ package anyparse.grammar.haxe;
 /**
  * Terminal for one line of a captured multi-line `/*…*\/` body.
  *
- * Matches any sequence of characters that is not `\n` and does not
- * start a `*\/` close delimiter, via PCRE negative lookahead
- * `(?!\*\/)`. `*`-quantifier lets empty lines between consecutive
- * `\n`s parse as zero-length matches — semantically meaningful blank
- * lines inside doc blocks.
+ * Stores only the **content** of the line — leading whitespace and
+ * any javadoc-style `*` marker are matched but dropped via
+ * `@:captureGroup(1)`. Writer policy, not source, drives whether
+ * output lines get wrap delimiters or leading `*` markers, so those
+ * bytes are never round-tripped.
  *
- * The negative-lookahead guard is load-bearing: without it the regex
- * would eat the final `*\/` as line content and leave nothing for
- * `BlockCommentBody.@:trail` to match. (The outer Star's entry peek
- * is `peekLit` over the full `*\/`, so an element whose first byte
- * equals `*` no longer short-circuits the loop.)
+ * Regex shape:
+ *  - `[ \t]*` — leading whitespace (stripped).
+ *  - `\**`   — optional run of `*` markers (javadoc style, stripped).
+ *  - `[ \t]?` — at most one separator space after the markers
+ *    (stripped so ` * foo` and `*foo` both yield `foo`).
+ *  - `((?:(?!\*\/)[^\n])*)` — the content capture group. Negative
+ *    lookahead `(?!\*\/)` keeps it from eating into the
+ *    `BlockCommentBody.@:trail` close delimiter.
  *
- * `@:raw` suppresses `skipWs` in the generated parse function: every
- * character inside the comment body is significant, including
- * leading whitespace carrying source indentation for re-indent.
- *
- * `@:rawString` uses the matched slice directly as the result value
- * instead of running it through the JSON string-unescape helper.
+ * `@:raw` suppresses `skipWs`: every character inside the body is
+ * significant at parse time even though we throw away the leading
+ * run at capture.
  */
-@:re('(?:(?!\\*/)[^\\n])*')
+@:re('[ \\t]*(?:\\*(?!/))*[ \\t]?((?:(?!\\*/)[^\\n])*)')
+@:captureGroup(1)
 @:rawString
 abstract BlockCommentLine(String) from String to String {}

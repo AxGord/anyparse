@@ -59,4 +59,14 @@ typedef WriteOptions = {
 	 * other corpus case byte-identical.
 	 */
 	trailingWhitespace:Bool,
+
+	/**
+	 * Output wrap style for multi-line block comments. `Plain` emits
+	 * `/*…*\/` with content-only interior lines; `Javadoc` emits
+	 * `/**…**\/` with ` * ` markers on each content line. The parser
+	 * strips both `*` markers and leading whitespace at capture time,
+	 * so this knob fully drives the output appearance — source style
+	 * is not echoed.
+	 */
+	commentStyle:CommentStyle,
 };

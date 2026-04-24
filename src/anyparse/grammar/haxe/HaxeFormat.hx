@@ -3,6 +3,7 @@ package anyparse.grammar.haxe;
 import anyparse.format.BodyPolicy;
 import anyparse.format.BracePlacement;
 import anyparse.format.CommentEmptyLinesPolicy;
+import anyparse.format.CommentStyle;
 import anyparse.format.Encoding;
 import anyparse.format.IndentChar;
 import anyparse.format.KeepEmptyLinesPolicy;
@@ -194,6 +195,7 @@ final class HaxeFormat implements TextFormat {
 		lineEnd: '\n',
 		finalNewline: true,
 		trailingWhitespace: false,
+		commentStyle: CommentStyle.Javadoc,
 		sameLineElse: SameLinePolicy.Same,
 		sameLineCatch: SameLinePolicy.Same,
 		sameLineDoWhile: SameLinePolicy.Same,

@@ -368,6 +368,7 @@ class HaxeWriterRoundTripTest extends Test {
 			lineEnd: base.lineEnd,
 			finalNewline: base.finalNewline,
 			trailingWhitespace: base.trailingWhitespace,
+			commentStyle: base.commentStyle,
 			sameLineElse: base.sameLineElse,
 			sameLineCatch: base.sameLineCatch,
 			sameLineDoWhile: base.sameLineDoWhile,
