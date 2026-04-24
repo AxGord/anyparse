@@ -192,6 +192,33 @@ import anyparse.format.WriteOptions;
  *    `HxClassDecl.members` is the only current consumer; interface /
  *    abstract / enum member bodies fall under the same axis but ship
  *    in follow-up slices when their grammar nodes land the flag.
+ *    in follow-up slices when their grammar nodes land the flag.
+ *
+ * Fields added in slice ω-interblank (inter-member blank lines):
+ *  - `betweenVars` — blank-line count between two consecutive var
+ *    members. Consumed only when the grammar field carries
+ *    `@:fmt(interMemberBlankLines('classifierField', 'VarCtorName', 'FnCtorName'))`.
+ *  - `betweenFunctions` — blank-line count between two consecutive
+ *    function members.
+ *  - `afterVars` — blank-line count at a var→function or
+ *    function→var boundary (the first member that switches kind).
+ *
+ * All three default to `0` (no blank line inserted regardless of
+ * neighbour kind) — the default-flip to haxe-formatter's
+ * `betweenFunctions: 1 / afterVars: 1 / betweenVars: 0` is deferred
+ * to a follow-up slice (`ω-interblank-defaults`), which will audit
+ * unit-test and corpus regressions before flipping. Any positive
+ * value currently collapses to a single blank-line contribution —
+ * the emission path accepts a boolean add-blank contributor per site,
+ * not a count loop. Multi-blank support is a future extension.
+ *
+ * Kind classification happens at write time via switch on the
+ * element's member-variant field, configured per grammar through the
+ * `@:fmt(interMemberBlankLines('classifierField', 'VarCtorName', 'FnCtorName'))` meta on the Star
+ * field (see `HxClassDecl.members`). The variant names are supplied
+ * per grammar so the macro stays shape-agnostic — a different
+ * grammar can map its own enum constructors onto the same Var/Fn
+ * kind pair without touching the macro.
  */
 typedef HxModuleWriteOptions = WriteOptions & {
 	sameLineElse:SameLinePolicy,
@@ -214,4 +241,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	afterFieldsWithDocComments:CommentEmptyLinesPolicy,
 	existingBetweenFields:KeepEmptyLinesPolicy,
 	beforeDocCommentEmptyLines:CommentEmptyLinesPolicy,
+	betweenVars:Int,
+	betweenFunctions:Int,
+	afterVars:Int,
 };

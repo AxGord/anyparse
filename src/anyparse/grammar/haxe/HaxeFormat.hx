@@ -186,6 +186,15 @@ final class HaxeFormat implements TextFormat {
 	 * into `Ignore` (respect source blank-line count) or `None` (strip
 	 * the blank line) requires an explicit `hxformat.json` override
 	 * (`"emptyLines": { "beforeDocCommentEmptyLines": "ignore" | "none" }`).
+	 *
+	 * Inter-member blank-line defaults (ω-interblank) are all `0` —
+	 * `betweenVars`, `betweenFunctions`, and `afterVars` contribute
+	 * nothing to the blank-line gate until explicitly overridden. This
+	 * keeps pre-slice output byte-identical. The default-flip to the
+	 * upstream haxe-formatter values (`betweenFunctions: 1`,
+	 * `afterVars: 1`, `betweenVars: 0`) is deferred to a follow-up
+	 * slice so the corpus and unit-test regressions can be audited
+	 * independently from the plumbing.
 	 */
 	public var defaultWriteOptions(default, null):HxModuleWriteOptions = {
 		indentChar: Tab,
@@ -216,6 +225,9 @@ final class HaxeFormat implements TextFormat {
 		afterFieldsWithDocComments: CommentEmptyLinesPolicy.One,
 		existingBetweenFields: KeepEmptyLinesPolicy.Keep,
 		beforeDocCommentEmptyLines: CommentEmptyLinesPolicy.One,
+		betweenVars: 0,
+		betweenFunctions: 0,
+		afterVars: 0,
 	};
 
 	private function new() {}

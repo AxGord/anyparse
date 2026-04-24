@@ -543,6 +543,66 @@ class HaxeFormatConfigLoaderTest extends Test {
 			'expected no blank line when leading is plain block comment in: <$out>');
 	}
 
+	public function testEmptyLinesBetweenVarsDefaultsToZero():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		Assert.equals(0, opts.betweenVars);
+	}
+
+	public function testEmptyLinesBetweenFunctionsDefaultsToZero():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		Assert.equals(0, opts.betweenFunctions);
+	}
+
+	public function testEmptyLinesAfterVarsDefaultsToZero():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		Assert.equals(0, opts.afterVars);
+	}
+
+	public function testEmptyLinesBetweenVarsMapsToInt():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"emptyLines": {"classEmptyLines": {"betweenVars": 2}}}'
+		);
+		Assert.equals(2, opts.betweenVars);
+	}
+
+	public function testEmptyLinesBetweenFunctionsMapsToInt():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"emptyLines": {"classEmptyLines": {"betweenFunctions": 1}}}'
+		);
+		Assert.equals(1, opts.betweenFunctions);
+	}
+
+	public function testEmptyLinesAfterVarsMapsToInt():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"emptyLines": {"classEmptyLines": {"afterVars": 3}}}'
+		);
+		Assert.equals(3, opts.afterVars);
+	}
+
+	public function testEmptyLinesBetweenFunctionsOneInsertsBlankBetweenFns():Void {
+		// Source has no blank line between two functions — `betweenFunctions: 1`
+		// forces one blank line regardless of source.
+		final src:String = 'class M {\n\tpublic function a():Void {}\n\tpublic function b():Void {}\n}';
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"emptyLines": {"classEmptyLines": {"betweenFunctions": 1}}}'
+		);
+		opts.finalNewline = false;
+		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		Assert.isTrue(out.indexOf('a():Void {}\n\n\tpublic function b') != -1,
+			'expected blank line with betweenFunctions=1 in: <$out>');
+	}
+
+	public function testEmptyLinesBetweenFunctionsZeroKeepsTightBetweenFns():Void {
+		// Default `betweenFunctions: 0` — no blank line is inserted
+		// between plain sibling functions.
+		final src:String = 'class M {\n\tpublic function a():Void {}\n\tpublic function b():Void {}\n}';
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		opts.finalNewline = false;
+		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		Assert.isTrue(out.indexOf('a():Void {}\n\tpublic function b') != -1,
+			'expected tight layout (no blank line) with betweenFunctions=0 in: <$out>');
+	}
+
 	public function testEmptyLinesBeforeDocCommentComposesWithRemove():Void {
 		// issue_208 shape: `existingBetweenFields=remove` +
 		// `afterFieldsWithDocComments=ignore` + default

@@ -150,6 +150,9 @@ class HxElseIfOptionsTest extends Test {
 			afterFieldsWithDocComments: base.afterFieldsWithDocComments,
 			existingBetweenFields: base.existingBetweenFields,
 			beforeDocCommentEmptyLines: base.beforeDocCommentEmptyLines,
+			betweenVars: base.betweenVars,
+			betweenFunctions: base.betweenFunctions,
+			afterVars: base.afterVars,
 		};
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}
@@ -185,6 +188,9 @@ class HxElseIfOptionsTest extends Test {
 			afterFieldsWithDocComments: base.afterFieldsWithDocComments,
 			existingBetweenFields: base.existingBetweenFields,
 			beforeDocCommentEmptyLines: base.beforeDocCommentEmptyLines,
+			betweenVars: base.betweenVars,
+			betweenFunctions: base.betweenFunctions,
+			afterVars: base.afterVars,
 		};
 	}
 }

@@ -771,9 +771,14 @@ class WriterLowering {
 				final afterDocComments:Bool = fmtHasFlag(starNode, 'afterFieldsWithDocComments');
 				final keepBetweenFields:Bool = fmtHasFlag(starNode, 'existingBetweenFields');
 				final beforeDocComments:Bool = fmtHasFlag(starNode, 'beforeDocCommentEmptyLines');
+				final interMemberArgs:Null<Array<String>> = fmtReadStringArgs(starNode, 'interMemberBlankLines');
+				final interMemberInfo:Null<InterMemberClassifyInfo> = interMemberArgs == null
+					? null
+					: buildInterMemberClassifyInfo(elemRefName, interMemberArgs);
 				parts.push(triviaBlockStarExpr(
 					fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, elemFn,
-					openText ?? '', closeText, false, afterDocComments, keepBetweenFields, beforeDocComments
+					openText ?? '', closeText, false, afterDocComments, keepBetweenFields, beforeDocComments,
+					interMemberInfo
 				));
 			} else if (isLastField) {
 				if (openText != null) parts.push(macro _dt($v{openText}));
@@ -1649,7 +1654,8 @@ class WriterLowering {
 		fieldAccess:Expr, trailBBAccess:Null<Expr>, trailLCAccess:Null<Expr>, trailCloseAccess:Null<Expr>,
 		elemFn:String, openText:String, closeText:String, appendHardlineAfterTrail:Bool = false,
 		afterFieldsWithDocComments:Bool = false, existingBetweenFields:Bool = false,
-		beforeDocCommentEmptyLines:Bool = false
+		beforeDocCommentEmptyLines:Bool = false,
+		interMemberInfo:Null<InterMemberClassifyInfo> = null
 	):Expr {
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
@@ -1706,7 +1712,8 @@ class WriterLowering {
 		// compile-time gate keeps JSON / AS3 writers byte-identical —
 		// their Star fields carry none of the flags and skip the policy
 		// computation entirely.
-		final anyEmptyLinesFlag:Bool = afterFieldsWithDocComments || existingBetweenFields || beforeDocCommentEmptyLines;
+		final interMember:Bool = interMemberInfo != null;
+		final anyEmptyLinesFlag:Bool = afterFieldsWithDocComments || existingBetweenFields || beforeDocCommentEmptyLines || interMember;
 		final stripByDocExpr:Expr = afterFieldsWithDocComments
 			? macro (_prevHadDocComment && opt.afterFieldsWithDocComments == anyparse.format.CommentEmptyLinesPolicy.None)
 			: macro false;
@@ -1733,10 +1740,29 @@ class WriterLowering {
 				_cdci++;
 			}
 		} : macro {};
+		final currKindComputeExpr:Expr = interMember ? {
+			final classifierAccess:Expr = {
+				expr: EField(macro _t.node, interMemberInfo.classifierFieldName),
+				pos: Context.currentPos(),
+			};
+			final switchExpr:Expr = {
+				expr: ESwitch(classifierAccess, interMemberInfo.classifyCases, null),
+				pos: Context.currentPos(),
+			};
+			macro _currKind = $switchExpr;
+		} : macro {};
+		final addByInterMemberExpr:Expr = interMember
+			? macro (
+				(_prevKind == 1 && _currKind == 1 && opt.betweenVars > 0)
+				|| (_prevKind == 2 && _currKind == 2 && opt.betweenFunctions > 0)
+				|| (_prevKind != 0 && _currKind != 0 && _prevKind != _currKind && opt.afterVars > 0)
+			)
+			: macro false;
 		final blankBeforeExpr:Expr = anyEmptyLinesFlag ? macro {
 			$currHasDocComputeExpr;
+			$currKindComputeExpr;
 			final _stripBlank:Bool = $stripByDocExpr || $stripByExistingExpr || $stripByCurrDocExpr;
-			final _addBlank:Bool = $addByDocExpr || $addByCurrDocExpr;
+			final _addBlank:Bool = $addByDocExpr || $addByCurrDocExpr || $addByInterMemberExpr;
 			final _sourceBlank:Bool = _t.blankBefore && !_stripBlank;
 			if (_si > 0 && (_sourceBlank || _addBlank)) _inner.push(_dhl());
 		} : macro {
@@ -1760,6 +1786,9 @@ class WriterLowering {
 		final initCurrDocCommentExpr:Expr = beforeDocCommentEmptyLines
 			? macro var _currHasDocComment:Bool = false
 			: macro {};
+		final initPrevKindExpr:Expr = interMember ? macro var _prevKind:Int = 0 : macro {};
+		final initCurrKindExpr:Expr = interMember ? macro var _currKind:Int = 0 : macro {};
+		final trackPrevKindExpr:Expr = interMember ? macro _prevKind = _currKind : macro {};
 		return macro {
 			final _arr = $fieldAccess;
 			final _trailLC:Array<String> = $trailLC;
@@ -1772,9 +1801,11 @@ class WriterLowering {
 				final _inner:Array<anyparse.core.Doc> = [];
 				$initDocCommentExpr;
 				$initCurrDocCommentExpr;
+				$initPrevKindExpr;
 				var _si:Int = 0;
 				while (_si < _arr.length) {
 					final _t = _arr[_si];
+					$initCurrKindExpr;
 					_inner.push(_dhl());
 					$blankBeforeExpr;
 					var _ci:Int = 0;
@@ -1787,6 +1818,7 @@ class WriterLowering {
 					final _elem:anyparse.core.Doc = $triviaElemCall;
 					final _tc:Null<String> = _t.trailingComment;
 					_inner.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDoc(_tc)) : _elem);
+					$trackPrevKindExpr;
 					_si++;
 				}
 				if (_trailLC.length > 0) {
@@ -2066,6 +2098,31 @@ class WriterLowering {
 		return null;
 	}
 
+	/**
+	 * Generalisation of `fmtReadString` for knob-form args with multiple
+	 * string literals — `name('a', 'b', 'c')`. Returns the list of string
+	 * values in source order. Returns `null` when the entry is absent or
+	 * any arg is not a string literal. Introduced by slice ω-interblank
+	 * for `@:fmt(interMemberBlankLines('fieldName', 'VarCtor', 'FnCtor'))`.
+	 */
+	private static function fmtReadStringArgs(node:ShapeNode, name:String):Null<Array<String>> {
+		final meta:Null<Metadata> = node.annotations.get('base.meta');
+		if (meta == null) return null;
+		for (entry in meta) if (entry.name == ':fmt') {
+			for (param in entry.params) switch param.expr {
+				case ECall({expr: EConst(CIdent(id))}, args) if (id == name):
+					final out:Array<String> = [];
+					for (arg in args) switch arg.expr {
+						case EConst(CString(s, _)): out.push(s);
+						case _: return null;
+					}
+					return out;
+				case _:
+			}
+		}
+		return null;
+	}
+
 	private static function simpleName(typePath:String):String {
 		final idx:Int = typePath.lastIndexOf('.');
 		return idx == -1 ? typePath : typePath.substring(idx + 1);
@@ -2112,6 +2169,82 @@ class WriterLowering {
 			return packOf(typePath).concat(['trivia', 'Pairs', simple + 'T', ctor]);
 		return packOf(typePath).concat([simple, ctor]);
 	}
+
+	/**
+	 * ω-interblank — resolve the `@:fmt(interMemberBlankLines(fieldName,
+	 * varCtor, fnCtor))` meta into the classify-switch shape that
+	 * `triviaBlockStarExpr` splices into its per-element loop.
+	 *
+	 * Inspects the element Seq rule's named field to locate the
+	 * classifier enum rule, then builds one `case <Ctor>(_):` pattern
+	 * per variant in that enum, mapping the configured `varCtor` name to
+	 * kind `1`, `fnCtor` to kind `2`, and every other variant to kind
+	 * `0`. Iterating every variant (instead of emitting a wildcard
+	 * default) keeps the switch exhaustive without relying on Haxe's
+	 * unused-pattern warnings for the single-grammar two-variant case.
+	 */
+	private function buildInterMemberClassifyInfo(elemRefName:String, args:Array<String>):InterMemberClassifyInfo {
+		if (args.length != 3)
+			Context.fatalError(
+				'WriterLowering: @:fmt(interMemberBlankLines) expects 3 string args (classifierField, varCtor, fnCtor), got ${args.length}',
+				Context.currentPos()
+			);
+		final fieldName:String = args[0];
+		final varCtor:String = args[1];
+		final fnCtor:String = args[2];
+		final elemRule:Null<ShapeNode> = shape.rules.get(elemRefName);
+		if (elemRule == null || elemRule.kind != Seq)
+			Context.fatalError(
+				'WriterLowering: @:fmt(interMemberBlankLines) requires element rule $elemRefName to be a Seq struct',
+				Context.currentPos()
+			);
+		var classifierNode:Null<ShapeNode> = null;
+		for (child in elemRule.children) if (child.annotations.get('base.fieldName') == fieldName) {
+			classifierNode = child;
+			break;
+		}
+		if (classifierNode == null)
+			Context.fatalError(
+				'WriterLowering: @:fmt(interMemberBlankLines) classifier field "$fieldName" not found on element rule $elemRefName',
+				Context.currentPos()
+			);
+		if (classifierNode.kind != Ref)
+			Context.fatalError(
+				'WriterLowering: @:fmt(interMemberBlankLines) classifier field "$fieldName" must be a plain Ref to an enum rule',
+				Context.currentPos()
+			);
+		final enumRuleName:Null<String> = classifierNode.annotations.get('base.ref');
+		if (enumRuleName == null)
+			Context.fatalError(
+				'WriterLowering: @:fmt(interMemberBlankLines) classifier field "$fieldName" has no base.ref annotation',
+				Context.currentPos()
+			);
+		final enumRule:Null<ShapeNode> = shape.rules.get(enumRuleName);
+		if (enumRule == null || enumRule.kind != Alt)
+			Context.fatalError(
+				'WriterLowering: @:fmt(interMemberBlankLines) classifier target $enumRuleName must be an Alt (enum)',
+				Context.currentPos()
+			);
+		final pos:Position = Context.currentPos();
+		final cases:Array<Case> = [];
+		for (branch in enumRule.children) {
+			final ctorName:Null<String> = branch.annotations.get('base.ctor');
+			if (ctorName == null) continue;
+			final arity:Int = branch.children.length;
+			final ctorIdent:Expr = {expr: EConst(CIdent(ctorName)), pos: pos};
+			final pattern:Expr = arity == 0
+				? ctorIdent
+				: {expr: ECall(ctorIdent, [for (_ in 0...arity) macro _]), pos: pos};
+			final kindExpr:Expr = if (ctorName == varCtor) macro 1;
+				else if (ctorName == fnCtor) macro 2;
+				else macro 0;
+			cases.push({values: [pattern], guard: null, expr: kindExpr});
+		}
+		return {
+			classifierFieldName: fieldName,
+			classifyCases: cases,
+		};
+	}
 }
 
 /** Output of WriterLowering for one rule. */
@@ -2134,5 +2267,18 @@ typedef WriterRule = {
 typedef PrevBodyInfo = {
 	access:Expr,
 	typePath:String,
+};
+
+/**
+ * ω-interblank — resolved data for `@:fmt(interMemberBlankLines(...))`.
+ * Produced by `WriterLowering.buildInterMemberClassifyInfo` and spliced
+ * into the `triviaBlockStarExpr` per-element loop to classify each
+ * element as a var (kind `1`), a function (kind `2`), or other
+ * (kind `0`). `classifyCases` is a ready-to-use `ESwitch` case list —
+ * one entry per enum variant, exhaustive, no wildcard.
+ */
+typedef InterMemberClassifyInfo = {
+	classifierFieldName:String,
+	classifyCases:Array<Case>,
 };
 #end
