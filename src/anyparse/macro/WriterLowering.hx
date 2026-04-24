@@ -332,17 +332,35 @@ class WriterLowering {
 				: null;
 			parts.push(triviaBlockStarExpr(argsAccess, null, null, trailCloseAccess, elemFn, leadText, trailText, true));
 		} else if (sepText != null) {
-			final tcExpr:Expr = trailingCommaExpr(branch);
-			parts.push(macro {
-				final _args = $argsAccess;
-				final _docs:Array<anyparse.core.Doc> = [];
-				var _i:Int = 0;
-				while (_i < _args.length) {
-					_docs.push($elemCall);
-					_i++;
-				}
-				sepList($v{leadText}, $v{trailText}, $v{sepText}, _docs, opt, $tcExpr);
-			});
+			// See `emitWriterStarField` — `@:sep('\n')` routes to a flat
+			// hardline-join emission (format-neutral).
+			if (sepText == '\n') {
+				parts.push(macro {
+					final _args = $argsAccess;
+					final _docs:Array<anyparse.core.Doc> = [_dt($v{leadText})];
+					var _i:Int = 0;
+					while (_i < _args.length) {
+						_docs.push(_dhl());
+						_docs.push($elemCall);
+						_i++;
+					}
+					_docs.push(_dhl());
+					_docs.push(_dt($v{trailText}));
+					_dc(_docs);
+				});
+			} else {
+				final tcExpr:Expr = trailingCommaExpr(branch);
+				parts.push(macro {
+					final _args = $argsAccess;
+					final _docs:Array<anyparse.core.Doc> = [];
+					var _i:Int = 0;
+					while (_i < _args.length) {
+						_docs.push($elemCall);
+						_i++;
+					}
+					sepList($v{leadText}, $v{trailText}, $v{sepText}, _docs, opt, $tcExpr);
+				});
+			}
 		} else {
 			parts.push(macro {
 				final _args = $argsAccess;
@@ -720,6 +738,30 @@ class WriterLowering {
 		}
 
 		if (closeText != null && sepText != null) {
+			// Newline as separator — semantically a hardline between
+			// elements, not a soft-fit-or-break token. `sepList` uses a
+			// soft-line (space-in-flat / newline-in-break) which doesn't
+			// match "newlines are structure." Route `@:sep('\n')` to a
+			// flat hardline-join emission: `open + \n + item + \n + … + \n + close`.
+			// No Nest — enclosing scope's indent reaches interior lines
+			// unchanged. Format-neutral — any grammar using `@:sep('\n')`
+			// gets this layout.
+			if (sepText == '\n') {
+				parts.push(macro {
+					final _arr = $fieldAccess;
+					final _docs:Array<anyparse.core.Doc> = [_dt($v{openText ?? ''})];
+					var _si:Int = 0;
+					while (_si < _arr.length) {
+						_docs.push(_dhl());
+						_docs.push($elemCall);
+						_si++;
+					}
+					_docs.push(_dhl());
+					_docs.push(_dt($v{closeText}));
+					_dc(_docs);
+				});
+				return;
+			}
 			// ω-E-whitespace: spaced leads (`{`) get a plain leading space;
 			// a Star with `@:fmt(funcParamParens)` opts into a runtime-
 			// switched space before its open delim. The two branches are

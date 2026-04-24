@@ -43,6 +43,7 @@ class WriterCodegen {
 			final optionsCT:ComplexType = optionsComplexType(optionsTypePath);
 			final resolvedRootFn:String = rootFnName ?? ('write' + simpleName(rootTypePath));
 			fields.push(publicEntry(resolvedRootFn, rootReturnCT, formatInfo, optionsCT));
+			fields.push(publicDocEntry(resolvedRootFn, rootReturnCT, formatInfo, optionsCT));
 			for (rule in rules) fields.push(ruleField(rule, optionsCT));
 			// Doc wrapper helpers
 			for (f in docHelperFields()) fields.push(f);
@@ -113,6 +114,48 @@ class WriterCodegen {
 					{name: 'options', type: macro : Null<$optionsCT>, value: macro null},
 				],
 				ret: macro : String,
+				expr: body,
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * Doc-returning counterpart of `publicEntry` — resolves options the
+	 * same way, calls the root rule function, but skips the final
+	 * `Renderer.render` step and hands the raw Doc tree to the caller.
+	 *
+	 * Used when a generated writer needs to be composed into a larger
+	 * Doc stream rather than rendered in isolation — e.g. block-comment
+	 * rendering embedded inside a class-member writer's output.
+	 */
+	private static function publicDocEntry(
+		rootFn:String, rootReturnCT:ComplexType,
+		formatInfo:FormatReader.FormatInfo,
+		optionsCT:ComplexType
+	):Field {
+		final fmtParts:Array<String> = formatInfo.schemaTypePath.split('.');
+		final defaultOptsExpr:Expr = {
+			expr: EField(macro $p{fmtParts}.instance, 'defaultWriteOptions'),
+			pos: Context.currentPos(),
+		};
+		final writeCall:Expr = {
+			expr: ECall(macro $i{rootFn}, [macro value, macro _opt]),
+			pos: Context.currentPos(),
+		};
+		final body:Expr = macro {
+			final _opt:$optionsCT = options ?? $defaultOptsExpr;
+			return $writeCall;
+		};
+		return {
+			name: 'writeDoc',
+			access: [APublic, AStatic],
+			kind: FFun({
+				args: [
+					{name: 'value', type: rootReturnCT},
+					{name: 'options', type: macro : Null<$optionsCT>, value: macro null},
+				],
+				ret: macro : anyparse.core.Doc,
 				expr: body,
 			}),
 			pos: Context.currentPos(),
@@ -332,19 +375,35 @@ class WriterCodegen {
 	 * as a single `Doc.Text` — there is no handle for re-indent when a
 	 * comment fits on one line.
 	 *
-	 * Multi-line block comments are re-indented by
-	 * `CommentLayout.buildLeadingCommentDoc` so interior lines align
-	 * with the current writer's `indentChar` / `indentSize` /
-	 * `tabWidth` regardless of what the source used. The helper emits
-	 * per-line `Doc.Text` joined by `Doc.Line('\n')`, letting the
-	 * Renderer supply the base indent on each hardline; the helper
-	 * only prefixes the delta (one indent unit for interior, none for
-	 * the closing line, a space for javadoc `* foo` alignment). Also
-	 * subsumes the javadoc-style close-line space-before-`*\/`
-	 * normalization that the pre-reindent helper had.
+	 * Multi-line block comments are re-rendered through
+	 * `anyparse.grammar.haxe.HaxeCommentNormalizer.normalize` — a
+	 * plain Haxe function in the Haxe format plugin that takes the
+	 * parsed AST plus `opt` and returns a Doc tree. All format-
+	 * specific logic (style dispatch, indent canonicalization,
+	 * common-prefix reduce, blank-edge handling) lives in that plugin
+	 * module — not in the macro core, not in a runtime helper.
+	 *
+	 * This helper is a thin macro-emitted adapter: guards single-line
+	 * / non-comment content as pass-through `Doc.Text`, parses the
+	 * verbatim string via the auto-generated `BlockCommentBodyParser`,
+	 * and delegates to the plugin normalizer. The adapter itself is
+	 * format-neutral; it names the Haxe-specific normalizer by full
+	 * path because trivia capture today is only wired for Haxe. A
+	 * future non-C-family format would have its own `*CommentNormalizer`
+	 * and a differently-named adapter.
 	 */
 	private static function leadingCommentDocField():Field {
-		final body:Expr = macro return anyparse.runtime.CommentLayout.buildLeadingCommentDoc(content, opt);
+		final body:Expr = macro {
+			if (!StringTools.startsWith(content, '/*')) return _dt(content);
+			if (content.indexOf('\n') < 0) return _dt(content);
+			final parsed:Null<anyparse.grammar.haxe.BlockComment> = try
+				anyparse.grammar.haxe.BlockCommentParser.parse(content)
+			catch (_:haxe.Exception) null;
+			if (parsed == null) return _dt(content);
+			final canonical:anyparse.grammar.haxe.BlockComment =
+				anyparse.grammar.haxe.HaxeCommentNormalizer.normalize(parsed, opt);
+			return anyparse.grammar.haxe.BlockCommentWriter.writeDoc(canonical, opt);
+		};
 		return {
 			name: 'leadingCommentDoc',
 			access: [APrivate, AStatic],

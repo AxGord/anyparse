@@ -1,28 +1,36 @@
 package anyparse.grammar.haxe;
 
 /**
- * Terminal for one line of a captured multi-line `/*…*\/` body.
+ * One line of a captured block-comment body.
  *
- * Stores only the **content** of the line — leading whitespace and
- * any javadoc-style `*` marker are matched but dropped via
- * `@:captureGroup(1)`. Writer policy, not source, drives whether
- * output lines get wrap delimiters or leading `*` markers, so those
- * bytes are never round-tripped.
+ * Two structural variants, distinguished by presence of a javadoc
+ * `*` marker — parser selects by source match:
  *
- * Regex shape:
- *  - `[ \t]*` — leading whitespace (stripped).
- *  - `\**`   — optional run of `*` markers (javadoc style, stripped).
- *  - `[ \t]?` — at most one separator space after the markers
- *    (stripped so ` * foo` and `*foo` both yield `foo`).
- *  - `((?:(?!\*\/)[^\n])*)` — the content capture group. Negative
- *    lookahead `(?!\*\/)` keeps it from eating into the
- *    `BlockCommentBody.@:trail` close delimiter.
+ *  - `StarredLine(body:BlockCommentStarredLine)` — `<ws>*<sp?><content>`.
+ *    Marker captured verbatim so round-trip preserves author spacing
+ *    (` * foo`, `*foo`, `\t * foo`, …).
+ *  - `PlainLine(body:BlockCommentPlainLine)` — `<ws><content>`, no star
+ *    marker. Leading ws preserved for relative-offset calculations.
  *
- * `@:raw` suppresses `skipWs`: every character inside the body is
- * significant at parse time even though we throw away the leading
- * run at capture.
+ * Parser tries StarredLine first (more specific — requires a `*`
+ * that isn't part of the body close) and falls back to PlainLine.
+ * Writer round-trips via the stored fields.
+ *
+ * Each variant wraps its fields in a struct typedef
+ * (`BlockCommentStarredLine` / `BlockCommentPlainLine`) because
+ * the macro's enum-branch lowering handles only single-Ref
+ * variants.
+ *
+ * `@:raw` suppresses `skipWs` in the generated parse function for
+ * this enum: the fields inside each wrapped struct are adjacent
+ * bytes in source, not whitespace-separated tokens.
  */
-@:re('[ \\t]*(?:\\*(?!/))*[ \\t]?((?:(?!\\*/)[^\\n])*)')
-@:captureGroup(1)
-@:rawString
-abstract BlockCommentLine(String) from String to String {}
+@:peg
+@:raw
+@:schema(anyparse.grammar.haxe.HaxeFormat)
+enum BlockCommentLine {
+
+	StarredLine(body:BlockCommentStarredLine);
+
+	PlainLine(body:BlockCommentPlainLine);
+}

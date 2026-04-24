@@ -185,7 +185,11 @@ class HxTriviaWriteTest extends Test {
 	/**
 	 * ω-C-commentStyle — default `JavadocNoStars`: `/**…**\/` wrap
 	 * with plain indent-unit content (no ` * ` markers). Mixed-indent
-	 * source re-emits at writer's `indentChar=Tab`.
+	 * source re-emits at writer's `indentChar=Tab`. Content lines
+	 * relative-offset past the common leading prefix is preserved
+	 * (bullets indented one space under a paragraph round-trip as
+	 * one-space-past-the-indent-unit in the output — same contract
+	 * as the `issue_51_adjust_comment_indentation` corpus fixture).
 	 */
 	public function testMultiLineBlockCommentJavadocNoStarsDefault():Void {
 		final source:String = 'class Main {\n'
@@ -199,8 +203,8 @@ class HxTriviaWriteTest extends Test {
 		final expected:String = 'class Main {\n'
 			+ '\t/**\n'
 			+ '\t\tDescription\n'
-			+ '\t\t- point A\n'
-			+ '\t\t- point B\n'
+			+ '\t\t - point A\n'
+			+ '\t\t - point B\n'
 			+ '\t**/\n'
 			+ '\tstatic public function main() {}\n'
 			+ '}\n';
