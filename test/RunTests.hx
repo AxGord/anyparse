@@ -42,6 +42,7 @@ import unit.ParseErrorTest;
 import unit.InputTest;
 import unit.WriteOptionsTest;
 import unit.AllmanProbe;
+import unit.CondModProbe;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -94,6 +95,7 @@ class RunTests {
 		runner.addCase(new InputTest());
 		runner.addCase(new WriteOptionsTest());
 		runner.addCase(new AllmanProbe());
+		runner.addCase(new CondModProbe());
 		utest.ui.Report.create(runner);
 		runner.run();
 	}
