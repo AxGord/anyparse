@@ -26,5 +26,5 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxTypeRef = {
 	var name:HxTypeName;
-	@:optional @:lead('<') @:trail('>') @:sep(',') var params:Null<Array<HxType>>;
+	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose) var params:Null<Array<HxType>>;
 }

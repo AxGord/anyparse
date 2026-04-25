@@ -265,6 +265,32 @@ import anyparse.format.WriteOptions;
  *    path which already emits ` = `, so this slice does not touch
  *    them. A binop-wide knob covering all Pratt-emitted operators is
  *    a separate slice.
+ *
+ * Fields added in slice ω-typeparam-spacing (type-param `<>` interior
+ * spacing):
+ *  - `typeParamOpen` — whitespace around the opening `<` of a type-
+ *    parameter list. Applied at every grammar site tagged
+ *    `@:fmt(typeParamOpen, typeParamClose)`: `HxTypeRef.params` plus
+ *    the declare-site `typeParams` fields on `HxClassDecl`,
+ *    `HxInterfaceDecl`, `HxAbstractDecl`, `HxEnumDecl`, `HxTypedefDecl`
+ *    and `HxFnDecl`. `None` (default, matches haxe-formatter's
+ *    `whitespace.typeParamOpenPolicy: @:default(None)`) keeps the
+ *    pre-slice tight layout (`Array<Int>`, `class Foo<T>`).
+ *    `Before`/`Both` emit a space outside before `<` (`Array <Int>`);
+ *    `After`/`Both` emit a space inside after `<` (`Array< Int>`). The
+ *    inside-spacing path threads through `sepList`'s `openInside` Doc
+ *    arg, so any future Star site adopting the flag picks up the same
+ *    semantics without further macro changes.
+ *  - `typeParamClose` — whitespace around the closing `>` of a type-
+ *    parameter list. `None` (default) keeps the pre-slice tight
+ *    layout. `Before`/`Both` emit a space inside before `>`
+ *    (`Array<Int >`); `After`/`Both` are exposed for parity but have
+ *    no effect yet — the writer's `sepList` shape concatenates the
+ *    close delim against whatever follows, with no outside-after-close
+ *    padding point. The combined fixture
+ *    `typeParamOpen=After + typeParamClose=Before` produces
+ *    `Array< Int >`, matching haxe-formatter's
+ *    `issue_588_anon_type_param`.
  */
 typedef HxModuleWriteOptions = WriteOptions & {
 	sameLineElse:SameLinePolicy,
@@ -295,4 +321,6 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	interfaceBetweenFunctions:Int,
 	interfaceAfterVars:Int,
 	typedefAssign:WhitespacePolicy,
+	typeParamOpen:WhitespacePolicy,
+	typeParamClose:WhitespacePolicy,
 };

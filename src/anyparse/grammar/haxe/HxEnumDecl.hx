@@ -21,6 +21,6 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxEnumDecl = {
 	@:kw('enum') var name:HxIdentLit;
-	@:optional @:lead('<') @:trail('>') @:sep(',') var typeParams:Null<Array<HxIdentLit>>;
+	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose) var typeParams:Null<Array<HxIdentLit>>;
 	@:lead('{') @:trail('}') var ctors:Array<HxEnumCtor>;
 }

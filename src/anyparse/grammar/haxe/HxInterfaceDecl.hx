@@ -35,6 +35,6 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxInterfaceDecl = {
 	@:kw('interface') var name:HxIdentLit;
-	@:optional @:lead('<') @:trail('>') @:sep(',') var typeParams:Null<Array<HxIdentLit>>;
+	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose) var typeParams:Null<Array<HxIdentLit>>;
 	@:fmt(leftCurly, interMemberBlankLines('member', 'VarMember', 'FnMember', 'interfaceBetweenVars', 'interfaceBetweenFunctions', 'interfaceAfterVars')) @:lead('{') @:trail('}') @:trivia var members:Array<HxMemberDecl>;
 }

@@ -425,6 +425,8 @@ class HaxeWriterRoundTripTest extends HxTestHelpers {
 			interfaceBetweenFunctions: base.interfaceBetweenFunctions,
 			interfaceAfterVars: base.interfaceAfterVars,
 			typedefAssign: base.typedefAssign,
+			typeParamOpen: base.typeParamOpen,
+			typeParamClose: base.typeParamClose,
 		};
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}

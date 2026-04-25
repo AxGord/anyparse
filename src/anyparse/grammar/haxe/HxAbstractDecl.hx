@@ -46,7 +46,7 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxAbstractDecl = {
 	@:kw('abstract') var name:HxIdentLit;
-	@:optional @:lead('<') @:trail('>') @:sep(',') var typeParams:Null<Array<HxIdentLit>>;
+	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose) var typeParams:Null<Array<HxIdentLit>>;
 	@:lead('(') @:trail(')') var underlyingType:HxType;
 	var clauses:Array<HxAbstractClause>;
 	@:fmt(leftCurly, afterFieldsWithDocComments, existingBetweenFields, beforeDocCommentEmptyLines, interMemberBlankLines('member', 'VarMember', 'FnMember')) @:lead('{') @:trail('}') @:trivia var members:Array<HxMemberDecl>;

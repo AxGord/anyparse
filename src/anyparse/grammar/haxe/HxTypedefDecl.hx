@@ -33,6 +33,6 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxTypedefDecl = {
 	@:kw('typedef') var name:HxIdentLit;
-	@:optional @:lead('<') @:trail('>') @:sep(',') var typeParams:Null<Array<HxIdentLit>>;
+	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose) var typeParams:Null<Array<HxIdentLit>>;
 	@:fmt(typedefAssign) @:lead('=') var type:HxType;
 }

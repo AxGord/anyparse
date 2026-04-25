@@ -286,7 +286,7 @@ class WriterLowering {
 		// `openDelimPolicySpace` returns null when the flag is absent so
 		// the pre-slice tight emission stays byte-identical.
 		final openSpace:Null<Expr> = openDelimPolicySpace(branch, ['callParens']);
-		final sepListCall:Expr = macro sepList($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr);
+		final sepListCall:Expr = macro sepList($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr, _de(), _de());
 		final dcArgs:Array<Expr> = [operandCall];
 		if (openSpace != null) dcArgs.push(openSpace);
 		dcArgs.push(sepListCall);
@@ -375,7 +375,7 @@ class WriterLowering {
 						_docs.push($elemCall);
 						_i++;
 					}
-					sepList($v{leadText}, $v{trailText}, $v{sepText}, _docs, opt, $tcExpr);
+					sepList($v{leadText}, $v{trailText}, $v{sepText}, _docs, opt, $tcExpr, _de(), _de());
 				});
 			}
 		} else {
@@ -485,8 +485,13 @@ class WriterLowering {
 						child == node.children[node.children.length - 1],
 						typePath, isFirstField, isRaw, stalePrevBareRefBody
 					);
+					// ω-typeparam-spacing: when the typeParamOpen=Before/Both
+					// path injects a leading-space Doc into innerParts, the
+					// list grows to two elements. EBlock would evaluate to
+					// the last Doc only and silently drop the space — use
+					// `_dc([...])` so the writer concatenates both pieces.
 					final innerExpr:Expr = if (innerParts.length == 1) innerParts[0]
-					else {expr: EBlock(innerParts), pos: Context.currentPos()};
+					else dcCall(innerParts);
 					parts.push(macro {
 						final _optVal = $fieldAccess;
 						if (_optVal != null) $innerExpr else _de();
@@ -918,15 +923,24 @@ class WriterLowering {
 			// structurally exclusive so a grammar site that ever combined
 			// them (spaced-lead `{` with a funcParamParens-style flag)
 			// cannot produce a double space.
+			//
+			// ω-typeparam-spacing: `@:fmt(typeParamOpen)` extends the same
+			// outside-before-open path — `Before`/`Both` on `<` emit a
+			// space before the delim (`Foo <Int>`). `After`/`Both` on
+			// `<` and `Before`/`Both` on `>` route through `delimInsidePolicySpace`
+			// below to splice padding INSIDE the delimiters via `sepList`'s
+			// `openInside` / `closeInside` Doc args.
 			if (!isFirstField && !isRaw) {
 				if (isSpacedLead(openText)) {
 					parts.push(macro _dt(' '));
 				} else {
-					final paramSpace:Null<Expr> = openDelimPolicySpace(starNode, ['funcParamParens']);
+					final paramSpace:Null<Expr> = openDelimPolicySpace(starNode, ['funcParamParens', 'typeParamOpen']);
 					if (paramSpace != null) parts.push(paramSpace);
 				}
 			}
 			final tcExpr:Expr = trailingCommaExpr(starNode);
+			final openInsideExpr:Expr = delimInsidePolicySpace(starNode, ['typeParamOpen'], false) ?? macro _de();
+			final closeInsideExpr:Expr = delimInsidePolicySpace(starNode, ['typeParamClose'], true) ?? macro _de();
 			parts.push(macro {
 				final _arr = $fieldAccess;
 				final _docs:Array<anyparse.core.Doc> = [];
@@ -935,7 +949,7 @@ class WriterLowering {
 					_docs.push($elemCall);
 					_si++;
 				}
-				sepList($v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $tcExpr);
+				sepList($v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $tcExpr, $openInsideExpr, $closeInsideExpr);
 			});
 		} else if (closeText != null) {
 			if (!isFirstField && !isRaw && isSpacedLead(openText)) parts.push(leftCurlySeparator(starNode));
@@ -1292,6 +1306,51 @@ class WriterLowering {
 		final bothPat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
 		final cases:Array<Case> = [
 			{values: [beforePat, bothPat], expr: macro _dt(' '), guard: null},
+		];
+		final optAccess:Expr = {expr: EField(macro opt, flagName), pos: Context.currentPos()};
+		return {expr: ESwitch(optAccess, cases, macro _de()), pos: Context.currentPos()};
+	}
+
+	/**
+	 * Return a Doc expression that pads the INSIDE of a Star struct
+	 * field's open or close delimiter — the symmetric counterpart of
+	 * `openDelimPolicySpace`, which only spaces the OUTSIDE-before-open
+	 * slot.
+	 *
+	 * For `isClose=false` (open delim, e.g. `<` of `Array<T>`):
+	 *  - `After` / `Both`  → `_dt(' ')` — emits ` ` after the open delim.
+	 *  - `Before` / `None` → `_de()` (no-op; outside slot is wired via
+	 *    `openDelimPolicySpace`).
+	 *
+	 * For `isClose=true` (close delim, e.g. `>` of `Array<T>`):
+	 *  - `Before` / `Both` → `_dt(' ')` — emits ` ` before the close delim.
+	 *  - `After` / `None`  → `_de()` (no-op; outside-after-close is not
+	 *    yet supported by the writer's `sepList` shape).
+	 *
+	 * Threaded into `sepList` via the `openInside` / `closeInside` Doc
+	 * args; returns `null` when the node carries no matching flag, so
+	 * the call site falls through to `_de()` and keeps the pre-slice
+	 * tight layout byte-identical.
+	 *
+	 * Consumed today by `@:fmt(typeParamOpen, typeParamClose)` on the
+	 * seven `typeParams` Star sites (`HxTypeRef.params` plus the five
+	 * declare-site `typeParams` fields on class / interface / abstract /
+	 * enum / typedef / function decls). Defaults `None` keep
+	 * `Array<Int>` / `class Foo<T>` tight; `whitespace.typeParamOpenPolicy:
+	 * "after"` + `whitespace.typeParamClosePolicy: "before"` flips them
+	 * to `Array< Int >`, matching haxe-formatter's `issue_588_anon_type_param`
+	 * fixture.
+	 */
+	private static function delimInsidePolicySpace(starNode:ShapeNode, flagNames:Array<String>, isClose:Bool):Null<Expr> {
+		final flagName:Null<String> = firstFmtFlag(starNode, flagNames);
+		if (flagName == null) return null;
+		final wpPath:Array<String> = ['anyparse', 'format', 'WhitespacePolicy'];
+		final beforePat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Before']));
+		final afterPat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['After']));
+		final bothPat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
+		final matchValues:Array<Expr> = isClose ? [beforePat, bothPat] : [afterPat, bothPat];
+		final cases:Array<Case> = [
+			{values: matchValues, expr: macro _dt(' '), guard: null},
 		];
 		final optAccess:Expr = {expr: EField(macro opt, flagName), pos: Context.currentPos()};
 		return {expr: ESwitch(optAccess, cases, macro _de()), pos: Context.currentPos()};

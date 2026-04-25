@@ -117,6 +117,8 @@ class HxLeftCurlyOptionsTest extends Test {
 			interfaceBetweenFunctions: base.interfaceBetweenFunctions,
 			interfaceAfterVars: base.interfaceAfterVars,
 			typedefAssign: base.typedefAssign,
+			typeParamOpen: base.typeParamOpen,
+			typeParamClose: base.typeParamClose,
 		};
 	}
 }

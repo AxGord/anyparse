@@ -5,11 +5,10 @@ package anyparse.grammar.haxe.format;
  *
  * Only keys whose runtime knob already exists on `HxModuleWriteOptions`
  * are modelled here. Missing keys (`functionTypeHaxe3Policy`,
- * `functionTypeHaxe4Policy`, `tryPolicy`, `typeParamOpenPolicy`,
- * `ifPolicy`, `arrowFunctionsPolicy`, `forPolicy`, `ternaryPolicy`, …)
- * are silently dropped by the ByName struct parser's
- * `UnknownPolicy.Skip` — they land with the slice that introduces the
- * matching writer knob.
+ * `functionTypeHaxe4Policy`, `tryPolicy`, `ifPolicy`,
+ * `arrowFunctionsPolicy`, `forPolicy`, `ternaryPolicy`, …) are silently
+ * dropped by the ByName struct parser's `UnknownPolicy.Skip` — they
+ * land with the slice that introduces the matching writer knob.
  *
  * Added in slice ψ₇ (feeds `opt.objectFieldColon`).
  *
@@ -24,12 +23,24 @@ package anyparse.grammar.haxe.format;
  * Extended in slice ω-call-parens:
  *  - `parenConfig.callParens.openingPolicy` feeds `opt.callParens`
  *    (the space before the `(` on `HxExpr.Call.args`).
+ *
+ * Extended in slice ω-typeparam-spacing:
+ *  - `typeParamOpenPolicy` feeds `opt.typeParamOpen` (the `<` of every
+ *    type-parameter list, both `HxTypeRef.params` and the declare-site
+ *    `typeParams` fields).
+ *  - `typeParamClosePolicy` feeds `opt.typeParamClose` (the matching
+ *    `>`). Combined `typeParamOpenPolicy: "after"` +
+ *    `typeParamClosePolicy: "before"` produces `Array< Int >`.
  */
 @:peg typedef HxFormatWhitespaceSection = {
 
 	@:optional var objectFieldColonPolicy:HxFormatWhitespacePolicy;
 
 	@:optional var typeHintColonPolicy:HxFormatWhitespacePolicy;
+
+	@:optional var typeParamOpenPolicy:HxFormatWhitespacePolicy;
+
+	@:optional var typeParamClosePolicy:HxFormatWhitespacePolicy;
 
 	@:optional var parenConfig:HxFormatParenConfigSection;
 };

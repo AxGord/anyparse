@@ -221,6 +221,14 @@ final class HaxeFormat implements TextFormat {
 	 * `whitespace.binopPolicy: @:default(Around)` for the typedef-rhs
 	 * site. Callers who want the pre-slice tight `typedef Foo=Bar;`
 	 * layout must pass `typedefAssign: WhitespacePolicy.None` explicitly.
+	 *
+	 * Type-param `<>` spacing defaults (ω-typeparam-spacing) are both
+	 * `None` — `Array<Int>` and `class Foo<T>` stay tight, matching
+	 * haxe-formatter's `whitespace.typeParamOpenPolicy: @:default(None)`
+	 * and `whitespace.typeParamClosePolicy: @:default(None)`. Opting
+	 * into the spaced form requires explicit `hxformat.json` overrides:
+	 * `"whitespace": { "typeParamOpenPolicy": "after",
+	 * "typeParamClosePolicy": "before" }` produces `Array< Int >`.
 	 */
 	public var defaultWriteOptions(default, null):HxModuleWriteOptions = {
 		indentChar: Tab,
@@ -259,6 +267,8 @@ final class HaxeFormat implements TextFormat {
 		interfaceBetweenFunctions: 0,
 		interfaceAfterVars: 0,
 		typedefAssign: WhitespacePolicy.Both,
+		typeParamOpen: WhitespacePolicy.None,
+		typeParamClose: WhitespacePolicy.None,
 	};
 
 	private function new() {}

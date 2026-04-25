@@ -127,6 +127,8 @@ final class HxTypedefAssignOptionsTest extends Test {
 			interfaceBetweenFunctions: base.interfaceBetweenFunctions,
 			interfaceAfterVars: base.interfaceAfterVars,
 			typedefAssign: typedefAssign,
+			typeParamOpen: base.typeParamOpen,
+			typeParamClose: base.typeParamClose,
 		};
 	}
 }

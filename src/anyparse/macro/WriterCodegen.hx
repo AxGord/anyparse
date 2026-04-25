@@ -307,6 +307,15 @@ class WriterCodegen {
 	 * the last item only when the enclosing Group lays out in break
 	 * mode — an `IfBreak` node carries the conditional. In flat mode
 	 * the trailing position is `Empty`, so short lists render unchanged.
+	 *
+	 * `openInside` / `closeInside` are inside-of-delimiter padding Docs
+	 * spliced between the open/close literals and the items, driven by
+	 * `WhitespacePolicy.After`/`Both` on the open delim and
+	 * `Before`/`Both` on the close delim (see `delimInsidePolicySpace`
+	 * in `WriterLowering`). Default `Empty` keeps the pre-slice tight
+	 * layout. Empty lists short-circuit to `_dt(open + close)` and skip
+	 * inside padding regardless — `< >` for `Array<>` would be visually
+	 * surprising and no fixture asks for it.
 	 */
 	private static function sepListField():Field {
 		final body:Expr = macro {
@@ -323,7 +332,11 @@ class WriterCodegen {
 			}
 			if (trailingComma) _inner.push(_dib(_dt(sep), _de()));
 			final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-			return _dg(_dc([_dt(open), _dn(_cols, _dc([_dsl(), _dc(_inner)])), _dsl(), _dt(close)]));
+			return _dg(_dc([
+				_dt(open), openInside,
+				_dn(_cols, _dc([_dsl(), _dc(_inner)])),
+				_dsl(), closeInside, _dt(close),
+			]));
 		};
 		return {
 			name: 'sepList',
@@ -336,6 +349,8 @@ class WriterCodegen {
 					{name: 'items', type: macro : Array<anyparse.core.Doc>},
 					{name: 'opt', type: macro : anyparse.format.WriteOptions},
 					{name: 'trailingComma', type: macro : Bool},
+					{name: 'openInside', type: macro : anyparse.core.Doc},
+					{name: 'closeInside', type: macro : anyparse.core.Doc},
 				],
 				ret: macro : anyparse.core.Doc,
 				expr: body,

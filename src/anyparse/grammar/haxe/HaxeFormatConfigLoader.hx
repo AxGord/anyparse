@@ -103,6 +103,15 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   `HxExpr.Call.args` (`trace (x)`); `After` / `None` leave the paren
  *   tight. The sibling `closingPolicy` key is parsed and silently
  *   ignored.
+ * - `whitespace.typeParamOpenPolicy` (ω-typeparam-spacing): same enum
+ *   / same collapse, routed to `opt.typeParamOpen`. `Before` / `Both`
+ *   emit a space outside before `<`; `After` / `Both` emit a space
+ *   inside after `<`. Default `None` leaves `Array<Int>` tight.
+ * - `whitespace.typeParamClosePolicy` (ω-typeparam-spacing): same enum,
+ *   routed to `opt.typeParamClose`. `Before` / `Both` emit a space
+ *   inside before `>`. `After` is exposed for parity but has no effect
+ *   yet — the writer's `sepList` shape concatenates the close delim
+ *   tight against whatever follows.
  * - `emptyLines.afterFieldsWithDocComments` (ω-C-empty-lines-doc):
  *   enum string — `"ignore"` → `CommentEmptyLinesPolicy.Ignore`,
  *   `"none"` → `CommentEmptyLinesPolicy.None`, `"one"` →
@@ -216,6 +225,8 @@ final class HaxeFormatConfigLoader {
 			interfaceBetweenFunctions: base.interfaceBetweenFunctions,
 			interfaceAfterVars: base.interfaceAfterVars,
 			typedefAssign: base.typedefAssign,
+			typeParamOpen: base.typeParamOpen,
+			typeParamClose: base.typeParamClose,
 		};
 		if (cfg.indentation != null) applyIndentation(cfg.indentation, result);
 		if (cfg.wrapping != null) applyWrapping(cfg.wrapping, result);
@@ -279,6 +290,10 @@ final class HaxeFormatConfigLoader {
 			opt.objectFieldColon = whitespaceToRuntime(section.objectFieldColonPolicy);
 		if (section.typeHintColonPolicy != null)
 			opt.typeHintColon = whitespaceToRuntime(section.typeHintColonPolicy);
+		if (section.typeParamOpenPolicy != null)
+			opt.typeParamOpen = whitespaceToRuntime(section.typeParamOpenPolicy);
+		if (section.typeParamClosePolicy != null)
+			opt.typeParamClose = whitespaceToRuntime(section.typeParamClosePolicy);
 		final paren:Null<HxFormatParenConfigSection> = section.parenConfig;
 		if (paren != null) {
 			final funcParam:Null<HxFormatParenPolicySection> = paren.funcParamParens;
