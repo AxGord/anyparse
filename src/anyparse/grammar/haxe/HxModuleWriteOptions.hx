@@ -107,6 +107,17 @@ import anyparse.format.WriteOptions;
  *    writer's `sepList` does not expose a post-open-paren padding
  *    point. Only `HxFnDecl.params` carries the flag — call sites,
  *    `new T(...)` args, and `(expr)` ParenExpr stay tight regardless.
+ *  - `callParens` — whitespace before the opening `(` of a call
+ *    expression's argument list (`HxExpr.Call.args`).
+ *    `None` (default) keeps the tight pre-slice layout (`trace(x)`).
+ *    `Before` / `Both` emit a single space before the paren
+ *    (`trace (x)`), matching haxe-formatter's
+ *    `whitespace.parenConfig.callParens.openingPolicy: "before"`.
+ *    `After` is exposed for parity but has no effect yet — the
+ *    writer's `sepList` does not expose a post-open-paren padding
+ *    point. Only `HxExpr.Call` carries the flag — `HxFnDecl.params`
+ *    keeps its own `funcParamParens` knob, `new T(...)` args and
+ *    `(expr)` ParenExpr stay tight regardless.
  *
  * Field added in slice ψ₈ (else-if keyword placement):
  *  - `elseIf` — placement of the nested `if` inside an `else` clause
@@ -237,6 +248,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	objectFieldColon:WhitespacePolicy,
 	typeHintColon:WhitespacePolicy,
 	funcParamParens:WhitespacePolicy,
+	callParens:WhitespacePolicy,
 	elseIf:KeywordPlacement,
 	fitLineIfWithElse:Bool,
 	afterFieldsWithDocComments:CommentEmptyLinesPolicy,

@@ -280,6 +280,17 @@ class WriterLowering {
 
 		final argsAccess:Expr = macro $i{argNames[1]};
 		final tcExpr:Expr = trailingCommaExpr(branch);
+		// ω-call-parens: a `@:postfix('(', ')')` ctor with
+		// `@:fmt(callParens)` opts into a runtime-switched space before
+		// the open delim, mirroring `funcParamParens` on a struct Star.
+		// `openDelimPolicySpace` returns null when the flag is absent so
+		// the pre-slice tight emission stays byte-identical.
+		final openSpace:Null<Expr> = openDelimPolicySpace(branch, ['callParens']);
+		final sepListCall:Expr = macro sepList($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr);
+		final dcArgs:Array<Expr> = [operandCall];
+		if (openSpace != null) dcArgs.push(openSpace);
+		dcArgs.push(sepListCall);
+		final dcExpr:Expr = dcCall(dcArgs);
 		return macro {
 			final _args = $argsAccess;
 			final _docs:Array<anyparse.core.Doc> = [];
@@ -288,7 +299,7 @@ class WriterLowering {
 				_docs.push($elemCall);
 				_i++;
 			}
-			_dc([$operandCall, sepList($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr)]);
+			$dcExpr;
 		};
 	}
 

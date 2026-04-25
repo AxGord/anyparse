@@ -155,6 +155,12 @@ final class HaxeFormat implements TextFormat {
 	 * `whitespace.parenConfig.funcParamParens.openingPolicy:
 	 * @:default(None)`.
 	 *
+	 * Call-parens default (ω-call-parens) is `None` — no space before
+	 * the opening `(` of `HxExpr.Call.args`. Matches the pre-slice
+	 * layout and haxe-formatter's
+	 * `whitespace.parenConfig.callParens.openingPolicy:
+	 * @:default(None)`.
+	 *
 	 * `fitLineIfWithElse` default (ψ₁₂) is `false` — when an `if` has
 	 * an `else` and the body policies are `FitLine`, the bodies fall
 	 * back to the `Next` layout instead of flat-or-break. Matches
@@ -224,6 +230,7 @@ final class HaxeFormat implements TextFormat {
 		objectFieldColon: WhitespacePolicy.After,
 		typeHintColon: WhitespacePolicy.None,
 		funcParamParens: WhitespacePolicy.None,
+		callParens: WhitespacePolicy.None,
 		elseIf: KeywordPlacement.Same,
 		fitLineIfWithElse: false,
 		afterFieldsWithDocComments: CommentEmptyLinesPolicy.One,

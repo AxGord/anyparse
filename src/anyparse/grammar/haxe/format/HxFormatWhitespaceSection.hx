@@ -20,6 +20,10 @@ package anyparse.grammar.haxe.format;
  *    `parenConfig.funcParamParens.openingPolicy`, feeding
  *    `opt.funcParamParens` (the space before the `(` on
  *    `HxFnDecl.params`).
+ *
+ * Extended in slice ω-call-parens:
+ *  - `parenConfig.callParens.openingPolicy` feeds `opt.callParens`
+ *    (the space before the `(` on `HxExpr.Call.args`).
  */
 @:peg typedef HxFormatWhitespaceSection = {
 

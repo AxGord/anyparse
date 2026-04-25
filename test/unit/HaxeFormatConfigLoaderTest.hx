@@ -268,6 +268,37 @@ class HaxeFormatConfigLoaderTest extends Test {
 		Assert.equals(WhitespacePolicy.None, opts.funcParamParens);
 	}
 
+	public function testWhitespaceCallParensDefaultsToNone():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		Assert.equals(WhitespacePolicy.None, opts.callParens);
+	}
+
+	public function testWhitespaceCallParensBeforeMapsToBefore():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"parenConfig": {"callParens": {"openingPolicy": "before"}}}}');
+		Assert.equals(WhitespacePolicy.Before, opts.callParens);
+	}
+
+	public function testWhitespaceCallParensEndToEnd():Void {
+		final src:String = 'class C { static function main() { trace(1); } }';
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"parenConfig": {"callParens": {"openingPolicy": "before"}}}}');
+		final ast:HxModule = HaxeModuleParser.parse(src);
+		final out:String = HxModuleWriter.write(ast, opts);
+		Assert.isTrue(out.indexOf('trace (1)') != -1, 'expected `trace (1)` in: <$out>');
+	}
+
+	public function testWhitespaceCallParensClosingPolicyIsIgnored():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"parenConfig": {"callParens": {"closingPolicy": "before"}}}}');
+		Assert.equals(WhitespacePolicy.None, opts.callParens);
+	}
+
+	public function testWhitespaceCallParensDoesNotAffectFuncParamParens():Void {
+		final src:String = 'class C { static function main() { trace(1); } }';
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"parenConfig": {"callParens": {"openingPolicy": "before"}}}}');
+		final ast:HxModule = HaxeModuleParser.parse(src);
+		final out:String = HxModuleWriter.write(ast, opts);
+		Assert.isTrue(out.indexOf('main()') != -1, 'expected `main()` (tight) in: <$out>');
+	}
+
 	public function testSameLineElseIfDefaultsToSame():Void {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		Assert.equals(KeywordPlacement.Same, opts.elseIf);

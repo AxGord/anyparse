@@ -96,6 +96,12 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   `HxFnDecl.params` (`function main ()`); `After` / `None` leave the
  *   paren tight (the paren-after axis is not yet wired). The sibling
  *   `closingPolicy` key is parsed and silently ignored.
+ * - `whitespace.parenConfig.callParens.openingPolicy`
+ *   (ω-call-parens): same enum, routed to `opt.callParens`.
+ *   `Before` / `Both` emit a single space before the `(` on
+ *   `HxExpr.Call.args` (`trace (x)`); `After` / `None` leave the paren
+ *   tight. The sibling `closingPolicy` key is parsed and silently
+ *   ignored.
  * - `emptyLines.afterFieldsWithDocComments` (ω-C-empty-lines-doc):
  *   enum string — `"ignore"` → `CommentEmptyLinesPolicy.Ignore`,
  *   `"none"` → `CommentEmptyLinesPolicy.None`, `"one"` →
@@ -140,7 +146,7 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  * `typedefEmptyLines`, other `classEmptyLines.*` sub-keys beyond
  * `existingBetweenFields`, …), other `whitespace.*` keys
  * (`ifPolicy`, `forPolicy`, `ternaryPolicy`, …), other
- * `whitespace.parenConfig.*` kinds (`callParens`, `ifParens`, …),
+ * `whitespace.parenConfig.*` kinds (`ifParens`, `forParens`, …),
  * `indentation.conditionalPolicy`, `baseTypeHints`, `disableFormatting`,
  * `excludes`. They will land with the slices that introduce the
  * matching knobs.
@@ -189,6 +195,7 @@ final class HaxeFormatConfigLoader {
 			objectFieldColon: base.objectFieldColon,
 			typeHintColon: base.typeHintColon,
 			funcParamParens: base.funcParamParens,
+			callParens: base.callParens,
 			elseIf: base.elseIf,
 			fitLineIfWithElse: base.fitLineIfWithElse,
 			afterFieldsWithDocComments: base.afterFieldsWithDocComments,
@@ -265,6 +272,9 @@ final class HaxeFormatConfigLoader {
 			final funcParam:Null<HxFormatParenPolicySection> = paren.funcParamParens;
 			if (funcParam != null && funcParam.openingPolicy != null)
 				opt.funcParamParens = whitespaceToRuntime(funcParam.openingPolicy);
+			final call:Null<HxFormatParenPolicySection> = paren.callParens;
+			if (call != null && call.openingPolicy != null)
+				opt.callParens = whitespaceToRuntime(call.openingPolicy);
 		}
 	}
 

@@ -412,6 +412,7 @@ class HaxeWriterRoundTripTest extends HxTestHelpers {
 			objectFieldColon: base.objectFieldColon,
 			typeHintColon: base.typeHintColon,
 			funcParamParens: base.funcParamParens,
+			callParens: base.callParens,
 			elseIf: base.elseIf,
 			fitLineIfWithElse: base.fitLineIfWithElse,
 			afterFieldsWithDocComments: base.afterFieldsWithDocComments,
