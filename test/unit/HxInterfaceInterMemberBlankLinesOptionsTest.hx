@@ -83,8 +83,9 @@ class HxInterfaceInterMemberBlankLinesOptionsTest extends Test {
 	}
 
 	public function testClassKnobsDoNotAffectInterface():Void {
-		final base:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
-		final opts:HxModuleWriteOptions = makeOptsAdvanced(base, 0, 0, 0, 0, 5, 5);
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		opts.betweenFunctions = 5;
+		opts.afterVars = 5;
 		final out:String = HaxeModuleTriviaWriter.write(
 			HaxeModuleTriviaParser.parse('interface I { public function a():Void; public function b():Void; }'),
 			opts
@@ -94,8 +95,10 @@ class HxInterfaceInterMemberBlankLinesOptionsTest extends Test {
 	}
 
 	public function testInterfaceKnobsDoNotAffectClass():Void {
-		final base:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
-		final opts:HxModuleWriteOptions = makeOptsAdvanced(base, 5, 5, 5, 0, 0, 0);
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		opts.interfaceBetweenVars = 5;
+		opts.interfaceBetweenFunctions = 5;
+		opts.interfaceAfterVars = 5;
 		final out:String = HaxeModuleTriviaWriter.write(
 			HaxeModuleTriviaParser.parse('class M { public var a:Int; public var b:Int; }'),
 			opts
@@ -151,63 +154,10 @@ class HxInterfaceInterMemberBlankLinesOptionsTest extends Test {
 	}
 
 	private inline function writeWith(src:String, ifaceBetweenVars:Int, ifaceBetweenFunctions:Int, ifaceAfterVars:Int):String {
-		final base:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
-		final opts:HxModuleWriteOptions = makeOptsAdvanced(
-			base, ifaceBetweenVars, ifaceBetweenFunctions, ifaceAfterVars,
-			base.betweenVars, base.betweenFunctions, base.afterVars
-		);
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		opts.interfaceBetweenVars = ifaceBetweenVars;
+		opts.interfaceBetweenFunctions = ifaceBetweenFunctions;
+		opts.interfaceAfterVars = ifaceAfterVars;
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-	}
-
-	private inline function makeOptsAdvanced(
-		base:HxModuleWriteOptions,
-		ifaceBetweenVars:Int, ifaceBetweenFunctions:Int, ifaceAfterVars:Int,
-		clsBetweenVars:Int, clsBetweenFunctions:Int, clsAfterVars:Int
-	):HxModuleWriteOptions {
-		return {
-			indentChar: base.indentChar,
-			indentSize: base.indentSize,
-			tabWidth: base.tabWidth,
-			lineWidth: base.lineWidth,
-			lineEnd: base.lineEnd,
-			finalNewline: base.finalNewline,
-			trailingWhitespace: base.trailingWhitespace,
-			commentStyle: base.commentStyle,
-			sameLineElse: base.sameLineElse,
-			sameLineCatch: base.sameLineCatch,
-			sameLineDoWhile: base.sameLineDoWhile,
-			trailingCommaArrays: base.trailingCommaArrays,
-			trailingCommaArgs: base.trailingCommaArgs,
-			trailingCommaParams: base.trailingCommaParams,
-			ifBody: base.ifBody,
-			elseBody: base.elseBody,
-			forBody: base.forBody,
-			whileBody: base.whileBody,
-			doBody: base.doBody,
-			leftCurly: base.leftCurly,
-			objectFieldColon: base.objectFieldColon,
-			typeHintColon: base.typeHintColon,
-			funcParamParens: base.funcParamParens,
-			callParens: base.callParens,
-			elseIf: base.elseIf,
-			fitLineIfWithElse: base.fitLineIfWithElse,
-			afterFieldsWithDocComments: base.afterFieldsWithDocComments,
-			existingBetweenFields: base.existingBetweenFields,
-			beforeDocCommentEmptyLines: base.beforeDocCommentEmptyLines,
-			betweenVars: clsBetweenVars,
-			betweenFunctions: clsBetweenFunctions,
-			afterVars: clsAfterVars,
-			interfaceBetweenVars: ifaceBetweenVars,
-			interfaceBetweenFunctions: ifaceBetweenFunctions,
-			interfaceAfterVars: ifaceAfterVars,
-			typedefAssign: base.typedefAssign,
-			typeParamDefaultEquals: base.typeParamDefaultEquals,
-			typeParamOpen: base.typeParamOpen,
-			typeParamClose: base.typeParamClose,
-			anonTypeBracesOpen: base.anonTypeBracesOpen,
-			anonTypeBracesClose: base.anonTypeBracesClose,
-			objectLiteralBracesOpen: base.objectLiteralBracesOpen,
-			objectLiteralBracesClose: base.objectLiteralBracesClose,
-		};
 	}
 }

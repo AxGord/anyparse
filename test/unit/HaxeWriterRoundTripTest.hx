@@ -2,7 +2,7 @@ package unit;
 
 import utest.Assert;
 import anyparse.format.BodyPolicy;
-import anyparse.grammar.haxe.HaxeFormat;
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -387,52 +387,13 @@ class HaxeWriterRoundTripTest extends HxTestHelpers {
 		src:String, ifBody:BodyPolicy, elseBody:BodyPolicy, forBody:BodyPolicy, whileBody:BodyPolicy, doBody:BodyPolicy,
 		lineWidth:Int
 	):String {
-		final base:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
-		final opts:HxModuleWriteOptions = {
-			indentChar: base.indentChar,
-			indentSize: base.indentSize,
-			tabWidth: base.tabWidth,
-			lineWidth: lineWidth,
-			lineEnd: base.lineEnd,
-			finalNewline: base.finalNewline,
-			trailingWhitespace: base.trailingWhitespace,
-			commentStyle: base.commentStyle,
-			sameLineElse: base.sameLineElse,
-			sameLineCatch: base.sameLineCatch,
-			sameLineDoWhile: base.sameLineDoWhile,
-			trailingCommaArrays: base.trailingCommaArrays,
-			trailingCommaArgs: base.trailingCommaArgs,
-			trailingCommaParams: base.trailingCommaParams,
-			ifBody: ifBody,
-			elseBody: elseBody,
-			forBody: forBody,
-			whileBody: whileBody,
-			doBody: doBody,
-			leftCurly: base.leftCurly,
-			objectFieldColon: base.objectFieldColon,
-			typeHintColon: base.typeHintColon,
-			funcParamParens: base.funcParamParens,
-			callParens: base.callParens,
-			elseIf: base.elseIf,
-			fitLineIfWithElse: base.fitLineIfWithElse,
-			afterFieldsWithDocComments: base.afterFieldsWithDocComments,
-			existingBetweenFields: base.existingBetweenFields,
-			beforeDocCommentEmptyLines: base.beforeDocCommentEmptyLines,
-			betweenVars: base.betweenVars,
-			betweenFunctions: base.betweenFunctions,
-			afterVars: base.afterVars,
-			interfaceBetweenVars: base.interfaceBetweenVars,
-			interfaceBetweenFunctions: base.interfaceBetweenFunctions,
-			interfaceAfterVars: base.interfaceAfterVars,
-			typedefAssign: base.typedefAssign,
-			typeParamDefaultEquals: base.typeParamDefaultEquals,
-			typeParamOpen: base.typeParamOpen,
-			typeParamClose: base.typeParamClose,
-			anonTypeBracesOpen: base.anonTypeBracesOpen,
-			anonTypeBracesClose: base.anonTypeBracesClose,
-			objectLiteralBracesOpen: base.objectLiteralBracesOpen,
-			objectLiteralBracesClose: base.objectLiteralBracesClose,
-		};
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		opts.lineWidth = lineWidth;
+		opts.ifBody = ifBody;
+		opts.elseBody = elseBody;
+		opts.forBody = forBody;
+		opts.whileBody = whileBody;
+		opts.doBody = doBody;
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}
 }

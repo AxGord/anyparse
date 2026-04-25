@@ -3,6 +3,7 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.grammar.haxe.HaxeFormat;
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -139,51 +140,11 @@ class HxTrailingCommaOptionsTest extends Test {
 	}
 
 	private function makeOpts(lineWidth:Int, arrays:Bool, args:Bool, params:Bool):HxModuleWriteOptions {
-		final base:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
-		return {
-			indentChar: base.indentChar,
-			indentSize: base.indentSize,
-			tabWidth: base.tabWidth,
-			lineWidth: lineWidth,
-			lineEnd: base.lineEnd,
-			finalNewline: base.finalNewline,
-			trailingWhitespace: base.trailingWhitespace,
-			commentStyle: base.commentStyle,
-			sameLineElse: base.sameLineElse,
-			sameLineCatch: base.sameLineCatch,
-			sameLineDoWhile: base.sameLineDoWhile,
-			trailingCommaArrays: arrays,
-			trailingCommaArgs: args,
-			trailingCommaParams: params,
-			ifBody: base.ifBody,
-			elseBody: base.elseBody,
-			forBody: base.forBody,
-			whileBody: base.whileBody,
-			doBody: base.doBody,
-			leftCurly: base.leftCurly,
-			objectFieldColon: base.objectFieldColon,
-			typeHintColon: base.typeHintColon,
-			funcParamParens: base.funcParamParens,
-			callParens: base.callParens,
-			elseIf: base.elseIf,
-			fitLineIfWithElse: base.fitLineIfWithElse,
-			afterFieldsWithDocComments: base.afterFieldsWithDocComments,
-			existingBetweenFields: base.existingBetweenFields,
-			beforeDocCommentEmptyLines: base.beforeDocCommentEmptyLines,
-			betweenVars: base.betweenVars,
-			betweenFunctions: base.betweenFunctions,
-			afterVars: base.afterVars,
-			interfaceBetweenVars: base.interfaceBetweenVars,
-			interfaceBetweenFunctions: base.interfaceBetweenFunctions,
-			interfaceAfterVars: base.interfaceAfterVars,
-			typedefAssign: base.typedefAssign,
-			typeParamDefaultEquals: base.typeParamDefaultEquals,
-			typeParamOpen: base.typeParamOpen,
-			typeParamClose: base.typeParamClose,
-			anonTypeBracesOpen: base.anonTypeBracesOpen,
-			anonTypeBracesClose: base.anonTypeBracesClose,
-			objectLiteralBracesOpen: base.objectLiteralBracesOpen,
-			objectLiteralBracesClose: base.objectLiteralBracesClose,
-		};
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		opts.lineWidth = lineWidth;
+		opts.trailingCommaArrays = arrays;
+		opts.trailingCommaArgs = args;
+		opts.trailingCommaParams = params;
+		return opts;
 	}
 }

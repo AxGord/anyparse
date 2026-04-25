@@ -4,6 +4,7 @@ import utest.Assert;
 import utest.Test;
 import anyparse.format.WhitespacePolicy;
 import anyparse.grammar.haxe.HaxeFormat;
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
@@ -98,51 +99,8 @@ class HxObjectFieldColonOptionsTest extends Test {
 	}
 
 	private inline function makeOpts(objectFieldColon:WhitespacePolicy):HxModuleWriteOptions {
-		final base:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
-		return {
-			indentChar: base.indentChar,
-			indentSize: base.indentSize,
-			tabWidth: base.tabWidth,
-			lineWidth: base.lineWidth,
-			lineEnd: base.lineEnd,
-			finalNewline: base.finalNewline,
-			trailingWhitespace: base.trailingWhitespace,
-			commentStyle: base.commentStyle,
-			sameLineElse: base.sameLineElse,
-			sameLineCatch: base.sameLineCatch,
-			sameLineDoWhile: base.sameLineDoWhile,
-			trailingCommaArrays: base.trailingCommaArrays,
-			trailingCommaArgs: base.trailingCommaArgs,
-			trailingCommaParams: base.trailingCommaParams,
-			ifBody: base.ifBody,
-			elseBody: base.elseBody,
-			forBody: base.forBody,
-			whileBody: base.whileBody,
-			doBody: base.doBody,
-			leftCurly: base.leftCurly,
-			objectFieldColon: objectFieldColon,
-			typeHintColon: base.typeHintColon,
-			funcParamParens: base.funcParamParens,
-			callParens: base.callParens,
-			elseIf: base.elseIf,
-			fitLineIfWithElse: base.fitLineIfWithElse,
-			afterFieldsWithDocComments: base.afterFieldsWithDocComments,
-			existingBetweenFields: base.existingBetweenFields,
-			beforeDocCommentEmptyLines: base.beforeDocCommentEmptyLines,
-			betweenVars: base.betweenVars,
-			betweenFunctions: base.betweenFunctions,
-			afterVars: base.afterVars,
-			interfaceBetweenVars: base.interfaceBetweenVars,
-			interfaceBetweenFunctions: base.interfaceBetweenFunctions,
-			interfaceAfterVars: base.interfaceAfterVars,
-			typedefAssign: base.typedefAssign,
-			typeParamDefaultEquals: base.typeParamDefaultEquals,
-			typeParamOpen: base.typeParamOpen,
-			typeParamClose: base.typeParamClose,
-			anonTypeBracesOpen: base.anonTypeBracesOpen,
-			anonTypeBracesClose: base.anonTypeBracesClose,
-			objectLiteralBracesOpen: base.objectLiteralBracesOpen,
-			objectLiteralBracesClose: base.objectLiteralBracesClose,
-		};
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		opts.objectFieldColon = objectFieldColon;
+		return opts;
 	}
 }
