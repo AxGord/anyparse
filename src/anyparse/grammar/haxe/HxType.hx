@@ -18,11 +18,12 @@ package anyparse.grammar.haxe;
  *    branch with `Right` associativity at precedence `0` — same Pratt
  *    pattern that powers `HxExpr`. The macro auto-detects the Pratt
  *    branch in `Lowering` and emits a precedence-climbing loop wrapping
- *    the atom dispatcher (which sees only `Named` for now). Carries
- *    `@:fmt(tight)` so the writer emits `Int->Void` without surrounding
- *    spaces, matching haxe-formatter's output for the old-form arrow.
+ *    the atom dispatcher. Carries `@:fmt(tight)` so the writer emits
+ *    `Int->Void` without surrounding spaces, matching haxe-formatter's
+ *    output for the old-form arrow.
  *    The new (parenthesised) form `(Int) -> Int`, `(Int, String) -> Bool`
- *    requires a parenthesised-type atom and stays for a follow-up slice.
+ *    is a separate axis with multi-arg + named-arg LHS shape and
+ *    around-spaced `->` emission; tracked as a follow-up slice.
  *
  *  - `Anon(fields:Array<HxAnonField>)` — anonymous structure type
  *    `{x:Int, y:String}`. Bracketed comma-separated `HxAnonField`
@@ -35,6 +36,17 @@ package anyparse.grammar.haxe;
  *    naturally through the recursive `HxType` value field on
  *    `HxAnonField`.
  *
+ *  - `Parens(inner:HxType)` — parenthesised type atom `(T)`. Wraps a
+ *    full inner `HxType` between `(` and `)` via Case 3 single-Ref
+ *    `@:wrap('(', ')')` — same shape as `HxExpr.ParenExpr`. Used both
+ *    for type-param constraints `<S:(pack.sub.Type)=...>` and for
+ *    explicit precedence wrapping inside arrows `(Int->Bool)->Void`.
+ *    The latter previously relied on the writer emitting parens on
+ *    left-nested arrows for precedence reasons; with `Parens` as an
+ *    AST-level construct the wrap becomes explicit on the parse side.
+ *    The new-form arrow `(Int) -> Int` is NOT this — that requires a
+ *    separate `HxArrowParam` shape (multi-arg, optionally-named).
+ *
  * The wrapper is introduced as a foundation so each new variant lands
  * as a small additive slice rather than retrofitting the type-position
  * shape across the whole grammar each time.
@@ -45,9 +57,9 @@ package anyparse.grammar.haxe;
  *
  * Right-associativity ensures `Int->Bool->Void` parses as
  * `Arrow(Int, Arrow(Bool, Void))`, mirroring the curried function-type
- * convention. Left-nested arrows like `(Int->Bool)->Void` carry an
- * AST-level `Arrow` on the left whose context-precedence (`leftCtx =
- * prec + 1` for right-assoc) forces the writer to wrap them in parens.
+ * convention. Left-nested arrows like `(Int->Bool)->Void` parse as
+ * `Arrow(Parens(Arrow(Int, Bool)), Void)` — the `Parens` atom captures
+ * the explicit grouping on the parse side.
  */
 @:peg
 enum HxType {
@@ -58,4 +70,7 @@ enum HxType {
 
 	@:lead('{') @:trail('}') @:sep(',') @:fmt(anonTypeBracesOpen, anonTypeBracesClose)
 	Anon(fields:Array<HxAnonField>);
+
+	@:wrap('(', ')')
+	Parens(inner:HxType);
 }
