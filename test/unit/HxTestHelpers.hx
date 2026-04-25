@@ -136,15 +136,15 @@ class HxTestHelpers extends Test {
 	 * Accepts `Null<HxType>` so optional type-position fields
 	 * (`HxFnDecl.returnType`, `HxVarDecl.type`, `HxLambdaParam.type`)
 	 * can be unwrapped at the assertion site without a separate
-	 * non-null guard. Foundation slice carries only the `Named`
-	 * variant; arrow / anon-struct branches added later will throw
-	 * via an additional `case _:` once tests start covering those
-	 * forms intentionally.
+	 * non-null guard. Throws on null, on `Arrow` (function-arrow
+	 * type), and on any future non-`Named` variant — callers asserting
+	 * arrow shape should switch on `HxType` directly.
 	 */
 	private function expectNamedType(t:Null<HxType>):HxTypeRef {
 		return switch t {
 			case null: throw 'expected HxType.Named, got null';
 			case Named(ref): ref;
+			case _: throw 'expected HxType.Named, got non-Named variant';
 		};
 	}
 }

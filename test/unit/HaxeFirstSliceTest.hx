@@ -169,6 +169,7 @@ class HaxeFirstSliceTest extends Test {
 		return switch t {
 			case null: throw 'expected HxType.Named, got null';
 			case Named(ref): ref;
+			case _: throw 'expected HxType.Named, got non-Named variant';
 		};
 	}
 }

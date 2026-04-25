@@ -5,16 +5,27 @@ package anyparse.grammar.haxe;
  *
  * `HxType` is the outer Alt enum that fronts every type-position field
  * (var-decl `:Type`, function-decl return type, abstract underlying
- * type, catch-clause type, etc.). The current foundation slice carries
- * a single `Named` variant wrapping `HxTypeRef` — the named-and-
- * optionally-parameterised type reference (`Int`, `Array<Int>`,
- * `Map<String, Int>`, `haxe.io.Bytes`, `Foo<Bar<Baz>>`).
+ * type, catch-clause type, etc.).
+ *
+ * Variants:
+ *
+ *  - `Named(ref:HxTypeRef)` — the named-and-optionally-parameterised
+ *    type reference (`Int`, `Array<Int>`, `Map<String, Int>`,
+ *    `haxe.io.Bytes`, `Foo<Bar<Baz>>`).
+ *  - `Arrow(left:HxType, right:HxType)` — function-arrow type in the
+ *    old (curried) syntax: `Void->Void`, `Int->String->Void`,
+ *    `Array<SymbolInformation>->Void`. Declared as an `@:infix('->')`
+ *    branch with `Right` associativity at precedence `0` — same Pratt
+ *    pattern that powers `HxExpr`. The macro auto-detects the Pratt
+ *    branch in `Lowering` and emits a precedence-climbing loop wrapping
+ *    the atom dispatcher (which sees only `Named` for now). Carries
+ *    `@:fmt(tight)` so the writer emits `Int->Void` without surrounding
+ *    spaces, matching haxe-formatter's output for the old-form arrow.
+ *    The new (parenthesised) form `(Int) -> Int`, `(Int, String) -> Bool`
+ *    requires a parenthesised-type atom and stays for a follow-up slice.
  *
  * Future additions land as new Alt branches:
  *
- *  - `Arrow(args:Array<HxType>, ret:HxType)` for function types
- *    (`Int -> Void`, `(Int, String) -> Bool`). Right-associative,
- *    parsed via Pratt-style operator dispatch.
  *  - `Anon(fields:Array<HxAnonField>)` for anonymous structure types
  *    (`{a:Int, b:String}`).
  *
@@ -25,8 +36,17 @@ package anyparse.grammar.haxe;
  * `HxTypeRef.params` carries `Array<HxType>`, not `Array<HxTypeRef>`,
  * so type parameters can themselves be arrows or anon structs once
  * those branches are added (`Array<Int -> Void>`, `Map<{a:Int}, B>`).
+ *
+ * Right-associativity ensures `Int->Bool->Void` parses as
+ * `Arrow(Int, Arrow(Bool, Void))`, mirroring the curried function-type
+ * convention. Left-nested arrows like `(Int->Bool)->Void` carry an
+ * AST-level `Arrow` on the left whose context-precedence (`leftCtx =
+ * prec + 1` for right-assoc) forces the writer to wrap them in parens.
  */
 @:peg
 enum HxType {
 	Named(ref:HxTypeRef);
+
+	@:infix('->', 0, 'Right') @:fmt(tight)
+	Arrow(left:HxType, right:HxType);
 }
