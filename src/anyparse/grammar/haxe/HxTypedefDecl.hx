@@ -3,10 +3,15 @@ package anyparse.grammar.haxe;
 /**
  * Grammar type for a Haxe typedef declaration.
  *
- * Shape: `typedef Name = TypeRef` — a type alias binding a name to
- * a type reference. The `typedef` keyword lives on the `name` field
- * via `@:kw('typedef')` so the generated parser enforces a word
- * boundary (`typedefine` is rejected).
+ * Shape: `typedef Name<TypeParams> = TypeRef` — a type alias binding
+ * a name (with optional declare-site type parameters) to a type
+ * reference. The `typedef` keyword lives on the `name` field via
+ * `@:kw('typedef')` so the generated parser enforces a word boundary
+ * (`typedefine` is rejected).
+ *
+ * `typeParams` is the symmetric close-peek-Star sibling of
+ * `HxFnDecl.typeParams` — bare-identifier declare-site form.
+ * Constraints/defaults are deferred.
  *
  * The trailing semicolon lives on the `TypedefDecl` branch in
  * `HxDecl` via `@:trail(';')`, not here — this typedef only
@@ -20,5 +25,6 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxTypedefDecl = {
 	@:kw('typedef') var name:HxIdentLit;
+	@:optional @:lead('<') @:trail('>') @:sep(',') var typeParams:Null<Array<HxIdentLit>>;
 	@:lead('=') var type:HxTypeRef;
 }

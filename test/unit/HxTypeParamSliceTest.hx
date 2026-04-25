@@ -1,10 +1,15 @@
 package unit;
 
 import utest.Assert;
+import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeParser;
+import anyparse.grammar.haxe.HxAbstractDecl;
 import anyparse.grammar.haxe.HxClassDecl;
+import anyparse.grammar.haxe.HxEnumDecl;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxIdentLit;
+import anyparse.grammar.haxe.HxModule;
+import anyparse.grammar.haxe.HxTypedefDecl;
 import anyparse.grammar.haxe.HxTypeRef;
 import anyparse.grammar.haxe.HxVarDecl;
 import anyparse.runtime.ParseError;
@@ -181,5 +186,73 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 
 	public function testRoundTripDeclareSiteMulti():Void {
 		roundTrip('class F { function pair<T, U>():Map<T, U> {} }');
+	}
+
+	public function testClassDeclareSiteSingle():Void {
+		final ast:HxClassDecl = HaxeParser.parse('class Box<T> { }');
+		final tps:Null<Array<HxIdentLit>> = ast.typeParams;
+		Assert.notNull(tps);
+		Assert.equals(1, tps.length);
+		Assert.equals('T', (tps[0] : String));
+	}
+
+	public function testClassDeclareSiteAbsentIsNull():Void {
+		final ast:HxClassDecl = HaxeParser.parse('class Box { }');
+		Assert.isNull(ast.typeParams);
+	}
+
+	public function testClassDeclareSiteMulti():Void {
+		final ast:HxClassDecl = HaxeParser.parse('class Pair<A, B> { }');
+		final tps:Null<Array<HxIdentLit>> = ast.typeParams;
+		Assert.notNull(tps);
+		Assert.equals(2, tps.length);
+		Assert.equals('A', (tps[0] : String));
+		Assert.equals('B', (tps[1] : String));
+	}
+
+	public function testTypedefDeclareSite():Void {
+		final ast:HxModule = HaxeModuleParser.parse('typedef List<T> = Array<T>;');
+		Assert.equals(1, ast.decls.length);
+		final td:HxTypedefDecl = expectTypedefDecl(ast.decls[0]);
+		final tps:Null<Array<HxIdentLit>> = td.typeParams;
+		Assert.notNull(tps);
+		Assert.equals(1, tps.length);
+		Assert.equals('T', (tps[0] : String));
+	}
+
+	public function testEnumDeclareSite():Void {
+		final ast:HxModule = HaxeModuleParser.parse('enum Option<T> { None; Some; }');
+		Assert.equals(1, ast.decls.length);
+		final ed:HxEnumDecl = expectEnumDecl(ast.decls[0]);
+		final tps:Null<Array<HxIdentLit>> = ed.typeParams;
+		Assert.notNull(tps);
+		Assert.equals(1, tps.length);
+		Assert.equals('T', (tps[0] : String));
+	}
+
+	public function testAbstractDeclareSite():Void {
+		final ast:HxModule = HaxeModuleParser.parse('abstract MyInt<T>(Int) { }');
+		Assert.equals(1, ast.decls.length);
+		final ad:HxAbstractDecl = expectAbstractDecl(ast.decls[0]);
+		final tps:Null<Array<HxIdentLit>> = ad.typeParams;
+		Assert.notNull(tps);
+		Assert.equals(1, tps.length);
+		Assert.equals('T', (tps[0] : String));
+	}
+
+	public function testRoundTripClassDeclareSite():Void {
+		roundTrip('class Box<T> { var v:T; }');
+	}
+
+	public function testRoundTripTypedefDeclareSite():Void {
+		roundTrip('typedef List<T> = Array<T>;');
+	}
+
+	public function testRoundTripEnumDeclareSite():Void {
+		roundTrip('enum Option<T> { None; Some; }');
+	}
+
+	public function testRoundTripAbstractDeclareSite():Void {
+		roundTrip('abstract MyInt<T>(Int) { }');
 	}
 }

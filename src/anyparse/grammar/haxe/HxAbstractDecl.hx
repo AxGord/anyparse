@@ -3,11 +3,14 @@ package anyparse.grammar.haxe;
 /**
  * Grammar type for a Haxe abstract declaration.
  *
- * Shape: `abstract Name(UnderlyingType) [from Type]* [to Type]* { members }`
+ * Shape: `abstract Name<TypeParams>(UnderlyingType) [from Type]* [to Type]* { members }`
  *
  * The `abstract` keyword lives on the `name` field via `@:kw('abstract')`
  * so the generated parser enforces a word boundary (`abstractly` is
  * rejected).
+ *
+ * `typeParams` is an optional close-peek-Star matching `HxFnDecl.typeParams`
+ * — bare-identifier declare-site form, no constraints/defaults yet.
  *
  * The underlying type is wrapped in parentheses via `@:lead('(')` and
  * `@:trail(')')` on the `underlyingType` field — existing Lowering
@@ -43,6 +46,7 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxAbstractDecl = {
 	@:kw('abstract') var name:HxIdentLit;
+	@:optional @:lead('<') @:trail('>') @:sep(',') var typeParams:Null<Array<HxIdentLit>>;
 	@:lead('(') @:trail(')') var underlyingType:HxTypeRef;
 	var clauses:Array<HxAbstractClause>;
 	@:fmt(leftCurly, afterFieldsWithDocComments, existingBetweenFields, beforeDocCommentEmptyLines, interMemberBlankLines('member', 'VarMember', 'FnMember')) @:lead('{') @:trail('}') @:trivia var members:Array<HxMemberDecl>;

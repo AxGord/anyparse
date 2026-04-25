@@ -22,7 +22,13 @@ package anyparse.grammar.haxe;
  * not accepted as `class` followed by `y` (the word-boundary check
  * fails and the parser rejects the input).
  *
- * The second field (`members`) is a `Star` field wrapped in `{` / `}`
+ * `typeParams` is the close-peek-Star sibling of `HxTypeRef.params`,
+ * gated on `@:optional` so the common no-generics case skips the
+ * angle brackets. Element type is `HxIdentLit` — bare-identifier
+ * declare-site form. Constraints, defaults, and multi-bound syntax
+ * are deferred (see `HxFnDecl` for the symmetric note).
+ *
+ * The members field is a `Star` field wrapped in `{` / `}`
  * with no separator between items — each `HxMemberDecl` is
  * self-terminating via its own `;` or `{}` tail. `Lowering`'s new
  * separator-less Star path drives that loop until the closing brace.
@@ -32,5 +38,6 @@ package anyparse.grammar.haxe;
 @:ws
 typedef HxClassDecl = {
 	@:kw('class') var name:HxIdentLit;
+	@:optional @:lead('<') @:trail('>') @:sep(',') var typeParams:Null<Array<HxIdentLit>>;
 	@:fmt(leftCurly, afterFieldsWithDocComments, existingBetweenFields, beforeDocCommentEmptyLines, interMemberBlankLines('member', 'VarMember', 'FnMember')) @:lead('{') @:trail('}') @:trivia var members:Array<HxMemberDecl>;
 }
