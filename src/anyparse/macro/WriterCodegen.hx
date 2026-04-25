@@ -418,6 +418,8 @@ class WriterCodegen {
 	 */
 	private static function leadingCommentDocField():Field {
 		final body:Expr = macro {
+			if (StringTools.startsWith(content, '//'))
+				return _dt(anyparse.grammar.haxe.HaxeCommentNormalizer.normalizeLineComment(content, opt.addLineCommentSpace));
 			if (!StringTools.startsWith(content, '/*')) return _dt(content);
 			if (content.indexOf('\n') < 0) return _dt(content);
 			final parsed:Null<anyparse.grammar.haxe.BlockComment> = try
@@ -449,14 +451,22 @@ class WriterCodegen {
 	 * Trailing capture rule guarantees single-line content (block
 	 * comments with an internal newline attach as leading-of-next),
 	 * so line style is always safe.
+	 *
+	 * `content` is the body AFTER `//`; we re-prepend the delimiter
+	 * before passing through the line-comment normalizer so the
+	 * `addLineCommentSpace` knob gates the same `//foo` → `// foo`
+	 * rewrite the leading and verbatim variants apply.
 	 */
 	private static function trailingCommentDocField():Field {
-		final body:Expr = macro return _dt(' //' + content);
+		final body:Expr = macro return _dt(' ' + anyparse.grammar.haxe.HaxeCommentNormalizer.normalizeLineComment('//' + content, opt.addLineCommentSpace));
 		return {
 			name: 'trailingCommentDoc',
 			access: [APrivate, AStatic],
 			kind: FFun({
-				args: [{name: 'content', type: macro : String}],
+				args: [
+					{name: 'content', type: macro : String},
+					{name: 'opt', type: macro : anyparse.format.WriteOptions},
+				],
 				ret: macro : anyparse.core.Doc,
 				expr: body,
 			}),
@@ -474,14 +484,24 @@ class WriterCodegen {
 	 * preserved across a round-trip. Per-element + AfterKw slots keep
 	 * the stripped-body `trailingCommentDoc` helper above — that path
 	 * normalises to line style by construction.
+	 *
+	 * ω-line-comment-space: routes through
+	 * `HaxeCommentNormalizer.normalizeLineComment` for the `addLineCommentSpace`
+	 * rewrite (`//foo` → `// foo` when the knob is on, decoration runs
+	 * survive tight). The normalizer short-circuits non-`//` input, so
+	 * a verbatim block-style trailing (`/* foo *\/`) passes through
+	 * unchanged.
 	 */
 	private static function trailingCommentDocVerbatimField():Field {
-		final body:Expr = macro return _dt(' ' + content);
+		final body:Expr = macro return _dt(' ' + anyparse.grammar.haxe.HaxeCommentNormalizer.normalizeLineComment(content, opt.addLineCommentSpace));
 		return {
 			name: 'trailingCommentDocVerbatim',
 			access: [APrivate, AStatic],
 			kind: FFun({
-				args: [{name: 'content', type: macro : String}],
+				args: [
+					{name: 'content', type: macro : String},
+					{name: 'opt', type: macro : anyparse.format.WriteOptions},
+				],
 				ret: macro : anyparse.core.Doc,
 				expr: body,
 			}),

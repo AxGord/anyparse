@@ -1916,8 +1916,8 @@ class WriterLowering {
 		// the parent Star's element separator already supplies a hardline.
 		final trailFollowExpr:Expr = appendHardlineAfterTrail ? macro _parts.push(_dhl()) : macro {};
 		final emptyTrailExpr:Expr = appendHardlineAfterTrail
-			? macro _dc([_dt($v{emptyText}), trailingCommentDocVerbatim(_trailClose), _dhl()])
-			: macro _dc([_dt($v{emptyText}), trailingCommentDocVerbatim(_trailClose)]);
+			? macro _dc([_dt($v{emptyText}), trailingCommentDocVerbatim(_trailClose, opt), _dhl()])
+			: macro _dc([_dt($v{emptyText}), trailingCommentDocVerbatim(_trailClose, opt)]);
 		// ω-C-empty-lines-doc / ω-C-empty-lines-between-fields /
 		// ω-C-empty-lines-before-doc: when the grammar field carries any
 		// of the empty-line flags
@@ -2058,7 +2058,7 @@ class WriterLowering {
 					$trackDocCommentExpr;
 					final _elem:anyparse.core.Doc = $triviaElemCall;
 					final _tc:Null<String> = _t.trailingComment;
-					_inner.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDoc(_tc)) : _elem);
+					_inner.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDoc(_tc, opt)) : _elem);
 					$trackPrevKindExpr;
 					_si++;
 				}
@@ -2075,7 +2075,7 @@ class WriterLowering {
 				final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 				final _parts:Array<anyparse.core.Doc> = [_dt($v{openText}), _dn(_cols, _dc(_inner)), _dhl(), _dt($v{closeText})];
 				if (_trailClose != null) {
-					_parts.push(trailingCommentDocVerbatim(_trailClose));
+					_parts.push(trailingCommentDocVerbatim(_trailClose, opt));
 					$trailFollowExpr;
 				}
 				_dc(_parts);
@@ -2121,7 +2121,7 @@ class WriterLowering {
 					}
 					final _elem:anyparse.core.Doc = $triviaElemCall;
 					final _tc:Null<String> = _t.trailingComment;
-					_docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDoc(_tc)) : _elem);
+					_docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDoc(_tc, opt)) : _elem);
 					_si++;
 				}
 				if (_trailLC.length > 0) {
@@ -2227,7 +2227,7 @@ class WriterLowering {
 					}
 					final _elem:anyparse.core.Doc = $triviaElemCall;
 					final _tc:Null<String> = _t.trailingComment;
-					_docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDoc(_tc)) : _elem);
+					_docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDoc(_tc, opt)) : _elem);
 					_si++;
 				}
 				if (_trailLC.length > 0) {

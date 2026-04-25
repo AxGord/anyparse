@@ -48,6 +48,13 @@ package anyparse.grammar.haxe.format;
  *    binop site the writer currently exposes as a knob. Future binop
  *    sites adopting their own `@:fmt(...)` flag should extend this
  *    mapping rather than introduce a separate JSON key.
+ *
+ * Extended in slice ω-line-comment-space:
+ *  - `addLineCommentSpace` feeds `opt.addLineCommentSpace`. Bool — when
+ *    `true` (haxe-formatter default) `//foo` is rewritten to `// foo`;
+ *    decoration runs (`//*****`, `//------`, `////`) survive tight. The
+ *    knob is consumed by `HaxeCommentNormalizer.normalizeLineComment`
+ *    inside the writer's leading / trailing line-comment helpers.
  */
 @:peg typedef HxFormatWhitespaceSection = {
 
@@ -60,6 +67,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var typeParamClosePolicy:HxFormatWhitespacePolicy;
 
 	@:optional var binopPolicy:HxFormatWhitespacePolicy;
+
+	@:optional var addLineCommentSpace:Bool;
 
 	@:optional var parenConfig:HxFormatParenConfigSection;
 

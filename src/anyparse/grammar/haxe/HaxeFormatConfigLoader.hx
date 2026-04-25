@@ -138,6 +138,11 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   as a per-field `WhitespacePolicy` knob. Future binop sites with
  *   their own `@:fmt(...)` flag should extend this mapping, not add a
  *   separate JSON key.
+ * - `whitespace.addLineCommentSpace` (ω-line-comment-space): boolean —
+ *   `true` (default) rewrites captured `//foo` line comments as
+ *   `// foo`; decoration runs (`//*****`, `//------`, `////`) survive
+ *   tight via the `^[/\*\-\s]+` guard. `false` skips the space-insert
+ *   pass (still rtrims the body). Routed to `opt.addLineCommentSpace`.
  * - `whitespace.bracesConfig.objectLiteralBraces.openingPolicy`
  *   (ω-objectlit-braces): same enum / same collapse, routed to
  *   `opt.objectLiteralBracesOpen`. `After` / `Both` emit a space
@@ -269,6 +274,7 @@ final class HaxeFormatConfigLoader {
 			anonTypeBracesClose: base.anonTypeBracesClose,
 			objectLiteralBracesOpen: base.objectLiteralBracesOpen,
 			objectLiteralBracesClose: base.objectLiteralBracesClose,
+			addLineCommentSpace: base.addLineCommentSpace,
 		};
 		if (cfg.indentation != null) applyIndentation(cfg.indentation, result);
 		if (cfg.wrapping != null) applyWrapping(cfg.wrapping, result);
@@ -338,6 +344,8 @@ final class HaxeFormatConfigLoader {
 			opt.typeParamClose = whitespaceToRuntime(section.typeParamClosePolicy);
 		if (section.binopPolicy != null)
 			opt.typeParamDefaultEquals = whitespaceToRuntime(section.binopPolicy);
+		if (section.addLineCommentSpace != null)
+			opt.addLineCommentSpace = section.addLineCommentSpace;
 		final paren:Null<HxFormatParenConfigSection> = section.parenConfig;
 		if (paren != null) {
 			final funcParam:Null<HxFormatParenPolicySection> = paren.funcParamParens;

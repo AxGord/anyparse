@@ -69,4 +69,20 @@ typedef WriteOptions = {
 	 * is not echoed.
 	 */
 	commentStyle:CommentStyle,
+
+	/**
+	 * When `true`, single-line `//` comments are re-emitted with one
+	 * space between `//` and a non-decoration body (`//foo` → `// foo`,
+	 * `//<- foo` → `// <- foo`). Decoration runs (body starting with
+	 * `/`, `*`, `-`, or whitespace) survive tight (`//*****`,
+	 * `//---------`, `////`). When `false`, the body is rtrim/trim'd
+	 * but no space is inserted. Lives on the base `WriteOptions` so
+	 * the unconditionally-emitted `leadingCommentDoc` /
+	 * `trailingCommentDoc(Verbatim)` writer helpers can read it
+	 * regardless of grammar — formats without a `//` comment vocabulary
+	 * still need a value here for the helpers to compile, even though
+	 * their captured trivia stream never reaches the line-comment
+	 * branch.
+	 */
+	addLineCommentSpace:Bool,
 };

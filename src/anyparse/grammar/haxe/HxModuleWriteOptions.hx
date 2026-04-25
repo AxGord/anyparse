@@ -344,6 +344,14 @@ import anyparse.format.WriteOptions;
  *    `objectLiteralBracesOpen=After + objectLiteralBracesClose=Before`
  *    flip produces `{ a: 1 }`, matching haxe-formatter's
  *    `bracesConfig.objectLiteralBraces` `around` policy pair.
+ *
+ * Slice ω-line-comment-space adds the `addLineCommentSpace:Bool` knob
+ * — but to the base `WriteOptions` typedef, not here. The knob drives a
+ * format-neutral writer helper (`leadingCommentDoc` /
+ * `trailingCommentDoc{,Verbatim}`) that every text writer emits, so the
+ * field has to live on the base struct or non-Haxe writers wouldn't
+ * compile. Default `true`. Matches haxe-formatter's
+ * `whitespace.addLineCommentSpace: @:default(true)`.
  */
 typedef HxModuleWriteOptions = WriteOptions & {
 	sameLineElse:SameLinePolicy,

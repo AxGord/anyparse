@@ -256,6 +256,16 @@ final class HaxeFormat implements TextFormat {
 	 * `"whitespace": { "bracesConfig": { "objectLiteralBraces":
 	 * { "openingPolicy": "around", "closingPolicy": "around" } } }`
 	 * which produces `{ a: 1 }`.
+	 *
+	 * `addLineCommentSpace` default (ω-line-comment-space) is `true` —
+	 * captured `//foo` line comments are re-emitted as `// foo` when
+	 * the body's first non-decoration character is alphanumeric or
+	 * other non-`[/\*\-\s]` content. Decoration runs (`//*******`,
+	 * `//---------`, `////////////`) survive tight. Matches haxe-
+	 * formatter's `whitespace.addLineCommentSpace: @:default(true)`.
+	 * Setting to `false` requires
+	 * `"whitespace": { "addLineCommentSpace": false }` in
+	 * `hxformat.json`.
 	 */
 	public var defaultWriteOptions(default, null):HxModuleWriteOptions = {
 		indentChar: Tab,
@@ -301,6 +311,7 @@ final class HaxeFormat implements TextFormat {
 		anonTypeBracesClose: WhitespacePolicy.None,
 		objectLiteralBracesOpen: WhitespacePolicy.None,
 		objectLiteralBracesClose: WhitespacePolicy.None,
+		addLineCommentSpace: true,
 	};
 
 	private function new() {}

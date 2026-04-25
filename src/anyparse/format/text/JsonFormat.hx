@@ -104,6 +104,7 @@ final class JsonFormat implements TextFormat {
 		finalNewline: false,
 		trailingWhitespace: false,
 		commentStyle: Plain,
+		addLineCommentSpace: true,
 	};
 
 	private function new() {}

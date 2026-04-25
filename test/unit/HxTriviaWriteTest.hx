@@ -402,4 +402,66 @@ class HxTriviaWriteTest extends Test {
 		final out:String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals(source + '\n', out);
 	}
+
+	/**
+	 * ω-line-comment-space — leading `//foo` (no space after `//`)
+	 * gets rewritten to `// foo` on emission. Mirrors haxe-formatter's
+	 * `whitespace.addLineCommentSpace: @:default(true)` behaviour and
+	 * unblocks the corpus's `single_line_comments.hxtest` /
+	 * `issue_162_space_at_start_of_single_line_comment.hxtest`.
+	 */
+	public function testLeadingLineCommentInsertsSpace():Void {
+		final source:String = '//foo\nclass Main {}';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out:String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals('// foo\nclass Main {}\n', out);
+	}
+
+	/**
+	 * ω-line-comment-space — decoration prefixes (body starts with
+	 * `*`, `-`, `/`, or whitespace) survive tight; the space-insert
+	 * pass is gated by the haxe-formatter `^[/\*\-\s]+` regex.
+	 */
+	public function testLeadingLineCommentDecorationKeepsTight():Void {
+		final source:String = 'class Main {\n'
+			+ '\t//*******\n'
+			+ '\t//---------\n'
+			+ '\t////////////\n'
+			+ '\t// already-spaced\n'
+			+ '\tvar x:Int;\n'
+			+ '}';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out:String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals(source + '\n', out);
+	}
+
+	/**
+	 * ω-line-comment-space — `addLineCommentSpace: false` skips the
+	 * space-insert pass; bodies are still trimmed but no padding is
+	 * synthesised. Knob lives on the base `WriteOptions` so every
+	 * text writer can read it from the unconditionally-emitted
+	 * `leadingCommentDoc` helper.
+	 */
+	public function testLeadingLineCommentSpaceCanBeDisabled():Void {
+		final source:String = '//foo\nclass Main {}';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final opts:anyparse.grammar.haxe.HxModuleWriteOptions =
+			anyparse.grammar.haxe.HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"addLineCommentSpace": false}}');
+		final out:String = HaxeModuleTriviaWriter.write(ast, opts);
+		Assert.equals('//foo\nclass Main {}\n', out);
+	}
+
+	/**
+	 * ω-line-comment-space — trailing same-line `//foo` (no space)
+	 * routed through `trailingCommentDoc`, the body-only helper, also
+	 * picks up the leading-space rewrite. Body is rebuilt as `'//' +
+	 * body` before normalisation so the same rule applies as for
+	 * leading and verbatim variants.
+	 */
+	public function testTrailingLineCommentInsertsSpace():Void {
+		final source:String = 'class Foo {\n\tvar x:Int; //inline\n}';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out:String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals('class Foo {\n\tvar x:Int; // inline\n}\n', out);
+	}
 }
