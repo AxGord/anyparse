@@ -3,22 +3,21 @@ package anyparse.grammar.haxe;
 /**
  * Grammar root for a captured block-comment token (multi-line or not).
  *
- * Two structural variants, distinguished by the open/close delimiter
- * pair — parser selects by source-literal match:
+ * Single-shape body: `Array<BlockCommentLine>` between alternative
+ * wrap pairs declared on the `lines` field via `@:lead` / `@:trail`
+ * (primary `/* … *\/` Plain pair) and `@:fmt(altWrap(...))` (alt
+ * `/** … **\/` DoubleStars pair, dispatched by `opt.commentStyle`).
  *
- *  - `DoubleStars` — `/** … **\/` (canonical Javadoc / Haxe doc-block shape).
- *  - `Plain` — `/* … *\/` (C-family plain block). Also captures mixed
- *    `/** … *\/` source via absorption of the extra leading `*` into
- *    the first interior line's content.
+ * Parser tries the primary `/*` open + `*\/` close first; on `**\/`
+ * close failure (DoubleStars source) rolls back and tries the alt
+ * `/**` open + `**\/` close. Mixed `/** … *\/` source rolls back
+ * from the alt close failure to the primary, where the `/*` open
+ * absorbs the leading `*` into the body's first line content.
  *
- * Wrap literals live in `@:lead` / `@:trail` metas on each variant
- * constructor — the single source of truth. Downstream code (parser,
- * writer, normalizer) never hardcodes `/*`/`/**`/`*\/`/`**\/` strings.
- *
- * Body is `Array<BlockCommentLine>` — each line is a `{ws, content}`
- * struct (see `BlockCommentLine`). `@:sep('\n')` separates interior
- * lines at parse time; at write time the newline-sep case is rendered
- * via hardline joins (see `emitWriterStarField`'s `@:sep('\n')` path).
+ * Writer emits the wrap pair selected at runtime by
+ * `opt.commentStyle`: `Plain` → primary `/* … *\/`; `Javadoc` /
+ * `JavadocNoStars` → alt `/** … **\/`. The AST itself does NOT
+ * carry which wrap the source had — wrap is policy, not structure.
  *
  * `@:raw` suppresses `skipWs` inside the captured body: comment
  * interior whitespace is significant (preserved for common-prefix
@@ -27,11 +26,8 @@ package anyparse.grammar.haxe;
 @:peg
 @:raw
 @:schema(anyparse.grammar.haxe.HaxeFormat)
-enum BlockComment {
-
-	@:lead('/**') @:trail('**/') @:sep('\n')
-	DoubleStars(lines:Array<BlockCommentLine>);
-
+typedef BlockComment = {
 	@:lead('/*') @:trail('*/') @:sep('\n')
-	Plain(lines:Array<BlockCommentLine>);
-}
+	@:fmt(altWrap('commentStyle', 'Javadoc|JavadocNoStars', '/**', '**/'))
+	var lines:Array<BlockCommentLine>;
+};

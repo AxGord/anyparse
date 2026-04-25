@@ -333,6 +333,31 @@ class HxTriviaWriteTest extends Test {
 		Assert.equals(expected, out);
 	}
 
+	/**
+	 * ω-altWrap — asymmetric source `/** … *\/` (DoubleStars open +
+	 * Plain close): parser tries the alt `/**`+`**\/` pair first, the
+	 * `**\/` close fails on `*\/`, rolls back to primary `/*`+`*\/`
+	 * pair which absorbs the leading `*` into body content. Output
+	 * canonicalises to `/** … **\/` under default `JavadocNoStars`.
+	 */
+	public function testMultiLineBlockCommentMixedDoubleOpenSingleCloseRoundTrips():Void {
+		final source:String = 'class Main {\n'
+			+ '\t/**\n'
+			+ '\tfoo\n'
+			+ '\t*/\n'
+			+ '\tvar x:Int;\n'
+			+ '}';
+		final expected:String = 'class Main {\n'
+			+ '\t/**\n'
+			+ '\t\tfoo\n'
+			+ '\t**/\n'
+			+ '\tvar x:Int;\n'
+			+ '}\n';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out:String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals(expected, out);
+	}
+
 	private static function withCommentStyle(style:anyparse.format.CommentStyle):anyparse.grammar.haxe.HxModuleWriteOptions {
 		final opts:anyparse.grammar.haxe.HxModuleWriteOptions =
 			anyparse.grammar.haxe.HaxeFormatConfigLoader.loadHxFormatJson('{}');
