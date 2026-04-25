@@ -73,6 +73,15 @@ class WriterCodegen {
 			// indent, closing with a hardline so the body's outer brace
 			// lands at the parent's indent level.
 			fields.push(kwGapDocField());
+			// ω-trivia-before-kw: renders the gap between the preceding token
+			// and a `@:optional @:kw` keyword. Returns the caller's plain
+			// separator when no comments captured; otherwise emits each
+			// captured leading comment on its own indented line, closing with
+			// a hardline so the kw lands at the parent's indent level. Line-
+			// comment style inherently breaks, so we always force own-line
+			// layout even when `sameLine`/`Same` would otherwise put the kw
+			// on the same line as `}`.
+			fields.push(kwBeforeDocField());
 		}
 		return fields;
 	}
@@ -609,6 +618,37 @@ class WriterCodegen {
 	 * closing hardline hands control to the Renderer at the parent's
 	 * indent level so the body's lead brace lands there.
 	 */
+	private static function kwBeforeDocField():Field {
+		final body:Expr = macro {
+			if (beforeKwLeading.length == 0) return sepDoc;
+			// Emit at the parent's indent (no `_dn` wrap) — the comment block
+			// occupies the same indent column as `}` and `else`. Hardline
+			// before each comment, plus a final hardline so the kw lands on
+			// its own line at the parent indent.
+			final _parts:Array<anyparse.core.Doc> = [];
+			for (_c in beforeKwLeading) {
+				_parts.push(_dhl());
+				_parts.push(leadingCommentDoc(_c, opt));
+			}
+			_parts.push(_dhl());
+			return _dc(_parts);
+		};
+		return {
+			name: 'kwBeforeDoc',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [
+					{name: 'beforeKwLeading', type: macro : Array<String>},
+					{name: 'sepDoc', type: macro : anyparse.core.Doc},
+					{name: 'opt', type: macro : anyparse.format.WriteOptions},
+				],
+				ret: macro : anyparse.core.Doc,
+				expr: body,
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
 	private static function kwGapDocField():Field {
 		final body:Expr = macro {
 			if (afterKw == null && kwLeading.length == 0) return nextCurly ? _dhl() : _dt(' ');

@@ -355,4 +355,146 @@ class HxTriviaParseTest extends Test {
 		Assert.equals(1, elseStmts.length);
 		Assert.equals(0, elseStmts[0].leadingComments.length);
 	}
+
+	/**
+	 * ω-trivia-before-kw — own-line line comment between `}` and `else`
+	 * is captured into `elseBodyBeforeKwLeading` instead of being
+	 * discarded by the pre-commit `skipWs`.
+	 */
+	public function testOwnLineCommentBetweenBraceAndElseKwCapturedOnHxIfStmt():Void {
+		final source:String =
+			'class Foo {\n'
+			+ '\tfunction bar() {\n'
+			+ '\t\tif (cond) { a; }\n'
+			+ '\t\t// before else\n'
+			+ '\t\telse { b; }\n'
+			+ '\t}\n'
+			+ '}';
+		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node {
+			case ClassDecl(decl): decl;
+			case _: throw 'expected ClassDecl';
+		};
+		final fn:anyparse.grammar.haxe.trivia.Pairs.HxFnDeclT = switch cls.members[0].node.member {
+			case FnMember(decl): decl;
+			case _: throw 'expected FnMember';
+		};
+		final stmts:Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>>
+			= switch fn.body {
+				case BlockBody(b): b.stmts;
+				case _: throw 'expected BlockBody';
+			};
+		final ifStmt:anyparse.grammar.haxe.trivia.Pairs.HxIfStmtT = switch stmts[0].node {
+			case IfStmt(s): s;
+			case _: throw 'expected IfStmt';
+		};
+		Assert.equals(1, ifStmt.elseBodyBeforeKwLeading.length);
+		Assert.equals('// before else', ifStmt.elseBodyBeforeKwLeading[0]);
+		Assert.isNull(ifStmt.elseBodyAfterKw);
+		Assert.equals(0, ifStmt.elseBodyKwLeading.length);
+	}
+
+	/**
+	 * ω-trivia-before-kw — own-line block comment between `}` and `else`
+	 * is captured into `elseBodyBeforeKwLeading`. (A same-line block on
+	 * the `}` line itself goes into the BlockStmt's `closeTrailing`
+	 * slot via `collectTrailingFull`, not here.)
+	 */
+	public function testOwnLineBlockCommentBetweenBraceAndElseKwCapturedOnHxIfStmt():Void {
+		final source:String =
+			'class Foo {\n'
+			+ '\tfunction bar() {\n'
+			+ '\t\tif (cond) { a; }\n'
+			+ '\t\t/* before else */\n'
+			+ '\t\telse { b; }\n'
+			+ '\t}\n'
+			+ '}';
+		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node {
+			case ClassDecl(decl): decl;
+			case _: throw 'expected ClassDecl';
+		};
+		final fn:anyparse.grammar.haxe.trivia.Pairs.HxFnDeclT = switch cls.members[0].node.member {
+			case FnMember(decl): decl;
+			case _: throw 'expected FnMember';
+		};
+		final stmts:Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>>
+			= switch fn.body {
+				case BlockBody(b): b.stmts;
+				case _: throw 'expected BlockBody';
+			};
+		final ifStmt:anyparse.grammar.haxe.trivia.Pairs.HxIfStmtT = switch stmts[0].node {
+			case IfStmt(s): s;
+			case _: throw 'expected IfStmt';
+		};
+		Assert.equals(1, ifStmt.elseBodyBeforeKwLeading.length);
+		Assert.equals('/* before else */', ifStmt.elseBodyBeforeKwLeading[0]);
+	}
+
+	/**
+	 * ω-trivia-before-kw — when no comments precede `else`, the
+	 * `elseBodyBeforeKwLeading` slot is an empty array (rewind path
+	 * never touches it; commit path copies an empty captured trivia).
+	 */
+	public function testNoCommentBetweenBraceAndElseLeavesBeforeKwLeadingEmpty():Void {
+		final source:String =
+			'class Foo {\n'
+			+ '\tfunction bar() {\n'
+			+ '\t\tif (cond) { a; } else { b; }\n'
+			+ '\t}\n'
+			+ '}';
+		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node {
+			case ClassDecl(decl): decl;
+			case _: throw 'expected ClassDecl';
+		};
+		final fn:anyparse.grammar.haxe.trivia.Pairs.HxFnDeclT = switch cls.members[0].node.member {
+			case FnMember(decl): decl;
+			case _: throw 'expected FnMember';
+		};
+		final stmts:Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>>
+			= switch fn.body {
+				case BlockBody(b): b.stmts;
+				case _: throw 'expected BlockBody';
+			};
+		final ifStmt:anyparse.grammar.haxe.trivia.Pairs.HxIfStmtT = switch stmts[0].node {
+			case IfStmt(s): s;
+			case _: throw 'expected IfStmt';
+		};
+		Assert.equals(0, ifStmt.elseBodyBeforeKwLeading.length);
+	}
+
+	/**
+	 * ω-trivia-before-kw — when an `if` has no `else` branch, the
+	 * `elseBodyBeforeKwLeading` slot still defaults to `[]` (the
+	 * commit-miss rewind path never populates it).
+	 */
+	public function testNoElseBranchLeavesBeforeKwLeadingEmpty():Void {
+		final source:String =
+			'class Foo {\n'
+			+ '\tfunction bar() {\n'
+			+ '\t\tif (cond) { a; }\n'
+			+ '\t}\n'
+			+ '}';
+		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node {
+			case ClassDecl(decl): decl;
+			case _: throw 'expected ClassDecl';
+		};
+		final fn:anyparse.grammar.haxe.trivia.Pairs.HxFnDeclT = switch cls.members[0].node.member {
+			case FnMember(decl): decl;
+			case _: throw 'expected FnMember';
+		};
+		final stmts:Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>>
+			= switch fn.body {
+				case BlockBody(b): b.stmts;
+				case _: throw 'expected BlockBody';
+			};
+		final ifStmt:anyparse.grammar.haxe.trivia.Pairs.HxIfStmtT = switch stmts[0].node {
+			case IfStmt(s): s;
+			case _: throw 'expected IfStmt';
+		};
+		Assert.isNull(ifStmt.elseBody);
+		Assert.equals(0, ifStmt.elseBodyBeforeKwLeading.length);
+	}
 }

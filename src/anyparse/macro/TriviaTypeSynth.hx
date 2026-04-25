@@ -80,6 +80,15 @@ class TriviaTypeSynth {
 	public static inline final BODY_ON_SAME_LINE_SUFFIX:String = 'BodyOnSameLine';
 
 	/**
+	 * ω-trivia-before-kw — own-line comments captured BEFORE the optional
+	 * keyword commit point (e.g. `if (x) { }\n// comment\nelse { }`). The
+	 * pre-commit `skipWs` previously discarded this trivia; the new path
+	 * collects it and stashes here on commit-success. Empty array on the
+	 * commit-miss path (rewind discards the captured trivia).
+	 */
+	public static inline final BEFORE_KW_LEADING_SUFFIX:String = 'BeforeKwLeading';
+
+	/**
 	 * ω-issue-48-v2 — source-shape slot synthesised on paired Seq types
 	 * alongside bare non-first Ref fields (no `@:optional`, no `@:kw`, no
 	 * `@:lead`). Records whether the source had a newline in the gap
@@ -230,6 +239,7 @@ class TriviaTypeSynth {
 			{name: fieldName + KW_LEADING_SUFFIX, kind: FVar(arrayStrCT), pos: pos, access: []},
 			{name: fieldName + BEFORE_KW_NEWLINE_SUFFIX, kind: FVar(boolCT), pos: pos, access: []},
 			{name: fieldName + BODY_ON_SAME_LINE_SUFFIX, kind: FVar(boolCT), pos: pos, access: []},
+			{name: fieldName + BEFORE_KW_LEADING_SUFFIX, kind: FVar(arrayStrCT), pos: pos, access: []},
 		];
 	}
 

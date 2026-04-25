@@ -605,9 +605,23 @@ class WriterLowering {
 					final bodyOnSameLineExpr:Null<Expr> = useTriviaGap
 						? {expr: EField(macro value, fieldName + TriviaTypeSynth.BODY_ON_SAME_LINE_SUFFIX), pos: Context.currentPos()}
 						: null;
+					// ω-trivia-before-kw: own-line comments captured between
+					// the preceding token and the kw (e.g. `} // c\nelse`)
+					// land in `<field>BeforeKwLeading`. When non-empty, the
+					// `kwBeforeDoc` runtime helper replaces the plain
+					// `sameLineSeparator` output with hardline-separated
+					// comments at the parent's indent level. When empty,
+					// the helper degrades to the unmodified separator.
+					final beforeKwLeadingExpr:Null<Expr> = useTriviaGap
+						? {expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_LEADING_SUFFIX), pos: Context.currentPos()}
+						: null;
 					final optParts:Array<Expr> = [];
 					if (kwLead != null) {
-						optParts.push(sameLineSeparator(child, prevBodyField, typePath));
+						final sepBaseExpr:Expr = sameLineSeparator(child, prevBodyField, typePath);
+						final sepWithBeforeKwExpr:Expr = beforeKwLeadingExpr != null
+							? macro kwBeforeDoc($beforeKwLeadingExpr, $sepBaseExpr, opt)
+							: sepBaseExpr;
+						optParts.push(sepWithBeforeKwExpr);
 						if (bodyPolicyFlag != null) {
 							optParts.push(macro _dt($v{kwLead}));
 							optParts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, macro _optVal, refName, hasElseIf, elseFieldName, afterKwExpr, kwLeadingExpr, bodyOnSameLineExpr));

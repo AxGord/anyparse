@@ -1157,6 +1157,7 @@ class Lowering {
 			final kwLeadingLocal:String = '_kwLeading_$fieldName';
 			final beforeKwNlLocal:String = '_beforeKwNl_$fieldName';
 			final bodyOnSameLineLocal:String = '_bodyOnSameLine_$fieldName';
+			final beforeKwLeadingLocal:String = '_beforeKwLeading_$fieldName';
 			if (hasKwTriviaSlots) {
 				parseSteps.push({
 					expr: EVars([{name: afterKwLocal, type: (macro : Null<String>), expr: macro null, isFinal: false}]),
@@ -1172,6 +1173,10 @@ class Lowering {
 				});
 				parseSteps.push({
 					expr: EVars([{name: bodyOnSameLineLocal, type: (macro : Bool), expr: macro false, isFinal: false}]),
+					pos: Context.currentPos(),
+				});
+				parseSteps.push({
+					expr: EVars([{name: beforeKwLeadingLocal, type: (macro : Array<String>), expr: macro [], isFinal: false}]),
 					pos: Context.currentPos(),
 				});
 			}
@@ -1239,7 +1244,30 @@ class Lowering {
 						macro $i{beforeKwNlLocal} = hasNewlineIn(ctx.input, _wsPos, _kwStartPos);
 					else
 						macro {};
-					final valueExpr:Expr = macro {
+					// ω-trivia-before-kw: in trivia mode + kw-bearing optional Ref,
+					// the pre-commit ws scan must `collectTrivia` instead of
+					// `skipWs` — otherwise own-line comments captured between the
+					// preceding token and the kw (e.g. `} // comment\nelse`) are
+					// silently discarded. On commit-success the captured leading
+					// comments flow into `_beforeKwLeading_<field>` for the
+					// writer to emit on its own line before the kw. On commit-
+					// miss the rewind (`ctx.pos = _wsPos`) drops the captured
+					// trivia so the enclosing Star's next `collectTrivia` re-
+					// observes it.
+					final valueExpr:Expr = if (hasKwTriviaSlots) macro {
+						final _wsPos:Int = ctx.pos;
+						final _preTrivia = collectTrivia(ctx);
+						final _kwStartPos:Int = ctx.pos;
+						if ($commitCheck) {
+							for (_c in _preTrivia.leadingComments) $i{beforeKwLeadingLocal}.push(_c);
+							$preCommitCapture;
+							$innerCommitAction;
+							$subCall;
+						} else {
+							ctx.pos = _wsPos;
+							null;
+						}
+					} else macro {
 						final _wsPos:Int = ctx.pos;
 						skipWs(ctx);
 						final _kwStartPos:Int = ctx.pos;
@@ -1318,6 +1346,7 @@ class Lowering {
 				structFields.push({field: fieldName + TriviaTypeSynth.KW_LEADING_SUFFIX, expr: macro $i{kwLeadingLocal}});
 				structFields.push({field: fieldName + TriviaTypeSynth.BEFORE_KW_NEWLINE_SUFFIX, expr: macro $i{beforeKwNlLocal}});
 				structFields.push({field: fieldName + TriviaTypeSynth.BODY_ON_SAME_LINE_SUFFIX, expr: macro $i{bodyOnSameLineLocal}});
+				structFields.push({field: fieldName + TriviaTypeSynth.BEFORE_KW_LEADING_SUFFIX, expr: macro $i{beforeKwLeadingLocal}});
 			}
 			if (ctx.trivia && isStar && child.annotations.get('trivia.starCollects') == true) {
 				final trailBBLocal:String = trailingBlankBeforeLocalName(localName);

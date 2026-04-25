@@ -381,4 +381,67 @@ class HxTriviaWriteTest extends Test {
 			objectLiteralBracesClose: base.objectLiteralBracesClose,
 		};
 	}
+
+	/**
+	 * ω-trivia-before-kw — own-line line comment between `}` and `else`
+	 * round-trips at the parent's indent level. Without the slice the
+	 * comment is dropped and the writer emits `} else { b; }` only.
+	 */
+	public function testOwnLineCommentBetweenBraceAndElseRoundTrip():Void {
+		final source:String = 'class Foo {\n'
+			+ '\tfunction bar() {\n'
+			+ '\t\tif (cond) {\n'
+			+ '\t\t\ta;\n'
+			+ '\t\t}\n'
+			+ '\t\t// before else\n'
+			+ '\t\telse {\n'
+			+ '\t\t\tb;\n'
+			+ '\t\t}\n'
+			+ '\t}\n'
+			+ '}';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out:String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals(source + '\n', out);
+	}
+
+	/**
+	 * ω-trivia-before-kw — multiple own-line line comments between `}`
+	 * and `else` each render on their own indented line.
+	 */
+	public function testMultipleOwnLineCommentsBetweenBraceAndElseRoundTrip():Void {
+		final source:String = 'class Foo {\n'
+			+ '\tfunction bar() {\n'
+			+ '\t\tif (cond) {\n'
+			+ '\t\t\ta;\n'
+			+ '\t\t}\n'
+			+ '\t\t// first\n'
+			+ '\t\t// second\n'
+			+ '\t\telse {\n'
+			+ '\t\t\tb;\n'
+			+ '\t\t}\n'
+			+ '\t}\n'
+			+ '}';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out:String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals(source + '\n', out);
+	}
+
+	/**
+	 * ω-trivia-before-kw — when no comments precede `else`, the slice
+	 * is byte-identical to pre-slice output (sameLine `} else`).
+	 */
+	public function testNoCommentBetweenBraceAndElseStaysSameLine():Void {
+		final source:String = 'class Foo {\n'
+			+ '\tfunction bar() {\n'
+			+ '\t\tif (cond) {\n'
+			+ '\t\t\ta;\n'
+			+ '\t\t} else {\n'
+			+ '\t\t\tb;\n'
+			+ '\t\t}\n'
+			+ '\t}\n'
+			+ '}';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out:String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals(source + '\n', out);
+	}
 }
