@@ -4,6 +4,7 @@ import utest.Assert;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxFnDecl;
+import anyparse.grammar.haxe.HxIdentLit;
 import anyparse.grammar.haxe.HxTypeRef;
 import anyparse.grammar.haxe.HxVarDecl;
 import anyparse.runtime.ParseError;
@@ -141,5 +142,44 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 
 	public function testRoundTripFnArgType():Void {
 		roundTrip('class F { function take(xs:Array<Int>):Void {} }');
+	}
+
+	public function testDeclareSiteAbsentIsNull():Void {
+		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar():Int {} }');
+		Assert.isNull(decl.typeParams);
+	}
+
+	public function testDeclareSiteSingleParam():Void {
+		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar<T>():T {} }');
+		final tps:Null<Array<HxIdentLit>> = decl.typeParams;
+		Assert.notNull(tps);
+		Assert.equals(1, tps.length);
+		Assert.equals('T', (tps[0] : String));
+	}
+
+	public function testDeclareSiteMultipleParams():Void {
+		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar<T, U>():Map<T, U> {} }');
+		final tps:Null<Array<HxIdentLit>> = decl.typeParams;
+		Assert.notNull(tps);
+		Assert.equals(2, tps.length);
+		Assert.equals('T', (tps[0] : String));
+		Assert.equals('U', (tps[1] : String));
+	}
+
+	public function testDeclareSiteWhitespaceTolerance():Void {
+		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar < T , U > ():Void {} }');
+		final tps:Null<Array<HxIdentLit>> = decl.typeParams;
+		Assert.notNull(tps);
+		Assert.equals(2, tps.length);
+		Assert.equals('T', (tps[0] : String));
+		Assert.equals('U', (tps[1] : String));
+	}
+
+	public function testRoundTripDeclareSiteSingle():Void {
+		roundTrip('class F { function get<T>():T {} }');
+	}
+
+	public function testRoundTripDeclareSiteMulti():Void {
+		roundTrip('class F { function pair<T, U>():Map<T, U> {} }');
 	}
 }

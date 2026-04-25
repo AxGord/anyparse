@@ -3,12 +3,21 @@ package anyparse.grammar.haxe;
 /**
  * Function declaration body for a class member `function`.
  *
- * Shape: `name ( params ) : ReturnType { body }` where params is a
- * comma-separated list of `HxParam` entries (possibly empty) and body
- * is zero or more statements inside braces.
+ * Shape: `name <typeParams> ( params ) : ReturnType { body }` where
+ * `typeParams` is an optional angle-bracketed comma-separated list of
+ * type-parameter names, `params` is a comma-separated list of `HxParam`
+ * entries (possibly empty), and body is zero or more statements inside
+ * braces.
  *
  * The `function` keyword lives on the enclosing `HxClassMember.FnMember`
  * constructor via `@:kw` — this typedef only describes the inside.
+ *
+ * `typeParams` is the close-peek-Star sibling of `HxTypeRef.params`:
+ * `@:optional @:lead('<') @:trail('>') @:sep(',')`. The element type
+ * is `HxIdentLit` — the bare-identifier declare-site form. Constraints
+ * (`<T:Foo>`), defaults (`<T = Int>`), and multi-constraint syntax
+ * (`<T:A&B>`) are deferred and require a wrapper `HxTypeParamDecl`
+ * element type.
  *
  * The `params` field uses `@:lead('(') @:trail(')') @:sep(',')` which
  * selects the sep-peek termination mode in `emitStarFieldSteps`:
@@ -29,6 +38,7 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxFnDecl = {
 	var name:HxIdentLit;
+	@:optional @:lead('<') @:trail('>') @:sep(',') var typeParams:Null<Array<HxIdentLit>>;
 	@:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams'), funcParamParens) var params:Array<HxParam>;
 	@:optional @:fmt(typeHintColon) @:lead(':') var returnType:Null<HxTypeRef>;
 	@:fmt(leftCurly) @:lead('{') @:trail('}') @:trivia var body:Array<HxStatement>;
