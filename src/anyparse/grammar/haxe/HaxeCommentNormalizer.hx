@@ -1,5 +1,6 @@
 package anyparse.grammar.haxe;
 
+import anyparse.core.Doc;
 import anyparse.format.CommentStyle;
 import anyparse.format.IndentChar;
 import anyparse.format.WriteOptions;
@@ -56,6 +57,27 @@ class HaxeCommentNormalizer {
 			case Plain: BlockComment.Plain(canonicalLines);
 			case Javadoc, JavadocNoStars: BlockComment.DoubleStars(canonicalLines);
 		};
+	}
+
+	/**
+	 * Full pipeline for the macro adapter: parse a captured `/*…*\/`
+	 * string, normalise it, write its Doc. Returns `Doc.Text(content)`
+	 * verbatim if the parser fails (asymmetric wrap pairs the grammar
+	 * can't express).
+	 *
+	 * Lives here (in the Haxe format plugin) so the macro adapter in
+	 * `WriterCodegen.leadingCommentDocField` never names Haxe-specific
+	 * grammar types (`BlockComment`, `BlockCommentParser`,
+	 * `BlockCommentWriter`) directly. The macro core stays format-
+	 * neutral; only this Haxe plugin module knows the comment pipeline
+	 * shape.
+	 */
+	public static function processCapturedBlockComment(content:String, opt:WriteOptions):Doc {
+		final parsed:Null<BlockComment> = try BlockCommentParser.parse(content)
+		catch (_:haxe.Exception) null;
+		if (parsed == null) return Text(content);
+		final canonical:BlockComment = normalize(parsed, opt);
+		return BlockCommentWriter.writeDoc(canonical, opt);
 	}
 
 	private static function normalizeLines(source:Array<BlockCommentLine>, opt:WriteOptions):Array<BlockCommentLine> {

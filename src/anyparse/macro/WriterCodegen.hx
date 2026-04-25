@@ -399,22 +399,23 @@ class WriterCodegen {
 	 * as a single `Doc.Text` — there is no handle for re-indent when a
 	 * comment fits on one line.
 	 *
-	 * Multi-line block comments are re-rendered through
-	 * `anyparse.grammar.haxe.HaxeCommentNormalizer.normalize` — a
-	 * plain Haxe function in the Haxe format plugin that takes the
-	 * parsed AST plus `opt` and returns a Doc tree. All format-
-	 * specific logic (style dispatch, indent canonicalization,
-	 * common-prefix reduce, blank-edge handling) lives in that plugin
-	 * module — not in the macro core, not in a runtime helper.
+	 * Multi-line block comments are delegated to
+	 * `anyparse.grammar.haxe.HaxeCommentNormalizer.processCapturedBlockComment`
+	 * — a plain Haxe function in the Haxe format plugin that takes the
+	 * captured `/*…*\/` string plus `opt` and returns a Doc tree. All
+	 * format-specific logic (parse, variant pick, indent canonicalization,
+	 * common-prefix reduce, blank-edge handling, writer dispatch) lives
+	 * in that plugin module — not in the macro core. The macro adapter
+	 * never names Haxe grammar types (`BlockComment`, `BlockCommentParser`,
+	 * `BlockCommentWriter`) or `CommentStyle` values directly.
 	 *
-	 * This helper is a thin macro-emitted adapter: guards single-line
-	 * / non-comment content as pass-through `Doc.Text`, parses the
-	 * verbatim string via the auto-generated `BlockCommentBodyParser`,
-	 * and delegates to the plugin normalizer. The adapter itself is
-	 * format-neutral; it names the Haxe-specific normalizer by full
-	 * path because trivia capture today is only wired for Haxe. A
-	 * future non-C-family format would have its own `*CommentNormalizer`
-	 * and a differently-named adapter.
+	 * This helper is a thin macro-emitted adapter: guards single-line /
+	 * non-comment content as pass-through `Doc.Text`, then forwards to
+	 * the plugin entry point. The adapter itself is format-neutral; it
+	 * names the Haxe-specific helper by full path because trivia capture
+	 * today is only wired for Haxe. A future non-C-family format would
+	 * have its own `*CommentNormalizer` with the same
+	 * `processCapturedBlockComment` shape and a differently-named adapter.
 	 */
 	private static function leadingCommentDocField():Field {
 		final body:Expr = macro {
@@ -422,13 +423,7 @@ class WriterCodegen {
 				return _dt(anyparse.grammar.haxe.HaxeCommentNormalizer.normalizeLineComment(content, opt.addLineCommentSpace));
 			if (!StringTools.startsWith(content, '/*')) return _dt(content);
 			if (content.indexOf('\n') < 0) return _dt(content);
-			final parsed:Null<anyparse.grammar.haxe.BlockComment> = try
-				anyparse.grammar.haxe.BlockCommentParser.parse(content)
-			catch (_:haxe.Exception) null;
-			if (parsed == null) return _dt(content);
-			final canonical:anyparse.grammar.haxe.BlockComment =
-				anyparse.grammar.haxe.HaxeCommentNormalizer.normalize(parsed, opt);
-			return anyparse.grammar.haxe.BlockCommentWriter.writeDoc(canonical, opt);
+			return anyparse.grammar.haxe.HaxeCommentNormalizer.processCapturedBlockComment(content, opt);
 		};
 		return {
 			name: 'leadingCommentDoc',
