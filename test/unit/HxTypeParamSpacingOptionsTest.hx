@@ -139,6 +139,7 @@ final class HxTypeParamSpacingOptionsTest extends Test {
 			interfaceBetweenFunctions: base.interfaceBetweenFunctions,
 			interfaceAfterVars: base.interfaceAfterVars,
 			typedefAssign: base.typedefAssign,
+			typeParamDefaultEquals: base.typeParamDefaultEquals,
 			typeParamOpen: open,
 			typeParamClose: close,
 			anonTypeBracesOpen: base.anonTypeBracesOpen,

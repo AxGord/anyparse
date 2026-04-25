@@ -222,6 +222,14 @@ final class HaxeFormat implements TextFormat {
 	 * site. Callers who want the pre-slice tight `typedef Foo=Bar;`
 	 * layout must pass `typedefAssign: WhitespacePolicy.None` explicitly.
 	 *
+	 * Type-param default `=` spacing default (ω-typeparam-default-equals)
+	 * is `Both` — `<T = Int>` / `<T:Foo = Bar>`, matching haxe-formatter's
+	 * `whitespace.binopPolicy: @:default(Around)` for the type-param-
+	 * default site. Callers who want the tight `<T=Int>` layout (the
+	 * `_none` corpus variant) must pass
+	 * `typeParamDefaultEquals: WhitespacePolicy.None` explicitly, or
+	 * load `whitespace.binopPolicy: "none"` via the JSON config.
+	 *
 	 * Type-param `<>` spacing defaults (ω-typeparam-spacing) are both
 	 * `None` — `Array<Int>` and `class Foo<T>` stay tight, matching
 	 * haxe-formatter's `whitespace.typeParamOpenPolicy: @:default(None)`
@@ -286,6 +294,7 @@ final class HaxeFormat implements TextFormat {
 		interfaceBetweenFunctions: 0,
 		interfaceAfterVars: 0,
 		typedefAssign: WhitespacePolicy.Both,
+		typeParamDefaultEquals: WhitespacePolicy.Both,
 		typeParamOpen: WhitespacePolicy.None,
 		typeParamClose: WhitespacePolicy.None,
 		anonTypeBracesOpen: WhitespacePolicy.None,

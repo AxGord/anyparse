@@ -201,6 +201,7 @@ class HxInterfaceInterMemberBlankLinesOptionsTest extends Test {
 			interfaceBetweenFunctions: ifaceBetweenFunctions,
 			interfaceAfterVars: ifaceAfterVars,
 			typedefAssign: base.typedefAssign,
+			typeParamDefaultEquals: base.typeParamDefaultEquals,
 			typeParamOpen: base.typeParamOpen,
 			typeParamClose: base.typeParamClose,
 			anonTypeBracesOpen: base.anonTypeBracesOpen,

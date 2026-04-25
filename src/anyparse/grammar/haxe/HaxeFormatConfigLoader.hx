@@ -128,6 +128,16 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   fixture (`{ x:Int }`). The sibling
  *   `bracesConfig.anonTypeBraces.removeInnerWhenEmpty` key is
  *   parsed and silently ignored.
+ * - `whitespace.binopPolicy` (ω-typeparam-default-equals): same enum
+ *   / same collapse, routed to `opt.typeParamDefaultEquals` (the `=`
+ *   joining a declare-site type-parameter to its default type on
+ *   `HxTypeParamDecl.defaultValue`). Default `Around` (= `Both`)
+ *   emits `<T = Int>`; `"none"` emits the tight `<T=Int>`.
+ *   Upstream's `binopPolicy` controls every binary operator; here it
+ *   only routes to the single binop site the writer currently exposes
+ *   as a per-field `WhitespacePolicy` knob. Future binop sites with
+ *   their own `@:fmt(...)` flag should extend this mapping, not add a
+ *   separate JSON key.
  * - `whitespace.bracesConfig.objectLiteralBraces.openingPolicy`
  *   (ω-objectlit-braces): same enum / same collapse, routed to
  *   `opt.objectLiteralBracesOpen`. `After` / `Both` emit a space
@@ -252,6 +262,7 @@ final class HaxeFormatConfigLoader {
 			interfaceBetweenFunctions: base.interfaceBetweenFunctions,
 			interfaceAfterVars: base.interfaceAfterVars,
 			typedefAssign: base.typedefAssign,
+			typeParamDefaultEquals: base.typeParamDefaultEquals,
 			typeParamOpen: base.typeParamOpen,
 			typeParamClose: base.typeParamClose,
 			anonTypeBracesOpen: base.anonTypeBracesOpen,
@@ -325,6 +336,8 @@ final class HaxeFormatConfigLoader {
 			opt.typeParamOpen = whitespaceToRuntime(section.typeParamOpenPolicy);
 		if (section.typeParamClosePolicy != null)
 			opt.typeParamClose = whitespaceToRuntime(section.typeParamClosePolicy);
+		if (section.binopPolicy != null)
+			opt.typeParamDefaultEquals = whitespaceToRuntime(section.binopPolicy);
 		final paren:Null<HxFormatParenConfigSection> = section.parenConfig;
 		if (paren != null) {
 			final funcParam:Null<HxFormatParenPolicySection> = paren.funcParamParens;

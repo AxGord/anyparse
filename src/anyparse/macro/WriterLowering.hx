@@ -638,6 +638,17 @@ class WriterLowering {
 							// tight `_dt(leadText)` byte-identical to the pre-
 							// flag path (`f():Void`).
 							optParts.push(whitespacePolicyLead(child, leadText, ['typeHintColon']));
+						} else if (firstFmtFlag(child, ['typeParamDefaultEquals']) != null) {
+							// ω-typeparam-default-equals: optional non-tight lead with
+							// `@:fmt(typeParamDefaultEquals)` collapses the
+							// pre-slice `sameLineSeparator + leadText + ' '` pair
+							// into a single `whitespacePolicyLead` switch so
+							// `WhitespacePolicy.None` can produce a tight
+							// `<T=Int>` (matching `whitespace.binopPolicy: "none"`).
+							// The default `Both` branch emits ` = ` — byte-
+							// identical to the previous pair when the field has
+							// no `@:fmt(sameLine(...))` companion.
+							optParts.push(whitespacePolicyLead(child, leadText, ['typeParamDefaultEquals']));
 						} else {
 							optParts.push(sameLineSeparator(child, prevBodyField, typePath));
 							optParts.push(macro _dt($v{leadText + ' '}));
@@ -1415,6 +1426,14 @@ class WriterLowering {
 	 *    `@:lead('=')`. Default `Both` — `typedef Foo = Bar;`. The
 	 *    `None` policy reverts to the pre-slice tight `=` via the
 	 *    same switch's fall-through path.
+	 *  - `typeParamDefaultEquals` (ω-typeparam-default-equals) —
+	 *    `HxTypeParamDecl.defaultValue`'s `@:optional @:lead('=')`.
+	 *    Default `Both` — `<T = Int>` / `<T:Foo = Bar>`. `None`
+	 *    collapses the optional non-tight lead's `sameLineSeparator +
+	 *    leadText + ' '` pair into a tight `<T=Int>` (matches
+	 *    `whitespace.binopPolicy: "none"`). Routed from the optional
+	 *    non-tight branch in `lowerStruct` Case 5, NOT from the
+	 *    mandatory-lead path that handles the other knobs above.
 	 *
 	 * Runtime dispatch for each switch (cases built as raw `EField`
 	 * patterns to avoid macro-time enum resolution against

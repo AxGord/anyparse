@@ -266,6 +266,20 @@ import anyparse.format.WriteOptions;
  *    them. A binop-wide knob covering all Pratt-emitted operators is
  *    a separate slice.
  *
+ * Field added in slice ω-typeparam-default-equals (declare-site
+ * type-parameter default `=` spacing):
+ *  - `typeParamDefaultEquals` — whitespace around the `=` joining a
+ *    type-parameter name (or constraint) to its default type
+ *    (`HxTypeParamDecl.defaultValue`'s lead). `Both` (default) emits
+ *    `<T = Int>` / `<T:Foo = Bar>`, matching haxe-formatter's
+ *    `whitespace.binopPolicy: @:default(Around)` for the type-param-
+ *    default site. `None` keeps the tight `<T=Int>` layout, matching
+ *    the `_none` corpus variant; `Before` / `After` are exposed for
+ *    parity. The knob only applies at sites tagged with
+ *    `@:fmt(typeParamDefaultEquals)` in the grammar; sibling
+ *    optional-Ref `=` leads (`HxVarDecl.init`, `HxParam.defaultValue`)
+ *    keep their bare-optional fallback emission.
+ *
  * Fields added in slice ω-typeparam-spacing (type-param `<>` interior
  * spacing):
  *  - `typeParamOpen` — whitespace around the opening `<` of a type-
@@ -360,6 +374,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	interfaceBetweenFunctions:Int,
 	interfaceAfterVars:Int,
 	typedefAssign:WhitespacePolicy,
+	typeParamDefaultEquals:WhitespacePolicy,
 	typeParamOpen:WhitespacePolicy,
 	typeParamClose:WhitespacePolicy,
 	anonTypeBracesOpen:WhitespacePolicy,

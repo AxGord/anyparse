@@ -136,6 +136,7 @@ class HxObjectFieldColonOptionsTest extends Test {
 			interfaceBetweenFunctions: base.interfaceBetweenFunctions,
 			interfaceAfterVars: base.interfaceAfterVars,
 			typedefAssign: base.typedefAssign,
+			typeParamDefaultEquals: base.typeParamDefaultEquals,
 			typeParamOpen: base.typeParamOpen,
 			typeParamClose: base.typeParamClose,
 			anonTypeBracesOpen: base.anonTypeBracesOpen,

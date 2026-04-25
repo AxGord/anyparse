@@ -22,17 +22,17 @@ package anyparse.grammar.haxe;
  *
  * The colon between name and constraint is emitted tight by default
  * (`<T:Foo>`, no surrounding spaces) — `:` is in `HaxeFormat.tightLeads`.
- * The equals sign between name (or constraint) and default emits
- * with surrounding spaces (`<T = Int>`, `<T:Foo = Bar>`) via the
- * default optional-Ref non-tight-lead path — matching haxe-formatter's
- * effective output on `binopPolicy = around` (the default). The
- * `binopPolicy = none` corpus variant (`<T=Int>`) stays out of scope
- * for this slice; a knob can be added later as
- * `@:fmt(typeParamDefaultEquals)` if a fixture demands it.
+ * Writer-side `=` spacing on the default is driven by
+ * `@:fmt(typeParamDefaultEquals)` (slice ω-typeparam-default-equals):
+ * default `WhitespacePolicy.Both` emits `<T = Int>` / `<T:Foo = Bar>`
+ * matching haxe-formatter's `whitespace.binopPolicy: @:default(Around)`.
+ * Setting `typeParamDefaultEquals: WhitespacePolicy.None` (or loading
+ * `whitespace.binopPolicy: "none"`) reverts to the tight `<T=Int>`
+ * layout, matching the `_none` corpus variant.
  */
 @:peg
 typedef HxTypeParamDecl = {
 	var name:HxIdentLit;
 	@:optional @:lead(':') var constraint:Null<HxType>;
-	@:optional @:lead('=') var defaultValue:Null<HxType>;
+	@:optional @:fmt(typeParamDefaultEquals) @:lead('=') var defaultValue:Null<HxType>;
 }

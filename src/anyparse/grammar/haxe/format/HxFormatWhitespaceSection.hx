@@ -39,6 +39,15 @@ package anyparse.grammar.haxe.format;
  *    `opt.anonTypeBracesClose` (the matching `}`). Combined
  *    `openingPolicy: "around"` + `closingPolicy: "around"` produces
  *    `{ x:Int }`.
+ *
+ * Extended in slice ω-typeparam-default-equals:
+ *  - `binopPolicy` feeds `opt.typeParamDefaultEquals` (the `=` joining
+ *    a declare-site type-parameter to its default type on
+ *    `HxTypeParamDecl.defaultValue`). Upstream's `binopPolicy` controls
+ *    spacing of every binary operator; here it routes to the only
+ *    binop site the writer currently exposes as a knob. Future binop
+ *    sites adopting their own `@:fmt(...)` flag should extend this
+ *    mapping rather than introduce a separate JSON key.
  */
 @:peg typedef HxFormatWhitespaceSection = {
 
@@ -49,6 +58,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var typeParamOpenPolicy:HxFormatWhitespacePolicy;
 
 	@:optional var typeParamClosePolicy:HxFormatWhitespacePolicy;
+
+	@:optional var binopPolicy:HxFormatWhitespacePolicy;
 
 	@:optional var parenConfig:HxFormatParenConfigSection;
 
