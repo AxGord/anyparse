@@ -17,6 +17,8 @@ import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxIdentLit;
 import anyparse.grammar.haxe.HxInterfaceDecl;
 import anyparse.grammar.haxe.HxModuleWriter;
+import anyparse.grammar.haxe.HxParam;
+import anyparse.grammar.haxe.HxParamBody;
 import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxType;
 import anyparse.grammar.haxe.HxTypeRef;
@@ -127,6 +129,48 @@ class HxTestHelpers extends Test {
 		return switch ctor {
 			case ParamCtor(decl): decl;
 			case _: throw 'expected ParamCtor, got $ctor';
+		};
+	}
+
+	/**
+	 * Unwrap an `HxParam` enum to the shared body when the variant
+	 * is `Required`. Throws on `Optional`.
+	 *
+	 * `HxParam` is an Alt-enum split — `Required(body)` vs
+	 * `Optional(body)` — to carry the `?name:Type` marker. Most call
+	 * sites only care about the `name`/`type`/`defaultValue` body and
+	 * already know which variant they expect; this helper keeps those
+	 * sites readable without an inline switch.
+	 */
+	private function expectRequiredParam(param:HxParam):HxParamBody {
+		return switch param {
+			case Required(body): body;
+			case Optional(_): throw 'expected HxParam.Required, got Optional';
+		};
+	}
+
+	/**
+	 * Unwrap an `HxParam` enum to the shared body when the variant
+	 * is `Optional`. Throws on `Required`. See `expectRequiredParam`.
+	 */
+	private function expectOptionalParam(param:HxParam):HxParamBody {
+		return switch param {
+			case Optional(body): body;
+			case Required(_): throw 'expected HxParam.Optional, got Required';
+		};
+	}
+
+	/**
+	 * Unwrap an `HxParam` to the shared body regardless of variant.
+	 *
+	 * Use when the assertion only cares about `name`/`type`/`defaultValue`
+	 * and the `Required` vs `Optional` distinction is irrelevant for the
+	 * test (e.g. type-position tests that exercise `HxType` shapes
+	 * through parameter types).
+	 */
+	private function paramBody(param:HxParam):HxParamBody {
+		return switch param {
+			case Required(body) | Optional(body): body;
 		};
 	}
 

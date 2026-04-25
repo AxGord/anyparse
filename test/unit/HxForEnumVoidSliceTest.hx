@@ -160,8 +160,9 @@ class HxForEnumVoidSliceTest extends HxTestHelpers {
 		final decl:HxEnumCtorDecl = expectParamCtor(ed.ctors[0]);
 		Assert.equals('Some', (decl.name : String));
 		Assert.equals(1, decl.params.length);
-		Assert.equals('v', (decl.params[0].name : String));
-		Assert.equals('Int', (expectNamedType(decl.params[0].type).name : String));
+		final body = expectRequiredParam(decl.params[0]);
+		Assert.equals('v', (body.name : String));
+		Assert.equals('Int', (expectNamedType(body.type).name : String));
 		Assert.equals('None', (expectSimpleCtor(ed.ctors[1]) : String));
 	}
 
@@ -172,9 +173,9 @@ class HxForEnumVoidSliceTest extends HxTestHelpers {
 		final decl:HxEnumCtorDecl = expectParamCtor(ed.ctors[0]);
 		Assert.equals('Rgb', (decl.name : String));
 		Assert.equals(3, decl.params.length);
-		Assert.equals('r', (decl.params[0].name : String));
-		Assert.equals('g', (decl.params[1].name : String));
-		Assert.equals('b', (decl.params[2].name : String));
+		Assert.equals('r', (expectRequiredParam(decl.params[0]).name : String));
+		Assert.equals('g', (expectRequiredParam(decl.params[1]).name : String));
+		Assert.equals('b', (expectRequiredParam(decl.params[2]).name : String));
 	}
 
 	public function testCtorWithDefaultValue():Void {
@@ -183,8 +184,9 @@ class HxForEnumVoidSliceTest extends HxTestHelpers {
 		Assert.equals(1, ed.ctors.length);
 		final decl:HxEnumCtorDecl = expectParamCtor(ed.ctors[0]);
 		Assert.equals(1, decl.params.length);
-		Assert.equals('x', (decl.params[0].name : String));
-		switch decl.params[0].defaultValue {
+		final body = expectRequiredParam(decl.params[0]);
+		Assert.equals('x', (body.name : String));
+		switch body.defaultValue {
 			case null: Assert.fail('expected default value');
 			case IntLit(v): Assert.equals(0, (v : Int));
 			case _: Assert.fail('expected IntLit default');

@@ -109,7 +109,7 @@ class HxTypeArrowSliceTest extends HxTestHelpers {
 	public function testArrowOnFnParamType():Void {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar(cb:Int->Void):Void {} }');
 		Assert.equals(1, decl.params.length);
-		final arr = expectArrow(decl.params[0].type);
+		final arr = expectArrow(expectRequiredParam(decl.params[0]).type);
 		Assert.equals('Int', (expectNamedType(arr.left).name : String));
 		Assert.equals('Void', (expectNamedType(arr.right).name : String));
 	}

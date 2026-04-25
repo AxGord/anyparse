@@ -1,21 +1,39 @@
 package anyparse.grammar.haxe;
 
 /**
- * A single function parameter in a Haxe function declaration.
+ * Single function parameter in a Haxe function declaration or enum
+ * constructor.
  *
- * Shape: `name : Type` or `name : Type = defaultValue`.
+ * Two branches:
  *
- * The type annotation is mandatory (same as `HxVarDecl`). The default
- * value is optional, using the same `@:optional @:lead('=')` pattern
- * as `HxVarDecl.init` — `matchLit` peeks the `=` as a commit point,
- * and the full `HxExpr` sub-rule fires only on hit.
+ *  - `Required(body:HxParamBody)` — the canonical form `name:Type` or
+ *    `name:Type = default`. No keyword/lead — the branch matches when
+ *    the next token is the parameter name (`HxIdentLit`).
  *
- * Varargs (`...`), type parameters on parameter types, and `?param`
- * optional-parameter syntax are deferred.
+ *  - `Optional(body:HxParamBody)` — the optional form `?name:Type` or
+ *    `?name:Type = default`. Dispatched by `@:lead('?')`. The body is
+ *    identical to `Required` after the `?` is consumed, so both
+ *    branches share `HxParamBody` as their inner shape.
+ *
+ * The Alt-enum-split shape was chosen over a Boolean presence flag
+ * for the same reason as `HxAnonField` — the macro pipeline currently
+ * supports `@:optional` only on `Ref` and `Star` fields. The split
+ * keeps the macro infra unchanged and reuses Case 3 (single-Ref-child
+ * branch with optional lead) on both the parser and writer sides.
+ *
+ * Branch order matters: `Optional` comes first so the `@:lead('?')`
+ * dispatch is tried before the fallthrough `Required`. This mirrors
+ * the `HxAnonField` and `HxStatement` patterns where keyword-/lead-
+ * dispatched branches precede the no-guard catch-all.
+ *
+ * Used by `HxFnDecl.params` (function-decl signature) and
+ * `HxEnumCtorDecl.params` (parameterised enum constructors).
+ *
+ * Varargs (`...`) and lambda-style `?param` (which routes through
+ * `HxLambdaParam`) are deferred / handled separately.
  */
 @:peg
-typedef HxParam = {
-	var name:HxIdentLit;
-	@:fmt(typeHintColon) @:lead(':') var type:HxType;
-	@:optional @:lead('=') var defaultValue:Null<HxExpr>;
+enum HxParam {
+	@:lead('?') Optional(body:HxParamBody);
+	Required(body:HxParamBody);
 }

@@ -131,7 +131,7 @@ class HxTypeAnonSliceTest extends HxTestHelpers {
 	public function testAnonOnFnParamType():Void {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar(s:{i:Int}):Void {} }');
 		Assert.equals(1, decl.params.length);
-		final fields = expectAnon(decl.params[0].type);
+		final fields = expectAnon(expectRequiredParam(decl.params[0]).type);
 		Assert.equals(1, fields.length);
 		Assert.equals('i', (expectRequired(fields[0]).name : String));
 	}
