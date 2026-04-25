@@ -10,7 +10,9 @@ package anyparse.grammar.haxe;
  * rejected).
  *
  * `typeParams` is an optional close-peek-Star matching `HxFnDecl.typeParams`
- * — bare-identifier declare-site form, no constraints/defaults yet.
+ * — `HxTypeParamDecl` element type carrying `name` and optional
+ * single-bound `constraint` (`<T:Foo>`). Defaults and multi-bound
+ * syntax are deferred.
  *
  * The underlying type is wrapped in parentheses via `@:lead('(')` and
  * `@:trail(')')` on the `underlyingType` field — existing Lowering
@@ -50,7 +52,7 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxAbstractDecl = {
 	@:kw('abstract') var name:HxIdentLit;
-	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose) var typeParams:Null<Array<HxIdentLit>>;
+	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose) var typeParams:Null<Array<HxTypeParamDecl>>;
 	@:lead('(') @:trail(')') var underlyingType:HxType;
 	@:fmt(padLeading) var clauses:Array<HxAbstractClause>;
 	@:fmt(leftCurly, afterFieldsWithDocComments, existingBetweenFields, beforeDocCommentEmptyLines, interMemberBlankLines('member', 'VarMember', 'FnMember')) @:lead('{') @:trail('}') @:trivia var members:Array<HxMemberDecl>;

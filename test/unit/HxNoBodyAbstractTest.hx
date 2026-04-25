@@ -80,7 +80,7 @@ class HxNoBodyAbstractTest extends HxTestHelpers {
 		Assert.equals(1, fns.length);
 		Assert.notNull(fns[0].typeParams);
 		Assert.equals(1, fns[0].typeParams.length);
-		Assert.equals('T', (fns[0].typeParams[0] : String));
+		Assert.equals('T', (fns[0].typeParams[0].name : String));
 		Assert.isTrue(fns[0].body.match(NoBody));
 	}
 

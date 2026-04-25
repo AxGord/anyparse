@@ -24,9 +24,11 @@ package anyparse.grammar.haxe;
  *
  * `typeParams` is the close-peek-Star sibling of `HxTypeRef.params`,
  * gated on `@:optional` so the common no-generics case skips the
- * angle brackets. Element type is `HxIdentLit` — bare-identifier
- * declare-site form. Constraints, defaults, and multi-bound syntax
- * are deferred (see `HxFnDecl` for the symmetric note).
+ * angle brackets. Element type is `HxTypeParamDecl` — declare-site
+ * wrapper carrying `name` and an optional single-bound `constraint`
+ * (`<T:Foo>`). Defaults (`<T = Int>`) and multi-bound syntax
+ * (`<T:A&B>`) are deferred and extend `HxTypeParamDecl` rather than
+ * reshape this field.
  *
  * The members field is a `Star` field wrapped in `{` / `}`
  * with no separator between items — each `HxMemberDecl` is
@@ -38,6 +40,6 @@ package anyparse.grammar.haxe;
 @:ws
 typedef HxClassDecl = {
 	@:kw('class') var name:HxIdentLit;
-	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose) var typeParams:Null<Array<HxIdentLit>>;
+	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose) var typeParams:Null<Array<HxTypeParamDecl>>;
 	@:fmt(leftCurly, afterFieldsWithDocComments, existingBetweenFields, beforeDocCommentEmptyLines, interMemberBlankLines('member', 'VarMember', 'FnMember')) @:lead('{') @:trail('}') @:trivia var members:Array<HxMemberDecl>;
 }

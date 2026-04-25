@@ -10,8 +10,9 @@ package anyparse.grammar.haxe;
  * (`typedefine` is rejected).
  *
  * `typeParams` is the symmetric close-peek-Star sibling of
- * `HxFnDecl.typeParams` — bare-identifier declare-site form.
- * Constraints/defaults are deferred.
+ * `HxFnDecl.typeParams` — `HxTypeParamDecl` element type carrying
+ * `name` and optional single-bound `constraint` (`<T:Foo>`).
+ * Defaults and multi-bound syntax are deferred.
  *
  * The trailing semicolon lives on the `TypedefDecl` branch in
  * `HxDecl` via `@:trail(';')`, not here — this typedef only
@@ -33,6 +34,6 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxTypedefDecl = {
 	@:kw('typedef') var name:HxIdentLit;
-	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose) var typeParams:Null<Array<HxIdentLit>>;
+	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose) var typeParams:Null<Array<HxTypeParamDecl>>;
 	@:fmt(typedefAssign) @:lead('=') var type:HxType;
 }

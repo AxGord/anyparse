@@ -12,8 +12,9 @@ package anyparse.grammar.haxe;
  * so the generated parser enforces a word boundary.
  *
  * `typeParams` is the symmetric close-peek-Star sibling of
- * `HxFnDecl.typeParams` — bare-identifier declare-site form.
- * Constraints and defaults are deferred.
+ * `HxFnDecl.typeParams` — `HxTypeParamDecl` element type carrying
+ * `name` and optional single-bound `constraint` (`<T:Foo>`).
+ * Defaults and multi-bound syntax are deferred.
  *
  * Constructors with parameters are supported via `HxEnumCtor.ParamCtor`
  * which wraps `HxEnumCtorDecl` — see `HxEnumCtor`.
@@ -21,6 +22,6 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxEnumDecl = {
 	@:kw('enum') var name:HxIdentLit;
-	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose) var typeParams:Null<Array<HxIdentLit>>;
+	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose) var typeParams:Null<Array<HxTypeParamDecl>>;
 	@:lead('{') @:trail('}') var ctors:Array<HxEnumCtor>;
 }

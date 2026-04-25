@@ -16,10 +16,10 @@ package anyparse.grammar.haxe;
  *
  * `typeParams` is the close-peek-Star sibling of `HxTypeRef.params`:
  * `@:optional @:lead('<') @:trail('>') @:sep(',')`. The element type
- * is `HxIdentLit` — the bare-identifier declare-site form. Constraints
- * (`<T:Foo>`), defaults (`<T = Int>`), and multi-constraint syntax
- * (`<T:A&B>`) are deferred and require a wrapper `HxTypeParamDecl`
- * element type.
+ * is `HxTypeParamDecl` — declare-site wrapper with `name` and optional
+ * single-bound `constraint` (`<T:Foo>`). Defaults (`<T = Int>`) and
+ * multi-constraint syntax (`<T:A&B>`) are deferred follow-up slices
+ * extending `HxTypeParamDecl`.
  *
  * The `params` field uses `@:lead('(') @:trail(')') @:sep(',')` which
  * selects the sep-peek termination mode in `emitStarFieldSteps`:
@@ -45,7 +45,7 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxFnDecl = {
 	var name:HxIdentLit;
-	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose) var typeParams:Null<Array<HxIdentLit>>;
+	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose) var typeParams:Null<Array<HxTypeParamDecl>>;
 	@:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams'), funcParamParens) var params:Array<HxParam>;
 	@:optional @:fmt(typeHintColon) @:lead(':') var returnType:Null<HxType>;
 	@:fmt(leftCurly) var body:HxFnBody;

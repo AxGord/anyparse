@@ -10,8 +10,9 @@ package anyparse.grammar.haxe;
  * same `var`/`function` members with optional modifiers.
  *
  * `typeParams` is the symmetric close-peek-Star sibling of
- * `HxFnDecl.typeParams` — bare-identifier declare-site form.
- * Constraints and defaults are deferred.
+ * `HxFnDecl.typeParams` — `HxTypeParamDecl` element type carrying
+ * `name` and optional single-bound `constraint` (`<T:Foo>`).
+ * Defaults and multi-bound syntax are deferred.
  *
  * Semantic differences between interfaces and classes (no function
  * bodies, no `static`, mandatory `public`) are not the parser's
@@ -35,6 +36,6 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxInterfaceDecl = {
 	@:kw('interface') var name:HxIdentLit;
-	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose) var typeParams:Null<Array<HxIdentLit>>;
+	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose) var typeParams:Null<Array<HxTypeParamDecl>>;
 	@:fmt(leftCurly, interMemberBlankLines('member', 'VarMember', 'FnMember', 'interfaceBetweenVars', 'interfaceBetweenFunctions', 'interfaceAfterVars')) @:lead('{') @:trail('}') @:trivia var members:Array<HxMemberDecl>;
 }
