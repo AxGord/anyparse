@@ -994,31 +994,39 @@ class WriterLowering {
 					_dc(_docs);
 				});
 			} else {
-				// `@:fmt(padBoundaries)` — when the Star is bracketed by
-				// surrounding tokens emitted OUTSIDE this struct (an outer
-				// enum ctor's kwLead / trailText, or a sibling Ref before
-				// it) AND has no own `@:lead`/`@:trail` to carry the space,
-				// the internal-only sep leaves `prevTok<elem1 elem2>nextTok`
-				// glued together. Opting in emits a leading + trailing space
-				// when the array is non-empty, yielding `prevTok elem1 elem2
-				// nextTok`. Empty arrays still degrade to `_de()` (no padding,
-				// no stray space). Format-neutral — any grammar nesting a
+				// `@:fmt(padLeading)` / `@:fmt(padTrailing)` — when the Star
+				// is bracketed by surrounding tokens emitted OUTSIDE this
+				// struct (an outer enum ctor's kwLead / trailText, or a
+				// sibling Ref before it) AND has no own `@:lead`/`@:trail`
+				// to carry the space, the internal-only sep leaves
+				// `prevTok<elem1 elem2>nextTok` glued together. Opting into
+				// `padLeading` emits a leading space when the array is non-
+				// empty (`prevTok elem1 elem2>nextTok`); `padTrailing` does
+				// the same on the trailing side; combine for the symmetric
+				// `prevTok elem1 elem2 nextTok` shape (used by
+				// `HxConditionalMod.body` to fence between `#if cond`/`#end`).
+				// Empty arrays still degrade to `_de()` (no padding, no
+				// stray space). Format-neutral — any grammar nesting a
 				// padded Star inside a surrounding-token sandwich can adopt
-				// the flag without touching the macro.
-				final padBoundaries:Bool = fmtHasFlag(starNode, 'padBoundaries');
-				if (padBoundaries) {
+				// either flag without touching the macro.
+				final padLeading:Bool = fmtHasFlag(starNode, 'padLeading');
+				final padTrailing:Bool = fmtHasFlag(starNode, 'padTrailing');
+				if (padLeading || padTrailing) {
+					final leadingPush:Expr = padLeading ? macro _docs.push(_dt(' ')) : macro {};
+					final trailingPush:Expr = padTrailing ? macro _docs.push(_dt(' ')) : macro {};
 					parts.push(macro {
 						final _arr = $fieldAccess;
 						if (_arr.length == 0) _de()
 						else {
-							final _docs:Array<anyparse.core.Doc> = [_dt(' ')];
+							final _docs:Array<anyparse.core.Doc> = [];
+							$leadingPush;
 							var _si:Int = 0;
 							while (_si < _arr.length) {
 								_docs.push($elemCall);
 								if (_si < _arr.length - 1) _docs.push(_dt(' '));
 								_si++;
 							}
-							_docs.push(_dt(' '));
+							$trailingPush;
 							_dc(_docs);
 						}
 					});

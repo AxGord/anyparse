@@ -17,13 +17,17 @@ package anyparse.grammar.haxe;
  * pattern (same as `HxDoWhileStmt.cond` which has `@:kw` + `@:lead` +
  * `@:trail`).
  *
- * The `clauses` field is a bare `Array<HxAbstractClause>` with no
- * annotations. It is not the last struct field, so
+ * The `clauses` field is a bare `Array<HxAbstractClause>` annotated only
+ * with `@:fmt(padLeading)`. It is not the last struct field, so
  * `emitStarFieldSteps` selects try-parse mode (line 1074): the loop
  * attempts to parse `HxAbstractClause` on each iteration and breaks
  * when neither `from` nor `to` keyword matches (i.e. the next token
  * is `{`). This is the first grammar consumer exercising positional
- * try-parse on a bare Star field.
+ * try-parse on a bare Star field. The `padLeading` flag closes the
+ * `(UnderlyingType)`↔`from` gap on the writer side: without it the
+ * bare-Star path's internal-only sep glues `(Bar)from` together.
+ * `padTrailing` is not needed — the next field (`members`) carries
+ * `@:lead('{')`, a spaced lead whose own separator covers the gap.
  *
  * Members reuse `HxMemberDecl` — same as `HxClassDecl` and
  * `HxInterfaceDecl`. Semantic restrictions (e.g. `@:op` annotations,
@@ -48,6 +52,6 @@ typedef HxAbstractDecl = {
 	@:kw('abstract') var name:HxIdentLit;
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose) var typeParams:Null<Array<HxIdentLit>>;
 	@:lead('(') @:trail(')') var underlyingType:HxType;
-	var clauses:Array<HxAbstractClause>;
+	@:fmt(padLeading) var clauses:Array<HxAbstractClause>;
 	@:fmt(leftCurly, afterFieldsWithDocComments, existingBetweenFields, beforeDocCommentEmptyLines, interMemberBlankLines('member', 'VarMember', 'FnMember')) @:lead('{') @:trail('}') @:trivia var members:Array<HxMemberDecl>;
 }

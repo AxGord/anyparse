@@ -15,9 +15,10 @@ import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
  * Single-line variants (V2, V3, `issue_107`, `issue_291`) and V1 assert
  * that the input parses AND that `parse → write` round-trips byte-
  * exactly. V2 / V3 use the writer-side gate closed by
- * `@:fmt(padBoundaries)` on `HxConditionalMod.body` (cond↔body[0] and
- * body[last]↔`#end` boundary spaces). V1 (`#if … #end` followed by a
- * newline-and-indent before the next modifier keyword) uses the
+ * `@:fmt(padLeading, padTrailing)` on `HxConditionalMod.body`
+ * (cond↔body[0] and body[last]↔`#end` boundary spaces). V1 (`#if … #end`
+ * followed by a newline-and-indent before the next modifier keyword)
+ * uses the
  * `@:trivia` capture added on `HxMemberDecl.modifiers` (per-element
  * `newlineBefore` slot consumed by the trivia tryparse Star writer to
  * emit a hardline between modifiers when the source had a single
@@ -26,7 +27,7 @@ import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
  * V4 (cond / modifier / `#end` on separate lines) stays parse-only:
  * the newlines INSIDE `HxConditionalMod.body` (between cond / body[0]
  * and between body[last] / `#end`) require the bearing cascade onto
- * `HxModifier` plus a padBoundaries-aware trivia writer plus a
+ * `HxModifier` plus a padLeading/padTrailing-aware trivia writer plus a
  * trail-side newline capture on the outer `Conditional` ctor. Deferred
  * until those land as their own slice — the V1 fix already removes the
  * primary corpus byte-diff (`issue_332` advances from offset 68 to

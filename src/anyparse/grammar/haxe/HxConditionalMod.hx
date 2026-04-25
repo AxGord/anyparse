@@ -24,15 +24,18 @@ package anyparse.grammar.haxe;
  * Writer-side output shape: `#if <cond> <modifiers> #end`. The `#if `
  * keyword carries its trailing space from `@:kw` + Case 3's `kwLead + ' '`
  * rule, modifiers join internally with single spaces, and the
- * `@:fmt(padBoundaries)` flag on `body` adds a leading + trailing space
- * around the Star when it is non-empty — closing the cond↔body[0] and
- * body[last]↔`#end` gaps that the default internal-only sep leaves glued
- * against the surrounding `#if`/`#end` tokens. Empty `body` degrades to
- * no padding, so a hypothetical `#if cond #end` stays as-is rather than
- * gaining a stray space.
+ * `@:fmt(padLeading, padTrailing)` flag pair on `body` adds a leading +
+ * trailing space around the Star when it is non-empty — closing the
+ * cond↔body[0] and body[last]↔`#end` gaps that the default internal-only
+ * sep leaves glued against the surrounding `#if`/`#end` tokens. Empty
+ * `body` degrades to `_de()` (no padding, no stray space), so a
+ * hypothetical `#if cond #end` stays as-is. The two flags are independent
+ * — `HxAbstractDecl.clauses` uses `@:fmt(padLeading)` alone because its
+ * trailing slot is already covered by the next field's `@:lead('{')`
+ * spaced-lead separator.
  */
 @:peg
 typedef HxConditionalMod = {
 	var cond:HxPpCondLit;
-	@:tryparse @:fmt(padBoundaries) var body:Array<HxModifier>;
+	@:tryparse @:fmt(padLeading, padTrailing) var body:Array<HxModifier>;
 };
