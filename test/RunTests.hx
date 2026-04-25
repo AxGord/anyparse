@@ -22,6 +22,7 @@ import unit.HxDoWhileThrowTryCatchSliceTest;
 import unit.HxAbstractSliceTest;
 import unit.HxStringSliceTest;
 import unit.HxArrowArraySliceTest;
+import unit.HxMetaExprSliceTest;
 import unit.HxObjectLitSliceTest;
 import unit.HxParamSliceTest;
 import unit.HxTypeParamSliceTest;
@@ -85,6 +86,7 @@ class RunTests {
 		runner.addCase(new HxStringSliceTest());
 		runner.addCase(new HxArrowArraySliceTest());
 		runner.addCase(new HxObjectLitSliceTest());
+		runner.addCase(new HxMetaExprSliceTest());
 		runner.addCase(new HxSameLineOptionsTest());
 		runner.addCase(new HxTrailingCommaOptionsTest());
 		runner.addCase(new HxLeftCurlyOptionsTest());

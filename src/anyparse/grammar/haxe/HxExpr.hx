@@ -73,6 +73,13 @@ package anyparse.grammar.haxe;
  *    is the commit point (`@:kw('new')`); the type name and argument
  *    list are parsed by `HxNewExpr`. Must appear before `IdentExpr`
  *    so `new` is not consumed as an identifier.
+ *  - `MetaExpr` — `@:meta expr` / `@:meta(args) expr` expression-level
+ *    metadata wrapper. Wraps `HxMetaExpr` typedef carrying the
+ *    `HxMetadata` regex slice plus a recursive `HxExpr`. Placed before
+ *    `IdentExpr` so the leading `@` is committed by the meta regex
+ *    before the bare-identifier catch-all is tried; non-`@` input fails
+ *    the regex on the first byte and `tryBranch` rolls back. Used by
+ *    `@:privateAccess (X).object` and similar argument-position metas.
  *  - `IdentExpr` — bare identifier (`other`). **Must appear last**
  *    among the pure atom branches: the identifier regex is permissive
  *    and would otherwise match `null` / `true` / `false` as bare
@@ -226,6 +233,8 @@ enum HxExpr {
 
 	@:kw('switch')
 	SwitchExpr(stmt:HxSwitchStmt);
+
+	MetaExpr(v:HxMetaExpr);
 
 	IdentExpr(v:HxIdentLit);
 
