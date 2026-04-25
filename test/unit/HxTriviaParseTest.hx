@@ -27,6 +27,13 @@ class HxTriviaParseTest extends Test {
 	// pattern mirrors `HxTriviaTypesTest._forceBuild` — initialisation
 	// order between a marker class's build phase and a consumer's
 	// top-of-file type references is not guaranteed without this hook.
+	//
+	// Helpers cannot reference paired `*T` types in their signatures —
+	// signature typing precedes static-init, so the synth module isn't
+	// registered yet. Each method body that accesses `fn.body` does an
+	// inline `switch fn.body { case BlockBody(b): b.stmts; case _: throw }`
+	// to extract the Trivial-wrapped statement array (`b` is the
+	// paired `HxFnBlockT` carrying the trivia + orphan slots).
 	private static final _forceBuild:Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 
 	public function testLeadingLineCommentOnDecl():Void {
@@ -98,9 +105,14 @@ class HxTriviaParseTest extends Test {
 			case FnMember(decl): decl;
 			case _: throw 'expected FnMember';
 		};
-		Assert.equals(1, fn.body.length);
-		Assert.equals(1, fn.body[0].leadingComments.length);
-		Assert.equals('// inner', fn.body[0].leadingComments[0]);
+		final stmts:Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>>
+			= switch fn.body {
+				case BlockBody(b): b.stmts;
+				case _: throw 'expected BlockBody';
+			};
+		Assert.equals(1, stmts.length);
+		Assert.equals(1, stmts[0].leadingComments.length);
+		Assert.equals('// inner', stmts[0].leadingComments[0]);
 	}
 
 	public function testBlockStmtStatementsCapturedAsTrivial():Void {
@@ -116,8 +128,13 @@ class HxTriviaParseTest extends Test {
 			case FnMember(decl): decl;
 			case _: throw 'expected FnMember';
 		};
-		Assert.equals(1, fn.body.length);
-		final inner:anyparse.grammar.haxe.trivia.Pairs.HxStatementT = fn.body[0].node;
+		final outerStmts:Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>>
+			= switch fn.body {
+				case BlockBody(b): b.stmts;
+				case _: throw 'expected BlockBody';
+			};
+		Assert.equals(1, outerStmts.length);
+		final inner:anyparse.grammar.haxe.trivia.Pairs.HxStatementT = outerStmts[0].node;
 		final stmts:Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch inner {
 			case BlockStmt(stmts, _): stmts;
 			case _: throw 'expected BlockStmt';
@@ -201,10 +218,15 @@ class HxTriviaParseTest extends Test {
 			case FnMember(decl): decl;
 			case _: throw 'expected FnMember';
 		};
-		Assert.equals(2, fn.body.length);
-		Assert.equals(0, fn.body[0].leadingComments.length);
-		Assert.equals(1, fn.body[1].leadingComments.length);
-		Assert.equals('// between stmts', fn.body[1].leadingComments[0]);
+		final stmts:Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>>
+			= switch fn.body {
+				case BlockBody(b): b.stmts;
+				case _: throw 'expected BlockBody';
+			};
+		Assert.equals(2, stmts.length);
+		Assert.equals(0, stmts[0].leadingComments.length);
+		Assert.equals(1, stmts[1].leadingComments.length);
+		Assert.equals('// between stmts', stmts[1].leadingComments[0]);
 	}
 
 	/**
@@ -229,8 +251,13 @@ class HxTriviaParseTest extends Test {
 			case FnMember(decl): decl;
 			case _: throw 'expected FnMember';
 		};
-		Assert.equals(1, fn.body.length);
-		Assert.equals(' trailing', fn.body[0].trailingComment);
+		final stmts:Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>>
+			= switch fn.body {
+				case BlockBody(b): b.stmts;
+				case _: throw 'expected BlockBody';
+			};
+		Assert.equals(1, stmts.length);
+		Assert.equals(' trailing', stmts[0].trailingComment);
 	}
 
 	/**
@@ -258,8 +285,13 @@ class HxTriviaParseTest extends Test {
 			case FnMember(decl): decl;
 			case _: throw 'expected FnMember';
 		};
-		Assert.equals(1, fn.body.length);
-		final ifStmt:anyparse.grammar.haxe.trivia.Pairs.HxIfStmtT = switch fn.body[0].node {
+		final stmts:Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>>
+			= switch fn.body {
+				case BlockBody(b): b.stmts;
+				case _: throw 'expected BlockBody';
+			};
+		Assert.equals(1, stmts.length);
+		final ifStmt:anyparse.grammar.haxe.trivia.Pairs.HxIfStmtT = switch stmts[0].node {
 			case IfStmt(s): s;
 			case _: throw 'expected IfStmt';
 		};
@@ -301,7 +333,12 @@ class HxTriviaParseTest extends Test {
 			case FnMember(decl): decl;
 			case _: throw 'expected FnMember';
 		};
-		final ifStmt:anyparse.grammar.haxe.trivia.Pairs.HxIfStmtT = switch fn.body[0].node {
+		final stmts:Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>>
+			= switch fn.body {
+				case BlockBody(b): b.stmts;
+				case _: throw 'expected BlockBody';
+			};
+		final ifStmt:anyparse.grammar.haxe.trivia.Pairs.HxIfStmtT = switch stmts[0].node {
 			case IfStmt(s): s;
 			case _: throw 'expected IfStmt';
 		};

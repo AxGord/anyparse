@@ -28,13 +28,14 @@ class HxBodySliceTest extends HxTestHelpers {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar():Void {} }');
 		Assert.equals('bar', (decl.name : String));
 		Assert.equals('Void', (decl.returnType.name : String));
-		Assert.equals(0, decl.body.length);
+		Assert.equals(0, fnBodyStmts(decl).length);
 	}
 
 	public function testSingleExprStmt():Void {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function f():Void { 1; } }');
-		Assert.equals(1, decl.body.length);
-		switch decl.body[0] {
+		final stmts:Array<HxStatement> = fnBodyStmts(decl);
+		Assert.equals(1, stmts.length);
+		switch stmts[0] {
 			case ExprStmt(expr):
 				switch expr {
 					case IntLit(v): Assert.equals(1, (v : Int));
@@ -46,8 +47,9 @@ class HxBodySliceTest extends HxTestHelpers {
 
 	public function testReturnStmt():Void {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function f():Int { return 42; } }');
-		Assert.equals(1, decl.body.length);
-		switch decl.body[0] {
+		final stmts:Array<HxStatement> = fnBodyStmts(decl);
+		Assert.equals(1, stmts.length);
+		switch stmts[0] {
 			case ReturnStmt(value):
 				switch value {
 					case IntLit(v): Assert.equals(42, (v : Int));
@@ -59,8 +61,9 @@ class HxBodySliceTest extends HxTestHelpers {
 
 	public function testVarStmt():Void {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function f():Void { var x:Int = 1; } }');
-		Assert.equals(1, decl.body.length);
-		switch decl.body[0] {
+		final stmts:Array<HxStatement> = fnBodyStmts(decl);
+		Assert.equals(1, stmts.length);
+		switch stmts[0] {
 			case VarStmt(vd):
 				Assert.equals('x', (vd.name : String));
 				Assert.equals('Int', (vd.type.name : String));
@@ -74,8 +77,9 @@ class HxBodySliceTest extends HxTestHelpers {
 
 	public function testVarWithoutInit():Void {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function f():Void { var x:Int; } }');
-		Assert.equals(1, decl.body.length);
-		switch decl.body[0] {
+		final stmts:Array<HxStatement> = fnBodyStmts(decl);
+		Assert.equals(1, stmts.length);
+		switch stmts[0] {
 			case VarStmt(vd):
 				Assert.equals('x', (vd.name : String));
 				Assert.equals('Int', (vd.type.name : String));
@@ -86,12 +90,13 @@ class HxBodySliceTest extends HxTestHelpers {
 
 	public function testMixedStatements():Void {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function f():Int { var x:Int = 1; x; return x; } }');
-		Assert.equals(3, decl.body.length);
-		switch decl.body[0] {
+		final stmts:Array<HxStatement> = fnBodyStmts(decl);
+		Assert.equals(3, stmts.length);
+		switch stmts[0] {
 			case VarStmt(vd): Assert.equals('x', (vd.name : String));
 			case null, _: Assert.fail('expected VarStmt');
 		}
-		switch decl.body[1] {
+		switch stmts[1] {
 			case ExprStmt(expr):
 				switch expr {
 					case IdentExpr(v): Assert.equals('x', (v : String));
@@ -99,7 +104,7 @@ class HxBodySliceTest extends HxTestHelpers {
 				}
 			case null, _: Assert.fail('expected ExprStmt');
 		}
-		switch decl.body[2] {
+		switch stmts[2] {
 			case ReturnStmt(value):
 				switch value {
 					case IdentExpr(v): Assert.equals('x', (v : String));
@@ -111,8 +116,9 @@ class HxBodySliceTest extends HxTestHelpers {
 
 	public function testExprWithOperators():Void {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function f():Void { a + b; } }');
-		Assert.equals(1, decl.body.length);
-		switch decl.body[0] {
+		final stmts:Array<HxStatement> = fnBodyStmts(decl);
+		Assert.equals(1, stmts.length);
+		switch stmts[0] {
 			case ExprStmt(expr):
 				switch expr {
 					case Add(left, right):
@@ -132,8 +138,9 @@ class HxBodySliceTest extends HxTestHelpers {
 
 	public function testMethodCall():Void {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function f():Void { foo(); } }');
-		Assert.equals(1, decl.body.length);
-		switch decl.body[0] {
+		final stmts:Array<HxStatement> = fnBodyStmts(decl);
+		Assert.equals(1, stmts.length);
+		switch stmts[0] {
 			case ExprStmt(expr):
 				switch expr {
 					case Call(operand, args):
@@ -150,8 +157,9 @@ class HxBodySliceTest extends HxTestHelpers {
 
 	public function testMethodCallChain():Void {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function f():Void { a.b(); } }');
-		Assert.equals(1, decl.body.length);
-		switch decl.body[0] {
+		final stmts:Array<HxStatement> = fnBodyStmts(decl);
+		Assert.equals(1, stmts.length);
+		switch stmts[0] {
 			case ExprStmt(expr):
 				switch expr {
 					case Call(operand, args):
@@ -173,8 +181,9 @@ class HxBodySliceTest extends HxTestHelpers {
 
 	public function testAssignmentStmt():Void {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function f():Void { x = 1; } }');
-		Assert.equals(1, decl.body.length);
-		switch decl.body[0] {
+		final stmts:Array<HxStatement> = fnBodyStmts(decl);
+		Assert.equals(1, stmts.length);
+		switch stmts[0] {
 			case ExprStmt(expr):
 				switch expr {
 					case Assign(left, right):
@@ -194,16 +203,17 @@ class HxBodySliceTest extends HxTestHelpers {
 
 	public function testMultipleExprStmts():Void {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function f():Void { 1; 2; 3; } }');
-		Assert.equals(3, decl.body.length);
-		switch decl.body[0] {
+		final stmts:Array<HxStatement> = fnBodyStmts(decl);
+		Assert.equals(3, stmts.length);
+		switch stmts[0] {
 			case ExprStmt(IntLit(v)): Assert.equals(1, (v : Int));
 			case null, _: Assert.fail('expected ExprStmt(IntLit(1))');
 		}
-		switch decl.body[1] {
+		switch stmts[1] {
 			case ExprStmt(IntLit(v)): Assert.equals(2, (v : Int));
 			case null, _: Assert.fail('expected ExprStmt(IntLit(2))');
 		}
-		switch decl.body[2] {
+		switch stmts[2] {
 			case ExprStmt(IntLit(v)): Assert.equals(3, (v : Int));
 			case null, _: Assert.fail('expected ExprStmt(IntLit(3))');
 		}
@@ -211,8 +221,9 @@ class HxBodySliceTest extends HxTestHelpers {
 
 	public function testReturnExpression():Void {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function f():Int { return a + 1; } }');
-		Assert.equals(1, decl.body.length);
-		switch decl.body[0] {
+		final stmts:Array<HxStatement> = fnBodyStmts(decl);
+		Assert.equals(1, stmts.length);
+		switch stmts[0] {
 			case ReturnStmt(value):
 				switch value {
 					case Add(left, right):
@@ -232,12 +243,13 @@ class HxBodySliceTest extends HxTestHelpers {
 
 	public function testWhitespaceTolerance():Void {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function f():Void {  var  x : Int ;  1 ;  } }');
-		Assert.equals(2, decl.body.length);
-		switch decl.body[0] {
+		final stmts:Array<HxStatement> = fnBodyStmts(decl);
+		Assert.equals(2, stmts.length);
+		switch stmts[0] {
 			case VarStmt(vd): Assert.equals('x', (vd.name : String));
 			case null, _: Assert.fail('expected VarStmt');
 		}
-		switch decl.body[1] {
+		switch stmts[1] {
 			case ExprStmt(IntLit(v)): Assert.equals(1, (v : Int));
 			case null, _: Assert.fail('expected ExprStmt(IntLit(1))');
 		}
@@ -260,8 +272,9 @@ class HxBodySliceTest extends HxTestHelpers {
 		Assert.equals(1, a.members.length);
 		final af:HxFnDecl = expectFnMember(a.members[0].member);
 		Assert.equals('f', (af.name : String));
-		Assert.equals(1, af.body.length);
-		switch af.body[0] {
+		final aStmts:Array<HxStatement> = fnBodyStmts(af);
+		Assert.equals(1, aStmts.length);
+		switch aStmts[0] {
 			case ReturnStmt(IntLit(v)): Assert.equals(1, (v : Int));
 			case null, _: Assert.fail('expected ReturnStmt(IntLit(1))');
 		}
@@ -270,8 +283,9 @@ class HxBodySliceTest extends HxTestHelpers {
 		Assert.equals(1, b.members.length);
 		final bf:HxFnDecl = expectFnMember(b.members[0].member);
 		Assert.equals('g', (bf.name : String));
-		Assert.equals(1, bf.body.length);
-		switch bf.body[0] {
+		final bStmts:Array<HxStatement> = fnBodyStmts(bf);
+		Assert.equals(1, bStmts.length);
+		switch bStmts[0] {
 			case ExprStmt(IdentExpr(v)): Assert.equals('x', (v : String));
 			case null, _: Assert.fail('expected ExprStmt(IdentExpr(x))');
 		}
@@ -281,15 +295,16 @@ class HxBodySliceTest extends HxTestHelpers {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function main() {} }');
 		Assert.equals('main', (decl.name : String));
 		Assert.isNull(decl.returnType);
-		Assert.equals(0, decl.body.length);
+		Assert.equals(0, fnBodyStmts(decl).length);
 	}
 
 	public function testFnDeclNoReturnTypeWithBody():Void {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function main() { return 1; } }');
 		Assert.equals('main', (decl.name : String));
 		Assert.isNull(decl.returnType);
-		Assert.equals(1, decl.body.length);
-		switch decl.body[0] {
+		final stmts:Array<HxStatement> = fnBodyStmts(decl);
+		Assert.equals(1, stmts.length);
+		switch stmts[0] {
 			case ReturnStmt(IntLit(v)): Assert.equals(1, (v : Int));
 			case null, _: Assert.fail('expected ReturnStmt(IntLit(1))');
 		}

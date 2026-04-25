@@ -30,7 +30,7 @@ class HxSwitchNewSliceTest extends HxTestHelpers {
 	/** Parse function body statements from a single-function class. */
 	private function parseBody(source:String):Array<HxStatement> {
 		final fn:HxFnDecl = parseSingleFnDecl(source);
-		return fn.body;
+		return fnBodyStmts(fn);
 	}
 
 	/** Extract switch statement from the first body statement. */
@@ -214,8 +214,9 @@ class HxSwitchNewSliceTest extends HxTestHelpers {
 		final cls:HxClassDecl = expectClassDecl(module.decls[0]);
 		Assert.equals(1, cls.members.length);
 		final fn:HxFnDecl = expectFnMember(cls.members[0].member);
-		Assert.equals(1, fn.body.length);
-		switch fn.body[0] {
+		final stmts:Array<HxStatement> = fnBodyStmts(fn);
+		Assert.equals(1, stmts.length);
+		switch stmts[0] {
 			case SwitchStmt(sw): Assert.equals(2, sw.cases.length);
 			case null, _: Assert.fail('expected SwitchStmt');
 		}
@@ -359,8 +360,9 @@ class HxSwitchNewSliceTest extends HxTestHelpers {
 		final cls:HxClassDecl = expectClassDecl(module.decls[0]);
 		Assert.equals(1, cls.members.length);
 		final fn:HxFnDecl = expectFnMember(cls.members[0].member);
-		Assert.equals(1, fn.body.length);
-		switch fn.body[0] {
+		final stmts:Array<HxStatement> = fnBodyStmts(fn);
+		Assert.equals(1, stmts.length);
+		switch stmts[0] {
 			case ExprStmt(expr):
 				switch expr {
 					case NewExpr(ne):

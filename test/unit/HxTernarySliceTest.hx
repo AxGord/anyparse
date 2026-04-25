@@ -176,8 +176,9 @@ class HxTernarySliceTest extends HxTestHelpers {
 		final ast:HxClassDecl = HaxeParser.parse('class Foo { function f():Int { return a ? b : c; } }');
 		Assert.equals(1, ast.members.length);
 		final fn:HxFnDecl = expectFnMember(ast.members[0].member);
-		Assert.equals(1, fn.body.length);
-		switch fn.body[0] {
+		final stmts:Array<HxStatement> = fnBodyStmts(fn);
+		Assert.equals(1, stmts.length);
+		switch stmts[0] {
 			case ReturnStmt(Ternary(IdentExpr(cond), IdentExpr(then), IdentExpr(els))):
 				Assert.equals('a', (cond : String));
 				Assert.equals('b', (then : String));

@@ -638,7 +638,27 @@ class WriterLowering {
 						parts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, fieldAccess, refName, hasElseIf, elseFieldName));
 						justWrappedBody = {access: fieldAccess, typePath: refName};
 					} else {
-						if (kwLead == null && leadText == null && !isFirstField && !isRaw) {
+						// `@:fmt(leftCurly)` on a bare Ref field (e.g.
+						// `HxFnDecl.body:HxFnBody`) routes the inter-field
+						// space through the runtime BracePlacement switch —
+						// same separator the Star path uses when the `{`
+						// open lives on the field. The Ref points at an
+						// enum (BlockBody / NoBody); the separator must be
+						// suppressed when the runtime branch is the
+						// `;`-terminated NoBody — emitting `_dt(' ')` ahead
+						// of `;` would round-trip as `function f():Void ;`.
+						// Detect the brace-bearing branch by `@:lead('{')`
+						// at macro time; gate emission on enum-ctor identity
+						// at runtime via `Type.enumConstructor`.
+						final lcSep:Null<Expr> = fmtHasFlag(child, 'leftCurly')
+							? leftCurlySeparator(child)
+							: null;
+						final lcCtor:Null<String> = lcSep == null ? null : leftCurlyTargetCtor(refName);
+						if (lcSep != null && lcCtor != null) {
+							final ctorName:String = lcCtor;
+							parts.push(macro Type.enumConstructor($fieldAccess) == $v{ctorName} ? $lcSep : _de());
+							parts.push(writeCall);
+						} else if (kwLead == null && leadText == null && !isFirstField && !isRaw) {
 							// ω-issue-48-v2: in trivia mode the bare Ref field
 							// grew a `<field>BeforeNewline:Bool` slot (see
 							// `TriviaTypeSynth.isBareNonFirstRef`). Consult it
@@ -661,8 +681,10 @@ class WriterLowering {
 								final prev:Expr = prevAnyStarNonEmpty;
 								parts.push(macro $prev ? _dt(' ') : _de());
 							} else parts.push(macro _dt(' '));
+							parts.push(writeCall);
+						} else {
+							parts.push(writeCall);
 						}
-						parts.push(writeCall);
 					}
 					// ω-close-trailing-alt: track ANY bare-Ref body (with or
 					// without bodyPolicy wrap) so the next field can react to
@@ -1185,6 +1207,46 @@ class WriterLowering {
 			{values: [nextPat], expr: macro _dhl(), guard: null},
 		];
 		return {expr: ESwitch(macro opt.leftCurly, cases, macro _dt(' ')), pos: Context.currentPos()};
+	}
+
+	/**
+	 * Find the branch of an Alt-rule whose first source-character is `{`.
+	 * Used by the Ref-field leftCurly emission path to gate the runtime
+	 * BracePlacement separator on the brace-bearing variant — sibling
+	 * branches like `HxFnBody.NoBody` (`@:lit(';')`) leave the separator
+	 * suppressed so `function f():Void;` round-trips without an inserted
+	 * space.
+	 *
+	 * Two shapes are recognised:
+	 *  - Direct: branch carries `@:lead('{')` itself (Case 4 Star ctor).
+	 *  - Indirect via Seq typedef: branch is Case 3 single-Ref wrapping a
+	 *    Seq whose first field's `@:lead` opens with `{` (e.g.
+	 *    `BlockBody(block:HxFnBlock)` where `HxFnBlock.stmts` carries the
+	 *    `@:lead('{')`).
+	 *
+	 * Returns the ctor's simple name (`'BlockBody'`) or `null` when the
+	 * rule is not an Alt or no branch surfaces a `{` lead.
+	 */
+	private function leftCurlyTargetCtor(refName:String):Null<String> {
+		final node:Null<ShapeNode> = shape.rules.get(refName);
+		if (node == null || node.kind != Alt) return null;
+		for (branch in node.children) {
+			final lead:Null<String> = branch.annotations.get('lit.leadText');
+			if (lead != null && lead == '{')
+				return branch.annotations.get('base.ctor');
+			if (branch.children.length == 1 && branch.children[0].kind == Ref) {
+				final innerName:Null<String> = branch.children[0].annotations.get('base.ref');
+				final innerNode:Null<ShapeNode> = innerName == null ? null : shape.rules.get(innerName);
+				if (innerNode != null && innerNode.kind == Seq && innerNode.children.length > 0) {
+					final firstField:ShapeNode = innerNode.children[0];
+					final firstLead:Null<String> = firstField.annotations.get('lit.leadText')
+						?? readMetaString(firstField, ':lead');
+					if (firstLead != null && firstLead.charAt(0) == '{')
+						return branch.annotations.get('base.ctor');
+				}
+			}
+		}
+		return null;
 	}
 
 	/**

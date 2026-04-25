@@ -12,10 +12,12 @@ import anyparse.grammar.haxe.HxDecl;
 import anyparse.grammar.haxe.HxEnumCtor;
 import anyparse.grammar.haxe.HxEnumCtorDecl;
 import anyparse.grammar.haxe.HxEnumDecl;
+import anyparse.grammar.haxe.HxFnBody;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxIdentLit;
 import anyparse.grammar.haxe.HxInterfaceDecl;
 import anyparse.grammar.haxe.HxModuleWriter;
+import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxTypedefDecl;
 import anyparse.grammar.haxe.HxVarDecl;
 
@@ -102,6 +104,13 @@ class HxTestHelpers extends Test {
 		return switch decl {
 			case AbstractDecl(ad): ad;
 			case _: throw 'expected AbstractDecl, got $decl';
+		};
+	}
+
+	private function fnBodyStmts(fn:HxFnDecl):Array<HxStatement> {
+		return switch fn.body {
+			case BlockBody(block): block.stmts;
+			case NoBody: throw 'expected BlockBody, got NoBody';
 		};
 	}
 

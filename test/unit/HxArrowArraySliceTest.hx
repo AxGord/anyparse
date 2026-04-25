@@ -80,8 +80,9 @@ class HxArrowArraySliceTest extends HxTestHelpers {
 	public function testArrowInReturn():Void {
 		final ast:HxClassDecl = HaxeParser.parse('class C { function f():Int { return x => x; } }');
 		final fn:HxFnDecl = expectFnMember(ast.members[0].member);
-		Assert.equals(1, fn.body.length);
-		switch fn.body[0] {
+		final stmts:Array<HxStatement> = fnBodyStmts(fn);
+		Assert.equals(1, stmts.length);
+		switch stmts[0] {
 			case ReturnStmt(Arrow(IdentExpr(l), IdentExpr(r))):
 				Assert.equals('x', (l : String));
 				Assert.equals('x', (r : String));
@@ -165,8 +166,9 @@ class HxArrowArraySliceTest extends HxTestHelpers {
 	public function testParenLambdaInReturn():Void {
 		final ast:HxClassDecl = HaxeParser.parse('class C { function f():Int { return (x) => x; } }');
 		final fn:HxFnDecl = expectFnMember(ast.members[0].member);
-		Assert.equals(1, fn.body.length);
-		switch fn.body[0] {
+		final stmts:Array<HxStatement> = fnBodyStmts(fn);
+		Assert.equals(1, stmts.length);
+		switch stmts[0] {
 			case ReturnStmt(ParenLambdaExpr(lambda)):
 				Assert.equals(1, lambda.params.length);
 			case null, _: Assert.fail('expected ReturnStmt(ParenLambdaExpr)');

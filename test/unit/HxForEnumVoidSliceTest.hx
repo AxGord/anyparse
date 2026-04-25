@@ -32,7 +32,7 @@ class HxForEnumVoidSliceTest extends HxTestHelpers {
 	/** Parse function body statements from a single-function class. */
 	private function parseBody(source:String):Array<HxStatement> {
 		final fn:HxFnDecl = parseSingleFnDecl(source);
-		return fn.body;
+		return fnBodyStmts(fn);
 	}
 
 	// ---- For statement tests ----
@@ -118,8 +118,9 @@ class HxForEnumVoidSliceTest extends HxTestHelpers {
 		Assert.equals(1, module.decls.length);
 		final cls:HxClassDecl = expectClassDecl(module.decls[0]);
 		final fn:HxFnDecl = expectFnMember(cls.members[0].member);
-		Assert.equals(1, fn.body.length);
-		switch fn.body[0] {
+		final stmts:Array<HxStatement> = fnBodyStmts(fn);
+		Assert.equals(1, stmts.length);
+		switch stmts[0] {
 			case ForStmt(_): Assert.isTrue(true);
 			case null, _: Assert.fail('expected ForStmt');
 		}
@@ -288,8 +289,9 @@ class HxForEnumVoidSliceTest extends HxTestHelpers {
 		Assert.equals(1, module.decls.length);
 		final cls:HxClassDecl = expectClassDecl(module.decls[0]);
 		final fn:HxFnDecl = expectFnMember(cls.members[0].member);
-		Assert.equals(1, fn.body.length);
-		switch fn.body[0] {
+		final stmts:Array<HxStatement> = fnBodyStmts(fn);
+		Assert.equals(1, stmts.length);
+		switch stmts[0] {
 			case VoidReturnStmt: Assert.isTrue(true);
 			case null, _: Assert.fail('expected VoidReturnStmt');
 		}

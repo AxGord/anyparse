@@ -31,7 +31,7 @@ class HxDoWhileThrowTryCatchSliceTest extends HxTestHelpers {
 	/** Parse function body statements from a single-function class. */
 	private function parseBody(source:String):Array<HxStatement> {
 		final fn:HxFnDecl = parseSingleFnDecl(source);
-		return fn.body;
+		return fnBodyStmts(fn);
 	}
 
 	/** Extract first statement as ThrowStmt expression. */
@@ -114,8 +114,9 @@ class HxDoWhileThrowTryCatchSliceTest extends HxTestHelpers {
 		final cls:HxClassDecl = expectClassDecl(module.decls[0]);
 		Assert.equals(1, cls.members.length);
 		final fn:HxFnDecl = expectFnMember(cls.members[0].member);
-		Assert.equals(1, fn.body.length);
-		switch fn.body[0] {
+		final stmts:Array<HxStatement> = fnBodyStmts(fn);
+		Assert.equals(1, stmts.length);
+		switch stmts[0] {
 			case ThrowStmt(expr):
 				switch expr {
 					case IntLit(v): Assert.equals(42, (v : Int));
@@ -347,8 +348,9 @@ class HxDoWhileThrowTryCatchSliceTest extends HxTestHelpers {
 		Assert.equals(1, module.decls.length);
 		final cls:HxClassDecl = expectClassDecl(module.decls[0]);
 		final fn:HxFnDecl = expectFnMember(cls.members[0].member);
-		Assert.equals(1, fn.body.length);
-		switch fn.body[0] {
+		final stmts:Array<HxStatement> = fnBodyStmts(fn);
+		Assert.equals(1, stmts.length);
+		switch stmts[0] {
 			case TryCatchStmt(tc):
 				Assert.equals(1, tc.catches.length);
 				Assert.equals('ex', (tc.catches[0].name : String));

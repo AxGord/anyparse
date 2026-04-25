@@ -8,6 +8,7 @@ import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxInterpString;
 import anyparse.grammar.haxe.HxModule;
+import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxStringSegment;
 import anyparse.grammar.haxe.HxVarDecl;
 import anyparse.runtime.ParseError;
@@ -221,8 +222,9 @@ class HxStringSliceTest extends HxTestHelpers {
 	public function testStringInReturn():Void {
 		final ast:HxClassDecl = HaxeParser.parse('class Foo { function bar():String { return "ok"; } }');
 		final fn:HxFnDecl = expectFnMember(ast.members[0].member);
-		Assert.equals(1, fn.body.length);
-		switch fn.body[0] {
+		final stmts:Array<HxStatement> = fnBodyStmts(fn);
+		Assert.equals(1, stmts.length);
+		switch stmts[0] {
 			case ReturnStmt(value):
 				assertDoubleString(value, 'ok');
 			case null, _:
