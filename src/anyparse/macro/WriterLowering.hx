@@ -556,7 +556,7 @@ class WriterLowering {
 			// a runtime-configurable spacing around the lead text; all
 			// other mandatory leads stay tight.
 			if (leadText != null && !isOptional)
-				parts.push(whitespacePolicyLead(child, leadText, ['objectFieldColon', 'typeHintColon']));
+				parts.push(whitespacePolicyLead(child, leadText, ['objectFieldColon', 'typeHintColon', 'typedefAssign']));
 
 			// Field value
 			final bodyPolicyFlag:Null<String> = fmtReadString(child, 'bodyPolicy');
@@ -1322,6 +1322,10 @@ class WriterLowering {
 	 *  - `typeHintColon` (ω-E-whitespace) — the three type-annotation
 	 *    colons: `HxVarDecl.type`, `HxParam.type`, `HxFnDecl.returnType`.
 	 *    Default `None` — `x:Int`, `f():Void` stay compact.
+	 *  - `typedefAssign` (ω-typedef-assign) — `HxTypedefDecl.type`'s
+	 *    `@:lead('=')`. Default `Both` — `typedef Foo = Bar;`. The
+	 *    `None` policy reverts to the pre-slice tight `=` via the
+	 *    same switch's fall-through path.
 	 *
 	 * Runtime dispatch for each switch (cases built as raw `EField`
 	 * patterns to avoid macro-time enum resolution against

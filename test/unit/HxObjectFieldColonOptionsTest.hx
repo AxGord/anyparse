@@ -135,6 +135,7 @@ class HxObjectFieldColonOptionsTest extends Test {
 			interfaceBetweenVars: base.interfaceBetweenVars,
 			interfaceBetweenFunctions: base.interfaceBetweenFunctions,
 			interfaceAfterVars: base.interfaceAfterVars,
+			typedefAssign: base.typedefAssign,
 		};
 	}
 }

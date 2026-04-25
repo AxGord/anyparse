@@ -33,6 +33,7 @@ import unit.HxSameLineOptionsTest;
 import unit.HxTrailingCommaOptionsTest;
 import unit.HxLeftCurlyOptionsTest;
 import unit.HxObjectFieldColonOptionsTest;
+import unit.HxTypedefAssignOptionsTest;
 import unit.HxElseIfOptionsTest;
 import unit.HxInterMemberBlankLinesOptionsTest;
 import unit.HxInterfaceInterMemberBlankLinesOptionsTest;
@@ -96,6 +97,7 @@ class RunTests {
 		runner.addCase(new HxTrailingCommaOptionsTest());
 		runner.addCase(new HxLeftCurlyOptionsTest());
 		runner.addCase(new HxObjectFieldColonOptionsTest());
+		runner.addCase(new HxTypedefAssignOptionsTest());
 		runner.addCase(new HxElseIfOptionsTest());
 		runner.addCase(new HxInterMemberBlankLinesOptionsTest());
 		runner.addCase(new HxInterfaceInterMemberBlankLinesOptionsTest());

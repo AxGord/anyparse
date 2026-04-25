@@ -215,6 +215,7 @@ final class HaxeFormatConfigLoader {
 			interfaceBetweenVars: base.interfaceBetweenVars,
 			interfaceBetweenFunctions: base.interfaceBetweenFunctions,
 			interfaceAfterVars: base.interfaceAfterVars,
+			typedefAssign: base.typedefAssign,
 		};
 		if (cfg.indentation != null) applyIndentation(cfg.indentation, result);
 		if (cfg.wrapping != null) applyWrapping(cfg.wrapping, result);

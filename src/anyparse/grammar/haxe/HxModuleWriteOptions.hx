@@ -250,6 +250,21 @@ import anyparse.format.WriteOptions;
  * form selects which `opt.*` field to read at runtime; the 3-arg form
  * keeps reading the shared `betweenVars` / `betweenFunctions` /
  * `afterVars` (used by class + abstract).
+ *
+ * Field added in slice ω-typedef-assign (typedef rhs `=` spacing):
+ *  - `typedefAssign` — whitespace around the `=` joining a typedef
+ *    name to its right-hand-side type (`HxTypedefDecl.type`'s lead).
+ *    `Both` (default) emits `typedef Foo = Bar;`, matching haxe-
+ *    formatter's `whitespace.binopPolicy: @:default(Around)` for the
+ *    typedef-rhs site specifically. `None` keeps the pre-slice tight
+ *    layout (`typedef Foo=Bar;`); `Before` / `After` are exposed for
+ *    parity with the policy shape. The knob only applies at sites
+ *    tagged with `@:fmt(typedefAssign)` in the grammar — the
+ *    optional-Ref `=` leads on `HxVarDecl.init` and
+ *    `HxParam.defaultValue` route through the bare-optional fallback
+ *    path which already emits ` = `, so this slice does not touch
+ *    them. A binop-wide knob covering all Pratt-emitted operators is
+ *    a separate slice.
  */
 typedef HxModuleWriteOptions = WriteOptions & {
 	sameLineElse:SameLinePolicy,
@@ -279,4 +294,5 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	interfaceBetweenVars:Int,
 	interfaceBetweenFunctions:Int,
 	interfaceAfterVars:Int,
+	typedefAssign:WhitespacePolicy,
 };

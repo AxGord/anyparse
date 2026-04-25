@@ -200,6 +200,7 @@ class HxInterfaceInterMemberBlankLinesOptionsTest extends Test {
 			interfaceBetweenVars: ifaceBetweenVars,
 			interfaceBetweenFunctions: ifaceBetweenFunctions,
 			interfaceAfterVars: ifaceAfterVars,
+			typedefAssign: base.typedefAssign,
 		};
 	}
 }

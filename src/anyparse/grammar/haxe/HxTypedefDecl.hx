@@ -21,14 +21,18 @@ package anyparse.grammar.haxe;
  * The `type` field is a full `HxType`, so struct typedefs
  * (`typedef Foo = {a:Int, b:String}`) and function types (`typedef
  * Foo = Int->Void`) compose through `HxType.Anon` and `HxType.Arrow`.
- * The writer-side `=` spacing for typedef rhs is governed by the
- * `@:lead('=')` literal emission and remains tight pending an
- * assignment-style knob (compare `HxVarDecl.init` which produces
- * ` = ` via the surrounding context).
+ * Writer-side `=` spacing on the rhs is driven by `@:fmt(typedefAssign)`
+ * (slice ω-typedef-assign): default `WhitespacePolicy.Both` emits
+ * `typedef Foo = Bar;` matching haxe-formatter's
+ * `whitespace.binopPolicy: @:default(Around)`. Setting
+ * `typedefAssign: WhitespacePolicy.None` reverts to the pre-slice
+ * tight layout (`typedef Foo=Bar;`). The optional-Ref `=` leads on
+ * `HxVarDecl.init` and `HxParam.defaultValue` still flow through the
+ * bare-optional fallback path, which already emits ` = `.
  */
 @:peg
 typedef HxTypedefDecl = {
 	@:kw('typedef') var name:HxIdentLit;
 	@:optional @:lead('<') @:trail('>') @:sep(',') var typeParams:Null<Array<HxIdentLit>>;
-	@:lead('=') var type:HxType;
+	@:fmt(typedefAssign) @:lead('=') var type:HxType;
 }

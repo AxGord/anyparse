@@ -215,6 +215,12 @@ final class HaxeFormat implements TextFormat {
 	 * The interface knobs are independent of the class/abstract
 	 * betweenVars / betweenFunctions / afterVars fields so the two
 	 * member-bodies can be tuned separately.
+	 *
+	 * Typedef-rhs `=` spacing default (ω-typedef-assign) is `Both` —
+	 * `typedef Foo = Bar;`, matching haxe-formatter's
+	 * `whitespace.binopPolicy: @:default(Around)` for the typedef-rhs
+	 * site. Callers who want the pre-slice tight `typedef Foo=Bar;`
+	 * layout must pass `typedefAssign: WhitespacePolicy.None` explicitly.
 	 */
 	public var defaultWriteOptions(default, null):HxModuleWriteOptions = {
 		indentChar: Tab,
@@ -252,6 +258,7 @@ final class HaxeFormat implements TextFormat {
 		interfaceBetweenVars: 0,
 		interfaceBetweenFunctions: 0,
 		interfaceAfterVars: 0,
+		typedefAssign: WhitespacePolicy.Both,
 	};
 
 	private function new() {}
