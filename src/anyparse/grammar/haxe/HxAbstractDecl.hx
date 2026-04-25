@@ -26,6 +26,17 @@ package anyparse.grammar.haxe;
  * `HxInterfaceDecl`. Semantic restrictions (e.g. `@:op` annotations,
  * implicit cast methods) are not the parser's responsibility.
  *
+ * The `members` field carries the same `@:fmt(...)` knob set as
+ * `HxClassDecl.members` (`leftCurly`, `afterFieldsWithDocComments`,
+ * `existingBetweenFields`, `beforeDocCommentEmptyLines`,
+ * `interMemberBlankLines('member', 'VarMember', 'FnMember')`). Upstream
+ * `EnumAbstractFieldsEmptyLinesConfig` shares the class defaults
+ * (`betweenVars: 0`, `betweenFunctions: 1`, `afterVars: 1`), so abstract
+ * routes through the same `HxModuleWriteOptions` fields without a
+ * dedicated typedef. `HxInterfaceDecl` (upstream `0/0/0`) needs its own
+ * knob set and stays on the bare `@:fmt(leftCurly)` until that slice
+ * lands.
+ *
  * `@:enum abstract` is deferred — it requires recognising the `enum`
  * keyword before `abstract` at the `HxDecl` level.
  */
@@ -34,5 +45,5 @@ typedef HxAbstractDecl = {
 	@:kw('abstract') var name:HxIdentLit;
 	@:lead('(') @:trail(')') var underlyingType:HxTypeRef;
 	var clauses:Array<HxAbstractClause>;
-	@:fmt(leftCurly) @:lead('{') @:trail('}') @:trivia var members:Array<HxMemberDecl>;
+	@:fmt(leftCurly, afterFieldsWithDocComments, existingBetweenFields, beforeDocCommentEmptyLines, interMemberBlankLines('member', 'VarMember', 'FnMember')) @:lead('{') @:trail('}') @:trivia var members:Array<HxMemberDecl>;
 }

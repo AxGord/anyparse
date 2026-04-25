@@ -96,6 +96,24 @@ class HxInterMemberBlankLinesOptionsTest extends Test {
 			'expected no blank line between two vars with betweenVars=0 in: <$out>');
 	}
 
+	public function testAbstractBetweenFunctionsOneInsertsBlank():Void {
+		final out:String = writeWith(
+			'abstract M(Int) { public function a():Void {} public function b():Void {} }',
+			0, 1, 0
+		);
+		Assert.isTrue(out.indexOf('a():Void {}\n\n\tpublic function b') != -1,
+			'expected blank line between two abstract functions with betweenFunctions=1 in: <$out>');
+	}
+
+	public function testAbstractAfterVarsOneInsertsBlankOnVarToFunction():Void {
+		final out:String = writeWith(
+			'abstract M(Int) { public var a:Int; public function b():Void {} }',
+			0, 0, 1
+		);
+		Assert.isTrue(out.indexOf('var a:Int;\n\n\tpublic function b') != -1,
+			'expected blank line at abstract var→function transition with afterVars=1 in: <$out>');
+	}
+
 	public function testConfigLoaderMapsBetweenFunctionsInt():Void {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"emptyLines": {"classEmptyLines": {"betweenFunctions": 2}}}'
