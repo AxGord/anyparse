@@ -19,8 +19,14 @@ package anyparse.grammar.haxe;
  * the EOF-terminated loop variant in `Lowering.emitStarFieldSteps`
  * (see D22 in session_state.md): the generated parser keeps parsing
  * decls until `ctx.pos` reaches `ctx.input.length`. Any trailing
- * non-whitespace text fails the inner `parseHxDecl` call and
+ * non-whitespace text fails the inner `parseHxTopLevelDecl` call and
  * propagates a `ParseError`.
+ *
+ * Element type is `HxTopLevelDecl`, the wrapper carrying optional
+ * leading modifiers (`private`, `extern`, `final`, …) before the
+ * `HxDecl` enum dispatch. The wrapper mirrors `HxMemberDecl` at
+ * top-level scope; reusing the same `HxModifier` enum keeps modifier
+ * syntax uniform across declaration sites.
  *
  * An empty source is valid and yields `{decls: []}` — zero-decl
  * modules mirror the existing zero-member class case.
@@ -29,5 +35,5 @@ package anyparse.grammar.haxe;
 @:schema(anyparse.grammar.haxe.HaxeFormat)
 @:ws
 typedef HxModule = {
-	@:trivia var decls:Array<HxDecl>;
+	@:trivia var decls:Array<HxTopLevelDecl>;
 }

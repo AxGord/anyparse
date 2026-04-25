@@ -73,7 +73,7 @@ class HxTriviaParseTest extends Test {
 	public function testLeadingCommentOnClassMember():Void {
 		final source:String = 'class Foo {\n\t// member note\n\tvar x:Int;\n}';
 		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node {
+		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node.decl {
 			case ClassDecl(decl): decl;
 			case _: throw 'expected ClassDecl';
 		};
@@ -85,7 +85,7 @@ class HxTriviaParseTest extends Test {
 	public function testTrailingLineCommentOnMember():Void {
 		final source:String = 'class Foo {\n\tvar x:Int; // inline\n}';
 		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node {
+		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node.decl {
 			case ClassDecl(decl): decl;
 			case _: throw 'expected ClassDecl';
 		};
@@ -97,7 +97,7 @@ class HxTriviaParseTest extends Test {
 	public function testLeadingCommentInsideFunctionBody():Void {
 		final source:String = 'class Foo {\n\tfunction bar() {\n\t\t// inner\n\t\tx;\n\t}\n}';
 		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node {
+		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node.decl {
 			case ClassDecl(decl): decl;
 			case _: throw 'expected ClassDecl';
 		};
@@ -120,7 +120,7 @@ class HxTriviaParseTest extends Test {
 		// @:trivia branch of HxStatement's BlockStmt enum ctor.
 		final source:String = 'class Foo {\n\tfunction bar() {\n\t\t{\n\t\t\t// inner block note\n\t\t\tx;\n\t\t}\n\t}\n}';
 		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node {
+		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node.decl {
 			case ClassDecl(decl): decl;
 			case _: throw 'expected ClassDecl';
 		};
@@ -169,7 +169,7 @@ class HxTriviaParseTest extends Test {
 	public function testTrailingBlockCommentOnSameLine():Void {
 		final source:String = 'class Foo {\n\tvar x:Int; /* inline block */\n}';
 		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node {
+		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node.decl {
 			case ClassDecl(decl): decl;
 			case _: throw 'expected ClassDecl';
 		};
@@ -210,7 +210,7 @@ class HxTriviaParseTest extends Test {
 			+ '\t}\n'
 			+ '}';
 		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node {
+		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node.decl {
 			case ClassDecl(decl): decl;
 			case _: throw 'expected ClassDecl';
 		};
@@ -243,7 +243,7 @@ class HxTriviaParseTest extends Test {
 			+ '\t}\n'
 			+ '}';
 		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node {
+		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node.decl {
 			case ClassDecl(decl): decl;
 			case _: throw 'expected ClassDecl';
 		};
@@ -277,7 +277,7 @@ class HxTriviaParseTest extends Test {
 			+ '\t}\n'
 			+ '}';
 		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node {
+		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node.decl {
 			case ClassDecl(decl): decl;
 			case _: throw 'expected ClassDecl';
 		};
@@ -325,7 +325,7 @@ class HxTriviaParseTest extends Test {
 			+ '\t}\n'
 			+ '}';
 		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node {
+		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node.decl {
 			case ClassDecl(decl): decl;
 			case _: throw 'expected ClassDecl';
 		};
@@ -371,7 +371,7 @@ class HxTriviaParseTest extends Test {
 			+ '\t}\n'
 			+ '}';
 		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node {
+		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node.decl {
 			case ClassDecl(decl): decl;
 			case _: throw 'expected ClassDecl';
 		};
@@ -410,7 +410,7 @@ class HxTriviaParseTest extends Test {
 			+ '\t}\n'
 			+ '}';
 		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node {
+		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node.decl {
 			case ClassDecl(decl): decl;
 			case _: throw 'expected ClassDecl';
 		};
@@ -444,7 +444,7 @@ class HxTriviaParseTest extends Test {
 			+ '\t}\n'
 			+ '}';
 		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node {
+		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node.decl {
 			case ClassDecl(decl): decl;
 			case _: throw 'expected ClassDecl';
 		};
@@ -477,7 +477,7 @@ class HxTriviaParseTest extends Test {
 			+ '\t}\n'
 			+ '}';
 		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node {
+		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node.decl {
 			case ClassDecl(decl): decl;
 			case _: throw 'expected ClassDecl';
 		};

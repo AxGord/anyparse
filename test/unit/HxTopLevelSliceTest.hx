@@ -6,6 +6,7 @@ import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxEnumDecl;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxInterfaceDecl;
+import anyparse.grammar.haxe.HxModifier;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxTypedefDecl;
 import anyparse.grammar.haxe.HxVarDecl;
@@ -189,5 +190,65 @@ class HxTopLevelSliceTest extends HxTestHelpers {
 
 	public function testWordBoundaryInterfacing():Void {
 		Assert.raises(() -> HaxeModuleParser.parse('interfacing IFoo {}'), ParseError);
+	}
+
+	// -- Top-level modifier tests --
+
+	public function testTopLevelPrivateClass():Void {
+		final module:HxModule = HaxeModuleParser.parse('private class Foo {}');
+		Assert.equals(1, module.decls.length);
+		Assert.equals(1, module.decls[0].modifiers.length);
+		Assert.equals(Private, module.decls[0].modifiers[0]);
+		final cls:HxClassDecl = expectClassDecl(module.decls[0]);
+		Assert.equals('Foo', (cls.name : String));
+	}
+
+	public function testTopLevelPrivateTypedef():Void {
+		final module:HxModule = HaxeModuleParser.parse('private typedef Foo = Bar;');
+		Assert.equals(1, module.decls.length);
+		Assert.equals(1, module.decls[0].modifiers.length);
+		Assert.equals(Private, module.decls[0].modifiers[0]);
+		final td:HxTypedefDecl = expectTypedefDecl(module.decls[0]);
+		Assert.equals('Foo', (td.name : String));
+	}
+
+	public function testTopLevelPrivateEnum():Void {
+		final module:HxModule = HaxeModuleParser.parse('private enum Color { Red; }');
+		Assert.equals(1, module.decls.length);
+		Assert.equals(1, module.decls[0].modifiers.length);
+		Assert.equals(Private, module.decls[0].modifiers[0]);
+		final ed:HxEnumDecl = expectEnumDecl(module.decls[0]);
+		Assert.equals('Color', (ed.name : String));
+	}
+
+	public function testTopLevelPrivateInterface():Void {
+		final module:HxModule = HaxeModuleParser.parse('private interface IFoo {}');
+		Assert.equals(1, module.decls.length);
+		Assert.equals(1, module.decls[0].modifiers.length);
+		Assert.equals(Private, module.decls[0].modifiers[0]);
+		final id:HxInterfaceDecl = expectInterfaceDecl(module.decls[0]);
+		Assert.equals('IFoo', (id.name : String));
+	}
+
+	public function testTopLevelExternFinalClass():Void {
+		// Multiple modifiers — semantic validity (`extern final class`) is
+		// the analysis pass's job, parser only checks syntax.
+		final module:HxModule = HaxeModuleParser.parse('extern final class Foo {}');
+		Assert.equals(2, module.decls[0].modifiers.length);
+		Assert.equals(Extern, module.decls[0].modifiers[0]);
+		Assert.equals(Final, module.decls[0].modifiers[1]);
+		final cls:HxClassDecl = expectClassDecl(module.decls[0]);
+		Assert.equals('Foo', (cls.name : String));
+	}
+
+	public function testTopLevelMixedModifiers():Void {
+		final source:String = 'private class A {} class B {} private typedef C = Int;';
+		final module:HxModule = HaxeModuleParser.parse(source);
+		Assert.equals(3, module.decls.length);
+		Assert.equals(1, module.decls[0].modifiers.length);
+		Assert.equals(Private, module.decls[0].modifiers[0]);
+		Assert.equals(0, module.decls[1].modifiers.length);
+		Assert.equals(1, module.decls[2].modifiers.length);
+		Assert.equals(Private, module.decls[2].modifiers[0]);
 	}
 }

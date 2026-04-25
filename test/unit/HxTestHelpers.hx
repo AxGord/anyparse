@@ -20,6 +20,7 @@ import anyparse.grammar.haxe.HxModuleWriter;
 import anyparse.grammar.haxe.HxParam;
 import anyparse.grammar.haxe.HxParamBody;
 import anyparse.grammar.haxe.HxStatement;
+import anyparse.grammar.haxe.HxTopLevelDecl;
 import anyparse.grammar.haxe.HxType;
 import anyparse.grammar.haxe.HxTypeRef;
 import anyparse.grammar.haxe.HxTypedefDecl;
@@ -76,38 +77,38 @@ class HxTestHelpers extends Test {
 		};
 	}
 
-	private function expectClassDecl(decl:HxDecl):HxClassDecl {
-		return switch decl {
+	private function expectClassDecl(wrapper:HxTopLevelDecl):HxClassDecl {
+		return switch wrapper.decl {
 			case ClassDecl(c): c;
-			case _: throw 'expected ClassDecl, got $decl';
+			case _: throw 'expected ClassDecl, got ${wrapper.decl}';
 		};
 	}
 
-	private function expectTypedefDecl(decl:HxDecl):HxTypedefDecl {
-		return switch decl {
+	private function expectTypedefDecl(wrapper:HxTopLevelDecl):HxTypedefDecl {
+		return switch wrapper.decl {
 			case TypedefDecl(td): td;
-			case _: throw 'expected TypedefDecl, got $decl';
+			case _: throw 'expected TypedefDecl, got ${wrapper.decl}';
 		};
 	}
 
-	private function expectEnumDecl(decl:HxDecl):HxEnumDecl {
-		return switch decl {
+	private function expectEnumDecl(wrapper:HxTopLevelDecl):HxEnumDecl {
+		return switch wrapper.decl {
 			case EnumDecl(ed): ed;
-			case _: throw 'expected EnumDecl, got $decl';
+			case _: throw 'expected EnumDecl, got ${wrapper.decl}';
 		};
 	}
 
-	private function expectInterfaceDecl(decl:HxDecl):HxInterfaceDecl {
-		return switch decl {
+	private function expectInterfaceDecl(wrapper:HxTopLevelDecl):HxInterfaceDecl {
+		return switch wrapper.decl {
 			case InterfaceDecl(id): id;
-			case _: throw 'expected InterfaceDecl, got $decl';
+			case _: throw 'expected InterfaceDecl, got ${wrapper.decl}';
 		};
 	}
 
-	private function expectAbstractDecl(decl:HxDecl):HxAbstractDecl {
-		return switch decl {
+	private function expectAbstractDecl(wrapper:HxTopLevelDecl):HxAbstractDecl {
+		return switch wrapper.decl {
 			case AbstractDecl(ad): ad;
-			case _: throw 'expected AbstractDecl, got $decl';
+			case _: throw 'expected AbstractDecl, got ${wrapper.decl}';
 		};
 	}
 
