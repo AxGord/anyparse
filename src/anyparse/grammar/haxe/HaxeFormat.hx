@@ -205,6 +205,16 @@ final class HaxeFormat implements TextFormat {
 	 * initial ω-interblank plumbing slice to land the infrastructure
 	 * and audit unit/corpus deltas independently; this slice flips
 	 * them to the upstream values.
+	 *
+	 * Interface inter-member blank-line defaults (ω-iface-interblank)
+	 * are all 0: consecutive interface members stay tight regardless of
+	 * kind, matching haxe-formatter InterfaceFieldsEmptyLinesConfig
+	 * defaults (betweenVars: 0, betweenFunctions: 0, afterVars: 0).
+	 * Opting in requires an explicit hxformat.json override:
+	 * "emptyLines": { "interfaceEmptyLines": { "betweenFunctions": 1 } }.
+	 * The interface knobs are independent of the class/abstract
+	 * betweenVars / betweenFunctions / afterVars fields so the two
+	 * member-bodies can be tuned separately.
 	 */
 	public var defaultWriteOptions(default, null):HxModuleWriteOptions = {
 		indentChar: Tab,
@@ -239,6 +249,9 @@ final class HaxeFormat implements TextFormat {
 		betweenVars: 0,
 		betweenFunctions: 1,
 		afterVars: 1,
+		interfaceBetweenVars: 0,
+		interfaceBetweenFunctions: 0,
+		interfaceAfterVars: 0,
 	};
 
 	private function new() {}

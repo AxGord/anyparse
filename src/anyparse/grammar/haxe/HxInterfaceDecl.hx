@@ -18,10 +18,23 @@ package anyparse.grammar.haxe;
  * responsibility — they belong to a later analysis pass.
  *
  * `extends` is deferred to a future slice.
+ *
+ * The `members` field carries the same `interMemberBlankLines` knob as
+ * `HxClassDecl.members` and `HxAbstractDecl.members`, but uses the
+ * 6-arg form to route the per-pair counts through the dedicated
+ * `interfaceBetweenVars` / `interfaceBetweenFunctions` /
+ * `interfaceAfterVars` `HxModuleWriteOptions` fields instead of the
+ * shared `betweenVars` / `betweenFunctions` / `afterVars`. Defaults are
+ * all `0`, matching haxe-formatter's `InterfaceFieldsEmptyLinesConfig`
+ * (interfaces stay tight unless the user opts in via
+ * `hxformat.json`'s `emptyLines.interfaceEmptyLines`). The other
+ * trivia-aware empty-line knobs (`afterFieldsWithDocComments`,
+ * `existingBetweenFields`, `beforeDocCommentEmptyLines`) ship in
+ * follow-up slices.
  */
 @:peg
 typedef HxInterfaceDecl = {
 	@:kw('interface') var name:HxIdentLit;
 	@:optional @:lead('<') @:trail('>') @:sep(',') var typeParams:Null<Array<HxIdentLit>>;
-	@:fmt(leftCurly) @:lead('{') @:trail('}') @:trivia var members:Array<HxMemberDecl>;
+	@:fmt(leftCurly, interMemberBlankLines('member', 'VarMember', 'FnMember', 'interfaceBetweenVars', 'interfaceBetweenFunctions', 'interfaceAfterVars')) @:lead('{') @:trail('}') @:trivia var members:Array<HxMemberDecl>;
 }

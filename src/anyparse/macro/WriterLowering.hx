@@ -1867,13 +1867,26 @@ class WriterLowering {
 			};
 			macro _currKind = $switchExpr;
 		} : macro {};
-		final addByInterMemberExpr:Expr = interMember
-			? macro (
-				(_prevKind == 1 && _currKind == 1 && opt.betweenVars > 0)
-				|| (_prevKind == 2 && _currKind == 2 && opt.betweenFunctions > 0)
-				|| (_prevKind != 0 && _currKind != 0 && _prevKind != _currKind && opt.afterVars > 0)
-			)
-			: macro false;
+		final addByInterMemberExpr:Expr = interMember ? {
+			final pos:Position = Context.currentPos();
+			final betweenVarsAccess:Expr = {
+				expr: EField(macro opt, interMemberInfo.betweenVarsField),
+				pos: pos,
+			};
+			final betweenFnAccess:Expr = {
+				expr: EField(macro opt, interMemberInfo.betweenFunctionsField),
+				pos: pos,
+			};
+			final afterVarsAccess:Expr = {
+				expr: EField(macro opt, interMemberInfo.afterVarsField),
+				pos: pos,
+			};
+			macro (
+				(_prevKind == 1 && _currKind == 1 && $betweenVarsAccess > 0)
+				|| (_prevKind == 2 && _currKind == 2 && $betweenFnAccess > 0)
+				|| (_prevKind != 0 && _currKind != 0 && _prevKind != _currKind && $afterVarsAccess > 0)
+			);
+		} : macro false;
 		final blankBeforeExpr:Expr = anyEmptyLinesFlag ? macro {
 			$currHasDocComputeExpr;
 			$currKindComputeExpr;
@@ -2300,14 +2313,17 @@ class WriterLowering {
 	 * unused-pattern warnings for the single-grammar two-variant case.
 	 */
 	private function buildInterMemberClassifyInfo(elemRefName:String, args:Array<String>):InterMemberClassifyInfo {
-		if (args.length != 3)
+		if (args.length != 3 && args.length != 6)
 			Context.fatalError(
-				'WriterLowering: @:fmt(interMemberBlankLines) expects 3 string args (classifierField, varCtor, fnCtor), got ${args.length}',
+				'WriterLowering: @:fmt(interMemberBlankLines) expects 3 or 6 string args (classifierField, varCtor, fnCtor [, betweenVarsField, betweenFunctionsField, afterVarsField]), got ${args.length}',
 				Context.currentPos()
 			);
 		final fieldName:String = args[0];
 		final varCtor:String = args[1];
 		final fnCtor:String = args[2];
+		final betweenVarsField:String = args.length == 6 ? args[3] : 'betweenVars';
+		final betweenFunctionsField:String = args.length == 6 ? args[4] : 'betweenFunctions';
+		final afterVarsField:String = args.length == 6 ? args[5] : 'afterVars';
 		final elemRule:Null<ShapeNode> = shape.rules.get(elemRefName);
 		if (elemRule == null || elemRule.kind != Seq)
 			Context.fatalError(
@@ -2359,6 +2375,9 @@ class WriterLowering {
 		return {
 			classifierFieldName: fieldName,
 			classifyCases: cases,
+			betweenVarsField: betweenVarsField,
+			betweenFunctionsField: betweenFunctionsField,
+			afterVarsField: afterVarsField,
 		};
 	}
 }
@@ -2392,9 +2411,22 @@ typedef PrevBodyInfo = {
  * element as a var (kind `1`), a function (kind `2`), or other
  * (kind `0`). `classifyCases` is a ready-to-use `ESwitch` case list —
  * one entry per enum variant, exhaustive, no wildcard.
+ *
+ * `betweenVarsField` / `betweenFunctionsField` / `afterVarsField` name
+ * the `HxModuleWriteOptions` Int fields read at runtime to gate each
+ * blank-line slot (ω-iface-interblank). The 3-arg meta form defaults
+ * them to the shared `betweenVars` / `betweenFunctions` / `afterVars`
+ * (used by class + abstract); the 6-arg form lets a grammar route to
+ * its own dedicated fields (e.g. interface uses
+ * `interfaceBetweenVars` / `interfaceBetweenFunctions` /
+ * `interfaceAfterVars` so its defaults stay independent of the
+ * class/abstract knobs).
  */
 typedef InterMemberClassifyInfo = {
 	classifierFieldName:String,
 	classifyCases:Array<Case>,
+	betweenVarsField:String,
+	betweenFunctionsField:String,
+	afterVarsField:String,
 };
 #end

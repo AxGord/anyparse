@@ -15,6 +15,7 @@ import anyparse.grammar.haxe.format.HxFormatConfig;
 import anyparse.grammar.haxe.format.HxFormatConfigParser;
 import anyparse.grammar.haxe.format.HxFormatEmptyLinesSection;
 import anyparse.grammar.haxe.format.HxFormatIndentationSection;
+import anyparse.grammar.haxe.format.HxFormatInterfaceEmptyLinesConfig;
 import anyparse.grammar.haxe.format.HxFormatKeepEmptyLinesPolicy;
 import anyparse.grammar.haxe.format.HxFormatKeywordPlacement;
 import anyparse.grammar.haxe.format.HxFormatLeftCurlyPolicy;
@@ -124,8 +125,15 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   A positive count currently collapses to a single blank-line
  *   contribution on the grammar sites tagged with
  *   `@:fmt(interMemberBlankLines('classifierField', 'VarCtorName', 'FnCtorName'))` — multi-blank emission is a
- *   future extension. `HxClassDecl.members` is the only current
- *   consumer.
+ *   future extension. `HxClassDecl.members` and `HxAbstractDecl.members`
+ *   read these knobs.
+ * - `emptyLines.interfaceEmptyLines.{betweenVars, betweenFunctions,
+ *   afterVars}` (ω-iface-interblank): non-negative Int counts routed to
+ *   `opt.interfaceBetweenVars`, `opt.interfaceBetweenFunctions`,
+ *   `opt.interfaceAfterVars`. Same semantics as `classEmptyLines`
+ *   but with separate runtime knobs read by `HxInterfaceDecl.members`
+ *   via the 6-arg form of `interMemberBlankLines`. Defaults are all
+ *   `0`, matching haxe-formatter's `InterfaceFieldsEmptyLinesConfig`.
  * - `emptyLines.beforeDocCommentEmptyLines` (ω-C-empty-lines-before-doc):
  *   enum string — same three-way collapse as
  *   `afterFieldsWithDocComments` (`"ignore"` / `"none"` / `"one"`),
@@ -142,7 +150,7 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  * (`finalNewline`, `maxAnywhereInFile`, `beforePackage`, `afterPackage`,
  * `betweenTypes`, per-type-kind sections
  * `macroClassEmptyLines` / `externClassEmptyLines` /
- * `abstractEmptyLines` / `interfaceEmptyLines` / `enumEmptyLines` /
+ * `abstractEmptyLines` / `enumEmptyLines` /
  * `typedefEmptyLines`, other `classEmptyLines.*` sub-keys beyond
  * `existingBetweenFields`, …), other `whitespace.*` keys
  * (`ifPolicy`, `forPolicy`, `ternaryPolicy`, …), other
@@ -204,6 +212,9 @@ final class HaxeFormatConfigLoader {
 			betweenVars: base.betweenVars,
 			betweenFunctions: base.betweenFunctions,
 			afterVars: base.afterVars,
+			interfaceBetweenVars: base.interfaceBetweenVars,
+			interfaceBetweenFunctions: base.interfaceBetweenFunctions,
+			interfaceAfterVars: base.interfaceAfterVars,
 		};
 		if (cfg.indentation != null) applyIndentation(cfg.indentation, result);
 		if (cfg.wrapping != null) applyWrapping(cfg.wrapping, result);
@@ -284,12 +295,20 @@ final class HaxeFormatConfigLoader {
 		if (section.beforeDocCommentEmptyLines != null)
 			opt.beforeDocCommentEmptyLines = commentEmptyLinesToRuntime(section.beforeDocCommentEmptyLines);
 		final classSection:Null<HxFormatClassEmptyLinesConfig> = section.classEmptyLines;
-		if (classSection == null) return;
-		if (classSection.existingBetweenFields != null)
-			opt.existingBetweenFields = keepEmptyLinesToRuntime(classSection.existingBetweenFields);
-		if (classSection.betweenVars != null) opt.betweenVars = classSection.betweenVars;
-		if (classSection.betweenFunctions != null) opt.betweenFunctions = classSection.betweenFunctions;
-		if (classSection.afterVars != null) opt.afterVars = classSection.afterVars;
+		if (classSection != null) {
+			if (classSection.existingBetweenFields != null)
+				opt.existingBetweenFields = keepEmptyLinesToRuntime(classSection.existingBetweenFields);
+			if (classSection.betweenVars != null) opt.betweenVars = classSection.betweenVars;
+			if (classSection.betweenFunctions != null) opt.betweenFunctions = classSection.betweenFunctions;
+			if (classSection.afterVars != null) opt.afterVars = classSection.afterVars;
+		}
+		final interfaceSection:Null<HxFormatInterfaceEmptyLinesConfig> = section.interfaceEmptyLines;
+		if (interfaceSection != null) {
+			if (interfaceSection.betweenVars != null) opt.interfaceBetweenVars = interfaceSection.betweenVars;
+			if (interfaceSection.betweenFunctions != null)
+				opt.interfaceBetweenFunctions = interfaceSection.betweenFunctions;
+			if (interfaceSection.afterVars != null) opt.interfaceAfterVars = interfaceSection.afterVars;
+		}
 	}
 
 	private static function sameLineToRuntime(policy:HxFormatSameLinePolicy):SameLinePolicy {

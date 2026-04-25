@@ -231,6 +231,25 @@ import anyparse.format.WriteOptions;
  * per grammar so the macro stays shape-agnostic — a different
  * grammar can map its own enum constructors onto the same Var/Fn
  * kind pair without touching the macro.
+ *
+ * Fields added in slice ω-iface-interblank (interface-specific
+ * inter-member blank-line counts):
+ *  - `interfaceBetweenVars` — blank-line count between two consecutive
+ *    interface var members.
+ *  - `interfaceBetweenFunctions` — blank-line count between two
+ *    consecutive interface function members.
+ *  - `interfaceAfterVars` — blank-line count at a var↔function boundary
+ *    inside an interface body.
+ *
+ * Defaults are `0 / 0 / 0`, matching haxe-formatter's
+ * `InterfaceFieldsEmptyLinesConfig` defaults — interface bodies stay
+ * tight unless explicitly overridden via `hxformat.json`. Routed
+ * through `@:fmt(interMemberBlankLines('member', 'VarMember',
+ * 'FnMember', 'interfaceBetweenVars', 'interfaceBetweenFunctions',
+ * 'interfaceAfterVars'))` on `HxInterfaceDecl.members`. The 6-arg
+ * form selects which `opt.*` field to read at runtime; the 3-arg form
+ * keeps reading the shared `betweenVars` / `betweenFunctions` /
+ * `afterVars` (used by class + abstract).
  */
 typedef HxModuleWriteOptions = WriteOptions & {
 	sameLineElse:SameLinePolicy,
@@ -257,4 +276,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	betweenVars:Int,
 	betweenFunctions:Int,
 	afterVars:Int,
+	interfaceBetweenVars:Int,
+	interfaceBetweenFunctions:Int,
+	interfaceAfterVars:Int,
 };

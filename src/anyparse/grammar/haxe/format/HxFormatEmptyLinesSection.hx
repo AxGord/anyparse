@@ -10,7 +10,7 @@ package anyparse.grammar.haxe.format;
  * `betweenSingleLineTypes`, `beforeRightCurly`, `afterLeftCurly`,
  * `afterReturn`, `beforeBlocks`, `afterBlocks`, `enumAbstractEmptyLines`,
  * `macroClassEmptyLines`, `externClassEmptyLines`,
- * `abstractEmptyLines`, `interfaceEmptyLines`, `enumEmptyLines`,
+ * `abstractEmptyLines`, `enumEmptyLines`,
  * `typedefEmptyLines`, `conditionalsEmptyLines`, `afterFileHeaderComment`,
  * `betweenMultilineComments`, …) are silently dropped by the ByName
  * struct parser's `UnknownPolicy.Skip` — they land with the slice that
@@ -28,6 +28,13 @@ package anyparse.grammar.haxe.format;
  * the `existingBetweenFields` sub-key is modelled today; the other
  * per-slot sub-keys (`beginType`, `endType`, `betweenVars`, …) land
  * with the slices that introduce their matching writer knobs.
+ *
+ * `interfaceEmptyLines` nested section added in slice
+ * ω-iface-interblank (feeds `opt.interfaceBetweenVars`,
+ * `opt.interfaceBetweenFunctions`, `opt.interfaceAfterVars` through
+ * `HxFormatInterfaceEmptyLinesConfig`). Mirrors `classEmptyLines` for
+ * interface members but with separate runtime knobs and 0/0/0 defaults
+ * matching haxe-formatter's `InterfaceFieldsEmptyLinesConfig`.
  */
 @:peg typedef HxFormatEmptyLinesSection = {
 
@@ -36,4 +43,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var beforeDocCommentEmptyLines:HxFormatCommentEmptyLinesPolicy;
 
 	@:optional var classEmptyLines:HxFormatClassEmptyLinesConfig;
+
+	@:optional var interfaceEmptyLines:HxFormatInterfaceEmptyLinesConfig;
 };

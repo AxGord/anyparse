@@ -369,6 +369,9 @@ class HxTriviaWriteTest extends Test {
 			betweenVars: base.betweenVars,
 			betweenFunctions: base.betweenFunctions,
 			afterVars: base.afterVars,
+			interfaceBetweenVars: base.interfaceBetweenVars,
+			interfaceBetweenFunctions: base.interfaceBetweenFunctions,
+			interfaceAfterVars: base.interfaceAfterVars,
 		};
 	}
 }

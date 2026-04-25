@@ -181,6 +181,9 @@ class HxInterMemberBlankLinesOptionsTest extends Test {
 			betweenVars: betweenVars,
 			betweenFunctions: betweenFunctions,
 			afterVars: afterVars,
+			interfaceBetweenVars: base.interfaceBetweenVars,
+			interfaceBetweenFunctions: base.interfaceBetweenFunctions,
+			interfaceAfterVars: base.interfaceAfterVars,
 		};
 	}
 }

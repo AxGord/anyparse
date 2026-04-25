@@ -154,6 +154,9 @@ class HxElseIfOptionsTest extends Test {
 			betweenVars: base.betweenVars,
 			betweenFunctions: base.betweenFunctions,
 			afterVars: base.afterVars,
+			interfaceBetweenVars: base.interfaceBetweenVars,
+			interfaceBetweenFunctions: base.interfaceBetweenFunctions,
+			interfaceAfterVars: base.interfaceAfterVars,
 		};
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}
@@ -193,6 +196,9 @@ class HxElseIfOptionsTest extends Test {
 			betweenVars: base.betweenVars,
 			betweenFunctions: base.betweenFunctions,
 			afterVars: base.afterVars,
+			interfaceBetweenVars: base.interfaceBetweenVars,
+			interfaceBetweenFunctions: base.interfaceBetweenFunctions,
+			interfaceAfterVars: base.interfaceAfterVars,
 		};
 	}
 }
