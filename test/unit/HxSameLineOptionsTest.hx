@@ -191,6 +191,8 @@ class HxSameLineOptionsTest extends Test {
 			typedefAssign: base.typedefAssign,
 			typeParamOpen: base.typeParamOpen,
 			typeParamClose: base.typeParamClose,
+			anonTypeBracesOpen: base.anonTypeBracesOpen,
+			anonTypeBracesClose: base.anonTypeBracesClose,
 		};
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}
@@ -244,6 +246,8 @@ class HxSameLineOptionsTest extends Test {
 			typedefAssign: base.typedefAssign,
 			typeParamOpen: base.typeParamOpen,
 			typeParamClose: base.typeParamClose,
+			anonTypeBracesOpen: base.anonTypeBracesOpen,
+			anonTypeBracesClose: base.anonTypeBracesClose,
 		};
 	}
 }

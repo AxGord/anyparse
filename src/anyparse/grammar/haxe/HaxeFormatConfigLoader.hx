@@ -9,6 +9,7 @@ import anyparse.format.KeywordPlacement;
 import anyparse.format.SameLinePolicy;
 import anyparse.format.WhitespacePolicy;
 import anyparse.grammar.haxe.format.HxFormatBodyPolicy;
+import anyparse.grammar.haxe.format.HxFormatBracesConfigSection;
 import anyparse.grammar.haxe.format.HxFormatClassEmptyLinesConfig;
 import anyparse.grammar.haxe.format.HxFormatCommentEmptyLinesPolicy;
 import anyparse.grammar.haxe.format.HxFormatConfig;
@@ -112,6 +113,21 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   inside before `>`. `After` is exposed for parity but has no effect
  *   yet — the writer's `sepList` shape concatenates the close delim
  *   tight against whatever follows.
+ * - `whitespace.bracesConfig.anonTypeBraces.openingPolicy`
+ *   (ω-anontype-braces): same enum / same collapse, routed to
+ *   `opt.anonTypeBracesOpen`. `After` / `Both` (haxe-formatter
+ *   `"around"`) emit a space inside after `{` of `HxType.Anon`;
+ *   `Before` / `None` keep the brace tight (no outside-before-open
+ *   path exists for the `lowerEnumStar` Alt-branch site).
+ * - `whitespace.bracesConfig.anonTypeBraces.closingPolicy`
+ *   (ω-anontype-braces): same enum, routed to
+ *   `opt.anonTypeBracesClose`. `Before` / `Both` (haxe-formatter
+ *   `"around"`) emit a space inside before `}`; `After` / `None`
+ *   leave the close tight. Combined opening + closing = `"around"`
+ *   reproduces haxe-formatter's `space_inside_anon_type_hint`
+ *   fixture (`{ x:Int }`). The sibling
+ *   `bracesConfig.anonTypeBraces.removeInnerWhenEmpty` key is
+ *   parsed and silently ignored.
  * - `emptyLines.afterFieldsWithDocComments` (ω-C-empty-lines-doc):
  *   enum string — `"ignore"` → `CommentEmptyLinesPolicy.Ignore`,
  *   `"none"` → `CommentEmptyLinesPolicy.None`, `"one"` →
@@ -227,6 +243,8 @@ final class HaxeFormatConfigLoader {
 			typedefAssign: base.typedefAssign,
 			typeParamOpen: base.typeParamOpen,
 			typeParamClose: base.typeParamClose,
+			anonTypeBracesOpen: base.anonTypeBracesOpen,
+			anonTypeBracesClose: base.anonTypeBracesClose,
 		};
 		if (cfg.indentation != null) applyIndentation(cfg.indentation, result);
 		if (cfg.wrapping != null) applyWrapping(cfg.wrapping, result);
@@ -302,6 +320,16 @@ final class HaxeFormatConfigLoader {
 			final call:Null<HxFormatParenPolicySection> = paren.callParens;
 			if (call != null && call.openingPolicy != null)
 				opt.callParens = whitespaceToRuntime(call.openingPolicy);
+		}
+		final braces:Null<HxFormatBracesConfigSection> = section.bracesConfig;
+		if (braces != null) {
+			final anonType:Null<HxFormatParenPolicySection> = braces.anonTypeBraces;
+			if (anonType != null) {
+				if (anonType.openingPolicy != null)
+					opt.anonTypeBracesOpen = whitespaceToRuntime(anonType.openingPolicy);
+				if (anonType.closingPolicy != null)
+					opt.anonTypeBracesClose = whitespaceToRuntime(anonType.closingPolicy);
+			}
 		}
 	}
 

@@ -141,6 +141,8 @@ final class HxTypeParamSpacingOptionsTest extends Test {
 			typedefAssign: base.typedefAssign,
 			typeParamOpen: open,
 			typeParamClose: close,
+			anonTypeBracesOpen: base.anonTypeBracesOpen,
+			anonTypeBracesClose: base.anonTypeBracesClose,
 		};
 	}
 }

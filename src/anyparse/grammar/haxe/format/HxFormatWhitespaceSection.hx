@@ -31,6 +31,14 @@ package anyparse.grammar.haxe.format;
  *  - `typeParamClosePolicy` feeds `opt.typeParamClose` (the matching
  *    `>`). Combined `typeParamOpenPolicy: "after"` +
  *    `typeParamClosePolicy: "before"` produces `Array< Int >`.
+ *
+ * Extended in slice ω-anontype-braces:
+ *  - `bracesConfig.anonTypeBraces.openingPolicy` feeds
+ *    `opt.anonTypeBracesOpen` (the `{` of `HxType.Anon`).
+ *  - `bracesConfig.anonTypeBraces.closingPolicy` feeds
+ *    `opt.anonTypeBracesClose` (the matching `}`). Combined
+ *    `openingPolicy: "around"` + `closingPolicy: "around"` produces
+ *    `{ x:Int }`.
  */
 @:peg typedef HxFormatWhitespaceSection = {
 
@@ -43,4 +51,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var typeParamClosePolicy:HxFormatWhitespacePolicy;
 
 	@:optional var parenConfig:HxFormatParenConfigSection;
+
+	@:optional var bracesConfig:HxFormatBracesConfigSection;
 };

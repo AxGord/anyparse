@@ -375,6 +375,8 @@ class HxTriviaWriteTest extends Test {
 			typedefAssign: base.typedefAssign,
 			typeParamOpen: base.typeParamOpen,
 			typeParamClose: base.typeParamClose,
+			anonTypeBracesOpen: base.anonTypeBracesOpen,
+			anonTypeBracesClose: base.anonTypeBracesClose,
 		};
 	}
 }

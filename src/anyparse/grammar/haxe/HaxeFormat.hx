@@ -229,6 +229,16 @@ final class HaxeFormat implements TextFormat {
 	 * into the spaced form requires explicit `hxformat.json` overrides:
 	 * `"whitespace": { "typeParamOpenPolicy": "after",
 	 * "typeParamClosePolicy": "before" }` produces `Array< Int >`.
+	 *
+	 * Anon-type `{}` interior spacing defaults (ω-anontype-braces) are
+	 * both `None` — `{x:Int}` stays tight. haxe-formatter's
+	 * `bracesConfig.anonTypeBraces` defaults to `{openingPolicy: Before,
+	 * closingPolicy: OnlyAfter}` whose effective inside-spaces are also
+	 * none, so the tight form matches upstream's default output for the
+	 * inside-of-braces axis. Opting into the spaced form requires:
+	 * `"whitespace": { "bracesConfig": { "anonTypeBraces":
+	 * { "openingPolicy": "around", "closingPolicy": "around" } } }`
+	 * which produces `{ x:Int }`.
 	 */
 	public var defaultWriteOptions(default, null):HxModuleWriteOptions = {
 		indentChar: Tab,
@@ -269,6 +279,8 @@ final class HaxeFormat implements TextFormat {
 		typedefAssign: WhitespacePolicy.Both,
 		typeParamOpen: WhitespacePolicy.None,
 		typeParamClose: WhitespacePolicy.None,
+		anonTypeBracesOpen: WhitespacePolicy.None,
+		anonTypeBracesClose: WhitespacePolicy.None,
 	};
 
 	private function new() {}

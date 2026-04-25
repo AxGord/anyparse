@@ -427,6 +427,8 @@ class HaxeWriterRoundTripTest extends HxTestHelpers {
 			typedefAssign: base.typedefAssign,
 			typeParamOpen: base.typeParamOpen,
 			typeParamClose: base.typeParamClose,
+			anonTypeBracesOpen: base.anonTypeBracesOpen,
+			anonTypeBracesClose: base.anonTypeBracesClose,
 		};
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}

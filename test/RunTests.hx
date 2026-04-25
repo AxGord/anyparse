@@ -35,6 +35,7 @@ import unit.HxLeftCurlyOptionsTest;
 import unit.HxObjectFieldColonOptionsTest;
 import unit.HxTypedefAssignOptionsTest;
 import unit.HxTypeParamSpacingOptionsTest;
+import unit.HxAnonTypeBracesOptionsTest;
 import unit.HxElseIfOptionsTest;
 import unit.HxInterMemberBlankLinesOptionsTest;
 import unit.HxInterfaceInterMemberBlankLinesOptionsTest;
@@ -100,6 +101,7 @@ class RunTests {
 		runner.addCase(new HxObjectFieldColonOptionsTest());
 		runner.addCase(new HxTypedefAssignOptionsTest());
 		runner.addCase(new HxTypeParamSpacingOptionsTest());
+		runner.addCase(new HxAnonTypeBracesOptionsTest());
 		runner.addCase(new HxElseIfOptionsTest());
 		runner.addCase(new HxInterMemberBlankLinesOptionsTest());
 		runner.addCase(new HxInterfaceInterMemberBlankLinesOptionsTest());

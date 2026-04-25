@@ -56,6 +56,6 @@ enum HxType {
 	@:infix('->', 0, 'Right') @:fmt(tight)
 	Arrow(left:HxType, right:HxType);
 
-	@:lead('{') @:trail('}') @:sep(',')
+	@:lead('{') @:trail('}') @:sep(',') @:fmt(anonTypeBracesOpen, anonTypeBracesClose)
 	Anon(fields:Array<HxAnonField>);
 }

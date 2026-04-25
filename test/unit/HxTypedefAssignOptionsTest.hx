@@ -129,6 +129,8 @@ final class HxTypedefAssignOptionsTest extends Test {
 			typedefAssign: typedefAssign,
 			typeParamOpen: base.typeParamOpen,
 			typeParamClose: base.typeParamClose,
+			anonTypeBracesOpen: base.anonTypeBracesOpen,
+			anonTypeBracesClose: base.anonTypeBracesClose,
 		};
 	}
 }

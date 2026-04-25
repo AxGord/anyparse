@@ -367,6 +367,8 @@ class WriterLowering {
 				});
 			} else {
 				final tcExpr:Expr = trailingCommaExpr(branch);
+				final openInsideExpr:Expr = delimInsidePolicySpace(branch, ['anonTypeBracesOpen'], false) ?? macro _de();
+				final closeInsideExpr:Expr = delimInsidePolicySpace(branch, ['anonTypeBracesClose'], true) ?? macro _de();
 				parts.push(macro {
 					final _args = $argsAccess;
 					final _docs:Array<anyparse.core.Doc> = [];
@@ -375,7 +377,7 @@ class WriterLowering {
 						_docs.push($elemCall);
 						_i++;
 					}
-					sepList($v{leadText}, $v{trailText}, $v{sepText}, _docs, opt, $tcExpr, _de(), _de());
+					sepList($v{leadText}, $v{trailText}, $v{sepText}, _docs, opt, $tcExpr, $openInsideExpr, $closeInsideExpr);
 				});
 			}
 		} else {
@@ -1332,14 +1334,16 @@ class WriterLowering {
 	 * the call site falls through to `_de()` and keeps the pre-slice
 	 * tight layout byte-identical.
 	 *
-	 * Consumed today by `@:fmt(typeParamOpen, typeParamClose)` on the
-	 * seven `typeParams` Star sites (`HxTypeRef.params` plus the five
-	 * declare-site `typeParams` fields on class / interface / abstract /
-	 * enum / typedef / function decls). Defaults `None` keep
-	 * `Array<Int>` / `class Foo<T>` tight; `whitespace.typeParamOpenPolicy:
-	 * "after"` + `whitespace.typeParamClosePolicy: "before"` flips them
-	 * to `Array< Int >`, matching haxe-formatter's `issue_588_anon_type_param`
-	 * fixture.
+	 * Consumed by `@:fmt(typeParamOpen, typeParamClose)` on the seven
+	 * `typeParams` Star sites (`HxTypeRef.params` plus the five declare-
+	 * site `typeParams` fields on class / interface / abstract / enum /
+	 * typedef / function decls), and by `@:fmt(anonTypeBracesOpen,
+	 * anonTypeBracesClose)` on the `HxType.Anon` Alt-branch's
+	 * `@:lead('{') @:trail('}') @:sep(',')` Star (routed through
+	 * `lowerEnumStar`). Defaults `None` keep `Array<Int>` /
+	 * `{x:Int}` tight; the haxe-formatter
+	 * `whitespace.bracesConfig.anonTypeBraces.{openingPolicy: "around",
+	 * closingPolicy: "around"}` flip produces `{ x:Int }`.
 	 */
 	private static function delimInsidePolicySpace(starNode:ShapeNode, flagNames:Array<String>, isClose:Bool):Null<Expr> {
 		final flagName:Null<String> = firstFmtFlag(starNode, flagNames);

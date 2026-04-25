@@ -291,6 +291,26 @@ import anyparse.format.WriteOptions;
  *    `typeParamOpen=After + typeParamClose=Before` produces
  *    `Array< Int >`, matching haxe-formatter's
  *    `issue_588_anon_type_param`.
+ *
+ * Fields added in slice ω-anontype-braces (anonymous-structure-type
+ * `{}` interior spacing):
+ *  - `anonTypeBracesOpen` — whitespace around the opening `{` of an
+ *    anonymous structure type (`HxType.Anon`'s `@:lead('{')`). `None`
+ *    (default) keeps the pre-slice tight layout (`{x:Int}`).
+ *    `After`/`Both` emit a space inside after `{` (`{ x:Int}`).
+ *    `Before`/`Both` are exposed for parity with the policy shape but
+ *    have no effect yet — the `lowerEnumStar` Alt-branch path has no
+ *    outside-before-open padding point, so the space between the
+ *    preceding token and `{` stays governed by upstream knobs
+ *    (`typeHintColon`, `objectFieldColon`, etc.).
+ *  - `anonTypeBracesClose` — whitespace around the closing `}` of an
+ *    anonymous structure type. `None` (default) keeps the pre-slice
+ *    tight layout. `Before`/`Both` emit a space inside before `}`
+ *    (`{x:Int }`); `After`/`Both` are exposed for parity but have no
+ *    effect yet (no outside-after-close padding point). The combined
+ *    `anonTypeBracesOpen=After + anonTypeBracesClose=Before` flip
+ *    produces `{ x:Int }`, matching haxe-formatter's
+ *    `space_inside_anon_type_hint` fixture.
  */
 typedef HxModuleWriteOptions = WriteOptions & {
 	sameLineElse:SameLinePolicy,
@@ -323,4 +343,6 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	typedefAssign:WhitespacePolicy,
 	typeParamOpen:WhitespacePolicy,
 	typeParamClose:WhitespacePolicy,
+	anonTypeBracesOpen:WhitespacePolicy,
+	anonTypeBracesClose:WhitespacePolicy,
 };
