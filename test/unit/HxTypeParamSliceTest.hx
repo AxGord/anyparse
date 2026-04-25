@@ -270,4 +270,42 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 	public function testRoundTripInterfaceDeclareSite():Void {
 		roundTrip('interface Iterable<T> { }');
 	}
+
+	public function testModuleQualifiedTwoSegments():Void {
+		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar():pkg.Type {} }');
+		Assert.equals('pkg.Type', (decl.returnType.name : String));
+		Assert.isNull(decl.returnType.params);
+	}
+
+	public function testModuleQualifiedThreeSegments():Void {
+		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar():haxe.io.Bytes {} }');
+		Assert.equals('haxe.io.Bytes', (decl.returnType.name : String));
+	}
+
+	public function testModuleQualifiedWithTypeParams():Void {
+		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar():haxe.ds.Map<String, Int> {} }');
+		Assert.equals('haxe.ds.Map', (decl.returnType.name : String));
+		final params:Null<Array<HxTypeRef>> = decl.returnType.params;
+		Assert.notNull(params);
+		Assert.equals(2, params.length);
+		Assert.equals('String', (params[0].name : String));
+		Assert.equals('Int', (params[1].name : String));
+	}
+
+	public function testModuleQualifiedAsTypeParam():Void {
+		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar():Array<haxe.io.Bytes> {} }');
+		Assert.equals('Array', (decl.returnType.name : String));
+		final params:Null<Array<HxTypeRef>> = decl.returnType.params;
+		Assert.notNull(params);
+		Assert.equals(1, params.length);
+		Assert.equals('haxe.io.Bytes', (params[0].name : String));
+	}
+
+	public function testRoundTripModuleQualified():Void {
+		roundTrip('class F { var x:haxe.io.Bytes; }');
+	}
+
+	public function testRoundTripModuleQualifiedWithParams():Void {
+		roundTrip('class F { var m:haxe.ds.Map<String, Int>; }');
+	}
 }
