@@ -244,7 +244,7 @@ final class HaxeFormat implements TextFormat {
 		indentChar: Tab,
 		indentSize: 1,
 		tabWidth: 4,
-		lineWidth: 120,
+		lineWidth: 160,
 		lineEnd: '\n',
 		finalNewline: true,
 		trailingWhitespace: false,

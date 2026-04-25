@@ -63,6 +63,7 @@ class WriteOptionsTest extends Test {
 		Assert.equals(Tab, defaults.indentChar);
 		Assert.equals(1, defaults.indentSize);
 		Assert.equals(4, defaults.tabWidth);
+		Assert.equals(160, defaults.lineWidth);
 		Assert.isTrue(defaults.finalNewline);
 	}
 }
