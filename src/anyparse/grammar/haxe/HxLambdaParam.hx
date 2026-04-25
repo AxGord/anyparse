@@ -12,5 +12,5 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxLambdaParam = {
 	var name:HxIdentLit;
-	@:optional @:lead(':') var type:Null<HxTypeRef>;
+	@:optional @:lead(':') var type:Null<HxType>;
 }

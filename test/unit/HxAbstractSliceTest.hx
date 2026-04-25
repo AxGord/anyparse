@@ -26,7 +26,7 @@ class HxAbstractSliceTest extends HxTestHelpers {
 		Assert.equals(1, module.decls.length);
 		final ad:HxAbstractDecl = expectAbstractDecl(module.decls[0]);
 		Assert.equals('Foo', (ad.name : String));
-		Assert.equals('Int', (ad.underlyingType.name : String));
+		Assert.equals('Int', (expectNamedType(ad.underlyingType).name : String));
 		Assert.equals(0, ad.clauses.length);
 		Assert.equals(0, ad.members.length);
 	}
@@ -36,7 +36,7 @@ class HxAbstractSliceTest extends HxTestHelpers {
 		Assert.equals(1, module.decls.length);
 		final ad:HxAbstractDecl = expectAbstractDecl(module.decls[0]);
 		Assert.equals('Foo', (ad.name : String));
-		Assert.equals('Int', (ad.underlyingType.name : String));
+		Assert.equals('Int', (expectNamedType(ad.underlyingType).name : String));
 		Assert.equals(0, ad.clauses.length);
 		Assert.equals(0, ad.members.length);
 	}
@@ -48,10 +48,10 @@ class HxAbstractSliceTest extends HxTestHelpers {
 		Assert.equals(1, module.decls.length);
 		final ad:HxAbstractDecl = expectAbstractDecl(module.decls[0]);
 		Assert.equals('Foo', (ad.name : String));
-		Assert.equals('Int', (ad.underlyingType.name : String));
+		Assert.equals('Int', (expectNamedType(ad.underlyingType).name : String));
 		Assert.equals(1, ad.clauses.length);
 		switch ad.clauses[0] {
-			case FromClause(type): Assert.equals('Int', (type.name : String));
+			case FromClause(type): Assert.equals('Int', (expectNamedType(type).name : String));
 			case _: Assert.fail('expected FromClause');
 		}
 	}
@@ -62,7 +62,7 @@ class HxAbstractSliceTest extends HxTestHelpers {
 		final ad:HxAbstractDecl = expectAbstractDecl(module.decls[0]);
 		Assert.equals(1, ad.clauses.length);
 		switch ad.clauses[0] {
-			case ToClause(type): Assert.equals('String', (type.name : String));
+			case ToClause(type): Assert.equals('String', (expectNamedType(type).name : String));
 			case _: Assert.fail('expected ToClause');
 		}
 	}
@@ -73,11 +73,11 @@ class HxAbstractSliceTest extends HxTestHelpers {
 		final ad:HxAbstractDecl = expectAbstractDecl(module.decls[0]);
 		Assert.equals(2, ad.clauses.length);
 		switch ad.clauses[0] {
-			case FromClause(type): Assert.equals('Int', (type.name : String));
+			case FromClause(type): Assert.equals('Int', (expectNamedType(type).name : String));
 			case _: Assert.fail('expected FromClause');
 		}
 		switch ad.clauses[1] {
-			case ToClause(type): Assert.equals('String', (type.name : String));
+			case ToClause(type): Assert.equals('String', (expectNamedType(type).name : String));
 			case _: Assert.fail('expected ToClause');
 		}
 	}
@@ -88,19 +88,19 @@ class HxAbstractSliceTest extends HxTestHelpers {
 		final ad:HxAbstractDecl = expectAbstractDecl(module.decls[0]);
 		Assert.equals(4, ad.clauses.length);
 		switch ad.clauses[0] {
-			case FromClause(type): Assert.equals('Int', (type.name : String));
+			case FromClause(type): Assert.equals('Int', (expectNamedType(type).name : String));
 			case _: Assert.fail('expected FromClause at 0');
 		}
 		switch ad.clauses[1] {
-			case FromClause(type): Assert.equals('Float', (type.name : String));
+			case FromClause(type): Assert.equals('Float', (expectNamedType(type).name : String));
 			case _: Assert.fail('expected FromClause at 1');
 		}
 		switch ad.clauses[2] {
-			case ToClause(type): Assert.equals('String', (type.name : String));
+			case ToClause(type): Assert.equals('String', (expectNamedType(type).name : String));
 			case _: Assert.fail('expected ToClause at 2');
 		}
 		switch ad.clauses[3] {
-			case ToClause(type): Assert.equals('Bool', (type.name : String));
+			case ToClause(type): Assert.equals('Bool', (expectNamedType(type).name : String));
 			case _: Assert.fail('expected ToClause at 3');
 		}
 	}
@@ -110,7 +110,7 @@ class HxAbstractSliceTest extends HxTestHelpers {
 		Assert.equals(1, module.decls.length);
 		final ad:HxAbstractDecl = expectAbstractDecl(module.decls[0]);
 		Assert.equals(2, ad.clauses.length);
-		Assert.equals('Int', (ad.underlyingType.name : String));
+		Assert.equals('Int', (expectNamedType(ad.underlyingType).name : String));
 	}
 
 	// -- Members --
@@ -123,7 +123,7 @@ class HxAbstractSliceTest extends HxTestHelpers {
 		Assert.equals(1, ad.members.length);
 		final vd:HxVarDecl = expectVarMember(ad.members[0].member);
 		Assert.equals('x', (vd.name : String));
-		Assert.equals('Int', (vd.type.name : String));
+		Assert.equals('Int', (expectNamedType(vd.type).name : String));
 	}
 
 	public function testAbstractWithFunction():Void {
@@ -133,7 +133,7 @@ class HxAbstractSliceTest extends HxTestHelpers {
 		Assert.equals(1, ad.members.length);
 		final fd:HxFnDecl = expectFnMember(ad.members[0].member);
 		Assert.equals('f', (fd.name : String));
-		Assert.equals('Void', (fd.returnType.name : String));
+		Assert.equals('Void', (expectNamedType(fd.returnType).name : String));
 	}
 
 	public function testAbstractWithModifiers():Void {

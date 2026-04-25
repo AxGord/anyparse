@@ -11,7 +11,7 @@ import anyparse.grammar.haxe.HxIdentLit;
 import anyparse.grammar.haxe.HxInterfaceDecl;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxTypedefDecl;
-import anyparse.grammar.haxe.HxTypeRef;
+import anyparse.grammar.haxe.HxType;
 import anyparse.grammar.haxe.HxVarDecl;
 import anyparse.runtime.ParseError;
 
@@ -33,82 +33,82 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 
 	public function testBareTypeHasNoParams():Void {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar():Int {} }');
-		Assert.equals('Int', (decl.returnType.name : String));
-		Assert.isNull(decl.returnType.params);
+		Assert.equals('Int', (expectNamedType(decl.returnType).name : String));
+		Assert.isNull(expectNamedType(decl.returnType).params);
 	}
 
 	public function testSingleTypeParam():Void {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar():Array<Int> {} }');
-		Assert.equals('Array', (decl.returnType.name : String));
-		final params:Null<Array<HxTypeRef>> = decl.returnType.params;
+		Assert.equals('Array', (expectNamedType(decl.returnType).name : String));
+		final params:Null<Array<HxType>> = expectNamedType(decl.returnType).params;
 		Assert.notNull(params);
 		Assert.equals(1, params.length);
-		Assert.equals('Int', (params[0].name : String));
-		Assert.isNull(params[0].params);
+		Assert.equals('Int', (expectNamedType(params[0]).name : String));
+		Assert.isNull(expectNamedType(params[0]).params);
 	}
 
 	public function testTwoTypeParams():Void {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar():Map<String, Int> {} }');
-		Assert.equals('Map', (decl.returnType.name : String));
-		final params:Null<Array<HxTypeRef>> = decl.returnType.params;
+		Assert.equals('Map', (expectNamedType(decl.returnType).name : String));
+		final params:Null<Array<HxType>> = expectNamedType(decl.returnType).params;
 		Assert.notNull(params);
 		Assert.equals(2, params.length);
-		Assert.equals('String', (params[0].name : String));
-		Assert.equals('Int', (params[1].name : String));
+		Assert.equals('String', (expectNamedType(params[0]).name : String));
+		Assert.equals('Int', (expectNamedType(params[1]).name : String));
 	}
 
 	public function testNestedTypeParams():Void {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar():Array<Array<Int>> {} }');
-		Assert.equals('Array', (decl.returnType.name : String));
-		final outer:Null<Array<HxTypeRef>> = decl.returnType.params;
+		Assert.equals('Array', (expectNamedType(decl.returnType).name : String));
+		final outer:Null<Array<HxType>> = expectNamedType(decl.returnType).params;
 		Assert.notNull(outer);
 		Assert.equals(1, outer.length);
-		Assert.equals('Array', (outer[0].name : String));
-		final inner:Null<Array<HxTypeRef>> = outer[0].params;
+		Assert.equals('Array', (expectNamedType(outer[0]).name : String));
+		final inner:Null<Array<HxType>> = expectNamedType(outer[0]).params;
 		Assert.notNull(inner);
 		Assert.equals(1, inner.length);
-		Assert.equals('Int', (inner[0].name : String));
+		Assert.equals('Int', (expectNamedType(inner[0]).name : String));
 	}
 
 	public function testDoubleNestedClosingBrackets():Void {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar():Foo<Bar<Baz>> {} }');
-		final outer:Null<Array<HxTypeRef>> = decl.returnType.params;
+		final outer:Null<Array<HxType>> = expectNamedType(decl.returnType).params;
 		Assert.notNull(outer);
 		Assert.equals(1, outer.length);
-		final mid:Null<Array<HxTypeRef>> = outer[0].params;
+		final mid:Null<Array<HxType>> = expectNamedType(outer[0]).params;
 		Assert.notNull(mid);
 		Assert.equals(1, mid.length);
-		Assert.equals('Baz', (mid[0].name : String));
+		Assert.equals('Baz', (expectNamedType(mid[0]).name : String));
 	}
 
 	public function testParamTypeOnFnArgument():Void {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar(xs:Array<Int>):Void {} }');
 		Assert.equals(1, decl.params.length);
-		Assert.equals('Array', (decl.params[0].type.name : String));
-		final inner:Null<Array<HxTypeRef>> = decl.params[0].type.params;
+		Assert.equals('Array', (expectNamedType(decl.params[0].type).name : String));
+		final inner:Null<Array<HxType>> = expectNamedType(decl.params[0].type).params;
 		Assert.notNull(inner);
 		Assert.equals(1, inner.length);
-		Assert.equals('Int', (inner[0].name : String));
+		Assert.equals('Int', (expectNamedType(inner[0]).name : String));
 	}
 
 	public function testParamTypeOnVar():Void {
 		final ast:HxClassDecl = HaxeParser.parse('class Foo { var xs:Array<String>; }');
 		Assert.equals(1, ast.members.length);
 		final decl:HxVarDecl = expectVarMember(ast.members[0].member);
-		Assert.equals('Array', (decl.type.name : String));
-		final inner:Null<Array<HxTypeRef>> = decl.type.params;
+		Assert.equals('Array', (expectNamedType(decl.type).name : String));
+		final inner:Null<Array<HxType>> = expectNamedType(decl.type).params;
 		Assert.notNull(inner);
 		Assert.equals(1, inner.length);
-		Assert.equals('String', (inner[0].name : String));
+		Assert.equals('String', (expectNamedType(inner[0]).name : String));
 	}
 
 	public function testWhitespaceTolerance():Void {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar():Map < String , Int > {} }');
-		final params:Null<Array<HxTypeRef>> = decl.returnType.params;
+		final params:Null<Array<HxType>> = expectNamedType(decl.returnType).params;
 		Assert.notNull(params);
 		Assert.equals(2, params.length);
-		Assert.equals('String', (params[0].name : String));
-		Assert.equals('Int', (params[1].name : String));
+		Assert.equals('String', (expectNamedType(params[0]).name : String));
+		Assert.equals('Int', (expectNamedType(params[1]).name : String));
 	}
 
 	public function testRejectsTrailingComma():Void {
@@ -121,7 +121,7 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 		// permissive degenerate input — the corpus never produces it,
 		// and the round-trip preserves the same empty-list shape.
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar():Foo<> {} }');
-		final params:Null<Array<HxTypeRef>> = decl.returnType.params;
+		final params:Null<Array<HxType>> = expectNamedType(decl.returnType).params;
 		Assert.notNull(params);
 		Assert.equals(0, params.length);
 	}
@@ -273,32 +273,32 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 
 	public function testModuleQualifiedTwoSegments():Void {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar():pkg.Type {} }');
-		Assert.equals('pkg.Type', (decl.returnType.name : String));
-		Assert.isNull(decl.returnType.params);
+		Assert.equals('pkg.Type', (expectNamedType(decl.returnType).name : String));
+		Assert.isNull(expectNamedType(decl.returnType).params);
 	}
 
 	public function testModuleQualifiedThreeSegments():Void {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar():haxe.io.Bytes {} }');
-		Assert.equals('haxe.io.Bytes', (decl.returnType.name : String));
+		Assert.equals('haxe.io.Bytes', (expectNamedType(decl.returnType).name : String));
 	}
 
 	public function testModuleQualifiedWithTypeParams():Void {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar():haxe.ds.Map<String, Int> {} }');
-		Assert.equals('haxe.ds.Map', (decl.returnType.name : String));
-		final params:Null<Array<HxTypeRef>> = decl.returnType.params;
+		Assert.equals('haxe.ds.Map', (expectNamedType(decl.returnType).name : String));
+		final params:Null<Array<HxType>> = expectNamedType(decl.returnType).params;
 		Assert.notNull(params);
 		Assert.equals(2, params.length);
-		Assert.equals('String', (params[0].name : String));
-		Assert.equals('Int', (params[1].name : String));
+		Assert.equals('String', (expectNamedType(params[0]).name : String));
+		Assert.equals('Int', (expectNamedType(params[1]).name : String));
 	}
 
 	public function testModuleQualifiedAsTypeParam():Void {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar():Array<haxe.io.Bytes> {} }');
-		Assert.equals('Array', (decl.returnType.name : String));
-		final params:Null<Array<HxTypeRef>> = decl.returnType.params;
+		Assert.equals('Array', (expectNamedType(decl.returnType).name : String));
+		final params:Null<Array<HxType>> = expectNamedType(decl.returnType).params;
 		Assert.notNull(params);
 		Assert.equals(1, params.length);
-		Assert.equals('haxe.io.Bytes', (params[0].name : String));
+		Assert.equals('haxe.io.Bytes', (expectNamedType(params[0]).name : String));
 	}
 
 	public function testRoundTripModuleQualified():Void {

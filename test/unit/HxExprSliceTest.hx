@@ -31,14 +31,14 @@ class HxExprSliceTest extends HxTestHelpers {
 	public function testVarWithoutInit():Void {
 		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int; }');
 		Assert.equals('x', (decl.name : String));
-		Assert.equals('Int', (decl.type.name : String));
+		Assert.equals('Int', (expectNamedType(decl.type).name : String));
 		Assert.isNull(decl.init);
 	}
 
 	public function testVarWithIntInit():Void {
 		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = 42; }');
 		Assert.equals('x', (decl.name : String));
-		Assert.equals('Int', (decl.type.name : String));
+		Assert.equals('Int', (expectNamedType(decl.type).name : String));
 		assertIntLit(decl.init, 42);
 	}
 

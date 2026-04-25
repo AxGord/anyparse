@@ -27,7 +27,7 @@ class HxBodySliceTest extends HxTestHelpers {
 	public function testEmptyBody():Void {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar():Void {} }');
 		Assert.equals('bar', (decl.name : String));
-		Assert.equals('Void', (decl.returnType.name : String));
+		Assert.equals('Void', (expectNamedType(decl.returnType).name : String));
 		Assert.equals(0, fnBodyStmts(decl).length);
 	}
 
@@ -66,7 +66,7 @@ class HxBodySliceTest extends HxTestHelpers {
 		switch stmts[0] {
 			case VarStmt(vd):
 				Assert.equals('x', (vd.name : String));
-				Assert.equals('Int', (vd.type.name : String));
+				Assert.equals('Int', (expectNamedType(vd.type).name : String));
 				switch vd.init {
 					case IntLit(v): Assert.equals(1, (v : Int));
 					case null, _: Assert.fail('expected IntLit(1)');
@@ -82,7 +82,7 @@ class HxBodySliceTest extends HxTestHelpers {
 		switch stmts[0] {
 			case VarStmt(vd):
 				Assert.equals('x', (vd.name : String));
-				Assert.equals('Int', (vd.type.name : String));
+				Assert.equals('Int', (expectNamedType(vd.type).name : String));
 				Assert.isNull(vd.init);
 			case null, _: Assert.fail('expected VarStmt');
 		}
@@ -313,6 +313,6 @@ class HxBodySliceTest extends HxTestHelpers {
 	public function testFnDeclOptionalReturnTypeStillAcceptsExplicit():Void {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function main():Void {} }');
 		Assert.equals('main', (decl.name : String));
-		Assert.equals('Void', (decl.returnType.name : String));
+		Assert.equals('Void', (expectNamedType(decl.returnType).name : String));
 	}
 }

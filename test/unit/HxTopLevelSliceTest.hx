@@ -27,7 +27,7 @@ class HxTopLevelSliceTest extends HxTestHelpers {
 		Assert.equals(1, module.decls.length);
 		final td:HxTypedefDecl = expectTypedefDecl(module.decls[0]);
 		Assert.equals('Foo', (td.name : String));
-		Assert.equals('Bar', (td.type.name : String));
+		Assert.equals('Bar', (expectNamedType(td.type).name : String));
 	}
 
 	public function testTypedefWhitespace():Void {
@@ -35,7 +35,7 @@ class HxTopLevelSliceTest extends HxTestHelpers {
 		Assert.equals(1, module.decls.length);
 		final td:HxTypedefDecl = expectTypedefDecl(module.decls[0]);
 		Assert.equals('Foo', (td.name : String));
-		Assert.equals('Bar', (td.type.name : String));
+		Assert.equals('Bar', (expectNamedType(td.type).name : String));
 	}
 
 	public function testTypedefInModule():Void {
@@ -125,7 +125,7 @@ class HxTopLevelSliceTest extends HxTestHelpers {
 		Assert.equals(1, id.members.length);
 		final vd:HxVarDecl = expectVarMember(id.members[0].member);
 		Assert.equals('x', (vd.name : String));
-		Assert.equals('Int', (vd.type.name : String));
+		Assert.equals('Int', (expectNamedType(vd.type).name : String));
 	}
 
 	public function testInterfaceWithFunction():Void {
@@ -135,7 +135,7 @@ class HxTopLevelSliceTest extends HxTestHelpers {
 		Assert.equals(1, id.members.length);
 		final fd:HxFnDecl = expectFnMember(id.members[0].member);
 		Assert.equals('f', (fd.name : String));
-		Assert.equals('Void', (fd.returnType.name : String));
+		Assert.equals('Void', (expectNamedType(fd.returnType).name : String));
 	}
 
 	public function testInterfaceWithModifiers():Void {
@@ -169,7 +169,7 @@ class HxTopLevelSliceTest extends HxTestHelpers {
 
 		final td:HxTypedefDecl = expectTypedefDecl(module.decls[1]);
 		Assert.equals('Bar', (td.name : String));
-		Assert.equals('Int', (td.type.name : String));
+		Assert.equals('Int', (expectNamedType(td.type).name : String));
 
 		final ed:HxEnumDecl = expectEnumDecl(module.decls[2]);
 		Assert.equals('Color', (ed.name : String));

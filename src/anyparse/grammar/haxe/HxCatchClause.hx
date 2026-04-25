@@ -15,6 +15,6 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxCatchClause = {
 	@:kw('catch') @:lead('(') var name:HxIdentLit;
-	@:lead(':') @:trail(')') var type:HxTypeRef;
+	@:lead(':') @:trail(')') var type:HxType;
 	var body:HxStatement;
 };

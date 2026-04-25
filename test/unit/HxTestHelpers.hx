@@ -18,6 +18,8 @@ import anyparse.grammar.haxe.HxIdentLit;
 import anyparse.grammar.haxe.HxInterfaceDecl;
 import anyparse.grammar.haxe.HxModuleWriter;
 import anyparse.grammar.haxe.HxStatement;
+import anyparse.grammar.haxe.HxType;
+import anyparse.grammar.haxe.HxTypeRef;
 import anyparse.grammar.haxe.HxTypedefDecl;
 import anyparse.grammar.haxe.HxVarDecl;
 
@@ -125,6 +127,24 @@ class HxTestHelpers extends Test {
 		return switch ctor {
 			case ParamCtor(decl): decl;
 			case _: throw 'expected ParamCtor, got $ctor';
+		};
+	}
+
+	/**
+	 * Unwrap a `HxType.Named` to its underlying `HxTypeRef`.
+	 *
+	 * Accepts `Null<HxType>` so optional type-position fields
+	 * (`HxFnDecl.returnType`, `HxVarDecl.type`, `HxLambdaParam.type`)
+	 * can be unwrapped at the assertion site without a separate
+	 * non-null guard. Foundation slice carries only the `Named`
+	 * variant; arrow / anon-struct branches added later will throw
+	 * via an additional `case _:` once tests start covering those
+	 * forms intentionally.
+	 */
+	private function expectNamedType(t:Null<HxType>):HxTypeRef {
+		return switch t {
+			case null: throw 'expected HxType.Named, got null';
+			case Named(ref): ref;
 		};
 	}
 }

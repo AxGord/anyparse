@@ -28,6 +28,6 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxVarDecl = {
 	var name:HxIdentLit;
-	@:optional @:fmt(typeHintColon) @:lead(':') var type:Null<HxTypeRef>;
+	@:optional @:fmt(typeHintColon) @:lead(':') var type:Null<HxType>;
 	@:optional @:lead('=') var init:Null<HxExpr>;
 }

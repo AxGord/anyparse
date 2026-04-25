@@ -27,7 +27,7 @@ class HxParamSliceTest extends HxTestHelpers {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar():Int {} }');
 		Assert.equals('bar', (decl.name : String));
 		Assert.equals(0, decl.params.length);
-		Assert.equals('Int', (decl.returnType.name : String));
+		Assert.equals('Int', (expectNamedType(decl.returnType).name : String));
 	}
 
 	public function testSingleParam():Void {
@@ -35,9 +35,9 @@ class HxParamSliceTest extends HxTestHelpers {
 		Assert.equals('bar', (decl.name : String));
 		Assert.equals(1, decl.params.length);
 		Assert.equals('x', (decl.params[0].name : String));
-		Assert.equals('Int', (decl.params[0].type.name : String));
+		Assert.equals('Int', (expectNamedType(decl.params[0].type).name : String));
 		Assert.isNull(decl.params[0].defaultValue);
-		Assert.equals('Bool', (decl.returnType.name : String));
+		Assert.equals('Bool', (expectNamedType(decl.returnType).name : String));
 	}
 
 	public function testTwoParams():Void {
@@ -45,27 +45,27 @@ class HxParamSliceTest extends HxTestHelpers {
 		Assert.equals('add', (decl.name : String));
 		Assert.equals(2, decl.params.length);
 		Assert.equals('a', (decl.params[0].name : String));
-		Assert.equals('Int', (decl.params[0].type.name : String));
+		Assert.equals('Int', (expectNamedType(decl.params[0].type).name : String));
 		Assert.equals('b', (decl.params[1].name : String));
-		Assert.equals('Int', (decl.params[1].type.name : String));
+		Assert.equals('Int', (expectNamedType(decl.params[1].type).name : String));
 	}
 
 	public function testThreeParams():Void {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function f(a:Int, b:String, c:Bool):Void {} }');
 		Assert.equals(3, decl.params.length);
 		Assert.equals('a', (decl.params[0].name : String));
-		Assert.equals('Int', (decl.params[0].type.name : String));
+		Assert.equals('Int', (expectNamedType(decl.params[0].type).name : String));
 		Assert.equals('b', (decl.params[1].name : String));
-		Assert.equals('String', (decl.params[1].type.name : String));
+		Assert.equals('String', (expectNamedType(decl.params[1].type).name : String));
 		Assert.equals('c', (decl.params[2].name : String));
-		Assert.equals('Bool', (decl.params[2].type.name : String));
+		Assert.equals('Bool', (expectNamedType(decl.params[2].type).name : String));
 	}
 
 	public function testParamWithDefaultValue():Void {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function f(x:Int = 42):Void {} }');
 		Assert.equals(1, decl.params.length);
 		Assert.equals('x', (decl.params[0].name : String));
-		Assert.equals('Int', (decl.params[0].type.name : String));
+		Assert.equals('Int', (expectNamedType(decl.params[0].type).name : String));
 		switch decl.params[0].defaultValue {
 			case IntLit(v): Assert.equals(42, (v : Int));
 			case null, _: Assert.fail('expected IntLit(42)');
@@ -113,9 +113,9 @@ class HxParamSliceTest extends HxTestHelpers {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function f( a : Int , b : String ):Void {} }');
 		Assert.equals(2, decl.params.length);
 		Assert.equals('a', (decl.params[0].name : String));
-		Assert.equals('Int', (decl.params[0].type.name : String));
+		Assert.equals('Int', (expectNamedType(decl.params[0].type).name : String));
 		Assert.equals('b', (decl.params[1].name : String));
-		Assert.equals('String', (decl.params[1].type.name : String));
+		Assert.equals('String', (expectNamedType(decl.params[1].type).name : String));
 	}
 
 	public function testRejectsTrailingComma():Void {

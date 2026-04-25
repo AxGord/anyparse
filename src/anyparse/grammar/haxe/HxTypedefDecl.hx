@@ -26,5 +26,5 @@ package anyparse.grammar.haxe;
 typedef HxTypedefDecl = {
 	@:kw('typedef') var name:HxIdentLit;
 	@:optional @:lead('<') @:trail('>') @:sep(',') var typeParams:Null<Array<HxIdentLit>>;
-	@:lead('=') var type:HxTypeRef;
+	@:lead('=') var type:HxType;
 }

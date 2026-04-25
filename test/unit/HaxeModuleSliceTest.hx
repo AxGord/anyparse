@@ -79,7 +79,7 @@ class HaxeModuleSliceTest extends HxTestHelpers {
 		switch fooMember {
 			case VarMember(decl):
 				Assert.equals('x', (decl.name : String));
-				Assert.equals('Int', (decl.type.name : String));
+				Assert.equals('Int', (expectNamedType(decl.type).name : String));
 			case _:
 				Assert.fail('expected VarMember, got $fooMember');
 		}
@@ -91,7 +91,7 @@ class HaxeModuleSliceTest extends HxTestHelpers {
 		switch barMember {
 			case FnMember(decl):
 				Assert.equals('tick', (decl.name : String));
-				Assert.equals('Void', (decl.returnType.name : String));
+				Assert.equals('Void', (expectNamedType(decl.returnType).name : String));
 			case _:
 				Assert.fail('expected FnMember, got $barMember');
 		}

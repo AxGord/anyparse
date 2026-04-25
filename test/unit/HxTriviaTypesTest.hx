@@ -35,7 +35,7 @@ import anyparse.grammar.haxe.HxModule;
  * Six bearing types are exercised below (out of the 19 the ω₄a
  * transitive closure identifies) — one direct-struct root, one
  * transitive-struct holder with `Array<HxDecl>` Star, one direct-
- * struct with optional `Null<HxTypeRef>` field, one bearing Alt enum
+ * struct with optional `Null<HxType>` field, one bearing Alt enum
  * with a `@:trivia` Star branch, and one nested Seq with
  * `@:optional Null<HxStatement>` field — covering each synthesis
  * codepath in `buildTypeDefinition` / `shapeToComplexType`.
@@ -76,7 +76,7 @@ class HxTriviaTypesTest extends Test {
 
 	public function testHxFnDeclTSynthesised():Void {
 		// Direct bearing rule (`@:trivia` on `body` field) with a
-		// Null<HxTypeRef> optional field exercising the wrapOptional path.
+		// Null<HxType> optional field exercising the wrapOptional path.
 		final t:Null<anyparse.grammar.haxe.trivia.Pairs.HxFnDeclT> = null;
 		Assert.isNull(t);
 	}

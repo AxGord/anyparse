@@ -161,7 +161,7 @@ class HxForEnumVoidSliceTest extends HxTestHelpers {
 		Assert.equals('Some', (decl.name : String));
 		Assert.equals(1, decl.params.length);
 		Assert.equals('v', (decl.params[0].name : String));
-		Assert.equals('Int', (decl.params[0].type.name : String));
+		Assert.equals('Int', (expectNamedType(decl.params[0].type).name : String));
 		Assert.equals('None', (expectSimpleCtor(ed.ctors[1]) : String));
 	}
 

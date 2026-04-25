@@ -51,7 +51,7 @@ class HxNoBodyAbstractTest extends HxTestHelpers {
 		final fns:Array<HxFnDecl> = parseInterfaceMembers('interface IFoo { function bar():Void; }');
 		Assert.equals(1, fns.length);
 		Assert.equals('bar', (fns[0].name : String));
-		Assert.equals('Void', (fns[0].returnType.name : String));
+		Assert.equals('Void', (expectNamedType(fns[0].returnType).name : String));
 		Assert.isTrue(fns[0].body.match(NoBody));
 	}
 

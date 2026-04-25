@@ -7,6 +7,7 @@ import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxClassMember;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxIdentLit;
+import anyparse.grammar.haxe.HxType;
 import anyparse.grammar.haxe.HxTypeRef;
 import anyparse.grammar.haxe.HxVarDecl;
 import anyparse.runtime.ParseError;
@@ -148,7 +149,7 @@ class HaxeFirstSliceTest extends Test {
 		switch member {
 			case VarMember(decl):
 				Assert.equals(expectedName, (decl.name : String));
-				Assert.equals(expectedType, (decl.type.name : String));
+				Assert.equals(expectedType, (namedRef(decl.type).name : String));
 			case _:
 				Assert.fail('expected VarMember, got $member');
 		}
@@ -158,9 +159,16 @@ class HaxeFirstSliceTest extends Test {
 		switch member {
 			case FnMember(decl):
 				Assert.equals(expectedName, (decl.name : String));
-				Assert.equals(expectedReturnType, (decl.returnType.name : String));
+				Assert.equals(expectedReturnType, (namedRef(decl.returnType).name : String));
 			case _:
 				Assert.fail('expected FnMember, got $member');
 		}
+	}
+
+	private static function namedRef(t:Null<HxType>):HxTypeRef {
+		return switch t {
+			case null: throw 'expected HxType.Named, got null';
+			case Named(ref): ref;
+		};
 	}
 }
