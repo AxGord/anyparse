@@ -386,4 +386,104 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 	public function testRoundTripModuleQualifiedWithParams():Void {
 		roundTrip('class F { var m:haxe.ds.Map<String, Int>; }');
 	}
+
+	public function testDefaultAbsentIsNull():Void {
+		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar<T>():T {} }');
+		final tps:Null<Array<HxTypeParamDecl>> = decl.typeParams;
+		Assert.notNull(tps);
+		Assert.isNull(tps[0].defaultValue);
+	}
+
+	public function testDefaultNamedType():Void {
+		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar<T = Int>():T {} }');
+		final tps:Null<Array<HxTypeParamDecl>> = decl.typeParams;
+		Assert.notNull(tps);
+		Assert.equals(1, tps.length);
+		Assert.equals('T', (tps[0].name : String));
+		Assert.isNull(tps[0].constraint);
+		final d:HxTypeRef = expectNamedType(tps[0].defaultValue);
+		Assert.equals('Int', (d.name : String));
+		Assert.isNull(d.params);
+	}
+
+	public function testDefaultModuleQualified():Void {
+		final ast:HxClassDecl = HaxeParser.parse('class Foo<T = pack.sub.Type> { }');
+		final tps:Null<Array<HxTypeParamDecl>> = ast.typeParams;
+		Assert.notNull(tps);
+		Assert.equals(1, tps.length);
+		Assert.equals('T', (tps[0].name : String));
+		final d:HxTypeRef = expectNamedType(tps[0].defaultValue);
+		Assert.equals('pack.sub.Type', (d.name : String));
+	}
+
+	public function testConstraintWithDefault():Void {
+		final ast:HxClassDecl = HaxeParser.parse('class Foo<T:Iterable = Array<Int>> { }');
+		final tps:Null<Array<HxTypeParamDecl>> = ast.typeParams;
+		Assert.notNull(tps);
+		Assert.equals(1, tps.length);
+		Assert.equals('T', (tps[0].name : String));
+		Assert.equals('Iterable', (expectNamedType(tps[0].constraint).name : String));
+		final d:HxTypeRef = expectNamedType(tps[0].defaultValue);
+		Assert.equals('Array', (d.name : String));
+		final dParams:Null<Array<HxType>> = d.params;
+		Assert.notNull(dParams);
+		Assert.equals(1, dParams.length);
+		Assert.equals('Int', (expectNamedType(dParams[0]).name : String));
+	}
+
+	public function testDefaultMixedHeadDefaultTailBare():Void {
+		final ast:HxClassDecl = HaxeParser.parse('class Foo<S = String, T> { }');
+		final tps:Null<Array<HxTypeParamDecl>> = ast.typeParams;
+		Assert.notNull(tps);
+		Assert.equals(2, tps.length);
+		Assert.equals('S', (tps[0].name : String));
+		Assert.equals('String', (expectNamedType(tps[0].defaultValue).name : String));
+		Assert.equals('T', (tps[1].name : String));
+		Assert.isNull(tps[1].defaultValue);
+	}
+
+	public function testDefaultMixedHeadBareTailDefault():Void {
+		final ast:HxClassDecl = HaxeParser.parse('class Foo<S, T = String> { }');
+		final tps:Null<Array<HxTypeParamDecl>> = ast.typeParams;
+		Assert.notNull(tps);
+		Assert.equals(2, tps.length);
+		Assert.equals('S', (tps[0].name : String));
+		Assert.isNull(tps[0].defaultValue);
+		Assert.equals('T', (tps[1].name : String));
+		Assert.equals('String', (expectNamedType(tps[1].defaultValue).name : String));
+	}
+
+	public function testDefaultBothWithDefaults():Void {
+		final ast:HxClassDecl = HaxeParser.parse('class Foo<S = Int, T = String> { }');
+		final tps:Null<Array<HxTypeParamDecl>> = ast.typeParams;
+		Assert.notNull(tps);
+		Assert.equals(2, tps.length);
+		Assert.equals('Int', (expectNamedType(tps[0].defaultValue).name : String));
+		Assert.equals('String', (expectNamedType(tps[1].defaultValue).name : String));
+	}
+
+	public function testDefaultWhitespaceTolerance():Void {
+		final ast:HxClassDecl = HaxeParser.parse('class Foo<T=Int> { }');
+		final tps:Null<Array<HxTypeParamDecl>> = ast.typeParams;
+		Assert.notNull(tps);
+		Assert.equals(1, tps.length);
+		Assert.equals('T', (tps[0].name : String));
+		Assert.equals('Int', (expectNamedType(tps[0].defaultValue).name : String));
+	}
+
+	public function testRoundTripDefaultSimple():Void {
+		roundTrip('class Box<T = Int> { var v:T; }');
+	}
+
+	public function testRoundTripDefaultModuleQualified():Void {
+		roundTrip('class Box<T = haxe.io.Bytes> { var v:T; }');
+	}
+
+	public function testRoundTripDefaultWithConstraint():Void {
+		roundTrip('class Box<T:Iterable = Array<Int>> { var v:T; }');
+	}
+
+	public function testRoundTripDefaultMixed():Void {
+		roundTrip('class Pair<S = Int, T = String> { var s:S; var t:T; }');
+	}
 }
