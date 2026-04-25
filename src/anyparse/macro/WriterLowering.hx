@@ -613,11 +613,28 @@ class WriterLowering {
 						justWrappedBody = {access: fieldAccess, typePath: refName};
 					} else {
 						if (kwLead == null && leadText == null && !isFirstField && !isRaw) {
-							if (prevAnyStarNonEmpty != null) {
+							// ω-issue-48-v2: in trivia mode the bare Ref field
+							// grew a `<field>BeforeNewline:Bool` slot (see
+							// `TriviaTypeSynth.isBareNonFirstRef`). Consult it
+							// to emit a hardline when the parser captured a
+							// source newline in the gap — this is the only
+							// signal available when a preceding bare-tryparse
+							// Star (e.g. `HxMemberDecl.modifiers`) is empty,
+							// since that Star has no first element whose
+							// `newlineBefore` could be read.
+							if (ctx.trivia && isTriviaBearing(typePath)) {
+								final nlAccess:Expr = {
+									expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX),
+									pos: Context.currentPos(),
+								};
+								if (prevAnyStarNonEmpty != null) {
+									final prev:Expr = prevAnyStarNonEmpty;
+									parts.push(macro $prev ? ($nlAccess ? _dhl() : _dt(' ')) : _de());
+								} else parts.push(macro $nlAccess ? _dhl() : _dt(' '));
+							} else if (prevAnyStarNonEmpty != null) {
 								final prev:Expr = prevAnyStarNonEmpty;
 								parts.push(macro $prev ? _dt(' ') : _de());
-							} else
-								parts.push(macro _dt(' '));
+							} else parts.push(macro _dt(' '));
 						}
 						parts.push(writeCall);
 					}

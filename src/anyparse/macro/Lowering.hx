@@ -1066,7 +1066,41 @@ class Lowering {
 			// mode) when the kw/lead miss — that trivia belongs to the next
 			// outer @:trivia Star loop, not to this discarded optional slot.
 			final isOptionalRef:Bool = child.kind == Ref && isOptional;
-			if (!triviaEofStar && !isOptionalRef) parseSteps.push(macro skipWs(ctx));
+			// ω-issue-48-v2: a bare non-first Ref field (no `@:optional`, no
+			// `@:kw`, no `@:lead`) in a trivia-bearing Seq captures the
+			// `newlineBefore` signal in the gap between preceding content
+			// and the sub-rule's first token. Needed when the preceding
+			// bare-tryparse Star is empty (e.g. `HxMemberDecl.modifiers`
+			// empty → `member` follows an `@:allow(...)\n` meta element):
+			// the Star's rewind stashes trivia back to `ctx.pendingTrivia`,
+			// and the pre-Ref `collectTrivia` here drains it, preserving
+			// the newline on the synth `<field>BeforeNewline:Bool` slot.
+			final hasBeforeNewlineSlot:Bool = child.kind == Ref
+				&& !isOptional
+				&& child != node.children[0]
+				&& kwLead == null
+				&& leadText == null
+				&& ctx.trivia
+				&& isTriviaBearing(typePath);
+			final beforeNlLocal:String = '_beforeNl_$fieldName';
+			if (!triviaEofStar && !isOptionalRef) {
+				if (hasBeforeNewlineSlot) {
+					// Route through `collectTrivia` — drains any
+					// `pendingTrivia` stash from a preceding empty
+					// bare-tryparse Star and captures `newlineBefore` into
+					// the local that the struct literal writes onto the
+					// synth slot. `skipWs` would silently discard both.
+					parseSteps.push({
+						expr: EVars([{
+							name: beforeNlLocal,
+							type: (macro : Bool),
+							expr: macro collectTrivia(ctx).newlineBefore,
+							isFinal: true,
+						}]),
+						pos: Context.currentPos(),
+					});
+				} else parseSteps.push(macro skipWs(ctx));
+			}
 			// ω-issue-316: for `@:optional @:kw(...)` Ref fields in Trivia
 			// mode, declare per-field locals that capture (a) a same-line
 			// trailing comment after the kw and (b) own-line leading comments
@@ -1251,6 +1285,8 @@ class Lowering {
 				parseSteps.push(macro expectLit(ctx, $v{trailText}));
 			}
 			structFields.push({field: fieldName, expr: macro $i{localName}});
+			if (hasBeforeNewlineSlot)
+				structFields.push({field: fieldName + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX, expr: macro $i{beforeNlLocal}});
 			if (hasKwTriviaSlots) {
 				structFields.push({field: fieldName + TriviaTypeSynth.AFTER_KW_SUFFIX, expr: macro $i{afterKwLocal}});
 				structFields.push({field: fieldName + TriviaTypeSynth.KW_LEADING_SUFFIX, expr: macro $i{kwLeadingLocal}});

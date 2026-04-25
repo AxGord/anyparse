@@ -80,6 +80,19 @@ class TriviaTypeSynth {
 	public static inline final BODY_ON_SAME_LINE_SUFFIX:String = 'BodyOnSameLine';
 
 	/**
+	 * ω-issue-48-v2 — source-shape slot synthesised on paired Seq types
+	 * alongside bare non-first Ref fields (no `@:optional`, no `@:kw`, no
+	 * `@:lead`). Records whether the source had a newline in the gap
+	 * between the preceding content and the sub-rule's first token.
+	 * Consumed by the writer's inter-field separator so that
+	 * `@:allow(...)\n\tvar x` round-trips with the newline intact even
+	 * when the member's `modifiers` Star is empty — the first element of
+	 * that empty Star cannot carry the `newlineBefore` signal, so the
+	 * parser drains the stashed trivia here instead.
+	 */
+	public static inline final BEFORE_NEWLINE_SUFFIX:String = 'BeforeNewline';
+
+	/**
 	 * ω-orphan-trivia — suffixes for trailing-trivia sibling slots
 	 * synthesised on paired Seq types alongside `@:trivia` Star fields.
 	 * `TrailingLeading` carries the own-line comments captured AFTER
@@ -151,6 +164,13 @@ class TriviaTypeSynth {
 					// would lose its comment at parse time.
 					if (isTriviaStarField(child))
 						for (extra in buildStarTrailingSlots(child, pos)) fields.push(extra);
+					// ω-issue-48-v2: bare non-first Ref fields grow a
+					// `BeforeNewline:Bool` slot capturing whether the source
+					// had a newline in the gap between the preceding content
+					// and the sub-rule's first token. Consumed by the
+					// writer's inter-field separator.
+					if (isBareNonFirstRef(child, origNode))
+						fields.push(buildBeforeNewlineSlot(child, pos));
 				}
 				final anon:ComplexType = TAnonymous(fields);
 				{pos: pos, pack: synthPack, name: pairedSimple, kind: TDAlias(anon), fields: []};
@@ -175,6 +195,21 @@ class TriviaTypeSynth {
 		if (child.kind != Ref) return false;
 		if (child.annotations.get('base.optional') != true) return false;
 		return readMetaString(child, ':kw') != null;
+	}
+
+	private static function isBareNonFirstRef(child:ShapeNode, parent:ShapeNode):Bool {
+		if (child.kind != Ref) return false;
+		if (child.annotations.get('base.optional') == true) return false;
+		if (child == parent.children[0]) return false;
+		if (readMetaString(child, ':kw') != null) return false;
+		if (readMetaString(child, ':lead') != null) return false;
+		return true;
+	}
+
+	private static function buildBeforeNewlineSlot(child:ShapeNode, pos:Position):Field {
+		final fieldName:String = child.annotations.get('base.fieldName');
+		final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
+		return {name: fieldName + BEFORE_NEWLINE_SUFFIX, kind: FVar(boolCT), pos: pos, access: []};
 	}
 
 	private static function buildKwTriviaSlots(child:ShapeNode, pos:Position):Array<Field> {

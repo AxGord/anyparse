@@ -183,6 +183,22 @@ class HxTriviaWriteTest extends Test {
 	}
 
 	/**
+	 * ω-issue-48-v2 — `@:allow(...)\n\tvar x` round-trips with the
+	 * newline intact even when the member's `modifiers` Star is empty.
+	 * The trivia `newlineBefore` marker sits on the member element
+	 * itself; the writer must consult it at the meta→member boundary
+	 * when modifiers contributes nothing. Mirrors upstream
+	 * `test/testcases/sameline/issue_48_metadata_max_length.hxtest`.
+	 */
+	public function testMetadataNewlineBeforeBareVar():Void {
+		final source:String = 'class Main {\n\t@:allow(Foo.Bar)\n\tvar x:Int;\n}';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out:String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals(source + '\n', out);
+	}
+
+
+	/**
 	 * ω-C-commentStyle — default `JavadocNoStars`: `/**…**\/` wrap
 	 * with plain indent-unit content (no ` * ` markers). Mixed-indent
 	 * source re-emits at writer's `indentChar=Tab`. Content lines
