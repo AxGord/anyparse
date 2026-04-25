@@ -1010,22 +1010,46 @@ class Lowering {
 			final trailText:Null<String> = readMetaString(child, ':trail');
 			final isStar:Bool = child.kind == Star;
 			final isOptional:Bool = child.annotations.get('base.optional') == true;
-			if (isOptional && child.kind != Ref) {
+			if (isOptional && child.kind != Ref && child.kind != Star) {
 				Context.fatalError(
-					'Lowering: @:optional is only supported on Ref-shaped struct fields (field "$fieldName")',
+					'Lowering: @:optional is only supported on Ref- or Star-shaped struct fields (field "$fieldName")',
 					Context.currentPos()
 				);
 			}
-			if (isOptional && trailText != null) {
-				// A trail on an optional field would have to live inside
+			if (isOptional && !isStar && trailText != null) {
+				// A trail on an optional Ref field would have to live inside
 				// the peek branch — the current session only supports
-				// lead-only optional fields. Reject explicitly rather than
-				// silently drop the trail; defer until a real grammar
-				// needs it.
+				// lead-only optional Ref fields. Reject explicitly rather
+				// than silently drop the trail; defer until a real grammar
+				// needs it. Optional Star fields are exempt — `@:trail` on
+				// a Star describes the close delimiter of the angle-/paren-
+				// bracketed list, not a free-floating post-field literal,
+				// and the close-peek emission already lives inside the
+				// matchLit-gated branch.
 				Context.fatalError(
 					'Lowering: @:optional combined with @:trail is deferred (field "$fieldName")',
 					Context.currentPos()
 				);
+			}
+			if (isStar && isOptional) {
+				// Optional Star is the angle-bracketed type-parameter
+				// pattern (`@:optional @:lead('<') @:trail('>') @:sep(',')`,
+				// first consumer: `HxTypeRef.params`). The combination
+				// requires a close delimiter — the matchLit peek on the
+				// open commits to consuming up to and including the close,
+				// so EOF / try-parse termination modes are inapplicable.
+				if (leadText == null || trailText == null) {
+					Context.fatalError(
+						'Lowering: @:optional Star field "$fieldName" requires both @:lead and @:trail',
+						Context.currentPos()
+					);
+				}
+				if (kwLead != null) {
+					Context.fatalError(
+						'Lowering: @:optional Star field "$fieldName" does not support @:kw',
+						Context.currentPos()
+					);
+				}
 			}
 			// Binary @:length prefix — read an N-byte ASCII-encoded length
 			// BEFORE any field-level lead literal. The parsed integer is
@@ -1252,6 +1276,8 @@ class Lowering {
 						}]),
 						pos: Context.currentPos(),
 					});
+				case Star if (isOptional):
+					emitOptionalStarFieldSteps(child, localName, parseSteps);
 				case Star:
 					final isLastField:Bool = child == node.children[node.children.length - 1];
 					emitStarFieldSteps(child, localName, parseSteps, isLastField);
@@ -1469,6 +1495,87 @@ class Lowering {
 		}
 		parseSteps.push(macro skipWs(ctx));
 		parseSteps.push(macro expectLit(ctx, $v{closeText}));
+	}
+
+	/**
+	 * Emit the parse steps for an `@:optional` Star struct field with
+	 * `@:lead` / `@:trail` (and optionally `@:sep`). The local is typed
+	 * `Null<Array<elemCT>>`; absent input leaves it `null`, present input
+	 * parses the bracketed list and assigns the array.
+	 *
+	 * First consumer: `HxTypeRef.params` (`@:optional @:lead('<')
+	 * @:trail('>') @:sep(',')`). The element rule may recurse into the
+	 * containing rule — composition is handled by the parser dispatcher,
+	 * not by this emitter.
+	 *
+	 * Termination is close-peek with an optional sep loop, mirroring
+	 * `emitStarFieldSteps`'s sep+close branch. Trivia-mode trailing slots
+	 * and tryparse / EOF modes are not supported — the bracketed list
+	 * shape commits to a close delimiter on `matchLit` hit.
+	 */
+	private function emitOptionalStarFieldSteps(starNode:ShapeNode, localName:String, parseSteps:Array<Expr>):Void {
+		final inner:ShapeNode = starNode.children[0];
+		if (inner.kind != Ref) {
+			Context.fatalError('Lowering: @:optional Star struct field must contain a Ref', Context.currentPos());
+		}
+		final elemRefName:String = inner.annotations.get('base.ref');
+		final elemFn:String = parseFnName(elemRefName);
+		final elemCT:ComplexType = ruleReturnCT(elemRefName);
+		final elemCall:Expr = {
+			expr: ECall(macro $i{elemFn}, [macro ctx]),
+			pos: Context.currentPos(),
+		};
+		// `@:lead` and `@:trail` are guaranteed non-null at this point —
+		// the validation block in `lowerStruct` rejects optional Star
+		// without both before the field-value switch fires.
+		final openText:String = starNode.annotations.get('lit.leadText');
+		final closeText:String = starNode.annotations.get('lit.trailText');
+		final sepText:Null<String> = starNode.annotations.get('lit.sepText');
+		final accumCT:ComplexType = TPath({pack: [], name: 'Array', params: [TPType(elemCT)]});
+		final optAccumCT:ComplexType = TPath({pack: [], name: 'Null', params: [TPType(accumCT)]});
+		final closeCharCode:Int = closeText.charCodeAt(0);
+		final closeNotNextExpr:Expr = closeText.length == 1
+			? macro ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}
+			: macro ctx.pos < ctx.input.length && !peekLit(ctx, $v{closeText});
+		final loopBody:Expr = if (sepText != null) {
+			final sepCharCode:Int = sepText.charCodeAt(0);
+			macro {
+				skipWs(ctx);
+				if ($closeNotNextExpr) {
+					_items.push($elemCall);
+					skipWs(ctx);
+					while (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
+						ctx.pos++;
+						skipWs(ctx);
+						_items.push($elemCall);
+						skipWs(ctx);
+					}
+				}
+			};
+		} else {
+			macro {
+				skipWs(ctx);
+				while ($closeNotNextExpr) {
+					_items.push($elemCall);
+					skipWs(ctx);
+				}
+			};
+		}
+		parseSteps.push({
+			expr: EVars([{
+				name: localName,
+				type: optAccumCT,
+				expr: macro if (matchLit(ctx, $v{openText})) {
+					final _items:$accumCT = [];
+					$loopBody;
+					skipWs(ctx);
+					expectLit(ctx, $v{closeText});
+					_items;
+				} else null,
+				isFinal: true,
+			}]),
+			pos: Context.currentPos(),
+		});
 	}
 
 	/**

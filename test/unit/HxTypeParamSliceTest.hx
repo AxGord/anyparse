@@ -1,0 +1,145 @@
+package unit;
+
+import utest.Assert;
+import anyparse.grammar.haxe.HaxeParser;
+import anyparse.grammar.haxe.HxClassDecl;
+import anyparse.grammar.haxe.HxFnDecl;
+import anyparse.grammar.haxe.HxTypeRef;
+import anyparse.grammar.haxe.HxVarDecl;
+import anyparse.runtime.ParseError;
+
+/**
+ * Phase 3 type-parameter tests for `HxTypeRef`.
+ *
+ * Validates the optional close-peek Star added to `HxTypeRef.params` —
+ * `@:optional @:lead('<') @:trail('>') @:sep(',')` — covering bare types
+ * (`Int`), single-arg generics (`Array<Int>`), multi-arg generics
+ * (`Map<String, Int>`), and recursive composition (`Foo<Bar<Baz>>`).
+ *
+ * The optional Star pattern is the first non-Ref consumer of `@:optional`
+ * in the grammar — generated via `Lowering.emitOptionalStarFieldSteps`
+ * on the parser side and a null-check wrapper in `WriterLowering` on the
+ * writer side. Recursion composes naturally because the element rule is
+ * `HxTypeRef` itself.
+ */
+class HxTypeParamSliceTest extends HxTestHelpers {
+
+	public function testBareTypeHasNoParams():Void {
+		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar():Int {} }');
+		Assert.equals('Int', (decl.returnType.name : String));
+		Assert.isNull(decl.returnType.params);
+	}
+
+	public function testSingleTypeParam():Void {
+		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar():Array<Int> {} }');
+		Assert.equals('Array', (decl.returnType.name : String));
+		final params:Null<Array<HxTypeRef>> = decl.returnType.params;
+		Assert.notNull(params);
+		Assert.equals(1, params.length);
+		Assert.equals('Int', (params[0].name : String));
+		Assert.isNull(params[0].params);
+	}
+
+	public function testTwoTypeParams():Void {
+		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar():Map<String, Int> {} }');
+		Assert.equals('Map', (decl.returnType.name : String));
+		final params:Null<Array<HxTypeRef>> = decl.returnType.params;
+		Assert.notNull(params);
+		Assert.equals(2, params.length);
+		Assert.equals('String', (params[0].name : String));
+		Assert.equals('Int', (params[1].name : String));
+	}
+
+	public function testNestedTypeParams():Void {
+		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar():Array<Array<Int>> {} }');
+		Assert.equals('Array', (decl.returnType.name : String));
+		final outer:Null<Array<HxTypeRef>> = decl.returnType.params;
+		Assert.notNull(outer);
+		Assert.equals(1, outer.length);
+		Assert.equals('Array', (outer[0].name : String));
+		final inner:Null<Array<HxTypeRef>> = outer[0].params;
+		Assert.notNull(inner);
+		Assert.equals(1, inner.length);
+		Assert.equals('Int', (inner[0].name : String));
+	}
+
+	public function testDoubleNestedClosingBrackets():Void {
+		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar():Foo<Bar<Baz>> {} }');
+		final outer:Null<Array<HxTypeRef>> = decl.returnType.params;
+		Assert.notNull(outer);
+		Assert.equals(1, outer.length);
+		final mid:Null<Array<HxTypeRef>> = outer[0].params;
+		Assert.notNull(mid);
+		Assert.equals(1, mid.length);
+		Assert.equals('Baz', (mid[0].name : String));
+	}
+
+	public function testParamTypeOnFnArgument():Void {
+		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar(xs:Array<Int>):Void {} }');
+		Assert.equals(1, decl.params.length);
+		Assert.equals('Array', (decl.params[0].type.name : String));
+		final inner:Null<Array<HxTypeRef>> = decl.params[0].type.params;
+		Assert.notNull(inner);
+		Assert.equals(1, inner.length);
+		Assert.equals('Int', (inner[0].name : String));
+	}
+
+	public function testParamTypeOnVar():Void {
+		final ast:HxClassDecl = HaxeParser.parse('class Foo { var xs:Array<String>; }');
+		Assert.equals(1, ast.members.length);
+		final decl:HxVarDecl = expectVarMember(ast.members[0].member);
+		Assert.equals('Array', (decl.type.name : String));
+		final inner:Null<Array<HxTypeRef>> = decl.type.params;
+		Assert.notNull(inner);
+		Assert.equals(1, inner.length);
+		Assert.equals('String', (inner[0].name : String));
+	}
+
+	public function testWhitespaceTolerance():Void {
+		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar():Map < String , Int > {} }');
+		final params:Null<Array<HxTypeRef>> = decl.returnType.params;
+		Assert.notNull(params);
+		Assert.equals(2, params.length);
+		Assert.equals('String', (params[0].name : String));
+		Assert.equals('Int', (params[1].name : String));
+	}
+
+	public function testRejectsTrailingComma():Void {
+		Assert.raises(() -> HaxeParser.parse('class Foo { function bar():Map<String, Int,> {} }'), ParseError);
+	}
+
+	public function testEmptyParamsParsesAsEmptyList():Void {
+		// `Foo<>` is invalid Haxe but the sep+close macro pattern mirrors
+		// the paren-list shape and accepts an empty list. Treated as a
+		// permissive degenerate input — the corpus never produces it,
+		// and the round-trip preserves the same empty-list shape.
+		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar():Foo<> {} }');
+		final params:Null<Array<HxTypeRef>> = decl.returnType.params;
+		Assert.notNull(params);
+		Assert.equals(0, params.length);
+	}
+
+	public function testRoundTripBare():Void {
+		roundTrip('class F { var x:Int; }');
+	}
+
+	public function testRoundTripSingleParam():Void {
+		roundTrip('class F { var xs:Array<Int>; }');
+	}
+
+	public function testRoundTripTwoParams():Void {
+		roundTrip('class F { var m:Map<String, Int>; }');
+	}
+
+	public function testRoundTripNested():Void {
+		roundTrip('class F { var x:Array<Array<Int>> = []; }');
+	}
+
+	public function testRoundTripFnReturnType():Void {
+		roundTrip('class F { function get():Array<Int> {} }');
+	}
+
+	public function testRoundTripFnArgType():Void {
+		roundTrip('class F { function take(xs:Array<Int>):Void {} }');
+	}
+}

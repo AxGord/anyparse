@@ -459,6 +459,32 @@ class WriterLowering {
 			};
 
 			if (isStar) {
+				if (isOptional) {
+					// Optional close-peek Star (first consumer:
+					// `HxTypeRef.params`). Build the inner emission against
+					// a narrowed local `_optVal` so the strict-null
+					// `final _arr = _optVal` inside `emitWriterStarField`
+					// types as `Array<T>`, then wrap the whole thing in a
+					// `null` check at the field-access boundary. Empty Doc
+					// (`_de()`) is the absent shape — the surrounding Seq
+					// emits nothing for the missing list.
+					final innerParts:Array<Expr> = [];
+					emitWriterStarField(
+						child, macro _optVal, innerParts,
+						child == node.children[node.children.length - 1],
+						typePath, isFirstField, isRaw, stalePrevBareRefBody
+					);
+					final innerExpr:Expr = if (innerParts.length == 1) innerParts[0]
+					else {expr: EBlock(innerParts), pos: Context.currentPos()};
+					parts.push(macro {
+						final _optVal = $fieldAccess;
+						if (_optVal != null) $innerExpr else _de();
+					});
+					prevAnyStarNonEmpty = null;
+					prevBodyField = null;
+					isFirstField = false;
+					continue;
+				}
 				// ω-member-meta: inter-Star separator. When a non-first
 				// bare-tryparse Star follows another bare-tryparse Star
 				// that may have emitted content, emit a leading separator
