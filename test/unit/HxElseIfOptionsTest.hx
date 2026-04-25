@@ -162,6 +162,8 @@ class HxElseIfOptionsTest extends Test {
 			typeParamClose: base.typeParamClose,
 			anonTypeBracesOpen: base.anonTypeBracesOpen,
 			anonTypeBracesClose: base.anonTypeBracesClose,
+			objectLiteralBracesOpen: base.objectLiteralBracesOpen,
+			objectLiteralBracesClose: base.objectLiteralBracesClose,
 		};
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}
@@ -209,6 +211,8 @@ class HxElseIfOptionsTest extends Test {
 			typeParamClose: base.typeParamClose,
 			anonTypeBracesOpen: base.anonTypeBracesOpen,
 			anonTypeBracesClose: base.anonTypeBracesClose,
+			objectLiteralBracesOpen: base.objectLiteralBracesOpen,
+			objectLiteralBracesClose: base.objectLiteralBracesClose,
 		};
 	}
 }

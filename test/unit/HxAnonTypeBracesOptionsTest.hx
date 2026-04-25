@@ -141,6 +141,8 @@ final class HxAnonTypeBracesOptionsTest extends Test {
 			typeParamClose: base.typeParamClose,
 			anonTypeBracesOpen: open,
 			anonTypeBracesClose: close,
+			objectLiteralBracesOpen: base.objectLiteralBracesOpen,
+			objectLiteralBracesClose: base.objectLiteralBracesClose,
 		};
 	}
 }

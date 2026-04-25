@@ -18,8 +18,14 @@ package anyparse.grammar.haxe;
  * corpus only exercises object literals inside expression contexts
  * (function arguments, binary-operator right-hand sides) where no
  * block-statement parser competes.
+ *
+ * `@:fmt(objectLiteralBracesOpen, objectLiteralBracesClose)` routes the
+ * inside-of-braces spacing through `delimInsidePolicySpace` — same
+ * mechanism as `@:fmt(typeParamOpen, typeParamClose)` on
+ * `HxTypeRef.params` and `@:fmt(anonTypeBracesOpen, anonTypeBracesClose)`
+ * on `HxType.Anon`. Defaults `None`/`None` keep `{a: 1}` tight.
  */
 @:peg
 typedef HxObjectLit = {
-	@:lead('{') @:trail('}') @:sep(',') var fields:Array<HxObjectField>;
+	@:fmt(objectLiteralBracesOpen, objectLiteralBracesClose) @:lead('{') @:trail('}') @:sep(',') var fields:Array<HxObjectField>;
 }

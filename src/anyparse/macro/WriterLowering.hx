@@ -941,8 +941,8 @@ class WriterLowering {
 				}
 			}
 			final tcExpr:Expr = trailingCommaExpr(starNode);
-			final openInsideExpr:Expr = delimInsidePolicySpace(starNode, ['typeParamOpen'], false) ?? macro _de();
-			final closeInsideExpr:Expr = delimInsidePolicySpace(starNode, ['typeParamClose'], true) ?? macro _de();
+			final openInsideExpr:Expr = delimInsidePolicySpace(starNode, ['typeParamOpen', 'objectLiteralBracesOpen'], false) ?? macro _de();
+			final closeInsideExpr:Expr = delimInsidePolicySpace(starNode, ['typeParamClose', 'objectLiteralBracesClose'], true) ?? macro _de();
 			parts.push(macro {
 				final _arr = $fieldAccess;
 				final _docs:Array<anyparse.core.Doc> = [];
@@ -1345,13 +1345,17 @@ class WriterLowering {
 	 * Consumed by `@:fmt(typeParamOpen, typeParamClose)` on the seven
 	 * `typeParams` Star sites (`HxTypeRef.params` plus the five declare-
 	 * site `typeParams` fields on class / interface / abstract / enum /
-	 * typedef / function decls), and by `@:fmt(anonTypeBracesOpen,
+	 * typedef / function decls), by `@:fmt(anonTypeBracesOpen,
 	 * anonTypeBracesClose)` on the `HxType.Anon` Alt-branch's
 	 * `@:lead('{') @:trail('}') @:sep(',')` Star (routed through
-	 * `lowerEnumStar`). Defaults `None` keep `Array<Int>` /
-	 * `{x:Int}` tight; the haxe-formatter
-	 * `whitespace.bracesConfig.anonTypeBraces.{openingPolicy: "around",
-	 * closingPolicy: "around"}` flip produces `{ x:Int }`.
+	 * `lowerEnumStar`), and by `@:fmt(objectLiteralBracesOpen,
+	 * objectLiteralBracesClose)` on `HxObjectLit.fields`'s `@:lead('{')
+	 * @:trail('}') @:sep(',')` Star (routed through the regular
+	 * `emitWriterStarField` sep-Star path). Defaults `None` keep
+	 * `Array<Int>` / `{x:Int}` / `{a: 1}` tight; the haxe-formatter
+	 * `whitespace.bracesConfig.{anonTypeBraces|objectLiteralBraces}.
+	 * {openingPolicy: "around", closingPolicy: "around"}` flip produces
+	 * `{ x:Int }` / `{ a: 1 }`.
 	 */
 	private static function delimInsidePolicySpace(starNode:ShapeNode, flagNames:Array<String>, isClose:Bool):Null<Expr> {
 		final flagName:Null<String> = firstFmtFlag(starNode, flagNames);

@@ -7,12 +7,14 @@ package anyparse.grammar.haxe.format;
  * policy pair (`HxFormatParenPolicySection` reused as the value
  * shape since the policy surface is identical).
  *
- * Added in slice ω-anontype-braces. `anonTypeBraces` is modelled —
- * `objectLiteralBraces`, `unknownBraces` and any future per-kind
- * sections (`codeBlocks`, `enumBraces`, …) land with their own slices
- * once a writer knob picks up the corresponding grammar site.
+ * Added in slice ω-anontype-braces. `anonTypeBraces` and
+ * `objectLiteralBraces` are modelled. `unknownBraces` and any future
+ * per-kind sections (`codeBlocks`, `enumBraces`, …) land with their
+ * own slices once a writer knob picks up the corresponding grammar
+ * site.
  */
 @:peg typedef HxFormatBracesConfigSection = {
 
 	@:optional var anonTypeBraces:HxFormatParenPolicySection;
+	@:optional var objectLiteralBraces:HxFormatParenPolicySection;
 };

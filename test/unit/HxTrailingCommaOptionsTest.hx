@@ -181,6 +181,8 @@ class HxTrailingCommaOptionsTest extends Test {
 			typeParamClose: base.typeParamClose,
 			anonTypeBracesOpen: base.anonTypeBracesOpen,
 			anonTypeBracesClose: base.anonTypeBracesClose,
+			objectLiteralBracesOpen: base.objectLiteralBracesOpen,
+			objectLiteralBracesClose: base.objectLiteralBracesClose,
 		};
 	}
 }

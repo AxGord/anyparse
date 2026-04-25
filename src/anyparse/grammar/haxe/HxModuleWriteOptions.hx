@@ -311,6 +311,25 @@ import anyparse.format.WriteOptions;
  *    `anonTypeBracesOpen=After + anonTypeBracesClose=Before` flip
  *    produces `{ x:Int }`, matching haxe-formatter's
  *    `space_inside_anon_type_hint` fixture.
+ *
+ * Fields added in slice ω-objectlit-braces (object-literal `{}`
+ * interior spacing — symmetric infrastructure to anonTypeBraces but
+ * for `HxObjectLit.fields`'s sep-Star path):
+ *  - `objectLiteralBracesOpen` — whitespace around the opening `{` of
+ *    an object-literal expression (`HxObjectLit`'s `@:lead('{')`).
+ *    `None` (default) keeps `{a: 1}` tight. `After`/`Both` emit a
+ *    space inside after `{` (`{ a: 1}`). `Before`/`Both` are exposed
+ *    for parity but have no effect yet — the regular Star path has
+ *    no outside-before-open padding point at the field-access
+ *    boundary used by object literals.
+ *  - `objectLiteralBracesClose` — whitespace around the closing `}`
+ *    of an object literal. `None` (default) keeps the tight layout.
+ *    `Before`/`Both` emit a space inside before `}` (`{a: 1 }`);
+ *    `After`/`Both` are exposed for parity but have no effect yet
+ *    (no outside-after-close padding point). The combined
+ *    `objectLiteralBracesOpen=After + objectLiteralBracesClose=Before`
+ *    flip produces `{ a: 1 }`, matching haxe-formatter's
+ *    `bracesConfig.objectLiteralBraces` `around` policy pair.
  */
 typedef HxModuleWriteOptions = WriteOptions & {
 	sameLineElse:SameLinePolicy,
@@ -345,4 +364,6 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	typeParamClose:WhitespacePolicy,
 	anonTypeBracesOpen:WhitespacePolicy,
 	anonTypeBracesClose:WhitespacePolicy,
+	objectLiteralBracesOpen:WhitespacePolicy,
+	objectLiteralBracesClose:WhitespacePolicy,
 };

@@ -128,6 +128,17 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   fixture (`{ x:Int }`). The sibling
  *   `bracesConfig.anonTypeBraces.removeInnerWhenEmpty` key is
  *   parsed and silently ignored.
+ * - `whitespace.bracesConfig.objectLiteralBraces.openingPolicy`
+ *   (ω-objectlit-braces): same enum / same collapse, routed to
+ *   `opt.objectLiteralBracesOpen`. `After` / `Both` emit a space
+ *   inside after `{` of `HxObjectLit`; `Before` / `None` keep the
+ *   brace tight.
+ * - `whitespace.bracesConfig.objectLiteralBraces.closingPolicy`
+ *   (ω-objectlit-braces): same enum, routed to
+ *   `opt.objectLiteralBracesClose`. `Before` / `Both` emit a space
+ *   inside before `}`; `After` / `None` leave the close tight.
+ *   Combined opening + closing = `"around"` produces `{ a: 1 }`.
+ *   The sibling `removeInnerWhenEmpty` key is silently ignored.
  * - `emptyLines.afterFieldsWithDocComments` (ω-C-empty-lines-doc):
  *   enum string — `"ignore"` → `CommentEmptyLinesPolicy.Ignore`,
  *   `"none"` → `CommentEmptyLinesPolicy.None`, `"one"` →
@@ -245,6 +256,8 @@ final class HaxeFormatConfigLoader {
 			typeParamClose: base.typeParamClose,
 			anonTypeBracesOpen: base.anonTypeBracesOpen,
 			anonTypeBracesClose: base.anonTypeBracesClose,
+			objectLiteralBracesOpen: base.objectLiteralBracesOpen,
+			objectLiteralBracesClose: base.objectLiteralBracesClose,
 		};
 		if (cfg.indentation != null) applyIndentation(cfg.indentation, result);
 		if (cfg.wrapping != null) applyWrapping(cfg.wrapping, result);
@@ -329,6 +342,13 @@ final class HaxeFormatConfigLoader {
 					opt.anonTypeBracesOpen = whitespaceToRuntime(anonType.openingPolicy);
 				if (anonType.closingPolicy != null)
 					opt.anonTypeBracesClose = whitespaceToRuntime(anonType.closingPolicy);
+			}
+			final objectLit:Null<HxFormatParenPolicySection> = braces.objectLiteralBraces;
+			if (objectLit != null) {
+				if (objectLit.openingPolicy != null)
+					opt.objectLiteralBracesOpen = whitespaceToRuntime(objectLit.openingPolicy);
+				if (objectLit.closingPolicy != null)
+					opt.objectLiteralBracesClose = whitespaceToRuntime(objectLit.closingPolicy);
 			}
 		}
 	}

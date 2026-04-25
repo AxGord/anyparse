@@ -36,6 +36,7 @@ import unit.HxObjectFieldColonOptionsTest;
 import unit.HxTypedefAssignOptionsTest;
 import unit.HxTypeParamSpacingOptionsTest;
 import unit.HxAnonTypeBracesOptionsTest;
+import unit.HxObjectLitBracesOptionsTest;
 import unit.HxAbstractClauseSpacingTest;
 import unit.HxElseIfOptionsTest;
 import unit.HxInterMemberBlankLinesOptionsTest;
@@ -103,6 +104,7 @@ class RunTests {
 		runner.addCase(new HxTypedefAssignOptionsTest());
 		runner.addCase(new HxTypeParamSpacingOptionsTest());
 		runner.addCase(new HxAnonTypeBracesOptionsTest());
+		runner.addCase(new HxObjectLitBracesOptionsTest());
 		runner.addCase(new HxAbstractClauseSpacingTest());
 		runner.addCase(new HxElseIfOptionsTest());
 		runner.addCase(new HxInterMemberBlankLinesOptionsTest());
