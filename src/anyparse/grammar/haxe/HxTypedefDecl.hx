@@ -18,9 +18,13 @@ package anyparse.grammar.haxe;
  * describes the inside, matching the pattern used by `HxVarDecl`
  * and `HxFnDecl`.
  *
- * Struct typedefs (`typedef Foo = { ... }`) and function types
- * (`typedef Foo = Int -> Void`) are deferred — `HxTypeRef` is
- * currently a single identifier.
+ * The `type` field is a full `HxType`, so struct typedefs
+ * (`typedef Foo = {a:Int, b:String}`) and function types (`typedef
+ * Foo = Int->Void`) compose through `HxType.Anon` and `HxType.Arrow`.
+ * The writer-side `=` spacing for typedef rhs is governed by the
+ * `@:lead('=')` literal emission and remains tight pending an
+ * assignment-style knob (compare `HxVarDecl.init` which produces
+ * ` = ` via the surrounding context).
  */
 @:peg
 typedef HxTypedefDecl = {

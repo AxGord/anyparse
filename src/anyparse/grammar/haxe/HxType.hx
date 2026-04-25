@@ -24,10 +24,16 @@ package anyparse.grammar.haxe;
  *    The new (parenthesised) form `(Int) -> Int`, `(Int, String) -> Bool`
  *    requires a parenthesised-type atom and stays for a follow-up slice.
  *
- * Future additions land as new Alt branches:
- *
- *  - `Anon(fields:Array<HxAnonField>)` for anonymous structure types
- *    (`{a:Int, b:String}`).
+ *  - `Anon(fields:Array<HxAnonField>)` — anonymous structure type
+ *    `{x:Int, y:String}`. Bracketed comma-separated `HxAnonField`
+ *    list reusing the same Case 4 sep-peek Star pattern as
+ *    `HxObjectLit`. Dispatched by the `{` lead — type-position is
+ *    always after `:` (var-decl, function-param, return type,
+ *    type-param body), so no Alt-level ambiguity with `HxStatement.
+ *    BlockStmt` or `HxExpr.ObjectLit` exists. Nested anon
+ *    (`{f:{f:Int}}`) and arrow inside anon (`{cb:Int->Void}`) compose
+ *    naturally through the recursive `HxType` value field on
+ *    `HxAnonField`.
  *
  * The wrapper is introduced as a foundation so each new variant lands
  * as a small additive slice rather than retrofitting the type-position
@@ -49,4 +55,7 @@ enum HxType {
 
 	@:infix('->', 0, 'Right') @:fmt(tight)
 	Arrow(left:HxType, right:HxType);
+
+	@:lead('{') @:trail('}') @:sep(',')
+	Anon(fields:Array<HxAnonField>);
 }
