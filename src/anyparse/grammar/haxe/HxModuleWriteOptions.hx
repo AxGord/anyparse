@@ -192,7 +192,6 @@ import anyparse.format.WriteOptions;
  *    `HxClassDecl.members` is the only current consumer; interface /
  *    abstract / enum member bodies fall under the same axis but ship
  *    in follow-up slices when their grammar nodes land the flag.
- *    in follow-up slices when their grammar nodes land the flag.
  *
  * Fields added in slice ω-interblank (inter-member blank lines):
  *  - `betweenVars` — blank-line count between two consecutive var
