@@ -8,6 +8,7 @@ import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxEnumDecl;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxIdentLit;
+import anyparse.grammar.haxe.HxInterfaceDecl;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxTypedefDecl;
 import anyparse.grammar.haxe.HxTypeRef;
@@ -254,5 +255,19 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 
 	public function testRoundTripAbstractDeclareSite():Void {
 		roundTrip('abstract MyInt<T>(Int) { }');
+	}
+
+	public function testInterfaceDeclareSite():Void {
+		final ast:HxModule = HaxeModuleParser.parse('interface Iterable<T> { }');
+		Assert.equals(1, ast.decls.length);
+		final id:HxInterfaceDecl = expectInterfaceDecl(ast.decls[0]);
+		final tps:Null<Array<HxIdentLit>> = id.typeParams;
+		Assert.notNull(tps);
+		Assert.equals(1, tps.length);
+		Assert.equals('T', (tps[0] : String));
+	}
+
+	public function testRoundTripInterfaceDeclareSite():Void {
+		roundTrip('interface Iterable<T> { }');
 	}
 }
