@@ -982,7 +982,16 @@ class Lowering {
 			});
 			if (trailText != null) {
 				steps.push(macro skipWs(ctx));
-				steps.push(macro expectLit(ctx, $v{trailText}));
+				// `@:trailOpt` annotates `lit.trailOptional:true` alongside
+				// `lit.trailText`. The trail literal becomes optional on
+				// parse — `matchLit` peeks + consumes if present, but does
+				// NOT throw if absent. The writer keeps emitting the literal
+				// (canonical output); source-fidelity is a separate slice.
+				// First consumer: `HxDecl.TypedefDecl` for `typedef Foo = T`
+				// without trailing `;`.
+				final trailOptional:Bool = branch.annotations.get('lit.trailOptional') == true;
+				if (trailOptional) steps.push(macro matchLit(ctx, $v{trailText}));
+				else steps.push(macro expectLit(ctx, $v{trailText}));
 			}
 			steps.push(macro return $ctorCall);
 			return macro $b{steps};

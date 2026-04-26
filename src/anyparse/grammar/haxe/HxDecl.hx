@@ -5,8 +5,13 @@ package anyparse.grammar.haxe;
  *
  * Five forms are recognised:
  *  - `ClassDecl` — `class Name { ... }` wrapping an `HxClassDecl`.
- *  - `TypedefDecl` — `typedef Name = Type;` wrapping an `HxTypedefDecl`.
- *    Carries `@:trail(';')` because the typedef has no closing brace.
+ *  - `TypedefDecl` — `typedef Name = Type[;]` wrapping an `HxTypedefDecl`.
+ *    Carries `@:trailOpt(';')` — the trailing semicolon is optional on
+ *    parse (real Haxe accepts both `typedef Foo = Int;` and
+ *    `typedef Foo = Int`, and the bare `}` form `typedef T = { x:Int }`
+ *    is the dominant convention for anon typedefs in the wild). The
+ *    writer keeps emitting `;` as canonical output; preserving source
+ *    presence is a separate slice.
  *  - `EnumDecl` — `enum Name { ... }` wrapping an `HxEnumDecl`.
  *  - `InterfaceDecl` — `interface Name { ... }` wrapping an `HxInterfaceDecl`.
  *  - `AbstractDecl` — `abstract Name(Type) [from T]* [to T]* { ... }`
@@ -21,7 +26,7 @@ package anyparse.grammar.haxe;
 enum HxDecl {
 	ClassDecl(decl:HxClassDecl);
 
-	@:trail(';')
+	@:trailOpt(';')
 	TypedefDecl(decl:HxTypedefDecl);
 
 	EnumDecl(decl:HxEnumDecl);

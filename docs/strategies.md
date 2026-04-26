@@ -83,9 +83,11 @@ Not a strategy in the plugin sense — it is the pass 1 foundation that every st
 
 ### Lit
 
-Owns: `@:lit`, `@:lead`, `@:trail`, `@:wrap`, `@:sep`.
+Owns: `@:lit`, `@:lead`, `@:trail`, `@:trailOpt`, `@:wrap`, `@:sep`.
 
 Lowers literal glue around fields into `Lit` nodes in a `Seq`. A field with `@:lead("{")` becomes `Seq([Lit("{"), field])`. A `@:sep(",")` on a `Star` becomes `Star(item, sep=Lit(","))`.
+
+`@:trailOpt(";")` is the optional-on-parse variant of `@:trail`. The parser emits `matchLit` (peek + consume-if-present) instead of `expectLit` (throws on absence); the writer keeps emitting the literal as canonical output. First consumer: `HxDecl.TypedefDecl` for `typedef Foo = T` without trailing `;`. Source-fidelity (preserve presence per input) is a separate slice.
 
 ### Re
 

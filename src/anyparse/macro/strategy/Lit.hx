@@ -22,6 +22,16 @@ import anyparse.core.Strategy;
  *  - `@:lead("open")`               — emit `Lit("open")` before the
  *                                     node's inner match.
  *  - `@:trail("close")`             — emit `Lit("close")` after.
+ *  - `@:trailOpt("close")`          — like `@:trail` but the close
+ *                                     literal is optional on parse:
+ *                                     parser emits `matchLit` (peek +
+ *                                     consume-if-present) instead of
+ *                                     `expectLit`. The writer keeps
+ *                                     emitting the literal as canonical
+ *                                     output. Source-fidelity (preserve
+ *                                     presence) is a separate slice.
+ *                                     Sets `lit.trailText` and
+ *                                     `lit.trailOptional:true`.
  *  - `@:wrap("o","c")`              — shorthand for `@:lead`+`@:trail`.
  *  - `@:sep(",")`                   — separator between elements of a
  *                                     `Star` child of this node.
@@ -34,7 +44,7 @@ class Lit implements Strategy {
 	public var name(default, null):String = 'Lit';
 	public var runsAfter(default, null):Array<String> = [];
 	public var runsBefore(default, null):Array<String> = [];
-	public var ownedMeta(default, null):Array<String> = [':lit', ':lead', ':trail', ':wrap', ':sep'];
+	public var ownedMeta(default, null):Array<String> = [':lit', ':lead', ':trail', ':trailOpt', ':wrap', ':sep'];
 	public var runtimeContribution(default, null):RuntimeContrib = {ctxFields: [], helpers: [], cacheKeyContributors: []};
 
 	public function new() {}
@@ -43,7 +53,7 @@ class Lit implements Strategy {
 		final meta:Null<Metadata> = node.annotations.get('base.meta');
 		if (meta == null) return false;
 		for (entry in meta) switch entry.name {
-			case ':lit' | ':lead' | ':trail' | ':wrap' | ':sep': return true;
+			case ':lit' | ':lead' | ':trail' | ':trailOpt' | ':wrap' | ':sep': return true;
 			case _:
 		}
 		return false;
@@ -60,6 +70,9 @@ class Lit implements Strategy {
 				node.annotations.set('lit.leadText', singleString(entry.params, ':lead'));
 			case ':trail':
 				node.annotations.set('lit.trailText', singleString(entry.params, ':trail'));
+			case ':trailOpt':
+				node.annotations.set('lit.trailText', singleString(entry.params, ':trailOpt'));
+				node.annotations.set('lit.trailOptional', true);
 			case ':wrap':
 				if (entry.params.length != 2) {
 					Context.fatalError('@:wrap expects exactly two string arguments', entry.pos);

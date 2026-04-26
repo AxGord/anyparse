@@ -52,8 +52,15 @@ class HxTopLevelSliceTest extends HxTestHelpers {
 		Assert.raises(() -> HaxeModuleParser.parse('typedef Foo Bar;'), ParseError);
 	}
 
-	public function testRejectsTypedefMissingSemicolon():Void {
-		Assert.raises(() -> HaxeModuleParser.parse('typedef Foo = Bar class Baz {}'), ParseError);
+	public function testTypedefMissingSemicolonAccepted():Void {
+		// Slice ω-typedef-trailOpt: trailing `;` on typedef is optional
+		// (`@:trailOpt(';')` on `HxDecl.TypedefDecl`). Real Haxe accepts
+		// `typedef Foo = Bar class Baz {}` because `class` ends the
+		// preceding type ref and starts a new top-level decl.
+		final module:HxModule = HaxeModuleParser.parse('typedef Foo = Bar class Baz {}');
+		Assert.equals(2, module.decls.length);
+		Assert.equals('Foo', (expectTypedefDecl(module.decls[0]).name : String));
+		Assert.equals('Baz', (expectClassDecl(module.decls[1]).name : String));
 	}
 
 	// -- Enum tests --
