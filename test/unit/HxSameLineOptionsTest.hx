@@ -148,6 +148,42 @@ class HxSameLineOptionsTest extends Test {
 		Assert.isTrue(out.indexOf('foo() catch') == -1, 'catch should break onto own line in: <$out>');
 	}
 
+	public function testExpressionTryNextBreaksTryBody():Void {
+		// ω-expression-try-body-break: expressionTry=Next must also break
+		// the body away from the `try` keyword — `try\n\t...\n\t\tfoo()`,
+		// not `try foo()`.
+		final out:String = writeWithExpressionTry(
+			'class F { function f():Void { var x = try foo() catch (_:Any) null; } }',
+			SameLinePolicy.Next
+		);
+		Assert.isTrue(out.indexOf('try foo()') == -1, 'try body should break onto own line in: <$out>');
+		Assert.isTrue(out.indexOf('try\n') != -1, 'expected hardline immediately after try keyword in: <$out>');
+	}
+
+	public function testExpressionTryNextBreaksCatchBody():Void {
+		// ω-expression-try-body-break: expressionTry=Next must also break
+		// the catch body away from the catch parens — `catch (_:Any)\n\t...\n\t\tnull`,
+		// not `catch (_:Any) null`.
+		final out:String = writeWithExpressionTry(
+			'class F { function f():Void { var x = try foo() catch (_:Any) null; } }',
+			SameLinePolicy.Next
+		);
+		Assert.isTrue(out.indexOf('catch (_:Any) null') == -1, 'catch body should break onto own line in: <$out>');
+		Assert.isTrue(out.indexOf('catch (_:Any)\n') != -1, 'expected hardline immediately after catch close paren in: <$out>');
+	}
+
+	public function testExpressionTrySameKeepsTryBodyInline():Void {
+		// expressionTry=Same → body and catch body stay inline with their
+		// preceding tokens. Asserts the bodyBreak `Same` branch keeps the
+		// pre-slice spacing byte-identical.
+		final out:String = writeWithExpressionTry(
+			'class F { function f():Void { var x = try foo() catch (_:Any) null; } }',
+			SameLinePolicy.Same
+		);
+		Assert.isTrue(out.indexOf('try foo()') != -1, 'expected inline `try foo()` in: <$out>');
+		Assert.isTrue(out.indexOf('catch (_:Any) null') != -1, 'expected inline `catch (_:Any) null` in: <$out>');
+	}
+
 	public function testExpressionTryIndependentFromSameLineCatch():Void {
 		// sameLineCatch=Next must not affect expression-form when expressionTry=Same.
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');

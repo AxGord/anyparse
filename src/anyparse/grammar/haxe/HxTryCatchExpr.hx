@@ -35,9 +35,21 @@ package anyparse.grammar.haxe;
  * own knob — `sameLineCatch` keeps driving the statement-form
  * (`HxTryCatchStmt.catches`). Default `Same` keeps the one-liner
  * idiom; `Next` produces the multi-line expression layout.
+ *
+ * `@:fmt(bodyBreak('expressionTry'))` (ω-expression-try-body-break)
+ * on the `body` field wraps the body in a SameLinePolicy switch.
+ * `Same` emits the existing inline space (`try foo()`); `Next` emits
+ * hardline + Nest one level deeper (`try\n\tfoo()`). Paired with the
+ * Star sameLine knob on `catches`, `Next` produces the canonical
+ * multi-line expression try layout (`try\n\tBODY\ncatch (...)\n\tCBODY`).
+ * Case 3 enum-branch lowering strips the `try` keyword's trailing
+ * space when the sub-struct opens with `@:fmt(bodyBreak(...))` — the
+ * wrap below provides the conditional space/hardline instead,
+ * preventing a double space in `Same` and a dangling space before a
+ * hardline in `Next`.
  */
 @:peg
 typedef HxTryCatchExpr = {
-	var body:HxExpr;
+	@:fmt(bodyBreak('expressionTry')) var body:HxExpr;
 	@:trivia @:tryparse @:fmt(sameLine('expressionTry')) var catches:Array<HxCatchClauseExpr>;
 };

@@ -249,7 +249,14 @@ class WriterLowering {
 			// `:` for Haxe). HxDefaultBranch opens with `@:lead(':')` —
 			// without the strip we emit `default :` instead of `default:`.
 			// Non-tight leads (`(`, `{`) keep the space — `if (`, `else {`.
+			//
+			// ω-expression-try-body-break: also strip when the sub-struct's
+			// first field carries `@:fmt(bodyBreak(...))` — the field's own
+			// `bodyBreakWrap` provides the conditional space/hardline-Nest
+			// between the kw and the body, so leaving the trailing space in
+			// would yield `try  body` (`Same`) or `try \n…body` (`Next`).
 			final stripKwTrailingSpace:Bool = subStructStartsWithBodyPolicy(refName)
+				|| subStructStartsWithBodyBreak(refName)
 				|| subStructStartsWithTightLead(refName);
 			final parts:Array<Expr> = [];
 			if (kwLead != null) {
@@ -707,10 +714,22 @@ class WriterLowering {
 							? leftCurlySeparator(child)
 							: null;
 						final lcCtor:Null<String> = lcSep == null ? null : leftCurlyTargetCtor(refName);
+						final bodyBreakFlag:Null<String> = fmtReadString(child, 'bodyBreak');
 						if (lcSep != null && lcCtor != null) {
 							final ctorName:String = lcCtor;
 							parts.push(macro Type.enumConstructor($fieldAccess) == $v{ctorName} ? $lcSep : _de());
 							parts.push(writeCall);
+						} else if (bodyBreakFlag != null && kwLead == null && leadText == null && !isRaw) {
+							// ω-expression-try-body-break: wrap the body field in a
+							// SameLinePolicy switch — `Same` emits ` ` + body, `Next`
+							// emits hardline + Nest + body so the body sits one indent
+							// deeper than the surrounding kw line. Used by
+							// `HxTryCatchExpr.body` (first field; Case 3 strips the
+							// `try` kw's trailing space so the wrap's `Same` ` ` is the
+							// sole separator) and by `HxCatchClauseExpr.body` (last
+							// field; replaces the fixed `_dt(' ')` between `)` and the
+							// catch body).
+							parts.push(bodyBreakWrap(bodyBreakFlag, writeCall));
 						} else if (kwLead == null && leadText == null && !isFirstField && !isRaw) {
 							// ω-issue-48-v2: in trivia mode the bare Ref field
 							// grew a `<field>BeforeNewline:Bool` slot (see
@@ -1252,6 +1271,47 @@ class WriterLowering {
 			{values: [keepPat], expr: keepExpr, guard: null},
 		];
 		return {expr: ESwitch(optFlag, cases, macro _dt(' ')), pos: Context.currentPos()};
+	}
+
+	/**
+	 * ω-expression-try-body-break — build a runtime switch over
+	 * `opt.<sameLineFlag>:SameLinePolicy` that wraps the body
+	 * `writeCall` with an extra Nest level on the `Next` branch so the
+	 * body content sits one indent deeper than the surrounding `try` /
+	 * `catch (...)` keyword line. `Same` (and the default) emits the
+	 * existing `' ' + body` shape; `Next` emits `_dn(_cols, _dc([_dhl(),
+	 * body]))` — hardline + nested-indent + body, mirroring
+	 * `bodyPolicyWrap`'s `Next` layout. `Keep` falls back to `Same`
+	 * because no per-field source-shape slot exists at this site.
+	 *
+	 * Used by `@:fmt(bodyBreak('flagName'))` on a bare-Ref body field —
+	 * `HxTryCatchExpr.body` (first field; Case 3 strips the `try` kw's
+	 * trailing space so the wrap's `Same` ` ` is the sole separator) and
+	 * `HxCatchClauseExpr.body` (last field; replaces the fixed
+	 * `_dt(' ')` between `)` and the catch body).
+	 */
+	private static function bodyBreakWrap(flagName:String, writeCall:Expr):Expr {
+		final optFlag:Expr = {
+			expr: EField(macro opt, flagName),
+			pos: Context.currentPos(),
+		};
+		final sameLayoutExpr:Expr = macro _dc([_dt(' '), $writeCall]);
+		final nextLayoutExpr:Expr = macro _dn(_cols, _dc([_dhl(), $writeCall]));
+		final slpPath:Array<String> = ['anyparse', 'format', 'SameLinePolicy'];
+		final nextPat:Expr = MacroStringTools.toFieldExpr(slpPath.concat(['Next']));
+		final keepPat:Expr = MacroStringTools.toFieldExpr(slpPath.concat(['Keep']));
+		final cases:Array<Case> = [
+			{values: [nextPat], expr: nextLayoutExpr, guard: null},
+			{values: [keepPat], expr: sameLayoutExpr, guard: null},
+		];
+		final switchExpr:Expr = {expr: ESwitch(optFlag, cases, sameLayoutExpr), pos: Context.currentPos()};
+		// `_dn(_cols, …)` in the Next branch needs a per-call `_cols` binding —
+		// mirrors `bodyPolicyWrap`'s tail block (line 1721) and the Star
+		// `_dn(_cols, _dc(_docs))` site at line 2337.
+		return macro {
+			final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+			$switchExpr;
+		};
 	}
 
 	/**
@@ -1863,6 +1923,30 @@ class WriterLowering {
 		if (readMetaString(first, ':kw') != null) return false;
 		if (readMetaString(first, ':lead') != null) return false;
 		return fmtReadString(first, 'bodyPolicy') != null;
+	}
+
+	/**
+	 * True when `refName` names a Seq rule whose first field is a bare
+	 * Ref annotated with `@:fmt(bodyBreak(...))` and no `@:kw` / `@:lead`
+	 * of its own. Mirrors `subStructStartsWithBodyPolicy` for the 2-way
+	 * `SameLinePolicy` body-break knob (ω-expression-try-body-break).
+	 * The field's own `bodyBreakWrap` provides the conditional
+	 * space/hardline-Nest between the parent kw and the body, so the
+	 * parent Case 3 must strip the trailing space from `kwLead` to
+	 * avoid a double space in `Same` and a dangling space before a
+	 * hardline in `Next`.
+	 */
+	private function subStructStartsWithBodyBreak(refName:String):Bool {
+		final subNode:Null<ShapeNode> = shape.rules.get(refName);
+		if (subNode == null || subNode.kind != Seq) return false;
+		final children:Array<ShapeNode> = subNode.children;
+		if (children.length == 0) return false;
+		final first:ShapeNode = children[0];
+		if (first.kind != Ref) return false;
+		if (first.annotations.get('base.optional') == true) return false;
+		if (readMetaString(first, ':kw') != null) return false;
+		if (readMetaString(first, ':lead') != null) return false;
+		return fmtReadString(first, 'bodyBreak') != null;
 	}
 
 	/**

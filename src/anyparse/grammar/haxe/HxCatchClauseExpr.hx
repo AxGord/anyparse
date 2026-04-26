@@ -17,10 +17,17 @@ package anyparse.grammar.haxe;
  * `@:kw('catch')` emits `expectKw` and `@:lead('(')` emits
  * `expectLit`, both sequentially (D50). The closing `)` is
  * `@:trail(')')` on the `type` field.
+ *
+ * `@:fmt(bodyBreak('expressionTry'))` on the `body` field wraps the
+ * catch body in a SameLinePolicy switch. `Same` keeps the existing
+ * inline space (`catch (e:T) body`); `Next` emits hardline + Nest
+ * one level deeper (`catch (e:T)\n\tbody`). Pair with
+ * `bodyBreak('expressionTry')` on `HxTryCatchExpr.body` to get the
+ * full multi-line expression try layout when `expressionTry=Next`.
  */
 @:peg
 typedef HxCatchClauseExpr = {
 	@:kw('catch') @:lead('(') var name:HxIdentLit;
 	@:lead(':') @:trail(')') var type:HxType;
-	var body:HxExpr;
+	@:fmt(bodyBreak('expressionTry')) var body:HxExpr;
 };
