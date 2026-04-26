@@ -4,13 +4,21 @@ package anyparse.grammar.haxe;
  * A class member declaration with optional leading metadata and
  * modifiers.
  *
- * Wraps `HxClassMember` (the `var`/`function` dispatch enum) with two
- * preceding Star fields: metadata tags (`@:keep`, `@:overload(...)`,
- * `@in(true)` …) first, then access/storage modifiers (`public`,
- * `static`, `#if … #end`, …). This typedef is the unit that
- * `HxClassDecl.members` iterates over, so both prefix sections are
- * parsed once before the keyword dispatch — no redundant re-parsing on
- * failed branches.
+ * Wraps `HxClassMember` (the `var`/`final`/`function` dispatch enum)
+ * with two preceding Star fields: metadata tags (`@:keep`,
+ * `@:overload(...)`, `@in(true)` …) first, then access/storage
+ * modifiers (`public`, `static`, `#if … #end`, …). This typedef is
+ * the unit that `HxClassDecl.members` iterates over, so both prefix
+ * sections are parsed once before the keyword dispatch — no redundant
+ * re-parsing on failed branches.
+ *
+ * The modifier element type is `HxMemberModifier` (not the broader
+ * `HxModifier`) so `final` is NOT eaten by the modifier Star — it
+ * reaches `HxClassMember.FinalMember` as the introducer of an
+ * immutable field declaration. The trade-off is the legacy
+ * `final var x:Int;` shape no longer parses at the member position;
+ * modern `final x:Int;` is the canonical form. See `HxMemberModifier`
+ * for full rationale.
  *
  * Neither Star carries `@:lead`, `@:trail`, or `@:sep` — both use the
  * try-parse termination mode in `emitStarFieldSteps`: the loop attempts
@@ -39,6 +47,6 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxMemberDecl = {
 	@:trivia @:tryparse var meta:Array<HxMetadata>;
-	@:trivia @:tryparse var modifiers:Array<HxModifier>;
+	@:trivia @:tryparse var modifiers:Array<HxMemberModifier>;
 	var member:HxClassMember;
 }

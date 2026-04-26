@@ -2,7 +2,7 @@ package unit;
 
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxMemberDecl;
-import anyparse.grammar.haxe.HxModifier;
+import anyparse.grammar.haxe.HxMemberModifier;
 import anyparse.grammar.haxe.HxClassMember;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HaxeParser;
@@ -12,10 +12,16 @@ import utest.Assert;
 
 /**
  * Tests for the modifier slice (slice ε): access and storage modifiers
- * (`public`, `private`, `static`, `inline`, `override`, `final`,
- * `dynamic`, `extern`) parsed as a `Star<HxModifier>` field on the
+ * (`public`, `private`, `static`, `inline`, `override`, `dynamic`,
+ * `extern`) parsed as a `Star<HxMemberModifier>` field on the
  * `HxMemberDecl` wrapper typedef, using the try-parse termination mode
  * in `emitStarFieldSteps`.
+ *
+ * Member-level `final` is NOT a modifier — it routes through
+ * `HxClassMember.FinalMember` (immutable field declaration).
+ * `HxFinalMemberSliceTest` covers the FinalMember dispatch path; this
+ * file just guards the rejection of the legacy `final var x:Int;` form
+ * to confirm the modifier Star no longer eats `final`.
  */
 class HxModifierSliceTest extends HxTestHelpers {
 
@@ -69,11 +75,13 @@ class HxModifierSliceTest extends HxTestHelpers {
 		Assert.equals(Override, m.modifiers[0]);
 	}
 
-	public function testSingleModifierFinal():Void {
-		final ast:HxClassDecl = HaxeParser.parse('class Foo { final var x:Int; }');
-		final m:HxMemberDecl = ast.members[0];
-		Assert.equals(1, m.modifiers.length);
-		Assert.equals(Final, m.modifiers[0]);
+	public function testLegacyFinalVarRejected():Void {
+		// `final var x:Int;` was the legacy member form; HxMemberModifier
+		// no longer lists Final, so the modifier Star yields and
+		// HxClassMember.FinalMember consumes `final` then expects an
+		// identifier (gets `var` keyword) — parse error. Modern
+		// `final x:Int;` is the supported form (see HxFinalMemberSliceTest).
+		Assert.raises(() -> HaxeParser.parse('class Foo { final var x:Int; }'), ParseError);
 	}
 
 	public function testSingleModifierDynamic():Void {

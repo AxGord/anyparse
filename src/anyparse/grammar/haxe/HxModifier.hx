@@ -1,7 +1,18 @@
 package anyparse.grammar.haxe;
 
 /**
- * Access and storage modifiers for class members.
+ * Access and storage modifiers — top-level form, used by
+ * `HxTopLevelDecl.modifiers` for `private`/`extern`/`final`/… in front
+ * of a `class`/`typedef`/`enum`/`interface`/`abstract` declaration.
+ * `Final` here is the sealed-class marker (`final class Foo {}`), not
+ * a field-declaration introducer.
+ *
+ * Class / interface / abstract members route through
+ * `HxMemberModifier` (the same enum minus `Final`), so member-level
+ * `final` reaches `HxClassMember.FinalMember` instead of being eaten
+ * as a modifier. See `HxMemberModifier` for the rationale and the one
+ * narrow exception (`HxConditionalMod` body still references this
+ * full enum so legacy `#if X final var x:Int; #end` remains accepted).
  *
  * Keyword-only branches are zero-arg. The generated parser enforces
  * word boundaries via `expectKw` so `publicly` does not partially match

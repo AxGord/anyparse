@@ -25,6 +25,7 @@ import unit.HxStringSliceTest;
 import unit.HxArrowArraySliceTest;
 import unit.HxThinArrowSliceTest;
 import unit.HxFinalUntypedSliceTest;
+import unit.HxFinalMemberSliceTest;
 import unit.HxIsSliceTest;
 import unit.HxCastSliceTest;
 import unit.HxMetaExprSliceTest;
@@ -112,6 +113,7 @@ class RunTests {
 		runner.addCase(new HxArrowArraySliceTest());
 		runner.addCase(new HxThinArrowSliceTest());
 		runner.addCase(new HxFinalUntypedSliceTest());
+		runner.addCase(new HxFinalMemberSliceTest());
 		runner.addCase(new HxIsSliceTest());
 		runner.addCase(new HxCastSliceTest());
 		runner.addCase(new HxBlockExprSliceTest());
