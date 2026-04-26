@@ -28,6 +28,7 @@ import unit.HxIsSliceTest;
 import unit.HxCastSliceTest;
 import unit.HxMetaExprSliceTest;
 import unit.HxBlockExprSliceTest;
+import unit.HxTryExprSliceTest;
 import unit.HxObjectLitSliceTest;
 import unit.HxParamSliceTest;
 import unit.HxTypeParamSliceTest;
@@ -108,6 +109,7 @@ class RunTests {
 		runner.addCase(new HxIsSliceTest());
 		runner.addCase(new HxCastSliceTest());
 		runner.addCase(new HxBlockExprSliceTest());
+		runner.addCase(new HxTryExprSliceTest());
 		runner.addCase(new HxObjectLitSliceTest());
 		runner.addCase(new HxMetaExprSliceTest());
 		runner.addCase(new HxSameLineOptionsTest());

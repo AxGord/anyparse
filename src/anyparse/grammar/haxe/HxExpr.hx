@@ -257,6 +257,9 @@ enum HxExpr {
 	@:kw('switch')
 	SwitchExpr(stmt:HxSwitchStmt);
 
+	@:kw('try')
+	TryExpr(stmt:HxTryCatchExpr);
+
 	@:kw('untyped')
 	UntypedExpr(operand:HxExpr);
 
