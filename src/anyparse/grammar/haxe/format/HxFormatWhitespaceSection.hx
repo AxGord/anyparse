@@ -5,10 +5,9 @@ package anyparse.grammar.haxe.format;
  *
  * Only keys whose runtime knob already exists on `HxModuleWriteOptions`
  * are modelled here. Missing keys (`functionTypeHaxe3Policy`,
- * `tryPolicy`, `ifPolicy`, `arrowFunctionsPolicy`, `forPolicy`,
- * `ternaryPolicy`, …) are silently dropped by the ByName struct
- * parser's `UnknownPolicy.Skip` — they land with the slice that
- * introduces the matching writer knob.
+ * `tryPolicy`, `ifPolicy`, `forPolicy`, `ternaryPolicy`, …) are
+ * silently dropped by the ByName struct parser's `UnknownPolicy.Skip`
+ * — they land with the slice that introduces the matching writer knob.
  *
  * Added in slice ψ₇ (feeds `opt.objectFieldColon`).
  *
@@ -64,6 +63,16 @@ package anyparse.grammar.haxe.format;
  *    sibling `functionTypeHaxe3Policy` (old-form curried `Int->Bool`)
  *    has its own `@:fmt(tight)` on `HxType.Arrow` and stays tight by
  *    construction — no JSON-side knob needed.
+ *
+ * Extended in slice ω-arrow-fn-expr:
+ *  - `arrowFunctionsPolicy` feeds `opt.arrowFunctions` (the `->`
+ *    separator inside a parenthesised arrow lambda expression,
+ *    `HxThinParenLambda.body`'s `@:lead('->')`). `Around` (default)
+ *    emits `(arg) -> body`; `None` keeps the tight `(arg)->body` form.
+ *    Independent of `functionTypeHaxe4Policy` (the type-position
+ *    sibling). The single-ident infix form `arg -> body`
+ *    (`HxExpr.ThinArrow`) rides the Pratt infix path which adds
+ *    surrounding spaces by default and is unaffected.
  */
 @:peg typedef HxFormatWhitespaceSection = {
 
@@ -78,6 +87,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var binopPolicy:HxFormatWhitespacePolicy;
 
 	@:optional var functionTypeHaxe4Policy:HxFormatWhitespacePolicy;
+
+	@:optional var arrowFunctionsPolicy:HxFormatWhitespacePolicy;
 
 	@:optional var addLineCommentSpace:Bool;
 

@@ -397,6 +397,23 @@ import anyparse.format.WriteOptions;
  *    grammar — `HxArrowFnType.ret` is the only consumer; the old-form
  *    curried arrow `Int->Bool` keeps its own `@:fmt(tight)` on
  *    `HxType.Arrow` and is unaffected.
+ *
+ * Field added in slice ω-arrow-fn-expr (parenthesised arrow lambda
+ * expression `->` spacing):
+ *  - `arrowFunctions` — whitespace around the `->` separator in a
+ *    parenthesised arrow lambda expression `(params) -> body`
+ *    (`HxThinParenLambda.body`'s `@:lead('->')`). `Both` (default)
+ *    emits `(arg) -> body`, matching haxe-formatter's
+ *    `whitespace.arrowFunctionsPolicy: @:default(Around)`. `None`
+ *    keeps the tight pre-slice layout `(arg)->body`. `Before` /
+ *    `After` are exposed for parity with the policy shape. The knob
+ *    only applies at sites tagged with `@:fmt(arrowFunctions)` in the
+ *    grammar — `HxThinParenLambda.body` is the only consumer; the
+ *    sibling single-ident infix form `arg -> body` (`HxExpr.ThinArrow`)
+ *    rides the Pratt infix path which already adds surrounding spaces
+ *    by default. Independent of `functionTypeHaxe4` (the type-position
+ *    `(args) -> ret`) so a config can space one form while keeping the
+ *    other tight, mirroring upstream's separate JSON keys.
  */
 typedef HxModuleWriteOptions = WriteOptions & {
 	sameLineElse:SameLinePolicy,
@@ -437,4 +454,5 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	expressionTry:SameLinePolicy,
 	indentCaseLabels:Bool,
 	functionTypeHaxe4:WhitespacePolicy,
+	arrowFunctions:WhitespacePolicy,
 };

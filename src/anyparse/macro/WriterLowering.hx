@@ -587,7 +587,7 @@ class WriterLowering {
 			// a runtime-configurable spacing around the lead text; all
 			// other mandatory leads stay tight.
 			if (leadText != null && !isOptional)
-				parts.push(whitespacePolicyLead(child, leadText, ['objectFieldColon', 'typeHintColon', 'typedefAssign', 'functionTypeHaxe4']));
+				parts.push(whitespacePolicyLead(child, leadText, ['objectFieldColon', 'typeHintColon', 'typedefAssign', 'functionTypeHaxe4', 'arrowFunctions']));
 
 			// Field value
 			final bodyPolicyFlag:Null<String> = fmtReadString(child, 'bodyPolicy');

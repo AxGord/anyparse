@@ -292,6 +292,18 @@ final class HaxeFormat implements TextFormat {
 	 * `hxformat.json`. The old-form curried arrow `Int->Bool` is on a
 	 * separate axis (`@:fmt(tight)` on `HxType.Arrow`, mirroring upstream's
 	 * `functionTypeHaxe3Policy: @:default(None)`) and is unaffected.
+	 *
+	 * `arrowFunctions` default (ω-arrow-fn-expr) is `Both` — the `->`
+	 * separator inside a parenthesised arrow lambda expression
+	 * (`HxThinParenLambda.body`) emits `(params) -> body` with
+	 * surrounding spaces, matching haxe-formatter's
+	 * `whitespace.arrowFunctionsPolicy: @:default(Around)`. Setting to
+	 * `None` produces the tight `(params)->body` form and requires
+	 * `"whitespace": { "arrowFunctionsPolicy": "none" }` in
+	 * `hxformat.json`. Independent of `functionTypeHaxe4` (the type-
+	 * position knob); the single-ident infix form `arg -> body`
+	 * (`HxExpr.ThinArrow`) is on the Pratt infix path which already
+	 * adds surrounding spaces by default and is unaffected.
 	 */
 	public var defaultWriteOptions(default, null):HxModuleWriteOptions = {
 		indentChar: Tab,
@@ -341,6 +353,7 @@ final class HaxeFormat implements TextFormat {
 		expressionTry: SameLinePolicy.Same,
 		indentCaseLabels: true,
 		functionTypeHaxe4: WhitespacePolicy.Both,
+		arrowFunctions: WhitespacePolicy.Both,
 	};
 
 	private function new() {}

@@ -157,6 +157,13 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   sibling `functionTypeHaxe3Policy` (old-form curried `Int->Bool`)
  *   maps to `@:fmt(tight)` on `HxType.Arrow` and is fixed at parse
  *   time — no JSON key is exposed.
+ * - `whitespace.arrowFunctionsPolicy` (ω-arrow-fn-expr): same enum
+ *   / same collapse, routed to `opt.arrowFunctions` (the `->`
+ *   separator inside a parenthesised arrow lambda expression,
+ *   `HxThinParenLambda.body`'s `@:lead('->')`). Default `Around`
+ *   (= `Both`) emits `(arg) -> body`; `"none"` emits the tight
+ *   `(arg)->body`. Independent of `functionTypeHaxe4Policy` (the
+ *   type-position sibling).
  * - `whitespace.addLineCommentSpace` (ω-line-comment-space): boolean —
  *   `true` (default) rewrites captured `//foo` line comments as
  *   `// foo`; decoration runs (`//*****`, `//------`, `////`) survive
@@ -297,6 +304,7 @@ final class HaxeFormatConfigLoader {
 			expressionTry: base.expressionTry,
 			indentCaseLabels: base.indentCaseLabels,
 			functionTypeHaxe4: base.functionTypeHaxe4,
+			arrowFunctions: base.arrowFunctions,
 		};
 		if (cfg.indentation != null) applyIndentation(cfg.indentation, result);
 		if (cfg.wrapping != null) applyWrapping(cfg.wrapping, result);
@@ -370,6 +378,8 @@ final class HaxeFormatConfigLoader {
 			opt.typeParamDefaultEquals = whitespaceToRuntime(section.binopPolicy);
 		if (section.functionTypeHaxe4Policy != null)
 			opt.functionTypeHaxe4 = whitespaceToRuntime(section.functionTypeHaxe4Policy);
+		if (section.arrowFunctionsPolicy != null)
+			opt.arrowFunctions = whitespaceToRuntime(section.arrowFunctionsPolicy);
 		if (section.addLineCommentSpace != null)
 			opt.addLineCommentSpace = section.addLineCommentSpace;
 		final paren:Null<HxFormatParenConfigSection> = section.parenConfig;
