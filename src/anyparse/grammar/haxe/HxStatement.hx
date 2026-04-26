@@ -61,7 +61,21 @@ package anyparse.grammar.haxe;
  *    Dispatched by the `try` keyword. No trailing `;`. The body and
  *    catch clauses are parsed via `HxTryCatchStmt` typedef. Catches
  *    use `@:tryparse` termination (D49). Each catch clause uses
- *    `@:kw('catch') @:lead('(')` on the same field (D50).
+ *    `@:kw('catch') @:lead('(')` on the same field (D50). Bodies
+ *    are full `HxStatement`s (typically `BlockStmt`).
+ *
+ *  - `TryCatchStmtBare` — bare-expression bodies form (ω-statement-
+ *    bare-break). `try expr catch (name:Type) expr;` — bodies are
+ *    `HxExpr` instead of `HxStatement`, and the entire chain ends
+ *    with `;` (bare expressions have no inherent statement
+ *    terminator). Both ctors share `@:kw('try')`; `tryBranch`
+ *    rolls back when `TryCatchStmt`'s `body:HxStatement` parse
+ *    fails on a bare expression (no `;` after `EXPR`, next token
+ *    is `catch`), and `TryCatchStmtBare` is tried next. Block-form
+ *    input wins via the source-order precedence; bare-form fixtures
+ *    that previously routed through `ExprStmt(TryExpr(...))` (with
+ *    expression-form layout) now match here and pick up the
+ *    `bareBodyBreaks` shape-aware multi-line layout.
  *
  *  - `BlockStmt` — `{ stmts }` block statement. No keyword guard —
  *    dispatched by the `{` literal. Uses Case 4 in
@@ -109,6 +123,9 @@ enum HxStatement {
 
 	@:kw('try')
 	TryCatchStmt(stmt:HxTryCatchStmt);
+
+	@:kw('try') @:trail(';')
+	TryCatchStmtBare(stmt:HxTryCatchStmtBare);
 
 	@:fmt(leftCurly) @:lead('{') @:trail('}') @:trivia
 	BlockStmt(stmts:Array<HxStatement>);

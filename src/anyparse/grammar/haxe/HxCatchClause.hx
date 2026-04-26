@@ -1,7 +1,7 @@
 package anyparse.grammar.haxe;
 
 /**
- * Catch clause grammar.
+ * Catch clause grammar (block-body form).
  *
  * Shape: `catch (name:Type) body`.
  *
@@ -10,7 +10,8 @@ package anyparse.grammar.haxe;
  * `expectLit`, both sequentially (D50). The closing `)` is
  * `@:trail(')')` on the `type` field. The `body` is a bare
  * `HxStatement` Ref — any statement branch (including `BlockStmt`)
- * is accepted.
+ * is accepted. The bare-expression sibling `HxCatchClauseStmtBare`
+ * carries the same name/type fields with `body:HxExpr`.
  */
 @:peg
 typedef HxCatchClause = {

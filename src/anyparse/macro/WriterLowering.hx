@@ -255,8 +255,15 @@ class WriterLowering {
 			// `bodyBreakWrap` provides the conditional space/hardline-Nest
 			// between the kw and the body, so leaving the trailing space in
 			// would yield `try  body` (`Same`) or `try \n…body` (`Next`).
+			//
+			// ω-statement-bare-break: same reasoning for `@:fmt(bareBodyBreaks)`
+			// — `bareBodyBreakWrap` provides the conditional inline-space /
+			// hardline-Nest based on body ctor shape. Statement-form
+			// `HxTryCatchStmt.body` opts into this; the parent kw `try` must
+			// drop its trailing space so the wrap is the sole separator.
 			final stripKwTrailingSpace:Bool = subStructStartsWithBodyPolicy(refName)
 				|| subStructStartsWithBodyBreak(refName)
+				|| subStructStartsWithBareBodyBreaks(refName)
 				|| subStructStartsWithTightLead(refName);
 			final parts:Array<Expr> = [];
 			if (kwLead != null) {
@@ -715,6 +722,7 @@ class WriterLowering {
 							: null;
 						final lcCtor:Null<String> = lcSep == null ? null : leftCurlyTargetCtor(refName);
 						final bodyBreakFlag:Null<String> = fmtReadString(child, 'bodyBreak');
+						final bareBodyBreaksFlag:Bool = fmtHasFlag(child, 'bareBodyBreaks');
 						if (lcSep != null && lcCtor != null) {
 							final ctorName:String = lcCtor;
 							parts.push(macro Type.enumConstructor($fieldAccess) == $v{ctorName} ? $lcSep : _de());
@@ -730,6 +738,18 @@ class WriterLowering {
 							// field; replaces the fixed `_dt(' ')` between `)` and the
 							// catch body).
 							parts.push(bodyBreakWrap(bodyBreakFlag, writeCall, fieldAccess, refName, fmtHasFlag(child, 'blockBodyKeepsInline')));
+						} else if (bareBodyBreaksFlag && kwLead == null && leadText == null && !isRaw) {
+							// ω-statement-bare-break: shape-only wrap — block body
+							// emits inline ` ` + body, bare body emits hardline +
+							// Nest + body. No policy involvement, so the layout is
+							// independent of `sameLineCatch` (block bodies still get
+							// their `} catch` placement controlled by the catches
+							// Star sameLine knob; bare bodies always break). Used by
+							// `HxTryCatchStmt.body` (first field; Case 3 strips the
+							// `try` kw's trailing space) and `HxCatchClause.body`
+							// (last field; replaces the default `_dt(' ')` separator
+							// between `)` and the catch body).
+							parts.push(bareBodyBreakWrap(writeCall, fieldAccess, refName));
 						} else if (kwLead == null && leadText == null && !isFirstField && !isRaw) {
 							// ω-issue-48-v2: in trivia mode the bare Ref field
 							// grew a `<field>BeforeNewline:Bool` slot (see
@@ -904,12 +924,21 @@ class WriterLowering {
 				// field for the first iteration, prev element's body for
 				// subsequent iterations) was a block ctor. Composes with the
 				// close-trailing override above by using it as the non-block
-				// fallback on the first iteration. Opt-in flag — statement-
-				// form `HxTryCatchStmt.catches` keeps the old behaviour
-				// (block-body still breaks `} catch` on `Next`, mirroring
-				// haxe-formatter's `sameLine.tryCatch` contract).
+				// fallback on the first iteration.
+				//
+				// ω-statement-bare-break: dual flag `@:fmt(bareBodyBreaks)`
+				// flips the cases — block bodies fall through to the policy-
+				// driven `sepExpr` (or close-trailing override on the first
+				// iteration) and bare bodies force `_dhl()`. Statement-form
+				// `HxTryCatchStmt.catches` opts into this so default config
+				// (`sameLineCatch=Same`) still breaks `try BARE\ncatch` even
+				// though the policy by itself would emit ` `. Block bodies
+				// stay under policy control (`sameLineCatch=Next` still
+				// breaks `} catch` to `}\ncatch`).
 				final blockShapeAware:Bool = fmtHasFlag(starNode, 'blockBodyKeepsInline');
-				final blockPatterns:Array<Expr> = sameLineName != null && prevBareRefBody != null && blockShapeAware
+				final bareShapeAware:Bool = fmtHasFlag(starNode, 'bareBodyBreaks');
+				final shapeAware:Bool = blockShapeAware || bareShapeAware;
+				final blockPatterns:Array<Expr> = sameLineName != null && prevBareRefBody != null && shapeAware
 					? collectBlockCtorPatterns(prevBareRefBody.typePath)
 					: [];
 				final elemBodyField:Null<String> = sameLineName != null && blockPatterns.length > 0
@@ -918,9 +947,11 @@ class WriterLowering {
 				final firstSepOverride:Null<Expr> = if (blockPatterns.length == 0) closeTrailingFirstOverride;
 				else {
 					final fallback:Expr = closeTrailingFirstOverride ?? sepExpr;
+					final blockBranch:Expr = blockShapeAware ? (macro _dt(' ')) : fallback;
+					final bareBranch:Expr = blockShapeAware ? fallback : (macro _dhl());
 					final cases:Array<Case> = [
-						{values: blockPatterns, expr: macro _dt(' '), guard: null},
-						{values: [macro _], expr: fallback, guard: null},
+						{values: blockPatterns, expr: blockBranch, guard: null},
+						{values: [macro _], expr: bareBranch, guard: null},
 					];
 					{expr: ESwitch(prevBareRefBody.access, cases, null), pos: Context.currentPos()};
 				};
@@ -930,9 +961,11 @@ class WriterLowering {
 						expr: EField(macro _arr[_si - 1].node, elemBodyField),
 						pos: Context.currentPos(),
 					};
+					final blockBranch:Expr = blockShapeAware ? (macro _dt(' ')) : sepExpr;
+					final bareBranch:Expr = blockShapeAware ? sepExpr : (macro _dhl());
 					final cases:Array<Case> = [
-						{values: blockPatterns, expr: macro _dt(' '), guard: null},
-						{values: [macro _], expr: sepExpr, guard: null},
+						{values: blockPatterns, expr: blockBranch, guard: null},
+						{values: [macro _], expr: bareBranch, guard: null},
 					];
 					{expr: ESwitch(prevElemBodyAccess, cases, null), pos: Context.currentPos()};
 				};
@@ -1094,10 +1127,16 @@ class WriterLowering {
 				// typed body field, force `_dt(' ')` for any iteration whose
 				// preceding body was a block ctor. Mirrors the trivia path;
 				// the plain path's element access drops the `.node`
-				// indirection. Opt-in flag — see the trivia-path comment for
-				// the statement-form rationale.
+				// indirection.
+				//
+				// ω-statement-bare-break: dual flag `@:fmt(bareBodyBreaks)`
+				// inverts the cases — block bodies fall through to `sepExpr`
+				// (policy-driven), bare bodies force `_dhl()`. See trivia-
+				// path comment for rationale.
 				final blockShapeAware:Bool = fmtHasFlag(starNode, 'blockBodyKeepsInline');
-				final blockPatterns:Array<Expr> = prevBareRefBody != null && blockShapeAware
+				final bareShapeAware:Bool = fmtHasFlag(starNode, 'bareBodyBreaks');
+				final shapeAware:Bool = blockShapeAware || bareShapeAware;
+				final blockPatterns:Array<Expr> = prevBareRefBody != null && shapeAware
 					? collectBlockCtorPatterns(prevBareRefBody.typePath)
 					: [];
 				final elemBodyField:Null<String> = blockPatterns.length > 0
@@ -1116,9 +1155,11 @@ class WriterLowering {
 						_dc(_docs);
 					});
 				} else {
+					final firstBlockBranch:Expr = blockShapeAware ? (macro _dt(' ')) : sepExpr;
+					final firstBareBranch:Expr = blockShapeAware ? sepExpr : (macro _dhl());
 					final firstShapeCases:Array<Case> = [
-						{values: blockPatterns, expr: macro _dt(' '), guard: null},
-						{values: [macro _], expr: sepExpr, guard: null},
+						{values: blockPatterns, expr: firstBlockBranch, guard: null},
+						{values: [macro _], expr: firstBareBranch, guard: null},
 					];
 					final firstSepShape:Expr = {
 						expr: ESwitch(prevBareRefBody.access, firstShapeCases, null),
@@ -1130,9 +1171,11 @@ class WriterLowering {
 							expr: EField(macro _arr[_si - 1], elemBodyField),
 							pos: Context.currentPos(),
 						};
+						final subBlockBranch:Expr = blockShapeAware ? (macro _dt(' ')) : sepExpr;
+						final subBareBranch:Expr = blockShapeAware ? sepExpr : (macro _dhl());
 						final cases:Array<Case> = [
-							{values: blockPatterns, expr: macro _dt(' '), guard: null},
-							{values: [macro _], expr: sepExpr, guard: null},
+							{values: blockPatterns, expr: subBlockBranch, guard: null},
+							{values: [macro _], expr: subBareBranch, guard: null},
 						];
 						{expr: ESwitch(prevElemBodyAccess, cases, null), pos: Context.currentPos()};
 					};
@@ -1425,6 +1468,54 @@ class WriterLowering {
 		// `_dn(_cols, …)` in the Next branch needs a per-call `_cols` binding —
 		// mirrors `bodyPolicyWrap`'s tail block (line 1721) and the Star
 		// `_dn(_cols, _dc(_docs))` site at line 2337.
+		return macro {
+			final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+			$wrapExpr;
+		};
+	}
+
+	/**
+	 * ω-statement-bare-break — wrap a bare-Ref body field with a runtime
+	 * ctor switch that forces a multi-line break for non-block bodies and
+	 * keeps the inline single-space layout for block bodies. No policy
+	 * involvement: the layout is decided purely by the body's enum ctor.
+	 *
+	 * Block ctors (`collectBlockCtorPatterns(bodyTypePath)`) → `_dc([_dt(' '),
+	 * body])` (inline space + body). Catch-all → `_dn(_cols, _dc([_dhl(),
+	 * body]))` (hardline + nested-indent + body, mirroring `bodyBreakWrap`'s
+	 * Next layout).
+	 *
+	 * Used by `@:fmt(bareBodyBreaks)` on a bare-Ref body field —
+	 * `HxTryCatchStmt.body` (first field; Case 3 strips the `try` kw's
+	 * trailing space so the wrap's inline `' '` is the sole separator) and
+	 * `HxCatchClause.body` (last field; replaces the fixed `_dt(' ')`
+	 * between `)` and the catch body). The semantic is the inverse of
+	 * `blockBodyKeepsInline` on `bodyBreakWrap` — that flag forces inline
+	 * for blocks regardless of an existing `Next` policy; this flag forces
+	 * break for bare bodies with no policy at all. The two flags address
+	 * the opposite haxe-formatter conventions for expression-position
+	 * (`expressionTry=Next` rare; bare bodies stay inline) versus
+	 * statement-position try-catch (default `sameLineCatch=Same`; bare
+	 * bodies always break).
+	 *
+	 * If `bodyTypePath` has no block ctors the helper degrades to an
+	 * unconditional `nextLayoutExpr` — a fallback that should never fire
+	 * in practice (statement-form bodies are `HxStatement` which carries
+	 * `BlockStmt`); kept defensive so the macro doesn't fatal-error on a
+	 * future grammar that adds the flag without a block alternative.
+	 */
+	private function bareBodyBreakWrap(writeCall:Expr, bodyAccess:Expr, bodyTypePath:String):Expr {
+		final sameLayoutExpr:Expr = macro _dc([_dt(' '), $writeCall]);
+		final nextLayoutExpr:Expr = macro _dn(_cols, _dc([_dhl(), $writeCall]));
+		final blockPatterns:Array<Expr> = collectBlockCtorPatterns(bodyTypePath);
+		final wrapExpr:Expr = if (blockPatterns.length == 0) nextLayoutExpr
+		else {
+			final shapeCases:Array<Case> = [
+				{values: blockPatterns, expr: sameLayoutExpr, guard: null},
+				{values: [macro _], expr: nextLayoutExpr, guard: null},
+			];
+			{expr: ESwitch(bodyAccess, shapeCases, null), pos: Context.currentPos()};
+		};
 		return macro {
 			final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 			$wrapExpr;
@@ -2086,6 +2177,31 @@ class WriterLowering {
 		if (readMetaString(first, ':kw') != null) return false;
 		if (readMetaString(first, ':lead') != null) return false;
 		return fmtReadString(first, 'bodyBreak') != null;
+	}
+
+	/**
+	 * True when `refName` names a Seq rule whose first field is a bare
+	 * Ref annotated with `@:fmt(bareBodyBreaks)` and no `@:kw` / `@:lead`
+	 * of its own. Mirror of `subStructStartsWithBodyBreak` for the
+	 * shape-driven (no policy) bare-body break knob (ω-statement-
+	 * bare-break). The field's own `bareBodyBreakWrap` provides the
+	 * conditional space/hardline-Nest between the parent kw and the body,
+	 * so the parent Case 3 must strip the trailing space from `kwLead` —
+	 * otherwise `try` + ` ` + (block branch's inline ` `) yields `try  body`
+	 * for blocks and `try \n\tbody` for bare bodies (dangling space before
+	 * the hardline).
+	 */
+	private function subStructStartsWithBareBodyBreaks(refName:String):Bool {
+		final subNode:Null<ShapeNode> = shape.rules.get(refName);
+		if (subNode == null || subNode.kind != Seq) return false;
+		final children:Array<ShapeNode> = subNode.children;
+		if (children.length == 0) return false;
+		final first:ShapeNode = children[0];
+		if (first.kind != Ref) return false;
+		if (first.annotations.get('base.optional') == true) return false;
+		if (readMetaString(first, ':kw') != null) return false;
+		if (readMetaString(first, ':lead') != null) return false;
+		return fmtHasFlag(first, 'bareBodyBreaks');
 	}
 
 	/**

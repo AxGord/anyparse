@@ -82,6 +82,47 @@ class HxSameLineOptionsTest extends Test {
 		Assert.isTrue(firstAt >= 0 && secondAt > firstAt, 'both catches expected in: <$out>');
 	}
 
+	public function testStatementBareTryBreaksByDefault():Void {
+		// ω-statement-bare-break: under default config (sameLineCatch=Same)
+		// a bare-body statement-form try-catch must still break to multi-line —
+		// `try\n\tBARE\ncatch (e:Any)\n\tBARE;` — matching haxe-formatter's
+		// auto-break for non-block statement-form try-catches (issue_21).
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final src:String = 'class F { function f():Void { try trace("") catch (e:Any) trace(""); } }';
+		final out:String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+		Assert.isTrue(out.indexOf('try trace') == -1, 'bare body must break onto own line in: <$out>');
+		Assert.isTrue(out.indexOf('trace("") catch') == -1, 'catch must break onto own line in: <$out>');
+		Assert.isTrue(out.indexOf('catch (e:Any) trace') == -1, 'catch body must break onto own line in: <$out>');
+		Assert.isTrue(out.indexOf('try\n') != -1, 'expected hardline after `try` in: <$out>');
+		Assert.isTrue(out.indexOf('catch (e:Any)\n') != -1, 'expected hardline after catch parens in: <$out>');
+	}
+
+	public function testStatementBareTryBlockFormStillInline():Void {
+		// ω-statement-bare-break: the bareBodyBreaks shape switch must keep
+		// the block-form (`try { … } catch (e:E) { … }`) inline at default
+		// `sameLineCatch=Same`. Block bodies route through `HxTryCatchStmt`
+		// (not `HxTryCatchStmtBare`) — verifies disambiguation via
+		// `tryBranch` source-order in `HxStatement` works as designed.
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final src:String = 'class F { function f():Void { try {} catch (e:E) {} } }';
+		final out:String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+		Assert.isTrue(out.indexOf('} catch ') != -1, 'block-form `} catch ` must stay inline in: <$out>');
+	}
+
+	public function testStatementBareTryUnaffectedByExpressionTry():Void {
+		// ω-statement-bare-break: statement-form bare-body try-catch is on
+		// a different grammar path than expression-form (`HxTryCatchStmtBare`
+		// vs `HxExpr.TryExpr`). `expressionTry=Same` (the inline default for
+		// expression-form one-liners) must NOT propagate to the statement-
+		// form bare layout — bare bodies still break here.
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		opts.expressionTry = SameLinePolicy.Same;
+		final src:String = 'class F { function f():Void { try trace("") catch (e:Any) trace(""); } }';
+		final out:String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+		Assert.isTrue(out.indexOf('try trace') == -1, 'statement-form bare body must break regardless of expressionTry in: <$out>');
+		Assert.isTrue(out.indexOf('try\n') != -1, 'expected hardline after `try` in: <$out>');
+	}
+
 	public function testSameLineDoWhileTrue():Void {
 		final out:String = writeWith(
 			'class F { function f():Void { do {} while (x); } }',
