@@ -986,6 +986,7 @@ class WriterLowering {
 				final afterDocComments:Bool = fmtHasFlag(starNode, 'afterFieldsWithDocComments');
 				final keepBetweenFields:Bool = fmtHasFlag(starNode, 'existingBetweenFields');
 				final beforeDocComments:Bool = fmtHasFlag(starNode, 'beforeDocCommentEmptyLines');
+				final indentCaseLabelsGate:Bool = fmtHasFlag(starNode, 'indentCaseLabels');
 				final interMemberArgs:Null<Array<String>> = fmtReadStringArgs(starNode, 'interMemberBlankLines');
 				final interMemberInfo:Null<InterMemberClassifyInfo> = interMemberArgs == null
 					? null
@@ -993,7 +994,7 @@ class WriterLowering {
 				parts.push(triviaBlockStarExpr(
 					fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, elemFn,
 					openText ?? '', closeText, false, afterDocComments, keepBetweenFields, beforeDocComments,
-					interMemberInfo
+					interMemberInfo, indentCaseLabelsGate
 				));
 			} else if (isLastField) {
 				if (openText != null) parts.push(macro _dt($v{openText}));
@@ -2239,7 +2240,8 @@ class WriterLowering {
 		elemFn:String, openText:String, closeText:String, appendHardlineAfterTrail:Bool = false,
 		afterFieldsWithDocComments:Bool = false, existingBetweenFields:Bool = false,
 		beforeDocCommentEmptyLines:Bool = false,
-		interMemberInfo:Null<InterMemberClassifyInfo> = null
+		interMemberInfo:Null<InterMemberClassifyInfo> = null,
+		indentCaseLabelsGate:Bool = false
 	):Expr {
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
@@ -2386,6 +2388,18 @@ class WriterLowering {
 		final initPrevKindExpr:Expr = interMember ? macro var _prevKind:Int = 0 : macro {};
 		final initCurrKindExpr:Expr = interMember ? macro var _currKind:Int = 0 : macro {};
 		final trackPrevKindExpr:Expr = interMember ? macro _prevKind = _currKind : macro {};
+		// ω-indent-case-labels: when the call site (HxSwitchStmt.cases /
+		// HxSwitchStmtBare.cases) opts in via `@:fmt(indentCaseLabels)`,
+		// the body wrap is gated on `opt.indentCaseLabels` at runtime —
+		// `false` flushes case labels with the surrounding `switch`
+		// keyword instead of nesting them one level inside `{ … }`.
+		// Per-case body indentation comes from `nestBody` on
+		// `HxCaseBranch.body` / `HxDefaultBranch.stmts` and stays in
+		// effect either way, so the body still receives one indent
+		// relative to its label.
+		final innerWrapExpr:Expr = indentCaseLabelsGate
+			? macro (opt.indentCaseLabels ? _dn(_cols, _dc(_inner)) : _dc(_inner))
+			: macro _dn(_cols, _dc(_inner));
 		return macro {
 			final _arr = $fieldAccess;
 			final _trailLC:Array<String> = $trailLC;
@@ -2429,7 +2443,8 @@ class WriterLowering {
 					}
 				}
 				final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-				final _parts:Array<anyparse.core.Doc> = [_dt($v{openText}), _dn(_cols, _dc(_inner)), _dhl(), _dt($v{closeText})];
+				final _innerWrap:anyparse.core.Doc = $innerWrapExpr;
+				final _parts:Array<anyparse.core.Doc> = [_dt($v{openText}), _innerWrap, _dhl(), _dt($v{closeText})];
 				if (_trailClose != null) {
 					_parts.push(trailingCommentDocVerbatim(_trailClose, opt));
 					$trailFollowExpr;

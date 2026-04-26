@@ -25,9 +25,15 @@ package anyparse.grammar.haxe;
  * marks `HxSwitchCase` / `HxCaseBranch` / `HxDefaultBranch` as trivia-
  * bearing via `TriviaAnalysis`'s fixed-point closure, triggering `*T`
  * synthesis in `TriviaTypeSynth`.
+ *
+ * `@:fmt(indentCaseLabels)` (ω-indent-case-labels) gates the inner-
+ * indent wrap that `triviaBlockStarExpr` normally adds around the
+ * cases body — when `opt.indentCaseLabels` is `false` the labels and
+ * their (still-`nestBody`-wrapped) bodies render flush with the
+ * `switch` keyword instead of one level inside the braces.
  */
 @:peg
 typedef HxSwitchStmt = {
 	@:lead('(') @:trail(')') var expr:HxExpr;
-	@:lead('{') @:trail('}') @:trivia var cases:Array<HxSwitchCase>;
+	@:fmt(indentCaseLabels) @:lead('{') @:trail('}') @:trivia var cases:Array<HxSwitchCase>;
 };

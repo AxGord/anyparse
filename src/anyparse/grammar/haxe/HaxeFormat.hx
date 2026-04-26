@@ -273,6 +273,14 @@ final class HaxeFormat implements TextFormat {
 	 * @:default(Same)`. Independent of `sameLineCatch` (statement-
 	 * form). Setting to `Next` requires
 	 * `"sameLine": { "expressionTry": "next" }` in `hxformat.json`.
+	 *
+	 * `indentCaseLabels` default (ω-indent-case-labels) is `true` — the
+	 * `case` / `default` labels of a `switch` body are indented one
+	 * level inside the surrounding `{ ... }` (matching haxe-formatter's
+	 * `indentation.indentCaseLabels: @:default(true)`). Setting to
+	 * `false` keeps the labels flush with the `switch` keyword and
+	 * requires `"indentation": { "indentCaseLabels": false }` in
+	 * `hxformat.json`.
 	 */
 	public var defaultWriteOptions(default, null):HxModuleWriteOptions = {
 		indentChar: Tab,
@@ -320,6 +328,7 @@ final class HaxeFormat implements TextFormat {
 		objectLiteralBracesClose: WhitespacePolicy.None,
 		addLineCommentSpace: true,
 		expressionTry: SameLinePolicy.Same,
+		indentCaseLabels: true,
 	};
 
 	private function new() {}

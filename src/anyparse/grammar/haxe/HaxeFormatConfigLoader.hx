@@ -50,6 +50,11 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  * - `indentation.trailingWhitespace`: bool → `trailingWhitespace`
  *   (opt-in — default `false` keeps `Renderer.render`'s deferred-indent
  *   behaviour, `true` preserves the surrounding indent on blank rows).
+ * - `indentation.indentCaseLabels` (ω-indent-case-labels): boolean —
+ *   `true` (default) keeps `case` / `default` labels nested one indent
+ *   level inside a `switch` body's `{ ... }`; `false` flushes the
+ *   labels with the `switch` keyword and only the per-case body is
+ *   indented. Routed to `opt.indentCaseLabels`.
  * - `wrapping.maxLineLength`: int → `lineWidth`.
  * - `sameLine.ifElse` / `sameLine.tryCatch` / `sameLine.doWhile`: enum
  *   string — `"same"` → `SameLinePolicy.Same`, `"next"` →
@@ -282,6 +287,7 @@ final class HaxeFormatConfigLoader {
 			objectLiteralBracesClose: base.objectLiteralBracesClose,
 			addLineCommentSpace: base.addLineCommentSpace,
 			expressionTry: base.expressionTry,
+			indentCaseLabels: base.indentCaseLabels,
 		};
 		if (cfg.indentation != null) applyIndentation(cfg.indentation, result);
 		if (cfg.wrapping != null) applyWrapping(cfg.wrapping, result);
@@ -308,6 +314,7 @@ final class HaxeFormatConfigLoader {
 		}
 		if (section.tabWidth != null) opt.tabWidth = section.tabWidth;
 		if (section.trailingWhitespace != null) opt.trailingWhitespace = section.trailingWhitespace;
+		if (section.indentCaseLabels != null) opt.indentCaseLabels = section.indentCaseLabels;
 	}
 
 	private static function applyWrapping(section:HxFormatWrappingSection, opt:HxModuleWriteOptions):Void {

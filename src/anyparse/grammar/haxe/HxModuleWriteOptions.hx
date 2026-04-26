@@ -370,6 +370,19 @@ import anyparse.format.WriteOptions;
  *    `@:fmt(sameLine('expressionTry'))` in the grammar —
  *    `HxTryCatchExpr.catches` is the only current consumer; statement-
  *    form `try` keeps reading `sameLineCatch`.
+ *
+ * Field added in slice ω-indent-case-labels (case-label indentation
+ * inside switch):
+ *  - `indentCaseLabels` — when `true` (default) the `case` / `default`
+ *    labels and their bodies are nested one indent level inside the
+ *    `switch` body's `{ ... }`, producing
+ *    `switch (e) {\n\tcase A:\n\t\tbody;\n}`. When `false` the labels
+ *    are kept flush with the `switch` keyword and only the case body
+ *    receives the per-case `nestBody` indent, producing
+ *    `switch (e) {\ncase A:\n\tbody;\n}`. Matches haxe-formatter's
+ *    `indentation.indentCaseLabels: @:default(true)`. The knob only
+ *    applies at sites tagged with `@:fmt(indentCaseLabels)` in the
+ *    grammar — `HxSwitchStmt.cases` and `HxSwitchStmtBare.cases`.
  */
 typedef HxModuleWriteOptions = WriteOptions & {
 	sameLineElse:SameLinePolicy,
@@ -408,4 +421,5 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	objectLiteralBracesOpen:WhitespacePolicy,
 	objectLiteralBracesClose:WhitespacePolicy,
 	expressionTry:SameLinePolicy,
+	indentCaseLabels:Bool,
 };

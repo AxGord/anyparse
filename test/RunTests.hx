@@ -50,6 +50,7 @@ import unit.HxAbstractClauseSpacingTest;
 import unit.HxElseIfOptionsTest;
 import unit.HxInterMemberBlankLinesOptionsTest;
 import unit.HxInterfaceInterMemberBlankLinesOptionsTest;
+import unit.HxIndentCaseLabelsOptionsTest;
 import unit.HxTriviaTypesTest;
 import unit.HxTriviaParseTest;
 import unit.HxTriviaWriteTest;
@@ -127,6 +128,7 @@ class RunTests {
 		runner.addCase(new HxElseIfOptionsTest());
 		runner.addCase(new HxInterMemberBlankLinesOptionsTest());
 		runner.addCase(new HxInterfaceInterMemberBlankLinesOptionsTest());
+		runner.addCase(new HxIndentCaseLabelsOptionsTest());
 		runner.addCase(new HxTriviaTypesTest());
 		runner.addCase(new HxTriviaParseTest());
 		runner.addCase(new HxTriviaWriteTest());

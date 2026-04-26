@@ -6,7 +6,11 @@ package anyparse.grammar.haxe.format;
  * `tabWidth` controls the visual column width of a tab character
  * when the renderer supports tab emission. `trailingWhitespace` opts
  * the renderer into emitting the surrounding indent on blank rows
- * (see `WriteOptions.trailingWhitespace`).
+ * (see `WriteOptions.trailingWhitespace`). `indentCaseLabels` toggles
+ * whether `case` / `default` labels inside a `switch` body are nested
+ * one level (`true`, default) or kept flush with the `switch` keyword
+ * (`false`, matching haxe-formatter's `indentation.indentCaseLabels:
+ * @:default(true)`).
  */
 @:peg typedef HxFormatIndentationSection = {
 
@@ -15,4 +19,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var tabWidth:Int;
 
 	@:optional var trailingWhitespace:Bool;
+
+	@:optional var indentCaseLabels:Bool;
 };

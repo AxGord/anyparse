@@ -140,6 +140,18 @@ class HaxeFormatConfigLoaderTest extends Test {
 		Assert.equals(8, opts.tabWidth);
 	}
 
+	public function testIndentCaseLabelsDefaultIsTrue():Void {
+		final defaults:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
+		Assert.isTrue(defaults.indentCaseLabels);
+	}
+
+	public function testIndentCaseLabelsFalseFlipsFlag():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"indentation": {"indentCaseLabels": false}}'
+		);
+		Assert.isFalse(opts.indentCaseLabels);
+	}
+
 	public function testWrappingMaxLineLength():Void {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"wrapping": {"maxLineLength": 200}}'
