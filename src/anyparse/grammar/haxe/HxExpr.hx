@@ -220,6 +220,8 @@ enum HxExpr {
 
 	ObjectLit(lit:HxObjectLit);
 
+	ThinParenLambdaExpr(lambda:HxThinParenLambda);
+
 	ParenLambdaExpr(lambda:HxParenLambda);
 
 	@:wrap('(', ')')
@@ -360,6 +362,9 @@ enum HxExpr {
 
 	@:infix('??=', 0, 'Right')
 	NullCoalAssign(left:HxExpr, right:HxExpr);
+
+	@:infix('->', 0, 'Right')
+	ThinArrow(left:HxExpr, right:HxExpr);
 
 	@:infix('=>', 0, 'Right')
 	Arrow(left:HxExpr, right:HxExpr);
