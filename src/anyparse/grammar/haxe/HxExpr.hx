@@ -42,7 +42,19 @@ package anyparse.grammar.haxe;
  *    atom candidate. Statement-level ambiguity with `BlockStmt` (also
  *    `@:lead('{')`) is deferred: only exercised in pure expression
  *    contexts (fn args, RHS of binops, initializers) where no
- *    statement parser competes.
+ *    statement parser competes. Expression-level ambiguity with
+ *    `BlockExpr` (also `@:lead('{')`) is resolved by source order
+ *    plus `tryBranch` rollback — see `BlockExpr` below.
+ *  - `BlockExpr` — block-form expression `{stmt1; stmt2; ...; expr;}`,
+ *    e.g. `var x = { trace("hi"); 5; }`,
+ *    `return { switch y { case A: 1; } }`. `Array<HxStatement>` between
+ *    `{` `}`, no sep — same shape as `HxStatement.BlockStmt`. Placed
+ *    AFTER `ObjectLit` so the strict `key: value` shape is tried first;
+ *    on inner-shape failure (no `:` after the first identifier, or `;`
+ *    instead of `,`/`}`), `tryBranch` (Lowering Case wrapper) rolls back
+ *    `ctx.pos` to before `{` and BlockExpr is tried next. Empty `{}` is
+ *    consumed by ObjectLit (zero-field Star) — block-vs-object
+ *    disambiguation only kicks in for non-empty bodies.
  *  - `ParenLambdaExpr` — parenthesised lambda `(params) => body`.
  *    Wraps `HxParenLambda` typedef. Placed **before** `ParenExpr` so
  *    `tryBranch` tries lambda first. If `=>` is absent after `)`, the
@@ -219,6 +231,9 @@ enum HxExpr {
 	ArrayExpr(elems:Array<HxExpr>);
 
 	ObjectLit(lit:HxObjectLit);
+
+	@:fmt(leftCurly) @:lead('{') @:trail('}') @:trivia
+	BlockExpr(stmts:Array<HxStatement>);
 
 	ThinParenLambdaExpr(lambda:HxThinParenLambda);
 
