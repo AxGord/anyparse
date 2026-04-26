@@ -236,6 +236,9 @@ enum HxExpr {
 	@:kw('switch')
 	SwitchExpr(stmt:HxSwitchStmt);
 
+	@:kw('untyped')
+	UntypedExpr(operand:HxExpr);
+
 	MetaExpr(v:HxMetaExpr);
 
 	IdentExpr(v:HxIdentLit);

@@ -15,6 +15,15 @@ package anyparse.grammar.haxe;
  * match and `classy` does not look like a truncated `class`. The
  * trailing `;` on `VarMember` is a per-constructor `@:trail` that the
  * macro emits after the sub-rule value is parsed.
+ *
+ * **Note on member-level `final`**: bare `final x = 1;` (immutable
+ * field) is not parsed here. `HxModifier` lists `final` as a modifier
+ * (correctly — `final class`, `final function f()`, `final var x` all
+ * exist), and the `HxMemberDecl` modifier Star greedily consumes it
+ * before this enum dispatches. Adding a `FinalMember(HxVarDecl)` ctor
+ * would never be reached. Disambiguation needs lookahead in the
+ * modifier Star — separate slice. Statement-level `final` (in function
+ * bodies) is unaffected and parses via `HxStatement.FinalStmt`.
  */
 @:peg
 enum HxClassMember {

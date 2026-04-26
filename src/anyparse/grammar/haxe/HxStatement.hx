@@ -12,6 +12,12 @@ package anyparse.grammar.haxe;
  *    a plain typedef). The trailing `;` is consumed by the branch's
  *    `@:trail`.
  *
+ *  - `FinalStmt` — `final name:Type = init;` immutable local-binding
+ *    declaration. Parallel to `VarStmt`, identical body shape — the
+ *    only difference is `@:kw('final')` instead of `@:kw('var')`. In
+ *    Haxe, `final` replaces `var` (it is not a modifier on `var`),
+ *    so the body is the same `HxVarDecl` reused verbatim.
+ *
  *  - `ReturnStmt` — `return expr;` return statement with a value.
  *    Tried before `VoidReturnStmt` — if expression parsing fails
  *    (e.g. next token is `;`), tryBranch rolls back and the void
@@ -73,6 +79,9 @@ package anyparse.grammar.haxe;
 enum HxStatement {
 	@:kw('var') @:trail(';')
 	VarStmt(decl:HxVarDecl);
+
+	@:kw('final') @:trail(';')
+	FinalStmt(decl:HxVarDecl);
 
 	@:kw('return') @:trail(';')
 	ReturnStmt(value:HxExpr);
