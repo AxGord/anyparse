@@ -31,9 +31,16 @@ package anyparse.grammar.haxe;
  * cases body — when `opt.indentCaseLabels` is `false` the labels and
  * their (still-`nestBody`-wrapped) bodies render flush with the
  * `switch` keyword instead of one level inside the braces.
+ *
+ * `@:fmt(leftCurly)` (ω-switch-leftCurly) routes the space before the
+ * cases-block opening `{` through `leftCurlySeparator`, so
+ * `lineEnds.leftCurly: before` / `both` produces Allman-style
+ * `switch (e)\n{` at the surrounding indent — same Star-with-
+ * `@:lead('{') @:trail('}') @:trivia` mechanism as
+ * `HxClassDecl.members` and `HxStatement.BlockStmt`.
  */
 @:peg
 typedef HxSwitchStmt = {
 	@:lead('(') @:trail(')') var expr:HxExpr;
-	@:fmt(indentCaseLabels) @:lead('{') @:trail('}') @:trivia var cases:Array<HxSwitchCase>;
+	@:fmt(leftCurly, indentCaseLabels) @:lead('{') @:trail('}') @:trivia var cases:Array<HxSwitchCase>;
 };

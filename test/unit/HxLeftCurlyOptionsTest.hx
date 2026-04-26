@@ -75,6 +75,39 @@ class HxLeftCurlyOptionsTest extends Test {
 			'expected nested Allman layout in: <$out>');
 	}
 
+	public function testLeftCurlyNextMovesSwitchBrace():Void {
+		final out:String = writeWith(
+			'class M { static function f() { switch (e) { case A: 1; default: 2; } } }',
+			BracePlacement.Next
+		);
+		Assert.isTrue(out.indexOf('switch (e)\n\t\t{') != -1,
+			'expected `switch (e)\\n\\t\\t{` in: <$out>');
+		Assert.isTrue(out.indexOf('switch (e) {') == -1,
+			'did not expect inline switch brace in: <$out>');
+	}
+
+	public function testLeftCurlyNextMovesBareSwitchBrace():Void {
+		final out:String = writeWith(
+			'class M { static function f() { switch e { case A: 1; default: 2; } } }',
+			BracePlacement.Next
+		);
+		Assert.isTrue(out.indexOf('switch e\n\t\t{') != -1,
+			'expected `switch e\\n\\t\\t{` in: <$out>');
+		Assert.isTrue(out.indexOf('switch e {') == -1,
+			'did not expect inline bare-switch brace in: <$out>');
+	}
+
+	public function testLeftCurlySameKeepsSwitchBraceInline():Void {
+		final out:String = writeWith(
+			'class M { static function f() { switch (e) { case A: 1; default: 2; } } }',
+			BracePlacement.Same
+		);
+		Assert.isTrue(out.indexOf('switch (e) {') != -1,
+			'expected inline `switch (e) {` in: <$out>');
+		Assert.isTrue(out.indexOf('switch (e)\n\t\t{') == -1,
+			'did not expect Allman switch brace under Same in: <$out>');
+	}
+
 	private inline function writeWith(src:String, leftCurly:BracePlacement):String {
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), makeOpts(leftCurly));
 	}
