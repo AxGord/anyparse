@@ -175,11 +175,17 @@ package anyparse.grammar.haxe;
  *  - prec 8 — `+` `-` (additive, left-assoc)
  *  - prec 7 — `<<` `>>` `>>>` (shift, left-assoc)
  *  - prec 6 — `|` `&` `^` (bitwise, left-assoc)
- *  - prec 5 — `==` `!=` `<=` `>=` `<` `>` (comparison, left-assoc) and
- *    `...` (interval / range). Tight-spaced in the writer via
- *    `@:fmt(tight)` on the ctor so `0...n` stays compact; arithmetic
- *    (`+`, `-`, `*`, `/`) at prec 8-9 binds tighter, so `0...n + 1`
- *    parses as `0...(n + 1)` matching Haxe's convention.
+ *  - prec 5 — `==` `!=` `<=` `>=` `<` `>` (comparison, left-assoc),
+ *    `...` (interval / range), and `is` (runtime type-check, left-assoc).
+ *    The interval branch is tight-spaced in the writer via `@:fmt(tight)`
+ *    on the ctor so `0...n` stays compact; arithmetic (`+`, `-`, `*`,
+ *    `/`) at prec 8-9 binds tighter, so `0...n + 1` parses as `0...(n + 1)`
+ *    matching Haxe's convention. The `is` operator is **asymmetric**:
+ *    its right operand is `HxType`, not `HxExpr`. Lowering detects the
+ *    cross-type Ref and routes the right operand through `parseHxType`
+ *    instead of recursing into the Pratt loop; the writer mirrors via
+ *    `writeFnFor(rightRef)`. Word-boundary dispatch (`matchKw` instead
+ *    of `matchLit`) ensures `island` does not eagerly consume `is`.
  *  - prec 4 — `&&` (logical and, left-assoc)
  *  - prec 3 — `||` (logical or, left-assoc)
  *  - prec 2 — `??` (null-coalescing, **right-assoc**)
@@ -335,6 +341,9 @@ enum HxExpr {
 
 	@:infix('...', 5) @:fmt(tight)
 	Interval(left:HxExpr, right:HxExpr);
+
+	@:infix('is', 5)
+	Is(left:HxExpr, right:HxType);
 
 	@:infix('&&', 4)
 	And(left:HxExpr, right:HxExpr);

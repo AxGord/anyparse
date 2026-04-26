@@ -340,10 +340,25 @@ class Lowering {
 					}
 				};
 			} else {
-				// Binary infix branch: two operands (left, right).
+				// Binary infix branch: two operands (left, right). The right
+				// operand normally recurses into the same Pratt loop at an
+				// elevated minPrec to enforce associativity. When the right
+				// child references a different enum than the loop's own
+				// (asymmetric infix, e.g. `x is Type` where left:HxExpr but
+				// right:HxType), recursing into the same loop is wrong — call
+				// the other type's parse function once at its default starting
+				// precedence and let outer Pratt iteration handle chaining.
 				final assocValue:String = branch.annotations.get('pratt.assoc');
 				final nextMinPrec:Int = assocValue == 'Right' ? precValue : precValue + 1;
-				final rightCall:Expr = {
+				final rightChildren:Array<ShapeNode> = branch.children;
+				final rightChild:ShapeNode = rightChildren[1];
+				final rightRef:Null<String> = rightChild.kind == Ref ? rightChild.annotations.get('base.ref') : null;
+				final isAsymmetric:Bool = rightRef != null && simpleName(rightRef) != simple;
+				final rightCT:ComplexType = isAsymmetric ? ruleReturnCT(rightRef) : returnCT;
+				final rightCall:Expr = if (isAsymmetric) {
+					expr: ECall(macro $i{parseFnName(rightRef)}, [macro ctx]),
+					pos: Context.currentPos(),
+				} else {
 					expr: ECall(macro $i{loopFnName}, [macro ctx, macro $v{nextMinPrec}]),
 					pos: Context.currentPos(),
 				};
@@ -357,12 +372,17 @@ class Lowering {
 						_matched = false;
 					} else {
 						skipWs(ctx);
-						final _right:$returnCT = $rightCall;
+						final _right:$rightCT = $rightCall;
 						left = $ctorCall;
 					}
 				};
 			};
-			opChain = macro if (matchLit(ctx, $v{opText})) $branchBody else $opChain;
+			final matchFnName:String = endsWithWordChar(opText) ? 'matchKw' : 'matchLit';
+			final matchCall:Expr = {
+				expr: ECall(macro $i{matchFnName}, [macro ctx, macro $v{opText}]),
+				pos: Context.currentPos(),
+			};
+			opChain = macro if ($matchCall) $branchBody else $opChain;
 		}
 		return macro {
 			var left:$returnCT = $atomCall;

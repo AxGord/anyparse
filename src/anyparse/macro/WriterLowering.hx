@@ -154,8 +154,18 @@ class WriterLowering {
 			// specific operator literal, not the language as a whole.
 			final isTight:Bool = fmtHasFlag(branch, 'tight');
 			final opWithSpaces:String = isTight ? opText : ' ' + opText + ' ';
+			// Asymmetric infix mirror of Lowering.lowerPrattLoop: when the
+			// right child references a different enum (e.g. `Is(left:HxExpr,
+			// right:HxType)`), the right operand uses that type's own writer
+			// at its default ctxPrec (no precedence parenthesisation cross-
+			// type). Self-symmetric branches keep the existing same-fn path.
+			final rightChild:ShapeNode = children[1];
+			final rightRef:Null<String> = rightChild.kind == Ref ? rightChild.annotations.get('base.ref') : null;
+			final isAsymmetric:Bool = rightRef != null && simpleName(rightRef) != simpleName(typePath);
 			final leftCall:Expr = makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, leftCtx);
-			final rightCall:Expr = makeWriteCall(writeFnName, macro $i{argNames[1]}, hasPratt, rightCtx);
+			final rightCall:Expr = isAsymmetric
+				? makeWriteCall(writeFnFor(rightRef), macro $i{argNames[1]}, false, -1)
+				: makeWriteCall(writeFnName, macro $i{argNames[1]}, hasPratt, rightCtx);
 			return macro {
 				final _inner:anyparse.core.Doc = _dc([
 					$leftCall, _dt($v{opWithSpaces}), $rightCall,
