@@ -18,6 +18,7 @@ import unit.HxTopLevelSliceTest;
 import unit.HxControlFlowSliceTest;
 import unit.HxForEnumVoidSliceTest;
 import unit.HxSwitchNewSliceTest;
+import unit.HxSwitchBareSliceTest;
 import unit.HxDoWhileThrowTryCatchSliceTest;
 import unit.HxAbstractSliceTest;
 import unit.HxStringSliceTest;
@@ -100,6 +101,7 @@ class RunTests {
 		runner.addCase(new HxControlFlowSliceTest());
 		runner.addCase(new HxForEnumVoidSliceTest());
 		runner.addCase(new HxSwitchNewSliceTest());
+		runner.addCase(new HxSwitchBareSliceTest());
 		runner.addCase(new HxDoWhileThrowTryCatchSliceTest());
 		runner.addCase(new HxAbstractSliceTest());
 		runner.addCase(new HxStringSliceTest());

@@ -3,7 +3,7 @@ package anyparse.grammar.haxe;
 /**
  * Statement grammar for Haxe function bodies.
  *
- * Eleven branches in source order — keyword-dispatched branches first,
+ * Branches in source order — keyword-dispatched branches first,
  * block statement next, expression-statement catch-all last:
  *
  *  - `VarStmt` — `var name:Type = init;` local variable declaration.
@@ -45,6 +45,17 @@ package anyparse.grammar.haxe;
  *    and default branch are parsed via `HxSwitchStmt` typedef. Case
  *    bodies use `@:tryparse` for implicit termination at the next
  *    `case` / `default` / `}` token (D49).
+ *
+ *  - `SwitchStmtBare` — `switch expr { cases }` switch statement
+ *    with no parens around the subject. Bodies and case structure
+ *    are identical to `SwitchStmt`; only the subject loses its
+ *    surrounding parens. Both ctors share `@:kw('switch')`;
+ *    `tryBranch` rolls back when `SwitchStmt`'s `@:lead('(')` fails
+ *    (next token after `switch` is the subject, not `(`), and
+ *    `SwitchStmtBare` is tried next. The parens-form keeps source-
+ *    order precedence, so `switch (cond) { … }` still routes to
+ *    `SwitchStmt`. Same precedent as the `TryCatchStmt` /
+ *    `TryCatchStmtBare` pair.
  *
  *  - `ThrowStmt` — `throw expr;` throw statement. Dispatched by the
  *    `throw` keyword. The expression is parsed and the trailing `;`
@@ -114,6 +125,9 @@ enum HxStatement {
 
 	@:kw('switch')
 	SwitchStmt(stmt:HxSwitchStmt);
+
+	@:kw('switch')
+	SwitchStmtBare(stmt:HxSwitchStmtBare);
 
 	@:kw('throw') @:trail(';')
 	ThrowStmt(expr:HxExpr);
