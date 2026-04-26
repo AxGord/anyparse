@@ -158,32 +158,37 @@ class Renderer {
 	/**
 		Returns `true` if rendering `d` in flat mode at the given indent
 		consumes at most `remaining` columns. Used to choose between flat and
-		broken layout for a `Group`.
+		broken layout for a `Group`/`BodyGroup`.
 	**/
 	static function fitsFlat(remaining:Int, indent:Int, d:Doc):Bool {
 		if (remaining < 0) return false;
-		var local:Array<Frame> = [new Frame(indent, MFlat, d)];
-		var budget = remaining;
+		final local:Array<Frame> = [new Frame(indent, MFlat, d)];
+		var budget:Int = remaining;
 
 		while (local.length > 0 && budget >= 0) {
-			var f = local.pop();
+			final f:Frame = local.pop();
 			switch (f.doc) {
 				case Empty:
 					// nothing
 				case Text(s):
 					budget -= s.length;
 				case Line(flat):
-					// In flat measurement mode we always use the flat
-					// replacement. A hard line (flat == "\n") makes the
-					// measurement "overflow" only if it is longer than the
-					// remaining budget — which is almost always the case —
-					// so groups containing hard lines will correctly refuse
-					// to flatten.
+					// A hard line (flat starts with "\n") forces the
+					// measurement to refuse flatten regardless of remaining
+					// budget — short hardline-bearing content (a switch
+					// with one case body) would otherwise pass the budget
+					// check by length alone and the parent Group would
+					// commit to MFlat, causing the renderer to emit
+					// hardlines without any indent. ω-break-group.
+					if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) {
+						budget = -1;
+						break;
+					}
 					budget -= flat.length;
 				case Nest(n, inner):
 					local.push(new Frame(f.indent + n, MFlat, inner));
 				case Concat(items):
-					var j = items.length;
+					var j:Int = items.length;
 					while (--j >= 0) local.push(new Frame(f.indent, MFlat, items[j]));
 				case Group(inner):
 					local.push(new Frame(f.indent, MFlat, inner));
@@ -195,9 +200,10 @@ class Renderer {
 					// Group's fit budget. This is what lets
 					// `bodyPolicyWrap`'s chained FitLines (e.g.
 					// `forBody=fitLine + ifBody=fitLine`) keep the outer
-					// body inline while the inner body breaks — the canonical
-					// "measure all nested groups flat" would force outer to
-					// break first.
+					// body inline while the inner body breaks — and lets
+					// `triviaBlockStarExpr`'s BG-wrapped block bodies sit
+					// inside a call arg without forcing the call's parens
+					// onto separate lines (ω-break-group).
 				case IfBreak(_, flatDoc):
 					local.push(new Frame(f.indent, MFlat, flatDoc));
 			}

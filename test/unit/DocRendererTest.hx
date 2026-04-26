@@ -236,4 +236,47 @@ class DocRendererTest extends Test {
 		final out:String = Renderer.render(doc, 80, Space, 1, '\n', false, true);
 		Assert.equals("\n  a\n  \n  b", out);
 	}
+
+	// ω-break-group: hardline-force-not-fit. A Group whose own inner
+	// contains a hardline (NOT shielded behind a BodyGroup) must always
+	// break, even if the total flat width fits in the budget. Without
+	// the force, short hardline-bearing content (a 2-line block body)
+	// would fit by length alone and the renderer would emit raw `\n`
+	// without indent.
+	function testGroupForcesBreakOnDirectHardlineEvenWhenContentFits() {
+		final inner:Doc = D.nest(1, D.concat([
+			D.text("a"),
+			D.hardline(),
+			D.text("b"),
+		]));
+		final actual:String = Renderer.render(D.group(inner), 80, Tab, 1);
+		Assert.equals("a\n\tb", actual);
+	}
+
+	// ω-break-group: a `Group` wrapping `Nest( BodyGroup{ block-body Doc
+	// containing hardlines } )`. The outer Group defers the BodyGroup in
+	// `fitsFlat` measurement, so the call-arg-shaped outer stays inline
+	// (no break around `(...)`). The inner BodyGroup measures its own
+	// hardlines (force-not-fit), commits to MBreak, and lays the body
+	// out at the surrounding `Nest`'s indent — which the BG inherits as
+	// MBreak from its own decision, so the inner Nest bumps correctly.
+	// This is the synthetic shape behind issue_552
+	// (`trace(switch foo { case … })`) and the arrow-body-in-call family
+	// after `triviaBlockStarExpr` BG-wraps its block-body emission.
+	function testCallArgOuterStaysFlatWhileBodyGroupBreaksCorrectly() {
+		final blockBody:Doc = BodyGroup(D.concat([
+			D.text("{"),
+			D.nest(1, D.concat([D.hardline(), D.text("case A: x;")])),
+			D.hardline(),
+			D.text("}"),
+		]));
+		final doc:Doc = D.group(D.concat([
+			D.text("trace("),
+			D.nest(1, blockBody),
+			D.text(")"),
+		]));
+		// Outer `(`...`)` stays inline; case body indents under the Nest
+		// (depth 1) that the inner BG inherits via its own MBreak choice.
+		Assert.equals("trace({\n\tcase A: x;\n})", Renderer.render(doc, 80, Tab, 1));
+	}
 }

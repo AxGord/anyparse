@@ -2449,7 +2449,15 @@ class WriterLowering {
 					_parts.push(trailingCommentDocVerbatim(_trailClose, opt));
 					$trailFollowExpr;
 				}
-				_dc(_parts);
+				// ω-break-group: wrap the block body in BodyGroup so a
+				// surrounding Group (e.g. a call's sepList) does NOT see
+				// the body's hardlines through its fitsFlat measurement.
+				// Without this, putting a switch / class block / `{}` body
+				// inside a call arg forces the call's outer parens to break
+				// (the body's hardlines fail the parent's fit). With BG,
+				// the outer parens stay inline; the body still breaks via
+				// its own hardline-force-not-fit decision.
+				_dbg(_dc(_parts));
 			}
 		};
 	}

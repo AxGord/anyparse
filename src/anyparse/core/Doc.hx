@@ -23,17 +23,21 @@ package anyparse.core;
 	- `Group(inner)`   — a unit of fit decision. The renderer measures the flat
 	                     width of `inner` and commits to flat if it fits within
 	                     the remaining width, otherwise to break.
-	- `BodyGroup(inner)` — structurally identical to `Group` but marks a
-	                     "body-level" fit decision emitted by
-	                     `WriterLowering.bodyPolicyWrap`'s `FitLine` branch.
-	                     The trivia writer's trailing-comment folder looks
-	                     specifically for `BodyGroup` when splicing a
-	                     trailing line comment into the body's measured
-	                     content so the Group's flat/break decision
-	                     accounts for the trailing comment width. Renderer
-	                     and `fitsFlat` treat `BodyGroup` identically to
-	                     `Group` — the distinction exists only as a
-	                     semantic marker for consumer-side Doc surgery.
+	- `BodyGroup(inner)` — body-level fit decision. Renderer treats
+	                     `BodyGroup` identically to `Group` for its own
+	                     flat/break choice. `fitsFlat` differs: when
+	                     measuring an outer Group that contains a
+	                     `BodyGroup`, the BG is DEFERRED — its content does
+	                     not contribute to the parent's measurement. The
+	                     parent therefore stays inline even when the inner
+	                     BG would break, which is what lets a multi-line
+	                     block body sit inside a call argument without
+	                     forcing the call's `(...)` onto separate lines,
+	                     and what lets chained FitLines keep the outer body
+	                     inline while the inner body breaks. The trivia
+	                     writer's trailing-comment folder looks specifically
+	                     for `BodyGroup` when splicing a trailing line
+	                     comment.
 	- `Concat(items)`  — sequential concatenation.
 	- `IfBreak(br, fl)`— emit `br` if the enclosing Group is in break mode,
 	                     `fl` if in flat mode. Used for trailing separators
