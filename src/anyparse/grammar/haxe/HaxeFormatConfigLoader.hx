@@ -66,6 +66,12 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   `FitLine` body policy active for `if`s with an `else` clause,
  *   `false` (default) degrades those bodies to `Next`. Matches haxe-
  *   formatter's `sameLine.fitLineIfWithElse: @:default(false)`.
+ * - `sameLine.expressionTry` (ω-expression-try): enum string — same
+ *   `"same"` / `"next"` / `"keep"` collapse as `sameLine.tryCatch`,
+ *   routed to `opt.expressionTry`. Default `Same`. Drives the
+ *   separator between the body and `catch` clauses of an
+ *   expression-position `try` (`HxTryCatchExpr.catches`). Independent
+ *   of `sameLine.tryCatch`, which keeps driving the statement-form.
  * - `trailingCommas.arrayLiteralDefault` / `trailingCommas.callArgumentDefault`
  *   / `trailingCommas.functionParameterDefault`: enum string — `"yes"`
  *   maps to `true`, every other value (`"no"`, `"keep"`, `"ignore"`) to
@@ -275,6 +281,7 @@ final class HaxeFormatConfigLoader {
 			objectLiteralBracesOpen: base.objectLiteralBracesOpen,
 			objectLiteralBracesClose: base.objectLiteralBracesClose,
 			addLineCommentSpace: base.addLineCommentSpace,
+			expressionTry: base.expressionTry,
 		};
 		if (cfg.indentation != null) applyIndentation(cfg.indentation, result);
 		if (cfg.wrapping != null) applyWrapping(cfg.wrapping, result);
@@ -318,6 +325,7 @@ final class HaxeFormatConfigLoader {
 		if (section.doWhileBody != null) opt.doBody = bodyPolicyToRuntime(section.doWhileBody);
 		if (section.elseIf != null) opt.elseIf = keywordPlacementToRuntime(section.elseIf);
 		if (section.fitLineIfWithElse != null) opt.fitLineIfWithElse = section.fitLineIfWithElse;
+		if (section.expressionTry != null) opt.expressionTry = sameLineToRuntime(section.expressionTry);
 	}
 
 	private static function applyTrailingCommas(section:HxFormatTrailingCommasSection, opt:HxModuleWriteOptions):Void {

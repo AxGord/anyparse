@@ -266,6 +266,13 @@ final class HaxeFormat implements TextFormat {
 	 * Setting to `false` requires
 	 * `"whitespace": { "addLineCommentSpace": false }` in
 	 * `hxformat.json`.
+	 *
+	 * `expressionTry` default (ω-expression-try) is `Same` — the
+	 * expression-position `try ... catch ...` form stays on one line,
+	 * matching haxe-formatter's `sameLine.expressionTry:
+	 * @:default(Same)`. Independent of `sameLineCatch` (statement-
+	 * form). Setting to `Next` requires
+	 * `"sameLine": { "expressionTry": "next" }` in `hxformat.json`.
 	 */
 	public var defaultWriteOptions(default, null):HxModuleWriteOptions = {
 		indentChar: Tab,
@@ -312,6 +319,7 @@ final class HaxeFormat implements TextFormat {
 		objectLiteralBracesOpen: WhitespacePolicy.None,
 		objectLiteralBracesClose: WhitespacePolicy.None,
 		addLineCommentSpace: true,
+		expressionTry: SameLinePolicy.Same,
 	};
 
 	private function new() {}

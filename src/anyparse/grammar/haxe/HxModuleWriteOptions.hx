@@ -352,6 +352,24 @@ import anyparse.format.WriteOptions;
  * field has to live on the base struct or non-Haxe writers wouldn't
  * compile. Default `true`. Matches haxe-formatter's
  * `whitespace.addLineCommentSpace: @:default(true)`.
+ *
+ * Field added in slice ω-expression-try (expression-position try-catch
+ * separator):
+ *  - `expressionTry` — three-way same-line policy for the separator
+ *    between the body of an expression-position `try` and each of its
+ *    `catch` clauses (`var x = try foo() catch (_:Any) null;`).
+ *    Independent of `sameLineCatch` (which keeps driving the
+ *    statement-form `try { ... } catch (...)`). `Same` (default —
+ *    matches haxe-formatter's `sameLine.expressionTry: @:default(Same)`)
+ *    keeps the expression form on one line. `Next` pushes the body
+ *    onto its own line and each `catch` keyword onto its own line as
+ *    well, producing the multi-line layout exercised by
+ *    `issue_509_try_catch_expression_next.hxtest`. `Keep` defers to
+ *    captured source shape; in plain mode it degrades to `Same`. The
+ *    knob only applies at sites tagged with
+ *    `@:fmt(sameLine('expressionTry'))` in the grammar —
+ *    `HxTryCatchExpr.catches` is the only current consumer; statement-
+ *    form `try` keeps reading `sameLineCatch`.
  */
 typedef HxModuleWriteOptions = WriteOptions & {
 	sameLineElse:SameLinePolicy,
@@ -389,4 +407,5 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	anonTypeBracesClose:WhitespacePolicy,
 	objectLiteralBracesOpen:WhitespacePolicy,
 	objectLiteralBracesClose:WhitespacePolicy,
+	expressionTry:SameLinePolicy,
 };

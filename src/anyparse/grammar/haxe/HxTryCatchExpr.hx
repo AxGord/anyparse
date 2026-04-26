@@ -30,14 +30,14 @@ package anyparse.grammar.haxe;
  * `try` is consumed by `HxStatement.TryCatchStmt` first because
  * `HxStatement` source order puts `TryCatchStmt` ahead of `ExprStmt`.
  *
- * `@:fmt(sameLine('sameLineCatch'))` reuses the statement-form knob
- * to drive the separator between body and `catch`. A dedicated
- * `expressionTry` policy (matching haxe-formatter's `sameLine.
- * expressionTry`) is a follow-up slice; until it lands, both
- * statement and expression forms share `sameLineCatch`.
+ * `@:fmt(sameLine('expressionTry'))` (ω-expression-try) drives the
+ * separator between body and `catch`. The expression-form has its
+ * own knob — `sameLineCatch` keeps driving the statement-form
+ * (`HxTryCatchStmt.catches`). Default `Same` keeps the one-liner
+ * idiom; `Next` produces the multi-line expression layout.
  */
 @:peg
 typedef HxTryCatchExpr = {
 	var body:HxExpr;
-	@:trivia @:tryparse @:fmt(sameLine('sameLineCatch')) var catches:Array<HxCatchClauseExpr>;
+	@:trivia @:tryparse @:fmt(sameLine('expressionTry')) var catches:Array<HxCatchClauseExpr>;
 };

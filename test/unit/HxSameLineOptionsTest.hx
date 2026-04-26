@@ -11,15 +11,17 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
 
 /**
- * τ₁ — runtime-switchable `sameLine` policies for `else`, `catch`, and
- * the trailing `while` of `do … while (…)`.
+ * τ₁ + ω-expression-try — runtime-switchable `sameLine` policies for
+ * `else`, `catch`, the trailing `while` of `do … while (…)`, and the
+ * expression-position `try ... catch` separator.
  *
- * Three independent `Bool` knobs on `HxModuleWriteOptions` control
- * whether the follow-up keyword sits on the same line as the preceding
- * `}` (default — matches haxe-formatter's `sameLine` defaults) or is
- * moved to the next line at the current indent level. The declarative
- * `@:fmt(sameLine("flagName"))` knob on the relevant grammar fields wires
- * each knob to one specific emission site in `WriterLowering`.
+ * Four independent `SameLinePolicy` knobs on `HxModuleWriteOptions`
+ * control whether the follow-up keyword sits on the same line as the
+ * preceding `}` (or body, for the expression-form try) — default
+ * matches haxe-formatter's `sameLine` defaults — or is moved to the
+ * next line at the current indent level. The declarative
+ * `@:fmt(sameLine("flagName"))` knob on the relevant grammar fields
+ * wires each knob to one specific emission site in `WriterLowering`.
  *
  * Each test round-trips a source through the parser, writes it with
  * each flag forced, and asserts the separator appears in the expected
@@ -122,6 +124,51 @@ class HxSameLineOptionsTest extends Test {
 		Assert.equals(SameLinePolicy.Same, defaults.sameLineElse);
 		Assert.equals(SameLinePolicy.Same, defaults.sameLineCatch);
 		Assert.equals(SameLinePolicy.Same, defaults.sameLineDoWhile);
+		Assert.equals(SameLinePolicy.Same, defaults.expressionTry);
+	}
+
+	public function testExpressionTrySameKeepsOneLiner():Void {
+		// expressionTry=Same → `try foo() catch (_:Any) null` stays inline.
+		final out:String = writeWithExpressionTry(
+			'class F { function f():Void { var x = try foo() catch (_:Any) null; } }',
+			SameLinePolicy.Same
+		);
+		Assert.isTrue(out.indexOf('try foo() catch (_:Any) null;') != -1, 'expected one-liner expression try in: <$out>');
+	}
+
+	public function testExpressionTryNextSplits():Void {
+		// expressionTry=Next → body and each catch break onto own lines.
+		final out:String = writeWithExpressionTry(
+			'class F { function f():Void { var x = try foo() catch (_:Any) null; } }',
+			SameLinePolicy.Next
+		);
+		Assert.isTrue(out.indexOf('try foo() catch (_:Any) null;') == -1, 'did not expect inline expression try in: <$out>');
+		Assert.isTrue(out.indexOf('catch (_:Any)') != -1, 'expected catch clause in: <$out>');
+		// catch keyword must sit on its own line, not on the same line as the body's last token.
+		Assert.isTrue(out.indexOf('foo() catch') == -1, 'catch should break onto own line in: <$out>');
+	}
+
+	public function testExpressionTryIndependentFromSameLineCatch():Void {
+		// sameLineCatch=Next must not affect expression-form when expressionTry=Same.
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		opts.sameLineCatch = SameLinePolicy.Next;
+		opts.expressionTry = SameLinePolicy.Same;
+		final src:String = 'class F { function f():Void { var x = try foo() catch (_:Any) null; try {} catch (e:E) {} } }';
+		final out:String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+		Assert.isTrue(out.indexOf('try foo() catch (_:Any) null;') != -1, 'expression form should stay inline in: <$out>');
+		Assert.isTrue(out.indexOf('} catch ') == -1, 'statement form catch should break in: <$out>');
+	}
+
+	public function testExpressionTryJsonNext():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"expressionTry": "next"}}');
+		Assert.equals(SameLinePolicy.Next, opts.expressionTry);
+		Assert.equals(SameLinePolicy.Same, opts.sameLineCatch);
+	}
+
+	private function writeWithExpressionTry(src:String, policy:SameLinePolicy):String {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		opts.expressionTry = policy;
+		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}
 
 	public function testSameLineElseTrueSuppressedByNonBlockThenBody():Void {

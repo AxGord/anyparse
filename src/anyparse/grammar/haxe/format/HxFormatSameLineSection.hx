@@ -30,6 +30,14 @@ package anyparse.grammar.haxe.format;
  * `if`s; `true` keeps `FitLine` active regardless of the else clause.
  * The loader maps this onto the runtime `fitLineIfWithElse` option on
  * `HxModuleWriteOptions`.
+ *
+ * `expressionTry` (ω-expression-try) is a two-way same-line knob for
+ * the separator between the body of an expression-position `try` and
+ * its `catch` clauses (`var x = try foo() catch (_:Any) null;`). It
+ * is independent of `tryCatch` (statement-form), matching haxe-
+ * formatter's `sameLine.expressionTry` field. Default `same`. The
+ * loader maps it onto the runtime `expressionTry` option on
+ * `HxModuleWriteOptions`.
  */
 @:peg typedef HxFormatSameLineSection = {
 
@@ -52,4 +60,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var elseIf:HxFormatKeywordPlacement;
 
 	@:optional var fitLineIfWithElse:Bool;
+
+	@:optional var expressionTry:HxFormatSameLinePolicy;
 };
