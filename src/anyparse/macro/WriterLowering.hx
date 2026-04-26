@@ -729,7 +729,7 @@ class WriterLowering {
 							// sole separator) and by `HxCatchClauseExpr.body` (last
 							// field; replaces the fixed `_dt(' ')` between `)` and the
 							// catch body).
-							parts.push(bodyBreakWrap(bodyBreakFlag, writeCall));
+							parts.push(bodyBreakWrap(bodyBreakFlag, writeCall, fieldAccess, refName, fmtHasFlag(child, 'blockBodyKeepsInline')));
 						} else if (kwLead == null && leadText == null && !isFirstField && !isRaw) {
 							// ω-issue-48-v2: in trivia mode the bare Ref field
 							// grew a `<field>BeforeNewline:Bool` slot (see
@@ -764,8 +764,14 @@ class WriterLowering {
 					// target type is trivia-bearing — non-bearing types have
 					// no closeTrailing slot and the override degrades to a
 					// no-op switch returning the default sep.
-					if (ctx.trivia && isTriviaBearing(refName))
-						prevBareRefBody = {access: fieldAccess, typePath: refName};
+					//
+					// ω-block-shape-aware: track in plain mode too, gated only
+					// on bare-Ref-ness. Block-shape consumers
+					// (`bodyBreakWrap`, the Star sameLine handler) check
+					// `collectBlockCtorPatterns(refName)` themselves and
+					// degrade to a no-op when the target type has no block
+					// ctors, so the wider tracker is safe in both modes.
+					prevBareRefBody = {access: fieldAccess, typePath: refName};
 
 				case _:
 					Context.fatalError('WriterLowering: struct field kind ${child.kind} not supported', Context.currentPos());
@@ -888,12 +894,51 @@ class WriterLowering {
 				// comment — the normal space sep would leak ` ` between the
 				// indent and the next sibling (e.g. `catch`). The override
 				// emits `_de()` instead; non-matching ctors fall through.
-				final firstSepOverride:Null<Expr> = sameLineName != null
+				final closeTrailingFirstOverride:Null<Expr> = sameLineName != null
 					? buildCloseTrailingFirstSepOverride(prevBareRefBody, sepExpr)
 					: null;
+				// ω-block-shape-aware: when the Star carries
+				// `@:fmt(blockBodyKeepsInline)` AND the prev body's enum has
+				// block ctors, force the leading sep before each catch
+				// element to `_dt(' ')` whenever the previous body (struct
+				// field for the first iteration, prev element's body for
+				// subsequent iterations) was a block ctor. Composes with the
+				// close-trailing override above by using it as the non-block
+				// fallback on the first iteration. Opt-in flag — statement-
+				// form `HxTryCatchStmt.catches` keeps the old behaviour
+				// (block-body still breaks `} catch` on `Next`, mirroring
+				// haxe-formatter's `sameLine.tryCatch` contract).
+				final blockShapeAware:Bool = fmtHasFlag(starNode, 'blockBodyKeepsInline');
+				final blockPatterns:Array<Expr> = sameLineName != null && prevBareRefBody != null && blockShapeAware
+					? collectBlockCtorPatterns(prevBareRefBody.typePath)
+					: [];
+				final elemBodyField:Null<String> = sameLineName != null && blockPatterns.length > 0
+					? findElementBodyField(elemRefName, prevBareRefBody.typePath)
+					: null;
+				final firstSepOverride:Null<Expr> = if (blockPatterns.length == 0) closeTrailingFirstOverride;
+				else {
+					final fallback:Expr = closeTrailingFirstOverride ?? sepExpr;
+					final cases:Array<Case> = [
+						{values: blockPatterns, expr: macro _dt(' '), guard: null},
+						{values: [macro _], expr: fallback, guard: null},
+					];
+					{expr: ESwitch(prevBareRefBody.access, cases, null), pos: Context.currentPos()};
+				};
+				final subsequentSepOverride:Null<Expr> = if (elemBodyField == null) null;
+				else {
+					final prevElemBodyAccess:Expr = {
+						expr: EField(macro _arr[_si - 1].node, elemBodyField),
+						pos: Context.currentPos(),
+					};
+					final cases:Array<Case> = [
+						{values: blockPatterns, expr: macro _dt(' '), guard: null},
+						{values: [macro _], expr: sepExpr, guard: null},
+					];
+					{expr: ESwitch(prevElemBodyAccess, cases, null), pos: Context.currentPos()};
+				};
 				parts.push(triviaTryparseStarExpr(
 					fieldAccess, elemFn, sepExpr, sameLineName != null, nestBody,
-					tryparseTrailBB, tryparseTrailLC, firstSepOverride
+					tryparseTrailBB, tryparseTrailLC, firstSepOverride, subsequentSepOverride
 				));
 				return;
 			}
@@ -1043,17 +1088,66 @@ class WriterLowering {
 					pos: Context.currentPos(),
 				};
 				final sepExpr:Expr = sameLinePolicySwitch(optFlag, macro _dt(' '));
-				parts.push(macro {
-					final _arr = $fieldAccess;
-					final _docs:Array<anyparse.core.Doc> = [];
-					var _si:Int = 0;
-					while (_si < _arr.length) {
-						_docs.push($sepExpr);
-						_docs.push($elemCall);
-						_si++;
-					}
-					_dc(_docs);
-				});
+				// ω-block-shape-aware: when the Star carries
+				// `@:fmt(blockBodyKeepsInline)` AND the prev struct field's
+				// body has block ctors AND the element type carries a same-
+				// typed body field, force `_dt(' ')` for any iteration whose
+				// preceding body was a block ctor. Mirrors the trivia path;
+				// the plain path's element access drops the `.node`
+				// indirection. Opt-in flag — see the trivia-path comment for
+				// the statement-form rationale.
+				final blockShapeAware:Bool = fmtHasFlag(starNode, 'blockBodyKeepsInline');
+				final blockPatterns:Array<Expr> = prevBareRefBody != null && blockShapeAware
+					? collectBlockCtorPatterns(prevBareRefBody.typePath)
+					: [];
+				final elemBodyField:Null<String> = blockPatterns.length > 0
+					? findElementBodyField(elemRefName, prevBareRefBody.typePath)
+					: null;
+				if (blockPatterns.length == 0) {
+					parts.push(macro {
+						final _arr = $fieldAccess;
+						final _docs:Array<anyparse.core.Doc> = [];
+						var _si:Int = 0;
+						while (_si < _arr.length) {
+							_docs.push($sepExpr);
+							_docs.push($elemCall);
+							_si++;
+						}
+						_dc(_docs);
+					});
+				} else {
+					final firstShapeCases:Array<Case> = [
+						{values: blockPatterns, expr: macro _dt(' '), guard: null},
+						{values: [macro _], expr: sepExpr, guard: null},
+					];
+					final firstSepShape:Expr = {
+						expr: ESwitch(prevBareRefBody.access, firstShapeCases, null),
+						pos: Context.currentPos(),
+					};
+					final subsequentSepExpr:Expr = if (elemBodyField == null) sepExpr;
+					else {
+						final prevElemBodyAccess:Expr = {
+							expr: EField(macro _arr[_si - 1], elemBodyField),
+							pos: Context.currentPos(),
+						};
+						final cases:Array<Case> = [
+							{values: blockPatterns, expr: macro _dt(' '), guard: null},
+							{values: [macro _], expr: sepExpr, guard: null},
+						];
+						{expr: ESwitch(prevElemBodyAccess, cases, null), pos: Context.currentPos()};
+					};
+					parts.push(macro {
+						final _arr = $fieldAccess;
+						final _docs:Array<anyparse.core.Doc> = [];
+						var _si:Int = 0;
+						while (_si < _arr.length) {
+							_docs.push(_si == 0 ? $firstSepShape : $subsequentSepExpr);
+							_docs.push($elemCall);
+							_si++;
+						}
+						_dc(_docs);
+					});
+				}
 			} else {
 				// `@:fmt(padLeading)` / `@:fmt(padTrailing)` — when the Star
 				// is bracketed by surrounding tokens emitted OUTSIDE this
@@ -1289,8 +1383,22 @@ class WriterLowering {
 	 * trailing space so the wrap's `Same` ` ` is the sole separator) and
 	 * `HxCatchClauseExpr.body` (last field; replaces the fixed
 	 * `_dt(' ')` between `)` and the catch body).
+	 *
+	 * ω-block-shape-aware (block-body shape-awareness): when the field
+	 * also carries `@:fmt(blockBodyKeepsInline)` AND the body's type has
+	 * block ctors (collected via `collectBlockCtorPatterns`), an outer
+	 * ctor switch forces the inline `' ' + body` layout for those ctors
+	 * regardless of the `opt.<flag>` policy — block bodies have their
+	 * own visual structure (`{ ... }` already opens its own line), so a
+	 * body-break would emit `try \n\t{ ... }` instead of the canonical
+	 * `try { ... }`. Non-block ctors still honour the policy switch.
+	 * Opt-in via the flag because statement-form siblings
+	 * (`HxTryCatchStmt.body` etc.) want the OPPOSITE — `} catch` breaks
+	 * to `}\ncatch` on `Next` regardless of body shape (see
+	 * `testSameLineCatchAppliesToEveryCatch` for the upstream
+	 * haxe-formatter contract).
 	 */
-	private static function bodyBreakWrap(flagName:String, writeCall:Expr):Expr {
+	private function bodyBreakWrap(flagName:String, writeCall:Expr, bodyAccess:Expr, bodyTypePath:String, shapeAware:Bool):Expr {
 		final optFlag:Expr = {
 			expr: EField(macro opt, flagName),
 			pos: Context.currentPos(),
@@ -1300,17 +1408,26 @@ class WriterLowering {
 		final slpPath:Array<String> = ['anyparse', 'format', 'SameLinePolicy'];
 		final nextPat:Expr = MacroStringTools.toFieldExpr(slpPath.concat(['Next']));
 		final keepPat:Expr = MacroStringTools.toFieldExpr(slpPath.concat(['Keep']));
-		final cases:Array<Case> = [
+		final flagCases:Array<Case> = [
 			{values: [nextPat], expr: nextLayoutExpr, guard: null},
 			{values: [keepPat], expr: sameLayoutExpr, guard: null},
 		];
-		final switchExpr:Expr = {expr: ESwitch(optFlag, cases, sameLayoutExpr), pos: Context.currentPos()};
+		final flagSwitch:Expr = {expr: ESwitch(optFlag, flagCases, sameLayoutExpr), pos: Context.currentPos()};
+		final blockPatterns:Array<Expr> = shapeAware ? collectBlockCtorPatterns(bodyTypePath) : [];
+		final wrapExpr:Expr = if (blockPatterns.length == 0) flagSwitch
+		else {
+			final shapeCases:Array<Case> = [
+				{values: blockPatterns, expr: sameLayoutExpr, guard: null},
+				{values: [macro _], expr: flagSwitch, guard: null},
+			];
+			{expr: ESwitch(bodyAccess, shapeCases, null), pos: Context.currentPos()};
+		};
 		// `_dn(_cols, …)` in the Next branch needs a per-call `_cols` binding —
 		// mirrors `bodyPolicyWrap`'s tail block (line 1721) and the Star
 		// `_dn(_cols, _dc(_docs))` site at line 2337.
 		return macro {
 			final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-			$switchExpr;
+			$wrapExpr;
 		};
 	}
 
@@ -1744,6 +1861,28 @@ class WriterLowering {
 		for (branch in rule.children) if (isBlockCtorBranch(branch))
 			patterns.push(branchCtorPattern(bodyTypePath, branch));
 		return patterns;
+	}
+
+	/**
+	 * ω-block-shape-aware — find the field name of the bare-Ref child on
+	 * `elemTypePath`'s Seq rule whose Ref points at `bodyTypePath`. Used by
+	 * the Star sameLine handler to wire shape-awareness on subsequent
+	 * iterations: each catch element after the first checks the previous
+	 * element's body shape (`_arr[_si - 1].<field>`) against the prev
+	 * body's block ctors. Returns `null` when the element is not a Seq,
+	 * has no matching Ref child, or the matching child is not a bare Ref
+	 * (Star / optional fields are skipped — they don't carry the body
+	 * directly).
+	 */
+	private function findElementBodyField(elemTypePath:String, bodyTypePath:String):Null<String> {
+		final rule:Null<ShapeNode> = shape.rules.get(elemTypePath);
+		if (rule == null || rule.kind != Seq) return null;
+		for (child in rule.children) if (child.kind == Ref) {
+			if (child.annotations.get('base.optional') == true) continue;
+			final ref:Null<String> = child.annotations.get('base.ref');
+			if (ref == bodyTypePath) return child.annotations.get('base.fieldName');
+		}
+		return null;
 	}
 
 	/**
@@ -2271,7 +2410,8 @@ class WriterLowering {
 		fieldAccess:Expr, elemFn:String, sepExpr:Expr,
 		sepBeforeFirst:Bool, nestBody:Bool,
 		trailBBAccess:Null<Expr>, trailLCAccess:Null<Expr>,
-		firstSepOverride:Null<Expr> = null
+		firstSepOverride:Null<Expr> = null,
+		subsequentSepOverride:Null<Expr> = null
 	):Expr {
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
@@ -2284,10 +2424,15 @@ class WriterLowering {
 		// ω-close-trailing-alt: the FIRST element's separator picks
 		// `firstSepOverride` (a runtime switch on the prev body's ctor)
 		// when supplied; otherwise it falls back to `sepExpr` like
-		// every subsequent iteration. Subsequent elements always use
-		// `sepExpr` — closeTrailing is a property of the prev STRUCT
-		// FIELD (the body), not of the prior list element.
+		// every subsequent iteration. Subsequent elements use
+		// `subsequentSepOverride` when supplied (ω-block-shape-aware:
+		// switch on prev element's body ctor) — closeTrailing was a
+		// property of the prev STRUCT FIELD only, but block-shape-
+		// awareness applies symmetrically across the chain (each catch
+		// follows another body whose shape decides `} catch` inline vs
+		// `\ncatch`).
 		final firstSepExpr:Expr = firstSepOverride ?? sepExpr;
+		final subsequentSepExpr:Expr = subsequentSepOverride ?? sepExpr;
 		return macro {
 			final _arr = $fieldAccess;
 			final _trailLC:Array<String> = $trailLC;
@@ -2322,7 +2467,7 @@ class WriterLowering {
 						_docs.push(_dhl());
 						if (_t.blankBefore) _docs.push(_dhl());
 					} else if (_si > 0) {
-						_docs.push($sepExpr);
+						_docs.push($subsequentSepExpr);
 					} else if (_sepFirst) {
 						_docs.push($firstSepExpr);
 					}

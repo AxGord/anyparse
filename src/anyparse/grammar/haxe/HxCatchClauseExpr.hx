@@ -24,10 +24,15 @@ package anyparse.grammar.haxe;
  * one level deeper (`catch (e:T)\n\tbody`). Pair with
  * `bodyBreak('expressionTry')` on `HxTryCatchExpr.body` to get the
  * full multi-line expression try layout when `expressionTry=Next`.
+ *
+ * `@:fmt(blockBodyKeepsInline)` makes the body-break shape-aware: when
+ * the catch body's runtime ctor is `BlockExpr`, the layout stays
+ * inline (`catch (e:T) { … }`) regardless of `expressionTry=Next`.
+ * See the parallel paragraph on `HxTryCatchExpr` for the rationale.
  */
 @:peg
 typedef HxCatchClauseExpr = {
 	@:kw('catch') @:lead('(') var name:HxIdentLit;
 	@:lead(':') @:trail(')') var type:HxType;
-	@:fmt(bodyBreak('expressionTry')) var body:HxExpr;
+	@:fmt(bodyBreak('expressionTry'), blockBodyKeepsInline) var body:HxExpr;
 };

@@ -201,6 +201,46 @@ class HxSameLineOptionsTest extends Test {
 		Assert.equals(SameLinePolicy.Same, opts.sameLineCatch);
 	}
 
+	public function testExpressionTryNextKeepsBlockBodyInline():Void {
+		// ω-block-shape-aware: with expressionTry=Next, a block try body
+		// and block catch body still emit inline `try { … } catch (…) { … }`
+		// instead of breaking around the braces. Block bodies have their
+		// own visual structure — a hardline before `{` would split a
+		// brace pair.
+		final out:String = writeWithExpressionTry(
+			'class F { function f():Void { var x = try { foo(); } catch (_:Any) { null; }; } }',
+			SameLinePolicy.Next
+		);
+		Assert.isTrue(out.indexOf('try {') != -1, 'expected inline `try {` (block body) in: <$out>');
+		Assert.isTrue(out.indexOf('} catch (_:Any) {') != -1, 'expected inline `} catch (_:Any) {` in: <$out>');
+		Assert.isTrue(out.indexOf('try\n') == -1, 'block-body try must not break onto own line in: <$out>');
+	}
+
+	public function testExpressionTryNextMixedBodiesShapeAware():Void {
+		// ω-block-shape-aware: bare body breaks (existing behaviour),
+		// block body stays inline (new behaviour) — same `expressionTry=Next`,
+		// runtime ctor switch picks the layout per try-catch instance.
+		final src:String = 'class F { function f():Void { '
+			+ 'var a = try foo() catch (_:Any) null; '
+			+ 'var b = try { foo(); } catch (_:Any) { null; }; } }';
+		final out:String = writeWithExpressionTry(src, SameLinePolicy.Next);
+		Assert.isTrue(out.indexOf('try foo()') == -1, 'bare body should still break in: <$out>');
+		Assert.isTrue(out.indexOf('try {') != -1, 'block body should stay inline in: <$out>');
+		Assert.isTrue(out.indexOf('} catch (_:Any) {') != -1, 'block-body `} catch ... {` should stay inline in: <$out>');
+	}
+
+	public function testExpressionTryNextStatementFormUnaffectedByBlockShape():Void {
+		// Statement-form `HxTryCatchStmt` does NOT carry
+		// `@:fmt(blockBodyKeepsInline)` — `sameLineCatch=Next` must keep
+		// breaking `} catch` to `}\ncatch` regardless of body shape, mirroring
+		// haxe-formatter's `sameLine.tryCatch=next` contract.
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		opts.sameLineCatch = SameLinePolicy.Next;
+		final src:String = 'class F { function f():Void { try {} catch (e:E) {} } }';
+		final out:String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+		Assert.isTrue(out.indexOf('} catch ') == -1, 'statement-form `} catch` must break in: <$out>');
+	}
+
 	private function writeWithExpressionTry(src:String, policy:SameLinePolicy):String {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.expressionTry = policy;

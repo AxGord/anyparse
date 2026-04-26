@@ -47,9 +47,20 @@ package anyparse.grammar.haxe;
  * wrap below provides the conditional space/hardline instead,
  * preventing a double space in `Same` and a dangling space before a
  * hardline in `Next`.
+ *
+ * `@:fmt(blockBodyKeepsInline)` (ω-block-shape-aware) on both `body`
+ * and `catches` makes the body-break and per-catch separator shape-
+ * aware: when the body's runtime ctor is a block-form (`BlockExpr`),
+ * the layout collapses to inline (`try { … }` / `} catch (…) { … }`)
+ * regardless of `expressionTry=Next`. Block bodies have their own
+ * visual structure — breaking `try \n\t{ … }` would split a brace pair
+ * across the leading hardline. Statement-form `HxTryCatchStmt` does
+ * NOT carry the flag — its haxe-formatter contract on `sameLine.
+ * tryCatch=next` breaks `} catch` to `}\ncatch` regardless of body
+ * shape (see `testSameLineCatchAppliesToEveryCatch`).
  */
 @:peg
 typedef HxTryCatchExpr = {
-	@:fmt(bodyBreak('expressionTry')) var body:HxExpr;
-	@:trivia @:tryparse @:fmt(sameLine('expressionTry')) var catches:Array<HxCatchClauseExpr>;
+	@:fmt(bodyBreak('expressionTry'), blockBodyKeepsInline) var body:HxExpr;
+	@:trivia @:tryparse @:fmt(sameLine('expressionTry'), blockBodyKeepsInline) var catches:Array<HxCatchClauseExpr>;
 };
