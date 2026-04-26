@@ -149,6 +149,14 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   as a per-field `WhitespacePolicy` knob. Future binop sites with
  *   their own `@:fmt(...)` flag should extend this mapping, not add a
  *   separate JSON key.
+ * - `whitespace.functionTypeHaxe4Policy` (ω-arrow-fn-type): same enum
+ *   / same collapse, routed to `opt.functionTypeHaxe4` (the `->`
+ *   separator inside a new-form arrow function type,
+ *   `HxArrowFnType.ret`'s `@:lead('->')`). Default `Around` (= `Both`)
+ *   emits `(Int) -> Bool`; `"none"` emits the tight `(Int)->Bool`. The
+ *   sibling `functionTypeHaxe3Policy` (old-form curried `Int->Bool`)
+ *   maps to `@:fmt(tight)` on `HxType.Arrow` and is fixed at parse
+ *   time — no JSON key is exposed.
  * - `whitespace.addLineCommentSpace` (ω-line-comment-space): boolean —
  *   `true` (default) rewrites captured `//foo` line comments as
  *   `// foo`; decoration runs (`//*****`, `//------`, `////`) survive
@@ -288,6 +296,7 @@ final class HaxeFormatConfigLoader {
 			addLineCommentSpace: base.addLineCommentSpace,
 			expressionTry: base.expressionTry,
 			indentCaseLabels: base.indentCaseLabels,
+			functionTypeHaxe4: base.functionTypeHaxe4,
 		};
 		if (cfg.indentation != null) applyIndentation(cfg.indentation, result);
 		if (cfg.wrapping != null) applyWrapping(cfg.wrapping, result);
@@ -359,6 +368,8 @@ final class HaxeFormatConfigLoader {
 			opt.typeParamClose = whitespaceToRuntime(section.typeParamClosePolicy);
 		if (section.binopPolicy != null)
 			opt.typeParamDefaultEquals = whitespaceToRuntime(section.binopPolicy);
+		if (section.functionTypeHaxe4Policy != null)
+			opt.functionTypeHaxe4 = whitespaceToRuntime(section.functionTypeHaxe4Policy);
 		if (section.addLineCommentSpace != null)
 			opt.addLineCommentSpace = section.addLineCommentSpace;
 		final paren:Null<HxFormatParenConfigSection> = section.parenConfig;

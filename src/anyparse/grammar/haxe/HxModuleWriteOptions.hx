@@ -383,6 +383,20 @@ import anyparse.format.WriteOptions;
  *    `indentation.indentCaseLabels: @:default(true)`. The knob only
  *    applies at sites tagged with `@:fmt(indentCaseLabels)` in the
  *    grammar — `HxSwitchStmt.cases` and `HxSwitchStmtBare.cases`.
+ *
+ * Field added in slice ω-arrow-fn-type (new-form arrow function type
+ * `->` spacing):
+ *  - `functionTypeHaxe4` — whitespace around the `->` separator in a
+ *    new-form (Haxe 4) arrow function type `(args) -> ret`
+ *    (`HxArrowFnType.ret`'s `@:lead('->')`). `Both` (default) emits
+ *    `(Int) -> Bool`, matching haxe-formatter's
+ *    `whitespace.functionTypeHaxe4Policy: @:default(Around)`. `None`
+ *    keeps the tight pre-slice layout `(Int)->Bool`. `Before` / `After`
+ *    are exposed for parity with the policy shape. The knob only
+ *    applies at sites tagged with `@:fmt(functionTypeHaxe4)` in the
+ *    grammar — `HxArrowFnType.ret` is the only consumer; the old-form
+ *    curried arrow `Int->Bool` keeps its own `@:fmt(tight)` on
+ *    `HxType.Arrow` and is unaffected.
  */
 typedef HxModuleWriteOptions = WriteOptions & {
 	sameLineElse:SameLinePolicy,
@@ -422,4 +436,5 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	objectLiteralBracesClose:WhitespacePolicy,
 	expressionTry:SameLinePolicy,
 	indentCaseLabels:Bool,
+	functionTypeHaxe4:WhitespacePolicy,
 };

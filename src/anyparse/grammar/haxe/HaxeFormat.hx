@@ -281,6 +281,17 @@ final class HaxeFormat implements TextFormat {
 	 * `false` keeps the labels flush with the `switch` keyword and
 	 * requires `"indentation": { "indentCaseLabels": false }` in
 	 * `hxformat.json`.
+	 *
+	 * `functionTypeHaxe4` default (ω-arrow-fn-type) is `Both` — the `->`
+	 * separator inside a new-form arrow function type
+	 * (`HxArrowFnType.ret`) emits `(args) -> ret` with surrounding
+	 * spaces, matching haxe-formatter's
+	 * `whitespace.functionTypeHaxe4Policy: @:default(Around)`. Setting
+	 * to `None` produces the tight `(args)->ret` form and requires
+	 * `"whitespace": { "functionTypeHaxe4Policy": "none" }` in
+	 * `hxformat.json`. The old-form curried arrow `Int->Bool` is on a
+	 * separate axis (`@:fmt(tight)` on `HxType.Arrow`, mirroring upstream's
+	 * `functionTypeHaxe3Policy: @:default(None)`) and is unaffected.
 	 */
 	public var defaultWriteOptions(default, null):HxModuleWriteOptions = {
 		indentChar: Tab,
@@ -329,6 +340,7 @@ final class HaxeFormat implements TextFormat {
 		addLineCommentSpace: true,
 		expressionTry: SameLinePolicy.Same,
 		indentCaseLabels: true,
+		functionTypeHaxe4: WhitespacePolicy.Both,
 	};
 
 	private function new() {}

@@ -12,15 +12,20 @@ import anyparse.grammar.haxe.HxVarDecl;
 /**
  * Slice `ω-hxtype-parens` — parenthesised-type atom on `HxType`.
  *
- * Validates the new `Parens(inner:HxType)` atom branch added via
+ * Validates the `Parens(inner:HxType)` atom branch added via
  * `@:wrap('(', ')')` — Case 3 single-Ref wrapping mirroring
- * `HxExpr.ParenExpr`. Used both for type-param constraints
- * `<S:(pack.sub.Type)=...>` and for explicit precedence wrapping
- * inside arrows `(Int->Bool)->Void`.
+ * `HxExpr.ParenExpr`. After the ω-arrow-fn-type slice landed
+ * `HxType.ArrowFn` BEFORE `Parens` in source order, `Parens` is
+ * reached only for `(...)` shapes NOT followed by `->` — e.g. the
+ * type-param constraint surface (`<S:(pack.sub.Type)=...>`), bare
+ * parens inside a type-param list (`Array<(Int)>`), and parens around
+ * an arrow type with no outer arrow (`(Int->Bool)` as a function-
+ * argument type).
  *
- * The new-form arrow `(Int) -> Int` is NOT covered here — it requires
- * a separate `HxArrowParam` shape (multi-arg, optionally-named) that
- * lands as a follow-up slice.
+ * The new-form arrow shapes `() -> R`, `(T, U) -> R`, `(name:T) -> R`
+ * and the single-arg `(T) -> R` (which now also routes through
+ * `ArrowFn`, NOT `Arrow(Parens(T), R)` as in the pre-slice writer)
+ * have their own coverage in `HxArrowFnTypeSliceTest`.
  */
 class HxTypeParensSliceTest extends HxTestHelpers {
 
@@ -74,14 +79,15 @@ class HxTypeParensSliceTest extends HxTestHelpers {
 	}
 
 	public function testParensAroundArrow():Void {
-		// `(Int->Bool)->Void` parses as Arrow(Parens(Arrow(Int,Bool)), Void).
-		final ast:HxClassDecl = HaxeParser.parse('class Foo { var f:(Int->Bool)->Void; }');
-		final v:HxVarDecl = expectVarMember(ast.members[0].member);
-		final outer = expectArrowType(v.type);
-		final innerArrow = expectArrowType(expectParensType(outer.left));
+		// Bare `(Int->Bool)` as a function-argument type — no following
+		// `->` so `ArrowFn` rolls back and `Parens` wins. Validates the
+		// inner Arrow shape survives the wrap.
+		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar(cb:(Int->Bool)):Void {} }');
+		Assert.equals(1, decl.params.length);
+		final paramType:HxType = expectRequiredParam(decl.params[0]).type;
+		final innerArrow = expectArrowType(expectParensType(paramType));
 		Assert.equals('Int', (expectNamedType(innerArrow.left).name : String));
 		Assert.equals('Bool', (expectNamedType(innerArrow.right).name : String));
-		Assert.equals('Void', (expectNamedType(outer.right).name : String));
 	}
 
 	public function testParensAsTypeParamConstraint():Void {
@@ -143,7 +149,7 @@ class HxTypeParensSliceTest extends HxTestHelpers {
 		roundTrip('class Foo { var f:(pack.sub.Type); }', 'parens-qualified');
 		roundTrip('class Foo { var f:(Array<Int>); }', 'parens-parameterised');
 		roundTrip('class Foo { var f:((Int)); }', 'nested-parens');
-		roundTrip('class Foo { var f:(Int->Bool)->Void; }', 'parens-around-left-arrow');
+		roundTrip('class Foo { function bar(cb:(Int->Bool)):Void {} }', 'parens-around-arrow-as-arg-type');
 		roundTrip('class Foo<S:(pack.sub.Type)> {}', 'parens-typeparam-constraint');
 		roundTrip('class Foo<S:(pack.sub.Type) = pack.sub.TypeImpl> {}', 'parens-typeparam-constraint-with-default');
 		roundTrip('class Foo { var f:Array<(Int)>; }', 'parens-inside-typeparam');

@@ -5,10 +5,10 @@ package anyparse.grammar.haxe.format;
  *
  * Only keys whose runtime knob already exists on `HxModuleWriteOptions`
  * are modelled here. Missing keys (`functionTypeHaxe3Policy`,
- * `functionTypeHaxe4Policy`, `tryPolicy`, `ifPolicy`,
- * `arrowFunctionsPolicy`, `forPolicy`, `ternaryPolicy`, …) are silently
- * dropped by the ByName struct parser's `UnknownPolicy.Skip` — they
- * land with the slice that introduces the matching writer knob.
+ * `tryPolicy`, `ifPolicy`, `arrowFunctionsPolicy`, `forPolicy`,
+ * `ternaryPolicy`, …) are silently dropped by the ByName struct
+ * parser's `UnknownPolicy.Skip` — they land with the slice that
+ * introduces the matching writer knob.
  *
  * Added in slice ψ₇ (feeds `opt.objectFieldColon`).
  *
@@ -55,6 +55,15 @@ package anyparse.grammar.haxe.format;
  *    decoration runs (`//*****`, `//------`, `////`) survive tight. The
  *    knob is consumed by `HaxeCommentNormalizer.normalizeLineComment`
  *    inside the writer's leading / trailing line-comment helpers.
+ *
+ * Extended in slice ω-arrow-fn-type:
+ *  - `functionTypeHaxe4Policy` feeds `opt.functionTypeHaxe4` (the `->`
+ *    separator inside a new-form arrow function type, `HxArrowFnType.
+ *    ret`'s `@:lead('->')`). `Around` (default) emits
+ *    `(Int) -> Bool`; `None` keeps the tight `(Int)->Bool` form. The
+ *    sibling `functionTypeHaxe3Policy` (old-form curried `Int->Bool`)
+ *    has its own `@:fmt(tight)` on `HxType.Arrow` and stays tight by
+ *    construction — no JSON-side knob needed.
  */
 @:peg typedef HxFormatWhitespaceSection = {
 
@@ -67,6 +76,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var typeParamClosePolicy:HxFormatWhitespacePolicy;
 
 	@:optional var binopPolicy:HxFormatWhitespacePolicy;
+
+	@:optional var functionTypeHaxe4Policy:HxFormatWhitespacePolicy;
 
 	@:optional var addLineCommentSpace:Bool;
 

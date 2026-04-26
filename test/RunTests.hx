@@ -43,6 +43,7 @@ import unit.HxLeftCurlyOptionsTest;
 import unit.HxObjectFieldColonOptionsTest;
 import unit.HxTypedefAssignOptionsTest;
 import unit.HxTypedefSemiSliceTest;
+import unit.HxArrowFnTypeSliceTest;
 import unit.HxTypeParamDefaultEqualsOptionsTest;
 import unit.HxTypeParamSpacingOptionsTest;
 import unit.HxAnonTypeBracesOptionsTest;
@@ -122,6 +123,7 @@ class RunTests {
 		runner.addCase(new HxObjectFieldColonOptionsTest());
 		runner.addCase(new HxTypedefAssignOptionsTest());
 		runner.addCase(new HxTypedefSemiSliceTest());
+		runner.addCase(new HxArrowFnTypeSliceTest());
 		runner.addCase(new HxTypeParamDefaultEqualsOptionsTest());
 		runner.addCase(new HxTypeParamSpacingOptionsTest());
 		runner.addCase(new HxAnonTypeBracesOptionsTest());

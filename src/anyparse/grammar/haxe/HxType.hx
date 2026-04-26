@@ -20,10 +20,8 @@ package anyparse.grammar.haxe;
  *    branch in `Lowering` and emits a precedence-climbing loop wrapping
  *    the atom dispatcher. Carries `@:fmt(tight)` so the writer emits
  *    `Int->Void` without surrounding spaces, matching haxe-formatter's
- *    output for the old-form arrow.
- *    The new (parenthesised) form `(Int) -> Int`, `(Int, String) -> Bool`
- *    is a separate axis with multi-arg + named-arg LHS shape and
- *    around-spaced `->` emission; tracked as a follow-up slice.
+ *    output for the old-form arrow. The new (parenthesised) form
+ *    `(args) -> ret` lives on the separate `ArrowFn` variant below.
  *
  *  - `Anon(fields:Array<HxAnonField>)` — anonymous structure type
  *    `{x:Int, y:String}`. Bracketed comma-separated `HxAnonField`
@@ -36,16 +34,30 @@ package anyparse.grammar.haxe;
  *    naturally through the recursive `HxType` value field on
  *    `HxAnonField`.
  *
+ *  - `ArrowFn(fn:HxArrowFnType)` — new-form arrow function type
+ *    `(args) -> ret` (Haxe 4 syntax). Structurally `(`-`,`-`)`
+ *    parenthesised list of `HxArrowParam` (positional `Type` or named
+ *    `name:Type`), then `->`, then return type. Placed BEFORE `Parens`
+ *    in source order so the parser tries the arrow-fn shape first; when
+ *    the trailing `->` is absent the branch rolls back and `Parens`
+ *    takes over for `(T)` parens-around-type. Examples: `() -> Void`,
+ *    `(Int, String) -> Bool`, `(name:String) -> Void`. The single-arg
+ *    `(T) -> R` shape ALSO routes through `ArrowFn` — there is no
+ *    parser-level disambiguation between "old-form arrow with parens
+ *    around a single positional arg" and "new-form arrow with one
+ *    positional arg"; the new-form representation is canonical and the
+ *    writer emits ` -> ` (around-spaced) per `functionTypeHaxe4Policy`.
+ *    Compound `(Int->Bool) -> Void` parses as
+ *    `ArrowFn([Positional(Arrow(Int,Bool))], Void)` — semantically
+ *    equivalent to the pre-slice `Arrow(Parens(Arrow(Int,Bool)), Void)`
+ *    but with around-spaced `->` on the outer arrow.
+ *
  *  - `Parens(inner:HxType)` — parenthesised type atom `(T)`. Wraps a
  *    full inner `HxType` between `(` and `)` via Case 3 single-Ref
  *    `@:wrap('(', ')')` — same shape as `HxExpr.ParenExpr`. Used both
  *    for type-param constraints `<S:(pack.sub.Type)=...>` and for
- *    explicit precedence wrapping inside arrows `(Int->Bool)->Void`.
- *    The latter previously relied on the writer emitting parens on
- *    left-nested arrows for precedence reasons; with `Parens` as an
- *    AST-level construct the wrap becomes explicit on the parse side.
- *    The new-form arrow `(Int) -> Int` is NOT this — that requires a
- *    separate `HxArrowParam` shape (multi-arg, optionally-named).
+ *    explicit precedence wrapping inside arrows `(Int->Bool)`. Reached
+ *    only when `ArrowFn` rolls back (no trailing `->` after `)`).
  *
  * The wrapper is introduced as a foundation so each new variant lands
  * as a small additive slice rather than retrofitting the type-position
@@ -57,9 +69,10 @@ package anyparse.grammar.haxe;
  *
  * Right-associativity ensures `Int->Bool->Void` parses as
  * `Arrow(Int, Arrow(Bool, Void))`, mirroring the curried function-type
- * convention. Left-nested arrows like `(Int->Bool)->Void` parse as
- * `Arrow(Parens(Arrow(Int, Bool)), Void)` — the `Parens` atom captures
- * the explicit grouping on the parse side.
+ * convention. Inputs with `(...)` followed by `->` route through
+ * `ArrowFn` (see the variant doc above) — `(Int->Bool) -> Void` parses
+ * as `ArrowFn([Positional(Arrow(Int, Bool))], Void)`. `Parens` is
+ * reached only for `(...)` shapes NOT followed by `->`.
  */
 @:peg
 enum HxType {
@@ -70,6 +83,8 @@ enum HxType {
 
 	@:lead('{') @:trail('}') @:sep(',') @:fmt(anonTypeBracesOpen, anonTypeBracesClose)
 	Anon(fields:Array<HxAnonField>);
+
+	ArrowFn(fn:HxArrowFnType);
 
 	@:wrap('(', ')')
 	Parens(inner:HxType);
