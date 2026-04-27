@@ -3,7 +3,7 @@ package anyparse.grammar.haxe;
 /**
  * Function-body shape on `HxFnDecl.body`.
  *
- * Two forms are recognised:
+ * Three forms are recognised:
  *  - `BlockBody(block:HxFnBlock)` — `{ stmts }` braced body. The
  *    `{`-leading peek that dispatches this branch lives on the
  *    `HxFnBlock.stmts` field; the brace policy (`@:fmt(leftCurly)`),
@@ -12,12 +12,21 @@ package anyparse.grammar.haxe;
  *  - `NoBody` — `;` only. The shape of an interface method or
  *    `@:overload` stub: `function foo():Void;`. Dispatched by the
  *    `;` literal.
+ *  - `ExprBody(expr:HxExpr)` — single-expression body terminated by
+ *    `;`: `function foo() trace("hi");`. Catch-all branch tried after
+ *    the two literal-led siblings; `tryBranch`'s rollback ensures
+ *    `BlockBody` (`{`-led) and `NoBody` (`;`-led) win on shared input.
+ *    `@:trail(';')` is non-optional — real Haxe requires the
+ *    terminator after an expression body. The writer emits a leading
+ *    space ahead of the expression via the parent field's
+ *    `Type.enumConstructor` switch (see `HxFnDecl.body` and the
+ *    `WriterLowering` Ref-with-`@:fmt(leftCurly)` path).
  *
- * The two branches' first literals (`{` from `HxFnBlock.stmts` for
- * `BlockBody`, `;` for `NoBody`) have no shared prefix, so declaration
- * order is irrelevant to dispatch. `HxFnBlock` is trivia-bearing, which
- * transitively makes this enum bearing — paired type `HxFnBodyT`
- * synthesised by `TriviaTypeSynth`.
+ * Branch order matters for dispatch: BlockBody → NoBody → ExprBody.
+ * The first two are tight first-char dispatches; the third runs the
+ * full HxExpr parser only when the first two fail. `HxFnBlock` is
+ * trivia-bearing, which transitively makes this enum bearing —
+ * paired type `HxFnBodyT` synthesised by `TriviaTypeSynth`.
  */
 @:peg
 enum HxFnBody {
@@ -26,4 +35,7 @@ enum HxFnBody {
 
 	@:lit(';')
 	NoBody;
+
+	@:trail(';')
+	ExprBody(expr:HxExpr);
 }

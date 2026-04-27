@@ -724,8 +724,19 @@ class WriterLowering {
 						final bodyBreakFlag:Null<String> = fmtReadString(child, 'bodyBreak');
 						final bareBodyBreaksFlag:Bool = fmtHasFlag(child, 'bareBodyBreaks');
 						if (lcSep != null && lcCtor != null) {
+							// Sibling no-lead branches (e.g. `HxFnBody.ExprBody`) need a
+							// ` ` separator between the parent kw and the sub-rule's
+							// first token — Case 3 generic single-Ref branches whose
+							// writer emits `subCall` first. `;`-led siblings (NoBody)
+							// stay on the `_de()` default so `function f():Void;`
+							// round-trips with no inserted space ahead of `;`.
 							final ctorName:String = lcCtor;
-							parts.push(macro Type.enumConstructor($fieldAccess) == $v{ctorName} ? $lcSep : _de());
+							final spaceCtors:Array<String> = spacePrefixCtors(refName, lcCtor);
+							final ctorExpr:Expr = macro Type.enumConstructor($fieldAccess);
+							var sepExpr:Expr = macro _de();
+							for (sc in spaceCtors) sepExpr = macro $ctorExpr == $v{sc} ? _dt(' ') : $sepExpr;
+							sepExpr = macro $ctorExpr == $v{ctorName} ? $lcSep : $sepExpr;
+							parts.push(sepExpr);
 							parts.push(writeCall);
 						} else if (bodyBreakFlag != null && kwLead == null && leadText == null && !isRaw) {
 							// ω-expression-try-body-break: wrap the body field in a
@@ -1593,6 +1604,43 @@ class WriterLowering {
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * List Alt branches of `refName` whose writer output begins with a
+	 * sub-rule write (no `@:lit`, no `@:lead`, no `@:kw` lead, and not the
+	 * brace-bearing branch already handled by `leftCurlyTargetCtor`).
+	 *
+	 * Such branches need an inserted ` ` separator at the parent Ref-field
+	 * site so the kw of the surrounding rule doesn't butt up against the
+	 * sub-rule's first token. The parser's Case 3 (single-Ref, optional
+	 * `@:trail`) already inserts `skipWs` before the sub-call; the writer
+	 * must produce the symmetric output.
+	 *
+	 * First consumer: `HxFnBody.ExprBody(expr:HxExpr) @:trail(';')` —
+	 * `function foo() trace("hi");`. The space sits between `()` and the
+	 * expression. `BlockBody`'s ` `/`\n\t` is owned by `leftCurlySeparator`;
+	 * `NoBody`'s `;` wants no preceding space (suppressed via `_de()` in
+	 * the runtime switch's default branch).
+	 */
+	private function spacePrefixCtors(refName:String, lcCtorName:Null<String>):Array<String> {
+		final ctors:Array<String> = [];
+		final node:Null<ShapeNode> = shape.rules.get(refName);
+		if (node == null || node.kind != Alt) return ctors;
+		for (branch in node.children) {
+			final ctor:Null<String> = branch.annotations.get('base.ctor');
+			if (ctor == null || ctor == lcCtorName) continue;
+			if (branch.annotations.get('lit.litList') != null) continue;
+			if (branch.annotations.get('lit.leadText') != null) continue;
+			if (branch.annotations.get('kw.leadText') != null) continue;
+			if (branch.annotations.get('prefix.op') != null) continue;
+			if (branch.annotations.get('postfix.op') != null) continue;
+			if (branch.annotations.get('pratt.prec') != null) continue;
+			if (branch.annotations.get('ternary.op') != null) continue;
+			if (branch.children.length != 1 || branch.children[0].kind != Ref) continue;
+			ctors.push(ctor);
+		}
+		return ctors;
 	}
 
 	/**
