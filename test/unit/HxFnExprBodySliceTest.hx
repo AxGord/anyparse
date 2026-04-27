@@ -29,9 +29,11 @@ import anyparse.grammar.haxe.HxModuleWriter;
  * Top-level `function f() expr;` is also exercised — `HxDecl.FnDecl`
  * shares the `HxFnBody` enum verbatim from class-member position.
  *
- * `return`-as-body (`function id(x) return x;`) is intentionally NOT
- * covered: `return` is only an `HxStatement` ctor in the current
- * grammar. Lifting it to `HxExpr` is a separate slice.
+ * `return`-as-body (`function id(x) return x;`) is covered by the
+ * follow-up slice ω-fn-return-body — see `HxFnReturnBodySliceTest`.
+ * That slice lifts `return` into `HxExpr` as a kw-led atom, after
+ * which `function f() return X;` parses through this `ExprBody`
+ * branch with no further `HxFnBody` change.
  */
 class HxFnExprBodySliceTest extends HxTestHelpers {
 

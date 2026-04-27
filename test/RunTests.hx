@@ -32,6 +32,7 @@ import unit.HxECheckTypeSliceTest;
 import unit.HxVarStmtTrailOptSliceTest;
 import unit.HxToplevelVarFnSliceTest;
 import unit.HxFnExprBodySliceTest;
+import unit.HxFnReturnBodySliceTest;
 import unit.HxMetaExprSliceTest;
 import unit.HxBlockExprSliceTest;
 import unit.HxTryExprSliceTest;
@@ -125,6 +126,7 @@ class RunTests {
 		runner.addCase(new HxVarStmtTrailOptSliceTest());
 		runner.addCase(new HxToplevelVarFnSliceTest());
 		runner.addCase(new HxFnExprBodySliceTest());
+		runner.addCase(new HxFnReturnBodySliceTest());
 		runner.addCase(new HxBlockExprSliceTest());
 		runner.addCase(new HxTryExprSliceTest());
 		runner.addCase(new HxObjectLitSliceTest());

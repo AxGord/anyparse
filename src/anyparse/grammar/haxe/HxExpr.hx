@@ -292,6 +292,9 @@ enum HxExpr {
 	@:kw('cast')
 	CastExpr(operand:HxExpr);
 
+	@:kw('return')
+	ReturnExpr(value:HxExpr);
+
 	MetaExpr(v:HxMetaExpr);
 
 	IdentExpr(v:HxIdentLit);
