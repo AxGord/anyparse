@@ -3,7 +3,7 @@ package anyparse.grammar.haxe;
 /**
  * A top-level declaration in a Haxe module.
  *
- * Five forms are recognised:
+ * Seven forms are recognised:
  *  - `ClassDecl` — `class Name { ... }` wrapping an `HxClassDecl`.
  *  - `TypedefDecl` — `typedef Name = Type[;]` wrapping an `HxTypedefDecl`.
  *    Carries `@:trailOpt(';')` — the trailing semicolon is optional on
@@ -16,11 +16,30 @@ package anyparse.grammar.haxe;
  *  - `InterfaceDecl` — `interface Name { ... }` wrapping an `HxInterfaceDecl`.
  *  - `AbstractDecl` — `abstract Name(Type) [from T]* [to T]* { ... }`
  *    wrapping an `HxAbstractDecl`.
+ *  - `VarDecl` — `var name [:Type] [= init];` module-level variable
+ *    declaration (slice ω-toplevel-var-fn). Reuses `HxVarDecl` from the
+ *    class-member / statement grammar. The `@:kw('var')` lives here, the
+ *    body has the same shape, and `@:trailOpt(';')` mirrors
+ *    `HxStatement.VarStmt`'s relaxation so a `}`-terminated rhs at module
+ *    level (rare, but possible) parses without a trailing semicolon.
+ *    Top-level `var`/`function` are not part of Haxe's stable surface
+ *    syntax, but the AxGord/haxe-formatter corpus contains plain-snippet
+ *    fixtures that drop the `class { ... }` wrapper to keep the test
+ *    bodies focused — the formatter accepts module-level `var`/`function`
+ *    in those snippets, and so do we to unblock the corpus.
+ *  - `FnDecl` — `function name(...) [:Ret] { stmts | expr | ; }` module-
+ *    level function declaration (slice ω-toplevel-var-fn). Reuses
+ *    `HxFnDecl` from the class-member grammar. The `@:kw('function')`
+ *    lives here. Body shape (block / no-body) is unchanged from the
+ *    inside-class form.
  *
- * Each branch's introducer keyword lives inside the enclosed sub-rule's
- * first field via `@:kw`, so the branches here have no `@:kw` — the
- * sub-rule already consumes it. This keeps each sub-rule usable as a
- * stand-alone parser root if needed.
+ * Each branch except `VarDecl` and `FnDecl` carries no `@:kw` — the
+ * enclosed sub-rule's first field already consumes the introducer
+ * keyword (`class`, `typedef`, `enum`, `interface`, `abstract`). The
+ * two new top-level binding ctors break this symmetry because their
+ * sub-rules (`HxVarDecl`, `HxFnDecl`) intentionally omit the `var` /
+ * `function` keyword — the keyword is owned by the calling context
+ * (`HxClassMember`, `HxStatement`, now `HxDecl`).
  */
 @:peg
 enum HxDecl {
@@ -34,4 +53,10 @@ enum HxDecl {
 	InterfaceDecl(decl:HxInterfaceDecl);
 
 	AbstractDecl(decl:HxAbstractDecl);
+
+	@:kw('var') @:trailOpt(';')
+	VarDecl(decl:HxVarDecl);
+
+	@:kw('function')
+	FnDecl(decl:HxFnDecl);
 }
