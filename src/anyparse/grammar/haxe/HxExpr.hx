@@ -60,6 +60,18 @@ package anyparse.grammar.haxe;
  *    `tryBranch` tries lambda first. If `=>` is absent after `)`, the
  *    parse throws and rolls back to `ParenExpr`. Handles all forms:
  *    `() => e`, `(x) => e`, `(x, y) => e`, `(x:Int) => e`.
+ *  - `ECheckTypeExpr` — type-check expression `(expr : Type)`. Wraps
+ *    `HxECheckType` typedef carrying `expr:HxExpr` after `(` and
+ *    `type:HxType` after `:` with closing `)`. Same field-pair shape
+ *    as `HxTypedCast` (`cast(target, type)`), differing only in the
+ *    inner separator (`:` vs `,`) and the writer-side spacing knob
+ *    (`@:fmt(typeCheckColon)` defaults to `Both`, emitting `("" : String)`
+ *    with surrounding spaces). Placed AFTER `ParenLambdaExpr` so the
+ *    typed-param lambda `(x : Int) => body` gets first try; placed
+ *    BEFORE `ParenExpr` so bare `(expr)` only matches when the inner
+ *    `:` is absent and `tryBranch` rolls ECheckType back. Followed by
+ *    postfix the usual way: `("" : String).length` parses as
+ *    `FieldAccess(ECheckTypeExpr(...), "length")`.
  *  - `ParenExpr` — parenthesised expression `(inner)`. The
  *    `@:wrap('(', ')')` metadata is handled by the `Lit` strategy,
  *    which writes `lit.leadText = '('` and `lit.trailText = ')'`.
@@ -244,6 +256,8 @@ enum HxExpr {
 	ThinParenLambdaExpr(lambda:HxThinParenLambda);
 
 	ParenLambdaExpr(lambda:HxParenLambda);
+
+	ECheckTypeExpr(info:HxECheckType);
 
 	@:wrap('(', ')')
 	ParenExpr(inner:HxExpr);

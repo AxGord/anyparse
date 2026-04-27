@@ -149,6 +149,15 @@ final class HaxeFormat implements TextFormat {
 	 * WhitespacePolicy.Both` explicitly (or set
 	 * `whitespace.typeHintColonPolicy: "around"` in `hxformat.json`).
 	 *
+	 * Type-check colon default (ω-check-type) is `Both` — `("" : String)`
+	 * with surrounding spaces. Matches haxe-formatter's
+	 * `whitespace.typeCheckColonPolicy: @:default(Around)`. Diverges
+	 * from `typeHintColon`'s `None` default because the type-check `:`
+	 * (inside `(expr : Type)`) follows the opposite upstream convention
+	 * from the type-annotation `:` (`x:Int`). Callers who want the
+	 * tight `("":String)` form must pass `typeCheckColon:
+	 * WhitespacePolicy.None` explicitly.
+	 *
 	 * Func-param-parens default (ω-E-whitespace) is `None` — no space
 	 * before the opening `(` of `HxFnDecl.params`. Matches the pre-
 	 * slice layout and haxe-formatter's
@@ -328,6 +337,7 @@ final class HaxeFormat implements TextFormat {
 		leftCurly: BracePlacement.Same,
 		objectFieldColon: WhitespacePolicy.After,
 		typeHintColon: WhitespacePolicy.None,
+		typeCheckColon: WhitespacePolicy.Both,
 		funcParamParens: WhitespacePolicy.None,
 		callParens: WhitespacePolicy.None,
 		elseIf: KeywordPlacement.Same,

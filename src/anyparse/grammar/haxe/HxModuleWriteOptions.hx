@@ -97,6 +97,15 @@ import anyparse.format.WriteOptions;
  *    applies at sites tagged with `@:fmt(typeHintColon)` in the
  *    grammar; the `:` inside an object literal (ψ₇) keeps its own
  *    `objectFieldColon` knob.
+ *  - `typeCheckColon` — whitespace around the `:` inside a type-check
+ *    expression `(expr : Type)` (`HxECheckType.type`'s `@:lead(':')`).
+ *    `Both` (default) emits `("" : String)` with surrounding spaces,
+ *    matching haxe-formatter's `whitespace.typeCheckColonPolicy:
+ *    @:default(Around)`. `None` keeps the tight `("":String)` form.
+ *    Separate from `typeHintColon` so the type-annotation default can
+ *    stay `None` (idiomatic `x:Int`) while the type-check default
+ *    stays `Both` — both sites use `:` but follow opposite conventions
+ *    upstream.
  *  - `funcParamParens` — whitespace before the opening `(` of a
  *    function declaration's parameter list (`HxFnDecl.params`).
  *    `None` (default) keeps the tight pre-slice layout
@@ -430,6 +439,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	leftCurly:BracePlacement,
 	objectFieldColon:WhitespacePolicy,
 	typeHintColon:WhitespacePolicy,
+	typeCheckColon:WhitespacePolicy,
 	funcParamParens:WhitespacePolicy,
 	callParens:WhitespacePolicy,
 	elseIf:KeywordPlacement,

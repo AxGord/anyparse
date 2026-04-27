@@ -279,6 +279,7 @@ final class HaxeFormatConfigLoader {
 			leftCurly: base.leftCurly,
 			objectFieldColon: base.objectFieldColon,
 			typeHintColon: base.typeHintColon,
+			typeCheckColon: base.typeCheckColon,
 			funcParamParens: base.funcParamParens,
 			callParens: base.callParens,
 			elseIf: base.elseIf,
@@ -370,6 +371,8 @@ final class HaxeFormatConfigLoader {
 			opt.objectFieldColon = whitespaceToRuntime(section.objectFieldColonPolicy);
 		if (section.typeHintColonPolicy != null)
 			opt.typeHintColon = whitespaceToRuntime(section.typeHintColonPolicy);
+		if (section.typeCheckColonPolicy != null)
+			opt.typeCheckColon = whitespaceToRuntime(section.typeCheckColonPolicy);
 		if (section.typeParamOpenPolicy != null)
 			opt.typeParamOpen = whitespaceToRuntime(section.typeParamOpenPolicy);
 		if (section.typeParamClosePolicy != null)

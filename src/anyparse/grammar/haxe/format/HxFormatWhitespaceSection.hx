@@ -73,12 +73,23 @@ package anyparse.grammar.haxe.format;
  *    sibling). The single-ident infix form `arg -> body`
  *    (`HxExpr.ThinArrow`) rides the Pratt infix path which adds
  *    surrounding spaces by default and is unaffected.
+ *
+ * Extended in slice ω-check-type:
+ *  - `typeCheckColonPolicy` feeds `opt.typeCheckColon` (the `:` inside
+ *    a type-check expression `(expr : Type)`, `HxECheckType.type`'s
+ *    `@:lead(':')`). `Around` (default) emits `("" : String)`; `None`
+ *    keeps the tight `("":String)` form. Separate from
+ *    `typeHintColonPolicy` so the type-annotation default can stay
+ *    `None` (`x:Int`) while the type-check default stays `Around` —
+ *    upstream's two `:` sites use opposite conventions.
  */
 @:peg typedef HxFormatWhitespaceSection = {
 
 	@:optional var objectFieldColonPolicy:HxFormatWhitespacePolicy;
 
 	@:optional var typeHintColonPolicy:HxFormatWhitespacePolicy;
+
+	@:optional var typeCheckColonPolicy:HxFormatWhitespacePolicy;
 
 	@:optional var typeParamOpenPolicy:HxFormatWhitespacePolicy;
 
