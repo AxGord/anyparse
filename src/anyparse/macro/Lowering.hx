@@ -987,8 +987,11 @@ class Lowering {
 				// parse — `matchLit` peeks + consumes if present, but does
 				// NOT throw if absent. The writer keeps emitting the literal
 				// (canonical output); source-fidelity is a separate slice.
-				// First consumer: `HxDecl.TypedefDecl` for `typedef Foo = T`
-				// without trailing `;`.
+				// Consumers: `HxDecl.TypedefDecl` for `typedef Foo = T`
+				// without trailing `;` (slice ω-typedef-trailOpt);
+				// `HxStatement.VarStmt` / `FinalStmt` for `var foo =
+				// switch (x) { case _: 1 }` without trailing `;` (slice
+				// ω-vardecl-trailOpt — the `}`-terminated rhs idiom).
 				final trailOptional:Bool = branch.annotations.get('lit.trailOptional') == true;
 				if (trailOptional) steps.push(macro matchLit(ctx, $v{trailText}));
 				else steps.push(macro expectLit(ctx, $v{trailText}));

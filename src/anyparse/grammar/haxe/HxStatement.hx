@@ -9,14 +9,22 @@ package anyparse.grammar.haxe;
  *  - `VarStmt` — `var name:Type = init;` local variable declaration.
  *    Reuses `HxVarDecl` from the class-member grammar. The `var`
  *    keyword is consumed here (not in `HxVarDecl` itself, which is
- *    a plain typedef). The trailing `;` is consumed by the branch's
- *    `@:trail`.
+ *    a plain typedef). The trailing `;` is `@:trailOpt(';')` —
+ *    optional on parse, canonical on write. Real Haxe drops the `;`
+ *    when the initializer ends with `}` (block, switch, if-with-else
+ *    block, try-with-block, …) because `}` already terminates the
+ *    statement; mandating `;` here would block ~50 corpus fixtures of
+ *    the `var foo = switch (x) { case _: ... }` shape. The optional
+ *    `;` is too lenient by Haxe's spec (`var x = 5\nvar y = 6` is
+ *    accepted), but the formatter only ever emits canonical `;`, so
+ *    the leniency has no observable effect on output.
  *
  *  - `FinalStmt` — `final name:Type = init;` immutable local-binding
  *    declaration. Parallel to `VarStmt`, identical body shape — the
  *    only difference is `@:kw('final')` instead of `@:kw('var')`. In
  *    Haxe, `final` replaces `var` (it is not a modifier on `var`),
- *    so the body is the same `HxVarDecl` reused verbatim.
+ *    so the body is the same `HxVarDecl` reused verbatim. Trailing
+ *    `;` follows `VarStmt`'s `:trailOpt` for the same reason.
  *
  *  - `ReturnStmt` — `return expr;` return statement with a value.
  *    Tried before `VoidReturnStmt` — if expression parsing fails
@@ -102,10 +110,10 @@ package anyparse.grammar.haxe;
  */
 @:peg
 enum HxStatement {
-	@:kw('var') @:trail(';')
+	@:kw('var') @:trailOpt(';')
 	VarStmt(decl:HxVarDecl);
 
-	@:kw('final') @:trail(';')
+	@:kw('final') @:trailOpt(';')
 	FinalStmt(decl:HxVarDecl);
 
 	@:kw('return') @:trail(';')
