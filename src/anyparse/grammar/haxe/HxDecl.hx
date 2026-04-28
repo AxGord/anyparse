@@ -3,7 +3,16 @@ package anyparse.grammar.haxe;
 /**
  * A top-level declaration in a Haxe module.
  *
- * Seven forms are recognised:
+ * Forms recognised (in source order, which is dispatch order):
+ *  - `PackageDecl` / `PackageEmpty` — `package foo.bar;` and the bare
+ *    `package;` directive (slice ω-toplevel-package). `@:kw('package')`
+ *    drives both branches; `PackageDecl(path:HxTypeName)` is tried
+ *    first to consume a dotted path, and the nullary `PackageEmpty`
+ *    catches the no-name shape via `tryBranch` rollback when
+ *    `HxTypeName`'s regex fails on the bare `;`. Real Haxe accepts at
+ *    most one `package` per module at the very top, but the parser
+ *    does not enforce position or count — semantic policing belongs to
+ *    a later analysis pass, not the grammar.
  *  - `ClassDecl` — `class Name { ... }` wrapping an `HxClassDecl`.
  *  - `TypedefDecl` — `typedef Name = Type[;]` wrapping an `HxTypedefDecl`.
  *    Carries `@:trailOpt(';')` — the trailing semicolon is optional on
@@ -33,16 +42,22 @@ package anyparse.grammar.haxe;
  *    lives here. Body shape (block / no-body) is unchanged from the
  *    inside-class form.
  *
- * Each branch except `VarDecl` and `FnDecl` carries no `@:kw` — the
- * enclosed sub-rule's first field already consumes the introducer
- * keyword (`class`, `typedef`, `enum`, `interface`, `abstract`). The
- * two new top-level binding ctors break this symmetry because their
- * sub-rules (`HxVarDecl`, `HxFnDecl`) intentionally omit the `var` /
- * `function` keyword — the keyword is owned by the calling context
- * (`HxClassMember`, `HxStatement`, now `HxDecl`).
+ * Each branch except `Package*`, `VarDecl`, and `FnDecl` carries no
+ * `@:kw` — the enclosed sub-rule's first field already consumes the
+ * introducer keyword (`class`, `typedef`, `enum`, `interface`,
+ * `abstract`). The kw-led ctors break this symmetry because their
+ * payloads (`HxVarDecl`, `HxFnDecl`, the bare path on `Package*`)
+ * intentionally omit the introducer — the keyword is owned by the
+ * calling context (`HxClassMember`, `HxStatement`, now `HxDecl`).
  */
 @:peg
 enum HxDecl {
+	@:kw('package') @:trail(';')
+	PackageDecl(path:HxTypeName);
+
+	@:kw('package') @:trail(';')
+	PackageEmpty;
+
 	ClassDecl(decl:HxClassDecl);
 
 	@:trailOpt(';')
