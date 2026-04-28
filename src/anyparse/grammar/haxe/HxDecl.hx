@@ -13,6 +13,19 @@ package anyparse.grammar.haxe;
  *    most one `package` per module at the very top, but the parser
  *    does not enforce position or count — semantic policing belongs to
  *    a later analysis pass, not the grammar.
+ *  - `ImportDecl` / `UsingDecl` — `import foo.bar.Baz;` and
+ *    `using foo.bar.Util;` (slice ω-toplevel-import-using). Each
+ *    carries `@:kw('import') / @:kw('using')` plus `@:trail(';')`;
+ *    the payload is the same dotted-ident `HxTypeName` regex that
+ *    `PackageDecl` uses, so single-segment (`import L;`),
+ *    sub-module (`import Module.SubType;`), and pack-qualified
+ *    (`import haxe.io.Bytes;`) forms all parse through one ctor.
+ *    Wildcard (`import haxe.*;`) and aliased
+ *    (`import Std.is as isOfType;`) forms are out of scope — each
+ *    is a separate slice. Like `Package*`, the parser does not
+ *    enforce ordering or position of imports relative to other
+ *    top-level decls; semantic policing belongs to a later analysis
+ *    pass.
  *  - `ClassDecl` — `class Name { ... }` wrapping an `HxClassDecl`.
  *  - `TypedefDecl` — `typedef Name = Type[;]` wrapping an `HxTypedefDecl`.
  *    Carries `@:trailOpt(';')` — the trailing semicolon is optional on
@@ -42,11 +55,12 @@ package anyparse.grammar.haxe;
  *    lives here. Body shape (block / no-body) is unchanged from the
  *    inside-class form.
  *
- * Each branch except `Package*`, `VarDecl`, and `FnDecl` carries no
- * `@:kw` — the enclosed sub-rule's first field already consumes the
- * introducer keyword (`class`, `typedef`, `enum`, `interface`,
- * `abstract`). The kw-led ctors break this symmetry because their
- * payloads (`HxVarDecl`, `HxFnDecl`, the bare path on `Package*`)
+ * Each branch except `Package*`, `Import*`, `Using*`, `VarDecl`, and
+ * `FnDecl` carries no `@:kw` — the enclosed sub-rule's first field
+ * already consumes the introducer keyword (`class`, `typedef`,
+ * `enum`, `interface`, `abstract`). The kw-led ctors break this
+ * symmetry because their payloads (`HxVarDecl`, `HxFnDecl`, the bare
+ * `HxTypeName` path on `Package*` / `Import*` / `Using*`)
  * intentionally omit the introducer — the keyword is owned by the
  * calling context (`HxClassMember`, `HxStatement`, now `HxDecl`).
  */
@@ -57,6 +71,12 @@ enum HxDecl {
 
 	@:kw('package') @:trail(';')
 	PackageEmpty;
+
+	@:kw('import') @:trail(';')
+	ImportDecl(path:HxTypeName);
+
+	@:kw('using') @:trail(';')
+	UsingDecl(path:HxTypeName);
 
 	ClassDecl(decl:HxClassDecl);
 
