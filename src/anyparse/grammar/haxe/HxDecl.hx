@@ -20,12 +20,20 @@ package anyparse.grammar.haxe;
  *    `PackageDecl` uses, so single-segment (`import L;`),
  *    sub-module (`import Module.SubType;`), and pack-qualified
  *    (`import haxe.io.Bytes;`) forms all parse through one ctor.
- *    Wildcard (`import haxe.*;`) and aliased
- *    (`import Std.is as isOfType;`) forms are out of scope — each
- *    is a separate slice. Like `Package*`, the parser does not
- *    enforce ordering or position of imports relative to other
- *    top-level decls; semantic policing belongs to a later analysis
- *    pass.
+ *  - `ImportWildDecl` / `UsingWildDecl` — wildcard form
+ *    `import haxe.*;` and `using foo.bar.*;` (slice
+ *    ω-toplevel-import-wild). Same `@:kw / @:trail` pair as the plain
+ *    ctors; payload is `HxWildPath`, a regex requiring a literal `.*`
+ *    suffix. Branch order places the wildcard ctors BEFORE the plain
+ *    ones so `tryBranch` rollback tries the longer match first and
+ *    falls through to the plain `HxTypeName` ctor when the `.*` tail
+ *    isn't present (mirrors the `PackageDecl` → `PackageEmpty`
+ *    rollback). Aliased (`import Std.is as isOfType;`) forms are out
+ *    of scope — separate slice.
+ *
+ *    Like `Package*`, the parser does not enforce ordering or
+ *    position of imports relative to other top-level decls; semantic
+ *    policing belongs to a later analysis pass.
  *  - `ClassDecl` — `class Name { ... }` wrapping an `HxClassDecl`.
  *  - `TypedefDecl` — `typedef Name = Type[;]` wrapping an `HxTypedefDecl`.
  *    Carries `@:trailOpt(';')` — the trailing semicolon is optional on
@@ -60,9 +68,10 @@ package anyparse.grammar.haxe;
  * already consumes the introducer keyword (`class`, `typedef`,
  * `enum`, `interface`, `abstract`). The kw-led ctors break this
  * symmetry because their payloads (`HxVarDecl`, `HxFnDecl`, the bare
- * `HxTypeName` path on `Package*` / `Import*` / `Using*`)
- * intentionally omit the introducer — the keyword is owned by the
- * calling context (`HxClassMember`, `HxStatement`, now `HxDecl`).
+ * `HxTypeName` / `HxWildPath` path on `Package*` / `Import*` /
+ * `Using*`) intentionally omit the introducer — the keyword is owned
+ * by the calling context (`HxClassMember`, `HxStatement`, now
+ * `HxDecl`).
  */
 @:peg
 enum HxDecl {
@@ -71,6 +80,12 @@ enum HxDecl {
 
 	@:kw('package') @:trail(';')
 	PackageEmpty;
+
+	@:kw('import') @:trail(';')
+	ImportWildDecl(path:HxWildPath);
+
+	@:kw('using') @:trail(';')
+	UsingWildDecl(path:HxWildPath);
 
 	@:kw('import') @:trail(';')
 	ImportDecl(path:HxTypeName);
