@@ -82,6 +82,17 @@ package anyparse.grammar.haxe.format;
  *    `typeHintColonPolicy` so the type-annotation default can stay
  *    `None` (`x:Int`) while the type-check default stays `Around` —
  *    upstream's two `:` sites use opposite conventions.
+ *
+ * Extended in slice ω-if-policy:
+ *  - `ifPolicy` feeds `opt.ifPolicy` (the gap between the `if` keyword
+ *    and the opening `(` of the condition; consumed by both
+ *    `HxStatement.IfStmt` and `HxExpr.IfExpr` via `@:fmt(ifPolicy)` on
+ *    the ctor). `After` (default) emits `if (cond)` with a single space;
+ *    `Before` / `None` (mapped from `"onlyBefore"` / `"none"`) collapse
+ *    to `if(cond)`. The "before" relative to `if` keyword leans on
+ *    surrounding context (e.g. `return if(...)` already has space
+ *    before `if` from the preceding token) — this knob only controls
+ *    the after-`if` gap.
  */
 @:peg typedef HxFormatWhitespaceSection = {
 
@@ -100,6 +111,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var functionTypeHaxe4Policy:HxFormatWhitespacePolicy;
 
 	@:optional var arrowFunctionsPolicy:HxFormatWhitespacePolicy;
+
+	@:optional var ifPolicy:HxFormatWhitespacePolicy;
 
 	@:optional var addLineCommentSpace:Bool;
 

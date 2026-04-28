@@ -127,6 +127,17 @@ import anyparse.format.WriteOptions;
  *    point. Only `HxExpr.Call` carries the flag — `HxFnDecl.params`
  *    keeps its own `funcParamParens` knob, `new T(...)` args and
  *    `(expr)` ParenExpr stay tight regardless.
+ *  - `ifPolicy` — whitespace between the `if` keyword and the opening
+ *    `(` of its condition. Consumed by `HxStatement.IfStmt` and
+ *    `HxExpr.IfExpr` via `@:fmt(ifPolicy)` on the ctor (slice
+ *    ω-if-policy). `After` (default) emits `if (cond)`, matching the
+ *    pre-slice fixed trailing space on the `if` keyword and
+ *    haxe-formatter's effective default. `Before` / `None` (mapped
+ *    from `"onlyBefore"` / `"none"`) collapse the gap to `if(cond)`,
+ *    matching `whitespace.ifPolicy: "onlyBefore"`. `Both` emits the
+ *    same after-space as `After` — the before-`if` slot is owned by
+ *    the preceding token's separator (`return`, `else`, statement
+ *    boundary), not by this knob.
  *
  * Field added in slice ψ₈ (else-if keyword placement):
  *  - `elseIf` — placement of the nested `if` inside an `else` clause
@@ -442,6 +453,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	typeCheckColon:WhitespacePolicy,
 	funcParamParens:WhitespacePolicy,
 	callParens:WhitespacePolicy,
+	ifPolicy:WhitespacePolicy,
 	elseIf:KeywordPlacement,
 	fitLineIfWithElse:Bool,
 	afterFieldsWithDocComments:CommentEmptyLinesPolicy,

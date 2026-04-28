@@ -164,6 +164,12 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   (= `Both`) emits `(arg) -> body`; `"none"` emits the tight
  *   `(arg)->body`. Independent of `functionTypeHaxe4Policy` (the
  *   type-position sibling).
+ * - `whitespace.ifPolicy` (ω-if-policy): same enum / same collapse,
+ *   routed to `opt.ifPolicy` (the gap between `if` keyword and the
+ *   opening `(` of its condition; consumed by `HxStatement.IfStmt` and
+ *   `HxExpr.IfExpr`). Default `After` emits `if (cond)`; `"onlyBefore"`
+ *   / `"none"` collapse to `if(cond)`. The before-`if` slot is owned
+ *   by the preceding token's separator and is unaffected by this knob.
  * - `whitespace.addLineCommentSpace` (ω-line-comment-space): boolean —
  *   `true` (default) rewrites captured `//foo` line comments as
  *   `// foo`; decoration runs (`//*****`, `//------`, `////`) survive
@@ -230,7 +236,7 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  * `abstractEmptyLines` / `enumEmptyLines` /
  * `typedefEmptyLines`, other `classEmptyLines.*` sub-keys beyond
  * `existingBetweenFields`, …), other `whitespace.*` keys
- * (`ifPolicy`, `forPolicy`, `ternaryPolicy`, …), other
+ * (`forPolicy`, `ternaryPolicy`, …), other
  * `whitespace.parenConfig.*` kinds (`ifParens`, `forParens`, …),
  * `indentation.conditionalPolicy`, `baseTypeHints`, `disableFormatting`,
  * `excludes`. They will land with the slices that introduce the
@@ -282,6 +288,7 @@ final class HaxeFormatConfigLoader {
 			typeCheckColon: base.typeCheckColon,
 			funcParamParens: base.funcParamParens,
 			callParens: base.callParens,
+			ifPolicy: base.ifPolicy,
 			elseIf: base.elseIf,
 			fitLineIfWithElse: base.fitLineIfWithElse,
 			afterFieldsWithDocComments: base.afterFieldsWithDocComments,
@@ -383,6 +390,8 @@ final class HaxeFormatConfigLoader {
 			opt.functionTypeHaxe4 = whitespaceToRuntime(section.functionTypeHaxe4Policy);
 		if (section.arrowFunctionsPolicy != null)
 			opt.arrowFunctions = whitespaceToRuntime(section.arrowFunctionsPolicy);
+		if (section.ifPolicy != null)
+			opt.ifPolicy = whitespaceToRuntime(section.ifPolicy);
 		if (section.addLineCommentSpace != null)
 			opt.addLineCommentSpace = section.addLineCommentSpace;
 		final paren:Null<HxFormatParenConfigSection> = section.parenConfig;

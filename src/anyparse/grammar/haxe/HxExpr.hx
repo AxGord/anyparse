@@ -265,7 +265,7 @@ enum HxExpr {
 	@:kw('new')
 	NewExpr(expr:HxNewExpr);
 
-	@:kw('if')
+	@:kw('if') @:fmt(ifPolicy)
 	IfExpr(stmt:HxIfExpr);
 
 	@:kw('for')

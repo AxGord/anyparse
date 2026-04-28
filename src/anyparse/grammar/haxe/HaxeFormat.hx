@@ -313,6 +313,15 @@ final class HaxeFormat implements TextFormat {
 	 * position knob); the single-ident infix form `arg -> body`
 	 * (`HxExpr.ThinArrow`) is on the Pratt infix path which already
 	 * adds surrounding spaces by default and is unaffected.
+	 *
+	 * `ifPolicy` default (ω-if-policy) is `After` — the gap between the
+	 * `if` keyword and the opening `(` of its condition is a single
+	 * space, producing `if (cond)` for both `HxStatement.IfStmt` and
+	 * `HxExpr.IfExpr`. Matches the pre-slice fixed trailing space on
+	 * the `if` keyword and haxe-formatter's effective default. Setting
+	 * to `None` (or the JSON-side `"onlyBefore"`) collapses the gap to
+	 * `if(cond)` and requires `"whitespace": { "ifPolicy": "onlyBefore" }`
+	 * (or `"none"`) in `hxformat.json`.
 	 */
 	public var defaultWriteOptions(default, null):HxModuleWriteOptions = {
 		indentChar: Tab,
@@ -340,6 +349,7 @@ final class HaxeFormat implements TextFormat {
 		typeCheckColon: WhitespacePolicy.Both,
 		funcParamParens: WhitespacePolicy.None,
 		callParens: WhitespacePolicy.None,
+		ifPolicy: WhitespacePolicy.After,
 		elseIf: KeywordPlacement.Same,
 		fitLineIfWithElse: false,
 		afterFieldsWithDocComments: CommentEmptyLinesPolicy.One,

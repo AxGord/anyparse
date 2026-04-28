@@ -265,10 +265,24 @@ class WriterLowering {
 				|| subStructStartsWithBodyBreak(refName)
 				|| subStructStartsWithBareBodyBreaks(refName)
 				|| subStructStartsWithTightLead(refName);
+			// ω-if-policy: an enum branch with `@:fmt(<flag>)` whose runtime
+			// value is `WhitespacePolicy` opts into a runtime-switched
+			// trailing space after the kw, mirroring `funcParamParens` /
+			// `callParens` on the open-delim side. Returns null when no
+			// flag matches so non-policy branches keep the pre-slice
+			// `kwLead + ' '` (or stripped) emission.
+			final kwTrailSpace:Null<Expr> = stripKwTrailingSpace
+				? null
+				: kwTrailingSpacePolicy(branch, ['ifPolicy']);
 			final parts:Array<Expr> = [];
 			if (kwLead != null) {
-				final kwText:String = stripKwTrailingSpace ? kwLead : kwLead + ' ';
-				parts.push(macro _dt($v{kwText}));
+				if (kwTrailSpace != null) {
+					parts.push(macro _dt($v{kwLead}));
+					parts.push(kwTrailSpace);
+				} else {
+					final kwText:String = stripKwTrailingSpace ? kwLead : kwLead + ' ';
+					parts.push(macro _dt($v{kwText}));
+				}
 			}
 			if (leadText != null) parts.push(macro _dt($v{leadText}));
 			parts.push(subCall);
@@ -1675,6 +1689,39 @@ class WriterLowering {
 		final bothPat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
 		final cases:Array<Case> = [
 			{values: [beforePat, bothPat], expr: macro _dt(' '), guard: null},
+		];
+		final optAccess:Expr = {expr: EField(macro opt, flagName), pos: Context.currentPos()};
+		return {expr: ESwitch(optAccess, cases, macro _de()), pos: Context.currentPos()};
+	}
+
+	/**
+	 * Return a Doc expression for the trailing space AFTER an enum
+	 * branch's `@:kw` keyword, gated by a `WhitespacePolicy` option.
+	 * The kw counterpart of `openDelimPolicySpace` — flipped semantics
+	 * because here the `WhitespacePolicy` value describes the gap on
+	 * the AFTER side of the kw (= BEFORE side of the following lead /
+	 * sub-struct).
+	 *
+	 * Returns `null` when the branch carries no flag from `flagNames`,
+	 * letting the call site fall through to the pre-slice fixed
+	 * trailing space (`kwLead + ' '`). When a flag matches, emits a
+	 * runtime switch on `opt.<flagName>`:
+	 *  - `After` / `Both` → `_dt(' ')` (space follows the kw).
+	 *  - `Before` / `None` → `_de()` (no space).
+	 *
+	 * Consumed today by `@:fmt(ifPolicy)` on `HxStatement.IfStmt` and
+	 * `HxExpr.IfExpr` (slice ω-if-policy) so a single config knob
+	 * controls both statement- and expression-form `if(cond)` /
+	 * `if (cond)` spacing.
+	 */
+	private static function kwTrailingSpacePolicy(branch:ShapeNode, flagNames:Array<String>):Null<Expr> {
+		final flagName:Null<String> = firstFmtFlag(branch, flagNames);
+		if (flagName == null) return null;
+		final wpPath:Array<String> = ['anyparse', 'format', 'WhitespacePolicy'];
+		final afterPat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['After']));
+		final bothPat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
+		final cases:Array<Case> = [
+			{values: [afterPat, bothPat], expr: macro _dt(' '), guard: null},
 		];
 		final optAccess:Expr = {expr: EField(macro opt, flagName), pos: Context.currentPos()};
 		return {expr: ESwitch(optAccess, cases, macro _de()), pos: Context.currentPos()};
