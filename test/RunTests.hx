@@ -68,6 +68,7 @@ import unit.HxTryPolicyOptionsTest;
 import unit.HxInterMemberBlankLinesOptionsTest;
 import unit.HxInterfaceInterMemberBlankLinesOptionsTest;
 import unit.HxAfterPackageSliceTest;
+import unit.HxBeforeUsingSliceTest;
 import unit.HxIndentCaseLabelsOptionsTest;
 import unit.HxTriviaTypesTest;
 import unit.HxTriviaParseTest;
@@ -164,6 +165,7 @@ class RunTests {
 		runner.addCase(new HxInterMemberBlankLinesOptionsTest());
 		runner.addCase(new HxInterfaceInterMemberBlankLinesOptionsTest());
 		runner.addCase(new HxAfterPackageSliceTest());
+		runner.addCase(new HxBeforeUsingSliceTest());
 		runner.addCase(new HxIndentCaseLabelsOptionsTest());
 		runner.addCase(new HxTriviaTypesTest());
 		runner.addCase(new HxTriviaParseTest());

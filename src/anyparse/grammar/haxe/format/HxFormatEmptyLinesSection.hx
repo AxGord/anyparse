@@ -44,6 +44,13 @@ package anyparse.grammar.haxe.format;
  * any blank line after `package` even when the source had one and `2`
  * emits two blank lines even when the source had none. Default `1`
  * matches haxe-formatter's `emptyLines.afterPackage: @:default(1)`.
+ *
+ * `importAndUsing` nested section added in slice ω-imports-using-blank
+ * (feeds `opt.beforeUsing` through `HxFormatImportAndUsingConfig`).
+ * Mirrors haxe-formatter's `emptyLines.importAndUsing` group; only the
+ * `beforeUsing` sub-key is modelled today, the other sub-keys
+ * (`betweenImports`, `betweenImportsLevel`, `beforeType`) land with the
+ * slices that introduce their matching writer knobs.
  */
 @:peg typedef HxFormatEmptyLinesSection = {
 
@@ -56,4 +63,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var interfaceEmptyLines:HxFormatInterfaceEmptyLinesConfig;
 
 	@:optional var afterPackage:Int;
+
+	@:optional var importAndUsing:HxFormatImportAndUsingConfig;
 };

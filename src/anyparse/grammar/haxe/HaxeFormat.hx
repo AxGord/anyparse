@@ -347,6 +347,19 @@ final class HaxeFormat implements TextFormat {
 	 * `@:fmt(blankLinesAfterCtor('decl', 'PackageDecl', 'PackageEmpty', 'afterPackage'))`
 	 * on `HxModule.decls` and consumed by the trivia-mode EOF Star path
 	 * in `WriterLowering.triviaEofStarExpr`.
+	 *
+	 * `beforeUsing` default (ω-imports-using-blank) is `1` — exact number
+	 * of blank lines between an `import` (or any non-`using`) decl and
+	 * the following `using` decl at module top level. Override
+	 * semantics: the source-captured blank-line count is replaced with
+	 * this value at the `import → using` transition, so `0` strips an
+	 * existing blank line and `2` doubles one regardless of source.
+	 * Consecutive `using` decls fall through to the source-driven
+	 * binary `blankBefore` flag. Matches haxe-formatter's
+	 * `emptyLines.importAndUsing.beforeUsing: @:default(1)`. Driven by
+	 * `@:fmt(blankLinesBeforeCtor('decl', 'UsingDecl', 'UsingWildDecl', 'beforeUsing'))`
+	 * on `HxModule.decls` and consumed by the trivia-mode EOF Star path
+	 * in `WriterLowering.triviaEofStarExpr`.
 	 */
 	public var defaultWriteOptions(default, null):HxModuleWriteOptions = {
 		indentChar: Tab,
@@ -404,6 +417,7 @@ final class HaxeFormat implements TextFormat {
 		functionTypeHaxe4: WhitespacePolicy.Both,
 		arrowFunctions: WhitespacePolicy.Both,
 		afterPackage: 1,
+		beforeUsing: 1,
 	};
 
 	private function new() {}

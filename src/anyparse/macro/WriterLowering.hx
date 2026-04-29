@@ -1028,7 +1028,14 @@ class WriterLowering {
 				final afterCtorInfo:Null<AfterCtorBlankInfo> = afterCtorArgs == null
 					? null
 					: buildAfterCtorBlankInfo(elemRefName, afterCtorArgs);
-				parts.push(triviaEofStarExpr(fieldAccess, trailBBAccess, trailLCAccess, elemFn, afterCtorInfo));
+				final beforeCtorArgs:Null<Array<String>> = fmtReadStringArgs(starNode, 'blankLinesBeforeCtor');
+				final beforeCtorInfo:Null<BeforeCtorBlankInfo> = beforeCtorArgs == null
+					? null
+					: buildBeforeCtorBlankInfo(elemRefName, beforeCtorArgs);
+				parts.push(triviaEofStarExpr(
+					fieldAccess, trailBBAccess, trailLCAccess, elemFn,
+					afterCtorInfo, beforeCtorInfo
+				));
 			} else {
 				Context.fatalError('WriterLowering: @:trivia Star without @:trail must be the last field', Context.currentPos());
 			}
@@ -2579,7 +2586,8 @@ class WriterLowering {
 	 */
 	private static function triviaEofStarExpr(
 		fieldAccess:Expr, trailBBAccess:Null<Expr>, trailLCAccess:Null<Expr>,
-		elemFn:String, afterCtorInfo:Null<AfterCtorBlankInfo> = null
+		elemFn:String, afterCtorInfo:Null<AfterCtorBlankInfo> = null,
+		beforeCtorInfo:Null<BeforeCtorBlankInfo> = null
 	):Expr {
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
@@ -2588,6 +2596,7 @@ class WriterLowering {
 		final trailBB:Expr = trailBBAccess ?? macro false;
 		final trailLC:Expr = trailLCAccess ?? macro ([] : Array<String>);
 		final useAfterCtor:Bool = afterCtorInfo != null;
+		final useBeforeCtor:Bool = beforeCtorInfo != null;
 		final pos:Position = Context.currentPos();
 		// ω-after-package — when the previous element matches one of the
 		// named ctors, the writer overrides the source-captured blank-
@@ -2595,6 +2604,13 @@ class WriterLowering {
 		// formatter's `emptyLines.afterPackage` count semantics — `1`
 		// inserts one blank line even when the source had none, `0`
 		// strips any blank line even when the source carried them).
+		//
+		// ω-imports-using-blank — symmetric "before-ctor" override: when
+		// the current element matches one of the named ctors AND the
+		// previous element does NOT match the same set, the writer
+		// overrides the source-captured count with `opt.<optField>`
+		// blank lines (drives the `import → using` transition). Cascade
+		// order: afterCtor wins first, then beforeCtor, then source.
 		// For all other element pairs the trivia channel's binary
 		// `blankBefore` flag drives a single blank line as before.
 		final initPrevKindExpr:Expr = useAfterCtor ? macro var _prevKindAfter:Int = 0 : macro {};
@@ -2611,13 +2627,39 @@ class WriterLowering {
 			macro _currKindAfter = $switchExpr;
 		} : macro {};
 		final trackPrevKindExpr:Expr = useAfterCtor ? macro _prevKindAfter = _currKindAfter : macro {};
-		final blanksCountExpr:Expr = useAfterCtor ? {
-			final optAccess:Expr = {
-				expr: EField(macro opt, afterCtorInfo.optField),
+		final initPrevKindBeforeExpr:Expr = useBeforeCtor ? macro var _prevKindBefore:Int = 0 : macro {};
+		final initCurrKindBeforeExpr:Expr = useBeforeCtor ? macro var _currKindBefore:Int = 0 : macro {};
+		final currKindBeforeComputeExpr:Expr = useBeforeCtor ? {
+			final classifierAccess:Expr = {
+				expr: EField(macro _t.node, beforeCtorInfo.classifierFieldName),
 				pos: pos,
 			};
-			macro (_prevKindAfter == 1 ? $optAccess : (_t.blankBefore ? 1 : 0));
-		} : macro (_t.blankBefore ? 1 : 0);
+			final switchExpr:Expr = {
+				expr: ESwitch(classifierAccess, beforeCtorInfo.classifyCases, null),
+				pos: pos,
+			};
+			macro _currKindBefore = $switchExpr;
+		} : macro {};
+		final trackPrevKindBeforeExpr:Expr = useBeforeCtor ? macro _prevKindBefore = _currKindBefore : macro {};
+		final blanksCountExpr:Expr = if (useAfterCtor && useBeforeCtor) {
+			final afterAccess:Expr = {expr: EField(macro opt, afterCtorInfo.optField), pos: pos};
+			final beforeAccess:Expr = {expr: EField(macro opt, beforeCtorInfo.optField), pos: pos};
+			macro (
+				_prevKindAfter == 1 ? $afterAccess
+				: (_currKindBefore == 1 && _prevKindBefore != 1 ? $beforeAccess
+				: (_t.blankBefore ? 1 : 0))
+			);
+		} else if (useAfterCtor) {
+			final afterAccess:Expr = {expr: EField(macro opt, afterCtorInfo.optField), pos: pos};
+			macro (_prevKindAfter == 1 ? $afterAccess : (_t.blankBefore ? 1 : 0));
+		} else if (useBeforeCtor) {
+			final beforeAccess:Expr = {expr: EField(macro opt, beforeCtorInfo.optField), pos: pos};
+			macro (
+				_currKindBefore == 1 && _prevKindBefore != 1
+					? $beforeAccess
+					: (_t.blankBefore ? 1 : 0)
+			);
+		} else macro (_t.blankBefore ? 1 : 0);
 		return macro {
 			final _arr = $fieldAccess;
 			final _trailLC:Array<String> = $trailLC;
@@ -2626,11 +2668,14 @@ class WriterLowering {
 			else {
 				final _docs:Array<anyparse.core.Doc> = [];
 				$initPrevKindExpr;
+				$initPrevKindBeforeExpr;
 				var _si:Int = 0;
 				while (_si < _arr.length) {
 					final _t = _arr[_si];
 					$initCurrKindExpr;
 					$currKindComputeExpr;
+					$initCurrKindBeforeExpr;
+					$currKindBeforeComputeExpr;
 					if (_si > 0) {
 						_docs.push(_dhl());
 						final _blanks:Int = $blanksCountExpr;
@@ -2650,6 +2695,7 @@ class WriterLowering {
 					final _tc:Null<String> = _t.trailingComment;
 					_docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDoc(_tc, opt)) : _elem);
 					$trackPrevKindExpr;
+					$trackPrevKindBeforeExpr;
 					_si++;
 				}
 				if (_trailLC.length > 0) {
@@ -3093,9 +3139,49 @@ class WriterLowering {
 	 * consulted.
 	 */
 	private function buildAfterCtorBlankInfo(elemRefName:String, args:Array<String>):AfterCtorBlankInfo {
+		final r:CtorBlankResolution = resolveCtorBlankArgs(elemRefName, args, 'blankLinesAfterCtor');
+		return {
+			classifierFieldName: r.fieldName,
+			classifyCases: r.cases,
+			optField: r.optField,
+		};
+	}
+
+	/**
+	 * ω-imports-using-blank — resolve `@:fmt(blankLinesBeforeCtor(classifierField,
+	 * CtorName1, [CtorName2, …], optField))` — symmetric mirror of
+	 * `buildAfterCtorBlankInfo`. Same arity (≥ 3 string args), same
+	 * single-axis yes/no classification on the named ctors. The runtime
+	 * gate (in `triviaEofStarExpr`) fires when the CURRENT element matches
+	 * AND the previous element did NOT match the same set, driving
+	 * "blank line before first X group" semantics (e.g. `import → using`
+	 * transition) independently of the after-ctor knob.
+	 */
+	private function buildBeforeCtorBlankInfo(elemRefName:String, args:Array<String>):BeforeCtorBlankInfo {
+		final r:CtorBlankResolution = resolveCtorBlankArgs(elemRefName, args, 'blankLinesBeforeCtor');
+		return {
+			classifierFieldName: r.fieldName,
+			classifyCases: r.cases,
+			optField: r.optField,
+		};
+	}
+
+	/**
+	 * Shared resolver for `@:fmt(blankLinesAfterCtor(...))` and
+	 * `@:fmt(blankLinesBeforeCtor(...))` — both metas accept the same
+	 * `(classifierField, CtorName1, …, optField)` arg shape and produce
+	 * the same single-axis classify-switch (`1` for any matching ctor,
+	 * `0` otherwise) plus an opt-field name. The two metas diverge only
+	 * at runtime: after-ctor consults the previous element's kind,
+	 * before-ctor consults the current element's kind paired with a
+	 * `prev != curr` gate. Centralising the parse/validation here keeps
+	 * both knobs in sync on shape-validation messages and the classifier
+	 * lookup path.
+	 */
+	private function resolveCtorBlankArgs(elemRefName:String, args:Array<String>, metaName:String):CtorBlankResolution {
 		if (args.length < 3)
 			Context.fatalError(
-				'WriterLowering: @:fmt(blankLinesAfterCtor) expects ≥ 3 string args (classifierField, CtorName1, [CtorName2, …], optField), got ${args.length}',
+				'WriterLowering: @:fmt($metaName) expects ≥ 3 string args (classifierField, CtorName1, [CtorName2, …], optField), got ${args.length}',
 				Context.currentPos()
 			);
 		final fieldName:String = args[0];
@@ -3103,40 +3189,36 @@ class WriterLowering {
 		final ctorNames:Array<String> = args.slice(1, args.length - 1);
 		if (ctorNames.length == 0)
 			Context.fatalError(
-				'WriterLowering: @:fmt(blankLinesAfterCtor) requires at least one ctor name between the classifier field and the opt field',
+				'WriterLowering: @:fmt($metaName) requires at least one ctor name between the classifier field and the opt field',
 				Context.currentPos()
 			);
 		final elemRule:Null<ShapeNode> = shape.rules.get(elemRefName);
 		if (elemRule == null || elemRule.kind != Seq)
 			Context.fatalError(
-				'WriterLowering: @:fmt(blankLinesAfterCtor) requires element rule $elemRefName to be a Seq struct',
+				'WriterLowering: @:fmt($metaName) requires element rule $elemRefName to be a Seq struct',
 				Context.currentPos()
 			);
-		var classifierNode:Null<ShapeNode> = null;
-		for (child in elemRule.children) if (child.annotations.get('base.fieldName') == fieldName) {
-			classifierNode = child;
-			break;
-		}
+		final classifierNode:Null<ShapeNode> = Lambda.find(elemRule.children, c -> c.annotations.get('base.fieldName') == fieldName);
 		if (classifierNode == null)
 			Context.fatalError(
-				'WriterLowering: @:fmt(blankLinesAfterCtor) classifier field "$fieldName" not found on element rule $elemRefName',
+				'WriterLowering: @:fmt($metaName) classifier field "$fieldName" not found on element rule $elemRefName',
 				Context.currentPos()
 			);
 		if (classifierNode.kind != Ref)
 			Context.fatalError(
-				'WriterLowering: @:fmt(blankLinesAfterCtor) classifier field "$fieldName" must be a plain Ref to an enum rule',
+				'WriterLowering: @:fmt($metaName) classifier field "$fieldName" must be a plain Ref to an enum rule',
 				Context.currentPos()
 			);
 		final enumRuleName:Null<String> = classifierNode.annotations.get('base.ref');
 		if (enumRuleName == null)
 			Context.fatalError(
-				'WriterLowering: @:fmt(blankLinesAfterCtor) classifier field "$fieldName" has no base.ref annotation',
+				'WriterLowering: @:fmt($metaName) classifier field "$fieldName" has no base.ref annotation',
 				Context.currentPos()
 			);
 		final enumRule:Null<ShapeNode> = shape.rules.get(enumRuleName);
 		if (enumRule == null || enumRule.kind != Alt)
 			Context.fatalError(
-				'WriterLowering: @:fmt(blankLinesAfterCtor) classifier target $enumRuleName must be an Alt (enum)',
+				'WriterLowering: @:fmt($metaName) classifier target $enumRuleName must be an Alt (enum)',
 				Context.currentPos()
 			);
 		final pos:Position = Context.currentPos();
@@ -3157,12 +3239,12 @@ class WriterLowering {
 		}
 		for (name in ctorNames) if (matched.indexOf(name) < 0)
 			Context.fatalError(
-				'WriterLowering: @:fmt(blankLinesAfterCtor) ctor "$name" not found in enum $enumRuleName',
+				'WriterLowering: @:fmt($metaName) ctor "$name" not found in enum $enumRuleName',
 				Context.currentPos()
 			);
 		return {
-			classifierFieldName: fieldName,
-			classifyCases: cases,
+			fieldName: fieldName,
+			cases: cases,
 			optField: optField,
 		};
 	}
@@ -3242,6 +3324,44 @@ typedef InterMemberClassifyInfo = {
 typedef AfterCtorBlankInfo = {
 	classifierFieldName:String,
 	classifyCases:Array<Case>,
+	optField:String,
+};
+
+/**
+ * ω-imports-using-blank — resolved data for
+ * `@:fmt(blankLinesBeforeCtor(classifierField, CtorName1, [CtorName2, …], optField))`.
+ * Produced by `WriterLowering.buildBeforeCtorBlankInfo` and spliced into
+ * `triviaEofStarExpr`'s per-element loop. Shape mirrors
+ * `AfterCtorBlankInfo` exactly — same single-axis classify-switch
+ * (`1` for any matching ctor, `0` otherwise) plus an opt-field name —
+ * the two diverge only at the runtime gate. After-ctor's gate fires on
+ * `_prevKindAfter == 1`; before-ctor's gate fires on
+ * `_currKindBefore == 1 && _prevKindBefore != 1`, which gives the
+ * "first X after a non-X" transition semantics (e.g. force a blank
+ * line at `import → using`, no force between consecutive `using` decls).
+ *
+ * Cascade priority in `triviaEofStarExpr`: after-ctor wins first, then
+ * before-ctor (when after-ctor doesn't match), then source-driven
+ * `blankBefore`. So a single decl pair can be governed by at most one
+ * override; no double-counting.
+ */
+typedef BeforeCtorBlankInfo = {
+	classifierFieldName:String,
+	classifyCases:Array<Case>,
+	optField:String,
+};
+
+/**
+ * Internal result type shared by `buildAfterCtorBlankInfo` and
+ * `buildBeforeCtorBlankInfo` — both metas accept the same arg shape
+ * and produce the same classify-switch + optField pair, then wrap it
+ * into their respective Info typedef. Centralising the resolution in
+ * one helper keeps shape-validation messages and the classifier-lookup
+ * path in sync between the two knobs.
+ */
+typedef CtorBlankResolution = {
+	fieldName:String,
+	cases:Array<Case>,
 	optField:String,
 };
 #end

@@ -15,6 +15,7 @@ import anyparse.grammar.haxe.format.HxFormatCommentEmptyLinesPolicy;
 import anyparse.grammar.haxe.format.HxFormatConfig;
 import anyparse.grammar.haxe.format.HxFormatConfigParser;
 import anyparse.grammar.haxe.format.HxFormatEmptyLinesSection;
+import anyparse.grammar.haxe.format.HxFormatImportAndUsingConfig;
 import anyparse.grammar.haxe.format.HxFormatIndentationSection;
 import anyparse.grammar.haxe.format.HxFormatInterfaceEmptyLinesConfig;
 import anyparse.grammar.haxe.format.HxFormatKeepEmptyLinesPolicy;
@@ -248,6 +249,15 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   decl in the same module — override semantics, not floor: the
  *   source-captured blank-line count is replaced with this value, so
  *   `0` strips any existing blank line and `2` always emits two.
+ * - `emptyLines.importAndUsing.beforeUsing` (ω-imports-using-blank):
+ *   non-negative Int routed to `opt.beforeUsing`. Default `1` matches
+ *   haxe-formatter's `emptyLines.importAndUsing.beforeUsing:
+ *   @:default(1)`. Drives the exact number of blank lines at the
+ *   `import → using` transition (current decl is `using`, previous decl
+ *   is not) — override semantics, not floor: source-captured count is
+ *   replaced with this value, so `0` strips the slot and `2` doubles
+ *   it. Consecutive `using` decls fall through to source-driven
+ *   binary `blankBefore`.
  *
  * Deliberately NOT supported in this slice (no corresponding
  * `HxModuleWriteOptions` field yet): `wrapping.*` beyond
@@ -341,6 +351,7 @@ final class HaxeFormatConfigLoader {
 			functionTypeHaxe4: base.functionTypeHaxe4,
 			arrowFunctions: base.arrowFunctions,
 			afterPackage: base.afterPackage,
+			beforeUsing: base.beforeUsing,
 		};
 		if (cfg.indentation != null) applyIndentation(cfg.indentation, result);
 		if (cfg.wrapping != null) applyWrapping(cfg.wrapping, result);
@@ -479,6 +490,10 @@ final class HaxeFormatConfigLoader {
 			if (interfaceSection.afterVars != null) opt.interfaceAfterVars = interfaceSection.afterVars;
 		}
 		if (section.afterPackage != null) opt.afterPackage = section.afterPackage;
+		final importAndUsing:Null<HxFormatImportAndUsingConfig> = section.importAndUsing;
+		if (importAndUsing != null) {
+			if (importAndUsing.beforeUsing != null) opt.beforeUsing = importAndUsing.beforeUsing;
+		}
 	}
 
 	private static function sameLineToRuntime(policy:HxFormatSameLinePolicy):SameLinePolicy {

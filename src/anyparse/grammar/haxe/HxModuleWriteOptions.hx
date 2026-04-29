@@ -486,6 +486,27 @@ import anyparse.format.WriteOptions;
  *    line after `import`-group" / "blank line after `typedef`" slices
  *    by adding an analogous `@:fmt(...)` call against a different opt
  *    field.
+ *
+ * Field added in slice ω-imports-using-blank (blank-line slot at
+ * `import → using` transition):
+ *  - `beforeUsing` — exact number of blank lines the writer emits when
+ *    the current top-level decl is a `using` directive (`UsingDecl` /
+ *    `UsingWildDecl`) and the previous decl is NOT a `using` directive.
+ *    Override semantics, not floor: the source-captured blank-line count
+ *    is always replaced with this value at the transition, so `0` strips
+ *    any blank line between `import` and `using` even when the source
+ *    had one and `2` doubles it regardless of source. Consecutive
+ *    `using` decls fall through to the trivia channel's binary
+ *    `blankBefore` flag (no override applied). `1` (default, matches
+ *    haxe-formatter's `emptyLines.importAndUsing.beforeUsing:
+ *    @:default(1)`) inserts one blank line between `import` and
+ *    `using` even when the source had none. The knob only triggers at
+ *    sites tagged with
+ *    `@:fmt(blankLinesBeforeCtor('decl', 'UsingDecl', 'UsingWildDecl', 'beforeUsing'))`
+ *    in the grammar — `HxModule.decls` is the only current consumer.
+ *    The same `blankLinesBeforeCtor` mechanism is open to future
+ *    "blank line before X-group" slices (e.g. `beforeType`) by adding
+ *    an analogous `@:fmt(...)` call against a different opt field.
  */
 typedef HxModuleWriteOptions = WriteOptions & {
 	sameLineElse:SameLinePolicy,
@@ -534,4 +555,5 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	functionTypeHaxe4:WhitespacePolicy,
 	arrowFunctions:WhitespacePolicy,
 	afterPackage:Int,
+	beforeUsing:Int,
 };

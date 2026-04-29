@@ -42,12 +42,32 @@ package anyparse.grammar.haxe;
  * element pairs keep the trivia channel's binary `blankBefore` flag —
  * one blank line when the source had any, none otherwise. The same
  * `blankLinesAfterCtor` shape is reusable for any future "blank line
- * after ctor X" slice (e.g. after import-group, after typedef-block)
- * by pointing at a different opt field.
+ * after ctor X" slice (e.g. after typedef-block) by pointing at a
+ * different opt field.
+ *
+ * `@:fmt(blankLinesBeforeCtor('decl', 'UsingDecl', 'UsingWildDecl', 'beforeUsing'))`
+ * (slice ω-imports-using-blank) is the mirror knob — instructs
+ * `triviaEofStarExpr` to emit exactly `opt.beforeUsing` blank lines
+ * before any element whose `decl` field matches `UsingDecl` /
+ * `UsingWildDecl` and whose preceding element does NOT match the same
+ * set. Drives the `import → using` transition: when prev is `import`
+ * (or any non-`using` decl) and curr is `using`, force the configured
+ * count regardless of source; consecutive `using` decls cascade
+ * through to source-driven `blankBefore`. The cascade order in the
+ * trivia EOF Star path is: `blankLinesAfterCtor` (prev match) wins
+ * first, then `blankLinesBeforeCtor` (curr match without prev match),
+ * then source-driven binary blank-line slot. The same mechanism is
+ * open to future "blank line before X-group" slices (e.g.
+ * `beforeType` for the import/using → type-decl transition) by adding
+ * an analogous `@:fmt(...)` call with a different ctor set and opt
+ * field.
  */
 @:peg
 @:schema(anyparse.grammar.haxe.HaxeFormat)
 @:ws
 typedef HxModule = {
-	@:trivia @:fmt(blankLinesAfterCtor('decl', 'PackageDecl', 'PackageEmpty', 'afterPackage')) var decls:Array<HxTopLevelDecl>;
+	@:trivia
+	@:fmt(blankLinesAfterCtor('decl', 'PackageDecl', 'PackageEmpty', 'afterPackage'))
+	@:fmt(blankLinesBeforeCtor('decl', 'UsingDecl', 'UsingWildDecl', 'beforeUsing'))
+	var decls:Array<HxTopLevelDecl>;
 }
