@@ -36,6 +36,7 @@ import unit.HxToplevelImportUsingSliceTest;
 import unit.HxToplevelImportWildSliceTest;
 import unit.HxToplevelMetaSliceTest;
 import unit.HxFnExprBodySliceTest;
+import unit.HxFnExprSliceTest;
 import unit.HxFnReturnBodySliceTest;
 import unit.HxMetaExprSliceTest;
 import unit.HxBlockExprSliceTest;
@@ -141,6 +142,7 @@ class RunTests {
 		runner.addCase(new HxToplevelImportWildSliceTest());
 		runner.addCase(new HxToplevelMetaSliceTest());
 		runner.addCase(new HxFnExprBodySliceTest());
+		runner.addCase(new HxFnExprSliceTest());
 		runner.addCase(new HxFnReturnBodySliceTest());
 		runner.addCase(new HxBlockExprSliceTest());
 		runner.addCase(new HxTryExprSliceTest());

@@ -295,6 +295,9 @@ enum HxExpr {
 	@:kw('return')
 	ReturnExpr(value:HxExpr);
 
+	@:kw('function')
+	FnExpr(fn:HxFnExpr);
+
 	MetaExpr(v:HxMetaExpr);
 
 	IdentExpr(v:HxIdentLit);
