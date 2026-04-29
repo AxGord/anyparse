@@ -79,6 +79,15 @@ package anyparse.grammar.haxe;
  *  - `ThrowStmt` — `throw expr;` throw statement. Dispatched by the
  *    `throw` keyword. The expression is parsed and the trailing `;`
  *    is consumed by the branch's `@:trail`.
+ *    `@:fmt(bodyPolicy('throwBody'))` on `expr` routes the
+ *    `throw`→value separator through the runtime `BodyPolicy` switch
+ *    (slice ω-throw-body), mirroring `ReturnStmt` exactly. `Same`
+ *    keeps `throw value;` flat; `Next` always pushes the value to
+ *    the next line at one indent level deeper; `FitLine` keeps it
+ *    flat when it fits within `lineWidth`, otherwise breaks. Default
+ *    is `FitLine` matching the `returnBody` precedent — haxe-formatter
+ *    has no separate `throwBody` knob upstream, but the same
+ *    fit-or-break semantics make sense for long thrown expressions.
  *
  *  - `DoWhileStmt` — `do body while (cond);` do-while loop.
  *    Dispatched by the `do` keyword. The body and parenthesised
@@ -159,7 +168,7 @@ enum HxStatement {
 	@:kw('switch') @:fmt(switchPolicy)
 	SwitchStmtBare(stmt:HxSwitchStmtBare);
 
-	@:kw('throw') @:trail(';')
+	@:kw('throw') @:trail(';') @:fmt(bodyPolicy('throwBody'))
 	ThrowStmt(expr:HxExpr);
 
 	@:kw('do') @:trail(';')

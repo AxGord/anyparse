@@ -60,6 +60,19 @@ import anyparse.format.WriteOptions;
  *    identical output; do-while diverges because the corpus reference
  *    (`sameLine.doWhileBody: next`) expects the break by default.
  *
+ * Field added in slice ω-throw-body:
+ *  - `throwBody` — same `BodyPolicy` knob shape as `returnBody`,
+ *    gating the separator between the `throw` keyword and its value
+ *    expression at `HxStatement.ThrowStmt`. `Same` keeps
+ *    `throw value;` flat; `Next` always pushes the value to the
+ *    next line; `FitLine` (default) keeps it flat when it fits
+ *    within `lineWidth`, otherwise breaks. `Keep` preserves the
+ *    source layout. There is no upstream haxe-formatter
+ *    `throwBody` knob — the JSON loader does not parse a
+ *    `sameLine.throwBody` key from `hxformat.json`. The runtime
+ *    knob exists for parity with `returnBody` and for users
+ *    constructing `HxModuleWriteOptions` programmatically.
+ *
  * Field added in slice ω-return-body:
  *  - `returnBody` — same `BodyPolicy` knob shape as `ifBody` /
  *    `forBody` / `whileBody` / `doBody`, gating the separator between
@@ -537,6 +550,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	whileBody:BodyPolicy,
 	doBody:BodyPolicy,
 	returnBody:BodyPolicy,
+	throwBody:BodyPolicy,
 	leftCurly:BracePlacement,
 	objectFieldColon:WhitespacePolicy,
 	typeHintColon:WhitespacePolicy,

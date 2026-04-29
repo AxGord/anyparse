@@ -137,6 +137,13 @@ final class HaxeFormat implements TextFormat {
 	 * `Keep` (preserve source) requires a `sameLine.returnBody`
 	 * override in `hxformat.json`.
 	 *
+	 * `throwBody` (ω-throw-body) shares the `returnBody` default and
+	 * shape — `throw value;` follows the same fit-or-break logic.
+	 * Unlike `returnBody`, there is no upstream `sameLine.throwBody`
+	 * key in haxe-formatter; the JSON loader does not parse one. The
+	 * runtime knob exists for parity and for users constructing
+	 * `HxModuleWriteOptions` programmatically.
+	 *
 	 * `elseIf` (ψ₈) defaults to `Same` — the nested `if` inside an
 	 * `else` clause stays on the same line as `else`, matching
 	 * haxe-formatter's `sameLine.elseIf: @:default(Same)`. This knob
@@ -399,6 +406,7 @@ final class HaxeFormat implements TextFormat {
 		whileBody: BodyPolicy.Next,
 		doBody: BodyPolicy.Next,
 		returnBody: BodyPolicy.FitLine,
+		throwBody: BodyPolicy.FitLine,
 		leftCurly: BracePlacement.Same,
 		objectFieldColon: WhitespacePolicy.After,
 		typeHintColon: WhitespacePolicy.None,

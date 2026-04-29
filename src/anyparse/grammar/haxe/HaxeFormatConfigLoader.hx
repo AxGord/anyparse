@@ -316,6 +316,7 @@ final class HaxeFormatConfigLoader {
 			whileBody: base.whileBody,
 			doBody: base.doBody,
 			returnBody: base.returnBody,
+			throwBody: base.throwBody,
 			leftCurly: base.leftCurly,
 			objectFieldColon: base.objectFieldColon,
 			typeHintColon: base.typeHintColon,
