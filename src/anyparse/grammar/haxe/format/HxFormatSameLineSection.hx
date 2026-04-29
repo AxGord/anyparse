@@ -46,6 +46,17 @@ package anyparse.grammar.haxe.format;
  * `returnBodySingleLine` knob (refining the policy for returns whose
  * value is single-line) is parsed and silently dropped — the
  * single-line refinement axis is not yet wired through the runtime.
+ *
+ * `catchBody` (ω-catch-body) is the same three-way body-placement
+ * knob shape as `ifBody`, gating the separator between the `)` of
+ * a catch clause's `(name:Type)` header and its body. The loader
+ * maps it onto the runtime `catchBody` option on
+ * `HxModuleWriteOptions`. Default `Next` mirrors haxe-formatter's
+ * `sameLine.catchBody: @:default(Next)`. The sibling `tryBody` knob
+ * (gating the `try`→body separator) is intentionally NOT parsed in
+ * this slice — first-field `bodyPolicy` on `HxTryCatchStmt.body`
+ * would silence the existing `tryPolicy` knob's `try{` collapse
+ * semantics. A separate slice will resolve the conflict.
  */
 @:peg typedef HxFormatSameLineSection = {
 
@@ -74,4 +85,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var returnBody:HxFormatBodyPolicy;
 
 	@:optional var returnBodySingleLine:HxFormatBodyPolicy;
+
+	@:optional var catchBody:HxFormatBodyPolicy;
 };

@@ -60,6 +60,24 @@ import anyparse.format.WriteOptions;
  *    identical output; do-while diverges because the corpus reference
  *    (`sameLine.doWhileBody: next`) expects the break by default.
  *
+ * Field added in slice ω-catch-body:
+ *  - `catchBody` — same three-way `BodyPolicy` knob shape as
+ *    `ifBody` / `forBody` / `whileBody` / `doBody`, gating the
+ *    separator between the `)` of the catch clause's `(name:Type)`
+ *    header and its body at `HxCatchClause.body`. `Same` keeps
+ *    `} catch (e:T) body;` flat. `Next` always pushes the body to
+ *    the next line at one indent level deeper. `FitLine` keeps it
+ *    flat when it fits within `lineWidth`, otherwise breaks. Block
+ *    bodies (`{ … }`) are shape-aware — the typical
+ *    `} catch (e:T) { … }` keeps the inline space regardless of the
+ *    policy. `tryBody` (gating the `try`→body separator at
+ *    `HxTryCatchStmt.body`) is intentionally NOT exposed in this
+ *    slice: that field is the first field of `HxTryCatchStmt` and
+ *    `WriterLowering`'s `subStructStartsWithBodyPolicy` strip would
+ *    silence the existing `tryPolicy:WhitespacePolicy` knob, breaking
+ *    `try{` / `try {` collapse semantics. A separate slice will
+ *    address the tryPolicy/tryBody co-existence.
+ *
  * Field added in slice ω-throw-body:
  *  - `throwBody` — same `BodyPolicy` knob shape as `returnBody`,
  *    gating the separator between the `throw` keyword and its value
@@ -564,6 +582,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	doBody:BodyPolicy,
 	returnBody:BodyPolicy,
 	throwBody:BodyPolicy,
+	catchBody:BodyPolicy,
 	leftCurly:BracePlacement,
 	objectFieldColon:WhitespacePolicy,
 	typeHintColon:WhitespacePolicy,

@@ -144,6 +144,18 @@ final class HaxeFormat implements TextFormat {
 	 * runtime knob exists for parity and for users constructing
 	 * `HxModuleWriteOptions` programmatically.
 	 *
+	 * `catchBody` (ω-catch-body) defaults to `Next`, matching haxe-
+	 * formatter's `sameLine.catchBody: @:default(Next)` and the
+	 * sibling `ifBody`/`forBody`/`whileBody`/`doBody` defaults. Drives
+	 * the `)`→body separator at `HxCatchClause.body`. Block bodies
+	 * stay inline regardless via `bodyPolicyWrap`'s block-ctor
+	 * detection, so the typical `} catch (e:T) { … }` round-trip is
+	 * unaffected; only non-block catch bodies (`} catch (e:T)
+	 * trace(e);`) see a hardline by default. Opting into `Same`,
+	 * `FitLine` or `Keep` requires an explicit `hxformat.json`
+	 * override (`"sameLine": { "catchBody": "same" | "fitLine" |
+	 * "keep" }`).
+	 *
 	 * `elseIf` (ψ₈) defaults to `Same` — the nested `if` inside an
 	 * `else` clause stays on the same line as `else`, matching
 	 * haxe-formatter's `sameLine.elseIf: @:default(Same)`. This knob
@@ -420,6 +432,7 @@ final class HaxeFormat implements TextFormat {
 		doBody: BodyPolicy.Next,
 		returnBody: BodyPolicy.FitLine,
 		throwBody: BodyPolicy.FitLine,
+		catchBody: BodyPolicy.Next,
 		leftCurly: BracePlacement.Same,
 		objectFieldColon: WhitespacePolicy.After,
 		typeHintColon: WhitespacePolicy.None,

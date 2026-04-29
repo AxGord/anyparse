@@ -73,6 +73,7 @@ import unit.HxAfterPackageSliceTest;
 import unit.HxBeforeUsingSliceTest;
 import unit.HxReturnBodySliceTest;
 import unit.HxThrowBodySliceTest;
+import unit.HxCatchBodySliceTest;
 import unit.HxIndentCaseLabelsOptionsTest;
 import unit.HxTriviaTypesTest;
 import unit.HxTriviaParseTest;
@@ -174,6 +175,7 @@ class RunTests {
 		runner.addCase(new HxBeforeUsingSliceTest());
 		runner.addCase(new HxReturnBodySliceTest());
 		runner.addCase(new HxThrowBodySliceTest());
+		runner.addCase(new HxCatchBodySliceTest());
 		runner.addCase(new HxIndentCaseLabelsOptionsTest());
 		runner.addCase(new HxTriviaTypesTest());
 		runner.addCase(new HxTriviaParseTest());
