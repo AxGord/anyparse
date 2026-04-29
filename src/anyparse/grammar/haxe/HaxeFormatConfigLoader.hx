@@ -241,12 +241,17 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   a doc comment even when the source had none; `Ignore` respects the
  *   captured source blank-line count; `None` strips any blank line
  *   before such a field.
+ * - `emptyLines.afterPackage` (ω-after-package): non-negative Int routed
+ *   to `opt.afterPackage`. Default `1` matches haxe-formatter's
+ *   `emptyLines.afterPackage: @:default(1)`. Drives the minimum number
+ *   of blank lines between a top-level `package …;` decl and the next
+ *   decl in the same module.
  *
  * Deliberately NOT supported in this slice (no corresponding
  * `HxModuleWriteOptions` field yet): `wrapping.*` beyond
  * `maxLineLength`, other `lineEnds.*` keys (`rightCurly`, `blockCurly`,
  * `objectLiteralCurly`, …), other `emptyLines.*` keys
- * (`finalNewline`, `maxAnywhereInFile`, `beforePackage`, `afterPackage`,
+ * (`finalNewline`, `maxAnywhereInFile`, `beforePackage`,
  * `betweenTypes`, per-type-kind sections
  * `macroClassEmptyLines` / `externClassEmptyLines` /
  * `abstractEmptyLines` / `enumEmptyLines` /
@@ -333,6 +338,7 @@ final class HaxeFormatConfigLoader {
 			indentCaseLabels: base.indentCaseLabels,
 			functionTypeHaxe4: base.functionTypeHaxe4,
 			arrowFunctions: base.arrowFunctions,
+			afterPackage: base.afterPackage,
 		};
 		if (cfg.indentation != null) applyIndentation(cfg.indentation, result);
 		if (cfg.wrapping != null) applyWrapping(cfg.wrapping, result);
@@ -470,6 +476,7 @@ final class HaxeFormatConfigLoader {
 				opt.interfaceBetweenFunctions = interfaceSection.betweenFunctions;
 			if (interfaceSection.afterVars != null) opt.interfaceAfterVars = interfaceSection.afterVars;
 		}
+		if (section.afterPackage != null) opt.afterPackage = section.afterPackage;
 	}
 
 	private static function sameLineToRuntime(policy:HxFormatSameLinePolicy):SameLinePolicy {

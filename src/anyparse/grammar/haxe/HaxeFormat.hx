@@ -336,6 +336,14 @@ final class HaxeFormat implements TextFormat {
 	 * `HxStatement.TryCatchStmt` (block-body form only; the bare-body
 	 * sibling's `bareBodyBreaks` predicate gates the slot to `null`).
 	 * Matches haxe-formatter's `whitespace.tryPolicy: @:default(After)`.
+	 *
+	 * `afterPackage` default (ω-after-package) is `1` — minimum number
+	 * of blank lines between the top-level `package …;` directive and
+	 * the next decl. Matches haxe-formatter's
+	 * `emptyLines.afterPackage: @:default(1)`. Driven by
+	 * `@:fmt(blankLinesAfterCtor('decl', 'PackageDecl', 'PackageEmpty', 'afterPackage'))`
+	 * on `HxModule.decls` and consumed by the trivia-mode EOF Star path
+	 * in `WriterLowering.triviaEofStarExpr`.
 	 */
 	public var defaultWriteOptions(default, null):HxModuleWriteOptions = {
 		indentChar: Tab,
@@ -392,6 +400,7 @@ final class HaxeFormat implements TextFormat {
 		indentCaseLabels: true,
 		functionTypeHaxe4: WhitespacePolicy.Both,
 		arrowFunctions: WhitespacePolicy.Both,
+		afterPackage: 1,
 	};
 
 	private function new() {}

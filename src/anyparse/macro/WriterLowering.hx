@@ -1024,7 +1024,11 @@ class WriterLowering {
 				));
 			} else if (isLastField) {
 				if (openText != null) parts.push(macro _dt($v{openText}));
-				parts.push(triviaEofStarExpr(fieldAccess, trailBBAccess, trailLCAccess, elemFn));
+				final afterCtorArgs:Null<Array<String>> = fmtReadStringArgs(starNode, 'blankLinesAfterCtor');
+				final afterCtorInfo:Null<AfterCtorBlankInfo> = afterCtorArgs == null
+					? null
+					: buildAfterCtorBlankInfo(elemRefName, afterCtorArgs);
+				parts.push(triviaEofStarExpr(fieldAccess, trailBBAccess, trailLCAccess, elemFn, afterCtorInfo));
 			} else {
 				Context.fatalError('WriterLowering: @:trivia Star without @:trail must be the last field', Context.currentPos());
 			}
@@ -2575,7 +2579,7 @@ class WriterLowering {
 	 */
 	private static function triviaEofStarExpr(
 		fieldAccess:Expr, trailBBAccess:Null<Expr>, trailLCAccess:Null<Expr>,
-		elemFn:String
+		elemFn:String, afterCtorInfo:Null<AfterCtorBlankInfo> = null
 	):Expr {
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
@@ -2583,6 +2587,37 @@ class WriterLowering {
 		};
 		final trailBB:Expr = trailBBAccess ?? macro false;
 		final trailLC:Expr = trailLCAccess ?? macro ([] : Array<String>);
+		final useAfterCtor:Bool = afterCtorInfo != null;
+		final pos:Position = Context.currentPos();
+		// ω-after-package — when the previous element matches one of the
+		// named ctors, the writer overrides the source-captured blank-
+		// line count with `opt.<optField>` blank lines (matching haxe-
+		// formatter's `emptyLines.afterPackage` count semantics — `1`
+		// inserts one blank line even when the source had none, `0`
+		// strips any blank line even when the source carried them).
+		// For all other element pairs the trivia channel's binary
+		// `blankBefore` flag drives a single blank line as before.
+		final initPrevKindExpr:Expr = useAfterCtor ? macro var _prevKindAfter:Int = 0 : macro {};
+		final initCurrKindExpr:Expr = useAfterCtor ? macro var _currKindAfter:Int = 0 : macro {};
+		final currKindComputeExpr:Expr = useAfterCtor ? {
+			final classifierAccess:Expr = {
+				expr: EField(macro _t.node, afterCtorInfo.classifierFieldName),
+				pos: pos,
+			};
+			final switchExpr:Expr = {
+				expr: ESwitch(classifierAccess, afterCtorInfo.classifyCases, null),
+				pos: pos,
+			};
+			macro _currKindAfter = $switchExpr;
+		} : macro {};
+		final trackPrevKindExpr:Expr = useAfterCtor ? macro _prevKindAfter = _currKindAfter : macro {};
+		final blanksCountExpr:Expr = useAfterCtor ? {
+			final optAccess:Expr = {
+				expr: EField(macro opt, afterCtorInfo.optField),
+				pos: pos,
+			};
+			macro (_prevKindAfter == 1 ? $optAccess : (_t.blankBefore ? 1 : 0));
+		} : macro (_t.blankBefore ? 1 : 0);
 		return macro {
 			final _arr = $fieldAccess;
 			final _trailLC:Array<String> = $trailLC;
@@ -2590,11 +2625,21 @@ class WriterLowering {
 			if (_arr.length == 0 && _trailLC.length == 0) _de()
 			else {
 				final _docs:Array<anyparse.core.Doc> = [];
+				$initPrevKindExpr;
 				var _si:Int = 0;
 				while (_si < _arr.length) {
 					final _t = _arr[_si];
-					if (_si > 0) _docs.push(_dhl());
-					if (_t.blankBefore && _si > 0) _docs.push(_dhl());
+					$initCurrKindExpr;
+					$currKindComputeExpr;
+					if (_si > 0) {
+						_docs.push(_dhl());
+						final _blanks:Int = $blanksCountExpr;
+						var _bli:Int = 0;
+						while (_bli < _blanks) {
+							_docs.push(_dhl());
+							_bli++;
+						}
+					}
 					var _ci:Int = 0;
 					while (_ci < _t.leadingComments.length) {
 						_docs.push(leadingCommentDoc(_t.leadingComments[_ci], opt));
@@ -2604,6 +2649,7 @@ class WriterLowering {
 					final _elem:anyparse.core.Doc = $triviaElemCall;
 					final _tc:Null<String> = _t.trailingComment;
 					_docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDoc(_tc, opt)) : _elem);
+					$trackPrevKindExpr;
 					_si++;
 				}
 				if (_trailLC.length > 0) {
@@ -3032,6 +3078,94 @@ class WriterLowering {
 			afterVarsField: afterVarsField,
 		};
 	}
+
+	/**
+	 * ω-after-package — resolve `@:fmt(blankLinesAfterCtor(classifierField,
+	 * CtorName1, [CtorName2, …], optField))` into a binary classify-switch
+	 * (`1` for any matching ctor, `0` otherwise) plus the option-field
+	 * name read at runtime to pick the forced-minimum blank-line count.
+	 *
+	 * Mirrors `buildInterMemberClassifyInfo` but with arity ≥ 3
+	 * (classifierField, ≥ 1 ctor name, optField) and a single-axis
+	 * yes/no classification instead of var/fn/other. Reusable for any
+	 * "blank line after ctor X" slice — the args list defines which
+	 * ctors trigger and which `HxModuleWriteOptions` Int field is
+	 * consulted.
+	 */
+	private function buildAfterCtorBlankInfo(elemRefName:String, args:Array<String>):AfterCtorBlankInfo {
+		if (args.length < 3)
+			Context.fatalError(
+				'WriterLowering: @:fmt(blankLinesAfterCtor) expects ≥ 3 string args (classifierField, CtorName1, [CtorName2, …], optField), got ${args.length}',
+				Context.currentPos()
+			);
+		final fieldName:String = args[0];
+		final optField:String = args[args.length - 1];
+		final ctorNames:Array<String> = args.slice(1, args.length - 1);
+		if (ctorNames.length == 0)
+			Context.fatalError(
+				'WriterLowering: @:fmt(blankLinesAfterCtor) requires at least one ctor name between the classifier field and the opt field',
+				Context.currentPos()
+			);
+		final elemRule:Null<ShapeNode> = shape.rules.get(elemRefName);
+		if (elemRule == null || elemRule.kind != Seq)
+			Context.fatalError(
+				'WriterLowering: @:fmt(blankLinesAfterCtor) requires element rule $elemRefName to be a Seq struct',
+				Context.currentPos()
+			);
+		var classifierNode:Null<ShapeNode> = null;
+		for (child in elemRule.children) if (child.annotations.get('base.fieldName') == fieldName) {
+			classifierNode = child;
+			break;
+		}
+		if (classifierNode == null)
+			Context.fatalError(
+				'WriterLowering: @:fmt(blankLinesAfterCtor) classifier field "$fieldName" not found on element rule $elemRefName',
+				Context.currentPos()
+			);
+		if (classifierNode.kind != Ref)
+			Context.fatalError(
+				'WriterLowering: @:fmt(blankLinesAfterCtor) classifier field "$fieldName" must be a plain Ref to an enum rule',
+				Context.currentPos()
+			);
+		final enumRuleName:Null<String> = classifierNode.annotations.get('base.ref');
+		if (enumRuleName == null)
+			Context.fatalError(
+				'WriterLowering: @:fmt(blankLinesAfterCtor) classifier field "$fieldName" has no base.ref annotation',
+				Context.currentPos()
+			);
+		final enumRule:Null<ShapeNode> = shape.rules.get(enumRuleName);
+		if (enumRule == null || enumRule.kind != Alt)
+			Context.fatalError(
+				'WriterLowering: @:fmt(blankLinesAfterCtor) classifier target $enumRuleName must be an Alt (enum)',
+				Context.currentPos()
+			);
+		final pos:Position = Context.currentPos();
+		final cases:Array<Case> = [];
+		final matched:Array<String> = [];
+		for (branch in enumRule.children) {
+			final ctorName:Null<String> = branch.annotations.get('base.ctor');
+			if (ctorName == null) continue;
+			final arity:Int = branch.children.length;
+			final ctorIdent:Expr = {expr: EConst(CIdent(ctorName)), pos: pos};
+			final pattern:Expr = arity == 0
+				? ctorIdent
+				: {expr: ECall(ctorIdent, [for (_ in 0...arity) macro _]), pos: pos};
+			final isMatch:Bool = ctorNames.indexOf(ctorName) >= 0;
+			if (isMatch) matched.push(ctorName);
+			final kindExpr:Expr = isMatch ? macro 1 : macro 0;
+			cases.push({values: [pattern], guard: null, expr: kindExpr});
+		}
+		for (name in ctorNames) if (matched.indexOf(name) < 0)
+			Context.fatalError(
+				'WriterLowering: @:fmt(blankLinesAfterCtor) ctor "$name" not found in enum $enumRuleName',
+				Context.currentPos()
+			);
+		return {
+			classifierFieldName: fieldName,
+			classifyCases: cases,
+			optField: optField,
+		};
+	}
 }
 
 /** Output of WriterLowering for one rule. */
@@ -3080,5 +3214,32 @@ typedef InterMemberClassifyInfo = {
 	betweenVarsField:String,
 	betweenFunctionsField:String,
 	afterVarsField:String,
+};
+
+/**
+ * ω-after-package — resolved data for
+ * `@:fmt(blankLinesAfterCtor(classifierField, CtorName1, [CtorName2, …], optField))`.
+ * Produced by `WriterLowering.buildAfterCtorBlankInfo` and spliced
+ * into `triviaEofStarExpr`'s per-element loop to drive a forced
+ * minimum number of blank lines after any element whose classifier
+ * matches one of the named ctors.
+ *
+ * `classifyCases` is a ready-to-use exhaustive `ESwitch` case list:
+ * each enum variant present in the classifier target enum maps to
+ * either kind `1` (matches one of the configured ctor names) or
+ * kind `0` (no match). The runtime gate then reads
+ * `_prevKindAfter == 1 ? opt.<optField> : 0` and composes the result
+ * with the source-captured `blankBefore` flag via `max`.
+ *
+ * `optField` is the `HxModuleWriteOptions` Int field name read at
+ * runtime (e.g. `afterPackage`). Single-axis: one knob, one option,
+ * one field — for multiple "after-X" rules on the same Star, repeat
+ * the `@:fmt(...)` umbrella entry with different ctor names and a
+ * different `optField`.
+ */
+typedef AfterCtorBlankInfo = {
+	classifierFieldName:String,
+	classifyCases:Array<Case>,
+	optField:String,
 };
 #end

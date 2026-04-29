@@ -5,7 +5,7 @@ package anyparse.grammar.haxe.format;
  *
  * Only keys whose runtime knob already exists on `HxModuleWriteOptions`
  * are modelled here. Missing keys (`finalNewline`, `maxAnywhereInFile`,
- * `beforePackage`, `afterPackage`, `betweenTypes`,
+ * `beforePackage`, `betweenTypes`,
  * `lineCommentsBetweenTypes`, `lineCommentsBetweenFunctions`,
  * `betweenSingleLineTypes`, `beforeRightCurly`, `afterLeftCurly`,
  * `afterReturn`, `beforeBlocks`, `afterBlocks`, `enumAbstractEmptyLines`,
@@ -35,6 +35,13 @@ package anyparse.grammar.haxe.format;
  * `HxFormatInterfaceEmptyLinesConfig`). Mirrors `classEmptyLines` for
  * interface members but with separate runtime knobs and 0/0/0 defaults
  * matching haxe-formatter's `InterfaceFieldsEmptyLinesConfig`.
+ *
+ * `afterPackage` added in slice ω-after-package (feeds
+ * `opt.afterPackage`). Non-negative Int — minimum number of blank lines
+ * the writer emits between a top-level `package …;` directive and the
+ * next declaration. Default `1` matches haxe-formatter's
+ * `emptyLines.afterPackage: @:default(1)`. `0` strips any blank line
+ * after `package` regardless of source.
  */
 @:peg typedef HxFormatEmptyLinesSection = {
 
@@ -45,4 +52,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var classEmptyLines:HxFormatClassEmptyLinesConfig;
 
 	@:optional var interfaceEmptyLines:HxFormatInterfaceEmptyLinesConfig;
+
+	@:optional var afterPackage:Int;
 };

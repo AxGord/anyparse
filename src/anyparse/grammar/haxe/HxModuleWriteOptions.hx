@@ -466,6 +466,23 @@ import anyparse.format.WriteOptions;
  *    by default. Independent of `functionTypeHaxe4` (the type-position
  *    `(args) -> ret`) so a config can space one form while keeping the
  *    other tight, mirroring upstream's separate JSON keys.
+ *
+ * Field added in slice ω-after-package (blank-line slot after the
+ * top-level `package …;` directive):
+ *  - `afterPackage` — minimum number of blank lines the writer emits
+ *    between a top-level `PackageDecl` / `PackageEmpty` element and the
+ *    following decl in the same module. `1` (default, matches haxe-
+ *    formatter's `emptyLines.afterPackage: @:default(1)`) inserts one
+ *    blank line after `package …;` even when the source had none. `0`
+ *    strips any blank line after `package` regardless of source.
+ *    Higher counts emit that many blank lines. The knob only triggers
+ *    at sites tagged with
+ *    `@:fmt(blankLinesAfterCtor('decl', 'PackageDecl', 'PackageEmpty', 'afterPackage'))`
+ *    in the grammar — `HxModule.decls` is the only current consumer.
+ *    The same `blankLinesAfterCtor` mechanism is open to future "blank
+ *    line after `import`-group" / "blank line after `typedef`" slices
+ *    by adding an analogous `@:fmt(...)` call against a different opt
+ *    field.
  */
 typedef HxModuleWriteOptions = WriteOptions & {
 	sameLineElse:SameLinePolicy,
@@ -513,4 +530,5 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	indentCaseLabels:Bool,
 	functionTypeHaxe4:WhitespacePolicy,
 	arrowFunctions:WhitespacePolicy,
+	afterPackage:Int,
 };
