@@ -23,12 +23,10 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
  * catch bodies (`} catch (e:T) trace(e);`) see the hardline under
  * `Next` / `FitLine`.
  *
- * `tryBody` (the sibling knob for the `try`→body separator) is
- * deliberately absent: adding a first-field `bodyPolicy` on
- * `HxTryCatchStmt.body` would silence the existing `tryPolicy`
- * knob's `try{` / `try {` collapse semantics via
- * `subStructStartsWithBodyPolicy`'s strip. A separate slice will
- * resolve the conflict.
+ * `tryBody` (the sibling knob for the `try`→body separator) lives in
+ * `HxTryBodyOptionsTest` (slice ω-tryBody) — they co-exist via
+ * `bodyPolicyWrap`'s `kwOwnsInlineSpace` mode so `tryPolicy=None`
+ * + `tryBody=Same` still collapses to `try{…}`.
  */
 @:nullSafety(Strict)
 class HxCatchBodySliceTest extends Test {

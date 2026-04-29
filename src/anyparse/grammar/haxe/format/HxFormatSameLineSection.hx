@@ -52,11 +52,20 @@ package anyparse.grammar.haxe.format;
  * a catch clause's `(name:Type)` header and its body. The loader
  * maps it onto the runtime `catchBody` option on
  * `HxModuleWriteOptions`. Default `Next` mirrors haxe-formatter's
- * `sameLine.catchBody: @:default(Next)`. The sibling `tryBody` knob
- * (gating the `try`→body separator) is intentionally NOT parsed in
- * this slice — first-field `bodyPolicy` on `HxTryCatchStmt.body`
- * would silence the existing `tryPolicy` knob's `try{` collapse
- * semantics. A separate slice will resolve the conflict.
+ * `sameLine.catchBody: @:default(Next)`.
+ *
+ * `tryBody` (ω-tryBody) is the same three-way body-placement knob
+ * shape as `catchBody`, gating the separator between the `try`
+ * keyword and its body at `HxTryCatchStmt.body`. The loader maps
+ * it onto the runtime `tryBody` option on `HxModuleWriteOptions`.
+ * Default `Same` diverges from upstream haxe-formatter's
+ * `sameLine.tryBody: @:default(next)` to match the AxGord fork's
+ * project-level `hxformat.json` (`"sameLine": { "tryBody": "same" }`)
+ * — the corpus we validate against. Co-exists with the
+ * `whitespace.tryPolicy` knob via the `kwOwnsInlineSpace` mode in
+ * `WriterLowering.bodyPolicyWrap` — `tryBody=Same` + `tryPolicy=None`
+ * still collapses to `try{…}`, decoupling the two semantic axes
+ * (body inline-vs-break vs kw-trail-space).
  */
 @:peg typedef HxFormatSameLineSection = {
 
@@ -87,4 +96,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var returnBodySingleLine:HxFormatBodyPolicy;
 
 	@:optional var catchBody:HxFormatBodyPolicy;
+
+	@:optional var tryBody:HxFormatBodyPolicy;
 };

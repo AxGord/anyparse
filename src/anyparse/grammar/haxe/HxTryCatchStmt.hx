@@ -20,6 +20,20 @@ package anyparse.grammar.haxe;
  * `HxCatchClause` (i.e. no `catch` keyword found). Without
  * `@:tryparse`, the last-field heuristic would select EOF mode.
  *
+ * `@:fmt(bodyPolicy('tryBody'), kwPolicy('tryPolicy'))` on `body`
+ * (ω-tryBody) wraps the `try`→body separator through
+ * `WriterLowering.bodyPolicyWrap` in `kwOwnsInlineSpace` mode. The
+ * `bodyPolicy('tryBody')` flag drives the body-placement axis at
+ * runtime (Same/Next/FitLine/Keep). The `kwPolicy('tryPolicy')`
+ * companion names the parent ctor's sibling `WhitespacePolicy` knob
+ * — under the `Same` body layout, the inline gap routes through
+ * `opt.tryPolicy` (After/Both → space, None/Before → empty) so
+ * `tryPolicy=None` + `tryBody=Same` collapses to `try{…}` while
+ * default `tryPolicy=After` + `tryBody=Same` keeps `try {…}`. The
+ * parent Case 3's `subStructStartsWithBodyPolicy` strip predicate
+ * still fires (kw-trail-space slot is null), so the kw-policy logic
+ * is consolidated inside the wrap.
+ *
  * `@:fmt(sameLine("sameLineCatch"))` on `catches` makes the writer's
  * separator between the body and the first catch, and between
  * consecutive catches, runtime-switchable: when the flag is `Same`
@@ -28,6 +42,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxTryCatchStmt = {
-	var body:HxStatement;
+	@:fmt(bodyPolicy('tryBody'), kwPolicy('tryPolicy')) var body:HxStatement;
 	@:trivia @:tryparse @:fmt(sameLine('sameLineCatch')) var catches:Array<HxCatchClause>;
 };

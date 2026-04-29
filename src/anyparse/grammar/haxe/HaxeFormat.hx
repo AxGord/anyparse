@@ -156,6 +156,24 @@ final class HaxeFormat implements TextFormat {
 	 * override (`"sameLine": { "catchBody": "same" | "fitLine" |
 	 * "keep" }`).
 	 *
+	 * `tryBody` (ω-tryBody) defaults to `Same` — diverges from
+	 * upstream haxe-formatter's `sameLine.tryBody: @:default(next)`
+	 * to match the AxGord fork's project-level `hxformat.json`
+	 * (`"sameLine": { "tryBody": "same" }`), which is the corpus
+	 * we validate against. Drives the
+	 * body-placement axis at `HxTryCatchStmt.body`. Block bodies
+	 * stay inline by default — the typical `try { … }` round-trip
+	 * routes through `bodyPolicyWrap`'s block-ctor path where
+	 * `leftCurly` controls the `{` position. Architecturally
+	 * orthogonal to `tryPolicy`: the `Same` inline gap routes
+	 * through `opt.tryPolicy` (`After`/`Both` → space, `None`/
+	 * `Before` → empty) via the `kwOwnsInlineSpace` mode in
+	 * `bodyPolicyWrap`, so `tryPolicy=None` + `tryBody=Same` still
+	 * collapses to `try{…}` while default `tryPolicy=After` +
+	 * `tryBody=Same` keeps `try {…}`. Opting into `Next`/`FitLine`/
+	 * `Keep` requires an explicit `hxformat.json` override
+	 * (`"sameLine": { "tryBody": "next" | "fitLine" | "keep" }`).
+	 *
 	 * `elseIf` (ψ₈) defaults to `Same` — the nested `if` inside an
 	 * `else` clause stays on the same line as `else`, matching
 	 * haxe-formatter's `sameLine.elseIf: @:default(Same)`. This knob
@@ -433,6 +451,7 @@ final class HaxeFormat implements TextFormat {
 		returnBody: BodyPolicy.FitLine,
 		throwBody: BodyPolicy.FitLine,
 		catchBody: BodyPolicy.Next,
+		tryBody: BodyPolicy.Same,
 		leftCurly: BracePlacement.Same,
 		objectFieldColon: WhitespacePolicy.After,
 		typeHintColon: WhitespacePolicy.None,

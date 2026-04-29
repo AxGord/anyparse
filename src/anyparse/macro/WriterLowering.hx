@@ -748,7 +748,18 @@ class WriterLowering {
 					// `)` trail): the trail emits the token literally and
 					// bodyPolicyWrap replaces the default ` ` separator.
 					if (bodyPolicyFlag != null && kwLead == null && leadText == null && !isRaw) {
-						parts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, fieldAccess, refName, hasElseIf, elseFieldName));
+						// ω-tryBody: optional `@:fmt(kwPolicy('<flag>'))` companion
+						// names a sibling `WhitespacePolicy` knob on the parent
+						// ctor (e.g. `tryPolicy` on `HxStatement.TryCatchStmt`).
+						// The `Same` inline separator inside `bodyPolicyWrap`
+						// then routes through `opt.<flag>` so the parent kw-
+						// policy controls the inline gap (empty under `None`,
+						// space under `After`/`Both`). Without the companion
+						// the wrap defaults to `_dt(' ')` and the parent ctor
+						// is responsible for stripping its kw-trail-space (as
+						// before).
+						final kwPolicyFlag:Null<String> = fmtReadString(child, 'kwPolicy');
+						parts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, fieldAccess, refName, hasElseIf, elseFieldName, null, null, null, kwPolicyFlag));
 						justWrappedBody = {access: fieldAccess, typePath: refName};
 					} else {
 						// `@:fmt(leftCurly)` on a bare Ref field (e.g.
@@ -2008,7 +2019,7 @@ class WriterLowering {
 	private function bodyPolicyWrap(
 		flagName:String, writeCall:Expr, bodyValueExpr:Expr, bodyTypePath:String, hasElseIf:Bool,
 		elseFieldName:Null<String>, ?afterKwExpr:Null<Expr>, ?kwLeadingExpr:Null<Expr>,
-		?bodyOnSameLineExpr:Null<Expr>
+		?bodyOnSameLineExpr:Null<Expr>, ?kwPolicyFlagName:Null<String>
 	):Expr {
 		final optFlag:Expr = {
 			expr: EField(macro opt, flagName),
@@ -2019,10 +2030,38 @@ class WriterLowering {
 		// call that renders any captured after-kw trailing / own-line
 		// leading comments and closes with a hardline. When slots are
 		// absent, fall back to the byte-identical pre-slice `_dt(' ')`.
+		//
+		// ω-tryBody (kwOwnsInlineSpace mode): when the field carries a
+		// `@:fmt(kwPolicy('<name>'))` companion meta, `kwPolicyFlagName`
+		// names a sibling `WhitespacePolicy:After`/`Both` knob on the
+		// parent ctor. The `Same` inline separator is then NOT a fixed
+		// `_dt(' ')` — it routes through a runtime switch on
+		// `opt.<kwPolicyFlagName>` so the parent kw-policy controls
+		// whether the inline gap is a space or empty (mirrors the
+		// architecturally orthogonal split between "is body inline?" and
+		// "is there a space after the kw?"). The strip predicate at the
+		// parent Case 3 still fires (kw-trail-space slot is null), so the
+		// kw-policy logic lives entirely inside this wrap. Parent ctors
+		// with no kw-policy knob skip the meta and get the legacy
+		// `_dt(' ')`. Mutually exclusive with `hasKwSlots` —
+		// `HxTryCatchStmt.body` is the only consumer today and the `try`
+		// kw-trivia is captured at the parent ctor level, not threaded.
 		final hasKwSlots:Bool = afterKwExpr != null && kwLeadingExpr != null;
+		final wpPath:Array<String> = ['anyparse', 'format', 'WhitespacePolicy'];
+		final wpAfter:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['After']));
+		final wpBoth:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
+		final kwPolicyInlineSep:Null<Expr> = kwPolicyFlagName == null ? null : {
+			final kwOpt:Expr = {expr: EField(macro opt, kwPolicyFlagName), pos: Context.currentPos()};
+			{
+				expr: ESwitch(kwOpt, [
+					{values: [wpAfter, wpBoth], expr: macro _dt(' '), guard: null},
+				], macro _de()),
+				pos: Context.currentPos(),
+			};
+		};
 		final sameSepNb:Expr = hasKwSlots
 			? macro kwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, false, opt)
-			: macro _dt(' ');
+			: kwPolicyInlineSep ?? macro _dt(' ');
 		final sameLayoutExpr:Expr = macro _dc([$sameSepNb, $writeCall]);
 		final nextLayoutExpr:Expr = macro _dn(_cols, _dc([_dhl(), $writeCall]));
 		// ω-issue-316-curly-both: block-ctor variant — when the body's
@@ -2031,6 +2070,10 @@ class WriterLowering {
 		// `kwGapDoc`'s `nextCurly` parameter (only affects the no-trivia
 		// path; trivia already emits a trailing hardline). For non-slot
 		// sites, a runtime switch picks between `_dhl()` and `_dt(' ')`.
+		// Under `kwOwnsInlineSpace` mode the leftCurly=Same branch routes
+		// through the same kw-policy switch as `sameSepNb` so kw-policy
+		// drives whether the inline gap before a same-line `{` is empty
+		// or one space (`try{` vs `try {`).
 		final bpPathLC:Array<String> = ['anyparse', 'format', 'BracePlacement'];
 		final nextPatLC:Expr = MacroStringTools.toFieldExpr(bpPathLC.concat(['Next']));
 		final isNextExpr:Expr = {
@@ -2039,12 +2082,13 @@ class WriterLowering {
 			], macro false),
 			pos: Context.currentPos(),
 		};
+		final sameSepBlockSameLayout:Expr = kwPolicyInlineSep ?? macro _dt(' ');
 		final sameSepBlock:Expr = hasKwSlots
 			? macro kwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, $isNextExpr, opt)
 			: {
 				expr: ESwitch(macro opt.leftCurly, [
 					{values: [nextPatLC], expr: macro _dhl(), guard: null},
-				], macro _dt(' ')),
+				], sameSepBlockSameLayout),
 				pos: Context.currentPos(),
 			};
 		final blockLayoutExpr:Expr = macro _dc([$sameSepBlock, $writeCall]);

@@ -106,7 +106,15 @@ package anyparse.grammar.haxe;
  *    `WhitespacePolicy` for the gap after the `try` keyword (default
  *    `After` → `try {`; `None` / `Before` collapse to `try{`). Mirrors
  *    `ifPolicy` / `forPolicy` / `whilePolicy` / `switchPolicy` on
- *    sibling control-flow ctors.
+ *    sibling control-flow ctors. Co-exists with `tryBody` on the
+ *    sub-struct's `body` field via the `kwOwnsInlineSpace` mode in
+ *    `WriterLowering.bodyPolicyWrap` (slice ω-tryBody): the parent
+ *    Case 3 strips the kw-trail-space (so the kw-policy slot at this
+ *    level is `null`) and the wrap's `Same` inline separator inside
+ *    `HxTryCatchStmt.body` reads `opt.tryPolicy` to choose between
+ *    space and empty. The body-placement axis (`tryBody`) and the
+ *    kw-trail-space axis (`tryPolicy`) are thus orthogonal at the
+ *    user-facing JSON config level.
  *
  *  - `TryCatchStmtBare` — bare-expression bodies form (ω-statement-
  *    bare-break). `try expr catch (name:Type) expr;` — bodies are

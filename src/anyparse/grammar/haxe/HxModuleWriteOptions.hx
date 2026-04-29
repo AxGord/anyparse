@@ -70,13 +70,28 @@ import anyparse.format.WriteOptions;
  *    flat when it fits within `lineWidth`, otherwise breaks. Block
  *    bodies (`{ … }`) are shape-aware — the typical
  *    `} catch (e:T) { … }` keeps the inline space regardless of the
- *    policy. `tryBody` (gating the `try`→body separator at
- *    `HxTryCatchStmt.body`) is intentionally NOT exposed in this
- *    slice: that field is the first field of `HxTryCatchStmt` and
- *    `WriterLowering`'s `subStructStartsWithBodyPolicy` strip would
- *    silence the existing `tryPolicy:WhitespacePolicy` knob, breaking
- *    `try{` / `try {` collapse semantics. A separate slice will
- *    address the tryPolicy/tryBody co-existence.
+ *    policy.
+ *
+ * Field added in slice ω-tryBody:
+ *  - `tryBody` — same three-way `BodyPolicy` knob shape as
+ *    `catchBody`, gating the body-placement axis at
+ *    `HxTryCatchStmt.body`. Default `Same` diverges from upstream
+ *    haxe-formatter's `sameLine.tryBody: @:default(next)` to match
+ *    the AxGord fork's project-level `hxformat.json` (the corpus we
+ *    validate against, which sets `"sameLine": { "tryBody": "same" }`).
+ *    `Next` always pushes the
+ *    body to the next line; `FitLine` fits-or-breaks; `Keep`
+ *    preserves source. Architecturally orthogonal to `tryPolicy`:
+ *    `tryPolicy` controls the inline whitespace right after the
+ *    `try` keyword (`try{` vs `try {`), `tryBody` controls whether
+ *    the body sits on the same line at all. They compose at runtime
+ *    via the `kwOwnsInlineSpace` mode in `WriterLowering.bodyPolicyWrap`
+ *    — `HxTryCatchStmt.body` carries `@:fmt(bodyPolicy('tryBody'),
+ *    kwPolicy('tryPolicy'))` so the `Same` inline gap routes through
+ *    `opt.tryPolicy` (after/both → space, none/before → empty) rather
+ *    than the legacy fixed `_dt(' ')`. Block bodies (`{ … }`) are
+ *    shape-aware — the leftCurly placement still wins for the brace
+ *    position (`leftCurly=Next` → `try\n{` regardless of `tryBody`).
  *
  * Field added in slice ω-throw-body:
  *  - `throwBody` — same `BodyPolicy` knob shape as `returnBody`,
@@ -583,6 +598,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	returnBody:BodyPolicy,
 	throwBody:BodyPolicy,
 	catchBody:BodyPolicy,
+	tryBody:BodyPolicy,
 	leftCurly:BracePlacement,
 	objectFieldColon:WhitespacePolicy,
 	typeHintColon:WhitespacePolicy,
