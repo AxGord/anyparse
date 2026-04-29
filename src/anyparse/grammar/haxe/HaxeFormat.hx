@@ -330,6 +330,12 @@ final class HaxeFormat implements TextFormat {
 	 * / `HxExpr.WhileExpr`, and `@:fmt(switchPolicy)` on all four switch
 	 * ctors (parens / bare × stmt / expr). Matches haxe-formatter's
 	 * `whitespace.{forPolicy,whilePolicy,switchPolicy}: @:default(After)`.
+	 *
+	 * `tryPolicy` default (ω-try-policy) is `After` — same shape as
+	 * `ifPolicy`, driven by `@:fmt(tryPolicy)` on
+	 * `HxStatement.TryCatchStmt` (block-body form only; the bare-body
+	 * sibling's `bareBodyBreaks` predicate gates the slot to `null`).
+	 * Matches haxe-formatter's `whitespace.tryPolicy: @:default(After)`.
 	 */
 	public var defaultWriteOptions(default, null):HxModuleWriteOptions = {
 		indentChar: Tab,
@@ -361,6 +367,7 @@ final class HaxeFormat implements TextFormat {
 		forPolicy: WhitespacePolicy.After,
 		whilePolicy: WhitespacePolicy.After,
 		switchPolicy: WhitespacePolicy.After,
+		tryPolicy: WhitespacePolicy.After,
 		elseIf: KeywordPlacement.Same,
 		fitLineIfWithElse: false,
 		afterFieldsWithDocComments: CommentEmptyLinesPolicy.One,

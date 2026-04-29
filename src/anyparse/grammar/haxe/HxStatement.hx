@@ -81,7 +81,12 @@ package anyparse.grammar.haxe;
  *    catch clauses are parsed via `HxTryCatchStmt` typedef. Catches
  *    use `@:tryparse` termination (D49). Each catch clause uses
  *    `@:kw('catch') @:lead('(')` on the same field (D50). Bodies
- *    are full `HxStatement`s (typically `BlockStmt`).
+ *    are full `HxStatement`s (typically `BlockStmt`). Carries
+ *    `@:fmt(tryPolicy)` (slice ω-try-policy) — runtime-switchable
+ *    `WhitespacePolicy` for the gap after the `try` keyword (default
+ *    `After` → `try {`; `None` / `Before` collapse to `try{`). Mirrors
+ *    `ifPolicy` / `forPolicy` / `whilePolicy` / `switchPolicy` on
+ *    sibling control-flow ctors.
  *
  *  - `TryCatchStmtBare` — bare-expression bodies form (ω-statement-
  *    bare-break). `try expr catch (name:Type) expr;` — bodies are
@@ -94,7 +99,13 @@ package anyparse.grammar.haxe;
  *    input wins via the source-order precedence; bare-form fixtures
  *    that previously routed through `ExprStmt(TryExpr(...))` (with
  *    expression-form layout) now match here and pick up the
- *    `bareBodyBreaks` shape-aware multi-line layout.
+ *    `bareBodyBreaks` shape-aware multi-line layout. Intentionally
+ *    does NOT carry `@:fmt(tryPolicy)`: the first field's
+ *    `@:fmt(bareBodyBreaks)` triggers the `stripKwTrailingSpace`
+ *    predicate in `WriterLowering.lowerEnumBranch`, which gates the
+ *    kw-trailing-space slot to `null` regardless of the configured
+ *    policy. Carrying the flag here would silently no-op, so it is
+ *    omitted to keep the asymmetry visible in source.
  *
  *  - `BlockStmt` — `{ stmts }` block statement. No keyword guard —
  *    dispatched by the `{` literal. Uses Case 4 in
@@ -143,7 +154,7 @@ enum HxStatement {
 	@:kw('do') @:trail(';')
 	DoWhileStmt(stmt:HxDoWhileStmt);
 
-	@:kw('try')
+	@:kw('try') @:fmt(tryPolicy)
 	TryCatchStmt(stmt:HxTryCatchStmt);
 
 	@:kw('try') @:trail(';')

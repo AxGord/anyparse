@@ -5,9 +5,9 @@ package anyparse.grammar.haxe.format;
  *
  * Only keys whose runtime knob already exists on `HxModuleWriteOptions`
  * are modelled here. Missing keys (`functionTypeHaxe3Policy`,
- * `tryPolicy`, `catchPolicy`, `ternaryPolicy`, …) are silently dropped
- * by the ByName struct parser's `UnknownPolicy.Skip` — they land with
- * the slice that introduces the matching writer knob.
+ * `catchPolicy`, `ternaryPolicy`, …) are silently dropped by the
+ * ByName struct parser's `UnknownPolicy.Skip` — they land with the
+ * slice that introduces the matching writer knob.
  *
  * Added in slice ψ₇ (feeds `opt.objectFieldColon`).
  *
@@ -103,6 +103,17 @@ package anyparse.grammar.haxe.format;
  *    and all four switch ctors (parens / bare × stmt / expr) via
  *    `@:fmt(<knobName>)`. Default `After`; `"onlyBefore"` / `"none"`
  *    collapse the gap.
+ *
+ * Extended in slice ω-try-policy:
+ *  - `tryPolicy` feeds `opt.tryPolicy`. Same shape as `ifPolicy` —
+ *    gates the trailing space after the `try` keyword. Consumed by
+ *    `HxStatement.TryCatchStmt` only (block-body form) via
+ *    `@:fmt(tryPolicy)`. Default `After` emits `try {`;
+ *    `"onlyBefore"` / `"none"` collapse to `try{`. The bare-body
+ *    sibling `TryCatchStmtBare` does NOT carry the flag — its first
+ *    field's `@:fmt(bareBodyBreaks)` triggers the
+ *    `stripKwTrailingSpace` predicate which gates the slot to `null`
+ *    regardless of policy.
  */
 @:peg typedef HxFormatWhitespaceSection = {
 
@@ -129,6 +140,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var whilePolicy:HxFormatWhitespacePolicy;
 
 	@:optional var switchPolicy:HxFormatWhitespacePolicy;
+
+	@:optional var tryPolicy:HxFormatWhitespacePolicy;
 
 	@:optional var addLineCommentSpace:Bool;
 

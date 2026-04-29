@@ -179,6 +179,13 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   (`switch cond { ... }`) honours the same knob — `Before` / `None`
  *   produce a parse-incompatible `switchcond` so the bare form should
  *   keep the default in practice.
+ * - `whitespace.tryPolicy` (ω-try-policy): same enum / same collapse,
+ *   routed to `opt.tryPolicy`. Same shape as `ifPolicy` — gates the
+ *   trailing space after `try`. Default `After` emits `try {`;
+ *   `"onlyBefore"` / `"none"` collapse to `try{`. Consumed by the
+ *   block-form `HxStatement.TryCatchStmt` only — the bare-form
+ *   sibling's `bareBodyBreaks` predicate gates the slot to `null`
+ *   regardless of policy.
  * - `whitespace.addLineCommentSpace` (ω-line-comment-space): boolean —
  *   `true` (default) rewrites captured `//foo` line comments as
  *   `// foo`; decoration runs (`//*****`, `//------`, `////`) survive
@@ -301,6 +308,7 @@ final class HaxeFormatConfigLoader {
 			forPolicy: base.forPolicy,
 			whilePolicy: base.whilePolicy,
 			switchPolicy: base.switchPolicy,
+			tryPolicy: base.tryPolicy,
 			elseIf: base.elseIf,
 			fitLineIfWithElse: base.fitLineIfWithElse,
 			afterFieldsWithDocComments: base.afterFieldsWithDocComments,
@@ -410,6 +418,8 @@ final class HaxeFormatConfigLoader {
 			opt.whilePolicy = whitespaceToRuntime(section.whilePolicy);
 		if (section.switchPolicy != null)
 			opt.switchPolicy = whitespaceToRuntime(section.switchPolicy);
+		if (section.tryPolicy != null)
+			opt.tryPolicy = whitespaceToRuntime(section.tryPolicy);
 		if (section.addLineCommentSpace != null)
 			opt.addLineCommentSpace = section.addLineCommentSpace;
 		final paren:Null<HxFormatParenConfigSection> = section.parenConfig;

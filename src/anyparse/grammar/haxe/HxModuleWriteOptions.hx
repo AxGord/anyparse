@@ -157,6 +157,20 @@ import anyparse.format.WriteOptions;
  *    `Both` is currently equivalent to `After` (the before-keyword slot
  *    belongs to the preceding token's separator).
  *
+ * Field added in slice ω-try-policy:
+ *  - `tryPolicy` — same `WhitespacePolicy` knob shape as `ifPolicy`,
+ *    gating the trailing space after the `try` keyword. Consumed by
+ *    `HxStatement.TryCatchStmt` only (block-body form) via
+ *    `@:fmt(tryPolicy)`. `After` (default) emits `try {`, matching
+ *    the pre-slice fixed trailing space and haxe-formatter's
+ *    effective default. `Before` / `None` collapse to `try{`. The
+ *    bare-body sibling `TryCatchStmtBare` does NOT carry the flag —
+ *    its first field's `@:fmt(bareBodyBreaks)` triggers the
+ *    `stripKwTrailingSpace` predicate which gates the slot to `null`
+ *    regardless of policy. `Both` is currently equivalent to `After`
+ *    (the before-keyword slot belongs to the preceding token's
+ *    separator).
+ *
  * Field added in slice ψ₈ (else-if keyword placement):
  *  - `elseIf` — placement of the nested `if` inside an `else` clause
  *    when the else branch is itself an if statement. `Same` (default,
@@ -475,6 +489,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	forPolicy:WhitespacePolicy,
 	whilePolicy:WhitespacePolicy,
 	switchPolicy:WhitespacePolicy,
+	tryPolicy:WhitespacePolicy,
 	elseIf:KeywordPlacement,
 	fitLineIfWithElse:Bool,
 	afterFieldsWithDocComments:CommentEmptyLinesPolicy,
