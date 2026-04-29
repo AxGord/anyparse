@@ -3220,16 +3220,18 @@ typedef InterMemberClassifyInfo = {
  * ω-after-package — resolved data for
  * `@:fmt(blankLinesAfterCtor(classifierField, CtorName1, [CtorName2, …], optField))`.
  * Produced by `WriterLowering.buildAfterCtorBlankInfo` and spliced
- * into `triviaEofStarExpr`'s per-element loop to drive a forced
- * minimum number of blank lines after any element whose classifier
+ * into `triviaEofStarExpr`'s per-element loop to override the source-
+ * captured blank-line count when the previous element's classifier
  * matches one of the named ctors.
  *
  * `classifyCases` is a ready-to-use exhaustive `ESwitch` case list:
  * each enum variant present in the classifier target enum maps to
  * either kind `1` (matches one of the configured ctor names) or
  * kind `0` (no match). The runtime gate then reads
- * `_prevKindAfter == 1 ? opt.<optField> : 0` and composes the result
- * with the source-captured `blankBefore` flag via `max`.
+ * `_prevKindAfter == 1 ? opt.<optField> : (_t.blankBefore ? 1 : 0)` —
+ * a hard override on match (the source-captured count is discarded),
+ * source-driven otherwise. `0` strips an existing blank line, higher
+ * counts insert that many regardless of source.
  *
  * `optField` is the `HxModuleWriteOptions` Int field name read at
  * runtime (e.g. `afterPackage`). Single-axis: one knob, one option,

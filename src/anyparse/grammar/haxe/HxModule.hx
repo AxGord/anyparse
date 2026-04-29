@@ -33,14 +33,17 @@ package anyparse.grammar.haxe;
  *
  * `@:fmt(blankLinesAfterCtor('decl', 'PackageDecl', 'PackageEmpty', 'afterPackage'))`
  * (slice ω-after-package) instructs the trivia-mode EOF Star path in
- * `WriterLowering.triviaEofStarExpr` to emit at least `opt.afterPackage`
+ * `WriterLowering.triviaEofStarExpr` to emit exactly `opt.afterPackage`
  * blank lines after any element whose `decl` field is `PackageDecl`
- * or `PackageEmpty`. Source-captured blank lines compose with the
- * minimum: when the source already had ≥ `opt.afterPackage` blanks,
- * the captured count wins; the knob only forces a minimum, never a
- * maximum. The same `blankLinesAfterCtor` shape is reusable for any
- * future "blank line after ctor X" slice (e.g. after import-group,
- * after typedef-block) by pointing at a different opt field.
+ * or `PackageEmpty`. Override semantics, not floor: the source-captured
+ * blank-line count is replaced with this value when the previous
+ * element matches a named ctor, so `0` strips an existing blank line
+ * and higher counts insert that many regardless of source. Other
+ * element pairs keep the trivia channel's binary `blankBefore` flag —
+ * one blank line when the source had any, none otherwise. The same
+ * `blankLinesAfterCtor` shape is reusable for any future "blank line
+ * after ctor X" slice (e.g. after import-group, after typedef-block)
+ * by pointing at a different opt field.
  */
 @:peg
 @:schema(anyparse.grammar.haxe.HaxeFormat)

@@ -337,10 +337,13 @@ final class HaxeFormat implements TextFormat {
 	 * sibling's `bareBodyBreaks` predicate gates the slot to `null`).
 	 * Matches haxe-formatter's `whitespace.tryPolicy: @:default(After)`.
 	 *
-	 * `afterPackage` default (ω-after-package) is `1` — minimum number
-	 * of blank lines between the top-level `package …;` directive and
-	 * the next decl. Matches haxe-formatter's
-	 * `emptyLines.afterPackage: @:default(1)`. Driven by
+	 * `afterPackage` default (ω-after-package) is `1` — exact number of
+	 * blank lines between the top-level `package …;` directive and the
+	 * next decl. Override semantics: the source-captured blank-line
+	 * count is replaced with this value, so `0` strips an existing
+	 * blank line and `2` doubles one regardless of source. Matches
+	 * haxe-formatter's `emptyLines.afterPackage: @:default(1)`. Driven
+	 * by
 	 * `@:fmt(blankLinesAfterCtor('decl', 'PackageDecl', 'PackageEmpty', 'afterPackage'))`
 	 * on `HxModule.decls` and consumed by the trivia-mode EOF Star path
 	 * in `WriterLowering.triviaEofStarExpr`.

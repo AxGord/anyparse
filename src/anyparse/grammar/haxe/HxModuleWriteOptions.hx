@@ -469,12 +469,15 @@ import anyparse.format.WriteOptions;
  *
  * Field added in slice ω-after-package (blank-line slot after the
  * top-level `package …;` directive):
- *  - `afterPackage` — minimum number of blank lines the writer emits
+ *  - `afterPackage` — exact number of blank lines the writer emits
  *    between a top-level `PackageDecl` / `PackageEmpty` element and the
- *    following decl in the same module. `1` (default, matches haxe-
- *    formatter's `emptyLines.afterPackage: @:default(1)`) inserts one
- *    blank line after `package …;` even when the source had none. `0`
- *    strips any blank line after `package` regardless of source.
+ *    following decl in the same module. Override semantics, not floor:
+ *    the source-captured blank-line count is always replaced with this
+ *    value when the previous element is a package decl. `1` (default,
+ *    matches haxe-formatter's
+ *    `emptyLines.afterPackage: @:default(1)`) inserts one blank line
+ *    after `package …;` even when the source had none. `0` strips any
+ *    blank line after `package` even when the source carried one.
  *    Higher counts emit that many blank lines. The knob only triggers
  *    at sites tagged with
  *    `@:fmt(blankLinesAfterCtor('decl', 'PackageDecl', 'PackageEmpty', 'afterPackage'))`

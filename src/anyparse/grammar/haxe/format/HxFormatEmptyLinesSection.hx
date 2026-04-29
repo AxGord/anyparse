@@ -37,11 +37,13 @@ package anyparse.grammar.haxe.format;
  * matching haxe-formatter's `InterfaceFieldsEmptyLinesConfig`.
  *
  * `afterPackage` added in slice ω-after-package (feeds
- * `opt.afterPackage`). Non-negative Int — minimum number of blank lines
+ * `opt.afterPackage`). Non-negative Int — exact number of blank lines
  * the writer emits between a top-level `package …;` directive and the
- * next declaration. Default `1` matches haxe-formatter's
- * `emptyLines.afterPackage: @:default(1)`. `0` strips any blank line
- * after `package` regardless of source.
+ * next declaration. Override semantics, not floor: the source-captured
+ * blank-line count is always replaced with this value, so `0` strips
+ * any blank line after `package` even when the source had one and `2`
+ * emits two blank lines even when the source had none. Default `1`
+ * matches haxe-formatter's `emptyLines.afterPackage: @:default(1)`.
  */
 @:peg typedef HxFormatEmptyLinesSection = {
 

@@ -243,9 +243,11 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   before such a field.
  * - `emptyLines.afterPackage` (ω-after-package): non-negative Int routed
  *   to `opt.afterPackage`. Default `1` matches haxe-formatter's
- *   `emptyLines.afterPackage: @:default(1)`. Drives the minimum number
+ *   `emptyLines.afterPackage: @:default(1)`. Drives the exact number
  *   of blank lines between a top-level `package …;` decl and the next
- *   decl in the same module.
+ *   decl in the same module — override semantics, not floor: the
+ *   source-captured blank-line count is replaced with this value, so
+ *   `0` strips any existing blank line and `2` always emits two.
  *
  * Deliberately NOT supported in this slice (no corresponding
  * `HxModuleWriteOptions` field yet): `wrapping.*` beyond
