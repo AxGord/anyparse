@@ -325,10 +325,18 @@ class WriterCodegen {
 	 * layout. Empty lists short-circuit to `_dt(open + close)` and skip
 	 * inside padding regardless — `< >` for `Array<>` would be visually
 	 * surprising and no fixture asks for it.
+	 *
+	 * `keepInnerWhenEmpty` (slice ω-anon-fn-empty-paren-inner-space) —
+	 * when `true` AND the list is empty, splices a single space between
+	 * the open and close literals (`( )` instead of `()`). Routed by
+	 * `WriterLowering.keepInnerWhenEmptyExpr` from a per-field
+	 * `@:fmt(keepInnerWhenEmpty('<flagName>'))` annotation; default
+	 * `false` preserves the pre-slice tight emission for every other
+	 * sepList caller that does not opt in.
 	 */
 	private static function sepListField():Field {
 		final body:Expr = macro {
-			if (items.length == 0) return _dt(open + close);
+			if (items.length == 0) return _dt(open + (keepInnerWhenEmpty ? ' ' : '') + close);
 			final _inner:Array<anyparse.core.Doc> = [];
 			var _i:Int = 0;
 			while (_i < items.length) {
@@ -360,6 +368,7 @@ class WriterCodegen {
 					{name: 'trailingComma', type: macro : Bool},
 					{name: 'openInside', type: macro : anyparse.core.Doc},
 					{name: 'closeInside', type: macro : anyparse.core.Doc},
+					{name: 'keepInnerWhenEmpty', type: macro : Bool},
 				],
 				ret: macro : anyparse.core.Doc,
 				expr: body,

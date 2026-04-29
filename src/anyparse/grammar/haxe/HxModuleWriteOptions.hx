@@ -191,6 +191,16 @@ import anyparse.format.WriteOptions;
  *    slot is the only switchable axis. Independent of `funcParamParens`
  *    so callers can keep `HxFnDecl` declarations tight while flipping
  *    anon-fn expression spacing (or vice versa).
+ *  - `anonFuncParamParensKeepInnerWhenEmpty` (slice
+ *    ω-anon-fn-empty-paren-inner-space) — when `true`, an empty
+ *    anonymous-function parameter list emits a single inside space
+ *    (`function ( ) body`); default `false` keeps the tight
+ *    `function()`. Driven by haxe-formatter's
+ *    `whitespace.parenConfig.anonFuncParamParens.removeInnerWhenEmpty`
+ *    (inverted at the loader: `false` in JSON → `true` in opt). Read
+ *    by `HxFnExpr.params`'s `@:fmt(keepInnerWhenEmpty(...))` and
+ *    routed through `sepList`'s `keepInnerWhenEmpty` arg — orthogonal
+ *    to the `anonFuncParens` outside-before-open knob.
  *  - `callParens` — whitespace before the opening `(` of a call
  *    expression's argument list (`HxExpr.Call.args`).
  *    `None` (default) keeps the tight pre-slice layout (`trace(x)`).
@@ -606,6 +616,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	funcParamParens:WhitespacePolicy,
 	callParens:WhitespacePolicy,
 	anonFuncParens:WhitespacePolicy,
+	anonFuncParamParensKeepInnerWhenEmpty:Bool,
 	ifPolicy:WhitespacePolicy,
 	forPolicy:WhitespacePolicy,
 	whilePolicy:WhitespacePolicy,

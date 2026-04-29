@@ -356,7 +356,7 @@ class WriterLowering {
 		// `openDelimPolicySpace` returns null when the flag is absent so
 		// the pre-slice tight emission stays byte-identical.
 		final openSpace:Null<Expr> = openDelimPolicySpace(branch, ['callParens']);
-		final sepListCall:Expr = macro sepList($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr, _de(), _de());
+		final sepListCall:Expr = macro sepList($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr, _de(), _de(), false);
 		final dcArgs:Array<Expr> = [operandCall];
 		if (openSpace != null) dcArgs.push(openSpace);
 		dcArgs.push(sepListCall);
@@ -447,7 +447,7 @@ class WriterLowering {
 						_docs.push($elemCall);
 						_i++;
 					}
-					sepList($v{leadText}, $v{trailText}, $v{sepText}, _docs, opt, $tcExpr, $openInsideExpr, $closeInsideExpr);
+					sepList($v{leadText}, $v{trailText}, $v{sepText}, _docs, opt, $tcExpr, $openInsideExpr, $closeInsideExpr, false);
 				});
 			}
 		} else {
@@ -1162,6 +1162,7 @@ class WriterLowering {
 			final tcExpr:Expr = trailingCommaExpr(starNode);
 			final openInsideExpr:Expr = delimInsidePolicySpace(starNode, ['typeParamOpen', 'objectLiteralBracesOpen'], false) ?? macro _de();
 			final closeInsideExpr:Expr = delimInsidePolicySpace(starNode, ['typeParamClose', 'objectLiteralBracesClose'], true) ?? macro _de();
+			final keepInnerExpr:Expr = keepInnerWhenEmptyExpr(starNode);
 			parts.push(macro {
 				final _arr = $fieldAccess;
 				final _docs:Array<anyparse.core.Doc> = [];
@@ -1170,7 +1171,7 @@ class WriterLowering {
 					_docs.push($elemCall);
 					_si++;
 				}
-				sepList($v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $tcExpr, $openInsideExpr, $closeInsideExpr);
+				sepList($v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $tcExpr, $openInsideExpr, $closeInsideExpr, $keepInnerExpr);
 			});
 		} else if (closeText != null) {
 			if (!isFirstField && !isRaw && isSpacedLead(openText)) parts.push(leftCurlySeparator(starNode));
@@ -2315,6 +2316,27 @@ class WriterLowering {
 	 */
 	private static function trailingCommaExpr(node:ShapeNode):Expr {
 		final flagName:Null<String> = fmtReadString(node, 'trailingComma');
+		if (flagName == null) return macro false;
+		return {
+			expr: EField(macro opt, flagName),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * Return a `Bool`-valued expression for the `keepInnerWhenEmpty`
+	 * argument of `sepList`. Returns `macro false` when the field
+	 * carries no `@:fmt(keepInnerWhenEmpty("flagName"))` knob, else
+	 * `macro opt.<flagName>` so the knob is resolved at runtime.
+	 *
+	 * Today only struct Star fields opt in (`HxFnExpr.params` →
+	 * `anonFuncParamParensKeepInnerWhenEmpty`). The two other `sepList`
+	 * call sites (postfix Star, enum Case 4 Star) pass `false`
+	 * directly — they have no fixture demand for the inside-space-on-
+	 * empty shape and the literal keeps the macro dependency narrow.
+	 */
+	private static function keepInnerWhenEmptyExpr(node:ShapeNode):Expr {
+		final flagName:Null<String> = fmtReadString(node, 'keepInnerWhenEmpty');
 		if (flagName == null) return macro false;
 		return {
 			expr: EField(macro opt, flagName),

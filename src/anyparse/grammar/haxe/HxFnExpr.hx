@@ -37,7 +37,7 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxFnExpr = {
-	@:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams')) var params:Array<HxLambdaParam>;
+	@:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams'), keepInnerWhenEmpty('anonFuncParamParensKeepInnerWhenEmpty')) var params:Array<HxLambdaParam>;
 	@:optional @:fmt(typeHintColon) @:lead(':') var returnType:Null<HxType>;
 	@:fmt(leftCurly) var body:HxFnExprBody;
 }

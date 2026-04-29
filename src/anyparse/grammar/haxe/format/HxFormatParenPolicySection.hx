@@ -12,10 +12,21 @@ package anyparse.grammar.haxe.format;
  * reserves a wired-up slot for the future close-paren writer knob.
  * Today the loader reads `openingPolicy` only (`HaxeFormatConfigLoader
  * .applyWhitespace`).
+ *
+ * `removeInnerWhenEmpty` (slice ω-anon-fn-empty-paren-inner-space):
+ * when explicitly set to `false` on `anonFuncParamParens`, the writer
+ * preserves a single inside space for an empty parameter list
+ * (`function ( ) body`). Default `true` collapses to the tight
+ * `function()` regardless of `openingPolicy`/`closingPolicy`.
+ * Recognised on `anonFuncParamParens` only today — sibling kinds
+ * (`funcParamParens`, `callParens`, …) still parse and silently
+ * ignore the key until a writer knob catches up.
  */
 @:peg typedef HxFormatParenPolicySection = {
 
 	@:optional var openingPolicy:HxFormatWhitespacePolicy;
 
 	@:optional var closingPolicy:HxFormatWhitespacePolicy;
+
+	@:optional var removeInnerWhenEmpty:Bool;
 };

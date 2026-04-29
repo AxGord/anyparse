@@ -67,6 +67,7 @@ import unit.HxIfPolicyOptionsTest;
 import unit.HxControlFlowPoliciesOptionsTest;
 import unit.HxTryPolicyOptionsTest;
 import unit.HxAnonFuncParensOptionsTest;
+import unit.HxAnonFuncEmptyParensInnerSpaceOptionsTest;
 import unit.HxInterMemberBlankLinesOptionsTest;
 import unit.HxInterfaceInterMemberBlankLinesOptionsTest;
 import unit.HxAfterPackageSliceTest;
@@ -170,6 +171,7 @@ class RunTests {
 		runner.addCase(new HxControlFlowPoliciesOptionsTest());
 		runner.addCase(new HxTryPolicyOptionsTest());
 		runner.addCase(new HxAnonFuncParensOptionsTest());
+		runner.addCase(new HxAnonFuncEmptyParensInnerSpaceOptionsTest());
 		runner.addCase(new HxInterMemberBlankLinesOptionsTest());
 		runner.addCase(new HxInterfaceInterMemberBlankLinesOptionsTest());
 		runner.addCase(new HxAfterPackageSliceTest());

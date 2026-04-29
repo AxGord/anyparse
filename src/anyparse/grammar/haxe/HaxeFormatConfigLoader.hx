@@ -122,9 +122,14 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   between the `function` keyword and the opening `(` of an
  *   anonymous-function expression (`function (args)…`); `After` /
  *   `None` collapse the gap to `function(args)…`. The sibling
- *   `closingPolicy` and `removeInnerWhenEmpty` keys are parsed and
- *   silently ignored — the `( )` interior-padding axis (covering
- *   `issue_251`-style `function ( ) …`) is not yet wired.
+ *   `closingPolicy` key is parsed and silently ignored.
+ * - `whitespace.parenConfig.anonFuncParamParens.removeInnerWhenEmpty`
+ *   (ω-anon-fn-empty-paren-inner-space): boolean inverted at the
+ *   loader and routed to `opt.anonFuncParamParensKeepInnerWhenEmpty`
+ *   (`false` in JSON → `true` in opt). Default `true` collapses an
+ *   empty anon-fn parameter list to the tight `function()`; setting
+ *   `false` keeps a single inside space (`function ( ) body`,
+ *   haxe-formatter `issue_251_space_after_anon_function_empty`).
  * - `whitespace.typeParamOpenPolicy` (ω-typeparam-spacing): same enum
  *   / same collapse, routed to `opt.typeParamOpen`. `Before` / `Both`
  *   emit a space outside before `<`; `After` / `Both` emit a space
@@ -335,6 +340,7 @@ final class HaxeFormatConfigLoader {
 			funcParamParens: base.funcParamParens,
 			callParens: base.callParens,
 			anonFuncParens: base.anonFuncParens,
+			anonFuncParamParensKeepInnerWhenEmpty: base.anonFuncParamParensKeepInnerWhenEmpty,
 			ifPolicy: base.ifPolicy,
 			forPolicy: base.forPolicy,
 			whilePolicy: base.whilePolicy,
@@ -467,8 +473,12 @@ final class HaxeFormatConfigLoader {
 			if (call != null && call.openingPolicy != null)
 				opt.callParens = whitespaceToRuntime(call.openingPolicy);
 			final anonFunc:Null<HxFormatParenPolicySection> = paren.anonFuncParamParens;
-			if (anonFunc != null && anonFunc.openingPolicy != null)
-				opt.anonFuncParens = whitespaceToRuntime(anonFunc.openingPolicy);
+			if (anonFunc != null) {
+				if (anonFunc.openingPolicy != null)
+					opt.anonFuncParens = whitespaceToRuntime(anonFunc.openingPolicy);
+				if (anonFunc.removeInnerWhenEmpty != null)
+					opt.anonFuncParamParensKeepInnerWhenEmpty = !anonFunc.removeInnerWhenEmpty;
+			}
 		}
 		final braces:Null<HxFormatBracesConfigSection> = section.bracesConfig;
 		if (braces != null) {

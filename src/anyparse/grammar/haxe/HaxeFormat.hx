@@ -237,6 +237,13 @@ final class HaxeFormat implements TextFormat {
 	 * `whitespace.parenConfig.anonFuncParamParens.openingPolicy:
 	 * "before"` in `hxformat.json`.
 	 *
+	 * `anonFuncParamParensKeepInnerWhenEmpty` default
+	 * (ω-anon-fn-empty-paren-inner-space) is `false` — an empty
+	 * anonymous-function parameter list emits the tight `function()`.
+	 * Setting `whitespace.parenConfig.anonFuncParamParens.removeInnerWhenEmpty:
+	 * false` in `hxformat.json` flips the runtime knob to `true`,
+	 * yielding `function ( ) body` (haxe-formatter parity).
+	 *
 	 * `fitLineIfWithElse` default (ψ₁₂) is `false` — when an `if` has
 	 * an `else` and the body policies are `FitLine`, the bodies fall
 	 * back to the `Next` layout instead of flat-or-break. Matches
@@ -459,6 +466,7 @@ final class HaxeFormat implements TextFormat {
 		funcParamParens: WhitespacePolicy.None,
 		callParens: WhitespacePolicy.None,
 		anonFuncParens: WhitespacePolicy.None,
+		anonFuncParamParensKeepInnerWhenEmpty: false,
 		ifPolicy: WhitespacePolicy.After,
 		forPolicy: WhitespacePolicy.After,
 		whilePolicy: WhitespacePolicy.After,
