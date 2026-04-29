@@ -282,16 +282,30 @@ class WriterLowering {
 				|| subStructStartsWithBodyBreak(refName)
 				|| subStructStartsWithBareBodyBreaks(refName)
 				|| subStructStartsWithTightLead(refName);
-			// ω-if-policy / ω-control-flow-policies / ω-try-policy: an
-			// enum branch with `@:fmt(<flag>)` whose runtime value is
-			// `WhitespacePolicy` opts into a runtime-switched trailing
-			// space after the kw, mirroring `funcParamParens` /
-			// `callParens` on the open-delim side. Returns null when no
-			// flag matches so non-policy branches keep the pre-slice
-			// `kwLead + ' '` (or stripped) emission.
-			final kwTrailSpace:Null<Expr> = stripKwTrailingSpace
+			// ω-if-policy / ω-control-flow-policies / ω-try-policy /
+			// ω-anon-fn-paren-policy: an enum branch with `@:fmt(<flag>)`
+			// whose runtime value is `WhitespacePolicy` opts into a
+			// runtime-switched trailing space after the kw. Two semantic
+			// flavours feed the SAME slot:
+			//  - kw-side (`After`/`Both` → space) for control-flow knobs
+			//    `ifPolicy` / `forPolicy` / `whilePolicy` / `switchPolicy`
+			//    / `tryPolicy` — JSON name like `"onlyAfter"` reads as
+			//    "after the kw".
+			//  - paren-side (`Before`/`Both` → space) for `anonFuncParens`,
+			//    matching haxe-formatter's
+			//    `whitespace.parenConfig.anonFuncParamParens.openingPolicy`
+			//    naming (sibling of `funcParamParens` / `callParens`).
+			// `firstFmtFlag` partitions the lookup so a branch carries at
+			// most one of the two flag families. Both helpers return null
+			// when no flag matches, letting non-policy branches keep the
+			// pre-slice `kwLead + ' '` (or stripped) emission.
+			final kwSidePolicySpace:Null<Expr> = stripKwTrailingSpace
 				? null
 				: kwTrailingSpacePolicy(branch, ['ifPolicy', 'forPolicy', 'whilePolicy', 'switchPolicy', 'tryPolicy']);
+			final parenSidePolicySpace:Null<Expr> = stripKwTrailingSpace
+				? null
+				: kwTrailingSpacePolicyParenSide(branch, ['anonFuncParens']);
+			final kwTrailSpace:Null<Expr> = kwSidePolicySpace ?? parenSidePolicySpace;
 			final parts:Array<Expr> = [];
 			if (kwLead != null) {
 				if (kwTrailSpace != null) {
@@ -1745,8 +1759,12 @@ class WriterLowering {
 	 * config knob controls both statement- and expression-form
 	 * `for(...)` / `for (...)`, `while(...)` / `while (...)`,
 	 * `switch(cond)` / `switch (cond)` (and bare `switch cond`) spacing,
-	 * and by `@:fmt(tryPolicy)` on `HxStatement.TryCatchStmt` (slice
-	 * ω-try-policy) gating `try {` / `try{`. The bare-body try sibling
+	 * by `@:fmt(tryPolicy)` on `HxStatement.TryCatchStmt` (slice
+	 * ω-try-policy) gating `try {` / `try{`, and by
+	 * `@:fmt(anonFuncParens)` on `HxExpr.FnExpr(fn:HxFnExpr)` (slice
+	 * ω-anon-fn-paren-policy) gating `function (args)…` /
+	 * `function(args)…` independently of `funcParamParens` (which
+	 * targets `HxFnDecl.params`). The bare-body try sibling
 	 * `TryCatchStmtBare` does NOT carry the flag — its first field's
 	 * `@:fmt(bareBodyBreaks)` strips the kw-trailing-space slot.
 	 */
@@ -1758,6 +1776,38 @@ class WriterLowering {
 		final bothPat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
 		final cases:Array<Case> = [
 			{values: [afterPat, bothPat], expr: macro _dt(' '), guard: null},
+		];
+		final optAccess:Expr = {expr: EField(macro opt, flagName), pos: Context.currentPos()};
+		return {expr: ESwitch(optAccess, cases, macro _de()), pos: Context.currentPos()};
+	}
+
+	/**
+	 * Paren-side counterpart of `kwTrailingSpacePolicy` — same kw-after
+	 * slot, but the `WhitespacePolicy` value names the gap from the
+	 * FOLLOWING open-delimiter's perspective. `Before` / `Both` mean
+	 * "space immediately before the `(`" (= space after the kw); `After`
+	 * / `None` mean no space in this slot.
+	 *
+	 * Consumed by `@:fmt(anonFuncParens)` on `HxExpr.FnExpr(fn:HxFnExpr)`
+	 * (slice ω-anon-fn-paren-policy) so the JSON config name
+	 * `whitespace.parenConfig.anonFuncParamParens.openingPolicy: "before"`
+	 * round-trips intuitively to `opt.anonFuncParens =
+	 * WhitespacePolicy.Before` and emits the expected `function (args)…`
+	 * spacing — matching the haxe-formatter convention where
+	 * `anonFuncParamParens` policies name the gap from the paren side
+	 * (siblings `funcParamParens`, `callParens`).
+	 *
+	 * Returned Expr shape mirrors `kwTrailingSpacePolicy`; only the
+	 * Before/After mapping flips.
+	 */
+	private static function kwTrailingSpacePolicyParenSide(branch:ShapeNode, flagNames:Array<String>):Null<Expr> {
+		final flagName:Null<String> = firstFmtFlag(branch, flagNames);
+		if (flagName == null) return null;
+		final wpPath:Array<String> = ['anyparse', 'format', 'WhitespacePolicy'];
+		final beforePat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Before']));
+		final bothPat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
+		final cases:Array<Case> = [
+			{values: [beforePat, bothPat], expr: macro _dt(' '), guard: null},
 		];
 		final optAccess:Expr = {expr: EField(macro opt, flagName), pos: Context.currentPos()};
 		return {expr: ESwitch(optAccess, cases, macro _de()), pos: Context.currentPos()};

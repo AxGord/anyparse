@@ -145,6 +145,19 @@ import anyparse.format.WriteOptions;
  *    writer's `sepList` does not expose a post-open-paren padding
  *    point. Only `HxFnDecl.params` carries the flag — call sites,
  *    `new T(...)` args, and `(expr)` ParenExpr stay tight regardless.
+ *  - `anonFuncParens` — whitespace AFTER the `function` keyword (=
+ *    BEFORE the opening `(`) of an anonymous-function expression
+ *    (`HxExpr.FnExpr(fn:HxFnExpr)`). `None` (default) drops the
+ *    pre-slice fixed `function ` trailing space, emitting tight
+ *    `function(args)…` — matching haxe-formatter's
+ *    `whitespace.parenConfig.anonFuncParamParens.openingPolicy:
+ *    @:default(None)` (the `auto` enum collapses to `None` here, the
+ *    upstream `auto` heuristic is not modelled). `Before` / `Both`
+ *    keep the space (`function (args)…`), matching `"before"`. `After`
+ *    is accepted for parity but produces no space — the kw-trailing
+ *    slot is the only switchable axis. Independent of `funcParamParens`
+ *    so callers can keep `HxFnDecl` declarations tight while flipping
+ *    anon-fn expression spacing (or vice versa).
  *  - `callParens` — whitespace before the opening `(` of a call
  *    expression's argument list (`HxExpr.Call.args`).
  *    `None` (default) keeps the tight pre-slice layout (`trace(x)`).
@@ -557,6 +570,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	typeCheckColon:WhitespacePolicy,
 	funcParamParens:WhitespacePolicy,
 	callParens:WhitespacePolicy,
+	anonFuncParens:WhitespacePolicy,
 	ifPolicy:WhitespacePolicy,
 	forPolicy:WhitespacePolicy,
 	whilePolicy:WhitespacePolicy,

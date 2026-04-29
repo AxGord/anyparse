@@ -116,6 +116,15 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   `HxExpr.Call.args` (`trace (x)`); `After` / `None` leave the paren
  *   tight. The sibling `closingPolicy` key is parsed and silently
  *   ignored.
+ * - `whitespace.parenConfig.anonFuncParamParens.openingPolicy`
+ *   (ω-anon-fn-paren-policy): same enum, routed to
+ *   `opt.anonFuncParens`. `Before` / `Both` emit a single space
+ *   between the `function` keyword and the opening `(` of an
+ *   anonymous-function expression (`function (args)…`); `After` /
+ *   `None` collapse the gap to `function(args)…`. The sibling
+ *   `closingPolicy` and `removeInnerWhenEmpty` keys are parsed and
+ *   silently ignored — the `( )` interior-padding axis (covering
+ *   `issue_251`-style `function ( ) …`) is not yet wired.
  * - `whitespace.typeParamOpenPolicy` (ω-typeparam-spacing): same enum
  *   / same collapse, routed to `opt.typeParamOpen`. `Before` / `Both`
  *   emit a space outside before `<`; `After` / `Both` emit a space
@@ -323,6 +332,7 @@ final class HaxeFormatConfigLoader {
 			typeCheckColon: base.typeCheckColon,
 			funcParamParens: base.funcParamParens,
 			callParens: base.callParens,
+			anonFuncParens: base.anonFuncParens,
 			ifPolicy: base.ifPolicy,
 			forPolicy: base.forPolicy,
 			whilePolicy: base.whilePolicy,
@@ -452,6 +462,9 @@ final class HaxeFormatConfigLoader {
 			final call:Null<HxFormatParenPolicySection> = paren.callParens;
 			if (call != null && call.openingPolicy != null)
 				opt.callParens = whitespaceToRuntime(call.openingPolicy);
+			final anonFunc:Null<HxFormatParenPolicySection> = paren.anonFuncParamParens;
+			if (anonFunc != null && anonFunc.openingPolicy != null)
+				opt.anonFuncParens = whitespaceToRuntime(anonFunc.openingPolicy);
 		}
 		final braces:Null<HxFormatBracesConfigSection> = section.bracesConfig;
 		if (braces != null) {

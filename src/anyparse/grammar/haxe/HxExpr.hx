@@ -295,7 +295,7 @@ enum HxExpr {
 	@:kw('return')
 	ReturnExpr(value:HxExpr);
 
-	@:kw('function')
+	@:kw('function') @:fmt(anonFuncParens)
 	FnExpr(fn:HxFnExpr);
 
 	MetaExpr(v:HxMetaExpr);

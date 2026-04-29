@@ -194,6 +194,19 @@ final class HaxeFormat implements TextFormat {
 	 * `whitespace.parenConfig.callParens.openingPolicy:
 	 * @:default(None)`.
 	 *
+	 * Anon-func-parens default (ω-anon-fn-paren-policy) is `None` — no
+	 * space between `function` and the opening `(` of an
+	 * `HxExpr.FnExpr(fn:HxFnExpr)` anonymous function (tight
+	 * `function(args)…`). The pre-slice writer hardcoded a trailing
+	 * space on the `function` kw (yielding `function (args)…`); the
+	 * `None` default flips to the upstream haxe-formatter shape so the
+	 * common idiom `function() {…}` round-trips byte-identically.
+	 * Callers who want `function (args)…` must pass
+	 * `anonFuncParens: WhitespacePolicy.Before` (or `Both`)
+	 * explicitly, or set
+	 * `whitespace.parenConfig.anonFuncParamParens.openingPolicy:
+	 * "before"` in `hxformat.json`.
+	 *
 	 * `fitLineIfWithElse` default (ψ₁₂) is `false` — when an `if` has
 	 * an `else` and the body policies are `FitLine`, the bodies fall
 	 * back to the `Next` layout instead of flat-or-break. Matches
@@ -413,6 +426,7 @@ final class HaxeFormat implements TextFormat {
 		typeCheckColon: WhitespacePolicy.Both,
 		funcParamParens: WhitespacePolicy.None,
 		callParens: WhitespacePolicy.None,
+		anonFuncParens: WhitespacePolicy.None,
 		ifPolicy: WhitespacePolicy.After,
 		forPolicy: WhitespacePolicy.After,
 		whilePolicy: WhitespacePolicy.After,
