@@ -268,16 +268,16 @@ enum HxExpr {
 	@:kw('if') @:fmt(ifPolicy)
 	IfExpr(stmt:HxIfExpr);
 
-	@:kw('for')
+	@:kw('for') @:fmt(forPolicy)
 	ForExpr(stmt:HxForExpr);
 
-	@:kw('while')
+	@:kw('while') @:fmt(whilePolicy)
 	WhileExpr(stmt:HxWhileExpr);
 
-	@:kw('switch')
+	@:kw('switch') @:fmt(switchPolicy)
 	SwitchExpr(stmt:HxSwitchStmt);
 
-	@:kw('switch')
+	@:kw('switch') @:fmt(switchPolicy)
 	SwitchExprBare(stmt:HxSwitchStmtBare);
 
 	@:kw('try')

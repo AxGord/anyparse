@@ -265,15 +265,16 @@ class WriterLowering {
 				|| subStructStartsWithBodyBreak(refName)
 				|| subStructStartsWithBareBodyBreaks(refName)
 				|| subStructStartsWithTightLead(refName);
-			// ω-if-policy: an enum branch with `@:fmt(<flag>)` whose runtime
-			// value is `WhitespacePolicy` opts into a runtime-switched
-			// trailing space after the kw, mirroring `funcParamParens` /
-			// `callParens` on the open-delim side. Returns null when no
-			// flag matches so non-policy branches keep the pre-slice
-			// `kwLead + ' '` (or stripped) emission.
+			// ω-if-policy / ω-control-flow-policies: an enum branch with
+			// `@:fmt(<flag>)` whose runtime value is `WhitespacePolicy`
+			// opts into a runtime-switched trailing space after the kw,
+			// mirroring `funcParamParens` / `callParens` on the open-delim
+			// side. Returns null when no flag matches so non-policy
+			// branches keep the pre-slice `kwLead + ' '` (or stripped)
+			// emission.
 			final kwTrailSpace:Null<Expr> = stripKwTrailingSpace
 				? null
-				: kwTrailingSpacePolicy(branch, ['ifPolicy']);
+				: kwTrailingSpacePolicy(branch, ['ifPolicy', 'forPolicy', 'whilePolicy', 'switchPolicy']);
 			final parts:Array<Expr> = [];
 			if (kwLead != null) {
 				if (kwTrailSpace != null) {
@@ -1710,9 +1711,12 @@ class WriterLowering {
 	 *  - `Before` / `None` → `_de()` (no space).
 	 *
 	 * Consumed today by `@:fmt(ifPolicy)` on `HxStatement.IfStmt` and
-	 * `HxExpr.IfExpr` (slice ω-if-policy) so a single config knob
-	 * controls both statement- and expression-form `if(cond)` /
-	 * `if (cond)` spacing.
+	 * `HxExpr.IfExpr` (slice ω-if-policy), and by `@:fmt(forPolicy)` /
+	 * `@:fmt(whilePolicy)` / `@:fmt(switchPolicy)` on the matching
+	 * stmt / expr ctors (slice ω-control-flow-policies) so a single
+	 * config knob controls both statement- and expression-form
+	 * `for(...)` / `for (...)`, `while(...)` / `while (...)`,
+	 * `switch(cond)` / `switch (cond)` (and bare `switch cond`) spacing.
 	 */
 	private static function kwTrailingSpacePolicy(branch:ShapeNode, flagNames:Array<String>):Null<Expr> {
 		final flagName:Null<String> = firstFmtFlag(branch, flagNames);

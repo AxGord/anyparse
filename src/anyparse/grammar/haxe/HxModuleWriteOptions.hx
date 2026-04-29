@@ -139,6 +139,24 @@ import anyparse.format.WriteOptions;
  *    the preceding token's separator (`return`, `else`, statement
  *    boundary), not by this knob.
  *
+ * Fields added in slice ω-control-flow-policies:
+ *  - `forPolicy` / `whilePolicy` / `switchPolicy` — same `WhitespacePolicy`
+ *    knob shape as `ifPolicy`, gating the trailing space after the
+ *    corresponding control-flow keyword. `forPolicy` is consumed by
+ *    `HxStatement.ForStmt` and `HxExpr.ForExpr`; `whilePolicy` by
+ *    `HxStatement.WhileStmt` and `HxExpr.WhileExpr`; `switchPolicy` by
+ *    all four switch ctors (parens / bare × stmt / expr). `After`
+ *    (default) emits `for (...)` / `while (...)` / `switch (cond)` /
+ *    `switch cond`, matching haxe-formatter's
+ *    `whitespace.forPolicy` / `whilePolicy` / `switchPolicy`
+ *    `@:default(After)`. `Before` / `None` collapse to `for(...)` /
+ *    `while(...)` / `switch(cond)` (parens form). For the bare switch
+ *    form (`switch cond { ... }`), `Before` / `None` produce
+ *    `switchcond` which is a syntax error — the knob is exposed for
+ *    completeness/parity but the bare form should keep the default.
+ *    `Both` is currently equivalent to `After` (the before-keyword slot
+ *    belongs to the preceding token's separator).
+ *
  * Field added in slice ψ₈ (else-if keyword placement):
  *  - `elseIf` — placement of the nested `if` inside an `else` clause
  *    when the else branch is itself an if statement. `Same` (default,
@@ -454,6 +472,9 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	funcParamParens:WhitespacePolicy,
 	callParens:WhitespacePolicy,
 	ifPolicy:WhitespacePolicy,
+	forPolicy:WhitespacePolicy,
+	whilePolicy:WhitespacePolicy,
+	switchPolicy:WhitespacePolicy,
 	elseIf:KeywordPlacement,
 	fitLineIfWithElse:Bool,
 	afterFieldsWithDocComments:CommentEmptyLinesPolicy,

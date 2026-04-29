@@ -170,6 +170,15 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   `HxExpr.IfExpr`). Default `After` emits `if (cond)`; `"onlyBefore"`
  *   / `"none"` collapse to `if(cond)`. The before-`if` slot is owned
  *   by the preceding token's separator and is unaffected by this knob.
+ * - `whitespace.{forPolicy,whilePolicy,switchPolicy}`
+ *   (ω-control-flow-policies): same enum / same collapse, routed to
+ *   `opt.forPolicy` / `opt.whilePolicy` / `opt.switchPolicy`. Same
+ *   shape as `ifPolicy` — gates the trailing space after `for`,
+ *   `while`, `switch`. Default `After`; `"onlyBefore"` / `"none"`
+ *   collapse to `for(`, `while(`, `switch(`. The bare switch form
+ *   (`switch cond { ... }`) honours the same knob — `Before` / `None`
+ *   produce a parse-incompatible `switchcond` so the bare form should
+ *   keep the default in practice.
  * - `whitespace.addLineCommentSpace` (ω-line-comment-space): boolean —
  *   `true` (default) rewrites captured `//foo` line comments as
  *   `// foo`; decoration runs (`//*****`, `//------`, `////`) survive
@@ -236,7 +245,7 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  * `abstractEmptyLines` / `enumEmptyLines` /
  * `typedefEmptyLines`, other `classEmptyLines.*` sub-keys beyond
  * `existingBetweenFields`, …), other `whitespace.*` keys
- * (`forPolicy`, `ternaryPolicy`, …), other
+ * (`ternaryPolicy`, …), other
  * `whitespace.parenConfig.*` kinds (`ifParens`, `forParens`, …),
  * `indentation.conditionalPolicy`, `baseTypeHints`, `disableFormatting`,
  * `excludes`. They will land with the slices that introduce the
@@ -289,6 +298,9 @@ final class HaxeFormatConfigLoader {
 			funcParamParens: base.funcParamParens,
 			callParens: base.callParens,
 			ifPolicy: base.ifPolicy,
+			forPolicy: base.forPolicy,
+			whilePolicy: base.whilePolicy,
+			switchPolicy: base.switchPolicy,
 			elseIf: base.elseIf,
 			fitLineIfWithElse: base.fitLineIfWithElse,
 			afterFieldsWithDocComments: base.afterFieldsWithDocComments,
@@ -392,6 +404,12 @@ final class HaxeFormatConfigLoader {
 			opt.arrowFunctions = whitespaceToRuntime(section.arrowFunctionsPolicy);
 		if (section.ifPolicy != null)
 			opt.ifPolicy = whitespaceToRuntime(section.ifPolicy);
+		if (section.forPolicy != null)
+			opt.forPolicy = whitespaceToRuntime(section.forPolicy);
+		if (section.whilePolicy != null)
+			opt.whilePolicy = whitespaceToRuntime(section.whilePolicy);
+		if (section.switchPolicy != null)
+			opt.switchPolicy = whitespaceToRuntime(section.switchPolicy);
 		if (section.addLineCommentSpace != null)
 			opt.addLineCommentSpace = section.addLineCommentSpace;
 		final paren:Null<HxFormatParenConfigSection> = section.parenConfig;

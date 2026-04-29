@@ -322,6 +322,14 @@ final class HaxeFormat implements TextFormat {
 	 * to `None` (or the JSON-side `"onlyBefore"`) collapses the gap to
 	 * `if(cond)` and requires `"whitespace": { "ifPolicy": "onlyBefore" }`
 	 * (or `"none"`) in `hxformat.json`.
+	 *
+	 * `forPolicy` / `whilePolicy` / `switchPolicy` defaults
+	 * (ω-control-flow-policies) are `After` — same shape as `ifPolicy`,
+	 * driven by `@:fmt(forPolicy)` on `HxStatement.ForStmt` /
+	 * `HxExpr.ForExpr`, `@:fmt(whilePolicy)` on `HxStatement.WhileStmt`
+	 * / `HxExpr.WhileExpr`, and `@:fmt(switchPolicy)` on all four switch
+	 * ctors (parens / bare × stmt / expr). Matches haxe-formatter's
+	 * `whitespace.{forPolicy,whilePolicy,switchPolicy}: @:default(After)`.
 	 */
 	public var defaultWriteOptions(default, null):HxModuleWriteOptions = {
 		indentChar: Tab,
@@ -350,6 +358,9 @@ final class HaxeFormat implements TextFormat {
 		funcParamParens: WhitespacePolicy.None,
 		callParens: WhitespacePolicy.None,
 		ifPolicy: WhitespacePolicy.After,
+		forPolicy: WhitespacePolicy.After,
+		whilePolicy: WhitespacePolicy.After,
+		switchPolicy: WhitespacePolicy.After,
 		elseIf: KeywordPlacement.Same,
 		fitLineIfWithElse: false,
 		afterFieldsWithDocComments: CommentEmptyLinesPolicy.One,

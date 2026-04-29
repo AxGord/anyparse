@@ -5,9 +5,9 @@ package anyparse.grammar.haxe.format;
  *
  * Only keys whose runtime knob already exists on `HxModuleWriteOptions`
  * are modelled here. Missing keys (`functionTypeHaxe3Policy`,
- * `tryPolicy`, `ifPolicy`, `forPolicy`, `ternaryPolicy`, …) are
- * silently dropped by the ByName struct parser's `UnknownPolicy.Skip`
- * — they land with the slice that introduces the matching writer knob.
+ * `tryPolicy`, `catchPolicy`, `ternaryPolicy`, …) are silently dropped
+ * by the ByName struct parser's `UnknownPolicy.Skip` — they land with
+ * the slice that introduces the matching writer knob.
  *
  * Added in slice ψ₇ (feeds `opt.objectFieldColon`).
  *
@@ -93,6 +93,16 @@ package anyparse.grammar.haxe.format;
  *    surrounding context (e.g. `return if(...)` already has space
  *    before `if` from the preceding token) — this knob only controls
  *    the after-`if` gap.
+ *
+ * Extended in slice ω-control-flow-policies:
+ *  - `forPolicy` / `whilePolicy` / `switchPolicy` feed
+ *    `opt.forPolicy` / `opt.whilePolicy` / `opt.switchPolicy`. Same
+ *    shape as `ifPolicy` — gates the trailing space after `for`,
+ *    `while`, `switch`. Consumed by `HxStatement.ForStmt` /
+ *    `HxExpr.ForExpr`, `HxStatement.WhileStmt` / `HxExpr.WhileExpr`,
+ *    and all four switch ctors (parens / bare × stmt / expr) via
+ *    `@:fmt(<knobName>)`. Default `After`; `"onlyBefore"` / `"none"`
+ *    collapse the gap.
  */
 @:peg typedef HxFormatWhitespaceSection = {
 
@@ -113,6 +123,12 @@ package anyparse.grammar.haxe.format;
 	@:optional var arrowFunctionsPolicy:HxFormatWhitespacePolicy;
 
 	@:optional var ifPolicy:HxFormatWhitespacePolicy;
+
+	@:optional var forPolicy:HxFormatWhitespacePolicy;
+
+	@:optional var whilePolicy:HxFormatWhitespacePolicy;
+
+	@:optional var switchPolicy:HxFormatWhitespacePolicy;
 
 	@:optional var addLineCommentSpace:Bool;
 

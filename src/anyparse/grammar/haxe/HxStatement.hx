@@ -125,16 +125,16 @@ enum HxStatement {
 	@:kw('if') @:fmt(ifPolicy)
 	IfStmt(stmt:HxIfStmt);
 
-	@:kw('while')
+	@:kw('while') @:fmt(whilePolicy)
 	WhileStmt(stmt:HxWhileStmt);
 
-	@:kw('for')
+	@:kw('for') @:fmt(forPolicy)
 	ForStmt(stmt:HxForStmt);
 
-	@:kw('switch')
+	@:kw('switch') @:fmt(switchPolicy)
 	SwitchStmt(stmt:HxSwitchStmt);
 
-	@:kw('switch')
+	@:kw('switch') @:fmt(switchPolicy)
 	SwitchStmtBare(stmt:HxSwitchStmtBare);
 
 	@:kw('throw') @:trail(';')
