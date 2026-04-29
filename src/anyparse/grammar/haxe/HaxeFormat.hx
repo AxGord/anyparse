@@ -113,12 +113,29 @@ final class HaxeFormat implements TextFormat {
 	 * defaults — all groups are `false` by default; the trailing `,`
 	 * only appears when the user opts in per group.
 	 *
-	 * Body-placement defaults (ψ₄ + ψ₁₀a) are `Next` for every
-	 * `*Body` knob — non-block bodies of `if` / `else` / `for` /
-	 * `while` / `do` sit on the next line, matching haxe-formatter's
+	 * Body-placement defaults (ψ₄ + ψ₁₀a) are `Next` for the five
+	 * statement-form `*Body` knobs (`ifBody`, `elseBody`, `forBody`,
+	 * `whileBody`, `doBody`) — non-block bodies of `if` / `else` /
+	 * `for` / `while` / `do` sit on the next line, matching
+	 * haxe-formatter's
 	 * `sameLine.{ifBody,elseBody,forBody,whileBody,doWhileBody}:
 	 * @:default(Next)`. Opting into `Same` (same-line body) or
 	 * `FitLine` requires an explicit `hxformat.json` override.
+	 * `returnBody` (ω-return-body, see below) is the exception — it
+	 * defaults to `FitLine`, not `Next`, because haxe-formatter's
+	 * effective `sameLine.returnBody: @:default(Same)` semantics wrap
+	 * long values via a separate `wrapping.maxLineLength` pass.
+	 *
+	 * `returnBody` (ω-return-body) defaults to `FitLine` — `return
+	 * value;` stays on one line when the value fits within
+	 * `lineWidth`, otherwise the value breaks to the next line at one
+	 * indent level deeper. This mirrors haxe-formatter's effective
+	 * `sameLine.returnBody: @:default(Same)` semantics: their `Same`
+	 * wraps long values via a separate `wrapping.maxLineLength` pass,
+	 * which corresponds to our `FitLine` rather than strict `Same`.
+	 * Opting into strict `Same` (no wrap) or `Next` (always-break) /
+	 * `Keep` (preserve source) requires a `sameLine.returnBody`
+	 * override in `hxformat.json`.
 	 *
 	 * `elseIf` (ψ₈) defaults to `Same` — the nested `if` inside an
 	 * `else` clause stays on the same line as `else`, matching
@@ -381,6 +398,7 @@ final class HaxeFormat implements TextFormat {
 		forBody: BodyPolicy.Next,
 		whileBody: BodyPolicy.Next,
 		doBody: BodyPolicy.Next,
+		returnBody: BodyPolicy.FitLine,
 		leftCurly: BracePlacement.Same,
 		objectFieldColon: WhitespacePolicy.After,
 		typeHintColon: WhitespacePolicy.None,

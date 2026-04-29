@@ -237,6 +237,22 @@ class WriterLowering {
 			else
 				{expr: ECall(macro $i{subFn}, [macro $i{argNames[0]}, macro opt]), pos: Context.currentPos()};
 
+			// ω-return-body: ctor-level `@:fmt(bodyPolicy(...))` on a kw-led
+			// single-Ref branch (e.g. `HxStatement.ReturnStmt(value:HxExpr)`)
+			// wraps the sub-call through `bodyPolicyWrap` so the kw→body
+			// separator is runtime-switchable. The wrap supplies the
+			// separator (`_dt(' ')` for `Same`, `_dn(_cols, _dhl + body)`
+			// for `Next`, etc.), so the kw must drop its trailing space —
+			// the existing `subStructStartsWithBodyPolicy` path covers the
+			// sub-struct case (`HxStatement.IfStmt(stmt:HxIfStmt)` where the
+			// `bodyPolicy` flag lives on a field of `HxIfStmt`); this new
+			// path covers the direct-Ref case where no wrapper struct hosts
+			// the field.
+			final ctorBodyPolicyFlag:Null<String> = fmtReadString(branch, 'bodyPolicy');
+			final bodyExpr:Expr = ctorBodyPolicyFlag != null
+				? bodyPolicyWrap(ctorBodyPolicyFlag, subCall, macro $i{argNames[0]}, refName, false, null)
+				: subCall;
+
 			// When the sub-struct opens with a bare-Ref @:fmt(bodyPolicy(...)) field,
 			// the sub-struct's writer emits the header→body separator via
 			// bodyPolicyWrap (Same/Next/FitLine). Stripping the trailing
@@ -261,7 +277,8 @@ class WriterLowering {
 			// hardline-Nest based on body ctor shape. Statement-form
 			// `HxTryCatchStmt.body` opts into this; the parent kw `try` must
 			// drop its trailing space so the wrap is the sole separator.
-			final stripKwTrailingSpace:Bool = subStructStartsWithBodyPolicy(refName)
+			final stripKwTrailingSpace:Bool = ctorBodyPolicyFlag != null
+				|| subStructStartsWithBodyPolicy(refName)
 				|| subStructStartsWithBodyBreak(refName)
 				|| subStructStartsWithBareBodyBreaks(refName)
 				|| subStructStartsWithTightLead(refName);
@@ -286,7 +303,7 @@ class WriterLowering {
 				}
 			}
 			if (leadText != null) parts.push(macro _dt($v{leadText}));
-			parts.push(subCall);
+			parts.push(bodyExpr);
 			if (trailText != null) parts.push(macro _dt($v{trailText}));
 			return if (parts.length == 1) parts[0]
 			else dcCall(parts);

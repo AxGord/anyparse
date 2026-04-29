@@ -60,6 +60,22 @@ import anyparse.format.WriteOptions;
  *    identical output; do-while diverges because the corpus reference
  *    (`sameLine.doWhileBody: next`) expects the break by default.
  *
+ * Field added in slice ω-return-body:
+ *  - `returnBody` — same `BodyPolicy` knob shape as `ifBody` /
+ *    `forBody` / `whileBody` / `doBody`, gating the separator between
+ *    the `return` keyword and its value expression. Consumed by
+ *    `HxStatement.ReturnStmt` only (the void-return variant has no
+ *    value to wrap). `Same` keeps `return value;` flat. `Next` always
+ *    pushes the value to the next line at one indent level deeper.
+ *    `FitLine` (default) keeps it flat when it fits within `lineWidth`,
+ *    otherwise breaks — corresponds to haxe-formatter's effective
+ *    `sameLine.returnBody: @:default(Same)` semantics, where their
+ *    `Same` wraps long values via a separate `wrapping.maxLineLength`
+ *    pass. `Keep` preserves the source layout. `returnBodySingleLine`
+ *    in `hxformat.json` (refining the policy for single-line bodies)
+ *    is a separate axis not yet exposed; its 3-way value is silently
+ *    dropped.
+ *
  * Policies apply only to non-block bodies: a block body (`{ … }`)
  * carries its own hardlines from `blockBody`, so the separator before
  * `{` is always a single space regardless of the policy.
@@ -520,6 +536,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	forBody:BodyPolicy,
 	whileBody:BodyPolicy,
 	doBody:BodyPolicy,
+	returnBody:BodyPolicy,
 	leftCurly:BracePlacement,
 	objectFieldColon:WhitespacePolicy,
 	typeHintColon:WhitespacePolicy,

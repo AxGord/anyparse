@@ -29,7 +29,18 @@ package anyparse.grammar.haxe;
  *  - `ReturnStmt` — `return expr;` return statement with a value.
  *    Tried before `VoidReturnStmt` — if expression parsing fails
  *    (e.g. next token is `;`), tryBranch rolls back and the void
- *    variant is tried.
+ *    variant is tried. `@:fmt(bodyPolicy('returnBody'))` on `value`
+ *    routes the `return`→value separator through the runtime
+ *    `BodyPolicy` switch (slice ω-return-body), mirroring how
+ *    `HxIfStmt.thenBody` / `HxForStmt.body` consume `ifBody` /
+ *    `forBody`. `Same` keeps `return value;` flat (the pre-slice
+ *    behaviour). `Next` always pushes the value to the next line at
+ *    one indent level deeper. `FitLine` keeps it flat when it fits
+ *    within `lineWidth`, otherwise breaks. Default is `FitLine`,
+ *    matching haxe-formatter's effective `sameLine.returnBody:
+ *    @:default(Same)` semantics — their `Same` wraps long values via
+ *    a separate `wrapping.maxLineLength` pass, which corresponds to
+ *    our `FitLine` rather than strict `Same`.
  *
  *  - `VoidReturnStmt` — `return;` void return statement. Zero-arg
  *    ctor with `@:kw('return') @:trail(';')`. Lowering Case 0
@@ -127,7 +138,7 @@ enum HxStatement {
 	@:kw('final') @:trailOpt(';')
 	FinalStmt(decl:HxVarDecl);
 
-	@:kw('return') @:trail(';')
+	@:kw('return') @:trail(';') @:fmt(bodyPolicy('returnBody'))
 	ReturnStmt(value:HxExpr);
 
 	@:kw('return') @:trail(';')

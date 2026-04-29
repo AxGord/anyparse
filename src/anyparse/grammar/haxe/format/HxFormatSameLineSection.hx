@@ -38,6 +38,14 @@ package anyparse.grammar.haxe.format;
  * formatter's `sameLine.expressionTry` field. Default `same`. The
  * loader maps it onto the runtime `expressionTry` option on
  * `HxModuleWriteOptions`.
+ *
+ * `returnBody` (ω-return-body) is the same three-way body-placement
+ * knob shape as `ifBody`, gating the separator between `return` and
+ * its value expression. The loader maps it onto the runtime
+ * `returnBody` option on `HxModuleWriteOptions`. The sibling
+ * `returnBodySingleLine` knob (refining the policy for returns whose
+ * value is single-line) is parsed and silently dropped — the
+ * single-line refinement axis is not yet wired through the runtime.
  */
 @:peg typedef HxFormatSameLineSection = {
 
@@ -62,4 +70,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var fitLineIfWithElse:Bool;
 
 	@:optional var expressionTry:HxFormatSameLinePolicy;
+
+	@:optional var returnBody:HxFormatBodyPolicy;
+
+	@:optional var returnBodySingleLine:HxFormatBodyPolicy;
 };

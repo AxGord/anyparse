@@ -315,6 +315,7 @@ final class HaxeFormatConfigLoader {
 			forBody: base.forBody,
 			whileBody: base.whileBody,
 			doBody: base.doBody,
+			returnBody: base.returnBody,
 			leftCurly: base.leftCurly,
 			objectFieldColon: base.objectFieldColon,
 			typeHintColon: base.typeHintColon,
@@ -394,6 +395,7 @@ final class HaxeFormatConfigLoader {
 		if (section.forBody != null) opt.forBody = bodyPolicyToRuntime(section.forBody);
 		if (section.whileBody != null) opt.whileBody = bodyPolicyToRuntime(section.whileBody);
 		if (section.doWhileBody != null) opt.doBody = bodyPolicyToRuntime(section.doWhileBody);
+		if (section.returnBody != null) opt.returnBody = bodyPolicyToRuntime(section.returnBody);
 		if (section.elseIf != null) opt.elseIf = keywordPlacementToRuntime(section.elseIf);
 		if (section.fitLineIfWithElse != null) opt.fitLineIfWithElse = section.fitLineIfWithElse;
 		if (section.expressionTry != null) opt.expressionTry = sameLineToRuntime(section.expressionTry);
