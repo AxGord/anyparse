@@ -408,31 +408,27 @@ class WriterCodegen {
 	 * as a single `Doc.Text` — there is no handle for re-indent when a
 	 * comment fits on one line.
 	 *
-	 * Multi-line block comments are delegated to
-	 * `anyparse.grammar.haxe.HaxeCommentNormalizer.processCapturedBlockComment`
-	 * — a plain Haxe function in the Haxe format plugin that takes the
-	 * captured `/*…*\/` string plus `opt` and returns a Doc tree. All
-	 * format-specific logic (parse, variant pick, indent canonicalization,
-	 * common-prefix reduce, blank-edge handling, writer dispatch) lives
-	 * in that plugin module — not in the macro core. The macro adapter
-	 * never names Haxe grammar types (`BlockComment`, `BlockCommentParser`,
-	 * `BlockCommentWriter`) or `CommentStyle` values directly.
-	 *
-	 * This helper is a thin macro-emitted adapter: guards single-line /
-	 * non-comment content as pass-through `Doc.Text`, then forwards to
-	 * the plugin entry point. The adapter itself is format-neutral; it
-	 * names the Haxe-specific helper by full path because trivia capture
-	 * today is only wired for Haxe. A future non-C-family format would
-	 * have its own `*CommentNormalizer` with the same
-	 * `processCapturedBlockComment` shape and a differently-named adapter.
+	 * Multi-line block comments and `//`-line bodies are delegated to
+	 * the plugin-supplied trivia adapters carried on `WriteOptions`
+	 * (`opt.blockCommentAdapter` / `opt.lineCommentAdapter`). The
+	 * format singleton's `defaultWriteOptions` populates both — e.g.
+	 * `HaxeFormat` wires them to `HaxeCommentNormalizer`'s entry
+	 * points. Routing through `opt` keeps the macro core format-
+	 * neutral: no module reference here names a specific grammar's
+	 * normalizer, so a non-C-family format with its own comment
+	 * adapter functions just sets these fields and reuses this
+	 * helper unchanged.
 	 */
 	private static function leadingCommentDocField():Field {
 		final body:Expr = macro {
-			if (StringTools.startsWith(content, '//'))
-				return _dt(anyparse.grammar.haxe.HaxeCommentNormalizer.normalizeLineComment(content, opt.addLineCommentSpace));
+			if (StringTools.startsWith(content, '//')) {
+				final _line = opt.lineCommentAdapter;
+				return _dt(_line == null ? content : _line(content, opt.addLineCommentSpace));
+			}
 			if (!StringTools.startsWith(content, '/*')) return _dt(content);
 			if (content.indexOf('\n') < 0) return _dt(content);
-			return anyparse.grammar.haxe.HaxeCommentNormalizer.processCapturedBlockComment(content, opt);
+			final _block = opt.blockCommentAdapter;
+			return _block == null ? _dt(content) : _block(content, opt);
 		};
 		return {
 			name: 'leadingCommentDoc',
@@ -462,7 +458,10 @@ class WriterCodegen {
 	 * rewrite the leading and verbatim variants apply.
 	 */
 	private static function trailingCommentDocField():Field {
-		final body:Expr = macro return _dt(' ' + anyparse.grammar.haxe.HaxeCommentNormalizer.normalizeLineComment('//' + content, opt.addLineCommentSpace));
+		final body:Expr = macro {
+			final _line = opt.lineCommentAdapter;
+			return _dt(' ' + (_line == null ? '//' + content : _line('//' + content, opt.addLineCommentSpace)));
+		};
 		return {
 			name: 'trailingCommentDoc',
 			access: [APrivate, AStatic],
@@ -489,15 +488,17 @@ class WriterCodegen {
 	 * the stripped-body `trailingCommentDoc` helper above — that path
 	 * normalises to line style by construction.
 	 *
-	 * ω-line-comment-space: routes through
-	 * `HaxeCommentNormalizer.normalizeLineComment` for the `addLineCommentSpace`
-	 * rewrite (`//foo` → `// foo` when the knob is on, decoration runs
-	 * survive tight). The normalizer short-circuits non-`//` input, so
-	 * a verbatim block-style trailing (`/* foo *\/`) passes through
-	 * unchanged.
+	 * ω-line-comment-space: routes through `opt.lineCommentAdapter`
+	 * for the `addLineCommentSpace` rewrite (`//foo` → `// foo` when
+	 * the knob is on, decoration runs survive tight). The plugin
+	 * normalizer short-circuits non-`//` input, so a verbatim block-
+	 * style trailing (`/* foo *\/`) passes through unchanged.
 	 */
 	private static function trailingCommentDocVerbatimField():Field {
-		final body:Expr = macro return _dt(' ' + anyparse.grammar.haxe.HaxeCommentNormalizer.normalizeLineComment(content, opt.addLineCommentSpace));
+		final body:Expr = macro {
+			final _line = opt.lineCommentAdapter;
+			return _dt(' ' + (_line == null ? content : _line(content, opt.addLineCommentSpace)));
+		};
 		return {
 			name: 'trailingCommentDocVerbatim',
 			access: [APrivate, AStatic],

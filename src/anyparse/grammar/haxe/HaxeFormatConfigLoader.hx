@@ -372,6 +372,8 @@ final class HaxeFormatConfigLoader {
 			arrowFunctions: base.arrowFunctions,
 			afterPackage: base.afterPackage,
 			beforeUsing: base.beforeUsing,
+			blockCommentAdapter: base.blockCommentAdapter,
+			lineCommentAdapter: base.lineCommentAdapter,
 		};
 		if (cfg.indentation != null) applyIndentation(cfg.indentation, result);
 		if (cfg.wrapping != null) applyWrapping(cfg.wrapping, result);

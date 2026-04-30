@@ -498,6 +498,8 @@ final class HaxeFormat implements TextFormat {
 		arrowFunctions: WhitespacePolicy.Both,
 		afterPackage: 1,
 		beforeUsing: 1,
+		blockCommentAdapter: HaxeCommentNormalizer.processCapturedBlockComment,
+		lineCommentAdapter: HaxeCommentNormalizer.normalizeLineComment,
 	};
 
 	private function new() {}

@@ -1,5 +1,7 @@
 package anyparse.format;
 
+import anyparse.core.Doc;
+
 /**
  * Base write options shared by all text writers.
  *
@@ -85,4 +87,29 @@ typedef WriteOptions = {
 	 * branch.
 	 */
 	addLineCommentSpace:Bool,
+
+	/**
+	 * Plugin-supplied trivia adapters bound at runtime. The macro-
+	 * emitted `leadingCommentDoc` / `trailingCommentDoc(Verbatim)`
+	 * helpers call these to convert captured trivia strings into Doc
+	 * fragments — keeps the macro core format-neutral by routing the
+	 * format-specific comment normalization through the writer's
+	 * runtime config rather than hardcoded module references.
+	 *
+	 * Formats that don't use trivia capture leave these null; helpers
+	 * that read them are only emitted when `{trivia: true}` is on, so
+	 * non-trivia writers never invoke the adapters. The active format's
+	 * `defaultWriteOptions` populates the fields with its own
+	 * normalizer (e.g. `HaxeFormat` sets these from
+	 * `HaxeCommentNormalizer.processCapturedBlockComment` /
+	 * `normalizeLineComment`).
+	 *
+	 *  - `blockCommentAdapter(content, opt) → Doc` — full pipeline for
+	 *    a captured `/*…*\/` body: parse → canonicalise → emit Doc.
+	 *  - `lineCommentAdapter(content, addSpace) → String` — string-level
+	 *    normalisation of a captured `//` body (decoration-aware
+	 *    `//foo` → `// foo` rewrite when `addSpace == true`).
+	 */
+	?blockCommentAdapter:Null<(String, WriteOptions) -> Doc>,
+	?lineCommentAdapter:Null<(String, Bool) -> String>,
 };
