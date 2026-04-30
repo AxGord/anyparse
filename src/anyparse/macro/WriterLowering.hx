@@ -45,7 +45,7 @@ class WriterLowering {
 
 		final hasPratt:Bool = node.kind == Alt && (hasPrattBranch(node) || hasPostfixBranch(node));
 
-		final body:Expr = switch node.kind {
+		final rawBody:Expr = switch node.kind {
 			case Alt: lowerEnum(node, typePath, hasPratt);
 			case Seq: lowerStruct(node, typePath);
 			case Terminal: lowerTerminal(node, typePath, simple);
@@ -53,6 +53,23 @@ class WriterLowering {
 				Context.fatalError('WriterLowering: cannot lower ${node.kind} for $typePath', Context.currentPos());
 				throw 'unreachable';
 		};
+		// ω-fmt-prewrite-hook: `@:fmt(preWrite(Pkg.Cls.fnName))` on the
+		// rule's TYPE (enum, typedef, terminal) lets a plugin rewrite
+		// the value before the default emission. Function signature:
+		// `(<RuleType>, WriteOptions) -> Null<<RuleType>>` — non-null
+		// re-dispatches through `fnName` so the rewritten value lands
+		// on its own ctor branch / struct path. Used for shape-
+		// conditional canonicalisation that fits no declarative
+		// `@:fmt(...)` knob: e.g. `HxType.ArrowFn([Pos(Arrow)], R)` →
+		// `Arrow(Parens, R)` for old-style curried chain rendering, or
+		// `BlockComment.lines` per-line variant pick + indent
+		// canonicalisation. The arg is a real Haxe expression (typically
+		// `EField` field-access) — type-checked at compile time, IDE
+		// go-to-def works, no string typo can survive compile.
+		final preWriteFn:Null<Expr> = fmtReadCall(node, 'preWrite');
+		final body:Expr = preWriteFn != null
+			? wrapWithPreWrite(preWriteFn, rawBody, fnName, hasPratt)
+			: rawBody;
 		return [{fnName: fnName, valueCT: valueCT, body: body, hasCtxPrec: hasPratt, isBinary: false}];
 	}
 
@@ -95,23 +112,10 @@ class WriterLowering {
 				{expr: ECall(ctorRef, argExprs), pos: Context.currentPos()};
 			};
 
-			// Build body
-			final rawBody:Expr = lowerEnumBranch(branch, typePath, writeFnName, hasPratt, argNames, precPostfix);
-			// ω-fmt-prewrite-hook: `@:fmt(preWrite(Pkg.Cls.fnName))` on an
-			// enum ctor lets a plugin rewrite the value before emit. The
-			// function signature is `<RuleType> -> Null<<RuleType>>`;
-			// non-null result re-dispatches through the same `writeFn` so
-			// the rewritten ctor lands on its own case branch. The arg is
-			// a real Haxe expression (typically `EField` field-access) —
-			// type-checked at compile time, IDE go-to-def works, no string
-			// typo can survive compile. Used for shape-conditional
-			// canonicalisation that fits no declarative `@:fmt(...)` knob
-			// — e.g. `HxType.ArrowFn` with single positional Arrow operand
-			// collapsing to old-style `Arrow(Parens, ret)`.
-			final preWriteFn:Null<Expr> = fmtReadCall(branch, 'preWrite');
-			final body:Expr = preWriteFn != null
-				? wrapWithPreWrite(preWriteFn, rawBody, writeFnName, hasPratt)
-				: rawBody;
+			// Build body. The `@:fmt(preWrite(...))` hook lives at the
+			// rule level (see `lowerRule`), so per-ctor branches need no
+			// additional wrapping here.
+			final body:Expr = lowerEnumBranch(branch, typePath, writeFnName, hasPratt, argNames, precPostfix);
 			cases.push({values: [pattern], expr: body, guard: null});
 		}
 		return macro return ${{expr: ESwitch(macro value, cases, null), pos: Context.currentPos()}};
@@ -131,17 +135,26 @@ class WriterLowering {
 	 * — non-opt-in ctors carry zero overhead, no extra dispatch.
 	 */
 	private function wrapWithPreWrite(fnExpr:Expr, defaultBody:Expr, writeFnName:String, hasPratt:Bool):Expr {
-		final selfCallArgs:Array<Expr> = hasPratt
-			? [macro _rw, macro opt, macro ctxPrec]
-			: [macro _rw, macro opt];
-		final selfCall:Expr = {
-			expr: ECall(macro $i{writeFnName}, selfCallArgs),
-			pos: Context.currentPos(),
-		};
-		final preCall:Expr = {expr: ECall(fnExpr, [macro value]), pos: Context.currentPos()};
+		// preWrite signature: `(value:T, opt:WriteOptions) -> Null<T>`.
+		// `opt` is passed through unconditionally so future rewrites can
+		// branch on config (line width, comment style, etc.) without a
+		// signature break — current consumers that don't need it accept
+		// and ignore the param. Replace-value semantics: when the rewrite
+		// returns non-null, the function's `value` parameter is reassigned
+		// in place and the default emission body runs against the new
+		// value. For enum rules the body's `switch value { ... }`
+		// dispatches against the rewritten value naturally — no recursive
+		// call to `$writeFnName`, so no risk of infinite loops on
+		// rewrites that produce values still matching the same hook (e.g.
+		// `HaxeCommentNormalizer.normalize` always returns a canonical
+		// `BlockComment`). For struct rules the body reads `value.<field>`
+		// which now sees the rewritten value's fields. The single rule-
+		// level wrap covers both kinds uniformly.
+		final preCall:Expr = {expr: ECall(fnExpr, [macro value, macro opt]), pos: Context.currentPos()};
 		return macro {
 			final _rw = $preCall;
-			if (_rw != null) $selfCall else $defaultBody;
+			if (_rw != null) value = _rw;
+			$defaultBody;
 		};
 	}
 

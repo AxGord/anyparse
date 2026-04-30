@@ -33,7 +33,7 @@ class HxArrowFnOldStyleRewriteTest extends HxTestHelpers {
 			args: [Positional(Arrow(named('Int'), named('Int')))],
 			ret: named('Int'),
 		});
-		final out:Null<HxType> = HaxeTypeRewrites.arrowFnOldStyleRewrite(input);
+		final out:Null<HxType> = HaxeTypeRewrites.arrowFnOldStyleRewrite(input, makeOpts());
 		Assert.notNull(out);
 		switch out {
 			case Arrow(Parens(Arrow(_, _)), Named(_)): Assert.pass();
@@ -49,7 +49,7 @@ class HxArrowFnOldStyleRewriteTest extends HxTestHelpers {
 			args: [Positional(named('Int'))],
 			ret: named('Int'),
 		});
-		Assert.isNull(HaxeTypeRewrites.arrowFnOldStyleRewrite(input));
+		Assert.isNull(HaxeTypeRewrites.arrowFnOldStyleRewrite(input, makeOpts()));
 	}
 
 	public function testRewriteSingleNamedReturnsNull():Void {
@@ -57,7 +57,7 @@ class HxArrowFnOldStyleRewriteTest extends HxTestHelpers {
 			args: [Named({name: 'x', type: named('String')})],
 			ret: named('Void'),
 		});
-		Assert.isNull(HaxeTypeRewrites.arrowFnOldStyleRewrite(input));
+		Assert.isNull(HaxeTypeRewrites.arrowFnOldStyleRewrite(input, makeOpts()));
 	}
 
 	public function testRewriteMultiArgReturnsNull():Void {
@@ -65,18 +65,19 @@ class HxArrowFnOldStyleRewriteTest extends HxTestHelpers {
 			args: [Positional(named('Int')), Positional(named('String'))],
 			ret: named('Bool'),
 		});
-		Assert.isNull(HaxeTypeRewrites.arrowFnOldStyleRewrite(input));
+		Assert.isNull(HaxeTypeRewrites.arrowFnOldStyleRewrite(input, makeOpts()));
 	}
 
 	public function testRewriteEmptyArgsReturnsNull():Void {
 		final input:HxType = ArrowFn({args: [], ret: named('Void')});
-		Assert.isNull(HaxeTypeRewrites.arrowFnOldStyleRewrite(input));
+		Assert.isNull(HaxeTypeRewrites.arrowFnOldStyleRewrite(input, makeOpts()));
 	}
 
 	public function testRewriteNonArrowFnCtorsReturnNull():Void {
-		Assert.isNull(HaxeTypeRewrites.arrowFnOldStyleRewrite(named('Int')));
-		Assert.isNull(HaxeTypeRewrites.arrowFnOldStyleRewrite(Arrow(named('A'), named('B'))));
-		Assert.isNull(HaxeTypeRewrites.arrowFnOldStyleRewrite(Parens(named('A'))));
+		final opts:HxModuleWriteOptions = makeOpts();
+		Assert.isNull(HaxeTypeRewrites.arrowFnOldStyleRewrite(named('Int'), opts));
+		Assert.isNull(HaxeTypeRewrites.arrowFnOldStyleRewrite(Arrow(named('A'), named('B')), opts));
+		Assert.isNull(HaxeTypeRewrites.arrowFnOldStyleRewrite(Parens(named('A')), opts));
 	}
 
 	// ---- Writer integration via @:fmt(preWrite) hook ----
@@ -139,9 +140,11 @@ class HxArrowFnOldStyleRewriteTest extends HxTestHelpers {
 		return Named({name: name, params: null});
 	}
 
+	private inline function makeOpts():HxModuleWriteOptions {
+		return HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	}
+
 	private inline function writeDefault(src:String):String {
-		final m:HxModule = HaxeModuleParser.parse(src);
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
-		return HxModuleWriter.write(m, opts);
+		return HxModuleWriter.write(HaxeModuleParser.parse(src), makeOpts());
 	}
 }

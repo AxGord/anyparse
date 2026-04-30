@@ -75,6 +75,7 @@ package anyparse.grammar.haxe;
  * reached only for `(...)` shapes NOT followed by `->`.
  */
 @:peg
+@:fmt(preWrite(HaxeTypeRewrites.arrowFnOldStyleRewrite))
 enum HxType {
 	Named(ref:HxTypeRef);
 
@@ -84,7 +85,6 @@ enum HxType {
 	@:lead('{') @:trail('}') @:sep(',') @:fmt(anonTypeBracesOpen, anonTypeBracesClose)
 	Anon(fields:Array<HxAnonField>);
 
-	@:fmt(preWrite(HaxeTypeRewrites.arrowFnOldStyleRewrite))
 	ArrowFn(fn:HxArrowFnType);
 
 	@:wrap('(', ')')

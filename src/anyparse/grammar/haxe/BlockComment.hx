@@ -26,6 +26,7 @@ package anyparse.grammar.haxe;
 @:peg
 @:raw
 @:schema(anyparse.grammar.haxe.HaxeFormat)
+@:fmt(preWrite(HaxeCommentNormalizer.normalize))
 typedef BlockComment = {
 	@:lead('/*') @:trail('*/') @:sep('\n')
 	@:fmt(altWrap('commentStyle', 'Javadoc|JavadocNoStars', '/**', '**/'))

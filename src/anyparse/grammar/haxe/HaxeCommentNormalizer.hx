@@ -45,7 +45,7 @@ import anyparse.format.WriteOptions;
  */
 class HaxeCommentNormalizer {
 
-	public static function normalize(source:BlockComment, opt:WriteOptions):BlockComment {
+	public static function normalize(source:BlockComment, opt:WriteOptions):Null<BlockComment> {
 		return {lines: normalizeLines(source.lines, opt)};
 	}
 
@@ -66,8 +66,10 @@ class HaxeCommentNormalizer {
 		final parsed:Null<BlockComment> = try BlockCommentParser.parse(content)
 		catch (_:haxe.Exception) null;
 		if (parsed == null) return Text(content);
-		final canonical:BlockComment = normalize(parsed, opt);
-		return BlockCommentWriter.writeDoc(canonical, opt);
+		// `BlockComment` carries `@:fmt(preWrite(normalize))` so the
+		// writer applies per-line variant pick + indent canonicalisation
+		// declaratively. The adapter just feeds the raw parsed AST in.
+		return BlockCommentWriter.writeDoc(parsed, opt);
 	}
 
 	private static function normalizeLines(source:Array<BlockCommentLine>, opt:WriteOptions):Array<BlockCommentLine> {
