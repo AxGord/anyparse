@@ -38,7 +38,7 @@ class WriteOptionsTest extends Test {
 			lineEnd: '\n',
 			finalNewline: false,
 			trailingWhitespace: false,
-			commentStyle: Plain,
+			commentStyle: Verbatim,
 			addLineCommentSpace: true,
 		};
 		final out:String = JValueWriter.write(ast, opts);

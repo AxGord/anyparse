@@ -1467,17 +1467,6 @@ class Lowering {
 			emitTriviaStarFieldSteps(starNode, localName, parseSteps, isLastField, elemCT, elemCall, openText, closeText);
 			return;
 		}
-		final altWrap:Null<{optName:String, optValues:Array<String>, altLead:String, altTrail:String}> = fmtReadAltWrap(starNode);
-		if (altWrap != null) {
-			if (openText == null || closeText == null || sepText == null) {
-				Context.fatalError(
-					'Lowering: @:fmt(altWrap) requires @:lead, @:trail and @:sep on the Star field',
-					Context.currentPos()
-				);
-			}
-			emitAltWrapStarFieldSteps(localName, parseSteps, openText, closeText, sepText, altWrap, elemCall, elemCT);
-			return;
-		}
 		if (openText != null) {
 			parseSteps.push(macro expectLit(ctx, $v{openText}));
 			parseSteps.push(macro skipWs(ctx));
@@ -1567,101 +1556,6 @@ class Lowering {
 		}
 		parseSteps.push(macro skipWs(ctx));
 		parseSteps.push(macro expectLit(ctx, $v{closeText}));
-	}
-
-	/**
-	 * Parse steps for a Star struct field with `@:fmt(altWrap(...))` —
-	 * declares an alternative wrap pair beside the primary `@:lead` /
-	 * `@:trail`. Parser tries primary first; on `ParseError` rolls back
-	 * `ctx.pos` and tries the alt pair. If both fail, raises a
-	 * `ParseError` against the saved start position.
-	 *
-	 * Currently scoped to the `@:sep('\n')` body shape — block-comment
-	 * style — because that's the only consumer (`BlockComment.lines`).
-	 * The body loop is identical between primary and alt attempts; only
-	 * the open / close literals (and their close-peek expressions)
-	 * differ.
-	 */
-	private function emitAltWrapStarFieldSteps(
-		localName:String, parseSteps:Array<Expr>, primaryLead:String, primaryTrail:String,
-		sepText:String,
-		altWrap:{optName:String, optValues:Array<String>, altLead:String, altTrail:String},
-		elemCall:Expr, elemCT:ComplexType
-	):Void {
-		if (sepText != '\n') {
-			Context.fatalError(
-				'Lowering: @:fmt(altWrap) currently supports only @:sep("\\n") (block-comment shape)',
-				Context.currentPos()
-			);
-		}
-		final accumCT:ComplexType = TPath({pack: [], name: 'Array', params: [TPType(elemCT)]});
-		parseSteps.push({
-			expr: EVars([{
-				name: localName,
-				type: accumCT,
-				expr: macro [],
-				isFinal: true,
-			}]),
-			pos: Context.currentPos(),
-		});
-		final accumRef:Expr = macro $i{localName};
-		final tryPrimary:Expr = altWrapAttempt(primaryLead, primaryTrail, sepText, accumRef, elemCall);
-		final tryAlt:Expr = altWrapAttempt(altWrap.altLead, altWrap.altTrail, sepText, accumRef, elemCall);
-		parseSteps.push(macro {
-			final _saved:Int = ctx.pos;
-			var _ok:Bool = false;
-			try {
-				$tryPrimary;
-				_ok = true;
-			} catch (_:anyparse.runtime.ParseError) {
-				ctx.pos = _saved;
-				$accumRef.resize(0);
-			}
-			if (!_ok) try {
-				$tryAlt;
-				_ok = true;
-			} catch (_:anyparse.runtime.ParseError) {
-				ctx.pos = _saved;
-				$accumRef.resize(0);
-			}
-			if (!_ok) throw new anyparse.runtime.ParseError(
-				new anyparse.runtime.Span(_saved, _saved),
-				'expected one of the declared wrap pairs'
-			);
-		});
-	}
-
-	/**
-	 * Build a single try-attempt block for `emitAltWrapStarFieldSteps`:
-	 * `expectLit(lead) ... loop with `\n` sep until close peek ...
-	 * expectLit(close)`. Mirrors the `closeText != null && sepText != null`
-	 * branch of `emitStarFieldSteps`, parameterised by the wrap pair.
-	 */
-	private static function altWrapAttempt(
-		lead:String, close:String, sepText:String, accumRef:Expr, elemCall:Expr
-	):Expr {
-		final closeCharCode:Int = close.charCodeAt(0);
-		final closeNotNextExpr:Expr = close.length == 1
-			? macro ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}
-			: macro ctx.pos < ctx.input.length && !peekLit(ctx, $v{close});
-		final sepCharCode:Int = sepText.charCodeAt(0);
-		return macro {
-			expectLit(ctx, $v{lead});
-			skipWs(ctx);
-			skipWs(ctx);
-			if ($closeNotNextExpr) {
-				$accumRef.push($elemCall);
-				skipWs(ctx);
-				while (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
-					ctx.pos++;
-					skipWs(ctx);
-					$accumRef.push($elemCall);
-					skipWs(ctx);
-				}
-			}
-			skipWs(ctx);
-			expectLit(ctx, $v{close});
-		};
 	}
 
 	/**
@@ -2569,35 +2463,6 @@ class Lowering {
 			}
 		}
 		return false;
-	}
-
-	/**
-	 * Read `@:fmt(altWrap(optName, valuePattern, altLead, altTrail))`
-	 * — declares an alternative wrap pair on a Star field, dispatched
-	 * at parse time via rule-level rollback (try primary lead/trail,
-	 * fall back to alt) and at write time via switch on `opt.<optName>`
-	 * with `valuePattern` listing the enum values that should select
-	 * the alt pair (`'A|B'`).
-	 *
-	 * Returns null when the meta is absent or when arguments don't
-	 * match the 4-string-literal shape.
-	 */
-	private static function fmtReadAltWrap(node:ShapeNode):Null<{optName:String, optValues:Array<String>, altLead:String, altTrail:String}> {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
-		if (meta == null) return null;
-		for (entry in meta) if (entry.name == ':fmt') {
-			for (param in entry.params) switch param.expr {
-				case ECall({expr: EConst(CIdent('altWrap'))}, args) if (args.length == 4):
-					final ss:Array<String> = [];
-					for (arg in args) switch arg.expr {
-						case EConst(CString(s, _)): ss.push(s);
-						case _: return null;
-					}
-					return {optName: ss[0], optValues: ss[1].split('|'), altLead: ss[2], altTrail: ss[3]};
-				case _:
-			}
-		}
-		return null;
 	}
 
 	// -------- trivia-mode helpers --------

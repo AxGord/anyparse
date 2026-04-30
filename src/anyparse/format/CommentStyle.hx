@@ -3,25 +3,30 @@ package anyparse.format;
 /**
  * Block-comment output style for multi-line `/*…*\/` comments.
  *
- * Captured `/*…*\/` content flows through `BlockCommentBodyParser`,
- * which strips leading whitespace and any `*` markers — source style
- * is not preserved. This enum drives how the writer re-wraps the
- * captured content at emit time.
+ * Default `Verbatim` preserves source content byte-identical between
+ * `/*` and `*\/`. The other values opt into a writer-side
+ * canonicalization pass that normalises wrap shape and per-line
+ * markers to a fixed style — useful when a project wants every doc
+ * block to look the same regardless of how it was originally
+ * authored.
  *
+ * - `Verbatim` (default) — source content round-trips byte-identical.
+ *    `*` runs adjacent to wrap delimiters, ` * ` per-line markers, blank
+ *    lines, indent — all preserved as the author wrote them. The writer
+ *    emits `/*` + content + `*\/` verbatim.
  * - `Plain` — `/*` opening, `*\/` closing, each interior line at
- *    `currentIndent + indentUnit + content`. Minimal wrap; no `*`
- *    markers on content lines.
+ *    `currentIndent + indentUnit + content`. Strips any source ` * `
+ *    markers and re-emits content with plain indent.
  * - `Javadoc` — `/**` opening, `**\/` closing, each interior line at
  *    `currentIndent + " * " + content`. Classic Haxe / Java doc-block
  *    appearance regardless of what the source used.
  * - `JavadocNoStars` — `/**` opening, `**\/` closing, each interior
  *    line at `currentIndent + indentUnit + content` (hybrid: doc-style
- *    delimiters with plain-indent content). Matches haxe-formatter's
- *    idiomatic output style for most Haxe doc blocks and is the
- *    default for `HaxeFormat`.
+ *    delimiters with plain-indent content).
  */
 enum abstract CommentStyle(Int) from Int to Int {
-	var Plain = 0;
-	var Javadoc = 1;
-	var JavadocNoStars = 2;
+	var Verbatim = 0;
+	var Plain = 1;
+	var Javadoc = 2;
+	var JavadocNoStars = 3;
 }

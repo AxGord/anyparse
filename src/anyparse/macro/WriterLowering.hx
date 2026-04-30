@@ -1193,16 +1193,9 @@ class WriterLowering {
 			// unchanged. Format-neutral — any grammar using `@:sep('\n')`
 			// gets this layout.
 			if (sepText == '\n') {
-				final altWrap:Null<{optName:String, optValues:Array<String>, altLead:String, altTrail:String}> = fmtReadAltWrap(starNode);
-				final openExpr:Expr = altWrap == null
-					? macro _dt($v{openText ?? ''})
-					: altWrapTextSwitch(altWrap, openText ?? '', altWrap.altLead);
-				final closeExpr:Expr = altWrap == null
-					? macro _dt($v{closeText})
-					: altWrapTextSwitch(altWrap, closeText, altWrap.altTrail);
 				parts.push(macro {
 					final _arr = $fieldAccess;
-					final _docs:Array<anyparse.core.Doc> = [$openExpr];
+					final _docs:Array<anyparse.core.Doc> = [_dt($v{openText ?? ''})];
 					var _si:Int = 0;
 					while (_si < _arr.length) {
 						_docs.push(_dhl());
@@ -1210,7 +1203,7 @@ class WriterLowering {
 						_si++;
 					}
 					_docs.push(_dhl());
-					_docs.push($closeExpr);
+					_docs.push(_dt($v{closeText}));
 					_dc(_docs);
 				});
 				return;
@@ -3148,58 +3141,6 @@ class WriterLowering {
 						case _: return null;
 					}
 					return out;
-				case _:
-			}
-		}
-		return null;
-	}
-
-	/**
-	 * Read `@:fmt(altWrap(optName, valuePattern, altLead, altTrail))`
-	 * — declares an alternative wrap pair on a Star field. Writer
-	 * emits a runtime switch on `opt.<optName>` against `valuePattern`
-	 * (pipe-separated enum values like `'A|B'`) — matching values pick
-	 * the alt pair, others fall back to primary `@:lead`/`@:trail`.
-	 * Mirror of `Lowering.fmtReadAltWrap` (parser-side rule rollback).
-	 *
-	 * Returns null when the meta is absent or when arguments don't
-	 * match the 4-string-literal shape.
-	 */
-	/**
-	 * Build a Doc text expression that picks between primary and alt
-	 * literal at write time based on `opt.<altWrap.optName>:CommentStyle`.
-	 * Matching enum values (from `altWrap.optValues`) emit `_dt(altText)`;
-	 * everything else falls through to `_dt(primaryText)`.
-	 *
-	 * Currently hardcodes `CommentStyle` as the opt-enum type — only
-	 * consumer is `BlockComment`'s wrap-pair switch. Generalisation to
-	 * arbitrary opt-enums (resolved via Context.toType on the opt field)
-	 * would land with the second consumer.
-	 */
-	private static function altWrapTextSwitch(
-		altWrap:{optName:String, optValues:Array<String>, altLead:String, altTrail:String},
-		primaryText:String,
-		altText:String
-	):Expr {
-		final csPath:Array<String> = ['anyparse', 'format', 'CommentStyle'];
-		final altPats:Array<Expr> = [for (v in altWrap.optValues) MacroStringTools.toFieldExpr(csPath.concat([v]))];
-		final cases:Array<Case> = [{values: altPats, expr: macro _dt($v{altText}), guard: null}];
-		final optAccess:Expr = {expr: EField(macro opt, altWrap.optName), pos: Context.currentPos()};
-		return {expr: ESwitch(optAccess, cases, macro _dt($v{primaryText})), pos: Context.currentPos()};
-	}
-
-	private static function fmtReadAltWrap(node:ShapeNode):Null<{optName:String, optValues:Array<String>, altLead:String, altTrail:String}> {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
-		if (meta == null) return null;
-		for (entry in meta) if (entry.name == ':fmt') {
-			for (param in entry.params) switch param.expr {
-				case ECall({expr: EConst(CIdent('altWrap'))}, args) if (args.length == 4):
-					final ss:Array<String> = [];
-					for (arg in args) switch arg.expr {
-						case EConst(CString(s, _)): ss.push(s);
-						case _: return null;
-					}
-					return {optName: ss[0], optValues: ss[1].split('|'), altLead: ss[2], altTrail: ss[3]};
 				case _:
 			}
 		}

@@ -1,34 +1,25 @@
 package anyparse.grammar.haxe;
 
 /**
- * Grammar root for a captured block-comment token (multi-line or not).
+ * A captured block-comment token. The AST is intentionally trivial —
+ * a comment is opaque text between `/*` and `*\/`. Whatever bytes sit
+ * between the wrap delimiters land in `content` verbatim, including
+ * any `*` runs adjacent to the wrap (`/**` open or `**\/` close) and
+ * any per-line ` * ` markers inside javadoc-style bodies.
  *
- * Single-shape body: `Array<BlockCommentLine>` between alternative
- * wrap pairs declared on the `lines` field via `@:lead` / `@:trail`
- * (primary `/* … *\/` Plain pair) and `@:fmt(altWrap(...))` (alt
- * `/** … **\/` DoubleStars pair, dispatched by `opt.commentStyle`).
+ * Output style is policy, not structure. By default
+ * (`commentStyle: Verbatim`) the writer emits `/*` + content + `*\/`
+ * byte-identical. With an explicit `commentStyle:
+ * Plain|Javadoc|JavadocNoStars` the writer's
+ * `HaxeCommentNormalizer.processCapturedBlockComment` adapter runs an
+ * opt-in canonicalization pass on the content string before emit.
  *
- * Parser tries the primary `/*` open + `*\/` close first; on `**\/`
- * close failure (DoubleStars source) rolls back and tries the alt
- * `/**` open + `**\/` close. Mixed `/** … *\/` source rolls back
- * from the alt close failure to the primary, where the `/*` open
- * absorbs the leading `*` into the body's first line content.
- *
- * Writer emits the wrap pair selected at runtime by
- * `opt.commentStyle`: `Plain` → primary `/* … *\/`; `Javadoc` /
- * `JavadocNoStars` → alt `/** … **\/`. The AST itself does NOT
- * carry which wrap the source had — wrap is policy, not structure.
- *
- * `@:raw` suppresses `skipWs` inside the captured body: comment
- * interior whitespace is significant (preserved for common-prefix
- * reduce in the plugin normalizer).
+ * `@:raw` suppresses `skipWs` between the wrap delimiters and the
+ * captured content terminal.
  */
 @:peg
 @:raw
 @:schema(anyparse.grammar.haxe.HaxeFormat)
-@:fmt(preWrite(HaxeCommentNormalizer.normalize))
 typedef BlockComment = {
-	@:lead('/*') @:trail('*/') @:sep('\n')
-	@:fmt(altWrap('commentStyle', 'Javadoc|JavadocNoStars', '/**', '**/'))
-	var lines:Array<BlockCommentLine>;
+	@:lead('/*') @:trail('*/') var content:BlockCommentContent;
 };

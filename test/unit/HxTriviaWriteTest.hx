@@ -78,16 +78,13 @@ class HxTriviaWriteTest extends Test {
 	}
 
 	public function testMultiLineBlockCommentStaysBlock():Void {
-		// Max-dry capture strips leading ws and `*` markers, so the
-		// interior line reduces to `doc` (content only). Writer re-
-		// emits per `HaxeFormat.defaultWriteOptions.commentStyle` —
-		// `JavadocNoStars` by default — yielding `/**…**/` wrap and
-		// plain indent-unit content.
+		// Default `commentStyle: Verbatim` round-trips block-comment
+		// content byte-identical between `/*` and `*/`. Per-line
+		// markers, blank lines, leading whitespace — all preserved.
 		final source:String = '/*\n * doc\n */\nclass Foo {}';
-		final expected:String = '/**\n\tdoc\n**/\nclass Foo {}\n';
 		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out:String = HaxeModuleTriviaWriter.write(ast);
-		Assert.equals(expected, out);
+		Assert.equals(source + '\n', out);
 	}
 
 	public function testTwoDeclsEachWithLeadingComment():Void {
@@ -158,14 +155,12 @@ class HxTriviaWriteTest extends Test {
 	}
 
 	public function testOrphanMultiLineBlockCommentInEmptyClassBody():Void {
-		// Max-dry: source's leading-ws on interior lines + trailing-ws
-		// before `*/` are stripped at parse time. Writer re-emits at
-		// the default `commentStyle: JavadocNoStars`.
+		// Default `commentStyle: Verbatim` preserves indent and content
+		// byte-identical between `/*` and `*/`.
 		final source:String = 'class Main {\n\t/*\n\t\tTODO:\n\t*/\n}';
-		final expected:String = 'class Main {\n\t/**\n\t\tTODO:\n\t**/\n}\n';
 		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out:String = HaxeModuleTriviaWriter.write(ast);
-		Assert.equals(expected, out);
+		Assert.equals(source + '\n', out);
 	}
 
 	public function testOrphanCommentAfterLastMemberBlankLine():Void {
@@ -199,15 +194,14 @@ class HxTriviaWriteTest extends Test {
 
 
 	/**
-	 * ω-C-commentStyle — default `JavadocNoStars`: `/**…**\/` wrap
-	 * with plain indent-unit content (no ` * ` markers). Mixed-indent
-	 * source re-emits at writer's `indentChar=Tab`. Content lines
-	 * relative-offset past the common leading prefix is preserved
-	 * (bullets indented one space under a paragraph round-trip as
-	 * one-space-past-the-indent-unit in the output — same contract
-	 * as the `issue_51_adjust_comment_indentation` corpus fixture).
+	 * ω-block-comment-verbatim — default `commentStyle: Verbatim`
+	 * preserves content byte-identical: 4-space source indent stays
+	 * 4-space (no canonicalization to writer's `\t`), per-line bullet
+	 * spacing preserved, wrap stars (`/**` open, `**\/` close) stay
+	 * verbatim. Re-indentation on context change lives in a separate
+	 * writer-side pass that this slice does not enable.
 	 */
-	public function testMultiLineBlockCommentJavadocNoStarsDefault():Void {
+	public function testMultiLineBlockCommentDefaultVerbatim():Void {
 		final source:String = 'class Main {\n'
 			+ '    /**\n'
 			+ '        Description\n'
@@ -218,10 +212,10 @@ class HxTriviaWriteTest extends Test {
 			+ '}';
 		final expected:String = 'class Main {\n'
 			+ '\t/**\n'
-			+ '\t\tDescription\n'
-			+ '\t\t - point A\n'
-			+ '\t\t - point B\n'
-			+ '\t**/\n'
+			+ '        Description\n'
+			+ '         - point A\n'
+			+ '         - point B\n'
+			+ '    **/\n'
 			+ '\tstatic public function main() {}\n'
 			+ '}\n';
 		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
@@ -230,12 +224,10 @@ class HxTriviaWriteTest extends Test {
 	}
 
 	/**
-	 * ω-C-commentStyle — source-javadoc (` * foo`) also collapses
-	 * into content-only on capture. Default `JavadocNoStars` re-
-	 * emits as `/**…**\/` wrap with plain indent-unit content — the
-	 * source ` * ` markers are not round-tripped.
+	 * ω-block-comment-verbatim — javadoc body with ` * ` per-line
+	 * markers round-trips byte-identical under default `Verbatim`.
 	 */
-	public function testMultiLineBlockCommentSourceJavadocCollapses():Void {
+	public function testMultiLineBlockCommentJavadocBodyVerbatim():Void {
 		final source:String = 'class Main {\n'
 			+ '\t/**\n'
 			+ '\t * first\n'
@@ -243,23 +235,15 @@ class HxTriviaWriteTest extends Test {
 			+ '\t */\n'
 			+ '\tvar x:Int;\n'
 			+ '}';
-		final expected:String = 'class Main {\n'
-			+ '\t/**\n'
-			+ '\t\tfirst\n'
-			+ '\t\tsecond\n'
-			+ '\t**/\n'
-			+ '\tvar x:Int;\n'
-			+ '}\n';
 		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out:String = HaxeModuleTriviaWriter.write(ast);
-		Assert.equals(expected, out);
+		Assert.equals(source + '\n', out);
 	}
 
 	/**
-	 * ω-C-commentStyle — inline content on the opening line wraps
-	 * through the same default `JavadocNoStars` path as separate-
-	 * line content. The `/** one, two,` opening collapses to a
-	 * regular first interior line after capture.
+	 * ω-block-comment-verbatim — inline content on the opening line
+	 * stays inline (no `\n` injected after `/*`) under default
+	 * `Verbatim`.
 	 */
 	public function testMultiLineBlockCommentInlineFirstLine():Void {
 		final source:String = 'class Main {\n'
@@ -267,16 +251,9 @@ class HxTriviaWriteTest extends Test {
 			+ '\tthree. */\n'
 			+ '\tvar x:Int;\n'
 			+ '}';
-		final expected:String = 'class Main {\n'
-			+ '\t/**\n'
-			+ '\t\tone, two,\n'
-			+ '\t\tthree.\n'
-			+ '\t**/\n'
-			+ '\tvar x:Int;\n'
-			+ '}\n';
 		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out:String = HaxeModuleTriviaWriter.write(ast);
-		Assert.equals(expected, out);
+		Assert.equals(source + '\n', out);
 	}
 
 	/**
@@ -334,28 +311,20 @@ class HxTriviaWriteTest extends Test {
 	}
 
 	/**
-	 * ω-altWrap — asymmetric source `/** … *\/` (DoubleStars open +
-	 * Plain close): parser tries the alt `/**`+`**\/` pair first, the
-	 * `**\/` close fails on `*\/`, rolls back to primary `/*`+`*\/`
-	 * pair which absorbs the leading `*` into body content. Output
-	 * canonicalises to `/** … **\/` under default `JavadocNoStars`.
+	 * ω-block-comment-verbatim — asymmetric `/** … *\/` round-trips
+	 * byte-identical under default `Verbatim`: extra `*` after `/*`
+	 * lives in content as a body byte; close stays `*\/`.
 	 */
-	public function testMultiLineBlockCommentMixedDoubleOpenSingleCloseRoundTrips():Void {
+	public function testMultiLineBlockCommentAsymmetricVerbatim():Void {
 		final source:String = 'class Main {\n'
 			+ '\t/**\n'
 			+ '\tfoo\n'
 			+ '\t*/\n'
 			+ '\tvar x:Int;\n'
 			+ '}';
-		final expected:String = 'class Main {\n'
-			+ '\t/**\n'
-			+ '\t\tfoo\n'
-			+ '\t**/\n'
-			+ '\tvar x:Int;\n'
-			+ '}\n';
 		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out:String = HaxeModuleTriviaWriter.write(ast);
-		Assert.equals(expected, out);
+		Assert.equals(source + '\n', out);
 	}
 
 	private static function withCommentStyle(style:anyparse.format.CommentStyle):anyparse.grammar.haxe.HxModuleWriteOptions {

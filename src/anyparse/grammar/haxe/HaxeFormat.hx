@@ -443,7 +443,7 @@ final class HaxeFormat implements TextFormat {
 		lineEnd: '\n',
 		finalNewline: true,
 		trailingWhitespace: false,
-		commentStyle: CommentStyle.JavadocNoStars,
+		commentStyle: CommentStyle.Verbatim,
 		sameLineElse: SameLinePolicy.Same,
 		sameLineCatch: SameLinePolicy.Same,
 		sameLineDoWhile: SameLinePolicy.Same,
