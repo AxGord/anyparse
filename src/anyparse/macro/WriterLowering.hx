@@ -1113,9 +1113,21 @@ class WriterLowering {
 					];
 					{expr: ESwitch(prevElemBodyAccess, cases, null), pos: Context.currentPos()};
 				};
+				// ω-case-body-policy: `@:fmt(bodyPolicy('flag1', 'flag2', ...))`
+				// on a `nestBody` Star opts the body field into runtime
+				// single-stmt-flat emission. The runtime ORs all named
+				// `BodyPolicy` flags — when ANY equals `Same` AND the
+				// body has exactly one element with no leading / trailing
+				// trivia, the writer skips the `_dn` wrap and emits an
+				// inline ` <stmt>` after the preceding token. Currently
+				// consumed by `HxCaseBranch.body` and
+				// `HxDefaultBranch.stmts` to switch between
+				// `case X:\n\tstmt;` (Next) and `case X: stmt;` (Same).
+				final caseBodyFlagNames:Array<String> = fmtReadStringArgs(starNode, 'bodyPolicy') ?? [];
 				parts.push(triviaTryparseStarExpr(
 					fieldAccess, elemFn, sepExpr, sameLineName != null, nestBody,
-					tryparseTrailBB, tryparseTrailLC, firstSepOverride, subsequentSepOverride
+					tryparseTrailBB, tryparseTrailLC, firstSepOverride, subsequentSepOverride,
+					caseBodyFlagNames
 				));
 				return;
 			}
@@ -2946,7 +2958,8 @@ class WriterLowering {
 		sepBeforeFirst:Bool, nestBody:Bool,
 		trailBBAccess:Null<Expr>, trailLCAccess:Null<Expr>,
 		firstSepOverride:Null<Expr> = null,
-		subsequentSepOverride:Null<Expr> = null
+		subsequentSepOverride:Null<Expr> = null,
+		caseBodyFlagNames:Null<Array<String>> = null
 	):Expr {
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
@@ -2968,12 +2981,39 @@ class WriterLowering {
 		// `\ncatch`).
 		final firstSepExpr:Expr = firstSepOverride ?? sepExpr;
 		final subsequentSepExpr:Expr = subsequentSepOverride ?? sepExpr;
+		// ω-case-body-policy: when the Star carries
+		// `@:fmt(bodyPolicy('flag1', 'flag2', ...))`, build a runtime
+		// expression that ORs `opt.<flag> == BodyPolicy.Same` across
+		// every named flag. When the OR is true AND the body holds a
+		// single element with no leading or orphan-trailing trivia,
+		// the runtime skips the `_dn` wrap and inlines the element via
+		// `_dt(' ')` instead of `_dhl()` — yielding `case X: foo();`
+		// (Same) instead of `case X:\n\tfoo();` (Next). When no flags
+		// are forwarded the gate stays `false` and the wrap behaves as
+		// before this slice.
+		final flatGateExpr:Expr = if (caseBodyFlagNames == null || caseBodyFlagNames.length == 0)
+			macro false;
+		else {
+			final samePat:Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BodyPolicy', 'Same']);
+			var acc:Null<Expr> = null;
+			for (flag in caseBodyFlagNames) {
+				final optFlag:Expr = {expr: EField(macro opt, flag), pos: Context.currentPos()};
+				final cmp:Expr = macro $optFlag == $samePat;
+				acc = acc == null ? cmp : macro $acc || $cmp;
+			}
+			(acc : Expr);
+		};
 		return macro {
 			final _arr = $fieldAccess;
 			final _trailLC:Array<String> = $trailLC;
 			final _trailBB:Bool = $trailBB;
 			final _sepFirst:Bool = $sepBeforeFirstExpr;
 			final _nestBody:Bool = $nestBodyExpr;
+			final _flatCase:Bool = _nestBody
+				&& $flatGateExpr
+				&& _arr.length == 1
+				&& _trailLC.length == 0
+				&& _arr[0].leadingComments.length == 0;
 			if (_arr.length == 0 && _trailLC.length == 0) _de() else {
 				final _docs:Array<anyparse.core.Doc> = [];
 				var _si:Int = 0;
@@ -2988,6 +3028,8 @@ class WriterLowering {
 							_docs.push(_dhl());
 							_ci++;
 						}
+					} else if (_flatCase) {
+						_docs.push(_dt(' '));
 					} else if (_nestBody) {
 						_docs.push(_dhl());
 					} else if (_si > 0 && _t.newlineBefore) {
@@ -3020,7 +3062,9 @@ class WriterLowering {
 						_ti++;
 					}
 				}
-				if (_nestBody) {
+				if (_flatCase) {
+					_dc(_docs);
+				} else if (_nestBody) {
 					final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 					_dn(_cols, _dc(_docs));
 				} else _dc(_docs);

@@ -93,6 +93,23 @@ import anyparse.format.WriteOptions;
  *    shape-aware — the leftCurly placement still wins for the brace
  *    position (`leftCurly=Next` → `try\n{` regardless of `tryBody`).
  *
+ * Fields added in slice ω-case-body-policy:
+ *  - `caseBody` — three-way `BodyPolicy` knob shape (`Same` / `Next` /
+ *    default) gating the body-placement axis at `HxCaseBranch.body` /
+ *    `HxDefaultBranch.stmts` for switch-as-statement contexts.
+ *    `Same` collapses a single-stmt body onto the case header line
+ *    (`case X: foo();`); `Next` (default) keeps the multiline
+ *    `case X:\n\tfoo();` shape. `FitLine` and `Keep` are not yet
+ *    implemented — they degrade to `Next`. Multi-stmt bodies always
+ *    stay multiline regardless of the knob.
+ *  - `expressionCase` — same shape, drives the same Star body but is
+ *    a sibling JSON key in `hxformat.json`. Conceptually distinguishes
+ *    expression-context switches (`var x = switch ... { case Y: 1; }`)
+ *    from statement-context switches; today the runtime ORs both
+ *    knobs (any non-`Next` value triggers flat) because no fixture
+ *    sets diverging values for the two contexts. AST-level threading
+ *    of expr-vs-stmt context is deferred until a fixture demands it.
+ *
  * Field added in slice ω-throw-body:
  *  - `throwBody` — same `BodyPolicy` knob shape as `returnBody`,
  *    gating the separator between the `throw` keyword and its value
@@ -609,6 +626,8 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	throwBody:BodyPolicy,
 	catchBody:BodyPolicy,
 	tryBody:BodyPolicy,
+	caseBody:BodyPolicy,
+	expressionCase:BodyPolicy,
 	leftCurly:BracePlacement,
 	objectFieldColon:WhitespacePolicy,
 	typeHintColon:WhitespacePolicy,

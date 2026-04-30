@@ -18,8 +18,12 @@ package anyparse.grammar.haxe;
  * `@:fmt(nestBody)` makes the writer wrap the body Doc in an extra
  * indent level, so statements drop onto their own line below the
  * `default:` header at body-indent instead of inline.
+ *
+ * `@:fmt(bodyPolicy('caseBody', 'expressionCase'))` (ω-case-body-policy)
+ * mirrors `HxCaseBranch.body` — single-stmt flat emission when either
+ * flag is `Same` and the body has no leading / orphan-trailing trivia.
  */
 @:peg
 typedef HxDefaultBranch = {
-	@:lead(':') @:trivia @:tryparse @:fmt(nestBody) var stmts:Array<HxStatement>;
+	@:lead(':') @:trivia @:tryparse @:fmt(nestBody, bodyPolicy('caseBody', 'expressionCase')) var stmts:Array<HxStatement>;
 };

@@ -54,6 +54,19 @@ package anyparse.grammar.haxe.format;
  * `HxModuleWriteOptions`. Default `Next` mirrors haxe-formatter's
  * `sameLine.catchBody: @:default(Next)`.
  *
+ * `caseBody` (ω-case-body-policy) is the same three-way body-placement
+ * knob shape as `ifBody`, gating whether a single-stmt switch case body
+ * sits on the same line as `case X:` or moves to a fresh line at one
+ * indent level deeper. The loader maps it onto the runtime `caseBody`
+ * option on `HxModuleWriteOptions`. Default `Next` matches haxe-
+ * formatter's `sameLine.caseBody: @:default(Next)`. `expressionCase`
+ * is the sibling knob for switches used in expression position
+ * (`var x = switch ... { case Y: 1; }`); the loader maps it onto the
+ * runtime `expressionCase` option. Both knobs feed the same Star body
+ * site at runtime (the writer ORs them together — any `Same` value
+ * triggers single-stmt flatten; `FitLine` and `Keep` degrade to `Next`
+ * until those policies are wired for case bodies in a follow-up slice).
+ *
  * `tryBody` (ω-tryBody) is the same three-way body-placement knob
  * shape as `catchBody`, gating the separator between the `try`
  * keyword and its body at `HxTryCatchStmt.body`. The loader maps
@@ -98,4 +111,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var catchBody:HxFormatBodyPolicy;
 
 	@:optional var tryBody:HxFormatBodyPolicy;
+
+	@:optional var caseBody:HxFormatBodyPolicy;
+
+	@:optional var expressionCase:HxFormatBodyPolicy;
 };

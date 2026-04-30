@@ -333,6 +333,8 @@ final class HaxeFormatConfigLoader {
 			throwBody: base.throwBody,
 			catchBody: base.catchBody,
 			tryBody: base.tryBody,
+			caseBody: base.caseBody,
+			expressionCase: base.expressionCase,
 			leftCurly: base.leftCurly,
 			objectFieldColon: base.objectFieldColon,
 			typeHintColon: base.typeHintColon,
@@ -419,6 +421,8 @@ final class HaxeFormatConfigLoader {
 		if (section.returnBody != null) opt.returnBody = bodyPolicyToRuntime(section.returnBody);
 		if (section.catchBody != null) opt.catchBody = bodyPolicyToRuntime(section.catchBody);
 		if (section.tryBody != null) opt.tryBody = bodyPolicyToRuntime(section.tryBody);
+		if (section.caseBody != null) opt.caseBody = bodyPolicyToRuntime(section.caseBody);
+		if (section.expressionCase != null) opt.expressionCase = bodyPolicyToRuntime(section.expressionCase);
 		if (section.elseIf != null) opt.elseIf = keywordPlacementToRuntime(section.elseIf);
 		if (section.fitLineIfWithElse != null) opt.fitLineIfWithElse = section.fitLineIfWithElse;
 		if (section.expressionTry != null) opt.expressionTry = sameLineToRuntime(section.expressionTry);

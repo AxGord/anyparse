@@ -156,6 +156,18 @@ final class HaxeFormat implements TextFormat {
 	 * override (`"sameLine": { "catchBody": "same" | "fitLine" |
 	 * "keep" }`).
 	 *
+	 * `caseBody` / `expressionCase` (ω-case-body-policy) default to
+	 * `Next` — single-stmt switch case bodies stay on a fresh line
+	 * below `case X:`, matching pre-slice byte-identical output for
+	 * fixtures that don't opt in. Setting either to `Same` flattens
+	 * single-stmt bodies onto the case header line (`case X: foo();`).
+	 * `caseBody` corresponds to haxe-formatter's
+	 * `sameLine.caseBody: @:default(Next)`; `expressionCase` to
+	 * `sameLine.expressionCase: @:default(Same)`. We diverge from the
+	 * latter's `Same` default to avoid the `;`-cascade regression
+	 * documented in `feedback_case_body_default_flip_regresses.md` —
+	 * default-flipping `expressionCase` to `Same` is a separate slice.
+	 *
 	 * `tryBody` (ω-tryBody) defaults to `Same` — diverges from
 	 * upstream haxe-formatter's `sameLine.tryBody: @:default(next)`
 	 * to match the AxGord fork's project-level `hxformat.json`
@@ -459,6 +471,8 @@ final class HaxeFormat implements TextFormat {
 		throwBody: BodyPolicy.FitLine,
 		catchBody: BodyPolicy.Next,
 		tryBody: BodyPolicy.Same,
+		caseBody: BodyPolicy.Next,
+		expressionCase: BodyPolicy.Next,
 		leftCurly: BracePlacement.Same,
 		objectFieldColon: WhitespacePolicy.After,
 		typeHintColon: WhitespacePolicy.None,
