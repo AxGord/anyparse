@@ -22,12 +22,15 @@ package anyparse.grammar.haxe;
  * indent level, so statements drop onto their own line below the
  * `case pattern:` header at body-indent instead of inline.
  *
- * `@:fmt(bodyPolicy('caseBody', 'expressionCase'))` (ω-case-body-policy)
- * exposes the dual `WriteOptions` knobs that gate single-stmt-flat
- * emission. When either flag is `Same` and the body has exactly one
- * statement with no leading or orphan-trailing comments, the writer
- * skips the `nestBody` indent and emits `case X: foo();` flat. Multi-
- * stmt bodies keep the multiline `nestBody` shape regardless.
+ * `@:fmt(bodyPolicy('caseBody', 'expressionCase'))` (ω-case-body-policy
+ * + ω-case-body-keep) exposes the dual `WriteOptions` knobs that gate
+ * single-stmt-flat emission. The writer skips the `nestBody` indent
+ * and emits `case X: foo();` flat when the body has exactly one
+ * statement with no leading or orphan-trailing comments AND either:
+ *  - either flag is `Same` (override — always flatten); or
+ *  - either flag is `Keep` and `Trivial<T>.newlineBefore` of the body's
+ *    first element is `false` (preserve same-line source shape).
+ * Multi-stmt bodies keep the multiline `nestBody` shape regardless.
  */
 @:peg
 typedef HxCaseBranch = {

@@ -19,9 +19,12 @@ package anyparse.grammar.haxe;
  * indent level, so statements drop onto their own line below the
  * `default:` header at body-indent instead of inline.
  *
- * `@:fmt(bodyPolicy('caseBody', 'expressionCase'))` (ω-case-body-policy)
- * mirrors `HxCaseBranch.body` — single-stmt flat emission when either
- * flag is `Same` and the body has no leading / orphan-trailing trivia.
+ * `@:fmt(bodyPolicy('caseBody', 'expressionCase'))` (ω-case-body-policy
+ * + ω-case-body-keep) mirrors `HxCaseBranch.body` — single-stmt flat
+ * emission when the body has no leading / orphan-trailing trivia AND
+ * either flag is `Same` (always flatten) OR either flag is `Keep` and
+ * the source had the stmt on the same line as `:`
+ * (`!Trivial<T>.newlineBefore` on the first element).
  */
 @:peg
 typedef HxDefaultBranch = {

@@ -12,10 +12,20 @@ package anyparse.format;
  * fits within `lineWidth`, otherwise breaks to the next line at one
  * indent level deeper.
  * `Keep` — preserve the source shape. The writer reads a per-node
- * boolean captured by the trivia-mode parser (`<field>BodyOnSameLine`)
- * and dispatches between `Same` and `Next` layouts at runtime. In
- * plain (non-trivia) mode the parser does not capture the slot, so
- * `Keep` degrades to `Same`.
+ * boolean captured by the trivia-mode parser and dispatches between
+ * `Same` and `Next` layouts at runtime. Two capture paths exist:
+ *  - Optional-kw Ref body fields (e.g. `if/else`, `try/catch`):
+ *    a synthesised sibling slot `<field>BodyOnSameLine:Bool` records
+ *    whether the body's first token followed the keyword on the same
+ *    line. Consumed by `bodyPolicyWrap`'s `Keep` branch.
+ *  - `@:trivia` Star body fields with `@:fmt(bodyPolicy(...))` (e.g.
+ *    `HxCaseBranch.body`, `HxDefaultBranch.stmts`): no synth slot —
+ *    the existing `Trivial<T>.newlineBefore` of the first element
+ *    carries the same signal (`!newlineBefore` ≡ same-line).
+ *    Consumed by `triviaTryparseStarExpr`'s flat-case gate.
+ * In plain (non-trivia) parsers neither capture path runs, so `Keep`
+ * matches the writer's default layout for the field (the Ref-path
+ * fallback emits `Same`, the Star-path is unreachable in plain mode).
  *
  * Consumed by the `@:fmt(bodyPolicy("flagName"))` writer knob: the
  * argument names a `BodyPolicy` field on the generated `WriteOptions`

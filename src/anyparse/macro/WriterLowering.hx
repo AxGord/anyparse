@@ -1122,16 +1122,21 @@ class WriterLowering {
 					];
 					{expr: ESwitch(prevElemBodyAccess, cases, null), pos: Context.currentPos()};
 				};
-				// ω-case-body-policy: `@:fmt(bodyPolicy('flag1', 'flag2', ...))`
-				// on a `nestBody` Star opts the body field into runtime
+				// ω-case-body-policy / ω-case-body-keep:
+				// `@:fmt(bodyPolicy('flag1', 'flag2', ...))` on a
+				// `nestBody` Star opts the body field into runtime
 				// single-stmt-flat emission. The runtime ORs all named
-				// `BodyPolicy` flags — when ANY equals `Same` AND the
-				// body has exactly one element with no leading / trailing
-				// trivia, the writer skips the `_dn` wrap and emits an
-				// inline ` <stmt>` after the preceding token. Currently
-				// consumed by `HxCaseBranch.body` and
-				// `HxDefaultBranch.stmts` to switch between
-				// `case X:\n\tstmt;` (Next) and `case X: stmt;` (Same).
+				// `BodyPolicy` flags across two predicates:
+				//  - ANY flag == `Same` → flatten unconditionally (override).
+				//  - ANY flag == `Keep` → flatten IFF the source had the
+				//    body's first element on the same line as the lead
+				//    (read off `Trivial<T>.newlineBefore`).
+				// Either path gates on the body holding exactly one element
+				// with no leading / orphan-trailing trivia; multi-stmt and
+				// trivia-bearing bodies stay multiline. Consumed by
+				// `HxCaseBranch.body` and `HxDefaultBranch.stmts` to
+				// switch between `case X:\n\tstmt;` (Next) and
+				// `case X: stmt;` (Same / Keep+sameLine).
 				final caseBodyFlagNames:Array<String> = fmtReadStringArgs(starNode, 'bodyPolicy') ?? [];
 				parts.push(triviaTryparseStarExpr(
 					fieldAccess, elemFn, sepExpr, sameLineName != null, nestBody,
@@ -3106,27 +3111,36 @@ class WriterLowering {
 		// `\ncatch`).
 		final firstSepExpr:Expr = firstSepOverride ?? sepExpr;
 		final subsequentSepExpr:Expr = subsequentSepOverride ?? sepExpr;
-		// ω-case-body-policy: when the Star carries
+		// ω-case-body-policy / ω-case-body-keep: when the Star carries
 		// `@:fmt(bodyPolicy('flag1', 'flag2', ...))`, build a runtime
-		// expression that ORs `opt.<flag> == BodyPolicy.Same` across
-		// every named flag. When the OR is true AND the body holds a
-		// single element with no leading or orphan-trailing trivia,
-		// the runtime skips the `_dn` wrap and inlines the element via
-		// `_dt(' ')` instead of `_dhl()` — yielding `case X: foo();`
-		// (Same) instead of `case X:\n\tfoo();` (Next). When no flags
-		// are forwarded the gate stays `false` and the wrap behaves as
-		// before this slice.
+		// gate over `opt.<flag>` for the named flags. Two predicates
+		// are ORed across every flag:
+		//  - `Same`: ANY flag set to `BodyPolicy.Same` flattens
+		//    unconditionally — author's source shape is overridden.
+		//  - `Keep`: ANY flag set to `BodyPolicy.Keep` flattens IFF the
+		//    captured body's first element has no preceding source
+		//    newline (`!_arr[0].newlineBefore`). This preserves the
+		//    author's per-instance choice between `case X: foo();` and
+		//    `case X:\n\tfoo();`.
+		// `_arr[0]` access is safe here because the outer `_flatCase`
+		// short-circuits via `_arr.length == 1` BEFORE this gate runs.
+		// `Next` and `FitLine` (default for both flags) leave the gate
+		// `false` — the wrap stays at its multiline shape.
 		final flatGateExpr:Expr = if (caseBodyFlagNames == null || caseBodyFlagNames.length == 0)
 			macro false;
 		else {
 			final samePat:Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BodyPolicy', 'Same']);
-			var acc:Null<Expr> = null;
+			final keepPat:Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BodyPolicy', 'Keep']);
+			var sameAcc:Null<Expr> = null;
+			var keepAcc:Null<Expr> = null;
 			for (flag in caseBodyFlagNames) {
 				final optFlag:Expr = {expr: EField(macro opt, flag), pos: Context.currentPos()};
-				final cmp:Expr = macro $optFlag == $samePat;
-				acc = acc == null ? cmp : macro $acc || $cmp;
+				final sameCmp:Expr = macro $optFlag == $samePat;
+				final keepCmp:Expr = macro $optFlag == $keepPat;
+				sameAcc = sameAcc == null ? sameCmp : macro $sameAcc || $sameCmp;
+				keepAcc = keepAcc == null ? keepCmp : macro $keepAcc || $keepCmp;
 			}
-			(acc : Expr);
+			macro ($sameAcc || ($keepAcc && !_arr[0].newlineBefore));
 		};
 		return macro {
 			final _arr = $fieldAccess;
@@ -3135,10 +3149,10 @@ class WriterLowering {
 			final _sepFirst:Bool = $sepBeforeFirstExpr;
 			final _nestBody:Bool = $nestBodyExpr;
 			final _flatCase:Bool = _nestBody
-				&& $flatGateExpr
 				&& _arr.length == 1
 				&& _trailLC.length == 0
-				&& _arr[0].leadingComments.length == 0;
+				&& _arr[0].leadingComments.length == 0
+				&& $flatGateExpr;
 			if (_arr.length == 0 && _trailLC.length == 0) _de() else {
 				final _docs:Array<anyparse.core.Doc> = [];
 				var _si:Int = 0;

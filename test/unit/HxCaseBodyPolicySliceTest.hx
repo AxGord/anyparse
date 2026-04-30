@@ -18,8 +18,10 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
  * an inline ` <stmt>` when the body has exactly one element with no
  * leading or orphan-trailing trivia.
  *
- * Only `Same` and `Next` are wired in this slice. `FitLine` and `Keep`
- * fall through to the `Next` path.
+ * `Same` and `Next` are wired through opt.<flag> directly. `Keep`
+ * (ω-case-body-keep) reads `Trivial<T>.newlineBefore` of the body's
+ * first element to flatten only when the source had the stmt on the
+ * same line as `:`. `FitLine` falls through to the `Next` path.
  *
  * Per `feedback_unit_test_trivia_writer.md`: the knobs are visible only
  * via `HaxeModuleTriviaParser`/`HaxeModuleTriviaWriter` — the plain
@@ -108,10 +110,30 @@ final class HxCaseBodyPolicySliceTest extends Test {
 		Assert.isTrue(out.indexOf('case 1:\n') != -1, 'FitLine must not flatten today (degrades to Next): <$out>');
 	}
 
-	public function testKeepDegradesToNext():Void {
+	public function testKeepFlattensSameLineSource():Void {
 		final src:String = 'class M { function f():Void { switch (x) { case 1: foo(); } } }';
 		final out:String = writeWithCaseBody(src, BodyPolicy.Keep);
-		Assert.isTrue(out.indexOf('case 1:\n') != -1, 'Keep must not flatten today (degrades to Next): <$out>');
+		Assert.isTrue(out.indexOf('case 1: foo();') != -1, 'Keep should flatten same-line source: <$out>');
+	}
+
+	public function testKeepPreservesNextLineSource():Void {
+		final src:String = 'class M { function f():Void { switch (x) {\n\t\t\tcase 1:\n\t\t\t\tfoo();\n\t\t} } }';
+		final out:String = writeWithCaseBody(src, BodyPolicy.Keep);
+		Assert.isTrue(out.indexOf('case 1: foo();') == -1, 'Keep should not flatten next-line source: <$out>');
+		Assert.isTrue(out.indexOf('case 1:\n') != -1, 'expected multiline `case 1:\\n` for next-line source: <$out>');
+	}
+
+	public function testKeepMultiStmtForcedMultiline():Void {
+		final src:String = 'class M { function f():Void { switch (x) { case 1: foo(); bar(); } } }';
+		final out:String = writeWithCaseBody(src, BodyPolicy.Keep);
+		Assert.isTrue(out.indexOf('case 1: foo();') == -1, 'multi-stmt body must stay multiline under Keep: <$out>');
+		Assert.isTrue(out.indexOf('case 1:\n') != -1, 'expected multiline `case 1:\\n` for multi-stmt under Keep: <$out>');
+	}
+
+	public function testExpressionCaseKeepFollowsSource():Void {
+		final src:String = 'class M { function f():Void { var v = switch (x) { case 1: 10; }; } }';
+		final out:String = writeWithExpressionCase(src, BodyPolicy.Keep);
+		Assert.isTrue(out.indexOf('case 1: 10;') != -1, 'expressionCase=Keep should flatten same-line source: <$out>');
 	}
 
 	private inline function writeWithCaseBody(src:String, policy:BodyPolicy):String {
