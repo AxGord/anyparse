@@ -311,6 +311,9 @@ enum HxExpr {
 	@:prefix('~')
 	BitNot(operand:HxExpr);
 
+	@:prefix('...') @:fmt(tight)
+	Spread(operand:HxExpr);
+
 	@:postfix('.')
 	FieldAccess(operand:HxExpr, field:HxIdentLit);
 

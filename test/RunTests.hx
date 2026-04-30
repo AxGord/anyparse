@@ -43,6 +43,7 @@ import unit.HxBlockExprSliceTest;
 import unit.HxTryExprSliceTest;
 import unit.HxObjectLitSliceTest;
 import unit.HxParamSliceTest;
+import unit.HxSpreadSliceTest;
 import unit.HxTypeParamSliceTest;
 import unit.HxTypeArrowSliceTest;
 import unit.HxTypeAnonSliceTest;
@@ -118,6 +119,7 @@ class RunTests {
 		runner.addCase(new HxModifierSliceTest());
 		runner.addCase(new HxVarNoTypeSliceTest());
 		runner.addCase(new HxParamSliceTest());
+		runner.addCase(new HxSpreadSliceTest());
 		runner.addCase(new HxTypeParamSliceTest());
 		runner.addCase(new HxTypeArrowSliceTest());
 		runner.addCase(new HxTypeAnonSliceTest());

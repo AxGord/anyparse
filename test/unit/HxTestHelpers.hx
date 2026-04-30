@@ -148,6 +148,7 @@ class HxTestHelpers extends Test {
 		return switch param {
 			case Required(body): body;
 			case Optional(_): throw 'expected HxParam.Required, got Optional';
+			case Rest(_): throw 'expected HxParam.Required, got Rest';
 		};
 	}
 
@@ -159,6 +160,20 @@ class HxTestHelpers extends Test {
 		return switch param {
 			case Optional(body): body;
 			case Required(_): throw 'expected HxParam.Optional, got Required';
+			case Rest(_): throw 'expected HxParam.Optional, got Rest';
+		};
+	}
+
+	/**
+	 * Unwrap an `HxParam` enum to the shared body when the variant is
+	 * `Rest` (`...name:Type` spread / varargs). Throws on `Required` /
+	 * `Optional`. See `expectRequiredParam`.
+	 */
+	private function expectRestParam(param:HxParam):HxParamBody {
+		return switch param {
+			case Rest(body): body;
+			case Required(_): throw 'expected HxParam.Rest, got Required';
+			case Optional(_): throw 'expected HxParam.Rest, got Optional';
 		};
 	}
 
@@ -172,7 +187,7 @@ class HxTestHelpers extends Test {
 	 */
 	private function paramBody(param:HxParam):HxParamBody {
 		return switch param {
-			case Required(body) | Optional(body): body;
+			case Required(body) | Optional(body) | Rest(body): body;
 		};
 	}
 
