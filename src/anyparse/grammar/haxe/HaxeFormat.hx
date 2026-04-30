@@ -14,7 +14,7 @@ import anyparse.format.text.FieldLookup;
 import anyparse.format.text.KeySyntax;
 import anyparse.format.text.MissingPolicy;
 import anyparse.format.text.TextFormat;
-import anyparse.format.text.TextFormat.BlockComment;
+import anyparse.format.text.TextFormat.BlockCommentDelims;
 import anyparse.format.text.TextFormat.BoolLiterals;
 import anyparse.format.text.TextFormat.UnescapeResult;
 import anyparse.format.text.TrailingSepPolicy;
@@ -61,7 +61,7 @@ final class HaxeFormat implements TextFormat {
 
 	public var whitespace(default, null):String = ' \t\n\r';
 	public var lineComment(default, null):Null<String> = '//';
-	public var blockComment(default, null):Null<BlockComment> = {open: '/*', close: '*/'};
+	public var blockComment(default, null):Null<BlockCommentDelims> = {open: '/*', close: '*/'};
 
 	public var keySyntax(default, null):KeySyntax = KeySyntax.Unquoted;
 	public var stringQuote(default, null):Array<String> = ['"', "'"];
@@ -498,8 +498,8 @@ final class HaxeFormat implements TextFormat {
 		arrowFunctions: WhitespacePolicy.Both,
 		afterPackage: 1,
 		beforeUsing: 1,
-		blockCommentAdapter: HaxeCommentNormalizer.processCapturedBlockComment,
-		lineCommentAdapter: HaxeCommentNormalizer.normalizeLineComment,
+		blockCommentAdapter: anyparse.format.text.BlockCommentNormalizer.processCapturedBlockComment,
+		lineCommentAdapter: anyparse.format.text.LineCommentNormalizer.normalizeLineComment,
 	};
 
 	private function new() {}

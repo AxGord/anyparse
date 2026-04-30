@@ -4,7 +4,7 @@ import anyparse.format.CommentStyle;
 import anyparse.format.Encoding;
 import anyparse.format.IndentChar;
 import anyparse.format.WriteOptions;
-import anyparse.format.text.TextFormat.BlockComment;
+import anyparse.format.text.TextFormat.BlockCommentDelims;
 import anyparse.format.text.TextFormat.BoolLiterals;
 import anyparse.format.text.TextFormat.UnescapeResult;
 
@@ -38,7 +38,7 @@ final class JsonFormat implements TextFormat {
 
 	public var whitespace(default, null):String = ' \t\n\r';
 	public var lineComment(default, null):Null<String> = null;
-	public var blockComment(default, null):Null<BlockComment> = null;
+	public var blockComment(default, null):Null<BlockCommentDelims> = null;
 
 	public var keySyntax(default, null):KeySyntax = KeySyntax.Quoted;
 	public var stringQuote(default, null):Array<String> = ['"'];

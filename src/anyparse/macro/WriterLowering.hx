@@ -146,7 +146,7 @@ class WriterLowering {
 		// dispatches against the rewritten value naturally — no recursive
 		// call to `$writeFnName`, so no risk of infinite loops on
 		// rewrites that produce values still matching the same hook (e.g.
-		// `HaxeCommentNormalizer.normalize` always returns a canonical
+		// `anyparse.format.text.BlockCommentNormalizer.normalize` always returns a canonical
 		// `BlockComment`). For struct rules the body reads `value.<field>`
 		// which now sees the rewritten value's fields. The single rule-
 		// level wrap covers both kinds uniformly.
@@ -504,11 +504,10 @@ class WriterLowering {
 					final _docs:Array<anyparse.core.Doc> = [_dt($v{leadText})];
 					var _i:Int = 0;
 					while (_i < _args.length) {
-						_docs.push(_dhl());
+						if (_i > 0) _docs.push(_dhl());
 						_docs.push($elemCall);
 						_i++;
 					}
-					_docs.push(_dhl());
 					_docs.push(_dt($v{trailText}));
 					_dc(_docs);
 				});
@@ -1198,11 +1197,10 @@ class WriterLowering {
 					final _docs:Array<anyparse.core.Doc> = [_dt($v{openText ?? ''})];
 					var _si:Int = 0;
 					while (_si < _arr.length) {
-						_docs.push(_dhl());
+						if (_si > 0) _docs.push(_dhl());
 						_docs.push($elemCall);
 						_si++;
 					}
-					_docs.push(_dhl());
 					_docs.push(_dt($v{closeText}));
 					_dc(_docs);
 				});

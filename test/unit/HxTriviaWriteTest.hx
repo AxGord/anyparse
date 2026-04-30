@@ -194,12 +194,16 @@ class HxTriviaWriteTest extends Test {
 
 
 	/**
-	 * ω-block-comment-verbatim — default `commentStyle: Verbatim`
-	 * preserves content byte-identical: 4-space source indent stays
-	 * 4-space (no canonicalization to writer's `\t`), per-line bullet
-	 * spacing preserved, wrap stars (`/**` open, `**\/` close) stay
-	 * verbatim. Re-indentation on context change lives in a separate
-	 * writer-side pass that this slice does not enable.
+	 * ω-block-comment-verbatim — default `commentStyle: Verbatim` with
+	 * indent-canonicalization on context change. Source 4-space indent
+	 * for the wrap maps to `\t` at target; interior lines reduce the
+	 * source common prefix and re-emit one indent unit deeper than the
+	 * wrap. Per-line residual ws (the single space before `- point A`)
+	 * survives untouched. Wrap stars (`/**` open, `**\/` close) stay
+	 * verbatim because line 0 / last decoration carry the source `*`s.
+	 *
+	 * Mirrors AxGord/haxe-formatter
+	 * `test/testcases/indentation/issue_51_adjust_comment_indentation.hxtest`.
 	 */
 	public function testMultiLineBlockCommentDefaultVerbatim():Void {
 		final source:String = 'class Main {\n'
@@ -212,10 +216,10 @@ class HxTriviaWriteTest extends Test {
 			+ '}';
 		final expected:String = 'class Main {\n'
 			+ '\t/**\n'
-			+ '        Description\n'
-			+ '         - point A\n'
-			+ '         - point B\n'
-			+ '    **/\n'
+			+ '\t\tDescription\n'
+			+ '\t\t - point A\n'
+			+ '\t\t - point B\n'
+			+ '\t**/\n'
 			+ '\tstatic public function main() {}\n'
 			+ '}\n';
 		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);

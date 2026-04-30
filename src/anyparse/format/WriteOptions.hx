@@ -101,8 +101,8 @@ typedef WriteOptions = {
 	 * non-trivia writers never invoke the adapters. The active format's
 	 * `defaultWriteOptions` populates the fields with its own
 	 * normalizer (e.g. `HaxeFormat` sets these from
-	 * `HaxeCommentNormalizer.processCapturedBlockComment` /
-	 * `normalizeLineComment`).
+	 * `anyparse.format.text.BlockCommentNormalizer.processCapturedBlockComment` /
+	 * `LineCommentNormalizer.normalizeLineComment`).
 	 *
 	 *  - `blockCommentAdapter(content, opt) → Doc` — full pipeline for
 	 *    a captured `/*…*\/` body: parse → canonicalise → emit Doc.

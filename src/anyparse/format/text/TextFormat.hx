@@ -3,9 +3,12 @@ package anyparse.format.text;
 import anyparse.format.Format;
 
 /**
- * Shape of an inline block comment delimiter pair.
+ * Shape of an inline block comment delimiter pair (the format's
+ * declaration of which delimiters it uses; the actual per-line
+ * grammar / parser / writer / normalizer for `/* … *\/` bodies
+ * lives in `anyparse.format.text.BlockComment` and friends).
  */
-typedef BlockComment = {
+typedef BlockCommentDelims = {
 	open:String,
 	close:String,
 };
@@ -50,7 +53,7 @@ interface TextFormat extends Format {
 
 	var whitespace(default, null):String;
 	var lineComment(default, null):Null<String>;
-	var blockComment(default, null):Null<BlockComment>;
+	var blockComment(default, null):Null<BlockCommentDelims>;
 
 	var keySyntax(default, null):KeySyntax;
 	var stringQuote(default, null):Array<String>;
