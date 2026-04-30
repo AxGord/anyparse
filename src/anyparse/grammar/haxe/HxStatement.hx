@@ -10,21 +10,27 @@ package anyparse.grammar.haxe;
  *    Reuses `HxVarDecl` from the class-member grammar. The `var`
  *    keyword is consumed here (not in `HxVarDecl` itself, which is
  *    a plain typedef). The trailing `;` is `@:trailOpt(';')` —
- *    optional on parse, canonical on write. Real Haxe drops the `;`
- *    when the initializer ends with `}` (block, switch, if-with-else
- *    block, try-with-block, …) because `}` already terminates the
- *    statement; mandating `;` here would block ~50 corpus fixtures of
- *    the `var foo = switch (x) { case _: ... }` shape. The optional
- *    `;` is too lenient by Haxe's spec (`var x = 5\nvar y = 6` is
- *    accepted), but the formatter only ever emits canonical `;`, so
- *    the leniency has no observable effect on output.
+ *    optional on parse, shape-gated on write via
+ *    `@:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))`: the
+ *    writer drops the `;` when `decl.init` ends with `}` (block,
+ *    switch, if-with-else block, try-with-block, anon-fn body, object
+ *    literal, …) and emits it otherwise. Mirrors haxe-formatter's
+ *    canonical output (`var foo = switch (x) { case _: 1; }` without
+ *    `;`); without the gate the writer would always emit a redundant
+ *    `;` after `}`, regressing ~50 corpus fixtures of that shape. The
+ *    optional `;` on parse is too lenient by Haxe's spec (`var x = 5
+ *    \nvar y = 6` is accepted), but the formatter only ever emits the
+ *    canonical form chosen by the gate, so the leniency has no
+ *    observable effect on output.
  *
  *  - `FinalStmt` — `final name:Type = init;` immutable local-binding
  *    declaration. Parallel to `VarStmt`, identical body shape — the
  *    only difference is `@:kw('final')` instead of `@:kw('var')`. In
  *    Haxe, `final` replaces `var` (it is not a modifier on `var`),
  *    so the body is the same `HxVarDecl` reused verbatim. Trailing
- *    `;` follows `VarStmt`'s `:trailOpt` for the same reason.
+ *    `;` follows `VarStmt`'s shape-gated `:trailOpt` for the same
+ *    reason — `final foo = switch (x) { case _: 1; }` round-trips
+ *    without a trailing `;`.
  *
  *  - `ReturnStmt` — `return expr;` return statement with a value.
  *    Tried before `VoidReturnStmt` — if expression parsing fails
@@ -149,10 +155,10 @@ package anyparse.grammar.haxe;
  */
 @:peg
 enum HxStatement {
-	@:kw('var') @:trailOpt(';')
+	@:kw('var') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))
 	VarStmt(decl:HxVarDecl);
 
-	@:kw('final') @:trailOpt(';')
+	@:kw('final') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))
 	FinalStmt(decl:HxVarDecl);
 
 	@:kw('return') @:trail(';') @:fmt(bodyPolicy('returnBody'))

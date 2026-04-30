@@ -395,7 +395,11 @@ class WriterLowering {
 			}
 			if (leadText != null) parts.push(macro _dt($v{leadText}));
 			parts.push(bodyExpr);
-			if (trailText != null) parts.push(macro _dt($v{trailText}));
+			if (trailText != null) {
+				final trailExpr:Expr = trailOptShapeGateWrap(branch, trailText, argNames[0])
+					?? macro _dt($v{trailText});
+				parts.push(trailExpr);
+			}
 			return if (parts.length == 1) parts[0]
 			else dcCall(parts);
 		}
@@ -3330,6 +3334,39 @@ class WriterLowering {
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * Wraps the trail-literal emission for a `@:trailOpt(...)` ctor in a
+	 * runtime-conditional `_de() / _dt(trail)` switch driven by a plugin-
+	 * supplied AST shape predicate. Activates only when the branch carries
+	 * both `lit.trailOptional=true` and `@:fmt(trailOptShapeGate('<adapter>',
+	 * '<argFieldPath>'))`. Returns `null` when either condition is absent
+	 * so the caller falls back to the unconditional `_dt(trail)` emission.
+	 *
+	 * `argFieldPath` is a dot-separated chain rooted at `argNames[0]` (the
+	 * single Ref-arg name in Case 3). For Haxe's `VarStmt(decl:HxVarDecl)`
+	 * the path is `init` — the optional initializer field on `HxVarDecl`.
+	 * Plain mode reads `_v0.init:Null<HxExpr>`; trivia mode reads
+	 * `_v0.init:Null<Trivial<HxExpr>>` — same field name, the plugin
+	 * adapter unwraps the wrapper internally.
+	 */
+	private static function trailOptShapeGateWrap(branch:ShapeNode, trailText:String, rootArg:String):Null<Expr> {
+		final trailOptional:Bool = branch.annotations.get('lit.trailOptional') == true;
+		if (!trailOptional) return null;
+		final args:Null<Array<String>> = fmtReadStringArgs(branch, 'trailOptShapeGate');
+		if (args == null || args.length != 2) return null;
+		final adapterName:String = args[0];
+		final argPath:String = args[1];
+		var pathExpr:Expr = macro $i{rootArg};
+		for (segment in argPath.split('.'))
+			pathExpr = {expr: EField(pathExpr, segment), pos: Context.currentPos()};
+		final adapterExpr:Expr = {expr: EField(macro opt, adapterName), pos: Context.currentPos()};
+		return macro {
+			final _gateRaw:Null<Dynamic> = $pathExpr;
+			final _gateFn:Null<Dynamic -> Bool> = $adapterExpr;
+			(_gateFn != null && _gateRaw != null && _gateFn(_gateRaw)) ? _de() : _dt($v{trailText});
+		};
 	}
 
 	private static function simpleName(typePath:String):String {

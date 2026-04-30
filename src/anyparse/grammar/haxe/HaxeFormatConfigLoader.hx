@@ -376,6 +376,7 @@ final class HaxeFormatConfigLoader {
 			beforeUsing: base.beforeUsing,
 			blockCommentAdapter: base.blockCommentAdapter,
 			lineCommentAdapter: base.lineCommentAdapter,
+			endsWithCloseBrace: base.endsWithCloseBrace,
 		};
 		if (cfg.indentation != null) applyIndentation(cfg.indentation, result);
 		if (cfg.wrapping != null) applyWrapping(cfg.wrapping, result);

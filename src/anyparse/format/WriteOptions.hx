@@ -112,4 +112,24 @@ typedef WriteOptions = {
 	 */
 	?blockCommentAdapter:Null<(String, WriteOptions) -> Doc>,
 	?lineCommentAdapter:Null<(String, Bool) -> String>,
+
+	/**
+	 * Plugin-supplied AST shape predicates bound at runtime. Read by
+	 * conditionally-emitted writer helpers — currently only the
+	 * `@:fmt(trailOptShapeGate(...))` knob on `@:trailOpt(...)` ctors.
+	 * `Dynamic` argument because the same adapter must accept both
+	 * Plain-mode AST nodes (raw enum values) and Trivia-mode nodes
+	 * (`Trivial<...>` struct wrappers around paired-enum values); the
+	 * plugin implementation pattern-matches the runtime form.
+	 *
+	 *  - `endsWithCloseBrace(raw) → Bool` — true iff the writer output
+	 *    for `raw` ends with a `}`. Drives the var/final-rhs `;` gate
+	 *    so `var x = switch (y) { ... }` round-trips without a trailing
+	 *    semicolon, matching haxe-formatter's canonical output.
+	 *
+	 * Formats that don't opt into the gate leave this null; the writer
+	 * helper checks `null` before invoking and falls back to the
+	 * unconditional trail emission.
+	 */
+	?endsWithCloseBrace:Null<Dynamic -> Bool>,
 };
