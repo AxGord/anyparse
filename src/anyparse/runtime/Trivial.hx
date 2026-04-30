@@ -25,12 +25,20 @@ package anyparse.runtime;
  * writer policies from reproducing the author's layout.
  *
  * Fields:
- *  - `blankBefore` — at least one blank source line preceded the node.
- *    Writer uses this to emit a separator-level blank when preserving
- *    source grouping. Bool over Int is a YAGNI choice: haxe-formatter
- *    (and most style guides in the Haxe ecosystem) collapse multiple
- *    blanks to max one; grammars that need N>1 (Python PEP8 style)
- *    can promote this to `Int` when they land.
+ *  - `blankBefore` — at least one blank source line preceded the node
+ *    (or its first leading comment, if any). Writer uses this to emit a
+ *    separator-level blank when preserving source grouping. Bool over
+ *    Int is a YAGNI choice: haxe-formatter (and most style guides in
+ *    the Haxe ecosystem) collapse multiple blanks to max one; grammars
+ *    that need N>1 (Python PEP8 style) can promote this to `Int` when
+ *    they land.
+ *  - `blankAfterLeadingComments` — at least one blank source line sat
+ *    between the last captured leading comment and the node itself.
+ *    Distinct from `blankBefore` so the writer can place the blank
+ *    line in the correct position when the source has
+ *    `\n\n// comment\n\nnode` (blank both sides) — `blankBefore` alone
+ *    would force the writer to choose one side. False when
+ *    `leadingComments` is empty.
  *  - `newlineBefore` — at least one source newline preceded the node
  *    (including the blank-line case where `blankBefore` is also true).
  *    Semantically the one-newline cousin of `blankBefore`: writers that
@@ -58,6 +66,7 @@ package anyparse.runtime;
  */
 typedef Trivial<T> = {
 	var blankBefore:Bool;
+	var blankAfterLeadingComments:Bool;
 	var newlineBefore:Bool;
 	var leadingComments:Array<String>;
 	var trailingComment:Null<String>;

@@ -417,6 +417,7 @@ class Codegen {
 		final commentStmts:Array<Expr> = [for (p in formatInfo.commentPatterns) commentCaptureBlock(p)];
 		final body:Expr = macro {
 			var _blankBefore:Bool = false;
+			var _blankAfterLeadingComments:Bool = false;
 			var _newlineBefore:Bool = false;
 			final _leading:Array<String> = [];
 			// Drain any trivia that a previous rule captured between an
@@ -424,6 +425,7 @@ class Codegen {
 			final _pt = ctx.pendingTrivia;
 			if (_pt != null) {
 				_blankBefore = _pt.blankBefore;
+				_blankAfterLeadingComments = _pt.blankAfterLeadingComments;
 				_newlineBefore = _pt.newlineBefore;
 				for (_c in _pt.leadingComments) _leading.push(_c);
 				ctx.pendingTrivia = null;
@@ -435,7 +437,15 @@ class Codegen {
 					ctx.pos++;
 					_nl++;
 					_newlineBefore = true;
-					if (_nl >= 2) _blankBefore = true;
+					// Blank lines split into two slots: those preceding any
+					// captured leading comment go to `blankBefore`, those
+					// after go to `blankAfterLeadingComments`. The split
+					// lets the writer reproduce `\n\n// c\n\nnode` faithfully
+					// — single-bool flag would conflate both gaps.
+					if (_nl >= 2) {
+						if (_leading.length == 0) _blankBefore = true;
+						else _blankAfterLeadingComments = true;
+					}
 					continue;
 				}
 				if (c == ' '.code || c == '\t'.code || c == '\r'.code) {
@@ -445,14 +455,19 @@ class Codegen {
 				$b{commentStmts};
 				break;
 			}
-			return {blankBefore: _blankBefore, newlineBefore: _newlineBefore, leadingComments: _leading};
+			return {
+				blankBefore: _blankBefore,
+				blankAfterLeadingComments: _blankAfterLeadingComments,
+				newlineBefore: _newlineBefore,
+				leadingComments: _leading,
+			};
 		};
 		return {
 			name: 'collectTrivia',
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{name: 'ctx', type: macro : anyparse.runtime.Parser}],
-				ret: macro : {blankBefore:Bool, newlineBefore:Bool, leadingComments:Array<String>},
+				ret: macro : {blankBefore:Bool, blankAfterLeadingComments:Bool, newlineBefore:Bool, leadingComments:Array<String>},
 				expr: body,
 			}),
 			pos: Context.currentPos(),

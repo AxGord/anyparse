@@ -2776,6 +2776,7 @@ class WriterLowering {
 						_inner.push(_dhl());
 						_ci++;
 					}
+					if (_t.blankAfterLeadingComments && _t.leadingComments.length > 0) _inner.push(_dhl());
 					$trackDocCommentExpr;
 					final _elem:anyparse.core.Doc = $triviaElemCall;
 					final _tc:Null<String> = _t.trailingComment;
@@ -2874,6 +2875,7 @@ class WriterLowering {
 							_inner.push(_dhl());
 							_ci++;
 						}
+						if (_t.blankAfterLeadingComments && _t.leadingComments.length > 0) _inner.push(_dhl());
 						final _elem:anyparse.core.Doc = $triviaElemCall;
 						var _line:anyparse.core.Doc = _elem;
 						if (_si < _arr.length - 1)
@@ -3034,6 +3036,7 @@ class WriterLowering {
 						_docs.push(_dhl());
 						_ci++;
 					}
+					if (_t.blankAfterLeadingComments && _t.leadingComments.length > 0) _docs.push(_dhl());
 					final _elem:anyparse.core.Doc = $triviaElemCall;
 					final _tc:Null<String> = _t.trailingComment;
 					_docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDoc(_tc, opt)) : _elem);
@@ -3167,6 +3170,7 @@ class WriterLowering {
 							_docs.push(_dhl());
 							_ci++;
 						}
+						if (_t.blankAfterLeadingComments) _docs.push(_dhl());
 					} else if (_flatCase) {
 						_docs.push(_dt(' '));
 					} else if (_nestBody) {

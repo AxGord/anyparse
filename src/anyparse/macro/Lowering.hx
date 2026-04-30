@@ -979,6 +979,7 @@ class Lowering {
 						final _trailing:Null<String> = collectTrailing(ctx);
 						_items.push({
 							blankBefore: _lead.blankBefore,
+							blankAfterLeadingComments: _lead.blankAfterLeadingComments,
 							newlineBefore: _lead.newlineBefore,
 							leadingComments: _lead.leadingComments,
 							trailingComment: _trailing,
@@ -1348,7 +1349,7 @@ class Lowering {
 						// comments, blank lines, OR a single newline boundary
 						// (the `newlineBefore` channel — sub-rule's first
 						// `@:trivia` Star element consumes it via `_t.newlineBefore`).
-						if (_t.leadingComments.length > 0 || _t.blankBefore || _t.newlineBefore) ctx.pendingTrivia = _t;
+						if (_t.leadingComments.length > 0 || _t.blankBefore || _t.blankAfterLeadingComments || _t.newlineBefore) ctx.pendingTrivia = _t;
 					} else macro skipWs(ctx);
 					final preCommitCapture:Expr = if (hasKwTriviaSlots)
 						macro $i{beforeKwNlLocal} = hasNewlineIn(ctx.input, _wsPos, _kwStartPos);
@@ -1843,6 +1844,7 @@ class Lowering {
 							final _trailing:Null<String> = collectTrailing(ctx);
 							$accumRef.push({
 								blankBefore: _lead.blankBefore,
+								blankAfterLeadingComments: _lead.blankAfterLeadingComments,
 								newlineBefore: _lead.newlineBefore,
 								leadingComments: _lead.leadingComments,
 								trailingComment: _trailing,
@@ -1871,6 +1873,7 @@ class Lowering {
 						final _trailing:Null<String> = collectTrailing(ctx);
 						$accumRef.push({
 							blankBefore: _lead.blankBefore,
+							blankAfterLeadingComments: _lead.blankAfterLeadingComments,
 							newlineBefore: _lead.newlineBefore,
 							leadingComments: _lead.leadingComments,
 							trailingComment: _trailing,
@@ -1932,6 +1935,7 @@ class Lowering {
 				final _trailing:Null<String> = collectTrailing(ctx);
 				$accumRef.push({
 					blankBefore: _lead.blankBefore,
+					blankAfterLeadingComments: _lead.blankAfterLeadingComments,
 					newlineBefore: _lead.newlineBefore,
 					leadingComments: _lead.leadingComments,
 					trailingComment: _trailing,
