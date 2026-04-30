@@ -51,10 +51,17 @@ class BlockCommentNormalizer {
 	 * only sane output is round-tripping bytes verbatim:
 	 *
 	 *  - Single-line (one captured line, no `\n` in source).
-	 *  - firstInline (`/* foo\n  bar *\/`): line 0 sits inline with
-	 *    the open delimiter; subsequent lines were authored at
-	 *    source-absolute columns relative to where `/*` ended up,
-	 *    not at any canonical depth we can reconstruct from content.
+	 *  - firstInline (`/* foo\n  bar *\/`) IN A NESTED CONTEXT:
+	 *    line 0 sits inline with the open delimiter; subsequent
+	 *    lines were authored at source-absolute columns relative to
+	 *    where `/*` ended up, not at any canonical depth we can
+	 *    reconstruct from content. We detect "nested context" via
+	 *    `structuralCloseLen(lastWs) > 0` — when the closing `*\/`
+	 *    line carries any structural indent (i.e. ws beyond a
+	 *    canonical single-space close pad), the wrap is at depth > 0
+	 *    and source columns are nest-relative. At top-level
+	 *    (closing structurally at column 0) source columns ARE
+	 *    canonical depth, so we let `normalize` rewrite them.
 	 *  - Javadoc-bodied: every non-edge content line starts with
 	 *    `*`. The ` * ` per-line marker IS the visual indent;
 	 *    common-prefix reduce would consume the marker space.
@@ -68,8 +75,23 @@ class BlockCommentNormalizer {
 		if (lines.length <= 1) return true;
 		final firstBody:String = lines[0].body;
 		final firstDeco:Bool = isAllStars(firstBody);
-		if (firstBody.length > 0 && !firstDeco) return true;
+		if (firstBody.length > 0 && !firstDeco) {
+			final lastWs:String = lines[lines.length - 1].ws;
+			if (structuralCloseLen(lastWs) > 0) return true;
+		}
 		return isJavadocStyle(lines);
+	}
+
+	/**
+	 * Structural indent length of a closing line's ws — `ws.length`
+	 * minus a single trailing space (canonical close pad before
+	 * `*\/`). Distinguishes `\t *\/` (1 char structural) from `*\/`
+	 * with single-space pad (0 char structural).
+	 */
+	private static function structuralCloseLen(ws:String):Int {
+		final len:Int = ws.length;
+		if (len > 0 && StringTools.fastCodeAt(ws, len - 1) == ' '.code) return len - 1;
+		return len;
 	}
 
 	/**
@@ -84,11 +106,25 @@ class BlockCommentNormalizer {
 	 *
 	 * Source common-prefix across non-edge non-decoration non-blank
 	 * lines is reduced; per-line residual whitespace beyond common
-	 * survives. When source common is strictly deeper than the
-	 * closing line's ws, content was authored "one level deeper than
-	 * the wrap delimiters" — re-emit one indent unit deeper at
-	 * target. Otherwise (close inline with content, common == close
-	 * ws) emit at wrap level so the close stays aligned.
+	 * survives. When source common is strictly deeper than the wrap
+	 * (closing line's structural ws), content was authored "one
+	 * level deeper than the wrap delimiters" — re-emit one indent
+	 * unit deeper at target. Otherwise (close inline with content,
+	 * common == close ws) emit at wrap level so the close stays
+	 * aligned.
+	 *
+	 * Per-line newWs:
+	 *  - Line 0: keep source ws (separator after `/*` for inline
+	 *    content like `/* foo\n…`); blank line 0 → `''`.
+	 *  - Last line decoration (`**\/` etc.): `''` so it aligns with
+	 *    the wrap.
+	 *  - Last line empty body (`\n*\/` close on own line): `' '`
+	 *    canonical pad before `*\/`. Surrounding nest is applied by
+	 *    the renderer via `Line('\n')`.
+	 *  - Last line non-empty body (`}*\/` style): structural close
+	 *    ws preserved (caller authored the close column).
+	 *  - Interior content: `(shouldBake ? indentUnit : '') + relWs`.
+	 *  - Interior blank: `''`.
 	 */
 	public static function normalize(comment:BlockComment, opt:WriteOptions):Null<BlockComment> {
 		final lines:Array<BlockCommentLine> = comment.lines;
@@ -103,7 +139,10 @@ class BlockCommentNormalizer {
 			final ws:String = lines[i].ws;
 			if (body.length == 0) continue;
 			if (i == 0) continue;
-			if (i == last && decoFlags[i]) continue;
+			// Last line is the structural close (`*\/` or `<content>*\/`),
+			// not interior content. Its ws represents the wrap's structural
+			// indent, not the comment body's indent depth.
+			if (i == last) continue;
 			if (!havePrefix) {
 				commonPrefix = ws;
 				havePrefix = true;
@@ -116,7 +155,9 @@ class BlockCommentNormalizer {
 		}
 		final commonLen:Int = commonPrefix.length;
 		final closingWs:String = lines[last].ws;
-		final shouldBake:Bool = commonPrefix.length > closingWs.length;
+		final closeStructLen:Int = structuralCloseLen(closingWs);
+		final structuralClose:String = closingWs.substr(0, closeStructLen);
+		final shouldBake:Bool = commonLen > closeStructLen;
 		final indentUnit:String = opt.indentChar == IndentChar.Tab
 			? '\t'
 			: StringTools.rpad('', ' ', opt.indentSize);
@@ -127,9 +168,15 @@ class BlockCommentNormalizer {
 			final ws:String = lines[i].ws;
 			var newWs:String;
 			if (i == 0) {
-				newWs = '';
-			} else if (i == last && decoFlags[i]) {
-				newWs = '';
+				newWs = body.length > 0 ? ws : '';
+			} else if (i == last) {
+				if (decoFlags[i]) {
+					newWs = '';
+				} else if (body.length == 0) {
+					newWs = ' ';
+				} else {
+					newWs = structuralClose;
+				}
 			} else if (body.length == 0) {
 				newWs = '';
 			} else {

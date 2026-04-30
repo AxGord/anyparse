@@ -155,12 +155,16 @@ class HxTriviaWriteTest extends Test {
 	}
 
 	public function testOrphanMultiLineBlockCommentInEmptyClassBody():Void {
-		// Default `commentStyle: Verbatim` preserves indent and content
-		// byte-identical between `/*` and `*/`.
+		// Default `commentStyle: Verbatim` runs the indent-canonicalize
+		// path on multi-line block comments whose first line has no
+		// inline content; the close-on-own-line is padded with a single
+		// space (haxe-formatter convention `<indent> */`), interior
+		// content keeps its source depth via per-line ws fields.
 		final source:String = 'class Main {\n\t/*\n\t\tTODO:\n\t*/\n}';
+		final expected:String = 'class Main {\n\t/*\n\t\tTODO:\n\t */\n}\n';
 		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out:String = HaxeModuleTriviaWriter.write(ast);
-		Assert.equals(source + '\n', out);
+		Assert.equals(expected, out);
 	}
 
 	public function testOrphanCommentAfterLastMemberBlankLine():Void {
@@ -315,9 +319,10 @@ class HxTriviaWriteTest extends Test {
 	}
 
 	/**
-	 * ω-block-comment-verbatim — asymmetric `/** … *\/` round-trips
-	 * byte-identical under default `Verbatim`: extra `*` after `/*`
-	 * lives in content as a body byte; close stays `*\/`.
+	 * ω-block-comment-verbatim — asymmetric `/** … *\/` under default
+	 * `Verbatim` keeps the extra `*` after `/*` as a body byte (not a
+	 * marker) and pads the close-on-own-line with the canonical
+	 * single space (`<indent> *\/`).
 	 */
 	public function testMultiLineBlockCommentAsymmetricVerbatim():Void {
 		final source:String = 'class Main {\n'
@@ -326,9 +331,15 @@ class HxTriviaWriteTest extends Test {
 			+ '\t*/\n'
 			+ '\tvar x:Int;\n'
 			+ '}';
+		final expected:String = 'class Main {\n'
+			+ '\t/**\n'
+			+ '\tfoo\n'
+			+ '\t */\n'
+			+ '\tvar x:Int;\n'
+			+ '}\n';
 		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out:String = HaxeModuleTriviaWriter.write(ast);
-		Assert.equals(source + '\n', out);
+		Assert.equals(expected, out);
 	}
 
 	private static function withCommentStyle(style:anyparse.format.CommentStyle):anyparse.grammar.haxe.HxModuleWriteOptions {
