@@ -55,6 +55,7 @@ import unit.HxObjectFieldColonOptionsTest;
 import unit.HxTypedefAssignOptionsTest;
 import unit.HxTypedefSemiSliceTest;
 import unit.HxArrowFnTypeSliceTest;
+import unit.HxArrowFnOldStyleRewriteTest;
 import unit.HxArrowFnExprSliceTest;
 import unit.HxArrayComprehensionSliceTest;
 import unit.HxTypeParamDefaultEqualsOptionsTest;
@@ -159,6 +160,7 @@ class RunTests {
 		runner.addCase(new HxTypedefAssignOptionsTest());
 		runner.addCase(new HxTypedefSemiSliceTest());
 		runner.addCase(new HxArrowFnTypeSliceTest());
+		runner.addCase(new HxArrowFnOldStyleRewriteTest());
 		runner.addCase(new HxArrowFnExprSliceTest());
 		runner.addCase(new HxArrayComprehensionSliceTest());
 		runner.addCase(new HxTypeParamDefaultEqualsOptionsTest());

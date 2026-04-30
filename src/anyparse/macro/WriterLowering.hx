@@ -96,10 +96,74 @@ class WriterLowering {
 			};
 
 			// Build body
-			final body:Expr = lowerEnumBranch(branch, typePath, writeFnName, hasPratt, argNames, precPostfix);
+			final rawBody:Expr = lowerEnumBranch(branch, typePath, writeFnName, hasPratt, argNames, precPostfix);
+			// ω-fmt-prewrite-hook: `@:fmt(preWrite(Pkg.Cls.fnName))` on an
+			// enum ctor lets a plugin rewrite the value before emit. The
+			// function signature is `<RuleType> -> Null<<RuleType>>`;
+			// non-null result re-dispatches through the same `writeFn` so
+			// the rewritten ctor lands on its own case branch. The arg is
+			// a real Haxe expression (typically `EField` field-access) —
+			// type-checked at compile time, IDE go-to-def works, no string
+			// typo can survive compile. Used for shape-conditional
+			// canonicalisation that fits no declarative `@:fmt(...)` knob
+			// — e.g. `HxType.ArrowFn` with single positional Arrow operand
+			// collapsing to old-style `Arrow(Parens, ret)`.
+			final preWriteFn:Null<Expr> = fmtReadCall(branch, 'preWrite');
+			final body:Expr = preWriteFn != null
+				? wrapWithPreWrite(preWriteFn, rawBody, writeFnName, hasPratt)
+				: rawBody;
 			cases.push({values: [pattern], expr: body, guard: null});
 		}
 		return macro return ${{expr: ESwitch(macro value, cases, null), pos: Context.currentPos()}};
+	}
+
+	/**
+	 * ω-fmt-prewrite-hook — wrap a per-ctor case body so the writer
+	 * first calls a plugin rewrite function, and on a non-null result
+	 * re-dispatches through the rule's main writer. The recurse path
+	 * routes the rewritten value back through the same `switch value`
+	 * so any ctor produced by the rewrite lands on its proper branch
+	 * (and on its own `@:fmt(...)` knobs). When the rewrite returns
+	 * null the case falls back to the default emission.
+	 *
+	 * The hook lives at the case-branch level (not at function entry)
+	 * so it fires only for the ctors that opt in via `@:fmt(preWrite)`
+	 * — non-opt-in ctors carry zero overhead, no extra dispatch.
+	 */
+	private function wrapWithPreWrite(fnExpr:Expr, defaultBody:Expr, writeFnName:String, hasPratt:Bool):Expr {
+		final selfCallArgs:Array<Expr> = hasPratt
+			? [macro _rw, macro opt, macro ctxPrec]
+			: [macro _rw, macro opt];
+		final selfCall:Expr = {
+			expr: ECall(macro $i{writeFnName}, selfCallArgs),
+			pos: Context.currentPos(),
+		};
+		final preCall:Expr = {expr: ECall(fnExpr, [macro value]), pos: Context.currentPos()};
+		return macro {
+			final _rw = $preCall;
+			if (_rw != null) $selfCall else $defaultBody;
+		};
+	}
+
+	/**
+	 * Read a `name(<expr>)` arg from any `@:fmt(...)` entry on the node
+	 * and return the inner expression unchanged. Mirror of
+	 * `fmtReadString` for cases where the arg should stay a real Haxe
+	 * expression (function reference, identifier path) so the macro
+	 * can splice it directly into generated code, type-checked by the
+	 * compiler. Returns null when the meta is absent or the arg shape
+	 * is not exactly `name(<single-expr>)`.
+	 */
+	private static function fmtReadCall(node:ShapeNode, name:String):Null<Expr> {
+		final meta:Null<Metadata> = node.annotations.get('base.meta');
+		if (meta == null) return null;
+		for (entry in meta) if (entry.name == ':fmt') {
+			for (param in entry.params) switch param.expr {
+				case ECall({expr: EConst(CIdent(id))}, [arg]) if (id == name): return arg;
+				case _:
+			}
+		}
+		return null;
 	}
 
 	private function lowerEnumBranch(

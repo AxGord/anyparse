@@ -84,6 +84,7 @@ enum HxType {
 	@:lead('{') @:trail('}') @:sep(',') @:fmt(anonTypeBracesOpen, anonTypeBracesClose)
 	Anon(fields:Array<HxAnonField>);
 
+	@:fmt(preWrite(HaxeTypeRewrites.arrowFnOldStyleRewrite))
 	ArrowFn(fn:HxArrowFnType);
 
 	@:wrap('(', ')')
