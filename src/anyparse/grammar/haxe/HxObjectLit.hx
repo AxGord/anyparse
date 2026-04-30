@@ -27,5 +27,5 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxObjectLit = {
-	@:fmt(objectLiteralBracesOpen, objectLiteralBracesClose) @:lead('{') @:trail('}') @:sep(',') var fields:Array<HxObjectField>;
+	@:fmt(objectLiteralBracesOpen, objectLiteralBracesClose) @:lead('{') @:trail('}') @:sep(',') @:trivia var fields:Array<HxObjectField>;
 }

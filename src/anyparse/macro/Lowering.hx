@@ -384,6 +384,41 @@ class Lowering {
 			};
 			opChain = macro if ($matchCall) $branchBody else $opChain;
 		}
+		// ω-trivia-sep: in Trivia mode, save pos BEFORE the per-iteration
+		// `skipWs`. On no-match, scan the consumed range for comment
+		// markers — if any are present, rewind to preserve the comment
+		// for a sibling's `collectTrailing` capture (otherwise `field: ""
+		// // some comment` loses its trailing comment). Plain whitespace
+		// and `\n` stay consumed so `@:raw` siblings (e.g. `${expr}` in
+		// string interp, where the trailing literal expects `}` directly
+		// without skipWs) keep working: no comment → no rewind.
+		if (ctx.trivia) return macro {
+			var left:$returnCT = $atomCall;
+			while (true) {
+				final _preWsPos:Int = ctx.pos;
+				skipWs(ctx);
+				final _savedPos:Int = ctx.pos;
+				var _matched:Bool = true;
+				$opChain;
+				if (!_matched) {
+					var _scanI:Int = _preWsPos;
+					var _hadComment:Bool = false;
+					while (_scanI + 1 < ctx.pos) {
+						if (ctx.input.charCodeAt(_scanI) == '/'.code) {
+							final _c2:Int = ctx.input.charCodeAt(_scanI + 1);
+							if (_c2 == '/'.code || _c2 == '*'.code) {
+								_hadComment = true;
+								break;
+							}
+						}
+						_scanI++;
+					}
+					if (_hadComment) ctx.pos = _preWsPos;
+					break;
+				}
+			}
+			return left;
+		};
 		return macro {
 			var left:$returnCT = $atomCall;
 			while (true) {
@@ -669,6 +704,34 @@ class Lowering {
 			}
 			opChain = macro if ($matchExpr) $branchBody else $opChain;
 		}
+		// ω-trivia-sep: same pre-skipWs save + comment-only rewind as
+		// `lowerPrattLoop`. See that function for the rationale.
+		if (ctx.trivia) return macro {
+			var left:$returnCT = $coreCall;
+			while (true) {
+				final _preWsPos:Int = ctx.pos;
+				skipWs(ctx);
+				var _matched:Bool = true;
+				$opChain;
+				if (!_matched) {
+					var _scanI:Int = _preWsPos;
+					var _hadComment:Bool = false;
+					while (_scanI + 1 < ctx.pos) {
+						if (ctx.input.charCodeAt(_scanI) == '/'.code) {
+							final _c2:Int = ctx.input.charCodeAt(_scanI + 1);
+							if (_c2 == '/'.code || _c2 == '*'.code) {
+								_hadComment = true;
+								break;
+							}
+						}
+						_scanI++;
+					}
+					if (_hadComment) ctx.pos = _preWsPos;
+					break;
+				}
+			}
+			return left;
+		};
 		return macro {
 			var left:$returnCT = $coreCall;
 			while (true) {
@@ -866,16 +929,15 @@ class Lowering {
 			// marks its stmts Star via the branch-level @:trivia meta propagated to
 			// the Star by TriviaAnalysis). Replace the plain element-push loop with
 			// a collectTrivia → parseElement → collectTrailing pipeline that feeds
-			// Trivial<T> structs into the accumulator. `@:sep` is incompatible with
-			// trivia capture (no @:trivia Star in the current grammar uses it) so
-			// only the close-peek variant is covered here.
+			// Trivial<T> structs into the accumulator.
+			//
+			// ω-trivia-sep: `@:sep` is supported alongside `@:trivia` for
+			// close-peek Alt branches (e.g. `HxExpr.ArrayExpr` with
+			// `@:lead('[') @:trail(']') @:sep(',')`). The sep is matched
+			// after each element via `matchLit`, before `collectTrailing`,
+			// so a same-line `// comment` after `,` attaches to the
+			// just-pushed element.
 			if (ctx.trivia && starNode.annotations.get('trivia.starCollects') == true) {
-				if (sepText != null) {
-					Context.fatalError(
-						'Lowering: @:trivia on a Star with @:sep is not supported',
-						Context.currentPos()
-					);
-				}
 				final wrappedCT:ComplexType = TPath({
 					pack: ['anyparse', 'runtime'], name: 'Trivial', params: [TPType(elemCT)]
 				});
@@ -890,6 +952,21 @@ class Lowering {
 					expr: ECall(ctorRef, [macro _items, macro _closeTrail]),
 					pos: Context.currentPos(),
 				};
+				final sepMatchExpr:Expr = if (sepText != null) {
+					// Same horizontal-whitespace-only skip as the struct-field
+					// trivia+sep path — avoids `skipWs` consuming the trailing
+					// `// comment` before `collectTrailing` runs.
+					macro {
+						while (ctx.pos < ctx.input.length) {
+							final _hwc:Int = ctx.input.charCodeAt(ctx.pos);
+							if (_hwc == ' '.code || _hwc == '\t'.code || _hwc == '\r'.code) ctx.pos++;
+							else break;
+						}
+						matchLit(ctx, $v{sepText});
+					}
+				} else {
+					macro {};
+				};
 				return macro {
 					skipWs(ctx);
 					expectLit(ctx, $v{leadText});
@@ -898,6 +975,7 @@ class Lowering {
 						final _lead = collectTrivia(ctx);
 						if ($closeNextOrEofExpr) break;
 						final _node:$elemCT = $elemCall;
+						$sepMatchExpr;
 						final _trailing:Null<String> = collectTrailing(ctx);
 						_items.push({
 							blankBefore: _lead.blankBefore,
@@ -1668,9 +1746,10 @@ class Lowering {
 		starNode:ShapeNode, localName:String, parseSteps:Array<Expr>, isLastField:Bool,
 		elemCT:ComplexType, elemCall:Expr, openText:Null<String>, closeText:Null<String>
 	):Void {
-		if (starNode.annotations.get('lit.sepText') != null) {
+		final sepText:Null<String> = starNode.annotations.get('lit.sepText');
+		if (sepText != null && (closeText == null || hasMeta(starNode, ':tryparse'))) {
 			Context.fatalError(
-				'Lowering: @:trivia on a Star with @:sep is not supported',
+				'Lowering: @:trivia + @:sep requires close-peek (@:trail), not EOF/@:tryparse',
 				Context.currentPos()
 			);
 		}
@@ -1816,6 +1895,30 @@ class Lowering {
 		} else {
 			macro ctx.pos >= ctx.input.length;
 		};
+		// ω-trivia-sep: when the trivia Star carries `@:sep`, an
+		// optional separator (e.g. `,`) is matched after each element
+		// before the trailing-comment capture. Trailing same-line
+		// comments after the sep (e.g. `field: 1, // comment`) attach
+		// to the just-pushed element. Without sep, the close-peek loop
+		// falls through unchanged.
+		//
+		// The pre-sep horizontal-whitespace skip avoids consuming
+		// newlines / comments (`skipWs` would swallow the trailing
+		// `// comment` before `collectTrailing` could see it). Inlines
+		// the same `' ' | '\t' | '\r'` walk that `collectTrailing`
+		// uses internally.
+		final sepMatchExpr:Expr = if (sepText != null) {
+			macro {
+				while (ctx.pos < ctx.input.length) {
+					final _hwc:Int = ctx.input.charCodeAt(ctx.pos);
+					if (_hwc == ' '.code || _hwc == '\t'.code || _hwc == '\r'.code) ctx.pos++;
+					else break;
+				}
+				matchLit(ctx, $v{sepText});
+			}
+		} else {
+			macro {};
+		};
 		parseSteps.push(macro {
 			while (true) {
 				final _lead = collectTrivia(ctx);
@@ -1825,6 +1928,7 @@ class Lowering {
 					break;
 				}
 				final _node:$elemCT = $elemCall;
+				$sepMatchExpr;
 				final _trailing:Null<String> = collectTrailing(ctx);
 				$accumRef.push({
 					blankBefore: _lead.blankBefore,

@@ -478,8 +478,6 @@ class WriterLowering {
 
 		final isTriviaStar:Bool = ctx.trivia && starNode.annotations.get('trivia.starCollects') == true;
 		if (isTriviaStar) {
-			if (sepText != null)
-				Context.fatalError('WriterLowering: @:trivia Star enum branch does not support @:sep', Context.currentPos());
 			// ω-orphan-trivia: Alt-branch Star still has no synth trailing
 			// orphan slots — `TrailingBlankBefore`/`TrailingLeading` are
 			// Seq-only. Pass null so leftover orphan trivia inside e.g.
@@ -494,7 +492,16 @@ class WriterLowering {
 			final trailCloseAccess:Null<Expr> = TriviaTypeSynth.isAltCloseTrailingBranch(branch)
 				? macro $i{argNames[1]}
 				: null;
-			parts.push(triviaBlockStarExpr(argsAccess, null, null, trailCloseAccess, elemFn, leadText, trailText, true));
+			// ω-trivia-sep: sep-Star Alt branches (e.g. `HxExpr.ArrayExpr`)
+			// route to the dedicated sep helper. Block-style (no sep)
+			// stays on the always-multi-line path.
+			if (sepText != null) {
+				parts.push(triviaSepStarExpr(
+					argsAccess, null, null, trailCloseAccess, elemFn, leadText, trailText, sepText
+				));
+			} else {
+				parts.push(triviaBlockStarExpr(argsAccess, null, null, trailCloseAccess, elemFn, leadText, trailText, true));
+			}
 		} else if (sepText != null) {
 			// See `emitWriterStarField` — `@:sep('\n')` routes to a flat
 			// hardline-join emission (format-neutral).
@@ -987,8 +994,10 @@ class WriterLowering {
 		// close, last field), and try-parse (no close, last field,
 		// `@:tryparse`).
 		if (isTriviaStar) {
-			if (sepText != null || isRaw)
-				Context.fatalError('WriterLowering: @:trivia Star does not support @:sep/@:raw', Context.currentPos());
+			if (isRaw)
+				Context.fatalError('WriterLowering: @:trivia Star does not support @:raw', Context.currentPos());
+			if (sepText != null && (closeText == null || hasMeta(starNode, ':tryparse')))
+				Context.fatalError('WriterLowering: @:trivia + @:sep requires close-peek (@:trail), not EOF/@:tryparse', Context.currentPos());
 			// ω-orphan-trivia / ω-close-trailing: Seq-struct call sites
 			// drive the trailing slots synthesised on the paired type.
 			// Alt-branch Star call sites (`HxStatement.BlockStmt`) have
@@ -1133,6 +1142,16 @@ class WriterLowering {
 			}
 			if (closeText != null) {
 				if (!isFirstField && isSpacedLead(openText)) parts.push(leftCurlySeparator(starNode));
+				// ω-trivia-sep: sep-Star with @:trivia routes to a
+				// dedicated helper that drives multi-line vs flat layout
+				// from per-element `newlineBefore` / comment trivia.
+				if (sepText != null) {
+					parts.push(triviaSepStarExpr(
+						fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, elemFn,
+						openText ?? '', closeText, sepText
+					));
+					return;
+				}
 				// `openText ?? ''` (was `?? '{'` through ω₅) — when a
 				// close-peek Star has no `@:lead`, the surrounding Seq
 				// emits the open delimiter before this field, so the Star
@@ -2785,6 +2804,112 @@ class WriterLowering {
 				// the outer parens stay inline; the body still breaks via
 				// its own hardline-force-not-fit decision.
 				_dbg(_dc(_parts));
+			}
+		};
+	}
+
+	/**
+	 * ω-trivia-sep: build the Doc expression for a close-peek `@:trivia`
+	 * Star field with `@:sep` (e.g. `HxObjectLit.fields` and
+	 * `HxExpr.ArrayExpr`). Mirrors `triviaBlockStarExpr` but adds the
+	 * separator between elements AND drives multi-line vs flat layout
+	 * from source-fidelity signals on the `Trivial<T>` wrapper.
+	 *
+	 * Layout decision is computed at runtime over the captured array:
+	 * if ANY element carries a `newlineBefore`, blank line, leading
+	 * comment, or trailing comment, OR the orphan trail slots are
+	 * non-empty, the whole literal renders multi-line. Otherwise it
+	 * collapses to flat `{a, b, c}` (or `[a, b, c]`) on a single line.
+	 *
+	 * The runtime check preserves source intent without reaching for
+	 * a width-driven Group: the existing 8 corpus fixtures all break
+	 * because the user wrote them multi-line, not because they
+	 * exceeded line width. Width-driven wrap stays a future slice.
+	 */
+	private static function triviaSepStarExpr(
+		fieldAccess:Expr, trailBBAccess:Null<Expr>, trailLCAccess:Null<Expr>, trailCloseAccess:Null<Expr>,
+		elemFn:String, openText:String, closeText:String, sepText:String
+	):Expr {
+		final triviaElemCall:Expr = {
+			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
+			pos: Context.currentPos(),
+		};
+		final emptyText:String = openText + closeText;
+		final trailBB:Expr = trailBBAccess ?? macro false;
+		final trailLC:Expr = trailLCAccess ?? macro ([] : Array<String>);
+		final trailClose:Expr = trailCloseAccess ?? macro (null : Null<String>);
+		final emptyTrailExpr:Expr = macro _dc([_dt($v{emptyText}), trailingCommentDocVerbatim(_trailClose, opt)]);
+		return macro {
+			final _arr = $fieldAccess;
+			final _trailLC:Array<String> = $trailLC;
+			final _trailBB:Bool = $trailBB;
+			final _trailClose:Null<String> = $trailClose;
+			if (_arr.length == 0 && _trailLC.length == 0) {
+				if (_trailClose != null) $emptyTrailExpr
+				else _dt($v{emptyText});
+			} else {
+				var _hasTrivia:Bool = _trailLC.length > 0;
+				var _ti:Int = 0;
+				while (!_hasTrivia && _ti < _arr.length) {
+					final _t = _arr[_ti];
+					if (_t.newlineBefore || _t.blankBefore || _t.leadingComments.length > 0 || _t.trailingComment != null)
+						_hasTrivia = true;
+					_ti++;
+				}
+				if (_hasTrivia) {
+					final _inner:Array<anyparse.core.Doc> = [];
+					var _si:Int = 0;
+					while (_si < _arr.length) {
+						final _t = _arr[_si];
+						_inner.push(_dhl());
+						if (_t.blankBefore && _si > 0) _inner.push(_dhl());
+						var _ci:Int = 0;
+						while (_ci < _t.leadingComments.length) {
+							_inner.push(leadingCommentDoc(_t.leadingComments[_ci], opt));
+							_inner.push(_dhl());
+							_ci++;
+						}
+						final _elem:anyparse.core.Doc = $triviaElemCall;
+						var _line:anyparse.core.Doc = _elem;
+						if (_si < _arr.length - 1)
+							_line = _dc([_line, _dt($v{sepText})]);
+						final _tc:Null<String> = _t.trailingComment;
+						if (_tc != null)
+							_line = _dc([_line, trailingCommentDoc(_tc, opt)]);
+						_inner.push(_line);
+						_si++;
+					}
+					if (_trailLC.length > 0) {
+						_inner.push(_dhl());
+						if (_trailBB && _arr.length > 0) _inner.push(_dhl());
+						var _tii:Int = 0;
+						while (_tii < _trailLC.length) {
+							_inner.push(leadingCommentDoc(_trailLC[_tii], opt));
+							if (_tii < _trailLC.length - 1) _inner.push(_dhl());
+							_tii++;
+						}
+					}
+					final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+					final _innerWrap:anyparse.core.Doc = _dn(_cols, _dc(_inner));
+					final _parts:Array<anyparse.core.Doc> = [_dt($v{openText}), _innerWrap, _dhl(), _dt($v{closeText})];
+					if (_trailClose != null)
+						_parts.push(trailingCommentDocVerbatim(_trailClose, opt));
+					_dbg(_dc(_parts));
+				} else {
+					final _flat:Array<anyparse.core.Doc> = [_dt($v{openText})];
+					var _si2:Int = 0;
+					while (_si2 < _arr.length) {
+						if (_si2 > 0) {
+							_flat.push(_dt($v{sepText}));
+							_flat.push(_dt(' '));
+						}
+						final _t = _arr[_si2];
+						_flat.push($triviaElemCall);
+						_si2++;
+					}
+					_flat.push(_dt($v{closeText}));
+					_dc(_flat);
+				}
 			}
 		};
 	}

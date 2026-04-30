@@ -473,4 +473,54 @@ class HxTriviaWriteTest extends Test {
 		final out:String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals('class Foo {\n\tvar x:Int; // inline\n}\n', out);
 	}
+
+	/**
+	 * ω-trivia-sep — `HxObjectLit.fields` flat single-line layout:
+	 * source has all fields on one line with no comments / no blanks /
+	 * no `newlineBefore`. `triviaSepStarExpr` collapses to `{a: 1, b:
+	 * 2}` and skips the multi-line wrap.
+	 */
+	public function testObjectLitFlatRoundTrip():Void {
+		final source:String = 'class Main {\n\tstatic function main() {\n\t\tvar o = {a: 1, b: 2};\n\t}\n}';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out:String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals('${source}\n', out);
+	}
+
+	/**
+	 * ω-trivia-sep — `HxObjectLit.fields` multi-line layout: source
+	 * had `newlineBefore` on each element, so the writer breaks the
+	 * literal across lines and indents the body one level.
+	 */
+	public function testObjectLitMultiLineRoundTrip():Void {
+		final source:String = 'class Main {\n\tstatic function main() {\n\t\tvar o = {\n\t\t\ta: 1,\n\t\t\tb: 2\n\t\t};\n\t}\n}';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out:String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals('${source}\n', out);
+	}
+
+	/**
+	 * ω-trivia-sep — trailing comment after the last value of
+	 * `HxObjectLit.fields` is captured by `collectTrailing` AFTER the
+	 * optional `,` (none here). Pratt loop's pre-skipWs comment-rewind
+	 * keeps the comment available for the sibling capture path.
+	 */
+	public function testObjectLitTrailingComment():Void {
+		final source:String = 'class Main {\n\tstatic function main() {\n\t\tvar o = {\n\t\t\ta: 1 // tag\n\t\t};\n\t}\n}';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out:String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals('${source}\n', out);
+	}
+
+	/**
+	 * ω-trivia-sep — `HxExpr.ArrayExpr` multi-line layout: array
+	 * elements parsed via the Alt-branch trivia+sep path round-trip
+	 * across lines.
+	 */
+	public function testArrayExprMultiLineRoundTrip():Void {
+		final source:String = 'class Main {\n\tstatic function main() {\n\t\tvar a = [\n\t\t\t1,\n\t\t\t2\n\t\t];\n\t}\n}';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out:String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals('${source}\n', out);
+	}
 }

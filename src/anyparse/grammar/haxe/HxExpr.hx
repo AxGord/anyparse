@@ -245,7 +245,7 @@ enum HxExpr {
 
 	SingleStringExpr(v:HxInterpString);
 
-	@:lead('[') @:trail(']') @:sep(',') @:fmt(trailingComma('trailingCommaArrays'))
+	@:trivia @:lead('[') @:trail(']') @:sep(',') @:fmt(trailingComma('trailingCommaArrays'))
 	ArrayExpr(elems:Array<HxExpr>);
 
 	ObjectLit(lit:HxObjectLit);
