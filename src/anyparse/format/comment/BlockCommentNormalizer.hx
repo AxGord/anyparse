@@ -1,4 +1,4 @@
-package anyparse.format.text;
+package anyparse.format.comment;
 
 import anyparse.core.Doc;
 import anyparse.format.CommentStyle;
@@ -8,7 +8,7 @@ import anyparse.format.WriteOptions;
 /**
  * Engine-level adapter for captured C-family block-comment bodies.
  *
- * Lives in `anyparse.format.text` next to the shared `BlockComment`
+ * Lives in `anyparse.format.comment` next to the shared `BlockComment`
  * grammar widget — any grammar (Haxe, AS3, JS, C/C++, Rust, …) wires
  * `processCapturedBlockComment` into its format singleton's
  * `defaultWriteOptions.blockCommentAdapter` and gets full block-

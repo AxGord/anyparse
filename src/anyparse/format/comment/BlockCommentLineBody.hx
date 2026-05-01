@@ -1,4 +1,4 @@
-package anyparse.format.text;
+package anyparse.format.comment;
 
 /**
  * Terminal for one line's body inside a block-comment, captured

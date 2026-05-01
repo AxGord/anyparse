@@ -1,12 +1,18 @@
-package anyparse.format.text;
+package anyparse.format.comment;
 
 import anyparse.format.CommentStyle;
 import anyparse.format.Encoding;
 import anyparse.format.IndentChar;
 import anyparse.format.WriteOptions;
+import anyparse.format.text.TextFormat;
 import anyparse.format.text.TextFormat.BlockCommentDelims;
 import anyparse.format.text.TextFormat.BoolLiterals;
 import anyparse.format.text.TextFormat.UnescapeResult;
+import anyparse.format.text.FieldLookup;
+import anyparse.format.text.KeySyntax;
+import anyparse.format.text.MissingPolicy;
+import anyparse.format.text.TrailingSepPolicy;
+import anyparse.format.text.UnknownPolicy;
 
 /**
  * Minimal schema-format for the shared C-family block comment widget.

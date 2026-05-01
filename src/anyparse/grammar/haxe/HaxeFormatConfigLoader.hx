@@ -368,6 +368,7 @@ final class HaxeFormatConfigLoader {
 			anonTypeBracesClose: base.anonTypeBracesClose,
 			objectLiteralBracesOpen: base.objectLiteralBracesOpen,
 			objectLiteralBracesClose: base.objectLiteralBracesClose,
+			objectLiteralWrap: base.objectLiteralWrap,
 			addLineCommentSpace: base.addLineCommentSpace,
 			expressionTry: base.expressionTry,
 			indentCaseLabels: base.indentCaseLabels,

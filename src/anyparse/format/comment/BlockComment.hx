@@ -1,12 +1,12 @@
-package anyparse.format.text;
+package anyparse.format.comment;
 
 /**
  * Shared C-family block comment grammar.
  *
- * Lives in the engine's `anyparse.format.text` package so any grammar
+ * Lives in the engine's `anyparse.format.comment` package so any grammar
  * (Haxe, AS3, JS, C/C++, Rust, etc.) using `/* … *\/` block comments
  * gets parsing, writing and indent canonicalization for free — no
- * format plugin code, just `import anyparse.format.text.BlockComment`
+ * format plugin code, just `import anyparse.format.comment.BlockComment`
  * and wire `BlockCommentNormalizer.processCapturedBlockComment` into
  * the format's `defaultWriteOptions.blockCommentAdapter`.
  *
@@ -28,8 +28,8 @@ package anyparse.format.text;
  */
 @:peg
 @:raw
-@:schema(anyparse.format.text.CFamilyCommentFormat)
-@:fmt(preWrite(anyparse.format.text.BlockCommentNormalizer.normalize))
+@:schema(anyparse.format.comment.CFamilyCommentFormat)
+@:fmt(preWrite(anyparse.format.comment.BlockCommentNormalizer.normalize))
 typedef BlockComment = {
 	@:lead('/*') @:trail('*/') @:sep('\n') var lines:Array<BlockCommentLine>;
 };

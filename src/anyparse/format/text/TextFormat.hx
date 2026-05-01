@@ -6,7 +6,7 @@ import anyparse.format.Format;
  * Shape of an inline block comment delimiter pair (the format's
  * declaration of which delimiters it uses; the actual per-line
  * grammar / parser / writer / normalizer for `/* … *\/` bodies
- * lives in `anyparse.format.text.BlockComment` and friends).
+ * lives in `anyparse.format.comment.BlockComment` and friends).
  */
 typedef BlockCommentDelims = {
 	open:String,

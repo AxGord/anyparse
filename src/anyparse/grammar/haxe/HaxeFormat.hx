@@ -19,6 +19,9 @@ import anyparse.format.text.TextFormat.BoolLiterals;
 import anyparse.format.text.TextFormat.UnescapeResult;
 import anyparse.format.text.TrailingSepPolicy;
 import anyparse.format.text.UnknownPolicy;
+import anyparse.format.wrap.WrapConditionType;
+import anyparse.format.wrap.WrapMode;
+import anyparse.format.wrap.WrapRules;
 
 /**
  * Text-format descriptor for the Haxe programming language.
@@ -539,6 +542,7 @@ final class HaxeFormat implements TextFormat {
 		anonTypeBracesClose: WhitespacePolicy.None,
 		objectLiteralBracesOpen: WhitespacePolicy.None,
 		objectLiteralBracesClose: WhitespacePolicy.None,
+		objectLiteralWrap: HaxeFormat.defaultObjectLiteralWrap(),
 		addLineCommentSpace: true,
 		expressionTry: SameLinePolicy.Same,
 		indentCaseLabels: true,
@@ -548,12 +552,51 @@ final class HaxeFormat implements TextFormat {
 		beforeUsing: 1,
 		afterMultilineDecl: 1,
 		beforeMultilineDecl: 1,
-		blockCommentAdapter: anyparse.format.text.BlockCommentNormalizer.processCapturedBlockComment,
-		lineCommentAdapter: anyparse.format.text.LineCommentNormalizer.normalizeLineComment,
+		blockCommentAdapter: anyparse.format.comment.BlockCommentNormalizer.processCapturedBlockComment,
+		lineCommentAdapter: anyparse.format.comment.LineCommentNormalizer.normalizeLineComment,
 		endsWithCloseBrace: HxExprUtil.endsWithCloseBrace,
 	};
 
 	private function new() {}
+
+	/**
+	 * Default `WrapRules` cascade for `HxObjectLit.fields` — ported
+	 * verbatim from haxe-formatter's `wrapping.objectLiteral` rule set
+	 * in `resources/default-hxformat.json` (AxGord fork). Returned as a
+	 * fresh struct on each call so test code that mutates the
+	 * `defaultWriteOptions.objectLiteralWrap` substruct doesn't corrupt
+	 * the singleton.
+	 */
+	public static function defaultObjectLiteralWrap():WrapRules {
+		return {
+			rules: [
+				{
+					mode: WrapMode.NoWrap,
+					conditions: [
+						{cond: WrapConditionType.ItemCountLessThan, value: 3},
+						{cond: WrapConditionType.ExceedsMaxLineLength, value: 0},
+					],
+				},
+				{
+					mode: WrapMode.OnePerLine,
+					conditions: [{cond: WrapConditionType.AnyItemLengthLargerThan, value: 30}],
+				},
+				{
+					mode: WrapMode.OnePerLine,
+					conditions: [{cond: WrapConditionType.TotalItemLengthLargerThan, value: 60}],
+				},
+				{
+					mode: WrapMode.OnePerLine,
+					conditions: [{cond: WrapConditionType.ItemCountLargerThan, value: 4}],
+				},
+				{
+					mode: WrapMode.OnePerLine,
+					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
+				},
+			],
+			defaultMode: WrapMode.NoWrap,
+		};
+	}
 
 	public function escapeChar(c:Int):String {
 		return switch c {

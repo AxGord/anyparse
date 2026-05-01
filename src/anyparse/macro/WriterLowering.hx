@@ -146,7 +146,7 @@ class WriterLowering {
 		// dispatches against the rewritten value naturally — no recursive
 		// call to `$writeFnName`, so no risk of infinite loops on
 		// rewrites that produce values still matching the same hook (e.g.
-		// `anyparse.format.text.BlockCommentNormalizer.normalize` always returns a canonical
+		// `anyparse.format.comment.BlockCommentNormalizer.normalize` always returns a canonical
 		// `BlockComment`). For struct rules the body reads `value.<field>`
 		// which now sees the rewritten value's fields. The single rule-
 		// level wrap covers both kinds uniformly.
@@ -1176,10 +1176,21 @@ class WriterLowering {
 				// ω-trivia-sep: sep-Star with @:trivia routes to a
 				// dedicated helper that drives multi-line vs flat layout
 				// from per-element `newlineBefore` / comment trivia.
+				//
+				// ω-wraprules-objlit: when the Star carries
+				// `@:fmt(wrapRules('<field>'))`, the no-trivia branch of
+				// `triviaSepStarExpr` defers to the runtime
+				// `WrapList.emit` engine so the cascade picks the layout
+				// shape (NoWrap / OnePerLine / FillLine / …). The
+				// trivia-bearing branch still forces multi-line — when
+				// inline / leading / trailing comments are present, the
+				// list cannot collapse to a single line regardless of
+				// what the cascade would say.
 				if (sepText != null) {
+					final wrapRulesField:Null<String> = fmtReadString(starNode, 'wrapRules');
 					parts.push(triviaSepStarExpr(
 						fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, elemFn,
-						openText ?? '', closeText, sepText
+						openText ?? '', closeText, sepText, wrapRulesField
 					));
 					return;
 				}
@@ -1303,11 +1314,37 @@ class WriterLowering {
 			// through `fillList` (Wadler fillSep) instead of `sepList`,
 			// packing items inline up to the line budget and breaking the
 			// separator before each overflow item at the list's indent.
+			//
+			// ω-wraprules-objlit: `@:fmt(wrapRules('<optionFieldName>'))`
+			// supersedes both above paths — routes the list through the
+			// runtime `WrapList.emit` engine driven by the named
+			// `WrapRules` cascade on `opt`. The cascade picks one of
+			// `NoWrap` / `OnePerLine` / `OnePerLineAfterFirst` /
+			// `FillLine` per call from item count, max/total flat width
+			// and an `exceedsMaxLineLength` flag — the engine evaluates
+			// the cascade twice (`exceeds=false` + `exceeds=true`) and
+			// emits `Group(IfBreak(brkDoc, flatDoc))` when the two runs
+			// disagree, so the renderer's flat/break decision picks the
+			// right mode at layout time. First consumer is `HxObjectLit`
+			// (`objectLiteralWrap`); future slices wire `arrayWrap`,
+			// `anonTypeWrap`, `callParameterWrap`, … through the same
+			// engine. `@:fmt(fill)` / `@:fmt(fillDoubleIndent)` are
+			// orthogonal — they continue to drive `fillList` for sites
+			// that opt into Wadler fillSep without per-construct rules.
+			final wrapRulesField:Null<String> = fmtReadString(starNode, 'wrapRules');
 			final useFill:Bool = fmtHasFlag(starNode, 'fill');
 			final fillDouble:Bool = fmtHasFlag(starNode, 'fillDoubleIndent');
-			final listCall:Expr = useFill
-				? macro fillList($v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $tcExpr, $openInsideExpr, $closeInsideExpr, $keepInnerExpr, $v{fillDouble})
-				: macro sepList($v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $tcExpr, $openInsideExpr, $closeInsideExpr, $keepInnerExpr);
+			final listCall:Expr = if (wrapRulesField != null) {
+				final rulesExpr:Expr = {
+					expr: EField(macro opt, wrapRulesField),
+					pos: Context.currentPos(),
+				};
+				macro anyparse.format.wrap.WrapList.emit($v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $openInsideExpr, $closeInsideExpr, $keepInnerExpr, $rulesExpr);
+			} else if (useFill) {
+				macro fillList($v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $tcExpr, $openInsideExpr, $closeInsideExpr, $keepInnerExpr, $v{fillDouble});
+			} else {
+				macro sepList($v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $tcExpr, $openInsideExpr, $closeInsideExpr, $keepInnerExpr);
+			};
 			parts.push(macro {
 				final _arr = $fieldAccess;
 				final _docs:Array<anyparse.core.Doc> = [];
@@ -2894,7 +2931,8 @@ class WriterLowering {
 	 */
 	private static function triviaSepStarExpr(
 		fieldAccess:Expr, trailBBAccess:Null<Expr>, trailLCAccess:Null<Expr>, trailCloseAccess:Null<Expr>,
-		elemFn:String, openText:String, closeText:String, sepText:String
+		elemFn:String, openText:String, closeText:String, sepText:String,
+		wrapRulesField:Null<String> = null
 	):Expr {
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
@@ -2905,6 +2943,52 @@ class WriterLowering {
 		final trailLC:Expr = trailLCAccess ?? macro ([] : Array<String>);
 		final trailClose:Expr = trailCloseAccess ?? macro (null : Null<String>);
 		final emptyTrailExpr:Expr = macro _dc([_dt($v{emptyText}), trailingCommentDocVerbatim(_trailClose, opt)]);
+		// ω-wraprules-objlit: when the Star carries
+		// `@:fmt(wrapRules('<field>'))`, defer the no-trivia branch's
+		// layout decision to the runtime `WrapList.emit` engine. The
+		// engine reads `opt.<field>:WrapRules`, measures item count +
+		// flat widths, and emits one of `NoWrap` / `OnePerLine` /
+		// `OnePerLineAfterFirst` / `FillLine` shapes — wrapping the
+		// result in `Group(IfBreak(brkDoc, flatDoc))` when the cascade's
+		// `exceeds=false` and `exceeds=true` runs disagree, so the
+		// renderer's flat/break decision picks the right mode at layout
+		// time. When `wrapRulesField` is null, the no-trivia branch
+		// keeps its pre-slice flat-only emission.
+		final noTriviaBranch:Expr = if (wrapRulesField != null) {
+			final rulesExpr:Expr = {
+				expr: EField(macro opt, wrapRulesField),
+				pos: Context.currentPos(),
+			};
+			macro {
+				final _docs:Array<anyparse.core.Doc> = [];
+				var _si2:Int = 0;
+				while (_si2 < _arr.length) {
+					final _t = _arr[_si2];
+					_docs.push($triviaElemCall);
+					_si2++;
+				}
+				anyparse.format.wrap.WrapList.emit(
+					$v{openText}, $v{closeText}, $v{sepText},
+					_docs, opt, _de(), _de(), false, $rulesExpr
+				);
+			};
+		} else {
+			macro {
+				final _flat:Array<anyparse.core.Doc> = [_dt($v{openText})];
+				var _si2:Int = 0;
+				while (_si2 < _arr.length) {
+					if (_si2 > 0) {
+						_flat.push(_dt($v{sepText}));
+						_flat.push(_dt(' '));
+					}
+					final _t = _arr[_si2];
+					_flat.push($triviaElemCall);
+					_si2++;
+				}
+				_flat.push(_dt($v{closeText}));
+				_dc(_flat);
+			};
+		};
 		return macro {
 			final _arr = $fieldAccess;
 			final _trailLC:Array<String> = $trailLC;
@@ -2963,19 +3047,7 @@ class WriterLowering {
 						_parts.push(trailingCommentDocVerbatim(_trailClose, opt));
 					_dbg(_dc(_parts));
 				} else {
-					final _flat:Array<anyparse.core.Doc> = [_dt($v{openText})];
-					var _si2:Int = 0;
-					while (_si2 < _arr.length) {
-						if (_si2 > 0) {
-							_flat.push(_dt($v{sepText}));
-							_flat.push(_dt(' '));
-						}
-						final _t = _arr[_si2];
-						_flat.push($triviaElemCall);
-						_si2++;
-					}
-					_flat.push(_dt($v{closeText}));
-					_dc(_flat);
+					$noTriviaBranch;
 				}
 			}
 		};

@@ -1,4 +1,4 @@
-package anyparse.format.text;
+package anyparse.format.comment;
 
 /**
  * Marker class for the macro-generated writer of `BlockComment`.
@@ -10,7 +10,7 @@ package anyparse.format.text;
  * routes each adjusted line through the surrounding writer's nest.
  */
 @:build(anyparse.macro.Build.buildWriter(
-	anyparse.format.text.BlockComment,
+	anyparse.format.comment.BlockComment,
 	anyparse.format.WriteOptions
 ))
 @:nullSafety(Strict)

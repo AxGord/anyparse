@@ -1,4 +1,4 @@
-package anyparse.format.text;
+package anyparse.format.comment;
 
 /**
  * One line of a block comment's interior: leading whitespace + body.
@@ -6,7 +6,7 @@ package anyparse.format.text;
  */
 @:peg
 @:raw
-@:schema(anyparse.format.text.CFamilyCommentFormat)
+@:schema(anyparse.format.comment.CFamilyCommentFormat)
 typedef BlockCommentLine = {
 	var ws:BlockCommentLineWs;
 	var body:BlockCommentLineBody;

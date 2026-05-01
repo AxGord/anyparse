@@ -1,4 +1,4 @@
-package anyparse.format.text;
+package anyparse.format.comment;
 
 /**
  * Marker class for the macro-generated parser of `BlockComment`.
@@ -9,6 +9,6 @@ package anyparse.format.text;
  * Plugin grammars don't subclass or rebuild — one widget, all
  * languages.
  */
-@:build(anyparse.macro.Build.buildParser(anyparse.format.text.BlockComment))
+@:build(anyparse.macro.Build.buildParser(anyparse.format.comment.BlockComment))
 @:nullSafety(Strict)
 class BlockCommentParser {}

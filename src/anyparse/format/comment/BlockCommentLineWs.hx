@@ -1,4 +1,4 @@
-package anyparse.format.text;
+package anyparse.format.comment;
 
 /**
  * Terminal for one line's leading whitespace inside a block-comment

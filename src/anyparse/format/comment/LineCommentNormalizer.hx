@@ -1,4 +1,4 @@
-package anyparse.format.text;
+package anyparse.format.comment;
 
 /**
  * Engine-level adapter for captured C-family line comments (`//…`).

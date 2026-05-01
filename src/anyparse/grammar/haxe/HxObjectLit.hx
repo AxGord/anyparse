@@ -24,8 +24,26 @@ package anyparse.grammar.haxe;
  * mechanism as `@:fmt(typeParamOpen, typeParamClose)` on
  * `HxTypeRef.params` and `@:fmt(anonTypeBracesOpen, anonTypeBracesClose)`
  * on `HxType.Anon`. Defaults `None`/`None` keep `{a: 1}` tight.
+ *
+ * `@:fmt(wrapRules('objectLiteralWrap'))` (slice ω-wraprules-objlit)
+ * routes the multi-line wrap decision through the runtime
+ * `WrapList.emit` engine driven by the `objectLiteralWrap:WrapRules`
+ * cascade on `opt`. The engine measures item count + max/total flat
+ * width, evaluates the cascade twice (`exceeds=false` + `exceeds=true`)
+ * and picks one of `NoWrap` / `OnePerLine` / `OnePerLineAfterFirst` /
+ * `FillLine` shapes — wrapping the result in
+ * `Group(IfBreak(brkDoc, flatDoc))` when the two runs disagree, so the
+ * renderer's flat/break decision selects the right mode at layout time.
+ * Default rules are ported from haxe-formatter's
+ * `wrapping.objectLiteral` (`HaxeFormat.defaultObjectLiteralWrap`):
+ * `noWrap` if `count <= 3 ∧ ¬exceeds`, else `onePerLine` if any item
+ * ≥ 30 cols / total ≥ 60 cols / count ≥ 4 / line exceeds `lineWidth`.
+ * Architecturally orthogonal to the `objectLiteralBracesOpen`/`Close`
+ * interior-spacing policies — wrap decides single-line vs multi-line
+ * shape, braces decide the `{a:1}`/`{ a:1 }` interior spacing of the
+ * single-line variant.
  */
 @:peg
 typedef HxObjectLit = {
-	@:fmt(objectLiteralBracesOpen, objectLiteralBracesClose) @:lead('{') @:trail('}') @:sep(',') @:trivia var fields:Array<HxObjectField>;
+	@:fmt(objectLiteralBracesOpen, objectLiteralBracesClose, wrapRules('objectLiteralWrap')) @:lead('{') @:trail('}') @:sep(',') @:trivia var fields:Array<HxObjectField>;
 }

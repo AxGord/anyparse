@@ -480,7 +480,7 @@ class WriterCodegen {
 	 * the plugin-supplied trivia adapters carried on `WriteOptions`
 	 * (`opt.blockCommentAdapter` / `opt.lineCommentAdapter`). The
 	 * format singleton's `defaultWriteOptions` populates both — e.g.
-	 * `HaxeFormat` wires them to `anyparse.format.text.BlockCommentNormalizer` /
+	 * `HaxeFormat` wires them to `anyparse.format.comment.BlockCommentNormalizer` /
 	 * `LineCommentNormalizer` entry
 	 * points. Routing through `opt` keeps the macro core format-
 	 * neutral: no module reference here names a specific grammar's

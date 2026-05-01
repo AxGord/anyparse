@@ -8,6 +8,7 @@ import anyparse.format.KeywordPlacement;
 import anyparse.format.SameLinePolicy;
 import anyparse.format.WhitespacePolicy;
 import anyparse.format.WriteOptions;
+import anyparse.format.wrap.WrapRules;
 
 /**
  * Write options specific to the Haxe module grammar (`HxModule`).
@@ -515,6 +516,27 @@ import anyparse.format.WriteOptions;
  *    flip produces `{ a: 1 }`, matching haxe-formatter's
  *    `bracesConfig.objectLiteralBraces` `around` policy pair.
  *
+ * Field added in slice ω-wraprules-objlit (per-construct wrap-rules
+ * cascade — first consumer is `HxObjectLit.fields`):
+ *  - `objectLiteralWrap` — `WrapRules` cascade driving the multi-line
+ *    layout decision for object-literal fields. The macro emits a
+ *    `WrapList.emit` runtime call at the `HxObjectLit.fields` Star
+ *    site (tagged with `@:fmt(wrapRules('objectLiteralWrap'))`), the
+ *    helper measures item count + max/total flat width, evaluates the
+ *    cascade twice (`exceeds=false` + `exceeds=true`) and emits one of
+ *    `NoWrap` / `OnePerLine` / `OnePerLineAfterFirst` / `FillLine`
+ *    shapes — wrapping the result in `Group(IfBreak(brkDoc, flatDoc))`
+ *    when the two cascade runs disagree, so the renderer's flat/break
+ *    decision selects the right mode at layout time. Defaults port
+ *    haxe-formatter's `wrapping.objectLiteral` rules from
+ *    `default-hxformat.json`: `noWrap` if `count <= 3 ∧ ¬exceeds`,
+ *    else `onePerLine` if any item ≥ 30 cols, total ≥ 60 cols, count
+ *    ≥ 4, or the line exceeds `lineWidth`; default mode `noWrap`.
+ *    Architecturally orthogonal to `objectLiteralBracesOpen`/`Close`
+ *    (interior-space policy) — the two compose: braces decide
+ *    `{a:1}` vs `{ a:1 }` spacing; `objectLiteralWrap` decides
+ *    single-line vs multi-line shape.
+ *
  * Slice ω-line-comment-space adds the `addLineCommentSpace:Bool` knob
  * — but to the base `WriteOptions` typedef, not here. The knob drives a
  * format-neutral writer helper (`leadingCommentDoc` /
@@ -708,6 +730,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	anonTypeBracesClose:WhitespacePolicy,
 	objectLiteralBracesOpen:WhitespacePolicy,
 	objectLiteralBracesClose:WhitespacePolicy,
+	objectLiteralWrap:WrapRules,
 	expressionTry:SameLinePolicy,
 	indentCaseLabels:Bool,
 	functionTypeHaxe4:WhitespacePolicy,

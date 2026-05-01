@@ -52,7 +52,7 @@ package anyparse.grammar.haxe.format;
  *  - `addLineCommentSpace` feeds `opt.addLineCommentSpace`. Bool — when
  *    `true` (haxe-formatter default) `//foo` is rewritten to `// foo`;
  *    decoration runs (`//*****`, `//------`, `////`) survive tight. The
- *    knob is consumed by `anyparse.format.text.LineCommentNormalizer.normalizeLineComment`
+ *    knob is consumed by `anyparse.format.comment.LineCommentNormalizer.normalizeLineComment`
  *    inside the writer's leading / trailing line-comment helpers.
  *
  * Extended in slice ω-arrow-fn-type:
