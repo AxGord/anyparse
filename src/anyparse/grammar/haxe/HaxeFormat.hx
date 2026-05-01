@@ -156,15 +156,13 @@ final class HaxeFormat implements TextFormat {
 	 * override (`"sameLine": { "catchBody": "same" | "fitLine" |
 	 * "keep" }`).
 	 *
-	 * `functionBody` (ω-functionBody-policy) defaults to `Same` —
-	 * `function f() expr;` stays inline with a single space between
-	 * the `()` and the body expression. Diverges from upstream haxe-
-	 * formatter's `sameLine.functionBody: @:default(Next)` to preserve
-	 * pre-slice byte-output across the corpus; the default flip is a
-	 * separate audit (`feedback_default_change_audit.md`). Setting
-	 * `"sameLine": { "functionBody": "next" }` pushes the body onto a
-	 * fresh line at one indent level deeper. The knob lives on
-	 * `HxFnBody.ExprBody`; `BlockBody` (`function f() { … }`) is
+	 * `functionBody` (ω-functionBody-policy) defaults to `Next` —
+	 * `function f() expr;` pushes the body onto a fresh line at one
+	 * indent level deeper, matching upstream haxe-formatter's
+	 * `sameLine.functionBody: @:default(Next)`. Setting `"sameLine":
+	 * { "functionBody": "same" }` keeps the body inline with a single
+	 * space between the `()` and the body expression. The knob lives
+	 * on `HxFnBody.ExprBody`; `BlockBody` (`function f() { … }`) is
 	 * unaffected — its layout is owned by `leftCurly`. `NoBody`
 	 * (`function f();` interface stub) is unaffected.
 	 *
@@ -485,7 +483,7 @@ final class HaxeFormat implements TextFormat {
 		tryBody: BodyPolicy.Same,
 		caseBody: BodyPolicy.Next,
 		expressionCase: BodyPolicy.Next,
-		functionBody: BodyPolicy.Same,
+		functionBody: BodyPolicy.Next,
 		leftCurly: BracePlacement.Same,
 		objectFieldColon: WhitespacePolicy.After,
 		typeHintColon: WhitespacePolicy.None,

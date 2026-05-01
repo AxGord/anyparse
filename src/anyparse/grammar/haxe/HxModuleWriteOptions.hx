@@ -97,17 +97,17 @@ import anyparse.format.WriteOptions;
  *  - `functionBody` — three-way `BodyPolicy` knob shape gating the
  *    body-placement axis at `HxFnBody.ExprBody` (`function f() expr;`,
  *    excluding the brace-bearing `BlockBody` and the `;`-only `NoBody`).
- *    `Same` (default) keeps `function f() expr;` inline with a single
- *    space; `Next` always pushes the body onto the next line at one
- *    indent level deeper. `FitLine` and `Keep` degrade to `Next`. The
- *    knob is consumed via ctor-level `@:fmt(bodyPolicy('functionBody'))`
- *    on `HxFnBody.ExprBody`; the parent `HxFnDecl.body` Case 5 (Ref +
- *    `@:fmt(leftCurly)`) suppresses its fixed `_dt(' ')` separator for
- *    ctors carrying `@:fmt(bodyPolicy(...))` so the wrap inside the
- *    sub-rule writer fully owns the kw-to-body separator. Default
- *    `Same` preserves the pre-slice byte-output; users opt into
- *    haxe-formatter's `@:default(Next)` via
- *    `"sameLine": { "functionBody": "next" }`.
+ *    `Next` (default) pushes the body onto the next line at one
+ *    indent level deeper, matching upstream haxe-formatter's
+ *    `sameLine.functionBody: @:default(Next)`; `Same` keeps
+ *    `function f() expr;` inline with a single space. `FitLine` and
+ *    `Keep` degrade to `Next`. The knob is consumed via ctor-level
+ *    `@:fmt(bodyPolicy('functionBody'))` on `HxFnBody.ExprBody`; the
+ *    parent `HxFnDecl.body` Case 5 (Ref + `@:fmt(leftCurly)`)
+ *    suppresses its fixed `_dt(' ')` separator for ctors carrying
+ *    `@:fmt(bodyPolicy(...))` so the wrap inside the sub-rule writer
+ *    fully owns the kw-to-body separator. Users opt into the inline
+ *    form via `"sameLine": { "functionBody": "same" }`.
  *
  * Fields added in slice ω-case-body-policy:
  *  - `caseBody` — three-way `BodyPolicy` knob shape (`Same` / `Next` /

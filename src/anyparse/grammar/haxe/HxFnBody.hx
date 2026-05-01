@@ -19,8 +19,8 @@ package anyparse.grammar.haxe;
  *    `@:trail(';')` is non-optional — real Haxe requires the
  *    terminator after an expression body. The kw→body separator is
  *    runtime-switchable via `@:fmt(bodyPolicy('functionBody'))`
- *    (slice ω-functionBody-policy) — `Same` (default) emits a single
- *    space, `Next` emits a hardline + Nest. The parent
+ *    (slice ω-functionBody-policy) — `Next` (default) emits a
+ *    hardline + Nest, `Same` emits a single space. The parent
  *    `HxFnDecl.body` field's Case 5 (Ref + `@:fmt(leftCurly)`)
  *    suppresses its fixed `_dt(' ')` for ctors carrying ctor-level
  *    `@:fmt(bodyPolicy(...))` so the wrap inside this branch's writer

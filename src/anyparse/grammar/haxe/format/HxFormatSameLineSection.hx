@@ -72,11 +72,10 @@ package anyparse.grammar.haxe.format;
  * `()` of a function declaration's parameter list and its body when
  * the body is a single expression (`function f() trace("hi");`).
  * The loader maps it onto the runtime `functionBody` option on
- * `HxModuleWriteOptions`. Default `Same` diverges from upstream
- * haxe-formatter's `sameLine.functionBody: @:default(Next)` to
- * preserve pre-slice byte-output; opting into `Next` matches haxe-
- * formatter's default. `BlockBody` (`function f() { … }`) and `NoBody`
- * (`function f();`) are unaffected — the knob lives on
+ * `HxModuleWriteOptions`. Default `Next` matches upstream haxe-
+ * formatter's `sameLine.functionBody: @:default(Next)`; opting into
+ * `Same` keeps the body inline. `BlockBody` (`function f() { … }`)
+ * and `NoBody` (`function f();`) are unaffected — the knob lives on
  * `HxFnBody.ExprBody` only.
  *
  * `tryBody` (ω-tryBody) is the same three-way body-placement knob
