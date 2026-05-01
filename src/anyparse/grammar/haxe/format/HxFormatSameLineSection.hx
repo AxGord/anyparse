@@ -67,6 +67,18 @@ package anyparse.grammar.haxe.format;
  * triggers single-stmt flatten; `FitLine` and `Keep` degrade to `Next`
  * until those policies are wired for case bodies in a follow-up slice).
  *
+ * `functionBody` (ω-functionBody-policy) is the same three-way body-
+ * placement knob shape as `ifBody`, gating the separator between the
+ * `()` of a function declaration's parameter list and its body when
+ * the body is a single expression (`function f() trace("hi");`).
+ * The loader maps it onto the runtime `functionBody` option on
+ * `HxModuleWriteOptions`. Default `Same` diverges from upstream
+ * haxe-formatter's `sameLine.functionBody: @:default(Next)` to
+ * preserve pre-slice byte-output; opting into `Next` matches haxe-
+ * formatter's default. `BlockBody` (`function f() { … }`) and `NoBody`
+ * (`function f();`) are unaffected — the knob lives on
+ * `HxFnBody.ExprBody` only.
+ *
  * `tryBody` (ω-tryBody) is the same three-way body-placement knob
  * shape as `catchBody`, gating the separator between the `try`
  * keyword and its body at `HxTryCatchStmt.body`. The loader maps
@@ -115,4 +127,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var caseBody:HxFormatBodyPolicy;
 
 	@:optional var expressionCase:HxFormatBodyPolicy;
+
+	@:optional var functionBody:HxFormatBodyPolicy;
 };

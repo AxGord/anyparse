@@ -17,10 +17,14 @@ package anyparse.grammar.haxe;
  *    the two literal-led siblings; `tryBranch`'s rollback ensures
  *    `BlockBody` (`{`-led) and `NoBody` (`;`-led) win on shared input.
  *    `@:trail(';')` is non-optional — real Haxe requires the
- *    terminator after an expression body. The writer emits a leading
- *    space ahead of the expression via the parent field's
- *    `Type.enumConstructor` switch (see `HxFnDecl.body` and the
- *    `WriterLowering` Ref-with-`@:fmt(leftCurly)` path).
+ *    terminator after an expression body. The kw→body separator is
+ *    runtime-switchable via `@:fmt(bodyPolicy('functionBody'))`
+ *    (slice ω-functionBody-policy) — `Same` (default) emits a single
+ *    space, `Next` emits a hardline + Nest. The parent
+ *    `HxFnDecl.body` field's Case 5 (Ref + `@:fmt(leftCurly)`)
+ *    suppresses its fixed `_dt(' ')` for ctors carrying ctor-level
+ *    `@:fmt(bodyPolicy(...))` so the wrap inside this branch's writer
+ *    fully owns the kw-to-body separator.
  *
  * Branch order matters for dispatch: BlockBody → NoBody → ExprBody.
  * The first two are tight first-char dispatches; the third runs the
@@ -36,6 +40,6 @@ enum HxFnBody {
 	@:lit(';')
 	NoBody;
 
-	@:trail(';')
+	@:trail(';') @:fmt(bodyPolicy('functionBody'))
 	ExprBody(expr:HxExpr);
 }

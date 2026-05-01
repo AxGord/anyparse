@@ -93,6 +93,22 @@ import anyparse.format.WriteOptions;
  *    shape-aware — the leftCurly placement still wins for the brace
  *    position (`leftCurly=Next` → `try\n{` regardless of `tryBody`).
  *
+ * Field added in slice ω-functionBody-policy:
+ *  - `functionBody` — three-way `BodyPolicy` knob shape gating the
+ *    body-placement axis at `HxFnBody.ExprBody` (`function f() expr;`,
+ *    excluding the brace-bearing `BlockBody` and the `;`-only `NoBody`).
+ *    `Same` (default) keeps `function f() expr;` inline with a single
+ *    space; `Next` always pushes the body onto the next line at one
+ *    indent level deeper. `FitLine` and `Keep` degrade to `Next`. The
+ *    knob is consumed via ctor-level `@:fmt(bodyPolicy('functionBody'))`
+ *    on `HxFnBody.ExprBody`; the parent `HxFnDecl.body` Case 5 (Ref +
+ *    `@:fmt(leftCurly)`) suppresses its fixed `_dt(' ')` separator for
+ *    ctors carrying `@:fmt(bodyPolicy(...))` so the wrap inside the
+ *    sub-rule writer fully owns the kw-to-body separator. Default
+ *    `Same` preserves the pre-slice byte-output; users opt into
+ *    haxe-formatter's `@:default(Next)` via
+ *    `"sameLine": { "functionBody": "next" }`.
+ *
  * Fields added in slice ω-case-body-policy:
  *  - `caseBody` — three-way `BodyPolicy` knob shape (`Same` / `Next` /
  *    default) gating the body-placement axis at `HxCaseBranch.body` /
@@ -628,6 +644,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	tryBody:BodyPolicy,
 	caseBody:BodyPolicy,
 	expressionCase:BodyPolicy,
+	functionBody:BodyPolicy,
 	leftCurly:BracePlacement,
 	objectFieldColon:WhitespacePolicy,
 	typeHintColon:WhitespacePolicy,

@@ -874,11 +874,24 @@ class WriterLowering {
 							// writer emits `subCall` first. `;`-led siblings (NoBody)
 							// stay on the `_de()` default so `function f():Void;`
 							// round-trips with no inserted space ahead of `;`.
+							//
+							// ω-functionBody-policy: a sibling ctor carrying ctor-level
+							// `@:fmt(bodyPolicy(...))` has its own bodyPolicyWrap inside
+							// the sub-rule writer (Case 3 path) which provides the
+							// kw→body separator (`_dt(' ')` for Same, hardline+Nest for
+							// Next). The parent must therefore emit `_de()` for that
+							// ctor, otherwise we get a doubled space (Same) or a
+							// trailing space ahead of the hardline (Next). The
+							// per-sibling separator decision lives at the parent here
+							// because only the parent knows the runtime ctor.
 							final ctorName:String = lcCtor;
 							final spaceCtors:Array<String> = spacePrefixCtors(refName, lcCtor);
 							final ctorExpr:Expr = macro Type.enumConstructor($fieldAccess);
 							var sepExpr:Expr = macro _de();
-							for (sc in spaceCtors) sepExpr = macro $ctorExpr == $v{sc} ? _dt(' ') : $sepExpr;
+							for (sc in spaceCtors) {
+								final scSep:Expr = ctorHasBodyPolicy(refName, sc) ? macro _de() : macro _dt(' ');
+								sepExpr = macro $ctorExpr == $v{sc} ? $scSep : $sepExpr;
+							}
 							sepExpr = macro $ctorExpr == $v{ctorName} ? $lcSep : $sepExpr;
 							parts.push(sepExpr);
 							parts.push(writeCall);
@@ -1818,6 +1831,25 @@ class WriterLowering {
 			ctors.push(ctor);
 		}
 		return ctors;
+	}
+
+	/**
+	 * Return `true` when the named ctor of `refName`'s Alt enum carries a
+	 * ctor-level `@:fmt(bodyPolicy(<flag>))`. Consumed by the Case 5
+	 * (Ref + `@:fmt(leftCurly)`) emission site to suppress the parent's
+	 * fixed `_dt(' ')` separator for sibling ctors whose own writer
+	 * (Case 3 path) wraps the body in `bodyPolicyWrap` and supplies the
+	 * kw→body separator runtime-switchably.
+	 *
+	 * First consumer: `HxFnBody.ExprBody`'s `@:fmt(bodyPolicy('functionBody'))`
+	 * (slice ω-functionBody-policy).
+	 */
+	private function ctorHasBodyPolicy(refName:String, ctorName:String):Bool {
+		final node:Null<ShapeNode> = shape.rules.get(refName);
+		if (node == null || node.kind != Alt) return false;
+		for (branch in node.children) if (branch.annotations.get('base.ctor') == ctorName)
+			return fmtReadString(branch, 'bodyPolicy') != null;
+		return false;
 	}
 
 	/**
