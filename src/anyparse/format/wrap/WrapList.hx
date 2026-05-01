@@ -36,7 +36,8 @@ class WrapList {
 		open:String, close:String, sep:String,
 		items:Array<Doc>, opt:WriteOptions,
 		openInside:Doc, closeInside:Doc,
-		keepInnerWhenEmpty:Bool, rules:WrapRules
+		keepInnerWhenEmpty:Bool, rules:WrapRules,
+		appendTrailingComma:Bool = false
 	):Doc {
 		if (items.length == 0)
 			return Text(open + (keepInnerWhenEmpty ? ' ' : '') + close);
@@ -60,16 +61,16 @@ class WrapList {
 
 		if (anyHardline) {
 			final mode:WrapMode = decide(rules, items.length, maxLen, total, true);
-			return shape(mode, open, close, sep, items, openInside, closeInside, cols);
+			return shape(mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
 		}
 
 		final modeFlat:WrapMode = decide(rules, items.length, maxLen, total, false);
 		final modeBreak:WrapMode = decide(rules, items.length, maxLen, total, true);
 		if (modeFlat == modeBreak)
-			return shape(modeFlat, open, close, sep, items, openInside, closeInside, cols);
+			return shape(modeFlat, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
 
-		final flatDoc:Doc = shape(modeFlat, open, close, sep, items, openInside, closeInside, cols);
-		final breakDoc:Doc = shape(modeBreak, open, close, sep, items, openInside, closeInside, cols);
+		final flatDoc:Doc = shape(modeFlat, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
+		final breakDoc:Doc = shape(modeBreak, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
 		return Group(IfBreak(breakDoc, flatDoc));
 	}
 
@@ -151,13 +152,14 @@ class WrapList {
 
 	private static function shape(
 		mode:WrapMode, open:String, close:String, sep:String,
-		items:Array<Doc>, openInside:Doc, closeInside:Doc, cols:Int
+		items:Array<Doc>, openInside:Doc, closeInside:Doc, cols:Int,
+		appendTrailingComma:Bool
 	):Doc {
 		return switch mode {
 			case NoWrap: shapeNoWrap(open, close, sep, items, openInside, closeInside);
-			case OnePerLine: shapeOnePerLine(open, close, sep, items, cols);
-			case OnePerLineAfterFirst: shapeOnePerLineAfterFirst(open, close, sep, items, cols);
-			case FillLine | FillLineWithLeadingBreak: shapeFillLine(open, close, sep, items, openInside, closeInside, cols);
+			case OnePerLine: shapeOnePerLine(open, close, sep, items, cols, appendTrailingComma);
+			case OnePerLineAfterFirst: shapeOnePerLineAfterFirst(open, close, sep, items, cols, appendTrailingComma);
+			case FillLine | FillLineWithLeadingBreak: shapeFillLine(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
 			case _: shapeNoWrap(open, close, sep, items, openInside, closeInside);
 		};
 	}
@@ -175,19 +177,21 @@ class WrapList {
 	}
 
 	private static function shapeOnePerLine(
-		open:String, close:String, sep:String, items:Array<Doc>, cols:Int
+		open:String, close:String, sep:String, items:Array<Doc>, cols:Int,
+		appendTrailingComma:Bool
 	):Doc {
 		final inner:Array<Doc> = [];
 		for (i in 0...items.length) {
 			inner.push(Line('\n'));
 			inner.push(items[i]);
-			if (i < items.length - 1) inner.push(Text(sep));
+			if (i < items.length - 1 || appendTrailingComma) inner.push(Text(sep));
 		}
 		return Concat([Text(open), Nest(cols, Concat(inner)), Line('\n'), Text(close)]);
 	}
 
 	private static function shapeOnePerLineAfterFirst(
-		open:String, close:String, sep:String, items:Array<Doc>, cols:Int
+		open:String, close:String, sep:String, items:Array<Doc>, cols:Int,
+		appendTrailingComma:Bool
 	):Doc {
 		if (items.length == 1)
 			return Concat([Text(open), items[0], Text(close)]);
@@ -197,6 +201,7 @@ class WrapList {
 			tail.push(Line('\n'));
 			tail.push(items[i]);
 		}
+		if (appendTrailingComma) tail.push(Text(sep));
 		return Concat([
 			Text(open), items[0],
 			Nest(cols, Concat(tail)),
@@ -206,14 +211,28 @@ class WrapList {
 
 	private static function shapeFillLine(
 		open:String, close:String, sep:String, items:Array<Doc>,
-		openInside:Doc, closeInside:Doc, cols:Int
+		openInside:Doc, closeInside:Doc, cols:Int,
+		appendTrailingComma:Bool
 	):Doc {
 		final sepDoc:Doc = Concat([Text(sep), Line(' ')]);
 		final body:Doc = items.length == 1 ? items[0] : Fill(items, sepDoc);
-		return Concat([
+		final tail:Doc = appendTrailingComma ? Text(sep) : Empty;
+		// Group wrap: matches the old `fillList` shape (parity with
+		// pre-cascade `@:fmt(fill)` Wadler-fillSep emission). The Group
+		// gives the renderer a coherent flat/break unit for measuring
+		// Fill's natural fit — when the Fill subtree fits flat on the
+		// remaining line, the Group selects MFlat and Nest is bypassed
+		// (no extra indent on inline args); when it doesn't, the Group
+		// breaks and Nest applies, giving each broken-before item the
+		// list's continuation indent. Without this Group wrap, the
+		// renderer stays in MBreak by default and Nest unconditionally
+		// adds cols to every Line replacement, over-indenting hardline-
+		// bearing args (e.g. anon-function block bodies, multi-line
+		// object literals).
+		return Group(Concat([
 			Text(open), openInside,
-			Nest(cols, body),
+			Nest(cols, Concat([body, tail])),
 			closeInside, Text(close),
-		]);
+		]));
 	}
 }

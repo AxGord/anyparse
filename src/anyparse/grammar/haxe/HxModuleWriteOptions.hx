@@ -537,6 +537,29 @@ import anyparse.format.wrap.WrapRules;
  *    `{a:1}` vs `{ a:1 }` spacing; `objectLiteralWrap` decides
  *    single-line vs multi-line shape.
  *
+ * Field added in slice ω-wraprules-callparam (per-construct wrap-rules
+ * cascade extended to the postfix-Star branch — second consumer is
+ * `HxExpr.Call.args`):
+ *  - `callParameterWrap` — `WrapRules` cascade driving the multi-line
+ *    layout decision for function-call argument lists. The macro emits a
+ *    `WrapList.emit` runtime call at the `HxExpr.Call.args` postfix-Star
+ *    site (tagged with `@:fmt(wrapRules('callParameterWrap'))`),
+ *    superseding the previous `@:fmt(fill)` Wadler-fillSep path. Same
+ *    twice-evaluated cascade machinery as `objectLiteralWrap` —
+ *    `Group(IfBreak)` is emitted when the `exceeds=false` and
+ *    `exceeds=true` runs disagree, so the renderer's flat/break decision
+ *    selects the right mode at layout time. Defaults port haxe-formatter's
+ *    `wrapping.callParameter` rules from `default-hxformat.json`:
+ *    `fillLine` if any of `count ≥ 7`, `total ≥ 140`, `anyItem ≥ 80`,
+ *    `line ≥ 160`, or `exceeds`; default mode `noWrap`. Architecturally
+ *    orthogonal to `callParens` (which still drives the runtime-switched
+ *    space before the open `(`); the two compose: `callParens` decides
+ *    `f(a)` vs `f (a)`, `callParameterWrap` decides single-line vs
+ *    multi-line shape of the args list. Function parameter lists
+ *    (`HxParam` Star with `@:fmt(fill, fillDoubleIndent)`) keep their
+ *    own Wadler-fillSep path — a future slice will wire
+ *    `functionSignature` cascade through the same engine.
+ *
  * Slice ω-line-comment-space adds the `addLineCommentSpace:Bool` knob
  * — but to the base `WriteOptions` typedef, not here. The knob drives a
  * format-neutral writer helper (`leadingCommentDoc` /
@@ -731,6 +754,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	objectLiteralBracesOpen:WhitespacePolicy,
 	objectLiteralBracesClose:WhitespacePolicy,
 	objectLiteralWrap:WrapRules,
+	callParameterWrap:WrapRules,
 	expressionTry:SameLinePolicy,
 	indentCaseLabels:Bool,
 	functionTypeHaxe4:WhitespacePolicy,

@@ -442,11 +442,31 @@ class WriterLowering {
 		// remaining budget; on overflow the separator before the offending
 		// item breaks at the args' indent. Default `sepList` stays for any
 		// postfix-Star ctor that doesn't opt in.
+		//
+		// ω-wraprules-callparam: `@:fmt(wrapRules('<optionFieldName>'))`
+		// supersedes both above paths — routes the args list through the
+		// runtime `WrapList.emit` engine driven by the named `WrapRules`
+		// cascade on `opt`. Mirrors the struct-Star branch in `lowerStruct`
+		// (slice ω-wraprules-objlit). First postfix-Star consumer is
+		// `HxExpr.Call.args` (`callParameterWrap`); future slices wire
+		// other postfix-Star ctors (array-access, etc.) through the same
+		// engine. `@:fmt(fill)` / `@:fmt(fillDoubleIndent)` remain orthogonal
+		// for postfix-Star sites that opt into Wadler fillSep without a
+		// per-construct cascade.
+		final wrapRulesField:Null<String> = fmtReadString(branch, 'wrapRules');
 		final useFill:Bool = fmtHasFlag(branch, 'fill');
 		final fillDouble:Bool = fmtHasFlag(branch, 'fillDoubleIndent');
-		final sepListCall:Expr = useFill
-			? macro fillList($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr, _de(), _de(), false, $v{fillDouble})
-			: macro sepList($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr, _de(), _de(), false);
+		final sepListCall:Expr = if (wrapRulesField != null) {
+			final rulesExpr:Expr = {
+				expr: EField(macro opt, wrapRulesField),
+				pos: Context.currentPos(),
+			};
+			macro anyparse.format.wrap.WrapList.emit($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, _de(), _de(), false, $rulesExpr, $tcExpr);
+		} else if (useFill) {
+			macro fillList($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr, _de(), _de(), false, $v{fillDouble});
+		} else {
+			macro sepList($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr, _de(), _de(), false);
+		};
 		final dcArgs:Array<Expr> = [operandCall];
 		if (openSpace != null) dcArgs.push(openSpace);
 		dcArgs.push(sepListCall);
@@ -1339,7 +1359,7 @@ class WriterLowering {
 					expr: EField(macro opt, wrapRulesField),
 					pos: Context.currentPos(),
 				};
-				macro anyparse.format.wrap.WrapList.emit($v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $openInsideExpr, $closeInsideExpr, $keepInnerExpr, $rulesExpr);
+				macro anyparse.format.wrap.WrapList.emit($v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $openInsideExpr, $closeInsideExpr, $keepInnerExpr, $rulesExpr, $tcExpr);
 			} else if (useFill) {
 				macro fillList($v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $tcExpr, $openInsideExpr, $closeInsideExpr, $keepInnerExpr, $v{fillDouble});
 			} else {

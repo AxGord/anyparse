@@ -543,6 +543,7 @@ final class HaxeFormat implements TextFormat {
 		objectLiteralBracesOpen: WhitespacePolicy.None,
 		objectLiteralBracesClose: WhitespacePolicy.None,
 		objectLiteralWrap: HaxeFormat.defaultObjectLiteralWrap(),
+		callParameterWrap: HaxeFormat.defaultCallParameterWrap(),
 		addLineCommentSpace: true,
 		expressionTry: SameLinePolicy.Same,
 		indentCaseLabels: true,
@@ -591,6 +592,38 @@ final class HaxeFormat implements TextFormat {
 				},
 				{
 					mode: WrapMode.OnePerLine,
+					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
+				},
+			],
+			defaultMode: WrapMode.NoWrap,
+		};
+	}
+
+	/**
+	 * Default `WrapRules` cascade for `HxExpr.Call.args` — ported
+	 * verbatim from haxe-formatter's `wrapping.callParameter` rule set
+	 * in `resources/default-hxformat.json` (AxGord fork). Returned as a
+	 * fresh struct on each call so test code that mutates the
+	 * `defaultWriteOptions.callParameterWrap` substruct doesn't corrupt
+	 * the singleton.
+	 */
+	public static function defaultCallParameterWrap():WrapRules {
+		return {
+			rules: [
+				{
+					mode: WrapMode.FillLine,
+					conditions: [{cond: WrapConditionType.ItemCountLargerThan, value: 7}],
+				},
+				{
+					mode: WrapMode.FillLine,
+					conditions: [{cond: WrapConditionType.TotalItemLengthLargerThan, value: 140}],
+				},
+				{
+					mode: WrapMode.FillLine,
+					conditions: [{cond: WrapConditionType.AnyItemLengthLargerThan, value: 80}],
+				},
+				{
+					mode: WrapMode.FillLine,
 					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
 				},
 			],
