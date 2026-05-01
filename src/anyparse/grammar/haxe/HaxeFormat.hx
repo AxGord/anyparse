@@ -456,6 +456,29 @@ final class HaxeFormat implements TextFormat {
 	 * `@:fmt(blankLinesBeforeCtor('decl', 'UsingDecl', 'UsingWildDecl', 'beforeUsing'))`
 	 * on `HxModule.decls` and consumed by the trivia-mode EOF Star path
 	 * in `WriterLowering.triviaEofStarExpr`.
+	 *
+	 * `afterMultilineDecl` / `beforeMultilineDecl` defaults
+	 * (ω-after-multiline) are both `1` — exact number of blank lines the
+	 * writer emits around a multi-line top-level type/function decl
+	 * (Class/Interface/Abstract/Enum with non-empty members, or FnDecl
+	 * with non-empty BlockBody). Override semantics. Matches
+	 * haxe-formatter's `emptyLines.betweenTypes: @:default(1)` and
+	 * `emptyLines.betweenSingleLineTypes: @:default(0)` discrimination —
+	 * the predicate-gated variant fires only on multi-line shapes, so
+	 * runs of single-line type decls fall through to the source-driven
+	 * blank-line slot (no override). Driven by
+	 * `@:fmt(blankLinesAfterCtorIf('decl', 'multiline', 'ClassDecl', …, 'afterMultilineDecl'))`
+	 * and the symmetric `BeforeCtorIf` on `HxModule.decls`. The
+	 * predicate `'multiline'` is grammar-derived at compile time —
+	 * `WriterLowering.buildMultilinePredicate` walks each ctor's arg
+	 * type, reading typedef-level
+	 * `@:fmt(multilineWhenFieldNonEmpty(<arrayField>))` /
+	 * `@:fmt(multilineWhenFieldShape(<refField>))` and ctor-level
+	 * `@:fmt(multilineCtor)` annotations on the relevant grammar types
+	 * (`HxClassDecl` / `HxInterfaceDecl` / `HxAbstractDecl` / `HxEnumDecl` /
+	 * `HxFnDecl` / `HxFnBlock` / `HxFnBody.BlockBody`). Zero runtime
+	 * reflection — the macro emits direct field access + `length > 0`
+	 * comparison.
 	 */
 	public var defaultWriteOptions(default, null):HxModuleWriteOptions = {
 		indentChar: Tab,
@@ -523,6 +546,8 @@ final class HaxeFormat implements TextFormat {
 		arrowFunctions: WhitespacePolicy.Both,
 		afterPackage: 1,
 		beforeUsing: 1,
+		afterMultilineDecl: 1,
+		beforeMultilineDecl: 1,
 		blockCommentAdapter: anyparse.format.text.BlockCommentNormalizer.processCapturedBlockComment,
 		lineCommentAdapter: anyparse.format.text.LineCommentNormalizer.normalizeLineComment,
 		endsWithCloseBrace: HxExprUtil.endsWithCloseBrace,

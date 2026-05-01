@@ -62,9 +62,22 @@ package anyparse.grammar.haxe;
  * refactor) — open to future "blank line before X-group" slices (e.g.
  * `beforeType` for the import/using → type-decl transition) by adding
  * an analogous `@:fmt(...)` call with a different ctor set and opt
- * field. A predicate-gated variant (gating on a structural property
- * like "is this decl multi-line") is the natural follow-up for slices
- * needing shape-aware blank-line rules.
+ * field.
+ *
+ * Predicate-gated variants `@:fmt(blankLinesAfterCtorIf(classifierField,
+ * predicateName, Ctor1, …, optField))` and the symmetric `…BeforeCtorIf`
+ * (slice ω-after-multiline) accept an extra `predicateName` arg right
+ * after the classifier — the kind=1 case body emits a grammar-derived
+ * structural check resolved at compile time by
+ * `WriterLowering.buildMultilinePredicate` (currently the only
+ * registered predicate is `'multiline'`). Empty-body single-line decls
+ * (`class C<T> {}`, `function f() {}`) fall through the predicate to
+ * kind=0 and the override stays inert. Drives the "blank line around
+ * multi-line type decls" rule (matches haxe-formatter's `betweenTypes`
+ * vs `betweenSingleLineTypes` discrimination) without regressing
+ * single-line type-decl runs. Zero runtime reflection — the macro
+ * walks the grammar shape and emits direct `Array.length > 0` /
+ * enum-`switch` checks.
  */
 @:peg
 @:schema(anyparse.grammar.haxe.HaxeFormat)
@@ -73,5 +86,7 @@ typedef HxModule = {
 	@:trivia
 	@:fmt(blankLinesAfterCtor('decl', 'PackageDecl', 'PackageEmpty', 'afterPackage'))
 	@:fmt(blankLinesBeforeCtor('decl', 'UsingDecl', 'UsingWildDecl', 'beforeUsing'))
+	@:fmt(blankLinesAfterCtorIf('decl', 'multiline', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'FnDecl', 'afterMultilineDecl'))
+	@:fmt(blankLinesBeforeCtorIf('decl', 'multiline', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'FnDecl', 'beforeMultilineDecl'))
 	var decls:Array<HxTopLevelDecl>;
 }

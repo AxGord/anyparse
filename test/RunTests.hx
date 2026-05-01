@@ -74,6 +74,7 @@ import unit.HxInterMemberBlankLinesOptionsTest;
 import unit.HxInterfaceInterMemberBlankLinesOptionsTest;
 import unit.HxAfterPackageSliceTest;
 import unit.HxBeforeUsingSliceTest;
+import unit.HxMultilineDeclSliceTest;
 import unit.HxReturnBodySliceTest;
 import unit.HxThrowBodySliceTest;
 import unit.HxCatchBodySliceTest;
@@ -184,6 +185,7 @@ class RunTests {
 		runner.addCase(new HxInterfaceInterMemberBlankLinesOptionsTest());
 		runner.addCase(new HxAfterPackageSliceTest());
 		runner.addCase(new HxBeforeUsingSliceTest());
+		runner.addCase(new HxMultilineDeclSliceTest());
 		runner.addCase(new HxReturnBodySliceTest());
 		runner.addCase(new HxThrowBodySliceTest());
 		runner.addCase(new HxCatchBodySliceTest());

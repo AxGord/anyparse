@@ -50,6 +50,7 @@ package anyparse.grammar.haxe;
  * keyword before `abstract` at the `HxDecl` level.
  */
 @:peg
+@:fmt(multilineWhenFieldNonEmpty('members'))
 typedef HxAbstractDecl = {
 	@:kw('abstract') var name:HxIdentLit;
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose) var typeParams:Null<Array<HxTypeParamDecl>>;

@@ -20,6 +20,7 @@ package anyparse.grammar.haxe;
  * which wraps `HxEnumCtorDecl` — see `HxEnumCtor`.
  */
 @:peg
+@:fmt(multilineWhenFieldNonEmpty('ctors'))
 typedef HxEnumDecl = {
 	@:kw('enum') var name:HxIdentLit;
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose) var typeParams:Null<Array<HxTypeParamDecl>>;

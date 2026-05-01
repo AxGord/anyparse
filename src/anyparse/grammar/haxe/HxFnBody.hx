@@ -35,6 +35,7 @@ package anyparse.grammar.haxe;
 @:peg
 enum HxFnBody {
 
+	@:fmt(multilineCtor)
 	BlockBody(block:HxFnBlock);
 
 	@:lit(';')

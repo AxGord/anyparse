@@ -628,6 +628,34 @@ import anyparse.format.WriteOptions;
  *    Multi-info support (ω-after-typedecl) lets a Star carry multiple
  *    `blankLinesAfterCtor` / `blankLinesBeforeCtor` entries with
  *    independent ctor sets and opt fields, cascaded in source order.
+ *
+ * Fields added in slice ω-after-multiline (predicate-gated blank-line
+ * rules driven by the grammar-derived `multiline` predicate):
+ *  - `afterMultilineDecl` — exact number of blank lines the writer emits
+ *    after a top-level decl whose ctor is in the predicate-gated set
+ *    (`ClassDecl` / `InterfaceDecl` / `AbstractDecl` / `EnumDecl` /
+ *    `FnDecl`) AND whose grammar-derived multi-line shape predicate
+ *    fires (non-empty `members` / `ctors` / `BlockBody.stmts`).
+ *    Override semantics, not floor: replaces the source-captured blank-
+ *    line count when the previous element matches. `1` (default,
+ *    matches haxe-formatter's `emptyLines.betweenTypes: @:default(1)`)
+ *    inserts one blank line after a multi-line type decl regardless of
+ *    source. `0` strips one. Empty-body single-line decls (`class C {}`)
+ *    fall through the predicate to kind=0 and the rule is inert — the
+ *    surrounding `betweenSingleLineTypes`-style behaviour is the
+ *    cascade's source-driven fallback.
+ *  - `beforeMultilineDecl` — symmetric "before" counterpart, fires when
+ *    the current top-level decl is multi-line AND the previous decl
+ *    isn't (otherwise `afterMultilineDecl` already covered the gap).
+ *    `1` (default) inserts one blank line before a multi-line decl
+ *    regardless of source. Cascade picks `afterMultilineDecl` first when
+ *    both rules would fire on the same gap (multi → multi transitions).
+ *
+ * The `multiline` predicate is resolved at compile time by
+ * `WriterLowering.buildMultilinePredicate` from the grammar's typedef-
+ * and ctor-level `@:fmt(multilineWhenFieldNonEmpty(...))` /
+ * `@:fmt(multilineWhenFieldShape(...))` / `@:fmt(multilineCtor)` metas.
+ * Zero runtime reflection.
  */
 typedef HxModuleWriteOptions = WriteOptions & {
 	sameLineElse:SameLinePolicy,
@@ -686,4 +714,6 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	arrowFunctions:WhitespacePolicy,
 	afterPackage:Int,
 	beforeUsing:Int,
+	afterMultilineDecl:Int,
+	beforeMultilineDecl:Int,
 };

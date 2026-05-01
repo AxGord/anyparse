@@ -38,6 +38,7 @@ package anyparse.grammar.haxe;
 @:peg
 @:schema(anyparse.grammar.haxe.HaxeFormat)
 @:ws
+@:fmt(multilineWhenFieldNonEmpty('members'))
 typedef HxClassDecl = {
 	@:kw('class') var name:HxIdentLit;
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose) var typeParams:Null<Array<HxTypeParamDecl>>;

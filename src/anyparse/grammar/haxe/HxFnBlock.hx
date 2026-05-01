@@ -18,6 +18,7 @@ package anyparse.grammar.haxe;
  * the `{` lead and `}` trail with its own statement-trivia capture.
  */
 @:peg
+@:fmt(multilineWhenFieldNonEmpty('stmts'))
 typedef HxFnBlock = {
 	@:lead('{') @:trail('}') @:trivia var stmts:Array<HxStatement>;
 }

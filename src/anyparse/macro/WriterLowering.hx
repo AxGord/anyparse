@@ -1206,12 +1206,18 @@ class WriterLowering {
 				if (openText != null) parts.push(macro _dt($v{openText}));
 				final afterCtorAllArgs:Array<Array<String>> = fmtReadStringArgsAll(starNode, 'blankLinesAfterCtor');
 				final afterCtorInfos:Array<AfterCtorBlankInfo> = [
-					for (args in afterCtorAllArgs) buildAfterCtorBlankInfo(elemRefName, args)
+					for (args in afterCtorAllArgs) buildAfterCtorBlankInfo(elemRefName, args, null)
 				];
+				final afterCtorIfAllArgs:Array<Array<String>> = fmtReadStringArgsAll(starNode, 'blankLinesAfterCtorIf');
+				for (args in afterCtorIfAllArgs)
+					afterCtorInfos.push(buildAfterCtorBlankInfoIf(elemRefName, args));
 				final beforeCtorAllArgs:Array<Array<String>> = fmtReadStringArgsAll(starNode, 'blankLinesBeforeCtor');
 				final beforeCtorInfos:Array<BeforeCtorBlankInfo> = [
-					for (args in beforeCtorAllArgs) buildBeforeCtorBlankInfo(elemRefName, args)
+					for (args in beforeCtorAllArgs) buildBeforeCtorBlankInfo(elemRefName, args, null)
 				];
+				final beforeCtorIfAllArgs:Array<Array<String>> = fmtReadStringArgsAll(starNode, 'blankLinesBeforeCtorIf');
+				for (args in beforeCtorIfAllArgs)
+					beforeCtorInfos.push(buildBeforeCtorBlankInfoIf(elemRefName, args));
 				parts.push(triviaEofStarExpr(
 					fieldAccess, trailBBAccess, trailLCAccess, elemFn,
 					afterCtorInfos, beforeCtorInfos
@@ -3655,8 +3661,35 @@ class WriterLowering {
 	 * ctors trigger and which `HxModuleWriteOptions` Int field is
 	 * consulted.
 	 */
-	private function buildAfterCtorBlankInfo(elemRefName:String, args:Array<String>):AfterCtorBlankInfo {
-		final r:CtorBlankResolution = resolveCtorBlankArgs(elemRefName, args, 'blankLinesAfterCtor');
+	private function buildAfterCtorBlankInfo(elemRefName:String, args:Array<String>, predicateAdapter:Null<String>):AfterCtorBlankInfo {
+		final r:CtorBlankResolution = resolveCtorBlankArgs(elemRefName, args, 'blankLinesAfterCtor', predicateAdapter);
+		return {
+			classifierFieldName: r.fieldName,
+			classifyCases: r.cases,
+			optField: r.optField,
+		};
+	}
+
+	/**
+	 * ω-after-multiline — predicate-gated variant of
+	 * `buildAfterCtorBlankInfo`. Args shape: `(classifierField,
+	 * predicateAdapter, CtorName1, …, optField)`. The runtime kind-=1
+	 * path runs `opt.<predicateAdapter>(_t.node)` after the ctor match
+	 * succeeds; kind stays `0` when the adapter returns false (or when
+	 * the adapter field on `opt` is null). Lets a single ctor set fire
+	 * a blank-line override only on shape-relevant elements (e.g.
+	 * "blank line around any multi-line type decl") instead of bare
+	 * ctor name (which would force the blank around empty-body decls
+	 * too — the previously regressed `class C<T> {}` case).
+	 */
+	private function buildAfterCtorBlankInfoIf(elemRefName:String, args:Array<String>):AfterCtorBlankInfo {
+		if (args.length < 4)
+			Context.fatalError(
+				'WriterLowering: @:fmt(blankLinesAfterCtorIf) expects ≥ 4 string args (classifierField, predicateAdapter, CtorName1, [CtorName2, …], optField), got ${args.length}',
+				Context.currentPos()
+			);
+		final reduced:Array<String> = [args[0]].concat(args.slice(2));
+		final r:CtorBlankResolution = resolveCtorBlankArgs(elemRefName, reduced, 'blankLinesAfterCtorIf', args[1]);
 		return {
 			classifierFieldName: r.fieldName,
 			classifyCases: r.cases,
@@ -3674,8 +3707,32 @@ class WriterLowering {
 	 * "blank line before first X group" semantics (e.g. `import → using`
 	 * transition) independently of the after-ctor knob.
 	 */
-	private function buildBeforeCtorBlankInfo(elemRefName:String, args:Array<String>):BeforeCtorBlankInfo {
-		final r:CtorBlankResolution = resolveCtorBlankArgs(elemRefName, args, 'blankLinesBeforeCtor');
+	private function buildBeforeCtorBlankInfo(elemRefName:String, args:Array<String>, predicateAdapter:Null<String>):BeforeCtorBlankInfo {
+		final r:CtorBlankResolution = resolveCtorBlankArgs(elemRefName, args, 'blankLinesBeforeCtor', predicateAdapter);
+		return {
+			classifierFieldName: r.fieldName,
+			classifyCases: r.cases,
+			optField: r.optField,
+		};
+	}
+
+	/**
+	 * Predicate-gated variant of `buildBeforeCtorBlankInfo`. Same arg
+	 * shape and adapter semantics as `buildAfterCtorBlankInfoIf` — the
+	 * runtime gate at consumption keeps the existing "curr matches AND
+	 * prev did NOT match" semantics, so the predicate-gated kind feeds
+	 * both sides of the comparison. A single decl pair is governed by
+	 * at most one override, and the cascade still picks after-ctor
+	 * entries before before-ctor entries.
+	 */
+	private function buildBeforeCtorBlankInfoIf(elemRefName:String, args:Array<String>):BeforeCtorBlankInfo {
+		if (args.length < 4)
+			Context.fatalError(
+				'WriterLowering: @:fmt(blankLinesBeforeCtorIf) expects ≥ 4 string args (classifierField, predicateAdapter, CtorName1, [CtorName2, …], optField), got ${args.length}',
+				Context.currentPos()
+			);
+		final reduced:Array<String> = [args[0]].concat(args.slice(2));
+		final r:CtorBlankResolution = resolveCtorBlankArgs(elemRefName, reduced, 'blankLinesBeforeCtorIf', args[1]);
 		return {
 			classifierFieldName: r.fieldName,
 			classifyCases: r.cases,
@@ -3695,7 +3752,7 @@ class WriterLowering {
 	 * both knobs in sync on shape-validation messages and the classifier
 	 * lookup path.
 	 */
-	private function resolveCtorBlankArgs(elemRefName:String, args:Array<String>, metaName:String):CtorBlankResolution {
+	private function resolveCtorBlankArgs(elemRefName:String, args:Array<String>, metaName:String, predicateName:Null<String>):CtorBlankResolution {
 		if (args.length < 3)
 			Context.fatalError(
 				'WriterLowering: @:fmt($metaName) expects ≥ 3 string args (classifierField, CtorName1, [CtorName2, …], optField), got ${args.length}',
@@ -3751,8 +3808,19 @@ class WriterLowering {
 				: {expr: ECall(ctorIdent, [for (_ in 0...arity) macro _]), pos: pos};
 			final isMatch:Bool = ctorNames.indexOf(ctorName) >= 0;
 			if (isMatch) matched.push(ctorName);
-			final kindExpr:Expr = isMatch ? macro 1 : macro 0;
-			cases.push({values: [pattern], guard: null, expr: kindExpr});
+			final kindExpr:Expr = if (!isMatch) macro 0;
+				else if (predicateName == null) macro 1;
+				else buildPredicateGatedKind(branch, ctorName, predicateName, metaName, enumRuleName);
+			// When a predicate gate is active, the case pattern must bind the
+			// first arg as `_v0` so the predicate can reference it. Plain
+			// (non-predicated) and zero-arg ctors keep the original wildcard
+			// pattern.
+			final patternFinal:Expr = if (isMatch && predicateName != null && arity >= 1) {
+				final binders:Array<Expr> = [];
+				for (i in 0...arity) binders.push(i == 0 ? macro _v0 : macro _);
+				{expr: ECall(ctorIdent, binders), pos: pos};
+			} else pattern;
+			cases.push({values: [patternFinal], guard: null, expr: kindExpr});
 		}
 		for (name in ctorNames) if (matched.indexOf(name) < 0)
 			Context.fatalError(
@@ -3764,6 +3832,138 @@ class WriterLowering {
 			cases: cases,
 			optField: optField,
 		};
+	}
+
+	/**
+	 * ω-after-multiline — build the kind-=1 case body for a
+	 * predicate-gated `blankLines{After,Before}CtorIf` ctor match.
+	 * `predicateName` is currently only `'multiline'`; resolves to a
+	 * grammar-derived structural check via `buildMultilinePredicate`
+	 * applied to the ctor's first arg (bound as `_v0` in the case
+	 * pattern). Returns `macro 0` when the ctor's payload type carries
+	 * no relevant `@:fmt(multilineWhen...)` meta, so adding new ctors to
+	 * the gated set without tagging their target type silently keeps
+	 * them at kind=0 (same as the bare ctor not being in the set).
+	 *
+	 * Recursive design: `multilineWhenFieldNonEmpty(<arrayField>)` on a
+	 * struct typedef → `_v0.<field>.length > 0`.
+	 * `multilineWhenFieldShape(<refField>)` → recurse into the field's
+	 * target type's predicate. On enum types, switch over each ctor
+	 * and apply `multilineCtor`-tagged ctor's arg-type predicate;
+	 * untagged ctors emit `false`.
+	 */
+	private function buildPredicateGatedKind(branch:ShapeNode, ctorName:String, predicateName:String, metaName:String, enumRuleName:String):Expr {
+		if (predicateName != 'multiline')
+			Context.fatalError(
+				'WriterLowering: @:fmt($metaName) predicate "$predicateName" is not registered (currently only "multiline" is supported)',
+				Context.currentPos()
+			);
+		if (branch.children.length == 0) return macro 0;
+		final argNode:ShapeNode = branch.children[0];
+		final argTypeName:Null<String> = argNode.annotations.get('base.ref');
+		if (argTypeName == null) return macro 0;
+		final pred:Null<Expr> = buildMultilinePredicate(argTypeName, macro _v0);
+		return pred == null ? macro 0 : macro $pred ? 1 : 0;
+	}
+
+	/**
+	 * ω-after-multiline — recursively build the multi-line predicate
+	 * for `typeName` applied to `accessExpr`. Returns `null` when the
+	 * type carries no multi-line meta — caller substitutes `macro 0`
+	 * (or `macro false`).
+	 *
+	 * Reads three `@:fmt(...)` flag forms from the grammar shape:
+	 *  - typedef-level `multilineWhenFieldNonEmpty('field')` →
+	 *    `accessExpr.field.length > 0`. Used when the type's multi-line
+	 *    nature is determined by a Star field's emptiness (Class /
+	 *    Iface / Abstract members, EnumDecl ctors, FnBlock stmts).
+	 *  - typedef-level `multilineWhenFieldShape('field')` → recurse
+	 *    into the named field's target type, applied to
+	 *    `accessExpr.field`. Used when the type defers its multi-line
+	 *    decision to a sub-rule (HxFnDecl → body).
+	 *  - ctor-level `multilineCtor` (on enum branches) → switch over
+	 *    every ctor of the enum; the tagged ctor binds its first arg
+	 *    and recurses into the arg's type predicate; untagged ctors
+	 *    emit `false`. Used for enum types whose multi-line nature
+	 *    depends on which variant is present (HxFnBody → BlockBody
+	 *    multi-line iff its block is, NoBody / ExprBody never).
+	 */
+	private function buildMultilinePredicate(typeName:String, accessExpr:Expr):Null<Expr> {
+		final node:Null<ShapeNode> = shape.rules.get(typeName);
+		if (node == null) return null;
+		final pos:Position = Context.currentPos();
+		final meta:Null<Metadata> = node.annotations.get('base.meta');
+		if (meta != null) {
+			for (entry in meta) if (entry.name == ':fmt') {
+				for (param in entry.params) switch param.expr {
+					case ECall({expr: EConst(CIdent('multilineWhenFieldNonEmpty'))}, [{expr: EConst(CString(field, _))}]):
+						final fieldExpr:Expr = {expr: EField(accessExpr, field), pos: pos};
+						return macro $fieldExpr.length > 0;
+					case ECall({expr: EConst(CIdent('multilineWhenFieldShape'))}, [{expr: EConst(CString(field, _))}]):
+						final fieldNode:Null<ShapeNode> = findFieldByName(node, field);
+						if (fieldNode == null)
+							Context.fatalError(
+								'WriterLowering: @:fmt(multilineWhenFieldShape) field "$field" not found on $typeName',
+								Context.currentPos()
+							);
+						final targetType:Null<String> = fieldNode.annotations.get('base.ref');
+						if (targetType == null) return null;
+						final fieldExpr:Expr = {expr: EField(accessExpr, field), pos: pos};
+						return buildMultilinePredicate(targetType, fieldExpr);
+					case _:
+				}
+			}
+		}
+		// Enum dispatch: switch over each ctor's `multilineCtor` flag.
+		if (node.kind == Alt) {
+			final cases:Array<Case> = [];
+			var anyTagged:Bool = false;
+			for (branch in node.children) {
+				final ctorName:Null<String> = branch.annotations.get('base.ctor');
+				if (ctorName == null) continue;
+				final arity:Int = branch.children.length;
+				final ctorIdent:Expr = {expr: EConst(CIdent(ctorName)), pos: pos};
+				final tagged:Bool = ctorBranchHasFlag(branch, 'multilineCtor');
+				final pattern:Expr = if (tagged && arity >= 1) {
+					final binders:Array<Expr> = [];
+					for (i in 0...arity) binders.push(i == 0 ? macro _v : macro _);
+					{expr: ECall(ctorIdent, binders), pos: pos};
+				} else if (arity == 0) {
+					ctorIdent;
+				} else {
+					{expr: ECall(ctorIdent, [for (_ in 0...arity) macro _]), pos: pos};
+				};
+				final body:Expr = if (!tagged) macro false;
+				else {
+					anyTagged = true;
+					final argNode:ShapeNode = branch.children[0];
+					final argTypeName:Null<String> = argNode.annotations.get('base.ref');
+					final inner:Null<Expr> = argTypeName == null ? null : buildMultilinePredicate(argTypeName, macro _v);
+					inner ?? macro false;
+				};
+				cases.push({values: [pattern], guard: null, expr: body});
+			}
+			if (!anyTagged) return null;
+			return {expr: ESwitch(accessExpr, cases, null), pos: pos};
+		}
+		return null;
+	}
+
+	private static function findFieldByName(node:ShapeNode, name:String):Null<ShapeNode> {
+		for (child in node.children) if (child.annotations.get('base.fieldName') == name) return child;
+		return null;
+	}
+
+	private static function ctorBranchHasFlag(branch:ShapeNode, flag:String):Bool {
+		final meta:Null<Metadata> = branch.annotations.get('base.meta');
+		if (meta == null) return false;
+		for (entry in meta) if (entry.name == ':fmt') {
+			for (param in entry.params) switch param.expr {
+				case EConst(CIdent(id)) if (id == flag): return true;
+				case _:
+			}
+		}
+		return false;
 	}
 }
 

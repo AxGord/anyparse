@@ -375,6 +375,8 @@ final class HaxeFormatConfigLoader {
 			arrowFunctions: base.arrowFunctions,
 			afterPackage: base.afterPackage,
 			beforeUsing: base.beforeUsing,
+			afterMultilineDecl: base.afterMultilineDecl,
+			beforeMultilineDecl: base.beforeMultilineDecl,
 			blockCommentAdapter: base.blockCommentAdapter,
 			lineCommentAdapter: base.lineCommentAdapter,
 			endsWithCloseBrace: base.endsWithCloseBrace,

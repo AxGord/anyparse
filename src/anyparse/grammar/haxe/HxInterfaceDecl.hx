@@ -34,6 +34,7 @@ package anyparse.grammar.haxe;
  * follow-up slices.
  */
 @:peg
+@:fmt(multilineWhenFieldNonEmpty('members'))
 typedef HxInterfaceDecl = {
 	@:kw('interface') var name:HxIdentLit;
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose) var typeParams:Null<Array<HxTypeParamDecl>>;
