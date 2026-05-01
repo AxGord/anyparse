@@ -54,13 +54,17 @@ package anyparse.grammar.haxe;
  * (or any non-`using` decl) and curr is `using`, force the configured
  * count regardless of source; consecutive `using` decls cascade
  * through to source-driven `blankBefore`. The cascade order in the
- * trivia EOF Star path is: `blankLinesAfterCtor` (prev match) wins
- * first, then `blankLinesBeforeCtor` (curr match without prev match),
- * then source-driven binary blank-line slot. The same mechanism is
- * open to future "blank line before X-group" slices (e.g.
+ * trivia EOF Star path is: `blankLinesAfterCtor` entries (in source
+ * order, prev match) win first, then `blankLinesBeforeCtor` entries
+ * (curr match without prev match), then source-driven binary blank-
+ * line slot. Multiple `blankLinesAfterCtor` / `blankLinesBeforeCtor`
+ * entries on the same Star are supported (ω-after-typedecl multi-info
+ * refactor) — open to future "blank line before X-group" slices (e.g.
  * `beforeType` for the import/using → type-decl transition) by adding
  * an analogous `@:fmt(...)` call with a different ctor set and opt
- * field.
+ * field. A predicate-gated variant (gating on a structural property
+ * like "is this decl multi-line") is the natural follow-up for slices
+ * needing shape-aware blank-line rules.
  */
 @:peg
 @:schema(anyparse.grammar.haxe.HaxeFormat)

@@ -1204,17 +1204,17 @@ class WriterLowering {
 				));
 			} else if (isLastField) {
 				if (openText != null) parts.push(macro _dt($v{openText}));
-				final afterCtorArgs:Null<Array<String>> = fmtReadStringArgs(starNode, 'blankLinesAfterCtor');
-				final afterCtorInfo:Null<AfterCtorBlankInfo> = afterCtorArgs == null
-					? null
-					: buildAfterCtorBlankInfo(elemRefName, afterCtorArgs);
-				final beforeCtorArgs:Null<Array<String>> = fmtReadStringArgs(starNode, 'blankLinesBeforeCtor');
-				final beforeCtorInfo:Null<BeforeCtorBlankInfo> = beforeCtorArgs == null
-					? null
-					: buildBeforeCtorBlankInfo(elemRefName, beforeCtorArgs);
+				final afterCtorAllArgs:Array<Array<String>> = fmtReadStringArgsAll(starNode, 'blankLinesAfterCtor');
+				final afterCtorInfos:Array<AfterCtorBlankInfo> = [
+					for (args in afterCtorAllArgs) buildAfterCtorBlankInfo(elemRefName, args)
+				];
+				final beforeCtorAllArgs:Array<Array<String>> = fmtReadStringArgsAll(starNode, 'blankLinesBeforeCtor');
+				final beforeCtorInfos:Array<BeforeCtorBlankInfo> = [
+					for (args in beforeCtorAllArgs) buildBeforeCtorBlankInfo(elemRefName, args)
+				];
 				parts.push(triviaEofStarExpr(
 					fieldAccess, trailBBAccess, trailLCAccess, elemFn,
-					afterCtorInfo, beforeCtorInfo
+					afterCtorInfos, beforeCtorInfos
 				));
 			} else {
 				Context.fatalError('WriterLowering: @:trivia Star without @:trail must be the last field', Context.currentPos());
@@ -2985,8 +2985,8 @@ class WriterLowering {
 	 */
 	private static function triviaEofStarExpr(
 		fieldAccess:Expr, trailBBAccess:Null<Expr>, trailLCAccess:Null<Expr>,
-		elemFn:String, afterCtorInfo:Null<AfterCtorBlankInfo> = null,
-		beforeCtorInfo:Null<BeforeCtorBlankInfo> = null
+		elemFn:String, afterCtorInfos:Array<AfterCtorBlankInfo> = null,
+		beforeCtorInfos:Array<BeforeCtorBlankInfo> = null
 	):Expr {
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
@@ -2994,8 +2994,8 @@ class WriterLowering {
 		};
 		final trailBB:Expr = trailBBAccess ?? macro false;
 		final trailLC:Expr = trailLCAccess ?? macro ([] : Array<String>);
-		final useAfterCtor:Bool = afterCtorInfo != null;
-		final useBeforeCtor:Bool = beforeCtorInfo != null;
+		final afterInfos:Array<AfterCtorBlankInfo> = afterCtorInfos ?? [];
+		final beforeInfos:Array<BeforeCtorBlankInfo> = beforeCtorInfos ?? [];
 		final pos:Position = Context.currentPos();
 		// ω-after-package — when the previous element matches one of the
 		// named ctors, the writer overrides the source-captured blank-
@@ -3012,104 +3012,170 @@ class WriterLowering {
 		// order: afterCtor wins first, then beforeCtor, then source.
 		// For all other element pairs the trivia channel's binary
 		// `blankBefore` flag drives a single blank line as before.
-		final initPrevKindExpr:Expr = useAfterCtor ? macro var _prevKindAfter:Int = 0 : macro {};
-		final initCurrKindExpr:Expr = useAfterCtor ? macro var _currKindAfter:Int = 0 : macro {};
-		final currKindComputeExpr:Expr = useAfterCtor ? {
-			final classifierAccess:Expr = {
-				expr: EField(macro _t.node, afterCtorInfo.classifierFieldName),
-				pos: pos,
-			};
-			final switchExpr:Expr = {
-				expr: ESwitch(classifierAccess, afterCtorInfo.classifyCases, null),
-				pos: pos,
-			};
-			macro _currKindAfter = $switchExpr;
-		} : macro {};
-		final trackPrevKindExpr:Expr = useAfterCtor ? macro _prevKindAfter = _currKindAfter : macro {};
-		final initPrevKindBeforeExpr:Expr = useBeforeCtor ? macro var _prevKindBefore:Int = 0 : macro {};
-		final initCurrKindBeforeExpr:Expr = useBeforeCtor ? macro var _currKindBefore:Int = 0 : macro {};
-		final currKindBeforeComputeExpr:Expr = useBeforeCtor ? {
-			final classifierAccess:Expr = {
-				expr: EField(macro _t.node, beforeCtorInfo.classifierFieldName),
-				pos: pos,
-			};
-			final switchExpr:Expr = {
-				expr: ESwitch(classifierAccess, beforeCtorInfo.classifyCases, null),
-				pos: pos,
-			};
-			macro _currKindBefore = $switchExpr;
-		} : macro {};
-		final trackPrevKindBeforeExpr:Expr = useBeforeCtor ? macro _prevKindBefore = _currKindBefore : macro {};
-		final blanksCountExpr:Expr = if (useAfterCtor && useBeforeCtor) {
-			final afterAccess:Expr = {expr: EField(macro opt, afterCtorInfo.optField), pos: pos};
-			final beforeAccess:Expr = {expr: EField(macro opt, beforeCtorInfo.optField), pos: pos};
-			macro (
-				_prevKindAfter == 1 ? $afterAccess
-				: (_currKindBefore == 1 && _prevKindBefore != 1 ? $beforeAccess
-				: (_t.blankBefore ? 1 : 0))
-			);
-		} else if (useAfterCtor) {
-			final afterAccess:Expr = {expr: EField(macro opt, afterCtorInfo.optField), pos: pos};
-			macro (_prevKindAfter == 1 ? $afterAccess : (_t.blankBefore ? 1 : 0));
-		} else if (useBeforeCtor) {
-			final beforeAccess:Expr = {expr: EField(macro opt, beforeCtorInfo.optField), pos: pos};
-			macro (
-				_currKindBefore == 1 && _prevKindBefore != 1
-					? $beforeAccess
-					: (_t.blankBefore ? 1 : 0)
-			);
-		} else macro (_t.blankBefore ? 1 : 0);
+		//
+		// ω-after-typedecl — the after/before ctor knobs accept multiple
+		// `@:fmt(blankLinesAfterCtor(...))` / `blankLinesBeforeCtor(...)`
+		// entries on the same Star, each with its own ctor set and opt
+		// field. Each entry produces an independent kind-tracker variable
+		// (`_prevKindAfterN` / `_prevKindBeforeN`); the runtime cascade
+		// runs them in source order — first afterInfos[0], then
+		// afterInfos[1], …, then beforeInfos[0], …, then source-driven.
+		// Knobs read from the source-order chain, so authors order the
+		// entries from highest priority (afterPackage) downward.
+		final initPrevKindExprs:Array<Expr> = [
+			for (i in 0...afterInfos.length) {
+				final name:String = '_prevKindAfter' + i;
+				macro var $name:Int = 0;
+			}
+		];
+		final initCurrKindExprs:Array<Expr> = [
+			for (i in 0...afterInfos.length) {
+				final name:String = '_currKindAfter' + i;
+				macro var $name:Int = 0;
+			}
+		];
+		final currKindComputeExprs:Array<Expr> = [
+			for (i in 0...afterInfos.length) {
+				final info:AfterCtorBlankInfo = afterInfos[i];
+				final classifierAccess:Expr = {
+					expr: EField(macro _t.node, info.classifierFieldName),
+					pos: pos,
+				};
+				final switchExpr:Expr = {
+					expr: ESwitch(classifierAccess, info.classifyCases, null),
+					pos: pos,
+				};
+				final lhs:Expr = {expr: EConst(CIdent('_currKindAfter' + i)), pos: pos};
+				macro $lhs = $switchExpr;
+			}
+		];
+		final trackPrevKindExprs:Array<Expr> = [
+			for (i in 0...afterInfos.length) {
+				final lhs:Expr = {expr: EConst(CIdent('_prevKindAfter' + i)), pos: pos};
+				final rhs:Expr = {expr: EConst(CIdent('_currKindAfter' + i)), pos: pos};
+				macro $lhs = $rhs;
+			}
+		];
+		final initPrevKindBeforeExprs:Array<Expr> = [
+			for (i in 0...beforeInfos.length) {
+				final name:String = '_prevKindBefore' + i;
+				macro var $name:Int = 0;
+			}
+		];
+		final initCurrKindBeforeExprs:Array<Expr> = [
+			for (i in 0...beforeInfos.length) {
+				final name:String = '_currKindBefore' + i;
+				macro var $name:Int = 0;
+			}
+		];
+		final currKindBeforeComputeExprs:Array<Expr> = [
+			for (i in 0...beforeInfos.length) {
+				final info:BeforeCtorBlankInfo = beforeInfos[i];
+				final classifierAccess:Expr = {
+					expr: EField(macro _t.node, info.classifierFieldName),
+					pos: pos,
+				};
+				final switchExpr:Expr = {
+					expr: ESwitch(classifierAccess, info.classifyCases, null),
+					pos: pos,
+				};
+				final lhs:Expr = {expr: EConst(CIdent('_currKindBefore' + i)), pos: pos};
+				macro $lhs = $switchExpr;
+			}
+		];
+		final trackPrevKindBeforeExprs:Array<Expr> = [
+			for (i in 0...beforeInfos.length) {
+				final lhs:Expr = {expr: EConst(CIdent('_prevKindBefore' + i)), pos: pos};
+				final rhs:Expr = {expr: EConst(CIdent('_currKindBefore' + i)), pos: pos};
+				macro $lhs = $rhs;
+			}
+		];
+		var blanksCountExpr:Expr = macro (_t.blankBefore ? 1 : 0);
+		// Build cascade from innermost (source-driven) outward — beforeInfos
+		// in reverse order first, then afterInfos in reverse order, so the
+		// source-order priority lands as the outermost ternary check.
+		for (i in 0...beforeInfos.length) {
+			final idx:Int = beforeInfos.length - 1 - i;
+			final info:BeforeCtorBlankInfo = beforeInfos[idx];
+			final beforeAccess:Expr = {expr: EField(macro opt, info.optField), pos: pos};
+			final currIdent:Expr = {expr: EConst(CIdent('_currKindBefore' + idx)), pos: pos};
+			final prevIdent:Expr = {expr: EConst(CIdent('_prevKindBefore' + idx)), pos: pos};
+			final fallback:Expr = blanksCountExpr;
+			blanksCountExpr = macro ($currIdent == 1 && $prevIdent != 1 ? $beforeAccess : $fallback);
+		}
+		for (i in 0...afterInfos.length) {
+			final idx:Int = afterInfos.length - 1 - i;
+			final info:AfterCtorBlankInfo = afterInfos[idx];
+			final afterAccess:Expr = {expr: EField(macro opt, info.optField), pos: pos};
+			final prevIdent:Expr = {expr: EConst(CIdent('_prevKindAfter' + idx)), pos: pos};
+			final fallback:Expr = blanksCountExpr;
+			blanksCountExpr = macro ($prevIdent == 1 ? $afterAccess : $fallback);
+		}
+		// Flatten the per-info var/compute/track exprs into the outer
+		// scope to avoid nested-EBlock isolation (skill: $b{} / EBlock
+		// creates a new scope, vars don't leak to siblings). The while
+		// body is built as a flat Array<Expr> too: `_currKindAfterN`
+		// / `_prevKindAfterN` ident references inside `$blanksCountExpr`
+		// must resolve against the same lexical block that declares them.
+		final whileBodyParts:Array<Expr> = [];
+		whileBodyParts.push(macro final _t = _arr[_si]);
+		for (e in initCurrKindExprs) whileBodyParts.push(e);
+		for (e in currKindComputeExprs) whileBodyParts.push(e);
+		for (e in initCurrKindBeforeExprs) whileBodyParts.push(e);
+		for (e in currKindBeforeComputeExprs) whileBodyParts.push(e);
+		whileBodyParts.push(macro if (_si > 0) {
+			_docs.push(_dhl());
+			final _blanks:Int = $blanksCountExpr;
+			var _bli:Int = 0;
+			while (_bli < _blanks) {
+				_docs.push(_dhl());
+				_bli++;
+			}
+		});
+		whileBodyParts.push(macro {
+			var _ci:Int = 0;
+			while (_ci < _t.leadingComments.length) {
+				_docs.push(leadingCommentDoc(_t.leadingComments[_ci], opt));
+				_docs.push(_dhl());
+				_ci++;
+			}
+		});
+		whileBodyParts.push(macro if (_t.blankAfterLeadingComments && _t.leadingComments.length > 0) _docs.push(_dhl()));
+		whileBodyParts.push(macro final _elem:anyparse.core.Doc = $triviaElemCall);
+		whileBodyParts.push(macro final _tc:Null<String> = _t.trailingComment);
+		whileBodyParts.push(macro _docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDoc(_tc, opt)) : _elem));
+		for (e in trackPrevKindExprs) whileBodyParts.push(e);
+		for (e in trackPrevKindBeforeExprs) whileBodyParts.push(e);
+		whileBodyParts.push(macro _si++);
+		final whileBodyBlock:Expr = {expr: EBlock(whileBodyParts), pos: pos};
+		final whileExpr:Expr = {
+			expr: EWhile(macro _si < _arr.length, whileBodyBlock, true),
+			pos: pos,
+		};
+		final elseBodyParts:Array<Expr> = [];
+		elseBodyParts.push(macro final _docs:Array<anyparse.core.Doc> = []);
+		for (e in initPrevKindExprs) elseBodyParts.push(e);
+		for (e in initPrevKindBeforeExprs) elseBodyParts.push(e);
+		elseBodyParts.push(macro var _si:Int = 0);
+		elseBodyParts.push(whileExpr);
+		elseBodyParts.push(macro if (_trailLC.length > 0) {
+			if (_arr.length > 0) _docs.push(_dhl());
+			if (_trailBB && _arr.length > 0) _docs.push(_dhl());
+			var _ti:Int = 0;
+			while (_ti < _trailLC.length) {
+				_docs.push(leadingCommentDoc(_trailLC[_ti], opt));
+				if (_ti < _trailLC.length - 1) _docs.push(_dhl());
+				_ti++;
+			}
+		});
+		elseBodyParts.push(macro _dc(_docs));
+		final elseBody:Expr = {expr: EBlock(elseBodyParts), pos: pos};
 		return macro {
 			final _arr = $fieldAccess;
 			final _trailLC:Array<String> = $trailLC;
 			final _trailBB:Bool = $trailBB;
 			if (_arr.length == 0 && _trailLC.length == 0) _de()
-			else {
-				final _docs:Array<anyparse.core.Doc> = [];
-				$initPrevKindExpr;
-				$initPrevKindBeforeExpr;
-				var _si:Int = 0;
-				while (_si < _arr.length) {
-					final _t = _arr[_si];
-					$initCurrKindExpr;
-					$currKindComputeExpr;
-					$initCurrKindBeforeExpr;
-					$currKindBeforeComputeExpr;
-					if (_si > 0) {
-						_docs.push(_dhl());
-						final _blanks:Int = $blanksCountExpr;
-						var _bli:Int = 0;
-						while (_bli < _blanks) {
-							_docs.push(_dhl());
-							_bli++;
-						}
-					}
-					var _ci:Int = 0;
-					while (_ci < _t.leadingComments.length) {
-						_docs.push(leadingCommentDoc(_t.leadingComments[_ci], opt));
-						_docs.push(_dhl());
-						_ci++;
-					}
-					if (_t.blankAfterLeadingComments && _t.leadingComments.length > 0) _docs.push(_dhl());
-					final _elem:anyparse.core.Doc = $triviaElemCall;
-					final _tc:Null<String> = _t.trailingComment;
-					_docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDoc(_tc, opt)) : _elem);
-					$trackPrevKindExpr;
-					$trackPrevKindBeforeExpr;
-					_si++;
-				}
-				if (_trailLC.length > 0) {
-					if (_arr.length > 0) _docs.push(_dhl());
-					if (_trailBB && _arr.length > 0) _docs.push(_dhl());
-					var _ti:Int = 0;
-					while (_ti < _trailLC.length) {
-						_docs.push(leadingCommentDoc(_trailLC[_ti], opt));
-						if (_ti < _trailLC.length - 1) _docs.push(_dhl());
-						_ti++;
-					}
-				}
-				_dc(_docs);
-			}
+			else $elseBody;
 		};
 	}
 
@@ -3384,6 +3450,34 @@ class WriterLowering {
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * Multi-entry variant of `fmtReadStringArgs` — returns every
+	 * `@:fmt(name(...))` occurrence on the node, in source order. Used by
+	 * knobs that may appear multiple times with different argument tuples
+	 * (e.g. `blankLinesAfterCtor` paired separately with `afterPackage`
+	 * and `afterTypeDecl` opts). Entries with non-string args are skipped
+	 * silently — same lenient policy as the single-entry helper.
+	 */
+	private static function fmtReadStringArgsAll(node:ShapeNode, name:String):Array<Array<String>> {
+		final out:Array<Array<String>> = [];
+		final meta:Null<Metadata> = node.annotations.get('base.meta');
+		if (meta == null) return out;
+		for (entry in meta) if (entry.name == ':fmt') {
+			for (param in entry.params) switch param.expr {
+				case ECall({expr: EConst(CIdent(id))}, args) if (id == name):
+					final group:Array<String> = [];
+					var ok:Bool = true;
+					for (arg in args) switch arg.expr {
+						case EConst(CString(s, _)): group.push(s);
+						case _: ok = false;
+					}
+					if (ok) out.push(group);
+				case _:
+			}
+		}
+		return out;
 	}
 
 	/**
@@ -3739,10 +3833,13 @@ typedef InterMemberClassifyInfo = {
  * counts insert that many regardless of source.
  *
  * `optField` is the `HxModuleWriteOptions` Int field name read at
- * runtime (e.g. `afterPackage`). Single-axis: one knob, one option,
- * one field — for multiple "after-X" rules on the same Star, repeat
- * the `@:fmt(...)` umbrella entry with different ctor names and a
- * different `optField`.
+ * runtime (e.g. `afterPackage`). The Star may carry multiple
+ * `@:fmt(blankLinesAfterCtor(...))` entries (ω-after-typedecl) — each
+ * produces its own `AfterCtorBlankInfo` with a disjoint ctor set and
+ * its own `optField`. The runtime cascade walks them in source order:
+ * the first matching kind-tracker wins, falling through to `beforeCtor`
+ * infos and finally the source-driven `blankBefore` flag. Authors
+ * order entries by priority (e.g. `afterPackage` before `afterTypeDecl`).
  */
 typedef AfterCtorBlankInfo = {
 	classifierFieldName:String,
@@ -3763,10 +3860,13 @@ typedef AfterCtorBlankInfo = {
  * "first X after a non-X" transition semantics (e.g. force a blank
  * line at `import → using`, no force between consecutive `using` decls).
  *
- * Cascade priority in `triviaEofStarExpr`: after-ctor wins first, then
- * before-ctor (when after-ctor doesn't match), then source-driven
- * `blankBefore`. So a single decl pair can be governed by at most one
- * override; no double-counting.
+ * Cascade priority in `triviaEofStarExpr`: after-ctor entries (in
+ * source order) win first, then before-ctor entries (in source order,
+ * each gated on `prev != curr` for that entry's set), then source-
+ * driven `blankBefore`. A single decl pair is governed by at most one
+ * override; no double-counting. Multiple before-ctor entries on the
+ * same Star are supported (ω-after-typedecl) — same shape as
+ * `AfterCtorBlankInfo`, evaluated independently per entry.
  */
 typedef BeforeCtorBlankInfo = {
 	classifierFieldName:String,

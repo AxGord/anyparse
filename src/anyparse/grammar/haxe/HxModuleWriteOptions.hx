@@ -625,6 +625,9 @@ import anyparse.format.WriteOptions;
  *    The same `blankLinesBeforeCtor` mechanism is open to future
  *    "blank line before X-group" slices (e.g. `beforeType`) by adding
  *    an analogous `@:fmt(...)` call against a different opt field.
+ *    Multi-info support (ω-after-typedecl) lets a Star carry multiple
+ *    `blankLinesAfterCtor` / `blankLinesBeforeCtor` entries with
+ *    independent ctor sets and opt fields, cascaded in source order.
  */
 typedef HxModuleWriteOptions = WriteOptions & {
 	sameLineElse:SameLinePolicy,
