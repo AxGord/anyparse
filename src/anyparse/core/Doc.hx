@@ -42,6 +42,19 @@ package anyparse.core;
 	- `IfBreak(br, fl)`— emit `br` if the enclosing Group is in break mode,
 	                     `fl` if in flat mode. Used for trailing separators
 	                     that should appear only when the list breaks.
+	- `Fill(items, sep)` — Wadler `fillSep`. In flat mode, emits items
+	                     joined by `sep` flat. In break mode, packs items
+	                     left-to-right: before each `items[i]` (i > 0),
+	                     measures `sep + items[i]` flat from the current
+	                     column; if it fits, emits `sep` flat then the
+	                     item; if it doesn't fit, emits `sep` in break
+	                     mode (so its inner `Line` becomes a hardline at
+	                     the Fill's indent) and starts the item on the
+	                     new line. Items[0] is always emitted at the
+	                     entry column. `BodyGroup` deferral applies inside
+	                     per-item flat measurements, so an item containing
+	                     a multi-line block body still measures by its
+	                     "header" width and packs cleanly with siblings.
 
 	See `D` for builder helpers and `Renderer` for the layout algorithm.
 **/
@@ -54,4 +67,5 @@ enum Doc {
 	BodyGroup(inner:Doc);
 	Concat(items:Array<Doc>);
 	IfBreak(breakDoc:Doc, flatDoc:Doc);
+	Fill(items:Array<Doc>, sep:Doc);
 }

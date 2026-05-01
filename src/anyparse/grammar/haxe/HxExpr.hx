@@ -320,7 +320,7 @@ enum HxExpr {
 	@:postfix('[', ']')
 	IndexAccess(operand:HxExpr, index:HxExpr);
 
-	@:postfix('(', ')') @:sep(',') @:fmt(trailingComma('trailingCommaArgs'), callParens)
+	@:postfix('(', ')') @:sep(',') @:fmt(trailingComma('trailingCommaArgs'), callParens, fill)
 	Call(operand:HxExpr, args:Array<HxExpr>);
 
 	@:infix('*', 9)

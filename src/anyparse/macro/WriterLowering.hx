@@ -437,7 +437,16 @@ class WriterLowering {
 		// `openDelimPolicySpace` returns null when the flag is absent so
 		// the pre-slice tight emission stays byte-identical.
 		final openSpace:Null<Expr> = openDelimPolicySpace(branch, ['callParens']);
-		final sepListCall:Expr = macro sepList($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr, _de(), _de(), false);
+		// ω-fill-primitive: `@:fmt(fill)` routes the args list through the
+		// Fill helper so items pack inline as long as each fits in the
+		// remaining budget; on overflow the separator before the offending
+		// item breaks at the args' indent. Default `sepList` stays for any
+		// postfix-Star ctor that doesn't opt in.
+		final useFill:Bool = fmtHasFlag(branch, 'fill');
+		final fillDouble:Bool = fmtHasFlag(branch, 'fillDoubleIndent');
+		final sepListCall:Expr = useFill
+			? macro fillList($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr, _de(), _de(), false, $v{fillDouble})
+			: macro sepList($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr, _de(), _de(), false);
 		final dcArgs:Array<Expr> = [operandCall];
 		if (openSpace != null) dcArgs.push(openSpace);
 		dcArgs.push(sepListCall);
@@ -1284,6 +1293,15 @@ class WriterLowering {
 			final openInsideExpr:Expr = delimInsidePolicySpace(starNode, ['typeParamOpen', 'objectLiteralBracesOpen'], false) ?? macro _de();
 			final closeInsideExpr:Expr = delimInsidePolicySpace(starNode, ['typeParamClose', 'objectLiteralBracesClose'], true) ?? macro _de();
 			final keepInnerExpr:Expr = keepInnerWhenEmptyExpr(starNode);
+			// ω-fill-primitive: `@:fmt(fill)` on the Star routes the list
+			// through `fillList` (Wadler fillSep) instead of `sepList`,
+			// packing items inline up to the line budget and breaking the
+			// separator before each overflow item at the list's indent.
+			final useFill:Bool = fmtHasFlag(starNode, 'fill');
+			final fillDouble:Bool = fmtHasFlag(starNode, 'fillDoubleIndent');
+			final listCall:Expr = useFill
+				? macro fillList($v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $tcExpr, $openInsideExpr, $closeInsideExpr, $keepInnerExpr, $v{fillDouble})
+				: macro sepList($v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $tcExpr, $openInsideExpr, $closeInsideExpr, $keepInnerExpr);
 			parts.push(macro {
 				final _arr = $fieldAccess;
 				final _docs:Array<anyparse.core.Doc> = [];
@@ -1292,7 +1310,7 @@ class WriterLowering {
 					_docs.push($elemCall);
 					_si++;
 				}
-				sepList($v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $tcExpr, $openInsideExpr, $closeInsideExpr, $keepInnerExpr);
+				$listCall;
 			});
 		} else if (closeText != null) {
 			if (!isFirstField && !isRaw && isSpacedLead(openText)) parts.push(leftCurlySeparator(starNode));

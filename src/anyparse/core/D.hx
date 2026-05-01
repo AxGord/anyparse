@@ -41,6 +41,15 @@ class D {
 	public static inline function concat(items:Array<Doc>):Doc
 		return Concat(items);
 
+	/**
+		Wadler `fillSep`. Packs `items` left-to-right joined by `sep`, breaking
+		before any item that would overflow the current line. The `sep`'s
+		`Line` becomes a hardline at the Fill's indent on overflow, and stays
+		flat between items that fit.
+	**/
+	public static inline function fill(items:Array<Doc>, sep:Doc):Doc
+		return Fill(items, sep);
+
 	/** Places `sep` between each item of `items`. Returns a fresh array. **/
 	public static function intersperse(items:Array<Doc>, sep:Doc):Array<Doc> {
 		if (items.length <= 1) return items.copy();

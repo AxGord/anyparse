@@ -14,16 +14,35 @@ private enum Mode {
 /**
 	One frame on the rendering stack. Carries the indent and mode that applies
 	to the doc it references.
+
+	When `fillRest != null` the frame is a Fill continuation: the renderer
+	resumes a `Doc.Fill` after `items[fillIdx-1]` has finished rendering and
+	must decide how to lay out `items[fillIdx]` based on the current column.
+	`doc` is `Empty` for these frames.
 **/
 private class Frame {
 	public var indent:Int;
 	public var mode:Mode;
 	public var doc:Doc;
+	public var fillRest:Null<Array<Doc>>;
+	public var fillIdx:Int;
+	public var fillSep:Null<Doc>;
 
 	public inline function new(indent:Int, mode:Mode, doc:Doc) {
 		this.indent = indent;
 		this.mode = mode;
 		this.doc = doc;
+		this.fillRest = null;
+		this.fillIdx = 0;
+		this.fillSep = null;
+	}
+
+	public static inline function fillCont(indent:Int, rest:Array<Doc>, idx:Int, sep:Doc):Frame {
+		final f:Frame = new Frame(indent, MBreak, Empty);
+		f.fillRest = rest;
+		f.fillIdx = idx;
+		f.fillSep = sep;
+		return f;
 	}
 }
 
@@ -81,6 +100,19 @@ class Renderer {
 
 		while (stack.length > 0) {
 			final f:Frame = stack.pop();
+			final fillRest:Null<Array<Doc>> = f.fillRest;
+			if (fillRest != null) {
+				final fillSep:Doc = f.fillSep;
+				final idx:Int = f.fillIdx;
+				if (idx < fillRest.length) {
+					final fits:Bool = fitsFlat(width - col, f.indent, Concat([fillSep, fillRest[idx]]));
+					if (idx + 1 < fillRest.length)
+						stack.push(Frame.fillCont(f.indent, fillRest, idx + 1, fillSep));
+					stack.push(new Frame(f.indent, MBreak, fillRest[idx]));
+					stack.push(new Frame(f.indent, fits ? MFlat : MBreak, fillSep));
+				}
+				continue;
+			}
 			switch (f.doc) {
 				case Empty:
 					// nothing
@@ -129,6 +161,27 @@ class Renderer {
 					}
 				case IfBreak(breakDoc, flatDoc):
 					stack.push(new Frame(f.indent, f.mode, f.mode == MBreak ? breakDoc : flatDoc));
+				case Fill(items, sep):
+					if (items.length == 0) {
+						// nothing
+					} else if (f.mode == MFlat) {
+						// All-flat: items joined by sep flat; reverse-push for
+						// natural left-to-right pop order.
+						var k:Int = items.length;
+						while (k > 0) {
+							k--;
+							stack.push(new Frame(f.indent, MFlat, items[k]));
+							if (k > 0) stack.push(new Frame(f.indent, MFlat, sep));
+						}
+					} else {
+						// Per-item fill: push items[0] first, then a FillCont
+						// that resumes for items[1..] once item[0]'s frames
+						// have drained and `col` reflects the post-item[0]
+						// pen position.
+						if (items.length > 1)
+							stack.push(Frame.fillCont(f.indent, items, 1, sep));
+						stack.push(new Frame(f.indent, MBreak, items[0]));
+					}
 			}
 		}
 
@@ -206,6 +259,14 @@ class Renderer {
 					// onto separate lines (ω-break-group).
 				case IfBreak(_, flatDoc):
 					local.push(new Frame(f.indent, MFlat, flatDoc));
+				case Fill(items, sep):
+					// Flat measurement of Fill: items joined by sep flat.
+					var k:Int = items.length;
+					while (k > 0) {
+						k--;
+						local.push(new Frame(f.indent, MFlat, items[k]));
+						if (k > 0) local.push(new Frame(f.indent, MFlat, sep));
+					}
 			}
 		}
 

@@ -50,6 +50,7 @@ class WriterCodegen {
 			// Layout helpers
 			fields.push(blockBodyField());
 			fields.push(sepListField());
+			fields.push(fillListField());
 			// Encoding helpers
 			fields.push(formatFloatField());
 			fields.push(escapeStringField(formatInfo));
@@ -264,6 +265,11 @@ class WriterCodegen {
 				[{name: 'br', type: macro : anyparse.core.Doc}, {name: 'fl', type: macro : anyparse.core.Doc}],
 				macro anyparse.core.Doc.IfBreak(br, fl)
 			),
+			docHelper(
+				'_dfill',
+				[{name: 'items', type: macro : Array<anyparse.core.Doc>}, {name: 'sep', type: macro : anyparse.core.Doc}],
+				macro anyparse.core.Doc.Fill(items, sep)
+			),
 		];
 	}
 
@@ -369,6 +375,68 @@ class WriterCodegen {
 					{name: 'openInside', type: macro : anyparse.core.Doc},
 					{name: 'closeInside', type: macro : anyparse.core.Doc},
 					{name: 'keepInnerWhenEmpty', type: macro : Bool},
+				],
+				ret: macro : anyparse.core.Doc,
+				expr: body,
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * Fill-mode list in delimiters (Wadler `fillSep`). Items pack
+	 * left-to-right inside the surrounding `Group`; on overflow the
+	 * separator before the offending item breaks at the Fill's indent.
+	 *
+	 * Activated by `@:fmt(fill)` on a Star field; routed through
+	 * `WriterLowering` instead of the canonical `sepList` for that field.
+	 *
+	 * Signature mirrors `sepList` for caller-site uniformity. Empty and
+	 * single-item lists short-circuit through the standard delimited
+	 * paths — Fill itself only kicks in for two-or-more items, where a
+	 * fit decision matters. Trailing-comma / inside-pad / keep-inner-when-
+	 * empty knobs are honoured the same way as in `sepList`.
+	 */
+	private static function fillListField():Field {
+		final body:Expr = macro {
+			if (items.length == 0) return _dt(open + (keepInnerWhenEmpty ? ' ' : '') + close);
+			final _sepDoc:anyparse.core.Doc = _dc([_dt(sep), _dl()]);
+			final _baseCols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+			final _cols:Int = doubleIndent ? _baseCols * 2 : _baseCols;
+			final _fill:anyparse.core.Doc = items.length == 1
+				? items[0]
+				: _dfill(items, _sepDoc);
+			final _trail:anyparse.core.Doc = trailingComma
+				? _dib(_dt(sep), _de())
+				: _de();
+			// No leading / trailing softline around items: in Fill mode the
+			// first item follows `open` inline and the closing delim sits
+			// directly after the last item. Hardlines between items get
+			// their indent from the surrounding `Nest`. `doubleIndent` doubles
+			// the continuation indent — matches haxe-formatter's convention
+			// of indenting wrapped function parameters one level deeper than
+			// the body so they remain visually distinct.
+			return _dg(_dc([
+				_dt(open), openInside,
+				_dn(_cols, _dc([_fill, _trail])),
+				closeInside, _dt(close),
+			]));
+		};
+		return {
+			name: 'fillList',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [
+					{name: 'open', type: macro : String},
+					{name: 'close', type: macro : String},
+					{name: 'sep', type: macro : String},
+					{name: 'items', type: macro : Array<anyparse.core.Doc>},
+					{name: 'opt', type: macro : anyparse.format.WriteOptions},
+					{name: 'trailingComma', type: macro : Bool},
+					{name: 'openInside', type: macro : anyparse.core.Doc},
+					{name: 'closeInside', type: macro : anyparse.core.Doc},
+					{name: 'keepInnerWhenEmpty', type: macro : Bool},
+					{name: 'doubleIndent', type: macro : Bool},
 				],
 				ret: macro : anyparse.core.Doc,
 				expr: body,

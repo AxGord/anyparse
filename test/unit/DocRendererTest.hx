@@ -263,6 +263,82 @@ class DocRendererTest extends Test {
 	// This is the synthetic shape behind issue_552
 	// (`trace(switch foo { case … })`) and the arrow-body-in-call family
 	// after `triviaBlockStarExpr` BG-wraps its block-body emission.
+	// Fill (Wadler fillSep): items join with `sep` on the same line as long
+	// as each fits in the remaining budget; on overflow the renderer breaks
+	// the offending separator at the Fill's indent and resumes packing.
+	function testFillAllFlat() {
+		final sep:Doc = D.concat([D.text(","), D.line()]);
+		final items:Array<Doc> = [D.text("a"), D.text("b"), D.text("c")];
+		Assert.equals("a, b, c", Renderer.render(D.fill(items, sep), 80));
+	}
+
+	function testFillAllBreakAtNarrowWidth() {
+		// Width 1: every successive item overflows so every sep breaks.
+		// Indent comes from the surrounding Nest — Fill itself does not
+		// add depth.
+		final sep:Doc = D.concat([D.text(","), D.line()]);
+		final items:Array<Doc> = [D.text("aa"), D.text("bb"), D.text("cc")];
+		final doc:Doc = D.nest(2, D.fill(items, sep));
+		Assert.equals("aa,\n  bb,\n  cc", Renderer.render(doc, 1));
+	}
+
+	function testFillPacksMultiplePerLine() {
+		// Width 8 fits "aa, bb" (6 cols) but ", cc" overflows (need 4, have
+		// 2). After breaking to col 2, "cc, dd" fits exactly (8 cols), then
+		// ", ee" overflows again so the last item starts a new line.
+		final sep:Doc = D.concat([D.text(","), D.line()]);
+		final items:Array<Doc> = [
+			D.text("aa"), D.text("bb"), D.text("cc"), D.text("dd"), D.text("ee"),
+		];
+		final doc:Doc = D.nest(2, D.fill(items, sep));
+		Assert.equals("aa, bb,\n  cc, dd,\n  ee", Renderer.render(doc, 8));
+	}
+
+	function testFillFirstItemAlwaysInline() {
+		// items[0] is always emitted at entry column, even when it alone
+		// already overflows. The fill decision starts at items[1].
+		final sep:Doc = D.concat([D.text(","), D.line()]);
+		final items:Array<Doc> = [D.text("longlonglong"), D.text("x")];
+		Assert.equals("longlonglong,\n  x", Renderer.render(D.nest(2, D.fill(items, sep)), 5));
+	}
+
+	function testFillWithBodyGroupItemPacksByHeader() {
+		// Item shape `name -> { body }` where the body is a BodyGroup with
+		// hardlines. Per-item flat measurement defers BodyGroups, so the
+		// item's "header" width drives packing — three lambdas with short
+		// headers pack on the same line, body breaks aside.
+		function lambda(name:String):Doc {
+			return D.concat([
+				D.text(name + " -> "),
+				BodyGroup(D.concat([
+					D.text("{"),
+					D.nest(1, D.concat([D.hardline(), D.text("body;")])),
+					D.hardline(),
+					D.text("}"),
+				])),
+			]);
+		}
+		final sep:Doc = D.concat([D.text(","), D.line()]);
+		final items:Array<Doc> = [lambda("x"), lambda("y")];
+		// Outer width 80: both lambda headers (`x -> {` and `y -> {`)
+		// fit on the same line; bodies break inside their BG. The lambdas'
+		// internal `Nest(1)` drives body indent without a Fill-level Nest.
+		Assert.equals(
+			"x -> {\n\tbody;\n}, y -> {\n\tbody;\n}",
+			Renderer.render(D.fill(items, sep), 80, Tab, 1)
+		);
+	}
+
+	function testFillWrappedInGroupFlatWhenAllFits() {
+		// Outer Group's flat measurement of Fill = items joined by sep flat.
+		// If everything fits, Group commits to flat → Fill in MFlat → all
+		// items packed with sep flat.
+		final sep:Doc = D.concat([D.text(","), D.line()]);
+		final items:Array<Doc> = [D.text("a"), D.text("b"), D.text("c")];
+		final doc:Doc = D.group(D.fill(items, sep));
+		Assert.equals("a, b, c", Renderer.render(doc, 80));
+	}
+
 	function testCallArgOuterStaysFlatWhileBodyGroupBreaksCorrectly() {
 		final blockBody:Doc = BodyGroup(D.concat([
 			D.text("{"),
