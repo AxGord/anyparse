@@ -68,6 +68,18 @@ final class HxObjectLitLeftCurlyOptionsTest extends Test {
 		Assert.isTrue(out.indexOf('= {a: 1, b: 2};') != -1, 'expected cuddled `= {a: 1, b: 2};` in: <$out>');
 	}
 
+	public function testTwoMultilineArgsHaveNoBlankLineBetween():Void {
+		// Slice ω-opthardline regression: when two multi-line object
+		// literals appear as call args under a wrap-engine break, the
+		// outer wrap engine emits `,\n` between args; without
+		// OptHardline the inner literal's leftCurly Next would also
+		// emit `\n`, producing `,\n\n{`. With OptHardline the inner `\n`
+		// is dropped — result is `,\n\t\t\t{`.
+		final src:String = 'class Main {\n\tpublic static function main() {\n\t\tvar result = formatter.formatFile({\n\t\t\tname: doc.uri.toFsPath().toString(),\n\t\t\tcontent: doc.tokens.bytes\n\t\t}, {\n\t\t\ttokens: doc.tokens.list,\n\t\t\ttokenTree: doc.tokens.tree\n\t\t});\n\t}\n}\n';
+		final out:String = writeWith(src, BracePlacement.Next);
+		Assert.isTrue(out.indexOf(',\n\n') == -1, 'no spurious blank line between args expected in: <$out>');
+	}
+
 	public function testCascadeSetsBothKnobsViaJson():Void {
 		final src:String = 'class Foo { static var x = {a: 1}; }';
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(

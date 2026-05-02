@@ -98,6 +98,14 @@ class Renderer {
 		var col:Int = 0;
 		var pendingIndent:Int = -1;
 		var pendingOptSpace:Null<String> = null;
+		// Tracks whether the last emitted byte was a hardline `\n`. Set
+		// true on every break-mode `Line` / `OptHardline` that actually
+		// writes `\n`; cleared on any subsequent non-hardline emit
+		// (Text, OptSpace flush, in-flat Line content). `OptHardline`
+		// reads this flag to decide whether to drop its `\n` (avoids
+		// `\n\n` when two emitters independently push a leading
+		// hardline at the same insertion point).
+		var lastEmittedWasHardline:Bool = false;
 
 		inline function flushOptSpace():Void {
 			if (pendingOptSpace != null) {
@@ -108,6 +116,7 @@ class Renderer {
 				buf.add(pendingOptSpace);
 				col += pendingOptSpace.length;
 				pendingOptSpace = null;
+				lastEmittedWasHardline = false;
 			}
 		}
 
@@ -138,6 +147,7 @@ class Renderer {
 						}
 						buf.add(s);
 						col += s.length;
+						lastEmittedWasHardline = false;
 					}
 				case Line(flat):
 					if (f.mode == MFlat) {
@@ -148,6 +158,7 @@ class Renderer {
 						}
 						buf.add(flat);
 						col += flat.length;
+						if (flat.length > 0) lastEmittedWasHardline = false;
 					} else {
 						// Break-mode hardline: drop pending OptSpace so the
 						// lead's optional trailing space disappears before
@@ -159,6 +170,7 @@ class Renderer {
 						buf.add(lineEnd);
 						pendingIndent = f.indent;
 						col = f.indent;
+						lastEmittedWasHardline = true;
 					}
 				case OptSpace(s):
 					// Defer; flushed by the next Text or in-flat Line, or
@@ -166,6 +178,30 @@ class Renderer {
 					// consecutive OptSpace nodes accumulate.
 					if (s.length > 0) {
 						pendingOptSpace = pendingOptSpace == null ? s : pendingOptSpace + s;
+					}
+				case OptHardline:
+					// Optional break-mode hardline: drop if the previous
+					// emit was already a `\n` (collision with sibling
+					// hardline at the same insertion point), otherwise
+					// emit `\n` + indent like a regular break-mode `Line`.
+					// Both branches clear `pendingOptSpace` to mirror
+					// real-hardline semantics. Even when dropped, update
+					// `pendingIndent` to this node's own indent — the
+					// dropping emitter is the "inner" one and its indent
+					// is more specific (e.g. objectLit's leftCurly Next
+					// inside a wrap-engine-driven multi-arg list).
+					pendingOptSpace = null;
+					if (lastEmittedWasHardline) {
+						pendingIndent = f.indent;
+						col = f.indent;
+					} else {
+						if (trailingWhitespace && pendingIndent >= 0) {
+							writeIndent(buf, pendingIndent, indentChar, tabWidth);
+						}
+						buf.add(lineEnd);
+						pendingIndent = f.indent;
+						col = f.indent;
+						lastEmittedWasHardline = true;
 					}
 				case Nest(n, inner):
 					// Indent only matters when observed (i.e. on a hardline
@@ -301,6 +337,13 @@ class Renderer {
 					// space (the suppression only happens at render time on
 					// break-mode `Line`).
 					budget -= s.length;
+				case OptHardline:
+					// OptHardline is a hardline by intent — it can never
+					// flatten. Mirror the `Line('\n')` budget=-1 path:
+					// any enclosing Group containing an OptHardline must
+					// commit to MBreak.
+					budget = -1;
+					break;
 			}
 		}
 

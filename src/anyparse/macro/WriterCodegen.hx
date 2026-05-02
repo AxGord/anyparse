@@ -258,6 +258,7 @@ class WriterCodegen {
 			docHelper('_dg', [{name: 'inner', type: macro : anyparse.core.Doc}], macro anyparse.core.Doc.Group(inner)),
 			docHelper('_dbg', [{name: 'inner', type: macro : anyparse.core.Doc}], macro anyparse.core.Doc.BodyGroup(inner)),
 			docHelper('_dhl', [], macro anyparse.core.Doc.Line('\n')),
+			docHelper('_doh', [], macro anyparse.core.Doc.OptHardline),
 			docHelper('_dsl', [], macro anyparse.core.Doc.Line('')),
 			docHelper('_dl', [], macro anyparse.core.Doc.Line(' ')),
 			docHelper('_de', [], macro anyparse.core.Doc.Empty),

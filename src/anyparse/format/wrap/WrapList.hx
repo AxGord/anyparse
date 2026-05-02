@@ -134,6 +134,12 @@ class WrapList {
 					// mode discards it. Wrap-rules-cascade measurements
 					// must therefore include it.
 					total += s.length;
+				case OptHardline:
+					// OptHardline can never flatten — mirrors `Line('\n')`
+					// returning -1 (and `Renderer.fitsFlat`'s OptHardline
+					// arm). Any item containing an OptHardline forces the
+					// wrap engine into break mode unconditionally.
+					return -1;
 			}
 		}
 		return total;

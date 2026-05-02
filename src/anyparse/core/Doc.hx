@@ -71,6 +71,23 @@ package anyparse.core;
 	                     newline. At end of render any unflushed
 	                     OptSpace is silently dropped (no trailing
 	                     whitespace at EOF).
+	- `OptHardline`    — optional break-mode newline, dropped when the
+	                     last emit was already a hardline (`Line('\n')`
+	                     or another `OptHardline`). Used to coordinate
+	                     between two independent emitters that each want
+	                     a leading newline at the same insertion point —
+	                     e.g. wrap-engine sep `\n` between call args
+	                     followed by the next arg's `leftCurly=Next`
+	                     leading `\n`. Without `OptHardline` the two
+	                     hardlines collide and produce `\n\n` (a
+	                     spurious blank line). Like `Line('\n')`, it
+	                     forces `fitsFlat` to refuse flatten — never
+	                     fits in flat mode. The dropped variant still
+	                     updates `pendingIndent` to the OptHardline's
+	                     own indent, so the next `Text` lands at the
+	                     more-specific (inner) position. Intentional
+	                     blank lines must use plain `Line('\n')` pairs;
+	                     OptHardline is opt-in at the producer site.
 
 	See `D` for builder helpers and `Renderer` for the layout algorithm.
 **/
@@ -85,4 +102,5 @@ enum Doc {
 	IfBreak(breakDoc:Doc, flatDoc:Doc);
 	Fill(items:Array<Doc>, sep:Doc);
 	OptSpace(s:String);
+	OptHardline;
 }

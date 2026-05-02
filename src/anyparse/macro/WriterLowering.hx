@@ -3143,15 +3143,20 @@ class WriterLowering {
 			? null
 			: {expr: EField(macro opt, leftCurlyKnob), pos: Context.currentPos()};
 		final nextPat:Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BracePlacement', 'Next']);
-		// Doc that selects `_dhl()` for `BracePlacement.Next`, `_de()`
-		// otherwise. Used in the trivia branch (prepended to `_parts`)
-		// and the no-trivia branch's `leadBreak` slot. `wrapLeadFlatDoc`
-		// is always `_de()` — flat layout never wants a hardline before
-		// the open brace, regardless of knob value.
+		// Doc that selects `_doh()` for `BracePlacement.Next`, `_de()`
+		// otherwise. `_doh()` is `OptHardline` — drops when the previous
+		// emit was already a hardline (e.g. wrap-engine sep `\n`
+		// between call args). Avoids the `,\n\n{` newline-collision
+		// bug when an outer wrap-engine sep and an inner leftCurly Next
+		// independently push a leading newline at the same insertion
+		// point (slice ω-opthardline).
+		//
+		// `wrapLeadFlatDoc` is always `_de()` — flat layout never wants
+		// a hardline before the open brace, regardless of knob value.
 		final knobNextOrEmpty:Expr = knobExpr == null
 			? macro _de()
 			: {
-				expr: ESwitch(knobExpr, [{values: [nextPat], expr: macro _dhl(), guard: null}], macro _de()),
+				expr: ESwitch(knobExpr, [{values: [nextPat], expr: macro _doh(), guard: null}], macro _de()),
 				pos: Context.currentPos(),
 			};
 		final triviaLeadDoc:Expr = knobNextOrEmpty;
