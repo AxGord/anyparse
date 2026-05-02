@@ -554,10 +554,10 @@ class WriterLowering {
 			// stays on the always-multi-line path.
 			if (sepText != null) {
 				parts.push(triviaSepStarExpr(
-					argsAccess, null, null, trailCloseAccess, elemFn, leadText, trailText, sepText
+					argsAccess, null, null, trailCloseAccess, null, elemFn, leadText, trailText, sepText
 				));
 			} else {
-				parts.push(triviaBlockStarExpr(argsAccess, null, null, trailCloseAccess, elemFn, leadText, trailText, true));
+				parts.push(triviaBlockStarExpr(argsAccess, null, null, trailCloseAccess, null, elemFn, leadText, trailText, true));
 			}
 		} else if (sepText != null) {
 			// See `emitWriterStarField` — `@:sep('\n')` routes to a flat
@@ -1086,6 +1086,15 @@ class WriterLowering {
 			final trailCloseAccess:Null<Expr> = fieldName == null || closeText == null
 				? null
 				: {expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_CLOSE_SUFFIX), pos: Context.currentPos()};
+			// ω-open-trailing: same-line `// comment` captured right after
+			// the open literal. Synthesised only when the Star carries
+			// `@:lead` AND not `@:tryparse` (parallel to TrailingClose's
+			// `@:trail` gate; tryparse writer helper does not consume the
+			// slot, and the synth gate omits it for tryparse Stars — see
+			// `TriviaTypeSynth.buildStarTrailingSlots`).
+			final trailOpenAccess:Null<Expr> = fieldName == null || openText == null || hasMeta(starNode, ':tryparse')
+				? null
+				: {expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_OPEN_SUFFIX), pos: Context.currentPos()};
 			if (hasMeta(starNode, ':tryparse')) {
 				if (closeText != null)
 					Context.fatalError('WriterLowering: @:trivia + @:tryparse must not have @:trail', Context.currentPos());
@@ -1233,7 +1242,7 @@ class WriterLowering {
 				if (sepText != null) {
 					final wrapRulesField:Null<String> = fmtReadString(starNode, 'wrapRules');
 					parts.push(triviaSepStarExpr(
-						fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, elemFn,
+						fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn,
 						openText ?? '', closeText, sepText, wrapRulesField
 					));
 					return;
@@ -1253,7 +1262,7 @@ class WriterLowering {
 					? null
 					: buildInterMemberClassifyInfo(elemRefName, interMemberArgs);
 				parts.push(triviaBlockStarExpr(
-					fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, elemFn,
+					fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn,
 					openText ?? '', closeText, false, afterDocComments, keepBetweenFields, beforeDocComments,
 					interMemberInfo, indentCaseLabelsGate
 				));
@@ -2751,7 +2760,8 @@ class WriterLowering {
 	 */
 	private static function triviaBlockStarExpr(
 		fieldAccess:Expr, trailBBAccess:Null<Expr>, trailLCAccess:Null<Expr>, trailCloseAccess:Null<Expr>,
-		elemFn:String, openText:String, closeText:String, appendHardlineAfterTrail:Bool = false,
+		trailOpenAccess:Null<Expr>, elemFn:String, openText:String, closeText:String,
+		appendHardlineAfterTrail:Bool = false,
 		afterFieldsWithDocComments:Bool = false, existingBetweenFields:Bool = false,
 		beforeDocCommentEmptyLines:Bool = false,
 		interMemberInfo:Null<InterMemberClassifyInfo> = null,
@@ -2778,6 +2788,12 @@ class WriterLowering {
 		// emission routes through `trailingCommentDocVerbatim` to
 		// preserve block-vs-line style on round-trip.
 		final trailClose:Expr = trailCloseAccess ?? macro (null : Null<String>);
+		// ω-open-trailing: same-line trailing comment captured right after
+		// the open literal (e.g. `{ // foo` before the first member).
+		// Synthesised only for Stars with `@:lead`; Alt-branch and EOF
+		// sites forward null. Verbatim emission preserves block-vs-line
+		// style.
+		final trailOpen:Expr = trailOpenAccess ?? macro (null : Null<String>);
 		// ω-close-trailing-alt: Alt-branch sites pass true so the trailing
 		// line comment is followed by `_dhl()` — line comments terminate
 		// at \n semantically, and the Alt's parent struct may emit a space
@@ -2919,7 +2935,8 @@ class WriterLowering {
 			final _trailLC:Array<String> = $trailLC;
 			final _trailBB:Bool = $trailBB;
 			final _trailClose:Null<String> = $trailClose;
-			if (_arr.length == 0 && _trailLC.length == 0) {
+			final _trailOpen:Null<String> = $trailOpen;
+			if (_arr.length == 0 && _trailLC.length == 0 && _trailOpen == null) {
 				if (_trailClose != null) $emptyTrailExpr
 				else _dt($v{emptyText});
 			} else {
@@ -2959,7 +2976,11 @@ class WriterLowering {
 				}
 				final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 				final _innerWrap:anyparse.core.Doc = $innerWrapExpr;
-				final _parts:Array<anyparse.core.Doc> = [_dt($v{openText}), _innerWrap, _dhl(), _dt($v{closeText})];
+				final _parts:Array<anyparse.core.Doc> = [_dt($v{openText})];
+				if (_trailOpen != null) _parts.push(trailingCommentDocVerbatim(_trailOpen, opt));
+				_parts.push(_innerWrap);
+				_parts.push(_dhl());
+				_parts.push(_dt($v{closeText}));
 				if (_trailClose != null) {
 					_parts.push(trailingCommentDocVerbatim(_trailClose, opt));
 					$trailFollowExpr;
@@ -2997,7 +3018,7 @@ class WriterLowering {
 	 */
 	private static function triviaSepStarExpr(
 		fieldAccess:Expr, trailBBAccess:Null<Expr>, trailLCAccess:Null<Expr>, trailCloseAccess:Null<Expr>,
-		elemFn:String, openText:String, closeText:String, sepText:String,
+		trailOpenAccess:Null<Expr>, elemFn:String, openText:String, closeText:String, sepText:String,
 		wrapRulesField:Null<String> = null
 	):Expr {
 		final triviaElemCall:Expr = {
@@ -3008,6 +3029,7 @@ class WriterLowering {
 		final trailBB:Expr = trailBBAccess ?? macro false;
 		final trailLC:Expr = trailLCAccess ?? macro ([] : Array<String>);
 		final trailClose:Expr = trailCloseAccess ?? macro (null : Null<String>);
+		final trailOpen:Expr = trailOpenAccess ?? macro (null : Null<String>);
 		final emptyTrailExpr:Expr = macro _dc([_dt($v{emptyText}), trailingCommentDocVerbatim(_trailClose, opt)]);
 		// ω-wraprules-objlit: when the Star carries
 		// `@:fmt(wrapRules('<field>'))`, defer the no-trivia branch's
@@ -3060,11 +3082,12 @@ class WriterLowering {
 			final _trailLC:Array<String> = $trailLC;
 			final _trailBB:Bool = $trailBB;
 			final _trailClose:Null<String> = $trailClose;
-			if (_arr.length == 0 && _trailLC.length == 0) {
+			final _trailOpen:Null<String> = $trailOpen;
+			if (_arr.length == 0 && _trailLC.length == 0 && _trailOpen == null) {
 				if (_trailClose != null) $emptyTrailExpr
 				else _dt($v{emptyText});
 			} else {
-				var _hasTrivia:Bool = _trailLC.length > 0;
+				var _hasTrivia:Bool = _trailLC.length > 0 || _trailOpen != null;
 				var _ti:Int = 0;
 				while (!_hasTrivia && _ti < _arr.length) {
 					final _t = _arr[_ti];
@@ -3108,7 +3131,11 @@ class WriterLowering {
 					}
 					final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 					final _innerWrap:anyparse.core.Doc = _dn(_cols, _dc(_inner));
-					final _parts:Array<anyparse.core.Doc> = [_dt($v{openText}), _innerWrap, _dhl(), _dt($v{closeText})];
+					final _parts:Array<anyparse.core.Doc> = [_dt($v{openText})];
+					if (_trailOpen != null) _parts.push(trailingCommentDocVerbatim(_trailOpen, opt));
+					_parts.push(_innerWrap);
+					_parts.push(_dhl());
+					_parts.push(_dt($v{closeText}));
 					if (_trailClose != null)
 						_parts.push(trailingCommentDocVerbatim(_trailClose, opt));
 					_dbg(_dc(_parts));

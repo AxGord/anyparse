@@ -550,4 +550,17 @@ class HxTriviaWriteTest extends Test {
 		final out:String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals('${source}\n', out);
 	}
+
+	/**
+	 * ω-open-trailing — same-line `// comment` after an object literal's
+	 * `{` open delim attaches as the open's trailing comment, not as
+	 * own-line leading of the first field. Covers `HxObjectLit.fields`'s
+	 * trivia-sep Star path.
+	 */
+	public function testObjectLitOpenTrailingLineComment():Void {
+		final source:String = 'class Main {\n\tstatic function main():Void {\n\t\tfunc({ // comment\n\t\t\tfoo: 1\n\t\t});\n\t}\n}';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out:String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals('${source}\n', out);
+	}
 }

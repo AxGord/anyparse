@@ -1485,6 +1485,14 @@ class Lowering {
 					final trailCloseLocal:String = trailingCloseLocalName(localName);
 					structFields.push({field: fieldName + TriviaTypeSynth.TRAILING_CLOSE_SUFFIX, expr: macro $i{trailCloseLocal}});
 				}
+				// ω-open-trailing: synth slot exists only for Stars with
+				// `@:lead` AND not `@:tryparse` (the tryparse writer helper
+				// does not consume the slot — see TriviaTypeSynth gate +
+				// `emitTriviaStarFieldSteps`'s open-text capture gate).
+				if (child.annotations.get('lit.leadText') != null && !hasMeta(child, ':tryparse')) {
+					final trailOpenLocal:String = trailingOpenLocalName(localName);
+					structFields.push({field: fieldName + TriviaTypeSynth.TRAILING_OPEN_SUFFIX, expr: macro $i{trailOpenLocal}});
+				}
 			}
 		}
 		// Binary: @:align — skip to next alignment boundary after all fields.
@@ -1778,6 +1786,38 @@ class Lowering {
 		final nestBody:Bool = fmtHasFlag(starNode, 'nestBody');
 		if (openText != null) {
 			parseSteps.push(macro expectLit(ctx, $v{openText}));
+			// ω-open-trailing: capture a same-line `// comment` (or
+			// `/* … */`) sitting right after the open literal (e.g.
+			// `{ // foo` before the first element). Stored in a synth
+			// `<field>TrailingOpen` slot on the paired Seq type; the
+			// writer emits it inline after the open lit so it stays on
+			// the same line as `{` rather than being mis-bucketed as
+			// own-line leading of the first element. Captured via
+			// `collectTrailingFull` (content WITH delimiters) so block-
+			// style trailings round-trip as `/* foo */`, mirroring the
+			// `<field>TrailingClose` slot's verbatim contract.
+			//
+			// Skipped for `@:tryparse` Stars: their writer helper
+			// (`triviaTryparseStarExpr`) does not consume the slot —
+			// capturing here would silently drop the comment at write
+			// time. The synth gate in `TriviaTypeSynth.buildStarTrailingSlots`
+			// matches; without it the struct-literal push below would
+			// also reference a non-existent field.
+			if (!tryparse) {
+				final trailOpenLocal:String = trailingOpenLocalName(localName);
+				final nullStrCT:ComplexType = TPath({
+					pack: [], name: 'Null', params: [TPType(TPath({pack: [], name: 'String', params: []}))]
+				});
+				parseSteps.push({
+					expr: EVars([{
+						name: trailOpenLocal,
+						type: nullStrCT,
+						expr: macro collectTrailingFull(ctx),
+						isFinal: true,
+					}]),
+					pos: Context.currentPos(),
+				});
+			}
 		}
 		final wrappedCT:ComplexType = TPath({
 			pack: ['anyparse', 'runtime'], name: 'Trivial', params: [TPType(elemCT)]
@@ -2009,6 +2049,15 @@ class Lowering {
 	 * try-parse branches skip it.
 	 */
 	public static inline function trailingCloseLocalName(localName:String):String return '${localName}_trailClose';
+
+	/**
+	 * Name of the `Null<String>` local that records a same-line trailing
+	 * comment captured right after a `@:trivia` Star's open literal
+	 * (ω-open-trailing). Mirror of `trailingCloseLocalName`. Only declared
+	 * in branches of `emitTriviaStarFieldSteps` that emit the open lit
+	 * (i.e. `openText != null`).
+	 */
+	public static inline function trailingOpenLocalName(localName:String):String return '${localName}_trailOpen';
 
 	// -------- terminal rule --------
 

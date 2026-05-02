@@ -124,6 +124,19 @@ class TriviaTypeSynth {
 	public static inline final TRAILING_CLOSE_SUFFIX:String = 'TrailingClose';
 
 	/**
+	 * ω-open-trailing — suffix for the same-line trailing comment
+	 * captured immediately after a `@:trivia` Star's open literal
+	 * (e.g. `{ // foo` before the first element). Mirror of
+	 * `TrailingClose`. Synthesised only for Stars that carry `@:lead`
+	 * (the open delimiter); bare Stars have no open lit to trail.
+	 * `Null<String>` — `null` when the source had no same-line comment
+	 * after the open. Captured via `collectTrailing` so the body has its
+	 * delimiters stripped (line-style only, by construction — internal
+	 * newline disqualifies the match).
+	 */
+	public static inline final TRAILING_OPEN_SUFFIX:String = 'TrailingOpen';
+
+	/**
 	 * ω-trailopt-source-track — positional arg name appended to paired
 	 * Alt ctors that carry `@:trailOpt(...)`. The parser's `matchLit`
 	 * result lands here so the writer can gate trail emission on source
@@ -285,7 +298,28 @@ class TriviaTypeSynth {
 			final nullStrCT:ComplexType = TPath({pack: [], name: 'Null', params: [TPType(strCT)]});
 			fields.push({name: fieldName + TRAILING_CLOSE_SUFFIX, kind: FVar(nullStrCT), pos: pos, access: []});
 		}
+		// ω-open-trailing: same-line `// comment` after the open literal
+		// is captured here for Stars that carry `@:lead`. Read directly
+		// from `base.meta` for the same TriviaTypeSynth/Lit-pass ordering
+		// reason as `:trail` above.
+		//
+		// Skipped for `@:tryparse` Stars: their writer helper
+		// (`triviaTryparseStarExpr`) does not consume an open-trail slot,
+		// so capturing one would silently drop the comment at write time.
+		// `HxDefaultBranch.stmts` (`@:lead(':') @:trivia @:tryparse`) is
+		// the lone current consumer of this gate.
+		if (readMetaString(child, ':lead') != null && !hasMeta(child, ':tryparse')) {
+			final nullStrCT:ComplexType = TPath({pack: [], name: 'Null', params: [TPType(strCT)]});
+			fields.push({name: fieldName + TRAILING_OPEN_SUFFIX, kind: FVar(nullStrCT), pos: pos, access: []});
+		}
 		return fields;
+	}
+
+	private static function hasMeta(node:ShapeNode, tag:String):Bool {
+		final meta:Null<Metadata> = node.annotations.get('base.meta');
+		if (meta == null) return false;
+		for (entry in meta) if (entry.name == tag) return true;
+		return false;
 	}
 
 	private static function readMetaString(node:ShapeNode, tag:String):Null<String> {
