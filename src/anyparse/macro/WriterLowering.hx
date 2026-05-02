@@ -1095,6 +1095,14 @@ class WriterLowering {
 			final trailOpenAccess:Null<Expr> = fieldName == null || openText == null || hasMeta(starNode, ':tryparse')
 				? null
 				: {expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_OPEN_SUFFIX), pos: Context.currentPos()};
+			// ω-trail-blank-after: synth slot is only present on tryparse +
+			// nestBody Stars. Forward null elsewhere so the slot access
+			// doesn't reference a non-existent field.
+			final trailBAAccess:Null<Expr> = fieldName == null
+					|| !hasMeta(starNode, ':tryparse')
+					|| !fmtHasFlag(starNode, 'nestBody')
+				? null
+				: {expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_BLANK_AFTER_SUFFIX), pos: Context.currentPos()};
 			if (hasMeta(starNode, ':tryparse')) {
 				if (closeText != null)
 					Context.fatalError('WriterLowering: @:trivia + @:tryparse must not have @:trail', Context.currentPos());
@@ -1137,6 +1145,7 @@ class WriterLowering {
 				// path byte-identical to the pre-nestBody shape.
 				final tryparseTrailBB:Null<Expr> = nestBody ? trailBBAccess : null;
 				final tryparseTrailLC:Null<Expr> = nestBody ? trailLCAccess : null;
+				final tryparseTrailBA:Null<Expr> = nestBody ? trailBAAccess : null;
 				// ω-close-trailing-alt: when prev field was a bare-Ref to a
 				// trivia-bearing type whose Alt has close-trailing branches
 				// (currently `HxStatement.BlockStmt`), build a runtime
@@ -1219,7 +1228,7 @@ class WriterLowering {
 				final caseBodyFlagNames:Array<String> = fmtReadStringArgs(starNode, 'bodyPolicy') ?? [];
 				parts.push(triviaTryparseStarExpr(
 					fieldAccess, elemFn, sepExpr, sameLineName != null, nestBody,
-					tryparseTrailBB, tryparseTrailLC, firstSepOverride, subsequentSepOverride,
+					tryparseTrailBB, tryparseTrailLC, tryparseTrailBA, firstSepOverride, subsequentSepOverride,
 					caseBodyFlagNames
 				));
 				return;
@@ -3380,7 +3389,7 @@ class WriterLowering {
 	private static function triviaTryparseStarExpr(
 		fieldAccess:Expr, elemFn:String, sepExpr:Expr,
 		sepBeforeFirst:Bool, nestBody:Bool,
-		trailBBAccess:Null<Expr>, trailLCAccess:Null<Expr>,
+		trailBBAccess:Null<Expr>, trailLCAccess:Null<Expr>, trailBAAccess:Null<Expr>,
 		firstSepOverride:Null<Expr> = null,
 		subsequentSepOverride:Null<Expr> = null,
 		caseBodyFlagNames:Null<Array<String>> = null
@@ -3393,6 +3402,12 @@ class WriterLowering {
 		final nestBodyExpr:Expr = macro $v{nestBody};
 		final trailBB:Expr = trailBBAccess ?? macro false;
 		final trailLC:Expr = trailLCAccess ?? macro ([] : Array<String>);
+		// ω-trail-blank-after: source had a blank line between the stashed
+		// orphan trail comment and the next outer-Star sibling. Emit an
+		// extra hardline at the end of `_trailDocs` so the gap survives
+		// round-trip. Null when slot is absent (non-tryparse-or-non-nestBody
+		// callers); falls back to `false` like trailBB.
+		final trailBA:Expr = trailBAAccess ?? macro false;
 		// ω-close-trailing-alt: the FIRST element's separator picks
 		// `firstSepOverride` (a runtime switch on the prev body's ctor)
 		// when supplied; otherwise it falls back to `sepExpr` like
@@ -3440,6 +3455,7 @@ class WriterLowering {
 			final _arr = $fieldAccess;
 			final _trailLC:Array<String> = $trailLC;
 			final _trailBB:Bool = $trailBB;
+			final _trailBA:Bool = $trailBA;
 			final _sepFirst:Bool = $sepBeforeFirstExpr;
 			final _nestBody:Bool = $nestBodyExpr;
 			final _flatCase:Bool = _nestBody
@@ -3503,6 +3519,13 @@ class WriterLowering {
 						_trailDocs.push(leadingCommentDoc(_trailLC[_ti], opt));
 						_ti++;
 					}
+					// ω-trail-blank-after: source had a blank line between this
+					// trail comment and the next outer-Star sibling (e.g. case
+					// label). Append an extra hardline at trail's tail; the
+					// outer Star will then add its own element-leading hardline
+					// for a true blank-line separator. Trailing whitespace on
+					// the empty line is trimmed by the renderer (default).
+					if (_trailBA) _trailDocs.push(_dhl());
 				}
 				if (_flatCase) {
 					_dc(_docs);

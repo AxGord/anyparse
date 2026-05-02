@@ -1493,6 +1493,14 @@ class Lowering {
 					final trailOpenLocal:String = trailingOpenLocalName(localName);
 					structFields.push({field: fieldName + TriviaTypeSynth.TRAILING_OPEN_SUFFIX, expr: macro $i{trailOpenLocal}});
 				}
+				// ω-trail-blank-after: synth slot exists only for `@:tryparse +
+				// @:fmt(nestBody)` Stars (see TriviaTypeSynth gate). Gate the
+				// push the same way; emitTriviaStarFieldSteps's tryparse+nestBody
+				// branch is the sole producer of `trailBALocal`.
+				if (hasMeta(child, ':tryparse') && fmtHasFlag(child, 'nestBody')) {
+					final trailBALocal:String = trailingBlankAfterLocalName(localName);
+					structFields.push({field: fieldName + TriviaTypeSynth.TRAILING_BLANK_AFTER_SUFFIX, expr: macro $i{trailBALocal}});
+				}
 			}
 		}
 		// Binary: @:align — skip to next alignment boundary after all fields.
@@ -1846,6 +1854,7 @@ class Lowering {
 		// `collectTrivia` scan rather than being stashed here.
 		final trailBBLocal:String = trailingBlankBeforeLocalName(localName);
 		final trailLCLocal:String = trailingLeadingLocalName(localName);
+		final trailBALocal:String = trailingBlankAfterLocalName(localName);
 		final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
 		final arrayStrCT:ComplexType = TPath({
 			pack: [], name: 'Array', params: [TPType(TPath({pack: [], name: 'String', params: []}))]
@@ -1868,6 +1877,24 @@ class Lowering {
 			}]),
 			pos: Context.currentPos(),
 		});
+		// ω-trail-blank-after: tryparse + nestBody Stars carry an extra Bool
+		// slot that records whether the source had a blank line BETWEEN the
+		// stashed orphan trail comment and the next outer-Star sibling. Set
+		// from `_lead.blankAfterLeadingComments` on the failed iteration
+		// (the parse attempt that triggered trail capture); other tryparse
+		// shapes either rewind on failure or have no nestBody wrap so the
+		// signal is meaningless. Default `false` matches the no-blank case.
+		if (tryparse && nestBody) {
+			parseSteps.push({
+				expr: EVars([{
+					name: trailBALocal,
+					type: boolCT,
+					expr: macro false,
+					isFinal: false,
+				}]),
+				pos: Context.currentPos(),
+			});
+		}
 		final accumRef:Expr = macro $i{localName};
 		if (tryparse) {
 			// Try-parse termination: each iteration saves `ctx.pos` before
@@ -1907,6 +1934,7 @@ class Lowering {
 							if (!_lead.blankBefore && _lead.leadingComments.length > 0) {
 								$i{trailBBLocal} = _lead.blankBefore;
 								$i{trailLCLocal} = _lead.leadingComments;
+								$i{trailBALocal} = _lead.blankAfterLeadingComments;
 								ctx.pos = _afterTriviaPos;
 							} else {
 								ctx.pos = _savedPos;
@@ -2058,6 +2086,16 @@ class Lowering {
 	 * (i.e. `openText != null`).
 	 */
 	public static inline function trailingOpenLocalName(localName:String):String return '${localName}_trailOpen';
+
+	/**
+	 * Name of the `Bool` local that records whether a tryparse+nestBody
+	 * Star's stashed orphan trail run was followed by a blank line
+	 * (ω-trail-blank-after). Mirrors `trailingBlankBeforeLocalName` —
+	 * the "after" cousin records gap between trail and the next outer
+	 * sibling, while "before" records gap between the last body element
+	 * and the trail itself.
+	 */
+	public static inline function trailingBlankAfterLocalName(localName:String):String return '${localName}_trailBA';
 
 	// -------- terminal rule --------
 

@@ -137,6 +137,21 @@ class TriviaTypeSynth {
 	public static inline final TRAILING_OPEN_SUFFIX:String = 'TrailingOpen';
 
 	/**
+	 * ω-trail-blank-after — suffix for a `Bool` flag recording whether
+	 * the source had a blank line between an orphan trail comment and the
+	 * next outer-Star sibling (e.g. `case A: // X\n\n case B:`). Set by
+	 * the tryparse+nestBody catch path when the failed-element trivia
+	 * carried `blankAfterLeadingComments`; consumed by
+	 * `triviaTryparseStarExpr` to emit an extra hardline after the trail
+	 * Doc so the blank survives round-trip. Synthesised only for Stars
+	 * that combine `@:tryparse` with `@:fmt(nestBody)` — currently
+	 * `HxCaseBranch.body` and `HxDefaultBranch.stmts`. Other tryparse
+	 * shapes either rewind on failure (no trail capture path) or have no
+	 * nestBody wrap (no body-vs-parent indent distinction).
+	 */
+	public static inline final TRAILING_BLANK_AFTER_SUFFIX:String = 'TrailingBlankAfter';
+
+	/**
 	 * ω-trailopt-source-track — positional arg name appended to paired
 	 * Alt ctors that carry `@:trailOpt(...)`. The parser's `matchLit`
 	 * result lands here so the writer can gate trail emission on source
@@ -312,7 +327,38 @@ class TriviaTypeSynth {
 			final nullStrCT:ComplexType = TPath({pack: [], name: 'Null', params: [TPType(strCT)]});
 			fields.push({name: fieldName + TRAILING_OPEN_SUFFIX, kind: FVar(nullStrCT), pos: pos, access: []});
 		}
+		// ω-trail-blank-after: tryparse + nestBody Stars need a Bool slot
+		// to carry the source's blank-line-between-trail-and-next-sibling
+		// signal (`_lead.blankAfterLeadingComments` from the failed-element
+		// trivia run). Other tryparse shapes either rewind on failure (no
+		// stash) or have no nestBody indent wrap. Reads `:fmt` directly from
+		// `base.meta` for the same TriviaTypeSynth/Lit-pass ordering reason
+		// as `:trail` / `:lead` above.
+		if (hasMeta(child, ':tryparse') && fmtHasFlag(child, 'nestBody')) {
+			fields.push({name: fieldName + TRAILING_BLANK_AFTER_SUFFIX, kind: FVar(boolCT), pos: pos, access: []});
+		}
 		return fields;
+	}
+
+	/**
+	 * Synth-side mirror of `Lowering.fmtHasFlag` / `WriterLowering.fmtHasFlag`.
+	 * Returns true when the node carries `@:fmt(...)` and one of the args
+	 * matches `name` either as a bare identifier (`@:fmt(nestBody)`) or as
+	 * the callee of a knob-form `ECall` (`@:fmt(bodyPolicy('foo'))`). Reads
+	 * directly from `base.meta` because `TriviaTypeSynth.arm` runs before
+	 * the Lit pass populates derived `fmt.*` annotations.
+	 */
+	private static function fmtHasFlag(node:ShapeNode, name:String):Bool {
+		final meta:Null<Metadata> = node.annotations.get('base.meta');
+		if (meta == null) return false;
+		for (entry in meta) if (entry.name == ':fmt') {
+			for (param in entry.params) switch param.expr {
+				case EConst(CIdent(id)) if (id == name): return true;
+				case ECall({expr: EConst(CIdent(id))}, _) if (id == name): return true;
+				case _:
+			}
+		}
+		return false;
 	}
 
 	private static function hasMeta(node:ShapeNode, tag:String):Bool {

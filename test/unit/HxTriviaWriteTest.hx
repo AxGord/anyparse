@@ -563,4 +563,18 @@ class HxTriviaWriteTest extends Test {
 		final out:String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals('${source}\n', out);
 	}
+
+	/**
+	 * Empty case body whose only content is a trail comment followed by a
+	 * blank line preserves the blank between trail and the next case label.
+	 * Mirrors haxe-formatter `indentation/issue_392_case_indentation`
+	 * second switch — `case A: // Case A` (own-line trail) + blank line +
+	 * `case B:` round-trips with the gap intact.
+	 */
+	public function testCaseBodyEmptyTrailWithBlankAfter():Void {
+		final source:String = 'class Main {\n\tstatic function main():Void {\n\t\tswitch v {\n\t\t\tcase A:\n\t\t\t\t// Case A\n\n\t\t\tcase B:\n\t\t\t\ttrace(\'b\');\n\t\t}\n\t}\n}';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out:String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals('${source}\n', out);
+	}
 }
