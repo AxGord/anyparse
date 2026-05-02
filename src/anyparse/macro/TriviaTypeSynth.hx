@@ -123,6 +123,18 @@ class TriviaTypeSynth {
 	 */
 	public static inline final TRAILING_CLOSE_SUFFIX:String = 'TrailingClose';
 
+	/**
+	 * ω-trailopt-source-track — positional arg name appended to paired
+	 * Alt ctors that carry `@:trailOpt(...)`. The parser's `matchLit`
+	 * result lands here so the writer can gate trail emission on source
+	 * presence (`true` → emit literal; `false` → omit). Plain mode keeps
+	 * the original ctor arity and falls back to AST-shape gates such as
+	 * `@:fmt(trailOptShapeGate(...))`. First consumers: `HxDeclT.TypedefDecl`
+	 * and `HxDeclT.VarDecl` (top-level) plus `HxStatementT.VarStmt` /
+	 * `FinalStmt` (function-body locals).
+	 */
+	public static inline final TRAIL_PRESENT_ARG_NAME:String = 'trailPresent';
+
 	private static inline final PAIRED_SUFFIX:String = 'T';
 	private static inline final SYNTH_SUBPACK:String = 'trivia';
 	private static inline final SYNTH_MODULE_LEAF:String = 'Pairs';
@@ -308,6 +320,17 @@ class TriviaTypeSynth {
 			final nullStrCT:ComplexType = TPath({pack: [], name: 'Null', params: [TPType(strCT)]});
 			args.push({name: 'closeTrailing', type: nullStrCT});
 		}
+		// ω-trailopt-source-track: `@:trailOpt(...)` Alt branches with a
+		// single Ref child grow a positional `trailPresent:Bool` arg
+		// holding the parser's `matchLit` result. Disjoint from
+		// `isAltCloseTrailingBranch` (Star vs Ref child shapes), so the
+		// two cannot collide on the same ctor. Read `@:trailOpt` from
+		// `base.meta` directly since `arm()` runs BEFORE the Lit pass
+		// populates `lit.trailOptional` on the branch.
+		if (isAltTrailOptBranch(branch)) {
+			final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
+			args.push({name: TRAIL_PRESENT_ARG_NAME, type: boolCT});
+		}
 		return {name: ctorName, kind: FFun({args: args, ret: null, expr: null}), pos: pos, access: []};
 	}
 
@@ -324,6 +347,23 @@ class TriviaTypeSynth {
 		if (star.kind != Star) return false;
 		if (star.annotations.get('trivia.starCollects') != true) return false;
 		return readMetaString(branch, ':trail') != null;
+	}
+
+	/**
+	 * True when the branch is a single-Ref Alt-ctor carrying `@:trailOpt(...)`.
+	 * Such ctors grow a positional `trailPresent:Bool` arg in the synth
+	 * pair so the writer can preserve source presence of the optional
+	 * trail literal. Reads `@:trailOpt` from `base.meta` directly since
+	 * `arm()` runs before the Lit strategy populates `lit.trailOptional`.
+	 *
+	 * Disjoint from `isAltCloseTrailingBranch`: that function requires a
+	 * single Star child with `@:trail`, this requires a single Ref child
+	 * with `@:trailOpt`. The two never coexist on the same branch.
+	 */
+	public static function isAltTrailOptBranch(branch:ShapeNode):Bool {
+		if (branch.children.length != 1) return false;
+		if (branch.children[0].kind != Ref) return false;
+		return readMetaString(branch, ':trailOpt') != null;
 	}
 
 	private static function shapeToComplexType(node:ShapeNode, synthPack:Array<String>):ComplexType {

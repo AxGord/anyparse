@@ -1040,7 +1040,16 @@ class Lowering {
 				expr: ECall(macro $i{parseFnName(refName)}, [macro ctx]),
 				pos: Context.currentPos(),
 			};
-			final ctorCall:Expr = {expr: ECall(ctorRef, [macro _raw]), pos: Context.currentPos()};
+			final trailOptional:Bool = branch.annotations.get('lit.trailOptional') == true;
+			// ω-trailopt-source-track: in trivia mode, paired Alt ctors
+			// of `@:trailOpt(...)` branches carry an extra positional
+			// `trailPresent:Bool` arg synthesised by `TriviaTypeSynth`.
+			// Pass the captured `matchLit` result through so the writer
+			// can preserve source presence of the trail literal.
+			final triviaTrailOpt:Bool = trailOptional && ctx.trivia && isTriviaBearing(typePath);
+			final ctorArgs:Array<Expr> = [macro _raw];
+			if (triviaTrailOpt) ctorArgs.push(macro _trailPresent);
+			final ctorCall:Expr = {expr: ECall(ctorRef, ctorArgs), pos: Context.currentPos()};
 			final kwLead:Null<String> = branch.annotations.get('kw.leadText');
 			final steps:Array<Expr> = [macro skipWs(ctx)];
 			if (kwLead != null) {
@@ -1064,15 +1073,19 @@ class Lowering {
 				// `@:trailOpt` annotates `lit.trailOptional:true` alongside
 				// `lit.trailText`. The trail literal becomes optional on
 				// parse — `matchLit` peeks + consumes if present, but does
-				// NOT throw if absent. The writer keeps emitting the literal
-				// (canonical output); source-fidelity is a separate slice.
+				// NOT throw if absent. In trivia mode the captured presence
+				// flag flows into the synth ctor's extra `trailPresent:Bool`
+				// arg (slice ω-trailopt-source-track 2026-05-02). Plain
+				// mode keeps the original ctor arity and falls back to
+				// AST-shape gates such as `@:fmt(trailOptShapeGate(...))`
+				// in the writer.
 				// Consumers: `HxDecl.TypedefDecl` for `typedef Foo = T`
 				// without trailing `;` (slice ω-typedef-trailOpt);
 				// `HxStatement.VarStmt` / `FinalStmt` for `var foo =
 				// switch (x) { case _: 1 }` without trailing `;` (slice
 				// ω-vardecl-trailOpt — the `}`-terminated rhs idiom).
-				final trailOptional:Bool = branch.annotations.get('lit.trailOptional') == true;
-				if (trailOptional) steps.push(macro matchLit(ctx, $v{trailText}));
+				if (triviaTrailOpt) steps.push(macro final _trailPresent:Bool = matchLit(ctx, $v{trailText}));
+				else if (trailOptional) steps.push(macro matchLit(ctx, $v{trailText}));
 				else steps.push(macro expectLit(ctx, $v{trailText}));
 			}
 			steps.push(macro return $ctorCall);

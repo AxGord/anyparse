@@ -100,7 +100,16 @@ class WriterLowering {
 			// The ShapeNode tree is unchanged — gate by reading the same
 			// raw `@:trail` meta `TriviaTypeSynth` consults — so the
 			// pattern grows by one binding consumed by `lowerEnumStar`.
-			final extraArgs:Int = ctx.trivia && TriviaTypeSynth.isAltCloseTrailingBranch(branch) ? 1 : 0;
+			//
+			// ω-trailopt-source-track: in trivia mode, single-Ref Alt
+			// branches carrying `@:trailOpt(...)` likewise grow a positional
+			// `trailPresent:Bool` arg captured by the parser's `matchLit`.
+			// Disjoint from `isAltCloseTrailingBranch` (Star vs Ref child),
+			// so at most one extra arg per branch — the writer reads the
+			// flag via `argNames[1]` in `lowerEnumBranch`'s Case 3.
+			final hasCloseTrailing:Bool = ctx.trivia && TriviaTypeSynth.isAltCloseTrailingBranch(branch);
+			final hasTrailOptFlag:Bool = ctx.trivia && TriviaTypeSynth.isAltTrailOptBranch(branch);
+			final extraArgs:Int = (hasCloseTrailing || hasTrailOptFlag) ? 1 : 0;
 			final argNames:Array<String> = [for (i in 0...children.length + extraArgs) '_v$i'];
 
 			// Build pattern
@@ -396,8 +405,23 @@ class WriterLowering {
 			if (leadText != null) parts.push(macro _dt($v{leadText}));
 			parts.push(bodyExpr);
 			if (trailText != null) {
-				final trailExpr:Expr = trailOptShapeGateWrap(branch, trailText, argNames[0])
-					?? macro _dt($v{trailText});
+				// ω-trailopt-source-track: in trivia mode, the parser
+				// captures `matchLit`'s presence flag into the synth ctor's
+				// positional `trailPresent:Bool` arg (`argNames[1]`). The
+				// writer gates trail emission on it directly — `true` →
+				// emit literal; `false` → empty Doc. This bypasses the
+				// AST-shape gate `trailOptShapeGateWrap`, which is a Plain-
+				// mode workaround for missing source-presence info. Trivia
+				// mode preserves authored source verbatim.
+				final isTriviaTrailOpt:Bool = ctx.trivia
+					&& TriviaTypeSynth.isAltTrailOptBranch(branch);
+				final trailExpr:Expr = if (isTriviaTrailOpt) {
+					final flagAccess:Expr = macro $i{argNames[1]};
+					macro $flagAccess ? _dt($v{trailText}) : _de();
+				} else {
+					trailOptShapeGateWrap(branch, trailText, argNames[0])
+						?? macro _dt($v{trailText});
+				};
 				parts.push(trailExpr);
 			}
 			return if (parts.length == 1) parts[0]
