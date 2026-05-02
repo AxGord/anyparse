@@ -10,7 +10,11 @@ package anyparse.format;
  * level deeper than the preceding token (`if (cond)\n\tbody;`).
  * `FitLine` — body stays flat if the whole `preceding-token + body`
  * fits within `lineWidth`, otherwise breaks to the next line at one
- * indent level deeper.
+ * indent level deeper. When the body itself has internal hardlines
+ * (multi-line single-expr like `return foo(\n\t...)`), the kw-side
+ * break is suppressed: the kw stays inline-with-space and the body
+ * wraps using its own internal indent. Only single-line-too-wide
+ * bodies trigger the kw-side break + indent.
  * `Keep` — preserve the source shape. The writer reads a per-node
  * boolean captured by the trivia-mode parser and dispatches between
  * `Same` and `Next` layouts at runtime. Two capture paths exist:

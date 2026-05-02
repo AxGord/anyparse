@@ -2319,15 +2319,37 @@ class WriterLowering {
 		final nextPat:Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Next']));
 		final fitPat:Expr = MacroStringTools.toFieldExpr(bpPath.concat(['FitLine']));
 		final keepPat:Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Keep']));
-		final fitExpr:Expr = if (elseFieldName == null) macro _dbg(_dn(_cols, _dc([_dl(), $writeCall])));
+		// ω-fitline-multiline-anti-wrap: when the body's writeCall
+		// produces a Doc with internal hardlines (multi-line single-expr
+		// like `return foo(\n\t...)`), the canonical
+		// `BodyGroup(Nest(_cols, [Line(' '), body]))` shape over-wraps:
+		// (a) the outer BodyGroup sees fitsFlat=false because of the
+		// inner hardline → soft `_dl()` breaks to `\n`, forcing a
+		// kw-side wrap that haxe-formatter does NOT emit; (b) the Nest
+		// adds `_cols` to every internal hardline on top of the body's
+		// own Nest, double-indenting the multi-line operand. The fix
+		// runtime-peeks `flatLength(body)`: when -1 (anyHardline), emit
+		// `Concat[Text(' '), body]` (kw inline + body wraps internally
+		// with its own indent). Width-driven break path is preserved
+		// for single-line bodies that don't fit `lineWidth`.
+		final fitInnerExpr:Expr = macro anyparse.format.wrap.WrapList.flatLength(_body) == -1
+			? _dc([_dt(' '), _body])
+			: _dbg(_dn(_cols, _dc([_dl(), _body])));
+		final fitExpr:Expr = if (elseFieldName == null) macro {
+			final _body:anyparse.core.Doc = $writeCall;
+			$fitInnerExpr;
+		};
 		else {
 			final elseAccess:Expr = {
 				expr: EField(macro value, elseFieldName),
 				pos: Context.currentPos(),
 			};
-			macro (opt.fitLineIfWithElse || $elseAccess == null)
-				? _dbg(_dn(_cols, _dc([_dl(), $writeCall])))
-				: _dn(_cols, _dc([_dhl(), $writeCall]));
+			macro {
+				final _body:anyparse.core.Doc = $writeCall;
+				(opt.fitLineIfWithElse || $elseAccess == null)
+					? $fitInnerExpr
+					: _dn(_cols, _dc([_dhl(), _body]));
+			}
 		}
 		// ω-keep-policy: `Keep` dispatches at runtime between same and
 		// next layouts based on the trivia-mode parser's captured

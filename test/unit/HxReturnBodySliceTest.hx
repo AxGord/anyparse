@@ -76,6 +76,23 @@ class HxReturnBodySliceTest extends Test {
 		Assert.isTrue(out.indexOf('return\n') == -1, 'void `return;` must not break in: <$out>');
 	}
 
+	/**
+	 * F. Single-expr body anti-wrap — when `returnBody = FitLine` (default)
+	 * and the value expression has its own internal hardlines (e.g. a call
+	 * with a function-block argument), `return` must stay inline-with-space
+	 * before the value's first line. The width-driven break exists only to
+	 * handle long FLAT values; multiline values already render across lines
+	 * and adding a kw-side break+nest just over-indents the body.
+	 *
+	 * Real-world fixture: `issue_546_wrapping_and_arrow_function.hxtest`.
+	 */
+	public function testFitLineMultilineValueStaysInline():Void {
+		final src:String = 'class M { static function f():Int { return foo(function() { var x = 1; return x; }); } }';
+		final out:String = writeWith(src, BodyPolicy.FitLine);
+		Assert.isTrue(out.indexOf('return foo(') != -1, 'expected `return foo(` inline (multiline body) in: <$out>');
+		Assert.isTrue(out.indexOf('return\n') == -1, 'multiline value must NOT trigger kw-side break in: <$out>');
+	}
+
 	public function testConfigLoaderMapsReturnBodySame():Void {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"sameLine": {"returnBody": "same"}}'
