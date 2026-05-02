@@ -648,6 +648,27 @@ import anyparse.format.wrap.WrapRules;
  *    applies at sites tagged with `@:fmt(indentCaseLabels)` in the
  *    grammar — `HxSwitchStmt.cases` and `HxSwitchStmtBare.cases`.
  *
+ * Field added in slice ω-indent-objectliteral (object-literal RHS
+ * indent):
+ *  - `indentObjectLiteral` — when `true` (default) AND
+ *    `objectLiteralLeftCurly` is `Next` (Allman), an `ObjectLit` value
+ *    on the right-hand side of `=`/`:`/`(`/`[`/keyword is wrapped in
+ *    `Nest(_cols, val)` so its hardlines pick up one extra indent
+ *    step (`var x =\n\t{...}` instead of `var x =\n{...}`). Matches
+ *    haxe-formatter's `indentation.indentObjectLiteral: @:default(true)`
+ *    rule, which only fires when `{` lands on its own line. Under
+ *    `Same` (cuddled) leftCurly the wrap is inert — `{` already sits on
+ *    the parent line, so the inner content's existing nest is enough.
+ *    When `indentObjectLiteral=false` the wrap is unconditionally inert.
+ *    The knob only applies at sites tagged with
+ *    `@:fmt(indentValueIfCtor('ObjectLit', 'indentObjectLiteral',
+ *    'objectLiteralLeftCurly'))` in the grammar — currently
+ *    `HxVarDecl.init` (var/final `=` RHS) and `HxObjectField.value`
+ *    (`:` RHS inside an enclosing object literal). Other RHS positions
+ *    (return/throw/assign/call-arg/array-element) intentionally do not
+ *    opt in yet — generalising is a follow-up slice once the corpus
+ *    delta is verified.
+ *
  * Field added in slice ω-arrow-fn-type (new-form arrow function type
  * `->` spacing):
  *  - `functionTypeHaxe4` — whitespace around the `->` separator in a
@@ -823,6 +844,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	anonTypeWrap:WrapRules,
 	expressionTry:SameLinePolicy,
 	indentCaseLabels:Bool,
+	indentObjectLiteral:Bool,
 	functionTypeHaxe4:WhitespacePolicy,
 	arrowFunctions:WhitespacePolicy,
 	afterPackage:Int,

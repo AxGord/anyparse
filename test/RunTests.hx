@@ -86,6 +86,7 @@ import unit.HxCaseBodyPolicySliceTest;
 import unit.HxFunctionBodyPolicySliceTest;
 import unit.HxTryBodyOptionsTest;
 import unit.HxIndentCaseLabelsOptionsTest;
+import unit.HxIndentObjectLiteralOptionsTest;
 import unit.HxTriviaTypesTest;
 import unit.HxTriviaParseTest;
 import unit.HxTriviaWriteTest;
@@ -201,6 +202,7 @@ class RunTests {
 		runner.addCase(new HxFunctionBodyPolicySliceTest());
 		runner.addCase(new HxTryBodyOptionsTest());
 		runner.addCase(new HxIndentCaseLabelsOptionsTest());
+		runner.addCase(new HxIndentObjectLiteralOptionsTest());
 		runner.addCase(new HxTriviaTypesTest());
 		runner.addCase(new HxTriviaParseTest());
 		runner.addCase(new HxTriviaWriteTest());

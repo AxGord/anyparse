@@ -94,6 +94,12 @@ final class HxObjectLitLeftCurlyOptionsTest extends Test {
 	private inline function writeWith(src:String, placement:BracePlacement):String {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.objectLiteralLeftCurly = placement;
+		// Disable indentObjectLiteral so this suite stays focused on the
+		// leftCurly axis — slice ω-indent-objectliteral default-true would
+		// otherwise add one extra indent step in front of `{` (turning
+		// `=\n\t{` into `=\n\t\t{`), which is a different concern tested
+		// separately in `HxIndentObjectLiteralOptionsTest`.
+		opts.indentObjectLiteral = false;
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
 }

@@ -403,6 +403,19 @@ final class HaxeFormat implements TextFormat {
 	 * requires `"indentation": { "indentCaseLabels": false }` in
 	 * `hxformat.json`.
 	 *
+	 * `indentObjectLiteral` default (ω-indent-objectliteral) is `true` —
+	 * an `ObjectLit` value placed on the right-hand side of `=`/`:`/`(`
+	 * /`[`/keyword picks up one extra indent step in front of `{` when
+	 * `objectLiteralLeftCurly` is `Next` / `both` (Allman), matching
+	 * haxe-formatter's `indentation.indentObjectLiteral: @:default(true)`
+	 * rule which only fires for own-line `{`. Setting to `false`
+	 * requires `"indentation": { "indentObjectLiteral": false }` in
+	 * `hxformat.json` and disables the extra indent. Under `Same`
+	 * (cuddled) leftCurly the knob is inert in both directions. The
+	 * gate fires only at sites tagged with `@:fmt(indentValueIfCtor(
+	 * 'ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'))` in
+	 * the grammar (currently `HxVarDecl.init` and `HxObjectField.value`).
+	 *
 	 * `functionTypeHaxe4` default (ω-arrow-fn-type) is `Both` — the `->`
 	 * separator inside a new-form arrow function type
 	 * (`HxArrowFnType.ret`) emits `(args) -> ret` with surrounding
@@ -563,6 +576,7 @@ final class HaxeFormat implements TextFormat {
 		addLineCommentSpace: true,
 		expressionTry: SameLinePolicy.Same,
 		indentCaseLabels: true,
+		indentObjectLiteral: true,
 		functionTypeHaxe4: WhitespacePolicy.Both,
 		arrowFunctions: WhitespacePolicy.Both,
 		afterPackage: 1,

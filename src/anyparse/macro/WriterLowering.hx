@@ -852,10 +852,16 @@ class WriterLowering {
 				case Ref if (isOptional):
 					final refName:String = child.annotations.get('base.ref');
 					final writeFn:String = writeFnFor(refName);
-					final writeCall:Expr = {
+					final rawWriteCall:Expr = {
 						expr: ECall(macro $i{writeFn}, [macro _optVal, macro opt]),
 						pos: Context.currentPos(),
 					};
+					// ω-indent-objectliteral: `@:fmt(indentValueIfCtor('<ctor>', '<optField>'))`
+					// wraps the writer call in a runtime gate (see
+					// `maybeIndentValueIfCtor` / `indentValueIfCtorWrap`).
+					// Currently used by `HxVarDecl.init` to indent a multi-
+					// line `ObjectLit` value one extra step.
+					final writeCall:Expr = maybeIndentValueIfCtor(rawWriteCall, macro _optVal, child);
 					// Leading separator is runtime-conditional when @:fmt(sameLine(...))
 					// is present — see sameLineSeparator. Split into (sep, kw+' ')
 					// so the sep part can become a hardline (τ₁).
@@ -956,10 +962,20 @@ class WriterLowering {
 				case Ref:
 					final refName:String = child.annotations.get('base.ref');
 					final writeFn:String = writeFnFor(refName);
-					final writeCall:Expr = {
+					final rawWriteCall:Expr = {
 						expr: ECall(macro $i{writeFn}, [fieldAccess, macro opt]),
 						pos: Context.currentPos(),
 					};
+					// ω-indent-objectliteral: `@:fmt(indentValueIfCtor('<ctor>', '<optField>'))`
+					// wrap on mandatory Ref — currently used by
+					// `HxObjectField.value` so a nested ObjectLit on a `:` RHS
+					// gets the same extra-indent as the outer `=` site
+					// (`HxVarDecl.init`). The flag has no effect when the
+					// runtime ctor mismatches or the named knob is false, so
+					// wrapping here is safe even if a future field combines
+					// the flag with `bodyPolicy` / `leftCurly` / `bodyBreak` /
+					// `bareBodyBreaks` — though no such combination exists today.
+					final writeCall:Expr = maybeIndentValueIfCtor(rawWriteCall, fieldAccess, child);
 					// bodyPolicy on a first field: the parent enum-branch
 					// Case 3 strips its kwLead trailing space so the
 					// separator here is the sole transition token. Non-
@@ -1949,6 +1965,76 @@ class WriterLowering {
 			final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 			$wrapExpr;
 		};
+	}
+
+	/**
+	 * ω-indent-objectliteral — wrap a Ref field's writer call in a runtime
+	 * gate that, when ALL THREE conditions hold, replaces the inline
+	 * emission with `Nest(_cols, value)`:
+	 *
+	 *  1. The bound value's enum ctor matches `ctorName`.
+	 *  2. The named knob `opt.<optField>:Bool` is true.
+	 *  3. The named knob `opt.<leftCurlyField>:BracePlacement` is `Next`.
+	 *
+	 * Mirrors haxe-formatter's `indentation.indentObjectLiteral=true`
+	 * rule, which only fires when `{` lands on its own line — i.e. when
+	 * the per-construct leftCurly placement is Allman (`Next` / `both`).
+	 * In that layout the value's hardlines pick up one extra indent
+	 * step: `var x =\n\t{...}` instead of `var x =\n{...}`. With
+	 * `Same` (cuddled) leftCurly the wrap is inert — `{` already sits on
+	 * the parent line, so the inner content's existing nest is enough
+	 * (`var x = {\n\t...}` byte-identical to the pre-slice layout).
+	 *
+	 * Used by `@:fmt(indentValueIfCtor('<ctorName>', '<optField>',
+	 * '<leftCurlyField>'))` on RHS-style Ref fields — currently
+	 * `HxVarDecl.init` and `HxObjectField.value` with `('ObjectLit',
+	 * 'indentObjectLiteral', 'objectLiteralLeftCurly')`. All three args
+	 * are grammar-driven so the macro core stays format-neutral: the
+	 * ctor name is local to the field's enum type, and both runtime
+	 * knobs live on the per-grammar `WriteOptions` struct (no base-
+	 * options bloat for non-Haxe formats). New RHS sites opt in by
+	 * tagging their field, no core edit required.
+	 *
+	 * The wrap is `Nest`, not `Group(IfBreak)`. An earlier draft tried
+	 * to gate the indent on the value's own break decision via
+	 * `Group(IfBreak(brk, flat))`, but `HxObjectLit.fields` emits a
+	 * `BodyGroup` that the renderer's `fitsFlat` defers — the outer
+	 * Group sees the IfBreak's flat branch as ~2 chars (just `{` + `}`
+	 * with the BodyGroup deferred) and always picks flat, so the wrap
+	 * never fired. Plain `Nest` sidesteps the measurement: when the
+	 * value emits inline (no internal hardlines) `Nest` is inert — short
+	 * literals stay cuddled (`var x = {a:1}`); when the value emits
+	 * multi-line the hardlines pick up the extra indent step.
+	 *
+	 * The `_cols:Int` binding mirrors `bodyPolicyWrap` / `bareBodyBreakWrap`
+	 * — `_dn(_cols, …)` reads the indent-step from `opt.indentChar` /
+	 * `opt.indentSize` / `opt.tabWidth` per call so generated code does
+	 * not assume any particular caller-side scope.
+	 */
+	private function indentValueIfCtorWrap(writeCall:Expr, fieldAccess:Expr, ctorName:String, optField:String, leftCurlyField:String):Expr {
+		final optAccess:Expr = {expr: EField(macro opt, optField), pos: Context.currentPos()};
+		final leftCurlyAccess:Expr = {expr: EField(macro opt, leftCurlyField), pos: Context.currentPos()};
+		return macro {
+			final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+			final _doc:anyparse.core.Doc = $writeCall;
+			if ($optAccess
+				&& $leftCurlyAccess == anyparse.format.BracePlacement.Next
+				&& Type.enumConstructor($fieldAccess) == $v{ctorName}) _dn(_cols, _doc) else _doc;
+		};
+	}
+
+	/**
+	 * Read `@:fmt(indentValueIfCtor('<ctor>', '<optField>',
+	 * '<leftCurlyField>'))` off `child` and return the wrapped writer
+	 * call when present, the raw call when absent. Both Ref-field
+	 * branches (optional + mandatory) in `lowerStruct` route through
+	 * this single helper to avoid duplicating the meta-validation block.
+	 */
+	private function maybeIndentValueIfCtor(rawWriteCall:Expr, fieldAccess:Expr, child:ShapeNode):Expr {
+		final indentArgs:Null<Array<String>> = child.fmtReadStringArgs('indentValueIfCtor');
+		if (indentArgs == null) return rawWriteCall;
+		if (indentArgs.length != 3) Context.fatalError('WriterLowering: @:fmt(indentValueIfCtor(...)) requires (ctorName, optField, leftCurlyField), got ${indentArgs.length} args', Context.currentPos());
+		return indentValueIfCtorWrap(rawWriteCall, fieldAccess, indentArgs[0], indentArgs[1], indentArgs[2]);
 	}
 
 	/**

@@ -24,10 +24,24 @@ package anyparse.grammar.haxe;
  * the type and the meta list (D23). The `@:lead('=')` is the commit
  * point for the optional — `matchLit` peeks it, and the sub-rule
  * parse only fires when the peek hits (D24).
+ *
+ * `@:fmt(indentValueIfCtor('ObjectLit', 'indentObjectLiteral',
+ * 'objectLiteralLeftCurly'))` (slice ω-indent-objectliteral) wraps the
+ * writer call for `init` in a runtime gate that — when the bound
+ * `HxExpr` ctor is `ObjectLit` AND `opt.indentObjectLiteral` is true
+ * (default) AND `opt.objectLiteralLeftCurly` is `Next` (`{` on its own
+ * line) — applies a `Nest(_cols, …)` wrap so the value's hardlines
+ * pick up one extra indent step. Visible effect under Allman:
+ * `var x =\n\t{...}` instead of `var x =\n{...}`, matching haxe-
+ * formatter's `indentation.indentObjectLiteral` rule which only fires
+ * when `{` lands on its own line. Cuddled `Same` placement is
+ * unchanged — the gate is inert because `{` already sits on the parent
+ * line. Other RHS values (calls, binops, etc.) are unaffected — the
+ * gate triggers only on the `ObjectLit` ctor.
  */
 @:peg
 typedef HxVarDecl = {
 	var name:HxIdentLit;
 	@:optional @:fmt(typeHintColon) @:lead(':') var type:Null<HxType>;
-	@:optional @:lead('=') var init:Null<HxExpr>;
+	@:optional @:fmt(indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly')) @:lead('=') var init:Null<HxExpr>;
 }

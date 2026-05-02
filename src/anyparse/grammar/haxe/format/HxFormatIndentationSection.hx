@@ -10,7 +10,11 @@ package anyparse.grammar.haxe.format;
  * whether `case` / `default` labels inside a `switch` body are nested
  * one level (`true`, default) or kept flush with the `switch` keyword
  * (`false`, matching haxe-formatter's `indentation.indentCaseLabels:
- * @:default(true)`).
+ * @:default(true)`). `indentObjectLiteral` toggles whether an
+ * `ObjectLit` value on `=`/`:` RHS picks up one extra indent step in
+ * front of its `{` (`true`, default) — fires only when
+ * `lineEnds.objectLiteralCurly.leftCurly` is Allman (`both`/`before`);
+ * matches haxe-formatter's `indentation.indentObjectLiteral: @:default(true)`.
  */
 @:peg typedef HxFormatIndentationSection = {
 
@@ -21,4 +25,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var trailingWhitespace:Bool;
 
 	@:optional var indentCaseLabels:Bool;
+
+	@:optional var indentObjectLiteral:Bool;
 };

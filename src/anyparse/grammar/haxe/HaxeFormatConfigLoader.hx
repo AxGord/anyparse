@@ -60,6 +60,14 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   level inside a `switch` body's `{ ... }`; `false` flushes the
  *   labels with the `switch` keyword and only the per-case body is
  *   indented. Routed to `opt.indentCaseLabels`.
+ * - `indentation.indentObjectLiteral` (ω-indent-objectliteral): boolean —
+ *   `true` (default) AND `lineEnds.objectLiteralCurly.leftCurly == both/before`
+ *   (Allman) adds one extra indent step in front of an `ObjectLit` value's
+ *   `{` on `=`/`:`/`(`/`[` RHS (`var x =\n\t{...}`); `false` (or
+ *   leftCurly=`after`/`none`/cuddled) keeps the layout unchanged.
+ *   Routed to `opt.indentObjectLiteral`; fires at sites tagged
+ *   `@:fmt(indentValueIfCtor('ObjectLit', 'indentObjectLiteral',
+ *   'objectLiteralLeftCurly'))` in the grammar.
  * - `wrapping.maxLineLength`: int → `lineWidth`.
  * - `wrapping.arrayWrap` (ω-arraylit-wraprules): partial `WrapRules`
  *   block → `arrayLiteralWrap`. Only `defaultWrap:String` is read; the
@@ -419,6 +427,7 @@ final class HaxeFormatConfigLoader {
 			addLineCommentSpace: base.addLineCommentSpace,
 			expressionTry: base.expressionTry,
 			indentCaseLabels: base.indentCaseLabels,
+			indentObjectLiteral: base.indentObjectLiteral,
 			functionTypeHaxe4: base.functionTypeHaxe4,
 			arrowFunctions: base.arrowFunctions,
 			afterPackage: base.afterPackage,
@@ -456,6 +465,7 @@ final class HaxeFormatConfigLoader {
 		if (section.tabWidth != null) opt.tabWidth = section.tabWidth;
 		if (section.trailingWhitespace != null) opt.trailingWhitespace = section.trailingWhitespace;
 		if (section.indentCaseLabels != null) opt.indentCaseLabels = section.indentCaseLabels;
+		if (section.indentObjectLiteral != null) opt.indentObjectLiteral = section.indentObjectLiteral;
 	}
 
 	private static function applyWrapping(section:HxFormatWrappingSection, opt:HxModuleWriteOptions):Void {

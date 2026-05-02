@@ -525,11 +525,19 @@ class HxTriviaWriteTest extends Test {
 	 * ω-trivia-sep — `HxObjectLit.fields` multi-line layout: source
 	 * had `newlineBefore` on each element, so the writer breaks the
 	 * literal across lines and indents the body one level.
+	 *
+	 * Disables `indentObjectLiteral` (slice ω-indent-objectliteral
+	 * default-true) so this round-trip stays focused on the trivia-sep
+	 * preservation axis — the new default would otherwise add one extra
+	 * indent step to every internal hardline.
 	 */
 	public function testObjectLitMultiLineRoundTrip():Void {
 		final source:String = 'class Main {\n\tstatic function main() {\n\t\tvar o = {\n\t\t\ta: 1,\n\t\t\tb: 2\n\t\t};\n\t}\n}';
 		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final out:String = HaxeModuleTriviaWriter.write(ast);
+		final opts:anyparse.grammar.haxe.HxModuleWriteOptions =
+			anyparse.grammar.haxe.HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		opts.indentObjectLiteral = false;
+		final out:String = HaxeModuleTriviaWriter.write(ast, opts);
 		Assert.equals('${source}\n', out);
 	}
 
@@ -538,11 +546,17 @@ class HxTriviaWriteTest extends Test {
 	 * `HxObjectLit.fields` is captured by `collectTrailing` AFTER the
 	 * optional `,` (none here). Pratt loop's pre-skipWs comment-rewind
 	 * keeps the comment available for the sibling capture path.
+	 *
+	 * `indentObjectLiteral=false` keeps the focus on trailing-comment
+	 * capture, see `testObjectLitMultiLineRoundTrip` for context.
 	 */
 	public function testObjectLitTrailingComment():Void {
 		final source:String = 'class Main {\n\tstatic function main() {\n\t\tvar o = {\n\t\t\ta: 1 // tag\n\t\t};\n\t}\n}';
 		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final out:String = HaxeModuleTriviaWriter.write(ast);
+		final opts:anyparse.grammar.haxe.HxModuleWriteOptions =
+			anyparse.grammar.haxe.HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		opts.indentObjectLiteral = false;
+		final out:String = HaxeModuleTriviaWriter.write(ast, opts);
 		Assert.equals('${source}\n', out);
 	}
 
