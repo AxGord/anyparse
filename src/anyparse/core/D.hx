@@ -50,6 +50,14 @@ class D {
 	public static inline function fill(items:Array<Doc>, sep:Doc):Doc
 		return Fill(items, sep);
 
+	/**
+		Optional inline whitespace, dropped when immediately followed by a
+		break-mode `Line`. Used for lead trailing spaces that must vanish
+		before a hardline (e.g. `leftCurly=Next`).
+	**/
+	public static inline function optSpace(s:String):Doc
+		return OptSpace(s);
+
 	/** Places `sep` between each item of `items`. Returns a fresh array. **/
 	public static function intersperse(items:Array<Doc>, sep:Doc):Array<Doc> {
 		if (items.length <= 1) return items.copy();

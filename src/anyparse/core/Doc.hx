@@ -55,6 +55,22 @@ package anyparse.core;
 	                     per-item flat measurements, so an item containing
 	                     a multi-line block body still measures by its
 	                     "header" width and packs cleanly with siblings.
+	- `OptSpace(s)`    — optional inline whitespace, dropped when
+	                     immediately followed by a break-mode `Line`
+	                     (hardline). Used by lead emission to keep the
+	                     "lead literal + trailing space" pair byte-
+	                     identical when the value lays out flat, but
+	                     suppress the trailing space when the value
+	                     emits a leading hardline (e.g. `leftCurly=Next`
+	                     on an object literal). Treated as `Text(s)` for
+	                     flat-mode `fitsFlat` measurement so wrapping
+	                     decisions don't shift. Renderer holds OptSpace
+	                     in a small pending buffer; it's flushed before
+	                     any `Text` (or in-flat `Line`) and discarded
+	                     right before a break-mode `Line` writes the
+	                     newline. At end of render any unflushed
+	                     OptSpace is silently dropped (no trailing
+	                     whitespace at EOF).
 
 	See `D` for builder helpers and `Renderer` for the layout algorithm.
 **/
@@ -68,4 +84,5 @@ enum Doc {
 	Concat(items:Array<Doc>);
 	IfBreak(breakDoc:Doc, flatDoc:Doc);
 	Fill(items:Array<Doc>, sep:Doc);
+	OptSpace(s:String);
 }

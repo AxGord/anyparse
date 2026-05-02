@@ -42,8 +42,18 @@ package anyparse.grammar.haxe;
  * interior-spacing policies — wrap decides single-line vs multi-line
  * shape, braces decide the `{a:1}`/`{ a:1 }` interior spacing of the
  * single-line variant.
+ *
+ * `@:fmt(leftCurly('objectLiteralLeftCurly'))` (slice
+ * ω-objectlit-leftCurly) routes the `{` placement through the
+ * per-construct `opt.objectLiteralLeftCurly:BracePlacement` knob
+ * instead of the global `opt.leftCurly`. The loader cascade in
+ * `HaxeFormatConfigLoader.applyLineEnds` writes the global
+ * `lineEnds.leftCurly` into both knobs while
+ * `lineEnds.objectLiteralCurly.leftCurly` overrides only the
+ * per-construct one — mirroring haxe-formatter's
+ * `MarkLineEnds.getCurlyPolicy(ObjectDecl)` precedence.
  */
 @:peg
 typedef HxObjectLit = {
-	@:fmt(objectLiteralBracesOpen, objectLiteralBracesClose, wrapRules('objectLiteralWrap')) @:lead('{') @:trail('}') @:sep(',') @:trivia var fields:Array<HxObjectField>;
+	@:fmt(objectLiteralBracesOpen, objectLiteralBracesClose, wrapRules('objectLiteralWrap'), leftCurly('objectLiteralLeftCurly')) @:lead('{') @:trail('}') @:sep(',') @:trivia var fields:Array<HxObjectField>;
 }

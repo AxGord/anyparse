@@ -14,6 +14,7 @@ import anyparse.grammar.haxe.format.HxFormatClassEmptyLinesConfig;
 import anyparse.grammar.haxe.format.HxFormatCommentEmptyLinesPolicy;
 import anyparse.grammar.haxe.format.HxFormatConfig;
 import anyparse.grammar.haxe.format.HxFormatConfigParser;
+import anyparse.grammar.haxe.format.HxFormatCurlyLineEndPolicy;
 import anyparse.grammar.haxe.format.HxFormatEmptyLinesSection;
 import anyparse.grammar.haxe.format.HxFormatImportAndUsingConfig;
 import anyparse.grammar.haxe.format.HxFormatIndentationSection;
@@ -88,7 +89,21 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   map to `BracePlacement.Next`; `"after"` / `"none"` map to
  *   `BracePlacement.Same`. `"none"` degrades because the inline
  *   `{ ... }` shape is not representable by the current two-value
- *   surface without per-node source-shape tracking.
+ *   surface without per-node source-shape tracking. Affects only
+ *   `opt.leftCurly` — does NOT cascade into `objectLiteralLeftCurly`.
+ *   Diverges from haxe-formatter's `MarkLineEnds.getCurlyPolicy(ObjectDecl)`
+ *   cascade because that path also gates on `parsedCode.isOriginalSameLine
+ *   (brOpen, brClose)` — keeping single-line object literals cuddled
+ *   regardless of the policy. The anyparse writer has no source-shape
+ *   preservation, so cascading global `leftCurly` into object literals
+ *   would push every short `return {…}` / `f({…})` brace to the next
+ *   line. Users wanting the next-line shape opt in via
+ *   `lineEnds.objectLiteralCurly.leftCurly` directly.
+ * - `lineEnds.objectLiteralCurly.leftCurly` (ω-objectlit-leftCurly):
+ *   per-construct sub-section that maps to `opt.objectLiteralLeftCurly`
+ *   independently of the global `leftCurly`. Same enum-string vocabulary.
+ *   `"both"` / `"before"` push `{` to the next line for `HxObjectLit.fields`
+ *   regardless of content shape; `"after"` / `"none"` keep braces cuddled.
  * - `whitespace.objectFieldColonPolicy` (ψ₇): enum string —
  *   `"before"` / `"onlyBefore"` → `WhitespacePolicy.Before`,
  *   `"after"`  / `"onlyAfter"`  → `WhitespacePolicy.After`,
@@ -288,7 +303,8 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  * Deliberately NOT supported in this slice (no corresponding
  * `HxModuleWriteOptions` field yet): `wrapping.*` beyond
  * `maxLineLength`, other `lineEnds.*` keys (`rightCurly`, `blockCurly`,
- * `objectLiteralCurly`, …), other `emptyLines.*` keys
+ * `anonTypeCurly`, `typedefCurly`, `anonFunctionCurly`, …), other
+ * `emptyLines.*` keys
  * (`finalNewline`, `maxAnywhereInFile`, `beforePackage`,
  * `betweenTypes`, per-type-kind sections
  * `macroClassEmptyLines` / `externClassEmptyLines` /
@@ -349,6 +365,7 @@ final class HaxeFormatConfigLoader {
 			expressionCase: base.expressionCase,
 			functionBody: base.functionBody,
 			leftCurly: base.leftCurly,
+			objectLiteralLeftCurly: base.objectLiteralLeftCurly,
 			objectFieldColon: base.objectFieldColon,
 			typeHintColon: base.typeHintColon,
 			typeCheckColon: base.typeCheckColon,
@@ -459,6 +476,10 @@ final class HaxeFormatConfigLoader {
 
 	private static function applyLineEnds(section:HxFormatLineEndsSection, opt:HxModuleWriteOptions):Void {
 		if (section.leftCurly != null) opt.leftCurly = leftCurlyToRuntime(section.leftCurly);
+		if (section.objectLiteralCurly != null) {
+			final sub:HxFormatCurlyLineEndPolicy = section.objectLiteralCurly;
+			if (sub.leftCurly != null) opt.objectLiteralLeftCurly = leftCurlyToRuntime(sub.leftCurly);
+		}
 	}
 
 	private static function applyWhitespace(section:HxFormatWhitespaceSection, opt:HxModuleWriteOptions):Void {

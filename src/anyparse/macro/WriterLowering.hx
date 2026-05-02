@@ -894,7 +894,17 @@ class WriterLowering {
 							optParts.push(whitespacePolicyLead(child, leadText, ['typeParamDefaultEquals']));
 						} else {
 							optParts.push(sameLineSeparator(child, prevBodyField, typePath));
-							optParts.push(macro _dt($v{leadText + ' '}));
+							// Trailing space after a non-tight optional lead
+							// is split into a literal `_dt(leadText)` plus an
+							// `_dop(' ')`. The optional space is dropped by
+							// the renderer when the value emits a leading
+							// hardline (e.g. `var x = {…}` with
+							// `leftCurly=Next` on the object literal),
+							// producing `var x =\n{…}` cleanly. For all
+							// other values the rendering is byte-identical
+							// to the pre-slice `_dt(leadText + ' ')` path.
+							optParts.push(macro _dt($v{leadText}));
+							optParts.push(macro _dop(' '));
 						}
 						optParts.push(writeCall);
 					} else {
@@ -1267,7 +1277,14 @@ class WriterLowering {
 				return;
 			}
 			if (closeText != null) {
-				if (!isFirstField && isSpacedLead(openText)) parts.push(leftCurlySeparator(starNode));
+				// First-field Star with knob-form `@:fmt(leftCurly('<knob>'))`
+				// (e.g. `HxObjectLit.fields`) fires the leftCurly switch
+				// even at first-field position — its outer caller already
+				// emits the inter-token space via `_dop(' ')`, so the
+				// `Same` branch is `_de()` and `Next` is `_dhl()` (drops
+				// the pending OptSpace and writes a hardline).
+				final hasKnobLeftCurly:Bool = starNode.fmtReadString('leftCurly') != null;
+				if ((!isFirstField || hasKnobLeftCurly) && isSpacedLead(openText)) parts.push(leftCurlySeparator(starNode));
 				// ω-trivia-sep: sep-Star with @:trivia routes to a
 				// dedicated helper that drives multi-line vs flat layout
 				// from per-element `newlineBefore` / comment trivia.
@@ -1451,7 +1468,11 @@ class WriterLowering {
 				$listCall;
 			});
 		} else if (closeText != null) {
-			if (!isFirstField && !isRaw && isSpacedLead(openText)) parts.push(leftCurlySeparator(starNode));
+			// Mirror of the trivia-path gate: knob-form leftCurly fires
+			// even on a first-field Star (outer-side OptSpace owns the
+			// inter-token space; see leftCurlySeparator's `_de()` branch).
+			final hasKnobLeftCurly2:Bool = starNode.fmtReadString('leftCurly') != null;
+			if ((!isFirstField || hasKnobLeftCurly2) && !isRaw && isSpacedLead(openText)) parts.push(leftCurlySeparator(starNode));
 			parts.push(macro {
 				final _arr = $fieldAccess;
 				final _docs:Array<anyparse.core.Doc> = [];
@@ -1888,13 +1909,15 @@ class WriterLowering {
 	 * the existing pre-ψ₆ behaviour. With `@:fmt(leftCurly)` present (no
 	 * argument), emits a switch that picks between `_dhl()` (hardline
 	 * at the current indent, placing `{` on its own line) and
-	 * `_dt(' ')` based on `opt.leftCurly:BracePlacement`. The knob
-	 * field name is hard-coded because haxe-formatter's `lineEnds.
-	 * leftCurly` is a single global knob and every tagged grammar site
-	 * maps to the same runtime option. Per-category overrides would
-	 * add their own metas (`@:typeBrace` / `@:blockBrace` / …) with
-	 * their own knob fields, keeping each meta tied to exactly one
-	 * option field.
+	 * `_dt(' ')` based on `opt.leftCurly:BracePlacement`.
+	 *
+	 * The bare flag `@:fmt(leftCurly)` reads the global `opt.leftCurly`
+	 * knob — every grammar site without an arg maps to the same runtime
+	 * option. The knob form `@:fmt(leftCurly('<knobName>'))` (slice
+	 * ω-objectlit-leftCurly) reads `opt.<knobName>` instead, enabling
+	 * per-construct overrides like `objectLiteralLeftCurly` for
+	 * `HxObjectLit.fields`. Loader-side cascade decides whether the
+	 * per-construct knob follows the global or stands on its own.
 	 *
 	 * The `Next` pattern is built as a raw `EField` expression to avoid
 	 * macro-time enum resolution against the `BracePlacement` abstract
@@ -1905,11 +1928,26 @@ class WriterLowering {
 	 */
 	private static function leftCurlySeparator(starNode:ShapeNode):Expr {
 		if (!starNode.fmtHasFlag('leftCurly')) return macro _dt(' ');
+		final knobName:Null<String> = starNode.fmtReadString('leftCurly');
+		final knobExpr:Expr = {expr: EField(macro opt, knobName ?? 'leftCurly'), pos: Context.currentPos()};
 		final nextPat:Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BracePlacement', 'Next']);
+		// Knob-form `@:fmt(leftCurly('<knob>'))` (e.g. on `HxObjectLit.fields`)
+		// fires from a first-field Star whose outer caller already emits
+		// the inter-token space via the lead's `_dop(' ')` (OptSpace). The
+		// `Same` branch therefore returns `_de()` — the OptSpace flushes
+		// as ' ' on its own. The `Next` branch emits a hardline; the
+		// renderer drops the pending OptSpace and writes `\n` cleanly.
+		//
+		// Bare flag `@:fmt(leftCurly)` (e.g. on `HxClassDecl.members`)
+		// fires from a non-first-field Star where the previous field has
+		// no trailing whitespace, so the separator must own the space
+		// directly: `Same` → `_dt(' ')`, `Next` → `_dhl()`. This is the
+		// pre-slice behaviour.
+		final defaultExpr:Expr = knobName != null ? macro _de() : macro _dt(' ');
 		final cases:Array<Case> = [
 			{values: [nextPat], expr: macro _dhl(), guard: null},
 		];
-		return {expr: ESwitch(macro opt.leftCurly, cases, macro _dt(' ')), pos: Context.currentPos()};
+		return {expr: ESwitch(knobExpr, cases, defaultExpr), pos: Context.currentPos()};
 	}
 
 	/**
@@ -2235,10 +2273,16 @@ class WriterLowering {
 		final beforePat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Before']));
 		final afterPat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['After']));
 		final bothPat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
+		// Trailing whitespace after the lead is emitted as `_dop(' ')`
+		// (OptSpace) so the renderer can drop it when the value emits a
+		// leading hardline — e.g. `Address: {…}` with `leftCurly=Next`
+		// on the nested object literal renders as `Address:\n{…}`. The
+		// leading space (Before / Both case) stays a plain `_dt(' ')`
+		// because nothing emits a hardline before the lead.
 		final cases:Array<Case> = [
-			{values: [beforePat], expr: macro _dt($v{' ' + leadText}), guard: null},
-			{values: [afterPat], expr: macro _dt($v{leadText + ' '}), guard: null},
-			{values: [bothPat], expr: macro _dt($v{' ' + leadText + ' '}), guard: null},
+			{values: [beforePat], expr: macro _dc([_dt(' '), _dt($v{leadText})]), guard: null},
+			{values: [afterPat], expr: macro _dc([_dt($v{leadText}), _dop(' ')]), guard: null},
+			{values: [bothPat], expr: macro _dc([_dt(' '), _dt($v{leadText}), _dop(' ')]), guard: null},
 		];
 		final optAccess:Expr = {expr: EField(macro opt, flagName), pos: Context.currentPos()};
 		return {expr: ESwitch(optAccess, cases, macro _dt($v{leadText})), pos: Context.currentPos()};

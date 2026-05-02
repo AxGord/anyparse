@@ -252,6 +252,7 @@ class WriterCodegen {
 	private static function docHelperFields():Array<Field> {
 		return [
 			docHelper('_dt', [{name: 's', type: macro : String}], macro anyparse.core.Doc.Text(s)),
+			docHelper('_dop', [{name: 's', type: macro : String}], macro anyparse.core.Doc.OptSpace(s)),
 			docHelper('_dc', [{name: 'items', type: macro : Array<anyparse.core.Doc>}], macro anyparse.core.Doc.Concat(items)),
 			docHelper('_dn', [{name: 'n', type: macro : Int}, {name: 'inner', type: macro : anyparse.core.Doc}], macro anyparse.core.Doc.Nest(n, inner)),
 			docHelper('_dg', [{name: 'inner', type: macro : anyparse.core.Doc}], macro anyparse.core.Doc.Group(inner)),

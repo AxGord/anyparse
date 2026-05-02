@@ -110,6 +110,13 @@ class WrapList {
 						stack.push(items[k]);
 						if (k > 0) stack.push(sep);
 					}
+				case OptSpace(s):
+					// OptSpace contributes its length to flat measurement
+					// (mirrors `Renderer.fitsFlat`): in a flat layout the
+					// optional trailing space always renders, only break
+					// mode discards it. Wrap-rules-cascade measurements
+					// must therefore include it.
+					total += s.length;
 			}
 		}
 		return total;

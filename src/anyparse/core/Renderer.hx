@@ -97,6 +97,19 @@ class Renderer {
 		final stack:Array<Frame> = [new Frame(0, MBreak, doc)];
 		var col:Int = 0;
 		var pendingIndent:Int = -1;
+		var pendingOptSpace:Null<String> = null;
+
+		inline function flushOptSpace():Void {
+			if (pendingOptSpace != null) {
+				if (pendingIndent >= 0) {
+					writeIndent(buf, pendingIndent, indentChar, tabWidth);
+					pendingIndent = -1;
+				}
+				buf.add(pendingOptSpace);
+				col += pendingOptSpace.length;
+				pendingOptSpace = null;
+			}
+		}
 
 		while (stack.length > 0) {
 			final f:Frame = stack.pop();
@@ -117,14 +130,18 @@ class Renderer {
 				case Empty:
 					// nothing
 				case Text(s):
-					if (s.length > 0 && pendingIndent >= 0) {
-						writeIndent(buf, pendingIndent, indentChar, tabWidth);
-						pendingIndent = -1;
+					if (s.length > 0) {
+						flushOptSpace();
+						if (pendingIndent >= 0) {
+							writeIndent(buf, pendingIndent, indentChar, tabWidth);
+							pendingIndent = -1;
+						}
+						buf.add(s);
+						col += s.length;
 					}
-					buf.add(s);
-					col += s.length;
 				case Line(flat):
 					if (f.mode == MFlat) {
+						flushOptSpace();
 						if (flat.length > 0 && pendingIndent >= 0) {
 							writeIndent(buf, pendingIndent, indentChar, tabWidth);
 							pendingIndent = -1;
@@ -132,12 +149,23 @@ class Renderer {
 						buf.add(flat);
 						col += flat.length;
 					} else {
+						// Break-mode hardline: drop pending OptSpace so the
+						// lead's optional trailing space disappears before
+						// the newline (no `var x = \n{...}` artifact).
+						pendingOptSpace = null;
 						if (trailingWhitespace && pendingIndent >= 0) {
 							writeIndent(buf, pendingIndent, indentChar, tabWidth);
 						}
 						buf.add(lineEnd);
 						pendingIndent = f.indent;
 						col = f.indent;
+					}
+				case OptSpace(s):
+					// Defer; flushed by the next Text or in-flat Line, or
+					// dropped by the next break-mode Line. Multiple
+					// consecutive OptSpace nodes accumulate.
+					if (s.length > 0) {
+						pendingOptSpace = pendingOptSpace == null ? s : pendingOptSpace + s;
 					}
 				case Nest(n, inner):
 					// Indent only matters when observed (i.e. on a hardline
@@ -267,6 +295,12 @@ class Renderer {
 						local.push(new Frame(f.indent, MFlat, items[k]));
 						if (k > 0) local.push(new Frame(f.indent, MFlat, sep));
 					}
+				case OptSpace(s):
+					// In flat measurement, OptSpace contributes its length —
+					// flat layout always flushes the lead's optional trailing
+					// space (the suppression only happens at render time on
+					// break-mode `Line`).
+					budget -= s.length;
 			}
 		}
 

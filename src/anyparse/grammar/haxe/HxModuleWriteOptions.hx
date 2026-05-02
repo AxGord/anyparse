@@ -170,6 +170,19 @@ import anyparse.format.wrap.WrapRules;
  *    `Before` / `Both` collapse to `Next` for our output, and the
  *    inline `None` shape is not yet supported.
  *
+ * Field added in slice ω-objectlit-leftCurly:
+ *  - `objectLiteralLeftCurly` — per-construct `BracePlacement` knob
+ *    for `HxObjectLit.fields` (`@:fmt(leftCurly('objectLiteralLeftCurly'))`).
+ *    Mirrors haxe-formatter's `lineEnds.objectLiteralCurly.leftCurly`
+ *    sub-section. Default `Same` keeps object literal braces cuddled.
+ *    The loader maps `lineEnds.objectLiteralCurly.leftCurly` directly
+ *    to this knob and does NOT cascade from the global
+ *    `lineEnds.leftCurly` — diverging from haxe-formatter's cascade
+ *    because that path also gates on source-shape preservation
+ *    (`isOriginalSameLine(brOpen, brClose)`) which the anyparse writer
+ *    does not have. Users opt in to next-line object-literal braces
+ *    via `lineEnds.objectLiteralCurly.leftCurly` directly.
+ *
  * Field added in slice ψ₇ (object-literal colon spacing):
  *  - `objectFieldColon` — whitespace around the `:` inside an
  *    anonymous object literal (`HxObjectField.value`'s lead). `After`
@@ -736,6 +749,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	expressionCase:BodyPolicy,
 	functionBody:BodyPolicy,
 	leftCurly:BracePlacement,
+	objectLiteralLeftCurly:BracePlacement,
 	objectFieldColon:WhitespacePolicy,
 	typeHintColon:WhitespacePolicy,
 	typeCheckColon:WhitespacePolicy,
