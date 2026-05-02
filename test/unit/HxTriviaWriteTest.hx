@@ -141,6 +141,53 @@ class HxTriviaWriteTest extends Test {
 	}
 
 	/**
+	 * ω-trivia-after-trail — same-line `// comment` after `if (cond)`'s
+	 * trailing `)` (a Ref field's `@:trail` literal) must be preserved
+	 * cuddled to the `)` ahead of the `Next`-layout body. Reproduces
+	 * `issue_45_comment_breaks_indentation.hxtest`'s second byte-diff
+	 * mechanism: pre-slice the comment was silently dropped because
+	 * `parseHxStatement` swallowed it as leading trivia of the bare-Ref
+	 * `thenBody` and the writer had no slot to re-emit it from.
+	 */
+	public function testSameLineCommentAfterIfCondRoundTrip():Void {
+		final source:String =
+			'class Foo {\n'
+			+ '\tfunction bar() {\n'
+			+ '\t\tif (cond) // afterCond\n'
+			+ '\t\t\tresize(1);\n'
+			+ '\t}\n'
+			+ '}';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out:String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals(source + '\n', out);
+	}
+
+	/**
+	 * ω-trivia-after-kw-next-layout — same-line `// comment` after `else`
+	 * (the optional-kw commit point) must be preserved cuddled to the
+	 * keyword when the body's `bodyPolicy` resolves to `Next` (haxe-
+	 * formatter default for `elseBody`). Reproduces
+	 * `issue_45_comment_breaks_indentation.hxtest`'s third byte-diff
+	 * mechanism: pre-slice the captured `_afterKw_elseBody` slot only fed
+	 * the Same-layout's `kwGapDoc`, so the Next-layout `_dn(_cols, [_dhl,
+	 * body])` silently dropped the comment.
+	 */
+	public function testSameLineCommentAfterElseNonBlockRoundTrip():Void {
+		final source:String =
+			'class Foo {\n'
+			+ '\tfunction bar() {\n'
+			+ '\t\tif (cond)\n'
+			+ '\t\t\ta();\n'
+			+ '\t\telse // afterElse\n'
+			+ '\t\t\tb();\n'
+			+ '\t}\n'
+			+ '}';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out:String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals(source + '\n', out);
+	}
+
+	/**
 	 * ω-issue-316b — own-line comment between `else` and the block's
 	 * `{` is preserved at the body's interior indent on output, while
 	 * the `{` drops back to the outer (body's exterior) indent.

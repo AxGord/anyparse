@@ -74,6 +74,14 @@ class WriterCodegen {
 			// indent, closing with a hardline so the body's outer brace
 			// lands at the parent's indent level.
 			fields.push(kwGapDocField());
+			// ω-trivia-after-kw-next-layout: renders the kw→body gap on
+			// the Next-layout side of `bodyPolicyWrap`. Mirror of
+			// `kwGapDoc` (Same-layout) but pre-puts the body inside a
+			// `Nest(cols, …)` and threads any captured `kwLeading` comments
+			// at the body's interior indent. Empty slots degrade to the
+			// pre-slice `Nest(cols, [hardline, body])` shape — fixtures
+			// without kw-trivia stay byte-identical.
+			fields.push(nextLayoutKwGapDocField());
 			// ω-trivia-before-kw: renders the gap between the preceding token
 			// and a `@:optional @:kw` keyword. Returns the caller's plain
 			// separator when no comments captured; otherwise emits each
@@ -809,6 +817,54 @@ class WriterCodegen {
 					{name: 'kwLeading', type: macro : Array<String>},
 					{name: 'cols', type: macro : Int},
 					{name: 'nextCurly', type: macro : Bool},
+					{name: 'opt', type: macro : anyparse.format.WriteOptions},
+				],
+				ret: macro : anyparse.core.Doc,
+				expr: body,
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * ω-trivia-after-kw-next-layout — render the kw→body gap on the
+	 * `bodyPolicyWrap` Next-layout path for `@:optional @:kw(...)` Ref
+	 * fields in Trivia mode. Mirror of `kwGapDoc` (which serves the
+	 * Same-layout side); the difference is that here the body MUST land
+	 * one indent deeper at the next line regardless of whether trivia
+	 * was captured. The body always lands inside `Nest(cols, …)` so it
+	 * sits at the parent's indent + cols.
+	 *
+	 *  - Both slots empty → `Nest(cols, [hardline, body])` (byte-
+	 *    identical to the pre-slice nextLayoutExpr).
+	 *  - `afterKw != null` → ` //<afterKw>` cuddled to the kw OUTSIDE
+	 *    the Nest, then `Nest(cols, [hardline, body])`.
+	 *  - `kwLeading` non-empty → each leading comment on its own line
+	 *    at the body's interior indent (inside the Nest), separated by
+	 *    hardlines, then the body at the same interior indent.
+	 *  - Both populated → afterKw first (sameline cuddle), then the
+	 *    nested leadings + body block.
+	 */
+	private static function nextLayoutKwGapDocField():Field {
+		final body:Expr = macro {
+			final _innerParts:Array<anyparse.core.Doc> = [_dhl()];
+			for (_c in kwLeading) {
+				_innerParts.push(leadingCommentDoc(_c, opt));
+				_innerParts.push(_dhl());
+			}
+			_innerParts.push(bodyDoc);
+			final _nested:anyparse.core.Doc = _dn(cols, _dc(_innerParts));
+			return afterKw == null ? _nested : _dc([trailingCommentDoc(afterKw, opt), _nested]);
+		};
+		return {
+			name: 'nextLayoutKwGapDoc',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [
+					{name: 'afterKw', type: macro : Null<String>},
+					{name: 'kwLeading', type: macro : Array<String>},
+					{name: 'cols', type: macro : Int},
+					{name: 'bodyDoc', type: macro : anyparse.core.Doc},
 					{name: 'opt', type: macro : anyparse.format.WriteOptions},
 				],
 				ret: macro : anyparse.core.Doc,

@@ -105,6 +105,18 @@ class TriviaTypeSynth {
 	public static inline final BEFORE_KW_TRAILING_SUFFIX:String = 'BeforeKwTrailing';
 
 	/**
+	 * ω-trivia-after-trail — same-line trailing comment captured immediately
+	 * AFTER a mandatory Ref field's `@:trail(LIT)` literal (e.g.
+	 * `if (cond) // afterCond\n\tbody` — the `// afterCond` cuddles to the
+	 * `)`). Synthesised on Ref fields carrying `@:trail` in trivia-bearing
+	 * rules. The next sibling field (typically a bodyPolicy-wrapped Ref)
+	 * reads `value.<priorField>AfterTrail` and threads it into the body's
+	 * leading separator so the comment survives round-trip. `null` when the
+	 * source had no same-line comment after the trail literal.
+	 */
+	public static inline final AFTER_TRAIL_SUFFIX:String = 'AfterTrail';
+
+	/**
 	 * ω-issue-48-v2 — source-shape slot synthesised on paired Seq types
 	 * alongside bare non-first Ref fields (no `@:optional`, no `@:kw`, no
 	 * `@:lead`). Records whether the source had a newline in the gap
@@ -246,6 +258,16 @@ class TriviaTypeSynth {
 					// writer's inter-field separator.
 					if (isBareNonFirstRef(child, origNode))
 						fields.push(buildBeforeNewlineSlot(child, pos));
+					// ω-trivia-after-trail: any mandatory Ref field with
+					// `@:trail` grows a `<field>AfterTrail:Null<String>` slot
+					// holding a same-line `// comment` captured right after
+					// the trail literal. Currently consumed by the next
+					// sibling's `bodyPolicyWrap` (HxIfStmt's `cond` →
+					// `thenBody`); other Ref+trail fields without a
+					// bodyPolicy sibling synthesise the slot harmlessly and
+					// can opt in later.
+					if (isTrailRef(child))
+						fields.push(buildAfterTrailSlot(child, pos));
 				}
 				final anon:ComplexType = TAnonymous(fields);
 				{pos: pos, pack: synthPack, name: pairedSimple, kind: TDAlias(anon), fields: []};
@@ -285,6 +307,27 @@ class TriviaTypeSynth {
 		final fieldName:String = child.annotations.get('base.fieldName');
 		final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
 		return {name: fieldName + BEFORE_NEWLINE_SUFFIX, kind: FVar(boolCT), pos: pos, access: []};
+	}
+
+	/**
+	 * True for mandatory Ref fields carrying `@:trail(LIT)`. Reads
+	 * `@:trail` from `base.meta` directly (TriviaTypeSynth.arm runs
+	 * BEFORE the Lit strategy populates `lit.trailText`, same ordering
+	 * constraint as `isOptionalKwRef` / star-trailing predicates).
+	 * Optional Refs are excluded — their `@:trail` lives inside the peek
+	 * branch and is structurally different.
+	 */
+	private static function isTrailRef(child:ShapeNode):Bool {
+		if (child.kind != Ref) return false;
+		if (child.annotations.get('base.optional') == true) return false;
+		return child.readMetaString(':trail') != null;
+	}
+
+	private static function buildAfterTrailSlot(child:ShapeNode, pos:Position):Field {
+		final fieldName:String = child.annotations.get('base.fieldName');
+		final strCT:ComplexType = TPath({pack: [], name: 'String', params: []});
+		final nullStrCT:ComplexType = TPath({pack: [], name: 'Null', params: [TPType(strCT)]});
+		return {name: fieldName + AFTER_TRAIL_SUFFIX, kind: FVar(nullStrCT), pos: pos, access: []};
 	}
 
 	private static function buildKwTriviaSlots(child:ShapeNode, pos:Position):Array<Field> {

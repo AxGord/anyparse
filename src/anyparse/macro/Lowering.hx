@@ -1505,11 +1505,35 @@ class Lowering {
 			// Also skipped for optional fields — a trail on an optional
 			// should live inside the peek branch, which is not supported in
 			// this session (the grammar has no such case yet).
+			final hasAfterTrailSlot:Bool = child.kind == Ref && !isStar && !isOptional && trailText != null
+				&& ctx.trivia && isTriviaBearing(typePath);
+			final afterTrailLocal:String = '_afterTrail_$fieldName';
 			if (!isStar && !isOptional && trailText != null) {
 				parseSteps.push(macro skipWs(ctx));
 				parseSteps.push(macro expectLit(ctx, $v{trailText}));
+				// ω-trivia-after-trail: in trivia-bearing rules, capture a
+				// same-line `// comment` after the trail literal into a
+				// sidecar local — pushed to the synth pair as
+				// `<field>AfterTrail:Null<String>` for the next sibling's
+				// `bodyPolicyWrap` to thread before its body emission.
+				// `collectTrailing` returns null when no same-line comment
+				// is present and does not consume any whitespace beyond
+				// the optional space + `//<body>` match.
+				if (hasAfterTrailSlot) {
+					parseSteps.push({
+						expr: EVars([{
+							name: afterTrailLocal,
+							type: (macro : Null<String>),
+							expr: macro collectTrailing(ctx),
+							isFinal: true,
+						}]),
+						pos: Context.currentPos(),
+					});
+				}
 			}
 			structFields.push({field: fieldName, expr: macro $i{localName}});
+			if (hasAfterTrailSlot)
+				structFields.push({field: fieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX, expr: macro $i{afterTrailLocal}});
 			if (hasBeforeNewlineSlot)
 				structFields.push({field: fieldName + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX, expr: macro $i{beforeNlLocal}});
 			if (hasKwTriviaSlots) {

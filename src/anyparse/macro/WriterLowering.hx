@@ -714,6 +714,16 @@ class WriterLowering {
 		// override emits `_de()` instead. Reset on Star to avoid carrying
 		// across non-Ref siblings.
 		var prevBareRefBody:Null<PrevBodyInfo> = null;
+		// ω-trivia-after-trail: tracks the field name of the immediately
+		// preceding mandatory Ref that carried `@:trail` in trivia-bearing
+		// mode. The next sibling's `bodyPolicyWrap` reads
+		// `value.<prevTrailFieldName>AfterTrail:Null<String>` and threads
+		// the captured same-line comment before the body's leading
+		// separator. Reset to null on any non-Ref-with-trail sibling so
+		// the slot is not carried across an intervening field that would
+		// itself terminate the visual gap. Plain mode and non-bearing
+		// rules leave this null — the synth slot does not exist there.
+		var prevTrailFieldName:Null<String> = null;
 		// ψ₁₂: captures the name of the first `@:optional` sibling that
 		// carries `@:fmt(bodyPolicy(...))` — consumed by children tagged
 		// `@:fmt(fitLineIfWithElse)` to wire a runtime sibling-presence
@@ -779,6 +789,7 @@ class WriterLowering {
 					});
 					prevAnyStarNonEmpty = null;
 					prevBodyField = null;
+					prevTrailFieldName = null;
 					isFirstField = false;
 					continue;
 				}
@@ -824,6 +835,7 @@ class WriterLowering {
 					prevAnyStarNonEmpty = null;
 				}
 				prevBodyField = null;
+				prevTrailFieldName = null;
 				isFirstField = false;
 				continue;
 			}
@@ -1009,7 +1021,21 @@ class WriterLowering {
 						// is responsible for stripping its kw-trail-space (as
 						// before).
 						final kwPolicyFlag:Null<String> = child.fmtReadString('kwPolicy');
-						parts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, fieldAccess, refName, hasElseIf, elseFieldName, null, null, null, kwPolicyFlag));
+						// ω-trivia-after-trail: when the IMMEDIATELY preceding
+						// sibling is a mandatory Ref carrying `@:trail` in
+						// trivia-bearing mode, read its synth slot
+						// `value.<priorField>AfterTrail:Null<String>` and
+						// thread it into `bodyPolicyWrap`. The wrap prepends
+						// ` //<comment>` (cuddled to the prior trail token) +
+						// forces the body onto its own line at +cols indent
+						// regardless of the runtime bodyPolicy. Currently
+						// fired by `HxIfStmt.thenBody` after `cond`'s `)`
+						// trail. Plain mode and non-bearing rules see a null
+						// `prevTrailFieldName` and skip the threading.
+						final afterTrailExpr:Null<Expr> = prevTrailFieldName == null
+							? null
+							: {expr: EField(macro value, prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX), pos: Context.currentPos()};
+						parts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, fieldAccess, refName, hasElseIf, elseFieldName, null, null, null, kwPolicyFlag, afterTrailExpr));
 						justWrappedBody = {access: fieldAccess, typePath: refName};
 					} else {
 						// `@:fmt(leftCurly)` on a bare Ref field (e.g.
@@ -1141,6 +1167,16 @@ class WriterLowering {
 			// so non-Star non-bearing fields just fall through with the
 			// stale value cleared in the next loop iteration's bare-Ref
 			// branch (which always assigns) or via the Star reset.
+			// ω-trivia-after-trail: a mandatory Ref with `@:trail` in
+			// trivia-bearing mode publishes its name so the NEXT field's
+			// `bodyPolicyWrap` can read `value.<name>AfterTrail`. Other
+			// field shapes (Star, optional, no-trail, plain mode, non-
+			// bearing rule) clear the signal so downstream emission does
+			// not reference a synth slot that was never populated.
+			prevTrailFieldName = (!isOptional && !isStar && trailText != null
+				&& ctx.trivia && isTriviaBearing(typePath))
+					? fieldName
+					: null;
 			isFirstField = false;
 		}
 
@@ -2511,7 +2547,7 @@ class WriterLowering {
 	private function bodyPolicyWrap(
 		flagName:String, writeCall:Expr, bodyValueExpr:Expr, bodyTypePath:String, hasElseIf:Bool,
 		elseFieldName:Null<String>, ?afterKwExpr:Null<Expr>, ?kwLeadingExpr:Null<Expr>,
-		?bodyOnSameLineExpr:Null<Expr>, ?kwPolicyFlagName:Null<String>
+		?bodyOnSameLineExpr:Null<Expr>, ?kwPolicyFlagName:Null<String>, ?afterTrailExpr:Null<Expr>
 	):Expr {
 		final optFlag:Expr = {
 			expr: EField(macro opt, flagName),
@@ -2555,7 +2591,20 @@ class WriterLowering {
 			? macro kwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, false, opt)
 			: kwPolicyInlineSep ?? macro _dt(' ');
 		final sameLayoutExpr:Expr = macro _dc([$sameSepNb, $writeCall]);
-		final nextLayoutExpr:Expr = macro _dn(_cols, _dc([_dhl(), $writeCall]));
+		// ω-trivia-after-kw-next-layout (bug #3 of issue_45): when the
+		// caller forwarded kw-trivia slot accesses, the Next-layout body
+		// also threads `afterKw` (cuddled to the kw, before the hardline)
+		// and `kwLeading` (own-line comments at body indent inside the
+		// Nest). Without this, default-Next non-block bodies like
+		// `else // c\n\tbody` silently drop the `// c` because the
+		// kw-trivia slots only fed the Same-layout's `kwGapDoc`. The
+		// runtime helper `nextLayoutKwGapDoc` builds the threaded shape;
+		// when both slots are empty it degrades to the pre-slice
+		// `_dn(_cols, [_dhl(), body])` shape so existing fixtures stay
+		// byte-identical.
+		final nextLayoutExpr:Expr = hasKwSlots
+			? macro nextLayoutKwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, $writeCall, opt)
+			: macro _dn(_cols, _dc([_dhl(), $writeCall]));
 		// ω-issue-316-curly-both: block-ctor variant — when the body's
 		// writeCall opens with `{`, the separator before it must honour
 		// `opt.leftCurly`. For kw-slot sites, threaded through
@@ -2670,7 +2719,28 @@ class WriterLowering {
 		final outerKeepCases:Array<Case> = [
 			{values: [keepPat], expr: keepLayoutExpr, guard: null},
 		];
-		final wrapExpr:Expr = {expr: ESwitch(optFlag, outerKeepCases, bodySwitch), pos: Context.currentPos()};
+		final coreWrapExpr:Expr = {expr: ESwitch(optFlag, outerKeepCases, bodySwitch), pos: Context.currentPos()};
+		// ω-trivia-after-trail: when a synth slot access was forwarded
+		// from `lowerStruct` (i.e. the IMMEDIATELY preceding sibling was
+		// a mandatory Ref with `@:trail` in trivia-bearing mode), runtime-
+		// gate the whole wrap on the slot's value. Non-null slot →
+		// override every layout (Same / Next / FitLine / block / elseIf)
+		// with a forced Next-layout that prepends ` //<comment>` cuddled
+		// to the prior trail token. The line comment forces a hardline
+		// regardless of the policy axis, so the body lands at +cols
+		// indent on the next line — matching haxe-formatter's
+		// `if (cond) // comment\n\tbody` shape. Null slot → run the
+		// pre-slice wrap unchanged. The ternary evaluates `$writeCall`
+		// only on its taken branch, mirroring how the policy switch
+		// already evaluates a single layout per call.
+		final wrapExpr:Expr = if (afterTrailExpr == null) coreWrapExpr
+		else {
+			final forcedLayout:Expr = macro _dc([
+				trailingCommentDoc($afterTrailExpr, opt),
+				_dn(_cols, _dc([_dhl(), $writeCall])),
+			]);
+			macro $afterTrailExpr != null ? $forcedLayout : $coreWrapExpr;
+		};
 
 		return macro {
 			final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
