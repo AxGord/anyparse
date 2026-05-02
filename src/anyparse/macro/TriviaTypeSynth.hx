@@ -5,6 +5,8 @@ import anyparse.core.ShapeTree;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 
+using anyparse.macro.MetaInspect;
+
 /**
  * ω₄c — Atomic synthesis of paired `*T` typedefs / enums for
  * trivia-bearing grammar rules.
@@ -243,15 +245,15 @@ class TriviaTypeSynth {
 	private static function isOptionalKwRef(child:ShapeNode):Bool {
 		if (child.kind != Ref) return false;
 		if (child.annotations.get('base.optional') != true) return false;
-		return readMetaString(child, ':kw') != null;
+		return child.readMetaString(':kw') != null;
 	}
 
 	private static function isBareNonFirstRef(child:ShapeNode, parent:ShapeNode):Bool {
 		if (child.kind != Ref) return false;
 		if (child.annotations.get('base.optional') == true) return false;
 		if (child == parent.children[0]) return false;
-		if (readMetaString(child, ':kw') != null) return false;
-		if (readMetaString(child, ':lead') != null) return false;
+		if (child.readMetaString(':kw') != null) return false;
+		if (child.readMetaString(':lead') != null) return false;
 		return true;
 	}
 
@@ -309,7 +311,7 @@ class TriviaTypeSynth {
 		// WriterLowering reference it), so at this point the Lit pass has
 		// not yet populated `lit.trailText`. Mirrors `isOptionalKwRef`'s
 		// direct-meta read pattern.
-		if (readMetaString(child, ':trail') != null) {
+		if (child.readMetaString(':trail') != null) {
 			final nullStrCT:ComplexType = TPath({pack: [], name: 'Null', params: [TPType(strCT)]});
 			fields.push({name: fieldName + TRAILING_CLOSE_SUFFIX, kind: FVar(nullStrCT), pos: pos, access: []});
 		}
@@ -323,7 +325,7 @@ class TriviaTypeSynth {
 		// so capturing one would silently drop the comment at write time.
 		// `HxDefaultBranch.stmts` (`@:lead(':') @:trivia @:tryparse`) is
 		// the lone current consumer of this gate.
-		if (readMetaString(child, ':lead') != null && !hasMeta(child, ':tryparse')) {
+		if (child.readMetaString(':lead') != null && !child.hasMeta(':tryparse')) {
 			final nullStrCT:ComplexType = TPath({pack: [], name: 'Null', params: [TPType(strCT)]});
 			fields.push({name: fieldName + TRAILING_OPEN_SUFFIX, kind: FVar(nullStrCT), pos: pos, access: []});
 		}
@@ -334,51 +336,10 @@ class TriviaTypeSynth {
 		// stash) or have no nestBody indent wrap. Reads `:fmt` directly from
 		// `base.meta` for the same TriviaTypeSynth/Lit-pass ordering reason
 		// as `:trail` / `:lead` above.
-		if (hasMeta(child, ':tryparse') && fmtHasFlag(child, 'nestBody')) {
+		if (child.hasMeta(':tryparse') && child.fmtHasFlag('nestBody')) {
 			fields.push({name: fieldName + TRAILING_BLANK_AFTER_SUFFIX, kind: FVar(boolCT), pos: pos, access: []});
 		}
 		return fields;
-	}
-
-	/**
-	 * Synth-side mirror of `Lowering.fmtHasFlag` / `WriterLowering.fmtHasFlag`.
-	 * Returns true when the node carries `@:fmt(...)` and one of the args
-	 * matches `name` either as a bare identifier (`@:fmt(nestBody)`) or as
-	 * the callee of a knob-form `ECall` (`@:fmt(bodyPolicy('foo'))`). Reads
-	 * directly from `base.meta` because `TriviaTypeSynth.arm` runs before
-	 * the Lit pass populates derived `fmt.*` annotations.
-	 */
-	private static function fmtHasFlag(node:ShapeNode, name:String):Bool {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
-		if (meta == null) return false;
-		for (entry in meta) if (entry.name == ':fmt') {
-			for (param in entry.params) switch param.expr {
-				case EConst(CIdent(id)) if (id == name): return true;
-				case ECall({expr: EConst(CIdent(id))}, _) if (id == name): return true;
-				case _:
-			}
-		}
-		return false;
-	}
-
-	private static function hasMeta(node:ShapeNode, tag:String):Bool {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
-		if (meta == null) return false;
-		for (entry in meta) if (entry.name == tag) return true;
-		return false;
-	}
-
-	private static function readMetaString(node:ShapeNode, tag:String):Null<String> {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
-		if (meta == null) return null;
-		for (entry in meta) if (entry.name == tag) {
-			if (entry.params.length != 1) return null;
-			return switch entry.params[0].expr {
-				case EConst(CString(s, _)): s;
-				case _: null;
-			};
-		}
-		return null;
 	}
 
 	private static function buildEnumCtor(branch:ShapeNode, pos:Position, synthPack:Array<String>):Field {
@@ -426,7 +387,7 @@ class TriviaTypeSynth {
 		final star:ShapeNode = branch.children[0];
 		if (star.kind != Star) return false;
 		if (star.annotations.get('trivia.starCollects') != true) return false;
-		return readMetaString(branch, ':trail') != null;
+		return branch.readMetaString(':trail') != null;
 	}
 
 	/**
@@ -443,7 +404,7 @@ class TriviaTypeSynth {
 	public static function isAltTrailOptBranch(branch:ShapeNode):Bool {
 		if (branch.children.length != 1) return false;
 		if (branch.children[0].kind != Ref) return false;
-		return readMetaString(branch, ':trailOpt') != null;
+		return branch.readMetaString(':trailOpt') != null;
 	}
 
 	private static function shapeToComplexType(node:ShapeNode, synthPack:Array<String>):ComplexType {

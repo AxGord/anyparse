@@ -5,6 +5,8 @@ import haxe.macro.Context;
 import haxe.macro.Expr;
 import anyparse.core.ShapeTree;
 
+using anyparse.macro.MetaInspect;
+
 /**
  * Pass 3W for binary formats — writer lowering.
  *
@@ -82,7 +84,7 @@ class BinaryWriterLowering {
 				emitLengthPrefix(lenPrefix.width, lenPrefix.encoding, fieldAccess, steps);
 
 			// @:lead — constant prefix literal.
-			final leadText:Null<String> = readMetaString(child, ':lead');
+			final leadText:Null<String> = child.readMetaString(':lead');
 			if (leadText != null)
 				steps.push(macro output.writeString($v{leadText}));
 
@@ -99,7 +101,7 @@ class BinaryWriterLowering {
 			}
 
 			// @:trail — constant suffix literal.
-			final trailText:Null<String> = readMetaString(child, ':trail');
+			final trailText:Null<String> = child.readMetaString(':trail');
 			if (trailText != null)
 				steps.push(macro output.writeString($v{trailText}));
 		}
@@ -216,19 +218,6 @@ class BinaryWriterLowering {
 	}
 
 	// -------- helpers --------
-
-	private static function readMetaString(node:ShapeNode, tag:String):Null<String> {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
-		if (meta == null) return null;
-		for (entry in meta) if (entry.name == tag) {
-			if (entry.params.length != 1) return null;
-			return switch entry.params[0].expr {
-				case EConst(CString(s, _)): s;
-				case _: null;
-			};
-		}
-		return null;
-	}
 
 	private static function simpleName(typePath:String):String {
 		final idx:Int = typePath.lastIndexOf('.');

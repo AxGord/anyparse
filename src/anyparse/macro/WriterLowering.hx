@@ -7,6 +7,8 @@ import haxe.macro.MacroStringTools;
 import anyparse.core.LoweringCtx;
 import anyparse.core.ShapeTree;
 
+using anyparse.macro.MetaInspect;
+
 /**
  * Pass 3W of the macro pipeline — writer lowering.
  *
@@ -238,7 +240,7 @@ class WriterLowering {
 			// idiomatic shape — the policy is grammar-level (per-operator),
 			// not format-level, because tightness is a property of the
 			// specific operator literal, not the language as a whole.
-			final isTight:Bool = fmtHasFlag(branch, 'tight');
+			final isTight:Bool = branch.fmtHasFlag('tight');
 			final opWithSpaces:String = isTight ? opText : ' ' + opText + ' ';
 			// Asymmetric infix mirror of Lowering.lowerPrattLoop: when the
 			// right child references a different enum (e.g. `Is(left:HxExpr,
@@ -334,7 +336,7 @@ class WriterLowering {
 			// `bodyPolicy` flag lives on a field of `HxIfStmt`); this new
 			// path covers the direct-Ref case where no wrapper struct hosts
 			// the field.
-			final ctorBodyPolicyFlag:Null<String> = fmtReadString(branch, 'bodyPolicy');
+			final ctorBodyPolicyFlag:Null<String> = branch.fmtReadString('bodyPolicy');
 			final bodyExpr:Expr = ctorBodyPolicyFlag != null
 				? bodyPolicyWrap(ctorBodyPolicyFlag, subCall, macro $i{argNames[0]}, refName, false, null)
 				: subCall;
@@ -477,9 +479,9 @@ class WriterLowering {
 		// engine. `@:fmt(fill)` / `@:fmt(fillDoubleIndent)` remain orthogonal
 		// for postfix-Star sites that opt into Wadler fillSep without a
 		// per-construct cascade.
-		final wrapRulesField:Null<String> = fmtReadString(branch, 'wrapRules');
-		final useFill:Bool = fmtHasFlag(branch, 'fill');
-		final fillDouble:Bool = fmtHasFlag(branch, 'fillDoubleIndent');
+		final wrapRulesField:Null<String> = branch.fmtReadString('wrapRules');
+		final useFill:Bool = branch.fmtHasFlag('fill');
+		final fillDouble:Bool = branch.fmtHasFlag('fillDoubleIndent');
 		final sepListCall:Expr = if (wrapRulesField != null) {
 			final rulesExpr:Expr = {
 				expr: EField(macro opt, wrapRulesField),
@@ -609,7 +611,7 @@ class WriterLowering {
 	// -------- struct rule --------
 
 	private function lowerStruct(node:ShapeNode, typePath:String):Expr {
-		final isRaw:Bool = hasMeta(node, ':raw');
+		final isRaw:Bool = node.hasMeta(':raw');
 		final parts:Array<Expr> = [];
 		var isFirstField:Bool = true;
 		// Tracks a cumulative bool expr: `true` when ANY preceding
@@ -656,7 +658,7 @@ class WriterLowering {
 		// pick one — no such grammar exists today, and a future case
 		// can disambiguate via an explicit arg on `@:fmt(fitLineIfWithElse)`.
 		var optionalBodyFieldName:Null<String> = null;
-		for (c in node.children) if (c.annotations.get('base.optional') == true && fmtReadString(c, 'bodyPolicy') != null) {
+		for (c in node.children) if (c.annotations.get('base.optional') == true && c.fmtReadString('bodyPolicy') != null) {
 			optionalBodyFieldName = c.annotations.get('base.fieldName');
 			break;
 		}
@@ -669,12 +671,12 @@ class WriterLowering {
 			// field doesn't leak the value set two iterations back.
 			final stalePrevBareRefBody:Null<PrevBodyInfo> = prevBareRefBody;
 			prevBareRefBody = null;
-			final kwLead:Null<String> = readMetaString(child, ':kw');
-			final leadText:Null<String> = readMetaString(child, ':lead');
-			final trailText:Null<String> = readMetaString(child, ':trail');
+			final kwLead:Null<String> = child.readMetaString(':kw');
+			final leadText:Null<String> = child.readMetaString(':lead');
+			final trailText:Null<String> = child.readMetaString(':trail');
 			final isStar:Bool = child.kind == Star;
 			final isOptional:Bool = child.annotations.get('base.optional') == true;
-			final hasElseIf:Bool = fmtHasFlag(child, 'elseIf');
+			final hasElseIf:Bool = child.fmtHasFlag('elseIf');
 
 			final fieldAccess:Expr = {
 				expr: EField(macro value, fieldName),
@@ -776,8 +778,8 @@ class WriterLowering {
 				parts.push(whitespacePolicyLead(child, leadText, ['objectFieldColon', 'typeHintColon', 'typeCheckColon', 'typedefAssign', 'functionTypeHaxe4', 'arrowFunctions']));
 
 			// Field value
-			final bodyPolicyFlag:Null<String> = fmtReadString(child, 'bodyPolicy');
-			final elseFieldName:Null<String> = fmtHasFlag(child, 'fitLineIfWithElse') ? optionalBodyFieldName : null;
+			final bodyPolicyFlag:Null<String> = child.fmtReadString('bodyPolicy');
+			final elseFieldName:Null<String> = child.fmtHasFlag('fitLineIfWithElse') ? optionalBodyFieldName : null;
 			var justWrappedBody:Null<PrevBodyInfo> = null;
 			switch child.kind {
 				case Ref if (isOptional):
@@ -898,7 +900,7 @@ class WriterLowering {
 						// the wrap defaults to `_dt(' ')` and the parent ctor
 						// is responsible for stripping its kw-trail-space (as
 						// before).
-						final kwPolicyFlag:Null<String> = fmtReadString(child, 'kwPolicy');
+						final kwPolicyFlag:Null<String> = child.fmtReadString('kwPolicy');
 						parts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, fieldAccess, refName, hasElseIf, elseFieldName, null, null, null, kwPolicyFlag));
 						justWrappedBody = {access: fieldAccess, typePath: refName};
 					} else {
@@ -914,12 +916,12 @@ class WriterLowering {
 						// Detect the brace-bearing branch by `@:lead('{')`
 						// at macro time; gate emission on enum-ctor identity
 						// at runtime via `Type.enumConstructor`.
-						final lcSep:Null<Expr> = fmtHasFlag(child, 'leftCurly')
+						final lcSep:Null<Expr> = child.fmtHasFlag('leftCurly')
 							? leftCurlySeparator(child)
 							: null;
 						final lcCtor:Null<String> = lcSep == null ? null : leftCurlyTargetCtor(refName);
-						final bodyBreakFlag:Null<String> = fmtReadString(child, 'bodyBreak');
-						final bareBodyBreaksFlag:Bool = fmtHasFlag(child, 'bareBodyBreaks');
+						final bodyBreakFlag:Null<String> = child.fmtReadString('bodyBreak');
+						final bareBodyBreaksFlag:Bool = child.fmtHasFlag('bareBodyBreaks');
 						if (lcSep != null && lcCtor != null) {
 							// Sibling no-lead branches (e.g. `HxFnBody.ExprBody`) need a
 							// ` ` separator between the parent kw and the sub-rule's
@@ -958,7 +960,7 @@ class WriterLowering {
 							// sole separator) and by `HxCatchClauseExpr.body` (last
 							// field; replaces the fixed `_dt(' ')` between `)` and the
 							// catch body).
-							parts.push(bodyBreakWrap(bodyBreakFlag, writeCall, fieldAccess, refName, fmtHasFlag(child, 'blockBodyKeepsInline')));
+							parts.push(bodyBreakWrap(bodyBreakFlag, writeCall, fieldAccess, refName, child.fmtHasFlag('blockBodyKeepsInline')));
 						} else if (bareBodyBreaksFlag && kwLead == null && leadText == null && !isRaw) {
 							// ω-statement-bare-break: shape-only wrap — block body
 							// emits inline ` ` + body, bare body emits hardline +
@@ -1066,7 +1068,7 @@ class WriterLowering {
 		if (isTriviaStar) {
 			if (isRaw)
 				Context.fatalError('WriterLowering: @:trivia Star does not support @:raw', Context.currentPos());
-			if (sepText != null && (closeText == null || hasMeta(starNode, ':tryparse')))
+			if (sepText != null && (closeText == null || starNode.hasMeta(':tryparse')))
 				Context.fatalError('WriterLowering: @:trivia + @:sep requires close-peek (@:trail), not EOF/@:tryparse', Context.currentPos());
 			// ω-orphan-trivia / ω-close-trailing: Seq-struct call sites
 			// drive the trailing slots synthesised on the paired type.
@@ -1092,18 +1094,18 @@ class WriterLowering {
 			// `@:trail` gate; tryparse writer helper does not consume the
 			// slot, and the synth gate omits it for tryparse Stars — see
 			// `TriviaTypeSynth.buildStarTrailingSlots`).
-			final trailOpenAccess:Null<Expr> = fieldName == null || openText == null || hasMeta(starNode, ':tryparse')
+			final trailOpenAccess:Null<Expr> = fieldName == null || openText == null || starNode.hasMeta(':tryparse')
 				? null
 				: {expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_OPEN_SUFFIX), pos: Context.currentPos()};
 			// ω-trail-blank-after: synth slot is only present on tryparse +
 			// nestBody Stars. Forward null elsewhere so the slot access
 			// doesn't reference a non-existent field.
 			final trailBAAccess:Null<Expr> = fieldName == null
-					|| !hasMeta(starNode, ':tryparse')
-					|| !fmtHasFlag(starNode, 'nestBody')
+					|| !starNode.hasMeta(':tryparse')
+					|| !starNode.fmtHasFlag('nestBody')
 				? null
 				: {expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_BLANK_AFTER_SUFFIX), pos: Context.currentPos()};
-			if (hasMeta(starNode, ':tryparse')) {
+			if (starNode.hasMeta(':tryparse')) {
 				if (closeText != null)
 					Context.fatalError('WriterLowering: @:trivia + @:tryparse must not have @:trail', Context.currentPos());
 				// Non-last-field @:trivia @:tryparse is supported only when
@@ -1131,14 +1133,14 @@ class WriterLowering {
 				// with the preceding struct field. Non-sameLine Stars
 				// (case / default bodies) emit it only between elements,
 				// matching the plain-mode tryparse writer.
-				final sameLineName:Null<String> = fmtReadString(starNode, 'sameLine');
+				final sameLineName:Null<String> = starNode.fmtReadString('sameLine');
 				final sepExpr:Expr = if (sameLineName != null) {
 					final optFlag:Expr = {expr: EField(macro opt, sameLineName), pos: Context.currentPos()};
 					sameLinePolicySwitch(optFlag, macro _dt(' '));
 				} else {
 					macro _dt(' ');
 				};
-				final nestBody:Bool = fmtHasFlag(starNode, 'nestBody');
+				final nestBody:Bool = starNode.fmtHasFlag('nestBody');
 				// Trailing slots only carry orphan trivia when nestBody is
 				// on (parser gates capture on the same flag). For catches
 				// the slots remain zero — forward null to keep the writer
@@ -1176,8 +1178,8 @@ class WriterLowering {
 				// though the policy by itself would emit ` `. Block bodies
 				// stay under policy control (`sameLineCatch=Next` still
 				// breaks `} catch` to `}\ncatch`).
-				final blockShapeAware:Bool = fmtHasFlag(starNode, 'blockBodyKeepsInline');
-				final bareShapeAware:Bool = fmtHasFlag(starNode, 'bareBodyBreaks');
+				final blockShapeAware:Bool = starNode.fmtHasFlag('blockBodyKeepsInline');
+				final bareShapeAware:Bool = starNode.fmtHasFlag('bareBodyBreaks');
 				final shapeAware:Bool = blockShapeAware || bareShapeAware;
 				final blockPatterns:Array<Expr> = sameLineName != null && prevBareRefBody != null && shapeAware
 					? collectBlockCtorPatterns(prevBareRefBody.typePath)
@@ -1225,7 +1227,7 @@ class WriterLowering {
 				// `HxCaseBranch.body` and `HxDefaultBranch.stmts` to
 				// switch between `case X:\n\tstmt;` (Next) and
 				// `case X: stmt;` (Same / Keep+sameLine).
-				final caseBodyFlagNames:Array<String> = fmtReadStringArgs(starNode, 'bodyPolicy') ?? [];
+				final caseBodyFlagNames:Array<String> = starNode.fmtReadStringArgs('bodyPolicy') ?? [];
 				parts.push(triviaTryparseStarExpr(
 					fieldAccess, elemFn, sepExpr, sameLineName != null, nestBody,
 					tryparseTrailBB, tryparseTrailLC, tryparseTrailBA, firstSepOverride, subsequentSepOverride,
@@ -1249,7 +1251,7 @@ class WriterLowering {
 				// list cannot collapse to a single line regardless of
 				// what the cascade would say.
 				if (sepText != null) {
-					final wrapRulesField:Null<String> = fmtReadString(starNode, 'wrapRules');
+					final wrapRulesField:Null<String> = starNode.fmtReadString('wrapRules');
 					parts.push(triviaSepStarExpr(
 						fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn,
 						openText ?? '', closeText, sepText, wrapRulesField
@@ -1262,11 +1264,11 @@ class WriterLowering {
 				// itself contributes nothing at the open position. Empty
 				// string → `_dt('')` is a no-op, and `emptyText = '' +
 				// closeText` stays format-neutral (invariant #5).
-				final afterDocComments:Bool = fmtHasFlag(starNode, 'afterFieldsWithDocComments');
-				final keepBetweenFields:Bool = fmtHasFlag(starNode, 'existingBetweenFields');
-				final beforeDocComments:Bool = fmtHasFlag(starNode, 'beforeDocCommentEmptyLines');
-				final indentCaseLabelsGate:Bool = fmtHasFlag(starNode, 'indentCaseLabels');
-				final interMemberArgs:Null<Array<String>> = fmtReadStringArgs(starNode, 'interMemberBlankLines');
+				final afterDocComments:Bool = starNode.fmtHasFlag('afterFieldsWithDocComments');
+				final keepBetweenFields:Bool = starNode.fmtHasFlag('existingBetweenFields');
+				final beforeDocComments:Bool = starNode.fmtHasFlag('beforeDocCommentEmptyLines');
+				final indentCaseLabelsGate:Bool = starNode.fmtHasFlag('indentCaseLabels');
+				final interMemberArgs:Null<Array<String>> = starNode.fmtReadStringArgs('interMemberBlankLines');
 				final interMemberInfo:Null<InterMemberClassifyInfo> = interMemberArgs == null
 					? null
 					: buildInterMemberClassifyInfo(elemRefName, interMemberArgs);
@@ -1277,18 +1279,18 @@ class WriterLowering {
 				));
 			} else if (isLastField) {
 				if (openText != null) parts.push(macro _dt($v{openText}));
-				final afterCtorAllArgs:Array<Array<String>> = fmtReadStringArgsAll(starNode, 'blankLinesAfterCtor');
+				final afterCtorAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesAfterCtor');
 				final afterCtorInfos:Array<AfterCtorBlankInfo> = [
 					for (args in afterCtorAllArgs) buildAfterCtorBlankInfo(elemRefName, args, null)
 				];
-				final afterCtorIfAllArgs:Array<Array<String>> = fmtReadStringArgsAll(starNode, 'blankLinesAfterCtorIf');
+				final afterCtorIfAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesAfterCtorIf');
 				for (args in afterCtorIfAllArgs)
 					afterCtorInfos.push(buildAfterCtorBlankInfoIf(elemRefName, args));
-				final beforeCtorAllArgs:Array<Array<String>> = fmtReadStringArgsAll(starNode, 'blankLinesBeforeCtor');
+				final beforeCtorAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBeforeCtor');
 				final beforeCtorInfos:Array<BeforeCtorBlankInfo> = [
 					for (args in beforeCtorAllArgs) buildBeforeCtorBlankInfo(elemRefName, args, null)
 				];
-				final beforeCtorIfAllArgs:Array<Array<String>> = fmtReadStringArgsAll(starNode, 'blankLinesBeforeCtorIf');
+				final beforeCtorIfAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBeforeCtorIf');
 				for (args in beforeCtorIfAllArgs)
 					beforeCtorInfos.push(buildBeforeCtorBlankInfoIf(elemRefName, args));
 				parts.push(triviaEofStarExpr(
@@ -1393,9 +1395,9 @@ class WriterLowering {
 			// engine. `@:fmt(fill)` / `@:fmt(fillDoubleIndent)` are
 			// orthogonal — they continue to drive `fillList` for sites
 			// that opt into Wadler fillSep without per-construct rules.
-			final wrapRulesField:Null<String> = fmtReadString(starNode, 'wrapRules');
-			final useFill:Bool = fmtHasFlag(starNode, 'fill');
-			final fillDouble:Bool = fmtHasFlag(starNode, 'fillDoubleIndent');
+			final wrapRulesField:Null<String> = starNode.fmtReadString('wrapRules');
+			final useFill:Bool = starNode.fmtHasFlag('fill');
+			final fillDouble:Bool = starNode.fmtHasFlag('fillDoubleIndent');
 			final listCall:Expr = if (wrapRulesField != null) {
 				final rulesExpr:Expr = {
 					expr: EField(macro opt, wrapRulesField),
@@ -1429,11 +1431,11 @@ class WriterLowering {
 				}
 				blockBody($v{openText ?? '{'}, $v{closeText}, _docs, opt);
 			});
-		} else if (!isLastField || hasMeta(starNode, ':tryparse')) {
+		} else if (!isLastField || starNode.hasMeta(':tryparse')) {
 			// Try-parse mode. Emit lead if present (e.g. ':' in default:).
 			if (openText != null)
 				parts.push(macro _dt($v{openText}));
-			final sameLineName:Null<String> = fmtReadString(starNode, 'sameLine');
+			final sameLineName:Null<String> = starNode.fmtReadString('sameLine');
 			if (sameLineName != null) {
 				// @:fmt(sameLine(...)) on a try-parse Star: each element is preceded by
 				// a runtime-conditional separator (space or hardline), so the
@@ -1458,8 +1460,8 @@ class WriterLowering {
 				// inverts the cases — block bodies fall through to `sepExpr`
 				// (policy-driven), bare bodies force `_dhl()`. See trivia-
 				// path comment for rationale.
-				final blockShapeAware:Bool = fmtHasFlag(starNode, 'blockBodyKeepsInline');
-				final bareShapeAware:Bool = fmtHasFlag(starNode, 'bareBodyBreaks');
+				final blockShapeAware:Bool = starNode.fmtHasFlag('blockBodyKeepsInline');
+				final bareShapeAware:Bool = starNode.fmtHasFlag('bareBodyBreaks');
 				final shapeAware:Bool = blockShapeAware || bareShapeAware;
 				final blockPatterns:Array<Expr> = prevBareRefBody != null && shapeAware
 					? collectBlockCtorPatterns(prevBareRefBody.typePath)
@@ -1532,8 +1534,8 @@ class WriterLowering {
 				// stray space). Format-neutral — any grammar nesting a
 				// padded Star inside a surrounding-token sandwich can adopt
 				// either flag without touching the macro.
-				final padLeading:Bool = fmtHasFlag(starNode, 'padLeading');
-				final padTrailing:Bool = fmtHasFlag(starNode, 'padTrailing');
+				final padLeading:Bool = starNode.fmtHasFlag('padLeading');
+				final padTrailing:Bool = starNode.fmtHasFlag('padTrailing');
 				if (padLeading || padTrailing) {
 					final leadingPush:Expr = padLeading ? macro _docs.push(_dt(' ')) : macro {};
 					final trailingPush:Expr = padTrailing ? macro _docs.push(_dt(' ')) : macro {};
@@ -1595,9 +1597,9 @@ class WriterLowering {
 
 	private function lowerTerminal(node:ShapeNode, typePath:String, simple:String):Expr {
 		final underlying:String = node.annotations.get('base.underlying');
-		final unescape:Bool = hasMeta(node, ':unescape');
-		final unescapeMode:Null<String> = readMetaString(node, ':unescape');
-		final raw:Bool = hasMeta(node, ':rawString');
+		final unescape:Bool = node.hasMeta(':unescape');
+		final unescapeMode:Null<String> = node.readMetaString(':unescape');
+		final raw:Bool = node.hasMeta(':rawString');
 
 		if (unescape) {
 			if (unescapeMode == 'raw') {
@@ -1674,7 +1676,7 @@ class WriterLowering {
 	 * `Keep` to `Same` since there is no per-element source-shape slot.
 	 */
 	private function sameLineSeparator(child:ShapeNode, prevBody:Null<PrevBodyInfo>, typePath:String):Expr {
-		final flagName:Null<String> = fmtReadString(child, 'sameLine');
+		final flagName:Null<String> = child.fmtReadString('sameLine');
 		if (flagName == null) return macro _dt(' ');
 		final optFlag:Expr = {
 			expr: EField(macro opt, flagName),
@@ -1693,7 +1695,7 @@ class WriterLowering {
 			&& fieldName != null
 			&& child.kind == Ref
 			&& child.annotations.get('base.optional') == true
-			&& readMetaString(child, ':kw') != null;
+			&& child.readMetaString(':kw') != null;
 		final keepExpr:Expr = if (hasKeepSlot) {
 			final slotAccess:Expr = {
 				expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_NEWLINE_SUFFIX),
@@ -1702,7 +1704,7 @@ class WriterLowering {
 			macro ($slotAccess ? _dhl() : _dt(' '));
 		} else macro _dt(' ');
 		final flagBased:Expr = sameLinePolicySwitch(optFlag, keepExpr);
-		if (prevBody == null || !fmtHasFlag(child, 'shapeAware')) return flagBased;
+		if (prevBody == null || !child.fmtHasFlag('shapeAware')) return flagBased;
 		final blockPatterns:Array<Expr> = collectBlockCtorPatterns(prevBody.typePath);
 		if (blockPatterns.length == 0) return flagBased;
 		final cases:Array<Case> = [
@@ -1871,7 +1873,7 @@ class WriterLowering {
 	 * by adding more cases.
 	 */
 	private static function leftCurlySeparator(starNode:ShapeNode):Expr {
-		if (!fmtHasFlag(starNode, 'leftCurly')) return macro _dt(' ');
+		if (!starNode.fmtHasFlag('leftCurly')) return macro _dt(' ');
 		final nextPat:Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BracePlacement', 'Next']);
 		final cases:Array<Case> = [
 			{values: [nextPat], expr: macro _dhl(), guard: null},
@@ -1910,7 +1912,7 @@ class WriterLowering {
 				if (innerNode != null && innerNode.kind == Seq && innerNode.children.length > 0) {
 					final firstField:ShapeNode = innerNode.children[0];
 					final firstLead:Null<String> = firstField.annotations.get('lit.leadText')
-						?? readMetaString(firstField, ':lead');
+						?? firstField.readMetaString(':lead');
 					if (firstLead != null && firstLead.charAt(0) == '{')
 						return branch.annotations.get('base.ctor');
 				}
@@ -1971,7 +1973,7 @@ class WriterLowering {
 		final node:Null<ShapeNode> = shape.rules.get(refName);
 		if (node == null || node.kind != Alt) return false;
 		for (branch in node.children) if (branch.annotations.get('base.ctor') == ctorName)
-			return fmtReadString(branch, 'bodyPolicy') != null;
+			return branch.fmtReadString('bodyPolicy') != null;
 		return false;
 	}
 
@@ -2145,7 +2147,7 @@ class WriterLowering {
 	 * Shared lookup for ω-E-whitespace's writer helpers.
 	 */
 	private static function firstFmtFlag(node:ShapeNode, flagNames:Array<String>):Null<String> {
-		for (name in flagNames) if (fmtHasFlag(node, name)) return name;
+		for (name in flagNames) if (node.fmtHasFlag(name)) return name;
 		return null;
 	}
 
@@ -2537,7 +2539,7 @@ class WriterLowering {
 		final untagged:Array<Expr> = [];
 		for (branch in rule.children) if (isBlockCtorBranch(branch)) {
 			final pattern:Expr = branchCtorPattern(bodyTypePath, branch);
-			if (fmtHasFlag(branch, 'leftCurly')) tagged.push(pattern);
+			if (branch.fmtHasFlag('leftCurly')) tagged.push(pattern);
 			else untagged.push(pattern);
 		}
 		return {tagged: tagged, untagged: untagged};
@@ -2600,7 +2602,7 @@ class WriterLowering {
 	 * (Case 4 Star / postfix Star) or a struct Star field.
 	 */
 	private static function trailingCommaExpr(node:ShapeNode):Expr {
-		final flagName:Null<String> = fmtReadString(node, 'trailingComma');
+		final flagName:Null<String> = node.fmtReadString('trailingComma');
 		if (flagName == null) return macro false;
 		return {
 			expr: EField(macro opt, flagName),
@@ -2621,7 +2623,7 @@ class WriterLowering {
 	 * empty shape and the literal keeps the macro dependency narrow.
 	 */
 	private static function keepInnerWhenEmptyExpr(node:ShapeNode):Expr {
-		final flagName:Null<String> = fmtReadString(node, 'keepInnerWhenEmpty');
+		final flagName:Null<String> = node.fmtReadString('keepInnerWhenEmpty');
 		if (flagName == null) return macro false;
 		return {
 			expr: EField(macro opt, flagName),
@@ -2683,9 +2685,9 @@ class WriterLowering {
 		final first:ShapeNode = children[0];
 		if (first.kind != Ref) return false;
 		if (first.annotations.get('base.optional') == true) return false;
-		if (readMetaString(first, ':kw') != null) return false;
-		if (readMetaString(first, ':lead') != null) return false;
-		return fmtReadString(first, 'bodyPolicy') != null;
+		if (first.readMetaString(':kw') != null) return false;
+		if (first.readMetaString(':lead') != null) return false;
+		return first.fmtReadString('bodyPolicy') != null;
 	}
 
 	/**
@@ -2707,9 +2709,9 @@ class WriterLowering {
 		final first:ShapeNode = children[0];
 		if (first.kind != Ref) return false;
 		if (first.annotations.get('base.optional') == true) return false;
-		if (readMetaString(first, ':kw') != null) return false;
-		if (readMetaString(first, ':lead') != null) return false;
-		return fmtReadString(first, 'bodyBreak') != null;
+		if (first.readMetaString(':kw') != null) return false;
+		if (first.readMetaString(':lead') != null) return false;
+		return first.fmtReadString('bodyBreak') != null;
 	}
 
 	/**
@@ -2732,9 +2734,9 @@ class WriterLowering {
 		final first:ShapeNode = children[0];
 		if (first.kind != Ref) return false;
 		if (first.annotations.get('base.optional') == true) return false;
-		if (readMetaString(first, ':kw') != null) return false;
-		if (readMetaString(first, ':lead') != null) return false;
-		return fmtHasFlag(first, 'bareBodyBreaks');
+		if (first.readMetaString(':kw') != null) return false;
+		if (first.readMetaString(':lead') != null) return false;
+		return first.fmtHasFlag('bareBodyBreaks');
 	}
 
 	/**
@@ -2751,7 +2753,7 @@ class WriterLowering {
 		final children:Array<ShapeNode> = subNode.children;
 		if (children.length == 0) return false;
 		final first:ShapeNode = children[0];
-		return isTightLead(readMetaString(first, ':lead'));
+		return isTightLead(first.readMetaString(':lead'));
 	}
 
 	/**
@@ -3575,121 +3577,6 @@ class WriterLowering {
 		return false;
 	}
 
-	private static function readMetaString(node:ShapeNode, tag:String):Null<String> {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
-		if (meta == null) return null;
-		for (entry in meta) if (entry.name == tag) {
-			if (entry.params.length != 1) return null;
-			return switch entry.params[0].expr {
-				case EConst(CString(s, _)): s;
-				case _: null;
-			};
-		}
-		return null;
-	}
-
-	private static function hasMeta(node:ShapeNode, tag:String):Bool {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
-		if (meta == null) return false;
-		for (entry in meta) if (entry.name == tag) return true;
-		return false;
-	}
-
-	/**
-	 * Returns true when the node carries `@:fmt(...)` and one of the
-	 * arguments either matches the bare identifier `name` (flag form,
-	 * e.g. `@:fmt(leftCurly)`) or is an `ECall` whose callee is `name`
-	 * (knob form, e.g. `@:fmt(bodyPolicy('foo'))`). Either form counts
-	 * as flag presence — this is the writer-side replacement for the
-	 * pre-ω₂ `hasMeta(node, ':leftCurly')` style reads.
-	 */
-	private static function fmtHasFlag(node:ShapeNode, name:String):Bool {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
-		if (meta == null) return false;
-		for (entry in meta) if (entry.name == ':fmt') {
-			for (param in entry.params) switch param.expr {
-				case EConst(CIdent(id)) if (id == name): return true;
-				case ECall({expr: EConst(CIdent(id))}, _) if (id == name): return true;
-				case _:
-			}
-		}
-		return false;
-	}
-
-	/**
-	 * Looks for a knob-form argument `name('value')` inside any
-	 * `@:fmt(...)` entry on the node and returns the string literal
-	 * value. Returns null when no matching entry is present or when
-	 * the argument shape is not a single string literal. Writer-side
-	 * replacement for the pre-ω₂ `readMetaString(node, ':sameLine')`
-	 * style reads.
-	 */
-	private static function fmtReadString(node:ShapeNode, name:String):Null<String> {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
-		if (meta == null) return null;
-		for (entry in meta) if (entry.name == ':fmt') {
-			for (param in entry.params) switch param.expr {
-				case ECall({expr: EConst(CIdent(id))}, [{expr: EConst(CString(s, _))}]) if (id == name):
-					return s;
-				case _:
-			}
-		}
-		return null;
-	}
-
-	/**
-	 * Generalisation of `fmtReadString` for knob-form args with multiple
-	 * string literals — `name('a', 'b', 'c')`. Returns the list of string
-	 * values in source order. Returns `null` when the entry is absent or
-	 * any arg is not a string literal. Introduced by slice ω-interblank
-	 * for `@:fmt(interMemberBlankLines('fieldName', 'VarCtor', 'FnCtor'))`.
-	 */
-	private static function fmtReadStringArgs(node:ShapeNode, name:String):Null<Array<String>> {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
-		if (meta == null) return null;
-		for (entry in meta) if (entry.name == ':fmt') {
-			for (param in entry.params) switch param.expr {
-				case ECall({expr: EConst(CIdent(id))}, args) if (id == name):
-					final out:Array<String> = [];
-					for (arg in args) switch arg.expr {
-						case EConst(CString(s, _)): out.push(s);
-						case _: return null;
-					}
-					return out;
-				case _:
-			}
-		}
-		return null;
-	}
-
-	/**
-	 * Multi-entry variant of `fmtReadStringArgs` — returns every
-	 * `@:fmt(name(...))` occurrence on the node, in source order. Used by
-	 * knobs that may appear multiple times with different argument tuples
-	 * (e.g. `blankLinesAfterCtor` paired separately with `afterPackage`
-	 * and `afterTypeDecl` opts). Entries with non-string args are skipped
-	 * silently — same lenient policy as the single-entry helper.
-	 */
-	private static function fmtReadStringArgsAll(node:ShapeNode, name:String):Array<Array<String>> {
-		final out:Array<Array<String>> = [];
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
-		if (meta == null) return out;
-		for (entry in meta) if (entry.name == ':fmt') {
-			for (param in entry.params) switch param.expr {
-				case ECall({expr: EConst(CIdent(id))}, args) if (id == name):
-					final group:Array<String> = [];
-					var ok:Bool = true;
-					for (arg in args) switch arg.expr {
-						case EConst(CString(s, _)): group.push(s);
-						case _: ok = false;
-					}
-					if (ok) out.push(group);
-				case _:
-			}
-		}
-		return out;
-	}
-
 	/**
 	 * Wraps the trail-literal emission for a `@:trailOpt(...)` ctor in a
 	 * runtime-conditional `_de() / _dt(trail)` switch driven by a plugin-
@@ -3708,7 +3595,7 @@ class WriterLowering {
 	private static function trailOptShapeGateWrap(branch:ShapeNode, trailText:String, rootArg:String):Null<Expr> {
 		final trailOptional:Bool = branch.annotations.get('lit.trailOptional') == true;
 		if (!trailOptional) return null;
-		final args:Null<Array<String>> = fmtReadStringArgs(branch, 'trailOptShapeGate');
+		final args:Null<Array<String>> = branch.fmtReadStringArgs('trailOptShapeGate');
 		if (args == null || args.length != 2) return null;
 		final adapterName:String = args[0];
 		final argPath:String = args[1];

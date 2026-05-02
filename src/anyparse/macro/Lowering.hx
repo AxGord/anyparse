@@ -8,6 +8,8 @@ import haxe.macro.MacroStringTools;
 import anyparse.core.LoweringCtx;
 import anyparse.core.ShapeTree;
 
+using anyparse.macro.MetaInspect;
+
 /**
  * Pass 3 of the macro pipeline — lowering.
  *
@@ -148,7 +150,7 @@ class Lowering {
 		// NOT consume spaces between tokens. The caller's skipWs (in the
 		// non-raw parent rule) handles whitespace before the raw rule's
 		// entry point; inside the raw rule, every character is significant.
-		if (hasMeta(node, ':raw') || formatInfo.isBinary)
+		if (node.hasMeta(':raw') || formatInfo.isBinary)
 			for (rule in rules) rule.body = stripSkipWs(rule.body);
 		return rules;
 	}
@@ -1129,9 +1131,9 @@ class Lowering {
 			// point. So the lead emission is also skipped for optional
 			// fields, and the peek + conditional sub-rule call are emitted
 			// together inside the field-value switch below.
-			final kwLead:Null<String> = readMetaString(child, ':kw');
-			final leadText:Null<String> = readMetaString(child, ':lead');
-			final trailText:Null<String> = readMetaString(child, ':trail');
+			final kwLead:Null<String> = child.readMetaString(':kw');
+			final leadText:Null<String> = child.readMetaString(':lead');
+			final trailText:Null<String> = child.readMetaString(':trail');
 			final isStar:Bool = child.kind == Star;
 			final isOptional:Bool = child.annotations.get('base.optional') == true;
 			if (isOptional && child.kind != Ref && child.kind != Star) {
@@ -1205,8 +1207,8 @@ class Lowering {
 			// `collectTrivia` inside the loop regardless.
 			final triviaEofStar:Bool = isStar
 				&& child.annotations.get('trivia.starCollects') == true
-				&& readMetaString(child, ':lead') == null
-				&& readMetaString(child, ':kw') == null
+				&& child.readMetaString(':lead') == null
+				&& child.readMetaString(':kw') == null
 				&& ctx.trivia;
 			// Slice ω₆a: an @:optional Ref field takes ownership of its own
 			// pre-field ws handling so the commit-check can rewind over the
@@ -1489,7 +1491,7 @@ class Lowering {
 				// `@:lead` AND not `@:tryparse` (the tryparse writer helper
 				// does not consume the slot — see TriviaTypeSynth gate +
 				// `emitTriviaStarFieldSteps`'s open-text capture gate).
-				if (child.annotations.get('lit.leadText') != null && !hasMeta(child, ':tryparse')) {
+				if (child.annotations.get('lit.leadText') != null && !child.hasMeta(':tryparse')) {
 					final trailOpenLocal:String = trailingOpenLocalName(localName);
 					structFields.push({field: fieldName + TriviaTypeSynth.TRAILING_OPEN_SUFFIX, expr: macro $i{trailOpenLocal}});
 				}
@@ -1497,7 +1499,7 @@ class Lowering {
 				// @:fmt(nestBody)` Stars (see TriviaTypeSynth gate). Gate the
 				// push the same way; emitTriviaStarFieldSteps's tryparse+nestBody
 				// branch is the sole producer of `trailBALocal`.
-				if (hasMeta(child, ':tryparse') && fmtHasFlag(child, 'nestBody')) {
+				if (child.hasMeta(':tryparse') && child.fmtHasFlag('nestBody')) {
 					final trailBALocal:String = trailingBlankAfterLocalName(localName);
 					structFields.push({field: fieldName + TriviaTypeSynth.TRAILING_BLANK_AFTER_SUFFIX, expr: macro $i{trailBALocal}});
 				}
@@ -1590,7 +1592,7 @@ class Lowering {
 			pos: Context.currentPos(),
 		});
 		final accumRef:Expr = macro $i{localName};
-		if (closeText == null && (!isLastField || hasMeta(starNode, ':tryparse'))) {
+		if (closeText == null && (!isLastField || starNode.hasMeta(':tryparse'))) {
 			// Try-parse mode: loop until element parse fails. Used by
 			// Star fields that are NOT the last field in a struct, OR
 			// by fields annotated with `@:tryparse` (D49) — the loop
@@ -1777,21 +1779,21 @@ class Lowering {
 		elemCT:ComplexType, elemCall:Expr, openText:Null<String>, closeText:Null<String>
 	):Void {
 		final sepText:Null<String> = starNode.annotations.get('lit.sepText');
-		if (sepText != null && (closeText == null || hasMeta(starNode, ':tryparse'))) {
+		if (sepText != null && (closeText == null || starNode.hasMeta(':tryparse'))) {
 			Context.fatalError(
 				'Lowering: @:trivia + @:sep requires close-peek (@:trail), not EOF/@:tryparse',
 				Context.currentPos()
 			);
 		}
-		if (closeText == null && !isLastField && !hasMeta(starNode, ':tryparse')) {
+		if (closeText == null && !isLastField && !starNode.hasMeta(':tryparse')) {
 			// Defensive — the Star shape would reject on the plain path too.
 			Context.fatalError(
 				'Lowering: @:trivia Star without @:trail requires the field to be terminal',
 				Context.currentPos()
 			);
 		}
-		final tryparse:Bool = hasMeta(starNode, ':tryparse');
-		final nestBody:Bool = fmtHasFlag(starNode, 'nestBody');
+		final tryparse:Bool = starNode.hasMeta(':tryparse');
+		final nestBody:Bool = starNode.fmtHasFlag('nestBody');
 		if (openText != null) {
 			parseSteps.push(macro expectLit(ctx, $v{openText}));
 			// ω-open-trailing: capture a same-line `// comment` (or
@@ -2115,20 +2117,20 @@ class Lowering {
 		// walk-and-unescape loop using the `@:schema` format's
 		// `unescapeChar`. Bare `@:unescape` strips surrounding quotes
 		// first; `@:unescape("raw")` uses the matched string as-is.
-		final unescape:Bool = hasMeta(node, ':unescape');
-		final unescapeMode:Null<String> = readMetaString(node, ':unescape');
+		final unescape:Bool = node.hasMeta(':unescape');
+		final unescapeMode:Null<String> = node.readMetaString(':unescape');
 
 		// `@:decode("pkg.Class.method")` on a Terminal abstract names a
 		// static function that decodes the matched string into the
 		// terminal's underlying type. The path is split on `.` and
 		// emitted as `pkg.Class.method(_matched)`.
-		final decodePath:Null<String> = readMetaString(node, ':decode');
+		final decodePath:Null<String> = node.readMetaString(':decode');
 
 		// `@:rawString` on a String-underlying Terminal means "the regex
 		// match is already the raw value" — skip decoding entirely. Used
 		// for identifier-like terminals (Haxe `HxIdentLit`) where the
 		// matched slice IS the identifier text.
-		final raw:Bool = hasMeta(node, ':rawString');
+		final raw:Bool = node.hasMeta(':rawString');
 
 		if (unescape && decodePath != null)
 			Context.fatalError('Lowering: terminal $typePath has both @:unescape and @:decode', Context.currentPos());
@@ -2269,10 +2271,10 @@ class Lowering {
 		if (node.annotations.get('bin.magic') != null) return false;
 		if (node.annotations.get('bin.align') != null) return false;
 		for (child in node.children) {
-			if (readMetaString(child, ':kw') != null) return false;
-			if (readMetaString(child, ':lead') != null) return false;
-			if (readMetaString(child, ':trail') != null) return false;
-			if (readMetaString(child, ':sep') != null) return false;
+			if (child.readMetaString(':kw') != null) return false;
+			if (child.readMetaString(':lead') != null) return false;
+			if (child.readMetaString(':trail') != null) return false;
+			if (child.readMetaString(':sep') != null) return false;
 		}
 		return true;
 	}
@@ -2616,19 +2618,6 @@ class Lowering {
 
 	// -------- helpers --------
 
-	private static function readMetaString(node:ShapeNode, tag:String):Null<String> {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
-		if (meta == null) return null;
-		for (entry in meta) if (entry.name == tag) {
-			if (entry.params.length != 1) return null;
-			return switch entry.params[0].expr {
-				case EConst(CString(s, _)): s;
-				case _: null;
-			};
-		}
-		return null;
-	}
-
 	/**
 	 * Returns true if the literal's last character is a word character
 	 * (`[A-Za-z0-9_]`). Used by `lowerEnumBranch` Cases 1 and 2 to decide
@@ -2644,33 +2633,6 @@ class Lowering {
 			|| (c >= 'A'.code && c <= 'Z'.code)
 			|| (c >= '0'.code && c <= '9'.code)
 			|| c == '_'.code;
-	}
-
-	private static function hasMeta(node:ShapeNode, tag:String):Bool {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
-		if (meta == null) return false;
-		for (entry in meta) if (entry.name == tag) return true;
-		return false;
-	}
-
-	/**
-	 * True when the node carries `@:fmt(...)` and one argument matches
-	 * the bare identifier `name` (flag form, e.g. `@:fmt(nestBody)`).
-	 * Parser-side mirror of `WriterLowering.fmtHasFlag` — `@:fmt` is
-	 * primarily a writer namespace, but some flags (like `nestBody`)
-	 * also gate parser behaviour to keep one meta per axis.
-	 */
-	private static function fmtHasFlag(node:ShapeNode, name:String):Bool {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
-		if (meta == null) return false;
-		for (entry in meta) if (entry.name == ':fmt') {
-			for (param in entry.params) switch param.expr {
-				case EConst(CIdent(id)) if (id == name): return true;
-				case ECall({expr: EConst(CIdent(id))}, _) if (id == name): return true;
-				case _:
-			}
-		}
-		return false;
 	}
 
 	// -------- trivia-mode helpers --------
