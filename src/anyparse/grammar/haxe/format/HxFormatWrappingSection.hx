@@ -8,14 +8,21 @@ package anyparse.grammar.haxe.format;
  *    ω-arraylit-wraprules).
  *  - `anonType`: `WrapRules` cascade → `anonTypeWrap` (slice
  *    ω-anontype-wraprules).
- *  - `methodChain`: `WrapRules` cascade → `methodChainWrap` (slice
- *    ω-methodchain-wraprules-capability — knob + loader only, writer
- *    wiring lands in a follow-up slice; see
- *    `HxModuleWriteOptions.methodChainWrap` doc paragraph). The
- *    remaining per-construct cascades (`objectLiteral`, `callParameter`,
- *    …) land with their own slices when each gains JSON-side wiring;
- *    the matching `WriteOptions` fields exist already but are still
- *    populated only from the `HaxeFormat.default*Wrap()` defaults.
+ *  - `methodChain`: `WrapRules` cascade → `methodChainWrap` (slices
+ *    ω-methodchain-wraprules-capability + ω-methodchain-emit — knob,
+ *    loader, and writer-time chain extractor all wired).
+ *
+ * Slice ω-peg-byname-array lifted the prior `@:peg` ByName Array<T>
+ * limitation, so every cascade above now ingests `rules` from
+ * `hxformat.json` verbatim (rules with the still-unmodelled
+ * `lineLength >= n` predicate are silently dropped at load time so the
+ * cascade falls through to the next rule).
+ *
+ * The remaining per-construct cascades (`objectLiteral`,
+ * `callParameter`, …) land with their own slices when each gains
+ * JSON-side wiring; the matching `WriteOptions` fields exist already
+ * but are still populated only from the `HaxeFormat.default*Wrap()`
+ * defaults.
  */
 @:peg typedef HxFormatWrappingSection = {
 

@@ -8,7 +8,10 @@ import anyparse.format.KeepEmptyLinesPolicy;
 import anyparse.format.KeywordPlacement;
 import anyparse.format.SameLinePolicy;
 import anyparse.format.WhitespacePolicy;
+import anyparse.format.wrap.WrapCondition;
+import anyparse.format.wrap.WrapConditionType;
 import anyparse.format.wrap.WrapMode;
+import anyparse.format.wrap.WrapRule;
 import anyparse.format.wrap.WrapRules;
 import anyparse.grammar.haxe.format.HxFormatBodyPolicy;
 import anyparse.grammar.haxe.format.HxFormatBracesConfigSection;
@@ -33,6 +36,8 @@ import anyparse.grammar.haxe.format.HxFormatTrailingCommaPolicy;
 import anyparse.grammar.haxe.format.HxFormatTrailingCommasSection;
 import anyparse.grammar.haxe.format.HxFormatWhitespacePolicy;
 import anyparse.grammar.haxe.format.HxFormatWhitespaceSection;
+import anyparse.grammar.haxe.format.HxFormatWrapCondition;
+import anyparse.grammar.haxe.format.HxFormatWrapRule;
 import anyparse.grammar.haxe.format.HxFormatWrapRules;
 import anyparse.grammar.haxe.format.HxFormatWrappingSection;
 
@@ -69,27 +74,25 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   `@:fmt(indentValueIfCtor('ObjectLit', 'indentObjectLiteral',
  *   'objectLiteralLeftCurly'))` in the grammar.
  * - `wrapping.maxLineLength`: int → `lineWidth`.
- * - `wrapping.arrayWrap` (ω-arraylit-wraprules): partial `WrapRules`
- *   block → `arrayLiteralWrap`. Only `defaultWrap:String` is read; the
- *   `rules:Array<...>` haxe-formatter field is dropped at parse time
- *   (`@:peg` ByName lowering doesn't yet model `Array<T>` struct fields)
- *   so any `arrayWrap` block reduces to `{rules: [], defaultMode:
- *   <parsed defaultWrap | base default>}`. Both corpus consumers
- *   (`indentation/issue_367_array_literal_call`,
- *   `indentation/object_literal`) set
- *   `{"defaultWrap":"noWrap","rules":[]}` — semantically identical to
- *   "disable array wrapping", which the collapse honours.
- * - `wrapping.anonType` (ω-anontype-wraprules): partial `WrapRules` block
- *   → `anonTypeWrap`. Same `defaultWrap`-only ingest collapse as
- *   `arrayWrap` (rules array dropped per the same `@:peg` ByName gap).
- *   Routes to `HxType.Anon.fields` via `wrapRules('anonTypeWrap')`.
- * - `wrapping.methodChain` (ω-methodchain-wraprules-capability): partial
- *   `WrapRules` block → `methodChainWrap`. Same `defaultWrap`-only
- *   ingest collapse as `arrayWrap` / `anonType`. The runtime field
- *   isn't read by any writer site yet — this slice ships the JSON
- *   surface so configs that pin a `methodChain` cascade load cleanly,
- *   pending the writer-time chain extractor that lands in the next
- *   slice.
+ * - `wrapping.arrayWrap` (ω-arraylit-wraprules + ω-peg-byname-array):
+ *   `WrapRules` cascade → `arrayLiteralWrap`. `defaultWrap:String` sets
+ *   the cascade's `defaultMode`; `rules:Array<HxFormatWrapRule>` is
+ *   ingested verbatim into the runtime cascade — `type` strings map to
+ *   `WrapMode`, `cond` strings map to `WrapConditionType`, rules whose
+ *   `cond` is still unmodelled (`lineLength >= n`) are dropped so the
+ *   cascade falls through cleanly. Absent keys preserve the runtime
+ *   baseline; `rules: []` resets the cascade to unconditional
+ *   `defaultMode`.
+ * - `wrapping.anonType` (ω-anontype-wraprules): same `WrapRules` ingest
+ *   shape as `arrayWrap`, routed to `anonTypeWrap`. Drives
+ *   `HxType.Anon.fields` via `wrapRules('anonTypeWrap')`.
+ * - `wrapping.methodChain` (ω-methodchain-wraprules-capability +
+ *   ω-methodchain-emit): `WrapRules` cascade → `methodChainWrap`.
+ *   Read at writer time by the chain extractor wired through
+ *   `@:fmt(methodChain('methodChainWrap'))` on `HxExpr.Call` and
+ *   `HxExpr.FieldAccess`. Custom rules from `.hxtest` configs (e.g.
+ *   `anyItemLength >= 25 → onePerLine`) now load through the same
+ *   cascade-ingest path as `arrayWrap` / `anonType`.
  * - `sameLine.ifElse` / `sameLine.tryCatch` / `sameLine.doWhile`: enum
  *   string — `"same"` → `SameLinePolicy.Same`, `"next"` →
  *   `SameLinePolicy.Next`, `"keep"` → `SameLinePolicy.Keep` (reads the
@@ -485,23 +488,51 @@ final class HaxeFormatConfigLoader {
 
 	/**
 	 * Converts a parsed `HxFormatWrapRules` into the runtime `WrapRules`
-	 * used by `WrapList.emit`. The `rules:Array<...>` haxe-formatter
-	 * field is silently dropped at parse time (`@:peg` ByName lowering
-	 * doesn't yet support `Array<T>` struct fields), so the presence of
-	 * any `arrayWrap` block resets the per-construct cascade to an empty
-	 * rules list with `defaultWrap` (or the base default if missing /
-	 * unparseable) as the unconditional mode. The two corpus fixtures
-	 * that use this knob (`indentation/issue_367_array_literal_call`,
-	 * `indentation/object_literal`) both set `{"defaultWrap":"noWrap",
-	 * "rules":[]}` — semantically identical to "disable array wrapping",
-	 * which this collapse honours. A future slice that ports `rules`
-	 * ingestion to the schema can extend this without changing call
-	 * sites.
+	 * used by `WrapList.emit`.
+	 *
+	 * `defaultWrap` overrides the cascade's `defaultMode` when it parses;
+	 * an unrecognised string falls back to the runtime `base.defaultMode`.
+	 *
+	 * `rules` is ingested verbatim — slice ω-peg-byname-array lifted the
+	 * `@:peg` ByName Array<T> limitation so the JSON-side rules array now
+	 * round-trips into the runtime cascade. Rules with an unrecognised
+	 * `type` are dropped, and rules with at least one unmodelled `cond`
+	 * predicate (currently `lineLength >= n`) are dropped wholesale so
+	 * the cascade falls through to the next rule instead of producing
+	 * a partially-evaluated decision. A configured `rules: []` resets the
+	 * cascade to empty (unconditional `defaultMode`); an absent `rules`
+	 * key preserves the runtime baseline cascade.
 	 */
 	private static function wrapRulesFromConfig(cfg:HxFormatWrapRules, base:WrapRules):WrapRules {
-		if (cfg.defaultWrap == null) return {rules: [], defaultMode: base.defaultMode};
-		final parsed:Null<WrapMode> = wrapModeFromString(cfg.defaultWrap);
-		return {rules: [], defaultMode: parsed ?? base.defaultMode};
+		final defaultMode:WrapMode = cfg.defaultWrap != null
+			? wrapModeFromString(cfg.defaultWrap) ?? base.defaultMode
+			: base.defaultMode;
+		final src:Null<Array<HxFormatWrapRule>> = cfg.rules;
+		if (src == null) return {rules: base.rules, defaultMode: defaultMode};
+		final rules:Array<WrapRule> = [];
+		for (raw in src) {
+			final mapped:Null<WrapRule> = wrapRuleFromConfig(raw);
+			if (mapped != null) rules.push(mapped);
+		}
+		return {rules: rules, defaultMode: defaultMode};
+	}
+
+	private static function wrapRuleFromConfig(raw:HxFormatWrapRule):Null<WrapRule> {
+		final typeStr:Null<String> = raw.type;
+		if (typeStr == null) return null;
+		final mode:Null<WrapMode> = wrapModeFromString(typeStr);
+		if (mode == null) return null;
+		final rawConds:Null<Array<HxFormatWrapCondition>> = raw.conditions;
+		final mapped:Array<WrapCondition> = [];
+		if (rawConds != null) for (rc in rawConds) {
+			final condStr:Null<String> = rc.cond;
+			if (condStr == null) return null;
+			final ct:Null<WrapConditionType> = wrapCondFromString(condStr);
+			if (ct == null) return null;
+			final condNarrow:WrapConditionType = ct;
+			mapped.push({cond: condNarrow, value: rc.value ?? 0});
+		}
+		return {conditions: mapped, mode: mode};
 	}
 
 	private static function wrapModeFromString(s:String):Null<WrapMode> {
@@ -511,6 +542,19 @@ final class HaxeFormatConfigLoader {
 			case 'onePerLineAfterFirst': WrapMode.OnePerLineAfterFirst;
 			case 'fillLine': WrapMode.FillLine;
 			case 'fillLineWithLeadingBreak': WrapMode.FillLineWithLeadingBreak;
+			case _: null;
+		};
+	}
+
+	private static function wrapCondFromString(s:String):Null<WrapConditionType> {
+		return switch s {
+			case 'itemCount <= n': WrapConditionType.ItemCountLessThan;
+			case 'itemCount >= n': WrapConditionType.ItemCountLargerThan;
+			case 'anyItemLength >= n': WrapConditionType.AnyItemLengthLargerThan;
+			case 'allItemLengths < n': WrapConditionType.AllItemLengthsLessThan;
+			case 'totalItemLength >= n': WrapConditionType.TotalItemLengthLargerThan;
+			case 'totalItemLength <= n': WrapConditionType.TotalItemLengthLessThan;
+			case 'exceedsMaxLineLength': WrapConditionType.ExceedsMaxLineLength;
 			case _: null;
 		};
 	}

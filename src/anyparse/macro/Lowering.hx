@@ -2487,6 +2487,8 @@ class Lowering {
 				final refName:String = child.annotations.get('base.ref');
 				final fnName:String = 'parse${simpleName(refName)}';
 				{expr: ECall(macro $i{fnName}, [macro ctx]), pos: Context.currentPos()};
+			case Star:
+				byNameStarParseExpr(child, fieldName);
 			case _:
 				Context.fatalError(
 					'Lowering: ByName struct field "$fieldName" has unsupported kind ${child.kind}'
@@ -2494,6 +2496,97 @@ class Lowering {
 					Context.currentPos()
 				);
 				throw 'unreachable';
+		};
+	}
+
+	/**
+	 * Emit the parse expression for a `ByName` struct field whose type is
+	 * `Array<T>`. Walks `formatInfo.sequenceOpen` / `entrySep` /
+	 * `sequenceClose` to drive the loop. Inner element parsing routes
+	 * through the Ref case's helpers (`parseFnName` + `ruleReturnCT`),
+	 * picking up trivia-bearing paths and JSON primitive rewrites
+	 * (`Array<HxFormatWrapRule>` reads via `parseHxFormatWrapRule`,
+	 * etc.).
+	 *
+	 * The accumulator local is typed against the field's declared
+	 * element type (extracted from `base.fieldType`) rather than the
+	 * inner Ref's rewrite target, so primitive-rewrite cases — where
+	 * the schema declares `Array<Int>` but the inner Ref points at
+	 * `anyparse.grammar.json.JIntLit` — keep the schema's invariant
+	 * `Array<Int>` shape and rely on the abstract's `from Int to Int`
+	 * conversion at each `push`.
+	 *
+	 * The element shape must be a single `Ref` child; nested `Star` is
+	 * deferred until a real schema needs `Array<Array<T>>`.
+	 */
+	private function byNameStarParseExpr(child:ShapeNode, fieldName:String):Expr {
+		final seqOpen:Null<String> = formatInfo.sequenceOpen;
+		final seqClose:Null<String> = formatInfo.sequenceClose;
+		if (seqOpen == null || seqClose == null) {
+			Context.fatalError(
+				'Lowering: ByName Array<T> field "$fieldName" requires the format ${formatInfo.schemaTypePath} '
+					+ 'to declare sequenceOpen / sequenceClose',
+				Context.currentPos()
+			);
+			throw 'unreachable';
+		}
+		if (child.children.length != 1) {
+			Context.fatalError(
+				'Lowering: ByName Array<T> field "$fieldName" expected exactly one element child, got ${child.children.length}',
+				Context.currentPos()
+			);
+			throw 'unreachable';
+		}
+		final inner:ShapeNode = child.children[0];
+		if (inner.kind != Ref) {
+			Context.fatalError(
+				'Lowering: ByName Array<T> field "$fieldName" element kind ${inner.kind} is not supported '
+					+ '— only Array<RefType> (a single named element type) is implemented',
+				Context.currentPos()
+			);
+			throw 'unreachable';
+		}
+		final refName:String = inner.annotations.get('base.ref');
+		final fnName:String = parseFnName(refName);
+		final fieldCT:Null<ComplexType> = child.annotations.get('base.fieldType');
+		final innerCT:ComplexType = extractArrayElementCT(fieldCT) ?? ruleReturnCT(refName);
+		final closeCharCode:Int = seqClose.charCodeAt(0);
+		final entrySep:String = formatInfo.entrySep;
+		return macro {
+			final _arr:Array<$innerCT> = [];
+			skipWs(ctx);
+			expectLit(ctx, $v{seqOpen});
+			skipWs(ctx);
+			if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}) {
+				while (true) {
+					skipWs(ctx);
+					_arr.push($i{fnName}(ctx));
+					skipWs(ctx);
+					if (!matchLit(ctx, $v{entrySep})) break;
+				}
+			}
+			skipWs(ctx);
+			expectLit(ctx, $v{seqClose});
+			_arr;
+		};
+	}
+
+	/**
+	 * Unwrap `Array<T>` (or `Null<Array<T>>`) and return the element
+	 * `ComplexType`. Used by `byNameStarParseExpr` to type the
+	 * accumulator local against the schema-declared element type
+	 * instead of the parse-fn return type, so primitive-rewrite paths
+	 * (`Array<Int>` field whose Ref child resolves to `JIntLit`) keep
+	 * `Array<Int>` shape and rely on the abstract's `from`/`to`
+	 * conversion at each `push`. Returns `null` on any other shape;
+	 * caller falls back to `ruleReturnCT(refName)`.
+	 */
+	private static function extractArrayElementCT(ct:Null<ComplexType>):Null<ComplexType> {
+		if (ct == null) return null;
+		return switch ct {
+			case TPath({pack: [], name: 'Array', params: [TPType(inner)]}): inner;
+			case TPath({pack: [], name: 'Null', params: [TPType(inner)]}): extractArrayElementCT(inner);
+			case _: null;
 		};
 	}
 

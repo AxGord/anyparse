@@ -18,10 +18,10 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
  *  - default cascade matches the 5-rule shape ported from
  *    `default-hxformat.json`'s `wrapping.methodChain` (minus the
  *    `lineLength`-gated rules `WrapConditionType` doesn't yet model);
- *  - `wrapping.methodChain.defaultWrap` flips the cascade's
- *    `defaultMode` (rules-array still drops per the existing
- *    `wrapRulesFromConfig` collapse — see
- *    `HaxeFormatConfigLoader.applyWrapping`);
+ *  - `wrapping.methodChain.defaultWrap` + `rules:[]` flip the cascade's
+ *    `defaultMode` and reset the rules array (slice ω-peg-byname-array
+ *    later lifted the rules-ingest limitation; full rule round-trip
+ *    coverage lives in `HxWrapRulesIngestTest`);
  *  - empty `{}` config returns the seeded defaults — sanity gate that
  *    `loadHxFormatJson`'s base struct copy carried the new field.
  */

@@ -51,6 +51,16 @@ typedef FormatInfo = {
 	entrySep:String,
 
 	/**
+	 * Literal that opens a sequence (array) block (e.g. `[`). `null` when
+	 * the format has no sequence syntax — array-typed schema fields then
+	 * have nowhere to anchor and the macro errors at lowering time.
+	 */
+	sequenceOpen:Null<String>,
+
+	/** Literal that closes a sequence block (e.g. `]`). */
+	sequenceClose:Null<String>,
+
+	/**
 	 * Format-declared grammar types for primitive / universal fields.
 	 * The macro looks these up when shaping typed schemas: a `Int`
 	 * field in a `@:schema(JsonFormat)` typedef becomes a `Ref` to the
@@ -147,6 +157,8 @@ class FormatReader {
 			mappingClose: isBinary ? '' : readStringField(cl, 'mappingClose'),
 			keyValueSep: isBinary ? '' : readStringField(cl, 'keyValueSep'),
 			entrySep: isBinary ? '' : readStringField(cl, 'entrySep'),
+			sequenceOpen: isBinary ? null : readStringFieldOpt(cl, 'sequenceOpen'),
+			sequenceClose: isBinary ? null : readStringFieldOpt(cl, 'sequenceClose'),
 			intType: isBinary ? null : readStringFieldOpt(cl, 'intType'),
 			floatType: isBinary ? null : readStringFieldOpt(cl, 'floatType'),
 			boolType: isBinary ? null : readStringFieldOpt(cl, 'boolType'),

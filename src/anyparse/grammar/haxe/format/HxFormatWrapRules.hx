@@ -5,21 +5,23 @@ package anyparse.grammar.haxe.format;
  * `wrapping.arrayWrap`, `wrapping.objectLiteral`,
  * `wrapping.callParameter`).
  *
- * Only `defaultWrap` is modelled here. The `rules:Array<...>` field
- * present in haxe-formatter's schema is silently dropped by the
- * macro parser (`UnknownPolicy.Skip` inherited from `JsonFormat`) —
- * `@:peg` ByName lowering doesn't yet support `Array<T>` struct
- * fields, and full rule ingestion isn't needed for the active corpus
- * fixtures (both `arrayWrap` overrides set `rules: []`).
+ * `defaultWrap` carries the cascade's fallback `WrapMode` string
+ * (`noWrap` / `onePerLine` / …). `rules` is the first-match-wins
+ * cascade body — each rule pairs a `WrapMode` (`type`) with an
+ * AND-list of `conditions`.
  *
- * The loader treats the presence of any `arrayWrap` block as a
- * request to reset the per-construct cascade: rules are replaced with
- * an empty array and `defaultWrap` (or the runtime default if
- * unparseable / absent) becomes the unconditional mode. A future
- * slice that ports `rules` ingestion to the schema can extend this
- * typedef without changing call sites.
+ * Slice ω-peg-byname-array landed `Array<T>` support in the `@:peg`
+ * ByName lowering, lifting the prior limitation that forced the
+ * loader to drop `rules` and collapse every config to a flat
+ * `defaultWrap`-only override. The loader now ingests the rules array
+ * verbatim, mapping `type` / `cond` strings to the runtime enums and
+ * silently dropping rules whose `cond` string is still unmodelled
+ * (e.g. `lineLength >= n`) so the cascade falls through cleanly to
+ * the next rule.
  */
 @:peg typedef HxFormatWrapRules = {
 
 	@:optional var defaultWrap:String;
+
+	@:optional var rules:Array<HxFormatWrapRule>;
 };
