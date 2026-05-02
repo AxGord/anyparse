@@ -1283,8 +1283,22 @@ class WriterLowering {
 				// emits the inter-token space via `_dop(' ')`, so the
 				// `Same` branch is `_de()` and `Next` is `_dhl()` (drops
 				// the pending OptSpace and writes a hardline).
-				final hasKnobLeftCurly:Bool = starNode.fmtReadString('leftCurly') != null;
-				if ((!isFirstField || hasKnobLeftCurly) && isSpacedLead(openText)) parts.push(leftCurlySeparator(starNode));
+				final knobLeftCurly:Null<String> = starNode.fmtReadString('leftCurly');
+				final hasKnobLeftCurly:Bool = knobLeftCurly != null;
+				// ω-objectlit-leftCurly-cascade: when the Star carries BOTH
+				// `@:fmt(wrapRules(...))` AND `@:fmt(leftCurly('<knob>'))`,
+				// leftCurly emission moves INSIDE `triviaSepStarExpr` so the
+				// no-trivia branch can wire `IfBreak(_dhl(), _de())` into the
+				// wrap engine's Group — short literals stay cuddled even when
+				// the knob is `Next`. Trivia-bearing branch keeps the
+				// pre-slice unconditional `_dhl()`/`_de()`. Outer site keeps
+				// emitting `leftCurlySeparator` for the no-wrap-rules case
+				// (legacy bare-flag callers and future knob-form callers
+				// without wrap-rules).
+				final wrapRulesField:Null<String> = starNode.fmtReadString('wrapRules');
+				final leftCurlyOwnedBySep:Bool = hasKnobLeftCurly && wrapRulesField != null;
+				if (!leftCurlyOwnedBySep && (!isFirstField || hasKnobLeftCurly) && isSpacedLead(openText))
+					parts.push(leftCurlySeparator(starNode));
 				// ω-trivia-sep: sep-Star with @:trivia routes to a
 				// dedicated helper that drives multi-line vs flat layout
 				// from per-element `newlineBefore` / comment trivia.
@@ -1299,10 +1313,10 @@ class WriterLowering {
 				// list cannot collapse to a single line regardless of
 				// what the cascade would say.
 				if (sepText != null) {
-					final wrapRulesField:Null<String> = starNode.fmtReadString('wrapRules');
 					parts.push(triviaSepStarExpr(
 						fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn,
-						openText ?? '', closeText, sepText, wrapRulesField
+						openText ?? '', closeText, sepText, wrapRulesField,
+						leftCurlyOwnedBySep ? knobLeftCurly : null
 					));
 					return;
 				}
@@ -3105,7 +3119,7 @@ class WriterLowering {
 	private static function triviaSepStarExpr(
 		fieldAccess:Expr, trailBBAccess:Null<Expr>, trailLCAccess:Null<Expr>, trailCloseAccess:Null<Expr>,
 		trailOpenAccess:Null<Expr>, elemFn:String, openText:String, closeText:String, sepText:String,
-		wrapRulesField:Null<String> = null
+		wrapRulesField:Null<String> = null, leftCurlyKnob:Null<String> = null
 	):Expr {
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
@@ -3117,6 +3131,32 @@ class WriterLowering {
 		final trailClose:Expr = trailCloseAccess ?? macro (null : Null<String>);
 		final trailOpen:Expr = trailOpenAccess ?? macro (null : Null<String>);
 		final emptyTrailExpr:Expr = macro _dc([_dt($v{emptyText}), trailingCommentDocVerbatim(_trailClose, opt)]);
+		// ω-objectlit-leftCurly-cascade: when the call site delegates
+		// leftCurly emission to this helper (knob-form leftCurly + wrap-
+		// rules), build runtime accessors for the knob value that:
+		//  - in the trivia branch: pick `_dhl()` (Next) or `_de()` (Same)
+		//    as a single Doc prepended to the BodyGroup's parts.
+		//  - in the no-trivia branch: feed `(leadFlat, leadBreak)` into
+		//    `WrapList.emit` so the engine's Group(IfBreak) picks the
+		//    right shape per the wrap-cascade's flat/break decision.
+		final knobExpr:Null<Expr> = leftCurlyKnob == null
+			? null
+			: {expr: EField(macro opt, leftCurlyKnob), pos: Context.currentPos()};
+		final nextPat:Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BracePlacement', 'Next']);
+		// Doc that selects `_dhl()` for `BracePlacement.Next`, `_de()`
+		// otherwise. Used in the trivia branch (prepended to `_parts`)
+		// and the no-trivia branch's `leadBreak` slot. `wrapLeadFlatDoc`
+		// is always `_de()` — flat layout never wants a hardline before
+		// the open brace, regardless of knob value.
+		final knobNextOrEmpty:Expr = knobExpr == null
+			? macro _de()
+			: {
+				expr: ESwitch(knobExpr, [{values: [nextPat], expr: macro _dhl(), guard: null}], macro _de()),
+				pos: Context.currentPos(),
+			};
+		final triviaLeadDoc:Expr = knobNextOrEmpty;
+		final wrapLeadFlatDoc:Expr = macro _de();
+		final wrapLeadBreakDoc:Expr = knobNextOrEmpty;
 		// ω-wraprules-objlit: when the Star carries
 		// `@:fmt(wrapRules('<field>'))`, defer the no-trivia branch's
 		// layout decision to the runtime `WrapList.emit` engine. The
@@ -3143,7 +3183,8 @@ class WriterLowering {
 				}
 				anyparse.format.wrap.WrapList.emit(
 					$v{openText}, $v{closeText}, $v{sepText},
-					_docs, opt, _de(), _de(), false, $rulesExpr
+					_docs, opt, _de(), _de(), false, $rulesExpr, false,
+					$wrapLeadFlatDoc, $wrapLeadBreakDoc
 				);
 			};
 		} else {
@@ -3217,7 +3258,9 @@ class WriterLowering {
 					}
 					final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 					final _innerWrap:anyparse.core.Doc = _dn(_cols, _dc(_inner));
-					final _parts:Array<anyparse.core.Doc> = [_dt($v{openText})];
+					final _parts:Array<anyparse.core.Doc> = [];
+					_parts.push($triviaLeadDoc);
+					_parts.push(_dt($v{openText}));
 					if (_trailOpen != null) _parts.push(trailingCommentDocVerbatim(_trailOpen, opt));
 					_parts.push(_innerWrap);
 					_parts.push(_dhl());

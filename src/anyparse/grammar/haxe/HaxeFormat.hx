@@ -216,13 +216,16 @@ final class HaxeFormat implements TextFormat {
 	 *
 	 * Object-literal left-curly default (ω-objectlit-leftCurly) is
 	 * `Same` — object-literal braces stay cuddled on the previous line
-	 * (`var x = {…}`, `f({…})`). The knob is independent of the global
-	 * `leftCurly` cascade: `lineEnds.leftCurly: "both"` does NOT push
-	 * object-literal braces to the next line. Diverges from
-	 * haxe-formatter's cascade because that pipeline also
-	 * source-preserves single-line `{…}` (`isOriginalSameLine(brOpen,
-	 * brClose)`) which the anyparse writer cannot. Opt in via
-	 * `"lineEnds": { "objectLiteralCurly": { "leftCurly": "<value>" } }`.
+	 * (`var x = {…}`, `f({…})`). Global `lineEnds.leftCurly` cascades
+	 * into this knob (slice ω-objectlit-leftCurly-cascade), mirroring
+	 * haxe-formatter's `MarkLineEnds.getCurlyPolicy(ObjectDecl)`
+	 * precedence — `lineEnds.leftCurly: "both"` flips both
+	 * `opt.leftCurly` AND `opt.objectLiteralLeftCurly` to `Next`. Per-
+	 * construct override `"lineEnds": { "objectLiteralCurly": { "leftCurly":
+	 * "<value>" } }` wins. Short literals chosen flat by the wrap
+	 * cascade stay cuddled even under `Next` — the wrap engine wires
+	 * `WrapList.emit`'s `(leadFlat, leadBreak)` so `Group(IfBreak)`
+	 * picks cuddled vs Allman per literal's own flat/break decision.
 	 *
 	 * Object-field colon default (ψ₇) is `After` — `{a: 0}`, matching
 	 * haxe-formatter's `whitespace.objectFieldColonPolicy:

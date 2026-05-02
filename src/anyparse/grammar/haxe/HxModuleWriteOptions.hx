@@ -175,13 +175,13 @@ import anyparse.format.wrap.WrapRules;
  *    for `HxObjectLit.fields` (`@:fmt(leftCurly('objectLiteralLeftCurly'))`).
  *    Mirrors haxe-formatter's `lineEnds.objectLiteralCurly.leftCurly`
  *    sub-section. Default `Same` keeps object literal braces cuddled.
- *    The loader maps `lineEnds.objectLiteralCurly.leftCurly` directly
- *    to this knob and does NOT cascade from the global
- *    `lineEnds.leftCurly` — diverging from haxe-formatter's cascade
- *    because that path also gates on source-shape preservation
- *    (`isOriginalSameLine(brOpen, brClose)`) which the anyparse writer
- *    does not have. Users opt in to next-line object-literal braces
- *    via `lineEnds.objectLiteralCurly.leftCurly` directly.
+ *    The loader cascades global `lineEnds.leftCurly` into this knob
+ *    (slice ω-objectlit-leftCurly-cascade — was rejected pre-cascade
+ *    because of regressions on short literals; resolved by wiring
+ *    leftCurly emission into `WrapList.emit`'s `(leadFlat, leadBreak)`
+ *    so the wrap engine's flat/break decision picks cuddled vs Allman
+ *    per literal). Per-construct sub-key
+ *    `lineEnds.objectLiteralCurly.leftCurly` overrides the cascade.
  *
  * Field added in slice ψ₇ (object-literal colon spacing):
  *  - `objectFieldColon` — whitespace around the `:` inside an

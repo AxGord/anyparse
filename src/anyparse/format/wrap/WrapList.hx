@@ -32,12 +32,24 @@ class WrapList {
 
 	private static inline final HARDLINE_LEN:Int = 1 << 20;
 
+	/**
+	 * `leadFlat` / `leadBreak`: optional Docs prepended INSIDE the
+	 * engine's `Group(IfBreak(brk, flat))` so a per-construct decoration
+	 * (typically a leftCurly placement: hardline for Allman / Empty for
+	 * cuddled) tracks the wrap engine's flat/break decision. When the
+	 * cascade collapses to a single mode (no Group wrap), the
+	 * appropriate lead is selected via `isFlatMode`. Defaults to
+	 * `Empty`/`Empty` — pre-slice callers see no behavioural change.
+	 * Slice ω-objectlit-leftCurly-cascade — first consumer is
+	 * `triviaSepStarExpr` for `HxObjectLit.fields` knob-form leftCurly.
+	 */
 	public static function emit(
 		open:String, close:String, sep:String,
 		items:Array<Doc>, opt:WriteOptions,
 		openInside:Doc, closeInside:Doc,
 		keepInnerWhenEmpty:Bool, rules:WrapRules,
-		appendTrailingComma:Bool = false
+		appendTrailingComma:Bool = false,
+		leadFlat:Doc = Empty, leadBreak:Doc = Empty
 	):Doc {
 		if (items.length == 0)
 			return Text(open + (keepInnerWhenEmpty ? ' ' : '') + close);
@@ -61,17 +73,22 @@ class WrapList {
 
 		if (anyHardline) {
 			final mode:WrapMode = decide(rules, items.length, maxLen, total, true);
-			return shape(mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
+			final body:Doc = shape(mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
+			return prependLead(body, isFlatMode(mode) ? leadFlat : leadBreak);
 		}
 
 		final modeFlat:WrapMode = decide(rules, items.length, maxLen, total, false);
 		final modeBreak:WrapMode = decide(rules, items.length, maxLen, total, true);
-		if (modeFlat == modeBreak)
-			return shape(modeFlat, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
+		if (modeFlat == modeBreak) {
+			final body:Doc = shape(modeFlat, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
+			return prependLead(body, isFlatMode(modeFlat) ? leadFlat : leadBreak);
+		}
 
 		final flatDoc:Doc = shape(modeFlat, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
 		final breakDoc:Doc = shape(modeBreak, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
-		return Group(IfBreak(breakDoc, flatDoc));
+		final flatWithLead:Doc = prependLead(flatDoc, leadFlat);
+		final breakWithLead:Doc = prependLead(breakDoc, leadBreak);
+		return Group(IfBreak(breakWithLead, flatWithLead));
 	}
 
 	/**
@@ -155,6 +172,33 @@ class WrapList {
 			if (!ok) return false;
 		}
 		return true;
+	}
+
+	/**
+	 * Wrap `body` with `lead` unless `lead` is `Empty` — avoids a
+	 * pointless single-element `Concat` for the common no-lead path.
+	 */
+	private static inline function prependLead(body:Doc, lead:Doc):Doc {
+		return switch lead {
+			case Empty: body;
+			case _: Concat([lead, body]);
+		};
+	}
+
+	/**
+	 * Classifies a `WrapMode` as single-line (`NoWrap`) vs multi-line
+	 * (`OnePerLine`, `OnePerLineAfterFirst`, `FillLine`, …). Used by
+	 * `emit` to pick `leadFlat` vs `leadBreak` when the cascade
+	 * collapses to a single mode and no `Group(IfBreak)` wrap is
+	 * emitted. `FillLine` counts as multi-line by intent — its inner
+	 * `Group` decides per-item fit but the construct as a whole opts
+	 * into wrapped layout.
+	 */
+	private static inline function isFlatMode(mode:WrapMode):Bool {
+		return switch mode {
+			case NoWrap: true;
+			case _: false;
+		};
 	}
 
 	private static function shape(

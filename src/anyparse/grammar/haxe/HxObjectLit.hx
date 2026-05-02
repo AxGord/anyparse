@@ -52,6 +52,18 @@ package anyparse.grammar.haxe;
  * `lineEnds.objectLiteralCurly.leftCurly` overrides only the
  * per-construct one — mirroring haxe-formatter's
  * `MarkLineEnds.getCurlyPolicy(ObjectDecl)` precedence.
+ *
+ * leftCurly emission for this field is owned by `triviaSepStarExpr`
+ * (slice ω-objectlit-leftCurly-cascade). Two runtime paths:
+ *  - trivia-bearing: any element has `newlineBefore` / leading /
+ *    trailing comment trivia → BodyGroup with forced hardlines;
+ *    leftCurly Doc is prepended unconditionally (`_dhl()` for Next,
+ *    `_de()` for Same).
+ *  - no-trivia: clean inline list → routes through `WrapList.emit`
+ *    with `(leadFlat=_de(), leadBreak=_dhl())` for Next, both `_de()`
+ *    for Same. The engine's `Group(IfBreak)` wrap picks cuddled vs
+ *    Allman per the wrap cascade's flat/break decision — short
+ *    literals chosen NoWrap stay cuddled even under `Next`.
  */
 @:peg
 typedef HxObjectLit = {

@@ -198,6 +198,28 @@ class HaxeFormatConfigLoaderTest extends Test {
 		Assert.isTrue(out.indexOf('function main()\n\t{') != -1, 'expected `function main()\\n\\t{` in: <$out>');
 	}
 
+	public function testLineEndsLeftCurlyCascadesToObjectLiteral():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"lineEnds": {"leftCurly": "before"}}');
+		Assert.equals(BracePlacement.Next, opts.leftCurly);
+		Assert.equals(BracePlacement.Next, opts.objectLiteralLeftCurly);
+	}
+
+	public function testObjectLiteralCurlyOverridesCascade():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"lineEnds": {"leftCurly": "before", "objectLiteralCurly": {"leftCurly": "after"}}}'
+		);
+		Assert.equals(BracePlacement.Next, opts.leftCurly);
+		Assert.equals(BracePlacement.Same, opts.objectLiteralLeftCurly);
+	}
+
+	public function testObjectLiteralCurlyAloneSetsOnlyObjectKnob():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"lineEnds": {"objectLiteralCurly": {"leftCurly": "before"}}}'
+		);
+		Assert.equals(BracePlacement.Same, opts.leftCurly);
+		Assert.equals(BracePlacement.Next, opts.objectLiteralLeftCurly);
+	}
+
 	public function testWhitespaceObjectFieldColonDefaultsToAfter():Void {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		Assert.equals(WhitespacePolicy.After, opts.objectFieldColon);

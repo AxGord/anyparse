@@ -89,21 +89,19 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   map to `BracePlacement.Next`; `"after"` / `"none"` map to
  *   `BracePlacement.Same`. `"none"` degrades because the inline
  *   `{ ... }` shape is not representable by the current two-value
- *   surface without per-node source-shape tracking. Affects only
- *   `opt.leftCurly` — does NOT cascade into `objectLiteralLeftCurly`.
- *   Diverges from haxe-formatter's `MarkLineEnds.getCurlyPolicy(ObjectDecl)`
- *   cascade because that path also gates on `parsedCode.isOriginalSameLine
- *   (brOpen, brClose)` — keeping single-line object literals cuddled
- *   regardless of the policy. The anyparse writer has no source-shape
- *   preservation, so cascading global `leftCurly` into object literals
- *   would push every short `return {…}` / `f({…})` brace to the next
- *   line. Users wanting the next-line shape opt in via
- *   `lineEnds.objectLiteralCurly.leftCurly` directly.
+ *   surface without per-node source-shape tracking. Sets `opt.leftCurly`
+ *   AND cascades into `opt.objectLiteralLeftCurly` (ω-objectlit-leftCurly-cascade)
+ *   so a single `lineEnds.leftCurly` knob drives every per-construct
+ *   curly placement at once. Mirrors haxe-formatter's
+ *   `MarkLineEnds.getCurlyPolicy(ObjectDecl)` precedence.
  * - `lineEnds.objectLiteralCurly.leftCurly` (ω-objectlit-leftCurly):
- *   per-construct sub-section that maps to `opt.objectLiteralLeftCurly`
- *   independently of the global `leftCurly`. Same enum-string vocabulary.
- *   `"both"` / `"before"` push `{` to the next line for `HxObjectLit.fields`
- *   regardless of content shape; `"after"` / `"none"` keep braces cuddled.
+ *   per-construct sub-section that overrides only the cascade for
+ *   `opt.objectLiteralLeftCurly` — applied AFTER the cascade so it
+ *   wins. Same enum-string vocabulary. With knob `Next`, short
+ *   object literals chosen flat by the wrap engine stay cuddled —
+ *   `triviaSepStarExpr` wires the leftCurly Doc through
+ *   `WrapList.emit`'s `(leadFlat, leadBreak)` so the wrap cascade's
+ *   flat/break decision picks cuddled vs Allman per literal.
  * - `whitespace.objectFieldColonPolicy` (ψ₇): enum string —
  *   `"before"` / `"onlyBefore"` → `WhitespacePolicy.Before`,
  *   `"after"`  / `"onlyAfter"`  → `WhitespacePolicy.After`,
@@ -475,7 +473,27 @@ final class HaxeFormatConfigLoader {
 	}
 
 	private static function applyLineEnds(section:HxFormatLineEndsSection, opt:HxModuleWriteOptions):Void {
-		if (section.leftCurly != null) opt.leftCurly = leftCurlyToRuntime(section.leftCurly);
+		if (section.leftCurly != null) {
+			final placement:BracePlacement = leftCurlyToRuntime(section.leftCurly);
+			opt.leftCurly = placement;
+			// ω-objectlit-leftCurly-cascade: cascade global `lineEnds.leftCurly`
+			// into per-construct `objectLiteralLeftCurly`. Mirrors haxe-formatter's
+			// `MarkLineEnds.getCurlyPolicy` precedence — global lineEnd seeds
+			// every per-construct knob, sub-keys override individually.
+			//
+			// Cascade is now safe (was rejected pre-slice per
+			// `feedback_no_global_cascade_per_construct.md`) because the
+			// knob-form leftCurly emission inside `triviaSepStarExpr` wires
+			// `WrapList.emit`'s `(leadFlat, leadBreak)` parameters: short
+			// object literals chosen flat by the wrap engine stay cuddled
+			// regardless of `Next`, multi-line ones go Allman. The fixtures
+			// the original memory worried about (issue_178, issue_185,
+			// issue_42_if_after_assign_with_blocks_on_same_line,
+			// object_literal_else_not_same_line) carry short literals the
+			// wrap cascade chooses NoWrap for — they continue to emit
+			// cuddled `{` even with `objectLiteralLeftCurly = Next`.
+			opt.objectLiteralLeftCurly = placement;
+		}
 		if (section.objectLiteralCurly != null) {
 			final sub:HxFormatCurlyLineEndPolicy = section.objectLiteralCurly;
 			if (sub.leftCurly != null) opt.objectLiteralLeftCurly = leftCurlyToRuntime(sub.leftCurly);
