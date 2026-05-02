@@ -585,9 +585,17 @@ class WriterLowering {
 			// ω-trivia-sep: sep-Star Alt branches (e.g. `HxExpr.ArrayExpr`)
 			// route to the dedicated sep helper. Block-style (no sep)
 			// stays on the always-multi-line path.
+			//
+			// ω-arraylit-wraprules: forward `@:fmt(wrapRules('<field>'))`
+			// from the enum-Case branch to the helper so the no-trivia
+			// branch can defer layout to `WrapList.emit` (mirrors the
+			// struct-Star path in `lowerStruct`). First Alt-branch
+			// consumer is `HxExpr.ArrayExpr.elems` (`arrayLiteralWrap`).
 			if (sepText != null) {
+				final wrapRulesField:Null<String> = branch.fmtReadString('wrapRules');
 				parts.push(triviaSepStarExpr(
-					argsAccess, null, null, trailCloseAccess, null, elemFn, leadText, trailText, sepText
+					argsAccess, null, null, trailCloseAccess, null, elemFn, leadText, trailText, sepText,
+					wrapRulesField
 				));
 			} else {
 				parts.push(triviaBlockStarExpr(argsAccess, null, null, trailCloseAccess, null, elemFn, leadText, trailText, true));

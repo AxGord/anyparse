@@ -8,6 +8,8 @@ import anyparse.format.KeepEmptyLinesPolicy;
 import anyparse.format.KeywordPlacement;
 import anyparse.format.SameLinePolicy;
 import anyparse.format.WhitespacePolicy;
+import anyparse.format.wrap.WrapMode;
+import anyparse.format.wrap.WrapRules;
 import anyparse.grammar.haxe.format.HxFormatBodyPolicy;
 import anyparse.grammar.haxe.format.HxFormatBracesConfigSection;
 import anyparse.grammar.haxe.format.HxFormatClassEmptyLinesConfig;
@@ -31,6 +33,7 @@ import anyparse.grammar.haxe.format.HxFormatTrailingCommaPolicy;
 import anyparse.grammar.haxe.format.HxFormatTrailingCommasSection;
 import anyparse.grammar.haxe.format.HxFormatWhitespacePolicy;
 import anyparse.grammar.haxe.format.HxFormatWhitespaceSection;
+import anyparse.grammar.haxe.format.HxFormatWrapRules;
 import anyparse.grammar.haxe.format.HxFormatWrappingSection;
 
 /**
@@ -58,6 +61,16 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   labels with the `switch` keyword and only the per-case body is
  *   indented. Routed to `opt.indentCaseLabels`.
  * - `wrapping.maxLineLength`: int → `lineWidth`.
+ * - `wrapping.arrayWrap` (ω-arraylit-wraprules): partial `WrapRules`
+ *   block → `arrayLiteralWrap`. Only `defaultWrap:String` is read; the
+ *   `rules:Array<...>` haxe-formatter field is dropped at parse time
+ *   (`@:peg` ByName lowering doesn't yet model `Array<T>` struct fields)
+ *   so any `arrayWrap` block reduces to `{rules: [], defaultMode:
+ *   <parsed defaultWrap | base default>}`. Both corpus consumers
+ *   (`indentation/issue_367_array_literal_call`,
+ *   `indentation/object_literal`) set
+ *   `{"defaultWrap":"noWrap","rules":[]}` — semantically identical to
+ *   "disable array wrapping", which the collapse honours.
  * - `sameLine.ifElse` / `sameLine.tryCatch` / `sameLine.doWhile`: enum
  *   string — `"same"` → `SameLinePolicy.Same`, `"next"` →
  *   `SameLinePolicy.Next`, `"keep"` → `SameLinePolicy.Keep` (reads the
@@ -397,6 +410,7 @@ final class HaxeFormatConfigLoader {
 			objectLiteralBracesClose: base.objectLiteralBracesClose,
 			objectLiteralWrap: base.objectLiteralWrap,
 			callParameterWrap: base.callParameterWrap,
+			arrayLiteralWrap: base.arrayLiteralWrap,
 			addLineCommentSpace: base.addLineCommentSpace,
 			expressionTry: base.expressionTry,
 			indentCaseLabels: base.indentCaseLabels,
@@ -441,6 +455,39 @@ final class HaxeFormatConfigLoader {
 
 	private static function applyWrapping(section:HxFormatWrappingSection, opt:HxModuleWriteOptions):Void {
 		if (section.maxLineLength != null) opt.lineWidth = section.maxLineLength;
+		if (section.arrayWrap != null) opt.arrayLiteralWrap = wrapRulesFromConfig(section.arrayWrap, opt.arrayLiteralWrap);
+	}
+
+	/**
+	 * Converts a parsed `HxFormatWrapRules` into the runtime `WrapRules`
+	 * used by `WrapList.emit`. The `rules:Array<...>` haxe-formatter
+	 * field is silently dropped at parse time (`@:peg` ByName lowering
+	 * doesn't yet support `Array<T>` struct fields), so the presence of
+	 * any `arrayWrap` block resets the per-construct cascade to an empty
+	 * rules list with `defaultWrap` (or the base default if missing /
+	 * unparseable) as the unconditional mode. The two corpus fixtures
+	 * that use this knob (`indentation/issue_367_array_literal_call`,
+	 * `indentation/object_literal`) both set `{"defaultWrap":"noWrap",
+	 * "rules":[]}` — semantically identical to "disable array wrapping",
+	 * which this collapse honours. A future slice that ports `rules`
+	 * ingestion to the schema can extend this without changing call
+	 * sites.
+	 */
+	private static function wrapRulesFromConfig(cfg:HxFormatWrapRules, base:WrapRules):WrapRules {
+		if (cfg.defaultWrap == null) return {rules: [], defaultMode: base.defaultMode};
+		final parsed:Null<WrapMode> = wrapModeFromString(cfg.defaultWrap);
+		return {rules: [], defaultMode: parsed ?? base.defaultMode};
+	}
+
+	private static function wrapModeFromString(s:String):Null<WrapMode> {
+		return switch s {
+			case 'noWrap': WrapMode.NoWrap;
+			case 'onePerLine': WrapMode.OnePerLine;
+			case 'onePerLineAfterFirst': WrapMode.OnePerLineAfterFirst;
+			case 'fillLine': WrapMode.FillLine;
+			case 'fillLineWithLeadingBreak': WrapMode.FillLineWithLeadingBreak;
+			case _: null;
+		};
 	}
 
 	private static function applySameLine(section:HxFormatSameLineSection, opt:HxModuleWriteOptions):Void {

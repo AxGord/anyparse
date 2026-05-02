@@ -558,6 +558,7 @@ final class HaxeFormat implements TextFormat {
 		objectLiteralBracesClose: WhitespacePolicy.None,
 		objectLiteralWrap: HaxeFormat.defaultObjectLiteralWrap(),
 		callParameterWrap: HaxeFormat.defaultCallParameterWrap(),
+		arrayLiteralWrap: HaxeFormat.defaultArrayLiteralWrap(),
 		addLineCommentSpace: true,
 		expressionTry: SameLinePolicy.Same,
 		indentCaseLabels: true,
@@ -639,6 +640,45 @@ final class HaxeFormat implements TextFormat {
 				},
 				{
 					mode: WrapMode.FillLine,
+					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
+				},
+			],
+			defaultMode: WrapMode.NoWrap,
+		};
+	}
+
+	/**
+	 * Default `WrapRules` cascade for `HxExpr.ArrayExpr.elems` — ported
+	 * from haxe-formatter's `wrapping.arrayWrap` rule set in
+	 * `resources/default-hxformat.json` (AxGord fork). Conditions
+	 * unsupported by the current `WrapConditionType` set
+	 * (`hasMultilineItems`, `equalItemLengths`) and the
+	 * `fillLineWithLeadingBreak` rules they gate are skipped — for the
+	 * `hasMultilineItems` case the `WrapList.emit` runtime already routes
+	 * `anyHardline=true` items through the `exceeds=true` cascade run
+	 * with `maxLen` / `total` set to `HARDLINE_LEN`, which fails the
+	 * `total<80` rule and triggers `OnePerLine` via the
+	 * `anyItemLength>=30` rule. Returned as a fresh struct on each call
+	 * so test code that mutates the `defaultWriteOptions.arrayLiteralWrap`
+	 * substruct doesn't corrupt the singleton.
+	 */
+	public static function defaultArrayLiteralWrap():WrapRules {
+		return {
+			rules: [
+				{
+					mode: WrapMode.NoWrap,
+					conditions: [{cond: WrapConditionType.TotalItemLengthLessThan, value: 80}],
+				},
+				{
+					mode: WrapMode.OnePerLine,
+					conditions: [{cond: WrapConditionType.AnyItemLengthLargerThan, value: 30}],
+				},
+				{
+					mode: WrapMode.OnePerLine,
+					conditions: [{cond: WrapConditionType.ItemCountLargerThan, value: 4}],
+				},
+				{
+					mode: WrapMode.OnePerLine,
 					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
 				},
 			],
