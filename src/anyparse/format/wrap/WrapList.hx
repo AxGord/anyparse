@@ -57,6 +57,7 @@ class WrapList {
 		var total:Int = 0;
 		var maxLen:Int = 0;
 		var anyHardline:Bool = false;
+		var anyLeadingHardline:Bool = false;
 		for (item in items) {
 			final len:Int = flatLength(item);
 			if (len < 0) {
@@ -67,25 +68,26 @@ class WrapList {
 				total += len;
 				if (len > maxLen) maxLen = len;
 			}
+			if (hasLeadingHardline(item)) anyLeadingHardline = true;
 		}
 
 		final cols:Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
 
 		if (anyHardline) {
 			final mode:WrapMode = decide(rules, items.length, maxLen, total, true);
-			final body:Doc = shape(mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
+			final body:Doc = shape(mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, anyLeadingHardline);
 			return prependLead(body, isFlatMode(mode) ? leadFlat : leadBreak);
 		}
 
 		final modeFlat:WrapMode = decide(rules, items.length, maxLen, total, false);
 		final modeBreak:WrapMode = decide(rules, items.length, maxLen, total, true);
 		if (modeFlat == modeBreak) {
-			final body:Doc = shape(modeFlat, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
+			final body:Doc = shape(modeFlat, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, false);
 			return prependLead(body, isFlatMode(modeFlat) ? leadFlat : leadBreak);
 		}
 
-		final flatDoc:Doc = shape(modeFlat, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
-		final breakDoc:Doc = shape(modeBreak, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
+		final flatDoc:Doc = shape(modeFlat, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, false);
+		final breakDoc:Doc = shape(modeBreak, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, false);
 		final flatWithLead:Doc = prependLead(flatDoc, leadFlat);
 		final breakWithLead:Doc = prependLead(breakDoc, leadBreak);
 		return Group(IfBreak(breakWithLead, flatWithLead));
@@ -210,13 +212,13 @@ class WrapList {
 	private static function shape(
 		mode:WrapMode, open:String, close:String, sep:String,
 		items:Array<Doc>, openInside:Doc, closeInside:Doc, cols:Int,
-		appendTrailingComma:Bool
+		appendTrailingComma:Bool, forceBreak:Bool
 	):Doc {
 		return switch mode {
 			case NoWrap: shapeNoWrap(open, close, sep, items, openInside, closeInside);
 			case OnePerLine: shapeOnePerLine(open, close, sep, items, cols, appendTrailingComma);
 			case OnePerLineAfterFirst: shapeOnePerLineAfterFirst(open, close, sep, items, cols, appendTrailingComma);
-			case FillLine | FillLineWithLeadingBreak: shapeFillLine(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
+			case FillLine | FillLineWithLeadingBreak: shapeFillLine(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, forceBreak);
 			case _: shapeNoWrap(open, close, sep, items, openInside, closeInside);
 		};
 	}
@@ -269,11 +271,37 @@ class WrapList {
 	private static function shapeFillLine(
 		open:String, close:String, sep:String, items:Array<Doc>,
 		openInside:Doc, closeInside:Doc, cols:Int,
-		appendTrailingComma:Bool
+		appendTrailingComma:Bool, forceBreak:Bool
 	):Doc {
-		final sepDoc:Doc = Concat([Text(sep), Line(' ')]);
+		// `forceBreak`: at least one item starts with a hardline
+		// (typically an objectLit / anonFn arg with `leftCurly=Next`).
+		// In this case the cascade-picked FillLine layout MUST commit
+		// to break mode regardless of total flat width — otherwise
+		// the outer Group's `fitsFlat` walks past `BodyGroup`-deferred
+		// items (Departure 2 in `Renderer`) and concludes that the
+		// whole list fits inline, so `Nest` is bypassed and each
+		// item's leading hardline lands at the surrounding indent
+		// instead of the list's continuation indent.
+		// (`feedback_fillline_bodygroup_deferred_flat.md`.)
+		//
+		// Two changes follow:
+		//  - sep's soft-line replacement becomes a real hardline
+		//    (`Line('\n')`) so `Fill`'s per-item-fit decision always
+		//    routes the sep frame through MBreak — no `, \n` trailing
+		//    space when the next item brings its own leading hardline;
+		//  - a `Line('\n')` is prepended inside the `Nest`, so the
+		//    Group sees an unflattenable hardline and commits to
+		//    MBreak (Departure 3); `items[0]`'s own leading
+		//    `OptHardline` then collides with this one and drops the
+		//    duplicate `\n` (per `Renderer.OptHardline`'s
+		//    `lastEmittedWasHardline` check).
+		final sepLine:Doc = forceBreak ? Line('\n') : Line(' ');
+		final sepDoc:Doc = Concat([Text(sep), sepLine]);
 		final body:Doc = items.length == 1 ? items[0] : Fill(items, sepDoc);
 		final tail:Doc = appendTrailingComma ? Text(sep) : Empty;
+		final inner:Doc = forceBreak
+			? Concat([Line('\n'), body, tail])
+			: Concat([body, tail]);
 		// Group wrap: matches the old `fillList` shape (parity with
 		// pre-cascade `@:fmt(fill)` Wadler-fillSep emission). The Group
 		// gives the renderer a coherent flat/break unit for measuring
@@ -285,11 +313,49 @@ class WrapList {
 		// renderer stays in MBreak by default and Nest unconditionally
 		// adds cols to every Line replacement, over-indenting hardline-
 		// bearing args (e.g. anon-function block bodies, multi-line
-		// object literals).
+		// object literals). When `forceBreak=true` the prepended
+		// hardline guarantees the Group lands in MBreak.
 		return Group(Concat([
 			Text(open), openInside,
-			Nest(cols, Concat([body, tail])),
+			Nest(cols, inner),
 			closeInside, Text(close),
 		]));
+	}
+
+	/**
+	 * Walks the leading edge of `d` and returns `true` if the first
+	 * Doc that emits visible content is a hardline (`Line('\n')` or
+	 * `OptHardline`). Skips through transparent wrappers (`Empty`,
+	 * single-leading-edge Concat slot, `Group` / `BodyGroup` / `Nest`
+	 * inner). Used by `emit` to decide whether the FillLine shape
+	 * must commit to break mode unconditionally.
+	 */
+	private static function hasLeadingHardline(d:Doc):Bool {
+		return switch d {
+			case Empty: false;
+			case OptHardline: true;
+			case Line(flat): flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code;
+			case Text(_): false;
+			case OptSpace(_): false;
+			case Nest(_, inner): hasLeadingHardline(inner);
+			case Group(inner) | BodyGroup(inner): hasLeadingHardline(inner);
+			case IfBreak(_, _): false;
+			case Concat(items):
+				for (it in items) {
+					if (hasLeadingHardline(it)) return true;
+					if (!isLeadingTransparent(it)) return false;
+				}
+				false;
+			case Fill(items, _):
+				items.length > 0 && hasLeadingHardline(items[0]);
+		};
+	}
+
+	private static inline function isLeadingTransparent(d:Doc):Bool {
+		return switch d {
+			case Empty: true;
+			case Concat([]): true;
+			case _: false;
+		};
 	}
 }
