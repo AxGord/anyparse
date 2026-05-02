@@ -5,7 +5,9 @@ package anyparse.grammar.haxe.format;
  *
  *  - `maxLineLength`: int → `lineWidth`.
  *  - `arrayWrap`: `WrapRules` cascade → `arrayLiteralWrap` (slice
- *    ω-arraylit-wraprules). Other per-construct cascades
+ *    ω-arraylit-wraprules).
+ *  - `anonType`: `WrapRules` cascade → `anonTypeWrap` (slice
+ *    ω-anontype-wraprules). The remaining per-construct cascades
  *    (`objectLiteral`, `callParameter`, …) land with their own slices
  *    when each gains JSON-side wiring; the matching `WriteOptions`
  *    fields exist already but are still populated only from the
@@ -16,4 +18,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var maxLineLength:Int;
 
 	@:optional var arrayWrap:HxFormatWrapRules;
+
+	@:optional var anonType:HxFormatWrapRules;
 };

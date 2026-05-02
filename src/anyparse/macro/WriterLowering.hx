@@ -620,6 +620,34 @@ class WriterLowering {
 				final tcExpr:Expr = trailingCommaExpr(branch);
 				final openInsideExpr:Expr = delimInsidePolicySpace(branch, ['anonTypeBracesOpen'], false) ?? macro _de();
 				final closeInsideExpr:Expr = delimInsidePolicySpace(branch, ['anonTypeBracesClose'], true) ?? macro _de();
+				// ω-anontype-wraprules: forward `@:fmt(wrapRules('<field>'))`
+				// to `WrapList.emit` for non-trivia-collecting Alt-Star
+				// nodes only. `@:trivia`-annotated branches (e.g.
+				// `HxExpr.ArrayExpr`) keep the renderer-driven `sepList`
+				// path here — their wrapRules dispatch already runs
+				// through `triviaSepStarExpr` in trivia mode, and
+				// switching the plain-mode path to `WrapList.emit` would
+				// lose renderer-driven flat/break for callers that rely
+				// on `lineWidth`-based natural breaking (verified by
+				// `HxTrailingCommaOptionsTest.testArrayTrailingCommaOnBreak`,
+				// which uses plain-mode `HxModuleWriter`). Type-position
+				// nodes (`HxType.Anon.fields`) don't carry trivia, so the
+				// plain-path dispatch is their only wrapRules surface —
+				// a `@:trivia` flip would synthesize unused machinery (see
+				// `feedback_trivia_not_freebie.md`).
+				final isTriviaCollecting:Bool = starNode.annotations.get('trivia.starCollects') == true;
+				final wrapRulesField:Null<String> = isTriviaCollecting
+					? null
+					: branch.fmtReadString('wrapRules');
+				final listCall:Expr = if (wrapRulesField != null) {
+					final rulesExpr:Expr = {
+						expr: EField(macro opt, wrapRulesField),
+						pos: Context.currentPos(),
+					};
+					macro anyparse.format.wrap.WrapList.emit($v{leadText}, $v{trailText}, $v{sepText}, _docs, opt, $openInsideExpr, $closeInsideExpr, false, $rulesExpr, $tcExpr);
+				} else {
+					macro sepList($v{leadText}, $v{trailText}, $v{sepText}, _docs, opt, $tcExpr, $openInsideExpr, $closeInsideExpr, false);
+				};
 				parts.push(macro {
 					final _args = $argsAccess;
 					final _docs:Array<anyparse.core.Doc> = [];
@@ -628,7 +656,7 @@ class WriterLowering {
 						_docs.push($elemCall);
 						_i++;
 					}
-					sepList($v{leadText}, $v{trailText}, $v{sepText}, _docs, opt, $tcExpr, $openInsideExpr, $closeInsideExpr, false);
+					$listCall;
 				});
 			}
 		} else {

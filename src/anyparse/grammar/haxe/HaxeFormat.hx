@@ -559,6 +559,7 @@ final class HaxeFormat implements TextFormat {
 		objectLiteralWrap: HaxeFormat.defaultObjectLiteralWrap(),
 		callParameterWrap: HaxeFormat.defaultCallParameterWrap(),
 		arrayLiteralWrap: HaxeFormat.defaultArrayLiteralWrap(),
+		anonTypeWrap: HaxeFormat.defaultAnonTypeWrap(),
 		addLineCommentSpace: true,
 		expressionTry: SameLinePolicy.Same,
 		indentCaseLabels: true,
@@ -679,6 +680,51 @@ final class HaxeFormat implements TextFormat {
 				},
 				{
 					mode: WrapMode.OnePerLine,
+					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
+				},
+			],
+			defaultMode: WrapMode.NoWrap,
+		};
+	}
+
+	/**
+	 * Default `WrapRules` cascade for `HxType.Anon.fields` — ported
+	 * from haxe-formatter's `wrapping.anonType` rule set in
+	 * `resources/default-hxformat.json` (AxGord fork). The full rule
+	 * set encodes cleanly against the current `WrapConditionType`
+	 * surface: short anon types stay flat via the AND-conjunction of
+	 * `itemCount<=3` and `exceedsMaxLineLength==0`, with three
+	 * cascading `OnePerLine` triggers (`anyItemLength>=30`,
+	 * `totalItemLength>=60`, `itemCount>=4`) and `FillLine` as the
+	 * `exceedsMaxLineLength==1` fallback. Returned as a fresh struct on
+	 * each call so test code that mutates the
+	 * `defaultWriteOptions.anonTypeWrap` substruct doesn't corrupt the
+	 * singleton.
+	 */
+	public static function defaultAnonTypeWrap():WrapRules {
+		return {
+			rules: [
+				{
+					mode: WrapMode.NoWrap,
+					conditions: [
+						{cond: WrapConditionType.ItemCountLessThan, value: 3},
+						{cond: WrapConditionType.ExceedsMaxLineLength, value: 0},
+					],
+				},
+				{
+					mode: WrapMode.OnePerLine,
+					conditions: [{cond: WrapConditionType.AnyItemLengthLargerThan, value: 30}],
+				},
+				{
+					mode: WrapMode.OnePerLine,
+					conditions: [{cond: WrapConditionType.TotalItemLengthLargerThan, value: 60}],
+				},
+				{
+					mode: WrapMode.OnePerLine,
+					conditions: [{cond: WrapConditionType.ItemCountLargerThan, value: 4}],
+				},
+				{
+					mode: WrapMode.FillLine,
 					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
 				},
 			],

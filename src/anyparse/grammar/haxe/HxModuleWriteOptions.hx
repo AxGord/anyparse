@@ -593,6 +593,22 @@ import anyparse.format.wrap.WrapRules;
  *    `trailingCommaArrays` (which still drives the optional trailing
  *    `,` after the last element on multi-line); the two compose.
  *
+ * Field added in slice ω-anontype-wraprules (fourth per-construct
+ * wrap-rules consumer):
+ *  - `anonTypeWrap` — `WrapRules` cascade driving the multi-line layout
+ *    decision for anonymous-type field lists (`{a:Int, b:String}`). The
+ *    macro emits a `WrapList.emit` runtime call at the `HxType.Anon.fields`
+ *    sep-Star site (tagged with `@:fmt(wrapRules('anonTypeWrap'))`).
+ *    Same twice-evaluated cascade machinery as the other three
+ *    per-construct wraps. Defaults port haxe-formatter's
+ *    `wrapping.anonType` rules from `default-hxformat.json` — the full
+ *    rule set is encodable: `itemCount<=3` + `exceedsMaxLineLength==0`
+ *    keeps short anon types flat, `anyItemLength>=30` /
+ *    `totalItemLength>=60` / `itemCount>=4` cascade to `OnePerLine`,
+ *    `exceedsMaxLineLength==1` falls through to `FillLine`. Architecturally
+ *    orthogonal to `anonTypeBracesOpen` / `anonTypeBracesClose` (which
+ *    still drive the inner-brace whitespace policy on flat layout).
+ *
  * Slice ω-line-comment-space adds the `addLineCommentSpace:Bool` knob
  * — but to the base `WriteOptions` typedef, not here. The knob drives a
  * format-neutral writer helper (`leadingCommentDoc` /
@@ -804,6 +820,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	objectLiteralWrap:WrapRules,
 	callParameterWrap:WrapRules,
 	arrayLiteralWrap:WrapRules,
+	anonTypeWrap:WrapRules,
 	expressionTry:SameLinePolicy,
 	indentCaseLabels:Bool,
 	functionTypeHaxe4:WhitespacePolicy,

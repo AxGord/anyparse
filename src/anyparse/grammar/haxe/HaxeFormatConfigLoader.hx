@@ -71,6 +71,10 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   `indentation/object_literal`) set
  *   `{"defaultWrap":"noWrap","rules":[]}` — semantically identical to
  *   "disable array wrapping", which the collapse honours.
+ * - `wrapping.anonType` (ω-anontype-wraprules): partial `WrapRules` block
+ *   → `anonTypeWrap`. Same `defaultWrap`-only ingest collapse as
+ *   `arrayWrap` (rules array dropped per the same `@:peg` ByName gap).
+ *   Routes to `HxType.Anon.fields` via `wrapRules('anonTypeWrap')`.
  * - `sameLine.ifElse` / `sameLine.tryCatch` / `sameLine.doWhile`: enum
  *   string — `"same"` → `SameLinePolicy.Same`, `"next"` →
  *   `SameLinePolicy.Next`, `"keep"` → `SameLinePolicy.Keep` (reads the
@@ -411,6 +415,7 @@ final class HaxeFormatConfigLoader {
 			objectLiteralWrap: base.objectLiteralWrap,
 			callParameterWrap: base.callParameterWrap,
 			arrayLiteralWrap: base.arrayLiteralWrap,
+			anonTypeWrap: base.anonTypeWrap,
 			addLineCommentSpace: base.addLineCommentSpace,
 			expressionTry: base.expressionTry,
 			indentCaseLabels: base.indentCaseLabels,
@@ -456,6 +461,7 @@ final class HaxeFormatConfigLoader {
 	private static function applyWrapping(section:HxFormatWrappingSection, opt:HxModuleWriteOptions):Void {
 		if (section.maxLineLength != null) opt.lineWidth = section.maxLineLength;
 		if (section.arrayWrap != null) opt.arrayLiteralWrap = wrapRulesFromConfig(section.arrayWrap, opt.arrayLiteralWrap);
+		if (section.anonType != null) opt.anonTypeWrap = wrapRulesFromConfig(section.anonType, opt.anonTypeWrap);
 	}
 
 	/**
