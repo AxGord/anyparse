@@ -38,8 +38,10 @@ class BlockCommentNormalizer {
 			catch (_:haxe.Exception) null;
 		if (parsed == null) return Text(content);
 		if (opt.commentStyle == CommentStyle.Verbatim) {
-			if (isJavadocStyle(parsed.lines)) return javadocBytePreserveDoc(content, parsed);
-			if (shouldPreserveBytes(parsed)) return Text(content);
+			final lines:Array<BlockCommentLine> = parsed.lines;
+			if (lines.length <= 1) return Text(content);
+			if (isJavadocStyle(lines)) return javadocBytePreserveDoc(content, parsed);
+			if (isFirstInlineNested(lines)) return firstInlineRebuildDoc(parsed, opt);
 			return BlockCommentWriter.writeDoc(parsed, opt);
 		}
 		return canonicalDoc(parsed, opt);
@@ -88,41 +90,122 @@ class BlockCommentNormalizer {
 	}
 
 	/**
-	 * Byte-preserve cases: the macro writer's hardline-join would
-	 * apply the surrounding nest to every interior line, doubling
-	 * the indent authors put in their source. For these shapes the
-	 * only sane output is round-tripping bytes verbatim:
+	 * `firstInline` shape — line 0 carries body content (not pure `*` decoration) —
+	 * IN A NESTED CONTEXT, detected via `structuralCloseLen(lastWs) > 0`. When the
+	 * closing `*\/` line carries structural indent beyond a canonical single-space
+	 * close pad, the wrap is at depth > 0 and source columns are nest-relative; at
+	 * top-level (close structurally at column 0) source columns ARE canonical depth
+	 * and `BlockCommentWriter.writeDoc` (with `@:sep('\n')` hardline-join + AST→AST
+	 * `normalize`) rewrites them.
 	 *
-	 *  - Single-line (one captured line, no `\n` in source).
-	 *  - firstInline (`/* foo\n  bar *\/`) IN A NESTED CONTEXT:
-	 *    line 0 sits inline with the open delimiter; subsequent
-	 *    lines were authored at source-absolute columns relative to
-	 *    where `/*` ended up, not at any canonical depth we can
-	 *    reconstruct from content. We detect "nested context" via
-	 *    `structuralCloseLen(lastWs) > 0` — when the closing `*\/`
-	 *    line carries any structural indent (i.e. ws beyond a
-	 *    canonical single-space close pad), the wrap is at depth > 0
-	 *    and source columns are nest-relative. At top-level
-	 *    (closing structurally at column 0) source columns ARE
-	 *    canonical depth, so we let `normalize` rewrite them.
-	 *  - Javadoc-bodied: every non-edge content line starts with
-	 *    `*`. The ` * ` per-line marker IS the visual indent;
-	 *    common-prefix reduce would consume the marker space.
-	 *
-	 * Anything else falls into the engine-driven canonicalize path:
-	 * AST→AST `normalize` rewrites ws fields, then the macro writer
-	 * routes through `@:sep('\n')` hardline-join.
+	 * Routes to `firstInlineRebuildDoc` which mirrors haxe-formatter's
+	 * `MarkTokenText.printComment` rule for non-startsWithStar comments: strip the
+	 * common interior leading-ws prefix, re-emit each interior line at `+1 indent
+	 * over surrounding nest`. Replaces the former `Text(content)` byte-preserve
+	 * path that left source-relative tab counts unchanged — issue_208 / issue_139
+	 * style fixtures lost the deepening continuation indent.
 	 */
-	private static function shouldPreserveBytes(comment:BlockComment):Bool {
-		final lines:Array<BlockCommentLine> = comment.lines;
-		if (lines.length <= 1) return true;
+	private static function isFirstInlineNested(lines:Array<BlockCommentLine>):Bool {
 		final firstBody:String = lines[0].body;
-		final firstDeco:Bool = isAllStars(firstBody);
-		if (firstBody.length > 0 && !firstDeco) {
-			final lastWs:String = lines[lines.length - 1].ws;
-			if (structuralCloseLen(lastWs) > 0) return true;
+		if (firstBody.length == 0 || isAllStars(firstBody)) return false;
+		final lastWs:String = lines[lines.length - 1].ws;
+		return structuralCloseLen(lastWs) > 0;
+	}
+
+	/**
+	 * Build a Doc for non-javadoc firstInline-bodied multi-line comments in nested
+	 * context. Mirrors haxe-formatter's `MarkTokenText.printComment` for
+	 * `startsWithStar = false`:
+	 *
+	 *  - Strip the common leading-ws prefix shared by interior lines (and the last
+	 *    line if its body doesn't match `^\s*(\**$|\})` — i.e. content-bearing
+	 *    last lines participate in the prefix calc).
+	 *  - Line 0: keep as-is (`Text("/*" + ws + body)`).
+	 *  - Interior lines: emit `Line('\n') + Text(indentUnit + strippedWs + body)`.
+	 *    `indentUnit` is the `+1` over surrounding nest; surrounding nest contributes
+	 *    its depth via the renderer's lazy-indent on `Line('\n')`.
+	 *  - Blank interior lines: emit only `Line('\n')` so the renderer's
+	 *    consecutive-Line discard suppresses trailing whitespace.
+	 *  - Last line — three cases:
+	 *      (a) `^\s*\}` style → trim, no extra indent (close-brace stays aligned
+	 *          with the wrap column).
+	 *      (b) `^\s*\*` star-prefixed → no extra indent, leave star alignment.
+	 *      (c) other content → `+1 indent`, rtrim then add trailing space if
+	 *          !endsWith('*') so `*\/` doesn't collide with last char.
+	 *  - Close `*\/` appended as `Text('*\/')`.
+	 */
+	private static function firstInlineRebuildDoc(comment:BlockComment, opt:WriteOptions):Doc {
+		final lines:Array<BlockCommentLine> = comment.lines;
+		final last:Int = lines.length - 1;
+		final lastBody:String = lines[last].body;
+		final lastIsClosingBrace:Bool = lastBody.length > 0 && StringTools.fastCodeAt(lastBody, 0) == '}'.code;
+		final lastIsDecoOrEmpty:Bool = lastBody.length == 0 || isAllStars(lastBody);
+		final includeLastInPrefix:Bool = !lastIsClosingBrace && !lastIsDecoOrEmpty;
+
+		var commonPrefix:Null<String> = null;
+		for (i in 1...lines.length) {
+			if (i == last && !includeLastInPrefix) continue;
+			final body:String = lines[i].body;
+			if (body.length == 0) continue;
+			final ws:String = lines[i].ws;
+			if (commonPrefix == null) {
+				commonPrefix = ws;
+			} else {
+				commonPrefix = commonPrefixOf(commonPrefix, ws);
+			}
 		}
-		return isJavadocStyle(lines);
+		final cp:String = commonPrefix ?? '';
+		final cpLen:Int = cp.length;
+
+		final indentUnit:String = indentUnitOf(opt);
+
+		final docs:Array<Doc> = [Text('/*' + lines[0].ws + lines[0].body)];
+
+		for (i in 1...lines.length) {
+			final ws:String = lines[i].ws;
+			final body:String = lines[i].body;
+
+			if (body.length == 0) {
+				docs.push(Line('\n'));
+				continue;
+			}
+
+			final stripWs:String = cpLen > 0 && StringTools.startsWith(ws, cp)
+				? ws.substr(cpLen)
+				: ws;
+
+			if (i == last) {
+				if (lastIsClosingBrace) {
+					docs.push(Line('\n'));
+					docs.push(Text(StringTools.trim(stripWs + body)));
+				} else if (StringTools.fastCodeAt(body, 0) == '*'.code) {
+					docs.push(Line('\n'));
+					docs.push(Text(stripWs + body));
+				} else {
+					var line:String = StringTools.rtrim(indentUnit + stripWs + body);
+					if (!StringTools.endsWith(line, '*')) line += ' ';
+					docs.push(Line('\n'));
+					docs.push(Text(line));
+				}
+			} else {
+				docs.push(Line('\n'));
+				docs.push(Text(indentUnit + stripWs + body));
+			}
+		}
+
+		docs.push(Text('*/'));
+		return Concat(docs);
+	}
+
+	private static inline function indentUnitOf(opt:WriteOptions):String {
+		return opt.indentChar == IndentChar.Tab ? '\t' : StringTools.rpad('', ' ', opt.indentSize);
+	}
+
+	private static function commonPrefixOf(a:String, b:String):String {
+		final lim:Int = a.length < b.length ? a.length : b.length;
+		var j:Int = 0;
+		while (j < lim && StringTools.fastCodeAt(a, j) == StringTools.fastCodeAt(b, j)) j++;
+		return a.substr(0, j);
 	}
 
 	/**
@@ -201,9 +284,7 @@ class BlockCommentNormalizer {
 		final closeStructLen:Int = structuralCloseLen(closingWs);
 		final structuralClose:String = closingWs.substr(0, closeStructLen);
 		final shouldBake:Bool = commonLen > closeStructLen;
-		final indentUnit:String = opt.indentChar == IndentChar.Tab
-			? '\t'
-			: StringTools.rpad('', ' ', opt.indentSize);
+		final indentUnit:String = indentUnitOf(opt);
 
 		final newLines:Array<BlockCommentLine> = [];
 		for (i in 0...lines.length) {
@@ -271,9 +352,7 @@ class BlockCommentNormalizer {
 		final wantStars:Bool = opt.commentStyle == CommentStyle.Javadoc;
 		final wrapDoc:Bool = opt.commentStyle == CommentStyle.Javadoc
 			|| opt.commentStyle == CommentStyle.JavadocNoStars;
-		final indentUnit:String = opt.indentChar == IndentChar.Tab
-			? '\t'
-			: StringTools.rpad('', ' ', opt.indentSize);
+		final indentUnit:String = indentUnitOf(opt);
 
 		final stripped:Array<{ws:String, content:String}> = stripMarkers(comment.lines);
 		final firstInline:Bool = stripped.length > 0 && stripped[0].content.length > 0;

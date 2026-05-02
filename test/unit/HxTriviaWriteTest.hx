@@ -278,7 +278,9 @@ class HxTriviaWriteTest extends Test {
 	/**
 	 * ω-block-comment-verbatim — inline content on the opening line
 	 * stays inline (no `\n` injected after `/*`) under default
-	 * `Verbatim`.
+	 * `Verbatim`. Continuation lines without a leading `*` marker
+	 * gain `+1 indent over surrounding nest` per haxe-formatter's
+	 * `MarkTokenText.printComment` rule (issue_208 / issue_139).
 	 */
 	public function testMultiLineBlockCommentInlineFirstLine():Void {
 		final source:String = 'class Main {\n'
@@ -286,9 +288,14 @@ class HxTriviaWriteTest extends Test {
 			+ '\tthree. */\n'
 			+ '\tvar x:Int;\n'
 			+ '}';
+		final expected:String = 'class Main {\n'
+			+ '\t/** one, two,\n'
+			+ '\t\tthree. */\n'
+			+ '\tvar x:Int;\n'
+			+ '}\n';
 		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out:String = HaxeModuleTriviaWriter.write(ast);
-		Assert.equals(source + '\n', out);
+		Assert.equals(expected, out);
 	}
 
 	/**
