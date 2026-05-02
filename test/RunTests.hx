@@ -31,6 +31,7 @@ import unit.HxCastSliceTest;
 import unit.HxECheckTypeSliceTest;
 import unit.HxVarStmtTrailOptSliceTest;
 import unit.HxTrailOptSourceTrackSliceTest;
+import unit.HxStringInterpNoFormatSliceTest;
 import unit.HxToplevelVarFnSliceTest;
 import unit.HxToplevelPackageSliceTest;
 import unit.HxToplevelImportUsingSliceTest;
@@ -151,6 +152,7 @@ class RunTests {
 		runner.addCase(new HxECheckTypeSliceTest());
 		runner.addCase(new HxVarStmtTrailOptSliceTest());
 		runner.addCase(new HxTrailOptSourceTrackSliceTest());
+		runner.addCase(new HxStringInterpNoFormatSliceTest());
 		runner.addCase(new HxToplevelVarFnSliceTest());
 		runner.addCase(new HxToplevelPackageSliceTest());
 		runner.addCase(new HxToplevelImportUsingSliceTest());

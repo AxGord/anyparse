@@ -701,6 +701,20 @@ import anyparse.format.wrap.WrapRules;
  * and ctor-level `@:fmt(multilineWhenFieldNonEmpty(...))` /
  * `@:fmt(multilineWhenFieldShape(...))` / `@:fmt(multilineCtor)` metas.
  * Zero runtime reflection.
+ *
+ * Field added in slice ω-string-interp-noformat (verbatim emit of
+ * `${…}` interpolation expressions in single-quoted strings):
+ *  - `formatStringInterpolation` — when `true` (default, matches haxe-
+ *    formatter's `whitespace.formatStringInterpolation: @:default(true)`)
+ *    the writer re-emits each `${expr}` segment by recursing into the
+ *    parsed `HxExpr`, producing canonical `${a + b}` spacing regardless
+ *    of source. When `false` the writer emits the parser-captured byte
+ *    slice between `${` and `}` verbatim, preserving the author's
+ *    spacing exactly (`${a+b}` stays `${a+b}`). The captured slice
+ *    rides on the trivia-pair synth ctor `HxStringSegmentT.Block`'s
+ *    positional `sourceText:String` arg, populated by Lowering Case 3
+ *    when the ctor carries `@:fmt(captureSource)`. Plain-mode pipelines
+ *    (no synth pair) do not capture and the knob has no effect there.
  */
 typedef HxModuleWriteOptions = WriteOptions & {
 	sameLineElse:SameLinePolicy,
@@ -763,4 +777,5 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	beforeUsing:Int,
 	afterMultilineDecl:Int,
 	beforeMultilineDecl:Int,
+	formatStringInterpolation:Bool,
 };

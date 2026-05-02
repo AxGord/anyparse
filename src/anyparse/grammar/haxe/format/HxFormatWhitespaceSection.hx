@@ -114,6 +114,17 @@ package anyparse.grammar.haxe.format;
  *    field's `@:fmt(bareBodyBreaks)` triggers the
  *    `stripKwTrailingSpace` predicate which gates the slot to `null`
  *    regardless of policy.
+ *
+ * Extended in slice ω-string-interp-noformat:
+ *  - `formatStringInterpolation` feeds `opt.formatStringInterpolation`.
+ *    Bool — when `true` (default) `${expr}` segments are re-rendered
+ *    by recursing into the parsed `HxExpr`; when `false` the writer
+ *    emits the parser-captured byte slice between `${` and `}`
+ *    verbatim, preserving the author's exact spacing inside the
+ *    braces. Consumed via the trivia-pair synth ctor's positional
+ *    `sourceText:String` arg on `HxStringSegmentT.Block`, populated
+ *    by Lowering Case 3 when the grammar ctor carries
+ *    `@:fmt(captureSource)`.
  */
 @:peg typedef HxFormatWhitespaceSection = {
 
@@ -144,6 +155,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var tryPolicy:HxFormatWhitespacePolicy;
 
 	@:optional var addLineCommentSpace:Bool;
+
+	@:optional var formatStringInterpolation:Bool;
 
 	@:optional var parenConfig:HxFormatParenConfigSection;
 

@@ -109,9 +109,17 @@ class WriterLowering {
 			// Disjoint from `isAltCloseTrailingBranch` (Star vs Ref child),
 			// so at most one extra arg per branch — the writer reads the
 			// flag via `argNames[1]` in `lowerEnumBranch`'s Case 3.
+			// ω-string-interp-noformat: in trivia mode, ctors with
+			// `@:fmt(captureSource)` grow a positional `sourceText:String`
+			// arg holding the parser-captured byte slice between the
+			// ctor's `@:lead` and `@:trail`. Disjoint from the above two
+			// (different shape predicates) — at most one extra arg per
+			// branch. Read inside Case 3 via `argNames[1]` to gate verbatim
+			// emission on `opt.formatStringInterpolation`.
 			final hasCloseTrailing:Bool = ctx.trivia && TriviaTypeSynth.isAltCloseTrailingBranch(branch);
 			final hasTrailOptFlag:Bool = ctx.trivia && TriviaTypeSynth.isAltTrailOptBranch(branch);
-			final extraArgs:Int = (hasCloseTrailing || hasTrailOptFlag) ? 1 : 0;
+			final hasCaptureSource:Bool = ctx.trivia && TriviaTypeSynth.isCaptureSourceBranch(branch);
+			final extraArgs:Int = (hasCloseTrailing || hasTrailOptFlag || hasCaptureSource) ? 1 : 0;
 			final argNames:Array<String> = [for (i in 0...children.length + extraArgs) '_v$i'];
 
 			// Build pattern
@@ -337,9 +345,32 @@ class WriterLowering {
 			// path covers the direct-Ref case where no wrapper struct hosts
 			// the field.
 			final ctorBodyPolicyFlag:Null<String> = branch.fmtReadString('bodyPolicy');
-			final bodyExpr:Expr = ctorBodyPolicyFlag != null
+			final policyWrapped:Expr = ctorBodyPolicyFlag != null
 				? bodyPolicyWrap(ctorBodyPolicyFlag, subCall, macro $i{argNames[0]}, refName, false, null)
 				: subCall;
+
+			// ω-string-interp-noformat: when the ctor opted into source-
+			// byte capture (`@:fmt(captureSource('<optName>'))` + trivia
+			// mode), the synth ctor's `argNames[1]` holds the verbatim
+			// slice between `@:lead` and `@:trail`. Gate emission on the
+			// named `Bool` runtime option: when `false`, emit the captured
+			// bytes via `_dt(sourceText)` instead of recursing into the
+			// parsed `expr`. The two modes are runtime-selectable per write
+			// — the same parsed AST can flip between formatted and verbatim
+			// by toggling the knob. The flag arg names the runtime field
+			// so format-neutrality is preserved (mirror of `bodyPolicy` /
+			// `wrapRules` parametric flags).
+			final captureSourceOpt:Null<String> = ctx.trivia
+				? branch.fmtReadString('captureSource')
+				: null;
+			final bodyExpr:Expr = if (captureSourceOpt != null) {
+				final sourceAccess:Expr = macro $i{argNames[1]};
+				final optAccess:Expr = {
+					expr: EField(macro opt, captureSourceOpt),
+					pos: Context.currentPos(),
+				};
+				macro $optAccess ? $policyWrapped : _dt($sourceAccess);
+			} else policyWrapped;
 
 			// When the sub-struct opens with a bare-Ref @:fmt(bodyPolicy(...)) field,
 			// the sub-struct's writer emits the header→body separator via

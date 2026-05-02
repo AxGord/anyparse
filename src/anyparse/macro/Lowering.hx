@@ -1049,8 +1049,20 @@ class Lowering {
 			// Pass the captured `matchLit` result through so the writer
 			// can preserve source presence of the trail literal.
 			final triviaTrailOpt:Bool = trailOptional && ctx.trivia && isTriviaBearing(typePath);
+			// ω-string-interp-noformat: ctors with `@:fmt(captureSource)` +
+			// `@:lead`/`@:trail` carry a positional `sourceText:String` arg
+			// in trivia mode. The parser captures the byte slice between
+			// lead and trail (inclusive of any interior whitespace) so the
+			// writer can emit verbatim under
+			// `opt.formatStringInterpolation == false`. Trivia-only because
+			// the synth-pair ctor is the carrier; plain pipelines keep the
+			// pre-slice ctor arity.
+			final triviaCaptureSource:Bool = ctx.trivia
+				&& isTriviaBearing(typePath)
+				&& TriviaTypeSynth.isCaptureSourceBranch(branch);
 			final ctorArgs:Array<Expr> = [macro _raw];
 			if (triviaTrailOpt) ctorArgs.push(macro _trailPresent);
+			if (triviaCaptureSource) ctorArgs.push(macro _sourceText);
 			final ctorCall:Expr = {expr: ECall(ctorRef, ctorArgs), pos: Context.currentPos()};
 			final kwLead:Null<String> = branch.annotations.get('kw.leadText');
 			final steps:Array<Expr> = [macro skipWs(ctx)];
@@ -1061,6 +1073,13 @@ class Lowering {
 				steps.push(macro expectLit(ctx, $v{leadText}));
 				steps.push(macro skipWs(ctx));
 			}
+			// Capture _start_pos AFTER any lead literal AND its skipWs, so
+			// the substring spans only what lives between lead and trail.
+			// In `@:raw` rules the `skipWs` call gets stripped by the rule-
+			// level post-process, but the capture still works — `ctx.pos`
+			// at this point is the position of the first byte after the
+			// lead literal.
+			if (triviaCaptureSource) steps.push(macro final _start_pos:Int = ctx.pos);
 			steps.push({
 				expr: EVars([{
 					name: '_raw',
@@ -1072,6 +1091,16 @@ class Lowering {
 			});
 			if (trailText != null) {
 				steps.push(macro skipWs(ctx));
+				// Capture _end_pos AFTER the post-Ref skipWs but BEFORE the
+				// trail-literal match, so trailing whitespace inside the
+				// braces (e.g. `${ i + 1 }`) is included in the verbatim
+				// slice. In `@:raw` rules the skipWs is stripped at post-
+				// process time and the capture lands at the position of
+				// the trail literal directly.
+				if (triviaCaptureSource) {
+					steps.push(macro final _end_pos:Int = ctx.pos);
+					steps.push(macro final _sourceText:String = ctx.input.substring(_start_pos, _end_pos));
+				}
 				// `@:trailOpt` annotates `lit.trailOptional:true` alongside
 				// `lit.trailText`. The trail literal becomes optional on
 				// parse — `matchLit` peeks + consumes if present, but does

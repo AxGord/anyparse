@@ -18,6 +18,17 @@ package anyparse.grammar.haxe;
  *
  * `@:raw` suppresses `skipWs` in the generated parse function — every
  * character between the enclosing `'` quotes is significant.
+ *
+ * `@:fmt(captureSource('<optionFieldName>'))` on `Block` opts the
+ * trivia-pair synth ctor (`HxStringSegmentT.Block`) into a positional
+ * `sourceText:String` arg holding the parser-captured byte slice
+ * between `${` and `}` (inclusive of any leading / trailing whitespace
+ * inside the braces). The writer reads it and gates emission on the
+ * named `Bool` runtime option — when `opt.formatStringInterpolation ==
+ * false`, the writer emits the captured slice verbatim instead of
+ * recursing into the parsed `HxExpr`. Matches haxe-formatter's
+ * `whitespace.formatStringInterpolation: false` knob, which preserves
+ * the author's exact spacing inside `${…}` instead of re-rendering.
  */
 @:peg
 @:raw
@@ -28,7 +39,7 @@ enum HxStringSegment {
 	@:lit("$$")
 	Dollar;
 
-	@:lead("${") @:trail("}")
+	@:lead("${") @:trail("}") @:fmt(captureSource('formatStringInterpolation'))
 	Block(expr:HxExpr);
 
 	@:lead("$")

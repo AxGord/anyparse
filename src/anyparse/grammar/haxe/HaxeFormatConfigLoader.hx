@@ -206,6 +206,18 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   `// foo`; decoration runs (`//*****`, `//------`, `////`) survive
  *   tight via the `^[/\*\-\s]+` guard. `false` skips the space-insert
  *   pass (still rtrims the body). Routed to `opt.addLineCommentSpace`.
+ * - `whitespace.formatStringInterpolation` (ω-string-interp-noformat):
+ *   boolean — `true` (default) re-renders each `${expr}` segment of a
+ *   single-quoted Haxe string by recursing into the parsed `HxExpr`
+ *   (canonical Pratt spacing, e.g. `i+1` becomes `i + 1`). `false`
+ *   emits the parser-captured byte slice between `${` and `}`
+ *   verbatim, preserving the author's exact spacing inside the
+ *   braces. Routed to `opt.formatStringInterpolation`. Carrier is the
+ *   trivia-pair synth ctor `HxStringSegmentT.Block`'s positional
+ *   `sourceText:String` arg, populated by Lowering Case 3 when the
+ *   grammar ctor carries `@:fmt(captureSource('formatStringInterpolation'))`;
+ *   plain-mode pipelines have no carrier and the knob is silently
+ *   inert there.
  * - `whitespace.bracesConfig.objectLiteralBraces.openingPolicy`
  *   (ω-objectlit-braces): same enum / same collapse, routed to
  *   `opt.objectLiteralBracesOpen`. `After` / `Both` emit a space
@@ -379,6 +391,7 @@ final class HaxeFormatConfigLoader {
 			beforeUsing: base.beforeUsing,
 			afterMultilineDecl: base.afterMultilineDecl,
 			beforeMultilineDecl: base.beforeMultilineDecl,
+			formatStringInterpolation: base.formatStringInterpolation,
 			blockCommentAdapter: base.blockCommentAdapter,
 			lineCommentAdapter: base.lineCommentAdapter,
 			endsWithCloseBrace: base.endsWithCloseBrace,
@@ -477,6 +490,8 @@ final class HaxeFormatConfigLoader {
 			opt.tryPolicy = whitespaceToRuntime(section.tryPolicy);
 		if (section.addLineCommentSpace != null)
 			opt.addLineCommentSpace = section.addLineCommentSpace;
+		if (section.formatStringInterpolation != null)
+			opt.formatStringInterpolation = section.formatStringInterpolation;
 		final paren:Null<HxFormatParenConfigSection> = section.parenConfig;
 		if (paren != null) {
 			final funcParam:Null<HxFormatParenPolicySection> = paren.funcParamParens;

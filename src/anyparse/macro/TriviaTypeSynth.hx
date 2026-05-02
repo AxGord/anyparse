@@ -165,6 +165,16 @@ class TriviaTypeSynth {
 	 */
 	public static inline final TRAIL_PRESENT_ARG_NAME:String = 'trailPresent';
 
+	/**
+	 * ω-string-interp-noformat — positional arg name appended to paired
+	 * Alt ctors that carry `@:fmt(captureSource)`. The parser captures the
+	 * input slice between the ctor's `@:lead` and `@:trail` literals here
+	 * so the writer can emit it verbatim under
+	 * `opt.formatStringInterpolation == false`. First (and currently only)
+	 * consumer: `HxStringSegmentT.Block` for `${expr}` interpolation.
+	 */
+	public static inline final SOURCE_TEXT_ARG_NAME:String = 'sourceText';
+
 	private static inline final PAIRED_SUFFIX:String = 'T';
 	private static inline final SYNTH_SUBPACK:String = 'trivia';
 	private static inline final SYNTH_MODULE_LEAF:String = 'Pairs';
@@ -372,6 +382,19 @@ class TriviaTypeSynth {
 			final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
 			args.push({name: TRAIL_PRESENT_ARG_NAME, type: boolCT});
 		}
+		// ω-string-interp-noformat: ctors carrying `@:fmt(captureSource)`
+		// grow a positional `sourceText:String` arg holding the parser-
+		// captured byte slice between the ctor's `@:lead` and `@:trail`
+		// literals. Disjoint from `isAltCloseTrailingBranch` (Star vs Ref
+		// child) and from `isAltTrailOptBranch` (the `@:trailOpt` predicate
+		// requires a trail literal that can be matched optionally; the
+		// captureSource ctors have unconditional `@:lead`/`@:trail`). When
+		// all three were ever to coexist on a single ctor, the arg order
+		// would be: closeTrailing → trailPresent → sourceText.
+		if (isCaptureSourceBranch(branch)) {
+			final strCT:ComplexType = TPath({pack: [], name: 'String', params: []});
+			args.push({name: SOURCE_TEXT_ARG_NAME, type: strCT});
+		}
 		return {name: ctorName, kind: FFun({args: args, ret: null, expr: null}), pos: pos, access: []};
 	}
 
@@ -405,6 +428,27 @@ class TriviaTypeSynth {
 		if (branch.children.length != 1) return false;
 		if (branch.children[0].kind != Ref) return false;
 		return branch.readMetaString(':trailOpt') != null;
+	}
+
+	/**
+	 * True when the branch opts into source-byte capture via
+	 * `@:fmt(captureSource('<optionFieldName>'))`. The synth-pair ctor
+	 * grows a positional `sourceText:String` arg; the parser fills it
+	 * with the input slice between the ctor's `@:lead` and `@:trail`
+	 * literals (inclusive of any whitespace inside) so the writer can
+	 * emit verbatim when the named runtime `Bool` option is `false`.
+	 *
+	 * Requires single Ref child + `@:lead` + `@:trail` (the parser has
+	 * an unambiguous slice to capture). Disjoint from
+	 * `isAltTrailOptBranch` since `@:trailOpt` and unconditional
+	 * `@:trail` are mutually exclusive on the same ctor.
+	 */
+	public static function isCaptureSourceBranch(branch:ShapeNode):Bool {
+		if (branch.children.length != 1) return false;
+		if (branch.children[0].kind != Ref) return false;
+		if (branch.readMetaString(':lead') == null) return false;
+		if (branch.readMetaString(':trail') == null) return false;
+		return branch.fmtReadString('captureSource') != null;
 	}
 
 	private static function shapeToComplexType(node:ShapeNode, synthPack:Array<String>):ComplexType {
