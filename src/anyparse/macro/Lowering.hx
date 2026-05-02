@@ -1313,6 +1313,7 @@ class Lowering {
 			final beforeKwNlLocal:String = '_beforeKwNl_$fieldName';
 			final bodyOnSameLineLocal:String = '_bodyOnSameLine_$fieldName';
 			final beforeKwLeadingLocal:String = '_beforeKwLeading_$fieldName';
+			final beforeKwTrailingLocal:String = '_beforeKwTrailing_$fieldName';
 			if (hasKwTriviaSlots) {
 				parseSteps.push({
 					expr: EVars([{name: afterKwLocal, type: (macro : Null<String>), expr: macro null, isFinal: false}]),
@@ -1332,6 +1333,10 @@ class Lowering {
 				});
 				parseSteps.push({
 					expr: EVars([{name: beforeKwLeadingLocal, type: (macro : Array<String>), expr: macro [], isFinal: false}]),
+					pos: Context.currentPos(),
+				});
+				parseSteps.push({
+					expr: EVars([{name: beforeKwTrailingLocal, type: (macro : Null<String>), expr: macro null, isFinal: false}]),
 					pos: Context.currentPos(),
 				});
 			}
@@ -1411,9 +1416,20 @@ class Lowering {
 					// observes it.
 					final valueExpr:Expr = if (hasKwTriviaSlots) macro {
 						final _wsPos:Int = ctx.pos;
+						// ω-trivia-before-kw-trailing: probe for a single same-line
+						// `// comment` after the preceding sibling's last token
+						// (e.g. `resize(); // first\nelse`). `collectTrailing`
+						// consumes pos to end of comment on hit, rewinds otherwise.
+						// On commit-success the captured body lands in
+						// `_beforeKwTrailing_<field>` for the writer to cuddle to
+						// the prior token. On commit-miss the outer `ctx.pos =
+						// _wsPos` rewind drops the capture so the enclosing Star's
+						// next `collectTrivia` re-observes it.
+						final _trailComment:Null<String> = collectTrailing(ctx);
 						final _preTrivia = collectTrivia(ctx);
 						final _kwStartPos:Int = ctx.pos;
 						if ($commitCheck) {
+							$i{beforeKwTrailingLocal} = _trailComment;
 							for (_c in _preTrivia.leadingComments) $i{beforeKwLeadingLocal}.push(_c);
 							$preCommitCapture;
 							$innerCommitAction;
@@ -1502,6 +1518,7 @@ class Lowering {
 				structFields.push({field: fieldName + TriviaTypeSynth.BEFORE_KW_NEWLINE_SUFFIX, expr: macro $i{beforeKwNlLocal}});
 				structFields.push({field: fieldName + TriviaTypeSynth.BODY_ON_SAME_LINE_SUFFIX, expr: macro $i{bodyOnSameLineLocal}});
 				structFields.push({field: fieldName + TriviaTypeSynth.BEFORE_KW_LEADING_SUFFIX, expr: macro $i{beforeKwLeadingLocal}});
+				structFields.push({field: fieldName + TriviaTypeSynth.BEFORE_KW_TRAILING_SUFFIX, expr: macro $i{beforeKwTrailingLocal}});
 			}
 			if (ctx.trivia && isStar && child.annotations.get('trivia.starCollects') == true) {
 				final trailBBLocal:String = trailingBlankBeforeLocalName(localName);

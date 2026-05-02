@@ -117,6 +117,30 @@ class HxTriviaWriteTest extends Test {
 	}
 
 	/**
+	 * ω-trivia-before-kw-trailing — same-line `// comment` after a
+	 * non-block then-body's terminating `;`, immediately before the
+	 * `else` keyword, must be preserved cuddled to the `;`. Reproduces
+	 * `issue_45_comment_breaks_indentation.hxtest`'s first byte-diff
+	 * mechanism: pre-slice the comment was bucketed as `BeforeKwLeading`
+	 * (own-line leading of `else`) and emitted on its own line, breaking
+	 * the source's `;-trailing-comment+else` shape.
+	 */
+	public function testSameLineCommentBeforeElseAfterStmtRoundTrip():Void {
+		final source:String =
+			'class Foo {\n'
+			+ '\tfunction bar() {\n'
+			+ '\t\tif (cond)\n'
+			+ '\t\t\ta(); // first\n'
+			+ '\t\telse\n'
+			+ '\t\t\tb(); // second\n'
+			+ '\t}\n'
+			+ '}';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out:String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals(source + '\n', out);
+	}
+
+	/**
 	 * ω-issue-316b — own-line comment between `else` and the block's
 	 * `{` is preserved at the body's interior indent on output, while
 	 * the `{` drops back to the outer (body's exterior) indent.

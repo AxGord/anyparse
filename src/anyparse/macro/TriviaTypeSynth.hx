@@ -91,6 +91,20 @@ class TriviaTypeSynth {
 	public static inline final BEFORE_KW_LEADING_SUFFIX:String = 'BeforeKwLeading';
 
 	/**
+	 * ω-trivia-before-kw-trailing — same-line trailing comment captured
+	 * BEFORE the optional keyword commit point but ON THE SAME LINE as the
+	 * preceding sibling's last token (e.g. `resize(); // first\nelse`).
+	 * Differs from `BeforeKwLeading` (own-line comments separated by `\n`):
+	 * `BeforeKwTrailing` is a single comment on the same line as the prior
+	 * `;`, captured via `collectTrailing` (single comment, no internal
+	 * newline). Stripped body, line-style only by construction. Writer
+	 * emits as ` //<body>` cuddled to the previous token before the
+	 * pre-kw hardline. `null` on the commit-miss path or when the source
+	 * has no same-line comment between the prior sibling and the keyword.
+	 */
+	public static inline final BEFORE_KW_TRAILING_SUFFIX:String = 'BeforeKwTrailing';
+
+	/**
 	 * ω-issue-48-v2 — source-shape slot synthesised on paired Seq types
 	 * alongside bare non-first Ref fields (no `@:optional`, no `@:kw`, no
 	 * `@:lead`). Records whether the source had a newline in the gap
@@ -292,6 +306,7 @@ class TriviaTypeSynth {
 			{name: fieldName + BEFORE_KW_NEWLINE_SUFFIX, kind: FVar(boolCT), pos: pos, access: []},
 			{name: fieldName + BODY_ON_SAME_LINE_SUFFIX, kind: FVar(boolCT), pos: pos, access: []},
 			{name: fieldName + BEFORE_KW_LEADING_SUFFIX, kind: FVar(arrayStrCT), pos: pos, access: []},
+			{name: fieldName + BEFORE_KW_TRAILING_SUFFIX, kind: FVar(nullStrCT), pos: pos, access: []},
 		];
 	}
 

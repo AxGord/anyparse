@@ -83,6 +83,11 @@ class WriterCodegen {
 			// layout even when `sameLine`/`Same` would otherwise put the kw
 			// on the same line as `}`.
 			fields.push(kwBeforeDocField());
+			// ω-trivia-before-kw-trailing: prepends a same-line trailing
+			// comment captured between the preceding sibling's last token and
+			// the optional kw (`resize(); // first\nelse`). Returns the
+			// caller's plain separator when no trailing captured.
+			fields.push(kwBeforeTrailingDocField());
 		}
 		return fields;
 	}
@@ -735,6 +740,37 @@ class WriterCodegen {
 			kind: FFun({
 				args: [
 					{name: 'beforeKwLeading', type: macro : Array<String>},
+					{name: 'sepDoc', type: macro : anyparse.core.Doc},
+					{name: 'opt', type: macro : anyparse.format.WriteOptions},
+				],
+				ret: macro : anyparse.core.Doc,
+				expr: body,
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * ω-trivia-before-kw-trailing — render the same-line trailing comment
+	 * captured between a preceding sibling's last token and an
+	 * `@:optional @:kw` keyword (e.g. `resize(); // first\nelse`). Returns
+	 * the caller's separator unchanged when `trailing` is `null`. Otherwise
+	 * concatenates ` //<body>` (via `trailingCommentDoc`) BEFORE the
+	 * separator so the comment cuddles to the prior token; the separator
+	 * (hardline or `kwBeforeDoc` output) follows and breaks back to the
+	 * parent indent before the kw.
+	 */
+	private static function kwBeforeTrailingDocField():Field {
+		final body:Expr = macro {
+			if (trailing == null) return sepDoc;
+			return _dc([trailingCommentDoc(trailing, opt), sepDoc]);
+		};
+		return {
+			name: 'kwBeforeTrailingDoc',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [
+					{name: 'trailing', type: macro : Null<String>},
 					{name: 'sepDoc', type: macro : anyparse.core.Doc},
 					{name: 'opt', type: macro : anyparse.format.WriteOptions},
 				],

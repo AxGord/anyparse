@@ -900,13 +900,28 @@ class WriterLowering {
 					final beforeKwLeadingExpr:Null<Expr> = useTriviaGap
 						? {expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_LEADING_SUFFIX), pos: Context.currentPos()}
 						: null;
+					// ω-trivia-before-kw-trailing: same-line trailing comment
+					// captured between the preceding sibling's last token and
+					// the kw (e.g. `resize(); // first\nelse`) lands in
+					// `<field>BeforeKwTrailing`. When non-null, prepended
+					// before the (possibly leading-augmented) separator so
+					// the comment cuddles to the prior token; the hardline
+					// inside the sep breaks back to the parent indent before
+					// the kw. Composes with `kwBeforeDoc` cleanly: trailing
+					// first, then own-line leadings, then sep+kw.
+					final beforeKwTrailingExpr:Null<Expr> = useTriviaGap
+						? {expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_TRAILING_SUFFIX), pos: Context.currentPos()}
+						: null;
 					final optParts:Array<Expr> = [];
 					if (kwLead != null) {
 						final sepBaseExpr:Expr = sameLineSeparator(child, prevBodyField, typePath);
 						final sepWithBeforeKwExpr:Expr = beforeKwLeadingExpr != null
 							? macro kwBeforeDoc($beforeKwLeadingExpr, $sepBaseExpr, opt)
 							: sepBaseExpr;
-						optParts.push(sepWithBeforeKwExpr);
+						final sepWithBeforeKwTrailingExpr:Expr = beforeKwTrailingExpr != null
+							? macro kwBeforeTrailingDoc($beforeKwTrailingExpr, $sepWithBeforeKwExpr, opt)
+							: sepWithBeforeKwExpr;
+						optParts.push(sepWithBeforeKwTrailingExpr);
 						if (bodyPolicyFlag != null) {
 							optParts.push(macro _dt($v{kwLead}));
 							optParts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, macro _optVal, refName, hasElseIf, elseFieldName, afterKwExpr, kwLeadingExpr, bodyOnSameLineExpr));
