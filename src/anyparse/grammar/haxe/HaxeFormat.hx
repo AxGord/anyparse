@@ -573,6 +573,7 @@ final class HaxeFormat implements TextFormat {
 		callParameterWrap: HaxeFormat.defaultCallParameterWrap(),
 		arrayLiteralWrap: HaxeFormat.defaultArrayLiteralWrap(),
 		anonTypeWrap: HaxeFormat.defaultAnonTypeWrap(),
+		methodChainWrap: HaxeFormat.defaultMethodChainWrap(),
 		addLineCommentSpace: true,
 		expressionTry: SameLinePolicy.Same,
 		indentCaseLabels: true,
@@ -739,6 +740,68 @@ final class HaxeFormat implements TextFormat {
 				},
 				{
 					mode: WrapMode.FillLine,
+					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
+				},
+			],
+			defaultMode: WrapMode.NoWrap,
+		};
+	}
+
+	/**
+	 * Default `WrapRules` cascade for postfix `.method(args)` chains —
+	 * ported from haxe-formatter's `wrapping.methodChain` rule set in
+	 * `resources/default-hxformat.json` (AxGord fork). The leading
+	 * `lineLength >= 160` rule from upstream is skipped because
+	 * `WrapConditionType` does not yet model raw current-line length —
+	 * same skip-precedent
+	 * as `defaultArrayLiteralWrap`'s `hasMultilineItems` /
+	 * `equalItemLengths` omissions. The remaining cascade still covers
+	 * the common cases: short chains stay flat (`itemCount<=3` +
+	 * `exceedsMaxLineLength==0`, or `totalItemLength<=80` +
+	 * `exceedsMaxLineLength==0`); `anyItemLength>=30` + `itemCount>=4`
+	 * or `itemCount>=7` or `exceedsMaxLineLength==1` cascades to
+	 * `OnePerLineAfterFirst`.
+	 *
+	 * NOTE: this cascade is currently unused by the writer pipeline —
+	 * the slice ω-methodchain-wraprules-capability ships the knob and
+	 * JSON loader only, so a follow-up slice can wire the writer-time
+	 * chain extractor against `HxExpr.Call` / `HxExpr.FieldAccess`. See
+	 * `HxModuleWriteOptions.methodChainWrap` for the rationale.
+	 *
+	 * Returned as a fresh struct on each call so test code that mutates
+	 * the `defaultWriteOptions.methodChainWrap` substruct doesn't
+	 * corrupt the singleton.
+	 */
+	public static function defaultMethodChainWrap():WrapRules {
+		return {
+			rules: [
+				{
+					mode: WrapMode.NoWrap,
+					conditions: [
+						{cond: WrapConditionType.ItemCountLessThan, value: 3},
+						{cond: WrapConditionType.ExceedsMaxLineLength, value: 0},
+					],
+				},
+				{
+					mode: WrapMode.NoWrap,
+					conditions: [
+						{cond: WrapConditionType.TotalItemLengthLessThan, value: 80},
+						{cond: WrapConditionType.ExceedsMaxLineLength, value: 0},
+					],
+				},
+				{
+					mode: WrapMode.OnePerLineAfterFirst,
+					conditions: [
+						{cond: WrapConditionType.AnyItemLengthLargerThan, value: 30},
+						{cond: WrapConditionType.ItemCountLargerThan, value: 4},
+					],
+				},
+				{
+					mode: WrapMode.OnePerLineAfterFirst,
+					conditions: [{cond: WrapConditionType.ItemCountLargerThan, value: 7}],
+				},
+				{
+					mode: WrapMode.OnePerLineAfterFirst,
 					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
 				},
 			],

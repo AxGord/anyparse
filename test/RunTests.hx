@@ -67,6 +67,7 @@ import unit.HxTypeParamSpacingOptionsTest;
 import unit.HxAnonTypeBracesOptionsTest;
 import unit.HxObjectLitBracesOptionsTest;
 import unit.HxObjectLitWrapRulesTest;
+import unit.HxMethodChainWrapCapabilityTest;
 import unit.HxAbstractClauseSpacingTest;
 import unit.HxElseIfOptionsTest;
 import unit.HxIfPolicyOptionsTest;
@@ -183,6 +184,7 @@ class RunTests {
 		runner.addCase(new HxAnonTypeBracesOptionsTest());
 		runner.addCase(new HxObjectLitBracesOptionsTest());
 		runner.addCase(new HxObjectLitWrapRulesTest());
+		runner.addCase(new HxMethodChainWrapCapabilityTest());
 		runner.addCase(new HxAbstractClauseSpacingTest());
 		runner.addCase(new HxElseIfOptionsTest());
 		runner.addCase(new HxIfPolicyOptionsTest());

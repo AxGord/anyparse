@@ -609,6 +609,30 @@ import anyparse.format.wrap.WrapRules;
  *    orthogonal to `anonTypeBracesOpen` / `anonTypeBracesClose` (which
  *    still drive the inner-brace whitespace policy on flat layout).
  *
+ * Field added in slice ω-methodchain-wraprules-capability (capability/parity
+ * step — knob + JSON loader only, no writer wiring yet):
+ *  - `methodChainWrap` — `WrapRules` cascade describing the multi-line
+ *    layout decision for `.method(args).method(args)…` postfix chains.
+ *    Architecturally distinct from the four existing per-construct
+ *    consumers (`objectLiteralWrap`, `callParameterWrap`, `arrayLiteralWrap`,
+ *    `anonTypeWrap`): chain segments aren't a flat `Star` field on a
+ *    grammar struct — they're a nested left-assoc tree
+ *    `Call(FieldAccess(Call(FieldAccess(...))))` over `HxExpr`, so
+ *    `WrapList.emit` can't be wired via `@:fmt(wrapRules('<field>'))` the
+ *    way the other four are. This slice ships the knob + loader so a
+ *    follow-up slice can wire the writer-time chain extractor + emit.
+ *    No grammar `@:fmt` site reads it yet; runtime behaviour is unchanged.
+ *    Defaults port haxe-formatter's `wrapping.methodChain` rules from
+ *    `default-hxformat.json`, minus the leading `lineLength >= 160` rule
+ *    which `WrapConditionType` does not yet model — same skip-precedent
+ *    as `defaultArrayLiteralWrap`'s `hasMultilineItems` /
+ *    `equalItemLengths` omissions (the runtime cascade then routes
+ *    through the supported conditions: `itemCount<=3` +
+ *    `exceedsMaxLineLength==0` OR `totalItemLength<=80` +
+ *    `exceedsMaxLineLength==0` keeps short chains flat;
+ *    `anyItemLength>=30` + `itemCount>=4`, `itemCount>=7`, or
+ *    `exceedsMaxLineLength==1` cascade to `OnePerLineAfterFirst`).
+ *
  * Slice ω-line-comment-space adds the `addLineCommentSpace:Bool` knob
  * — but to the base `WriteOptions` typedef, not here. The knob drives a
  * format-neutral writer helper (`leadingCommentDoc` /
@@ -842,6 +866,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	callParameterWrap:WrapRules,
 	arrayLiteralWrap:WrapRules,
 	anonTypeWrap:WrapRules,
+	methodChainWrap:WrapRules,
 	expressionTry:SameLinePolicy,
 	indentCaseLabels:Bool,
 	indentObjectLiteral:Bool,

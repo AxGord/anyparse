@@ -83,6 +83,13 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   → `anonTypeWrap`. Same `defaultWrap`-only ingest collapse as
  *   `arrayWrap` (rules array dropped per the same `@:peg` ByName gap).
  *   Routes to `HxType.Anon.fields` via `wrapRules('anonTypeWrap')`.
+ * - `wrapping.methodChain` (ω-methodchain-wraprules-capability): partial
+ *   `WrapRules` block → `methodChainWrap`. Same `defaultWrap`-only
+ *   ingest collapse as `arrayWrap` / `anonType`. The runtime field
+ *   isn't read by any writer site yet — this slice ships the JSON
+ *   surface so configs that pin a `methodChain` cascade load cleanly,
+ *   pending the writer-time chain extractor that lands in the next
+ *   slice.
  * - `sameLine.ifElse` / `sameLine.tryCatch` / `sameLine.doWhile`: enum
  *   string — `"same"` → `SameLinePolicy.Same`, `"next"` →
  *   `SameLinePolicy.Next`, `"keep"` → `SameLinePolicy.Keep` (reads the
@@ -424,6 +431,7 @@ final class HaxeFormatConfigLoader {
 			callParameterWrap: base.callParameterWrap,
 			arrayLiteralWrap: base.arrayLiteralWrap,
 			anonTypeWrap: base.anonTypeWrap,
+			methodChainWrap: base.methodChainWrap,
 			addLineCommentSpace: base.addLineCommentSpace,
 			expressionTry: base.expressionTry,
 			indentCaseLabels: base.indentCaseLabels,
@@ -472,6 +480,7 @@ final class HaxeFormatConfigLoader {
 		if (section.maxLineLength != null) opt.lineWidth = section.maxLineLength;
 		if (section.arrayWrap != null) opt.arrayLiteralWrap = wrapRulesFromConfig(section.arrayWrap, opt.arrayLiteralWrap);
 		if (section.anonType != null) opt.anonTypeWrap = wrapRulesFromConfig(section.anonType, opt.anonTypeWrap);
+		if (section.methodChain != null) opt.methodChainWrap = wrapRulesFromConfig(section.methodChain, opt.methodChainWrap);
 	}
 
 	/**
