@@ -3487,12 +3487,20 @@ class WriterLowering {
 					_docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDoc(_tc, opt)) : _elem);
 					_si++;
 				}
+				// Trail comments collected into a separate Doc array so the
+				// nestBody branch can render them at parent indent when the
+				// body has stmts (issue_392): a `// comment` on its own line
+				// between case body's last stmt and the next `case` label
+				// belongs at case-label level, not case-body level. Empty-
+				// body cases (only-comment) keep body-level indent — the
+				// trail concat fold below restores that path.
+				final _trailDocs:Array<anyparse.core.Doc> = [];
 				if (_trailLC.length > 0) {
 					var _ti:Int = 0;
 					while (_ti < _trailLC.length) {
-						_docs.push(_dhl());
-						if (_trailBB && _ti == 0 && _arr.length > 0) _docs.push(_dhl());
-						_docs.push(leadingCommentDoc(_trailLC[_ti], opt));
+						_trailDocs.push(_dhl());
+						if (_trailBB && _ti == 0 && _arr.length > 0) _trailDocs.push(_dhl());
+						_trailDocs.push(leadingCommentDoc(_trailLC[_ti], opt));
 						_ti++;
 					}
 				}
@@ -3500,8 +3508,16 @@ class WriterLowering {
 					_dc(_docs);
 				} else if (_nestBody) {
 					final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-					_dn(_cols, _dc(_docs));
-				} else _dc(_docs);
+					if (_arr.length > 0 && _trailDocs.length > 0) {
+						_dc([_dn(_cols, _dc(_docs)), _dc(_trailDocs)]);
+					} else {
+						for (_d in _trailDocs) _docs.push(_d);
+						_dn(_cols, _dc(_docs));
+					}
+				} else {
+					for (_d in _trailDocs) _docs.push(_d);
+					_dc(_docs);
+				}
 			}
 		};
 	}
