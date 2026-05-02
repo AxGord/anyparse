@@ -135,7 +135,17 @@ class WriterLowering {
 			// rule level (see `lowerRule`), so per-ctor branches need no
 			// additional wrapping here.
 			final body:Expr = lowerEnumBranch(branch, typePath, writeFnName, hasPratt, argNames, precPostfix);
-			cases.push({values: [pattern], expr: body, guard: null});
+			// ω-methodchain-emit: ctors carrying `@:fmt(methodChain('<wrapField>'))`
+			// (currently `HxExpr.Call` and `HxExpr.FieldAccess`) wrap their
+			// case body with a runtime walk that detects two-or-more-segment
+			// chains and emits via `MethodChainEmit` against the named
+			// `WrapRules` cascade on `opt`. Non-chain values (single calls,
+			// plain field access) fall through to the default emission.
+			final chainField:Null<String> = branch.fmtReadString('methodChain');
+			final wrappedBody:Expr = chainField != null
+				? wrapWithChainDispatch(body, chainField, writeFnName, node, precPostfix)
+				: body;
+			cases.push({values: [pattern], expr: wrappedBody, guard: null});
 		}
 		return macro return ${{expr: ESwitch(macro value, cases, null), pos: Context.currentPos()}};
 	}
@@ -174,6 +184,129 @@ class WriterLowering {
 			final _rw = $preCall;
 			if (_rw != null) value = _rw;
 			$defaultBody;
+		};
+	}
+
+	/**
+	 * ω-methodchain-emit — wrap a per-ctor case body with a writer-time
+	 * chain extractor + cascade-driven emit.
+	 *
+	 * The pattern: at each entry to a ctor tagged
+	 * `@:fmt(methodChain('<wrapField>'))` we walk down the AST collecting
+	 * chain segments. Two segment shapes are recognised, both keyed off
+	 * sibling enum ctors carrying the same `methodChain` flag:
+	 *  - **Call segment** — `Call(FieldAccess(prev, fld), args)` — emits
+	 *    `.<fld>(<args>)` with the inner args list routed through
+	 *    `WrapList.emit` against the Call ctor's `wrapRules` /
+	 *    `trailingComma` / postfix delimiters (preserving per-call
+	 *    callParameter wrapping inside each segment);
+	 *  - **Field segment** — `FieldAccess(prev, fld)` — emits `.<fld>`
+	 *    (no args list).
+	 *
+	 * The walk also pulls out the chain `receiver` — the deepest
+	 * non-chain operand (anything that doesn't match `Call(FieldAccess
+	 * (Call,_), _)` / `FieldAccess(Call,_)` rest of the way down).
+	 *
+	 * When the walk finds two or more segments the body short-circuits
+	 * via a `return` to `MethodChainEmit.emit(receiverDoc, segs, opt,
+	 * opt.<wrapField>)`. One-segment cases — `a.b()` plain call or
+	 * `a.b` plain field — fall through to the default emission, so
+	 * non-chain expressions pay only the cost of one `switch` per
+	 * Call/FieldAccess ctor entry (no recursion, no allocation).
+	 *
+	 * Args list config (open/close/sep/wrapRules/trailingComma) is read
+	 * from the sibling Call ctor's annotations — keeping the chain
+	 * emit's arg formatting byte-identical to the regular call emit.
+	 * `opt` and `ctxPrec` are in scope from the surrounding writer-fn
+	 * signature; recursive renderings (receiver, args) call the same
+	 * `$writeFnName` — for HxExpr trivia mode that's `writeHxExprT`,
+	 * for plain mode `writeHxExpr`.
+	 */
+	private function wrapWithChainDispatch(
+		body:Expr, chainField:String, writeFnName:String, node:ShapeNode, precPostfix:Int
+	):Expr {
+		// Locate the Call-shaped sibling (postfix Star with `methodChain`).
+		var callBranch:Null<ShapeNode> = null;
+		for (b in node.children) if (b.fmtReadString('methodChain') != null) {
+			if (b.children.length == 2 && b.children[1].kind == Star) {
+				callBranch = b;
+				break;
+			}
+		}
+		if (callBranch == null)
+			Context.error('WriterLowering.methodChain: expected a sibling postfix-Star ctor with @:fmt(methodChain(...))', Context.currentPos());
+		final cb:ShapeNode = callBranch;
+		final callOpen:String = cb.annotations.get('postfix.op');
+		final callClose:String = cb.annotations.get('postfix.close') ?? '';
+		final callSep:String = cb.annotations.get('lit.sepText') ?? ',';
+		final callWrapField:Null<String> = cb.fmtReadString('wrapRules');
+		final callTcExpr:Expr = trailingCommaExpr(cb);
+		// Args list shape: the Call ctor MUST carry `@:fmt(wrapRules(
+		// '<field>'))` for the chain-emit's per-segment rendering to use
+		// the same arg layout as a regular Call. Surfacing this as a
+		// macro-time error rather than carrying a dead fallback per
+		// architecture skill ("no complexity before pain"); a future
+		// grammar that drops wrapRules can extend this path then.
+		if (callWrapField == null)
+			Context.error('WriterLowering.methodChain: Call sibling ctor must carry @:fmt(wrapRules(\'<field>\')) for the chain-emit per-segment args layout to share the regular call shape', Context.currentPos());
+		final cwf:String = callWrapField;
+		final callRulesExpr:Expr = {
+			expr: EField(macro opt, cwf),
+			pos: Context.currentPos(),
+		};
+		final argsListExpr:Expr = macro anyparse.format.wrap.WrapList.emit(
+			$v{callOpen}, $v{callClose}, $v{callSep}, _argDocs, opt,
+			_de(), _de(), false, $callRulesExpr, $callTcExpr
+		);
+		final chainRulesExpr:Expr = {
+			expr: EField(macro opt, chainField),
+			pos: Context.currentPos(),
+		};
+		final writeIdent:Expr = {
+			expr: EConst(CIdent(writeFnName)),
+			pos: Context.currentPos(),
+		};
+		// Receiver renders at the postfix precedence so a binop /
+		// ternary receiver gets parenthesised — `(a + b).foo().bar()`
+		// must keep its parens or the chain misreads as
+		// `a + b.foo().bar()`. Mirrors the `lowerEnumBranch` postfix
+		// path which passes `precPostfix` for the same reason.
+		final precExpr:Expr = macro $v{precPostfix};
+		// The pattern names `Call` and `FieldAccess` resolve against the
+		// switch value's enum (`HxExprT` in trivia mode, `HxExpr` in
+		// plain mode). The macro emits the same unqualified ctor names
+		// for both modes — Haxe's typer resolves to whichever sibling
+		// ctor lives on the `value` parameter's enum.
+		return macro {
+			final _segs:Array<anyparse.core.Doc> = [];
+			var _cursor = value;
+			var _receiver = value;
+			while (true) {
+				switch _cursor {
+					case Call(_op, _args):
+						switch _op {
+							case FieldAccess(_prev, _fld):
+								final _argDocs:Array<anyparse.core.Doc> = [for (_a in _args) $writeIdent(_a, opt, -1)];
+								final _argsDoc:anyparse.core.Doc = $argsListExpr;
+								_segs.unshift(_dc([_dt('.' + _fld), _argsDoc]));
+								_cursor = _prev;
+							case _:
+								_receiver = _cursor;
+								break;
+						}
+					case FieldAccess(_prev, _fld):
+						_segs.unshift(_dt('.' + _fld));
+						_cursor = _prev;
+					case _:
+						_receiver = _cursor;
+						break;
+				}
+			}
+			if (_segs.length >= 2) {
+				final _recDoc:anyparse.core.Doc = $writeIdent(_receiver, opt, $precExpr);
+				return anyparse.format.wrap.MethodChainEmit.emit(_recDoc, _segs, opt, $chainRulesExpr);
+			}
+			$body;
 		};
 	}
 

@@ -314,13 +314,13 @@ enum HxExpr {
 	@:prefix('...') @:fmt(tight)
 	Spread(operand:HxExpr);
 
-	@:postfix('.')
+	@:postfix('.') @:fmt(methodChain('methodChainWrap'))
 	FieldAccess(operand:HxExpr, field:HxIdentLit);
 
 	@:postfix('[', ']')
 	IndexAccess(operand:HxExpr, index:HxExpr);
 
-	@:postfix('(', ')') @:sep(',') @:fmt(trailingComma('trailingCommaArgs'), callParens, wrapRules('callParameterWrap'))
+	@:postfix('(', ')') @:sep(',') @:fmt(trailingComma('trailingCommaArgs'), callParens, wrapRules('callParameterWrap'), methodChain('methodChainWrap'))
 	Call(operand:HxExpr, args:Array<HxExpr>);
 
 	@:infix('*', 9)
