@@ -249,6 +249,33 @@ class HxTriviaWriteTest extends Test {
 	}
 
 	/**
+	 * ω-javadoc-byte-preserve-nest — javadoc-bodied verbatim comment
+	 * authored at file column 0 lands at the surrounding context's
+	 * indent (one tab here for class-member depth). Source's per-line
+	 * structure (per-line ` * [Description]`, close-pad before delimiter) survives intact;
+	 * only the leading column shifts to follow target nest. Mirrors
+	 * AxGord/haxe-formatter
+	 * `whitespace/final_space_removed_from_javadoc_comments_2.hxtest`.
+	 */
+	public function testMultiLineBlockCommentJavadocColZeroIndentsToTarget():Void {
+		final source:String = 'class Main{\n'
+			+ '/**\n'
+			+ ' * [Description]\n'
+			+ ' */\n'
+			+ 'static function main(){}\n'
+			+ '}';
+		final expected:String = 'class Main {\n'
+			+ '\t/**\n'
+			+ '\t * [Description]\n'
+			+ '\t */\n'
+			+ '\tstatic function main() {}\n'
+			+ '}\n';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out:String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals(expected, out);
+	}
+
+	/**
 	 * ω-block-comment-verbatim — inline content on the opening line
 	 * stays inline (no `\n` injected after `/*`) under default
 	 * `Verbatim`.

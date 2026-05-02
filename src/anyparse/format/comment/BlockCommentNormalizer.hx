@@ -38,10 +38,53 @@ class BlockCommentNormalizer {
 			catch (_:haxe.Exception) null;
 		if (parsed == null) return Text(content);
 		if (opt.commentStyle == CommentStyle.Verbatim) {
+			if (isJavadocStyle(parsed.lines)) return javadocBytePreserveDoc(content, parsed);
 			if (shouldPreserveBytes(parsed)) return Text(content);
 			return BlockCommentWriter.writeDoc(parsed, opt);
 		}
 		return canonicalDoc(parsed, opt);
+	}
+
+	/**
+	 * Build a Doc for javadoc-bodied verbatim comments (`isJavadocStyle`)
+	 * that lets the surrounding writer's nest land on each interior line.
+	 *
+	 * Splits source content on `\n`, strips the closing line's structural
+	 * indent prefix from each interior segment (so already-nested source
+	 * at depth N doesn't double-indent under target nest depth N), and
+	 * joins segments with `Line('\n')`. Wrap delimiters (`/*`, `*\/`)
+	 * ride on segment 0 and the last segment respectively — they are
+	 * part of `content`.
+	 *
+	 * Scoped to javadoc-style (each non-edge non-blank line body starts
+	 * with `*`) because that style anchors the visual depth to surrounding
+	 * nest by convention. The other byte-preserve cases — `firstInline`-
+	 * nested (where authors place subsequent lines at source-absolute
+	 * columns relative to the open delimiter, not surrounding nest) and
+	 * single-line — keep the literal `Text(content)` path.
+	 *
+	 * Replaces a former `Text(content)` shortcut whose embedded `\n`
+	 * chars bypassed the renderer's lazy-indent path: a col-0 javadoc
+	 * comment dropped into a tab-indented context emitted at col 0
+	 * instead of following the surrounding nest.
+	 */
+	private static function javadocBytePreserveDoc(content:String, comment:BlockComment):Doc {
+		final segments:Array<String> = content.split('\n');
+		if (segments.length <= 1) return Text(content);
+		final lines:Array<BlockCommentLine> = comment.lines;
+		final closingWs:String = lines[lines.length - 1].ws;
+		final closeStructLen:Int = structuralCloseLen(closingWs);
+		final closeStruct:String = closingWs.substr(0, closeStructLen);
+		final docs:Array<Doc> = [Text(segments[0])];
+		for (i in 1...segments.length) {
+			final raw:String = segments[i];
+			final stripped:String = closeStructLen > 0 && StringTools.startsWith(raw, closeStruct)
+				? raw.substr(closeStructLen)
+				: raw;
+			docs.push(Line('\n'));
+			docs.push(Text(stripped));
+		}
+		return Concat(docs);
 	}
 
 	/**
