@@ -286,6 +286,9 @@ enum HxExpr {
 	@:kw('untyped')
 	UntypedExpr(operand:HxExpr);
 
+	@:kw('macro')
+	MacroExpr(operand:HxExpr);
+
 	@:kw('cast')
 	TypedCastExpr(info:HxTypedCast);
 
