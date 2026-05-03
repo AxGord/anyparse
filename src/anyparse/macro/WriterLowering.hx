@@ -1040,7 +1040,16 @@ class WriterLowering {
 					// `maybeIndentValueIfCtor` / `indentValueIfCtorWrap`).
 					// Currently used by `HxVarDecl.init` to indent a multi-
 					// line `ObjectLit` value one extra step.
-					final writeCall:Expr = maybeIndentValueIfCtor(rawWriteCall, macro _optVal, child);
+					//
+					// ω-expr-body-indent-objectliteral: same-field combination
+					// with `@:fmt(bodyPolicy(...))` (e.g. `HxIfExpr.elseBranch`)
+					// switches the meta into the SUBTRACTIVE channel through
+					// `bodyPolicyWrap`'s `indentObjArgs` argument; see the
+					// mandatory-Ref path below for the rationale.
+					final indentObjArgs:Null<Array<String>> = child.fmtReadStringArgs('indentValueIfCtor');
+					final writeCall:Expr = bodyPolicyFlag != null && indentObjArgs != null
+						? rawWriteCall
+						: maybeIndentValueIfCtor(rawWriteCall, macro _optVal, child);
 					// Leading separator is runtime-conditional when @:fmt(sameLine(...))
 					// is present — see sameLineSeparator. Split into (sep, kw+' ')
 					// so the sep part can become a hardline (τ₁).
@@ -1103,7 +1112,7 @@ class WriterLowering {
 						optParts.push(sepWithBeforeKwTrailingExpr);
 						if (bodyPolicyFlag != null) {
 							optParts.push(macro _dt($v{kwLead}));
-							optParts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, macro _optVal, refName, hasElseIf, elseFieldName, afterKwExpr, kwLeadingExpr, bodyOnSameLineExpr));
+							optParts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, macro _optVal, refName, hasElseIf, elseFieldName, afterKwExpr, kwLeadingExpr, bodyOnSameLineExpr, null, null, indentObjArgs));
 						} else {
 							optParts.push(macro _dt($v{kwLead + ' '}));
 							optParts.push(writeCall);
@@ -1164,12 +1173,25 @@ class WriterLowering {
 					// wrap on mandatory Ref — currently used by
 					// `HxObjectField.value` so a nested ObjectLit on a `:` RHS
 					// gets the same extra-indent as the outer `=` site
-					// (`HxVarDecl.init`). The flag has no effect when the
-					// runtime ctor mismatches or the named knob is false, so
-					// wrapping here is safe even if a future field combines
-					// the flag with `bodyPolicy` / `leftCurly` / `bodyBreak` /
-					// `bareBodyBreaks` — though no such combination exists today.
-					final writeCall:Expr = maybeIndentValueIfCtor(rawWriteCall, fieldAccess, child);
+					// (`HxVarDecl.init`).
+					//
+					// ω-expr-body-indent-objectliteral: when the same field
+					// also carries `@:fmt(bodyPolicy(...))` (e.g.
+					// `HxIfExpr.thenBranch`), the additive Nest of
+					// `maybeIndentValueIfCtor` would compound with
+					// `bodyPolicyWrap`'s default `Nest(_cols, [_dhl, body])` and
+					// produce double-indent on `indentObjectLiteral=true`. The
+					// bare-Ref bodyPolicy path therefore SKIPS the additive
+					// wrap here and instead routes the same meta through
+					// `bodyPolicyWrap`'s `indentObjArgs` channel as a
+					// SUBTRACTIVE rule — the rule fires the inverse direction
+					// (`indentObjectLiteral=false` drops the default Nest
+					// when the body is a multi-line ObjectLit, leaving `{`
+					// at parent indent).
+					final indentObjArgs:Null<Array<String>> = child.fmtReadStringArgs('indentValueIfCtor');
+					final writeCall:Expr = bodyPolicyFlag != null && indentObjArgs != null
+						? rawWriteCall
+						: maybeIndentValueIfCtor(rawWriteCall, fieldAccess, child);
 					// bodyPolicy on a first field: the parent enum-branch
 					// Case 3 strips its kwLead trailing space so the
 					// separator here is the sole transition token. Non-
@@ -1216,7 +1238,7 @@ class WriterLowering {
 						final bodyOnSameLineExpr:Null<Expr> = ctx.trivia && !isFirstField
 							? macro !${ {expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX), pos: Context.currentPos()} }
 							: null;
-						parts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, fieldAccess, refName, hasElseIf, elseFieldName, null, null, bodyOnSameLineExpr, kwPolicyFlag, afterTrailExpr));
+						parts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, fieldAccess, refName, hasElseIf, elseFieldName, null, null, bodyOnSameLineExpr, kwPolicyFlag, afterTrailExpr, indentObjArgs));
 						justWrappedBody = {access: fieldAccess, typePath: refName};
 					} else {
 						// `@:fmt(leftCurly)` on a bare Ref field (e.g.
@@ -2728,7 +2750,8 @@ class WriterLowering {
 	private function bodyPolicyWrap(
 		flagName:String, writeCall:Expr, bodyValueExpr:Expr, bodyTypePath:String, hasElseIf:Bool,
 		elseFieldName:Null<String>, ?afterKwExpr:Null<Expr>, ?kwLeadingExpr:Null<Expr>,
-		?bodyOnSameLineExpr:Null<Expr>, ?kwPolicyFlagName:Null<String>, ?afterTrailExpr:Null<Expr>
+		?bodyOnSameLineExpr:Null<Expr>, ?kwPolicyFlagName:Null<String>, ?afterTrailExpr:Null<Expr>,
+		?indentObjArgs:Array<String>
 	):Expr {
 		final optFlag:Expr = {
 			expr: EField(macro opt, flagName),
@@ -2783,9 +2806,48 @@ class WriterLowering {
 		// when both slots are empty it degrades to the pre-slice
 		// `_dn(_cols, [_dhl(), body])` shape so existing fixtures stay
 		// byte-identical.
-		final nextLayoutExpr:Expr = hasKwSlots
-			? macro nextLayoutKwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, $writeCall, opt)
-			: macro _dn(_cols, _dc([_dhl(), $writeCall]));
+		// ω-expr-body-indent-objectliteral: when the bare-Ref body field
+		// carries `@:fmt(indentValueIfCtor('<ctor>', '<optField>',
+		// '<leftCurlyField>'))` AND the runtime conditions match
+		// (named bool opt FALSE — the inverse of the additive RHS rule
+		// — AND named leftCurly opt `Next` AND value's enum ctor matches
+		// `ctorName` AND the body's `flatLength` is `-1` i.e. anyHardline),
+		// drop the outer Nest from the Next-layout. The body's own
+		// leftCurly hardline then lands at the parent's indent
+		// (`{` cuddled to the surrounding kw column) and only the body's
+		// internal Nest contributes the `+cols` step for the contents.
+		// Mirrors haxe-formatter's `indentation.indentObjectLiteral=false`
+		// rule for `if (cond)\n{...}` / `for (...) <obj-lit>` style sites
+		// where the obj-lit acts as the body anchor itself. Single-line
+		// obj-lit values fall through to the default `_dn(_cols, …)` so
+		// short cases keep the per-stmt nesting (`if (cond)\n\t{a:1}`).
+		//
+		// TODO: the `!hasKwSlots` gate silently disables the rule on
+		// trivia-mode kw-slot paths (`@:optional @:kw` Ref + bodyPolicy +
+		// indentValueIfCtor — would target a future `HxIfExpr.elseBranch`
+		// extension). Threading `indentObjArgs` into `nextLayoutKwGapDoc`
+		// would lift the limit but is deferred until a consumer needs it.
+		if (indentObjArgs != null && indentObjArgs.length != 3)
+			Context.fatalError('WriterLowering: bodyPolicyWrap indentObjArgs requires (ctorName, optField, leftCurlyField), got ${indentObjArgs.length} args', Context.currentPos());
+		final indentObjGuardedNext:Null<Expr> = if (indentObjArgs != null && !hasKwSlots) {
+			final ctorName:String = indentObjArgs[0];
+			final optAccess:Expr = {expr: EField(macro opt, indentObjArgs[1]), pos: Context.currentPos()};
+			final lcAccess:Expr = {expr: EField(macro opt, indentObjArgs[2]), pos: Context.currentPos()};
+			macro {
+				final _body:anyparse.core.Doc = $writeCall;
+				if (!$optAccess
+					&& $lcAccess == anyparse.format.BracePlacement.Next
+					&& Type.enumConstructor($bodyValueExpr) == $v{ctorName}
+					&& anyparse.format.wrap.WrapList.flatLength(_body) == -1)
+					_dc([_dhl(), _body])
+				else
+					_dn(_cols, _dc([_dhl(), _body]));
+			};
+		}
+		else null;
+		final nextLayoutExpr:Expr = if (indentObjGuardedNext != null) indentObjGuardedNext
+		else if (hasKwSlots) macro nextLayoutKwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, $writeCall, opt)
+		else macro _dn(_cols, _dc([_dhl(), $writeCall]));
 		// ω-issue-316-curly-both: block-ctor variant — when the body's
 		// writeCall opens with `{`, the separator before it must honour
 		// `opt.leftCurly`. For kw-slot sites, threaded through

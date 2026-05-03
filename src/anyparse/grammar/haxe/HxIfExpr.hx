@@ -37,10 +37,26 @@ package anyparse.grammar.haxe;
  * value, and `else if` chains in expression position are handled
  * naturally by recursion through `HxIfExpr.elseBranch:Null<HxExpr>`
  * being itself an `IfExpr`.
+ *
+ * `@:fmt(indentValueIfCtor('ObjectLit', 'indentObjectLiteral',
+ * 'objectLiteralLeftCurly'))` on `thenBranch` — subtractive variant of
+ * the meta carried by `HxVarDecl.init` / `HxObjectField.value` /
+ * `HxStatement.ReturnStmt`. When the body is a multi-line ObjectLit AND
+ * `indentObjectLiteral=false` AND `objectLiteralLeftCurly=Next`, the
+ * default `bodyPolicyWrap` Next-layout's outer Nest is dropped so the
+ * obj-lit's `{` aligns with the `if` keyword's column instead of one
+ * indent step deeper. Single-line obj-lit bodies (and any other ctor)
+ * fall through to the default `Nest(_cols, …)`. Mirrors haxe-formatter's
+ * `indentation.indentObjectLiteral=false` rule for the
+ * `if (cond)\n{...}` shape. Asymmetry: `elseBranch` does NOT carry the
+ * meta — its optional `@:kw('else')` Ref routes through
+ * `bodyPolicyWrap`'s kw-trivia slot path (`nextLayoutKwGapDoc`) which
+ * the current gate excludes; threading `indentObjArgs` into that helper
+ * is deferred until a corpus consumer needs it.
  */
 @:peg
 typedef HxIfExpr = {
 	@:lead('(') @:trail(')') var cond:HxExpr;
-	@:fmt(bodyPolicy('expressionIfBody')) var thenBranch:HxExpr;
+	@:fmt(bodyPolicy('expressionIfBody'), indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly')) var thenBranch:HxExpr;
 	@:optional @:kw('else') @:fmt(bodyPolicy('expressionElseBody')) var elseBranch:Null<HxExpr>;
 };
