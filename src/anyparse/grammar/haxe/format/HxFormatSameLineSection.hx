@@ -78,6 +78,19 @@ package anyparse.grammar.haxe.format;
  * and `NoBody` (`function f();`) are unaffected — the knob lives on
  * `HxFnBody.ExprBody` only.
  *
+ * `untypedBody` (ω-untyped-body-policy) is the same three-way body-
+ * placement knob shape as `ifBody`, gating the parent→`untyped`
+ * separator at `HxFnBody.UntypedBlockBody` (`function f():T untyped {
+ * … }`). The loader maps it onto the runtime `untypedBody` option on
+ * `HxModuleWriteOptions`. Default `Same` matches haxe-formatter's
+ * `sameLine.untypedBody: @:default(Same)`. Setting `"next"` pushes
+ * `untyped` onto its own line at one indent level deeper; `"keep"`
+ * preserves source (degrades to `Same` in plain mode); `"fitLine"`
+ * fits-or-breaks. Stmt-level form `HxStatement.UntypedBlockStmt`
+ * (incl. `try untyped { … }`) is deferred to a follow-up slice —
+ * duplicating the wrap would stack with parent body-policy / block-
+ * stmt separators producing double spaces / spurious blank lines.
+ *
  * `tryBody` (ω-tryBody) is the same three-way body-placement knob
  * shape as `catchBody`, gating the separator between the `try`
  * keyword and its body at `HxTryCatchStmt.body`. The loader maps
@@ -140,6 +153,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var expressionCase:HxFormatBodyPolicy;
 
 	@:optional var functionBody:HxFormatBodyPolicy;
+
+	@:optional var untypedBody:HxFormatBodyPolicy;
 
 	@:optional var expressionIf:HxFormatBodyPolicy;
 };

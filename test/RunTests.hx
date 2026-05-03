@@ -87,6 +87,7 @@ import unit.HxThrowBodySliceTest;
 import unit.HxCatchBodySliceTest;
 import unit.HxCaseBodyPolicySliceTest;
 import unit.HxFunctionBodyPolicySliceTest;
+import unit.HxUntypedBodyPolicySliceTest;
 import unit.HxTryBodyOptionsTest;
 import unit.HxIndentCaseLabelsOptionsTest;
 import unit.HxIndentObjectLiteralOptionsTest;
@@ -206,6 +207,7 @@ class RunTests {
 		runner.addCase(new HxCatchBodySliceTest());
 		runner.addCase(new HxCaseBodyPolicySliceTest());
 		runner.addCase(new HxFunctionBodyPolicySliceTest());
+		runner.addCase(new HxUntypedBodyPolicySliceTest());
 		runner.addCase(new HxTryBodyOptionsTest());
 		runner.addCase(new HxIndentCaseLabelsOptionsTest());
 		runner.addCase(new HxIndentObjectLiteralOptionsTest());

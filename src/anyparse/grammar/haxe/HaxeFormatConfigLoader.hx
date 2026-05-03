@@ -410,6 +410,7 @@ final class HaxeFormatConfigLoader {
 			caseBody: base.caseBody,
 			expressionCase: base.expressionCase,
 			functionBody: base.functionBody,
+			untypedBody: base.untypedBody,
 			expressionIfBody: base.expressionIfBody,
 			expressionElseBody: base.expressionElseBody,
 			expressionForBody: base.expressionForBody,
@@ -590,6 +591,7 @@ final class HaxeFormatConfigLoader {
 		if (section.caseBody != null) opt.caseBody = bodyPolicyToRuntime(section.caseBody);
 		if (section.expressionCase != null) opt.expressionCase = bodyPolicyToRuntime(section.expressionCase);
 		if (section.functionBody != null) opt.functionBody = bodyPolicyToRuntime(section.functionBody);
+		if (section.untypedBody != null) opt.untypedBody = bodyPolicyToRuntime(section.untypedBody);
 		// Slice ω-expr-body-keep: the JSON key `sameLine.expressionIf`
 		// is parsed via the schema (so unknown-key validation passes)
 		// but ONLY `Keep` is honoured at runtime. `Same` / `Next` /

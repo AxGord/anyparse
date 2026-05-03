@@ -162,19 +162,34 @@ package anyparse.grammar.haxe;
  *    policy. Carrying the flag here would silently no-op, so it is
  *    omitted to keep the asymmetry visible in source.
  *
- *  - `UntypedBlockStmt` — `untyped { stmts }` block statement. The
- *    `untyped` keyword acts as a block-shape modifier with no trailing
- *    `;` requirement (parallel to how `if`/`while`/`for` block bodies
- *    avoid `;` while `ExprStmt` requires it). Reuses `HxFnBlock` for
- *    the `{ stmts }` payload, same shape as `HxFnBody.UntypedBlockBody`.
- *    Must appear before `BlockStmt` so `untyped` commits before the
- *    bare-`{` dispatch fires; covers the stmt-level `untyped { … }`
- *    form found in `try untyped { … } catch …` and inside fn-body
- *    blocks (`function f():T { untyped { … } }`). Slice
- *    ω-untyped-block-stmt-body. Without this branch the parser would
- *    accept `untyped { … };` (with trailing `;`) via
- *    `ExprStmt(UntypedExpr(BlockExpr))`, but the haxe-formatter corpus
- *    only emits the no-`;` form.
+ *  - `UntypedBlockStmt(body:HxUntypedFnBody)` — `untyped { stmts }`
+ *    block statement. The `untyped` keyword acts as a block-shape
+ *    modifier with no trailing `;` requirement (parallel to how
+ *    `if`/`while`/`for` block bodies avoid `;` while `ExprStmt`
+ *    requires it). Reuses the shared `HxUntypedFnBody` Seq wrapper
+ *    (kw + `HxFnBlock`) so the parse + write paths match
+ *    `HxFnBody.UntypedBlockBody` byte-for-byte. Must appear before
+ *    `BlockStmt` so the inner `untyped` peek (via `tryBranch`
+ *    rollback) fires before the bare-`{` dispatch; covers the stmt-
+ *    level `untyped { … }` form found in `try untyped { … } catch …`
+ *    and inside fn-body blocks (`function f():T { untyped { … } }`).
+ *    Without this branch the parser would accept `untyped { … };`
+ *    (with trailing `;`) via `ExprStmt(UntypedExpr(BlockExpr))`, but
+ *    the haxe-formatter corpus only emits the no-`;` form.
+ *    Intentionally does NOT carry `@:fmt(bodyPolicy('untypedBody'))`
+ *    in slice ω-untyped-body-policy: a stmt-level wrap stacks with
+ *    parent separators (block stmts already prepend `\n<indent>`,
+ *    `try`'s tryBody wrap already supplies a `Same`/`Next` gap), so a
+ *    duplicate inner wrap would produce double spaces / blank lines /
+ *    trailing-space-before-hardline artefacts. The fn-decl form
+ *    (`HxFnBody.UntypedBlockBody`) carries the knob because the
+ *    parent `HxFnDecl.body` Ref-field's leftCurly Case 5 routes
+ *    `UntypedBlockBody` through `spacePrefixCtors` + `ctorHasBodyPolicy`
+ *    so the parent emits `_de()` and the wrap is the sole separator.
+ *    Stmt-context untypedBody handling is deferred to a follow-up
+ *    slice that suppresses the parent body-policy wrap when the inner
+ *    body is `UntypedBlockStmt`.
+ *
  *  - `BlockStmt` — `{ stmts }` block statement. No keyword guard —
  *    dispatched by the `{` literal. Uses Case 4 in
  *    `Lowering.lowerEnumBranch` (Array<Ref> with lead/trail, no sep).
@@ -228,8 +243,7 @@ enum HxStatement {
 	@:kw('try') @:trail(';')
 	TryCatchStmtBare(stmt:HxTryCatchStmtBare);
 
-	@:kw('untyped')
-	UntypedBlockStmt(block:HxFnBlock);
+	UntypedBlockStmt(body:HxUntypedFnBody);
 
 	@:fmt(leftCurly) @:lead('{') @:trail('}') @:trivia
 	BlockStmt(stmts:Array<HxStatement>);

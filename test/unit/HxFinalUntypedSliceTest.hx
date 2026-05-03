@@ -203,9 +203,9 @@ class HxFinalUntypedSliceTest extends HxTestHelpers {
 		final fn:HxFnDecl = parseSingleFnDecl('class C { function m():Void { untyped { foo(); } } }');
 		final stmts:Array<HxStatement> = fnBodyStmts(fn);
 		switch stmts[0] {
-			case UntypedBlockStmt(block):
-				Assert.equals(1, block.stmts.length);
-				switch block.stmts[0] {
+			case UntypedBlockStmt(body):
+				Assert.equals(1, body.block.stmts.length);
+				switch body.block.stmts[0] {
 					case ExprStmt(Call(IdentExpr(name), _)): Assert.equals('foo', (name : String));
 					case null, _: Assert.fail('expected inner ExprStmt(Call(foo))');
 				}
@@ -224,8 +224,8 @@ class HxFinalUntypedSliceTest extends HxTestHelpers {
 		// Body parses as HxFnBody.UntypedBlockBody not BlockBody.
 		final fn:HxFnDecl = parseSingleFnDecl('class C { function f():Int untyped { return 1; } }');
 		switch fn.body {
-			case UntypedBlockBody(block):
-				Assert.equals(1, block.stmts.length);
+			case UntypedBlockBody(body):
+				Assert.equals(1, body.block.stmts.length);
 			case null, _: Assert.fail('expected UntypedBlockBody, got ${fn.body}');
 		}
 	}

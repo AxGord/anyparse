@@ -169,6 +169,21 @@ final class HaxeFormat implements TextFormat {
 	 * unaffected — its layout is owned by `leftCurly`. `NoBody`
 	 * (`function f();` interface stub) is unaffected.
 	 *
+	 * `untypedBody` (ω-untyped-body-policy) defaults to `Same` —
+	 * `function f():T untyped { … }` cuddles `untyped` after the
+	 * function header by default, matching haxe-formatter's
+	 * `sameLine.untypedBody: @:default(Same)`. Setting `"sameLine":
+	 * { "untypedBody": "next" }` pushes `untyped` onto its own line
+	 * at one indent level deeper. The knob is consumed at
+	 * `HxFnBody.UntypedBlockBody` (fn-decl modifier form). Stmt-level
+	 * `HxStatement.UntypedBlockStmt` (incl. `try untyped { … }` and
+	 * block-stmt `{ untyped { … } }`) is deferred to a follow-up
+	 * slice — a duplicate inner wrap would stack with the parent
+	 * body-policy / block-stmt separators and produce double spaces
+	 * / spurious blank lines. Inline-expression variants
+	 * (`HxExpr.UntypedExpr`, single-expr `untyped expr`) ride a
+	 * different path and stay unaffected.
+	 *
 	 * `caseBody` defaults to `Next` — single-stmt switch case bodies
 	 * stay on a fresh line below `case X:` for non-expression statement
 	 * bodies (block, var, if-stmt, …). `expressionCase` defaults to
@@ -539,6 +554,7 @@ final class HaxeFormat implements TextFormat {
 		caseBody: BodyPolicy.Next,
 		expressionCase: BodyPolicy.Keep,
 		functionBody: BodyPolicy.Next,
+		untypedBody: BodyPolicy.Same,
 		expressionIfBody: BodyPolicy.Keep,
 		expressionElseBody: BodyPolicy.Keep,
 		expressionForBody: BodyPolicy.Keep,

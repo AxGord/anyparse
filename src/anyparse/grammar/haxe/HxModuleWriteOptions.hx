@@ -94,6 +94,35 @@ import anyparse.format.wrap.WrapRules;
  *    shape-aware — the leftCurly placement still wins for the brace
  *    position (`leftCurly=Next` → `try\n{` regardless of `tryBody`).
  *
+ * Field added in slice ω-untyped-body-policy:
+ *  - `untypedBody` — three-way `BodyPolicy` knob shape gating the
+ *    parent→`untyped` separator at `HxFnBody.UntypedBlockBody`
+ *    (`function f():T untyped { … }`). `Same` (default — matches
+ *    haxe-formatter's `sameLine.untypedBody: @:default(Same)`) cuddles
+ *    the kw inline (`function f():T untyped { … }`). `Next` pushes
+ *    `untyped` to its own line at one indent level deeper
+ *    (`function f():T\n\tuntyped { … }`). `FitLine` keeps it flat when
+ *    it fits within `lineWidth`, otherwise breaks. `Keep` preserves
+ *    the source layout. Consumed via branch-level
+ *    `@:fmt(bodyPolicy('untypedBody'))` on `HxFnBody.UntypedBlockBody`;
+ *    the wrap fires inside the single-Ref Case 3 path so the inner
+ *    `HxUntypedFnBody` Seq (kw + `HxFnBlock`) provides `untyped { … }`
+ *    as `subCall` and `bodyPolicyWrap` prepends the runtime-switched
+ *    separator before it. The parent `HxFnDecl.body` Ref-field's
+ *    leftCurly Case 5 routes `UntypedBlockBody` through
+ *    `spacePrefixCtors` + `ctorHasBodyPolicy` (=> `_de()` separator)
+ *    so the wrap is the sole source of the kw-leading transition.
+ *    Mirrors haxe-formatter's `markUntyped` (MarkSameLine.hx:1024),
+ *    which only applies the knob when `untyped`'s parent token is not
+ *    a Block-typed `{`. The stmt-level form
+ *    `HxStatement.UntypedBlockStmt` (incl. `try untyped { … }` and
+ *    block-stmt `{ untyped { … } }`) deliberately does NOT consume
+ *    this knob in this slice — a stmt-level wrap stacks with parent
+ *    body-policy / block-stmt separators (double space, spurious
+ *    blank line, trailing space before hardline). Stmt-context
+ *    handling is a follow-up slice that suppresses the parent wrap
+ *    when the inner ctor is `UntypedBlockStmt`.
+ *
  * Field added in slice ω-functionBody-policy:
  *  - `functionBody` — three-way `BodyPolicy` knob shape gating the
  *    body-placement axis at `HxFnBody.ExprBody` (`function f() expr;`,
@@ -856,6 +885,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	caseBody:BodyPolicy,
 	expressionCase:BodyPolicy,
 	functionBody:BodyPolicy,
+	untypedBody:BodyPolicy,
 	expressionIfBody:BodyPolicy,
 	expressionElseBody:BodyPolicy,
 	expressionForBody:BodyPolicy,
