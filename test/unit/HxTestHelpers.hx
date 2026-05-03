@@ -114,7 +114,7 @@ class HxTestHelpers extends Test {
 
 	private function fnBodyStmts(fn:HxFnDecl):Array<HxStatement> {
 		return switch fn.body {
-			case BlockBody(block): block.stmts;
+			case BlockBody(block) | UntypedBlockBody(block): block.stmts;
 			case NoBody: throw 'expected BlockBody, got NoBody';
 			case ExprBody(_): throw 'expected BlockBody, got ExprBody';
 		};

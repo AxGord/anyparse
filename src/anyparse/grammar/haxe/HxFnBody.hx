@@ -3,7 +3,16 @@ package anyparse.grammar.haxe;
 /**
  * Function-body shape on `HxFnDecl.body`.
  *
- * Three forms are recognised:
+ * Four forms are recognised:
+ *  - `UntypedBlockBody(block:HxFnBlock)` — `untyped { stmts }` body
+ *    with the `untyped` keyword as a pre-block modifier
+ *    (`function f():Type untyped { body }`). Real Haxe sugar that
+ *    wraps the entire body in an untyped block. Reuses `HxFnBlock`
+ *    verbatim for the `{ stmts }` payload; the `@:kw('untyped')`
+ *    commit point distinguishes this branch from plain `BlockBody`.
+ *    Must appear before `BlockBody` so the keyword commit fires
+ *    before the bare-`{` dispatch. Slice ω-untyped-block-stmt-body
+ *    targets `issue_362_untyped_body*` corpus fixtures.
  *  - `BlockBody(block:HxFnBlock)` — `{ stmts }` braced body. The
  *    `{`-leading peek that dispatches this branch lives on the
  *    `HxFnBlock.stmts` field; the brace policy (`@:fmt(leftCurly)`),
@@ -26,14 +35,18 @@ package anyparse.grammar.haxe;
  *    `@:fmt(bodyPolicy(...))` so the wrap inside this branch's writer
  *    fully owns the kw-to-body separator.
  *
- * Branch order matters for dispatch: BlockBody → NoBody → ExprBody.
- * The first two are tight first-char dispatches; the third runs the
- * full HxExpr parser only when the first two fail. `HxFnBlock` is
- * trivia-bearing, which transitively makes this enum bearing —
- * paired type `HxFnBodyT` synthesised by `TriviaTypeSynth`.
+ * Branch order matters for dispatch: UntypedBlockBody → BlockBody →
+ * NoBody → ExprBody. The first three are tight first-char/keyword
+ * dispatches; the fourth runs the full HxExpr parser only when the
+ * preceding three fail. `HxFnBlock` is trivia-bearing, which
+ * transitively makes this enum bearing — paired type `HxFnBodyT`
+ * synthesised by `TriviaTypeSynth`.
  */
 @:peg
 enum HxFnBody {
+
+	@:kw('untyped') @:fmt(multilineCtor)
+	UntypedBlockBody(block:HxFnBlock);
 
 	@:fmt(multilineCtor)
 	BlockBody(block:HxFnBlock);

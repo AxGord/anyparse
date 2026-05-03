@@ -194,6 +194,46 @@ class HxFinalUntypedSliceTest extends HxTestHelpers {
 		roundTrip('class C { function m():Void { return untyped; } }', 'return untyped;');
 	}
 
+	// ======== UntypedBlockStmt — `untyped { stmts }` block statement ========
+
+	public function testUntypedBlockStmtAsStatement():Void {
+		// `untyped { foo(); }` at stmt-level — no trailing `;` required,
+		// dispatches via dedicated `UntypedBlockStmt` ctor (kw 'untyped' +
+		// HxFnBlock payload) BEFORE the bare-`{` `BlockStmt`.
+		final fn:HxFnDecl = parseSingleFnDecl('class C { function m():Void { untyped { foo(); } } }');
+		final stmts:Array<HxStatement> = fnBodyStmts(fn);
+		switch stmts[0] {
+			case UntypedBlockStmt(block):
+				Assert.equals(1, block.stmts.length);
+				switch block.stmts[0] {
+					case ExprStmt(Call(IdentExpr(name), _)): Assert.equals('foo', (name : String));
+					case null, _: Assert.fail('expected inner ExprStmt(Call(foo))');
+				}
+			case null, _: Assert.fail('expected UntypedBlockStmt, got ${stmts[0]}');
+		}
+	}
+
+	public function testUntypedBlockStmtRoundTrip():Void {
+		roundTrip('class C { function m():Void { untyped { foo(); } } }', 'untyped { foo(); }');
+	}
+
+	// ======== UntypedBlockBody — `function f():Type untyped { body }` ========
+
+	public function testUntypedBlockBodyOnFn():Void {
+		// `function f():Int untyped { return 1; }` — fn-body modifier form.
+		// Body parses as HxFnBody.UntypedBlockBody not BlockBody.
+		final fn:HxFnDecl = parseSingleFnDecl('class C { function f():Int untyped { return 1; } }');
+		switch fn.body {
+			case UntypedBlockBody(block):
+				Assert.equals(1, block.stmts.length);
+			case null, _: Assert.fail('expected UntypedBlockBody, got ${fn.body}');
+		}
+	}
+
+	public function testUntypedBlockBodyRoundTrip():Void {
+		roundTrip('class C { function f():Int untyped { return 1; } }', 'untyped fn body');
+	}
+
 	// ======== Combined: final stmt holding untyped init ========
 
 	public function testFinalHoldsUntyped():Void {

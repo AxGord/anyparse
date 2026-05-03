@@ -162,6 +162,19 @@ package anyparse.grammar.haxe;
  *    policy. Carrying the flag here would silently no-op, so it is
  *    omitted to keep the asymmetry visible in source.
  *
+ *  - `UntypedBlockStmt` — `untyped { stmts }` block statement. The
+ *    `untyped` keyword acts as a block-shape modifier with no trailing
+ *    `;` requirement (parallel to how `if`/`while`/`for` block bodies
+ *    avoid `;` while `ExprStmt` requires it). Reuses `HxFnBlock` for
+ *    the `{ stmts }` payload, same shape as `HxFnBody.UntypedBlockBody`.
+ *    Must appear before `BlockStmt` so `untyped` commits before the
+ *    bare-`{` dispatch fires; covers the stmt-level `untyped { … }`
+ *    form found in `try untyped { … } catch …` and inside fn-body
+ *    blocks (`function f():T { untyped { … } }`). Slice
+ *    ω-untyped-block-stmt-body. Without this branch the parser would
+ *    accept `untyped { … };` (with trailing `;`) via
+ *    `ExprStmt(UntypedExpr(BlockExpr))`, but the haxe-formatter corpus
+ *    only emits the no-`;` form.
  *  - `BlockStmt` — `{ stmts }` block statement. No keyword guard —
  *    dispatched by the `{` literal. Uses Case 4 in
  *    `Lowering.lowerEnumBranch` (Array<Ref> with lead/trail, no sep).
@@ -214,6 +227,9 @@ enum HxStatement {
 
 	@:kw('try') @:trail(';')
 	TryCatchStmtBare(stmt:HxTryCatchStmtBare);
+
+	@:kw('untyped')
+	UntypedBlockStmt(block:HxFnBlock);
 
 	@:fmt(leftCurly) @:lead('{') @:trail('}') @:trivia
 	BlockStmt(stmts:Array<HxStatement>);

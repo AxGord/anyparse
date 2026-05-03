@@ -1256,7 +1256,8 @@ class WriterLowering {
 						final lcSep:Null<Expr> = child.fmtHasFlag('leftCurly')
 							? leftCurlySeparator(child)
 							: null;
-						final lcCtor:Null<String> = lcSep == null ? null : leftCurlyTargetCtor(refName);
+						final lcCtors:Array<String> = lcSep == null ? [] : leftCurlyTargetCtors(refName);
+						final lcCtor:Null<String> = lcCtors.length == 0 ? null : lcCtors[0];
 						final bodyBreakFlag:Null<String> = child.fmtReadString('bodyBreak');
 						final bareBodyBreaksFlag:Bool = child.fmtHasFlag('bareBodyBreaks');
 						if (lcSep != null && lcCtor != null) {
@@ -1276,15 +1277,15 @@ class WriterLowering {
 							// trailing space ahead of the hardline (Next). The
 							// per-sibling separator decision lives at the parent here
 							// because only the parent knows the runtime ctor.
-							final ctorName:String = lcCtor;
-							final spaceCtors:Array<String> = spacePrefixCtors(refName, lcCtor);
+							final spaceCtors:Array<String> = spacePrefixCtors(refName, lcCtors);
 							final ctorExpr:Expr = macro Type.enumConstructor($fieldAccess);
 							var sepExpr:Expr = macro _de();
 							for (sc in spaceCtors) {
 								final scSep:Expr = ctorHasBodyPolicy(refName, sc) ? macro _de() : macro _dt(' ');
 								sepExpr = macro $ctorExpr == $v{sc} ? $scSep : $sepExpr;
 							}
-							sepExpr = macro $ctorExpr == $v{ctorName} ? $lcSep : $sepExpr;
+							for (lc in lcCtors)
+								sepExpr = macro $ctorExpr == $v{lc} ? $lcSep : $sepExpr;
 							parts.push(sepExpr);
 							parts.push(writeCall);
 						} else if (bodyBreakFlag != null && kwLead == null && leadText == null && !isRaw) {
@@ -2358,13 +2359,18 @@ class WriterLowering {
 	 * Returns the ctor's simple name (`'BlockBody'`) or `null` when the
 	 * rule is not an Alt or no branch surfaces a `{` lead.
 	 */
-	private function leftCurlyTargetCtor(refName:String):Null<String> {
+	private function leftCurlyTargetCtors(refName:String):Array<String> {
+		final result:Array<String> = [];
 		final node:Null<ShapeNode> = shape.rules.get(refName);
-		if (node == null || node.kind != Alt) return null;
+		if (node == null || node.kind != Alt) return result;
 		for (branch in node.children) {
+			final ctor:Null<String> = branch.annotations.get('base.ctor');
+			if (ctor == null) continue;
 			final lead:Null<String> = branch.annotations.get('lit.leadText');
-			if (lead != null && lead == '{')
-				return branch.annotations.get('base.ctor');
+			if (lead != null && lead == '{') {
+				result.push(ctor);
+				continue;
+			}
 			if (branch.children.length == 1 && branch.children[0].kind == Ref) {
 				final innerName:Null<String> = branch.children[0].annotations.get('base.ref');
 				final innerNode:Null<ShapeNode> = innerName == null ? null : shape.rules.get(innerName);
@@ -2373,11 +2379,11 @@ class WriterLowering {
 					final firstLead:Null<String> = firstField.annotations.get('lit.leadText')
 						?? firstField.readMetaString(':lead');
 					if (firstLead != null && firstLead.charAt(0) == '{')
-						return branch.annotations.get('base.ctor');
+						result.push(ctor);
 				}
 			}
 		}
-		return null;
+		return result;
 	}
 
 	/**
@@ -2397,13 +2403,13 @@ class WriterLowering {
 	 * `NoBody`'s `;` wants no preceding space (suppressed via `_de()` in
 	 * the runtime switch's default branch).
 	 */
-	private function spacePrefixCtors(refName:String, lcCtorName:Null<String>):Array<String> {
+	private function spacePrefixCtors(refName:String, lcCtorNames:Array<String>):Array<String> {
 		final ctors:Array<String> = [];
 		final node:Null<ShapeNode> = shape.rules.get(refName);
 		if (node == null || node.kind != Alt) return ctors;
 		for (branch in node.children) {
 			final ctor:Null<String> = branch.annotations.get('base.ctor');
-			if (ctor == null || ctor == lcCtorName) continue;
+			if (ctor == null || lcCtorNames.indexOf(ctor) != -1) continue;
 			if (branch.annotations.get('lit.litList') != null) continue;
 			if (branch.annotations.get('lit.leadText') != null) continue;
 			if (branch.annotations.get('kw.leadText') != null) continue;
