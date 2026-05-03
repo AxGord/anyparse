@@ -482,6 +482,40 @@ class WriterLowering {
 				? bodyPolicyWrap(ctorBodyPolicyFlag, subCall, macro $i{argNames[0]}, refName, false, null)
 				: subCall;
 
+			// ω-return-indent-objectliteral: ctor-level
+			// `@:fmt(indentValueIfCtor('<ctor>', '<optField>', '<leftCurlyField>'))`
+			// on a kw-led single-Ref branch (e.g. `HxStatement.ReturnStmt`)
+			// extends the RHS-style indent rule of `HxVarDecl.init` /
+			// `HxObjectField.value` to the ctor-arg form. When the runtime
+			// conditions match (named bool opt true AND named leftCurly opt
+			// `Next` AND `Type.enumConstructor(value) == ctorName`), bypass
+			// `bodyPolicyWrap`'s sameLayoutExpr fallback (which emits a
+			// trailing-space-before-hardline `_dt(' ') + writeCall`) and
+			// instead emit `Nest(_cols, subCall)` directly. The body's
+			// own leading `_dhl` (e.g. ObjectLit's `leftCurly=Next`) picks
+			// up `+cols` indent through the Nest so the `{` lands one step
+			// past the kw column. When the conditions don't match, falls
+			// through to `policyWrapped` unchanged. Reads three string args
+			// off the branch (mirrors the `child`-level helper of the same
+			// name).
+			final indentArgs:Null<Array<String>> = branch.fmtReadStringArgs('indentValueIfCtor');
+			final indentWrapped:Expr = if (indentArgs == null) policyWrapped
+			else {
+				if (indentArgs.length != 3) Context.fatalError('WriterLowering: @:fmt(indentValueIfCtor(...)) on ctor requires (ctorName, optField, leftCurlyField), got ${indentArgs.length} args', Context.currentPos());
+				final ctorName:String = indentArgs[0];
+				final optField:String = indentArgs[1];
+				final leftCurlyField:String = indentArgs[2];
+				final optAccess:Expr = {expr: EField(macro opt, optField), pos: Context.currentPos()};
+				final leftCurlyAccess:Expr = {expr: EField(macro opt, leftCurlyField), pos: Context.currentPos()};
+				final valueAccess:Expr = macro $i{argNames[0]};
+				macro {
+					final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+					if ($optAccess
+						&& $leftCurlyAccess == anyparse.format.BracePlacement.Next
+						&& Type.enumConstructor($valueAccess) == $v{ctorName}) _dc([_dop(' '), _dn(_cols, $subCall)]) else $policyWrapped;
+				};
+			}
+
 			// ω-string-interp-noformat: when the ctor opted into source-
 			// byte capture (`@:fmt(captureSource('<optName>'))` + trivia
 			// mode), the synth ctor's `argNames[1]` holds the verbatim
@@ -502,8 +536,8 @@ class WriterLowering {
 					expr: EField(macro opt, captureSourceOpt),
 					pos: Context.currentPos(),
 				};
-				macro $optAccess ? $policyWrapped : _dt($sourceAccess);
-			} else policyWrapped;
+				macro $optAccess ? $indentWrapped : _dt($sourceAccess);
+			} else indentWrapped;
 
 			// When the sub-struct opens with a bare-Ref @:fmt(bodyPolicy(...)) field,
 			// the sub-struct's writer emits the header→body separator via

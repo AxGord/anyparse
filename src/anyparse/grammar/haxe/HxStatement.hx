@@ -47,6 +47,18 @@ package anyparse.grammar.haxe;
  *    @:default(Same)` semantics — their `Same` wraps long values via
  *    a separate `wrapping.maxLineLength` pass, which corresponds to
  *    our `FitLine` rather than strict `Same`.
+ *    Also carries `@:fmt(indentValueIfCtor('ObjectLit',
+ *    'indentObjectLiteral', 'objectLiteralLeftCurly'))` (slice
+ *    ω-return-indent-objectliteral) — when the value is an
+ *    `ObjectLit` AND `opt.indentObjectLiteral=true` AND
+ *    `opt.objectLiteralLeftCurly==Next`, the kw→body wrap routes
+ *    through a `Nest(_cols, subCall)` shape that lets the
+ *    `ObjectLit`'s own leading `_dhl` (from its leftCurly=Next)
+ *    pick up `+cols` indent. Result: `return\n\t{\n\t\tk: v\n\t};`
+ *    instead of `return \n{...};` (cuddled space + body at parent
+ *    column). Mirrors `indentation.indentObjectLiteral` semantics
+ *    extended from `HxVarDecl.init` / `HxObjectField.value` to the
+ *    return-body site.
  *
  *  - `VoidReturnStmt` — `return;` void return statement. Zero-arg
  *    ctor with `@:kw('return') @:trail(';')`. Lowering Case 0
@@ -161,7 +173,7 @@ enum HxStatement {
 	@:kw('final') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))
 	FinalStmt(decl:HxVarDecl);
 
-	@:kw('return') @:trail(';') @:fmt(bodyPolicy('returnBody'))
+	@:kw('return') @:trail(';') @:fmt(bodyPolicy('returnBody'), indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'))
 	ReturnStmt(value:HxExpr);
 
 	@:kw('return') @:trail(';')
