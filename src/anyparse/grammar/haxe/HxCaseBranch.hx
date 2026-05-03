@@ -23,13 +23,16 @@ package anyparse.grammar.haxe;
  * `case pattern:` header at body-indent instead of inline.
  *
  * `@:fmt(bodyPolicy('caseBody', 'expressionCase'))` (ω-case-body-policy
- * + ω-case-body-keep) exposes the dual `WriteOptions` knobs that gate
- * single-stmt-flat emission. The writer skips the `nestBody` indent
- * and emits `case X: foo();` flat when the body has exactly one
- * statement with no leading or orphan-trailing comments AND either:
+ * + ω-case-body-keep + ω-expression-case-keep-default) exposes the
+ * dual `WriteOptions` knobs that gate single-stmt-flat emission. The
+ * writer skips the `nestBody` indent and emits `case X: foo();` flat
+ * when the body has exactly one statement with no leading or
+ * orphan-trailing comments AND either:
  *  - either flag is `Same` (override — always flatten); or
  *  - either flag is `Keep` and `Trivial<T>.newlineBefore` of the body's
  *    first element is `false` (preserve same-line source shape).
+ * `caseBody` defaults to `Next`; `expressionCase` defaults to `Keep`
+ * (so author-written `case X: foo();` round-trips byte-identically).
  * Multi-stmt bodies keep the multiline `nestBody` shape regardless.
  */
 @:peg

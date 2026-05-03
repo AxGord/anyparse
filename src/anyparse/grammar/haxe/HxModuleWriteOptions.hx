@@ -132,21 +132,27 @@ import anyparse.format.wrap.WrapRules;
  *    three independently.
  *
  * Fields added in slice ω-case-body-policy:
- *  - `caseBody` — three-way `BodyPolicy` knob shape (`Same` / `Next` /
- *    default) gating the body-placement axis at `HxCaseBranch.body` /
- *    `HxDefaultBranch.stmts` for switch-as-statement contexts.
- *    `Same` collapses a single-stmt body onto the case header line
- *    (`case X: foo();`); `Next` (default) keeps the multiline
- *    `case X:\n\tfoo();` shape. `FitLine` and `Keep` are not yet
- *    implemented — they degrade to `Next`. Multi-stmt bodies always
- *    stay multiline regardless of the knob.
+ *  - `caseBody` — `BodyPolicy` knob gating the body-placement axis at
+ *    `HxCaseBranch.body` / `HxDefaultBranch.stmts` for switch-as-
+ *    statement contexts. `Same` collapses a single-stmt body onto the
+ *    case header line (`case X: foo();`); `Next` (default) keeps the
+ *    multiline `case X:\n\tfoo();` shape. `Keep` (added in slice
+ *    ω-case-body-keep) reads `Trivial<T>.newlineBefore` of the body's
+ *    first element to flatten only when the source had the stmt on
+ *    the same line as `:`. `FitLine` degrades to `Next`. Multi-stmt
+ *    bodies always stay multiline regardless of the knob.
  *  - `expressionCase` — same shape, drives the same Star body but is
- *    a sibling JSON key in `hxformat.json`. Conceptually distinguishes
+ *    a sibling JSON key in `hxformat.json`. Default flipped to `Keep`
+ *    in slice ω-expression-case-keep-default (2026-05-03), matching
+ *    the spirit of haxe-formatter's upstream `Same` default while
+ *    avoiding the VarStmt `@:trailOpt(';')` cascade that an
+ *    unconditional flatten would trigger. Conceptually distinguishes
  *    expression-context switches (`var x = switch ... { case Y: 1; }`)
- *    from statement-context switches; today the runtime ORs both
- *    knobs (any non-`Next` value triggers flat) because no fixture
- *    sets diverging values for the two contexts. AST-level threading
- *    of expr-vs-stmt context is deferred until a fixture demands it.
+ *    from statement-context switches; the runtime ORs both knobs (any
+ *    non-`Next`/non-`FitLine` value can trigger flat) because no
+ *    fixture sets diverging values for the two contexts. AST-level
+ *    threading of expr-vs-stmt context is deferred until a fixture
+ *    demands it.
  *
  * Field added in slice ω-throw-body:
  *  - `throwBody` — same `BodyPolicy` knob shape as `returnBody`,

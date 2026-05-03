@@ -169,17 +169,20 @@ final class HaxeFormat implements TextFormat {
 	 * unaffected — its layout is owned by `leftCurly`. `NoBody`
 	 * (`function f();` interface stub) is unaffected.
 	 *
-	 * `caseBody` / `expressionCase` (ω-case-body-policy) default to
-	 * `Next` — single-stmt switch case bodies stay on a fresh line
-	 * below `case X:`, matching pre-slice byte-identical output for
-	 * fixtures that don't opt in. Setting either to `Same` flattens
-	 * single-stmt bodies onto the case header line (`case X: foo();`).
-	 * `caseBody` corresponds to haxe-formatter's
-	 * `sameLine.caseBody: @:default(Next)`; `expressionCase` to
-	 * `sameLine.expressionCase: @:default(Same)`. We diverge from the
-	 * latter's `Same` default to avoid the `;`-cascade regression
-	 * documented in `feedback_case_body_default_flip_regresses.md` —
-	 * default-flipping `expressionCase` to `Same` is a separate slice.
+	 * `caseBody` defaults to `Next` — single-stmt switch case bodies
+	 * stay on a fresh line below `case X:` for non-expression statement
+	 * bodies (block, var, if-stmt, …). `expressionCase` defaults to
+	 * `Keep` (slice ω-expression-case-keep-default 2026-05-03) — when
+	 * the body's first element had no preceding source newline, the
+	 * `case X: foo();` shape is preserved; otherwise the body keeps the
+	 * source's multiline layout. Setting either to `Same` flattens
+	 * single-stmt bodies unconditionally. `caseBody` corresponds to
+	 * haxe-formatter's `sameLine.caseBody: @:default(Next)`;
+	 * `expressionCase` to `sameLine.expressionCase: @:default(Same)`.
+	 * We pick `Keep` over upstream's `Same` to avoid the `;`-cascade
+	 * regression documented in `feedback_case_body_default_flip_regresses.md`
+	 * — Keep gates on source same-line-ness so multi-line source bodies
+	 * keep their VarStmt `@:trailOpt(';')` cascade behaviour.
 	 *
 	 * `tryBody` (ω-tryBody) defaults to `Same` — diverges from
 	 * upstream haxe-formatter's `sameLine.tryBody: @:default(next)`
@@ -534,7 +537,7 @@ final class HaxeFormat implements TextFormat {
 		catchBody: BodyPolicy.Next,
 		tryBody: BodyPolicy.Same,
 		caseBody: BodyPolicy.Next,
-		expressionCase: BodyPolicy.Next,
+		expressionCase: BodyPolicy.Keep,
 		functionBody: BodyPolicy.Next,
 		expressionIfBody: BodyPolicy.Keep,
 		expressionElseBody: BodyPolicy.Keep,

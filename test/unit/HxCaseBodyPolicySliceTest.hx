@@ -35,15 +35,18 @@ final class HxCaseBodyPolicySliceTest extends Test {
 		super();
 	}
 
-	public function testDefaultIsNext():Void {
+	public function testDefaultsCaseBodyNextExpressionCaseKeep():Void {
 		final defaults:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
 		Assert.equals(BodyPolicy.Next, defaults.caseBody);
-		Assert.equals(BodyPolicy.Next, defaults.expressionCase);
+		Assert.equals(BodyPolicy.Keep, defaults.expressionCase);
 	}
 
 	public function testNextKeepsSingleStmtMultiline():Void {
 		final src:String = 'class M { function f():Void { switch (x) { case 1: foo(); } } }';
-		final out:String = writeWithCaseBody(src, BodyPolicy.Next);
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		opts.caseBody = BodyPolicy.Next;
+		opts.expressionCase = BodyPolicy.Next;
+		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('case 1:\n') != -1, 'expected multiline `case 1:\\n` in: <$out>');
 		Assert.isTrue(out.indexOf('case 1: foo();') == -1, 'did not expect inline `case 1: foo();` in: <$out>');
 	}
@@ -78,7 +81,7 @@ final class HxCaseBodyPolicySliceTest extends Test {
 			'{"sameLine": {"caseBody": "same"}}'
 		);
 		Assert.equals(BodyPolicy.Same, opts.caseBody);
-		Assert.equals(BodyPolicy.Next, opts.expressionCase);
+		Assert.equals(BodyPolicy.Keep, opts.expressionCase);
 	}
 
 	public function testConfigLoaderMapsExpressionCaseSame():Void {
@@ -92,7 +95,7 @@ final class HxCaseBodyPolicySliceTest extends Test {
 	public function testConfigLoaderEmptyKeepsDefaults():Void {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		Assert.equals(BodyPolicy.Next, opts.caseBody);
-		Assert.equals(BodyPolicy.Next, opts.expressionCase);
+		Assert.equals(BodyPolicy.Keep, opts.expressionCase);
 	}
 
 	public function testBothKnobsSameStillFlattens():Void {
@@ -106,7 +109,10 @@ final class HxCaseBodyPolicySliceTest extends Test {
 
 	public function testFitLineDegradesToNext():Void {
 		final src:String = 'class M { function f():Void { switch (x) { case 1: foo(); } } }';
-		final out:String = writeWithCaseBody(src, BodyPolicy.FitLine);
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		opts.caseBody = BodyPolicy.FitLine;
+		opts.expressionCase = BodyPolicy.Next;
+		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('case 1:\n') != -1, 'FitLine must not flatten today (degrades to Next): <$out>');
 	}
 

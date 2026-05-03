@@ -20,11 +20,13 @@ package anyparse.grammar.haxe;
  * `default:` header at body-indent instead of inline.
  *
  * `@:fmt(bodyPolicy('caseBody', 'expressionCase'))` (ω-case-body-policy
- * + ω-case-body-keep) mirrors `HxCaseBranch.body` — single-stmt flat
- * emission when the body has no leading / orphan-trailing trivia AND
- * either flag is `Same` (always flatten) OR either flag is `Keep` and
- * the source had the stmt on the same line as `:`
- * (`!Trivial<T>.newlineBefore` on the first element).
+ * + ω-case-body-keep + ω-expression-case-keep-default) mirrors
+ * `HxCaseBranch.body` — single-stmt flat emission when the body has no
+ * leading / orphan-trailing trivia AND either flag is `Same` (always
+ * flatten) OR either flag is `Keep` and the source had the stmt on the
+ * same line as `:` (`!Trivial<T>.newlineBefore` on the first element).
+ * `caseBody` defaults to `Next`; `expressionCase` defaults to `Keep`,
+ * so author-written `default: foo();` round-trips byte-identically.
  */
 @:peg
 typedef HxDefaultBranch = {

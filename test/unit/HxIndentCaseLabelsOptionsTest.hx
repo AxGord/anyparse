@@ -2,6 +2,7 @@ package unit;
 
 import utest.Assert;
 import utest.Test;
+import anyparse.format.BodyPolicy;
 import anyparse.grammar.haxe.HaxeFormat;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
@@ -126,6 +127,12 @@ class HxIndentCaseLabelsOptionsTest extends Test {
 	private inline function writeWith(src:String, indentCaseLabels:Bool):String {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.indentCaseLabels = indentCaseLabels;
+		// Pin expressionCase=Next so case-body inline-source samples
+		// keep the multiline body shape these indentCaseLabels assertions
+		// expect; the slice ω-expression-case-keep-default flipped the
+		// global default to Keep, which would otherwise flatten
+		// `case A: 1;` and break the indent-position checks.
+		opts.expressionCase = BodyPolicy.Next;
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
 }
