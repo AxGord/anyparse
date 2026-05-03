@@ -1168,7 +1168,21 @@ class WriterLowering {
 						final afterTrailExpr:Null<Expr> = prevTrailFieldName == null
 							? null
 							: {expr: EField(macro value, prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX), pos: Context.currentPos()};
-						parts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, fieldAccess, refName, hasElseIf, elseFieldName, null, null, null, kwPolicyFlag, afterTrailExpr));
+						// Slice ω-expr-body-keep: `BodyPolicy.Keep` on bare-Ref
+						// body fields reads the source-shape signal from the
+						// existing `<field>BeforeNewline:Bool` synth slot
+						// (created by `isBareNonFirstRef` in TriviaTypeSynth) —
+						// `BodyOnSameLine` is its inverse, no separate slot
+						// needed. First-field bodyPolicy paths (Case 3) have no
+						// BeforeNewline slot, so the !isFirstField gate keeps
+						// the pre-slice null fallback there. Without ctx.trivia
+						// the slot doesn't exist either; null falls back to the
+						// `Same` layout inside `bodyPolicyWrap` (matches the
+						// pre-slice plain-mode behaviour for Keep).
+						final bodyOnSameLineExpr:Null<Expr> = ctx.trivia && !isFirstField
+							? macro !${ {expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX), pos: Context.currentPos()} }
+							: null;
+						parts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, fieldAccess, refName, hasElseIf, elseFieldName, null, null, bodyOnSameLineExpr, kwPolicyFlag, afterTrailExpr));
 						justWrappedBody = {access: fieldAccess, typePath: refName};
 					} else {
 						// `@:fmt(leftCurly)` on a bare Ref field (e.g.

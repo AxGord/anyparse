@@ -90,6 +90,18 @@ package anyparse.grammar.haxe.format;
  * `WriterLowering.bodyPolicyWrap` — `tryBody=Same` + `tryPolicy=None`
  * still collapses to `try{…}`, decoupling the two semantic axes
  * (body inline-vs-break vs kw-trail-space).
+ *
+ * `expressionIf` (ω-expr-body-keep) is the body-placement knob for
+ * the expression-position counterparts of `if`/`for` (the typedefs
+ * driving array comprehensions and any value-position `if`/`for`).
+ * The loader fans this single JSON key out into three runtime knobs
+ * — `expressionIfBody` / `expressionElseBody` / `expressionForBody` —
+ * because haxe-formatter exposes only one config key for the trio.
+ * Default `Keep` (in `HaxeFormat.defaultWriteOptions`) preserves the
+ * source layout, matching haxe-formatter's
+ * `sameLine.expressionIf: @:default(Keep)`. Statement-level
+ * counterparts (`ifBody` / `elseBody` / `forBody`) keep their own
+ * defaults — the divergence is intentional.
  */
 @:peg typedef HxFormatSameLineSection = {
 
@@ -128,4 +140,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var expressionCase:HxFormatBodyPolicy;
 
 	@:optional var functionBody:HxFormatBodyPolicy;
+
+	@:optional var expressionIf:HxFormatBodyPolicy;
 };

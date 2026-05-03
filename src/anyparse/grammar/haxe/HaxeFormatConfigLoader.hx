@@ -108,6 +108,19 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   `FitLine` body policy active for `if`s with an `else` clause,
  *   `false` (default) degrades those bodies to `Next`. Matches haxe-
  *   formatter's `sameLine.fitLineIfWithElse: @:default(false)`.
+ * - `sameLine.expressionIf` (ω-expr-body-keep): enum string. Parsed
+ *   through the schema for unknown-key validation but only the
+ *   `keep` value is honoured at runtime — fans out into all three
+ *   knobs `expressionIfBody` / `expressionElseBody` /
+ *   `expressionForBody`. Other values (`same` / `next` / `fitLine`)
+ *   are currently ignored: `BodyPolicy.Next` on the inner body
+ *   force-breaks legitimate inline arrow bodies because the
+ *   bodyPolicyWrap engine cannot derive surrounding-context fit.
+ *   Default at the WriteOptions level is already `Keep` so the
+ *   honoured branch is a no-op; programmatic users can set the
+ *   three knobs independently when they need finer control.
+ *   Distinct from the statement-level `ifBody` / `elseBody` /
+ *   `forBody` defaults (`Next`).
  * - `sameLine.expressionTry` (ω-expression-try): enum string — same
  *   `"same"` / `"next"` / `"keep"` collapse as `sameLine.tryCatch`,
  *   routed to `opt.expressionTry`. Default `Same`. Drives the
@@ -397,6 +410,9 @@ final class HaxeFormatConfigLoader {
 			caseBody: base.caseBody,
 			expressionCase: base.expressionCase,
 			functionBody: base.functionBody,
+			expressionIfBody: base.expressionIfBody,
+			expressionElseBody: base.expressionElseBody,
+			expressionForBody: base.expressionForBody,
 			leftCurly: base.leftCurly,
 			objectLiteralLeftCurly: base.objectLiteralLeftCurly,
 			objectFieldColon: base.objectFieldColon,
@@ -574,6 +590,26 @@ final class HaxeFormatConfigLoader {
 		if (section.caseBody != null) opt.caseBody = bodyPolicyToRuntime(section.caseBody);
 		if (section.expressionCase != null) opt.expressionCase = bodyPolicyToRuntime(section.expressionCase);
 		if (section.functionBody != null) opt.functionBody = bodyPolicyToRuntime(section.functionBody);
+		// Slice ω-expr-body-keep: the JSON key `sameLine.expressionIf`
+		// is parsed via the schema (so unknown-key validation passes)
+		// but ONLY `Keep` is honoured at runtime. `Same` / `Next` /
+		// `FitLine` for expression-position `if`/`for` bodies need
+		// surrounding-context propagation that the bodyPolicyWrap
+		// engine cannot derive in isolation (a `Next` on the inner
+		// body force-breaks legitimate inline arrow bodies — see
+		// `fitline_arrow_body_if.hxtest`). When the user writes
+		// `expressionIf: keep` the runtime defaults already give Keep,
+		// so the fan-out is a no-op; when they write any other value
+		// it is currently ignored. Programmatic users can still set
+		// the three knobs independently.
+		if (section.expressionIf != null) {
+			final p:BodyPolicy = bodyPolicyToRuntime(section.expressionIf);
+			if (p == BodyPolicy.Keep) {
+				opt.expressionIfBody = p;
+				opt.expressionElseBody = p;
+				opt.expressionForBody = p;
+			}
+		}
 		if (section.elseIf != null) opt.elseIf = keywordPlacementToRuntime(section.elseIf);
 		if (section.fitLineIfWithElse != null) opt.fitLineIfWithElse = section.fitLineIfWithElse;
 		if (section.expressionTry != null) opt.expressionTry = sameLineToRuntime(section.expressionTry);

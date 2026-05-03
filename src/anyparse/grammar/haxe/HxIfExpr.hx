@@ -17,15 +17,30 @@ package anyparse.grammar.haxe;
  * enclosing `if` greedily consumes the next `else`, so
  * `if (a) if (b) x else y` binds `else y` to the inner `if`.
  *
- * No `@:fmt` knobs for now — expression-if almost always fits on one
- * line in practice (object-literal field values, call arguments). If
- * corpus evidence later shows a multi-line policy is needed, wire the
- * bodyPolicy / sameLine / fitLineIfWithElse knobs the same way
- * `HxIfStmt` does.
+ * `@:fmt(bodyPolicy('expressionIfBody'))` on `thenBranch` and
+ * `@:fmt(bodyPolicy('expressionElseBody'))` on `elseBranch` — distinct
+ * from `HxIfStmt`'s `ifBody` / `elseBody` knobs because expression-
+ * position `if` needs different default behaviour. Default `Keep`
+ * preserves source layout via the `<field>BeforeNewline:Bool` synth
+ * slot (then-branch via the bare-Ref non-first synth, else-branch via
+ * the existing optional-kw `BodyOnSameLine` synth). Matches haxe-
+ * formatter's `sameLine.expressionIf: @:default(Keep)`. The single
+ * JSON key `sameLine.expressionIf` fans out into all three expression
+ * body knobs at load time. Single-line branches under any policy
+ * stay flat — short flat-fitting expression-`if` (object field
+ * values, call args) is unaffected.
+ *
+ * `elseBranch` does NOT carry the statement-level `sameLine` /
+ * `shapeAware` / `elseIf` / `fitLineIfWithElse` companions: those
+ * knobs trigger Allman-style placement and policy interactions
+ * tuned for statement-`if`. Expression-`if` always reads as one
+ * value, and `else if` chains in expression position are handled
+ * naturally by recursion through `HxIfExpr.elseBranch:Null<HxExpr>`
+ * being itself an `IfExpr`.
  */
 @:peg
 typedef HxIfExpr = {
 	@:lead('(') @:trail(')') var cond:HxExpr;
-	var thenBranch:HxExpr;
-	@:optional @:kw('else') var elseBranch:Null<HxExpr>;
+	@:fmt(bodyPolicy('expressionIfBody')) var thenBranch:HxExpr;
+	@:optional @:kw('else') @:fmt(bodyPolicy('expressionElseBody')) var elseBranch:Null<HxExpr>;
 };

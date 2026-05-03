@@ -110,6 +110,27 @@ import anyparse.format.wrap.WrapRules;
  *    fully owns the kw-to-body separator. Users opt into the inline
  *    form via `"sameLine": { "functionBody": "same" }`.
  *
+ * Fields added in slice ω-expr-body-keep:
+ *  - `expressionIfBody` / `expressionElseBody` / `expressionForBody`
+ *    — `BodyPolicy` knobs gating the body-placement axis at the
+ *    expression-position counterparts of `if`/`for` (the `HxIfExpr` /
+ *    `HxForExpr` typedefs that drive array comprehensions and any
+ *    value-position `if`/`for`). All three default to `Keep` so the
+ *    writer preserves source layout — matching upstream haxe-formatter's
+ *    `sameLine.expressionIf: @:default(Keep)` semantics. Statement-
+ *    level forms keep their separate `ifBody` / `elseBody` / `forBody`
+ *    knobs (default `Next`) — the divergence is intentional: stmt
+ *    bodies almost always break to the next line, expression bodies
+ *    almost always stay flat unless the source had them broken.
+ *    `Keep` reads the source-shape signal off the existing
+ *    `<field>BeforeNewline:Bool` synth slot (created on bare-non-first
+ *    Refs by `TriviaTypeSynth`); plain mode (no slot) degrades to
+ *    `Same`. `Same` / `Next` / `FitLine` work the same as on the
+ *    statement-level knobs. JSON: a single `sameLine.expressionIf`
+ *    key fans out into all three knobs (haxe-formatter exposes only
+ *    one config key for the trio); programmatic users can set the
+ *    three independently.
+ *
  * Fields added in slice ω-case-body-policy:
  *  - `caseBody` — three-way `BodyPolicy` knob shape (`Same` / `Next` /
  *    default) gating the body-placement axis at `HxCaseBranch.body` /
@@ -829,6 +850,9 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	caseBody:BodyPolicy,
 	expressionCase:BodyPolicy,
 	functionBody:BodyPolicy,
+	expressionIfBody:BodyPolicy,
+	expressionElseBody:BodyPolicy,
+	expressionForBody:BodyPolicy,
 	leftCurly:BracePlacement,
 	objectLiteralLeftCurly:BracePlacement,
 	objectFieldColon:WhitespacePolicy,

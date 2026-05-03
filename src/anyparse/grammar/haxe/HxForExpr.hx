@@ -26,16 +26,19 @@ package anyparse.grammar.haxe;
  * limitation. Lifting requires a destructured-iter shape on both
  * forms, tracked as a future slice.
  *
- * No `@:fmt(bodyPolicy(...))` on `body` — array-comprehension bodies
- * almost always fit on one line in practice (`[for (x in xs) f(x)]`,
- * `[for (i in 0...10) i * i]`). If corpus evidence later shows a
- * multi-line policy is needed, wire the `bodyPolicy` knob the same
- * way `HxForStmt` does. Same precedent as `HxIfExpr` skipping the
- * if-body wrap knobs that `HxIfStmt` carries.
+ * `@:fmt(bodyPolicy('expressionForBody'))` on `body` — distinct from
+ * `HxForStmt`'s `forBody` knob because expression-position `for`
+ * (array comprehensions, value-position) needs different default
+ * behaviour. Default `Keep` preserves source layout via the
+ * `<field>BeforeNewline:Bool` synth slot; matches haxe-formatter's
+ * `sameLine.expressionIf: @:default(Keep)`. Setting the JSON key
+ * `sameLine.expressionIf` overrides all three expression-knob
+ * defaults uniformly. Single-line bodies under any policy stay flat
+ * — `[for (i in 0...10) i * i]` is unaffected.
  */
 @:peg
 typedef HxForExpr = {
 	@:lead('(') var varName:HxIdentLit;
 	@:kw('in') @:trail(')') var iterable:HxExpr;
-	var body:HxExpr;
+	@:fmt(bodyPolicy('expressionForBody')) var body:HxExpr;
 };
