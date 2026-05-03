@@ -17,9 +17,12 @@ package anyparse.grammar.haxe;
  *    pushes `untyped` to its own line. The parent `HxFnDecl.body`'s
  *    leftCurly Case 5 routes this ctor through `spacePrefixCtors` +
  *    `ctorHasBodyPolicy` (=> `_de()` separator), so the inner wrap is
- *    the sole source of the kw-leading transition. Must appear before
- *    `BlockBody` so the inner `untyped` peek (via tryBranch rollback)
- *    fires before the bare-`{` dispatch.
+ *    the sole source of the kw-leading transition. The `untyped`→`{`
+ *    gap is governed independently by `HxUntypedFnBody.block`'s
+ *    `@:fmt(leftCurly)` (slice ω-untyped-leftCurly): under
+ *    `leftCurly=Next` the brace also drops onto its own line. Must
+ *    appear before `BlockBody` so the inner `untyped` peek (via
+ *    tryBranch rollback) fires before the bare-`{` dispatch.
  *  - `BlockBody(block:HxFnBlock)` — `{ stmts }` braced body. The
  *    `{`-leading peek that dispatches this branch lives on the
  *    `HxFnBlock.stmts` field; the brace policy (`@:fmt(leftCurly)`),

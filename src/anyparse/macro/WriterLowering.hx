@@ -1010,9 +1010,30 @@ class WriterLowering {
 			// D61: kw prefix — space before kw (unless first), kw text with trailing space.
 			// @:fmt(sameLine(flagName)) on the child switches the leading space to a
 			// hardline when `opt.<flagName>` is false (τ₁).
+			//
+			// ω-untyped-leftCurly: `@:fmt(leftCurly)` on a kw-led mandatory Ref
+			// (currently `HxUntypedFnBody.block`) splits the kw emission so the
+			// trailing space is replaced by a runtime `BracePlacement` switch —
+			// `Same` (default) emits `_dt(' ')` (byte-identical to the unsplit
+			// `kwLead + ' '` form), `Next` emits `_dhl()` so the inner `{` lands
+			// on its own line at the current indent. The Ref-case body emits no
+			// further separator before its writeCall, so pushing leftCurlySeparator
+			// here owns the kw→`{` transition fully.
 			if (kwLead != null && !isOptional) {
 				if (!isFirstField && !isRaw) parts.push(sameLineSeparator(child, prevBodyField, typePath));
-				parts.push(macro _dt($v{kwLead + ' '}));
+				if (child.fmtHasFlag('leftCurly')) {
+					// Bare-flag only at this site. Knob-form `@:fmt(leftCurly('<knob>'))`
+					// is designed for first-field Star paths where the outer caller
+					// produces an `_dop(' ')` (OptSpace) the `Same` branch can ride
+					// on; here there is no OptSpace producer, so a knob-form `Same`
+					// would silently strip the kw→`{` space.
+					if (child.fmtReadString('leftCurly') != null)
+						Context.fatalError('WriterLowering: knob-form @:fmt(leftCurly(\'<knob>\')) on kw-led mandatory Ref not supported (no OptSpace producer at this site)', Context.currentPos());
+					parts.push(macro _dt($v{kwLead}));
+					parts.push(leftCurlySeparator(child));
+				} else {
+					parts.push(macro _dt($v{kwLead + ' '}));
+				}
 			}
 
 			// D61: non-optional lead — no space before lead.

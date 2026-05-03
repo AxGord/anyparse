@@ -51,7 +51,13 @@ package anyparse.grammar.haxe;
  * `tryBody=Same` (`try untyped {…}`). Block-stmt Star context (e.g.
  * `{ untyped {…} }`) has no override and keeps the Star's `\n<indent>`
  * separator unchanged, so `untypedBody` stays inert there — matching
- * haxe-formatter's BrOpen-parent exception.
+ * haxe-formatter's BrOpen-parent exception. Independently, the inner
+ * `untyped`→`{` gap is governed by `HxUntypedFnBody.block`'s
+ * `@:fmt(leftCurly)` (slice ω-untyped-leftCurly): under
+ * `leftCurly=Next` the brace lands on its own line, so
+ * `try untyped\n<indent>{…}` is reachable from `tryBody=Same` +
+ * `leftCurly=Next` and full Allman `try\n<indent>untyped\n<indent>{…}`
+ * from `untypedBody=Next` + `leftCurly=Next`.
  */
 @:peg
 typedef HxTryCatchStmt = {

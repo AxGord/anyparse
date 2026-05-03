@@ -195,7 +195,11 @@ package anyparse.grammar.haxe;
  *    bodyPolicyWrap) keeps the Star's `\n<indent>` separator unchanged
  *    — matching haxe-formatter's `markUntyped` rule that
  *    `sameLine.untypedBody` only applies when the parent token is not
- *    a Block-typed `BrOpen`.
+ *    a Block-typed `BrOpen`. The inner `untyped`→`{` gap is owned by
+ *    `HxUntypedFnBody.block`'s `@:fmt(leftCurly)` (slice
+ *    ω-untyped-leftCurly): under `leftCurly=Next` the brace drops onto
+ *    its own line regardless of the stmt-context, mirroring
+ *    haxe-formatter's `lineEnds.leftCurly` global Allman placement.
  *
  *  - `BlockStmt` — `{ stmts }` block statement. No keyword guard —
  *    dispatched by the `{` literal. Uses Case 4 in
