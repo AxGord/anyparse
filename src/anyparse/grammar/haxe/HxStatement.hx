@@ -35,7 +35,16 @@ package anyparse.grammar.haxe;
  *  - `ReturnStmt` — `return expr;` return statement with a value.
  *    Tried before `VoidReturnStmt` — if expression parsing fails
  *    (e.g. next token is `;`), tryBranch rolls back and the void
- *    variant is tried. `@:fmt(bodyPolicy('returnBody'))` on `value`
+ *    variant is tried. The trailing `;` is `@:trailOpt(';')` (slice
+ *    ω-return-trailopt 2026-05-03) — Haxe's parser allows
+ *    `return expr` without `;` when the next token already terminates
+ *    the statement (typically `}`), e.g. `return if (...) {} else {}`.
+ *    Trivia mode preserves the source's `;` presence verbatim via the
+ *    `trailPresent:Bool` synth slot from `ω-trailopt-source-track`,
+ *    so round-trip is byte-identical regardless of whether the
+ *    author wrote `;` or not. Plain mode falls back to always emitting
+ *    `;` (no AST-shape gate wired) — corpus tests run trivia mode
+ *    exclusively. `@:fmt(bodyPolicy('returnBody'))` on `value`
  *    routes the `return`→value separator through the runtime
  *    `BodyPolicy` switch (slice ω-return-body), mirroring how
  *    `HxIfStmt.thenBody` / `HxForStmt.body` consume `ifBody` /
@@ -173,7 +182,7 @@ enum HxStatement {
 	@:kw('final') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))
 	FinalStmt(decl:HxVarDecl);
 
-	@:kw('return') @:trail(';') @:fmt(bodyPolicy('returnBody'), indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'))
+	@:kw('return') @:trailOpt(';') @:fmt(bodyPolicy('returnBody'), indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'))
 	ReturnStmt(value:HxExpr);
 
 	@:kw('return') @:trail(';')
