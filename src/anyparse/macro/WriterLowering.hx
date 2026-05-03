@@ -2791,9 +2791,18 @@ class WriterLowering {
 				pos: Context.currentPos(),
 			};
 		};
+		// ω-keep-degraded-optspace: default kw→body separator is `_dop(' ')`
+		// (OptSpace, drops before break-mode hardline) instead of `_dt(' ')`
+		// (Text). When `Keep` policy degrades to `sameLayoutExpr` (no
+		// `bodyOnSameLineExpr` slot — Case 3 enum-branch path) and the body's
+		// own emission opens with a hardline (e.g. ObjectLit + leftCurly=Next),
+		// the OptSpace drops, yielding `return\n{...}` instead of the spurious
+		// `return \n{...}`. For Same policy with non-hardline-opening body
+		// (Ident, Call, block ctor `{...}`), OptSpace renders as `' '`,
+		// preserving pre-slice byte output.
 		final sameSepNb:Expr = hasKwSlots
 			? macro kwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, false, opt)
-			: kwPolicyInlineSep ?? macro _dt(' ');
+			: kwPolicyInlineSep ?? macro _dop(' ');
 		final sameLayoutExpr:Expr = macro _dc([$sameSepNb, $writeCall]);
 		// ω-trivia-after-kw-next-layout (bug #3 of issue_45): when the
 		// caller forwarded kw-trivia slot accesses, the Next-layout body
