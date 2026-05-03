@@ -295,9 +295,30 @@ class WrapList {
 		//    `OptHardline` then collides with this one and drops the
 		//    duplicate `\n` (per `Renderer.OptHardline`'s
 		//    `lastEmittedWasHardline` check).
+		// ω-fillline-single-noncascade: a single hardline-bearing item
+		// (e.g. a chain segment whose lone arg is a multi-line lambda)
+		// has no list shape to make — there's nothing to fill, no
+		// per-item positioning. The cascade still picks `FillLine` for
+		// such items because the hardline counts the item as overflow,
+		// but the FillLine continuation `Nest(cols, …)` then drifts
+		// every break-mode `\n` inside the item one indent too deep
+		// relative to the surrounding column. Mirror fork's wrapping
+		// engine, which emits `(<item>)` inline in this situation:
+		// drop the continuation Nest (and the leading hardline that
+		// only exists to force MBreak) when there is exactly one item.
+		// Multi-item lists keep the existing `Fill(items, sep)` shape
+		// where the Nest legitimately positions each broken-before
+		// item at the list's continuation indent.
+		if (items.length == 1) {
+			final tail0:Doc = appendTrailingComma ? Text(sep) : Empty;
+			return Group(Concat([
+				Text(open), openInside, items[0], tail0,
+				closeInside, Text(close),
+			]));
+		}
 		final sepLine:Doc = forceBreak ? Line('\n') : Line(' ');
 		final sepDoc:Doc = Concat([Text(sep), sepLine]);
-		final body:Doc = items.length == 1 ? items[0] : Fill(items, sepDoc);
+		final body:Doc = Fill(items, sepDoc);
 		final tail:Doc = appendTrailingComma ? Text(sep) : Empty;
 		final inner:Doc = forceBreak
 			? Concat([Line('\n'), body, tail])

@@ -109,4 +109,28 @@ class HxMethodChainEmitTest extends Test {
 		Assert.isTrue(out.indexOf('a.b;') != -1, 'expected plain field access inline: <$out>');
 	}
 
+	public function testChainSegmentSingleArgMultilineLambdaNoExtraIndent():Void {
+		// ω-fillline-single-noncascade regression: chain segment whose
+		// lone arg is a multi-line anon function with `leftCurly=Next`
+		// (Allman). The single hardline-bearing arg used to route
+		// through `WrapList.shapeFillLine`'s continuation `Nest(cols,
+		// …)`, drifting the lambda's `\n{` and body lines one tab too
+		// deep relative to the segment column. Fix short-circuits the
+		// single-item FillLine shape to drop the Nest, mirroring fork's
+		// inline `(<item>)` emission.
+		final src:String = 'class M { function f() { a.b().c(function(x) { stmt; }); } }';
+		final cfg:String = '{
+			"lineEnds":{"leftCurly":"both"},
+			"wrapping":{"methodChain":{"rules":[
+				{"conditions":[{"cond":"itemCount >= n","value":2}],"type":"onePerLine"}
+			]}}
+		}';
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
+		final out:String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+		// Function body at 2 tabs; chain Nest pushes segs to 3 tabs;
+		// lambda's `\n{` lands at 3 tabs (chain seg column), body at 4.
+		Assert.isTrue(out.indexOf('\n\t\t\t.c(function(x)\n\t\t\t{\n\t\t\t\tstmt;\n\t\t\t});') != -1,
+			'expected lambda `{` at chain seg column, body one tab deeper: <$out>');
+	}
+
 }
