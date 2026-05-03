@@ -1238,7 +1238,17 @@ class WriterLowering {
 						final bodyOnSameLineExpr:Null<Expr> = ctx.trivia && !isFirstField
 							? macro !${ {expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX), pos: Context.currentPos()} }
 							: null;
-						parts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, fieldAccess, refName, hasElseIf, elseFieldName, null, null, bodyOnSameLineExpr, kwPolicyFlag, afterTrailExpr, indentObjArgs));
+						// ω-untyped-body-stmt-override: forward all
+						// `@:fmt(bodyPolicyOverride('<ctor>', '<flag>'))`
+						// entries on this field to bodyPolicyWrap. Each entry
+						// flips the parent's own bodyPolicy flag to the named
+						// replacement when the body's runtime ctor matches —
+						// e.g. `HxTryCatchStmt.body` reads `untypedBody`
+						// instead of `tryBody` when the value is
+						// `HxStatement.UntypedBlockStmt`. Multiple entries
+						// cascade through a runtime ternary chain.
+						final policyOverrides:Array<Array<String>> = child.fmtReadStringArgsAll('bodyPolicyOverride');
+						parts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, fieldAccess, refName, hasElseIf, elseFieldName, null, null, bodyOnSameLineExpr, kwPolicyFlag, afterTrailExpr, indentObjArgs, policyOverrides));
 						justWrappedBody = {access: fieldAccess, typePath: refName};
 					} else {
 						// `@:fmt(leftCurly)` on a bare Ref field (e.g.
@@ -2757,11 +2767,41 @@ class WriterLowering {
 		flagName:String, writeCall:Expr, bodyValueExpr:Expr, bodyTypePath:String, hasElseIf:Bool,
 		elseFieldName:Null<String>, ?afterKwExpr:Null<Expr>, ?kwLeadingExpr:Null<Expr>,
 		?bodyOnSameLineExpr:Null<Expr>, ?kwPolicyFlagName:Null<String>, ?afterTrailExpr:Null<Expr>,
-		?indentObjArgs:Array<String>
+		?indentObjArgs:Array<String>, ?policyOverrides:Array<Array<String>>
 	):Expr {
-		final optFlag:Expr = {
+		// ω-untyped-body-stmt-override: parent-side body-policy override.
+		// When the field carries `@:fmt(bodyPolicyOverride('<ctor>',
+		// '<flag>'))` (one entry per call, repeatable), the parent's own
+		// `flagName` knob is overridden at runtime by the named replacement
+		// flag whenever the body's runtime ctor matches. Mirrors haxe-
+		// formatter's "applies sameLine.untypedBody to the gap before
+		// `untyped` whenever the parent token is not a Block-typed BrOpen"
+		// rule: in non-block parents (e.g. `try` body), the inner-shape
+		// knob (`untypedBody`) wins over the parent-shape knob (`tryBody`).
+		// Block-stmt Star context has no such override and uses its own
+		// `\n<indent>` separator unchanged. Reads via `Type.enumConstructor`
+		// so multiple overrides cascade through a ternary chain. Used by
+		// `HxTryCatchStmt.body` to flip `tryBody` → `untypedBody` when the
+		// body is `UntypedBlockStmt`.
+		final defaultOptFlag:Expr = {
 			expr: EField(macro opt, flagName),
 			pos: Context.currentPos(),
+		};
+		final optFlag:Expr = if (policyOverrides == null || policyOverrides.length == 0) defaultOptFlag
+		else {
+			final ctorExpr:Expr = macro Type.enumConstructor($bodyValueExpr);
+			var chain:Expr = defaultOptFlag;
+			var i:Int = policyOverrides.length - 1;
+			while (i >= 0) {
+				final pair:Array<String> = policyOverrides[i];
+				if (pair.length != 2) Context.fatalError('WriterLowering: bodyPolicyWrap policyOverrides entry requires (ctorName, flagName), got ${pair.length} args', Context.currentPos());
+				final ctorName:String = pair[0];
+				final overrideFlag:String = pair[1];
+				final overrideField:Expr = {expr: EField(macro opt, overrideFlag), pos: Context.currentPos()};
+				chain = macro $ctorExpr == $v{ctorName} ? $overrideField : $chain;
+				i--;
+			}
+			chain;
 		};
 		// ω-issue-316: when the caller forwarded kw-trivia slot accesses,
 		// the "Same" separator (`_dt(' ')`) becomes a runtime `kwGapDoc`

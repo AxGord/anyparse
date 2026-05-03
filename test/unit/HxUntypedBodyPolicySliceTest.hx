@@ -21,11 +21,16 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
  * the sole source of the kw-leading transition. Default `Same` matches
  * haxe-formatter's `sameLine.untypedBody: @:default(Same)`.
  *
- * Stmt-level form `HxStatement.UntypedBlockStmt` (incl. `try untyped
- * { … }` and block-stmt `{ untyped { … } }`) does NOT consume this
- * knob in this slice — duplicating the wrap would stack with parent
- * separators producing double spaces / spurious blank lines. Stmt-
- * context handling is a follow-up slice.
+ * ω-untyped-body-stmt-override — stmt-level form
+ * `HxStatement.UntypedBlockStmt` is reached as the body of `try`
+ * (`HxTryCatchStmt.body`) via the parent-side
+ * `@:fmt(bodyPolicyOverride('UntypedBlockStmt', 'untypedBody'))`
+ * companion meta. The wrap reads `opt.untypedBody` instead of
+ * `opt.tryBody` at runtime when the body's runtime ctor matches —
+ * the inner-shape knob wins over the parent-shape knob. Block-stmt
+ * Star context (`{ untyped { … } }`) has no override and keeps the
+ * Star's `\n<indent>` separator, so `untypedBody` stays inert there
+ * — matching haxe-formatter's BrOpen-parent exception.
  */
 @:nullSafety(Strict)
 class HxUntypedBodyPolicySliceTest extends Test {
@@ -57,17 +62,42 @@ class HxUntypedBodyPolicySliceTest extends Test {
 		Assert.isTrue(out.indexOf('untyped {') != -1, 'expected `untyped {` after the break in: <$out>');
 	}
 
-	public function testStmtFormUnaffectedByUntypedBodyKnob():Void {
-		// Slice scope: stmt-context untypedBody handling is deferred.
-		// `try untyped { … }` and `{ untyped { … } }` keep their default
-		// inline layout regardless of the knob, so the wrap doesn't stack
-		// with parent separators.
-		final outNext:String = writeWith(
+	public function testTryBodyDefaultSameKeepsUntypedInline():Void {
+		// `try untyped { … }` with default `untypedBody=Same` cuddles
+		// the kw to `try` (`try untyped {…}`). The override fires
+		// (body is `UntypedBlockStmt`) but the chosen knob's `Same`
+		// layout still emits the inline space.
+		final out:String = writeWith(
+			'class M { function f():Void { try untyped { foo(); } catch (e:Dynamic) {} } }',
+			BodyPolicy.Same
+		);
+		Assert.isTrue(out.indexOf('try untyped {') != -1, 'expected `try untyped {` inline with default Same in: <$out>');
+	}
+
+	public function testTryBodyNextPushesUntypedToOwnLine():Void {
+		// `try untyped { … }` with `untypedBody=Next` overrides the
+		// parent's `tryBody` knob (default Same) and pushes `untyped`
+		// onto its own line at one indent step deeper.
+		final out:String = writeWith(
 			'class M { function f():Void { try untyped { foo(); } catch (e:Dynamic) {} } }',
 			BodyPolicy.Next
 		);
-		Assert.isTrue(outNext.indexOf('try untyped {') != -1, 'expected `try untyped {` inline regardless of knob in: <$outNext>');
-		Assert.isTrue(outNext.indexOf('try\n') == -1, 'try-context untypedBody must not push `untyped` to next line in: <$outNext>');
+		Assert.isTrue(out.indexOf('try untyped') == -1, 'did not expect inline `try untyped` in: <$out>');
+		Assert.isTrue(out.indexOf('try\n') != -1, 'expected hardline after `try` in: <$out>');
+		Assert.isTrue(out.indexOf('untyped {') != -1, 'expected `untyped {` after the break in: <$out>');
+	}
+
+	public function testBlockStmtContextUnaffectedByUntypedBodyKnob():Void {
+		// `{ untyped { … } }` (UntypedBlockStmt under BlockStmt's Star)
+		// has no parent-side override — the Star's `\n<indent>`
+		// separator drives layout regardless of `untypedBody`. Both
+		// Same and Next produce the same output (cuddled to its own
+		// indented line).
+		final src:String = 'class M { function f():Void { untyped { foo(); } } }';
+		final outSame:String = writeWith(src, BodyPolicy.Same);
+		final outNext:String = writeWith(src, BodyPolicy.Next);
+		Assert.equals(outSame, outNext);
+		Assert.isTrue(outSame.indexOf('\n\t\tuntyped {') != -1, 'expected block-stmt `untyped {` at +2 indent in: <$outSame>');
 	}
 
 	public function testConfigLoaderMapsUntypedBodySame():Void {

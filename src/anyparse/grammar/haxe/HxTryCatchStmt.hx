@@ -39,9 +39,22 @@ package anyparse.grammar.haxe;
  * consecutive catches, runtime-switchable: when the flag is `Same`
  * the separator is a plain space (`} catch (…)`); when `Next` it
  * becomes a hardline (`}\ncatch (…)`).
+ *
+ * `@:fmt(bodyPolicyOverride('UntypedBlockStmt', 'untypedBody'))` on
+ * `body` (slice ω-untyped-body-stmt-override) flips the body-policy
+ * flag from `tryBody` to `untypedBody` at runtime when the body is
+ * `HxStatement.UntypedBlockStmt` (i.e. `try untyped { … }`). Mirrors
+ * haxe-formatter's `markUntyped` rule: `sameLine.untypedBody` applies
+ * to the gap before the `untyped` keyword whenever the parent token
+ * is not a Block-typed `BrOpen`. The `try` body slot is non-block, so
+ * `untypedBody=Next` (`try\n\tuntyped {…}`) wins over the default
+ * `tryBody=Same` (`try untyped {…}`). Block-stmt Star context (e.g.
+ * `{ untyped {…} }`) has no override and keeps the Star's `\n<indent>`
+ * separator unchanged, so `untypedBody` stays inert there — matching
+ * haxe-formatter's BrOpen-parent exception.
  */
 @:peg
 typedef HxTryCatchStmt = {
-	@:fmt(bodyPolicy('tryBody'), kwPolicy('tryPolicy')) var body:HxStatement;
+	@:fmt(bodyPolicy('tryBody'), kwPolicy('tryPolicy'), bodyPolicyOverride('UntypedBlockStmt', 'untypedBody')) var body:HxStatement;
 	@:trivia @:tryparse @:fmt(sameLine('sameLineCatch')) var catches:Array<HxCatchClause>;
 };

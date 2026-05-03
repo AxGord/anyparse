@@ -177,18 +177,25 @@ package anyparse.grammar.haxe;
  *    (with trailing `;`) via `ExprStmt(UntypedExpr(BlockExpr))`, but
  *    the haxe-formatter corpus only emits the no-`;` form.
  *    Intentionally does NOT carry `@:fmt(bodyPolicy('untypedBody'))`
- *    in slice ω-untyped-body-policy: a stmt-level wrap stacks with
- *    parent separators (block stmts already prepend `\n<indent>`,
- *    `try`'s tryBody wrap already supplies a `Same`/`Next` gap), so a
+ *    on the ctor: a stmt-level inner wrap stacks with parent
+ *    separators (block stmts already prepend `\n<indent>`, `try`'s
+ *    tryBody wrap already supplies a `Same`/`Next` gap), so a
  *    duplicate inner wrap would produce double spaces / blank lines /
  *    trailing-space-before-hardline artefacts. The fn-decl form
  *    (`HxFnBody.UntypedBlockBody`) carries the knob because the
  *    parent `HxFnDecl.body` Ref-field's leftCurly Case 5 routes
  *    `UntypedBlockBody` through `spacePrefixCtors` + `ctorHasBodyPolicy`
  *    so the parent emits `_de()` and the wrap is the sole separator.
- *    Stmt-context untypedBody handling is deferred to a follow-up
- *    slice that suppresses the parent body-policy wrap when the inner
- *    body is `UntypedBlockStmt`.
+ *    Stmt-context handling lives at the parent site: slice
+ *    ω-untyped-body-stmt-override wires
+ *    `@:fmt(bodyPolicyOverride('UntypedBlockStmt', 'untypedBody'))`
+ *    on `HxTryCatchStmt.body` so the existing `tryBody` wrap reads
+ *    `opt.untypedBody` instead of `opt.tryBody` at runtime when the
+ *    body is `UntypedBlockStmt`. Block-stmt Star context (no parent
+ *    bodyPolicyWrap) keeps the Star's `\n<indent>` separator unchanged
+ *    — matching haxe-formatter's `markUntyped` rule that
+ *    `sameLine.untypedBody` only applies when the parent token is not
+ *    a Block-typed `BrOpen`.
  *
  *  - `BlockStmt` — `{ stmts }` block statement. No keyword guard —
  *    dispatched by the `{` literal. Uses Case 4 in
