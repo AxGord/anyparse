@@ -42,6 +42,17 @@ class WrapList {
 	 * `Empty`/`Empty` — pre-slice callers see no behavioural change.
 	 * Slice ω-objectlit-leftCurly-cascade — first consumer is
 	 * `triviaSepStarExpr` for `HxObjectLit.fields` knob-form leftCurly.
+	 *
+	 * `forceExceeds`: when `true`, both cascade evaluations
+	 * (`exceeds=false` and `exceeds=true`) are replaced with a single
+	 * `exceeds=true` decide call so the engine commits unconditionally
+	 * to the break-mode shape (typically `OnePerLine` for default
+	 * cascades). Used by sep-Stars whose source carried a trailing
+	 * separator AND whose `@:fmt(trailingComma(...))` knob is on — the
+	 * trailing-sep is treated as an explicit "stay multi-line" hint
+	 * even when item widths would otherwise collapse the list flat.
+	 * Slice ω-objectlit-source-trail-comma — first consumer is
+	 * `HxObjectLit.fields`.
 	 */
 	public static function emit(
 		open:String, close:String, sep:String,
@@ -49,7 +60,8 @@ class WrapList {
 		openInside:Doc, closeInside:Doc,
 		keepInnerWhenEmpty:Bool, rules:WrapRules,
 		appendTrailingComma:Bool = false,
-		leadFlat:Doc = Empty, leadBreak:Doc = Empty
+		leadFlat:Doc = Empty, leadBreak:Doc = Empty,
+		forceExceeds:Bool = false
 	):Doc {
 		if (items.length == 0)
 			return Text(open + (keepInnerWhenEmpty ? ' ' : '') + close);
@@ -73,7 +85,7 @@ class WrapList {
 
 		final cols:Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
 
-		if (anyHardline) {
+		if (anyHardline || forceExceeds) {
 			final mode:WrapMode = decide(rules, items.length, maxLen, total, true);
 			final body:Doc = shape(mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, anyLeadingHardline);
 			return prependLead(body, isFlatMode(mode) ? leadFlat : leadBreak);

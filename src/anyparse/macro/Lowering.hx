@@ -1573,6 +1573,16 @@ class Lowering {
 					final trailBALocal:String = trailingBlankAfterLocalName(localName);
 					structFields.push({field: fieldName + TriviaTypeSynth.TRAILING_BLANK_AFTER_SUFFIX, expr: macro $i{trailBALocal}});
 				}
+				// ω-objectlit-source-trail-comma: synth slot exists only for
+				// sep-Stars with a close literal (see TriviaTypeSynth gate).
+				// Both `lit.sepText` and `lit.trailText` are populated by the
+				// Lit strategy before Lowering runs, so reading from
+				// annotations here mirrors the close-trailing / open-trailing
+				// gates above.
+				if (child.annotations.get('lit.sepText') != null && child.annotations.get('lit.trailText') != null) {
+					final trailPresentLocal:String = trailPresentLocalName(localName);
+					structFields.push({field: fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX, expr: macro $i{trailPresentLocal}});
+				}
 			}
 		}
 		// Binary: @:align — skip to next alignment boundary after all fields.
@@ -1967,6 +1977,25 @@ class Lowering {
 				pos: Context.currentPos(),
 			});
 		}
+		// ω-objectlit-source-trail-comma: sep-Stars with a close literal
+		// declare an extra mutable Bool that records whether the LAST
+		// `matchLit(sepText)` call inside the loop succeeded. After the
+		// loop terminates via the close-peek check, the local holds
+		// `true` iff the final parsed element was followed by a separator
+		// (i.e. source had a trailing comma). Default `false` covers the
+		// empty-list case and the no-trailing-sep case identically.
+		final trailPresentLocal:String = trailPresentLocalName(localName);
+		if (sepText != null) {
+			parseSteps.push({
+				expr: EVars([{
+					name: trailPresentLocal,
+					type: boolCT,
+					expr: macro false,
+					isFinal: false,
+				}]),
+				pos: Context.currentPos(),
+			});
+		}
 		final accumRef:Expr = macro $i{localName};
 		if (tryparse) {
 			// Try-parse termination: each iteration saves `ctx.pos` before
@@ -2063,6 +2092,11 @@ class Lowering {
 		// `// comment` before `collectTrailing` could see it). Inlines
 		// the same `' ' | '\t' | '\r'` walk that `collectTrailing`
 		// uses internally.
+		// ω-objectlit-source-trail-comma: capture the per-iteration
+		// `matchLit` result into the slice's source-trail-presence local.
+		// After the loop's close-peek terminates, the local holds the
+		// LAST iteration's sep result — `true` iff the source committed
+		// to a trailing separator before the close.
 		final sepMatchExpr:Expr = if (sepText != null) {
 			macro {
 				while (ctx.pos < ctx.input.length) {
@@ -2070,7 +2104,7 @@ class Lowering {
 					if (_hwc == ' '.code || _hwc == '\t'.code || _hwc == '\r'.code) ctx.pos++;
 					else break;
 				}
-				matchLit(ctx, $v{sepText});
+				$i{trailPresentLocal} = matchLit(ctx, $v{sepText});
 			}
 		} else {
 			macro {};
@@ -2168,6 +2202,17 @@ class Lowering {
 	 * and the trail itself.
 	 */
 	public static inline function trailingBlankAfterLocalName(localName:String):String return '${localName}_trailBA';
+
+	/**
+	 * Name of the `Bool` local that records whether the source had a
+	 * trailing separator after the last element of a `@:trivia` sep-Star
+	 * with a close literal (ω-objectlit-source-trail-comma). Set by the
+	 * per-iteration `matchLit(sepText)` capture inside
+	 * `emitTriviaStarFieldSteps`'s sep+close branch; pushed into the
+	 * synth pair's `<field>TrailPresent` slot by `lowerStruct`. Consumed
+	 * by the writer's `WrapList.emit` call as the `forceExceeds` flag.
+	 */
+	public static inline function trailPresentLocalName(localName:String):String return '${localName}_trailPresent';
 
 	// -------- terminal rule --------
 

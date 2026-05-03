@@ -180,6 +180,20 @@ class TriviaTypeSynth {
 	public static inline final TRAILING_BLANK_AFTER_SUFFIX:String = 'TrailingBlankAfter';
 
 	/**
+	 * ω-objectlit-source-trail-comma — suffix for a `Bool` slot recording
+	 * whether the source had a separator (e.g. trailing `,`) after the
+	 * last element of a `@:trivia` sep-Star with a close literal. Set by
+	 * the parser's per-iteration `matchLit(sepText)` capture; consumed by
+	 * the writer's `WrapList.emit` call as a `forceExceeds` flag so that
+	 * source-trailing-comma + an opt-in `@:fmt(trailingComma(...))` knob
+	 * forces the wrap cascade into break-mode (typically `OnePerLine`),
+	 * round-tripping the source's "I want this list multi-line" intent.
+	 * Synthesised only for Stars carrying both `@:sep` and `@:trail`;
+	 * other Stars skip the slot. First consumer: `HxObjectLit.fields`.
+	 */
+	public static inline final TRAIL_PRESENT_SUFFIX:String = 'TrailPresent';
+
+	/**
 	 * ω-trailopt-source-track — positional arg name appended to paired
 	 * Alt ctors that carry `@:trailOpt(...)`. The parser's `matchLit`
 	 * result lands here so the writer can gate trail emission on source
@@ -406,6 +420,16 @@ class TriviaTypeSynth {
 		// as `:trail` / `:lead` above.
 		if (child.hasMeta(':tryparse') && child.fmtHasFlag('nestBody')) {
 			fields.push({name: fieldName + TRAILING_BLANK_AFTER_SUFFIX, kind: FVar(boolCT), pos: pos, access: []});
+		}
+		// ω-objectlit-source-trail-comma: sep-Stars with a close literal
+		// grow a `Bool` slot capturing whether the source had a trailing
+		// separator after the last element. The writer reads it via
+		// `<field>TrailPresent` to force the wrap-rules cascade into
+		// break-mode when the source committed to a multi-line list.
+		// Reads `:sep` / `:trail` directly from `base.meta` for the same
+		// pre-Lit-pass ordering reason as the gates above.
+		if (child.readMetaString(':sep') != null && child.readMetaString(':trail') != null) {
+			fields.push({name: fieldName + TRAIL_PRESENT_SUFFIX, kind: FVar(boolCT), pos: pos, access: []});
 		}
 		return fields;
 	}

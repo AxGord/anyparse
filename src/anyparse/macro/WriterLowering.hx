@@ -1484,6 +1484,13 @@ class WriterLowering {
 					|| !starNode.fmtHasFlag('nestBody')
 				? null
 				: {expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_BLANK_AFTER_SUFFIX), pos: Context.currentPos()};
+			// ω-objectlit-source-trail-comma: synth slot is only present on
+			// sep-Stars with a close literal. Forward null elsewhere so the
+			// slot access doesn't reference a non-existent field. Mirrors
+			// the `@:trail` / `@:sep` parser-side gate in TriviaTypeSynth.
+			final trailPresentAccess:Null<Expr> = fieldName == null || sepText == null || closeText == null
+				? null
+				: {expr: EField(macro value, fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX), pos: Context.currentPos()};
 			if (starNode.hasMeta(':tryparse')) {
 				if (closeText != null)
 					Context.fatalError('WriterLowering: @:trivia + @:tryparse must not have @:trail', Context.currentPos());
@@ -1651,10 +1658,19 @@ class WriterLowering {
 				// list cannot collapse to a single line regardless of
 				// what the cascade would say.
 				if (sepText != null) {
+					// ω-objectlit-source-trail-comma: when the Star also
+					// carries `@:fmt(trailingComma('<knob>'))`, thread the
+					// knob's field name into `triviaSepStarExpr` so its
+					// no-trivia branch can `forceExceeds` on the wrap engine
+					// when the source had a trailing separator AND the knob
+					// is on. Null knob → behaves identically to pre-slice
+					// (cascade evaluates exceeds=false / =true symmetrically).
+					final trailingCommaField:Null<String> = starNode.fmtReadString('trailingComma');
 					parts.push(triviaSepStarExpr(
 						fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn,
 						openText ?? '', closeText, sepText, wrapRulesField,
-						leftCurlyOwnedBySep ? knobLeftCurly : null
+						leftCurlyOwnedBySep ? knobLeftCurly : null,
+						trailPresentAccess, trailingCommaField
 					));
 					return;
 				}
@@ -3645,7 +3661,8 @@ class WriterLowering {
 	private static function triviaSepStarExpr(
 		fieldAccess:Expr, trailBBAccess:Null<Expr>, trailLCAccess:Null<Expr>, trailCloseAccess:Null<Expr>,
 		trailOpenAccess:Null<Expr>, elemFn:String, openText:String, closeText:String, sepText:String,
-		wrapRulesField:Null<String> = null, leftCurlyKnob:Null<String> = null
+		wrapRulesField:Null<String> = null, leftCurlyKnob:Null<String> = null,
+		trailPresentAccess:Null<Expr> = null, trailingCommaField:Null<String> = null
 	):Expr {
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
@@ -3699,6 +3716,25 @@ class WriterLowering {
 		// renderer's flat/break decision picks the right mode at layout
 		// time. When `wrapRulesField` is null, the no-trivia branch
 		// keeps its pre-slice flat-only emission.
+		//
+		// ω-objectlit-source-trail-comma: when both `trailPresentAccess`
+		// and `trailingCommaField` are wired, the engine receives a
+		// `forceExceeds` flag = `<value>.<field>TrailPresent &&
+		// opt.<trailingCommaField>`. When true, the cascade collapses to
+		// its `exceeds=true` branch — typically `OnePerLine` — so the
+		// source's "I want this multi-line" intent (a trailing separator)
+		// round-trips instead of being silently flattened. The same
+		// `opt.<trailingCommaField>` value is forwarded as
+		// `appendTrailingComma` so the multi-line shape's last element
+		// gets its `,`. When the knob is off the conjunction stays false
+		// and `appendTrailingComma` is false — behaviour is byte-
+		// identical to the pre-slice path.
+		final knobAccessOrFalse:Expr = trailingCommaField == null
+			? macro false
+			: {expr: EField(macro opt, trailingCommaField), pos: Context.currentPos()};
+		final forceExceedsExpr:Expr = trailPresentAccess != null && trailingCommaField != null
+			? macro $trailPresentAccess && $knobAccessOrFalse
+			: macro false;
 		final noTriviaBranch:Expr = if (wrapRulesField != null) {
 			final rulesExpr:Expr = {
 				expr: EField(macro opt, wrapRulesField),
@@ -3714,8 +3750,8 @@ class WriterLowering {
 				}
 				anyparse.format.wrap.WrapList.emit(
 					$v{openText}, $v{closeText}, $v{sepText},
-					_docs, opt, _de(), _de(), false, $rulesExpr, false,
-					$wrapLeadFlatDoc, $wrapLeadBreakDoc
+					_docs, opt, _de(), _de(), false, $rulesExpr, $knobAccessOrFalse,
+					$wrapLeadFlatDoc, $wrapLeadBreakDoc, $forceExceedsExpr
 				);
 			};
 		} else {
