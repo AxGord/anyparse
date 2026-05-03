@@ -4178,10 +4178,19 @@ class WriterLowering {
 					// the empty line is trimmed by the renderer (default).
 					if (_trailBA) _trailDocs.push(_dhl());
 				}
+				final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 				if (_flatCase) {
-					_dc(_docs);
+					// ω-flat-case-wrap-indent: when bodyPolicy flattens the
+					// case body inline (`case X: foo({...});`) but the body
+					// breaks at render time (e.g. call-args wrap-rules fire),
+					// the broken lines need +1 continuation indent relative
+					// to the case-label line — matching haxe-formatter's
+					// expressionCase=same/keep behavior. Wrapping the body
+					// Doc in `_dn(_cols, ...)` is a no-op in the flat path
+					// (no \n inside the body) and applies +1 indent on every
+					// inner newline when the body wraps. Issue_121 fixtures.
+					_dn(_cols, _dc(_docs));
 				} else if (_nestBody) {
-					final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 					if (_arr.length > 0 && _trailDocs.length > 0) {
 						_dc([_dn(_cols, _dc(_docs)), _dc(_trailDocs)]);
 					} else {
