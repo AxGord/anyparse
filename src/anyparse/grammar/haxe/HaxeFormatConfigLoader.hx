@@ -128,11 +128,14 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   expression-position `try` (`HxTryCatchExpr.catches`). Independent
  *   of `sameLine.tryCatch`, which keeps driving the statement-form.
  * - `trailingCommas.arrayLiteralDefault` / `trailingCommas.callArgumentDefault`
- *   / `trailingCommas.functionParameterDefault`: enum string — `"yes"`
+ *   / `trailingCommas.functionParameterDefault` /
+ *   `trailingCommas.objectLiteralDefault`: enum string — `"yes"`
  *   maps to `true`, every other value (`"no"`, `"keep"`, `"ignore"`) to
  *   `false`. `keep` requires an AST that remembers whether the source
  *   had a trailing comma — a debt to address once the parser records
  *   that detail; for now the writer only knows "always" or "never".
+ *   `objectLiteralDefault` is anyparse-specific (haxe-formatter
+ *   upstream omits this knob) — slice ω-objectlit-trailing-comma.
  * - `lineEnds.leftCurly` (ψ₆): enum string — `"before"` / `"both"`
  *   map to `BracePlacement.Next`; `"after"` / `"none"` map to
  *   `BracePlacement.Same`. `"none"` degrades because the inline
@@ -398,6 +401,7 @@ final class HaxeFormatConfigLoader {
 			trailingCommaArrays: base.trailingCommaArrays,
 			trailingCommaArgs: base.trailingCommaArgs,
 			trailingCommaParams: base.trailingCommaParams,
+			trailingCommaObjectLits: base.trailingCommaObjectLits,
 			ifBody: base.ifBody,
 			elseBody: base.elseBody,
 			forBody: base.forBody,
@@ -624,6 +628,8 @@ final class HaxeFormatConfigLoader {
 			opt.trailingCommaArgs = trailingCommaToBool(section.callArgumentDefault);
 		if (section.functionParameterDefault != null)
 			opt.trailingCommaParams = trailingCommaToBool(section.functionParameterDefault);
+		if (section.objectLiteralDefault != null)
+			opt.trailingCommaObjectLits = trailingCommaToBool(section.objectLiteralDefault);
 	}
 
 	private static function applyLineEnds(section:HxFormatLineEndsSection, opt:HxModuleWriteOptions):Void {

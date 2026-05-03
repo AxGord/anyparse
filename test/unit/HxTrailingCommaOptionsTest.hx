@@ -11,9 +11,9 @@ import anyparse.grammar.haxe.HxModuleWriter;
 
 /**
  * τ₂ — runtime-switchable trailing-comma policies for array literals,
- * call argument lists, and parameter lists.
+ * call argument lists, parameter lists, and object literals.
  *
- * Three independent `Bool` knobs on `HxModuleWriteOptions` — all
+ * Four independent `Bool` knobs on `HxModuleWriteOptions` — all
  * defaulting to `false` on `HaxeFormat.defaultWriteOptions`. Each knob
  * is wired through the declarative `@:fmt(trailingComma("flagName"))` knob
  * on the relevant grammar field / enum branch and plumbed to the new
@@ -24,9 +24,15 @@ import anyparse.grammar.haxe.HxModuleWriter;
  * with a narrow `lineWidth` so the trailing-comma branch fires on
  * intentionally short sources, independent of content length.
  *
+ * `trailingCommaObjectLits` was added in slice ω-objectlit-trailing-comma —
+ * capability foundation for future metadata-prefix-aware obj-lit rules
+ * (issue_607 family). JSON key `trailingCommas.objectLiteralDefault` is
+ * anyparse-specific (haxe-formatter upstream omits this knob).
+ *
  * Each test exercises one sepList consumer (array literal, call, func
- * params) and verifies both the positive (flag `true` → trailing `,`)
- * and negative (flag `false` → no trailing `,`) runtime outcomes.
+ * params, object literal) and verifies both the positive (flag `true`
+ * → trailing `,`) and negative (flag `false` → no trailing `,`) runtime
+ * outcomes.
  */
 @:nullSafety(Strict)
 class HxTrailingCommaOptionsTest extends Test {
@@ -40,6 +46,7 @@ class HxTrailingCommaOptionsTest extends Test {
 		Assert.isFalse(defaults.trailingCommaArrays);
 		Assert.isFalse(defaults.trailingCommaArgs);
 		Assert.isFalse(defaults.trailingCommaParams);
+		Assert.isFalse(defaults.trailingCommaObjectLits);
 	}
 
 	public function testArrayTrailingCommaOnBreak():Void {
@@ -101,6 +108,36 @@ class HxTrailingCommaOptionsTest extends Test {
 		assertTrailingComma(out, 'y', ')');
 		assertNoTrailingComma(out, '2', ']');
 		assertNoTrailingComma(out, 'b:Int', ')');
+	}
+
+	public function testObjectLitTrailingCommaOnBreak():Void {
+		final src:String = 'class F { function f():Void { var o:Dynamic = {a: 1, b: 2, c: 3}; } }';
+		final out:String = writeWithObjectLits(src, true);
+		assertTrailingComma(out, '3', '}');
+	}
+
+	public function testObjectLitNoTrailingCommaWhenFlagOff():Void {
+		final src:String = 'class F { function f():Void { var o:Dynamic = {a: 1, b: 2, c: 3}; } }';
+		final out:String = writeWithObjectLits(src, false);
+		assertNoTrailingComma(out, '3', '}');
+	}
+
+	public function testObjectLitFlagIndependent():Void {
+		// Flip only trailingCommaObjectLits → arrays / args / params must not emit `,`.
+		final src:String = 'class F { function f(a:Int, b:Int):Void { var o:Dynamic = {x: 1, y: 2}; var xs:Dynamic = [3, 4]; foo(p, q); } }';
+		final opts:HxModuleWriteOptions = makeOpts(10, false, false, false);
+		opts.trailingCommaObjectLits = true;
+		final out:String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+		assertTrailingComma(out, 'y: 2', '}');
+		assertNoTrailingComma(out, '4', ']');
+		assertNoTrailingComma(out, 'q', ')');
+		assertNoTrailingComma(out, 'b:Int', ')');
+	}
+
+	private function writeWithObjectLits(src:String, objectLits:Bool):String {
+		final opts:HxModuleWriteOptions = makeOpts(10, false, false, false);
+		opts.trailingCommaObjectLits = objectLits;
+		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}
 
 	private function assertTrailingComma(out:String, lastItem:String, close:String):Void {

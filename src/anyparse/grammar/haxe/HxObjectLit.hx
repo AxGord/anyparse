@@ -53,6 +53,15 @@ package anyparse.grammar.haxe;
  * per-construct one — mirroring haxe-formatter's
  * `MarkLineEnds.getCurlyPolicy(ObjectDecl)` precedence.
  *
+ * `@:fmt(trailingComma('trailingCommaObjectLits'))` (slice
+ * ω-objectlit-trailing-comma) routes the trailing-comma-on-break
+ * decision through the per-construct `opt.trailingCommaObjectLits:Bool`
+ * knob, mirroring the sibling `trailingCommaArrays` /
+ * `trailingCommaArgs` / `trailingCommaParams` flags. Default `false`
+ * preserves the pre-slice byte-identical layout for every fork fixture
+ * — capability foundation for future metadata-prefix-aware obj-lit
+ * rules in `HxMetaExpr` writers.
+ *
  * leftCurly emission for this field is owned by `triviaSepStarExpr`
  * (slice ω-objectlit-leftCurly-cascade). Two runtime paths:
  *  - trivia-bearing: any element has `newlineBefore` / leading /
@@ -67,5 +76,5 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxObjectLit = {
-	@:fmt(objectLiteralBracesOpen, objectLiteralBracesClose, wrapRules('objectLiteralWrap'), leftCurly('objectLiteralLeftCurly')) @:lead('{') @:trail('}') @:sep(',') @:trivia var fields:Array<HxObjectField>;
+	@:fmt(objectLiteralBracesOpen, objectLiteralBracesClose, wrapRules('objectLiteralWrap'), leftCurly('objectLiteralLeftCurly'), trailingComma('trailingCommaObjectLits')) @:lead('{') @:trail('}') @:sep(',') @:trivia var fields:Array<HxObjectField>;
 }

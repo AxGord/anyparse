@@ -542,6 +542,7 @@ final class HaxeFormat implements TextFormat {
 		trailingCommaArrays: false,
 		trailingCommaArgs: false,
 		trailingCommaParams: false,
+		trailingCommaObjectLits: false,
 		ifBody: BodyPolicy.Next,
 		elseBody: BodyPolicy.Next,
 		forBody: BodyPolicy.Next,

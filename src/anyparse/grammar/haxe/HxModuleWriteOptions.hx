@@ -37,6 +37,14 @@ import anyparse.format.wrap.WrapRules;
  *    (including `new T(...)` constructor calls).
  *  - `trailingCommaParams` — same policy for function / enum ctor /
  *    parenthesised-lambda parameter lists.
+ *  - `trailingCommaObjectLits` (slice ω-objectlit-trailing-comma) —
+ *    same policy for object literal field lists. Default `false`. JSON
+ *    key `trailingCommas.objectLiteralDefault` mirrors the sibling
+ *    `arrayLiteralDefault` / `callArgumentDefault` /
+ *    `functionParameterDefault` keys; haxe-formatter upstream does not
+ *    expose this knob (preserves source) so the JSON key is anyparse-
+ *    specific. Capability foundation for future
+ *    `metadata-prefixed objectLit` rules in `HxMetaExpr` writers.
  *
  * Trailing-comma flags have no effect when the list fits on one line:
  * the trailing `,` is emitted only when the enclosing Group lays out
@@ -873,6 +881,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	trailingCommaArrays:Bool,
 	trailingCommaArgs:Bool,
 	trailingCommaParams:Bool,
+	trailingCommaObjectLits:Bool,
 	ifBody:BodyPolicy,
 	elseBody:BodyPolicy,
 	forBody:BodyPolicy,
