@@ -176,6 +176,24 @@ class HxFinalUntypedSliceTest extends HxTestHelpers {
 		roundTrip('class C { function m():Void { untyped foo(); } }', 'stmt-level untyped');
 	}
 
+	// ======== UntypedAtom — bare `untyped` (no operand) ========
+
+	public function testUntypedAtomBareInReturn():Void {
+		// `return untyped;` — bare `untyped` keyword, no operand.
+		// PEG tries UntypedExpr(operand) first; operand-parse fails at `;`,
+		// tryBranch rolls back, UntypedAtom matches kw and succeeds.
+		final fn:HxFnDecl = parseSingleFnDecl('class C { function m():Void { return untyped; } }');
+		final stmts:Array<HxStatement> = fnBodyStmts(fn);
+		switch stmts[0] {
+			case ReturnStmt(UntypedAtom): Assert.pass();
+			case null, _: Assert.fail('expected ReturnStmt(UntypedAtom), got ${stmts[0]}');
+		}
+	}
+
+	public function testUntypedAtomRoundTrip():Void {
+		roundTrip('class C { function m():Void { return untyped; } }', 'return untyped;');
+	}
+
 	// ======== Combined: final stmt holding untyped init ========
 
 	public function testFinalHoldsUntyped():Void {
