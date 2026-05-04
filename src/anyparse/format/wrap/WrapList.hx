@@ -4,6 +4,8 @@ import anyparse.core.Doc;
 import anyparse.format.IndentChar;
 import anyparse.format.WriteOptions;
 
+using Lambda;
+
 /**
  * Runtime helper that emits a `Doc` for a delimited list whose layout
  * is driven by a `WrapRules` cascade.
@@ -157,6 +159,58 @@ class WrapList {
 			}
 		}
 		return total;
+	}
+
+	/**
+	 * Returns `true` if `d`, when laid out in break mode, would emit a
+	 * forced hardline (`Line('\n')` or `OptHardline`) before any
+	 * non-newline content. Walks the leftmost spine: descends through
+	 * `Nest`/`Group`/`BodyGroup`, picks the break branch of `IfBreak`,
+	 * and skips leading transparent nodes (`Empty` / `Concat([])`).
+	 *
+	 * Mirrors `flatLength`'s "forced hardline" convention — soft
+	 * `Line(' ')` / `Line('')` and `OptSpace(_)` answer `false` (a soft
+	 * line in break mode emits `\n` but is flat-flattenable, so it
+	 * doesn't qualify as a "starts with hardline" signal). Distinct
+	 * from `hasLeadingHardline` (private) which is FillLine-mode-only
+	 * and returns `false` for `IfBreak` unconditionally; this variant
+	 * descends into the break branch because its caller renders in
+	 * break mode.
+	 *
+	 * Used by macro-generated paren-wrap (`@:wrap(open, close)` on an
+	 * enum ctor) to gate "trailing hardline before close": when the
+	 * inner Doc opens with a forced hardline (e.g. `BinaryChainEmit`'s
+	 * `OnePerLine` shape — every operand on its own line including
+	 * the first), the wrap renders the close delimiter on its own line
+	 * at the outer indent, matching haxe-formatter's `return !(\n…\n)`
+	 * shape on issue_187_oneline. When the inner does NOT start with a
+	 * hardline (e.g. `OnePerLineAfterFirst` keeps the first operand
+	 * inline with the open delim), the wrap stays glued — matches the
+	 * default-cascade `((items[0]\n\t…\n\titems[n-1]))` shape on
+	 * issue_187_multi_line_wrapped_assignment.
+	 */
+	public static function startsWithHardline(d:Doc):Bool {
+		var node:Doc = d;
+		while (true) switch node {
+			case Empty | Text(_) | OptSpace(_):
+				return false;
+			case Line(flat):
+				return flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code;
+			case OptHardline:
+				return true;
+			case Nest(_, inner) | Group(inner) | BodyGroup(inner):
+				node = inner;
+			case IfBreak(brk, _):
+				node = brk;
+			case Concat(items):
+				final first:Null<Doc> = items.find(it -> !isLeadingTransparent(it));
+				if (first == null) return false;
+				node = first;
+			case Fill(items, _):
+				final first:Null<Doc> = items.find(it -> !isLeadingTransparent(it));
+				if (first == null) return false;
+				node = first;
+		}
 	}
 
 	/**

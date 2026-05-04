@@ -719,6 +719,42 @@ class WriterLowering {
 				};
 				parts.push(trailExpr);
 			}
+			// ω-paren-wrap-break: `@:wrap(open, close)` enum ctor (no kw,
+			// both lead and trail set) renders as a Group whose break
+			// shape adds a hardline before the close delimiter, so a
+			// multi-line inner Doc lands the close on its own line at
+			// the outer indent — matches haxe-formatter's
+			// `return !(\n\t\t\t...\n\t\t)` shape on issue_187_oneline.
+			// Gated at runtime on `WrapList.startsWithHardline(_inner)`
+			// so the close-on-own-line behavior is symmetric with the
+			// open-with-hardline behavior of the inner Doc:
+			//  - inner with leading hardline (e.g. `BinaryChainEmit`
+			//    `OnePerLine` shape — every operand on its own line):
+			//    close goes on its own line.
+			//  - inner without leading hardline (e.g.
+			//    `OnePerLineAfterFirst` keeps items[0] inline): close
+			//    stays glued to the last item — matches the
+			//    default-cascade `((items[0]\n\t…\n\titems[n-1]))`
+			//    shape on issue_187_multi_line_wrapped_assignment.
+			// The flat shape stays byte-identical to the pre-slice
+			// `lead + inner + trail` concat.
+			final isWrapShape:Bool = kwLead == null && leadText != null && trailText != null && parts.length == 3;
+			if (isWrapShape) {
+				final leadDoc:Expr = parts[0];
+				final innerDoc:Expr = parts[1];
+				final trailDoc:Expr = parts[2];
+				return macro {
+					final _wrapInner:anyparse.core.Doc = $innerDoc;
+					final _wrapTrail:anyparse.core.Doc = $trailDoc;
+					anyparse.format.wrap.WrapList.startsWithHardline(_wrapInner)
+						? _dg(_dib(
+							_dc([$leadDoc, _wrapInner, _dhl(), _wrapTrail]),
+							_dc([$leadDoc, _wrapInner, _wrapTrail])
+						))
+						: _dc([$leadDoc, _wrapInner, _wrapTrail]);
+				};
+			}
+
 			return if (parts.length == 1) parts[0]
 			else dcCall(parts);
 		}

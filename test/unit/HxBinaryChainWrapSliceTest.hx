@@ -180,6 +180,43 @@ class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 			'expected flat `dirty = 1` with around-space intact in: <$out>');
 	}
 
+	public function testParenWrapBreakOnLeadingHardline():Void {
+		// ω-paren-wrap-break: when a `@:wrap('(', ')')` ctor's inner Doc
+		// opens with a hardline (here: `opBoolChain.defaultWrap=onePerLine`
+		// forces every operand onto its own line, including the first),
+		// the close `)` lands on its own line at the outer indent —
+		// matches haxe-formatter's `return !(\n…\n);` shape on the first
+		// sub-case of issue_187_oneline. Gated at runtime via
+		// `WrapList.startsWithHardline` so the default OPLAfterFirst
+		// cascade (no leading hardline, items[0] glued to `((`) keeps the
+		// close glued to the last item.
+		final src:String = 'class Main {\n\tpublic static function main() {\n\t\treturn !(\n\t\t\ta.y + b.h <= c.y || d.y >= e.y + f.h ||\n\t\t\tg.x + h.w <= i.x || j.x >= k.x + l.w\n\t\t);\n\t}\n}';
+		final cfg:String = '{ "wrapping": { "opBoolChain": { "defaultWrap": "onePerLine", "rules": [] } } }';
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
+		opts.lineWidth = 80;
+		final out:String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+		Assert.isTrue(out.indexOf('\n\t\t);') != -1,
+			'expected close `)` on own line at outer indent in: <$out>');
+		Assert.isTrue(out.indexOf('l.w);') == -1,
+			'close should not be glued to last item in: <$out>');
+	}
+
+	public function testParenWrapKeepsCloseGluedOnOPLAfterFirst():Void {
+		// Default opBoolChain cascade is OPLAfterFirst (items[0] inline,
+		// rest on own lines). Inner Doc has NO leading hardline, so
+		// `WrapList.startsWithHardline` returns false and the wrap stays
+		// in the pre-slice `lead + inner + trail` flat shape — close `)`
+		// glued to last item. Mirrors the expected default-config layout
+		// of issue_187_multi_line_wrapped_assignment.
+		final src:String = 'class C { static function m():Void { var v:Bool = (aaaaaaaaaaaa || bbbbbbbbbbbb || cccccccccccc || dddddddddddd || eeeeeeeeeeee); } }';
+		final out:String = writeWithLineWidth(src, 80);
+		// Close paren must be glued to the last operand `eeee...);`.
+		Assert.isTrue(out.indexOf('eeeeeeeeeeee);') != -1,
+			'expected close `)` glued to last item for OPLAfterFirst inner in: <$out>');
+		Assert.isTrue(out.indexOf('\n\t);') == -1 && out.indexOf('\n\t\t);') == -1,
+			'close should not land on its own line for OPLAfterFirst inner in: <$out>');
+	}
+
 	public function testIdempotencyLongBoolChain():Void {
 		final src:String = 'class C { static function m():Void { dirty = aaaaaaaaaaaa || bbbbbbbbbbbb || cccccccccccc || dddddddddddd || eeeeeeeeeeee; } }';
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
