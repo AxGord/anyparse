@@ -382,6 +382,15 @@ class WriterLowering {
 			// not format-level, because tightness is a property of the
 			// specific operator literal, not the language as a whole.
 			final isTight:Bool = branch.fmtHasFlag('tight');
+			// Assignment-class operators (prec=0: `=`, `+=`, `<<=`, `??=`, …)
+			// keep flat emission. The break point for a long assignment lives
+			// inside its RHS chain (which has its own Group), not at the `=`
+			// itself — haxe-formatter expects `dirty = dirty\n\t|| ...`, i.e.
+			// `lhs = first-of-rhs` on the lead line and breaks ONLY at the
+			// inner binary chain. Wrapping `=` in a Group would force a break
+			// before `=` once the full flat width exceeds the line, producing
+			// `dirty\n\t= ...` — wrong indent and wrong shape.
+			final isAssign:Bool = prec == 0;
 			final opWithSpaces:String = isTight ? opText : ' ' + opText + ' ';
 			// Asymmetric infix mirror of Lowering.lowerPrattLoop: when the
 			// right child references a different enum (e.g. `Is(left:HxExpr,
@@ -395,10 +404,30 @@ class WriterLowering {
 			final rightCall:Expr = isAsymmetric
 				? makeWriteCall(writeFnFor(rightRef), macro $i{argNames[1]}, false, -1)
 				: makeWriteCall(writeFnName, macro $i{argNames[1]}, hasPratt, rightCtx);
+			if (isTight || isAssign) {
+				return macro {
+					final _inner:anyparse.core.Doc = _dc([
+						$leftCall, _dt($v{opWithSpaces}), $rightCall,
+					]);
+					if ($v{prec} < ctxPrec) _dc([_dt('('), _inner, _dt(')')]) else _inner;
+				};
+			}
+			// Group/Line/Nest wrap for non-tight non-assign infix: lets the
+			// renderer pick flat (Line(' ') → space) when the chain's full
+			// flat width fits in the remaining columns, else break (Line(' ')
+			// → hardline at indent + cols). Nested infix subtrees emit their
+			// own Group, so each level of e.g. `||` chains decides flat/break
+			// independently at its own column position when the renderer
+			// descends — exactly what the upstream haxe-formatter binary-op
+			// chain layout does (issue_179, issue_187_*).
+			final opAfterText:String = opText + ' ';
 			return macro {
-				final _inner:anyparse.core.Doc = _dc([
-					$leftCall, _dt($v{opWithSpaces}), $rightCall,
-				]);
+				final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space
+					? opt.indentSize : opt.tabWidth;
+				final _inner:anyparse.core.Doc = _dg(_dc([
+					$leftCall,
+					_dn(_cols, _dc([_dl(), _dt($v{opAfterText}), $rightCall])),
+				]));
 				if ($v{prec} < ctxPrec) _dc([_dt('('), _inner, _dt(')')]) else _inner;
 			};
 		}
