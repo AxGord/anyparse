@@ -68,6 +68,7 @@ import unit.HxAnonTypeBracesOptionsTest;
 import unit.HxObjectLitBracesOptionsTest;
 import unit.HxObjectLitWrapRulesTest;
 import unit.HxObjectLitSourceTrailCommaSliceTest;
+import unit.HxMetaAllmanObjectLitSliceTest;
 import unit.HxMethodChainWrapCapabilityTest;
 import unit.HxMethodChainEmitTest;
 import unit.HxWrapRulesIngestTest;
@@ -189,6 +190,7 @@ class RunTests {
 		runner.addCase(new HxObjectLitBracesOptionsTest());
 		runner.addCase(new HxObjectLitWrapRulesTest());
 		runner.addCase(new HxObjectLitSourceTrailCommaSliceTest());
+		runner.addCase(new HxMetaAllmanObjectLitSliceTest());
 		runner.addCase(new HxMethodChainWrapCapabilityTest());
 		runner.addCase(new HxMethodChainEmitTest());
 		runner.addCase(new HxWrapRulesIngestTest());

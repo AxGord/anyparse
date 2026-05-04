@@ -24,9 +24,24 @@ package anyparse.grammar.haxe;
  * are bare Refs (no `@:lead`/`@:kw`/`@:trail`): the second-field
  * branch in `WriterLowering.lowerStruct` injects a default `_dt(' ')`
  * separator between consecutive Ref fields.
+ *
+ * The `expr` field carries `@:fmt(allmanIndentForCtor('ObjectLit'))`
+ * (slice ω-meta-allman-objectlit) so `@meta { … }` round-trips with
+ * the haxe-formatter convention of placing `{` on its own line at
+ * indent +1: the wrap suppresses the default `_dt(' ')` separator
+ * and emits `Nest(_cols, [Hardline, writeExpr])` when the runtime
+ * value's ctor is `ObjectLit`. The `Nest` bumps the current indent
+ * by one step before the hardline lands, so the value's `{` sits at
+ * `parent + _cols`; the `ObjectLit` writer's own internal nest then
+ * pushes the body to `parent + 2·_cols`. Non-`ObjectLit` ctors fall
+ * through to the inline ` value` layout. The placement is structural,
+ * not configurable — there is no companion knob in `WriteOptions`.
+ * Reusable on any future MetaExpr-style wrapper that gates a
+ * brace-form value on the same Allman convention.
  */
 @:peg
 typedef HxMetaExpr = {
 	var meta:HxMetadata;
+	@:fmt(allmanIndentForCtor('ObjectLit'))
 	var expr:HxExpr;
 }

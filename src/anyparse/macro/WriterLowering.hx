@@ -1343,29 +1343,65 @@ class WriterLowering {
 							// between `)` and the catch body).
 							parts.push(bareBodyBreakWrap(writeCall, fieldAccess, refName));
 						} else if (kwLead == null && leadText == null && !isFirstField && !isRaw) {
-							// ω-issue-48-v2: in trivia mode the bare Ref field
-							// grew a `<field>BeforeNewline:Bool` slot (see
-							// `TriviaTypeSynth.isBareNonFirstRef`). Consult it
-							// to emit a hardline when the parser captured a
-							// source newline in the gap — this is the only
-							// signal available when a preceding bare-tryparse
-							// Star (e.g. `HxMemberDecl.modifiers`) is empty,
-							// since that Star has no first element whose
-							// `newlineBefore` could be read.
-							if (ctx.trivia && isTriviaBearing(typePath)) {
-								final nlAccess:Expr = {
-									expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX),
-									pos: Context.currentPos(),
-								};
-								if (prevAnyStarNonEmpty != null) {
+							// ω-meta-allman-objectlit: `@:fmt(allmanIndentForCtor('<ctor>'))`
+							// on a bare-Ref non-first field forces an Allman-style
+							// brace placement plus one indent step when the field's
+							// runtime value matches the named ctor. The default
+							// `_dt(' ')` separator is suppressed and the writer call
+							// is wrapped in `Nest(_cols, [hardline, writeCall])` —
+							// the hardline lands at indent base + _cols (Nest bumps
+							// the current indent), so the value's own opening
+							// literal sits one indent step deeper than the parent
+							// and the value's body picks up another step from its
+							// own internal Nest. Non-matching ctors fall through to
+							// the default `_dt(' ') + writeCall` layout.
+							//
+							// First (and currently only) consumer: `HxMetaExpr.expr`
+							// with `('ObjectLit')` so `@meta { ... }` round-trips
+							// the haxe-formatter convention of placing `{` on its
+							// own line at indent +1 regardless of the global
+							// `objectLiteralLeftCurly` knob — the meta-prefixed
+							// brace placement is structural, not configurable.
+							//
+							// Trivia-mode `BeforeNewline` signal is bypassed when
+							// the flag fires — the runtime ctor check is
+							// structurally definitive for the brace-form layout
+							// and source-newline preservation would only matter
+							// for non-brace alternatives that already fall through
+							// to the default sep path.
+							final allmanCtor:Null<String> = child.fmtReadString('allmanIndentForCtor');
+							if (allmanCtor != null) {
+								final ctorMatchExpr:Expr = macro Type.enumConstructor($fieldAccess) == $v{allmanCtor};
+								parts.push(macro {
+									final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+									final _doc:anyparse.core.Doc = $writeCall;
+									$ctorMatchExpr ? _dn(_cols, _dc([_dhl(), _doc])) : _dc([_dt(' '), _doc]);
+								});
+							} else {
+								// ω-issue-48-v2: in trivia mode the bare Ref field
+								// grew a `<field>BeforeNewline:Bool` slot (see
+								// `TriviaTypeSynth.isBareNonFirstRef`). Consult it
+								// to emit a hardline when the parser captured a
+								// source newline in the gap — this is the only
+								// signal available when a preceding bare-tryparse
+								// Star (e.g. `HxMemberDecl.modifiers`) is empty,
+								// since that Star has no first element whose
+								// `newlineBefore` could be read.
+								if (ctx.trivia && isTriviaBearing(typePath)) {
+									final nlAccess:Expr = {
+										expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX),
+										pos: Context.currentPos(),
+									};
+									if (prevAnyStarNonEmpty != null) {
+										final prev:Expr = prevAnyStarNonEmpty;
+										parts.push(macro $prev ? ($nlAccess ? _dhl() : _dt(' ')) : _de());
+									} else parts.push(macro $nlAccess ? _dhl() : _dt(' '));
+								} else if (prevAnyStarNonEmpty != null) {
 									final prev:Expr = prevAnyStarNonEmpty;
-									parts.push(macro $prev ? ($nlAccess ? _dhl() : _dt(' ')) : _de());
-								} else parts.push(macro $nlAccess ? _dhl() : _dt(' '));
-							} else if (prevAnyStarNonEmpty != null) {
-								final prev:Expr = prevAnyStarNonEmpty;
-								parts.push(macro $prev ? _dt(' ') : _de());
-							} else parts.push(macro _dt(' '));
-							parts.push(writeCall);
+									parts.push(macro $prev ? _dt(' ') : _de());
+								} else parts.push(macro _dt(' '));
+								parts.push(writeCall);
+							}
 						} else {
 							parts.push(writeCall);
 						}
@@ -3735,6 +3771,23 @@ class WriterLowering {
 		final forceExceedsExpr:Expr = trailPresentAccess != null && trailingCommaField != null
 			? macro $trailPresentAccess && $knobAccessOrFalse
 			: macro false;
+		// ω-meta-allman-objectlit: when source had a trailing `,`, preserve
+		// it in any multi-line shape regardless of the knob. Flat `NoWrap`
+		// never appends (`shapeNoWrap` ignores `appendTrailingComma`), so
+		// the disjunction degrades to the pre-slice behaviour for the
+		// knob-off + flat-cascade case (`testSourceTrailingCommaIgnored-
+		// WhenKnobOff` still asserts `{i: 0}`). The change only matters
+		// when the layout is forced multi-line by some other signal —
+		// surrounding hardlines (e.g. the meta-Allman wrap from
+		// `HxMetaExpr.expr`'s `@:fmt(allmanIndentForCtor)`), natural
+		// cascade fit, or `forceExceeds` — at which point the source's
+		// `,` round-trips like the rest of the multi-line shape.
+		// Mirrors haxe-formatter's "Keep" trailing-comma policy for the
+		// meta-prefixed object-literal pattern (`return @patch { ..., }`
+		// → multi-line with closing `,`).
+		final appendTrailingCommaExpr:Expr = trailPresentAccess != null && trailingCommaField != null
+			? macro $trailPresentAccess || $knobAccessOrFalse
+			: knobAccessOrFalse;
 		final noTriviaBranch:Expr = if (wrapRulesField != null) {
 			final rulesExpr:Expr = {
 				expr: EField(macro opt, wrapRulesField),
@@ -3750,7 +3803,7 @@ class WriterLowering {
 				}
 				anyparse.format.wrap.WrapList.emit(
 					$v{openText}, $v{closeText}, $v{sepText},
-					_docs, opt, _de(), _de(), false, $rulesExpr, $knobAccessOrFalse,
+					_docs, opt, _de(), _de(), false, $rulesExpr, $appendTrailingCommaExpr,
 					$wrapLeadFlatDoc, $wrapLeadBreakDoc, $forceExceedsExpr
 				);
 			};
@@ -3805,7 +3858,7 @@ class WriterLowering {
 						if (_t.blankAfterLeadingComments && _t.leadingComments.length > 0) _inner.push(_dhl());
 						final _elem:anyparse.core.Doc = $triviaElemCall;
 						var _line:anyparse.core.Doc = _elem;
-						if (_si < _arr.length - 1)
+						if (_si < _arr.length - 1 || $appendTrailingCommaExpr)
 							_line = _dc([_line, _dt($v{sepText})]);
 						final _tc:Null<String> = _t.trailingComment;
 						if (_tc != null)
