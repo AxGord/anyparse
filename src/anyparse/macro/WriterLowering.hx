@@ -405,10 +405,23 @@ class WriterLowering {
 				? makeWriteCall(writeFnFor(rightRef), macro $i{argNames[1]}, false, -1)
 				: makeWriteCall(writeFnName, macro $i{argNames[1]}, hasPratt, rightCtx);
 			if (isTight || isAssign) {
-				return macro {
-					final _inner:anyparse.core.Doc = _dc([
+				// Assign / arrow ops (prec 0, non-tight): split the trailing
+				// space into `_dop(' ')` (OptSpace) so the renderer drops it
+				// when the RHS emits a leading break-mode hardline (e.g.
+				// `dirty =\n\t\t\tdirty || ...` from a OnePerLine wrapping
+				// chain on the RHS), avoiding a spurious `dirty = \n…`
+				// trailing-space-before-newline. Flat emission is unchanged
+				// — the next Text from `$rightCall` flushes the OptSpace.
+				// Tight ops keep the original single-Text shape (no spaces).
+				final innerExpr:Expr = isAssign && !isTight
+					? macro _dc([
+						$leftCall, _dt(' '), _dt($v{opText}), _dop(' '), $rightCall,
+					])
+					: macro _dc([
 						$leftCall, _dt($v{opWithSpaces}), $rightCall,
 					]);
+				return macro {
+					final _inner:anyparse.core.Doc = $innerExpr;
 					if ($v{prec} < ctxPrec) _dc([_dt('('), _inner, _dt(')')]) else _inner;
 				};
 			}

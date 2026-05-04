@@ -146,6 +146,40 @@ class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 		Assert.isTrue(out.indexOf('?? bbbbbbbbbbbb') != -1, 'expected `?? bbb` in: <$out>');
 	}
 
+	public function testAssignTrailingSpaceDropsBeforeRhsBreak():Void {
+		// Slice ω-assign-rhs-optspace: when the RHS chain wraps with a
+		// leading hardline (e.g. `opBoolChain.defaultWrap: onePerLine`
+		// forces every operand onto its own line including the first),
+		// the trailing space after `=` must drop so we emit `dirty =\n`
+		// rather than `dirty = \n` — matching haxe-formatter's
+		// issue_187_oneline expected output. The split lead emits the
+		// trailing space as `OptSpace`, which the renderer drops on
+		// break-mode hardline collision.
+		final src:String = 'class C { static function m():Void { dirty = a || b || c; } }';
+		final cfg:String = '{ "wrapping": { "opBoolChain": { "defaultWrap": "onePerLine", "rules": [] } } }';
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
+		opts.lineWidth = 80;
+		final out:String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+		Assert.isTrue(out.indexOf('dirty =\n') != -1,
+			'expected `dirty =\\n` (no trailing space before break-mode hardline) in: <$out>');
+		Assert.isTrue(out.indexOf('dirty = \n') == -1,
+			'unexpected trailing space before hardline in: <$out>');
+	}
+
+	public function testAssignFlatKeepsAroundSpace():Void {
+		// Smoke: when the RHS of an assignment expression fits flat, the
+		// trailing OptSpace after `=` flushes via the next Text — the
+		// output is still ` = ` with the space intact (no behavioural
+		// change for flat assignments). Routed through the binary-op
+		// Pratt path (`Assign(IdentExpr, IntLit)` inside a function
+		// body), not `HxVarDecl @:lead('=')`, so it actually exercises
+		// the new split-OptSpace branch.
+		final src:String = 'class C { static function m():Void { dirty = 1; } }';
+		final out:String = writeWithLineWidth(src, 80);
+		Assert.isTrue(out.indexOf('dirty = 1') != -1,
+			'expected flat `dirty = 1` with around-space intact in: <$out>');
+	}
+
 	public function testIdempotencyLongBoolChain():Void {
 		final src:String = 'class C { static function m():Void { dirty = aaaaaaaaaaaa || bbbbbbbbbbbb || cccccccccccc || dddddddddddd || eeeeeeeeeeee; } }';
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
