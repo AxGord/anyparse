@@ -597,6 +597,8 @@ final class HaxeFormat implements TextFormat {
 		arrayLiteralWrap: HaxeFormat.defaultArrayLiteralWrap(),
 		anonTypeWrap: HaxeFormat.defaultAnonTypeWrap(),
 		methodChainWrap: HaxeFormat.defaultMethodChainWrap(),
+		opBoolChainWrap: HaxeFormat.defaultOpBoolChainWrap(),
+		opAddSubChainWrap: HaxeFormat.defaultOpAddSubChainWrap(),
 		addLineCommentSpace: true,
 		expressionTry: SameLinePolicy.Same,
 		indentCaseLabels: true,
@@ -825,6 +827,71 @@ final class HaxeFormat implements TextFormat {
 				},
 				{
 					mode: WrapMode.OnePerLineAfterFirst,
+					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
+				},
+			],
+			defaultMode: WrapMode.NoWrap,
+		};
+	}
+
+	/**
+	 * Default `WrapRules` cascade for `||` / `&&` chains (haxe-formatter
+	 * `opBoolChain` class). Single rule: when the chain in flat layout
+	 * would exceed `WriteOptions.lineWidth`, fall through to
+	 * `OnePerLineAfterFirst` (BeforeLast op placement — `op` prefixes
+	 * each continuation line). `defaultMode: NoWrap` keeps short chains
+	 * inline.
+	 *
+	 * Mirrors the `exceedsMaxLineLength → OnePerLineAfterFirst` final
+	 * rule in haxe-formatter's `wrapping.opBoolChain` cascade. The
+	 * upstream WrapConfig has 5 additional rules with `lineLength >= 140`
+	 * + `anyItemLength >= 40` predicates that `WrapConditionType` does
+	 * not yet model — same skip-precedent as `defaultMethodChainWrap`'s
+	 * `lineLength >= 160` omission. For default-config fixtures the
+	 * single `ExceedsMaxLineLength` cond fires identically to upstream's
+	 * 6-rule cascade.
+	 */
+	public static function defaultOpBoolChainWrap():WrapRules {
+		return {
+			rules: [
+				{
+					mode: WrapMode.OnePerLineAfterFirst,
+					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
+				},
+			],
+			defaultMode: WrapMode.NoWrap,
+		};
+	}
+
+	/**
+	 * Default `WrapRules` cascade for `+` / `-` chains (haxe-formatter
+	 * `opAddSubChain` class). Single rule
+	 * `ExceedsMaxLineLength → FillLine` over `defaultMode: NoWrap`.
+	 *
+	 * Diverges from `defaultOpBoolChainWrap` (which uses
+	 * `OnePerLineAfterFirst`): haxe-formatter's `opAddSubChain` cascade
+	 * routes the wide-but-short-item case (the most common one for
+	 * string concat — long total length, lots of short items) through
+	 * `FillLine`, packing as many operands per line as fit. Drives
+	 * issue_179's long throw expression — `throw "a" + b + "c" + ... +
+	 * ") in atlas " + name + " with max size ("\n\t+ rest` — where the
+	 * first ~10 items pack inline and the break lands on the soft-line
+	 * before the overflowing operand. `WrapConditionType` doesn't yet
+	 * model the upstream `lineLength >= 160` predicate so the simpler
+	 * `ExceedsMaxLineLength` cond fires identically for default-config
+	 * fixtures.
+	 *
+	 * `BinaryChainEmit.shapeFillLine` emits BeforeLast op placement
+	 * (`op` prefixes each continuation operand) for default cascade
+	 * fires; user `hxformat.json` `wrapping.opAddSubChain.defaultWrap:
+	 * fillLine` plus an empty `rules: []` falls through to FillLine
+	 * with the same BeforeLast placement.
+	 */
+	public static function defaultOpAddSubChainWrap():WrapRules {
+		return {
+			rules: [
+				{
+					mode: WrapMode.FillLine,
 					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
 				},
 			],

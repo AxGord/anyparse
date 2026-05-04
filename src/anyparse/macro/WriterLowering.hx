@@ -412,14 +412,67 @@ class WriterLowering {
 					if ($v{prec} < ctxPrec) _dc([_dt('('), _inner, _dt(')')]) else _inner;
 				};
 			}
-			// Group/Line/Nest wrap for non-tight non-assign infix: lets the
-			// renderer pick flat (Line(' ') → space) when the chain's full
-			// flat width fits in the remaining columns, else break (Line(' ')
-			// → hardline at indent + cols). Nested infix subtrees emit their
-			// own Group, so each level of e.g. `||` chains decides flat/break
-			// independently at its own column position when the renderer
-			// descends — exactly what the upstream haxe-formatter binary-op
-			// chain layout does (issue_179, issue_187_*).
+			// Slice ω-binop-wraprules: `||` / `&&` (opBoolChain) and
+			// `+` / `-` (opAddSubChain) dispatch to a chain-level emit
+			// that gathers the full same-class subtree into a flat
+			// `(items, ops)` pair, runs the cascade once, and emits one
+			// `BinaryChainEmit` shape (NoWrap / OnePerLineAfterFirst /
+			// OnePerLine / FillLine). Inner same-class `BinOp` nodes are
+			// consumed by the AST walk — they never re-enter the writer
+			// through their own ctor branch, so the cascade evaluates
+			// exactly once per chain regardless of depth. Mirror of
+			// `wrapWithChainDispatch` for postfix method chains.
+			//
+			// Extraction is inline (vs an external helper) so the
+			// `case Or(...)` / `case And(...)` patterns resolve against
+			// the current writer's value type — `HxExpr` in plain mode,
+			// `HxExprT` in trivia mode (paired type carries the same
+			// ctor names). A typed external helper would force a
+			// `(_e:HxExpr)` parameter that fails compile in trivia
+			// writers.
+			final isChainBool:Bool = opText == '||' || opText == '&&';
+			final isChainAddSub:Bool = opText == '+' || opText == '-';
+			if (isChainBool || isChainAddSub) {
+				final chainRulesField:String = isChainBool ? 'opBoolChainWrap' : 'opAddSubChainWrap';
+				final chainRulesExpr:Expr = {
+					expr: EField(macro opt, chainRulesField),
+					pos: Context.currentPos(),
+				};
+				final argTypeCT:ComplexType = ruleValueCT(typePath);
+				// Leaf operands render at the chain's own precedence. A
+				// sub-expression with strictly lower prec (ternary inside
+				// `||`, assign inside `+`) gets the parens it needs;
+				// same-class operators are consumed by the extractor.
+				final leafCall:Expr = makeWriteCall(writeFnName, macro _e, hasPratt, prec);
+				final gatherSwitch:Expr = isChainBool
+					? macro switch _e {
+						case Or(_l, _r): _gather(_l); _ops.push('||'); _gather(_r);
+						case And(_l, _r): _gather(_l); _ops.push('&&'); _gather(_r);
+						case _: _items.push($leafCall);
+					}
+					: macro switch _e {
+						case Add(_l, _r): _gather(_l); _ops.push('+'); _gather(_r);
+						case Sub(_l, _r): _gather(_l); _ops.push('-'); _gather(_r);
+						case _: _items.push($leafCall);
+					};
+				return macro {
+					final _items:Array<anyparse.core.Doc> = [];
+					final _ops:Array<String> = [];
+					function _gather(_e:$argTypeCT):Void $gatherSwitch;
+					_gather($i{argNames[0]});
+					_ops.push($v{opText});
+					_gather($i{argNames[1]});
+					final _inner:anyparse.core.Doc = anyparse.format.wrap.BinaryChainEmit.emit(
+						_items, _ops, opt, $chainRulesExpr
+					);
+					if ($v{prec} < ctxPrec) _dc([_dt('('), _inner, _dt(')')]) else _inner;
+				};
+			}
+			// Group/Line/Nest wrap for non-tight non-assign non-chain
+			// infix (compare, shift, bitwise, `is`, `??`): lets the
+			// renderer pick flat (Line(' ') → space) when the chain's
+			// full flat width fits in the remaining columns, else break.
+			// Per-binary Group cascading from G.1 (ω-binop-group-wrap).
 			final opAfterText:String = opText + ' ';
 			return macro {
 				final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space

@@ -697,6 +697,44 @@ import anyparse.format.wrap.WrapRules;
  *    `anyItemLength>=30` + `itemCount>=4`, `itemCount>=7`, or
  *    `exceedsMaxLineLength==1` cascade to `OnePerLineAfterFirst`).
  *
+ * Fields added in slice ω-binop-wraprules:
+ *  - `opBoolChainWrap` — `WrapRules` cascade for `||` / `&&` (haxe-
+ *    formatter `opBoolChain` class). Drives multi-line break shape on
+ *    long boolean chains (assignment RHS chains like `dirty = dirty
+ *    \n\t|| (X) \n\t|| (Y)` — issue_187 default). The macro fires
+ *    `BinaryChainEmit.emit` on the outermost `Or` / `And` ctor; the
+ *    chain extractor (inlined into `WriterLowering`'s infix Pratt
+ *    branch via a local `_gather` recursion over `case Or(_,_) | case
+ *    And(_,_) | case _:` so the patterns resolve against the writer's
+ *    paired type — `HxExpr` plain mode, `HxExprT` trivia mode) collects
+ *    all same-class operands into a flat `(items, ops)` pair before
+ *    one cascade evaluation per top-level chain.
+ *  - `opAddSubChainWrap` — `WrapRules` cascade for `+` / `-` (haxe-
+ *    formatter `opAddSubChain` class). Drives multi-line break shape
+ *    on long arithmetic / string-concat chains (issue_179 long throw
+ *    string concat). Same dispatch flow via the inlined `_gather`
+ *    walking `case Add(_,_) | case Sub(_,_) | case _:`.
+ *
+ * Defaults are minimal:
+ *  - `opBoolChainWrap`: single rule
+ *    `ExceedsMaxLineLength → OnePerLineAfterFirst` over `defaultMode:
+ *    NoWrap` (BeforeLast op placement — `\n+indent || operand`).
+ *  - `opAddSubChainWrap`: single rule
+ *    `ExceedsMaxLineLength → FillLine` over `defaultMode: NoWrap`
+ *    (BeforeLast op placement — pack inline up to line budget, soft-
+ *    line break before overflow). Different mode reflects haxe-
+ *    formatter's per-class default — bool chains canonically place
+ *    each operator on its own line; add/sub chains canonically pack
+ *    multiple operands per line (long string concat, arithmetic).
+ *
+ * Mirrors haxe-formatter's fallback behaviour (the upstream WrapConfig
+ * has 6 rules per cascade with `lineLength >= 140/160` + `anyItem
+ * Length >= 40/60` — currently unmodelled by `WrapConditionType` —
+ * but for default-config fixtures the `exceedsMaxLineLength` cond
+ * fires identically to upstream's final rule). User `hxformat.json`
+ * `wrapping.opBoolChain` / `opAddSubChain` configs override the
+ * cascade through the loader (defaultWrap + rules).
+ *
  * Slice ω-line-comment-space adds the `addLineCommentSpace:Bool` knob
  * — but to the base `WriteOptions` typedef, not here. The knob drives a
  * format-neutral writer helper (`leadingCommentDoc` /
@@ -936,6 +974,8 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	arrayLiteralWrap:WrapRules,
 	anonTypeWrap:WrapRules,
 	methodChainWrap:WrapRules,
+	opBoolChainWrap:WrapRules,
+	opAddSubChainWrap:WrapRules,
 	expressionTry:SameLinePolicy,
 	indentCaseLabels:Bool,
 	indentObjectLiteral:Bool,

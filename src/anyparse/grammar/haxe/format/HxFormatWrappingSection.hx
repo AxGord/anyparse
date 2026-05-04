@@ -11,6 +11,11 @@ package anyparse.grammar.haxe.format;
  *  - `methodChain`: `WrapRules` cascade → `methodChainWrap` (slices
  *    ω-methodchain-wraprules-capability + ω-methodchain-emit — knob,
  *    loader, and writer-time chain extractor all wired).
+ *  - `opBoolChain`: `WrapRules` cascade → `opBoolChainWrap` (slice
+ *    ω-binop-wraprules — drives `||` / `&&` chain break shape;
+ *    knob + loader + macro-time dispatch all wired).
+ *  - `opAddSubChain`: `WrapRules` cascade → `opAddSubChainWrap` (same
+ *    slice — drives `+` / `-` chain break shape).
  *
  * Slice ω-peg-byname-array lifted the prior `@:peg` ByName Array<T>
  * limitation, so every cascade above now ingests `rules` from
@@ -33,4 +38,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var anonType:HxFormatWrapRules;
 
 	@:optional var methodChain:HxFormatWrapRules;
+
+	@:optional var opBoolChain:HxFormatWrapRules;
+
+	@:optional var opAddSubChain:HxFormatWrapRules;
 };
