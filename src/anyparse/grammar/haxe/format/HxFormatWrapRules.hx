@@ -23,5 +23,7 @@ package anyparse.grammar.haxe.format;
 
 	@:optional var defaultWrap:String;
 
+	@:optional var defaultLocation:String;
+
 	@:optional var rules:Array<HxFormatWrapRule>;
 };

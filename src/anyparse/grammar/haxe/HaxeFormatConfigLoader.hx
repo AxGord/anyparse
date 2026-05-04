@@ -13,6 +13,7 @@ import anyparse.format.wrap.WrapConditionType;
 import anyparse.format.wrap.WrapMode;
 import anyparse.format.wrap.WrapRule;
 import anyparse.format.wrap.WrapRules;
+import anyparse.format.wrap.WrappingLocation;
 import anyparse.grammar.haxe.format.HxFormatBodyPolicy;
 import anyparse.grammar.haxe.format.HxFormatBracesConfigSection;
 import anyparse.grammar.haxe.format.HxFormatClassEmptyLinesConfig;
@@ -532,14 +533,18 @@ final class HaxeFormatConfigLoader {
 		final defaultMode:WrapMode = cfg.defaultWrap != null
 			? wrapModeFromString(cfg.defaultWrap) ?? base.defaultMode
 			: base.defaultMode;
+		final defaultLocation:Null<WrappingLocation> = cfg.defaultLocation != null
+			? wrappingLocationFromString(cfg.defaultLocation) ?? base.defaultLocation
+			: base.defaultLocation;
 		final src:Null<Array<HxFormatWrapRule>> = cfg.rules;
-		if (src == null) return {rules: base.rules, defaultMode: defaultMode};
+		if (src == null)
+			return {rules: base.rules, defaultMode: defaultMode, defaultLocation: defaultLocation};
 		final rules:Array<WrapRule> = [];
 		for (raw in src) {
 			final mapped:Null<WrapRule> = wrapRuleFromConfig(raw);
 			if (mapped != null) rules.push(mapped);
 		}
-		return {rules: rules, defaultMode: defaultMode};
+		return {rules: rules, defaultMode: defaultMode, defaultLocation: defaultLocation};
 	}
 
 	private static function wrapRuleFromConfig(raw:HxFormatWrapRule):Null<WrapRule> {
@@ -557,7 +562,19 @@ final class HaxeFormatConfigLoader {
 			final condNarrow:WrapConditionType = ct;
 			mapped.push({cond: condNarrow, value: rc.value ?? 0});
 		}
-		return {conditions: mapped, mode: mode};
+		final locStr:Null<String> = raw.location;
+		final location:Null<WrappingLocation> = locStr != null ? wrappingLocationFromString(locStr) : null;
+		return location != null
+			? {conditions: mapped, mode: mode, location: location}
+			: {conditions: mapped, mode: mode};
+	}
+
+	private static function wrappingLocationFromString(s:String):Null<WrappingLocation> {
+		return switch s {
+			case 'beforeLast': WrappingLocation.BeforeLast;
+			case 'afterLast': WrappingLocation.AfterLast;
+			case _: null;
+		};
 	}
 
 	private static function wrapModeFromString(s:String):Null<WrapMode> {

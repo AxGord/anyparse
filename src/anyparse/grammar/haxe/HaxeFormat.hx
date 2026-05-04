@@ -22,6 +22,7 @@ import anyparse.format.text.UnknownPolicy;
 import anyparse.format.wrap.WrapConditionType;
 import anyparse.format.wrap.WrapMode;
 import anyparse.format.wrap.WrapRules;
+import anyparse.format.wrap.WrappingLocation;
 
 /**
  * Text-format descriptor for the Haxe programming language.
@@ -838,13 +839,16 @@ final class HaxeFormat implements TextFormat {
 	 * Default `WrapRules` cascade for `||` / `&&` chains (haxe-formatter
 	 * `opBoolChain` class). Single rule: when the chain in flat layout
 	 * would exceed `WriteOptions.lineWidth`, fall through to
-	 * `OnePerLineAfterFirst` (BeforeLast op placement — `op` prefixes
-	 * each continuation line). `defaultMode: NoWrap` keeps short chains
-	 * inline.
+	 * `OnePerLineAfterFirst` with explicit `location: BeforeLast` (`op`
+	 * prefixes each continuation line). `defaultMode: NoWrap` keeps short
+	 * chains inline.
 	 *
-	 * Mirrors the `exceedsMaxLineLength → OnePerLineAfterFirst` final
-	 * rule in haxe-formatter's `wrapping.opBoolChain` cascade. The
-	 * upstream WrapConfig has 5 additional rules with `lineLength >= 140`
+	 * The explicit `BeforeLast` matches haxe-formatter's per-rule setting
+	 * for the analogous final rule in `wrapping.opBoolChain` and shields
+	 * the rule from the cascade-level `defaultLocation: AfterLast`
+	 * fallback (mirroring fork's typedef-level default).
+	 *
+	 * The upstream WrapConfig has 5 additional rules with `lineLength >= 140`
 	 * + `anyItemLength >= 40` predicates that `WrapConditionType` does
 	 * not yet model — same skip-precedent as `defaultMethodChainWrap`'s
 	 * `lineLength >= 160` omission. For default-config fixtures the
@@ -856,6 +860,7 @@ final class HaxeFormat implements TextFormat {
 			rules: [
 				{
 					mode: WrapMode.OnePerLineAfterFirst,
+					location: WrappingLocation.BeforeLast,
 					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
 				},
 			],
@@ -881,17 +886,17 @@ final class HaxeFormat implements TextFormat {
 	 * `ExceedsMaxLineLength` cond fires identically for default-config
 	 * fixtures.
 	 *
-	 * `BinaryChainEmit.shapeFillLine` emits BeforeLast op placement
-	 * (`op` prefixes each continuation operand) for default cascade
-	 * fires; user `hxformat.json` `wrapping.opAddSubChain.defaultWrap:
-	 * fillLine` plus an empty `rules: []` falls through to FillLine
-	 * with the same BeforeLast placement.
+	 * Explicit `location: BeforeLast` on the rule preserves the existing
+	 * op-before-operand emission and shields it from the cascade-level
+	 * `defaultLocation: AfterLast` fallback (mirroring fork's typedef
+	 * default).
 	 */
 	public static function defaultOpAddSubChainWrap():WrapRules {
 		return {
 			rules: [
 				{
 					mode: WrapMode.FillLine,
+					location: WrappingLocation.BeforeLast,
 					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
 				},
 			],

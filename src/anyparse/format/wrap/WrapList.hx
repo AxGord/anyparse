@@ -174,6 +174,31 @@ class WrapList {
 		return rules.defaultMode;
 	}
 
+	/**
+	 * Variant of `decide` that returns the matched rule's `mode` AND
+	 * effective `location`. The effective location is the matched
+	 * rule's `location` field when set, else the parent
+	 * `rules.defaultLocation`, else `AfterLast` (mirroring haxe-formatter's
+	 * `WrapRules.defaultLocation` typedef default).
+	 *
+	 * When no rule matches, returns `defaultMode` paired with the same
+	 * fallback chain for the location. Used by chain-emission consumers
+	 * (`BinaryChainEmit`) that pick continuation-line operator placement
+	 * per-rule. Delimited-list consumers (`WrapList.emit` itself) still
+	 * call `decide` — they don't consume `location`.
+	 */
+	public static function decideRule(
+		rules:WrapRules, itemCount:Int, maxItemLen:Int,
+		totalItemLen:Int, exceedsMaxLineLength:Bool
+	):{mode:WrapMode, location:WrappingLocation} {
+		final fallback:WrappingLocation = rules.defaultLocation ?? WrappingLocation.AfterLast;
+		for (rule in rules.rules) {
+			if (matches(rule, itemCount, maxItemLen, totalItemLen, exceedsMaxLineLength))
+				return {mode: rule.mode, location: rule.location ?? fallback};
+		}
+		return {mode: rules.defaultMode, location: fallback};
+	}
+
 	private static function matches(
 		rule:WrapRule, itemCount:Int, maxItemLen:Int,
 		totalItemLen:Int, exceedsMaxLineLength:Bool
