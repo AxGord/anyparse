@@ -109,12 +109,15 @@ package anyparse.grammar.haxe;
  *    `@:fmt(bodyPolicy('throwBody'))` on `expr` routes the
  *    `throw`→value separator through the runtime `BodyPolicy` switch
  *    (slice ω-throw-body), mirroring `ReturnStmt` exactly. `Same`
- *    keeps `throw value;` flat; `Next` always pushes the value to
- *    the next line at one indent level deeper; `FitLine` keeps it
- *    flat when it fits within `lineWidth`, otherwise breaks. Default
- *    is `FitLine` matching the `returnBody` precedent — haxe-formatter
- *    has no separate `throwBody` knob upstream, but the same
- *    fit-or-break semantics make sense for long thrown expressions.
+ *    (default) keeps `throw value;` flat regardless of length; `Next`
+ *    always pushes the value to the next line at one indent level
+ *    deeper; `FitLine` keeps it flat when it fits within `lineWidth`,
+ *    otherwise breaks. Default flipped from `FitLine` to `Same` in
+ *    slice ω-throw-body-same-default — haxe-formatter has no
+ *    `throwBody` knob and leaves `throw <expr>` inline regardless of
+ *    length, so a long chain-typed value wraps via its own internal
+ *    fill rules (`opAddSubChain` / `opBoolChain` cascade) rather
+ *    than breaking at the kw boundary.
  *
  *  - `DoWhileStmt` — `do body while (cond);` do-while loop.
  *    Dispatched by the `do` keyword. The body and parenthesised

@@ -125,10 +125,15 @@ final class HaxeFormat implements TextFormat {
 	 * `sameLine.{ifBody,elseBody,forBody,whileBody,doWhileBody}:
 	 * @:default(Next)`. Opting into `Same` (same-line body) or
 	 * `FitLine` requires an explicit `hxformat.json` override.
-	 * `returnBody` (ω-return-body, see below) is the exception — it
-	 * defaults to `FitLine`, not `Next`, because haxe-formatter's
-	 * effective `sameLine.returnBody: @:default(Same)` semantics wrap
-	 * long values via a separate `wrapping.maxLineLength` pass.
+	 * `returnBody` and `throwBody` are the exceptions — `returnBody`
+	 * (ω-return-body, see below) defaults to `FitLine` because
+	 * haxe-formatter's effective `sameLine.returnBody: @:default(Same)`
+	 * semantics wrap long values via a separate
+	 * `wrapping.maxLineLength` pass; `throwBody` (slice
+	 * ω-throw-body-same-default) defaults to `Same` because
+	 * haxe-formatter has no `throwBody` knob and leaves
+	 * `throw <expr>` inline regardless of length, deferring any wrap
+	 * to the value's own chain/fill rules.
 	 *
 	 * `returnBody` (ω-return-body) defaults to `FitLine` — `return
 	 * value;` stays on one line when the value fits within
@@ -141,12 +146,16 @@ final class HaxeFormat implements TextFormat {
 	 * `Keep` (preserve source) requires a `sameLine.returnBody`
 	 * override in `hxformat.json`.
 	 *
-	 * `throwBody` (ω-throw-body) shares the `returnBody` default and
-	 * shape — `throw value;` follows the same fit-or-break logic.
-	 * Unlike `returnBody`, there is no upstream `sameLine.throwBody`
-	 * key in haxe-formatter; the JSON loader does not parse one. The
-	 * runtime knob exists for parity and for users constructing
-	 * `HxModuleWriteOptions` programmatically.
+	 * `throwBody` (ω-throw-body) shares the `returnBody` shape but
+	 * defaults to `Same`, not `FitLine` — `throw value;` always stays
+	 * flat at the kw-side. haxe-formatter has no `throwBody` knob and
+	 * leaves the `throw <expr>` separator inline regardless of length;
+	 * any wrap happens inside the value via its own chain/fill rules
+	 * (slice ω-throw-body-same-default, supersedes the original
+	 * FitLine-mirror-returnBody default). `Next` / `FitLine` / `Keep`
+	 * remain available for users constructing `HxModuleWriteOptions`
+	 * programmatically; the JSON loader still does not parse a
+	 * `sameLine.throwBody` key.
 	 *
 	 * `catchBody` (ω-catch-body) defaults to `Next`, matching haxe-
 	 * formatter's `sameLine.catchBody: @:default(Next)` and the
@@ -550,7 +559,7 @@ final class HaxeFormat implements TextFormat {
 		whileBody: BodyPolicy.Next,
 		doBody: BodyPolicy.Next,
 		returnBody: BodyPolicy.FitLine,
-		throwBody: BodyPolicy.FitLine,
+		throwBody: BodyPolicy.Same,
 		catchBody: BodyPolicy.Next,
 		tryBody: BodyPolicy.Same,
 		caseBody: BodyPolicy.Next,

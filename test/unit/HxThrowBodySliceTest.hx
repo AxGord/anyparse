@@ -17,8 +17,11 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
  * extension consuming `@:fmt(bodyPolicy('throwBody'))` on a kw-led
  * single-Ref enum branch.
  *
- * Default is `FitLine` to mirror `returnBody` — `throw value;` stays
- * flat when the value fits within `lineWidth`, breaks otherwise.
+ * Default is `Same` (slice ω-throw-body-same-default) — `throw value;`
+ * always stays flat at the kw boundary, regardless of value length.
+ * haxe-formatter has no `throwBody` knob and leaves `throw <expr>`
+ * inline, deferring any wrap to the value's own chain/fill rules; the
+ * `Same` default matches that upstream byte-for-byte.
  *
  * Unlike `returnBody`, there is NO upstream `sameLine.throwBody` key
  * in haxe-formatter — the JSON loader does not parse one. The runtime
@@ -29,18 +32,41 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 @:nullSafety(Strict)
 class HxThrowBodySliceTest extends Test {
 
+	/**
+	 * Length of the synthetic string literal used by the long-value
+	 * tests. Must exceed the default `lineWidth` (~120) so `FitLine`
+	 * is forced to break and the `Same`-vs-`FitLine` contrast is
+	 * meaningful.
+	 */
+	private static inline final LONG_VALUE_LEN:Int = 200;
+
 	public function new():Void {
 		super();
 	}
 
-	public function testDefaultIsFitLine():Void {
+	public function testDefaultIsSame():Void {
 		final defaults:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
-		Assert.equals(BodyPolicy.FitLine, defaults.throwBody);
+		Assert.equals(BodyPolicy.Same, defaults.throwBody);
 	}
 
 	public function testSameKeepsValueFlat():Void {
 		final out:String = writeWith('class M { function f():Void { throw 1; } }', BodyPolicy.Same);
 		Assert.isTrue(out.indexOf('throw 1;') != -1, 'expected `throw 1;` flat in: <$out>');
+	}
+
+	/**
+	 * Pins the `Same` contract for slice ω-throw-body-same-default:
+	 * `Same` is unconditional flat — value length irrelevant. The
+	 * single-byte separator between `throw` and its value is always
+	 * one space regardless of how the value renders (`lineWidth`
+	 * gating belongs to `FitLine`, not `Same`). Long-string-throw is
+	 * exactly the corpus shape (issue_179) the default flip targets.
+	 */
+	public function testSameKeepsLongValueFlat():Void {
+		final src:String = 'class M { function f():Void { throw ${makeLongStringLit(LONG_VALUE_LEN)}; } }';
+		final out:String = writeWith(src, BodyPolicy.Same);
+		Assert.isTrue(out.indexOf('throw "') != -1, 'expected `throw "..."` flat (Same ignores width) in: <$out>');
+		Assert.isTrue(out.indexOf('throw\n') == -1, '`Same` must NOT break before long value in: <$out>');
 	}
 
 	public function testNextBreaksShortValue():Void {
@@ -55,10 +81,7 @@ class HxThrowBodySliceTest extends Test {
 	}
 
 	public function testFitLineBreaksLongValue():Void {
-		final buf:StringBuf = new StringBuf();
-		for (i in 0...200) buf.add('-');
-		final longLit:String = '"' + buf.toString() + '"';
-		final src:String = 'class M { function f():Void { throw $longLit; } }';
+		final src:String = 'class M { function f():Void { throw ${makeLongStringLit(LONG_VALUE_LEN)}; } }';
 		final out:String = writeWith(src, BodyPolicy.FitLine);
 		Assert.isTrue(out.indexOf('throw\n') != -1, 'expected break before long value (>lineWidth) in: <$out>');
 	}
@@ -85,12 +108,12 @@ class HxThrowBodySliceTest extends Test {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"sameLine": {"throwBody": "next"}}'
 		);
-		Assert.equals(BodyPolicy.FitLine, opts.throwBody);
+		Assert.equals(BodyPolicy.Same, opts.throwBody);
 	}
 
 	public function testConfigLoaderEmptyKeepsDefault():Void {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
-		Assert.equals(BodyPolicy.FitLine, opts.throwBody);
+		Assert.equals(BodyPolicy.Same, opts.throwBody);
 	}
 
 	public function testReturnBodyAndThrowBodyIndependent():Void {
@@ -106,5 +129,11 @@ class HxThrowBodySliceTest extends Test {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.throwBody = policy;
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+	}
+
+	private static inline function makeLongStringLit(len:Int):String {
+		final buf:StringBuf = new StringBuf();
+		for (i in 0...len) buf.add('-');
+		return '"' + buf.toString() + '"';
 	}
 }

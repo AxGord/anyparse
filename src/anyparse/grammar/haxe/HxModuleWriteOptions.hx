@@ -194,15 +194,19 @@ import anyparse.format.wrap.WrapRules;
  * Field added in slice ω-throw-body:
  *  - `throwBody` — same `BodyPolicy` knob shape as `returnBody`,
  *    gating the separator between the `throw` keyword and its value
- *    expression at `HxStatement.ThrowStmt`. `Same` keeps
- *    `throw value;` flat; `Next` always pushes the value to the
- *    next line; `FitLine` (default) keeps it flat when it fits
- *    within `lineWidth`, otherwise breaks. `Keep` preserves the
- *    source layout. There is no upstream haxe-formatter
- *    `throwBody` knob — the JSON loader does not parse a
- *    `sameLine.throwBody` key from `hxformat.json`. The runtime
- *    knob exists for parity with `returnBody` and for users
- *    constructing `HxModuleWriteOptions` programmatically.
+ *    expression at `HxStatement.ThrowStmt`. `Same` (default) keeps
+ *    `throw value;` flat regardless of length; `Next` always pushes
+ *    the value to the next line; `FitLine` keeps it flat when it
+ *    fits within `lineWidth`, otherwise breaks; `Keep` preserves
+ *    the source layout. Default flipped from `FitLine` to `Same` in
+ *    slice ω-throw-body-same-default — haxe-formatter has no
+ *    `throwBody` knob and leaves `throw <expr>` inline regardless of
+ *    length, so `Same` matches upstream byte-for-byte while letting
+ *    long chain/string-concat values wrap via their own internal
+ *    fill rules instead of breaking at the kw boundary. The JSON
+ *    loader still does not parse a `sameLine.throwBody` key from
+ *    `hxformat.json`; the runtime knob exists for users constructing
+ *    `HxModuleWriteOptions` programmatically.
  *
  * Field added in slice ω-return-body:
  *  - `returnBody` — same `BodyPolicy` knob shape as `ifBody` /
