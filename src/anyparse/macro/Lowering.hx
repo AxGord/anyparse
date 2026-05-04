@@ -1066,10 +1066,20 @@ class Lowering {
 			final ctorCall:Expr = {expr: ECall(ctorRef, ctorArgs), pos: Context.currentPos()};
 			final kwLead:Null<String> = branch.annotations.get('kw.leadText');
 			final steps:Array<Expr> = [macro skipWs(ctx)];
+			// `@:kw` and `@:wrap`/`@:lead` compose on the same single-Ref
+			// branch: emit kw (word-boundary checked) first, then the lead
+			// literal. First consumer is `HxMetadata.OverloadMeta` which
+			// pairs `@:kw('@:overload')` with `@:wrap('(', ')')` so the
+			// keyword commits the branch and the parens delimit the
+			// structurally-parsed `HxOverloadArgs` payload. Either or both
+			// may be absent — the `@:kw('return')`-only ctors keep their
+			// pre-slice shape, and a bare `@:wrap`-only ctor (`ParenExpr`)
+			// stays a single-literal commit.
 			if (kwLead != null) {
 				steps.push(macro expectKw(ctx, $v{kwLead}));
 				steps.push(macro skipWs(ctx));
-			} else if (leadText != null) {
+			}
+			if (leadText != null) {
 				steps.push(macro expectLit(ctx, $v{leadText}));
 				steps.push(macro skipWs(ctx));
 			}

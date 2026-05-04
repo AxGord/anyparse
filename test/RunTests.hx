@@ -41,6 +41,7 @@ import unit.HxFnExprBodySliceTest;
 import unit.HxFnExprSliceTest;
 import unit.HxFnReturnBodySliceTest;
 import unit.HxMetaExprSliceTest;
+import unit.HxOverloadMetaSliceTest;
 import unit.HxBlockExprSliceTest;
 import unit.HxTryExprSliceTest;
 import unit.HxObjectLitSliceTest;
@@ -175,6 +176,7 @@ class RunTests {
 		runner.addCase(new HxTryExprSliceTest());
 		runner.addCase(new HxObjectLitSliceTest());
 		runner.addCase(new HxMetaExprSliceTest());
+		runner.addCase(new HxOverloadMetaSliceTest());
 		runner.addCase(new HxSameLineOptionsTest());
 		runner.addCase(new HxTrailingCommaOptionsTest());
 		runner.addCase(new HxLeftCurlyOptionsTest());

@@ -7,6 +7,7 @@ import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnDecl;
+import anyparse.grammar.haxe.HxMetadataUtil;
 import anyparse.grammar.haxe.HxMetaExpr;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxModuleWriter;
@@ -40,7 +41,7 @@ class HxMetaExprSliceTest extends HxTestHelpers {
 		final args:Array<HxExpr> = expectCallArgs(callExpr);
 		Assert.equals(1, args.length);
 		final wrapper:HxMetaExpr = expectMetaExpr(args[0]);
-		Assert.equals('@:privateAccess', (wrapper.meta : String));
+		Assert.equals('@:privateAccess', HxMetadataUtil.source(wrapper.meta));
 	}
 
 	public function testParsesMetaWithArgs():Void {
@@ -48,7 +49,7 @@ class HxMetaExprSliceTest extends HxTestHelpers {
 		final fn:HxFnDecl = parseSingleFnDecl(src);
 		final args:Array<HxExpr> = expectCallArgs(expectExprStmt(fnBodyStmts(fn)[0]));
 		final wrapper:HxMetaExpr = expectMetaExpr(args[0]);
-		Assert.equals('@:foo(1, 2)', (wrapper.meta : String));
+		Assert.equals('@:foo(1, 2)', HxMetadataUtil.source(wrapper.meta));
 		assertIdentExpr(wrapper.expr, 'X');
 	}
 
@@ -57,9 +58,9 @@ class HxMetaExprSliceTest extends HxTestHelpers {
 		final fn:HxFnDecl = parseSingleFnDecl(src);
 		final args:Array<HxExpr> = expectCallArgs(expectExprStmt(fnBodyStmts(fn)[0]));
 		final outer:HxMetaExpr = expectMetaExpr(args[0]);
-		Assert.equals('@:a', (outer.meta : String));
+		Assert.equals('@:a', HxMetadataUtil.source(outer.meta));
 		final inner:HxMetaExpr = expectMetaExpr(outer.expr);
-		Assert.equals('@:b', (inner.meta : String));
+		Assert.equals('@:b', HxMetadataUtil.source(inner.meta));
 		assertIdentExpr(inner.expr, 'X');
 	}
 

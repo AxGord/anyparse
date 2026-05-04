@@ -4,6 +4,7 @@ import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxDecl;
 import anyparse.grammar.haxe.HxMetadata;
+import anyparse.grammar.haxe.HxMetadataUtil;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxModuleWriter;
 
@@ -13,8 +14,10 @@ import anyparse.grammar.haxe.HxModuleWriter;
  * top-level `@:enum`, `@:allow(pack.Cls)`, `@test("foo")` etc. parse
  * before the `class`/`typedef`/`enum`/`interface`/`abstract` dispatch.
  * Mirror of the meta Star already on `HxMemberDecl`. Captures stay as
- * verbatim regex matches via the `HxMetadata` abstract-over-String —
- * no structured payload, no plugin hook.
+ * verbatim regex matches via `HxMetadata.PlainMeta(raw:HxMetaRaw)` —
+ * the regex catch-all branch of the `HxMetadata` enum (structural
+ * branches like `OverloadMeta` exist for compiler metas with
+ * function-decl arguments).
  *
  * Capability-only target: corpus fixtures `popen_in_metadata.hxtest`
  * (`@:allow(pack.Base) @test("foo") class Main {}`) and
@@ -29,7 +32,7 @@ class HxToplevelMetaSliceTest extends HxTestHelpers {
 		final ast:HxModule = HaxeModuleParser.parse('@:enum class M {}');
 		Assert.equals(1, ast.decls.length);
 		Assert.equals(1, ast.decls[0].meta.length);
-		Assert.equals('@:enum', (ast.decls[0].meta[0] : String));
+		Assert.equals('@:enum', HxMetadataUtil.source(ast.decls[0].meta[0]));
 		switch ast.decls[0].decl {
 			case ClassDecl(_): Assert.pass();
 			case _: Assert.fail('expected ClassDecl, got ${ast.decls[0].decl}');
@@ -40,14 +43,14 @@ class HxToplevelMetaSliceTest extends HxTestHelpers {
 		final ast:HxModule = HaxeModuleParser.parse('@:allow(pack.Base) @test("foo") class Main {}');
 		Assert.equals(1, ast.decls.length);
 		Assert.equals(2, ast.decls[0].meta.length);
-		Assert.equals('@:allow(pack.Base)', (ast.decls[0].meta[0] : String));
-		Assert.equals('@test("foo")', (ast.decls[0].meta[1] : String));
+		Assert.equals('@:allow(pack.Base)', HxMetadataUtil.source(ast.decls[0].meta[0]));
+		Assert.equals('@test("foo")', HxMetadataUtil.source(ast.decls[0].meta[1]));
 	}
 
 	public function testMetaThenModifierOnClass():Void {
 		final ast:HxModule = HaxeModuleParser.parse('@:keep private class M {}');
 		Assert.equals(1, ast.decls[0].meta.length);
-		Assert.equals('@:keep', (ast.decls[0].meta[0] : String));
+		Assert.equals('@:keep', HxMetadataUtil.source(ast.decls[0].meta[0]));
 		Assert.equals(1, ast.decls[0].modifiers.length);
 	}
 
@@ -97,7 +100,7 @@ class HxToplevelMetaSliceTest extends HxTestHelpers {
 		final ast:HxModule = HaxeModuleParser.parse('package foo;\nimport bar.Baz;\n@:enum class M {}');
 		Assert.equals(3, ast.decls.length);
 		Assert.equals(1, ast.decls[2].meta.length);
-		Assert.equals('@:enum', (ast.decls[2].meta[0] : String));
+		Assert.equals('@:enum', HxMetadataUtil.source(ast.decls[2].meta[0]));
 	}
 
 	public function testWriterEmitsSingleMeta():Void {

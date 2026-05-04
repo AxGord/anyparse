@@ -1,38 +1,31 @@
 package anyparse.grammar.haxe;
 
 /**
- * Leading metadata tag on a class member — `@name` (user metadata) or
- * `@:name` (compiler metadata), with an optional parenthesised argument
- * block.
+ * Leading metadata tag on a class member, top-level decl, or inside
+ * `HxMetaExpr` — `@name` (user metadata) or `@:name` (compiler
+ * metadata), with an optional parenthesised argument block.
  *
- * Captured verbatim as the matched substring, prefix and argument block
- * included, so `@:allow(pack.Cls)`, `@:overload(function<T>():Void {})`,
- * `@in(true)` etc. round-trip byte-for-byte. The stored value drives
- * the writer directly (via the `@:rawString` pipeline in
- * `Lowering.lowerTerminal`), so no structured access to metadata
- * contents is offered — a future analysis pass can re-parse the string
- * if introspection becomes necessary.
+ * Dispatched as an `@:peg` enum so structurally-known compiler metas
+ * with function-decl arguments (currently `@:overload(function...)`)
+ * round-trip through the structural HxOverloadFn writer — applying
+ * format-driven knobs like `typeHintColon`, `funcParamParens`, etc.
+ * to the inner function shape. All other meta forms fall through to
+ * the verbatim `PlainMeta(raw:HxMetaRaw)` regex catch-all, preserving
+ * byte-exact round-trip via the pre-existing `@:rawString` pipeline.
  *
- * The regex permits up to three levels of nested parentheses, enough
- * for the idiomatic fork-corpus forms: `@:final` / `@:optional` / `@new`
- * (no args), `@:allow(dotted.Ident)` (1), `@:overload(function<T>():Void {})`
- * (2), and simple `@:foo(a.b(c))`-style compound arguments (3). A
- * deeper-than-3 literal will truncate the match, leaving the inner
- * parens in the stream for the next field to choke on — deepen the
- * pattern when a real grammar site demands it.
+ * Branch order matters: structural branches first (kw-led, with
+ * tryBranch rollback on mismatch), regex catch-all last. The kw
+ * matchers use `matchKw` (word-boundary), so `@:overload_foo` does
+ * NOT collide with the `@:overload` branch — boundary check on the
+ * char following the literal rejects identifier continuations.
  *
- * Strings that embed `(` or `)` inside the argument block (for example
- * `@:deprecated("has (parens) inside")`) are NOT understood: a
- * paren-counting regex cannot track string boundaries, so the counter
- * desyncs and the match mis-anchors. No such form is in the current
- * target fixture set; a future slice can swap in a string-aware
- * runtime helper when `@:deprecated`-style metas become the next
- * blocker.
- *
- * `@:rawString` routes the matched slice through `Lowering.lowerTerminal`
- * without running the JSON-style unescape loop — metadata source is not
- * a Haxe string literal and must be preserved byte-exact.
+ * Used by `HxMemberDecl.meta`, `HxMetaExpr.meta`, and
+ * `HxTopLevelDecl.meta` — same enum reachable via three Star/Ref
+ * field positions; consumer files don't need switch dispatch unless
+ * they want to inspect the structural payload.
  */
-@:re('@:?[A-Za-z_][A-Za-z0-9_]*(?:\\((?:[^()]|\\((?:[^()]|\\([^()]*\\))*\\))*\\))?')
-@:rawString
-abstract HxMetadata(String) from String to String {}
+@:peg
+enum HxMetadata {
+	@:kw('@:overload') @:wrap('(', ')') OverloadMeta(args:HxOverloadArgs);
+	PlainMeta(raw:HxMetaRaw);
+}

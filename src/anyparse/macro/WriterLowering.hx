@@ -662,7 +662,15 @@ class WriterLowering {
 				|| subStructStartsWithBodyPolicy(refName)
 				|| subStructStartsWithBodyBreak(refName)
 				|| subStructStartsWithBareBodyBreaks(refName)
-				|| subStructStartsWithTightLead(refName);
+				|| subStructStartsWithTightLead(refName)
+				// Combined kw + `@:wrap`/`@:lead` on the same single-Ref
+				// branch composes as a tight visual unit: `@:overload(...)`
+				// (kw `@:overload` + wrap lead `(`) renders without a
+				// space between them. Strip the kw's trailing space so
+				// the lead literal abuts the kw — first consumer is
+				// `HxMetadata.OverloadMeta`. Symmetric with the parser-
+				// side composition extension in Lowering Case 3.
+				|| leadText != null;
 			// ω-if-policy / ω-control-flow-policies / ω-try-policy /
 			// ω-anon-fn-paren-policy: an enum branch with `@:fmt(<flag>)`
 			// whose runtime value is `WhitespacePolicy` opts into a
@@ -1162,6 +1170,18 @@ class WriterLowering {
 						Context.fatalError('WriterLowering: knob-form @:fmt(leftCurly(\'<knob>\')) on kw-led mandatory Ref not supported (no OptSpace producer at this site)', Context.currentPos());
 					parts.push(macro _dt($v{kwLead}));
 					parts.push(leftCurlySeparator(child));
+				} else if (child.fmtHasFlag('kwTight')) {
+					// `@:fmt(kwTight)` on a kw-led mandatory Ref drops the
+					// default `kwLead + ' '` trailing space so the kw abuts
+					// the sub-rule's first token. First consumer is
+					// `HxOverloadArgs.fn` (`@:kw('function')` Ref to
+					// `HxOverloadFn`) — `function<T>(...)` and
+					// `function(...)` both want no space between
+					// `function` and the leading `<` / `(`. Mirrors the
+					// haxe-formatter convention for the metadata-arg
+					// function form (no equivalent of `anonFuncParens`
+					// applies inside `@:overload(...)`).
+					parts.push(macro _dt($v{kwLead}));
 				} else {
 					parts.push(macro _dt($v{kwLead + ' '}));
 				}
