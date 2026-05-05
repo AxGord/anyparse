@@ -799,6 +799,23 @@ import anyparse.format.wrap.WrapRules;
  *    opt in yet — generalising is a follow-up slice once the corpus
  *    delta is verified.
  *
+ * Field added in slice ω-indent-complex-value-expr (extra indent on
+ * `if`-as-RHS value expression):
+ *  - `indentComplexValueExpressions` — when `true`, an `IfExpr` value
+ *    on the right-hand side of `=`/`:`/`(`/`[`/keyword is wrapped in
+ *    `Nest(_cols, val)` so its hardlines (the `{ … } else { … }` block
+ *    bodies) pick up one extra indent step. Matches haxe-formatter's
+ *    `indentation.indentComplexValueExpressions: @:default(false)` rule
+ *    for the `var x = if (cond) { … } else { … };` shape. Default is
+ *    `false` — the wrap is inert and existing layouts are unchanged.
+ *    Independent of leftCurly placement: the `{` after `if (cond)` is
+ *    grammatically tied to the same line, so no leftCurly gate. The knob
+ *    only applies at sites tagged with
+ *    `@:fmt(indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'))`
+ *    in the grammar — currently `HxVarDecl.init` only. Future RHS sites
+ *    (`HxObjectField.value`, return/call-arg) and value ctors (`SwitchExpr`,
+ *    `TryExpr`) opt in by adding their own entry.
+ *
  * Field added in slice ω-arrow-fn-type (new-form arrow function type
  * `->` spacing):
  *  - `functionTypeHaxe4` — whitespace around the `->` separator in a
@@ -983,6 +1000,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	expressionTry:SameLinePolicy,
 	indentCaseLabels:Bool,
 	indentObjectLiteral:Bool,
+	indentComplexValueExpressions:Bool,
 	functionTypeHaxe4:WhitespacePolicy,
 	arrowFunctions:WhitespacePolicy,
 	afterPackage:Int,

@@ -36,12 +36,26 @@ package anyparse.grammar.haxe;
  * formatter's `indentation.indentObjectLiteral` rule which only fires
  * when `{` lands on its own line. Cuddled `Same` placement is
  * unchanged — the gate is inert because `{` already sits on the parent
- * line. Other RHS values (calls, binops, etc.) are unaffected — the
- * gate triggers only on the `ObjectLit` ctor.
+ * line.
+ *
+ * A second `@:fmt(indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'))`
+ * entry (slice ω-indent-complex-value-expr) stacks on the same field —
+ * when the bound `HxExpr` ctor is `IfExpr` AND
+ * `opt.indentComplexValueExpressions` is true (non-default), a
+ * `Nest(_cols, …)` wrap shifts the if-expression's block bodies one
+ * indent step right (`var x = if (cond) {\n\t\t…\n\t};` instead of
+ * `var x = if (cond) {\n\t…\n};`). Mirrors haxe-formatter's
+ * `indentation.indentComplexValueExpressions` rule. The 2-arg form
+ * drops the leftCurly gate — `if` always cuddles its `{`, so a
+ * placement check would be inert. Other RHS ctors (calls, binops,
+ * literals other than ObjectLit/IfExpr) are unaffected.
  */
 @:peg
 typedef HxVarDecl = {
 	var name:HxIdentLit;
 	@:optional @:fmt(typeHintColon) @:lead(':') var type:Null<HxType>;
-	@:optional @:fmt(indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly')) @:lead('=') var init:Null<HxExpr>;
+	@:optional
+	@:fmt(indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'),
+		indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'))
+	@:lead('=') var init:Null<HxExpr>;
 }

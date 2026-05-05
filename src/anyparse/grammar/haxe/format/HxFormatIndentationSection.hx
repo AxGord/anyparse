@@ -15,6 +15,10 @@ package anyparse.grammar.haxe.format;
  * front of its `{` (`true`, default) — fires only when
  * `lineEnds.objectLiteralCurly.leftCurly` is Allman (`both`/`before`);
  * matches haxe-formatter's `indentation.indentObjectLiteral: @:default(true)`.
+ * `indentComplexValueExpressions` toggles whether an `IfExpr` value on
+ * `=`/`:` RHS picks up one extra indent step on its body block(s)
+ * (`false`, default — matches haxe-formatter's
+ * `indentation.indentComplexValueExpressions: @:default(false)`).
  */
 @:peg typedef HxFormatIndentationSection = {
 
@@ -27,4 +31,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var indentCaseLabels:Bool;
 
 	@:optional var indentObjectLiteral:Bool;
+
+	@:optional var indentComplexValueExpressions:Bool;
 };

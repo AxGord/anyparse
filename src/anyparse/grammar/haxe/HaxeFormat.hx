@@ -444,6 +444,18 @@ final class HaxeFormat implements TextFormat {
 	 * 'ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'))` in
 	 * the grammar (currently `HxVarDecl.init` and `HxObjectField.value`).
 	 *
+	 * `indentComplexValueExpressions` default (ω-indent-complex-value-expr)
+	 * is `false` — an `IfExpr` value on `=`/`:`/`(`/`[`/keyword RHS
+	 * renders without an extra indent step (matching haxe-formatter's
+	 * `indentation.indentComplexValueExpressions: @:default(false)`).
+	 * Setting to `true` requires
+	 * `"indentation": { "indentComplexValueExpressions": true }` in
+	 * `hxformat.json` and adds one indent step to the value's hardlines
+	 * (the `{ … } else { … }` block bodies of `var x = if (cond) … else …;`
+	 * shift one tab right). The gate fires only at sites tagged with
+	 * `@:fmt(indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'))`
+	 * in the grammar (currently `HxVarDecl.init`).
+	 *
 	 * `functionTypeHaxe4` default (ω-arrow-fn-type) is `Both` — the `->`
 	 * separator inside a new-form arrow function type
 	 * (`HxArrowFnType.ret`) emits `(args) -> ret` with surrounding
@@ -613,6 +625,7 @@ final class HaxeFormat implements TextFormat {
 		expressionTry: SameLinePolicy.Same,
 		indentCaseLabels: true,
 		indentObjectLiteral: true,
+		indentComplexValueExpressions: false,
 		functionTypeHaxe4: WhitespacePolicy.Both,
 		arrowFunctions: WhitespacePolicy.Both,
 		afterPackage: 1,
