@@ -173,6 +173,66 @@ class HxIndentObjectLiteralOptionsTest extends Test {
 		Assert.isTrue(out.indexOf('if (cond)\n\t\t\t\t\t{\n') != -1, 'expected `if (cond)\\n\\t\\t\\t\\t\\t{` (kw+1 indent for true) in: <$out>');
 	}
 
+	// Slice ω-issue-168 — additive structural override on `HxForExpr.body`.
+	// `@:fmt(bodyAllmanIndentForCtor('ObjectLit', 'indentObjectLiteral'))`
+	// fires when the body's runtime ctor is `ObjectLit` AND the body's
+	// writeCall has internal hardlines AND `opt.indentObjectLiteral` is
+	// true — places the obj-lit's `{` on its own line at +cols (Allman)
+	// regardless of `objectLiteralLeftCurly` (which stays `Same` at
+	// fork's default), and lets the obj-lit's own field Nest add the
+	// +cols step on top, giving `{` at base+cols and fields at base+2cols.
+	// Asymmetric vs `HxIfExpr.thenBranch`, which keeps `if (cond) {`
+	// cuddled per fork's per-construct rule (verified via fork CLI).
+	public function testForCompObjLitMultiLineGetsAllmanIndent():Void {
+		// Default config (`{}`): mirrors fork's
+		// `issue_168_object_literal_in_array_comprehension` fixture — array
+		// comprehension where the body is a multi-line obj-lit. `for` lands
+		// at 3 tabs (continuation indent inside the broken array); `{` at
+		// 4 tabs (+cols from the `for` body's Nest); fields at 5 tabs (+cols
+		// from the obj-lit's own Nest); closing `}` at 4 tabs.
+		final src:String = 'class M {\n\tpublic static function main() {\n\t\tvar expectedEdits = [for (usage in markedUsages) {\n\t\t\t\trange: usage,\n\t\t\t\tnewText: newName\n\t\t\t}\n\t\t];\n\t}\n}';
+		final out:String = writeWithCfg(src, '{}');
+		Assert.isTrue(out.indexOf('for (usage in markedUsages)\n\t\t\t\t{\n') != -1, 'expected `for (...)\\n\\t\\t\\t\\t{` (Allman placement at base+cols) in: <$out>');
+		Assert.isTrue(out.indexOf('\n\t\t\t\t\trange: usage,\n') != -1, 'expected fields at base+2cols (5 tabs) in: <$out>');
+		Assert.isTrue(out.indexOf('\n\t\t\t\t}\n') != -1, 'expected closing `}` at base+cols (4 tabs) in: <$out>');
+	}
+
+	public function testForCompObjLitSingleLineStaysFlat():Void {
+		// Single-field obj-lit body — `flatLength` returns the byte count
+		// (not -1), so the override gate fails. Falls through to the
+		// pre-slice Keep/Same layout: body cuddled to the `for` head.
+		final src:String = 'class M {\n\tpublic static function main() {\n\t\tvar a = [for (i in 0...10) {x: i}];\n\t}\n}';
+		final out:String = writeWithCfg(src, '{}');
+		Assert.isTrue(out.indexOf('[for (i in 0...10) {x: i}]') != -1, 'expected single-line obj-lit body cuddled flat in: <$out>');
+	}
+
+	public function testForCompNonObjLitBodyFallsThrough():Void {
+		// Non-ObjectLit body (plain expression) — the runtime ctor check
+		// fails and the override degrades to the policy-decided wrap.
+		final src:String = 'class M {\n\tpublic static function main() {\n\t\tvar a = [for (i in 0...10) i * i];\n\t}\n}';
+		final out:String = writeWithCfg(src, '{}');
+		Assert.isTrue(out.indexOf('[for (i in 0...10) i * i]') != -1, 'expected non-obj-lit body cuddled in: <$out>');
+	}
+
+	public function testForCompObjLitFalseFlagFallsThrough():Void {
+		// `indentObjectLiteral=false` defeats the gate — the override does
+		// not fire and the body emits via the policy-decided layout (Keep
+		// preserves the source's cuddled `{`).
+		final src:String = 'class M {\n\tpublic static function main() {\n\t\tvar expectedEdits = [for (usage in markedUsages) {\n\t\t\t\trange: usage,\n\t\t\t\tnewText: newName\n\t\t\t}\n\t\t];\n\t}\n}';
+		final out:String = writeWithCfg(src, '{"indentation":{"indentObjectLiteral":false}}');
+		Assert.isTrue(out.indexOf('for (usage in markedUsages) {\n') != -1, 'expected source-cuddled `{` under indentObjectLiteral=false in: <$out>');
+	}
+
+	public function testIfExprObjLitDoesNotGetForRule():Void {
+		// Asymmetry pin — `HxIfExpr.thenBranch` does NOT carry
+		// `bodyAllmanIndentForCtor`. With default `indentObjectLiteral=true`
+		// the `if (cond) {<multi obj-lit>}` shape stays cuddled, matching
+		// fork's per-construct rule (verified via fork CLI 2026-05-05).
+		final src:String = 'class M {\n\tpublic static function main() {\n\t\tvar x = if (cond) {\n\t\t\ta: 1,\n\t\t\tb: 2\n\t\t} else {\n\t\t\ta: 3,\n\t\t\tb: 4\n\t\t};\n\t}\n}';
+		final out:String = writeWithCfg(src, '{}');
+		Assert.isTrue(out.indexOf('if (cond) {\n') != -1, 'expected `if (cond) {` cuddled (no for-rule on HxIfExpr) in: <$out>');
+	}
+
 	private inline function writeWithCfg(src:String, cfg:String):String {
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), HaxeFormatConfigLoader.loadHxFormatJson(cfg));
 	}

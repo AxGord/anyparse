@@ -35,10 +35,27 @@ package anyparse.grammar.haxe;
  * `sameLine.expressionIf` overrides all three expression-knob
  * defaults uniformly. Single-line bodies under any policy stay flat
  * — `[for (i in 0...10) i * i]` is unaffected.
+ *
+ * `@:fmt(bodyAllmanIndentForCtor('ObjectLit', 'indentObjectLiteral'))`
+ * on `body` — structural runtime override that fires when ALL apply:
+ * body's runtime ctor is `ObjectLit`, the body's writeCall has
+ * internal hardlines (`flatLength == -1`), and `opt.indentObjectLiteral`
+ * is true. Layout becomes `_dn(_cols, [_dhl(), _dn(_cols, body)])` —
+ * `{` on its own line at +cols, fields at +2cols, `}` at +cols —
+ * regardless of the policy axis (Same/Next/FitLine/Keep) AND
+ * regardless of `opt.objectLiteralLeftCurly` (which controls obj-lit
+ * placement in RHS-value contexts like `var x = {...}` where fork
+ * keeps `{` cuddled). The for-comprehension body breaks the obj-lit
+ * out structurally per fork's rule for `[for (x in xs) {<multi>}]`.
+ * Single-line obj-lit bodies, non-ObjectLit values, or
+ * `indentObjectLiteral=false` configs fall through. The asymmetry
+ * vs `HxIfExpr.thenBranch` (which stays cuddled for
+ * `if (cond) {<obj>}`) is intentional and matches fork's per-
+ * construct rule (verified via fork CLI probe).
  */
 @:peg
 typedef HxForExpr = {
 	@:lead('(') var varName:HxIdentLit;
 	@:kw('in') @:trail(')') var iterable:HxExpr;
-	@:fmt(bodyPolicy('expressionForBody')) var body:HxExpr;
+	@:fmt(bodyPolicy('expressionForBody'), bodyAllmanIndentForCtor('ObjectLit', 'indentObjectLiteral')) var body:HxExpr;
 };

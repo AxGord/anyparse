@@ -1573,7 +1573,21 @@ class WriterLowering {
 						// `HxStatement.UntypedBlockStmt`. Multiple entries
 						// cascade through a runtime ternary chain.
 						final policyOverrides:Array<Array<String>> = child.fmtReadStringArgsAll('bodyPolicyOverride');
-						parts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, fieldAccess, refName, hasElseIf, elseFieldName, null, null, bodyOnSameLineExpr, kwPolicyFlag, afterTrailExpr, indentObjArgs, policyOverrides));
+						// ω-issue-168: `@:fmt(bodyAllmanIndentForCtor('<ctor>',
+						// '<optField>', '<lcField>'))` runtime-overrides the
+						// policy-decided layout when the body's runtime ctor
+						// matches `<ctor>` AND `opt.<optField>` is true AND
+						// `opt.<lcField>` is `Next` AND the body's writeCall
+						// emits internal hardlines (multi-line). The override
+						// places the body in Allman position with extra
+						// `+cols` indent on contents, regardless of Keep/Same/
+						// Next/FitLine policy. Currently consumed by
+						// `HxForExpr.body` for the `[for (x in xs) {<multi>}]`
+						// shape; HxIfExpr.thenBranch deliberately does NOT
+						// carry this meta because fork keeps `if (cond) {`
+						// cuddled.
+						final bodyAllmanIndentArgs:Null<Array<String>> = child.fmtReadStringArgs('bodyAllmanIndentForCtor');
+						parts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, fieldAccess, refName, hasElseIf, elseFieldName, null, null, bodyOnSameLineExpr, kwPolicyFlag, afterTrailExpr, indentObjArgs, policyOverrides, bodyAllmanIndentArgs));
 						justWrappedBody = {access: fieldAccess, typePath: refName};
 					} else {
 						// `@:fmt(leftCurly)` on a bare Ref field (e.g.
@@ -3188,7 +3202,8 @@ class WriterLowering {
 		flagName:String, writeCall:Expr, bodyValueExpr:Expr, bodyTypePath:String, hasElseIf:Bool,
 		elseFieldName:Null<String>, ?afterKwExpr:Null<Expr>, ?kwLeadingExpr:Null<Expr>,
 		?bodyOnSameLineExpr:Null<Expr>, ?kwPolicyFlagName:Null<String>, ?afterTrailExpr:Null<Expr>,
-		?indentObjArgs:Array<String>, ?policyOverrides:Array<Array<String>>
+		?indentObjArgs:Array<String>, ?policyOverrides:Array<Array<String>>,
+		?bodyAllmanIndentArgs:Array<String>
 	):Expr {
 		// ω-untyped-body-stmt-override: parent-side body-policy override.
 		// When the field carries `@:fmt(bodyPolicyOverride('<ctor>',
@@ -3460,10 +3475,41 @@ class WriterLowering {
 			]);
 			macro $afterTrailExpr != null ? $forcedLayout : $coreWrapExpr;
 		};
+		// ω-issue-168: outermost runtime override — when the field carries
+		// `@:fmt(bodyAllmanIndentForCtor('<ctor>', '<optField>',
+		// '<lcField>'))` AND the runtime conditions match (named bool opt
+		// TRUE, named leftCurly opt `Next`, value's ctor matches, body's
+		// `flatLength` is `-1` i.e. anyHardline), bypass the policy-decided
+		// layout entirely and emit `_dn(_cols, [_dhl(), _dn(_cols, body)])`
+		// — `{` on its own line at +cols, body's contents at +2cols, `}` at
+		// +cols. The wrap-with-extra-Nest matches haxe-formatter's per-
+		// construct rule for `[for (x in xs) {<multi-line obj-lit>}]`
+		// comprehensions where the body is broken from the `for` head and
+		// indented one extra step. Single-line obj-lit bodies, non-
+		// ObjectLit values, or `objectLiteralLeftCurly == Same` configs
+		// fall through to the policy-decided `wrapExpr`. The override
+		// stays outside `coreWrapExpr` so it stacks above Keep's source-
+		// shape preservation as well as the explicit policy axes.
+		final finalWrapExpr:Expr = if (bodyAllmanIndentArgs == null) wrapExpr
+		else {
+			if (bodyAllmanIndentArgs.length != 2)
+				Context.fatalError('WriterLowering: bodyPolicyWrap bodyAllmanIndentArgs requires (ctorName, optField), got ${bodyAllmanIndentArgs.length} args', Context.currentPos());
+			final ctorName:String = bodyAllmanIndentArgs[0];
+			final optAccess:Expr = {expr: EField(macro opt, bodyAllmanIndentArgs[1]), pos: Context.currentPos()};
+			macro {
+				final _bodyForAllman:anyparse.core.Doc = $writeCall;
+				if ($optAccess
+					&& Type.enumConstructor($bodyValueExpr) == $v{ctorName}
+					&& anyparse.format.wrap.WrapList.flatLength(_bodyForAllman) == -1)
+					_dn(_cols, _dc([_dhl(), _bodyForAllman]))
+				else
+					$wrapExpr;
+			};
+		};
 
 		return macro {
 			final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-			$wrapExpr;
+			$finalWrapExpr;
 		};
 	}
 
