@@ -47,6 +47,10 @@ class WriterCodegen {
 			for (rule in rules) fields.push(ruleField(rule, optionsCT));
 			// Doc wrapper helpers
 			for (f in docHelperFields()) fields.push(f);
+			// ω-expression-case-flat-fanout: typed `Reflect.copy(opt)` shim,
+			// emitted unconditionally so triviaTryparseStarExpr's flat-fanout
+			// path can call it without per-grammar gating.
+			fields.push(copyOptField(optionsCT));
 			// Layout helpers
 			fields.push(blockBodyField());
 			fields.push(sepListField());
@@ -293,6 +297,35 @@ class WriterCodegen {
 			name: name,
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({args: args, ret: macro : anyparse.core.Doc, expr: macro return $body}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * ω-expression-case-flat-fanout helper — typed shallow copy of `opt`.
+	 *
+	 * `Reflect.copy(o)` returns `Null<T>` which strict null safety refuses
+	 * to narrow at the call site. The helper carries `@:nullSafety(Off)`
+	 * locally so the cast to non-nullable T resolves without leaking
+	 * `untyped`/`Dynamic` into the callers. Used by `triviaTryparseStarExpr`
+	 * when a Star carries `@:fmt(flatChildOpt(...))` — the runtime flat
+	 * branch needs a per-call mutable copy to override knob fields without
+	 * touching the shared `opt` singleton.
+	 */
+	private static function copyOptField(optionsCT:ComplexType):Field {
+		return {
+			name: '_copyOpt',
+			access: [APrivate, AStatic, AInline],
+			meta: [{name: ':nullSafety', params: [macro Off], pos: Context.currentPos()}],
+			kind: FFun({
+				args: [{name: 'o', type: optionsCT}],
+				ret: optionsCT,
+				expr: macro {
+					final _c:$optionsCT = cast Reflect.copy(o);
+					if (_c == null) throw 'WriterCodegen._copyOpt: Reflect.copy returned null';
+					return _c;
+				},
+			}),
 			pos: Context.currentPos(),
 		};
 	}

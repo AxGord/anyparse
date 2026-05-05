@@ -1808,10 +1808,25 @@ class WriterLowering {
 				// switch between `case X:\n\tstmt;` (Next) and
 				// `case X: stmt;` (Same / Keep+sameLine).
 				final caseBodyFlagNames:Array<String> = starNode.fmtReadStringArgs('bodyPolicy') ?? [];
+				// ω-expression-case-flat-fanout: when `@:fmt(flatChildOpt('A=B', …))`
+				// is present, parse each `'from=to'` arg into a [from, to] pair so
+				// `triviaTryparseStarExpr` can emit a `Reflect.copy(opt)` + per-pair
+				// override block in the runtime flat-case branch.
+				final flatChildOptRaw:Null<Array<String>> = starNode.fmtReadStringArgs('flatChildOpt');
+				final flatChildOptPairs:Array<Array<String>> = if (flatChildOptRaw == null) []
+				else {
+					final out:Array<Array<String>> = [];
+					for (raw in flatChildOptRaw) {
+						final eq:Int = raw.indexOf('=');
+						if (eq <= 0 || eq >= raw.length - 1) Context.fatalError('WriterLowering: @:fmt(flatChildOpt(...)) arg must be "from=to", got "${raw}"', Context.currentPos());
+						out.push([raw.substr(0, eq), raw.substr(eq + 1)]);
+					}
+					out;
+				};
 				parts.push(triviaTryparseStarExpr(
 					fieldAccess, elemFn, sepExpr, sameLineName != null, nestBody,
 					tryparseTrailBB, tryparseTrailLC, tryparseTrailBA, firstSepOverride, subsequentSepOverride,
-					caseBodyFlagNames
+					caseBodyFlagNames, flatChildOptPairs
 				));
 				return;
 			}
@@ -2325,7 +2340,36 @@ class WriterLowering {
 			{values: blockPatterns, expr: flagBased, guard: null},
 			{values: [macro _], expr: macro _dhl(), guard: null},
 		];
-		return {expr: ESwitch(prevBody.access, cases, null), pos: Context.currentPos()};
+		final shapeAwareSwitch:Expr = {expr: ESwitch(prevBody.access, cases, null), pos: Context.currentPos()};
+		// ω-expression-case-flat-fanout: shape-aware-break for `else` is
+		// correct only when the child body actually lays out on its own
+		// line. The child's runtime layout is driven by `opt.<bodyPolicy>`:
+		//  - `Same` — body is forced inline → else-break is wrong, fall to
+		//    flagBased (sameLineElse drives the gap).
+		//  - `Keep` + slot says source had body inline (`!BeforeKwNewline`)
+		//    → body is inline → suppress, fall to flagBased.
+		//  - `Next` / `FitLine` / `Keep`+slot=broken — body sits on its own
+		//    line → keep the pre-slice shape-break.
+		// Default `elseBody=Next` keeps existing behaviour. Without this
+		// gate, fanning `elseBody` to `expressionCase` inside a flat case
+		// body would still produce `if (cond) body;\n\telse elseBody;`
+		// because shape-aware would force `else` to its own line
+		// regardless of the runtime body decision. Children without a
+		// `bodyPolicy` meta (no current consumers, but defensive) keep the
+		// pre-slice unconditional shape-aware switch.
+		final childBodyPolicyFlag:Null<String> = child.fmtReadString('bodyPolicy');
+		if (childBodyPolicyFlag == null) return shapeAwareSwitch;
+		final bpAccess:Expr = {expr: EField(macro opt, childBodyPolicyFlag), pos: Context.currentPos()};
+		final samePat:Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BodyPolicy', 'Same']);
+		final keepPat:Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BodyPolicy', 'Keep']);
+		final isInlineExpr:Expr = if (hasKeepSlot) {
+			final slotAccess:Expr = {
+				expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_NEWLINE_SUFFIX),
+				pos: Context.currentPos(),
+			};
+			macro ($bpAccess == $samePat || ($bpAccess == $keepPat && !$slotAccess));
+		} else macro $bpAccess == $samePat;
+		return macro $isInlineExpr ? $flagBased : $shapeAwareSwitch;
 	}
 
 	/**
@@ -4290,10 +4334,15 @@ class WriterLowering {
 		trailBBAccess:Null<Expr>, trailLCAccess:Null<Expr>, trailBAAccess:Null<Expr>,
 		firstSepOverride:Null<Expr> = null,
 		subsequentSepOverride:Null<Expr> = null,
-		caseBodyFlagNames:Null<Array<String>> = null
+		caseBodyFlagNames:Null<Array<String>> = null,
+		flatChildOptPairs:Null<Array<Array<String>>> = null
 	):Expr {
+		// ω-expression-case-flat-fanout: when the body's element call should
+		// receive a copy-on-flat opt with named fields swapped, build the
+		// per-pair override block. The caller-side helper has already parsed
+		// `'from=to'` args into [from, to] pairs.
 		final triviaElemCall:Expr = {
-			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
+			expr: ECall(macro $i{elemFn}, [macro _t.node, macro _writerOpt]),
 			pos: Context.currentPos(),
 		};
 		final sepBeforeFirstExpr:Expr = macro $v{sepBeforeFirst};
@@ -4349,6 +4398,27 @@ class WriterLowering {
 			}
 			macro ($sameAcc || ($keepAcc && !_arr[0].newlineBefore));
 		};
+		// ω-expression-case-flat-fanout: when `flatChildOptPairs` is non-empty,
+		// the `_writerOpt` emitted into the runtime block is a `Reflect.copy(opt)`
+		// + per-pair field override on the flat path, falling back to `opt`
+		// itself everywhere else. The triviaElemCall reads `_writerOpt` so the
+		// child writer sees the swapped knobs (statement-position
+		// `ifBody`/`elseBody`/`forBody` → expression-position counterparts) and
+		// propagates them through subsequent recursive calls. Default is plain
+		// `opt` (no copy) — non-flat-fanout consumers stay byte-identical.
+		final writerOptExpr:Expr = if (flatChildOptPairs == null || flatChildOptPairs.length == 0)
+			macro opt;
+		else {
+			final block:Array<Expr> = [macro final _wo = _copyOpt(opt)];
+			for (pair in flatChildOptPairs) {
+				final fromAccess:Expr = {expr: EField(macro _wo, pair[0]), pos: Context.currentPos()};
+				final toAccess:Expr = {expr: EField(macro opt, pair[1]), pos: Context.currentPos()};
+				block.push(macro $fromAccess = $toAccess);
+			}
+			block.push(macro _wo);
+			final overrideBlock:Expr = {expr: EBlock(block), pos: Context.currentPos()};
+			macro (_flatCase ? $overrideBlock : opt);
+		};
 		return macro {
 			final _arr = $fieldAccess;
 			final _trailLC:Array<String> = $trailLC;
@@ -4361,6 +4431,7 @@ class WriterLowering {
 				&& _trailLC.length == 0
 				&& _arr[0].leadingComments.length == 0
 				&& $flatGateExpr;
+			final _writerOpt = $writerOptExpr;
 			if (_arr.length == 0 && _trailLC.length == 0) _de() else {
 				final _docs:Array<anyparse.core.Doc> = [];
 				var _si:Int = 0;

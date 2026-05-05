@@ -27,8 +27,18 @@ package anyparse.grammar.haxe;
  * same line as `:` (`!Trivial<T>.newlineBefore` on the first element).
  * `caseBody` defaults to `Next`; `expressionCase` defaults to `Keep`,
  * so author-written `default: foo();` round-trips byte-identically.
+ *
+ * `@:fmt(flatChildOpt('A=B', ...))` (ω-expression-case-flat-fanout)
+ * mirrors `HxCaseBranch.body` — when the flat gate fires, the body's
+ * element is written with a `Reflect.copy(opt)` whose listed fields are
+ * overridden by the named sibling fields, so nested control-flow inside
+ * a flat default body picks expression-position policy. See
+ * `HxCaseBranch.body`'s doc for the propagation contract.
  */
 @:peg
 typedef HxDefaultBranch = {
-	@:lead(':') @:trivia @:tryparse @:fmt(nestBody, bodyPolicy('caseBody', 'expressionCase')) var stmts:Array<HxStatement>;
+	@:lead(':') @:trivia @:tryparse @:fmt(
+		nestBody, bodyPolicy('caseBody', 'expressionCase'),
+		flatChildOpt('ifBody=expressionCase', 'elseBody=expressionCase', 'forBody=expressionCase')
+	) var stmts:Array<HxStatement>;
 };

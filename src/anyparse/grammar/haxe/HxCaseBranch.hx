@@ -34,9 +34,30 @@ package anyparse.grammar.haxe;
  * `caseBody` defaults to `Next`; `expressionCase` defaults to `Keep`
  * (so author-written `case X: foo();` round-trips byte-identically).
  * Multi-stmt bodies keep the multiline `nestBody` shape regardless.
+ *
+ * `@:fmt(flatChildOpt('A=B', ...))` (ω-expression-case-flat-fanout) opts
+ * the body's child writer call into a copy-on-flat opt-fanout: when the
+ * runtime flat gate fires, the body's element is written with a
+ * `Reflect.copy(opt)` whose listed fields are overridden by the named
+ * sibling fields. For Haxe, this swaps `ifBody`/`elseBody`/`forBody` for
+ * `expressionCase` itself — when the case body is flattened, the inner
+ * control-flow inherits the same shape choice the user picked for the
+ * case body (`Same` → force inline, `Keep` → preserve source). Using
+ * `expressionCase` as the swap source instead of the separate
+ * `expressionIfBody`/`expressionElseBody`/`expressionForBody` knobs
+ * avoids interfering with `HxIfExpr.thenBranch`/`HxIfExpr.elseBranch`
+ * (which read those knobs directly for `var x = if (a) b else c` style
+ * literals — `fitline_arrow_body_if.hxtest` would otherwise regress).
+ * The fanout propagates through subsequent recursive writer calls (since
+ * the copy is passed as `opt` to the child) — block-bodied descendants
+ * reset naturally because their wrap policies are not gated on these
+ * knobs.
  */
 @:peg
 typedef HxCaseBranch = {
 	@:trail(':') var pattern:HxExpr;
-	@:trivia @:tryparse @:fmt(nestBody, bodyPolicy('caseBody', 'expressionCase')) var body:Array<HxStatement>;
+	@:trivia @:tryparse @:fmt(
+		nestBody, bodyPolicy('caseBody', 'expressionCase'),
+		flatChildOpt('ifBody=expressionCase', 'elseBody=expressionCase', 'forBody=expressionCase')
+	) var body:Array<HxStatement>;
 };

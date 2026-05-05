@@ -629,6 +629,12 @@ final class HaxeFormatConfigLoader {
 		// so the fan-out is a no-op; when they write any other value
 		// it is currently ignored. Programmatic users can still set
 		// the three knobs independently.
+		// ω-expression-case-flat-fanout: HxCaseBranch.body uses
+		// `expressionCase` (NOT `expressionIfBody`) as the swap source,
+		// so propagating `expressionIf: same/next/fitLine` here would
+		// leak into HxIfExpr.thenBranch's `bodyPolicy('expressionIfBody')`
+		// and break the existing arrow-body fixture. The Keep-only gate
+		// stays.
 		if (section.expressionIf != null) {
 			final p:BodyPolicy = bodyPolicyToRuntime(section.expressionIf);
 			if (p == BodyPolicy.Keep) {
