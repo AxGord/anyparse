@@ -162,6 +162,49 @@ class WrapList {
 	}
 
 	/**
+	 * Walks `d` right-to-left tracking `Nest` depth, returns the depth
+	 * at which the rightmost forced hardline (`Line('\n')` or
+	 * `OptHardline`) lives. Returns `-1` when `d` contains no forced
+	 * hardline at all.
+	 *
+	 * Used by `shapeFillLine`'s single-item branch as a trigger for
+	 * splitting close-paren placement into a flat vs break `IfBreak`
+	 * shape: when the item's tail in MBreak would land at an inner-
+	 * `Nest` column (chain segments via `MethodChainEmit`'s break shape,
+	 * `IfBreak.brk` content with its own continuation Nest), inserting
+	 * a `Line('\n')` before the close paren returns the close to the
+	 * outer column. The flat branch is needed because the same item
+	 * may render as MFlat (chain that fits inline, `BodyGroup`-deferred
+	 * lambda body) and the close should glue to the last token.
+	 *
+	 * `IfBreak` walks the break branch (the question we're answering is
+	 * about MBreak layout). `Fill` items are NOT walked — they're
+	 * typically `BodyGroup`-wrapped and their hardlines defer from
+	 * outer-Group fit measurement; only the sep contributes (a hard
+	 * `Line('\n')` sep signals forceBreak inter-item layout).
+	 */
+	public static function lastHardlineDepth(d:Doc, depth:Int):Int {
+		return switch d {
+			case Empty | Text(_) | OptSpace(_): -1;
+			case Line(flat):
+				flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code ? depth : -1;
+			case OptHardline: depth;
+			case Nest(cols, inner): lastHardlineDepth(inner, depth + cols);
+			case Group(inner) | BodyGroup(inner): lastHardlineDepth(inner, depth);
+			case IfBreak(brk, _): lastHardlineDepth(brk, depth);
+			case Concat(items):
+				var i:Int = items.length;
+				while (--i >= 0) {
+					final r:Int = lastHardlineDepth(items[i], depth);
+					if (r >= 0) return r;
+				}
+				-1;
+			case Fill(items, sep):
+				items.length > 1 ? lastHardlineDepth(sep, depth) : -1;
+		};
+	}
+
+	/**
 	 * Returns `true` if `d`, when laid out in break mode, would emit a
 	 * forced hardline (`Line('\n')` or `OptHardline`) before any
 	 * non-newline content. Walks the leftmost spine: descends through
@@ -402,6 +445,37 @@ class WrapList {
 		// item at the list's continuation indent.
 		if (items.length == 1) {
 			final tail0:Doc = appendTrailingComma ? Text(sep) : Empty;
+			// Close-paren placement: when `items[0]` contains an
+			// inner-anchored hardline (something inside one or more
+			// `Nest(cols, …)` layers — e.g. method-chain segments via
+			// `MethodChainEmit`'s break-shape, or `IfBreak`'s break
+			// branch when the inner content commits to break), the
+			// close paren should land at the outer column instead of
+			// gluing to the last inner-anchored token. But the inner
+			// might also stay flat (chain that fits inline, lambda
+			// whose body is `BodyGroup`-deferred and outer Group goes
+			// MFlat). We don't know which way the renderer's outer
+			// Group will go, so emit BOTH shapes through `IfBreak` and
+			// let the outer Group's `fitsFlat` pick the right one:
+			//  - flat → `(<item>)` (close glued, lambda-style)
+			//  - brk  → `(<item>\n<close>)` (close on own line, chain-style)
+			// `lastHardlineDepth` is the trigger for the IfBreak split;
+			// when no inner-anchored hardline exists at all
+			// (depth ≤ 0), there's no scenario where break-before-close
+			// is needed, so emit the simpler `(<item>)` shape directly.
+			final lastDepth:Int = lastHardlineDepth(items[0], 0);
+			if (lastDepth > 0) {
+				return Group(IfBreak(
+					Concat([
+						Text(open), openInside, items[0], tail0,
+						Line('\n'), closeInside, Text(close),
+					]),
+					Concat([
+						Text(open), openInside, items[0], tail0,
+						closeInside, Text(close),
+					])
+				));
+			}
 			return Group(Concat([
 				Text(open), openInside, items[0], tail0,
 				closeInside, Text(close),
