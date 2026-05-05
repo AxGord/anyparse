@@ -118,18 +118,21 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   `false` (default) degrades those bodies to `Next`. Matches haxe-
  *   formatter's `sameLine.fitLineIfWithElse: @:default(false)`.
  * - `sameLine.expressionIf` (ω-expr-body-keep): enum string. Parsed
- *   through the schema for unknown-key validation but only the
- *   `keep` value is honoured at runtime — fans out into all three
- *   knobs `expressionIfBody` / `expressionElseBody` /
- *   `expressionForBody`. Other values (`same` / `next` / `fitLine`)
- *   are currently ignored: `BodyPolicy.Next` on the inner body
- *   force-breaks legitimate inline arrow bodies because the
- *   bodyPolicyWrap engine cannot derive surrounding-context fit.
- *   Default at the WriteOptions level is already `Keep` so the
- *   honoured branch is a no-op; programmatic users can set the
- *   three knobs independently when they need finer control.
- *   Distinct from the statement-level `ifBody` / `elseBody` /
- *   `forBody` defaults (`Next`).
+ *   through the schema for unknown-key validation; `keep` and `same`
+ *   are honoured at runtime — fans out into all three knobs
+ *   `expressionIfBody` / `expressionElseBody` / `expressionForBody`.
+ *   `same` force-flattens expression-position `if/else/for` bodies,
+ *   which is unconditionally safe because `Same` collapses to
+ *   `_dop(' ')` regardless of surrounding context (no arrow-context
+ *   ambiguity). `next` / `fitLine` are still ignored: `BodyPolicy.Next`
+ *   on the inner body force-breaks legitimate inline arrow bodies
+ *   because the bodyPolicyWrap engine cannot derive surrounding-context
+ *   fit (would regress `fitline_arrow_body_if.hxtest`).
+ *   Default at the WriteOptions level is `Keep` so the honoured branch
+ *   is a no-op when omitted; programmatic users can set the three
+ *   knobs independently when they need finer control. Distinct from
+ *   the statement-level `ifBody` / `elseBody` / `forBody` defaults
+ *   (`Next`).
  * - `sameLine.expressionTry` (ω-expression-try): enum string — same
  *   `"same"` / `"next"` / `"keep"` collapse as `sameLine.tryCatch`,
  *   routed to `opt.expressionTry`. Default `Same`. Drives the
@@ -629,25 +632,25 @@ final class HaxeFormatConfigLoader {
 		if (section.untypedBody != null) opt.untypedBody = bodyPolicyToRuntime(section.untypedBody);
 		// Slice ω-expr-body-keep: the JSON key `sameLine.expressionIf`
 		// is parsed via the schema (so unknown-key validation passes)
-		// but ONLY `Keep` is honoured at runtime. `Same` / `Next` /
-		// `FitLine` for expression-position `if`/`for` bodies need
-		// surrounding-context propagation that the bodyPolicyWrap
-		// engine cannot derive in isolation (a `Next` on the inner
-		// body force-breaks legitimate inline arrow bodies — see
-		// `fitline_arrow_body_if.hxtest`). When the user writes
-		// `expressionIf: keep` the runtime defaults already give Keep,
-		// so the fan-out is a no-op; when they write any other value
-		// it is currently ignored. Programmatic users can still set
-		// the three knobs independently.
+		// and `Keep` / `Same` are honoured at runtime. `Same` force-
+		// flattens expression-position `if/else/for` bodies, which is
+		// unconditionally safe because the bodyPolicyWrap `Same` branch
+		// emits `_dop(' ')` regardless of surrounding context — no arrow-
+		// context ambiguity. `Next` / `FitLine` still need surrounding-
+		// context propagation that the bodyPolicyWrap engine cannot
+		// derive in isolation (a `Next` on the inner body force-breaks
+		// legitimate inline arrow bodies — see `fitline_arrow_body_if.hxtest`).
+		// Programmatic users can still set the three knobs independently
+		// for finer control.
 		// ω-expression-case-flat-fanout: HxCaseBranch.body uses
 		// `expressionCase` (NOT `expressionIfBody`) as the swap source,
-		// so propagating `expressionIf: same/next/fitLine` here would
-		// leak into HxIfExpr.thenBranch's `bodyPolicy('expressionIfBody')`
-		// and break the existing arrow-body fixture. The Keep-only gate
+		// so propagating `expressionIf: next/fitLine` here would leak
+		// into HxIfExpr.thenBranch's `bodyPolicy('expressionIfBody')` and
+		// break the existing arrow-body fixture. The Next/FitLine gate
 		// stays.
 		if (section.expressionIf != null) {
 			final p:BodyPolicy = bodyPolicyToRuntime(section.expressionIf);
-			if (p == BodyPolicy.Keep) {
+			if (p == BodyPolicy.Keep || p == BodyPolicy.Same) {
 				opt.expressionIfBody = p;
 				opt.expressionElseBody = p;
 				opt.expressionForBody = p;
