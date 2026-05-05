@@ -1,11 +1,12 @@
 package anyparse.grammar.haxe;
 
 /**
- * Anonymous function expression payload: `function(params) body`.
+ * Anonymous function expression payload: `function(params) body?`.
  *
  * The `function` keyword is consumed at the enclosing
  * `HxExpr.FnExpr` ctor via `@:kw('function')` — this typedef only
- * describes the parameter list, optional return type, and body.
+ * describes the parameter list, optional return type, and optional
+ * body.
  * The space (or lack thereof) BETWEEN `function` and `(` is gated by
  * `@:fmt(anonFuncParens)` on the enclosing ctor, NOT by a
  * `funcParamParens`-style flag on the `params` Star here — the Star
@@ -31,6 +32,20 @@ package anyparse.grammar.haxe;
  * enclosing `tryBranch` rolls back the `function` keyword and
  * tries the next atom candidate.
  *
+ * `body` is `@:optional` with `@:absentOn(...)` peek-ahead: when
+ * the next non-trivia char after `params` (or `returnType`) is one
+ * of the listed terminators, the body is treated as absent. This
+ * unblocks body-less anonymous-function forms — most notably
+ * `@:overload(function())` metadata args, where the function arg
+ * carries only a signature and no body. The terminator set covers
+ * every context `HxFnExpr` is reached through transitively via
+ * `HxExpr.FnExpr`: `,`/`)` (call-args, array/object lit, type
+ * params, meta args), `;` (statement, var-decl), `}`/`]` (block
+ * close, switch case, array close). This permits body-less in
+ * non-meta positions too — anyparse philosophy is round-trip over
+ * Haxe semantic validation; source-faithful output is preserved
+ * because absent body emits no `{...}` token.
+ *
  * `HxFnExpr` is trivia-bearing transitively through
  * `HxFnExprBody.BlockBody(HxFnBlock)` — the paired type
  * `HxFnExprT` is synthesised by `TriviaTypeSynth`.
@@ -39,5 +54,5 @@ package anyparse.grammar.haxe;
 typedef HxFnExpr = {
 	@:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams'), keepInnerWhenEmpty('anonFuncParamParensKeepInnerWhenEmpty')) var params:Array<HxLambdaParam>;
 	@:optional @:fmt(typeHintColon) @:lead(':') var returnType:Null<HxType>;
-	@:fmt(leftCurly) var body:HxFnExprBody;
+	@:optional @:absentOn(',', ')', ';', '}', ']') @:fmt(leftCurly) var body:Null<HxFnExprBody>;
 }

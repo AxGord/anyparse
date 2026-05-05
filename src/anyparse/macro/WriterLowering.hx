@@ -1496,6 +1496,30 @@ class WriterLowering {
 						}
 						optParts.push(writeCall);
 					} else {
+						// ω-absent-on: optional Ref with no kw / lead — emit
+						// only the writeCall, but if `@:fmt(leftCurly)` is
+						// present mirror the mandatory-Ref path's runtime
+						// ctor switch so the kw→`{` transition (Allman
+						// `\n{` for BlockBody, ` ` for ExprBody) survives.
+						// Without this the absent-on body emits its
+						// payload glued to the previous token. First and
+						// only consumer so far: `HxFnExpr.body`.
+						final lcSep:Null<Expr> = child.fmtHasFlag('leftCurly')
+							? leftCurlySeparator(child)
+							: null;
+						final lcCtors:Array<String> = lcSep == null ? [] : leftCurlyTargetCtors(refName);
+						if (lcSep != null && lcCtors.length > 0) {
+							final spaceCtors:Array<String> = spacePrefixCtors(refName, lcCtors);
+							final ctorExpr:Expr = macro Type.enumConstructor(_optVal);
+							var sepExpr:Expr = macro _de();
+							for (sc in spaceCtors) {
+								final scSep:Expr = ctorHasBodyPolicy(refName, sc) ? macro _de() : macro _dt(' ');
+								sepExpr = macro $ctorExpr == $v{sc} ? $scSep : $sepExpr;
+							}
+							for (lc in lcCtors)
+								sepExpr = macro $ctorExpr == $v{lc} ? $lcSep : $sepExpr;
+							optParts.push(sepExpr);
+						}
 						optParts.push(writeCall);
 					}
 					final optBody:Expr = if (optParts.length == 1) optParts[0]

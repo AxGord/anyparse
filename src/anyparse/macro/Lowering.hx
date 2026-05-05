@@ -1324,6 +1324,15 @@ class Lowering {
 			final kwLead:Null<String> = child.readMetaString(':kw');
 			final leadText:Null<String> = child.readMetaString(':lead');
 			final trailText:Null<String> = child.readMetaString(':trail');
+			// ω-absent-on: declarative escape-hatch for `@:optional Ref` to
+			// an enum without a shared lead literal. Lists the terminator
+			// literals that signal field absence at the current position;
+			// emission peeks them BEFORE attempting `parseRef` instead of
+			// the lead/kw matchLit-commit chain. Used by `HxFnExpr.body`
+			// where `HxFnExprBody = BlockBody({-led) | ExprBody(catch-all)`
+			// — the latter has no fixed lead, so a regular `@:optional`
+			// can't dispatch.
+			final absentOnLits:Null<Array<String>> = child.readMetaStringArgs(':absentOn');
 			final isStar:Bool = child.kind == Star;
 			final isOptional:Bool = child.annotations.get('base.optional') == true;
 			if (isOptional && child.kind != Ref && child.kind != Star) {
@@ -1346,6 +1355,41 @@ class Lowering {
 					'Lowering: @:optional combined with @:trail is deferred (field "$fieldName")',
 					Context.currentPos()
 				);
+			}
+			if (absentOnLits != null) {
+				// `@:absentOn` is a peek-ahead absence dispatch — it does NOT
+				// consume any literals (the listed terminators belong to the
+				// enclosing context). Combined with `@:lead`/`@:kw` it would
+				// be ambiguous (which decides absence?), and combined with
+				// `@:trail` it inherits the same "trail inside peek" gap as
+				// regular `@:optional`. Both combinations are rejected. The
+				// meta also requires the field to be an optional Ref —
+				// Stars have their own commit semantics through `@:lead` /
+				// `@:trail`; `absentOn` adds nothing there.
+				if (!isOptional || child.kind != Ref) {
+					Context.fatalError(
+						'Lowering: @:absentOn requires @:optional Ref (field "$fieldName")',
+						Context.currentPos()
+					);
+				}
+				if (kwLead != null || leadText != null) {
+					Context.fatalError(
+						'Lowering: @:absentOn cannot combine with @:lead or @:kw (field "$fieldName")',
+						Context.currentPos()
+					);
+				}
+				if (trailText != null) {
+					Context.fatalError(
+						'Lowering: @:absentOn cannot combine with @:trail (field "$fieldName")',
+						Context.currentPos()
+					);
+				}
+				if (absentOnLits.length == 0) {
+					Context.fatalError(
+						'Lowering: @:absentOn requires at least one terminator literal (field "$fieldName")',
+						Context.currentPos()
+					);
+				}
 			}
 			if (isStar && isOptional) {
 				// Optional Star is the angle-bracketed type-parameter
@@ -1503,9 +1547,9 @@ class Lowering {
 			}
 			switch child.kind {
 				case Ref if (isOptional):
-					if (kwLead == null && leadText == null) {
+					if (kwLead == null && leadText == null && absentOnLits == null) {
 						Context.fatalError(
-							'Lowering: @:optional struct field "$fieldName" requires @:lead or @:kw',
+							'Lowering: @:optional struct field "$fieldName" requires @:lead, @:kw or @:absentOn',
 							Context.currentPos()
 						);
 					}
@@ -1522,6 +1566,51 @@ class Lowering {
 					final fieldCT:ComplexType = isTriviaBearing(refName)
 						? TPath({pack: [], name: 'Null', params: [TPType(ruleReturnCT(refName))]})
 						: child.annotations.get('base.fieldType');
+					if (absentOnLits != null) {
+						// `@:absentOn(lit1, lit2, ...)` — peek-ahead absence
+						// dispatch. The listed terminators are NOT consumed
+						// (they belong to the enclosing context); the parser
+						// just decides whether to call `parseRef` or set the
+						// field to `null`. On absence the pre-ws position is
+						// restored so any leading whitespace stays visible to
+						// the parent's next `skipWs`. On presence the call
+						// runs from the post-ws position; `parseRef` does not
+						// double-skip. Trivia mode applies the same
+						// `pendingTrivia` stash as the lead-led branch so
+						// leading comments captured before an absent body
+						// flow to the next sibling's `collectTrivia`.
+						final peekChain:Expr = {
+							var acc:Expr = macro peekLit(ctx, $v{absentOnLits[0]});
+							for (i in 1...absentOnLits.length) {
+								final lit:String = absentOnLits[i];
+								acc = macro $acc || peekLit(ctx, $v{lit});
+							}
+							acc;
+						};
+						final wsAction:Expr = ctx.trivia ? macro {
+							final _t = collectTrivia(ctx);
+							if (_t.leadingComments.length > 0 || _t.blankBefore || _t.blankAfterLeadingComments || _t.newlineBefore) ctx.pendingTrivia = _t;
+						} : macro skipWs(ctx);
+						final absentOnValueExpr:Expr = macro {
+							final _wsPos:Int = ctx.pos;
+							$wsAction;
+							if ($peekChain) {
+								ctx.pos = _wsPos;
+								null;
+							} else {
+								$subCall;
+							}
+						};
+						parseSteps.push({
+							expr: EVars([{
+								name: localName,
+								type: fieldCT,
+								expr: absentOnValueExpr,
+								isFinal: true,
+							}]),
+							pos: Context.currentPos(),
+						});
+					} else {
 					// The commit point peeks the lead literal or keyword —
 					// on hit, consume and parse the sub-rule; on miss,
 					// rewind pos to before the pre-commit ws scan so any
@@ -1621,6 +1710,7 @@ class Lowering {
 						}]),
 						pos: Context.currentPos(),
 					});
+					}
 				case Ref:
 					final refName:String = child.annotations.get('base.ref');
 					final callExpr:Expr = {

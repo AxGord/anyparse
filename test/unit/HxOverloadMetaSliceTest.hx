@@ -37,12 +37,18 @@ class HxOverloadMetaSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public function testParsesNonOverloadAsPlainVariant():Void {
+	public function testParsesNonOverloadAsGenericMeta():Void {
+		// Post ω-generic-meta: `@:keep` (and any other non-overload @-led
+		// meta) now parses through the structural `Meta(name, args)`
+		// branch instead of `PlainMeta`. The args field is `null` here
+		// because there's no `(...)` argument block. PlainMeta is reached
+		// only when both OverloadMeta and Meta tryBranches fail (deeply
+		// nested or string-edge-case input).
 		final ast:HxModule = HaxeModuleParser.parse('@:keep class M {}');
 		final m:HxMetadata = ast.decls[0].meta[0];
 		switch m {
-			case PlainMeta(_): Assert.pass();
-			case _: Assert.fail('expected PlainMeta, got $m');
+			case Meta(_): Assert.pass();
+			case _: Assert.fail('expected Meta, got $m');
 		}
 	}
 

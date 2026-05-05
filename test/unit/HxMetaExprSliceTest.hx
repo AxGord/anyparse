@@ -45,11 +45,20 @@ class HxMetaExprSliceTest extends HxTestHelpers {
 	}
 
 	public function testParsesMetaWithArgs():Void {
+		// Post ω-generic-meta: `@:foo(1, 2)` parses through the structural
+		// `MetaCall` branch — name in `call.name`, args list parses through
+		// the standard HxExpr pipeline. PlainMeta-source verbatim no longer
+		// applies to this shape; assert the structural payload directly.
 		final src:String = 'class Main { static function main() { trace(@:foo(1, 2) X); } }';
 		final fn:HxFnDecl = parseSingleFnDecl(src);
 		final args:Array<HxExpr> = expectCallArgs(expectExprStmt(fnBodyStmts(fn)[0]));
 		final wrapper:HxMetaExpr = expectMetaExpr(args[0]);
-		Assert.equals('@:foo(1, 2)', HxMetadataUtil.source(wrapper.meta));
+		switch wrapper.meta {
+			case MetaCall(call):
+				Assert.equals('@:foo', (call.name : String));
+				Assert.equals(2, call.args.length);
+			case _: Assert.fail('expected MetaCall, got ' + wrapper.meta);
+		}
 		assertIdentExpr(wrapper.expr, 'X');
 	}
 

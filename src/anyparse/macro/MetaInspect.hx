@@ -55,6 +55,27 @@ final class MetaInspect {
 	}
 
 	/**
+	 * Reads N string literal arguments of the named metadata entry, in
+	 * source order. Returns null when the entry is absent, has zero
+	 * params, or any param is not a string literal. Multi-arg sibling
+	 * of `readMetaString` for tags like `@:absentOn('a', 'b', ')')`.
+	 */
+	public static function readMetaStringArgs(node:ShapeNode, tag:String):Null<Array<String>> {
+		final meta:Null<Metadata> = node.annotations.get('base.meta');
+		if (meta == null) return null;
+		for (entry in meta) if (entry.name == tag) {
+			if (entry.params.length == 0) return null;
+			final out:Array<String> = [];
+			for (p in entry.params) switch p.expr {
+				case EConst(CString(s, _)): out.push(s);
+				case _: return null;
+			}
+			return out;
+		}
+		return null;
+	}
+
+	/**
 	 * True when the node carries `@:fmt(...)` and any argument matches
 	 * `name` either as a bare identifier (flag form, `@:fmt(nestBody)`)
 	 * or as the callee of an `ECall` (knob form, `@:fmt(bodyPolicy('x'))`).

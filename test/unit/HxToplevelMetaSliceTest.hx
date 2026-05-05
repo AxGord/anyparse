@@ -40,11 +40,24 @@ class HxToplevelMetaSliceTest extends HxTestHelpers {
 	}
 
 	public function testMultipleMetasOnClass():Void {
+		// Post ω-generic-meta: paren-bearing metas parse through the
+		// structural `MetaCall` branch — assert names + arg counts directly
+		// since `source()` doesn't reconstruct structural payloads.
 		final ast:HxModule = HaxeModuleParser.parse('@:allow(pack.Base) @test("foo") class Main {}');
 		Assert.equals(1, ast.decls.length);
 		Assert.equals(2, ast.decls[0].meta.length);
-		Assert.equals('@:allow(pack.Base)', HxMetadataUtil.source(ast.decls[0].meta[0]));
-		Assert.equals('@test("foo")', HxMetadataUtil.source(ast.decls[0].meta[1]));
+		switch ast.decls[0].meta[0] {
+			case MetaCall(call):
+				Assert.equals('@:allow', (call.name : String));
+				Assert.equals(1, call.args.length);
+			case _: Assert.fail('expected MetaCall for @:allow, got ' + ast.decls[0].meta[0]);
+		}
+		switch ast.decls[0].meta[1] {
+			case MetaCall(call):
+				Assert.equals('@test', (call.name : String));
+				Assert.equals(1, call.args.length);
+			case _: Assert.fail('expected MetaCall for @test, got ' + ast.decls[0].meta[1]);
+		}
 	}
 
 	public function testMetaThenModifierOnClass():Void {
