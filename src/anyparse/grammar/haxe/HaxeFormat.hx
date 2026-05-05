@@ -797,17 +797,18 @@ final class HaxeFormat implements TextFormat {
 	/**
 	 * Default `WrapRules` cascade for postfix `.method(args)` chains —
 	 * ported from haxe-formatter's `wrapping.methodChain` rule set in
-	 * `resources/default-hxformat.json` (AxGord fork). The leading
-	 * `lineLength >= 160` rule from upstream is skipped because
-	 * `WrapConditionType` does not yet model raw current-line length —
-	 * same skip-precedent
-	 * as `defaultArrayLiteralWrap`'s `hasMultilineItems` /
-	 * `equalItemLengths` omissions. The remaining cascade still covers
-	 * the common cases: short chains stay flat (`itemCount<=3` +
-	 * `exceedsMaxLineLength==0`, or `totalItemLength<=80` +
-	 * `exceedsMaxLineLength==0`); `anyItemLength>=30` + `itemCount>=4`
-	 * or `itemCount>=7` or `exceedsMaxLineLength==1` cascades to
-	 * `OnePerLineAfterFirst`.
+	 * `resources/default-hxformat.json` (AxGord fork). Slice
+	 * ω-linelen-static added the runtime infra for `lineLength >= n`
+	 * (mapped to `LineLengthLargerThan`, evaluated statically against
+	 * `totalItemFlatLength`); upstream's leading `lineLength >= 160` rule
+	 * has not yet been folded into this baseline cascade because
+	 * adopting it shifts behaviour for all currently-passing fixtures
+	 * with empty/default `wrapping.methodChain` config and needs its own
+	 * regression sweep. The current cascade covers the common cases:
+	 * short chains stay flat (`itemCount<=3` + `exceedsMaxLineLength==0`,
+	 * or `totalItemLength<=80` + `exceedsMaxLineLength==0`);
+	 * `anyItemLength>=30` + `itemCount>=4` or `itemCount>=7` or
+	 * `exceedsMaxLineLength==1` cascades to `OnePerLineAfterFirst`.
 	 *
 	 * NOTE: this cascade is currently unused by the writer pipeline —
 	 * the slice ω-methodchain-wraprules-capability ships the knob and

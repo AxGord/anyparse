@@ -23,6 +23,13 @@ package anyparse.format.wrap;
  *    runs disagree, so the renderer's flat/break decision picks the
  *    right mode at layout time. When both runs agree, the chosen mode
  *    is unconditional and no Group wrap is needed.
+ *  - `LineLengthLargerThan` — `totalItemFlatLength >= n` against the
+ *    construct's own flat width. Differs from `TotalItemLengthLargerThan`
+ *    only by intent: haxe-formatter's `lineLength >= n` is conceptually
+ *    "would the rendered line at this point cross threshold N", which
+ *    anyparse approximates as the construct's flat width without
+ *    column prefix. Mapped from JSON `'lineLength >= n'` (slice
+ *    ω-linelen-static).
  *
  * Format-neutral — same conditions apply to any delimited list across
  * languages. Mirrors haxe-formatter's `WrapConditionType` enum
@@ -43,4 +50,6 @@ enum abstract WrapConditionType(Int) from Int to Int {
 	final TotalItemLengthLessThan = 5;
 
 	final ExceedsMaxLineLength = 6;
+
+	final LineLengthLargerThan = 7;
 }

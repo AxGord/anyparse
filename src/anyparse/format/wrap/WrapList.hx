@@ -309,6 +309,7 @@ class WrapList {
 				case TotalItemLengthLargerThan: totalItemLen >= cond.value;
 				case TotalItemLengthLessThan: totalItemLen <= cond.value;
 				case ExceedsMaxLineLength: cond.value == 0 ? !exceedsMaxLineLength : exceedsMaxLineLength;
+				case LineLengthLargerThan: totalItemLen >= cond.value;
 				case _: false;
 			};
 			if (!ok) return false;

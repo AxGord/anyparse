@@ -87,9 +87,12 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   `WrapRules` cascade → `arrayLiteralWrap`. `defaultWrap:String` sets
  *   the cascade's `defaultMode`; `rules:Array<HxFormatWrapRule>` is
  *   ingested verbatim into the runtime cascade — `type` strings map to
- *   `WrapMode`, `cond` strings map to `WrapConditionType`, rules whose
- *   `cond` is still unmodelled (`lineLength >= n`) are dropped so the
- *   cascade falls through cleanly. Absent keys preserve the runtime
+ *   `WrapMode`, `cond` strings map to `WrapConditionType` (including
+ *   `lineLength >= n` since slice ω-linelen-static — interpreted as
+ *   `totalItemFlatLength >= n`, the construct's flat width without
+ *   column prefix), rules with an unrecognised `cond` are still
+ *   dropped so the cascade falls through cleanly. Absent keys preserve
+ *   the runtime
  *   baseline; `rules: []` resets the cascade to unconditional
  *   `defaultMode`.
  * - `wrapping.anonType` (ω-anontype-wraprules): same `WrapRules` ingest
@@ -535,10 +538,12 @@ final class HaxeFormatConfigLoader {
 	 * `rules` is ingested verbatim — slice ω-peg-byname-array lifted the
 	 * `@:peg` ByName Array<T> limitation so the JSON-side rules array now
 	 * round-trips into the runtime cascade. Rules with an unrecognised
-	 * `type` are dropped, and rules with at least one unmodelled `cond`
-	 * predicate (currently `lineLength >= n`) are dropped wholesale so
-	 * the cascade falls through to the next rule instead of producing
-	 * a partially-evaluated decision. A configured `rules: []` resets the
+	 * `type` are dropped, and rules with at least one unrecognised `cond`
+	 * predicate are dropped wholesale so the cascade falls through to
+	 * the next rule instead of producing a partially-evaluated decision.
+	 * Slice ω-linelen-static added `lineLength >= n` to the recognised
+	 * set (mapped to `LineLengthLargerThan`, evaluated statically against
+	 * the construct's flat width). A configured `rules: []` resets the
 	 * cascade to empty (unconditional `defaultMode`); an absent `rules`
 	 * key preserves the runtime baseline cascade.
 	 */
@@ -610,6 +615,7 @@ final class HaxeFormatConfigLoader {
 			case 'totalItemLength >= n': WrapConditionType.TotalItemLengthLargerThan;
 			case 'totalItemLength <= n': WrapConditionType.TotalItemLengthLessThan;
 			case 'exceedsMaxLineLength': WrapConditionType.ExceedsMaxLineLength;
+			case 'lineLength >= n': WrapConditionType.LineLengthLargerThan;
 			case _: null;
 		};
 	}

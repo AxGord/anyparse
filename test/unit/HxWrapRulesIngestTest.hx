@@ -14,15 +14,14 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
  *
  * Scope: assert that `loadHxFormatJson` round-trips `rules: [...]` into
  * the runtime `WrapRules` cascade (mode + cond + value), correctly
- * drops rules whose `cond` predicate isn't modelled yet
- * (`lineLength >= n`), and degrades gracefully when an entry is
- * malformed.
+ * drops rules with an unrecognised `cond` predicate, and degrades
+ * gracefully when an entry is malformed.
  *
- * `testMultipleConditionsAndAllPredicates` exercises all seven
- * `wrapCondFromString` branches (`itemCount <= n` / `itemCount >= n` /
+ * `testMultipleConditionsAndAllPredicates` exercises every
+ * `wrapCondFromString` branch (`itemCount <= n` / `itemCount >= n` /
  * `anyItemLength >= n` / `allItemLengths < n` / `totalItemLength <= n` /
- * `totalItemLength >= n` / `exceedsMaxLineLength`) so a regression in
- * any single arm is caught by this file alone.
+ * `totalItemLength >= n` / `exceedsMaxLineLength` / `lineLength >= n`)
+ * so a regression in any single arm is caught by this file alone.
  */
 @:nullSafety(Strict)
 class HxWrapRulesIngestTest extends Test {
@@ -86,11 +85,29 @@ class HxWrapRulesIngestTest extends Test {
 		Assert.equals(20, r2.conditions[1].value);
 	}
 
-	public function testUnmodelledLineLengthCondDropsRule():Void {
+	public function testLineLengthCondIngested():Void {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"wrapping":{"methodChain":{"rules":['
 				+ '{"type":"onePerLineAfterFirst","conditions":['
 				+ '{"cond":"lineLength >= n","value":160}'
+				+ ']},'
+				+ '{"type":"noWrap","conditions":['
+				+ '{"cond":"itemCount <= n","value":3}'
+				+ ']}'
+				+ ']}}}'
+		);
+		Assert.equals(2, opts.methodChainWrap.rules.length);
+		Assert.equals(WrapMode.OnePerLineAfterFirst, opts.methodChainWrap.rules[0].mode);
+		Assert.equals(1, opts.methodChainWrap.rules[0].conditions.length);
+		Assert.equals(WrapConditionType.LineLengthLargerThan, opts.methodChainWrap.rules[0].conditions[0].cond);
+		Assert.equals(160, opts.methodChainWrap.rules[0].conditions[0].value);
+	}
+
+	public function testUnknownCondDropsRule():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"wrapping":{"methodChain":{"rules":['
+				+ '{"type":"onePerLineAfterFirst","conditions":['
+				+ '{"cond":"thisCondIsBogus >= n","value":42}'
 				+ ']},'
 				+ '{"type":"noWrap","conditions":['
 				+ '{"cond":"itemCount <= n","value":3}'
