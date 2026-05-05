@@ -126,8 +126,17 @@ class WriterLowering {
 			final hasOpenTrailing:Bool = hasCloseTrailing
 				&& branch.readMetaString(':lead') != null
 				&& !branch.hasMeta(':tryparse');
+			// ω-postfix-call-trailing: postfix Star-suffix ctors with
+			// auto-marked `trivia.starCollects=true` Stars (currently
+			// `HxExpr.Call`) grow a positional `closeTrailing:Null<String>`
+			// slot for the trailing comment between the close `)` and the
+			// next postfix iteration. Disjoint from the four Alt-side
+			// predicates (different ctor shapes), so the predicates compose
+			// additively in `extraArgs` without collision.
+			final hasPostfixCloseTrailing:Bool = ctx.trivia && TriviaTypeSynth.isPostfixCloseTrailingBranch(branch);
 			final extraArgs:Int = ((hasCloseTrailing || hasTrailOptFlag || hasCaptureSource) ? 1 : 0)
-				+ (hasOpenTrailing ? 1 : 0);
+				+ (hasOpenTrailing ? 1 : 0)
+				+ (hasPostfixCloseTrailing ? 1 : 0);
 			final argNames:Array<String> = [for (i in 0...children.length + extraArgs) '_v$i'];
 
 			// Build pattern
@@ -309,37 +318,79 @@ class WriterLowering {
 		// plain mode). The macro emits the same unqualified ctor names
 		// for both modes — Haxe's typer resolves to whichever sibling
 		// ctor lives on the `value` parameter's enum.
-		return macro {
-			final _segs:Array<anyparse.core.Doc> = [];
-			var _cursor = value;
-			var _receiver = value;
-			while (true) {
-				switch _cursor {
-					case Call(_op, _args):
-						switch _op {
-							case FieldAccess(_prev, _fld):
-								final _argDocs:Array<anyparse.core.Doc> = $argDocsExpr;
-								final _argsDoc:anyparse.core.Doc = $argsListExpr;
-								_segs.unshift(_dc([_dt('.' + _fld), _argsDoc]));
-								_cursor = _prev;
-							case _:
-								_receiver = _cursor;
-								break;
-						}
-					case FieldAccess(_prev, _fld):
-						_segs.unshift(_dt('.' + _fld));
-						_cursor = _prev;
-					case _:
-						_receiver = _cursor;
-						break;
+		//
+		// ω-postfix-call-trailing: trivia-mode Call ctor grew a
+		// positional `closeTrailing:Null<String>` slot (see
+		// `TriviaTypeSynth.isPostfixCloseTrailingBranch`); the trivia
+		// branch's pattern matches three args and embeds `_trailClose`
+		// into the segment's Doc when non-null. Plain-mode pattern stays
+		// 2-arg. Both branches share the rest of the chain walk.
+		return isCallTriviaStar
+			? macro {
+				final _segs:Array<anyparse.core.Doc> = [];
+				var _cursor = value;
+				var _receiver = value;
+				while (true) {
+					switch _cursor {
+						case Call(_op, _args, _trailClose):
+							switch _op {
+								case FieldAccess(_prev, _fld):
+									final _argDocs:Array<anyparse.core.Doc> = $argDocsExpr;
+									final _argsDoc:anyparse.core.Doc = $argsListExpr;
+									final _segDoc:anyparse.core.Doc = _trailClose != null
+										? _dc([_dt('.' + _fld), _argsDoc, trailingCommentDocVerbatim(_trailClose, opt)])
+										: _dc([_dt('.' + _fld), _argsDoc]);
+									_segs.unshift(_segDoc);
+									_cursor = _prev;
+								case _:
+									_receiver = _cursor;
+									break;
+							}
+						case FieldAccess(_prev, _fld):
+							_segs.unshift(_dt('.' + _fld));
+							_cursor = _prev;
+						case _:
+							_receiver = _cursor;
+							break;
+					}
 				}
+				if (_segs.length >= 2) {
+					final _recDoc:anyparse.core.Doc = $writeIdent(_receiver, opt, $precExpr);
+					return anyparse.format.wrap.MethodChainEmit.emit(_recDoc, _segs, opt, $chainRulesExpr);
+				}
+				$body;
 			}
-			if (_segs.length >= 2) {
-				final _recDoc:anyparse.core.Doc = $writeIdent(_receiver, opt, $precExpr);
-				return anyparse.format.wrap.MethodChainEmit.emit(_recDoc, _segs, opt, $chainRulesExpr);
-			}
-			$body;
-		};
+			: macro {
+				final _segs:Array<anyparse.core.Doc> = [];
+				var _cursor = value;
+				var _receiver = value;
+				while (true) {
+					switch _cursor {
+						case Call(_op, _args):
+							switch _op {
+								case FieldAccess(_prev, _fld):
+									final _argDocs:Array<anyparse.core.Doc> = $argDocsExpr;
+									final _argsDoc:anyparse.core.Doc = $argsListExpr;
+									_segs.unshift(_dc([_dt('.' + _fld), _argsDoc]));
+									_cursor = _prev;
+								case _:
+									_receiver = _cursor;
+									break;
+							}
+						case FieldAccess(_prev, _fld):
+							_segs.unshift(_dt('.' + _fld));
+							_cursor = _prev;
+						case _:
+							_receiver = _cursor;
+							break;
+					}
+				}
+				if (_segs.length >= 2) {
+					final _recDoc:anyparse.core.Doc = $writeIdent(_receiver, opt, $precExpr);
+					return anyparse.format.wrap.MethodChainEmit.emit(_recDoc, _segs, opt, $chainRulesExpr);
+				}
+				$body;
+			};
 	}
 
 	/**
@@ -889,6 +940,32 @@ class WriterLowering {
 					: _elem);
 			}
 			: macro _docs.push($elemCall);
+		// ω-postfix-call-trailing: when the synth pair grew a
+		// `closeTrailing:Null<String>` slot (gated by `isTriviaStar`,
+		// which is the same predicate as `isPostfixCloseTrailingBranch`
+		// at this site), append `trailingCommentDocVerbatim(_trailClose,
+		// opt)` after the call's emitted Doc when non-null. The slot
+		// holds a same-line trailing `// c` / `/* c */` between `)` and
+		// the next expression boundary — captured by Lowering's
+		// `lowerPostfixLoop` Star-suffix trivia branch. For chain Calls
+		// the chain extractor (`wrapWithChainDispatch`) handles the same
+		// slot per segment via its own dispatch; this default-path
+		// emission covers non-chain single Calls.
+		final tailExpr:Expr = isTriviaStar
+			? {
+				final closeTrailRef:Expr = {
+					expr: EConst(CIdent(argNames[2])),
+					pos: Context.currentPos(),
+				};
+				macro {
+					final _dcResult:anyparse.core.Doc = $dcExpr;
+					final _trailClose:Null<String> = $closeTrailRef;
+					_trailClose != null
+						? _dc([_dcResult, trailingCommentDocVerbatim(_trailClose, opt)])
+						: _dcResult;
+				};
+			}
+			: dcExpr;
 		return macro {
 			final _args = $argsAccess;
 			final _docs:Array<anyparse.core.Doc> = [];
@@ -897,7 +974,7 @@ class WriterLowering {
 				$pushElemExpr;
 				_i++;
 			}
-			$dcExpr;
+			$tailExpr;
 		};
 	}
 

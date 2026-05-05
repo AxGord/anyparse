@@ -494,7 +494,66 @@ class TriviaTypeSynth {
 			final strCT:ComplexType = TPath({pack: [], name: 'String', params: []});
 			args.push({name: SOURCE_TEXT_ARG_NAME, type: strCT});
 		}
+		// ω-postfix-call-trailing: Star-suffix `@:postfix(open, close) @:sep(...)`
+		// branches whose Star already auto-collects per-arg trivia
+		// (`trivia.starCollects=true`, set by `TriviaAnalysis.markPostfixStarSuffix`)
+		// grow a positional `closeTrailing:Null<String>` arg holding the
+		// trailing comment captured by the parser AFTER the close literal,
+		// before the next postfix step or Pratt iteration. Without this
+		// slot, `lowerPostfixLoop`'s per-iteration `skipWs(ctx)` eats
+		// inter-segment line/block comments — losing them silently for the
+		// writer (e.g. `.alt(x) // c\n.height(y)` chain segments lose `// c`).
+		// Disjoint from the four predicates above (different shape predicates),
+		// so at most one of these adds applies to any given branch.
+		if (isPostfixCloseTrailingBranch(branch)) {
+			final strCT:ComplexType = TPath({pack: [], name: 'String', params: []});
+			final nullStrCT:ComplexType = TPath({pack: [], name: 'Null', params: [TPType(strCT)]});
+			args.push({name: 'closeTrailing', type: nullStrCT});
+		}
 		return {name: ctorName, kind: FFun({args: args, ret: null, expr: null}), pos: pos, access: []};
+	}
+
+	/**
+	 * True when the branch is a postfix Star-suffix ctor (e.g.
+	 * `Call(operand:T, args:Array<T>)` from `@:postfix('(', ')') @:sep(',')`)
+	 * whose Star child carries `trivia.starCollects=true` (set by
+	 * `TriviaAnalysis.markPostfixStarSuffix`). Such branches grow a
+	 * positional `closeTrailing:Null<String>` arg holding the trailing
+	 * comment captured by the parser right after the postfix close literal,
+	 * before the next postfix step's `skipWs` would eat it.
+	 *
+	 * Single-Ref-suffix postfix (e.g. `FieldAccess(operand, field)` from
+	 * `@:postfix('.')`) doesn't qualify — child[1] is Ref, not Star, so
+	 * `TriviaAnalysis.markPostfixStarSuffix` never sets `trivia.starCollects`
+	 * on it. Pair-lit postfix (1 child + close lit) likewise misses. Both
+	 * shapes can grow their own slot in a follow-up if a fixture demands
+	 * it; today the only failing fixture is the Star-suffix Call form
+	 * (`indentation/method_chain_with_line_comment`).
+	 *
+	 * Discriminator is `trivia.starCollects` on a 2nd Star child — the
+	 * marker function only sets that for the postfix Star-suffix shape it
+	 * detects via `:postfix(open, close)` + `[Ref, Star]`. We can't read
+	 * `postfix.op`/`postfix.close` from `branch.annotations` here because
+	 * the Postfix strategy runs LATER (see `Build.run`: TriviaAnalysis →
+	 * TriviaTypeSynth.arm → registry.runAnnotate); only the marker's
+	 * `trivia.starCollects` flag is reliably present at arm-time.
+	 */
+	public static function isPostfixCloseTrailingBranch(branch:ShapeNode):Bool {
+		if (branch.children.length != 2) return false;
+		if (branch.children[0].kind != Ref) return false;
+		final star:ShapeNode = branch.children[1];
+		if (star.kind != Star) return false;
+		if (star.annotations.get('trivia.starCollects') != true) return false;
+		// Tighten: `trivia.starCollects` is also set by `markStarsWithTrivia`
+		// for `:trivia` Seq branches with a single Star child. Those are NOT
+		// postfix and must not grow a `closeTrailing` slot — Lowering's
+		// `lowerPostfixLoop` is the only producer for the slot. Read
+		// `:postfix` from raw `base.meta` (Postfix strategy hasn't run yet)
+		// to ensure the branch is a postfix ctor.
+		final meta:Null<Metadata> = branch.annotations.get('base.meta');
+		if (meta == null) return false;
+		for (entry in meta) if (entry.name == ':postfix' && entry.params.length == 2) return true;
+		return false;
 	}
 
 	/**

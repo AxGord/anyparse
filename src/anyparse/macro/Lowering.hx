@@ -614,6 +614,19 @@ class Lowering {
 					: macro ctx.pos < ctx.input.length && !peekLit(ctx, $v{close});
 				final sepText:Null<String> = branch.annotations.get('lit.sepText');
 				final ctorCall:Expr = {expr: ECall(ctorRef, [macro left, macro _args]), pos: Context.currentPos()};
+				// ω-postfix-call-trailing: when the synth pair grew a
+				// `closeTrailing:Null<String>` slot (see
+				// `TriviaTypeSynth.isPostfixCloseTrailingBranch`), the trivia
+				// branch's ctor call grows a third positional arg. The slot
+				// is filled by `collectTrailingFull` after `expectLit(close)`
+				// — capturing same-line `// c` / `/* c */` between `)` and
+				// the next postfix step's leading-trivia. Without the slot,
+				// the inner `skipWs(ctx)` of the next postfix iteration eats
+				// the comment.
+				final ctorCallTrivia:Expr = {
+					expr: ECall(ctorRef, [macro left, macro _args, macro _trailClose]),
+					pos: Context.currentPos(),
+				};
 				// ω-postfix-starsuffix-trivia: when TriviaAnalysis marks
 				// this Star with `trivia.starCollects=true` (auto-set for
 				// postfix Star-suffix branches), the synth wraps the
@@ -701,7 +714,16 @@ class Lowering {
 						}
 						skipWs(ctx);
 						expectLit(ctx, $v{close});
-						left = $ctorCall;
+						// Capture trailing comment between `close` and the
+						// next postfix iteration's leading trivia. Same-line
+						// only — multi-line look-ahead would steal comments
+						// belonging to the next chain segment's `_lead` slot
+						// (or to the enclosing statement's trailing slot
+						// when the chain ends here). The Pratt loop's
+						// outer skipWs-rewind handles the chain-end case
+						// (no postfix matches → rewind on `_hadComment`).
+						final _trailClose:Null<String> = collectTrailingFull(ctx);
+						left = $ctorCallTrivia;
 					};
 				} else if (sepText != null) {
 					final sepCharCode:Int = sepText.charCodeAt(0);

@@ -74,6 +74,7 @@ import unit.HxBinaryChainWrapSliceTest;
 import unit.HxBinopGroupWrapSliceTest;
 import unit.HxMethodChainWrapCapabilityTest;
 import unit.HxMethodChainEmitTest;
+import unit.HxMethodChainCloseTrailingTest;
 import unit.HxWrapRulesIngestTest;
 import unit.HxAbstractClauseSpacingTest;
 import unit.HxElseIfOptionsTest;
@@ -199,6 +200,7 @@ class RunTests {
 		runner.addCase(new HxBinopGroupWrapSliceTest());
 		runner.addCase(new HxMethodChainWrapCapabilityTest());
 		runner.addCase(new HxMethodChainEmitTest());
+		runner.addCase(new HxMethodChainCloseTrailingTest());
 		runner.addCase(new HxWrapRulesIngestTest());
 		runner.addCase(new HxAbstractClauseSpacingTest());
 		runner.addCase(new HxElseIfOptionsTest());
