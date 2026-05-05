@@ -24,14 +24,13 @@ import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
  * emit a hardline between modifiers when the source had a single
  * newline boundary).
  *
- * V4 (cond / modifier / `#end` on separate lines) stays parse-only:
- * the newlines INSIDE `HxConditionalMod.body` (between cond / body[0]
- * and between body[last] / `#end`) require the bearing cascade onto
- * `HxModifier` plus a padLeading/padTrailing-aware trivia writer plus a
- * trail-side newline capture on the outer `Conditional` ctor. Deferred
- * until those land as their own slice — the V1 fix already removes the
- * primary corpus byte-diff (`issue_332` advances from offset 68 to
- * offset 327 with V4 as the lone remaining gap).
+ * V4 (cond / modifier / `#end` on separate lines) round-trips via
+ * `@:trivia` on `HxConditionalMod.body` plus a padLeading/padTrailing-
+ * aware branch in `triviaTryparseStarExpr`. The first body element's
+ * captured `newlineBefore` flag drives both pad slots — when set, both
+ * cond↔body and body↔`#end` gaps render as hardlines; otherwise the
+ * single-line shape (V1–V3: `<cond> mods #end`) is preserved with
+ * fixed-space padding.
  *
  * The fork fixtures' output sections are trailing-newline-terminated,
  * so `roundTrip` appends `'\n'` to the input when computing the
@@ -63,8 +62,7 @@ class CondModProbe extends Test {
 	}
 
 	public function testIssue332V4():Void {
-		HaxeModuleTriviaParser.parse('class Main {\n\t#if (neko_v21 || (cpp && !cppia) || flash)\n\tinline\n\t#end\n\tpublic static function main() {}\n}');
-		Assert.pass();
+		roundTrip('class Main {\n\t#if (neko_v21 || (cpp && !cppia) || flash)\n\tinline\n\t#end\n\tpublic static function main() {}\n}');
 	}
 
 	private static function roundTrip(source:String):Void {

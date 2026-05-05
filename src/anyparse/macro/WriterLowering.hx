@@ -2014,10 +2014,23 @@ class WriterLowering {
 					}
 					out;
 				};
+				// ω-cond-mod-pad: `@:fmt(padLeading)`/`@:fmt(padTrailing)` on
+				// a `@:trivia @:tryparse` Star emit a leading/trailing space
+				// when non-empty (matches the non-trivia padLeading/padTrailing
+				// branch), with the leading slot SWITCHING to `_dhl()` when
+				// the source had a newline before the first element. Used by
+				// `HxConditionalMod.body` so V1–V3 (single-line `#if X mods #end`)
+				// stay on one line and V4 (newline-separated cond/mods/`#end`)
+				// breaks all three pad slots together — the trail-side pad
+				// follows the leading-side decision because the parser does
+				// not capture a body→`#end` newline slot, but in legal source
+				// shapes the two newlines are correlated.
+				final tryparsePadLeading:Bool = starNode.fmtHasFlag('padLeading');
+				final tryparsePadTrailing:Bool = starNode.fmtHasFlag('padTrailing');
 				parts.push(triviaTryparseStarExpr(
 					fieldAccess, elemFn, sepExpr, sameLineName != null, nestBody,
 					tryparseTrailBB, tryparseTrailLC, tryparseTrailBA, firstSepOverride, subsequentSepOverride,
-					caseBodyFlagNames, flatChildOptPairs
+					caseBodyFlagNames, flatChildOptPairs, tryparsePadLeading, tryparsePadTrailing
 				));
 				return;
 			}
@@ -4671,7 +4684,9 @@ class WriterLowering {
 		firstSepOverride:Null<Expr> = null,
 		subsequentSepOverride:Null<Expr> = null,
 		caseBodyFlagNames:Null<Array<String>> = null,
-		flatChildOptPairs:Null<Array<Array<String>>> = null
+		flatChildOptPairs:Null<Array<Array<String>>> = null,
+		padLeading:Bool = false,
+		padTrailing:Bool = false
 	):Expr {
 		// ω-expression-case-flat-fanout: when the body's element call should
 		// receive a copy-on-flat opt with named fields swapped, build the
@@ -4755,6 +4770,8 @@ class WriterLowering {
 			final overrideBlock:Expr = {expr: EBlock(block), pos: Context.currentPos()};
 			macro (_flatCase ? $overrideBlock : opt);
 		};
+		final padLeadingExpr:Expr = macro $v{padLeading};
+		final padTrailingExpr:Expr = macro $v{padTrailing};
 		return macro {
 			final _arr = $fieldAccess;
 			final _trailLC:Array<String> = $trailLC;
@@ -4768,8 +4785,18 @@ class WriterLowering {
 				&& _arr[0].leadingComments.length == 0
 				&& $flatGateExpr;
 			final _writerOpt = $writerOptExpr;
+			// ω-cond-mod-pad: padLeading/padTrailing emit a space (single-line
+			// shape) or hardline (multi-line, when first element carries a
+			// source newline) around the Star body. Trail-side decision
+			// mirrors leading-side because the parser does not capture a
+			// body[last]→outer-trail newline slot — in legal source shapes
+			// the two are correlated. Empty arrays skip both pads.
+			final _padLeading:Bool = $padLeadingExpr;
+			final _padTrailing:Bool = $padTrailingExpr;
+			final _padHardline:Bool = (_padLeading || _padTrailing) && _arr.length > 0 && _arr[0].newlineBefore;
 			if (_arr.length == 0 && _trailLC.length == 0) _de() else {
 				final _docs:Array<anyparse.core.Doc> = [];
+				if (_padLeading && _arr.length > 0) _docs.push(_padHardline ? _dhl() : _dt(' '));
 				var _si:Int = 0;
 				while (_si < _arr.length) {
 					final _t = _arr[_si];
@@ -4808,6 +4835,7 @@ class WriterLowering {
 					_docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDoc(_tc, opt)) : _elem);
 					_si++;
 				}
+				if (_padTrailing && _arr.length > 0) _docs.push(_padHardline ? _dhl() : _dt(' '));
 				// Trail comments collected into a separate Doc array so the
 				// nestBody branch can render them at parent indent when the
 				// body has stmts (issue_392): a `// comment` on its own line
