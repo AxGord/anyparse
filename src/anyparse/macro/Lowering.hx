@@ -950,8 +950,21 @@ class Lowering {
 				// literal. The Full variant keeps comment delimiters so the
 				// writer can round-trip block-vs-line style (ω-trailing-
 				// block-style). Plain mode keeps the 1-arg ctor.
+				//
+				// ω-open-trailing-alt: when the branch carries `@:lead`,
+				// append `_openTrail` as a 3rd positional arg. Captured
+				// via `collectTrailingFull` right after the open literal
+				// (mirror of Seq-struct's `<field>TrailingOpen` slot).
+				// Without this, an inline `[ /* foo */ ]` would lose the
+				// comment — the loop's terminal `_lead` is dropped on
+				// the close-peek break, and same-line comments after `[`
+				// don't show up in `collectTrivia`'s newline-anchored
+				// scan anyway.
+				final hasOpenTrail:Bool = branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse');
+				final ctorArgsTrivia:Array<Expr> = [macro _items, macro _closeTrail];
+				if (hasOpenTrail) ctorArgsTrivia.push(macro _openTrail);
 				final ctorCallTrivia:Expr = {
-					expr: ECall(ctorRef, [macro _items, macro _closeTrail]),
+					expr: ECall(ctorRef, ctorArgsTrivia),
 					pos: Context.currentPos(),
 				};
 				final sepMatchExpr:Expr = if (sepText != null) {
@@ -972,6 +985,7 @@ class Lowering {
 				return macro {
 					skipWs(ctx);
 					expectLit(ctx, $v{leadText});
+					final _openTrail:Null<String> = collectTrailingFull(ctx);
 					final _items:Array<$wrappedCT> = [];
 					while (true) {
 						final _lead = collectTrivia(ctx);

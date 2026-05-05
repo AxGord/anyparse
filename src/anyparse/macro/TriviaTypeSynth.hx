@@ -448,10 +448,27 @@ class TriviaTypeSynth {
 		// close-trailing slot synthesised by `buildStarTrailingSlots`,
 		// but the arg has no field-name prefix — Alt ctors are
 		// positional so the writer reads it via `argNames[1]`.
+		//
+		// ω-open-trailing-alt: when the branch ALSO carries `@:lead`
+		// (which all three current consumers — BlockStmt, ArrayExpr,
+		// BlockExpr — do), append a parallel positional `openTrailing:
+		// Null<String>` arg captured via `collectTrailingFull` right
+		// after the open literal. Mirrors the Seq-struct open-trailing
+		// slot. Writer reads it via `argNames[2]`. Without this, an
+		// inline same-line comment between open and first element
+		// (or, when the Star is empty, between open and close) is lost
+		// at parse — the synth ctor had no slot for it.
 		if (isAltCloseTrailingBranch(branch)) {
 			final strCT:ComplexType = TPath({pack: [], name: 'String', params: []});
 			final nullStrCT:ComplexType = TPath({pack: [], name: 'Null', params: [TPType(strCT)]});
 			args.push({name: 'closeTrailing', type: nullStrCT});
+			// `:tryparse` excluded for parity with `buildStarTrailingSlots` —
+			// the writer's tryparse helper does not consume an open-trail
+			// slot, so capturing one would silently drop the comment at
+			// write time. Today no Alt branch combines `:trivia + :tryparse`
+			// + `:lead` so the guard is dormant; kept for forward parity.
+			if (branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse'))
+				args.push({name: 'openTrailing', type: nullStrCT});
 		}
 		// ω-trailopt-source-track: `@:trailOpt(...)` Alt branches with a
 		// single Ref child grow a positional `trailPresent:Bool` arg

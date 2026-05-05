@@ -119,7 +119,15 @@ class WriterLowering {
 			final hasCloseTrailing:Bool = ctx.trivia && TriviaTypeSynth.isAltCloseTrailingBranch(branch);
 			final hasTrailOptFlag:Bool = ctx.trivia && TriviaTypeSynth.isAltTrailOptBranch(branch);
 			final hasCaptureSource:Bool = ctx.trivia && TriviaTypeSynth.isCaptureSourceBranch(branch);
-			final extraArgs:Int = (hasCloseTrailing || hasTrailOptFlag || hasCaptureSource) ? 1 : 0;
+			// ω-open-trailing-alt: same-line trailing comment after the
+			// open lit grows a parallel positional arg next to closeTrailing.
+			// Synth gate is `isAltCloseTrailingBranch && @:lead present`,
+			// mirrored here so `argNames[2]` names the openTrailing slot.
+			final hasOpenTrailing:Bool = hasCloseTrailing
+				&& branch.readMetaString(':lead') != null
+				&& !branch.hasMeta(':tryparse');
+			final extraArgs:Int = ((hasCloseTrailing || hasTrailOptFlag || hasCaptureSource) ? 1 : 0)
+				+ (hasOpenTrailing ? 1 : 0);
 			final argNames:Array<String> = [for (i in 0...children.length + extraArgs) '_v$i'];
 
 			// Build pattern
@@ -885,8 +893,22 @@ class WriterLowering {
 			// synth ctor grew a positional arg (`closeTrailing`) and
 			// `argNames[1]` is its writer-side binding. Plain mode keeps
 			// the pre-slice null path (no extra arg, no extra binding).
+			//
+			// ω-open-trailing-alt: parallel slot for the same-line trailing
+			// comment captured AFTER the open literal (`[ /* foo */]` for
+			// empty arrays, `{ // foo` before first stmt). Synth appends
+			// `openTrailing:Null<String>` as `argNames[2]` when the branch
+			// also carries `@:lead`. Without this, an inline comment in an
+			// otherwise-empty close-peek Star is dropped at parse — the
+			// loop's terminal `_lead` is discarded on close-peek break, and
+			// `collectTrivia`'s newline-anchored scan skips same-line
+			// comments after the open lit anyway.
 			final trailCloseAccess:Null<Expr> = TriviaTypeSynth.isAltCloseTrailingBranch(branch)
 				? macro $i{argNames[1]}
+				: null;
+			final trailOpenAccess:Null<Expr> = TriviaTypeSynth.isAltCloseTrailingBranch(branch)
+					&& branch.readMetaString(':lead') != null
+				? macro $i{argNames[2]}
 				: null;
 			// ω-trivia-sep: sep-Star Alt branches (e.g. `HxExpr.ArrayExpr`)
 			// route to the dedicated sep helper. Block-style (no sep)
@@ -900,11 +922,11 @@ class WriterLowering {
 			if (sepText != null) {
 				final wrapRulesField:Null<String> = branch.fmtReadString('wrapRules');
 				parts.push(triviaSepStarExpr(
-					argsAccess, null, null, trailCloseAccess, null, elemFn, leadText, trailText, sepText,
+					argsAccess, null, null, trailCloseAccess, trailOpenAccess, elemFn, leadText, trailText, sepText,
 					wrapRulesField
 				));
 			} else {
-				parts.push(triviaBlockStarExpr(argsAccess, null, null, trailCloseAccess, null, elemFn, leadText, trailText, true));
+				parts.push(triviaBlockStarExpr(argsAccess, null, null, trailCloseAccess, trailOpenAccess, elemFn, leadText, trailText, true));
 			}
 		} else if (sepText != null) {
 			// See `emitWriterStarField` — `@:sep('\n')` routes to a flat
@@ -3381,8 +3403,16 @@ class WriterLowering {
 			final ctorName:String = branch.annotations.get('base.ctor');
 			final ctorPath:Array<String> = ruleCtorPath(prevBareRefBody.typePath, ctorName);
 			final ctorRef:Expr = MacroStringTools.toFieldExpr(ctorPath);
+			// Pattern arity: child shape (1 Star) + the closeTrailing slot
+			// (which we BIND as `_ct`) + any further synth extras
+			// (currently only openTrailing for `:lead` branches; trailOpt /
+			// captureSource predicates are disjoint from the close-trailing
+			// shape, but the helper covers them for forward compatibility).
+			final extras:Int = branchSynthExtraArity(prevBareRefBody.typePath, branch);
+			final patternArgs:Array<Expr> = [macro _, macro _ct];
+			for (_ in 0...extras - 1) patternArgs.push(macro _);
 			final pattern:Expr = {
-				expr: ECall(ctorRef, [macro _, macro _ct]),
+				expr: ECall(ctorRef, patternArgs),
 				pos: Context.currentPos(),
 			};
 			cases.push({values: [pattern], guard: macro _ct != null, expr: macro _de()});
@@ -3416,7 +3446,7 @@ class WriterLowering {
 
 	private function branchCtorPattern(bodyTypePath:String, branch:ShapeNode):Expr {
 		final ctorName:String = branch.annotations.get('base.ctor');
-		final arity:Int = branch.children.length;
+		final arity:Int = branch.children.length + branchSynthExtraArity(bodyTypePath, branch);
 		final ctorPath:Array<String> = ruleCtorPath(bodyTypePath, ctorName);
 		final ctorRef:Expr = MacroStringTools.toFieldExpr(ctorPath);
 		return if (arity == 0) ctorRef
@@ -3424,6 +3454,25 @@ class WriterLowering {
 			final args:Array<Expr> = [for (_ in 0...arity) macro _];
 			{expr: ECall(ctorRef, args), pos: Context.currentPos()};
 		};
+	}
+
+	/**
+	 * Synth-pair Alt branches grow positional args beyond `children.length`
+	 * in trivia mode (closeTrailing, openTrailing, trailPresent, sourceText).
+	 * Wildcard patterns must include matching `_` slots for each, otherwise
+	 * arity mismatches the synth ctor at compile time. Returns 0 when the
+	 * body is not trivia-bearing or the branch shape adds no extra args.
+	 */
+	private function branchSynthExtraArity(bodyTypePath:String, branch:ShapeNode):Int {
+		if (!isTriviaBearing(bodyTypePath)) return 0;
+		var extras:Int = 0;
+		if (TriviaTypeSynth.isAltCloseTrailingBranch(branch)) {
+			extras++;
+			if (branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse')) extras++;
+		}
+		if (TriviaTypeSynth.isAltTrailOptBranch(branch)) extras++;
+		if (TriviaTypeSynth.isCaptureSourceBranch(branch)) extras++;
+		return extras;
 	}
 
 	private static function isBlockCtorBranch(branch:ShapeNode):Bool {
@@ -3449,7 +3498,7 @@ class WriterLowering {
 		for (branch in rule.children) {
 			final branchCtor:String = branch.annotations.get('base.ctor');
 			if (branchCtor != ctorName) continue;
-			final arity:Int = branch.children.length;
+			final arity:Int = branch.children.length + branchSynthExtraArity(bodyTypePath, branch);
 			final ctorPath:Array<String> = ruleCtorPath(bodyTypePath, branchCtor);
 			final ctorRef:Expr = MacroStringTools.toFieldExpr(ctorPath);
 			return if (arity == 0) ctorRef
@@ -3816,7 +3865,20 @@ class WriterLowering {
 			final _trailBB:Bool = $trailBB;
 			final _trailClose:Null<String> = $trailClose;
 			final _trailOpen:Null<String> = $trailOpen;
-			if (_arr.length == 0 && _trailLC.length == 0 && _trailOpen == null) {
+			// ω-open-trailing-alt: empty Star with a same-line block-style
+			// trail comment after the open lit (`{ /* nop */ }`) emits flat
+			// tight. Mirror of the equivalent fast path in
+			// `triviaSepStarExpr` — see that helper for the line-style
+			// fall-through rationale (line `// …` comments always arrive
+			// with a source `\n` before the close).
+			if (_arr.length == 0 && _trailLC.length == 0
+					&& _trailOpen != null && StringTools.startsWith(_trailOpen, '/*')) {
+				final _openDoc:anyparse.core.Doc = _dt(_trailOpen);
+				if (_trailClose != null)
+					_dc([_dt($v{openText}), _openDoc, _dt($v{closeText}), trailingCommentDocVerbatim(_trailClose, opt)]);
+				else
+					_dc([_dt($v{openText}), _openDoc, _dt($v{closeText})]);
+			} else if (_arr.length == 0 && _trailLC.length == 0 && _trailOpen == null) {
 				if (_trailClose != null) $emptyTrailExpr
 				else _dt($v{emptyText});
 			} else {
@@ -4032,7 +4094,24 @@ class WriterLowering {
 			final _trailBB:Bool = $trailBB;
 			final _trailClose:Null<String> = $trailClose;
 			final _trailOpen:Null<String> = $trailOpen;
-			if (_arr.length == 0 && _trailLC.length == 0 && _trailOpen == null) {
+			// ω-open-trailing-alt: empty Star with only a same-line block-
+			// style trail comment after the open lit (`[ /* foo */ ]`,
+			// `{ /* nop */ }`) emits flat tight `[<comment>]`. Line-style
+			// `_trailOpen` ALWAYS arrives with a source newline before the
+			// close (`// …` would otherwise consume `]` as comment body),
+			// so it falls through to the multi-line path. The block-style
+			// gate also rules out the `[ /* foo */\n]` case — the source
+			// newline lands in the loop's terminal `_lead`, but that path
+			// has no element to attach to and currently degrades; if/when
+			// we synth a "newlineBeforeClose" slot, this gate tightens.
+			if (_arr.length == 0 && _trailLC.length == 0
+					&& _trailOpen != null && StringTools.startsWith(_trailOpen, '/*')) {
+				final _openDoc:anyparse.core.Doc = _dt(_trailOpen);
+				if (_trailClose != null)
+					_dc([_dt($v{openText}), _openDoc, _dt($v{closeText}), trailingCommentDocVerbatim(_trailClose, opt)]);
+				else
+					_dc([_dt($v{openText}), _openDoc, _dt($v{closeText})]);
+			} else if (_arr.length == 0 && _trailLC.length == 0 && _trailOpen == null) {
 				if (_trailClose != null) $emptyTrailExpr
 				else _dt($v{emptyText});
 			} else {
