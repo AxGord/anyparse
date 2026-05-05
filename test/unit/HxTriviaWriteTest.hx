@@ -87,6 +87,58 @@ class HxTriviaWriteTest extends Test {
 		Assert.equals(source + '\n', out);
 	}
 
+	/**
+	 * ω-orphan-trivia-alt — orphan line comments inside a BlockStmt /
+	 * BlockExpr / ArrayExpr (Alt-branch close-peek `@:trivia` Stars) must
+	 * survive round-trip. Pre-slice these were dropped because the
+	 * Lowering Case 4 trivia loop discarded `_lead` on close-peek break;
+	 * the synth ctor had no positional slots to carry the captured
+	 * `blankBefore` / `leadingComments` and the writer passed null through
+	 * to the helper. issue_360 sameline fixture's primary 88-byte diff was
+	 * exactly this mechanism — comments inside `try { … } catch (e:T)
+	 * { /* dropped *\/ }` block bodies.
+	 */
+	public function testOrphanCommentInsideBlockBodyRoundTrip():Void {
+		final source:String =
+			'class Foo {\n'
+			+ '\tfunction bar() {\n'
+			+ '\t\ttry {\n'
+			+ '\t\t\t// inside try\n'
+			+ '\t\t} catch (e:Err) {\n'
+			+ '\t\t\t// inside catch\n'
+			+ '\t\t}\n'
+			+ '\t\t{\n'
+			+ '\t\t\t// inside plain block\n'
+			+ '\t\t}\n'
+			+ '\t}\n'
+			+ '}';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out:String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals(source + '\n', out);
+	}
+
+	/**
+	 * ω-orphan-trivia-alt — trailing line comment after the LAST stmt
+	 * inside a block (between `;` and `}`) must survive. Variant of
+	 * the orphan-comment fix that exercises the `_arr.length > 0`
+	 * code path in `triviaBlockStarExpr` (`_trailBB` triggers `_dhl()`
+	 * before the captured trail comments).
+	 */
+	public function testTrailingCommentAfterLastStmtInBlockRoundTrip():Void {
+		final source:String =
+			'class Foo {\n'
+			+ '\tfunction bar() {\n'
+			+ '\t\t{\n'
+			+ '\t\t\tx;\n'
+			+ '\t\t\t// after last\n'
+			+ '\t\t}\n'
+			+ '\t}\n'
+			+ '}';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out:String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals(source + '\n', out);
+	}
+
 	public function testTwoDeclsEachWithLeadingComment():Void {
 		final source:String = '// first decl\nclass A {}\n\n// second decl\nclass B {}';
 		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);

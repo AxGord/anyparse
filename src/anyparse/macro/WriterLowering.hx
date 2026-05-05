@@ -134,8 +134,13 @@ class WriterLowering {
 			// predicates (different ctor shapes), so the predicates compose
 			// additively in `extraArgs` without collision.
 			final hasPostfixCloseTrailing:Bool = ctx.trivia && TriviaTypeSynth.isPostfixCloseTrailingBranch(branch);
+			// ω-orphan-trivia-alt: when the branch grows openTrailing it
+			// also grows trailingBlankBefore (`argNames[3]`) and
+			// trailingLeading (`argNames[4]`). Same `isAltCloseTrailingBranch
+			// && @:lead && !@:tryparse` gate as `hasOpenTrailing` — the
+			// synth and parser sides both emit conditionally on it.
 			final extraArgs:Int = ((hasCloseTrailing || hasTrailOptFlag || hasCaptureSource) ? 1 : 0)
-				+ (hasOpenTrailing ? 1 : 0)
+				+ (hasOpenTrailing ? 3 : 0)
 				+ (hasPostfixCloseTrailing ? 1 : 0);
 			final argNames:Array<String> = [for (i in 0...children.length + extraArgs) '_v$i'];
 
@@ -1006,17 +1011,11 @@ class WriterLowering {
 
 		final isTriviaStar:Bool = ctx.trivia && starNode.annotations.get('trivia.starCollects') == true;
 		if (isTriviaStar) {
-			// ω-orphan-trivia: Alt-branch Star still has no synth trailing
-			// orphan slots — `TrailingBlankBefore`/`TrailingLeading` are
-			// Seq-only. Pass null so leftover orphan trivia inside e.g.
-			// `BlockStmt({ /*c*/ })` continues to drop until that synth
-			// is widened.
-			//
 			// ω-close-trailing-alt: same-line trailing comment captured
-			// after the close literal (`} // catch`) IS available — the
-			// synth ctor grew a positional arg (`closeTrailing`) and
-			// `argNames[1]` is its writer-side binding. Plain mode keeps
-			// the pre-slice null path (no extra arg, no extra binding).
+			// after the close literal (`} // catch`). The synth ctor
+			// grew a positional arg (`closeTrailing`) and `argNames[1]`
+			// is its writer-side binding. Plain mode keeps the pre-slice
+			// null path (no extra arg, no extra binding).
 			//
 			// ω-open-trailing-alt: parallel slot for the same-line trailing
 			// comment captured AFTER the open literal (`[ /* foo */]` for
@@ -1027,12 +1026,31 @@ class WriterLowering {
 			// loop's terminal `_lead` is discarded on close-peek break, and
 			// `collectTrivia`'s newline-anchored scan skips same-line
 			// comments after the open lit anyway.
+			final hasOrphan:Bool = TriviaTypeSynth.isAltCloseTrailingBranch(branch)
+				&& branch.readMetaString(':lead') != null
+				&& !branch.hasMeta(':tryparse');
 			final trailCloseAccess:Null<Expr> = TriviaTypeSynth.isAltCloseTrailingBranch(branch)
 				? macro $i{argNames[1]}
 				: null;
-			final trailOpenAccess:Null<Expr> = TriviaTypeSynth.isAltCloseTrailingBranch(branch)
-					&& branch.readMetaString(':lead') != null
+			final trailOpenAccess:Null<Expr> = hasOrphan
 				? macro $i{argNames[2]}
+				: null;
+			// ω-orphan-trivia-alt: orphan trivia between the last Star
+			// element and the close literal (e.g. trailing line comment
+			// inside `try { p(); /* dropped */ }`). Synth grew two
+			// positional args (`trailingBlankBefore` at `argNames[3]`,
+			// `trailingLeading` at `argNames[4]`) for `isAltCloseTrailingBranch`
+			// branches with `@:lead`. The Lowering Case 4 trivia loop
+			// captures `_lead.blankBefore` / `_lead.leadingComments` on
+			// close-peek break and forwards them. Without this, an inner
+			// `// foo` between the last stmt and `}` is dropped at parse —
+			// `collectTrivia` runs on the final iteration but its result is
+			// discarded on the break.
+			final trailBBAccess:Null<Expr> = hasOrphan
+				? macro $i{argNames[3]}
+				: null;
+			final trailLCAccess:Null<Expr> = hasOrphan
+				? macro $i{argNames[4]}
 				: null;
 			// ω-trivia-sep: sep-Star Alt branches (e.g. `HxExpr.ArrayExpr`)
 			// route to the dedicated sep helper. Block-style (no sep)
@@ -1046,11 +1064,11 @@ class WriterLowering {
 			if (sepText != null) {
 				final wrapRulesField:Null<String> = branch.fmtReadString('wrapRules');
 				parts.push(triviaSepStarExpr(
-					argsAccess, null, null, trailCloseAccess, trailOpenAccess, elemFn, leadText, trailText, sepText,
+					argsAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, leadText, trailText, sepText,
 					wrapRulesField
 				));
 			} else {
-				parts.push(triviaBlockStarExpr(argsAccess, null, null, trailCloseAccess, trailOpenAccess, elemFn, leadText, trailText, true));
+				parts.push(triviaBlockStarExpr(argsAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, leadText, trailText, true));
 			}
 		} else if (sepText != null) {
 			// See `emitWriterStarField` — `@:sep('\n')` routes to a flat

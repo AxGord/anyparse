@@ -467,8 +467,26 @@ class TriviaTypeSynth {
 			// slot, so capturing one would silently drop the comment at
 			// write time. Today no Alt branch combines `:trivia + :tryparse`
 			// + `:lead` so the guard is dormant; kept for forward parity.
-			if (branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse'))
+			if (branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse')) {
 				args.push({name: 'openTrailing', type: nullStrCT});
+				// ω-orphan-trivia-alt: orphan trivia between the last Star
+				// element and the close literal (e.g. trailing line comment
+				// inside `try { p(); /* dropped */ }`). Mirror of the Seq-
+				// struct `<field>TrailingBlankBefore` / `<field>TrailingLeading`
+				// slots from `buildStarTrailingSlots` — the Lowering Case 4
+				// trivia loop captures `_lead.blankBefore` and `_lead.leadingComments`
+				// on close-peek break and pushes them as the next two
+				// positional args. Writer reads via `argNames[3]` /
+				// `argNames[4]`. Gated on `@:lead`-present for predictable arg
+				// position; today's `isAltCloseTrailingBranch` consumers all
+				// carry `@:lead`.
+				final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
+				final arrayStrCT:ComplexType = TPath({
+					pack: [], name: 'Array', params: [TPType(strCT)]
+				});
+				args.push({name: 'trailingBlankBefore', type: boolCT});
+				args.push({name: 'trailingLeading', type: arrayStrCT});
+			}
 		}
 		// ω-trailopt-source-track: `@:trailOpt(...)` Alt branches with a
 		// single Ref child grow a positional `trailPresent:Bool` arg

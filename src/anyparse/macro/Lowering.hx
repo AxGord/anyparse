@@ -1084,7 +1084,16 @@ class Lowering {
 				// scan anyway.
 				final hasOpenTrail:Bool = branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse');
 				final ctorArgsTrivia:Array<Expr> = [macro _items, macro _closeTrail];
-				if (hasOpenTrail) ctorArgsTrivia.push(macro _openTrail);
+				if (hasOpenTrail) {
+					ctorArgsTrivia.push(macro _openTrail);
+					// ω-orphan-trivia-alt: parallel to the Seq-struct
+					// trail-orphan capture in `emitTriviaStarFieldSteps`.
+					// Captured into mutable locals on the close-peek break
+					// (see loop body below) so trivia between the last Star
+					// element and the close literal survives round-trip.
+					ctorArgsTrivia.push(macro _trailBB);
+					ctorArgsTrivia.push(macro _trailLC);
+				}
 				final ctorCallTrivia:Expr = {
 					expr: ECall(ctorRef, ctorArgsTrivia),
 					pos: Context.currentPos(),
@@ -1109,9 +1118,15 @@ class Lowering {
 					expectLit(ctx, $v{leadText});
 					final _openTrail:Null<String> = collectTrailingFull(ctx);
 					final _items:Array<$wrappedCT> = [];
+					var _trailBB:Bool = false;
+					var _trailLC:Array<String> = [];
 					while (true) {
 						final _lead = collectTrivia(ctx);
-						if ($closeNextOrEofExpr) break;
+						if ($closeNextOrEofExpr) {
+							_trailBB = _lead.blankBefore;
+							_trailLC = _lead.leadingComments;
+							break;
+						}
 						final _node:$elemCT = $elemCall;
 						$sepMatchExpr;
 						final _trailing:Null<String> = collectTrailing(ctx);
