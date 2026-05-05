@@ -13,11 +13,19 @@ package anyparse.grammar.haxe;
  * established shape (mirror of `HxUntypedFnBody.block` consuming the
  * `untyped` kw before its `HxFnBlock` Ref).
  *
+ * `@:fmt(anonFuncParens)` routes the kw-trailing space slot through
+ * the runtime `WhitespacePolicy` knob (paren-side semantics): default
+ * `None` keeps `function<T>(...)` / `function(...)` tight, `Before` /
+ * `Both` emit `function <T>(...)` / `function (...)`. Mirrors the
+ * haxe-formatter convention where `function`-led parens inside a
+ * metadata arg track `anonFuncParamParens` — see
+ * `MarkWhitespace.determinePOpenPolicy` default fall-through.
+ *
  * Trivia: `HxOverloadFn` is bearing transitively through
  * `HxFnBody.BlockBody(HxFnBlock)`, so this wrapper is bearing too —
  * `TriviaTypeSynth` synthesises `HxOverloadArgsT` automatically.
  */
 @:peg
 typedef HxOverloadArgs = {
-	@:kw('function') @:fmt(kwTight) var fn:HxOverloadFn;
+	@:kw('function') @:fmt(anonFuncParens) var fn:HxOverloadFn;
 }

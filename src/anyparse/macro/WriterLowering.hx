@@ -1170,18 +1170,25 @@ class WriterLowering {
 						Context.fatalError('WriterLowering: knob-form @:fmt(leftCurly(\'<knob>\')) on kw-led mandatory Ref not supported (no OptSpace producer at this site)', Context.currentPos());
 					parts.push(macro _dt($v{kwLead}));
 					parts.push(leftCurlySeparator(child));
-				} else if (child.fmtHasFlag('kwTight')) {
-					// `@:fmt(kwTight)` on a kw-led mandatory Ref drops the
-					// default `kwLead + ' '` trailing space so the kw abuts
-					// the sub-rule's first token. First consumer is
+				} else if (child.fmtHasFlag('anonFuncParens')) {
+					// `@:fmt(anonFuncParens)` on a kw-led mandatory Ref
+					// routes the kw-trailing space slot through the
+					// runtime `WhitespacePolicy` knob (paren-side
+					// semantics — `Before` / `Both` emit a space, `None`
+					// / `After` collapse it). First consumer is
 					// `HxOverloadArgs.fn` (`@:kw('function')` Ref to
-					// `HxOverloadFn`) — `function<T>(...)` and
-					// `function(...)` both want no space between
-					// `function` and the leading `<` / `(`. Mirrors the
-					// haxe-formatter convention for the metadata-arg
-					// function form (no equivalent of `anonFuncParens`
-					// applies inside `@:overload(...)`).
+					// `HxOverloadFn`) — default `None` keeps
+					// `function<T>(...)` / `function(...)` tight, and
+					// `whitespace.parenConfig.anonFuncParamParens.openingPolicy:
+					// "before"` flips both to `function <T>(...)` /
+					// `function (...)`. Mirrors the haxe-formatter
+					// convention where `function`-led parens inside a
+					// metadata arg track `anonFuncParamParens` (see
+					// `MarkWhitespace.determinePOpenPolicy` default
+					// fall-through).
 					parts.push(macro _dt($v{kwLead}));
+					final policySpace:Null<Expr> = kwTrailingSpacePolicyParenSide(child, ['anonFuncParens']);
+					if (policySpace != null) parts.push(policySpace);
 				} else {
 					parts.push(macro _dt($v{kwLead + ' '}));
 				}

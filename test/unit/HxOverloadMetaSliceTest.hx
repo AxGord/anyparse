@@ -1,10 +1,12 @@
 package unit;
 
 import utest.Assert;
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxDecl;
 import anyparse.grammar.haxe.HxMetadata;
 import anyparse.grammar.haxe.HxModule;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
 
 /**
@@ -73,6 +75,25 @@ class HxOverloadMetaSliceTest extends HxTestHelpers {
 	public function testRoundTripMalformedOverloadFallsBackToPlain():Void {
 		final src:String = 'class M {\n\t@:overload(function())\n\tfunction get():Void;\n}';
 		roundTrip(src);
+	}
+
+	public function testWriterEmitsSpaceBeforeParenWhenAnonFuncParensBefore():Void {
+		// Body-bearing form so the structural OverloadMeta path fires —
+		// the body-less form `@:overload(function())` still rolls back
+		// to verbatim PlainMeta because `HxOverloadFn.body` is mandatory.
+		final src:String = 'class M {\n\t@:overload(function():Void {})\n\tfunction main();\n}';
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"whitespace": {"parenConfig": {"anonFuncParamParens": {"openingPolicy": "before"}}}}');
+		final out:String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+		Assert.isTrue(out.indexOf('@:overload(function ()') >= 0,
+			'expected `@:overload(function ()` under anonFuncParens=Before in: <$out>');
+	}
+
+	public function testWriterDefaultKeepsTightOverloadParen():Void {
+		final src:String = 'class M {\n\t@:overload(function():Void {})\n\tfunction main();\n}';
+		final out:String = HxModuleWriter.write(HaxeModuleParser.parse(src));
+		Assert.isTrue(out.indexOf('@:overload(function()') >= 0,
+			'expected default tight `function()` inside `@:overload(...)` in: <$out>');
 	}
 
 	private function expectClassMembers(ast:HxModule) {
