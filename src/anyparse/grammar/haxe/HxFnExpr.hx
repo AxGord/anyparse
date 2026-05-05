@@ -26,6 +26,13 @@ package anyparse.grammar.haxe;
  *    `function(res) trace(res)` appears inside `Call(args)` where
  *    the next char is `,` or `)`, not `;`.
  *
+ * `typeParams` covers typed anonymous functions
+ * `function<T>(...)` — most commonly seen inside `@:overload(...)`
+ * metadata args (`@:overload(function<T>(key:String):T {})`) but also
+ * valid in any expression position. The optional `<T,...>` block sits
+ * before `params` and routes through the same `HxTypeParamDecl`
+ * grammar as `HxFnDecl.typeParams`.
+ *
  * Named local function expressions (`function foo() body` in
  * expression position) are out of scope for this slice — if the
  * input has an identifier between `function` and `(`, the
@@ -52,6 +59,7 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxFnExpr = {
+	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose) var typeParams:Null<Array<HxTypeParamDecl>>;
 	@:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams'), keepInnerWhenEmpty('anonFuncParamParensKeepInnerWhenEmpty')) var params:Array<HxLambdaParam>;
 	@:optional @:fmt(typeHintColon) @:lead(':') var returnType:Null<HxType>;
 	@:optional @:absentOn(',', ')', ';', '}', ']') @:fmt(leftCurly) var body:Null<HxFnExprBody>;

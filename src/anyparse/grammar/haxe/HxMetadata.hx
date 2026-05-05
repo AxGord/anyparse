@@ -5,20 +5,16 @@ package anyparse.grammar.haxe;
  * `HxMetaExpr` — `@name` (user metadata) or `@:name` (compiler
  * metadata), with an optional parenthesised argument block.
  *
- * Dispatched as an `@:peg` enum across four branches in this order:
+ * Dispatched as an `@:peg` enum across three branches in this order:
  *
- *  - `OverloadMeta(HxOverloadArgs)` — kw-led commit on `@:overload`,
- *    routes through the structural `HxOverloadFn` payload. Body-
- *    bearing forms (`@:overload(function():Void {})`) win this
- *    branch; body-less `@:overload(function())` fails the mandatory
- *    `body:HxFnBody` and falls through.
  *  - `MetaCall(HxMetaCallArgs)` — paren-bearing structural form
  *    `@:name(args)`. The `HxMetaNameTight` regex uses positive
  *    lookahead `(?=\()` so any whitespace between name and `(`
  *    fails the regex and rolls back through `tryBranch`. Args parse
  *    through the standard `HxExpr` pipeline so format-driven knobs
- *    apply uniformly. This branch claims `@:overload(function())`
- *    after `OverloadMeta` rolls back on body-less form.
+ *    apply uniformly. This branch claims `@:overload(...)` shapes
+ *    (typed and body-less anonymous functions parse via
+ *    `HxExpr.FnExpr` → `HxFnExpr`).
  *  - `Meta(HxMetaName)` — bare `@:name` (no parens). Reached after
  *    `MetaCall` rolls back because no tight `(` follows the name.
  *  - `PlainMeta(HxMetaRaw)` — regex catch-all, preserves byte-
@@ -43,7 +39,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 enum HxMetadata {
-	@:kw('@:overload') @:wrap('(', ')') OverloadMeta(args:HxOverloadArgs);
 	MetaCall(call:HxMetaCallArgs);
 	Meta(name:HxMetaName);
 	PlainMeta(raw:HxMetaRaw);

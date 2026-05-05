@@ -16,8 +16,8 @@ import anyparse.grammar.haxe.HxModuleWriter;
  * Mirror of the meta Star already on `HxMemberDecl`. Captures stay as
  * verbatim regex matches via `HxMetadata.PlainMeta(raw:HxMetaRaw)` —
  * the regex catch-all branch of the `HxMetadata` enum (structural
- * branches like `OverloadMeta` exist for compiler metas with
- * function-decl arguments).
+ * branches like `MetaCall` / `Meta` claim `@:meta(args)` and `@:meta`
+ * shapes first via `tryBranch` rollback ordering).
  *
  * Capability-only target: corpus fixtures `popen_in_metadata.hxtest`
  * (`@:allow(pack.Base) @test("foo") class Main {}`) and

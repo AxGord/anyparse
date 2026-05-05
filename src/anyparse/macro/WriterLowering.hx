@@ -751,13 +751,12 @@ class WriterLowering {
 				|| subStructStartsWithBodyBreak(refName)
 				|| subStructStartsWithBareBodyBreaks(refName)
 				|| subStructStartsWithTightLead(refName)
-				// Combined kw + `@:wrap`/`@:lead` on the same single-Ref
-				// branch composes as a tight visual unit: `@:overload(...)`
-				// (kw `@:overload` + wrap lead `(`) renders without a
-				// space between them. Strip the kw's trailing space so
-				// the lead literal abuts the kw — first consumer is
-				// `HxMetadata.OverloadMeta`. Symmetric with the parser-
-				// side composition extension in Lowering Case 3.
+				// Combined kw + `@:lead` on the same single-Ref branch
+				// composes as a tight visual unit: kw and lead literal
+				// render adjacent without a separating space. Strip the
+				// kw's trailing space so the lead literal abuts the kw.
+				// Symmetric with the parser-side composition in Lowering
+				// Case 3.
 				|| leadText != null;
 			// ω-if-policy / ω-control-flow-policies / ω-try-policy /
 			// ω-anon-fn-paren-policy: an enum branch with `@:fmt(<flag>)`
@@ -1340,14 +1339,15 @@ class WriterLowering {
 					// runtime `WhitespacePolicy` knob (paren-side
 					// semantics — `Before` / `Both` emit a space, `None`
 					// / `After` collapse it). First consumer is
-					// `HxOverloadArgs.fn` (`@:kw('function')` Ref to
-					// `HxOverloadFn`) — default `None` keeps
+					// `HxExpr.FnExpr` (`@:kw('function')` Ref to
+					// `HxFnExpr`) — default `None` keeps
 					// `function<T>(...)` / `function(...)` tight, and
 					// `whitespace.parenConfig.anonFuncParamParens.openingPolicy:
 					// "before"` flips both to `function <T>(...)` /
 					// `function (...)`. Mirrors the haxe-formatter
-					// convention where `function`-led parens inside a
-					// metadata arg track `anonFuncParamParens` (see
+					// convention where `function`-led parens (also when
+					// reached inside an `@:overload(...)` metadata arg)
+					// track `anonFuncParamParens` (see
 					// `MarkWhitespace.determinePOpenPolicy` default
 					// fall-through).
 					parts.push(macro _dt($v{kwLead}));

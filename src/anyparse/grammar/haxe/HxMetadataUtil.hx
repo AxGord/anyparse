@@ -12,18 +12,17 @@ package anyparse.grammar.haxe;
  *
  * For `PlainMeta(raw)`, returns the verbatim regex match.
  *
- * For structurally-parsed branches (e.g. `OverloadMeta`), the source
- * form must be reconstructed by the writer. Since unit tests rarely
- * need this and the writer's full Doc pipeline is heavy, those
- * branches throw — tests that inspect structural metas should switch
- * on the variant directly.
+ * For structurally-parsed branches (`MetaCall`), the source form
+ * must be reconstructed by the writer. Since unit tests rarely need
+ * this and the writer's full Doc pipeline is heavy, those branches
+ * throw — tests that inspect structural metas should switch on the
+ * variant directly.
  */
 class HxMetadataUtil {
 
 	public static inline function source(m:HxMetadata):String {
 		return switch m {
 			case PlainMeta(raw): (raw : String);
-			case OverloadMeta(_): throw 'HxMetadataUtil.source: structural OverloadMeta cannot be re-emitted as a String — switch on the variant directly';
 			case MetaCall(_): throw 'HxMetadataUtil.source: structural MetaCall cannot be re-emitted as a String — switch on the variant directly';
 			case Meta(name): '$name';
 		}
