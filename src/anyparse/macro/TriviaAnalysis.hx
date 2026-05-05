@@ -11,9 +11,15 @@ import haxe.macro.Expr;
  *
  *  1. **Direct detection** — scan every `ShapeNode` tree and mark Star
  *     nodes whose grammar-source field/ctor-arg carried the `@:trivia`
- *     meta. Stored as `trivia.starCollects = true` on the Star node
- *     itself, consulted later by Lowering when generating Trivia-mode
- *     Star-element parse loops.
+ *     meta, AND auto-mark Star args of `@:postfix(open, close)` enum
+ *     branches (the postfix Star-suffix shape, e.g. `Call(operand, args)`)
+ *     even without an explicit `@:trivia` — `Lowering`'s postfix-loop
+ *     and `WriterLowering.lowerPostfixStar` route through dedicated
+ *     paths that don't trigger `triviaSepStarExpr`'s over-break, so the
+ *     auto-mark is safe and avoids the writer-side multi-line predicate
+ *     regression parked in 2026-05-01. Stored as `trivia.starCollects = true`
+ *     on the Star node itself, consulted later by Lowering when
+ *     generating Trivia-mode Star-element parse loops.
  *
  *  2. **Transitive closure** — a rule is "trivia-bearing" if it
  *     directly contains a Star with `@:trivia`, OR any of its Ref
@@ -33,6 +39,19 @@ class TriviaAnalysis {
 
 	public static function run(result:ShapeBuilder.ShapeResult):Void {
 		for (name => node in result.rules) markStarsWithTrivia(node);
+		// ω-postfix-starsuffix-trivia: postfix Star-suffix branches
+		// (e.g. `@:postfix('(', ')') @:sep(',') Call(operand, args)`)
+		// auto-mark their args' Star with `trivia.starCollects = true`
+		// without an explicit `@:trivia`. The synth wraps each elem in
+		// `Trivial<elemT>`, the parser per-element captures trailing
+		// comments via `lowerPostfixLoop`'s trivia branch, the writer
+		// reads `.node`/`.trailingComment` per arg in `lowerPostfixStar`.
+		// `@:trivia` is intentionally NOT used — it would route the
+		// writer through `triviaSepStarExpr` whose multi-line predicate
+		// over-breaks call-arg lists (parked 2026-05-01,
+		// `feedback_trivia_not_freebie.md`). The dedicated
+		// `lowerPostfixStar` writer path is unaffected.
+		for (name => node in result.rules) markPostfixStarSuffix(node);
 		final directlyBearing:Map<String, Bool> = [];
 		for (name => node in result.rules) directlyBearing[name] = hasAnyTriviaStar(node);
 		final bearing:Map<String, Bool> = [];
@@ -72,6 +91,25 @@ class TriviaAnalysis {
 			if (stars.length == 1) stars[0].annotations.set('trivia.starCollects', true);
 		}
 		for (child in node.children) markStarsWithTrivia(child);
+	}
+
+	private static function markPostfixStarSuffix(node:ShapeNode):Void {
+		// Postfix branches live as Seq children of the rule's Alt root.
+		// Detect: branch.base.meta has `:postfix` with 2 args (open, close)
+		// AND children = [Ref operand, Star args]. Mark the Star.
+		if (node.kind == Seq && hasPostfixPair(node.annotations.get('base.meta'))
+			&& node.children.length == 2
+			&& node.children[0].kind == Ref
+			&& node.children[1].kind == Star) {
+			node.children[1].annotations.set('trivia.starCollects', true);
+		}
+		for (child in node.children) markPostfixStarSuffix(child);
+	}
+
+	private static function hasPostfixPair(meta:Null<Metadata>):Bool {
+		if (meta == null) return false;
+		for (e in meta) if (e.name == ':postfix' && e.params.length == 2) return true;
+		return false;
 	}
 
 	private static function hasTrivia(meta:Null<Metadata>):Bool {

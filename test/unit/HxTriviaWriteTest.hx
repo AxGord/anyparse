@@ -669,4 +669,35 @@ class HxTriviaWriteTest extends Test {
 		final out:String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals('${source}\n', out);
 	}
+
+	/**
+	 * ω-postfix-starsuffix-trivia — inline `/* x *\/` block comments
+	 * between Call args round-trip in flat layout. Pre-slice, comments
+	 * inside `(args)` were dropped at parse: the postfix Star-suffix
+	 * branch had no trivia path and `skipWs(ctx)` between args ate any
+	 * trailing comment before any capture. Reproduces
+	 * `whitespace/commented_out_parameter.hxtest`'s mechanism in a
+	 * minimal shape.
+	 */
+	public function testCallArgFlatInlineBlockComments():Void {
+		final source:String = 'class Main {\n\tstatic function main() {\n\t\tfoo(a, "" /* x */, "" /* y */);\n\t}\n}';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out:String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals(source + '\n', out);
+	}
+
+	/**
+	 * ω-postfix-starsuffix-trivia — multi-line trail capture: a comment
+	 * physically on the line AFTER an arg but BEFORE its trailing sep
+	 * is treated as trailing-of-arg (mirror of fork's reformat). The
+	 * writer renders the comment cuddled to the arg in the output
+	 * regardless of source position.
+	 */
+	public function testCallArgMultiLineTrailingComment():Void {
+		final source:String = 'class Main {\n\tstatic function main() {\n\t\tfoo(a, ""\n\t\t\t/* tag */, b);\n\t}\n}';
+		final expected:String = 'class Main {\n\tstatic function main() {\n\t\tfoo(a, "" /* tag */, b);\n\t}\n}\n';
+		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out:String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals(expected, out);
+	}
 }

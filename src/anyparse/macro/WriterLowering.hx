@@ -274,6 +274,30 @@ class WriterLowering {
 			expr: EConst(CIdent(writeFnName)),
 			pos: Context.currentPos(),
 		};
+		// ω-postfix-starsuffix-trivia: per-arg Doc comprehension below
+		// must mirror `lowerPostfixStar`'s trivia branch: when args are
+		// `Array<Trivial<HxExprT>>` (auto-wrapped by TriviaTypeSynth),
+		// read `.node` for the recursive write and append
+		// `.trailingComment` verbatim. Plain-mode and grammars that
+		// don't auto-collect on the postfix Star-suffix keep the
+		// pre-slice direct `_a` access.
+		final cbStar:ShapeNode = cb.children[1];
+		final isCallTriviaStar:Bool = ctx.trivia
+			&& cbStar.annotations.get('trivia.starCollects') == true;
+		final argDocsExpr:Expr = isCallTriviaStar
+			? macro {
+				final _argDocs:Array<anyparse.core.Doc> = [];
+				for (_a in _args) {
+					final _aDoc:anyparse.core.Doc = $writeIdent(_a.node, opt, -1);
+					final _aTc:Null<String> = _a.trailingComment;
+					// `trailingCommentDocVerbatim` already prepends ' '.
+					_argDocs.push(_aTc != null
+						? _dc([_aDoc, trailingCommentDocVerbatim(_aTc, opt)])
+						: _aDoc);
+				}
+				_argDocs;
+			}
+			: macro [for (_a in _args) $writeIdent(_a, opt, -1)];
 		// Receiver renders at the postfix precedence so a binop /
 		// ternary receiver gets parenthesised — `(a + b).foo().bar()`
 		// must keep its parens or the chain misreads as
@@ -294,7 +318,7 @@ class WriterLowering {
 					case Call(_op, _args):
 						switch _op {
 							case FieldAccess(_prev, _fld):
-								final _argDocs:Array<anyparse.core.Doc> = [for (_a in _args) $writeIdent(_a, opt, -1)];
+								final _argDocs:Array<anyparse.core.Doc> = $argDocsExpr;
 								final _argsDoc:anyparse.core.Doc = $argsListExpr;
 								_segs.unshift(_dc([_dt('.' + _fld), _argsDoc]));
 								_cursor = _prev;
@@ -793,7 +817,18 @@ class WriterLowering {
 		final elemFn:String = isSelfRef ? writeFnName : writeFnFor(elemRefName);
 		final elemSep:String = branch.annotations.get('lit.sepText') ?? ',';
 
-		final elemCallArgs:Array<Expr> = [macro _args[_i], macro opt];
+		// ω-postfix-starsuffix-trivia: when TriviaAnalysis auto-marks
+		// the postfix Star-suffix Star with `trivia.starCollects=true`
+		// (Call.args, IndexAccess analogues, etc.), TriviaTypeSynth wraps
+		// each elem in `Trivial<elemT>`. Read `.node` for the element
+		// write call and append `.trailingComment` (verbatim, with
+		// delimiters intact) as `_dt(' ') + trailingCommentDoc` after
+		// the element when non-null. Plain mode and non-trivia-collecting
+		// Stars keep the pre-slice direct `_args[_i]` access.
+		final isTriviaStar:Bool = ctx.trivia
+			&& starNode.annotations.get('trivia.starCollects') == true;
+		final elemRead:Expr = isTriviaStar ? macro _args[_i].node : macro _args[_i];
+		final elemCallArgs:Array<Expr> = [elemRead, macro opt];
 		if (isSelfRef && hasPratt) elemCallArgs.push(macro -1);
 		final elemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, elemCallArgs),
@@ -842,12 +877,24 @@ class WriterLowering {
 		if (openSpace != null) dcArgs.push(openSpace);
 		dcArgs.push(sepListCall);
 		final dcExpr:Expr = dcCall(dcArgs);
+		final pushElemExpr:Expr = isTriviaStar
+			? macro {
+				final _elem:anyparse.core.Doc = $elemCall;
+				final _tc:Null<String> = _args[_i].trailingComment;
+				// `trailingCommentDocVerbatim` already prepends ' ' to
+				// the captured content, so the per-arg Doc is just
+				// `_elem ++ trailingDoc` — no extra `_dt(' ')`.
+				_docs.push(_tc != null
+					? _dc([_elem, trailingCommentDocVerbatim(_tc, opt)])
+					: _elem);
+			}
+			: macro _docs.push($elemCall);
 		return macro {
 			final _args = $argsAccess;
 			final _docs:Array<anyparse.core.Doc> = [];
 			var _i:Int = 0;
 			while (_i < _args.length) {
-				_docs.push($elemCall);
+				$pushElemExpr;
 				_i++;
 			}
 			$dcExpr;

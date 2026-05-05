@@ -614,7 +614,96 @@ class Lowering {
 					: macro ctx.pos < ctx.input.length && !peekLit(ctx, $v{close});
 				final sepText:Null<String> = branch.annotations.get('lit.sepText');
 				final ctorCall:Expr = {expr: ECall(ctorRef, [macro left, macro _args]), pos: Context.currentPos()};
-				if (sepText != null) {
+				// ω-postfix-starsuffix-trivia: when TriviaAnalysis marks
+				// this Star with `trivia.starCollects=true` (auto-set for
+				// postfix Star-suffix branches), the synth wraps the
+				// args type as `Array<Trivial<elemCT>>` and the parser
+				// captures per-arg trailing comments. Mirrors lowerStruct's
+				// trivia-Star pattern (line 985-1009): horizontal-only-skip
+				// before sep match so an inline `// comment` or `/* x */`
+				// after each arg lands in `collectTrailing` instead of
+				// being eaten by `skipWs`. Without this path, inline
+				// trailing comments inside Call args / IndexAccess
+				// brackets are silently dropped at parse time.
+				final triviaCollect:Bool = ctx.trivia
+					&& starNode.annotations.get('trivia.starCollects') == true;
+				if (triviaCollect && sepText != null) {
+					final wrappedCT:ComplexType = TPath({
+						pack: ['anyparse', 'runtime'], name: 'Trivial', params: [TPType(elemCT)]
+					});
+					final sepCharCode:Int = sepText.charCodeAt(0);
+					// Per-element loop: leading-trivia → close-peek break →
+					// parse → multi-line trailing scan → matchLit(sep).
+					//
+					// Trailing comments are captured up to the next sep
+					// or close, even across newlines (mirrors fork's
+					// `arg \n /* c */, b` interpretation: the comment is
+					// trailing-of-arg, not leading-of-next). Implementation:
+					// save pos, run `collectTrivia` (multi-line), check if
+					// we're at sep — if so, the swept trivia was trailing.
+					// Otherwise rewind so the trivia stays available for
+					// the next iter's `_lead` capture.
+					//
+					// Multi-comment trailing (rare) is concatenated with
+					// `\n` between captures — `trailingCommentDocVerbatim`
+					// emits as a verbatim run.
+					//
+					// Sep-after-newline (`arg\n,bar`) tolerance: when the
+					// post-sweep position landed past `\n` whitespace and
+					// no comments need preserving (sweep yielded none, or
+					// they were attached as trailing), we KEEP that swept
+					// position so `matchLit(sep)` finds the sep. Only when
+					// the sweep yielded comments NOT at sep do we rewind
+					// — preserving them for the next iter's `_lead`.
+					macro {
+						skipWs(ctx);
+						final _args:Array<$wrappedCT> = [];
+						while (true) {
+							final _lead = collectTrivia(ctx);
+							if (!($closeNotNextExpr)) break;
+							final _node:$elemCT = $elemCall;
+							var _trailing:Null<String> = null;
+							// Step 1: same-line trail capture. Returns
+							// captured slice with delimiters or null.
+							final _sameLine:Null<String> = collectTrailingFull(ctx);
+							if (_sameLine != null) _trailing = _sameLine;
+							// Step 2: multi-line trail look-ahead.
+							final _preSweepPos:Int = ctx.pos;
+							final _swept = collectTrivia(ctx);
+							final _atSep:Bool = ctx.pos < ctx.input.length
+								&& ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode};
+							if (_atSep && _swept.leadingComments.length > 0) {
+								final _addl:String = _swept.leadingComments.join('\n');
+								_trailing = _trailing != null
+									? _trailing + '\n' + _addl
+									: _addl;
+							} else if (_swept.leadingComments.length > 0) {
+								// Comments belong to next iter's _lead —
+								// rewind so they're re-captured (and to
+								// avoid losing them through `matchLit`'s
+								// no-skip behaviour).
+								ctx.pos = _preSweepPos;
+							}
+							// Else: no comments swept — keep cursor at
+							// post-sweep pos. This crosses `\n` and any
+							// horizontal ws, so `matchLit(sep)` finds a
+							// sep on a different line than the arg
+							// (`arg\n,bar`) — fork-supported pattern.
+							matchLit(ctx, $v{sepText});
+							_args.push({
+								blankBefore: _lead.blankBefore,
+								blankAfterLeadingComments: _lead.blankAfterLeadingComments,
+								newlineBefore: _lead.newlineBefore,
+								leadingComments: _lead.leadingComments,
+								trailingComment: _trailing,
+								node: _node,
+							});
+						}
+						skipWs(ctx);
+						expectLit(ctx, $v{close});
+						left = $ctorCall;
+					};
+				} else if (sepText != null) {
 					final sepCharCode:Int = sepText.charCodeAt(0);
 					macro {
 						skipWs(ctx);
@@ -633,6 +722,17 @@ class Lowering {
 						expectLit(ctx, $v{close});
 						left = $ctorCall;
 					};
+				} else if (triviaCollect) {
+					// triviaCollect is auto-set only on `@:postfix(...)
+					// @:sep(...)` branches by `TriviaAnalysis.markPostfixStarSuffix`,
+					// so this branch is unreachable today. Surface the
+					// invariant loud rather than carrying dead code that
+					// silently mishandles a future no-sep variant.
+					Context.fatalError(
+						'Lowering: postfix Star-suffix branch "$ctor" has trivia.starCollects=true without @:sep — TriviaAnalysis should not auto-mark this shape; needs explicit support',
+						Context.currentPos()
+					);
+					throw 'unreachable';
 				} else {
 					// No separator — peek-close loop (same as Case 4 no-sep).
 					macro {
