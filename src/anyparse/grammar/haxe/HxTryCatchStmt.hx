@@ -34,11 +34,20 @@ package anyparse.grammar.haxe;
  * still fires (kw-trail-space slot is null), so the kw-policy logic
  * is consolidated inside the wrap.
  *
- * `@:fmt(sameLine("sameLineCatch"))` on `catches` makes the writer's
- * separator between the body and the first catch, and between
- * consecutive catches, runtime-switchable: when the flag is `Same`
- * the separator is a plain space (`} catch (…)`); when `Next` it
- * becomes a hardline (`}\ncatch (…)`).
+ * `@:fmt(sameLine('sameLineCatch'), bareBodyBreaks)` on `catches`
+ * makes the writer's separator between the body and the first catch,
+ * and between consecutive catches, both runtime-switchable AND shape-
+ * aware. The `sameLine('sameLineCatch')` flag drives policy: `Same`
+ * → space (`} catch (…)`); `Next` → hardline (`}\ncatch (…)`). The
+ * `bareBodyBreaks` companion (ω-tryBody-next-default + sameLineCatch-
+ * shape-aware) forces a hardline before each catch whenever the
+ * preceding body is non-block (e.g. `ExprStmt`), regardless of
+ * `sameLineCatch`. Pairs with `tryBody=Next` default: a non-block
+ * body breaks before via `bodyPolicy('tryBody')`, so the catch must
+ * also break to keep the multi-line `try\n\tBARE;\ncatch (…)\n\tBARE;`
+ * layout coherent. Block bodies fall through to the policy-driven
+ * separator as before — `try { … } catch (…)` stays inline under
+ * `sameLineCatch=Same`.
  *
  * `@:fmt(bodyPolicyOverride('UntypedBlockStmt', 'untypedBody'))` on
  * `body` (slice ω-untyped-body-stmt-override) flips the body-policy
@@ -62,5 +71,5 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxTryCatchStmt = {
 	@:fmt(bodyPolicy('tryBody'), kwPolicy('tryPolicy'), bodyPolicyOverride('UntypedBlockStmt', 'untypedBody')) var body:HxStatement;
-	@:trivia @:tryparse @:fmt(sameLine('sameLineCatch')) var catches:Array<HxCatchClause>;
+	@:trivia @:tryparse @:fmt(sameLine('sameLineCatch'), bareBodyBreaks) var catches:Array<HxCatchClause>;
 };

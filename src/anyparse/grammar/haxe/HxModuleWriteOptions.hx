@@ -84,13 +84,11 @@ import anyparse.format.wrap.WrapRules;
  * Field added in slice ω-tryBody:
  *  - `tryBody` — same three-way `BodyPolicy` knob shape as
  *    `catchBody`, gating the body-placement axis at
- *    `HxTryCatchStmt.body`. Default `Same` diverges from upstream
- *    haxe-formatter's `sameLine.tryBody: @:default(next)` to match
- *    the AxGord fork's project-level `hxformat.json` (the corpus we
- *    validate against, which sets `"sameLine": { "tryBody": "same" }`).
- *    `Next` always pushes the
- *    body to the next line; `FitLine` fits-or-breaks; `Keep`
- *    preserves source. Architecturally orthogonal to `tryPolicy`:
+ *    `HxTryCatchStmt.body`. Default `Next` matches upstream
+ *    haxe-formatter's `sameLine.tryBody: @:default(next)`. `Next`
+ *    always pushes the non-block body to the next line; `Same`
+ *    keeps it inline (`try a();`); `FitLine` fits-or-breaks;
+ *    `Keep` preserves source. Architecturally orthogonal to `tryPolicy`:
  *    `tryPolicy` controls the inline whitespace right after the
  *    `try` keyword (`try{` vs `try {`), `tryBody` controls whether
  *    the body sits on the same line at all. They compose at runtime

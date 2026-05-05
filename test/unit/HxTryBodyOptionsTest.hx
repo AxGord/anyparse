@@ -37,9 +37,9 @@ class HxTryBodyOptionsTest extends Test {
 		super();
 	}
 
-	public function testDefaultIsSame():Void {
+	public function testDefaultIsNext():Void {
 		final defaults:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
-		Assert.equals(BodyPolicy.Same, defaults.tryBody);
+		Assert.equals(BodyPolicy.Next, defaults.tryBody);
 	}
 
 	public function testTryPolicyAfterTryBodySameKeepsSpace():Void {
@@ -127,7 +127,7 @@ class HxTryBodyOptionsTest extends Test {
 
 	public function testEmptyJsonKeepsDefault():Void {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
-		Assert.equals(BodyPolicy.Same, opts.tryBody);
+		Assert.equals(BodyPolicy.Next, opts.tryBody);
 	}
 
 	public function testTryBodyAndCatchBodyIndependent():Void {

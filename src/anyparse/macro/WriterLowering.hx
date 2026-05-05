@@ -1930,17 +1930,30 @@ class WriterLowering {
 				// ω-statement-bare-break: dual flag `@:fmt(bareBodyBreaks)`
 				// flips the cases — block bodies fall through to the policy-
 				// driven `sepExpr` (or close-trailing override on the first
-				// iteration) and bare bodies force `_dhl()`. Statement-form
-				// `HxTryCatchStmt.catches` opts into this so default config
-				// (`sameLineCatch=Same`) still breaks `try BARE\ncatch` even
-				// though the policy by itself would emit ` `. Block bodies
-				// stay under policy control (`sameLineCatch=Next` still
-				// breaks `} catch` to `}\ncatch`).
+				// iteration) and bare bodies force `_dhl()`. Both
+				// `HxTryCatchStmt.catches` (block-form ctor with non-block
+				// body via `ExprStmt(...)`) and `HxTryCatchStmtBare.catches`
+				// (bare-form, body=HxExpr) opt in — non-block prev-body
+				// pairs with `tryBody=Next` to keep the multi-line layout
+				// coherent: `try\n\tBARE;\ncatch (...)`. Block bodies stay
+				// under policy control (`sameLineCatch=Next` still breaks
+				// `} catch` to `}\ncatch`). The block-ctor predicate is
+				// `isBlockShapeEquivalentBranch` (sister of
+				// `isBlockCtorBranch` that also accepts `@:fmt(blockShape)`
+				// opt-in ctors like `UntypedBlockStmt(body:HxUntypedFnBody)`,
+				// which emits `untyped { … }` — visually a block).
 				final blockShapeAware:Bool = starNode.fmtHasFlag('blockBodyKeepsInline');
 				final bareShapeAware:Bool = starNode.fmtHasFlag('bareBodyBreaks');
 				final shapeAware:Bool = blockShapeAware || bareShapeAware;
+				// `bareBodyBreaks` includes blockShape opt-in ctors (e.g.
+				// `UntypedBlockStmt`) — they end with `}` and should be
+				// treated as block for the catch-separator decision while
+				// staying non-block in `bodyPolicyWrap`'s strict block-ctor
+				// override path.
 				final blockPatterns:Array<Expr> = sameLineName != null && prevBareRefBody != null && shapeAware
-					? collectBlockCtorPatterns(prevBareRefBody.typePath)
+					? (bareShapeAware
+						? collectBlockShapeEquivalentPatterns(prevBareRefBody.typePath)
+						: collectBlockCtorPatterns(prevBareRefBody.typePath))
 					: [];
 				final elemBodyField:Null<String> = sameLineName != null && blockPatterns.length > 0
 					? findElementBodyField(elemRefName, prevBareRefBody.typePath)
@@ -2271,7 +2284,9 @@ class WriterLowering {
 				final bareShapeAware:Bool = starNode.fmtHasFlag('bareBodyBreaks');
 				final shapeAware:Bool = blockShapeAware || bareShapeAware;
 				final blockPatterns:Array<Expr> = prevBareRefBody != null && shapeAware
-					? collectBlockCtorPatterns(prevBareRefBody.typePath)
+					? (bareShapeAware
+						? collectBlockShapeEquivalentPatterns(prevBareRefBody.typePath)
+						: collectBlockCtorPatterns(prevBareRefBody.typePath))
 					: [];
 				final elemBodyField:Null<String> = blockPatterns.length > 0
 					? findElementBodyField(elemRefName, prevBareRefBody.typePath)
@@ -3577,6 +3592,15 @@ class WriterLowering {
 		return patterns;
 	}
 
+	private function collectBlockShapeEquivalentPatterns(bodyTypePath:String):Array<Expr> {
+		final rule:Null<ShapeNode> = shape.rules.get(bodyTypePath);
+		if (rule == null || rule.kind != Alt) return [];
+		final patterns:Array<Expr> = [];
+		for (branch in rule.children) if (isBlockShapeEquivalentBranch(branch))
+			patterns.push(branchCtorPattern(bodyTypePath, branch));
+		return patterns;
+	}
+
 	/**
 	 * ω-block-shape-aware — find the field name of the bare-Ref child on
 	 * `elemTypePath`'s Seq rule whose Ref points at `bodyTypePath`. Used by
@@ -3699,6 +3723,21 @@ class WriterLowering {
 		if (leadText == null || trailText == null) return false;
 		if (branch.children.length != 1) return false;
 		return branch.children[0].kind == Star;
+	}
+
+	/**
+	 * Sister predicate to `isBlockCtorBranch`: includes `@:fmt(blockShape)`
+	 * opt-in ctors that wrap a block via an inner Ref but emit visually as
+	 * `kw … { … }` (e.g. `UntypedBlockStmt(body:HxUntypedFnBody)` →
+	 * `untyped { … }`). Used ONLY by shape-aware writers that care about
+	 * "ends with a `}`" — e.g. `bareBodyBreaks` on a Star where the prev
+	 * sibling body decides whether to force a hardline before the next
+	 * element. `bodyPolicyWrap`'s body-placement override uses the strict
+	 * `isBlockCtorBranch` so per-ctor overrides like
+	 * `bodyPolicyOverride('UntypedBlockStmt', 'untypedBody')` still fire.
+	 */
+	private static function isBlockShapeEquivalentBranch(branch:ShapeNode):Bool {
+		return isBlockCtorBranch(branch) || branch.fmtHasFlag('blockShape');
 	}
 
 	/**

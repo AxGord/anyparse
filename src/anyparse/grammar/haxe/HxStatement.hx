@@ -203,6 +203,17 @@ package anyparse.grammar.haxe;
  *    ω-untyped-leftCurly): under `leftCurly=Next` the brace drops onto
  *    its own line regardless of the stmt-context, mirroring
  *    haxe-formatter's `lineEnds.leftCurly` global Allman placement.
+ *    Carries `@:fmt(blockShape)` (slice ω-tryBody-next-default +
+ *    sameLineCatch-shape-aware) so shape-aware writers that gate on
+ *    "the prev body ends with `}`" treat it as block-equivalent. Used
+ *    by `bareBodyBreaks` on `HxTryCatchStmt.catches` to keep the
+ *    `} catch (...)` cuddle for `try untyped { … } catch (...)`. The
+ *    flag is consumed by `WriterLowering.isBlockShapeEquivalentBranch`,
+ *    a sister of `isBlockCtorBranch` that respects `blockShape` —
+ *    `bodyPolicyWrap`'s strict block-ctor override path keeps using
+ *    `isBlockCtorBranch` so per-ctor overrides
+ *    (`bodyPolicyOverride('UntypedBlockStmt', 'untypedBody')`) still
+ *    fire.
  *
  *  - `BlockStmt` — `{ stmts }` block statement. No keyword guard —
  *    dispatched by the `{` literal. Uses Case 4 in
@@ -257,6 +268,7 @@ enum HxStatement {
 	@:kw('try') @:trail(';')
 	TryCatchStmtBare(stmt:HxTryCatchStmtBare);
 
+	@:fmt(blockShape)
 	UntypedBlockStmt(body:HxUntypedFnBody);
 
 	@:fmt(leftCurly) @:lead('{') @:trail('}') @:trivia
