@@ -10,18 +10,17 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 
 /**
  * ω-methodchain-wraprules-capability — capability/parity unit tests for
- * the `methodChainWrap` `WrapRules` cascade. No grammar `@:fmt` site
- * reads it yet (writer-time chain extractor lands in a follow-up
- * slice), so this only exercises the WriteOptions surface and the
- * `wrapping.methodChain` JSON loader path.
+ * the `methodChainWrap` `WrapRules` cascade.
  *
  *  - default cascade matches the 5-rule shape ported from
- *    `default-hxformat.json`'s `wrapping.methodChain` (minus the
- *    `lineLength`-gated rules `WrapConditionType` doesn't yet model);
+ *    `default-hxformat.json`'s `wrapping.methodChain` (minus
+ *    upstream's leading `lineLength >= 160` rule — adoption blocked
+ *    on `chainItemLength` / `fitsFlat` `BodyGroup` divergence; see
+ *    `HaxeFormat.defaultMethodChainWrap` doc);
  *  - `wrapping.methodChain.defaultWrap` + `rules:[]` flip the cascade's
  *    `defaultMode` and reset the rules array (slice ω-peg-byname-array
- *    later lifted the rules-ingest limitation; full rule round-trip
- *    coverage lives in `HxWrapRulesIngestTest`);
+ *    lifted the rules-ingest limitation; full rule round-trip coverage
+ *    lives in `HxWrapRulesIngestTest`);
  *  - empty `{}` config returns the seeded defaults — sanity gate that
  *    `loadHxFormatJson`'s base struct copy carried the new field.
  */

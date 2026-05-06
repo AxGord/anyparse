@@ -800,21 +800,28 @@ final class HaxeFormat implements TextFormat {
 	 * `resources/default-hxformat.json` (AxGord fork). Slice
 	 * ω-linelen-static added the runtime infra for `lineLength >= n`
 	 * (mapped to `LineLengthLargerThan`, evaluated statically against
-	 * `totalItemFlatLength`); upstream's leading `lineLength >= 160` rule
-	 * has not yet been folded into this baseline cascade because
-	 * adopting it shifts behaviour for all currently-passing fixtures
-	 * with empty/default `wrapping.methodChain` config and needs its own
-	 * regression sweep. The current cascade covers the common cases:
-	 * short chains stay flat (`itemCount<=3` + `exceedsMaxLineLength==0`,
-	 * or `totalItemLength<=80` + `exceedsMaxLineLength==0`);
-	 * `anyItemLength>=30` + `itemCount>=4` or `itemCount>=7` or
-	 * `exceedsMaxLineLength==1` cascades to `OnePerLineAfterFirst`.
-	 *
-	 * NOTE: this cascade is currently unused by the writer pipeline —
-	 * the slice ω-methodchain-wraprules-capability ships the knob and
-	 * JSON loader only, so a follow-up slice can wire the writer-time
-	 * chain extractor against `HxExpr.Call` / `HxExpr.FieldAccess`. See
-	 * `HxModuleWriteOptions.methodChainWrap` for the rationale.
+	 * `totalItemFlatLength`); slice ω-linelen-methodchain-baseline
+	 * tried to fold upstream's leading `lineLength >= 160` rule into
+	 * this baseline and reverted after it regressed
+	 * `issue_576_switch_indentation` (idn): static eval of
+	 * `LineLengthLargerThan` uses `MethodChainEmit.chainItemLength`
+	 * which sums all token text inside each segment — including the
+	 * tokens of `BodyGroup`-wrapped block / lambda bodies. The
+	 * renderer's `fitsFlat` instead defers `BodyGroup` content out of
+	 * the parent `Group`'s flat measurement (block bodies decide
+	 * their own break/flat independently). The two measurements
+	 * diverge whenever a chain segment carries a `BodyGroup`-bearing
+	 * argument (lambdas, block expressions, struct literals): the
+	 * static `total` over-counts by the deferred body width. Adopting
+	 * the upstream rule under this divergence causes `OnePerLine*`
+	 * to fire for chains the renderer would (and the corpus
+	 * baseline expects to) keep flat. Re-adoption is conditional on
+	 * either (a) Phase B / column-aware probe (renderer-time eval),
+	 * or (b) a `chainItemLength` fix that mirrors `fitsFlat`'s
+	 * `BodyGroup` deferral, with full passing-fixture audit before
+	 * commit. The current cascade covers the common cases via
+	 * `IfBreak`-split between `NoWrap` and `OnePerLineAfterFirst`,
+	 * picked at render time by the parent `Group`.
 	 *
 	 * Returned as a fresh struct on each call so test code that mutates
 	 * the `defaultWriteOptions.methodChainWrap` substruct doesn't
@@ -870,11 +877,13 @@ final class HaxeFormat implements TextFormat {
 	 * the rule from the cascade-level `defaultLocation: AfterLast`
 	 * fallback (mirroring fork's typedef-level default).
 	 *
-	 * The upstream WrapConfig has 5 additional rules with `lineLength >= 140`
-	 * + `anyItemLength >= 40` predicates that `WrapConditionType` does
-	 * not yet model — same skip-precedent as `defaultMethodChainWrap`'s
-	 * `lineLength >= 160` omission. For default-config fixtures the
-	 * single `ExceedsMaxLineLength` cond fires identically to upstream's
+	 * The upstream WrapConfig has 5 additional rules including
+	 * `lineLength >= 140` + `anyItemLength >= 40` predicates that have
+	 * not yet been folded into this baseline cascade — adopting them
+	 * requires its own regression sweep against currently-passing
+	 * fixtures (an `itemCount >= 4` non-exceeds rule shifts behaviour
+	 * for short logical chains). For default-config fixtures the single
+	 * `ExceedsMaxLineLength` cond fires identically to upstream's
 	 * 6-rule cascade.
 	 */
 	public static function defaultOpBoolChainWrap():WrapRules {
@@ -903,10 +912,12 @@ final class HaxeFormat implements TextFormat {
 	 * issue_179's long throw expression — `throw "a" + b + "c" + ... +
 	 * ") in atlas " + name + " with max size ("\n\t+ rest` — where the
 	 * first ~10 items pack inline and the break lands on the soft-line
-	 * before the overflowing operand. `WrapConditionType` doesn't yet
-	 * model the upstream `lineLength >= 160` predicate so the simpler
-	 * `ExceedsMaxLineLength` cond fires identically for default-config
-	 * fixtures.
+	 * before the overflowing operand. The upstream `lineLength >= 160`
+	 * predicate (`LineLengthLargerThan` since slice ω-linelen-static)
+	 * has not yet been folded into this cascade — adopting the full
+	 * 6-rule upstream shape (which adds an `itemCount >= 4` non-exceeds
+	 * rule) requires its own regression sweep. For default-config
+	 * fixtures the single `ExceedsMaxLineLength` cond fires identically.
 	 *
 	 * Explicit `location: BeforeLast` on the rule preserves the existing
 	 * op-before-operand emission and shields it from the cascade-level
