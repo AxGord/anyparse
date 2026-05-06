@@ -713,21 +713,26 @@ final class HaxeFormat implements TextFormat {
 	/**
 	 * Default `WrapRules` cascade for `HxExpr.ArrayExpr.elems` — ported
 	 * from haxe-formatter's `wrapping.arrayWrap` rule set in
-	 * `resources/default-hxformat.json` (AxGord fork). Conditions
-	 * unsupported by the current `WrapConditionType` set
-	 * (`hasMultilineItems`, `equalItemLengths`) and the
-	 * `fillLineWithLeadingBreak` rules they gate are skipped — for the
-	 * `hasMultilineItems` case the `WrapList.emit` runtime already routes
-	 * `anyHardline=true` items through the `exceeds=true` cascade run
-	 * with `maxLen` / `total` set to `HARDLINE_LEN`, which fails the
-	 * `total<80` rule and triggers `OnePerLine` via the
-	 * `anyItemLength>=30` rule. Returned as a fresh struct on each call
-	 * so test code that mutates the `defaultWriteOptions.arrayLiteralWrap`
-	 * substruct doesn't corrupt the singleton.
+	 * `resources/default-hxformat.json` (AxGord fork). Now matches the
+	 * upstream first rule `hasMultilineItems → OnePerLine` directly,
+	 * after `WrapList.emit` decoupled item-multiline detection from
+	 * width measurement (slice ω-flatlength-decouple-tokenwidth) — items
+	 * with hardlines anywhere (incl. `BodyGroup`-deferred bodies) feed
+	 * `total`/`maxLen` as clean `flatTokenWidth` while `hasMultilineItems`
+	 * triggers via the new `HasMultilineItems` cascade condition. The
+	 * `equalItemLengths` condition and its `fillLineWithLeadingBreak`
+	 * rule remain skipped — none of the current corpus fixtures depends
+	 * on it. Returned as a fresh struct on each call so test code that
+	 * mutates the `defaultWriteOptions.arrayLiteralWrap` substruct
+	 * doesn't corrupt the singleton.
 	 */
 	public static function defaultArrayLiteralWrap():WrapRules {
 		return {
 			rules: [
+				{
+					mode: WrapMode.OnePerLine,
+					conditions: [{cond: WrapConditionType.HasMultilineItems, value: 1}],
+				},
 				{
 					mode: WrapMode.NoWrap,
 					conditions: [{cond: WrapConditionType.TotalItemLengthLessThan, value: 80}],

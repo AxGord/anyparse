@@ -68,33 +68,40 @@ class WrapList {
 		if (items.length == 0)
 			return Text(open + (keepInnerWhenEmpty ? ' ' : '') + close);
 
+		// Decoupled measurement (ω-flatlength-decouple-tokenwidth):
+		//   - `flatLength(item) < 0` retains its legacy semantic and
+		//     drives `anyHardline` — preserves the (b) break-commit
+		//     shortcut on items with hardlines anywhere (including
+		//     inside `BodyGroup`).
+		//   - `flatTokenWidth(item)` feeds clean widths to cascade rule
+		//     conditions — mirrors `Renderer.fitsFlat`'s BG-defer so
+		//     `LineLengthLargerThan` / `TotalItemLengthLargerThan` /
+		//     `AnyItemLengthLargerThan` see the same widths the
+		//     renderer would lay out flat. Replaces the old
+		//     `HARDLINE_LEN` (~1M) inflation that conflated "has
+		//     hardline anywhere" with "rule-bound widths".
 		var total:Int = 0;
 		var maxLen:Int = 0;
 		var anyHardline:Bool = false;
 		var anyLeadingHardline:Bool = false;
 		for (item in items) {
-			final len:Int = flatLength(item);
-			if (len < 0) {
-				anyHardline = true;
-				total += HARDLINE_LEN;
-				maxLen = HARDLINE_LEN;
-			} else {
-				total += len;
-				if (len > maxLen) maxLen = len;
-			}
+			if (flatLength(item) < 0) anyHardline = true;
+			final w:Int = flatTokenWidth(item);
+			total += w;
+			if (w > maxLen) maxLen = w;
 			if (hasLeadingHardline(item)) anyLeadingHardline = true;
 		}
 
 		final cols:Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
 
 		if (anyHardline || forceExceeds) {
-			final mode:WrapMode = decide(rules, items.length, maxLen, total, true);
+			final mode:WrapMode = decide(rules, items.length, maxLen, total, true, anyHardline);
 			final body:Doc = shape(mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, anyLeadingHardline);
 			return prependLead(body, isFlatMode(mode) ? leadFlat : leadBreak);
 		}
 
-		final modeFlat:WrapMode = decide(rules, items.length, maxLen, total, false);
-		final modeBreak:WrapMode = decide(rules, items.length, maxLen, total, true);
+		final modeFlat:WrapMode = decide(rules, items.length, maxLen, total, false, false);
+		final modeBreak:WrapMode = decide(rules, items.length, maxLen, total, true, false);
 		if (modeFlat == modeBreak) {
 			final body:Doc = shape(modeFlat, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, false);
 			return prependLead(body, isFlatMode(modeFlat) ? leadFlat : leadBreak);
@@ -156,6 +163,71 @@ class WrapList {
 					// arm). Any item containing an OptHardline forces the
 					// wrap engine into break mode unconditionally.
 					return -1;
+			}
+		}
+		return total;
+	}
+
+	/**
+	 * Walks a `Doc` tree and returns its visible-token width in columns —
+	 * the same width the renderer would emit in flat layout if forced
+	 * hardlines didn't terminate that mode. Differs from `flatLength` in
+	 * two ways:
+	 *
+	 *  - never returns `-1`: forced hardlines (`Line('\n')` /
+	 *    `OptHardline`) contribute zero columns instead of aborting the
+	 *    walk. The caller gets the visible-text width regardless of
+	 *    whether the item could ever lay out flat.
+	 *  - `BodyGroup` content is deferred (not walked) — mirrors
+	 *    `Renderer.fitsFlat` Departure 2 and
+	 *    `MethodChainEmit.chainItemLength`.
+	 *
+	 * Used by `WrapList.emit` to feed clean widths into cascade rule
+	 * conditions (`LineLengthLargerThan` / `TotalItemLengthLargerThan` /
+	 * `AnyItemLengthLargerThan`) without conflating them with the
+	 * `anyHardline` break-commit signal — which is still derived from
+	 * `flatLength(item) < 0` (unchanged) so existing call sites in
+	 * `WriterLowering` and the legacy `flatLength==-1` semantic stay
+	 * intact (ω-flatlength-decouple-tokenwidth).
+	 */
+	public static function flatTokenWidth(d:Doc):Int {
+		final stack:Array<Doc> = [d];
+		var total:Int = 0;
+		while (stack.length > 0) {
+			final node:Doc = stack.pop();
+			switch (node) {
+				case Empty | OptHardline:
+				case Text(s):
+					total += s.length;
+				case Line(flat):
+					if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) {
+						// Forced hardline contributes 0 to token width
+						// (mirrors `MethodChainEmit.chainItemLength`).
+					} else {
+						total += flat.length;
+					}
+				case Nest(_, inner):
+					stack.push(inner);
+				case Concat(items):
+					var i:Int = items.length;
+					while (--i >= 0) stack.push(items[i]);
+				case Group(inner):
+					stack.push(inner);
+				case BodyGroup(_):
+					// Defer like `Renderer.fitsFlat`: BG content decides
+					// its own flat/break and does not contribute to the
+					// parent list's static width.
+				case IfBreak(_, flatDoc):
+					stack.push(flatDoc);
+				case Fill(items, sep):
+					var k:Int = items.length;
+					while (k > 0) {
+						k--;
+						stack.push(items[k]);
+						if (k > 0) stack.push(sep);
+					}
+				case OptSpace(s):
+					total += s.length;
 			}
 		}
 		return total;
@@ -259,13 +331,19 @@ class WrapList {
 	/**
 	 * Walks the rules cascade and returns the first matching mode.
 	 * Falls back to `rules.defaultMode` when no rule matches.
+	 *
+	 * `hasMultilineItems` defaults to `false` so existing call sites
+	 * that do not yet track item-multiline status keep their previous
+	 * behaviour — only cascades whose rules use `HasMultilineItems`
+	 * see a difference.
 	 */
 	public static function decide(
 		rules:WrapRules, itemCount:Int, maxItemLen:Int,
-		totalItemLen:Int, exceedsMaxLineLength:Bool
+		totalItemLen:Int, exceedsMaxLineLength:Bool,
+		hasMultilineItems:Bool = false
 	):WrapMode {
 		for (rule in rules.rules) {
-			if (matches(rule, itemCount, maxItemLen, totalItemLen, exceedsMaxLineLength))
+			if (matches(rule, itemCount, maxItemLen, totalItemLen, exceedsMaxLineLength, hasMultilineItems))
 				return rule.mode;
 		}
 		return rules.defaultMode;
@@ -286,11 +364,12 @@ class WrapList {
 	 */
 	public static function decideRule(
 		rules:WrapRules, itemCount:Int, maxItemLen:Int,
-		totalItemLen:Int, exceedsMaxLineLength:Bool
+		totalItemLen:Int, exceedsMaxLineLength:Bool,
+		hasMultilineItems:Bool = false
 	):{mode:WrapMode, location:WrappingLocation} {
 		final fallback:WrappingLocation = rules.defaultLocation ?? WrappingLocation.AfterLast;
 		for (rule in rules.rules) {
-			if (matches(rule, itemCount, maxItemLen, totalItemLen, exceedsMaxLineLength))
+			if (matches(rule, itemCount, maxItemLen, totalItemLen, exceedsMaxLineLength, hasMultilineItems))
 				return {mode: rule.mode, location: rule.location ?? fallback};
 		}
 		return {mode: rules.defaultMode, location: fallback};
@@ -298,7 +377,8 @@ class WrapList {
 
 	private static function matches(
 		rule:WrapRule, itemCount:Int, maxItemLen:Int,
-		totalItemLen:Int, exceedsMaxLineLength:Bool
+		totalItemLen:Int, exceedsMaxLineLength:Bool,
+		hasMultilineItems:Bool
 	):Bool {
 		for (cond in rule.conditions) {
 			final ok:Bool = switch cond.cond {
@@ -310,6 +390,7 @@ class WrapList {
 				case TotalItemLengthLessThan: totalItemLen <= cond.value;
 				case ExceedsMaxLineLength: cond.value == 0 ? !exceedsMaxLineLength : exceedsMaxLineLength;
 				case LineLengthLargerThan: totalItemLen >= cond.value;
+				case HasMultilineItems: cond.value == 0 ? !hasMultilineItems : hasMultilineItems;
 				case _: false;
 			};
 			if (!ok) return false;

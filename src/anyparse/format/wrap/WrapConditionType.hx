@@ -30,6 +30,15 @@ package anyparse.format.wrap;
  *    anyparse approximates as the construct's flat width without
  *    column prefix. Mapped from JSON `'lineLength >= n'` (slice
  *    ω-linelen-static).
+ *  - `HasMultilineItems` — `anyHardline == (value != 0)`. Triggers when
+ *    at least one item carries a forced hardline (`Line('\n')` or
+ *    `OptHardline`) anywhere in its `Doc` subtree, including inside
+ *    `BodyGroup` (i.e. matches the legacy `flatLength(item) < 0`
+ *    semantic). Replaces the prior `HARDLINE_LEN` inflation hack — the
+ *    cascade now expresses "items have multi-line content" as an
+ *    explicit predicate instead of relying on `total/maxLen` blowing
+ *    past every threshold. Mapped from JSON `'hasMultilineItems'`
+ *    (slice ω-flatlength-decouple-tokenwidth).
  *
  * Format-neutral — same conditions apply to any delimited list across
  * languages. Mirrors haxe-formatter's `WrapConditionType` enum
@@ -52,4 +61,6 @@ enum abstract WrapConditionType(Int) from Int to Int {
 	final ExceedsMaxLineLength = 6;
 
 	final LineLengthLargerThan = 7;
+
+	final HasMultilineItems = 8;
 }

@@ -616,6 +616,7 @@ final class HaxeFormatConfigLoader {
 			case 'totalItemLength <= n': WrapConditionType.TotalItemLengthLessThan;
 			case 'exceedsMaxLineLength': WrapConditionType.ExceedsMaxLineLength;
 			case 'lineLength >= n': WrapConditionType.LineLengthLargerThan;
+			case 'hasMultilineItems': WrapConditionType.HasMultilineItems;
 			case _: null;
 		};
 	}
