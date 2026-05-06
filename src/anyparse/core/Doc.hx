@@ -42,6 +42,21 @@ package anyparse.core;
 	- `IfBreak(br, fl)`— emit `br` if the enclosing Group is in break mode,
 	                     `fl` if in flat mode. Used for trailing separators
 	                     that should appear only when the list breaks.
+	- `IfWidthExceeds(n, br, fl)` — column-aware sibling of `IfBreak`. At
+	                     render time, the renderer probes whether the
+	                     current column plus `flatWidth(fl)` reaches `n`.
+	                     If yes → emit `br`; else → `fl`. Independent of
+	                     the surrounding Group's flat/break mode. Used by
+	                     `WrapList.emit` to honour `LineLengthLargerThan`
+	                     cascade conditions whose threshold differs from
+	                     `WriteOptions.lineWidth` (the standard `IfBreak`
+	                     pivot) — e.g. opBool's `lineLength >= 140` when
+	                     `maxLineLength = 160`. For threshold equal to
+	                     `lineWidth`, prefer `IfBreak` (cheaper, no per-
+	                     primitive column probe). `fitsFlat` (used by
+	                     enclosing `Group` measurement) forwards to `fl`
+	                     so flat-mode width estimation stays stable
+	                     regardless of the column-aware decision.
 	- `Fill(items, sep)` — Wadler `fillSep`. In flat mode, emits items
 	                     joined by `sep` flat. In break mode, packs items
 	                     left-to-right: before each `items[i]` (i > 0),
@@ -100,6 +115,7 @@ enum Doc {
 	BodyGroup(inner:Doc);
 	Concat(items:Array<Doc>);
 	IfBreak(breakDoc:Doc, flatDoc:Doc);
+	IfWidthExceeds(n:Int, breakDoc:Doc, flatDoc:Doc);
 	Fill(items:Array<Doc>, sep:Doc);
 	OptSpace(s:String);
 	OptHardline;

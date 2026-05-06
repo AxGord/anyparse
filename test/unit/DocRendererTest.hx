@@ -355,4 +355,74 @@ class DocRendererTest extends Test {
 		// (depth 1) that the inner BG inherits via its own MBreak choice.
 		Assert.equals("trace({\n\tcase A: x;\n})", Renderer.render(doc, 80, Tab, 1));
 	}
+
+	// `IfWidthExceeds(n, brk, flat)` is the column-aware sibling of
+	// `IfBreak`. The renderer probes `column + flatWidth(flatDoc)`
+	// against `n` at layout time: when the threshold is reached the
+	// brk shape fires, otherwise flat. Independent of the enclosing
+	// Group's flat/break mode (slice ω-ifwidthexceeds-infra).
+
+	function testIfWidthExceedsAtColumnZeroBelowThreshold() {
+		// At col 0 with 5-char content and threshold 10, col + flat = 5
+		// — under threshold → flat side fires.
+		final doc:Doc = IfWidthExceeds(10, D.text("BREAK"), D.text("FLATX"));
+		Assert.equals("FLATX", Renderer.render(doc, 80));
+	}
+
+	function testIfWidthExceedsAtColumnZeroReachesThreshold() {
+		// At col 0 with 10-char content and threshold 10, col + flat = 10
+		// — reaches threshold → brk fires. Renderer probes
+		// `fitsFlat(n - 1 - col, …)` = `fitsFlat(9, …)` on 10-char flat
+		// content; budget 9 < width 10 → returns false → `!false` = true
+		// = crosses → emits brk.
+		final doc:Doc = IfWidthExceeds(10, D.text("BREAKBREAK"), D.text("FLATXFLATX"));
+		Assert.equals("BREAKBREAK", Renderer.render(doc, 80));
+	}
+
+	function testIfWidthExceedsShiftedByPrefix() {
+		// Prefix "abcdefgh" (8 cols) puts pen at col 8; with threshold
+		// 10, even short 3-char content (col + flat = 11) crosses — brk
+		// fires. Both shapes have same width so the test is purely
+		// about the column-aware probe.
+		final doc:Doc = D.concat([
+			D.text("abcdefgh"),
+			IfWidthExceeds(10, D.text("BRK"), D.text("FLT")),
+		]);
+		Assert.equals("abcdefghBRK", Renderer.render(doc, 80));
+	}
+
+	function testIfWidthExceedsShiftedShortPrefix() {
+		// Same shape, prefix only 2 cols → col + flat = 5, under
+		// threshold 10 → flat fires.
+		final doc:Doc = D.concat([
+			D.text("ab"),
+			IfWidthExceeds(10, D.text("BRK"), D.text("FLT")),
+		]);
+		Assert.equals("abFLT", Renderer.render(doc, 80));
+	}
+
+	function testIfWidthExceedsForwardsToFlatInFitsFlat() {
+		// Outer Group's fitsFlat measurement walks the IfWidthExceeds
+		// flat side; the Group's own break/flat decision is unaffected
+		// by the column-aware probe. Here flat side is 5 cols, brk
+		// side is 50 cols. Outer Group with budget 80 fits the flat
+		// shape — Group commits to MFlat, IfWidthExceeds probes col 0
+		// vs threshold 10 → 5 < 10 → flat fires.
+		final brk:Doc = D.text("BREAKBREAKBREAKBREAKBREAKBREAKBREAKBREAKBREAKBREAK");
+		final flat:Doc = D.text("FLATX");
+		final doc:Doc = D.group(IfWidthExceeds(10, brk, flat));
+		Assert.equals("FLATX", Renderer.render(doc, 80));
+	}
+
+	function testIfWidthExceedsThresholdLessThanColumnFiresBreak() {
+		// Sentinel: when `n - col < 0`, the renderer's `fitsFlat`
+		// short-circuits to false → brk fires regardless of flat content
+		// width. Threshold 5 with 10-col prefix puts col past threshold
+		// before any flat content is measured.
+		final doc:Doc = D.concat([
+			D.text("0123456789"),
+			IfWidthExceeds(5, D.text("BRK"), D.text("FLT")),
+		]);
+		Assert.equals("0123456789BRK", Renderer.render(doc, 80));
+	}
 }

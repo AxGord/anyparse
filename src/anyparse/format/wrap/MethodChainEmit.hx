@@ -101,6 +101,11 @@ class MethodChainEmit {
 					// parent chain's static width.
 				case IfBreak(_, flatDoc):
 					stack.push(flatDoc);
+				case IfWidthExceeds(_, _, flatDoc):
+					// Forward to flat side (mirrors `IfBreak`): the
+					// column-aware decision happens at render time and
+					// chain-item width measurement uses the flat shape.
+					stack.push(flatDoc);
 				case Fill(items, sep):
 					var k:Int = items.length;
 					while (k > 0) {

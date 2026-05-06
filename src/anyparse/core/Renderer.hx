@@ -225,6 +225,23 @@ class Renderer {
 					}
 				case IfBreak(breakDoc, flatDoc):
 					stack.push(new Frame(f.indent, f.mode, f.mode == MBreak ? breakDoc : flatDoc));
+				case IfWidthExceeds(n, breakDoc, flatDoc):
+					// Column-aware probe: rule fires when `col +
+					// flatWidth(flatDoc) >= n` (matches the cascade
+					// `lineLength >= n` predicate). `fitsFlat` answers
+					// `flatWidth <= remaining`, so the inverse threshold
+					// is `remaining = n - 1 - col` — fitsFlat returns
+					// true ⇔ `col + flatWidth <= n - 1` ⇔ `col +
+					// flatWidth < n` ⇔ rule does NOT fire. Negation
+					// gives `crosses = rule fires` → emit `breakDoc`.
+					// When `n - 1 - col < 0` (threshold already at or
+					// past current column), `fitsFlat` short-circuits
+					// to false → breakDoc fires. The mode is propagated
+					// unchanged — this primitive is independent of the
+					// enclosing Group's flat/break choice; it answers a
+					// separate column-vs-threshold question.
+					final crosses:Bool = !fitsFlat(n - 1 - col, f.indent, flatDoc);
+					stack.push(new Frame(f.indent, f.mode, crosses ? breakDoc : flatDoc));
 				case Fill(items, sep):
 					if (items.length == 0) {
 						// nothing
@@ -322,6 +339,14 @@ class Renderer {
 					// inside a call arg without forcing the call's parens
 					// onto separate lines (ω-break-group).
 				case IfBreak(_, flatDoc):
+					local.push(new Frame(f.indent, MFlat, flatDoc));
+				case IfWidthExceeds(_, _, flatDoc):
+					// Forward to flat side: an enclosing Group's flat-width
+					// measurement should ignore the column-aware decision.
+					// The flat shape is what would render in MFlat — same
+					// stable answer the IfBreak forward gives. Keeps wrap-
+					// engine width measurements decoupled from threshold
+					// probes that fire only at render time.
 					local.push(new Frame(f.indent, MFlat, flatDoc));
 				case Fill(items, sep):
 					// Flat measurement of Fill: items joined by sep flat.
