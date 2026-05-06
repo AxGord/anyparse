@@ -681,7 +681,16 @@ final class HaxeFormat implements TextFormat {
 	/**
 	 * Default `WrapRules` cascade for `HxExpr.Call.args` — ported
 	 * verbatim from haxe-formatter's `wrapping.callParameter` rule set
-	 * in `resources/default-hxformat.json` (AxGord fork). Returned as a
+	 * in `resources/default-hxformat.json` (AxGord fork). Five rules in
+	 * source order: `itemCount>=7`, `totalItemLength>=140`,
+	 * `anyItemLength>=80`, `lineLength>=160`, `exceedsMaxLineLength==1`
+	 * — all `FillLine`, defaultMode `NoWrap`. The `lineLength>=160`
+	 * rule (slice ω-callparam-linelen-160) is functionally subsumed by
+	 * `totalItemLength>=140` at this default — `LineLengthLargerThan`
+	 * evaluates to `totalItemLen >= n` like its sibling — but is kept
+	 * present for byte-exact alignment with upstream and so user-side
+	 * `hxformat.json` tweaks that lower `totalItemLength` without
+	 * touching `lineLength` keep the threshold intact. Returned as a
 	 * fresh struct on each call so test code that mutates the
 	 * `defaultWriteOptions.callParameterWrap` substruct doesn't corrupt
 	 * the singleton.
@@ -700,6 +709,10 @@ final class HaxeFormat implements TextFormat {
 				{
 					mode: WrapMode.FillLine,
 					conditions: [{cond: WrapConditionType.AnyItemLengthLargerThan, value: 80}],
+				},
+				{
+					mode: WrapMode.FillLine,
+					conditions: [{cond: WrapConditionType.LineLengthLargerThan, value: 160}],
 				},
 				{
 					mode: WrapMode.FillLine,
