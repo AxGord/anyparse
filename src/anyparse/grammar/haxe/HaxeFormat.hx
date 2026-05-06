@@ -880,25 +880,42 @@ final class HaxeFormat implements TextFormat {
 
 	/**
 	 * Default `WrapRules` cascade for `||` / `&&` chains (haxe-formatter
-	 * `opBoolChain` class). Single rule: when the chain in flat layout
-	 * would exceed `WriteOptions.lineWidth`, fall through to
-	 * `OnePerLineAfterFirst` with explicit `location: BeforeLast` (`op`
-	 * prefixes each continuation line). `defaultMode: NoWrap` keeps short
-	 * chains inline.
+	 * `opBoolChain` class). Mirrors the upstream 6-rule cascade in
+	 * `default-hxformat.json` `wrapping.opBoolChain` (slice
+	 * ω-opbool-cascade — adopted via the threshold-aware
+	 * `IfWidthExceeds` infra in `WrapList.collectExtraLineLengthThresholds`
+	 * + `BinaryChainEmit.emit`).
 	 *
-	 * The explicit `BeforeLast` matches haxe-formatter's per-rule setting
-	 * for the analogous final rule in `wrapping.opBoolChain` and shields
-	 * the rule from the cascade-level `defaultLocation: AfterLast`
-	 * fallback (mirroring fork's typedef-level default).
+	 * Rules (first-match):
+	 *  1. `lineLength >= 140` + `anyItemLength >= 40` → OnePerLineAfterFirst
+	 *  2. `lineLength >= 140` → FillLine
+	 *  3. `itemCount <= 3` + `!exceeds` → NoWrap
+	 *  4. `totalItemLength <= 120` + `!exceeds` → NoWrap
+	 *  5. `itemCount >= 4` → OnePerLineAfterFirst
+	 *  6. `exceeds` → FillLine
 	 *
-	 * The upstream WrapConfig has 5 additional rules including
-	 * `lineLength >= 140` + `anyItemLength >= 40` predicates that have
-	 * not yet been folded into this baseline cascade — adopting them
-	 * requires its own regression sweep against currently-passing
-	 * fixtures (an `itemCount >= 4` non-exceeds rule shifts behaviour
-	 * for short logical chains). For default-config fixtures the single
-	 * `ExceedsMaxLineLength` cond fires identically to upstream's
-	 * 6-rule cascade.
+	 * `defaultMode: NoWrap` preserves the cascade-level fallback for
+	 * the rare case where no rule matches (only possible when the
+	 * chain is exactly 0/1 items, which the engine short-circuits).
+	 *
+	 * Note rule 6 mode is `FillLine` per upstream — diverges from
+	 * anyparse's pre-cascade single-rule placeholder which used
+	 * `OnePerLineAfterFirst`. In default-config corpus fixtures rule 5
+	 * (`itemCount >= 4`) fires before rule 6 on most multi-line
+	 * `||` / `&&` chains, so the rule 6 mode change is mostly moot.
+	 *
+	 * `location: BeforeLast` on every rule mirrors haxe-formatter's
+	 * per-rule setting and shields each rule from the cascade-level
+	 * `defaultLocation: AfterLast` fallback.
+	 *
+	 * Threshold 140 is column-aware — handled by
+	 * `WrapList.collectExtraLineLengthThresholds` extracting it as an
+	 * extra threshold (≠ default `lineWidth=160`); `BinaryChainEmit`
+	 * emits an `IfWidthExceeds(140, …)` wrapper so the renderer probes
+	 * `column + flatWidth >= 140` at layout time rather than the static
+	 * column-blind `totalItemLen >= 140` semantic that regressed
+	 * `issue_187_multi_line_wrapped_assignment` in a prior naive
+	 * adoption attempt.
 	 */
 	public static function defaultOpBoolChainWrap():WrapRules {
 		return {
@@ -906,7 +923,45 @@ final class HaxeFormat implements TextFormat {
 				{
 					mode: WrapMode.OnePerLineAfterFirst,
 					location: WrappingLocation.BeforeLast,
-					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
+					conditions: [
+						{cond: WrapConditionType.LineLengthLargerThan, value: 140},
+						{cond: WrapConditionType.AnyItemLengthLargerThan, value: 40},
+					],
+				},
+				{
+					mode: WrapMode.FillLine,
+					location: WrappingLocation.BeforeLast,
+					conditions: [
+						{cond: WrapConditionType.LineLengthLargerThan, value: 140},
+					],
+				},
+				{
+					mode: WrapMode.NoWrap,
+					conditions: [
+						{cond: WrapConditionType.ItemCountLessThan, value: 3},
+						{cond: WrapConditionType.ExceedsMaxLineLength, value: 0},
+					],
+				},
+				{
+					mode: WrapMode.NoWrap,
+					conditions: [
+						{cond: WrapConditionType.TotalItemLengthLessThan, value: 120},
+						{cond: WrapConditionType.ExceedsMaxLineLength, value: 0},
+					],
+				},
+				{
+					mode: WrapMode.OnePerLineAfterFirst,
+					location: WrappingLocation.BeforeLast,
+					conditions: [
+						{cond: WrapConditionType.ItemCountLargerThan, value: 4},
+					],
+				},
+				{
+					mode: WrapMode.FillLine,
+					location: WrappingLocation.BeforeLast,
+					conditions: [
+						{cond: WrapConditionType.ExceedsMaxLineLength, value: 1},
+					],
 				},
 			],
 			defaultMode: WrapMode.NoWrap,
@@ -915,36 +970,83 @@ final class HaxeFormat implements TextFormat {
 
 	/**
 	 * Default `WrapRules` cascade for `+` / `-` chains (haxe-formatter
-	 * `opAddSubChain` class). Single rule
-	 * `ExceedsMaxLineLength → FillLine` over `defaultMode: NoWrap`.
+	 * `opAddSubChain` class). Mirrors the upstream 6-rule cascade in
+	 * `default-hxformat.json` `wrapping.opAddSubChain` (slice
+	 * ω-opaddsub-cascade — adopted alongside ω-opbool-cascade via the
+	 * threshold-aware infra).
 	 *
-	 * Diverges from `defaultOpBoolChainWrap` (which uses
-	 * `OnePerLineAfterFirst`): haxe-formatter's `opAddSubChain` cascade
-	 * routes the wide-but-short-item case (the most common one for
-	 * string concat — long total length, lots of short items) through
-	 * `FillLine`, packing as many operands per line as fit. Drives
-	 * issue_179's long throw expression — `throw "a" + b + "c" + ... +
-	 * ") in atlas " + name + " with max size ("\n\t+ rest` — where the
-	 * first ~10 items pack inline and the break lands on the soft-line
-	 * before the overflowing operand. The upstream `lineLength >= 160`
-	 * predicate (`LineLengthLargerThan` since slice ω-linelen-static)
-	 * has not yet been folded into this cascade — adopting the full
-	 * 6-rule upstream shape (which adds an `itemCount >= 4` non-exceeds
-	 * rule) requires its own regression sweep. For default-config
-	 * fixtures the single `ExceedsMaxLineLength` cond fires identically.
+	 * Rules (first-match):
+	 *  1. `lineLength >= 160` + `anyItemLength >= 60` → OnePerLineAfterFirst
+	 *  2. `lineLength >= 160` → FillLine
+	 *  3. `itemCount <= 3` + `!exceeds` → NoWrap
+	 *  4. `totalItemLength <= 120` + `!exceeds` → NoWrap
+	 *  5. `itemCount >= 4` → OnePerLineAfterFirst
+	 *  6. `exceeds` → OnePerLineAfterFirst
 	 *
-	 * Explicit `location: BeforeLast` on the rule preserves the existing
-	 * op-before-operand emission and shields it from the cascade-level
-	 * `defaultLocation: AfterLast` fallback (mirroring fork's typedef
-	 * default).
+	 * `defaultMode: NoWrap` preserves the cascade-level fallback.
+	 *
+	 * Diverges from `defaultOpBoolChainWrap` only in:
+	 *  - thresholds (160/60 vs 140/40),
+	 *  - rule 6 mode (`OnePerLineAfterFirst` vs `FillLine`) — matches
+	 *    upstream's per-cascade choice and anyparse's pre-cascade
+	 *    behaviour.
+	 *
+	 * Threshold 160 equals default `lineWidth` so
+	 * `collectExtraLineLengthThresholds` filters it out — rule 1/2
+	 * collapse cleanly to the existing `IfBreak` exceeds pivot, no
+	 * `IfWidthExceeds` wrapper needed.
+	 *
+	 * Drives issue_179's long throw expression: rule 2
+	 * (`lineLength >= 160 → FillLine`) packs the first ~10 string-concat
+	 * operands inline up to the line budget and breaks on the soft-line
+	 * before the overflowing operand — `throw "a" + b + "c" + ... +
+	 * ") in atlas " + name + " with max size ("\n\t+ rest`.
 	 */
 	public static function defaultOpAddSubChainWrap():WrapRules {
 		return {
 			rules: [
 				{
+					mode: WrapMode.OnePerLineAfterFirst,
+					location: WrappingLocation.BeforeLast,
+					conditions: [
+						{cond: WrapConditionType.LineLengthLargerThan, value: 160},
+						{cond: WrapConditionType.AnyItemLengthLargerThan, value: 60},
+					],
+				},
+				{
 					mode: WrapMode.FillLine,
 					location: WrappingLocation.BeforeLast,
-					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
+					conditions: [
+						{cond: WrapConditionType.LineLengthLargerThan, value: 160},
+					],
+				},
+				{
+					mode: WrapMode.NoWrap,
+					conditions: [
+						{cond: WrapConditionType.ItemCountLessThan, value: 3},
+						{cond: WrapConditionType.ExceedsMaxLineLength, value: 0},
+					],
+				},
+				{
+					mode: WrapMode.NoWrap,
+					conditions: [
+						{cond: WrapConditionType.TotalItemLengthLessThan, value: 120},
+						{cond: WrapConditionType.ExceedsMaxLineLength, value: 0},
+					],
+				},
+				{
+					mode: WrapMode.OnePerLineAfterFirst,
+					location: WrappingLocation.BeforeLast,
+					conditions: [
+						{cond: WrapConditionType.ItemCountLargerThan, value: 4},
+					],
+				},
+				{
+					mode: WrapMode.OnePerLineAfterFirst,
+					location: WrappingLocation.BeforeLast,
+					conditions: [
+						{cond: WrapConditionType.ExceedsMaxLineLength, value: 1},
+					],
 				},
 			],
 			defaultMode: WrapMode.NoWrap,

@@ -371,10 +371,8 @@ class DocRendererTest extends Test {
 
 	function testIfWidthExceedsAtColumnZeroReachesThreshold() {
 		// At col 0 with 10-char content and threshold 10, col + flat = 10
-		// — reaches threshold → brk fires. Renderer probes
-		// `fitsFlat(n - 1 - col, …)` = `fitsFlat(9, …)` on 10-char flat
-		// content; budget 9 < width 10 → returns false → `!false` = true
-		// = crosses → emits brk.
+		// — reaches threshold (`>= n`) → brk fires. Renderer probe is
+		// `col + flatTokenWidth(flatDoc) >= n` (boundary inclusive).
 		final doc:Doc = IfWidthExceeds(10, D.text("BREAKBREAK"), D.text("FLATXFLATX"));
 		Assert.equals("BREAKBREAK", Renderer.render(doc, 80));
 	}
@@ -415,14 +413,31 @@ class DocRendererTest extends Test {
 	}
 
 	function testIfWidthExceedsThresholdLessThanColumnFiresBreak() {
-		// Sentinel: when `n - col < 0`, the renderer's `fitsFlat`
-		// short-circuits to false → brk fires regardless of flat content
-		// width. Threshold 5 with 10-col prefix puts col past threshold
-		// before any flat content is measured.
+		// Sentinel: when `col >= n` already, the rule fires regardless
+		// of flat content width — the column has already crossed the
+		// threshold. Threshold 5 with 10-col prefix puts col past the
+		// threshold before any flat content is measured.
 		final doc:Doc = D.concat([
 			D.text("0123456789"),
 			IfWidthExceeds(5, D.text("BRK"), D.text("FLT")),
 		]);
 		Assert.equals("0123456789BRK", Renderer.render(doc, 80));
+	}
+
+	function testIfWidthExceedsFlatHardlinesIgnoredInProbe() {
+		// `BinaryChainEmit`-style flat side: a multi-line shape with
+		// forced hardlines (each operand on its own continuation line).
+		// The cascade rule `lineLength >= n` semantic asks "does the
+		// natural inline width reach n?" — hardlines count as zero width
+		// in that probe (otherwise `fitsFlat`-style budget walk would
+		// always refuse-to-flatten and pick brk regardless of column).
+		// At col 0, flat side's token width is 6 ("aabbcc"), threshold
+		// 10 — 0 + 6 < 10, so flat fires.
+		final flatShape:Doc = D.concat([
+			D.text("aa"), D.hardline(), D.text("bb"), D.hardline(), D.text("cc"),
+		]);
+		final brkShape:Doc = D.text("BRK");
+		final doc:Doc = IfWidthExceeds(10, brkShape, flatShape);
+		Assert.equals("aa\nbb\ncc", Renderer.render(doc, 80));
 	}
 }

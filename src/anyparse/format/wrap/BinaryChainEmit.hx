@@ -63,8 +63,12 @@ import anyparse.format.WriteOptions;
  * The `location` axis (`BeforeLast` vs `AfterLast`) is selected per
  * rule via `WrapRule.location` (or the parent
  * `WrapRules.defaultLocation` fallback) and resolved by
- * `WrapList.decideRule`. Mirrors haxe-formatter's `wrapping.<class>.location`
- * field on per-rule entries in `WrapConfig.hx`.
+ * `WrapList.decideRuleWithLineLengthState` — column-aware variant of
+ * `decideRule` that defers `LineLengthLargerThan` evaluation to a
+ * caller-supplied predicate so the renderer's column position can
+ * gate threshold-firing at layout time. Mirrors haxe-formatter's
+ * `wrapping.<class>.location` field on per-rule entries in
+ * `WrapConfig.hx`.
  */
 @:nullSafety(Strict)
 final class BinaryChainEmit {
@@ -92,11 +96,24 @@ final class BinaryChainEmit {
 		var total:Int = 0;
 		var maxLen:Int = 0;
 		var anyHardline:Bool = false;
-		for (item in items) {
+		for (i in 0...items.length) {
+			final item:Doc = items[i];
 			if (WrapList.flatLength(item) < 0) anyHardline = true;
 			final w:Int = WrapList.flatTokenWidth(item);
 			total += w;
-			if (w > maxLen) maxLen = w;
+			// `anyItemLength` mirrors upstream haxe-formatter's
+			// per-item width semantic: each operand beyond the first
+			// is preceded by `op ` on its continuation line, so the
+			// rendered token width for those items includes the
+			// leading `op ` (operator + single space). The first
+			// operand has no leading operator (it sits at the call
+			// site after the assignment / open paren). Without this
+			// adjustment a chain of ~39-char operands joined by `||`
+			// would measure `maxLen=39` and miss rule 1's
+			// `anyItemLength >= 40` predicate, while upstream
+			// measures `maxLen=42` (`|| ` + 39) and the rule fires.
+			final renderedW:Int = (i == 0) ? w : (ops[i - 1].length + 1 + w);
+			if (renderedW > maxLen) maxLen = renderedW;
 		}
 		// Add ` op ` width per gap so the cascade's `totalLength` /
 		// `exceedsMaxLineLength` predicates measure the realistic flat
@@ -105,19 +122,152 @@ final class BinaryChainEmit {
 
 		final cols:Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
 
-		if (anyHardline) {
-			final r:{mode:WrapMode, location:WrappingLocation} = WrapList.decideRule(rules, items.length, maxLen, total, true, true);
+		// Column-aware `LineLengthLargerThan` thresholds — mirror
+		// `WrapList.emit`'s threshold-aware enumeration pattern (slice
+		// ω-ifwidthexceeds-infra). Cascade rules with `lineLength >= n`
+		// where `n != opt.lineWidth` cannot be answered at emit time
+		// because the rendered column position is unknown until layout.
+		// Threshold == lineWidth collapses cleanly to `exceeds` (the
+		// existing `IfBreak` pivot) and stays on the legacy 2-state
+		// path. Non-lineWidth thresholds enumerate extra states and
+		// emit one `IfWidthExceeds(t, …)` wrapper per distinct
+		// threshold so the renderer probes `column + flatWidth(flat)`
+		// against `t` at layout time.
+		final extraThresholds:Array<Int> = WrapList.collectExtraLineLengthThresholds(rules, opt.lineWidth);
+
+		// Cascade-eval helper: caller specifies the (exceeds,
+		// firingThresholds) state and gets the cascade's resolved
+		// {mode, location}. `LineLengthLargerThan` is mapped to:
+		//   - `t == lineWidth` → use `exceeds` (collapse semantic)
+		//   - `t != lineWidth` → membership in `firing`
+		// All other cond kinds preserve their original evaluators.
+		// Non-`inline` so it can be passed as a closure into
+		// `buildBinaryThresholdTree` (Haxe forbids closure-on-inline-closure).
+		function evalAt(exceeds:Bool, firing:Array<Int>):{mode:WrapMode, location:WrappingLocation} {
+			return WrapList.decideRuleWithLineLengthState(rules, items.length, maxLen, total,
+				exceeds, anyHardline,
+				t -> t == opt.lineWidth ? exceeds : firing.contains(t));
+		}
+
+		function shapeAt(r:{mode:WrapMode, location:WrappingLocation}):Doc {
 			return shape(r.mode, r.location, items, ops, cols);
 		}
 
-		final flat:{mode:WrapMode, location:WrappingLocation} = WrapList.decideRule(rules, items.length, maxLen, total, false, false);
-		final brk:{mode:WrapMode, location:WrappingLocation} = WrapList.decideRule(rules, items.length, maxLen, total, true, false);
-		if (flat.mode == brk.mode && flat.location == brk.location)
-			return shape(flat.mode, flat.location, items, ops, cols);
+		// Force-break path: cascade evaluated only against
+		// `exceeds=true` (anyHardline already commits to break-mode
+		// per the prior decoupling slice). Thresholds still
+		// column-aware — even when the parent commits to break-mode,
+		// a `LineLengthLargerThan` rule answer can flip with column.
+		// `buildBinaryThresholdTree` handles 0/1/N thresholds via
+		// recursion (no IfBreak split — single shape per leaf).
+		if (anyHardline)
+			return buildBinaryThresholdTree(extraThresholds, [], true, evalAt, shapeAt);
 
-		final flatDoc:Doc = shape(flat.mode, flat.location, items, ops, cols);
-		final breakDoc:Doc = shape(brk.mode, brk.location, items, ops, cols);
-		return Group(IfBreak(breakDoc, flatDoc));
+		// Normal path: cascade evaluated against (exceeds=false /
+		// exceeds=true) AND each non-lineWidth threshold's firing
+		// state. Tree construction:
+		//   - 0 extra thresholds: existing 2-state Group(IfBreak)
+		//   - 1 extra threshold T (impossibility-filtered, 3 shapes):
+		//       * T < lineWidth: `IfWidthExceeds(T, IfBreak(YY, YN), NN)`
+		//         (col<T → col<lineWidth → !exceeds; one impossible state pruned)
+		//       * T > lineWidth: `IfBreak(IfWidthExceeds(T, YY, NY), NN)`
+		//         (col>=T>lineWidth → exceeds; one impossible state pruned)
+		//   - 2+ extra thresholds: full enumeration via
+		//     `buildBinaryThresholdTree` (each `IfWidthExceeds(t, …)`
+		//     nests the next threshold). Impossibility filtering not
+		//     applied at N≥2; renderer never reaches the impossible-
+		//     state leaves at runtime, so the extra Doc shapes are
+		//     inert. None of the current default cascades use N≥2 —
+		//     this branch is correctness insurance for future cascades.
+		if (extraThresholds.length == 0) {
+			final flat:{mode:WrapMode, location:WrappingLocation} = evalAt(false, []);
+			final brk:{mode:WrapMode, location:WrappingLocation} = evalAt(true, []);
+			if (sameRule(flat, brk)) return shapeAt(flat);
+			return Group(IfBreak(shapeAt(brk), shapeAt(flat)));
+		}
+
+		if (extraThresholds.length == 1) {
+			final t:Int = extraThresholds[0];
+			if (t < opt.lineWidth) {
+				// 3 valid states (col+w<t implies col+w<lineWidth implies !exceeds):
+				//   (firing=∅,    exceeds=no)  → rNN
+				//   (firing={t},  exceeds=no)  → rYN
+				//   (firing={t},  exceeds=yes) → rYY
+				final rNN:{mode:WrapMode, location:WrappingLocation} = evalAt(false, []);
+				final rYN:{mode:WrapMode, location:WrappingLocation} = evalAt(false, [t]);
+				final rYY:{mode:WrapMode, location:WrappingLocation} = evalAt(true, [t]);
+				if (sameRule(rNN, rYN) && sameRule(rYN, rYY)) return shapeAt(rNN);
+				// Inner IfBreak picks between exceeds-yes and exceeds-no
+				// when the column has already crossed `t`. Outer
+				// IfWidthExceeds picks the column-vs-t answer first; the
+				// flat side bypasses the IfBreak entirely (only one
+				// valid state below `t`).
+				final brk:Doc = sameRule(rYY, rYN) ? shapeAt(rYY) : Group(IfBreak(shapeAt(rYY), shapeAt(rYN)));
+				return Group(IfWidthExceeds(t, brk, shapeAt(rNN)));
+			}
+			// t > lineWidth: 3 valid states (col+w>=t implies col+w>=lineWidth):
+			//   (firing=∅,    exceeds=no)  → rNN
+			//   (firing=∅,    exceeds=yes) → rNY
+			//   (firing={t},  exceeds=yes) → rYY
+			final rNN:{mode:WrapMode, location:WrappingLocation} = evalAt(false, []);
+			final rNY:{mode:WrapMode, location:WrappingLocation} = evalAt(true, []);
+			final rYY:{mode:WrapMode, location:WrappingLocation} = evalAt(true, [t]);
+			if (sameRule(rNN, rNY) && sameRule(rNY, rYY)) return shapeAt(rNN);
+			// Outer IfBreak picks exceeds=no/yes; inner IfWidthExceeds
+			// further partitions the exceeds=yes side around `t`.
+			final brk:Doc = sameRule(rNY, rYY) ? shapeAt(rYY) : Group(IfWidthExceeds(t, shapeAt(rYY), shapeAt(rNY)));
+			return Group(IfBreak(brk, shapeAt(rNN)));
+		}
+
+		// 2+ extra thresholds — full enumeration without impossibility
+		// filtering. Renderer's column-aware probe at each
+		// IfWidthExceeds layer picks the correct leaf at runtime.
+		return buildBinaryThresholdTree(extraThresholds, [], null, evalAt, shapeAt);
+	}
+
+	/**
+	 * Recursive helper that builds the `IfWidthExceeds + IfBreak` tree
+	 * for chain-emit's cascade-with-thresholds layout. Sister of
+	 * `WrapList.buildThresholdTree` but emits chain shapes
+	 * (`shape(mode, location, …)`) at each leaf instead of routing
+	 * through a delimited-list `shapeAt(mode, lead)` closure.
+	 *
+	 *  - `forcedExceeds == true` → emit a single shape at each leaf
+	 *    (no IfBreak — parent committed to break-mode regardless of
+	 *    column). Used by the `anyHardline` path.
+	 *  - `forcedExceeds == null` → enumerate `exceeds=false` /
+	 *    `exceeds=true` at each leaf and split via `Group(IfBreak(…))`
+	 *    when the resolved {mode, location} pairs differ.
+	 *
+	 * `firing` accumulates thresholds chosen as "fired" along the
+	 * brk-side recursion. No impossibility filtering — renderer's
+	 * column probe at each `IfWidthExceeds` layer is monotone, so the
+	 * impossible-state leaves are unreachable at runtime regardless.
+	 */
+	private static function buildBinaryThresholdTree(
+		thresholds:Array<Int>, firing:Array<Int>,
+		forcedExceeds:Null<Bool>,
+		evalAt:(Bool, Array<Int>) -> {mode:WrapMode, location:WrappingLocation},
+		shapeAt:{mode:WrapMode, location:WrappingLocation} -> Doc
+	):Doc {
+		if (thresholds.length == 0) {
+			if (forcedExceeds != null) return shapeAt(evalAt(forcedExceeds, firing));
+			final rFlat:{mode:WrapMode, location:WrappingLocation} = evalAt(false, firing);
+			final rBrk:{mode:WrapMode, location:WrappingLocation} = evalAt(true, firing);
+			if (sameRule(rFlat, rBrk)) return shapeAt(rFlat);
+			return Group(IfBreak(shapeAt(rBrk), shapeAt(rFlat)));
+		}
+		final t:Int = thresholds[0];
+		final rest:Array<Int> = thresholds.slice(1);
+		final firingPlus:Array<Int> = firing.copy();
+		firingPlus.push(t);
+		final brk:Doc = buildBinaryThresholdTree(rest, firingPlus, forcedExceeds, evalAt, shapeAt);
+		final flat:Doc = buildBinaryThresholdTree(rest, firing, forcedExceeds, evalAt, shapeAt);
+		return IfWidthExceeds(t, brk, flat);
+	}
+
+	private static inline function sameRule(a:{mode:WrapMode, location:WrappingLocation}, b:{mode:WrapMode, location:WrappingLocation}):Bool {
+		return a.mode == b.mode && a.location == b.location;
 	}
 
 	private static function shape(mode:WrapMode, location:WrappingLocation, items:Array<Doc>, ops:Array<String>, cols:Int):Doc {

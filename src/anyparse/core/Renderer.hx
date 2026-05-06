@@ -227,20 +227,28 @@ class Renderer {
 					stack.push(new Frame(f.indent, f.mode, f.mode == MBreak ? breakDoc : flatDoc));
 				case IfWidthExceeds(n, breakDoc, flatDoc):
 					// Column-aware probe: rule fires when `col +
-					// flatWidth(flatDoc) >= n` (matches the cascade
-					// `lineLength >= n` predicate). `fitsFlat` answers
-					// `flatWidth <= remaining`, so the inverse threshold
-					// is `remaining = n - 1 - col` — fitsFlat returns
-					// true ⇔ `col + flatWidth <= n - 1` ⇔ `col +
-					// flatWidth < n` ⇔ rule does NOT fire. Negation
-					// gives `crosses = rule fires` → emit `breakDoc`.
-					// When `n - 1 - col < 0` (threshold already at or
-					// past current column), `fitsFlat` short-circuits
-					// to false → breakDoc fires. The mode is propagated
-					// unchanged — this primitive is independent of the
-					// enclosing Group's flat/break choice; it answers a
-					// separate column-vs-threshold question.
-					final crosses:Bool = !fitsFlat(n - 1 - col, f.indent, flatDoc);
+					// flatTokenWidth(flatDoc) >= n` (matches the cascade
+					// `lineLength >= n` predicate). The width measurement
+					// treats forced hardlines as zero width (mirrors
+					// `WrapList.flatTokenWidth`'s semantic) — the cascade
+					// rule asks "does the natural inline width reach n",
+					// not "does the flat shape budget-fit". Plain
+					// `fitsFlat` would refuse-to-flatten on any hardline
+					// inside flatDoc and incorrectly always pick brk;
+					// here a chain-emit shape (OPLAfterFirst, contains
+					// `Line('\n')` between operands) gets its real
+					// flat-token width back, so cascade rule 5
+					// (`itemCount>=4`) can win over rule 2
+					// (`lineLength>=140`) when the rendered chain at the
+					// current column wouldn't actually overflow.
+					//
+					// When `col >= n` already, the rule fires regardless
+					// of width — short-circuited by the `>=` comparison.
+					// The mode is propagated unchanged: this primitive is
+					// independent of the enclosing Group's flat/break
+					// choice; it answers a separate column-vs-threshold
+					// question.
+					final crosses:Bool = (col + flatTokenWidth(flatDoc) >= n);
 					stack.push(new Frame(f.indent, f.mode, crosses ? breakDoc : flatDoc));
 				case Fill(items, sep):
 					if (items.length == 0) {
@@ -373,5 +381,63 @@ class Renderer {
 		}
 
 		return budget >= 0;
+	}
+
+	/**
+	 * Walks a `Doc` tree and returns its visible-token width — the same
+	 * width the renderer would emit in flat layout if forced hardlines
+	 * didn't terminate that mode. Mirror of `WrapList.flatTokenWidth`,
+	 * duplicated here to keep `core.Renderer` independent of `format.wrap`.
+	 *
+	 * Treats forced hardlines (`Line('\n')`, `OptHardline`) as zero width
+	 * instead of aborting (which is what `fitsFlat`'s budget walk does).
+	 * `BodyGroup` content is deferred (zero width) to mirror
+	 * `fitsFlat`'s Departure 2.
+	 *
+	 * Used exclusively by the `IfWidthExceeds` probe to answer the
+	 * cascade rule `lineLength >= n` predicate as `col +
+	 * flatTokenWidth(flatDoc) >= n` — natural inline width, hardlines
+	 * ignored.
+	 */
+	static function flatTokenWidth(d:Doc):Int {
+		final stack:Array<Doc> = [d];
+		var total:Int = 0;
+		while (stack.length > 0) {
+			final node:Doc = stack.pop();
+			switch (node) {
+				case Empty | OptHardline:
+				case Text(s):
+					total += s.length;
+				case Line(flat):
+					if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) {
+						// Forced hardline contributes 0 to token width.
+					} else {
+						total += flat.length;
+					}
+				case Nest(_, inner):
+					stack.push(inner);
+				case Concat(items):
+					var i:Int = items.length;
+					while (--i >= 0) stack.push(items[i]);
+				case Group(inner):
+					stack.push(inner);
+				case BodyGroup(_):
+					// Defer — BG decides its own flat/break independently.
+				case IfBreak(_, flatDoc):
+					stack.push(flatDoc);
+				case IfWidthExceeds(_, _, flatDoc):
+					stack.push(flatDoc);
+				case Fill(items, sep):
+					var k:Int = items.length;
+					while (k > 0) {
+						k--;
+						stack.push(items[k]);
+						if (k > 0) stack.push(sep);
+					}
+				case OptSpace(s):
+					total += s.length;
+			}
+		}
+		return total;
 	}
 }

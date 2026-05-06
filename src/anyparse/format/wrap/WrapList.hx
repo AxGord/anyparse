@@ -117,7 +117,7 @@ class WrapList {
 		function evalAt(exceeds:Bool, firing:Array<Int>):WrapMode {
 			return decideWithLineLengthState(rules, items.length, maxLen, total,
 				exceeds, anyHardline,
-				t -> t == opt.lineWidth ? exceeds : firing.indexOf(t) >= 0);
+				t -> t == opt.lineWidth ? exceeds : firing.contains(t));
 		}
 
 		// Per-state shape builder: picks the right lead based on the
@@ -260,8 +260,12 @@ class WrapList {
 	 * appearing in `rules.rules` whose value differs from `lineWidth`.
 	 * Thresholds equal to `lineWidth` collapse to the `exceeds` semantic
 	 * (handled by the standard `IfBreak` pivot) and are filtered out.
+	 *
+	 * Public so chain-emit consumers (`BinaryChainEmit`) can build the
+	 * same threshold-aware Doc tree on top of the cascade evaluator
+	 * variants `decideWithLineLengthState` / `decideRuleWithLineLengthState`.
 	 */
-	private static function collectExtraLineLengthThresholds(rules:WrapRules, lineWidth:Int):Array<Int> {
+	public static function collectExtraLineLengthThresholds(rules:WrapRules, lineWidth:Int):Array<Int> {
 		final out:Array<Int> = [];
 		for (rule in rules.rules) {
 			for (cond in rule.conditions) {
@@ -277,7 +281,7 @@ class WrapList {
 	 * to a caller-supplied predicate. Used by `emit` to enumerate
 	 * cascade outcomes across (exceeds, lineLength-firing) state
 	 * combinations without mutating the static `decide` semantic
-	 * relied on by `BinaryChainEmit` / `MethodChainEmit`.
+	 * relied on by `MethodChainEmit`.
 	 */
 	private static function decideWithLineLengthState(
 		rules:WrapRules, itemCount:Int, maxItemLen:Int,
@@ -290,6 +294,34 @@ class WrapList {
 				return rule.mode;
 		}
 		return rules.defaultMode;
+	}
+
+	/**
+	 * Variant of `decideRule` that defers `LineLengthLargerThan`
+	 * evaluation to a caller-supplied predicate. Returns mode + effective
+	 * location (matching `decideRule`'s shape) so chain-emit consumers
+	 * can render per-rule operator placement (`BeforeLast` / `AfterLast`)
+	 * while still routing the threshold answer through the renderer's
+	 * column probe.
+	 *
+	 * Location resolution: rule.location ?? rules.defaultLocation ??
+	 * `WrappingLocation.AfterLast` — same fallback chain as `decideRule`.
+	 *
+	 * Used by `BinaryChainEmit.emit` to enumerate cascade outcomes
+	 * across (exceeds, lineLength-firing) state combinations.
+	 */
+	public static function decideRuleWithLineLengthState(
+		rules:WrapRules, itemCount:Int, maxItemLen:Int,
+		totalItemLen:Int, exceedsMaxLineLength:Bool,
+		hasMultilineItems:Bool, lineLengthFires:Int -> Bool
+	):{mode:WrapMode, location:WrappingLocation} {
+		final fallback:WrappingLocation = rules.defaultLocation ?? WrappingLocation.AfterLast;
+		for (rule in rules.rules) {
+			if (matchesWithLineLengthState(rule, itemCount, maxItemLen, totalItemLen,
+					exceedsMaxLineLength, hasMultilineItems, lineLengthFires))
+				return {mode: rule.mode, location: rule.location ?? fallback};
+		}
+		return {mode: rules.defaultMode, location: fallback};
 	}
 
 	private static function matchesWithLineLengthState(
@@ -603,6 +635,15 @@ class WrapList {
 				case TotalItemLengthLargerThan: totalItemLen >= cond.value;
 				case TotalItemLengthLessThan: totalItemLen <= cond.value;
 				case ExceedsMaxLineLength: cond.value == 0 ? !exceedsMaxLineLength : exceedsMaxLineLength;
+				// Static (column-blind) `LineLengthLargerThan` semantic — kept
+				// for legacy callers `decide` / `decideRule`. Currently only
+				// `MethodChainEmit` still consumes these; `BinaryChainEmit`
+				// and `WrapList.emit` go through the threshold-aware
+				// `*WithLineLengthState` variants (column-aware, via the
+				// renderer's `IfWidthExceeds` probe). When `MethodChainEmit`
+				// flips to threshold-aware, this arm becomes unreachable
+				// and can be deleted along with `decide` / `decideRule` /
+				// `matches`.
 				case LineLengthLargerThan: totalItemLen >= cond.value;
 				case HasMultilineItems: cond.value == 0 ? !hasMultilineItems : hasMultilineItems;
 				case _: false;
