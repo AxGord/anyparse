@@ -51,6 +51,7 @@ class Codegen {
 			fields.push(collectTrailingField(formatInfo));
 			fields.push(collectTrailingFullField(formatInfo));
 			fields.push(hasNewlineInField());
+			if (formatInfo.commentPatterns.length > 0) fields.push(skipWsAndStashField(formatInfo));
 		}
 		return fields;
 	}
@@ -224,6 +225,90 @@ class Codegen {
 			while (ctx.pos < ctx.input.length) {
 				if (matchLit(ctx, $v{close})) break;
 				ctx.pos++;
+			}
+			continue;
+		}
+	}
+
+	/**
+	 * ω-pratt-comment-stash — Trivia-mode twin of `skipWs` that captures
+	 * each consumed comment VERBATIM (open + body + optional close) into
+	 * `ctx.pendingTrivia.leadingComments`. Used by `Lowering.lowerPrattLoop`
+	 * (and `lowerPostfixLoop`) inside the matched-branch body where the
+	 * outer Pratt rewind-on-no-match cannot reach: once an operator has
+	 * matched, the post-op `skipWs` would otherwise drop any line/block
+	 * comment between the operator token and the next operand. Stashing
+	 * into `pendingTrivia` lets the next `collectTrivia` drain them as
+	 * leading-of-next-thing — orphan trivia rather than data loss
+	 * (per user permission "вытаскивать в конец выражения").
+	 */
+	private static function skipWsAndStashField(formatInfo:FormatReader.FormatInfo):Field {
+		final commentStmts:Array<Expr> = [for (p in formatInfo.commentPatterns) commentSkipAndStashBlock(p)];
+		final body:Expr = macro while (ctx.pos < ctx.input.length) {
+			final c:Int = ctx.input.charCodeAt(ctx.pos);
+			if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code) {
+				ctx.pos++;
+				continue;
+			}
+			$b{commentStmts};
+			break;
+		};
+		return {
+			name: 'skipWsAndStash',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [{name: 'ctx', type: macro : anyparse.runtime.Parser}],
+				ret: macro : Void,
+				expr: body,
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	private static function commentSkipAndStashBlock(p:FormatReader.CommentPattern):Expr {
+		final open:String = p.open;
+		if (p.lineTerminated) return macro if (matchLit(ctx, $v{open})) {
+			final _start:Int = ctx.pos - $v{open.length};
+			while (ctx.pos < ctx.input.length) {
+				if (ctx.input.charCodeAt(ctx.pos) == '\n'.code) break;
+				ctx.pos++;
+			}
+			final _verbatim:String = ctx.input.substring(_start, ctx.pos);
+			final _pt = ctx.pendingTrivia;
+			if (_pt == null) {
+				ctx.pendingTrivia = {
+					blankBefore: false,
+					blankAfterLeadingComments: false,
+					newlineBefore: false,
+					leadingComments: [_verbatim],
+				};
+			} else {
+				_pt.leadingComments.push(_verbatim);
+			}
+			continue;
+		}
+		final close:String = p.close;
+		return macro if (matchLit(ctx, $v{open})) {
+			final _start:Int = ctx.pos - $v{open.length};
+			var _end:Int = ctx.pos;
+			while (ctx.pos < ctx.input.length) {
+				if (matchLit(ctx, $v{close})) {
+					_end = ctx.pos;
+					break;
+				}
+				ctx.pos++;
+			}
+			final _verbatim:String = ctx.input.substring(_start, _end);
+			final _pt = ctx.pendingTrivia;
+			if (_pt == null) {
+				ctx.pendingTrivia = {
+					blankBefore: false,
+					blankAfterLeadingComments: false,
+					newlineBefore: false,
+					leadingComments: [_verbatim],
+				};
+			} else {
+				_pt.leadingComments.push(_verbatim);
 			}
 			continue;
 		}

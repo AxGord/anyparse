@@ -304,6 +304,19 @@ class Lowering {
 		// the matched ctor call. Ternary branches (detected by `ternary.op`)
 		// parse both middle and right operands at `minPrec = 0` (full
 		// expression) with an `expectLit` separator in between.
+		// ω-pratt-comment-stash: in Trivia mode, the matched-branch internal
+		// `skipWs` calls swap to `skipWsAndStash` so any line/block comment
+		// between the operator and the next operand is captured verbatim
+		// into `ctx.pendingTrivia.leadingComments`. The next `collectTrivia`
+		// drains them as leading-of-next-thing — orphan trivia rather than
+		// data loss. Without this swap, `a + // c\n b` loses `// c` because
+		// the post-op `skipWs` discards it (the outer Pratt rewind only fires
+		// on no-match). Plain mode keeps `skipWs` (no Trivia channel).
+		final skipFnName:String = ctx.trivia ? 'skipWsAndStash' : 'skipWs';
+		final skipCall:Expr = {
+			expr: ECall(macro $i{skipFnName}, [macro ctx]),
+			pos: Context.currentPos(),
+		};
 		var opChain:Expr = macro _matched = false;
 		for (i in 0...operatorBranches.length) {
 			final branch:ShapeNode = operatorBranches[operatorBranches.length - 1 - i];
@@ -332,11 +345,11 @@ class Lowering {
 						ctx.pos = _savedPos;
 						_matched = false;
 					} else {
-						skipWs(ctx);
+						$skipCall;
 						final _middle:$returnCT = $fullExprCall;
-						skipWs(ctx);
+						$skipCall;
 						expectLit(ctx, $v{sepText});
-						skipWs(ctx);
+						$skipCall;
 						final _right:$returnCT = $fullExprCall;
 						left = $ctorCall;
 					}
@@ -373,7 +386,7 @@ class Lowering {
 						ctx.pos = _savedPos;
 						_matched = false;
 					} else {
-						skipWs(ctx);
+						$skipCall;
 						final _right:$rightCT = $rightCall;
 						left = $ctorCall;
 					}
@@ -394,11 +407,18 @@ class Lowering {
 		// and `\n` stay consumed so `@:raw` siblings (e.g. `${expr}` in
 		// string interp, where the trailing literal expects `}` directly
 		// without skipWs) keep working: no comment → no rewind.
+		// ω-pratt-comment-stash: outer per-iter skipWs swaps to skipWsAndStash
+		// so comments BEFORE an operator (`a /* c */ + b`) get captured into
+		// `pendingTrivia` when an op matches. On no-match rewind, the
+		// captured comments must also be popped from the stash — otherwise
+		// the caller's collectTrivia sees them AND re-captures from input,
+		// duplicating. `_stashCount0` snapshot lets us truncate.
 		if (ctx.trivia) return macro {
 			var left:$returnCT = $atomCall;
 			while (true) {
 				final _preWsPos:Int = ctx.pos;
-				skipWs(ctx);
+				final _stashCount0:Int = ctx.pendingTrivia == null ? 0 : ctx.pendingTrivia.leadingComments.length;
+				skipWsAndStash(ctx);
 				final _savedPos:Int = ctx.pos;
 				var _matched:Bool = true;
 				$opChain;
@@ -415,7 +435,13 @@ class Lowering {
 						}
 						_scanI++;
 					}
-					if (_hadComment) ctx.pos = _preWsPos;
+					if (_hadComment) {
+						ctx.pos = _preWsPos;
+						final _pt = ctx.pendingTrivia;
+						if (_pt != null) {
+							while (_pt.leadingComments.length > _stashCount0) _pt.leadingComments.pop();
+						}
+					}
 					break;
 				}
 			}
