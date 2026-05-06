@@ -69,8 +69,6 @@ import anyparse.format.WriteOptions;
 @:nullSafety(Strict)
 final class BinaryChainEmit {
 
-	private static inline final HARDLINE_LEN:Int = 1 << 20;
-
 	public static function emit(
 		items:Array<Doc>, ops:Array<String>,
 		opt:WriteOptions, rules:WrapRules
@@ -78,19 +76,27 @@ final class BinaryChainEmit {
 		if (items.length == 0) return Empty;
 		if (items.length == 1) return items[0];
 
+		// Decoupled measurement (mirror ω-flatlength-decouple-tokenwidth
+		// in `WrapList.emit`):
+		//   - `flatLength(item) < 0` retains its legacy semantic and
+		//     drives `anyHardline` — preserves the (b) break-commit
+		//     shortcut on items with hardlines anywhere (including
+		//     inside `BodyGroup`).
+		//   - `flatTokenWidth(item)` feeds clean widths to cascade rule
+		//     conditions — mirrors `Renderer.fitsFlat`'s BG-defer so
+		//     `LineLengthLargerThan` / `TotalItemLengthLargerThan` /
+		//     `AnyItemLengthLargerThan` see the same widths the renderer
+		//     would lay out flat. Replaces the old `HARDLINE_LEN` (~1M)
+		//     inflation that conflated "has hardline anywhere" with
+		//     "rule-bound widths".
 		var total:Int = 0;
 		var maxLen:Int = 0;
 		var anyHardline:Bool = false;
-		for (i in 0...items.length) {
-			final len:Int = WrapList.flatLength(items[i]);
-			if (len < 0) {
-				anyHardline = true;
-				total += HARDLINE_LEN;
-				maxLen = HARDLINE_LEN;
-			} else {
-				total += len;
-				if (len > maxLen) maxLen = len;
-			}
+		for (item in items) {
+			if (WrapList.flatLength(item) < 0) anyHardline = true;
+			final w:Int = WrapList.flatTokenWidth(item);
+			total += w;
+			if (w > maxLen) maxLen = w;
 		}
 		// Add ` op ` width per gap so the cascade's `totalLength` /
 		// `exceedsMaxLineLength` predicates measure the realistic flat
@@ -100,12 +106,12 @@ final class BinaryChainEmit {
 		final cols:Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
 
 		if (anyHardline) {
-			final r:{mode:WrapMode, location:WrappingLocation} = WrapList.decideRule(rules, items.length, maxLen, total, true);
+			final r:{mode:WrapMode, location:WrappingLocation} = WrapList.decideRule(rules, items.length, maxLen, total, true, true);
 			return shape(r.mode, r.location, items, ops, cols);
 		}
 
-		final flat:{mode:WrapMode, location:WrappingLocation} = WrapList.decideRule(rules, items.length, maxLen, total, false);
-		final brk:{mode:WrapMode, location:WrappingLocation} = WrapList.decideRule(rules, items.length, maxLen, total, true);
+		final flat:{mode:WrapMode, location:WrappingLocation} = WrapList.decideRule(rules, items.length, maxLen, total, false, false);
+		final brk:{mode:WrapMode, location:WrappingLocation} = WrapList.decideRule(rules, items.length, maxLen, total, true, false);
 		if (flat.mode == brk.mode && flat.location == brk.location)
 			return shape(flat.mode, flat.location, items, ops, cols);
 
