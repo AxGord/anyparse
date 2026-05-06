@@ -12,10 +12,11 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
  * ω-methodchain-wraprules-capability — capability/parity unit tests for
  * the `methodChainWrap` `WrapRules` cascade.
  *
- *  - default cascade matches the 5-rule shape ported from
- *    `default-hxformat.json`'s `wrapping.methodChain` (minus
- *    upstream's leading `lineLength >= 160` rule — adoption blocked
- *    on `chainItemLength` / `fitsFlat` `BodyGroup` divergence; see
+ *  - default cascade matches the 6-rule shape ported from
+ *    `default-hxformat.json`'s `wrapping.methodChain` (including
+ *    upstream's leading `lineLength >= 160` rule — adopted in
+ *    ω-chain-itemlen-bg-defer once `chainItemLength` was aligned
+ *    with `fitsFlat`'s `BodyGroup` deferral; see
  *    `HaxeFormat.defaultMethodChainWrap` doc);
  *  - `wrapping.methodChain.defaultWrap` + `rules:[]` flip the cascade's
  *    `defaultMode` and reset the rules array (slice ω-peg-byname-array
@@ -35,7 +36,7 @@ class HxMethodChainWrapCapabilityTest extends Test {
 		final defaults:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
 		final wrap:WrapRules = defaults.methodChainWrap;
 		Assert.equals(WrapMode.NoWrap, wrap.defaultMode);
-		Assert.equals(5, wrap.rules.length);
+		Assert.equals(6, wrap.rules.length);
 	}
 
 	public function testJsonDefaultWrapOverridesDefaultMode():Void {
@@ -49,7 +50,7 @@ class HxMethodChainWrapCapabilityTest extends Test {
 	public function testEmptyJsonKeepsSeededDefaults():Void {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		Assert.equals(WrapMode.NoWrap, opts.methodChainWrap.defaultMode);
-		Assert.equals(5, opts.methodChainWrap.rules.length);
+		Assert.equals(6, opts.methodChainWrap.rules.length);
 	}
 
 }

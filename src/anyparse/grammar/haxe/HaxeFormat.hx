@@ -800,28 +800,20 @@ final class HaxeFormat implements TextFormat {
 	 * `resources/default-hxformat.json` (AxGord fork). Slice
 	 * ω-linelen-static added the runtime infra for `lineLength >= n`
 	 * (mapped to `LineLengthLargerThan`, evaluated statically against
-	 * `totalItemFlatLength`); slice ω-linelen-methodchain-baseline
-	 * tried to fold upstream's leading `lineLength >= 160` rule into
-	 * this baseline and reverted after it regressed
-	 * `issue_576_switch_indentation` (idn): static eval of
-	 * `LineLengthLargerThan` uses `MethodChainEmit.chainItemLength`
-	 * which sums all token text inside each segment — including the
-	 * tokens of `BodyGroup`-wrapped block / lambda bodies. The
-	 * renderer's `fitsFlat` instead defers `BodyGroup` content out of
-	 * the parent `Group`'s flat measurement (block bodies decide
-	 * their own break/flat independently). The two measurements
-	 * diverge whenever a chain segment carries a `BodyGroup`-bearing
-	 * argument (lambdas, block expressions, struct literals): the
-	 * static `total` over-counts by the deferred body width. Adopting
-	 * the upstream rule under this divergence causes `OnePerLine*`
-	 * to fire for chains the renderer would (and the corpus
-	 * baseline expects to) keep flat. Re-adoption is conditional on
-	 * either (a) Phase B / column-aware probe (renderer-time eval),
-	 * or (b) a `chainItemLength` fix that mirrors `fitsFlat`'s
-	 * `BodyGroup` deferral, with full passing-fixture audit before
-	 * commit. The current cascade covers the common cases via
-	 * `IfBreak`-split between `NoWrap` and `OnePerLineAfterFirst`,
-	 * picked at render time by the parent `Group`.
+	 * `totalItemFlatLength`). Slice ω-linelen-methodchain-baseline
+	 * first tried to adopt upstream's leading `lineLength >= 160` rule
+	 * and reverted: static eval used `MethodChainEmit.chainItemLength`
+	 * which descended into `BodyGroup` content, while the renderer's
+	 * `fitsFlat` defers BG content (Departure 2). Multi-line lambda /
+	 * block / struct-lit bodies inflated `total` and the rule fired
+	 * for chains the renderer would (and the corpus expected to) keep
+	 * flat — `issue_576_switch_indentation` regressed. Slice
+	 * ω-chain-itemlen-bg-defer aligned `chainItemLength` with
+	 * `fitsFlat`'s BG-defer and re-adopted the leading rule (full
+	 * 6-rule cascade now matches upstream). The cascade also covers
+	 * the common cases via `IfBreak`-split between `NoWrap` and
+	 * `OnePerLineAfterFirst`, picked at render time by the parent
+	 * `Group`.
 	 *
 	 * Returned as a fresh struct on each call so test code that mutates
 	 * the `defaultWriteOptions.methodChainWrap` substruct doesn't
@@ -830,6 +822,10 @@ final class HaxeFormat implements TextFormat {
 	public static function defaultMethodChainWrap():WrapRules {
 		return {
 			rules: [
+				{
+					mode: WrapMode.OnePerLineAfterFirst,
+					conditions: [{cond: WrapConditionType.LineLengthLargerThan, value: 160}],
+				},
 				{
 					mode: WrapMode.NoWrap,
 					conditions: [

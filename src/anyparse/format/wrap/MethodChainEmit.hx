@@ -40,14 +40,18 @@ class MethodChainEmit {
 		if (segments.length == 0) return receiver;
 
 		// Token-text width metric: chain segment length is the segment's
-		// rendered width with internal `Line('\n')` / `OptHardline`
-		// counted as zero contribution. Mirrors fork's chain measurement
-		// (token-position-based span ignoring inside-lambda layout
-		// breaks). Without this, a multi-line lambda body inside `.then(
-		// λ)` makes `WrapList.flatLength` return -1 and forces break-mode
-		// unconditionally — wrong: a 2-segment chain whose only "size"
-		// is internal lambda content should stay flat per fork's
-		// `itemCount<=3 + !exceeds → NoWrap` default rule.
+		// rendered width with `BodyGroup` content deferred (mirrors
+		// `Renderer.fitsFlat`'s BG-defer in Departure 2 — block / lambda /
+		// struct-lit bodies decide their own break/flat at render time and
+		// must NOT contribute to the parent chain's static `total`/`maxLen`
+		// measurement). Internal `Line('\n')` / `OptHardline` outside
+		// `BodyGroup` count as zero contribution (token-width semantics
+		// keep a 2-segment chain whose only "size" is internal break-mode
+		// layout flat per fork's `itemCount<=3 + !exceeds → NoWrap`
+		// default rule). Static cascade rules `LineLengthLargerThan` /
+		// `TotalItemLengthLargerThan` / `AnyItemLengthLargerThan` then
+		// see chain widths consistent with the renderer's flat-fit
+		// decision (ω-chain-itemlen-bg-defer).
 		var total:Int = 0;
 		var maxLen:Int = 0;
 		for (seg in segments) {
@@ -89,8 +93,12 @@ class MethodChainEmit {
 				case Concat(items):
 					var i:Int = items.length;
 					while (--i >= 0) stack.push(items[i]);
-				case Group(inner) | BodyGroup(inner):
+				case Group(inner):
 					stack.push(inner);
+				case BodyGroup(_):
+					// Defer like `Renderer.fitsFlat`: BG content decides
+					// its own flat/break and does not contribute to the
+					// parent chain's static width.
 				case IfBreak(_, flatDoc):
 					stack.push(flatDoc);
 				case Fill(items, sep):
