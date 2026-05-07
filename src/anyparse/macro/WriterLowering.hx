@@ -128,6 +128,14 @@ class WriterLowering {
 			// (single-Ref + `:kw` + `bodyPolicy` is structurally distinct)
 			// so the predicate composes additively in `extraArgs`.
 			final hasBodyPolicyKw:Bool = ctx.trivia && TriviaTypeSynth.isAltBodyPolicyKwBranch(branch);
+			// omega-paren-wrap-source-newline: single-Ref @:wrap branches with
+			// `@:fmt(captureWrapOpenNewline)` grow a positional `wrapOpenNewline:Bool`
+			// arg captured by the parser (post-lead skipWs gap newline). Read
+			// inside the wrap-shape block below via `wrapOpenNewlineExpr` to
+			// route between the open-broken and glue break shapes. Disjoint
+			// from the kw-bearing predicates (no kw on @:wrap ctors); composes
+			// additively in `extraArgs`.
+			final hasWrapOpenNewline:Bool = ctx.trivia && TriviaTypeSynth.isAltWrapOpenNewlineBranch(branch);
 			// ω-open-trailing-alt: same-line trailing comment after the
 			// open lit grows a parallel positional arg next to closeTrailing.
 			// Synth gate is `isAltCloseTrailingBranch && @:lead present`,
@@ -151,6 +159,7 @@ class WriterLowering {
 			final extraArgs:Int = ((hasCloseTrailing || hasTrailOptFlag || hasCaptureSource) ? 1 : 0)
 				+ (hasOpenTrailing ? 3 : 0)
 				+ (hasBodyPolicyKw ? 1 : 0)
+				+ (hasWrapOpenNewline ? 1 : 0)
 				+ (hasPostfixCloseTrailing ? 1 : 0);
 			final argNames:Array<String> = [for (i in 0...children.length + extraArgs) '_v$i'];
 
@@ -699,6 +708,27 @@ class WriterLowering {
 				if (TriviaTypeSynth.isCaptureSourceBranch(branch)) idx++;
 				macro $i{argNames[idx]};
 			};
+			// omega-paren-wrap-source-newline: ctors carrying
+			// @:fmt(captureWrapOpenNewline) on a single-Ref @:wrap branch grow
+			// a positional `wrapOpenNewline:Bool` arg in the synth pair (see
+			// TriviaTypeSynth.buildEnumCtor push order). Compute its access
+			// expression here so the @:wrap shape below can switch break-mode
+			// shape based on source-shape capture. Plain mode (or trivia-mode
+			// without the opt-in flag) leaves `wrapOpenNewlineExpr` null and
+			// the shape falls back to the existing unconditional glue.
+			final isWrapOpenNewlineCtor:Bool = ctx.trivia && isTriviaBearing(typePath) && TriviaTypeSynth.isAltWrapOpenNewlineBranch(branch);
+			final wrapOpenNewlineExpr:Null<Expr> = if (!isWrapOpenNewlineCtor) null
+			else {
+				var idx:Int = children.length;
+				if (TriviaTypeSynth.isAltCloseTrailingBranch(branch)) {
+					idx++;
+					if (branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse')) idx += 3;
+				}
+				if (TriviaTypeSynth.isAltTrailOptBranch(branch)) idx++;
+				if (TriviaTypeSynth.isCaptureSourceBranch(branch)) idx++;
+				if (TriviaTypeSynth.isAltBodyPolicyKwBranch(branch)) idx++;
+				macro $i{argNames[idx]};
+			};
 			// ω-issue-257-firstline regression-fix: forward `indentArgs` to
 			// `bodyPolicyWrap` so its `indentObjGuardedNext` rule fires for
 			// the ctor-level `Next`/`Keep`-bodyOnSameLine-false fallback path
@@ -928,6 +958,31 @@ class WriterLowering {
 				final leadDoc:Expr = parts[0];
 				final innerDoc:Expr = parts[1];
 				final trailDoc:Expr = parts[2];
+				// omega-paren-wrap-source-newline: when the ctor opted into
+				// `@:fmt(captureWrapOpenNewline)` and the parser captured a
+				// source `\n` between open delim and inner sub-rule's first
+				// token, route the break shape to `(\n<inner>\n)` (open
+				// followed by hardline + close on its own line). The inner's
+				// own leading `OptHardlineSkipAtOpenDelim` collides with the
+				// freshly-emitted hardline and drops via the renderer's
+				// hardline-collision branch -- net output is `(\n<item0>\n…\n)`.
+				// When the source had no leading newline (or the ctor didn't
+				// opt in / plain mode), fall back to the pre-slice shape
+				// `(<inner>\n)` from the chain emit's open-delim glue.
+				if (wrapOpenNewlineExpr != null) {
+					return macro {
+						final _wrapInner:anyparse.core.Doc = $innerDoc;
+						final _wrapTrail:anyparse.core.Doc = $trailDoc;
+						anyparse.format.wrap.WrapList.startsWithHardline(_wrapInner)
+							? _dg(_dib(
+								$wrapOpenNewlineExpr
+									? _dc([$leadDoc, _dhl(), _wrapInner, _dhl(), _wrapTrail])
+									: _dc([$leadDoc, _wrapInner, _dhl(), _wrapTrail]),
+								_dc([$leadDoc, _wrapInner, _wrapTrail])
+							))
+							: _dc([$leadDoc, _wrapInner, _wrapTrail]);
+					};
+				}
 				return macro {
 					final _wrapInner:anyparse.core.Doc = $innerDoc;
 					final _wrapTrail:anyparse.core.Doc = $trailDoc;

@@ -259,7 +259,7 @@ enum HxExpr {
 
 	ECheckTypeExpr(info:HxECheckType);
 
-	@:wrap('(', ')')
+	@:wrap('(', ')') @:fmt(captureWrapOpenNewline)
 	ParenExpr(inner:HxExpr);
 
 	@:kw('new')

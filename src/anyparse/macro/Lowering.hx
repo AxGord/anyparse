@@ -1271,10 +1271,22 @@ class Lowering {
 			final triviaBodyPolicyKw:Bool = ctx.trivia
 				&& isTriviaBearing(typePath)
 				&& TriviaTypeSynth.isAltBodyPolicyKwBranch(branch);
+			// omega-paren-wrap-source-newline: ctors with @:fmt(captureWrapOpenNewline)
+			// on a single-Ref @:wrap branch carry a positional wrapOpenNewline:
+			// Bool arg in the synth pair. Parser captures whether the gap
+			// between the open lead literal and the inner sub-rule's first
+			// token crossed a newline so the writer can pick between
+			// `(\n<inner>\n)` (open broken; preserves authored shape on
+			// chain inners) and `(<inner>\n)` (glued; unchanged default).
+			// Trivia-only; plain mode keeps the original ctor arity.
+			final triviaWrapOpenNewline:Bool = ctx.trivia
+				&& isTriviaBearing(typePath)
+				&& TriviaTypeSynth.isAltWrapOpenNewlineBranch(branch);
 			final ctorArgs:Array<Expr> = [macro _raw];
 			if (triviaTrailOpt) ctorArgs.push(macro _trailPresent);
 			if (triviaCaptureSource) ctorArgs.push(macro _sourceText);
 			if (triviaBodyPolicyKw) ctorArgs.push(macro _bodyOnSameLine);
+			if (triviaWrapOpenNewline) ctorArgs.push(macro _wrapOpenNewline);
 			final ctorCall:Expr = {expr: ECall(ctorRef, ctorArgs), pos: Context.currentPos()};
 			final kwLead:Null<String> = branch.annotations.get('kw.leadText');
 			final steps:Array<Expr> = [macro skipWs(ctx)];
@@ -1321,7 +1333,15 @@ class Lowering {
 			}
 			if (leadText != null) {
 				steps.push(macro expectLit(ctx, $v{leadText}));
+				// omega-paren-wrap-source-newline: capture _leadEndPos BEFORE
+				// the post-lead skipWs so _wrapOpenNewline can probe whether
+				// the gap up to the inner sub-rule's first token crossed a
+				// newline. Mirrors the kw-led _kwEndPos / _bodyOnSameLine
+				// pattern above.
+				if (triviaWrapOpenNewline) steps.push(macro final _leadEndPos:Int = ctx.pos);
 				steps.push(macro skipWs(ctx));
+				if (triviaWrapOpenNewline)
+					steps.push(macro final _wrapOpenNewline:Bool = hasNewlineIn(ctx.input, _leadEndPos, ctx.pos));
 			}
 			// Capture _start_pos AFTER any lead literal AND its skipWs, so
 			// the substring spans only what lives between lead and trail.

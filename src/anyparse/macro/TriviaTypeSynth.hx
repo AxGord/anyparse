@@ -228,6 +228,24 @@ class TriviaTypeSynth {
 	 */
 	public static inline final BODY_ON_SAME_LINE_ARG_NAME:String = 'bodyOnSameLine';
 
+	/**
+	 * ω-paren-wrap-source-newline — positional arg name appended to paired
+	 * Alt ctors carrying `@:fmt(captureWrapOpenNewline)` on a `@:wrap(...)`
+	 * (no kw, has lead+trail) single-Ref branch. The parser captures
+	 * whether the source had a newline in the gap between the open
+	 * delimiter (`@:lead`) and the inner sub-rule's first token — i.e.
+	 * source author wrote `(\n\tinner)` (newline) vs `(inner)` (tight).
+	 * The writer threads the flag into the wrap shape so a chain inner
+	 * rendered as OnePerLine round-trips the source-author distinction
+	 * between `((items[0]\n\titems[1]\n))` (no leading newline → glued)
+	 * and `(\n\titems[0]\n\titems[1]\n)` (open broken → first item on
+	 * its own line). Without the slot the writer can only emit one of
+	 * the two shapes uniformly. Plain mode keeps the original ctor arity
+	 * and the writer falls back to the always-glue shape from
+	 * `OptHardlineSkipAtOpenDelim`. First consumer: `HxExpr.ParenExpr`.
+	 */
+	public static inline final WRAP_OPEN_NEWLINE_ARG_NAME:String = 'wrapOpenNewline';
+
 	private static inline final PAIRED_SUFFIX:String = 'T';
 	private static inline final SYNTH_SUBPACK:String = 'trivia';
 	private static inline final SYNTH_MODULE_LEAF:String = 'Pairs';
@@ -543,6 +561,21 @@ class TriviaTypeSynth {
 			final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
 			args.push({name: BODY_ON_SAME_LINE_ARG_NAME, type: boolCT});
 		}
+		// ω-paren-wrap-source-newline: single-Ref @:wrap(open, close) Alt
+		// branches opting into source-shape capture via
+		// @:fmt(captureWrapOpenNewline) grow a positional `wrapOpenNewline:Bool`
+		// arg holding hasNewlineIn(_leadEndPos, ctx.pos) over the gap between
+		// the open lead literal and the inner sub-rule's first token.
+		// Disjoint from isAltBodyPolicyKwBranch (which requires @:kw; wrap
+		// ctors have no kw) and from the close/postfix trailing predicates
+		// (single Ref child shape, no Star). The arg follows bodyOnSameLine
+		// and precedes the postfix closeTrailing in buildEnumCtor's ordering
+		// so indices in WriterLowering stay deterministic. First consumer:
+		// HxExpr.ParenExpr.
+		if (isAltWrapOpenNewlineBranch(branch)) {
+			final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
+			args.push({name: WRAP_OPEN_NEWLINE_ARG_NAME, type: boolCT});
+		}
 		// ω-postfix-call-trailing: Star-suffix `@:postfix(open, close) @:sep(...)`
 		// branches whose Star already auto-collects per-arg trivia
 		// (`trivia.starCollects=true`, set by `TriviaAnalysis.markPostfixStarSuffix`)
@@ -683,6 +716,43 @@ class TriviaTypeSynth {
 		if (branch.children[0].kind != Ref) return false;
 		if (branch.readMetaString(':kw') == null) return false;
 		return branch.fmtReadString('bodyPolicy') != null;
+	}
+
+	/**
+	 * ω-paren-wrap-source-newline: True when the branch is a single-Ref
+	 * `@:wrap(open, close)` Alt-ctor (no `@:kw`, has both `@:lead` and
+	 * `@:trail`) opting in via parameterless `@:fmt(captureWrapOpenNewline)`.
+	 * Such ctors grow a positional `wrapOpenNewline:Bool` arg in the synth
+	 * pair so the writer can route between two break shapes at write time:
+	 *   - source had `\n` after open delim (`paramOpenedNewline=true`)  -->
+	 *     break shape `(\n<inner>\n)` (open delim followed by hardline,
+	 *     close on its own line); matches author intent for chains where
+	 *     the source already broke after `(`.
+	 *   - source had no `\n` after open delim (`paramOpenedNewline=false`)
+	 *     --> existing glue shape `(<inner>\n)` from the chain emit's
+	 *     `OptHardlineSkipAtOpenDelim`. Items[0] glued to enclosing `(`.
+	 *
+	 * Disjoint from `isAltBodyPolicyKwBranch` (kw absent vs required) and
+	 * from the close/postfix-trailing predicates (Ref vs Star child).
+	 * Plain mode keeps the original ctor arity and the writer falls back
+	 * to the unconditional glue shape. First consumer: `HxExpr.ParenExpr`.
+	 */
+	public static function isAltWrapOpenNewlineBranch(branch:ShapeNode):Bool {
+		if (branch.children.length != 1) return false;
+		if (branch.children[0].kind != Ref) return false;
+		if (branch.hasMeta(':kw')) return false;
+		// `@:wrap(o,c)` is the canonical shorthand for `@:lead(o) + @:trail(c)`
+		// at this opt-in's first consumer. `Lit.annotate` populates
+		// `lit.leadText`/`lit.trailText` from either form, but that runs AFTER
+		// `arm()` (see `Build.run` ordering -- same constraint motivating
+		// raw-meta probes elsewhere in this file). Use `hasMeta` rather than
+		// `readMetaString` because `@:wrap` carries TWO params (open + close)
+		// and `readMetaString` requires exactly one. Both authoring forms
+		// grow the same lit pair downstream.
+		final hasWrap:Bool = branch.hasMeta(':wrap');
+		final hasLeadTrail:Bool = branch.hasMeta(':lead') && branch.hasMeta(':trail');
+		if (!(hasWrap || hasLeadTrail)) return false;
+		return branch.fmtHasFlag('captureWrapOpenNewline');
 	}
 
 	private static function shapeToComplexType(node:ShapeNode, synthPack:Array<String>):ComplexType {
