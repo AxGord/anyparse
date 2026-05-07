@@ -696,18 +696,9 @@ class WriterLowering {
 			// closeTrailing. Plain mode keeps `null` and the wrap degrades
 			// to `sameLayoutExpr` (no Keep slot — falls through the same
 			// width-aware path as `Same`).
-			final isBodyPolicyKwCtor:Bool = ctx.trivia && isTriviaBearing(typePath) && TriviaTypeSynth.isAltBodyPolicyKwBranch(branch);
-			final bodyOnSameLineExpr:Null<Expr> = if (!isBodyPolicyKwCtor) null
-			else {
-				var idx:Int = children.length;
-				if (TriviaTypeSynth.isAltCloseTrailingBranch(branch)) {
-					idx++;
-					if (branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse')) idx += 3;
-				}
-				if (TriviaTypeSynth.isAltTrailOptBranch(branch)) idx++;
-				if (TriviaTypeSynth.isCaptureSourceBranch(branch)) idx++;
-				macro $i{argNames[idx]};
-			};
+			final bodyOnSameLineExpr:Null<Expr> = (ctx.trivia && isTriviaBearing(typePath))
+				? altSlotAccess(branch, children.length, argNames, BodyPolicyKw)
+				: null;
 			// omega-paren-wrap-source-newline: ctors carrying
 			// @:fmt(captureWrapOpenNewline) on a single-Ref @:wrap branch grow
 			// a positional `wrapOpenNewline:Bool` arg in the synth pair (see
@@ -716,19 +707,9 @@ class WriterLowering {
 			// shape based on source-shape capture. Plain mode (or trivia-mode
 			// without the opt-in flag) leaves `wrapOpenNewlineExpr` null and
 			// the shape falls back to the existing unconditional glue.
-			final isWrapOpenNewlineCtor:Bool = ctx.trivia && isTriviaBearing(typePath) && TriviaTypeSynth.isAltWrapOpenNewlineBranch(branch);
-			final wrapOpenNewlineExpr:Null<Expr> = if (!isWrapOpenNewlineCtor) null
-			else {
-				var idx:Int = children.length;
-				if (TriviaTypeSynth.isAltCloseTrailingBranch(branch)) {
-					idx++;
-					if (branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse')) idx += 3;
-				}
-				if (TriviaTypeSynth.isAltTrailOptBranch(branch)) idx++;
-				if (TriviaTypeSynth.isCaptureSourceBranch(branch)) idx++;
-				if (TriviaTypeSynth.isAltBodyPolicyKwBranch(branch)) idx++;
-				macro $i{argNames[idx]};
-			};
+			final wrapOpenNewlineExpr:Null<Expr> = (ctx.trivia && isTriviaBearing(typePath))
+				? altSlotAccess(branch, children.length, argNames, WrapOpenNewline)
+				: null;
 			// ω-issue-257-firstline regression-fix: forward `indentArgs` to
 			// `bodyPolicyWrap` so its `indentObjGuardedNext` rule fires for
 			// the ctor-level `Next`/`Keep`-bodyOnSameLine-false fallback path
@@ -5792,6 +5773,46 @@ class WriterLowering {
 		}
 		return false;
 	}
+
+	/**
+	 * Resolves the positional argument access expression for a synth-ctor
+	 * Alt slot, given the slot kind. Returns `null` when the branch does
+	 * not carry that slot (synth ctor wasn't extended with the matching
+	 * positional arg). Callers must additionally gate on `ctx.trivia &&
+	 * isTriviaBearing(typePath)` since these slots only exist on
+	 * trivia-mode bearing ctors.
+	 *
+	 * The slot order mirrors `TriviaTypeSynth.buildEnumCtor` push order:
+	 *   CloseTrailing (+ 3 conditional `:lead && !:tryparse` slots) →
+	 *   TrailOpt → CaptureSource → BodyPolicyKw → WrapOpenNewline.
+	 *
+	 * Centralising this walker keeps idx accounting in lockstep with
+	 * `buildEnumCtor`; future slot additions become a single chain extend
+	 * here instead of touching every consumer.
+	 */
+	private static function altSlotAccess(branch:ShapeNode, baseIdx:Int, argNames:Array<String>, slot:AltSlot):Null<Expr> {
+		final hasSlot:Bool = switch slot {
+			case CloseTrailing:   TriviaTypeSynth.isAltCloseTrailingBranch(branch);
+			case TrailOpt:        TriviaTypeSynth.isAltTrailOptBranch(branch);
+			case CaptureSource:   TriviaTypeSynth.isCaptureSourceBranch(branch);
+			case BodyPolicyKw:    TriviaTypeSynth.isAltBodyPolicyKwBranch(branch);
+			case WrapOpenNewline: TriviaTypeSynth.isAltWrapOpenNewlineBranch(branch);
+		};
+		if (!hasSlot) return null;
+		var idx:Int = baseIdx;
+		if (slot == CloseTrailing) return macro $i{argNames[idx]};
+		if (TriviaTypeSynth.isAltCloseTrailingBranch(branch)) {
+			idx++;
+			if (branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse')) idx += 3;
+		}
+		if (slot == TrailOpt) return macro $i{argNames[idx]};
+		if (TriviaTypeSynth.isAltTrailOptBranch(branch)) idx++;
+		if (slot == CaptureSource) return macro $i{argNames[idx]};
+		if (TriviaTypeSynth.isCaptureSourceBranch(branch)) idx++;
+		if (slot == BodyPolicyKw) return macro $i{argNames[idx]};
+		if (TriviaTypeSynth.isAltBodyPolicyKwBranch(branch)) idx++;
+		return macro $i{argNames[idx]};
+	}
 }
 
 /** Output of WriterLowering for one rule. */
@@ -5962,4 +5983,17 @@ typedef CtorBlankResolution = {
 	cases:Array<Case>,
 	optField:String,
 };
+
+/**
+ * Synth-ctor positional-arg slot kind for `altSlotAccess`. Order MUST
+ * mirror `TriviaTypeSynth.buildEnumCtor`'s push order — the walker
+ * relies on declaration order to skip slots preceding the requested one.
+ */
+enum abstract AltSlot(Int) {
+	final CloseTrailing = 0;
+	final TrailOpt = 1;
+	final CaptureSource = 2;
+	final BodyPolicyKw = 3;
+	final WrapOpenNewline = 4;
+}
 #end
