@@ -122,6 +122,23 @@ package anyparse.core;
 	                     more-specific (inner) position. Intentional
 	                     blank lines must use plain `Line('\n')` pairs;
 	                     OptHardline is opt-in at the producer site.
+	- `OptHardlineSkipAtOpenDelim` — break-mode newline that drops when
+	                     the last emitted byte is an open delimiter
+	                     (`(`, `[`, `{`), or a prior hardline (mirrors
+	                     `OptHardline`'s collision drop). Used by chain
+	                     shapes (`BinaryChainEmit.shapeOnePerLine`) for
+	                     the leading hardline before items[0]: keeps
+	                     the chain's first operand glued to the
+	                     enclosing open delim (`(items[0]...`) while
+	                     still emitting `\n+indent` in outer-context
+	                     cases (`dirty = chain`, `return chain`) where
+	                     the previous byte is `=` / `n` / etc. Like
+	                     `Line('\n')` and `OptHardline`, forces
+	                     `fitsFlat` to refuse flatten so the enclosing
+	                     Group commits MBreak. The dropped variant
+	                     updates `pendingIndent` to the node's own
+	                     indent so following `Text` lands at the
+	                     correct column.
 
 	See `D` for builder helpers and `Renderer` for the layout algorithm.
 **/
@@ -139,4 +156,5 @@ enum Doc {
 	Fill(items:Array<Doc>, sep:Doc);
 	OptSpace(s:String);
 	OptHardline;
+	OptHardlineSkipAtOpenDelim;
 }

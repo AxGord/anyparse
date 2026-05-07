@@ -106,6 +106,22 @@ class Renderer {
 		// `\n\n` when two emitters independently push a leading
 		// hardline at the same insertion point).
 		var lastEmittedWasHardline:Bool = false;
+		// Tracks whether the last emitted byte to `buf` was an open
+		// delimiter (`(`, `[`, `{`). Set true on Text whose last char
+		// is an open delim; cleared on any subsequent emit (Text not
+		// ending in delim, Line, OptSpace flush, OptHardline emit, or
+		// the new ctor's emit). `OptHardlineSkipAtOpenDelim` reads this
+		// to drop its `\n+indent` when wrapped chain content sits
+		// directly inside `(`/`[`/`{` so items[0] glues to the open
+		// delim. Indent flush (whitespace) does not set the flag — its
+		// last byte is a tab/space, not a delim.
+		var lastEmittedWasOpenDelim:Bool = false;
+
+		inline function endsWithOpenDelim(s:String):Bool {
+			if (s.length == 0) return false;
+			final c:Int = StringTools.fastCodeAt(s, s.length - 1);
+			return c == '('.code || c == '['.code || c == '{'.code;
+		}
 
 		inline function flushOptSpace():Void {
 			if (pendingOptSpace != null) {
@@ -117,6 +133,7 @@ class Renderer {
 				col += pendingOptSpace.length;
 				pendingOptSpace = null;
 				lastEmittedWasHardline = false;
+				lastEmittedWasOpenDelim = false;
 			}
 		}
 
@@ -148,6 +165,7 @@ class Renderer {
 						buf.add(s);
 						col += s.length;
 						lastEmittedWasHardline = false;
+						lastEmittedWasOpenDelim = endsWithOpenDelim(s);
 					}
 				case Line(flat):
 					if (f.mode == MFlat) {
@@ -158,7 +176,10 @@ class Renderer {
 						}
 						buf.add(flat);
 						col += flat.length;
-						if (flat.length > 0) lastEmittedWasHardline = false;
+						if (flat.length > 0) {
+							lastEmittedWasHardline = false;
+							lastEmittedWasOpenDelim = endsWithOpenDelim(flat);
+						}
 					} else {
 						// Break-mode hardline: drop pending OptSpace so the
 						// lead's optional trailing space disappears before
@@ -171,6 +192,7 @@ class Renderer {
 						pendingIndent = f.indent;
 						col = f.indent;
 						lastEmittedWasHardline = true;
+						lastEmittedWasOpenDelim = false;
 					}
 				case OptSpace(s):
 					// Defer; flushed by the next Text or in-flat Line, or
@@ -202,6 +224,42 @@ class Renderer {
 						pendingIndent = f.indent;
 						col = f.indent;
 						lastEmittedWasHardline = true;
+						lastEmittedWasOpenDelim = false;
+					}
+				case OptHardlineSkipAtOpenDelim:
+					// Open-delim-aware leading hardline. Three branches:
+					//  1. Last emit was an open delim (`(`/`[`/`{`):
+					//     drop the `\n+indent` so items[0] glues to the
+					//     open delim. Leave `col` and `pendingIndent`
+					//     untouched — the open delim's text already set
+					//     col, and the next continuation `\n` (later
+					//     break-mode `Line` for items[1]) will set its
+					//     own pendingIndent at frame time.
+					//     `lastEmittedWasOpenDelim` stays true so a
+					//     redundant follow-up of the same ctor (defensive
+					//     case) keeps dropping.
+					//  2. Last emit was a hardline: mirror `OptHardline`'s
+					//     collision drop (update pendingIndent + col to
+					//     the more-specific inner indent).
+					//  3. Otherwise: emit `\n+indent` like a regular
+					//     break-mode `Line`. Used by chain shapes for
+					//     the leading `\n` before items[0] in
+					//     outer-context cases (`dirty = chain`).
+					pendingOptSpace = null;
+					if (lastEmittedWasOpenDelim) {
+						// drop, leave col / pendingIndent / flags as-is
+					} else if (lastEmittedWasHardline) {
+						pendingIndent = f.indent;
+						col = f.indent;
+					} else {
+						if (trailingWhitespace && pendingIndent >= 0) {
+							writeIndent(buf, pendingIndent, indentChar, tabWidth);
+						}
+						buf.add(lineEnd);
+						pendingIndent = f.indent;
+						col = f.indent;
+						lastEmittedWasHardline = true;
+						lastEmittedWasOpenDelim = false;
 					}
 				case Nest(n, inner):
 					// Indent only matters when observed (i.e. on a hardline
@@ -395,11 +453,11 @@ class Renderer {
 					// space (the suppression only happens at render time on
 					// break-mode `Line`).
 					budget -= s.length;
-				case OptHardline:
-					// OptHardline is a hardline by intent — it can never
-					// flatten. Mirror the `Line('\n')` budget=-1 path:
-					// any enclosing Group containing an OptHardline must
-					// commit to MBreak.
+				case OptHardline | OptHardlineSkipAtOpenDelim:
+					// Both opt-hardline variants are hardlines by intent
+					// and can never flatten. Mirror the `Line('\n')`
+					// budget=-1 path: any enclosing Group containing
+					// either must commit to MBreak.
 					budget = -1;
 					break;
 			}
@@ -430,7 +488,7 @@ class Renderer {
 		while (stack.length > 0) {
 			final node:Doc = stack.pop();
 			switch (node) {
-				case Empty | OptHardline:
+				case Empty | OptHardline | OptHardlineSkipAtOpenDelim:
 				case Text(s):
 					total += s.length;
 				case Line(flat):
@@ -500,7 +558,7 @@ class Renderer {
 			final node:Doc = stack.pop();
 			switch (node) {
 				case Empty:
-				case OptHardline:
+				case OptHardline | OptHardlineSkipAtOpenDelim:
 					aborted = true;
 				case Text(s):
 					total += s.length;

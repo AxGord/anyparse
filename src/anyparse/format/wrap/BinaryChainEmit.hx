@@ -331,7 +331,17 @@ final class BinaryChainEmit {
 		//    (`return !(\n\ta || b || \n\tc || \n\td\n);`).
 		//  - `BeforeLast`: every continuation line starts with `op `
 		//    (`\n\titems[0]\n\top_0 items[1]\n\top_1 items[2]…`).
-		final inner:Array<Doc> = [Line('\n'), items[0]];
+		//
+		// Leading break is `OptHardlineSkipAtOpenDelim` rather than
+		// plain `Line('\n')`: when the chain is wrapped directly inside
+		// `(`/`[`/`{` (e.g. `((a || b || c))` paren-wrapped sub-chain),
+		// the renderer drops the leading `\n+indent` so items[0] glues
+		// to the open delim, matching haxe-formatter's
+		// `((items[0] ||\n\titems[1]...\n))` shape on
+		// issue_187_oneline. Outer-context cases (`dirty = chain`,
+		// `return chain`) keep the leading `\n+indent` because their
+		// previous emitted byte is `=` / `n` / etc., not an open delim.
+		final inner:Array<Doc> = [OptHardlineSkipAtOpenDelim, items[0]];
 		switch location {
 			case AfterLast:
 				for (i in 0...ops.length) {

@@ -217,6 +217,52 @@ class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 			'close should not land on its own line for OPLAfterFirst inner in: <$out>');
 	}
 
+	public function testOnePerLineGluesItemsZeroToOpenDelim():Void {
+		// ω-onePerLine-glueAtOpenDelim — when a chain in OnePerLine mode is
+		// wrapped directly inside `(`/`[`/`{`, the leading hardline of the
+		// chain shape (`Doc.OptHardlineSkipAtOpenDelim` since this slice)
+		// drops at render time so items[0] glues to the open delim.
+		// Mirrors haxe-formatter's `((items[0] ||\n\titems[1]))` shape on
+		// the inner paren-wrapped sub-chains of issue_187_oneline (3rd/4th
+		// `dirty=` statements). Without the drop, anyparse would emit
+		// `(\n\titems[0] ||...` and diverge from fork.
+		//
+		// `var v:Bool = (a || b || c)` puts the OnePerLine chain directly
+		// inside ParenExpr (`@:wrap('(', ')')` on `HxExpr.ParenExpr`).
+		// `defaultWrap: onePerLine` + empty rules forces OnePerLine
+		// regardless of fit, so the shape exercises the leading-hardline
+		// drop path even on a short chain.
+		final src:String = 'class C { static function m():Void { var v:Bool = (a || b || c); } }';
+		final cfg:String = '{ "wrapping": { "opBoolChain": { "defaultWrap": "onePerLine", "rules": [] } } }';
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
+		opts.lineWidth = 80;
+		final out:String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+		Assert.isTrue(out.indexOf('(a ||') != -1,
+			'expected items[0] glued to `(` (no `\\n+indent` between) in: <$out>');
+		Assert.isTrue(out.indexOf('(\n') == -1,
+			'unexpected `(\\n` after open paren — leading hardline should drop in: <$out>');
+		// Sanity: the chain still breaks (continuations on own lines).
+		Assert.isTrue(out.indexOf('\n') != -1, 'expected at least one break in chain: <$out>');
+	}
+
+	public function testOnePerLineKeepsLeadingBreakAfterAssign():Void {
+		// Sister of testOnePerLineGluesItemsZeroToOpenDelim — verifies
+		// the OPPOSITE context (chain after `=` assignment) still emits
+		// the leading `\n+indent`. The new ctor's drop predicate fires
+		// only when last byte is `(`/`[`/`{` — `=` (with OptSpace
+		// trailing-space dropped on hardline) leaves the previous byte
+		// neither hardline nor open delim, so the leading `\n` emits.
+		// Matches haxe-formatter's `dirty =\n\titems[0]...` shape on the
+		// 1st `dirty=` statement of issue_187_oneline.
+		final src:String = 'class C { static function m():Void { dirty = a || b || c; } }';
+		final cfg:String = '{ "wrapping": { "opBoolChain": { "defaultWrap": "onePerLine", "rules": [] } } }';
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
+		opts.lineWidth = 80;
+		final out:String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+		Assert.isTrue(out.indexOf('=\n') != -1,
+			'expected `=\\n` (leading break still emits after assignment) in: <$out>');
+	}
+
 	public function testIdempotencyLongBoolChain():Void {
 		final src:String = 'class C { static function m():Void { dirty = aaaaaaaaaaaa || bbbbbbbbbbbb || cccccccccccc || dddddddddddd || eeeeeeeeeeee; } }';
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');

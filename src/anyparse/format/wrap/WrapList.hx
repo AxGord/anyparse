@@ -407,11 +407,12 @@ class WrapList {
 					// mode discards it. Wrap-rules-cascade measurements
 					// must therefore include it.
 					total += s.length;
-				case OptHardline:
-					// OptHardline can never flatten — mirrors `Line('\n')`
-					// returning -1 (and `Renderer.fitsFlat`'s OptHardline
-					// arm). Any item containing an OptHardline forces the
-					// wrap engine into break mode unconditionally.
+				case OptHardline | OptHardlineSkipAtOpenDelim:
+					// Both opt-hardline variants can never flatten —
+					// mirrors `Line('\n')` returning -1 (and
+					// `Renderer.fitsFlat`'s OptHardline arm). Any item
+					// containing either forces the wrap engine into
+					// break mode unconditionally.
 					return -1;
 			}
 		}
@@ -446,7 +447,7 @@ class WrapList {
 		while (stack.length > 0) {
 			final node:Doc = stack.pop();
 			switch (node) {
-				case Empty | OptHardline:
+				case Empty | OptHardline | OptHardlineSkipAtOpenDelim:
 				case Text(s):
 					total += s.length;
 				case Line(flat):
@@ -518,7 +519,7 @@ class WrapList {
 			case Empty | Text(_) | OptSpace(_): -1;
 			case Line(flat):
 				flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code ? depth : -1;
-			case OptHardline: depth;
+			case OptHardline | OptHardlineSkipAtOpenDelim: depth;
 			case Nest(cols, inner): lastHardlineDepth(inner, depth + cols);
 			case Group(inner) | BodyGroup(inner): lastHardlineDepth(inner, depth);
 			case IfBreak(brk, _): lastHardlineDepth(brk, depth);
@@ -571,7 +572,13 @@ class WrapList {
 				return false;
 			case Line(flat):
 				return flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code;
-			case OptHardline:
+			case OptHardline | OptHardlineSkipAtOpenDelim:
+				// Both opt-hardline variants count as a leading hardline
+				// for the wrap-engine `(...)` shape decision. The new
+				// ctor's render-time drop (when inside an open delim)
+				// keeps items[0] glued, but the structural answer here
+				// stays "yes, inner has a leading break point" so the
+				// wrap still places close on its own line.
 				return true;
 			case Nest(_, inner) | Group(inner) | BodyGroup(inner):
 				node = inner;
@@ -795,7 +802,7 @@ class WrapList {
 	private static function hasLeadingHardline(d:Doc):Bool {
 		return switch d {
 			case Empty: false;
-			case OptHardline: true;
+			case OptHardline | OptHardlineSkipAtOpenDelim: true;
 			case Line(flat): flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code;
 			case Text(_): false;
 			case OptSpace(_): false;
