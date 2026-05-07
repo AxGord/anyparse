@@ -674,6 +674,23 @@ final class HaxeFormatConfigLoader {
 				opt.expressionElseBody = p;
 				opt.expressionForBody = p;
 			}
+			// ω-expression-if-next-with-fitline-body: fanout `Next` / `FitLine`
+			// into `expressionIfBody` / `expressionElseBody` only.
+			// `expressionForBody` is intentionally excluded — `for` has no
+			// `else` sibling, so the noSiblingFallback gate cannot kick in,
+			// and arrow-body / comprehension `for` would regress. The arrow-
+			// body if-without-else and comprehension filter-if cases are
+			// caught by `HxIfExpr.thenBranch`'s `@:fmt(noSiblingFallback(
+			// 'ifBody'))`: when `elseBranch` is `null` at runtime, the body
+			// policy falls back to `opt.ifBody` (FitLine) instead of
+			// `opt.expressionIfBody` (Next), preserving inline shape for
+			// `item -> if (cond) body` and `[for (x in xs) if (cond) x]`.
+			// Mirrors fork's `MarkSameLine.markIf` `parent.tok==Arrow` and
+			// `isComprehensionFilterIf` short-circuits onto `ifBody`.
+			else if (p == BodyPolicy.Next || p == BodyPolicy.FitLine) {
+				opt.expressionIfBody = p;
+				opt.expressionElseBody = p;
+			}
 			// ω-expr-else-sameline: fanout `sameLine.expressionIf` into
 			// `sameLineExpressionElse:SameLinePolicy`, the per-`else` gap
 			// for HxIfExpr.elseBranch. Independent of body-placement

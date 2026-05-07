@@ -39,13 +39,43 @@ package anyparse.grammar.haxe;
  * BodyPolicy Next/FitLine gate does not apply here. `Keep` consults
  * the synth `elseBranchBeforeKwNewline` slot (computed against the
  * preceding field's last non-whitespace position via `_prevEnd`,
- * see `Lowering.hx` ω-prev-content-end). `elseBranch` does NOT
- * carry the statement-level `shapeAware` / `elseIf` /
- * `fitLineIfWithElse` companions: those trigger Allman-style
- * placement and policy interactions tuned for statement-`if`.
- * Expression-`if` always reads as one value, and `else if` chains
- * in expression position are handled naturally by recursion through
- * `HxIfExpr.elseBranch:Null<HxExpr>` being itself an `IfExpr`.
+ * see `Lowering.hx` ω-prev-content-end).
+ *
+ * `@:fmt(shapeAware)` on `elseBranch` (parity with
+ * `HxIfStmt.elseBody`) — when the preceding sibling `thenBranch`'s
+ * runtime ctor is non-block (anything other than `BlockExpr` /
+ * `ObjectLit`) AND `expressionElseBody` is `Next` / `FitLine`, the
+ * pre-`else` separator switches to a hardline regardless of the
+ * `sameLineExpressionElse` flag. Block-shape `thenBranch` (block /
+ * object literal) keeps the flag-driven separator so `} else {`
+ * cuddles when the source did. `Same`-policy and `Keep`+inline-slot
+ * suppress the shape-aware break (matches the gate at
+ * `WriterLowering.hx:2670+`).
+ *
+ * `@:fmt(elseIf)` on `elseBranch` — when the body is itself an
+ * `HxIfExpr` (recursive `else if (...)` chain), the body-placement
+ * dispatch consults `opt.elseIf:KeywordPlacement` (default `Same`)
+ * instead of `expressionElseBody`, so `else if` cuddles inline
+ * regardless of the outer body policy. The `findCtorPattern` lookup
+ * in `bodyPolicyWrap` tries both `IfStmt` and `IfExpr` ctor names so
+ * the same `opt.elseIf` knob covers statement and expression forms.
+ * `fitLineIfWithElse` is intentionally absent — the expression form
+ * uses the inverse-polarity `noSiblingFallback('ifBody')` mechanism
+ * on `thenBranch` (below) for the no-else fallback case.
+ *
+ * `@:fmt(noSiblingFallback('ifBody'))` on `thenBranch` — runtime
+ * fallback when the next optional sibling (`elseBranch`) is null:
+ * `bodyPolicyWrap` swaps `opt.expressionIfBody` for `opt.ifBody`
+ * before any ctor / Keep / Next / FitLine dispatch fires. Mirrors
+ * fork's `MarkSameLine.markIf` short-circuits onto `ifBody` for
+ * `parent.tok==Arrow` (arrow-body if-without-else) and
+ * `isComprehensionFilterIf` (no-else filter form): under
+ * `expressionIf=next` the body would otherwise force-break and
+ * regress `item -> if (cond) body` and `[for (x in xs) if (cond) x]`.
+ * The "inverse polarity" relative to `HxIfStmt`'s
+ * `fitLineIfWithElse` is intentional — `fitLineIfWithElse` degrades
+ * `FitLine` to `Next` when an `else` IS present; this knob degrades
+ * `Next/FitLine/...` to a separate flag when `else` is ABSENT.
  *
  * `@:fmt(indentValueIfCtor('ObjectLit', 'indentObjectLiteral',
  * 'objectLiteralLeftCurly'))` on `thenBranch` — subtractive variant of
@@ -66,6 +96,6 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxIfExpr = {
 	@:lead('(') @:trail(')') var cond:HxExpr;
-	@:fmt(bodyPolicy('expressionIfBody'), indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly')) var thenBranch:HxExpr;
-	@:optional @:kw('else') @:fmt(bodyPolicy('expressionElseBody'), sameLine('sameLineExpressionElse')) var elseBranch:Null<HxExpr>;
+	@:fmt(bodyPolicy('expressionIfBody'), indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'), noSiblingFallback('ifBody')) var thenBranch:HxExpr;
+	@:optional @:kw('else') @:fmt(bodyPolicy('expressionElseBody'), sameLine('sameLineExpressionElse'), shapeAware, elseIf) var elseBranch:Null<HxExpr>;
 };

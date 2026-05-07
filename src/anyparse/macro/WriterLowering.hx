@@ -1448,7 +1448,17 @@ class WriterLowering {
 
 			// Field value
 			final bodyPolicyFlag:Null<String> = child.fmtReadString('bodyPolicy');
-			final elseFieldName:Null<String> = child.fmtHasFlag('fitLineIfWithElse') ? optionalBodyFieldName : null;
+			// ω-expression-if-next-with-fitline-body: `@:fmt(noSiblingFallback(
+			// 'fallbackFlag'))` on a bare-Ref body field tells `bodyPolicyWrap`
+			// to swap `opt.<bodyPolicy>` for `opt.<fallbackFlag>` at runtime
+			// when the next optional sibling field's value is null. Used by
+			// `HxIfExpr.thenBranch` to fall back to `opt.ifBody` (FitLine) when
+			// `elseBranch` is null — mirrors fork's arrow-body / comprehension-
+			// filter-if short-circuits onto `ifBody`. When this flag is set
+			// the field also opts into the `optionalBodyFieldName` channel so
+			// `elseFieldName` is populated regardless of `fitLineIfWithElse`.
+			final fallbackFlag:Null<String> = child.fmtReadString('noSiblingFallback');
+			final elseFieldName:Null<String> = (child.fmtHasFlag('fitLineIfWithElse') || fallbackFlag != null) ? optionalBodyFieldName : null;
 			var justWrappedBody:Null<PrevBodyInfo> = null;
 			switch child.kind {
 				case Ref if (isOptional):
@@ -1709,7 +1719,7 @@ class WriterLowering {
 						// carry this meta because fork keeps `if (cond) {`
 						// cuddled.
 						final bodyAllmanIndentArgs:Null<Array<String>> = child.fmtReadStringArgs('bodyAllmanIndentForCtor');
-						parts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, fieldAccess, refName, hasElseIf, elseFieldName, null, null, bodyOnSameLineExpr, kwPolicyFlag, afterTrailExpr, indentObjArgs, policyOverrides, bodyAllmanIndentArgs));
+						parts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, fieldAccess, refName, hasElseIf, elseFieldName, null, null, bodyOnSameLineExpr, kwPolicyFlag, afterTrailExpr, indentObjArgs, policyOverrides, bodyAllmanIndentArgs, null, null, fallbackFlag));
 						justWrappedBody = {access: fieldAccess, typePath: refName};
 					} else {
 						// `@:fmt(leftCurly)` on a bare Ref field (e.g.
@@ -3384,7 +3394,7 @@ class WriterLowering {
 		?bodyOnSameLineExpr:Null<Expr>, ?kwPolicyFlagName:Null<String>, ?afterTrailExpr:Null<Expr>,
 		?indentObjArgs:Array<String>, ?policyOverrides:Array<Array<String>>,
 		?bodyAllmanIndentArgs:Array<String>, ?widthAware:Bool,
-		?ifExprIndentArgs:Array<String>
+		?ifExprIndentArgs:Array<String>, ?fallbackFlagName:String
 	):Expr {
 		// ω-untyped-body-stmt-override: parent-side body-policy override.
 		// When the field carries `@:fmt(bodyPolicyOverride('<ctor>',
@@ -3404,7 +3414,7 @@ class WriterLowering {
 			expr: EField(macro opt, flagName),
 			pos: Context.currentPos(),
 		};
-		final optFlag:Expr = if (policyOverrides == null || policyOverrides.length == 0) defaultOptFlag
+		final ctorOverriddenOptFlag:Expr = if (policyOverrides == null || policyOverrides.length == 0) defaultOptFlag
 		else {
 			final ctorExpr:Expr = macro Type.enumConstructor($bodyValueExpr);
 			var chain:Expr = defaultOptFlag;
@@ -3419,6 +3429,41 @@ class WriterLowering {
 				i--;
 			}
 			chain;
+		};
+		// ω-expression-if-next-with-fitline-body: outermost runtime swap on
+		// `optFlag`. When the field carries `@:fmt(noSiblingFallback(
+		// '<fallbackFlagName>'))` AND the next optional sibling field is null
+		// at runtime AND the resolved policy is `Next` / `FitLine`, the body
+		// policy is read from `opt.<fallbackFlagName>` instead of
+		// `opt.<flagName>`. Wraps OUTSIDE the ctor-override chain because no-
+		// sibling implies "fall back to the simpler shape" — the body's ctor
+		// is irrelevant when the fallback policy applies.
+		//
+		// `Same` / `Keep` are NOT swapped: the original semantic is "flatten /
+		// preserve source" which is independent of sibling presence, and the
+		// fallback flag (e.g. `opt.ifBody=Next` default) would force-break
+		// short bodies that the user's config explicitly asked to keep flat.
+		// The fallback exists to undo the force-break of `Next/FitLine`, not
+		// to override every policy.
+		//
+		// Consumed by `HxIfExpr.thenBranch` (`fallbackFlagName='ifBody'`,
+		// elseFieldName='elseBranch'): when `else` is absent AND
+		// `opt.expressionIfBody` is `Next` / `FitLine`, the body uses
+		// `opt.ifBody` instead, preserving inline shape for arrow-body and
+		// comprehension-filter `if (cond) body` cases under `expressionIf=
+		// next`. With `expressionIf=same/keep` the original policy applies.
+		final optFlag:Expr = if (fallbackFlagName == null || elseFieldName == null) ctorOverriddenOptFlag
+		else {
+			final elseAccess:Expr = {expr: EField(macro value, elseFieldName), pos: Context.currentPos()};
+			final fallbackAccess:Expr = {expr: EField(macro opt, fallbackFlagName), pos: Context.currentPos()};
+			final bpPath:Array<String> = ['anyparse', 'format', 'BodyPolicy'];
+			final samePat:Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Same']));
+			final keepPat:Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Keep']));
+			macro {
+				final _resolvedBP:anyparse.format.BodyPolicy = $ctorOverriddenOptFlag;
+				($elseAccess == null && _resolvedBP != $samePat && _resolvedBP != $keepPat)
+					? $fallbackAccess : _resolvedBP;
+			};
 		};
 		// ω-issue-316: when the caller forwarded kw-trivia slot accesses,
 		// the "Same" separator (`_dt(' ')`) becomes a runtime `kwGapDoc`
@@ -3680,7 +3725,13 @@ class WriterLowering {
 		final policySwitch:Expr = {expr: ESwitch(optFlag, policyCases, sameLayoutExpr), pos: Context.currentPos()};
 
 		final blockSplit:{tagged:Array<Expr>, untagged:Array<Expr>} = collectBlockCtorPatternsByLeftCurly(bodyTypePath);
-		final ifStmtPattern:Null<Expr> = hasElseIf ? findCtorPattern(bodyTypePath, 'IfStmt') : null;
+		// ω-expression-if-next-with-fitline-body: `hasElseIf` with body type
+		// HxStatement matches `IfStmt`; with body type HxExpr matches `IfExpr`
+		// (HxIfExpr.elseBranch). The override fires when the else-body is
+		// itself an if-construct so `else if` cuddles via opt.elseIf semantics.
+		final ifStmtPattern:Null<Expr> = hasElseIf
+			? (findCtorPattern(bodyTypePath, 'IfStmt') ?? findCtorPattern(bodyTypePath, 'IfExpr'))
+			: null;
 		final outerCases:Array<Case> = [];
 		if (ifStmtPattern != null) {
 			final kpPath:Array<String> = ['anyparse', 'format', 'KeywordPlacement'];
