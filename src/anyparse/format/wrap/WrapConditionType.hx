@@ -23,22 +23,31 @@ package anyparse.format.wrap;
  *    runs disagree, so the renderer's flat/break decision picks the
  *    right mode at layout time. When both runs agree, the chosen mode
  *    is unconditional and no Group wrap is needed.
- *  - `LineLengthLargerThan` — `totalItemFlatLength >= n` against the
- *    construct's own flat width. Differs from `TotalItemLengthLargerThan`
- *    only by intent: haxe-formatter's `lineLength >= n` is conceptually
- *    "would the rendered line at this point cross threshold N", which
- *    anyparse approximates as the construct's flat width without
- *    column prefix. Mapped from JSON `'lineLength >= n'` (slice
- *    ω-linelen-static).
+ *  - `LineLengthLargerThan` — column-aware "would `column +
+ *    flatTokenWidth(item) >= n` at the renderer's layout time". Routed
+ *    through `Doc.IfWidthExceeds(n, brk, flat)` by the engine — the
+ *    static cascade walk in `decideWithLineLengthState` defers the
+ *    answer to a caller-supplied `lineLengthFires` predicate, and
+ *    `WrapList.emit` / `BinaryChainEmit.emit` / `MethodChainEmit.emit`
+ *    enumerate cascade outcomes across (exceeds, lineLength-firing)
+ *    states and emit one `IfWidthExceeds` wrapper per distinct
+ *    threshold so the renderer probes column position at layout time.
+ *    When the threshold equals `WriteOptions.lineWidth` the cascade
+ *    collapses to the existing `exceeds` semantic via the standard
+ *    `IfBreak` pivot. Mapped from JSON `'lineLength >= n'` (slice
+ *    ω-linelen-static introduced the cond; ω-ifwidthexceeds-infra
+ *    added the column-aware Doc primitive; ω-methodchain-threshold-aware
+ *    completed migration of all callers).
  *  - `HasMultilineItems` — `anyHardline == (value != 0)`. Triggers when
  *    at least one item carries a forced hardline (`Line('\n')` or
  *    `OptHardline`) anywhere in its `Doc` subtree, including inside
  *    `BodyGroup` (i.e. matches the legacy `flatLength(item) < 0`
- *    semantic). Replaces the prior `HARDLINE_LEN` inflation hack — the
- *    cascade now expresses "items have multi-line content" as an
- *    explicit predicate instead of relying on `total/maxLen` blowing
- *    past every threshold. Mapped from JSON `'hasMultilineItems'`
- *    (slice ω-flatlength-decouple-tokenwidth).
+ *    semantic). Replaces the prior `HARDLINE_LEN` inflation hack
+ *    (deleted in slice ω-methodchain-threshold-aware) — the cascade now
+ *    expresses "items have multi-line content" as an explicit predicate
+ *    instead of relying on `total/maxLen` blowing past every threshold.
+ *    Mapped from JSON `'hasMultilineItems'` (slice
+ *    ω-flatlength-decouple-tokenwidth).
  *
  * Format-neutral — same conditions apply to any delimited list across
  * languages. Mirrors haxe-formatter's `WrapConditionType` enum

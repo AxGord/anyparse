@@ -648,16 +648,16 @@ import anyparse.format.wrap.WrapRules;
  *    sep-Star site (tagged with `@:fmt(wrapRules('arrayLiteralWrap'))`).
  *    Same twice-evaluated cascade machinery as `objectLiteralWrap` /
  *    `callParameterWrap`. Defaults port haxe-formatter's
- *    `wrapping.arrayWrap` rules from `default-hxformat.json`, minus the
- *    `hasMultilineItems` and `equalItemLengths` conditions (and their
- *    gated `fillLineWithLeadingBreak` rules) which `WrapConditionType`
- *    does not yet model — for the `hasMultilineItems` case the runtime
- *    already routes `anyHardline=true` items through the `exceeds=true`
- *    cascade run with `maxLen`/`total` set to `HARDLINE_LEN`, which
- *    fails the `total<80` rule and triggers `OnePerLine` via the
- *    `anyItemLength>=30` rule. Architecturally orthogonal to
- *    `trailingCommaArrays` (which still drives the optional trailing
- *    `,` after the last element on multi-line); the two compose.
+ *    `wrapping.arrayWrap` rules from `default-hxformat.json`, including
+ *    the leading `hasMultilineItems → OnePerLine` rule (slice
+ *    ω-flatlength-decouple-tokenwidth introduced the
+ *    `HasMultilineItems` cond and decoupled item-multiline detection
+ *    from width measurement). The `equalItemLengths` cond and its
+ *    gated `fillLineWithLeadingBreak` rule remain skipped — none of
+ *    the current corpus fixtures depend on it. Architecturally
+ *    orthogonal to `trailingCommaArrays` (which still drives the
+ *    optional trailing `,` after the last element on multi-line); the
+ *    two compose.
  *
  * Field added in slice ω-anontype-wraprules (fourth per-construct
  * wrap-rules consumer):

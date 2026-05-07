@@ -817,21 +817,26 @@ final class HaxeFormat implements TextFormat {
 	 * ported from haxe-formatter's `wrapping.methodChain` rule set in
 	 * `resources/default-hxformat.json` (AxGord fork). Slice
 	 * ω-linelen-static added the runtime infra for `lineLength >= n`
-	 * (mapped to `LineLengthLargerThan`, evaluated statically against
-	 * `totalItemFlatLength`). Slice ω-linelen-methodchain-baseline
-	 * first tried to adopt upstream's leading `lineLength >= 160` rule
-	 * and reverted: static eval used `MethodChainEmit.chainItemLength`
-	 * which descended into `BodyGroup` content, while the renderer's
-	 * `fitsFlat` defers BG content (Departure 2). Multi-line lambda /
-	 * block / struct-lit bodies inflated `total` and the rule fired
-	 * for chains the renderer would (and the corpus expected to) keep
-	 * flat — `issue_576_switch_indentation` regressed. Slice
-	 * ω-chain-itemlen-bg-defer aligned `chainItemLength` with
-	 * `fitsFlat`'s BG-defer and re-adopted the leading rule (full
-	 * 6-rule cascade now matches upstream). The cascade also covers
+	 * (initially evaluated statically against `totalItemFlatLength`).
+	 * Slice ω-linelen-methodchain-baseline first tried to adopt upstream's
+	 * leading `lineLength >= 160` rule and reverted: static eval used
+	 * `MethodChainEmit.chainItemLength` which descended into `BodyGroup`
+	 * content, while the renderer's `fitsFlat` defers BG content
+	 * (Departure 2). Multi-line lambda / block / struct-lit bodies
+	 * inflated `total` and the rule fired for chains the renderer would
+	 * (and the corpus expected to) keep flat — `issue_576_switch_indentation`
+	 * regressed. Slice ω-chain-itemlen-bg-defer aligned `chainItemLength`
+	 * with `fitsFlat`'s BG-defer and re-adopted the leading rule (full
+	 * 6-rule cascade now matches upstream). Slice
+	 * ω-methodchain-threshold-aware migrated `MethodChainEmit.emit` off
+	 * the legacy column-blind `decide` evaluator onto
+	 * `decideWithLineLengthState` + `IfWidthExceeds` — at default
+	 * `lineWidth=160` the leading `LineLengthLargerThan: 160` collapses
+	 * cleanly to the existing `exceeds` semantic via the standard
+	 * `IfBreak` pivot; user-modified `lineWidth` now routes the answer
+	 * through the renderer's column-aware probe. The cascade also covers
 	 * the common cases via `IfBreak`-split between `NoWrap` and
-	 * `OnePerLineAfterFirst`, picked at render time by the parent
-	 * `Group`.
+	 * `OnePerLineAfterFirst`, picked at render time by the parent `Group`.
 	 *
 	 * Returned as a fresh struct on each call so test code that mutates
 	 * the `defaultWriteOptions.methodChainWrap` substruct doesn't

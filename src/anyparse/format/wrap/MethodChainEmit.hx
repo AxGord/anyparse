@@ -48,10 +48,9 @@ class MethodChainEmit {
 		// `BodyGroup` count as zero contribution (token-width semantics
 		// keep a 2-segment chain whose only "size" is internal break-mode
 		// layout flat per fork's `itemCount<=3 + !exceeds → NoWrap`
-		// default rule). Static cascade rules `LineLengthLargerThan` /
-		// `TotalItemLengthLargerThan` / `AnyItemLengthLargerThan` then
-		// see chain widths consistent with the renderer's flat-fit
-		// decision (ω-chain-itemlen-bg-defer).
+		// default rule). Cascade rules `TotalItemLengthLargerThan` /
+		// `AnyItemLengthLargerThan` then see chain widths consistent
+		// with the renderer's flat-fit decision (ω-chain-itemlen-bg-defer).
 		var total:Int = 0;
 		var maxLen:Int = 0;
 		for (seg in segments) {
@@ -62,14 +61,121 @@ class MethodChainEmit {
 
 		final cols:Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
 
-		final modeFlat:WrapMode = WrapList.decide(rules, segments.length, maxLen, total, false);
-		final modeBreak:WrapMode = WrapList.decide(rules, segments.length, maxLen, total, true);
-		if (modeFlat == modeBreak)
-			return shape(modeFlat, receiver, segments, cols);
+		// Column-aware `LineLengthLargerThan` thresholds — mirror
+		// `WrapList.emit` / `BinaryChainEmit.emit` threshold-aware
+		// enumeration pattern (slice ω-ifwidthexceeds-infra +
+		// ω-methodchain-threshold-aware). Cascade rules with
+		// `lineLength >= n` where `n != opt.lineWidth` cannot be answered
+		// at emit time because the rendered column position is unknown
+		// until layout. Threshold == lineWidth collapses cleanly to
+		// `exceeds` (the existing `IfBreak` pivot) and stays on the
+		// 2-state path. Non-lineWidth thresholds enumerate extra states
+		// and emit one `IfWidthExceeds(t, …)` wrapper per distinct
+		// threshold so the renderer probes `column + flatWidth(flat)`
+		// against `t` at layout time.
+		final extraThresholds:Array<Int> = WrapList.collectExtraLineLengthThresholds(rules, opt.lineWidth);
 
-		final flatDoc:Doc = shape(modeFlat, receiver, segments, cols);
-		final breakDoc:Doc = shape(modeBreak, receiver, segments, cols);
-		return Group(IfBreak(breakDoc, flatDoc));
+		// Cascade-eval helper: caller specifies the (exceeds, firing) state
+		// and gets the cascade's resolved mode. `LineLengthLargerThan` is
+		// mapped to:
+		//   - `t == lineWidth` → use `exceeds` (collapse semantic)
+		//   - `t != lineWidth` → membership in `firing`
+		// `hasMultilineItems` is `false` — chain segments don't track
+		// internal hardlines for cascade purposes (BG-deferred bodies
+		// decide their own layout; bare `Line('\n')` inside a segment is
+		// not expected outside BG). `MethodChainEmit` does NOT have an
+		// `anyHardline` force-break path mirroring `BinaryChainEmit`'s —
+		// adding one is a separate slice if a fixture demands it.
+		// Non-`inline` so it can be passed as a closure into
+		// `buildChainThresholdTree` (Haxe forbids closure-on-inline-closure).
+		function evalAt(exceeds:Bool, firing:Array<Int>):WrapMode {
+			return WrapList.decideWithLineLengthState(rules, segments.length, maxLen, total,
+				exceeds, false,
+				t -> t == opt.lineWidth ? exceeds : firing.contains(t));
+		}
+
+		function shapeAt(mode:WrapMode):Doc {
+			return shape(mode, receiver, segments, cols);
+		}
+
+		// Normal path: cascade evaluated against (exceeds=false /
+		// exceeds=true) AND each non-lineWidth threshold's firing state.
+		// Tree construction mirrors `WrapList.emit`'s 0/1/N branches —
+		// the impossibility-pruning at N=1 keeps the renderer's tree
+		// minimal (one impossible state filtered out per `t < lineWidth`
+		// or `t > lineWidth` case).
+		if (extraThresholds.length == 0) {
+			final modeFlat:WrapMode = evalAt(false, []);
+			final modeBreak:WrapMode = evalAt(true, []);
+			if (modeFlat == modeBreak) return shapeAt(modeFlat);
+			return Group(IfBreak(shapeAt(modeBreak), shapeAt(modeFlat)));
+		}
+
+		if (extraThresholds.length == 1) {
+			final t:Int = extraThresholds[0];
+			if (t < opt.lineWidth) {
+				// 3 valid states (col+w<t implies col+w<lineWidth implies !exceeds):
+				//   (firing=∅,    exceeds=no)  → modeNN
+				//   (firing={t},  exceeds=no)  → modeYN
+				//   (firing={t},  exceeds=yes) → modeYY
+				final modeNN:WrapMode = evalAt(false, []);
+				final modeYN:WrapMode = evalAt(false, [t]);
+				final modeYY:WrapMode = evalAt(true, [t]);
+				if (modeNN == modeYN && modeYN == modeYY) return shapeAt(modeNN);
+				final brk:Doc = (modeYY == modeYN) ? shapeAt(modeYY) : Group(IfBreak(shapeAt(modeYY), shapeAt(modeYN)));
+				return Group(IfWidthExceeds(t, brk, shapeAt(modeNN)));
+			}
+			// t > lineWidth: 3 valid states (col+w>=t implies col+w>=lineWidth):
+			//   (firing=∅,    exceeds=no)  → modeNN
+			//   (firing=∅,    exceeds=yes) → modeNY
+			//   (firing={t},  exceeds=yes) → modeYY
+			final modeNN:WrapMode = evalAt(false, []);
+			final modeNY:WrapMode = evalAt(true, []);
+			final modeYY:WrapMode = evalAt(true, [t]);
+			if (modeNN == modeNY && modeNY == modeYY) return shapeAt(modeNN);
+			final brk:Doc = (modeNY == modeYY) ? shapeAt(modeYY) : Group(IfWidthExceeds(t, shapeAt(modeYY), shapeAt(modeNY)));
+			return Group(IfBreak(brk, shapeAt(modeNN)));
+		}
+
+		// 2+ extra thresholds — full enumeration without impossibility
+		// filtering. Renderer's column-aware probe at each
+		// `IfWidthExceeds` layer picks the correct leaf at runtime; the
+		// impossible-state shapes are inert. None of the current default
+		// cascades use N≥2 — this branch is correctness insurance.
+		return buildChainThresholdTree(extraThresholds, [], evalAt, shapeAt);
+	}
+
+	/**
+	 * Recursive helper that builds the `IfWidthExceeds + IfBreak` tree
+	 * for chain-emit's cascade-with-thresholds layout. Sister of
+	 * `WrapList.buildThresholdTree` and `BinaryChainEmit.buildBinaryThresholdTree`
+	 * but emits chain shapes (`shape(mode, …)`) at each leaf — no
+	 * `location` axis (chain segments don't have op placement).
+	 *
+	 * `firing` accumulates thresholds chosen as "fired" along the
+	 * brk-side recursion. Each leaf splits via `Group(IfBreak(…))` when
+	 * the resolved modes differ. No impossibility filtering at N≥2 —
+	 * renderer's column probe at each `IfWidthExceeds` layer is monotone,
+	 * so the impossible-state leaves are unreachable at runtime regardless.
+	 */
+	private static function buildChainThresholdTree(
+		thresholds:Array<Int>, firing:Array<Int>,
+		evalAt:(Bool, Array<Int>) -> WrapMode,
+		shapeAt:WrapMode -> Doc
+	):Doc {
+		if (thresholds.length == 0) {
+			final modeFlat:WrapMode = evalAt(false, firing);
+			final modeBreak:WrapMode = evalAt(true, firing);
+			if (modeFlat == modeBreak) return shapeAt(modeFlat);
+			return Group(IfBreak(shapeAt(modeBreak), shapeAt(modeFlat)));
+		}
+		final t:Int = thresholds[0];
+		final rest:Array<Int> = thresholds.slice(1);
+		final firingPlus:Array<Int> = firing.copy();
+		firingPlus.push(t);
+		final brk:Doc = buildChainThresholdTree(rest, firingPlus, evalAt, shapeAt);
+		final flat:Doc = buildChainThresholdTree(rest, firing, evalAt, shapeAt);
+		return IfWidthExceeds(t, brk, flat);
 	}
 
 	private static function chainItemLength(d:Doc):Int {

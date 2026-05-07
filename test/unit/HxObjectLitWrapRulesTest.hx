@@ -23,9 +23,11 @@ import anyparse.grammar.haxe.HxModuleWriter;
  * Default mode: `noWrap`.
  *
  * Test layout:
- *  - `WrapList.decide` direct unit tests confirm the cascade walks
- *    rules in order, AND-combines conditions, and returns
- *    `defaultMode` on miss. Format-neutral — no parser needed.
+ *  - `WrapList.decideWithLineLengthState` direct unit tests confirm the
+ *    cascade walks rules in order, AND-combines conditions, and returns
+ *    `defaultMode` on miss. Format-neutral — no parser needed. None of
+ *    these test cascades use `LineLengthLargerThan`, so the test-local
+ *    `decide` helper passes a constant-`false` predicate for that arm.
  *  - End-to-end tests run a Haxe object literal through the parser +
  *    writer and assert the resulting source matches the expected
  *    layout shape for the chosen mode. Default rules are inherited
@@ -51,12 +53,12 @@ final class HxObjectLitWrapRulesTest extends Test {
 
 	public function testDecideNoWrapForThreeShortItems():Void {
 		final rules:WrapRules = HaxeFormat.defaultObjectLiteralWrap();
-		Assert.equals(WrapMode.NoWrap, WrapList.decide(rules, 3, 5, 15, false));
+		Assert.equals(WrapMode.NoWrap, decide(rules, 3, 5, 15, false));
 	}
 
 	public function testDecideOnePerLineForFourItems():Void {
 		final rules:WrapRules = HaxeFormat.defaultObjectLiteralWrap();
-		Assert.equals(WrapMode.OnePerLine, WrapList.decide(rules, 4, 5, 20, false));
+		Assert.equals(WrapMode.OnePerLine, decide(rules, 4, 5, 20, false));
 	}
 
 	public function testDecideNoWrapWinsOverLongAnyItemForFewItems():Void {
@@ -65,7 +67,7 @@ final class HxObjectLitWrapRulesTest extends Test {
 		// `AnyItemLengthLargerThan` rule only triggers once the count
 		// rule's gate releases (count > 3 or exceeds=true).
 		final rules:WrapRules = HaxeFormat.defaultObjectLiteralWrap();
-		Assert.equals(WrapMode.NoWrap, WrapList.decide(rules, 2, 35, 50, false));
+		Assert.equals(WrapMode.NoWrap, decide(rules, 2, 35, 50, false));
 	}
 
 	public function testDecideOnePerLineForLongAnyItemWhenExceeds():Void {
@@ -76,7 +78,7 @@ final class HxObjectLitWrapRulesTest extends Test {
 		// side: when the source line overflows, the Group breaks and
 		// the cascade's `exceeds=true` arm fires.
 		final rules:WrapRules = HaxeFormat.defaultObjectLiteralWrap();
-		Assert.equals(WrapMode.OnePerLine, WrapList.decide(rules, 2, 35, 50, true));
+		Assert.equals(WrapMode.OnePerLine, decide(rules, 2, 35, 50, true));
 	}
 
 	public function testDecideOnePerLineForLargeTotalWhenExceeds():Void {
@@ -86,12 +88,12 @@ final class HxObjectLitWrapRulesTest extends Test {
 		// pushes the enclosing line past `lineWidth` even though the
 		// per-item count is below 4.
 		final rules:WrapRules = HaxeFormat.defaultObjectLiteralWrap();
-		Assert.equals(WrapMode.OnePerLine, WrapList.decide(rules, 3, 25, 65, true));
+		Assert.equals(WrapMode.OnePerLine, decide(rules, 3, 25, 65, true));
 	}
 
 	public function testDecideOnePerLineWhenExceedsLine():Void {
 		final rules:WrapRules = HaxeFormat.defaultObjectLiteralWrap();
-		Assert.equals(WrapMode.OnePerLine, WrapList.decide(rules, 1, 5, 5, true));
+		Assert.equals(WrapMode.OnePerLine, decide(rules, 1, 5, 5, true));
 	}
 
 	public function testDecideRespectsCustomDefaultMode():Void {
@@ -99,7 +101,7 @@ final class HxObjectLitWrapRulesTest extends Test {
 			rules: [],
 			defaultMode: WrapMode.FillLine,
 		};
-		Assert.equals(WrapMode.FillLine, WrapList.decide(rules, 99, 99, 999, true));
+		Assert.equals(WrapMode.FillLine, decide(rules, 99, 99, 999, true));
 	}
 
 	public function testDecideFirstMatchWins():Void {
@@ -116,7 +118,7 @@ final class HxObjectLitWrapRulesTest extends Test {
 			],
 			defaultMode: WrapMode.NoWrap,
 		};
-		Assert.equals(WrapMode.FillLine, WrapList.decide(rules, 5, 5, 25, false));
+		Assert.equals(WrapMode.FillLine, decide(rules, 5, 5, 25, false));
 	}
 
 	public function testFlatLengthCountsTextAndFlatLine():Void {
@@ -176,5 +178,22 @@ final class HxObjectLitWrapRulesTest extends Test {
 	private inline function writeWith(src:String):String {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+	}
+
+	/**
+	 * Test-local adapter over `WrapList.decideWithLineLengthState`.
+	 * `hasMultilineItems=false` and `lineLengthFires=t -> false` because
+	 * none of the cascade rules under test use `HasMultilineItems` or
+	 * `LineLengthLargerThan` — those arms would just return `false` and
+	 * the cascade walks past them either way. Keeps test call sites
+	 * focused on the (itemCount, maxLen, total, exceeds) arguments that
+	 * matter.
+	 */
+	private static inline function decide(
+		rules:WrapRules, itemCount:Int, maxItemLen:Int,
+		totalItemLen:Int, exceedsMaxLineLength:Bool
+	):WrapMode {
+		return WrapList.decideWithLineLengthState(rules, itemCount, maxItemLen, totalItemLen,
+			exceedsMaxLineLength, false, t -> false);
 	}
 }

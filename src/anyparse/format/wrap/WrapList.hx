@@ -32,8 +32,6 @@ using Lambda;
  */
 class WrapList {
 
-	private static inline final HARDLINE_LEN:Int = 1 << 20;
-
 	/**
 	 * `leadFlat` / `leadBreak`: optional Docs prepended INSIDE the
 	 * engine's `Group(IfBreak(brk, flat))` so a per-construct decoration
@@ -277,13 +275,20 @@ class WrapList {
 	}
 
 	/**
-	 * Variant of `decide` that defers `LineLengthLargerThan` evaluation
-	 * to a caller-supplied predicate. Used by `emit` to enumerate
+	 * Walks the rules cascade and returns the first matching mode.
+	 * `LineLengthLargerThan` evaluation is deferred to the caller-
+	 * supplied `lineLengthFires` predicate so consumers can enumerate
 	 * cascade outcomes across (exceeds, lineLength-firing) state
-	 * combinations without mutating the static `decide` semantic
-	 * relied on by `MethodChainEmit`.
+	 * combinations and route the threshold answer through the renderer's
+	 * column-aware `IfWidthExceeds` probe at layout time. Falls back to
+	 * `rules.defaultMode` when no rule matches.
+	 *
+	 * Used by `emit`, `BinaryChainEmit.emit`, and `MethodChainEmit.emit`
+	 * — the three callers that build threshold-aware Doc trees on top
+	 * of this evaluator (slice ω-ifwidthexceeds-infra +
+	 * ω-methodchain-threshold-aware).
 	 */
-	private static function decideWithLineLengthState(
+	public static function decideWithLineLengthState(
 		rules:WrapRules, itemCount:Int, maxItemLen:Int,
 		totalItemLen:Int, exceedsMaxLineLength:Bool,
 		hasMultilineItems:Bool, lineLengthFires:Int -> Bool
@@ -297,15 +302,16 @@ class WrapList {
 	}
 
 	/**
-	 * Variant of `decideRule` that defers `LineLengthLargerThan`
-	 * evaluation to a caller-supplied predicate. Returns mode + effective
-	 * location (matching `decideRule`'s shape) so chain-emit consumers
-	 * can render per-rule operator placement (`BeforeLast` / `AfterLast`)
-	 * while still routing the threshold answer through the renderer's
-	 * column probe.
+	 * Walks the cascade and returns the matched rule's `mode` paired with
+	 * its effective `location` (`BeforeLast` / `AfterLast`), so chain-emit
+	 * consumers can render per-rule operator placement. `LineLengthLargerThan`
+	 * evaluation is deferred to the caller-supplied `lineLengthFires`
+	 * predicate so the threshold answer can route through the renderer's
+	 * column-aware `IfWidthExceeds` probe at layout time.
 	 *
-	 * Location resolution: rule.location ?? rules.defaultLocation ??
-	 * `WrappingLocation.AfterLast` — same fallback chain as `decideRule`.
+	 * Location resolution: `rule.location ?? rules.defaultLocation ??
+	 * WrappingLocation.AfterLast` — mirrors haxe-formatter's `WrapRules.defaultLocation`
+	 * typedef default.
 	 *
 	 * Used by `BinaryChainEmit.emit` to enumerate cascade outcomes
 	 * across (exceeds, lineLength-firing) state combinations.
@@ -572,85 +578,6 @@ class WrapList {
 				if (first == null) return false;
 				node = first;
 		}
-	}
-
-	/**
-	 * Walks the rules cascade and returns the first matching mode.
-	 * Falls back to `rules.defaultMode` when no rule matches.
-	 *
-	 * `hasMultilineItems` defaults to `false` so existing call sites
-	 * that do not yet track item-multiline status keep their previous
-	 * behaviour — only cascades whose rules use `HasMultilineItems`
-	 * see a difference.
-	 */
-	public static function decide(
-		rules:WrapRules, itemCount:Int, maxItemLen:Int,
-		totalItemLen:Int, exceedsMaxLineLength:Bool,
-		hasMultilineItems:Bool = false
-	):WrapMode {
-		for (rule in rules.rules) {
-			if (matches(rule, itemCount, maxItemLen, totalItemLen, exceedsMaxLineLength, hasMultilineItems))
-				return rule.mode;
-		}
-		return rules.defaultMode;
-	}
-
-	/**
-	 * Variant of `decide` that returns the matched rule's `mode` AND
-	 * effective `location`. The effective location is the matched
-	 * rule's `location` field when set, else the parent
-	 * `rules.defaultLocation`, else `AfterLast` (mirroring haxe-formatter's
-	 * `WrapRules.defaultLocation` typedef default).
-	 *
-	 * When no rule matches, returns `defaultMode` paired with the same
-	 * fallback chain for the location. Used by chain-emission consumers
-	 * (`BinaryChainEmit`) that pick continuation-line operator placement
-	 * per-rule. Delimited-list consumers (`WrapList.emit` itself) still
-	 * call `decide` — they don't consume `location`.
-	 */
-	public static function decideRule(
-		rules:WrapRules, itemCount:Int, maxItemLen:Int,
-		totalItemLen:Int, exceedsMaxLineLength:Bool,
-		hasMultilineItems:Bool = false
-	):{mode:WrapMode, location:WrappingLocation} {
-		final fallback:WrappingLocation = rules.defaultLocation ?? WrappingLocation.AfterLast;
-		for (rule in rules.rules) {
-			if (matches(rule, itemCount, maxItemLen, totalItemLen, exceedsMaxLineLength, hasMultilineItems))
-				return {mode: rule.mode, location: rule.location ?? fallback};
-		}
-		return {mode: rules.defaultMode, location: fallback};
-	}
-
-	private static function matches(
-		rule:WrapRule, itemCount:Int, maxItemLen:Int,
-		totalItemLen:Int, exceedsMaxLineLength:Bool,
-		hasMultilineItems:Bool
-	):Bool {
-		for (cond in rule.conditions) {
-			final ok:Bool = switch cond.cond {
-				case ItemCountLargerThan: itemCount >= cond.value;
-				case ItemCountLessThan: itemCount <= cond.value;
-				case AnyItemLengthLargerThan: maxItemLen >= cond.value;
-				case AllItemLengthsLessThan: maxItemLen <= cond.value;
-				case TotalItemLengthLargerThan: totalItemLen >= cond.value;
-				case TotalItemLengthLessThan: totalItemLen <= cond.value;
-				case ExceedsMaxLineLength: cond.value == 0 ? !exceedsMaxLineLength : exceedsMaxLineLength;
-				// Static (column-blind) `LineLengthLargerThan` semantic — kept
-				// for legacy callers `decide` / `decideRule`. Currently only
-				// `MethodChainEmit` still consumes these; `BinaryChainEmit`
-				// and `WrapList.emit` go through the threshold-aware
-				// `*WithLineLengthState` variants (column-aware, via the
-				// renderer's `IfWidthExceeds` probe). When `MethodChainEmit`
-				// flips to threshold-aware, this arm becomes unreachable
-				// and can be deleted along with `decide` / `decideRule` /
-				// `matches`.
-				case LineLengthLargerThan: totalItemLen >= cond.value;
-				case HasMultilineItems: cond.value == 0 ? !hasMultilineItems : hasMultilineItems;
-				case _: false;
-			};
-			if (!ok) return false;
-		}
-		return true;
 	}
 
 	/**
