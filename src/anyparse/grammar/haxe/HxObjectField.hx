@@ -34,5 +34,5 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxObjectField = {
 	var name:HxIdentLit;
-	@:fmt(objectFieldColon, indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly')) @:lead(':') var value:HxExpr;
+	@:fmt(objectFieldColon, indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'), propagateExprPosition) @:lead(':') var value:HxExpr;
 }

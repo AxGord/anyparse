@@ -52,12 +52,26 @@ package anyparse.grammar.haxe;
  * the copy is passed as `opt` to the child) — block-bodied descendants
  * reset naturally because their wrap policies are not gated on these
  * knobs.
+ *
+ * `@:fmt(propagateExprPosition)` (ω-issue-423-mech-a) flips the
+ * runtime `_writerOpt` from a flat-only copy to an always-copy whose
+ * `_inExprPosition` field is set to `true` unconditionally. The dual-
+ * flag `bodyPolicy('caseBody', 'expressionCase')` flat-gate consults
+ * `opt._inExprPosition` at runtime: descendants of a case body see
+ * `true` and their case-body sites pick the expression-position
+ * `expressionCase` policy (default `Keep`, flatten on same-line
+ * source); top-level statement-position case bodies see `false` and
+ * pick the statement-position `caseBody` policy (default `Next`,
+ * break). Mirrors fork's `isReturnExpression` walk-up heuristic in
+ * `MarkSameLine.markCase` — a case nested in another case's body is
+ * treated as expression-position.
  */
 @:peg
 typedef HxCaseBranch = {
 	@:trail(':') var pattern:HxExpr;
 	@:trivia @:tryparse @:fmt(
 		nestBody, bodyPolicy('caseBody', 'expressionCase'),
-		flatChildOpt('ifBody=expressionCase', 'elseBody=expressionCase', 'forBody=expressionCase')
+		flatChildOpt('ifBody=expressionCase', 'elseBody=expressionCase', 'forBody=expressionCase'),
+		propagateExprPosition
 	) var body:Array<HxStatement>;
 };

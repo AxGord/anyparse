@@ -56,6 +56,7 @@ typedef HxVarDecl = {
 	@:optional @:fmt(typeHintColon) @:lead(':') var type:Null<HxType>;
 	@:optional
 	@:fmt(indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'),
-		indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'))
+		indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'),
+		propagateExprPosition)
 	@:lead('=') var init:Null<HxExpr>;
 }

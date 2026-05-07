@@ -23,6 +23,14 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
  * first element to flatten only when the source had the stmt on the
  * same line as `:`. `FitLine` falls through to the `Next` path.
  *
+ * ω-issue-423-mech-a flipped the dual-flag gate from OR-of-both to
+ * dispatch on `opt._inExprPosition`: top-level switch case bodies
+ * (statement-position) consult `caseBody`; cases nested in another
+ * case's body (expression-position via
+ * `@:fmt(propagateExprPosition)`) consult `expressionCase`. Tests in
+ * this file exercise statement-position only — see
+ * `HxCaseExprPositionPropagateTest` for expression-position coverage.
+ *
  * Per `feedback_unit_test_trivia_writer.md`: the knobs are visible only
  * via `HaxeModuleTriviaParser`/`HaxeModuleTriviaWriter` — the plain
  * writer takes a different lowering path that does not call
@@ -57,10 +65,15 @@ final class HxCaseBodyPolicySliceTest extends Test {
 		Assert.isTrue(out.indexOf('case 1: foo();') != -1, 'expected inline `case 1: foo();` in: <$out>');
 	}
 
-	public function testExpressionCaseSameFlattensSingleStmt():Void {
+	public function testExpressionCaseSameAtStatementPositionDoesNotFlatten():Void {
+		// ω-issue-423-mech-a: at statement-position (top-level switch in
+		// fn body) the dispatched gate consults `caseBody` only. Setting
+		// `expressionCase=Same` no longer forces flatten — only `caseBody`
+		// can. Regression coverage for the OR→dispatch semantic flip.
 		final src:String = 'class M { function f():Void { switch (x) { case 1: foo(); } } }';
 		final out:String = writeWithExpressionCase(src, BodyPolicy.Same);
-		Assert.isTrue(out.indexOf('case 1: foo();') != -1, 'expected inline `case 1: foo();` (expressionCase=Same) in: <$out>');
+		Assert.isTrue(out.indexOf('case 1: foo();') == -1, 'expressionCase=Same must NOT flatten at statement-position: <$out>');
+		Assert.isTrue(out.indexOf('case 1:\n') != -1, 'expected multiline `case 1:\\n` at statement-position: <$out>');
 	}
 
 	public function testSameKeepsMultiStmtMultiline():Void {
@@ -136,10 +149,16 @@ final class HxCaseBodyPolicySliceTest extends Test {
 		Assert.isTrue(out.indexOf('case 1:\n') != -1, 'expected multiline `case 1:\\n` for multi-stmt under Keep: <$out>');
 	}
 
-	public function testExpressionCaseKeepFollowsSource():Void {
+	public function testExpressionCaseKeepAtVarInitFlattensSameLine():Void {
+		// ω-issue-423-mech-a: `HxVarDecl.init` is wired with
+		// `@:fmt(propagateExprPosition)`, so a var-init switch puts its
+		// cases in expression-position. Default `expressionCase=Keep`
+		// + same-line source flattens the case body. Mirrors fork's
+		// `isReturnExpression` walk-up that hits `=` (Binop) and routes
+		// to `markExpressionCase`.
 		final src:String = 'class M { function f():Void { var v = switch (x) { case 1: 10; }; } }';
 		final out:String = writeWithExpressionCase(src, BodyPolicy.Keep);
-		Assert.isTrue(out.indexOf('case 1: 10;') != -1, 'expressionCase=Keep should flatten same-line source: <$out>');
+		Assert.isTrue(out.indexOf('case 1: 10;') != -1, 'var-init switch case should flatten under expressionCase=Keep + sameLine source: <$out>');
 	}
 
 	private inline function writeWithCaseBody(src:String, policy:BodyPolicy):String {

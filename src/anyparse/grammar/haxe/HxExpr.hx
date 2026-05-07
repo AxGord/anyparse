@@ -259,7 +259,7 @@ enum HxExpr {
 
 	ECheckTypeExpr(info:HxECheckType);
 
-	@:wrap('(', ')') @:fmt(captureWrapOpenNewline)
+	@:wrap('(', ')') @:fmt(captureWrapOpenNewline, propagateExprPosition)
 	ParenExpr(inner:HxExpr);
 
 	@:kw('new')
@@ -298,7 +298,7 @@ enum HxExpr {
 	@:kw('cast')
 	CastExpr(operand:HxExpr);
 
-	@:kw('return')
+	@:kw('return') @:fmt(propagateExprPosition)
 	ReturnExpr(value:HxExpr);
 
 	@:kw('function') @:fmt(anonFuncParens)
@@ -326,7 +326,7 @@ enum HxExpr {
 	@:postfix('[', ']')
 	IndexAccess(operand:HxExpr, index:HxExpr);
 
-	@:postfix('(', ')') @:sep(',') @:fmt(trailingComma('trailingCommaArgs'), callParens, wrapRules('callParameterWrap'), methodChain('methodChainWrap'))
+	@:postfix('(', ')') @:sep(',') @:fmt(trailingComma('trailingCommaArgs'), callParens, wrapRules('callParameterWrap'), methodChain('methodChainWrap'), propagateExprPosition)
 	Call(operand:HxExpr, args:Array<HxExpr>);
 
 	@:infix('*', 9)

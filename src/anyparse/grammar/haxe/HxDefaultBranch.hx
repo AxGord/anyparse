@@ -34,11 +34,21 @@ package anyparse.grammar.haxe;
  * overridden by the named sibling fields, so nested control-flow inside
  * a flat default body picks expression-position policy. See
  * `HxCaseBranch.body`'s doc for the propagation contract.
+ *
+ * `@:fmt(propagateExprPosition)` (ω-issue-423-mech-a) mirrors
+ * `HxCaseBranch.body` — the runtime always-copy sets
+ * `_wo._inExprPosition = true` so the dual-flag flat-gate in any
+ * descendant case body picks the expression-position
+ * `expressionCase` policy. Top-level statement-position default
+ * bodies (default value `_inExprPosition = false`) keep the
+ * `caseBody` policy. See `HxCaseBranch.body`'s doc for the dispatch
+ * contract.
  */
 @:peg
 typedef HxDefaultBranch = {
 	@:lead(':') @:trivia @:tryparse @:fmt(
 		nestBody, bodyPolicy('caseBody', 'expressionCase'),
-		flatChildOpt('ifBody=expressionCase', 'elseBody=expressionCase', 'forBody=expressionCase')
+		flatChildOpt('ifBody=expressionCase', 'elseBody=expressionCase', 'forBody=expressionCase'),
+		propagateExprPosition
 	) var stmts:Array<HxStatement>;
 };

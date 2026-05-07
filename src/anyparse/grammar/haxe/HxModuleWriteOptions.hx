@@ -943,6 +943,25 @@ import anyparse.format.wrap.WrapRules;
  *    positional `sourceText:String` arg, populated by Lowering Case 3
  *    when the ctor carries `@:fmt(captureSource)`. Plain-mode pipelines
  *    (no synth pair) do not capture and the knob has no effect there.
+ *
+ * Internal field added in slice ω-issue-423-mech-a (case-body context
+ * dispatch):
+ *  - `_inExprPosition` — write-time-only signal flagging that the
+ *    current writer call is descending through an expression-position
+ *    parent (currently set only by `HxCaseBranch.body` /
+ *    `HxDefaultBranch.stmts` via `@:fmt(propagateExprPosition)`).
+ *    Read by the dual-flag `bodyPolicy('caseBody', 'expressionCase')`
+ *    flat-gate in `WriterLowering.triviaTryparseStarExpr` to dispatch
+ *    between the statement-position `caseBody` policy (default
+ *    `Next`, breaks) and the expression-position `expressionCase`
+ *    policy (default `Keep`, flattens on same-line source). The
+ *    underscore prefix marks it as an internal channel — not a user-
+ *    facing knob, no JSON loader entry, no `hxformat.json` ingest.
+ *    Default `false`. Mirrors fork's `isReturnExpression` parent-walk
+ *    heuristic in `MarkSameLine.markCase`: outer `case X:` in a
+ *    statement-position switch sees `false` and breaks per `caseBody`,
+ *    while a case nested inside another case's body inherits `true`
+ *    via opt-fanout and flattens per `expressionCase`.
  */
 typedef HxModuleWriteOptions = WriteOptions & {
 	sameLineElse:SameLinePolicy,
@@ -1020,4 +1039,5 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	afterMultilineDecl:Int,
 	beforeMultilineDecl:Int,
 	formatStringInterpolation:Bool,
+	_inExprPosition:Bool,
 };

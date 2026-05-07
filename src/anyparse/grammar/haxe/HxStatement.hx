@@ -284,7 +284,8 @@ enum HxStatement {
 	@:fmt(bodyPolicy('returnBody'),
 		indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'),
 		indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'),
-		widthAware)
+		widthAware,
+		propagateExprPosition)
 	ReturnStmt(value:HxExpr);
 
 	@:kw('return') @:trail(';')

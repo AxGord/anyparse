@@ -497,6 +497,7 @@ final class HaxeFormatConfigLoader {
 			afterMultilineDecl: base.afterMultilineDecl,
 			beforeMultilineDecl: base.beforeMultilineDecl,
 			formatStringInterpolation: base.formatStringInterpolation,
+			_inExprPosition: base._inExprPosition,
 			blockCommentAdapter: base.blockCommentAdapter,
 			lineCommentAdapter: base.lineCommentAdapter,
 			endsWithCloseBrace: base.endsWithCloseBrace,

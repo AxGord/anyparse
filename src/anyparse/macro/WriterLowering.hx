@@ -663,10 +663,18 @@ class WriterLowering {
 			final refName:String = children[0].annotations.get('base.ref');
 			final subFn:String = writeFnFor(refName);
 			final isSelfRef:Bool = simpleName(refName) == simpleName(typePath);
+			// ω-issue-423-mech-a: when the kw-Ref ctor itself carries
+			// `@:fmt(propagateExprPosition)` (e.g. `HxStatement.ReturnStmt`,
+			// `HxExpr.ReturnExpr`), wrap the sub-call's opt arg in
+			// `_setExprPosition` so the `value:HxExpr` descendant sees the
+			// expression-position frame. Idempotent — already-true opt
+			// passes through.
+			final propagateExpr:Bool = branch.fmtHasFlag('propagateExprPosition');
+			final ctorOptArg:Expr = propagateExpr ? macro _setExprPosition(opt) : macro opt;
 			final subCall:Expr = if (isSelfRef && hasPratt)
-				{expr: ECall(macro $i{subFn}, [macro $i{argNames[0]}, macro opt, macro -1]), pos: Context.currentPos()}
+				{expr: ECall(macro $i{subFn}, [macro $i{argNames[0]}, ctorOptArg, macro -1]), pos: Context.currentPos()}
 			else
-				{expr: ECall(macro $i{subFn}, [macro $i{argNames[0]}, macro opt]), pos: Context.currentPos()};
+				{expr: ECall(macro $i{subFn}, [macro $i{argNames[0]}, ctorOptArg]), pos: Context.currentPos()};
 
 			// ω-return-body: ctor-level `@:fmt(bodyPolicy(...))` on a kw-led
 			// single-Ref branch (e.g. `HxStatement.ReturnStmt(value:HxExpr)`)
@@ -1009,7 +1017,14 @@ class WriterLowering {
 		final isTriviaStar:Bool = ctx.trivia
 			&& starNode.annotations.get('trivia.starCollects') == true;
 		final elemRead:Expr = isTriviaStar ? macro _args[_i].node : macro _args[_i];
-		final elemCallArgs:Array<Expr> = [elemRead, macro opt];
+		// ω-issue-423-mech-a: ctor-level `@:fmt(propagateExprPosition)` on a
+		// postfix-Star ctor (e.g. `HxExpr.Call`, `HxNewExpr`) wraps each
+		// element's opt arg in `_setExprPosition` so call/ctor args land in
+		// expression-position and any case body deeper than them picks
+		// `expressionCase` via the dispatched flat-gate.
+		final propagateExpr:Bool = branch.fmtHasFlag('propagateExprPosition');
+		final elemOptArg:Expr = propagateExpr ? macro _setExprPosition(opt) : macro opt;
+		final elemCallArgs:Array<Expr> = [elemRead, elemOptArg];
 		if (isSelfRef && hasPratt) elemCallArgs.push(macro -1);
 		final elemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, elemCallArgs),
@@ -1510,8 +1525,15 @@ class WriterLowering {
 				case Ref if (isOptional):
 					final refName:String = child.annotations.get('base.ref');
 					final writeFn:String = writeFnFor(refName);
+					// ω-issue-423-mech-a: same opt-fanout as mandatory Ref —
+					// when the optional Ref carries `@:fmt(propagateExprPosition)`,
+					// wrap opt in `_setExprPosition` so the descendant writer
+					// sees `_inExprPosition=true`. Used by `HxVarDecl.init`
+					// to flag var-rhs as expression-position.
+					final propagateExpr:Bool = child.fmtHasFlag('propagateExprPosition');
+					final optArgExpr:Expr = propagateExpr ? macro _setExprPosition(opt) : macro opt;
 					final rawWriteCall:Expr = {
-						expr: ECall(macro $i{writeFn}, [macro _optVal, macro opt]),
+						expr: ECall(macro $i{writeFn}, [macro _optVal, optArgExpr]),
 						pos: Context.currentPos(),
 					};
 					// ω-indent-objectliteral: `@:fmt(indentValueIfCtor('<ctor>', '<optField>'))`
@@ -1679,8 +1701,20 @@ class WriterLowering {
 				case Ref:
 					final refName:String = child.annotations.get('base.ref');
 					final writeFn:String = writeFnFor(refName);
+					// ω-issue-423-mech-a: when the Ref carries
+					// `@:fmt(propagateExprPosition)`, wrap the opt arg in
+					// `_setExprPosition` so the descendant writer (and ANY
+					// further recursive descent through it) sees
+					// `_inExprPosition=true`. Idempotent — already-true opt
+					// passes through without re-allocating. Consumers:
+					// `HxVarDecl.init`, `HxObjectField.value`,
+					// `HxParenLambda.body`, `HxThinParenLambda.body` — every
+					// expression-position-yielding Ref parent that ANY case-
+					// body descendant might see.
+					final propagateExpr:Bool = child.fmtHasFlag('propagateExprPosition');
+					final optArgExpr:Expr = propagateExpr ? macro _setExprPosition(opt) : macro opt;
 					final rawWriteCall:Expr = {
-						expr: ECall(macro $i{writeFn}, [fieldAccess, macro opt]),
+						expr: ECall(macro $i{writeFn}, [fieldAccess, optArgExpr]),
 						pos: Context.currentPos(),
 					};
 					// ω-indent-objectliteral: `@:fmt(indentValueIfCtor('<ctor>', '<optField>'))`
@@ -2271,10 +2305,23 @@ class WriterLowering {
 				// shapes the two newlines are correlated.
 				final tryparsePadLeading:Bool = starNode.fmtHasFlag('padLeading');
 				final tryparsePadTrailing:Bool = starNode.fmtHasFlag('padTrailing');
+				// ω-issue-423-mech-a: `@:fmt(propagateExprPosition)` on a
+				// `@:trivia @:tryparse` Star marks the body as an expression-
+				// position frame for descendants. The runtime block emits an
+				// always-copy of `opt` with `_inExprPosition = true` set, so
+				// the dual-flag `bodyPolicy('A','B')` flat-gate in nested
+				// case-body sites picks the expression-position policy
+				// (`expressionCase`) instead of the statement-position one
+				// (`caseBody`). Mirrors fork's `isReturnExpression` walk-up
+				// heuristic — currently wired only by `HxCaseBranch.body` /
+				// `HxDefaultBranch.stmts` so a case nested in another case's
+				// body inherits expression context.
+				final propagateExprPosition:Bool = starNode.fmtHasFlag('propagateExprPosition');
 				parts.push(triviaTryparseStarExpr(
 					fieldAccess, elemFn, sepExpr, sameLineName != null, nestBody,
 					tryparseTrailBB, tryparseTrailLC, tryparseTrailBA, firstSepOverride, subsequentSepOverride,
-					caseBodyFlagNames, flatChildOptPairs, tryparsePadLeading, tryparsePadTrailing
+					caseBodyFlagNames, flatChildOptPairs, tryparsePadLeading, tryparsePadTrailing,
+					propagateExprPosition
 				));
 				return;
 			}
@@ -5054,6 +5101,29 @@ class WriterLowering {
 	 * Empty bodies with no trailing orphans emit nothing (no stray
 	 * hardline, no dangling nest).
 	 */
+
+	/**
+	 * Build a per-flag flat-gate predicate for the case-body
+	 * `bodyPolicy` mechanism: `opt.<flag> == Same || (opt.<flag> ==
+	 * Keep && !_arr[0].newlineBefore)`. The emitted Expr references
+	 * the runtime block's local `_arr` (bound by the outer
+	 * `final _arr = $fieldAccess`).
+	 *
+	 * Used by `triviaTryparseStarExpr.flatGateExpr` for both single-
+	 * flag callers (e.g. `bodyPolicy('returnBody')`) and the dual-flag
+	 * case-body form (`bodyPolicy('caseBody', 'expressionCase')` on
+	 * `HxCaseBranch.body` / `HxDefaultBranch.stmts`). The dual form
+	 * dispatches at runtime on `opt._inExprPosition` to pick which
+	 * predicate fires; this helper just builds the predicate body for
+	 * one flag at a time.
+	 */
+	private static function buildCaseBodyFlagPredicate(flagName:String):Expr {
+		final samePat:Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BodyPolicy', 'Same']);
+		final keepPat:Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BodyPolicy', 'Keep']);
+		final optFlag:Expr = {expr: EField(macro opt, flagName), pos: Context.currentPos()};
+		return macro ($optFlag == $samePat || ($optFlag == $keepPat && !_arr[0].newlineBefore));
+	}
+
 	private static function triviaTryparseStarExpr(
 		fieldAccess:Expr, elemFn:String, sepExpr:Expr,
 		sepBeforeFirst:Bool, nestBody:Bool,
@@ -5063,7 +5133,8 @@ class WriterLowering {
 		caseBodyFlagNames:Null<Array<String>> = null,
 		flatChildOptPairs:Null<Array<Array<String>>> = null,
 		padLeading:Bool = false,
-		padTrailing:Bool = false
+		padTrailing:Bool = false,
+		propagateExprPosition:Bool = false
 	):Expr {
 		// ω-expression-case-flat-fanout: when the body's element call should
 		// receive a copy-on-flat opt with named fields swapped, build the
@@ -5096,35 +5167,39 @@ class WriterLowering {
 		final firstSepExpr:Expr = firstSepOverride ?? sepExpr;
 		final subsequentSepExpr:Expr = subsequentSepOverride ?? sepExpr;
 		// ω-case-body-policy / ω-case-body-keep: when the Star carries
-		// `@:fmt(bodyPolicy('flag1', 'flag2', ...))`, build a runtime
-		// gate over `opt.<flag>` for the named flags. Two predicates
-		// are ORed across every flag:
-		//  - `Same`: ANY flag set to `BodyPolicy.Same` flattens
-		//    unconditionally — author's source shape is overridden.
-		//  - `Keep`: ANY flag set to `BodyPolicy.Keep` flattens IFF the
-		//    captured body's first element has no preceding source
-		//    newline (`!_arr[0].newlineBefore`). This preserves the
-		//    author's per-instance choice between `case X: foo();` and
-		//    `case X:\n\tfoo();`.
-		// `_arr[0]` access is safe here because the outer `_flatCase`
-		// short-circuits via `_arr.length == 1` BEFORE this gate runs.
-		// `Next` and `FitLine` (default for both flags) leave the gate
-		// `false` — the wrap stays at its multiline shape.
+		// `@:fmt(bodyPolicy('<flag>'))` (single-flag) or
+		// `@:fmt(bodyPolicy('<stmtFlag>', '<exprFlag>'))` (dual form
+		// for case bodies), build a runtime gate over `opt.<flag>`:
+		//  - `Same` → flatten unconditionally (override).
+		//  - `Keep` → flatten IFF the body's first element has no
+		//    preceding source newline (`!_arr[0].newlineBefore`).
+		//  - `Next` / `FitLine` → gate stays `false`, wrap stays
+		//    multiline.
+		// `_arr[0]` access is safe — the outer `_flatCase` short-
+		// circuits via `_arr.length == 1` BEFORE this gate runs.
+		//
+		// ω-issue-423-mech-a: dual-flag case-body form dispatches at
+		// runtime on `opt._inExprPosition`. Convention: `flag[0]` is
+		// the statement-position policy (used when descending through
+		// non-expression-position parents — top-level switch in a
+		// function body picks `caseBody=Next` → break), `flag[1]` is
+		// the expression-position policy (used when an
+		// expression-position parent set `_inExprPosition=true` via
+		// `@:fmt(propagateExprPosition)` — case-in-case body picks
+		// `expressionCase=Keep` → flatten on same-line source).
+		// Mirrors fork's `isReturnExpression` walk-up heuristic in
+		// `MarkSameLine.markCase`. Single-flag callers stay byte-
+		// identical (no dispatch).
+		if (caseBodyFlagNames != null && caseBodyFlagNames.length > 2)
+			Context.fatalError('WriterLowering: @:fmt(bodyPolicy(...)) takes at most 2 args (stmtFlag, exprFlag), got ${caseBodyFlagNames.length}', Context.currentPos());
 		final flatGateExpr:Expr = if (caseBodyFlagNames == null || caseBodyFlagNames.length == 0)
 			macro false;
+		else if (caseBodyFlagNames.length == 1)
+			buildCaseBodyFlagPredicate(caseBodyFlagNames[0]);
 		else {
-			final samePat:Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BodyPolicy', 'Same']);
-			final keepPat:Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BodyPolicy', 'Keep']);
-			var sameAcc:Null<Expr> = null;
-			var keepAcc:Null<Expr> = null;
-			for (flag in caseBodyFlagNames) {
-				final optFlag:Expr = {expr: EField(macro opt, flag), pos: Context.currentPos()};
-				final sameCmp:Expr = macro $optFlag == $samePat;
-				final keepCmp:Expr = macro $optFlag == $keepPat;
-				sameAcc = sameAcc == null ? sameCmp : macro $sameAcc || $sameCmp;
-				keepAcc = keepAcc == null ? keepCmp : macro $keepAcc || $keepCmp;
-			}
-			macro ($sameAcc || ($keepAcc && !_arr[0].newlineBefore));
+			final stmtPred:Expr = buildCaseBodyFlagPredicate(caseBodyFlagNames[0]);
+			final exprPred:Expr = buildCaseBodyFlagPredicate(caseBodyFlagNames[1]);
+			macro (opt._inExprPosition ? $exprPred : $stmtPred);
 		};
 		// ω-expression-case-flat-fanout: when `flatChildOptPairs` is non-empty,
 		// the `_writerOpt` emitted into the runtime block is a `Reflect.copy(opt)`
@@ -5134,9 +5209,18 @@ class WriterLowering {
 		// `ifBody`/`elseBody`/`forBody` → expression-position counterparts) and
 		// propagates them through subsequent recursive calls. Default is plain
 		// `opt` (no copy) — non-flat-fanout consumers stay byte-identical.
-		final writerOptExpr:Expr = if (flatChildOptPairs == null || flatChildOptPairs.length == 0)
+		//
+		// ω-issue-423-mech-a: when `propagateExprPosition` is true, the copy
+		// fires on BOTH paths (flat AND break) and unconditionally sets
+		// `_wo._inExprPosition = true` so descendants see the expression-
+		// position frame regardless of whether the case body itself flattens.
+		// `flatChildOpt` per-pair overrides remain gated on `_flatCase`. When
+		// the propagation flag is off, the existing flat-only path is preserved
+		// byte-identically (copy only on flat, plain `opt` otherwise).
+		final hasFlatChildOpt:Bool = flatChildOptPairs != null && flatChildOptPairs.length > 0;
+		final writerOptExpr:Expr = if (!hasFlatChildOpt && !propagateExprPosition)
 			macro opt;
-		else {
+		else if (!propagateExprPosition) {
 			final block:Array<Expr> = [macro final _wo = _copyOpt(opt)];
 			for (pair in flatChildOptPairs) {
 				final fromAccess:Expr = {expr: EField(macro _wo, pair[0]), pos: Context.currentPos()};
@@ -5146,6 +5230,28 @@ class WriterLowering {
 			block.push(macro _wo);
 			final overrideBlock:Expr = {expr: EBlock(block), pos: Context.currentPos()};
 			macro (_flatCase ? $overrideBlock : opt);
+		} else {
+			// Wrap each `macro` expression in parens — array-literal `,` after
+			// a `macro final ... = ...` reification fragment otherwise mis-parses
+			// (the parser treats `macro` as a variable name in the next element).
+			final block:Array<Expr> = [
+				(macro final _wo = _copyOpt(opt)),
+				(macro _wo._inExprPosition = true),
+			];
+			if (hasFlatChildOpt) {
+				final flatOnlyParts:Array<Expr> = [
+					for (pair in flatChildOptPairs) {
+						final fromAccess:Expr = {expr: EField(macro _wo, pair[0]), pos: Context.currentPos()};
+						final toAccess:Expr = {expr: EField(macro opt, pair[1]), pos: Context.currentPos()};
+						macro $fromAccess = $toAccess;
+					}
+				];
+				final flatOnlyExpr:Expr = {expr: EBlock(flatOnlyParts), pos: Context.currentPos()};
+				block.push(macro if (_flatCase) $flatOnlyExpr);
+			}
+			block.push(macro _wo);
+			final overrideBlock:Expr = {expr: EBlock(block), pos: Context.currentPos()};
+			overrideBlock;
 		};
 		final padLeadingExpr:Expr = macro $v{padLeading};
 		final padTrailingExpr:Expr = macro $v{padTrailing};

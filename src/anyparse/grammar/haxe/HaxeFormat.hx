@@ -633,6 +633,7 @@ final class HaxeFormat implements TextFormat {
 		afterMultilineDecl: 1,
 		beforeMultilineDecl: 1,
 		formatStringInterpolation: true,
+		_inExprPosition: false,
 		blockCommentAdapter: anyparse.format.comment.BlockCommentNormalizer.processCapturedBlockComment,
 		lineCommentAdapter: anyparse.format.comment.LineCommentNormalizer.normalizeLineComment,
 		endsWithCloseBrace: HxExprUtil.endsWithCloseBrace,

@@ -51,6 +51,16 @@ class WriterCodegen {
 			// emitted unconditionally so triviaTryparseStarExpr's flat-fanout
 			// path can call it without per-grammar gating.
 			fields.push(copyOptField(optionsCT));
+			// ω-issue-423-mech-a: opt-fanout helper for `propagateExprPosition`.
+			// Returns the input opt unchanged when `_inExprPosition` is already
+			// true (no allocation on already-propagating descendants); otherwise
+			// returns a `_copyOpt` with the flag flipped on. Emitted only when
+			// the opt typedef carries the `_inExprPosition:Bool` field —
+			// grammars whose options struct doesn't declare it (e.g. Json,
+			// Bin) skip the helper to avoid a compile-time field-resolution
+			// error. Per-grammar opt-in lives in the typedef itself.
+			if (optionsHasInExprPosition(optionsTypePath))
+				fields.push(setExprPositionField(optionsCT));
 			// Layout helpers
 			fields.push(blockBodyField());
 			fields.push(sepListField());
@@ -193,6 +203,36 @@ class WriterCodegen {
 		final simple:String = simpleName(optionsTypePath);
 		final pack:Array<String> = packOf(optionsTypePath);
 		return TPath({pack: pack, name: simple, params: []});
+	}
+
+	/**
+	 * ω-issue-423-mech-a — true iff the writer's `WriteOptions` typedef
+	 * carries the `_inExprPosition:Bool` field. Used to gate emission
+	 * of the `_setExprPosition` helper: grammars whose options struct
+	 * doesn't declare the field (Json, Bin, etc.) skip the helper to
+	 * avoid a compile-time field-resolution error inside its body.
+	 *
+	 * Walks `TType`/`TAnon` so it sees the intersection-typedef form
+	 * (`HxModuleWriteOptions = WriteOptions & {...}`) — `getType`
+	 * resolves to the alias before unification. `TLazy` is followed
+	 * eagerly to handle forward-referenced typedefs.
+	 */
+	private static function optionsHasInExprPosition(optionsTypePath:String):Bool {
+		final t:Null<haxe.macro.Type> = try Context.getType(optionsTypePath) catch (e:haxe.Exception) null;
+		if (t == null) return false;
+		return anonHasField(t, '_inExprPosition');
+	}
+
+	private static function anonHasField(t:haxe.macro.Type, name:String):Bool {
+		switch (t) {
+			case TLazy(f): return anonHasField(f(), name);
+			case TType(_, _): return anonHasField(Context.follow(t), name);
+			case TAnonymous(aRef):
+				final fields:Array<haxe.macro.Type.ClassField> = aRef.get().fields;
+				for (cf in fields) if (cf.name == name) return true;
+				return false;
+			case _: return false;
+		}
 	}
 
 	private static function packOf(typePath:String):Array<String> {
@@ -341,6 +381,38 @@ class WriterCodegen {
 				expr: macro {
 					final _c:$optionsCT = cast Reflect.copy(o);
 					if (_c == null) throw 'WriterCodegen._copyOpt: Reflect.copy returned null';
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * ω-issue-423-mech-a — opt-fanout shim for the `propagateExprPosition`
+	 * meta. Idempotent: returns `o` unchanged when `_inExprPosition` is
+	 * already `true` (avoids per-call allocation in already-propagating
+	 * descendant chains); otherwise returns a `_copyOpt(o)` with the
+	 * flag flipped on. Emitted unconditionally so consumer call sites
+	 * (Ref-field writer call, sep-Star element call, kw-Ref ctor body
+	 * sub-call) can invoke it without per-grammar gating.
+	 *
+	 * Signature requires `_inExprPosition:Bool` on the opt typedef —
+	 * grammars whose `HxModuleWriteOptions`-equivalent struct lacks the
+	 * field would fail field-resolution at codegen time. Currently
+	 * declared on `HxModuleWriteOptions` only (Haxe grammar).
+	 */
+	private static function setExprPositionField(optionsCT:ComplexType):Field {
+		return {
+			name: '_setExprPosition',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{name: 'o', type: optionsCT}],
+				ret: optionsCT,
+				expr: macro {
+					if (o._inExprPosition) return o;
+					final _c:$optionsCT = _copyOpt(o);
+					_c._inExprPosition = true;
 					return _c;
 				},
 			}),
