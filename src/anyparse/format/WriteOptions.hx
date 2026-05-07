@@ -127,9 +127,19 @@ typedef WriteOptions = {
 	 *    so `var x = switch (y) { ... }` round-trips without a trailing
 	 *    semicolon, matching haxe-formatter's canonical output.
 	 *
-	 * Formats that don't opt into the gate leave this null; the writer
-	 * helper checks `null` before invoking and falls back to the
-	 * unconditional trail emission.
+	 *  - `caseBodyRefusesFlat(raw) → Bool` — true iff the body's first
+	 *    element should refuse inline emission regardless of the
+	 *    `bodyPolicy` flat-gate verdict. Drives `@:fmt(refuseFlatOnComplexExpr)`
+	 *    on `@:trivia @:tryparse` Star fields (case / default body):
+	 *    even when `expressionCase=Keep` + same-line source would
+	 *    flatten, an outermost shape the plugin classifies as
+	 *    "complex" (Haxe: logical `&&` / `||`) breaks. Mirrors fork's
+	 *    `MarkSameLine.markExpressionCase` body-shape heuristic.
+	 *
+	 * Formats that don't opt into a gate leave the field null; the
+	 * writer helper checks `null` before invoking and falls back to
+	 * the unconditional non-refusal path.
 	 */
 	?endsWithCloseBrace:Null<Dynamic -> Bool>,
+	?caseBodyRefusesFlat:Null<Dynamic -> Bool>,
 };

@@ -65,6 +65,19 @@ package anyparse.grammar.haxe;
  * break). Mirrors fork's `isReturnExpression` walk-up heuristic in
  * `MarkSameLine.markCase` — a case nested in another case's body is
  * treated as expression-position.
+ *
+ * `@:fmt(refuseFlatOnComplexExpr)` (ω-issue-423-mech-b) adds a body-
+ * shape AND-clause to the runtime flat-gate via the plugin-supplied
+ * `WriteOptions.caseBodyRefusesFlat` adapter (Haxe wires it to
+ * `HxExprUtil.refusesCaseFlat`). A case body whose single statement
+ * is `A && B` or `A || B` refuses inline regardless of the dual flat-
+ * gate's verdict, so `case PRESSED: A || B;` breaks even at
+ * expression-position where `expressionCase=Keep` + same-line source
+ * would otherwise flatten. Empirical scope (probed against fork CLI)
+ * is just the logical operators — every other binop, ternary, and
+ * assignment variant nests hierarchically in fork's token tree and
+ * stays inline. Mirrors fork's `markExpressionCase` body-shape check
+ * (`dblDot.children.length == 2 && second.tok != CommentLine`).
  */
 @:peg
 typedef HxCaseBranch = {
@@ -72,6 +85,6 @@ typedef HxCaseBranch = {
 	@:trivia @:tryparse @:fmt(
 		nestBody, bodyPolicy('caseBody', 'expressionCase'),
 		flatChildOpt('ifBody=expressionCase', 'elseBody=expressionCase', 'forBody=expressionCase'),
-		propagateExprPosition
+		propagateExprPosition, refuseFlatOnComplexExpr
 	) var body:Array<HxStatement>;
 };

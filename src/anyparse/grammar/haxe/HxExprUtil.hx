@@ -53,6 +53,44 @@ final class HxExprUtil {
 	 * trailing `;`; literal-shaped expressions (object / block / array
 	 * / paren / if-as-expression) keep it.
 	 */
+	/**
+	 * HxExpr ctor names that — when wrapped in `ExprStmt(expr)` and
+	 * standing as the sole statement of a case body — refuse inline
+	 * emission. Empirical scope (probed against fork CLI): only `And`
+	 * (`&&`) and `Or` (`||`). All other binops, ternary, and
+	 * assignment variants nest hierarchically under one `dblDot` child
+	 * in fork's tokentree and are allowed inline.
+	 */
+	private static final REFUSED_CASE_BODY_CTORS:Array<String> = ['And', 'Or'];
+
+	/**
+	 * True when a single-statement case body should refuse inline
+	 * because its outermost expression is `&&` or `||`. Mirrors
+	 * haxe-formatter's `MarkSameLine.markExpressionCase` body-shape
+	 * heuristic. Wired on `WriteOptions.caseBodyRefusesFlat` so the
+	 * writer-side `@:fmt(refuseFlatOnComplexExpr)` flat-gate AND-clause
+	 * dispatches through the plugin without engine→plugin coupling.
+	 *
+	 * `Dynamic` argument so the same predicate fires on both Plain-mode
+	 * `HxStatement` enum values and Trivia-mode `Trivial<HxStatementT>`
+	 * struct wrappers — `Type.enumConstructor` matches against both
+	 * enums (Plain `HxStatement` and synthesised `HxStatementT`) since
+	 * they share constructor names. Returns `false` for null,
+	 * non-enum, or non-`ExprStmt` shapes.
+	 */
+	public static function refusesCaseFlat(raw:Null<Dynamic>):Bool {
+		final s:Null<Dynamic> = unwrap(raw);
+		if (s == null) return false;
+		if (Type.enumConstructor(s) != 'ExprStmt') return false;
+		final params:Null<Array<Dynamic>> = Type.enumParameters(s);
+		if (params == null || params.length == 0) return false;
+		final inner:Null<Dynamic> = unwrap(params[0]);
+		if (inner == null) return false;
+		final ctor:Null<String> = Type.enumConstructor(inner);
+		if (ctor == null) return false;
+		return REFUSED_CASE_BODY_CTORS.contains(ctor);
+	}
+
 	public static function endsWithCloseBrace(raw:Null<Dynamic>):Bool {
 		final e:Null<Dynamic> = unwrap(raw);
 		if (e == null) return false;

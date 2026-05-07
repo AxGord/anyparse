@@ -43,12 +43,19 @@ package anyparse.grammar.haxe;
  * bodies (default value `_inExprPosition = false`) keep the
  * `caseBody` policy. See `HxCaseBranch.body`'s doc for the dispatch
  * contract.
+ *
+ * `@:fmt(refuseFlatOnComplexExpr)` (ω-issue-423-mech-b) mirrors
+ * `HxCaseBranch.body` — the plugin-supplied
+ * `WriteOptions.caseBodyRefusesFlat` adapter AND-s into the runtime
+ * flat-gate so a `default: A || B;` body refuses inline regardless of
+ * the dual flat-gate's verdict. See `HxCaseBranch.body`'s doc for the
+ * body-shape contract.
  */
 @:peg
 typedef HxDefaultBranch = {
 	@:lead(':') @:trivia @:tryparse @:fmt(
 		nestBody, bodyPolicy('caseBody', 'expressionCase'),
 		flatChildOpt('ifBody=expressionCase', 'elseBody=expressionCase', 'forBody=expressionCase'),
-		propagateExprPosition
+		propagateExprPosition, refuseFlatOnComplexExpr
 	) var stmts:Array<HxStatement>;
 };

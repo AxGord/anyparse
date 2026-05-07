@@ -2317,11 +2317,21 @@ class WriterLowering {
 				// `HxDefaultBranch.stmts` so a case nested in another case's
 				// body inherits expression context.
 				final propagateExprPosition:Bool = starNode.fmtHasFlag('propagateExprPosition');
+				// ω-issue-423-mech-b: `@:fmt(refuseFlatOnComplexExpr)` AND-s the
+				// runtime `_flatCase` gate with `!opt.caseBodyRefusesFlat(_arr[0].node)`,
+				// dispatching through the plugin-supplied adapter on
+				// `WriteOptions` (Haxe wires it to `HxExprUtil.refusesCaseFlat`).
+				// Engine never references the grammar plugin by name —
+				// mirrors the `endsWithCloseBrace` adapter pattern. Null
+				// adapter falls through (no refusal). Wired on
+				// `HxCaseBranch.body` / `HxDefaultBranch.stmts` to mirror
+				// fork's `MarkSameLine.markExpressionCase` body-shape check.
+				final refuseFlatOnComplex:Bool = starNode.fmtHasFlag('refuseFlatOnComplexExpr');
 				parts.push(triviaTryparseStarExpr(
 					fieldAccess, elemFn, sepExpr, sameLineName != null, nestBody,
 					tryparseTrailBB, tryparseTrailLC, tryparseTrailBA, firstSepOverride, subsequentSepOverride,
 					caseBodyFlagNames, flatChildOptPairs, tryparsePadLeading, tryparsePadTrailing,
-					propagateExprPosition
+					propagateExprPosition, refuseFlatOnComplex
 				));
 				return;
 			}
@@ -5134,7 +5144,8 @@ class WriterLowering {
 		flatChildOptPairs:Null<Array<Array<String>>> = null,
 		padLeading:Bool = false,
 		padTrailing:Bool = false,
-		propagateExprPosition:Bool = false
+		propagateExprPosition:Bool = false,
+		refuseFlatOnComplex:Bool = false
 	):Expr {
 		// ω-expression-case-flat-fanout: when the body's element call should
 		// receive a copy-on-flat opt with named fields swapped, build the
@@ -5255,6 +5266,21 @@ class WriterLowering {
 		};
 		final padLeadingExpr:Expr = macro $v{padLeading};
 		final padTrailingExpr:Expr = macro $v{padTrailing};
+		// ω-issue-423-mech-b: `@:fmt(refuseFlatOnComplexExpr)` adds an extra
+		// AND-clause to `_flatCase` that defers to the plugin-supplied
+		// `WriteOptions.caseBodyRefusesFlat` adapter (mirrors the
+		// `endsWithCloseBrace` pattern — engine never references the
+		// grammar plugin by name; the plugin's `defaultWriteOptions`
+		// wires its own predicate). Null adapter → no refusal (the gate
+		// short-circuits to `true`, preserving the dual flat-gate's
+		// verdict). Default `refuseFlatOnComplex=false` → predicate
+		// omitted entirely (other Star consumers stay byte-identical).
+		final shapeRefusalExpr:Expr = refuseFlatOnComplex
+			? (macro {
+				final _refuseFn:Null<Dynamic -> Bool> = opt.caseBodyRefusesFlat;
+				_refuseFn == null || !_refuseFn(_arr[0].node);
+			})
+			: (macro true);
 		return macro {
 			final _arr = $fieldAccess;
 			final _trailLC:Array<String> = $trailLC;
@@ -5266,6 +5292,7 @@ class WriterLowering {
 				&& _arr.length == 1
 				&& _trailLC.length == 0
 				&& _arr[0].leadingComments.length == 0
+				&& $shapeRefusalExpr
 				&& $flatGateExpr;
 			final _writerOpt = $writerOptExpr;
 			// ω-cond-mod-pad: padLeading/padTrailing emit a space (single-line

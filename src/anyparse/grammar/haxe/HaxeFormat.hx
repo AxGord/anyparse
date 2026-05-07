@@ -637,6 +637,7 @@ final class HaxeFormat implements TextFormat {
 		blockCommentAdapter: anyparse.format.comment.BlockCommentNormalizer.processCapturedBlockComment,
 		lineCommentAdapter: anyparse.format.comment.LineCommentNormalizer.normalizeLineComment,
 		endsWithCloseBrace: HxExprUtil.endsWithCloseBrace,
+		caseBodyRefusesFlat: HxExprUtil.refusesCaseFlat,
 	};
 
 	private function new() {}
