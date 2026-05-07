@@ -661,8 +661,13 @@ class WriterLowering {
 			// path covers the direct-Ref case where no wrapper struct hosts
 			// the field.
 			final ctorBodyPolicyFlag:Null<String> = branch.fmtReadString('bodyPolicy');
+			// ω-returnbody-widthaware: read the parameterless `@:fmt(widthAware)`
+			// flag at the same call site so the runtime IfWidthExceeds wrap
+			// is opt-in per ctor (currently `HxStatement.ReturnStmt`).
+			final ctorWidthAware:Bool = branch.fmtHasFlag('widthAware');
 			final policyWrapped:Expr = ctorBodyPolicyFlag != null
-				? bodyPolicyWrap(ctorBodyPolicyFlag, subCall, macro $i{argNames[0]}, refName, false, null)
+				? bodyPolicyWrap(ctorBodyPolicyFlag, subCall, macro $i{argNames[0]}, refName, false, null,
+					null, null, null, null, null, null, null, null, ctorWidthAware)
 				: subCall;
 
 			// ω-return-indent-objectliteral: ctor-level
@@ -3303,7 +3308,7 @@ class WriterLowering {
 		elseFieldName:Null<String>, ?afterKwExpr:Null<Expr>, ?kwLeadingExpr:Null<Expr>,
 		?bodyOnSameLineExpr:Null<Expr>, ?kwPolicyFlagName:Null<String>, ?afterTrailExpr:Null<Expr>,
 		?indentObjArgs:Array<String>, ?policyOverrides:Array<Array<String>>,
-		?bodyAllmanIndentArgs:Array<String>
+		?bodyAllmanIndentArgs:Array<String>, ?widthAware:Bool
 	):Expr {
 		// ω-untyped-body-stmt-override: parent-side body-policy override.
 		// When the field carries `@:fmt(bodyPolicyOverride('<ctor>',
@@ -3385,7 +3390,54 @@ class WriterLowering {
 		final sameSepNb:Expr = hasKwSlots
 			? macro kwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, false, opt)
 			: kwPolicyInlineSep ?? macro _dop(' ');
-		final sameLayoutExpr:Expr = macro _dc([$sameSepNb, $writeCall]);
+		// ω-returnbody-widthaware: when the field carries `@:fmt(widthAware)`,
+		// wrap the Same-mode emission with a `Doc.IfWidthExceeds(opt.lineWidth,
+		// brk, flat)` probe. The renderer chooses `brk` (next-line + indent)
+		// when `col + flatTokenWidth(flat) >= opt.lineWidth`, else `flat`
+		// (inline). Affects `Same` policy and the `Keep`-fallback path when
+		// no `BodyOnSameLine` slot is wired (current ReturnStmt ctor-level
+		// consumer is slot-less — see TODO below). `_bodyW` is bound once
+		// so the writer call emits a single Doc subtree shared between both
+		// sides of the IfWidthExceeds; the renderer materialises only the
+		// chosen branch.
+		//
+		// Known limitation (issue_257 cluster mech-(a) compound, partial
+		// landing 2026-05-07): `flatTokenWidth` collapses forced hardlines
+		// to zero, so the probe answers "would total flat width overflow",
+		// not "would the rendered first line overflow". For multi-line
+		// bodies whose first line fits but later lines push total width past
+		// `lineWidth` (multi-branch if-expr returns under
+		// `expressionIf=keep`), the probe over-fires. ReturnStmt's three
+		// `issue_257_*` fixtures interact with this:
+		//  - `_keep` (long-string + if-expr source-broken): the over-fire
+		//    accidentally matches the Keep+source-broken expectation
+		//    because both routes want break. PASSES.
+		//  - `_same` / `_same_indent_value_expr` (Same policy): expected
+		//    keeps the if-expr inline (first-line-fits semantic), the
+		//    over-fire breaks. FAIL — parked.
+		// Proper fix requires (1) threading a `<refName>BeforeNewline:Bool`
+		// synth slot to ctor-level kw-led branches with `@:fmt(bodyPolicy)`
+		// (TriviaTypeSynth.buildEnumCtor + Lowering capture + this call
+		// site) so Keep's source-shape decision routes through
+		// `nextLayoutExpr` for source-broken cases, and (2) a first-line
+		// width measurement primitive (e.g. `flatTokenWidthFirstLine` that
+		// stops at the first forced hardline) replacing `flatTokenWidth` in
+		// the renderer's IfWidthExceeds probe — or a sibling Doc primitive
+		// `IfFirstLineExceeds(n, brk, flat)` to avoid changing chain
+		// consumers' cascade semantic. Tracked under
+		// `feedback_issue_257_compound.md` mech-(a-residual).
+		//
+		// Trade-off: when both `widthAware` AND `indentValueIfCtor` fire on
+		// the same field AND the width-aware brk path triggers, the brk path
+		// uses the plain `_dn(_cols, [_dhl(), _bodyW])` shape — the
+		// `indentObjGuardedNext` outer-Nest-drop is reachable only via
+		// explicit `Next` policy. ReturnStmt's only consumer today.
+		final sameLayoutExpr:Expr = if (widthAware == true) macro {
+			final _bodyW:anyparse.core.Doc = $writeCall;
+			_diwe(opt.lineWidth,
+				_dn(_cols, _dc([_dhl(), _bodyW])),
+				_dc([$sameSepNb, _bodyW]));
+		} else macro _dc([$sameSepNb, $writeCall]);
 		// ω-trivia-after-kw-next-layout (bug #3 of issue_45): when the
 		// caller forwarded kw-trivia slot accesses, the Next-layout body
 		// also threads `afterKw` (cuddled to the kw, before the hardline)

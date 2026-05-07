@@ -48,14 +48,46 @@ package anyparse.grammar.haxe;
  *    routes the `return`→value separator through the runtime
  *    `BodyPolicy` switch (slice ω-return-body), mirroring how
  *    `HxIfStmt.thenBody` / `HxForStmt.body` consume `ifBody` /
- *    `forBody`. `Same` keeps `return value;` flat (the pre-slice
- *    behaviour). `Next` always pushes the value to the next line at
- *    one indent level deeper. `FitLine` keeps it flat when it fits
- *    within `lineWidth`, otherwise breaks. Default is `FitLine`,
- *    matching haxe-formatter's effective `sameLine.returnBody:
- *    @:default(Same)` semantics — their `Same` wraps long values via
- *    a separate `wrapping.maxLineLength` pass, which corresponds to
- *    our `FitLine` rather than strict `Same`.
+ *    `forBody`. `Same` keeps `return value;` flat when it fits in
+ *    `opt.lineWidth`; otherwise the value breaks to the next line at
+ *    one indent level deeper (slice ω-returnbody-widthaware via the
+ *    `@:fmt(widthAware)` companion meta — see below). `Next` always
+ *    pushes the value to the next line at one indent level deeper.
+ *    `FitLine` keeps it flat when it fits within `lineWidth`, otherwise
+ *    breaks. Default is `FitLine`. With `widthAware` active, our `Same`
+ *    now matches haxe-formatter's `sameLine.returnBody: same` directly
+ *    — their `Same` wraps long values via a separate
+ *    `wrapping.maxLineLength` pass, which we replicate per-field at
+ *    write time via a `Doc.IfWidthExceeds(opt.lineWidth, brk, flat)`
+ *    wrap around the `Same`-mode emission. `Keep` `BodyOnSameLine=true`
+ *    (source had inline) inherits the same width-aware wrap; `Keep`
+ *    `BodyOnSameLine=false` (source had break) is unaffected — already
+ *    breaks via `nextLayoutExpr`.
+ *
+ *    Known limitation (mech-(a) of the issue_257 compound, partial
+ *    2026-05-07): the renderer probe uses `flatTokenWidth` which sums
+ *    every token in the flat shape, treating forced hardlines as zero.
+ *    For multi-line bodies whose first rendered line fits but whose
+ *    total token width exceeds `lineWidth` (multi-branch `if-expr` under
+ *    `expressionIf=keep` is the canonical example), the probe over-fires
+ *    and breaks the body to next line. This accidentally matches the
+ *    `Keep`-with-source-broken semantic (where break is what the user
+ *    wrote), so `issue_257_return_keep` PASSES; it diverges from
+ *    `Same`-with-multi-line-body (where the user asked for inline), so
+ *    `issue_257_return_same` and `_same_indent_value_expr` still fail.
+ *    Proper fix requires threading a `<refName>BeforeNewline:Bool` synth
+ *    slot to kw-led ctor branches with `@:fmt(bodyPolicy)` AND a
+ *    first-line-width measurement primitive (`IfFirstLineExceeds` Doc
+ *    sibling, or the equivalent helper). Tracked under
+ *    `feedback_issue_257_compound.md` mech-(a-residual).
+ *
+ *    The parameterless `@:fmt(widthAware)` flag opts the field into the
+ *    width-aware wrap inside `WriterLowering.bodyPolicyWrap`. Strictly
+ *    opt-in: other `bodyPolicy` consumers (HxIfStmt.thenBody,
+ *    HxForExpr.body, HxObjectField.value, …) keep strict-flat `Same`
+ *    semantics until they explicitly opt in. Mirrors haxe-formatter's
+ *    per-construct `wrapping.maxLineLength` rules — currently only
+ *    return-shape consumers (`return`, eventually `throw`) match.
  *    Also carries `@:fmt(indentValueIfCtor('ObjectLit',
  *    'indentObjectLiteral', 'objectLiteralLeftCurly'))` (slice
  *    ω-return-indent-objectliteral) — when the value is an
@@ -235,7 +267,7 @@ enum HxStatement {
 	@:kw('final') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))
 	FinalStmt(decl:HxVarDecl);
 
-	@:kw('return') @:trailOpt(';') @:fmt(bodyPolicy('returnBody'), indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'))
+	@:kw('return') @:trailOpt(';') @:fmt(bodyPolicy('returnBody'), indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'), widthAware)
 	ReturnStmt(value:HxExpr);
 
 	@:kw('return') @:trail(';')
