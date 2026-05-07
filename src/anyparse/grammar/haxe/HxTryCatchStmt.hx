@@ -67,9 +67,21 @@ package anyparse.grammar.haxe;
  * `try untyped\n<indent>{…}` is reachable from `tryBody=Same` +
  * `leftCurly=Next` and full Allman `try\n<indent>untyped\n<indent>{…}`
  * from `untypedBody=Next` + `leftCurly=Next`.
+ *
+ * `@:fmt(beforeNewlineSlotFirst)` on `body` (slice ω-untyped-keep-trybody)
+ * extends the `<field>BeforeNewline:Bool` synth slot to a FIRST Ref field
+ * (the default predicate `isBareNonFirstRef` excludes first fields). Pairs
+ * with parent Alt-branch `@:fmt(forwardNewlineForBody)` on
+ * `HxStatement.TryCatchStmt` — that flag tells `Lowering`'s Case 3 to OMIT
+ * the post-kw `skipWs(ctx)` so the inner first-field's `collectTrivia`
+ * scans the gap between `try` and the body's first token, capturing
+ * `newlineBefore` onto the synth slot. The writer's bare-Ref bodyPolicy
+ * path then forwards `bodyOnSameLineExpr = !value.bodyBeforeNewline` into
+ * `bodyPolicyWrap`, which drives the `Keep` dispatch — closing the
+ * `untypedBody=Keep` source-shape channel for `try\n\tuntyped {…}`.
  */
 @:peg
 typedef HxTryCatchStmt = {
-	@:fmt(bodyPolicy('tryBody'), kwPolicy('tryPolicy'), bodyPolicyOverride('UntypedBlockStmt', 'untypedBody')) var body:HxStatement;
+	@:fmt(bodyPolicy('tryBody'), kwPolicy('tryPolicy'), bodyPolicyOverride('UntypedBlockStmt', 'untypedBody'), beforeNewlineSlotFirst) var body:HxStatement;
 	@:trivia @:tryparse @:fmt(sameLine('sameLineCatch'), bareBodyBreaks) var catches:Array<HxCatchClause>;
 };

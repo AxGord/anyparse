@@ -1713,7 +1713,17 @@ class WriterLowering {
 						// the slot doesn't exist either; null falls back to the
 						// `Same` layout inside `bodyPolicyWrap` (matches the
 						// pre-slice plain-mode behaviour for Keep).
-						final bodyOnSameLineExpr:Null<Expr> = ctx.trivia && !isFirstField
+						//
+						// ω-untyped-keep-trybody: `@:fmt(beforeNewlineSlotFirst)`
+						// opt-in extends slot reading to first-field bodyPolicy
+						// paths. Pairs with parent Alt-branch
+						// `@:fmt(forwardNewlineForBody)` (Case 3 omits post-kw
+						// `skipWs`) and `TriviaTypeSynth.isBareNonFirstRef` /
+						// `Lowering.hasBeforeNewlineSlot` first-field allowances.
+						// Currently consumed by `HxTryCatchStmt.body` for
+						// `untypedBody=Keep` source-shape preservation.
+						final firstFieldNlOptIn:Bool = isFirstField && child.fmtHasFlag('beforeNewlineSlotFirst');
+						final bodyOnSameLineExpr:Null<Expr> = ctx.trivia && (!isFirstField || firstFieldNlOptIn)
 							? macro !${ {expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX), pos: Context.currentPos()} }
 							: null;
 						// ω-untyped-body-stmt-override: forward all

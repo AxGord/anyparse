@@ -1286,6 +1286,27 @@ class Lowering {
 			// inner Ref. Either or both may be absent — the `@:kw('return')`
 			// -only ctors keep their pre-slice shape, and a bare `@:wrap`
 			// -only ctor (`ParenExpr`) stays a single-literal commit.
+			// ω-untyped-keep-trybody: branch-level `@:fmt(forwardNewlineForBody)`
+			// opt-in tells Case 3 to OMIT the post-kw `skipWs(ctx)` so the
+			// inner sub-rule's first-field `collectTrivia` can scan the gap
+			// itself and capture `newlineBefore` onto the synth
+			// `<field>BeforeNewline:Bool` slot. Pairs with field-level
+			// `@:fmt(beforeNewlineSlotFirst)` on the inner struct's first
+			// Ref field — both must be present for the channel to work.
+			// Without the flag the post-kw `skipWs` runs as before, which
+			// is the right default for every other Case 3 kw-branch (`if`,
+			// `while`, `for`, `do`, `switch`, `throw`, etc.). Currently
+			// consumed only by `HxStatement.TryCatchStmt` (issue_362
+			// _untyped_body_keep `try\n\tuntyped {…}` shape).
+			final forwardNewlineForBody:Bool = branch.fmtHasFlag('forwardNewlineForBody');
+			// `forwardNewlineForBody` omits the post-kw `skipWs`. The
+			// `triviaBodyPolicyKw` capture (`_bodyOnSameLine` from
+			// `hasNewlineIn(_kwEndPos, ctx.pos)`) would then scan an empty
+			// range and silently degenerate to `_bodyOnSameLine=true`. The
+			// two channels target the same data (post-kw newline) via
+			// different routes — combining them is a grammar error.
+			if (forwardNewlineForBody && triviaBodyPolicyKw)
+				Context.fatalError('Lowering: @:fmt(forwardNewlineForBody) on a @:fmt(bodyPolicy(...)) branch is a conflict — both channels capture the post-kw newline; pick one.', Context.currentPos());
 			if (kwLead != null) {
 				steps.push(macro expectKw(ctx, $v{kwLead}));
 				// ω-issue-257-firstline: capture `_kwEndPos` BEFORE the
@@ -1294,7 +1315,7 @@ class Lowering {
 				// Mirrors the struct-side `_bodyOnSameLine_<field>` capture
 				// in `lowerStruct`'s `@:optional @:kw` path.
 				if (triviaBodyPolicyKw) steps.push(macro final _kwEndPos:Int = ctx.pos);
-				steps.push(macro skipWs(ctx));
+				if (!forwardNewlineForBody) steps.push(macro skipWs(ctx));
 				if (triviaBodyPolicyKw)
 					steps.push(macro final _bodyOnSameLine:Bool = !hasNewlineIn(ctx.input, _kwEndPos, ctx.pos));
 			}
@@ -1527,13 +1548,27 @@ class Lowering {
 			// the Star's rewind stashes trivia back to `ctx.pendingTrivia`,
 			// and the pre-Ref `collectTrivia` here drains it, preserving
 			// the newline on the synth `<field>BeforeNewline:Bool` slot.
-			final hasBeforeNewlineSlot:Bool = child.kind == Ref
+			//
+			// ω-untyped-keep-trybody: opt-in `@:fmt(beforeNewlineSlotFirst)`
+			// extends the slot to FIRST Ref fields when the parent Alt-branch
+			// carries `@:fmt(forwardNewlineForBody)` (which omits the parent's
+			// post-kw `skipWs`). The first-field `collectTrivia` then scans
+			// the gap between the parent kw and the field's first token
+			// itself, capturing `newlineBefore` for the writer's `Keep`
+			// dispatch. Currently consumed by `HxTryCatchStmt.body` to
+			// preserve `try\n\tuntyped {…}` source shape under
+			// `untypedBody=Keep`.
+			final isBareTriviaRefNoLead:Bool = child.kind == Ref
 				&& !isOptional
-				&& child != node.children[0]
 				&& kwLead == null
 				&& leadText == null
 				&& ctx.trivia
 				&& isTriviaBearing(typePath);
+			final isFirstField:Bool = child == node.children[0];
+			final isFirstFieldNlOptIn:Bool = isBareTriviaRefNoLead
+				&& isFirstField
+				&& child.fmtHasFlag('beforeNewlineSlotFirst');
+			final hasBeforeNewlineSlot:Bool = isBareTriviaRefNoLead && (!isFirstField || isFirstFieldNlOptIn);
 			final beforeNlLocal:String = '_beforeNl_$fieldName';
 			if (!triviaEofStar && !isOptionalRef) {
 				if (hasBeforeNewlineSlot) {

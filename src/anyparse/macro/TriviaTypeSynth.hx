@@ -324,9 +324,14 @@ class TriviaTypeSynth {
 	private static function isBareNonFirstRef(child:ShapeNode, parent:ShapeNode):Bool {
 		if (child.kind != Ref) return false;
 		if (child.annotations.get('base.optional') == true) return false;
-		if (child == parent.children[0]) return false;
 		if (child.readMetaString(':kw') != null) return false;
 		if (child.readMetaString(':lead') != null) return false;
+		// ω-untyped-keep-trybody: `@:fmt(beforeNewlineSlotFirst)` opt-in
+		// extends BeforeNewline-slot synthesis to FIRST Ref fields. Pairs
+		// with parent Alt-branch `@:fmt(forwardNewlineForBody)` so the
+		// inner first-field `collectTrivia` scans the post-kw gap. See
+		// `Lowering.hasBeforeNewlineSlot` / Case 3 post-kw skipWs gate.
+		if (child == parent.children[0]) return child.fmtHasFlag('beforeNewlineSlotFirst');
 		return true;
 	}
 
