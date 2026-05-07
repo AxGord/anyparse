@@ -1627,6 +1627,14 @@ class WriterLowering {
 						optParts.push(sepWithBeforeKwTrailingExpr);
 						if (bodyPolicyFlag != null) {
 							optParts.push(macro _dt($v{kwLead}));
+							// ω-expression-if-with-blocks: sister read of
+							// `@:fmt(inlineBlockBodyIfFlag(...))` on optional-kw
+							// body field path (e.g. `HxIfExpr.elseBranch`'s
+							// `@:optional @:kw('else')` form). Threaded into the
+							// same `bodyPolicyWrap` plumbing as the bare-Ref path
+							// below; the runtime override fires at writeCall-swap
+							// time before policy dispatch.
+							final inlineBlockBodyArgs:Null<Array<String>> = child.fmtReadStringArgs('inlineBlockBodyIfFlag');
 							optParts.push(bodyPolicyWrap({
 								flagName: bodyPolicyFlag,
 								exprFlagName: bodyPolicyExprFlag,
@@ -1639,6 +1647,7 @@ class WriterLowering {
 								kwLeadingExpr: kwLeadingExpr,
 								bodyOnSameLineExpr: bodyOnSameLineExpr,
 								indentObjArgs: indentObjArgs,
+								inlineBlockBodyArgs: inlineBlockBodyArgs,
 							}));
 						} else {
 							optParts.push(macro _dt($v{kwLead + ' '}));
@@ -1835,6 +1844,18 @@ class WriterLowering {
 						// carry this meta because fork keeps `if (cond) {`
 						// cuddled.
 						final bodyAllmanIndentArgs:Null<Array<String>> = child.fmtReadStringArgs('bodyAllmanIndentForCtor');
+						// ω-expression-if-with-blocks: `@:fmt(inlineBlockBodyIfFlag(
+						// '<flagName>'))` reads `opt.<flagName>:Bool` at runtime;
+						// when true AND body's runtime ctor is `BlockExpr`, wrap
+						// the body's writeCall result in `D.flatten(…)` to collapse
+						// `{<hardline>stmt;<hardline>}` to `{stmt;}` regardless of
+						// width. Mirrors fork's `expressionIfWithBlocks` knob
+						// (`MarkSameLine.markBody` with `includeBrOpen=true` →
+						// `markBlockBody` Same-policy collapse). Currently consumed
+						// by `HxIfExpr.thenBranch` / `elseBranch`. Non-BlockExpr
+						// bodies and flag-false fall through to the regular policy
+						// cascade.
+						final inlineBlockBodyArgs:Null<Array<String>> = child.fmtReadStringArgs('inlineBlockBodyIfFlag');
 						parts.push(bodyPolicyWrap({
 							flagName: bodyPolicyFlag,
 							exprFlagName: bodyPolicyExprFlag,
@@ -1850,6 +1871,7 @@ class WriterLowering {
 							policyOverrides: policyOverrides,
 							bodyAllmanIndentArgs: bodyAllmanIndentArgs,
 							fallbackFlagName: fallbackFlag,
+							inlineBlockBodyArgs: inlineBlockBodyArgs,
 						}));
 						justWrappedBody = {access: fieldAccess, typePath: refName};
 					} else {
@@ -3613,7 +3635,6 @@ class WriterLowering {
 		// the original local names keeps the body diff-free; the typedef
 		// definition lives at the bottom of this file alongside `PrevBodyInfo`.
 		final flagName:String = opts.flagName;
-		final writeCall:Expr = opts.writeCall;
 		final bodyValueExpr:Expr = opts.bodyValueExpr;
 		final bodyTypePath:String = opts.bodyTypePath;
 		final hasElseIf:Bool = opts.hasElseIf;
@@ -3629,6 +3650,36 @@ class WriterLowering {
 		final widthAware:Null<Bool> = opts.widthAware;
 		final ifExprIndentArgs:Null<Array<String>> = opts.ifExprIndentArgs;
 		final fallbackFlagName:Null<String> = opts.fallbackFlagName;
+		final inlineBlockBodyArgs:Null<Array<String>> = opts.inlineBlockBodyArgs;
+		// ω-expression-if-with-blocks: when the field carries
+		// `@:fmt(inlineBlockBodyIfFlag('<flagName>'))`, swap the body's
+		// writeCall for a runtime-conditional Doc that flattens block
+		// bodies inline when `opt.<flagName>` is true AND the body's
+		// runtime ctor is `BlockExpr`. Done at the entry of bodyPolicyWrap
+		// so the flattened body propagates through every downstream
+		// policy / override layout (Same / Next / Keep / FitLine / etc.).
+		// Non-BlockExpr bodies and flag-false invocations get the original
+		// writeCall result unchanged.
+		//
+		// Note: ctor literal `'BlockExpr'` is hardcoded by-definition —
+		// the meta's semantic IS "block-shaped body collapse" (mirrors
+		// fork's `markBlockBody`). If a future grammar wants the same
+		// override on a different block-shaped ctor, extend the meta to
+		// `inlineBlockBodyIfFlag('<flag>', '<ctorName>')` and read both
+		// args here.
+		final writeCall:Expr = if (inlineBlockBodyArgs == null) opts.writeCall
+		else {
+			if (inlineBlockBodyArgs.length != 1)
+				Context.fatalError('WriterLowering: bodyPolicyWrap inlineBlockBodyArgs requires (flagName), got ${inlineBlockBodyArgs.length} args', Context.currentPos());
+			final inlineFlag:Expr = {expr: EField(macro opt, inlineBlockBodyArgs[0]), pos: Context.currentPos()};
+			final origWriteCall:Expr = opts.writeCall;
+			macro {
+				final _bodyDoc:anyparse.core.Doc = $origWriteCall;
+				($inlineFlag && Type.enumConstructor($bodyValueExpr) == 'BlockExpr')
+					? anyparse.core.D.flatten(_bodyDoc)
+					: _bodyDoc;
+			};
+		};
 		// ω-untyped-body-stmt-override: parent-side body-policy override.
 		// When the field carries `@:fmt(bodyPolicyOverride('<ctor>',
 		// '<flag>'))` (one entry per call, repeatable), the parent's own
@@ -6066,6 +6117,7 @@ typedef PrevBodyInfo = {
  *   - `widthAware`          — when `true`, the `Same` branch routes through `IfWidthExceeds` for line-fit-aware break.
  *   - `ifExprIndentArgs`    — `(ctorName, optField)` pair for the IfExpr-as-value RHS-style indent in flat path.
  *   - `fallbackFlagName`    — name of a fallback `BodyPolicy` flag activated when the sibling `else` is absent.
+ *   - `inlineBlockBodyArgs` — `(flagName)` 1-tuple for the inline-collapse override on `BlockExpr` bodies (slice ω-expression-if-with-blocks).
  */
 typedef WrapBodyOpts = {
 	flagName:String,
@@ -6086,6 +6138,7 @@ typedef WrapBodyOpts = {
 	?widthAware:Bool,
 	?ifExprIndentArgs:Array<String>,
 	?fallbackFlagName:String,
+	?inlineBlockBodyArgs:Array<String>,
 };
 
 /**

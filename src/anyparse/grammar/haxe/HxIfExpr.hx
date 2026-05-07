@@ -63,6 +63,20 @@ package anyparse.grammar.haxe;
  * uses the inverse-polarity `noSiblingFallback('ifBody')` mechanism
  * on `thenBranch` (below) for the no-else fallback case.
  *
+ * `@:fmt(inlineBlockBodyIfFlag('expressionIfWithBlocks'))` on both
+ * branches — runtime override that bypasses the policy-decided
+ * layout when `opt.expressionIfWithBlocks == true` AND the body's
+ * runtime ctor is `BlockExpr`. Wraps the body's writeCall result in
+ * `D.flatten(…)` to collapse `{<hardline>stmt;<hardline>}` to
+ * `{stmt;}` regardless of width. Mirrors fork's
+ * `sameLine.expressionIfWithBlocks` knob (`MarkSameLine.markBody`
+ * with `includeBrOpen=true` triggers `markBlockBody` Same-policy
+ * collapse). Non-BlockExpr bodies and `expressionIfWithBlocks=false`
+ * fall through to the regular `bodyPolicy` cascade. Caveat: under
+ * Trivia mode `// line comments` inside the block body fold against
+ * the next token and break syntax — same limitation as fork; the
+ * knob is opt-in.
+ *
  * `@:fmt(noSiblingFallback('ifBody'))` on `thenBranch` — runtime
  * fallback when the next optional sibling (`elseBranch`) is null:
  * `bodyPolicyWrap` swaps `opt.expressionIfBody` for `opt.ifBody`
@@ -96,6 +110,6 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxIfExpr = {
 	@:lead('(') @:trail(')') var cond:HxExpr;
-	@:fmt(bodyPolicy('expressionIfBody'), indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'), noSiblingFallback('ifBody')) var thenBranch:HxExpr;
-	@:optional @:kw('else') @:fmt(bodyPolicy('expressionElseBody'), sameLine('sameLineExpressionElse'), shapeAware, elseIf) var elseBranch:Null<HxExpr>;
+	@:fmt(bodyPolicy('expressionIfBody'), indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'), noSiblingFallback('ifBody'), inlineBlockBodyIfFlag('expressionIfWithBlocks')) var thenBranch:HxExpr;
+	@:optional @:kw('else') @:fmt(bodyPolicy('expressionElseBody'), sameLine('sameLineExpressionElse'), shapeAware, elseIf, inlineBlockBodyIfFlag('expressionIfWithBlocks')) var elseBranch:Null<HxExpr>;
 };

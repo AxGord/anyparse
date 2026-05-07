@@ -179,6 +179,20 @@ import anyparse.format.wrap.WrapRules;
  *    one config key for the trio); programmatic users can set the
  *    three independently.
  *
+ * Field added in slice ω-expression-if-with-blocks:
+ *  - `expressionIfWithBlocks` — `Bool` knob (default `false`) gating
+ *    inline collapse of `BlockExpr` bodies on `HxIfExpr.thenBranch` /
+ *    `HxIfExpr.elseBranch`. When `true` AND the runtime body ctor is
+ *    `BlockExpr`, the writer wraps the body's `Doc` in `D.flatten(…)`
+ *    — collapsing `{<hardline>stmt;<hardline>}` to `{stmt;}` regardless
+ *    of width. Mirrors fork's `sameLine.expressionIfWithBlocks: false`
+ *    knob (`MarkSameLine.markBody(token, policy, includeBrOpen=true)`
+ *    routing on `BrOpen` block bodies → `markBlockBody` collapse).
+ *    Wired via `@:fmt(inlineBlockBodyIfFlag('expressionIfWithBlocks'))`
+ *    on both branch fields; flag-false fall-through preserves the
+ *    existing `bodyPolicy('expressionIfBody'/'expressionElseBody')`
+ *    cascade unchanged.
+ *
  * Fields added in slice ω-case-body-policy:
  *  - `caseBody` — `BodyPolicy` knob gating the body-placement axis at
  *    `HxCaseBranch.body` / `HxDefaultBranch.stmts` for switch-as-
@@ -988,6 +1002,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	expressionIfBody:BodyPolicy,
 	expressionElseBody:BodyPolicy,
 	expressionForBody:BodyPolicy,
+	expressionIfWithBlocks:Bool,
 	leftCurly:BracePlacement,
 	objectLiteralLeftCurly:BracePlacement,
 	objectFieldColon:WhitespacePolicy,

@@ -68,4 +68,47 @@ class D {
 		}
 		return result;
 	}
+
+	/**
+		Wadler-style `flatten`: structurally rewrites `d` into a Doc that
+		renders as if the renderer were forced into MFlat mode for every
+		Group / IfBreak / threshold-conditional. Unconditional hardlines
+		(`Line("\n")`) collapse to `Empty` since their flat output `"\n"`
+		would still break. Optional whitespace primitives (`OptSpace`,
+		`OptHardline`, `OptHardlineSkipAtOpenDelim`) reduce to their
+		no-break inline form (`Text(s)` or `Empty`). `Nest` indent is
+		dropped — irrelevant in flat mode.
+
+		Used by writer-side overrides that force inline collapse of a
+		body sub-tree regardless of width — e.g. fork's
+		`expressionIfWithBlocks` knob collapses an if-expression's block
+		body to a single line.
+
+		Caveat: the transform is line-oriented, not syntax-aware. Inputs
+		containing `// line comments` (Trivia mode) collapse the comment
+		marker against the next token and break syntax. Caller is
+		responsible for guarding against such inputs (or accepting the
+		limitation, mirroring fork's behaviour).
+	**/
+	public static function flatten(d:Doc):Doc {
+		return switch d {
+			case Empty: Empty;
+			case Text(_): d;
+			case Line(flat): flat == '\n' ? Empty : Text(flat);
+			case Nest(_, inner): flatten(inner);
+			case Group(inner): flatten(inner);
+			case BodyGroup(inner): flatten(inner);
+			case Concat(items): Concat([for (i in items) flatten(i)]);
+			case IfBreak(_, fl): flatten(fl);
+			case IfWidthExceeds(_, _, fl): flatten(fl);
+			case IfFirstLineExceeds(_, _, fl): flatten(fl);
+			case IfLineExceeds(_, _, fl): flatten(fl);
+			case Fill(items, sep):
+				final flatSep:Doc = flatten(sep);
+				Concat(intersperse([for (i in items) flatten(i)], flatSep));
+			case OptSpace(s): Text(s);
+			case OptHardline: Empty;
+			case OptHardlineSkipAtOpenDelim: Empty;
+		};
+	}
 }

@@ -115,6 +115,16 @@ package anyparse.grammar.haxe.format;
  * `sameLine.expressionIf: @:default(Keep)`. Statement-level
  * counterparts (`ifBody` / `elseBody` / `forBody`) keep their own
  * defaults — the divergence is intentional.
+ *
+ * `expressionIfWithBlocks` (ω-expression-if-with-blocks) is an
+ * orthogonal `Bool` knob (default `false`) that collapses
+ * `BlockExpr` bodies on `HxIfExpr.thenBranch` / `elseBranch` to a
+ * single line when set. Mirrors haxe-formatter's
+ * `sameLine.expressionIfWithBlocks: false` — the body's brace pair
+ * survives but its contents flatten regardless of width. Wired via
+ * `@:fmt(inlineBlockBodyIfFlag('expressionIfWithBlocks'))` on both
+ * branches; non-block bodies fall through to the `expressionIf*`
+ * cascade unchanged.
  */
 @:peg typedef HxFormatSameLineSection = {
 
@@ -157,4 +167,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var untypedBody:HxFormatBodyPolicy;
 
 	@:optional var expressionIf:HxFormatBodyPolicy;
+
+	@:optional var expressionIfWithBlocks:Bool;
 };

@@ -622,4 +622,71 @@ class DocRendererTest extends Test {
 		final doc:Doc = D.group(IfLineExceeds(10, brk, flat));
 		Assert.equals("FLATX", Renderer.render(doc, 80));
 	}
+
+	function testFlattenCollapsesBlockShape() {
+		// `{ <hardline>nest(stmt;)<hardline> }` flattens to `{stmt;}` —
+		// the canonical use case (slice ω-expression-if-with-blocks).
+		final body:Doc = D.concat([
+			D.text('{'),
+			D.nest(1, D.concat([D.hardline(), D.text('"";')])),
+			D.hardline(),
+			D.text('}'),
+		]);
+		Assert.equals('{"";}', Renderer.render(D.flatten(body), 80));
+	}
+
+	function testFlattenPicksFlatSideOfIfBreak() {
+		// IfBreak / IfWidthExceeds / IfFirstLineExceeds / IfLineExceeds
+		// all collapse to their flat side regardless of width.
+		final doc:Doc = D.concat([
+			IfBreak(D.text('BRK1'), D.text('flatA')),
+			IfWidthExceeds(0, D.text('BRK2'), D.text('flatB')),
+			IfFirstLineExceeds(0, D.text('BRK3'), D.text('flatC')),
+			IfLineExceeds(0, D.text('BRK4'), D.text('flatD')),
+		]);
+		Assert.equals('flatAflatBflatCflatD', Renderer.render(D.flatten(doc), 80));
+	}
+
+	function testFlattenForcesGroupFlatRegardlessOfWidth() {
+		// A Group with break-mode hardlines and break-mode-only width
+		// would normally pick brk shape under tight budget. After
+		// flatten, the inner content collapses to its flat-mode shape.
+		final inner:Doc = D.concat([
+			D.text('a'), D.line(), D.text('b'), D.line(), D.text('c'),
+		]);
+		final doc:Doc = D.group(inner);
+		// Width 3 forces brk in normal render: "a\nb\nc".
+		Assert.equals('a\nb\nc', Renderer.render(doc, 3));
+		// flatten pulls the flat shape regardless: "a b c".
+		Assert.equals('a b c', Renderer.render(D.flatten(doc), 3));
+	}
+
+	function testFlattenDropsNestIndent() {
+		// `Nest(1, hardline + text)` after flatten loses the indent
+		// (irrelevant in flat mode) AND drops the hardline.
+		final doc:Doc = D.nest(1, D.concat([D.hardline(), D.text('inner')]));
+		Assert.equals('inner', Renderer.render(D.flatten(doc), 80));
+	}
+
+	function testFlattenFillIntersperseSep() {
+		// `Fill(items, sep)` flattens into Concat with flatten(sep)
+		// interspersed between flatten(items).
+		final doc:Doc = D.fill([D.text('x'), D.text('y'), D.text('z')], D.line());
+		// flatten(D.line()) → Text(' ') (Line(' ') with non-`\n` flat).
+		Assert.equals('x y z', Renderer.render(D.flatten(doc), 80));
+	}
+
+	function testFlattenOptHardlineDrops() {
+		// OptHardline / OptHardlineSkipAtOpenDelim drop entirely;
+		// OptSpace becomes Text(s).
+		final doc:Doc = D.concat([
+			D.text('a'),
+			OptHardline,
+			D.optSpace(' '),
+			D.text('b'),
+			OptHardlineSkipAtOpenDelim,
+			D.text('c'),
+		]);
+		Assert.equals('a bc', Renderer.render(D.flatten(doc), 80));
+	}
 }

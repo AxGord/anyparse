@@ -445,6 +445,7 @@ final class HaxeFormatConfigLoader {
 			expressionIfBody: base.expressionIfBody,
 			expressionElseBody: base.expressionElseBody,
 			expressionForBody: base.expressionForBody,
+			expressionIfWithBlocks: base.expressionIfWithBlocks,
 			leftCurly: base.leftCurly,
 			objectLiteralLeftCurly: base.objectLiteralLeftCurly,
 			objectFieldColon: base.objectFieldColon,
@@ -724,6 +725,7 @@ final class HaxeFormatConfigLoader {
 		if (section.elseIf != null) opt.elseIf = keywordPlacementToRuntime(section.elseIf);
 		if (section.fitLineIfWithElse != null) opt.fitLineIfWithElse = section.fitLineIfWithElse;
 		if (section.expressionTry != null) opt.expressionTry = sameLineToRuntime(section.expressionTry);
+		if (section.expressionIfWithBlocks != null) opt.expressionIfWithBlocks = section.expressionIfWithBlocks;
 	}
 
 	private static function applyTrailingCommas(section:HxFormatTrailingCommasSection, opt:HxModuleWriteOptions):Void {
