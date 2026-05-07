@@ -49,5 +49,5 @@ typedef HxFnDecl = {
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose) var typeParams:Null<Array<HxTypeParamDecl>>;
 	@:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams'), funcParamParens, fill, fillDoubleIndent) var params:Array<HxParam>;
 	@:optional @:fmt(typeHintColon) @:lead(':') var returnType:Null<HxType>;
-	@:fmt(leftCurly) var body:HxFnBody;
+	@:fmt(leftCurly, bodyPolicyForCtor('UntypedBlockBody', 'untypedBody')) var body:HxFnBody;
 }

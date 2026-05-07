@@ -425,8 +425,11 @@ class Lowering {
 				if (!_matched) {
 					var _scanI:Int = _preWsPos;
 					var _hadComment:Bool = false;
-					while (_scanI + 1 < ctx.pos) {
-						if (ctx.input.charCodeAt(_scanI) == '/'.code) {
+					var _hadNewline:Bool = false;
+					while (_scanI < ctx.pos) {
+						final _ch:Int = ctx.input.charCodeAt(_scanI);
+						if (_ch == '\n'.code) _hadNewline = true;
+						if (_ch == '/'.code && _scanI + 1 < ctx.pos) {
 							final _c2:Int = ctx.input.charCodeAt(_scanI + 1);
 							if (_c2 == '/'.code || _c2 == '*'.code) {
 								_hadComment = true;
@@ -440,6 +443,26 @@ class Lowering {
 						final _pt = ctx.pendingTrivia;
 						if (_pt != null) {
 							while (_pt.leadingComments.length > _stashCount0) _pt.leadingComments.pop();
+						}
+					} else if (_hadNewline) {
+						// ω-untyped-keep: when no operator matches AND the consumed
+						// WS contained a newline (no comment, no rewind), stash the
+						// newline signal into `pendingTrivia` so the next sibling's
+						// `collectTrivia` drain captures `newlineBefore=true`. Without
+						// this, Pratt silently consumes the newline and downstream
+						// `bodyBeforeNewline` slots never fire (e.g. function-body
+						// `untyped` after `:Type\n\tuntyped {…}` — the body field's
+						// pre-field collectTrivia sees pos already past the `\n`).
+						final _pt = ctx.pendingTrivia;
+						if (_pt == null) {
+							ctx.pendingTrivia = {
+								blankBefore: false,
+								blankAfterLeadingComments: false,
+								newlineBefore: true,
+								leadingComments: [],
+							};
+						} else {
+							_pt.newlineBefore = true;
 						}
 					}
 					break;

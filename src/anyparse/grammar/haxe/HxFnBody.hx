@@ -57,7 +57,7 @@ package anyparse.grammar.haxe;
 @:peg
 enum HxFnBody {
 
-	@:fmt(multilineCtor, bodyPolicy('untypedBody'))
+	@:fmt(multilineCtor)
 	UntypedBlockBody(body:HxUntypedFnBody);
 
 	@:fmt(multilineCtor)

@@ -1802,8 +1802,57 @@ class WriterLowering {
 							}
 							for (lc in lcCtors)
 								sepExpr = macro $ctorExpr == $v{lc} ? $lcSep : $sepExpr;
-							parts.push(sepExpr);
-							parts.push(writeCall);
+							// ω-untyped-keep: `@:fmt(bodyPolicyForCtor('<ctor>',
+							// '<flagName>'))` on a struct field with leftCurly path
+							// runtime-replaces the per-ctor `sep + writeCall` pair with
+							// a `bodyPolicyWrap` invocation when the body's runtime
+							// ctor matches. The wrap reads `opt.<flagName>` for policy
+							// and (when the field's `<field>BeforeNewline:Bool` slot
+							// is synthesised — bare non-first Ref / trivia-bearing
+							// path, see `hasBeforeNewlineSlot` in `Lowering.lowerStruct`)
+							// reads `!value.<field>BeforeNewline` as `bodyOnSameLine`
+							// for the `Keep` dispatch. Other ctors keep the existing
+							// per-ctor switch unchanged.
+							//
+							// Architectural rationale: pre-kw gap before an inner kw
+							// (e.g. `untyped` inside `HxUntypedFnBody.block`) is
+							// consumed by parent-struct's pre-field skipWs BEFORE the
+							// inner sub-rule probes. Capturing the slot at the inner
+							// kw site always reads `true`. Moving the wrap from inner
+							// ctor (`HxFnBody.UntypedBlockBody`) to outer struct field
+							// (`HxFnDecl.body`) places it where the `bodyBeforeNewline`
+							// slot is captured by the existing `hasBeforeNewlineSlot`
+							// path — which fires during the parent struct's parse,
+							// when the gap is still in play.
+							//
+							// First consumer: `HxFnDecl.body` for
+							// `bodyPolicyForCtor('UntypedBlockBody', 'untypedBody')`.
+							final bodyPolicyForCtorArgs:Null<Array<String>> = child.fmtReadStringArgs('bodyPolicyForCtor');
+							if (bodyPolicyForCtorArgs != null) {
+								if (bodyPolicyForCtorArgs.length != 2)
+									Context.fatalError('WriterLowering: @:fmt(bodyPolicyForCtor(...)) requires (ctorName, flagName), got ${bodyPolicyForCtorArgs.length} args', Context.currentPos());
+								final wrapCtorName:String = bodyPolicyForCtorArgs[0];
+								final wrapFlagName:String = bodyPolicyForCtorArgs[1];
+								final hasBeforeNlSlot:Bool = ctx.trivia && isTriviaBearing(typePath)
+									&& !isFirstField && kwLead == null && leadText == null;
+								final wrapBodyOnSameLineExpr:Null<Expr> = hasBeforeNlSlot
+									? {expr: EUnop(OpNot, false, {expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX), pos: Context.currentPos()}), pos: Context.currentPos()}
+									: null;
+								final wrapOutput:Expr = bodyPolicyWrap({
+									flagName: wrapFlagName,
+									writeCall: writeCall,
+									bodyValueExpr: fieldAccess,
+									bodyTypePath: refName,
+									hasElseIf: false,
+									elseFieldName: null,
+									bodyOnSameLineExpr: wrapBodyOnSameLineExpr,
+								});
+								final defaultPair:Expr = macro _dc([$sepExpr, $writeCall]);
+								parts.push(macro $ctorExpr == $v{wrapCtorName} ? $wrapOutput : $defaultPair);
+							} else {
+								parts.push(sepExpr);
+								parts.push(writeCall);
+							}
 						} else if (bodyBreakFlag != null && kwLead == null && leadText == null && !isRaw) {
 							// ω-expression-try-body-break: wrap the body field in a
 							// SameLinePolicy switch — `Same` emits ` ` + body, `Next`
