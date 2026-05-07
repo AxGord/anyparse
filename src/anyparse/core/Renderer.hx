@@ -250,6 +250,25 @@ class Renderer {
 					// question.
 					final crosses:Bool = (col + flatTokenWidth(flatDoc) >= n);
 					stack.push(new Frame(f.indent, f.mode, crosses ? breakDoc : flatDoc));
+				case IfFirstLineExceeds(n, breakDoc, flatDoc):
+					// First-line-aware probe: rule fires when `col +
+					// flatTokenWidthFirstLine(flatDoc) >= n`. Differs from
+					// `IfWidthExceeds` in measurement semantic — the first-
+					// line walk caps at the first forced hardline inside
+					// `flatDoc`, so a multi-line subtree whose first line
+					// fits stays inline (this branch picks `flatDoc`) even
+					// though its total flat width would exceed `n`. Used
+					// by `bodyPolicyWrap`'s width-aware path: e.g. `return
+					// <multi-line if-expr>` keeps the if-expr's head glued
+					// to `return` when the head fits, while subsequent
+					// `else` branches keep their own hardlines.
+					//
+					// Mode propagation matches `IfWidthExceeds` — both
+					// primitives answer a column-vs-threshold question
+					// independent of the enclosing Group's flat/break
+					// choice.
+					final firstLineCrosses:Bool = (col + flatTokenWidthFirstLine(flatDoc) >= n);
+					stack.push(new Frame(f.indent, f.mode, firstLineCrosses ? breakDoc : flatDoc));
 				case Fill(items, sep):
 					if (items.length == 0) {
 						// nothing
@@ -356,6 +375,12 @@ class Renderer {
 					// engine width measurements decoupled from threshold
 					// probes that fire only at render time.
 					local.push(new Frame(f.indent, MFlat, flatDoc));
+				case IfFirstLineExceeds(_, _, flatDoc):
+					// Same forwarding as `IfWidthExceeds`: enclosing Group's
+					// `fitsFlat` measurement uses the flat shape; the first-
+					// line probe is a render-time decision, transparent to
+					// wrap-engine width measurement.
+					local.push(new Frame(f.indent, MFlat, flatDoc));
 				case Fill(items, sep):
 					// Flat measurement of Fill: items joined by sep flat.
 					var k:Int = items.length;
@@ -426,6 +451,79 @@ class Renderer {
 				case IfBreak(_, flatDoc):
 					stack.push(flatDoc);
 				case IfWidthExceeds(_, _, flatDoc):
+					stack.push(flatDoc);
+				case IfFirstLineExceeds(_, _, flatDoc):
+					// Mirror `IfWidthExceeds` semantic: descend into the
+					// flat side. Chain consumers calling `flatTokenWidth`
+					// keep their hardline-ignoring measurement intact —
+					// the first-line cap is the renderer-side probe's
+					// concern, not the chain cascade's.
+					stack.push(flatDoc);
+				case Fill(items, sep):
+					var k:Int = items.length;
+					while (k > 0) {
+						k--;
+						stack.push(items[k]);
+						if (k > 0) stack.push(sep);
+					}
+				case OptSpace(s):
+					total += s.length;
+			}
+		}
+		return total;
+	}
+
+	/**
+	 * First-line variant of `flatTokenWidth`. Walks the same flat-shape
+	 * tree but caps the measurement at the first forced hardline
+	 * (`Line('\n')` or `OptHardline`): the running total at that point is
+	 * returned and the rest of the tree is ignored. Used exclusively by
+	 * the `IfFirstLineExceeds` probe to answer "would the first rendered
+	 * line of `flatDoc` exceed `n` columns from the current pen?".
+	 *
+	 * Departure from `flatTokenWidth`: forced hardlines abort the walk
+	 * instead of contributing zero width. `BodyGroup` is still deferred
+	 * (zero, no abort) — its content decides its own flat/break later
+	 * and cannot be predicted at probe time. `Group` descends as usual;
+	 * a forced hardline anywhere in its inner aborts the first-line walk
+	 * because such a Group must commit to break mode.
+	 *
+	 * Stack-based walk — items pushed in reverse so pop order matches
+	 * left-to-right traversal. The `aborted` flag short-circuits
+	 * remaining work once a hardline is seen.
+	 */
+	static function flatTokenWidthFirstLine(d:Doc):Int {
+		final stack:Array<Doc> = [d];
+		var total:Int = 0;
+		var aborted:Bool = false;
+		while (stack.length > 0 && !aborted) {
+			final node:Doc = stack.pop();
+			switch (node) {
+				case Empty:
+				case OptHardline:
+					aborted = true;
+				case Text(s):
+					total += s.length;
+				case Line(flat):
+					if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) {
+						aborted = true;
+					} else {
+						total += flat.length;
+					}
+				case Nest(_, inner):
+					stack.push(inner);
+				case Concat(items):
+					var i:Int = items.length;
+					while (--i >= 0) stack.push(items[i]);
+				case Group(inner):
+					stack.push(inner);
+				case BodyGroup(_):
+					// Defer — BG decides its own flat/break independently.
+				case IfBreak(_, flatDoc):
+					stack.push(flatDoc);
+				case IfWidthExceeds(_, _, flatDoc):
+					stack.push(flatDoc);
+				case IfFirstLineExceeds(_, _, flatDoc):
 					stack.push(flatDoc);
 				case Fill(items, sep):
 					var k:Int = items.length;

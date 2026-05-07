@@ -212,6 +212,11 @@ class MethodChainEmit {
 					// column-aware decision happens at render time and
 					// chain-item width measurement uses the flat shape.
 					stack.push(flatDoc);
+				case IfFirstLineExceeds(_, _, flatDoc):
+					// Mirror `IfWidthExceeds`: chain segments treat the
+					// first-line probe transparently — the flat shape
+					// answers the chain's "ignore hardlines" semantic.
+					stack.push(flatDoc);
 				case Fill(items, sep):
 					var k:Int = items.length;
 					while (k > 0) {

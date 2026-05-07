@@ -1237,9 +1237,21 @@ class Lowering {
 			final triviaCaptureSource:Bool = ctx.trivia
 				&& isTriviaBearing(typePath)
 				&& TriviaTypeSynth.isCaptureSourceBranch(branch);
+			// ω-issue-257-firstline: ctors with `@:fmt(bodyPolicy(...))` on a
+			// single-Ref kw-led branch (e.g. `HxStatement.ReturnStmt`) carry
+			// a positional `bodyOnSameLine:Bool` arg in the synth pair. The
+			// parser captures whether the post-kw whitespace crossed a
+			// newline so `bodyPolicyWrap`'s `Keep` branch can dispatch
+			// source-shape-aware. Trivia-only — plain mode keeps the
+			// original ctor arity and falls back to width-driven layout
+			// via `widthAware`.
+			final triviaBodyPolicyKw:Bool = ctx.trivia
+				&& isTriviaBearing(typePath)
+				&& TriviaTypeSynth.isAltBodyPolicyKwBranch(branch);
 			final ctorArgs:Array<Expr> = [macro _raw];
 			if (triviaTrailOpt) ctorArgs.push(macro _trailPresent);
 			if (triviaCaptureSource) ctorArgs.push(macro _sourceText);
+			if (triviaBodyPolicyKw) ctorArgs.push(macro _bodyOnSameLine);
 			final ctorCall:Expr = {expr: ECall(ctorRef, ctorArgs), pos: Context.currentPos()};
 			final kwLead:Null<String> = branch.annotations.get('kw.leadText');
 			final steps:Array<Expr> = [macro skipWs(ctx)];
@@ -1253,7 +1265,15 @@ class Lowering {
 			// -only ctor (`ParenExpr`) stays a single-literal commit.
 			if (kwLead != null) {
 				steps.push(macro expectKw(ctx, $v{kwLead}));
+				// ω-issue-257-firstline: capture `_kwEndPos` BEFORE the
+				// post-kw `skipWs` so `_bodyOnSameLine` can probe whether
+				// the gap up to the body's first token crossed a newline.
+				// Mirrors the struct-side `_bodyOnSameLine_<field>` capture
+				// in `lowerStruct`'s `@:optional @:kw` path.
+				if (triviaBodyPolicyKw) steps.push(macro final _kwEndPos:Int = ctx.pos);
 				steps.push(macro skipWs(ctx));
+				if (triviaBodyPolicyKw)
+					steps.push(macro final _bodyOnSameLine:Bool = !hasNewlineIn(ctx.input, _kwEndPos, ctx.pos));
 			}
 			if (leadText != null) {
 				steps.push(macro expectLit(ctx, $v{leadText}));

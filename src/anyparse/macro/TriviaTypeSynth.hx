@@ -215,6 +215,19 @@ class TriviaTypeSynth {
 	 */
 	public static inline final SOURCE_TEXT_ARG_NAME:String = 'sourceText';
 
+	/**
+	 * ω-issue-257-firstline — positional arg name appended to paired Alt
+	 * ctors carrying `@:fmt(bodyPolicy(...))` on a single-Ref kw-led
+	 * branch (e.g. `HxStatementT.ReturnStmt`). The parser captures
+	 * whether the body's first token followed the keyword on the same
+	 * source line so `bodyPolicyWrap`'s `Keep` branch can pick between
+	 * `sameLayoutExpr` and `nextLayoutExpr` at writer time — the ctor-
+	 * level mirror of the struct-field `<field>BodyOnSameLine` slot.
+	 * Plain mode keeps the original ctor arity (no slot, default Same
+	 * layout via `widthAware`). First consumer: `HxStatementT.ReturnStmt`.
+	 */
+	public static inline final BODY_ON_SAME_LINE_ARG_NAME:String = 'bodyOnSameLine';
+
 	private static inline final PAIRED_SUFFIX:String = 'T';
 	private static inline final SYNTH_SUBPACK:String = 'trivia';
 	private static inline final SYNTH_MODULE_LEAF:String = 'Pairs';
@@ -512,6 +525,19 @@ class TriviaTypeSynth {
 			final strCT:ComplexType = TPath({pack: [], name: 'String', params: []});
 			args.push({name: SOURCE_TEXT_ARG_NAME, type: strCT});
 		}
+		// ω-issue-257-firstline: single-Ref kw-led Alt branches carrying
+		// `@:fmt(bodyPolicy(...))` grow a positional `bodyOnSameLine:Bool`
+		// arg holding the parser's source-shape capture (post-kw whitespace
+		// crossed a newline → false; same-line → true). Co-occurs with
+		// `isAltTrailOptBranch` on the first consumer `HxStatement.ReturnStmt`
+		// (`@:kw('return') @:trailOpt(';')`); the arg order in this block
+		// (trailPresent → sourceText → bodyOnSameLine) handles the overlap.
+		// Disjoint from the close-trailing predicates (single Ref child
+		// shape, no Star child).
+		if (isAltBodyPolicyKwBranch(branch)) {
+			final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
+			args.push({name: BODY_ON_SAME_LINE_ARG_NAME, type: boolCT});
+		}
 		// ω-postfix-call-trailing: Star-suffix `@:postfix(open, close) @:sep(...)`
 		// branches whose Star already auto-collects per-arg trivia
 		// (`trivia.starCollects=true`, set by `TriviaAnalysis.markPostfixStarSuffix`)
@@ -625,6 +651,33 @@ class TriviaTypeSynth {
 		if (branch.readMetaString(':lead') == null) return false;
 		if (branch.readMetaString(':trail') == null) return false;
 		return branch.fmtReadString('captureSource') != null;
+	}
+
+	/**
+	 * True when the branch is a single-Ref kw-led Alt-ctor carrying
+	 * `@:fmt(bodyPolicy(...))`. Such ctors grow a positional
+	 * `bodyOnSameLine:Bool` arg in the synth pair so `bodyPolicyWrap`'s
+	 * `Keep` branch can dispatch source-shape-aware between
+	 * `sameLayoutExpr` and `nextLayoutExpr` at writer time. Reads
+	 * `@:fmt(bodyPolicy(...))` via `fmtReadString`, which works at arm-time
+	 * because `base.meta` is populated by `ShapeBuilder` before
+	 * `TriviaTypeSynth.arm()` runs (see `Build.run` ordering — same path
+	 * `isCaptureSourceBranch` relies on).
+	 *
+	 * Requires `@:kw(...)` for the parser's commit point — bodyPolicy
+	 * without a kw has no anchor for the post-kw newline probe.
+	 * Co-occurs with `isAltTrailOptBranch` on the first consumer
+	 * `HxStatement.ReturnStmt` (`@:kw('return') @:trailOpt(';')`); the
+	 * `buildEnumCtor` push order (trailPresent → sourceText →
+	 * bodyOnSameLine) keeps the layout deterministic. Disjoint from the
+	 * close-trailing predicates (single Ref child, no Star child). First
+	 * consumer: `HxStatement.ReturnStmt`.
+	 */
+	public static function isAltBodyPolicyKwBranch(branch:ShapeNode):Bool {
+		if (branch.children.length != 1) return false;
+		if (branch.children[0].kind != Ref) return false;
+		if (branch.readMetaString(':kw') == null) return false;
+		return branch.fmtReadString('bodyPolicy') != null;
 	}
 
 	private static function shapeToComplexType(node:ShapeNode, synthPack:Array<String>):ComplexType {

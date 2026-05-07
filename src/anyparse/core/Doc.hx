@@ -57,6 +57,25 @@ package anyparse.core;
 	                     enclosing `Group` measurement) forwards to `fl`
 	                     so flat-mode width estimation stays stable
 	                     regardless of the column-aware decision.
+	- `IfFirstLineExceeds(n, br, fl)` — first-line-aware sibling of
+	                     `IfWidthExceeds`. Probes `col + firstLineWidth(fl)`
+	                     against `n` instead of total flat width: forced
+	                     hardlines inside `fl` cap the measurement at the
+	                     first line rather than collapsing to zero. Used
+	                     when the layout decision depends on whether the
+	                     first rendered line of a multi-line subtree
+	                     overflows — e.g. `return <multi-line if-expr>`
+	                     wants the if-expr's HEAD inline with `return`
+	                     when the head fits, even though subsequent
+	                     branches break. The full-width sibling
+	                     `IfWidthExceeds` answers "would the whole flat
+	                     subtree fit", which over-fires for multi-line
+	                     bodies; this sibling answers "would the first
+	                     rendered line fit", matching haxe-formatter's
+	                     `sameLine.returnBody: same` semantics. Group's
+	                     `fitsFlat` forwards to `fl` (same as
+	                     `IfWidthExceeds`) so chain consumers' cascade
+	                     semantic stays unchanged.
 	- `Fill(items, sep)` — Wadler `fillSep`. In flat mode, emits items
 	                     joined by `sep` flat. In break mode, packs items
 	                     left-to-right: before each `items[i]` (i > 0),
@@ -116,6 +135,7 @@ enum Doc {
 	Concat(items:Array<Doc>);
 	IfBreak(breakDoc:Doc, flatDoc:Doc);
 	IfWidthExceeds(n:Int, breakDoc:Doc, flatDoc:Doc);
+	IfFirstLineExceeds(n:Int, breakDoc:Doc, flatDoc:Doc);
 	Fill(items:Array<Doc>, sep:Doc);
 	OptSpace(s:String);
 	OptHardline;

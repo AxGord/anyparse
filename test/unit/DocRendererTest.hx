@@ -440,4 +440,97 @@ class DocRendererTest extends Test {
 		final doc:Doc = IfWidthExceeds(10, brkShape, flatShape);
 		Assert.equals("aa\nbb\ncc", Renderer.render(doc, 80));
 	}
+
+	// `IfFirstLineExceeds(n, brk, flat)` is the first-line-aware sibling
+	// of `IfWidthExceeds`. The probe formula is `col +
+	// flatTokenWidthFirstLine(flatDoc) >= n` — the first-line walk caps
+	// at the first forced hardline inside `flatDoc`, so a multi-line
+	// subtree whose first line fits stays inline (this branch picks
+	// `flat`) even though its total flat width would exceed `n`. Used by
+	// `bodyPolicyWrap`'s width-aware path to keep `return <multi-line
+	// if-expr>` glued to the kw when the head fits (slice
+	// ω-issue-257-firstline).
+
+	function testIfFirstLineExceedsAtColumnZeroBelowThreshold() {
+		// At col 0 with 5-char single-line flat and threshold 10, col +
+		// firstLine = 5 — under threshold → flat fires. Same arithmetic
+		// as the `IfWidthExceeds` sibling for hardline-free shapes.
+		final doc:Doc = IfFirstLineExceeds(10, D.text("BREAK"), D.text("FLATX"));
+		Assert.equals("FLATX", Renderer.render(doc, 80));
+	}
+
+	function testIfFirstLineExceedsAtColumnZeroReachesThreshold() {
+		// At col 0 with 10-char single-line flat and threshold 10, col +
+		// firstLine = 10 — reaches threshold (`>= n`) → brk fires.
+		final doc:Doc = IfFirstLineExceeds(10, D.text("BREAKBREAK"), D.text("FLATXFLATX"));
+		Assert.equals("BREAKBREAK", Renderer.render(doc, 80));
+	}
+
+	function testIfFirstLineExceedsCapsAtFirstHardline() {
+		// CRITICAL: this is the difference from `IfWidthExceeds`. flat
+		// side is multi-line via forced hardlines; total token width
+		// would be 12 ("aabbbbbbbbbbcc" minus hardlines), but the
+		// first-line walk aborts at the first hardline and returns just
+		// "aa" (2 cols). At col 0 with threshold 10, 0 + 2 < 10 → flat
+		// fires (the multi-line shape renders verbatim). The
+		// `IfWidthExceeds` sibling on the same input would also pick
+		// flat at col 0, but for different reasons; the diverging
+		// behaviour shows up under prefix shift (next test).
+		final flatShape:Doc = D.concat([
+			D.text("aa"), D.hardline(), D.text("bbbbbbbbbb"), D.hardline(), D.text("cc"),
+		]);
+		final brkShape:Doc = D.text("BRK");
+		final doc:Doc = IfFirstLineExceeds(10, brkShape, flatShape);
+		Assert.equals("aa\nbbbbbbbbbb\ncc", Renderer.render(doc, 80));
+	}
+
+	function testIfFirstLineExceedsPrefixedFirstLineFits() {
+		// 6-col prefix puts pen at col 6; flat side first line is "aaa"
+		// (3 cols) before the hardline, total firstLine probe = 6 + 3 =
+		// 9 < threshold 10 → flat fires. Even though the full flat shape
+		// has 50+ cols of content beyond the hardline, only the first
+		// line is measured. This is the sameLine.returnBody=same shape
+		// in microcosm: `return ` head + multi-line if-expr body whose
+		// first line fits.
+		final flatShape:Doc = D.concat([
+			D.text("aaa"), D.hardline(), D.text("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"),
+		]);
+		final brkShape:Doc = D.text("BRK");
+		final doc:Doc = D.concat([
+			D.text("prefix"),
+			IfFirstLineExceeds(10, brkShape, flatShape),
+		]);
+		Assert.equals("prefixaaa\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", Renderer.render(doc, 80));
+	}
+
+	function testIfFirstLineExceedsPrefixedFirstLineOverflows() {
+		// 8-col prefix + flat first line "aaaa" (4 cols) = 12 >= threshold
+		// 10 → brk fires. Even though the flat side's first line by
+		// itself is short, combined with the prefix it crosses the
+		// threshold. Demonstrates the column-aware nature of the probe
+		// is preserved (same as `IfWidthExceeds`).
+		final flatShape:Doc = D.concat([
+			D.text("aaaa"), D.hardline(), D.text("bb"),
+		]);
+		final brkShape:Doc = D.text("BRK");
+		final doc:Doc = D.concat([
+			D.text("12345678"),
+			IfFirstLineExceeds(10, brkShape, flatShape),
+		]);
+		Assert.equals("12345678BRK", Renderer.render(doc, 80));
+	}
+
+	function testIfFirstLineExceedsForwardsToFlatInFitsFlat() {
+		// Outer Group's fitsFlat measurement walks the IfFirstLineExceeds
+		// flat side (mirrors `IfWidthExceeds` semantic). The probe is
+		// renderer-side, transparent to wrap-engine width measurement.
+		// Here flat side is 5 cols (no hardline), brk side is 50 cols.
+		// Outer Group with budget 80 fits the flat shape — Group commits
+		// to MFlat, the probe at col 0 vs threshold 10 evaluates 5 < 10
+		// → flat fires.
+		final brk:Doc = D.text("BREAKBREAKBREAKBREAKBREAKBREAKBREAKBREAKBREAKBREAK");
+		final flat:Doc = D.text("FLATX");
+		final doc:Doc = D.group(IfFirstLineExceeds(10, brk, flat));
+		Assert.equals("FLATX", Renderer.render(doc, 80));
+	}
 }

@@ -119,6 +119,15 @@ class WriterLowering {
 			final hasCloseTrailing:Bool = ctx.trivia && TriviaTypeSynth.isAltCloseTrailingBranch(branch);
 			final hasTrailOptFlag:Bool = ctx.trivia && TriviaTypeSynth.isAltTrailOptBranch(branch);
 			final hasCaptureSource:Bool = ctx.trivia && TriviaTypeSynth.isCaptureSourceBranch(branch);
+			// ω-issue-257-firstline: single-Ref kw-led ctors carrying
+			// `@:fmt(bodyPolicy(...))` grow a positional `bodyOnSameLine:Bool`
+			// arg captured by the parser. Read inside Case 3 via the index
+			// computed below to forward as `bodyPolicyWrap`'s
+			// `bodyOnSameLineExpr` parameter so `Keep` policy dispatches
+			// source-shape-aware. Disjoint from the four predicates above
+			// (single-Ref + `:kw` + `bodyPolicy` is structurally distinct)
+			// so the predicate composes additively in `extraArgs`.
+			final hasBodyPolicyKw:Bool = ctx.trivia && TriviaTypeSynth.isAltBodyPolicyKwBranch(branch);
 			// ω-open-trailing-alt: same-line trailing comment after the
 			// open lit grows a parallel positional arg next to closeTrailing.
 			// Synth gate is `isAltCloseTrailingBranch && @:lead present`,
@@ -141,6 +150,7 @@ class WriterLowering {
 			// synth and parser sides both emit conditionally on it.
 			final extraArgs:Int = ((hasCloseTrailing || hasTrailOptFlag || hasCaptureSource) ? 1 : 0)
 				+ (hasOpenTrailing ? 3 : 0)
+				+ (hasBodyPolicyKw ? 1 : 0)
 				+ (hasPostfixCloseTrailing ? 1 : 0);
 			final argNames:Array<String> = [for (i in 0...children.length + extraArgs) '_v$i'];
 
@@ -662,12 +672,50 @@ class WriterLowering {
 			// the field.
 			final ctorBodyPolicyFlag:Null<String> = branch.fmtReadString('bodyPolicy');
 			// ω-returnbody-widthaware: read the parameterless `@:fmt(widthAware)`
-			// flag at the same call site so the runtime IfWidthExceeds wrap
-			// is opt-in per ctor (currently `HxStatement.ReturnStmt`).
+			// flag at the same call site so the runtime IfFirstLineExceeds
+			// wrap is opt-in per ctor (currently `HxStatement.ReturnStmt`).
 			final ctorWidthAware:Bool = branch.fmtHasFlag('widthAware');
+			// ω-issue-257-firstline: when the ctor is the bodyPolicy-kw-Ref
+			// shape (predicate matches `HxStatement.ReturnStmt`) and trivia
+			// mode + bearing typePath, the synth ctor carries a positional
+			// `bodyOnSameLine:Bool` arg captured by the parser. Forward its
+			// access expression so `bodyPolicyWrap`'s `Keep` branch can
+			// dispatch source-shape-aware. The arg index follows the same
+			// ordering as `TriviaTypeSynth.buildEnumCtor`: closeTrailing
+			// (+ openTrailing/trailingBlankBefore/trailingLeading) →
+			// trailPresent → sourceText → bodyOnSameLine → postfix
+			// closeTrailing. Plain mode keeps `null` and the wrap degrades
+			// to `sameLayoutExpr` (no Keep slot — falls through the same
+			// width-aware path as `Same`).
+			final isBodyPolicyKwCtor:Bool = ctx.trivia && isTriviaBearing(typePath) && TriviaTypeSynth.isAltBodyPolicyKwBranch(branch);
+			final bodyOnSameLineExpr:Null<Expr> = if (!isBodyPolicyKwCtor) null
+			else {
+				var idx:Int = children.length;
+				if (TriviaTypeSynth.isAltCloseTrailingBranch(branch)) {
+					idx++;
+					if (branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse')) idx += 3;
+				}
+				if (TriviaTypeSynth.isAltTrailOptBranch(branch)) idx++;
+				if (TriviaTypeSynth.isCaptureSourceBranch(branch)) idx++;
+				macro $i{argNames[idx]};
+			};
+			// ω-issue-257-firstline regression-fix: forward `indentArgs` to
+			// `bodyPolicyWrap` so its `indentObjGuardedNext` rule fires for
+			// the ctor-level `Next`/`Keep`-bodyOnSameLine-false fallback path
+			// when the body is an ObjectLit and `indentObjectLiteral=false`.
+			// Without forwarding, the `Keep`-route nextLayoutExpr always
+			// emits `_dn(_cols, [_dhl, body])` and over-indents `{` by one
+			// step (`return\n\t\t\t{` instead of `return\n\t\t{` for
+			// `indentObjectLiteral=false` configs). The post-process wrap
+			// below at `indentWrapped` keeps overriding the SAME-policy case
+			// when `indentObjectLiteral=true`; the two layers are orthogonal
+			// — post-process handles `Same+true`, bodyPolicyWrap handles
+			// `Next+false` and `Keep+false`. Reads the meta once and reuses
+			// the result for both layers.
+			final indentArgs:Null<Array<String>> = branch.fmtReadStringArgs('indentValueIfCtor');
 			final policyWrapped:Expr = ctorBodyPolicyFlag != null
 				? bodyPolicyWrap(ctorBodyPolicyFlag, subCall, macro $i{argNames[0]}, refName, false, null,
-					null, null, null, null, null, null, null, null, ctorWidthAware)
+					null, null, bodyOnSameLineExpr, null, null, indentArgs, null, null, ctorWidthAware)
 				: subCall;
 
 			// ω-return-indent-objectliteral: ctor-level
@@ -686,7 +734,6 @@ class WriterLowering {
 			// through to `policyWrapped` unchanged. Reads three string args
 			// off the branch (mirrors the `child`-level helper of the same
 			// name).
-			final indentArgs:Null<Array<String>> = branch.fmtReadStringArgs('indentValueIfCtor');
 			final indentWrapped:Expr = if (indentArgs == null) policyWrapped
 			else {
 				if (indentArgs.length != 3) Context.fatalError('WriterLowering: @:fmt(indentValueIfCtor(...)) on ctor requires (ctorName, optField, leftCurlyField), got ${indentArgs.length} args', Context.currentPos());
@@ -3390,42 +3437,34 @@ class WriterLowering {
 		final sameSepNb:Expr = hasKwSlots
 			? macro kwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, false, opt)
 			: kwPolicyInlineSep ?? macro _dop(' ');
-		// ω-returnbody-widthaware: when the field carries `@:fmt(widthAware)`,
-		// wrap the Same-mode emission with a `Doc.IfWidthExceeds(opt.lineWidth,
-		// brk, flat)` probe. The renderer chooses `brk` (next-line + indent)
-		// when `col + flatTokenWidth(flat) >= opt.lineWidth`, else `flat`
-		// (inline). Affects `Same` policy and the `Keep`-fallback path when
-		// no `BodyOnSameLine` slot is wired (current ReturnStmt ctor-level
-		// consumer is slot-less — see TODO below). `_bodyW` is bound once
-		// so the writer call emits a single Doc subtree shared between both
-		// sides of the IfWidthExceeds; the renderer materialises only the
-		// chosen branch.
+		// ω-returnbody-widthaware + ω-issue-257-firstline: when the field
+		// carries `@:fmt(widthAware)`, wrap the Same-mode emission with a
+		// `Doc.IfFirstLineExceeds(opt.lineWidth, brk, flat)` probe. The
+		// renderer chooses `brk` (next-line + indent) when `col +
+		// flatTokenWidthFirstLine(flat) >= opt.lineWidth`, else `flat`
+		// (inline). The first-line cap matters for multi-line bodies whose
+		// first rendered line fits but whose total flat width would
+		// overflow — e.g. `return <multi-line if-expr>` where the if-expr's
+		// head fits inline with `return` while subsequent `else` branches
+		// keep their own hardlines (haxe-formatter's
+		// `sameLine.returnBody: same` semantic). The earlier
+		// `IfWidthExceeds` variant over-fired on such shapes and forced
+		// the body onto its own line.
 		//
-		// Known limitation (issue_257 cluster mech-(a) compound, partial
-		// landing 2026-05-07): `flatTokenWidth` collapses forced hardlines
-		// to zero, so the probe answers "would total flat width overflow",
-		// not "would the rendered first line overflow". For multi-line
-		// bodies whose first line fits but later lines push total width past
-		// `lineWidth` (multi-branch if-expr returns under
-		// `expressionIf=keep`), the probe over-fires. ReturnStmt's three
-		// `issue_257_*` fixtures interact with this:
-		//  - `_keep` (long-string + if-expr source-broken): the over-fire
-		//    accidentally matches the Keep+source-broken expectation
-		//    because both routes want break. PASSES.
-		//  - `_same` / `_same_indent_value_expr` (Same policy): expected
-		//    keeps the if-expr inline (first-line-fits semantic), the
-		//    over-fire breaks. FAIL — parked.
-		// Proper fix requires (1) threading a `<refName>BeforeNewline:Bool`
-		// synth slot to ctor-level kw-led branches with `@:fmt(bodyPolicy)`
-		// (TriviaTypeSynth.buildEnumCtor + Lowering capture + this call
-		// site) so Keep's source-shape decision routes through
-		// `nextLayoutExpr` for source-broken cases, and (2) a first-line
-		// width measurement primitive (e.g. `flatTokenWidthFirstLine` that
-		// stops at the first forced hardline) replacing `flatTokenWidth` in
-		// the renderer's IfWidthExceeds probe — or a sibling Doc primitive
-		// `IfFirstLineExceeds(n, brk, flat)` to avoid changing chain
-		// consumers' cascade semantic. Tracked under
-		// `feedback_issue_257_compound.md` mech-(a-residual).
+		// `_bodyW` is bound once so the writer call emits a single Doc
+		// subtree shared between both sides of the IfFirstLineExceeds; the
+		// renderer materialises only the chosen branch. The flat-shape
+		// sibling (`flatTokenWidth` in chain consumers) is unchanged —
+		// only the renderer-side probe descends with the first-line cap.
+		//
+		// Affects `Same` policy unconditionally and the `Keep`-fallback
+		// path when no `bodyOnSameLineExpr` slot is forwarded. With the
+		// slot threaded (ctor-level capture in `Lowering.lowerEnumBranch`
+		// Case 3 — see `triviaBodyPolicyKw` gate — and forwarded by the
+		// Case 3 writer call site below), `Keep` dispatches source-shape-
+		// aware: `true` → `sameLayoutExpr` (still width-probed via the
+		// first-line cap), `false` → `nextLayoutExpr` (unconditional
+		// break).
 		//
 		// Trade-off: when both `widthAware` AND `indentValueIfCtor` fire on
 		// the same field AND the width-aware brk path triggers, the brk path
@@ -3434,7 +3473,7 @@ class WriterLowering {
 		// explicit `Next` policy. ReturnStmt's only consumer today.
 		final sameLayoutExpr:Expr = if (widthAware == true) macro {
 			final _bodyW:anyparse.core.Doc = $writeCall;
-			_diwe(opt.lineWidth,
+			_difle(opt.lineWidth,
 				_dn(_cols, _dc([_dhl(), _bodyW])),
 				_dc([$sameSepNb, _bodyW]));
 		} else macro _dc([$sameSepNb, $writeCall]);

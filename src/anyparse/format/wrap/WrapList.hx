@@ -388,6 +388,11 @@ class WrapList {
 					// arm — the column-aware decision happens at render
 					// time, not in static walks.
 					stack.push(flatDoc);
+				case IfFirstLineExceeds(_, _, flatDoc):
+					// Mirror `IfWidthExceeds` arm: forward to flat side.
+					// First-line cap is renderer-side; static walks see
+					// the full flat shape.
+					stack.push(flatDoc);
 				case Fill(items, sep):
 					var k:Int = items.length;
 					while (k > 0) {
@@ -468,6 +473,10 @@ class WrapList {
 					// Forward to flat side: token-width measurement uses
 					// the flat shape, mirroring the `IfBreak` arm.
 					stack.push(flatDoc);
+				case IfFirstLineExceeds(_, _, flatDoc):
+					// Mirror `IfWidthExceeds`: chain consumers walk the
+					// flat side, ignoring the renderer-side first-line cap.
+					stack.push(flatDoc);
 				case Fill(items, sep):
 					var k:Int = items.length;
 					while (k > 0) {
@@ -514,6 +523,7 @@ class WrapList {
 			case Group(inner) | BodyGroup(inner): lastHardlineDepth(inner, depth);
 			case IfBreak(brk, _): lastHardlineDepth(brk, depth);
 			case IfWidthExceeds(_, brk, _): lastHardlineDepth(brk, depth);
+			case IfFirstLineExceeds(_, brk, _): lastHardlineDepth(brk, depth);
 			case Concat(items):
 				var i:Int = items.length;
 				while (--i >= 0) {
@@ -568,6 +578,8 @@ class WrapList {
 			case IfBreak(brk, _):
 				node = brk;
 			case IfWidthExceeds(_, brk, _):
+				node = brk;
+			case IfFirstLineExceeds(_, brk, _):
 				node = brk;
 			case Concat(items):
 				final first:Null<Doc> = items.find(it -> !isLeadingTransparent(it));
@@ -791,6 +803,7 @@ class WrapList {
 			case Group(inner) | BodyGroup(inner): hasLeadingHardline(inner);
 			case IfBreak(_, _): false;
 			case IfWidthExceeds(_, _, _): false;
+			case IfFirstLineExceeds(_, _, _): false;
 			case Concat(items):
 				for (it in items) {
 					if (hasLeadingHardline(it)) return true;

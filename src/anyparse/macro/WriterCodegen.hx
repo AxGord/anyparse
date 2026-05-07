@@ -294,6 +294,15 @@ class WriterCodegen {
 				macro anyparse.core.Doc.IfWidthExceeds(n, br, fl)
 			),
 			docHelper(
+				'_difle',
+				[
+					{name: 'n', type: macro : Int},
+					{name: 'br', type: macro : anyparse.core.Doc},
+					{name: 'fl', type: macro : anyparse.core.Doc}
+				],
+				macro anyparse.core.Doc.IfFirstLineExceeds(n, br, fl)
+			),
+			docHelper(
 				'_dfill',
 				[{name: 'items', type: macro : Array<anyparse.core.Doc>}, {name: 'sep', type: macro : anyparse.core.Doc}],
 				macro anyparse.core.Doc.Fill(items, sep)
