@@ -327,6 +327,24 @@ class Renderer {
 					// choice.
 					final firstLineCrosses:Bool = (col + flatTokenWidthFirstLine(flatDoc) >= n);
 					stack.push(new Frame(f.indent, f.mode, firstLineCrosses ? breakDoc : flatDoc));
+				case IfLineExceeds(n, breakDoc, flatDoc):
+					// Line-length-aware probe: rule fires when `col +
+					// flatTokenWidth(flatDoc) +
+					// flatTokenWidthOfRestStack(stack) >= n`. The third term
+					// is a lookahead over the rendering stack from this
+					// point forward, summed up to the next forced hardline
+					// — captures everything that would land on the SAME
+					// rendered line if the flat branch fired here. Closes
+					// the Wadler-style local-Group blindspot where an inner
+					// `Group(IfBreak)` decides flat even though enclosing
+					// expression pushes the line past threshold.
+					//
+					// Mode propagation matches `IfWidthExceeds` /
+					// `IfFirstLineExceeds`: probe is independent of the
+					// enclosing Group's flat/break choice. Slice
+					// ω-iflineexceeds-infra.
+					final lineCrosses:Bool = (col + flatTokenWidth(flatDoc) + flatTokenWidthOfRestStack(stack) >= n);
+					stack.push(new Frame(f.indent, f.mode, lineCrosses ? breakDoc : flatDoc));
 				case Fill(items, sep):
 					if (items.length == 0) {
 						// nothing
@@ -439,6 +457,12 @@ class Renderer {
 					// line probe is a render-time decision, transparent to
 					// wrap-engine width measurement.
 					local.push(new Frame(f.indent, MFlat, flatDoc));
+				case IfLineExceeds(_, _, flatDoc):
+					// Mirror `IfWidthExceeds` / `IfFirstLineExceeds`: the
+					// rest-of-stack lookahead is a render-time decision.
+					// Static `fitsFlat` walks see only the flat shape so
+					// enclosing Group budget measurements stay stable.
+					local.push(new Frame(f.indent, MFlat, flatDoc));
 				case Fill(items, sep):
 					// Flat measurement of Fill: items joined by sep flat.
 					var k:Int = items.length;
@@ -517,6 +541,10 @@ class Renderer {
 					// the first-line cap is the renderer-side probe's
 					// concern, not the chain cascade's.
 					stack.push(flatDoc);
+				case IfLineExceeds(_, _, flatDoc):
+					// Forward to flat side: rest-of-stack lookahead is a
+					// render-time decision (slice ω-iflineexceeds-infra).
+					stack.push(flatDoc);
 				case Fill(items, sep):
 					var k:Int = items.length;
 					while (k > 0) {
@@ -583,6 +611,8 @@ class Renderer {
 					stack.push(flatDoc);
 				case IfFirstLineExceeds(_, _, flatDoc):
 					stack.push(flatDoc);
+				case IfLineExceeds(_, _, flatDoc):
+					stack.push(flatDoc);
 				case Fill(items, sep):
 					var k:Int = items.length;
 					while (k > 0) {
@@ -592,6 +622,106 @@ class Renderer {
 					}
 				case OptSpace(s):
 					total += s.length;
+			}
+		}
+		return total;
+	}
+
+	/**
+	 * Sums the flat-mode token width of every frame currently on the
+	 * rendering stack, walking from top (next to emit) downward, until
+	 * a forced hardline is encountered. Hardline detection is mode-aware:
+	 * a frame in `MBreak` treats every `Line(_)` as a hardline (the
+	 * renderer would emit `\n + indent`); a frame in `MFlat` treats only
+	 * `Line(flat)` whose `flat` starts with `\n` (and `OptHardline` /
+	 * `OptHardlineSkipAtOpenDelim`) as hardlines. Once a hardline is
+	 * hit, the running total is returned and the rest of the stack is
+	 * ignored — the lookahead never crosses a line boundary.
+	 *
+	 * Used exclusively by the `IfLineExceeds` probe to answer "would
+	 * the rendered current line, including everything after this
+	 * primitive, reach `n` columns?" (slice ω-iflineexceeds-infra).
+	 *
+	 * Departures from `flatTokenWidth`:
+	 *  - frames carry a mode (the mode they were pushed with) so MBreak
+	 *    `Line` aborts immediately;
+	 *  - nested `Group` content is descended in `MFlat` (static walk
+	 *    can't predict the runtime Group decision; flat-side measurement
+	 *    matches the cascade rule semantic "if everything stayed flat,
+	 *    would the line exceed?");
+	 *  - `BodyGroup` is deferred (zero width, no abort) — same Departure 2
+	 *    as `fitsFlat`.
+	 *
+	 * Stack-based walk over a `(doc, mode)` pair list — items pushed in
+	 * reverse so pop order matches left-to-right traversal of each
+	 * frame's subtree.
+	 */
+	private static function flatTokenWidthOfRestStack(stack:Array<Frame>):Int {
+		var total:Int = 0;
+		var aborted:Bool = false;
+		var i:Int = stack.length - 1;
+		while (i >= 0 && !aborted) {
+			final f:Frame = stack[i];
+			i--;
+			if (f.fillRest != null) {
+				// FillCont frame: a `Doc.Fill` resumption point. In MBreak
+				// mode (always — FillCont is constructed only for the
+				// per-item path), the next emission likely starts with a
+				// hardline at the Fill's indent. Treat as a hardline
+				// boundary so the lookahead never crosses a Fill
+				// continuation. Conservative under-count for the rare case
+				// where Fill items still pack flat is acceptable here —
+				// chain dispatch sites don't sit inside Fill primitives.
+				aborted = true;
+				continue;
+			}
+			final inner:Array<{doc:Doc, mode:Mode}> = [{doc: f.doc, mode: f.mode}];
+			while (inner.length > 0 && !aborted) {
+				final node:{doc:Doc, mode:Mode} = inner.pop();
+				switch node.doc {
+					case Empty:
+					case Text(s):
+						total += s.length;
+					case Line(flat):
+						if (node.mode == MBreak) {
+							aborted = true;
+						} else if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) {
+							aborted = true;
+						} else {
+							total += flat.length;
+						}
+					case Nest(_, innerDoc):
+						inner.push({doc: innerDoc, mode: node.mode});
+					case Concat(items):
+						var k:Int = items.length;
+						while (--k >= 0) inner.push({doc: items[k], mode: node.mode});
+					case Group(innerDoc):
+						// Static walk: descend in MFlat. Runtime Group
+						// decision is unknowable here; flat-side measurement
+						// matches the cascade rule semantic.
+						inner.push({doc: innerDoc, mode: MFlat});
+					case BodyGroup(_):
+						// Deferred — BG decides own layout (Departure 2).
+					case IfBreak(_, flatDoc):
+						inner.push({doc: flatDoc, mode: MFlat});
+					case IfWidthExceeds(_, _, flatDoc):
+						inner.push({doc: flatDoc, mode: MFlat});
+					case IfFirstLineExceeds(_, _, flatDoc):
+						inner.push({doc: flatDoc, mode: MFlat});
+					case IfLineExceeds(_, _, flatDoc):
+						inner.push({doc: flatDoc, mode: MFlat});
+					case Fill(items, sep):
+						var k:Int = items.length;
+						while (k > 0) {
+							k--;
+							inner.push({doc: items[k], mode: MFlat});
+							if (k > 0) inner.push({doc: sep, mode: MFlat});
+						}
+					case OptSpace(s):
+						total += s.length;
+					case OptHardline | OptHardlineSkipAtOpenDelim:
+						aborted = true;
+				}
 			}
 		}
 		return total;

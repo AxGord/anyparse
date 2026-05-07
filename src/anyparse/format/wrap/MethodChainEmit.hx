@@ -217,6 +217,11 @@ class MethodChainEmit {
 					// first-line probe transparently — the flat shape
 					// answers the chain's "ignore hardlines" semantic.
 					stack.push(flatDoc);
+				case IfLineExceeds(_, _, flatDoc):
+					// Mirror `IfWidthExceeds`: chain segments forward to
+					// flat side; rest-of-stack lookahead is renderer-side
+					// (slice ω-iflineexceeds-infra).
+					stack.push(flatDoc);
 				case Fill(items, sep):
 					var k:Int = items.length;
 					while (k > 0) {

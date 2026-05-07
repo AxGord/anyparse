@@ -76,6 +76,25 @@ package anyparse.core;
 	                     `fitsFlat` forwards to `fl` (same as
 	                     `IfWidthExceeds`) so chain consumers' cascade
 	                     semantic stays unchanged.
+	- `IfLineExceeds(n, br, fl)` — line-length-aware sibling of
+	                     `IfWidthExceeds`. Probes `col +
+	                     flatTokenWidth(fl) + flatTokenWidthOfRestStack`
+	                     against `n` — extends the column-aware probe with
+	                     a lookahead over the rest of the rendering stack
+	                     up to the next forced hardline. Answers "would
+	                     the rendered current line, including everything
+	                     after this primitive on the same source line,
+	                     reach `n` columns?". Closes the architectural
+	                     blindspot where a chain `Group(IfBreak)` sees only
+	                     its own subtree and picks flat even though the
+	                     enclosing assign/binop expression would push the
+	                     line past `lineWidth`. Independent of the
+	                     enclosing Group's flat/break mode (mirrors
+	                     `IfWidthExceeds`); `fitsFlat` forwards to `fl`.
+	                     Slice ω-iflineexceeds-infra introduces this
+	                     primitive; consumers wire in via subsequent
+	                     slices that need line-aware probes outside the
+	                     wrap-engine cascade machinery.
 	- `Fill(items, sep)` — Wadler `fillSep`. In flat mode, emits items
 	                     joined by `sep` flat. In break mode, packs items
 	                     left-to-right: before each `items[i]` (i > 0),
@@ -153,6 +172,7 @@ enum Doc {
 	IfBreak(breakDoc:Doc, flatDoc:Doc);
 	IfWidthExceeds(n:Int, breakDoc:Doc, flatDoc:Doc);
 	IfFirstLineExceeds(n:Int, breakDoc:Doc, flatDoc:Doc);
+	IfLineExceeds(n:Int, breakDoc:Doc, flatDoc:Doc);
 	Fill(items:Array<Doc>, sep:Doc);
 	OptSpace(s:String);
 	OptHardline;

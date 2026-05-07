@@ -533,4 +533,93 @@ class DocRendererTest extends Test {
 		final doc:Doc = D.group(IfFirstLineExceeds(10, brk, flat));
 		Assert.equals("FLATX", Renderer.render(doc, 80));
 	}
+
+	// `IfLineExceeds(n, brk, flat)` is the line-length-aware sibling of
+	// `IfWidthExceeds`. The probe formula is `col +
+	// flatTokenWidth(flatDoc) + flatTokenWidthOfRestStack(stack) >= n`
+	// — extends the column-aware probe with a lookahead over the rest
+	// of the rendering stack up to the next forced hardline. Closes the
+	// Wadler-style local-Group blindspot where an inner `Group(IfBreak)`
+	// decides flat even though enclosing expression pushes the line past
+	// `lineWidth` (slice ω-iflineexceeds-infra).
+
+	function testIfLineExceedsAtColumnZeroBelowThreshold() {
+		// At col 0 with 5-char flat content and no rest-of-stack,
+		// 0 + 5 + 0 = 5 < 10 → flat fires. Same arithmetic as the
+		// `IfWidthExceeds` sibling when stack is empty after the probe.
+		final doc:Doc = IfLineExceeds(10, D.text("BREAK"), D.text("FLATX"));
+		Assert.equals("FLATX", Renderer.render(doc, 80));
+	}
+
+	function testIfLineExceedsSelfAloneCrossesThreshold() {
+		// At col 0 with 10-char flat content and no rest-of-stack,
+		// 0 + 10 + 0 = 10 >= 10 → brk fires. Self-only width is enough.
+		final doc:Doc = IfLineExceeds(10, D.text("BREAKBREAK"), D.text("FLATXFLATX"));
+		Assert.equals("BREAKBREAK", Renderer.render(doc, 80));
+	}
+
+	function testIfLineExceedsCombinedCrossesThreshold() {
+		// CRITICAL: this is the difference from `IfWidthExceeds`. Self
+		// width is 5 cols (would fire flat under sibling probe); but the
+		// rest-of-stack contains another 8 cols of content. At col 0,
+		// 0 + 5 + 8 = 13 >= 10 → brk fires. The lookahead captures the
+		// trailing content that will land on the same line.
+		final doc:Doc = D.concat([
+			IfLineExceeds(10, D.text("BRKBR"), D.text("FLATX")),
+			D.text("trailing"),
+		]);
+		Assert.equals("BRKBRtrailing", Renderer.render(doc, 80));
+	}
+
+	function testIfLineExceedsHardlineInRestStopsLookahead() {
+		// Hardline in rest-of-stack caps the lookahead: content after
+		// the hardline doesn't count toward the line-length probe.
+		// Self width 5 + rest "ab" before hardline = 7 < threshold 10
+		// → flat fires. The 102-col text after the hardline is on a
+		// different line, irrelevant to the probe.
+		final doc:Doc = D.concat([
+			IfLineExceeds(10, D.text("BRKBR"), D.text("FLATX")),
+			D.text("ab"),
+			D.hardline(),
+			D.text("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"),
+		]);
+		Assert.equals("FLATXab\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", Renderer.render(doc, 200));
+	}
+
+	function testIfLineExceedsBodyGroupInRestDeferred() {
+		// `BodyGroup` content in rest-of-stack is deferred (zero-width
+		// contribution) — mirrors `fitsFlat` Departure 2. Without BG
+		// defer, a multi-line block body inflated the lookahead and
+		// triggered brk regardless of the body's actual layout.
+		// Here self width 5 + BG (zero) + 2 trailing chars = 7 < 10 →
+		// flat fires. The BG renders as its own subtree separately.
+		final body:Doc = BodyGroup(D.concat([
+			D.text("{"),
+			D.nest(1, D.concat([D.hardline(), D.text("verylongbody")])),
+			D.hardline(),
+			D.text("}"),
+		]));
+		final doc:Doc = D.concat([
+			IfLineExceeds(10, D.text("BRKBR"), D.text("FLATX")),
+			body,
+			D.text("ab"),
+		]);
+		// BG's inner has hardlines so it commits to MBreak — body indents
+		// at one tab via the inner Nest. The probe sees zero width for BG
+		// (deferred per `flatTokenWidthOfRestStack`'s BodyGroup arm).
+		Assert.equals("FLATX{\n\tverylongbody\n}ab", Renderer.render(doc, 80, Tab, 1));
+	}
+
+	function testIfLineExceedsForwardsToFlatInFitsFlat() {
+		// Outer Group's fitsFlat measurement walks the `IfLineExceeds`
+		// flat side (mirrors sister primitives). Here flat side is 5
+		// cols, brk side is 50 cols. Outer Group with budget 80 fits
+		// the flat shape — commits to MFlat. The line-length probe at
+		// col 0 with rest-empty evaluates 5 < 10 → flat fires
+		// independently of the Group's decision.
+		final brk:Doc = D.text("BREAKBREAKBREAKBREAKBREAKBREAKBREAKBREAKBREAKBREAK");
+		final flat:Doc = D.text("FLATX");
+		final doc:Doc = D.group(IfLineExceeds(10, brk, flat));
+		Assert.equals("FLATX", Renderer.render(doc, 80));
+	}
 }
