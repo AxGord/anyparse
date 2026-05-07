@@ -101,6 +101,19 @@ package anyparse.grammar.haxe;
  *    extended from `HxVarDecl.init` / `HxObjectField.value` to the
  *    return-body site.
  *
+ *    Sister entry `@:fmt(indentValueIfCtor('IfExpr',
+ *    'indentComplexValueExpressions'))` (slice
+ *    ω-issue-257-return-same-indent-value-expr) — when the value is
+ *    an `IfExpr` AND `opt.indentComplexValueExpressions=true`, the
+ *    flat-path body emit (Same / Keep+bodyOnSameLine / widthAware
+ *    flat) is wrapped in `Nest(_cols, body)` so the multi-branch
+ *    if-expr's internal `else` hardlines pick up `+cols`. Fires
+ *    ONLY in flat-path; `nextLayoutExpr`/brk/`blockLayoutExpr`/
+ *    `fitExpr` already supply their own outer Nest, so doubling
+ *    would over-indent. Mirrors the parallel entry on
+ *    `HxVarDecl.init`. Result: `return if (a) x\n\t\telse y;`
+ *    instead of `return if (a) x\n\telse y;`.
+ *
  *  - `VoidReturnStmt` — `return;` void return statement. Zero-arg
  *    ctor with `@:kw('return') @:trail(';')`. Lowering Case 0
  *    extended to emit the trail literal (D48).
@@ -267,7 +280,11 @@ enum HxStatement {
 	@:kw('final') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))
 	FinalStmt(decl:HxVarDecl);
 
-	@:kw('return') @:trailOpt(';') @:fmt(bodyPolicy('returnBody'), indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'), widthAware)
+	@:kw('return') @:trailOpt(';')
+	@:fmt(bodyPolicy('returnBody'),
+		indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'),
+		indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'),
+		widthAware)
 	ReturnStmt(value:HxExpr);
 
 	@:kw('return') @:trail(';')

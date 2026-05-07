@@ -712,10 +712,39 @@ class WriterLowering {
 			// — post-process handles `Same+true`, bodyPolicyWrap handles
 			// `Next+false` and `Keep+false`. Reads the meta once and reuses
 			// the result for both layers.
-			final indentArgs:Null<Array<String>> = branch.fmtReadStringArgs('indentValueIfCtor');
+			//
+			// ω-issue-257-return-same-indent-value-expr: split the
+			// `indentValueIfCtor` entries on this ctor by arity:
+			//   - 3-arg form `(ctorName, optField, leftCurlyField)` →
+			//     `indentArgs`, fed to `bodyPolicyWrap.indentObjGuardedNext`
+			//     (Next/Keep+false ObjectLit path) AND post-hoc
+			//     `indentWrapped` (Same+true ObjectLit path). At most one
+			//     entry per ctor.
+			//   - 2-arg form `(ctorName, optField)` → `ifExprIndentArgs`,
+			//     fed to `bodyPolicyWrap` as the new `ifExprIndentArgs`
+			//     param which conditionally wraps the writeCall in
+			//     `Nest(_cols, …)` ONLY in the Same flat-path (so multi-
+			//     line IfExpr-as-value picks up `+cols` on its internal
+			//     else-branch hardlines, mirroring the struct-field
+			//     `HxVarDecl.init` semantic). At most one entry per ctor.
+			// Mirrors the multi-entry pattern in `maybeIndentValueIfCtor`
+			// for struct-field path.
+			var indentArgs:Null<Array<String>> = null;
+			var ifExprIndentArgs:Null<Array<String>> = null;
+			final indentEntries:Array<Array<String>> = branch.fmtReadStringArgsAll('indentValueIfCtor');
+			for (entry in indentEntries) switch entry.length {
+				case 3:
+					if (indentArgs != null) Context.fatalError('WriterLowering: at most one 3-arg @:fmt(indentValueIfCtor(ctorName, optField, leftCurlyField)) per ctor', Context.currentPos());
+					indentArgs = entry;
+				case 2:
+					if (ifExprIndentArgs != null) Context.fatalError('WriterLowering: at most one 2-arg @:fmt(indentValueIfCtor(ctorName, optField)) per ctor', Context.currentPos());
+					ifExprIndentArgs = entry;
+				case _:
+					Context.fatalError('WriterLowering: @:fmt(indentValueIfCtor(...)) on ctor requires 2 or 3 args, got ${entry.length}', Context.currentPos());
+			}
 			final policyWrapped:Expr = ctorBodyPolicyFlag != null
 				? bodyPolicyWrap(ctorBodyPolicyFlag, subCall, macro $i{argNames[0]}, refName, false, null,
-					null, null, bodyOnSameLineExpr, null, null, indentArgs, null, null, ctorWidthAware)
+					null, null, bodyOnSameLineExpr, null, null, indentArgs, null, null, ctorWidthAware, ifExprIndentArgs)
 				: subCall;
 
 			// ω-return-indent-objectliteral: ctor-level
@@ -731,12 +760,11 @@ class WriterLowering {
 			// own leading `_dhl` (e.g. ObjectLit's `leftCurly=Next`) picks
 			// up `+cols` indent through the Nest so the `{` lands one step
 			// past the kw column. When the conditions don't match, falls
-			// through to `policyWrapped` unchanged. Reads three string args
-			// off the branch (mirrors the `child`-level helper of the same
-			// name).
+			// through to `policyWrapped` unchanged. `indentArgs` is the
+			// 3-arg entry (guaranteed by the arity split above; null when
+			// only the 2-arg IfExpr form is present).
 			final indentWrapped:Expr = if (indentArgs == null) policyWrapped
 			else {
-				if (indentArgs.length != 3) Context.fatalError('WriterLowering: @:fmt(indentValueIfCtor(...)) on ctor requires (ctorName, optField, leftCurlyField), got ${indentArgs.length} args', Context.currentPos());
 				final ctorName:String = indentArgs[0];
 				final optField:String = indentArgs[1];
 				final leftCurlyField:String = indentArgs[2];
@@ -3355,7 +3383,8 @@ class WriterLowering {
 		elseFieldName:Null<String>, ?afterKwExpr:Null<Expr>, ?kwLeadingExpr:Null<Expr>,
 		?bodyOnSameLineExpr:Null<Expr>, ?kwPolicyFlagName:Null<String>, ?afterTrailExpr:Null<Expr>,
 		?indentObjArgs:Array<String>, ?policyOverrides:Array<Array<String>>,
-		?bodyAllmanIndentArgs:Array<String>, ?widthAware:Bool
+		?bodyAllmanIndentArgs:Array<String>, ?widthAware:Bool,
+		?ifExprIndentArgs:Array<String>
 	):Expr {
 		// ω-untyped-body-stmt-override: parent-side body-policy override.
 		// When the field carries `@:fmt(bodyPolicyOverride('<ctor>',
@@ -3471,12 +3500,49 @@ class WriterLowering {
 		// uses the plain `_dn(_cols, [_dhl(), _bodyW])` shape — the
 		// `indentObjGuardedNext` outer-Nest-drop is reachable only via
 		// explicit `Next` policy. ReturnStmt's only consumer today.
-		final sameLayoutExpr:Expr = if (widthAware == true) macro {
-			final _bodyW:anyparse.core.Doc = $writeCall;
-			_difle(opt.lineWidth,
-				_dn(_cols, _dc([_dhl(), _bodyW])),
-				_dc([$sameSepNb, _bodyW]));
-		} else macro _dc([$sameSepNb, $writeCall]);
+		//
+		// ω-issue-257-return-same-indent-value-expr: when `ifExprIndentArgs`
+		// names a 2-arg `indentValueIfCtor(ctorName, optField)` entry, build
+		// a conditional `Nest(_cols, body)` wrapper and apply it ONLY in the
+		// Same flat-path (widthAware flat branch + non-widthAware Same).
+		// Mirrors the struct-field `HxVarDecl.init` semantic
+		// (`@:fmt(indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'))`)
+		// for ctor-level kw-led single-Ref branches like
+		// `HxStatement.ReturnStmt`. Without the gate, multi-branch IfExpr
+		// values inside `return <if-expr>` (Same policy, body inline with
+		// `return`) emit their internal `else` hardlines at the ambient
+		// indent — expected is `+cols` (one extra step beyond the kw
+		// column). The `nextLayoutExpr`, `blockLayoutExpr`, `fitExpr`, and
+		// widthAware-brk paths already apply their own outer Nest, so
+		// double-Nest = over-indent — the wrap fires only in flat-path.
+		// Same-policy `Keep` fallback (no `bodyOnSameLineExpr` slot) routes
+		// through `sameLayoutExpr`, so it inherits the wrap; `Keep`-with-
+		// `bodyOnSameLineExpr=true` also routes through `sameLayoutExpr`.
+		// `Keep`-with-`bodyOnSameLineExpr=false` routes through
+		// `nextLayoutExpr` (no wrap, body already on its own indent step).
+		if (ifExprIndentArgs != null && ifExprIndentArgs.length != 2)
+			Context.fatalError('WriterLowering: bodyPolicyWrap ifExprIndentArgs requires (ctorName, optField), got ${ifExprIndentArgs.length} args', Context.currentPos());
+		inline function wrapIfExprNest(bodyExpr:Expr):Expr {
+			if (ifExprIndentArgs == null) return bodyExpr;
+			final ifCtorName:String = ifExprIndentArgs[0];
+			final ifOptAccess:Expr = {expr: EField(macro opt, ifExprIndentArgs[1]), pos: Context.currentPos()};
+			return macro {
+				final _bIfn:anyparse.core.Doc = $bodyExpr;
+				($ifOptAccess && Type.enumConstructor($bodyValueExpr) == $v{ifCtorName}) ? _dn(_cols, _bIfn) : _bIfn;
+			};
+		}
+		final sameLayoutExpr:Expr = if (widthAware == true) {
+			final flatBody:Expr = wrapIfExprNest(macro _bodyW);
+			macro {
+				final _bodyW:anyparse.core.Doc = $writeCall;
+				_difle(opt.lineWidth,
+					_dn(_cols, _dc([_dhl(), _bodyW])),
+					_dc([$sameSepNb, $flatBody]));
+			};
+		} else {
+			final flatBody:Expr = wrapIfExprNest(writeCall);
+			macro _dc([$sameSepNb, $flatBody]);
+		};
 		// ω-trivia-after-kw-next-layout (bug #3 of issue_45): when the
 		// caller forwarded kw-trivia slot accesses, the Next-layout body
 		// also threads `afterKw` (cuddled to the kw, before the hardline)
