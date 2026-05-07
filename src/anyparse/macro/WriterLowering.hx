@@ -743,8 +743,18 @@ class WriterLowering {
 					Context.fatalError('WriterLowering: @:fmt(indentValueIfCtor(...)) on ctor requires 2 or 3 args, got ${entry.length}', Context.currentPos());
 			}
 			final policyWrapped:Expr = ctorBodyPolicyFlag != null
-				? bodyPolicyWrap(ctorBodyPolicyFlag, subCall, macro $i{argNames[0]}, refName, false, null,
-					null, null, bodyOnSameLineExpr, null, null, indentArgs, null, null, ctorWidthAware, ifExprIndentArgs)
+				? bodyPolicyWrap({
+					flagName: ctorBodyPolicyFlag,
+					writeCall: subCall,
+					bodyValueExpr: macro $i{argNames[0]},
+					bodyTypePath: refName,
+					hasElseIf: false,
+					elseFieldName: null,
+					bodyOnSameLineExpr: bodyOnSameLineExpr,
+					indentObjArgs: indentArgs,
+					widthAware: ctorWidthAware,
+					ifExprIndentArgs: ifExprIndentArgs,
+				})
 				: subCall;
 
 			// ω-return-indent-objectliteral: ctor-level
@@ -1545,7 +1555,18 @@ class WriterLowering {
 						optParts.push(sepWithBeforeKwTrailingExpr);
 						if (bodyPolicyFlag != null) {
 							optParts.push(macro _dt($v{kwLead}));
-							optParts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, macro _optVal, refName, hasElseIf, elseFieldName, afterKwExpr, kwLeadingExpr, bodyOnSameLineExpr, null, null, indentObjArgs));
+							optParts.push(bodyPolicyWrap({
+								flagName: bodyPolicyFlag,
+								writeCall: writeCall,
+								bodyValueExpr: macro _optVal,
+								bodyTypePath: refName,
+								hasElseIf: hasElseIf,
+								elseFieldName: elseFieldName,
+								afterKwExpr: afterKwExpr,
+								kwLeadingExpr: kwLeadingExpr,
+								bodyOnSameLineExpr: bodyOnSameLineExpr,
+								indentObjArgs: indentObjArgs,
+							}));
 						} else {
 							optParts.push(macro _dt($v{kwLead + ' '}));
 							optParts.push(writeCall);
@@ -1719,7 +1740,21 @@ class WriterLowering {
 						// carry this meta because fork keeps `if (cond) {`
 						// cuddled.
 						final bodyAllmanIndentArgs:Null<Array<String>> = child.fmtReadStringArgs('bodyAllmanIndentForCtor');
-						parts.push(bodyPolicyWrap(bodyPolicyFlag, writeCall, fieldAccess, refName, hasElseIf, elseFieldName, null, null, bodyOnSameLineExpr, kwPolicyFlag, afterTrailExpr, indentObjArgs, policyOverrides, bodyAllmanIndentArgs, null, null, fallbackFlag));
+						parts.push(bodyPolicyWrap({
+							flagName: bodyPolicyFlag,
+							writeCall: writeCall,
+							bodyValueExpr: fieldAccess,
+							bodyTypePath: refName,
+							hasElseIf: hasElseIf,
+							elseFieldName: elseFieldName,
+							bodyOnSameLineExpr: bodyOnSameLineExpr,
+							kwPolicyFlagName: kwPolicyFlag,
+							afterTrailExpr: afterTrailExpr,
+							indentObjArgs: indentObjArgs,
+							policyOverrides: policyOverrides,
+							bodyAllmanIndentArgs: bodyAllmanIndentArgs,
+							fallbackFlagName: fallbackFlag,
+						}));
 						justWrappedBody = {access: fieldAccess, typePath: refName};
 					} else {
 						// `@:fmt(leftCurly)` on a bare Ref field (e.g.
@@ -3388,14 +3423,29 @@ class WriterLowering {
 	 * The case patterns are built as raw `EField` expressions to avoid
 	 * macro-time enum resolution against the `BodyPolicy` abstract.
 	 */
-	private function bodyPolicyWrap(
-		flagName:String, writeCall:Expr, bodyValueExpr:Expr, bodyTypePath:String, hasElseIf:Bool,
-		elseFieldName:Null<String>, ?afterKwExpr:Null<Expr>, ?kwLeadingExpr:Null<Expr>,
-		?bodyOnSameLineExpr:Null<Expr>, ?kwPolicyFlagName:Null<String>, ?afterTrailExpr:Null<Expr>,
-		?indentObjArgs:Array<String>, ?policyOverrides:Array<Array<String>>,
-		?bodyAllmanIndentArgs:Array<String>, ?widthAware:Bool,
-		?ifExprIndentArgs:Array<String>, ?fallbackFlagName:String
-	):Expr {
+	private function bodyPolicyWrap(opts:WrapBodyOpts):Expr {
+		// ω-bodyPolicyWrap-struct-arg: 17-positional-arg signature collapsed
+		// into a single struct (`WrapBodyOpts`) so call sites no longer thread
+		// `null, null, null` runs for forwarding-only fields. Aliasing back to
+		// the original local names keeps the body diff-free; the typedef
+		// definition lives at the bottom of this file alongside `PrevBodyInfo`.
+		final flagName:String = opts.flagName;
+		final writeCall:Expr = opts.writeCall;
+		final bodyValueExpr:Expr = opts.bodyValueExpr;
+		final bodyTypePath:String = opts.bodyTypePath;
+		final hasElseIf:Bool = opts.hasElseIf;
+		final elseFieldName:Null<String> = opts.elseFieldName;
+		final afterKwExpr:Null<Expr> = opts.afterKwExpr;
+		final kwLeadingExpr:Null<Expr> = opts.kwLeadingExpr;
+		final bodyOnSameLineExpr:Null<Expr> = opts.bodyOnSameLineExpr;
+		final kwPolicyFlagName:Null<String> = opts.kwPolicyFlagName;
+		final afterTrailExpr:Null<Expr> = opts.afterTrailExpr;
+		final indentObjArgs:Null<Array<String>> = opts.indentObjArgs;
+		final policyOverrides:Null<Array<Array<String>>> = opts.policyOverrides;
+		final bodyAllmanIndentArgs:Null<Array<String>> = opts.bodyAllmanIndentArgs;
+		final widthAware:Null<Bool> = opts.widthAware;
+		final ifExprIndentArgs:Null<Array<String>> = opts.ifExprIndentArgs;
+		final fallbackFlagName:Null<String> = opts.fallbackFlagName;
 		// ω-untyped-body-stmt-override: parent-side body-policy override.
 		// When the field carries `@:fmt(bodyPolicyOverride('<ctor>',
 		// '<flag>'))` (one entry per call, repeatable), the parent's own
@@ -5650,6 +5700,54 @@ typedef WriterRule = {
 typedef PrevBodyInfo = {
 	access:Expr,
 	typePath:String,
+};
+
+/**
+ * ω-bodyPolicyWrap-struct-arg — option struct for `WriterLowering.bodyPolicyWrap`.
+ *
+ * Refactored from a 17-positional-arg signature (5 mandatory + 12 optional) into
+ * a single struct-arg form so call sites are readable and forwarding-only fields
+ * don't need long `null, null, null` runs. The 6 fields without `?` are required
+ * (every call site passes them explicitly today); the rest are forwarding flags
+ * for one of the runtime overrides documented in `bodyPolicyWrap`'s body.
+ *
+ * Field semantics — see `bodyPolicyWrap` body comments for full detail:
+ *   - `flagName`            — name of the `BodyPolicy` field on `opt` driving the layout switch.
+ *   - `writeCall`           — pre-built `Doc` expression that emits the body's bytes.
+ *   - `bodyValueExpr`       — runtime access to the body value (used for `Type.enumConstructor` checks).
+ *   - `bodyTypePath`        — fully qualified Haxe type path of the body's enum (for ctor-pattern lookup).
+ *   - `hasElseIf`           — `true` for `HxIfExpr.thenBranch`-style sites that elide `{}` when followed by `if`.
+ *   - `elseFieldName`       — name of the sibling `else`-side field on `value`; `null` when no peer.
+ *   - `afterKwExpr`         — runtime access to captured after-kw trivia (`kwGapDoc` source).
+ *   - `kwLeadingExpr`       — runtime access to captured kw-leading trivia.
+ *   - `bodyOnSameLineExpr`  — runtime `Bool` driving the `Keep` branch's flat-vs-break choice.
+ *   - `kwPolicyFlagName`    — name of a sibling `WhitespacePolicy` knob driving the `Same` separator (kw-policy mode).
+ *   - `afterTrailExpr`      — runtime access to captured after-kw trailing comment (forces `Next` shape).
+ *   - `indentObjArgs`       — `(ctorName, optField, lcField)` triple for the `indentObjGuardedNext` rule.
+ *   - `policyOverrides`     — list of `(ctorName, flagName)` pairs cascading the runtime body-policy override.
+ *   - `bodyAllmanIndentArgs`— `(ctorName, optField)` pair for the multi-line Allman+indent override.
+ *   - `widthAware`          — when `true`, the `Same` branch routes through `IfWidthExceeds` for line-fit-aware break.
+ *   - `ifExprIndentArgs`    — `(ctorName, optField)` pair for the IfExpr-as-value RHS-style indent in flat path.
+ *   - `fallbackFlagName`    — name of a fallback `BodyPolicy` flag activated when the sibling `else` is absent.
+ */
+typedef WrapBodyOpts = {
+	flagName:String,
+	writeCall:Expr,
+	bodyValueExpr:Expr,
+	bodyTypePath:String,
+	hasElseIf:Bool,
+	elseFieldName:Null<String>,
+	?afterKwExpr:Null<Expr>,
+	?kwLeadingExpr:Null<Expr>,
+	?bodyOnSameLineExpr:Null<Expr>,
+	?kwPolicyFlagName:Null<String>,
+	?afterTrailExpr:Null<Expr>,
+	?indentObjArgs:Array<String>,
+	?policyOverrides:Array<Array<String>>,
+	?bodyAllmanIndentArgs:Array<String>,
+	?widthAware:Bool,
+	?ifExprIndentArgs:Array<String>,
+	?fallbackFlagName:String,
 };
 
 /**
