@@ -116,6 +116,7 @@ import unit.AllmanProbe;
 import unit.CondModProbe;
 import unit.HxBlankAfterLeadingCommentSliceTest;
 import unit.HxVarTrailOptShapeSliceTest;
+import unit.HxFillLinePerGapSepTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -242,6 +243,7 @@ class RunTests {
 		runner.addCase(new CondModProbe());
 		runner.addCase(new HxBlankAfterLeadingCommentSliceTest());
 		runner.addCase(new HxVarTrailOptShapeSliceTest());
+		runner.addCase(new HxFillLinePerGapSepTest());
 		utest.ui.Report.create(runner);
 		runner.run();
 	}

@@ -81,13 +81,11 @@ class WrapList {
 		var total:Int = 0;
 		var maxLen:Int = 0;
 		var anyHardline:Bool = false;
-		var anyLeadingHardline:Bool = false;
 		for (item in items) {
 			if (flatLength(item) < 0) anyHardline = true;
 			final w:Int = flatTokenWidth(item);
 			total += w;
 			if (w > maxLen) maxLen = w;
-			if (hasLeadingHardline(item)) anyLeadingHardline = true;
 		}
 
 		final cols:Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
@@ -121,7 +119,7 @@ class WrapList {
 		// Per-state shape builder: picks the right lead based on the
 		// resolved mode (flat vs break-style layout).
 		function shapeAt(mode:WrapMode, lead:Doc):Doc {
-			final body:Doc = shape(mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, anyLeadingHardline);
+			final body:Doc = shape(mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
 			return prependLead(body, lead);
 		}
 
@@ -512,7 +510,8 @@ class WrapList {
 	 * about MBreak layout). `Fill` items are NOT walked — they're
 	 * typically `BodyGroup`-wrapped and their hardlines defer from
 	 * outer-Group fit measurement; only the sep contributes (a hard
-	 * `Line('\n')` sep signals forceBreak inter-item layout).
+	 * `Line('\n')` sep signals a chunk-boundary inter-item layout per
+	 * the post-`ω-fillline-pergap-sep` shapeFillLine structure).
 	 */
 	public static function lastHardlineDepth(d:Doc, depth:Int):Int {
 		return switch d {
@@ -629,13 +628,13 @@ class WrapList {
 	private static function shape(
 		mode:WrapMode, open:String, close:String, sep:String,
 		items:Array<Doc>, openInside:Doc, closeInside:Doc, cols:Int,
-		appendTrailingComma:Bool, forceBreak:Bool
+		appendTrailingComma:Bool
 	):Doc {
 		return switch mode {
 			case NoWrap: shapeNoWrap(open, close, sep, items, openInside, closeInside);
 			case OnePerLine: shapeOnePerLine(open, close, sep, items, cols, appendTrailingComma);
 			case OnePerLineAfterFirst: shapeOnePerLineAfterFirst(open, close, sep, items, cols, appendTrailingComma);
-			case FillLine | FillLineWithLeadingBreak: shapeFillLine(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, forceBreak);
+			case FillLine | FillLineWithLeadingBreak: shapeFillLine(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
 			case _: shapeNoWrap(open, close, sep, items, openInside, closeInside);
 		};
 	}
@@ -688,30 +687,27 @@ class WrapList {
 	private static function shapeFillLine(
 		open:String, close:String, sep:String, items:Array<Doc>,
 		openInside:Doc, closeInside:Doc, cols:Int,
-		appendTrailingComma:Bool, forceBreak:Bool
+		appendTrailingComma:Bool
 	):Doc {
-		// `forceBreak`: at least one item starts with a hardline
-		// (typically an objectLit / anonFn arg with `leftCurly=Next`).
-		// In this case the cascade-picked FillLine layout MUST commit
-		// to break mode regardless of total flat width — otherwise
-		// the outer Group's `fitsFlat` walks past `BodyGroup`-deferred
-		// items (Departure 2 in `Renderer`) and concludes that the
-		// whole list fits inline, so `Nest` is bypassed and each
-		// item's leading hardline lands at the surrounding indent
-		// instead of the list's continuation indent.
-		// (`feedback_fillline_bodygroup_deferred_flat.md`.)
+		// Per-gap sep awareness (slice ω-fillline-pergap-sep): items split
+		// into chunks at every leading-hardline boundary. Within each
+		// chunk items pack via `Fill(chunk, softSep)` (Wadler fillSep —
+		// per-item fit, soft `Line(' ')` between operands); between two
+		// chunks a forced `Text(sep) + Line('\n')` enforces the break in
+		// front of the next chunk's leading-hardline-bearing first item.
 		//
-		// Two changes follow:
-		//  - sep's soft-line replacement becomes a real hardline
-		//    (`Line('\n')`) so `Fill`'s per-item-fit decision always
-		//    routes the sep frame through MBreak — no `, \n` trailing
-		//    space when the next item brings its own leading hardline;
-		//  - a `Line('\n')` is prepended inside the `Nest`, so the
-		//    Group sees an unflattenable hardline and commits to
-		//    MBreak (Departure 3); `items[0]`'s own leading
-		//    `OptHardline` then collides with this one and drops the
-		//    duplicate `\n` (per `Renderer.OptHardline`'s
-		//    `lastEmittedWasHardline` check).
+		// Replaces the previous `forceBreak`-when-anyLeadingHardline
+		// mechanism (slice ω-fillline-force-break) which over-fired:
+		// with one hardline-led item in a list of N, ALL N-1 seps were
+		// turned into forced hardlines, breaking even between items that
+		// would otherwise pack inline (e.g. `Event.wysiwygCreateLink(id,
+		// false, {…})` had `id` and `false` driven onto their own lines
+		// by the `{…}` arg's leading hardline). The chunked structure
+		// keeps the BG-deferred-flat fix's intent — the outer Group's
+		// `fitsFlat` still aborts on the chunk-boundary `Line('\n')` and
+		// commits to MBreak, so `Nest` continues to provide the
+		// continuation indent for the broken-before items — without
+		// smearing the forced-break onto soft gaps.
 		// ω-fillline-single-noncascade: a single hardline-bearing item
 		// (e.g. a chain segment whose lone arg is a multi-line lambda)
 		// has no list shape to make — there's nothing to fill, no
@@ -764,26 +760,39 @@ class WrapList {
 				closeInside, Text(close),
 			]));
 		}
-		final sepLine:Doc = forceBreak ? Line('\n') : Line(' ');
-		final sepDoc:Doc = Concat([Text(sep), sepLine]);
-		final body:Doc = Fill(items, sepDoc);
+		// Chunk loop. Walk items[1..N]; at every leading-hardline-bearing
+		// item OR the end of the list, emit (a) the comma + forced
+		// `Line('\n')` between this chunk and the previous one (skipped
+		// for the first chunk) and (b) the chunk body — `Fill(chunk,
+		// softSep)` for multi-item chunks, the bare item for singletons
+		// (no Wadler fillSep needed at length 1). The `Group` wrap below
+		// preserves the renderer's flat/break decision: when no item has
+		// any hardline the Group selects MFlat and items inline cleanly;
+		// the moment any chunk boundary or any item carries a hardline
+		// `fitsFlat` aborts on it and the Group commits to MBreak with
+		// `Nest` providing the continuation indent.
+		final softSep:Doc = Concat([Text(sep), Line(' ')]);
+		final bodyParts:Array<Doc> = [];
+		var chunkStart:Int = 0;
+		for (i in 1...items.length + 1) {
+			final atEnd:Bool = i == items.length;
+			final hardLed:Bool = !atEnd && hasLeadingHardline(items[i]);
+			if (atEnd || hardLed) {
+				if (chunkStart > 0) {
+					bodyParts.push(Text(sep));
+					bodyParts.push(Line('\n'));
+				}
+				if (i - chunkStart == 1) {
+					bodyParts.push(items[chunkStart]);
+				} else {
+					final chunk:Array<Doc> = items.slice(chunkStart, i);
+					bodyParts.push(Fill(chunk, softSep));
+				}
+				chunkStart = i;
+			}
+		}
 		final tail:Doc = appendTrailingComma ? Text(sep) : Empty;
-		final inner:Doc = forceBreak
-			? Concat([Line('\n'), body, tail])
-			: Concat([body, tail]);
-		// Group wrap: matches the old `fillList` shape (parity with
-		// pre-cascade `@:fmt(fill)` Wadler-fillSep emission). The Group
-		// gives the renderer a coherent flat/break unit for measuring
-		// Fill's natural fit — when the Fill subtree fits flat on the
-		// remaining line, the Group selects MFlat and Nest is bypassed
-		// (no extra indent on inline args); when it doesn't, the Group
-		// breaks and Nest applies, giving each broken-before item the
-		// list's continuation indent. Without this Group wrap, the
-		// renderer stays in MBreak by default and Nest unconditionally
-		// adds cols to every Line replacement, over-indenting hardline-
-		// bearing args (e.g. anon-function block bodies, multi-line
-		// object literals). When `forceBreak=true` the prepended
-		// hardline guarantees the Group lands in MBreak.
+		final inner:Doc = Concat([Concat(bodyParts), tail]);
 		return Group(Concat([
 			Text(open), openInside,
 			Nest(cols, inner),
