@@ -55,6 +55,6 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxIfStmt = {
 	@:lead('(') @:trail(')') var cond:HxExpr;
-	@:fmt(bodyPolicy('ifBody'), fitLineIfWithElse) var thenBody:HxStatement;
-	@:optional @:kw('else') @:fmt(sameLine('sameLineElse'), shapeAware, bodyPolicy('elseBody'), elseIf, fitLineIfWithElse) var elseBody:Null<HxStatement>;
+	@:fmt(bodyPolicy('ifBody', 'expressionIfBody'), fitLineIfWithElse) var thenBody:HxStatement;
+	@:optional @:kw('else') @:fmt(sameLine('sameLineElse'), shapeAware, bodyPolicy('elseBody', 'expressionElseBody'), elseIf, fitLineIfWithElse) var elseBody:Null<HxStatement>;
 };

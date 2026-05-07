@@ -687,7 +687,14 @@ class WriterLowering {
 			// `bodyPolicy` flag lives on a field of `HxIfStmt`); this new
 			// path covers the direct-Ref case where no wrapper struct hosts
 			// the field.
-			final ctorBodyPolicyFlag:Null<String> = branch.fmtReadString('bodyPolicy');
+			// ω-issue-257-else-in-return-switch: `bodyPolicy(...)` accepts
+			// 1 or 2 flag names. Two-arg form dispatches between the
+			// stmt-position knob (arg 0) and expr-position knob (arg 1)
+			// at runtime via `opt._inExprPosition`. Mirrors the dual-flag
+			// dispatch in `triviaTryparseStarExpr` for case-body Stars.
+			final ctorBodyPolicy:{stmt:Null<String>, expr:Null<String>} = readBodyPolicyDual(branch);
+			final ctorBodyPolicyFlag:Null<String> = ctorBodyPolicy.stmt;
+			final ctorBodyPolicyExprFlag:Null<String> = ctorBodyPolicy.expr;
 			// ω-returnbody-widthaware: read the parameterless `@:fmt(widthAware)`
 			// flag at the same call site so the runtime IfFirstLineExceeds
 			// wrap is opt-in per ctor (currently `HxStatement.ReturnStmt`).
@@ -764,6 +771,7 @@ class WriterLowering {
 			final policyWrapped:Expr = ctorBodyPolicyFlag != null
 				? bodyPolicyWrap({
 					flagName: ctorBodyPolicyFlag,
+					exprFlagName: ctorBodyPolicyExprFlag,
 					writeCall: subCall,
 					bodyValueExpr: macro $i{argNames[0]},
 					bodyTypePath: refName,
@@ -1345,7 +1353,7 @@ class WriterLowering {
 		// pick one — no such grammar exists today, and a future case
 		// can disambiguate via an explicit arg on `@:fmt(fitLineIfWithElse)`.
 		var optionalBodyFieldName:Null<String> = null;
-		for (c in node.children) if (c.annotations.get('base.optional') == true && c.fmtReadString('bodyPolicy') != null) {
+		for (c in node.children) if (c.annotations.get('base.optional') == true && c.fmtReadStringArgs('bodyPolicy') != null) {
 			optionalBodyFieldName = c.annotations.get('base.fieldName');
 			break;
 		}
@@ -1508,7 +1516,13 @@ class WriterLowering {
 				parts.push(whitespacePolicyLead(child, leadText, ['objectFieldColon', 'typeHintColon', 'typeCheckColon', 'typedefAssign', 'functionTypeHaxe4', 'arrowFunctions']));
 
 			// Field value
-			final bodyPolicyFlag:Null<String> = child.fmtReadString('bodyPolicy');
+			// ω-issue-257-else-in-return-switch: same dual-flag form as
+			// the ctor-level read above — `bodyPolicy('<stmtFlag>',
+			// '<exprFlag>')` dispatches at runtime on
+			// `opt._inExprPosition`.
+			final bodyPolicy:{stmt:Null<String>, expr:Null<String>} = readBodyPolicyDual(child);
+			final bodyPolicyFlag:Null<String> = bodyPolicy.stmt;
+			final bodyPolicyExprFlag:Null<String> = bodyPolicy.expr;
 			// ω-expression-if-next-with-fitline-body: `@:fmt(noSiblingFallback(
 			// 'fallbackFlag'))` on a bare-Ref body field tells `bodyPolicyWrap`
 			// to swap `opt.<bodyPolicy>` for `opt.<fallbackFlag>` at runtime
@@ -1615,6 +1629,7 @@ class WriterLowering {
 							optParts.push(macro _dt($v{kwLead}));
 							optParts.push(bodyPolicyWrap({
 								flagName: bodyPolicyFlag,
+								exprFlagName: bodyPolicyExprFlag,
 								writeCall: writeCall,
 								bodyValueExpr: macro _optVal,
 								bodyTypePath: refName,
@@ -1822,6 +1837,7 @@ class WriterLowering {
 						final bodyAllmanIndentArgs:Null<Array<String>> = child.fmtReadStringArgs('bodyAllmanIndentForCtor');
 						parts.push(bodyPolicyWrap({
 							flagName: bodyPolicyFlag,
+							exprFlagName: bodyPolicyExprFlag,
 							writeCall: writeCall,
 							bodyValueExpr: fieldAccess,
 							bodyTypePath: refName,
@@ -2864,9 +2880,24 @@ class WriterLowering {
 		// regardless of the runtime body decision. Children without a
 		// `bodyPolicy` meta (no current consumers, but defensive) keep the
 		// pre-slice unconditional shape-aware switch.
-		final childBodyPolicyFlag:Null<String> = child.fmtReadString('bodyPolicy');
+		// ω-issue-257-else-in-return-switch: dual-flag bodyPolicy on the
+		// child propagates here too — the inline-shape probe must
+		// dispatch on `opt._inExprPosition` so an expr-position parent
+		// (e.g. inner `if/else` in the case body of a return-switch
+		// when `expressionIf=Same`) reads the expr-side knob and
+		// suppresses the shape-aware else-break consistently with the
+		// dispatched body layout in `bodyPolicyWrap`. Single-flag
+		// callers (no second arg) keep the byte-identical pre-slice
+		// access.
+		final childBodyPolicy:{stmt:Null<String>, expr:Null<String>} = readBodyPolicyDual(child);
+		final childBodyPolicyFlag:Null<String> = childBodyPolicy.stmt;
 		if (childBodyPolicyFlag == null) return shapeAwareSwitch;
-		final bpAccess:Expr = {expr: EField(macro opt, childBodyPolicyFlag), pos: Context.currentPos()};
+		final stmtBpAccess:Expr = {expr: EField(macro opt, childBodyPolicyFlag), pos: Context.currentPos()};
+		final bpAccess:Expr = if (childBodyPolicy.expr == null) stmtBpAccess
+		else {
+			final exprBpAccess:Expr = {expr: EField(macro opt, childBodyPolicy.expr), pos: Context.currentPos()};
+			macro (opt._inExprPosition ? $exprBpAccess : $stmtBpAccess);
+		};
 		final samePat:Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BodyPolicy', 'Same']);
 		final keepPat:Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BodyPolicy', 'Keep']);
 		final isInlineExpr:Expr = if (hasKeepSlot) {
@@ -3260,7 +3291,7 @@ class WriterLowering {
 		final node:Null<ShapeNode> = shape.rules.get(refName);
 		if (node == null || node.kind != Alt) return false;
 		for (branch in node.children) if (branch.annotations.get('base.ctor') == ctorName)
-			return branch.fmtReadString('bodyPolicy') != null;
+			return branch.fmtReadStringArgs('bodyPolicy') != null;
 		return false;
 	}
 
@@ -3612,9 +3643,27 @@ class WriterLowering {
 		// so multiple overrides cascade through a ternary chain. Used by
 		// `HxTryCatchStmt.body` to flip `tryBody` → `untypedBody` when the
 		// body is `UntypedBlockStmt`.
-		final defaultOptFlag:Expr = {
+		// ω-issue-257-else-in-return-switch: when the field carries a
+		// dual-flag `bodyPolicy('<stmtFlag>', '<exprFlag>')`, the
+		// resolved policy depends on `opt._inExprPosition` — stmt
+		// position reads the first flag, expr position reads the
+		// second. Mirrors the dual-flag dispatch in
+		// `triviaTryparseStarExpr` for case-body Star fields. Single-
+		// flag form (`exprFlagName == null`) keeps the byte-identical
+		// pre-slice access. First consumers: `HxIfStmt.thenBody`
+		// (`bodyPolicy('ifBody', 'expressionIfBody')`) and
+		// `HxIfStmt.elseBody` (`bodyPolicy('elseBody',
+		// 'expressionElseBody')`) — flatten in/else inside
+		// `case POpen: if(c) a; else b;` of a return-switch when
+		// `expressionIf=Same`.
+		final exprFlagName:Null<String> = opts.exprFlagName;
+		final defaultOptFlag:Expr = if (exprFlagName == null) {
 			expr: EField(macro opt, flagName),
 			pos: Context.currentPos(),
+		} else {
+			final stmtAccess:Expr = {expr: EField(macro opt, flagName), pos: Context.currentPos()};
+			final exprAccess:Expr = {expr: EField(macro opt, exprFlagName), pos: Context.currentPos()};
+			macro (opt._inExprPosition ? $exprAccess : $stmtAccess);
 		};
 		final ctorOverriddenOptFlag:Expr = if (policyOverrides == null || policyOverrides.length == 0) defaultOptFlag
 		else {
@@ -4309,7 +4358,7 @@ class WriterLowering {
 		if (first.annotations.get('base.optional') == true) return false;
 		if (first.readMetaString(':kw') != null) return false;
 		if (first.readMetaString(':lead') != null) return false;
-		return first.fmtReadString('bodyPolicy') != null;
+		return first.fmtReadStringArgs('bodyPolicy') != null;
 	}
 
 	/**
@@ -5127,6 +5176,25 @@ class WriterLowering {
 	 * predicate fires; this helper just builds the predicate body for
 	 * one flag at a time.
 	 */
+	/**
+	 * ω-issue-257-else-in-return-switch — read the dual-flag form of
+	 * `@:fmt(bodyPolicy('<stmtFlag>')` or `@:fmt(bodyPolicy('<stmtFlag>',
+	 * '<exprFlag>'))` from a grammar node. Single-flag form returns
+	 * `{stmt, expr: null}`; dual-flag form returns both names. Arity
+	 * outside [1, 2] is a fatal error mirroring the policy in
+	 * `triviaTryparseStarExpr` for case-body Star fields. Centralised so
+	 * the four reader sites (ctor-level branch, optional-Ref shared
+	 * branch, mandatory-Ref shared branch, `sameLineSeparator`) stay in
+	 * lockstep on validation rules.
+	 */
+	private static function readBodyPolicyDual(node:ShapeNode):{stmt:Null<String>, expr:Null<String>} {
+		final args:Null<Array<String>> = node.fmtReadStringArgs('bodyPolicy');
+		if (args == null) return {stmt: null, expr: null};
+		if (args.length < 1 || args.length > 2)
+			Context.fatalError('WriterLowering: @:fmt(bodyPolicy(...)) takes 1 or 2 args, got ${args.length}', Context.currentPos());
+		return {stmt: args[0], expr: args.length == 2 ? args[1] : null};
+	}
+
 	private static function buildCaseBodyFlagPredicate(flagName:String):Expr {
 		final samePat:Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BodyPolicy', 'Same']);
 		final keepPat:Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BodyPolicy', 'Keep']);
@@ -5981,6 +6049,7 @@ typedef PrevBodyInfo = {
  *
  * Field semantics — see `bodyPolicyWrap` body comments for full detail:
  *   - `flagName`            — name of the `BodyPolicy` field on `opt` driving the layout switch.
+ *   - `exprFlagName`        — optional 2nd `BodyPolicy` field name (expr-position dispatch when `opt._inExprPosition`).
  *   - `writeCall`           — pre-built `Doc` expression that emits the body's bytes.
  *   - `bodyValueExpr`       — runtime access to the body value (used for `Type.enumConstructor` checks).
  *   - `bodyTypePath`        — fully qualified Haxe type path of the body's enum (for ctor-pattern lookup).
@@ -6000,6 +6069,7 @@ typedef PrevBodyInfo = {
  */
 typedef WrapBodyOpts = {
 	flagName:String,
+	?exprFlagName:Null<String>,
 	writeCall:Expr,
 	bodyValueExpr:Expr,
 	bodyTypePath:String,
