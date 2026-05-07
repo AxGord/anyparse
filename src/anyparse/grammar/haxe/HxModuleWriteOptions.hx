@@ -29,6 +29,19 @@ import anyparse.format.wrap.WrapRules;
  *  - `sameLineCatch` — same three-way shape for `} catch (...)`.
  *  - `sameLineDoWhile` — same three-way shape for the closing
  *    `while (...)` of a `do … while (…)` loop.
+ *  - `sameLineExpressionElse` (ω-expr-else-sameline) — placement of
+ *    `else` relative to the preceding token when `else` is the
+ *    optional kw of an expression-position `if` (`HxIfExpr.elseBranch`).
+ *    Distinct from `sameLineElse`, which governs the statement-level
+ *    construct's body. Default `Same` (space) preserves the pre-slice
+ *    hardcoded behaviour. JSON `sameLine.expressionIf` fans the
+ *    same value into both the BodyPolicy channel (gated to Keep/Same)
+ *    AND this knob (ungated; Next maps to Keep, see loader doc). Keep
+ *    consults the synth `elseBranchBeforeKwNewline` slot, which is
+ *    computed against the preceding field's last non-whitespace
+ *    position via `_prevEnd` scan-back (see `Lowering.hx`
+ *    ω-prev-content-end) so trailing whitespace consumed by Pratt's
+ *    tail loop does not falsify the slot.
  *
  * Fields added in slice τ₂ (trailing-comma policies):
  *  - `trailingCommaArrays` — when `true`, array literals that break
@@ -935,6 +948,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	sameLineElse:SameLinePolicy,
 	sameLineCatch:SameLinePolicy,
 	sameLineDoWhile:SameLinePolicy,
+	sameLineExpressionElse:SameLinePolicy,
 	trailingCommaArrays:Bool,
 	trailingCommaArgs:Bool,
 	trailingCommaParams:Bool,

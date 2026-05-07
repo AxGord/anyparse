@@ -30,13 +30,22 @@ package anyparse.grammar.haxe;
  * stay flat — short flat-fitting expression-`if` (object field
  * values, call args) is unaffected.
  *
- * `elseBranch` does NOT carry the statement-level `sameLine` /
- * `shapeAware` / `elseIf` / `fitLineIfWithElse` companions: those
- * knobs trigger Allman-style placement and policy interactions
- * tuned for statement-`if`. Expression-`if` always reads as one
- * value, and `else if` chains in expression position are handled
- * naturally by recursion through `HxIfExpr.elseBranch:Null<HxExpr>`
- * being itself an `IfExpr`.
+ * `elseBranch` carries `@:fmt(sameLine('sameLineExpressionElse'))` —
+ * the SameLinePolicy companion for the pre-`else` gap, distinct from
+ * statement-`if`'s `sameLineElse`. Default `Same` matches the
+ * pre-slice hardcoded space behaviour. JSON `sameLine.expressionIf`
+ * fans out unconditionally (Same/Keep/Next/FitLine→Same fallback) —
+ * the pre-`else` gap has no arrow-body interaction, so the
+ * BodyPolicy Next/FitLine gate does not apply here. `Keep` consults
+ * the synth `elseBranchBeforeKwNewline` slot (computed against the
+ * preceding field's last non-whitespace position via `_prevEnd`,
+ * see `Lowering.hx` ω-prev-content-end). `elseBranch` does NOT
+ * carry the statement-level `shapeAware` / `elseIf` /
+ * `fitLineIfWithElse` companions: those trigger Allman-style
+ * placement and policy interactions tuned for statement-`if`.
+ * Expression-`if` always reads as one value, and `else if` chains
+ * in expression position are handled naturally by recursion through
+ * `HxIfExpr.elseBranch:Null<HxExpr>` being itself an `IfExpr`.
  *
  * `@:fmt(indentValueIfCtor('ObjectLit', 'indentObjectLiteral',
  * 'objectLiteralLeftCurly'))` on `thenBranch` — subtractive variant of
@@ -58,5 +67,5 @@ package anyparse.grammar.haxe;
 typedef HxIfExpr = {
 	@:lead('(') @:trail(')') var cond:HxExpr;
 	@:fmt(bodyPolicy('expressionIfBody'), indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly')) var thenBranch:HxExpr;
-	@:optional @:kw('else') @:fmt(bodyPolicy('expressionElseBody')) var elseBranch:Null<HxExpr>;
+	@:optional @:kw('else') @:fmt(bodyPolicy('expressionElseBody'), sameLine('sameLineExpressionElse')) var elseBranch:Null<HxExpr>;
 };

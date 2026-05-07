@@ -120,22 +120,33 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   `FitLine` body policy active for `if`s with an `else` clause,
  *   `false` (default) degrades those bodies to `Next`. Matches haxe-
  *   formatter's `sameLine.fitLineIfWithElse: @:default(false)`.
- * - `sameLine.expressionIf` (ω-expr-body-keep): enum string. Parsed
- *   through the schema for unknown-key validation; `keep` and `same`
- *   are honoured at runtime — fans out into all three knobs
+ * - `sameLine.expressionIf` (ω-expr-body-keep + ω-expr-else-sameline):
+ *   enum string. Two-channel fanout. Channel A (BodyPolicy, gated):
+ *   `keep` and `same` propagate into the three body knobs
  *   `expressionIfBody` / `expressionElseBody` / `expressionForBody`.
  *   `same` force-flattens expression-position `if/else/for` bodies,
  *   which is unconditionally safe because `Same` collapses to
  *   `_dop(' ')` regardless of surrounding context (no arrow-context
- *   ambiguity). `next` / `fitLine` are still ignored: `BodyPolicy.Next`
- *   on the inner body force-breaks legitimate inline arrow bodies
- *   because the bodyPolicyWrap engine cannot derive surrounding-context
- *   fit (would regress `fitline_arrow_body_if.hxtest`).
+ *   ambiguity). `next` / `fitLine` are still ignored on this channel:
+ *   `BodyPolicy.Next` on the inner body force-breaks legitimate inline
+ *   arrow bodies because the bodyPolicyWrap engine cannot derive
+ *   surrounding-context fit (would regress `fitline_arrow_body_if.hxtest`).
  *   Default at the WriteOptions level is `Keep` so the honoured branch
  *   is a no-op when omitted; programmatic users can set the three
  *   knobs independently when they need finer control. Distinct from
  *   the statement-level `ifBody` / `elseBody` / `forBody` defaults
  *   (`Next`).
+ *   Channel B (SameLinePolicy, ungated): the same JSON value also
+ *   fans out into `sameLineExpressionElse:SameLinePolicy`, the per-
+ *   `else` gap for `HxIfExpr.elseBranch`. `same` → `Same` (force
+ *   inline space), `keep` and `next` → `Keep` (read the synth
+ *   `BeforeKwNewline` slot, preserve source layout), `fitLine` →
+ *   `Same` fallback. `next` maps to `Keep` rather than `Next` because
+ *   fork's `expressionIf=next` semantic is block-shape-aware (`} else
+ *   {` cuddles even with `next`); the source-preserving Keep mapping
+ *   reproduces this correctly across the corpus without a dedicated
+ *   shape-aware dispatch. Default `Same` keeps the pre-slice
+ *   hardcoded space behaviour when no JSON setting is present.
  * - `sameLine.expressionTry` (ω-expression-try): enum string — same
  *   `"same"` / `"next"` / `"keep"` collapse as `sameLine.tryCatch`,
  *   routed to `opt.expressionTry`. Default `Same`. Drives the
@@ -413,6 +424,7 @@ final class HaxeFormatConfigLoader {
 			sameLineElse: base.sameLineElse,
 			sameLineCatch: base.sameLineCatch,
 			sameLineDoWhile: base.sameLineDoWhile,
+			sameLineExpressionElse: base.sameLineExpressionElse,
 			trailingCommaArrays: base.trailingCommaArrays,
 			trailingCommaArgs: base.trailingCommaArgs,
 			trailingCommaParams: base.trailingCommaParams,
@@ -662,6 +674,33 @@ final class HaxeFormatConfigLoader {
 				opt.expressionElseBody = p;
 				opt.expressionForBody = p;
 			}
+			// ω-expr-else-sameline: fanout `sameLine.expressionIf` into
+			// `sameLineExpressionElse:SameLinePolicy`, the per-`else` gap
+			// for HxIfExpr.elseBranch. Independent of body-placement
+			// fanout (which has the arrow-body regression gate above).
+			//
+			// Mapping rationale: `Next` maps to `Keep` (NOT `Next`) so
+			// the writer reads the synth `BeforeKwNewline` slot and
+			// preserves whatever the source had. Fork's actual semantic
+			// for `expressionIf=next` is block-shape-aware (`} else {`
+			// stays cuddled even with `next`, only non-block prev breaks).
+			// Mapping to `Keep` reproduces this correctly across the
+			// corpus because:
+			//  - block-shape branches in source are typically inline →
+			//    Keep slot=false → space → matches fork's cuddle.
+			//  - non-block (e.g. object-lit) branches in source typically
+			//    have the `\n` already → Keep slot=true → hardline →
+			//    matches fork's break.
+			// True shape-aware Next dispatch (force-break for non-block,
+			// cuddle for block, regardless of source) would need a
+			// dedicated `@:fmt(shapeAware)` variant — deferred until a
+			// fixture surfaces that the source-preserving mapping mishits.
+			// `Same` and `Keep` map directly. `FitLine` falls through to
+			// `Same` (no SameLinePolicy counterpart).
+			opt.sameLineExpressionElse = switch p {
+				case BodyPolicy.Keep, BodyPolicy.Next: SameLinePolicy.Keep;
+				case _: SameLinePolicy.Same;
+			};
 		}
 		if (section.elseIf != null) opt.elseIf = keywordPlacementToRuntime(section.elseIf);
 		if (section.fitLineIfWithElse != null) opt.fitLineIfWithElse = section.fitLineIfWithElse;

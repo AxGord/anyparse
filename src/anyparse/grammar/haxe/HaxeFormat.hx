@@ -560,6 +560,7 @@ final class HaxeFormat implements TextFormat {
 		sameLineElse: SameLinePolicy.Same,
 		sameLineCatch: SameLinePolicy.Same,
 		sameLineDoWhile: SameLinePolicy.Same,
+		sameLineExpressionElse: SameLinePolicy.Same,
 		trailingCommaArrays: false,
 		trailingCommaArgs: false,
 		trailingCommaParams: false,

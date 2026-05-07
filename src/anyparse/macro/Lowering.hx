@@ -1676,7 +1676,7 @@ class Lowering {
 						if (_t.leadingComments.length > 0 || _t.blankBefore || _t.blankAfterLeadingComments || _t.newlineBefore) ctx.pendingTrivia = _t;
 					} else macro skipWs(ctx);
 					final preCommitCapture:Expr = if (hasKwTriviaSlots)
-						macro $i{beforeKwNlLocal} = hasNewlineIn(ctx.input, _wsPos, _kwStartPos);
+						macro $i{beforeKwNlLocal} = hasNewlineIn(ctx.input, _prevEnd, _kwStartPos);
 					else
 						macro {};
 					// ω-trivia-before-kw: in trivia mode + kw-bearing optional Ref,
@@ -1691,6 +1691,21 @@ class Lowering {
 					// observes it.
 					final valueExpr:Expr = if (hasKwTriviaSlots) macro {
 						final _wsPos:Int = ctx.pos;
+						// ω-prev-content-end: scan back past trailing whitespace consumed
+						// by the preceding field's parser (notably HxExpr→Pratt, whose tail
+						// loop's `skipWsAndStash` swallows `\n` before bailing on no-op
+						// match — see Pratt loop tail rewind logic). Without scan-back,
+						// `BeforeKwNewline = hasNewlineIn(_wsPos, _kwStartPos)` was always
+						// false for `HxExpr→@:optional @:kw` siblings (HxIfExpr.elseBranch
+						// most notably). `_prevEnd` walks back over [' ', '\t', '\n', '\r']
+						// without touching `ctx.pos`, so `@:raw` next-siblings (e.g. `${expr}`
+						// trailing `}` in HxStringSegment.Block) are unaffected.
+						var _prevEnd:Int = _wsPos;
+						while (_prevEnd > 0) {
+							final _wsCh:Int = ctx.input.charCodeAt(_prevEnd - 1);
+							if (_wsCh == ' '.code || _wsCh == '\t'.code || _wsCh == '\n'.code || _wsCh == '\r'.code) _prevEnd--;
+							else break;
+						}
 						// ω-trivia-before-kw-trailing: probe for a single same-line
 						// `// comment` after the preceding sibling's last token
 						// (e.g. `resize(); // first\nelse`). `collectTrailing`
