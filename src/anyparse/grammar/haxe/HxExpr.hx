@@ -304,6 +304,9 @@ enum HxExpr {
 	@:kw('function') @:fmt(anonFuncParens)
 	FnExpr(fn:HxFnExpr);
 
+	@:kw('#if') @:trail('#end')
+	ConditionalExpr(inner:HxConditionalExpr);
+
 	MetaExpr(v:HxMetaExpr);
 
 	IdentExpr(v:HxIdentLit);
