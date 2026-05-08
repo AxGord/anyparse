@@ -130,6 +130,28 @@ class TriviaTypeSynth {
 	public static inline final BEFORE_NEWLINE_SUFFIX:String = 'BeforeNewline';
 
 	/**
+	 * ω-cond-comp-expr-multiline — source-shape slot synthesised on
+	 * paired Seq types alongside bare-Ref fields that carry
+	 * `@:fmt(captureSourceNewlineAfter)`. Records whether the source
+	 * had a newline immediately AFTER this field's last token (and
+	 * before the next outer sibling — typically the parent ctor's
+	 * `@:trail` literal).
+	 *
+	 * Sister to `BeforeNewline` (which captures the gap BEFORE the
+	 * field's first token); together they let a bare-Ref field
+	 * source-shape its own pad-trailing boundary regardless of
+	 * which downstream sibling owns the visible token. Consumed by
+	 * `WriterLowering.padTrailingDoc`'s `collectFollowingNewlineSignals`
+	 * walker as a terminal-fallback signal (no guard) — fires only
+	 * when every preceding signal in the chain falls through (all
+	 * downstream optional siblings are absent).
+	 *
+	 * Currently consumed by `HxConditionalExpr.expr`'s `expr → '#end'`
+	 * boundary when both `elseifs` is empty AND `elseExpr` is absent.
+	 */
+	public static inline final NEWLINE_AFTER_SUFFIX:String = 'NewlineAfter';
+
+	/**
 	 * ω-orphan-trivia — suffixes for trailing-trivia sibling slots
 	 * synthesised on paired Seq types alongside `@:trivia` Star fields.
 	 * `TrailingLeading` carries the own-line comments captured AFTER
@@ -313,6 +335,16 @@ class TriviaTypeSynth {
 					// can opt in later.
 					if (isTrailRef(child))
 						fields.push(buildAfterTrailSlot(child, pos));
+					// ω-cond-comp-expr-multiline: bare Ref fields opted in via
+					// `@:fmt(captureSourceNewlineAfter)` grow a `NewlineAfter:Bool`
+					// slot capturing whether the source had a newline AFTER
+					// this field's last token. Read by the writer's
+					// `padTrailingDoc` terminal-fallback signal when no
+					// downstream sibling carries a slot (e.g.
+					// `HxConditionalExpr.expr → '#end'` when both `elseifs`
+					// and `elseExpr` are absent).
+					if (isPadTrailingTerminalRef(child))
+						fields.push(buildNewlineAfterSlot(child, pos));
 				}
 				final anon:ComplexType = TAnonymous(fields);
 				{pos: pos, pack: synthPack, name: pairedSimple, kind: TDAlias(anon), fields: []};
@@ -390,6 +422,38 @@ class TriviaTypeSynth {
 		final strCT:ComplexType = TPath({pack: [], name: 'String', params: []});
 		final nullStrCT:ComplexType = TPath({pack: [], name: 'Null', params: [TPType(strCT)]});
 		return {name: fieldName + AFTER_TRAIL_SUFFIX, kind: FVar(nullStrCT), pos: pos, access: []};
+	}
+
+	/**
+	 * True for any Ref field opted in via `@:fmt(captureSourceNewlineAfter)`.
+	 * The slot records whether the source had a newline AFTER this
+	 * field's parse position — used by the writer's `padTrailingDoc`
+	 * walker as a per-field source-shape signal for the boundary
+	 * between this field and the parent ctor's trail literal (or
+	 * the next non-signal-bearing sibling).
+	 *
+	 * Bare Ref, optional Ref, and optional-kw Ref are all eligible —
+	 * the capture position is "wherever ctx.pos lands after this
+	 * field's parse case branch settles", which is well-defined for
+	 * all three kinds (post-parse for present case, post-rewind for
+	 * absent case).
+	 *
+	 * Currently consumed by:
+	 *   - `HxConditionalExpr.expr` (mandatory bare Ref) — captures the
+	 *     `expr → '#end'` boundary newline when both `elseifs` is empty
+	 *     and `elseExpr` is absent.
+	 *   - `HxConditionalExpr.elseExpr` (optional kw Ref) — captures the
+	 *     `elseExpr → '#end'` boundary newline.
+	 */
+	private static function isPadTrailingTerminalRef(child:ShapeNode):Bool {
+		if (child.kind != Ref) return false;
+		return child.fmtHasFlag('captureSourceNewlineAfter');
+	}
+
+	private static function buildNewlineAfterSlot(child:ShapeNode, pos:Position):Field {
+		final fieldName:String = child.annotations.get('base.fieldName');
+		final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
+		return {name: fieldName + NEWLINE_AFTER_SUFFIX, kind: FVar(boolCT), pos: pos, access: []};
 	}
 
 	private static function buildKwTriviaSlots(child:ShapeNode, pos:Position):Array<Field> {

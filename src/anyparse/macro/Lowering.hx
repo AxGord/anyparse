@@ -1971,11 +1971,62 @@ class Lowering {
 					});
 				}
 			}
+			// ω-cond-comp-expr-multiline: terminal-slot newline capture for
+			// bare Ref fields opted in via `@:fmt(captureSourceNewlineAfter)`.
+			// Mirrors `hasBeforeNewlineSlot` (which captures the gap BEFORE
+			// the field's first token) — this captures the gap AFTER. Drains
+			// any `pendingTrivia` stashed by the field's parse path
+			// (e.g. Pratt / postfix newline-stash on the bare-Ref's own
+			// expression body) AND consumes inter-token whitespace through
+			// to the next non-whitespace byte. The captured trivia is
+			// re-stashed into `ctx.pendingTrivia` so the next field's own
+			// `collectTrivia` can replay it for its leading-newline slot —
+			// without the re-stash, the newline would be consumed by the
+			// terminal slot's read alone and the downstream signal walker
+			// in `WriterLowering.padTrailingDoc` would lose its primary
+			// (non-terminal) signal.
+			final hasNewlineAfterSlot:Bool = child.kind == Ref
+				&& !isStar
+				&& trailText == null
+				&& ctx.trivia
+				&& isTriviaBearing(typePath)
+				&& child.fmtHasFlag('captureSourceNewlineAfter');
+			final newlineAfterLocal:String = '_newlineAfter_$fieldName';
+			if (hasNewlineAfterSlot) {
+				parseSteps.push({
+					expr: EVars([{
+						name: newlineAfterLocal,
+						type: (macro : Bool),
+						expr: macro false,
+						isFinal: false,
+					}]),
+					pos: Context.currentPos(),
+				});
+				parseSteps.push(macro {
+					final _captured = collectTrivia(ctx);
+					$i{newlineAfterLocal} = _captured.newlineBefore;
+					if (
+						_captured.newlineBefore
+						|| _captured.blankBefore
+						|| _captured.blankAfterLeadingComments
+						|| _captured.leadingComments.length > 0
+					) {
+						ctx.pendingTrivia = {
+							blankBefore: _captured.blankBefore,
+							blankAfterLeadingComments: _captured.blankAfterLeadingComments,
+							newlineBefore: _captured.newlineBefore,
+							leadingComments: _captured.leadingComments,
+						};
+					}
+				});
+			}
 			structFields.push({field: fieldName, expr: macro $i{localName}});
 			if (hasAfterTrailSlot)
 				structFields.push({field: fieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX, expr: macro $i{afterTrailLocal}});
 			if (hasBeforeNewlineSlot)
 				structFields.push({field: fieldName + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX, expr: macro $i{beforeNlLocal}});
+			if (hasNewlineAfterSlot)
+				structFields.push({field: fieldName + TriviaTypeSynth.NEWLINE_AFTER_SUFFIX, expr: macro $i{newlineAfterLocal}});
 			if (hasKwTriviaSlots) {
 				structFields.push({field: fieldName + TriviaTypeSynth.AFTER_KW_SUFFIX, expr: macro $i{afterKwLocal}});
 				structFields.push({field: fieldName + TriviaTypeSynth.KW_LEADING_SUFFIX, expr: macro $i{kwLeadingLocal}});

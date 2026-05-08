@@ -3230,6 +3230,29 @@ class WriterLowering {
 			// outright.
 			if (!isOptional && next.kind != Star) break;
 		}
+		// ω-cond-comp-expr-multiline (sub-slice 5): terminal-fallback
+		// signal on `child` itself when opted in via
+		// `@:fmt(captureSourceNewlineAfter)`. The signal describes the
+		// newline AFTER `child`'s last token — used when every preceding
+		// downstream signal is absent at runtime (Star empty + optional
+		// Refs all null), i.e. when the boundary is `child → parent
+		// trail-literal`. Always-on guard (`macro true`) — a runtime
+		// ternary `g₀ ? s₀ : (g₁ ? s₁ : … (true ? s_n : false))`
+		// folds to `(present ? signal : … : s_n)`, so this entry is
+		// the chain's tail and only fires when no earlier guard
+		// matched a present downstream field.
+		final childFieldName:Null<String> = child.annotations.get('base.fieldName');
+		if (childFieldName != null && child.kind == Ref && child.fmtHasFlag('captureSourceNewlineAfter')) {
+			final terminalSlot:Expr = {
+				expr: EField(macro value, childFieldName + TriviaTypeSynth.NEWLINE_AFTER_SUFFIX),
+				pos: Context.currentPos(),
+			};
+			// Always-on guard. For an optional `child` the slot stores
+			// whatever `collectTrivia` saw at the post-rewind position
+			// when absent, which still describes the gap that `child`'s
+			// pad-trailing emit site is closing.
+			out.push({guard: macro true, signal: terminalSlot});
+		}
 		return out;
 	}
 
