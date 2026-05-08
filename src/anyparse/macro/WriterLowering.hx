@@ -1383,10 +1383,50 @@ class WriterLowering {
 					// `_dc([...])` so the writer concatenates both pieces.
 					final innerExpr:Expr = if (innerParts.length == 1) innerParts[0]
 					else dcCall(innerParts);
-					parts.push(macro {
-						final _optVal = $fieldAccess;
-						if (_optVal != null) $innerExpr else _de();
-					});
+					if (kwLead != null) {
+						// ω-cond-comp-engine: kw-led optional Star writer
+						// mirror. Splices the kw-Ref optional path's
+						// inter-field sep + kw-trivia layers (sameLineSeparator
+						// + kwBeforeDoc + kwBeforeTrailingDoc) with the Star
+						// body emitted by `emitWriterStarField`. The Star
+						// helper already honours `@:fmt(padLeading, padTrailing)`
+						// against the narrowed `_optVal:Array<T>`, so the gap
+						// between the kw and the first body element comes
+						// from the pad logic — no need for a literal trailing
+						// space on the kw token. Empty body degrades to `_de()`
+						// inside the helper, mirroring `HxConditionalMod.body`'s
+						// non-optional precedent. First consumer:
+						// `HxConditionalDecl.elseBody`.
+						final useTriviaGap:Bool = ctx.trivia;
+						final beforeKwLeadingExpr:Null<Expr> = useTriviaGap
+							? {expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_LEADING_SUFFIX), pos: Context.currentPos()}
+							: null;
+						final beforeKwTrailingExpr:Null<Expr> = useTriviaGap
+							? {expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_TRAILING_SUFFIX), pos: Context.currentPos()}
+							: null;
+						final sepBaseExpr:Expr = sameLineSeparator(child, prevBodyField, typePath);
+						final sepWithBeforeKwExpr:Expr = beforeKwLeadingExpr != null
+							? macro kwBeforeDoc($beforeKwLeadingExpr, $sepBaseExpr, opt)
+							: sepBaseExpr;
+						final sepWithBeforeKwTrailingExpr:Expr = beforeKwTrailingExpr != null
+							? macro kwBeforeTrailingDoc($beforeKwTrailingExpr, $sepWithBeforeKwExpr, opt)
+							: sepWithBeforeKwExpr;
+						final kwOptParts:Array<Expr> = [
+							sepWithBeforeKwTrailingExpr,
+							macro _dt($v{kwLead}),
+							innerExpr,
+						];
+						final kwOptBody:Expr = dcCall(kwOptParts);
+						parts.push(macro {
+							final _optVal = $fieldAccess;
+							if (_optVal != null) $kwOptBody else _de();
+						});
+					} else {
+						parts.push(macro {
+							final _optVal = $fieldAccess;
+							if (_optVal != null) $innerExpr else _de();
+						});
+					}
 					prevAnyStarNonEmpty = null;
 					prevBodyField = null;
 					prevTrailFieldName = null;

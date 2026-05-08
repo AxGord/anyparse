@@ -109,4 +109,23 @@ enum HxDecl {
 
 	@:kw('function')
 	FnDecl(decl:HxFnDecl);
+
+	/**
+	 * `#if <cond> <decls> [#else <decls>] #end` preprocessor-guarded
+	 * region wrapping module-level declarations (slice ω-cond-comp-
+	 * decl). Mirror of `HxModifier.Conditional` at the decl scope:
+	 * `@:kw('#if')` dispatches with a non-word-char boundary check (so
+	 * `#iff` is rejected); `@:trail('#end')` consumes the closing
+	 * directive after `HxConditionalDecl` parses the cond atom, the
+	 * body Star, and the optional `#else` clause. Nested `#if` is
+	 * supported transitively because the body re-enters `HxDecl`
+	 * through `HxTopLevelDecl`.
+	 *
+	 * Position at the end of the dispatch enum is by convention
+	 * (mirror of `HxModifier.Conditional`); branch order does not
+	 * matter for `#if` because no other `HxDecl` ctor's keyword starts
+	 * with `#`.
+	 */
+	@:kw('#if') @:trail('#end')
+	Conditional(inner:HxConditionalDecl);
 }

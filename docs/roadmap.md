@@ -90,7 +90,7 @@ Sessions should align with phase boundaries — start a new Claude Code session 
 **Deliverables**:
 - 🔶 `anyparse.grammar.haxe` package (currently `src/anyparse/grammar/haxe/`, may split to a separate haxelib later) containing the Haxe grammar as `@:peg` types with metadata. **Skeleton landed**: single class declaration with `var name:Type;` and `function name():Type {}` members; `HaxeFormat` singleton; `HaxeParser` marker class driving the macro pipeline.
 - ⬜ Haxe formatter CLI binary (hxcpp or neko) that takes a `.hx` file and outputs formatted Haxe.
-- ⬜ Test corpus from the user's haxe-formatter fork: every regression case in that fork's commit history becomes a test case here.
+- 🔶 Test corpus from the user's haxe-formatter fork: every regression case in that fork's commit history becomes a test case here. **Bootstrap arc closed (2026-05-08)**: all 10 fork corpus categories wired into `HxFormatterCorpusTest` (884 fixtures total). Aggregate after ω-cond-comp-decl S1 (2026-05-08): 245 pass / 207 fail / 340 skip-parse + 1 skip-config + 1 malformed; pass-rate on parse-able = 54%. Cond-comp grammar arc opened: `HxConditionalDecl` adds `#if <decls> [#else <decls>] #end` at module-decl scope; engine refactor `ω-cond-comp-engine` lifted Lowering's `@:optional Star + @:kw` ban via new `emitOptionalKwStarFieldSteps` (parser) + writer mirror + TriviaTypeSynth gate generalisation. Hard-assertion ratcheting per-bucket and per-mechanism fix slices remain.
 - ⬜ Performance benchmark against haxe-formatter on a real Haxe codebase.
 
 **Phase 3 skeleton — what landed (2026-04-11)**:

@@ -287,7 +287,7 @@ class TriviaTypeSynth {
 					// comments captured between kw and body (`KwLeading`).
 					// Writer consumes these to preserve source layout; absent
 					// consumers read `null` / `[]` with no harm.
-					if (isOptionalKwRef(child))
+					if (isOptionalKw(child))
 						for (extra in buildKwTriviaSlots(child, pos)) fields.push(extra);
 					// ω-orphan-trivia: `@:trivia` Star fields grow two
 					// sibling slots capturing trailing trivia (own-line
@@ -333,8 +333,20 @@ class TriviaTypeSynth {
 		return {name: fieldName, kind: FVar(ct), pos: pos, access: [], meta: meta};
 	}
 
-	private static function isOptionalKwRef(child:ShapeNode):Bool {
-		if (child.kind != Ref) return false;
+	private static function isOptionalKw(child:ShapeNode):Bool {
+		// Generalised over kind=Ref|Star — both shapes need the kw-trivia
+		// sibling slots (`<f>BeforeKwLeading` / `<f>BeforeKwTrailing` /
+		// `<f>AfterKw` / `<f>KwLeading` / `<f>BeforeKwNewline` /
+		// `<f>BodyOnSameLine`) so the writer can round-trip the kw→body
+		// gap regardless of whether the body is a single Ref or a Star
+		// of decls/statements.
+		//
+		// Ref consumer: `HxIfStmt.elseBody` (`@:optional @:kw('else')`
+		// Ref to HxStatement). Star consumer: `HxConditionalDecl.elseBody`
+		// (`@:optional @:kw('#else')` Star of HxTopLevelDecl, slice
+		// ω-cond-comp-engine). Lowering's `isOptionalKwStar` mirrors this
+		// predicate's Star branch on the parser side.
+		if (child.kind != Ref && child.kind != Star) return false;
 		if (child.annotations.get('base.optional') != true) return false;
 		return child.readMetaString(':kw') != null;
 	}
@@ -363,7 +375,7 @@ class TriviaTypeSynth {
 	 * True for mandatory Ref fields carrying `@:trail(LIT)`. Reads
 	 * `@:trail` from `base.meta` directly (TriviaTypeSynth.arm runs
 	 * BEFORE the Lit strategy populates `lit.trailText`, same ordering
-	 * constraint as `isOptionalKwRef` / star-trailing predicates).
+	 * constraint as `isOptionalKw` / star-trailing predicates).
 	 * Optional Refs are excluded — their `@:trail` lives inside the peek
 	 * branch and is structurally different.
 	 */
@@ -427,7 +439,7 @@ class TriviaTypeSynth {
 		// runs BEFORE `registry.runAnnotate` in `Build.buildParser` /
 		// `buildWriter` (the paired type must exist before Lowering /
 		// WriterLowering reference it), so at this point the Lit pass has
-		// not yet populated `lit.trailText`. Mirrors `isOptionalKwRef`'s
+		// not yet populated `lit.trailText`. Mirrors `isOptionalKw`'s
 		// direct-meta read pattern.
 		if (child.readMetaString(':trail') != null) {
 			final nullStrCT:ComplexType = TPath({pack: [], name: 'Null', params: [TPType(strCT)]});

@@ -1501,21 +1501,26 @@ class Lowering {
 				}
 			}
 			if (isStar && isOptional) {
-				// Optional Star is the angle-bracketed type-parameter
-				// pattern (`@:optional @:lead('<') @:trail('>') @:sep(',')`,
-				// first consumer: `HxTypeRef.params`). The combination
-				// requires a close delimiter — the matchLit peek on the
-				// open commits to consuming up to and including the close,
-				// so EOF / try-parse termination modes are inapplicable.
-				if (leadText == null || trailText == null) {
+				// Two supported shapes:
+				//
+				// 1. Angle-bracketed type-parameter pattern (`@:optional
+				//    @:lead('<') @:trail('>') @:sep(',')`, first consumer:
+				//    `HxTypeRef.params`). The combination requires a close
+				//    delimiter — the matchLit peek on the open commits to
+				//    consuming up to and including the close, so EOF /
+				//    try-parse termination modes are inapplicable.
+				//
+				// 2. Kw-led tryparse Star (`@:optional @:kw('#else')
+				//    @:tryparse var elseBody:Null<Array<T>>`, first consumer:
+				//    `HxConditionalDecl.elseBody`). Splices the kw-Ref commit
+				//    machinery with the tryparse Star loop body — `matchKw`
+				//    commits, on hit the loop runs until element parse fails,
+				//    on miss `ctx.pos` rewinds to pre-ws so trivia stays
+				//    visible to the next outer Star. Lowered by
+				//    `emitOptionalKwStarFieldSteps` (case branch below).
+				if (kwLead == null && (leadText == null || trailText == null)) {
 					Context.fatalError(
-						'Lowering: @:optional Star field "$fieldName" requires both @:lead and @:trail',
-						Context.currentPos()
-					);
-				}
-				if (kwLead != null) {
-					Context.fatalError(
-						'Lowering: @:optional Star field "$fieldName" does not support @:kw',
+						'Lowering: @:optional Star field "$fieldName" requires either @:kw (tryparse mode) or both @:lead and @:trail (angle-bracket mode)',
 						Context.currentPos()
 					);
 				}
@@ -1559,6 +1564,16 @@ class Lowering {
 			// mode) when the kw/lead miss — that trivia belongs to the next
 			// outer @:trivia Star loop, not to this discarded optional slot.
 			final isOptionalRef:Bool = child.kind == Ref && isOptional;
+			// ω-cond-comp-engine: `@:optional @:kw + tryparse Star` — kw-led
+			// commit point on a Star field. Splices the kw commit + miss-rewind
+			// machinery from the optional-Ref path with the tryparse Star loop
+			// body. Mirrors `isOptionalRef`'s pre-field ws ownership: the
+			// commit-check below performs its own ws scan + rewind so trivia
+			// stays visible to the next outer @:trivia Star on commit miss.
+			// First consumer: `HxConditionalDecl.elseBody` (`#if … #else <decls>
+			// #end`). Replaces the pre-slice Ref-wrapper companion typedef
+			// pattern (extra fn frame + wrapper struct alloc per `#else` hit).
+			final isOptionalKwStar:Bool = child.kind == Star && isOptional && kwLead != null;
 			// ω-issue-48-v2: a bare non-first Ref field (no `@:optional`, no
 			// `@:kw`, no `@:lead`) in a trivia-bearing Seq captures the
 			// `newlineBefore` signal in the gap between preceding content
@@ -1590,7 +1605,7 @@ class Lowering {
 				&& child.fmtHasFlag('beforeNewlineSlotFirst');
 			final hasBeforeNewlineSlot:Bool = isBareTriviaRefNoLead && (!isFirstField || isFirstFieldNlOptIn);
 			final beforeNlLocal:String = '_beforeNl_$fieldName';
-			if (!triviaEofStar && !isOptionalRef) {
+			if (!triviaEofStar && !isOptionalRef && !isOptionalKwStar) {
 				if (hasBeforeNewlineSlot) {
 					// Route through `collectTrivia` — drains any
 					// `pendingTrivia` stash from a preceding empty
@@ -1635,7 +1650,7 @@ class Lowering {
 			// conditional branch in the codegen (`parseFnName`, `ruleReturnCT`,
 			// `ruleCtorPath` all return the plain form for non-bearing refs in
 			// trivia mode).
-			final hasKwTriviaSlots:Bool = isOptionalRef && kwLead != null && ctx.trivia && isTriviaBearing(typePath);
+			final hasKwTriviaSlots:Bool = (isOptionalRef || isOptionalKwStar) && kwLead != null && ctx.trivia && isTriviaBearing(typePath);
 			final afterKwLocal:String = '_afterKw_$fieldName';
 			final kwLeadingLocal:String = '_kwLeading_$fieldName';
 			final beforeKwNlLocal:String = '_beforeKwNl_$fieldName';
@@ -1864,6 +1879,12 @@ class Lowering {
 						}]),
 						pos: Context.currentPos(),
 					});
+				case Star if (isOptional && kwLead != null):
+					emitOptionalKwStarFieldSteps(
+						child, localName, parseSteps, kwLead, hasKwTriviaSlots,
+						afterKwLocal, kwLeadingLocal, beforeKwNlLocal, bodyOnSameLineLocal,
+						beforeKwLeadingLocal, beforeKwTrailingLocal
+					);
 				case Star if (isOptional):
 					emitOptionalStarFieldSteps(child, localName, parseSteps);
 				case Star:
@@ -2212,6 +2233,191 @@ class Lowering {
 					expectLit(ctx, $v{closeText});
 					_items;
 				} else null,
+				isFinal: true,
+			}]),
+			pos: Context.currentPos(),
+		});
+	}
+
+	/**
+	 * Emit the parse steps for an `@:optional @:kw + @:tryparse Star`
+	 * struct field. The kw is the commit point — on `matchKw` hit the
+	 * tryparse loop runs until element parse fails; on miss `ctx.pos`
+	 * rewinds to before the pre-commit ws scan so any trivia we just
+	 * skipped becomes visible again to the enclosing `@:trivia` Star's
+	 * next `collectTrivia` (mirrors the optional-Ref miss-rewind at
+	 * `lowerStruct` ~1825).
+	 *
+	 * First consumer: `HxConditionalDecl.elseBody` (`#if … #else <decls>
+	 * #end`). Splices two known-working components: kw-led commit +
+	 * miss-rewind + trivia-slot machinery from the optional-Ref path
+	 * (`lowerStruct` ~1744-1839) and the tryparse Star loop body from
+	 * the non-optional Star path (`emitStarFieldSteps` ~2071 plain /
+	 * `emitTriviaStarFieldSteps` ~2438 trivia).
+	 *
+	 * The local is typed `Null<Array<elemCT>>` (plain) or
+	 * `Null<Array<Trivial<elemCT>>>` (trivia + `trivia.starCollects`) —
+	 * absent input leaves it `null`, present input commits and runs the
+	 * loop. This preserves the round-trip distinction between absent
+	 * `#else` (null) and present-but-empty `#else #end` (empty array).
+	 *
+	 * Trivia-mode orphan-trail slots (`<localName>Trailing*`) are
+	 * declared at outer scope with zero-init. Regular tryparse rewinds
+	 * uncapture trivia on element-parse failure, so the slots stay at
+	 * their defaults — orphan trivia propagates outward through the
+	 * enclosing Star's `collectTrivia`. `@:fmt(nestBody)` is rejected
+	 * (no current consumer; semantics inside an optional kw guard are
+	 * undecided).
+	 */
+	private function emitOptionalKwStarFieldSteps(
+		starNode:ShapeNode, localName:String, parseSteps:Array<Expr>,
+		kwLead:String, hasKwTriviaSlots:Bool,
+		afterKwLocal:String, kwLeadingLocal:String, beforeKwNlLocal:String,
+		bodyOnSameLineLocal:String, beforeKwLeadingLocal:String, beforeKwTrailingLocal:String
+	):Void {
+		final inner:ShapeNode = starNode.children[0];
+		if (inner.kind != Ref)
+			Context.fatalError('Lowering: @:optional @:kw Star struct field must contain a Ref', Context.currentPos());
+		if (starNode.fmtHasFlag('nestBody'))
+			Context.fatalError('Lowering: @:optional @:kw Star + @:fmt(nestBody) is not supported', Context.currentPos());
+		if (!starNode.hasMeta(':tryparse'))
+			Context.fatalError('Lowering: @:optional @:kw Star requires @:tryparse', Context.currentPos());
+		final elemRefName:String = inner.annotations.get('base.ref');
+		final elemFn:String = parseFnName(elemRefName);
+		final elemCT:ComplexType = ruleReturnCT(elemRefName);
+		final elemCall:Expr = {
+			expr: ECall(macro $i{elemFn}, [macro ctx]),
+			pos: Context.currentPos(),
+		};
+		final isTriviaCollects:Bool = ctx.trivia && starNode.annotations.get('trivia.starCollects') == true;
+		// Element wrap and accumulator types — Trivial<T> in trivia mode.
+		final accumElemCT:ComplexType = isTriviaCollects
+			? TPath({pack: ['anyparse', 'runtime'], name: 'Trivial', params: [TPType(elemCT)]})
+			: elemCT;
+		final accumCT:ComplexType = TPath({pack: [], name: 'Array', params: [TPType(accumElemCT)]});
+		final optAccumCT:ComplexType = TPath({pack: [], name: 'Null', params: [TPType(accumCT)]});
+		// Trivia-mode orphan-trail slots — zero-init at outer scope so
+		// the writer's struct-literal at end-of-fn can read them. Regular
+		// tryparse never writes here (rewind-on-fail uncaptures trivia);
+		// slots exist purely to satisfy synth-paired-type field shape.
+		if (isTriviaCollects) {
+			final trailBBLocal:String = trailingBlankBeforeLocalName(localName);
+			final trailLCLocal:String = trailingLeadingLocalName(localName);
+			final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
+			final arrayStrCT:ComplexType = TPath({
+				pack: [], name: 'Array', params: [TPType(TPath({pack: [], name: 'String', params: []}))]
+			});
+			parseSteps.push({
+				expr: EVars([{name: trailBBLocal, type: boolCT, expr: macro false, isFinal: false}]),
+				pos: Context.currentPos(),
+			});
+			parseSteps.push({
+				expr: EVars([{name: trailLCLocal, type: arrayStrCT, expr: macro [], isFinal: false}]),
+				pos: Context.currentPos(),
+			});
+		}
+		// Tryparse loop body — element parse in a try/catch, rewind to
+		// `_savedPos` on failure. Trivia mode wraps in `Trivial<T>` and
+		// scans `_lead` / `_trailing` per element; plain mode pushes the
+		// raw element. Mirrors the regular tryparse Star paths.
+		final loopBody:Expr = if (isTriviaCollects) {
+			macro {
+				while (true) {
+					final _savedPos:Int = ctx.pos;
+					final _lead = collectTrivia(ctx);
+					try {
+						final _node:$elemCT = $elemCall;
+						final _trailing:Null<String> = collectTrailing(ctx);
+						_items.push({
+							blankBefore: _lead.blankBefore,
+							blankAfterLeadingComments: _lead.blankAfterLeadingComments,
+							newlineBefore: _lead.newlineBefore,
+							leadingComments: _lead.leadingComments,
+							trailingComment: _trailing,
+							node: _node,
+						});
+					} catch (_e:anyparse.runtime.ParseError) {
+						ctx.pos = _savedPos;
+						break;
+					}
+				}
+			};
+		} else {
+			macro {
+				while (true) {
+					final _savedPos:Int = ctx.pos;
+					try {
+						skipWs(ctx);
+						_items.push($elemCall);
+					} catch (_e:anyparse.runtime.ParseError) {
+						ctx.pos = _savedPos;
+						break;
+					}
+				}
+			};
+		}
+		// Post-commit kw-trivia capture — mirrors the optional-Ref path.
+		final innerCommitAction:Expr = if (hasKwTriviaSlots) macro {
+			final _kwEndPos:Int = ctx.pos;
+			$i{afterKwLocal} = collectTrailing(ctx);
+			final _t = collectTrivia(ctx);
+			for (_c in _t.leadingComments) $i{kwLeadingLocal}.push(_c);
+			$i{bodyOnSameLineLocal} = !hasNewlineIn(ctx.input, _kwEndPos, ctx.pos);
+		} else if (ctx.trivia) macro {
+			final _t = collectTrivia(ctx);
+			if (_t.leadingComments.length > 0 || _t.blankBefore || _t.blankAfterLeadingComments || _t.newlineBefore) ctx.pendingTrivia = _t;
+		} else macro skipWs(ctx);
+		final preCommitCapture:Expr = if (hasKwTriviaSlots)
+			macro $i{beforeKwNlLocal} = hasNewlineIn(ctx.input, _prevEnd, _kwStartPos);
+		else
+			macro {};
+		final commitCheck:Expr = macro matchKw(ctx, $v{kwLead});
+		// Pre-commit ws scan + commit + miss-rewind. Trivia mode does the
+		// scan-back + collectTrailing + collectTrivia capture; plain mode
+		// just `skipWs`. Both rewind `ctx.pos = _wsPos` on miss.
+		final valueExpr:Expr = if (hasKwTriviaSlots) macro {
+			final _wsPos:Int = ctx.pos;
+			var _prevEnd:Int = _wsPos;
+			while (_prevEnd > 0) {
+				final _wsCh:Int = ctx.input.charCodeAt(_prevEnd - 1);
+				if (_wsCh == ' '.code || _wsCh == '\t'.code || _wsCh == '\n'.code || _wsCh == '\r'.code) _prevEnd--;
+				else break;
+			}
+			final _trailComment:Null<String> = collectTrailing(ctx);
+			final _preTrivia = collectTrivia(ctx);
+			final _kwStartPos:Int = ctx.pos;
+			if ($commitCheck) {
+				$i{beforeKwTrailingLocal} = _trailComment;
+				for (_c in _preTrivia.leadingComments) $i{beforeKwLeadingLocal}.push(_c);
+				$preCommitCapture;
+				$innerCommitAction;
+				final _items:$accumCT = [];
+				$loopBody;
+				_items;
+			} else {
+				ctx.pos = _wsPos;
+				null;
+			}
+		} else macro {
+			final _wsPos:Int = ctx.pos;
+			skipWs(ctx);
+			final _kwStartPos:Int = ctx.pos;
+			if ($commitCheck) {
+				$preCommitCapture;
+				$innerCommitAction;
+				final _items:$accumCT = [];
+				$loopBody;
+				_items;
+			} else {
+				ctx.pos = _wsPos;
+				null;
+			}
+		};
+		parseSteps.push({
+			expr: EVars([{
+				name: localName,
+				type: optAccumCT,
+				expr: valueExpr,
 				isFinal: true,
 			}]),
 			pos: Context.currentPos(),
