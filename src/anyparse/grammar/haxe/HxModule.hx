@@ -45,25 +45,26 @@ package anyparse.grammar.haxe;
  * after ctor X" slice (e.g. after typedef-block) by pointing at a
  * different opt field.
  *
- * `@:fmt(blankLinesBeforeCtor('decl', 'UsingDecl', 'UsingWildDecl', 'beforeUsing'))`
- * (slice ω-imports-using-blank) is the mirror knob — instructs
- * `triviaEofStarExpr` to emit exactly `opt.beforeUsing` blank lines
- * before any element whose `decl` field matches `UsingDecl` /
- * `UsingWildDecl` and whose preceding element does NOT match the same
- * set. Drives the `import → using` transition: when prev is `import`
- * (or any non-`using` decl) and curr is `using`, force the configured
- * count regardless of source; consecutive `using` decls cascade
- * through to source-driven `blankBefore`. The cascade order in the
+ * `@:fmt(blankLinesOnTransitionAcross('decl', 'ImportDecl',
+ * 'ImportWildDecl', '|', 'UsingDecl', 'UsingWildDecl', 'beforeUsing'))`
+ * (slice ω-imports-using-transition) fires `opt.beforeUsing` blank
+ * lines on a cross-subset boundary: the `'|'` separator splits the
+ * matched ctors into two subsets (left of `'|'`: imports; right:
+ * usings). The cascade fires when prev's tail-classified kind sits in
+ * one subset AND curr's head-classified kind sits in the other —
+ * mirroring fork's `MarkEmptyLines.markImports` cross-kind branch
+ * (`prevInfo.isImport != newInfo.isImport`). Replaces the older
+ * asymmetric `blankLinesBeforeCtor('UsingDecl', …)` knob, which only
+ * fired Import→Using; transition is symmetric (both directions). With
+ * head-transparency for `Conditional` wired below, also covers
+ * `using → #if … import …` boundaries. The cascade order in the
  * trivia EOF Star path is: `blankLinesAfterCtor` entries (in source
  * order, prev match) win first, then `blankLinesBetweenSameCtorByLevel`
  * entries (same-kind pair with path-level mismatch), then
- * `blankLinesBeforeCtor` entries (curr match without prev match), then
- * source-driven binary blank-line slot. Multiple
- * `blankLinesAfterCtor` / `blankLinesBeforeCtor` entries on the same
- * Star are supported (ω-after-typedecl multi-info refactor) — open to
- * future "blank line before X-group" slices (e.g. `beforeType` for the
- * import/using → type-decl transition) by adding an analogous
- * `@:fmt(...)` call with a different ctor set and opt field.
+ * `blankLinesOnTransitionAcross` entries (cross-subset transition),
+ * then source-driven binary blank-line slot. Mutually exclusive with
+ * `blankLinesBetweenSameCtorByLevel` per pair (same-kind vs cross-kind
+ * partition).
  *
  * `@:fmt(blankLinesBetweenSameCtorByLevel('decl', CtorA1, [CtorA2, …],
  * 'betweenImportsLevel', 'betweenImports', 'betweenImportsPathDiffers'))`
@@ -82,22 +83,25 @@ package anyparse.grammar.haxe;
  *
  * `@:fmt(blankLinesBetweenSameCtorTailTransparent('decl', 'Conditional',
  * 'betweenImportsTailLeafClassify'))` (slice ω-cond-comp-tail-transparency)
- * extends the same-kind path-level cascade with "transparent wrapper"
- * support: when the current element matches the named ctor (here
- * `HxDecl.Conditional`), the engine routes through the
- * `betweenImportsTailLeafClassify` adapter on `WriteOptions` to walk
- * the wrapper to its tail leaf decl (last non-empty branch's last
- * element, recursively unwrapping nested wrappers). The adapter
- * returns `{ctorName, path}` for recognised leaf ctors; the engine
- * filters `_r.ctorName` against each between info's matched ctorNames
- * list at runtime, so a single shared walker feeds both the Imports
- * and Usings between infos. Closes the boundary `#end → import x.X;`
- * where the conditional's tail import path differs from the next
- * import's at the configured level (Bug #2.B in the imports_and_using
- * fixture cluster). The cascade priority is unchanged — `after >
- * between (with transparent route) > before > source` — and ctors
- * that don't appear in either matched or transparent sets keep
- * falling into the unmatched bucket (kind=0/path='').
+ * and the head-side mirror
+ * `@:fmt(blankLinesBetweenSameCtorHeadTransparent('decl', 'Conditional',
+ * 'betweenImportsHeadLeafClassify'))` (slice ω-imports-using-transition)
+ * extend the same-kind path-level cascade with "transparent wrapper"
+ * support on both ends of a boundary: when an element matches the named
+ * ctor (here `HxDecl.Conditional`), the engine routes through the
+ * `betweenImportsTailLeafClassify` adapter for the prev-side classifier
+ * (last non-empty branch's last element) and the
+ * `betweenImportsHeadLeafClassify` adapter for the curr-side classifier
+ * (first non-empty branch's first element), recursively unwrapping
+ * nested wrappers in each direction. Each adapter returns
+ * `{ctorName, path}` for recognised leaf ctors; the engine filters
+ * `_r.ctorName` against each between info's matched ctorNames list at
+ * runtime, so a single shared walker pair feeds both the Imports and
+ * Usings between infos AND the cross-subset transition cascade. Tail
+ * transparency closes `#end → import` boundaries (Bug #2.B); head
+ * transparency closes `import → #if … import …` boundaries (Bug #2.A,
+ * via transition cascade with prev=Import + curr=Conditional with
+ * import-head leaf in a different subset position).
  *
  * Predicate-gated variants `@:fmt(blankLinesAfterCtorIf(classifierField,
  * predicateName, Ctor1, …, optField))` and the symmetric `…BeforeCtorIf`
@@ -120,10 +124,11 @@ package anyparse.grammar.haxe;
 typedef HxModule = {
 	@:trivia
 	@:fmt(blankLinesAfterCtor('decl', 'PackageDecl', 'PackageEmpty', 'afterPackage'))
-	@:fmt(blankLinesBeforeCtor('decl', 'UsingDecl', 'UsingWildDecl', 'beforeUsing'))
+	@:fmt(blankLinesOnTransitionAcross('decl', 'ImportDecl', 'ImportWildDecl', '|', 'UsingDecl', 'UsingWildDecl', 'beforeUsing'))
 	@:fmt(blankLinesBetweenSameCtorByLevel('decl', 'ImportDecl', 'ImportWildDecl', 'betweenImportsLevel', 'betweenImports', 'betweenImportsPathDiffers'))
 	@:fmt(blankLinesBetweenSameCtorByLevel('decl', 'UsingDecl', 'UsingWildDecl', 'betweenImportsLevel', 'betweenImports', 'betweenImportsPathDiffers'))
 	@:fmt(blankLinesBetweenSameCtorTailTransparent('decl', 'Conditional', 'betweenImportsTailLeafClassify'))
+	@:fmt(blankLinesBetweenSameCtorHeadTransparent('decl', 'Conditional', 'betweenImportsHeadLeafClassify'))
 	@:fmt(blankLinesAfterCtorIf('decl', 'multiline', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'FnDecl', 'afterMultilineDecl'))
 	@:fmt(blankLinesBeforeCtorIf('decl', 'multiline', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'FnDecl', 'beforeMultilineDecl'))
 	var decls:Array<HxTopLevelDecl>;

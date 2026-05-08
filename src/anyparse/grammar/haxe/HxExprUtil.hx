@@ -188,7 +188,7 @@ final class HxExprUtil {
 		if (payload == null) return null;
 		final elseBody:Null<Array<Dynamic>> = Reflect.field(payload, 'elseBody');
 		if (elseBody != null && elseBody.length > 0)
-			return classifyTopLevelDeclElement(elseBody[elseBody.length - 1]);
+			return classifyTopLevelDeclElement(elseBody[elseBody.length - 1], Tail);
 		final elseifs:Null<Array<Dynamic>> = Reflect.field(payload, 'elseifs');
 		if (elseifs != null && elseifs.length > 0) {
 			var i:Int = elseifs.length - 1;
@@ -197,14 +197,67 @@ final class HxExprUtil {
 				if (clause != null) {
 					final clauseBody:Null<Array<Dynamic>> = Reflect.field(clause, 'body');
 					if (clauseBody != null && clauseBody.length > 0)
-						return classifyTopLevelDeclElement(clauseBody[clauseBody.length - 1]);
+						return classifyTopLevelDeclElement(clauseBody[clauseBody.length - 1], Tail);
 				}
 				i--;
 			}
 		}
 		final body:Null<Array<Dynamic>> = Reflect.field(payload, 'body');
 		if (body != null && body.length > 0)
-			return classifyTopLevelDeclElement(body[body.length - 1]);
+			return classifyTopLevelDeclElement(body[body.length - 1], Tail);
+		return null;
+	}
+
+	/**
+	 * ω-imports-using-transition — classifies the head leaf decl of a
+	 * `HxConditionalDecl` (or its Trivia synth pair `HxConditionalDeclT`)
+	 * for the between-cascade in `WriterLowering.triviaEofStarExpr`.
+	 *
+	 * Walk priority (FIRST non-empty branch wins — strict positional,
+	 * source order: `body` → `elseifs[0..]` → `elseBody`). Mirror of
+	 * `tailLeafClassifyImports` but reversed: the conditional's head is
+	 * what its first source-order branch contributes first.
+	 *
+	 *  1. `body` Star — if non-empty, classify its first element and
+	 *     return that result directly (`null` propagates up so the
+	 *     caller treats the conditional as opaque). Other branches
+	 *     are NOT consulted.
+	 *  2. else `elseifs[0].body` … `elseifs[last].body` — scan from
+	 *     head to find the first non-empty clause body; classify its
+	 *     first element and return directly.
+	 *  3. else `elseBody` Star — first element classification.
+	 *  4. else `null`.
+	 *
+	 * Recurses into nested `Conditional` ctors via the `Head` direction
+	 * so `#if a #if b import x; #end #end` resolves to `import x` as
+	 * the head leaf, not the inner conditional opaquely.
+	 *
+	 * Wired on `WriteOptions.betweenImportsHeadLeafClassify` via
+	 * `HaxeFormat.defaultWriteOptions`. Used by both `betweenImports`
+	 * cascade head-transparent path and the cross-subset transition
+	 * cascade (`blankLinesOnTransitionAcross`) on `HxModule.decls`.
+	 */
+	public static function headLeafClassifyImports(payload:Null<Dynamic>):Null<{ctorName:String, path:String}> {
+		if (payload == null) return null;
+		final body:Null<Array<Dynamic>> = Reflect.field(payload, 'body');
+		if (body != null && body.length > 0)
+			return classifyTopLevelDeclElement(body[0], Head);
+		final elseifs:Null<Array<Dynamic>> = Reflect.field(payload, 'elseifs');
+		if (elseifs != null && elseifs.length > 0) {
+			var i:Int = 0;
+			while (i < elseifs.length) {
+				final clause:Null<Dynamic> = unwrapTrivialStruct(elseifs[i]);
+				if (clause != null) {
+					final clauseBody:Null<Array<Dynamic>> = Reflect.field(clause, 'body');
+					if (clauseBody != null && clauseBody.length > 0)
+						return classifyTopLevelDeclElement(clauseBody[0], Head);
+				}
+				i++;
+			}
+		}
+		final elseBody:Null<Array<Dynamic>> = Reflect.field(payload, 'elseBody');
+		if (elseBody != null && elseBody.length > 0)
+			return classifyTopLevelDeclElement(elseBody[0], Head);
 		return null;
 	}
 
@@ -215,8 +268,13 @@ final class HxExprUtil {
 	 * (Trivia mode); both expose a `.decl` field of an `HxDecl` /
 	 * `HxDeclT` enum value. Returns `null` on null input, missing
 	 * `.decl`, or any unsupported ctor.
+	 *
+	 * `direction` selects which sub-walker recurses into a nested
+	 * `Conditional` payload — `Head` keeps walking into first-branch /
+	 * first-element, `Tail` into last-branch / last-element. Direction
+	 * does NOT affect terminal `ImportDecl` / `UsingDecl` etc. cases.
 	 */
-	private static function classifyTopLevelDeclElement(elem:Null<Dynamic>):Null<{ctorName:String, path:String}> {
+	private static function classifyTopLevelDeclElement(elem:Null<Dynamic>, direction:LeafDirection):Null<{ctorName:String, path:String}> {
 		final inner:Null<Dynamic> = unwrapTrivialStruct(elem);
 		if (inner == null) return null;
 		final decl:Null<Dynamic> = Reflect.field(inner, 'decl');
@@ -226,7 +284,7 @@ final class HxExprUtil {
 		final params:Null<Array<Dynamic>> = Type.enumParameters(decl);
 		if (params == null || params.length == 0) return null;
 		return switch ctor {
-			case 'Conditional': tailLeafClassifyImports(params[0]);
+			case 'Conditional': direction == Tail ? tailLeafClassifyImports(params[0]) : headLeafClassifyImports(params[0]);
 			case 'ImportDecl' | 'ImportWildDecl' | 'UsingDecl' | 'UsingWildDecl':
 				final path:Null<String> = params[0];
 				path == null ? null : {ctorName: ctor, path: path};
@@ -247,4 +305,15 @@ final class HxExprUtil {
 		if (raw == null) return null;
 		return Reflect.hasField(raw, 'node') ? Reflect.field(raw, 'node') : raw;
 	}
+}
+
+/**
+ * Recursion direction selector for `classifyTopLevelDeclElement` when
+ * encountering a nested `Conditional` ctor. `Head` recurses via
+ * `headLeafClassifyImports` (first branch / first element); `Tail`
+ * recurses via `tailLeafClassifyImports` (last branch / last element).
+ */
+private enum abstract LeafDirection(Int) {
+	final Head = 0;
+	final Tail = 1;
 }

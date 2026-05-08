@@ -2628,59 +2628,104 @@ class WriterLowering {
 				for (args in beforeCtorIfAllArgs)
 					beforeCtorInfos.push(buildBeforeCtorBlankInfoIf(elemRefName, args));
 				final betweenCtorAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBetweenSameCtorByLevel');
-				// ω-cond-comp-tail-transparency — read sibling
+				// ω-cond-comp-tail-transparency / ω-imports-using-transition —
+				// read sibling
 				// `blankLinesBetweenSameCtorTailTransparent(classifier, ctor,
+				// adapter)` and
+				// `blankLinesBetweenSameCtorHeadTransparent(classifier, ctor,
 				// adapter)` metas. Group by classifier field name; merge each
-				// group's transparent ctors + (single-shared) adapter into the
-				// between info(s) sharing that classifier. Multiple metas with
-				// the same classifier MUST agree on adapter field (one walker
-				// per Star, not per-ctor); compile-time error otherwise.
+				// group's transparent ctor list + (single-shared) tail/head
+				// adapter into the between info(s) sharing that classifier.
+				// Multiple metas with the same classifier MUST agree on each
+				// direction's adapter (one walker per Star, not per-ctor);
+				// compile-time error otherwise. Tail and head transparent
+				// ctor sets MUST also agree — a ctor that's transparent for
+				// tail is transparent for head too (a Conditional wraps both
+				// ends of its body).
 				final tailTransparentAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBetweenSameCtorTailTransparent');
-				final transparentByClassifier:Map<String, {ctors:Array<String>, adapter:String}> = [];
-				for (args in tailTransparentAllArgs) {
+				final headTransparentAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBetweenSameCtorHeadTransparent');
+				final transparentByClassifier:Map<String, {ctors:Array<String>, tailAdapter:Null<String>, headAdapter:Null<String>}> = [];
+				inline function ingestTransparent(args:Array<String>, isTail:Bool, metaName:String):Void {
 					if (args.length != 3)
 						Context.fatalError(
-							'WriterLowering: @:fmt(blankLinesBetweenSameCtorTailTransparent) expects exactly 3 string args (classifierField, ctorName, adapterOptField), got ${args.length}',
+							'WriterLowering: @:fmt($metaName) expects exactly 3 string args (classifierField, ctorName, adapterOptField), got ${args.length}',
 							Context.currentPos()
 						);
 					final cf:String = args[0];
 					final ctor:String = args[1];
 					final adapter:String = args[2];
-					final entry:Null<{ctors:Array<String>, adapter:String}> = transparentByClassifier[cf];
+					var entry:Null<{ctors:Array<String>, tailAdapter:Null<String>, headAdapter:Null<String>}> = transparentByClassifier[cf];
 					if (entry == null) {
-						transparentByClassifier[cf] = {ctors: [ctor], adapter: adapter};
-					} else {
-						if (entry.adapter != adapter)
+						entry = {ctors: [], tailAdapter: null, headAdapter: null};
+						transparentByClassifier[cf] = entry;
+					}
+					if (entry.ctors.indexOf(ctor) < 0) entry.ctors.push(ctor);
+					if (isTail) {
+						if (entry.tailAdapter != null && entry.tailAdapter != adapter)
 							Context.fatalError(
-								'WriterLowering: @:fmt(blankLinesBetweenSameCtorTailTransparent) adapter mismatch for classifier "$cf" — got "${entry.adapter}" and "$adapter"; one shared adapter per Star+classifier',
+								'WriterLowering: @:fmt($metaName) adapter mismatch for classifier "$cf" — got "${entry.tailAdapter}" and "$adapter"; one shared tail adapter per Star+classifier',
 								Context.currentPos()
 							);
-						if (entry.ctors.indexOf(ctor) < 0) entry.ctors.push(ctor);
+						entry.tailAdapter = adapter;
+					} else {
+						if (entry.headAdapter != null && entry.headAdapter != adapter)
+							Context.fatalError(
+								'WriterLowering: @:fmt($metaName) adapter mismatch for classifier "$cf" — got "${entry.headAdapter}" and "$adapter"; one shared head adapter per Star+classifier',
+								Context.currentPos()
+							);
+						entry.headAdapter = adapter;
 					}
 				}
+				for (args in tailTransparentAllArgs)
+					ingestTransparent(args, true, 'blankLinesBetweenSameCtorTailTransparent');
+				for (args in headTransparentAllArgs)
+					ingestTransparent(args, false, 'blankLinesBetweenSameCtorHeadTransparent');
 				final betweenCtorInfos:Array<BetweenCtorBlankInfo> = [
 					for (args in betweenCtorAllArgs) {
 						final classifier:String = args[0];
-						final tt:Null<{ctors:Array<String>, adapter:String}> = transparentByClassifier[classifier];
+						final tt:Null<{ctors:Array<String>, tailAdapter:Null<String>, headAdapter:Null<String>}> = transparentByClassifier[classifier];
 						buildBetweenCtorBlankInfo(
 							elemRefName, args,
 							tt != null ? tt.ctors : [],
-							tt != null ? tt.adapter : null
+							tt != null ? tt.tailAdapter : null,
+							tt != null ? tt.headAdapter : null
+						);
+					}
+				];
+				// ω-imports-using-transition — read sibling
+				// `blankLinesOnTransitionAcross(classifier, CtorA…, '|',
+				// CtorB…, optField)` metas. Reuse the same
+				// `transparentByClassifier` map as the betweenSameCtor
+				// cascade — head/tail adapters are shared per Star+
+				// classifier, regardless of which cascade reads them.
+				final transitionAcrossAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesOnTransitionAcross');
+				final transitionAcrossInfos:Array<TransitionAcrossInfo> = [
+					for (args in transitionAcrossAllArgs) {
+						final classifier:String = args[0];
+						final tt:Null<{ctors:Array<String>, tailAdapter:Null<String>, headAdapter:Null<String>}> = transparentByClassifier[classifier];
+						buildTransitionAcrossInfo(
+							elemRefName, args,
+							tt != null ? tt.ctors : [],
+							tt != null ? tt.tailAdapter : null,
+							tt != null ? tt.headAdapter : null
 						);
 					}
 				];
 				// Validate every transparent meta has at least one matching
-				// between meta — otherwise the transparent declaration is
-				// dead code.
-				for (cf in transparentByClassifier.keys())
-					if (!Lambda.exists(betweenCtorInfos, info -> info.classifierFieldName == cf))
+				// between OR transition meta — otherwise the transparent
+				// declaration is dead code.
+				for (cf in transparentByClassifier.keys()) {
+					final hasBetween:Bool = Lambda.exists(betweenCtorInfos, info -> info.classifierFieldName == cf);
+					final hasTransition:Bool = Lambda.exists(transitionAcrossInfos, info -> info.classifierFieldName == cf);
+					if (!hasBetween && !hasTransition)
 						Context.fatalError(
-							'WriterLowering: @:fmt(blankLinesBetweenSameCtorTailTransparent) classifier "$cf" has no matching @:fmt(blankLinesBetweenSameCtorByLevel) on the same Star',
+							'WriterLowering: @:fmt(blankLinesBetweenSameCtor{Tail,Head}Transparent) classifier "$cf" has no matching @:fmt(blankLinesBetweenSameCtorByLevel) or @:fmt(blankLinesOnTransitionAcross) on the same Star',
 							Context.currentPos()
 						);
+				}
 				parts.push(triviaEofStarExpr(
 					fieldAccess, trailBBAccess, trailLCAccess, elemFn,
-					afterCtorInfos, beforeCtorInfos, betweenCtorInfos
+					afterCtorInfos, beforeCtorInfos, betweenCtorInfos, transitionAcrossInfos
 				));
 			} else {
 				Context.fatalError('WriterLowering: @:trivia Star without @:trail must be the last field', Context.currentPos());
@@ -5456,7 +5501,8 @@ class WriterLowering {
 		fieldAccess:Expr, trailBBAccess:Null<Expr>, trailLCAccess:Null<Expr>,
 		elemFn:String, afterCtorInfos:Array<AfterCtorBlankInfo> = null,
 		beforeCtorInfos:Array<BeforeCtorBlankInfo> = null,
-		betweenCtorInfos:Array<BetweenCtorBlankInfo> = null
+		betweenCtorInfos:Array<BetweenCtorBlankInfo> = null,
+		transitionAcrossInfos:Array<TransitionAcrossInfo> = null
 	):Expr {
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
@@ -5467,6 +5513,7 @@ class WriterLowering {
 		final afterInfos:Array<AfterCtorBlankInfo> = afterCtorInfos ?? [];
 		final beforeInfos:Array<BeforeCtorBlankInfo> = beforeCtorInfos ?? [];
 		final betweenInfos:Array<BetweenCtorBlankInfo> = betweenCtorInfos ?? [];
+		final transitionInfos:Array<TransitionAcrossInfo> = transitionAcrossInfos ?? [];
 		final pos:Position = Context.currentPos();
 		// ω-after-package — when the previous element matches one of the
 		// named ctors, the writer overrides the source-captured blank-
@@ -5497,8 +5544,8 @@ class WriterLowering {
 		// ω-imports-using-between — same-kind pair gate with path-level
 		// awareness. Adds `@:fmt(blankLinesBetweenSameCtorByLevel(...))`
 		// alongside the after/before families. Per-entry trackers carry
-		// both a kind flag (`_prevKindBetweenN` / `_currKindBetweenN`)
-		// AND a path String (`_prevPathBetweenN` / `_currPathBetweenN`)
+		// both a kind flag (`_prevTailKindBetweenN` / `_currTailKindBetweenN`)
+		// AND a path String (`_prevTailPathBetweenN` / `_currTailPathBetweenN`)
 		// captured from the matched ctor's first positional arg via
 		// `_v0` binding. Cascade priority: afterInfos[*] > betweenInfos[*]
 		// > beforeInfos[*] > source-driven `blankBefore`. Mutually
@@ -5581,17 +5628,21 @@ class WriterLowering {
 		// `pathDifferFQN` returns `true` for (prevPath, currPath, level).
 		final initPrevKindBetweenExprs:Array<Expr> = [];
 		for (i in 0...betweenInfos.length) {
-			final kn:String = '_prevKindBetween' + i;
-			final pn:String = '_prevPathBetween' + i;
+			final kn:String = '_prevTailKindBetween' + i;
+			final pn:String = '_prevTailPathBetween' + i;
 			initPrevKindBetweenExprs.push(macro var $kn:Int = 0);
 			initPrevKindBetweenExprs.push(macro var $pn:String = '');
 		}
 		final initCurrKindBetweenExprs:Array<Expr> = [];
 		for (i in 0...betweenInfos.length) {
-			final kn:String = '_currKindBetween' + i;
-			final pn:String = '_currPathBetween' + i;
-			initCurrKindBetweenExprs.push(macro var $kn:Int = 0);
-			initCurrKindBetweenExprs.push(macro var $pn:String = '');
+			final tkn:String = '_currTailKindBetween' + i;
+			final tpn:String = '_currTailPathBetween' + i;
+			final hkn:String = '_currHeadKindBetween' + i;
+			final hpn:String = '_currHeadPathBetween' + i;
+			initCurrKindBetweenExprs.push(macro var $tkn:Int = 0);
+			initCurrKindBetweenExprs.push(macro var $tpn:String = '');
+			initCurrKindBetweenExprs.push(macro var $hkn:Int = 0);
+			initCurrKindBetweenExprs.push(macro var $hpn:String = '');
 		}
 		final currKindBetweenComputeExprs:Array<Expr> = [
 			for (i in 0...betweenInfos.length) {
@@ -5600,46 +5651,82 @@ class WriterLowering {
 					expr: EField(macro _t.node, info.classifierFieldName),
 					pos: pos,
 				};
-				final kindIdent:Expr = {expr: EConst(CIdent('_currKindBetween' + i)), pos: pos};
-				final pathIdent:Expr = {expr: EConst(CIdent('_currPathBetween' + i)), pos: pos};
-				// ω-cond-comp-tail-transparency — transparent-case body:
-				// call `opt.<tailAdapter>(_v0)` (null-guarded), filter the
-				// returned `{ctorName, path}` against THIS info's matched
-				// ctorNames list (so a single shared walker can feed
-				// multiple between infos on the same Star — Imports info
-				// rejects a Using leaf and vice versa). On null adapter
-				// or null result or non-matching ctorName, fall back to
-				// kind=0/path='' (same as the unmatched case body).
-				final transparentBody:Null<Expr> = if (info.tailAdapterOptField == null) null else {
+				final tailKindIdent:Expr = {expr: EConst(CIdent('_currTailKindBetween' + i)), pos: pos};
+				final tailPathIdent:Expr = {expr: EConst(CIdent('_currTailPathBetween' + i)), pos: pos};
+				final headKindIdent:Expr = {expr: EConst(CIdent('_currHeadKindBetween' + i)), pos: pos};
+				final headPathIdent:Expr = {expr: EConst(CIdent('_currHeadPathBetween' + i)), pos: pos};
+				// ω-cond-comp-tail-transparency / ω-imports-using-transition
+				// — transparent-case body: classify the wrapper's tail leaf
+				// AND head leaf via the per-info adapters (null-guarded).
+				// Filter each result's `{ctorName, path}` against THIS
+				// info's matched ctorNames list so a single shared adapter
+				// pair can feed multiple between infos on the same Star
+				// (Imports info rejects a Using leaf and vice versa). On
+				// null adapter / null result / non-matching ctorName, fall
+				// back to kind=0/path='' for that direction. Tail feeds the
+				// next iteration's prev side via the track-step; head feeds
+				// THIS iteration's curr side at cascade fire.
+				final ctorNameMatch:Expr = {
+					var acc:Expr = macro false;
+					for (cn in info.matchedCtorNames) {
+						final lit:Expr = {expr: EConst(CString(cn)), pos: pos};
+						acc = macro $acc || _r.ctorName == $lit;
+					}
+					acc;
+				};
+				final tailBody:Expr = if (info.tailAdapterOptField == null)
+					macro { $tailKindIdent = 0; $tailPathIdent = ''; }
+				else {
 					final adapterAccess:Expr = {expr: EField(macro opt, info.tailAdapterOptField), pos: pos};
-					final ctorNameMatch:Expr = {
-						var acc:Expr = macro false;
-						for (cn in info.matchedCtorNames) {
-							final lit:Expr = {expr: EConst(CString(cn)), pos: pos};
-							acc = macro $acc || _r.ctorName == $lit;
-						}
-						acc;
-					};
 					macro {
 						final _r = $adapterAccess != null ? $adapterAccess(_v0) : null;
 						if (_r != null && $ctorNameMatch) {
-							$kindIdent = 1;
-							$pathIdent = _r.path;
+							$tailKindIdent = 1;
+							$tailPathIdent = _r.path;
 						} else {
-							$kindIdent = 0;
-							$pathIdent = '';
+							$tailKindIdent = 0;
+							$tailPathIdent = '';
 						}
 					};
+				}
+				final headBody:Expr = if (info.headAdapterOptField == null)
+					macro { $headKindIdent = 0; $headPathIdent = ''; }
+				else {
+					final adapterAccess:Expr = {expr: EField(macro opt, info.headAdapterOptField), pos: pos};
+					macro {
+						final _r = $adapterAccess != null ? $adapterAccess(_v0) : null;
+						if (_r != null && $ctorNameMatch) {
+							$headKindIdent = 1;
+							$headPathIdent = _r.path;
+						} else {
+							$headKindIdent = 0;
+							$headPathIdent = '';
+						}
+					};
+				}
+				final transparentBody:Expr = macro {
+					$tailBody;
+					$headBody;
 				};
 				final cases:Array<Case> = [
 					for (cp in info.ctorPatterns) {
 						values: [cp.pattern],
 						guard: null,
 						expr: cp.isMatch
-							? macro { $kindIdent = 1; $pathIdent = _v0; }
-							: cp.isTransparent && transparentBody != null
+							? macro {
+								$tailKindIdent = 1;
+								$tailPathIdent = _v0;
+								$headKindIdent = 1;
+								$headPathIdent = _v0;
+							}
+							: cp.isTransparent
 								? transparentBody
-								: macro { $kindIdent = 0; $pathIdent = ''; },
+								: macro {
+									$tailKindIdent = 0;
+									$tailPathIdent = '';
+									$headKindIdent = 0;
+									$headPathIdent = '';
+								},
 					}
 				];
 				{
@@ -5650,12 +5737,136 @@ class WriterLowering {
 		];
 		final trackPrevKindBetweenExprs:Array<Expr> = [];
 		for (i in 0...betweenInfos.length) {
-			final pkLhs:Expr = {expr: EConst(CIdent('_prevKindBetween' + i)), pos: pos};
-			final pkRhs:Expr = {expr: EConst(CIdent('_currKindBetween' + i)), pos: pos};
-			final ppLhs:Expr = {expr: EConst(CIdent('_prevPathBetween' + i)), pos: pos};
-			final ppRhs:Expr = {expr: EConst(CIdent('_currPathBetween' + i)), pos: pos};
+			final pkLhs:Expr = {expr: EConst(CIdent('_prevTailKindBetween' + i)), pos: pos};
+			final pkRhs:Expr = {expr: EConst(CIdent('_currTailKindBetween' + i)), pos: pos};
+			final ppLhs:Expr = {expr: EConst(CIdent('_prevTailPathBetween' + i)), pos: pos};
+			final ppRhs:Expr = {expr: EConst(CIdent('_currTailPathBetween' + i)), pos: pos};
 			trackPrevKindBetweenExprs.push(macro $pkLhs = $pkRhs);
 			trackPrevKindBetweenExprs.push(macro $ppLhs = $ppRhs);
+		}
+		// ω-imports-using-transition — per-info trackers for the
+		// cross-subset transition cascade. Each transition info splits the
+		// matched ctors into two subsets (A and B) and fires `opt.<count>`
+		// blank lines on a A↔B boundary, with head transparency on the
+		// curr side and tail transparency on the prev side. Trackers
+		// mirror the betweenCtor pair but DOUBLED across A/B and HEAD/TAIL
+		// (no path tracking — transition cascade has no level/path
+		// semantic).
+		final initPrevKindTransitionExprs:Array<Expr> = [];
+		for (i in 0...transitionInfos.length) {
+			final ka:String = '_prevTailKindAcrossA' + i;
+			final kb:String = '_prevTailKindAcrossB' + i;
+			initPrevKindTransitionExprs.push(macro var $ka:Int = 0);
+			initPrevKindTransitionExprs.push(macro var $kb:Int = 0);
+		}
+		final initCurrKindTransitionExprs:Array<Expr> = [];
+		for (i in 0...transitionInfos.length) {
+			final tka:String = '_currTailKindAcrossA' + i;
+			final tkb:String = '_currTailKindAcrossB' + i;
+			final hka:String = '_currHeadKindAcrossA' + i;
+			final hkb:String = '_currHeadKindAcrossB' + i;
+			initCurrKindTransitionExprs.push(macro var $tka:Int = 0);
+			initCurrKindTransitionExprs.push(macro var $tkb:Int = 0);
+			initCurrKindTransitionExprs.push(macro var $hka:Int = 0);
+			initCurrKindTransitionExprs.push(macro var $hkb:Int = 0);
+		}
+		final currKindTransitionComputeExprs:Array<Expr> = [
+			for (i in 0...transitionInfos.length) {
+				final info:TransitionAcrossInfo = transitionInfos[i];
+				final classifierAccess:Expr = {
+					expr: EField(macro _t.node, info.classifierFieldName),
+					pos: pos,
+				};
+				final tkaIdent:Expr = {expr: EConst(CIdent('_currTailKindAcrossA' + i)), pos: pos};
+				final tkbIdent:Expr = {expr: EConst(CIdent('_currTailKindAcrossB' + i)), pos: pos};
+				final hkaIdent:Expr = {expr: EConst(CIdent('_currHeadKindAcrossA' + i)), pos: pos};
+				final hkbIdent:Expr = {expr: EConst(CIdent('_currHeadKindAcrossB' + i)), pos: pos};
+				inline function buildAdapterMatchExpr(adapterField:Null<String>, names:Array<String>):Expr {
+					if (adapterField == null) return macro 0;
+					var acc:Expr = macro false;
+					for (cn in names) {
+						final lit:Expr = {expr: EConst(CString(cn)), pos: pos};
+						acc = macro $acc || _r.ctorName == $lit;
+					}
+					return macro (_r != null && $acc) ? 1 : 0;
+				}
+				final tailAdapterAccess:Null<Expr> = info.tailAdapterOptField == null
+					? null
+					: {expr: EField(macro opt, info.tailAdapterOptField), pos: pos};
+				final headAdapterAccess:Null<Expr> = info.headAdapterOptField == null
+					? null
+					: {expr: EField(macro opt, info.headAdapterOptField), pos: pos};
+				final tailMatchA:Expr = buildAdapterMatchExpr(info.tailAdapterOptField, info.matchedCtorNamesA);
+				final tailMatchB:Expr = buildAdapterMatchExpr(info.tailAdapterOptField, info.matchedCtorNamesB);
+				final headMatchA:Expr = buildAdapterMatchExpr(info.headAdapterOptField, info.matchedCtorNamesA);
+				final headMatchB:Expr = buildAdapterMatchExpr(info.headAdapterOptField, info.matchedCtorNamesB);
+				final transparentBody:Expr = if (tailAdapterAccess == null && headAdapterAccess == null)
+					macro {
+						$tkaIdent = 0; $tkbIdent = 0;
+						$hkaIdent = 0; $hkbIdent = 0;
+					}
+				else if (headAdapterAccess == null)
+					macro {
+						final _r = $tailAdapterAccess != null ? $tailAdapterAccess(_v0) : null;
+						$tkaIdent = $tailMatchA;
+						$tkbIdent = $tailMatchB;
+						$hkaIdent = 0;
+						$hkbIdent = 0;
+					}
+				else if (tailAdapterAccess == null)
+					macro {
+						final _r = $headAdapterAccess != null ? $headAdapterAccess(_v0) : null;
+						$hkaIdent = $headMatchA;
+						$hkbIdent = $headMatchB;
+						$tkaIdent = 0;
+						$tkbIdent = 0;
+					}
+				else
+					macro {
+						final _r = $tailAdapterAccess != null ? $tailAdapterAccess(_v0) : null;
+						$tkaIdent = $tailMatchA;
+						$tkbIdent = $tailMatchB;
+						{
+							final _r = $headAdapterAccess != null ? $headAdapterAccess(_v0) : null;
+							$hkaIdent = $headMatchA;
+							$hkbIdent = $headMatchB;
+						}
+					};
+				final cases:Array<Case> = [
+					for (cp in info.ctorPatterns) {
+						values: [cp.pattern],
+						guard: null,
+						expr: switch cp.subset {
+							case 1: macro {
+								$tkaIdent = 1; $tkbIdent = 0;
+								$hkaIdent = 1; $hkbIdent = 0;
+							};
+							case 2: macro {
+								$tkaIdent = 0; $tkbIdent = 1;
+								$hkaIdent = 0; $hkbIdent = 1;
+							};
+							case 3: transparentBody;
+							case _: macro {
+								$tkaIdent = 0; $tkbIdent = 0;
+								$hkaIdent = 0; $hkbIdent = 0;
+							};
+						},
+					}
+				];
+				{
+					expr: ESwitch(classifierAccess, cases, null),
+					pos: pos,
+				};
+			}
+		];
+		final trackPrevKindTransitionExprs:Array<Expr> = [];
+		for (i in 0...transitionInfos.length) {
+			final pkaLhs:Expr = {expr: EConst(CIdent('_prevTailKindAcrossA' + i)), pos: pos};
+			final pkaRhs:Expr = {expr: EConst(CIdent('_currTailKindAcrossA' + i)), pos: pos};
+			final pkbLhs:Expr = {expr: EConst(CIdent('_prevTailKindAcrossB' + i)), pos: pos};
+			final pkbRhs:Expr = {expr: EConst(CIdent('_currTailKindAcrossB' + i)), pos: pos};
+			trackPrevKindTransitionExprs.push(macro $pkaLhs = $pkaRhs);
+			trackPrevKindTransitionExprs.push(macro $pkbLhs = $pkbRhs);
 		}
 		var blanksCountExpr:Expr = macro (_t.blankBefore ? 1 : 0);
 		// Build cascade from innermost (source-driven) outward — beforeInfos
@@ -5677,10 +5888,16 @@ class WriterLowering {
 			final countAccess:Expr = {expr: EField(macro opt, info.countOptField), pos: pos};
 			final levelAccess:Expr = {expr: EField(macro opt, info.levelOptField), pos: pos};
 			final adapterAccess:Expr = {expr: EField(macro opt, info.adapterOptField), pos: pos};
-			final currKindIdent:Expr = {expr: EConst(CIdent('_currKindBetween' + idx)), pos: pos};
-			final prevKindIdent:Expr = {expr: EConst(CIdent('_prevKindBetween' + idx)), pos: pos};
-			final currPathIdent:Expr = {expr: EConst(CIdent('_currPathBetween' + idx)), pos: pos};
-			final prevPathIdent:Expr = {expr: EConst(CIdent('_prevPathBetween' + idx)), pos: pos};
+			// curr-side reads HEAD trackers (what THIS iteration's element
+			// starts with); prev-side reads TAIL trackers (what previous
+			// iteration's element ended with). For matched ctors head==tail
+			// (computed equal in `currKindBetweenComputeExprs`); for
+			// transparent ctors (Conditional) head and tail diverge and
+			// are populated by the head/tail adapter pair.
+			final currKindIdent:Expr = {expr: EConst(CIdent('_currHeadKindBetween' + idx)), pos: pos};
+			final prevKindIdent:Expr = {expr: EConst(CIdent('_prevTailKindBetween' + idx)), pos: pos};
+			final currPathIdent:Expr = {expr: EConst(CIdent('_currHeadPathBetween' + idx)), pos: pos};
+			final prevPathIdent:Expr = {expr: EConst(CIdent('_prevTailPathBetween' + idx)), pos: pos};
 			final differCall:Expr = {
 				expr: ECall(adapterAccess, [prevPathIdent, currPathIdent, levelAccess]),
 				pos: pos,
@@ -5694,6 +5911,30 @@ class WriterLowering {
 			// inert when no adapter is wired (cascade falls through to the
 			// fallback / source-driven blank count).
 			blanksCountExpr = macro ($currKindIdent == 1 && $prevKindIdent == 1 && $adapterAccess != null && $differCall ? $countAccess : $fallback);
+		}
+		// ω-imports-using-transition — fire `opt.<countOptField>` blank
+		// lines on a cross-subset boundary: prev's tail-classified kind
+		// in subset A while curr's head-classified kind in subset B (or
+		// the symmetric A↔B swap). Transparent-ctor (Conditional) head
+		// and tail are populated via the per-info adapter pair in
+		// `currKindTransitionComputeExprs`. Mutually exclusive with
+		// `betweenInfos` (which fires on same-subset same-kind), so the
+		// cascade order between the two doesn't matter — exactly one
+		// fires per boundary.
+		for (i in 0...transitionInfos.length) {
+			final idx:Int = transitionInfos.length - 1 - i;
+			final info:TransitionAcrossInfo = transitionInfos[idx];
+			final countAccess:Expr = {expr: EField(macro opt, info.countOptField), pos: pos};
+			final currHKAIdent:Expr = {expr: EConst(CIdent('_currHeadKindAcrossA' + idx)), pos: pos};
+			final currHKBIdent:Expr = {expr: EConst(CIdent('_currHeadKindAcrossB' + idx)), pos: pos};
+			final prevTKAIdent:Expr = {expr: EConst(CIdent('_prevTailKindAcrossA' + idx)), pos: pos};
+			final prevTKBIdent:Expr = {expr: EConst(CIdent('_prevTailKindAcrossB' + idx)), pos: pos};
+			final fallback:Expr = blanksCountExpr;
+			blanksCountExpr = macro (
+				($currHKAIdent == 1 && $prevTKBIdent == 1)
+				|| ($currHKBIdent == 1 && $prevTKAIdent == 1)
+				? $countAccess : $fallback
+			);
 		}
 		for (i in 0...afterInfos.length) {
 			final idx:Int = afterInfos.length - 1 - i;
@@ -5717,6 +5958,8 @@ class WriterLowering {
 		for (e in currKindBeforeComputeExprs) whileBodyParts.push(e);
 		for (e in initCurrKindBetweenExprs) whileBodyParts.push(e);
 		for (e in currKindBetweenComputeExprs) whileBodyParts.push(e);
+		for (e in initCurrKindTransitionExprs) whileBodyParts.push(e);
+		for (e in currKindTransitionComputeExprs) whileBodyParts.push(e);
 		whileBodyParts.push(macro if (_si > 0) {
 			_docs.push(_dhl());
 			final _blanks:Int = $blanksCountExpr;
@@ -5741,6 +5984,7 @@ class WriterLowering {
 		for (e in trackPrevKindExprs) whileBodyParts.push(e);
 		for (e in trackPrevKindBeforeExprs) whileBodyParts.push(e);
 		for (e in trackPrevKindBetweenExprs) whileBodyParts.push(e);
+		for (e in trackPrevKindTransitionExprs) whileBodyParts.push(e);
 		whileBodyParts.push(macro _si++);
 		final whileBodyBlock:Expr = {expr: EBlock(whileBodyParts), pos: pos};
 		final whileExpr:Expr = {
@@ -5752,6 +5996,7 @@ class WriterLowering {
 		for (e in initPrevKindExprs) elseBodyParts.push(e);
 		for (e in initPrevKindBeforeExprs) elseBodyParts.push(e);
 		for (e in initPrevKindBetweenExprs) elseBodyParts.push(e);
+		for (e in initPrevKindTransitionExprs) elseBodyParts.push(e);
 		elseBodyParts.push(macro var _si:Int = 0);
 		elseBodyParts.push(whileExpr);
 		elseBodyParts.push(macro if (_trailLC.length > 0) {
@@ -6455,7 +6700,8 @@ class WriterLowering {
 	 */
 	private function buildBetweenCtorBlankInfo(
 		elemRefName:String, args:Array<String>,
-		transparentCtorNames:Array<String>, tailAdapterOptField:Null<String>
+		transparentCtorNames:Array<String>,
+		tailAdapterOptField:Null<String>, headAdapterOptField:Null<String>
 	):BetweenCtorBlankInfo {
 		if (args.length < 5)
 			Context.fatalError(
@@ -6546,6 +6792,139 @@ class WriterLowering {
 			countOptField: countOptField,
 			adapterOptField: adapterOptField,
 			tailAdapterOptField: tailAdapterOptField,
+			headAdapterOptField: headAdapterOptField,
+			transparentCtorNames: transparentCtorNames.copy(),
+		};
+	}
+
+	/**
+	 * ω-imports-using-transition — lower one
+	 * `@:fmt(blankLinesOnTransitionAcross(classifierField, CtorA1,
+	 * [CtorA2, …], '|', CtorB1, [CtorB2, …], countOptField))` into a
+	 * `TransitionAcrossInfo`. The `'|'` literal in the args list separates
+	 * subset A (left) from subset B (right). Each subset must be non-
+	 * empty; ctors must exist in the classifier's target enum.
+	 *
+	 * Transparent-ctor support is inherited from sibling
+	 * `blankLinesBetweenSameCtor{Tail,Head}Transparent` metas via the
+	 * pre-merged `transparentByClassifier` map (caller).
+	 */
+	private function buildTransitionAcrossInfo(
+		elemRefName:String, args:Array<String>,
+		transparentCtorNames:Array<String>,
+		tailAdapterOptField:Null<String>, headAdapterOptField:Null<String>
+	):TransitionAcrossInfo {
+		if (args.length < 5)
+			Context.fatalError(
+				'WriterLowering: @:fmt(blankLinesOnTransitionAcross) expects ≥ 5 string args (classifierField, CtorA1, [CtorA2, …], "|", CtorB1, [CtorB2, …], countOptField), got ${args.length}',
+				Context.currentPos()
+			);
+		final fieldName:String = args[0];
+		final countOptField:String = args[args.length - 1];
+		final pipeIdx:Int = args.indexOf('|');
+		if (pipeIdx < 2 || pipeIdx > args.length - 3)
+			Context.fatalError(
+				'WriterLowering: @:fmt(blankLinesOnTransitionAcross) requires a "|" separator between subset A and subset B (with at least one ctor on each side); got args ${args}',
+				Context.currentPos()
+			);
+		final ctorNamesA:Array<String> = args.slice(1, pipeIdx);
+		final ctorNamesB:Array<String> = args.slice(pipeIdx + 1, args.length - 1);
+		if (ctorNamesA.length == 0 || ctorNamesB.length == 0)
+			Context.fatalError(
+				'WriterLowering: @:fmt(blankLinesOnTransitionAcross) requires at least one ctor on each side of "|"',
+				Context.currentPos()
+			);
+		for (name in ctorNamesA) if (ctorNamesB.indexOf(name) >= 0)
+			Context.fatalError(
+				'WriterLowering: @:fmt(blankLinesOnTransitionAcross) ctor "$name" appears in both subset A and subset B — must be in exactly one',
+				Context.currentPos()
+			);
+		for (name in ctorNamesA) if (transparentCtorNames.indexOf(name) >= 0)
+			Context.fatalError(
+				'WriterLowering: @:fmt(blankLinesOnTransitionAcross) ctor "$name" appears both as a matched (subset A) and transparent ctor on the same Star — must be one or the other',
+				Context.currentPos()
+			);
+		for (name in ctorNamesB) if (transparentCtorNames.indexOf(name) >= 0)
+			Context.fatalError(
+				'WriterLowering: @:fmt(blankLinesOnTransitionAcross) ctor "$name" appears both as a matched (subset B) and transparent ctor on the same Star — must be one or the other',
+				Context.currentPos()
+			);
+		final r:{enumRule:ShapeNode, enumRuleName:String} = resolveClassifierEnum(elemRefName, fieldName, 'blankLinesOnTransitionAcross');
+		final enumRule:ShapeNode = r.enumRule;
+		final enumRuleName:String = r.enumRuleName;
+		final pos:Position = Context.currentPos();
+		final patterns:Array<TransitionAcrossPattern> = [];
+		final matchedA:Array<String> = [];
+		final matchedB:Array<String> = [];
+		final transparentMatched:Array<String> = [];
+		for (branch in enumRule.children) {
+			final ctorName:Null<String> = branch.annotations.get('base.ctor');
+			if (ctorName == null) continue;
+			final arity:Int = branch.children.length;
+			final ctorIdent:Expr = {expr: EConst(CIdent(ctorName)), pos: pos};
+			final inA:Bool = ctorNamesA.indexOf(ctorName) >= 0;
+			final inB:Bool = !inA && ctorNamesB.indexOf(ctorName) >= 0;
+			final isTransparent:Bool = !inA && !inB && transparentCtorNames.indexOf(ctorName) >= 0;
+			if (inA) {
+				matchedA.push(ctorName);
+				final binders:Array<Expr> = arity == 0
+					? []
+					: [for (i in 0...arity) i == 0 ? macro _v0 : macro _];
+				patterns.push({
+					pattern: arity == 0 ? ctorIdent : {expr: ECall(ctorIdent, binders), pos: pos},
+					subset: 1,
+				});
+			} else if (inB) {
+				matchedB.push(ctorName);
+				final binders:Array<Expr> = arity == 0
+					? []
+					: [for (i in 0...arity) i == 0 ? macro _v0 : macro _];
+				patterns.push({
+					pattern: arity == 0 ? ctorIdent : {expr: ECall(ctorIdent, binders), pos: pos},
+					subset: 2,
+				});
+			} else if (isTransparent) {
+				if (arity < 1)
+					Context.fatalError(
+						'WriterLowering: @:fmt(blankLinesOnTransitionAcross) transparent ctor "$ctorName" must have arity ≥ 1 (first arg is the wrapper payload bound to _v0 and passed to the head/tail-leaf classifier adapters); got arity $arity',
+						Context.currentPos()
+					);
+				transparentMatched.push(ctorName);
+				final binders:Array<Expr> = [for (i in 0...arity) i == 0 ? macro _v0 : macro _];
+				patterns.push({
+					pattern: {expr: ECall(ctorIdent, binders), pos: pos},
+					subset: 3,
+				});
+			} else {
+				final pattern:Expr = arity == 0
+					? ctorIdent
+					: {expr: ECall(ctorIdent, [for (_ in 0...arity) macro _]), pos: pos};
+				patterns.push({pattern: pattern, subset: 0});
+			}
+		}
+		for (name in ctorNamesA) if (matchedA.indexOf(name) < 0)
+			Context.fatalError(
+				'WriterLowering: @:fmt(blankLinesOnTransitionAcross) subset A ctor "$name" not found in enum $enumRuleName',
+				Context.currentPos()
+			);
+		for (name in ctorNamesB) if (matchedB.indexOf(name) < 0)
+			Context.fatalError(
+				'WriterLowering: @:fmt(blankLinesOnTransitionAcross) subset B ctor "$name" not found in enum $enumRuleName',
+				Context.currentPos()
+			);
+		for (name in transparentCtorNames) if (transparentMatched.indexOf(name) < 0)
+			Context.fatalError(
+				'WriterLowering: @:fmt(blankLinesBetweenSameCtor{Tail,Head}Transparent) ctor "$name" not found in enum $enumRuleName',
+				Context.currentPos()
+			);
+		return {
+			classifierFieldName: fieldName,
+			ctorPatterns: patterns,
+			matchedCtorNamesA: ctorNamesA.copy(),
+			matchedCtorNamesB: ctorNamesB.copy(),
+			countOptField: countOptField,
+			tailAdapterOptField: tailAdapterOptField,
+			headAdapterOptField: headAdapterOptField,
 			transparentCtorNames: transparentCtorNames.copy(),
 		};
 	}
@@ -7011,7 +7390,7 @@ typedef BeforeCtorBlankInfo = {
  * ctors bind their first positional arg as `_v0`; unmatched ctors use
  * a wildcard for every arg). The case body is generated at cascade-
  * emit time inside `triviaEofStarExpr` because it needs to reference
- * the per-info `_currKindBetween<i>` / `_currPathBetween<i>` ident
+ * the per-info `_currTailKindBetween<i>` / `_currTailPathBetween<i>` ident
  * names, which depend on the info's index in the cascade.
  *
  * `adapterOptField` names a function-typed field on `WriteOptions`
@@ -7022,26 +7401,38 @@ typedef BeforeCtorBlankInfo = {
  * priority: after-ctor entries (outermost) > between entries >
  * before-ctor entries > source-driven `blankBefore`.
  *
- * `tailAdapterOptField` (slice ω-cond-comp-tail-transparency) names an
- * optional function-typed field on `WriteOptions`
- * (e.g. `betweenImportsTailLeafClassify:Null<Dynamic -> Null<{ctorName,
- * path}>>`). When non-null, ctors named in `transparentCtorNames` are
- * routed through the adapter at runtime: the adapter walks the wrapper
- * payload (e.g. `HxConditionalDecl`) to its tail leaf decl, returns
- * `{ctorName, path}` describing that leaf, and the engine then runs a
- * runtime `_r.ctorName == 'CtorA' || _r.ctorName == 'CtorB'` filter
- * against the per-info `ctorNames` list — so a single shared adapter
- * can feed multiple between infos on the same Star (one walker drives
- * both Imports and Usings infos on `HxModule.decls`). When null, the
- * transparent ctor list is empty and the cascade behaves as before
- * (transparent ctors fall into the unmatched bucket → kind=0/path='').
+ * `tailAdapterOptField` (slice ω-cond-comp-tail-transparency) and
+ * `headAdapterOptField` (slice ω-imports-using-transition) name
+ * optional function-typed fields on `WriteOptions`
+ * (e.g. `betweenImportsTailLeafClassify` /
+ * `betweenImportsHeadLeafClassify`, each
+ * `Null<Dynamic -> Null<{ctorName, path}>>`). When non-null, ctors
+ * named in `transparentCtorNames` are routed through the matching
+ * direction's adapter at runtime: tail walks the wrapper payload (e.g.
+ * `HxConditionalDecl`) to its LAST-branch / LAST-element leaf decl,
+ * head walks to FIRST-branch / FIRST-element. Each adapter returns
+ * `{ctorName, path}`; the engine runs a runtime
+ * `_r.ctorName == 'CtorA' || _r.ctorName == 'CtorB'` filter against
+ * the per-info `matchedCtorNames` list — so a single shared adapter
+ * pair can feed multiple between infos on the same Star (one walker
+ * pair drives both Imports and Usings infos on `HxModule.decls`).
+ * Tail feeds the next iteration's prev-side via the track-step;
+ * head feeds THIS iteration's curr-side at cascade fire. Either or
+ * both adapter fields may be null: the absent direction zeros out
+ * its kind/path for transparent ctors (same as the unmatched bucket)
+ * while the wired direction's classification still drives the
+ * cascade. With both null, transparent ctors fall fully into the
+ * unmatched bucket.
  *
  * `transparentCtorNames` lists the wrapper ctor names (e.g.
  * `Conditional`) collected from
  * `@:fmt(blankLinesBetweenSameCtorTailTransparent(classifierField,
- * ctorName, adapterOptField))` metas with matching classifier field.
- * Validated arity ≥ 1 (first positional arg is the wrapper payload
- * passed to the adapter).
+ * ctorName, adapterOptField))` and
+ * `@:fmt(blankLinesBetweenSameCtorHeadTransparent(...))` metas with
+ * matching classifier field — merged across both directions, so any
+ * ctor that appears in EITHER meta becomes transparent. Validated
+ * arity ≥ 1 (first positional arg is the wrapper payload passed to
+ * the adapter pair).
  */
 typedef BetweenCtorBlankInfo = {
 	classifierFieldName:String,
@@ -7051,6 +7442,7 @@ typedef BetweenCtorBlankInfo = {
 	countOptField:String,
 	adapterOptField:String,
 	tailAdapterOptField:Null<String>,
+	headAdapterOptField:Null<String>,
 	transparentCtorNames:Array<String>,
 };
 
@@ -7072,6 +7464,59 @@ typedef BetweenCtorPattern = {
 	pattern:Expr,
 	isMatch:Bool,
 	isTransparent:Bool,
+};
+
+/**
+ * ω-imports-using-transition — resolved data for
+ * `@:fmt(blankLinesOnTransitionAcross(classifierField, CtorA1,
+ * [CtorA2, …], '|', CtorB1, [CtorB2, …], countOptField))`. Produced by
+ * `WriterLowering.buildTransitionAcrossInfo` and spliced into
+ * `triviaEofStarExpr`'s per-element loop alongside the
+ * `BetweenCtorBlankInfo` family.
+ *
+ * Fires `opt.<countOptField>` blank lines when prev's tail-classified
+ * kind and curr's head-classified kind fall into DIFFERENT subsets
+ * (subset A vs subset B): `(prevTailA==1 && currHeadB==1) || (prevTailB
+ * ==1 && currHeadA==1) → fire`. Mirrors fork's `MarkEmptyLines.markImports`
+ * cross-kind emit (`prevInfo.isImport != newInfo.isImport →
+ * emit beforeUsing`).
+ *
+ * Transparent-ctor support is inherited from the same Star's
+ * `blankLinesBetweenSameCtor{Tail,Head}Transparent` metas — the merged
+ * `transparentByClassifier` map's adapter pair feeds both the betweenCtor
+ * and transitionAcross runtime classifiers, so a single pair of
+ * head/tail walkers covers all classifiers on the same Star.
+ *
+ * `ctorPatterns` carries one entry per enum variant in the classifier
+ * target. `subset` selects the case-body shape: 1 for subset A match,
+ * 2 for subset B match, 3 for transparent (calls head + tail adapters
+ * and sets each direction's A/B flags by ctorName lookup), 0 for
+ * unmatched (zero out all flags). Matched-ctor patterns bind `_v0` to
+ * the ctor's first positional arg (currently unused at this cascade,
+ * reserved for parity with `BetweenCtorBlankInfo` and possible future
+ * path-aware transition rules); transparent-ctor patterns also bind
+ * `_v0` (the wrapper payload passed to the adapter pair); unmatched
+ * patterns wildcard every arg.
+ */
+typedef TransitionAcrossInfo = {
+	classifierFieldName:String,
+	ctorPatterns:Array<TransitionAcrossPattern>,
+	matchedCtorNamesA:Array<String>,
+	matchedCtorNamesB:Array<String>,
+	countOptField:String,
+	tailAdapterOptField:Null<String>,
+	headAdapterOptField:Null<String>,
+	transparentCtorNames:Array<String>,
+};
+
+/**
+ * One ESwitch case pattern with its subset tag for `TransitionAcrossInfo`.
+ * `subset`: 1 = matched in subset A, 2 = matched in subset B, 3 =
+ * transparent wrapper, 0 = unmatched.
+ */
+typedef TransitionAcrossPattern = {
+	pattern:Expr,
+	subset:Int,
 };
 
 /**

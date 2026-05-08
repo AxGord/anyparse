@@ -156,7 +156,7 @@ typedef WriteOptions = {
 	 *    `WriterLowering.triviaEofStarExpr`: when the current element
 	 *    matches the transparent ctor name, the engine emits a runtime
 	 *    `opt.<adapterField>(payload)` call instead of resetting
-	 *    `_currKindBetween/_currPathBetween` to (0,''). The plugin
+	 *    `_currTailKindBetween/_currTailPathBetween` to (0,''). The plugin
 	 *    walks the wrapper's body Stars (last non-empty branch's last
 	 *    decl, recursively unwrapping nested wrappers) and returns the
 	 *    leaf's ctor name + first-positional-arg path String, or
@@ -169,6 +169,19 @@ typedef WriteOptions = {
 	 *    format-neutral engine, primitive return shape, plugin handles
 	 *    the AST traversal.
 	 *
+	 *  - `betweenImportsHeadLeafClassify(payload) → Null<{ctorName,path}>` —
+	 *    head-side mirror of `betweenImportsTailLeafClassify`. Drives
+	 *    `@:fmt(blankLinesBetweenSameCtorHeadTransparent(...))` and the
+	 *    cross-subset transition cascade
+	 *    (`@:fmt(blankLinesOnTransitionAcross(...))`) by classifying the
+	 *    HEAD leaf decl of a transparent wrapper (first non-empty branch's
+	 *    first element, recursing into nested wrappers head-first). Used
+	 *    at curr-side classification — what the wrapper "starts with" for
+	 *    the prev→curr boundary decision in this iteration. Tail-walker
+	 *    feeds the next iteration's prev side; head-walker feeds this
+	 *    iteration's curr side. Together they cover bidirectional
+	 *    transparency for a `Conditional` containing imports/usings.
+	 *
 	 * Formats that don't opt into a gate leave the field null; the
 	 * writer helper checks `null` before invoking and falls back to
 	 * the unconditional non-refusal path.
@@ -177,4 +190,5 @@ typedef WriteOptions = {
 	?caseBodyRefusesFlat:Null<Dynamic -> Bool>,
 	?betweenImportsPathDiffers:Null<(String, String, Int) -> Bool>,
 	?betweenImportsTailLeafClassify:Null<Dynamic -> Null<{ctorName:String, path:String}>>,
+	?betweenImportsHeadLeafClassify:Null<Dynamic -> Null<{ctorName:String, path:String}>>,
 };
