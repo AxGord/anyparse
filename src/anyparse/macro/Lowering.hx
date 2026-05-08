@@ -2363,6 +2363,24 @@ class Lowering {
 			final _t = collectTrivia(ctx);
 			for (_c in _t.leadingComments) $i{kwLeadingLocal}.push(_c);
 			$i{bodyOnSameLineLocal} = !hasNewlineIn(ctx.input, _kwEndPos, ctx.pos);
+			// ω-cond-comp-elseBody-pad-stash: propagate the post-kw
+			// newline/blank signal forward so the loop's first-iteration
+			// `collectTrivia` (which drains `ctx.pendingTrivia`) sees it
+			// and sets `_arr[0].newlineBefore = true`. Without this stash
+			// the writer's `_padHardline` switch (`triviaTryparseStarExpr`)
+			// reads false on the first body element and `#else\nimport\n
+			// #end` round-trips flat as `#else import #end`. Sister non-kw
+			// branch below already does the equivalent stash; the kw
+			// branch lacked the producer despite sharing the downstream
+			// drainer (`Codegen.collectTriviaField`). leadingComments
+			// drained into kwLeading above — re-stashing would emit them
+			// twice (once attached to the kw, once on body[0]).
+			if (_t.newlineBefore || _t.blankBefore || _t.blankAfterLeadingComments) ctx.pendingTrivia = {
+				blankBefore: _t.blankBefore,
+				blankAfterLeadingComments: _t.blankAfterLeadingComments,
+				newlineBefore: _t.newlineBefore,
+				leadingComments: [],
+			};
 		} else if (ctx.trivia) macro {
 			final _t = collectTrivia(ctx);
 			if (_t.leadingComments.length > 0 || _t.blankBefore || _t.blankAfterLeadingComments || _t.newlineBefore) ctx.pendingTrivia = _t;
