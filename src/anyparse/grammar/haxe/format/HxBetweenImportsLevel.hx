@@ -12,13 +12,18 @@ package anyparse.grammar.haxe.format;
  * `pathDiffers(prevPath, currPath, opt.betweenImportsLevel)` returns
  * `true`. `All` always returns `true` (one blank between every pair);
  * the `*LevelPackage` cases compare the first N dot-separated segments
- * of each path; `FullPackage` compares the entire path.
+ * of the **package** (path with the last segment dropped) of each side;
+ * `FullPackage` compares the entire package (still drop-last). The last
+ * segment is always treated as the module / type name — fork's
+ * `MarkEmptyLines.getImportInfo` builds its `*Package` fields from
+ * `parts.pop()`-ed token list (the popped segment is `moduleName`),
+ * so the comparison axes here mirror that semantic.
  *
  * The path arguments are dotted-ident strings — the import / using
  * payload (`HxTypeName` / `HxWildPath`) round-trips through the writer
- * as-is. For wildcards (`foo.bar.*`) the trailing `.*` participates in
- * the `FullPackage` comparison just like fork's
- * `MarkEmptyLines.getImportInfo`, which uses the verbatim token stream.
+ * as-is. For wildcards (`foo.bar.*`) the trailing `*` is the dropped
+ * "module" segment so the package becomes `foo.bar`, which is what
+ * fork's tokenised path produces too.
  *
  * Note `pathDiffers` returns `true` when the prefixes are the same
  * length but mismatch, AND when one path is shorter than the other at
@@ -57,13 +62,20 @@ enum abstract HxBetweenImportsLevel(Int) from Int to Int {
 	 */
 	public static function pathDiffers(prev:String, curr:String, level:Int):Bool {
 		final lvl:HxBetweenImportsLevel = level;
-		switch lvl {
-			case All: return true;
-			case FullPackage: return prev != curr;
-			case _:
-		}
-		final prevSegs:Array<String> = prev.split('.');
-		final currSegs:Array<String> = curr.split('.');
+		if (lvl == All) return true;
+		// Drop the last segment from both paths before computing the
+		// level prefix — fork's `MarkEmptyLines.getImportInfo:201` does
+		// `parts.pop()` to peel off the module name, then builds its
+		// `*Package` axes from the remaining package parts. Without this
+		// drop our level comparison treats e.g. `haxe.Int64` and
+		// `haxe.Json` as differing at second level (segment[1] = `Int64`
+		// vs `Json`) where fork sees both as package `haxe` and emits
+		// no blank.
+		final prevPkg:String = dropModuleName(prev);
+		final currPkg:String = dropModuleName(curr);
+		if (lvl == FullPackage) return prevPkg != currPkg;
+		final prevSegs:Array<String> = prevPkg == '' ? [] : prevPkg.split('.');
+		final currSegs:Array<String> = currPkg == '' ? [] : currPkg.split('.');
 		// fork's ImportPackageInfo zero-fills missing levels (default-empty
 		// String fields). When prev/curr have fewer than `level` segments,
 		// the missing slots compare as '' — same shape as fork's behaviour.
@@ -73,5 +85,10 @@ enum abstract HxBetweenImportsLevel(Int) from Int to Int {
 			if (p != c) return true;
 		}
 		return false;
+	}
+
+	private static inline function dropModuleName(path:String):String {
+		final lastDot:Int = path.lastIndexOf('.');
+		return lastDot >= 0 ? path.substr(0, lastDot) : '';
 	}
 }
