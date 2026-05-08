@@ -446,8 +446,7 @@ class TriviaTypeSynth {
 	 *     `elseExpr → '#end'` boundary newline.
 	 */
 	private static function isPadTrailingTerminalRef(child:ShapeNode):Bool {
-		if (child.kind != Ref) return false;
-		return child.fmtHasFlag('captureSourceNewlineAfter');
+		return child.kind == Ref && child.fmtHasFlag('captureSourceNewlineAfter');
 	}
 
 	private static function buildNewlineAfterSlot(child:ShapeNode, pos:Position):Field {

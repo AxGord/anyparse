@@ -79,13 +79,16 @@ package anyparse.grammar.haxe;
  * boundary, so no leading-side gap exists to close.
  *
  * Source-driven multi-line shape preservation
- * (`#if cond\n\te1\n#else\n\te2\n#end`) is a partial follow-up: the
- * `elseExpr`-side `_beforeKwNewline_` slot already captures the
- * source's `expr`→`#else` newline through the engine path, so the
- * `#else`-led branch's leading newline is recoverable at write
- * time; the `expr`-side (cond→expr leading newline, expr→`#end`
- * trailing newline) needs a `@:trivia` capture on `expr` plus
- * writer-time space-vs-hardline switching to fully round-trip.
+ * (`#if cond\n\te1\n#else\n\te2\n#end`): the `elseExpr`-side
+ * `_beforeKwNewline_` slot captures the source's `expr`→`#else`
+ * newline through the engine path; the `expr`-side / `elseExpr`-side
+ * trailing boundaries (`expr`→`#elseif`/`#else`/`#end` and
+ * `elseExpr`→`#end`) opt into the terminal `<f>NewlineAfter:Bool`
+ * slot via `@:fmt(captureSourceNewlineAfter)` so `WriterLowering.padTrailingDoc`
+ * can pick `_dhl()` over `_dt(' ')` when the source had a newline at
+ * the boundary (sub-slice 5 of ω-cond-comp-expr-multiline). Full
+ * fixture closure also depends on body indent and opt-kw kw→body
+ * sep — both separate residuals.
  */
 @:peg
 typedef HxConditionalExpr = {
