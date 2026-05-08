@@ -14,6 +14,11 @@ package anyparse.grammar.haxe;
  * <cond>` and the body Star, and between the body Star's last element
  * and the next clause's `#elseif` / the trailing `#else` / `#end`).
  *
+ * Same blank-line cascade meta cluster as `HxConditionalDecl.body`
+ * (slice ω-bug-2c-inner-star) — `betweenSameCtorByLevel` for
+ * import / using same-set adjacency, `onTransitionAcross` for the
+ * import↔using boundary, head/tail transparent for nested `#if`.
+ *
  * Element type is `HxTopLevelDecl` (not bare `HxDecl`) for the same
  * reason `HxConditionalDecl.body` uses it: leading metadata + modifiers
  * inside the clause region parse uniformly through the same meta +
@@ -27,5 +32,11 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxElseifDecl = {
 	@:kw('#elseif') var cond:HxPpCondLit;
-	@:trivia @:tryparse @:fmt(padLeading, padTrailing) var body:Array<HxTopLevelDecl>;
+	@:trivia @:tryparse @:fmt(padLeading, padTrailing)
+	@:fmt(blankLinesOnTransitionAcross('decl', 'ImportDecl', 'ImportWildDecl', '|', 'UsingDecl', 'UsingWildDecl', 'beforeUsing'))
+	@:fmt(blankLinesBetweenSameCtorByLevel('decl', 'ImportDecl', 'ImportWildDecl', 'betweenImportsLevel', 'betweenImports', 'betweenImportsPathDiffers'))
+	@:fmt(blankLinesBetweenSameCtorByLevel('decl', 'UsingDecl', 'UsingWildDecl', 'betweenImportsLevel', 'betweenImports', 'betweenImportsPathDiffers'))
+	@:fmt(blankLinesBetweenSameCtorTailTransparent('decl', 'Conditional', 'betweenImportsTailLeafClassify'))
+	@:fmt(blankLinesBetweenSameCtorHeadTransparent('decl', 'Conditional', 'betweenImportsHeadLeafClassify'))
+	var body:Array<HxTopLevelDecl>;
 };

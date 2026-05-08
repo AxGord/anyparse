@@ -103,6 +103,15 @@ package anyparse.grammar.haxe;
  * via transition cascade with prev=Import + curr=Conditional with
  * import-head leaf in a different subset position).
  *
+ * The five-meta cluster from `blankLinesOnTransitionAcross` through
+ * `blankLinesBetweenSameCtorHeadTransparent` is mirrored on the inner
+ * conditional bodies (`HxConditionalDecl.body`, `HxConditionalDecl.elseBody`,
+ * `HxElseifDecl.body`) by slice ω-bug-2c-inner-star — same arg strings,
+ * so cascade behavior between sibling decls inside `#if … #end` matches
+ * the top-level Star. Edits to the meta arg strings here MUST be
+ * mirrored at all three sites in lockstep (no built-in cluster-include
+ * mechanism for Haxe positional metadata).
+ *
  * Predicate-gated variants `@:fmt(blankLinesAfterCtorIf(classifierField,
  * predicateName, Ctor1, …, optField))` and the symmetric `…BeforeCtorIf`
  * (slice ω-after-multiline) accept an extra `predicateName` arg right

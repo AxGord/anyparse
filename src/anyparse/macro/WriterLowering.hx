@@ -2531,11 +2531,18 @@ class WriterLowering {
 				// `HxCaseBranch.body` / `HxDefaultBranch.stmts` to mirror
 				// fork's `MarkSameLine.markExpressionCase` body-shape check.
 				final refuseFlatOnComplex:Bool = starNode.fmtHasFlag('refuseFlatOnComplexExpr');
+				// ω-bug-2c-inner-star — read the same cascade `@:fmt(blankLines*)`
+				// metas that the EOF-Star branch reads, so an inner Star (e.g.
+				// `HxConditionalDecl.body`) opted in via the metas drives the
+				// blank-line cascade between its sibling elements.
+				final cascadeInfos:CascadeInfos = readCascadeInfosFromStar(starNode, elemRefName);
 				parts.push(triviaTryparseStarExpr(
 					fieldAccess, elemFn, sepExpr, sameLineName != null, nestBody,
 					tryparseTrailBB, tryparseTrailLC, tryparseTrailBA, firstSepOverride, subsequentSepOverride,
 					caseBodyFlagNames, flatChildOptPairs, tryparsePadLeading, tryparsePadTrailing,
-					propagateExprPosition, refuseFlatOnComplex
+					propagateExprPosition, refuseFlatOnComplex,
+					cascadeInfos.afterCtorInfos, cascadeInfos.beforeCtorInfos,
+					cascadeInfos.betweenCtorInfos, cascadeInfos.transitionAcrossInfos
 				));
 				return;
 			}
@@ -2613,119 +2620,11 @@ class WriterLowering {
 				));
 			} else if (isLastField) {
 				if (openText != null) parts.push(macro _dt($v{openText}));
-				final afterCtorAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesAfterCtor');
-				final afterCtorInfos:Array<AfterCtorBlankInfo> = [
-					for (args in afterCtorAllArgs) buildAfterCtorBlankInfo(elemRefName, args, null)
-				];
-				final afterCtorIfAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesAfterCtorIf');
-				for (args in afterCtorIfAllArgs)
-					afterCtorInfos.push(buildAfterCtorBlankInfoIf(elemRefName, args));
-				final beforeCtorAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBeforeCtor');
-				final beforeCtorInfos:Array<BeforeCtorBlankInfo> = [
-					for (args in beforeCtorAllArgs) buildBeforeCtorBlankInfo(elemRefName, args, null)
-				];
-				final beforeCtorIfAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBeforeCtorIf');
-				for (args in beforeCtorIfAllArgs)
-					beforeCtorInfos.push(buildBeforeCtorBlankInfoIf(elemRefName, args));
-				final betweenCtorAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBetweenSameCtorByLevel');
-				// ω-cond-comp-tail-transparency / ω-imports-using-transition —
-				// read sibling
-				// `blankLinesBetweenSameCtorTailTransparent(classifier, ctor,
-				// adapter)` and
-				// `blankLinesBetweenSameCtorHeadTransparent(classifier, ctor,
-				// adapter)` metas. Group by classifier field name; merge each
-				// group's transparent ctor list + (single-shared) tail/head
-				// adapter into the between info(s) sharing that classifier.
-				// Multiple metas with the same classifier MUST agree on each
-				// direction's adapter (one walker per Star, not per-ctor);
-				// compile-time error otherwise. Tail and head transparent
-				// ctor sets MUST also agree — a ctor that's transparent for
-				// tail is transparent for head too (a Conditional wraps both
-				// ends of its body).
-				final tailTransparentAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBetweenSameCtorTailTransparent');
-				final headTransparentAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBetweenSameCtorHeadTransparent');
-				final transparentByClassifier:Map<String, {ctors:Array<String>, tailAdapter:Null<String>, headAdapter:Null<String>}> = [];
-				inline function ingestTransparent(args:Array<String>, isTail:Bool, metaName:String):Void {
-					if (args.length != 3)
-						Context.fatalError(
-							'WriterLowering: @:fmt($metaName) expects exactly 3 string args (classifierField, ctorName, adapterOptField), got ${args.length}',
-							Context.currentPos()
-						);
-					final cf:String = args[0];
-					final ctor:String = args[1];
-					final adapter:String = args[2];
-					var entry:Null<{ctors:Array<String>, tailAdapter:Null<String>, headAdapter:Null<String>}> = transparentByClassifier[cf];
-					if (entry == null) {
-						entry = {ctors: [], tailAdapter: null, headAdapter: null};
-						transparentByClassifier[cf] = entry;
-					}
-					if (entry.ctors.indexOf(ctor) < 0) entry.ctors.push(ctor);
-					if (isTail) {
-						if (entry.tailAdapter != null && entry.tailAdapter != adapter)
-							Context.fatalError(
-								'WriterLowering: @:fmt($metaName) adapter mismatch for classifier "$cf" — got "${entry.tailAdapter}" and "$adapter"; one shared tail adapter per Star+classifier',
-								Context.currentPos()
-							);
-						entry.tailAdapter = adapter;
-					} else {
-						if (entry.headAdapter != null && entry.headAdapter != adapter)
-							Context.fatalError(
-								'WriterLowering: @:fmt($metaName) adapter mismatch for classifier "$cf" — got "${entry.headAdapter}" and "$adapter"; one shared head adapter per Star+classifier',
-								Context.currentPos()
-							);
-						entry.headAdapter = adapter;
-					}
-				}
-				for (args in tailTransparentAllArgs)
-					ingestTransparent(args, true, 'blankLinesBetweenSameCtorTailTransparent');
-				for (args in headTransparentAllArgs)
-					ingestTransparent(args, false, 'blankLinesBetweenSameCtorHeadTransparent');
-				final betweenCtorInfos:Array<BetweenCtorBlankInfo> = [
-					for (args in betweenCtorAllArgs) {
-						final classifier:String = args[0];
-						final tt:Null<{ctors:Array<String>, tailAdapter:Null<String>, headAdapter:Null<String>}> = transparentByClassifier[classifier];
-						buildBetweenCtorBlankInfo(
-							elemRefName, args,
-							tt != null ? tt.ctors : [],
-							tt != null ? tt.tailAdapter : null,
-							tt != null ? tt.headAdapter : null
-						);
-					}
-				];
-				// ω-imports-using-transition — read sibling
-				// `blankLinesOnTransitionAcross(classifier, CtorA…, '|',
-				// CtorB…, optField)` metas. Reuse the same
-				// `transparentByClassifier` map as the betweenSameCtor
-				// cascade — head/tail adapters are shared per Star+
-				// classifier, regardless of which cascade reads them.
-				final transitionAcrossAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesOnTransitionAcross');
-				final transitionAcrossInfos:Array<TransitionAcrossInfo> = [
-					for (args in transitionAcrossAllArgs) {
-						final classifier:String = args[0];
-						final tt:Null<{ctors:Array<String>, tailAdapter:Null<String>, headAdapter:Null<String>}> = transparentByClassifier[classifier];
-						buildTransitionAcrossInfo(
-							elemRefName, args,
-							tt != null ? tt.ctors : [],
-							tt != null ? tt.tailAdapter : null,
-							tt != null ? tt.headAdapter : null
-						);
-					}
-				];
-				// Validate every transparent meta has at least one matching
-				// between OR transition meta — otherwise the transparent
-				// declaration is dead code.
-				for (cf in transparentByClassifier.keys()) {
-					final hasBetween:Bool = Lambda.exists(betweenCtorInfos, info -> info.classifierFieldName == cf);
-					final hasTransition:Bool = Lambda.exists(transitionAcrossInfos, info -> info.classifierFieldName == cf);
-					if (!hasBetween && !hasTransition)
-						Context.fatalError(
-							'WriterLowering: @:fmt(blankLinesBetweenSameCtor{Tail,Head}Transparent) classifier "$cf" has no matching @:fmt(blankLinesBetweenSameCtorByLevel) or @:fmt(blankLinesOnTransitionAcross) on the same Star',
-							Context.currentPos()
-						);
-				}
+				final cascadeInfos:CascadeInfos = readCascadeInfosFromStar(starNode, elemRefName);
 				parts.push(triviaEofStarExpr(
 					fieldAccess, trailBBAccess, trailLCAccess, elemFn,
-					afterCtorInfos, beforeCtorInfos, betweenCtorInfos, transitionAcrossInfos
+					cascadeInfos.afterCtorInfos, cascadeInfos.beforeCtorInfos,
+					cascadeInfos.betweenCtorInfos, cascadeInfos.transitionAcrossInfos
 				));
 			} else {
 				Context.fatalError('WriterLowering: @:trivia Star without @:trail must be the last field', Context.currentPos());
@@ -5490,6 +5389,344 @@ class WriterLowering {
 	}
 
 	/**
+	 * ω-bug-2c-inner-star — extract the cascade emit machinery shared by
+	 * `triviaEofStarExpr` (top-level EOF-terminated Star) and
+	 * `triviaTryparseStarExpr` (inner tryparse-terminated Star, e.g.
+	 * `HxConditionalDecl.body`). Returns five Exprs ready to splice into
+	 * the consumer's runtime block:
+	 *
+	 *  - `initPrev`   — single EVars statement declaring all `_prev*`
+	 *                   trackers (placed once, in the outer scope, before
+	 *                   the while loop).
+	 *  - `initCurr`   — single EVars statement declaring all `_curr*`
+	 *                   trackers (placed inside the while body, before
+	 *                   `currCompute`).
+	 *  - `currCompute`— single EBlock of assignments computing `_curr*`
+	 *                   from `_t.node` classifier values.
+	 *  - `trackPrev`  — single EBlock of `_prev* = _curr*` assignments
+	 *                   (end of iteration).
+	 *  - `blanksCount`— Int-typed cascade ternary, fallback
+	 *                   `(_t.blankBefore ? 1 : 0)`. Empty info arrays leave
+	 *                   only the fallback, so consumers without cascade
+	 *                   metas behave byte-identically (the `(0|1)` count
+	 *                   matches the existing `if (blankBefore) push(\\n)`
+	 *                   path).
+	 *
+	 * The emitted Exprs reference runtime locals defined in the consumer's
+	 * scope: `_t` (per-iteration `_arr[_si]` binding), `opt` (writer
+	 * options parameter), and `_v0` (bound by ctor pattern inside switch
+	 * cases — local to each pattern body via `BetweenCtorPattern` /
+	 * `TransitionAcrossPattern`).
+	 *
+	 * Sister to `readCascadeInfosFromStar`, which reads the
+	 * `@:fmt(blankLines*)` metas off the Star ShapeNode and produces the
+	 * info arrays consumed here. The two helpers together let any Star
+	 * emit kind opt in to the cascade machinery without duplicating its
+	 * implementation.
+	 */
+	private static function buildCascadeEmit(
+		afterInfos:Array<AfterCtorBlankInfo>,
+		beforeInfos:Array<BeforeCtorBlankInfo>,
+		betweenInfos:Array<BetweenCtorBlankInfo>,
+		transitionInfos:Array<TransitionAcrossInfo>
+	):CascadeEmit {
+		final pos:Position = Context.currentPos();
+
+		final prevVars:Array<Var> = [];
+		final currVars:Array<Var> = [];
+		final currCompute:Array<Expr> = [];
+		final trackPrev:Array<Expr> = [];
+
+		// After-ctor cascade — single-axis kind tracker per info.
+		for (i in 0...afterInfos.length) {
+			final info:AfterCtorBlankInfo = afterInfos[i];
+			prevVars.push({name: '_prevKindAfter' + i, type: macro:Int, expr: macro 0});
+			currVars.push({name: '_currKindAfter' + i, type: macro:Int, expr: macro 0});
+			final classifierAccess:Expr = {expr: EField(macro _t.node, info.classifierFieldName), pos: pos};
+			final switchExpr:Expr = {expr: ESwitch(classifierAccess, info.classifyCases, null), pos: pos};
+			final lhs:Expr = {expr: EConst(CIdent('_currKindAfter' + i)), pos: pos};
+			currCompute.push(macro $lhs = $switchExpr);
+			final tlhs:Expr = {expr: EConst(CIdent('_prevKindAfter' + i)), pos: pos};
+			final trhs:Expr = {expr: EConst(CIdent('_currKindAfter' + i)), pos: pos};
+			trackPrev.push(macro $tlhs = $trhs);
+		}
+
+		// Before-ctor cascade — same shape as after-ctor, separate idents.
+		for (i in 0...beforeInfos.length) {
+			final info:BeforeCtorBlankInfo = beforeInfos[i];
+			prevVars.push({name: '_prevKindBefore' + i, type: macro:Int, expr: macro 0});
+			currVars.push({name: '_currKindBefore' + i, type: macro:Int, expr: macro 0});
+			final classifierAccess:Expr = {expr: EField(macro _t.node, info.classifierFieldName), pos: pos};
+			final switchExpr:Expr = {expr: ESwitch(classifierAccess, info.classifyCases, null), pos: pos};
+			final lhs:Expr = {expr: EConst(CIdent('_currKindBefore' + i)), pos: pos};
+			currCompute.push(macro $lhs = $switchExpr);
+			final tlhs:Expr = {expr: EConst(CIdent('_prevKindBefore' + i)), pos: pos};
+			final trhs:Expr = {expr: EConst(CIdent('_currKindBefore' + i)), pos: pos};
+			trackPrev.push(macro $tlhs = $trhs);
+		}
+
+		// Between-ctor cascade — kind+path trackers, head AND tail axes,
+		// transparent-wrapper support via the shared head/tail adapter pair.
+		for (i in 0...betweenInfos.length) {
+			final info:BetweenCtorBlankInfo = betweenInfos[i];
+			prevVars.push({name: '_prevTailKindBetween' + i, type: macro:Int, expr: macro 0});
+			prevVars.push({name: '_prevTailPathBetween' + i, type: macro:String, expr: macro ''});
+			currVars.push({name: '_currTailKindBetween' + i, type: macro:Int, expr: macro 0});
+			currVars.push({name: '_currTailPathBetween' + i, type: macro:String, expr: macro ''});
+			currVars.push({name: '_currHeadKindBetween' + i, type: macro:Int, expr: macro 0});
+			currVars.push({name: '_currHeadPathBetween' + i, type: macro:String, expr: macro ''});
+
+			final classifierAccess:Expr = {expr: EField(macro _t.node, info.classifierFieldName), pos: pos};
+			final tailKindIdent:Expr = {expr: EConst(CIdent('_currTailKindBetween' + i)), pos: pos};
+			final tailPathIdent:Expr = {expr: EConst(CIdent('_currTailPathBetween' + i)), pos: pos};
+			final headKindIdent:Expr = {expr: EConst(CIdent('_currHeadKindBetween' + i)), pos: pos};
+			final headPathIdent:Expr = {expr: EConst(CIdent('_currHeadPathBetween' + i)), pos: pos};
+
+			final ctorNameMatch:Expr = {
+				var acc:Expr = macro false;
+				for (cn in info.matchedCtorNames) {
+					final lit:Expr = {expr: EConst(CString(cn)), pos: pos};
+					acc = macro $acc || _r.ctorName == $lit;
+				}
+				acc;
+			};
+			final tailBody:Expr = if (info.tailAdapterOptField == null)
+				macro { $tailKindIdent = 0; $tailPathIdent = ''; }
+			else {
+				final adapterAccess:Expr = {expr: EField(macro opt, info.tailAdapterOptField), pos: pos};
+				macro {
+					final _r = $adapterAccess != null ? $adapterAccess(_v0) : null;
+					if (_r != null && $ctorNameMatch) {
+						$tailKindIdent = 1;
+						$tailPathIdent = _r.path;
+					} else {
+						$tailKindIdent = 0;
+						$tailPathIdent = '';
+					}
+				};
+			}
+			final headBody:Expr = if (info.headAdapterOptField == null)
+				macro { $headKindIdent = 0; $headPathIdent = ''; }
+			else {
+				final adapterAccess:Expr = {expr: EField(macro opt, info.headAdapterOptField), pos: pos};
+				macro {
+					final _r = $adapterAccess != null ? $adapterAccess(_v0) : null;
+					if (_r != null && $ctorNameMatch) {
+						$headKindIdent = 1;
+						$headPathIdent = _r.path;
+					} else {
+						$headKindIdent = 0;
+						$headPathIdent = '';
+					}
+				};
+			}
+			final transparentBody:Expr = macro {
+				$tailBody;
+				$headBody;
+			};
+			final cases:Array<Case> = [
+				for (cp in info.ctorPatterns) {
+					values: [cp.pattern],
+					guard: null,
+					expr: cp.isMatch
+						? macro {
+							$tailKindIdent = 1;
+							$tailPathIdent = _v0;
+							$headKindIdent = 1;
+							$headPathIdent = _v0;
+						}
+						: cp.isTransparent
+							? transparentBody
+							: macro {
+								$tailKindIdent = 0;
+								$tailPathIdent = '';
+								$headKindIdent = 0;
+								$headPathIdent = '';
+							},
+				}
+			];
+			currCompute.push({expr: ESwitch(classifierAccess, cases, null), pos: pos});
+
+			final pkLhs:Expr = {expr: EConst(CIdent('_prevTailKindBetween' + i)), pos: pos};
+			final pkRhs:Expr = {expr: EConst(CIdent('_currTailKindBetween' + i)), pos: pos};
+			final ppLhs:Expr = {expr: EConst(CIdent('_prevTailPathBetween' + i)), pos: pos};
+			final ppRhs:Expr = {expr: EConst(CIdent('_currTailPathBetween' + i)), pos: pos};
+			trackPrev.push(macro $pkLhs = $pkRhs);
+			trackPrev.push(macro $ppLhs = $ppRhs);
+		}
+
+		// Cross-subset transition cascade — A/B subset trackers, head AND
+		// tail, transparent-wrapper support via head/tail adapter pair.
+		for (i in 0...transitionInfos.length) {
+			final info:TransitionAcrossInfo = transitionInfos[i];
+			prevVars.push({name: '_prevTailKindAcrossA' + i, type: macro:Int, expr: macro 0});
+			prevVars.push({name: '_prevTailKindAcrossB' + i, type: macro:Int, expr: macro 0});
+			currVars.push({name: '_currTailKindAcrossA' + i, type: macro:Int, expr: macro 0});
+			currVars.push({name: '_currTailKindAcrossB' + i, type: macro:Int, expr: macro 0});
+			currVars.push({name: '_currHeadKindAcrossA' + i, type: macro:Int, expr: macro 0});
+			currVars.push({name: '_currHeadKindAcrossB' + i, type: macro:Int, expr: macro 0});
+
+			final classifierAccess:Expr = {expr: EField(macro _t.node, info.classifierFieldName), pos: pos};
+			final tkaIdent:Expr = {expr: EConst(CIdent('_currTailKindAcrossA' + i)), pos: pos};
+			final tkbIdent:Expr = {expr: EConst(CIdent('_currTailKindAcrossB' + i)), pos: pos};
+			final hkaIdent:Expr = {expr: EConst(CIdent('_currHeadKindAcrossA' + i)), pos: pos};
+			final hkbIdent:Expr = {expr: EConst(CIdent('_currHeadKindAcrossB' + i)), pos: pos};
+			inline function buildAdapterMatchExpr(adapterField:Null<String>, names:Array<String>):Expr {
+				if (adapterField == null) return macro 0;
+				var acc:Expr = macro false;
+				for (cn in names) {
+					final lit:Expr = {expr: EConst(CString(cn)), pos: pos};
+					acc = macro $acc || _r.ctorName == $lit;
+				}
+				return macro (_r != null && $acc) ? 1 : 0;
+			}
+			final tailAdapterAccess:Null<Expr> = info.tailAdapterOptField == null
+				? null
+				: {expr: EField(macro opt, info.tailAdapterOptField), pos: pos};
+			final headAdapterAccess:Null<Expr> = info.headAdapterOptField == null
+				? null
+				: {expr: EField(macro opt, info.headAdapterOptField), pos: pos};
+			final tailMatchA:Expr = buildAdapterMatchExpr(info.tailAdapterOptField, info.matchedCtorNamesA);
+			final tailMatchB:Expr = buildAdapterMatchExpr(info.tailAdapterOptField, info.matchedCtorNamesB);
+			final headMatchA:Expr = buildAdapterMatchExpr(info.headAdapterOptField, info.matchedCtorNamesA);
+			final headMatchB:Expr = buildAdapterMatchExpr(info.headAdapterOptField, info.matchedCtorNamesB);
+			final transparentBody:Expr = if (tailAdapterAccess == null && headAdapterAccess == null)
+				macro {
+					$tkaIdent = 0; $tkbIdent = 0;
+					$hkaIdent = 0; $hkbIdent = 0;
+				}
+			else if (headAdapterAccess == null)
+				macro {
+					final _r = $tailAdapterAccess != null ? $tailAdapterAccess(_v0) : null;
+					$tkaIdent = $tailMatchA;
+					$tkbIdent = $tailMatchB;
+					$hkaIdent = 0;
+					$hkbIdent = 0;
+				}
+			else if (tailAdapterAccess == null)
+				macro {
+					final _r = $headAdapterAccess != null ? $headAdapterAccess(_v0) : null;
+					$hkaIdent = $headMatchA;
+					$hkbIdent = $headMatchB;
+					$tkaIdent = 0;
+					$tkbIdent = 0;
+				}
+			else
+				macro {
+					final _r = $tailAdapterAccess != null ? $tailAdapterAccess(_v0) : null;
+					$tkaIdent = $tailMatchA;
+					$tkbIdent = $tailMatchB;
+					{
+						final _r = $headAdapterAccess != null ? $headAdapterAccess(_v0) : null;
+						$hkaIdent = $headMatchA;
+						$hkbIdent = $headMatchB;
+					}
+				};
+			final cases:Array<Case> = [
+				for (cp in info.ctorPatterns) {
+					values: [cp.pattern],
+					guard: null,
+					expr: switch cp.subset {
+						case 1: macro {
+							$tkaIdent = 1; $tkbIdent = 0;
+							$hkaIdent = 1; $hkbIdent = 0;
+						};
+						case 2: macro {
+							$tkaIdent = 0; $tkbIdent = 1;
+							$hkaIdent = 0; $hkbIdent = 1;
+						};
+						case 3: transparentBody;
+						case _: macro {
+							$tkaIdent = 0; $tkbIdent = 0;
+							$hkaIdent = 0; $hkbIdent = 0;
+						};
+					},
+				}
+			];
+			currCompute.push({expr: ESwitch(classifierAccess, cases, null), pos: pos});
+
+			final pkaLhs:Expr = {expr: EConst(CIdent('_prevTailKindAcrossA' + i)), pos: pos};
+			final pkaRhs:Expr = {expr: EConst(CIdent('_currTailKindAcrossA' + i)), pos: pos};
+			final pkbLhs:Expr = {expr: EConst(CIdent('_prevTailKindAcrossB' + i)), pos: pos};
+			final pkbRhs:Expr = {expr: EConst(CIdent('_currTailKindAcrossB' + i)), pos: pos};
+			trackPrev.push(macro $pkaLhs = $pkaRhs);
+			trackPrev.push(macro $pkbLhs = $pkbRhs);
+		}
+
+		// Build cascade ternary from innermost (source-driven) outward —
+		// before in reverse, then between in reverse, then transition in
+		// reverse, then after in reverse. Final priority (outermost wins
+		// first): after[0..N] > between[0..N] > transition[0..N] >
+		// before[0..N] > source-driven `(_t.blankBefore ? 1 : 0)`.
+		var blanksCountExpr:Expr = macro (_t.blankBefore ? 1 : 0);
+		for (i in 0...beforeInfos.length) {
+			final idx:Int = beforeInfos.length - 1 - i;
+			final info:BeforeCtorBlankInfo = beforeInfos[idx];
+			final beforeAccess:Expr = {expr: EField(macro opt, info.optField), pos: pos};
+			final currIdent:Expr = {expr: EConst(CIdent('_currKindBefore' + idx)), pos: pos};
+			final prevIdent:Expr = {expr: EConst(CIdent('_prevKindBefore' + idx)), pos: pos};
+			final fallback:Expr = blanksCountExpr;
+			blanksCountExpr = macro ($currIdent == 1 && $prevIdent != 1 ? $beforeAccess : $fallback);
+		}
+		for (i in 0...betweenInfos.length) {
+			final idx:Int = betweenInfos.length - 1 - i;
+			final info:BetweenCtorBlankInfo = betweenInfos[idx];
+			final countAccess:Expr = {expr: EField(macro opt, info.countOptField), pos: pos};
+			final levelAccess:Expr = {expr: EField(macro opt, info.levelOptField), pos: pos};
+			final adapterAccess:Expr = {expr: EField(macro opt, info.adapterOptField), pos: pos};
+			final currKindIdent:Expr = {expr: EConst(CIdent('_currHeadKindBetween' + idx)), pos: pos};
+			final prevKindIdent:Expr = {expr: EConst(CIdent('_prevTailKindBetween' + idx)), pos: pos};
+			final currPathIdent:Expr = {expr: EConst(CIdent('_currHeadPathBetween' + idx)), pos: pos};
+			final prevPathIdent:Expr = {expr: EConst(CIdent('_prevTailPathBetween' + idx)), pos: pos};
+			final differCall:Expr = {expr: ECall(adapterAccess, [prevPathIdent, currPathIdent, levelAccess]), pos: pos};
+			final fallback:Expr = blanksCountExpr;
+			// Null-guard the adapter call — `WriteOptions.<adapterOptField>` is
+			// declared `Null<(String,String,Int)->Bool>`, and the consuming
+			// writer files (HxModuleWriter / HaxeModuleTriviaWriter, both
+			// `@:nullSafety(Strict)`) reject a bare `opt.f(...)` call. The `&&`
+			// short-circuit on `$adapterAccess != null` keeps the path inert
+			// when no adapter is wired (cascade falls through to the fallback /
+			// source-driven blank count).
+			blanksCountExpr = macro ($currKindIdent == 1 && $prevKindIdent == 1 && $adapterAccess != null && $differCall ? $countAccess : $fallback);
+		}
+		for (i in 0...transitionInfos.length) {
+			final idx:Int = transitionInfos.length - 1 - i;
+			final info:TransitionAcrossInfo = transitionInfos[idx];
+			final countAccess:Expr = {expr: EField(macro opt, info.countOptField), pos: pos};
+			final currHKAIdent:Expr = {expr: EConst(CIdent('_currHeadKindAcrossA' + idx)), pos: pos};
+			final currHKBIdent:Expr = {expr: EConst(CIdent('_currHeadKindAcrossB' + idx)), pos: pos};
+			final prevTKAIdent:Expr = {expr: EConst(CIdent('_prevTailKindAcrossA' + idx)), pos: pos};
+			final prevTKBIdent:Expr = {expr: EConst(CIdent('_prevTailKindAcrossB' + idx)), pos: pos};
+			final fallback:Expr = blanksCountExpr;
+			blanksCountExpr = macro (
+				($currHKAIdent == 1 && $prevTKBIdent == 1)
+				|| ($currHKBIdent == 1 && $prevTKAIdent == 1)
+				? $countAccess : $fallback
+			);
+		}
+		for (i in 0...afterInfos.length) {
+			final idx:Int = afterInfos.length - 1 - i;
+			final info:AfterCtorBlankInfo = afterInfos[idx];
+			final afterAccess:Expr = {expr: EField(macro opt, info.optField), pos: pos};
+			final prevIdent:Expr = {expr: EConst(CIdent('_prevKindAfter' + idx)), pos: pos};
+			final fallback:Expr = blanksCountExpr;
+			blanksCountExpr = macro ($prevIdent == 1 ? $afterAccess : $fallback);
+		}
+
+		final initPrev:Expr = prevVars.length > 0 ? {expr: EVars(prevVars), pos: pos} : (macro {});
+		final initCurr:Expr = currVars.length > 0 ? {expr: EVars(currVars), pos: pos} : (macro {});
+		final currComputeExpr:Expr = currCompute.length > 0 ? {expr: EBlock(currCompute), pos: pos} : (macro {});
+		final trackPrevExpr:Expr = trackPrev.length > 0 ? {expr: EBlock(trackPrev), pos: pos} : (macro {});
+		return {
+			initPrev: initPrev,
+			initCurr: initCurr,
+			currCompute: currComputeExpr,
+			trackPrev: trackPrevExpr,
+			blanksCount: blanksCountExpr,
+		};
+	}
+
+	/**
 	 * Build the Doc expression for an EOF-mode trivia Star field
 	 * (last field, no `@:trail`). Single hardline between elements
 	 * instead of the plain mode's forced double hardline, with the extra
@@ -5515,451 +5752,26 @@ class WriterLowering {
 		final betweenInfos:Array<BetweenCtorBlankInfo> = betweenCtorInfos ?? [];
 		final transitionInfos:Array<TransitionAcrossInfo> = transitionAcrossInfos ?? [];
 		final pos:Position = Context.currentPos();
-		// ω-after-package — when the previous element matches one of the
-		// named ctors, the writer overrides the source-captured blank-
-		// line count with `opt.<optField>` blank lines (matching haxe-
-		// formatter's `emptyLines.afterPackage` count semantics — `1`
-		// inserts one blank line even when the source had none, `0`
-		// strips any blank line even when the source carried them).
-		//
-		// ω-imports-using-blank — symmetric "before-ctor" override: when
-		// the current element matches one of the named ctors AND the
-		// previous element does NOT match the same set, the writer
-		// overrides the source-captured count with `opt.<optField>`
-		// blank lines (drives the `import → using` transition). Cascade
-		// order: afterCtor wins first, then beforeCtor, then source.
-		// For all other element pairs the trivia channel's binary
-		// `blankBefore` flag drives a single blank line as before.
-		//
-		// ω-after-typedecl — the after/before ctor knobs accept multiple
-		// `@:fmt(blankLinesAfterCtor(...))` / `blankLinesBeforeCtor(...)`
-		// entries on the same Star, each with its own ctor set and opt
-		// field. Each entry produces an independent kind-tracker variable
-		// (`_prevKindAfterN` / `_prevKindBeforeN`); the runtime cascade
-		// runs them in source order — first afterInfos[0], then
-		// afterInfos[1], …, then beforeInfos[0], …, then source-driven.
-		// Knobs read from the source-order chain, so authors order the
-		// entries from highest priority (afterPackage) downward.
-		//
-		// ω-imports-using-between — same-kind pair gate with path-level
-		// awareness. Adds `@:fmt(blankLinesBetweenSameCtorByLevel(...))`
-		// alongside the after/before families. Per-entry trackers carry
-		// both a kind flag (`_prevTailKindBetweenN` / `_currTailKindBetweenN`)
-		// AND a path String (`_prevTailPathBetweenN` / `_currTailPathBetweenN`)
-		// captured from the matched ctor's first positional arg via
-		// `_v0` binding. Cascade priority: afterInfos[*] > betweenInfos[*]
-		// > beforeInfos[*] > source-driven `blankBefore`. Mutually
-		// exclusive in practice on import/using boundaries (same-kind
-		// vs kind-switch on the import-set ↔ using-set partition).
-		final initPrevKindExprs:Array<Expr> = [
-			for (i in 0...afterInfos.length) {
-				final name:String = '_prevKindAfter' + i;
-				macro var $name:Int = 0;
-			}
-		];
-		final initCurrKindExprs:Array<Expr> = [
-			for (i in 0...afterInfos.length) {
-				final name:String = '_currKindAfter' + i;
-				macro var $name:Int = 0;
-			}
-		];
-		final currKindComputeExprs:Array<Expr> = [
-			for (i in 0...afterInfos.length) {
-				final info:AfterCtorBlankInfo = afterInfos[i];
-				final classifierAccess:Expr = {
-					expr: EField(macro _t.node, info.classifierFieldName),
-					pos: pos,
-				};
-				final switchExpr:Expr = {
-					expr: ESwitch(classifierAccess, info.classifyCases, null),
-					pos: pos,
-				};
-				final lhs:Expr = {expr: EConst(CIdent('_currKindAfter' + i)), pos: pos};
-				macro $lhs = $switchExpr;
-			}
-		];
-		final trackPrevKindExprs:Array<Expr> = [
-			for (i in 0...afterInfos.length) {
-				final lhs:Expr = {expr: EConst(CIdent('_prevKindAfter' + i)), pos: pos};
-				final rhs:Expr = {expr: EConst(CIdent('_currKindAfter' + i)), pos: pos};
-				macro $lhs = $rhs;
-			}
-		];
-		final initPrevKindBeforeExprs:Array<Expr> = [
-			for (i in 0...beforeInfos.length) {
-				final name:String = '_prevKindBefore' + i;
-				macro var $name:Int = 0;
-			}
-		];
-		final initCurrKindBeforeExprs:Array<Expr> = [
-			for (i in 0...beforeInfos.length) {
-				final name:String = '_currKindBefore' + i;
-				macro var $name:Int = 0;
-			}
-		];
-		final currKindBeforeComputeExprs:Array<Expr> = [
-			for (i in 0...beforeInfos.length) {
-				final info:BeforeCtorBlankInfo = beforeInfos[i];
-				final classifierAccess:Expr = {
-					expr: EField(macro _t.node, info.classifierFieldName),
-					pos: pos,
-				};
-				final switchExpr:Expr = {
-					expr: ESwitch(classifierAccess, info.classifyCases, null),
-					pos: pos,
-				};
-				final lhs:Expr = {expr: EConst(CIdent('_currKindBefore' + i)), pos: pos};
-				macro $lhs = $switchExpr;
-			}
-		];
-		final trackPrevKindBeforeExprs:Array<Expr> = [
-			for (i in 0...beforeInfos.length) {
-				final lhs:Expr = {expr: EConst(CIdent('_prevKindBefore' + i)), pos: pos};
-				final rhs:Expr = {expr: EConst(CIdent('_currKindBefore' + i)), pos: pos};
-				macro $lhs = $rhs;
-			}
-		];
-		// ω-imports-using-between — same-kind pair gate with path-level
-		// awareness. Per-info trackers carry both a kind flag (1 if
-		// matched, 0 otherwise) AND the matched ctor's first positional
-		// arg as a path String. The cascade ternary fires
-		// `opt.<countOptField>` blank lines when both prev and curr
-		// match the same set AND the runtime helper named by
-		// `pathDifferFQN` returns `true` for (prevPath, currPath, level).
-		final initPrevKindBetweenExprs:Array<Expr> = [];
-		for (i in 0...betweenInfos.length) {
-			final kn:String = '_prevTailKindBetween' + i;
-			final pn:String = '_prevTailPathBetween' + i;
-			initPrevKindBetweenExprs.push(macro var $kn:Int = 0);
-			initPrevKindBetweenExprs.push(macro var $pn:String = '');
-		}
-		final initCurrKindBetweenExprs:Array<Expr> = [];
-		for (i in 0...betweenInfos.length) {
-			final tkn:String = '_currTailKindBetween' + i;
-			final tpn:String = '_currTailPathBetween' + i;
-			final hkn:String = '_currHeadKindBetween' + i;
-			final hpn:String = '_currHeadPathBetween' + i;
-			initCurrKindBetweenExprs.push(macro var $tkn:Int = 0);
-			initCurrKindBetweenExprs.push(macro var $tpn:String = '');
-			initCurrKindBetweenExprs.push(macro var $hkn:Int = 0);
-			initCurrKindBetweenExprs.push(macro var $hpn:String = '');
-		}
-		final currKindBetweenComputeExprs:Array<Expr> = [
-			for (i in 0...betweenInfos.length) {
-				final info:BetweenCtorBlankInfo = betweenInfos[i];
-				final classifierAccess:Expr = {
-					expr: EField(macro _t.node, info.classifierFieldName),
-					pos: pos,
-				};
-				final tailKindIdent:Expr = {expr: EConst(CIdent('_currTailKindBetween' + i)), pos: pos};
-				final tailPathIdent:Expr = {expr: EConst(CIdent('_currTailPathBetween' + i)), pos: pos};
-				final headKindIdent:Expr = {expr: EConst(CIdent('_currHeadKindBetween' + i)), pos: pos};
-				final headPathIdent:Expr = {expr: EConst(CIdent('_currHeadPathBetween' + i)), pos: pos};
-				// ω-cond-comp-tail-transparency / ω-imports-using-transition
-				// — transparent-case body: classify the wrapper's tail leaf
-				// AND head leaf via the per-info adapters (null-guarded).
-				// Filter each result's `{ctorName, path}` against THIS
-				// info's matched ctorNames list so a single shared adapter
-				// pair can feed multiple between infos on the same Star
-				// (Imports info rejects a Using leaf and vice versa). On
-				// null adapter / null result / non-matching ctorName, fall
-				// back to kind=0/path='' for that direction. Tail feeds the
-				// next iteration's prev side via the track-step; head feeds
-				// THIS iteration's curr side at cascade fire.
-				final ctorNameMatch:Expr = {
-					var acc:Expr = macro false;
-					for (cn in info.matchedCtorNames) {
-						final lit:Expr = {expr: EConst(CString(cn)), pos: pos};
-						acc = macro $acc || _r.ctorName == $lit;
-					}
-					acc;
-				};
-				final tailBody:Expr = if (info.tailAdapterOptField == null)
-					macro { $tailKindIdent = 0; $tailPathIdent = ''; }
-				else {
-					final adapterAccess:Expr = {expr: EField(macro opt, info.tailAdapterOptField), pos: pos};
-					macro {
-						final _r = $adapterAccess != null ? $adapterAccess(_v0) : null;
-						if (_r != null && $ctorNameMatch) {
-							$tailKindIdent = 1;
-							$tailPathIdent = _r.path;
-						} else {
-							$tailKindIdent = 0;
-							$tailPathIdent = '';
-						}
-					};
-				}
-				final headBody:Expr = if (info.headAdapterOptField == null)
-					macro { $headKindIdent = 0; $headPathIdent = ''; }
-				else {
-					final adapterAccess:Expr = {expr: EField(macro opt, info.headAdapterOptField), pos: pos};
-					macro {
-						final _r = $adapterAccess != null ? $adapterAccess(_v0) : null;
-						if (_r != null && $ctorNameMatch) {
-							$headKindIdent = 1;
-							$headPathIdent = _r.path;
-						} else {
-							$headKindIdent = 0;
-							$headPathIdent = '';
-						}
-					};
-				}
-				final transparentBody:Expr = macro {
-					$tailBody;
-					$headBody;
-				};
-				final cases:Array<Case> = [
-					for (cp in info.ctorPatterns) {
-						values: [cp.pattern],
-						guard: null,
-						expr: cp.isMatch
-							? macro {
-								$tailKindIdent = 1;
-								$tailPathIdent = _v0;
-								$headKindIdent = 1;
-								$headPathIdent = _v0;
-							}
-							: cp.isTransparent
-								? transparentBody
-								: macro {
-									$tailKindIdent = 0;
-									$tailPathIdent = '';
-									$headKindIdent = 0;
-									$headPathIdent = '';
-								},
-					}
-				];
-				{
-					expr: ESwitch(classifierAccess, cases, null),
-					pos: pos,
-				};
-			}
-		];
-		final trackPrevKindBetweenExprs:Array<Expr> = [];
-		for (i in 0...betweenInfos.length) {
-			final pkLhs:Expr = {expr: EConst(CIdent('_prevTailKindBetween' + i)), pos: pos};
-			final pkRhs:Expr = {expr: EConst(CIdent('_currTailKindBetween' + i)), pos: pos};
-			final ppLhs:Expr = {expr: EConst(CIdent('_prevTailPathBetween' + i)), pos: pos};
-			final ppRhs:Expr = {expr: EConst(CIdent('_currTailPathBetween' + i)), pos: pos};
-			trackPrevKindBetweenExprs.push(macro $pkLhs = $pkRhs);
-			trackPrevKindBetweenExprs.push(macro $ppLhs = $ppRhs);
-		}
-		// ω-imports-using-transition — per-info trackers for the
-		// cross-subset transition cascade. Each transition info splits the
-		// matched ctors into two subsets (A and B) and fires `opt.<count>`
-		// blank lines on a A↔B boundary, with head transparency on the
-		// curr side and tail transparency on the prev side. Trackers
-		// mirror the betweenCtor pair but DOUBLED across A/B and HEAD/TAIL
-		// (no path tracking — transition cascade has no level/path
-		// semantic).
-		final initPrevKindTransitionExprs:Array<Expr> = [];
-		for (i in 0...transitionInfos.length) {
-			final ka:String = '_prevTailKindAcrossA' + i;
-			final kb:String = '_prevTailKindAcrossB' + i;
-			initPrevKindTransitionExprs.push(macro var $ka:Int = 0);
-			initPrevKindTransitionExprs.push(macro var $kb:Int = 0);
-		}
-		final initCurrKindTransitionExprs:Array<Expr> = [];
-		for (i in 0...transitionInfos.length) {
-			final tka:String = '_currTailKindAcrossA' + i;
-			final tkb:String = '_currTailKindAcrossB' + i;
-			final hka:String = '_currHeadKindAcrossA' + i;
-			final hkb:String = '_currHeadKindAcrossB' + i;
-			initCurrKindTransitionExprs.push(macro var $tka:Int = 0);
-			initCurrKindTransitionExprs.push(macro var $tkb:Int = 0);
-			initCurrKindTransitionExprs.push(macro var $hka:Int = 0);
-			initCurrKindTransitionExprs.push(macro var $hkb:Int = 0);
-		}
-		final currKindTransitionComputeExprs:Array<Expr> = [
-			for (i in 0...transitionInfos.length) {
-				final info:TransitionAcrossInfo = transitionInfos[i];
-				final classifierAccess:Expr = {
-					expr: EField(macro _t.node, info.classifierFieldName),
-					pos: pos,
-				};
-				final tkaIdent:Expr = {expr: EConst(CIdent('_currTailKindAcrossA' + i)), pos: pos};
-				final tkbIdent:Expr = {expr: EConst(CIdent('_currTailKindAcrossB' + i)), pos: pos};
-				final hkaIdent:Expr = {expr: EConst(CIdent('_currHeadKindAcrossA' + i)), pos: pos};
-				final hkbIdent:Expr = {expr: EConst(CIdent('_currHeadKindAcrossB' + i)), pos: pos};
-				inline function buildAdapterMatchExpr(adapterField:Null<String>, names:Array<String>):Expr {
-					if (adapterField == null) return macro 0;
-					var acc:Expr = macro false;
-					for (cn in names) {
-						final lit:Expr = {expr: EConst(CString(cn)), pos: pos};
-						acc = macro $acc || _r.ctorName == $lit;
-					}
-					return macro (_r != null && $acc) ? 1 : 0;
-				}
-				final tailAdapterAccess:Null<Expr> = info.tailAdapterOptField == null
-					? null
-					: {expr: EField(macro opt, info.tailAdapterOptField), pos: pos};
-				final headAdapterAccess:Null<Expr> = info.headAdapterOptField == null
-					? null
-					: {expr: EField(macro opt, info.headAdapterOptField), pos: pos};
-				final tailMatchA:Expr = buildAdapterMatchExpr(info.tailAdapterOptField, info.matchedCtorNamesA);
-				final tailMatchB:Expr = buildAdapterMatchExpr(info.tailAdapterOptField, info.matchedCtorNamesB);
-				final headMatchA:Expr = buildAdapterMatchExpr(info.headAdapterOptField, info.matchedCtorNamesA);
-				final headMatchB:Expr = buildAdapterMatchExpr(info.headAdapterOptField, info.matchedCtorNamesB);
-				final transparentBody:Expr = if (tailAdapterAccess == null && headAdapterAccess == null)
-					macro {
-						$tkaIdent = 0; $tkbIdent = 0;
-						$hkaIdent = 0; $hkbIdent = 0;
-					}
-				else if (headAdapterAccess == null)
-					macro {
-						final _r = $tailAdapterAccess != null ? $tailAdapterAccess(_v0) : null;
-						$tkaIdent = $tailMatchA;
-						$tkbIdent = $tailMatchB;
-						$hkaIdent = 0;
-						$hkbIdent = 0;
-					}
-				else if (tailAdapterAccess == null)
-					macro {
-						final _r = $headAdapterAccess != null ? $headAdapterAccess(_v0) : null;
-						$hkaIdent = $headMatchA;
-						$hkbIdent = $headMatchB;
-						$tkaIdent = 0;
-						$tkbIdent = 0;
-					}
-				else
-					macro {
-						final _r = $tailAdapterAccess != null ? $tailAdapterAccess(_v0) : null;
-						$tkaIdent = $tailMatchA;
-						$tkbIdent = $tailMatchB;
-						{
-							final _r = $headAdapterAccess != null ? $headAdapterAccess(_v0) : null;
-							$hkaIdent = $headMatchA;
-							$hkbIdent = $headMatchB;
-						}
-					};
-				final cases:Array<Case> = [
-					for (cp in info.ctorPatterns) {
-						values: [cp.pattern],
-						guard: null,
-						expr: switch cp.subset {
-							case 1: macro {
-								$tkaIdent = 1; $tkbIdent = 0;
-								$hkaIdent = 1; $hkbIdent = 0;
-							};
-							case 2: macro {
-								$tkaIdent = 0; $tkbIdent = 1;
-								$hkaIdent = 0; $hkbIdent = 1;
-							};
-							case 3: transparentBody;
-							case _: macro {
-								$tkaIdent = 0; $tkbIdent = 0;
-								$hkaIdent = 0; $hkbIdent = 0;
-							};
-						},
-					}
-				];
-				{
-					expr: ESwitch(classifierAccess, cases, null),
-					pos: pos,
-				};
-			}
-		];
-		final trackPrevKindTransitionExprs:Array<Expr> = [];
-		for (i in 0...transitionInfos.length) {
-			final pkaLhs:Expr = {expr: EConst(CIdent('_prevTailKindAcrossA' + i)), pos: pos};
-			final pkaRhs:Expr = {expr: EConst(CIdent('_currTailKindAcrossA' + i)), pos: pos};
-			final pkbLhs:Expr = {expr: EConst(CIdent('_prevTailKindAcrossB' + i)), pos: pos};
-			final pkbRhs:Expr = {expr: EConst(CIdent('_currTailKindAcrossB' + i)), pos: pos};
-			trackPrevKindTransitionExprs.push(macro $pkaLhs = $pkaRhs);
-			trackPrevKindTransitionExprs.push(macro $pkbLhs = $pkbRhs);
-		}
-		var blanksCountExpr:Expr = macro (_t.blankBefore ? 1 : 0);
-		// Build cascade from innermost (source-driven) outward — beforeInfos
-		// in reverse order, then betweenInfos in reverse order, then
-		// afterInfos in reverse order. Final priority (outermost first):
-		// after[0..N] > between[0..N] > before[0..N] > source.
-		for (i in 0...beforeInfos.length) {
-			final idx:Int = beforeInfos.length - 1 - i;
-			final info:BeforeCtorBlankInfo = beforeInfos[idx];
-			final beforeAccess:Expr = {expr: EField(macro opt, info.optField), pos: pos};
-			final currIdent:Expr = {expr: EConst(CIdent('_currKindBefore' + idx)), pos: pos};
-			final prevIdent:Expr = {expr: EConst(CIdent('_prevKindBefore' + idx)), pos: pos};
-			final fallback:Expr = blanksCountExpr;
-			blanksCountExpr = macro ($currIdent == 1 && $prevIdent != 1 ? $beforeAccess : $fallback);
-		}
-		for (i in 0...betweenInfos.length) {
-			final idx:Int = betweenInfos.length - 1 - i;
-			final info:BetweenCtorBlankInfo = betweenInfos[idx];
-			final countAccess:Expr = {expr: EField(macro opt, info.countOptField), pos: pos};
-			final levelAccess:Expr = {expr: EField(macro opt, info.levelOptField), pos: pos};
-			final adapterAccess:Expr = {expr: EField(macro opt, info.adapterOptField), pos: pos};
-			// curr-side reads HEAD trackers (what THIS iteration's element
-			// starts with); prev-side reads TAIL trackers (what previous
-			// iteration's element ended with). For matched ctors head==tail
-			// (computed equal in `currKindBetweenComputeExprs`); for
-			// transparent ctors (Conditional) head and tail diverge and
-			// are populated by the head/tail adapter pair.
-			final currKindIdent:Expr = {expr: EConst(CIdent('_currHeadKindBetween' + idx)), pos: pos};
-			final prevKindIdent:Expr = {expr: EConst(CIdent('_prevTailKindBetween' + idx)), pos: pos};
-			final currPathIdent:Expr = {expr: EConst(CIdent('_currHeadPathBetween' + idx)), pos: pos};
-			final prevPathIdent:Expr = {expr: EConst(CIdent('_prevTailPathBetween' + idx)), pos: pos};
-			final differCall:Expr = {
-				expr: ECall(adapterAccess, [prevPathIdent, currPathIdent, levelAccess]),
-				pos: pos,
-			};
-			final fallback:Expr = blanksCountExpr;
-			// Null-guard the adapter call — `WriteOptions.<adapterOptField>` is
-			// declared `Null<(String,String,Int)->Bool>` so the consuming
-			// writer files (HxModuleWriter / HaxeModuleTriviaWriter, both
-			// `@:nullSafety(Strict)`) reject a bare `opt.f(...)` call. The
-			// && short-circuit on `$adapterAccess != null` keeps the path
-			// inert when no adapter is wired (cascade falls through to the
-			// fallback / source-driven blank count).
-			blanksCountExpr = macro ($currKindIdent == 1 && $prevKindIdent == 1 && $adapterAccess != null && $differCall ? $countAccess : $fallback);
-		}
-		// ω-imports-using-transition — fire `opt.<countOptField>` blank
-		// lines on a cross-subset boundary: prev's tail-classified kind
-		// in subset A while curr's head-classified kind in subset B (or
-		// the symmetric A↔B swap). Transparent-ctor (Conditional) head
-		// and tail are populated via the per-info adapter pair in
-		// `currKindTransitionComputeExprs`. Mutually exclusive with
-		// `betweenInfos` (which fires on same-subset same-kind), so the
-		// cascade order between the two doesn't matter — exactly one
-		// fires per boundary.
-		for (i in 0...transitionInfos.length) {
-			final idx:Int = transitionInfos.length - 1 - i;
-			final info:TransitionAcrossInfo = transitionInfos[idx];
-			final countAccess:Expr = {expr: EField(macro opt, info.countOptField), pos: pos};
-			final currHKAIdent:Expr = {expr: EConst(CIdent('_currHeadKindAcrossA' + idx)), pos: pos};
-			final currHKBIdent:Expr = {expr: EConst(CIdent('_currHeadKindAcrossB' + idx)), pos: pos};
-			final prevTKAIdent:Expr = {expr: EConst(CIdent('_prevTailKindAcrossA' + idx)), pos: pos};
-			final prevTKBIdent:Expr = {expr: EConst(CIdent('_prevTailKindAcrossB' + idx)), pos: pos};
-			final fallback:Expr = blanksCountExpr;
-			blanksCountExpr = macro (
-				($currHKAIdent == 1 && $prevTKBIdent == 1)
-				|| ($currHKBIdent == 1 && $prevTKAIdent == 1)
-				? $countAccess : $fallback
-			);
-		}
-		for (i in 0...afterInfos.length) {
-			final idx:Int = afterInfos.length - 1 - i;
-			final info:AfterCtorBlankInfo = afterInfos[idx];
-			final afterAccess:Expr = {expr: EField(macro opt, info.optField), pos: pos};
-			final prevIdent:Expr = {expr: EConst(CIdent('_prevKindAfter' + idx)), pos: pos};
-			final fallback:Expr = blanksCountExpr;
-			blanksCountExpr = macro ($prevIdent == 1 ? $afterAccess : $fallback);
-		}
-		// Flatten the per-info var/compute/track exprs into the outer
-		// scope to avoid nested-EBlock isolation (skill: $b{} / EBlock
-		// creates a new scope, vars don't leak to siblings). The while
-		// body is built as a flat Array<Expr> too: `_currKindAfterN`
-		// / `_prevKindAfterN` ident references inside `$blanksCountExpr`
-		// must resolve against the same lexical block that declares them.
+		// ω-bug-2c-inner-star — cascade emit machinery (per-info trackers
+		// + cascade ternary) extracted into `buildCascadeEmit` so the
+		// inner-Star path (`triviaTryparseStarExpr`, e.g.
+		// `HxConditionalDecl.body`) can opt in too. See `buildCascadeEmit`
+		// for cascade priority semantics, transparent-wrapper handling,
+		// and the runtime locals (`_t`, `_v0`, `opt`) the emitted Exprs
+		// reference.
+		final emit:CascadeEmit = buildCascadeEmit(afterInfos, beforeInfos, betweenInfos, transitionInfos);
+		final blanksCountExpr:Expr = emit.blanksCount;
+		// `emit.initPrev` / `emit.initCurr` are EVars statements with all
+		// per-info trackers folded into one — declared once at the
+		// surrounding-scope's top-level so subsequent siblings (compute,
+		// cascade fire, track) resolve their idents against the same
+		// lexical block. `emit.currCompute` / `emit.trackPrev` are EBlocks
+		// of pure assignments, fine to nest. `$blanksCountExpr` references
+		// the `_curr*` / `_prev*` idents at the cascade fire point.
 		final whileBodyParts:Array<Expr> = [];
 		whileBodyParts.push(macro final _t = _arr[_si]);
-		for (e in initCurrKindExprs) whileBodyParts.push(e);
-		for (e in currKindComputeExprs) whileBodyParts.push(e);
-		for (e in initCurrKindBeforeExprs) whileBodyParts.push(e);
-		for (e in currKindBeforeComputeExprs) whileBodyParts.push(e);
-		for (e in initCurrKindBetweenExprs) whileBodyParts.push(e);
-		for (e in currKindBetweenComputeExprs) whileBodyParts.push(e);
-		for (e in initCurrKindTransitionExprs) whileBodyParts.push(e);
-		for (e in currKindTransitionComputeExprs) whileBodyParts.push(e);
+		whileBodyParts.push(emit.initCurr);
+		whileBodyParts.push(emit.currCompute);
 		whileBodyParts.push(macro if (_si > 0) {
 			_docs.push(_dhl());
 			final _blanks:Int = $blanksCountExpr;
@@ -5981,10 +5793,7 @@ class WriterLowering {
 		whileBodyParts.push(macro final _elem:anyparse.core.Doc = $triviaElemCall);
 		whileBodyParts.push(macro final _tc:Null<String> = _t.trailingComment);
 		whileBodyParts.push(macro _docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDoc(_tc, opt)) : _elem));
-		for (e in trackPrevKindExprs) whileBodyParts.push(e);
-		for (e in trackPrevKindBeforeExprs) whileBodyParts.push(e);
-		for (e in trackPrevKindBetweenExprs) whileBodyParts.push(e);
-		for (e in trackPrevKindTransitionExprs) whileBodyParts.push(e);
+		whileBodyParts.push(emit.trackPrev);
 		whileBodyParts.push(macro _si++);
 		final whileBodyBlock:Expr = {expr: EBlock(whileBodyParts), pos: pos};
 		final whileExpr:Expr = {
@@ -5993,10 +5802,7 @@ class WriterLowering {
 		};
 		final elseBodyParts:Array<Expr> = [];
 		elseBodyParts.push(macro final _docs:Array<anyparse.core.Doc> = []);
-		for (e in initPrevKindExprs) elseBodyParts.push(e);
-		for (e in initPrevKindBeforeExprs) elseBodyParts.push(e);
-		for (e in initPrevKindBetweenExprs) elseBodyParts.push(e);
-		for (e in initPrevKindTransitionExprs) elseBodyParts.push(e);
+		elseBodyParts.push(emit.initPrev);
 		elseBodyParts.push(macro var _si:Int = 0);
 		elseBodyParts.push(whileExpr);
 		elseBodyParts.push(macro if (_trailLC.length > 0) {
@@ -6100,8 +5906,32 @@ class WriterLowering {
 		padLeading:Bool = false,
 		padTrailing:Bool = false,
 		propagateExprPosition:Bool = false,
-		refuseFlatOnComplex:Bool = false
+		refuseFlatOnComplex:Bool = false,
+		afterCtorInfos:Array<AfterCtorBlankInfo> = null,
+		beforeCtorInfos:Array<BeforeCtorBlankInfo> = null,
+		betweenCtorInfos:Array<BetweenCtorBlankInfo> = null,
+		transitionAcrossInfos:Array<TransitionAcrossInfo> = null
 	):Expr {
+		// ω-bug-2c-inner-star — cascade emit for the tryparse-Star path.
+		// Cascade trackers + cascade-fire blank count come from
+		// `buildCascadeEmit`; consumer splices `$cascadeInitPrev` once
+		// before the while loop (in `_docs` outer scope), `$cascadeInitCurr`
+		// + `$cascadeCurrCompute` at the top of each iteration, replaces
+		// the source-driven `if (blankBefore) push(\\n)` between iterations
+		// with a `_blanks` cascade loop, and `$cascadeTrackPrev` at the end
+		// of each iteration. With all info arrays empty, the cascade
+		// fallback is `(_t.blankBefore ? 1 : 0)` — byte-identical to the
+		// pre-slice behavior on `_si > 0 && _t.newlineBefore`.
+		final afterInfos:Array<AfterCtorBlankInfo> = afterCtorInfos ?? [];
+		final beforeInfos:Array<BeforeCtorBlankInfo> = beforeCtorInfos ?? [];
+		final betweenInfos:Array<BetweenCtorBlankInfo> = betweenCtorInfos ?? [];
+		final transitionInfos:Array<TransitionAcrossInfo> = transitionAcrossInfos ?? [];
+		final cascadeEmit:CascadeEmit = buildCascadeEmit(afterInfos, beforeInfos, betweenInfos, transitionInfos);
+		final cascadeInitPrev:Expr = cascadeEmit.initPrev;
+		final cascadeInitCurr:Expr = cascadeEmit.initCurr;
+		final cascadeCurrCompute:Expr = cascadeEmit.currCompute;
+		final cascadeTrackPrev:Expr = cascadeEmit.trackPrev;
+		final cascadeBlanksCount:Expr = cascadeEmit.blanksCount;
 		// ω-expression-case-flat-fanout: when the body's element call should
 		// receive a copy-on-flat opt with named fields swapped, build the
 		// per-pair override block. The caller-side helper has already parsed
@@ -6261,10 +6091,13 @@ class WriterLowering {
 			final _padHardline:Bool = (_padLeading || _padTrailing) && _arr.length > 0 && _arr[0].newlineBefore;
 			if (_arr.length == 0 && _trailLC.length == 0) _de() else {
 				final _docs:Array<anyparse.core.Doc> = [];
+				$cascadeInitPrev;
 				if (_padLeading && _arr.length > 0) _docs.push(_padHardline ? _dhl() : _dt(' '));
 				var _si:Int = 0;
 				while (_si < _arr.length) {
 					final _t = _arr[_si];
+					$cascadeInitCurr;
+					$cascadeCurrCompute;
 					if (_t.leadingComments.length > 0) {
 						_docs.push(_dhl());
 						if (_t.blankBefore && _si > 0) _docs.push(_dhl());
@@ -6286,10 +6119,19 @@ class WriterLowering {
 						// `#if COND <mods> #end\n\tpublic` (issue_332 V1) down
 						// to `#if COND <mods> #end public` on round-trip,
 						// losing the author's modifier-list line break.
-						// `blankBefore` adds the second hardline for source
-						// gaps of two or more newlines.
+						//
+						// ω-bug-2c-inner-star: cascade-blanks loop replaces the
+						// pre-slice `if (_t.blankBefore) push(\\n)` source-driven
+						// path. With no cascade infos active, `$cascadeBlanksCount`
+						// reduces to `(_t.blankBefore ? 1 : 0)` — byte-identical
+						// to the prior single-blank emit.
 						_docs.push(_dhl());
-						if (_t.blankBefore) _docs.push(_dhl());
+						final _blanks:Int = $cascadeBlanksCount;
+						var _bli:Int = 0;
+						while (_bli < _blanks) {
+							_docs.push(_dhl());
+							_bli++;
+						}
 					} else if (_si > 0) {
 						_docs.push($subsequentSepExpr);
 					} else if (_sepFirst) {
@@ -6298,6 +6140,7 @@ class WriterLowering {
 					final _elem:anyparse.core.Doc = $triviaElemCall;
 					final _tc:Null<String> = _t.trailingComment;
 					_docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDoc(_tc, opt)) : _elem);
+					$cascadeTrackPrev;
 					_si++;
 				}
 				if (_padTrailing && _arr.length > 0) _docs.push(_padHardline ? _dhl() : _dt(' '));
@@ -6585,6 +6428,125 @@ class WriterLowering {
 			betweenVarsField: betweenVarsField,
 			betweenFunctionsField: betweenFunctionsField,
 			afterVarsField: afterVarsField,
+		};
+	}
+
+	/**
+	 * ω-bug-2c-inner-star — read every cascade `@:fmt(blankLines*)` meta
+	 * off a `@:trivia` Star ShapeNode and resolve them into the four
+	 * info arrays consumed by `buildCascadeEmit`. Centralises the
+	 * meta-read + transparent-merge + cross-validation block previously
+	 * inlined in the EOF-Star branch of `lowerStruct`, so the inner-Star
+	 * branch (`triviaTryparseStarExpr` consumers) can reuse the same
+	 * cascade infrastructure without duplication.
+	 *
+	 * Recognised metas:
+	 *  - `blankLinesAfterCtor` / `blankLinesAfterCtorIf`
+	 *  - `blankLinesBeforeCtor` / `blankLinesBeforeCtorIf`
+	 *  - `blankLinesBetweenSameCtorByLevel`
+	 *  - `blankLinesBetweenSameCtorTailTransparent`
+	 *  - `blankLinesBetweenSameCtorHeadTransparent`
+	 *  - `blankLinesOnTransitionAcross`
+	 *
+	 * Tail/head transparent metas are merged per-classifier-field into a
+	 * shared adapter pair, fed to BOTH the between-ctor and transition
+	 * cascades (single shared head/tail walker per Star+classifier). Any
+	 * transparent meta whose classifier has no matching between/transition
+	 * meta is rejected at compile time as dead code.
+	 */
+	private function readCascadeInfosFromStar(starNode:ShapeNode, elemRefName:String):CascadeInfos {
+		final afterCtorAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesAfterCtor');
+		final afterCtorInfos:Array<AfterCtorBlankInfo> = [
+			for (args in afterCtorAllArgs) buildAfterCtorBlankInfo(elemRefName, args, null)
+		];
+		final afterCtorIfAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesAfterCtorIf');
+		for (args in afterCtorIfAllArgs)
+			afterCtorInfos.push(buildAfterCtorBlankInfoIf(elemRefName, args));
+		final beforeCtorAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBeforeCtor');
+		final beforeCtorInfos:Array<BeforeCtorBlankInfo> = [
+			for (args in beforeCtorAllArgs) buildBeforeCtorBlankInfo(elemRefName, args, null)
+		];
+		final beforeCtorIfAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBeforeCtorIf');
+		for (args in beforeCtorIfAllArgs)
+			beforeCtorInfos.push(buildBeforeCtorBlankInfoIf(elemRefName, args));
+		final betweenCtorAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBetweenSameCtorByLevel');
+		final tailTransparentAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBetweenSameCtorTailTransparent');
+		final headTransparentAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBetweenSameCtorHeadTransparent');
+		final transparentByClassifier:Map<String, {ctors:Array<String>, tailAdapter:Null<String>, headAdapter:Null<String>}> = [];
+		inline function ingestTransparent(args:Array<String>, isTail:Bool, metaName:String):Void {
+			if (args.length != 3)
+				Context.fatalError(
+					'WriterLowering: @:fmt($metaName) expects exactly 3 string args (classifierField, ctorName, adapterOptField), got ${args.length}',
+					Context.currentPos()
+				);
+			final cf:String = args[0];
+			final ctor:String = args[1];
+			final adapter:String = args[2];
+			var entry:Null<{ctors:Array<String>, tailAdapter:Null<String>, headAdapter:Null<String>}> = transparentByClassifier[cf];
+			if (entry == null) {
+				entry = {ctors: [], tailAdapter: null, headAdapter: null};
+				transparentByClassifier[cf] = entry;
+			}
+			if (entry.ctors.indexOf(ctor) < 0) entry.ctors.push(ctor);
+			if (isTail) {
+				if (entry.tailAdapter != null && entry.tailAdapter != adapter)
+					Context.fatalError(
+						'WriterLowering: @:fmt($metaName) adapter mismatch for classifier "$cf" — got "${entry.tailAdapter}" and "$adapter"; one shared tail adapter per Star+classifier',
+						Context.currentPos()
+					);
+				entry.tailAdapter = adapter;
+			} else {
+				if (entry.headAdapter != null && entry.headAdapter != adapter)
+					Context.fatalError(
+						'WriterLowering: @:fmt($metaName) adapter mismatch for classifier "$cf" — got "${entry.headAdapter}" and "$adapter"; one shared head adapter per Star+classifier',
+						Context.currentPos()
+					);
+				entry.headAdapter = adapter;
+			}
+		}
+		for (args in tailTransparentAllArgs)
+			ingestTransparent(args, true, 'blankLinesBetweenSameCtorTailTransparent');
+		for (args in headTransparentAllArgs)
+			ingestTransparent(args, false, 'blankLinesBetweenSameCtorHeadTransparent');
+		final betweenCtorInfos:Array<BetweenCtorBlankInfo> = [
+			for (args in betweenCtorAllArgs) {
+				final classifier:String = args[0];
+				final tt:Null<{ctors:Array<String>, tailAdapter:Null<String>, headAdapter:Null<String>}> = transparentByClassifier[classifier];
+				buildBetweenCtorBlankInfo(
+					elemRefName, args,
+					tt != null ? tt.ctors : [],
+					tt != null ? tt.tailAdapter : null,
+					tt != null ? tt.headAdapter : null
+				);
+			}
+		];
+		final transitionAcrossAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesOnTransitionAcross');
+		final transitionAcrossInfos:Array<TransitionAcrossInfo> = [
+			for (args in transitionAcrossAllArgs) {
+				final classifier:String = args[0];
+				final tt:Null<{ctors:Array<String>, tailAdapter:Null<String>, headAdapter:Null<String>}> = transparentByClassifier[classifier];
+				buildTransitionAcrossInfo(
+					elemRefName, args,
+					tt != null ? tt.ctors : [],
+					tt != null ? tt.tailAdapter : null,
+					tt != null ? tt.headAdapter : null
+				);
+			}
+		];
+		for (cf in transparentByClassifier.keys()) {
+			final hasBetween:Bool = Lambda.exists(betweenCtorInfos, info -> info.classifierFieldName == cf);
+			final hasTransition:Bool = Lambda.exists(transitionAcrossInfos, info -> info.classifierFieldName == cf);
+			if (!hasBetween && !hasTransition)
+				Context.fatalError(
+					'WriterLowering: @:fmt(blankLinesBetweenSameCtor{Tail,Head}Transparent) classifier "$cf" has no matching @:fmt(blankLinesBetweenSameCtorByLevel) or @:fmt(blankLinesOnTransitionAcross) on the same Star',
+					Context.currentPos()
+				);
+		}
+		return {
+			afterCtorInfos: afterCtorInfos,
+			beforeCtorInfos: beforeCtorInfos,
+			betweenCtorInfos: betweenCtorInfos,
+			transitionAcrossInfos: transitionAcrossInfos,
 		};
 	}
 
@@ -7341,6 +7303,38 @@ typedef AfterCtorBlankInfo = {
 	classifierFieldName:String,
 	classifyCases:Array<Case>,
 	optField:String,
+};
+
+/**
+ * Aggregated cascade info arrays read off a `@:trivia` Star ShapeNode
+ * by `WriterLowering.readCascadeInfosFromStar`. Each array is the
+ * resolved form of one `@:fmt(blankLines*)` meta family on the same
+ * Star — see the per-Info typedefs for shape semantics. Both the EOF
+ * Star branch (`triviaEofStarExpr`) and the tryparse Star branch
+ * (`triviaTryparseStarExpr`) consume this struct unchanged.
+ */
+typedef CascadeInfos = {
+	afterCtorInfos:Array<AfterCtorBlankInfo>,
+	beforeCtorInfos:Array<BeforeCtorBlankInfo>,
+	betweenCtorInfos:Array<BetweenCtorBlankInfo>,
+	transitionAcrossInfos:Array<TransitionAcrossInfo>,
+};
+
+/**
+ * Output of `WriterLowering.buildCascadeEmit` — five Exprs ready to
+ * splice into the consumer's runtime block. `initPrev` / `initCurr`
+ * are single combined `EVars` statements (folded across all infos);
+ * `currCompute` / `trackPrev` are `EBlock`s of pure assignments;
+ * `blanksCount` is the cascade ternary with fallback
+ * `(_t.blankBefore ? 1 : 0)`. Empty info arrays produce `macro {}`
+ * placeholders so non-cascade-bearing consumers stay byte-identical.
+ */
+typedef CascadeEmit = {
+	initPrev:Expr,
+	initCurr:Expr,
+	currCompute:Expr,
+	trackPrev:Expr,
+	blanksCount:Expr,
 };
 
 /**

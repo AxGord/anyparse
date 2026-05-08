@@ -38,6 +38,17 @@ package anyparse.grammar.haxe;
  * set (captured via `@:trivia`), reproducing the multi-line shape the
  * fork's import fixtures exercise (`#if php\nimport php.Lib;\n#end`).
  *
+ * Slice ω-bug-2c-inner-star opted `body` and `elseBody` into the
+ * inter-element blank-line cascade (mirror of `HxModule.decls`):
+ * `blankLinesBetweenSameCtorByLevel` for adjacent imports / usings,
+ * `blankLinesOnTransitionAcross` for the import↔using boundary, plus
+ * the head/tail transparent-wrapper meta pair so a nested `#if … #end`
+ * inside the body still routes through the leaf classifier. Drives
+ * fork's `imports_and_using_all` fixture — between two `import …;`
+ * decls inside a `#if php` body, fork's `betweenImports=1 +
+ * betweenImportsLevel=all` config now fires the same blank-line
+ * override anyparse's top-level Star already honored.
+ *
  * `@:optional @:kw('#else') @:tryparse var elseBody:Null<Array<…>>`
  * uses the kw-led optional Star path (Lowering's
  * `emitOptionalKwStarFieldSteps`, slice ω-cond-comp-engine). The path
@@ -50,7 +61,19 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxConditionalDecl = {
 	var cond:HxPpCondLit;
-	@:trivia @:tryparse @:fmt(padLeading, padTrailing) var body:Array<HxTopLevelDecl>;
+	@:trivia @:tryparse @:fmt(padLeading, padTrailing)
+	@:fmt(blankLinesOnTransitionAcross('decl', 'ImportDecl', 'ImportWildDecl', '|', 'UsingDecl', 'UsingWildDecl', 'beforeUsing'))
+	@:fmt(blankLinesBetweenSameCtorByLevel('decl', 'ImportDecl', 'ImportWildDecl', 'betweenImportsLevel', 'betweenImports', 'betweenImportsPathDiffers'))
+	@:fmt(blankLinesBetweenSameCtorByLevel('decl', 'UsingDecl', 'UsingWildDecl', 'betweenImportsLevel', 'betweenImports', 'betweenImportsPathDiffers'))
+	@:fmt(blankLinesBetweenSameCtorTailTransparent('decl', 'Conditional', 'betweenImportsTailLeafClassify'))
+	@:fmt(blankLinesBetweenSameCtorHeadTransparent('decl', 'Conditional', 'betweenImportsHeadLeafClassify'))
+	var body:Array<HxTopLevelDecl>;
 	@:trivia @:tryparse var elseifs:Array<HxElseifDecl>;
-	@:optional @:kw('#else') @:trivia @:tryparse @:fmt(padLeading, padTrailing) var elseBody:Null<Array<HxTopLevelDecl>>;
+	@:optional @:kw('#else') @:trivia @:tryparse @:fmt(padLeading, padTrailing)
+	@:fmt(blankLinesOnTransitionAcross('decl', 'ImportDecl', 'ImportWildDecl', '|', 'UsingDecl', 'UsingWildDecl', 'beforeUsing'))
+	@:fmt(blankLinesBetweenSameCtorByLevel('decl', 'ImportDecl', 'ImportWildDecl', 'betweenImportsLevel', 'betweenImports', 'betweenImportsPathDiffers'))
+	@:fmt(blankLinesBetweenSameCtorByLevel('decl', 'UsingDecl', 'UsingWildDecl', 'betweenImportsLevel', 'betweenImports', 'betweenImportsPathDiffers'))
+	@:fmt(blankLinesBetweenSameCtorTailTransparent('decl', 'Conditional', 'betweenImportsTailLeafClassify'))
+	@:fmt(blankLinesBetweenSameCtorHeadTransparent('decl', 'Conditional', 'betweenImportsHeadLeafClassify'))
+	var elseBody:Null<Array<HxTopLevelDecl>>;
 };
