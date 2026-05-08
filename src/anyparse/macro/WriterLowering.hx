@@ -291,18 +291,12 @@ class WriterLowering {
 		if (callWrapField == null)
 			Context.error('WriterLowering.methodChain: Call sibling ctor must carry @:fmt(wrapRules(\'<field>\')) for the chain-emit per-segment args layout to share the regular call shape', Context.currentPos());
 		final cwf:String = callWrapField;
-		final callRulesExpr:Expr = {
-			expr: EField(macro opt, cwf),
-			pos: Context.currentPos(),
-		};
+		final callRulesExpr:Expr = optFieldAccess(cwf);
 		final argsListExpr:Expr = macro anyparse.format.wrap.WrapList.emit(
 			$v{callOpen}, $v{callClose}, $v{callSep}, _argDocs, opt,
 			_de(), _de(), false, $callRulesExpr, $callTcExpr
 		);
-		final chainRulesExpr:Expr = {
-			expr: EField(macro opt, chainField),
-			pos: Context.currentPos(),
-		};
+		final chainRulesExpr:Expr = optFieldAccess(chainField);
 		final writeIdent:Expr = {
 			expr: EConst(CIdent(writeFnName)),
 			pos: Context.currentPos(),
@@ -554,10 +548,7 @@ class WriterLowering {
 			final isChainAddSub:Bool = opText == '+' || opText == '-';
 			if (isChainBool || isChainAddSub) {
 				final chainRulesField:String = isChainBool ? 'opBoolChainWrap' : 'opAddSubChainWrap';
-				final chainRulesExpr:Expr = {
-					expr: EField(macro opt, chainRulesField),
-					pos: Context.currentPos(),
-				};
+				final chainRulesExpr:Expr = optFieldAccess(chainRulesField);
 				final argTypeCT:ComplexType = ruleValueCT(typePath);
 				// Leaf operands render at the chain's own precedence. A
 				// sub-expression with strictly lower prec (ternary inside
@@ -805,8 +796,8 @@ class WriterLowering {
 				final ctorName:String = indentArgs[0];
 				final optField:String = indentArgs[1];
 				final leftCurlyField:String = indentArgs[2];
-				final optAccess:Expr = {expr: EField(macro opt, optField), pos: Context.currentPos()};
-				final leftCurlyAccess:Expr = {expr: EField(macro opt, leftCurlyField), pos: Context.currentPos()};
+				final optAccess:Expr = optFieldAccess(optField);
+				final leftCurlyAccess:Expr = optFieldAccess(leftCurlyField);
 				final valueAccess:Expr = macro $i{argNames[0]};
 				macro {
 					final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
@@ -832,10 +823,7 @@ class WriterLowering {
 				: null;
 			final bodyExpr:Expr = if (captureSourceOpt != null) {
 				final sourceAccess:Expr = macro $i{argNames[1]};
-				final optAccess:Expr = {
-					expr: EField(macro opt, captureSourceOpt),
-					pos: Context.currentPos(),
-				};
+				final optAccess:Expr = optFieldAccess(captureSourceOpt);
 				macro $optAccess ? $indentWrapped : _dt($sourceAccess);
 			} else indentWrapped;
 
@@ -1067,10 +1055,7 @@ class WriterLowering {
 		final useFill:Bool = branch.fmtHasFlag('fill');
 		final fillDouble:Bool = branch.fmtHasFlag('fillDoubleIndent');
 		final sepListCall:Expr = if (wrapRulesField != null) {
-			final rulesExpr:Expr = {
-				expr: EField(macro opt, wrapRulesField),
-				pos: Context.currentPos(),
-			};
+			final rulesExpr:Expr = optFieldAccess(wrapRulesField);
 			macro anyparse.format.wrap.WrapList.emit($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, _de(), _de(), false, $rulesExpr, $tcExpr);
 		} else if (useFill) {
 			macro fillList($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr, _de(), _de(), false, $v{fillDouble});
@@ -1258,10 +1243,7 @@ class WriterLowering {
 					? null
 					: branch.fmtReadString('wrapRules');
 				final listCall:Expr = if (wrapRulesField != null) {
-					final rulesExpr:Expr = {
-						expr: EField(macro opt, wrapRulesField),
-						pos: Context.currentPos(),
-					};
+					final rulesExpr:Expr = optFieldAccess(wrapRulesField);
 					macro anyparse.format.wrap.WrapList.emit($v{leadText}, $v{trailText}, $v{sepText}, _docs, opt, $openInsideExpr, $closeInsideExpr, false, $rulesExpr, $tcExpr);
 				} else {
 					macro sepList($v{leadText}, $v{trailText}, $v{sepText}, _docs, opt, $tcExpr, $openInsideExpr, $closeInsideExpr, false);
@@ -2206,7 +2188,7 @@ class WriterLowering {
 				// matching the plain-mode tryparse writer.
 				final sameLineName:Null<String> = starNode.fmtReadString('sameLine');
 				final sepExpr:Expr = if (sameLineName != null) {
-					final optFlag:Expr = {expr: EField(macro opt, sameLineName), pos: Context.currentPos()};
+					final optFlag:Expr = optFieldAccess(sameLineName);
 					sameLinePolicySwitch(optFlag, macro _dt(' '));
 				} else {
 					macro _dt(' ');
@@ -2564,10 +2546,7 @@ class WriterLowering {
 			final useFill:Bool = starNode.fmtHasFlag('fill');
 			final fillDouble:Bool = starNode.fmtHasFlag('fillDoubleIndent');
 			final listCall:Expr = if (wrapRulesField != null) {
-				final rulesExpr:Expr = {
-					expr: EField(macro opt, wrapRulesField),
-					pos: Context.currentPos(),
-				};
+				final rulesExpr:Expr = optFieldAccess(wrapRulesField);
 				macro anyparse.format.wrap.WrapList.emit($v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $openInsideExpr, $closeInsideExpr, $keepInnerExpr, $rulesExpr, $tcExpr);
 			} else if (useFill) {
 				macro fillList($v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $tcExpr, $openInsideExpr, $closeInsideExpr, $keepInnerExpr, $v{fillDouble});
@@ -2612,10 +2591,7 @@ class WriterLowering {
 				// the preceding struct field (τ₁ — catches against try body).
 				// Per-element shape is not captured today, so `Keep` degrades
 				// to `Same` at this site (ω-keep-policy).
-				final optFlag:Expr = {
-					expr: EField(macro opt, sameLineName),
-					pos: Context.currentPos(),
-				};
+				final optFlag:Expr = optFieldAccess(sameLineName);
 				final sepExpr:Expr = sameLinePolicySwitch(optFlag, macro _dt(' '));
 				// ω-block-shape-aware: when the Star carries
 				// `@:fmt(blockBodyKeepsInline)` AND the prev struct field's
@@ -2849,10 +2825,7 @@ class WriterLowering {
 	private function sameLineSeparator(child:ShapeNode, prevBody:Null<PrevBodyInfo>, typePath:String):Expr {
 		final flagName:Null<String> = child.fmtReadString('sameLine');
 		if (flagName == null) return macro _dt(' ');
-		final optFlag:Expr = {
-			expr: EField(macro opt, flagName),
-			pos: Context.currentPos(),
-		};
+		final optFlag:Expr = optFieldAccess(flagName);
 		final fieldName:Null<String> = child.annotations.get('base.fieldName');
 		// Mirror of Lowering's `hasKwTriviaSlots` gate — `<field>BeforeKwNewline`
 		// only exists on the synth paired `*T` type of trivia-bearing enclosing
@@ -2911,10 +2884,10 @@ class WriterLowering {
 		final childBodyPolicy:{stmt:Null<String>, expr:Null<String>} = readBodyPolicyDual(child);
 		final childBodyPolicyFlag:Null<String> = childBodyPolicy.stmt;
 		if (childBodyPolicyFlag == null) return shapeAwareSwitch;
-		final stmtBpAccess:Expr = {expr: EField(macro opt, childBodyPolicyFlag), pos: Context.currentPos()};
+		final stmtBpAccess:Expr = optFieldAccess(childBodyPolicyFlag);
 		final bpAccess:Expr = if (childBodyPolicy.expr == null) stmtBpAccess
 		else {
-			final exprBpAccess:Expr = {expr: EField(macro opt, childBodyPolicy.expr), pos: Context.currentPos()};
+			final exprBpAccess:Expr = optFieldAccess(childBodyPolicy.expr);
 			macro (opt._inExprPosition ? $exprBpAccess : $stmtBpAccess);
 		};
 		final samePat:Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BodyPolicy', 'Same']);
@@ -2984,10 +2957,7 @@ class WriterLowering {
 	 * haxe-formatter contract).
 	 */
 	private function bodyBreakWrap(flagName:String, writeCall:Expr, bodyAccess:Expr, bodyTypePath:String, shapeAware:Bool):Expr {
-		final optFlag:Expr = {
-			expr: EField(macro opt, flagName),
-			pos: Context.currentPos(),
-		};
+		final optFlag:Expr = optFieldAccess(flagName);
 		final sameLayoutExpr:Expr = macro _dc([_dt(' '), $writeCall]);
 		final nextLayoutExpr:Expr = macro _dn(_cols, _dc([_dhl(), $writeCall]));
 		final slpPath:Array<String> = ['anyparse', 'format', 'SameLinePolicy'];
@@ -3122,11 +3092,11 @@ class WriterLowering {
 	 * not assume any particular caller-side scope.
 	 */
 	private function indentValueIfCtorWrap(writeCall:Expr, fieldAccess:Expr, ctorName:String, optField:String, ?leftCurlyField:String):Expr {
-		final optAccess:Expr = {expr: EField(macro opt, optField), pos: Context.currentPos()};
+		final optAccess:Expr = optFieldAccess(optField);
 		final ctorMatch:Expr = macro Type.enumConstructor($fieldAccess) == $v{ctorName};
 		final condExpr:Expr = if (leftCurlyField == null) macro $optAccess && $ctorMatch
 		else {
-			final leftCurlyAccess:Expr = {expr: EField(macro opt, leftCurlyField), pos: Context.currentPos()};
+			final leftCurlyAccess:Expr = optFieldAccess(leftCurlyField);
 			macro $optAccess && $leftCurlyAccess == anyparse.format.BracePlacement.Next && $ctorMatch;
 		};
 		return macro {
@@ -3192,7 +3162,7 @@ class WriterLowering {
 	private static function leftCurlySeparator(starNode:ShapeNode):Expr {
 		if (!starNode.fmtHasFlag('leftCurly')) return macro _dt(' ');
 		final knobName:Null<String> = starNode.fmtReadString('leftCurly');
-		final knobExpr:Expr = {expr: EField(macro opt, knobName ?? 'leftCurly'), pos: Context.currentPos()};
+		final knobExpr:Expr = optFieldAccess(knobName ?? 'leftCurly');
 		final nextPat:Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BracePlacement', 'Next']);
 		// Knob-form `@:fmt(leftCurly('<knob>'))` (e.g. on `HxObjectLit.fields`)
 		// fires from a first-field Star whose outer caller already emits
@@ -3347,7 +3317,7 @@ class WriterLowering {
 		final cases:Array<Case> = [
 			{values: [beforePat, bothPat], expr: macro _dt(' '), guard: null},
 		];
-		final optAccess:Expr = {expr: EField(macro opt, flagName), pos: Context.currentPos()};
+		final optAccess:Expr = optFieldAccess(flagName);
 		return {expr: ESwitch(optAccess, cases, macro _de()), pos: Context.currentPos()};
 	}
 
@@ -3391,7 +3361,7 @@ class WriterLowering {
 		final cases:Array<Case> = [
 			{values: [afterPat, bothPat], expr: macro _dt(' '), guard: null},
 		];
-		final optAccess:Expr = {expr: EField(macro opt, flagName), pos: Context.currentPos()};
+		final optAccess:Expr = optFieldAccess(flagName);
 		return {expr: ESwitch(optAccess, cases, macro _de()), pos: Context.currentPos()};
 	}
 
@@ -3423,7 +3393,7 @@ class WriterLowering {
 		final cases:Array<Case> = [
 			{values: [beforePat, bothPat], expr: macro _dt(' '), guard: null},
 		];
-		final optAccess:Expr = {expr: EField(macro opt, flagName), pos: Context.currentPos()};
+		final optAccess:Expr = optFieldAccess(flagName);
 		return {expr: ESwitch(optAccess, cases, macro _de()), pos: Context.currentPos()};
 	}
 
@@ -3474,7 +3444,7 @@ class WriterLowering {
 		final cases:Array<Case> = [
 			{values: matchValues, expr: macro _dt(' '), guard: null},
 		];
-		final optAccess:Expr = {expr: EField(macro opt, flagName), pos: Context.currentPos()};
+		final optAccess:Expr = optFieldAccess(flagName);
 		return {expr: ESwitch(optAccess, cases, macro _de()), pos: Context.currentPos()};
 	}
 
@@ -3552,7 +3522,7 @@ class WriterLowering {
 			{values: [afterPat], expr: macro _dc([_dt($v{leadText}), _dop(' ')]), guard: null},
 			{values: [bothPat], expr: macro _dc([_dt(' '), _dt($v{leadText}), _dop(' ')]), guard: null},
 		];
-		final optAccess:Expr = {expr: EField(macro opt, flagName), pos: Context.currentPos()};
+		final optAccess:Expr = optFieldAccess(flagName);
 		return {expr: ESwitch(optAccess, cases, macro _dt($v{leadText})), pos: Context.currentPos()};
 	}
 
@@ -3668,7 +3638,7 @@ class WriterLowering {
 		else {
 			if (inlineBlockBodyArgs.length != 1)
 				Context.fatalError('WriterLowering: bodyPolicyWrap inlineBlockBodyArgs requires (flagName), got ${inlineBlockBodyArgs.length} args', Context.currentPos());
-			final inlineFlag:Expr = {expr: EField(macro opt, inlineBlockBodyArgs[0]), pos: Context.currentPos()};
+			final inlineFlag:Expr = optFieldAccess(inlineBlockBodyArgs[0]);
 			final origWriteCall:Expr = opts.writeCall;
 			macro {
 				final _bodyDoc:anyparse.core.Doc = $origWriteCall;
@@ -3705,12 +3675,9 @@ class WriterLowering {
 		// `case POpen: if(c) a; else b;` of a return-switch when
 		// `expressionIf=Same`.
 		final exprFlagName:Null<String> = opts.exprFlagName;
-		final defaultOptFlag:Expr = if (exprFlagName == null) {
-			expr: EField(macro opt, flagName),
-			pos: Context.currentPos(),
-		} else {
-			final stmtAccess:Expr = {expr: EField(macro opt, flagName), pos: Context.currentPos()};
-			final exprAccess:Expr = {expr: EField(macro opt, exprFlagName), pos: Context.currentPos()};
+		final defaultOptFlag:Expr = if (exprFlagName == null) optFieldAccess(flagName) else {
+			final stmtAccess:Expr = optFieldAccess(flagName);
+			final exprAccess:Expr = optFieldAccess(exprFlagName);
 			macro (opt._inExprPosition ? $exprAccess : $stmtAccess);
 		};
 		final ctorOverriddenOptFlag:Expr = if (policyOverrides == null || policyOverrides.length == 0) defaultOptFlag
@@ -3723,7 +3690,7 @@ class WriterLowering {
 				if (pair.length != 2) Context.fatalError('WriterLowering: bodyPolicyWrap policyOverrides entry requires (ctorName, flagName), got ${pair.length} args', Context.currentPos());
 				final ctorName:String = pair[0];
 				final overrideFlag:String = pair[1];
-				final overrideField:Expr = {expr: EField(macro opt, overrideFlag), pos: Context.currentPos()};
+				final overrideField:Expr = optFieldAccess(overrideFlag);
 				chain = macro $ctorExpr == $v{ctorName} ? $overrideField : $chain;
 				i--;
 			}
@@ -3754,7 +3721,7 @@ class WriterLowering {
 		final optFlag:Expr = if (fallbackFlagName == null || elseFieldName == null) ctorOverriddenOptFlag
 		else {
 			final elseAccess:Expr = {expr: EField(macro value, elseFieldName), pos: Context.currentPos()};
-			final fallbackAccess:Expr = {expr: EField(macro opt, fallbackFlagName), pos: Context.currentPos()};
+			final fallbackAccess:Expr = optFieldAccess(fallbackFlagName);
 			final bpPath:Array<String> = ['anyparse', 'format', 'BodyPolicy'];
 			final samePat:Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Same']));
 			final keepPat:Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Keep']));
@@ -3790,7 +3757,7 @@ class WriterLowering {
 		final wpAfter:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['After']));
 		final wpBoth:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
 		final kwPolicyInlineSep:Null<Expr> = kwPolicyFlagName == null ? null : {
-			final kwOpt:Expr = {expr: EField(macro opt, kwPolicyFlagName), pos: Context.currentPos()};
+			final kwOpt:Expr = optFieldAccess(kwPolicyFlagName);
 			{
 				expr: ESwitch(kwOpt, [
 					{values: [wpAfter, wpBoth], expr: macro _dt(' '), guard: null},
@@ -3869,7 +3836,7 @@ class WriterLowering {
 		inline function wrapIfExprNest(bodyExpr:Expr):Expr {
 			if (ifExprIndentArgs == null) return bodyExpr;
 			final ifCtorName:String = ifExprIndentArgs[0];
-			final ifOptAccess:Expr = {expr: EField(macro opt, ifExprIndentArgs[1]), pos: Context.currentPos()};
+			final ifOptAccess:Expr = optFieldAccess(ifExprIndentArgs[1]);
 			return macro {
 				final _bIfn:anyparse.core.Doc = $bodyExpr;
 				($ifOptAccess && Type.enumConstructor($bodyValueExpr) == $v{ifCtorName}) ? _dn(_cols, _bIfn) : _bIfn;
@@ -3923,8 +3890,8 @@ class WriterLowering {
 			Context.fatalError('WriterLowering: bodyPolicyWrap indentObjArgs requires (ctorName, optField, leftCurlyField), got ${indentObjArgs.length} args', Context.currentPos());
 		final indentObjGuardedNext:Null<Expr> = if (indentObjArgs != null && !hasKwSlots) {
 			final ctorName:String = indentObjArgs[0];
-			final optAccess:Expr = {expr: EField(macro opt, indentObjArgs[1]), pos: Context.currentPos()};
-			final lcAccess:Expr = {expr: EField(macro opt, indentObjArgs[2]), pos: Context.currentPos()};
+			final optAccess:Expr = optFieldAccess(indentObjArgs[1]);
+			final lcAccess:Expr = optFieldAccess(indentObjArgs[2]);
 			macro {
 				final _body:anyparse.core.Doc = $writeCall;
 				if (!$optAccess
@@ -4102,7 +4069,7 @@ class WriterLowering {
 			if (bodyAllmanIndentArgs.length != 2)
 				Context.fatalError('WriterLowering: bodyPolicyWrap bodyAllmanIndentArgs requires (ctorName, optField), got ${bodyAllmanIndentArgs.length} args', Context.currentPos());
 			final ctorName:String = bodyAllmanIndentArgs[0];
-			final optAccess:Expr = {expr: EField(macro opt, bodyAllmanIndentArgs[1]), pos: Context.currentPos()};
+			final optAccess:Expr = optFieldAccess(bodyAllmanIndentArgs[1]);
 			macro {
 				final _bodyForAllman:anyparse.core.Doc = $writeCall;
 				if ($optAccess
@@ -4323,10 +4290,7 @@ class WriterLowering {
 	private static function trailingCommaExpr(node:ShapeNode):Expr {
 		final flagName:Null<String> = node.fmtReadString('trailingComma');
 		if (flagName == null) return macro false;
-		return {
-			expr: EField(macro opt, flagName),
-			pos: Context.currentPos(),
-		};
+		return optFieldAccess(flagName);
 	}
 
 	/**
@@ -4344,10 +4308,7 @@ class WriterLowering {
 	private static function keepInnerWhenEmptyExpr(node:ShapeNode):Expr {
 		final flagName:Null<String> = node.fmtReadString('keepInnerWhenEmpty');
 		if (flagName == null) return macro false;
-		return {
-			expr: EField(macro opt, flagName),
-			pos: Context.currentPos(),
-		};
+		return optFieldAccess(flagName);
 	}
 
 	/**
@@ -4785,7 +4746,7 @@ class WriterLowering {
 		//    right shape per the wrap-cascade's flat/break decision.
 		final knobExpr:Null<Expr> = leftCurlyKnob == null
 			? null
-			: {expr: EField(macro opt, leftCurlyKnob), pos: Context.currentPos()};
+			: optFieldAccess(leftCurlyKnob);
 		final nextPat:Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BracePlacement', 'Next']);
 		// Doc that selects `_doh()` for `BracePlacement.Next`, `_de()`
 		// otherwise. `_doh()` is `OptHardline` — drops when the previous
@@ -4832,7 +4793,7 @@ class WriterLowering {
 		// identical to the pre-slice path.
 		final knobAccessOrFalse:Expr = trailingCommaField == null
 			? macro false
-			: {expr: EField(macro opt, trailingCommaField), pos: Context.currentPos()};
+			: optFieldAccess(trailingCommaField);
 		final forceExceedsExpr:Expr = trailPresentAccess != null && trailingCommaField != null
 			? macro $trailPresentAccess && $knobAccessOrFalse
 			: macro false;
@@ -4854,10 +4815,7 @@ class WriterLowering {
 			? macro $trailPresentAccess || $knobAccessOrFalse
 			: knobAccessOrFalse;
 		final noTriviaBranch:Expr = if (wrapRulesField != null) {
-			final rulesExpr:Expr = {
-				expr: EField(macro opt, wrapRulesField),
-				pos: Context.currentPos(),
-			};
+			final rulesExpr:Expr = optFieldAccess(wrapRulesField);
 			macro {
 				final _docs:Array<anyparse.core.Doc> = [];
 				var _si2:Int = 0;
@@ -5246,7 +5204,7 @@ class WriterLowering {
 	private static function buildCaseBodyFlagPredicate(flagName:String):Expr {
 		final samePat:Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BodyPolicy', 'Same']);
 		final keepPat:Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BodyPolicy', 'Keep']);
-		final optFlag:Expr = {expr: EField(macro opt, flagName), pos: Context.currentPos()};
+		final optFlag:Expr = optFieldAccess(flagName);
 		return macro ($optFlag == $samePat || ($optFlag == $keepPat && !_arr[0].newlineBefore));
 	}
 
@@ -5351,7 +5309,7 @@ class WriterLowering {
 			final block:Array<Expr> = [macro final _wo = _copyOpt(opt)];
 			for (pair in flatChildOptPairs) {
 				final fromAccess:Expr = {expr: EField(macro _wo, pair[0]), pos: Context.currentPos()};
-				final toAccess:Expr = {expr: EField(macro opt, pair[1]), pos: Context.currentPos()};
+				final toAccess:Expr = optFieldAccess(pair[1]);
 				block.push(macro $fromAccess = $toAccess);
 			}
 			block.push(macro _wo);
@@ -5369,7 +5327,7 @@ class WriterLowering {
 				final flatOnlyParts:Array<Expr> = [
 					for (pair in flatChildOptPairs) {
 						final fromAccess:Expr = {expr: EField(macro _wo, pair[0]), pos: Context.currentPos()};
-						final toAccess:Expr = {expr: EField(macro opt, pair[1]), pos: Context.currentPos()};
+						final toAccess:Expr = optFieldAccess(pair[1]);
 						macro $fromAccess = $toAccess;
 					}
 				];
@@ -5520,6 +5478,21 @@ class WriterLowering {
 	}
 
 	/**
+	 * Build the field-access Expr `opt.<fieldName>` — used everywhere the
+	 * generated writer reads a `WriteOptions` knob (cascade rules, body
+	 * policy flags, leftCurly placement, etc.). Replaces 4-line inline
+	 * `optFieldAccess(name)`
+	 * boilerplate at ~46 sites.
+	 *
+	 * Two sites that build the access with a non-`Context.currentPos()`
+	 * position (`triviaSepStarExpr` per-info loops in `interMemberInfo`)
+	 * stay inline — the helper assumes `Context.currentPos()`.
+	 */
+	private static inline function optFieldAccess(fieldName:String):Expr {
+		return {expr: EField(macro opt, fieldName), pos: Context.currentPos()};
+	}
+
+	/**
 	 * Build the field-access Expr `value.<fieldName><BEFORE_NEWLINE_SUFFIX>`
 	 * for a trivia-bearing struct field's `<field>BeforeNewline:Bool` synth slot
 	 * (created by `TriviaTypeSynth.isBareNonFirstRef`). The slot reads `true`
@@ -5597,7 +5570,7 @@ class WriterLowering {
 		var pathExpr:Expr = macro $i{rootArg};
 		for (segment in argPath.split('.'))
 			pathExpr = {expr: EField(pathExpr, segment), pos: Context.currentPos()};
-		final adapterExpr:Expr = {expr: EField(macro opt, adapterName), pos: Context.currentPos()};
+		final adapterExpr:Expr = optFieldAccess(adapterName);
 		return macro {
 			final _gateRaw:Null<Dynamic> = $pathExpr;
 			final _gateFn:Null<Dynamic -> Bool> = $adapterExpr;
