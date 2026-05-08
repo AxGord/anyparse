@@ -411,6 +411,11 @@ class WrapList {
 					// mode discards it. Wrap-rules-cascade measurements
 					// must therefore include it.
 					total += s.length;
+				case OptSpaceSkipAfterHardline:
+					// Mirror `OptSpace`: width-1 byte for flat measurement.
+					// Runtime-time drop only fires when `lastEmit==Hardline`
+					// which can never hold inside a flat-shape probe.
+					total += 1;
 				case OptHardline | OptHardlineSkipAtOpenDelim:
 					// Both opt-hardline variants can never flatten —
 					// mirrors `Line('\n')` returning -1 (and
@@ -448,7 +453,7 @@ class WrapList {
 	 */
 	public static function lastHardlineDepth(d:Doc, depth:Int):Int {
 		return switch d {
-			case Empty | Text(_) | OptSpace(_): -1;
+			case Empty | Text(_) | OptSpace(_) | OptSpaceSkipAfterHardline: -1;
 			case Line(flat):
 				flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code ? depth : -1;
 			case OptHardline | OptHardlineSkipAtOpenDelim: depth;
@@ -501,7 +506,7 @@ class WrapList {
 	public static function startsWithHardline(d:Doc):Bool {
 		var node:Doc = d;
 		while (true) switch node {
-			case Empty | Text(_) | OptSpace(_):
+			case Empty | Text(_) | OptSpace(_) | OptSpaceSkipAfterHardline:
 				return false;
 			case Line(flat):
 				return flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code;
@@ -751,6 +756,7 @@ class WrapList {
 			case Line(flat): flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code;
 			case Text(_): false;
 			case OptSpace(_): false;
+			case OptSpaceSkipAfterHardline: false;
 			case Nest(_, inner): hasLeadingHardline(inner);
 			case Group(inner) | BodyGroup(inner): hasLeadingHardline(inner);
 			case IfBreak(_, _): false;

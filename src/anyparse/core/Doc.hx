@@ -177,4 +177,24 @@ enum Doc {
 	OptSpace(s:String);
 	OptHardline;
 	OptHardlineSkipAtOpenDelim;
+	/**
+	 * Inline single space that drops when the last emitted output was
+	 * a hardline. Mirror of `OptHardlineSkipAtOpenDelim`'s drop-on-state
+	 * pattern but for the trailing-side: emit `' '` to keep tokens
+	 * separated when the previous emit ended on the same line, drop
+	 * silently when the previous emit ended with `\n+indent` (no
+	 * spurious ` #else` after a closing-brace's hardline).
+	 *
+	 * Used by `WriterLowering.sameLineSeparator` as the default
+	 * inter-field gap on optional-kw fields whose preceding sibling
+	 * (typically a `@:trivia @:tryparse` Star ending with a body
+	 * statement's `;\n`) emits a hardline with no pad-trailing signal
+	 * to drop the explicit space. Plain `Text(' ')` would land at
+	 * column 1 of the new line, producing ` #else` instead of `#else`.
+	 *
+	 * Like `OptSpace`, contributes its width (`1`) to flat-measurement
+	 * walks (`fitsFlat`, `flatTokenWidth*`); like `OptHardlineSkipAtOpenDelim`,
+	 * the drop decision happens at render time based on `lastEmit`.
+	 */
+	OptSpaceSkipAfterHardline;
 }

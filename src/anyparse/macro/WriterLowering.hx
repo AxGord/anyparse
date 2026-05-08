@@ -2980,7 +2980,22 @@ class WriterLowering {
 				: result;
 		}
 		final flagName:Null<String> = child.fmtReadString('sameLine');
-		if (flagName == null) return withPadTrailingDrop(macro _dt(' '));
+		// ω-cond-comp-expr-multiline (sub-slice 6): default sep is
+		// `_dossh()` (Doc.OptSpaceSkipAfterHardline) — emits `' '` to
+		// keep tokens separated when the previous emit ended on the same
+		// line, drops to nothing when the previous emit ended with a
+		// hardline. Closes the spurious-space-after-hardline window
+		// without conflating with `prevPadTrailing` (the latter is a
+		// macro-time signal about the prior FIELD's pad-emission, while
+		// this drop reads the renderer's runtime `lastEmit` state — they
+		// fire under different conditions and stack cleanly:
+		// `withPadTrailingDrop` collapses to `_de()` when prev's pad
+		// fired, otherwise `_dossh()` handles the residual hardline-
+		// trailing case from a non-pad-bearing prev field's body, e.g.
+		// `HxConditionalStmt.body → '#elseif'-clause → '#else'` where
+		// elseifs is non-empty so body's pad is masked but elseifs's
+		// last body element still ends with a hardline).
+		if (flagName == null) return withPadTrailingDrop(macro _dossh());
 		final optFlag:Expr = optFieldAccess(flagName);
 		final fieldName:Null<String> = child.annotations.get('base.fieldName');
 		// Mirror of Lowering's `hasKwTriviaSlots` gate — `<field>BeforeKwNewline`

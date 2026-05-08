@@ -231,6 +231,8 @@ class MethodChainEmit {
 					}
 				case OptSpace(s):
 					total += s.length;
+				case OptSpaceSkipAfterHardline:
+					total += 1;
 				case OptHardline | OptHardlineSkipAtOpenDelim:
 					// Same zero-width treatment as `Line('\n')`.
 			}

@@ -89,6 +89,8 @@ final class DocMeasure {
 					}
 				case OptSpace(s):
 					total += s.length;
+				case OptSpaceSkipAfterHardline:
+					total += 1;
 			}
 		}
 		return total;

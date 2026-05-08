@@ -58,6 +58,14 @@ class D {
 	public static inline function optSpace(s:String):Doc
 		return OptSpace(s);
 
+	/**
+	 * Inline single space that drops when the last emitted output
+	 * was a hardline. See `Doc.OptSpaceSkipAfterHardline` for the
+	 * trade-off vs `OptSpace`.
+	 */
+	public static inline function optSpaceSkipAfterHardline():Doc
+		return OptSpaceSkipAfterHardline;
+
 	/** Places `sep` between each item of `items`. Returns a fresh array. **/
 	public static function intersperse(items:Array<Doc>, sep:Doc):Array<Doc> {
 		if (items.length <= 1) return items.copy();
@@ -109,6 +117,7 @@ class D {
 			case OptSpace(s): Text(s);
 			case OptHardline: Empty;
 			case OptHardlineSkipAtOpenDelim: Empty;
+			case OptSpaceSkipAfterHardline: Text(' ');
 		};
 	}
 }

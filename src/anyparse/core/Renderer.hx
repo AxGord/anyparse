@@ -243,6 +243,20 @@ class Renderer {
 						col = f.indent;
 						lastEmit = Hardline;
 					}
+				case OptSpaceSkipAfterHardline:
+					// Inline single space, dropped when the last emitted
+					// output ended with a hardline. Mirror of
+					// `OptHardlineSkipAtOpenDelim`'s drop-on-state pattern
+					// for the trailing-side. Pending `OptSpace` cleared on
+					// drop; on emit, the space prints at the current
+					// (post-flush) position via the same `pendingOptSpace`
+					// channel as `OptSpace(' ')` would, so the flat-mode
+					// `Line(' ')` collapse ordering still holds.
+					if (lastEmit == Hardline) {
+						pendingOptSpace = null;
+					} else {
+						pendingOptSpace = pendingOptSpace == null ? ' ' : pendingOptSpace + ' ';
+					}
 				case OptHardlineSkipAtOpenDelim:
 					// Open-delim-aware leading hardline. Three branches:
 					//  1. Last emit was an open delim (`(`/`[`/`{`):
@@ -493,6 +507,12 @@ class Renderer {
 					// space (the suppression only happens at render time on
 					// break-mode `Line`).
 					budget -= s.length;
+				case OptSpaceSkipAfterHardline:
+					// In flat measurement, treat as a single-byte space —
+					// the runtime drop only fires when `lastEmit==Hardline`,
+					// which by definition cannot happen inside a `fitsFlat`
+					// probe (the probe walks pure flat shape).
+					budget -= 1;
 				case OptHardline | OptHardlineSkipAtOpenDelim:
 					// Both opt-hardline variants are hardlines by intent
 					// and can never flatten. Mirror the `Line('\n')`
@@ -569,6 +589,8 @@ class Renderer {
 					}
 				case OptSpace(s):
 					total += s.length;
+				case OptSpaceSkipAfterHardline:
+					total += 1;
 			}
 		}
 		return total;
@@ -666,6 +688,8 @@ class Renderer {
 						}
 					case OptSpace(s):
 						total += s.length;
+					case OptSpaceSkipAfterHardline:
+						total += 1;
 					case OptHardline | OptHardlineSkipAtOpenDelim:
 						aborted = true;
 				}
