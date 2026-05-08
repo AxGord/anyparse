@@ -27,12 +27,13 @@ import anyparse.runtime.ParseError;
  * on `HaxeModuleParser`/`HxModuleWriter` for layout-only tests that do
  * not need comment preservation.
  *
- * Category coverage grows one method at a time. Currently wired:
+ * All 10 fork corpus categories are wired:
  * `whitespace/` (153), `sameline/` (132), `indentation/` (130),
  * `wrapping/` (200), `emptylines/` (96), `lineends/` (94),
- * `other/` (62). Remaining categories (`formatrange`,
- * `expressionlevel`, `missing`) are added in subsequent slices —
- * each is one new method reusing `HxFormatterCorpusHelpers`.
+ * `other/` (62), `formatrange/` (15), `expressionlevel/` (1),
+ * `missing/` (1). Each category is one method reusing
+ * `HxFormatterCorpusHelpers` — extending coverage to a new fork
+ * directory takes ~4 lines (1 const + 1 method + doc bump).
  *
  * The harness intentionally does NOT fail the utest pass on per-case
  * byte diffs. The first run will surface dozens of grammar gaps
@@ -55,6 +56,9 @@ class HxFormatterCorpusTest extends Test {
 	private static inline final EMPTYLINES_SUBDIR:String = 'test/testcases/emptylines';
 	private static inline final LINEENDS_SUBDIR:String = 'test/testcases/lineends';
 	private static inline final OTHER_SUBDIR:String = 'test/testcases/other';
+	private static inline final FORMATRANGE_SUBDIR:String = 'test/testcases/formatrange';
+	private static inline final EXPRESSIONLEVEL_SUBDIR:String = 'test/testcases/expressionlevel';
+	private static inline final MISSING_SUBDIR:String = 'test/testcases/missing';
 	private static inline final HXTEST_EXT:String = '.hxtest';
 	private static inline final MAX_DIFF_CONTEXT:Int = 40;
 	private static inline final MAX_REASON_LEN:Int = 120;
@@ -90,6 +94,18 @@ class HxFormatterCorpusTest extends Test {
 
 	public function testOther():Void {
 		runCategory(OTHER_SUBDIR, 'other');
+	}
+
+	public function testFormatRange():Void {
+		runCategory(FORMATRANGE_SUBDIR, 'formatrange');
+	}
+
+	public function testExpressionLevel():Void {
+		runCategory(EXPRESSIONLEVEL_SUBDIR, 'expressionlevel');
+	}
+
+	public function testMissing():Void {
+		runCategory(MISSING_SUBDIR, 'missing');
 	}
 
 	private function runCategory(subdir:String, label:String):Void {
