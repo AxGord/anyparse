@@ -3118,26 +3118,119 @@ class WriterLowering {
 	}
 
 	/**
-	 * ω-cond-comp-expr-multiline (sub-slice 1) — emit the Doc that a
-	 * Ref-side `@:fmt(padTrailing)` site pushes between `child` and
-	 * the next sibling (or the parent ctor's trail literal). Today
-	 * this is a literal `_dt(' ')`, byte-identical to the inline
-	 * push it replaced; the sub-slice 2 extension turns this into a
-	 * runtime ternary picking `_dhl()` vs `_dt(' ')` based on the
-	 * NEXT field's leading-newline signal (Star first-element
-	 * `newlineBefore`, optional-kw-Ref `BeforeKwNewline`, or — when
-	 * sub-slice 5 lands — a terminal `<field>NewlineAfter` slot
-	 * synthesised on `child` itself for the parent-trail boundary).
+	 * ω-cond-comp-expr-multiline — emit the Doc that a Ref-side
+	 * `@:fmt(padTrailing)` site pushes between `child` and the next
+	 * sibling (or the parent ctor's trail literal). In plain mode
+	 * or when the parent's struct rule is non-trivia-bearing, falls
+	 * back to a literal `_dt(' ')` (byte-identical to the inline
+	 * push the helper replaced in sub-slice 1).
+	 *
+	 * In trivia mode, walks the children that follow `child`
+	 * via `collectFollowingNewlineSignals` and builds a runtime
+	 * ternary chain that picks `_dhl()` over `_dt(' ')` when ANY
+	 * downstream field's leading-newline signal is true at write
+	 * time:
+	 *
+	 *   `(g₀ ? s₀ : (g₁ ? s₁ : … (g_n ? s_n : false))) ? _dhl() : _dt(' ')`
+	 *
+	 * Each `(guard, signal)` pair represents one downstream
+	 * boundary candidate — guard is "this field is present at
+	 * runtime", signal is "this field's leading-newline slot is
+	 * true". The first guarded-and-present field's signal wins;
+	 * absent fields pass through to the next entry.
+	 *
+	 * Sub-slice 2 wires the two existing slot kinds — `@:trivia`
+	 * Star first-element `newlineBefore` and optional-kw-Ref/Star
+	 * `BeforeKwNewline`. Sub-slice 5 will add a terminal entry on
+	 * `child` itself (`<field>NewlineAfter`) for the
+	 * parent-trail-literal boundary case where no downstream
+	 * sibling carries a slot.
 	 *
 	 * Centralised so all three Ref-kind pad emit sites (mandatory
 	 * Ref at the end-of-loop block, optional Ref inside `optParts`,
 	 * and any future Ref-kind opt-in) share one decision surface.
 	 * Star-kind fields keep their existing in-helper pad emission
 	 * (`triviaTryparseStarExpr` reads `_arr[0].newlineBefore` for
-	 * its own first-element signal).
+	 * its own first-element signal — Star→Star path was
+	 * pre-existing and unrelated to this slice's Ref-kind lift).
 	 */
 	private function padTrailingDoc(parent:ShapeNode, child:ShapeNode, typePath:String):Expr {
-		return macro _dt(' ');
+		if (!ctx.trivia || !isTriviaBearing(typePath)) return macro _dt(' ');
+		final signals:Array<{guard:Expr, signal:Expr}> = collectFollowingNewlineSignals(parent, child);
+		if (signals.length == 0) return macro _dt(' ');
+		var picked:Expr = macro false;
+		var i:Int = signals.length;
+		while (i-- > 0) {
+			final sig:{guard:Expr, signal:Expr} = signals[i];
+			final guard:Expr = sig.guard;
+			final signal:Expr = sig.signal;
+			picked = macro $guard ? $signal : $picked;
+		}
+		return macro $picked ? _dhl() : _dt(' ');
+	}
+
+	/**
+	 * ω-cond-comp-expr-multiline — walk the children of `parent`
+	 * that follow `child`, collecting one `(guard, signal)` pair
+	 * per downstream field whose presence is runtime-guarded AND
+	 * whose leading-newline source-shape was captured by the
+	 * trivia parser. Stops at the first mandatory non-transparent
+	 * field — that field always emits visible content, so any
+	 * further signal is irrelevant to `child`'s pad-emit site.
+	 *
+	 * Slot precedence (matches `TriviaTypeSynth`): a field that
+	 * is BOTH `@:trivia` Star AND optional-kw routes through the
+	 * opt-kw branch — `BeforeKwNewline` describes the kw-position
+	 * newline (the boundary `child`'s pad is closing), while the
+	 * Star's first-element `newlineBefore` describes a post-kw
+	 * boundary one layer deeper.
+	 *
+	 * Optional fields (Ref or Star) without `@:kw` and without
+	 * `@:trivia` carry no captured-newline slot — they're walked
+	 * past as "transparent if absent" but contribute no entry; a
+	 * downstream signal-bearing field still gets to win when the
+	 * intervening transparent field is empty/absent at runtime.
+	 */
+	private function collectFollowingNewlineSignals(parent:ShapeNode, child:ShapeNode):Array<{guard:Expr, signal:Expr}> {
+		final out:Array<{guard:Expr, signal:Expr}> = [];
+		final startIdx:Int = parent.children.indexOf(child);
+		if (startIdx < 0) return out;
+		for (i in (startIdx + 1)...parent.children.length) {
+			final next:ShapeNode = parent.children[i];
+			final nextFieldName:Null<String> = next.annotations.get('base.fieldName');
+			if (nextFieldName == null) continue;
+			final nextAccess:Expr = {expr: EField(macro value, nextFieldName), pos: Context.currentPos()};
+			final isOptional:Bool = next.annotations.get('base.optional') == true;
+			final isOptKw:Bool = (next.kind == Ref || next.kind == Star)
+				&& isOptional
+				&& next.readMetaString(':kw') != null;
+			if (isOptKw) {
+				final slotAccess:Expr = {
+					expr: EField(macro value, nextFieldName + TriviaTypeSynth.BEFORE_KW_NEWLINE_SUFFIX),
+					pos: Context.currentPos(),
+				};
+				out.push({guard: macro $nextAccess != null, signal: slotAccess});
+				continue;
+			}
+			final isTriviaStar:Bool = next.kind == Star && next.annotations.get('trivia.starCollects') == true;
+			if (isTriviaStar) {
+				final firstNl:Expr = macro $nextAccess[0].newlineBefore;
+				final guard:Expr = isOptional
+					? macro $nextAccess != null && $nextAccess.length > 0
+					: macro $nextAccess.length > 0;
+				out.push({guard: guard, signal: firstNl});
+				continue;
+			}
+			// Non-signal field. Optional/transparent kinds without a
+			// captured-newline slot fall through to the next iteration —
+			// when absent at runtime they contribute no signal, when
+			// present they emit visible content and the boundary is
+			// theirs (a downstream signal would describe a different
+			// boundary). Mandatory non-transparent fields stop the walk
+			// outright.
+			if (!isOptional && next.kind != Star) break;
+		}
+		return out;
 	}
 
 	/**

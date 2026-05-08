@@ -879,6 +879,19 @@ class Lowering {
 		}
 		// ω-trivia-sep: same pre-skipWs save + comment-only rewind as
 		// `lowerPrattLoop`. See that function for the rationale.
+		// ω-cond-comp-expr-multiline: mirror lowerPrattLoop's
+		// `ω-untyped-keep` newline-stash on postfix-loop exit. When the
+		// loop's last skipWs consumed a `\n` (and no comment, no postfix
+		// match), the newline is otherwise silently dropped — Pratt's
+		// outer trivia loop saves `_preWsPos` at the position the postfix
+		// loop returns from, so by the time Pratt's own stash logic runs
+		// the newline is already past `_preWsPos` and the scan-back finds
+		// nothing. Without the stash, downstream `collectTrivia` calls
+		// (e.g. the `@:trivia @:tryparse Star` `elseifs` of
+		// `HxConditionalExpr` after `expr` is parsed) read
+		// `newlineBefore=false` and the writer's pad-as-hardline lift
+		// fires false on the `expr → elseifs[0]` boundary even when
+		// source is multi-line.
 		if (ctx.trivia) return macro {
 			var left:$returnCT = $coreCall;
 			while (true) {
@@ -889,8 +902,11 @@ class Lowering {
 				if (!_matched) {
 					var _scanI:Int = _preWsPos;
 					var _hadComment:Bool = false;
-					while (_scanI + 1 < ctx.pos) {
-						if (ctx.input.charCodeAt(_scanI) == '/'.code) {
+					var _hadNewline:Bool = false;
+					while (_scanI < ctx.pos) {
+						final _ch:Int = ctx.input.charCodeAt(_scanI);
+						if (_ch == '\n'.code) _hadNewline = true;
+						if (_ch == '/'.code && _scanI + 1 < ctx.pos) {
 							final _c2:Int = ctx.input.charCodeAt(_scanI + 1);
 							if (_c2 == '/'.code || _c2 == '*'.code) {
 								_hadComment = true;
@@ -899,7 +915,21 @@ class Lowering {
 						}
 						_scanI++;
 					}
-					if (_hadComment) ctx.pos = _preWsPos;
+					if (_hadComment) {
+						ctx.pos = _preWsPos;
+					} else if (_hadNewline) {
+						final _pt = ctx.pendingTrivia;
+						if (_pt == null) {
+							ctx.pendingTrivia = {
+								blankBefore: false,
+								blankAfterLeadingComments: false,
+								newlineBefore: true,
+								leadingComments: [],
+							};
+						} else {
+							_pt.newlineBefore = true;
+						}
+					}
 					break;
 				}
 			}
