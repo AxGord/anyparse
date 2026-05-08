@@ -1498,18 +1498,31 @@ class WriterLowering {
 				// newline intact instead of collapsing to a space). Plain
 				// mode has no Trivial wrapper, so the double-gated branch
 				// emits a plain space (no newline recovery).
+				//
+				// ω-pad-trailing-ref / ω-cond-comp-stmt-blank-fix: when the
+				// immediately preceding field fired `@:fmt(padTrailing)`,
+				// drop THIS sep at runtime so the pad's emission owns the
+				// boundary alone. Without the gate, body→elseifs boundary
+				// in `HxConditionalStmt` / `HxConditionalDecl` doubled the
+				// hardline (body's padTrailing emits `_dhl()` because
+				// `body[0].newlineBefore=true`, then this sep emits
+				// `_dhl()` again because `elseifs[0].newlineBefore=true`)
+				// and produced a spurious blank line between the last body
+				// stmt and `#elseif`. Mirrors the `withPadTrailingDrop`
+				// wrapper in `sameLineSeparator` (kw-Ref / opt-Ref sep
+				// path); both consume the same macro-time `prevPadTrailing`
+				// signal at struct-field boundaries.
 				if (isBareTryparseStar(child) && !isFirstField && prevAnyStarNonEmpty != null) {
 					final prev:Expr = prevAnyStarNonEmpty;
-					if (ctx.trivia) {
-						parts.push(macro {
+					final baseExpr:Expr = ctx.trivia
+						? macro {
 							final _next = $fieldAccess;
 							if ($prev && _next.length > 0)
 								_next[0].newlineBefore ? _dhl() : _dt(' ');
 							else _de();
-						});
-					} else {
-						parts.push(macro ($prev && $fieldAccess.length > 0) ? _dt(' ') : _de());
-					}
+						}
+						: macro ($prev && $fieldAccess.length > 0) ? _dt(' ') : _de();
+					parts.push(withPadTrailingDrop(prevPadTrailing, baseExpr));
 				}
 				emitWriterStarField(child, fieldAccess, parts, child == node.children[node.children.length - 1], typePath, isFirstField, isRaw, stalePrevBareRefBody);
 				if (isBareTryparseStar(child)) {
@@ -2968,17 +2981,11 @@ class WriterLowering {
 	private function sameLineSeparator(
 		child:ShapeNode, prevBody:Null<PrevBodyInfo>, typePath:String, prevPadTrailing:Null<Expr> = null
 	):Expr {
-		// ω-pad-trailing-ref: when the immediately preceding field fired
-		// `@:fmt(padTrailing)`, drop THIS field's leading separator to
-		// `_de()` at runtime so the pad's space owns the boundary alone.
-		// Wraps the result of every return path uniformly — the wrapper
-		// is a no-op when `prevPadTrailing == null`, so existing callers
-		// (no upstream padTrailing) stay byte-identical.
-		inline function withPadTrailingDrop(result:Expr):Expr {
-			return prevPadTrailing != null
-				? macro ($prevPadTrailing ? _de() : $result)
-				: result;
-		}
+		// ω-pad-trailing-ref: every return path wraps via the static
+		// `withPadTrailingDrop` helper — drops the sep at runtime when
+		// the immediately preceding field's `@:fmt(padTrailing)` fired.
+		// No-op when `prevPadTrailing == null`, so existing callers (no
+		// upstream padTrailing) stay byte-identical.
 		final flagName:Null<String> = child.fmtReadString('sameLine');
 		// ω-cond-comp-expr-multiline (sub-slice 6): default sep is
 		// `_dossh()` (Doc.OptSpaceSkipAfterHardline) — emits `' '` to
@@ -2995,7 +3002,7 @@ class WriterLowering {
 		// `HxConditionalStmt.body → '#elseif'-clause → '#else'` where
 		// elseifs is non-empty so body's pad is masked but elseifs's
 		// last body element still ends with a hardline).
-		if (flagName == null) return withPadTrailingDrop(macro _dossh());
+		if (flagName == null) return withPadTrailingDrop(prevPadTrailing, macro _dossh());
 		final optFlag:Expr = optFieldAccess(flagName);
 		final fieldName:Null<String> = child.annotations.get('base.fieldName');
 		// Mirror of Lowering's `hasKwTriviaSlots` gate — `<field>BeforeKwNewline`
@@ -3019,9 +3026,9 @@ class WriterLowering {
 			macro ($slotAccess ? _dhl() : _dt(' '));
 		} else macro _dt(' ');
 		final flagBased:Expr = sameLinePolicySwitch(optFlag, keepExpr);
-		if (prevBody == null || !child.fmtHasFlag('shapeAware')) return withPadTrailingDrop(flagBased);
+		if (prevBody == null || !child.fmtHasFlag('shapeAware')) return withPadTrailingDrop(prevPadTrailing, flagBased);
 		final blockPatterns:Array<Expr> = collectBlockCtorPatterns(prevBody.typePath);
-		if (blockPatterns.length == 0) return withPadTrailingDrop(flagBased);
+		if (blockPatterns.length == 0) return withPadTrailingDrop(prevPadTrailing, flagBased);
 		final cases:Array<Case> = [
 			{values: blockPatterns, expr: flagBased, guard: null},
 			{values: [macro _], expr: macro _dhl(), guard: null},
@@ -3054,7 +3061,7 @@ class WriterLowering {
 		// access.
 		final childBodyPolicy:{stmt:Null<String>, expr:Null<String>} = readBodyPolicyDual(child);
 		final childBodyPolicyFlag:Null<String> = childBodyPolicy.stmt;
-		if (childBodyPolicyFlag == null) return withPadTrailingDrop(shapeAwareSwitch);
+		if (childBodyPolicyFlag == null) return withPadTrailingDrop(prevPadTrailing, shapeAwareSwitch);
 		final stmtBpAccess:Expr = optFieldAccess(childBodyPolicyFlag);
 		final bpAccess:Expr = if (childBodyPolicy.expr == null) stmtBpAccess
 		else {
@@ -3070,7 +3077,7 @@ class WriterLowering {
 			};
 			macro ($bpAccess == $samePat || ($bpAccess == $keepPat && !$slotAccess));
 		} else macro $bpAccess == $samePat;
-		return withPadTrailingDrop(macro $isInlineExpr ? $flagBased : $shapeAwareSwitch);
+		return withPadTrailingDrop(prevPadTrailing, macro $isInlineExpr ? $flagBased : $shapeAwareSwitch);
 	}
 
 	/**
@@ -3130,6 +3137,28 @@ class WriterLowering {
 		if (fires == null) return prev != null ? macro $transparent && $prev : null;
 		if (transparent == null) return fires;
 		return prev != null ? macro $fires || ($transparent && $prev) : fires;
+	}
+
+	/**
+	 * ω-pad-trailing-ref — wrap a sep-emission `Expr` with the
+	 * `prevPadTrailing` runtime drop. When the immediately preceding
+	 * field fired `@:fmt(padTrailing)`, drop THIS sep at runtime so
+	 * the pad's emission owns the boundary alone.
+	 *
+	 * No-op (returns `result` unchanged) when `prevPadTrailing` is
+	 * null — preserves byte-identical behaviour for callers without
+	 * an upstream pad signal.
+	 *
+	 * Two consumer sites: `sameLineSeparator` (kw-Ref / opt-Ref /
+	 * opt-lead struct-field sep) and the inter-Star sep at the
+	 * struct-field bare-tryparse-Star branch (sub-slice 7). Both
+	 * read the same macro-time `prevPadTrailing` set by
+	 * `composePadTrailing` at the end of each iteration.
+	 */
+	private static inline function withPadTrailingDrop(prevPadTrailing:Null<Expr>, result:Expr):Expr {
+		return prevPadTrailing != null
+			? macro ($prevPadTrailing ? _de() : $result)
+			: result;
 	}
 
 	/**
