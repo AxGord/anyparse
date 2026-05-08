@@ -260,6 +260,23 @@ package anyparse.grammar.haxe;
  *    (`bodyPolicyOverride('UntypedBlockStmt', 'untypedBody')`) still
  *    fire.
  *
+ *  - `Conditional` — `#if <cond> <stmts> [#else <stmts>] #end`
+ *    preprocessor-guarded region wrapping function-body statements
+ *    (slice ω-cond-comp-stmt). Mirror of `HxDecl.Conditional` /
+ *    `HxModifier.Conditional` at the statement scope: `@:kw('#if')`
+ *    dispatches with a non-word-char boundary check (so `#iff` is
+ *    rejected); `@:trail('#end')` consumes the closing directive
+ *    after `HxConditionalStmt` parses the cond atom, the body Star,
+ *    and the optional `#else` clause. Nested `#if` is supported
+ *    transitively because the body re-enters `HxStatement` through
+ *    `HxConditionalStmt.body`.
+ *
+ *    Position before `BlockStmt` / `ExprStmt` ensures the `#if`
+ *    keyword dispatch fires before the `{`-literal `BlockStmt`
+ *    fallthrough and the catch-all expression-statement; branch order
+ *    relative to other kw-led ctors does not matter because no other
+ *    `HxStatement` ctor's keyword starts with `#`.
+ *
  *  - `BlockStmt` — `{ stmts }` block statement. No keyword guard —
  *    dispatched by the `{` literal. Uses Case 4 in
  *    `Lowering.lowerEnumBranch` (Array<Ref> with lead/trail, no sep).
@@ -320,6 +337,9 @@ enum HxStatement {
 
 	@:fmt(blockShape)
 	UntypedBlockStmt(body:HxUntypedFnBody);
+
+	@:kw('#if') @:trail('#end')
+	Conditional(inner:HxConditionalStmt);
 
 	@:fmt(leftCurly) @:lead('{') @:trail('}') @:trivia
 	BlockStmt(stmts:Array<HxStatement>);
