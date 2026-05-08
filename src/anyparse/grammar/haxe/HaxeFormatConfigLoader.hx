@@ -111,6 +111,12 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   `HxNewExpr.args` via `@:fmt(wrapRules('callParameterWrap'))` —
  *   field, default, and writer dispatch were already wired; this
  *   slice closes the loader-side gap.
+ * - `wrapping.objectLiteral` (ω-wrapping-objectLiteral-ingest): same
+ *   `WrapRules` ingest shape as `arrayWrap`, routed to
+ *   `objectLiteralWrap`. Drives `HxObjectLit.fields` via
+ *   `@:fmt(wrapRules('objectLiteralWrap'))` — field, default, and
+ *   writer dispatch were already wired; this slice closes the loader-
+ *   side gap.
  * - `sameLine.ifElse` / `sameLine.tryCatch` / `sameLine.doWhile`: enum
  *   string — `"same"` → `SameLinePolicy.Same`, `"next"` →
  *   `SameLinePolicy.Next`, `"keep"` → `SameLinePolicy.Keep` (reads the
@@ -548,6 +554,7 @@ final class HaxeFormatConfigLoader {
 		if (section.opBoolChain != null) opt.opBoolChainWrap = wrapRulesFromConfig(section.opBoolChain, opt.opBoolChainWrap);
 		if (section.opAddSubChain != null) opt.opAddSubChainWrap = wrapRulesFromConfig(section.opAddSubChain, opt.opAddSubChainWrap);
 		if (section.callParameter != null) opt.callParameterWrap = wrapRulesFromConfig(section.callParameter, opt.callParameterWrap);
+		if (section.objectLiteral != null) opt.objectLiteralWrap = wrapRulesFromConfig(section.objectLiteral, opt.objectLiteralWrap);
 	}
 
 	/**

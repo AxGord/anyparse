@@ -20,6 +20,11 @@ package anyparse.grammar.haxe.format;
  *    ω-wrapping-callParameter-ingest — knob, loader, and writer
  *    dispatch via `@:fmt(wrapRules('callParameterWrap'))` on
  *    `HxExpr.Call.args` and `HxNewExpr.args` are now wired).
+ *  - `objectLiteral`: `WrapRules` cascade → `objectLiteralWrap` (slice
+ *    ω-wrapping-objectLiteral-ingest — knob, default, and writer
+ *    dispatch via `@:fmt(wrapRules('objectLiteralWrap'))` on
+ *    `HxObjectLit.fields` were already wired before this slice; only
+ *    the loader-side mapping was missing).
  *
  * Slice ω-peg-byname-array lifted the prior `@:peg` ByName Array<T>
  * limitation, so every cascade above now ingests `rules` from
@@ -27,12 +32,10 @@ package anyparse.grammar.haxe.format;
  * `lineLength >= n` predicate are silently dropped at load time so the
  * cascade falls through to the next rule).
  *
- * The remaining per-construct cascades (`objectLiteral`,
- * `conditionWrapping`, `expressionWrapping`, `typeParameter`,
- * `arrayMatrixWrap`, …) land with their own slices when each gains
- * JSON-side wiring; some matching `WriteOptions` fields exist already
- * (e.g. `objectLiteralWrap`) but are still populated only from the
- * `HaxeFormat.default*Wrap()` defaults; others need new fields plus
+ * The remaining per-construct cascades (`conditionWrapping`,
+ * `expressionWrapping`, `typeParameter`, `arrayMatrixWrap`, …) land
+ * with their own slices when each gains JSON-side wiring; matching
+ * `WriteOptions` fields don't exist yet and need new fields plus
  * grammar `@:fmt` wiring.
  */
 @:peg typedef HxFormatWrappingSection = {
@@ -50,4 +53,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var opAddSubChain:HxFormatWrapRules;
 
 	@:optional var callParameter:HxFormatWrapRules;
+
+	@:optional var objectLiteral:HxFormatWrapRules;
 };
