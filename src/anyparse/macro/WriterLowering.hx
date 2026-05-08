@@ -1818,7 +1818,7 @@ class WriterLowering {
 						// `untypedBody=Keep` source-shape preservation.
 						final firstFieldNlOptIn:Bool = isFirstField && child.fmtHasFlag('beforeNewlineSlotFirst');
 						final bodyOnSameLineExpr:Null<Expr> = ctx.trivia && (!isFirstField || firstFieldNlOptIn)
-							? macro !${ {expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX), pos: Context.currentPos()} }
+							? beforeNewlineNotAccess(fieldName)
 							: null;
 						// ω-untyped-body-stmt-override: forward all
 						// `@:fmt(bodyPolicyOverride('<ctor>', '<flag>'))`
@@ -1954,7 +1954,7 @@ class WriterLowering {
 								final hasBeforeNlSlot:Bool = ctx.trivia && isTriviaBearing(typePath)
 									&& !isFirstField && kwLead == null && leadText == null;
 								final wrapBodyOnSameLineExpr:Null<Expr> = hasBeforeNlSlot
-									? {expr: EUnop(OpNot, false, {expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX), pos: Context.currentPos()}), pos: Context.currentPos()}
+									? beforeNewlineNotAccess(fieldName)
 									: null;
 								final wrapOutput:Expr = bodyPolicyWrap({
 									flagName: wrapFlagName,
@@ -2040,10 +2040,7 @@ class WriterLowering {
 								// since that Star has no first element whose
 								// `newlineBefore` could be read.
 								if (ctx.trivia && isTriviaBearing(typePath)) {
-									final nlAccess:Expr = {
-										expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX),
-										pos: Context.currentPos(),
-									};
+									final nlAccess:Expr = beforeNewlineAccess(fieldName);
 									if (prevAnyStarNonEmpty != null) {
 										final prev:Expr = prevAnyStarNonEmpty;
 										parts.push(macro $prev ? ($nlAccess ? _dhl() : _dt(' ')) : _de());
@@ -5520,6 +5517,35 @@ class WriterLowering {
 	private static function dcCall(parts:Array<Expr>):Expr {
 		final arr:Expr = {expr: EArrayDecl(parts), pos: Context.currentPos()};
 		return macro _dc($arr);
+	}
+
+	/**
+	 * Build the field-access Expr `value.<fieldName><BEFORE_NEWLINE_SUFFIX>`
+	 * for a trivia-bearing struct field's `<field>BeforeNewline:Bool` synth slot
+	 * (created by `TriviaTypeSynth.isBareNonFirstRef`). The slot reads `true`
+	 * when the parser captured a source newline in the gap before the field.
+	 *
+	 * Used by `lowerStruct` for source-newline preservation paths
+	 * (issue_48-v2 bare-ref hardline) — also see `beforeNewlineNotAccess` for
+	 * the `bodyOnSameLine` inverse used by `bodyPolicyWrap` consumers.
+	 */
+	private static inline function beforeNewlineAccess(fieldName:String):Expr {
+		return {
+			expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * Build `!value.<fieldName><BEFORE_NEWLINE_SUFFIX>` — the `bodyOnSameLine`
+	 * inverse of the trivia BeforeNewline slot, used by `bodyPolicyWrap`'s
+	 * `Keep`-policy dispatch and the `bodyPolicyForCtor` runtime wrap.
+	 */
+	private static inline function beforeNewlineNotAccess(fieldName:String):Expr {
+		return {
+			expr: EUnop(OpNot, false, beforeNewlineAccess(fieldName)),
+			pos: Context.currentPos(),
+		};
 	}
 
 	private static function makeWriteCall(writeFnName:String, valueExpr:Expr, hasPratt:Bool, ctxPrec:Int):Expr {
