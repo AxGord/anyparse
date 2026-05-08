@@ -1804,7 +1804,7 @@ class WriterLowering {
 					// `... e2 #end` boundary lands as ` #end` instead of
 					// `e2#end`.
 					if (child.fmtHasFlag('padTrailing')) {
-						optParts.push(macro _dt(' '));
+						optParts.push(padTrailingDoc(node, child, typePath));
 						thisPadTrailing = macro $fieldAccess != null;
 					}
 					final optBody:Expr = if (optParts.length == 1) optParts[0]
@@ -2191,7 +2191,7 @@ class WriterLowering {
 			// Ref (transparent when absent). The latter lets a prev pad
 			// signal propagate across an absent optional Ref middle field.
 			if (!isStar && !isOptional && child.fmtHasFlag('padTrailing')) {
-				parts.push(macro _dt(' '));
+				parts.push(padTrailingDoc(node, child, typePath));
 				thisPadTrailing = macro true;
 			}
 			if (isStar) {
@@ -3115,6 +3115,29 @@ class WriterLowering {
 		if (fires == null) return prev != null ? macro $transparent && $prev : null;
 		if (transparent == null) return fires;
 		return prev != null ? macro $fires || ($transparent && $prev) : fires;
+	}
+
+	/**
+	 * ω-cond-comp-expr-multiline (sub-slice 1) — emit the Doc that a
+	 * Ref-side `@:fmt(padTrailing)` site pushes between `child` and
+	 * the next sibling (or the parent ctor's trail literal). Today
+	 * this is a literal `_dt(' ')`, byte-identical to the inline
+	 * push it replaced; the sub-slice 2 extension turns this into a
+	 * runtime ternary picking `_dhl()` vs `_dt(' ')` based on the
+	 * NEXT field's leading-newline signal (Star first-element
+	 * `newlineBefore`, optional-kw-Ref `BeforeKwNewline`, or — when
+	 * sub-slice 5 lands — a terminal `<field>NewlineAfter` slot
+	 * synthesised on `child` itself for the parent-trail boundary).
+	 *
+	 * Centralised so all three Ref-kind pad emit sites (mandatory
+	 * Ref at the end-of-loop block, optional Ref inside `optParts`,
+	 * and any future Ref-kind opt-in) share one decision surface.
+	 * Star-kind fields keep their existing in-helper pad emission
+	 * (`triviaTryparseStarExpr` reads `_arr[0].newlineBefore` for
+	 * its own first-element signal).
+	 */
+	private function padTrailingDoc(parent:ShapeNode, child:ShapeNode, typePath:String):Expr {
+		return macro _dt(' ');
 	}
 
 	/**
