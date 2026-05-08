@@ -1,6 +1,7 @@
 package anyparse.format.wrap;
 
 import anyparse.core.Doc;
+import anyparse.core.DocMeasure;
 import anyparse.format.IndentChar;
 import anyparse.format.WriteOptions;
 
@@ -54,7 +55,7 @@ class MethodChainEmit {
 		var total:Int = 0;
 		var maxLen:Int = 0;
 		for (seg in segments) {
-			final len:Int = chainItemLength(seg);
+			final len:Int = DocMeasure.flatTokenWidth(seg);
 			total += len;
 			if (len > maxLen) maxLen = len;
 		}
@@ -176,68 +177,6 @@ class MethodChainEmit {
 		final brk:Doc = buildChainThresholdTree(rest, firingPlus, evalAt, shapeAt);
 		final flat:Doc = buildChainThresholdTree(rest, firing, evalAt, shapeAt);
 		return IfWidthExceeds(t, brk, flat);
-	}
-
-	private static function chainItemLength(d:Doc):Int {
-		final stack:Array<Doc> = [d];
-		var total:Int = 0;
-		while (stack.length > 0) {
-			final node:Doc = stack.pop();
-			switch (node) {
-				case Empty:
-				case Text(s):
-					total += s.length;
-				case Line(flat):
-					if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) {
-						// hardline — count 0 (token-width measurement
-						// skips the layout break).
-					} else {
-						total += flat.length;
-					}
-				case Nest(_, inner):
-					stack.push(inner);
-				case Concat(items):
-					var i:Int = items.length;
-					while (--i >= 0) stack.push(items[i]);
-				case Group(inner):
-					stack.push(inner);
-				case BodyGroup(_):
-					// Defer like `Renderer.fitsFlat`: BG content decides
-					// its own flat/break and does not contribute to the
-					// parent chain's static width.
-				case IfBreak(_, flatDoc):
-					stack.push(flatDoc);
-				case IfWidthExceeds(_, _, flatDoc):
-					// Forward to flat side (mirrors `IfBreak`): the
-					// column-aware decision happens at render time and
-					// chain-item width measurement uses the flat shape.
-					stack.push(flatDoc);
-				case IfFirstLineExceeds(_, _, flatDoc):
-					// Mirror `IfWidthExceeds`: chain segments treat the
-					// first-line probe transparently — the flat shape
-					// answers the chain's "ignore hardlines" semantic.
-					stack.push(flatDoc);
-				case IfLineExceeds(_, _, flatDoc):
-					// Mirror `IfWidthExceeds`: chain segments forward to
-					// flat side; rest-of-stack lookahead is renderer-side
-					// (slice ω-iflineexceeds-infra).
-					stack.push(flatDoc);
-				case Fill(items, sep):
-					var k:Int = items.length;
-					while (k > 0) {
-						k--;
-						stack.push(items[k]);
-						if (k > 0) stack.push(sep);
-					}
-				case OptSpace(s):
-					total += s.length;
-				case OptSpaceSkipAfterHardline:
-					total += 1;
-				case OptHardline | OptHardlineSkipAtOpenDelim:
-					// Same zero-width treatment as `Line('\n')`.
-			}
-		}
-		return total;
 	}
 
 	private static function shape(
