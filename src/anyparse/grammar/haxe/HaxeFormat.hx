@@ -669,6 +669,7 @@ final class HaxeFormat implements TextFormat {
 		endsWithCloseBrace: HxExprUtil.endsWithCloseBrace,
 		caseBodyRefusesFlat: HxExprUtil.refusesCaseFlat,
 		betweenImportsPathDiffers: HxBetweenImportsLevel.pathDiffers,
+		betweenImportsTailLeafClassify: HxExprUtil.tailLeafClassifyImports,
 	};
 
 	private function new() {}

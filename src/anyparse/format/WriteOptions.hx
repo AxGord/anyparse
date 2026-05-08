@@ -148,6 +148,27 @@ typedef WriteOptions = {
 	 *    via the underlying-Int representation of its level enum
 	 *    (e.g. `enum abstract HxBetweenImportsLevel(Int) from Int to Int`).
 	 *
+	 *  - `betweenImportsTailLeafClassify(payload) → Null<{ctorName,path}>` —
+	 *    classifies the tail leaf decl of a "transparent" wrapper ctor
+	 *    (e.g. `HxDecl.Conditional(inner:HxConditionalDecl)`). Drives
+	 *    the `@:fmt(blankLinesBetweenSameCtorTailTransparent(...))`
+	 *    extension to the between-cascade in
+	 *    `WriterLowering.triviaEofStarExpr`: when the current element
+	 *    matches the transparent ctor name, the engine emits a runtime
+	 *    `opt.<adapterField>(payload)` call instead of resetting
+	 *    `_currKindBetween/_currPathBetween` to (0,''). The plugin
+	 *    walks the wrapper's body Stars (last non-empty branch's last
+	 *    decl, recursively unwrapping nested wrappers) and returns the
+	 *    leaf's ctor name + first-positional-arg path String, or
+	 *    `null` when no leaf is recognised. The engine does the per-
+	 *    info ctor-name match at runtime — `_r.ctorName == 'CtorA' ||
+	 *    _r.ctorName == 'CtorB'` derived from each between info's own
+	 *    ctorNames list — so the same adapter feeds multiple between
+	 *    infos on the same Star (e.g. one walker shared by Imports +
+	 *    Usings infos). Mirrors `betweenImportsPathDiffers` pattern:
+	 *    format-neutral engine, primitive return shape, plugin handles
+	 *    the AST traversal.
+	 *
 	 * Formats that don't opt into a gate leave the field null; the
 	 * writer helper checks `null` before invoking and falls back to
 	 * the unconditional non-refusal path.
@@ -155,4 +176,5 @@ typedef WriteOptions = {
 	?endsWithCloseBrace:Null<Dynamic -> Bool>,
 	?caseBodyRefusesFlat:Null<Dynamic -> Bool>,
 	?betweenImportsPathDiffers:Null<(String, String, Int) -> Bool>,
+	?betweenImportsTailLeafClassify:Null<Dynamic -> Null<{ctorName:String, path:String}>>,
 };

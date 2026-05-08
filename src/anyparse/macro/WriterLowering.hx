@@ -2628,9 +2628,56 @@ class WriterLowering {
 				for (args in beforeCtorIfAllArgs)
 					beforeCtorInfos.push(buildBeforeCtorBlankInfoIf(elemRefName, args));
 				final betweenCtorAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBetweenSameCtorByLevel');
+				// ω-cond-comp-tail-transparency — read sibling
+				// `blankLinesBetweenSameCtorTailTransparent(classifier, ctor,
+				// adapter)` metas. Group by classifier field name; merge each
+				// group's transparent ctors + (single-shared) adapter into the
+				// between info(s) sharing that classifier. Multiple metas with
+				// the same classifier MUST agree on adapter field (one walker
+				// per Star, not per-ctor); compile-time error otherwise.
+				final tailTransparentAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBetweenSameCtorTailTransparent');
+				final transparentByClassifier:Map<String, {ctors:Array<String>, adapter:String}> = [];
+				for (args in tailTransparentAllArgs) {
+					if (args.length != 3)
+						Context.fatalError(
+							'WriterLowering: @:fmt(blankLinesBetweenSameCtorTailTransparent) expects exactly 3 string args (classifierField, ctorName, adapterOptField), got ${args.length}',
+							Context.currentPos()
+						);
+					final cf:String = args[0];
+					final ctor:String = args[1];
+					final adapter:String = args[2];
+					final entry:Null<{ctors:Array<String>, adapter:String}> = transparentByClassifier[cf];
+					if (entry == null) {
+						transparentByClassifier[cf] = {ctors: [ctor], adapter: adapter};
+					} else {
+						if (entry.adapter != adapter)
+							Context.fatalError(
+								'WriterLowering: @:fmt(blankLinesBetweenSameCtorTailTransparent) adapter mismatch for classifier "$cf" — got "${entry.adapter}" and "$adapter"; one shared adapter per Star+classifier',
+								Context.currentPos()
+							);
+						if (entry.ctors.indexOf(ctor) < 0) entry.ctors.push(ctor);
+					}
+				}
 				final betweenCtorInfos:Array<BetweenCtorBlankInfo> = [
-					for (args in betweenCtorAllArgs) buildBetweenCtorBlankInfo(elemRefName, args)
+					for (args in betweenCtorAllArgs) {
+						final classifier:String = args[0];
+						final tt:Null<{ctors:Array<String>, adapter:String}> = transparentByClassifier[classifier];
+						buildBetweenCtorBlankInfo(
+							elemRefName, args,
+							tt != null ? tt.ctors : [],
+							tt != null ? tt.adapter : null
+						);
+					}
 				];
+				// Validate every transparent meta has at least one matching
+				// between meta — otherwise the transparent declaration is
+				// dead code.
+				for (cf in transparentByClassifier.keys())
+					if (!Lambda.exists(betweenCtorInfos, info -> info.classifierFieldName == cf))
+						Context.fatalError(
+							'WriterLowering: @:fmt(blankLinesBetweenSameCtorTailTransparent) classifier "$cf" has no matching @:fmt(blankLinesBetweenSameCtorByLevel) on the same Star',
+							Context.currentPos()
+						);
 				parts.push(triviaEofStarExpr(
 					fieldAccess, trailBBAccess, trailLCAccess, elemFn,
 					afterCtorInfos, beforeCtorInfos, betweenCtorInfos
@@ -5555,13 +5602,44 @@ class WriterLowering {
 				};
 				final kindIdent:Expr = {expr: EConst(CIdent('_currKindBetween' + i)), pos: pos};
 				final pathIdent:Expr = {expr: EConst(CIdent('_currPathBetween' + i)), pos: pos};
+				// ω-cond-comp-tail-transparency — transparent-case body:
+				// call `opt.<tailAdapter>(_v0)` (null-guarded), filter the
+				// returned `{ctorName, path}` against THIS info's matched
+				// ctorNames list (so a single shared walker can feed
+				// multiple between infos on the same Star — Imports info
+				// rejects a Using leaf and vice versa). On null adapter
+				// or null result or non-matching ctorName, fall back to
+				// kind=0/path='' (same as the unmatched case body).
+				final transparentBody:Null<Expr> = if (info.tailAdapterOptField == null) null else {
+					final adapterAccess:Expr = {expr: EField(macro opt, info.tailAdapterOptField), pos: pos};
+					final ctorNameMatch:Expr = {
+						var acc:Expr = macro false;
+						for (cn in info.matchedCtorNames) {
+							final lit:Expr = {expr: EConst(CString(cn)), pos: pos};
+							acc = macro $acc || _r.ctorName == $lit;
+						}
+						acc;
+					};
+					macro {
+						final _r = $adapterAccess != null ? $adapterAccess(_v0) : null;
+						if (_r != null && $ctorNameMatch) {
+							$kindIdent = 1;
+							$pathIdent = _r.path;
+						} else {
+							$kindIdent = 0;
+							$pathIdent = '';
+						}
+					};
+				};
 				final cases:Array<Case> = [
 					for (cp in info.ctorPatterns) {
 						values: [cp.pattern],
 						guard: null,
 						expr: cp.isMatch
 							? macro { $kindIdent = 1; $pathIdent = _v0; }
-							: macro { $kindIdent = 0; $pathIdent = ''; },
+							: cp.isTransparent && transparentBody != null
+								? transparentBody
+								: macro { $kindIdent = 0; $pathIdent = ''; },
 					}
 				];
 				{
@@ -6375,7 +6453,10 @@ class WriterLowering {
 	 * emit time, and (b) the matched arity-≥1 requirement is stricter
 	 * than the existing builder's optional `_v0` binding.
 	 */
-	private function buildBetweenCtorBlankInfo(elemRefName:String, args:Array<String>):BetweenCtorBlankInfo {
+	private function buildBetweenCtorBlankInfo(
+		elemRefName:String, args:Array<String>,
+		transparentCtorNames:Array<String>, tailAdapterOptField:Null<String>
+	):BetweenCtorBlankInfo {
 		if (args.length < 5)
 			Context.fatalError(
 				'WriterLowering: @:fmt(blankLinesBetweenSameCtorByLevel) expects ≥ 5 string args (classifierField, CtorName1, [CtorName2, …], levelOptField, countOptField, adapterOptField), got ${args.length}',
@@ -6391,18 +6472,29 @@ class WriterLowering {
 				'WriterLowering: @:fmt(blankLinesBetweenSameCtorByLevel) requires at least one ctor name between the classifier field and the level/count/adapter tail',
 				Context.currentPos()
 			);
+		// ω-cond-comp-tail-transparency — sanity-check no overlap between
+		// matched and transparent sets. A ctor in both lists would be
+		// ambiguous (kind=1/path=_v0 wins or transparent adapter call?).
+		// Reject at compile time so the grammar author resolves it.
+		for (name in ctorNames) if (transparentCtorNames.indexOf(name) >= 0)
+			Context.fatalError(
+				'WriterLowering: ctor "$name" appears both in @:fmt(blankLinesBetweenSameCtorByLevel) matched set and in @:fmt(blankLinesBetweenSameCtorTailTransparent) transparent set on the same Star — must be one or the other',
+				Context.currentPos()
+			);
 		final r:{enumRule:ShapeNode, enumRuleName:String} = resolveClassifierEnum(elemRefName, fieldName, 'blankLinesBetweenSameCtorByLevel');
 		final enumRule:ShapeNode = r.enumRule;
 		final enumRuleName:String = r.enumRuleName;
 		final pos:Position = Context.currentPos();
 		final patterns:Array<BetweenCtorPattern> = [];
 		final matched:Array<String> = [];
+		final transparentMatched:Array<String> = [];
 		for (branch in enumRule.children) {
 			final ctorName:Null<String> = branch.annotations.get('base.ctor');
 			if (ctorName == null) continue;
 			final arity:Int = branch.children.length;
 			final ctorIdent:Expr = {expr: EConst(CIdent(ctorName)), pos: pos};
 			final isMatch:Bool = ctorNames.indexOf(ctorName) >= 0;
+			final isTransparent:Bool = !isMatch && transparentCtorNames.indexOf(ctorName) >= 0;
 			if (isMatch) {
 				if (arity < 1)
 					Context.fatalError(
@@ -6414,12 +6506,26 @@ class WriterLowering {
 				patterns.push({
 					pattern: {expr: ECall(ctorIdent, binders), pos: pos},
 					isMatch: true,
+					isTransparent: false,
+				});
+			} else if (isTransparent) {
+				if (arity < 1)
+					Context.fatalError(
+						'WriterLowering: @:fmt(blankLinesBetweenSameCtorTailTransparent) ctor "$ctorName" must have arity ≥ 1 (first arg is the wrapper payload bound to _v0 and passed to the tail-leaf classifier adapter); got arity $arity',
+						Context.currentPos()
+					);
+				transparentMatched.push(ctorName);
+				final binders:Array<Expr> = [for (i in 0...arity) i == 0 ? macro _v0 : macro _];
+				patterns.push({
+					pattern: {expr: ECall(ctorIdent, binders), pos: pos},
+					isMatch: false,
+					isTransparent: true,
 				});
 			} else {
 				final pattern:Expr = arity == 0
 					? ctorIdent
 					: {expr: ECall(ctorIdent, [for (_ in 0...arity) macro _]), pos: pos};
-				patterns.push({pattern: pattern, isMatch: false});
+				patterns.push({pattern: pattern, isMatch: false, isTransparent: false});
 			}
 		}
 		for (name in ctorNames) if (matched.indexOf(name) < 0)
@@ -6427,12 +6533,20 @@ class WriterLowering {
 				'WriterLowering: @:fmt(blankLinesBetweenSameCtorByLevel) ctor "$name" not found in enum $enumRuleName',
 				Context.currentPos()
 			);
+		for (name in transparentCtorNames) if (transparentMatched.indexOf(name) < 0)
+			Context.fatalError(
+				'WriterLowering: @:fmt(blankLinesBetweenSameCtorTailTransparent) ctor "$name" not found in enum $enumRuleName',
+				Context.currentPos()
+			);
 		return {
 			classifierFieldName: fieldName,
 			ctorPatterns: patterns,
+			matchedCtorNames: ctorNames.copy(),
 			levelOptField: levelOptField,
 			countOptField: countOptField,
 			adapterOptField: adapterOptField,
+			tailAdapterOptField: tailAdapterOptField,
+			transparentCtorNames: transparentCtorNames.copy(),
 		};
 	}
 
@@ -6907,24 +7021,57 @@ typedef BeforeCtorBlankInfo = {
  * grammar-package coupling baked into the macro core. Cascade
  * priority: after-ctor entries (outermost) > between entries >
  * before-ctor entries > source-driven `blankBefore`.
+ *
+ * `tailAdapterOptField` (slice ω-cond-comp-tail-transparency) names an
+ * optional function-typed field on `WriteOptions`
+ * (e.g. `betweenImportsTailLeafClassify:Null<Dynamic -> Null<{ctorName,
+ * path}>>`). When non-null, ctors named in `transparentCtorNames` are
+ * routed through the adapter at runtime: the adapter walks the wrapper
+ * payload (e.g. `HxConditionalDecl`) to its tail leaf decl, returns
+ * `{ctorName, path}` describing that leaf, and the engine then runs a
+ * runtime `_r.ctorName == 'CtorA' || _r.ctorName == 'CtorB'` filter
+ * against the per-info `ctorNames` list — so a single shared adapter
+ * can feed multiple between infos on the same Star (one walker drives
+ * both Imports and Usings infos on `HxModule.decls`). When null, the
+ * transparent ctor list is empty and the cascade behaves as before
+ * (transparent ctors fall into the unmatched bucket → kind=0/path='').
+ *
+ * `transparentCtorNames` lists the wrapper ctor names (e.g.
+ * `Conditional`) collected from
+ * `@:fmt(blankLinesBetweenSameCtorTailTransparent(classifierField,
+ * ctorName, adapterOptField))` metas with matching classifier field.
+ * Validated arity ≥ 1 (first positional arg is the wrapper payload
+ * passed to the adapter).
  */
 typedef BetweenCtorBlankInfo = {
 	classifierFieldName:String,
 	ctorPatterns:Array<BetweenCtorPattern>,
+	matchedCtorNames:Array<String>,
 	levelOptField:String,
 	countOptField:String,
 	adapterOptField:String,
+	tailAdapterOptField:Null<String>,
+	transparentCtorNames:Array<String>,
 };
 
 /**
- * One ESwitch case pattern with its matched/unmatched flag, used by
- * `BetweenCtorBlankInfo`. Matched-ctor patterns bind `_v0` to the
- * ctor's first positional arg so the cascade-emit phase can read the
- * import / using path String at runtime.
+ * One ESwitch case pattern with its matched/unmatched/transparent flag,
+ * used by `BetweenCtorBlankInfo`. Matched-ctor patterns bind `_v0` to
+ * the ctor's first positional arg so the cascade-emit phase can read
+ * the import / using path String at runtime. Transparent-ctor patterns
+ * also bind `_v0` (the wrapper payload, e.g. `HxConditionalDecl`) so
+ * the emit phase can pass it to the tail-leaf classifier adapter.
+ * Unmatched-ctor patterns use a wildcard for every arg.
+ *
+ * `isMatch` and `isTransparent` are mutually exclusive — at most one
+ * is `true`. `isMatch=true` → kind=1/path=_v0 case body. `isTransparent
+ * =true` → adapter-call case body filtered by per-info ctorNames.
+ * Both `false` → kind=0/path='' (unmatched fallback).
  */
 typedef BetweenCtorPattern = {
 	pattern:Expr,
 	isMatch:Bool,
+	isTransparent:Bool,
 };
 
 /**

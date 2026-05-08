@@ -135,4 +135,116 @@ final class HxExprUtil {
 		if (raw == null) return null;
 		return Type.getEnum(raw) != null ? raw : Reflect.field(raw, 'node');
 	}
+
+	/**
+	 * ω-cond-comp-tail-transparency — classifies the tail leaf decl of a
+	 * `HxConditionalDecl` (or its Trivia synth pair `HxConditionalDeclT`)
+	 * for the between-cascade in `WriterLowering.triviaEofStarExpr`.
+	 *
+	 * Walk priority (LAST non-empty branch wins — strict positional):
+	 *  1. `elseBody` Star — if non-empty, classify its last element and
+	 *     return that result directly (`null` is propagated up so the
+	 *     caller treats the conditional as opaque). The other branches
+	 *     are NOT consulted.
+	 *  2. else `elseifs[last].body` … `elseifs[0].body` — scan from
+	 *     tail back to find a non-empty clause body; classify its last
+	 *     element and return that result directly. Branch fall-through
+	 *     skips empty clauses but stops at the FIRST non-empty one.
+	 *  3. else `body` Star — last element classification, returned
+	 *     directly.
+	 *  4. else `null` (no non-empty branch — cascade falls through to
+	 *     kind=0/path='').
+	 *
+	 * The strict "last branch wins" semantic matches what the cascade
+	 * expects from a positional trailing-element walker: a conditional
+	 * whose tail branch ends in a non-import (e.g. `class Foo {}`)
+	 * should NOT classify as an import even when an earlier branch
+	 * does, because the source's last sibling-emitted decl is the
+	 * non-import.
+	 *
+	 * Element classification: unwrap `Trivial<HxTopLevelDeclT>` if
+	 * present, read `.decl` field (`HxDecl` or `HxDeclT` enum). On
+	 * `Conditional` ctor, recurse into the wrapped payload (handles
+	 * nested `#if … #if … #end #end`). On `ImportDecl` /
+	 * `ImportWildDecl` / `UsingDecl` / `UsingWildDecl`, return
+	 * `{ctorName, path}` with the path String the parser captured
+	 * (`HxTypeName` / `HxWildPath` are abstract over String — runtime
+	 * values are plain Strings). On any other ctor, return `null` —
+	 * cascade treats the conditional as opaque (kind=0/path='').
+	 *
+	 * Wired on `WriteOptions.betweenImportsTailLeafClassify` via
+	 * `HaxeFormat.defaultWriteOptions`. Same shared adapter feeds both
+	 * Imports and Usings between infos on `HxModule.decls`; the engine
+	 * does the per-info `_r.ctorName == '<info ctor>'` filter so each
+	 * info only sees a leaf classification matching its own ctorNames.
+	 *
+	 * `Null<Dynamic>` argument because the same predicate fires on
+	 * both Plain-mode (`HxConditionalDecl` plain struct) and Trivia-mode
+	 * (`HxConditionalDeclT` paired struct); both have the same field
+	 * names (`body`, `elseifs`, `elseBody`) so `Reflect.field` reads
+	 * uniformly.
+	 */
+	public static function tailLeafClassifyImports(payload:Null<Dynamic>):Null<{ctorName:String, path:String}> {
+		if (payload == null) return null;
+		final elseBody:Null<Array<Dynamic>> = Reflect.field(payload, 'elseBody');
+		if (elseBody != null && elseBody.length > 0)
+			return classifyTopLevelDeclElement(elseBody[elseBody.length - 1]);
+		final elseifs:Null<Array<Dynamic>> = Reflect.field(payload, 'elseifs');
+		if (elseifs != null && elseifs.length > 0) {
+			var i:Int = elseifs.length - 1;
+			while (i >= 0) {
+				final clause:Null<Dynamic> = unwrapTrivialStruct(elseifs[i]);
+				if (clause != null) {
+					final clauseBody:Null<Array<Dynamic>> = Reflect.field(clause, 'body');
+					if (clauseBody != null && clauseBody.length > 0)
+						return classifyTopLevelDeclElement(clauseBody[clauseBody.length - 1]);
+				}
+				i--;
+			}
+		}
+		final body:Null<Array<Dynamic>> = Reflect.field(payload, 'body');
+		if (body != null && body.length > 0)
+			return classifyTopLevelDeclElement(body[body.length - 1]);
+		return null;
+	}
+
+	/**
+	 * Classify one element from a `HxConditionalDecl.body` /
+	 * `elseifs[i].body` / `elseBody` Star. Element shape is
+	 * `HxTopLevelDecl` (Plain mode) or `Trivial<HxTopLevelDeclT>`
+	 * (Trivia mode); both expose a `.decl` field of an `HxDecl` /
+	 * `HxDeclT` enum value. Returns `null` on null input, missing
+	 * `.decl`, or any unsupported ctor.
+	 */
+	private static function classifyTopLevelDeclElement(elem:Null<Dynamic>):Null<{ctorName:String, path:String}> {
+		final inner:Null<Dynamic> = unwrapTrivialStruct(elem);
+		if (inner == null) return null;
+		final decl:Null<Dynamic> = Reflect.field(inner, 'decl');
+		if (decl == null) return null;
+		final ctor:Null<String> = Type.enumConstructor(decl);
+		if (ctor == null) return null;
+		final params:Null<Array<Dynamic>> = Type.enumParameters(decl);
+		if (params == null || params.length == 0) return null;
+		return switch ctor {
+			case 'Conditional': tailLeafClassifyImports(params[0]);
+			case 'ImportDecl' | 'ImportWildDecl' | 'UsingDecl' | 'UsingWildDecl':
+				final path:Null<String> = params[0];
+				path == null ? null : {ctorName: ctor, path: path};
+			case _: null;
+		};
+	}
+
+	/**
+	 * Unwrap a `Trivial<T>` wrapper struct around another struct (e.g.
+	 * `Trivial<HxTopLevelDeclT>` → `HxTopLevelDeclT`). Distinct from
+	 * `unwrap` above because that one targets enum values and uses
+	 * `Type.getEnum` to discriminate; here both wrapper and wrapped are
+	 * structs, so the discriminator is `Reflect.hasField('node')`. Plain
+	 * structs (`HxTopLevelDecl` directly, no wrapper) have no `node`
+	 * field and pass through unchanged.
+	 */
+	private static inline function unwrapTrivialStruct(raw:Null<Dynamic>):Null<Dynamic> {
+		if (raw == null) return null;
+		return Reflect.hasField(raw, 'node') ? Reflect.field(raw, 'node') : raw;
+	}
 }
