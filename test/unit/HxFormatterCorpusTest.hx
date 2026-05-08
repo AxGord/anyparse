@@ -27,9 +27,11 @@ import anyparse.runtime.ParseError;
  * on `HaxeModuleParser`/`HxModuleWriter` for layout-only tests that do
  * not need comment preservation.
  *
- * Category coverage grows one method at a time. This slice lands
- * `sameline/` (132 cases). Subsequent slices add `expressionlevel`,
- * `indentation`, `wrapping`, etc. — each is one new method reusing
+ * Category coverage grows one method at a time. Currently wired:
+ * `whitespace/` (153), `sameline/` (132), `indentation/` (130),
+ * `wrapping/` (200). Remaining categories (`emptylines`, `lineends`,
+ * `other`, `formatrange`, `expressionlevel`, `missing`) are added in
+ * subsequent slices — each is one new method reusing
  * `HxFormatterCorpusHelpers`.
  *
  * The harness intentionally does NOT fail the utest pass on per-case
@@ -49,6 +51,7 @@ class HxFormatterCorpusTest extends Test {
 	private static inline final SAMELINE_SUBDIR:String = 'test/testcases/sameline';
 	private static inline final WHITESPACE_SUBDIR:String = 'test/testcases/whitespace';
 	private static inline final INDENTATION_SUBDIR:String = 'test/testcases/indentation';
+	private static inline final WRAPPING_SUBDIR:String = 'test/testcases/wrapping';
 	private static inline final HXTEST_EXT:String = '.hxtest';
 	private static inline final MAX_DIFF_CONTEXT:Int = 40;
 	private static inline final MAX_REASON_LEN:Int = 120;
@@ -70,6 +73,10 @@ class HxFormatterCorpusTest extends Test {
 		runCategory(INDENTATION_SUBDIR, 'indentation');
 	}
 
+	public function testWrapping():Void {
+		runCategory(WRAPPING_SUBDIR, 'wrapping');
+	}
+
 	private function runCategory(subdir:String, label:String):Void {
 		final root:Null<String> = HxFormatterCorpusHelpers.forkRoot();
 		if (root == null) {
@@ -88,6 +95,7 @@ class HxFormatterCorpusTest extends Test {
 		var skipMalformed:Int = 0;
 		var skipParse:Int = 0;
 		var skipWrite:Int = 0;
+		var skipConfig:Int = 0;
 		final failLines:Array<String> = [];
 		final parseReasons:Map<String, Int> = [];
 
@@ -101,7 +109,10 @@ class HxFormatterCorpusTest extends Test {
 				skipMalformed++;
 				continue;
 			}
-			final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(tc.config);
+			final opts:HxModuleWriteOptions = try HaxeFormatConfigLoader.loadHxFormatJson(tc.config) catch (exception:Exception) {
+				skipConfig++;
+				continue;
+			};
 			// .hxtest fixtures strip the file's trailing \n during read
 			// (HxFormatterCorpusHelpers.stripPadNewlines), so the expected
 			// section never carries a trailing newline. Disable the
@@ -127,8 +138,8 @@ class HxFormatterCorpusTest extends Test {
 			}
 		}
 
-		final total:Int = pass + fail + skipMalformed + skipParse + skipWrite;
-		Sys.println('$label corpus: $pass pass / $fail fail / $skipParse skip-parse / $skipWrite skip-write / $skipMalformed malformed (total $total)');
+		final total:Int = pass + fail + skipMalformed + skipParse + skipWrite + skipConfig;
+		Sys.println('$label corpus: $pass pass / $fail fail / $skipParse skip-parse / $skipWrite skip-write / $skipConfig skip-config / $skipMalformed malformed (total $total)');
 		if (fail > 0) Sys.println('$label fails:');
 		for (line in failLines) Sys.println(line);
 		if (skipParse > 0) printParseReasons(label, parseReasons);
