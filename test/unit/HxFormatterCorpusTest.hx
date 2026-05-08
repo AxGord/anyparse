@@ -29,8 +29,8 @@ import anyparse.runtime.ParseError;
  *
  * Category coverage grows one method at a time. Currently wired:
  * `whitespace/` (153), `sameline/` (132), `indentation/` (130),
- * `wrapping/` (200), `emptylines/` (96). Remaining categories
- * (`lineends`, `other`, `formatrange`, `expressionlevel`, `missing`)
+ * `wrapping/` (200), `emptylines/` (96), `lineends/` (94). Remaining
+ * categories (`other`, `formatrange`, `expressionlevel`, `missing`)
  * are added in subsequent slices — each is one new method reusing
  * `HxFormatterCorpusHelpers`.
  *
@@ -53,6 +53,7 @@ class HxFormatterCorpusTest extends Test {
 	private static inline final INDENTATION_SUBDIR:String = 'test/testcases/indentation';
 	private static inline final WRAPPING_SUBDIR:String = 'test/testcases/wrapping';
 	private static inline final EMPTYLINES_SUBDIR:String = 'test/testcases/emptylines';
+	private static inline final LINEENDS_SUBDIR:String = 'test/testcases/lineends';
 	private static inline final HXTEST_EXT:String = '.hxtest';
 	private static inline final MAX_DIFF_CONTEXT:Int = 40;
 	private static inline final MAX_REASON_LEN:Int = 120;
@@ -80,6 +81,10 @@ class HxFormatterCorpusTest extends Test {
 
 	public function testEmptyLines():Void {
 		runCategory(EMPTYLINES_SUBDIR, 'emptylines');
+	}
+
+	public function testLineEnds():Void {
+		runCategory(LINEENDS_SUBDIR, 'lineends');
 	}
 
 	private function runCategory(subdir:String, label:String):Void {
