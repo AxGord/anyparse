@@ -1295,6 +1295,22 @@ class WriterLowering {
 		// fields back. Reset to `null` on any non-Star field, since the
 		// emitted content at that point forms its own boundary.
 		var prevAnyStarNonEmpty:Null<Expr> = null;
+		// ω-pad-trailing-ref: tracks the runtime-Bool expr representing
+		// the immediately preceding field's `@:fmt(padTrailing)` emission
+		// (or `null` when the previous field neither carried the flag
+		// nor — for optional/Star kinds — had its presence guard pass).
+		// Read by `sameLineSeparator` to drop the next field's leading
+		// space to `_de()` when this expr is truthy at runtime — closes
+		// the double-space window when prev field's padTrailing meets
+		// next field's sameLineSep at the same gate (canonical example:
+		// `HxConditionalExpr` `expr` (bare-Ref padTrailing) immediately
+		// followed by `elseExpr` (optional-kw-Ref sameLineSep)).
+		//
+		// Set at the end of each iteration's field branch from the per-
+		// iteration scratch `thisPadTrailing`. Cleared (set to null) when
+		// the iteration's field doesn't fire padTrailing — natural
+		// boundary reset, no separate clear needed.
+		var prevPadTrailing:Null<Expr> = null;
 		// ψ₉: tracks the immediately preceding bare-Ref field that was
 		// wrapped via `bodyPolicyWrap` — the next field's `@:fmt(sameLine(...))`
 		// separator must then be shape-aware on the preceding body's
@@ -1348,6 +1364,29 @@ class WriterLowering {
 			// field doesn't leak the value set two iterations back.
 			final stalePrevBareRefBody:Null<PrevBodyInfo> = prevBareRefBody;
 			prevBareRefBody = null;
+			// ω-pad-trailing-ref: per-iteration scratch holding THIS
+			// field's padTrailing-emission runtime expr (or null if this
+			// field doesn't fire padTrailing). Each field-kind branch
+			// sets it locally before its `continue` (Star branches) or
+			// fall-through (Ref/OptRef branches) to the shared end-of-
+			// loop block, where `composePadTrailing` folds it into
+			// `prevPadTrailing`.
+			var thisPadTrailing:Null<Expr> = null;
+			// ω-pad-trailing-ref: per-iteration scratch holding THIS
+			// field's "transparent at runtime" runtime expr — i.e. the
+			// guard under which the field emits NO visible content (and
+			// therefore can be skipped over when propagating an earlier
+			// field's pad signal across an intervening empty/absent
+			// middle field). `null` means "always emits content" (e.g.
+			// mandatory bare Ref). Set per branch:
+			//   bare Ref:        null (never transparent)
+			//   optional Ref:    `$fieldAccess == null`
+			//   non-opt Star:    `$fieldAccess.length == 0`
+			//   optional Star:   `$fieldAccess == null || $fieldAccess.length == 0`
+			// Folded into `prevPadTrailing` via `composePadTrailing` —
+			// closes the empty-middle-Star window where a static reset
+			// would lose the signal across `expr → empty Star → elseExpr`.
+			var thisTransparent:Null<Expr> = null;
 			final kwLead:Null<String> = child.readMetaString(':kw');
 			final leadText:Null<String> = child.readMetaString(':lead');
 			final trailText:Null<String> = child.readMetaString(':trail');
@@ -1404,7 +1443,7 @@ class WriterLowering {
 						final beforeKwTrailingExpr:Null<Expr> = useTriviaGap
 							? {expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_TRAILING_SUFFIX), pos: Context.currentPos()}
 							: null;
-						final sepBaseExpr:Expr = sameLineSeparator(child, prevBodyField, typePath);
+						final sepBaseExpr:Expr = sameLineSeparator(child, prevBodyField, typePath, prevPadTrailing);
 						final sepWithBeforeKwExpr:Expr = beforeKwLeadingExpr != null
 							? macro kwBeforeDoc($beforeKwLeadingExpr, $sepBaseExpr, opt)
 							: sepBaseExpr;
@@ -1427,9 +1466,19 @@ class WriterLowering {
 							if (_optVal != null) $innerExpr else _de();
 						});
 					}
+					// ω-pad-trailing-ref: optional Star with @:fmt(padTrailing)
+					// fires its trailing-pad ONLY when both `_optVal != null`
+					// AND `_optVal.length > 0` (the Star helper's empty branch
+					// returns `_de()` regardless of pad flags). Optional Star
+					// is transparent (no visible output) when absent OR empty,
+					// so propagate prev across that combined guard.
+					if (child.fmtHasFlag('padTrailing'))
+						thisPadTrailing = macro $fieldAccess != null && $fieldAccess.length > 0;
+					thisTransparent = macro $fieldAccess == null || $fieldAccess.length == 0;
 					prevAnyStarNonEmpty = null;
 					prevBodyField = null;
 					prevTrailFieldName = null;
+					prevPadTrailing = composePadTrailing(prevPadTrailing, thisPadTrailing, thisTransparent);
 					isFirstField = false;
 					continue;
 				}
@@ -1474,8 +1523,16 @@ class WriterLowering {
 				} else {
 					prevAnyStarNonEmpty = null;
 				}
+				// ω-pad-trailing-ref: non-optional Star with @:fmt(padTrailing)
+				// fires its trailing-pad when `_arr.length > 0` (the helper's
+				// empty branch returns `_de()`). Non-opt Star is transparent
+				// when empty, so propagate prev across `length == 0`.
+				if (child.fmtHasFlag('padTrailing'))
+					thisPadTrailing = macro $fieldAccess.length > 0;
+				thisTransparent = macro $fieldAccess.length == 0;
 				prevBodyField = null;
 				prevTrailFieldName = null;
+				prevPadTrailing = composePadTrailing(prevPadTrailing, thisPadTrailing, thisTransparent);
 				isFirstField = false;
 				continue;
 			}
@@ -1493,7 +1550,7 @@ class WriterLowering {
 			// further separator before its writeCall, so pushing leftCurlySeparator
 			// here owns the kw→`{` transition fully.
 			if (kwLead != null && !isOptional) {
-				if (!isFirstField && !isRaw) parts.push(sameLineSeparator(child, prevBodyField, typePath));
+				if (!isFirstField && !isRaw) parts.push(sameLineSeparator(child, prevBodyField, typePath, prevPadTrailing));
 				if (child.fmtHasFlag('leftCurly')) {
 					// Bare-flag only at this site. Knob-form `@:fmt(leftCurly('<knob>'))`
 					// is designed for first-field Star paths where the outer caller
@@ -1639,7 +1696,7 @@ class WriterLowering {
 						: null;
 					final optParts:Array<Expr> = [];
 					if (kwLead != null) {
-						final sepBaseExpr:Expr = sameLineSeparator(child, prevBodyField, typePath);
+						final sepBaseExpr:Expr = sameLineSeparator(child, prevBodyField, typePath, prevPadTrailing);
 						final sepWithBeforeKwExpr:Expr = beforeKwLeadingExpr != null
 							? macro kwBeforeDoc($beforeKwLeadingExpr, $sepBaseExpr, opt)
 							: sepBaseExpr;
@@ -1696,7 +1753,7 @@ class WriterLowering {
 							// no `@:fmt(sameLine(...))` companion.
 							optParts.push(whitespacePolicyLead(child, leadText, ['typeParamDefaultEquals']));
 						} else {
-							optParts.push(sameLineSeparator(child, prevBodyField, typePath));
+							optParts.push(sameLineSeparator(child, prevBodyField, typePath, prevPadTrailing));
 							// Trailing space after a non-tight optional lead
 							// is split into a literal `_dt(leadText)` plus an
 							// `_dop(' ')`. The optional space is dropped by
@@ -1736,6 +1793,19 @@ class WriterLowering {
 							optParts.push(sepExpr);
 						}
 						optParts.push(writeCall);
+					}
+					// ω-pad-trailing-ref: optional-Ref `@:fmt(padTrailing)`
+					// pushes a trailing space INSIDE optParts so the pad is
+					// emitted only when `_optVal != null` (the surrounding
+					// wrap drops the entire optBody to `_de()` for the
+					// absent case). Tracker expr is `$fieldAccess != null`,
+					// matching the runtime presence guard one-to-one.
+					// First consumer: `HxConditionalExpr.elseExpr` so the
+					// `... e2 #end` boundary lands as ` #end` instead of
+					// `e2#end`.
+					if (child.fmtHasFlag('padTrailing')) {
+						optParts.push(macro _dt(' '));
+						thisPadTrailing = macro $fieldAccess != null;
 					}
 					final optBody:Expr = if (optParts.length == 1) optParts[0]
 					else dcCall(optParts);
@@ -2100,8 +2170,41 @@ class WriterLowering {
 			if (!isOptional && trailText != null)
 				parts.push(macro _dt($v{trailText}));
 
+			// ω-pad-trailing-ref: bare-Ref `@:fmt(padTrailing)` — mandatory
+			// Ref always fires, so push a trailing space unconditionally and
+			// set tracker to a constant `true`. Optional-Ref padTrailing was
+			// pushed inside `optParts` above (gated on `_optVal != null`),
+			// so this branch covers ONLY the mandatory-Ref kind. Star-kind
+			// fields were already handled by the early-continue paths above.
+			// Position: AFTER `@:trail` push so the pad lands BETWEEN the
+			// field's writeCall (+ any trail literal) and the next sibling's
+			// leading sep — that's the boundary where `sameLineSeparator`
+			// reads `prevPadTrailing` and drops to `_de()`.
+			//
+			// First consumer: `HxConditionalExpr.expr` (mandatory bare Ref)
+			// so `expr` → either `#elseif` / `#else` / outer `#end` lands
+			// with one inter-token space instead of either glued (no engine)
+			// or doubled (naive padTrailing without engine drop).
+			//
+			// `thisTransparent` is `null` for mandatory bare Ref (always
+			// emits visible content), `$fieldAccess == null` for optional
+			// Ref (transparent when absent). The latter lets a prev pad
+			// signal propagate across an absent optional Ref middle field.
+			if (!isStar && !isOptional && child.fmtHasFlag('padTrailing')) {
+				parts.push(macro _dt(' '));
+				thisPadTrailing = macro true;
+			}
+			if (isStar) {
+				// Star kinds already updated `prevPadTrailing` via their
+				// early-continue path; Star branches never reach this
+				// shared end-of-loop block, so `thisTransparent` is moot.
+			} else if (isOptional) {
+				thisTransparent = macro $fieldAccess == null;
+			}
+
 			prevAnyStarNonEmpty = null;
 			prevBodyField = justWrappedBody;
+			prevPadTrailing = composePadTrailing(prevPadTrailing, thisPadTrailing, thisTransparent);
 			// `prevBareRefBody` was either set above for trivia-bearing
 			// bare-Ref fields (the only case the next sibling can usefully
 			// inspect) or untouched here when the field was a non-Ref kind.
@@ -2862,9 +2965,22 @@ class WriterLowering {
 	 * handler (per-element separator, different semantic) and routes
 	 * `Keep` to `Same` since there is no per-element source-shape slot.
 	 */
-	private function sameLineSeparator(child:ShapeNode, prevBody:Null<PrevBodyInfo>, typePath:String):Expr {
+	private function sameLineSeparator(
+		child:ShapeNode, prevBody:Null<PrevBodyInfo>, typePath:String, prevPadTrailing:Null<Expr> = null
+	):Expr {
+		// ω-pad-trailing-ref: when the immediately preceding field fired
+		// `@:fmt(padTrailing)`, drop THIS field's leading separator to
+		// `_de()` at runtime so the pad's space owns the boundary alone.
+		// Wraps the result of every return path uniformly — the wrapper
+		// is a no-op when `prevPadTrailing == null`, so existing callers
+		// (no upstream padTrailing) stay byte-identical.
+		inline function withPadTrailingDrop(result:Expr):Expr {
+			return prevPadTrailing != null
+				? macro ($prevPadTrailing ? _de() : $result)
+				: result;
+		}
 		final flagName:Null<String> = child.fmtReadString('sameLine');
-		if (flagName == null) return macro _dt(' ');
+		if (flagName == null) return withPadTrailingDrop(macro _dt(' '));
 		final optFlag:Expr = optFieldAccess(flagName);
 		final fieldName:Null<String> = child.annotations.get('base.fieldName');
 		// Mirror of Lowering's `hasKwTriviaSlots` gate — `<field>BeforeKwNewline`
@@ -2888,9 +3004,9 @@ class WriterLowering {
 			macro ($slotAccess ? _dhl() : _dt(' '));
 		} else macro _dt(' ');
 		final flagBased:Expr = sameLinePolicySwitch(optFlag, keepExpr);
-		if (prevBody == null || !child.fmtHasFlag('shapeAware')) return flagBased;
+		if (prevBody == null || !child.fmtHasFlag('shapeAware')) return withPadTrailingDrop(flagBased);
 		final blockPatterns:Array<Expr> = collectBlockCtorPatterns(prevBody.typePath);
-		if (blockPatterns.length == 0) return flagBased;
+		if (blockPatterns.length == 0) return withPadTrailingDrop(flagBased);
 		final cases:Array<Case> = [
 			{values: blockPatterns, expr: flagBased, guard: null},
 			{values: [macro _], expr: macro _dhl(), guard: null},
@@ -2923,7 +3039,7 @@ class WriterLowering {
 		// access.
 		final childBodyPolicy:{stmt:Null<String>, expr:Null<String>} = readBodyPolicyDual(child);
 		final childBodyPolicyFlag:Null<String> = childBodyPolicy.stmt;
-		if (childBodyPolicyFlag == null) return shapeAwareSwitch;
+		if (childBodyPolicyFlag == null) return withPadTrailingDrop(shapeAwareSwitch);
 		final stmtBpAccess:Expr = optFieldAccess(childBodyPolicyFlag);
 		final bpAccess:Expr = if (childBodyPolicy.expr == null) stmtBpAccess
 		else {
@@ -2939,7 +3055,7 @@ class WriterLowering {
 			};
 			macro ($bpAccess == $samePat || ($bpAccess == $keepPat && !$slotAccess));
 		} else macro $bpAccess == $samePat;
-		return macro $isInlineExpr ? $flagBased : $shapeAwareSwitch;
+		return withPadTrailingDrop(macro $isInlineExpr ? $flagBased : $shapeAwareSwitch);
 	}
 
 	/**
@@ -2963,6 +3079,42 @@ class WriterLowering {
 			{values: [keepPat], expr: keepExpr, guard: null},
 		];
 		return {expr: ESwitch(optFlag, cases, macro _dt(' ')), pos: Context.currentPos()};
+	}
+
+	/**
+	 * ω-pad-trailing-ref — fold a field's runtime pad-fire condition
+	 * (`fires`) and runtime transparency condition (`transparent`)
+	 * into the running `prevPadTrailing` tracker.
+	 *
+	 * Truth table per (fires, transparent, prev) presence:
+	 *
+	 *   fires=null, transparent=null      → return null
+	 *     (visible non-pad emission resets the chain)
+	 *   fires=null, transparent=expr      → return `transparent && prev`
+	 *     (this field is sometimes-empty; when empty, propagate prev)
+	 *   fires=expr, transparent=null      → return `fires`
+	 *     (mandatory-Ref pad — always fires when present)
+	 *   fires=expr, transparent=expr      → return `fires || (transparent && prev)`
+	 *     (optional/Star with pad — fires when present, propagates when transparent)
+	 *
+	 * The `transparent` runtime expr must be the negation of "this
+	 * field emitted any visible content" — i.e. true iff the field's
+	 * presence guard fails (Star empty / optional-Ref absent / etc.).
+	 * For optional-Star/Ref WITH pad, `transparent` and `fires` are
+	 * mutex by construction (`length > 0` vs `length == 0`); the
+	 * disjunction in the third arm therefore collapses cleanly without
+	 * runtime overlap.
+	 *
+	 * Returns `null` to mean "no live pad signal" — every caller stores
+	 * the result back into `prevPadTrailing`, and `sameLineSeparator`
+	 * treats a `null` tracker as "wrap is a no-op" (byte-identical to
+	 * the pre-engine path).
+	 */
+	private static function composePadTrailing(prev:Null<Expr>, fires:Null<Expr>, transparent:Null<Expr>):Null<Expr> {
+		if (fires == null && transparent == null) return null;
+		if (fires == null) return prev != null ? macro $transparent && $prev : null;
+		if (transparent == null) return fires;
+		return prev != null ? macro $fires || ($transparent && $prev) : fires;
 	}
 
 	/**

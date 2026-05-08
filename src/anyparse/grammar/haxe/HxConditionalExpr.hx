@@ -49,23 +49,48 @@ package anyparse.grammar.haxe;
  * existing optional-kw-Ref engine path (the `TriviaTypeSynth.isOptionalKw`
  * generalisation from ω-cond-comp-engine accepts Ref|Star uniformly).
  *
- * No `@:fmt(padLeading, padTrailing)` — that meta is Star-specific
- * (the writer adds pads around non-empty Stars). Single-Ref body
- * slots default to one inter-token space via the writer's standard
- * lead/trail emission, which matches the canonical inline shape
- * (`#if cond e1 #else e2 #end`). Source-driven multi-line shape
- * preservation (`#if cond\n\te1\n#else\n\te2\n#end`) is a partial
- * follow-up: the `elseExpr`-side `_beforeKwNewline_` slot already
- * captures the source's `expr`→`#else` newline through the engine
- * path, so the `#else`-led branch's leading newline is recoverable
- * at write time; the `expr`-side (cond→expr leading newline,
- * expr→`#end` trailing newline) needs a `@:trivia` capture on `expr`
- * plus writer-time space-vs-hardline switching to fully round-trip.
+ * `@:fmt(padTrailing)` on `expr`, `elseifs`, and `elseExpr` (slice
+ * ω-pad-trailing-ref-engine) closes the boundary gaps that the
+ * default internal-only sep leaves glued. Without the flag,
+ * `expr`→outer `#end` would emit `expr#end` (missing space) and
+ * `expr`→`#else` would emit `expr#else` for the same reason. The
+ * engine's `prevPadTrailing` tracker drops the next field's
+ * `sameLineSeparator` to `_de()` at runtime when this pad fires,
+ * preventing the double-space `expr  #else` window that a naive
+ * pad-only opt-in would open.
+ *
+ * Pad placement per field (single emission point per boundary):
+ *   - `expr` (bare-Ref pad)        — owns `expr → elseifs / #else / #end`.
+ *   - `elseifs` (Star pad)         — owns `last_clause_expr → #else / #end`
+ *                                    when at least one clause is present;
+ *                                    transparent when empty (engine
+ *                                    propagates `expr`'s pad through the
+ *                                    empty Star via `composePadTrailing`).
+ *   - `elseExpr` (optional-Ref pad) — owns `elseExpr → #end`; emitted
+ *                                    INSIDE the optional wrapper so the
+ *                                    pad fires only when `elseExpr != null`.
+ * Each clause's own `expr` carries NO pad — the parent Star's trailing
+ * pad alone owns the trailing boundary; mirroring `HxElseifDecl` /
+ * `HxElseifStmt` body Stars where the clause-internal Star pad is
+ * what the parent Star sep + clause pad would otherwise double up.
+ *
+ * `@:fmt(padLeading)` (Star-specific) is not used in this slice — the
+ * preceding kw / sibling already provides the leading sep into each
+ * boundary, so no leading-side gap exists to close.
+ *
+ * Source-driven multi-line shape preservation
+ * (`#if cond\n\te1\n#else\n\te2\n#end`) is a partial follow-up: the
+ * `elseExpr`-side `_beforeKwNewline_` slot already captures the
+ * source's `expr`→`#else` newline through the engine path, so the
+ * `#else`-led branch's leading newline is recoverable at write
+ * time; the `expr`-side (cond→expr leading newline, expr→`#end`
+ * trailing newline) needs a `@:trivia` capture on `expr` plus
+ * writer-time space-vs-hardline switching to fully round-trip.
  */
 @:peg
 typedef HxConditionalExpr = {
 	var cond:HxPpCondLit;
-	var expr:HxExpr;
-	@:trivia @:tryparse var elseifs:Array<HxElseifExpr>;
-	@:optional @:kw('#else') var elseExpr:Null<HxExpr>;
+	@:fmt(padTrailing) var expr:HxExpr;
+	@:trivia @:tryparse @:fmt(padTrailing) var elseifs:Array<HxElseifExpr>;
+	@:optional @:kw('#else') @:fmt(padTrailing) var elseExpr:Null<HxExpr>;
 };

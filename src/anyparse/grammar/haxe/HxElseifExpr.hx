@@ -14,9 +14,16 @@ package anyparse.grammar.haxe;
  * outside `BlockExpr`'s `{…}`; multi-statement clause bodies wrap
  * via `BlockExpr` (which is itself an `HxExpr`).
  *
- * No `@:fmt(padLeading, padTrailing)` — that meta is Star-specific.
- * Single-Ref body slots default to one inter-token space via the
- * writer's standard lead/trail emission.
+ * No `@:fmt(padTrailing)` on `expr` — the trailing-space boundary
+ * is owned by the parent struct's `elseifs` Star
+ * (`@:fmt(padTrailing)`), which fires after the LAST clause when
+ * the Star is non-empty. Putting padTrailing on each clause's
+ * `expr` would compose with the Star's per-iteration `' '`
+ * inter-element separator (Star helper at `WriterLowering.hx`
+ * line ~5510 / ~5549) and produce `clause1_expr  #elseif clause2`
+ * (double space) at every internal clause boundary. Owning the
+ * trailing pad at the parent-Star level emits `' '` once, after
+ * the last clause, where it's needed.
  *
  * The `#elseif` keyword sits on the first field's metadata so the
  * parent's `@:tryparse Star` loop dispatches + terminates uniformly
