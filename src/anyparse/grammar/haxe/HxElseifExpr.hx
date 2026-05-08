@@ -33,9 +33,22 @@ package anyparse.grammar.haxe;
  * `elseifs` Star MUST appear before the `elseExpr` field so the
  * clause Star fully terminates before the optional `#else`
  * dispatch fires.
+ *
+ * `@:fmt(nestBodyOnSourceNewline)` on `expr` (slice
+ * ω-cond-comp-expr-body-nest) wraps the body's leading separator in
+ * `Nest(_cols, [hardline, body])` when the source had a newline at
+ * the cond → expr boundary (`exprBeforeNewline=true`), placing the
+ * body one indent step deeper than the `#elseif` line per the
+ * expression-scope fork convention (issue_429). Inline shape
+ * (`#elseif b 2`) keeps the default `' ' + body` because the
+ * captured slot is false. Mirrors the `nestBodyOnSourceNewline` arm
+ * of `HxConditionalExpr.expr`; `padTrailing` /
+ * `captureSourceNewlineAfter` siblings on that field are intentionally
+ * absent here — the parent Star (`HxConditionalExpr.elseifs`) owns
+ * the trailing-pad boundary, see paragraph above.
  */
 @:peg
 typedef HxElseifExpr = {
 	@:kw('#elseif') var cond:HxPpCondLit;
-	var expr:HxExpr;
+	@:fmt(nestBodyOnSourceNewline) var expr:HxExpr;
 };

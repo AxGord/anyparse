@@ -86,14 +86,29 @@ package anyparse.grammar.haxe;
  * `elseExpr`→`#end`) opt into the terminal `<f>NewlineAfter:Bool`
  * slot via `@:fmt(captureSourceNewlineAfter)` so `WriterLowering.padTrailingDoc`
  * can pick `_dhl()` over `_dt(' ')` when the source had a newline at
- * the boundary (sub-slice 5 of ω-cond-comp-expr-multiline). Full
- * fixture closure also depends on body indent and opt-kw kw→body
- * sep — both separate residuals.
+ * the boundary (sub-slice 5 of ω-cond-comp-expr-multiline).
+ *
+ * `@:fmt(nestBodyOnSourceNewline)` on `expr` and `elseExpr` (slice
+ * ω-cond-comp-expr-body-nest) wraps the body's leading separator in
+ * `Nest(_cols, [hardline, body])` when the source had a newline at
+ * the kw/cond → body boundary, placing the body one indent step deeper
+ * than the surrounding `#if`/`#else` line — the fork convention at
+ * expression scope (issue_429). Without the flag the body lands at
+ * parent indent on break, mismatching fork output. Inline single-line
+ * shape (`var x = #if c a #else b #end`) keeps the byte-identical
+ * `_dt(' ') + body` layout because the source-newline decision is
+ * false (`exprBeforeNewline=false` on `expr`;
+ * `elseExprBodyOnSameLine=true` on `elseExpr`, which the writer
+ * inverts to `false`). Per-kind dispatch lives in
+ * `WriterLowering.lowerStruct`: bare-Ref non-first reads
+ * `value.exprBeforeNewline` directly; opt-kw-Ref reads
+ * `!value.elseExprBodyOnSameLine`. Stmt/decl scope mirrors don't get
+ * the flag — fork keeps body at the keyword's indent there.
  */
 @:peg
 typedef HxConditionalExpr = {
 	var cond:HxPpCondLit;
-	@:fmt(padTrailing, captureSourceNewlineAfter) var expr:HxExpr;
+	@:fmt(padTrailing, captureSourceNewlineAfter, nestBodyOnSourceNewline) var expr:HxExpr;
 	@:trivia @:tryparse @:fmt(padTrailing) var elseifs:Array<HxElseifExpr>;
-	@:optional @:kw('#else') @:fmt(padTrailing, captureSourceNewlineAfter) var elseExpr:Null<HxExpr>;
+	@:optional @:kw('#else') @:fmt(padTrailing, captureSourceNewlineAfter, nestBodyOnSourceNewline) var elseExpr:Null<HxExpr>;
 };

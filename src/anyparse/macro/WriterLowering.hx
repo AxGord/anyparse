@@ -1741,6 +1741,21 @@ class WriterLowering {
 								indentObjArgs: indentObjArgs,
 								inlineBlockBodyArgs: inlineBlockBodyArgs,
 							}));
+						} else if (child.fmtHasFlag('nestBodyOnSourceNewline') && bodyOnSameLineExpr != null) {
+							// ω-cond-comp-expr-body-nest: optional-kw-Ref body
+							// break+nest based on the captured `<f>BodyOnSameLine`
+							// slot. When the slot is false (source had a newline
+							// between the kw and the body) the wrapper emits
+							// `Nest(_cols, [hardline, body])` so the body sits
+							// one indent step deeper than the kw line. When true
+							// the wrapper emits `' ' + body` for inline single-
+							// line shape. Plain mode and non-trivia-bearing rules
+							// see a null `bodyOnSameLineExpr` and fall through to
+							// the default `_dt(kwLead + ' ') + writeCall` below.
+							// Currently consumed by `HxConditionalExpr.elseExpr`.
+							optParts.push(macro _dt($v{kwLead}));
+							final invertedSignal:Expr = macro !$bodyOnSameLineExpr;
+							optParts.push(nestBodyOnSourceNewlineWrap(writeCall, invertedSignal));
 						} else {
 							optParts.push(macro _dt($v{kwLead + ' '}));
 							optParts.push(writeCall);
@@ -2134,6 +2149,22 @@ class WriterLowering {
 									final _doc:anyparse.core.Doc = $writeCall;
 									$ctorMatchExpr ? _dn(_cols, _dc([_dhl(), _doc])) : _dc([_dt(' '), _doc]);
 								});
+							} else if (child.fmtHasFlag('nestBodyOnSourceNewline') && ctx.trivia && isTriviaBearing(typePath)) {
+								// ω-cond-comp-expr-body-nest: source-shape-driven
+								// body break+nest. The bare-Ref non-first slot
+								// `<f>BeforeNewline:Bool` (synth via
+								// `TriviaTypeSynth.isBareNonFirstRef`) records
+								// whether the source had a newline before this
+								// field's first token. When true the wrapper
+								// emits `Nest(_cols, [hardline, body])` so the
+								// body sits one indent step deeper than the
+								// preceding `#if`/`#elseif` keyword line; when
+								// false the wrapper emits `' ' + body` for
+								// inline single-line cond-comp expressions.
+								// Currently consumed by `HxConditionalExpr.expr`
+								// and `HxElseifExpr.expr`.
+								final nlSignal:Expr = beforeNewlineAccess(fieldName);
+								parts.push(nestBodyOnSourceNewlineWrap(writeCall, nlSignal));
 							} else {
 								// ω-issue-48-v2: in trivia mode the bare Ref field
 								// grew a `<field>BeforeNewline:Bool` slot (see
@@ -3406,6 +3437,58 @@ class WriterLowering {
 		return macro {
 			final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 			$wrapExpr;
+		};
+	}
+
+	/**
+	 * ω-cond-comp-expr-body-nest — wrap a body Ref's writer call so the
+	 * leading separator + body emit either as inline `' ' + body`
+	 * (source on same line) or as `Nest(_cols, [hardline, body])`
+	 * (source had a newline at the boundary). Pure source-shape decision —
+	 * no user-config policy involvement, distinct from the heavier
+	 * `bodyPolicyWrap` (Same/Next/Keep + bodyOnSameLine slot) and the
+	 * shape-aware `bareBodyBreakWrap` (block-ctor switch). Sister to the
+	 * issue_48-v2 inline `nlAccess ? _dhl() : _dt(' ')` sep but with the
+	 * `_dn(_cols, ...)` wrap so the body picks up `+1` indent step on
+	 * break — required for expression-scope cond-comp where the fork
+	 * convention places the body one level deeper than `#if`/`#elseif`/
+	 * `#else` (issue_429), unlike stmt/decl scope where body sits at
+	 * the same indent as the keyword.
+	 *
+	 * `sourceNewlineExpr` is a runtime `Bool` Expr the caller assembles
+	 * from the appropriate per-kind slot:
+	 *   - Bare-Ref non-first → `value.<f>BeforeNewline` directly (true
+	 *     means the source had a newline before this field's first
+	 *     token, so break + nest).
+	 *   - Optional-kw-Ref → `!value.<f>BodyOnSameLine` (the captured
+	 *     slot stores `true` when body sat on the same line as the kw,
+	 *     so we negate to get the break decision).
+	 *
+	 * The wrapper itself is signal-agnostic — kind dispatch lives at
+	 * the call site so each path can read its own slot and gate on
+	 * `ctx.trivia` / `isTriviaBearing(typePath)` before opting in.
+	 *
+	 * Plain mode and non-trivia-bearing types must NOT call this helper
+	 * — there's no captured slot to read; the call site falls back to
+	 * the existing `_dt(' ') + writeCall` default sep instead.
+	 *
+	 * Used by `@:fmt(nestBodyOnSourceNewline)` on body Ref fields of
+	 * `HxConditionalExpr.expr`, `HxConditionalExpr.elseExpr`, and
+	 * `HxElseifExpr.expr`. All current consumers have a non-Star
+	 * prior sibling (`cond:HxPpCondLit` for the bare-Ref expr fields;
+	 * the prior sibling is irrelevant for the optional-kw-Ref path
+	 * which owns its own kw separator). Future consumers placing
+	 * the flag on a bare-Ref whose prior sibling is an optional Star
+	 * would need to compose with `prevAnyStarNonEmpty` at the call
+	 * site — the wrapper itself is intentionally signal-only, mirroring
+	 * the simplicity of `bareBodyBreakWrap`.
+	 */
+	private static inline function nestBodyOnSourceNewlineWrap(writeCall:Expr, sourceNewlineExpr:Expr):Expr {
+		final sameLayoutExpr:Expr = macro _dc([_dt(' '), $writeCall]);
+		final nextLayoutExpr:Expr = macro _dn(_cols, _dc([_dhl(), $writeCall]));
+		return macro {
+			final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+			$sourceNewlineExpr ? $nextLayoutExpr : $sameLayoutExpr;
 		};
 	}
 
