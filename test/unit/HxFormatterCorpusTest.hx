@@ -29,10 +29,10 @@ import anyparse.runtime.ParseError;
  *
  * Category coverage grows one method at a time. Currently wired:
  * `whitespace/` (153), `sameline/` (132), `indentation/` (130),
- * `wrapping/` (200), `emptylines/` (96), `lineends/` (94). Remaining
- * categories (`other`, `formatrange`, `expressionlevel`, `missing`)
- * are added in subsequent slices — each is one new method reusing
- * `HxFormatterCorpusHelpers`.
+ * `wrapping/` (200), `emptylines/` (96), `lineends/` (94),
+ * `other/` (62). Remaining categories (`formatrange`,
+ * `expressionlevel`, `missing`) are added in subsequent slices —
+ * each is one new method reusing `HxFormatterCorpusHelpers`.
  *
  * The harness intentionally does NOT fail the utest pass on per-case
  * byte diffs. The first run will surface dozens of grammar gaps
@@ -54,6 +54,7 @@ class HxFormatterCorpusTest extends Test {
 	private static inline final WRAPPING_SUBDIR:String = 'test/testcases/wrapping';
 	private static inline final EMPTYLINES_SUBDIR:String = 'test/testcases/emptylines';
 	private static inline final LINEENDS_SUBDIR:String = 'test/testcases/lineends';
+	private static inline final OTHER_SUBDIR:String = 'test/testcases/other';
 	private static inline final HXTEST_EXT:String = '.hxtest';
 	private static inline final MAX_DIFF_CONTEXT:Int = 40;
 	private static inline final MAX_REASON_LEN:Int = 120;
@@ -85,6 +86,10 @@ class HxFormatterCorpusTest extends Test {
 
 	public function testLineEnds():Void {
 		runCategory(LINEENDS_SUBDIR, 'lineends');
+	}
+
+	public function testOther():Void {
+		runCategory(OTHER_SUBDIR, 'other');
 	}
 
 	private function runCategory(subdir:String, label:String):Void {
