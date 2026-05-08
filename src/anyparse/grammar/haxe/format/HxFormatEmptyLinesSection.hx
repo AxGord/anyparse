@@ -47,10 +47,11 @@ package anyparse.grammar.haxe.format;
  *
  * `importAndUsing` nested section added in slice ω-imports-using-blank
  * (feeds `opt.beforeUsing` through `HxFormatImportAndUsingConfig`).
- * Mirrors haxe-formatter's `emptyLines.importAndUsing` group; only the
- * `beforeUsing` sub-key is modelled today, the other sub-keys
- * (`betweenImports`, `betweenImportsLevel`, `beforeType`) land with the
- * slices that introduce their matching writer knobs.
+ * Mirrors haxe-formatter's `emptyLines.importAndUsing` group;
+ * `beforeUsing` (ω-imports-using-blank) and
+ * `betweenImports` + `betweenImportsLevel` (ω-imports-using-between)
+ * are modelled today, the remaining sub-key (`beforeType`) lands with
+ * the slice that introduces its matching writer knob.
  */
 @:peg typedef HxFormatEmptyLinesSection = {
 

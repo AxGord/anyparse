@@ -2627,9 +2627,13 @@ class WriterLowering {
 				final beforeCtorIfAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBeforeCtorIf');
 				for (args in beforeCtorIfAllArgs)
 					beforeCtorInfos.push(buildBeforeCtorBlankInfoIf(elemRefName, args));
+				final betweenCtorAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBetweenSameCtorByLevel');
+				final betweenCtorInfos:Array<BetweenCtorBlankInfo> = [
+					for (args in betweenCtorAllArgs) buildBetweenCtorBlankInfo(elemRefName, args)
+				];
 				parts.push(triviaEofStarExpr(
 					fieldAccess, trailBBAccess, trailLCAccess, elemFn,
-					afterCtorInfos, beforeCtorInfos
+					afterCtorInfos, beforeCtorInfos, betweenCtorInfos
 				));
 			} else {
 				Context.fatalError('WriterLowering: @:trivia Star without @:trail must be the last field', Context.currentPos());
@@ -5404,7 +5408,8 @@ class WriterLowering {
 	private static function triviaEofStarExpr(
 		fieldAccess:Expr, trailBBAccess:Null<Expr>, trailLCAccess:Null<Expr>,
 		elemFn:String, afterCtorInfos:Array<AfterCtorBlankInfo> = null,
-		beforeCtorInfos:Array<BeforeCtorBlankInfo> = null
+		beforeCtorInfos:Array<BeforeCtorBlankInfo> = null,
+		betweenCtorInfos:Array<BetweenCtorBlankInfo> = null
 	):Expr {
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
@@ -5414,6 +5419,7 @@ class WriterLowering {
 		final trailLC:Expr = trailLCAccess ?? macro ([] : Array<String>);
 		final afterInfos:Array<AfterCtorBlankInfo> = afterCtorInfos ?? [];
 		final beforeInfos:Array<BeforeCtorBlankInfo> = beforeCtorInfos ?? [];
+		final betweenInfos:Array<BetweenCtorBlankInfo> = betweenCtorInfos ?? [];
 		final pos:Position = Context.currentPos();
 		// ω-after-package — when the previous element matches one of the
 		// named ctors, the writer overrides the source-captured blank-
@@ -5440,6 +5446,17 @@ class WriterLowering {
 		// afterInfos[1], …, then beforeInfos[0], …, then source-driven.
 		// Knobs read from the source-order chain, so authors order the
 		// entries from highest priority (afterPackage) downward.
+		//
+		// ω-imports-using-between — same-kind pair gate with path-level
+		// awareness. Adds `@:fmt(blankLinesBetweenSameCtorByLevel(...))`
+		// alongside the after/before families. Per-entry trackers carry
+		// both a kind flag (`_prevKindBetweenN` / `_currKindBetweenN`)
+		// AND a path String (`_prevPathBetweenN` / `_currPathBetweenN`)
+		// captured from the matched ctor's first positional arg via
+		// `_v0` binding. Cascade priority: afterInfos[*] > betweenInfos[*]
+		// > beforeInfos[*] > source-driven `blankBefore`. Mutually
+		// exclusive in practice on import/using boundaries (same-kind
+		// vs kind-switch on the import-set ↔ using-set partition).
 		final initPrevKindExprs:Array<Expr> = [
 			for (i in 0...afterInfos.length) {
 				final name:String = '_prevKindAfter' + i;
@@ -5508,10 +5525,65 @@ class WriterLowering {
 				macro $lhs = $rhs;
 			}
 		];
+		// ω-imports-using-between — same-kind pair gate with path-level
+		// awareness. Per-info trackers carry both a kind flag (1 if
+		// matched, 0 otherwise) AND the matched ctor's first positional
+		// arg as a path String. The cascade ternary fires
+		// `opt.<countOptField>` blank lines when both prev and curr
+		// match the same set AND the runtime helper named by
+		// `pathDifferFQN` returns `true` for (prevPath, currPath, level).
+		final initPrevKindBetweenExprs:Array<Expr> = [];
+		for (i in 0...betweenInfos.length) {
+			final kn:String = '_prevKindBetween' + i;
+			final pn:String = '_prevPathBetween' + i;
+			initPrevKindBetweenExprs.push(macro var $kn:Int = 0);
+			initPrevKindBetweenExprs.push(macro var $pn:String = '');
+		}
+		final initCurrKindBetweenExprs:Array<Expr> = [];
+		for (i in 0...betweenInfos.length) {
+			final kn:String = '_currKindBetween' + i;
+			final pn:String = '_currPathBetween' + i;
+			initCurrKindBetweenExprs.push(macro var $kn:Int = 0);
+			initCurrKindBetweenExprs.push(macro var $pn:String = '');
+		}
+		final currKindBetweenComputeExprs:Array<Expr> = [
+			for (i in 0...betweenInfos.length) {
+				final info:BetweenCtorBlankInfo = betweenInfos[i];
+				final classifierAccess:Expr = {
+					expr: EField(macro _t.node, info.classifierFieldName),
+					pos: pos,
+				};
+				final kindIdent:Expr = {expr: EConst(CIdent('_currKindBetween' + i)), pos: pos};
+				final pathIdent:Expr = {expr: EConst(CIdent('_currPathBetween' + i)), pos: pos};
+				final cases:Array<Case> = [
+					for (cp in info.ctorPatterns) {
+						values: [cp.pattern],
+						guard: null,
+						expr: cp.isMatch
+							? macro { $kindIdent = 1; $pathIdent = _v0; }
+							: macro { $kindIdent = 0; $pathIdent = ''; },
+					}
+				];
+				{
+					expr: ESwitch(classifierAccess, cases, null),
+					pos: pos,
+				};
+			}
+		];
+		final trackPrevKindBetweenExprs:Array<Expr> = [];
+		for (i in 0...betweenInfos.length) {
+			final pkLhs:Expr = {expr: EConst(CIdent('_prevKindBetween' + i)), pos: pos};
+			final pkRhs:Expr = {expr: EConst(CIdent('_currKindBetween' + i)), pos: pos};
+			final ppLhs:Expr = {expr: EConst(CIdent('_prevPathBetween' + i)), pos: pos};
+			final ppRhs:Expr = {expr: EConst(CIdent('_currPathBetween' + i)), pos: pos};
+			trackPrevKindBetweenExprs.push(macro $pkLhs = $pkRhs);
+			trackPrevKindBetweenExprs.push(macro $ppLhs = $ppRhs);
+		}
 		var blanksCountExpr:Expr = macro (_t.blankBefore ? 1 : 0);
 		// Build cascade from innermost (source-driven) outward — beforeInfos
-		// in reverse order first, then afterInfos in reverse order, so the
-		// source-order priority lands as the outermost ternary check.
+		// in reverse order, then betweenInfos in reverse order, then
+		// afterInfos in reverse order. Final priority (outermost first):
+		// after[0..N] > between[0..N] > before[0..N] > source.
 		for (i in 0...beforeInfos.length) {
 			final idx:Int = beforeInfos.length - 1 - i;
 			final info:BeforeCtorBlankInfo = beforeInfos[idx];
@@ -5520,6 +5592,30 @@ class WriterLowering {
 			final prevIdent:Expr = {expr: EConst(CIdent('_prevKindBefore' + idx)), pos: pos};
 			final fallback:Expr = blanksCountExpr;
 			blanksCountExpr = macro ($currIdent == 1 && $prevIdent != 1 ? $beforeAccess : $fallback);
+		}
+		for (i in 0...betweenInfos.length) {
+			final idx:Int = betweenInfos.length - 1 - i;
+			final info:BetweenCtorBlankInfo = betweenInfos[idx];
+			final countAccess:Expr = {expr: EField(macro opt, info.countOptField), pos: pos};
+			final levelAccess:Expr = {expr: EField(macro opt, info.levelOptField), pos: pos};
+			final adapterAccess:Expr = {expr: EField(macro opt, info.adapterOptField), pos: pos};
+			final currKindIdent:Expr = {expr: EConst(CIdent('_currKindBetween' + idx)), pos: pos};
+			final prevKindIdent:Expr = {expr: EConst(CIdent('_prevKindBetween' + idx)), pos: pos};
+			final currPathIdent:Expr = {expr: EConst(CIdent('_currPathBetween' + idx)), pos: pos};
+			final prevPathIdent:Expr = {expr: EConst(CIdent('_prevPathBetween' + idx)), pos: pos};
+			final differCall:Expr = {
+				expr: ECall(adapterAccess, [prevPathIdent, currPathIdent, levelAccess]),
+				pos: pos,
+			};
+			final fallback:Expr = blanksCountExpr;
+			// Null-guard the adapter call — `WriteOptions.<adapterOptField>` is
+			// declared `Null<(String,String,Int)->Bool>` so the consuming
+			// writer files (HxModuleWriter / HaxeModuleTriviaWriter, both
+			// `@:nullSafety(Strict)`) reject a bare `opt.f(...)` call. The
+			// && short-circuit on `$adapterAccess != null` keeps the path
+			// inert when no adapter is wired (cascade falls through to the
+			// fallback / source-driven blank count).
+			blanksCountExpr = macro ($currKindIdent == 1 && $prevKindIdent == 1 && $adapterAccess != null && $differCall ? $countAccess : $fallback);
 		}
 		for (i in 0...afterInfos.length) {
 			final idx:Int = afterInfos.length - 1 - i;
@@ -5541,6 +5637,8 @@ class WriterLowering {
 		for (e in currKindComputeExprs) whileBodyParts.push(e);
 		for (e in initCurrKindBeforeExprs) whileBodyParts.push(e);
 		for (e in currKindBeforeComputeExprs) whileBodyParts.push(e);
+		for (e in initCurrKindBetweenExprs) whileBodyParts.push(e);
+		for (e in currKindBetweenComputeExprs) whileBodyParts.push(e);
 		whileBodyParts.push(macro if (_si > 0) {
 			_docs.push(_dhl());
 			final _blanks:Int = $blanksCountExpr;
@@ -5564,6 +5662,7 @@ class WriterLowering {
 		whileBodyParts.push(macro _docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDoc(_tc, opt)) : _elem));
 		for (e in trackPrevKindExprs) whileBodyParts.push(e);
 		for (e in trackPrevKindBeforeExprs) whileBodyParts.push(e);
+		for (e in trackPrevKindBetweenExprs) whileBodyParts.push(e);
 		whileBodyParts.push(macro _si++);
 		final whileBodyBlock:Expr = {expr: EBlock(whileBodyParts), pos: pos};
 		final whileExpr:Expr = {
@@ -5574,6 +5673,7 @@ class WriterLowering {
 		elseBodyParts.push(macro final _docs:Array<anyparse.core.Doc> = []);
 		for (e in initPrevKindExprs) elseBodyParts.push(e);
 		for (e in initPrevKindBeforeExprs) elseBodyParts.push(e);
+		for (e in initPrevKindBetweenExprs) elseBodyParts.push(e);
 		elseBodyParts.push(macro var _si:Int = 0);
 		elseBodyParts.push(whileExpr);
 		elseBodyParts.push(macro if (_trailLC.length > 0) {
@@ -6258,31 +6358,93 @@ class WriterLowering {
 	}
 
 	/**
-	 * Shared resolver for `@:fmt(blankLinesAfterCtor(...))` and
-	 * `@:fmt(blankLinesBeforeCtor(...))` — both metas accept the same
-	 * `(classifierField, CtorName1, …, optField)` arg shape and produce
-	 * the same single-axis classify-switch (`1` for any matching ctor,
-	 * `0` otherwise) plus an opt-field name. The two metas diverge only
-	 * at runtime: after-ctor consults the previous element's kind,
-	 * before-ctor consults the current element's kind paired with a
-	 * `prev != curr` gate. Centralising the parse/validation here keeps
-	 * both knobs in sync on shape-validation messages and the classifier
-	 * lookup path.
+	 * ω-imports-using-between — resolve
+	 * `@:fmt(blankLinesBetweenSameCtorByLevel(classifierField,
+	 * CtorName1, [CtorName2, …], levelOptField, countOptField,
+	 * pathDifferFQN))` into a `BetweenCtorBlankInfo`. Validates the
+	 * classifier resolves to an enum and that every named ctor exists
+	 * with arity ≥ 1 (the first positional arg is the path payload
+	 * read at runtime). Patterns for matched ctors bind `_v0` to the
+	 * first arg; unmatched ctors use bare wildcards.
+	 *
+	 * Reuses the classifier resolution path from `resolveCtorBlankArgs`
+	 * (probe Seq element rule → find Ref field → walk to enum target →
+	 * enumerate Alt branches) but builds its own case-pattern set
+	 * because (a) the runtime case body assigns BOTH a kind flag AND a
+	 * path String at index-dependent ident names, generated at cascade-
+	 * emit time, and (b) the matched arity-≥1 requirement is stricter
+	 * than the existing builder's optional `_v0` binding.
 	 */
-	private function resolveCtorBlankArgs(elemRefName:String, args:Array<String>, metaName:String, predicateName:Null<String>):CtorBlankResolution {
-		if (args.length < 3)
+	private function buildBetweenCtorBlankInfo(elemRefName:String, args:Array<String>):BetweenCtorBlankInfo {
+		if (args.length < 5)
 			Context.fatalError(
-				'WriterLowering: @:fmt($metaName) expects ≥ 3 string args (classifierField, CtorName1, [CtorName2, …], optField), got ${args.length}',
+				'WriterLowering: @:fmt(blankLinesBetweenSameCtorByLevel) expects ≥ 5 string args (classifierField, CtorName1, [CtorName2, …], levelOptField, countOptField, adapterOptField), got ${args.length}',
 				Context.currentPos()
 			);
 		final fieldName:String = args[0];
-		final optField:String = args[args.length - 1];
-		final ctorNames:Array<String> = args.slice(1, args.length - 1);
+		final adapterOptField:String = args[args.length - 1];
+		final countOptField:String = args[args.length - 2];
+		final levelOptField:String = args[args.length - 3];
+		final ctorNames:Array<String> = args.slice(1, args.length - 3);
 		if (ctorNames.length == 0)
 			Context.fatalError(
-				'WriterLowering: @:fmt($metaName) requires at least one ctor name between the classifier field and the opt field',
+				'WriterLowering: @:fmt(blankLinesBetweenSameCtorByLevel) requires at least one ctor name between the classifier field and the level/count/adapter tail',
 				Context.currentPos()
 			);
+		final r:{enumRule:ShapeNode, enumRuleName:String} = resolveClassifierEnum(elemRefName, fieldName, 'blankLinesBetweenSameCtorByLevel');
+		final enumRule:ShapeNode = r.enumRule;
+		final enumRuleName:String = r.enumRuleName;
+		final pos:Position = Context.currentPos();
+		final patterns:Array<BetweenCtorPattern> = [];
+		final matched:Array<String> = [];
+		for (branch in enumRule.children) {
+			final ctorName:Null<String> = branch.annotations.get('base.ctor');
+			if (ctorName == null) continue;
+			final arity:Int = branch.children.length;
+			final ctorIdent:Expr = {expr: EConst(CIdent(ctorName)), pos: pos};
+			final isMatch:Bool = ctorNames.indexOf(ctorName) >= 0;
+			if (isMatch) {
+				if (arity < 1)
+					Context.fatalError(
+						'WriterLowering: @:fmt(blankLinesBetweenSameCtorByLevel) ctor "$ctorName" must have arity ≥ 1 (first arg is the path payload bound to _v0); got arity $arity',
+						Context.currentPos()
+					);
+				matched.push(ctorName);
+				final binders:Array<Expr> = [for (i in 0...arity) i == 0 ? macro _v0 : macro _];
+				patterns.push({
+					pattern: {expr: ECall(ctorIdent, binders), pos: pos},
+					isMatch: true,
+				});
+			} else {
+				final pattern:Expr = arity == 0
+					? ctorIdent
+					: {expr: ECall(ctorIdent, [for (_ in 0...arity) macro _]), pos: pos};
+				patterns.push({pattern: pattern, isMatch: false});
+			}
+		}
+		for (name in ctorNames) if (matched.indexOf(name) < 0)
+			Context.fatalError(
+				'WriterLowering: @:fmt(blankLinesBetweenSameCtorByLevel) ctor "$name" not found in enum $enumRuleName',
+				Context.currentPos()
+			);
+		return {
+			classifierFieldName: fieldName,
+			ctorPatterns: patterns,
+			levelOptField: levelOptField,
+			countOptField: countOptField,
+			adapterOptField: adapterOptField,
+		};
+	}
+
+	/**
+	 * Shared classifier-lookup path for the `blankLines{After,Before,
+	 * BetweenSameCtorByLevel}Ctor[*]` meta family. Validates that the
+	 * Seq element rule has a Ref field matching `fieldName`, that the
+	 * Ref points at an Alt rule, and returns `(enumRule, enumRuleName)`
+	 * for downstream branch enumeration. Centralising this stops the
+	 * five fatalError messages from drifting out of sync across builders.
+	 */
+	private function resolveClassifierEnum(elemRefName:String, fieldName:String, metaName:String):{enumRule:ShapeNode, enumRuleName:String} {
 		final elemRule:Null<ShapeNode> = shape.rules.get(elemRefName);
 		if (elemRule == null || elemRule.kind != Seq)
 			Context.fatalError(
@@ -6312,6 +6474,38 @@ class WriterLowering {
 				'WriterLowering: @:fmt($metaName) classifier target $enumRuleName must be an Alt (enum)',
 				Context.currentPos()
 			);
+		return {enumRule: enumRule, enumRuleName: enumRuleName};
+	}
+
+	/**
+	 * Shared resolver for `@:fmt(blankLinesAfterCtor(...))` and
+	 * `@:fmt(blankLinesBeforeCtor(...))` — both metas accept the same
+	 * `(classifierField, CtorName1, …, optField)` arg shape and produce
+	 * the same single-axis classify-switch (`1` for any matching ctor,
+	 * `0` otherwise) plus an opt-field name. The two metas diverge only
+	 * at runtime: after-ctor consults the previous element's kind,
+	 * before-ctor consults the current element's kind paired with a
+	 * `prev != curr` gate. Centralising the parse/validation here keeps
+	 * both knobs in sync on shape-validation messages and the classifier
+	 * lookup path.
+	 */
+	private function resolveCtorBlankArgs(elemRefName:String, args:Array<String>, metaName:String, predicateName:Null<String>):CtorBlankResolution {
+		if (args.length < 3)
+			Context.fatalError(
+				'WriterLowering: @:fmt($metaName) expects ≥ 3 string args (classifierField, CtorName1, [CtorName2, …], optField), got ${args.length}',
+				Context.currentPos()
+			);
+		final fieldName:String = args[0];
+		final optField:String = args[args.length - 1];
+		final ctorNames:Array<String> = args.slice(1, args.length - 1);
+		if (ctorNames.length == 0)
+			Context.fatalError(
+				'WriterLowering: @:fmt($metaName) requires at least one ctor name between the classifier field and the opt field',
+				Context.currentPos()
+			);
+		final r:{enumRule:ShapeNode, enumRuleName:String} = resolveClassifierEnum(elemRefName, fieldName, metaName);
+		final enumRule:ShapeNode = r.enumRule;
+		final enumRuleName:String = r.enumRuleName;
 		final pos:Position = Context.currentPos();
 		final cases:Array<Case> = [];
 		final matched:Array<String> = [];
@@ -6681,6 +6875,56 @@ typedef BeforeCtorBlankInfo = {
 	classifierFieldName:String,
 	classifyCases:Array<Case>,
 	optField:String,
+};
+
+/**
+ * ω-imports-using-between — resolved data for
+ * `@:fmt(blankLinesBetweenSameCtorByLevel(classifierField, CtorName1,
+ * [CtorName2, …], levelOptField, countOptField, adapterOptField))`.
+ * Produced by `WriterLowering.buildBetweenCtorBlankInfo` and spliced
+ * into `triviaEofStarExpr`'s per-element loop alongside the
+ * after/before-ctor families. Shape diverges from those two: the
+ * runtime tracks both a kind flag (1 for any matching ctor, 0 otherwise)
+ * AND a path String (first ctor arg of the matched ctor, e.g. the
+ * `HxTypeName`/`HxWildPath` payload of `ImportDecl(path)`). The cascade
+ * ternary fires `opt.<countOptField>` blank lines when both prev and
+ * curr match the same set AND
+ * `opt.<adapterOptField>(prevPath, currPath, opt.<levelOptField>)`
+ * returns `true`.
+ *
+ * `ctorPatterns` carries one entry per enum variant in the classifier
+ * target — `pattern` is a ready-to-use ESwitch case pattern (matched
+ * ctors bind their first positional arg as `_v0`; unmatched ctors use
+ * a wildcard for every arg). The case body is generated at cascade-
+ * emit time inside `triviaEofStarExpr` because it needs to reference
+ * the per-info `_currKindBetween<i>` / `_currPathBetween<i>` ident
+ * names, which depend on the info's index in the cascade.
+ *
+ * `adapterOptField` names a function-typed field on `WriteOptions`
+ * (e.g. `betweenImportsPathDiffers:Null<(String, String, Int) -> Bool>`)
+ * default-wired by the grammar plugin. Engine emits a pure
+ * `opt.<adapterOptField>(...)` EField call — no FQN parsing, no
+ * grammar-package coupling baked into the macro core. Cascade
+ * priority: after-ctor entries (outermost) > between entries >
+ * before-ctor entries > source-driven `blankBefore`.
+ */
+typedef BetweenCtorBlankInfo = {
+	classifierFieldName:String,
+	ctorPatterns:Array<BetweenCtorPattern>,
+	levelOptField:String,
+	countOptField:String,
+	adapterOptField:String,
+};
+
+/**
+ * One ESwitch case pattern with its matched/unmatched flag, used by
+ * `BetweenCtorBlankInfo`. Matched-ctor patterns bind `_v0` to the
+ * ctor's first positional arg so the cascade-emit phase can read the
+ * import / using path String at runtime.
+ */
+typedef BetweenCtorPattern = {
+	pattern:Expr,
+	isMatch:Bool,
 };
 
 /**

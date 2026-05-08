@@ -14,6 +14,7 @@ import anyparse.format.wrap.WrapMode;
 import anyparse.format.wrap.WrapRule;
 import anyparse.format.wrap.WrapRules;
 import anyparse.format.wrap.WrappingLocation;
+import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
 import anyparse.grammar.haxe.format.HxFormatBodyPolicy;
 import anyparse.grammar.haxe.format.HxFormatBracesConfigSection;
 import anyparse.grammar.haxe.format.HxFormatClassEmptyLinesConfig;
@@ -386,6 +387,18 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   replaced with this value, so `0` strips the slot and `2` doubles
  *   it. Consecutive `using` decls fall through to source-driven
  *   binary `blankBefore`.
+ * - `emptyLines.importAndUsing.betweenImports` +
+ *   `emptyLines.importAndUsing.betweenImportsLevel`
+ *   (ω-imports-using-between): non-negative Int routed to
+ *   `opt.betweenImports` (default `0`) and JSON-string token routed
+ *   through `betweenImportsLevelFromString` to `opt.betweenImportsLevel`
+ *   (default `All`). Together drive blank-line insertion between two
+ *   consecutive same-kind imports / usings whose dotted-ident paths
+ *   fall into different groups at the configured level. Fork accepts
+ *   `"all"` / `"firstLevelPackage"` / `"secondLevelPackage"` /
+ *   `"thirdLevelPackage"` / `"fourthLevelPackage"` /
+ *   `"fifthLevelPackage"` / `"fullPackage"`; unknown tokens leave the
+ *   default in place.
  *
  * Deliberately NOT supported in this slice (no corresponding
  * `HxModuleWriteOptions` field yet): `wrapping.*` beyond
@@ -393,7 +406,7 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  * `anonTypeCurly`, `typedefCurly`, `anonFunctionCurly`, …), other
  * `emptyLines.*` keys
  * (`finalNewline`, `maxAnywhereInFile`, `beforePackage`,
- * `betweenTypes`, per-type-kind sections
+ * `betweenTypes`, `importAndUsing.beforeType`, per-type-kind sections
  * `macroClassEmptyLines` / `externClassEmptyLines` /
  * `abstractEmptyLines` / `enumEmptyLines` /
  * `typedefEmptyLines`, other `classEmptyLines.*` sub-keys beyond
@@ -507,6 +520,8 @@ final class HaxeFormatConfigLoader {
 			arrowFunctions: base.arrowFunctions,
 			afterPackage: base.afterPackage,
 			beforeUsing: base.beforeUsing,
+			betweenImports: base.betweenImports,
+			betweenImportsLevel: base.betweenImportsLevel,
 			afterMultilineDecl: base.afterMultilineDecl,
 			beforeMultilineDecl: base.beforeMultilineDecl,
 			formatStringInterpolation: base.formatStringInterpolation,
@@ -515,6 +530,7 @@ final class HaxeFormatConfigLoader {
 			lineCommentAdapter: base.lineCommentAdapter,
 			endsWithCloseBrace: base.endsWithCloseBrace,
 			caseBodyRefusesFlat: base.caseBodyRefusesFlat,
+			betweenImportsPathDiffers: base.betweenImportsPathDiffers,
 		};
 		if (cfg.indentation != null) applyIndentation(cfg.indentation, result);
 		if (cfg.wrapping != null) applyWrapping(cfg.wrapping, result);
@@ -871,7 +887,34 @@ final class HaxeFormatConfigLoader {
 		final importAndUsing:Null<HxFormatImportAndUsingConfig> = section.importAndUsing;
 		if (importAndUsing != null) {
 			if (importAndUsing.beforeUsing != null) opt.beforeUsing = importAndUsing.beforeUsing;
+			if (importAndUsing.betweenImports != null) opt.betweenImports = importAndUsing.betweenImports;
+			final levelRaw:Null<String> = importAndUsing.betweenImportsLevel;
+			if (levelRaw != null) {
+				final mapped:Null<HxBetweenImportsLevel> = betweenImportsLevelFromString(levelRaw);
+				if (mapped != null) opt.betweenImportsLevel = mapped;
+			}
 		}
+	}
+
+	/**
+	 * Map a haxe-formatter `betweenImportsLevel` string token to the
+	 * runtime enum. Mirrors fork's `BetweenImportsEmptyLinesLevel` JSON
+	 * encoding (`"all"` / `"firstLevelPackage"` / … / `"fullPackage"`).
+	 * Unknown tokens return `null` and the caller leaves the existing
+	 * `opt.betweenImportsLevel` (defaults `All`) intact — same lenient
+	 * behaviour as the rest of the loader's enum mappings.
+	 */
+	private static function betweenImportsLevelFromString(raw:String):Null<HxBetweenImportsLevel> {
+		return switch raw {
+			case 'all': HxBetweenImportsLevel.All;
+			case 'firstLevelPackage': HxBetweenImportsLevel.FirstLevelPackage;
+			case 'secondLevelPackage': HxBetweenImportsLevel.SecondLevelPackage;
+			case 'thirdLevelPackage': HxBetweenImportsLevel.ThirdLevelPackage;
+			case 'fourthLevelPackage': HxBetweenImportsLevel.FourthLevelPackage;
+			case 'fifthLevelPackage': HxBetweenImportsLevel.FifthLevelPackage;
+			case 'fullPackage': HxBetweenImportsLevel.FullPackage;
+			case _: null;
+		};
 	}
 
 	private static function sameLineToRuntime(policy:HxFormatSameLinePolicy):SameLinePolicy {

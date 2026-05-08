@@ -9,6 +9,7 @@ import anyparse.format.SameLinePolicy;
 import anyparse.format.WhitespacePolicy;
 import anyparse.format.WriteOptions;
 import anyparse.format.wrap.WrapRules;
+import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
 
 /**
  * Write options specific to the Haxe module grammar (`HxModule`).
@@ -916,6 +917,40 @@ import anyparse.format.wrap.WrapRules;
  *    `blankLinesAfterCtor` / `blankLinesBeforeCtor` entries with
  *    independent ctor sets and opt fields, cascaded in source order.
  *
+ * Fields added in slice ω-imports-using-between (blank-line slot
+ * between two consecutive same-kind imports / usings, level-aware):
+ *  - `betweenImports` — exact number of blank lines the writer emits
+ *    when both the previous and current top-level decls are imports
+ *    (`ImportDecl` / `ImportWildDecl`) or both usings (`UsingDecl` /
+ *    `UsingWildDecl`) AND their dotted-ident paths fall into different
+ *    groups at the configured level. Override semantics, not floor:
+ *    the source-captured blank-line count is replaced with this value
+ *    on a level-mismatch boundary. `0` (default, matches haxe-
+ *    formatter's `emptyLines.importAndUsing.betweenImports:
+ *    @:default(0)`) leaves consecutive same-kind imports glued; `1`
+ *    inserts one blank line between groups. Same-level pairs (e.g.
+ *    two `haxe.io.*` imports under `firstLevelPackage` policy) fall
+ *    through to the trivia channel's binary `blankBefore` flag.
+ *  - `betweenImportsLevel` — granularity of the level test. `All`
+ *    treats every same-kind boundary as a level mismatch (one blank
+ *    between every pair); `FirstLevelPackage` … `FifthLevelPackage`
+ *    compare the first N dot-separated segments of the path;
+ *    `FullPackage` compares the entire path. Default `All` matches
+ *    haxe-formatter's `BetweenImportsEmptyLinesLevel: @:default(All)`.
+ *    The knob only triggers at sites tagged with
+ *    `@:fmt(blankLinesBetweenSameCtorByLevel('decl', Ctor1, [Ctor2, …],
+ *    'betweenImportsLevel', 'betweenImports',
+ *    'betweenImportsPathDiffers'))` in the grammar — `HxModule.decls`
+ *    is the only current consumer (one entry per kind set: imports +
+ *    usings). The 6th meta arg names the format-neutral
+ *    `WriteOptions.betweenImportsPathDiffers` adapter slot, default-
+ *    wired by the grammar plugin to its level-aware path-comparison
+ *    helper (engine emits a pure `opt.betweenImportsPathDiffers(...)`
+ *    EField call — see `endsWithCloseBrace` / `caseBodyRefusesFlat`
+ *    precedent). The same `blankLinesBetweenSameCtorByLevel` mechanism
+ *    is open to future same-kind, path-aware blank-line slices on any
+ *    Star whose ctor set carries a String-shaped first arg.
+ *
  * Fields added in slice ω-after-multiline (predicate-gated blank-line
  * rules driven by the grammar-derived `multiline` predicate):
  *  - `afterMultilineDecl` — exact number of blank lines the writer emits
@@ -1051,6 +1086,8 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	arrowFunctions:WhitespacePolicy,
 	afterPackage:Int,
 	beforeUsing:Int,
+	betweenImports:Int,
+	betweenImportsLevel:HxBetweenImportsLevel,
 	afterMultilineDecl:Int,
 	beforeMultilineDecl:Int,
 	formatStringInterpolation:Bool,

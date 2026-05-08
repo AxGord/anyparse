@@ -55,14 +55,30 @@ package anyparse.grammar.haxe;
  * count regardless of source; consecutive `using` decls cascade
  * through to source-driven `blankBefore`. The cascade order in the
  * trivia EOF Star path is: `blankLinesAfterCtor` entries (in source
- * order, prev match) win first, then `blankLinesBeforeCtor` entries
- * (curr match without prev match), then source-driven binary blank-
- * line slot. Multiple `blankLinesAfterCtor` / `blankLinesBeforeCtor`
- * entries on the same Star are supported (ω-after-typedecl multi-info
- * refactor) — open to future "blank line before X-group" slices (e.g.
- * `beforeType` for the import/using → type-decl transition) by adding
- * an analogous `@:fmt(...)` call with a different ctor set and opt
- * field.
+ * order, prev match) win first, then `blankLinesBetweenSameCtorByLevel`
+ * entries (same-kind pair with path-level mismatch), then
+ * `blankLinesBeforeCtor` entries (curr match without prev match), then
+ * source-driven binary blank-line slot. Multiple
+ * `blankLinesAfterCtor` / `blankLinesBeforeCtor` entries on the same
+ * Star are supported (ω-after-typedecl multi-info refactor) — open to
+ * future "blank line before X-group" slices (e.g. `beforeType` for the
+ * import/using → type-decl transition) by adding an analogous
+ * `@:fmt(...)` call with a different ctor set and opt field.
+ *
+ * `@:fmt(blankLinesBetweenSameCtorByLevel('decl', CtorA1, [CtorA2, …],
+ * 'betweenImportsLevel', 'betweenImports', 'betweenImportsPathDiffers'))`
+ * (slice ω-imports-using-between) is the same-kind, path-level-aware
+ * knob — fires `opt.betweenImports` blank lines between two
+ * consecutive elements that BOTH match the named ctor set AND whose
+ * path payloads (first positional ctor arg) differ at
+ * `opt.betweenImportsLevel` granularity per the grammar-supplied
+ * `opt.betweenImportsPathDiffers` adapter. Two entries here — one for
+ * the imports set, one for the usings set — keep the gate symmetric
+ * with fork's `prev.isImport == curr.isImport` partition. The adapter
+ * field follows the established `endsWithCloseBrace` /
+ * `caseBodyRefusesFlat` pattern: declared on `WriteOptions` base,
+ * default-wired by the grammar plugin, engine emits a pure
+ * `opt.<name>(...)` EField call.
  *
  * Predicate-gated variants `@:fmt(blankLinesAfterCtorIf(classifierField,
  * predicateName, Ctor1, …, optField))` and the symmetric `…BeforeCtorIf`
@@ -86,6 +102,8 @@ typedef HxModule = {
 	@:trivia
 	@:fmt(blankLinesAfterCtor('decl', 'PackageDecl', 'PackageEmpty', 'afterPackage'))
 	@:fmt(blankLinesBeforeCtor('decl', 'UsingDecl', 'UsingWildDecl', 'beforeUsing'))
+	@:fmt(blankLinesBetweenSameCtorByLevel('decl', 'ImportDecl', 'ImportWildDecl', 'betweenImportsLevel', 'betweenImports', 'betweenImportsPathDiffers'))
+	@:fmt(blankLinesBetweenSameCtorByLevel('decl', 'UsingDecl', 'UsingWildDecl', 'betweenImportsLevel', 'betweenImports', 'betweenImportsPathDiffers'))
 	@:fmt(blankLinesAfterCtorIf('decl', 'multiline', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'FnDecl', 'afterMultilineDecl'))
 	@:fmt(blankLinesBeforeCtorIf('decl', 'multiline', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'FnDecl', 'beforeMultilineDecl'))
 	var decls:Array<HxTopLevelDecl>;

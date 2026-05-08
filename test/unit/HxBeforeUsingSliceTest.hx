@@ -74,11 +74,20 @@ class HxBeforeUsingSliceTest extends Test {
 		);
 	}
 
-	public function testConsecutiveUsingsRespectSourceBlank():Void {
+	public function testConsecutiveUsingsCollapseUnderDefaultBetween():Void {
+		// ω-imports-using-between superseded the pre-slice "source-driven
+		// blankBefore for consecutive usings" assertion. Defaults
+		// `betweenImports: 0` + `betweenImportsLevel: All` force 0 blanks
+		// between every consecutive same-kind pair (matches fork's
+		// `BetweenImportsEmptyLinesLevel: @:default(All)` +
+		// `betweenImports: @:default(0)`). To preserve a source blank,
+		// callers must override the defaults via `hxformat.json` (e.g.
+		// `betweenImports: 1` or `betweenImportsLevel: FullPackage` for
+		// per-path-prefix grouping).
 		final out:String = writeWith('using A;\n\nusing B;', 1);
 		Assert.equals(
-			'using A;\n\nusing B;\n', out,
-			'consecutive `using` decls fall through to source-driven blankBefore'
+			'using A;\nusing B;\n', out,
+			'default betweenImports: 0 + level: All overrides consecutive same-kind pairs to 0 blanks'
 		);
 	}
 

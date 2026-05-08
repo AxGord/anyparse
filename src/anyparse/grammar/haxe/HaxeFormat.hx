@@ -23,6 +23,7 @@ import anyparse.format.wrap.WrapConditionType;
 import anyparse.format.wrap.WrapMode;
 import anyparse.format.wrap.WrapRules;
 import anyparse.format.wrap.WrappingLocation;
+import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
 
 /**
  * Text-format descriptor for the Haxe programming language.
@@ -525,6 +526,32 @@ final class HaxeFormat implements TextFormat {
 	 * on `HxModule.decls` and consumed by the trivia-mode EOF Star path
 	 * in `WriterLowering.triviaEofStarExpr`.
 	 *
+	 * `betweenImports` default (ω-imports-using-between) is `0` — exact
+	 * number of blank lines between two consecutive same-kind imports
+	 * (or two consecutive same-kind usings) whose dotted-ident paths
+	 * fall into different groups at `betweenImportsLevel`. Override
+	 * semantics: the source-captured blank-line count is replaced on a
+	 * level-mismatch boundary. Same-level pairs fall through to the
+	 * source-driven `blankBefore` flag. Matches haxe-formatter's
+	 * `emptyLines.importAndUsing.betweenImports: @:default(0)`.
+	 *
+	 * `betweenImportsLevel` default (ω-imports-using-between) is `All` —
+	 * granularity of the level test for `betweenImports`. `All` treats
+	 * every same-kind boundary as a level mismatch (one blank between
+	 * every pair); `FirstLevelPackage` … `FifthLevelPackage` compare
+	 * the first N dot-separated segments; `FullPackage` compares the
+	 * full path. Matches haxe-formatter's
+	 * `BetweenImportsEmptyLinesLevel: @:default(All)`. Driven together
+	 * with `betweenImports` by
+	 * `@:fmt(blankLinesBetweenSameCtorByLevel('decl', Ctor1, [Ctor2, …],
+	 * 'betweenImportsLevel', 'betweenImports',
+	 * 'betweenImportsPathDiffers'))` on `HxModule.decls` and consumed
+	 * by the trivia-mode EOF Star path in
+	 * `WriterLowering.triviaEofStarExpr`. The path-comparison helper
+	 * is wired through the format-neutral
+	 * `WriteOptions.betweenImportsPathDiffers` adapter slot, defaulted
+	 * to `HxBetweenImportsLevel.pathDiffers`.
+	 *
 	 * `afterMultilineDecl` / `beforeMultilineDecl` defaults
 	 * (ω-after-multiline) are both `1` — exact number of blank lines the
 	 * writer emits around a multi-line top-level type/function decl
@@ -631,6 +658,8 @@ final class HaxeFormat implements TextFormat {
 		arrowFunctions: WhitespacePolicy.Both,
 		afterPackage: 1,
 		beforeUsing: 1,
+		betweenImports: 0,
+		betweenImportsLevel: HxBetweenImportsLevel.All,
 		afterMultilineDecl: 1,
 		beforeMultilineDecl: 1,
 		formatStringInterpolation: true,
@@ -639,6 +668,7 @@ final class HaxeFormat implements TextFormat {
 		lineCommentAdapter: anyparse.format.comment.LineCommentNormalizer.normalizeLineComment,
 		endsWithCloseBrace: HxExprUtil.endsWithCloseBrace,
 		caseBodyRefusesFlat: HxExprUtil.refusesCaseFlat,
+		betweenImportsPathDiffers: HxBetweenImportsLevel.pathDiffers,
 	};
 
 	private function new() {}

@@ -136,10 +136,23 @@ typedef WriteOptions = {
 	 *    "complex" (Haxe: logical `&&` / `||`) breaks. Mirrors fork's
 	 *    `MarkSameLine.markExpressionCase` body-shape heuristic.
 	 *
+	 *  - `betweenImportsPathDiffers(prevPath, currPath, level) → Bool` —
+	 *    true iff the two paths fall into different groups at the
+	 *    configured granularity. Drives the
+	 *    `@:fmt(blankLinesBetweenSameCtorByLevel(...))` cascade in
+	 *    `WriterLowering.triviaEofStarExpr`: the meta's last arg names
+	 *    this opt field, the engine emits a pure
+	 *    `opt.betweenImportsPathDiffers(prev, curr, level)` call. Args
+	 *    are primitive (`String` paths + `Int` level) so the engine
+	 *    stays format-neutral; the plugin's typed-enum helper plugs in
+	 *    via the underlying-Int representation of its level enum
+	 *    (e.g. `enum abstract HxBetweenImportsLevel(Int) from Int to Int`).
+	 *
 	 * Formats that don't opt into a gate leave the field null; the
 	 * writer helper checks `null` before invoking and falls back to
 	 * the unconditional non-refusal path.
 	 */
 	?endsWithCloseBrace:Null<Dynamic -> Bool>,
 	?caseBodyRefusesFlat:Null<Dynamic -> Bool>,
+	?betweenImportsPathDiffers:Null<(String, String, Int) -> Bool>,
 };
