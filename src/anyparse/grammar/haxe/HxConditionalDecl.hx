@@ -20,11 +20,14 @@ package anyparse.grammar.haxe;
  * Nested `#if` is supported transitively through the body re-entering
  * `HxDecl.Conditional` via the dispatch enum's `@:kw('#if')` ctor.
  *
- * `#elseif` is intentionally out of scope for this slice — fixtures
- * in the imports_and_using_* cluster only use `#if … #else … #end`.
- * Adding `#elseif` would require a chained-clause shape (one `#if`
- * head + Star of `#elseif` clauses + optional `#else` tail) and is
- * deferred to a follow-up slice.
+ * `#elseif` chained-clause support landed in slice ω-cond-comp-elseif:
+ * `elseifs:Array<HxElseifDecl>` Star sits between `body` and `elseBody`.
+ * Each clause is a `HxElseifDecl` typedef carrying the `#elseif`
+ * keyword on its first field's metadata (HxCatchClause precedent), so
+ * the Star's `@:tryparse` loop dispatches per-iteration and naturally
+ * terminates when the next token isn't `#elseif`. Empty Star degrades
+ * to `_de()` (no output). Position before `elseBody` is mandatory so
+ * the clause loop fully terminates before the optional `#else`.
  *
  * Writer-side output mirrors `HxConditionalMod`: the
  * `@:fmt(padLeading, padTrailing)` flag pair on `body` and `elseBody`
@@ -48,5 +51,6 @@ package anyparse.grammar.haxe;
 typedef HxConditionalDecl = {
 	var cond:HxPpCondLit;
 	@:trivia @:tryparse @:fmt(padLeading, padTrailing) var body:Array<HxTopLevelDecl>;
+	@:trivia @:tryparse var elseifs:Array<HxElseifDecl>;
 	@:optional @:kw('#else') @:trivia @:tryparse @:fmt(padLeading, padTrailing) var elseBody:Null<Array<HxTopLevelDecl>>;
 };

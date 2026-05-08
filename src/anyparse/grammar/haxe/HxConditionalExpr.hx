@@ -32,14 +32,14 @@ package anyparse.grammar.haxe;
  * `Array<HxStatement>`, dispatched via `tryBranch` rollback when the
  * single-Ref form fails. Deferred until a fixture demands it.
  *
- * `#elseif` is intentionally out of scope for this slice (mirrors
- * `HxConditionalDecl` / `HxConditionalStmt` scope decisions). At
- * expression scope `#elseif` is more idiomatic than at decl/stmt
- * scope (`var x = #if a 1 #elseif b 2 #else 3 #end;`) so a follow-up
- * is more likely to surface here first; the chained-clause shape
- * (one `#if` head + Star of `#elseif` clauses + optional `#else`
- * tail) will land uniformly across the cond-comp typedef cluster
- * when added.
+ * `#elseif` chained-clause support landed in slice ω-cond-comp-elseif:
+ * `elseifs:Array<HxElseifExpr>` Star sits between `expr` and
+ * `elseExpr`. Each clause is a `HxElseifExpr` typedef carrying the
+ * `#elseif` keyword on its first field's metadata (HxCatchClause
+ * precedent), with single-`HxExpr` body matching this typedef's own
+ * Ref-vs-Star divergence. Empty Star degrades to `_de()`. Position
+ * before `elseExpr` is mandatory so the clause loop fully terminates
+ * before the optional `#else` dispatch fires.
  *
  * `@:optional @:kw('#else') var elseExpr:Null<HxExpr>` uses the long-
  * supported optional-kw-Ref path (predates the Star variant from
@@ -66,5 +66,6 @@ package anyparse.grammar.haxe;
 typedef HxConditionalExpr = {
 	var cond:HxPpCondLit;
 	var expr:HxExpr;
+	@:trivia @:tryparse var elseifs:Array<HxElseifExpr>;
 	@:optional @:kw('#else') var elseExpr:Null<HxExpr>;
 };
