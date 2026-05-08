@@ -12,6 +12,35 @@ private enum Mode {
 }
 
 /**
+	Classifies the last byte committed to the output buffer. Drives the
+	collision/glue decisions made by `OptHardline` and
+	`OptHardlineSkipAtOpenDelim` when their `\n+indent` would be redundant
+	or would break a deliberate open-delim glue.
+
+	The three states are mutually exclusive — replaces a prior pair of
+	parallel `lastEmittedWasHardline`/`lastEmittedWasOpenDelim` Bool flags
+	whose mutex was a convention, not type-enforced.
+
+	- `Other` — initial state and after any non-hardline, non-open-delim
+	  emit (Text not ending in `(`/`[`/`{`, in-flat `Line` content,
+	  `OptSpace` flush). Both opt-hardline ctors emit `\n+indent`.
+	- `Hardline` — a `\n` was just written (break-mode `Line`,
+	  `OptHardline` emit, or `OptHardlineSkipAtOpenDelim` emit). Both
+	  opt-hardline ctors drop their own `\n` (collision avoidance) but
+	  may still update `pendingIndent`/`col` to the inner emitter's more-
+	  specific indent.
+	- `OpenDelim` — last byte is `(`, `[`, or `{`.
+	  `OptHardlineSkipAtOpenDelim` drops its `\n+indent` so the next
+	  emission glues directly to the open delim (used by chain shapes
+	  to honour source `(<chain>` vs `(\n<chain>` distinctions).
+**/
+private enum LastEmit {
+	Other;
+	Hardline;
+	OpenDelim;
+}
+
+/**
 	One frame on the rendering stack. Carries the indent and mode that applies
 	to the doc it references.
 
@@ -98,29 +127,22 @@ class Renderer {
 		var col:Int = 0;
 		var pendingIndent:Int = -1;
 		var pendingOptSpace:Null<String> = null;
-		// Tracks whether the last emitted byte was a hardline `\n`. Set
-		// true on every break-mode `Line` / `OptHardline` that actually
-		// writes `\n`; cleared on any subsequent non-hardline emit
-		// (Text, OptSpace flush, in-flat Line content). `OptHardline`
-		// reads this flag to decide whether to drop its `\n` (avoids
-		// `\n\n` when two emitters independently push a leading
-		// hardline at the same insertion point).
-		var lastEmittedWasHardline:Bool = false;
-		// Tracks whether the last emitted byte to `buf` was an open
-		// delimiter (`(`, `[`, `{`). Set true on Text whose last char
-		// is an open delim; cleared on any subsequent emit (Text not
-		// ending in delim, Line, OptSpace flush, OptHardline emit, or
-		// the new ctor's emit). `OptHardlineSkipAtOpenDelim` reads this
-		// to drop its `\n+indent` when wrapped chain content sits
-		// directly inside `(`/`[`/`{` so items[0] glues to the open
-		// delim. Indent flush (whitespace) does not set the flag — its
-		// last byte is a tab/space, not a delim.
-		var lastEmittedWasOpenDelim:Bool = false;
+		// Three-state classifier of the last byte committed to `buf`.
+		// Drives `OptHardline` collision drop and
+		// `OptHardlineSkipAtOpenDelim` open-delim glue. See `LastEmit`
+		// docblock for state transitions; semantics replace a prior
+		// pair of parallel `lastEmittedWas{Hardline,OpenDelim}` Bools
+		// whose mutex was conventional, not type-enforced.
+		var lastEmit:LastEmit = Other;
 
 		inline function endsWithOpenDelim(s:String):Bool {
 			if (s.length == 0) return false;
 			final c:Int = StringTools.fastCodeAt(s, s.length - 1);
 			return c == '('.code || c == '['.code || c == '{'.code;
+		}
+
+		inline function lastEmitFromText(s:String):LastEmit {
+			return endsWithOpenDelim(s) ? OpenDelim : Other;
 		}
 
 		inline function flushOptSpace():Void {
@@ -132,8 +154,7 @@ class Renderer {
 				buf.add(pendingOptSpace);
 				col += pendingOptSpace.length;
 				pendingOptSpace = null;
-				lastEmittedWasHardline = false;
-				lastEmittedWasOpenDelim = false;
+				lastEmit = Other;
 			}
 		}
 
@@ -164,8 +185,7 @@ class Renderer {
 						}
 						buf.add(s);
 						col += s.length;
-						lastEmittedWasHardline = false;
-						lastEmittedWasOpenDelim = endsWithOpenDelim(s);
+						lastEmit = lastEmitFromText(s);
 					}
 				case Line(flat):
 					if (f.mode == MFlat) {
@@ -177,8 +197,7 @@ class Renderer {
 						buf.add(flat);
 						col += flat.length;
 						if (flat.length > 0) {
-							lastEmittedWasHardline = false;
-							lastEmittedWasOpenDelim = endsWithOpenDelim(flat);
+							lastEmit = lastEmitFromText(flat);
 						}
 					} else {
 						// Break-mode hardline: drop pending OptSpace so the
@@ -191,8 +210,7 @@ class Renderer {
 						buf.add(lineEnd);
 						pendingIndent = f.indent;
 						col = f.indent;
-						lastEmittedWasHardline = true;
-						lastEmittedWasOpenDelim = false;
+						lastEmit = Hardline;
 					}
 				case OptSpace(s):
 					// Defer; flushed by the next Text or in-flat Line, or
@@ -213,7 +231,7 @@ class Renderer {
 					// is more specific (e.g. objectLit's leftCurly Next
 					// inside a wrap-engine-driven multi-arg list).
 					pendingOptSpace = null;
-					if (lastEmittedWasHardline) {
+					if (lastEmit == Hardline) {
 						pendingIndent = f.indent;
 						col = f.indent;
 					} else {
@@ -223,8 +241,7 @@ class Renderer {
 						buf.add(lineEnd);
 						pendingIndent = f.indent;
 						col = f.indent;
-						lastEmittedWasHardline = true;
-						lastEmittedWasOpenDelim = false;
+						lastEmit = Hardline;
 					}
 				case OptHardlineSkipAtOpenDelim:
 					// Open-delim-aware leading hardline. Three branches:
@@ -235,9 +252,9 @@ class Renderer {
 					//     col, and the next continuation `\n` (later
 					//     break-mode `Line` for items[1]) will set its
 					//     own pendingIndent at frame time.
-					//     `lastEmittedWasOpenDelim` stays true so a
-					//     redundant follow-up of the same ctor (defensive
-					//     case) keeps dropping.
+					//     `lastEmit` stays `OpenDelim` so a redundant
+					//     follow-up of the same ctor (defensive case)
+					//     keeps dropping.
 					//  2. Last emit was a hardline: mirror `OptHardline`'s
 					//     collision drop (update pendingIndent + col to
 					//     the more-specific inner indent).
@@ -246,20 +263,20 @@ class Renderer {
 					//     the leading `\n` before items[0] in
 					//     outer-context cases (`dirty = chain`).
 					pendingOptSpace = null;
-					if (lastEmittedWasOpenDelim) {
-						// drop, leave col / pendingIndent / flags as-is
-					} else if (lastEmittedWasHardline) {
-						pendingIndent = f.indent;
-						col = f.indent;
-					} else {
-						if (trailingWhitespace && pendingIndent >= 0) {
-							writeIndent(buf, pendingIndent, indentChar, tabWidth);
-						}
-						buf.add(lineEnd);
-						pendingIndent = f.indent;
-						col = f.indent;
-						lastEmittedWasHardline = true;
-						lastEmittedWasOpenDelim = false;
+					switch lastEmit {
+						case OpenDelim:
+							// drop, leave col / pendingIndent / lastEmit as-is
+						case Hardline:
+							pendingIndent = f.indent;
+							col = f.indent;
+						case Other:
+							if (trailingWhitespace && pendingIndent >= 0) {
+								writeIndent(buf, pendingIndent, indentChar, tabWidth);
+							}
+							buf.add(lineEnd);
+							pendingIndent = f.indent;
+							col = f.indent;
+							lastEmit = Hardline;
 					}
 				case Nest(n, inner):
 					// Indent only matters when observed (i.e. on a hardline
