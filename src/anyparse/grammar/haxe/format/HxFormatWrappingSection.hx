@@ -16,6 +16,10 @@ package anyparse.grammar.haxe.format;
  *    knob + loader + macro-time dispatch all wired).
  *  - `opAddSubChain`: `WrapRules` cascade → `opAddSubChainWrap` (same
  *    slice — drives `+` / `-` chain break shape).
+ *  - `callParameter`: `WrapRules` cascade → `callParameterWrap` (slice
+ *    ω-wrapping-callParameter-ingest — knob, loader, and writer
+ *    dispatch via `@:fmt(wrapRules('callParameterWrap'))` on
+ *    `HxExpr.Call.args` and `HxNewExpr.args` are now wired).
  *
  * Slice ω-peg-byname-array lifted the prior `@:peg` ByName Array<T>
  * limitation, so every cascade above now ingests `rules` from
@@ -24,10 +28,12 @@ package anyparse.grammar.haxe.format;
  * cascade falls through to the next rule).
  *
  * The remaining per-construct cascades (`objectLiteral`,
- * `callParameter`, …) land with their own slices when each gains
- * JSON-side wiring; the matching `WriteOptions` fields exist already
- * but are still populated only from the `HaxeFormat.default*Wrap()`
- * defaults.
+ * `conditionWrapping`, `expressionWrapping`, `typeParameter`,
+ * `arrayMatrixWrap`, …) land with their own slices when each gains
+ * JSON-side wiring; some matching `WriteOptions` fields exist already
+ * (e.g. `objectLiteralWrap`) but are still populated only from the
+ * `HaxeFormat.default*Wrap()` defaults; others need new fields plus
+ * grammar `@:fmt` wiring.
  */
 @:peg typedef HxFormatWrappingSection = {
 
@@ -42,4 +48,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var opBoolChain:HxFormatWrapRules;
 
 	@:optional var opAddSubChain:HxFormatWrapRules;
+
+	@:optional var callParameter:HxFormatWrapRules;
 };

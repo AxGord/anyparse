@@ -105,6 +105,12 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   `HxExpr.FieldAccess`. Custom rules from `.hxtest` configs (e.g.
  *   `anyItemLength >= 25 → onePerLine`) now load through the same
  *   cascade-ingest path as `arrayWrap` / `anonType`.
+ * - `wrapping.callParameter` (ω-wrapping-callParameter-ingest): same
+ *   `WrapRules` ingest shape as `arrayWrap`, routed to
+ *   `callParameterWrap`. Drives `HxExpr.Call.args` and
+ *   `HxNewExpr.args` via `@:fmt(wrapRules('callParameterWrap'))` —
+ *   field, default, and writer dispatch were already wired; this
+ *   slice closes the loader-side gap.
  * - `sameLine.ifElse` / `sameLine.tryCatch` / `sameLine.doWhile`: enum
  *   string — `"same"` → `SameLinePolicy.Same`, `"next"` →
  *   `SameLinePolicy.Next`, `"keep"` → `SameLinePolicy.Keep` (reads the
@@ -541,6 +547,7 @@ final class HaxeFormatConfigLoader {
 		if (section.methodChain != null) opt.methodChainWrap = wrapRulesFromConfig(section.methodChain, opt.methodChainWrap);
 		if (section.opBoolChain != null) opt.opBoolChainWrap = wrapRulesFromConfig(section.opBoolChain, opt.opBoolChainWrap);
 		if (section.opAddSubChain != null) opt.opAddSubChainWrap = wrapRulesFromConfig(section.opAddSubChain, opt.opAddSubChainWrap);
+		if (section.callParameter != null) opt.callParameterWrap = wrapRulesFromConfig(section.callParameter, opt.callParameterWrap);
 	}
 
 	/**
