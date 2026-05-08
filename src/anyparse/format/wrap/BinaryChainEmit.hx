@@ -1,6 +1,7 @@
 package anyparse.format.wrap;
 
 import anyparse.core.Doc;
+import anyparse.core.DocMeasure;
 import anyparse.format.IndentChar;
 import anyparse.format.WriteOptions;
 
@@ -86,7 +87,7 @@ final class BinaryChainEmit {
 		//     drives `anyHardline` — preserves the (b) break-commit
 		//     shortcut on items with hardlines anywhere (including
 		//     inside `BodyGroup`).
-		//   - `flatTokenWidth(item)` feeds clean widths to cascade rule
+		//   - `DocMeasure.flatTokenWidth(item)` feeds clean widths to cascade rule
 		//     conditions — mirrors `Renderer.fitsFlat`'s BG-defer so
 		//     `LineLengthLargerThan` / `TotalItemLengthLargerThan` /
 		//     `AnyItemLengthLargerThan` see the same widths the renderer
@@ -99,7 +100,7 @@ final class BinaryChainEmit {
 		for (i in 0...items.length) {
 			final item:Doc = items[i];
 			if (WrapList.flatLength(item) < 0) anyHardline = true;
-			final w:Int = WrapList.flatTokenWidth(item);
+			final w:Int = DocMeasure.flatTokenWidth(item);
 			total += w;
 			// `anyItemLength` mirrors upstream haxe-formatter's
 			// per-item width semantic: each operand beyond the first

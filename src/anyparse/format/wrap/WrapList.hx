@@ -1,6 +1,7 @@
 package anyparse.format.wrap;
 
 import anyparse.core.Doc;
+import anyparse.core.DocMeasure;
 import anyparse.format.IndentChar;
 import anyparse.format.WriteOptions;
 
@@ -71,19 +72,19 @@ class WrapList {
 		//     drives `anyHardline` — preserves the (b) break-commit
 		//     shortcut on items with hardlines anywhere (including
 		//     inside `BodyGroup`).
-		//   - `flatTokenWidth(item)` feeds clean widths to cascade rule
-		//     conditions — mirrors `Renderer.fitsFlat`'s BG-defer so
-		//     `LineLengthLargerThan` / `TotalItemLengthLargerThan` /
-		//     `AnyItemLengthLargerThan` see the same widths the
-		//     renderer would lay out flat. Replaces the old
-		//     `HARDLINE_LEN` (~1M) inflation that conflated "has
+		//   - `DocMeasure.flatTokenWidth(item)` feeds clean widths to
+		//     cascade rule conditions — mirrors `Renderer.fitsFlat`'s
+		//     BG-defer so `LineLengthLargerThan` /
+		//     `TotalItemLengthLargerThan` / `AnyItemLengthLargerThan` see
+		//     the same widths the renderer would lay out flat. Replaces
+		//     the old `HARDLINE_LEN` (~1M) inflation that conflated "has
 		//     hardline anywhere" with "rule-bound widths".
 		var total:Int = 0;
 		var maxLen:Int = 0;
 		var anyHardline:Bool = false;
 		for (item in items) {
 			if (flatLength(item) < 0) anyHardline = true;
-			final w:Int = flatTokenWidth(item);
+			final w:Int = DocMeasure.flatTokenWidth(item);
 			total += w;
 			if (w > maxLen) maxLen = w;
 		}
@@ -417,84 +418,6 @@ class WrapList {
 					// containing either forces the wrap engine into
 					// break mode unconditionally.
 					return -1;
-			}
-		}
-		return total;
-	}
-
-	/**
-	 * Walks a `Doc` tree and returns its visible-token width in columns —
-	 * the same width the renderer would emit in flat layout if forced
-	 * hardlines didn't terminate that mode. Differs from `flatLength` in
-	 * two ways:
-	 *
-	 *  - never returns `-1`: forced hardlines (`Line('\n')` /
-	 *    `OptHardline`) contribute zero columns instead of aborting the
-	 *    walk. The caller gets the visible-text width regardless of
-	 *    whether the item could ever lay out flat.
-	 *  - `BodyGroup` content is deferred (not walked) — mirrors
-	 *    `Renderer.fitsFlat` Departure 2 and
-	 *    `MethodChainEmit.chainItemLength`.
-	 *
-	 * Used by `WrapList.emit` to feed clean widths into cascade rule
-	 * conditions (`LineLengthLargerThan` / `TotalItemLengthLargerThan` /
-	 * `AnyItemLengthLargerThan`) without conflating them with the
-	 * `anyHardline` break-commit signal — which is still derived from
-	 * `flatLength(item) < 0` (unchanged) so existing call sites in
-	 * `WriterLowering` and the legacy `flatLength==-1` semantic stay
-	 * intact (ω-flatlength-decouple-tokenwidth).
-	 */
-	public static function flatTokenWidth(d:Doc):Int {
-		final stack:Array<Doc> = [d];
-		var total:Int = 0;
-		while (stack.length > 0) {
-			final node:Doc = stack.pop();
-			switch (node) {
-				case Empty | OptHardline | OptHardlineSkipAtOpenDelim:
-				case Text(s):
-					total += s.length;
-				case Line(flat):
-					if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) {
-						// Forced hardline contributes 0 to token width
-						// (mirrors `MethodChainEmit.chainItemLength`).
-					} else {
-						total += flat.length;
-					}
-				case Nest(_, inner):
-					stack.push(inner);
-				case Concat(items):
-					var i:Int = items.length;
-					while (--i >= 0) stack.push(items[i]);
-				case Group(inner):
-					stack.push(inner);
-				case BodyGroup(_):
-					// Defer like `Renderer.fitsFlat`: BG content decides
-					// its own flat/break and does not contribute to the
-					// parent list's static width.
-				case IfBreak(_, flatDoc):
-					stack.push(flatDoc);
-				case IfWidthExceeds(_, _, flatDoc):
-					// Forward to flat side: token-width measurement uses
-					// the flat shape, mirroring the `IfBreak` arm.
-					stack.push(flatDoc);
-				case IfFirstLineExceeds(_, _, flatDoc):
-					// Mirror `IfWidthExceeds`: chain consumers walk the
-					// flat side, ignoring the renderer-side first-line cap.
-					stack.push(flatDoc);
-				case IfLineExceeds(_, _, flatDoc):
-					// Mirror `IfWidthExceeds`: chain consumers walk the
-					// flat side; rest-of-stack lookahead is renderer-side
-					// (slice ω-iflineexceeds-infra).
-					stack.push(flatDoc);
-				case Fill(items, sep):
-					var k:Int = items.length;
-					while (k > 0) {
-						k--;
-						stack.push(items[k]);
-						if (k > 0) stack.push(sep);
-					}
-				case OptSpace(s):
-					total += s.length;
 			}
 		}
 		return total;

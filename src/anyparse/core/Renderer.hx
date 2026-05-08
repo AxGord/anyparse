@@ -285,12 +285,11 @@ class Renderer {
 					stack.push(new Frame(f.indent, f.mode, f.mode == MBreak ? breakDoc : flatDoc));
 				case IfWidthExceeds(n, breakDoc, flatDoc):
 					// Column-aware probe: rule fires when `col +
-					// flatTokenWidth(flatDoc) >= n` (matches the cascade
-					// `lineLength >= n` predicate). The width measurement
-					// treats forced hardlines as zero width (mirrors
-					// `WrapList.flatTokenWidth`'s semantic) — the cascade
-					// rule asks "does the natural inline width reach n",
-					// not "does the flat shape budget-fit". Plain
+					// DocMeasure.flatTokenWidth(flatDoc) >= n` (matches the
+					// cascade `lineLength >= n` predicate). The width
+					// measurement treats forced hardlines as zero width —
+					// the cascade rule asks "does the natural inline width
+					// reach n", not "does the flat shape budget-fit". Plain
 					// `fitsFlat` would refuse-to-flatten on any hardline
 					// inside flatDoc and incorrectly always pick brk;
 					// here a chain-emit shape (OPLAfterFirst, contains
@@ -306,7 +305,7 @@ class Renderer {
 					// independent of the enclosing Group's flat/break
 					// choice; it answers a separate column-vs-threshold
 					// question.
-					final crosses:Bool = (col + flatTokenWidth(flatDoc) >= n);
+					final crosses:Bool = (col + DocMeasure.flatTokenWidth(flatDoc) >= n);
 					stack.push(new Frame(f.indent, f.mode, crosses ? breakDoc : flatDoc));
 				case IfFirstLineExceeds(n, breakDoc, flatDoc):
 					// First-line-aware probe: rule fires when `col +
@@ -329,7 +328,7 @@ class Renderer {
 					stack.push(new Frame(f.indent, f.mode, firstLineCrosses ? breakDoc : flatDoc));
 				case IfLineExceeds(n, breakDoc, flatDoc):
 					// Line-length-aware probe: rule fires when `col +
-					// flatTokenWidth(flatDoc) +
+					// DocMeasure.flatTokenWidth(flatDoc) +
 					// flatTokenWidthOfRestStack(stack) >= n`. The third term
 					// is a lookahead over the rendering stack from this
 					// point forward, summed up to the next forced hardline
@@ -343,7 +342,7 @@ class Renderer {
 					// `IfFirstLineExceeds`: probe is independent of the
 					// enclosing Group's flat/break choice. Slice
 					// ω-iflineexceeds-infra.
-					final lineCrosses:Bool = (col + flatTokenWidth(flatDoc) + flatTokenWidthOfRestStack(stack) >= n);
+					final lineCrosses:Bool = (col + DocMeasure.flatTokenWidth(flatDoc) + flatTokenWidthOfRestStack(stack) >= n);
 					stack.push(new Frame(f.indent, f.mode, lineCrosses ? breakDoc : flatDoc));
 				case Fill(items, sep):
 					if (items.length == 0) {
@@ -491,83 +490,14 @@ class Renderer {
 	}
 
 	/**
-	 * Walks a `Doc` tree and returns its visible-token width — the same
-	 * width the renderer would emit in flat layout if forced hardlines
-	 * didn't terminate that mode. Mirror of `WrapList.flatTokenWidth`,
-	 * duplicated here to keep `core.Renderer` independent of `format.wrap`.
-	 *
-	 * Treats forced hardlines (`Line('\n')`, `OptHardline`) as zero width
-	 * instead of aborting (which is what `fitsFlat`'s budget walk does).
-	 * `BodyGroup` content is deferred (zero width) to mirror
-	 * `fitsFlat`'s Departure 2.
-	 *
-	 * Used exclusively by the `IfWidthExceeds` probe to answer the
-	 * cascade rule `lineLength >= n` predicate as `col +
-	 * flatTokenWidth(flatDoc) >= n` — natural inline width, hardlines
-	 * ignored.
-	 */
-	static function flatTokenWidth(d:Doc):Int {
-		final stack:Array<Doc> = [d];
-		var total:Int = 0;
-		while (stack.length > 0) {
-			final node:Doc = stack.pop();
-			switch (node) {
-				case Empty | OptHardline | OptHardlineSkipAtOpenDelim:
-				case Text(s):
-					total += s.length;
-				case Line(flat):
-					if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) {
-						// Forced hardline contributes 0 to token width.
-					} else {
-						total += flat.length;
-					}
-				case Nest(_, inner):
-					stack.push(inner);
-				case Concat(items):
-					var i:Int = items.length;
-					while (--i >= 0) stack.push(items[i]);
-				case Group(inner):
-					stack.push(inner);
-				case BodyGroup(_):
-					// Defer — BG decides its own flat/break independently.
-				case IfBreak(_, flatDoc):
-					stack.push(flatDoc);
-				case IfWidthExceeds(_, _, flatDoc):
-					stack.push(flatDoc);
-				case IfFirstLineExceeds(_, _, flatDoc):
-					// Mirror `IfWidthExceeds` semantic: descend into the
-					// flat side. Chain consumers calling `flatTokenWidth`
-					// keep their hardline-ignoring measurement intact —
-					// the first-line cap is the renderer-side probe's
-					// concern, not the chain cascade's.
-					stack.push(flatDoc);
-				case IfLineExceeds(_, _, flatDoc):
-					// Forward to flat side: rest-of-stack lookahead is a
-					// render-time decision (slice ω-iflineexceeds-infra).
-					stack.push(flatDoc);
-				case Fill(items, sep):
-					var k:Int = items.length;
-					while (k > 0) {
-						k--;
-						stack.push(items[k]);
-						if (k > 0) stack.push(sep);
-					}
-				case OptSpace(s):
-					total += s.length;
-			}
-		}
-		return total;
-	}
-
-	/**
-	 * First-line variant of `flatTokenWidth`. Walks the same flat-shape
+	 * First-line variant of `DocMeasure.flatTokenWidth`. Walks the same flat-shape
 	 * tree but caps the measurement at the first forced hardline
 	 * (`Line('\n')` or `OptHardline`): the running total at that point is
 	 * returned and the rest of the tree is ignored. Used exclusively by
 	 * the `IfFirstLineExceeds` probe to answer "would the first rendered
 	 * line of `flatDoc` exceed `n` columns from the current pen?".
 	 *
-	 * Departure from `flatTokenWidth`: forced hardlines abort the walk
+	 * Departure from `DocMeasure.flatTokenWidth`: forced hardlines abort the walk
 	 * instead of contributing zero width. `BodyGroup` is still deferred
 	 * (zero, no abort) — its content decides its own flat/break later
 	 * and cannot be predicted at probe time. `Group` descends as usual;
@@ -642,7 +572,7 @@ class Renderer {
 	 * the rendered current line, including everything after this
 	 * primitive, reach `n` columns?" (slice ω-iflineexceeds-infra).
 	 *
-	 * Departures from `flatTokenWidth`:
+	 * Departures from `DocMeasure.flatTokenWidth`:
 	 *  - frames carry a mode (the mode they were pushed with) so MBreak
 	 *    `Line` aborts immediately;
 	 *  - nested `Group` content is descended in `MFlat` (static walk
