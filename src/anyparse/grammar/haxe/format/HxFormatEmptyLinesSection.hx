@@ -65,5 +65,9 @@ package anyparse.grammar.haxe.format;
 
 	@:optional var afterPackage:Int;
 
+	@:optional var afterLeftCurly:HxFormatKeepEmptyLinesPolicy;
+
+	@:optional var beforeRightCurly:HxFormatKeepEmptyLinesPolicy;
+
 	@:optional var importAndUsing:HxFormatImportAndUsingConfig;
 };

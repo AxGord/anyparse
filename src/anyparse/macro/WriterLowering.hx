@@ -2610,6 +2610,7 @@ class WriterLowering {
 				final beforeDocComments:Bool = starNode.fmtHasFlag('beforeDocCommentEmptyLines');
 				final indentCaseLabelsGate:Bool = starNode.fmtHasFlag('indentCaseLabels');
 				final emptyCurlyBreak:Bool = starNode.fmtHasFlag('emptyCurlyBreak');
+				final beginEndType:Bool = starNode.fmtHasFlag('beginEndType');
 				final interMemberArgs:Null<Array<String>> = starNode.fmtReadStringArgs('interMemberBlankLines');
 				final interMemberInfo:Null<InterMemberClassifyInfo> = interMemberArgs == null
 					? null
@@ -2617,7 +2618,7 @@ class WriterLowering {
 				parts.push(triviaBlockStarExpr(
 					fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn,
 					openText ?? '', closeText, false, afterDocComments, keepBetweenFields, beforeDocComments,
-					interMemberInfo, indentCaseLabelsGate, emptyCurlyBreak
+					interMemberInfo, indentCaseLabelsGate, emptyCurlyBreak, beginEndType
 				));
 			} else if (isLastField) {
 				if (openText != null) parts.push(macro _dt($v{openText}));
@@ -4911,7 +4912,8 @@ class WriterLowering {
 		beforeDocCommentEmptyLines:Bool = false,
 		interMemberInfo:Null<InterMemberClassifyInfo> = null,
 		indentCaseLabelsGate:Bool = false,
-		emptyCurlyBreak:Bool = false
+		emptyCurlyBreak:Bool = false,
+		beginEndType:Bool = false
 	):Expr {
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
@@ -5089,6 +5091,36 @@ class WriterLowering {
 		final innerWrapExpr:Expr = indentCaseLabelsGate
 			? macro (opt.indentCaseLabels ? _dn(_cols, _dc(_inner)) : _dc(_inner))
 			: macro _dn(_cols, _dc(_inner));
+		// ω-class-begin-end-type: opt-in head/tail blank-line injection
+		// for class/interface/abstract bodies. Drives `opt.beginType` /
+		// `opt.endType` (exact counts) and `opt.afterLeftCurly` /
+		// `opt.beforeRightCurly` (Keep/Remove on source blanks). The
+		// explicit count wins when > 0; otherwise Keep honours the
+		// captured source-blank signal (`_arr[0].blankBefore` for the
+		// open side, `_trailBB` for the close side). Remove (default)
+		// strips. The flag is opt-in per Star — formats that don't
+		// expose the knobs leave the inserts disabled.
+		final beginTypeExpr:Expr = beginEndType ? macro {
+			final _firstSourceBlank:Bool = _arr.length > 0 && _arr[0].blankBefore;
+			final _beginN:Int = opt.beginType > 0
+				? opt.beginType
+				: (opt.afterLeftCurly == anyparse.format.KeepEmptyLinesPolicy.Keep && _firstSourceBlank ? 1 : 0);
+			var _bi:Int = 0;
+			while (_bi < _beginN) {
+				_inner.push(_dhl());
+				_bi++;
+			}
+		} : macro {};
+		final endTypeExpr:Expr = beginEndType ? macro {
+			final _endN:Int = opt.endType > 0
+				? opt.endType
+				: (opt.beforeRightCurly == anyparse.format.KeepEmptyLinesPolicy.Keep && _trailBB && _arr.length > 0 ? 1 : 0);
+			var _ei:Int = 0;
+			while (_ei < _endN) {
+				_inner.push(_dhl());
+				_ei++;
+			}
+		} : macro {};
 		return macro {
 			final _arr = $fieldAccess;
 			final _trailLC:Array<String> = $trailLC;
@@ -5121,6 +5153,7 @@ class WriterLowering {
 					final _t = _arr[_si];
 					$initCurrKindExpr;
 					_inner.push(_dhl());
+					if (_si == 0) $beginTypeExpr;
 					$blankBeforeExpr;
 					var _ci:Int = 0;
 					while (_ci < _t.leadingComments.length) {
@@ -5145,7 +5178,7 @@ class WriterLowering {
 						if (_ti < _trailLC.length - 1) _inner.push(_dhl());
 						_ti++;
 					}
-				}
+				} else $endTypeExpr;
 				final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 				final _innerWrap:anyparse.core.Doc = $innerWrapExpr;
 				final _parts:Array<anyparse.core.Doc> = [_dt($v{openText})];

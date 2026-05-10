@@ -541,6 +541,33 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  * keeps reading the shared `betweenVars` / `betweenFunctions` /
  * `afterVars` (used by class + abstract).
  *
+ * Fields added in slice ω-class-begin-end-type (head/tail blank lines
+ * inside class/interface/abstract bodies):
+ *  - `beginType` — exact blank-line count emitted between the opening
+ *    `{` of a type body and its first member. `0` (default, matches
+ *    haxe-formatter's `emptyLines.classEmptyLines.beginType:
+ *    @:default(0)`) keeps the pre-slice tight layout. Positive values
+ *    insert N blank lines regardless of source.
+ *  - `endType` — exact blank-line count emitted between the last member
+ *    of a type body and its closing `}`. `0` (default, matches haxe-
+ *    formatter's `emptyLines.classEmptyLines.endType: @:default(0)`)
+ *    keeps the pre-slice tight layout.
+ *  - `afterLeftCurly` — two-way policy gating source-blank preservation
+ *    after the opening `{` when `beginType` is `0`. `Remove` (default,
+ *    matches haxe-formatter's `emptyLines.afterLeftCurly:
+ *    @:default(Remove)`) strips source blanks. `Keep` honours the
+ *    captured `_t.blankBefore` of the first member. `beginType > 0`
+ *    overrides this knob — the explicit count wins.
+ *  - `beforeRightCurly` — two-way policy gating source-blank preservation
+ *    before the closing `}` when `endType` is `0`. `Remove` (default)
+ *    strips. `Keep` honours the captured trail-blank-before-close
+ *    signal. `endType > 0` overrides — the explicit count wins.
+ *
+ * The four knobs only fire at sites tagged with `@:fmt(beginEndType)`
+ * in the grammar — `HxClassDecl.members`, `HxInterfaceDecl.members`,
+ * and `HxAbstractDecl.members` are the current consumers; enum bodies
+ * and macro classes ship in follow-up slices.
+ *
  * Field added in slice ω-typedef-assign (typedef rhs `=` spacing):
  *  - `typedefAssign` — whitespace around the `=` joining a typedef
  *    name to its right-hand-side type (`HxTypedefDecl.type`'s lead).
@@ -1105,6 +1132,10 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	interfaceBetweenVars:Int,
 	interfaceBetweenFunctions:Int,
 	interfaceAfterVars:Int,
+	beginType:Int,
+	endType:Int,
+	afterLeftCurly:KeepEmptyLinesPolicy,
+	beforeRightCurly:KeepEmptyLinesPolicy,
 	typedefAssign:WhitespacePolicy,
 	typeParamDefaultEquals:WhitespacePolicy,
 	typeParamOpen:WhitespacePolicy,

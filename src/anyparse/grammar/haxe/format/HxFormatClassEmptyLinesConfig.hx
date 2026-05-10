@@ -34,4 +34,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var betweenFunctions:Int;
 
 	@:optional var afterVars:Int;
+
+	@:optional var beginType:Int;
+
+	@:optional var endType:Int;
 };

@@ -509,6 +509,10 @@ final class HaxeFormatConfigLoader {
 			interfaceBetweenVars: base.interfaceBetweenVars,
 			interfaceBetweenFunctions: base.interfaceBetweenFunctions,
 			interfaceAfterVars: base.interfaceAfterVars,
+			beginType: base.beginType,
+			endType: base.endType,
+			afterLeftCurly: base.afterLeftCurly,
+			beforeRightCurly: base.beforeRightCurly,
 			typedefAssign: base.typedefAssign,
 			typeParamDefaultEquals: base.typeParamDefaultEquals,
 			typeParamOpen: base.typeParamOpen,
@@ -892,6 +896,8 @@ final class HaxeFormatConfigLoader {
 			if (classSection.betweenVars != null) opt.betweenVars = classSection.betweenVars;
 			if (classSection.betweenFunctions != null) opt.betweenFunctions = classSection.betweenFunctions;
 			if (classSection.afterVars != null) opt.afterVars = classSection.afterVars;
+			if (classSection.beginType != null) opt.beginType = classSection.beginType;
+			if (classSection.endType != null) opt.endType = classSection.endType;
 		}
 		final interfaceSection:Null<HxFormatInterfaceEmptyLinesConfig> = section.interfaceEmptyLines;
 		if (interfaceSection != null) {
@@ -901,6 +907,10 @@ final class HaxeFormatConfigLoader {
 			if (interfaceSection.afterVars != null) opt.interfaceAfterVars = interfaceSection.afterVars;
 		}
 		if (section.afterPackage != null) opt.afterPackage = section.afterPackage;
+		if (section.afterLeftCurly != null)
+			opt.afterLeftCurly = keepEmptyLinesToRuntime(section.afterLeftCurly);
+		if (section.beforeRightCurly != null)
+			opt.beforeRightCurly = keepEmptyLinesToRuntime(section.beforeRightCurly);
 		final importAndUsing:Null<HxFormatImportAndUsingConfig> = section.importAndUsing;
 		if (importAndUsing != null) {
 			if (importAndUsing.beforeUsing != null) opt.beforeUsing = importAndUsing.beforeUsing;
