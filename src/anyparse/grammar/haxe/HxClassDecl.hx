@@ -42,5 +42,5 @@ package anyparse.grammar.haxe;
 typedef HxClassDecl = {
 	@:kw('class') var name:HxIdentLit;
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose) var typeParams:Null<Array<HxTypeParamDecl>>;
-	@:fmt(leftCurly, emptyCurlyBreak, beginEndType, afterFieldsWithDocComments, existingBetweenFields, beforeDocCommentEmptyLines, blankBeforeFinalDocCommentInLeading, blankBeforeOrphanLineCommentTrail, interMemberBlankLines('member', 'VarMember', 'FnMember'), staticVarSubdivision) @:lead('{') @:trail('}') @:trivia var members:Array<HxMemberDecl>;
+	@:fmt(leftCurly, emptyCurlyBreak, beginEndType, afterFieldsWithDocComments, existingBetweenFields, beforeDocCommentEmptyLines, blankBeforeFinalDocCommentInLeading, blankBeforeOrphanLineCommentTrail, interMemberBlankLines('member', 'VarMember', 'FnMember'), staticVarSubdivision, betweenMultilineCommentsBlanks) @:lead('{') @:trail('}') @:trivia var members:Array<HxMemberDecl>;
 }

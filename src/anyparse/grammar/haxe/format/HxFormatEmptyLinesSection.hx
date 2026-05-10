@@ -11,10 +11,9 @@ package anyparse.grammar.haxe.format;
  * `afterReturn`, `beforeBlocks`, `afterBlocks`, `enumAbstractEmptyLines`,
  * `macroClassEmptyLines`,
  * `abstractEmptyLines`, `enumEmptyLines`,
- * `typedefEmptyLines`, `conditionalsEmptyLines`, `afterFileHeaderComment`,
- * `betweenMultilineComments`, …) are silently dropped by the ByName
- * struct parser's `UnknownPolicy.Skip` — they land with the slice that
- * introduces the matching writer knob.
+ * `typedefEmptyLines`, `conditionalsEmptyLines`, …) are silently dropped
+ * by the ByName struct parser's `UnknownPolicy.Skip` — they land with
+ * the slice that introduces the matching writer knob.
  *
  * `afterFieldsWithDocComments` added in slice ω-C-empty-lines-doc
  * (feeds `opt.afterFieldsWithDocComments`).
@@ -68,6 +67,12 @@ package anyparse.grammar.haxe.format;
  * `betweenImports` + `betweenImportsLevel` (ω-imports-using-between)
  * are modelled today, the remaining sub-key (`beforeType`) lands with
  * the slice that introduces its matching writer knob.
+ *
+ * `afterFileHeaderComment` / `betweenMultilineComments` added in slice
+ * ω-fileheader-multiline-comments. Non-negative Int knobs that drive
+ * the writer's per-leadingComments-array blank-line policy. See
+ * `HxModuleWriteOptions.afterFileHeaderComment` /
+ * `HxModuleWriteOptions.betweenMultilineComments` for full semantics.
  */
 @:peg typedef HxFormatEmptyLinesSection = {
 
@@ -90,4 +95,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var beforeRightCurly:HxFormatKeepEmptyLinesPolicy;
 
 	@:optional var importAndUsing:HxFormatImportAndUsingConfig;
+
+	@:optional var afterFileHeaderComment:Int;
+
+	@:optional var betweenMultilineComments:Int;
 };

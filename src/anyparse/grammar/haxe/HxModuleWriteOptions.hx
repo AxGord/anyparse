@@ -1149,6 +1149,37 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    extern-marked classes); the anyparse minimal gate covers the
  *    interMember subset only — wider knobs can join later if a fixture
  *    requires them.
+ *
+ * Fields added in slice ω-fileheader-multiline-comments (blank-line
+ * policy within a decl's `leadingComments` chain — mirrors haxe-
+ * formatter's `emptyLines.afterFileHeaderComment` /
+ * `emptyLines.betweenMultilineComments` knobs):
+ *  - `afterFileHeaderComment` — exact number of blank lines the writer
+ *    emits AFTER the FIRST top-level block-style comment in a module
+ *    when fileheader semantics apply. "Fileheader applies" iff the
+ *    module either contains at least one `package` / `import` / `using`
+ *    decl, OR the first decl carries 2+ leading comments at module
+ *    head (so the second token is also a comment). Override semantics:
+ *    replaces source-captured blank-line counts at the first→next slot
+ *    regardless of source. `1` (default, matches haxe-formatter's
+ *    `emptyLines.afterFileHeaderComment: @:default(1)`) inserts one
+ *    blank between fileheader and the next thing. `0` keeps fileheader
+ *    glued to next. The knob only triggers at sites tagged with
+ *    `@:fmt(afterFileHeaderCommentBlanks)` in the grammar — `HxModule.decls`
+ *    is the only consumer (concept is module-scope by definition).
+ *  - `betweenMultilineComments` — exact number of blank lines the writer
+ *    emits BETWEEN two consecutive block-style comments (`/* … *\/` or
+ *    `/** … *\/`) wherever block-block boundaries occur in
+ *    `leadingComments` arrays or in trailing-orphan comment arrays
+ *    (`_trailLC`). Override semantics: replaces source-captured blank-
+ *    line counts at every block-block boundary except the slot already
+ *    claimed by `afterFileHeaderComment`. `0` (default, matches haxe-
+ *    formatter's `emptyLines.betweenMultilineComments: @:default(0)`)
+ *    leaves consecutive block comments glued; `1` inserts one blank.
+ *    The knob only triggers at sites tagged with
+ *    `@:fmt(betweenMultilineCommentsBlanks)` in the grammar —
+ *    `HxModule.decls`, class / interface / abstract member Stars are
+ *    the current consumers.
  */
 typedef HxModuleWriteOptions = WriteOptions & {
 	sameLineElse:SameLinePolicy,
@@ -1237,6 +1268,8 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	beforeType:Int,
 	afterMultilineDecl:Int,
 	beforeMultilineDecl:Int,
+	afterFileHeaderComment:Int,
+	betweenMultilineComments:Int,
 	formatStringInterpolation:Bool,
 	_inExprPosition:Bool,
 	_classExtern:Bool,

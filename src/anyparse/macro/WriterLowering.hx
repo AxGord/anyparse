@@ -2696,22 +2696,27 @@ class WriterLowering {
 				final staticVarSubdivInfo:Null<StaticVarSubdivisionInfo> = (staticVarSubdiv && interMemberInfo != null)
 					? buildStaticVarSubdivisionInfo(elemRefName, staticVarSubdivArgs ?? [])
 					: null;
+				final betweenMultilineCommentsBlanks:Bool = starNode.fmtHasFlag('betweenMultilineCommentsBlanks');
 				parts.push(triviaBlockStarExpr(
 					fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn,
 					openText ?? '', closeText, false, afterDocComments, keepBetweenFields, beforeDocComments,
 					interMemberInfo, indentCaseLabelsGate, emptyCurlyBreak, beginEndType, keepCurlyBlanks,
-					lineCommentTrailBlank, blankBeforeFinalDocInLeading, staticVarSubdivInfo
+					lineCommentTrailBlank, blankBeforeFinalDocInLeading, staticVarSubdivInfo,
+					betweenMultilineCommentsBlanks
 				));
 			} else if (isLastField) {
 				if (openText != null) parts.push(macro _dt($v{openText}));
 				final cascadeInfos:CascadeInfos = readCascadeInfosFromStar(starNode, elemRefName);
 				final lineCommentTrailBlank:Bool = starNode.fmtHasFlag('blankBeforeOrphanLineCommentTrail');
 				final lineCommentLedAddBlank:Bool = starNode.fmtHasFlag('blankBeforeLineCommentLed');
+				final afterFileHeaderCommentBlanks:Bool = starNode.fmtHasFlag('afterFileHeaderCommentBlanks');
+				final betweenMultilineCommentsBlanks:Bool = starNode.fmtHasFlag('betweenMultilineCommentsBlanks');
 				parts.push(triviaEofStarExpr(
 					fieldAccess, trailBBAccess, trailLCAccess, elemFn,
 					cascadeInfos.afterCtorInfos, cascadeInfos.beforeCtorInfos,
 					cascadeInfos.betweenCtorInfos, cascadeInfos.transitionAcrossInfos,
-					cascadeInfos.headCtorInfos, lineCommentTrailBlank, lineCommentLedAddBlank
+					cascadeInfos.headCtorInfos, lineCommentTrailBlank, lineCommentLedAddBlank,
+					afterFileHeaderCommentBlanks, betweenMultilineCommentsBlanks
 				));
 			} else {
 				Context.fatalError('WriterLowering: @:trivia Star without @:trail must be the last field', Context.currentPos());
@@ -5002,7 +5007,8 @@ class WriterLowering {
 		keepCurlyBlanks:Bool = false,
 		lineCommentTrailBlank:Bool = false,
 		blankBeforeFinalDocInLeading:Bool = false,
-		staticVarSubdivInfo:Null<StaticVarSubdivisionInfo> = null
+		staticVarSubdivInfo:Null<StaticVarSubdivisionInfo> = null,
+		betweenMultilineCommentsBlanks:Bool = false
 	):Expr {
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
@@ -5382,6 +5388,37 @@ class WriterLowering {
 		final extraInnerTrailBlankExpr:Expr = lineCommentTrailBlank
 			? macro (_arr.length > 0 && (_trailBB || (_trailLC.length > 0 && StringTools.startsWith(_trailLC[0], '//'))))
 			: macro (_trailBB && _arr.length > 0);
+		// ω-fileheader-multiline-comments: betweenMultilineComments override
+		// for body-internal block-block boundaries — both inside per-element
+		// `leadingComments` and inside the body's trailing orphan chain.
+		// Mirrors fork's `markMultilineComments` which fires at every
+		// block-comment-to-block-comment pair regardless of scope.
+		final blockLeadingBetweenExpr:Expr = betweenMultilineCommentsBlanks
+			? macro {
+				if (_ci + 1 < _t.leadingComments.length
+						&& StringTools.startsWith(_t.leadingComments[_ci], '/*')
+						&& StringTools.startsWith(_t.leadingComments[_ci + 1], '/*')) {
+					var _bbi:Int = 0;
+					while (_bbi < opt.betweenMultilineComments) {
+						_inner.push(_dhl());
+						_bbi++;
+					}
+				}
+			}
+			: macro {};
+		final blockTrailBetweenExpr:Expr = betweenMultilineCommentsBlanks
+			? macro {
+				if (_ti + 1 < _trailLC.length
+						&& StringTools.startsWith(_trailLC[_ti], '/*')
+						&& StringTools.startsWith(_trailLC[_ti + 1], '/*')) {
+					var _bbi:Int = 0;
+					while (_bbi < opt.betweenMultilineComments) {
+						_inner.push(_dhl());
+						_bbi++;
+					}
+				}
+			}
+			: macro {};
 		return macro {
 			final _arr = $fieldAccess;
 			final _trailLC:Array<String> = $trailLC;
@@ -5422,6 +5459,7 @@ class WriterLowering {
 						$leadingSplitGateExpr;
 						_inner.push(leadingCommentDoc(_t.leadingComments[_ci], opt));
 						_inner.push(_dhl());
+						$blockLeadingBetweenExpr;
 						_ci++;
 					}
 					if (_t.blankAfterLeadingComments && _t.leadingComments.length > 0) _inner.push(_dhl());
@@ -5439,6 +5477,7 @@ class WriterLowering {
 					while (_ti < _trailLC.length) {
 						_inner.push(leadingCommentDoc(_trailLC[_ti], opt));
 						if (_ti < _trailLC.length - 1) _inner.push(_dhl());
+						$blockTrailBetweenExpr;
 						_ti++;
 					}
 				} else $endTypeExpr;
@@ -6081,7 +6120,9 @@ class WriterLowering {
 		transitionAcrossInfos:Array<TransitionAcrossInfo> = null,
 		headCtorInfos:Array<HeadCtorBlankInfo> = null,
 		lineCommentTrailBlank:Bool = false,
-		lineCommentLedAddBlank:Bool = false
+		lineCommentLedAddBlank:Bool = false,
+		afterFileHeaderCommentBlanks:Bool = false,
+		betweenMultilineCommentsBlanks:Bool = false
 	):Expr {
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
@@ -6118,6 +6159,8 @@ class WriterLowering {
 		// the `_curr*` / `_prev*` idents at the cascade fire point.
 		final whileBodyParts:Array<Expr> = [];
 		whileBodyParts.push(macro final _t = _arr[_si]);
+		if (afterFileHeaderCommentBlanks || betweenMultilineCommentsBlanks)
+			whileBodyParts.push(macro var _suppressBalc:Bool = false);
 		whileBodyParts.push(emit.initCurr);
 		whileBodyParts.push(emit.currCompute);
 		// ω-line-comment-led-blank: opt-in via `@:fmt(blankBeforeLineCommentLed)`
@@ -6142,15 +6185,50 @@ class WriterLowering {
 				_bli++;
 			}
 		});
+		// ω-fileheader-multiline-comments: opt-in via
+		// `@:fmt(afterFileHeaderCommentBlanks)` and / or
+		// `@:fmt(betweenMultilineCommentsBlanks)` on the EOF Star.
+		// `_suppressBalc` (only declared when at least one of the two
+		// flags fires) replaces the source-driven `blankAfterLeadingComments`
+		// trail-blank with the policy override at the c[last]→decl slot
+		// when fileheader semantics applied during this iteration.
+		final fileheaderCommentBlanksExpr:Expr = (afterFileHeaderCommentBlanks || betweenMultilineCommentsBlanks)
+			? macro {
+				final _lc:String = _t.leadingComments[_ci];
+				final _isBlock:Bool = StringTools.startsWith(_lc, '/*');
+				final _isLast:Bool = _ci + 1 == _t.leadingComments.length;
+				var _override:Int = 0;
+				final _firstSlot:Bool = $v{afterFileHeaderCommentBlanks}
+					&& _si == 0 && _ci == 0 && _isBlock
+					&& (_hasPiu || _t.leadingComments.length >= 2);
+				if (_firstSlot) {
+					_override = opt.afterFileHeaderComment;
+					_suppressBalc = true;
+				} else if ($v{betweenMultilineCommentsBlanks}
+						&& !_isLast && _isBlock
+						&& StringTools.startsWith(_t.leadingComments[_ci + 1], '/*')) {
+					_override = opt.betweenMultilineComments;
+				}
+				var _bi:Int = 0;
+				while (_bi < _override) {
+					_docs.push(_dhl());
+					_bi++;
+				}
+			}
+			: macro {};
+		final balcExpr:Expr = (afterFileHeaderCommentBlanks || betweenMultilineCommentsBlanks)
+			? macro if (_t.blankAfterLeadingComments && _t.leadingComments.length > 0 && !_suppressBalc) _docs.push(_dhl())
+			: macro if (_t.blankAfterLeadingComments && _t.leadingComments.length > 0) _docs.push(_dhl());
 		whileBodyParts.push(macro {
 			var _ci:Int = 0;
 			while (_ci < _t.leadingComments.length) {
 				_docs.push(leadingCommentDoc(_t.leadingComments[_ci], opt));
 				_docs.push(_dhl());
+				$fileheaderCommentBlanksExpr;
 				_ci++;
 			}
 		});
-		whileBodyParts.push(macro if (_t.blankAfterLeadingComments && _t.leadingComments.length > 0) _docs.push(_dhl()));
+		whileBodyParts.push(balcExpr);
 		whileBodyParts.push(macro final _elem:anyparse.core.Doc = $triviaElemCall);
 		whileBodyParts.push(macro final _tc:Null<String> = _t.trailingComment);
 		whileBodyParts.push(macro _docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDoc(_tc, opt)) : _elem));
@@ -6164,6 +6242,27 @@ class WriterLowering {
 		final elseBodyParts:Array<Expr> = [];
 		elseBodyParts.push(macro final _docs:Array<anyparse.core.Doc> = []);
 		elseBodyParts.push(emit.initPrev);
+		// ω-fileheader-multiline-comments: `_hasPiu` flags whether the
+		// module contains any `package` / `import` / `using` decl (mirrors
+		// fork's `markFileHeader` packagesAndImports filter). When it is
+		// true OR when the first decl carries 2+ leading comments, the
+		// fileheader rule fires at `_si == 0 && _ci == 0` and replaces the
+		// source-driven blank slot with `opt.afterFileHeaderComment`.
+		// Top-level scan only — HxDecl's `Conditional` ctor wraps inner
+		// decls but fileheader fixtures never test that combination, so
+		// the simpler shallow scan stays in place until a fixture needs it.
+		if (afterFileHeaderCommentBlanks || betweenMultilineCommentsBlanks) elseBodyParts.push(macro var _hasPiu:Bool = false);
+		if (afterFileHeaderCommentBlanks) elseBodyParts.push(macro {
+			var _piuI:Int = 0;
+			while (_piuI < _arr.length) {
+				if (!_hasPiu) switch _arr[_piuI].node.decl {
+					case PackageDecl(_) | PackageEmpty | ImportDecl(_) | ImportWildDecl(_) | UsingDecl(_) | UsingWildDecl(_):
+						_hasPiu = true;
+					case _:
+				}
+				_piuI++;
+			}
+		});
 		elseBodyParts.push(headEmitExpr);
 		elseBodyParts.push(macro var _si:Int = 0);
 		elseBodyParts.push(whileExpr);
@@ -6177,6 +6276,23 @@ class WriterLowering {
 		final extraTrailBlankExpr:Expr = lineCommentTrailBlank
 			? macro (_arr.length > 0 && (_trailBB || (_trailLC.length > 0 && StringTools.startsWith(_trailLC[0], '//'))))
 			: macro (_trailBB && _arr.length > 0);
+		// ω-fileheader-multiline-comments: when the trail contains two or
+		// more block-style comments, fork's `markMultilineComments` fires
+		// `betweenMultilineComments` extra blanks between each block-block
+		// pair. Mirrors the leading-comments emit gate above.
+		final eofTrailBetweenExpr:Expr = betweenMultilineCommentsBlanks
+			? macro {
+				if (_ti < _trailLC.length - 1
+						&& StringTools.startsWith(_trailLC[_ti], '/*')
+						&& StringTools.startsWith(_trailLC[_ti + 1], '/*')) {
+					var _bbi:Int = 0;
+					while (_bbi < opt.betweenMultilineComments) {
+						_docs.push(_dhl());
+						_bbi++;
+					}
+				}
+			}
+			: macro {};
 		elseBodyParts.push(macro if (_trailLC.length > 0) {
 			if (_arr.length > 0) _docs.push(_dhl());
 			if ($extraTrailBlankExpr) _docs.push(_dhl());
@@ -6184,6 +6300,7 @@ class WriterLowering {
 			while (_ti < _trailLC.length) {
 				_docs.push(leadingCommentDoc(_trailLC[_ti], opt));
 				if (_ti < _trailLC.length - 1) _docs.push(_dhl());
+				$eofTrailBetweenExpr;
 				_ti++;
 			}
 		});

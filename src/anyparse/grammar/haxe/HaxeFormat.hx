@@ -715,6 +715,8 @@ final class HaxeFormat implements TextFormat {
 		beforeType: 1,
 		afterMultilineDecl: 1,
 		beforeMultilineDecl: 1,
+		afterFileHeaderComment: 1,
+		betweenMultilineComments: 0,
 		formatStringInterpolation: true,
 		_inExprPosition: false,
 		_classExtern: false,
