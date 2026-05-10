@@ -2692,11 +2692,12 @@ class WriterLowering {
 				if (openText != null) parts.push(macro _dt($v{openText}));
 				final cascadeInfos:CascadeInfos = readCascadeInfosFromStar(starNode, elemRefName);
 				final lineCommentTrailBlank:Bool = starNode.fmtHasFlag('blankBeforeOrphanLineCommentTrail');
+				final lineCommentLedAddBlank:Bool = starNode.fmtHasFlag('blankBeforeLineCommentLed');
 				parts.push(triviaEofStarExpr(
 					fieldAccess, trailBBAccess, trailLCAccess, elemFn,
 					cascadeInfos.afterCtorInfos, cascadeInfos.beforeCtorInfos,
 					cascadeInfos.betweenCtorInfos, cascadeInfos.transitionAcrossInfos,
-					cascadeInfos.headCtorInfos, lineCommentTrailBlank
+					cascadeInfos.headCtorInfos, lineCommentTrailBlank, lineCommentLedAddBlank
 				));
 			} else {
 				Context.fatalError('WriterLowering: @:trivia Star without @:trail must be the last field', Context.currentPos());
@@ -5911,7 +5912,8 @@ class WriterLowering {
 		betweenCtorInfos:Array<BetweenCtorBlankInfo> = null,
 		transitionAcrossInfos:Array<TransitionAcrossInfo> = null,
 		headCtorInfos:Array<HeadCtorBlankInfo> = null,
-		lineCommentTrailBlank:Bool = false
+		lineCommentTrailBlank:Bool = false,
+		lineCommentLedAddBlank:Bool = false
 	):Expr {
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
@@ -5950,11 +5952,24 @@ class WriterLowering {
 		whileBodyParts.push(macro final _t = _arr[_si]);
 		whileBodyParts.push(emit.initCurr);
 		whileBodyParts.push(emit.currCompute);
+		// ω-line-comment-led-blank: opt-in via `@:fmt(blankBeforeLineCommentLed)`
+		// on the EOF Star — when the next sibling's `leadingComments[0]` starts
+		// with `//`, force at least 1 blank line between previous element and
+		// the line-comment chain regardless of source-blank capture or cascade
+		// rules. Mirrors fork's `markLineCommentsAfter(typeToken, 1)` always-1
+		// rule (MarkEmptyLines.hx:823) for top-level type→line-comment-led-type
+		// boundaries. Only fires when the cascade-determined `_blanks` count
+		// is 0 — cascade priorities (afterCtor / betweenCtor / transition /
+		// beforeCtor / source-blank) are otherwise preserved.
+		final lineCommentLedExpr:Expr = lineCommentLedAddBlank
+			? macro (_t.leadingComments.length > 0 && StringTools.startsWith(_t.leadingComments[0], '//'))
+			: macro false;
 		whileBodyParts.push(macro if (_si > 0) {
 			_docs.push(_dhl());
 			final _blanks:Int = $blanksCountExpr;
+			final _bln:Int = ($lineCommentLedExpr && _blanks == 0) ? 1 : _blanks;
 			var _bli:Int = 0;
-			while (_bli < _blanks) {
+			while (_bli < _bln) {
 				_docs.push(_dhl());
 				_bli++;
 			}

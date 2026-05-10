@@ -160,5 +160,6 @@ typedef HxModule = {
 	@:fmt(blankLinesAfterCtorIf('decl', 'multiline', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'FnDecl', 'afterMultilineDecl'))
 	@:fmt(blankLinesBeforeCtorIf('decl', 'multiline', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'FnDecl', 'beforeMultilineDecl'))
 	@:fmt(blankBeforeOrphanLineCommentTrail)
+	@:fmt(blankBeforeLineCommentLed)
 	var decls:Array<HxTopLevelDecl>;
 }
