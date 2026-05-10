@@ -134,6 +134,7 @@ typedef HxModule = {
 	@:trivia
 	@:fmt(blankLinesAfterCtor('decl', 'PackageDecl', 'PackageEmpty', 'afterPackage'))
 	@:fmt(blankLinesOnTransitionAcross('decl', 'ImportDecl', 'ImportWildDecl', '|', 'UsingDecl', 'UsingWildDecl', 'beforeUsing'))
+	@:fmt(blankLinesOnTransitionAcross('decl', 'ImportDecl', 'ImportWildDecl', 'UsingDecl', 'UsingWildDecl', '|', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'TypedefDecl', 'FnDecl', 'beforeType'))
 	@:fmt(blankLinesBetweenSameCtorByLevel('decl', 'ImportDecl', 'ImportWildDecl', 'betweenImportsLevel', 'betweenImports', 'betweenImportsPathDiffers'))
 	@:fmt(blankLinesBetweenSameCtorByLevel('decl', 'UsingDecl', 'UsingWildDecl', 'betweenImportsLevel', 'betweenImports', 'betweenImportsPathDiffers'))
 	@:fmt(blankLinesBetweenSameCtorTailTransparent('decl', 'Conditional', 'betweenImportsTailLeafClassify'))

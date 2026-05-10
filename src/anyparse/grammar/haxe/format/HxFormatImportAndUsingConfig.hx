@@ -5,9 +5,9 @@ package anyparse.grammar.haxe.format;
  * `hxformat.json` config.
  *
  * Only keys whose runtime knob already exists on `HxModuleWriteOptions`
- * are modelled here. Missing keys (`beforeType`, …) are silently
- * dropped by the ByName struct parser's `UnknownPolicy.Skip` — they
- * land with the slice that introduces the matching writer knob.
+ * are modelled here. Missing keys are silently dropped by the ByName
+ * struct parser's `UnknownPolicy.Skip` — they land with the slice
+ * that introduces the matching writer knob.
  *
  * `beforeUsing` added in slice ω-imports-using-blank — feeds
  * `opt.beforeUsing`. Matches haxe-formatter's
@@ -20,6 +20,10 @@ package anyparse.grammar.haxe.format;
  * `emptyLines.importAndUsing.betweenImportsLevel: @:default(All)`.
  * The level field is read from JSON as a String and remapped to
  * `HxBetweenImportsLevel` by `HaxeFormatConfigLoader`.
+ *
+ * `beforeType` added in slice ω-imports-using-before-type — feeds
+ * `opt.beforeType`. Matches haxe-formatter's
+ * `emptyLines.importAndUsing.beforeType: @:default(1)`.
  */
 @:peg typedef HxFormatImportAndUsingConfig = {
 
@@ -28,4 +32,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var betweenImports:Int;
 
 	@:optional var betweenImportsLevel:String;
+
+	@:optional var beforeType:Int;
 };

@@ -399,6 +399,16 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   `"thirdLevelPackage"` / `"fourthLevelPackage"` /
  *   `"fifthLevelPackage"` / `"fullPackage"`; unknown tokens leave the
  *   default in place.
+ * - `emptyLines.importAndUsing.beforeType`
+ *   (ω-imports-using-before-type): non-negative Int routed to
+ *   `opt.beforeType`. Default `1` matches haxe-formatter's
+ *   `emptyLines.importAndUsing.beforeType: @:default(1)`. Drives the
+ *   exact number of blank lines at the import/using → type-decl
+ *   transition (current decl is `ClassDecl` / `InterfaceDecl` /
+ *   `AbstractDecl` / `EnumDecl` / `TypedefDecl` / `FnDecl`, previous
+ *   decl is `import` / `using`) — override semantics, not floor:
+ *   source-captured count is replaced with this value, so `0` strips
+ *   the slot and `2` doubles it.
  *
  * Deliberately NOT supported in this slice (no corresponding
  * `HxModuleWriteOptions` field yet): `wrapping.*` beyond
@@ -406,7 +416,7 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  * `anonTypeCurly`, `typedefCurly`, `anonFunctionCurly`, …), other
  * `emptyLines.*` keys
  * (`finalNewline`, `maxAnywhereInFile`, `beforePackage`,
- * `betweenTypes`, `importAndUsing.beforeType`, per-type-kind sections
+ * `betweenTypes`, per-type-kind sections
  * `macroClassEmptyLines` / `externClassEmptyLines` /
  * `abstractEmptyLines` / `enumEmptyLines` /
  * `typedefEmptyLines`, other `classEmptyLines.*` sub-keys beyond
@@ -522,6 +532,7 @@ final class HaxeFormatConfigLoader {
 			beforeUsing: base.beforeUsing,
 			betweenImports: base.betweenImports,
 			betweenImportsLevel: base.betweenImportsLevel,
+			beforeType: base.beforeType,
 			afterMultilineDecl: base.afterMultilineDecl,
 			beforeMultilineDecl: base.beforeMultilineDecl,
 			formatStringInterpolation: base.formatStringInterpolation,
@@ -895,6 +906,7 @@ final class HaxeFormatConfigLoader {
 				final mapped:Null<HxBetweenImportsLevel> = betweenImportsLevelFromString(levelRaw);
 				if (mapped != null) opt.betweenImportsLevel = mapped;
 			}
+			if (importAndUsing.beforeType != null) opt.beforeType = importAndUsing.beforeType;
 		}
 	}
 

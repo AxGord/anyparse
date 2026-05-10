@@ -552,6 +552,27 @@ final class HaxeFormat implements TextFormat {
 	 * `WriteOptions.betweenImportsPathDiffers` adapter slot, defaulted
 	 * to `HxBetweenImportsLevel.pathDiffers`.
 	 *
+	 * `beforeType` default (ω-imports-using-before-type) is `1` — exact
+	 * number of blank lines the writer emits at the import/using →
+	 * type-decl transition (current decl is `ClassDecl` /
+	 * `InterfaceDecl` / `AbstractDecl` / `EnumDecl` / `TypedefDecl` /
+	 * `FnDecl`, previous decl is an import or using directive).
+	 * Override semantics: the source-captured blank-line count is
+	 * replaced with this value at the transition, so `0` strips an
+	 * existing blank line and `2` doubles one regardless of source.
+	 * Matches haxe-formatter's `emptyLines.importAndUsing.beforeType:
+	 * @:default(1)`. Driven by
+	 * `@:fmt(blankLinesOnTransitionAcross('decl', 'ImportDecl',
+	 * 'ImportWildDecl', 'UsingDecl', 'UsingWildDecl', '|', 'ClassDecl',
+	 * 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'TypedefDecl',
+	 * 'FnDecl', 'beforeType'))` on `HxModule.decls`,
+	 * `HxConditionalDecl.body` / `elseBody`, and `HxElseifDecl.body`
+	 * (mirrored cluster), consumed by the trivia-mode EOF Star path in
+	 * `WriterLowering.triviaEofStarExpr`. Conditional transparency
+	 * from the existing `betweenImportsTailLeafClassify` /
+	 * `betweenImportsHeadLeafClassify` adapters extends to this
+	 * transition automatically — both share the `'decl'` classifier.
+	 *
 	 * `afterMultilineDecl` / `beforeMultilineDecl` defaults
 	 * (ω-after-multiline) are both `1` — exact number of blank lines the
 	 * writer emits around a multi-line top-level type/function decl
@@ -660,6 +681,7 @@ final class HaxeFormat implements TextFormat {
 		beforeUsing: 1,
 		betweenImports: 0,
 		betweenImportsLevel: HxBetweenImportsLevel.All,
+		beforeType: 1,
 		afterMultilineDecl: 1,
 		beforeMultilineDecl: 1,
 		formatStringInterpolation: true,

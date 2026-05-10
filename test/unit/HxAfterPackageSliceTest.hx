@@ -113,6 +113,7 @@ class HxAfterPackageSliceTest extends Test {
 	private inline function makeOpts(afterPackage:Int):HxModuleWriteOptions {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.afterPackage = afterPackage;
+		opts.beforeType = 0;
 		return opts;
 	}
 }

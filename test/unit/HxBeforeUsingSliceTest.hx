@@ -139,6 +139,7 @@ class HxBeforeUsingSliceTest extends Test {
 	private inline function makeOpts(beforeUsing:Int):HxModuleWriteOptions {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.beforeUsing = beforeUsing;
+		opts.beforeType = 0;
 		return opts;
 	}
 }

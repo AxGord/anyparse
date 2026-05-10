@@ -6822,7 +6822,14 @@ class WriterLowering {
 		for (branch in enumRule.children) {
 			final ctorName:Null<String> = branch.annotations.get('base.ctor');
 			if (ctorName == null) continue;
-			final arity:Int = branch.children.length;
+			final shapeArity:Int = branch.children.length;
+			// In trivia mode, ctors with `@:trailOpt` / `@:lead` close-trailing /
+			// `@:fmt(captureSource)` carry a synthesized positional arg appended
+			// to the synth ctor (`HxDeclT.TypedefDecl(decl, trailPresent)`). The
+			// pattern arity must match the synth ctor's full arity, otherwise
+			// the generated switch fails with "Not enough arguments". Helper
+			// returns 0 outside trivia mode or for non-bearing enums.
+			final arity:Int = shapeArity + branchSynthExtraArity(enumRuleName, branch);
 			final ctorIdent:Expr = {expr: EConst(CIdent(ctorName)), pos: pos};
 			final inA:Bool = ctorNamesA.indexOf(ctorName) >= 0;
 			final inB:Bool = !inA && ctorNamesB.indexOf(ctorName) >= 0;
@@ -6846,9 +6853,9 @@ class WriterLowering {
 					subset: 2,
 				});
 			} else if (isTransparent) {
-				if (arity < 1)
+				if (shapeArity < 1)
 					Context.fatalError(
-						'WriterLowering: @:fmt(blankLinesOnTransitionAcross) transparent ctor "$ctorName" must have arity ≥ 1 (first arg is the wrapper payload bound to _v0 and passed to the head/tail-leaf classifier adapters); got arity $arity',
+						'WriterLowering: @:fmt(blankLinesOnTransitionAcross) transparent ctor "$ctorName" must have arity ≥ 1 (first arg is the wrapper payload bound to _v0 and passed to the head/tail-leaf classifier adapters); got arity $shapeArity',
 						Context.currentPos()
 					);
 				transparentMatched.push(ctorName);
@@ -6967,7 +6974,12 @@ class WriterLowering {
 		for (branch in enumRule.children) {
 			final ctorName:Null<String> = branch.annotations.get('base.ctor');
 			if (ctorName == null) continue;
-			final arity:Int = branch.children.length;
+			// Synth-aware arity: in trivia mode, ctors carrying `@:trailOpt` /
+			// `@:lead` close-trailing / `@:fmt(captureSource)` etc. grow
+			// positional args on the paired synth ctor. The wildcard / `_v0`
+			// pattern must size to the full synth arity or Haxe rejects with
+			// "Not enough arguments" at the generated switch.
+			final arity:Int = branch.children.length + branchSynthExtraArity(enumRuleName, branch);
 			final ctorIdent:Expr = {expr: EConst(CIdent(ctorName)), pos: pos};
 			final pattern:Expr = arity == 0
 				? ctorIdent

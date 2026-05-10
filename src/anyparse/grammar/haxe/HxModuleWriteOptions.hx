@@ -951,6 +951,35 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    is open to future same-kind, path-aware blank-line slices on any
  *    Star whose ctor set carries a String-shaped first arg.
  *
+ * Field added in slice ω-imports-using-before-type (blank-line slot at
+ * the import/using → type-decl transition):
+ *  - `beforeType` — exact number of blank lines the writer emits when
+ *    the current top-level decl is a type-bearing decl (`ClassDecl` /
+ *    `InterfaceDecl` / `AbstractDecl` / `EnumDecl` / `TypedefDecl` /
+ *    `FnDecl`) and the previous decl is an `import` / `using`
+ *    directive (`ImportDecl` / `ImportWildDecl` / `UsingDecl` /
+ *    `UsingWildDecl`). Override semantics, not floor: the source-
+ *    captured blank-line count is replaced with this value at the
+ *    transition, so `0` strips an existing blank line and `2` doubles
+ *    one regardless of source. Pairs that don't span the
+ *    import/using ↔ type boundary fall through to the next cascade
+ *    layer (between-same-kind, source-driven). `1` (default, matches
+ *    haxe-formatter's `emptyLines.importAndUsing.beforeType:
+ *    @:default(1)`) inserts one blank line between the last
+ *    `import` / `using` and the first type decl. The knob only
+ *    triggers at sites tagged with
+ *    `@:fmt(blankLinesOnTransitionAcross('decl', 'ImportDecl',
+ *    'ImportWildDecl', 'UsingDecl', 'UsingWildDecl', '|', 'ClassDecl',
+ *    'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'TypedefDecl',
+ *    'FnDecl', 'beforeType'))` in the grammar — `HxModule.decls`,
+ *    `HxConditionalDecl.body` / `elseBody`, and `HxElseifDecl.body`
+ *    are the current consumers (mirrored cluster). Conditional
+ *    transparency from the existing
+ *    `betweenImportsTailLeafClassify` / `betweenImportsHeadLeafClassify`
+ *    adapters extends to this transition automatically — they share
+ *    the `'decl'` classifier, so `#if … import …` blocks are
+ *    recognised as imports for the boundary test.
+ *
  * Fields added in slice ω-after-multiline (predicate-gated blank-line
  * rules driven by the grammar-derived `multiline` predicate):
  *  - `afterMultilineDecl` — exact number of blank lines the writer emits
@@ -1088,6 +1117,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	beforeUsing:Int,
 	betweenImports:Int,
 	betweenImportsLevel:HxBetweenImportsLevel,
+	beforeType:Int,
 	afterMultilineDecl:Int,
 	beforeMultilineDecl:Int,
 	formatStringInterpolation:Bool,
