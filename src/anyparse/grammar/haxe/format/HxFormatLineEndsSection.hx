@@ -5,8 +5,8 @@ package anyparse.grammar.haxe.format;
  *
  * Only the keys whose runtime knob already exists on
  * `HxModuleWriteOptions` are modelled here. Missing keys
- * (`rightCurly`, `emptyCurly`, `blockCurly`, `anonFunctionCurly`,
- * `anonTypeCurly`, `typedefCurly`, `metadata*`, `caseColon`, `sharp`,
+ * (`rightCurly`, `blockCurly`, `anonFunctionCurly`, `anonTypeCurly`,
+ * `typedefCurly`, `metadata*`, `caseColon`, `sharp`,
  * `lineEndCharacter`, …) are silently dropped by the ByName struct
  * parser's `UnknownPolicy.Skip` — they land with the slice that
  * introduces the matching writer knob.
@@ -18,10 +18,16 @@ package anyparse.grammar.haxe.format;
  * its `leftCurly` wins over the global one for the
  * `opt.objectLiteralLeftCurly` knob. Other per-construct sub-sections
  * (`blockCurly`, `anonTypeCurly`, …) land with their own slices.
+ *
+ * `emptyCurly` (slice ω-empty-curly-break) drives `opt.emptyCurly`
+ * — `"break"` switches empty bodies to a two-line layout (`{\n}`),
+ * `"same"` keeps the flat default (`{}`).
  */
 @:peg typedef HxFormatLineEndsSection = {
 
 	@:optional var leftCurly:HxFormatLeftCurlyPolicy;
+
+	@:optional var emptyCurly:HxFormatEmptyCurlyPolicy;
 
 	@:optional var objectLiteralCurly:HxFormatCurlyLineEndPolicy;
 };

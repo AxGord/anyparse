@@ -56,6 +56,7 @@ import unit.HxPrefixSliceTest;
 import unit.HxSameLineOptionsTest;
 import unit.HxTrailingCommaOptionsTest;
 import unit.HxLeftCurlyOptionsTest;
+import unit.HxEmptyCurlyOptionsTest;
 import unit.HxObjectLitLeftCurlyOptionsTest;
 import unit.HxObjectFieldColonOptionsTest;
 import unit.HxTypedefAssignOptionsTest;
@@ -188,6 +189,7 @@ class RunTests {
 		runner.addCase(new HxSameLineOptionsTest());
 		runner.addCase(new HxTrailingCommaOptionsTest());
 		runner.addCase(new HxLeftCurlyOptionsTest());
+		runner.addCase(new HxEmptyCurlyOptionsTest());
 		runner.addCase(new HxObjectLitLeftCurlyOptionsTest());
 		runner.addCase(new HxObjectFieldColonOptionsTest());
 		runner.addCase(new HxTypedefAssignOptionsTest());

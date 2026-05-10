@@ -2609,6 +2609,7 @@ class WriterLowering {
 				final keepBetweenFields:Bool = starNode.fmtHasFlag('existingBetweenFields');
 				final beforeDocComments:Bool = starNode.fmtHasFlag('beforeDocCommentEmptyLines');
 				final indentCaseLabelsGate:Bool = starNode.fmtHasFlag('indentCaseLabels');
+				final emptyCurlyBreak:Bool = starNode.fmtHasFlag('emptyCurlyBreak');
 				final interMemberArgs:Null<Array<String>> = starNode.fmtReadStringArgs('interMemberBlankLines');
 				final interMemberInfo:Null<InterMemberClassifyInfo> = interMemberArgs == null
 					? null
@@ -2616,7 +2617,7 @@ class WriterLowering {
 				parts.push(triviaBlockStarExpr(
 					fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn,
 					openText ?? '', closeText, false, afterDocComments, keepBetweenFields, beforeDocComments,
-					interMemberInfo, indentCaseLabelsGate
+					interMemberInfo, indentCaseLabelsGate, emptyCurlyBreak
 				));
 			} else if (isLastField) {
 				if (openText != null) parts.push(macro _dt($v{openText}));
@@ -4909,13 +4910,27 @@ class WriterLowering {
 		afterFieldsWithDocComments:Bool = false, existingBetweenFields:Bool = false,
 		beforeDocCommentEmptyLines:Bool = false,
 		interMemberInfo:Null<InterMemberClassifyInfo> = null,
-		indentCaseLabelsGate:Bool = false
+		indentCaseLabelsGate:Bool = false,
+		emptyCurlyBreak:Bool = false
 	):Expr {
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
 			pos: Context.currentPos(),
 		};
 		final emptyText:String = openText + closeText;
+		// ω-empty-curly-break: when the call site opts in via
+		// `@:fmt(emptyCurlyBreak)`, the empty-body branch dispatches at
+		// runtime on `opt.emptyCurly`. `Break` emits the open lit, a
+		// hardline at the parent's indent, and the close lit on its own
+		// line (`{\n}`); `Same` keeps the pre-slice flat `{}`. Mirrors
+		// haxe-formatter's `lineEnds.emptyCurly: same|break`. The flag
+		// is opt-in per Star — formats / grammars that don't expose the
+		// knob skip the branch entirely.
+		final emptyDocExpr:Expr = emptyCurlyBreak
+			? macro (opt.emptyCurly == anyparse.format.EmptyCurly.Break
+				? _dc([_dt($v{openText}), _dhl(), _dt($v{closeText})])
+				: _dt($v{emptyText}))
+			: macro _dt($v{emptyText});
 		// ω-orphan-trivia: Alt-branch Star call sites (BlockStmt) have no
 		// synth trailing slots — the null branch drops trailing trivia,
 		// matching pre-slice behaviour. Seq-struct call sites forward the
@@ -5095,7 +5110,7 @@ class WriterLowering {
 					_dc([_dt($v{openText}), _openDoc, _dt($v{closeText})]);
 			} else if (_arr.length == 0 && _trailLC.length == 0 && _trailOpen == null) {
 				if (_trailClose != null) $emptyTrailExpr
-				else _dt($v{emptyText});
+				else $emptyDocExpr;
 			} else {
 				final _inner:Array<anyparse.core.Doc> = [];
 				$initDocCommentExpr;

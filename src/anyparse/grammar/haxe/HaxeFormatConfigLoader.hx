@@ -3,6 +3,7 @@ package anyparse.grammar.haxe;
 import anyparse.format.BodyPolicy;
 import anyparse.format.BracePlacement;
 import anyparse.format.CommentEmptyLinesPolicy;
+import anyparse.format.EmptyCurly;
 import anyparse.format.IndentChar;
 import anyparse.format.KeepEmptyLinesPolicy;
 import anyparse.format.KeywordPlacement;
@@ -22,6 +23,7 @@ import anyparse.grammar.haxe.format.HxFormatCommentEmptyLinesPolicy;
 import anyparse.grammar.haxe.format.HxFormatConfig;
 import anyparse.grammar.haxe.format.HxFormatConfigParser;
 import anyparse.grammar.haxe.format.HxFormatCurlyLineEndPolicy;
+import anyparse.grammar.haxe.format.HxFormatEmptyCurlyPolicy;
 import anyparse.grammar.haxe.format.HxFormatEmptyLinesSection;
 import anyparse.grammar.haxe.format.HxFormatImportAndUsingConfig;
 import anyparse.grammar.haxe.format.HxFormatIndentationSection;
@@ -482,6 +484,7 @@ final class HaxeFormatConfigLoader {
 			expressionForBody: base.expressionForBody,
 			expressionIfWithBlocks: base.expressionIfWithBlocks,
 			leftCurly: base.leftCurly,
+			emptyCurly: base.emptyCurly,
 			objectLiteralLeftCurly: base.objectLiteralLeftCurly,
 			objectFieldColon: base.objectFieldColon,
 			typeHintColon: base.typeHintColon,
@@ -808,6 +811,7 @@ final class HaxeFormatConfigLoader {
 			final sub:HxFormatCurlyLineEndPolicy = section.objectLiteralCurly;
 			if (sub.leftCurly != null) opt.objectLiteralLeftCurly = leftCurlyToRuntime(sub.leftCurly);
 		}
+		if (section.emptyCurly != null) opt.emptyCurly = emptyCurlyToRuntime(section.emptyCurly);
 	}
 
 	private static function applyWhitespace(section:HxFormatWhitespaceSection, opt:HxModuleWriteOptions):Void {
@@ -957,6 +961,13 @@ final class HaxeFormatConfigLoader {
 		return switch policy {
 			case HxFormatLeftCurlyPolicy.Before | HxFormatLeftCurlyPolicy.Both: BracePlacement.Next;
 			case _: BracePlacement.Same;
+		};
+	}
+
+	private static function emptyCurlyToRuntime(policy:HxFormatEmptyCurlyPolicy):EmptyCurly {
+		return switch policy {
+			case HxFormatEmptyCurlyPolicy.Break: EmptyCurly.Break;
+			case _: EmptyCurly.Same;
 		};
 	}
 

@@ -4,6 +4,7 @@ import anyparse.format.BodyPolicy;
 import anyparse.format.BracePlacement;
 import anyparse.format.CommentEmptyLinesPolicy;
 import anyparse.format.CommentStyle;
+import anyparse.format.EmptyCurly;
 import anyparse.format.Encoding;
 import anyparse.format.IndentChar;
 import anyparse.format.KeepEmptyLinesPolicy;
@@ -254,6 +255,14 @@ final class HaxeFormat implements TextFormat {
 	 * cascade stay cuddled even under `Next` — the wrap engine wires
 	 * `WrapList.emit`'s `(leadFlat, leadBreak)` so `Group(IfBreak)`
 	 * picks cuddled vs Allman per literal's own flat/break decision.
+	 *
+	 * Empty-curly default (ω-empty-curly-break) is `Same` — empty
+	 * bodies stay flat (`class C {}`, `function f() {}`). `Break`
+	 * emits empty bodies across two lines with `}` on its own line at
+	 * the parent's indent (`class C {\n}`). Mirrors haxe-formatter's
+	 * `lineEnds.emptyCurly: @:default(Same)`. Driven via
+	 * `@:fmt(emptyCurlyBreak)` on body Stars (`HxClassDecl.members`,
+	 * `HxFnBlock.stmts`, etc.).
 	 *
 	 * Object-field colon default (ψ₇) is `After` — `{a: 0}`, matching
 	 * haxe-formatter's `whitespace.objectFieldColonPolicy:
@@ -631,6 +640,7 @@ final class HaxeFormat implements TextFormat {
 		expressionForBody: BodyPolicy.Keep,
 		expressionIfWithBlocks: false,
 		leftCurly: BracePlacement.Same,
+		emptyCurly: EmptyCurly.Same,
 		objectLiteralLeftCurly: BracePlacement.Same,
 		objectFieldColon: WhitespacePolicy.After,
 		typeHintColon: WhitespacePolicy.None,

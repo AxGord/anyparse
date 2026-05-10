@@ -3,6 +3,7 @@ package anyparse.grammar.haxe;
 import anyparse.format.BodyPolicy;
 import anyparse.format.BracePlacement;
 import anyparse.format.CommentEmptyLinesPolicy;
+import anyparse.format.EmptyCurly;
 import anyparse.format.KeepEmptyLinesPolicy;
 import anyparse.format.KeywordPlacement;
 import anyparse.format.SameLinePolicy;
@@ -263,6 +264,17 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    (`class Main\n{`). Only two values are exposed — haxe-formatter's
  *    `Before` / `Both` collapse to `Next` for our output, and the
  *    inline `None` shape is not yet supported.
+ *
+ * Field added in slice ω-empty-curly-break:
+ *  - `emptyCurly` — `EmptyCurly` knob driving the empty-body
+ *    layout at every grammar site tagged with `@:fmt(emptyCurlyBreak)`.
+ *    `Same` (default) keeps empty bodies flat (`class C {}`,
+ *    `function f() {}`). `Break` emits empty bodies across two lines
+ *    with `}` on its own line at the parent's indent (`class C {\n}`).
+ *    Mirrors haxe-formatter's `lineEnds.emptyCurly: same|break`.
+ *    Override semantics, not floor: source-blank-line content between
+ *    the open and close lit is irrelevant — the runtime decision is
+ *    purely opt-driven for empty Stars.
  *
  * Field added in slice ω-objectlit-leftCurly:
  *  - `objectLiteralLeftCurly` — per-construct `BracePlacement` knob
@@ -1068,6 +1080,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	expressionForBody:BodyPolicy,
 	expressionIfWithBlocks:Bool,
 	leftCurly:BracePlacement,
+	emptyCurly:EmptyCurly,
 	objectLiteralLeftCurly:BracePlacement,
 	objectFieldColon:WhitespacePolicy,
 	typeHintColon:WhitespacePolicy,
