@@ -1097,6 +1097,27 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    statement-position switch sees `false` and breaks per `caseBody`,
  *    while a case nested inside another case's body inherits `true`
  *    via opt-fanout and flattens per `expressionCase`.
+ *
+ * Internal field added in slice ω-extern-class-no-blanks
+ * (extern-modifier-aware interMember suppression):
+ *  - `_classExtern` — write-time-only signal flagging that the current
+ *    writer call is descending into an `extern`-marked top-level
+ *    declaration. Set by `HxTopLevelDecl.decl` via
+ *    `@:fmt(setBoolFlagFromStarCtor('_classExtern', 'modifiers',
+ *    'Extern'))` when the sibling `modifiers` Star contains an `Extern`
+ *    ctor; descendants see the flag through the standard opt-fanout
+ *    copy. Read by `triviaBlockStarExpr`'s `addByInterMemberExpr` to
+ *    AND-out interMember-driven blank-line emission when the flag is
+ *    set — `extern class Foo { var a; var b; function new(); function
+ *    foo(); }` round-trips with zero blanks regardless of
+ *    `betweenVars` / `betweenFunctions` / `afterVars` defaults. The
+ *    underscore prefix marks it as an internal channel — not a user-
+ *    facing knob, no JSON loader entry, no `hxformat.json` ingest.
+ *    Default `false`. Mirrors fork's `externClassEmptyLines` config
+ *    section (which swaps the entire `EmptyLines` policy block on
+ *    extern-marked classes); the anyparse minimal gate covers the
+ *    interMember subset only — wider knobs can join later if a fixture
+ *    requires them.
  */
 typedef HxModuleWriteOptions = WriteOptions & {
 	sameLineElse:SameLinePolicy,
@@ -1185,4 +1206,5 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	beforeMultilineDecl:Int,
 	formatStringInterpolation:Bool,
 	_inExprPosition:Bool,
+	_classExtern:Bool,
 };

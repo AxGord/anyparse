@@ -1865,10 +1865,67 @@ class WriterLowering {
 					// expression-position-yielding Ref parent that ANY case-
 					// body descendant might see.
 					final propagateExpr:Bool = child.fmtHasFlag('propagateExprPosition');
-					final optArgExpr:Expr = propagateExpr ? macro _setExprPosition(opt) : macro opt;
-					final rawWriteCall:Expr = {
+					// ω-extern-class-no-blanks:
+					// `@:fmt(setBoolFlagFromStarCtor(optField, starField,
+					// ctorName))` allocates a fresh opt copy
+					// (`_wo = _copyOpt(opt)`) and sets `_wo.<optField> = true`
+					// iff the parent struct's sibling `<starField>` Star
+					// contains an element matching `<ctorName>`. Used by
+					// `HxTopLevelDecl.decl` to propagate `_classExtern` from
+					// the presence of `Extern` in `modifiers`, so descendants
+					// (`HxClassDecl.members`) can suppress
+					// `interMemberBlankLines`-driven blanks. Trivia-bearing
+					// path probes `_m.node.match(<ctorName>)` because Star
+					// elements wrap the underlying enum in `Trivial<...>`;
+					// plain mode probes `_m.match(<ctorName>)` directly.
+					// Composes with `propagateExprPosition` — when both metas
+					// fire on the same field, `_wo._inExprPosition = true` is
+					// set inline alongside the bool-flag assignment so a
+					// single opt copy carries both modifications.
+					final boolFlagArgs:Null<Array<String>> = child.fmtReadStringArgs('setBoolFlagFromStarCtor');
+					if (boolFlagArgs != null && boolFlagArgs.length != 3)
+						Context.fatalError(
+							'WriterLowering: @:fmt(setBoolFlagFromStarCtor) expects 3 string args (optField, starField, ctorName), got ${boolFlagArgs.length}',
+							Context.currentPos()
+						);
+					final optArgExpr:Expr = if (boolFlagArgs != null)
+						macro _wo;
+					else
+						propagateExpr ? macro _setExprPosition(opt) : macro opt;
+					final baseRawWriteCall:Expr = {
 						expr: ECall(macro $i{writeFn}, [fieldAccess, optArgExpr]),
 						pos: Context.currentPos(),
+					};
+					final rawWriteCall:Expr = if (boolFlagArgs == null) baseRawWriteCall;
+					else {
+						final pos:Position = Context.currentPos();
+						final optField:String = boolFlagArgs[0];
+						final starField:String = boolFlagArgs[1];
+						final ctorName:String = boolFlagArgs[2];
+						final starAccess:Expr = {expr: EField(macro value, starField), pos: pos};
+						final flagAccess:Expr = {expr: EField(macro _wo, optField), pos: pos};
+						final ctorIdent:Expr = {expr: EConst(CIdent(ctorName)), pos: pos};
+						final useNodeAccess:Bool = ctx.trivia && isTriviaBearing(typePath);
+						final probeBody:Expr = useNodeAccess
+							? macro for (_m in $starAccess) if (_m.node.match($ctorIdent)) { _f = true; break; }
+							: macro for (_m in $starAccess) if (_m.match($ctorIdent)) { _f = true; break; };
+						final propagateExprStmt:Expr = propagateExpr ? (macro _wo._inExprPosition = true) : (macro {});
+						// Each `macro …` reification in an array literal must be
+						// parenthesised — bare `macro` after `[…,` mis-parses as
+						// "Keyword macro cannot be used as variable name". Plain
+						// identifiers (`propagateExprStmt`, `baseRawWriteCall`)
+						// are fine as-is.
+						final block:Array<Expr> = [
+							(macro final _wo = _copyOpt(opt)),
+							propagateExprStmt,
+							(macro {
+								var _f:Bool = false;
+								$probeBody;
+								$flagAccess = _f;
+							}),
+							baseRawWriteCall,
+						];
+						{expr: EBlock(block), pos: pos};
 					};
 					// ω-indent-objectliteral: `@:fmt(indentValueIfCtor('<ctor>', '<optField>'))`
 					// wrap on mandatory Ref — currently used by
@@ -5055,11 +5112,20 @@ class WriterLowering {
 				expr: EField(macro opt, interMemberInfo.afterVarsField),
 				pos: pos,
 			};
-			macro (
+			// ω-extern-class-no-blanks: `_classExtern` is propagated from
+			// `HxTopLevelDecl.decl` via `@:fmt(setBoolFlagFromStarCtor(...))`
+			// when the sibling `modifiers` Star contains `Extern`. AND-out
+			// the entire interMember add-rule when the flag is set so an
+			// `extern class { var; var; function; function; }` round-trips
+			// with zero blanks regardless of `betweenVars` /
+			// `betweenFunctions` / `afterVars` defaults — mirrors fork's
+			// `externClassEmptyLines` config-section override at the
+			// minimal interMember subset.
+			macro (!opt._classExtern && (
 				(_prevKind == 1 && _currKind == 1 && $betweenVarsAccess > 0)
 				|| (_prevKind == 2 && _currKind == 2 && $betweenFnAccess > 0)
 				|| (_prevKind != 0 && _currKind != 0 && _prevKind != _currKind && $afterVarsAccess > 0)
-			);
+			));
 		} : macro false;
 		final blankBeforeExpr:Expr = anyEmptyLinesFlag ? macro {
 			$currHasDocComputeExpr;

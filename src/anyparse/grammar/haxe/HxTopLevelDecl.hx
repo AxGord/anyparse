@@ -28,10 +28,22 @@ package anyparse.grammar.haxe;
  * `@:keep\n@:expose\nclass Foo` preserves the inter-meta newline, and
  * `@:enum class M` vs `@:enum\nclass M` round-trip verbatim because the
  * trivia channel records the newline before the dispatch keyword.
+ *
+ * `@:fmt(setBoolFlagFromStarCtor('_classExtern', 'modifiers', 'Extern'))`
+ * on the `decl` field (slice ω-extern-class-no-blanks) propagates a
+ * runtime flag down through the descendant writer chain whenever the
+ * sibling `modifiers` Star contains an `Extern` ctor. The descendant
+ * writer for `HxClassDecl.members` reads `opt._classExtern` to suppress
+ * `interMemberBlankLines`-driven blanks, mirroring fork's
+ * `externClassEmptyLines` behaviour at minimal scope. The mechanism
+ * is meta-driven and reusable for any future "set bool opt flag from
+ * sibling Star ctor presence" rule (e.g. `_classFinal`,
+ * `_classMacro`).
  */
 @:peg
 typedef HxTopLevelDecl = {
 	@:trivia @:tryparse var meta:Array<HxMetadata>;
 	@:trivia @:tryparse var modifiers:Array<HxModifier>;
+	@:fmt(setBoolFlagFromStarCtor('_classExtern', 'modifiers', 'Extern'))
 	var decl:HxDecl;
 }
