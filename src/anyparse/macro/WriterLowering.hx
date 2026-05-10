@@ -1201,7 +1201,16 @@ class WriterLowering {
 					wrapRulesField
 				));
 			} else {
-				parts.push(triviaBlockStarExpr(argsAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, leadText, trailText, true));
+				// ω-bropen-keep: forward `@:fmt(keepCurlyBlanks)` from the
+				// enum-Case branch so non-type block bodies (BlockStmt,
+				// BlockExpr) honour `opt.afterLeftCurly` /
+				// `opt.beforeRightCurly` Keep policy. Sister to the
+				// struct-Star path's read at the `lowerStruct` call site.
+				final keepCurlyBlanks:Bool = branch.fmtHasFlag('keepCurlyBlanks');
+				parts.push(triviaBlockStarExpr(
+					argsAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn,
+					leadText, trailText, true, false, false, false, null, false, false, false, keepCurlyBlanks
+				));
 			}
 		} else if (sepText != null) {
 			// See `emitWriterStarField` — `@:sep('\n')` routes to a flat
@@ -2612,6 +2621,7 @@ class WriterLowering {
 				final indentCaseLabelsGate:Bool = starNode.fmtHasFlag('indentCaseLabels');
 				final emptyCurlyBreak:Bool = starNode.fmtHasFlag('emptyCurlyBreak');
 				final beginEndType:Bool = starNode.fmtHasFlag('beginEndType');
+				final keepCurlyBlanks:Bool = starNode.fmtHasFlag('keepCurlyBlanks');
 				final interMemberArgs:Null<Array<String>> = starNode.fmtReadStringArgs('interMemberBlankLines');
 				final interMemberInfo:Null<InterMemberClassifyInfo> = interMemberArgs == null
 					? null
@@ -2619,7 +2629,7 @@ class WriterLowering {
 				parts.push(triviaBlockStarExpr(
 					fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn,
 					openText ?? '', closeText, false, afterDocComments, keepBetweenFields, beforeDocComments,
-					interMemberInfo, indentCaseLabelsGate, emptyCurlyBreak, beginEndType
+					interMemberInfo, indentCaseLabelsGate, emptyCurlyBreak, beginEndType, keepCurlyBlanks
 				));
 			} else if (isLastField) {
 				if (openText != null) parts.push(macro _dt($v{openText}));
@@ -4915,7 +4925,8 @@ class WriterLowering {
 		interMemberInfo:Null<InterMemberClassifyInfo> = null,
 		indentCaseLabelsGate:Bool = false,
 		emptyCurlyBreak:Bool = false,
-		beginEndType:Bool = false
+		beginEndType:Bool = false,
+		keepCurlyBlanks:Bool = false
 	):Expr {
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
@@ -5102,21 +5113,35 @@ class WriterLowering {
 		// open side, `_trailBB` for the close side). Remove (default)
 		// strips. The flag is opt-in per Star — formats that don't
 		// expose the knobs leave the inserts disabled.
-		final beginTypeExpr:Expr = beginEndType ? macro {
-			final _firstSourceBlank:Bool = _arr.length > 0 && _arr[0].blankBefore;
-			final _beginN:Int = opt.beginType > 0
+		//
+		// ω-bropen-keep: sister opt-in `keepCurlyBlanks` for non-type
+		// bodies (function body, if/while/etc. block-stmt, block-expr).
+		// Honours the universal `opt.afterLeftCurly` / `opt.beforeRightCurly`
+		// Keep policy without applying type-scoped `opt.beginType` /
+		// `opt.endType` Int counts (those live under haxe-formatter's
+		// `emptyLines.classEmptyLines` and only fire on type bodies).
+		final emitBeginExtras:Bool = beginEndType || keepCurlyBlanks;
+		final beginNExpr:Expr = beginEndType
+			? macro (opt.beginType > 0
 				? opt.beginType
-				: (opt.afterLeftCurly == anyparse.format.KeepEmptyLinesPolicy.Keep && _firstSourceBlank ? 1 : 0);
+				: (opt.afterLeftCurly == anyparse.format.KeepEmptyLinesPolicy.Keep && _firstSourceBlank ? 1 : 0))
+			: macro (opt.afterLeftCurly == anyparse.format.KeepEmptyLinesPolicy.Keep && _firstSourceBlank ? 1 : 0);
+		final endNExpr:Expr = beginEndType
+			? macro (opt.endType > 0
+				? opt.endType
+				: (opt.beforeRightCurly == anyparse.format.KeepEmptyLinesPolicy.Keep && _trailBB && _arr.length > 0 ? 1 : 0))
+			: macro (opt.beforeRightCurly == anyparse.format.KeepEmptyLinesPolicy.Keep && _trailBB && _arr.length > 0 ? 1 : 0);
+		final beginTypeExpr:Expr = emitBeginExtras ? macro {
+			final _firstSourceBlank:Bool = _arr.length > 0 && _arr[0].blankBefore;
+			final _beginN:Int = $beginNExpr;
 			var _bi:Int = 0;
 			while (_bi < _beginN) {
 				_inner.push(_dhl());
 				_bi++;
 			}
 		} : macro {};
-		final endTypeExpr:Expr = beginEndType ? macro {
-			final _endN:Int = opt.endType > 0
-				? opt.endType
-				: (opt.beforeRightCurly == anyparse.format.KeepEmptyLinesPolicy.Keep && _trailBB && _arr.length > 0 ? 1 : 0);
+		final endTypeExpr:Expr = emitBeginExtras ? macro {
+			final _endN:Int = $endNExpr;
 			var _ei:Int = 0;
 			while (_ei < _endN) {
 				_inner.push(_dhl());

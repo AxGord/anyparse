@@ -20,5 +20,5 @@ package anyparse.grammar.haxe;
 @:peg
 @:fmt(multilineWhenFieldNonEmpty('stmts'))
 typedef HxFnBlock = {
-	@:fmt(emptyCurlyBreak) @:lead('{') @:trail('}') @:trivia var stmts:Array<HxStatement>;
+	@:fmt(emptyCurlyBreak, keepCurlyBlanks) @:lead('{') @:trail('}') @:trivia var stmts:Array<HxStatement>;
 }
