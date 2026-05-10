@@ -514,6 +514,7 @@ final class HaxeFormatConfigLoader {
 			betweenVars: base.betweenVars,
 			betweenFunctions: base.betweenFunctions,
 			afterVars: base.afterVars,
+			afterStaticVars: base.afterStaticVars,
 			interfaceBetweenVars: base.interfaceBetweenVars,
 			interfaceBetweenFunctions: base.interfaceBetweenFunctions,
 			interfaceAfterVars: base.interfaceAfterVars,
@@ -906,6 +907,7 @@ final class HaxeFormatConfigLoader {
 			if (classSection.betweenVars != null) opt.betweenVars = classSection.betweenVars;
 			if (classSection.betweenFunctions != null) opt.betweenFunctions = classSection.betweenFunctions;
 			if (classSection.afterVars != null) opt.afterVars = classSection.afterVars;
+			if (classSection.afterStaticVars != null) opt.afterStaticVars = classSection.afterStaticVars;
 			if (classSection.beginType != null) opt.beginType = classSection.beginType;
 			if (classSection.endType != null) opt.endType = classSection.endType;
 		}

@@ -56,5 +56,5 @@ typedef HxAbstractDecl = {
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose) var typeParams:Null<Array<HxTypeParamDecl>>;
 	@:lead('(') @:trail(')') var underlyingType:HxType;
 	@:fmt(padLeading) var clauses:Array<HxAbstractClause>;
-	@:fmt(leftCurly, emptyCurlyBreak, beginEndType, afterFieldsWithDocComments, existingBetweenFields, beforeDocCommentEmptyLines, blankBeforeFinalDocCommentInLeading, blankBeforeOrphanLineCommentTrail, interMemberBlankLines('member', 'VarMember', 'FnMember')) @:lead('{') @:trail('}') @:trivia var members:Array<HxMemberDecl>;
+	@:fmt(leftCurly, emptyCurlyBreak, beginEndType, afterFieldsWithDocComments, existingBetweenFields, beforeDocCommentEmptyLines, blankBeforeFinalDocCommentInLeading, blankBeforeOrphanLineCommentTrail, interMemberBlankLines('member', 'VarMember', 'FnMember'), staticVarSubdivision) @:lead('{') @:trail('}') @:trivia var members:Array<HxMemberDecl>;
 }

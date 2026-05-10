@@ -2685,11 +2685,22 @@ class WriterLowering {
 				final interMemberInfo:Null<InterMemberClassifyInfo> = interMemberArgs == null
 					? null
 					: buildInterMemberClassifyInfo(elemRefName, interMemberArgs);
+				// `fmtHasFlag` accepts both bare-identifier (`staticVarSubdivision`)
+				// and call form (`staticVarSubdivision('modifiers', 'Static',
+				// 'afterStaticVars')`) — `fmtReadStringArgs` is null in the
+				// bare form and only carries args when the call form is used.
+				final staticVarSubdiv:Bool = starNode.fmtHasFlag('staticVarSubdivision');
+				final staticVarSubdivArgs:Null<Array<String>> = staticVarSubdiv
+					? starNode.fmtReadStringArgs('staticVarSubdivision')
+					: null;
+				final staticVarSubdivInfo:Null<StaticVarSubdivisionInfo> = (staticVarSubdiv && interMemberInfo != null)
+					? buildStaticVarSubdivisionInfo(elemRefName, staticVarSubdivArgs ?? [])
+					: null;
 				parts.push(triviaBlockStarExpr(
 					fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn,
 					openText ?? '', closeText, false, afterDocComments, keepBetweenFields, beforeDocComments,
 					interMemberInfo, indentCaseLabelsGate, emptyCurlyBreak, beginEndType, keepCurlyBlanks,
-					lineCommentTrailBlank, blankBeforeFinalDocInLeading
+					lineCommentTrailBlank, blankBeforeFinalDocInLeading, staticVarSubdivInfo
 				));
 			} else if (isLastField) {
 				if (openText != null) parts.push(macro _dt($v{openText}));
@@ -4990,7 +5001,8 @@ class WriterLowering {
 		beginEndType:Bool = false,
 		keepCurlyBlanks:Bool = false,
 		lineCommentTrailBlank:Bool = false,
-		blankBeforeFinalDocInLeading:Bool = false
+		blankBeforeFinalDocInLeading:Bool = false,
+		staticVarSubdivInfo:Null<StaticVarSubdivisionInfo> = null
 	):Expr {
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
@@ -5094,6 +5106,28 @@ class WriterLowering {
 				_cdci++;
 			}
 		} : macro {};
+		// ω-class-static-var-cascade: when the Star opts in via
+		// `@:fmt(staticVarSubdivision)`, augment the per-iteration kind
+		// switch with a sibling-Star scan that promotes kind `1` (instance
+		// var) to kind `3` (static var) on encountering a `Static`-ctor
+		// modifier. Kind `2` (function) is left alone — fork's
+		// classifier-cascade DOES split static functions, but no current
+		// fixture exercises that arm; defer until one does.
+		final staticVarSubdiv:Bool = staticVarSubdivInfo != null;
+		final staticPromoteExpr:Expr = staticVarSubdiv ? {
+			final pos:Position = Context.currentPos();
+			final modAccess:Expr = {
+				expr: EField(macro _t.node, staticVarSubdivInfo.modifierFieldName),
+				pos: pos,
+			};
+			final staticIdent:Expr = {expr: EConst(CIdent(staticVarSubdivInfo.staticCtorName)), pos: pos};
+			macro {
+				if (_currKind == 1) for (_m in $modAccess) if (_m.node.match($staticIdent)) {
+					_currKind = 3;
+					break;
+				}
+			};
+		} : macro {};
 		final currKindComputeExpr:Expr = interMember ? {
 			final classifierAccess:Expr = {
 				expr: EField(macro _t.node, interMemberInfo.classifierFieldName),
@@ -5103,7 +5137,10 @@ class WriterLowering {
 				expr: ESwitch(classifierAccess, interMemberInfo.classifyCases, null),
 				pos: Context.currentPos(),
 			};
-			macro _currKind = $switchExpr;
+			macro {
+				_currKind = $switchExpr;
+				$staticPromoteExpr;
+			};
 		} : macro {};
 		final addByInterMemberExpr:Expr = interMember ? {
 			final pos:Position = Context.currentPos();
@@ -5128,11 +5165,39 @@ class WriterLowering {
 			// `betweenFunctions` / `afterVars` defaults — mirrors fork's
 			// `externClassEmptyLines` config-section override at the
 			// minimal interMember subset.
-			macro (!opt._classExtern && (
-				(_prevKind == 1 && _currKind == 1 && $betweenVarsAccess > 0)
-				|| (_prevKind == 2 && _currKind == 2 && $betweenFnAccess > 0)
-				|| (_prevKind != 0 && _currKind != 0 && _prevKind != _currKind && $afterVarsAccess > 0)
-			));
+			//
+			// ω-class-static-var-cascade: when subdivision is active, kind
+			// `3` represents static-var. Same-kind cascade arms treat
+			// kinds `1` and `3` as both "var" for the var↔function `afterVars`
+			// arm (so static-var → fn fires `afterVars` like instance-var → fn).
+			// Within the var family, instance↔static transitions fire the
+			// new `afterStaticVars` knob; same-static and same-instance use
+			// `betweenVars` (fork's `betweenStaticVars` defaults to `0` —
+			// equivalent — and is not modeled separately until a fixture
+			// requires it). When subdivision is off, kind `3` is unreachable
+			// and the cascade collapses to the pre-slice three arms.
+			if (staticVarSubdiv) {
+				final afterStaticVarsAccess:Expr = {
+					expr: EField(macro opt, staticVarSubdivInfo.afterStaticVarsField),
+					pos: pos,
+				};
+				macro (!opt._classExtern && (
+					(_prevKind == 1 && _currKind == 1 && $betweenVarsAccess > 0)
+					|| (_prevKind == 3 && _currKind == 3 && $betweenVarsAccess > 0)
+					|| (((_prevKind == 1 && _currKind == 3) || (_prevKind == 3 && _currKind == 1))
+						&& $afterStaticVarsAccess > 0)
+					|| (_prevKind == 2 && _currKind == 2 && $betweenFnAccess > 0)
+					|| ((((_prevKind == 1 || _prevKind == 3) && _currKind == 2)
+						|| (_prevKind == 2 && (_currKind == 1 || _currKind == 3)))
+						&& $afterVarsAccess > 0)
+				));
+			} else {
+				macro (!opt._classExtern && (
+					(_prevKind == 1 && _currKind == 1 && $betweenVarsAccess > 0)
+					|| (_prevKind == 2 && _currKind == 2 && $betweenFnAccess > 0)
+					|| (_prevKind != 0 && _currKind != 0 && _prevKind != _currKind && $afterVarsAccess > 0)
+				));
+			}
 		} : macro false;
 		final blankBeforeExpr:Expr = anyEmptyLinesFlag ? macro {
 			$currHasDocComputeExpr;
@@ -6691,6 +6756,90 @@ class WriterLowering {
 	}
 
 	/**
+	 * ω-class-static-var-cascade — resolve `@:fmt(staticVarSubdivision)` /
+	 * `@:fmt(staticVarSubdivision('<modifierField>', '<staticCtor>',
+	 * '<afterStaticVarsField>'))` into the data the per-iteration kind
+	 * switch reads to promote kind `1` (instance var) to kind `3` (static
+	 * var). The zero-arg form defaults to the `('modifiers', 'Static',
+	 * 'afterStaticVars')` triple — matches the canonical
+	 * `HxMemberDecl.modifiers` Star + `HxMemberModifier.Static` ctor +
+	 * `HxModuleWriteOptions.afterStaticVars` knob.
+	 *
+	 * The companion meta is read alongside `@:fmt(interMemberBlankLines)`;
+	 * `@:fmt(staticVarSubdivision)` without `interMemberBlankLines` is
+	 * inert (the cascade arms are written by `triviaBlockStarExpr` and
+	 * gated on the interMember presence). Validates that the named
+	 * modifier field exists on the element Seq rule and that it's a Star.
+	 */
+	private function buildStaticVarSubdivisionInfo(elemRefName:String, args:Array<String>):StaticVarSubdivisionInfo {
+		if (args.length != 0 && args.length != 3)
+			Context.fatalError(
+				'WriterLowering: @:fmt(staticVarSubdivision) expects 0 or 3 string args (modifierField, staticCtor, afterStaticVarsField), got ${args.length}',
+				Context.currentPos()
+			);
+		final modifierField:String = args.length == 3 ? args[0] : 'modifiers';
+		final staticCtor:String = args.length == 3 ? args[1] : 'Static';
+		final afterStaticVarsField:String = args.length == 3 ? args[2] : 'afterStaticVars';
+		final elemRule:Null<ShapeNode> = shape.rules.get(elemRefName);
+		if (elemRule == null || elemRule.kind != Seq)
+			Context.fatalError(
+				'WriterLowering: @:fmt(staticVarSubdivision) requires element rule $elemRefName to be a Seq struct',
+				Context.currentPos()
+			);
+		var modifierNode:Null<ShapeNode> = null;
+		for (child in elemRule.children) if (child.annotations.get('base.fieldName') == modifierField) {
+			modifierNode = child;
+			break;
+		}
+		if (modifierNode == null)
+			Context.fatalError(
+				'WriterLowering: @:fmt(staticVarSubdivision) modifier field "$modifierField" not found on element rule $elemRefName',
+				Context.currentPos()
+			);
+		if (modifierNode.kind != Star)
+			Context.fatalError(
+				'WriterLowering: @:fmt(staticVarSubdivision) modifier field "$modifierField" must be a Star',
+				Context.currentPos()
+			);
+		// `base.ref` lives on the Star's element child (the Ref node), not the
+		// Star itself — `ShapeBuilder.shapeFieldType` builds `Array<T>` as a
+		// Star with `children = [shapeFieldType(T)]` and only the inner Ref
+		// carries `base.ref`.
+		if (modifierNode.children.length != 1)
+			Context.fatalError(
+				'WriterLowering: @:fmt(staticVarSubdivision) modifier field "$modifierField" must have exactly one Star child',
+				Context.currentPos()
+			);
+		final modifierEnumName:Null<String> = modifierNode.children[0].annotations.get('base.ref');
+		if (modifierEnumName == null)
+			Context.fatalError(
+				'WriterLowering: @:fmt(staticVarSubdivision) modifier field "$modifierField" has no base.ref annotation',
+				Context.currentPos()
+			);
+		final modifierEnum:Null<ShapeNode> = shape.rules.get(modifierEnumName);
+		if (modifierEnum == null || modifierEnum.kind != Alt)
+			Context.fatalError(
+				'WriterLowering: @:fmt(staticVarSubdivision) modifier target $modifierEnumName must be an Alt (enum)',
+				Context.currentPos()
+			);
+		var staticBranchFound:Bool = false;
+		for (branch in modifierEnum.children) if (branch.annotations.get('base.ctor') == staticCtor) {
+			staticBranchFound = true;
+			break;
+		}
+		if (!staticBranchFound)
+			Context.fatalError(
+				'WriterLowering: @:fmt(staticVarSubdivision) static ctor "$staticCtor" not found on enum $modifierEnumName',
+				Context.currentPos()
+			);
+		return {
+			modifierFieldName: modifierField,
+			staticCtorName: staticCtor,
+			afterStaticVarsField: afterStaticVarsField,
+		};
+	}
+
+	/**
 	 * ω-bug-2c-inner-star — read every cascade `@:fmt(blankLines*)` meta
 	 * off a `@:trivia` Star ShapeNode and resolve them into the four
 	 * info arrays consumed by `buildCascadeEmit`. Centralises the
@@ -7567,6 +7716,32 @@ typedef InterMemberClassifyInfo = {
 	betweenVarsField:String,
 	betweenFunctionsField:String,
 	afterVarsField:String,
+};
+
+/**
+ * ω-class-static-var-cascade — resolved data for
+ * `@:fmt(staticVarSubdivision)` /
+ * `@:fmt(staticVarSubdivision('<modifierField>', '<staticCtor>',
+ * '<afterStaticVarsField>'))`. Produced by
+ * `WriterLowering.buildStaticVarSubdivisionInfo`. When present alongside
+ * `interMemberInfo`, `triviaBlockStarExpr` augments the per-iteration
+ * `_currKind` switch with a sibling-Star scan: when the base switch
+ * yields kind `1` (instance var) AND the `<modifierField>` Star contains
+ * a `<staticCtor>`-ctor element, `_currKind` is promoted to `3` (static
+ * var). The cascade then routes (1,3)/(3,1) transitions to the
+ * `<afterStaticVarsField>` opt knob, leaving (1,1)/(3,3)/(2,2)/var↔fn
+ * arms on the existing `betweenVars` / `betweenFunctions` / `afterVars`.
+ *
+ * Class and abstract members opt in; interface members do NOT — fork's
+ * `InterfaceFieldsEmptyLinesConfig` lacks `afterStaticVars` and treats
+ * static-var transitions as plain `betweenVars`. Skipping the meta on
+ * `HxInterfaceDecl.members` keeps that behaviour without a separate
+ * interface-side knob.
+ */
+typedef StaticVarSubdivisionInfo = {
+	modifierFieldName:String,
+	staticCtorName:String,
+	afterStaticVarsField:String,
 };
 
 /**

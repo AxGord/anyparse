@@ -541,6 +541,19 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  * keeps reading the shared `betweenVars` / `betweenFunctions` /
  * `afterVars` (used by class + abstract).
  *
+ * Field added in slice ω-class-static-var-cascade (instance-vs-static
+ * var subdivision in `interMemberBlankLines`):
+ *  - `afterStaticVars` — blank-line count emitted between an instance
+ *    var and a static var (or vice versa). Default `1`, matching
+ *    haxe-formatter's `emptyLines.classEmptyLines.afterStaticVars:
+ *    @:default(1)`. Fires only when the grammar Star ALSO carries
+ *    `@:fmt(staticVarSubdivision)` — class and abstract members opt
+ *    in, interface members do not (interface bodies stay tight at the
+ *    instance↔static boundary by fork convention). The cascade arm
+ *    is gated by `!opt._classExtern`, so extern-class members keep
+ *    the existing zero-blank invariant from
+ *    `ω-extern-class-no-blanks`.
+ *
  * Fields added in slice ω-class-begin-end-type (head/tail blank lines
  * inside class/interface/abstract bodies):
  *  - `beginType` — exact blank-line count emitted between the opening
@@ -1168,6 +1181,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	betweenVars:Int,
 	betweenFunctions:Int,
 	afterVars:Int,
+	afterStaticVars:Int,
 	interfaceBetweenVars:Int,
 	interfaceBetweenFunctions:Int,
 	interfaceAfterVars:Int,
