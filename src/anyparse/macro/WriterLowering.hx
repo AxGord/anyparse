@@ -2679,6 +2679,8 @@ class WriterLowering {
 				final emptyCurlyBreak:Bool = starNode.fmtHasFlag('emptyCurlyBreak');
 				final beginEndType:Bool = starNode.fmtHasFlag('beginEndType');
 				final keepCurlyBlanks:Bool = starNode.fmtHasFlag('keepCurlyBlanks');
+				final lineCommentTrailBlank:Bool = starNode.fmtHasFlag('blankBeforeOrphanLineCommentTrail');
+				final blankBeforeFinalDocInLeading:Bool = starNode.fmtHasFlag('blankBeforeFinalDocCommentInLeading');
 				final interMemberArgs:Null<Array<String>> = starNode.fmtReadStringArgs('interMemberBlankLines');
 				final interMemberInfo:Null<InterMemberClassifyInfo> = interMemberArgs == null
 					? null
@@ -2686,7 +2688,8 @@ class WriterLowering {
 				parts.push(triviaBlockStarExpr(
 					fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn,
 					openText ?? '', closeText, false, afterDocComments, keepBetweenFields, beforeDocComments,
-					interMemberInfo, indentCaseLabelsGate, emptyCurlyBreak, beginEndType, keepCurlyBlanks
+					interMemberInfo, indentCaseLabelsGate, emptyCurlyBreak, beginEndType, keepCurlyBlanks,
+					lineCommentTrailBlank, blankBeforeFinalDocInLeading
 				));
 			} else if (isLastField) {
 				if (openText != null) parts.push(macro _dt($v{openText}));
@@ -4985,7 +4988,9 @@ class WriterLowering {
 		indentCaseLabelsGate:Bool = false,
 		emptyCurlyBreak:Bool = false,
 		beginEndType:Bool = false,
-		keepCurlyBlanks:Bool = false
+		keepCurlyBlanks:Bool = false,
+		lineCommentTrailBlank:Bool = false,
+		blankBeforeFinalDocInLeading:Bool = false
 	):Expr {
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
@@ -5216,6 +5221,46 @@ class WriterLowering {
 				_ei++;
 			}
 		} : macro {};
+		// ω-block-final-doc-leading-blank: opt-in via
+		// `@:fmt(blankBeforeFinalDocCommentInLeading)`. When the current
+		// element's `leadingComments` mixes line-style `//` runs with a
+		// trailing `/**` doc-comment, fork inserts a single blank between
+		// the last `//` and that final `/**` (treats the last `/**` as
+		// "the doc comment", separated from the line-comment cluster).
+		// Only fires for the LAST `/**` index — earlier `/**` entries
+		// inside leading do NOT get a leading blank (verified via fork
+		// CLI probes on `// /** // /** static main()` shapes). The
+		// "is last `/**`" lookahead is recomputed inline per iteration
+		// — the leadingComments arrays are short (≤ ~5 entries in
+		// practice) so the cost is negligible, and it lets the gate
+		// stay self-contained without leaking a helper var into the
+		// outer EBlock scope.
+		final leadingSplitGateExpr:Expr = blankBeforeFinalDocInLeading
+			? macro {
+				if (_ci > 0 && StringTools.startsWith(_t.leadingComments[_ci], '/**')
+						&& StringTools.startsWith(_t.leadingComments[_ci - 1], '//')) {
+					var _isLastDoc:Bool = true;
+					var _ldi:Int = _ci + 1;
+					while (_ldi < _t.leadingComments.length) {
+						if (StringTools.startsWith(_t.leadingComments[_ldi], '/**')) {
+							_isLastDoc = false;
+							break;
+						}
+						_ldi++;
+					}
+					if (_isLastDoc) _inner.push(_dhl());
+				}
+			}
+			: macro {};
+		// ω-block-orphan-trail-blank: opt-in via
+		// `@:fmt(blankBeforeOrphanLineCommentTrail)` (sister to the EOF
+		// flavor in `triviaEofStarExpr`). When the orphan trail is led by
+		// a line-comment `//`, force the extra `_dhl()` blank between the
+		// last block member and the trail chain regardless of source-blank
+		// capture. Without the flag the gate stays `_trailBB`-driven.
+		final extraInnerTrailBlankExpr:Expr = lineCommentTrailBlank
+			? macro (_arr.length > 0 && (_trailBB || (_trailLC.length > 0 && StringTools.startsWith(_trailLC[0], '//'))))
+			: macro (_trailBB && _arr.length > 0);
 		return macro {
 			final _arr = $fieldAccess;
 			final _trailLC:Array<String> = $trailLC;
@@ -5252,6 +5297,7 @@ class WriterLowering {
 					$blankBeforeExpr;
 					var _ci:Int = 0;
 					while (_ci < _t.leadingComments.length) {
+						$leadingSplitGateExpr;
 						_inner.push(leadingCommentDoc(_t.leadingComments[_ci], opt));
 						_inner.push(_dhl());
 						_ci++;
@@ -5266,7 +5312,7 @@ class WriterLowering {
 				}
 				if (_trailLC.length > 0) {
 					_inner.push(_dhl());
-					if (_trailBB && _arr.length > 0) _inner.push(_dhl());
+					if ($extraInnerTrailBlankExpr) _inner.push(_dhl());
 					var _ti:Int = 0;
 					while (_ti < _trailLC.length) {
 						_inner.push(leadingCommentDoc(_trailLC[_ti], opt));
