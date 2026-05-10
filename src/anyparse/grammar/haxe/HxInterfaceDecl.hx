@@ -28,15 +28,18 @@ package anyparse.grammar.haxe;
  * shared `betweenVars` / `betweenFunctions` / `afterVars`. Defaults are
  * all `0`, matching haxe-formatter's `InterfaceFieldsEmptyLinesConfig`
  * (interfaces stay tight unless the user opts in via
- * `hxformat.json`'s `emptyLines.interfaceEmptyLines`). The other
- * trivia-aware empty-line knobs (`afterFieldsWithDocComments`,
- * `existingBetweenFields`, `beforeDocCommentEmptyLines`) ship in
- * follow-up slices.
+ * `hxformat.json`'s `emptyLines.interfaceEmptyLines`). The
+ * trivia-aware empty-line knobs `afterFieldsWithDocComments`,
+ * `existingBetweenFields`, and `beforeDocCommentEmptyLines` are
+ * shared with `HxClassDecl.members` and `HxAbstractDecl.members` —
+ * interface fields opt into the same engine paths so a doc-commented
+ * function in interface scope (e.g. `issue_385_single_line_doc_comment_fields`)
+ * gets the same trailing blank line as in class/abstract scope.
  */
 @:peg
 @:fmt(multilineWhenFieldNonEmpty('members'))
 typedef HxInterfaceDecl = {
 	@:kw('interface') var name:HxIdentLit;
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose) var typeParams:Null<Array<HxTypeParamDecl>>;
-	@:fmt(leftCurly, emptyCurlyBreak, beginEndType, interMemberBlankLines('member', 'VarMember', 'FnMember', 'interfaceBetweenVars', 'interfaceBetweenFunctions', 'interfaceAfterVars')) @:lead('{') @:trail('}') @:trivia var members:Array<HxMemberDecl>;
+	@:fmt(leftCurly, emptyCurlyBreak, beginEndType, afterFieldsWithDocComments, existingBetweenFields, beforeDocCommentEmptyLines, interMemberBlankLines('member', 'VarMember', 'FnMember', 'interfaceBetweenVars', 'interfaceBetweenFunctions', 'interfaceAfterVars')) @:lead('{') @:trail('}') @:trivia var members:Array<HxMemberDecl>;
 }
