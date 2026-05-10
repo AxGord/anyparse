@@ -596,8 +596,21 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *
  * The four knobs only fire at sites tagged with `@:fmt(beginEndType)`
  * in the grammar — `HxClassDecl.members`, `HxInterfaceDecl.members`,
- * and `HxAbstractDecl.members` are the current consumers; enum bodies
- * and macro classes ship in follow-up slices.
+ * `HxAbstractDecl.members` and (since ω-enum-empty-lines)
+ * `HxEnumDecl.ctors` are the current consumers; macro classes ship in
+ * follow-up slices.
+ *
+ * Field added in slice ω-enum-empty-lines (uniform inter-element blank
+ * lines for Star fields whose element type is an Alt without a
+ * var/fn split — primarily `HxEnumDecl.ctors`):
+ *  - `betweenEnumCtors` — exact blank-line count emitted between every
+ *    pair of adjacent enum constructors. `0` (default, matches haxe-
+ *    formatter's `emptyLines.enumEmptyLines.betweenFields: @:default(0)`)
+ *    keeps the pre-slice tight layout. The knob only applies at sites
+ *    tagged with `@:fmt(uniformBetween('betweenEnumCtors'))` in the
+ *    grammar; the meta is a generic uniform-between handler — a future
+ *    Alt-Star Star (e.g. typedef field list, switch-case list) can
+ *    reuse it by pointing at its own opt knob.
  *
  * Field added in slice ω-typedef-assign (typedef rhs `=` spacing):
  *  - `typedefAssign` — whitespace around the `=` joining a typedef
@@ -1235,6 +1248,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	interfaceBetweenVars:Int,
 	interfaceBetweenFunctions:Int,
 	interfaceAfterVars:Int,
+	betweenEnumCtors:Int,
 	beginType:Int,
 	endType:Int,
 	afterLeftCurly:KeepEmptyLinesPolicy,

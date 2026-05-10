@@ -10,7 +10,7 @@ package anyparse.grammar.haxe.format;
  * `betweenSingleLineTypes`, `beforeRightCurly`, `afterLeftCurly`,
  * `afterReturn`, `beforeBlocks`, `afterBlocks`, `enumAbstractEmptyLines`,
  * `macroClassEmptyLines`,
- * `abstractEmptyLines`, `enumEmptyLines`,
+ * `abstractEmptyLines`,
  * `typedefEmptyLines`, `conditionalsEmptyLines`, …) are silently dropped
  * by the ByName struct parser's `UnknownPolicy.Skip` — they land with
  * the slice that introduces the matching writer knob.
@@ -43,6 +43,13 @@ package anyparse.grammar.haxe.format;
  * `HxFormatInterfaceEmptyLinesConfig`). Mirrors `classEmptyLines` for
  * interface members but with separate runtime knobs and 0/0/0 defaults
  * matching haxe-formatter's `InterfaceFieldsEmptyLinesConfig`.
+ *
+ * `enumEmptyLines` nested section added in slice ω-enum-empty-lines.
+ * Drives blank-line behaviour inside `enum` bodies — its `betweenFields`
+ * sub-key feeds the dedicated `opt.betweenEnumCtors` knob; the rest
+ * (`existingBetweenFields`, `beginType`, `endType`) share the global
+ * runtime knobs with class / interface / abstract sections (last-write
+ * wins for fixtures that mix sections).
  *
  * `afterPackage` added in slice ω-after-package (feeds
  * `opt.afterPackage`). Non-negative Int — exact number of blank lines
@@ -85,6 +92,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var externClassEmptyLines:HxFormatClassEmptyLinesConfig;
 
 	@:optional var interfaceEmptyLines:HxFormatInterfaceEmptyLinesConfig;
+
+	@:optional var enumEmptyLines:HxFormatEnumEmptyLinesConfig;
 
 	@:optional var afterPackage:Int;
 

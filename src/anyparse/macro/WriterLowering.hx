@@ -2697,12 +2697,21 @@ class WriterLowering {
 					? buildStaticVarSubdivisionInfo(elemRefName, staticVarSubdivArgs ?? [])
 					: null;
 				final betweenMultilineCommentsBlanks:Bool = starNode.fmtHasFlag('betweenMultilineCommentsBlanks');
+				final uniformBetweenArgs:Null<Array<String>> = starNode.fmtReadStringArgs('uniformBetween');
+				if (uniformBetweenArgs != null && uniformBetweenArgs.length != 1)
+					Context.fatalError(
+						'WriterLowering: @:fmt(uniformBetween) expects exactly 1 string arg (optField), got ${uniformBetweenArgs.length}',
+						Context.currentPos()
+					);
+				final uniformBetweenOptField:Null<String> = uniformBetweenArgs != null
+					? uniformBetweenArgs[0]
+					: null;
 				parts.push(triviaBlockStarExpr(
 					fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn,
 					openText ?? '', closeText, false, afterDocComments, keepBetweenFields, beforeDocComments,
 					interMemberInfo, indentCaseLabelsGate, emptyCurlyBreak, beginEndType, keepCurlyBlanks,
 					lineCommentTrailBlank, blankBeforeFinalDocInLeading, staticVarSubdivInfo,
-					betweenMultilineCommentsBlanks
+					betweenMultilineCommentsBlanks, uniformBetweenOptField
 				));
 			} else if (isLastField) {
 				if (openText != null) parts.push(macro _dt($v{openText}));
@@ -5008,7 +5017,8 @@ class WriterLowering {
 		lineCommentTrailBlank:Bool = false,
 		blankBeforeFinalDocInLeading:Bool = false,
 		staticVarSubdivInfo:Null<StaticVarSubdivisionInfo> = null,
-		betweenMultilineCommentsBlanks:Bool = false
+		betweenMultilineCommentsBlanks:Bool = false,
+		uniformBetweenOptField:Null<String> = null
 	):Expr {
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
@@ -5085,7 +5095,8 @@ class WriterLowering {
 		// their Star fields carry none of the flags and skip the policy
 		// computation entirely.
 		final interMember:Bool = interMemberInfo != null;
-		final anyEmptyLinesFlag:Bool = afterFieldsWithDocComments || existingBetweenFields || beforeDocCommentEmptyLines || interMember;
+		final uniformBetween:Bool = uniformBetweenOptField != null;
+		final anyEmptyLinesFlag:Bool = afterFieldsWithDocComments || existingBetweenFields || beforeDocCommentEmptyLines || interMember || uniformBetween;
 		final stripByDocExpr:Expr = afterFieldsWithDocComments
 			? macro (_prevHadDocComment && opt.afterFieldsWithDocComments == anyparse.format.CommentEmptyLinesPolicy.None)
 			: macro false;
@@ -5257,12 +5268,27 @@ class WriterLowering {
 				));
 			}
 		} : macro false;
+		// ω-enum-empty-lines: opt-in via `@:fmt(uniformBetween('<optField>'))`.
+		// When present, the named non-negative-Int knob on the runtime
+		// `opt` is consulted at the inter-element slot — `> 0` contributes
+		// to `_addBlank` (single-blank semantics, same shape as the other
+		// add arms). Generic mech: any Star whose elements are an Alt
+		// without a var/fn split (e.g. `HxEnumDecl.ctors` →
+		// `opt.betweenEnumCtors`) can opt in by pointing at its own knob.
+		final addByUniformBetweenExpr:Expr = uniformBetween ? {
+			final pos:Position = Context.currentPos();
+			final optAccess:Expr = {
+				expr: EField(macro opt, uniformBetweenOptField),
+				pos: pos,
+			};
+			macro $optAccess > 0;
+		} : macro false;
 		final blankBeforeExpr:Expr = anyEmptyLinesFlag ? macro {
 			$currHasDocComputeExpr;
 			$currKindComputeExpr;
 			$currHasSplitLeadingComputeExpr;
 			final _stripBlank:Bool = $stripByDocExpr || $stripByExistingExpr || $stripByCurrDocExpr || $stripBySplitLeadingExpr;
-			final _addBlank:Bool = !$addSuppressOnSplitLeadingExpr && ($addByDocExpr || $addByCurrDocExpr || $addByInterMemberExpr);
+			final _addBlank:Bool = !$addSuppressOnSplitLeadingExpr && ($addByDocExpr || $addByCurrDocExpr || $addByInterMemberExpr || $addByUniformBetweenExpr);
 			final _sourceBlank:Bool = _t.blankBefore && !_stripBlank;
 			if (_si > 0 && (_sourceBlank || _addBlank)) _inner.push(_dhl());
 		} : macro {

@@ -25,6 +25,7 @@ import anyparse.grammar.haxe.format.HxFormatConfigParser;
 import anyparse.grammar.haxe.format.HxFormatCurlyLineEndPolicy;
 import anyparse.grammar.haxe.format.HxFormatEmptyCurlyPolicy;
 import anyparse.grammar.haxe.format.HxFormatEmptyLinesSection;
+import anyparse.grammar.haxe.format.HxFormatEnumEmptyLinesConfig;
 import anyparse.grammar.haxe.format.HxFormatImportAndUsingConfig;
 import anyparse.grammar.haxe.format.HxFormatIndentationSection;
 import anyparse.grammar.haxe.format.HxFormatInterfaceEmptyLinesConfig;
@@ -417,6 +418,17 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   `"thirdLevelPackage"` / `"fourthLevelPackage"` /
  *   `"fifthLevelPackage"` / `"fullPackage"`; unknown tokens leave the
  *   default in place.
+ * - `emptyLines.enumEmptyLines.{existingBetweenFields, betweenFields,
+ *   beginType, endType}` (ω-enum-empty-lines): drives blank-line
+ *   behaviour inside `enum` bodies. `existingBetweenFields` /
+ *   `beginType` / `endType` feed the GLOBAL `opt.existingBetweenFields`
+ *   / `opt.beginType` / `opt.endType` knobs (last-write-wins relative
+ *   to `classEmptyLines` / `interfaceEmptyLines` for fixtures that
+ *   define multiple type sections — single-type fixtures land cleanly).
+ *   `betweenFields` feeds the dedicated `opt.betweenEnumCtors` knob
+ *   (default `0`), exact blank-line count between adjacent enum
+ *   constructors. `HxEnumDecl.ctors` opts in via `@:fmt(beginEndType,
+ *   existingBetweenFields, uniformBetween('betweenEnumCtors'))`.
  * - `emptyLines.importAndUsing.beforeType`
  *   (ω-imports-using-before-type): non-negative Int routed to
  *   `opt.beforeType`. Default `1` matches haxe-formatter's
@@ -436,7 +448,7 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  * (`finalNewline`, `maxAnywhereInFile`,
  * `betweenTypes`, per-type-kind sections
  * `macroClassEmptyLines` /
- * `abstractEmptyLines` / `enumEmptyLines` /
+ * `abstractEmptyLines` /
  * `typedefEmptyLines`, other `classEmptyLines.*` sub-keys beyond
  * `existingBetweenFields`, other `externClassEmptyLines.*` sub-keys
  * beyond `existingBetweenFields`, …), other `whitespace.*` keys
@@ -528,6 +540,7 @@ final class HaxeFormatConfigLoader {
 			interfaceBetweenVars: base.interfaceBetweenVars,
 			interfaceBetweenFunctions: base.interfaceBetweenFunctions,
 			interfaceAfterVars: base.interfaceAfterVars,
+			betweenEnumCtors: base.betweenEnumCtors,
 			beginType: base.beginType,
 			endType: base.endType,
 			afterLeftCurly: base.afterLeftCurly,
@@ -934,6 +947,14 @@ final class HaxeFormatConfigLoader {
 			if (interfaceSection.betweenFunctions != null)
 				opt.interfaceBetweenFunctions = interfaceSection.betweenFunctions;
 			if (interfaceSection.afterVars != null) opt.interfaceAfterVars = interfaceSection.afterVars;
+		}
+		final enumSection:Null<HxFormatEnumEmptyLinesConfig> = section.enumEmptyLines;
+		if (enumSection != null) {
+			if (enumSection.existingBetweenFields != null)
+				opt.existingBetweenFields = keepEmptyLinesToRuntime(enumSection.existingBetweenFields);
+			if (enumSection.betweenFields != null) opt.betweenEnumCtors = enumSection.betweenFields;
+			if (enumSection.beginType != null) opt.beginType = enumSection.beginType;
+			if (enumSection.endType != null) opt.endType = enumSection.endType;
 		}
 		if (section.afterPackage != null) opt.afterPackage = section.afterPackage;
 		if (section.beforePackage != null) opt.beforePackage = section.beforePackage;

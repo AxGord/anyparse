@@ -681,6 +681,7 @@ final class HaxeFormat implements TextFormat {
 		interfaceBetweenVars: 0,
 		interfaceBetweenFunctions: 0,
 		interfaceAfterVars: 0,
+		betweenEnumCtors: 0,
 		beginType: 0,
 		endType: 0,
 		afterLeftCurly: KeepEmptyLinesPolicy.Remove,
