@@ -4,6 +4,7 @@ package anyparse.macro;
 import anyparse.core.ShapeTree;
 import haxe.macro.Context;
 import haxe.macro.Expr;
+import haxe.macro.MacroStringTools;
 
 using anyparse.macro.MetaInspect;
 
@@ -271,8 +272,10 @@ class TriviaTypeSynth {
 	private static inline final PAIRED_SUFFIX:String = 'T';
 	private static inline final SYNTH_SUBPACK:String = 'trivia';
 	private static inline final SYNTH_MODULE_LEAF:String = 'Pairs';
+	private static inline final CONVERTERS_CLASS_NAME:String = 'Converters';
 	private static final shapes:Array<ShapeBuilder.ShapeResult> = [];
 	private static final defined:Map<String, Bool> = new Map();
+	private static var convertersAdded:Bool = false;
 
 	public static function arm(shape:ShapeBuilder.ShapeResult):Void {
 		if (shapes.indexOf(shape) == -1) shapes.push(shape);
@@ -280,19 +283,408 @@ class TriviaTypeSynth {
 		final synthPack:Array<String> = rootPack.concat([SYNTH_SUBPACK]);
 		final modulePath:String = synthPack.concat([SYNTH_MODULE_LEAF]).join('.');
 		final paired:Array<TypeDefinition> = [];
+		final convertedNames:Array<String> = [];
 		for (origName => node in shape.rules) {
 			if (node.annotations.get('trivia.bearing') != true) continue;
 			final pairedFqn:String = origName + PAIRED_SUFFIX;
 			if (defined.exists(pairedFqn)) continue;
 			defined.set(pairedFqn, true);
 			paired.push(buildTypeDefinition(origName, node, synthPack));
+			convertedNames.push(origName);
 		}
 		if (paired.length == 0) return;
+		// ω-paired-converters (Phase A1): emit a single `Converters` class
+		// in the same synth module carrying static `pairedToRaw_<T>` /
+		// `rawToPaired_<T>` helpers for every paired type. The engine
+		// (`WriterLowering.wrapWithPreWrite`) routes preWrite plugins
+		// through these helpers in trivia mode, so plugin sigs stay raw
+		// (`(<T>, WriteOptions) -> Null<<T>>`) regardless of trivia
+		// propagation. One Converters class per `Context.defineModule`
+		// batch — additional `arm()` calls for the same module batch
+		// must not re-emit (Haxe rejects duplicate type defs); the
+		// `convertersAdded` flag guards repeat invocations.
+		if (!convertersAdded) {
+			convertersAdded = true;
+			paired.push(buildConvertersClass(convertedNames, synthPack));
+		}
 		Context.defineModule(modulePath, paired);
 		#if anyparse_trivia_dump
 		for (td in paired)
 			Sys.println('// trivia.synth: defined ${td.pack.join('.')}.${td.name} in module $modulePath');
 		#end
+	}
+
+	/**
+	 * ω-paired-converters (Phase A1) — emit a `Converters` class with
+	 * `pairedToRaw_<T>` static helpers for every paired type in the
+	 * batch. Phase A2 appends `rawToPaired_<T>` siblings.
+	 *
+	 * Routed at runtime by `WriterLowering.wrapWithPreWrite` to unwrap
+	 * a paired-T `value` into raw form, hand it to the plugin's raw
+	 * preWrite signature, and (when the plugin rewrites) re-wrap via
+	 * `rawToPaired_<T>` with empty default trivia. Plugin authors never
+	 * see paired types regardless of trivia propagation up the chain.
+	 *
+	 * Each helper is recursive across the paired-type graph: a Ref to
+	 * another paired type calls that type's `pairedToRaw_`, terminals
+	 * / non-paired refs pass through, `Trivial<X>`-wrapped Star elements
+	 * unwrap via `.node`. Cyclic graphs (HxStatementT ↔ HxIfStmtT) work
+	 * because all helpers land in one `Context.defineModule` batch
+	 * alongside the paired types.
+	 */
+	private static function buildConvertersClass(convertedNames:Array<String>, synthPack:Array<String>):TypeDefinition {
+		final pos:Position = Context.currentPos();
+		convertedNames.sort((a:String, b:String) -> a < b ? -1 : (a > b ? 1 : 0));
+		final shape:ShapeBuilder.ShapeResult = shapes[shapes.length - 1];
+		final fns:Array<Field> = [];
+		for (origName in convertedNames) {
+			final node:Null<ShapeNode> = shape.rules.get(origName);
+			if (node == null) continue;
+			fns.push(buildPairedToRawFn(origName, node, synthPack));
+			fns.push(buildRawToPairedFn(origName, node, synthPack));
+		}
+		return {
+			pos: pos,
+			pack: synthPack,
+			name: CONVERTERS_CLASS_NAME,
+			kind: TDClass(null, [], false, true, false),
+			fields: fns,
+			meta: [{name: ':nullSafety', params: [macro Strict], pos: pos}],
+		};
+	}
+
+	/**
+	 * Build the `pairedToRaw_<Leaf>` static method for a single paired
+	 * type. Signature: `(value:<Leaf>T):<RawLeaf>` — raw return type
+	 * lives at the original module path, paired arg type lives in the
+	 * synth module.
+	 *
+	 * Body shape:
+	 *  - Seq paired type → object literal `{ fieldA: unwrap(value.fieldA), ... }`.
+	 *  - Alt paired type → `switch value { case Ctor(args, _extras): RawType.Ctor(unwrap(args)); ... }`.
+	 *  - Terminal → unreachable (terminals never gain `trivia.bearing`).
+	 */
+	private static function buildPairedToRawFn(origName:String, origNode:ShapeNode, synthPack:Array<String>):Field {
+		final pairedSimple:String = leafOf(origName) + PAIRED_SUFFIX;
+		final rawSimple:String = leafOf(origName);
+		final rawCT:ComplexType = TPath({pack: packOf(origName), name: rawSimple, params: []});
+		final pairedCT:ComplexType = TPath({pack: synthPack, name: pairedSimple, params: []});
+		final pos:Position = Context.currentPos();
+		final body:Expr = switch origNode.kind {
+			case Seq: buildPairedToRawSeqBody(origNode, pos);
+			case Alt: buildPairedToRawAltBody(origName, origNode, pos);
+			case _:
+				Context.fatalError('TriviaTypeSynth: pairedToRaw unsupported kind ${origNode.kind} for $origName', pos);
+				throw 'unreachable';
+		};
+		return {
+			name: 'pairedToRaw_' + rawSimple,
+			access: [APublic, AStatic],
+			pos: pos,
+			kind: FFun({args: [{name: 'value', type: pairedCT}], ret: rawCT, expr: body}),
+		};
+	}
+
+	private static function buildPairedToRawSeqBody(origNode:ShapeNode, pos:Position):Expr {
+		final entries:Array<{field:String, expr:Expr}> = [];
+		for (child in origNode.children) {
+			final fieldName:String = child.annotations.get('base.fieldName');
+			final access:Expr = {expr: EField(macro value, fieldName), pos: pos};
+			entries.push({field: fieldName, expr: shapePairedToRawUnwrap(access, child, pos)});
+		}
+		final structLit:Expr = {expr: EObjectDecl([for (e in entries) {field: e.field, expr: e.expr}]), pos: pos};
+		return macro return $structLit;
+	}
+
+	private static function buildPairedToRawAltBody(origName:String, origNode:ShapeNode, pos:Position):Expr {
+		final rawSimple:String = leafOf(origName);
+		final rawPack:Array<String> = packOf(origName);
+		final cases:Array<Case> = [];
+		for (branch in origNode.children) {
+			final ctorName:String = branch.annotations.get('base.ctor');
+			final origArgCount:Int = branch.children.length;
+			final extraCount:Int = countAltExtras(branch);
+			if (origArgCount == 0 && extraCount == 0) {
+				// Bare ctor `case CtorName: RawType.CtorName;`
+				final pattern:Expr = {expr: EConst(CIdent(ctorName)), pos: pos};
+				final raw:Expr = MacroStringTools.toFieldExpr(rawPack.concat([rawSimple, ctorName]));
+				cases.push({values: [pattern], guard: null, expr: raw});
+				continue;
+			}
+			// Pattern: CtorName(arg0, arg1, _, _, ...)
+			final binders:Array<Expr> = [];
+			for (i in 0...origArgCount) {
+				final argName:String = branch.children[i].annotations.get('base.fieldName');
+				binders.push({expr: EConst(CIdent(argName)), pos: pos});
+			}
+			for (_ in 0...extraCount)
+				binders.push({expr: EConst(CIdent('_')), pos: pos});
+			final pattern:Expr = {expr: ECall({expr: EConst(CIdent(ctorName)), pos: pos}, binders), pos: pos};
+			// Body: RawType.CtorName(unwrap(arg0), unwrap(arg1), ...)
+			final unwrapArgs:Array<Expr> = [];
+			for (i in 0...origArgCount) {
+				final argNode:ShapeNode = branch.children[i];
+				final argName:String = argNode.annotations.get('base.fieldName');
+				final argAccess:Expr = {expr: EConst(CIdent(argName)), pos: pos};
+				unwrapArgs.push(shapePairedToRawUnwrap(argAccess, argNode, pos));
+			}
+			final rawCtorFn:Expr = MacroStringTools.toFieldExpr(rawPack.concat([rawSimple, ctorName]));
+			final body:Expr = {expr: ECall(rawCtorFn, unwrapArgs), pos: pos};
+			cases.push({values: [pattern], guard: null, expr: body});
+		}
+		final switchExpr:Expr = {expr: ESwitch(macro value, cases, null), pos: pos};
+		return macro return $switchExpr;
+	}
+
+	/**
+	 * Build the unwrap expression for one paired-type access. Handles
+	 * the four shape kinds — Ref / Star / Terminal / Null-wrap — and
+	 * recurses into element types via the same helper.
+	 */
+	private static function shapePairedToRawUnwrap(access:Expr, node:ShapeNode, pos:Position):Expr {
+		switch node.kind {
+			case Ref:
+				final refName:String = node.annotations.get('base.ref');
+				final optional:Bool = node.annotations.get('base.optional') == true;
+				if (!refIsBearing(refName)) return access; // raw type already
+				final fnName:String = 'pairedToRaw_' + leafOf(refName);
+				final call:Expr = {expr: ECall({expr: EConst(CIdent(fnName)), pos: pos}, [access]), pos: pos};
+				return optional ? macro ($access == null ? null : $call) : call;
+			case Star:
+				final elem:ShapeNode = node.children[0];
+				final triviaWrap:Bool = node.annotations.get('trivia.starCollects') == true;
+				final optional:Bool = node.annotations.get('base.optional') == true;
+				final innerAccess:Expr = triviaWrap ? (macro t.node) : (macro e);
+				final iterVar:String = triviaWrap ? 't' : 'e';
+				final inner:Expr = shapePairedToRawUnwrap(innerAccess, elem, pos);
+				final loopExpr:Expr = {
+					expr: EArrayDecl([{
+						expr: EFor(
+							macro $i{iterVar} in $access,
+							inner
+						),
+						pos: pos,
+					}]),
+					pos: pos,
+				};
+				// Wadler trick — `[for (x in arr) expr]` is the comprehension; produce it via EFor inside EArrayDecl
+				// Actually Haxe accepts EMeta? Simpler: build via parser-friendly Expr
+				final compr:Expr = {expr: EArrayDecl([{
+					expr: EFor(
+						{expr: EBinop(OpIn, {expr: EConst(CIdent(iterVar)), pos: pos}, access), pos: pos},
+						inner
+					),
+					pos: pos,
+				}]), pos: pos};
+				return optional ? macro ($access == null ? null : $compr) : compr;
+			case Terminal:
+				return access;
+			case _:
+				Context.fatalError('TriviaTypeSynth: shapePairedToRawUnwrap unexpected kind ${node.kind}', pos);
+				throw 'unreachable';
+		}
+	}
+
+	/**
+	 * Count the trivia-only positional args appended to an Alt branch
+	 * AFTER the original ctor children. Must mirror exactly the gates
+	 * applied in `buildEnumCtor`'s second half — every predicate there
+	 * adds a positional arg; this function adds the same arg counts.
+	 */
+	private static function countAltExtras(branch:ShapeNode):Int {
+		var n:Int = 0;
+		if (isAltCloseTrailingBranch(branch)) {
+			n++; // closeTrailing
+			if (branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse')) {
+				n += 3; // openTrailing + trailingBlankBefore + trailingLeading
+			}
+		}
+		if (isAltTrailOptBranch(branch)) n++; // trailPresent
+		if (isCaptureSourceBranch(branch)) n++; // sourceText
+		if (isAltBodyPolicyKwBranch(branch)) n++; // bodyOnSameLine
+		if (isAltWrapOpenNewlineBranch(branch)) n++; // wrapOpenNewline
+		if (isPostfixCloseTrailingBranch(branch)) n++; // closeTrailing (postfix variant)
+		return n;
+	}
+
+	/**
+	 * Build the `rawToPaired_<Leaf>` static method for a single paired
+	 * type. Signature: `(value:<RawLeaf>):<Leaf>T`. Wraps a raw value
+	 * into paired form with empty default trivia.
+	 *
+	 * Called by `WriterLowering.wrapWithPreWrite` after a preWrite
+	 * plugin rewrite — the plugin returns raw, engine must hand the
+	 * writer a paired-T. The rewrite typically produces a different
+	 * ctor shape (e.g. `ArrowFn → Arrow(Parens, ...)`); original trivia
+	 * doesn't fit the new ctor and is correctly lost.
+	 */
+	private static function buildRawToPairedFn(origName:String, origNode:ShapeNode, synthPack:Array<String>):Field {
+		final pairedSimple:String = leafOf(origName) + PAIRED_SUFFIX;
+		final rawSimple:String = leafOf(origName);
+		final rawCT:ComplexType = TPath({pack: packOf(origName), name: rawSimple, params: []});
+		final pairedCT:ComplexType = TPath({pack: synthPack, name: pairedSimple, params: []});
+		final pos:Position = Context.currentPos();
+		final body:Expr = switch origNode.kind {
+			case Seq: buildRawToPairedSeqBody(origNode, pos);
+			case Alt: buildRawToPairedAltBody(origName, origNode, synthPack, pos);
+			case _:
+				Context.fatalError('TriviaTypeSynth: rawToPaired unsupported kind ${origNode.kind} for $origName', pos);
+				throw 'unreachable';
+		};
+		return {
+			name: 'rawToPaired_' + rawSimple,
+			access: [APublic, AStatic],
+			pos: pos,
+			kind: FFun({args: [{name: 'value', type: rawCT}], ret: pairedCT, expr: body}),
+		};
+	}
+
+	private static function buildRawToPairedSeqBody(origNode:ShapeNode, pos:Position):Expr {
+		final entries:Array<{field:String, expr:Expr}> = [];
+		for (child in origNode.children) {
+			final fieldName:String = child.annotations.get('base.fieldName');
+			final access:Expr = {expr: EField(macro value, fieldName), pos: pos};
+			entries.push({field: fieldName, expr: shapeRawToPairedWrap(access, child, pos)});
+			// Append trivia-only sibling fields with default empty values —
+			// mirror the gates applied in `buildTypeDefinition`'s Seq path.
+			if (isOptionalKw(child)) {
+				entries.push({field: fieldName + AFTER_KW_SUFFIX, expr: macro (null : Null<String>)});
+				entries.push({field: fieldName + KW_LEADING_SUFFIX, expr: macro ([] : Array<String>)});
+				entries.push({field: fieldName + BEFORE_KW_NEWLINE_SUFFIX, expr: macro false});
+				entries.push({field: fieldName + BODY_ON_SAME_LINE_SUFFIX, expr: macro false});
+				entries.push({field: fieldName + BEFORE_KW_LEADING_SUFFIX, expr: macro ([] : Array<String>)});
+				entries.push({field: fieldName + BEFORE_KW_TRAILING_SUFFIX, expr: macro (null : Null<String>)});
+			}
+			if (isTriviaStarField(child)) {
+				entries.push({field: fieldName + TRAILING_BLANK_BEFORE_SUFFIX, expr: macro false});
+				entries.push({field: fieldName + TRAILING_LEADING_SUFFIX, expr: macro ([] : Array<String>)});
+				if (child.readMetaString(':trail') != null)
+					entries.push({field: fieldName + TRAILING_CLOSE_SUFFIX, expr: macro (null : Null<String>)});
+				if (child.readMetaString(':lead') != null && !child.hasMeta(':tryparse'))
+					entries.push({field: fieldName + TRAILING_OPEN_SUFFIX, expr: macro (null : Null<String>)});
+				if (child.hasMeta(':tryparse') && child.fmtHasFlag('nestBody'))
+					entries.push({field: fieldName + TRAILING_BLANK_AFTER_SUFFIX, expr: macro false});
+				if (child.readMetaString(':sep') != null && child.readMetaString(':trail') != null)
+					entries.push({field: fieldName + TRAIL_PRESENT_SUFFIX, expr: macro false});
+			}
+			if (isBareNonFirstRef(child, origNode))
+				entries.push({field: fieldName + BEFORE_NEWLINE_SUFFIX, expr: macro false});
+			if (isTrailRef(child))
+				entries.push({field: fieldName + AFTER_TRAIL_SUFFIX, expr: macro (null : Null<String>)});
+			if (isPadTrailingTerminalRef(child))
+				entries.push({field: fieldName + NEWLINE_AFTER_SUFFIX, expr: macro false});
+		}
+		final structLit:Expr = {expr: EObjectDecl([for (e in entries) {field: e.field, expr: e.expr}]), pos: pos};
+		return macro return $structLit;
+	}
+
+	private static function buildRawToPairedAltBody(origName:String, origNode:ShapeNode, synthPack:Array<String>, pos:Position):Expr {
+		final pairedSimple:String = leafOf(origName) + PAIRED_SUFFIX;
+		final pairedPath:Array<String> = synthPack.concat([SYNTH_MODULE_LEAF, pairedSimple]);
+		final cases:Array<Case> = [];
+		for (branch in origNode.children) {
+			final ctorName:String = branch.annotations.get('base.ctor');
+			final origArgCount:Int = branch.children.length;
+			if (origArgCount == 0) {
+				final pattern:Expr = {expr: EConst(CIdent(ctorName)), pos: pos};
+				final pairedCtor:Expr = MacroStringTools.toFieldExpr(pairedPath.concat([ctorName]));
+				cases.push({values: [pattern], guard: null, expr: pairedCtor});
+				continue;
+			}
+			// Pattern: CtorName(arg0, arg1, ...) — raw ctors have no extras.
+			final binders:Array<Expr> = [
+				for (i in 0...origArgCount)
+					{expr: EConst(CIdent(branch.children[i].annotations.get('base.fieldName'))), pos: pos}
+			];
+			final pattern:Expr = {expr: ECall({expr: EConst(CIdent(ctorName)), pos: pos}, binders), pos: pos};
+			// Body: PairedType.CtorName(wrap(arg0), wrap(arg1), ...defaults).
+			final pairedArgs:Array<Expr> = [
+				for (i in 0...origArgCount) {
+					final argNode:ShapeNode = branch.children[i];
+					final argName:String = argNode.annotations.get('base.fieldName');
+					final argAccess:Expr = {expr: EConst(CIdent(argName)), pos: pos};
+					shapeRawToPairedWrap(argAccess, argNode, pos);
+				}
+			];
+			for (extra in buildAltExtraDefaults(branch, pos)) pairedArgs.push(extra);
+			final pairedCtorFn:Expr = MacroStringTools.toFieldExpr(pairedPath.concat([ctorName]));
+			final body:Expr = {expr: ECall(pairedCtorFn, pairedArgs), pos: pos};
+			cases.push({values: [pattern], guard: null, expr: body});
+		}
+		final switchExpr:Expr = {expr: ESwitch(macro value, cases, null), pos: pos};
+		return macro return $switchExpr;
+	}
+
+	/**
+	 * Default-value expressions for Alt branch trivia-only positional
+	 * extras. Order MUST mirror `buildEnumCtor`'s push order so the
+	 * paired ctor's positional arg list is satisfied position-by-position.
+	 */
+	private static function buildAltExtraDefaults(branch:ShapeNode, pos:Position):Array<Expr> {
+		final defaults:Array<Expr> = [];
+		if (isAltCloseTrailingBranch(branch)) {
+			defaults.push(macro (null : Null<String>)); // closeTrailing
+			if (branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse')) {
+				defaults.push(macro (null : Null<String>)); // openTrailing
+				defaults.push(macro false); // trailingBlankBefore
+				defaults.push(macro ([] : Array<String>)); // trailingLeading
+			}
+		}
+		if (isAltTrailOptBranch(branch)) defaults.push(macro false); // trailPresent
+		if (isCaptureSourceBranch(branch)) defaults.push(macro ''); // sourceText
+		if (isAltBodyPolicyKwBranch(branch)) defaults.push(macro false); // bodyOnSameLine
+		if (isAltWrapOpenNewlineBranch(branch)) defaults.push(macro false); // wrapOpenNewline
+		if (isPostfixCloseTrailingBranch(branch)) defaults.push(macro (null : Null<String>)); // closeTrailing
+		return defaults;
+	}
+
+	/**
+	 * Build the wrap expression for one raw-value access. Mirror of
+	 * `shapePairedToRawUnwrap` — same shape kinds, opposite direction.
+	 * Star elements gain a fresh `Trivial<T>` envelope with empty
+	 * trivia siblings; inner refs that are themselves paired recurse
+	 * through `rawToPaired_<Inner>`.
+	 */
+	private static function shapeRawToPairedWrap(access:Expr, node:ShapeNode, pos:Position):Expr {
+		switch node.kind {
+			case Ref:
+				final refName:String = node.annotations.get('base.ref');
+				final optional:Bool = node.annotations.get('base.optional') == true;
+				if (!refIsBearing(refName)) return access;
+				final fnName:String = 'rawToPaired_' + leafOf(refName);
+				final call:Expr = {expr: ECall({expr: EConst(CIdent(fnName)), pos: pos}, [access]), pos: pos};
+				return optional ? macro ($access == null ? null : $call) : call;
+			case Star:
+				final elem:ShapeNode = node.children[0];
+				final triviaWrap:Bool = node.annotations.get('trivia.starCollects') == true;
+				final optional:Bool = node.annotations.get('base.optional') == true;
+				final iterVar:String = triviaWrap ? 'e' : 'e';
+				final iterExpr:Expr = {expr: EConst(CIdent(iterVar)), pos: pos};
+				final innerWrap:Expr = shapeRawToPairedWrap(iterExpr, elem, pos);
+				final perElem:Expr = triviaWrap
+					? macro ({
+						blankBefore: false,
+						blankAfterLeadingComments: false,
+						newlineBefore: false,
+						leadingComments: ([] : Array<String>),
+						trailingComment: (null : Null<String>),
+						node: $innerWrap,
+					})
+					: innerWrap;
+				final compr:Expr = {expr: EArrayDecl([{
+					expr: EFor(
+						{expr: EBinop(OpIn, {expr: EConst(CIdent(iterVar)), pos: pos}, access), pos: pos},
+						perElem
+					),
+					pos: pos,
+				}]), pos: pos};
+				return optional ? macro ($access == null ? null : $compr) : compr;
+			case Terminal:
+				return access;
+			case _:
+				Context.fatalError('TriviaTypeSynth: shapeRawToPairedWrap unexpected kind ${node.kind}', pos);
+				throw 'unreachable';
+		}
 	}
 
 	private static function buildTypeDefinition(origName:String, origNode:ShapeNode, synthPack:Array<String>):TypeDefinition {

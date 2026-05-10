@@ -70,7 +70,7 @@ class WriterLowering {
 		// go-to-def works, no string typo can survive compile.
 		final preWriteFn:Null<Expr> = fmtReadCall(node, 'preWrite');
 		final body:Expr = preWriteFn != null
-			? wrapWithPreWrite(preWriteFn, rawBody, fnName, hasPratt)
+			? wrapWithPreWrite(preWriteFn, rawBody, fnName, hasPratt, typePath)
 			: rawBody;
 		return [{fnName: fnName, valueCT: valueCT, body: body, hasCtxPrec: hasPratt, isBinary: false}];
 	}
@@ -204,7 +204,7 @@ class WriterLowering {
 	 * so it fires only for the ctors that opt in via `@:fmt(preWrite)`
 	 * — non-opt-in ctors carry zero overhead, no extra dispatch.
 	 */
-	private function wrapWithPreWrite(fnExpr:Expr, defaultBody:Expr, writeFnName:String, hasPratt:Bool):Expr {
+	private function wrapWithPreWrite(fnExpr:Expr, defaultBody:Expr, writeFnName:String, hasPratt:Bool, typePath:String):Expr {
 		// preWrite signature: `(value:T, opt:WriteOptions) -> Null<T>`.
 		// `opt` is passed through unconditionally so future rewrites can
 		// branch on config (line width, comment style, etc.) without a
@@ -220,7 +220,31 @@ class WriterLowering {
 		// `BlockComment`). For struct rules the body reads `value.<field>`
 		// which now sees the rewritten value's fields. The single rule-
 		// level wrap covers both kinds uniformly.
-		final preCall:Expr = {expr: ECall(fnExpr, [macro value, macro opt]), pos: Context.currentPos()};
+		//
+		// ω-paired-converters (Phase A3): in trivia mode, the writer's
+		// `value` is paired-T but the plugin signature accepts raw type.
+		// Route through the synth-generated `Converters.pairedToRaw_<T>`
+		// / `rawToPaired_<T>` helpers so plugins remain raw-only. The
+		// rewrite path loses the source trivia by design — when the
+		// plugin substitutes a different ctor shape, the original trivia
+		// no longer fits and defaults to empty.
+		final pos:Position = Context.currentPos();
+		if (isTriviaBearing(typePath)) {
+			final simple:String = simpleName(typePath);
+			final convPath:Array<String> = packOf(typePath).concat(['trivia', 'Pairs', 'Converters']);
+			final pairedToRawFn:Expr = MacroStringTools.toFieldExpr(convPath.concat(['pairedToRaw_' + simple]));
+			final rawToPairedFn:Expr = MacroStringTools.toFieldExpr(convPath.concat(['rawToPaired_' + simple]));
+			final userCall:Expr = {expr: ECall(fnExpr, [macro _raw, macro opt]), pos: pos};
+			final wrapBack:Expr = {expr: ECall(rawToPairedFn, [macro _rw]), pos: pos};
+			final unwrap:Expr = {expr: ECall(pairedToRawFn, [macro value]), pos: pos};
+			return macro {
+				final _raw = $unwrap;
+				final _rw = $userCall;
+				if (_rw != null) value = $wrapBack;
+				$defaultBody;
+			};
+		}
+		final preCall:Expr = {expr: ECall(fnExpr, [macro value, macro opt]), pos: pos};
 		return macro {
 			final _rw = $preCall;
 			if (_rw != null) value = _rw;
