@@ -1220,9 +1220,21 @@ class WriterLowering {
 			// consumer is `HxExpr.ArrayExpr.elems` (`arrayLiteralWrap`).
 			if (sepText != null) {
 				final wrapRulesField:Null<String> = branch.fmtReadString('wrapRules');
+				// ω-trivia-sep-anontype-braces (Phase B1): forward the
+				// `anonTypeBracesOpen/Close` policy via
+				// `delimInsidePolicySpace` so the trivia-mode emit honours
+				// inside-brace whitespace exactly like the non-trivia
+				// branch (line ~1257). Branches without the flag get null
+				// → helper falls back to `_de()` (no spaces inside).
+				final openInsideExpr:Null<Expr> = delimInsidePolicySpace(branch, ['anonTypeBracesOpen'], false);
+				final closeInsideExpr:Null<Expr> = delimInsidePolicySpace(branch, ['anonTypeBracesClose'], true);
+				// ω-trivia-sep-doc-comment-cascade (Phase B2): forward the
+				// `beforeDocCommentEmptyLines` flag so sep-Stars opt into
+				// the cascade (currently only `HxType.Anon.fields`).
+				final beforeDocComments:Bool = branch.fmtHasFlag('beforeDocCommentEmptyLines');
 				parts.push(triviaSepStarExpr(
 					argsAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, leadText, trailText, sepText,
-					wrapRulesField
+					wrapRulesField, null, null, null, openInsideExpr, closeInsideExpr, beforeDocComments
 				));
 			} else {
 				// ω-bropen-keep: forward `@:fmt(keepCurlyBlanks)` from the
@@ -5577,8 +5589,56 @@ class WriterLowering {
 		fieldAccess:Expr, trailBBAccess:Null<Expr>, trailLCAccess:Null<Expr>, trailCloseAccess:Null<Expr>,
 		trailOpenAccess:Null<Expr>, elemFn:String, openText:String, closeText:String, sepText:String,
 		wrapRulesField:Null<String> = null, leftCurlyKnob:Null<String> = null,
-		trailPresentAccess:Null<Expr> = null, trailingCommaField:Null<String> = null
+		trailPresentAccess:Null<Expr> = null, trailingCommaField:Null<String> = null,
+		openInsideExpr:Null<Expr> = null, closeInsideExpr:Null<Expr> = null,
+		beforeDocCommentEmptyLines:Bool = false
 	):Expr {
+		// ω-trivia-sep-anontype-braces (Phase B1): when the call site
+		// reads `@:fmt(anonTypeBracesOpen)` / `objectLiteralBracesOpen`
+		// via `delimInsidePolicySpace` and threads the resulting Doc
+		// expression here, the wrap-rules branch wires it into
+		// `WrapList.emit` (parity with the non-trivia path's
+		// `delimInsidePolicySpace` plumbing). Null fall-through keeps
+		// `_de()` — backward-compatible for callers that don't have the
+		// knobs (e.g. `HxExpr.ArrayExpr.elems`).
+		final openInsideDoc:Expr = openInsideExpr ?? macro _de();
+		final closeInsideDoc:Expr = closeInsideExpr ?? macro _de();
+		// ω-trivia-sep-doc-comment-cascade (Phase B2): mirror the
+		// `_currHasDocComment` / `addByCurrDocExpr` machinery from
+		// `triviaBlockStarExpr` so sep-Stars (e.g. `HxType.Anon.fields`
+		// in trivia mode) honour the `beforeDocCommentEmptyLines` policy
+		// at inter-element slots. Compile-time gate keeps callers without
+		// the flag (`HxExpr.ArrayExpr.elems`, `HxObjectLit.fields`)
+		// byte-identical to pre-slice behaviour.
+		final stripByCurrDocExpr:Expr = beforeDocCommentEmptyLines
+			? macro (_currHasDocComment && opt.beforeDocCommentEmptyLines == anyparse.format.CommentEmptyLinesPolicy.None)
+			: macro false;
+		final addByCurrDocExpr:Expr = beforeDocCommentEmptyLines
+			? macro (_currHasDocComment && opt.beforeDocCommentEmptyLines == anyparse.format.CommentEmptyLinesPolicy.One)
+			: macro false;
+		final currHasDocComputeExpr:Expr = beforeDocCommentEmptyLines ? macro {
+			_currHasDocComment = false;
+			var _cdci:Int = 0;
+			while (_cdci < _t.leadingComments.length) {
+				if (StringTools.startsWith(_t.leadingComments[_cdci], '/**')) {
+					_currHasDocComment = true;
+					break;
+				}
+				_cdci++;
+			}
+		} : macro {};
+		final initCurrDocCommentExpr:Expr = beforeDocCommentEmptyLines
+			? macro var _currHasDocComment:Bool = false
+			: macro {};
+		final blankBeforeExpr:Expr = beforeDocCommentEmptyLines ? macro {
+			$currHasDocComputeExpr;
+			final _stripBlank:Bool = $stripByCurrDocExpr;
+			final _addBlank:Bool = $addByCurrDocExpr;
+			final _sourceBlank:Bool = _t.blankBefore && !_stripBlank;
+			if (_si > 0 && (_sourceBlank || _addBlank)) _inner.push(_dhl());
+		} : macro {
+			if (_t.blankBefore && _si > 0) _inner.push(_dhl());
+		};
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
 			pos: Context.currentPos(),
@@ -5679,7 +5739,7 @@ class WriterLowering {
 				}
 				anyparse.format.wrap.WrapList.emit(
 					$v{openText}, $v{closeText}, $v{sepText},
-					_docs, opt, _de(), _de(), false, $rulesExpr, $appendTrailingCommaExpr,
+					_docs, opt, $openInsideDoc, $closeInsideDoc, false, $rulesExpr, $appendTrailingCommaExpr,
 					$wrapLeadFlatDoc, $wrapLeadBreakDoc, $forceExceedsExpr
 				);
 			};
@@ -5737,11 +5797,12 @@ class WriterLowering {
 				}
 				if (_hasTrivia) {
 					final _inner:Array<anyparse.core.Doc> = [];
+					$initCurrDocCommentExpr;
 					var _si:Int = 0;
 					while (_si < _arr.length) {
 						final _t = _arr[_si];
 						_inner.push(_dhl());
-						if (_t.blankBefore && _si > 0) _inner.push(_dhl());
+						$blankBeforeExpr;
 						var _ci:Int = 0;
 						while (_ci < _t.leadingComments.length) {
 							_inner.push(leadingCommentDoc(_t.leadingComments[_ci], opt));
