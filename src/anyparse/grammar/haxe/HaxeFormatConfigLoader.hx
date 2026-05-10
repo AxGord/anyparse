@@ -380,6 +380,14 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   decl in the same module — override semantics, not floor: the
  *   source-captured blank-line count is replaced with this value, so
  *   `0` strips any existing blank line and `2` always emits two.
+ * - `emptyLines.beforePackage` (ω-before-package): non-negative Int
+ *   routed to `opt.beforePackage`. Default `0` matches haxe-formatter's
+ *   `emptyLines.beforePackage: @:default(0)`. Drives the exact number
+ *   of blank lines emitted at file head BEFORE a leading `package …;`
+ *   decl — override semantics, head-of-Star only: applied once at the
+ *   start of the module, so `0` keeps the file leading edge tight and
+ *   `1` inserts one blank line before `package …;` regardless of
+ *   source.
  * - `emptyLines.importAndUsing.beforeUsing` (ω-imports-using-blank):
  *   non-negative Int routed to `opt.beforeUsing`. Default `1` matches
  *   haxe-formatter's `emptyLines.importAndUsing.beforeUsing:
@@ -417,7 +425,7 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  * `maxLineLength`, other `lineEnds.*` keys (`rightCurly`, `blockCurly`,
  * `anonTypeCurly`, `typedefCurly`, `anonFunctionCurly`, …), other
  * `emptyLines.*` keys
- * (`finalNewline`, `maxAnywhereInFile`, `beforePackage`,
+ * (`finalNewline`, `maxAnywhereInFile`,
  * `betweenTypes`, per-type-kind sections
  * `macroClassEmptyLines` / `externClassEmptyLines` /
  * `abstractEmptyLines` / `enumEmptyLines` /
@@ -536,6 +544,7 @@ final class HaxeFormatConfigLoader {
 			functionTypeHaxe4: base.functionTypeHaxe4,
 			arrowFunctions: base.arrowFunctions,
 			afterPackage: base.afterPackage,
+			beforePackage: base.beforePackage,
 			beforeUsing: base.beforeUsing,
 			betweenImports: base.betweenImports,
 			betweenImportsLevel: base.betweenImportsLevel,
@@ -907,6 +916,7 @@ final class HaxeFormatConfigLoader {
 			if (interfaceSection.afterVars != null) opt.interfaceAfterVars = interfaceSection.afterVars;
 		}
 		if (section.afterPackage != null) opt.afterPackage = section.afterPackage;
+		if (section.beforePackage != null) opt.beforePackage = section.beforePackage;
 		if (section.afterLeftCurly != null)
 			opt.afterLeftCurly = keepEmptyLinesToRuntime(section.afterLeftCurly);
 		if (section.beforeRightCurly != null)

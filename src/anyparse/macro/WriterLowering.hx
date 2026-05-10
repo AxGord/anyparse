@@ -2542,7 +2542,8 @@ class WriterLowering {
 					caseBodyFlagNames, flatChildOptPairs, tryparsePadLeading, tryparsePadTrailing,
 					propagateExprPosition, refuseFlatOnComplex,
 					cascadeInfos.afterCtorInfos, cascadeInfos.beforeCtorInfos,
-					cascadeInfos.betweenCtorInfos, cascadeInfos.transitionAcrossInfos
+					cascadeInfos.betweenCtorInfos, cascadeInfos.transitionAcrossInfos,
+					cascadeInfos.headCtorInfos
 				));
 				return;
 			}
@@ -2626,7 +2627,8 @@ class WriterLowering {
 				parts.push(triviaEofStarExpr(
 					fieldAccess, trailBBAccess, trailLCAccess, elemFn,
 					cascadeInfos.afterCtorInfos, cascadeInfos.beforeCtorInfos,
-					cascadeInfos.betweenCtorInfos, cascadeInfos.transitionAcrossInfos
+					cascadeInfos.betweenCtorInfos, cascadeInfos.transitionAcrossInfos,
+					cascadeInfos.headCtorInfos
 				));
 			} else {
 				Context.fatalError('WriterLowering: @:trivia Star without @:trail must be the last field', Context.currentPos());
@@ -5476,7 +5478,8 @@ class WriterLowering {
 		afterInfos:Array<AfterCtorBlankInfo>,
 		beforeInfos:Array<BeforeCtorBlankInfo>,
 		betweenInfos:Array<BetweenCtorBlankInfo>,
-		transitionInfos:Array<TransitionAcrossInfo>
+		transitionInfos:Array<TransitionAcrossInfo>,
+		headInfos:Array<HeadCtorBlankInfo>
 	):CascadeEmit {
 		final pos:Position = Context.currentPos();
 
@@ -5761,6 +5764,32 @@ class WriterLowering {
 			blanksCountExpr = macro ($prevIdent == 1 ? $afterAccess : $fallback);
 		}
 
+		// ω-before-package — head-of-Star cascade. Each info contributes a
+		// single `_arr[0].node.<classifier>` switch returning kind 1 / 0;
+		// the cascade ternary picks the first matching opt.<optField>
+		// (source order = priority), fallback `0`. Built bottom-up so info[0]
+		// is the outermost test. Reads `_arr[0]` directly — head emit fires
+		// once at the start of the Star body, before any `_t = _arr[_si]`
+		// binding exists. With empty `headInfos`, the emitted `headEmit`
+		// block is `macro {}` — non-opt-in callers stay byte-identical.
+		var headBlanksExpr:Expr = macro 0;
+		for (i in 0...headInfos.length) {
+			final idx:Int = headInfos.length - 1 - i;
+			final info:HeadCtorBlankInfo = headInfos[idx];
+			final classifierAccess:Expr = {expr: EField(macro _arr[0].node, info.classifierFieldName), pos: pos};
+			final switchExpr:Expr = {expr: ESwitch(classifierAccess, info.classifyCases, null), pos: pos};
+			final optAccess:Expr = {expr: EField(macro opt, info.optField), pos: pos};
+			final fallback:Expr = headBlanksExpr;
+			headBlanksExpr = macro ($switchExpr == 1 ? $optAccess : $fallback);
+		}
+		final headEmit:Expr = headInfos.length == 0 ? (macro {}) : (macro if (_arr.length > 0) {
+			final _hb:Int = $headBlanksExpr;
+			var _hbi:Int = 0;
+			while (_hbi < _hb) {
+				_docs.push(_dhl());
+				_hbi++;
+			}
+		});
 		final initPrev:Expr = prevVars.length > 0 ? {expr: EVars(prevVars), pos: pos} : (macro {});
 		final initCurr:Expr = currVars.length > 0 ? {expr: EVars(currVars), pos: pos} : (macro {});
 		final currComputeExpr:Expr = currCompute.length > 0 ? {expr: EBlock(currCompute), pos: pos} : (macro {});
@@ -5771,6 +5800,7 @@ class WriterLowering {
 			currCompute: currComputeExpr,
 			trackPrev: trackPrevExpr,
 			blanksCount: blanksCountExpr,
+			headEmit: headEmit,
 		};
 	}
 
@@ -5787,7 +5817,8 @@ class WriterLowering {
 		elemFn:String, afterCtorInfos:Array<AfterCtorBlankInfo> = null,
 		beforeCtorInfos:Array<BeforeCtorBlankInfo> = null,
 		betweenCtorInfos:Array<BetweenCtorBlankInfo> = null,
-		transitionAcrossInfos:Array<TransitionAcrossInfo> = null
+		transitionAcrossInfos:Array<TransitionAcrossInfo> = null,
+		headCtorInfos:Array<HeadCtorBlankInfo> = null
 	):Expr {
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
@@ -5799,6 +5830,7 @@ class WriterLowering {
 		final beforeInfos:Array<BeforeCtorBlankInfo> = beforeCtorInfos ?? [];
 		final betweenInfos:Array<BetweenCtorBlankInfo> = betweenCtorInfos ?? [];
 		final transitionInfos:Array<TransitionAcrossInfo> = transitionAcrossInfos ?? [];
+		final headInfos:Array<HeadCtorBlankInfo> = headCtorInfos ?? [];
 		final pos:Position = Context.currentPos();
 		// ω-bug-2c-inner-star — cascade emit machinery (per-info trackers
 		// + cascade ternary) extracted into `buildCascadeEmit` so the
@@ -5807,8 +5839,13 @@ class WriterLowering {
 		// for cascade priority semantics, transparent-wrapper handling,
 		// and the runtime locals (`_t`, `_v0`, `opt`) the emitted Exprs
 		// reference.
-		final emit:CascadeEmit = buildCascadeEmit(afterInfos, beforeInfos, betweenInfos, transitionInfos);
+		final emit:CascadeEmit = buildCascadeEmit(afterInfos, beforeInfos, betweenInfos, transitionInfos, headInfos);
 		final blanksCountExpr:Expr = emit.blanksCount;
+		// ω-before-package — head-of-Star override (e.g. `beforePackage`).
+		// Spliced once at the start of `_docs` building, after `initPrev`,
+		// before any element emit. With no `blankLinesAtHeadIfCtor` meta on
+		// the Star, `headEmit` is `macro {}` — byte-identical to pre-slice.
+		final headEmitExpr:Expr = emit.headEmit;
 		// `emit.initPrev` / `emit.initCurr` are EVars statements with all
 		// per-info trackers folded into one — declared once at the
 		// surrounding-scope's top-level so subsequent siblings (compute,
@@ -5851,6 +5888,7 @@ class WriterLowering {
 		final elseBodyParts:Array<Expr> = [];
 		elseBodyParts.push(macro final _docs:Array<anyparse.core.Doc> = []);
 		elseBodyParts.push(emit.initPrev);
+		elseBodyParts.push(headEmitExpr);
 		elseBodyParts.push(macro var _si:Int = 0);
 		elseBodyParts.push(whileExpr);
 		elseBodyParts.push(macro if (_trailLC.length > 0) {
@@ -5958,7 +5996,8 @@ class WriterLowering {
 		afterCtorInfos:Array<AfterCtorBlankInfo> = null,
 		beforeCtorInfos:Array<BeforeCtorBlankInfo> = null,
 		betweenCtorInfos:Array<BetweenCtorBlankInfo> = null,
-		transitionAcrossInfos:Array<TransitionAcrossInfo> = null
+		transitionAcrossInfos:Array<TransitionAcrossInfo> = null,
+		headCtorInfos:Array<HeadCtorBlankInfo> = null
 	):Expr {
 		// ω-bug-2c-inner-star — cascade emit for the tryparse-Star path.
 		// Cascade trackers + cascade-fire blank count come from
@@ -5974,12 +6013,19 @@ class WriterLowering {
 		final beforeInfos:Array<BeforeCtorBlankInfo> = beforeCtorInfos ?? [];
 		final betweenInfos:Array<BetweenCtorBlankInfo> = betweenCtorInfos ?? [];
 		final transitionInfos:Array<TransitionAcrossInfo> = transitionAcrossInfos ?? [];
-		final cascadeEmit:CascadeEmit = buildCascadeEmit(afterInfos, beforeInfos, betweenInfos, transitionInfos);
+		final headInfos:Array<HeadCtorBlankInfo> = headCtorInfos ?? [];
+		final cascadeEmit:CascadeEmit = buildCascadeEmit(afterInfos, beforeInfos, betweenInfos, transitionInfos, headInfos);
 		final cascadeInitPrev:Expr = cascadeEmit.initPrev;
 		final cascadeInitCurr:Expr = cascadeEmit.initCurr;
 		final cascadeCurrCompute:Expr = cascadeEmit.currCompute;
 		final cascadeTrackPrev:Expr = cascadeEmit.trackPrev;
 		final cascadeBlanksCount:Expr = cascadeEmit.blanksCount;
+		// ω-before-package — head-of-Star override (e.g. `beforePackage`).
+		// Spliced once at the start of the inner Star body (after `_docs`
+		// init / `_padLeading`, before the while loop). With no
+		// `blankLinesAtHeadIfCtor` meta on this inner Star — the typical
+		// case for body-Stars — `headEmit` is `macro {}`, byte-identical.
+		final cascadeHeadEmit:Expr = cascadeEmit.headEmit;
 		// ω-expression-case-flat-fanout: when the body's element call should
 		// receive a copy-on-flat opt with named fields swapped, build the
 		// per-pair override block. The caller-side helper has already parsed
@@ -6140,6 +6186,7 @@ class WriterLowering {
 			if (_arr.length == 0 && _trailLC.length == 0) _de() else {
 				final _docs:Array<anyparse.core.Doc> = [];
 				$cascadeInitPrev;
+				$cascadeHeadEmit;
 				if (_padLeading && _arr.length > 0) _docs.push(_padHardline ? _dhl() : _dt(' '));
 				var _si:Int = 0;
 				while (_si < _arr.length) {
@@ -6581,6 +6628,10 @@ class WriterLowering {
 				);
 			}
 		];
+		final headCtorAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesAtHeadIfCtor');
+		final headCtorInfos:Array<HeadCtorBlankInfo> = [
+			for (args in headCtorAllArgs) buildHeadCtorBlankInfo(elemRefName, args)
+		];
 		for (cf in transparentByClassifier.keys()) {
 			final hasBetween:Bool = Lambda.exists(betweenCtorInfos, info -> info.classifierFieldName == cf);
 			final hasTransition:Bool = Lambda.exists(transitionAcrossInfos, info -> info.classifierFieldName == cf);
@@ -6595,6 +6646,27 @@ class WriterLowering {
 			beforeCtorInfos: beforeCtorInfos,
 			betweenCtorInfos: betweenCtorInfos,
 			transitionAcrossInfos: transitionAcrossInfos,
+			headCtorInfos: headCtorInfos,
+		};
+	}
+
+	/**
+	 * ω-before-package — resolve
+	 * `@:fmt(blankLinesAtHeadIfCtor(classifierField, CtorName1,
+	 * [CtorName2, …], optField))` into a `HeadCtorBlankInfo`. Same
+	 * single-axis classify-switch shape as `buildAfterCtorBlankInfo`
+	 * (1 if matched, 0 otherwise) — semantic divergence is at the cascade
+	 * splice point: head-of-Star override fires once on `_arr[0].node`,
+	 * not per-iteration. Reuses `resolveCtorBlankArgs` for arity
+	 * validation, classifier-enum resolution, and synth-arity-aware case
+	 * pattern emission.
+	 */
+	private function buildHeadCtorBlankInfo(elemRefName:String, args:Array<String>):HeadCtorBlankInfo {
+		final r:CtorBlankResolution = resolveCtorBlankArgs(elemRefName, args, 'blankLinesAtHeadIfCtor', null);
+		return {
+			classifierFieldName: r.fieldName,
+			classifyCases: r.cases,
+			optField: r.optField,
 		};
 	}
 
@@ -7366,28 +7438,67 @@ typedef AfterCtorBlankInfo = {
 };
 
 /**
+ * ω-before-package — resolved data for
+ * `@:fmt(blankLinesAtHeadIfCtor(classifierField, CtorName1, [CtorName2, …],
+ * optField))`. Produced by `WriterLowering.buildHeadCtorBlankInfo` and
+ * spliced into the start of `triviaEofStarExpr` / `triviaTryparseStarExpr`
+ * elseBody (after `_docs` init, before any element emit). Fires
+ * `opt.<optField>` blank lines at the START of the Star body when the
+ * FIRST element matches one of the named ctors. Source-driven blank
+ * suppression / extension does not apply — this is a pure override
+ * tied to the structural shape of the head element.
+ *
+ * Mirrors `AfterCtorBlankInfo` shape exactly (single-axis classify-
+ * switch + opt field), with two semantic differences: (a) classifier is
+ * read off `_arr[0].node.<field>`, not the per-element `_t.node`;
+ * (b) consumed once at the head, not per-iteration. Multiple infos on
+ * the same Star are walked in source order, first matching wins —
+ * remaining infos are inert. Reusable for any future "blank lines at
+ * head before ctor X" slice (e.g. file-leading-comment normalisation
+ * before a typedef header) by pointing at a different opt field.
+ *
+ * No `Before` mirror is needed at the cascade level: head and "before
+ * first" are the same boundary at a Star's head, and the source-driven
+ * binary blank-line slot does not apply at index 0 either way.
+ */
+typedef HeadCtorBlankInfo = {
+	classifierFieldName:String,
+	classifyCases:Array<Case>,
+	optField:String,
+};
+
+/**
  * Aggregated cascade info arrays read off a `@:trivia` Star ShapeNode
  * by `WriterLowering.readCascadeInfosFromStar`. Each array is the
  * resolved form of one `@:fmt(blankLines*)` meta family on the same
  * Star — see the per-Info typedefs for shape semantics. Both the EOF
  * Star branch (`triviaEofStarExpr`) and the tryparse Star branch
  * (`triviaTryparseStarExpr`) consume this struct unchanged.
+ *
+ * `headCtorInfos` is the head-of-Star override family
+ * (`blankLinesAtHeadIfCtor`); spliced once at the start of the Star
+ * body. Empty array → no head emit, byte-identical to non-opt-in
+ * consumers.
  */
 typedef CascadeInfos = {
 	afterCtorInfos:Array<AfterCtorBlankInfo>,
 	beforeCtorInfos:Array<BeforeCtorBlankInfo>,
 	betweenCtorInfos:Array<BetweenCtorBlankInfo>,
 	transitionAcrossInfos:Array<TransitionAcrossInfo>,
+	headCtorInfos:Array<HeadCtorBlankInfo>,
 };
 
 /**
- * Output of `WriterLowering.buildCascadeEmit` — five Exprs ready to
+ * Output of `WriterLowering.buildCascadeEmit` — six Exprs ready to
  * splice into the consumer's runtime block. `initPrev` / `initCurr`
  * are single combined `EVars` statements (folded across all infos);
  * `currCompute` / `trackPrev` are `EBlock`s of pure assignments;
  * `blanksCount` is the cascade ternary with fallback
- * `(_t.blankBefore ? 1 : 0)`. Empty info arrays produce `macro {}`
- * placeholders so non-cascade-bearing consumers stay byte-identical.
+ * `(_t.blankBefore ? 1 : 0)`. `headEmit` is the head-of-Star block
+ * (head cascade ternary + push loop, guarded on `_arr.length > 0`)
+ * spliced once at the start of the Star body, after `_docs` init.
+ * Empty info arrays produce `macro {}` placeholders so non-cascade-
+ * bearing consumers stay byte-identical.
  */
 typedef CascadeEmit = {
 	initPrev:Expr,
@@ -7395,6 +7506,7 @@ typedef CascadeEmit = {
 	currCompute:Expr,
 	trackPrev:Expr,
 	blanksCount:Expr,
+	headEmit:Expr,
 };
 
 /**

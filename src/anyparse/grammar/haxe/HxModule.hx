@@ -31,6 +31,23 @@ package anyparse.grammar.haxe;
  * An empty source is valid and yields `{decls: []}` — zero-decl
  * modules mirror the existing zero-member class case.
  *
+ * `@:fmt(blankLinesAtHeadIfCtor('decl', 'PackageDecl', 'PackageEmpty', 'beforePackage'))`
+ * (slice ω-before-package) is the head-of-Star sister to
+ * `blankLinesAfterCtor`: at the start of the module's decl list, if the
+ * first element matches `PackageDecl` / `PackageEmpty`, the engine emits
+ * exactly `opt.beforePackage` blank lines BEFORE the package directive.
+ * Override semantics, head-of-Star only — applies once at file head.
+ * Default `0` keeps the file leading edge tight against `package …;`;
+ * `1` inserts one blank line so the file starts with a leading newline
+ * (mirrors fork's `emptyLines.beforePackage` behaviour). The same
+ * `blankLinesAtHeadIfCtor` mechanism is reusable for any future "blank
+ * lines at head before ctor X" slice (e.g. file-leading typedef header)
+ * by pointing at a different opt field. The head emit is spliced once
+ * at the start of the elseBody in
+ * `WriterLowering.triviaEofStarExpr` (and mirrored in
+ * `triviaTryparseStarExpr` for inner Stars), driven by
+ * `WriterLowering.buildHeadCtorBlankInfo` and `CascadeEmit.headEmit`.
+ *
  * `@:fmt(blankLinesAfterCtor('decl', 'PackageDecl', 'PackageEmpty', 'afterPackage'))`
  * (slice ω-after-package) instructs the trivia-mode EOF Star path in
  * `WriterLowering.triviaEofStarExpr` to emit exactly `opt.afterPackage`
@@ -132,6 +149,7 @@ package anyparse.grammar.haxe;
 @:ws
 typedef HxModule = {
 	@:trivia
+	@:fmt(blankLinesAtHeadIfCtor('decl', 'PackageDecl', 'PackageEmpty', 'beforePackage'))
 	@:fmt(blankLinesAfterCtor('decl', 'PackageDecl', 'PackageEmpty', 'afterPackage'))
 	@:fmt(blankLinesOnTransitionAcross('decl', 'ImportDecl', 'ImportWildDecl', '|', 'UsingDecl', 'UsingWildDecl', 'beforeUsing'))
 	@:fmt(blankLinesOnTransitionAcross('decl', 'ImportDecl', 'ImportWildDecl', 'UsingDecl', 'UsingWildDecl', '|', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'TypedefDecl', 'FnDecl', 'beforeType'))

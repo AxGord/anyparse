@@ -932,6 +932,24 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    by adding an analogous `@:fmt(...)` call against a different opt
  *    field.
  *
+ * Field added in slice ω-before-package (blank-line slot at file head
+ * before the top-level `package …;` directive):
+ *  - `beforePackage` — exact number of blank lines the writer emits at
+ *    the very START of a module when its first top-level decl is a
+ *    `PackageDecl` / `PackageEmpty`. Override semantics, head-of-Star
+ *    only: applies once per module, before any element is emitted.
+ *    `0` (default, matches haxe-formatter's
+ *    `emptyLines.beforePackage: @:default(0)`) keeps the file leading-
+ *    edge tight against `package …;` even when the source had blank
+ *    lines before it. `1` inserts one blank line before `package …;`
+ *    so the file starts with a leading newline. The knob only triggers
+ *    at sites tagged with
+ *    `@:fmt(blankLinesAtHeadIfCtor('decl', 'PackageDecl', 'PackageEmpty', 'beforePackage'))`
+ *    in the grammar — `HxModule.decls` is the only current consumer.
+ *    The same `blankLinesAtHeadIfCtor` mechanism is reusable for any
+ *    future "blank lines at head before ctor X" slice (e.g. before a
+ *    file-leading typedef header) by pointing at a different opt field.
+ *
  * Field added in slice ω-imports-using-blank (blank-line slot at
  * `import → using` transition):
  *  - `beforeUsing` — exact number of blank lines the writer emits when
@@ -1158,6 +1176,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	functionTypeHaxe4:WhitespacePolicy,
 	arrowFunctions:WhitespacePolicy,
 	afterPackage:Int,
+	beforePackage:Int,
 	beforeUsing:Int,
 	betweenImports:Int,
 	betweenImportsLevel:HxBetweenImportsLevel,

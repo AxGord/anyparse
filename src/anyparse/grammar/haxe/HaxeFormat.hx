@@ -522,6 +522,20 @@ final class HaxeFormat implements TextFormat {
 	 * on `HxModule.decls` and consumed by the trivia-mode EOF Star path
 	 * in `WriterLowering.triviaEofStarExpr`.
 	 *
+	 * `beforePackage` default (ω-before-package) is `0` — exact number of
+	 * blank lines emitted at file head BEFORE the leading `package …;`
+	 * directive. Override semantics, head-of-Star only: the source-
+	 * captured blank-line count is replaced once at the start of the
+	 * module. `0` (default) keeps the file leading edge tight against
+	 * `package …;` even when the source had blank lines before it; `1`
+	 * inserts one blank line so the file starts with a leading newline.
+	 * Matches haxe-formatter's `emptyLines.beforePackage: @:default(0)`.
+	 * Driven by
+	 * `@:fmt(blankLinesAtHeadIfCtor('decl', 'PackageDecl', 'PackageEmpty', 'beforePackage'))`
+	 * on `HxModule.decls` and consumed by the head-emit splice in
+	 * `WriterLowering.triviaEofStarExpr` (head-of-Star override fires
+	 * once before the per-element loop).
+	 *
 	 * `beforeUsing` default (ω-imports-using-blank) is `1` — exact number
 	 * of blank lines between an `import` (or any non-`using`) decl and
 	 * the following `using` decl at module top level. Override
@@ -692,6 +706,7 @@ final class HaxeFormat implements TextFormat {
 		functionTypeHaxe4: WhitespacePolicy.Both,
 		arrowFunctions: WhitespacePolicy.Both,
 		afterPackage: 1,
+		beforePackage: 0,
 		beforeUsing: 1,
 		betweenImports: 0,
 		betweenImportsLevel: HxBetweenImportsLevel.All,
