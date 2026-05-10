@@ -672,6 +672,7 @@ final class HaxeFormat implements TextFormat {
 		fitLineIfWithElse: false,
 		afterFieldsWithDocComments: CommentEmptyLinesPolicy.One,
 		existingBetweenFields: KeepEmptyLinesPolicy.Keep,
+		externExistingBetweenFields: KeepEmptyLinesPolicy.Keep,
 		beforeDocCommentEmptyLines: CommentEmptyLinesPolicy.One,
 		betweenVars: 0,
 		betweenFunctions: 1,

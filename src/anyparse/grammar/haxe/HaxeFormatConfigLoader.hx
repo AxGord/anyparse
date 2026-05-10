@@ -350,6 +350,14 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   `opt.existingBetweenFields`. Default `Keep` preserves source
  *   blank lines between class members; `Remove` strips every blank
  *   line between siblings regardless of source.
+ * - `emptyLines.externClassEmptyLines.existingBetweenFields`
+ *   (ω-extern-existing-between-split-leading): same enum mapping as
+ *   the regular variant, routed to `opt.externExistingBetweenFields`.
+ *   Engine consults this knob in place of `existingBetweenFields`
+ *   whenever `_classExtern` is true; `Remove` then strips the
+ *   inter-member source blank for any next member whose leading
+ *   carries the split shape (a trailing doc comment preceded by
+ *   `//` line comments). Default `Keep`.
  * - `emptyLines.classEmptyLines.{betweenVars, betweenFunctions,
  *   afterVars}` (ω-interblank): non-negative Int counts routed to
  *   `opt.betweenVars`, `opt.betweenFunctions`, `opt.afterVars`.
@@ -427,10 +435,11 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  * `emptyLines.*` keys
  * (`finalNewline`, `maxAnywhereInFile`,
  * `betweenTypes`, per-type-kind sections
- * `macroClassEmptyLines` / `externClassEmptyLines` /
+ * `macroClassEmptyLines` /
  * `abstractEmptyLines` / `enumEmptyLines` /
  * `typedefEmptyLines`, other `classEmptyLines.*` sub-keys beyond
- * `existingBetweenFields`, …), other `whitespace.*` keys
+ * `existingBetweenFields`, other `externClassEmptyLines.*` sub-keys
+ * beyond `existingBetweenFields`, …), other `whitespace.*` keys
  * (`ternaryPolicy`, …), other
  * `whitespace.parenConfig.*` kinds (`ifParens`, `forParens`, …),
  * `indentation.conditionalPolicy`, `baseTypeHints`, `disableFormatting`,
@@ -510,6 +519,7 @@ final class HaxeFormatConfigLoader {
 			fitLineIfWithElse: base.fitLineIfWithElse,
 			afterFieldsWithDocComments: base.afterFieldsWithDocComments,
 			existingBetweenFields: base.existingBetweenFields,
+			externExistingBetweenFields: base.externExistingBetweenFields,
 			beforeDocCommentEmptyLines: base.beforeDocCommentEmptyLines,
 			betweenVars: base.betweenVars,
 			betweenFunctions: base.betweenFunctions,
@@ -910,6 +920,11 @@ final class HaxeFormatConfigLoader {
 			if (classSection.afterStaticVars != null) opt.afterStaticVars = classSection.afterStaticVars;
 			if (classSection.beginType != null) opt.beginType = classSection.beginType;
 			if (classSection.endType != null) opt.endType = classSection.endType;
+		}
+		final externClassSection:Null<HxFormatClassEmptyLinesConfig> = section.externClassEmptyLines;
+		if (externClassSection != null) {
+			if (externClassSection.existingBetweenFields != null)
+				opt.externExistingBetweenFields = keepEmptyLinesToRuntime(externClassSection.existingBetweenFields);
 		}
 		final interfaceSection:Null<HxFormatInterfaceEmptyLinesConfig> = section.interfaceEmptyLines;
 		if (interfaceSection != null) {

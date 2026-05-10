@@ -474,6 +474,24 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    abstract / enum member bodies fall under the same axis but ship
  *    in follow-up slices when their grammar nodes land the flag.
  *
+ * Field added in slice ω-extern-existing-between-split-leading
+ * (companion to `existingBetweenFields` for extern-class scope):
+ *  - `externExistingBetweenFields` — `Keep` / `Remove` policy that takes
+ *    over from `existingBetweenFields` when `_classExtern` is true.
+ *    Default `Keep` matches the pre-slice behaviour where the same
+ *    `existingBetweenFields` value applied to both regular and extern
+ *    class members. Loaded from
+ *    `emptyLines.externClassEmptyLines.existingBetweenFields`. Combined
+ *    with the engine's split-leading detector: `Remove` strips the
+ *    inter-member source blank only when the next member's leading
+ *    cluster carries a trailing `/**` doc-comment preceded by `//`
+ *    line-comments (the same shape that triggers
+ *    `blankBeforeFinalDocCommentInLeading`). Source blanks adjacent to
+ *    members with a regular leading cluster (single `/**` or none)
+ *    survive untouched, mirroring fork's behaviour for the
+ *    `existingBetweenFields=Remove + afterFieldsWithDocComments=Ignore`
+ *    config combo.
+ *
  * Field added in slice ω-C-empty-lines-before-doc:
  *  - `beforeDocCommentEmptyLines` — blank-line policy for the slot
  *    immediately preceding a class member whose leading trivia starts
@@ -1177,6 +1195,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	fitLineIfWithElse:Bool,
 	afterFieldsWithDocComments:CommentEmptyLinesPolicy,
 	existingBetweenFields:KeepEmptyLinesPolicy,
+	externExistingBetweenFields:KeepEmptyLinesPolicy,
 	beforeDocCommentEmptyLines:CommentEmptyLinesPolicy,
 	betweenVars:Int,
 	betweenFunctions:Int,

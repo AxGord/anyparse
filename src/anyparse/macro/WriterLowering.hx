@@ -5089,6 +5089,37 @@ class WriterLowering {
 		final stripByExistingExpr:Expr = existingBetweenFields
 			? macro (opt.existingBetweenFields == anyparse.format.KeepEmptyLinesPolicy.Remove)
 			: macro false;
+		// ω-extern-existing-between-split-leading: when the current
+		// member's `leadingComments` carries the "split" shape — a
+		// trailing `/**` doc-comment preceded by `//` line-comments —
+		// fork's `existingBetweenFields=Remove` policy strips the
+		// inter-member source blank, regardless of `_prevHadDocComment`.
+		// The strip is consulted under the extern-scoped policy
+		// (`externExistingBetweenFields`) when `_classExtern` is set,
+		// otherwise the regular policy. This lets fixtures that mix
+		// `afterFieldsWithDocComments=Ignore` with `Remove` behave
+		// like fork: blanks between members with a regular leading
+		// cluster survive, while the split-leading boundary collapses
+		// (the source blank is "moved" inside the leading cluster by
+		// the sibling `blankBeforeFinalDocCommentInLeading` mech).
+		final stripBySplitLeadingExpr:Expr = existingBetweenFields
+			? macro (
+				opt._classExtern
+				&& _currHasSplitLeading
+				&& opt.externExistingBetweenFields == anyparse.format.KeepEmptyLinesPolicy.Remove
+			)
+			: macro false;
+		// Companion suppress: in extern context, fork never re-adds a
+		// blank at the inter-member slot when the next member's leading
+		// carries the split shape — beforeDocCommentEmptyLines=One only
+		// fires intra-leading on the final `/**`. Independent of
+		// `externExistingBetweenFields` policy (verified via fork CLI:
+		// extern + split + default config + no source blank → no add;
+		// extern + split + source blank present → blank preserved
+		// because source survives, but no extra add stacks on top).
+		final addSuppressOnSplitLeadingExpr:Expr = existingBetweenFields
+			? macro (opt._classExtern && _currHasSplitLeading)
+			: macro false;
 		final stripByCurrDocExpr:Expr = beforeDocCommentEmptyLines
 			? macro (_currHasDocComment && opt.beforeDocCommentEmptyLines == anyparse.format.CommentEmptyLinesPolicy.None)
 			: macro false;
@@ -5105,6 +5136,27 @@ class WriterLowering {
 				}
 				_cdci++;
 			}
+		} : macro {};
+		// ω-extern-existing-between-split-leading: per-element scan that
+		// flips `_currHasSplitLeading` true when the element's leading
+		// cluster ends in a `/**` doc comment whose immediate predecessor
+		// is a `//` line comment. Mirrors the gate used by
+		// `blankBeforeFinalDocCommentInLeading` (single front-to-back
+		// pass tracking the index of the last `/**`; the split fires when
+		// that index is > 0 AND the previous entry is `//`-prefixed).
+		// Drives `stripBySplitLeadingExpr` above; gated on the same
+		// `existingBetweenFields` star flag so JSON / AS3 writers stay
+		// untouched.
+		final currHasSplitLeadingComputeExpr:Expr = existingBetweenFields ? macro {
+			_currHasSplitLeading = false;
+			var _slLast:Int = -1;
+			var _sli:Int = 0;
+			while (_sli < _t.leadingComments.length) {
+				if (StringTools.startsWith(_t.leadingComments[_sli], '/**')) _slLast = _sli;
+				_sli++;
+			}
+			if (_slLast > 0 && StringTools.startsWith(_t.leadingComments[_slLast - 1], '//'))
+				_currHasSplitLeading = true;
 		} : macro {};
 		// ω-class-static-var-cascade: when the Star opts in via
 		// `@:fmt(staticVarSubdivision)`, augment the per-iteration kind
@@ -5202,8 +5254,9 @@ class WriterLowering {
 		final blankBeforeExpr:Expr = anyEmptyLinesFlag ? macro {
 			$currHasDocComputeExpr;
 			$currKindComputeExpr;
-			final _stripBlank:Bool = $stripByDocExpr || $stripByExistingExpr || $stripByCurrDocExpr;
-			final _addBlank:Bool = $addByDocExpr || $addByCurrDocExpr || $addByInterMemberExpr;
+			$currHasSplitLeadingComputeExpr;
+			final _stripBlank:Bool = $stripByDocExpr || $stripByExistingExpr || $stripByCurrDocExpr || $stripBySplitLeadingExpr;
+			final _addBlank:Bool = !$addSuppressOnSplitLeadingExpr && ($addByDocExpr || $addByCurrDocExpr || $addByInterMemberExpr);
 			final _sourceBlank:Bool = _t.blankBefore && !_stripBlank;
 			if (_si > 0 && (_sourceBlank || _addBlank)) _inner.push(_dhl());
 		} : macro {
@@ -5226,6 +5279,9 @@ class WriterLowering {
 			: macro {};
 		final initCurrDocCommentExpr:Expr = beforeDocCommentEmptyLines
 			? macro var _currHasDocComment:Bool = false
+			: macro {};
+		final initCurrSplitLeadingExpr:Expr = existingBetweenFields
+			? macro var _currHasSplitLeading:Bool = false
 			: macro {};
 		final initPrevKindExpr:Expr = interMember ? macro var _prevKind:Int = 0 : macro {};
 		final initCurrKindExpr:Expr = interMember ? macro var _currKind:Int = 0 : macro {};
@@ -5352,6 +5408,7 @@ class WriterLowering {
 				final _inner:Array<anyparse.core.Doc> = [];
 				$initDocCommentExpr;
 				$initCurrDocCommentExpr;
+				$initCurrSplitLeadingExpr;
 				$initPrevKindExpr;
 				var _si:Int = 0;
 				while (_si < _arr.length) {

@@ -9,7 +9,7 @@ package anyparse.grammar.haxe.format;
  * `lineCommentsBetweenTypes`, `lineCommentsBetweenFunctions`,
  * `betweenSingleLineTypes`, `beforeRightCurly`, `afterLeftCurly`,
  * `afterReturn`, `beforeBlocks`, `afterBlocks`, `enumAbstractEmptyLines`,
- * `macroClassEmptyLines`, `externClassEmptyLines`,
+ * `macroClassEmptyLines`,
  * `abstractEmptyLines`, `enumEmptyLines`,
  * `typedefEmptyLines`, `conditionalsEmptyLines`, `afterFileHeaderComment`,
  * `betweenMultilineComments`, …) are silently dropped by the ByName
@@ -28,6 +28,15 @@ package anyparse.grammar.haxe.format;
  * the `existingBetweenFields` sub-key is modelled today; the other
  * per-slot sub-keys (`beginType`, `endType`, `betweenVars`, …) land
  * with the slices that introduce their matching writer knobs.
+ *
+ * `externClassEmptyLines` nested section added in slice
+ * ω-extern-existing-between-split-leading. Reuses
+ * `HxFormatClassEmptyLinesConfig` (fork shares the
+ * `EmptyLinesFieldsConfig` shape across regular / extern / macro class
+ * scopes). Only the `existingBetweenFields` sub-key is consumed today
+ * (feeds `opt.externExistingBetweenFields`); the other per-slot
+ * sub-keys land alongside their extern-scoped runtime knobs as future
+ * fixtures need them.
  *
  * `interfaceEmptyLines` nested section added in slice
  * ω-iface-interblank (feeds `opt.interfaceBetweenVars`,
@@ -67,6 +76,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var beforeDocCommentEmptyLines:HxFormatCommentEmptyLinesPolicy;
 
 	@:optional var classEmptyLines:HxFormatClassEmptyLinesConfig;
+
+	@:optional var externClassEmptyLines:HxFormatClassEmptyLinesConfig;
 
 	@:optional var interfaceEmptyLines:HxFormatInterfaceEmptyLinesConfig;
 

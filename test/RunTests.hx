@@ -117,6 +117,7 @@ import unit.ParseErrorTest;
 import unit.InputTest;
 import unit.WriteOptionsTest;
 import unit.AllmanProbe;
+import unit.Probe147;
 import unit.CondModProbe;
 import unit.HxBlankAfterLeadingCommentSliceTest;
 import unit.HxVarTrailOptShapeSliceTest;
@@ -248,6 +249,7 @@ class RunTests {
 		runner.addCase(new InputTest());
 		runner.addCase(new WriteOptionsTest());
 		runner.addCase(new AllmanProbe());
+		runner.addCase(new Probe147());
 		runner.addCase(new CondModProbe());
 		runner.addCase(new HxBlankAfterLeadingCommentSliceTest());
 		runner.addCase(new HxVarTrailOptShapeSliceTest());
