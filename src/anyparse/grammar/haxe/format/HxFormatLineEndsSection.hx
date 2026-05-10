@@ -6,10 +6,10 @@ package anyparse.grammar.haxe.format;
  * Only the keys whose runtime knob already exists on
  * `HxModuleWriteOptions` are modelled here. Missing keys
  * (`rightCurly`, `blockCurly`, `anonFunctionCurly`, `anonTypeCurly`,
- * `typedefCurly`, `metadata*`, `caseColon`, `sharp`,
- * `lineEndCharacter`, …) are silently dropped by the ByName struct
- * parser's `UnknownPolicy.Skip` — they land with the slice that
- * introduces the matching writer knob.
+ * `typedefCurly`, `metadataType`, `metadataVar`, `metadataOther`,
+ * `caseColon`, `sharp`, `lineEndCharacter`, …) are silently dropped
+ * by the ByName struct parser's `UnknownPolicy.Skip` — they land
+ * with the slice that introduces the matching writer knob.
  *
  * Per-construct sub-section `objectLiteralCurly` (slice
  * ω-objectlit-leftCurly) overrides `leftCurly` for object-literal
@@ -30,4 +30,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var emptyCurly:HxFormatEmptyCurlyPolicy;
 
 	@:optional var objectLiteralCurly:HxFormatCurlyLineEndPolicy;
+
+	@:optional var metadataFunction:HxFormatMetadataLineEndPolicy;
 };

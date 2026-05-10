@@ -6,6 +6,7 @@ import anyparse.format.CommentEmptyLinesPolicy;
 import anyparse.format.EmptyCurly;
 import anyparse.format.KeepEmptyLinesPolicy;
 import anyparse.format.KeywordPlacement;
+import anyparse.format.MetadataLineEndPolicy;
 import anyparse.format.SameLinePolicy;
 import anyparse.format.WhitespacePolicy;
 import anyparse.format.WriteOptions;
@@ -1193,6 +1194,26 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    `@:fmt(betweenMultilineCommentsBlanks)` in the grammar —
  *    `HxModule.decls`, class / interface / abstract member Stars are
  *    the current consumers.
+ *
+ * Field added in slice ω-metadata-line-end-function:
+ *  - `metadataFunctionLineEnd` — line-end policy for the metadata
+ *    `@:tryparse` Star on `HxMemberDecl.meta`. Mirrors haxe-formatter's
+ *    `lineEnds.metadataFunction` (`AtLineEndPolicy`):
+ *      `None` (default) — source-driven inter-element separator from
+ *        per-element `newlineBefore` trivia; no forced gap after the
+ *        last metadata.
+ *      `After` — every inter-element separator becomes a hardline AND
+ *        a hardline fires after the last element (one metadata per
+ *        line, ignoring source layout).
+ *      `AfterLast` — inter-element separator stays source-driven, but
+ *        a hardline ALWAYS fires after the last metadata.
+ *      `ForceAfterLast` — inter-element separator is forced to a
+ *        single space (collapses any source newlines between metas)
+ *        AND a hardline fires after the last metadata.
+ *    Consumed by `@:fmt(metaLineEndPolicy('metadataFunctionLineEnd'))`
+ *    on `HxMemberDecl.meta`. Per-construct sister knobs
+ *    (`metadataType` / `metadataVar` / `metadataOther`) land with
+ *    their own slices.
  */
 typedef HxModuleWriteOptions = WriteOptions & {
 	sameLineElse:SameLinePolicy,
@@ -1285,6 +1306,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	afterFileHeaderComment:Int,
 	betweenMultilineComments:Int,
 	formatStringInterpolation:Bool,
+	metadataFunctionLineEnd:MetadataLineEndPolicy,
 	_inExprPosition:Bool,
 	_classExtern:Bool,
 };

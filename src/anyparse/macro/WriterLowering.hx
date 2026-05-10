@@ -1585,8 +1585,23 @@ class WriterLowering {
 				// fires its trailing-pad when `_arr.length > 0` (the helper's
 				// empty branch returns `_de()`). Non-opt Star is transparent
 				// when empty, so propagate prev across `length == 0`.
+				//
+				// ω-metadata-line-end-function: a Star carrying
+				// `@:fmt(metaLineEndPolicy('<optField>'))` ALSO fires a
+				// trailing-pad equivalent when the runtime knob is non-None
+				// AND the Star is non-empty. Reuse the `prevPadTrailing`
+				// channel so the next field's inter-Star sep
+				// (`withPadTrailingDrop`) drops its own emit, avoiding a
+				// double-hardline at the meta→modifiers boundary.
 				if (child.fmtHasFlag('padTrailing'))
 					thisPadTrailing = macro $fieldAccess.length > 0;
+				else {
+					final metaLineEndField:Null<String> = child.fmtReadString('metaLineEndPolicy');
+					if (metaLineEndField != null) {
+						final optAccess:Expr = optFieldAccess(metaLineEndField);
+						thisPadTrailing = macro $fieldAccess.length > 0 && $optAccess != 0;
+					}
+				}
 				thisTransparent = macro $fieldAccess.length == 0;
 				prevBodyField = null;
 				prevTrailFieldName = null;
@@ -2279,14 +2294,15 @@ class WriterLowering {
 								// `newlineBefore` could be read.
 								if (ctx.trivia && isTriviaBearing(typePath)) {
 									final nlAccess:Expr = beforeNewlineAccess(fieldName);
-									if (prevAnyStarNonEmpty != null) {
+									final triviaSepExpr:Expr = if (prevAnyStarNonEmpty != null) {
 										final prev:Expr = prevAnyStarNonEmpty;
-										parts.push(macro $prev ? ($nlAccess ? _dhl() : _dt(' ')) : _de());
-									} else parts.push(macro $nlAccess ? _dhl() : _dt(' '));
+										macro $prev ? ($nlAccess ? _dhl() : _dt(' ')) : _de();
+									} else macro $nlAccess ? _dhl() : _dt(' ');
+									parts.push(withPadTrailingDrop(prevPadTrailing, triviaSepExpr));
 								} else if (prevAnyStarNonEmpty != null) {
 									final prev:Expr = prevAnyStarNonEmpty;
-									parts.push(macro $prev ? _dt(' ') : _de());
-								} else parts.push(macro _dt(' '));
+									parts.push(withPadTrailingDrop(prevPadTrailing, macro $prev ? _dt(' ') : _de()));
+								} else parts.push(withPadTrailingDrop(prevPadTrailing, macro _dt(' ')));
 								parts.push(writeCall);
 							}
 						} else {
@@ -2633,6 +2649,11 @@ class WriterLowering {
 				// `HxCaseBranch.body` / `HxDefaultBranch.stmts` to mirror
 				// fork's `MarkSameLine.markExpressionCase` body-shape check.
 				final refuseFlatOnComplex:Bool = starNode.fmtHasFlag('refuseFlatOnComplexExpr');
+				// ω-metadata-line-end-function: `@:fmt(metaLineEndPolicy('<optField>'))`
+				// on a `@:trivia @:tryparse` Star wires inter-element + post-Star
+				// separator dispatch through `opt.<optField>:MetadataLineEndPolicy`.
+				// Default `None` (and absent flag) is byte-identical to pre-slice.
+				final metaLineEndOptField:Null<String> = starNode.fmtReadString('metaLineEndPolicy');
 				// ω-bug-2c-inner-star — read the same cascade `@:fmt(blankLines*)`
 				// metas that the EOF-Star branch reads, so an inner Star (e.g.
 				// `HxConditionalDecl.body`) opted in via the metas drives the
@@ -2645,7 +2666,8 @@ class WriterLowering {
 					propagateExprPosition, refuseFlatOnComplex,
 					cascadeInfos.afterCtorInfos, cascadeInfos.beforeCtorInfos,
 					cascadeInfos.betweenCtorInfos, cascadeInfos.transitionAcrossInfos,
-					cascadeInfos.headCtorInfos
+					cascadeInfos.headCtorInfos,
+					metaLineEndOptField
 				));
 				return;
 			}
@@ -6511,7 +6533,8 @@ class WriterLowering {
 		beforeCtorInfos:Array<BeforeCtorBlankInfo> = null,
 		betweenCtorInfos:Array<BetweenCtorBlankInfo> = null,
 		transitionAcrossInfos:Array<TransitionAcrossInfo> = null,
-		headCtorInfos:Array<HeadCtorBlankInfo> = null
+		headCtorInfos:Array<HeadCtorBlankInfo> = null,
+		metaLineEndOptField:Null<String> = null
 	):Expr {
 		// ω-bug-2c-inner-star — cascade emit for the tryparse-Star path.
 		// Cascade trackers + cascade-fire blank count come from
@@ -6659,6 +6682,18 @@ class WriterLowering {
 		};
 		final padLeadingExpr:Expr = macro $v{padLeading};
 		final padTrailingExpr:Expr = macro $v{padTrailing};
+		// ω-metadata-line-end-function: runtime `_metaPolicy:Int` read from
+		// `opt.<metaLineEndOptField>` (default 0 = None when the flag is
+		// absent, byte-identical to pre-slice). Drives inter-element sep
+		// override AND post-Star hardline. Values mirror
+		// `anyparse.format.MetadataLineEndPolicy`:
+		//   0 = None (source-driven, default)
+		//   1 = After (every inter-meta sep → hardline)
+		//   2 = AfterLast (source-driven inter-meta, force trailing hardline)
+		//   3 = ForceAfterLast (collapse inter-meta to space, force trailing hardline)
+		final metaPolicyExpr:Expr = metaLineEndOptField != null
+			? optFieldAccess(metaLineEndOptField)
+			: macro 0;
 		// ω-issue-423-mech-b: `@:fmt(refuseFlatOnComplexExpr)` adds an extra
 		// AND-clause to `_flatCase` that defers to the plugin-supplied
 		// `WriteOptions.caseBodyRefusesFlat` adapter (mirrors the
@@ -6697,6 +6732,7 @@ class WriterLowering {
 			final _padLeading:Bool = $padLeadingExpr;
 			final _padTrailing:Bool = $padTrailingExpr;
 			final _padHardline:Bool = (_padLeading || _padTrailing) && _arr.length > 0 && _arr[0].newlineBefore;
+			final _metaPolicy:Int = $metaPolicyExpr;
 			if (_arr.length == 0 && _trailLC.length == 0) _de() else {
 				final _docs:Array<anyparse.core.Doc> = [];
 				$cascadeInitPrev;
@@ -6721,6 +6757,20 @@ class WriterLowering {
 						_docs.push(_dt(' '));
 					} else if (_nestBody) {
 						_docs.push(_dhl());
+					} else if (_si > 0 && _metaPolicy == 1) {
+						// ω-metadata-line-end-function: After policy collapses
+						// source-driven inter-meta sep to a forced hardline,
+						// emitting one metadata per line regardless of source
+						// layout. Skips the cascade-blanks path — blank-line
+						// separators between metas aren't a fork-supported shape
+						// for the After policy.
+						_docs.push(_dhl());
+					} else if (_si > 0 && _metaPolicy == 3) {
+						// ω-metadata-line-end-function: ForceAfterLast collapses
+						// any source newline between consecutive metas to a
+						// single space, producing the canonical `@A @B @C`
+						// inline shape ahead of the trailing hardline.
+						_docs.push(_dt(' '));
 					} else if (_si > 0 && _t.newlineBefore) {
 						// ω-cond-mod-newline: preserve a single source newline
 						// between try-parse Star elements. Without this, the
@@ -6753,6 +6803,7 @@ class WriterLowering {
 					_si++;
 				}
 				if (_padTrailing && _arr.length > 0) _docs.push(_padHardline ? _dhl() : _dt(' '));
+				else if (_metaPolicy != 0 && _arr.length > 0) _docs.push(_dhl());
 				// Trail comments collected into a separate Doc array so the
 				// nestBody branch can render them at parent indent when the
 				// body has stmts (issue_392): a `// comment` on its own line

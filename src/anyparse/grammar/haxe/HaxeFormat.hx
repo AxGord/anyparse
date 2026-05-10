@@ -9,6 +9,7 @@ import anyparse.format.Encoding;
 import anyparse.format.IndentChar;
 import anyparse.format.KeepEmptyLinesPolicy;
 import anyparse.format.KeywordPlacement;
+import anyparse.format.MetadataLineEndPolicy;
 import anyparse.format.SameLinePolicy;
 import anyparse.format.WhitespacePolicy;
 import anyparse.format.text.FieldLookup;
@@ -719,6 +720,7 @@ final class HaxeFormat implements TextFormat {
 		afterFileHeaderComment: 1,
 		betweenMultilineComments: 0,
 		formatStringInterpolation: true,
+		metadataFunctionLineEnd: MetadataLineEndPolicy.None,
 		_inExprPosition: false,
 		_classExtern: false,
 		blockCommentAdapter: anyparse.format.comment.BlockCommentNormalizer.processCapturedBlockComment,

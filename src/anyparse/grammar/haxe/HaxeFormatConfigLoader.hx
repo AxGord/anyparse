@@ -7,6 +7,7 @@ import anyparse.format.EmptyCurly;
 import anyparse.format.IndentChar;
 import anyparse.format.KeepEmptyLinesPolicy;
 import anyparse.format.KeywordPlacement;
+import anyparse.format.MetadataLineEndPolicy;
 import anyparse.format.SameLinePolicy;
 import anyparse.format.WhitespacePolicy;
 import anyparse.format.wrap.WrapCondition;
@@ -33,6 +34,7 @@ import anyparse.grammar.haxe.format.HxFormatKeepEmptyLinesPolicy;
 import anyparse.grammar.haxe.format.HxFormatKeywordPlacement;
 import anyparse.grammar.haxe.format.HxFormatLeftCurlyPolicy;
 import anyparse.grammar.haxe.format.HxFormatLineEndsSection;
+import anyparse.grammar.haxe.format.HxFormatMetadataLineEndPolicy;
 import anyparse.grammar.haxe.format.HxFormatParenConfigSection;
 import anyparse.grammar.haxe.format.HxFormatParenPolicySection;
 import anyparse.grammar.haxe.format.HxFormatSameLinePolicy;
@@ -578,6 +580,7 @@ final class HaxeFormatConfigLoader {
 			afterFileHeaderComment: base.afterFileHeaderComment,
 			betweenMultilineComments: base.betweenMultilineComments,
 			formatStringInterpolation: base.formatStringInterpolation,
+			metadataFunctionLineEnd: base.metadataFunctionLineEnd,
 			_inExprPosition: base._inExprPosition,
 			_classExtern: base._classExtern,
 			blockCommentAdapter: base.blockCommentAdapter,
@@ -852,6 +855,13 @@ final class HaxeFormatConfigLoader {
 			if (sub.leftCurly != null) opt.objectLiteralLeftCurly = leftCurlyToRuntime(sub.leftCurly);
 		}
 		if (section.emptyCurly != null) opt.emptyCurly = emptyCurlyToRuntime(section.emptyCurly);
+		// ω-metadata-line-end-function: `lineEnds.metadataFunction` →
+		// `opt.metadataFunctionLineEnd`. Default `None` preserves source-
+		// driven inter-meta separator; `After` / `AfterLast` /
+		// `ForceAfterLast` force a hardline after the last function meta
+		// (and override inter-element sep for `After` / `ForceAfterLast`).
+		if (section.metadataFunction != null)
+			opt.metadataFunctionLineEnd = metadataLineEndToRuntime(section.metadataFunction);
 	}
 
 	private static function applyWhitespace(section:HxFormatWhitespaceSection, opt:HxModuleWriteOptions):Void {
@@ -1031,6 +1041,15 @@ final class HaxeFormatConfigLoader {
 		return switch policy {
 			case HxFormatEmptyCurlyPolicy.Break: EmptyCurly.Break;
 			case _: EmptyCurly.Same;
+		};
+	}
+
+	private static function metadataLineEndToRuntime(policy:HxFormatMetadataLineEndPolicy):MetadataLineEndPolicy {
+		return switch policy {
+			case HxFormatMetadataLineEndPolicy.After: MetadataLineEndPolicy.After;
+			case HxFormatMetadataLineEndPolicy.AfterLast: MetadataLineEndPolicy.AfterLast;
+			case HxFormatMetadataLineEndPolicy.ForceAfterLast: MetadataLineEndPolicy.ForceAfterLast;
+			case _: MetadataLineEndPolicy.None;
 		};
 	}
 
