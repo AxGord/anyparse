@@ -2691,11 +2691,12 @@ class WriterLowering {
 			} else if (isLastField) {
 				if (openText != null) parts.push(macro _dt($v{openText}));
 				final cascadeInfos:CascadeInfos = readCascadeInfosFromStar(starNode, elemRefName);
+				final lineCommentTrailBlank:Bool = starNode.fmtHasFlag('blankBeforeOrphanLineCommentTrail');
 				parts.push(triviaEofStarExpr(
 					fieldAccess, trailBBAccess, trailLCAccess, elemFn,
 					cascadeInfos.afterCtorInfos, cascadeInfos.beforeCtorInfos,
 					cascadeInfos.betweenCtorInfos, cascadeInfos.transitionAcrossInfos,
-					cascadeInfos.headCtorInfos
+					cascadeInfos.headCtorInfos, lineCommentTrailBlank
 				));
 			} else {
 				Context.fatalError('WriterLowering: @:trivia Star without @:trail must be the last field', Context.currentPos());
@@ -5909,7 +5910,8 @@ class WriterLowering {
 		beforeCtorInfos:Array<BeforeCtorBlankInfo> = null,
 		betweenCtorInfos:Array<BetweenCtorBlankInfo> = null,
 		transitionAcrossInfos:Array<TransitionAcrossInfo> = null,
-		headCtorInfos:Array<HeadCtorBlankInfo> = null
+		headCtorInfos:Array<HeadCtorBlankInfo> = null,
+		lineCommentTrailBlank:Bool = false
 	):Expr {
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
@@ -5982,9 +5984,19 @@ class WriterLowering {
 		elseBodyParts.push(headEmitExpr);
 		elseBodyParts.push(macro var _si:Int = 0);
 		elseBodyParts.push(whileExpr);
+		// ω-orphan-trail-blank: opt-in via `@:fmt(blankBeforeOrphanLineCommentTrail)`
+		// on the EOF Star — when the orphan trail is led by a line-comment
+		// (`// …`), force the extra `_dhl()` blank between last decl and
+		// trail chain regardless of source-blank capture. Mirrors fork's
+		// `markLineCommentsAfter(typeToken, 1)` always-1 rule for top-level
+		// type→trailing-line-comment-chain boundaries. Without the flag the
+		// gate stays `_trailBB`-driven (source-blank-preserve).
+		final extraTrailBlankExpr:Expr = lineCommentTrailBlank
+			? macro (_arr.length > 0 && (_trailBB || (_trailLC.length > 0 && StringTools.startsWith(_trailLC[0], '//'))))
+			: macro (_trailBB && _arr.length > 0);
 		elseBodyParts.push(macro if (_trailLC.length > 0) {
 			if (_arr.length > 0) _docs.push(_dhl());
-			if (_trailBB && _arr.length > 0) _docs.push(_dhl());
+			if ($extraTrailBlankExpr) _docs.push(_dhl());
 			var _ti:Int = 0;
 			while (_ti < _trailLC.length) {
 				_docs.push(leadingCommentDoc(_trailLC[_ti], opt));
