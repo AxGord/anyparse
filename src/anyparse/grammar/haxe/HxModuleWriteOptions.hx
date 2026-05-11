@@ -986,6 +986,14 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    on long arithmetic / string-concat chains (issue_179 long throw
  *    string concat). Same dispatch flow via the inlined `_gather`
  *    walking `case Add(_,_) | case Sub(_,_) | case _:`.
+ *  - `conditionWrap` — `WrapRules` cascade for statement-condition
+ *    parens (`if (cond)`, `for (item in coll)`, `while (cond)`,
+ *    `switch (expr)` — haxe-formatter `conditionWrapping` class). Slice
+ *    ω-condition-wrap-ingest adds the field, default, and JSON loader
+ *    path only. Engine + grammar `@:fmt(condWrap(…))` wiring lands in a
+ *    follow-up slice; reading the field is a no-op for now. Default is
+ *    minimal (`defaultMode: NoWrap`, no rules) so the foundational
+ *    scaffold is Δpass=0.
  *
  * Defaults are minimal:
  *  - `opBoolChainWrap`: single rule
@@ -1555,6 +1563,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	methodChainWrap:WrapRules,
 	opBoolChainWrap:WrapRules,
 	opAddSubChainWrap:WrapRules,
+	conditionWrap:WrapRules,
 	expressionTry:SameLinePolicy,
 	indentCaseLabels:Bool,
 	indentObjectLiteral:Bool,

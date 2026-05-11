@@ -713,6 +713,7 @@ final class HaxeFormat implements TextFormat {
 		methodChainWrap: HaxeFormat.defaultMethodChainWrap(),
 		opBoolChainWrap: HaxeFormat.defaultOpBoolChainWrap(),
 		opAddSubChainWrap: HaxeFormat.defaultOpAddSubChainWrap(),
+		conditionWrap: HaxeFormat.defaultConditionWrap(),
 		addLineCommentSpace: true,
 		expressionTry: SameLinePolicy.Same,
 		indentCaseLabels: true,
@@ -1139,6 +1140,28 @@ final class HaxeFormat implements TextFormat {
 					],
 				},
 			],
+			defaultMode: WrapMode.NoWrap,
+		};
+	}
+
+	/**
+	 * Default `WrapRules` cascade for statement-condition parens
+	 * (`if (cond)`, `for (item in coll)`, `while (cond)`, `switch
+	 * (expr)`). Slice ω-condition-wrap-ingest foundational scaffold —
+	 * the writer does not consume this field yet, so the default is
+	 * deliberately minimal: empty rules + `defaultMode: NoWrap`, which
+	 * preserves pre-slice byte output. Engine + grammar wiring lands in
+	 * a follow-up slice; user `hxformat.json` `wrapping.conditionWrapping`
+	 * configs are still ingested by the loader so the cascade is
+	 * available when the wiring slice ships.
+	 *
+	 * Returned as a fresh struct on each call so test code that mutates
+	 * the `defaultWriteOptions.conditionWrap` substruct doesn't corrupt
+	 * the singleton.
+	 */
+	public static function defaultConditionWrap():WrapRules {
+		return {
+			rules: [],
 			defaultMode: WrapMode.NoWrap,
 		};
 	}

@@ -25,6 +25,13 @@ package anyparse.grammar.haxe.format;
  *    dispatch via `@:fmt(wrapRules('objectLiteralWrap'))` on
  *    `HxObjectLit.fields` were already wired before this slice; only
  *    the loader-side mapping was missing).
+ *  - `conditionWrapping`: `WrapRules` cascade → `conditionWrap` (slice
+ *    ω-condition-wrap-ingest — foundational scaffold). Drives wrap
+ *    shape for statement-condition parens (`if (cond)`, `for (item in
+ *    coll)`, `while (cond)`, `switch (expr)`). The loader path is wired
+ *    here; the engine + grammar `@:fmt(condWrap(…))` wiring lands in a
+ *    follow-up slice. Defaults match anyparse's pre-slice behaviour
+ *    (`NoWrap`, no rules) so this scaffold is Δpass=0.
  *
  * Slice ω-peg-byname-array lifted the prior `@:peg` ByName Array<T>
  * limitation, so every cascade above now ingests `rules` from
@@ -32,11 +39,10 @@ package anyparse.grammar.haxe.format;
  * `lineLength >= n` predicate are silently dropped at load time so the
  * cascade falls through to the next rule).
  *
- * The remaining per-construct cascades (`conditionWrapping`,
- * `expressionWrapping`, `typeParameter`, `arrayMatrixWrap`, …) land
- * with their own slices when each gains JSON-side wiring; matching
- * `WriteOptions` fields don't exist yet and need new fields plus
- * grammar `@:fmt` wiring.
+ * The remaining per-construct cascades (`expressionWrapping`,
+ * `typeParameter`, `arrayMatrixWrap`, …) land with their own slices
+ * when each gains JSON-side wiring; matching `WriteOptions` fields
+ * don't exist yet and need new fields plus grammar `@:fmt` wiring.
  */
 @:peg typedef HxFormatWrappingSection = {
 
@@ -55,4 +61,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var callParameter:HxFormatWrapRules;
 
 	@:optional var objectLiteral:HxFormatWrapRules;
+
+	@:optional var conditionWrapping:HxFormatWrapRules;
 };

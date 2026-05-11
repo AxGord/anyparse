@@ -575,6 +575,7 @@ final class HaxeFormatConfigLoader {
 			methodChainWrap: base.methodChainWrap,
 			opBoolChainWrap: base.opBoolChainWrap,
 			opAddSubChainWrap: base.opAddSubChainWrap,
+			conditionWrap: base.conditionWrap,
 			addLineCommentSpace: base.addLineCommentSpace,
 			expressionTry: base.expressionTry,
 			indentCaseLabels: base.indentCaseLabels,
@@ -648,6 +649,7 @@ final class HaxeFormatConfigLoader {
 		if (section.opAddSubChain != null) opt.opAddSubChainWrap = wrapRulesFromConfig(section.opAddSubChain, opt.opAddSubChainWrap);
 		if (section.callParameter != null) opt.callParameterWrap = wrapRulesFromConfig(section.callParameter, opt.callParameterWrap);
 		if (section.objectLiteral != null) opt.objectLiteralWrap = wrapRulesFromConfig(section.objectLiteral, opt.objectLiteralWrap);
+		if (section.conditionWrapping != null) opt.conditionWrap = wrapRulesFromConfig(section.conditionWrapping, opt.conditionWrap);
 	}
 
 	/**
