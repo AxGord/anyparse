@@ -8281,6 +8281,21 @@ class WriterLowering {
 	 *    emit `false`. Used for enum types whose multi-line nature
 	 *    depends on which variant is present (HxFnBody → BlockBody
 	 *    multi-line iff its block is, NoBody / ExprBody never).
+	 *  - typedef-level `multilineWhenFieldCtorAndOpt('<field>', '<ctorName>',
+	 *    '<optField>', '<optEnumExpr>')` (4-arg form) →
+	 *    `Type.enumConstructor(accessExpr.<field>) == ctorName
+	 *    && opt.<optField> == <optEnumExpr>`. The 4th arg is parsed as
+	 *    a Haxe expression (via `Context.parse`) so the compared value
+	 *    can be a fully-qualified `enum abstract` constructor like
+	 *    `anyparse.format.BracePlacement.Next` — `Type.enumConstructor`
+	 *    on the opt side would not compile for `enum abstract` knobs.
+	 *    Use when the structural ctor match alone isn't enough — the
+	 *    bound type may render flat or multi-line depending on a runtime
+	 *    layout knob. Currently used by `HxTypedefDecl` to mark itself
+	 *    multi-line only when `type` is `Anon` AND `anonTypeLeftCurly`
+	 *    is `Next` (Allman): under `Same` the same source emits single-
+	 *    line so the predicate stays false. The full path on the 4th
+	 *    arg keeps the macro free of grammar-specific imports.
 	 */
 	private function buildMultilinePredicate(typeName:String, accessExpr:Expr):Null<Expr> {
 		final node:Null<ShapeNode> = shape.rules.get(typeName);
@@ -8304,6 +8319,32 @@ class WriterLowering {
 						if (targetType == null) return null;
 						final fieldExpr:Expr = {expr: EField(accessExpr, field), pos: pos};
 						return buildMultilinePredicate(targetType, fieldExpr);
+					// ω-typedef-between-blank: 4-arg runtime ctor match on a
+					// named field PLUS an opt-side runtime equality with a
+					// fully-qualified enum literal. Emits
+					// `Type.enumConstructor(<accessExpr>.<field>) == <ctorName>
+					// && opt.<optField> == <optEnumExpr>`.
+					// The opt-gate distinguishes layout modes that drive
+					// whether a structurally-bound type renders multi-line
+					// — e.g. `HxTypedefDecl` is "multi-line in output" only
+					// when the bound type is `Anon` AND `anonTypeLeftCurly`
+					// is `BracePlacement.Next` (issue_301 boundary). Avoids
+					// spurious blanks under Same / other placements where the
+					// same source emits single-line. The 4th arg is parsed
+					// as a Haxe expression so `enum abstract` knobs (which
+					// fail `Type.enumConstructor`) can be compared directly
+					// against their declared constructor.
+					case ECall({expr: EConst(CIdent('multilineWhenFieldCtorAndOpt'))}, [
+						{expr: EConst(CString(field, _))},
+						{expr: EConst(CString(ctorName, _))},
+						{expr: EConst(CString(optField, _))},
+						{expr: EConst(CString(optEnumExprStr, _))}
+					]):
+						final fieldExpr:Expr = {expr: EField(accessExpr, field), pos: pos};
+						final optAccess:Expr = optFieldAccess(optField);
+						final optEnumExpr:Expr = Context.parse(optEnumExprStr, pos);
+						return macro Type.enumConstructor($fieldExpr) == $v{ctorName}
+							&& $optAccess == $optEnumExpr;
 					case _:
 				}
 			}

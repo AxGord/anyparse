@@ -30,8 +30,25 @@ package anyparse.grammar.haxe;
  * tight layout (`typedef Foo=Bar;`). The optional-Ref `=` leads on
  * `HxVarDecl.init` and `HxParam.defaultValue` still flow through the
  * bare-optional fallback path, which already emits ` = `.
+ *
+ * `@:fmt(multilineWhenFieldCtorAndOpt('type', 'Anon',
+ * 'anonTypeLeftCurly', 'anyparse.format.BracePlacement.Next'))`
+ * (slice ω-typedef-between-blank) tags
+ * the typedef as structurally multi-line when its bound type is an
+ * anonymous structure AND `anonTypeLeftCurly` is Allman (`Next` — `{`
+ * on its own line, the placement under which the typedef body force-
+ * multi rule fires per slice ω-typedef-anon-force-multi). The grammar-
+ * derived predicate feeds into `HxModule.decls`'s
+ * `blankLinesAfterCtorIf('decl', 'multiline', …, 'TypedefDecl',
+ * 'afterMultilineDecl')` cascade so two consecutive multi-line typedefs
+ * get a blank-line slot between them (matches haxe-formatter's
+ * `emptyLines.betweenTypes: @:default(1)` for typedef→typedef). Under
+ * `Same` (cuddled) the predicate stays false because the same source
+ * emits single-line — the cascade falls through to
+ * `betweenSingleLineTypes` (default 0) instead.
  */
 @:peg
+@:fmt(multilineWhenFieldCtorAndOpt('type', 'Anon', 'anonTypeLeftCurly', 'anyparse.format.BracePlacement.Next'))
 typedef HxTypedefDecl = {
 	@:kw('typedef') var name:HxIdentLit;
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose) var typeParams:Null<Array<HxTypeParamDecl>>;
