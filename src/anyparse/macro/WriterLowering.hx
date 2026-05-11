@@ -1280,10 +1280,20 @@ class WriterLowering {
 				// presence so the helper clears `_inAnonFnBody` for the
 				// per-element write — see helper docstring for rationale.
 				final anonFnClear:Bool = branch.fmtHasFlag('leftCurlyAnonFnOverride');
+				// ω-blockempty: enum-Case branch may opt into empty-curly
+				// break dispatch via `@:fmt(emptyCurlyBreak)` (bare or with
+				// knob-name arg). Used by `HxStatement.BlockStmt` and
+				// `HxExpr.BlockExpr` to route empty bodies through
+				// `opt.blockEmptyCurly`.
+				final emptyCurlyBreak:Bool = branch.fmtHasFlag('emptyCurlyBreak');
+				final emptyCurlyKnobArgs:Null<Array<String>> = branch.fmtReadStringArgs('emptyCurlyBreak');
+				final emptyCurlyKnob:Null<String> = (emptyCurlyKnobArgs != null && emptyCurlyKnobArgs.length >= 1)
+					? emptyCurlyKnobArgs[0]
+					: null;
 				parts.push(triviaBlockStarExpr(
 					argsAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn,
-					leadText, trailText, true, false, false, false, null, false, false, false, keepCurlyBlanks,
-					false, false, null, false, null, anonFnClear
+					leadText, trailText, true, false, false, false, null, false, emptyCurlyBreak, false, keepCurlyBlanks,
+					false, false, null, false, null, anonFnClear, emptyCurlyKnob
 				));
 			}
 		} else if (sepText != null) {
@@ -2812,6 +2822,14 @@ class WriterLowering {
 				final beforeDocComments:Bool = starNode.fmtHasFlag('beforeDocCommentEmptyLines');
 				final indentCaseLabelsGate:Bool = starNode.fmtHasFlag('indentCaseLabels');
 				final emptyCurlyBreak:Bool = starNode.fmtHasFlag('emptyCurlyBreak');
+				// ω-blockempty: call-form `@:fmt(emptyCurlyBreak('<knob>'))`
+				// names a per-construct EmptyCurly opt field. The bare form
+				// returns null and falls back to `_inAnonFnBody` dispatch
+				// inside `triviaBlockStarExpr`.
+				final emptyCurlyKnobArgs:Null<Array<String>> = starNode.fmtReadStringArgs('emptyCurlyBreak');
+				final emptyCurlyKnob:Null<String> = (emptyCurlyKnobArgs != null && emptyCurlyKnobArgs.length >= 1)
+					? emptyCurlyKnobArgs[0]
+					: null;
 				final beginEndType:Bool = starNode.fmtHasFlag('beginEndType');
 				final keepCurlyBlanks:Bool = starNode.fmtHasFlag('keepCurlyBlanks');
 				final lineCommentTrailBlank:Bool = starNode.fmtHasFlag('blankBeforeOrphanLineCommentTrail');
@@ -2847,7 +2865,7 @@ class WriterLowering {
 					openText ?? '', closeText, false, afterDocComments, keepBetweenFields, beforeDocComments,
 					interMemberInfo, indentCaseLabelsGate, emptyCurlyBreak, beginEndType, keepCurlyBlanks,
 					lineCommentTrailBlank, blankBeforeFinalDocInLeading, staticVarSubdivInfo,
-					betweenMultilineCommentsBlanks, uniformBetweenOptField, anonFnClear
+					betweenMultilineCommentsBlanks, uniformBetweenOptField, anonFnClear, emptyCurlyKnob
 				));
 			} else if (isLastField) {
 				if (openText != null) parts.push(macro _dt($v{openText}));
@@ -5176,7 +5194,8 @@ class WriterLowering {
 		staticVarSubdivInfo:Null<StaticVarSubdivisionInfo> = null,
 		betweenMultilineCommentsBlanks:Bool = false,
 		uniformBetweenOptField:Null<String> = null,
-		clearAnonFnBodyOnElems:Bool = false
+		clearAnonFnBodyOnElems:Bool = false,
+		emptyCurlyKnob:Null<String> = null
 	):Expr {
 		// ω-arrow-lambda-body-context: when the call site opts in via
 		// `@:fmt(leftCurlyAnonFnOverride(...))` on the parent Star, the per-
@@ -5215,8 +5234,20 @@ class WriterLowering {
 		// opts into `@:fmt(emptyCurlyBreak)` on a body Star also needs
 		// `_inAnonFnBody` and `anonFunctionEmptyCurly` on its options
 		// typedef. Currently only Haxe grammar uses `emptyCurlyBreak`.
+		// ω-blockempty: when the call site opts into the call-form
+		// `@:fmt(emptyCurlyBreak('<knob>'))` instead of the bare
+		// `@:fmt(emptyCurlyBreak)`, the dispatch reads `opt.<knob>` directly
+		// — bypassing the `_inAnonFnBody` ternary. Used by `BlockStmt` /
+		// `BlockExpr` / `HxSwitchStmt.cases` / `HxSwitchStmtBare.cases` to
+		// route to `opt.blockEmptyCurly` (driven by `lineEnds.blockCurly.emptyCurly`
+		// sub-key). Bare-flag callers (`HxFnBlock.stmts`, class/iface/abstract
+		// member-Star bodies, `HxEnumDecl.ctors`) keep the pre-slice
+		// `_inAnonFnBody`-based dispatch.
+		final emptyCurlyAccess:Expr = emptyCurlyKnob != null
+			? {expr: EField(macro opt, emptyCurlyKnob), pos: Context.currentPos()}
+			: macro (opt._inAnonFnBody ? opt.anonFunctionEmptyCurly : opt.emptyCurly);
 		final emptyDocExpr:Expr = emptyCurlyBreak
-			? macro ((opt._inAnonFnBody ? opt.anonFunctionEmptyCurly : opt.emptyCurly) == anyparse.format.EmptyCurly.Break
+			? macro ($emptyCurlyAccess == anyparse.format.EmptyCurly.Break
 				? _dc([_dt($v{openText}), _dhl(), _dt($v{closeText})])
 				: _dt($v{emptyText}))
 			: macro _dt($v{emptyText});

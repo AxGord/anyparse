@@ -522,6 +522,7 @@ final class HaxeFormatConfigLoader {
 			anonFunctionLeftCurly: base.anonFunctionLeftCurly,
 			blockLeftCurly: base.blockLeftCurly,
 			anonFunctionEmptyCurly: base.anonFunctionEmptyCurly,
+			blockEmptyCurly: base.blockEmptyCurly,
 			objectFieldColon: base.objectFieldColon,
 			typeHintColon: base.typeHintColon,
 			typeCheckColon: base.typeCheckColon,
@@ -915,6 +916,13 @@ final class HaxeFormatConfigLoader {
 			// precedence.
 			final sub:HxFormatCurlyLineEndPolicy = section.blockCurly;
 			if (sub.leftCurly != null) opt.blockLeftCurly = leftCurlyToRuntime(sub.leftCurly);
+			// ω-blockempty: per-construct sub-key
+			// `lineEnds.blockCurly.emptyCurly` overrides the cascade for
+			// empty plain block bodies (`HxStatement.BlockStmt`,
+			// `HxExpr.BlockExpr`, `HxSwitchStmt.cases`,
+			// `HxSwitchStmtBare.cases`). Mirrors haxe-formatter's
+			// `MarkLineEnds.getCurlyPolicy(Block).emptyCurly` precedence.
+			if (sub.emptyCurly != null) opt.blockEmptyCurly = emptyCurlyToRuntime(sub.emptyCurly);
 		}
 		if (section.emptyCurly != null) {
 			final empty:EmptyCurly = emptyCurlyToRuntime(section.emptyCurly);
@@ -927,6 +935,12 @@ final class HaxeFormatConfigLoader {
 			// global ingest order.
 			if (section.anonFunctionCurly == null || section.anonFunctionCurly.emptyCurly == null)
 				opt.anonFunctionEmptyCurly = empty;
+			// ω-blockempty: cascade global `lineEnds.emptyCurly` into
+			// `opt.blockEmptyCurly`. The `lineEnds.blockCurly.emptyCurly`
+			// sub-key handler runs before this block when both are present,
+			// so the explicit override wins regardless of global ingest order.
+			if (section.blockCurly == null || section.blockCurly.emptyCurly == null)
+				opt.blockEmptyCurly = empty;
 		}
 		// ω-metadata-line-end-function: `lineEnds.metadataFunction` →
 		// `opt.metadataFunctionLineEnd`. Default `None` preserves source-

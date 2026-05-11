@@ -355,6 +355,25 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    `objectLiteralCurly`, `typedefCurly`) take precedence over
  *    `blockCurly` for their respective brace contexts.
  *
+ * Field added in slice ω-blockempty:
+ *  - `blockEmptyCurly` — per-construct `EmptyCurly` knob for the
+ *    empty-body emission of plain block bodies (`if (x) {}`, an empty
+ *    `{ }` block, `switch (e) {}`, etc.). `Same` (default) keeps
+ *    the flat `{}` layout; `Break` emits the body across two lines with
+ *    `}` on its own line at the parent's indent (`{\n}`). The loader
+ *    cascades global `lineEnds.emptyCurly` into this knob (sister
+ *    pattern to `anonFunctionEmptyCurly`); per-construct sub-key
+ *    `lineEnds.blockCurly.emptyCurly` overrides the cascade. Consumed
+ *    by `HxStatement.BlockStmt`, `HxExpr.BlockExpr`,
+ *    `HxSwitchStmt.cases`, `HxSwitchStmtBare.cases` via the
+ *    `@:fmt(emptyCurlyBreak('blockEmptyCurly'))` call-form flag — the
+ *    bare `@:fmt(emptyCurlyBreak)` form keeps the pre-slice dispatch
+ *    (`_inAnonFnBody` selecting between `anonFunctionEmptyCurly` and
+ *    global `emptyCurly`) and remains the path used by `HxFnBlock.stmts`
+ *    and class / interface / abstract member-Star bodies. Mirrors
+ *    haxe-formatter's `MarkLineEnds.detectCurlyPolicy(Block).emptyCurly`
+ *    precedence.
+ *
  * Field added in slice ψ₇ (object-literal colon spacing):
  *  - `objectFieldColon` — whitespace around the `:` inside an
  *    anonymous object literal (`HxObjectField.value`'s lead). `After`
@@ -1368,6 +1387,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	anonFunctionLeftCurly:BracePlacement,
 	anonFunctionEmptyCurly:EmptyCurly,
 	blockLeftCurly:BracePlacement,
+	blockEmptyCurly:EmptyCurly,
 	objectFieldColon:WhitespacePolicy,
 	typeHintColon:WhitespacePolicy,
 	typeCheckColon:WhitespacePolicy,

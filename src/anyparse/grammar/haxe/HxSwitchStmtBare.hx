@@ -25,5 +25,5 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxSwitchStmtBare = {
 	var expr:HxExpr;
-	@:fmt(leftCurly('blockLeftCurly'), indentCaseLabels) @:lead('{') @:trail('}') @:trivia var cases:Array<HxSwitchCase>;
+	@:fmt(leftCurly('blockLeftCurly'), emptyCurlyBreak('blockEmptyCurly'), indentCaseLabels) @:lead('{') @:trail('}') @:trivia var cases:Array<HxSwitchCase>;
 };
