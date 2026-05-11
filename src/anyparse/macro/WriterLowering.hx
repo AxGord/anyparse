@@ -2468,10 +2468,33 @@ class WriterLowering {
 							// `opt.<knob>:WrapRules` so the renderer
 							// commits to `(cond)` or `(\n\tcond\n)` based
 							// on column fit at layout time.
+							//
+							// ω-chain-fillline-in-condwrap: before the
+							// inner cond Ref writeCall evaluates, shadow
+							// `opt` with `_setChainModeOverride(opt, ovr)`
+							// where `ovr` is derived from the cond
+							// cascade's `defaultMode` (NoWrap → null, no
+							// allocation). The helper swaps
+							// `opBoolChainWrap` / `opAddSubChainWrap` to
+							// `{rules: [], defaultMode: mode}` so the
+							// chain dispatch inside the cond emits the
+							// override mode directly — mirrors fork's
+							// `collapseChainWraps` post-pass output shape
+							// without a Doc-IR post-collapse phase. The
+							// outer `WrapList.emitCondition` receives the
+							// same shadowed opt; harmless because the
+							// cond knob itself is preserved by `_copyOpt`.
 							final condKnobAccess:Expr = optFieldAccess(condWrapArgs[0]);
-							parts.push(macro anyparse.format.wrap.WrapList.emitCondition(
-								$v{leadText}, $v{trailText}, $writeCall, opt, $condKnobAccess
-							));
+							parts.push(macro {
+								final _condRules:anyparse.format.wrap.WrapRules = $condKnobAccess;
+								final _condMode:anyparse.format.wrap.WrapMode = _condRules.defaultMode;
+								final _chainOvr:Null<anyparse.format.wrap.WrapMode> =
+									_condMode == anyparse.format.wrap.WrapMode.NoWrap ? null : _condMode;
+								final opt = _setChainModeOverride(opt, _chainOvr);
+								anyparse.format.wrap.WrapList.emitCondition(
+									$v{leadText}, $v{trailText}, $writeCall, opt, $condKnobAccess
+								);
+							});
 						} else {
 							parts.push(writeCall);
 						}

@@ -11,6 +11,7 @@ import anyparse.format.RightCurlyPlacement;
 import anyparse.format.SameLinePolicy;
 import anyparse.format.WhitespacePolicy;
 import anyparse.format.WriteOptions;
+import anyparse.format.wrap.WrapMode;
 import anyparse.format.wrap.WrapRules;
 import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
 
@@ -1377,6 +1378,26 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    The underscore prefix marks it as internal — no JSON loader entry,
  *    no `hxformat.json` ingest. Default `false`.
  *
+ * Internal field added in slice ω-chain-fillline-in-condwrap (chain
+ * mode override for opBoolChain / opAddSubChain inside an active
+ * `@:fmt(condWrap)` cond-wrap site):
+ *  - `_chainModeOverride` — write-time-only override forcing
+ *    `BinaryChainEmit.emit`'s cascade to a single mode. Set by the
+ *    runtime `_setChainModeOverride(opt, mode)` helper at the
+ *    `@:fmt(condWrap('<knob>'))` site in `WriterLowering.lowerStruct`
+ *    before the inner cond Ref writeCall evaluates. The helper swaps
+ *    `opBoolChainWrap` and `opAddSubChainWrap` to a fresh
+ *    `{rules: [], defaultMode: mode}` cascade so the chain dispatch at
+ *    `WriterLowering.hx:600` (which reads those fields by name) sees
+ *    the override transparently — no change to `BinaryChainEmit.emit`.
+ *    Derived mode reads `opt.<condKnob>.defaultMode` — `NoWrap` /
+ *    unmappable modes leave the override `null`, suppressing
+ *    allocation on the default path. Mirrors fork's
+ *    `collapseChainWraps` post-pass output shape without a Doc-IR
+ *    post-collapse phase. Sister channel to `_inAnonFnBody` —
+ *    write-time-only, no JSON loader entry, no `hxformat.json` ingest.
+ *    Default `null`.
+ *
  * Internal field added in slice ω-extern-class-no-blanks
  * (extern-modifier-aware interMember suppression):
  *  - `_classExtern` — write-time-only signal flagging that the current
@@ -1588,4 +1609,5 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	_classExtern:Bool,
 	_inAnonFnBody:Bool,
 	_inTypedefBody:Bool,
+	_chainModeOverride:Null<WrapMode>,
 };

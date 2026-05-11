@@ -80,6 +80,19 @@ class WriterCodegen {
 				fields.push(setTypedefBodyField(optionsCT));
 				fields.push(clearTypedefBodyField(optionsCT));
 			}
+			// ω-chain-fillline-in-condwrap: opt-fanout helper for
+			// `@:fmt(condWrap)` site. Forces `BinaryChainEmit.emit`'s
+			// cascade to a single mode by swapping `opBoolChainWrap` /
+			// `opAddSubChainWrap` to a degenerate `{rules: [],
+			// defaultMode: mode}` cascade. Sister to `_setAnonFnBody` —
+			// idempotent, null-mode short-circuit avoids allocation on
+			// the default path. Emitted only when the opt typedef
+			// declares `_chainModeOverride:Null<WrapMode>` AND carries
+			// both `opBoolChainWrap` and `opAddSubChainWrap`.
+			if (optionsHasField(optionsTypePath, '_chainModeOverride')
+				&& optionsHasField(optionsTypePath, 'opBoolChainWrap')
+				&& optionsHasField(optionsTypePath, 'opAddSubChainWrap'))
+				fields.push(setChainModeOverrideField(optionsCT));
 			// Layout helpers
 			fields.push(blockBodyField());
 			fields.push(sepListField());
@@ -568,6 +581,65 @@ class WriterCodegen {
 					if (!o._inTypedefBody) return o;
 					final _c:$optionsCT = _copyOpt(o);
 					_c._inTypedefBody = false;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * ω-chain-fillline-in-condwrap — opt-fanout shim for the
+	 * `@:fmt(condWrap('<knob>'))` site. Forces `BinaryChainEmit.emit`'s
+	 * cascade to a single mode by swapping `opBoolChainWrap` and
+	 * `opAddSubChainWrap` to `{rules: [], defaultMode: mode}` — the
+	 * chain dispatch reads those fields by name and sees the override
+	 * transparently, no `BinaryChainEmit` signature change. Idempotent:
+	 * returns `o` unchanged when `mode == null` (no allocation on the
+	 * default path) or when the override already matches. Consumed at
+	 * `HxIfStmt.cond` / `HxWhileStmt.cond` writer call sites to mirror
+	 * haxe-formatter's `collapseChainWraps` post-pass output shape
+	 * (chains inside an active cond-wrap collapse from `OnePerLine` to
+	 * `FillLine`-like packing). Emitted only when the opt typedef
+	 * declares `_chainModeOverride:Null<WrapMode>` AND carries both
+	 * `opBoolChainWrap` and `opAddSubChainWrap` (currently
+	 * `HxModuleWriteOptions` only).
+	 */
+	private static function setChainModeOverrideField(optionsCT:ComplexType):Field {
+		return {
+			name: '_setChainModeOverride',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [
+					{name: 'o', type: optionsCT},
+					{name: 'mode', type: macro : Null<anyparse.format.wrap.WrapMode>},
+				],
+				ret: optionsCT,
+				expr: macro {
+					if (mode == null) return o;
+					final _mode:anyparse.format.wrap.WrapMode = mode;
+					if (o._chainModeOverride == _mode) return o;
+					final _c:$optionsCT = _copyOpt(o);
+					_c._chainModeOverride = _mode;
+					// `defaultLocation: BeforeLast` mirrors fork's post-
+					// `collapseChainWraps` output shape: chain breaks remain at
+					// the OnePerLineAfterFirst-emitted `BeforeLast` positions
+					// (operator prefixes the next operand on the continuation
+					// line). Without an explicit location the cascade falls
+					// through to `WrapList.decide`'s default fallback which
+					// emits `AfterLast` — verified post-slice diff shifted
+					// from `\n && X` (correct) to `X &&\n` (wrong) until this
+					// line landed.
+					_c.opBoolChainWrap = {
+						rules: [],
+						defaultMode: _mode,
+						defaultLocation: anyparse.format.wrap.WrappingLocation.BeforeLast,
+					};
+					_c.opAddSubChainWrap = {
+						rules: [],
+						defaultMode: _mode,
+						defaultLocation: anyparse.format.wrap.WrappingLocation.BeforeLast,
+					};
 					return _c;
 				},
 			}),
