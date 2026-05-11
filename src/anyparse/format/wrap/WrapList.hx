@@ -54,6 +54,20 @@ class WrapList {
 	 * even when item widths would otherwise collapse the list flat.
 	 * Slice ω-objectlit-source-trail-comma — first consumer is
 	 * `HxObjectLit.fields`.
+	 *
+	 * `trailBreak`: the Doc emitted immediately before `Text(close)` in
+	 * the `OnePerLine` shape. Null defaults to `Line('\n')` — the
+	 * legacy hardcoded close-on-own-line layout — so pre-slice callers
+	 * stay byte-identical. Per-construct `RightCurlyPlacement` knobs
+	 * pass `Empty` for `Inline` (close glued to last body token) or
+	 * `Line('\n')` for `Same`. Mirrors the trivia branch's
+	 * `triviaTrailDoc` in `WriterLowering.triviaSepStarExpr` so wrap-
+	 * engine and trivia paths honour the same
+	 * `RightCurlyPlacement.{Inline,Same}` semantic. Honoured by
+	 * `shapeOnePerLine` only — `OnePerLineAfterFirst` / `FillLine` glue
+	 * close by mode design and have no Inline-vs-Same axis to express.
+	 * Slice ω-wraplist-trailbreakdoc — first consumers are
+	 * `HxObjectLit.fields` and `HxType.Anon` via `triviaSepStarExpr`.
 	 */
 	public static function emit(
 		open:String, close:String, sep:String,
@@ -62,8 +76,12 @@ class WrapList {
 		keepInnerWhenEmpty:Bool, rules:WrapRules,
 		appendTrailingComma:Bool = false,
 		leadFlat:Doc = Empty, leadBreak:Doc = Empty,
-		forceExceeds:Bool = false
+		forceExceeds:Bool = false,
+		?trailBreak:Doc
 	):Doc {
+		// `Line('\n')` is not a Haxe-constant default — unwrap a null
+		// sentinel into the legacy hardcoded hardline here.
+		final trailBreakDoc:Doc = trailBreak ?? Line('\n');
 		if (items.length == 0)
 			return Text(open + (keepInnerWhenEmpty ? ' ' : '') + close);
 
@@ -120,7 +138,7 @@ class WrapList {
 		// Per-state shape builder: picks the right lead based on the
 		// resolved mode (flat vs break-style layout).
 		function shapeAt(mode:WrapMode, lead:Doc):Doc {
-			final body:Doc = shape(mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
+			final body:Doc = shape(mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreakDoc);
 			return prependLead(body, lead);
 		}
 
@@ -569,11 +587,11 @@ class WrapList {
 	private static function shape(
 		mode:WrapMode, open:String, close:String, sep:String,
 		items:Array<Doc>, openInside:Doc, closeInside:Doc, cols:Int,
-		appendTrailingComma:Bool
+		appendTrailingComma:Bool, trailBreak:Doc
 	):Doc {
 		return switch mode {
 			case NoWrap: shapeNoWrap(open, close, sep, items, openInside, closeInside);
-			case OnePerLine: shapeOnePerLine(open, close, sep, items, cols, appendTrailingComma);
+			case OnePerLine: shapeOnePerLine(open, close, sep, items, cols, appendTrailingComma, trailBreak);
 			case OnePerLineAfterFirst: shapeOnePerLineAfterFirst(open, close, sep, items, cols, appendTrailingComma);
 			case FillLine | FillLineWithLeadingBreak: shapeFillLine(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
 			case _: shapeNoWrap(open, close, sep, items, openInside, closeInside);
@@ -594,7 +612,7 @@ class WrapList {
 
 	private static function shapeOnePerLine(
 		open:String, close:String, sep:String, items:Array<Doc>, cols:Int,
-		appendTrailingComma:Bool
+		appendTrailingComma:Bool, trailBreak:Doc
 	):Doc {
 		final inner:Array<Doc> = [];
 		for (i in 0...items.length) {
@@ -602,7 +620,12 @@ class WrapList {
 			inner.push(items[i]);
 			if (i < items.length - 1 || appendTrailingComma) inner.push(Text(sep));
 		}
-		return Concat([Text(open), Nest(cols, Concat(inner)), Line('\n'), Text(close)]);
+		// `trailBreak` per-construct rightCurly substitution
+		// (ω-wraplist-trailbreakdoc). Default `Line('\n')` preserves the
+		// legacy close-on-own-line layout; `Empty` produced from
+		// `RightCurlyPlacement.Inline` glues close to the last body
+		// token. See `emit` docstring for the full rationale.
+		return Concat([Text(open), Nest(cols, Concat(inner)), trailBreak, Text(close)]);
 	}
 
 	private static function shapeOnePerLineAfterFirst(

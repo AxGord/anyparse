@@ -266,6 +266,38 @@ class HxRightCurlyOptionsTest extends Test {
 		Assert.isTrue(out.indexOf('b: 2\n\t\t}') != -1, 'expected object-literal close on own line in: <$out>');
 	}
 
+	/**
+	 * ω-wraplist-trailbreakdoc — wrap-engine path parity with the trivia
+	 * branch. Flat source (no newlines between fields) and 4 fields force
+	 * the `noTriviaBranch` of `triviaSepStarExpr` through `WrapList.emit`,
+	 * whose default `objectLiteralWrap` cascade commits to `OnePerLine`
+	 * at `count >= 4`. The `trailBreak` Doc fed into
+	 * `WrapList.shapeOnePerLine` then drives close placement — `Empty`
+	 * (Inline) glues the close to the last field, `Line('\n')` (Same)
+	 * keeps it on its own line.
+	 */
+	public function testSameKeepsObjectLiteralCloseOnOwnLineInWrapEngine():Void {
+		final src:String = 'class Main {\n\tstatic function f() {\n\t\tvar o = {a: 1, b: 2, c: 3, d: 4};\n\t}\n}';
+		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), makeOpts(RightCurlyPlacement.Same));
+		Assert.isTrue(out.indexOf('d: 4\n\t\t}') != -1, 'expected wrap-engine close on own line in: <$out>');
+	}
+
+	public function testInlineGluesObjectLiteralCloseInWrapEngine():Void {
+		final src:String = 'class Main {\n\tstatic function f() {\n\t\tvar o = {a: 1, b: 2, c: 3, d: 4};\n\t}\n}';
+		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), makeOpts(RightCurlyPlacement.Inline));
+		Assert.isTrue(out.indexOf('d: 4}') != -1, 'expected wrap-engine close glued in: <$out>');
+	}
+
+	public function testNoWrapShapeUnaffectedByObjectLiteralRightCurly():Void {
+		// 2 fields, flat source — cascade picks `NoWrap` (count <= 3 and
+		// total < 60 cols). `shapeNoWrap` emits the single-line
+		// `{a: 1, b: 2}` shape with no trailBreak in play, so the close
+		// is glued regardless of `objectLiteralRightCurly`.
+		final src:String = 'class Main {\n\tstatic function f() {\n\t\tvar o = {a: 1, b: 2};\n\t}\n}';
+		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), makeOpts(RightCurlyPlacement.Inline));
+		Assert.isTrue(out.indexOf('{a: 1, b: 2}') != -1, 'expected single-line nowrap shape in: <$out>');
+	}
+
 	private inline function makeOpts(rc:RightCurlyPlacement):HxModuleWriteOptions {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		// Mirror the loader's `lineEnds.rightCurly` cascade — set every

@@ -5961,10 +5961,10 @@ class WriterLowering {
 		// token) and `_dhl()` otherwise. Null knob → unconditional
 		// `_dhl()` (legacy). Substituted for the unconditional `_dhl()`
 		// emitted immediately before `_dt(closeText)` in the trivia
-		// branch. The wrap-engine branch (no per-element trivia)
-		// continues to use `WrapList.emit`'s shapes — wrap-branch
-		// Inline support is deferred to a separate slice if a fixture
-		// demands it.
+		// branch. The wrap-engine branch reads the same expression
+		// through `WrapList.emit`'s `trailBreak` param (slice
+		// ω-wraplist-trailbreakdoc) — both branches honour the same
+		// `RightCurlyPlacement.{Inline,Same}` semantic.
 		final rightCurlyKnobExpr:Null<Expr> = rightCurlyKnob == null
 			? null
 			: optFieldAccess(rightCurlyKnob);
@@ -5975,6 +5975,13 @@ class WriterLowering {
 				expr: ESwitch(rightCurlyKnobExpr, [{values: [inlinePat], expr: macro _de(), guard: null}], macro _dhl()),
 				pos: Context.currentPos(),
 			};
+		// ω-wraplist-trailbreakdoc: wrap-engine close placement reads
+		// the same knob as the trivia branch's `triviaTrailDoc`.
+		// `WrapList.shapeOnePerLine` substitutes the result for the
+		// hardcoded `Line('\n')` before `Text(close)` — `_de()` glues
+		// the close to the last body token (Inline), `_dhl()` keeps
+		// it on its own line (Same).
+		final wrapTrailBreakDoc:Expr = triviaTrailDoc;
 		// ω-wraprules-objlit: when the Star carries
 		// `@:fmt(wrapRules('<field>'))`, defer the no-trivia branch's
 		// layout decision to the runtime `WrapList.emit` engine. The
@@ -6035,7 +6042,7 @@ class WriterLowering {
 				anyparse.format.wrap.WrapList.emit(
 					$v{openText}, $v{closeText}, $v{sepText},
 					_docs, opt, $openInsideDoc, $closeInsideDoc, false, $rulesExpr, $appendTrailingCommaExpr,
-					$wrapLeadFlatDoc, $wrapLeadBreakDoc, $forceExceedsExpr
+					$wrapLeadFlatDoc, $wrapLeadBreakDoc, $forceExceedsExpr, $wrapTrailBreakDoc
 				);
 			};
 		} else {
