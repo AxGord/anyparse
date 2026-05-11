@@ -1325,6 +1325,29 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    as internal — no JSON loader entry, no `hxformat.json` ingest.
  *    Default `false`.
  *
+ * Internal field added in slice ω-typedef-anon-force-multi
+ * (typedef-RHS anon force-multi-line layout):
+ *  - `_inTypedefBody` — write-time-only signal flagging that the current
+ *    writer call is descending into a typedef RHS type (`type` field of
+ *    `HxTypedefDecl`). Set via `@:fmt(propagateTypedefContext)` +
+ *    `_setTypedefBody` opt-fanout on `HxTypedefDecl.type`. Consumed by
+ *    `@:fmt(forceMultiInTypedef)` on `HxType.Anon.fields` — when the
+ *    flag is true AND `opt.anonTypeLeftCurly == BracePlacement.Next`,
+ *    the writer threads a runtime `forceMode` predicate into
+ *    `WrapList.emit` so the cascade is bypassed and the anon body is
+ *    laid out `OnePerLine` (forcing `=\n{\n\t...\n}` shape even when
+ *    fields fit flat). The leftCurly==Next gate mirrors fork's
+ *    `MarkLineEnds.detectCurlyPolicy(TypedefDecl)` rule: the
+ *    curly-break-driven multi-line layout fires only when the global
+ *    `lineEnds.leftCurly` ↔ `anonTypeLeftCurly` cascade hits
+ *    `before`/`both` (= Next). With the default `after` cascade (Same)
+ *    flat typedef-RHS anons stay cuddled. Cleared via
+ *    `_clearTypedefBody` per-element in the Anon body Star so nested
+ *    anons inside the typedef RHS (`typedef T = {f:{g:Int}}`) revert
+ *    to default layout-driven wrap. Sister channel to `_inAnonFnBody`.
+ *    The underscore prefix marks it as internal — no JSON loader entry,
+ *    no `hxformat.json` ingest. Default `false`.
+ *
  * Internal field added in slice ω-extern-class-no-blanks
  * (extern-modifier-aware interMember suppression):
  *  - `_classExtern` — write-time-only signal flagging that the current
@@ -1533,4 +1556,5 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	_inExprPosition:Bool,
 	_classExtern:Bool,
 	_inAnonFnBody:Bool,
+	_inTypedefBody:Bool,
 };

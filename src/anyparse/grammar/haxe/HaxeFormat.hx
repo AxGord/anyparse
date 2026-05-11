@@ -735,6 +735,7 @@ final class HaxeFormat implements TextFormat {
 		_inExprPosition: false,
 		_classExtern: false,
 		_inAnonFnBody: false,
+		_inTypedefBody: false,
 		blockCommentAdapter: anyparse.format.comment.BlockCommentNormalizer.processCapturedBlockComment,
 		lineCommentAdapter: anyparse.format.comment.LineCommentNormalizer.normalizeLineComment,
 		endsWithCloseBrace: HxExprUtil.endsWithCloseBrace,

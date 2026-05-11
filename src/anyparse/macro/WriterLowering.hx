@@ -1272,9 +1272,21 @@ class WriterLowering {
 				// (no opt-in or bare flag) falls back to unconditional
 				// `_dhl()` before close.
 				final knobRightCurly:Null<String> = branch.fmtReadString('rightCurly');
+				// ω-typedef-anon-force-multi: enum-Alt branch reader for
+				// `@:fmt(forceMultiInTypedef)` on `HxType.Anon`. Threads the
+				// flag into `triviaSepStarExpr` so the no-trivia branch
+				// emits a runtime `opt._inTypedefBody ? WrapMode.OnePerLine
+				// : null` as `WrapList.emit`'s 15th `forceMode` arg. Closes
+				// the `issue_301` typedef-anon source-flat → fork-multi
+				// shape gap by forcing OnePerLine when the parent
+				// `HxTypedefDecl.type` Ref has flipped `_inTypedefBody=true`
+				// via `propagateTypedefContext`. Non-typedef anon callers
+				// (var-type-hint, fn-return-type) stay cascade-driven.
+				final forceMultiTypedef:Bool = branch.fmtHasFlag('forceMultiInTypedef');
 				parts.push(triviaSepStarExpr(
 					argsAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, leadText, trailText, sepText,
-					wrapRulesField, knobLeftCurly, knobRightCurly, null, null, openInsideExpr, closeInsideExpr, beforeDocComments
+					wrapRulesField, knobLeftCurly, knobRightCurly, null, null, openInsideExpr, closeInsideExpr, beforeDocComments,
+					forceMultiTypedef
 				));
 			} else {
 				// ω-bropen-keep: forward `@:fmt(keepCurlyBlanks)` from the
@@ -2021,6 +2033,15 @@ class WriterLowering {
 					// instead of the global `opt.blockLeftCurly`. Mirrors the
 					// optional-Ref site above (consumer: `HxFnExpr.body`).
 					final propagateAnonFn:Bool = child.fmtHasFlag('propagateAnonFnContext');
+					// ω-typedef-anon-force-multi: sister opt-fanout — when the
+					// mandatory Ref carries `@:fmt(propagateTypedefContext)`,
+					// wrap opt in `_setTypedefBody` so the descendant writer
+					// sees `_inTypedefBody=true`. Used by `HxTypedefDecl.type`
+					// so the inner `HxType.Anon.fields` Star reads
+					// `opt._inTypedefBody=true` and forces multi-line via
+					// `WrapList.emit(..., forceMode = WrapMode.OnePerLine)`.
+					// Composes with sister flags by stacked wrapping.
+					final propagateTypedef:Bool = child.fmtHasFlag('propagateTypedefContext');
 					// ω-extern-class-no-blanks:
 					// `@:fmt(setBoolFlagFromStarCtor(optField, starField,
 					// ctorName))` allocates a fresh opt copy
@@ -2044,16 +2065,15 @@ class WriterLowering {
 							'WriterLowering: @:fmt(setBoolFlagFromStarCtor) expects 3 string args (optField, starField, ctorName), got ${boolFlagArgs.length}',
 							Context.currentPos()
 						);
-					final optArgExpr:Expr = if (boolFlagArgs != null)
+					final optArgExpr:Expr = if (boolFlagArgs != null) {
 						macro _wo;
-					else if (propagateExpr && propagateAnonFn)
-						macro _setAnonFnBody(_setExprPosition(opt));
-					else if (propagateExpr)
-						macro _setExprPosition(opt);
-					else if (propagateAnonFn)
-						macro _setAnonFnBody(opt);
-					else
-						macro opt;
+					} else {
+						var e:Expr = macro opt;
+						if (propagateExpr) e = macro _setExprPosition($e);
+						if (propagateAnonFn) e = macro _setAnonFnBody($e);
+						if (propagateTypedef) e = macro _setTypedefBody($e);
+						e;
+					};
 					final baseRawWriteCall:Expr = {
 						expr: ECall(macro $i{writeFn}, [fieldAccess, optArgExpr]),
 						pos: Context.currentPos(),
@@ -2835,12 +2855,23 @@ class WriterLowering {
 					// param. Null (no opt-in) preserves pre-slice
 					// unconditional `_dhl()` before close.
 					final knobRightCurly:Null<String> = starNode.fmtReadString('rightCurly');
+					// ω-typedef-anon-force-multi: when the sep-Star carries
+					// `@:fmt(forceMultiInTypedef)` (currently only
+					// `HxType.Anon.fields`), thread the flag into
+					// `triviaSepStarExpr` so its no-trivia branch emits a
+					// runtime `opt._inTypedefBody ? WrapMode.OnePerLine :
+					// null` as `WrapList.emit`'s 15th `forceMode` arg.
+					// Bypasses the cascade only when the typedef-RHS
+					// context is active — non-typedef anon consumers
+					// (var-type-hint, fn-return-type) stay cascade-driven.
+					final forceMultiTypedef:Bool = starNode.fmtHasFlag('forceMultiInTypedef');
 					parts.push(triviaSepStarExpr(
 						fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn,
 						openText ?? '', closeText, sepText, wrapRulesField,
 						leftCurlyOwnedBySep ? knobLeftCurly : null,
 						knobRightCurly,
-						trailPresentAccess, trailingCommaField
+						trailPresentAccess, trailingCommaField,
+						null, null, false, forceMultiTypedef
 					));
 					return;
 				}
@@ -5866,7 +5897,8 @@ class WriterLowering {
 		rightCurlyKnob:Null<String> = null,
 		trailPresentAccess:Null<Expr> = null, trailingCommaField:Null<String> = null,
 		openInsideExpr:Null<Expr> = null, closeInsideExpr:Null<Expr> = null,
-		beforeDocCommentEmptyLines:Bool = false
+		beforeDocCommentEmptyLines:Bool = false,
+		forceMultiInTypedef:Bool = false
 	):Expr {
 		// ω-trivia-sep-anontype-braces (Phase B1): when the call site
 		// reads `@:fmt(anonTypeBracesOpen)` / `objectLiteralBracesOpen`
@@ -5914,8 +5946,19 @@ class WriterLowering {
 		} : macro {
 			if (_t.blankBefore && _si > 0) _inner.push(_dhl());
 		};
+		// ω-typedef-anon-force-multi: when the Star carries
+		// `@:fmt(forceMultiInTypedef)`, the outermost typedef-RHS anon
+		// has flipped `opt._inTypedefBody=true` via the parent Ref's
+		// `propagateTypedefContext`. Per-element writer calls must
+		// CLEAR the flag before recursing so a nested anon
+		// (`typedef T = {a:{b:Int}}` — inner `{b:Int}`) reverts to
+		// default fit-driven wrap. Sister to `_clearAnonFnBody` on the
+		// block-Star path.
+		final elemOptArg:Expr = forceMultiInTypedef
+			? macro _clearTypedefBody(opt)
+			: macro opt;
 		final triviaElemCall:Expr = {
-			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
+			expr: ECall(macro $i{elemFn}, [macro _t.node, elemOptArg]),
 			pos: Context.currentPos(),
 		};
 		final emptyText:String = openText + closeText;
@@ -6029,6 +6072,39 @@ class WriterLowering {
 		final appendTrailingCommaExpr:Expr = trailPresentAccess != null && trailingCommaField != null
 			? macro $trailPresentAccess || $knobAccessOrFalse
 			: knobAccessOrFalse;
+		// ω-typedef-anon-force-multi: 15th positional arg to
+		// `WrapList.emit` — a runtime `Null<WrapMode>` predicate. When
+		// the Star opted into `@:fmt(forceMultiInTypedef)` AND the
+		// parent typedef-RHS Ref flipped `opt._inTypedefBody=true` via
+		// `propagateTypedefContext` AND `opt.anonTypeLeftCurly == Next`,
+		// the engine bypasses the cascade and lays out the body
+		// `OnePerLine` unconditionally — closes the issue_301 typedef-
+		// anon source-flat → fork-multi-line shape gap deferred in
+		// ω-anontype-left-curly. The leftCurly==Next gate mirrors fork's
+		// `MarkLineEnds.detectCurlyPolicy(TypedefDecl)` rule: the
+		// curly-break-driven multi-line layout fires only when the
+		// global `lineEnds.leftCurly` ↔ our `anonTypeLeftCurly` cascade
+		// hits `before`/`both` (= Next). For the default `after` (= Same)
+		// flat typedef-RHS anons stay cuddled, matching issue_586 /
+		// issue_206 / issue_588 (which leave `typedef T = {a:Int}` /
+		// `typedef T = {…}->Void` / `typedef T = Array<{k:Int}>` flat).
+		// Null fall-through preserves pre-slice cascade-driven layout
+		// for non-typedef anon consumers (var-type-hint, fn-return-type).
+		// ω-typedef-anon-force-multi: 15th positional arg to
+		// `WrapList.emit` — a runtime `Null<WrapMode>` predicate. When
+		// the Star opted into `@:fmt(forceMultiInTypedef)` AND the
+		// parent typedef-RHS Ref flipped `opt._inTypedefBody=true` via
+		// `propagateTypedefContext` AND `opt.anonTypeLeftCurly == Next`,
+		// the engine bypasses the cascade and lays out the body
+		// `OnePerLine` unconditionally — closes the issue_301 typedef-
+		// anon source-flat → fork-multi-line shape gap deferred in
+		// ω-anontype-left-curly. The leftCurly==Next gate mirrors fork's
+		// `MarkLineEnds.detectCurlyPolicy(TypedefDecl)` rule.
+		final forceModeExpr:Expr = forceMultiInTypedef
+			? macro (opt._inTypedefBody && opt.anonTypeLeftCurly == anyparse.format.BracePlacement.Next
+				? anyparse.format.wrap.WrapMode.OnePerLine
+				: (null : Null<anyparse.format.wrap.WrapMode>))
+			: macro (null : Null<anyparse.format.wrap.WrapMode>);
 		final noTriviaBranch:Expr = if (wrapRulesField != null) {
 			final rulesExpr:Expr = optFieldAccess(wrapRulesField);
 			macro {
@@ -6042,7 +6118,7 @@ class WriterLowering {
 				anyparse.format.wrap.WrapList.emit(
 					$v{openText}, $v{closeText}, $v{sepText},
 					_docs, opt, $openInsideDoc, $closeInsideDoc, false, $rulesExpr, $appendTrailingCommaExpr,
-					$wrapLeadFlatDoc, $wrapLeadBreakDoc, $forceExceedsExpr, $wrapTrailBreakDoc
+					$wrapLeadFlatDoc, $wrapLeadBreakDoc, $forceExceedsExpr, $wrapTrailBreakDoc, $forceModeExpr
 				);
 			};
 		} else {

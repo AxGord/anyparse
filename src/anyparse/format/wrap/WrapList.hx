@@ -68,6 +68,19 @@ class WrapList {
 	 * close by mode design and have no Inline-vs-Same axis to express.
 	 * Slice ω-wraplist-trailbreakdoc — first consumers are
 	 * `HxObjectLit.fields` and `HxType.Anon` via `triviaSepStarExpr`.
+	 *
+	 * `forceMode`: optional `WrapMode` override that bypasses the
+	 * cascade and forces a single mode regardless of `evalAt(...)`.
+	 * `null` (default) is the pre-slice behaviour — the cascade runs
+	 * normally. Non-null short-circuits both `exceeds=false` and
+	 * `exceeds=true` evaluations to the supplied mode AND skips
+	 * extra-threshold enumeration, so the renderer commits
+	 * unconditionally to one shape (no `IfBreak` wrapping needed).
+	 * Used by `@:fmt(forceMultiInTypedef)` on typedef-RHS anon types
+	 * to thread `WrapMode.OnePerLine` when `opt._inTypedefBody=true`,
+	 * matching fork's `MarkLineEnds.markTypedef` parent-walk forcing
+	 * `=\n{\n\t...\n}` shape regardless of field count or fit.
+	 * Slice ω-typedef-anon-force-multi.
 	 */
 	public static function emit(
 		open:String, close:String, sep:String,
@@ -77,7 +90,8 @@ class WrapList {
 		appendTrailingComma:Bool = false,
 		leadFlat:Doc = Empty, leadBreak:Doc = Empty,
 		forceExceeds:Bool = false,
-		?trailBreak:Doc
+		?trailBreak:Doc,
+		?forceMode:Null<WrapMode>
 	):Doc {
 		// `Line('\n')` is not a Haxe-constant default — unwrap a null
 		// sentinel into the legacy hardcoded hardline here.
@@ -129,7 +143,13 @@ class WrapList {
 		// All other cond kinds preserve their original evaluators.
 		// Non-`inline` so it can be passed as `evalAt` arg into
 		// `buildForceBreakTree` (Haxe forbids closure-on-inline-closure).
+		// ω-typedef-anon-force-multi: when caller passes a non-null
+		// `forceMode`, the cascade is bypassed and the supplied mode is
+		// returned unconditionally. Used by `@:fmt(forceMultiInTypedef)`
+		// on typedef-RHS anon types via the runtime gate
+		// `opt._inTypedefBody ? WrapMode.OnePerLine : null`.
 		function evalAt(exceeds:Bool, firing:Array<Int>):WrapMode {
+			if (forceMode != null) return forceMode;
 			return decideWithLineLengthState(rules, items.length, maxLen, total,
 				exceeds, anyHardline,
 				t -> t == opt.lineWidth ? exceeds : firing.contains(t));

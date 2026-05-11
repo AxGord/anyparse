@@ -71,6 +71,15 @@ class WriterCodegen {
 				fields.push(setAnonFnBodyField(optionsCT));
 				fields.push(clearAnonFnBodyField(optionsCT));
 			}
+			// ω-typedef-anon-force-multi: opt-fanout helper pair for
+			// `propagateTypedefContext` (typedef-RHS Ref dispatch) and
+			// `forceMultiInTypedef` (Anon-body Star per-element clear).
+			// Sister to `_setAnonFnBody`/`_clearAnonFnBody`. Gated on
+			// `_inTypedefBody:Bool` field presence on the opt typedef.
+			if (optionsHasField(optionsTypePath, '_inTypedefBody')) {
+				fields.push(setTypedefBodyField(optionsCT));
+				fields.push(clearTypedefBodyField(optionsCT));
+			}
 			// Layout helpers
 			fields.push(blockBodyField());
 			fields.push(sepListField());
@@ -497,6 +506,67 @@ class WriterCodegen {
 					if (!o._inAnonFnBody) return o;
 					final _c:$optionsCT = _copyOpt(o);
 					_c._inAnonFnBody = false;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * ω-typedef-anon-force-multi — opt-fanout shim for the
+	 * `propagateTypedefContext` meta. Idempotent sister to
+	 * `_setAnonFnBody` — returns `o` unchanged when `_inTypedefBody` is
+	 * already `true`; otherwise returns a `_copyOpt(o)` with the flag
+	 * flipped on. Consumed at `HxTypedefDecl.type`'s Ref writer call
+	 * site to flag the descendant `HxType.Anon.fields` Star so the
+	 * `forceMultiInTypedef` predicate threads `WrapMode.OnePerLine`
+	 * into `WrapList.emit`, forcing typedef-RHS anons to multi-line
+	 * layout even when fields fit flat. Emitted only when the opt
+	 * typedef declares `_inTypedefBody:Bool`.
+	 */
+	private static function setTypedefBodyField(optionsCT:ComplexType):Field {
+		return {
+			name: '_setTypedefBody',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{name: 'o', type: optionsCT}],
+				ret: optionsCT,
+				expr: macro {
+					if (o._inTypedefBody) return o;
+					final _c:$optionsCT = _copyOpt(o);
+					_c._inTypedefBody = true;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * ω-typedef-anon-force-multi — sister reset helper to
+	 * `_setTypedefBody`. Returns the input opt unchanged when
+	 * `_inTypedefBody` is already `false`; otherwise returns a
+	 * `_copyOpt(o)` with the flag cleared. Consumed by the
+	 * `HxType.Anon.fields` per-element call when the parent Star
+	 * carries `@:fmt(forceMultiInTypedef)` so the force-multi
+	 * decision fires exactly once at the outermost typedef-RHS anon
+	 * and nested anon types inside the body fall back to the default
+	 * fit-driven `wrapRules` cascade. Emitted only when the opt
+	 * typedef carries `_inTypedefBody:Bool` — paired with
+	 * `_setTypedefBody` emission.
+	 */
+	private static function clearTypedefBodyField(optionsCT:ComplexType):Field {
+		return {
+			name: '_clearTypedefBody',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{name: 'o', type: optionsCT}],
+				ret: optionsCT,
+				expr: macro {
+					if (!o._inTypedefBody) return o;
+					final _c:$optionsCT = _copyOpt(o);
+					_c._inTypedefBody = false;
 					return _c;
 				},
 			}),

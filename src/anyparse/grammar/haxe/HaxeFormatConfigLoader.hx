@@ -597,6 +597,7 @@ final class HaxeFormatConfigLoader {
 			_inExprPosition: base._inExprPosition,
 			_classExtern: base._classExtern,
 			_inAnonFnBody: base._inAnonFnBody,
+			_inTypedefBody: base._inTypedefBody,
 			blockCommentAdapter: base.blockCommentAdapter,
 			lineCommentAdapter: base.lineCommentAdapter,
 			endsWithCloseBrace: base.endsWithCloseBrace,
