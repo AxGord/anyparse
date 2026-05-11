@@ -1486,7 +1486,57 @@ class WriterLowering {
 			break;
 		}
 
+		// ω-condwrap-forstmt: detect a span-mode condWrap pair —
+		// `@:fmt(condWrap('<knob>'))` on a starting field plus a later
+		// sibling carrying the `@:fmt(condWrapEnd)` sentinel flag. The
+		// open paren literal comes from the start field's `@:lead`, the
+		// close paren from the end field's `@:trail`; the inter-field
+		// pushes (separators, `@:kw` text, second writeCall) accumulate
+		// normally into `parts` and are spliced into a single
+		// `WrapList.emitCondition` wrap at the end of the end-field's
+		// iteration. Single-Ref consumers (`HxIfStmt.cond`,
+		// `HxWhileStmt.cond`) have no `condWrapEnd` sibling, so
+		// `spanInfo` stays null and the existing single-Ref path runs.
+		//
+		// First consumer: `HxForStmt` — span covers
+		// `varName + 'in' + iterable` with `(` from varName.@:lead and
+		// `)` from iterable.@:trail. Fork's `markPWrapping` dispatches
+		// `ForLoop` to the same `wrapCondition` path as `WhileCondition`
+		// / `IfCondition`.
+		var spanInfo:Null<{startIdx:Int, endIdx:Int, leadText:String, trailText:String, knob:String}> = null;
+		{
+			var startIdx:Int = -1;
+			var startKnob:Null<String> = null;
+			var startLead:Null<String> = null;
+			for (i in 0...node.children.length) {
+				final c:ShapeNode = node.children[i];
+				final cw:Null<Array<String>> = c.fmtReadStringArgs('condWrap');
+				if (cw != null && startIdx == -1) {
+					startIdx = i;
+					startKnob = cw[0];
+					startLead = c.readMetaString(':lead');
+				} else if (c.fmtHasFlag('condWrapEnd') && startIdx != -1) {
+					final endTrail:Null<String> = c.readMetaString(':trail');
+					if (startLead == null || endTrail == null)
+						Context.fatalError('WriterLowering: @:fmt(condWrap)/@:fmt(condWrapEnd) span requires @:lead on the start field and @:trail on the end field', Context.currentPos());
+					if (startKnob == null)
+						Context.fatalError('WriterLowering: @:fmt(condWrap) requires a knob arg', Context.currentPos());
+					if (c.kind != Ref || c.annotations.get('base.optional') == true)
+						Context.fatalError('WriterLowering: @:fmt(condWrapEnd) is supported only on bare mandatory Ref fields', Context.currentPos());
+					spanInfo = {
+						startIdx: startIdx, endIdx: i,
+						leadText: startLead, trailText: endTrail,
+						knob: startKnob,
+					};
+					break;
+				}
+			}
+		}
+		var fieldIdx:Int = -1;
+		var spanStartPartsIdx:Int = -1;
+
 		for (child in node.children) {
+			fieldIdx++;
 			final fieldName:Null<String> = child.annotations.get('base.fieldName');
 			if (fieldName == null)
 				Context.fatalError('WriterLowering: struct field missing base.fieldName', Context.currentPos());
@@ -1536,15 +1586,24 @@ class WriterLowering {
 			// `parts.push(writeCall)` default path emits the wrapped Doc
 			// via the runtime helper instead.
 			final condWrapArgs:Null<Array<String>> = child.fmtReadStringArgs('condWrap');
+			final isSpanStart:Bool = spanInfo != null && fieldIdx == spanInfo.startIdx;
+			final hasCondWrapEnd:Bool = spanInfo != null && fieldIdx == spanInfo.endIdx;
 			if (condWrapArgs != null) {
 				if (condWrapArgs.length != 1)
 					Context.fatalError('WriterLowering: @:fmt(condWrap(\'<knob>\')) requires 1 string arg, got ${condWrapArgs.length}', Context.currentPos());
-				if (leadText == null || trailText == null)
-					Context.fatalError('WriterLowering: @:fmt(condWrap) requires both @:lead and @:trail on the field', Context.currentPos());
-				if (isOptional || isStar || kwLead != null || child.kind != Ref)
+				if (leadText == null)
+					Context.fatalError('WriterLowering: @:fmt(condWrap) requires @:lead on the field', Context.currentPos());
+				// Span mode: trail literal lives on the matched `@:fmt(condWrapEnd)`
+				// sibling; single-Ref mode: trail required on the same field.
+				if (spanInfo == null && trailText == null)
+					Context.fatalError('WriterLowering: @:fmt(condWrap) requires @:trail on the field (or a sibling @:fmt(condWrapEnd) for span mode)', Context.currentPos());
+				if (isOptional || isStar || child.kind != Ref)
 					Context.fatalError('WriterLowering: @:fmt(condWrap) is supported only on bare mandatory Ref fields', Context.currentPos());
+				if (spanInfo == null && kwLead != null)
+					Context.fatalError('WriterLowering: @:fmt(condWrap) (single-Ref mode) does not support @:kw on the same field', Context.currentPos());
 			}
 			final hasCondWrap:Bool = condWrapArgs != null;
+			if (isSpanStart) spanStartPartsIdx = parts.length;
 
 			final fieldAccess:Expr = {
 				expr: EField(macro value, fieldName),
@@ -1775,7 +1834,14 @@ class WriterLowering {
 			// `@:fmt(typeHintColon)` on the field switches the emission to
 			// a runtime-configurable spacing around the lead text; all
 			// other mandatory leads stay tight.
-			if (leadText != null && !isOptional && !hasCondWrap)
+			// ω-condwrap-forstmt: symmetric with the trail gate below — the
+			// end-field of a condWrap span cannot push its own `@:lead`
+			// literal (the open paren is owned by the start field and emitted
+			// via the splice's `emitCondition` wrap). No current consumer
+			// puts `@:lead` on the end field, but mirror the trail gate so a
+			// future end-field with `@:lead` does not silently leak the lead
+			// literal into the spanned cond Doc.
+			if (leadText != null && !isOptional && !hasCondWrap && !hasCondWrapEnd)
 				parts.push(whitespacePolicyLead(child, leadText, ['objectFieldColon', 'typeHintColon', 'typeCheckColon', 'typedefAssign', 'functionTypeHaxe4', 'arrowFunctions']));
 
 			// Field value
@@ -2458,6 +2524,18 @@ class WriterLowering {
 								} else parts.push(withPadTrailingDrop(prevPadTrailing, macro _dt(' ')));
 								parts.push(writeCall);
 							}
+						} else if (hasCondWrap && spanInfo != null) {
+							// ω-condwrap-forstmt: span mode — defer the
+							// `emitCondition` wrap to the end-field
+							// iteration. Push writeCall directly so
+							// inter-field separators / kw text /
+							// trailing-field writeCall accumulate in
+							// `parts` for splicing at the end. The
+							// `_setChainModeOverride` shadow is also
+							// applied lazily (inside the end-field's
+							// splice block) so the inner writeCalls see
+							// the overridden cascade.
+							parts.push(writeCall);
 						} else if (hasCondWrap) {
 							// ω-condition-wrap-wiring: replace bare lead+
 							// value+trail emission with a runtime
@@ -2519,7 +2597,7 @@ class WriterLowering {
 			}
 
 			// Trail
-			if (!isOptional && trailText != null && !hasCondWrap)
+			if (!isOptional && trailText != null && !hasCondWrap && !hasCondWrapEnd)
 				parts.push(macro _dt($v{trailText}));
 
 			// ω-pad-trailing-ref: bare-Ref `@:fmt(padTrailing)` — mandatory
@@ -2575,6 +2653,31 @@ class WriterLowering {
 					? fieldName
 					: null;
 			isFirstField = false;
+
+			// ω-condwrap-forstmt: end of span-mode iteration — splice the
+			// accumulated cond-span Doc parts and wrap them in a single
+			// `WrapList.emitCondition` call, mirroring the single-Ref
+			// engine's emit at line ~2480 but with a runtime-built
+			// composite condDoc (`_dc([...])`) instead of one writeCall.
+			if (hasCondWrapEnd && spanInfo != null) {
+				final spanLen:Int = parts.length - spanStartPartsIdx;
+				final spanBuf:Array<Expr> = parts.slice(spanStartPartsIdx, parts.length);
+				parts.splice(spanStartPartsIdx, spanLen);
+				final innerDoc:Expr = if (spanBuf.length == 1) spanBuf[0] else dcCall(spanBuf);
+				final condKnobAccess:Expr = optFieldAccess(spanInfo.knob);
+				final leadStr:String = spanInfo.leadText;
+				final trailStr:String = spanInfo.trailText;
+				parts.push(macro {
+					final _condRules:anyparse.format.wrap.WrapRules = $condKnobAccess;
+					final _condMode:anyparse.format.wrap.WrapMode = _condRules.defaultMode;
+					final _chainOvr:Null<anyparse.format.wrap.WrapMode> =
+						_condMode == anyparse.format.wrap.WrapMode.NoWrap ? null : _condMode;
+					final opt = _setChainModeOverride(opt, _chainOvr);
+					anyparse.format.wrap.WrapList.emitCondition(
+						$v{leadStr}, $v{trailStr}, $innerDoc, opt, $condKnobAccess
+					);
+				});
+			}
 		}
 
 		final dcExpr:Expr = dcCall(parts);
