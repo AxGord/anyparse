@@ -67,8 +67,10 @@ class WriterCodegen {
 			// with the flag flipped on. Sister to `_setExprPosition`. Emitted
 			// only when the opt typedef carries `_inAnonFnBody:Bool` —
 			// currently declared on `HxModuleWriteOptions` only.
-			if (optionsHasField(optionsTypePath, '_inAnonFnBody'))
+			if (optionsHasField(optionsTypePath, '_inAnonFnBody')) {
 				fields.push(setAnonFnBodyField(optionsCT));
+				fields.push(clearAnonFnBodyField(optionsCT));
+			}
 			// Layout helpers
 			fields.push(blockBodyField());
 			fields.push(sepListField());
@@ -464,6 +466,37 @@ class WriterCodegen {
 					if (o._inAnonFnBody) return o;
 					final _c:$optionsCT = _copyOpt(o);
 					_c._inAnonFnBody = true;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * ω-arrow-lambda-body-context — sister reset helper to
+	 * `_setAnonFnBody`. Returns the input opt unchanged when
+	 * `_inAnonFnBody` is already `false` (no allocation in non-lambda
+	 * descents); otherwise returns a `_copyOpt(o)` with the flag
+	 * cleared. Consumed by `triviaBlockStarExpr`'s per-element call
+	 * when the parent Star carries `@:fmt(leftCurlyAnonFnOverride(...))`
+	 * so the anon-fn brace placement decision is consumed exactly once
+	 * at `HxExpr.BlockExpr` and nested statements / nested `BlockExpr`
+	 * inside the body fall back to the default `blockLeftCurly` knob.
+	 * Emitted only when the opt typedef carries `_inAnonFnBody:Bool` —
+	 * paired with `_setAnonFnBody` emission.
+	 */
+	private static function clearAnonFnBodyField(optionsCT:ComplexType):Field {
+		return {
+			name: '_clearAnonFnBody',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{name: 'o', type: optionsCT}],
+				ret: optionsCT,
+				expr: macro {
+					if (!o._inAnonFnBody) return o;
+					final _c:$optionsCT = _copyOpt(o);
+					_c._inAnonFnBody = false;
 					return _c;
 				},
 			}),

@@ -1166,6 +1166,28 @@ class WriterLowering {
 		final parts:Array<Expr> = [];
 		if (kwLead != null) parts.push(macro _dt($v{kwLead + ' '}));
 
+		// ω-arrow-lambda-body-context: enum-Case Star branches opting into
+		// `@:fmt(leftCurlyAnonFnOverride('<knob>'))` (currently
+		// `HxExpr.BlockExpr`) prepend a runtime-gated hardline before the
+		// open delimiter — when the writer was descended through
+		// `@:fmt(propagateAnonFnContext)` (parent flips `_inAnonFnBody=true`
+		// via `_setAnonFnBody`) AND the named knob is `Next`, the hardline
+		// fires and the renderer drops the parent's preceding `_dop(' ')`
+		// OptSpace (e.g. `arrowFunctions=Both` after `->`), placing `{` on
+		// its own line at the parent indent. When the override knob is
+		// `Same` OR `_inAnonFnBody=false` (non-lambda context like
+		// `HxIfExpr.thenBranch` reaching `BlockExpr`), the prefix is `_de()`
+		// and the pre-slice cuddled `{` layout is preserved. The flag is
+		// then cleared on per-element opt by `triviaBlockStarExpr` so
+		// nested BlockExpr inside body statements falls back to default
+		// `blockLeftCurly`.
+		final anonFnOverrideKnob:Null<String> = branch.fmtReadString('leftCurlyAnonFnOverride');
+		if (anonFnOverrideKnob != null) {
+			final knobAccess:Expr = optFieldAccess(anonFnOverrideKnob);
+			final nextPat:Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BracePlacement', 'Next']);
+			parts.push(macro opt._inAnonFnBody && $knobAccess == $nextPat ? _dhl() : _de());
+		}
+
 		final isTriviaStar:Bool = ctx.trivia && starNode.annotations.get('trivia.starCollects') == true;
 		if (isTriviaStar) {
 			// ω-close-trailing-alt: same-line trailing comment captured
@@ -1254,9 +1276,14 @@ class WriterLowering {
 				// `opt.beforeRightCurly` Keep policy. Sister to the
 				// struct-Star path's read at the `lowerStruct` call site.
 				final keepCurlyBlanks:Bool = branch.fmtHasFlag('keepCurlyBlanks');
+				// ω-arrow-lambda-body-context: forward the override-meta
+				// presence so the helper clears `_inAnonFnBody` for the
+				// per-element write — see helper docstring for rationale.
+				final anonFnClear:Bool = branch.fmtHasFlag('leftCurlyAnonFnOverride');
 				parts.push(triviaBlockStarExpr(
 					argsAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn,
-					leadText, trailText, true, false, false, false, null, false, false, false, keepCurlyBlanks
+					leadText, trailText, true, false, false, false, null, false, false, false, keepCurlyBlanks,
+					false, false, null, false, null, anonFnClear
 				));
 			}
 		} else if (sepText != null) {
@@ -1949,6 +1976,16 @@ class WriterLowering {
 					// expression-position-yielding Ref parent that ANY case-
 					// body descendant might see.
 					final propagateExpr:Bool = child.fmtHasFlag('propagateExprPosition');
+					// ω-arrow-lambda-body-context: sister opt-fanout to
+					// `propagateExprPosition` — when the mandatory Ref carries
+					// `@:fmt(propagateAnonFnContext)`, wrap opt in
+					// `_setAnonFnBody` so the descendant writer sees
+					// `_inAnonFnBody=true`. Used by `HxParenLambda.body` and
+					// `HxThinParenLambda.body` so the inner `HxExpr.BlockExpr`
+					// reads `opt.anonFunctionLeftCurly` for its `{` placement
+					// instead of the global `opt.blockLeftCurly`. Mirrors the
+					// optional-Ref site above (consumer: `HxFnExpr.body`).
+					final propagateAnonFn:Bool = child.fmtHasFlag('propagateAnonFnContext');
 					// ω-extern-class-no-blanks:
 					// `@:fmt(setBoolFlagFromStarCtor(optField, starField,
 					// ctorName))` allocates a fresh opt copy
@@ -1974,8 +2011,14 @@ class WriterLowering {
 						);
 					final optArgExpr:Expr = if (boolFlagArgs != null)
 						macro _wo;
+					else if (propagateExpr && propagateAnonFn)
+						macro _setAnonFnBody(_setExprPosition(opt));
+					else if (propagateExpr)
+						macro _setExprPosition(opt);
+					else if (propagateAnonFn)
+						macro _setAnonFnBody(opt);
 					else
-						propagateExpr ? macro _setExprPosition(opt) : macro opt;
+						macro opt;
 					final baseRawWriteCall:Expr = {
 						expr: ECall(macro $i{writeFn}, [fieldAccess, optArgExpr]),
 						pos: Context.currentPos(),
@@ -2798,12 +2841,13 @@ class WriterLowering {
 				final uniformBetweenOptField:Null<String> = uniformBetweenArgs != null
 					? uniformBetweenArgs[0]
 					: null;
+				final anonFnClear:Bool = starNode.fmtHasFlag('leftCurlyAnonFnOverride');
 				parts.push(triviaBlockStarExpr(
 					fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn,
 					openText ?? '', closeText, false, afterDocComments, keepBetweenFields, beforeDocComments,
 					interMemberInfo, indentCaseLabelsGate, emptyCurlyBreak, beginEndType, keepCurlyBlanks,
 					lineCommentTrailBlank, blankBeforeFinalDocInLeading, staticVarSubdivInfo,
-					betweenMultilineCommentsBlanks, uniformBetweenOptField
+					betweenMultilineCommentsBlanks, uniformBetweenOptField, anonFnClear
 				));
 			} else if (isLastField) {
 				if (openText != null) parts.push(macro _dt($v{openText}));
@@ -3809,7 +3853,22 @@ class WriterLowering {
 	private static function leftCurlySeparator(starNode:ShapeNode, optSpaceUpstream:Bool = false):Expr {
 		if (!starNode.fmtHasFlag('leftCurly')) return macro _dt(' ');
 		final knobName:Null<String> = starNode.fmtReadString('leftCurly');
-		final knobExpr:Expr = optFieldAccess(knobName ?? 'leftCurly');
+		final baseKnobExpr:Expr = optFieldAccess(knobName ?? 'leftCurly');
+		// ω-arrow-lambda-body-context: sister meta
+		// `@:fmt(leftCurlyAnonFnOverride('<knob>'))` co-located with
+		// `@:fmt(leftCurly('<knob>'))` enables flag-aware dispatch — when
+		// the writer descends through `@:fmt(propagateAnonFnContext)` (e.g.
+		// from `HxThinParenLambda.body`), `opt._inAnonFnBody` is true and
+		// the separator reads `opt.<overrideKnob>` (anonFunctionLeftCurly)
+		// instead of the default knob (blockLeftCurly). Consumer:
+		// `HxExpr.BlockExpr.stmts`. Star-element write site clears the flag
+		// before per-element descent so nested BlockExpr in inner statements
+		// fall back to the default knob.
+		final anonFnOverrideKnob:Null<String> = starNode.fmtReadString('leftCurlyAnonFnOverride');
+		final knobExpr:Expr = if (anonFnOverrideKnob != null) {
+			final overrideExpr:Expr = optFieldAccess(anonFnOverrideKnob);
+			macro opt._inAnonFnBody ? $overrideExpr : $baseKnobExpr;
+		} else baseKnobExpr;
 		final nextPat:Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BracePlacement', 'Next']);
 		// `optSpaceUpstream=true` (currently only first-field Star with
 		// knob-form `@:fmt(leftCurly('<knob>'))`, e.g. `HxObjectLit.fields` /
@@ -5116,10 +5175,21 @@ class WriterLowering {
 		blankBeforeFinalDocInLeading:Bool = false,
 		staticVarSubdivInfo:Null<StaticVarSubdivisionInfo> = null,
 		betweenMultilineCommentsBlanks:Bool = false,
-		uniformBetweenOptField:Null<String> = null
+		uniformBetweenOptField:Null<String> = null,
+		clearAnonFnBodyOnElems:Bool = false
 	):Expr {
+		// ω-arrow-lambda-body-context: when the call site opts in via
+		// `@:fmt(leftCurlyAnonFnOverride(...))` on the parent Star, the per-
+		// element write call passes `_clearAnonFnBody(opt)` so the flag is
+		// consumed at this Star's `{` placement and descendants (nested
+		// statements / nested BlockExpr inside the body) fall back to the
+		// default `blockLeftCurly` knob rather than re-triggering the
+		// anon-fn override.
+		final elemOptExpr:Expr = clearAnonFnBodyOnElems
+			? macro _clearAnonFnBody(opt)
+			: macro opt;
 		final triviaElemCall:Expr = {
-			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
+			expr: ECall(macro $i{elemFn}, [macro _t.node, elemOptExpr]),
 			pos: Context.currentPos(),
 		};
 		final emptyText:String = openText + closeText;

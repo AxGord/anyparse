@@ -1208,19 +1208,29 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    while a case nested inside another case's body inherits `true`
  *    via opt-fanout and flattens per `expressionCase`.
  *
- * Internal field added in slice ω-anonfunction-empty-curly:
+ * Internal field added in slice ω-anonfunction-empty-curly, extended in
+ * slice ω-arrow-lambda-body-context:
  *  - `_inAnonFnBody` — write-time-only signal flagging that the current
- *    writer call is descending into an anonymous function expression's
- *    body (`HxFnExpr.body` → `HxFnExprBody.BlockBody(HxFnBlock)`). Set
- *    via `@:fmt(propagateAnonFnContext)` + `_setAnonFnBody` opt-fanout
- *    on the `HxFnExpr.body` optional-Ref writer call site. Read by the
- *    `emptyCurlyBreak` emit branch in `triviaBlockStarExpr` to dispatch
- *    between `opt.emptyCurly` (global, used by class / interface /
- *    abstract / enum bodies AND `HxFnDecl.body`) and
- *    `opt.anonFunctionEmptyCurly` (anonymous function context). Sister
- *    channel to `_inExprPosition`. The underscore prefix marks it as
- *    internal — no JSON loader entry, no `hxformat.json` ingest. Default
- *    `false`.
+ *    writer call is descending into an anonymous function body. Sources:
+ *    `HxFnExpr.body` → `HxFnExprBody.BlockBody(HxFnBlock)` (function-kw
+ *    anon-fn), `HxParenLambda.body` → `HxExpr` (`(params) => body`), and
+ *    `HxThinParenLambda.body` → `HxExpr` (`(params) -> body`). Set via
+ *    `@:fmt(propagateAnonFnContext)` + `_setAnonFnBody` opt-fanout on
+ *    these Ref writer call sites. Consumers:
+ *     - `emptyCurlyBreak` emit branch in `triviaBlockStarExpr` dispatches
+ *       between `opt.emptyCurly` (global — class / interface / abstract /
+ *       enum / `HxFnDecl.body`) and `opt.anonFunctionEmptyCurly`.
+ *     - `HxExpr.BlockExpr.stmts` (opt-in via
+ *       `@:fmt(leftCurlyAnonFnOverride('anonFunctionLeftCurly'))`)
+ *       prepends a runtime-gated hardline before `{` when the flag is
+ *       true AND the named knob is `Next`, placing the arrow-lambda body
+ *       brace in Allman position. The flag is then cleared via
+ *       `_clearAnonFnBody` on the per-element opt so nested statements /
+ *       nested `BlockExpr` inside the body fall back to default
+ *       `blockLeftCurly`.
+ *    Sister channel to `_inExprPosition`. The underscore prefix marks it
+ *    as internal — no JSON loader entry, no `hxformat.json` ingest.
+ *    Default `false`.
  *
  * Internal field added in slice ω-extern-class-no-blanks
  * (extern-modifier-aware interMember suppression):
