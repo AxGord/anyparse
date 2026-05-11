@@ -2828,15 +2828,18 @@ class WriterLowering {
 					// is on. Null knob → behaves identically to pre-slice
 					// (cascade evaluates exceeds=false / =true symmetrically).
 					final trailingCommaField:Null<String> = starNode.fmtReadString('trailingComma');
-					// ω-anontype-right-curly: struct-Star path keeps
-					// rightCurlyKnob=null — `HxObjectLit.fields` does not
-					// yet have a per-construct `objectLiteralRightCurly`
-					// opt field. Defer to ω-objectlit-right-curly slice.
+					// ω-objectlit-right-curly: struct-Star path now threads
+					// `@:fmt(rightCurly('<knob>'))` (e.g.
+					// `rightCurly('objectLiteralRightCurly')` on
+					// `HxObjectLit.fields`) into `triviaSepStarExpr`'s 12th
+					// param. Null (no opt-in) preserves pre-slice
+					// unconditional `_dhl()` before close.
+					final knobRightCurly:Null<String> = starNode.fmtReadString('rightCurly');
 					parts.push(triviaSepStarExpr(
 						fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn,
 						openText ?? '', closeText, sepText, wrapRulesField,
 						leftCurlyOwnedBySep ? knobLeftCurly : null,
-						null,
+						knobRightCurly,
 						trailPresentAccess, trailingCommaField
 					));
 					return;

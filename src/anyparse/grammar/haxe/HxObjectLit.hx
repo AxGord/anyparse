@@ -53,6 +53,20 @@ package anyparse.grammar.haxe;
  * per-construct one — mirroring haxe-formatter's
  * `MarkLineEnds.getCurlyPolicy(ObjectDecl)` precedence.
  *
+ * `@:fmt(rightCurly('objectLiteralRightCurly'))` (slice
+ * ω-objectlit-right-curly) routes the hardline emitted immediately
+ * before `}` through the per-construct
+ * `opt.objectLiteralRightCurly:RightCurlyPlacement` knob. `Same`
+ * (default) keeps `\n}` so the close sits on its own line; `Inline`
+ * drops the before-close hardline so `}` glues to the last field.
+ * The loader cascade writes the global `lineEnds.rightCurly` into
+ * this knob alongside `blockRightCurly` / `anonFunctionRightCurly` /
+ * `anonTypeRightCurly`; per-construct sub-key
+ * `lineEnds.objectLiteralCurly.rightCurly` overrides the cascade.
+ * Dispatch fires only in `triviaSepStarExpr`'s trivia branch — the
+ * wrap-engine branch (no per-element trivia) continues to use
+ * `WrapList.emit`'s shape close emission.
+ *
  * `@:fmt(trailingComma('trailingCommaObjectLits'))` (slice
  * ω-objectlit-trailing-comma) routes the trailing-comma-on-break
  * decision through the per-construct `opt.trailingCommaObjectLits:Bool`
@@ -76,5 +90,5 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxObjectLit = {
-	@:fmt(objectLiteralBracesOpen, objectLiteralBracesClose, wrapRules('objectLiteralWrap'), leftCurly('objectLiteralLeftCurly'), trailingComma('trailingCommaObjectLits')) @:lead('{') @:trail('}') @:sep(',') @:trivia var fields:Array<HxObjectField>;
+	@:fmt(objectLiteralBracesOpen, objectLiteralBracesClose, wrapRules('objectLiteralWrap'), leftCurly('objectLiteralLeftCurly'), rightCurly('objectLiteralRightCurly'), trailingComma('trailingCommaObjectLits')) @:lead('{') @:trail('}') @:sep(',') @:trivia var fields:Array<HxObjectField>;
 }

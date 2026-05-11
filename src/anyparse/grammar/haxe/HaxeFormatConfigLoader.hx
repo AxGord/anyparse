@@ -528,6 +528,7 @@ final class HaxeFormatConfigLoader {
 			blockRightCurly: base.blockRightCurly,
 			anonFunctionRightCurly: base.anonFunctionRightCurly,
 			anonTypeRightCurly: base.anonTypeRightCurly,
+			objectLiteralRightCurly: base.objectLiteralRightCurly,
 			objectFieldColon: base.objectFieldColon,
 			typeHintColon: base.typeHintColon,
 			typeCheckColon: base.typeCheckColon,
@@ -900,6 +901,12 @@ final class HaxeFormatConfigLoader {
 		if (section.objectLiteralCurly != null) {
 			final sub:HxFormatCurlyLineEndPolicy = section.objectLiteralCurly;
 			if (sub.leftCurly != null) opt.objectLiteralLeftCurly = leftCurlyToRuntime(sub.leftCurly);
+			// ω-objectlit-right-curly: per-construct sub-key
+			// `lineEnds.objectLiteralCurly.rightCurly` overrides the cascade
+			// for object-literal body closes (`HxObjectLit.fields`). Mirrors
+			// haxe-formatter's `MarkLineEnds.getCurlyPolicy(ObjectDecl).rightCurly`
+			// precedence.
+			if (sub.rightCurly != null) opt.objectLiteralRightCurly = rightCurlyToRuntime(sub.rightCurly);
 		}
 		if (section.anonFunctionCurly != null) {
 			final sub:HxFormatCurlyLineEndPolicy = section.anonFunctionCurly;
@@ -993,6 +1000,11 @@ final class HaxeFormatConfigLoader {
 			// sub-key already set it.
 			if (section.anonTypeCurly == null || section.anonTypeCurly.rightCurly == null)
 				opt.anonTypeRightCurly = placement;
+			// ω-objectlit-right-curly: cascade global lineEnd into
+			// `objectLiteralRightCurly` unless the
+			// `objectLiteralCurly.rightCurly` sub-key already set it.
+			if (section.objectLiteralCurly == null || section.objectLiteralCurly.rightCurly == null)
+				opt.objectLiteralRightCurly = placement;
 		}
 		// ω-metadata-line-end-function: `lineEnds.metadataFunction` →
 		// `opt.metadataFunctionLineEnd`. Default `None` preserves source-
