@@ -1205,6 +1205,37 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    `HxModule.decls`, class / interface / abstract member Stars are
  *    the current consumers.
  *
+ * Field added in slice ω-between-single-line-types:
+ *  - `betweenSingleLineTypes` — number of blank lines the writer emits
+ *    BETWEEN any consecutive pair of single-line top-level type decls
+ *    (typedef / class / interface / abstract / enum where NEITHER matches
+ *    the grammar-derived `multiline` predicate — i.e. empty-body
+ *    `class C {}` / `interface I {}` / `enum E {}` / `abstract A() {}`
+ *    AND any `typedef T = …;`). Insertion-only semantic: the override
+ *    fires ONLY when this value is `> 0`, in which case it forces
+ *    exactly that many blanks regardless of source. `0` (default,
+ *    matches haxe-formatter's `emptyLines.betweenSingleLineTypes:
+ *    @:default(0)`) leaves the slot source-driven — pre-slice behaviour
+ *    is preserved when the source had a blank between two single-line
+ *    type decls. `1` inserts one blank line between every same-shape
+ *    pair (a typedef before a class follows the cascade priority —
+ *    `afterMultilineDecl` / `beforeMultilineDecl` win when either side
+ *    is multi-line). The `>0` gate is engine-level, not knob-level: the
+ *    runtime cascade ternary short-circuits to source-driven when the
+ *    knob reads 0, matching fork's
+ *    `MarkEmptyLines.markBlankLinesAfter`-style "insertion only" pattern
+ *    for the single-line slot (fork never strips blanks here; only fills
+ *    when source had none). Driven by
+ *    `@:fmt(blankLinesBetweenSameCtorIfNot('decl', 'multiline', 'ClassDecl',
+ *    'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'TypedefDecl',
+ *    'betweenSingleLineTypes'))` on `HxModule.decls`. The cascade gate
+ *    consults BOTH prev and curr classifier kinds — fires only when both
+ *    ends of the pair fall in the ctor set AND neither matches the
+ *    predicate. Zero runtime reflection — the macro emits direct enum-
+ *    switch + the same grammar-derived `multiline` predicate used by
+ *    `afterMultilineDecl` (inverted polarity per the meta name's `IfNot`
+ *    suffix).
+ *
  * Field added in slice ω-metadata-line-end-function:
  *  - `metadataFunctionLineEnd` — line-end policy for the metadata
  *    `@:tryparse` Star on `HxMemberDecl.meta`. Mirrors haxe-formatter's
@@ -1316,6 +1347,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	beforeMultilineDecl:Int,
 	afterFileHeaderComment:Int,
 	betweenMultilineComments:Int,
+	betweenSingleLineTypes:Int,
 	formatStringInterpolation:Bool,
 	metadataFunctionLineEnd:MetadataLineEndPolicy,
 	_inExprPosition:Bool,

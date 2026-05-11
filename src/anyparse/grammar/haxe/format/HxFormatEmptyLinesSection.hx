@@ -7,7 +7,7 @@ package anyparse.grammar.haxe.format;
  * are modelled here. Missing keys (`finalNewline`, `maxAnywhereInFile`,
  * `betweenTypes`,
  * `lineCommentsBetweenTypes`, `lineCommentsBetweenFunctions`,
- * `betweenSingleLineTypes`, `beforeRightCurly`, `afterLeftCurly`,
+ * `beforeRightCurly`, `afterLeftCurly`,
  * `afterReturn`, `beforeBlocks`, `afterBlocks`, `enumAbstractEmptyLines`,
  * `macroClassEmptyLines`,
  * `abstractEmptyLines`,
@@ -80,6 +80,15 @@ package anyparse.grammar.haxe.format;
  * the writer's per-leadingComments-array blank-line policy. See
  * `HxModuleWriteOptions.afterFileHeaderComment` /
  * `HxModuleWriteOptions.betweenMultilineComments` for full semantics.
+ *
+ * `betweenSingleLineTypes` added in slice ω-between-single-line-types
+ * (feeds `opt.betweenSingleLineTypes`). Non-negative Int — number of
+ * blank lines emitted between any consecutive pair of single-line type
+ * decls (typedef / class / interface / abstract / enum where neither
+ * matches the grammar-derived `multiline` predicate). Insertion-only:
+ * `0` (default, matches haxe-formatter's
+ * `emptyLines.betweenSingleLineTypes: @:default(0)`) leaves the slot
+ * source-driven; `>0` forces that many blanks regardless of source.
  */
 @:peg typedef HxFormatEmptyLinesSection = {
 
@@ -108,4 +117,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var afterFileHeaderComment:Int;
 
 	@:optional var betweenMultilineComments:Int;
+
+	@:optional var betweenSingleLineTypes:Int;
 };

@@ -580,6 +580,7 @@ final class HaxeFormatConfigLoader {
 			beforeMultilineDecl: base.beforeMultilineDecl,
 			afterFileHeaderComment: base.afterFileHeaderComment,
 			betweenMultilineComments: base.betweenMultilineComments,
+			betweenSingleLineTypes: base.betweenSingleLineTypes,
 			formatStringInterpolation: base.formatStringInterpolation,
 			metadataFunctionLineEnd: base.metadataFunctionLineEnd,
 			_inExprPosition: base._inExprPosition,
@@ -979,6 +980,7 @@ final class HaxeFormatConfigLoader {
 		if (section.beforePackage != null) opt.beforePackage = section.beforePackage;
 		if (section.afterFileHeaderComment != null) opt.afterFileHeaderComment = section.afterFileHeaderComment;
 		if (section.betweenMultilineComments != null) opt.betweenMultilineComments = section.betweenMultilineComments;
+		if (section.betweenSingleLineTypes != null) opt.betweenSingleLineTypes = section.betweenSingleLineTypes;
 		if (section.afterLeftCurly != null)
 			opt.afterLeftCurly = keepEmptyLinesToRuntime(section.afterLeftCurly);
 		if (section.beforeRightCurly != null)

@@ -2678,7 +2678,8 @@ class WriterLowering {
 					cascadeInfos.afterCtorInfos, cascadeInfos.beforeCtorInfos,
 					cascadeInfos.betweenCtorInfos, cascadeInfos.transitionAcrossInfos,
 					cascadeInfos.headCtorInfos,
-					metaLineEndOptField
+					metaLineEndOptField,
+					cascadeInfos.betweenSameCtorIfNotInfos
 				));
 				return;
 			}
@@ -2794,7 +2795,8 @@ class WriterLowering {
 					cascadeInfos.afterCtorInfos, cascadeInfos.beforeCtorInfos,
 					cascadeInfos.betweenCtorInfos, cascadeInfos.transitionAcrossInfos,
 					cascadeInfos.headCtorInfos, lineCommentTrailBlank, lineCommentLedAddBlank,
-					afterFileHeaderCommentBlanks, betweenMultilineCommentsBlanks
+					afterFileHeaderCommentBlanks, betweenMultilineCommentsBlanks,
+					cascadeInfos.betweenSameCtorIfNotInfos
 				));
 			} else {
 				Context.fatalError('WriterLowering: @:trivia Star without @:trail must be the last field', Context.currentPos());
@@ -5923,8 +5925,10 @@ class WriterLowering {
 		beforeInfos:Array<BeforeCtorBlankInfo>,
 		betweenInfos:Array<BetweenCtorBlankInfo>,
 		transitionInfos:Array<TransitionAcrossInfo>,
-		headInfos:Array<HeadCtorBlankInfo>
+		headInfos:Array<HeadCtorBlankInfo>,
+		betweenSameIfNotInfos:Array<BetweenSameCtorIfNotInfo> = null
 	):CascadeEmit {
+		final betweenIfNotInfos:Array<BetweenSameCtorIfNotInfo> = betweenSameIfNotInfos ?? [];
 		final pos:Position = Context.currentPos();
 
 		final prevVars:Array<Var> = [];
@@ -6050,6 +6054,25 @@ class WriterLowering {
 			trackPrev.push(macro $ppLhs = $ppRhs);
 		}
 
+		// ω-between-single-line-types — single-axis kind tracker per info,
+		// kind=1 when the current element matches one of the named ctors
+		// AND the grammar-derived `multiline` predicate returns FALSE on
+		// its payload (inverted polarity via `resolveCtorBlankArgs(...,
+		// predicateInvert=true)`). Cascade fire consults BOTH prev and
+		// curr trackers — see the priority-wrap loop below.
+		for (i in 0...betweenIfNotInfos.length) {
+			final info:BetweenSameCtorIfNotInfo = betweenIfNotInfos[i];
+			prevVars.push({name: '_prevKindBetweenIfNot' + i, type: macro:Int, expr: macro 0});
+			currVars.push({name: '_currKindBetweenIfNot' + i, type: macro:Int, expr: macro 0});
+			final classifierAccess:Expr = {expr: EField(macro _t.node, info.classifierFieldName), pos: pos};
+			final switchExpr:Expr = {expr: ESwitch(classifierAccess, info.classifyCases, null), pos: pos};
+			final lhs:Expr = {expr: EConst(CIdent('_currKindBetweenIfNot' + i)), pos: pos};
+			currCompute.push(macro $lhs = $switchExpr);
+			final tlhs:Expr = {expr: EConst(CIdent('_prevKindBetweenIfNot' + i)), pos: pos};
+			final trhs:Expr = {expr: EConst(CIdent('_currKindBetweenIfNot' + i)), pos: pos};
+			trackPrev.push(macro $tlhs = $trhs);
+		}
+
 		// Cross-subset transition cascade — A/B subset trackers, head AND
 		// tail, transparent-wrapper support via head/tail adapter pair.
 		for (i in 0...transitionInfos.length) {
@@ -6163,6 +6186,24 @@ class WriterLowering {
 			final fallback:Expr = blanksCountExpr;
 			blanksCountExpr = macro ($currIdent == 1 && $prevIdent != 1 ? $beforeAccess : $fallback);
 		}
+		// ω-between-single-line-types — splice in priority between `before`
+		// (just wrapped) and `between` (about to wrap). Fires `opt.<f>`
+		// blanks when both prev and curr kind trackers report 1 (matched
+		// ctor AND !multiline on both sides of the pair) AND `opt > 0`.
+		// The `opt > 0` gate keeps default `0` as "source-driven" (the
+		// fallback cascade runs unchanged), matching fork's
+		// `betweenSingleLineTypes` insertion-only semantic — `0` does NOT
+		// strip source blanks between single-line type pairs. `>0` forces
+		// exactly that many blanks regardless of source-captured count.
+		for (i in 0...betweenIfNotInfos.length) {
+			final idx:Int = betweenIfNotInfos.length - 1 - i;
+			final info:BetweenSameCtorIfNotInfo = betweenIfNotInfos[idx];
+			final optAccess:Expr = {expr: EField(macro opt, info.optField), pos: pos};
+			final currIdent:Expr = {expr: EConst(CIdent('_currKindBetweenIfNot' + idx)), pos: pos};
+			final prevIdent:Expr = {expr: EConst(CIdent('_prevKindBetweenIfNot' + idx)), pos: pos};
+			final fallback:Expr = blanksCountExpr;
+			blanksCountExpr = macro ($currIdent == 1 && $prevIdent == 1 && $optAccess > 0 ? $optAccess : $fallback);
+		}
 		for (i in 0...betweenInfos.length) {
 			final idx:Int = betweenInfos.length - 1 - i;
 			final info:BetweenCtorBlankInfo = betweenInfos[idx];
@@ -6266,7 +6307,8 @@ class WriterLowering {
 		lineCommentTrailBlank:Bool = false,
 		lineCommentLedAddBlank:Bool = false,
 		afterFileHeaderCommentBlanks:Bool = false,
-		betweenMultilineCommentsBlanks:Bool = false
+		betweenMultilineCommentsBlanks:Bool = false,
+		betweenSameCtorIfNotInfos:Array<BetweenSameCtorIfNotInfo> = null
 	):Expr {
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
@@ -6279,6 +6321,7 @@ class WriterLowering {
 		final betweenInfos:Array<BetweenCtorBlankInfo> = betweenCtorInfos ?? [];
 		final transitionInfos:Array<TransitionAcrossInfo> = transitionAcrossInfos ?? [];
 		final headInfos:Array<HeadCtorBlankInfo> = headCtorInfos ?? [];
+		final betweenIfNotInfos:Array<BetweenSameCtorIfNotInfo> = betweenSameCtorIfNotInfos ?? [];
 		final pos:Position = Context.currentPos();
 		// ω-bug-2c-inner-star — cascade emit machinery (per-info trackers
 		// + cascade ternary) extracted into `buildCascadeEmit` so the
@@ -6287,7 +6330,7 @@ class WriterLowering {
 		// for cascade priority semantics, transparent-wrapper handling,
 		// and the runtime locals (`_t`, `_v0`, `opt`) the emitted Exprs
 		// reference.
-		final emit:CascadeEmit = buildCascadeEmit(afterInfos, beforeInfos, betweenInfos, transitionInfos, headInfos);
+		final emit:CascadeEmit = buildCascadeEmit(afterInfos, beforeInfos, betweenInfos, transitionInfos, headInfos, betweenIfNotInfos);
 		final blanksCountExpr:Expr = emit.blanksCount;
 		// ω-before-package — head-of-Star override (e.g. `beforePackage`).
 		// Spliced once at the start of `_docs` building, after `initPrev`,
@@ -6545,7 +6588,8 @@ class WriterLowering {
 		betweenCtorInfos:Array<BetweenCtorBlankInfo> = null,
 		transitionAcrossInfos:Array<TransitionAcrossInfo> = null,
 		headCtorInfos:Array<HeadCtorBlankInfo> = null,
-		metaLineEndOptField:Null<String> = null
+		metaLineEndOptField:Null<String> = null,
+		betweenSameCtorIfNotInfos:Array<BetweenSameCtorIfNotInfo> = null
 	):Expr {
 		// ω-bug-2c-inner-star — cascade emit for the tryparse-Star path.
 		// Cascade trackers + cascade-fire blank count come from
@@ -6562,7 +6606,8 @@ class WriterLowering {
 		final betweenInfos:Array<BetweenCtorBlankInfo> = betweenCtorInfos ?? [];
 		final transitionInfos:Array<TransitionAcrossInfo> = transitionAcrossInfos ?? [];
 		final headInfos:Array<HeadCtorBlankInfo> = headCtorInfos ?? [];
-		final cascadeEmit:CascadeEmit = buildCascadeEmit(afterInfos, beforeInfos, betweenInfos, transitionInfos, headInfos);
+		final betweenIfNotInfos:Array<BetweenSameCtorIfNotInfo> = betweenSameCtorIfNotInfos ?? [];
+		final cascadeEmit:CascadeEmit = buildCascadeEmit(afterInfos, beforeInfos, betweenInfos, transitionInfos, headInfos, betweenIfNotInfos);
 		final cascadeInitPrev:Expr = cascadeEmit.initPrev;
 		final cascadeInitCurr:Expr = cascadeEmit.initCurr;
 		final cascadeCurrCompute:Expr = cascadeEmit.currCompute;
@@ -7201,6 +7246,7 @@ class WriterLowering {
 	 *  - `blankLinesBetweenSameCtorByLevel`
 	 *  - `blankLinesBetweenSameCtorTailTransparent`
 	 *  - `blankLinesBetweenSameCtorHeadTransparent`
+	 *  - `blankLinesBetweenSameCtorIfNot`
 	 *  - `blankLinesOnTransitionAcross`
 	 *
 	 * Tail/head transparent metas are merged per-classifier-field into a
@@ -7301,12 +7347,17 @@ class WriterLowering {
 					Context.currentPos()
 				);
 		}
+		final betweenSameCtorIfNotAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBetweenSameCtorIfNot');
+		final betweenSameCtorIfNotInfos:Array<BetweenSameCtorIfNotInfo> = [
+			for (args in betweenSameCtorIfNotAllArgs) buildBetweenSameCtorBlankInfoIfNot(elemRefName, args)
+		];
 		return {
 			afterCtorInfos: afterCtorInfos,
 			beforeCtorInfos: beforeCtorInfos,
 			betweenCtorInfos: betweenCtorInfos,
 			transitionAcrossInfos: transitionAcrossInfos,
 			headCtorInfos: headCtorInfos,
+			betweenSameCtorIfNotInfos: betweenSameCtorIfNotInfos,
 		};
 	}
 
@@ -7415,6 +7466,41 @@ class WriterLowering {
 			);
 		final reduced:Array<String> = [args[0]].concat(args.slice(2));
 		final r:CtorBlankResolution = resolveCtorBlankArgs(elemRefName, reduced, 'blankLinesBeforeCtorIf', args[1]);
+		return {
+			classifierFieldName: r.fieldName,
+			classifyCases: r.cases,
+			optField: r.optField,
+		};
+	}
+
+	/**
+	 * ω-between-single-line-types — resolve
+	 * `@:fmt(blankLinesBetweenSameCtorIfNot(classifierField,
+	 * predicateName, CtorName1, [CtorName2, …], optField))` into a
+	 * `BetweenSameCtorIfNotInfo`. Same arg shape as
+	 * `blankLinesAfterCtorIf` (≥ 4 string args, predicate name at args[1])
+	 * but the resolver runs with `predicateInvert=true`, so the kind
+	 * tracker fires `1` when the ctor matches AND the predicate is FALSE
+	 * (i.e. the ctor's payload is single-line per the grammar-derived
+	 * `multiline` predicate). The cascade-emit phase consults BOTH prev
+	 * and curr trackers — fires `opt.<optField>` blank lines only when
+	 * both sides of the consecutive pair land in kind=1.
+	 *
+	 * Currently only `'multiline'` is registered as a predicate name (via
+	 * `buildPredicateGatedKind`). Untagged / empty-body / no-payload
+	 * ctors bucket into kind=1 (single-line by default), so adding new
+	 * ctors to the named set without tagging their payload type with
+	 * `@:fmt(multilineWhen…)` is safe — they fire the rule whenever they
+	 * appear next to another matched ctor.
+	 */
+	private function buildBetweenSameCtorBlankInfoIfNot(elemRefName:String, args:Array<String>):BetweenSameCtorIfNotInfo {
+		if (args.length < 4)
+			Context.fatalError(
+				'WriterLowering: @:fmt(blankLinesBetweenSameCtorIfNot) expects ≥ 4 string args (classifierField, predicateName, CtorName1, [CtorName2, …], optField), got ${args.length}',
+				Context.currentPos()
+			);
+		final reduced:Array<String> = [args[0]].concat(args.slice(2));
+		final r:CtorBlankResolution = resolveCtorBlankArgs(elemRefName, reduced, 'blankLinesBetweenSameCtorIfNot', args[1], true);
 		return {
 			classifierFieldName: r.fieldName,
 			classifyCases: r.cases,
@@ -7731,7 +7817,7 @@ class WriterLowering {
 	 * both knobs in sync on shape-validation messages and the classifier
 	 * lookup path.
 	 */
-	private function resolveCtorBlankArgs(elemRefName:String, args:Array<String>, metaName:String, predicateName:Null<String>):CtorBlankResolution {
+	private function resolveCtorBlankArgs(elemRefName:String, args:Array<String>, metaName:String, predicateName:Null<String>, predicateInvert:Bool = false):CtorBlankResolution {
 		if (args.length < 3)
 			Context.fatalError(
 				'WriterLowering: @:fmt($metaName) expects ≥ 3 string args (classifierField, CtorName1, [CtorName2, …], optField), got ${args.length}',
@@ -7768,7 +7854,7 @@ class WriterLowering {
 			if (isMatch) matched.push(ctorName);
 			final kindExpr:Expr = if (!isMatch) macro 0;
 				else if (predicateName == null) macro 1;
-				else buildPredicateGatedKind(branch, ctorName, predicateName, metaName, enumRuleName);
+				else buildPredicateGatedKind(branch, ctorName, predicateName, metaName, enumRuleName, predicateInvert);
 			// When a predicate gate is active, the case pattern must bind the
 			// first arg as `_v0` so the predicate can reference it. Plain
 			// (non-predicated) and zero-arg ctors keep the original wildcard
@@ -7810,18 +7896,25 @@ class WriterLowering {
 	 * and apply `multilineCtor`-tagged ctor's arg-type predicate;
 	 * untagged ctors emit `false`.
 	 */
-	private function buildPredicateGatedKind(branch:ShapeNode, ctorName:String, predicateName:String, metaName:String, enumRuleName:String):Expr {
+	private function buildPredicateGatedKind(branch:ShapeNode, ctorName:String, predicateName:String, metaName:String, enumRuleName:String, invert:Bool = false):Expr {
 		if (predicateName != 'multiline')
 			Context.fatalError(
 				'WriterLowering: @:fmt($metaName) predicate "$predicateName" is not registered (currently only "multiline" is supported)',
 				Context.currentPos()
 			);
-		if (branch.children.length == 0) return macro 0;
+		// ω-between-single-line-types — `invert=true` flips the kind polarity:
+		// kind=1 when predicate is FALSE (i.e. the ctor matches AND is NOT
+		// multi-line). Used by `blankLinesBetweenSameCtorIfNot` to track
+		// "single-line side of the pair". Untagged ctors (no relevant
+		// `multilineWhen…` meta on payload type) return `null` predicate
+		// → kind=1 unconditionally under invert (single-line by default).
+		if (branch.children.length == 0) return invert ? macro 1 : macro 0;
 		final argNode:ShapeNode = branch.children[0];
 		final argTypeName:Null<String> = argNode.annotations.get('base.ref');
-		if (argTypeName == null) return macro 0;
+		if (argTypeName == null) return invert ? macro 1 : macro 0;
 		final pred:Null<Expr> = buildMultilinePredicate(argTypeName, macro _v0);
-		return pred == null ? macro 0 : macro $pred ? 1 : 0;
+		if (pred == null) return invert ? macro 1 : macro 0;
+		return invert ? macro ($pred ? 0 : 1) : macro ($pred ? 1 : 0);
 	}
 
 	/**
@@ -8154,6 +8247,44 @@ typedef HeadCtorBlankInfo = {
 };
 
 /**
+ * ω-between-single-line-types — resolved data for
+ * `@:fmt(blankLinesBetweenSameCtorIfNot(classifierField, predicateName,
+ * CtorName1, [CtorName2, …], optField))`. Produced by
+ * `WriterLowering.buildBetweenSameCtorBlankInfoIfNot` and spliced into
+ * `triviaEofStarExpr` / `triviaTryparseStarExpr`'s per-element loop
+ * alongside the after/before/between/transition families.
+ *
+ * Shape mirrors `AfterCtorBlankInfo` / `BeforeCtorBlankInfo` exactly
+ * (single-axis classify-switch returning `1` for any matching ctor
+ * whose `predicateName` evaluates to FALSE on its payload, `0`
+ * otherwise) plus an opt-field name. The two diverge from after / before
+ * at the cascade gate: this family fires when BOTH prev and curr have
+ * kind=1 — i.e. consecutive pair where both ends fall in the matching
+ * ctor set AND neither side matches the predicate.
+ *
+ * Used to drive haxe-formatter's `emptyLines.betweenSingleLineTypes`
+ * semantic (1 blank between any pair of single-line typedef / class /
+ * interface / abstract / enum decls). The predicate is grammar-derived
+ * via `buildMultilinePredicate` (same one driving `afterMultilineDecl` /
+ * `beforeMultilineDecl`) but with inverted polarity at kind-emission
+ * time, so untagged / empty-body decls bucket into "single-line" and
+ * non-empty type-body decls bucket into "multi-line" automatically.
+ *
+ * Cascade priority: after-ctor > between-ctor (path-aware) > transition
+ * > between-same-ctor-if-not > before-ctor > source-driven. Sits below
+ * the path-aware between family (Imports/Usings) because that family
+ * also gates on both sides and would conflict otherwise; sits above
+ * before-ctor so a single-line typedef → single-line typedef pair
+ * still fires `betweenSingleLineTypes` even when an unrelated
+ * before-ctor rule would otherwise apply.
+ */
+typedef BetweenSameCtorIfNotInfo = {
+	classifierFieldName:String,
+	classifyCases:Array<Case>,
+	optField:String,
+};
+
+/**
  * Aggregated cascade info arrays read off a `@:trivia` Star ShapeNode
  * by `WriterLowering.readCascadeInfosFromStar`. Each array is the
  * resolved form of one `@:fmt(blankLines*)` meta family on the same
@@ -8172,6 +8303,7 @@ typedef CascadeInfos = {
 	betweenCtorInfos:Array<BetweenCtorBlankInfo>,
 	transitionAcrossInfos:Array<TransitionAcrossInfo>,
 	headCtorInfos:Array<HeadCtorBlankInfo>,
+	betweenSameCtorIfNotInfos:Array<BetweenSameCtorIfNotInfo>,
 };
 
 /**
