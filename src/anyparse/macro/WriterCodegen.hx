@@ -158,7 +158,8 @@ class WriterCodegen {
 				_opt.tabWidth,
 				_opt.lineEnd,
 				_opt.finalNewline,
-				_opt.trailingWhitespace
+				_opt.trailingWhitespace,
+				_opt.maxConsecutiveBlanks
 			);
 		};
 		return {

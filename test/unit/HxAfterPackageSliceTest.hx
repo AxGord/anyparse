@@ -114,6 +114,9 @@ class HxAfterPackageSliceTest extends Test {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.afterPackage = afterPackage;
 		opts.beforeType = 0;
+		// Disable the final-pass blank-line cap so this slice's `afterPackage:2`
+		// assertion is not collapsed by the default `maxConsecutiveBlanks:1`.
+		opts.maxConsecutiveBlanks = -1;
 		return opts;
 	}
 }

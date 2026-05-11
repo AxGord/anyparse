@@ -491,6 +491,7 @@ final class HaxeFormatConfigLoader {
 			lineEnd: base.lineEnd,
 			finalNewline: base.finalNewline,
 			trailingWhitespace: base.trailingWhitespace,
+			maxConsecutiveBlanks: base.maxConsecutiveBlanks,
 			commentStyle: base.commentStyle,
 			sameLineElse: base.sameLineElse,
 			sameLineCatch: base.sameLineCatch,
@@ -1132,6 +1133,12 @@ final class HaxeFormatConfigLoader {
 		if (section.afterFileHeaderComment != null) opt.afterFileHeaderComment = section.afterFileHeaderComment;
 		if (section.betweenMultilineComments != null) opt.betweenMultilineComments = section.betweenMultilineComments;
 		if (section.betweenSingleLineTypes != null) opt.betweenSingleLineTypes = section.betweenSingleLineTypes;
+		// ω-max-anywhere-in-file: feed the JSON `emptyLines.maxAnywhereInFile`
+		// knob into the generic `Renderer.render` cap parameter via
+		// `WriteOptions.maxConsecutiveBlanks`. Fork's `@:default(1)` matches
+		// our `HaxeFormat.defaultWriteOptions` default, so the override only
+		// kicks in when the fixture explicitly sets a different value.
+		if (section.maxAnywhereInFile != null) opt.maxConsecutiveBlanks = section.maxAnywhereInFile;
 		if (section.afterLeftCurly != null)
 			opt.afterLeftCurly = keepEmptyLinesToRuntime(section.afterLeftCurly);
 		if (section.beforeRightCurly != null)

@@ -120,7 +120,8 @@ class Renderer {
 		tabWidth:Int = 1,
 		lineEnd:String = '\n',
 		finalNewline:Bool = false,
-		trailingWhitespace:Bool = false
+		trailingWhitespace:Bool = false,
+		maxConsecutiveBlanks:Int = -1
 	):String {
 		final buf:StringBuf = new StringBuf();
 		final stack:Array<Frame> = [new Frame(0, MBreak, doc)];
@@ -399,9 +400,66 @@ class Renderer {
 			}
 		}
 
-		final out:String = buf.toString();
-		if (finalNewline && !StringTools.endsWith(out, lineEnd)) return out + lineEnd;
-		return out;
+		final raw:String = buf.toString();
+		final capped:String = maxConsecutiveBlanks >= 0 ? capConsecutiveBlanks(raw, lineEnd, maxConsecutiveBlanks) : raw;
+		if (finalNewline && !StringTools.endsWith(capped, lineEnd)) return capped + lineEnd;
+		return capped;
+	}
+
+	/**
+		Collapses runs of consecutive `lineEnd` sequences down to
+		`maxBlanks + 1` line-end occurrences — i.e. at most `maxBlanks`
+		blank lines between any two non-empty lines. Drives the haxe-
+		formatter `emptyLines.maxAnywhereInFile` knob (fed through
+		`WriteOptions.maxConsecutiveBlanks`). With `maxBlanks = 0` the
+		output has no blank lines at all; `maxBlanks = 1` allows one
+		blank line at most, etc. Single-character `lineEnd` ("\n", "\r")
+		and multi-character ("\r\n") are both handled.
+
+		Pre-condition: `maxBlanks >= 0`; the caller guards `< 0` for
+		unbounded (no-cap) mode.
+	**/
+	private static function capConsecutiveBlanks(s:String, lineEnd:String, maxBlanks:Int):String {
+		final leLen:Int = lineEnd.length;
+		if (leLen == 0) return s;
+		final maxRunLen:Int = (maxBlanks + 1) * leLen;
+		final buf:StringBuf = new StringBuf();
+		final n:Int = s.length;
+		var i:Int = 0;
+		var segStart:Int = 0;
+		while (i < n) {
+			if (startsWithAt(s, i, lineEnd)) {
+				if (i > segStart) buf.addSub(s, segStart, i - segStart);
+				var runEnd:Int = i + leLen;
+				while (runEnd <= n - leLen && startsWithAt(s, runEnd, lineEnd))
+					runEnd += leLen;
+				final runLen:Int = runEnd - i;
+				final emitLen:Int = runLen < maxRunLen ? runLen : maxRunLen;
+				buf.addSub(s, i, emitLen);
+				i = runEnd;
+				segStart = i;
+			} else {
+				i++;
+			}
+		}
+		if (segStart < n) buf.addSub(s, segStart, n - segStart);
+		return buf.toString();
+	}
+
+	/**
+		Returns true iff `s` contains `needle` starting at index `at`.
+		Helper for `capConsecutiveBlanks` lineEnd-run detection — operates
+		on code-unit boundaries (works for both single-char `\n` / `\r`
+		and multi-char `\r\n` line-ends, since the needle is matched
+		verbatim).
+	**/
+	private static function startsWithAt(s:String, at:Int, needle:String):Bool {
+		final needleLen:Int = needle.length;
+		if (at + needleLen > s.length) return false;
+		for (k in 0...needleLen)
+			if (StringTools.fastCodeAt(s, at + k) != StringTools.fastCodeAt(needle, k))
+				return false;
+		return true;
 	}
 
 	/**

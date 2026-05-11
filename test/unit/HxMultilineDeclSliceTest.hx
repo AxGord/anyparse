@@ -125,6 +125,10 @@ class HxMultilineDeclSliceTest extends Test {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.afterMultilineDecl = after;
 		opts.beforeMultilineDecl = before;
+		// Disable the final-pass blank-line cap so this slice's `after:2` /
+		// `before:2` assertions are not collapsed by the default
+		// `maxConsecutiveBlanks:1`.
+		opts.maxConsecutiveBlanks = -1;
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
 }

@@ -629,6 +629,7 @@ final class HaxeFormat implements TextFormat {
 		lineEnd: '\n',
 		finalNewline: true,
 		trailingWhitespace: false,
+		maxConsecutiveBlanks: 1,
 		commentStyle: CommentStyle.Verbatim,
 		sameLineElse: SameLinePolicy.Same,
 		sameLineCatch: SameLinePolicy.Same,

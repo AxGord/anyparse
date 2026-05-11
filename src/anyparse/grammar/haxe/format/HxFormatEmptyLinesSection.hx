@@ -4,8 +4,7 @@ package anyparse.grammar.haxe.format;
  * `emptyLines` section of a haxe-formatter `hxformat.json` config.
  *
  * Only keys whose runtime knob already exists on `HxModuleWriteOptions`
- * are modelled here. Missing keys (`finalNewline`, `maxAnywhereInFile`,
- * `betweenTypes`,
+ * are modelled here. Missing keys (`finalNewline`, `betweenTypes`,
  * `lineCommentsBetweenTypes`, `lineCommentsBetweenFunctions`,
  * `beforeRightCurly`, `afterLeftCurly`,
  * `afterReturn`, `beforeBlocks`, `afterBlocks`, `enumAbstractEmptyLines`,
@@ -81,6 +80,16 @@ package anyparse.grammar.haxe.format;
  * `HxModuleWriteOptions.afterFileHeaderComment` /
  * `HxModuleWriteOptions.betweenMultilineComments` for full semantics.
  *
+ * `maxAnywhereInFile` added in slice ω-max-anywhere-in-file (feeds
+ * `opt.maxConsecutiveBlanks` on the generic base `WriteOptions`).
+ * Non-negative Int — the writer's final-pass cap on consecutive
+ * `lineEnd` runs in the rendered output: at most this many blank lines
+ * between any two non-empty lines. Default `1` matches haxe-formatter's
+ * `emptyLines.maxAnywhereInFile: @:default(1)`. `0` strips every blank
+ * line in the file; `-1` would mean "unbounded" but the JSON loader
+ * never produces that value — the runtime `-1` sentinel is reserved for
+ * non-Haxe grammars whose defaults leave the cap off.
+ *
  * `betweenSingleLineTypes` added in slice ω-between-single-line-types
  * (feeds `opt.betweenSingleLineTypes`). Non-negative Int — number of
  * blank lines emitted between any consecutive pair of single-line type
@@ -119,4 +128,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var betweenMultilineComments:Int;
 
 	@:optional var betweenSingleLineTypes:Int;
+
+	@:optional var maxAnywhereInFile:Int;
 };

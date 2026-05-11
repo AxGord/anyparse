@@ -103,6 +103,7 @@ final class JsonFormat implements TextFormat {
 		lineEnd: '\n',
 		finalNewline: false,
 		trailingWhitespace: false,
+		maxConsecutiveBlanks: -1,
 		commentStyle: Verbatim,
 		addLineCommentSpace: true,
 	};

@@ -93,6 +93,26 @@ typedef WriteOptions = {
 	addLineCommentSpace:Bool,
 
 	/**
+	 * Cap on consecutive line-end runs in the rendered output. Read once
+	 * by `Renderer.render` as the final post-pass: any run of `N+1` or
+	 * more consecutive `lineEnd` sequences is truncated to exactly
+	 * `maxConsecutiveBlanks + 1` line-end occurrences (i.e. at most
+	 * `maxConsecutiveBlanks` blank lines between any two non-empty
+	 * lines). Default `-1` disables the cap and preserves whatever the
+	 * Doc tree emitted. Fed by haxe-formatter's
+	 * `emptyLines.maxAnywhereInFile` knob through
+	 * `HaxeFormatConfigLoader`; other grammars leave it unbounded.
+	 *
+	 *  - `maxConsecutiveBlanks = 0` — no blank lines anywhere; every
+	 *    inter-line gap collapses to a single line-end.
+	 *  - `maxConsecutiveBlanks = 1` — at most one blank line between
+	 *    any two non-empty lines (fork's default value).
+	 *  - `maxConsecutiveBlanks = N >= 0` — at most `N` blank lines.
+	 *  - `maxConsecutiveBlanks = -1` — unbounded (no post-pass).
+	 */
+	maxConsecutiveBlanks:Int,
+
+	/**
 	 * Plugin-supplied trivia adapters bound at runtime. The macro-
 	 * emitted `leadingCommentDoc` / `trailingCommentDoc(Verbatim)`
 	 * helpers call these to convert captured trivia strings into Doc

@@ -140,6 +140,9 @@ class HxBeforeUsingSliceTest extends Test {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.beforeUsing = beforeUsing;
 		opts.beforeType = 0;
+		// Disable the final-pass blank-line cap so this slice's `beforeUsing:2`
+		// assertion is not collapsed by the default `maxConsecutiveBlanks:1`.
+		opts.maxConsecutiveBlanks = -1;
 		return opts;
 	}
 }
