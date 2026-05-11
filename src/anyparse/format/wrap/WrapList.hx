@@ -248,6 +248,76 @@ class WrapList {
 	}
 
 	/**
+	 * Single-Ref wrap variant of `emit` for statement-condition paren
+	 * groups (`if (cond)`, `while (cond)`). The cascade sees the cond
+	 * as a 1-item list and picks between flat shape `(cond)` and
+	 * wrapped shape `(\n\tcond\n)`. Renderer's column-aware fit
+	 * decision selects the right shape via `Group(IfBreak(brk, flat))`.
+	 *
+	 * Cond payloads carrying hardlines (cond already broken by inner
+	 * opBoolChain / call-arg wrap / lambda body) commit to the wrapped
+	 * shape unconditionally — `flatLength(condDoc) < 0`.
+	 *
+	 * `LineLengthLargerThan` thresholds beyond the cascade's basic
+	 * `ExceedsMaxLineLength` rule are NOT supported here yet — first
+	 * consumer (`HxIfStmt.cond` / `HxWhileStmt.cond`) ships only the
+	 * fork's default `fillLineWithLeadingBreak` + `exceedsMaxLineLength:
+	 * 0 → noWrap` cascade. Slice ω-condition-wrap-wiring.
+	 */
+	public static function emitCondition(
+		open:String, close:String,
+		condDoc:Doc, opt:WriteOptions, rules:WrapRules
+	):Doc {
+		final cols:Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
+		final condW:Int = DocMeasure.flatTokenWidth(condDoc);
+		final hasHardline:Bool = flatLength(condDoc) < 0;
+
+		final flatShape:Doc = Concat([Text(open), condDoc, Text(close)]);
+		// `Nest(cols, Line('\n'))` indents ONLY the post-open hardline so
+		// the cond's first line starts at outer+cols. `condDoc` itself is
+		// emitted OUTSIDE the Nest so any inner opBoolChain / call-arg
+		// wrapping uses its own outer indent as the Nest base instead of
+		// compounding with this wrapper's Nest (closes the +2cols
+		// over-indent on `if (cond1 && cond2 && …)` cascades).
+		final brkShape:Doc = Concat([
+			Text(open),
+			Nest(cols, Line('\n')),
+			condDoc,
+			Line('\n'),
+			Text(close),
+		]);
+
+		inline function decideAt(exceeds:Bool):WrapMode {
+			return decideWithLineLengthState(
+				rules, 1, condW, condW, exceeds, hasHardline,
+				t -> t == opt.lineWidth ? exceeds : false
+			);
+		}
+
+		// Only `FillLineWithLeadingBreak` materialises the leading +
+		// trailing hardlines around the cond — other wrap modes
+		// (`OnePerLine`, `OnePerLineAfterFirst`, `FillLine`) keep the
+		// open/close glued to the cond and rely on the cond's own
+		// internal break engines (opBoolChain, call-arg wrap, …) for
+		// per-operand layout. `NoWrap` and unmodelled modes fall back
+		// to flat. This narrow ⟂-modes match keeps the slice net-
+		// positive — every other mode acts as a no-op until a future
+		// slice models its specific shape.
+		inline function shapeFor(mode:WrapMode):Doc {
+			return mode == FillLineWithLeadingBreak ? brkShape : flatShape;
+		}
+
+		if (hasHardline) return shapeFor(decideAt(true));
+
+		final modeFlat:WrapMode = decideAt(false);
+		final modeBreak:WrapMode = decideAt(true);
+		final flatBrk:Bool = modeFlat == FillLineWithLeadingBreak;
+		final breakBrk:Bool = modeBreak == FillLineWithLeadingBreak;
+		if (flatBrk == breakBrk) return shapeFor(modeFlat);
+		return Group(IfBreak(shapeFor(modeBreak), shapeFor(modeFlat)));
+	}
+
+	/**
 	 * Recursive helper that builds the IfWidthExceeds + IfBreak tree
 	 * for the cascade-with-thresholds layout. `forcedExceeds`:
 	 *   - `true` → emit a single shape at each leaf (no IfBreak —

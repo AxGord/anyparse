@@ -1523,6 +1523,28 @@ class WriterLowering {
 			final isStar:Bool = child.kind == Star;
 			final isOptional:Bool = child.annotations.get('base.optional') == true;
 			final hasElseIf:Bool = child.fmtHasFlag('elseIf');
+			// ω-condition-wrap-wiring: `@:fmt(condWrap('<knob>'))` on a
+			// bare mandatory Ref carrying `@:lead('(') @:trail(')')` (or
+			// any open/close literal pair) routes lead+value+trail through
+			// the runtime `WrapList.emitCondition` cascade instead of
+			// pushing the three pieces independently. The cascade fits
+			// flat `(cond)` when the column has room and breaks to
+			// `(\n\tcond\n)` otherwise — driven by `opt.<knob>:WrapRules`.
+			// First consumers: `HxIfStmt.cond`, `HxWhileStmt.cond`. The
+			// lead push at line ~1756 and the trail push at line ~2463
+			// are skipped when this meta fires, and the bare-Ref Case's
+			// `parts.push(writeCall)` default path emits the wrapped Doc
+			// via the runtime helper instead.
+			final condWrapArgs:Null<Array<String>> = child.fmtReadStringArgs('condWrap');
+			if (condWrapArgs != null) {
+				if (condWrapArgs.length != 1)
+					Context.fatalError('WriterLowering: @:fmt(condWrap(\'<knob>\')) requires 1 string arg, got ${condWrapArgs.length}', Context.currentPos());
+				if (leadText == null || trailText == null)
+					Context.fatalError('WriterLowering: @:fmt(condWrap) requires both @:lead and @:trail on the field', Context.currentPos());
+				if (isOptional || isStar || kwLead != null || child.kind != Ref)
+					Context.fatalError('WriterLowering: @:fmt(condWrap) is supported only on bare mandatory Ref fields', Context.currentPos());
+			}
+			final hasCondWrap:Bool = condWrapArgs != null;
 
 			final fieldAccess:Expr = {
 				expr: EField(macro value, fieldName),
@@ -1753,7 +1775,7 @@ class WriterLowering {
 			// `@:fmt(typeHintColon)` on the field switches the emission to
 			// a runtime-configurable spacing around the lead text; all
 			// other mandatory leads stay tight.
-			if (leadText != null && !isOptional)
+			if (leadText != null && !isOptional && !hasCondWrap)
 				parts.push(whitespacePolicyLead(child, leadText, ['objectFieldColon', 'typeHintColon', 'typeCheckColon', 'typedefAssign', 'functionTypeHaxe4', 'arrowFunctions']));
 
 			// Field value
@@ -2436,6 +2458,20 @@ class WriterLowering {
 								} else parts.push(withPadTrailingDrop(prevPadTrailing, macro _dt(' ')));
 								parts.push(writeCall);
 							}
+						} else if (hasCondWrap) {
+							// ω-condition-wrap-wiring: replace bare lead+
+							// value+trail emission with a runtime
+							// `WrapList.emitCondition` call. The lead and
+							// trail pushes above are gated off by
+							// `hasCondWrap`; here the writer emits the
+							// `Group(IfBreak(brk, flat))` shape driven by
+							// `opt.<knob>:WrapRules` so the renderer
+							// commits to `(cond)` or `(\n\tcond\n)` based
+							// on column fit at layout time.
+							final condKnobAccess:Expr = optFieldAccess(condWrapArgs[0]);
+							parts.push(macro anyparse.format.wrap.WrapList.emitCondition(
+								$v{leadText}, $v{trailText}, $writeCall, opt, $condKnobAccess
+							));
 						} else {
 							parts.push(writeCall);
 						}
@@ -2460,7 +2496,7 @@ class WriterLowering {
 			}
 
 			// Trail
-			if (!isOptional && trailText != null)
+			if (!isOptional && trailText != null && !hasCondWrap)
 				parts.push(macro _dt($v{trailText}));
 
 			// ω-pad-trailing-ref: bare-Ref `@:fmt(padTrailing)` — mandatory
