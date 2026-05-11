@@ -19,6 +19,11 @@ package anyparse.grammar.haxe.format;
  * `=`/`:` RHS picks up one extra indent step on its body block(s)
  * (`false`, default — matches haxe-formatter's
  * `indentation.indentComplexValueExpressions: @:default(false)`).
+ * `indentVarTypeHintAnon` toggles whether a multi-line `Anon` value on
+ * the var-type-hint RHS picks up one extra indent step in front of its
+ * `{` (`true`, default) — fires only when `lineEnds.anonTypeCurly.leftCurly`
+ * is Allman (`both`/`before`). No fork analogue; the fork applies the
+ * indent unconditionally under Allman.
  */
 @:peg typedef HxFormatIndentationSection = {
 
@@ -33,4 +38,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var indentObjectLiteral:Bool;
 
 	@:optional var indentComplexValueExpressions:Bool;
+
+	@:optional var indentVarTypeHintAnon:Bool;
 };

@@ -579,6 +579,7 @@ final class HaxeFormatConfigLoader {
 			indentCaseLabels: base.indentCaseLabels,
 			indentObjectLiteral: base.indentObjectLiteral,
 			indentComplexValueExpressions: base.indentComplexValueExpressions,
+			indentVarTypeHintAnon: base.indentVarTypeHintAnon,
 			functionTypeHaxe4: base.functionTypeHaxe4,
 			arrowFunctions: base.arrowFunctions,
 			afterPackage: base.afterPackage,
@@ -634,6 +635,7 @@ final class HaxeFormatConfigLoader {
 		if (section.indentCaseLabels != null) opt.indentCaseLabels = section.indentCaseLabels;
 		if (section.indentObjectLiteral != null) opt.indentObjectLiteral = section.indentObjectLiteral;
 		if (section.indentComplexValueExpressions != null) opt.indentComplexValueExpressions = section.indentComplexValueExpressions;
+		if (section.indentVarTypeHintAnon != null) opt.indentVarTypeHintAnon = section.indentVarTypeHintAnon;
 	}
 
 	private static function applyWrapping(section:HxFormatWrappingSection, opt:HxModuleWriteOptions):Void {

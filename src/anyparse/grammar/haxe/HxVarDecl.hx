@@ -49,11 +49,29 @@ package anyparse.grammar.haxe;
  * drops the leftCurly gate — `if` always cuddles its `{`, so a
  * placement check would be inert. Other RHS ctors (calls, binops,
  * literals other than ObjectLit/IfExpr) are unaffected.
+ *
+ * `@:fmt(indentValueIfCtor('Anon', 'indentVarTypeHintAnon',
+ * 'anonTypeLeftCurly'))` on the `type` field (slice ω-var-type-hint-
+ * anon-indent) extends the same RHS-style indent rule to the type-hint
+ * RHS — when the bound `HxType` ctor is `Anon` AND
+ * `opt.indentVarTypeHintAnon` is true (default) AND
+ * `opt.anonTypeLeftCurly` is `Next` (`{` on its own line) — applies a
+ * `Nest(_cols, …)` wrap so the multi-line anon body's hardlines pick up
+ * one extra indent step. Visible effect under Allman:
+ * `\tvar a:\n\t\t{\n\t\t\tx:Int,…\n\t\t};` instead of
+ * `\tvar a:\n\t{\n\t\tx:Int,…\n\t};`, matching the fork's behaviour for
+ * multi-line var-type-hint anon types under `lineEnds.leftCurly: "both"`
+ * (issue_301 fixture cluster). Single-line anon (`var a:{x:Int}`) stays
+ * cuddled under Same — the wrap is inert because no internal hardlines
+ * exist. Independent of `init` — both fields can carry their own
+ * `indentValueIfCtor` entries simultaneously.
  */
 @:peg
 typedef HxVarDecl = {
 	var name:HxIdentLit;
-	@:optional @:fmt(typeHintColon) @:lead(':') var type:Null<HxType>;
+	@:optional @:fmt(typeHintColon,
+		indentValueIfCtor('Anon', 'indentVarTypeHintAnon', 'anonTypeLeftCurly'))
+		@:lead(':') var type:Null<HxType>;
 	@:optional
 	@:fmt(indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'),
 		indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'),

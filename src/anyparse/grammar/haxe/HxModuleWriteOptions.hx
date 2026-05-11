@@ -1084,6 +1084,27 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    (`HxObjectField.value`, return/call-arg) and value ctors (`SwitchExpr`,
  *    `TryExpr`) opt in by adding their own entry.
  *
+ * Field added in slice ω-var-type-hint-anon-indent (extra indent on
+ * multi-line `Anon` type-hint under Allman):
+ *  - `indentVarTypeHintAnon` — when `true` (default) AND
+ *    `anonTypeLeftCurly` is `Next`, a multi-line `Anon` value on the
+ *    right-hand side of a var's type-hint `:` is wrapped in
+ *    `Nest(_cols, val)` so its hardlines pick up one extra indent step.
+ *    Visible effect under Allman:
+ *    `\tvar a:\n\t\t{\n\t\t\tx:Int\n\t\t};` instead of
+ *    `\tvar a:\n\t{\n\t\tx:Int\n\t};`. Mirrors the fork's behaviour for
+ *    multi-line var-type-hint anon types under `lineEnds.leftCurly:
+ *    "both"` (issue_301 fixture cluster). Under `Same` (cuddled)
+ *    leftCurly the wrap is inert — `{` already sits on the parent line,
+ *    so the inner content's existing nest is enough. When
+ *    `indentVarTypeHintAnon=false` the wrap is unconditionally inert.
+ *    The knob only applies at sites tagged with
+ *    `@:fmt(indentValueIfCtor('Anon', 'indentVarTypeHintAnon',
+ *    'anonTypeLeftCurly'))` in the grammar — currently `HxVarDecl.type`
+ *    only (covers class member `var` + local `VarStmt`). Other type-
+ *    hint sites (function returnType, lambda param type, anon-field type)
+ *    intentionally do not opt in yet — generalising is a follow-up slice.
+ *
  * Field added in slice ω-arrow-fn-type (new-form arrow function type
  * `->` spacing):
  *  - `functionTypeHaxe4` — whitespace around the `->` separator in a
@@ -1538,6 +1559,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	indentCaseLabels:Bool,
 	indentObjectLiteral:Bool,
 	indentComplexValueExpressions:Bool,
+	indentVarTypeHintAnon:Bool,
 	functionTypeHaxe4:WhitespacePolicy,
 	arrowFunctions:WhitespacePolicy,
 	afterPackage:Int,

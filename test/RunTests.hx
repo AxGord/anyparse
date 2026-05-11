@@ -63,6 +63,7 @@ import unit.HxObjectFieldColonOptionsTest;
 import unit.HxTypedefAssignOptionsTest;
 import unit.HxTypedefSemiSliceTest;
 import unit.HxTypedefAnonForceMultiTest;
+import unit.HxVarTypeHintAnonIndentTest;
 import unit.HxArrowFnTypeSliceTest;
 import unit.HxArrowFnOldStyleRewriteTest;
 import unit.HxArrowFnExprSliceTest;
@@ -203,6 +204,7 @@ class RunTests {
 		runner.addCase(new HxTypedefAssignOptionsTest());
 		runner.addCase(new HxTypedefSemiSliceTest());
 		runner.addCase(new HxTypedefAnonForceMultiTest());
+		runner.addCase(new HxVarTypeHintAnonIndentTest());
 		runner.addCase(new HxArrowFnTypeSliceTest());
 		runner.addCase(new HxArrowFnOldStyleRewriteTest());
 		runner.addCase(new HxArrowFnExprSliceTest());
