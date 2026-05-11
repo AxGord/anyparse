@@ -290,6 +290,16 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    per literal). Per-construct sub-key
  *    `lineEnds.objectLiteralCurly.leftCurly` overrides the cascade.
  *
+ * Field added in slice ω-anontype-left-curly:
+ *  - `anonTypeLeftCurly` — per-construct `BracePlacement` knob for
+ *    `HxType.Anon.fields` (`@:fmt(leftCurly('anonTypeLeftCurly'))`).
+ *    Default `Same` keeps anon-type braces cuddled. The loader cascades
+ *    global `lineEnds.leftCurly` into this knob (same pattern as
+ *    `objectLiteralLeftCurly`). With `Next`, typedef RHS anon-types
+ *    emit `typedef Foo =\n{ ... }` and inner var-type anons emit
+ *    `var a:\n\t{ ... }`, matching haxe-formatter's
+ *    `MarkLineEnds.getCurlyPolicy(AnonType)` precedence.
+ *
  * Field added in slice ψ₇ (object-literal colon spacing):
  *  - `objectFieldColon` — whitespace around the `:` inside an
  *    anonymous object literal (`HxObjectField.value`'s lead). `After`
@@ -1244,6 +1254,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	leftCurly:BracePlacement,
 	emptyCurly:EmptyCurly,
 	objectLiteralLeftCurly:BracePlacement,
+	anonTypeLeftCurly:BracePlacement,
 	objectFieldColon:WhitespacePolicy,
 	typeHintColon:WhitespacePolicy,
 	typeCheckColon:WhitespacePolicy,

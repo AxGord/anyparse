@@ -1232,9 +1232,20 @@ class WriterLowering {
 				// `beforeDocCommentEmptyLines` flag so sep-Stars opt into
 				// the cascade (currently only `HxType.Anon.fields`).
 				final beforeDocComments:Bool = branch.fmtHasFlag('beforeDocCommentEmptyLines');
+				// ω-anontype-left-curly: forward `@:fmt(leftCurly('<knob>'))`
+				// from the enum-Alt branch so `HxType.Anon` honours per-
+				// construct `anonTypeLeftCurly`. When `Next`, the helper's
+				// trivia branch prepends `_doh()` (OptHardline) before the
+				// `{`, and the no-trivia branch feeds the same Doc into
+				// `WrapList.emit`'s `(leadFlat=_de(), leadBreak=_doh())`
+				// pair so the wrap engine's flat/break decision picks
+				// cuddled vs Allman per the anon-type's measured shape.
+				// Mirrors the struct-Star `lowerStruct` path at
+				// `HxObjectLit.fields`.
+				final knobLeftCurly:Null<String> = branch.fmtReadString('leftCurly');
 				parts.push(triviaSepStarExpr(
 					argsAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, leadText, trailText, sepText,
-					wrapRulesField, null, null, null, openInsideExpr, closeInsideExpr, beforeDocComments
+					wrapRulesField, knobLeftCurly, null, null, openInsideExpr, closeInsideExpr, beforeDocComments
 				));
 			} else {
 				// ω-bropen-keep: forward `@:fmt(keepCurlyBlanks)` from the

@@ -517,6 +517,7 @@ final class HaxeFormatConfigLoader {
 			leftCurly: base.leftCurly,
 			emptyCurly: base.emptyCurly,
 			objectLiteralLeftCurly: base.objectLiteralLeftCurly,
+			anonTypeLeftCurly: base.anonTypeLeftCurly,
 			objectFieldColon: base.objectFieldColon,
 			typeHintColon: base.typeHintColon,
 			typeCheckColon: base.typeCheckColon,
@@ -849,6 +850,14 @@ final class HaxeFormatConfigLoader {
 			// wrap cascade chooses NoWrap for — they continue to emit
 			// cuddled `{` even with `objectLiteralLeftCurly = Next`.
 			opt.objectLiteralLeftCurly = placement;
+			// ω-anontype-left-curly: cascade global `lineEnds.leftCurly`
+			// into `opt.anonTypeLeftCurly`. With `Next`, typedef RHS
+			// anon-types (`typedef Foo = {...}`) and inner var-type anons
+			// (`var a:{...}`) flip to Allman (`=\n{ ... }`). Default
+			// `Same` keeps the cuddled layout. Mirrors haxe-formatter's
+			// `MarkLineEnds.getCurlyPolicy(AnonType)` precedence — global
+			// lineEnd seeds every per-construct knob, sub-keys override.
+			opt.anonTypeLeftCurly = placement;
 		}
 		if (section.objectLiteralCurly != null) {
 			final sub:HxFormatCurlyLineEndPolicy = section.objectLiteralCurly;
