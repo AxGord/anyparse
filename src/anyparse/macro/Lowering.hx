@@ -1390,7 +1390,43 @@ class Lowering {
 				pos: Context.currentPos(),
 			});
 			if (trailText != null) {
-				steps.push(macro skipWs(ctx));
+				// ω-trailopt-stash-trivia: in trivia mode + `@:trailOpt`, use
+				// `skipWsAndStash` so trailing comments between the body and
+				// the optional trail literal land in `ctx.pendingTrivia`.
+				// When the trail is ABSENT (e.g. `typedef Foo = Int\n/** doc
+				// **/\ntypedef Bar`), the parent Star's next `collectTrivia`
+				// drains the stash and the doc-comment becomes leading of the
+				// next decl. The plain `skipWs` path silently dropped it.
+				// Cases: issue_216 / issue_321 closures. Mandatory `@:trail`
+				// paths keep the original `skipWs` — comments before a
+				// required trail literal are intra-decl close trivia and the
+				// downstream writer handles them via close-trail slots.
+				if (triviaTrailOpt) {
+					// ω-trailopt-stash-trivia: capture the gap between the
+					// inner Ref's last byte and the (optional) trail literal
+					// via `collectTrivia` — captures `newlineBefore` /
+					// `blankBefore` AND any line/block comments. Re-stash
+					// into `ctx.pendingTrivia` when anything was captured so
+					// the parent Star's next `collectTrivia` drains them as
+					// leading of the next sibling decl (the trail literal
+					// was absent so there's no intra-decl trailing slot to
+					// route to). Plain `skipWsAndStash` would lose the
+					// blank/newline signal.
+					steps.push(macro {
+						final _trailOptCap = collectTrivia(ctx);
+						if (_trailOptCap.newlineBefore
+							|| _trailOptCap.blankBefore
+							|| _trailOptCap.blankAfterLeadingComments
+							|| _trailOptCap.leadingComments.length > 0) {
+							ctx.pendingTrivia = {
+								blankBefore: _trailOptCap.blankBefore,
+								blankAfterLeadingComments: _trailOptCap.blankAfterLeadingComments,
+								newlineBefore: _trailOptCap.newlineBefore,
+								leadingComments: _trailOptCap.leadingComments,
+							};
+						}
+					});
+				} else steps.push(macro skipWs(ctx));
 				// Capture _end_pos AFTER the post-Ref skipWs but BEFORE the
 				// trail-literal match, so trailing whitespace inside the
 				// braces (e.g. `${ i + 1 }`) is included in the verbatim
@@ -1635,7 +1671,16 @@ class Lowering {
 				&& child.fmtHasFlag('beforeNewlineSlotFirst');
 			final hasBeforeNewlineSlot:Bool = isBareTriviaRefNoLead && (!isFirstField || isFirstFieldNlOptIn);
 			final beforeNlLocal:String = '_beforeNl_$fieldName';
-			if (!triviaEofStar && !isOptionalRef && !isOptionalKwStar) {
+			// ω-optional-star-rewind: when the field is `@:optional Star`
+			// with `@:lead` (e.g. `HxTypeRef.params:Array<HxType>` —
+			// `<...>`), defer the pre-field `skipWs` into the emit so the
+			// emit can rewind cursor on `matchLit` miss. The miss-rewind
+			// preserves any trivia (notably doc-comments between
+			// `typedef Foo = Int` and the next decl) that the pre-field
+			// `skipWs` would otherwise silently consume — closes
+			// issue_216 / issue_321 cluster's parser-side bug.
+			final optStarWithLead:Bool = isStar && isOptional && kwLead == null;
+			if (!triviaEofStar && !isOptionalRef && !isOptionalKwStar && !optStarWithLead) {
 				if (hasBeforeNewlineSlot) {
 					// Route through `collectTrivia` — drains any
 					// `pendingTrivia` stash from a preceding empty
@@ -2303,17 +2348,30 @@ class Lowering {
 				}
 			};
 		}
+		// ω-optional-star-rewind: save cursor BEFORE the pre-peek
+		// `skipWs`, then attempt the open-lit match. On miss, rewind to
+		// the saved pos so any consumed trivia (whitespace OR comments)
+		// stays in the source for the next field / outer Star to pick
+		// up. The caller (`lowerStruct`) suppresses its per-field
+		// pre-`skipWs` for this branch so we don't double-skip.
 		parseSteps.push({
 			expr: EVars([{
 				name: localName,
 				type: optAccumCT,
-				expr: macro if (matchLit(ctx, $v{openText})) {
-					final _items:$accumCT = [];
-					$loopBody;
+				expr: macro {
+					final _savedPosOptStar:Int = ctx.pos;
 					skipWs(ctx);
-					expectLit(ctx, $v{closeText});
-					_items;
-				} else null,
+					if (matchLit(ctx, $v{openText})) {
+						final _items:$accumCT = [];
+						$loopBody;
+						skipWs(ctx);
+						expectLit(ctx, $v{closeText});
+						_items;
+					} else {
+						ctx.pos = _savedPosOptStar;
+						null;
+					}
+				},
 				isFinal: true,
 			}]),
 			pos: Context.currentPos(),
