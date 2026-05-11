@@ -876,13 +876,19 @@ final class HaxeFormatConfigLoader {
 			// reading the global `leftCurly`; per-context routing through
 			// the lambda parent is a follow-up slice.
 			opt.anonFunctionLeftCurly = placement;
-			// ω-blockcurly: cascade global `lineEnds.leftCurly`
-			// into `opt.blockLeftCurly`. With `Next`, plain block bodies
-			// (currently `HxFnDecl.body`) flip to Allman
-			// (`function f()\n{…}`). Default `Same` keeps the cuddled
+			// ω-blockcurly + ω-blockcurly-broader: cascade global
+			// `lineEnds.leftCurly` into `opt.blockLeftCurly`. With
+			// `Next`, every plain block body flips to Allman —
+			// `HxFnDecl.body` (`function f()\n{…}`),
+			// `HxStatement.BlockStmt` (`if (cond)\n{…}`),
+			// `HxExpr.BlockExpr` (block-as-expression),
+			// `HxSwitchStmt.cases` / `HxSwitchStmtBare.cases`
+			// (`switch (e)\n{…}`), `HxUntypedFnBody.block`
+			// (`untyped\n{…}`). Default `Same` keeps the cuddled
 			// layout. Mirrors haxe-formatter's
-			// `MarkLineEnds.getCurlyPolicy(Block)` precedence — global
-			// lineEnd seeds every per-construct knob, sub-keys override.
+			// `MarkLineEnds.detectCurlyPolicy(Block)` precedence —
+			// global lineEnd seeds every per-construct knob, sub-keys
+			// override.
 			opt.blockLeftCurly = placement;
 		}
 		if (section.objectLiteralCurly != null) {

@@ -1636,13 +1636,17 @@ class WriterLowering {
 			if (kwLead != null && !isOptional) {
 				if (!isFirstField && !isRaw) parts.push(sameLineSeparator(child, prevBodyField, typePath, prevPadTrailing));
 				if (child.fmtHasFlag('leftCurly')) {
-					// Bare-flag only at this site. Knob-form `@:fmt(leftCurly('<knob>'))`
-					// is designed for first-field Star paths where the outer caller
-					// produces an `_dop(' ')` (OptSpace) the `Same` branch can ride
-					// on; here there is no OptSpace producer, so a knob-form `Same`
-					// would silently strip the kw→`{` space.
-					if (child.fmtReadString('leftCurly') != null)
-						Context.fatalError('WriterLowering: knob-form @:fmt(leftCurly(\'<knob>\')) on kw-led mandatory Ref not supported (no OptSpace producer at this site)', Context.currentPos());
+					// `leftCurlySeparator` (default `optSpaceUpstream=false`)
+					// handles both forms identically at this site: bare-flag
+					// reads `opt.leftCurly`, knob-form reads
+					// `opt.<knobName>` — `Same` emits `_dt(' ')`
+					// (byte-identical to the unsplit `kwLead + ' '` form) and
+					// `Next` emits `_dhl()`. First knob-form consumer here:
+					// `HxUntypedFnBody.block` with
+					// `leftCurly('blockLeftCurly')` (slice
+					// ω-blockcurly-broader) so the kw→`{` gap honors the
+					// per-construct `Block` knob alongside the global
+					// cascade.
 					parts.push(macro _dt($v{kwLead}));
 					parts.push(leftCurlySeparator(child));
 				} else if (child.fmtHasFlag('anonFuncParens')) {

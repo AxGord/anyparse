@@ -32,15 +32,21 @@ package anyparse.grammar.haxe;
  * their (still-`nestBody`-wrapped) bodies render flush with the
  * `switch` keyword instead of one level inside the braces.
  *
- * `@:fmt(leftCurly)` (ω-switch-leftCurly) routes the space before the
- * cases-block opening `{` through `leftCurlySeparator`, so
- * `lineEnds.leftCurly: before` / `both` produces Allman-style
- * `switch (e)\n{` at the surrounding indent — same Star-with-
- * `@:lead('{') @:trail('}') @:trivia` mechanism as
- * `HxClassDecl.members` and `HxStatement.BlockStmt`.
+ * `@:fmt(leftCurly('blockLeftCurly'))` (slices ω-switch-leftCurly +
+ * ω-blockcurly-broader) routes the space before the cases-block
+ * opening `{` through `leftCurlySeparator`, reading the per-construct
+ * `opt.blockLeftCurly` knob — preseeded by the loader from global
+ * `lineEnds.leftCurly` and overridable via
+ * `lineEnds.blockCurly.leftCurly`. `Same` keeps the cuddled
+ * `switch (e) {`, `Next` produces Allman-style `switch (e)\n{` at the
+ * surrounding indent. Same Star-with-`@:lead('{') @:trail('}')
+ * @:trivia` mechanism as `HxStatement.BlockStmt` / `HxExpr.BlockExpr`;
+ * `HxClassDecl.members` still uses bare `leftCurly` because class/
+ * interface/abstract member braces are not Block-category in fork's
+ * `detectCurlyPolicy`.
  */
 @:peg
 typedef HxSwitchStmt = {
 	@:lead('(') @:trail(')') var expr:HxExpr;
-	@:fmt(leftCurly, indentCaseLabels) @:lead('{') @:trail('}') @:trivia var cases:Array<HxSwitchCase>;
+	@:fmt(leftCurly('blockLeftCurly'), indentCaseLabels) @:lead('{') @:trail('}') @:trivia var cases:Array<HxSwitchCase>;
 };

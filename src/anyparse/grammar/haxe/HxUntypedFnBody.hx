@@ -29,18 +29,21 @@ package anyparse.grammar.haxe;
  * `HxFnBody.BlockBody` so the inner `{ stmts }` payload, brace policy,
  * `@:trivia` capture, and orphan-trivia synth slots are all shared.
  *
- * Field-level `@:fmt(leftCurly)` (slice ω-untyped-leftCurly) routes the
+ * Field-level `@:fmt(leftCurly('blockLeftCurly'))` (slices
+ * ω-untyped-leftCurly + ω-blockcurly-broader) routes the
  * `untyped`→`{` gap through `leftCurlySeparator`: `Same` (default) →
  * `_dt(' ')` keeps the brace cuddled (`untyped { … }`), `Next` →
  * `_dhl()` drops the brace onto its own line at the current indent
- * (`untyped\n<indent>{ … }`). Mirrors haxe-formatter's
- * `lineEnds.leftCurly: both`/`before` Allman placement which is global
- * across all `{` opens — for `untyped { … }` this means the brace after
- * the `untyped` keyword breaks too. The bare flag (no knob name) reads
- * `opt.leftCurly`, the same global knob HxFnDecl.body, HxClassDecl, etc.
- * already consume.
+ * (`untyped\n<indent>{ … }`). Reads `opt.blockLeftCurly` — the
+ * per-construct `Block` knob preseeded by the loader from global
+ * `lineEnds.leftCurly` and overridable via `lineEnds.blockCurly.leftCurly`.
+ * Sister Block-category consumers (`HxFnDecl.body`,
+ * `HxStatement.BlockStmt`, `HxExpr.BlockExpr`, `HxSwitchStmt.cases`,
+ * `HxSwitchStmtBare.cases`) read the same knob; member-Star bodies on
+ * class/interface/abstract decls still read bare `opt.leftCurly`
+ * (separate sub-categories in fork's `detectCurlyPolicy`).
  */
 @:peg
 typedef HxUntypedFnBody = {
-	@:kw('untyped') @:fmt(leftCurly) var block:HxFnBlock;
+	@:kw('untyped') @:fmt(leftCurly('blockLeftCurly')) var block:HxFnBlock;
 }

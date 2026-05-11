@@ -250,7 +250,7 @@ enum HxExpr {
 
 	ObjectLit(lit:HxObjectLit);
 
-	@:fmt(leftCurly, keepCurlyBlanks) @:lead('{') @:trail('}') @:trivia
+	@:fmt(leftCurly('blockLeftCurly'), keepCurlyBlanks) @:lead('{') @:trail('}') @:trivia
 	BlockExpr(stmts:Array<HxStatement>);
 
 	ThinParenLambdaExpr(lambda:HxThinParenLambda);

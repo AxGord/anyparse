@@ -335,19 +335,25 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    `_setExprPosition`). Arrow-lambda body (`() -> {…}`) is NOT covered
  *    by this knob — same scope decision as `anonFunctionLeftCurly`.
  *
- * Field added in slice ω-blockcurly:
+ * Field added in slice ω-blockcurly, broadened in slice
+ * ω-blockcurly-broader:
  *  - `blockLeftCurly` — per-construct `BracePlacement` knob for plain
- *    block bodies (function declarations). Currently consumed only by
- *    `HxFnDecl.body` via `@:fmt(leftCurly('blockLeftCurly'))`. Default
- *    `Same` keeps the cuddled `function f() {` layout. With `Next`,
- *    the brace flips to Allman (`function f()\n{`). The loader cascades
+ *    block bodies. Consumed by `HxFnDecl.body`, `HxStatement.BlockStmt`,
+ *    `HxExpr.BlockExpr`, `HxSwitchStmt.cases`, `HxSwitchStmtBare.cases`,
+ *    `HxUntypedFnBody.block` — every site that fork's
+ *    `MarkLineEnds.detectCurlyPolicy` classifies as `BrOpenType.Block`.
+ *    Default `Same` keeps the cuddled `function f() { … }` /
+ *    `if (cond) { … }` / `switch (e) { … }` layout. With `Next`,
+ *    every block-brace flips to Allman (`function f()\n{`,
+ *    `if (cond)\n{`, `switch (e)\n{`, etc.). The loader cascades
  *    global `lineEnds.leftCurly` into this knob (same pattern as the
  *    other per-construct leftCurly siblings); per-construct sub-key
  *    `lineEnds.blockCurly.leftCurly` overrides the cascade. Mirrors
- *    haxe-formatter's `MarkLineEnds.getCurlyPolicy(Block)` precedence.
- *    Other block-shaped bodies (if/else/while/for/switch BlockStmt,
- *    BlockExpr) still read the global `opt.leftCurly` — extending
- *    coverage to those sites is a follow-up slice.
+ *    haxe-formatter's `detectCurlyPolicy(Block)` precedence —
+ *    `anonFunctionCurly` (function-expression / arrow-lambda body) and
+ *    the type-shape sub-categories (`anonTypeCurly`,
+ *    `objectLiteralCurly`, `typedefCurly`) take precedence over
+ *    `blockCurly` for their respective brace contexts.
  *
  * Field added in slice ψ₇ (object-literal colon spacing):
  *  - `objectFieldColon` — whitespace around the `:` inside an

@@ -25,11 +25,14 @@ package anyparse.grammar.haxe.format;
  * `anonFunctionCurly` (slice ω-anonfunction-left-curly) overrides
  * `leftCurly` for anon-function expression braces (`function() {…}`)
  * via `opt.anonFunctionLeftCurly` — same precedence rules. Sibling
- * `blockCurly` (slice ω-blockcurly) overrides `leftCurly` for plain
- * block bodies via `opt.blockLeftCurly` — currently consumed only by
- * `HxFnDecl.body`; mirrors haxe-formatter's
- * `MarkLineEnds.getCurlyPolicy(Block)` precedence. Other per-construct
- * sub-sections (`anonTypeCurly`, …) land with their own slices.
+ * `blockCurly` (slices ω-blockcurly + ω-blockcurly-broader) overrides
+ * `leftCurly` for plain block bodies via `opt.blockLeftCurly` —
+ * consumed by `HxFnDecl.body`, `HxStatement.BlockStmt`,
+ * `HxExpr.BlockExpr`, `HxSwitchStmt.cases`, `HxSwitchStmtBare.cases`,
+ * `HxUntypedFnBody.block`; mirrors haxe-formatter's
+ * `MarkLineEnds.detectCurlyPolicy(Block)` precedence. Other
+ * per-construct sub-sections (`anonTypeCurly`, …) land with their own
+ * slices.
  *
  * `emptyCurly` (slice ω-empty-curly-break) drives `opt.emptyCurly`
  * — `"break"` switches empty bodies to a two-line layout (`{\n}`),
