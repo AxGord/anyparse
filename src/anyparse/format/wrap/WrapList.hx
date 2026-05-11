@@ -273,16 +273,21 @@ class WrapList {
 		final hasHardline:Bool = flatLength(condDoc) < 0;
 
 		final flatShape:Doc = Concat([Text(open), condDoc, Text(close)]);
-		// `Nest(cols, Line('\n'))` indents ONLY the post-open hardline so
-		// the cond's first line starts at outer+cols. `condDoc` itself is
-		// emitted OUTSIDE the Nest so any inner opBoolChain / call-arg
-		// wrapping uses its own outer indent as the Nest base instead of
-		// compounding with this wrapper's Nest (closes the +2cols
-		// over-indent on `if (cond1 && cond2 && …)` cascades).
+		// `Nest(cols, [Line('\n'), condDoc])` puts BOTH the post-open
+		// hardline AND `condDoc` itself at the bumped indent base
+		// (outer+cols). Inner break engines that emit their own
+		// `Nest(cols, …)` therefore inherit the bumped base — call-arg
+		// continuation lands at outer+2cols (matching fork's `WrapPClose`
+		// `+1` paren indent + call-arg's own `+1`). Chains
+		// (opBoolChain / opAddSubChain) participate via the
+		// `_chainModeOverride` channel: the chain dispatch suppresses its
+		// own `Nest(cols, …)` when an override is active so its breaks
+		// land at outer+cols (operator-led illusion), not at
+		// outer+2cols. See `BinaryChainEmit.emit`'s `nestSuppress`
+		// argument and the macro-emitted call site in `WriterLowering`.
 		final brkShape:Doc = Concat([
 			Text(open),
-			Nest(cols, Line('\n')),
-			condDoc,
+			Nest(cols, Concat([Line('\n'), condDoc])),
 			Line('\n'),
 			Text(close),
 		]);

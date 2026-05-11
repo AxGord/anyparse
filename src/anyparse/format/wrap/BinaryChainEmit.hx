@@ -76,7 +76,8 @@ final class BinaryChainEmit {
 
 	public static function emit(
 		items:Array<Doc>, ops:Array<String>,
-		opt:WriteOptions, rules:WrapRules
+		opt:WriteOptions, rules:WrapRules,
+		nestSuppress:Bool = false
 	):Doc {
 		if (items.length == 0) return Empty;
 		if (items.length == 1) return items[0];
@@ -121,7 +122,18 @@ final class BinaryChainEmit {
 		// span (`items joined by ' op '`).
 		for (i in 0...ops.length) total += ops[i].length + 2;
 
-		final cols:Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
+		// `nestSuppress` collapses the chain shapes' own `Nest(cols, …)`
+		// to a no-op (cols=0) so chain breaks land at the inherited
+		// indent base rather than `base+cols`. Used when the chain is
+		// emitted inside a `WrapList.emitCondition` paren-wrap whose
+		// outer `Nest(cols, condDoc)` already supplies the +1 paren
+		// indent — chain operator-led continuation should stay at
+		// outer+cols (matching fork's `\n\t…&& X` shape) rather than
+		// compounding to outer+2cols. Call-arg / lambda-body engines
+		// inside the same cond keep their own Nest because their
+		// continuation legitimately wants the +2cols (paren+1 +
+		// callArg+1) layout.
+		final cols:Int = nestSuppress ? 0 : (opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth);
 
 		// Column-aware `LineLengthLargerThan` thresholds — mirror
 		// `WrapList.emit`'s threshold-aware enumeration pattern (slice

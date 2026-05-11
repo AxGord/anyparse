@@ -597,8 +597,26 @@ class WriterLowering {
 					_gather($i{argNames[0]});
 					_ops.push($v{opText});
 					_gather($i{argNames[1]});
+					// ω-condwrap-call-arg-nest: pair `_chainModeOverride`
+					// (set by the `@:fmt(condWrap)` site via
+					// `_setChainModeOverride`) with chain-Nest suppression
+					// — but only when the cond cascade picks
+					// `FillLineWithLeadingBreak`. Reason: only that mode
+					// expands `WrapList.emitCondition` to `brkShape`
+					// (`Nest(cols, [Line('\n'), condDoc])`) which gives the
+					// chain its `+cols` outer indent. Other override modes
+					// (`FillLine`, `OnePerLine`, `OnePerLineAfterFirst`)
+					// fall through to `flatShape` (`(condDoc)`) — no
+					// outer Nest, so the chain's OWN `Nest(cols, …)` is
+					// what supplies the continuation indent and must NOT
+					// be suppressed (else chain breaks land at `outer`
+					// instead of `outer+cols`). Safe to read
+					// `_chainModeOverride` directly: only Haxe declares
+					// `||`/`&&`/`+`/`-` chain infix
+					// (HxModuleWriteOptions carries the field).
 					final _inner:anyparse.core.Doc = anyparse.format.wrap.BinaryChainEmit.emit(
-						_items, _ops, opt, $chainRulesExpr
+						_items, _ops, opt, $chainRulesExpr,
+						opt._chainModeOverride == anyparse.format.wrap.WrapMode.FillLineWithLeadingBreak
 					);
 					if ($v{prec} < ctxPrec) _dc([_dt('('), _inner, _dt(')')]) else _inner;
 				};
