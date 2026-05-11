@@ -412,6 +412,24 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    `MarkLineEnds.detectCurlyPolicy(AnonymousFunction).rightCurly`
  *    precedence.
  *
+ * Field added in slice ω-anontype-right-curly:
+ *  - `anonTypeRightCurly` — per-construct `RightCurlyPlacement` knob
+ *    gating the hardline emitted immediately before `}` for anonymous
+ *    type braces (`HxType.Anon.fields`). `Same` (default) keeps the
+ *    standard layout with the close on its own line; `Inline` drops
+ *    the before-close hardline so the brace glues to the last field
+ *    (`{x:Int, y:Int}` flat or `{\n\tx:Int,\n\ty:Int}` Inline). The
+ *    loader cascades global `lineEnds.rightCurly` into this knob
+ *    alongside `blockRightCurly` / `anonFunctionRightCurly`;
+ *    per-construct sub-key `lineEnds.anonTypeCurly.rightCurly`
+ *    overrides the cascade. Consumed by `HxType.Anon` via the
+ *    `@:fmt(rightCurly('anonTypeRightCurly'))` call-form flag —
+ *    dispatches in `triviaSepStarExpr`'s trivia branch only; the
+ *    wrap-engine branch (no per-element trivia) continues to use
+ *    `WrapList.emit`'s shapes (deferred to a separate slice if a
+ *    fixture demands wrap-branch Inline). Mirrors haxe-formatter's
+ *    `MarkLineEnds.detectCurlyPolicy(AnonType).rightCurly` precedence.
+ *
  * Field added in slice ψ₇ (object-literal colon spacing):
  *  - `objectFieldColon` — whitespace around the `:` inside an
  *    anonymous object literal (`HxObjectField.value`'s lead). `After`
@@ -1428,6 +1446,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	blockEmptyCurly:EmptyCurly,
 	blockRightCurly:RightCurlyPlacement,
 	anonFunctionRightCurly:RightCurlyPlacement,
+	anonTypeRightCurly:RightCurlyPlacement,
 	objectFieldColon:WhitespacePolicy,
 	typeHintColon:WhitespacePolicy,
 	typeCheckColon:WhitespacePolicy,

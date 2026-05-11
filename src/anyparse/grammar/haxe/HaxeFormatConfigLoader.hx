@@ -527,6 +527,7 @@ final class HaxeFormatConfigLoader {
 			blockEmptyCurly: base.blockEmptyCurly,
 			blockRightCurly: base.blockRightCurly,
 			anonFunctionRightCurly: base.anonFunctionRightCurly,
+			anonTypeRightCurly: base.anonTypeRightCurly,
 			objectFieldColon: base.objectFieldColon,
 			typeHintColon: base.typeHintColon,
 			typeCheckColon: base.typeCheckColon,
@@ -918,6 +919,15 @@ final class HaxeFormatConfigLoader {
 			// precedence.
 			if (sub.rightCurly != null) opt.anonFunctionRightCurly = rightCurlyToRuntime(sub.rightCurly);
 		}
+		if (section.anonTypeCurly != null) {
+			// ω-anontype-right-curly: per-construct sub-key
+			// `lineEnds.anonTypeCurly.rightCurly` overrides the cascade
+			// for anonymous type body closes (`HxType.Anon`). Mirrors
+			// haxe-formatter's `MarkLineEnds.getCurlyPolicy(AnonType).rightCurly`
+			// precedence.
+			final sub:HxFormatCurlyLineEndPolicy = section.anonTypeCurly;
+			if (sub.rightCurly != null) opt.anonTypeRightCurly = rightCurlyToRuntime(sub.rightCurly);
+		}
 		if (section.blockCurly != null) {
 			// ω-blockcurly: per-construct sub-key
 			// `lineEnds.blockCurly.leftCurly` overrides the cascade for
@@ -978,6 +988,11 @@ final class HaxeFormatConfigLoader {
 			// `anonFunctionCurly.rightCurly` sub-key already set it.
 			if (section.anonFunctionCurly == null || section.anonFunctionCurly.rightCurly == null)
 				opt.anonFunctionRightCurly = placement;
+			// ω-anontype-right-curly: cascade global lineEnd into
+			// `anonTypeRightCurly` unless the `anonTypeCurly.rightCurly`
+			// sub-key already set it.
+			if (section.anonTypeCurly == null || section.anonTypeCurly.rightCurly == null)
+				opt.anonTypeRightCurly = placement;
 		}
 		// ω-metadata-line-end-function: `lineEnds.metadataFunction` →
 		// `opt.metadataFunctionLineEnd`. Default `None` preserves source-

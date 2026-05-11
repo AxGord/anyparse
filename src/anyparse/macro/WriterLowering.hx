@@ -1265,9 +1265,16 @@ class WriterLowering {
 				// Mirrors the struct-Star `lowerStruct` path at
 				// `HxObjectLit.fields`.
 				final knobLeftCurly:Null<String> = branch.fmtReadString('leftCurly');
+				// ω-anontype-right-curly: call-form `@:fmt(rightCurly('<knob>'))`
+				// names a per-construct `RightCurlyPlacement` opt field that
+				// the trivia branch of `triviaSepStarExpr` reads. Currently
+				// consumed by `HxType.Anon` for `anonTypeRightCurly`. Null
+				// (no opt-in or bare flag) falls back to unconditional
+				// `_dhl()` before close.
+				final knobRightCurly:Null<String> = branch.fmtReadString('rightCurly');
 				parts.push(triviaSepStarExpr(
 					argsAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, leadText, trailText, sepText,
-					wrapRulesField, knobLeftCurly, null, null, openInsideExpr, closeInsideExpr, beforeDocComments
+					wrapRulesField, knobLeftCurly, knobRightCurly, null, null, openInsideExpr, closeInsideExpr, beforeDocComments
 				));
 			} else {
 				// ω-bropen-keep: forward `@:fmt(keepCurlyBlanks)` from the
@@ -2821,10 +2828,15 @@ class WriterLowering {
 					// is on. Null knob → behaves identically to pre-slice
 					// (cascade evaluates exceeds=false / =true symmetrically).
 					final trailingCommaField:Null<String> = starNode.fmtReadString('trailingComma');
+					// ω-anontype-right-curly: struct-Star path keeps
+					// rightCurlyKnob=null — `HxObjectLit.fields` does not
+					// yet have a per-construct `objectLiteralRightCurly`
+					// opt field. Defer to ω-objectlit-right-curly slice.
 					parts.push(triviaSepStarExpr(
 						fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn,
 						openText ?? '', closeText, sepText, wrapRulesField,
 						leftCurlyOwnedBySep ? knobLeftCurly : null,
+						null,
 						trailPresentAccess, trailingCommaField
 					));
 					return;
@@ -5848,6 +5860,7 @@ class WriterLowering {
 		fieldAccess:Expr, trailBBAccess:Null<Expr>, trailLCAccess:Null<Expr>, trailCloseAccess:Null<Expr>,
 		trailOpenAccess:Null<Expr>, elemFn:String, openText:String, closeText:String, sepText:String,
 		wrapRulesField:Null<String> = null, leftCurlyKnob:Null<String> = null,
+		rightCurlyKnob:Null<String> = null,
 		trailPresentAccess:Null<Expr> = null, trailingCommaField:Null<String> = null,
 		openInsideExpr:Null<Expr> = null, closeInsideExpr:Null<Expr> = null,
 		beforeDocCommentEmptyLines:Bool = false
@@ -5939,6 +5952,26 @@ class WriterLowering {
 		final triviaLeadDoc:Expr = knobNextOrEmpty;
 		final wrapLeadFlatDoc:Expr = macro _de();
 		final wrapLeadBreakDoc:Expr = knobNextOrEmpty;
+		// ω-anontype-right-curly: when the call site reads
+		// `@:fmt(rightCurly('<knob>'))`, build a Doc that picks `_de()`
+		// for `RightCurlyPlacement.Inline` (close glued to last body
+		// token) and `_dhl()` otherwise. Null knob → unconditional
+		// `_dhl()` (legacy). Substituted for the unconditional `_dhl()`
+		// emitted immediately before `_dt(closeText)` in the trivia
+		// branch. The wrap-engine branch (no per-element trivia)
+		// continues to use `WrapList.emit`'s shapes — wrap-branch
+		// Inline support is deferred to a separate slice if a fixture
+		// demands it.
+		final rightCurlyKnobExpr:Null<Expr> = rightCurlyKnob == null
+			? null
+			: optFieldAccess(rightCurlyKnob);
+		final inlinePat:Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'RightCurlyPlacement', 'Inline']);
+		final triviaTrailDoc:Expr = rightCurlyKnobExpr == null
+			? macro _dhl()
+			: {
+				expr: ESwitch(rightCurlyKnobExpr, [{values: [inlinePat], expr: macro _de(), guard: null}], macro _dhl()),
+				pos: Context.currentPos(),
+			};
 		// ω-wraprules-objlit: when the Star carries
 		// `@:fmt(wrapRules('<field>'))`, defer the no-trivia branch's
 		// layout decision to the runtime `WrapList.emit` engine. The
@@ -6096,7 +6129,7 @@ class WriterLowering {
 					_parts.push(_dt($v{openText}));
 					if (_trailOpen != null) _parts.push(trailingCommentDocVerbatim(_trailOpen, opt));
 					_parts.push(_innerWrap);
-					_parts.push(_dhl());
+					_parts.push($triviaTrailDoc);
 					_parts.push(_dt($v{closeText}));
 					if (_trailClose != null)
 						_parts.push(trailingCommentDocVerbatim(_trailClose, opt));

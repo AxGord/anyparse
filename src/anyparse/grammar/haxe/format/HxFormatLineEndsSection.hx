@@ -5,7 +5,7 @@ package anyparse.grammar.haxe.format;
  *
  * Only the keys whose runtime knob already exists on
  * `HxModuleWriteOptions` / base `WriteOptions` are modelled here.
- * Missing keys (`anonTypeCurly`, `typedefCurly`, `metadataType`,
+ * Missing keys (`typedefCurly`, `metadataType`,
  * `metadataVar`, `metadataOther`, `caseColon`, `sharp`, …) are
  * silently dropped by the ByName struct parser's `UnknownPolicy.Skip`
  * — they land with the slice that introduces the matching writer knob.
@@ -42,11 +42,12 @@ package anyparse.grammar.haxe.format;
  * default; the after-`}` newline is contributed by the surrounding
  * sibling sep), `"after"` / `"none"` collapse to `Inline` (no
  * hardline before `}`; the close glues to the last body token).
- * Currently consumed only by plain block bodies opting in via
- * `@:fmt(rightCurly('blockRightCurly'))` on their Star field; per-construct
- * sub-sections (`anonFunctionCurly.rightCurly`,
- * `objectLiteralCurly.rightCurly`, …) ingest the same sub-key but
- * route to separate runtime knobs in later slices.
+ * Plain block bodies opt in via `@:fmt(rightCurly('blockRightCurly'))`;
+ * anon-fn bodies via `@:fmt(rightCurlyAnonFnOverride('anonFunctionRightCurly'))`;
+ * anonymous types (`HxType.Anon`) via `@:fmt(rightCurly('anonTypeRightCurly'))`
+ * (trivia branch only — wrap-engine branch deferred). Per-construct
+ * sub-sections (`objectLiteralCurly.rightCurly`, …) ingest the same
+ * sub-key but route to separate runtime knobs in later slices.
  */
 @:peg typedef HxFormatLineEndsSection = {
 
@@ -59,6 +60,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var objectLiteralCurly:HxFormatCurlyLineEndPolicy;
 
 	@:optional var anonFunctionCurly:HxFormatCurlyLineEndPolicy;
+
+	@:optional var anonTypeCurly:HxFormatCurlyLineEndPolicy;
 
 	@:optional var blockCurly:HxFormatCurlyLineEndPolicy;
 

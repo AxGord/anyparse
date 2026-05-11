@@ -17,15 +17,18 @@ package anyparse.grammar.haxe.format;
  * sub-section via `opt.anonFunctionEmptyCurly`; sibling sub-sections
  * (`objectLiteralCurly`, `blockCurly`, …) land with their own slices.
  *
- * `rightCurly` (slice ω-blockright-curly) overrides the global
- * `lineEnds.rightCurly` cascade for the construct's closing-brace
- * placement. Currently consumed only by the `blockCurly` sub-section
- * via `opt.blockRightCurly`; sibling sub-sections land with their own
- * slices. Mirrors haxe-formatter's `RightCurlyLineEndPolicy` —
- * `"before"`/`"both"` collapse to `Same` (hardline before `}`,
- * default), `"after"`/`"none"` collapse to `Inline` (no hardline
- * before `}`) because the trailing newline after `}` is contributed
- * by the surrounding sibling sep, not by `blockBody`.
+ * `rightCurly` (slices ω-blockright-curly + ω-anonfunction-right-curly +
+ * ω-anontype-right-curly) overrides the global `lineEnds.rightCurly`
+ * cascade for the construct's closing-brace placement. Consumed by the
+ * `blockCurly`, `anonFunctionCurly`, and `anonTypeCurly` sub-sections
+ * via `opt.blockRightCurly`, `opt.anonFunctionRightCurly`, and
+ * `opt.anonTypeRightCurly` respectively; the remaining sub-section
+ * (`objectLiteralCurly`) lands with its own slice. Mirrors
+ * haxe-formatter's `RightCurlyLineEndPolicy` — `"before"`/`"both"`
+ * collapse to `Same` (hardline before `}`, default), `"after"`/`"none"`
+ * collapse to `Inline` (no hardline before `}`) because the trailing
+ * newline after `}` is contributed by the surrounding sibling sep, not
+ * by `blockBody`.
  */
 @:peg typedef HxFormatCurlyLineEndPolicy = {
 

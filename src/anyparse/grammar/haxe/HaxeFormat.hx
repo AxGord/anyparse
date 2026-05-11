@@ -665,6 +665,7 @@ final class HaxeFormat implements TextFormat {
 		blockEmptyCurly: EmptyCurly.Same,
 		blockRightCurly: RightCurlyPlacement.Same,
 		anonFunctionRightCurly: RightCurlyPlacement.Same,
+		anonTypeRightCurly: RightCurlyPlacement.Same,
 		objectFieldColon: WhitespacePolicy.After,
 		typeHintColon: WhitespacePolicy.None,
 		typeCheckColon: WhitespacePolicy.Both,

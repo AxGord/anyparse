@@ -10,13 +10,14 @@ import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 
 /**
- * ω-blockright-curly + ω-anonfunction-right-curly —
+ * ω-blockright-curly + ω-anonfunction-right-curly + ω-anontype-right-curly —
  * `blockRightCurly:RightCurlyPlacement` knob for plain block bodies
  * (`HxStatement.BlockStmt`, `HxExpr.BlockExpr`, `HxSwitchStmt.cases`,
  * `HxSwitchStmtBare.cases`); `anonFunctionRightCurly` knob for
  * anonymous function expression bodies (`HxFnExpr.body` through
  * `HxFnBlock.stmts`, gated on `_inAnonFnBody` so `HxFnDecl.body`
- * stays on pre-slice `_dhl()`). Default `Same` for both knobs keeps
+ * stays on pre-slice `_dhl()`); `anonTypeRightCurly` knob for anonymous
+ * type braces (`HxType.Anon`). Default `Same` for all three knobs keeps
  * the standard close-on-own-line layout; `Inline` drops the
  * before-close hardline so the brace glues to the last body token.
  * Drives haxe-formatter's `lineEnds.rightCurly: before|both|after|none`
@@ -33,36 +34,42 @@ class HxRightCurlyOptionsTest extends Test {
 		final defaults:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
 		Assert.equals(RightCurlyPlacement.Same, defaults.blockRightCurly);
 		Assert.equals(RightCurlyPlacement.Same, defaults.anonFunctionRightCurly);
+		Assert.equals(RightCurlyPlacement.Same, defaults.anonTypeRightCurly);
 	}
 
 	public function testConfigLoaderMapsBeforeToSame():Void {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"lineEnds": {"rightCurly": "before"}}');
 		Assert.equals(RightCurlyPlacement.Same, opts.blockRightCurly);
 		Assert.equals(RightCurlyPlacement.Same, opts.anonFunctionRightCurly);
+		Assert.equals(RightCurlyPlacement.Same, opts.anonTypeRightCurly);
 	}
 
 	public function testConfigLoaderMapsBothToSame():Void {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"lineEnds": {"rightCurly": "both"}}');
 		Assert.equals(RightCurlyPlacement.Same, opts.blockRightCurly);
 		Assert.equals(RightCurlyPlacement.Same, opts.anonFunctionRightCurly);
+		Assert.equals(RightCurlyPlacement.Same, opts.anonTypeRightCurly);
 	}
 
 	public function testConfigLoaderMapsAfterToInline():Void {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"lineEnds": {"rightCurly": "after"}}');
 		Assert.equals(RightCurlyPlacement.Inline, opts.blockRightCurly);
 		Assert.equals(RightCurlyPlacement.Inline, opts.anonFunctionRightCurly);
+		Assert.equals(RightCurlyPlacement.Inline, opts.anonTypeRightCurly);
 	}
 
 	public function testConfigLoaderMapsNoneToInline():Void {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"lineEnds": {"rightCurly": "none"}}');
 		Assert.equals(RightCurlyPlacement.Inline, opts.blockRightCurly);
 		Assert.equals(RightCurlyPlacement.Inline, opts.anonFunctionRightCurly);
+		Assert.equals(RightCurlyPlacement.Inline, opts.anonTypeRightCurly);
 	}
 
 	public function testConfigLoaderMissingKeepsDefault():Void {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		Assert.equals(RightCurlyPlacement.Same, opts.blockRightCurly);
 		Assert.equals(RightCurlyPlacement.Same, opts.anonFunctionRightCurly);
+		Assert.equals(RightCurlyPlacement.Same, opts.anonTypeRightCurly);
 	}
 
 	public function testBlockCurlySubKeyOverridesGlobalForBlockRightCurly():Void {
@@ -70,8 +77,9 @@ class HxRightCurlyOptionsTest extends Test {
 			'{"lineEnds": {"rightCurly": "after", "blockCurly": {"rightCurly": "before"}}}'
 		);
 		Assert.equals(RightCurlyPlacement.Same, opts.blockRightCurly);
-		// Sibling cascade unaffected by blockCurly sub-key.
+		// Sibling cascades unaffected by blockCurly sub-key.
 		Assert.equals(RightCurlyPlacement.Inline, opts.anonFunctionRightCurly);
+		Assert.equals(RightCurlyPlacement.Inline, opts.anonTypeRightCurly);
 	}
 
 	public function testBlockCurlySubKeyAloneSetsBlockRightCurly():Void {
@@ -79,8 +87,9 @@ class HxRightCurlyOptionsTest extends Test {
 			'{"lineEnds": {"blockCurly": {"rightCurly": "after"}}}'
 		);
 		Assert.equals(RightCurlyPlacement.Inline, opts.blockRightCurly);
-		// Sub-key targets blockCurly only; anonFunction keeps default.
+		// Sub-key targets blockCurly only; siblings keep default.
 		Assert.equals(RightCurlyPlacement.Same, opts.anonFunctionRightCurly);
+		Assert.equals(RightCurlyPlacement.Same, opts.anonTypeRightCurly);
 	}
 
 	public function testAnonFunctionCurlySubKeyOverridesGlobalForAnonFunctionRightCurly():Void {
@@ -88,8 +97,9 @@ class HxRightCurlyOptionsTest extends Test {
 			'{"lineEnds": {"rightCurly": "after", "anonFunctionCurly": {"rightCurly": "before"}}}'
 		);
 		Assert.equals(RightCurlyPlacement.Same, opts.anonFunctionRightCurly);
-		// Sibling cascade unaffected by anonFunctionCurly sub-key.
+		// Sibling cascades unaffected by anonFunctionCurly sub-key.
 		Assert.equals(RightCurlyPlacement.Inline, opts.blockRightCurly);
+		Assert.equals(RightCurlyPlacement.Inline, opts.anonTypeRightCurly);
 	}
 
 	public function testAnonFunctionCurlySubKeyAloneSetsAnonFunctionRightCurly():Void {
@@ -97,8 +107,29 @@ class HxRightCurlyOptionsTest extends Test {
 			'{"lineEnds": {"anonFunctionCurly": {"rightCurly": "after"}}}'
 		);
 		Assert.equals(RightCurlyPlacement.Inline, opts.anonFunctionRightCurly);
-		// Sub-key targets anonFunctionCurly only; block keeps default.
+		// Sub-key targets anonFunctionCurly only; siblings keep default.
 		Assert.equals(RightCurlyPlacement.Same, opts.blockRightCurly);
+		Assert.equals(RightCurlyPlacement.Same, opts.anonTypeRightCurly);
+	}
+
+	public function testAnonTypeCurlySubKeyOverridesGlobalForAnonTypeRightCurly():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"lineEnds": {"rightCurly": "after", "anonTypeCurly": {"rightCurly": "before"}}}'
+		);
+		Assert.equals(RightCurlyPlacement.Same, opts.anonTypeRightCurly);
+		// Sibling cascades unaffected by anonTypeCurly sub-key.
+		Assert.equals(RightCurlyPlacement.Inline, opts.blockRightCurly);
+		Assert.equals(RightCurlyPlacement.Inline, opts.anonFunctionRightCurly);
+	}
+
+	public function testAnonTypeCurlySubKeyAloneSetsAnonTypeRightCurly():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"lineEnds": {"anonTypeCurly": {"rightCurly": "after"}}}'
+		);
+		Assert.equals(RightCurlyPlacement.Inline, opts.anonTypeRightCurly);
+		// Sub-key targets anonTypeCurly only; siblings keep default.
+		Assert.equals(RightCurlyPlacement.Same, opts.blockRightCurly);
+		Assert.equals(RightCurlyPlacement.Same, opts.anonFunctionRightCurly);
 	}
 
 	public function testSameKeepsBlockStmtCloseOnOwnLine():Void {
@@ -137,19 +168,48 @@ class HxRightCurlyOptionsTest extends Test {
 		final src:String = 'class Main {\n\tstatic function f() {\n\t\ttrace(1);\n\t}\n}';
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.anonFunctionRightCurly = RightCurlyPlacement.Inline;
-		// Leave blockRightCurly at default Same so BlockStmt close isn't glued either.
+		// Leave blockRightCurly + anonTypeRightCurly at default Same so
+		// neither BlockStmt close nor any other shape is glued.
 		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('trace(1);\n\t}') != -1, 'expected fn-decl close on own line in: <$out>');
+	}
+
+	public function testSameKeepsAnonTypeCloseOnOwnLine():Void {
+		// Multi-line anon-type (newlines between fields trigger trivia
+		// branch in `triviaSepStarExpr`). With `Same`, the close `}`
+		// stays on its own line.
+		final src:String = 'typedef Point = {\n\tx:Int,\n\ty:Int\n}';
+		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), makeOpts(RightCurlyPlacement.Same));
+		Assert.isTrue(out.indexOf('y:Int\n}') != -1, 'expected anon-type close on own line in: <$out>');
+	}
+
+	public function testInlineGluesAnonTypeClose():Void {
+		// With `Inline`, the close `}` glues to the last field token.
+		final src:String = 'typedef Point = {\n\tx:Int,\n\ty:Int\n}';
+		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), makeOpts(RightCurlyPlacement.Inline));
+		Assert.isTrue(out.indexOf('y:Int}') != -1, 'expected anon-type close glued in: <$out>');
+	}
+
+	public function testAnonTypeUnaffectedWhenOnlyBlockKnobInline():Void {
+		// `anonTypeRightCurly=Same`, `blockRightCurly=Inline`. The anon-
+		// type close stays on its own line — the block knob does NOT
+		// propagate to `HxType.Anon` (different Star, different meta).
+		final src:String = 'typedef Point = {\n\tx:Int,\n\ty:Int\n}';
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		opts.blockRightCurly = RightCurlyPlacement.Inline;
+		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		Assert.isTrue(out.indexOf('y:Int\n}') != -1, 'expected anon-type close on own line in: <$out>');
 	}
 
 	private inline function makeOpts(rc:RightCurlyPlacement):HxModuleWriteOptions {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		// Mirror the loader's `lineEnds.rightCurly` cascade — set every
 		// per-construct RightCurlyPlacement knob in lockstep so byte-shape
-		// tests can exercise either the block or anon-fn path with one
-		// helper call.
+		// tests can exercise the block, anon-fn, or anon-type path with
+		// one helper call.
 		opts.blockRightCurly = rc;
 		opts.anonFunctionRightCurly = rc;
+		opts.anonTypeRightCurly = rc;
 		return opts;
 	}
 }
