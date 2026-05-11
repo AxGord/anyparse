@@ -115,6 +115,12 @@ class HxLeftCurlyOptionsTest extends Test {
 	private inline function makeOpts(leftCurly:BracePlacement):HxModuleWriteOptions {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.leftCurly = leftCurly;
+		// Mirror the loader's `lineEnds.leftCurly` cascade for per-construct
+		// knobs that no longer fall back to the global `leftCurly` at the
+		// emit site. Currently `blockLeftCurly` (ω-blockcurly,
+		// `HxFnDecl.body`); add other per-construct siblings as their
+		// emit sites convert from bare-flag to knob-form.
+		opts.blockLeftCurly = leftCurly;
 		return opts;
 	}
 }

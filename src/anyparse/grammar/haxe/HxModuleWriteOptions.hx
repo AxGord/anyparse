@@ -335,6 +335,20 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    `_setExprPosition`). Arrow-lambda body (`() -> {…}`) is NOT covered
  *    by this knob — same scope decision as `anonFunctionLeftCurly`.
  *
+ * Field added in slice ω-blockcurly:
+ *  - `blockLeftCurly` — per-construct `BracePlacement` knob for plain
+ *    block bodies (function declarations). Currently consumed only by
+ *    `HxFnDecl.body` via `@:fmt(leftCurly('blockLeftCurly'))`. Default
+ *    `Same` keeps the cuddled `function f() {` layout. With `Next`,
+ *    the brace flips to Allman (`function f()\n{`). The loader cascades
+ *    global `lineEnds.leftCurly` into this knob (same pattern as the
+ *    other per-construct leftCurly siblings); per-construct sub-key
+ *    `lineEnds.blockCurly.leftCurly` overrides the cascade. Mirrors
+ *    haxe-formatter's `MarkLineEnds.getCurlyPolicy(Block)` precedence.
+ *    Other block-shaped bodies (if/else/while/for/switch BlockStmt,
+ *    BlockExpr) still read the global `opt.leftCurly` — extending
+ *    coverage to those sites is a follow-up slice.
+ *
  * Field added in slice ψ₇ (object-literal colon spacing):
  *  - `objectFieldColon` — whitespace around the `:` inside an
  *    anonymous object literal (`HxObjectField.value`'s lead). `After`
@@ -1337,6 +1351,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	anonTypeLeftCurly:BracePlacement,
 	anonFunctionLeftCurly:BracePlacement,
 	anonFunctionEmptyCurly:EmptyCurly,
+	blockLeftCurly:BracePlacement,
 	objectFieldColon:WhitespacePolicy,
 	typeHintColon:WhitespacePolicy,
 	typeCheckColon:WhitespacePolicy,

@@ -5,7 +5,7 @@ package anyparse.grammar.haxe.format;
  *
  * Only the keys whose runtime knob already exists on
  * `HxModuleWriteOptions` / base `WriteOptions` are modelled here.
- * Missing keys (`rightCurly`, `blockCurly`, `anonTypeCurly`,
+ * Missing keys (`rightCurly`, `anonTypeCurly`,
  * `typedefCurly`, `metadataType`, `metadataVar`, `metadataOther`,
  * `caseColon`, `sharp`, …) are silently dropped by the ByName
  * struct parser's `UnknownPolicy.Skip` — they land with the slice
@@ -24,9 +24,12 @@ package anyparse.grammar.haxe.format;
  * `opt.objectLiteralLeftCurly` knob. Sibling sub-section
  * `anonFunctionCurly` (slice ω-anonfunction-left-curly) overrides
  * `leftCurly` for anon-function expression braces (`function() {…}`)
- * via `opt.anonFunctionLeftCurly` — same precedence rules. Other
- * per-construct sub-sections (`blockCurly`, `anonTypeCurly`, …) land
- * with their own slices.
+ * via `opt.anonFunctionLeftCurly` — same precedence rules. Sibling
+ * `blockCurly` (slice ω-blockcurly) overrides `leftCurly` for plain
+ * block bodies via `opt.blockLeftCurly` — currently consumed only by
+ * `HxFnDecl.body`; mirrors haxe-formatter's
+ * `MarkLineEnds.getCurlyPolicy(Block)` precedence. Other per-construct
+ * sub-sections (`anonTypeCurly`, …) land with their own slices.
  *
  * `emptyCurly` (slice ω-empty-curly-break) drives `opt.emptyCurly`
  * — `"break"` switches empty bodies to a two-line layout (`{\n}`),
@@ -41,6 +44,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var objectLiteralCurly:HxFormatCurlyLineEndPolicy;
 
 	@:optional var anonFunctionCurly:HxFormatCurlyLineEndPolicy;
+
+	@:optional var blockCurly:HxFormatCurlyLineEndPolicy;
 
 	@:optional var metadataFunction:HxFormatMetadataLineEndPolicy;
 

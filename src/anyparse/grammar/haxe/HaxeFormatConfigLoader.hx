@@ -520,6 +520,7 @@ final class HaxeFormatConfigLoader {
 			objectLiteralLeftCurly: base.objectLiteralLeftCurly,
 			anonTypeLeftCurly: base.anonTypeLeftCurly,
 			anonFunctionLeftCurly: base.anonFunctionLeftCurly,
+			blockLeftCurly: base.blockLeftCurly,
 			anonFunctionEmptyCurly: base.anonFunctionEmptyCurly,
 			objectFieldColon: base.objectFieldColon,
 			typeHintColon: base.typeHintColon,
@@ -875,6 +876,14 @@ final class HaxeFormatConfigLoader {
 			// reading the global `leftCurly`; per-context routing through
 			// the lambda parent is a follow-up slice.
 			opt.anonFunctionLeftCurly = placement;
+			// ω-blockcurly: cascade global `lineEnds.leftCurly`
+			// into `opt.blockLeftCurly`. With `Next`, plain block bodies
+			// (currently `HxFnDecl.body`) flip to Allman
+			// (`function f()\n{…}`). Default `Same` keeps the cuddled
+			// layout. Mirrors haxe-formatter's
+			// `MarkLineEnds.getCurlyPolicy(Block)` precedence — global
+			// lineEnd seeds every per-construct knob, sub-keys override.
+			opt.blockLeftCurly = placement;
 		}
 		if (section.objectLiteralCurly != null) {
 			final sub:HxFormatCurlyLineEndPolicy = section.objectLiteralCurly;
@@ -891,6 +900,15 @@ final class HaxeFormatConfigLoader {
 			// precedence — global lineEnd seeds the knob, the sub-key
 			// wins when present.
 			if (sub.emptyCurly != null) opt.anonFunctionEmptyCurly = emptyCurlyToRuntime(sub.emptyCurly);
+		}
+		if (section.blockCurly != null) {
+			// ω-blockcurly: per-construct sub-key
+			// `lineEnds.blockCurly.leftCurly` overrides the cascade for
+			// plain block body braces (currently `HxFnDecl.body`).
+			// Mirrors haxe-formatter's `MarkLineEnds.getCurlyPolicy(Block)`
+			// precedence.
+			final sub:HxFormatCurlyLineEndPolicy = section.blockCurly;
+			if (sub.leftCurly != null) opt.blockLeftCurly = leftCurlyToRuntime(sub.leftCurly);
 		}
 		if (section.emptyCurly != null) {
 			final empty:EmptyCurly = emptyCurlyToRuntime(section.emptyCurly);
