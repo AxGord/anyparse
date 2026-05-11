@@ -520,6 +520,7 @@ final class HaxeFormatConfigLoader {
 			objectLiteralLeftCurly: base.objectLiteralLeftCurly,
 			anonTypeLeftCurly: base.anonTypeLeftCurly,
 			anonFunctionLeftCurly: base.anonFunctionLeftCurly,
+			anonFunctionEmptyCurly: base.anonFunctionEmptyCurly,
 			objectFieldColon: base.objectFieldColon,
 			typeHintColon: base.typeHintColon,
 			typeCheckColon: base.typeCheckColon,
@@ -587,6 +588,7 @@ final class HaxeFormatConfigLoader {
 			metadataFunctionLineEnd: base.metadataFunctionLineEnd,
 			_inExprPosition: base._inExprPosition,
 			_classExtern: base._classExtern,
+			_inAnonFnBody: base._inAnonFnBody,
 			blockCommentAdapter: base.blockCommentAdapter,
 			lineCommentAdapter: base.lineCommentAdapter,
 			endsWithCloseBrace: base.endsWithCloseBrace,
@@ -881,8 +883,27 @@ final class HaxeFormatConfigLoader {
 		if (section.anonFunctionCurly != null) {
 			final sub:HxFormatCurlyLineEndPolicy = section.anonFunctionCurly;
 			if (sub.leftCurly != null) opt.anonFunctionLeftCurly = leftCurlyToRuntime(sub.leftCurly);
+			// ω-anonfunction-empty-curly: per-construct sub-key
+			// `lineEnds.anonFunctionCurly.emptyCurly` overrides the cascade
+			// for empty anonymous function bodies (`function(){}` →
+			// `function()\n{\n}`). Mirrors haxe-formatter's
+			// `MarkLineEnds.getCurlyPolicy(AnonymousFunction).emptyCurly`
+			// precedence — global lineEnd seeds the knob, the sub-key
+			// wins when present.
+			if (sub.emptyCurly != null) opt.anonFunctionEmptyCurly = emptyCurlyToRuntime(sub.emptyCurly);
 		}
-		if (section.emptyCurly != null) opt.emptyCurly = emptyCurlyToRuntime(section.emptyCurly);
+		if (section.emptyCurly != null) {
+			final empty:EmptyCurly = emptyCurlyToRuntime(section.emptyCurly);
+			opt.emptyCurly = empty;
+			// ω-anonfunction-empty-curly: cascade global `lineEnds.emptyCurly`
+			// into `opt.anonFunctionEmptyCurly` (same pattern as
+			// `anonFunctionLeftCurly` cascade above). The sub-key handler
+			// runs before this block when both are present, so the explicit
+			// `anonFunctionCurly.emptyCurly` override wins regardless of
+			// global ingest order.
+			if (section.anonFunctionCurly == null || section.anonFunctionCurly.emptyCurly == null)
+				opt.anonFunctionEmptyCurly = empty;
+		}
 		// ω-metadata-line-end-function: `lineEnds.metadataFunction` →
 		// `opt.metadataFunctionLineEnd`. Default `None` preserves source-
 		// driven inter-meta separator; `After` / `AfterLast` /

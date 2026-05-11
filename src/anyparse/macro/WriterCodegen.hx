@@ -61,6 +61,14 @@ class WriterCodegen {
 			// error. Per-grammar opt-in lives in the typedef itself.
 			if (optionsHasInExprPosition(optionsTypePath))
 				fields.push(setExprPositionField(optionsCT));
+			// ω-anonfunction-empty-curly: opt-fanout helper for
+			// `propagateAnonFnContext`. Returns the input opt unchanged when
+			// `_inAnonFnBody` is already true; otherwise returns a `_copyOpt`
+			// with the flag flipped on. Sister to `_setExprPosition`. Emitted
+			// only when the opt typedef carries `_inAnonFnBody:Bool` —
+			// currently declared on `HxModuleWriteOptions` only.
+			if (optionsHasField(optionsTypePath, '_inAnonFnBody'))
+				fields.push(setAnonFnBodyField(optionsCT));
 			// Layout helpers
 			fields.push(blockBodyField());
 			fields.push(sepListField());
@@ -218,9 +226,22 @@ class WriterCodegen {
 	 * eagerly to handle forward-referenced typedefs.
 	 */
 	private static function optionsHasInExprPosition(optionsTypePath:String):Bool {
+		return optionsHasField(optionsTypePath, '_inExprPosition');
+	}
+
+	/**
+	 * ω-anonfunction-empty-curly — generic field-presence probe sister
+	 * to `optionsHasInExprPosition`. Walks the same `TType`/`TAnon`
+	 * intersection chain so it sees the merged `HxModuleWriteOptions =
+	 * WriteOptions & {...}` shape. Used to gate the emission of
+	 * per-flag opt-fanout helpers (`_setAnonFnBody` etc.) so that
+	 * grammars whose options struct doesn't declare the matching
+	 * internal flag skip the helper.
+	 */
+	private static function optionsHasField(optionsTypePath:String, fieldName:String):Bool {
 		final t:Null<haxe.macro.Type> = try Context.getType(optionsTypePath) catch (e:haxe.Exception) null;
 		if (t == null) return false;
-		return anonHasField(t, '_inExprPosition');
+		return anonHasField(t, fieldName);
 	}
 
 	private static function anonHasField(t:haxe.macro.Type, name:String):Bool {
@@ -414,6 +435,35 @@ class WriterCodegen {
 					if (o._inExprPosition) return o;
 					final _c:$optionsCT = _copyOpt(o);
 					_c._inExprPosition = true;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * ω-anonfunction-empty-curly — opt-fanout shim for the
+	 * `propagateAnonFnContext` meta. Idempotent sister to
+	 * `_setExprPosition` — returns `o` unchanged when `_inAnonFnBody`
+	 * is already `true`; otherwise returns a `_copyOpt(o)` with the
+	 * flag flipped on. Consumed at `HxFnExpr.body`'s optional-Ref
+	 * writer call site to flag the descendant `HxFnBlock.stmts`
+	 * emptyCurlyBreak emit so it reads `opt.anonFunctionEmptyCurly`
+	 * instead of `opt.emptyCurly`. Emitted only when the opt typedef
+	 * declares `_inAnonFnBody:Bool` (currently `HxModuleWriteOptions`).
+	 */
+	private static function setAnonFnBodyField(optionsCT:ComplexType):Field {
+		return {
+			name: '_setAnonFnBody',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{name: 'o', type: optionsCT}],
+				ret: optionsCT,
+				expr: macro {
+					if (o._inAnonFnBody) return o;
+					final _c:$optionsCT = _copyOpt(o);
+					_c._inAnonFnBody = true;
 					return _c;
 				},
 			}),

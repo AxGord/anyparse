@@ -1708,7 +1708,25 @@ class WriterLowering {
 					// sees `_inExprPosition=true`. Used by `HxVarDecl.init`
 					// to flag var-rhs as expression-position.
 					final propagateExpr:Bool = child.fmtHasFlag('propagateExprPosition');
-					final optArgExpr:Expr = propagateExpr ? macro _setExprPosition(opt) : macro opt;
+					// ω-anonfunction-empty-curly: sister opt-fanout — when the
+					// optional Ref carries `@:fmt(propagateAnonFnContext)`,
+					// wrap opt in `_setAnonFnBody` so the descendant writer
+					// sees `_inAnonFnBody=true`. Used by `HxFnExpr.body` to
+					// flag the anon-fn body so the inner `HxFnBlock.stmts`
+					// emptyCurlyBreak emit dispatches on
+					// `opt.anonFunctionEmptyCurly` instead of the global
+					// `opt.emptyCurly`. Idempotent — composes safely with
+					// `propagateExprPosition` should a future field combine
+					// both metas.
+					final propagateAnonFn:Bool = child.fmtHasFlag('propagateAnonFnContext');
+					final optArgExpr:Expr = if (propagateExpr && propagateAnonFn)
+						macro _setAnonFnBody(_setExprPosition(opt));
+					else if (propagateExpr)
+						macro _setExprPosition(opt);
+					else if (propagateAnonFn)
+						macro _setAnonFnBody(opt);
+					else
+						macro opt;
 					final rawWriteCall:Expr = {
 						expr: ECall(macro $i{writeFn}, [macro _optVal, optArgExpr]),
 						pos: Context.currentPos(),
@@ -5109,8 +5127,22 @@ class WriterLowering {
 		// haxe-formatter's `lineEnds.emptyCurly: same|break`. The flag
 		// is opt-in per Star — formats / grammars that don't expose the
 		// knob skip the branch entirely.
+		// ω-anonfunction-empty-curly: when the call site descends through
+		// an anonymous-function-expression body (`HxFnExpr.body` flagged
+		// via `@:fmt(propagateAnonFnContext)` + `_setAnonFnBody`
+		// opt-fanout), read `opt.anonFunctionEmptyCurly` instead of the
+		// global `opt.emptyCurly`. Lets `lineEnds.anonFunctionCurly.emptyCurly`
+		// flip empty `function() {}` bodies to two-line Allman
+		// (`function()\n{\n}`) without affecting class/iface/abstract/enum
+		// bodies (which keep reading `opt.emptyCurly`). Pre-slice behaviour
+		// for HxFnDecl body (NOT in anon-fn context) is preserved:
+		// `_inAnonFnBody` defaults false so dispatch falls through to
+		// `opt.emptyCurly`. Emitted unconditionally — every grammar that
+		// opts into `@:fmt(emptyCurlyBreak)` on a body Star also needs
+		// `_inAnonFnBody` and `anonFunctionEmptyCurly` on its options
+		// typedef. Currently only Haxe grammar uses `emptyCurlyBreak`.
 		final emptyDocExpr:Expr = emptyCurlyBreak
-			? macro (opt.emptyCurly == anyparse.format.EmptyCurly.Break
+			? macro ((opt._inAnonFnBody ? opt.anonFunctionEmptyCurly : opt.emptyCurly) == anyparse.format.EmptyCurly.Break
 				? _dc([_dt($v{openText}), _dhl(), _dt($v{closeText})])
 				: _dt($v{emptyText}))
 			: macro _dt($v{emptyText});

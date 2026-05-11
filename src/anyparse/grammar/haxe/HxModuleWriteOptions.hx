@@ -316,6 +316,25 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    follow-up slice (requires writer-side context propagation through
  *    `BlockExpr`, sister to `propagateExprPosition`).
  *
+ * Field added in slice ω-anonfunction-empty-curly:
+ *  - `anonFunctionEmptyCurly` — per-construct `EmptyCurly` knob for the
+ *    empty-body emission inside an anonymous function expression
+ *    (`function() {}` vs `function()\n{\n}`). `Same` (default) keeps the
+ *    flat layout; `Break` emits the empty body across two lines with `}`
+ *    on its own line at the parent's indent. The loader cascades global
+ *    `lineEnds.emptyCurly` into this knob (sister pattern to
+ *    `anonFunctionLeftCurly`); per-construct sub-key
+ *    `lineEnds.anonFunctionCurly.emptyCurly` overrides the cascade.
+ *    Routed at the `HxFnBlock.stmts` emit site via the per-call
+ *    `opt._inAnonFnBody` flag — when true, the writer reads
+ *    `opt.anonFunctionEmptyCurly` instead of `opt.emptyCurly` for the
+ *    empty-body dispatch. `HxFnDecl` body keeps reading `opt.emptyCurly`
+ *    because `_inAnonFnBody` is set ONLY by `HxFnExpr.body`'s writer
+ *    call through `@:fmt(propagateAnonFnContext)` + `_setAnonFnBody`
+ *    opt-fanout (sister to `propagateExprPosition` /
+ *    `_setExprPosition`). Arrow-lambda body (`() -> {…}`) is NOT covered
+ *    by this knob — same scope decision as `anonFunctionLeftCurly`.
+ *
  * Field added in slice ψ₇ (object-literal colon spacing):
  *  - `objectFieldColon` — whitespace around the `:` inside an
  *    anonymous object literal (`HxObjectField.value`'s lead). `After`
@@ -1169,6 +1188,20 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    while a case nested inside another case's body inherits `true`
  *    via opt-fanout and flattens per `expressionCase`.
  *
+ * Internal field added in slice ω-anonfunction-empty-curly:
+ *  - `_inAnonFnBody` — write-time-only signal flagging that the current
+ *    writer call is descending into an anonymous function expression's
+ *    body (`HxFnExpr.body` → `HxFnExprBody.BlockBody(HxFnBlock)`). Set
+ *    via `@:fmt(propagateAnonFnContext)` + `_setAnonFnBody` opt-fanout
+ *    on the `HxFnExpr.body` optional-Ref writer call site. Read by the
+ *    `emptyCurlyBreak` emit branch in `triviaBlockStarExpr` to dispatch
+ *    between `opt.emptyCurly` (global, used by class / interface /
+ *    abstract / enum bodies AND `HxFnDecl.body`) and
+ *    `opt.anonFunctionEmptyCurly` (anonymous function context). Sister
+ *    channel to `_inExprPosition`. The underscore prefix marks it as
+ *    internal — no JSON loader entry, no `hxformat.json` ingest. Default
+ *    `false`.
+ *
  * Internal field added in slice ω-extern-class-no-blanks
  * (extern-modifier-aware interMember suppression):
  *  - `_classExtern` — write-time-only signal flagging that the current
@@ -1303,6 +1336,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	objectLiteralLeftCurly:BracePlacement,
 	anonTypeLeftCurly:BracePlacement,
 	anonFunctionLeftCurly:BracePlacement,
+	anonFunctionEmptyCurly:EmptyCurly,
 	objectFieldColon:WhitespacePolicy,
 	typeHintColon:WhitespacePolicy,
 	typeCheckColon:WhitespacePolicy,
@@ -1369,4 +1403,5 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	metadataFunctionLineEnd:MetadataLineEndPolicy,
 	_inExprPosition:Bool,
 	_classExtern:Bool,
+	_inAnonFnBody:Bool,
 };
