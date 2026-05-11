@@ -526,6 +526,7 @@ final class HaxeFormatConfigLoader {
 			anonFunctionEmptyCurly: base.anonFunctionEmptyCurly,
 			blockEmptyCurly: base.blockEmptyCurly,
 			blockRightCurly: base.blockRightCurly,
+			anonFunctionRightCurly: base.anonFunctionRightCurly,
 			objectFieldColon: base.objectFieldColon,
 			typeHintColon: base.typeHintColon,
 			typeCheckColon: base.typeCheckColon,
@@ -910,6 +911,12 @@ final class HaxeFormatConfigLoader {
 			// precedence — global lineEnd seeds the knob, the sub-key
 			// wins when present.
 			if (sub.emptyCurly != null) opt.anonFunctionEmptyCurly = emptyCurlyToRuntime(sub.emptyCurly);
+			// ω-anonfunction-right-curly: per-construct sub-key
+			// `lineEnds.anonFunctionCurly.rightCurly` overrides the cascade
+			// for anonymous function body closes. Mirrors haxe-formatter's
+			// `MarkLineEnds.getCurlyPolicy(AnonymousFunction).rightCurly`
+			// precedence.
+			if (sub.rightCurly != null) opt.anonFunctionRightCurly = rightCurlyToRuntime(sub.rightCurly);
 		}
 		if (section.blockCurly != null) {
 			// ω-blockcurly: per-construct sub-key
@@ -950,21 +957,27 @@ final class HaxeFormatConfigLoader {
 			if (section.blockCurly == null || section.blockCurly.emptyCurly == null)
 				opt.blockEmptyCurly = empty;
 		}
-		// ω-blockright-curly: cascade global `lineEnds.rightCurly` into
-		// `opt.blockRightCurly`. With `Inline` (mapped from `"after"` /
-		// `"none"`), plain block bodies emit `{ body }` without a
-		// hardline before `}`; `Same` (mapped from `"before"` / `"both"`,
-		// default) keeps the standard close-on-own-line layout. The
-		// `lineEnds.blockCurly.rightCurly` sub-key handler runs before this
-		// block when both are present, so the explicit override wins
-		// regardless of global ingest order. Mirrors haxe-formatter's
-		// `MarkLineEnds.detectCurlyPolicy(Block).rightCurly` precedence.
-		// Sibling per-construct cascades (`anonFunctionRightCurly`, …)
-		// land with their own slices.
+		// ω-blockright-curly + ω-anonfunction-right-curly: cascade global
+		// `lineEnds.rightCurly` into every per-construct
+		// `RightCurlyPlacement` knob. With `Inline` (mapped from `"after"`
+		// / `"none"`), block bodies emit `{ body }` without a hardline
+		// before `}`; `Same` (mapped from `"before"` / `"both"`, default)
+		// keeps the standard close-on-own-line layout. The per-construct
+		// sub-key handlers (`lineEnds.blockCurly.rightCurly`,
+		// `lineEnds.anonFunctionCurly.rightCurly`) run before this block
+		// when present, so explicit overrides win regardless of global
+		// ingest order. Mirrors haxe-formatter's
+		// `MarkLineEnds.detectCurlyPolicy(...).rightCurly` precedence —
+		// global lineEnd seeds every per-construct knob, sub-keys override.
 		if (section.rightCurly != null) {
 			final placement:RightCurlyPlacement = rightCurlyToRuntime(section.rightCurly);
 			if (section.blockCurly == null || section.blockCurly.rightCurly == null)
 				opt.blockRightCurly = placement;
+			// ω-anonfunction-right-curly: cascade global lineEnd into
+			// `anonFunctionRightCurly` unless the
+			// `anonFunctionCurly.rightCurly` sub-key already set it.
+			if (section.anonFunctionCurly == null || section.anonFunctionCurly.rightCurly == null)
+				opt.anonFunctionRightCurly = placement;
 		}
 		// ω-metadata-line-end-function: `lineEnds.metadataFunction` →
 		// `opt.metadataFunctionLineEnd`. Default `None` preserves source-

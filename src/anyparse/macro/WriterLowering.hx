@@ -1298,10 +1298,20 @@ class WriterLowering {
 				final rightCurlyKnob:Null<String> = (rightCurlyKnobArgs != null && rightCurlyKnobArgs.length >= 1)
 					? rightCurlyKnobArgs[0]
 					: null;
+				// ω-anonfunction-right-curly: call-form
+				// `@:fmt(rightCurlyAnonFnOverride('<knob>'))` names a
+				// RightCurlyPlacement opt field that the dispatch reads
+				// only when `_inAnonFnBody=true`. Sister to
+				// `leftCurlyAnonFnOverride`. Pre-slice (no opt-in) falls
+				// through to `_dhl()` for non-anon-fn contexts.
+				final rightCurlyAnonFnArgs:Null<Array<String>> = branch.fmtReadStringArgs('rightCurlyAnonFnOverride');
+				final rightCurlyAnonFnKnob:Null<String> = (rightCurlyAnonFnArgs != null && rightCurlyAnonFnArgs.length >= 1)
+					? rightCurlyAnonFnArgs[0]
+					: null;
 				parts.push(triviaBlockStarExpr(
 					argsAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn,
 					leadText, trailText, true, false, false, false, null, false, emptyCurlyBreak, false, keepCurlyBlanks,
-					false, false, null, false, null, anonFnClear, emptyCurlyKnob, rightCurlyKnob
+					false, false, null, false, null, anonFnClear, emptyCurlyKnob, rightCurlyKnob, rightCurlyAnonFnKnob
 				));
 			}
 		} else if (sepText != null) {
@@ -2877,13 +2887,25 @@ class WriterLowering {
 				final rightCurlyKnob:Null<String> = (rightCurlyKnobArgs != null && rightCurlyKnobArgs.length >= 1)
 					? rightCurlyKnobArgs[0]
 					: null;
+				// ω-anonfunction-right-curly: call-form
+				// `@:fmt(rightCurlyAnonFnOverride('<knob>'))` on a Seq-struct
+				// Star names a RightCurlyPlacement opt field read only when
+				// `_inAnonFnBody=true`. Used by `HxFnBlock.stmts` to route
+				// anon-fn body closes through `opt.anonFunctionRightCurly`
+				// while keeping `HxFnDecl.body` / `HxUntypedFnBody.block`
+				// (same `HxFnBlock` Star, `_inAnonFnBody=false`) on the
+				// pre-slice `_dhl()` path.
+				final rightCurlyAnonFnArgs:Null<Array<String>> = starNode.fmtReadStringArgs('rightCurlyAnonFnOverride');
+				final rightCurlyAnonFnKnob:Null<String> = (rightCurlyAnonFnArgs != null && rightCurlyAnonFnArgs.length >= 1)
+					? rightCurlyAnonFnArgs[0]
+					: null;
 				parts.push(triviaBlockStarExpr(
 					fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn,
 					openText ?? '', closeText, false, afterDocComments, keepBetweenFields, beforeDocComments,
 					interMemberInfo, indentCaseLabelsGate, emptyCurlyBreak, beginEndType, keepCurlyBlanks,
 					lineCommentTrailBlank, blankBeforeFinalDocInLeading, staticVarSubdivInfo,
 					betweenMultilineCommentsBlanks, uniformBetweenOptField, anonFnClear, emptyCurlyKnob,
-					rightCurlyKnob
+					rightCurlyKnob, rightCurlyAnonFnKnob
 				));
 			} else if (isLastField) {
 				if (openText != null) parts.push(macro _dt($v{openText}));
@@ -5214,7 +5236,8 @@ class WriterLowering {
 		uniformBetweenOptField:Null<String> = null,
 		clearAnonFnBodyOnElems:Bool = false,
 		emptyCurlyKnob:Null<String> = null,
-		rightCurlyKnob:Null<String> = null
+		rightCurlyKnob:Null<String> = null,
+		rightCurlyAnonFnKnob:Null<String> = null
 	):Expr {
 		// ω-arrow-lambda-body-context: when the call site opts in via
 		// `@:fmt(leftCurlyAnonFnOverride(...))` on the parent Star, the per-
@@ -5283,12 +5306,33 @@ class WriterLowering {
 		// (-> `Same`) vs `after|none` (-> `Inline`) -- the trailing
 		// newline after `}` is contributed by the outer sibling sep, so
 		// fork's 4-value surface collapses to 2 here.
+		// ω-anonfunction-right-curly: when the call site opts into the
+		// call-form `@:fmt(rightCurlyAnonFnOverride('<knob>'))`, the
+		// dispatch fires only when `opt._inAnonFnBody=true` (set by a
+		// parent's `@:fmt(propagateAnonFnContext)` via `_setAnonFnBody`)
+		// — `Inline` drops the hardline before `}`, `Same` falls through
+		// to `_dhl()`. When `_inAnonFnBody=false`, the dispatch falls
+		// through to `_dhl()` regardless of the knob value. Used by
+		// `HxFnBlock.stmts` to apply `anonFunctionRightCurly` to anon-fn
+		// bodies (`HxFnExpr.body`) while preserving pre-slice `_dhl()`
+		// for function declarations (`HxFnDecl.body`) and untyped blocks
+		// (`HxUntypedFnBody.block`) that share the same `HxFnBlock`
+		// typedef. `rightCurlyKnob` (direct dispatch) takes precedence
+		// over `rightCurlyAnonFnKnob` when both are set — but in
+		// practice no Star opts into both. Sister to
+		// `leftCurlyAnonFnOverride` precedent.
 		final rightCurlyAccess:Null<Expr> = rightCurlyKnob != null
 			? {expr: EField(macro opt, rightCurlyKnob), pos: Context.currentPos()}
 			: null;
-		final beforeCloseHardlineExpr:Expr = rightCurlyAccess != null
-			? macro ($rightCurlyAccess == anyparse.format.RightCurlyPlacement.Inline ? _de() : _dhl())
-			: macro _dhl();
+		final rightCurlyAnonFnAccess:Null<Expr> = (rightCurlyKnob == null && rightCurlyAnonFnKnob != null)
+			? {expr: EField(macro opt, rightCurlyAnonFnKnob), pos: Context.currentPos()}
+			: null;
+		final beforeCloseHardlineExpr:Expr = if (rightCurlyAccess != null)
+			macro ($rightCurlyAccess == anyparse.format.RightCurlyPlacement.Inline ? _de() : _dhl());
+		else if (rightCurlyAnonFnAccess != null)
+			macro (opt._inAnonFnBody && $rightCurlyAnonFnAccess == anyparse.format.RightCurlyPlacement.Inline ? _de() : _dhl());
+		else
+			macro _dhl();
 		// ω-orphan-trivia: Alt-branch Star call sites (BlockStmt) have no
 		// synth trailing slots — the null branch drops trailing trivia,
 		// matching pre-slice behaviour. Seq-struct call sites forward the

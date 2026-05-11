@@ -392,6 +392,26 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    after-`}` newline is contributed by the outer sibling sep, not
  *    by `blockBody`), `"after"` / `"none"` collapse to `Inline`.
  *
+ * Field added in slice ω-anonfunction-right-curly:
+ *  - `anonFunctionRightCurly` — per-construct `RightCurlyPlacement` knob
+ *    gating the hardline emitted immediately before `}` for anonymous
+ *    function expression bodies (`function() { ... }` reached via
+ *    `HxFnExpr.body` carrying `@:fmt(propagateAnonFnContext)`). `Same`
+ *    (default) keeps the standard layout with the close on its own
+ *    line; `Inline` drops the before-close hardline so the brace glues
+ *    to the last body token (`function() { body }`). The loader
+ *    cascades global `lineEnds.rightCurly` into this knob alongside
+ *    `blockRightCurly`; per-construct sub-key
+ *    `lineEnds.anonFunctionCurly.rightCurly` overrides the cascade.
+ *    Consumed by `HxFnBlock.stmts` via the
+ *    `@:fmt(rightCurlyAnonFnOverride('anonFunctionRightCurly'))`
+ *    call-form flag — the dispatch fires only when `_inAnonFnBody=true`
+ *    (anon-fn descent path), preserving pre-slice `_dhl()` for
+ *    `HxFnDecl.body` (function declarations) and `HxUntypedFnBody.block`
+ *    (which share `HxFnBlock`). Mirrors haxe-formatter's
+ *    `MarkLineEnds.detectCurlyPolicy(AnonymousFunction).rightCurly`
+ *    precedence.
+ *
  * Field added in slice ψ₇ (object-literal colon spacing):
  *  - `objectFieldColon` — whitespace around the `:` inside an
  *    anonymous object literal (`HxObjectField.value`'s lead). `After`
@@ -1407,6 +1427,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	blockLeftCurly:BracePlacement,
 	blockEmptyCurly:EmptyCurly,
 	blockRightCurly:RightCurlyPlacement,
+	anonFunctionRightCurly:RightCurlyPlacement,
 	objectFieldColon:WhitespacePolicy,
 	typeHintColon:WhitespacePolicy,
 	typeCheckColon:WhitespacePolicy,
