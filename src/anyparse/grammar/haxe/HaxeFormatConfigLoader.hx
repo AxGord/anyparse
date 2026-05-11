@@ -717,28 +717,39 @@ final class HaxeFormatConfigLoader {
 		};
 	}
 
+	// Accepts BOTH the symbolic JSON form (`'onePerLine'`, the fork's
+	// `WrappingType` enum-abstract-string VALUES) AND the legacy identifier
+	// form (`'OnePerLine'`, the enum-abstract IDENTIFIERS as serialized by
+	// json2object in older fork fixtures). Fixtures in the wild use both
+	// (e.g. `wrapping_method_chain_per_line.hxtest` uses identifier form;
+	// `wrapping_of_function_signature_keep.hxtest` uses symbolic form).
 	private static function wrapModeFromString(s:String):Null<WrapMode> {
 		return switch s {
-			case 'noWrap': WrapMode.NoWrap;
-			case 'onePerLine': WrapMode.OnePerLine;
-			case 'onePerLineAfterFirst': WrapMode.OnePerLineAfterFirst;
-			case 'fillLine': WrapMode.FillLine;
-			case 'fillLineWithLeadingBreak': WrapMode.FillLineWithLeadingBreak;
+			case 'noWrap' | 'NoWrap': WrapMode.NoWrap;
+			case 'onePerLine' | 'OnePerLine': WrapMode.OnePerLine;
+			case 'onePerLineAfterFirst' | 'OnePerLineAfterFirst': WrapMode.OnePerLineAfterFirst;
+			case 'fillLine' | 'FillLine': WrapMode.FillLine;
+			case 'fillLineWithLeadingBreak' | 'FillLineWithLeadingBreak': WrapMode.FillLineWithLeadingBreak;
 			case _: null;
 		};
 	}
 
+	// Accepts BOTH the symbolic JSON form (`'itemCount >= n'`, the fork's
+	// `WrapConditionType` enum-abstract-string VALUES) AND the identifier
+	// form (`'ItemCountLargerThan'`, the enum-abstract IDENTIFIERS as
+	// serialized by json2object in older fork fixtures). See sister
+	// `wrapModeFromString` for rationale.
 	private static function wrapCondFromString(s:String):Null<WrapConditionType> {
 		return switch s {
-			case 'itemCount <= n': WrapConditionType.ItemCountLessThan;
-			case 'itemCount >= n': WrapConditionType.ItemCountLargerThan;
-			case 'anyItemLength >= n': WrapConditionType.AnyItemLengthLargerThan;
-			case 'allItemLengths < n': WrapConditionType.AllItemLengthsLessThan;
-			case 'totalItemLength >= n': WrapConditionType.TotalItemLengthLargerThan;
-			case 'totalItemLength <= n': WrapConditionType.TotalItemLengthLessThan;
-			case 'exceedsMaxLineLength': WrapConditionType.ExceedsMaxLineLength;
-			case 'lineLength >= n': WrapConditionType.LineLengthLargerThan;
-			case 'hasMultilineItems': WrapConditionType.HasMultilineItems;
+			case 'itemCount <= n' | 'ItemCountLessThan': WrapConditionType.ItemCountLessThan;
+			case 'itemCount >= n' | 'ItemCountLargerThan': WrapConditionType.ItemCountLargerThan;
+			case 'anyItemLength >= n' | 'AnyItemLengthLargerThan': WrapConditionType.AnyItemLengthLargerThan;
+			case 'allItemLengths < n' | 'AllItemLengthsLessThan': WrapConditionType.AllItemLengthsLessThan;
+			case 'totalItemLength >= n' | 'TotalItemLengthLargerThan': WrapConditionType.TotalItemLengthLargerThan;
+			case 'totalItemLength <= n' | 'TotalItemLengthLessThan': WrapConditionType.TotalItemLengthLessThan;
+			case 'exceedsMaxLineLength' | 'ExceedsMaxLineLength': WrapConditionType.ExceedsMaxLineLength;
+			case 'lineLength >= n' | 'LineLengthLargerThan': WrapConditionType.LineLengthLargerThan;
+			case 'hasMultilineItems' | 'HasMultilineItems': WrapConditionType.HasMultilineItems;
 			case _: null;
 		};
 	}
