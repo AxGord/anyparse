@@ -7,6 +7,7 @@ import anyparse.format.EmptyCurly;
 import anyparse.format.KeepEmptyLinesPolicy;
 import anyparse.format.KeywordPlacement;
 import anyparse.format.MetadataLineEndPolicy;
+import anyparse.format.RightCurlyPlacement;
 import anyparse.format.SameLinePolicy;
 import anyparse.format.WhitespacePolicy;
 import anyparse.format.WriteOptions;
@@ -373,6 +374,23 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    and class / interface / abstract member-Star bodies. Mirrors
  *    haxe-formatter's `MarkLineEnds.detectCurlyPolicy(Block).emptyCurly`
  *    precedence.
+ *
+ * Field added in slice ω-blockright-curly:
+ *  - `blockRightCurly` — per-construct `RightCurlyPlacement` knob
+ *    gating the hardline emitted immediately before `}` for plain
+ *    block bodies. `Same` (default) keeps the standard layout with
+ *    the close on its own line; `Inline` drops the before-close
+ *    hardline so the brace glues to the last body token (`{ body }`).
+ *    The loader cascades global `lineEnds.rightCurly` into this knob;
+ *    per-construct sub-key `lineEnds.blockCurly.rightCurly` overrides
+ *    the cascade. Consumed by `HxStatement.BlockStmt`,
+ *    `HxExpr.BlockExpr`, `HxSwitchStmt.cases`, `HxSwitchStmtBare.cases`
+ *    via the `@:fmt(rightCurly('blockRightCurly'))` call-form flag.
+ *    Bare-flag callers and other Star sites untouched. Mirrors
+ *    haxe-formatter's `MarkLineEnds.detectCurlyPolicy(Block).rightCurly`
+ *    precedence — `"before"` / `"both"` collapse to `Same` (the
+ *    after-`}` newline is contributed by the outer sibling sep, not
+ *    by `blockBody`), `"after"` / `"none"` collapse to `Inline`.
  *
  * Field added in slice ψ₇ (object-literal colon spacing):
  *  - `objectFieldColon` — whitespace around the `:` inside an
@@ -1388,6 +1406,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	anonFunctionEmptyCurly:EmptyCurly,
 	blockLeftCurly:BracePlacement,
 	blockEmptyCurly:EmptyCurly,
+	blockRightCurly:RightCurlyPlacement,
 	objectFieldColon:WhitespacePolicy,
 	typeHintColon:WhitespacePolicy,
 	typeCheckColon:WhitespacePolicy,

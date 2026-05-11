@@ -5,11 +5,10 @@ package anyparse.grammar.haxe.format;
  *
  * Only the keys whose runtime knob already exists on
  * `HxModuleWriteOptions` / base `WriteOptions` are modelled here.
- * Missing keys (`rightCurly`, `anonTypeCurly`,
- * `typedefCurly`, `metadataType`, `metadataVar`, `metadataOther`,
- * `caseColon`, `sharp`, …) are silently dropped by the ByName
- * struct parser's `UnknownPolicy.Skip` — they land with the slice
- * that introduces the matching writer knob.
+ * Missing keys (`anonTypeCurly`, `typedefCurly`, `metadataType`,
+ * `metadataVar`, `metadataOther`, `caseColon`, `sharp`, …) are
+ * silently dropped by the ByName struct parser's `UnknownPolicy.Skip`
+ * — they land with the slice that introduces the matching writer knob.
  *
  * `lineEndCharacter` (slice ω-lineend-character) drives the base
  * `WriteOptions.lineEnd` String — `"LF"` / `"CRLF"` / `"CR"` map
@@ -37,10 +36,23 @@ package anyparse.grammar.haxe.format;
  * `emptyCurly` (slice ω-empty-curly-break) drives `opt.emptyCurly`
  * — `"break"` switches empty bodies to a two-line layout (`{\n}`),
  * `"same"` keeps the flat default (`{}`).
+ *
+ * `rightCurly` (slice ω-blockright-curly) drives `opt.blockRightCurly`
+ * — `"before"` / `"both"` collapse to `Same` (hardline before `}`,
+ * default; the after-`}` newline is contributed by the surrounding
+ * sibling sep), `"after"` / `"none"` collapse to `Inline` (no
+ * hardline before `}`; the close glues to the last body token).
+ * Currently consumed only by plain block bodies opting in via
+ * `@:fmt(rightCurly('blockRightCurly'))` on their Star field; per-construct
+ * sub-sections (`anonFunctionCurly.rightCurly`,
+ * `objectLiteralCurly.rightCurly`, …) ingest the same sub-key but
+ * route to separate runtime knobs in later slices.
  */
 @:peg typedef HxFormatLineEndsSection = {
 
 	@:optional var leftCurly:HxFormatLeftCurlyPolicy;
+
+	@:optional var rightCurly:HxFormatRightCurlyPolicy;
 
 	@:optional var emptyCurly:HxFormatEmptyCurlyPolicy;
 

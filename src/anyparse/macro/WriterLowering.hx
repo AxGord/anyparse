@@ -1290,10 +1290,18 @@ class WriterLowering {
 				final emptyCurlyKnob:Null<String> = (emptyCurlyKnobArgs != null && emptyCurlyKnobArgs.length >= 1)
 					? emptyCurlyKnobArgs[0]
 					: null;
+				// ω-blockright-curly: call-form `@:fmt(rightCurly('<knob>'))`
+				// names a per-construct RightCurlyPlacement opt field. The
+				// bare form returns null and falls back to unconditional
+				// `_dhl()` before close inside `triviaBlockStarExpr`.
+				final rightCurlyKnobArgs:Null<Array<String>> = branch.fmtReadStringArgs('rightCurly');
+				final rightCurlyKnob:Null<String> = (rightCurlyKnobArgs != null && rightCurlyKnobArgs.length >= 1)
+					? rightCurlyKnobArgs[0]
+					: null;
 				parts.push(triviaBlockStarExpr(
 					argsAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn,
 					leadText, trailText, true, false, false, false, null, false, emptyCurlyBreak, false, keepCurlyBlanks,
-					false, false, null, false, null, anonFnClear, emptyCurlyKnob
+					false, false, null, false, null, anonFnClear, emptyCurlyKnob, rightCurlyKnob
 				));
 			}
 		} else if (sepText != null) {
@@ -2860,12 +2868,22 @@ class WriterLowering {
 					? uniformBetweenArgs[0]
 					: null;
 				final anonFnClear:Bool = starNode.fmtHasFlag('leftCurlyAnonFnOverride');
+				// ω-blockright-curly: call-form `@:fmt(rightCurly('<knob>'))`
+				// on a Seq-struct Star names a per-construct
+				// RightCurlyPlacement opt field. Sister to `emptyCurlyKnob`
+				// — when null, dispatch falls back to unconditional
+				// `_dhl()` before close inside `triviaBlockStarExpr`.
+				final rightCurlyKnobArgs:Null<Array<String>> = starNode.fmtReadStringArgs('rightCurly');
+				final rightCurlyKnob:Null<String> = (rightCurlyKnobArgs != null && rightCurlyKnobArgs.length >= 1)
+					? rightCurlyKnobArgs[0]
+					: null;
 				parts.push(triviaBlockStarExpr(
 					fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn,
 					openText ?? '', closeText, false, afterDocComments, keepBetweenFields, beforeDocComments,
 					interMemberInfo, indentCaseLabelsGate, emptyCurlyBreak, beginEndType, keepCurlyBlanks,
 					lineCommentTrailBlank, blankBeforeFinalDocInLeading, staticVarSubdivInfo,
-					betweenMultilineCommentsBlanks, uniformBetweenOptField, anonFnClear, emptyCurlyKnob
+					betweenMultilineCommentsBlanks, uniformBetweenOptField, anonFnClear, emptyCurlyKnob,
+					rightCurlyKnob
 				));
 			} else if (isLastField) {
 				if (openText != null) parts.push(macro _dt($v{openText}));
@@ -5195,7 +5213,8 @@ class WriterLowering {
 		betweenMultilineCommentsBlanks:Bool = false,
 		uniformBetweenOptField:Null<String> = null,
 		clearAnonFnBodyOnElems:Bool = false,
-		emptyCurlyKnob:Null<String> = null
+		emptyCurlyKnob:Null<String> = null,
+		rightCurlyKnob:Null<String> = null
 	):Expr {
 		// ω-arrow-lambda-body-context: when the call site opts in via
 		// `@:fmt(leftCurlyAnonFnOverride(...))` on the parent Star, the per-
@@ -5251,6 +5270,25 @@ class WriterLowering {
 				? _dc([_dt($v{openText}), _dhl(), _dt($v{closeText})])
 				: _dt($v{emptyText}))
 			: macro _dt($v{emptyText});
+		// ω-blockright-curly: when the call site opts into the call-form
+		// `@:fmt(rightCurly('<knob>'))`, the non-empty-body branch reads
+		// `opt.<knob>:RightCurlyPlacement` and drops the hardline before
+		// `}` when the knob is `Inline`. `Same` (default) keeps the
+		// pre-slice `_dhl()` so `}` lands on its own line at the parent
+		// indent. The empty-body branch is unaffected — empty-body
+		// dispatch is owned by `emptyCurlyBreak` + `emptyCurlyKnob`.
+		// Bare-flag callers without `rightCurlyKnob` keep pre-slice
+		// behaviour (knob is null → `_dhl()` emitted unconditionally).
+		// Mirrors haxe-formatter's `lineEnds.rightCurly: before|both`
+		// (-> `Same`) vs `after|none` (-> `Inline`) -- the trailing
+		// newline after `}` is contributed by the outer sibling sep, so
+		// fork's 4-value surface collapses to 2 here.
+		final rightCurlyAccess:Null<Expr> = rightCurlyKnob != null
+			? {expr: EField(macro opt, rightCurlyKnob), pos: Context.currentPos()}
+			: null;
+		final beforeCloseHardlineExpr:Expr = rightCurlyAccess != null
+			? macro ($rightCurlyAccess == anyparse.format.RightCurlyPlacement.Inline ? _de() : _dhl())
+			: macro _dhl();
 		// ω-orphan-trivia: Alt-branch Star call sites (BlockStmt) have no
 		// synth trailing slots — the null branch drops trailing trivia,
 		// matching pre-slice behaviour. Seq-struct call sites forward the
@@ -5725,7 +5763,7 @@ class WriterLowering {
 				final _parts:Array<anyparse.core.Doc> = [_dt($v{openText})];
 				if (_trailOpen != null) _parts.push(trailingCommentDocVerbatim(_trailOpen, opt));
 				_parts.push(_innerWrap);
-				_parts.push(_dhl());
+				_parts.push($beforeCloseHardlineExpr);
 				_parts.push(_dt($v{closeText}));
 				if (_trailClose != null) {
 					_parts.push(trailingCommentDocVerbatim(_trailClose, opt));

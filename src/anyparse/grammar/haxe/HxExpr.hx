@@ -250,7 +250,7 @@ enum HxExpr {
 
 	ObjectLit(lit:HxObjectLit);
 
-	@:fmt(leftCurly('blockLeftCurly'), leftCurlyAnonFnOverride('anonFunctionLeftCurly'), emptyCurlyBreak('blockEmptyCurly'), keepCurlyBlanks)
+	@:fmt(leftCurly('blockLeftCurly'), leftCurlyAnonFnOverride('anonFunctionLeftCurly'), emptyCurlyBreak('blockEmptyCurly'), rightCurly('blockRightCurly'), keepCurlyBlanks)
 	@:lead('{') @:trail('}') @:trivia
 	BlockExpr(stmts:Array<HxStatement>);
 

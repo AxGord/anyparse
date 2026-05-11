@@ -341,7 +341,7 @@ enum HxStatement {
 	@:kw('#if') @:trail('#end')
 	Conditional(inner:HxConditionalStmt);
 
-	@:fmt(leftCurly('blockLeftCurly'), emptyCurlyBreak('blockEmptyCurly'), keepCurlyBlanks)
+	@:fmt(leftCurly('blockLeftCurly'), emptyCurlyBreak('blockEmptyCurly'), rightCurly('blockRightCurly'), keepCurlyBlanks)
 	@:lead('{') @:trail('}') @:trivia
 	BlockStmt(stmts:Array<HxStatement>);
 

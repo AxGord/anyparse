@@ -8,6 +8,7 @@ import anyparse.format.IndentChar;
 import anyparse.format.KeepEmptyLinesPolicy;
 import anyparse.format.KeywordPlacement;
 import anyparse.format.MetadataLineEndPolicy;
+import anyparse.format.RightCurlyPlacement;
 import anyparse.format.SameLinePolicy;
 import anyparse.format.WhitespacePolicy;
 import anyparse.format.wrap.WrapCondition;
@@ -38,6 +39,7 @@ import anyparse.grammar.haxe.format.HxFormatLineEndsSection;
 import anyparse.grammar.haxe.format.HxFormatMetadataLineEndPolicy;
 import anyparse.grammar.haxe.format.HxFormatParenConfigSection;
 import anyparse.grammar.haxe.format.HxFormatParenPolicySection;
+import anyparse.grammar.haxe.format.HxFormatRightCurlyPolicy;
 import anyparse.grammar.haxe.format.HxFormatSameLinePolicy;
 import anyparse.grammar.haxe.format.HxFormatSameLineSection;
 import anyparse.grammar.haxe.format.HxFormatTrailingCommaPolicy;
@@ -523,6 +525,7 @@ final class HaxeFormatConfigLoader {
 			blockLeftCurly: base.blockLeftCurly,
 			anonFunctionEmptyCurly: base.anonFunctionEmptyCurly,
 			blockEmptyCurly: base.blockEmptyCurly,
+			blockRightCurly: base.blockRightCurly,
 			objectFieldColon: base.objectFieldColon,
 			typeHintColon: base.typeHintColon,
 			typeCheckColon: base.typeCheckColon,
@@ -923,6 +926,11 @@ final class HaxeFormatConfigLoader {
 			// `HxSwitchStmtBare.cases`). Mirrors haxe-formatter's
 			// `MarkLineEnds.getCurlyPolicy(Block).emptyCurly` precedence.
 			if (sub.emptyCurly != null) opt.blockEmptyCurly = emptyCurlyToRuntime(sub.emptyCurly);
+			// ω-blockright-curly: per-construct sub-key
+			// `lineEnds.blockCurly.rightCurly` overrides the cascade for
+			// plain block body closes. Mirrors haxe-formatter's
+			// `MarkLineEnds.getCurlyPolicy(Block).rightCurly` precedence.
+			if (sub.rightCurly != null) opt.blockRightCurly = rightCurlyToRuntime(sub.rightCurly);
 		}
 		if (section.emptyCurly != null) {
 			final empty:EmptyCurly = emptyCurlyToRuntime(section.emptyCurly);
@@ -941,6 +949,22 @@ final class HaxeFormatConfigLoader {
 			// so the explicit override wins regardless of global ingest order.
 			if (section.blockCurly == null || section.blockCurly.emptyCurly == null)
 				opt.blockEmptyCurly = empty;
+		}
+		// ω-blockright-curly: cascade global `lineEnds.rightCurly` into
+		// `opt.blockRightCurly`. With `Inline` (mapped from `"after"` /
+		// `"none"`), plain block bodies emit `{ body }` without a
+		// hardline before `}`; `Same` (mapped from `"before"` / `"both"`,
+		// default) keeps the standard close-on-own-line layout. The
+		// `lineEnds.blockCurly.rightCurly` sub-key handler runs before this
+		// block when both are present, so the explicit override wins
+		// regardless of global ingest order. Mirrors haxe-formatter's
+		// `MarkLineEnds.detectCurlyPolicy(Block).rightCurly` precedence.
+		// Sibling per-construct cascades (`anonFunctionRightCurly`, …)
+		// land with their own slices.
+		if (section.rightCurly != null) {
+			final placement:RightCurlyPlacement = rightCurlyToRuntime(section.rightCurly);
+			if (section.blockCurly == null || section.blockCurly.rightCurly == null)
+				opt.blockRightCurly = placement;
 		}
 		// ω-metadata-line-end-function: `lineEnds.metadataFunction` →
 		// `opt.metadataFunctionLineEnd`. Default `None` preserves source-
@@ -1136,6 +1160,17 @@ final class HaxeFormatConfigLoader {
 		return switch policy {
 			case HxFormatEmptyCurlyPolicy.Break: EmptyCurly.Break;
 			case _: EmptyCurly.Same;
+		};
+	}
+
+	private static function rightCurlyToRuntime(policy:HxFormatRightCurlyPolicy):RightCurlyPlacement {
+		// "before" / "both" → Same (hardline before `}`, default — the
+		// trailing newline after `}` is contributed by the outer sibling
+		// sep, not by `blockBody`, so `Before` and `Both` collapse).
+		// "after" / "none" → Inline (no hardline before `}`).
+		return switch policy {
+			case HxFormatRightCurlyPolicy.After | HxFormatRightCurlyPolicy.None: RightCurlyPlacement.Inline;
+			case _: RightCurlyPlacement.Same;
 		};
 	}
 

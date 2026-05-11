@@ -10,6 +10,7 @@ import anyparse.format.IndentChar;
 import anyparse.format.KeepEmptyLinesPolicy;
 import anyparse.format.KeywordPlacement;
 import anyparse.format.MetadataLineEndPolicy;
+import anyparse.format.RightCurlyPlacement;
 import anyparse.format.SameLinePolicy;
 import anyparse.format.WhitespacePolicy;
 import anyparse.format.text.FieldLookup;
@@ -662,6 +663,7 @@ final class HaxeFormat implements TextFormat {
 		anonFunctionEmptyCurly: EmptyCurly.Same,
 		blockLeftCurly: BracePlacement.Same,
 		blockEmptyCurly: EmptyCurly.Same,
+		blockRightCurly: RightCurlyPlacement.Same,
 		objectFieldColon: WhitespacePolicy.After,
 		typeHintColon: WhitespacePolicy.None,
 		typeCheckColon: WhitespacePolicy.Both,
