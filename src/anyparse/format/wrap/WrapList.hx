@@ -319,7 +319,16 @@ class WrapList {
 		final flatBrk:Bool = modeFlat == FillLineWithLeadingBreak;
 		final breakBrk:Bool = modeBreak == FillLineWithLeadingBreak;
 		if (flatBrk == breakBrk) return shapeFor(modeFlat);
-		return Group(IfBreak(shapeFor(modeBreak), shapeFor(modeFlat)));
+		// `IfLineExceeds` over `Group(IfBreak(…))`: `Group` only measures
+		// the cond's own flat width; trailing tokens on the same rendered
+		// line (e.g. ` {` after the close paren on `if`-stmt sites)
+		// vanish from the fit decision — a 129-col `(cond)` fits exactly
+		// at the 11-col `\t\tif ` start but the trailing ` {` pushes the
+		// rendered line to 142 > 140 lineWidth. `IfLineExceeds` adds the
+		// `flatTokenWidthOfRestStack` lookahead so the probe accounts for
+		// what lands on the same line if the flat branch fires. Closes
+		// the Wadler-style local-Group blindspot for cond-wrap sites.
+		return IfLineExceeds(opt.lineWidth, shapeFor(modeBreak), shapeFor(modeFlat));
 	}
 
 	/**
