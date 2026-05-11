@@ -2705,7 +2705,7 @@ class WriterLowering {
 				final wrapRulesField:Null<String> = starNode.fmtReadString('wrapRules');
 				final leftCurlyOwnedBySep:Bool = hasKnobLeftCurly && wrapRulesField != null;
 				if (!leftCurlyOwnedBySep && (!isFirstField || hasKnobLeftCurly) && isSpacedLead(openText))
-					parts.push(leftCurlySeparator(starNode));
+					parts.push(leftCurlySeparator(starNode, isFirstField && hasKnobLeftCurly));
 				// ω-trivia-sep: sep-Star with @:trivia routes to a
 				// dedicated helper that drives multi-line vs flat layout
 				// from per-element `newlineBefore` / comment trivia.
@@ -3784,24 +3784,29 @@ class WriterLowering {
 	 * and keeps the space — additional placements can be routed here
 	 * by adding more cases.
 	 */
-	private static function leftCurlySeparator(starNode:ShapeNode):Expr {
+	private static function leftCurlySeparator(starNode:ShapeNode, optSpaceUpstream:Bool = false):Expr {
 		if (!starNode.fmtHasFlag('leftCurly')) return macro _dt(' ');
 		final knobName:Null<String> = starNode.fmtReadString('leftCurly');
 		final knobExpr:Expr = optFieldAccess(knobName ?? 'leftCurly');
 		final nextPat:Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BracePlacement', 'Next']);
-		// Knob-form `@:fmt(leftCurly('<knob>'))` (e.g. on `HxObjectLit.fields`)
-		// fires from a first-field Star whose outer caller already emits
-		// the inter-token space via the lead's `_dop(' ')` (OptSpace). The
-		// `Same` branch therefore returns `_de()` — the OptSpace flushes
-		// as ' ' on its own. The `Next` branch emits a hardline; the
-		// renderer drops the pending OptSpace and writes `\n` cleanly.
+		// `optSpaceUpstream=true` (currently only first-field Star with
+		// knob-form `@:fmt(leftCurly('<knob>'))`, e.g. `HxObjectLit.fields` /
+		// `HxType.Anon.fields`) means the outer caller already emits the
+		// inter-token space via the lead's `_dop(' ')` (OptSpace). The
+		// `Same` branch returns `_de()` — the OptSpace flushes as ' ' on
+		// its own. The `Next` branch emits a hardline; the renderer drops
+		// the pending OptSpace and writes `\n` cleanly.
 		//
-		// Bare flag `@:fmt(leftCurly)` (e.g. on `HxClassDecl.members`)
-		// fires from a non-first-field Star where the previous field has
-		// no trailing whitespace, so the separator must own the space
-		// directly: `Same` → `_dt(' ')`, `Next` → `_dhl()`. This is the
-		// pre-slice behaviour.
-		final defaultExpr:Expr = knobName != null ? macro _de() : macro _dt(' ');
+		// `optSpaceUpstream=false` (the default — kw-led mandatory Ref,
+		// optional Ref / bare Ref `@:fmt(leftCurly)`, non-first-field
+		// Star bare-flag) means no upstream space producer; the separator
+		// must own the space directly: `Same` → `_dt(' ')`, `Next` →
+		// `_dhl()`. Knob-form on these paths (slice
+		// ω-anonfunction-left-curly first consumer: `HxFnExpr.body` with
+		// `leftCurly('anonFunctionLeftCurly')`) keeps the `_dt(' ')` Same
+		// default — the pre-slice heuristic that switched to `_de()` on
+		// any knob-form was tuned for the first-field-Star site only.
+		final defaultExpr:Expr = optSpaceUpstream ? macro _de() : macro _dt(' ');
 		final cases:Array<Case> = [
 			{values: [nextPat], expr: macro _dhl(), guard: null},
 		];

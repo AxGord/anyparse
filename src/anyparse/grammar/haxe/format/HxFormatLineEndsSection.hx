@@ -5,11 +5,11 @@ package anyparse.grammar.haxe.format;
  *
  * Only the keys whose runtime knob already exists on
  * `HxModuleWriteOptions` / base `WriteOptions` are modelled here.
- * Missing keys (`rightCurly`, `blockCurly`, `anonFunctionCurly`,
- * `anonTypeCurly`, `typedefCurly`, `metadataType`, `metadataVar`,
- * `metadataOther`, `caseColon`, `sharp`, …) are silently dropped
- * by the ByName struct parser's `UnknownPolicy.Skip` — they land
- * with the slice that introduces the matching writer knob.
+ * Missing keys (`rightCurly`, `blockCurly`, `anonTypeCurly`,
+ * `typedefCurly`, `metadataType`, `metadataVar`, `metadataOther`,
+ * `caseColon`, `sharp`, …) are silently dropped by the ByName
+ * struct parser's `UnknownPolicy.Skip` — they land with the slice
+ * that introduces the matching writer knob.
  *
  * `lineEndCharacter` (slice ω-lineend-character) drives the base
  * `WriteOptions.lineEnd` String — `"LF"` / `"CRLF"` / `"CR"` map
@@ -21,8 +21,12 @@ package anyparse.grammar.haxe.format;
  * braces only, matching haxe-formatter's
  * `MarkLineEnds.getCurlyPolicy(ObjectDecl)` precedence: when present,
  * its `leftCurly` wins over the global one for the
- * `opt.objectLiteralLeftCurly` knob. Other per-construct sub-sections
- * (`blockCurly`, `anonTypeCurly`, …) land with their own slices.
+ * `opt.objectLiteralLeftCurly` knob. Sibling sub-section
+ * `anonFunctionCurly` (slice ω-anonfunction-left-curly) overrides
+ * `leftCurly` for anon-function expression braces (`function() {…}`)
+ * via `opt.anonFunctionLeftCurly` — same precedence rules. Other
+ * per-construct sub-sections (`blockCurly`, `anonTypeCurly`, …) land
+ * with their own slices.
  *
  * `emptyCurly` (slice ω-empty-curly-break) drives `opt.emptyCurly`
  * — `"break"` switches empty bodies to a two-line layout (`{\n}`),
@@ -35,6 +39,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var emptyCurly:HxFormatEmptyCurlyPolicy;
 
 	@:optional var objectLiteralCurly:HxFormatCurlyLineEndPolicy;
+
+	@:optional var anonFunctionCurly:HxFormatCurlyLineEndPolicy;
 
 	@:optional var metadataFunction:HxFormatMetadataLineEndPolicy;
 

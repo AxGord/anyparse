@@ -446,7 +446,7 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  * Deliberately NOT supported in this slice (no corresponding
  * `HxModuleWriteOptions` field yet): `wrapping.*` beyond
  * `maxLineLength`, other `lineEnds.*` keys (`rightCurly`, `blockCurly`,
- * `anonTypeCurly`, `typedefCurly`, `anonFunctionCurly`, …), other
+ * `anonTypeCurly`, `typedefCurly`, …), other
  * `emptyLines.*` keys
  * (`finalNewline`, `maxAnywhereInFile`,
  * `betweenTypes`, per-type-kind sections
@@ -519,6 +519,7 @@ final class HaxeFormatConfigLoader {
 			emptyCurly: base.emptyCurly,
 			objectLiteralLeftCurly: base.objectLiteralLeftCurly,
 			anonTypeLeftCurly: base.anonTypeLeftCurly,
+			anonFunctionLeftCurly: base.anonFunctionLeftCurly,
 			objectFieldColon: base.objectFieldColon,
 			typeHintColon: base.typeHintColon,
 			typeCheckColon: base.typeCheckColon,
@@ -860,10 +861,26 @@ final class HaxeFormatConfigLoader {
 			// `MarkLineEnds.getCurlyPolicy(AnonType)` precedence — global
 			// lineEnd seeds every per-construct knob, sub-keys override.
 			opt.anonTypeLeftCurly = placement;
+			// ω-anonfunction-left-curly: cascade global `lineEnds.leftCurly`
+			// into `opt.anonFunctionLeftCurly`. With `Next`, anonymous
+			// function expression bodies (`function() {…}`) flip to Allman
+			// (`function()\n{…}`). Default `Same` keeps the cuddled
+			// layout. Mirrors haxe-formatter's
+			// `MarkLineEnds.getCurlyPolicy(AnonymousFunction)` precedence
+			// — global lineEnd seeds every per-construct knob, sub-keys
+			// override. Arrow-lambda body (`() -> {…}`) is NOT covered
+			// here — the lambda body is `HxExpr.BlockExpr` which keeps
+			// reading the global `leftCurly`; per-context routing through
+			// the lambda parent is a follow-up slice.
+			opt.anonFunctionLeftCurly = placement;
 		}
 		if (section.objectLiteralCurly != null) {
 			final sub:HxFormatCurlyLineEndPolicy = section.objectLiteralCurly;
 			if (sub.leftCurly != null) opt.objectLiteralLeftCurly = leftCurlyToRuntime(sub.leftCurly);
+		}
+		if (section.anonFunctionCurly != null) {
+			final sub:HxFormatCurlyLineEndPolicy = section.anonFunctionCurly;
+			if (sub.leftCurly != null) opt.anonFunctionLeftCurly = leftCurlyToRuntime(sub.leftCurly);
 		}
 		if (section.emptyCurly != null) opt.emptyCurly = emptyCurlyToRuntime(section.emptyCurly);
 		// ω-metadata-line-end-function: `lineEnds.metadataFunction` →

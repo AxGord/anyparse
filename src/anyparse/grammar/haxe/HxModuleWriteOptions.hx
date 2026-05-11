@@ -300,6 +300,22 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    `var a:\n\t{ ... }`, matching haxe-formatter's
  *    `MarkLineEnds.getCurlyPolicy(AnonType)` precedence.
  *
+ * Field added in slice ω-anonfunction-left-curly:
+ *  - `anonFunctionLeftCurly` — per-construct `BracePlacement` knob for
+ *    `HxFnExpr.body` (`@:fmt(leftCurly('anonFunctionLeftCurly'))`).
+ *    Default `Same` keeps anon-function expression braces cuddled
+ *    (`function() {…}`). With `Next`, the brace flips to Allman
+ *    (`function()\n{…}`). The loader cascades global `lineEnds.leftCurly`
+ *    into this knob (same pattern as `objectLiteralLeftCurly` /
+ *    `anonTypeLeftCurly`); per-construct sub-key
+ *    `lineEnds.anonFunctionCurly.leftCurly` overrides the cascade.
+ *    Mirrors haxe-formatter's `MarkLineEnds.getCurlyPolicy(AnonymousFunction)`
+ *    precedence. Arrow-lambda body (`() -> {…}`) is NOT covered by this
+ *    knob — the lambda body is `HxExpr.BlockExpr` which uses the global
+ *    `leftCurly`; per-context routing through the lambda parent is a
+ *    follow-up slice (requires writer-side context propagation through
+ *    `BlockExpr`, sister to `propagateExprPosition`).
+ *
  * Field added in slice ψ₇ (object-literal colon spacing):
  *  - `objectFieldColon` — whitespace around the `:` inside an
  *    anonymous object literal (`HxObjectField.value`'s lead). `After`
@@ -1286,6 +1302,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	emptyCurly:EmptyCurly,
 	objectLiteralLeftCurly:BracePlacement,
 	anonTypeLeftCurly:BracePlacement,
+	anonFunctionLeftCurly:BracePlacement,
 	objectFieldColon:WhitespacePolicy,
 	typeHintColon:WhitespacePolicy,
 	typeCheckColon:WhitespacePolicy,
