@@ -121,6 +121,7 @@ import unit.AllmanProbe;
 import unit.Probe147;
 import unit.ProbeMetadataLineEnd;
 import unit.CondModProbe;
+import unit.ProbeIssue344;
 import unit.HxBlankAfterLeadingCommentSliceTest;
 import unit.HxVarTrailOptShapeSliceTest;
 import unit.HxFillLinePerGapSepTest;
@@ -255,6 +256,7 @@ class RunTests {
 		runner.addCase(new Probe147());
 		runner.addCase(new ProbeMetadataLineEnd());
 		runner.addCase(new CondModProbe());
+		runner.addCase(new ProbeIssue344());
 		runner.addCase(new HxBlankAfterLeadingCommentSliceTest());
 		runner.addCase(new HxVarTrailOptShapeSliceTest());
 		runner.addCase(new HxFillLinePerGapSepTest());

@@ -771,7 +771,20 @@ class WriterCodegen {
 				case anyparse.core.Doc.Concat(items):
 					var _i:Int = items.length - 1;
 					while (_i >= 0) {
-						final _folded:Null<anyparse.core.Doc> = _foldTrailingIntoBodyGroup(items[_i], trailing);
+						final _item:anyparse.core.Doc = items[_i];
+						// ω-fold-trailing-stop-at-text: abort the backward walk at
+						// a concrete `Text(s)` literal (non-empty `s`). Folding past
+						// a trail keyword like `#end` or `}` would splice the
+						// trailing comment INSIDE preceding structure (e.g. inner
+						// BodyGroup), placing it BEFORE the literal in output.
+						// Empty Text, Empty, Line, IfBreak etc. keep walking so
+						// trailing whitespace/separator items don't block fold.
+						switch (_item) {
+							case anyparse.core.Doc.Text(s) if (s.length > 0):
+								return null;
+							case _:
+						}
+						final _folded:Null<anyparse.core.Doc> = _foldTrailingIntoBodyGroup(_item, trailing);
 						if (_folded != null) {
 							final _newItems:Array<anyparse.core.Doc> = items.copy();
 							_newItems[_i] = _folded;
