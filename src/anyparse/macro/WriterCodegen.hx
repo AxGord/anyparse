@@ -91,8 +91,10 @@ class WriterCodegen {
 			// both `opBoolChainWrap` and `opAddSubChainWrap`.
 			if (optionsHasField(optionsTypePath, '_chainModeOverride')
 				&& optionsHasField(optionsTypePath, 'opBoolChainWrap')
-				&& optionsHasField(optionsTypePath, 'opAddSubChainWrap'))
+				&& optionsHasField(optionsTypePath, 'opAddSubChainWrap')) {
 				fields.push(setChainModeOverrideField(optionsCT));
+				fields.push(resolveChainLocField());
+			}
 			// Layout helpers
 			fields.push(blockBodyField());
 			fields.push(sepListField());
@@ -621,26 +623,58 @@ class WriterCodegen {
 					if (o._chainModeOverride == _mode) return o;
 					final _c:$optionsCT = _copyOpt(o);
 					_c._chainModeOverride = _mode;
-					// `defaultLocation: BeforeLast` mirrors fork's post-
-					// `collapseChainWraps` output shape: chain breaks remain at
-					// the OnePerLineAfterFirst-emitted `BeforeLast` positions
-					// (operator prefixes the next operand on the continuation
-					// line). Without an explicit location the cascade falls
-					// through to `WrapList.decide`'s default fallback which
-					// emits `AfterLast` — verified post-slice diff shifted
-					// from `\n && X` (correct) to `X &&\n` (wrong) until this
-					// line landed.
+					// Mode override forces chain layout to the cond-wrap
+					// mode (mirrors fork's `collapseChainWraps` post-pass),
+					// but operator-placement preference must follow the
+					// user-configured opBoolChain location — fork preserves
+					// the original `location` even after collapse. Resolve
+					// per source: `defaultLocation` → last rule's `location`
+					// (cascade fallback rule) → `BeforeLast`. The default
+					// `BeforeLast` mirrors haxe-formatter's idiomatic default
+					// (`\n&& X`) for unconfigured opBoolChain; was hardcoded
+					// before priority_over_opbool exposed the gap.
 					_c.opBoolChainWrap = {
 						rules: [],
 						defaultMode: _mode,
-						defaultLocation: anyparse.format.wrap.WrappingLocation.BeforeLast,
+						defaultLocation: _resolveChainLoc(o.opBoolChainWrap),
 					};
 					_c.opAddSubChainWrap = {
 						rules: [],
 						defaultMode: _mode,
-						defaultLocation: anyparse.format.wrap.WrappingLocation.BeforeLast,
+						defaultLocation: _resolveChainLoc(o.opAddSubChainWrap),
 					};
 					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * Picks the effective `defaultLocation` to install on the override
+	 * cascade. Resolution: `r.defaultLocation` → last rule's `location`
+	 * (catch-all fallback rule) → `WrappingLocation.BeforeLast`.
+	 *
+	 * Sister to `setChainModeOverrideField` — emitted whenever that helper
+	 * is emitted so the override path can preserve user-configured
+	 * operator placement instead of the prior hardcoded `BeforeLast`.
+	 */
+	private static function resolveChainLocField():Field {
+		return {
+			name: '_resolveChainLoc',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [{name: 'r', type: macro : anyparse.format.wrap.WrapRules}],
+				ret: macro : anyparse.format.wrap.WrappingLocation,
+				expr: macro {
+					final _dl:Null<anyparse.format.wrap.WrappingLocation> = r.defaultLocation;
+					if (_dl != null) return _dl;
+					var _i:Int = r.rules.length;
+					while (--_i >= 0) {
+						final _loc:Null<anyparse.format.wrap.WrappingLocation> = r.rules[_i].location;
+						if (_loc != null) return _loc;
+					}
+					return anyparse.format.wrap.WrappingLocation.BeforeLast;
 				},
 			}),
 			pos: Context.currentPos(),
