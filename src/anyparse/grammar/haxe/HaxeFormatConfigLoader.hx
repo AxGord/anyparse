@@ -33,6 +33,7 @@ import anyparse.grammar.haxe.format.HxFormatInterfaceEmptyLinesConfig;
 import anyparse.grammar.haxe.format.HxFormatKeepEmptyLinesPolicy;
 import anyparse.grammar.haxe.format.HxFormatKeywordPlacement;
 import anyparse.grammar.haxe.format.HxFormatLeftCurlyPolicy;
+import anyparse.grammar.haxe.format.HxFormatLineEndCharacter;
 import anyparse.grammar.haxe.format.HxFormatLineEndsSection;
 import anyparse.grammar.haxe.format.HxFormatMetadataLineEndPolicy;
 import anyparse.grammar.haxe.format.HxFormatParenConfigSection;
@@ -872,6 +873,13 @@ final class HaxeFormatConfigLoader {
 		// (and override inter-element sep for `After` / `ForceAfterLast`).
 		if (section.metadataFunction != null)
 			opt.metadataFunctionLineEnd = metadataLineEndToRuntime(section.metadataFunction);
+		// ω-lineend-character: `lineEnds.lineEndCharacter` → `opt.lineEnd`
+		// (base WriteOptions String). `"LF"` / `"CRLF"` / `"CR"` map to
+		// `\n` / `\r\n` / `\r`; `"Auto"` falls back to `\n` because the
+		// writer is decoupled from the source byte stream (no
+		// `parsedCode.lineSeparator` equivalent).
+		if (section.lineEndCharacter != null)
+			opt.lineEnd = lineEndCharacterToRuntime(section.lineEndCharacter);
 	}
 
 	private static function applyWhitespace(section:HxFormatWhitespaceSection, opt:HxModuleWriteOptions):Void {
@@ -1052,6 +1060,14 @@ final class HaxeFormatConfigLoader {
 		return switch policy {
 			case HxFormatEmptyCurlyPolicy.Break: EmptyCurly.Break;
 			case _: EmptyCurly.Same;
+		};
+	}
+
+	private static function lineEndCharacterToRuntime(policy:HxFormatLineEndCharacter):String {
+		return switch policy {
+			case HxFormatLineEndCharacter.CRLF: '\r\n';
+			case HxFormatLineEndCharacter.CR: '\r';
+			case _: '\n';
 		};
 	}
 

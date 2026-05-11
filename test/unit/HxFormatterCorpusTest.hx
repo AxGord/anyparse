@@ -144,12 +144,15 @@ class HxFormatterCorpusTest extends Test {
 				skipConfig++;
 				continue;
 			};
-			// .hxtest fixtures strip the file's trailing \n during read
-			// (HxFormatterCorpusHelpers.stripPadNewlines), so the expected
-			// section never carries a trailing newline. Disable the
-			// writer's finalNewline knob to match — comparison would
-			// otherwise show a spurious +1 \n on every byte-exact pass.
-			opts.finalNewline = false;
+			// .hxtest fixtures strip exactly one trailing `\n` from each
+			// section (HxFormatterCorpusHelpers.stripPadNewlines).
+			// Enable the writer's finalNewline knob and strip a matching
+			// trailing `\n` from `actual` below so the comparison stays
+			// symmetric for all `lineEnd` values: under `lineEnd = '\n'`
+			// the strip drops the appended LF; under `lineEnd = '\r\n'`
+			// it drops the trailing LF leaving the `\r` that the fixture's
+			// stripPadNewlines also leaves in `expected`.
+			opts.finalNewline = true;
 			final module:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = try HaxeModuleTriviaParser.parse(tc.input) catch (exception:Exception) {
 				skipParse++;
 				final reason:String = classifyParseFailure(exception, tc.input);
@@ -157,10 +160,13 @@ class HxFormatterCorpusTest extends Test {
 				parseReasons[reason] = (prev == null ? 0 : prev) + 1;
 				continue;
 			};
-			final actual:String = try HaxeModuleTriviaWriter.write(module, opts) catch (exception:Exception) {
+			final actualRaw:String = try HaxeModuleTriviaWriter.write(module, opts) catch (exception:Exception) {
 				skipWrite++;
 				continue;
 			};
+			final actual:String = actualRaw.length > 0 && StringTools.fastCodeAt(actualRaw, actualRaw.length - 1) == '\n'.code
+				? actualRaw.substr(0, actualRaw.length - 1)
+				: actualRaw;
 			if (actual == tc.expected) {
 				pass++;
 			} else {

@@ -4,12 +4,17 @@ package anyparse.grammar.haxe.format;
  * `lineEnds` section of a haxe-formatter `hxformat.json` config.
  *
  * Only the keys whose runtime knob already exists on
- * `HxModuleWriteOptions` are modelled here. Missing keys
- * (`rightCurly`, `blockCurly`, `anonFunctionCurly`, `anonTypeCurly`,
- * `typedefCurly`, `metadataType`, `metadataVar`, `metadataOther`,
- * `caseColon`, `sharp`, `lineEndCharacter`, …) are silently dropped
+ * `HxModuleWriteOptions` / base `WriteOptions` are modelled here.
+ * Missing keys (`rightCurly`, `blockCurly`, `anonFunctionCurly`,
+ * `anonTypeCurly`, `typedefCurly`, `metadataType`, `metadataVar`,
+ * `metadataOther`, `caseColon`, `sharp`, …) are silently dropped
  * by the ByName struct parser's `UnknownPolicy.Skip` — they land
  * with the slice that introduces the matching writer knob.
+ *
+ * `lineEndCharacter` (slice ω-lineend-character) drives the base
+ * `WriteOptions.lineEnd` String — `"LF"` / `"CRLF"` / `"CR"` map
+ * to `\n` / `\r\n` / `\r`, `"Auto"` falls back to `\n` (no
+ * source-detection plumbing).
  *
  * Per-construct sub-section `objectLiteralCurly` (slice
  * ω-objectlit-leftCurly) overrides `leftCurly` for object-literal
@@ -32,4 +37,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var objectLiteralCurly:HxFormatCurlyLineEndPolicy;
 
 	@:optional var metadataFunction:HxFormatMetadataLineEndPolicy;
+
+	@:optional var lineEndCharacter:HxFormatLineEndCharacter;
 };

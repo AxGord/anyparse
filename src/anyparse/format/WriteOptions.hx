@@ -41,8 +41,12 @@ typedef WriteOptions = {
 	lineWidth:Int,
 
 	/**
-	 * End-of-line sequence emitted by the writer. Declared in σ;
-	 * honored once the renderer gains line-ending awareness.
+	 * End-of-line sequence emitted by the writer for every break-mode
+	 * `Line` / `OptHardline` (and as the trailing newline when
+	 * `finalNewline` is true). Honored by `Renderer.render` directly.
+	 * For Haxe grammar, fed by `lineEnds.lineEndCharacter` config:
+	 * `"LF"` → `\n`, `"CRLF"` → `\r\n`, `"CR"` → `\r`, `"auto"` falls
+	 * back to `\n` (no source-detection plumbing).
 	 */
 	lineEnd:String,
 
