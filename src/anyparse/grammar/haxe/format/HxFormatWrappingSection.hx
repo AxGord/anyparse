@@ -38,6 +38,17 @@ package anyparse.grammar.haxe.format;
  *    `BinaryChainEmit.emit` with items=[cond, then, else] and
  *    ops=['?', ':']. Default `{rules: [], NoWrap}` is byte-equivalent
  *    to the prior flat emit.
+ *  - `functionSignature`: `WrapRules` cascade → `functionSignatureWrap`
+ *    (slice ω-functionsignature-wrap-ingest — foundational scaffold).
+ *    Drives break shape for named function parameter lists
+ *    (`HxFnDecl.params`). The loader path is wired here; the engine
+ *    swap from the prior `@:fmt(fill, fillDoubleIndent)` Wadler-fillSep
+ *    path to `WrapList.emit` lands in a follow-up slice once `WrapList`
+ *    gains a `defaultAdditionalIndent` knob (current cascade lacks the
+ *    `+1 tab` continuation indent the Wadler path provided, causing
+ *    1-tab regressions on `issue_170` / `type_hint_around`). Defaults
+ *    match fork's `wrapping.functionSignature`: `defaultMode: FillLine`,
+ *    no rules.
  *
  * Slice ω-peg-byname-array lifted the prior `@:peg` ByName Array<T>
  * limitation, so every cascade above now ingests `rules` from
@@ -46,9 +57,10 @@ package anyparse.grammar.haxe.format;
  * cascade falls through to the next rule).
  *
  * The remaining per-construct cascades (`expressionWrapping`,
- * `typeParameter`, `arrayMatrixWrap`, …) land with their own slices
- * when each gains JSON-side wiring; matching `WriteOptions` fields
- * don't exist yet and need new fields plus grammar `@:fmt` wiring.
+ * `anonFunctionSignature`, `typeParameter`, `arrayMatrixWrap`, …) land
+ * with their own slices when each gains JSON-side wiring; matching
+ * `WriteOptions` fields don't exist yet and need new fields plus
+ * grammar `@:fmt` wiring.
  */
 @:peg typedef HxFormatWrappingSection = {
 
@@ -71,4 +83,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var conditionWrapping:HxFormatWrapRules;
 
 	@:optional var ternaryExpression:HxFormatWrapRules;
+
+	@:optional var functionSignature:HxFormatWrapRules;
 };

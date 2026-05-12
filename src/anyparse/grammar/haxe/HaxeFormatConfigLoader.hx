@@ -577,6 +577,7 @@ final class HaxeFormatConfigLoader {
 			opAddSubChainWrap: base.opAddSubChainWrap,
 			conditionWrap: base.conditionWrap,
 			ternaryWrap: base.ternaryWrap,
+			functionSignatureWrap: base.functionSignatureWrap,
 			addLineCommentSpace: base.addLineCommentSpace,
 			expressionTry: base.expressionTry,
 			indentCaseLabels: base.indentCaseLabels,
@@ -653,6 +654,7 @@ final class HaxeFormatConfigLoader {
 		if (section.objectLiteral != null) opt.objectLiteralWrap = wrapRulesFromConfig(section.objectLiteral, opt.objectLiteralWrap);
 		if (section.conditionWrapping != null) opt.conditionWrap = wrapRulesFromConfig(section.conditionWrapping, opt.conditionWrap);
 		if (section.ternaryExpression != null) opt.ternaryWrap = wrapRulesFromConfig(section.ternaryExpression, opt.ternaryWrap);
+		if (section.functionSignature != null) opt.functionSignatureWrap = wrapRulesFromConfig(section.functionSignature, opt.functionSignatureWrap);
 	}
 
 	/**

@@ -1002,6 +1002,17 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    then, else] and ops=['?', ':']. Default `{rules: [], defaultMode: NoWrap}`
  *    keeps `cond ? then : else` flat byte-equivalent to the
  *    pre-slice emit.
+ *  - `functionSignatureWrap` — `WrapRules` cascade for named function
+ *    parameter lists (`HxFnDecl.params` — haxe-formatter
+ *    `functionSignature` class). Slice ω-functionsignature-wrap-ingest
+ *    adds the field, default, and JSON loader path only; the grammar
+ *    `@:fmt(wrapRules('functionSignatureWrap'))` opt-in lands in a
+ *    follow-up slice once `WrapList.emit` gains a
+ *    `defaultAdditionalIndent` knob — the current cascade lacks the
+ *    `+1 tab` continuation indent the prior `@:fmt(fill,
+ *    fillDoubleIndent)` Wadler-fillSep path provided. Default matches
+ *    fork's `default-hxformat.json` (`defaultMode: FillLine`, no
+ *    rules).
  *
  * Defaults are minimal:
  *  - `opBoolChainWrap`: single rule
@@ -1593,6 +1604,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	opAddSubChainWrap:WrapRules,
 	conditionWrap:WrapRules,
 	ternaryWrap:WrapRules,
+	functionSignatureWrap:WrapRules,
 	expressionTry:SameLinePolicy,
 	indentCaseLabels:Bool,
 	indentObjectLiteral:Bool,

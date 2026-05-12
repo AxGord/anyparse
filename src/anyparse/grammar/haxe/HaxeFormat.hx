@@ -715,6 +715,7 @@ final class HaxeFormat implements TextFormat {
 		opAddSubChainWrap: HaxeFormat.defaultOpAddSubChainWrap(),
 		conditionWrap: HaxeFormat.defaultConditionWrap(),
 		ternaryWrap: HaxeFormat.defaultTernaryWrap(),
+		functionSignatureWrap: HaxeFormat.defaultFunctionSignatureWrap(),
 		addLineCommentSpace: true,
 		expressionTry: SameLinePolicy.Same,
 		indentCaseLabels: true,
@@ -1186,6 +1187,29 @@ final class HaxeFormat implements TextFormat {
 		return {
 			rules: [],
 			defaultMode: WrapMode.NoWrap,
+		};
+	}
+
+	/**
+	 * Default `WrapRules` cascade for named function parameter lists
+	 * (haxe-formatter `functionSignature` class). Slice
+	 * ω-functionsignature-wrap-ingest adds the foundational scaffold —
+	 * field, default, JSON loader. The grammar opt-in on `HxFnDecl.params`
+	 * lands in a follow-up slice once `WrapList.emit` gains a
+	 * `defaultAdditionalIndent` knob.
+	 *
+	 * Mirrors haxe-formatter's `default-hxformat.json`:
+	 * `{rules: [], defaultWrap: fillLine}` — empty rule set, plain
+	 * `FillLine` mode.
+	 *
+	 * Returned as a fresh struct on each call so test code that mutates
+	 * the `defaultWriteOptions.functionSignatureWrap` substruct doesn't
+	 * corrupt the singleton.
+	 */
+	public static function defaultFunctionSignatureWrap():WrapRules {
+		return {
+			rules: [],
+			defaultMode: WrapMode.FillLine,
 		};
 	}
 
