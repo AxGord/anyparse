@@ -995,6 +995,13 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    follow-up slice; reading the field is a no-op for now. Default is
  *    minimal (`defaultMode: NoWrap`, no rules) so the foundational
  *    scaffold is Δpass=0.
+ *  - `ternaryWrap` — `WrapRules` cascade for the `? :` ternary
+ *    (haxe-formatter `ternaryExpression` class). Slice ω-ternary-wrap
+ *    wires the field, default, JSON loader, and `WriterLowering`'s
+ *    `@:ternary` branch to `BinaryChainEmit.emit` with items=[cond,
+ *    then, else] and ops=['?', ':']. Default `{rules: [], defaultMode: NoWrap}`
+ *    keeps `cond ? then : else` flat byte-equivalent to the
+ *    pre-slice emit.
  *
  * Defaults are minimal:
  *  - `opBoolChainWrap`: single rule
@@ -1585,6 +1592,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	opBoolChainWrap:WrapRules,
 	opAddSubChainWrap:WrapRules,
 	conditionWrap:WrapRules,
+	ternaryWrap:WrapRules,
 	expressionTry:SameLinePolicy,
 	indentCaseLabels:Bool,
 	indentObjectLiteral:Bool,

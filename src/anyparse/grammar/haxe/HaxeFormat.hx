@@ -714,6 +714,7 @@ final class HaxeFormat implements TextFormat {
 		opBoolChainWrap: HaxeFormat.defaultOpBoolChainWrap(),
 		opAddSubChainWrap: HaxeFormat.defaultOpAddSubChainWrap(),
 		conditionWrap: HaxeFormat.defaultConditionWrap(),
+		ternaryWrap: HaxeFormat.defaultTernaryWrap(),
 		addLineCommentSpace: true,
 		expressionTry: SameLinePolicy.Same,
 		indentCaseLabels: true,
@@ -1161,6 +1162,27 @@ final class HaxeFormat implements TextFormat {
 	 * the singleton.
 	 */
 	public static function defaultConditionWrap():WrapRules {
+		return {
+			rules: [],
+			defaultMode: WrapMode.NoWrap,
+		};
+	}
+
+	/**
+	 * Default `WrapRules` cascade for the `? :` ternary
+	 * (haxe-formatter `ternaryExpression` class). Slice ω-ternary-wrap
+	 * wires `WriterLowering`'s `@:ternary` branch into
+	 * `BinaryChainEmit.emit` (items=[cond, then, else],
+	 * ops=['?', ':']); the empty-rule `NoWrap` default keeps the flat
+	 * `cond ? then : else` byte-equivalent to the pre-slice emit, so the
+	 * scaffold is regression-free on every fixture that doesn't set a
+	 * non-default `ternaryExpression` config.
+	 *
+	 * Returned as a fresh struct on each call so test code that mutates
+	 * the `defaultWriteOptions.ternaryWrap` substruct doesn't corrupt
+	 * the singleton.
+	 */
+	public static function defaultTernaryWrap():WrapRules {
 		return {
 			rules: [],
 			defaultMode: WrapMode.NoWrap,

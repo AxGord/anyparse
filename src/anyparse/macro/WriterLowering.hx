@@ -482,14 +482,27 @@ class WriterLowering {
 			final condCall:Expr = makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, tPrec + 1);
 			final middleCall:Expr = makeWriteCall(writeFnName, macro $i{argNames[1]}, hasPratt, -1);
 			final rightCall:Expr = makeWriteCall(writeFnName, macro $i{argNames[2]}, hasPratt, -1);
-			final opWithSpaces:String = ' ' + ternaryOp + ' ';
-			final sepWithSpaces:String = ' ' + sep + ' ';
+			// ω-ternary-wrap: dispatch to the chain-emit engine with a
+			// degenerate 3-item / 2-op chain (items = [cond, then, else],
+			// ops = [ternaryOp, sep]). `BinaryChainEmit.shapeNoWrap`
+			// produces `cond ? then : else` with `' op '` spacing —
+			// byte-equivalent to the prior flat emit when the cascade
+			// resolves to NoWrap (default). `OnePerLineAfterFirst` +
+			// BeforeLast (haxe-formatter `ternaryExpression` canonical
+			// break shape) yields `cond\n\t? then\n\t: else`. The chain
+			// extractor is intentionally NOT applied here: nested ternary
+			// `Ternary(a, b, Ternary(c, d, e))` renders the inner ternary
+			// as a self-contained leaf Doc through the standard writer
+			// path — each `?:` node runs the cascade independently.
+			// Collapsing nested ternaries into a single chain is a future
+			// slice (no current fixture demands it).
+			final rulesExpr:Expr = optFieldAccess('ternaryWrap');
 			return macro {
-				final _inner:anyparse.core.Doc = _dc([
-					$condCall, _dt($v{opWithSpaces}),
-					$middleCall, _dt($v{sepWithSpaces}),
-					$rightCall,
-				]);
+				final _items:Array<anyparse.core.Doc> = [$condCall, $middleCall, $rightCall];
+				final _ops:Array<String> = [$v{ternaryOp}, $v{sep}];
+				final _inner:anyparse.core.Doc = anyparse.format.wrap.BinaryChainEmit.emit(
+					_items, _ops, opt, $rulesExpr, false
+				);
 				if ($v{tPrec} < ctxPrec) _dc([_dt('('), _inner, _dt(')')]) else _inner;
 			};
 		}

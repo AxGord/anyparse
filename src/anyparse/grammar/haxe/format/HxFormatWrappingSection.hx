@@ -32,6 +32,12 @@ package anyparse.grammar.haxe.format;
  *    here; the engine + grammar `@:fmt(condWrap(…))` wiring lands in a
  *    follow-up slice. Defaults match anyparse's pre-slice behaviour
  *    (`NoWrap`, no rules) so this scaffold is Δpass=0.
+ *  - `ternaryExpression`: `WrapRules` cascade → `ternaryWrap` (slice
+ *    ω-ternary-wrap). Drives break shape for the `? :` ternary —
+ *    `WriterLowering`'s `@:ternary` branch now dispatches to
+ *    `BinaryChainEmit.emit` with items=[cond, then, else] and
+ *    ops=['?', ':']. Default `{rules: [], NoWrap}` is byte-equivalent
+ *    to the prior flat emit.
  *
  * Slice ω-peg-byname-array lifted the prior `@:peg` ByName Array<T>
  * limitation, so every cascade above now ingests `rules` from
@@ -63,4 +69,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var objectLiteral:HxFormatWrapRules;
 
 	@:optional var conditionWrapping:HxFormatWrapRules;
+
+	@:optional var ternaryExpression:HxFormatWrapRules;
 };
