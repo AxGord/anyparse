@@ -1004,15 +1004,18 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    pre-slice emit.
  *  - `functionSignatureWrap` — `WrapRules` cascade for named function
  *    parameter lists (`HxFnDecl.params` — haxe-formatter
- *    `functionSignature` class). Slice ω-functionsignature-wrap-ingest
- *    adds the field, default, and JSON loader path only; the grammar
- *    `@:fmt(wrapRules('functionSignatureWrap'))` opt-in lands in a
- *    follow-up slice once `WrapList.emit` gains a
- *    `defaultAdditionalIndent` knob — the current cascade lacks the
- *    `+1 tab` continuation indent the prior `@:fmt(fill,
- *    fillDoubleIndent)` Wadler-fillSep path provided. Default matches
- *    fork's `default-hxformat.json` (`defaultMode: FillLine`, no
- *    rules).
+ *    `functionSignature` class). Slice
+ *    ω-functionsignature-wrap-ingest landed the foundational scaffold
+ *    (field, default, JSON loader); slice ω-wraplist-additional-indent
+ *    added the `defaultAdditionalIndent` knob on `WrapRules` consumed
+ *    by `WrapList.emit`, and the follow-up grammar slice opted
+ *    `HxFnDecl.params` into `@:fmt(wrapRules('functionSignatureWrap'))`.
+ *    Default matches fork's `default-hxformat.json`:
+ *    `{rules: [], defaultMode: FillLine, defaultAdditionalIndent: 1}`
+ *    — `+1 tab` continuation indent keeps wrapped parameters one
+ *    indent level deeper than the body, mirroring the legacy
+ *    `@:fmt(fill, fillDoubleIndent)` Wadler-fillSep emission this
+ *    cascade replaces.
  *
  * Defaults are minimal:
  *  - `opBoolChainWrap`: single rule

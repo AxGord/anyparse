@@ -683,15 +683,16 @@ final class HaxeFormatConfigLoader {
 		final defaultLocation:Null<WrappingLocation> = cfg.defaultLocation != null
 			? wrappingLocationFromString(cfg.defaultLocation) ?? base.defaultLocation
 			: base.defaultLocation;
+		final defaultAdditionalIndent:Null<Int> = cfg.defaultAdditionalIndent ?? base.defaultAdditionalIndent;
 		final src:Null<Array<HxFormatWrapRule>> = cfg.rules;
 		if (src == null)
-			return {rules: base.rules, defaultMode: defaultMode, defaultLocation: defaultLocation};
+			return {rules: base.rules, defaultMode: defaultMode, defaultLocation: defaultLocation, defaultAdditionalIndent: defaultAdditionalIndent};
 		final rules:Array<WrapRule> = [];
 		for (raw in src) {
 			final mapped:Null<WrapRule> = wrapRuleFromConfig(raw);
 			if (mapped != null) rules.push(mapped);
 		}
-		return {rules: rules, defaultMode: defaultMode, defaultLocation: defaultLocation};
+		return {rules: rules, defaultMode: defaultMode, defaultLocation: defaultLocation, defaultAdditionalIndent: defaultAdditionalIndent};
 	}
 
 	private static function wrapRuleFromConfig(raw:HxFormatWrapRule):Null<WrapRule> {

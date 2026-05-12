@@ -25,5 +25,7 @@ package anyparse.grammar.haxe.format;
 
 	@:optional var defaultLocation:String;
 
+	@:optional var defaultAdditionalIndent:Int;
+
 	@:optional var rules:Array<HxFormatWrapRule>;
 };

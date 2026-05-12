@@ -38,17 +38,15 @@ package anyparse.grammar.haxe.format;
  *    `BinaryChainEmit.emit` with items=[cond, then, else] and
  *    ops=['?', ':']. Default `{rules: [], NoWrap}` is byte-equivalent
  *    to the prior flat emit.
- *  - `functionSignature`: `WrapRules` cascade → `functionSignatureWrap`
- *    (slice ω-functionsignature-wrap-ingest — foundational scaffold).
+ *  - `functionSignature`: `WrapRules` cascade → `functionSignatureWrap`.
  *    Drives break shape for named function parameter lists
- *    (`HxFnDecl.params`). The loader path is wired here; the engine
- *    swap from the prior `@:fmt(fill, fillDoubleIndent)` Wadler-fillSep
- *    path to `WrapList.emit` lands in a follow-up slice once `WrapList`
- *    gains a `defaultAdditionalIndent` knob (current cascade lacks the
- *    `+1 tab` continuation indent the Wadler path provided, causing
- *    1-tab regressions on `issue_170` / `type_hint_around`). Defaults
- *    match fork's `wrapping.functionSignature`: `defaultMode: FillLine`,
- *    no rules.
+ *    (`HxFnDecl.params`). Slice ω-functionsignature-wrap-ingest landed
+ *    the loader path; slice ω-wraplist-additional-indent added the
+ *    `defaultAdditionalIndent` knob on `WrapRules`; the follow-up
+ *    grammar slice opted `HxFnDecl.params` into
+ *    `@:fmt(wrapRules('functionSignatureWrap'))`. Defaults match
+ *    fork's `wrapping.functionSignature`:
+ *    `{rules: [], defaultMode: FillLine, defaultAdditionalIndent: 1}`.
  *
  * Slice ω-peg-byname-array lifted the prior `@:peg` ByName Array<T>
  * limitation, so every cascade above now ingests `rules` from

@@ -121,7 +121,16 @@ class WrapList {
 			if (w > maxLen) maxLen = w;
 		}
 
-		final cols:Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
+		final baseCols:Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
+		// `defaultAdditionalIndent` (slice ω-wraplist-additional-indent):
+		// bumps the continuation indent by N extra units on top of the
+		// base `Nest(cols, …)` used by every break-mode shape. Mirrors
+		// fork's `WrapRules.defaultAdditionalIndent` — only
+		// `wrapping.functionSignature` ships a non-zero value (1) in
+		// fork's `default-hxformat.json`, so every other cascade keeps
+		// the legacy single-indent continuation column.
+		final additional:Int = rules.defaultAdditionalIndent ?? 0;
+		final cols:Int = baseCols * (1 + additional);
 
 		// Column-aware `LineLengthLargerThan` thresholds (slice
 		// ω-ifwidthexceeds-infra). Cascade rules with `lineLength >= n`

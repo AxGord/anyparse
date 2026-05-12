@@ -29,9 +29,26 @@ package anyparse.format.wrap;
  * `WrapRules.defaultLocation: AfterLast` typedef default. Currently
  * consumed only by chain emission — delimited-list shapes
  * (`WrapList.emit`) ignore it.
+ *
+ * `defaultAdditionalIndent` (optional) bumps the continuation indent
+ * applied to every break-mode shape by N extra indent units, where
+ * the unit is the same `opt.indentSize` / `opt.tabWidth` value the
+ * engine already uses for the base `Nest(cols, …)`. Mirrors haxe-
+ * formatter's `WrapRules.defaultAdditionalIndent: Int` typedef field
+ * (and `resources/default-hxformat.json`'s `wrapping.functionSignature`
+ * `defaultAdditionalIndent: 1` knob). When absent or 0, behaviour is
+ * unchanged. Consumed only by `WrapList.emit` (delimited-list shapes
+ * — `OnePerLine`, `OnePerLineAfterFirst`, `FillLine`). Chain
+ * emitters (`BinaryChainEmit`, `MethodChainEmit`) keep their own
+ * `Nest(cols, …)` base and ignore this knob — no fork cascade
+ * presently sets `defaultAdditionalIndent` on chain configs, and the
+ * chain emitters' indent semantics are tied to operator placement
+ * rather than a list's continuation column. Slice
+ * ω-wraplist-additional-indent.
  */
 typedef WrapRules = {
 	var rules:Array<WrapRule>;
 	var defaultMode:WrapMode;
 	@:optional var defaultLocation:WrappingLocation;
+	@:optional var defaultAdditionalIndent:Int;
 };

@@ -1192,15 +1192,21 @@ final class HaxeFormat implements TextFormat {
 
 	/**
 	 * Default `WrapRules` cascade for named function parameter lists
-	 * (haxe-formatter `functionSignature` class). Slice
-	 * ω-functionsignature-wrap-ingest adds the foundational scaffold —
-	 * field, default, JSON loader. The grammar opt-in on `HxFnDecl.params`
-	 * lands in a follow-up slice once `WrapList.emit` gains a
-	 * `defaultAdditionalIndent` knob.
+	 * (haxe-formatter `functionSignature` class).
 	 *
 	 * Mirrors haxe-formatter's `default-hxformat.json`:
-	 * `{rules: [], defaultWrap: fillLine}` — empty rule set, plain
-	 * `FillLine` mode.
+	 * `{rules: [], defaultWrap: fillLine, defaultAdditionalIndent: 1}` —
+	 * empty rule set, `FillLine` mode, +1 indent unit on continuation
+	 * lines. The `defaultAdditionalIndent: 1` keeps wrapped function
+	 * parameters one indent level deeper than the function body so they
+	 * remain visually distinct (matches the legacy `@:fmt(fill,
+	 * fillDoubleIndent)` Wadler-fillSep emission this cascade replaces).
+	 *
+	 * Slice ω-functionsignature-wrap-ingest landed the foundational
+	 * scaffold (field, default, JSON loader). Slice
+	 * ω-wraplist-additional-indent extended `WrapList.emit` with the
+	 * `defaultAdditionalIndent` knob, and the follow-up slice swapped
+	 * `HxFnDecl.params` over to `@:fmt(wrapRules('functionSignatureWrap'))`.
 	 *
 	 * Returned as a fresh struct on each call so test code that mutates
 	 * the `defaultWriteOptions.functionSignatureWrap` substruct doesn't
@@ -1210,6 +1216,7 @@ final class HaxeFormat implements TextFormat {
 		return {
 			rules: [],
 			defaultMode: WrapMode.FillLine,
+			defaultAdditionalIndent: 1,
 		};
 	}
 
