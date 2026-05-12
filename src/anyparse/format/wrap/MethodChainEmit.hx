@@ -109,7 +109,17 @@ class MethodChainEmit {
 			final modeFlat:WrapMode = evalAt(false, []);
 			final modeBreak:WrapMode = evalAt(true, []);
 			if (modeFlat == modeBreak) return shapeAt(modeFlat);
-			return Group(IfBreak(shapeAt(modeBreak), shapeAt(modeFlat)));
+			// `IfFullLineExceeds` over `Group(IfBreak(…))`: chain's own
+			// `Group` measures only its own subtree; trailing tokens on
+			// the same rendered line (e.g. ` BODY` after the for-cond
+			// close-paren on `condition_wrapping_method_chain`, where
+			// `BODY` lives inside a sibling `BodyGroup` from
+			// `forBody=fitLine`) vanish from the fit decision. The
+			// asymmetric BG semantic: own-subtree DEFERS BG (chain-of-
+			// lambdas like `xs.map(λ).filter(λ)` don't inflate the
+			// probe), rest-of-stack DESCENDS BG (sibling body after
+			// chain IS visible). Slice ω-iffulllineexceeds-primitive.
+			return IfFullLineExceeds(opt.lineWidth, shapeAt(modeBreak), shapeAt(modeFlat));
 		}
 
 		if (extraThresholds.length == 1) {
@@ -123,7 +133,7 @@ class MethodChainEmit {
 				final modeYN:WrapMode = evalAt(false, [t]);
 				final modeYY:WrapMode = evalAt(true, [t]);
 				if (modeNN == modeYN && modeYN == modeYY) return shapeAt(modeNN);
-				final brk:Doc = (modeYY == modeYN) ? shapeAt(modeYY) : Group(IfBreak(shapeAt(modeYY), shapeAt(modeYN)));
+				final brk:Doc = (modeYY == modeYN) ? shapeAt(modeYY) : IfFullLineExceeds(opt.lineWidth, shapeAt(modeYY), shapeAt(modeYN));
 				return Group(IfWidthExceeds(t, brk, shapeAt(modeNN)));
 			}
 			// t > lineWidth: 3 valid states (col+w>=t implies col+w>=lineWidth):
@@ -135,7 +145,7 @@ class MethodChainEmit {
 			final modeYY:WrapMode = evalAt(true, [t]);
 			if (modeNN == modeNY && modeNY == modeYY) return shapeAt(modeNN);
 			final brk:Doc = (modeNY == modeYY) ? shapeAt(modeYY) : Group(IfWidthExceeds(t, shapeAt(modeYY), shapeAt(modeNY)));
-			return Group(IfBreak(brk, shapeAt(modeNN)));
+			return IfFullLineExceeds(opt.lineWidth, brk, shapeAt(modeNN));
 		}
 
 		// 2+ extra thresholds — full enumeration without impossibility
@@ -143,39 +153,42 @@ class MethodChainEmit {
 		// `IfWidthExceeds` layer picks the correct leaf at runtime; the
 		// impossible-state shapes are inert. None of the current default
 		// cascades use N≥2 — this branch is correctness insurance.
-		return buildChainThresholdTree(extraThresholds, [], evalAt, shapeAt);
+		return buildChainThresholdTree(extraThresholds, [], evalAt, shapeAt, opt.lineWidth);
 	}
 
 	/**
-	 * Recursive helper that builds the `IfWidthExceeds + IfBreak` tree
-	 * for chain-emit's cascade-with-thresholds layout. Sister of
+	 * Recursive helper that builds the `IfWidthExceeds + IfFullLineExceeds`
+	 * tree for chain-emit's cascade-with-thresholds layout. Sister of
 	 * `WrapList.buildThresholdTree` and `BinaryChainEmit.buildBinaryThresholdTree`
 	 * but emits chain shapes (`shape(mode, …)`) at each leaf — no
 	 * `location` axis (chain segments don't have op placement).
 	 *
 	 * `firing` accumulates thresholds chosen as "fired" along the
-	 * brk-side recursion. Each leaf splits via `Group(IfBreak(…))` when
-	 * the resolved modes differ. No impossibility filtering at N≥2 —
-	 * renderer's column probe at each `IfWidthExceeds` layer is monotone,
-	 * so the impossible-state leaves are unreachable at runtime regardless.
+	 * brk-side recursion. Each leaf splits via `IfFullLineExceeds(lineWidth, …)`
+	 * (asymmetric BG-descend on rest-of-stack only) when the resolved
+	 * modes differ — mirrors the top-level chain-emit collapse. No
+	 * impossibility filtering at N≥2 — renderer's column probe at each
+	 * `IfWidthExceeds` layer is monotone, so the impossible-state leaves
+	 * are unreachable at runtime regardless.
 	 */
 	private static function buildChainThresholdTree(
 		thresholds:Array<Int>, firing:Array<Int>,
 		evalAt:(Bool, Array<Int>) -> WrapMode,
-		shapeAt:WrapMode -> Doc
+		shapeAt:WrapMode -> Doc,
+		lineWidth:Int
 	):Doc {
 		if (thresholds.length == 0) {
 			final modeFlat:WrapMode = evalAt(false, firing);
 			final modeBreak:WrapMode = evalAt(true, firing);
 			if (modeFlat == modeBreak) return shapeAt(modeFlat);
-			return Group(IfBreak(shapeAt(modeBreak), shapeAt(modeFlat)));
+			return IfFullLineExceeds(lineWidth, shapeAt(modeBreak), shapeAt(modeFlat));
 		}
 		final t:Int = thresholds[0];
 		final rest:Array<Int> = thresholds.slice(1);
 		final firingPlus:Array<Int> = firing.copy();
 		firingPlus.push(t);
-		final brk:Doc = buildChainThresholdTree(rest, firingPlus, evalAt, shapeAt);
-		final flat:Doc = buildChainThresholdTree(rest, firing, evalAt, shapeAt);
+		final brk:Doc = buildChainThresholdTree(rest, firingPlus, evalAt, shapeAt, lineWidth);
+		final flat:Doc = buildChainThresholdTree(rest, firing, evalAt, shapeAt, lineWidth);
 		return IfWidthExceeds(t, brk, flat);
 	}
 

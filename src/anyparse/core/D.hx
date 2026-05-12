@@ -111,6 +111,7 @@ class D {
 			case IfWidthExceeds(_, _, fl): flatten(fl);
 			case IfFirstLineExceeds(_, _, fl): flatten(fl);
 			case IfLineExceeds(_, _, fl): flatten(fl);
+			case IfFullLineExceeds(_, _, fl): flatten(fl);
 			case Fill(items, sep):
 				final flatSep:Doc = flatten(sep);
 				Concat(intersperse([for (i in items) flatten(i)], flatSep));

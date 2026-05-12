@@ -376,6 +376,23 @@ class Renderer {
 					// ω-iflineexceeds-infra.
 					final lineCrosses:Bool = (col + DocMeasure.flatTokenWidth(flatDoc) + flatTokenWidthOfRestStack(stack) >= n);
 					stack.push(new Frame(f.indent, f.mode, lineCrosses ? breakDoc : flatDoc));
+				case IfFullLineExceeds(n, breakDoc, flatDoc):
+					// Sibling of `IfLineExceeds` with asymmetric BG
+					// semantic: the primitive's own subtree uses the
+					// regular `flatTokenWidth` (defers BG — so a lambda
+					// body BG inside one of `flatDoc`'s segments stays
+					// deferred and doesn't inflate the chain probe),
+					// but the rest-of-stack lookahead descends BG via
+					// `flatTokenWidthOfRestStackFull` so a sibling body
+					// BG that follows on the same source line (e.g.
+					// `for (cond) BODY` with `forBody=fitLine` BG-wrap)
+					// is visible to the probe. Closes the chain-emit
+					// blindspot at `condition_wrapping_method_chain`
+					// while avoiding the chain-of-lambdas over-fire
+					// (regression class of the symmetric-descend
+					// approach). Slice ω-iffulllineexceeds-primitive.
+					final fullLineCrosses:Bool = (col + DocMeasure.flatTokenWidth(flatDoc) + flatTokenWidthOfRestStackFull(stack) >= n);
+					stack.push(new Frame(f.indent, f.mode, fullLineCrosses ? breakDoc : flatDoc));
 				case Fill(items, sep):
 					if (items.length == 0) {
 						// nothing
@@ -551,6 +568,11 @@ class Renderer {
 					// Static `fitsFlat` walks see only the flat shape so
 					// enclosing Group budget measurements stay stable.
 					local.push(new Frame(f.indent, MFlat, flatDoc));
+				case IfFullLineExceeds(_, _, flatDoc):
+					// Mirror `IfLineExceeds`: rest-of-stack BG-descend
+					// is a render-time decision. `fitsFlat` sees only
+					// the flat shape (slice ω-iffulllineexceeds-primitive).
+					local.push(new Frame(f.indent, MFlat, flatDoc));
 				case Fill(items, sep):
 					// Flat measurement of Fill: items joined by sep flat.
 					var k:Int = items.length;
@@ -637,6 +659,8 @@ class Renderer {
 				case IfFirstLineExceeds(_, _, flatDoc):
 					stack.push(flatDoc);
 				case IfLineExceeds(_, _, flatDoc):
+					stack.push(flatDoc);
+				case IfFullLineExceeds(_, _, flatDoc):
 					stack.push(flatDoc);
 				case Fill(items, sep):
 					var k:Int = items.length;
@@ -736,6 +760,88 @@ class Renderer {
 					case IfFirstLineExceeds(_, _, flatDoc):
 						inner.push({doc: flatDoc, mode: MFlat});
 					case IfLineExceeds(_, _, flatDoc):
+						inner.push({doc: flatDoc, mode: MFlat});
+					case IfFullLineExceeds(_, _, flatDoc):
+						inner.push({doc: flatDoc, mode: MFlat});
+					case Fill(items, sep):
+						var k:Int = items.length;
+						while (k > 0) {
+							k--;
+							inner.push({doc: items[k], mode: MFlat});
+							if (k > 0) inner.push({doc: sep, mode: MFlat});
+						}
+					case OptSpace(s):
+						total += s.length;
+					case OptSpaceSkipAfterHardline:
+						total += 1;
+					case OptHardline | OptHardlineSkipAtOpenDelim:
+						aborted = true;
+				}
+			}
+		}
+		return total;
+	}
+
+	/**
+	 * BG-descending sibling of `flatTokenWidthOfRestStack`. Identical
+	 * stack-walk + abort-at-hardline semantic except the
+	 * `BodyGroup(innerDoc)` arm descends in `MFlat` (mirrors `Group`)
+	 * instead of being deferred. Used exclusively by the
+	 * `IfFullLineExceeds` probe — chain-emit's wrap decision needs to
+	 * see inline body content that follows on the same rendered line
+	 * (e.g. `for (cond) BODY` where `BODY` lives inside a `BodyGroup`
+	 * from `forBody=fitLine`).
+	 *
+	 * The sister `flatTokenWidthOfRestStack` stays unchanged
+	 * (Departure 2) for the cond-wrap `IfLineExceeds` site whose probe
+	 * must NOT include body content (else trailing-comment cond-wrap
+	 * fixtures regress — see `feedback_bg_descend_reststack_*` memory).
+	 */
+	private static function flatTokenWidthOfRestStackFull(stack:Array<Frame>):Int {
+		var total:Int = 0;
+		var aborted:Bool = false;
+		var i:Int = stack.length - 1;
+		while (i >= 0 && !aborted) {
+			final f:Frame = stack[i];
+			i--;
+			if (f.fillRest != null) {
+				aborted = true;
+				continue;
+			}
+			final inner:Array<{doc:Doc, mode:Mode}> = [{doc: f.doc, mode: f.mode}];
+			while (inner.length > 0 && !aborted) {
+				final node:{doc:Doc, mode:Mode} = inner.pop();
+				switch node.doc {
+					case Empty:
+					case Text(s):
+						total += s.length;
+					case Line(flat):
+						if (node.mode == MBreak) {
+							aborted = true;
+						} else if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) {
+							aborted = true;
+						} else {
+							total += flat.length;
+						}
+					case Nest(_, innerDoc):
+						inner.push({doc: innerDoc, mode: node.mode});
+					case Concat(items):
+						var k:Int = items.length;
+						while (--k >= 0) inner.push({doc: items[k], mode: node.mode});
+					case Group(innerDoc) | BodyGroup(innerDoc):
+						// BG-descend: chain-emit's full-line probe must
+						// see inline body content (differentiator vs
+						// sister `flatTokenWidthOfRestStack`).
+						inner.push({doc: innerDoc, mode: MFlat});
+					case IfBreak(_, flatDoc):
+						inner.push({doc: flatDoc, mode: MFlat});
+					case IfWidthExceeds(_, _, flatDoc):
+						inner.push({doc: flatDoc, mode: MFlat});
+					case IfFirstLineExceeds(_, _, flatDoc):
+						inner.push({doc: flatDoc, mode: MFlat});
+					case IfLineExceeds(_, _, flatDoc):
+						inner.push({doc: flatDoc, mode: MFlat});
+					case IfFullLineExceeds(_, _, flatDoc):
 						inner.push({doc: flatDoc, mode: MFlat});
 					case Fill(items, sep):
 						var k:Int = items.length;

@@ -80,6 +80,14 @@ final class DocMeasure {
 					// flat side; rest-of-stack lookahead is renderer-side
 					// (slice ω-iflineexceeds-infra).
 					stack.push(flatDoc);
+				case IfFullLineExceeds(_, _, flatDoc):
+					// Mirror `IfLineExceeds`: cascade-rule static walks
+					// see the flat shape; the asymmetric BG semantic
+					// only applies to the renderer-side rest-of-stack
+					// probe (slice ω-iffulllineexceeds-primitive). The
+					// primitive's own subtree width uses this same
+					// `flatTokenWidth` (defer BG) — sister forwarding.
+					stack.push(flatDoc);
 				case Fill(items, sep):
 					var k:Int = items.length;
 					while (k > 0) {

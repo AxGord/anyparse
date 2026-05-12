@@ -91,10 +91,35 @@ package anyparse.core;
  *                      line past `lineWidth`. Independent of the
  *                      enclosing Group's flat/break mode (mirrors
  *                      `IfWidthExceeds`); `fitsFlat` forwards to `fl`.
+ *                      `BodyGroup` is DEFERRED in both walks
+ *                      (Departure 2) — body content does not contribute.
  *                      Slice ω-iflineexceeds-infra introduces this
  *                      primitive; consumers wire in via subsequent
  *                      slices that need line-aware probes outside the
  *                      wrap-engine cascade machinery.
+ * - `IfFullLineExceeds(n, br, fl)` — sibling of `IfLineExceeds` with
+ *                      an asymmetric `BodyGroup` semantic:
+ *                      `flatTokenWidth(fl)` (the primitive's own subtree
+ *                      width) DEFERS `BodyGroup` so a lambda body BG
+ *                      INSIDE one of `fl`'s segments stays measured by
+ *                      its header only — chain probes don't over-fire
+ *                      when a chain segment contains a multi-line
+ *                      lambda body; while the rest-of-stack lookahead
+ *                      `flatTokenWidthOfRestStackFull(stack)` DESCENDS
+ *                      `BodyGroup` so a sibling body that follows
+ *                      AFTER this primitive on the same source line
+ *                      (e.g. the `for (cond) BODY` body wrapped in BG
+ *                      by `sameLine.forBody=fitLine`) IS visible to
+ *                      the probe. Closes the chain-emit blindspot
+ *                      where `Group(IfBreak)` at the chain level sees
+ *                      only the chain's own subtree, missing trailing
+ *                      tokens past close-paren including inline body
+ *                      content in a sibling `BodyGroup`. Used by
+ *                      `MethodChainEmit`. Independent of the enclosing
+ *                      Group's flat/break mode (mirrors
+ *                      `IfLineExceeds`); `fitsFlat` and cascade-rule
+ *                      static walks forward to `fl`. Slice
+ *                      ω-iffulllineexceeds-primitive.
  * - `Fill(items, sep)` — Wadler `fillSep`. In flat mode, emits items
  *                      joined by `sep` flat. In break mode, packs items
  *                      left-to-right: before each `items[i]` (i > 0),
@@ -173,6 +198,7 @@ enum Doc {
 	IfWidthExceeds(n:Int, breakDoc:Doc, flatDoc:Doc);
 	IfFirstLineExceeds(n:Int, breakDoc:Doc, flatDoc:Doc);
 	IfLineExceeds(n:Int, breakDoc:Doc, flatDoc:Doc);
+	IfFullLineExceeds(n:Int, breakDoc:Doc, flatDoc:Doc);
 	Fill(items:Array<Doc>, sep:Doc);
 	OptSpace(s:String);
 	OptHardline;

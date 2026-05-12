@@ -519,6 +519,11 @@ class WrapList {
 					// Rest-of-stack lookahead is renderer-side (slice
 					// ω-iflineexceeds-infra).
 					stack.push(flatDoc);
+				case IfFullLineExceeds(_, _, flatDoc):
+					// Mirror `IfLineExceeds` arm: forward to flat side.
+					// Asymmetric BG semantic only applies to renderer-
+					// side rest-of-stack probe.
+					stack.push(flatDoc);
 				case Fill(items, sep):
 					var k:Int = items.length;
 					while (k > 0) {
@@ -585,6 +590,7 @@ class WrapList {
 			case IfWidthExceeds(_, brk, _): lastHardlineDepth(brk, depth);
 			case IfFirstLineExceeds(_, brk, _): lastHardlineDepth(brk, depth);
 			case IfLineExceeds(_, brk, _): lastHardlineDepth(brk, depth);
+			case IfFullLineExceeds(_, brk, _): lastHardlineDepth(brk, depth);
 			case Concat(items):
 				var i:Int = items.length;
 				while (--i >= 0) {
@@ -649,6 +655,8 @@ class WrapList {
 			case IfFirstLineExceeds(_, brk, _):
 				node = brk;
 			case IfLineExceeds(_, brk, _):
+				node = brk;
+			case IfFullLineExceeds(_, brk, _):
 				node = brk;
 			case Concat(items):
 				final first:Null<Doc> = items.find(it -> !isLeadingTransparent(it));
@@ -890,6 +898,7 @@ class WrapList {
 			case IfWidthExceeds(_, _, _): false;
 			case IfFirstLineExceeds(_, _, _): false;
 			case IfLineExceeds(_, _, _): false;
+			case IfFullLineExceeds(_, _, _): false;
 			case Concat(items):
 				for (it in items) {
 					if (hasLeadingHardline(it)) return true;
