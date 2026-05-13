@@ -38,7 +38,7 @@ class MethodChainEmit {
 	public static function emit(
 		receiver:Doc, segments:Array<Doc>, opt:WriteOptions, rules:WrapRules
 	):Doc {
-		if (segments.length == 0) return receiver;
+		if (segments.length == 0) return WrapBoundary(receiver);
 
 		// Token-text width metric: chain segment length is the segment's
 		// rendered width with `BodyGroup` content deferred (mirrors
@@ -108,7 +108,7 @@ class MethodChainEmit {
 		if (extraThresholds.length == 0) {
 			final modeFlat:WrapMode = evalAt(false, []);
 			final modeBreak:WrapMode = evalAt(true, []);
-			if (modeFlat == modeBreak) return shapeAt(modeFlat);
+			if (modeFlat == modeBreak) return WrapBoundary(shapeAt(modeFlat));
 			// `IfFullLineExceeds` over `Group(IfBreak(…))`: chain's own
 			// `Group` measures only its own subtree; trailing tokens on
 			// the same rendered line (e.g. ` BODY` after the for-cond
@@ -119,7 +119,7 @@ class MethodChainEmit {
 			// lambdas like `xs.map(λ).filter(λ)` don't inflate the
 			// probe), rest-of-stack DESCENDS BG (sibling body after
 			// chain IS visible). Slice ω-iffulllineexceeds-primitive.
-			return IfFullLineExceeds(opt.lineWidth, shapeAt(modeBreak), shapeAt(modeFlat));
+			return WrapBoundary(IfFullLineExceeds(opt.lineWidth, shapeAt(modeBreak), shapeAt(modeFlat)));
 		}
 
 		if (extraThresholds.length == 1) {
@@ -132,9 +132,9 @@ class MethodChainEmit {
 				final modeNN:WrapMode = evalAt(false, []);
 				final modeYN:WrapMode = evalAt(false, [t]);
 				final modeYY:WrapMode = evalAt(true, [t]);
-				if (modeNN == modeYN && modeYN == modeYY) return shapeAt(modeNN);
+				if (modeNN == modeYN && modeYN == modeYY) return WrapBoundary(shapeAt(modeNN));
 				final brk:Doc = (modeYY == modeYN) ? shapeAt(modeYY) : IfFullLineExceeds(opt.lineWidth, shapeAt(modeYY), shapeAt(modeYN));
-				return Group(IfWidthExceeds(t, brk, shapeAt(modeNN)));
+				return WrapBoundary(Group(IfWidthExceeds(t, brk, shapeAt(modeNN))));
 			}
 			// t > lineWidth: 3 valid states (col+w>=t implies col+w>=lineWidth):
 			//   (firing=∅,    exceeds=no)  → modeNN
@@ -143,9 +143,9 @@ class MethodChainEmit {
 			final modeNN:WrapMode = evalAt(false, []);
 			final modeNY:WrapMode = evalAt(true, []);
 			final modeYY:WrapMode = evalAt(true, [t]);
-			if (modeNN == modeNY && modeNY == modeYY) return shapeAt(modeNN);
+			if (modeNN == modeNY && modeNY == modeYY) return WrapBoundary(shapeAt(modeNN));
 			final brk:Doc = (modeNY == modeYY) ? shapeAt(modeYY) : Group(IfWidthExceeds(t, shapeAt(modeYY), shapeAt(modeNY)));
-			return IfFullLineExceeds(opt.lineWidth, brk, shapeAt(modeNN));
+			return WrapBoundary(IfFullLineExceeds(opt.lineWidth, brk, shapeAt(modeNN)));
 		}
 
 		// 2+ extra thresholds — full enumeration without impossibility
@@ -153,7 +153,7 @@ class MethodChainEmit {
 		// `IfWidthExceeds` layer picks the correct leaf at runtime; the
 		// impossible-state shapes are inert. None of the current default
 		// cascades use N≥2 — this branch is correctness insurance.
-		return buildChainThresholdTree(extraThresholds, [], evalAt, shapeAt, opt.lineWidth);
+		return WrapBoundary(buildChainThresholdTree(extraThresholds, [], evalAt, shapeAt, opt.lineWidth));
 	}
 
 	/**

@@ -98,7 +98,7 @@ class WrapList {
 		// sentinel into the legacy hardcoded hardline here.
 		final trailBreakDoc:Doc = trailBreak ?? Line('\n');
 		if (items.length == 0)
-			return Text(open + (keepInnerWhenEmpty ? ' ' : '') + close);
+			return WrapBoundary(Text(open + (keepInnerWhenEmpty ? ' ' : '') + close));
 
 		// Decoupled measurement (ω-flatlength-decouple-tokenwidth):
 		//   - `flatLength(item) < 0` retains its legacy semantic and
@@ -216,7 +216,7 @@ class WrapList {
 		// recursion (1-threshold optimization with impossibility
 		// filtering inlined for the common case below).
 		if (anyHardline || forceExceeds)
-			return buildThresholdTree(extraThresholds, [], true, leadFlat, leadBreak, evalAt, shapeAt, leadFor);
+			return WrapBoundary(buildThresholdTree(extraThresholds, [], true, leadFlat, leadBreak, evalAt, shapeAt, leadFor));
 
 		// Normal path: cascade evaluated against (exceeds=false /
 		// exceeds=true) AND each non-lineWidth threshold's firing
@@ -238,10 +238,10 @@ class WrapList {
 			final modeFlat:WrapMode = evalAt(false, []);
 			final modeBreak:WrapMode = evalAt(true, []);
 			if (modeFlat == modeBreak)
-				return shapeAt(modeFlat, leadFor(modeFlat));
+				return WrapBoundary(shapeAt(modeFlat, leadFor(modeFlat)));
 			final flatWithLead:Doc = shapeAt(modeFlat, leadFlat);
 			final breakWithLead:Doc = shapeAt(modeBreak, leadBreak);
-			return Group(IfBreak(breakWithLead, flatWithLead));
+			return WrapBoundary(Group(IfBreak(breakWithLead, flatWithLead)));
 		}
 
 		if (extraThresholds.length == 1) {
@@ -257,14 +257,14 @@ class WrapList {
 				final shapeNN:Doc = shapeAt(modeNN, leadFor(modeNN));
 				final shapeYN:Doc = shapeAt(modeYN, leadFor(modeYN));
 				final shapeYY:Doc = shapeAt(modeYY, leadFor(modeYY));
-				if (modeNN == modeYN && modeYN == modeYY) return shapeNN;
+				if (modeNN == modeYN && modeYN == modeYY) return WrapBoundary(shapeNN);
 				// Inner IfBreak picks between exceeds-yes and exceeds-no
 				// when the column has already crossed `t`. Outer
 				// IfWidthExceeds picks the column-vs-t answer first; the
 				// flat side bypasses the IfBreak entirely (only one
 				// valid state below `t`).
 				final brk:Doc = (modeYY == modeYN) ? shapeYY : Group(IfBreak(shapeYY, shapeYN));
-				return Group(IfWidthExceeds(t, brk, shapeNN));
+				return WrapBoundary(Group(IfWidthExceeds(t, brk, shapeNN)));
 			}
 			// t > lineWidth: 3 valid states (col+w>=t implies col+w>=lineWidth):
 			//   (firing=∅,    exceeds=no)  → modeNN
@@ -276,17 +276,17 @@ class WrapList {
 			final shapeNN:Doc = shapeAt(modeNN, leadFor(modeNN));
 			final shapeNY:Doc = shapeAt(modeNY, leadFor(modeNY));
 			final shapeYY:Doc = shapeAt(modeYY, leadFor(modeYY));
-			if (modeNN == modeNY && modeNY == modeYY) return shapeNN;
+			if (modeNN == modeNY && modeNY == modeYY) return WrapBoundary(shapeNN);
 			// Outer IfBreak picks exceeds=no/yes; inner IfWidthExceeds
 			// further partitions the exceeds=yes side around `t`.
 			final brk:Doc = (modeNY == modeYY) ? shapeYY : Group(IfWidthExceeds(t, shapeYY, shapeNY));
-			return Group(IfBreak(brk, shapeNN));
+			return WrapBoundary(Group(IfBreak(brk, shapeNN)));
 		}
 
 		// 2+ extra thresholds — full enumeration without impossibility
 		// filtering. Renderer's column-aware probe at each
 		// IfWidthExceeds layer picks the correct leaf at runtime.
-		return buildThresholdTree(extraThresholds, [], null, leadFlat, leadBreak, evalAt, shapeAt, leadFor);
+		return WrapBoundary(buildThresholdTree(extraThresholds, [], null, leadFlat, leadBreak, evalAt, shapeAt, leadFor));
 	}
 
 	/**
@@ -354,13 +354,13 @@ class WrapList {
 			return mode == FillLineWithLeadingBreak ? brkShape : flatShape;
 		}
 
-		if (hasHardline) return shapeFor(decideAt(true));
+		if (hasHardline) return WrapBoundary(shapeFor(decideAt(true)));
 
 		final modeFlat:WrapMode = decideAt(false);
 		final modeBreak:WrapMode = decideAt(true);
 		final flatBrk:Bool = modeFlat == FillLineWithLeadingBreak;
 		final breakBrk:Bool = modeBreak == FillLineWithLeadingBreak;
-		if (flatBrk == breakBrk) return shapeFor(modeFlat);
+		if (flatBrk == breakBrk) return WrapBoundary(shapeFor(modeFlat));
 		// `IfLineExceeds` over `Group(IfBreak(…))`: `Group` only measures
 		// the cond's own flat width; trailing tokens on the same rendered
 		// line (e.g. ` {` after the close paren on `if`-stmt sites)
@@ -370,7 +370,7 @@ class WrapList {
 		// `flatTokenWidthOfRestStack` lookahead so the probe accounts for
 		// what lands on the same line if the flat branch fires. Closes
 		// the Wadler-style local-Group blindspot for cond-wrap sites.
-		return IfLineExceeds(opt.lineWidth, shapeFor(modeBreak), shapeFor(modeFlat));
+		return WrapBoundary(IfLineExceeds(opt.lineWidth, shapeFor(modeBreak), shapeFor(modeFlat)));
 	}
 
 	/**

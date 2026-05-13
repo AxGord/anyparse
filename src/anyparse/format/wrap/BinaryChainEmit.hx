@@ -79,8 +79,8 @@ final class BinaryChainEmit {
 		opt:WriteOptions, rules:WrapRules,
 		nestSuppress:Bool = false
 	):Doc {
-		if (items.length == 0) return Empty;
-		if (items.length == 1) return items[0];
+		if (items.length == 0) return WrapBoundary(Empty);
+		if (items.length == 1) return WrapBoundary(items[0]);
 
 		// Decoupled measurement (mirror ω-flatlength-decouple-tokenwidth
 		// in `WrapList.emit`):
@@ -174,7 +174,7 @@ final class BinaryChainEmit {
 		// `buildBinaryThresholdTree` handles 0/1/N thresholds via
 		// recursion (no IfBreak split — single shape per leaf).
 		if (anyHardline)
-			return buildBinaryThresholdTree(extraThresholds, [], true, evalAt, shapeAt);
+			return WrapBoundary(buildBinaryThresholdTree(extraThresholds, [], true, evalAt, shapeAt));
 
 		// Normal path: cascade evaluated against (exceeds=false /
 		// exceeds=true) AND each non-lineWidth threshold's firing
@@ -195,8 +195,8 @@ final class BinaryChainEmit {
 		if (extraThresholds.length == 0) {
 			final flat:{mode:WrapMode, location:WrappingLocation} = evalAt(false, []);
 			final brk:{mode:WrapMode, location:WrappingLocation} = evalAt(true, []);
-			if (sameRule(flat, brk)) return shapeAt(flat);
-			return Group(IfBreak(shapeAt(brk), shapeAt(flat)));
+			if (sameRule(flat, brk)) return WrapBoundary(shapeAt(flat));
+			return WrapBoundary(Group(IfBreak(shapeAt(brk), shapeAt(flat))));
 		}
 
 		if (extraThresholds.length == 1) {
@@ -209,14 +209,14 @@ final class BinaryChainEmit {
 				final rNN:{mode:WrapMode, location:WrappingLocation} = evalAt(false, []);
 				final rYN:{mode:WrapMode, location:WrappingLocation} = evalAt(false, [t]);
 				final rYY:{mode:WrapMode, location:WrappingLocation} = evalAt(true, [t]);
-				if (sameRule(rNN, rYN) && sameRule(rYN, rYY)) return shapeAt(rNN);
+				if (sameRule(rNN, rYN) && sameRule(rYN, rYY)) return WrapBoundary(shapeAt(rNN));
 				// Inner IfBreak picks between exceeds-yes and exceeds-no
 				// when the column has already crossed `t`. Outer
 				// IfWidthExceeds picks the column-vs-t answer first; the
 				// flat side bypasses the IfBreak entirely (only one
 				// valid state below `t`).
 				final brk:Doc = sameRule(rYY, rYN) ? shapeAt(rYY) : Group(IfBreak(shapeAt(rYY), shapeAt(rYN)));
-				return Group(IfWidthExceeds(t, brk, shapeAt(rNN)));
+				return WrapBoundary(Group(IfWidthExceeds(t, brk, shapeAt(rNN))));
 			}
 			// t > lineWidth: 3 valid states (col+w>=t implies col+w>=lineWidth):
 			//   (firing=∅,    exceeds=no)  → rNN
@@ -225,17 +225,17 @@ final class BinaryChainEmit {
 			final rNN:{mode:WrapMode, location:WrappingLocation} = evalAt(false, []);
 			final rNY:{mode:WrapMode, location:WrappingLocation} = evalAt(true, []);
 			final rYY:{mode:WrapMode, location:WrappingLocation} = evalAt(true, [t]);
-			if (sameRule(rNN, rNY) && sameRule(rNY, rYY)) return shapeAt(rNN);
+			if (sameRule(rNN, rNY) && sameRule(rNY, rYY)) return WrapBoundary(shapeAt(rNN));
 			// Outer IfBreak picks exceeds=no/yes; inner IfWidthExceeds
 			// further partitions the exceeds=yes side around `t`.
 			final brk:Doc = sameRule(rNY, rYY) ? shapeAt(rYY) : Group(IfWidthExceeds(t, shapeAt(rYY), shapeAt(rNY)));
-			return Group(IfBreak(brk, shapeAt(rNN)));
+			return WrapBoundary(Group(IfBreak(brk, shapeAt(rNN))));
 		}
 
 		// 2+ extra thresholds — full enumeration without impossibility
 		// filtering. Renderer's column-aware probe at each
 		// IfWidthExceeds layer picks the correct leaf at runtime.
-		return buildBinaryThresholdTree(extraThresholds, [], null, evalAt, shapeAt);
+		return WrapBoundary(buildBinaryThresholdTree(extraThresholds, [], null, evalAt, shapeAt));
 	}
 
 	/**
