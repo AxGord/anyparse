@@ -578,6 +578,7 @@ final class HaxeFormatConfigLoader {
 			conditionWrap: base.conditionWrap,
 			ternaryWrap: base.ternaryWrap,
 			functionSignatureWrap: base.functionSignatureWrap,
+			anonFunctionSignatureWrap: base.anonFunctionSignatureWrap,
 			addLineCommentSpace: base.addLineCommentSpace,
 			expressionTry: base.expressionTry,
 			indentCaseLabels: base.indentCaseLabels,
@@ -655,6 +656,7 @@ final class HaxeFormatConfigLoader {
 		if (section.conditionWrapping != null) opt.conditionWrap = wrapRulesFromConfig(section.conditionWrapping, opt.conditionWrap);
 		if (section.ternaryExpression != null) opt.ternaryWrap = wrapRulesFromConfig(section.ternaryExpression, opt.ternaryWrap);
 		if (section.functionSignature != null) opt.functionSignatureWrap = wrapRulesFromConfig(section.functionSignature, opt.functionSignatureWrap);
+		if (section.anonFunctionSignature != null) opt.anonFunctionSignatureWrap = wrapRulesFromConfig(section.anonFunctionSignature, opt.anonFunctionSignatureWrap);
 	}
 
 	/**

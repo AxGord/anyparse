@@ -716,6 +716,7 @@ final class HaxeFormat implements TextFormat {
 		conditionWrap: HaxeFormat.defaultConditionWrap(),
 		ternaryWrap: HaxeFormat.defaultTernaryWrap(),
 		functionSignatureWrap: HaxeFormat.defaultFunctionSignatureWrap(),
+		anonFunctionSignatureWrap: HaxeFormat.defaultAnonFunctionSignatureWrap(),
 		addLineCommentSpace: true,
 		expressionTry: SameLinePolicy.Same,
 		indentCaseLabels: true,
@@ -1216,6 +1217,47 @@ final class HaxeFormat implements TextFormat {
 		return {
 			rules: [],
 			defaultMode: WrapMode.FillLine,
+			defaultAdditionalIndent: 1,
+		};
+	}
+
+	/**
+	 * Default `WrapRules` cascade for anonymous-function parameter
+	 * lists — `HxFnExpr.params` (`function(...)`),
+	 * `HxParenLambda.params` (`(...) => body`), and
+	 * `HxThinParenLambda.params` (`(...) -> body`). Ported from
+	 * haxe-formatter's `wrapping.anonFunctionSignature` rule set in
+	 * `resources/default-hxformat.json` (AxGord fork): short anon-fn
+	 * signatures stay flat (`defaultMode: NoWrap`) and break only when
+	 * one of three cascade triggers fires — `itemCount >= 7`,
+	 * `totalItemLength >= 80`, or `exceedsMaxLineLength`, all routing
+	 * to `FillLine` with `+1 tab` continuation indent.
+	 *
+	 * Per-rule `additionalIndent` from fork's JSON is not modelled —
+	 * the cascade-level `defaultAdditionalIndent: 1` is byte-equivalent
+	 * because every rule in the fork's default carries the same `1`.
+	 *
+	 * Returned as a fresh struct on each call so test code that mutates
+	 * the `defaultWriteOptions.anonFunctionSignatureWrap` substruct
+	 * doesn't corrupt the singleton.
+	 */
+	public static function defaultAnonFunctionSignatureWrap():WrapRules {
+		return {
+			rules: [
+				{
+					mode: WrapMode.FillLine,
+					conditions: [{cond: WrapConditionType.ItemCountLargerThan, value: 7}],
+				},
+				{
+					mode: WrapMode.FillLine,
+					conditions: [{cond: WrapConditionType.TotalItemLengthLargerThan, value: 80}],
+				},
+				{
+					mode: WrapMode.FillLine,
+					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
+				},
+			],
+			defaultMode: WrapMode.NoWrap,
 			defaultAdditionalIndent: 1,
 		};
 	}

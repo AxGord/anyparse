@@ -17,6 +17,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxParenLambda = {
-	@:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams')) var params:Array<HxLambdaParam>;
+	@:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams'), wrapRules('anonFunctionSignatureWrap')) var params:Array<HxLambdaParam>;
 	@:fmt(propagateExprPosition, propagateAnonFnContext) @:lead('=>') var body:HxExpr;
 }

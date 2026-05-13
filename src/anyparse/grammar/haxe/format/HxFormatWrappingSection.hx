@@ -47,6 +47,16 @@ package anyparse.grammar.haxe.format;
  *    `@:fmt(wrapRules('functionSignatureWrap'))`. Defaults match
  *    fork's `wrapping.functionSignature`:
  *    `{rules: [], defaultMode: FillLine, defaultAdditionalIndent: 1}`.
+ *  - `anonFunctionSignature`: `WrapRules` cascade →
+ *    `anonFunctionSignatureWrap`. Drives break shape for anonymous-
+ *    function parameter lists — `HxFnExpr.params` (`function(...)`),
+ *    `HxParenLambda.params` (`(...) => body`), and
+ *    `HxThinParenLambda.params` (`(...) -> body`). Slice
+ *    ω-anonFunctionSignature-wrap-ingest landed the foundational scaffold
+ *    (loader + grammar opt-in) with fork-mirror defaults:
+ *    `{rules: [itemCount>=7 → FillLine, totalItemLength>=80 → FillLine,
+ *    exceedsMaxLineLength → FillLine], defaultMode: NoWrap,
+ *    defaultAdditionalIndent: 1}`.
  *
  * Slice ω-peg-byname-array lifted the prior `@:peg` ByName Array<T>
  * limitation, so every cascade above now ingests `rules` from
@@ -55,10 +65,9 @@ package anyparse.grammar.haxe.format;
  * cascade falls through to the next rule).
  *
  * The remaining per-construct cascades (`expressionWrapping`,
- * `anonFunctionSignature`, `typeParameter`, `arrayMatrixWrap`, …) land
- * with their own slices when each gains JSON-side wiring; matching
- * `WriteOptions` fields don't exist yet and need new fields plus
- * grammar `@:fmt` wiring.
+ * `typeParameter`, `arrayMatrixWrap`, …) land with their own slices
+ * when each gains JSON-side wiring; matching `WriteOptions` fields
+ * don't exist yet and need new fields plus grammar `@:fmt` wiring.
  */
 @:peg typedef HxFormatWrappingSection = {
 
@@ -83,4 +92,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var ternaryExpression:HxFormatWrapRules;
 
 	@:optional var functionSignature:HxFormatWrapRules;
+
+	@:optional var anonFunctionSignature:HxFormatWrapRules;
 };

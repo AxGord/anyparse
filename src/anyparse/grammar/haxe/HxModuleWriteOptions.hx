@@ -1016,6 +1016,19 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    indent level deeper than the body, mirroring the legacy
  *    `@:fmt(fill, fillDoubleIndent)` Wadler-fillSep emission this
  *    cascade replaces.
+ *  - `anonFunctionSignatureWrap` — `WrapRules` cascade for anonymous-
+ *    function parameter lists (haxe-formatter `anonFunctionSignature`
+ *    class). Drives break shape for `HxFnExpr.params`
+ *    (`function(...)`), `HxParenLambda.params` (`(...) => body`), and
+ *    `HxThinParenLambda.params` (`(...) -> body`). Slice
+ *    ω-anonFunctionSignature-wrap-ingest landed the foundational
+ *    scaffold (field, default, JSON loader, grammar opt-in). Default
+ *    mirrors fork's `default-hxformat.json`:
+ *    `{rules: [itemCount>=7 → FillLine, totalItemLength>=80 → FillLine,
+ *    exceedsMaxLineLength → FillLine], defaultMode: NoWrap,
+ *    defaultAdditionalIndent: 1}` — short anon-fn signatures stay
+ *    flat (`function(a, b) trace(a + b)`) and only break when one of
+ *    the cascade triggers fires.
  *
  * Defaults are minimal:
  *  - `opBoolChainWrap`: single rule
@@ -1608,6 +1621,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	conditionWrap:WrapRules,
 	ternaryWrap:WrapRules,
 	functionSignatureWrap:WrapRules,
+	anonFunctionSignatureWrap:WrapRules,
 	expressionTry:SameLinePolicy,
 	indentCaseLabels:Bool,
 	indentObjectLiteral:Bool,
