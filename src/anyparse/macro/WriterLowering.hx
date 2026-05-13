@@ -3564,25 +3564,66 @@ class WriterLowering {
 				// either flag without touching the macro.
 				final padLeading:Bool = starNode.fmtHasFlag('padLeading');
 				final padTrailing:Bool = starNode.fmtHasFlag('padTrailing');
+				// ω-abstract-clauses-linewrap: when a bare-Star with padLeading
+				// (and/or padTrailing) opts in via `@:fmt(lineLengthAwareSeps)`,
+				// replace each hard padding/inter-element space with an
+				// `IfLineExceeds(opt.lineWidth, _dhl(), _dt(' '))` probe and
+				// wrap the body in `Nest(_cols, ...)` so break-mode hardlines
+				// indent +1 from the enclosing decl. Mirrors fork's
+				// `wrapAfter` + `CodeLine.applyWrapping` mechanism for
+				// `abstract <T>(...) [from X]*` clauses (MarkWhitespace.hx:79
+				// + codedata/CodeLine.hx:47). Single-clause and short-multi-
+				// clause cases decide correctly without a multi-pass marker
+				// because `IfLineExceeds`'s rest-of-stack walker sees the
+				// trailing same-line content (members `{}` + close-trailing
+				// comment). First consumer is `HxAbstractDecl.clauses`.
+				final lineLengthAwareSeps:Bool = starNode.fmtHasFlag('lineLengthAwareSeps');
 				if (padLeading || padTrailing) {
-					final leadingPush:Expr = padLeading ? macro _docs.push(_dt(' ')) : macro {};
-					final trailingPush:Expr = padTrailing ? macro _docs.push(_dt(' ')) : macro {};
-					parts.push(macro {
-						final _arr = $fieldAccess;
-						if (_arr.length == 0) _de()
-						else {
-							final _docs:Array<anyparse.core.Doc> = [];
-							$leadingPush;
-							var _si:Int = 0;
-							while (_si < _arr.length) {
-								_docs.push($elemCall);
-								if (_si < _arr.length - 1) _docs.push(_dt(' '));
-								_si++;
+					if (lineLengthAwareSeps) {
+						final leadingPush:Expr = padLeading
+							? macro _docs.push(_dile(opt.lineWidth, _dhl(), _dt(' ')))
+							: macro {};
+						final trailingPush:Expr = padTrailing
+							? macro _docs.push(_dile(opt.lineWidth, _dhl(), _dt(' ')))
+							: macro {};
+						parts.push(macro {
+							final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+							final _arr = $fieldAccess;
+							if (_arr.length == 0) _de()
+							else {
+								final _docs:Array<anyparse.core.Doc> = [];
+								$leadingPush;
+								var _si:Int = 0;
+								while (_si < _arr.length) {
+									_docs.push($elemCall);
+									if (_si < _arr.length - 1)
+										_docs.push(_dile(opt.lineWidth, _dhl(), _dt(' ')));
+									_si++;
+								}
+								$trailingPush;
+								_dn(_cols, _dc(_docs));
 							}
-							$trailingPush;
-							_dc(_docs);
-						}
-					});
+						});
+					} else {
+						final leadingPush:Expr = padLeading ? macro _docs.push(_dt(' ')) : macro {};
+						final trailingPush:Expr = padTrailing ? macro _docs.push(_dt(' ')) : macro {};
+						parts.push(macro {
+							final _arr = $fieldAccess;
+							if (_arr.length == 0) _de()
+							else {
+								final _docs:Array<anyparse.core.Doc> = [];
+								$leadingPush;
+								var _si:Int = 0;
+								while (_si < _arr.length) {
+									_docs.push($elemCall);
+									if (_si < _arr.length - 1) _docs.push(_dt(' '));
+									_si++;
+								}
+								$trailingPush;
+								_dc(_docs);
+							}
+						});
+					}
 				} else {
 					parts.push(macro {
 						final _arr = $fieldAccess;

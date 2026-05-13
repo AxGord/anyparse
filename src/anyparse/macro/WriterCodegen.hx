@@ -406,6 +406,21 @@ class WriterCodegen {
 				],
 				macro anyparse.core.Doc.IfFirstLineExceeds(n, br, fl)
 			),
+			// ω-abstract-clauses-linewrap: column-threshold probe consuming
+			// rest-of-stack flat width. Fires `br` when
+			// `col + flatTokenWidth(fl) + flatTokenWidthOfRestStack(stack) >= n`.
+			// Used by the bare-Star `padLeading + lineLengthAwareSeps` emit
+			// branch to break before `from`/`to` clauses on abstract decls
+			// when the full decl line exceeds `opt.lineWidth`.
+			docHelper(
+				'_dile',
+				[
+					{name: 'n', type: macro : Int},
+					{name: 'br', type: macro : anyparse.core.Doc},
+					{name: 'fl', type: macro : anyparse.core.Doc}
+				],
+				macro anyparse.core.Doc.IfLineExceeds(n, br, fl)
+			),
 			docHelper(
 				'_dfill',
 				[{name: 'items', type: macro : Array<anyparse.core.Doc>}, {name: 'sep', type: macro : anyparse.core.Doc}],
