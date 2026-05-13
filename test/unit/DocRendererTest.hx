@@ -148,6 +148,74 @@ class DocRendererTest extends Test {
 		Assert.equals('[a, b] = LongTrailingContentThatPushesPastWidth', Renderer.render(flatRegion, 40));
 	}
 
+	function testFillRestProbeEmptyStackBehavesLikeFill() {
+		// ω-fill-rest-probe: with nothing trailing, the rest-probe variant
+		// must behave identically to plain Fill — restW returns 0 from an
+		// empty stack, so the per-item-fit decision sees the same budget.
+		// Bare Fill at top of stack — outer frame mode is MBreak, so Fill
+		// enters its per-item FillCont path (the probe consumer) directly,
+		// without an outer Group flipping it to all-flat.
+		final items:Array<Doc> = [Text('aa'), Text('bb'), Text('cc')];
+		final sep:Doc = Concat([Text(','), Line(' ')]);
+		final fillDoc:Doc = Fill(items, sep);
+		final probeDoc:Doc = FillWithRestProbe(items, sep);
+
+		// Width 80: per-item probes all fit; both pack inline.
+		Assert.equals('aa, bb, cc', Renderer.render(fillDoc, 80));
+		Assert.equals('aa, bb, cc', Renderer.render(probeDoc, 80));
+
+		// Width 5: per-item probes all fail; both break per-item the same way.
+		Assert.equals('aa,\nbb,\ncc', Renderer.render(fillDoc, 5));
+		Assert.equals('aa,\nbb,\ncc', Renderer.render(probeDoc, 5));
+	}
+
+	function testFillRestProbeBreaksWhenTrailingContent() {
+		// ω-fill-rest-probe: when significant content trails on the same
+		// line, the probe variant breaks per-item earlier — even though
+		// each item fits in the remaining budget under plain Fill's
+		// budget calculation.
+		//
+		// Bare Fill (no outer Group): an enclosing `Group(Fill(...))` whose
+		// inner subtree fits flat in the budget commits to MFlat, collapsing
+		// Fill to the all-flat branch — FillCont never built, probe never
+		// fires. The slice's mech lives in FillCont resumption. For the
+		// real-world consumer (typedef LHS+RHS), `GroupWithRestProbe` (slice
+		// 1) flips the outer Group to MBreak via its own rest-of-stack probe
+		// — this test exercises the Fill-layer probe in isolation.
+		final items:Array<Doc> = [Text('aa'), Text('bb'), Text('cc')];
+		final sep:Doc = Concat([Text(','), Line(' ')]);
+		final trailing:Doc = Text(' = LongTrailingContentThatPushesPastWidth');
+
+		final plainFill:Doc = Concat([Fill(items, sep), trailing]);
+		final probeFill:Doc = Concat([FillWithRestProbe(items, sep), trailing]);
+
+		// Width 30: plain Fill packs all items inline (per-item probe sees
+		// only `width - col - tailReserve`); rest-of-line trailing tail
+		// overflows the line WITHOUT triggering a per-item break.
+		final plainOut:String = Renderer.render(plainFill, 30);
+		Assert.equals('aa, bb, cc = LongTrailingContentThatPushesPastWidth', plainOut);
+
+		// Same width, probe variant: the rest-of-stack walker sees the
+		// trailing text width on each per-item probe — items 2 and 3 no
+		// longer fit, so the Fill breaks per-item.
+		final probeOut:String = Renderer.render(probeFill, 30);
+		Assert.equals('aa,\nbb,\ncc = LongTrailingContentThatPushesPastWidth', probeOut);
+	}
+
+	function testFillRestProbeForceFlatPropagation() {
+		// ω-fill-rest-probe: inside a Flatten region, the rest-probe is
+		// bypassed (same as plain Fill's force-flat short-circuit). All
+		// items render flat regardless of trailing content.
+		final items:Array<Doc> = [Text('aa'), Text('bb'), Text('cc')];
+		final sep:Doc = Concat([Text(','), Line(' ')]);
+		final trailing:Doc = Text(' = LongTrailingContentThatPushesPastWidth');
+		final flatRegion:Doc = Flatten(Concat([FillWithRestProbe(items, sep), trailing]));
+
+		// Width 30: probe would normally break per-item (per previous
+		// test), but Flatten forces MFlat throughout.
+		Assert.equals('aa, bb, cc = LongTrailingContentThatPushesPastWidth', Renderer.render(flatRegion, 30));
+	}
+
 	function testInterspersePreservesElements() {
 		var items = [D.text("a"), D.text("b"), D.text("c")];
 		var result = D.intersperse(items, D.text(","));

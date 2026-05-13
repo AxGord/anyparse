@@ -231,6 +231,29 @@ enum Doc {
 	IfLineExceeds(n:Int, breakDoc:Doc, flatDoc:Doc);
 	IfFullLineExceeds(n:Int, breakDoc:Doc, flatDoc:Doc);
 	Fill(items:Array<Doc>, sep:Doc, ?tailReserve:Int);
+
+	/**
+	 * Rest-of-stack-aware `Fill` variant (ω-fill-rest-probe). At render
+	 * time the per-item-fit probe in the FillCont resumption subtracts
+	 * `flatTokenWidthOfRestStack(stack)` from the budget — content
+	 * trailing on the same rendered line after the Fill subtree is
+	 * considered when deciding break-before-item. Mirrors fork's
+	 * `wrapFillLine2AfterLast` `lengthAfter` bias at the Fill primitive
+	 * layer; sister to `GroupWithRestProbe` at the Group decision layer.
+	 *
+	 * Used by `WrapList.shapeFillLine`'s last-chunk Fill construction
+	 * when the outer Star opts in via `@:fmt(groupRestProbe)` (semantic
+	 * is shared: "this Star's wrap considers rest-of-stack" at both
+	 * Group and Fill decision layers). Earlier chunks are followed by a
+	 * forced `,\n` chunk boundary, so their last-item-fit decision can't
+	 * push the tail off the line — rest-probe is irrelevant there.
+	 *
+	 * All Doc walkers (`flatTokenWidth`, `flatTokenWidthFirstLine`,
+	 * `flatLength`, `hasLeadingHardline`, …) treat this primitive
+	 * identically to `Fill(items, sep, tailReserve)` — semantic
+	 * difference is rendering-time only.
+	 */
+	FillWithRestProbe(items:Array<Doc>, sep:Doc, ?tailReserve:Int);
 	OptSpace(s:String);
 	OptHardline;
 	OptHardlineSkipAtOpenDelim;

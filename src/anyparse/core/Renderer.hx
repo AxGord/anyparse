@@ -59,6 +59,18 @@ private class Frame {
 	public var fillTailReserve:Int;
 
 	/**
+	 * Rest-of-stack-aware per-item-fit flag (ω-fill-rest-probe). When
+	 * `true`, the FillCont resumption probe at the top of the dispatch
+	 * loop subtracts `flatTokenWidthOfRestStack(stack)` from the budget
+	 * so the LAST packed item leaves room for content trailing the Fill
+	 * subtree on the same rendered line — mirrors fork's
+	 * `wrapFillLine2AfterLast` `lengthAfter` accounting at the Fill
+	 * primitive layer. Set by entry from `Doc.FillWithRestProbe` ctor;
+	 * default `false` keeps every existing call-site unchanged.
+	 */
+	public var fillRestProbe:Bool;
+
+	/**
 	 * Force-flat propagation flag (ω-force-flat-engine, slice B). When
 	 * `true`, the renderer treats every `Group` / `BodyGroup` as if it
 	 * had chosen `MFlat` (skipping `fitsFlat`), picks the flat branch of
@@ -80,14 +92,19 @@ private class Frame {
 		this.fillIdx = 0;
 		this.fillSep = null;
 		this.fillTailReserve = 0;
+		this.fillRestProbe = false;
 	}
 
-	public static inline function fillCont(indent:Int, rest:Array<Doc>, idx:Int, sep:Doc, tailReserve:Int, forceFlat:Bool = false):Frame {
+	public static inline function fillCont(
+		indent:Int, rest:Array<Doc>, idx:Int, sep:Doc, tailReserve:Int,
+		forceFlat:Bool = false, restProbe:Bool = false
+	):Frame {
 		final f:Frame = new Frame(indent, MBreak, Empty, forceFlat);
 		f.fillRest = rest;
 		f.fillIdx = idx;
 		f.fillSep = sep;
 		f.fillTailReserve = tailReserve;
+		f.fillRestProbe = restProbe;
 		return f;
 	}
 }
@@ -192,9 +209,19 @@ class Renderer {
 					// `lineLength + tokenLength >= maxLineLength` accounting
 					// where each item carries its trailing comma in
 					// `firstLineLength` (slice ω-fill-tail-reserve).
-					final fits:Bool = fitsFlat(width - col - tailReserve, f.indent, Concat([fillSep, fillRest[idx]]));
+					//
+					// `restW` is the additional tail beyond the Fill subtree
+					// itself (content trailing the Fill on the same rendered
+					// line — e.g. typedef RHS `= RequestMethod<...>;` after a
+					// typeParams Fill). Subtracted only when the originating
+					// Fill ctor was `FillWithRestProbe` (ω-fill-rest-probe).
+					// Default `restW=0` preserves byte-equivalent legacy
+					// behavior; sister to `GroupWithRestProbe` at the Group
+					// decision layer.
+					final restW:Int = f.fillRestProbe ? flatTokenWidthOfRestStack(stack) : 0;
+					final fits:Bool = fitsFlat(width - col - tailReserve - restW, f.indent, Concat([fillSep, fillRest[idx]]));
 					if (idx + 1 < fillRest.length)
-						stack.push(Frame.fillCont(f.indent, fillRest, idx + 1, fillSep, tailReserve, f.forceFlat));
+						stack.push(Frame.fillCont(f.indent, fillRest, idx + 1, fillSep, tailReserve, f.forceFlat, f.fillRestProbe));
 					stack.push(new Frame(f.indent, MBreak, fillRest[idx], f.forceFlat));
 					stack.push(new Frame(f.indent, fits ? MFlat : MBreak, fillSep, f.forceFlat));
 				}
@@ -486,7 +513,18 @@ class Renderer {
 						final fullLineCrosses:Bool = (col + DocMeasure.flatTokenWidth(flatDoc) + flatTokenWidthOfRestStackFull(stack) >= n);
 						stack.push(new Frame(f.indent, f.mode, fullLineCrosses ? breakDoc : flatDoc));
 					}
-				case Fill(items, sep, tailReserveOpt):
+				case Fill(items, sep, tailReserveOpt) | FillWithRestProbe(items, sep, tailReserveOpt):
+					// Paired arm: identical entry shape for both ctors. The
+					// rest-probe semantic lives in FillCont resumption (see
+					// top of dispatch loop) — we just tag the FillCont frame
+					// with the originating ctor's `restProbe` flag. The
+					// force-flat / all-flat branches don't care which ctor
+					// produced them — items collapse to a flat sep-joined
+					// emit either way.
+					final restProbe:Bool = switch f.doc {
+						case FillWithRestProbe(_, _, _): true;
+						case _: false;
+					};
 					if (items.length == 0) {
 						// nothing
 					} else if (f.forceFlat || f.mode == MFlat) {
@@ -511,8 +549,8 @@ class Renderer {
 						// of the dispatch loop.
 						final tailReserve:Int = tailReserveOpt ?? 0;
 						if (items.length > 1)
-							stack.push(Frame.fillCont(f.indent, items, 1, sep, tailReserve));
-						stack.push(new Frame(f.indent, MBreak, items[0]));
+							stack.push(Frame.fillCont(f.indent, items, 1, sep, tailReserve, f.forceFlat, restProbe));
+						stack.push(new Frame(f.indent, MBreak, items[0], f.forceFlat));
 					}
 				case Flatten(inner):
 					// ω-force-flat-engine slice B: enter force-flat region.
@@ -693,11 +731,14 @@ class Renderer {
 					// is a render-time decision. `fitsFlat` sees only
 					// the flat shape (slice ω-iffulllineexceeds-primitive).
 					local.push(new Frame(f.indent, MFlat, flatDoc));
-				case Fill(items, sep, _):
+				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
 					// Flat measurement of Fill: items joined by sep flat.
 					// `tailReserve` is a render-time per-item-fit knob, NOT
 					// a flat-width adjustment — irrelevant when the enclosing
 					// Group asks "does the whole Fill fit on one line".
+					// FillWithRestProbe shares semantic at static measurement —
+					// rest-probe is a render-time decision, identical to plain
+					// Fill in `fitsFlat`.
 					var k:Int = items.length;
 					while (k > 0) {
 						k--;
@@ -792,7 +833,7 @@ class Renderer {
 					stack.push(flatDoc);
 				case IfFullLineExceeds(_, _, flatDoc):
 					stack.push(flatDoc);
-				case Fill(items, sep, _):
+				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
 					var k:Int = items.length;
 					while (k > 0) {
 						k--;
@@ -900,7 +941,7 @@ class Renderer {
 						inner.push({doc: flatDoc, mode: MFlat});
 					case IfFullLineExceeds(_, _, flatDoc):
 						inner.push({doc: flatDoc, mode: MFlat});
-					case Fill(items, sep, _):
+					case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
 						var k:Int = items.length;
 						while (k > 0) {
 							k--;
@@ -987,7 +1028,7 @@ class Renderer {
 						inner.push({doc: flatDoc, mode: MFlat});
 					case IfFullLineExceeds(_, _, flatDoc):
 						inner.push({doc: flatDoc, mode: MFlat});
-					case Fill(items, sep, _):
+					case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
 						var k:Int = items.length;
 						while (k > 0) {
 							k--;

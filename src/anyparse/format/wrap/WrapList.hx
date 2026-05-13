@@ -584,7 +584,7 @@ class WrapList {
 					// Asymmetric BG semantic only applies to renderer-
 					// side rest-of-stack probe.
 					stack.push(flatDoc);
-				case Fill(items, sep, _):
+				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
 					var k:Int = items.length;
 					while (k > 0) {
 						k--;
@@ -663,7 +663,7 @@ class WrapList {
 					if (r >= 0) return r;
 				}
 				-1;
-			case Fill(items, sep, _):
+			case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
 				items.length > 1 ? lastHardlineDepth(sep, depth) : -1;
 			// ω-force-flat-engine slice A: pass-through. Both markers are
 			// render-time state — they wrap an `inner` whose hardlines
@@ -731,7 +731,7 @@ class WrapList {
 				final first:Null<Doc> = items.find(it -> !isLeadingTransparent(it));
 				if (first == null) return false;
 				node = first;
-			case Fill(items, _, _):
+			case Fill(items, _, _) | FillWithRestProbe(items, _, _):
 				final first:Null<Doc> = items.find(it -> !isLeadingTransparent(it));
 				if (first == null) return false;
 				node = first;
@@ -976,7 +976,21 @@ class WrapList {
 					// the tail off the line. Reserving on them would
 					// tighten the in-chunk wrap budget without benefit.
 					final tailReserve:Int = atEnd ? lastChunkTailReserve : 0;
-					bodyParts.push(Fill(chunk, softSep, tailReserve));
+					// ω-fill-rest-probe: opt-in to `FillWithRestProbe` on the
+					// LAST chunk when the caller's Star opted in via
+					// `@:fmt(groupRestProbe)`. Mirrors `GroupWithRestProbe`
+					// at outer Group layer — together they close fixtures
+					// like `wrapping/issue_494_type_parameter` where the LHS
+					// typeParams must wrap because significant content
+					// (`= RequestMethod<...>;`) trails on the same source
+					// line. Earlier chunks are followed by a forced `,\n`
+					// boundary so rest-probe is irrelevant there — bare Fill
+					// preserves byte-equivalent legacy behavior.
+					bodyParts.push(
+						groupRestProbe && atEnd
+							? FillWithRestProbe(chunk, softSep, tailReserve)
+							: Fill(chunk, softSep, tailReserve)
+					);
 				}
 				chunkStart = i;
 			}
@@ -1080,7 +1094,7 @@ class WrapList {
 					if (!isLeadingTransparent(it)) return false;
 				}
 				false;
-			case Fill(items, _, _):
+			case Fill(items, _, _) | FillWithRestProbe(items, _, _):
 				items.length > 0 && hasLeadingHardline(items[0]);
 			// ω-force-flat-engine slice A: pass-through. Both markers are
 			// render-time state — their `inner` carries the same leading

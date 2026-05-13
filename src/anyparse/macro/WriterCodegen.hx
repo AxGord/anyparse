@@ -401,6 +401,14 @@ class WriterCodegen {
 				[{name: 'items', type: macro : Array<anyparse.core.Doc>}, {name: 'sep', type: macro : anyparse.core.Doc}],
 				macro anyparse.core.Doc.Fill(items, sep)
 			),
+			// ω-fill-rest-probe: opt-in Fill variant whose per-item-fit probe
+			// in FillCont resumption subtracts rest-of-stack flat width from
+			// the budget. Sister to `_dgrp` at the Fill primitive layer.
+			docHelper(
+				'_dfwrp',
+				[{name: 'items', type: macro : Array<anyparse.core.Doc>}, {name: 'sep', type: macro : anyparse.core.Doc}],
+				macro anyparse.core.Doc.FillWithRestProbe(items, sep)
+			),
 			// ω-force-flat-engine slice D follow-up: WrapBoundary helper so the
 			// hand-rolled trivia-branch dispatchers (triviaSepStarExpr et al.)
 			// can reset force-flat for their inner content the same way the
