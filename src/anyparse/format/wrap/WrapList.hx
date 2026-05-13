@@ -730,7 +730,8 @@ class WrapList {
 			case NoWrap: shapeNoWrap(open, close, sep, items, openInside, closeInside);
 			case OnePerLine: shapeOnePerLine(open, close, sep, items, cols, appendTrailingComma, trailBreak);
 			case OnePerLineAfterFirst: shapeOnePerLineAfterFirst(open, close, sep, items, cols, appendTrailingComma);
-			case FillLine | FillLineWithLeadingBreak: shapeFillLine(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
+			case FillLine: shapeFillLine(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
+			case FillLineWithLeadingBreak: shapeFillLineWithLeadingBreak(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
 			case _: shapeNoWrap(open, close, sep, items, openInside, closeInside);
 		};
 	}
@@ -899,6 +900,39 @@ class WrapList {
 			Nest(cols, inner),
 			closeInside, Text(close),
 		]));
+	}
+
+	/**
+	 * `FillLineWithLeadingBreak` shape on the multi-item path: always
+	 * emit `Line('\n')` immediately after `open` (inside the
+	 * continuation `Nest`) and immediately before `close` (at the
+	 * outer column). Items pack inline via `Fill(items, softSep)` —
+	 * Wadler fillSep, same soft per-item wrap-on-overflow used by
+	 * `shapeFillLine`'s multi-item chunk body. Mirrors the single-Ref
+	 * `emitCondition.brkShape` semantics for cascade-fired FLWLB on
+	 * Star fields (first consumer: `HxFnDecl.params` with the fork's
+	 * `wrapPClose` paren-break pattern). The caller's
+	 * `Group(IfBreak(this-shape, NoWrap-shape))` flow keeps this
+	 * branch off the flat path — the renderer only commits here when
+	 * the flat form doesn't fit. `cols` is supplied by `emit`'s
+	 * mode-gated formula and lands the cascade-forced break at
+	 * `outer + additional` tabs (the wrap-engine indent regime),
+	 * matching fork's `calcIndent + additionalIndent`.
+	 */
+	private static function shapeFillLineWithLeadingBreak(
+		open:String, close:String, sep:String, items:Array<Doc>,
+		openInside:Doc, closeInside:Doc, cols:Int,
+		appendTrailingComma:Bool
+	):Doc {
+		final softSep:Doc = Concat([Text(sep), Line(' ')]);
+		final inner:Doc = items.length == 1 ? items[0] : Fill(items, softSep);
+		final tail:Doc = appendTrailingComma ? Text(sep) : Empty;
+		return Concat([
+			Text(open), openInside,
+			Nest(cols, Concat([Line('\n'), inner, tail])),
+			Line('\n'),
+			closeInside, Text(close),
+		]);
 	}
 
 	/**
