@@ -46,7 +46,7 @@ package anyparse.grammar.haxe;
 @:fmt(multilineWhenFieldShape('body'), propagateFnBodyEmpty('body'))
 typedef HxFnDecl = {
 	var name:HxIdentLit;
-	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap')) var typeParams:Null<Array<HxTypeParamDecl>>;
+	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var typeParams:Null<Array<HxTypeParamDecl>>;
 	@:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams'), funcParamParens, wrapRules('functionSignatureWrap'), bodyAwareCompactIndent) var params:Array<HxParam>;
 	@:optional @:fmt(typeHintColon) @:lead(':') var returnType:Null<HxType>;
 	@:fmt(leftCurly('blockLeftCurly'), bodyPolicyForCtor('UntypedBlockBody', 'untypedBody')) var body:HxFnBody;
