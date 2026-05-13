@@ -20,6 +20,15 @@ package anyparse.grammar.haxe;
  * `callParens`) apply uniformly to function-expression args without
  * per-meta grammar.
  *
+ * Wrap shape is driven by the `metadataCallParameterWrap:WrapRules`
+ * cascade (slice ω-metadataCallParameter-wrap-ingest). Default `NoWrap`
+ * keeps the meta-call parens tight regardless of inner expression
+ * breaks — `@:overload(function(parsedCode:..., currTokenType:...,\n\t\t
+ * config:...))` lets `function`'s param Fill wrap internally without
+ * propagating outward as `@:overload(\n\tfunction(...)\n)` (the legacy
+ * `sepList` Group-with-softlines layout). Replaces the all-or-nothing
+ * Group break that fired whenever any inner item carried a hardline.
+ *
  * Trivia: bearing transitively through `Array<HxExpr>` whenever any
  * `HxExpr` ctor is bearing — `TriviaTypeSynth` synthesises
  * `HxMetaCallArgsT` automatically.
@@ -27,5 +36,5 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxMetaCallArgs = {
 	var name:HxMetaNameTight;
-	@:lead('(') @:trail(')') @:sep(',') var args:Array<HxExpr>;
+	@:lead('(') @:trail(')') @:sep(',') @:fmt(wrapRules('metadataCallParameterWrap')) var args:Array<HxExpr>;
 }

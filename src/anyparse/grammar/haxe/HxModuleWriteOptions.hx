@@ -1029,6 +1029,21 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    defaultAdditionalIndent: 1}` — short anon-fn signatures stay
  *    flat (`function(a, b) trace(a + b)`) and only break when one of
  *    the cascade triggers fires.
+ *  - `metadataCallParameterWrap` — `WrapRules` cascade for metadata-call
+ *    argument lists (haxe-formatter `metadataCallParameter` class). Drives
+ *    break shape for `HxMetaCallArgs.args` (`@:overload(args)`,
+ *    `@:keep(args)`, …). Slice ω-metadataCallParameter-wrap-ingest replaces
+ *    the legacy `sepList` Group-with-softlines emission for meta args —
+ *    the prior path wrapped the outer parens with leading/trailing
+ *    hardlines whenever the inner expression broke, producing
+ *    `@:overload(\n\tfunction(...)\n)` instead of fork's tight
+ *    `@:overload(function(...))`. Default mirrors fork's
+ *    `default-hxformat.json`:
+ *    `{rules: [totalItemLength>=140 → FillLine, lineLength>=160 → FillLine,
+ *    exceedsMaxLineLength → FillLine], defaultMode: NoWrap}` — single-arg
+ *    `@:overload` keeps the parens glued and the inner FnExpr handles its
+ *    own param wrap; multi-arg metas with a long flat width fall through
+ *    to FillLine packing.
  *
  * Defaults are minimal:
  *  - `opBoolChainWrap`: single rule
@@ -1642,6 +1657,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	ternaryWrap:WrapRules,
 	functionSignatureWrap:WrapRules,
 	anonFunctionSignatureWrap:WrapRules,
+	metadataCallParameterWrap:WrapRules,
 	expressionTry:SameLinePolicy,
 	indentCaseLabels:Bool,
 	indentObjectLiteral:Bool,

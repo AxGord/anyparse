@@ -126,6 +126,17 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   `@:fmt(wrapRules('objectLiteralWrap'))` — field, default, and
  *   writer dispatch were already wired; this slice closes the loader-
  *   side gap.
+ * - `wrapping.metadataCallParameter` (ω-metadataCallParameter-wrap-ingest):
+ *   same `WrapRules` ingest shape as `arrayWrap`, routed to
+ *   `metadataCallParameterWrap`. Drives `HxMetaCallArgs.args` via
+ *   `@:fmt(wrapRules('metadataCallParameterWrap'))` — field, default,
+ *   loader, and grammar opt-in all land in the same slice. Default
+ *   `{rules: [totalItemLength>=140 → FillLine, lineLength>=160 →
+ *   FillLine, exceedsMaxLineLength → FillLine], defaultMode: NoWrap}`
+ *   keeps `@:overload(function(...))` parens tight even when the inner
+ *   FnExpr params wrap internally — replaces the legacy `sepList`
+ *   Group-with-softlines layout that propagated inner breaks outward as
+ *   `@:overload(\n\tfunction(...)\n)`.
  * - `sameLine.ifElse` / `sameLine.tryCatch` / `sameLine.doWhile`: enum
  *   string — `"same"` → `SameLinePolicy.Same`, `"next"` →
  *   `SameLinePolicy.Next`, `"keep"` → `SameLinePolicy.Keep` (reads the
@@ -579,6 +590,7 @@ final class HaxeFormatConfigLoader {
 			ternaryWrap: base.ternaryWrap,
 			functionSignatureWrap: base.functionSignatureWrap,
 			anonFunctionSignatureWrap: base.anonFunctionSignatureWrap,
+			metadataCallParameterWrap: base.metadataCallParameterWrap,
 			addLineCommentSpace: base.addLineCommentSpace,
 			expressionTry: base.expressionTry,
 			indentCaseLabels: base.indentCaseLabels,
@@ -658,6 +670,7 @@ final class HaxeFormatConfigLoader {
 		if (section.ternaryExpression != null) opt.ternaryWrap = wrapRulesFromConfig(section.ternaryExpression, opt.ternaryWrap);
 		if (section.functionSignature != null) opt.functionSignatureWrap = wrapRulesFromConfig(section.functionSignature, opt.functionSignatureWrap);
 		if (section.anonFunctionSignature != null) opt.anonFunctionSignatureWrap = wrapRulesFromConfig(section.anonFunctionSignature, opt.anonFunctionSignatureWrap);
+		if (section.metadataCallParameter != null) opt.metadataCallParameterWrap = wrapRulesFromConfig(section.metadataCallParameter, opt.metadataCallParameterWrap);
 	}
 
 	/**

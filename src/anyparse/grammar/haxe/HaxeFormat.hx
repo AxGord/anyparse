@@ -717,6 +717,7 @@ final class HaxeFormat implements TextFormat {
 		ternaryWrap: HaxeFormat.defaultTernaryWrap(),
 		functionSignatureWrap: HaxeFormat.defaultFunctionSignatureWrap(),
 		anonFunctionSignatureWrap: HaxeFormat.defaultAnonFunctionSignatureWrap(),
+		metadataCallParameterWrap: HaxeFormat.defaultMetadataCallParameterWrap(),
 		addLineCommentSpace: true,
 		expressionTry: SameLinePolicy.Same,
 		indentCaseLabels: true,
@@ -1260,6 +1261,46 @@ final class HaxeFormat implements TextFormat {
 			],
 			defaultMode: WrapMode.NoWrap,
 			defaultAdditionalIndent: 1,
+		};
+	}
+
+	/**
+	 * Default `WrapRules` cascade for metadata-call argument lists —
+	 * `HxMetaCallArgs.args` (`@:overload(args)`, `@:keep(args)`, …).
+	 * Ported from haxe-formatter's `wrapping.metadataCallParameter` rule
+	 * set in `resources/default-hxformat.json` (AxGord fork): meta args
+	 * stay flat (`defaultMode: NoWrap`) and only break when one of three
+	 * cascade triggers fires — `totalItemLength >= 140`, `lineLength >= 160`,
+	 * or `exceedsMaxLineLength`, all routing to `FillLine`.
+	 *
+	 * The `lineLength >= 160` rule is functionally subsumed by
+	 * `totalItemLength >= 140` at this default — `LineLengthLargerThan`
+	 * evaluates as `totalItemLen >= n` like its sibling — but is kept
+	 * present for byte-exact alignment with upstream and so user-side
+	 * `hxformat.json` tweaks that lower `totalItemLength` without
+	 * touching `lineLength` keep the threshold intact.
+	 *
+	 * Returned as a fresh struct on each call so test code that mutates
+	 * the `defaultWriteOptions.metadataCallParameterWrap` substruct
+	 * doesn't corrupt the singleton.
+	 */
+	public static function defaultMetadataCallParameterWrap():WrapRules {
+		return {
+			rules: [
+				{
+					mode: WrapMode.FillLine,
+					conditions: [{cond: WrapConditionType.TotalItemLengthLargerThan, value: 140}],
+				},
+				{
+					mode: WrapMode.FillLine,
+					conditions: [{cond: WrapConditionType.LineLengthLargerThan, value: 160}],
+				},
+				{
+					mode: WrapMode.FillLine,
+					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
+				},
+			],
+			defaultMode: WrapMode.NoWrap,
 		};
 	}
 

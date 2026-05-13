@@ -57,6 +57,17 @@ package anyparse.grammar.haxe.format;
  *    `{rules: [itemCount>=7 → FillLine, totalItemLength>=80 → FillLine,
  *    exceedsMaxLineLength → FillLine], defaultMode: NoWrap,
  *    defaultAdditionalIndent: 1}`.
+ *  - `metadataCallParameter`: `WrapRules` cascade →
+ *    `metadataCallParameterWrap`. Drives break shape for metadata-call
+ *    argument lists — `HxMetaCallArgs.args` (`@:overload(args)`,
+ *    `@:keep(args)`, …). Slice ω-metadataCallParameter-wrap-ingest
+ *    landed the cascade with fork-mirror defaults:
+ *    `{rules: [totalItemLength>=140 → FillLine,
+ *    lineLength>=160 → FillLine, exceedsMaxLineLength → FillLine],
+ *    defaultMode: NoWrap}`. Replaces the legacy `sepList` Group-with-
+ *    softlines layout that propagated inner FnExpr param breaks outward
+ *    as `@:overload(\n\tfunction(...)\n)`; NoWrap keeps the meta-call
+ *    parens tight even when the inner expression wraps internally.
  *
  * Slice ω-peg-byname-array lifted the prior `@:peg` ByName Array<T>
  * limitation, so every cascade above now ingests `rules` from
@@ -94,4 +105,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var functionSignature:HxFormatWrapRules;
 
 	@:optional var anonFunctionSignature:HxFormatWrapRules;
+
+	@:optional var metadataCallParameter:HxFormatWrapRules;
 };
