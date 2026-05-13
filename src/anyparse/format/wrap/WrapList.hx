@@ -603,12 +603,12 @@ class WrapList {
 					// Runtime-time drop only fires when `lastEmit==Hardline`
 					// which can never hold inside a flat-shape probe.
 					total += 1;
-				case OptHardline | OptHardlineSkipAtOpenDelim:
-					// Both opt-hardline variants can never flatten —
+				case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
+					// All three opt-hardline variants can never flatten —
 					// mirrors `Line('\n')` returning -1 (and
 					// `Renderer.fitsFlat`'s OptHardline arm). Any item
-					// containing either forces the wrap engine into
-					// break mode unconditionally.
+					// containing one forces the wrap engine into break
+					// mode unconditionally.
 					return -1;
 				case Flatten(inner) | WrapBoundary(inner):
 					// ω-force-flat-engine slice A: pass-through. Both
@@ -648,7 +648,7 @@ class WrapList {
 			case Empty | Text(_) | OptSpace(_) | OptSpaceSkipAfterHardline: -1;
 			case Line(flat):
 				flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code ? depth : -1;
-			case OptHardline | OptHardlineSkipAtOpenDelim: depth;
+			case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline: depth;
 			case Nest(cols, inner): lastHardlineDepth(inner, depth + cols);
 			case Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner): lastHardlineDepth(inner, depth);
 			case IfBreak(brk, _): lastHardlineDepth(brk, depth);
@@ -707,13 +707,13 @@ class WrapList {
 				return false;
 			case Line(flat):
 				return flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code;
-			case OptHardline | OptHardlineSkipAtOpenDelim:
-				// Both opt-hardline variants count as a leading hardline
-				// for the wrap-engine `(...)` shape decision. The new
-				// ctor's render-time drop (when inside an open delim)
-				// keeps items[0] glued, but the structural answer here
-				// stays "yes, inner has a leading break point" so the
-				// wrap still places close on its own line.
+			case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
+				// All three opt-hardline variants count as a leading
+				// hardline for the wrap-engine `(...)` shape decision.
+				// Their render-time drops are emit-time decisions; the
+				// structural answer here stays "yes, inner has a leading
+				// break point" so the wrap still places close on its own
+				// line.
 				return true;
 			case Nest(_, inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner):
 				node = inner;
@@ -1076,7 +1076,7 @@ class WrapList {
 	private static function hasLeadingHardline(d:Doc):Bool {
 		return switch d {
 			case Empty: false;
-			case OptHardline | OptHardlineSkipAtOpenDelim: true;
+			case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline: true;
 			case Line(flat): flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code;
 			case Text(_): false;
 			case OptSpace(_): false;

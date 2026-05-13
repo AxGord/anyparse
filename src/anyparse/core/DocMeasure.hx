@@ -17,7 +17,8 @@ final class DocMeasure {
 	 * didn't terminate that mode.
 	 *
 	 * Treats forced hardlines (`Line('\n')`, `OptHardline`,
-	 * `OptHardlineSkipAtOpenDelim`) as zero width instead of aborting
+	 * `OptHardlineSkipAtOpenDelim`, `OptHardlineSkipBeforeHardline`)
+	 * as zero width instead of aborting
 	 * (which is what `Renderer.fitsFlat`'s budget walk does).
 	 * `BodyGroup` content is deferred (zero width) — mirrors
 	 * `Renderer.fitsFlat` Departure 2 and `MethodChainEmit.chainItemLength`.
@@ -44,7 +45,7 @@ final class DocMeasure {
 		while (stack.length > 0) {
 			final node:Doc = stack.pop();
 			switch (node) {
-				case Empty | OptHardline | OptHardlineSkipAtOpenDelim:
+				case Empty | OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
 				case Text(s):
 					total += s.length;
 				case Line(flat):

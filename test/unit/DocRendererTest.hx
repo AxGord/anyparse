@@ -901,4 +901,118 @@ class DocRendererTest extends Test {
 			Renderer.render(Flatten(Flatten(inner)), 3)
 		);
 	}
+
+	// ω-opthardlineskipbeforehardline: forward-looking opt-hardline.
+	// `OptHardlineSkipBeforeHardline` defers `\n+indent` emit until
+	// the next content-bearing follower fires; an incoming hardline-
+	// like emit drops the pending slot without write. Pins both
+	// branches of the drop-on-following semantic.
+
+	function testOHSBHFiresWhenFollowedByContent() {
+		// Pending OHSBH + Text → flush pending first, then write Text.
+		// No follower hardline, so the deferred `\n` lands.
+		final doc:Doc = D.concat([
+			D.text('a'),
+			OptHardlineSkipBeforeHardline,
+			D.text('b'),
+		]);
+		Assert.equals('a\nb', Renderer.render(doc, 80));
+	}
+
+	function testOHSBHDropsWhenFollowedByHardline() {
+		// Pending OHSBH + MBreak `Line('\n')` → drop pending, emit only
+		// the incoming hardline. Single `\n` between `a` and `b` —
+		// without OHSBH's collision drop the result would be `a\n\nb`.
+		final doc:Doc = D.concat([
+			D.text('a'),
+			OptHardlineSkipBeforeHardline,
+			D.hardline(),
+			D.text('b'),
+		]);
+		Assert.equals('a\nb', Renderer.render(doc, 80));
+	}
+
+	function testOHSBHDropsWhenFollowedByOptHardline() {
+		// Pending OHSBH + `OptHardline` → drop pending; OptHardline
+		// then sees lastEmit=Other (no prior hardline) and emits its
+		// own `\n`. Single newline total — the collision suppression
+		// generalises across hardline ctors.
+		final doc:Doc = D.concat([
+			D.text('a'),
+			OptHardlineSkipBeforeHardline,
+			OptHardline,
+			D.text('b'),
+		]);
+		Assert.equals('a\nb', Renderer.render(doc, 80));
+	}
+
+	function testOHSBHConsecutivesCollapseToOne() {
+		// Two `OptHardlineSkipBeforeHardline` in a row: the inner
+		// overwrites the slot, the outer's deferred emit is silently
+		// dropped (its emit was never committed). Followed by Text →
+		// single `\n+indent` flushes for the inner ctor. The semantic
+		// mirrors `OptHardline`'s collision-drop "more-specific inner
+		// wins" pattern.
+		final doc:Doc = D.concat([
+			D.text('a'),
+			OptHardlineSkipBeforeHardline,
+			OptHardlineSkipBeforeHardline,
+			D.text('b'),
+		]);
+		Assert.equals('a\nb', Renderer.render(doc, 80));
+	}
+
+	function testOHSBHDropsPendingOptSpaceOnFlush() {
+		// Pending OHSBH + pending OptSpace + Text: flushPendingHardline
+		// drops pendingOptSpace as part of break-mode-Line semantic.
+		// Result `a\nb` — the optional trailing space vanishes before
+		// the deferred newline lands.
+		final doc:Doc = D.concat([
+			D.text('a'),
+			D.optSpace(' '),
+			OptHardlineSkipBeforeHardline,
+			D.text('b'),
+		]);
+		Assert.equals('a\nb', Renderer.render(doc, 80));
+	}
+
+	function testOHSBHForcesGroupBreak() {
+		// `OptHardlineSkipBeforeHardline` forces `fitsFlat` to refuse
+		// flatten — any enclosing Group commits MBreak even with ample
+		// budget. Pins the parity with `OptHardline` / `Line('\n')` in
+		// `fitsFlat`'s walker arm.
+		final doc:Doc = D.group(D.concat([
+			D.text('a'),
+			OptHardlineSkipBeforeHardline,
+			D.text('b'),
+		]));
+		Assert.equals('a\nb', Renderer.render(doc, 80));
+	}
+
+	function testOHSBHDroppedInsideFlatten() {
+		// Inside `Flatten(...)`, `OptHardlineSkipBeforeHardline` drops
+		// entirely — mirror of `OptHardline`'s force-flat arm. No
+		// pending slot is set, so the follower Text writes immediately
+		// at the current column without an interleaved hardline.
+		final doc:Doc = D.concat([
+			D.text('a'),
+			OptHardlineSkipBeforeHardline,
+			D.text('b'),
+		]);
+		Assert.equals('ab', Renderer.render(Flatten(doc), 80));
+	}
+
+	function testOHSBHWithNestUsesInnerIndent() {
+		// `Nest(2, OHSBH)` sets the pending slot's indent to 2 cols.
+		// On flush, the `\n+indent` uses that inner-most indent value
+		// — mirror of `OptHardline`'s "more-specific inner wins"
+		// indent propagation. Renderer's pendingHardline carries the
+		// frame indent through to flushPendingHardline.
+		final doc:Doc = D.concat([
+			D.text('a'),
+			D.nest(2, OptHardlineSkipBeforeHardline),
+			D.text('b'),
+		]);
+		Assert.equals('a\n  b', Renderer.render(doc, 80));
+	}
 }

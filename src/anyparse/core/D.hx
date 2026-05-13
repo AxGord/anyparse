@@ -83,7 +83,8 @@ class D {
 	 * Group / IfBreak / threshold-conditional. Unconditional hardlines
 	 * (`Line("\n")`) collapse to `Empty` since their flat output `"\n"`
 	 * would still break. Optional whitespace primitives (`OptSpace`,
-	 * `OptHardline`, `OptHardlineSkipAtOpenDelim`) reduce to their
+	 * `OptHardline`, `OptHardlineSkipAtOpenDelim`,
+	 * `OptHardlineSkipBeforeHardline`) reduce to their
 	 * no-break inline form (`Text(s)` or `Empty`). `Nest` indent is
 	 * dropped — irrelevant in flat mode.
 	 *
@@ -118,6 +119,7 @@ class D {
 			case OptSpace(s): Text(s);
 			case OptHardline: Empty;
 			case OptHardlineSkipAtOpenDelim: Empty;
+			case OptHardlineSkipBeforeHardline: Empty;
 			case OptSpaceSkipAfterHardline: Text(' ');
 			// ω-force-flat-engine slice A: both markers collapse — outer
 			// `flatten` already applies the force-flat transform, so a

@@ -192,6 +192,22 @@ package anyparse.core;
  *                      updates `pendingIndent` to the node's own
  *                      indent so following `Text` lands at the
  *                      correct column.
+ * - `OptHardlineSkipBeforeHardline` — break-mode newline that drops
+ *                      when the NEXT non-OptSpace emit is itself a
+ *                      hardline. Forward-looking mirror of
+ *                      `OptHardline`'s drop-on-previous: the renderer
+ *                      holds the emit in a `pendingHardline` slot
+ *                      (sister to `pendingOptSpace`) and flushes it on
+ *                      the first content-bearing emit; a hardline-like
+ *                      emit arriving while pending clears it without
+ *                      write. Used at `trailFollowExpr`
+ *                      (close-trailing-of-Alt-branch-BlockStmt) where
+ *                      the parent stmt-list Star's per-element
+ *                      separator will itself emit `\n`, so the
+ *                      comment-terminator hardline must drop to avoid
+ *                      a spurious blank line between consecutive
+ *                      `} // comment` / `<next stmt>` siblings. Forces
+ *                      `fitsFlat` to refuse flatten.
  *
  * See `D` for builder helpers and `Renderer` for the layout algorithm.
  */
@@ -257,6 +273,42 @@ enum Doc {
 	OptSpace(s:String);
 	OptHardline;
 	OptHardlineSkipAtOpenDelim;
+
+	/**
+	 * Break-mode newline that drops when the **next** non-OptSpace emit
+	 * is itself a hardline (`Line('\n')`, `OptHardline`,
+	 * `OptHardlineSkipAtOpenDelim`, or another `OptHardlineSkipBeforeHardline`).
+	 * Forward-looking mirror of `OptHardline`'s drop-on-state: where
+	 * `OptHardline` drops when the PREVIOUS emit was a hardline, this
+	 * primitive drops when the FOLLOWING emit will be a hardline. The
+	 * renderer holds the emit in a small `pendingHardline` slot (sister
+	 * to `pendingOptSpace`) and flushes it on the first content-bearing
+	 * emit (`Text`, in-flat `Line(flat)`, or a flushed `OptSpace*`); a
+	 * hardline-like emit arriving while pending clears it without write.
+	 *
+	 * Used at the `trailFollowExpr` close-trailing-of-Alt-branch-BlockStmt
+	 * site (`WriterLowering.hx:5727`): a line-comment trailing the
+	 * BlockStmt's close brace (`} // comment`) needs an emitter-side `\n`
+	 * to terminate the comment line, BUT when the enclosing Star's
+	 * per-element separator already emits a hardline for the next
+	 * sibling, the two hardlines collide and produce a spurious blank
+	 * line. With `_dohsbh`, our hardline drops when followed by the
+	 * sep's hardline (sibling stmt boundary), but still fires when
+	 * followed by content (sameLineCatch's `OptSpaceSkipAfterHardline`
+	 * arrives after pending → flush emits `\n+indent`, then the
+	 * lastEmit=Hardline drop fires inside OSSAH → catch lands on the
+	 * next line at the correct indent).
+	 *
+	 * Like `Line('\n')`, `OptHardline`, and `OptHardlineSkipAtOpenDelim`,
+	 * forces `fitsFlat` to refuse flatten — any enclosing Group containing
+	 * this primitive commits to `MBreak`. Inside `Flatten(...)` force-flat
+	 * region, drops entirely (mirror of `OptHardline`'s force-flat arm).
+	 * Doc walkers (`flatTokenWidth`, `flatTokenWidthFirstLine`,
+	 * `flatTokenWidthOfRestStack`, `flatLength`, `hasLeadingHardline`,
+	 * …) treat this primitive identically to `OptHardline` — semantic
+	 * difference is rendering-time only.
+	 */
+	OptHardlineSkipBeforeHardline;
 
 	/**
 	 * Inline single space that drops when the last emitted output was

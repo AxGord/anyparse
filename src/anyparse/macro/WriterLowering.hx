@@ -5717,14 +5717,25 @@ class WriterLowering {
 		// style.
 		final trailOpen:Expr = trailOpenAccess ?? macro (null : Null<String>);
 		// ω-close-trailing-alt: Alt-branch sites pass true so the trailing
-		// line comment is followed by `_dhl()` — line comments terminate
+		// line comment is followed by a hardline — line comments terminate
 		// at \n semantically, and the Alt's parent struct may emit a space
 		// sep next (e.g. HxTryCatchStmt.body→catches with sameLineCatch),
 		// which would glue the next sibling onto the same line as the
 		// comment. Seq-struct sites pass false: their close-trailing slot
 		// always lives on the LAST field of its containing struct, where
 		// the parent Star's element separator already supplies a hardline.
-		final trailFollowExpr:Expr = appendHardlineAfterTrail ? macro _parts.push(_dhl()) : macro {};
+		//
+		// ω-opthardlineskipbeforehardline (slice B opt-in): emit
+		// `_dohsbh()` instead of `_dhl()`. Forward-looking opt-hardline
+		// drops when the next non-OptSpace emit is itself a hardline —
+		// closes the spurious-blank-line bug between two consecutive
+		// `} // comment` / `<next stmt>` BlockStmt-Alt siblings where
+		// the parent stmt-list Star's per-element sep emits a hardline.
+		// In the sameLineCatch case the parent emits a content/space
+		// follower, so `_dohsbh()` still fires (lands `\n+indent` for
+		// the next-line catch placement). See target fixtures
+		// `lineends/issue_445_curly_with_comment{,_both}`.
+		final trailFollowExpr:Expr = appendHardlineAfterTrail ? macro _parts.push(_dohsbh()) : macro {};
 		final emptyTrailExpr:Expr = appendHardlineAfterTrail
 			? macro _dc([_dt($v{emptyText}), trailingCommentDocVerbatim(_trailClose, opt), _dhl()])
 			: macro _dc([_dt($v{emptyText}), trailingCommentDocVerbatim(_trailClose, opt)]);

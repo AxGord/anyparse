@@ -369,6 +369,16 @@ class WriterCodegen {
 			docHelper('_dgrp', [{name: 'inner', type: macro : anyparse.core.Doc}], macro anyparse.core.Doc.GroupWithRestProbe(inner)),
 			docHelper('_dhl', [], macro anyparse.core.Doc.Line('\n')),
 			docHelper('_doh', [], macro anyparse.core.Doc.OptHardline),
+			// ω-opthardlineskipbeforehardline: forward-looking opt-hardline.
+			// Defers the `\n+indent` emit to the first content-bearing
+			// follower; a follower hardline-like emit clears the slot
+			// without write. Sister to `_doh` (`OptHardline` — drops on
+			// PREVIOUS hardline) but for the trailing-side. Emit at
+			// `trailFollowExpr` (close-trailing-of-Alt-branch-BlockStmt)
+			// to suppress the spurious blank line between a
+			// `} // comment` BlockStmt close and the parent stmt-list
+			// Star's per-element-sep hardline.
+			docHelper('_dohsbh', [], macro anyparse.core.Doc.OptHardlineSkipBeforeHardline),
 			docHelper('_dossh', [], macro anyparse.core.Doc.OptSpaceSkipAfterHardline),
 			docHelper('_dsl', [], macro anyparse.core.Doc.Line('')),
 			docHelper('_dl', [], macro anyparse.core.Doc.Line(' ')),

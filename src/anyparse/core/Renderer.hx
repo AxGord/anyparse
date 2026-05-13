@@ -162,6 +162,14 @@ class Renderer {
 		var col:Int = 0;
 		var pendingIndent:Int = -1;
 		var pendingOptSpace:Null<String> = null;
+		// ω-opthardlineskipbeforeHardline: forward-looking hardline slot.
+		// `OptHardlineSkipBeforeHardline` sets this to its frame indent
+		// instead of emitting; the next content-bearing emit (Text,
+		// in-flat Line, flushed OptSpace*) flushes it as `\n+indent` and
+		// clears the slot, while an incoming hardline-like emit clears
+		// it without writing. Sister to `pendingOptSpace`'s deferred
+		// pattern but for the trailing-side. `-1` = no pending.
+		var pendingHardline:Int = -1;
 		// Three-state classifier of the last byte committed to `buf`.
 		// Drives `OptHardline` collision drop and
 		// `OptHardlineSkipAtOpenDelim` open-delim glue. See `LastEmit`
@@ -190,6 +198,28 @@ class Renderer {
 				col += pendingOptSpace.length;
 				pendingOptSpace = null;
 				lastEmit = Other;
+			}
+		}
+
+		// Flush a pending `OptHardlineSkipBeforeHardline` slot: emit
+		// `\n+indent` like a regular break-mode `Line` and drop the
+		// pending OptSpace (mirrors the break-mode-Line semantic — the
+		// optional trailing space disappears before a newline). Called
+		// at the top of every content-bearing case so the deferred
+		// hardline lands before its follower. A no-op when no slot
+		// pending. Distinct from the `drop` path (no flush, just clear)
+		// taken by incoming hardline-like emits.
+		inline function flushPendingHardline():Void {
+			if (pendingHardline >= 0) {
+				pendingOptSpace = null;
+				if (trailingWhitespace && pendingIndent >= 0) {
+					writeIndent(buf, pendingIndent, indentChar, tabWidth);
+				}
+				buf.add(lineEnd);
+				pendingIndent = pendingHardline;
+				col = pendingHardline;
+				lastEmit = Hardline;
+				pendingHardline = -1;
 			}
 		}
 
@@ -243,6 +273,7 @@ class Renderer {
 					// nothing
 				case Text(s):
 					if (s.length > 0) {
+						flushPendingHardline();
 						flushOptSpace();
 						if (pendingIndent >= 0) {
 							writeIndent(buf, pendingIndent, indentChar, tabWidth);
@@ -254,6 +285,7 @@ class Renderer {
 					}
 				case Line(flat):
 					if (f.forceFlat || f.mode == MFlat) {
+						flushPendingHardline();
 						flushOptSpace();
 						if (flat.length > 0 && pendingIndent >= 0) {
 							writeIndent(buf, pendingIndent, indentChar, tabWidth);
@@ -267,8 +299,13 @@ class Renderer {
 					} else {
 						// Break-mode hardline: drop pending OptSpace so the
 						// lead's optional trailing space disappears before
-						// the newline (no `var x = \n{...}` artifact).
+						// the newline (no `var x = \n{...}` artifact). Also
+						// drop any pending `OptHardlineSkipBeforeHardline`
+						// (collision: the deferred hardline's reason for
+						// existing — "fire unless next is hardline" — fails
+						// here because we ARE that hardline).
 						pendingOptSpace = null;
+						if (pendingHardline >= 0) pendingHardline = -1;
 						if (trailingWhitespace && pendingIndent >= 0) {
 							writeIndent(buf, pendingIndent, indentChar, tabWidth);
 						}
@@ -296,11 +333,16 @@ class Renderer {
 					// is more specific (e.g. objectLit's leftCurly Next
 					// inside a wrap-engine-driven multi-arg list).
 					//
+					// Drop any pending `OptHardlineSkipBeforeHardline`
+					// (collision: incoming hardline-like emit clears the
+					// deferred forward-looking hardline without write).
+					//
 					// Force-flat (slice B): inside a `Flatten(...)` region,
 					// every optional hardline is collapsed — `pendingOptSpace`
 					// is cleared (mirror real-hardline) but no `\n` is
 					// emitted and `pendingIndent`/`col`/`lastEmit` stay put.
 					pendingOptSpace = null;
+					if (pendingHardline >= 0) pendingHardline = -1;
 					if (f.forceFlat) {
 						// drop entirely
 					} else if (lastEmit == Hardline) {
@@ -355,10 +397,15 @@ class Renderer {
 					//     the leading `\n` before items[0] in
 					//     outer-context cases (`dirty = chain`).
 					//
+					// Drop any pending `OptHardlineSkipBeforeHardline`
+					// (collision: incoming hardline-like emit clears the
+					// deferred forward-looking hardline without write).
+					//
 					// Force-flat (slice B): same drop-entirely behaviour as
 					// `OptHardline` — `pendingOptSpace` cleared, no `\n`
 					// emitted, surrounding state untouched.
 					pendingOptSpace = null;
+					if (pendingHardline >= 0) pendingHardline = -1;
 					if (f.forceFlat) {
 						// drop entirely
 					} else switch lastEmit {
@@ -375,6 +422,39 @@ class Renderer {
 							pendingIndent = f.indent;
 							col = f.indent;
 							lastEmit = Hardline;
+					}
+				case OptHardlineSkipBeforeHardline:
+					// Forward-looking opt-hardline (ω-opthardlineskipbeforehardline):
+					// defer the `\n+indent` emit to the first content-bearing
+					// follower (Text, in-flat Line, flushed OptSpace*). Sister
+					// to `pendingOptSpace`'s deferred pattern but for the
+					// trailing-side. An incoming hardline-like emit
+					// (`Line` in MBreak, `OptHardline`,
+					// `OptHardlineSkipAtOpenDelim`) clears the pending slot
+					// without write — collision suppression for the
+					// `} // comment\n + parent-Star sep \n` double-hardline
+					// case at the `trailFollowExpr` site.
+					//
+					// Collision among consecutive `OptHardlineSkipBeforeHardline`
+					// emits: overwrite the slot with the inner ctor's indent
+					// (the latter is more specific). The prior pending's
+					// emit was never committed, so no buf state to roll back.
+					//
+					// `pendingOptSpace` is intentionally NOT cleared on entry:
+					// the deferred state hasn't committed to a hardline yet,
+					// so the optional space stays alive until the slot
+					// flushes (which drops it as break-mode-Line does) or
+					// drops (collision — the incoming hardline will clear
+					// pendingOptSpace via its own path).
+					//
+					// Force-flat (slice B): drop entirely. Mirror
+					// `OptHardline`'s force-flat arm — inside a `Flatten(...)`
+					// region the deferred emit is moot (force-flat collapses
+					// every optional hardline).
+					if (f.forceFlat) {
+						// drop entirely
+					} else {
+						pendingHardline = f.indent;
 					}
 				case Nest(n, inner):
 					// Indent only matters when observed (i.e. on a hardline
@@ -768,11 +848,11 @@ class Renderer {
 					// which by definition cannot happen inside a `fitsFlat`
 					// probe (the probe walks pure flat shape).
 					budget -= 1;
-				case OptHardline | OptHardlineSkipAtOpenDelim:
-					// Both opt-hardline variants are hardlines by intent
+				case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
+					// All three opt-hardline variants are hardlines by intent
 					// and can never flatten. Mirror the `Line('\n')`
 					// budget=-1 path: any enclosing Group containing
-					// either must commit to MBreak.
+					// one must commit to MBreak.
 					budget = -1;
 					break;
 				case Flatten(inner) | WrapBoundary(inner):
@@ -815,7 +895,7 @@ class Renderer {
 			final node:Doc = stack.pop();
 			switch (node) {
 				case Empty:
-				case OptHardline | OptHardlineSkipAtOpenDelim:
+				case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
 					aborted = true;
 				case Text(s):
 					total += s.length;
@@ -963,7 +1043,7 @@ class Renderer {
 						total += s.length;
 					case OptSpaceSkipAfterHardline:
 						total += 1;
-					case OptHardline | OptHardlineSkipAtOpenDelim:
+					case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
 						aborted = true;
 					case Flatten(innerDoc) | WrapBoundary(innerDoc):
 						// ω-force-flat-engine slice A: pass-through. The
@@ -1050,7 +1130,7 @@ class Renderer {
 						total += s.length;
 					case OptSpaceSkipAfterHardline:
 						total += 1;
-					case OptHardline | OptHardlineSkipAtOpenDelim:
+					case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
 						aborted = true;
 					case Flatten(innerDoc) | WrapBoundary(innerDoc):
 						// ω-force-flat-engine slice A: pass-through. Sister
