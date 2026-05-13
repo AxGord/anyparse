@@ -51,6 +51,6 @@ package anyparse.grammar.haxe;
 @:fmt(multilineWhenFieldCtorAndOpt('type', 'Anon', 'anonTypeLeftCurly', 'anyparse.format.BracePlacement.Next'))
 typedef HxTypedefDecl = {
 	@:kw('typedef') var name:HxIdentLit;
-	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose) var typeParams:Null<Array<HxTypeParamDecl>>;
+	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap')) var typeParams:Null<Array<HxTypeParamDecl>>;
 	@:fmt(typedefAssign, propagateTypedefContext) @:lead('=') var type:HxType;
 }

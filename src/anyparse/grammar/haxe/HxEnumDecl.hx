@@ -23,6 +23,6 @@ package anyparse.grammar.haxe;
 @:fmt(multilineWhenFieldNonEmpty('ctors'))
 typedef HxEnumDecl = {
 	@:kw('enum') var name:HxIdentLit;
-	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose) var typeParams:Null<Array<HxTypeParamDecl>>;
+	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap')) var typeParams:Null<Array<HxTypeParamDecl>>;
 	@:fmt(beginEndType, existingBetweenFields, uniformBetween('betweenEnumCtors'), beforeDocCommentEmptyLines) @:lead('{') @:trail('}') @:trivia var ctors:Array<HxEnumCtor>;
 }

@@ -68,6 +68,16 @@ package anyparse.grammar.haxe.format;
  *    softlines layout that propagated inner FnExpr param breaks outward
  *    as `@:overload(\n\tfunction(...)\n)`; NoWrap keeps the meta-call
  *    parens tight even when the inner expression wraps internally.
+ *  - `typeParameter`: `WrapRules` cascade → `typeParameterWrap`. Drives
+ *    break shape for type-parameter lists — declare-site
+ *    (`HxClassDecl.typeParams`, `HxTypedefDecl.typeParams`,
+ *    `HxFnDecl.typeParams`, `HxFnExpr.typeParams`,
+ *    `HxEnumDecl.typeParams`, `HxAbstractDecl.typeParams`,
+ *    `HxInterfaceDecl.typeParams`) and use-site (`HxTypeRef.params`).
+ *    Slice ω-typeparameter-wrap-ingest landed the cascade with
+ *    fork-mirror defaults: `{rules: [anyItemLength>=50 → FillLine,
+ *    totalItemLength>=70 → FillLine], defaultMode: NoWrap}`. Short
+ *    `<T>` / `<K, V>` lists stay flat; long lists pack Wadler-style.
  *
  * Slice ω-peg-byname-array lifted the prior `@:peg` ByName Array<T>
  * limitation, so every cascade above now ingests `rules` from
@@ -76,9 +86,9 @@ package anyparse.grammar.haxe.format;
  * cascade falls through to the next rule).
  *
  * The remaining per-construct cascades (`expressionWrapping`,
- * `typeParameter`, `arrayMatrixWrap`, …) land with their own slices
- * when each gains JSON-side wiring; matching `WriteOptions` fields
- * don't exist yet and need new fields plus grammar `@:fmt` wiring.
+ * `arrayMatrixWrap`, …) land with their own slices when each gains
+ * JSON-side wiring; matching `WriteOptions` fields don't exist yet and
+ * need new fields plus grammar `@:fmt` wiring.
  */
 @:peg typedef HxFormatWrappingSection = {
 
@@ -107,4 +117,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var anonFunctionSignature:HxFormatWrapRules;
 
 	@:optional var metadataCallParameter:HxFormatWrapRules;
+
+	@:optional var typeParameter:HxFormatWrapRules;
 };

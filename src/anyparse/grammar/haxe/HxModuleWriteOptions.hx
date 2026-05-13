@@ -1044,6 +1044,18 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    `@:overload` keeps the parens glued and the inner FnExpr handles its
  *    own param wrap; multi-arg metas with a long flat width fall through
  *    to FillLine packing.
+ *  - `typeParameterWrap` — `WrapRules` cascade for type-parameter lists
+ *    (haxe-formatter `typeParameter` class). Drives break shape for
+ *    `<T, U, V>` lists at declare-site (`HxClassDecl.typeParams`,
+ *    `HxTypedefDecl.typeParams`, `HxFnDecl.typeParams`,
+ *    `HxFnExpr.typeParams`, `HxEnumDecl.typeParams`,
+ *    `HxAbstractDecl.typeParams`, `HxInterfaceDecl.typeParams`) and
+ *    use-site (`HxTypeRef.params` — `Map<K, V>`, `Array<T>`). Slice
+ *    ω-typeparameter-wrap-ingest landed the cascade with fork-mirror
+ *    defaults: `{rules: [anyItemLength>=50 → FillLine,
+ *    totalItemLength>=70 → FillLine], defaultMode: NoWrap}` — short
+ *    `<T>` / `<K, V>` lists stay flat; lists whose maximum item width
+ *    or aggregate width crosses the soft threshold pack Wadler-style.
  *
  * Defaults are minimal:
  *  - `opBoolChainWrap`: single rule
@@ -1658,6 +1670,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	functionSignatureWrap:WrapRules,
 	anonFunctionSignatureWrap:WrapRules,
 	metadataCallParameterWrap:WrapRules,
+	typeParameterWrap:WrapRules,
 	expressionTry:SameLinePolicy,
 	indentCaseLabels:Bool,
 	indentObjectLiteral:Bool,

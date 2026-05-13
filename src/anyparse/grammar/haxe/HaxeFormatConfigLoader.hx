@@ -137,6 +137,18 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   FnExpr params wrap internally — replaces the legacy `sepList`
  *   Group-with-softlines layout that propagated inner breaks outward as
  *   `@:overload(\n\tfunction(...)\n)`.
+ * - `wrapping.typeParameter` (ω-typeparameter-wrap-ingest): same
+ *   `WrapRules` ingest shape as `arrayWrap`, routed to
+ *   `typeParameterWrap`. Drives declare-site `<T, U, V>` lists on
+ *   `HxClassDecl.typeParams`, `HxTypedefDecl.typeParams`,
+ *   `HxFnDecl.typeParams`, `HxFnExpr.typeParams`,
+ *   `HxEnumDecl.typeParams`, `HxAbstractDecl.typeParams`,
+ *   `HxInterfaceDecl.typeParams` plus use-site `HxTypeRef.params`
+ *   (`Map<K, V>`, `Array<T>`) via
+ *   `@:fmt(wrapRules('typeParameterWrap'))`. Default
+ *   `{rules: [anyItemLength>=50 → FillLine, totalItemLength>=70 →
+ *   FillLine], defaultMode: NoWrap}` — short lists stay flat, long
+ *   lists pack Wadler-style.
  * - `sameLine.ifElse` / `sameLine.tryCatch` / `sameLine.doWhile`: enum
  *   string — `"same"` → `SameLinePolicy.Same`, `"next"` →
  *   `SameLinePolicy.Next`, `"keep"` → `SameLinePolicy.Keep` (reads the
@@ -591,6 +603,7 @@ final class HaxeFormatConfigLoader {
 			functionSignatureWrap: base.functionSignatureWrap,
 			anonFunctionSignatureWrap: base.anonFunctionSignatureWrap,
 			metadataCallParameterWrap: base.metadataCallParameterWrap,
+			typeParameterWrap: base.typeParameterWrap,
 			addLineCommentSpace: base.addLineCommentSpace,
 			expressionTry: base.expressionTry,
 			indentCaseLabels: base.indentCaseLabels,
@@ -671,6 +684,7 @@ final class HaxeFormatConfigLoader {
 		if (section.functionSignature != null) opt.functionSignatureWrap = wrapRulesFromConfig(section.functionSignature, opt.functionSignatureWrap);
 		if (section.anonFunctionSignature != null) opt.anonFunctionSignatureWrap = wrapRulesFromConfig(section.anonFunctionSignature, opt.anonFunctionSignatureWrap);
 		if (section.metadataCallParameter != null) opt.metadataCallParameterWrap = wrapRulesFromConfig(section.metadataCallParameter, opt.metadataCallParameterWrap);
+		if (section.typeParameter != null) opt.typeParameterWrap = wrapRulesFromConfig(section.typeParameter, opt.typeParameterWrap);
 	}
 
 	/**

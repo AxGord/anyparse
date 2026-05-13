@@ -718,6 +718,7 @@ final class HaxeFormat implements TextFormat {
 		functionSignatureWrap: HaxeFormat.defaultFunctionSignatureWrap(),
 		anonFunctionSignatureWrap: HaxeFormat.defaultAnonFunctionSignatureWrap(),
 		metadataCallParameterWrap: HaxeFormat.defaultMetadataCallParameterWrap(),
+		typeParameterWrap: HaxeFormat.defaultTypeParameterWrap(),
 		addLineCommentSpace: true,
 		expressionTry: SameLinePolicy.Same,
 		indentCaseLabels: true,
@@ -1298,6 +1299,39 @@ final class HaxeFormat implements TextFormat {
 				{
 					mode: WrapMode.FillLine,
 					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
+				},
+			],
+			defaultMode: WrapMode.NoWrap,
+		};
+	}
+
+	/**
+	 * Default `WrapRules` cascade for type-parameter lists — declare-site
+	 * (`HxClassDecl.typeParams`, `HxTypedefDecl.typeParams`,
+	 * `HxFnDecl.typeParams`, `HxFnExpr.typeParams`,
+	 * `HxEnumDecl.typeParams`, `HxAbstractDecl.typeParams`,
+	 * `HxInterfaceDecl.typeParams`) and use-site (`HxTypeRef.params`).
+	 * Ported from haxe-formatter's `wrapping.typeParameter` rule set in
+	 * `resources/default-hxformat.json`: short `<T>` / `<K, V>` lists stay
+	 * flat (`defaultMode: NoWrap`); a list breaks to Wadler-style FillLine
+	 * packing when either soft threshold fires — `anyItemLength >= 50`
+	 * (one very long type-param name) or `totalItemLength >= 70`
+	 * (aggregate width across all entries).
+	 *
+	 * Returned as a fresh struct on each call so test code that mutates
+	 * the `defaultWriteOptions.typeParameterWrap` substruct doesn't
+	 * corrupt the singleton.
+	 */
+	public static function defaultTypeParameterWrap():WrapRules {
+		return {
+			rules: [
+				{
+					mode: WrapMode.FillLine,
+					conditions: [{cond: WrapConditionType.AnyItemLengthLargerThan, value: 50}],
+				},
+				{
+					mode: WrapMode.FillLine,
+					conditions: [{cond: WrapConditionType.TotalItemLengthLargerThan, value: 70}],
 				},
 			],
 			defaultMode: WrapMode.NoWrap,
