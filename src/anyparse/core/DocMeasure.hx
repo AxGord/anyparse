@@ -88,7 +88,7 @@ final class DocMeasure {
 					// primitive's own subtree width uses this same
 					// `flatTokenWidth` (defer BG) — sister forwarding.
 					stack.push(flatDoc);
-				case Fill(items, sep):
+				case Fill(items, sep, _):
 					var k:Int = items.length;
 					while (k > 0) {
 						k--;

@@ -56,6 +56,7 @@ private class Frame {
 	public var fillRest:Null<Array<Doc>>;
 	public var fillIdx:Int;
 	public var fillSep:Null<Doc>;
+	public var fillTailReserve:Int;
 
 	public inline function new(indent:Int, mode:Mode, doc:Doc) {
 		this.indent = indent;
@@ -64,13 +65,15 @@ private class Frame {
 		this.fillRest = null;
 		this.fillIdx = 0;
 		this.fillSep = null;
+		this.fillTailReserve = 0;
 	}
 
-	public static inline function fillCont(indent:Int, rest:Array<Doc>, idx:Int, sep:Doc):Frame {
+	public static inline function fillCont(indent:Int, rest:Array<Doc>, idx:Int, sep:Doc, tailReserve:Int):Frame {
 		final f:Frame = new Frame(indent, MBreak, Empty);
 		f.fillRest = rest;
 		f.fillIdx = idx;
 		f.fillSep = sep;
+		f.fillTailReserve = tailReserve;
 		return f;
 	}
 }
@@ -165,10 +168,19 @@ class Renderer {
 			if (fillRest != null) {
 				final fillSep:Doc = f.fillSep;
 				final idx:Int = f.fillIdx;
+				final tailReserve:Int = f.fillTailReserve;
 				if (idx < fillRest.length) {
-					final fits:Bool = fitsFlat(width - col, f.indent, Concat([fillSep, fillRest[idx]]));
+					// `tailReserve` cols are reserved for post-Fill same-line
+					// content (trailing comma + close delim emitted OUTSIDE
+					// the Fill — see `Doc.Fill` doc-comment). Subtracting it
+					// from the probe budget makes the LAST packed item leave
+					// room for that tail, matching fork's `wrapFillLine2AfterLast`
+					// `lineLength + tokenLength >= maxLineLength` accounting
+					// where each item carries its trailing comma in
+					// `firstLineLength` (slice ω-fill-tail-reserve).
+					final fits:Bool = fitsFlat(width - col - tailReserve, f.indent, Concat([fillSep, fillRest[idx]]));
 					if (idx + 1 < fillRest.length)
-						stack.push(Frame.fillCont(f.indent, fillRest, idx + 1, fillSep));
+						stack.push(Frame.fillCont(f.indent, fillRest, idx + 1, fillSep, tailReserve));
 					stack.push(new Frame(f.indent, MBreak, fillRest[idx]));
 					stack.push(new Frame(f.indent, fits ? MFlat : MBreak, fillSep));
 				}
@@ -393,7 +405,7 @@ class Renderer {
 					// approach). Slice ω-iffulllineexceeds-primitive.
 					final fullLineCrosses:Bool = (col + DocMeasure.flatTokenWidth(flatDoc) + flatTokenWidthOfRestStackFull(stack) >= n);
 					stack.push(new Frame(f.indent, f.mode, fullLineCrosses ? breakDoc : flatDoc));
-				case Fill(items, sep):
+				case Fill(items, sep, tailReserveOpt):
 					if (items.length == 0) {
 						// nothing
 					} else if (f.mode == MFlat) {
@@ -409,9 +421,14 @@ class Renderer {
 						// Per-item fill: push items[0] first, then a FillCont
 						// that resumes for items[1..] once item[0]'s frames
 						// have drained and `col` reflects the post-item[0]
-						// pen position.
+						// pen position. `tailReserve` (cols of post-Fill
+						// same-line content; default 0) rides the FillCont
+						// frame and tightens the per-item-fit budget on
+						// each subsequent probe — see Fill case at the top
+						// of the dispatch loop.
+						final tailReserve:Int = tailReserveOpt ?? 0;
 						if (items.length > 1)
-							stack.push(Frame.fillCont(f.indent, items, 1, sep));
+							stack.push(Frame.fillCont(f.indent, items, 1, sep, tailReserve));
 						stack.push(new Frame(f.indent, MBreak, items[0]));
 					}
 			}
@@ -573,8 +590,11 @@ class Renderer {
 					// is a render-time decision. `fitsFlat` sees only
 					// the flat shape (slice ω-iffulllineexceeds-primitive).
 					local.push(new Frame(f.indent, MFlat, flatDoc));
-				case Fill(items, sep):
+				case Fill(items, sep, _):
 					// Flat measurement of Fill: items joined by sep flat.
+					// `tailReserve` is a render-time per-item-fit knob, NOT
+					// a flat-width adjustment — irrelevant when the enclosing
+					// Group asks "does the whole Fill fit on one line".
 					var k:Int = items.length;
 					while (k > 0) {
 						k--;
@@ -662,7 +682,7 @@ class Renderer {
 					stack.push(flatDoc);
 				case IfFullLineExceeds(_, _, flatDoc):
 					stack.push(flatDoc);
-				case Fill(items, sep):
+				case Fill(items, sep, _):
 					var k:Int = items.length;
 					while (k > 0) {
 						k--;
@@ -763,7 +783,7 @@ class Renderer {
 						inner.push({doc: flatDoc, mode: MFlat});
 					case IfFullLineExceeds(_, _, flatDoc):
 						inner.push({doc: flatDoc, mode: MFlat});
-					case Fill(items, sep):
+					case Fill(items, sep, _):
 						var k:Int = items.length;
 						while (k > 0) {
 							k--;
@@ -843,7 +863,7 @@ class Renderer {
 						inner.push({doc: flatDoc, mode: MFlat});
 					case IfFullLineExceeds(_, _, flatDoc):
 						inner.push({doc: flatDoc, mode: MFlat});
-					case Fill(items, sep):
+					case Fill(items, sep, _):
 						var k:Int = items.length;
 						while (k > 0) {
 							k--;

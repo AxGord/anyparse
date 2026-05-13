@@ -112,7 +112,7 @@ class D {
 			case IfFirstLineExceeds(_, _, fl): flatten(fl);
 			case IfLineExceeds(_, _, fl): flatten(fl);
 			case IfFullLineExceeds(_, _, fl): flatten(fl);
-			case Fill(items, sep):
+			case Fill(items, sep, _):
 				final flatSep:Doc = flatten(sep);
 				Concat(intersperse([for (i in items) flatten(i)], flatSep));
 			case OptSpace(s): Text(s);

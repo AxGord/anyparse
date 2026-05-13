@@ -120,12 +120,12 @@ package anyparse.core;
  *                      `IfLineExceeds`); `fitsFlat` and cascade-rule
  *                      static walks forward to `fl`. Slice
  *                      ω-iffulllineexceeds-primitive.
- * - `Fill(items, sep)` — Wadler `fillSep`. In flat mode, emits items
- *                      joined by `sep` flat. In break mode, packs items
- *                      left-to-right: before each `items[i]` (i > 0),
- *                      measures `sep + items[i]` flat from the current
- *                      column; if it fits, emits `sep` flat then the
- *                      item; if it doesn't fit, emits `sep` in break
+ * - `Fill(items, sep, ?tailReserve)` — Wadler `fillSep`. In flat mode,
+ *                      emits items joined by `sep` flat. In break mode,
+ *                      packs items left-to-right: before each `items[i]`
+ *                      (i > 0), measures `sep + items[i]` flat from the
+ *                      current column; if it fits, emits `sep` flat then
+ *                      the item; if it doesn't fit, emits `sep` in break
  *                      mode (so its inner `Line` becomes a hardline at
  *                      the Fill's indent) and starts the item on the
  *                      new line. Items[0] is always emitted at the
@@ -133,6 +133,15 @@ package anyparse.core;
  *                      per-item flat measurements, so an item containing
  *                      a multi-line block body still measures by its
  *                      "header" width and packs cleanly with siblings.
+ *                      `tailReserve` (default 0) — cols of post-Fill
+ *                      same-line content (typically trailing punct +
+ *                      close delim emitted OUTSIDE the Fill but on the
+ *                      same line as its last packed item). Subtracted
+ *                      from per-item-fit budget so the LAST packed item
+ *                      leaves room for that tail; mirrors fork's
+ *                      `wrapFillLine2AfterLast` accounting where each
+ *                      item carries its trailing comma in `firstLineLength`.
+ *                      Slice ω-fill-tail-reserve.
  * - `OptSpace(s)`    — optional inline whitespace, dropped when
  *                      immediately followed by a break-mode `Line`
  *                      (hardline). Used by lead emission to keep the
@@ -199,7 +208,7 @@ enum Doc {
 	IfFirstLineExceeds(n:Int, breakDoc:Doc, flatDoc:Doc);
 	IfLineExceeds(n:Int, breakDoc:Doc, flatDoc:Doc);
 	IfFullLineExceeds(n:Int, breakDoc:Doc, flatDoc:Doc);
-	Fill(items:Array<Doc>, sep:Doc);
+	Fill(items:Array<Doc>, sep:Doc, ?tailReserve:Int);
 	OptSpace(s:String);
 	OptHardline;
 	OptHardlineSkipAtOpenDelim;

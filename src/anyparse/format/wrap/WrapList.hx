@@ -566,7 +566,7 @@ class WrapList {
 					// Asymmetric BG semantic only applies to renderer-
 					// side rest-of-stack probe.
 					stack.push(flatDoc);
-				case Fill(items, sep):
+				case Fill(items, sep, _):
 					var k:Int = items.length;
 					while (k > 0) {
 						k--;
@@ -640,7 +640,7 @@ class WrapList {
 					if (r >= 0) return r;
 				}
 				-1;
-			case Fill(items, sep):
+			case Fill(items, sep, _):
 				items.length > 1 ? lastHardlineDepth(sep, depth) : -1;
 		};
 	}
@@ -704,7 +704,7 @@ class WrapList {
 				final first:Null<Doc> = items.find(it -> !isLeadingTransparent(it));
 				if (first == null) return false;
 				node = first;
-			case Fill(items, _):
+			case Fill(items, _, _):
 				final first:Null<Doc> = items.find(it -> !isLeadingTransparent(it));
 				if (first == null) return false;
 				node = first;
@@ -891,6 +891,30 @@ class WrapList {
 		// `fitsFlat` aborts on it and the Group commits to MBreak with
 		// `Nest` providing the continuation indent.
 		final softSep:Doc = Concat([Text(sep), Line(' ')]);
+		// Cols of post-Fill same-line content. Three components:
+		//   1. The eventual trailing-separator that lands on EACH wrapped
+		//      line (`,` from softSep going break-mode between this line's
+		//      last packed item and the next line's first item). Universal
+		//      — every non-final wrapped line ends with this `,`.
+		//   2. A `+1` semantic alignment for fork's `lineLength +
+		//      tokenLength >= maxLineLength` (strict-break-at-threshold)
+		//      vs our `fitsFlat`'s `flatWidth <= remaining` (lenient-pack-
+		//      at-threshold) semantic mismatch. Without it the per-item-
+		//      fit probe packs one item too many on lines that fork would
+		//      break at exactly `col == lineWidth` (target fixture:
+		//      `wrapping_of_function_signature.hxtest` byte-diff @ 616).
+		//   3. Last-line tail: optional explicit trailing comma + the
+		//      `closeInside` Doc's flat width + close delim. These share
+		//      the line with the LAST packed item of the LAST chunk.
+		// Subtracted from the Fill's per-item-fit budget so the last
+		// packed item on EACH wrapped line leaves room for that tail —
+		// mirrors fork's `wrapFillLine2AfterLast` accounting where each
+		// item carries its trailing comma in `firstLineLength`
+		// (slice ω-fill-tail-reserve).
+		final lastChunkTailReserve:Int = sep.length + 1
+			+ (appendTrailingComma ? sep.length : 0)
+			+ DocMeasure.flatTokenWidth(closeInside)
+			+ close.length;
 		final bodyParts:Array<Doc> = [];
 		var chunkStart:Int = 0;
 		for (i in 1...items.length + 1) {
@@ -905,7 +929,13 @@ class WrapList {
 					bodyParts.push(items[chunkStart]);
 				} else {
 					final chunk:Array<Doc> = items.slice(chunkStart, i);
-					bodyParts.push(Fill(chunk, softSep));
+					// Only the LAST chunk reserves cols for the tail —
+					// earlier chunks are followed by a forced `,\n` chunk
+					// boundary so their last-item-fit decision can't push
+					// the tail off the line. Reserving on them would
+					// tighten the in-chunk wrap budget without benefit.
+					final tailReserve:Int = atEnd ? lastChunkTailReserve : 0;
+					bodyParts.push(Fill(chunk, softSep, tailReserve));
 				}
 				chunkStart = i;
 			}
@@ -942,7 +972,16 @@ class WrapList {
 		appendTrailingComma:Bool
 	):Doc {
 		final softSep:Doc = Concat([Text(sep), Line(' ')]);
-		final inner:Doc = items.length == 1 ? items[0] : Fill(items, softSep);
+		// Tail reserve identical in structure to `shapeFillLine` but
+		// without the `closeInside + close` component — FLWLB places
+		// close on its own line via the forced `Line('\n')` between
+		// the Nest exit and `closeInside`. The `sep.length + 1` base
+		// covers (a) trailing softSep `,` landing on every wrapped
+		// line and (b) the fork-`>=` vs ours-`<=` semantic alignment.
+		// Slice ω-fill-tail-reserve.
+		final tailReserve:Int = sep.length + 1
+			+ (appendTrailingComma ? sep.length : 0);
+		final inner:Doc = items.length == 1 ? items[0] : Fill(items, softSep, tailReserve);
 		final tail:Doc = appendTrailingComma ? Text(sep) : Empty;
 		return Concat([
 			Text(open), openInside,
@@ -981,7 +1020,7 @@ class WrapList {
 					if (!isLeadingTransparent(it)) return false;
 				}
 				false;
-			case Fill(items, _):
+			case Fill(items, _, _):
 				items.length > 0 && hasLeadingHardline(items[0]);
 		};
 	}
