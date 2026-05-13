@@ -6117,7 +6117,14 @@ class WriterLowering {
 				// (the body's hardlines fail the parent's fit). With BG,
 				// the outer parens stay inline; the body still breaks via
 				// its own hardline-force-not-fit decision.
-				_dbg(_dc(_parts));
+				//
+				// ω-force-flat-engine sister-coverage: block-style trivia
+				// hand-rolls `_dbg(_dc(_parts))` and sits under wrap-cascade
+				// parents (e.g. function bodies inside NoWrap call args).
+				// `_dwb` matches the trivia-sep sister fix at 6491 — no-op
+				// outside Flatten frame, opt-out boundary inside one so a
+				// nested wrap-engine reads its own independent layout.
+				_dwb(_dbg(_dc(_parts)));
 			}
 		};
 	}
@@ -7103,7 +7110,13 @@ class WriterLowering {
 				_ti++;
 			}
 		});
-		elseBodyParts.push(macro _dc(_docs));
+		// ω-force-flat-engine sister-coverage: EOF Star is top-level
+		// (`HxModule.decls`) so its parent frame is the document root,
+		// not a wrap-cascade Flatten. `_dwb` is a defensive no-op here —
+		// kept for invariant symmetry with the other trivia dispatchers
+		// so a future caller that places EOF-style emit under a Flatten
+		// parent doesn't silently lose its hand-rolled hardlines.
+		elseBodyParts.push(macro _dwb(_dc(_docs)));
 		final elseBody:Expr = {expr: EBlock(elseBodyParts), pos: pos};
 		return macro {
 			final _arr = $fieldAccess;
@@ -7497,6 +7510,12 @@ class WriterLowering {
 					if (_trailBA) _trailDocs.push(_dhl());
 				}
 				final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+				// ω-force-flat-engine sister-coverage: tryparse Star is used
+				// for inner-Star bodies (case bodies, `HxConditionalDecl.body`)
+				// which can sit under wrap-cascade Flatten parents in expression
+				// position. Each leaf branch hand-rolls its terminal Doc — wrap
+				// uniformly in `_dwb` so a nested wrap-engine reads its own
+				// independent layout. `_dwb` is no-op outside Flatten frame.
 				if (_flatCase) {
 					// ω-flat-case-wrap-indent: when bodyPolicy flattens the
 					// case body inline (`case X: foo({...});`) but the body
@@ -7507,17 +7526,17 @@ class WriterLowering {
 					// Doc in `_dn(_cols, ...)` is a no-op in the flat path
 					// (no \n inside the body) and applies +1 indent on every
 					// inner newline when the body wraps. Issue_121 fixtures.
-					_dn(_cols, _dc(_docs));
+					_dwb(_dn(_cols, _dc(_docs)));
 				} else if (_nestBody) {
 					if (_arr.length > 0 && _trailDocs.length > 0) {
-						_dc([_dn(_cols, _dc(_docs)), _dc(_trailDocs)]);
+						_dwb(_dc([_dn(_cols, _dc(_docs)), _dc(_trailDocs)]));
 					} else {
 						for (_d in _trailDocs) _docs.push(_d);
-						_dn(_cols, _dc(_docs));
+						_dwb(_dn(_cols, _dc(_docs)));
 					}
 				} else {
 					for (_d in _trailDocs) _docs.push(_d);
-					_dc(_docs);
+					_dwb(_dc(_docs));
 				}
 			}
 		};
