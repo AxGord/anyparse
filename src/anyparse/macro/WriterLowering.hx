@@ -5122,11 +5122,23 @@ class WriterLowering {
 		// adds `_cols` to every internal hardline on top of the body's
 		// own Nest, double-indenting the multi-line operand. The fix
 		// runtime-peeks `flatLength(body)`: when -1 (anyHardline), emit
-		// `Concat[Text(' '), body]` (kw inline + body wraps internally
-		// with its own indent). Width-driven break path is preserved
-		// for single-line bodies that don't fit `lineWidth`.
+		// `Concat[OptSpace(' '), body]` (kw inline + body wraps
+		// internally with its own indent). Width-driven break path is
+		// preserved for single-line bodies that don't fit `lineWidth`.
+		// ω-optspace-leading-break: `_dop(' ')` instead of `_dt(' ')` —
+		// when the body's leading shape is itself a hardline (e.g. a
+		// long op-add chain whose `shapeOnePerLine` opens with
+		// `OptHardlineSkipAtOpenDelim`), the OptSpace drops cleanly via
+		// renderer's `pendingOptSpace = null` on the inner hardline emit,
+		// yielding `return\n\t<chain>` instead of `return \n\t<chain>`.
+		// For bodies whose leading shape is plain Text (e.g. `return
+		// foo(\narg)` — multi-line call with leading `foo(`), the
+		// OptSpace flushes normally as a space — byte-identical to the
+		// pre-slice `_dt(' ')` emission. Sister fix to the kw-led
+		// optional-Ref lead-value split at line 2129 which uses the same
+		// idiom for `var x =\n{...}` object-literal-leftCurly-Next.
 		final fitInnerExpr:Expr = macro anyparse.format.wrap.WrapList.flatLength(_body) == -1
-			? _dc([_dt(' '), _body])
+			? _dc([_dop(' '), _body])
 			: _dbg(_dn(_cols, _dc([_dl(), _body])));
 		final fitExpr:Expr = if (elseFieldName == null) macro {
 			final _body:anyparse.core.Doc = $writeCall;
