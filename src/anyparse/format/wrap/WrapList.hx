@@ -91,7 +91,8 @@ class WrapList {
 		leadFlat:Doc = Empty, leadBreak:Doc = Empty,
 		forceExceeds:Bool = false,
 		?trailBreak:Doc,
-		?forceMode:Null<WrapMode>
+		?forceMode:Null<WrapMode>,
+		compactContinuation:Bool = false
 	):Doc {
 		// `Line('\n')` is not a Haxe-constant default — unwrap a null
 		// sentinel into the legacy hardcoded hardline here.
@@ -146,7 +147,23 @@ class WrapList {
 		final additional:Int = rules.defaultAdditionalIndent ?? 0;
 		final probeMode:WrapMode = decideWithLineLengthState(rules, items.length, maxLen, total, true, anyHardline, _ -> false);
 		final cascadeForcesBreak:Bool = probeMode == OnePerLine || probeMode == OnePerLineAfterFirst || probeMode == FillLineWithLeadingBreak;
-		final cols:Int = baseCols * (cascadeForcesBreak && additional > 0 ? additional : 1 + additional);
+		// ω-functionsignature-body-aware-indent: fork drops the paren-bump
+		// `+1` from FillLine / NoWrap continuation when the wrapped signature
+		// is followed by an empty / absent body (`function foo(...) {}` or
+		// `function foo(...);`). Continuation lands at `member+additional` (=
+		// 1 tab) instead of `member+1+additional` (= 2 tabs). Mirrors fork's
+		// `paren_indent_function_signature` token-tree `calcIndent` rule that
+		// reduces inner-token indent when no body content follows the close-
+		// paren. The signal is threaded via the `compactContinuation` param —
+		// callers (WriterLowering's `@:fmt(wrapRules)` dispatch on
+		// `HxFnDecl.params`) read `opt._fnSigBodyEmpty` and pass it here so
+		// the engine stays format-neutral. Cascade-forced break (OPL / OPLAF
+		// / FLWLB) already took the `additional`-only branch — body-empty
+		// extends FillLine / NoWrap to the same regime when the signal is
+		// live. Default `false` keeps every other wrap-site (call args,
+		// object lit, anon-type, anon-fn-sig) at the legacy `1 + additional`.
+		final compactCont:Bool = cascadeForcesBreak || compactContinuation;
+		final cols:Int = baseCols * (compactCont && additional > 0 ? additional : 1 + additional);
 
 		// Column-aware `LineLengthLargerThan` thresholds (slice
 		// ω-ifwidthexceeds-infra). Cascade rules with `lineLength >= n`

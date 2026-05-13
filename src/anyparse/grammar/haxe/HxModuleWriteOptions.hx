@@ -1412,6 +1412,26 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    The underscore prefix marks it as internal — no JSON loader entry,
  *    no `hxformat.json` ingest. Default `false`.
  *
+ * Internal field added in slice ω-functionsignature-body-aware-indent
+ * (fork's body-aware continuation indent on wrapped function signatures):
+ *  - `_fnSigBodyEmpty` — write-time-only signal flagging that the
+ *    currently-emitting `HxFnDecl` has an empty/absent body
+ *    (`NoBody` / `BlockBody({})` / `UntypedBlockBody({})`). Set via
+ *    `@:fmt(propagateFnBodyEmpty('body'))` struct-level meta on
+ *    `HxFnDecl`, evaluated at struct emit prelude via an inline switch
+ *    over `HxFnBody` ctors (`NoBody` / empty-`stmts` `BlockBody` /
+ *    empty-`stmts` `UntypedBlockBody` → true; `ExprBody` → false),
+ *    restored after struct emit.
+ *    Consumed by `WrapList.emit`'s cols formula: when `true` AND the
+ *    `defaultAdditionalIndent` is positive, the FillLine / NoWrap path
+ *    drops the `+1` paren-bump continuation, landing at
+ *    `member+additional` (= 1 tab) instead of `member+1+additional`
+ *    (= 2 tabs). Mirrors fork's token-tree `calcIndent` reduction when
+ *    no body tokens follow the close-paren of a wrapped signature.
+ *    Sister channel to `_inAnonFnBody` / `_inTypedefBody`. The
+ *    underscore prefix marks it as internal — no JSON loader entry,
+ *    no `hxformat.json` ingest. Default `false`.
+ *
  * Internal field added in slice ω-chain-fillline-in-condwrap (chain
  * mode override for opBoolChain / opAddSubChain inside an active
  * `@:fmt(condWrap)` cond-wrap site):
@@ -1646,5 +1666,6 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	_classExtern:Bool,
 	_inAnonFnBody:Bool,
 	_inTypedefBody:Bool,
+	_fnSigBodyEmpty:Bool,
 	_chainModeOverride:Null<WrapMode>,
 };

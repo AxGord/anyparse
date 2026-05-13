@@ -1314,10 +1314,11 @@ class WriterLowering {
 				// via `propagateTypedefContext`. Non-typedef anon callers
 				// (var-type-hint, fn-return-type) stay cascade-driven.
 				final forceMultiTypedef:Bool = branch.fmtHasFlag('forceMultiInTypedef');
+				final bodyAware:Bool = branch.fmtHasFlag('bodyAwareCompactIndent');
 				parts.push(triviaSepStarExpr(
 					argsAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, leadText, trailText, sepText,
 					wrapRulesField, knobLeftCurly, knobRightCurly, null, null, openInsideExpr, closeInsideExpr, beforeDocComments,
-					forceMultiTypedef
+					forceMultiTypedef, bodyAware
 				));
 			} else {
 				// ω-bropen-keep: forward `@:fmt(keepCurlyBlanks)` from the
@@ -2712,7 +2713,46 @@ class WriterLowering {
 		}
 
 		final dcExpr:Expr = dcCall(parts);
-		return macro return $dcExpr;
+
+		// ω-functionsignature-body-aware-indent: struct-level
+		// `@:fmt(propagateFnBodyEmpty('<bodyField>'))` flags `opt._fnSigBodyEmpty`
+		// based on emptiness of the named body field (typed `HxFnBody` / paired
+		// `HxFnBodyT`). The flag is consumed by `WrapList.emit`'s cols formula
+		// to drop the FillLine `+1` paren-bump continuation when the wrapped
+		// signature is followed by an empty / absent body (`{}` / `;` /
+		// `untyped {}`). Mirrors fork's token-tree `calcIndent` reduction.
+		//
+		// Save-mutate-eval-restore pattern guards nested HxFnDecl: each level
+		// stashes the inherited flag and writes its own; restore reverts on
+		// exit. The pattern matches `value.<bodyField>` against `HxFnBody`'s
+		// four ctors with bare names so plain-mode (`HxFnBody`) and trivia-mode
+		// (`HxFnBodyT`) both resolve cleanly — TriviaTypeSynth preserves ctor
+		// names verbatim across paired types.
+		final fnBodyEmptyArgs:Null<Array<String>> = node.fmtReadStringArgs('propagateFnBodyEmpty');
+		if (fnBodyEmptyArgs == null) return macro return $dcExpr;
+		if (fnBodyEmptyArgs.length != 1)
+			Context.fatalError(
+				'WriterLowering: @:fmt(propagateFnBodyEmpty) expects 1 string arg (bodyFieldName), got ${fnBodyEmptyArgs.length}',
+				Context.currentPos()
+			);
+		final bodyField:String = fnBodyEmptyArgs[0];
+		final bodyAccess:Expr = {expr: EField(macro value, bodyField), pos: Context.currentPos()};
+		final isEmptyExpr:Expr = macro {
+			final _body = $bodyAccess;
+			switch _body {
+				case NoBody: true;
+				case BlockBody(_b): _b.stmts.length == 0;
+				case UntypedBlockBody(_u): _u.block.stmts.length == 0;
+				case ExprBody(_): false;
+			}
+		};
+		return macro {
+			final _savedFnSigBodyEmpty:Bool = opt._fnSigBodyEmpty;
+			opt._fnSigBodyEmpty = $isEmptyExpr;
+			final _resultDoc:anyparse.core.Doc = $dcExpr;
+			opt._fnSigBodyEmpty = _savedFnSigBodyEmpty;
+			return _resultDoc;
+		};
 	}
 
 	/** Emit writer steps for a Star struct field. */
@@ -3058,13 +3098,14 @@ class WriterLowering {
 					// context is active — non-typedef anon consumers
 					// (var-type-hint, fn-return-type) stay cascade-driven.
 					final forceMultiTypedef:Bool = starNode.fmtHasFlag('forceMultiInTypedef');
+					final bodyAware:Bool = starNode.fmtHasFlag('bodyAwareCompactIndent');
 					parts.push(triviaSepStarExpr(
 						fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn,
 						openText ?? '', closeText, sepText, wrapRulesField,
 						leftCurlyOwnedBySep ? knobLeftCurly : null,
 						knobRightCurly,
 						trailPresentAccess, trailingCommaField,
-						null, null, false, forceMultiTypedef
+						null, null, false, forceMultiTypedef, bodyAware
 					));
 					return;
 				}
@@ -3262,9 +3303,25 @@ class WriterLowering {
 			final wrapRulesField:Null<String> = starNode.fmtReadString('wrapRules');
 			final useFill:Bool = starNode.fmtHasFlag('fill');
 			final fillDouble:Bool = starNode.fmtHasFlag('fillDoubleIndent');
+			// ω-functionsignature-body-aware-indent: `@:fmt(bodyAwareCompactIndent)`
+			// on the Star tells the wrapRules dispatch to thread
+			// `opt._fnSigBodyEmpty` into `WrapList.emit`'s `compactContinuation`
+			// param. The flag is set by the sibling struct-level meta
+			// `@:fmt(propagateFnBodyEmpty(<bodyField>))` and consumed only by
+			// the cascade engine. Fields without this meta pass `false` so
+			// only the opt-in site reacts; reads `opt._fnSigBodyEmpty` at
+			// runtime so non-HxFnDecl wraps inside descendant code (default
+			// values, body call args, …) see `false` (no propagation past
+			// the opt-fanout span — see `lowerStruct`'s save/restore).
+			final bodyAware:Bool = starNode.fmtHasFlag('bodyAwareCompactIndent');
 			final listCall:Expr = if (wrapRulesField != null) {
 				final rulesExpr:Expr = optFieldAccess(wrapRulesField);
-				macro anyparse.format.wrap.WrapList.emit($v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $openInsideExpr, $closeInsideExpr, $keepInnerExpr, $rulesExpr, $tcExpr);
+				final compactContExpr:Expr = bodyAware ? (macro opt._fnSigBodyEmpty) : (macro false);
+				macro anyparse.format.wrap.WrapList.emit(
+					$v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt,
+					$openInsideExpr, $closeInsideExpr, $keepInnerExpr, $rulesExpr, $tcExpr,
+					_de(), _de(), false, null, null, $compactContExpr
+				);
 			} else if (useFill) {
 				macro fillList($v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $tcExpr, $openInsideExpr, $closeInsideExpr, $keepInnerExpr, $v{fillDouble});
 			} else {
@@ -6091,7 +6148,8 @@ class WriterLowering {
 		trailPresentAccess:Null<Expr> = null, trailingCommaField:Null<String> = null,
 		openInsideExpr:Null<Expr> = null, closeInsideExpr:Null<Expr> = null,
 		beforeDocCommentEmptyLines:Bool = false,
-		forceMultiInTypedef:Bool = false
+		forceMultiInTypedef:Bool = false,
+		bodyAwareCompactIndent:Bool = false
 	):Expr {
 		// ω-trivia-sep-anontype-braces (Phase B1): when the call site
 		// reads `@:fmt(anonTypeBracesOpen)` / `objectLiteralBracesOpen`
@@ -6300,6 +6358,16 @@ class WriterLowering {
 			: macro (null : Null<anyparse.format.wrap.WrapMode>);
 		final noTriviaBranch:Expr = if (wrapRulesField != null) {
 			final rulesExpr:Expr = optFieldAccess(wrapRulesField);
+			// ω-functionsignature-body-aware-indent: thread the field-level
+			// `@:fmt(bodyAwareCompactIndent)` opt-in into `WrapList.emit`'s
+			// 16th `compactContinuation` param. Reads `opt._fnSigBodyEmpty`
+			// at runtime — true only inside HxFnDecl's struct-emit span
+			// where `@:fmt(propagateFnBodyEmpty('body'))` flips the flag.
+			// Other sep-Star consumers (HxType.Anon.fields,
+			// HxObjectLit.fields, etc.) leave the flag clear and pass
+			// `macro false`, keeping the engine byte-identical to pre-slice
+			// for non-opt-in sites.
+			final compactContExpr:Expr = bodyAwareCompactIndent ? (macro opt._fnSigBodyEmpty) : (macro false);
 			macro {
 				final _docs:Array<anyparse.core.Doc> = [];
 				var _si2:Int = 0;
@@ -6311,7 +6379,7 @@ class WriterLowering {
 				anyparse.format.wrap.WrapList.emit(
 					$v{openText}, $v{closeText}, $v{sepText},
 					_docs, opt, $openInsideDoc, $closeInsideDoc, false, $rulesExpr, $appendTrailingCommaExpr,
-					$wrapLeadFlatDoc, $wrapLeadBreakDoc, $forceExceedsExpr, $wrapTrailBreakDoc, $forceModeExpr
+					$wrapLeadFlatDoc, $wrapLeadBreakDoc, $forceExceedsExpr, $wrapTrailBreakDoc, $forceModeExpr, $compactContExpr
 				);
 			};
 		} else {

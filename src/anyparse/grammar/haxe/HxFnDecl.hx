@@ -43,11 +43,11 @@ package anyparse.grammar.haxe;
  * `BlockBody`. `HxFnBody` is trivia-bearing (paired type `HxFnBodyT`).
  */
 @:peg
-@:fmt(multilineWhenFieldShape('body'))
+@:fmt(multilineWhenFieldShape('body'), propagateFnBodyEmpty('body'))
 typedef HxFnDecl = {
 	var name:HxIdentLit;
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose) var typeParams:Null<Array<HxTypeParamDecl>>;
-	@:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams'), funcParamParens, wrapRules('functionSignatureWrap')) var params:Array<HxParam>;
+	@:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams'), funcParamParens, wrapRules('functionSignatureWrap'), bodyAwareCompactIndent) var params:Array<HxParam>;
 	@:optional @:fmt(typeHintColon) @:lead(':') var returnType:Null<HxType>;
 	@:fmt(leftCurly('blockLeftCurly'), bodyPolicyForCtor('UntypedBlockBody', 'untypedBody')) var body:HxFnBody;
 }
