@@ -58,18 +58,32 @@ private class Frame {
 	public var fillSep:Null<Doc>;
 	public var fillTailReserve:Int;
 
-	public inline function new(indent:Int, mode:Mode, doc:Doc) {
+	/**
+	 * Force-flat propagation flag (ω-force-flat-engine, slice B). When
+	 * `true`, the renderer treats every `Group` / `BodyGroup` as if it
+	 * had chosen `MFlat` (skipping `fitsFlat`), picks the flat branch of
+	 * every `IfBreak` / `If*Exceeds`, collapses `Fill` to a plain sep-
+	 * joined emit, drops `OptHardline*` entirely, and renders `Line(flat)`
+	 * as plain text regardless of `mode`. Entered via `Doc.Flatten(inner)`;
+	 * reset via `Doc.WrapBoundary(inner)` so nested wrap-cascade outputs
+	 * decide independently inside a parent's force-flat region. Default
+	 * `false` keeps every existing call-site unchanged.
+	 */
+	public var forceFlat:Bool;
+
+	public inline function new(indent:Int, mode:Mode, doc:Doc, forceFlat:Bool = false) {
 		this.indent = indent;
 		this.mode = mode;
 		this.doc = doc;
+		this.forceFlat = forceFlat;
 		this.fillRest = null;
 		this.fillIdx = 0;
 		this.fillSep = null;
 		this.fillTailReserve = 0;
 	}
 
-	public static inline function fillCont(indent:Int, rest:Array<Doc>, idx:Int, sep:Doc, tailReserve:Int):Frame {
-		final f:Frame = new Frame(indent, MBreak, Empty);
+	public static inline function fillCont(indent:Int, rest:Array<Doc>, idx:Int, sep:Doc, tailReserve:Int, forceFlat:Bool = false):Frame {
+		final f:Frame = new Frame(indent, MBreak, Empty, forceFlat);
 		f.fillRest = rest;
 		f.fillIdx = idx;
 		f.fillSep = sep;
@@ -180,9 +194,9 @@ class Renderer {
 					// `firstLineLength` (slice ω-fill-tail-reserve).
 					final fits:Bool = fitsFlat(width - col - tailReserve, f.indent, Concat([fillSep, fillRest[idx]]));
 					if (idx + 1 < fillRest.length)
-						stack.push(Frame.fillCont(f.indent, fillRest, idx + 1, fillSep, tailReserve));
-					stack.push(new Frame(f.indent, MBreak, fillRest[idx]));
-					stack.push(new Frame(f.indent, fits ? MFlat : MBreak, fillSep));
+						stack.push(Frame.fillCont(f.indent, fillRest, idx + 1, fillSep, tailReserve, f.forceFlat));
+					stack.push(new Frame(f.indent, MBreak, fillRest[idx], f.forceFlat));
+					stack.push(new Frame(f.indent, fits ? MFlat : MBreak, fillSep, f.forceFlat));
 				}
 				continue;
 			}
@@ -201,7 +215,7 @@ class Renderer {
 						lastEmit = lastEmitFromText(s);
 					}
 				case Line(flat):
-					if (f.mode == MFlat) {
+					if (f.forceFlat || f.mode == MFlat) {
 						flushOptSpace();
 						if (flat.length > 0 && pendingIndent >= 0) {
 							writeIndent(buf, pendingIndent, indentChar, tabWidth);
@@ -243,8 +257,15 @@ class Renderer {
 					// dropping emitter is the "inner" one and its indent
 					// is more specific (e.g. objectLit's leftCurly Next
 					// inside a wrap-engine-driven multi-arg list).
+					//
+					// Force-flat (slice B): inside a `Flatten(...)` region,
+					// every optional hardline is collapsed — `pendingOptSpace`
+					// is cleared (mirror real-hardline) but no `\n` is
+					// emitted and `pendingIndent`/`col`/`lastEmit` stay put.
 					pendingOptSpace = null;
-					if (lastEmit == Hardline) {
+					if (f.forceFlat) {
+						// drop entirely
+					} else if (lastEmit == Hardline) {
 						pendingIndent = f.indent;
 						col = f.indent;
 					} else {
@@ -265,7 +286,13 @@ class Renderer {
 					// (post-flush) position via the same `pendingOptSpace`
 					// channel as `OptSpace(' ')` would, so the flat-mode
 					// `Line(' ')` collapse ordering still holds.
-					if (lastEmit == Hardline) {
+					//
+					// Force-flat (slice B): inside a `Flatten(...)` region,
+					// every preceding `OptHardline*` was dropped, so a
+					// `Hardline` lastEmit can only carry over from OUTSIDE
+					// the region. Force the space unconditionally — the
+					// drop-on-state semantic is moot inside force-flat.
+					if (!f.forceFlat && lastEmit == Hardline) {
 						pendingOptSpace = null;
 					} else {
 						pendingOptSpace = pendingOptSpace == null ? ' ' : pendingOptSpace + ' ';
@@ -289,8 +316,14 @@ class Renderer {
 					//     break-mode `Line`. Used by chain shapes for
 					//     the leading `\n` before items[0] in
 					//     outer-context cases (`dirty = chain`).
+					//
+					// Force-flat (slice B): same drop-entirely behaviour as
+					// `OptHardline` — `pendingOptSpace` cleared, no `\n`
+					// emitted, surrounding state untouched.
 					pendingOptSpace = null;
-					switch lastEmit {
+					if (f.forceFlat) {
+						// drop entirely
+					} else switch lastEmit {
 						case OpenDelim:
 							// drop, leave col / pendingIndent / lastEmit as-is
 						case Hardline:
@@ -315,18 +348,28 @@ class Renderer {
 					// indent; canonical Wadler cumulative nesting gives
 					// outer+inner instead.
 					final nextIndent:Int = f.mode == MBreak ? f.indent + n : f.indent;
-					stack.push(new Frame(nextIndent, f.mode, inner));
+					stack.push(new Frame(nextIndent, f.mode, inner, f.forceFlat));
 				case Concat(items):
 					var i:Int = items.length;
-					while (--i >= 0) stack.push(new Frame(f.indent, f.mode, items[i]));
+					while (--i >= 0) stack.push(new Frame(f.indent, f.mode, items[i], f.forceFlat));
 				case Group(inner) | BodyGroup(inner):
-					if (fitsFlat(width - col, f.indent, inner)) {
+					// Force-flat (slice B): skip `fitsFlat` entirely and push
+					// the inner as MFlat with `forceFlat=true` propagated.
+					// The `Flatten` region committed to flat for the whole
+					// subtree at entry — local fit measurement is moot here.
+					if (f.forceFlat) {
+						stack.push(new Frame(f.indent, MFlat, inner, true));
+					} else if (fitsFlat(width - col, f.indent, inner)) {
 						stack.push(new Frame(f.indent, MFlat, inner));
 					} else {
 						stack.push(new Frame(f.indent, MBreak, inner));
 					}
 				case IfBreak(breakDoc, flatDoc):
-					stack.push(new Frame(f.indent, f.mode, f.mode == MBreak ? breakDoc : flatDoc));
+					// Force-flat (slice B): always pick `flatDoc`, propagate
+					// `forceFlat=true` so the chosen branch keeps the region
+					// semantic for its own descendants.
+					final picked:Doc = (f.forceFlat || f.mode == MFlat) ? flatDoc : breakDoc;
+					stack.push(new Frame(f.indent, f.mode, picked, f.forceFlat));
 				case IfWidthExceeds(n, breakDoc, flatDoc):
 					// Column-aware probe: rule fires when `col +
 					// DocMeasure.flatTokenWidth(flatDoc) >= n` (matches the
@@ -349,8 +392,12 @@ class Renderer {
 					// independent of the enclosing Group's flat/break
 					// choice; it answers a separate column-vs-threshold
 					// question.
-					final crosses:Bool = (col + DocMeasure.flatTokenWidth(flatDoc) >= n);
-					stack.push(new Frame(f.indent, f.mode, crosses ? breakDoc : flatDoc));
+					if (f.forceFlat) {
+						stack.push(new Frame(f.indent, f.mode, flatDoc, true));
+					} else {
+						final crosses:Bool = (col + DocMeasure.flatTokenWidth(flatDoc) >= n);
+						stack.push(new Frame(f.indent, f.mode, crosses ? breakDoc : flatDoc));
+					}
 				case IfFirstLineExceeds(n, breakDoc, flatDoc):
 					// First-line-aware probe: rule fires when `col +
 					// flatTokenWidthFirstLine(flatDoc) >= n`. Differs from
@@ -368,8 +415,12 @@ class Renderer {
 					// primitives answer a column-vs-threshold question
 					// independent of the enclosing Group's flat/break
 					// choice.
-					final firstLineCrosses:Bool = (col + flatTokenWidthFirstLine(flatDoc) >= n);
-					stack.push(new Frame(f.indent, f.mode, firstLineCrosses ? breakDoc : flatDoc));
+					if (f.forceFlat) {
+						stack.push(new Frame(f.indent, f.mode, flatDoc, true));
+					} else {
+						final firstLineCrosses:Bool = (col + flatTokenWidthFirstLine(flatDoc) >= n);
+						stack.push(new Frame(f.indent, f.mode, firstLineCrosses ? breakDoc : flatDoc));
+					}
 				case IfLineExceeds(n, breakDoc, flatDoc):
 					// Line-length-aware probe: rule fires when `col +
 					// DocMeasure.flatTokenWidth(flatDoc) +
@@ -386,8 +437,12 @@ class Renderer {
 					// `IfFirstLineExceeds`: probe is independent of the
 					// enclosing Group's flat/break choice. Slice
 					// ω-iflineexceeds-infra.
-					final lineCrosses:Bool = (col + DocMeasure.flatTokenWidth(flatDoc) + flatTokenWidthOfRestStack(stack) >= n);
-					stack.push(new Frame(f.indent, f.mode, lineCrosses ? breakDoc : flatDoc));
+					if (f.forceFlat) {
+						stack.push(new Frame(f.indent, f.mode, flatDoc, true));
+					} else {
+						final lineCrosses:Bool = (col + DocMeasure.flatTokenWidth(flatDoc) + flatTokenWidthOfRestStack(stack) >= n);
+						stack.push(new Frame(f.indent, f.mode, lineCrosses ? breakDoc : flatDoc));
+					}
 				case IfFullLineExceeds(n, breakDoc, flatDoc):
 					// Sibling of `IfLineExceeds` with asymmetric BG
 					// semantic: the primitive's own subtree uses the
@@ -403,19 +458,25 @@ class Renderer {
 					// while avoiding the chain-of-lambdas over-fire
 					// (regression class of the symmetric-descend
 					// approach). Slice ω-iffulllineexceeds-primitive.
-					final fullLineCrosses:Bool = (col + DocMeasure.flatTokenWidth(flatDoc) + flatTokenWidthOfRestStackFull(stack) >= n);
-					stack.push(new Frame(f.indent, f.mode, fullLineCrosses ? breakDoc : flatDoc));
+					if (f.forceFlat) {
+						stack.push(new Frame(f.indent, f.mode, flatDoc, true));
+					} else {
+						final fullLineCrosses:Bool = (col + DocMeasure.flatTokenWidth(flatDoc) + flatTokenWidthOfRestStackFull(stack) >= n);
+						stack.push(new Frame(f.indent, f.mode, fullLineCrosses ? breakDoc : flatDoc));
+					}
 				case Fill(items, sep, tailReserveOpt):
 					if (items.length == 0) {
 						// nothing
-					} else if (f.mode == MFlat) {
+					} else if (f.forceFlat || f.mode == MFlat) {
 						// All-flat: items joined by sep flat; reverse-push for
-						// natural left-to-right pop order.
+						// natural left-to-right pop order. Force-flat (slice B)
+						// routes here too — items + sep propagate `forceFlat`
+						// so nested wrap markers inside an item stay collapsed.
 						var k:Int = items.length;
 						while (k > 0) {
 							k--;
-							stack.push(new Frame(f.indent, MFlat, items[k]));
-							if (k > 0) stack.push(new Frame(f.indent, MFlat, sep));
+							stack.push(new Frame(f.indent, MFlat, items[k], f.forceFlat));
+							if (k > 0) stack.push(new Frame(f.indent, MFlat, sep, f.forceFlat));
 						}
 					} else {
 						// Per-item fill: push items[0] first, then a FillCont
@@ -431,14 +492,26 @@ class Renderer {
 							stack.push(Frame.fillCont(f.indent, items, 1, sep, tailReserve));
 						stack.push(new Frame(f.indent, MBreak, items[0]));
 					}
-				case Flatten(inner) | WrapBoundary(inner):
-					// ω-force-flat-engine slice A: pass-through walker arm.
-					// Slice B will introduce `Frame.forceFlat` dispatch that
-					// distinguishes Flatten (sets true) from WrapBoundary
-					// (clears to false). Until then both ctors are inert —
-					// inner is rendered with the enclosing frame's mode/indent
-					// exactly as if the marker were absent.
-					stack.push(new Frame(f.indent, f.mode, inner));
+				case Flatten(inner):
+					// ω-force-flat-engine slice B: enter force-flat region.
+					// Push `inner` with `MFlat` mode and `forceFlat=true` so
+					// every descendant Group/IfBreak/Fill/etc. follows the
+					// flat dispatch path until a `WrapBoundary` resets the
+					// flag (or the subtree drains). Nested `Flatten` is a
+					// no-op — pushing `forceFlat=true` when already `true`
+					// is idempotent. Note: no emitter constructs `Flatten`
+					// yet (slice D opt-in); this arm is exercise-tested
+					// only after slice C/D land.
+					stack.push(new Frame(f.indent, MFlat, inner, true));
+				case WrapBoundary(inner):
+					// ω-force-flat-engine slice B: reset force-flat. Push
+					// `inner` with the enclosing frame's mode preserved and
+					// `forceFlat=false` so nested wrap-cascade outputs
+					// evaluate their own conditions independently inside a
+					// parent's force-flat region. When the enclosing context
+					// did NOT have force-flat active, this is a no-op pass-
+					// through (same shape as the prior slice-A arm).
+					stack.push(new Frame(f.indent, f.mode, inner, false));
 			}
 		}
 

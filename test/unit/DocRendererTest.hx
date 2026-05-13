@@ -689,4 +689,93 @@ class DocRendererTest extends Test {
 		]);
 		Assert.equals('a bc', Renderer.render(D.flatten(doc), 80));
 	}
+
+	// ω-force-flat-engine slice B: render-time `Doc.Flatten(inner)` /
+	// `Doc.WrapBoundary(inner)` markers. Distinct from `D.flatten` (a
+	// structural transform that rewrites the tree); the ctors below
+	// preserve the input shape and let the renderer's `forceFlat`
+	// dispatch interpret them at emit time. Tests pin the dispatch
+	// behaviour now so slice C/D wiring can rely on it.
+
+	function testRenderFlattenForcesGroupFlatAtNarrowWidth() {
+		// Without Flatten: a Group with two `D.line()` separators at
+		// width=3 commits to MBreak (`a\nb\nc`). With Flatten wrapping
+		// the same Group, `fitsFlat` is skipped and the Group renders
+		// as MFlat regardless of width — softlines emit their flat
+		// substring (' ' for `D.line()`).
+		final inner:Doc = D.concat([
+			D.text('a'), D.line(), D.text('b'), D.line(), D.text('c'),
+		]);
+		final group:Doc = D.group(inner);
+		Assert.equals('a\nb\nc', Renderer.render(group, 3));
+		Assert.equals('a b c', Renderer.render(Flatten(group), 3));
+	}
+
+	function testRenderFlattenPicksFlatBranchOfEveryIfStar() {
+		// All five branch-or-flat primitives (`IfBreak`, `IfWidthExceeds`,
+		// `IfFirstLineExceeds`, `IfLineExceeds`, `IfFullLineExceeds`)
+		// pick `flatDoc` inside a `Flatten` region — the probes are
+		// skipped entirely. Thresholds of `0` would normally fire `brk`.
+		final inside:Doc = D.concat([
+			IfBreak(D.text('BRK1'), D.text('a')),
+			IfWidthExceeds(0, D.text('BRK2'), D.text('b')),
+			IfFirstLineExceeds(0, D.text('BRK3'), D.text('c')),
+			IfLineExceeds(0, D.text('BRK4'), D.text('d')),
+			IfFullLineExceeds(0, D.text('BRK5'), D.text('e')),
+		]);
+		Assert.equals('abcde', Renderer.render(Flatten(inside), 80));
+	}
+
+	function testRenderFlattenDropsOptHardlineKeepsOptSpace() {
+		// Inside Flatten, `OptHardline` and `OptHardlineSkipAtOpenDelim`
+		// are dropped entirely; `OptSpace(' ')` still emits its space;
+		// `OptSpaceSkipAfterHardline` emits a space (no preceding
+		// hardline can exist inside the force-flat region).
+		final inside:Doc = D.concat([
+			D.text('a'),
+			OptHardline,
+			D.optSpace(' '),
+			D.text('b'),
+			OptHardlineSkipAtOpenDelim,
+			D.optSpaceSkipAfterHardline(),
+			D.text('c'),
+		]);
+		Assert.equals('a b c', Renderer.render(Flatten(inside), 80));
+	}
+
+	function testRenderFlattenFillJoinsAllFlat() {
+		// Inside Flatten, `Fill(items, sep)` skips per-item-fit dispatch
+		// and emits items interspersed with `sep` in MFlat. The `sep`
+		// (`D.line()`) renders as its flat substring ' '.
+		final fill:Doc = D.fill([D.text('x'), D.text('y'), D.text('z')], D.line());
+		Assert.equals('x y z', Renderer.render(Flatten(fill), 3));
+	}
+
+	function testRenderWrapBoundaryResetsForceFlatInsideFlatten() {
+		// `WrapBoundary` clears `forceFlat` for its subtree. A Group
+		// nested inside `Flatten(WrapBoundary(...))` decides flat/break
+		// normally — at width=3, the boundary-wrapped Group reverts to
+		// MBreak because `fitsFlat` runs again.
+		final inner:Doc = D.concat([
+			D.text('a'), D.line(), D.text('b'), D.line(), D.text('c'),
+		]);
+		final wrapped:Doc = WrapBoundary(D.group(inner));
+		// Outside Flatten, WrapBoundary is a no-op pass-through.
+		Assert.equals('a\nb\nc', Renderer.render(wrapped, 3));
+		// Inside Flatten, the boundary resets force-flat so the inner
+		// Group's `fitsFlat` fires and picks MBreak at width=3.
+		Assert.equals('a\nb\nc', Renderer.render(Flatten(wrapped), 3));
+	}
+
+	function testRenderNestedFlattenIsIdempotent() {
+		// `Flatten(Flatten(x))` is the same as `Flatten(x)` — pushing
+		// `forceFlat=true` over an already-`true` frame is a no-op.
+		final inner:Doc = D.group(D.concat([
+			D.text('a'), D.line(), D.text('b'),
+		]));
+		Assert.equals(
+			Renderer.render(Flatten(inner), 3),
+			Renderer.render(Flatten(Flatten(inner)), 3)
+		);
+	}
 }
