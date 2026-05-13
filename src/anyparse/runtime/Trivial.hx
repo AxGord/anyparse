@@ -57,6 +57,18 @@ package anyparse.runtime;
  *    Null when absent.
  *    Only one trailing slot: multiple comments on the same trailing
  *    line are unusual enough to collapse into a single slot.
+ *  - `sepAfter` — source had a separator (e.g. `,`) immediately AFTER
+ *    this element, before either the next element's leading trivia or
+ *    the close literal. Defaults to `true` so non-tracking sites
+ *    (postfix args, tryparse Stars, raw→paired bridge) preserve the
+ *    legacy "always emit sep" behaviour. Sites that actually capture
+ *    source presence (`@:sep` + `@:trivia` + `@:trail` Stars at
+ *    `emitTriviaStarFieldSteps` and the matching Alt path) store the
+ *    real `matchLit` result so the writer can suppress inter-element
+ *    commas the source intentionally omitted (lineends/issue_111).
+ *    Sister to the Star's own `trailPresent:Bool` synth slot — last
+ *    element's `sepAfter` is the same value, kept separate to avoid
+ *    cross-coupling existing trailing-comma logic.
  *  - `node` — the wrapped AST node itself.
  *
  * Shape is flat (no inner `trivia` struct) — until an actual use case
@@ -70,5 +82,6 @@ typedef Trivial<T> = {
 	var newlineBefore:Bool;
 	var leadingComments:Array<String>;
 	var trailingComment:Null<String>;
+	var sepAfter:Bool;
 	var node:T;
 }

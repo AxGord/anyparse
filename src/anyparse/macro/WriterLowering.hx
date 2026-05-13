@@ -6589,7 +6589,18 @@ class WriterLowering {
 						if (_t.blankAfterLeadingComments && _t.leadingComments.length > 0) _inner.push(_dhl());
 						final _elem:anyparse.core.Doc = $triviaElemCall;
 						var _line:anyparse.core.Doc = _elem;
-						if (_si < _arr.length - 1 || $appendTrailingCommaExpr)
+						// ω-objectlit-source-inter-sep: inter-element comma
+						// honours source presence via `_t.sepAfter` (default
+						// `true` for non-tracking sites — see Trivial.hx).
+						// Trailing-position comma keeps the existing
+						// `appendTrailingComma` decision (source-present OR
+						// knob, computed by `appendTrailingCommaExpr`).
+						// Closes lineends/issue_111 where source had two
+						// `field:` slots with no separator between them; we
+						// previously emitted the comma unconditionally.
+						final _isLast:Bool = _si == _arr.length - 1;
+						final _emitSep:Bool = _isLast ? $appendTrailingCommaExpr : _t.sepAfter;
+						if (_emitSep)
 							_line = _dc([_line, _dt($v{sepText})]);
 						final _tc:Null<String> = _t.trailingComment;
 						if (_tc != null)

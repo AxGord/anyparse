@@ -677,6 +677,7 @@ class TriviaTypeSynth {
 						newlineBefore: false,
 						leadingComments: ([] : Array<String>),
 						trailingComment: (null : Null<String>),
+						sepAfter: true,
 						node: $innerWrap,
 					})
 					: innerWrap;

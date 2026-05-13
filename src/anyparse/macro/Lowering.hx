@@ -751,13 +751,14 @@ class Lowering {
 							// horizontal ws, so `matchLit(sep)` finds a
 							// sep on a different line than the arg
 							// (`arg\n,bar`) — fork-supported pattern.
-							matchLit(ctx, $v{sepText});
+							final _sepAfter:Bool = matchLit(ctx, $v{sepText});
 							_args.push({
 								blankBefore: _lead.blankBefore,
 								blankAfterLeadingComments: _lead.blankAfterLeadingComments,
 								newlineBefore: _lead.newlineBefore,
 								leadingComments: _lead.leadingComments,
 								trailingComment: _trailing,
+								sepAfter: _sepAfter,
 								node: _node,
 							});
 						}
@@ -1203,13 +1204,22 @@ class Lowering {
 					// build above). Mirror of the struct-Star-side capture at
 					// `emitTriviaStarFieldSteps`'s `$i{trailPresentLocal} =
 					// matchLit(...)` (Lowering.hx around line 2859).
+					//
+					// ω-objectlit-source-inter-sep: additionally capture per-
+					// iteration into `_sepAfter` for the per-element
+					// `Trivial.sepAfter` slot. The writer's trivia-branch sep
+					// gate (`triviaSepStarExpr` :6592) consults this to
+					// suppress inter-element seps the source intentionally
+					// omitted (lineends/issue_111). For sep-less branches the
+					// loop body sets `_sepAfter = true` (always-emit default).
 					macro {
 						while (ctx.pos < ctx.input.length) {
 							final _hwc:Int = ctx.input.charCodeAt(ctx.pos);
 							if (_hwc == ' '.code || _hwc == '\t'.code || _hwc == '\r'.code) ctx.pos++;
 							else break;
 						}
-						_trailPresent = matchLit(ctx, $v{sepText});
+						_sepAfter = matchLit(ctx, $v{sepText});
+						_trailPresent = _sepAfter;
 					}
 				} else {
 					macro {};
@@ -1236,6 +1246,7 @@ class Lowering {
 							break;
 						}
 						final _node:$elemCT = $elemCall;
+						var _sepAfter:Bool = true;
 						$sepMatchExpr;
 						final _trailing:Null<String> = collectTrailing(ctx);
 						_items.push({
@@ -1244,6 +1255,7 @@ class Lowering {
 							newlineBefore: _lead.newlineBefore,
 							leadingComments: _lead.leadingComments,
 							trailingComment: _trailing,
+							sepAfter: _sepAfter,
 							node: _node,
 						});
 					}
@@ -2502,6 +2514,7 @@ class Lowering {
 							newlineBefore: _lead.newlineBefore,
 							leadingComments: _lead.leadingComments,
 							trailingComment: _trailing,
+							sepAfter: true,
 							node: _node,
 						});
 					} catch (_e:anyparse.runtime.ParseError) {
@@ -2810,6 +2823,7 @@ class Lowering {
 								newlineBefore: _lead.newlineBefore,
 								leadingComments: _lead.leadingComments,
 								trailingComment: _trailing,
+								sepAfter: true,
 								node: _node,
 							});
 						} catch (_e:anyparse.runtime.ParseError) {
@@ -2840,6 +2854,7 @@ class Lowering {
 							newlineBefore: _lead.newlineBefore,
 							leadingComments: _lead.leadingComments,
 							trailingComment: _trailing,
+							sepAfter: true,
 							node: _node,
 						});
 					} catch (_e:anyparse.runtime.ParseError) {
@@ -2878,6 +2893,15 @@ class Lowering {
 		// After the loop's close-peek terminates, the local holds the
 		// LAST iteration's sep result — `true` iff the source committed
 		// to a trailing separator before the close.
+		//
+		// ω-objectlit-source-inter-sep: additionally capture per-
+		// iteration into `_sepAfter` for the per-element
+		// `Trivial.sepAfter` slot. The writer's trivia-branch sep gate
+		// (`triviaSepStarExpr` :6592) consults this to suppress inter-
+		// element seps the source intentionally omitted
+		// (lineends/issue_111). Sep-less Stars push `sepAfter: true`
+		// (default declared just inside the loop body) so the writer's
+		// always-emit branch fires unchanged.
 		final sepMatchExpr:Expr = if (sepText != null) {
 			macro {
 				while (ctx.pos < ctx.input.length) {
@@ -2885,7 +2909,8 @@ class Lowering {
 					if (_hwc == ' '.code || _hwc == '\t'.code || _hwc == '\r'.code) ctx.pos++;
 					else break;
 				}
-				$i{trailPresentLocal} = matchLit(ctx, $v{sepText});
+				_sepAfter = matchLit(ctx, $v{sepText});
+				$i{trailPresentLocal} = _sepAfter;
 			}
 		} else {
 			macro {};
@@ -2899,6 +2924,7 @@ class Lowering {
 					break;
 				}
 				final _node:$elemCT = $elemCall;
+				var _sepAfter:Bool = true;
 				$sepMatchExpr;
 				final _trailing:Null<String> = collectTrailing(ctx);
 				$accumRef.push({
@@ -2907,6 +2933,7 @@ class Lowering {
 					newlineBefore: _lead.newlineBefore,
 					leadingComments: _lead.leadingComments,
 					trailingComment: _trailing,
+					sepAfter: _sepAfter,
 					node: _node,
 				});
 			}
