@@ -119,6 +119,11 @@ class D {
 			case OptHardline: Empty;
 			case OptHardlineSkipAtOpenDelim: Empty;
 			case OptSpaceSkipAfterHardline: Text(' ');
+			// ω-force-flat-engine slice A: both markers collapse — outer
+			// `flatten` already applies the force-flat transform, so a
+			// nested `Flatten` is idempotent and a nested `WrapBoundary`
+			// is moot (we're committing to flat at the structural level).
+			case Flatten(inner) | WrapBoundary(inner): flatten(inner);
 		};
 	}
 }

@@ -431,6 +431,14 @@ class Renderer {
 							stack.push(Frame.fillCont(f.indent, items, 1, sep, tailReserve));
 						stack.push(new Frame(f.indent, MBreak, items[0]));
 					}
+				case Flatten(inner) | WrapBoundary(inner):
+					// ω-force-flat-engine slice A: pass-through walker arm.
+					// Slice B will introduce `Frame.forceFlat` dispatch that
+					// distinguishes Flatten (sets true) from WrapBoundary
+					// (clears to false). Until then both ctors are inert —
+					// inner is rendered with the enclosing frame's mode/indent
+					// exactly as if the marker were absent.
+					stack.push(new Frame(f.indent, f.mode, inner));
 			}
 		}
 
@@ -620,6 +628,13 @@ class Renderer {
 					// either must commit to MBreak.
 					budget = -1;
 					break;
+				case Flatten(inner) | WrapBoundary(inner):
+					// ω-force-flat-engine slice A: pass-through. Both
+					// markers are render-time state, transparent to flat-
+					// width measurement — descend `inner` with the same
+					// MFlat frame. Slice B's `forceFlat` dispatch lives in
+					// `render()`, not in static `fitsFlat` walks.
+					local.push(new Frame(f.indent, MFlat, inner));
 			}
 		}
 
@@ -693,6 +708,11 @@ class Renderer {
 					total += s.length;
 				case OptSpaceSkipAfterHardline:
 					total += 1;
+				case Flatten(inner) | WrapBoundary(inner):
+					// ω-force-flat-engine slice A: transparent to first-
+					// line walk. Both markers are render-time state; the
+					// static first-line probe sees only structural width.
+					stack.push(inner);
 			}
 		}
 		return total;
@@ -796,6 +816,11 @@ class Renderer {
 						total += 1;
 					case OptHardline | OptHardlineSkipAtOpenDelim:
 						aborted = true;
+					case Flatten(innerDoc) | WrapBoundary(innerDoc):
+						// ω-force-flat-engine slice A: pass-through. The
+						// rest-of-stack probe measures structural width;
+						// force-flat markers add no width.
+						inner.push({doc: innerDoc, mode: node.mode});
 				}
 			}
 		}
@@ -876,6 +901,10 @@ class Renderer {
 						total += 1;
 					case OptHardline | OptHardlineSkipAtOpenDelim:
 						aborted = true;
+					case Flatten(innerDoc) | WrapBoundary(innerDoc):
+						// ω-force-flat-engine slice A: pass-through. Sister
+						// of the `flatTokenWidthOfRestStack` arm.
+						inner.push({doc: innerDoc, mode: node.mode});
 				}
 			}
 		}

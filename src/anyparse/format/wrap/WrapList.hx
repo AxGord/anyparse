@@ -592,6 +592,11 @@ class WrapList {
 					// containing either forces the wrap engine into
 					// break mode unconditionally.
 					return -1;
+				case Flatten(inner) | WrapBoundary(inner):
+					// ω-force-flat-engine slice A: pass-through. Both
+					// markers are render-time state; cascade-evaluator
+					// width measurements stay structural.
+					stack.push(inner);
 			}
 		}
 		return total;
@@ -642,6 +647,10 @@ class WrapList {
 				-1;
 			case Fill(items, sep, _):
 				items.length > 1 ? lastHardlineDepth(sep, depth) : -1;
+			// ω-force-flat-engine slice A: pass-through. Both markers are
+			// render-time state — they wrap an `inner` whose hardlines
+			// (if any) carry the same depth they would without the marker.
+			case Flatten(inner) | WrapBoundary(inner): lastHardlineDepth(inner, depth);
 		};
 	}
 
@@ -708,6 +717,11 @@ class WrapList {
 				final first:Null<Doc> = items.find(it -> !isLeadingTransparent(it));
 				if (first == null) return false;
 				node = first;
+			case Flatten(inner) | WrapBoundary(inner):
+				// ω-force-flat-engine slice A: pass-through. Render-time
+				// state — leading-hardline detection sees the marker's
+				// `inner` as if no wrapper were present.
+				node = inner;
 		}
 	}
 
@@ -1022,6 +1036,10 @@ class WrapList {
 				false;
 			case Fill(items, _, _):
 				items.length > 0 && hasLeadingHardline(items[0]);
+			// ω-force-flat-engine slice A: pass-through. Both markers are
+			// render-time state — their `inner` carries the same leading
+			// hardline answer it would without the wrap.
+			case Flatten(inner) | WrapBoundary(inner): hasLeadingHardline(inner);
 		};
 	}
 

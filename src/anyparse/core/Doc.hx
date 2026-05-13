@@ -234,4 +234,49 @@ enum Doc {
 	 * the drop decision happens at render time based on `lastEmit`.
 	 */
 	OptSpaceSkipAfterHardline;
+
+	/**
+	 * Force-flat propagation marker (ω-force-flat-engine). Inside the
+	 * subtree, the renderer treats every `Group` / `BodyGroup` as if it
+	 * had chosen `MFlat` regardless of column fit, picks the flat branch
+	 * of every `IfBreak` / `If*Exceeds`, lowers `Fill` to a plain
+	 * sep-joined emit, collapses `OptHardline*` to nothing, and renders
+	 * `Line(flat)` with the `flat` substring as text. Used by
+	 * `WrapList.shapeNoWrap` to materialise fork's "this construct stays
+	 * flat no matter what" semantic without per-Star-field cascade
+	 * workarounds.
+	 *
+	 * Force-flat is rendering-time state, not structural — Doc walkers
+	 * (`flatLength`, `flatTokenWidth*`, `hasLeadingHardline`, …) treat
+	 * `Flatten` as a transparent pass-through, identical to descending
+	 * `inner` directly. Only `Renderer` interprets it.
+	 *
+	 * Pair with `WrapBoundary` to scope force-flat to a single
+	 * construct's body. Inner wrap-cascade results wrap themselves in
+	 * `WrapBoundary` to reset force-flat — each cascade evaluates
+	 * independently inside a force-flat region.
+	 */
+	Flatten(inner:Doc);
+
+	/**
+	 * Force-flat reset marker (ω-force-flat-engine). Inside the subtree,
+	 * the renderer clears any inherited force-flat state — `Group` /
+	 * `BodyGroup` resume their normal `fitsFlat` decision, `IfBreak` /
+	 * `If*Exceeds` pick by enclosing `Group` mode, `Fill` does its
+	 * per-item fit dispatch, hardlines render normally. When the
+	 * enclosing context did NOT have force-flat active, this primitive
+	 * is a no-op pass-through.
+	 *
+	 * Emitted by every wrap-cascade producer (`WrapList.emit`,
+	 * `WrapList.emitCondition`, `BinaryChainEmit.emit`,
+	 * `MethodChainEmit.emit`) around its final return value so that a
+	 * nested cascade evaluates its own conditions inside a parent's
+	 * force-flat region. The boundary is the "I have my own wrap-class —
+	 * don't propagate force-flat into me" marker that mirrors fork's
+	 * per-construct independent wrap-rules semantic.
+	 *
+	 * Like `Flatten`, this is rendering-time state — Doc walkers treat
+	 * it as transparent pass-through.
+	 */
+	WrapBoundary(inner:Doc);
 }

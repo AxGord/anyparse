@@ -99,6 +99,11 @@ final class DocMeasure {
 					total += s.length;
 				case OptSpaceSkipAfterHardline:
 					total += 1;
+				case Flatten(inner) | WrapBoundary(inner):
+					// ω-force-flat-engine slice A: pass-through. Both
+					// markers are render-time state; structural token-width
+					// measurement is independent of force-flat propagation.
+					stack.push(inner);
 			}
 		}
 		return total;
