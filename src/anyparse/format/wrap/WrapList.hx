@@ -92,7 +92,8 @@ class WrapList {
 		forceExceeds:Bool = false,
 		?trailBreak:Doc,
 		?forceMode:Null<WrapMode>,
-		compactContinuation:Bool = false
+		compactContinuation:Bool = false,
+		groupRestProbe:Bool = false
 	):Doc {
 		// `Line('\n')` is not a Haxe-constant default — unwrap a null
 		// sentinel into the legacy hardcoded hardline here.
@@ -217,7 +218,7 @@ class WrapList {
 		// Per-state shape builder: picks the right lead based on the
 		// resolved mode (flat vs break-style layout).
 		function shapeAt(mode:WrapMode, lead:Doc):Doc {
-			final body:Doc = shape(mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreakDoc);
+			final body:Doc = shape(mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreakDoc, groupRestProbe);
 			return prependLead(body, lead);
 		}
 
@@ -772,13 +773,13 @@ class WrapList {
 	private static function shape(
 		mode:WrapMode, open:String, close:String, sep:String,
 		items:Array<Doc>, openInside:Doc, closeInside:Doc, cols:Int,
-		appendTrailingComma:Bool, trailBreak:Doc
+		appendTrailingComma:Bool, trailBreak:Doc, groupRestProbe:Bool
 	):Doc {
 		return switch mode {
 			case NoWrap: shapeNoWrap(open, close, sep, items, openInside, closeInside);
 			case OnePerLine: shapeOnePerLine(open, close, sep, items, cols, appendTrailingComma, trailBreak);
 			case OnePerLineAfterFirst: shapeOnePerLineAfterFirst(open, close, sep, items, cols, appendTrailingComma);
-			case FillLine: shapeFillLine(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
+			case FillLine: shapeFillLine(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe);
 			case FillLineWithLeadingBreak: shapeFillLineWithLeadingBreak(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
 			case _: shapeNoWrap(open, close, sep, items, openInside, closeInside);
 		};
@@ -844,7 +845,7 @@ class WrapList {
 	private static function shapeFillLine(
 		open:String, close:String, sep:String, items:Array<Doc>,
 		openInside:Doc, closeInside:Doc, cols:Int,
-		appendTrailingComma:Bool
+		appendTrailingComma:Bool, groupRestProbe:Bool
 	):Doc {
 		// Per-gap sep awareness (slice ω-fillline-pergap-sep): items split
 		// into chunks at every leading-hardline boundary. Within each
@@ -901,7 +902,7 @@ class WrapList {
 			// is needed, so emit the simpler `(<item>)` shape directly.
 			final lastDepth:Int = lastHardlineDepth(items[0], 0);
 			if (lastDepth > 0) {
-				return Group(IfBreak(
+				final ifBreakInner:Doc = IfBreak(
 					Concat([
 						Text(open), openInside, items[0], tail0,
 						Line('\n'), closeInside, Text(close),
@@ -910,12 +911,14 @@ class WrapList {
 						Text(open), openInside, items[0], tail0,
 						closeInside, Text(close),
 					])
-				));
+				);
+				return groupOrRestProbe(ifBreakInner, groupRestProbe);
 			}
-			return Group(Concat([
+			final flatInner:Doc = Concat([
 				Text(open), openInside, items[0], tail0,
 				closeInside, Text(close),
-			]));
+			]);
+			return groupOrRestProbe(flatInner, groupRestProbe);
 		}
 		// Chunk loop. Walk items[1..N]; at every leading-hardline-bearing
 		// item OR the end of the list, emit (a) the comma + forced
@@ -980,11 +983,30 @@ class WrapList {
 		}
 		final tail:Doc = appendTrailingComma ? Text(sep) : Empty;
 		final inner:Doc = Concat([Concat(bodyParts), tail]);
-		return Group(Concat([
+		final outerInner:Doc = Concat([
 			Text(open), openInside,
 			Nest(cols, inner),
 			closeInside, Text(close),
-		]));
+		]);
+		return groupOrRestProbe(outerInner, groupRestProbe);
+	}
+
+	/**
+	 * ω-group-rest-probe slice 2: pick `GroupWithRestProbe` over `Group`
+	 * when the caller's Star opted into rest-of-stack lookahead via
+	 * `@:fmt(groupRestProbe)`. Used at sites where significant same-line
+	 * content trails the wrap construct (e.g. typedef LHS `<T,U,V>`
+	 * followed by ` = Rhs<...>;` on the same source line). Fork's wrap
+	 * engine considers `lengthAfter` when deciding whether to wrap the
+	 * LHS — our plain `Group.fitsFlat` is blind to rest-of-stack.
+	 * `GroupWithRestProbe(inner)` subtracts
+	 * `flatTokenWidthOfRestStack(stack)` from the budget at render time,
+	 * matching fork's bias. Default `false` keeps every other consumer
+	 * (call args, object literals, anon types, HxTypeRef.params) on the
+	 * legacy `Group` decision.
+	 */
+	private static inline function groupOrRestProbe(inner:Doc, groupRestProbe:Bool):Doc {
+		return groupRestProbe ? GroupWithRestProbe(inner) : Group(inner);
 	}
 
 	/**

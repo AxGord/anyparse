@@ -1315,10 +1315,15 @@ class WriterLowering {
 				// (var-type-hint, fn-return-type) stay cascade-driven.
 				final forceMultiTypedef:Bool = branch.fmtHasFlag('forceMultiInTypedef');
 				final bodyAware:Bool = branch.fmtHasFlag('bodyAwareCompactIndent');
+				// ω-group-rest-probe slice 2: enum-Alt branch reader for
+				// `@:fmt(groupRestProbe)`. Trivia-path mirror of the plain-
+				// path read at lowerStruct's Star dispatch. Dual-dispatch
+				// per [[feedback-wraprules-dispatch-dual-path]].
+				final groupRestProbe:Bool = branch.fmtHasFlag('groupRestProbe');
 				parts.push(triviaSepStarExpr(
 					argsAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, leadText, trailText, sepText,
 					wrapRulesField, knobLeftCurly, knobRightCurly, null, null, openInsideExpr, closeInsideExpr, beforeDocComments,
-					forceMultiTypedef, bodyAware
+					forceMultiTypedef, bodyAware, groupRestProbe
 				));
 			} else {
 				// ω-bropen-keep: forward `@:fmt(keepCurlyBlanks)` from the
@@ -3145,13 +3150,19 @@ class WriterLowering {
 					// (var-type-hint, fn-return-type) stay cascade-driven.
 					final forceMultiTypedef:Bool = starNode.fmtHasFlag('forceMultiInTypedef');
 					final bodyAware:Bool = starNode.fmtHasFlag('bodyAwareCompactIndent');
+					// ω-group-rest-probe slice 2: struct-Star path reader for
+					// `@:fmt(groupRestProbe)`. Mirrors the lowerStruct plain-
+					// path read (added at the lowerStruct dispatch site).
+					// Trivia-path dual-dispatch closure per
+					// [[feedback-wraprules-dispatch-dual-path]].
+					final groupRestProbe:Bool = starNode.fmtHasFlag('groupRestProbe');
 					parts.push(triviaSepStarExpr(
 						fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn,
 						openText ?? '', closeText, sepText, wrapRulesField,
 						leftCurlyOwnedBySep ? knobLeftCurly : null,
 						knobRightCurly,
 						trailPresentAccess, trailingCommaField,
-						null, null, false, forceMultiTypedef, bodyAware
+						null, null, false, forceMultiTypedef, bodyAware, groupRestProbe
 					));
 					return;
 				}
@@ -3360,13 +3371,21 @@ class WriterLowering {
 			// values, body call args, …) see `false` (no propagation past
 			// the opt-fanout span — see `lowerStruct`'s save/restore).
 			final bodyAware:Bool = starNode.fmtHasFlag('bodyAwareCompactIndent');
+			// ω-group-rest-probe slice 2: `@:fmt(groupRestProbe)` opt-in for
+			// Star fields whose outer Group should bias toward MBreak when
+			// significant same-line content trails (typedef LHS typeParams,
+			// followed by ` = Rhs<…>;`). Mirrors fork's `lengthAfter` rule
+			// at Group layer. Plain-path 17th param to `WrapList.emit`;
+			// trivia path mirror lives in `triviaSepStarExpr` (dual-dispatch
+			// per [[feedback-wraprules-dispatch-dual-path]]).
+			final groupRestProbe:Bool = starNode.fmtHasFlag('groupRestProbe');
 			final listCall:Expr = if (wrapRulesField != null) {
 				final rulesExpr:Expr = optFieldAccess(wrapRulesField);
 				final compactContExpr:Expr = bodyAware ? (macro opt._fnSigBodyEmpty) : (macro false);
 				macro anyparse.format.wrap.WrapList.emit(
 					$v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt,
 					$openInsideExpr, $closeInsideExpr, $keepInnerExpr, $rulesExpr, $tcExpr,
-					_de(), _de(), false, null, null, $compactContExpr
+					_de(), _de(), false, null, null, $compactContExpr, $v{groupRestProbe}
 				);
 			} else if (useFill) {
 				macro fillList($v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $tcExpr, $openInsideExpr, $closeInsideExpr, $keepInnerExpr, $v{fillDouble});
@@ -6202,7 +6221,8 @@ class WriterLowering {
 		openInsideExpr:Null<Expr> = null, closeInsideExpr:Null<Expr> = null,
 		beforeDocCommentEmptyLines:Bool = false,
 		forceMultiInTypedef:Bool = false,
-		bodyAwareCompactIndent:Bool = false
+		bodyAwareCompactIndent:Bool = false,
+		groupRestProbe:Bool = false
 	):Expr {
 		// ω-trivia-sep-anontype-braces (Phase B1): when the call site
 		// reads `@:fmt(anonTypeBracesOpen)` / `objectLiteralBracesOpen`
@@ -6432,7 +6452,7 @@ class WriterLowering {
 				anyparse.format.wrap.WrapList.emit(
 					$v{openText}, $v{closeText}, $v{sepText},
 					_docs, opt, $openInsideDoc, $closeInsideDoc, false, $rulesExpr, $appendTrailingCommaExpr,
-					$wrapLeadFlatDoc, $wrapLeadBreakDoc, $forceExceedsExpr, $wrapTrailBreakDoc, $forceModeExpr, $compactContExpr
+					$wrapLeadFlatDoc, $wrapLeadBreakDoc, $forceExceedsExpr, $wrapTrailBreakDoc, $forceModeExpr, $compactContExpr, $v{groupRestProbe}
 				);
 			};
 		} else {

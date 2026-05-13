@@ -47,6 +47,18 @@ package anyparse.grammar.haxe;
  * emits single-line — the cascade falls through to
  * `betweenSingleLineTypes` (default 0) instead.
  *
+ * `@:fmt(groupRestProbe)` on `typeParams` (slice ω-group-rest-probe-2)
+ * flips the outer Group emitted by `WrapList.shapeFillLine` to
+ * `GroupWithRestProbe` so the per-line fit check subtracts
+ * `flatTokenWidthOfRestStack(stack)` from the budget. Without it, a
+ * fitting-by-itself LHS `<...>` flat-emits and forces the RHS use-site
+ * `<...>` to wrap; with it, the LHS sees the trailing
+ * `= Rhs<...>;` content and proactively breaks, matching fork's
+ * `wrapFillLine2AfterLast` `lengthAfter` bias. Targets the LHS-vs-RHS
+ * competing-wraps pair on `wrapping/issue_494_type_parameter`. Mech-
+ * live at outer Group layer; closing the byte-diff fully also requires
+ * a sister rest-of-stack mech inside `Doc.Fill`'s per-item-fit probe.
+ *
  * `@:fmt(multilineWhenStarFieldWrapsCascade('typeParams',
  * 'typeParameterWrap', 'name'))` (slice ω-typedef-typeparam-multiline)
  * OR-folds an additional condition into the multi-line predicate via
@@ -66,6 +78,6 @@ package anyparse.grammar.haxe;
 @:fmt(multilineWhenStarFieldWrapsCascade('typeParams', 'typeParameterWrap', 'name'))
 typedef HxTypedefDecl = {
 	@:kw('typedef') var name:HxIdentLit;
-	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap')) var typeParams:Null<Array<HxTypeParamDecl>>;
+	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var typeParams:Null<Array<HxTypeParamDecl>>;
 	@:fmt(typedefAssign, propagateTypedefContext) @:lead('=') var type:HxType;
 }
