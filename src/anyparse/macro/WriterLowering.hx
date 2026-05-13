@@ -8630,6 +8630,26 @@ class WriterLowering {
 	 *    is `Next` (Allman): under `Same` the same source emits single-
 	 *    line so the predicate stays false. The full path on the 4th
 	 *    arg keeps the macro free of grammar-specific imports.
+	 *  - typedef-level `multilineWhenStarFieldWrapsCascade('<starField>',
+	 *    '<cascadeKnob>', '<itemNameField>')` (3-arg form) — predicate
+	 *    fires when the named Star field's wrap cascade would resolve
+	 *    to a non-`NoWrap` mode. The macro emits a runtime mirror of
+	 *    `WrapList.emit`'s width arithmetic (sum/max with `(n-1)*2`
+	 *    inter-item sep correction for `, `), reads `opt.<cascadeKnob>`
+	 *    as a `WrapRules`, and calls `WrapList.decideWithLineLengthState`
+	 *    with layout-blind inputs (`exceeds=false`, no `LineLengthLargerThan`
+	 *    firing). Per-item width approximated as `item.<itemNameField>.length`
+	 *    — sufficient when items are dominated by a single bare-name field
+	 *    (e.g. `HxTypeParamDecl.name`, no constraint). Used by
+	 *    `HxTypedefDecl` to detect typedefs whose declare-site typeParams
+	 *    overflow `totalItemLength`/`anyItemLength` thresholds.
+	 *
+	 * Multiple struct-level meta entries OR-fold into one predicate:
+	 * each matching meta contributes a clause, and the predicate fires
+	 * when any clause fires. Enables composing structural conditions
+	 * (Anon-Allman binding) with rendering-aware conditions (wrap-cascade
+	 * fires on a Star field) on the same typedef. Previously first-match-
+	 * wins-returns precluded this composition.
 	 */
 	private function buildMultilinePredicate(typeName:String, accessExpr:Expr):Null<Expr> {
 		final node:Null<ShapeNode> = shape.rules.get(typeName);
@@ -8637,11 +8657,20 @@ class WriterLowering {
 		final pos:Position = Context.currentPos();
 		final meta:Null<Metadata> = node.annotations.get('base.meta');
 		if (meta != null) {
+			// Collect every matching struct-level multiline flag and OR-fold
+			// them into one predicate. Single first-match-wins precluded
+			// composing structural conditions (Anon-Allman binding) with
+			// rendering-aware conditions (wrap-cascade fires on a Star field),
+			// so a typedef whose body type stays simple but whose declare-site
+			// typeParams overflow into a wrap could not be detected as
+			// multi-line. Closes the `wrapping/issue_494_type_parameter`
+			// boundary between a flat typedef and a typeParam-wrapping typedef.
+			final preds:Array<Expr> = [];
 			for (entry in meta) if (entry.name == ':fmt') {
 				for (param in entry.params) switch param.expr {
 					case ECall({expr: EConst(CIdent('multilineWhenFieldNonEmpty'))}, [{expr: EConst(CString(field, _))}]):
 						final fieldExpr:Expr = {expr: EField(accessExpr, field), pos: pos};
-						return macro $fieldExpr.length > 0;
+						preds.push(macro $fieldExpr.length > 0);
 					case ECall({expr: EConst(CIdent('multilineWhenFieldShape'))}, [{expr: EConst(CString(field, _))}]):
 						final fieldNode:Null<ShapeNode> = findFieldByName(node, field);
 						if (fieldNode == null)
@@ -8650,9 +8679,10 @@ class WriterLowering {
 								Context.currentPos()
 							);
 						final targetType:Null<String> = fieldNode.annotations.get('base.ref');
-						if (targetType == null) return null;
+						if (targetType == null) continue;
 						final fieldExpr:Expr = {expr: EField(accessExpr, field), pos: pos};
-						return buildMultilinePredicate(targetType, fieldExpr);
+						final inner:Null<Expr> = buildMultilinePredicate(targetType, fieldExpr);
+						if (inner != null) preds.push(inner);
 					// ω-typedef-between-blank: 4-arg runtime ctor match on a
 					// named field PLUS an opt-side runtime equality with a
 					// fully-qualified enum literal. Emits
@@ -8677,10 +8707,67 @@ class WriterLowering {
 						final fieldExpr:Expr = {expr: EField(accessExpr, field), pos: pos};
 						final optAccess:Expr = optFieldAccess(optField);
 						final optEnumExpr:Expr = Context.parse(optEnumExprStr, pos);
-						return macro Type.enumConstructor($fieldExpr) == $v{ctorName}
-							&& $optAccess == $optEnumExpr;
+						preds.push(macro Type.enumConstructor($fieldExpr) == $v{ctorName}
+							&& $optAccess == $optEnumExpr);
+					// ω-typedef-typeparam-multiline: 3-arg cascade probe on a
+					// Star field. Mirror of `WrapList.decideWithLineLengthState`
+					// at predicate-eval time, approximating per-item width via
+					// `<itemNameField>.length` and the same `(n-1)*(sep+space)`
+					// inter-item correction `WrapList.emit` applies. Predicate
+					// fires when the cascade would resolve to any non-NoWrap
+					// mode, i.e. the typedef's declare-site type parameters
+					// would render multi-line. Hardcodes sep width to fork-
+					// standard `, ` (2 chars) — every Haxe wrap cascade uses
+					// comma separators, so this matches the runtime that
+					// `shapeNoWrap` / `shapeFillLine` produce.
+					case ECall({expr: EConst(CIdent('multilineWhenStarFieldWrapsCascade'))}, [
+						{expr: EConst(CString(field, _))},
+						{expr: EConst(CString(cascadeKnob, _))},
+						{expr: EConst(CString(itemNameField, _))}
+					]):
+						final fieldExpr:Expr = {expr: EField(accessExpr, field), pos: pos};
+						final cascadeAccess:Expr = optFieldAccess(cascadeKnob);
+						final itemFieldExpr:Expr = {expr: EField(macro _p, itemNameField), pos: pos};
+						// Width arithmetic mirrors `WrapList.emit`: each non-last item
+						// contributes `name + sep + space` (= +2 for fork-standard `, `),
+						// the last item contributes just `name`. Applied symmetrically
+						// to BOTH `_sum` (→ `totalItemLength` cascade cond) AND `_maxLen`
+						// (→ `anyItemLength` cascade cond) so the predicate's threshold
+						// answers match `WrapList.emit`'s at runtime. Without sep in
+						// maxLen the predicate could undershoot on item-length boundary
+						// cases (e.g. item of exactly 49 chars vs threshold 50: predicate
+						// false, emit true).
+						preds.push(macro {
+							final _arr = $fieldExpr;
+							if (_arr == null || _arr.length == 0)
+								false;
+							else {
+								var _sum:Int = 0;
+								var _maxLen:Int = 0;
+								final _lastIdx:Int = _arr.length - 1;
+								for (_i in 0..._arr.length) {
+									final _p = _arr[_i];
+									final _raw:Int = ($itemFieldExpr : String).length;
+									final _w:Int = _i < _lastIdx ? _raw + 2 : _raw;
+									_sum += _w;
+									if (_w > _maxLen) _maxLen = _w;
+								}
+								anyparse.format.wrap.WrapList.decideWithLineLengthState(
+									$cascadeAccess, _arr.length, _maxLen, _sum,
+									false, false, _ -> false
+								) != anyparse.format.wrap.WrapMode.NoWrap;
+							}
+						});
 					case _:
 				}
+			}
+			if (preds.length > 0) {
+				var folded:Expr = preds[0];
+				for (i in 1...preds.length) {
+					final next:Expr = preds[i];
+					folded = macro $folded || $next;
+				}
+				return folded;
 			}
 		}
 		// Enum dispatch: switch over each ctor's `multilineCtor` flag.

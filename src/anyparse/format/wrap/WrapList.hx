@@ -115,9 +115,26 @@ class WrapList {
 		var total:Int = 0;
 		var maxLen:Int = 0;
 		var anyHardline:Bool = false;
-		for (item in items) {
+		// Mirror fork's `firstLineLength` (MarkWrappingBase.collectWrappableItems):
+		// fork extends each non-last item's `endToken` to include the trailing
+		// comma, and `calcLengthUntilNewline` then sums the comma's `spacesAfter`
+		// — so each non-last item contributes `name + sep + space`. Our `sep`
+		// param is the bare separator (`","`); the renderer always pairs it with
+		// a flat-mode space (`Text(sep + ' ')` in `shapeNoWrap`, `Concat([Text(sep),
+		// Line(' ')])` in `shapeFillLine` softSep), so the effective per-gap width
+		// is `sep.length + 1`. Without this addition the cascade thresholds
+		// (`totalItemLength`, `anyItemLength`) undershoot fork's measurement,
+		// silently leaving long argument/typeParam lists flat past `maxLineLength`.
+		// Closes `wrapping/issue_494_type_parameter` for typeParam cascades: 6
+		// type params totaling `7+9+17+7+9+17 = 66` plus `5*2 = 10` sep widths
+		// = 76 ≥ `totalItemLength >= 70` rule.
+		final sepWidth:Int = sep.length + 1;
+		final lastIdx:Int = items.length - 1;
+		for (i in 0...items.length) {
+			final item:Doc = items[i];
 			if (flatLength(item) < 0) anyHardline = true;
-			final w:Int = DocMeasure.flatTokenWidth(item);
+			final rawW:Int = DocMeasure.flatTokenWidth(item);
+			final w:Int = i < lastIdx ? rawW + sepWidth : rawW;
 			total += w;
 			if (w > maxLen) maxLen = w;
 		}

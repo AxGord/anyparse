@@ -46,9 +46,24 @@ package anyparse.grammar.haxe;
  * `Same` (cuddled) the predicate stays false because the same source
  * emits single-line — the cascade falls through to
  * `betweenSingleLineTypes` (default 0) instead.
+ *
+ * `@:fmt(multilineWhenStarFieldWrapsCascade('typeParams',
+ * 'typeParameterWrap', 'name'))` (slice ω-typedef-typeparam-multiline)
+ * OR-folds an additional condition into the multi-line predicate via
+ * `WriterLowering.buildMultilinePredicate`: the typedef counts as
+ * multi-line when its declare-site typeParams would render through a
+ * non-`NoWrap` cascade mode. At predicate-eval time the engine
+ * approximates per-item width via `name.length` and the same
+ * `(n-1) * (sep + space)` correction `WrapList.emit` applies (2 chars
+ * for `, ` sep), then probes `opt.typeParameterWrap` via
+ * `WrapList.decideWithLineLengthState`. Closes the gap on
+ * `wrapping/issue_494_type_parameter` between flat-typedef → wrapped-
+ * typedef pairs: long type parameter lists drive `blankLinesBeforeCtorIf`
+ * to insert the `betweenTypes=1`-equivalent blank line.
  */
 @:peg
 @:fmt(multilineWhenFieldCtorAndOpt('type', 'Anon', 'anonTypeLeftCurly', 'anyparse.format.BracePlacement.Next'))
+@:fmt(multilineWhenStarFieldWrapsCascade('typeParams', 'typeParameterWrap', 'name'))
 typedef HxTypedefDecl = {
 	@:kw('typedef') var name:HxIdentLit;
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap')) var typeParams:Null<Array<HxTypeParamDecl>>;
