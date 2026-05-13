@@ -156,8 +156,20 @@ class WriterLowering {
 			// trailingLeading (`argNames[4]`). Same `isAltCloseTrailingBranch
 			// && @:lead && !@:tryparse` gate as `hasOpenTrailing` — the
 			// synth and parser sides both emit conditionally on it.
+			// ω-arraylit-source-trail-comma: enum-Alt sep+trail+lead+@:trivia
+			// branches (HxExpr.ArrayExpr, HxType.Anon) grow a positional
+			// `trailPresent:Bool` arg holding whether the source had a trailing
+			// separator before the close literal. Same gate as the synth side
+			// (`branch.readMetaString(':sep') != null` inside the
+			// `isAltCloseTrailingBranch + @:lead + !@:tryparse` block in
+			// `TriviaTypeSynth.buildEnumCtor`) so positions stay deterministic.
+			// Writer reads via `argNames[5]` in `lowerEnumStar`. Sister to
+			// struct-Star `<field>TrailPresent` synth slot.
+			final hasArrayLitTrailPresent:Bool = hasOpenTrailing
+				&& branch.readMetaString(':sep') != null;
 			final extraArgs:Int = ((hasCloseTrailing || hasTrailOptFlag || hasCaptureSource) ? 1 : 0)
 				+ (hasOpenTrailing ? 3 : 0)
+				+ (hasArrayLitTrailPresent ? 1 : 0)
 				+ (hasBodyPolicyKw ? 1 : 0)
 				+ (hasWrapOpenNewline ? 1 : 0)
 				+ (hasPostfixCloseTrailing ? 1 : 0);
@@ -1262,6 +1274,18 @@ class WriterLowering {
 			final trailLCAccess:Null<Expr> = hasOrphan
 				? macro $i{argNames[4]}
 				: null;
+			// ω-arraylit-source-trail-comma: enum-Alt sep+trail+lead+@:trivia
+			// branches grow a 6th positional `trailPresent:Bool` (synth pushes
+			// it inside the `isAltCloseTrailingBranch + @:lead + !@:tryparse`
+			// block when `branch.readMetaString(':sep') != null`). Bind here so
+			// the trivia branch of `triviaSepStarExpr` can preserve a source
+			// trailing comma via `appendTrailingCommaExpr = trailPresent ||
+			// knob`. Sister to struct-Star `<field>TrailPresent` binding in
+			// `lowerStruct`.
+			final hasSepTrailPresent:Bool = hasOrphan && sepText != null;
+			final sepTrailPresentAccess:Null<Expr> = hasSepTrailPresent
+				? macro $i{argNames[5]}
+				: null;
 			// ω-trivia-sep: sep-Star Alt branches (e.g. `HxExpr.ArrayExpr`)
 			// route to the dedicated sep helper. Block-style (no sep)
 			// stays on the always-multi-line path.
@@ -1273,6 +1297,24 @@ class WriterLowering {
 			// consumer is `HxExpr.ArrayExpr.elems` (`arrayLiteralWrap`).
 			if (sepText != null) {
 				final wrapRulesField:Null<String> = branch.fmtReadString('wrapRules');
+				// ω-arraylit-trailing-comma-dispatch: enum-Alt branches
+				// (e.g. `HxExpr.ArrayExpr`) carry `@:fmt(trailingComma(
+				// '<knob>'))` but the trivia-mode emit at this site
+				// previously hardcoded `null, null` for `triviaSepStarExpr`'s
+				// 13th/14th params, ignoring the knob entirely. Sister
+				// dispatch-dual-path gap to [[feedback-wraprules-dispatch-
+				// dual-path]] — the struct-Star path at `lowerStruct`
+				// already threads `trailingCommaField`. Companion sibling
+				// `ω-arraylit-source-trail-comma` adds the 13th param's
+				// counterpart via a synth-side positional `trailPresent:
+				// Bool` slot (no `<field>TrailPresent` named struct field —
+				// Alt ctors are positional, so synth pushes the slot under
+				// the `isAltCloseTrailingBranch + @:lead + !@:tryparse +
+				// @:sep` gate; writer binds it via `argNames[5]` as
+				// `sepTrailPresentAccess` below). With both, the trivia-
+				// sep helper's `appendTrailingCommaExpr` engages identically
+				// to the struct-Star path: `trailPresent || knob`.
+				final trailingCommaField:Null<String> = branch.fmtReadString('trailingComma');
 				// ω-trivia-sep-anontype-braces (Phase B1): forward the
 				// `anonTypeBracesOpen/Close` policy via
 				// `delimInsidePolicySpace` so the trivia-mode emit honours
@@ -1322,7 +1364,7 @@ class WriterLowering {
 				final groupRestProbe:Bool = branch.fmtHasFlag('groupRestProbe');
 				parts.push(triviaSepStarExpr(
 					argsAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, leadText, trailText, sepText,
-					wrapRulesField, knobLeftCurly, knobRightCurly, null, null, openInsideExpr, closeInsideExpr, beforeDocComments,
+					wrapRulesField, knobLeftCurly, knobRightCurly, sepTrailPresentAccess, trailingCommaField, openInsideExpr, closeInsideExpr, beforeDocComments,
 					forceMultiTypedef, bodyAware, groupRestProbe
 				));
 			} else {

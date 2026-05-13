@@ -1172,6 +1172,18 @@ class Lowering {
 					// element and the close literal survives round-trip.
 					ctorArgsTrivia.push(macro _trailBB);
 					ctorArgsTrivia.push(macro _trailLC);
+					// ω-arraylit-source-trail-comma: sep+trail+lead+@:trivia
+					// branches additionally forward whether the source had a
+					// trailing separator before the close literal. The synth
+					// ctor's 6th positional `trailPresent:Bool` (gated on
+					// `:sep` in `TriviaTypeSynth.buildEnumCtor`) holds the
+					// last-iteration `matchLit(sepText)` result captured by
+					// `sepMatchExpr` below. Same `:sep` gate keeps the
+					// positional count in sync between parser-emit and synth-
+					// define for non-sep branches (BlockStmt, BlockExpr).
+					if (sepText != null) {
+						ctorArgsTrivia.push(macro _trailPresent);
+					}
 				}
 				final ctorCallTrivia:Expr = {
 					expr: ECall(ctorRef, ctorArgsTrivia),
@@ -1181,13 +1193,23 @@ class Lowering {
 					// Same horizontal-whitespace-only skip as the struct-field
 					// trivia+sep path — avoids `skipWs` consuming the trailing
 					// `// comment` before `collectTrailing` runs.
+					//
+					// ω-arraylit-source-trail-comma: capture matchLit result
+					// into `_trailPresent`. After the close-peek loop exits,
+					// the local holds the LAST iteration's sep result — `true`
+					// iff the source committed to a trailing `,` before the
+					// close literal. Forwarded as the 6th positional ctor arg
+					// when both `:lead` and `:sep` are present (see ctorArgs
+					// build above). Mirror of the struct-Star-side capture at
+					// `emitTriviaStarFieldSteps`'s `$i{trailPresentLocal} =
+					// matchLit(...)` (Lowering.hx around line 2859).
 					macro {
 						while (ctx.pos < ctx.input.length) {
 							final _hwc:Int = ctx.input.charCodeAt(ctx.pos);
 							if (_hwc == ' '.code || _hwc == '\t'.code || _hwc == '\r'.code) ctx.pos++;
 							else break;
 						}
-						matchLit(ctx, $v{sepText});
+						_trailPresent = matchLit(ctx, $v{sepText});
 					}
 				} else {
 					macro {};
@@ -1199,6 +1221,13 @@ class Lowering {
 					final _items:Array<$wrappedCT> = [];
 					var _trailBB:Bool = false;
 					var _trailLC:Array<String> = [];
+					// ω-arraylit-source-trail-comma: declared unconditionally to
+					// keep the macro body shape stable; only assigned when
+					// `sepText != null` (see `sepMatchExpr` above) and only
+					// forwarded to the ctor when both `:lead` AND `:sep` apply
+					// (see `ctorArgsTrivia` build above). For sep-less branches
+					// the var is unused; Haxe does not warn on unused locals.
+					var _trailPresent:Bool = false;
 					while (true) {
 						final _lead = collectTrivia(ctx);
 						if ($closeNextOrEofExpr) {

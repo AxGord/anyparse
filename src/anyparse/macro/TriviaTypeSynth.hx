@@ -497,6 +497,9 @@ class TriviaTypeSynth {
 			n++; // closeTrailing
 			if (branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse')) {
 				n += 3; // openTrailing + trailingBlankBefore + trailingLeading
+				// ω-arraylit-source-trail-comma: + trailPresent when @:sep is
+				// present (mirrors `buildEnumCtor` gate).
+				if (branch.readMetaString(':sep') != null) n++;
 			}
 		}
 		if (isAltTrailOptBranch(branch)) n++; // trailPresent
@@ -628,6 +631,12 @@ class TriviaTypeSynth {
 				defaults.push(macro (null : Null<String>)); // openTrailing
 				defaults.push(macro false); // trailingBlankBefore
 				defaults.push(macro ([] : Array<String>)); // trailingLeading
+				// ω-arraylit-source-trail-comma: trailPresent default for
+				// raw-to-paired wraps. `false` matches the parser's initial
+				// state — preWrite plugin rewrites don't preserve source
+				// trailing-sep presence, so the writer falls back to the
+				// knob-only path (`appendTrailingCommaExpr = knob`).
+				if (branch.readMetaString(':sep') != null) defaults.push(macro false);
 			}
 		}
 		if (isAltTrailOptBranch(branch)) defaults.push(macro false); // trailPresent
@@ -989,6 +998,25 @@ class TriviaTypeSynth {
 				});
 				args.push({name: 'trailingBlankBefore', type: boolCT});
 				args.push({name: 'trailingLeading', type: arrayStrCT});
+				// ω-arraylit-source-trail-comma: enum-Alt sep+trail+lead+@:trivia
+				// branches (HxExpr.ArrayExpr, HxType.Anon) grow an additional
+				// `trailPresent:Bool` arg recording whether the source had a
+				// trailing separator before the close literal. Parser captures
+				// the last-iteration `matchLit(sepText)` result; writer reads
+				// via `argNames[5]` (position 5 inside this block, after
+				// closeTrailing/openTrailing/trailingBlankBefore/trailingLeading)
+				// and threads as `trailPresentAccess` to the trivia-sep helper
+				// so `appendTrailingCommaExpr = trailPresent || knob` preserves
+				// the source `,` on multi-line shapes. Disjoint from the lower
+				// `isAltTrailOptBranch`'s `trailPresent` arg (Star vs Ref child
+				// shape — comment at line 1009 already calls out the disjoint
+				// invariant). Reuses `TRAIL_PRESENT_ARG_NAME` so the writer's
+				// runtime field-name probe stays consistent. Gated on `@:sep`
+				// so block-style trivia ctors (`BlockStmt`, `BlockExpr`) keep
+				// their pre-slice 5-arg shape.
+				if (branch.readMetaString(':sep') != null) {
+					args.push({name: TRAIL_PRESENT_ARG_NAME, type: boolCT});
+				}
 			}
 		}
 		// ω-trailopt-source-track: `@:trailOpt(...)` Alt branches with a
