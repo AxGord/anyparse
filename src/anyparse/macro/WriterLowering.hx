@@ -6480,7 +6480,15 @@ class WriterLowering {
 					_parts.push(_dt($v{closeText}));
 					if (_trailClose != null)
 						_parts.push(trailingCommentDocVerbatim(_trailClose, opt));
-					_dbg(_dc(_parts));
+					// ω-force-flat-engine slice D follow-up: trivia branch builds
+					// hardlined Doc by hand instead of going through one of the 4
+					// cascade-emit functions Slice C wraps. Without `_dwb` here a
+					// trivia-bearing inner construct nested inside a NoWrap-cascade
+					// `Flatten` region loses its source-preserved indent (the
+					// hardlines fire but `Nest`'s columns are dropped by force-flat).
+					// WrapBoundary is no-op when the parent frame is not in force-flat
+					// mode, so this wrap is safe on the non-nested common path.
+					_dwb(_dbg(_dc(_parts)));
 				} else {
 					$noTriviaBranch;
 				}

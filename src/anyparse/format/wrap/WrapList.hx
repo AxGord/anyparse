@@ -776,7 +776,14 @@ class WrapList {
 			if (i > 0) inner.push(Text(sep + ' '));
 			inner.push(items[i]);
 		}
-		return Concat([Text(open), openInside, Concat(inner), closeInside, Text(close)]);
+		// ω-force-flat-engine slice D: wrap inner content in `Flatten` so any
+		// Group/IfBreak/Fill nested inside a NoWrap-cascade construct is forced
+		// to its flat branch by the renderer (Frame.forceFlat propagation).
+		// `open`/`close` delimiters and `openInside`/`closeInside` trivia stay
+		// outside the marker — they're construct metadata, not body content.
+		// Nested cascades inside `inner` reset force-flat via the
+		// `WrapBoundary` wraps Slice C placed around their `emit()` returns.
+		return Concat([Text(open), openInside, Flatten(Concat(inner)), closeInside, Text(close)]);
 	}
 
 	private static function shapeOnePerLine(

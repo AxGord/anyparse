@@ -396,6 +396,11 @@ class WriterCodegen {
 				[{name: 'items', type: macro : Array<anyparse.core.Doc>}, {name: 'sep', type: macro : anyparse.core.Doc}],
 				macro anyparse.core.Doc.Fill(items, sep)
 			),
+			// ω-force-flat-engine slice D follow-up: WrapBoundary helper so the
+			// hand-rolled trivia-branch dispatchers (triviaSepStarExpr et al.)
+			// can reset force-flat for their inner content the same way the
+			// 4 cascade-emit functions do via Slice C's wraps.
+			docHelper('_dwb', [{name: 'inner', type: macro : anyparse.core.Doc}], macro anyparse.core.Doc.WrapBoundary(inner)),
 		];
 	}
 
