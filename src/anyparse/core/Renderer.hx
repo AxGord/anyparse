@@ -364,6 +364,28 @@ class Renderer {
 					} else {
 						stack.push(new Frame(f.indent, MBreak, inner));
 					}
+				case GroupWithRestProbe(inner):
+					// ω-group-rest-probe: Group variant whose fit decision
+					// subtracts `flatTokenWidthOfRestStack(stack)` from the
+					// budget — same-line content emitted AFTER this Group by
+					// parent frames is considered before committing to MFlat.
+					// Mirrors fork's `wrapFillLine2AfterLast` `lengthAfter`
+					// bias: when significant content trails on the same line
+					// (e.g. typedef LHS typeParams followed by ` = RhsType<…>;`
+					// on the same line), prefer MBreak over MFlat so the
+					// trailing content has room. Sister to `IfLineExceeds`
+					// rest-of-stack lookahead — same walker, different
+					// consumer (Group-style fit instead of explicit branch).
+					if (f.forceFlat) {
+						stack.push(new Frame(f.indent, MFlat, inner, true));
+					} else {
+						final restW:Int = flatTokenWidthOfRestStack(stack);
+						if (fitsFlat(width - col - restW, f.indent, inner)) {
+							stack.push(new Frame(f.indent, MFlat, inner));
+						} else {
+							stack.push(new Frame(f.indent, MBreak, inner));
+						}
+					}
 				case IfBreak(breakDoc, flatDoc):
 					// Force-flat (slice B): always pick `flatDoc`, propagate
 					// `forceFlat=true` so the chosen branch keeps the region
@@ -630,7 +652,7 @@ class Renderer {
 				case Concat(items):
 					var j:Int = items.length;
 					while (--j >= 0) local.push(new Frame(f.indent, MFlat, items[j]));
-				case Group(inner):
+				case Group(inner) | GroupWithRestProbe(inner):
 					local.push(new Frame(f.indent, MFlat, inner));
 				case BodyGroup(_):
 					// Defer nested BodyGroups out of the parent's flat
@@ -756,7 +778,7 @@ class Renderer {
 				case Concat(items):
 					var i:Int = items.length;
 					while (--i >= 0) stack.push(items[i]);
-				case Group(inner):
+				case Group(inner) | GroupWithRestProbe(inner):
 					stack.push(inner);
 				case BodyGroup(_):
 					// Defer — BG decides its own flat/break independently.
@@ -859,10 +881,12 @@ class Renderer {
 					case Concat(items):
 						var k:Int = items.length;
 						while (--k >= 0) inner.push({doc: items[k], mode: node.mode});
-					case Group(innerDoc):
+					case Group(innerDoc) | GroupWithRestProbe(innerDoc):
 						// Static walk: descend in MFlat. Runtime Group
 						// decision is unknowable here; flat-side measurement
-						// matches the cascade rule semantic.
+						// matches the cascade rule semantic. GroupWithRestProbe
+						// shares semantic at static walk — the rest-probe
+						// affects render-time fit decision only.
 						inner.push({doc: innerDoc, mode: MFlat});
 					case BodyGroup(_):
 						// Deferred — BG decides own layout (Departure 2).
@@ -946,10 +970,12 @@ class Renderer {
 					case Concat(items):
 						var k:Int = items.length;
 						while (--k >= 0) inner.push({doc: items[k], mode: node.mode});
-					case Group(innerDoc) | BodyGroup(innerDoc):
+					case Group(innerDoc) | BodyGroup(innerDoc) | GroupWithRestProbe(innerDoc):
 						// BG-descend: chain-emit's full-line probe must
 						// see inline body content (differentiator vs
 						// sister `flatTokenWidthOfRestStack`).
+						// GroupWithRestProbe shares semantic at static
+						// walk — rest-probe is render-time only.
 						inner.push({doc: innerDoc, mode: MFlat});
 					case IfBreak(_, flatDoc):
 						inner.push({doc: flatDoc, mode: MFlat});

@@ -558,7 +558,7 @@ class WrapList {
 				case Concat(items):
 					var i:Int = items.length;
 					while (--i >= 0) stack.push(items[i]);
-				case Group(inner) | BodyGroup(inner):
+				case Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner):
 					stack.push(inner);
 				case IfBreak(_, flatDoc):
 					stack.push(flatDoc);
@@ -649,7 +649,7 @@ class WrapList {
 				flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code ? depth : -1;
 			case OptHardline | OptHardlineSkipAtOpenDelim: depth;
 			case Nest(cols, inner): lastHardlineDepth(inner, depth + cols);
-			case Group(inner) | BodyGroup(inner): lastHardlineDepth(inner, depth);
+			case Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner): lastHardlineDepth(inner, depth);
 			case IfBreak(brk, _): lastHardlineDepth(brk, depth);
 			case IfWidthExceeds(_, brk, _): lastHardlineDepth(brk, depth);
 			case IfFirstLineExceeds(_, brk, _): lastHardlineDepth(brk, depth);
@@ -714,7 +714,7 @@ class WrapList {
 				// stays "yes, inner has a leading break point" so the
 				// wrap still places close on its own line.
 				return true;
-			case Nest(_, inner) | Group(inner) | BodyGroup(inner):
+			case Nest(_, inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner):
 				node = inner;
 			case IfBreak(brk, _):
 				node = brk;
@@ -1046,7 +1046,7 @@ class WrapList {
 			case OptSpace(_): false;
 			case OptSpaceSkipAfterHardline: false;
 			case Nest(_, inner): hasLeadingHardline(inner);
-			case Group(inner) | BodyGroup(inner): hasLeadingHardline(inner);
+			case Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner): hasLeadingHardline(inner);
 			case IfBreak(_, _): false;
 			case IfWidthExceeds(_, _, _): false;
 			case IfFirstLineExceeds(_, _, _): false;

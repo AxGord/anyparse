@@ -104,7 +104,7 @@ class D {
 			case Text(_): d;
 			case Line(flat): flat == '\n' ? Empty : Text(flat);
 			case Nest(_, inner): flatten(inner);
-			case Group(inner): flatten(inner);
+			case Group(inner) | GroupWithRestProbe(inner): flatten(inner);
 			case BodyGroup(inner): flatten(inner);
 			case Concat(items): Concat([for (i in items) flatten(i)]);
 			case IfBreak(_, fl): flatten(fl);

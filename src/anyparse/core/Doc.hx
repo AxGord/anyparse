@@ -202,6 +202,28 @@ enum Doc {
 	Nest(indent:Int, inner:Doc);
 	Group(inner:Doc);
 	BodyGroup(inner:Doc);
+
+	/**
+	 * Rest-of-stack-aware `Group` variant (ω-group-rest-probe). At
+	 * render time the fit decision subtracts `flatTokenWidthOfRestStack(stack)`
+	 * from the budget — content trailing on the same rendered line after
+	 * this Group is considered before committing to MFlat. Mirrors fork's
+	 * `wrapFillLine2AfterLast` `lengthAfter` bias toward earlier wrap
+	 * construct when significant content trails on the same line (e.g.
+	 * typedef LHS typeParams that should wrap because RHS won't fit on
+	 * the continuation).
+	 *
+	 * Sister to `IfLineExceeds` rest-of-stack lookahead — same walker
+	 * (`flatTokenWidthOfRestStack`), different consumer: `IfLineExceeds`
+	 * picks between two explicit docs based on column threshold; this
+	 * primitive picks between MFlat / MBreak by fit decision.
+	 *
+	 * All Doc walkers (`flatTokenWidth`, `flatTokenWidthFirstLine`,
+	 * `flatLength`, `hasLeadingHardline`, …) treat this primitive
+	 * identically to `Group(inner)` — semantic difference is rendering-time
+	 * only.
+	 */
+	GroupWithRestProbe(inner:Doc);
 	Concat(items:Array<Doc>);
 	IfBreak(breakDoc:Doc, flatDoc:Doc);
 	IfWidthExceeds(n:Int, breakDoc:Doc, flatDoc:Doc);

@@ -59,7 +59,7 @@ final class DocMeasure {
 				case Concat(items):
 					var i:Int = items.length;
 					while (--i >= 0) stack.push(items[i]);
-				case Group(inner):
+				case Group(inner) | GroupWithRestProbe(inner):
 					stack.push(inner);
 				case BodyGroup(_):
 					// Defer like `Renderer.fitsFlat`: BG content decides

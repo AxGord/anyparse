@@ -95,6 +95,59 @@ class DocRendererTest extends Test {
 		Assert.equals(expected, Renderer.render(outer, 10));
 	}
 
+	function testGroupRestProbeEmptyStackBehavesLikeGroup() {
+		// ω-group-rest-probe: with nothing trailing, the rest-probe variant
+		// must behave identically to plain Group — restW returns 0 from
+		// an empty stack, so the fit decision sees the same budget.
+		final inner:Doc = Concat([Text('['), Text('a'), Text(','), Line(' '), Text('b'), Text(']')]);
+		final groupDoc:Doc = Group(inner);
+		final probeDoc:Doc = GroupWithRestProbe(inner);
+
+		// Width 80: both fit flat.
+		Assert.equals('[a, b]', Renderer.render(groupDoc, 80));
+		Assert.equals('[a, b]', Renderer.render(probeDoc, 80));
+
+		// Width 4: both break (`[a, b]` is 6 chars > 4).
+		Assert.equals('[a,\nb]', Renderer.render(groupDoc, 4));
+		Assert.equals('[a,\nb]', Renderer.render(probeDoc, 4));
+	}
+
+	function testGroupRestProbeBreaksWhenTrailingContent() {
+		// ω-group-rest-probe: when significant content trails on the same
+		// line, the probe variant prefers MBreak over MFlat — even though
+		// the Group's own content fits flat in the remaining budget.
+		final groupContent:Doc = Concat([Text('['), Text('a'), Text(','), Line(' '), Text('b'), Text(']')]);
+		final trailing:Doc = Text(' = LongTrailingContentThatPushesPastWidth');
+
+		final plainGroup:Doc = Concat([Group(groupContent), trailing]);
+		final probeGroup:Doc = Concat([GroupWithRestProbe(groupContent), trailing]);
+
+		// Width 40: plain Group fits its own 6 chars and stays flat; the
+		// trailing content overflows the line WITHOUT triggering a break
+		// inside the Group (probe-blind behavior).
+		final plainOut:String = Renderer.render(plainGroup, 40);
+		Assert.equals('[a, b] = LongTrailingContentThatPushesPastWidth', plainOut);
+
+		// Same width, probe variant: the rest-of-stack walker sees the
+		// trailing text width, subtracts from the budget — Group's 6 chars
+		// no longer fit, the Group breaks.
+		final probeOut:String = Renderer.render(probeGroup, 40);
+		Assert.equals('[a,\nb] = LongTrailingContentThatPushesPastWidth', probeOut);
+	}
+
+	function testGroupRestProbeForceFlatPropagation() {
+		// ω-group-rest-probe: inside a Flatten region, the rest-probe is
+		// bypassed (same as plain Group's force-flat short-circuit). The
+		// inner content renders flat regardless of trailing content.
+		final inner:Doc = Concat([Text('['), Text('a'), Text(','), Line(' '), Text('b'), Text(']')]);
+		final trailing:Doc = Text(' = LongTrailingContentThatPushesPastWidth');
+		final flatRegion:Doc = Flatten(Concat([GroupWithRestProbe(inner), trailing]));
+
+		// Width 40: probe would normally break (per previous test), but
+		// Flatten forces MFlat throughout.
+		Assert.equals('[a, b] = LongTrailingContentThatPushesPastWidth', Renderer.render(flatRegion, 40));
+	}
+
 	function testInterspersePreservesElements() {
 		var items = [D.text("a"), D.text("b"), D.text("c")];
 		var result = D.intersperse(items, D.text(","));

@@ -362,6 +362,11 @@ class WriterCodegen {
 			docHelper('_dn', [{name: 'n', type: macro : Int}, {name: 'inner', type: macro : anyparse.core.Doc}], macro anyparse.core.Doc.Nest(n, inner)),
 			docHelper('_dg', [{name: 'inner', type: macro : anyparse.core.Doc}], macro anyparse.core.Doc.Group(inner)),
 			docHelper('_dbg', [{name: 'inner', type: macro : anyparse.core.Doc}], macro anyparse.core.Doc.BodyGroup(inner)),
+			// ω-group-rest-probe: opt-in Group variant whose render-time fit
+			// decision subtracts rest-of-stack flat width from the budget.
+			// Emit via `_dgrp(...)` instead of `_dg(...)` at sites where
+			// trailing same-line content should bias toward MBreak.
+			docHelper('_dgrp', [{name: 'inner', type: macro : anyparse.core.Doc}], macro anyparse.core.Doc.GroupWithRestProbe(inner)),
 			docHelper('_dhl', [], macro anyparse.core.Doc.Line('\n')),
 			docHelper('_doh', [], macro anyparse.core.Doc.OptHardline),
 			docHelper('_dossh', [], macro anyparse.core.Doc.OptSpaceSkipAfterHardline),
