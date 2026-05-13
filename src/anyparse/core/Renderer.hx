@@ -214,11 +214,22 @@ class Renderer {
 					// itself (content trailing the Fill on the same rendered
 					// line — e.g. typedef RHS `= RequestMethod<...>;` after a
 					// typeParams Fill). Subtracted only when the originating
-					// Fill ctor was `FillWithRestProbe` (ω-fill-rest-probe).
+					// Fill ctor was `FillWithRestProbe` (ω-fill-rest-probe)
+					// AND we're probing the LAST item (slice 4): fork's
+					// `wrapFillLine2AfterLast` reserves the rest-of-line tail
+					// for the AFTER-LAST decision, not every per-item probe.
+					// Middle items break only when they themselves overflow;
+					// the tail lands on whichever line the last item ends on,
+					// so only the last item's probe must account for it.
+					// Applying restW per-item is over-pessimistic (regresses
+					// e.g. `wrapping/issue_494_type_parameter` — too-early
+					// break, only 2 of 6 items packed instead of 5).
 					// Default `restW=0` preserves byte-equivalent legacy
 					// behavior; sister to `GroupWithRestProbe` at the Group
 					// decision layer.
-					final restW:Int = f.fillRestProbe ? flatTokenWidthOfRestStack(stack) : 0;
+					final restW:Int = (f.fillRestProbe && idx == fillRest.length - 1)
+						? flatTokenWidthOfRestStack(stack)
+						: 0;
 					final fits:Bool = fitsFlat(width - col - tailReserve - restW, f.indent, Concat([fillSep, fillRest[idx]]));
 					if (idx + 1 < fillRest.length)
 						stack.push(Frame.fillCont(f.indent, fillRest, idx + 1, fillSep, tailReserve, f.forceFlat, f.fillRestProbe));

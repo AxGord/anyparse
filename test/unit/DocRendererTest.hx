@@ -171,9 +171,10 @@ class DocRendererTest extends Test {
 
 	function testFillRestProbeBreaksWhenTrailingContent() {
 		// ω-fill-rest-probe: when significant content trails on the same
-		// line, the probe variant breaks per-item earlier — even though
-		// each item fits in the remaining budget under plain Fill's
-		// budget calculation.
+		// line, the probe variant breaks BEFORE THE LAST ITEM — fork's
+		// `wrapFillLine2AfterLast` semantic: pack items normally; only
+		// the last item's probe reserves room for the rest-of-line tail.
+		// Middle items break only when they themselves overflow.
 		//
 		// Bare Fill (no outer Group): an enclosing `Group(Fill(...))` whose
 		// inner subtree fits flat in the budget commits to MFlat, collapsing
@@ -195,11 +196,12 @@ class DocRendererTest extends Test {
 		final plainOut:String = Renderer.render(plainFill, 30);
 		Assert.equals('aa, bb, cc = LongTrailingContentThatPushesPastWidth', plainOut);
 
-		// Same width, probe variant: the rest-of-stack walker sees the
-		// trailing text width on each per-item probe — items 2 and 3 no
-		// longer fit, so the Fill breaks per-item.
+		// Same width, probe variant: only the LAST item's probe subtracts
+		// `restW` (= 41, the trailing text width). Item 1 (`bb`, middle)
+		// fits without restW pressure → packs. Item 2 (`cc`, last) probes
+		// `width - col - 0 - 41 = -17 < 4` → BREAK before `cc`.
 		final probeOut:String = Renderer.render(probeFill, 30);
-		Assert.equals('aa,\nbb,\ncc = LongTrailingContentThatPushesPastWidth', probeOut);
+		Assert.equals('aa, bb,\ncc = LongTrailingContentThatPushesPastWidth', probeOut);
 	}
 
 	function testFillRestProbeForceFlatPropagation() {
