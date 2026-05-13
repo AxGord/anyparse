@@ -2737,15 +2737,61 @@ class WriterLowering {
 			);
 		final bodyField:String = fnBodyEmptyArgs[0];
 		final bodyAccess:Expr = {expr: EField(macro value, bodyField), pos: Context.currentPos()};
-		final isEmptyExpr:Expr = macro {
-			final _body = $bodyAccess;
-			switch _body {
-				case NoBody: true;
-				case BlockBody(_b): _b.stmts.length == 0;
-				case UntypedBlockBody(_u): _u.block.stmts.length == 0;
-				case ExprBody(_): false;
-			}
+		// ω-anonfnsignature-body-aware-indent: dispatch the empty-body
+		// switch on the body field's actual enum type. `HxFnBody` and
+		// `HxFnExprBody` share two bare ctor names (`BlockBody`,
+		// `ExprBody`) but differ in the other ctors — a single
+		// hardcoded form fails compilation on whichever enum lacks
+		// `NoBody` / `UntypedBlockBody`. Resolve the type via the
+		// body field's ShapeNode `base.ref` annotation (FQN, stripped
+		// by `simpleName`) and emit the matching ctor set. The `T`-
+		// suffixed variants (`HxFnBodyT` / `HxFnExprBodyT`) carry the
+		// same ctor names per `TriviaTypeSynth` — share an arm. Optional
+		// body (`Null<HxFnExprBody>` on `HxFnExpr.body`) gets a leading
+		// `_body == null` guard so absent body (`@:overload(function(...))`)
+		// flags as empty.
+		var bodyRef:Null<String> = null;
+		var bodyIsOptional:Bool = false;
+		for (c in node.children) if (c.annotations.get('base.fieldName') == bodyField) {
+			bodyRef = c.annotations.get('base.ref');
+			bodyIsOptional = c.annotations.get('base.optional') == true;
+			break;
+		}
+		if (bodyRef == null)
+			Context.fatalError(
+				'WriterLowering: @:fmt(propagateFnBodyEmpty) bodyField "$bodyField" not found in struct',
+				Context.currentPos()
+			);
+		final bodyTypeName:String = simpleName(bodyRef);
+		final bodySwitchExpr:Expr = switch bodyTypeName {
+			case 'HxFnBody' | 'HxFnBodyT':
+				macro switch _body {
+					case NoBody: true;
+					case BlockBody(_b): _b.stmts.length == 0;
+					case UntypedBlockBody(_u): _u.block.stmts.length == 0;
+					case ExprBody(_): false;
+				};
+			case 'HxFnExprBody' | 'HxFnExprBodyT':
+				macro switch _body {
+					case BlockBody(_b): _b.stmts.length == 0;
+					case ExprBody(_): false;
+				};
+			case _:
+				Context.fatalError(
+					'WriterLowering: @:fmt(propagateFnBodyEmpty) unsupported body type "$bodyTypeName" (expected HxFnBody / HxFnExprBody)',
+					Context.currentPos()
+				);
+				throw 'unreachable';
 		};
+		final isEmptyExpr:Expr = bodyIsOptional
+			? macro {
+				final _body = $bodyAccess;
+				if (_body == null) true; else $bodySwitchExpr;
+			}
+			: macro {
+				final _body = $bodyAccess;
+				$bodySwitchExpr;
+			};
 		return macro {
 			final _savedFnSigBodyEmpty:Bool = opt._fnSigBodyEmpty;
 			opt._fnSigBodyEmpty = $isEmptyExpr;
