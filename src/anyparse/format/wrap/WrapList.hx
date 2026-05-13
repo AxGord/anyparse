@@ -122,15 +122,31 @@ class WrapList {
 		}
 
 		final baseCols:Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
-		// `defaultAdditionalIndent` (slice ω-wraplist-additional-indent):
-		// bumps the continuation indent by N extra units on top of the
-		// base `Nest(cols, …)` used by every break-mode shape. Mirrors
-		// fork's `WrapRules.defaultAdditionalIndent` — only
-		// `wrapping.functionSignature` ships a non-zero value (1) in
-		// fork's `default-hxformat.json`, so every other cascade keeps
-		// the legacy single-indent continuation column.
+		// Continuation-indent depth for break-mode shapes
+		// (`Nest(cols, …)`). Two indent regimes coexist:
+		//   - **Cascade-forced break** (`OnePerLine`,
+		//     `OnePerLineAfterFirst`, `FillLineWithLeadingBreak`): the
+		//     cascade injects its own hardlines between items. Fork's
+		//     `calcIndent(firstToken) + additionalIndent` lands at
+		//     `outer-block-indent + N` tabs, so our `Nest` must add
+		//     `additional` units only (our outer `Nest` stack already
+		//     contributes the `calcIndent` portion).
+		//   - **Fit-driven / trivia-driven** (`NoWrap`, `FillLine`):
+		//     cascade emits items flat; any hardlines come from
+		//     trivia-preserved source breaks (or `Fill`'s built-in
+		//     break-on-overflow). Fork's token-tree positions those at
+		//     `calcIndent + 1 + additionalIndent` (the extra `+1` from
+		//     paren-bumped `calcIndent` of inner tokens), which our
+		//     renderer matches with `baseCols * (1 + additional)`.
+		// Probe mode at `exceeds=true / firing=∅` before threshold
+		// enumeration. The result is a heuristic — cascades with
+		// `LineLengthLargerThan` thresholds that flip the mode at
+		// runtime aren't covered, but no current consumer combines
+		// `defaultAdditionalIndent > 0` with such thresholds.
 		final additional:Int = rules.defaultAdditionalIndent ?? 0;
-		final cols:Int = baseCols * (1 + additional);
+		final probeMode:WrapMode = decideWithLineLengthState(rules, items.length, maxLen, total, true, anyHardline, _ -> false);
+		final cascadeForcesBreak:Bool = probeMode == OnePerLine || probeMode == OnePerLineAfterFirst || probeMode == FillLineWithLeadingBreak;
+		final cols:Int = baseCols * (cascadeForcesBreak && additional > 0 ? additional : 1 + additional);
 
 		// Column-aware `LineLengthLargerThan` thresholds (slice
 		// ω-ifwidthexceeds-infra). Cascade rules with `lineLength >= n`
