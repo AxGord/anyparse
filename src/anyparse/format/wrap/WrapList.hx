@@ -729,6 +729,14 @@ class WrapList {
 			case OnePerLineAfterFirst: shapeOnePerLineAfterFirst(open, close, sep, items, cols, appendTrailingComma);
 			case FillLine: shapeFillLine(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe);
 			case FillLineWithLeadingBreak: shapeFillLineWithLeadingBreak(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
+			// ω-keep-objectlit: Keep cascade hits are pre-empted by the
+			// writer's trivia branch (`triviaSepStarExpr`) — at the engine
+			// level, Keep collapses to NoWrap so any leakage produces a
+			// sensible single-line layout instead of a crash. The Keep
+			// emit shape lives at the writer, not the engine, because it
+			// needs per-element `Trivial<T>.newlineBefore` access (already
+			// rendered Docs lose that signal).
+			case Keep: shapeNoWrap(open, close, sep, items, openInside, closeInside);
 			case _: shapeNoWrap(open, close, sep, items, openInside, closeInside);
 		};
 	}

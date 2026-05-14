@@ -38,4 +38,22 @@ enum abstract WrapMode(Int) from Int to Int {
 	final FillLine = 3;
 
 	final FillLineWithLeadingBreak = 4;
+
+	/**
+	 * Source-newline preservation: each element's hardline-vs-glue
+	 * decision reads `Trivial<T>.newlineBefore` at the writer site.
+	 * Fork's `WrappingType.Keep` (`MarkWrappingBase.hx:65-120`
+	 * `keep2`).
+	 *
+	 * Effective only at the trivia-emit branch
+	 * (`WriterLowering.triviaSepStarExpr`). The cascade engine's
+	 * `shape` switch maps `Keep → shapeNoWrap` as a defensive
+	 * fallback — Keep cascades the writer pre-empts before invoking
+	 * `WrapList.emit`. If a Keep rule ever reaches the engine, the
+	 * fallback gives a sensible single-line layout instead of a
+	 * crash.
+	 *
+	 * Slice ω-keep-objectlit and beyond.
+	 */
+	final Keep = 5;
 }

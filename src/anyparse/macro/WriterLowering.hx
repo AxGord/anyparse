@@ -6539,6 +6539,29 @@ class WriterLowering {
 		final trailClose:Expr = trailCloseAccess ?? macro (null : Null<String>);
 		final trailOpen:Expr = trailOpenAccess ?? macro (null : Null<String>);
 		final emptyTrailExpr:Expr = macro _dc([_dt($v{emptyText}), trailingCommentDocVerbatim(_trailClose, opt)]);
+		// ω-keep-objectlit: when the Star carries
+		// `@:fmt(wrapRules('<rulesField>'))` AND the runtime config sets
+		// `opt.<rulesField>.defaultMode == WrapMode.Keep`, the trivia
+		// branch's per-element loop swaps the unconditional leading
+		// `_dhl()` for a per-element source-aware decision (hardline if
+		// `Trivial<T>.newlineBefore`, space if glued). Mirrors fork's
+		// `MarkWrappingBase.keep2` per-token `isOriginalNewlineBefore`
+		// dispatch. `_keepEmit=false` (default — null `wrapRulesField`
+		// OR rules' defaultMode != Keep OR any comment forces hardline)
+		// preserves the legacy force-multi shape byte-identically.
+		//
+		// JSON-driven: the loader maps `"defaultWrap": "keep"` → `Keep`;
+		// `BinaryChainEmit` and `MethodChainEmit` route `Keep` to their
+		// `shapeNoWrap` arms to preserve baseline for chain-config Keep
+		// cases (e.g. `issue_187_multi_line_wrapped_assignment_oneline`)
+		// where the JSON-config Keep slipped past loader's silent-drop
+		// previously. Real chain-Keep semantics is a follow-up slice.
+		final keepCheckExpr:Expr = wrapRulesField != null
+			? {
+				final rulesAccess:Expr = optFieldAccess(wrapRulesField);
+				macro $rulesAccess.defaultMode == anyparse.format.wrap.WrapMode.Keep;
+			}
+			: macro false;
 		// ω-objectlit-leftCurly-cascade: when the call site delegates
 		// leftCurly emission to this helper (knob-form leftCurly + wrap-
 		// rules), build runtime accessors for the knob value that:
@@ -6782,13 +6805,35 @@ class WriterLowering {
 					_ti++;
 				}
 				final _hasTrivia:Bool = _requiresHardline || _hasSourceNewlines;
+				// ω-keep-objectlit: Keep emit gate. Fires when the wrap-rules
+				// runtime mode is Keep AND no comments/blanks force hardline
+				// (the comment+blank case falls back to legacy force-multi
+				// because cascade can't emit comments; Slice 4 territory).
+				final _keepEmit:Bool = $keepCheckExpr && !_requiresHardline;
 				if (_hasTrivia) {
 					final _inner:Array<anyparse.core.Doc> = [];
 					$initCurrDocCommentExpr;
 					var _si:Int = 0;
 					while (_si < _arr.length) {
 						final _t = _arr[_si];
-						_inner.push(_dhl());
+						// ω-keep-objectlit: per-element source-aware leading break.
+						// Keep mode: first element gets hardline only if source
+						// had `\n` before it (`newlineBefore=true`) — otherwise
+						// glue to open lit. Subsequent elements: hardline on
+						// source-newline, space otherwise. Legacy non-Keep path
+						// always pushes hardline (force-multi byte-identical).
+						if (_keepEmit) {
+							if (_si > 0) {
+								if (_t.newlineBefore)
+									_inner.push(_dhl());
+								else
+									_inner.push(_dt(' '));
+							} else if (_t.newlineBefore) {
+								_inner.push(_dhl());
+							}
+						} else {
+							_inner.push(_dhl());
+						}
 						$blankBeforeExpr;
 						var _ci:Int = 0;
 						while (_ci < _t.leadingComments.length) {

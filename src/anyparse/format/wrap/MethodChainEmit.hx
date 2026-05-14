@@ -199,6 +199,12 @@ class MethodChainEmit {
 			case NoWrap: shapeNoWrap(receiver, segments);
 			case OnePerLine: shapeOnePerLine(receiver, segments, cols);
 			case OnePerLineAfterFirst: shapeOnePerLineAfterFirst(receiver, segments, cols);
+			// ω-keep-objectlit: JSON `"defaultWrap": "keep"` on method-chain
+			// configs (methodChain.defaultWrap = "keep" in
+			// `wrapping_method_chain_keep.hxtest`) routed to shapeNoWrap.
+			// Preserves pre-recognition baseline byte-identically — real
+			// per-segment chain-Keep semantics is a follow-up slice.
+			case Keep: shapeNoWrap(receiver, segments);
 			// FillLine and FillLineWithLeadingBreak don't have a chain-
 			// specific semantics in fork's `WrappingProcessor` either.
 			// Fall back to OnePerLineAfterFirst (the most common chain

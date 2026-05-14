@@ -770,6 +770,16 @@ final class HaxeFormatConfigLoader {
 			case 'onePerLineAfterFirst' | 'OnePerLineAfterFirst': WrapMode.OnePerLineAfterFirst;
 			case 'fillLine' | 'FillLine': WrapMode.FillLine;
 			case 'fillLineWithLeadingBreak' | 'FillLineWithLeadingBreak': WrapMode.FillLineWithLeadingBreak;
+			// ω-keep-objectlit: fork's `WrappingType.Keep` preserves
+			// source-newline pattern per-element. Loader maps it to
+			// `WrapMode.Keep`; `triviaSepStarExpr` (`WriterLowering.hx`)
+			// consumes it for trivia-bearing Stars (ObjectLit, Anon-type,
+			// etc.) via the `_keepEmit` gate. `BinaryChainEmit` and
+			// `MethodChainEmit` route `Keep` to their `shapeNoWrap` arms
+			// — chain Keep semantics is a follow-up slice; the NoWrap
+			// fallback preserves the pre-recognition baseline byte-
+			// identically for chain-config Keep fixtures.
+			case 'keep' | 'Keep': WrapMode.Keep;
 			case _: null;
 		};
 	}

@@ -289,6 +289,17 @@ final class BinaryChainEmit {
 			case OnePerLine: shapeOnePerLine(items, ops, cols, location);
 			case OnePerLineAfterFirst: shapeOnePerLineAfterFirst(items, ops, cols, location);
 			case FillLine | FillLineWithLeadingBreak: shapeFillLine(items, ops, cols, location);
+			// ω-keep-objectlit: JSON `"defaultWrap": "keep"` on chain
+			// configs (opAddSubChain, opBoolChain, etc.) routed to
+			// shapeNoWrap. Preserves pre-recognition baseline byte-
+			// identically — before loader recognized "keep", these
+			// configs fell back to `base.defaultMode = NoWrap` via
+			// `cfg.defaultWrap != null ? wrapModeFromString(_) ?? base.defaultMode : base.defaultMode`.
+			// Real per-element chain-Keep semantics (mirror of fork's
+			// `keepLineEnds`/`markKeepLineEnds`) is a follow-up slice;
+			// no current fixture exercises it for chain operators where
+			// shapeNoWrap differs from the source's existing layout.
+			case Keep: shapeNoWrap(items, ops);
 			case _: shapeOnePerLineAfterFirst(items, ops, cols, location);
 		};
 	}
