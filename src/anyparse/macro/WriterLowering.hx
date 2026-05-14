@@ -3293,6 +3293,19 @@ class WriterLowering {
 				// list cannot collapse to a single line regardless of
 				// what the cascade would say.
 				if (sepText != null) {
+					// ω-cascade-emits-comments: emit the funcParamParens /
+					// typeParamOpen space inside the @:trivia + sep
+					// dispatch — the @:trivia path returns BEFORE the
+					// no-trivia branch at `:3504-3510` that owns the
+					// equivalent emit, so without this mirror the
+					// `function foo ()` space (and sister knobs) is
+					// silently dropped when the Star becomes @:trivia.
+					// First-field Stars skip (matches the no-trivia path's
+					// `!isFirstField` gate).
+					if (!isFirstField) {
+						final triviaParamSpace:Null<Expr> = openDelimPolicySpace(starNode, ['funcParamParens', 'typeParamOpen']);
+						if (triviaParamSpace != null) parts.push(triviaParamSpace);
+					}
 					// ω-objectlit-source-trail-comma: when the Star also
 					// carries `@:fmt(trailingComma('<knob>'))`, thread the
 					// knob's field name into `triviaSepStarExpr` so its
