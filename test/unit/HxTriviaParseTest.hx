@@ -91,7 +91,7 @@ class HxTriviaParseTest extends Test {
 		};
 		Assert.equals(1, cls.members.length);
 		Assert.equals(0, cls.members[0].leadingComments.length);
-		Assert.equals(' inline', cls.members[0].trailingComment);
+		Assert.equals('// inline', cls.members[0].trailingComment);
 	}
 
 	public function testLeadingCommentInsideFunctionBody():Void {
@@ -174,7 +174,7 @@ class HxTriviaParseTest extends Test {
 			case _: throw 'expected ClassDecl';
 		};
 		Assert.equals(1, cls.members.length);
-		Assert.equals(' inline block ', cls.members[0].trailingComment);
+		Assert.equals('/* inline block */', cls.members[0].trailingComment);
 	}
 
 	public function testMultilineBlockIsLeadingNotTrailing():Void {
@@ -257,7 +257,7 @@ class HxTriviaParseTest extends Test {
 				case _: throw 'expected BlockBody';
 			};
 		Assert.equals(1, stmts.length);
-		Assert.equals(' trailing', stmts[0].trailingComment);
+		Assert.equals('// trailing', stmts[0].trailingComment);
 	}
 
 	/**

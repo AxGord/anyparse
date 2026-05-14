@@ -6396,7 +6396,7 @@ class WriterLowering {
 					$trackDocCommentExpr;
 					final _elem:anyparse.core.Doc = $triviaElemCall;
 					final _tc:Null<String> = _t.trailingComment;
-					_inner.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDoc(_tc, opt)) : _elem);
+					_inner.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDocVerbatim(_tc, opt)) : _elem);
 					$trackPrevKindExpr;
 					_si++;
 				}
@@ -6859,7 +6859,7 @@ class WriterLowering {
 							_line = _dc([_line, _dt($v{sepText})]);
 						final _tc:Null<String> = _t.trailingComment;
 						if (_tc != null)
-							_line = _dc([_line, trailingCommentDoc(_tc, opt)]);
+							_line = _dc([_line, trailingCommentDocVerbatim(_tc, opt)]);
 						_inner.push(_line);
 						_si++;
 					}
@@ -7434,7 +7434,7 @@ class WriterLowering {
 		whileBodyParts.push(balcExpr);
 		whileBodyParts.push(macro final _elem:anyparse.core.Doc = $triviaElemCall);
 		whileBodyParts.push(macro final _tc:Null<String> = _t.trailingComment);
-		whileBodyParts.push(macro _docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDoc(_tc, opt)) : _elem));
+		whileBodyParts.push(macro _docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDocVerbatim(_tc, opt)) : _elem));
 		whileBodyParts.push(emit.trackPrev);
 		whileBodyParts.push(macro _si++);
 		final whileBodyBlock:Expr = {expr: EBlock(whileBodyParts), pos: pos};
@@ -7937,7 +7937,7 @@ class WriterLowering {
 					}
 					final _elem:anyparse.core.Doc = $triviaElemCall;
 					final _tc:Null<String> = _t.trailingComment;
-					_docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDoc(_tc, opt)) : _elem);
+					_docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDocVerbatim(_tc, opt)) : _elem);
 					$cascadeTrackPrev;
 					_si++;
 				}

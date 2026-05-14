@@ -1248,7 +1248,7 @@ class Lowering {
 						final _node:$elemCT = $elemCall;
 						var _sepAfter:Bool = true;
 						$sepMatchExpr;
-						final _trailing:Null<String> = collectTrailing(ctx);
+						final _trailing:Null<String> = collectTrailingFull(ctx);
 						_items.push({
 							blankBefore: _lead.blankBefore,
 							blankAfterLeadingComments: _lead.blankAfterLeadingComments,
@@ -2507,7 +2507,7 @@ class Lowering {
 					final _lead = collectTrivia(ctx);
 					try {
 						final _node:$elemCT = $elemCall;
-						final _trailing:Null<String> = collectTrailing(ctx);
+						final _trailing:Null<String> = collectTrailingFull(ctx);
 						_items.push({
 							blankBefore: _lead.blankBefore,
 							blankAfterLeadingComments: _lead.blankAfterLeadingComments,
@@ -2816,7 +2816,7 @@ class Lowering {
 						final _afterTriviaPos:Int = ctx.pos;
 						try {
 							final _node:$elemCT = $elemCall;
-							final _trailing:Null<String> = collectTrailing(ctx);
+							final _trailing:Null<String> = collectTrailingFull(ctx);
 							$accumRef.push({
 								blankBefore: _lead.blankBefore,
 								blankAfterLeadingComments: _lead.blankAfterLeadingComments,
@@ -2847,7 +2847,7 @@ class Lowering {
 					final _lead = collectTrivia(ctx);
 					try {
 						final _node:$elemCT = $elemCall;
-						final _trailing:Null<String> = collectTrailing(ctx);
+						final _trailing:Null<String> = collectTrailingFull(ctx);
 						$accumRef.push({
 							blankBefore: _lead.blankBefore,
 							blankAfterLeadingComments: _lead.blankAfterLeadingComments,
@@ -2935,10 +2935,10 @@ class Lowering {
 					break;
 				}
 				final _node:$elemCT = $elemCall;
-				final _trailingBeforeSep:Null<String> = collectTrailing(ctx);
+				final _trailingBeforeSep:Null<String> = collectTrailingFull(ctx);
 				var _sepAfter:Bool = true;
 				$sepMatchExpr;
-				final _trailing:Null<String> = _trailingBeforeSep ?? (_sepAfter ? collectTrailing(ctx) : null);
+				final _trailing:Null<String> = _trailingBeforeSep ?? (_sepAfter ? collectTrailingFull(ctx) : null);
 				$accumRef.push({
 					blankBefore: _lead.blankBefore,
 					blankAfterLeadingComments: _lead.blankAfterLeadingComments,

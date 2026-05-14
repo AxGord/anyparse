@@ -9,14 +9,13 @@ package anyparse.runtime;
  * that consumes plain statements cannot accidentally receive trivia-wrapped
  * ones, and vice versa.
  *
- * Comment **text** is captured verbatim for leading comments — the open
- * and close delimiters are retained in the string (line-style `//…`,
- * block-style `/*…*\/`) so the writer can round-trip source style
- * without style-guessing heuristics. Trailing comments (a single same-
- * line comment after the node) store the body only, with delimiters
- * stripped — trailing capture rejects internal newlines, so line style
- * is always safe at emit time and storing delimiters would just be
- * noise.
+ * Comment **text** is captured verbatim for both leading and trailing
+ * comments — open and close delimiters are retained in the string
+ * (line-style `//…`, block-style `/*…*\/`) so the writer can
+ * round-trip source style without style-guessing heuristics. The
+ * writer dispatches block-vs-line emission shape from the captured
+ * prefix (`/*` vs `//`); a stripped body would force lossy
+ * normalisation to line style at emit time.
  *
  * Comment **position** IS stored (leading vs trailing) because it encodes
  * semantically meaningful authorial intent — unit annotations on a value,
@@ -51,12 +50,15 @@ package anyparse.runtime;
  *    verbatim (`// foo` or `/* foo *\/`); the writer emits the captured
  *    string as-is with one runtime post-process for javadoc-style
  *    close normalization on multi-line blocks.
- *  - `trailingComment` — a single same-line comment after the node (the
- *    ` seconds` body of `// seconds` attached to `var timeout = 30;`).
- *    Body only, delimiters stripped; the writer emits `// <body>`.
- *    Null when absent.
- *    Only one trailing slot: multiple comments on the same trailing
- *    line are unusual enough to collapse into a single slot.
+ *  - `trailingComment` — a single same-line comment after the node
+ *    (`// seconds` attached to `var timeout = 30;`, or `/*c*/` inline
+ *    before a separator). Captured VERBATIM with delimiters intact;
+ *    the writer emits via `trailingCommentDocVerbatim`. Null when
+ *    absent. Only one trailing slot: multiple comments on the same
+ *    trailing line are unusual enough to collapse into a single slot.
+ *    Trailing capture rejects block comments with internal newlines —
+ *    a newline-bearing block is left for the next element's leading
+ *    capture, so this slot never carries `\n`.
  *  - `sepAfter` — source had a separator (e.g. `,`) immediately AFTER
  *    this element, before either the next element's leading trivia or
  *    the close literal. Defaults to `true` so non-tracking sites
