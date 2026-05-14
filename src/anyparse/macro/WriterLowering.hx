@@ -2700,6 +2700,44 @@ class WriterLowering {
 									$v{leadText}, $v{trailText}, $writeCall, opt, $condKnobAccess
 								);
 							});
+						} else if (child.fmtHasFlag('arrowBodyLineWrap')) {
+							// ω-arrow-body-line-wrap: when the line containing
+							// the lambda body — `(params) -> body` plus rest of
+							// stack — would exceed `opt.lineWidth`, break after
+							// `->` (or `=>`) and indent the body one level. The
+							// preceding lead emission via `whitespacePolicyLead`
+							// terminates with `_dop(' ')` (OptSpace); the brk
+							// side's leading hardline triggers the renderer's
+							// `pendingOptSpace` clear so the post-arrow space
+							// drops cleanly without leaving a trailing token.
+							// Flat side is the bare writeCall — byte-identical
+							// to the pre-slice default branch below.
+							//
+							// Mirrors fork's `MarkWrapping.applyArrowWrapping`
+							// (`MarkWrapping.hx:985-1041`): collect arrows whose
+							// flat line exceeds `maxLineLength`, apply break
+							// after `->`, try collapse, restore on still-exceed.
+							// Our `_dile` IS the collapse — flat side fires
+							// when the line fits, brk side fires when it does
+							// not, both decided at render time.
+							//
+							// Wrapped in `_dwb` (WrapBoundary) so a sister probe
+							// in `WrapList.shapeFillLine` 1-item path can detect
+							// the arrow-body-line-wrap signature structurally
+							// and route the outer Call's close paren to its own
+							// line (mirrors fork's parent-walk close-paren mark
+							// in `applyArrowWrapping`'s `lineEndBefore(pClose)`).
+							// Slice-2 follow-up extends `isChainOPLBreak`.
+							//
+							// Currently consumed by `HxThinParenLambda.body`
+							// (`->` form) and `HxParenLambda.body` (`=>` form)
+							// for symmetric coverage of the canonical and
+							// legacy lambda-body syntaxes.
+							parts.push(macro {
+								final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+								final _doc:anyparse.core.Doc = $writeCall;
+								_dwb(_dile(opt.lineWidth, _dn(_cols, _dc([_dhl(), _doc])), _doc));
+							});
 						} else {
 							parts.push(writeCall);
 						}
