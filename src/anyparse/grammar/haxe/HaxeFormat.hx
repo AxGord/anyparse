@@ -1178,11 +1178,14 @@ final class HaxeFormat implements TextFormat {
 	 * Default `WrapRules` cascade for the `? :` ternary
 	 * (haxe-formatter `ternaryExpression` class). Slice ω-ternary-wrap
 	 * wires `WriterLowering`'s `@:ternary` branch into
-	 * `BinaryChainEmit.emit` (items=[cond, then, else],
-	 * ops=['?', ':']); the empty-rule `NoWrap` default keeps the flat
-	 * `cond ? then : else` byte-equivalent to the pre-slice emit, so the
-	 * scaffold is regression-free on every fixture that doesn't set a
-	 * non-default `ternaryExpression` config.
+	 * `BinaryChainEmit.emit` (items=[cond, then, else], ops=['?', ':']).
+	 *
+	 * Rule: `exceedsMaxLineLength=1 → OnePerLineAfterFirst, BeforeLast`
+	 * mirrors fork's `resources/default-hxformat.json` ternary cascade
+	 * verbatim — when the flat `cond ? then : else` line overflows the
+	 * `wrapping.maxLineLength` budget, the condition stays inline with
+	 * the parent and the `? then` / `: else` pair each take their own
+	 * continuation line. Slice ω-ternary-default-rule.
 	 *
 	 * Returned as a fresh struct on each call so test code that mutates
 	 * the `defaultWriteOptions.ternaryWrap` substruct doesn't corrupt
@@ -1190,7 +1193,15 @@ final class HaxeFormat implements TextFormat {
 	 */
 	public static function defaultTernaryWrap():WrapRules {
 		return {
-			rules: [],
+			rules: [
+				{
+					mode: WrapMode.OnePerLineAfterFirst,
+					location: WrappingLocation.BeforeLast,
+					conditions: [
+						{cond: WrapConditionType.ExceedsMaxLineLength, value: 1},
+					],
+				},
+			],
 			defaultMode: WrapMode.NoWrap,
 		};
 	}
