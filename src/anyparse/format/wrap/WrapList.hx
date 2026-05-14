@@ -737,6 +737,14 @@ class WrapList {
 			// needs per-element `Trivial<T>.newlineBefore` access (already
 			// rendered Docs lose that signal).
 			case Keep: shapeNoWrap(open, close, sep, items, openInside, closeInside);
+			// ω-cascade-emits-comments: Ignore is the sister policy on the
+			// source-newline axis. Like Keep, the writer's trivia branch
+			// pre-empts before reaching the engine — the cascade-emit
+			// shape lives inside `triviaSepStarExpr` because it needs
+			// per-element `Trivial<T>.leadingComments` / `trailingComment`
+			// access. Defensive fallback so any leakage produces a
+			// sensible single-line layout.
+			case Ignore: shapeNoWrap(open, close, sep, items, openInside, closeInside);
 			case _: shapeNoWrap(open, close, sep, items, openInside, closeInside);
 		};
 	}

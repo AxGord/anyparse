@@ -780,6 +780,13 @@ final class HaxeFormatConfigLoader {
 			// fallback preserves the pre-recognition baseline byte-
 			// identically for chain-config Keep fixtures.
 			case 'keep' | 'Keep': WrapMode.Keep;
+			// ω-cascade-emits-comments: fork's `WrappingType.Ignore`
+			// drops source-newline signal and lets the cascade pick a
+			// width-driven layout. Sister to Keep on the same axis.
+			// `triviaSepStarExpr` consumes it via the `_ignoreEmit`
+			// gate; chain emitters route `Ignore → shapeNoWrap` as a
+			// defensive fallback.
+			case 'ignore' | 'Ignore': WrapMode.Ignore;
 			case _: null;
 		};
 	}

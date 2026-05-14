@@ -51,7 +51,7 @@ package anyparse.runtime;
  *    string as-is with one runtime post-process for javadoc-style
  *    close normalization on multi-line blocks.
  *  - `trailingComment` — a single same-line comment after the node
- *    (`// seconds` attached to `var timeout = 30;`, or `/*c*/` inline
+ *    (`// seconds` attached to `var timeout = 30;`, or `/*c*\/` inline
  *    before a separator). Captured VERBATIM with delimiters intact;
  *    the writer emits via `trailingCommentDocVerbatim`. Null when
  *    absent. Only one trailing slot: multiple comments on the same

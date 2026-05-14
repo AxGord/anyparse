@@ -300,6 +300,10 @@ final class BinaryChainEmit {
 			// no current fixture exercises it for chain operators where
 			// shapeNoWrap differs from the source's existing layout.
 			case Keep: shapeNoWrap(items, ops);
+			// ω-cascade-emits-comments: Ignore sister to Keep — the writer
+			// pre-empts at the trivia branch. Defensive fallback to
+			// shapeNoWrap on engine leakage.
+			case Ignore: shapeNoWrap(items, ops);
 			case _: shapeOnePerLineAfterFirst(items, ops, cols, location);
 		};
 	}

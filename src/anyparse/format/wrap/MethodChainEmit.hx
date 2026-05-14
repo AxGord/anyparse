@@ -205,6 +205,9 @@ class MethodChainEmit {
 			// Preserves pre-recognition baseline byte-identically — real
 			// per-segment chain-Keep semantics is a follow-up slice.
 			case Keep: shapeNoWrap(receiver, segments);
+			// ω-cascade-emits-comments: Ignore sister to Keep — defensive
+			// fallback on engine leakage.
+			case Ignore: shapeNoWrap(receiver, segments);
 			// FillLine and FillLineWithLeadingBreak don't have a chain-
 			// specific semantics in fork's `WrappingProcessor` either.
 			// Fall back to OnePerLineAfterFirst (the most common chain

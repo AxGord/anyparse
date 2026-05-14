@@ -56,4 +56,21 @@ enum abstract WrapMode(Int) from Int to Int {
 	 * Slice ω-keep-objectlit and beyond.
 	 */
 	final Keep = 5;
+
+	/**
+	 * Source-newline drop: ignore `Trivial<T>.newlineBefore` and let
+	 * the cascade pick a width-driven layout. Per-element leading
+	 * comments and block-style trailing comments are inlined into the
+	 * cascade-emitted items so width-driven layout can still preserve
+	 * source comments. Sister to `Keep` — opposite policy on the same
+	 * source-newline axis. Fork's `WrappingType.Ignore`.
+	 *
+	 * Effective only at the trivia-emit branch
+	 * (`WriterLowering.triviaSepStarExpr`); the cascade engine's
+	 * `shape` switch maps `Ignore → shapeNoWrap` as a defensive
+	 * fallback identical to Keep's.
+	 *
+	 * Slice ω-cascade-emits-comments and beyond.
+	 */
+	final Ignore = 6;
 }

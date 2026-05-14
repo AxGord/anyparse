@@ -1410,10 +1410,18 @@ class WriterLowering {
 				// path read at lowerStruct's Star dispatch. Dual-dispatch
 				// per [[feedback-wraprules-dispatch-dual-path]].
 				final groupRestProbe:Bool = branch.fmtHasFlag('groupRestProbe');
+				// ω-cascade-emits-comments: enum-Alt branch reader for
+				// `@:fmt(ignoreSourceNewlinesForWrap)` — intrinsic
+				// per-construct opt-in to fork's `Ignore` policy
+				// (drop source newline signal, inline cascade-emittable
+				// trivia). Currently no enum-Alt consumer opts in;
+				// reader present for symmetry with the struct-path
+				// dual-dispatch.
+				final ignoreSourceNewlines:Bool = branch.fmtHasFlag('ignoreSourceNewlinesForWrap');
 				parts.push(triviaSepStarExpr(
 					argsAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, leadText, trailText, sepText,
 					wrapRulesField, knobLeftCurly, knobRightCurly, sepTrailPresentAccess, trailingCommaField, openInsideExpr, closeInsideExpr, beforeDocComments,
-					forceMultiTypedef, bodyAware, groupRestProbe
+					forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines
 				));
 			} else {
 				// ω-bropen-keep: forward `@:fmt(keepCurlyBlanks)` from the
@@ -3317,13 +3325,21 @@ class WriterLowering {
 					// Trivia-path dual-dispatch closure per
 					// [[feedback-wraprules-dispatch-dual-path]].
 					final groupRestProbe:Bool = starNode.fmtHasFlag('groupRestProbe');
+					// ω-cascade-emits-comments: struct-Star path reader for
+					// `@:fmt(ignoreSourceNewlinesForWrap)`. Intrinsic
+					// per-construct opt-in to fork's `Ignore` semantic —
+					// drops `Trivial<T>.newlineBefore` signal, routes
+					// per-element block-trailing + leading comments
+					// through the cascade no-trivia branch. Currently
+					// `HxFnDecl.params` (Slice 4c).
+					final ignoreSourceNewlines:Bool = starNode.fmtHasFlag('ignoreSourceNewlinesForWrap');
 					parts.push(triviaSepStarExpr(
 						fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn,
 						openText ?? '', closeText, sepText, wrapRulesField,
 						leftCurlyOwnedBySep ? knobLeftCurly : null,
 						knobRightCurly,
 						trailPresentAccess, trailingCommaField,
-						null, null, false, forceMultiTypedef, bodyAware, groupRestProbe
+						null, null, false, forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines
 					));
 					return;
 				}
@@ -6470,7 +6486,8 @@ class WriterLowering {
 		beforeDocCommentEmptyLines:Bool = false,
 		forceMultiInTypedef:Bool = false,
 		bodyAwareCompactIndent:Bool = false,
-		groupRestProbe:Bool = false
+		groupRestProbe:Bool = false,
+		ignoreSourceNewlinesForWrap:Bool = false
 	):Expr {
 		// ω-trivia-sep-anontype-braces (Phase B1): when the call site
 		// reads `@:fmt(anonTypeBracesOpen)` / `objectLiteralBracesOpen`
@@ -6562,6 +6579,22 @@ class WriterLowering {
 				macro $rulesAccess.defaultMode == anyparse.format.wrap.WrapMode.Keep;
 			}
 			: macro false;
+		// ω-cascade-emits-comments: Ignore-mode runtime check, sister to
+		// `keepCheckExpr`. Fires when the wrap-rules JSON config sets
+		// `"defaultWrap": "ignore"` (case-2, user-driven) OR the grammar
+		// annotation `@:fmt(ignoreSourceNewlinesForWrap)` is set (case-1,
+		// intrinsic per-construct semantic — currently `HxFnDecl.params`).
+		// Architecture per [[feedback-grammar-annotation-keep-too-aggressive]]:
+		// intrinsic flags + JSON checks are disjoined here, no separate
+		// override channel.
+		final ignoreCheckExpr:Expr = ignoreSourceNewlinesForWrap
+			? macro true
+			: (wrapRulesField != null
+				? {
+					final rulesAccess:Expr = optFieldAccess(wrapRulesField);
+					macro $rulesAccess.defaultMode == anyparse.format.wrap.WrapMode.Ignore;
+				}
+				: macro false);
 		// ω-objectlit-leftCurly-cascade: when the call site delegates
 		// leftCurly emission to this helper (knob-form leftCurly + wrap-
 		// rules), build runtime accessors for the knob value that:
@@ -6712,12 +6745,34 @@ class WriterLowering {
 			// `macro false`, keeping the engine byte-identical to pre-slice
 			// for non-opt-in sites.
 			final compactContExpr:Expr = bodyAwareCompactIndent ? (macro opt._fnSigBodyEmpty) : (macro false);
+			// ω-cascade-emits-comments: wrap each per-element Doc with its
+			// leading comments (each followed by a hardline) and an inline
+			// block-style trailing comment (line-style trailings are not
+			// cascade-emittable — the engine inserts the separator AFTER
+			// the item, which would land INSIDE a `// ...` line comment;
+			// those route to the force-multi branch via `_requiresHardline`
+			// in the predicate split below). When the element has no
+			// trivia (the only case reached pre-slice), `_parts.length==1`
+			// collapses to the bare `_elemBase` Doc — byte-identical to
+			// the previous `_docs.push($triviaElemCall)` shape.
 			macro {
 				final _docs:Array<anyparse.core.Doc> = [];
 				var _si2:Int = 0;
 				while (_si2 < _arr.length) {
 					final _t = _arr[_si2];
-					_docs.push($triviaElemCall);
+					final _elemBase:anyparse.core.Doc = $triviaElemCall;
+					final _parts:Array<anyparse.core.Doc> = [];
+					var _ci2:Int = 0;
+					while (_ci2 < _t.leadingComments.length) {
+						_parts.push(leadingCommentDoc(_t.leadingComments[_ci2], opt));
+						_parts.push(_dhl());
+						_ci2++;
+					}
+					_parts.push(_elemBase);
+					final _tc2:Null<String> = _t.trailingComment;
+					if (_tc2 != null && StringTools.startsWith(_tc2, '/*'))
+						_parts.push(trailingCommentDocVerbatim(_tc2, opt));
+					_docs.push(_parts.length == 1 ? _parts[0] : _dc(_parts));
 					_si2++;
 				}
 				anyparse.format.wrap.WrapList.emit(
@@ -6770,37 +6825,56 @@ class WriterLowering {
 				if (_trailClose != null) $emptyTrailExpr
 				else _dt($v{emptyText});
 			} else {
-				// ω-keep-predicate-split: decompose `_hasTrivia` into two
-				// orthogonal predicates as scaffold for per-Star wrap-kind
-				// opt-in (ω-keep-objectlit and beyond).
+				// ω-keep-predicate-split + ω-cascade-emits-comments: decompose
+				// `_hasTrivia` into three orthogonal predicates so the
+				// Ignore-mode cascade can ingest per-element block comments
+				// and the Keep emit path can stay gated on physical hardline
+				// requirements alone.
 				//
-				//  - `_requiresHardline` — physical hardline requirement: any
-				//    comment slot (leading/trailing per element, or
-				//    `_trailLC`/`_trailOpen` on the open/close boundary) or
-				//    blank line. Cascade no-trivia branch DROPS these signals
-				//    (`$triviaElemCall` = `writeXxxT(_t.node, opt)` — comments
-				//    not consulted), so anything in this bucket MUST route
-				//    through the force-multi branch to preserve trivia.
+				//  - `_requiresHardline` — physical hardline requirement:
+				//    `_trailLC`/`_trailOpen` on the open/close boundary, any
+				//    blank line before an element, leading comments (when
+				//    NOT in ignore mode), and trailing LINE comments (any
+				//    mode — engine inserts the sep AFTER the item, which
+				//    would land inside `// ...`). Anything in this bucket
+				//    MUST route through the force-multi branch.
 				//  - `_hasSourceNewlines` — bare `newlineBefore=true` on at
-				//    least one element. Independent axis: source had a break
-				//    between elements but no comment forced it. Default
-				//    behavior remains "force-multi when present" — matches
-				//    legacy. Future slices add per-Star opt-out (Ignore) or
-				//    opt-in-per-element-emit (Keep) gated on this signal.
+				//    least one element. Independent axis. Under
+				//    `_ignoreEmit` this signal is DROPPED (fork's `Ignore`
+				//    policy ignores source newlines and lets width drive
+				//    layout); legacy default still flips `_hasTrivia=true`.
+				//  - `_hasInlineableTrivia` — at least one element carries a
+				//    leading comment OR a block-style trailing comment, AND
+				//    `_ignoreEmit` is live. These are cascade-emittable: the
+				//    no-trivia branch wraps each item Doc with its leading
+				//    comments + inline block trailing before passing to
+				//    `WrapList.emit`. Routes the item to cascade (not
+				//    force-multi) when no `_requiresHardline` blocker fires.
 				//
-				// Byte-identity: `_requiresHardline || _hasSourceNewlines` is
-				// the same set as the original OR (newlineBefore +
-				// blankBefore + leadingComments + trailingComment + trailLC +
-				// trailOpen). Short-circuit dropped — predicate values
-				// unchanged, micro-perf only.
+				// Byte-identity for `_ignoreEmit=false`: comments still set
+				// `_requiresHardline=true` (legacy bucket); cascade rewrite
+				// at the no-trivia branch collapses to `_docs.push(_elem)`
+				// because `_parts.length==1` on no-comment elements.
+				final _ignoreEmit:Bool = $ignoreCheckExpr;
 				var _requiresHardline:Bool = _trailLC.length > 0 || _trailOpen != null;
 				var _hasSourceNewlines:Bool = false;
+				var _hasInlineableTrivia:Bool = false;
 				var _ti:Int = 0;
 				while (_ti < _arr.length) {
 					final _t = _arr[_ti];
-					if (_t.blankBefore || _t.leadingComments.length > 0 || _t.trailingComment != null)
-						_requiresHardline = true;
-					if (_t.newlineBefore)
+					if (_t.blankBefore) _requiresHardline = true;
+					if (_t.leadingComments.length > 0) {
+						if (_ignoreEmit) _hasInlineableTrivia = true;
+						else _requiresHardline = true;
+					}
+					final _tcSig:Null<String> = _t.trailingComment;
+					if (_tcSig != null) {
+						if (_ignoreEmit && StringTools.startsWith(_tcSig, '/*'))
+							_hasInlineableTrivia = true;
+						else
+							_requiresHardline = true;
+					}
+					if (_t.newlineBefore && !_ignoreEmit)
 						_hasSourceNewlines = true;
 					_ti++;
 				}
@@ -6808,7 +6882,8 @@ class WriterLowering {
 				// ω-keep-objectlit: Keep emit gate. Fires when the wrap-rules
 				// runtime mode is Keep AND no comments/blanks force hardline
 				// (the comment+blank case falls back to legacy force-multi
-				// because cascade can't emit comments; Slice 4 territory).
+				// because Keep emit lives in the force-multi branch; the
+				// cascade-emits-comments path is reserved for Ignore mode).
 				final _keepEmit:Bool = $keepCheckExpr && !_requiresHardline;
 				if (_hasTrivia) {
 					final _inner:Array<anyparse.core.Doc> = [];
