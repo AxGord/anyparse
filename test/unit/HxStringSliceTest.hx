@@ -49,11 +49,16 @@ class HxStringSliceTest extends HxTestHelpers {
 		assertDoubleString(decl.init, 'hello world');
 	}
 
-	/** Escape sequences in double-quoted string: `\n`, `\t`, `\\`, `\"`. */
+	/**
+	 * Escape sequences in double-quoted string: `\n`, `\t`, `\\`, `\"`.
+	 * ω-doublestring-rawstring: HxDoubleStringLit now stores the raw
+	 * source slice — escape sequences are NOT decoded. Asserts the
+	 * verbatim form: `a\nb\tc\\d\"e` (each `\X` is two chars in storage).
+	 */
 	public function testDoubleEscapes():Void {
 		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:String = "a\\nb\\tc\\\\d\\"e"; }');
 		final s:String = expectDoubleString(decl.init);
-		Assert.equals('a\nb\tc\\d"e', s);
+		Assert.equals('a\\nb\\tc\\\\d\\"e', s);
 	}
 
 	// ======== single-quoted — structured Array<HxStringSegment> ========
@@ -272,7 +277,15 @@ class HxStringSliceTest extends HxTestHelpers {
 
 	private function expectDoubleString(expr:Null<HxExpr>):String {
 		return switch expr {
-			case DoubleStringExpr(v): (v : String);
+			// ω-doublestring-rawstring: HxDoubleStringLit now stores the raw
+			// source slice (outer `"..."` included) for byte-perfect round-
+			// trip of multiline strings. Strip quotes so existing simple
+			// assertions like `'hello'` keep matching. Escape sequences are
+			// NOT decoded — assertions involving escapes would need a real
+			// decoder (deferred until a corpus consumer demands it).
+			case DoubleStringExpr(v):
+				final raw:String = (v : String);
+				raw.substring(1, raw.length - 1);
 			case null, _: throw 'expected DoubleStringExpr, got $expr';
 		};
 	}

@@ -244,6 +244,19 @@ class HaxeWriterRoundTripTest extends HxTestHelpers {
 		roundTrip('class F { var x:String = "hello"; }');
 	}
 
+	function testDoubleStringMultilineLiteralPreserved():Void {
+		// ω-doublestring-rawstring: literal embedded newlines inside a
+		// double-quoted string must survive round-trip verbatim (Haxe
+		// allows multiline strings). Previously decoded + re-escaped
+		// via `escapeChar` which converted literal `\n` → `\n` escape,
+		// collapsing the multiline source to inline-escaped form.
+		// Source has actual newlines between the quotes — no `\n` escape.
+		final src:String = 'class F { var x:String = "a\n\nb"; }';
+		final out:String = HxModuleWriter.write(HaxeModuleParser.parse(src));
+		Assert.isTrue(out.indexOf('"a\n\nb"') != -1, 'expected literal multiline string preserved in: <' + out + '>');
+		Assert.isTrue(out.indexOf('\\n') == -1, 'did not expect re-escaped \\n in: <' + out + '>');
+	}
+
 	function testSingleString():Void {
 		roundTrip("class F { var x:String = 'hello'; }");
 	}
