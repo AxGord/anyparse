@@ -5,6 +5,7 @@ import anyparse.grammar.sexpr.SValue;
 import anyparse.grammar.sexpr.SValueWriter;
 import anyparse.query.Matcher.Match;
 import anyparse.query.QueryNode;
+import anyparse.query.Refs.RefHit;
 import anyparse.runtime.Span;
 import anyparse.runtime.Span.Position;
 
@@ -41,6 +42,16 @@ final class Text {
 		for (m in matches) {
 			buf.add(SValueWriter.write(toSValue(m), SExprFormat.instance.defaultWriteOptions));
 			buf.add('\n');
+		}
+		return buf.toString();
+	}
+
+	public static function renderRefs(file:String, source:String, hits:Array<RefHit>):String {
+		if (hits.length == 0) return '$file: no refs\n';
+		final buf:StringBuf = new StringBuf();
+		for (h in hits) {
+			final pos:Position = h.span.lineCol(source);
+			buf.add('$file:${pos.line}:${pos.col - 1}: [${h.kind.toString()}] ${h.name}\n');
 		}
 		return buf.toString();
 	}

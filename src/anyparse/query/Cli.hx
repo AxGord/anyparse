@@ -1,7 +1,10 @@
 package anyparse.query;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Matcher.Match;
+import anyparse.query.Refs.RefHit;
+import anyparse.query.Refs.RefKind;
 import anyparse.query.format.Json;
 import anyparse.query.format.Text;
 import anyparse.runtime.ParseError;
@@ -46,13 +49,119 @@ final class Cli {
 		switch cmd {
 			case 'ast': return runAst(rest);
 			case 'search': return runSearch(rest);
-			case 'refs', 'meta':
+			case 'refs': return runRefs(rest);
+			case 'meta':
 				stderr('apq: subcommand "$cmd" deferred to a later phase\n');
 				return EXIT_USAGE;
 			case _:
 				stderr('apq: unknown subcommand "$cmd"\n');
 				printUsage();
 				return EXIT_USAGE;
+		}
+	}
+
+	private static function runRefs(args:Array<String>):Int {
+		var lang:String = 'haxe';
+		var json:Bool = false;
+		var wantDecls:Bool = false;
+		var wantReads:Bool = false;
+		var wantWrites:Bool = false;
+		var name:Null<String> = null;
+		var inputSpec:Null<String> = null;
+
+		var i:Int = 0;
+		while (i < args.length) {
+			final a:String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--json':
+					json = true;
+				case '--decls':
+					wantDecls = true;
+				case '--reads':
+					wantReads = true;
+				case '--writes':
+					wantWrites = true;
+				case '-h', '--help':
+					printRefsUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq refs: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (name == null) {
+						name = a;
+					} else if (inputSpec == null) {
+						inputSpec = a;
+					} else {
+						stderr('apq refs: extra positional argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (name == null) {
+			stderr('apq refs: missing <name> argument\n');
+			printRefsUsage();
+			return EXIT_USAGE;
+		}
+		if (inputSpec == null) {
+			stderr('apq refs: missing <file-or-glob> argument\n');
+			printRefsUsage();
+			return EXIT_USAGE;
+		}
+		final nameStr:String = name;
+		final inputStr:String = inputSpec;
+		// No flag = no filter (emit every hit). Any flag flips on the
+		// allow-set; sister CLIs (`git log --author --grep`) follow the
+		// same any-flag-narrows convention.
+		final anyFilter:Bool = wantDecls || wantReads || wantWrites;
+
+		final plugin:GrammarPlugin = pickPlugin(lang);
+		final shape:RefShape = plugin.refShape();
+
+		final paths:Array<String> = Glob.expand(inputStr, '.hx');
+		if (paths.length == 0) {
+			stderr('apq refs: no input files matched "$inputStr"\n');
+			return EXIT_RUNTIME;
+		}
+
+		final allEntries:Array<{file:String, source:String, hits:Array<RefHit>}> = [];
+		for (path in paths) {
+			final source:String = readFile(path);
+			final tree:Null<QueryNode> = try plugin.parseFile(source)
+				catch (e:ParseError) {
+					stderr('apq refs: $path: ${e.toString()}\n');
+					null;
+				}
+				catch (e:Exception) {
+					stderr('apq refs: $path: ${e.message}\n');
+					null;
+				};
+			if (tree == null) continue;
+			final raw:Array<RefHit> = Refs.find(nameStr, tree, shape);
+			final filtered:Array<RefHit> = anyFilter
+				? raw.filter(h -> kindAllowed(h.kind, wantDecls, wantReads, wantWrites))
+				: raw;
+			if (filtered.length == 0) continue;
+			allEntries.push({file: path, source: source, hits: filtered});
+		}
+
+		if (json) {
+			sysPrint(Json.renderRefs(allEntries));
+		} else {
+			for (entry in allEntries) sysPrint(Text.renderRefs(entry.file, entry.source, entry.hits));
+		}
+		return EXIT_OK;
+	}
+
+	private static inline function kindAllowed(k:RefKind, decls:Bool, reads:Bool, writes:Bool):Bool {
+		return switch k {
+			case Decl: decls;
+			case Read: reads;
+			case Write: writes;
 		}
 	}
 
@@ -274,8 +383,8 @@ final class Cli {
 		sysPrint('\n');
 		sysPrint('Commands:\n');
 		sysPrint('  ast      Dump parsed AST (S-expr or JSON)\n');
-		sysPrint('  search   Structural pattern search (deferred to Phase 2)\n');
-		sysPrint('  refs     Symbol references with scope (deferred to Phase 3)\n');
+		sysPrint('  search   Structural pattern search\n');
+		sysPrint('  refs     Symbol references (name-only; scope-aware in Phase 3.2)\n');
 		sysPrint('  meta     Annotation-on-decl shortcut (deferred to Phase 4)\n');
 		sysPrint('\n');
 		sysPrint('Global options:\n');
@@ -293,6 +402,20 @@ final class Cli {
 		sysPrint("Pattern syntax: language source with `$X` / `$_` metavars.\n");
 		sysPrint("  $X      — bind a subtree; reuses must match structurally.\n");
 		sysPrint("  $_      — wildcard, no binding.\n");
+	}
+
+	private static function printRefsUsage():Void {
+		sysPrint('Usage: apq refs [options] <name> <file-or-dir>\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --json              Emit JSON instead of text\n');
+		sysPrint('  --decls             Filter to declarations\n');
+		sysPrint('  --reads             Filter to read references\n');
+		sysPrint('  --writes            Filter to write references (Phase 3.3)\n');
+		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('\n');
+		sysPrint('Phase 3.1: name-only matching, no lexical scope. Filters combine\n');
+		sysPrint('inclusively — passing `--decls --reads` keeps both kinds.\n');
 	}
 
 	private static function printAstUsage():Void {

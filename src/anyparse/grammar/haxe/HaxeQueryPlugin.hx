@@ -53,6 +53,38 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		return new QueryNode('module', null, children);
 	}
 
+	public function refShape():RefShape {
+		// Identifier references come exclusively through `HxExpr.IdentExpr(v)`
+		// — the bare-identifier branch of the expression enum. Field-access
+		// (`obj.foo`), method names, type references, and string-literal
+		// fragments live under different ctors and never match.
+		//
+		// Decl-host kinds: any enum-ctor whose `extractName` walk resolves
+		// to a binding declaration. Top-level type decls (`ClassDecl`, …),
+		// statement-level var bindings (`VarStmt`, `FinalStmt`, top-level
+		// `VarDecl`/`FnDecl`), class-member bindings (`VarMember`,
+		// `FinalMember`, `FnMember`), and function-parameter bindings via
+		// `HxParam`'s three Alt branches (`Required`/`Optional`/`Rest`).
+		//
+		// Known gaps (Phase 3.2 / 3.3 plugin work — these decl sites live
+		// on struct fields whose names are absorbed into a parent slot,
+		// so they do not surface as their own `QueryNode`s):
+		//  - For-loop iterator variables (`HxForStmt.varName`,
+		//    `HxForExpr.varName`).
+		//  - Catch-clause exception names (`HxCatchClause.name`).
+		//  - Lambda-parameter names (`HxLambdaParam.name`).
+		return {
+			identKind: 'IdentExpr',
+			declHostKinds: [
+				'VarDecl', 'FnDecl',
+				'ClassDecl', 'InterfaceDecl', 'EnumDecl', 'AbstractDecl', 'TypedefDecl',
+				'VarMember', 'FinalMember', 'FnMember',
+				'VarStmt', 'FinalStmt',
+				'Required', 'Optional', 'Rest',
+			],
+		};
+	}
+
 	public function parsePattern(source:String):Pattern {
 		// `$X` / `$_` are not valid Haxe identifier prefixes outside string
 		// interpolation, so we substitute them for reserved-identifier

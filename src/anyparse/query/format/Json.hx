@@ -3,11 +3,15 @@ package anyparse.query.format;
 import anyparse.format.text.JsonFormat;
 import anyparse.query.Matcher.Match;
 import anyparse.query.QueryNode;
+import anyparse.query.Refs.RefHit;
 import anyparse.query.format.json.AstDumpJson;
 import anyparse.query.format.json.AstDumpJsonWriter;
 import anyparse.query.format.json.AstMatchesJson;
 import anyparse.query.format.json.AstMatchesJsonWriter;
 import anyparse.query.format.json.AstNodeJson;
+import anyparse.query.format.json.AstRefHit;
+import anyparse.query.format.json.AstRefHits;
+import anyparse.query.format.json.AstRefHitsWriter;
 import anyparse.query.format.json.AstSearchBinding;
 import anyparse.query.format.json.AstSearchMatch;
 import anyparse.query.format.json.AstSearchMatches;
@@ -46,6 +50,18 @@ final class Json {
 	public static function renderMatches(file:String, matches:Array<QueryNode>):String {
 		final out:AstMatchesJson = {file: file, matches: matches.map(toAst)};
 		return AstMatchesJsonWriter.write(out, JsonFormat.instance.defaultWriteOptions) + '\n';
+	}
+
+	public static function renderRefs(entries:Array<{file:String, source:String, hits:Array<RefHit>}>):String {
+		final out:Array<AstRefHit> = [];
+		for (entry in entries) for (h in entry.hits) out.push({
+			file: entry.file,
+			kind: h.kind.toString(),
+			span: spanToJson(h.span, entry.source),
+			name: h.name,
+		});
+		final envelope:AstRefHits = {hits: out};
+		return AstRefHitsWriter.write(envelope, JsonFormat.instance.defaultWriteOptions) + '\n';
 	}
 
 	public static function renderSearchMatches(file:String, source:String, matches:Array<Match>):String {
