@@ -7537,7 +7537,16 @@ class WriterLowering {
 		final cascadeInitCurr:Expr = cascadeEmit.initCurr;
 		final cascadeCurrCompute:Expr = cascadeEmit.currCompute;
 		final cascadeTrackPrev:Expr = cascadeEmit.trackPrev;
-		final cascadeBlanksCount:Expr = cascadeEmit.blanksCount;
+		// ω-meta-strip-blanks: meta Stars (marked via `@:fmt(metaLineEndPolicy(...))`)
+		// cap inter-element separator at a single hardline regardless of source
+		// blank-line count. Mirrors fork's `MarkLineEnds.determineMetadataPolicy`:
+		// all four AtLineEndPolicy values (None/After/AfterLast/ForceAfterLast)
+		// emit at most one newline between consecutive `@:meta` tokens, and
+		// `MarkEmptyLines` has no rule that adds blanks between At tokens.
+		// Non-meta Stars keep the cascade-driven source-blank pass through.
+		final cascadeBlanksCount:Expr = metaLineEndOptField != null
+			? macro 0
+			: cascadeEmit.blanksCount;
 		// ω-before-package — head-of-Star override (e.g. `beforePackage`).
 		// Spliced once at the start of the inner Star body (after `_docs`
 		// init / `_padLeading`, before the while loop). With no
