@@ -1,4 +1,7 @@
-bin/
+bin/*.n
+bin/*.js
+bin/*.n.map
+bin/*.js.map
 dump/
 *.n
 *.n.map

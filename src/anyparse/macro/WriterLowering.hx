@@ -1175,7 +1175,7 @@ class WriterLowering {
 		} else if (useFill) {
 			macro fillList($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr, _de(), _de(), false, $v{fillDouble});
 		} else {
-			macro sepList($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr, _de(), _de(), false);
+			macro sepList($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr, _de(), _de(), false, false);
 		};
 		final dcArgs:Array<Expr> = [operandCall];
 		if (openSpace != null) dcArgs.push(openSpace);
@@ -1511,7 +1511,7 @@ class WriterLowering {
 					final rulesExpr:Expr = optFieldAccess(wrapRulesField);
 					macro anyparse.format.wrap.WrapList.emit($v{leadText}, $v{trailText}, $v{sepText}, _docs, opt, $openInsideExpr, $closeInsideExpr, false, $rulesExpr, $tcExpr);
 				} else {
-					macro sepList($v{leadText}, $v{trailText}, $v{sepText}, _docs, opt, $tcExpr, $openInsideExpr, $closeInsideExpr, false);
+					macro sepList($v{leadText}, $v{trailText}, $v{sepText}, _docs, opt, $tcExpr, $openInsideExpr, $closeInsideExpr, false, $v{branch.fmtHasFlag('cuddle')});
 				};
 				parts.push(macro {
 					final _args = $argsAccess;
@@ -1542,7 +1542,152 @@ class WriterLowering {
 
 	// -------- struct rule --------
 
+	/**
+	 * Mirror of `Lowering.shouldLowerByName` for the writer side. When
+	 * the resolved format has `fieldLookup == ByName + keySyntax ==
+	 * Quoted` and no struct field carries positional metadata
+	 * (`@:kw / @:lead / @:trail / @:sep`) or binary metadata, the
+	 * writer emits the struct as a JSON-style key-dispatched object —
+	 * `"<key>": <value>` entries joined by the format's `entrySep` and
+	 * wrapped in `mappingOpen` / `mappingClose`. Symmetric to the
+	 * parser's ByName codepath so `@:peg @:schema(JsonFormat) typedef
+	 * T = { … }` round-trips through `Build.buildParser` /
+	 * `Build.buildWriter` without any positional metadata.
+	 */
+	private function shouldWriteByName(node:ShapeNode):Bool {
+		if (formatInfo.isBinary) return false;
+		if (formatInfo.fieldLookup != ByName) return false;
+		if (formatInfo.keySyntax != Quoted) return false;
+		if (node.annotations.get('bin.magic') != null) return false;
+		if (node.annotations.get('bin.align') != null) return false;
+		for (child in node.children) {
+			if (child.readMetaString(':kw') != null) return false;
+			if (child.readMetaString(':lead') != null) return false;
+			if (child.readMetaString(':trail') != null) return false;
+			if (child.readMetaString(':sep') != null) return false;
+		}
+		return true;
+	}
+
+	/**
+	 * Emit the writer body for a struct lowered as a key-dispatched
+	 * object. For each child field, build a `Doc` for
+	 * `"<key>"<keyValueSep> <value>` and push it into a runtime
+	 * accumulator. Optional fields whose value is `null` are skipped
+	 * entirely — neither their key nor their separator is emitted.
+	 * The accumulator is then handed to `sepList` so the entries get
+	 * width-aware line breaks for free, just like the positional-
+	 * struct writer paths.
+	 *
+	 * Field value dispatch:
+	 *  - `Ref` → call the sub-rule's `write<Ref>(value, opt)`. For
+	 *    primitive fields the ShapeBuilder has already rewritten
+	 *    `base.ref` to the format-declared terminal (e.g. `String` →
+	 *    `JStringLit`), so the same call handles string escaping.
+	 *  - `Star` → emit `sequenceOpen + items joined by entrySep +
+	 *    sequenceClose` via `sepList`. The element shape must be a
+	 *    single `Ref`; nested `Star` is deferred until a real schema
+	 *    needs `Array<Array<T>>`.
+	 *
+	 * Failure modes match the parser's `byNameStarParseExpr`: missing
+	 * `sequenceOpen` / `sequenceClose` on the format is a macro-time
+	 * fatal error.
+	 */
+	private function lowerStructByName(node:ShapeNode, typePath:String):Expr {
+		final mappingOpen:String = formatInfo.mappingOpen;
+		final mappingClose:String = formatInfo.mappingClose;
+		final keyValueSep:String = formatInfo.keyValueSep;
+		final entrySep:String = formatInfo.entrySep;
+
+		final stmts:Array<Expr> = [macro final _entries:Array<anyparse.core.Doc> = []];
+
+		for (child in node.children) {
+			final fieldName:Null<String> = child.annotations.get('base.fieldName');
+			if (fieldName == null)
+				Context.fatalError('WriterLowering: ByName struct field missing base.fieldName for $typePath', Context.currentPos());
+			final isOptional:Bool = child.annotations.get('base.optional') == true;
+			final fieldAccess:Expr = {expr: EField(macro value, fieldName), pos: Context.currentPos()};
+			final keyPrefix:String = '"' + fieldName + '"' + keyValueSep;
+			if (isOptional) {
+				// Strict null safety does not narrow field reads — capture into
+				// a non-null local before handing off to the per-kind writer.
+				final fieldCT:Null<ComplexType> = child.annotations.get('base.fieldType');
+				if (fieldCT == null)
+					Context.fatalError('WriterLowering: ByName optional field "$fieldName" missing base.fieldType for $typePath', Context.currentPos());
+				final localName:String = '_v_' + fieldName;
+				final valueDocExpr:Expr = byNameFieldWriteExpr(child, fieldName, macro $i{localName});
+				stmts.push(macro if ($fieldAccess != null) {
+					final $localName:$fieldCT = $fieldAccess;
+					_entries.push(_dc([_dt($v{keyPrefix}), $valueDocExpr]));
+				});
+			} else {
+				final valueDocExpr:Expr = byNameFieldWriteExpr(child, fieldName, fieldAccess);
+				stmts.push(macro _entries.push(_dc([_dt($v{keyPrefix}), $valueDocExpr])));
+			}
+		}
+
+		stmts.push(macro return sepList(
+			$v{mappingOpen}, $v{mappingClose}, $v{entrySep},
+			_entries, opt, false, _de(), _de(), false, false
+		));
+		return macro $b{stmts};
+	}
+
+	private function byNameFieldWriteExpr(child:ShapeNode, fieldName:String, valueAccess:Expr):Expr {
+		return switch child.kind {
+			case Ref:
+				final refName:String = child.annotations.get('base.ref');
+				makeWriteCall(writeFnFor(refName), valueAccess, false, -1);
+			case Star:
+				byNameStarWriteExpr(child, fieldName, valueAccess);
+			case _:
+				Context.fatalError(
+					'WriterLowering: ByName struct field "$fieldName" has unsupported kind ${child.kind}'
+					+ ' — format ${formatInfo.schemaTypePath} may be missing a primitive type mapping',
+					Context.currentPos()
+				);
+				throw 'unreachable';
+		};
+	}
+
+	private function byNameStarWriteExpr(child:ShapeNode, fieldName:String, valueAccess:Expr):Expr {
+		final seqOpen:Null<String> = formatInfo.sequenceOpen;
+		final seqClose:Null<String> = formatInfo.sequenceClose;
+		if (seqOpen == null || seqClose == null) {
+			Context.fatalError(
+				'WriterLowering: ByName Array<T> field "$fieldName" requires the format ${formatInfo.schemaTypePath} '
+				+ 'to declare sequenceOpen / sequenceClose',
+				Context.currentPos()
+			);
+			throw 'unreachable';
+		}
+		if (child.children.length != 1) {
+			Context.fatalError(
+				'WriterLowering: ByName Array<T> field "$fieldName" expected exactly one element child, got ${child.children.length}',
+				Context.currentPos()
+			);
+			throw 'unreachable';
+		}
+		final inner:ShapeNode = child.children[0];
+		if (inner.kind != Ref) {
+			Context.fatalError(
+				'WriterLowering: ByName Array<T> field "$fieldName" element kind ${inner.kind} is not supported '
+				+ '— only Array<RefType> (a single named element type) is implemented',
+				Context.currentPos()
+			);
+			throw 'unreachable';
+		}
+		final refName:String = inner.annotations.get('base.ref');
+		final elemFn:String = writeFnFor(refName);
+		final entrySep:String = formatInfo.entrySep;
+		return macro {
+			final _items:Array<anyparse.core.Doc> = [for (_e in $valueAccess) $i{elemFn}(_e, opt)];
+			sepList($v{seqOpen}, $v{seqClose}, $v{entrySep}, _items, opt, false, _de(), _de(), false, false);
+		};
+	}
+
 	private function lowerStruct(node:ShapeNode, typePath:String):Expr {
+		if (shouldWriteByName(node)) return lowerStructByName(node, typePath);
 		final isRaw:Bool = node.hasMeta(':raw');
 		final parts:Array<Expr> = [];
 		var isFirstField:Bool = true;
@@ -3580,7 +3725,7 @@ class WriterLowering {
 			} else if (useFill) {
 				macro fillList($v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $tcExpr, $openInsideExpr, $closeInsideExpr, $keepInnerExpr, $v{fillDouble});
 			} else {
-				macro sepList($v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $tcExpr, $openInsideExpr, $closeInsideExpr, $keepInnerExpr);
+				macro sepList($v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $tcExpr, $openInsideExpr, $closeInsideExpr, $keepInnerExpr, false);
 			};
 			parts.push(macro {
 				final _arr = $fieldAccess;

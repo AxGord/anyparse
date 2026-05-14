@@ -797,10 +797,18 @@ class WriterCodegen {
 			}
 			if (trailingComma) _inner.push(_dib(_dt(sep), _de()));
 			final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+			// `cuddleHead` collapses the leading/trailing softlines into
+			// empty docs so the first item cuddles to `open` and the last
+			// to `close` — Lisp-style `(head\n  …rest)` instead of the
+			// default JSON-style `(\n  …items\n)`. The break-mode indent
+			// continues to flow from the surrounding `Nest`, so multi-line
+			// layout still indents inner items.
+			final _lead:anyparse.core.Doc = cuddleHead ? _de() : _dsl();
+			final _trail:anyparse.core.Doc = cuddleHead ? _de() : _dsl();
 			return _dg(_dc([
 				_dt(open), openInside,
-				_dn(_cols, _dc([_dsl(), _dc(_inner)])),
-				_dsl(), closeInside, _dt(close),
+				_dn(_cols, _dc([_lead, _dc(_inner)])),
+				_trail, closeInside, _dt(close),
 			]));
 		};
 		return {
@@ -817,6 +825,7 @@ class WriterCodegen {
 					{name: 'openInside', type: macro : anyparse.core.Doc},
 					{name: 'closeInside', type: macro : anyparse.core.Doc},
 					{name: 'keepInnerWhenEmpty', type: macro : Bool},
+					{name: 'cuddleHead', type: macro : Bool},
 				],
 				ret: macro : anyparse.core.Doc,
 				expr: body,

@@ -131,6 +131,9 @@ import unit.ProbeTypedefTrivia;
 import unit.HxBlankAfterLeadingCommentSliceTest;
 import unit.HxVarTrailOptShapeSliceTest;
 import unit.HxFillLinePerGapSepTest;
+import unit.ApqSelectorTest;
+import unit.ApqAstIntegrationTest;
+import unit.ApqJsonSchemaProbe;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -272,6 +275,9 @@ class RunTests {
 		runner.addCase(new HxBlankAfterLeadingCommentSliceTest());
 		runner.addCase(new HxVarTrailOptShapeSliceTest());
 		runner.addCase(new HxFillLinePerGapSepTest());
+		runner.addCase(new ApqSelectorTest());
+		runner.addCase(new ApqAstIntegrationTest());
+		runner.addCase(new ApqJsonSchemaProbe());
 		utest.ui.Report.create(runner);
 		runner.run();
 	}

@@ -1,0 +1,3 @@
+-cp src
+-main anyparse.query.Cli
+-neko bin/apq.n
