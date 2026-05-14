@@ -6747,14 +6747,41 @@ class WriterLowering {
 				if (_trailClose != null) $emptyTrailExpr
 				else _dt($v{emptyText});
 			} else {
-				var _hasTrivia:Bool = _trailLC.length > 0 || _trailOpen != null;
+				// ω-keep-predicate-split: decompose `_hasTrivia` into two
+				// orthogonal predicates as scaffold for per-Star wrap-kind
+				// opt-in (ω-keep-objectlit and beyond).
+				//
+				//  - `_requiresHardline` — physical hardline requirement: any
+				//    comment slot (leading/trailing per element, or
+				//    `_trailLC`/`_trailOpen` on the open/close boundary) or
+				//    blank line. Cascade no-trivia branch DROPS these signals
+				//    (`$triviaElemCall` = `writeXxxT(_t.node, opt)` — comments
+				//    not consulted), so anything in this bucket MUST route
+				//    through the force-multi branch to preserve trivia.
+				//  - `_hasSourceNewlines` — bare `newlineBefore=true` on at
+				//    least one element. Independent axis: source had a break
+				//    between elements but no comment forced it. Default
+				//    behavior remains "force-multi when present" — matches
+				//    legacy. Future slices add per-Star opt-out (Ignore) or
+				//    opt-in-per-element-emit (Keep) gated on this signal.
+				//
+				// Byte-identity: `_requiresHardline || _hasSourceNewlines` is
+				// the same set as the original OR (newlineBefore +
+				// blankBefore + leadingComments + trailingComment + trailLC +
+				// trailOpen). Short-circuit dropped — predicate values
+				// unchanged, micro-perf only.
+				var _requiresHardline:Bool = _trailLC.length > 0 || _trailOpen != null;
+				var _hasSourceNewlines:Bool = false;
 				var _ti:Int = 0;
-				while (!_hasTrivia && _ti < _arr.length) {
+				while (_ti < _arr.length) {
 					final _t = _arr[_ti];
-					if (_t.newlineBefore || _t.blankBefore || _t.leadingComments.length > 0 || _t.trailingComment != null)
-						_hasTrivia = true;
+					if (_t.blankBefore || _t.leadingComments.length > 0 || _t.trailingComment != null)
+						_requiresHardline = true;
+					if (_t.newlineBefore)
+						_hasSourceNewlines = true;
 					_ti++;
 				}
+				final _hasTrivia:Bool = _requiresHardline || _hasSourceNewlines;
 				if (_hasTrivia) {
 					final _inner:Array<anyparse.core.Doc> = [];
 					$initCurrDocCommentExpr;
