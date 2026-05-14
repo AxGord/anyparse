@@ -924,7 +924,22 @@ class WriterLowering {
 			final bodyExpr:Expr = if (captureSourceOpt != null) {
 				final sourceAccess:Expr = macro $i{argNames[1]};
 				final optAccess:Expr = optFieldAccess(captureSourceOpt);
-				macro $optAccess ? $indentWrapped : _dt($sourceAccess);
+				// Mirror haxe-formatter `MarkTokenText.printStringToken`
+				// (`MarkTokenText.hx:39-63`). Fork uses naive `text.indexOf('}',
+				// index + 2)` to find the close of `${…}`. Two failure modes
+				// both land at verbatim emission upstream:
+				//  - a literal `{` inside the body (nested string / anon
+				//    struct) trips the explicit `fragment.indexOf("{")` skip
+				//    (line 54);
+				//  - a literal `}` inside the body makes `indexOf("}")` match
+				//    too early; the truncated fragment fails `formatFragment`
+				//    tokenisation (line 110-113 catch) and the slot stays
+				//    verbatim.
+				// Our recursive-descent parser handles brace balance correctly,
+				// but to match fork's byte output we replicate both bail-outs
+				// at write time: any `{` OR `}` in the captured slice → emit
+				// verbatim. Closes `whitespace/issue_72_whitespace_in_string_interpolation`.
+				macro $optAccess && $sourceAccess.indexOf('{') < 0 && $sourceAccess.indexOf('}') < 0 ? $indentWrapped : _dt($sourceAccess);
 			} else indentWrapped;
 
 			// When the sub-struct opens with a bare-Ref @:fmt(bodyPolicy(...)) field,
