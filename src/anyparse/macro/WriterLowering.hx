@@ -379,11 +379,27 @@ class WriterLowering {
 		// branch's pattern matches three args and embeds `_trailClose`
 		// into the segment's Doc when non-null. Plain-mode pattern stays
 		// 2-arg. Both branches share the rest of the chain walk.
+		// ω-methodchain-prev-pclose-gate: mirror fork's
+		// `MarkWrapping.markMethodChaining` chain-start rule — a Dot
+		// counts as a chain start only when it is preceded by `)` in
+		// source. In AST terms: at least one segment in the chain must
+		// have a `_prev` that is a Call ctor (which renders ending with
+		// `)`). Pure-prefix paths like `haxe.Json.parse(s)` have NO dot
+		// after `)` → fork does not mark a chain → no
+		// OnePerLineAfterFirst wrap. Without this gate we activate
+		// `MethodChainEmit` on every 2+-segment Call/FieldAccess
+		// sequence, which over-wraps short type-path chains inside a
+		// long enclosing line (the `IfFullLineExceeds` probe sees the
+		// rest-of-stack and forces BREAK mode). The gate is
+		// conservative — it matches PClose only; `(a + b).foo()` and
+		// `a[i].foo()` still fall through to default emission, matching
+		// fork's `isDotAfterPClose` PClose-only test (`MarkWrapping.hx:2299`).
 		return isCallTriviaStar
 			? macro {
 				final _segs:Array<anyparse.core.Doc> = [];
 				var _cursor = value;
 				var _receiver = value;
+				var _hasCallPrev:Bool = false;
 				while (true) {
 					switch _cursor {
 						case Call(_op, _args, _trailClose):
@@ -395,6 +411,10 @@ class WriterLowering {
 										? _dc([_dt('.' + _fld), _argsDoc, trailingCommentDocVerbatim(_trailClose, opt)])
 										: _dc([_dt('.' + _fld), _argsDoc]);
 									_segs.unshift(_segDoc);
+									switch _prev {
+										case Call(_, _, _): _hasCallPrev = true;
+										case _:
+									}
 									_cursor = _prev;
 								case _:
 									_receiver = _cursor;
@@ -402,13 +422,17 @@ class WriterLowering {
 							}
 						case FieldAccess(_prev, _fld):
 							_segs.unshift(_dt('.' + _fld));
+							switch _prev {
+								case Call(_, _, _): _hasCallPrev = true;
+								case _:
+							}
 							_cursor = _prev;
 						case _:
 							_receiver = _cursor;
 							break;
 					}
 				}
-				if (_segs.length >= 2) {
+				if (_segs.length >= 2 && _hasCallPrev) {
 					final _recDoc:anyparse.core.Doc = $writeIdent(_receiver, opt, $precExpr);
 					return anyparse.format.wrap.MethodChainEmit.emit(_recDoc, _segs, opt, $chainRulesExpr);
 				}
@@ -418,6 +442,7 @@ class WriterLowering {
 				final _segs:Array<anyparse.core.Doc> = [];
 				var _cursor = value;
 				var _receiver = value;
+				var _hasCallPrev:Bool = false;
 				while (true) {
 					switch _cursor {
 						case Call(_op, _args):
@@ -426,6 +451,10 @@ class WriterLowering {
 									final _argDocs:Array<anyparse.core.Doc> = $argDocsExpr;
 									final _argsDoc:anyparse.core.Doc = $argsListExpr;
 									_segs.unshift(_dc([_dt('.' + _fld), _argsDoc]));
+									switch _prev {
+										case Call(_, _): _hasCallPrev = true;
+										case _:
+									}
 									_cursor = _prev;
 								case _:
 									_receiver = _cursor;
@@ -433,13 +462,17 @@ class WriterLowering {
 							}
 						case FieldAccess(_prev, _fld):
 							_segs.unshift(_dt('.' + _fld));
+							switch _prev {
+								case Call(_, _): _hasCallPrev = true;
+								case _:
+							}
 							_cursor = _prev;
 						case _:
 							_receiver = _cursor;
 							break;
 					}
 				}
-				if (_segs.length >= 2) {
+				if (_segs.length >= 2 && _hasCallPrev) {
 					final _recDoc:anyparse.core.Doc = $writeIdent(_receiver, opt, $precExpr);
 					return anyparse.format.wrap.MethodChainEmit.emit(_recDoc, _segs, opt, $chainRulesExpr);
 				}
