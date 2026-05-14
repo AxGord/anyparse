@@ -260,6 +260,16 @@ class HaxeWriterRoundTripTest extends HxTestHelpers {
 		roundTrip("class F { var x:String = 'costs " + "$$" + "5'; }");
 	}
 
+	function testSingleStringEscapedDollarRoundTrip():Void {
+		// `\$` inside `'...'` is a valid Haxe escape preventing interpolation;
+		// previously `unescapeChar` threw on the escape with no current
+		// fixture exercising it. Defensive completeness — paired with
+		// `escapeSingleQuoteChar`'s `'$' → '\\$'` emission.
+		final src:String = "class F { var x:String = 'val=\\$name'; }";
+		final out:String = HxModuleWriter.write(HaxeModuleParser.parse(src));
+		Assert.isTrue(out.indexOf("'val=\\$name'") != -1, "expected backslash-dollar-name preserved in: " + out);
+	}
+
 	function testSingleStringWithDoubleQuotePreservedBare():Void {
 		// ω-singlequote-escape: bare `"` inside `'...'` must NOT be escaped
 		// on output. Haxe single-quoted strings don't escape `"`.
