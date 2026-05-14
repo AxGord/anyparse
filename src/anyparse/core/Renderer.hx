@@ -573,15 +573,23 @@ class Renderer {
 					// `Group(IfBreak)` decides flat even though enclosing
 					// expression pushes the line past threshold.
 					//
-					// Mode propagation matches `IfWidthExceeds` /
-					// `IfFirstLineExceeds`: probe is independent of the
-					// enclosing Group's flat/break choice. Slice
-					// ω-iflineexceeds-infra.
+					// Brk-side mode: force `MBreak`. The break shape carries
+					// hardlines + Nest that must render as `\n + indent` and
+					// drop pendingOptSpace — under an enclosing `MFlat`
+					// context (e.g. inside a `Flatten` whose `WrapBoundary`
+					// reset `forceFlat` but did not restore mode), the inner
+					// `Line('\n')` would otherwise emit a bare `\n` flat
+					// string without indent. Slice ω-iflineexceeds-brk-mode.
+					//
+					// Flat-side mode: preserve `f.mode`. The flat shape is
+					// the inline alternative; it should respect the enclosing
+					// context's mode. Slice ω-iflineexceeds-infra.
 					if (f.forceFlat) {
 						stack.push(new Frame(f.indent, f.mode, flatDoc, true));
 					} else {
 						final lineCrosses:Bool = (col + DocMeasure.flatTokenWidth(flatDoc) + flatTokenWidthOfRestStack(stack) >= n);
-						stack.push(new Frame(f.indent, f.mode, lineCrosses ? breakDoc : flatDoc));
+						final pushMode:Mode = lineCrosses ? MBreak : f.mode;
+						stack.push(new Frame(f.indent, pushMode, lineCrosses ? breakDoc : flatDoc));
 					}
 				case IfFullLineExceeds(n, breakDoc, flatDoc):
 					// Sibling of `IfLineExceeds` with asymmetric BG

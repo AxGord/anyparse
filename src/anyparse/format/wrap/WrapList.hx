@@ -737,6 +737,25 @@ class WrapList {
 		open:String, close:String, sep:String, items:Array<Doc>,
 		openInside:Doc, closeInside:Doc
 	):Doc {
+		// ω-arrow-body-close-paren-own-line slice 2: when the sole item
+		// carries a slice-1 arrow-body-line-wrap marker, escalate the shape
+		// from `Flatten(items)` to `Group(IfBreak(close-on-own-line,
+		// close-glued))` so the outer call's `)` lands on its own line
+		// when the inner arrow body wraps. Group's `fitsFlat` walks the
+		// inner `IfLineExceeds.flat` (the inline lambda body), so MFlat
+		// fires iff the body fits — coupling the two wrap decisions.
+		// Mirrors fork's `applyArrowWrapping` parent-walk close-paren mark.
+		//
+		// Why escalate out of `Flatten`: under `Flatten`, the inner
+		// arrow-body wrap's `_dile` probe inside `_dwb` would still fire
+		// independently (WrapBoundary resets forceFlat), but the outer
+		// close paren has no mechanism to follow that decision. Group +
+		// IfBreak emits both close placements and picks consistently.
+		if (items.length == 1 && isArrowBodyMarker(items[0])) {
+			final flatShape:Doc = Concat([Text(open), openInside, items[0], closeInside, Text(close)]);
+			final brkShape:Doc = Concat([Text(open), openInside, items[0], Line('\n'), closeInside, Text(close)]);
+			return Group(IfBreak(brkShape, flatShape));
+		}
 		final inner:Array<Doc> = [];
 		for (i in 0...items.length) {
 			if (i > 0) inner.push(Text(sep + ' '));
@@ -1007,6 +1026,55 @@ class WrapList {
 					case _: false;
 				};
 			case IfFullLineExceeds(_, brk, _): isOPLShape(brk);
+			case _: false;
+		};
+	}
+
+	/**
+	 * ω-arrow-body-close-paren-own-line slice 2: structural marker probe
+	 * for the arrow-body-line-wrap shape emitted by slice 1 at
+	 * `WriterLowering.hx:2703-2740`. Returns `true` when `item`'s tail
+	 * contains a `WrapBoundary(IfLineExceeds(_, Nest(_, Concat([Line('\n'), _])), _))`
+	 * marker — the slice-1 emit signature for `HxThinParenLambda.body` /
+	 * `HxParenLambda.body` under `@:fmt(arrowBodyLineWrap)`.
+	 *
+	 * Used by `shapeNoWrap` to route the outer Call's `(arg)` shape to
+	 * `Group(IfBreak(brk_close_on_own_line, flat_close_glued))` when the
+	 * sole arg is an arrow lambda whose body might wrap. The Group's
+	 * `fitsFlat` walks `IfLineExceeds.flat` (the inline body) so MFlat
+	 * fires iff the body fits — aligned with the inner `_dile` probe's
+	 * decision. Mirrors fork's `applyArrowWrapping` parent-walk that
+	 * marks the enclosing call's close paren on a separate line when the
+	 * arrow body wraps.
+	 *
+	 * Tail-walk: items[0] is the entire lambda Doc `Concat([Text('('),
+	 * params, Text(')'), Text('->'), OptSpace(' '), wrapped_body])`; the
+	 * marker is in the last element. Recurse on Concat tail until a
+	 * `WrapBoundary` is reached.
+	 *
+	 * False-positive footprint: `WrapBoundary(IfLineExceeds(...))` is
+	 * also emitted by `emitCondition` (cond-wrap, line 391) but its brk
+	 * shape is a Concat with explicit `Text(open)`/`Text(close)`
+	 * delimiters wrapping the cond, not a `Nest(_, Concat([Line('\n'),
+	 * _]))`. `HxAbstractDecl.clauses` uses `IfLineExceeds(_, _dhl(),
+	 * _dt(' '))` — brk is bare `Line('\n')`, also doesn't match the
+	 * Nest+Concat structure. Probe is narrow to slice-1's emit.
+	 */
+	private static function isArrowBodyMarker(item:Doc):Bool {
+		return switch item {
+			case WrapBoundary(IfLineExceeds(_, brk, _)): isArrowBrkShape(brk);
+			case Concat(arr) if (arr.length > 0): isArrowBodyMarker(arr[arr.length - 1]);
+			case _: false;
+		};
+	}
+
+	private static function isArrowBrkShape(d:Doc):Bool {
+		return switch d {
+			case Nest(_, Concat(arr)) if (arr.length >= 1):
+				switch arr[0] {
+					case Line(s) if (s == '\n'): true;
+					case _: false;
+				};
 			case _: false;
 		};
 	}
