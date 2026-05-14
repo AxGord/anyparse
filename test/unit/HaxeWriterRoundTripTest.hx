@@ -260,6 +260,24 @@ class HaxeWriterRoundTripTest extends HxTestHelpers {
 		roundTrip("class F { var x:String = 'costs " + "$$" + "5'; }");
 	}
 
+	function testSingleStringWithDoubleQuotePreservedBare():Void {
+		// ω-singlequote-escape: bare `"` inside `'...'` must NOT be escaped
+		// on output. Haxe single-quoted strings don't escape `"`.
+		final out:String = HxModuleWriter.write(
+			HaxeModuleParser.parse("class F { var x:String = 'a \"b\" c'; }")
+		);
+		Assert.isTrue(out.indexOf("'a \"b\" c'") != -1, 'expected bare `"b"` inside single-quoted string in: <$out>');
+		Assert.isTrue(out.indexOf("\\\"") == -1, 'did not expect backslash-escaped `\\"` in: <$out>');
+	}
+
+	function testDoubleStringWithDoubleQuoteEscaped():Void {
+		// Sister: inside `"..."`, embedded `"` MUST be escaped as `\"`.
+		final out:String = HxModuleWriter.write(
+			HaxeModuleParser.parse('class F { var x:String = "a \\"b\\" c"; }')
+		);
+		Assert.isTrue(out.indexOf('"a \\"b\\" c"') != -1, 'expected `\\"` inside double-quoted string in: <$out>');
+	}
+
 	function testMixedDecls():Void {
 		roundTrip('class A {} typedef B = C; enum D { X; } interface E {} abstract F(Int) {}');
 	}

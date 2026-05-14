@@ -3773,17 +3773,32 @@ class WriterLowering {
 		final raw:Bool = node.hasMeta(':rawString');
 
 		if (unescape) {
-			if (unescapeMode == 'raw') {
-				// @:unescape("raw"): escape without wrapping in quotes.
-				// Cast abstract to String for field access.
+			if (unescapeMode == 'raw' || unescapeMode == 'singleQuoteRaw') {
+				// @:unescape("raw"):           escape without quote wrap,
+				//                              using the format's `escapeChar`
+				//                              (double-quote-aware table).
+				// @:unescape("singleQuoteRaw"): same, but uses
+				//                              `escapeSingleQuoteChar` —
+				//                              the format's single-quote-
+				//                              aware escape table (escapes
+				//                              `'`, `$`, `\\` but leaves
+				//                              `"` bare). Used by
+				//                              `HxStringLitSegment` so that
+				//                              literal `"` inside Haxe
+				//                              `'...'` strings round-trips
+				//                              bare instead of being
+				//                              over-escaped to `\\"`.
 				final fmtParts:Array<String> = formatInfo.schemaTypePath.split('.');
+				final escapeCall:Expr = unescapeMode == 'singleQuoteRaw'
+					? macro $p{fmtParts}.instance.escapeSingleQuoteChar(_c)
+					: macro $p{fmtParts}.instance.escapeChar(_c);
 				return macro {
 					final _s:String = (cast value : String);
 					final _buf:StringBuf = new StringBuf();
 					var _ci:Int = 0;
 					while (_ci < _s.length) {
 						final _c:Null<Int> = _s.charCodeAt(_ci);
-						if (_c != null) _buf.add($p{fmtParts}.instance.escapeChar(_c));
+						if (_c != null) _buf.add($e{escapeCall});
 						_ci++;
 					}
 					return _dt(_buf.toString());

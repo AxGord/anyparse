@@ -3039,7 +3039,9 @@ class Lowering {
 		// `@:unescape` on a Terminal abstract generates an inline
 		// walk-and-unescape loop using the `@:schema` format's
 		// `unescapeChar`. Bare `@:unescape` strips surrounding quotes
-		// first; `@:unescape("raw")` uses the matched string as-is.
+		// first; `@:unescape("raw")` and `@:unescape("singleQuoteRaw")`
+		// both use the matched string as-is (no quote strip) — they
+		// differ only in writer-side escape table (see WriterLowering).
 		final unescape:Bool = node.hasMeta(':unescape');
 		final unescapeMode:Null<String> = node.readMetaString(':unescape');
 
@@ -3062,7 +3064,7 @@ class Lowering {
 
 		final decodeExpr:Expr = if (unescape) {
 			final fmtParts:Array<String> = formatInfo.schemaTypePath.split('.');
-			final bodyExpr:Expr = if (unescapeMode == 'raw') macro _matched
+			final bodyExpr:Expr = if (unescapeMode == 'raw' || unescapeMode == 'singleQuoteRaw') macro _matched
 				else macro _matched.substring(1, _matched.length - 1);
 			macro {
 				final _body:String = $e{bodyExpr};

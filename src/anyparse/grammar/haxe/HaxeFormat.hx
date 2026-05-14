@@ -1385,6 +1385,39 @@ final class HaxeFormat implements TextFormat {
 		};
 	}
 
+	/**
+	 * Escape a single character for emission inside a SINGLE-quoted Haxe
+	 * string segment (`'...'`).
+	 *
+	 * Asymmetry with `escapeChar` (which targets double-quoted strings):
+	 *  - `'` is the delimiter → escape as `\'`
+	 *  - `"` is a literal character inside single-quoted strings → bare
+	 *  - `$` triggers interpolation → escape as `\$` so a literal dollar
+	 *    in the parsed segment doesn't accidentally start interpolation
+	 *    on re-parse. (Currently the segment parser regex excludes `$`
+	 *    from `HxStringLitSegment`, but the writer guards defensively.)
+	 *  - `\` and control chars (`\n`, `\r`, `\t`, `\xNN`) — same as
+	 *    `escapeChar`.
+	 *
+	 * Used by `HxStringLitSegment`'s writer (`@:unescape("singleQuoteRaw")`
+	 * mode) to round-trip Haxe single-quoted strings whose literal body
+	 * may contain bare `"` (very common in code that builds SQL / HTML
+	 * snippets in single-quoted strings).
+	 */
+	public function escapeSingleQuoteChar(c:Int):String {
+		return switch c {
+			case '\''.code: '\\\'';
+			case '\\'.code: '\\\\';
+			case '$'.code: '\\$';
+			case '\n'.code: '\\n';
+			case '\r'.code: '\\r';
+			case '\t'.code: '\\t';
+			case _:
+				if (c < 0x20) '\\x' + StringTools.hex(c, 2);
+				else String.fromCharCode(c);
+		};
+	}
+
 	public function unescapeChar(input:String, pos:Int):UnescapeResult {
 		final esc:Null<Int> = input.charCodeAt(pos);
 		if (esc == null) throw new haxe.Exception('unterminated escape at $pos');
