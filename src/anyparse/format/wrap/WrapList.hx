@@ -830,7 +830,7 @@ class WrapList {
 		// item at the list's continuation indent.
 		if (items.length == 1) {
 			final tail0:Doc = appendTrailingComma ? Text(sep) : Empty;
-			// Close-paren placement at items.length=1: always close-glued.
+			// Close-paren placement at items.length=1: default close-glued.
 			// When `items[0]` carries an internal hardline (binop chain
 			// break inside a 1-arg call, multi-line lambda body, ternary
 			// branch inside parens, …), the break is internal continuation
@@ -838,21 +838,31 @@ class WrapList {
 			// inner breaks via the arg's own wrap and keeps the call's
 			// paren attached to the last rendered token. Mirrors fork's
 			// `wrapping/issue_314_splitting_field_access` and related
-			// 1-arg-multiline-arg fixtures. Replaces an earlier
-			// `lastHardlineDepth > 0 → IfBreak(close_own_line, close_glued)`
-			// split that put the close on its own line in break mode —
-			// `lastHardlineDepth` measured the depth where the rightmost
-			// hardline lived but couldn't distinguish "arg ends mid-break
-			// at inner-Nest column" (close should glue to that token,
-			// fork-style) from a hypothetical "needs to return close to
-			// outer column" case (no concrete fixture motivates the
-			// latter). The single close-glued shape covers both binop /
-			// ternary / lambda payloads — see ω-anyhardline-1arg-close-glued.
-			final flatShape:Doc = Concat([
+			// 1-arg-multiline-arg fixtures.
+			//
+			// EXCEPTION — chain-OPL receiver-led break: when `items[0]`
+			// is a method chain in `OnePerLine` mode (receiver on the
+			// first line, EVERY segment on its own indented line including
+			// the first), fork puts the outer call's close paren back on
+			// its own line at the outer column instead of gluing it to the
+			// last segment's tail. Distinguishable structurally — OPL
+			// shape is `Concat([receiver, Nest(cols, [Line, seg0, ...])])`
+			// (length=2, second child Nest), vs OPLAF's `Concat([r, seg0,
+			// Nest])` (length=3) where the close stays glued. See
+			// `isChainOPLBreak` for the marker probe and ω-1arg-close-
+			// chain-opl-gate for the slice that introduced it.
+			final gluedShape:Doc = Concat([
 				Text(open), openInside, items[0], tail0,
 				closeInside, Text(close),
 			]);
-			return groupOrRestProbe(flatShape, groupRestProbe);
+			if (isChainOPLBreak(items[0])) {
+				final brkShape:Doc = Concat([
+					Text(open), openInside, items[0], tail0,
+					closeInside, Line('\n'), Text(close),
+				]);
+				return groupOrRestProbe(IfBreak(brkShape, gluedShape), groupRestProbe);
+			}
+			return groupOrRestProbe(gluedShape, groupRestProbe);
 		}
 		// Chunk loop. Walk items[1..N]; at every leading-hardline-bearing
 		// item OR the end of the list, emit (a) the comma + forced
@@ -955,6 +965,50 @@ class WrapList {
 	 */
 	private static inline function groupOrRestProbe(inner:Doc, groupRestProbe:Bool):Doc {
 		return groupRestProbe ? GroupWithRestProbe(inner) : Group(inner);
+	}
+
+	/**
+	 * ω-1arg-close-chain-opl-gate: structural marker probe for chain-OPL
+	 * shape inside a 1-arg list. Returns `true` when `item` likely
+	 * originated from `MethodChainEmit` in `OnePerLine` mode — receiver
+	 * is followed IMMEDIATELY by a `Nest` (no inline first segment).
+	 *
+	 * Two emitter paths covered, both wrapped in `WrapBoundary`:
+	 *  - Collapsed cascade (modes equal at flat/break): `<shape>` direct.
+	 *  - Split cascade no-threshold: `IfFullLineExceeds(_, <break-shape>, _)`.
+	 *
+	 * Shape signature: `Concat([_, Nest(_, _)])` (length=2, second child
+	 * is `Nest`). Distinguishes OPL (`MethodChainEmit.shapeOnePerLine`)
+	 * from OPLAF (`shapeOnePerLineAfterFirst`, length=3) at the chain
+	 * layer.
+	 *
+	 * False-positive footprint: `BinaryChainEmit`'s `sameRule`-collapse
+	 * path can also emit `WrapBoundary(Concat([_, Nest(_)]))` directly
+	 * when its cascade resolves to OnePerLineAfterFirst at both
+	 * exceeds=false/true. No current corpus fixture triggers this — binop
+	 * default cascade always splits via `LineLengthLargerThan`, so the
+	 * top-level wrapper at issue_314 et al. is `Group(IfBreak(...))`,
+	 * not the bare `WrapBoundary(<shape>)` matched here. Thresholded
+	 * chain OPL (`MethodChainEmit:137/148`) returns `false` here —
+	 * future slice if a fixture demands.
+	 */
+	private static function isChainOPLBreak(item:Doc):Bool {
+		return switch item {
+			case WrapBoundary(inner): isOPLShape(inner);
+			case _: false;
+		};
+	}
+
+	private static function isOPLShape(d:Doc):Bool {
+		return switch d {
+			case Concat(arr) if (arr.length == 2):
+				switch arr[1] {
+					case Nest(_, _): true;
+					case _: false;
+				};
+			case IfFullLineExceeds(_, brk, _): isOPLShape(brk);
+			case _: false;
+		};
 	}
 
 	/**
