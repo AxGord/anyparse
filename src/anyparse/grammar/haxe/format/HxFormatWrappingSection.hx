@@ -78,6 +78,25 @@ package anyparse.grammar.haxe.format;
  *    fork-mirror defaults: `{rules: [anyItemLength>=50 → FillLine,
  *    totalItemLength>=70 → FillLine], defaultMode: NoWrap}`. Short
  *    `<T>` / `<K, V>` lists stay flat; long lists pack Wadler-style.
+ *  - `expressionWrapping`: `WrapRules` cascade →
+ *    `expressionWrappingWrap` (slice
+ *    ω-expressionwrapping-cascade-ingest — foundational scaffold).
+ *    Drives break shape for parenthesised expressions (`(expr)` —
+ *    haxe-formatter `expressionWrapping` class). The loader path
+ *    is wired here; the engine + grammar `@:fmt(parenWrapRules(…))`
+ *    wiring lands in a follow-up slice (a prior writer-time prototype
+ *    at `WriterLowering`'s `isWrapShape` branch surfaced an outer-
+ *    chain wrap-priority issue — when `obj.y = (expr)` exceeds
+ *    `maxLineLength`, the outer `opAddSubChain` cascade commits
+ *    MBreak before the paren's cascade probe runs, so the resulting
+ *    Doc stacks two `Nest`s and over-indents the paren content. Fork
+ *    resolves this with a 2-pass marker phase that decides paren
+ *    wrap FIRST, then re-evaluates chain wrap; the follow-up slice
+ *    needs an equivalent Doc-level mechanism). Fork-mirror default
+ *    matches `default-hxformat.json`:
+ *    `{rules: [], defaultMode: NoWrap}` — opt-out by default, so
+ *    every cascade-less config stays byte-identical and the loader
+ *    scaffold is Δpass=0.
  *
  * Slice ω-peg-byname-array lifted the prior `@:peg` ByName Array<T>
  * limitation, so every cascade above now ingests `rules` from
@@ -85,10 +104,10 @@ package anyparse.grammar.haxe.format;
  * `lineLength >= n` predicate are silently dropped at load time so the
  * cascade falls through to the next rule).
  *
- * The remaining per-construct cascades (`expressionWrapping`,
- * `arrayMatrixWrap`, …) land with their own slices when each gains
- * JSON-side wiring; matching `WriteOptions` fields don't exist yet and
- * need new fields plus grammar `@:fmt` wiring.
+ * The remaining per-construct cascades (`arrayMatrixWrap`, …) land
+ * with their own slices when each gains JSON-side wiring; matching
+ * `WriteOptions` fields don't exist yet and need new fields plus
+ * grammar `@:fmt` wiring.
  */
 @:peg typedef HxFormatWrappingSection = {
 
@@ -119,4 +138,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var metadataCallParameter:HxFormatWrapRules;
 
 	@:optional var typeParameter:HxFormatWrapRules;
+
+	@:optional var expressionWrapping:HxFormatWrapRules;
 };

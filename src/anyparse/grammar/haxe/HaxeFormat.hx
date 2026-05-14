@@ -719,6 +719,7 @@ final class HaxeFormat implements TextFormat {
 		anonFunctionSignatureWrap: HaxeFormat.defaultAnonFunctionSignatureWrap(),
 		metadataCallParameterWrap: HaxeFormat.defaultMetadataCallParameterWrap(),
 		typeParameterWrap: HaxeFormat.defaultTypeParameterWrap(),
+		expressionWrappingWrap: HaxeFormat.defaultExpressionWrappingWrap(),
 		addLineCommentSpace: true,
 		expressionTry: SameLinePolicy.Same,
 		indentCaseLabels: true,
@@ -1188,6 +1189,28 @@ final class HaxeFormat implements TextFormat {
 	 * the singleton.
 	 */
 	public static function defaultTernaryWrap():WrapRules {
+		return {
+			rules: [],
+			defaultMode: WrapMode.NoWrap,
+		};
+	}
+
+	/**
+	 * Default `WrapRules` cascade for parenthesised expressions
+	 * (`(expr)` — haxe-formatter `expressionWrapping` class). Slice
+	 * ω-expressionwrapping-cascade-ingest foundational scaffold —
+	 * the writer does not consume this field yet, so the default is
+	 * deliberately minimal: empty rules + `defaultMode: NoWrap`, which
+	 * preserves pre-slice byte output. Engine + grammar wiring lands
+	 * in a follow-up slice; user `hxformat.json`
+	 * `wrapping.expressionWrapping` configs are still ingested by the
+	 * loader so the cascade is available when the wiring slice ships.
+	 *
+	 * Returned as a fresh struct on each call so test code that mutates
+	 * the `defaultWriteOptions.expressionWrappingWrap` substruct doesn't
+	 * corrupt the singleton.
+	 */
+	public static function defaultExpressionWrappingWrap():WrapRules {
 		return {
 			rules: [],
 			defaultMode: WrapMode.NoWrap,

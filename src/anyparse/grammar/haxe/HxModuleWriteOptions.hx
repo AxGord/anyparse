@@ -1056,6 +1056,25 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    totalItemLength>=70 → FillLine], defaultMode: NoWrap}` — short
  *    `<T>` / `<K, V>` lists stay flat; lists whose maximum item width
  *    or aggregate width crosses the soft threshold pack Wadler-style.
+ *  - `expressionWrappingWrap` — `WrapRules` cascade for parenthesised
+ *    expressions (`(expr)` — haxe-formatter `expressionWrapping`
+ *    class). Slice ω-expressionwrapping-cascade-ingest adds the
+ *    field, default, and JSON loader path only (foundational
+ *    scaffold). Engine + grammar `@:fmt(parenWrapRules(…))` wiring
+ *    lands in a follow-up slice — a writer-time prototype at
+ *    `WriterLowering`'s `isWrapShape` branch (forcing `(\n\tinner\n)`
+ *    via `Nest(_cols, …)` when the cascade fires non-NoWrap) surfaced
+ *    an outer-chain wrap-priority issue: when the enclosing expression
+ *    overflows, the outer `opAddSubChain` / `opBoolChain` cascade
+ *    commits MBreak before the paren probe runs, so the resulting
+ *    Doc stacks two `Nest`s and over-indents the paren content.
+ *    Resolving this needs a Doc-level analogue of fork's 2-pass
+ *    marker phase (paren wraps first, then the outer chain re-
+ *    evaluates against the now-shorter line). Default matches fork's
+ *    `default-hxformat.json` `wrapping.expressionWrapping`:
+ *    `{rules: [], defaultMode: NoWrap}` — minimal, opt-out by
+ *    default; fixtures without an explicit `expressionWrapping`
+ *    config stay byte-identical.
  *
  * Defaults are minimal:
  *  - `opBoolChainWrap`: single rule
@@ -1671,6 +1690,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	anonFunctionSignatureWrap:WrapRules,
 	metadataCallParameterWrap:WrapRules,
 	typeParameterWrap:WrapRules,
+	expressionWrappingWrap:WrapRules,
 	expressionTry:SameLinePolicy,
 	indentCaseLabels:Bool,
 	indentObjectLiteral:Bool,

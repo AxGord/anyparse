@@ -604,6 +604,7 @@ final class HaxeFormatConfigLoader {
 			anonFunctionSignatureWrap: base.anonFunctionSignatureWrap,
 			metadataCallParameterWrap: base.metadataCallParameterWrap,
 			typeParameterWrap: base.typeParameterWrap,
+			expressionWrappingWrap: base.expressionWrappingWrap,
 			addLineCommentSpace: base.addLineCommentSpace,
 			expressionTry: base.expressionTry,
 			indentCaseLabels: base.indentCaseLabels,
@@ -685,6 +686,7 @@ final class HaxeFormatConfigLoader {
 		if (section.anonFunctionSignature != null) opt.anonFunctionSignatureWrap = wrapRulesFromConfig(section.anonFunctionSignature, opt.anonFunctionSignatureWrap);
 		if (section.metadataCallParameter != null) opt.metadataCallParameterWrap = wrapRulesFromConfig(section.metadataCallParameter, opt.metadataCallParameterWrap);
 		if (section.typeParameter != null) opt.typeParameterWrap = wrapRulesFromConfig(section.typeParameter, opt.typeParameterWrap);
+		if (section.expressionWrapping != null) opt.expressionWrappingWrap = wrapRulesFromConfig(section.expressionWrapping, opt.expressionWrappingWrap);
 	}
 
 	/**
