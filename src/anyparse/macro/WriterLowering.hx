@@ -2843,17 +2843,33 @@ class WriterLowering {
 				Context.currentPos()
 			);
 		final bodyTypeName:String = simpleName(bodyRef);
+		// ω-fnbody-empty-honours-orphan-trivia: in trivia mode, a `{ // comment }`
+		// or `{\n // orphan \n}` body is NOT empty for fork's
+		// `paren_indent_function_signature` rule — the comment is content, even
+		// though `stmts.length == 0`. Mirror fork's behaviour by additionally
+		// checking the synth slots `<field>TrailingOpen` (`// after open lit`)
+		// and `<field>TrailingLeading` (orphan comments before close lit). Skip
+		// `TrailingClose` (trailing AFTER `}` doesn't affect body content) and
+		// `TrailingBlankBefore` (blank-line only is still empty). In plain mode
+		// the slots don't exist on the body type, so the original
+		// `_b.stmts.length == 0` form is preserved.
+		final blockEmptyExpr:Expr = ctx.trivia
+			? macro _b.stmts.length == 0 && _b.stmtsTrailingOpen == null && _b.stmtsTrailingLeading.length == 0
+			: macro _b.stmts.length == 0;
+		final untypedBlockEmptyExpr:Expr = ctx.trivia
+			? macro _u.block.stmts.length == 0 && _u.block.stmtsTrailingOpen == null && _u.block.stmtsTrailingLeading.length == 0
+			: macro _u.block.stmts.length == 0;
 		final bodySwitchExpr:Expr = switch bodyTypeName {
 			case 'HxFnBody' | 'HxFnBodyT':
 				macro switch _body {
 					case NoBody: true;
-					case BlockBody(_b): _b.stmts.length == 0;
-					case UntypedBlockBody(_u): _u.block.stmts.length == 0;
+					case BlockBody(_b): $blockEmptyExpr;
+					case UntypedBlockBody(_u): $untypedBlockEmptyExpr;
 					case ExprBody(_): false;
 				};
 			case 'HxFnExprBody' | 'HxFnExprBodyT':
 				macro switch _body {
-					case BlockBody(_b): _b.stmts.length == 0;
+					case BlockBody(_b): $blockEmptyExpr;
 					case ExprBody(_): false;
 				};
 			case _:
