@@ -528,15 +528,26 @@ class Renderer {
 					//
 					// When `col >= n` already, the rule fires regardless
 					// of width — short-circuited by the `>=` comparison.
-					// The mode is propagated unchanged: this primitive is
-					// independent of the enclosing Group's flat/break
-					// choice; it answers a separate column-vs-threshold
-					// question.
+					//
+					// Brk-side mode: force `MBreak`. The break shape may
+					// carry hardlines + Nest that must render as `\n +
+					// indent` and drop pendingOptSpace — under an enclosing
+					// `MFlat` context (e.g. inside a `Flatten` whose
+					// `WrapBoundary` reset `forceFlat` but did not restore
+					// mode), the inner `Line('\n')` would otherwise emit a
+					// bare `\n` flat string without indent. Sister-arm
+					// sweep mirrors the fix at `IfLineExceeds`
+					// (slice ω-iflineexceeds-brk-mode).
+					//
+					// Flat-side mode: preserve `f.mode`. The flat shape is
+					// the inline alternative; it respects the enclosing
+					// context's mode.
 					if (f.forceFlat) {
 						stack.push(new Frame(f.indent, f.mode, flatDoc, true));
 					} else {
 						final crosses:Bool = (col + DocMeasure.flatTokenWidth(flatDoc) >= n);
-						stack.push(new Frame(f.indent, f.mode, crosses ? breakDoc : flatDoc));
+						final pushMode:Mode = crosses ? MBreak : f.mode;
+						stack.push(new Frame(f.indent, pushMode, crosses ? breakDoc : flatDoc));
 					}
 				case IfFirstLineExceeds(n, breakDoc, flatDoc):
 					// First-line-aware probe: rule fires when `col +
@@ -551,15 +562,17 @@ class Renderer {
 					// to `return` when the head fits, while subsequent
 					// `else` branches keep their own hardlines.
 					//
-					// Mode propagation matches `IfWidthExceeds` — both
-					// primitives answer a column-vs-threshold question
-					// independent of the enclosing Group's flat/break
-					// choice.
+					// Mode propagation matches `IfWidthExceeds` and
+					// `IfLineExceeds` — brk-side forces `MBreak` so a break
+					// shape carrying hardlines + Nest renders correctly under
+					// an enclosing `MFlat` context; flat-side preserves
+					// `f.mode` as the inline alternative.
 					if (f.forceFlat) {
 						stack.push(new Frame(f.indent, f.mode, flatDoc, true));
 					} else {
 						final firstLineCrosses:Bool = (col + flatTokenWidthFirstLine(flatDoc) >= n);
-						stack.push(new Frame(f.indent, f.mode, firstLineCrosses ? breakDoc : flatDoc));
+						final pushMode:Mode = firstLineCrosses ? MBreak : f.mode;
+						stack.push(new Frame(f.indent, pushMode, firstLineCrosses ? breakDoc : flatDoc));
 					}
 				case IfLineExceeds(n, breakDoc, flatDoc):
 					// Line-length-aware probe: rule fires when `col +
@@ -606,11 +619,16 @@ class Renderer {
 					// while avoiding the chain-of-lambdas over-fire
 					// (regression class of the symmetric-descend
 					// approach). Slice ω-iffulllineexceeds-primitive.
+					//
+					// Mode propagation matches `IfLineExceeds`: brk-side
+					// forces `MBreak` (slice ω-iflineexceeds-brk-mode
+					// sister-arm sweep); flat-side preserves `f.mode`.
 					if (f.forceFlat) {
 						stack.push(new Frame(f.indent, f.mode, flatDoc, true));
 					} else {
 						final fullLineCrosses:Bool = (col + DocMeasure.flatTokenWidth(flatDoc) + flatTokenWidthOfRestStackFull(stack) >= n);
-						stack.push(new Frame(f.indent, f.mode, fullLineCrosses ? breakDoc : flatDoc));
+						final pushMode:Mode = fullLineCrosses ? MBreak : f.mode;
+						stack.push(new Frame(f.indent, pushMode, fullLineCrosses ? breakDoc : flatDoc));
 					}
 				case Fill(items, sep, tailReserveOpt) | FillWithRestProbe(items, sep, tailReserveOpt):
 					// Paired arm: identical entry shape for both ctors. The
