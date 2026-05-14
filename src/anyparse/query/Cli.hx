@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.Matcher.Match;
 import anyparse.query.format.Json;
 import anyparse.query.format.Text;
 import anyparse.runtime.ParseError;
@@ -44,7 +45,8 @@ final class Cli {
 		final rest:Array<String> = args.slice(1);
 		switch cmd {
 			case 'ast': return runAst(rest);
-			case 'search', 'refs', 'meta':
+			case 'search': return runSearch(rest);
+			case 'refs', 'meta':
 				stderr('apq: subcommand "$cmd" deferred to a later phase\n');
 				return EXIT_USAGE;
 			case _:
@@ -52,6 +54,119 @@ final class Cli {
 				printUsage();
 				return EXIT_USAGE;
 		}
+	}
+
+	private static function runSearch(args:Array<String>):Int {
+		var lang:String = 'haxe';
+		var json:Bool = false;
+		var pattern:Null<String> = null;
+		var inputSpec:Null<String> = null;
+
+		var i:Int = 0;
+		while (i < args.length) {
+			final a:String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--json':
+					json = true;
+				case '-h', '--help':
+					printSearchUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq search: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (pattern == null) {
+						pattern = a;
+					} else if (inputSpec == null) {
+						inputSpec = a;
+					} else {
+						stderr('apq search: extra positional argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (pattern == null) {
+			stderr('apq search: missing <pattern> argument\n');
+			printSearchUsage();
+			return EXIT_USAGE;
+		}
+		if (inputSpec == null) {
+			stderr('apq search: missing <file-or-glob> argument\n');
+			printSearchUsage();
+			return EXIT_USAGE;
+		}
+		final patternStr:String = pattern;
+		final inputStr:String = inputSpec;
+
+		final plugin:GrammarPlugin = pickPlugin(lang);
+		final parsed:Pattern = try plugin.parsePattern(patternStr)
+			catch (e:Exception) {
+				stderr('apq search: pattern: ${e.message}\n');
+				return EXIT_RUNTIME;
+			};
+
+		final paths:Array<String> = Glob.expand(inputStr, '.hx');
+		if (paths.length == 0) {
+			stderr('apq search: no input files matched "$inputStr"\n');
+			return EXIT_RUNTIME;
+		}
+
+		final allMatches:Array<Match> = [];
+		final allEntries:Array<{file:String, source:String, matches:Array<Match>}> = [];
+		for (path in paths) {
+			final source:String = readFile(path);
+			final tree:Null<QueryNode> = try plugin.parseFile(source)
+				catch (e:ParseError) {
+					stderr('apq search: $path: ${e.toString()}\n');
+					null;
+				}
+				catch (e:Exception) {
+					stderr('apq search: $path: ${e.message}\n');
+					null;
+				};
+			if (tree == null) continue;
+			final matches:Array<Match> = Matcher.search(parsed, tree);
+			if (matches.length == 0) continue;
+			allEntries.push({file: path, source: source, matches: matches});
+			for (m in matches) allMatches.push(m);
+		}
+
+		if (json) {
+			final combined:StringBuf = new StringBuf();
+			combined.add('{"matches":[');
+			var first:Bool = true;
+			for (entry in allEntries) {
+				for (m in entry.matches) {
+					if (!first) combined.add(',');
+					first = false;
+					combined.add(perMatchJson(entry.file, entry.source, m));
+				}
+			}
+			combined.add(']}\n');
+			sysPrint(combined.toString());
+		} else {
+			for (entry in allEntries) sysPrint(Text.renderSearchMatches(entry.file, entry.source, entry.matches));
+		}
+		return EXIT_OK;
+	}
+
+	private static function perMatchJson(file:String, source:String, m:Match):String {
+		// Render a single match through the macro-generated writer by
+		// wrapping it in a singleton envelope, then slicing the inner
+		// JSON object out. Keeps every entry typed through the same path
+		// as the multi-match render — no separate stringify code.
+		final rendered:String = Json.renderSearchMatches(file, source, [m]);
+		// Strip the `{"matches":[` prefix and `]}\n` suffix to get the
+		// bare match object for inclusion in the multi-file array.
+		final inner:String = StringTools.trim(rendered);
+		final openIdx:Int = inner.indexOf('[');
+		final closeIdx:Int = inner.lastIndexOf(']');
+		if (openIdx < 0 || closeIdx <= openIdx) return rendered;
+		return inner.substring(openIdx + 1, closeIdx);
 	}
 
 	private static function runAst(args:Array<String>):Int {
@@ -123,12 +238,12 @@ final class Cli {
 			final selector:Selector = Selector.parse(selectExpr);
 			final raw:Array<QueryNode> = Engine.select(tree, selector);
 			final matches:Array<QueryNode> = depth < 0 ? raw : [for (m in raw) Engine.truncate(m, depth)];
-			Sys.print(json ? Json.renderMatches(file, matches) : Text.renderMatches(matches));
+			sysPrint(json ? Json.renderMatches(file, matches) : Text.renderMatches(matches));
 			return EXIT_OK;
 		}
 
 		final shaped:QueryNode = Engine.truncate(tree, depth);
-		Sys.print(json ? Json.renderTree(file, shaped) : Text.render(shaped));
+		sysPrint(json ? Json.renderTree(file, shaped) : Text.render(shaped));
 		return EXIT_OK;
 	}
 
@@ -153,35 +268,53 @@ final class Cli {
 	}
 
 	private static function printUsage():Void {
-		Sys.print('apq — anyparse query CLI\n');
-		Sys.print('\n');
-		Sys.print('Usage: apq <command> [options] <file>\n');
-		Sys.print('\n');
-		Sys.print('Commands:\n');
-		Sys.print('  ast      Dump parsed AST (S-expr or JSON)\n');
-		Sys.print('  search   Structural pattern search (deferred to Phase 2)\n');
-		Sys.print('  refs     Symbol references with scope (deferred to Phase 3)\n');
-		Sys.print('  meta     Annotation-on-decl shortcut (deferred to Phase 4)\n');
-		Sys.print('\n');
-		Sys.print('Global options:\n');
-		Sys.print('  --lang <name>   Pick grammar plugin (default: haxe)\n');
-		Sys.print('  -h, --help      Show help\n');
+		sysPrint('apq — anyparse query CLI\n');
+		sysPrint('\n');
+		sysPrint('Usage: apq <command> [options] <file>\n');
+		sysPrint('\n');
+		sysPrint('Commands:\n');
+		sysPrint('  ast      Dump parsed AST (S-expr or JSON)\n');
+		sysPrint('  search   Structural pattern search (deferred to Phase 2)\n');
+		sysPrint('  refs     Symbol references with scope (deferred to Phase 3)\n');
+		sysPrint('  meta     Annotation-on-decl shortcut (deferred to Phase 4)\n');
+		sysPrint('\n');
+		sysPrint('Global options:\n');
+		sysPrint('  --lang <name>   Pick grammar plugin (default: haxe)\n');
+		sysPrint('  -h, --help      Show help\n');
+	}
+
+	private static function printSearchUsage():Void {
+		sysPrint('Usage: apq search [options] <pattern> <file-or-dir>\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --json              Emit JSON instead of text\n');
+		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('\n');
+		sysPrint("Pattern syntax: language source with `$X` / `$_` metavars.\n");
+		sysPrint("  $X      — bind a subtree; reuses must match structurally.\n");
+		sysPrint("  $_      — wildcard, no binding.\n");
 	}
 
 	private static function printAstUsage():Void {
-		Sys.print('Usage: apq ast [options] <file>\n');
-		Sys.print('\n');
-		Sys.print('Options:\n');
-		Sys.print('  --json              Emit JSON instead of S-expr\n');
-		Sys.print('  --depth <n>         Truncate beyond depth n\n');
-		Sys.print('  --select <path>     Subtree(s) matching a selector (e.g. "ClassDecl > FnDecl:foo")\n');
-		Sys.print('  --at <line>:<col>   Smallest enclosing node (deferred)\n');
-		Sys.print('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('Usage: apq ast [options] <file>\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --json              Emit JSON instead of S-expr\n');
+		sysPrint('  --depth <n>         Truncate beyond depth n\n');
+		sysPrint('  --select <path>     Subtree(s) matching a selector (e.g. "ClassDecl > FnDecl:foo")\n');
+		sysPrint('  --at <line>:<col>   Smallest enclosing node (deferred)\n');
+		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 	}
 
 	private static function stderr(s:String):Void {
 		#if sys
 		Sys.stderr().writeString(s);
+		#end
+	}
+
+	private static inline function sysPrint(s:String):Void {
+		#if sys
+		Sys.print(s);
 		#end
 	}
 }

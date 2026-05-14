@@ -36,6 +36,17 @@ final class Parser {
 	 */
 	public var pendingTrivia:Null<{blankBefore:Bool, blankAfterLeadingComments:Bool, newlineBefore:Bool, leadingComments:Array<String>}> = null;
 
+	/**
+	 * Span-mode side-channel. Span-mode-generated parsers
+	 * (`@:build(Build.buildParser(T, {spans:true}))`) push a
+	 * `Span(_start, ctx.pos)` here at every enum-ctor / struct-Seq return
+	 * site, in source post-order. The public `parse(source)` entry exposes
+	 * the populated array alongside the parsed root so downstream
+	 * consumers (e.g. the apq query plugin) can walk the typed AST in
+	 * post-order and pop spans in lockstep. Empty in non-span-mode builds.
+	 */
+	public final parseSpans:Array<Span> = [];
+
 	public function new(input:Input) {
 		this.input = input;
 	}

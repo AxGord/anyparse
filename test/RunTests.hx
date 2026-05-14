@@ -134,6 +134,11 @@ import unit.HxFillLinePerGapSepTest;
 import unit.ApqSelectorTest;
 import unit.ApqAstIntegrationTest;
 import unit.ApqJsonSchemaProbe;
+import unit.SpanModeProbe;
+import unit.ApqSpanFlowTest;
+import unit.PatternParseProbe;
+import unit.ApqMatcherTest;
+import unit.ApqSearchCliTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -278,6 +283,11 @@ class RunTests {
 		runner.addCase(new ApqSelectorTest());
 		runner.addCase(new ApqAstIntegrationTest());
 		runner.addCase(new ApqJsonSchemaProbe());
+		runner.addCase(new SpanModeProbe());
+		runner.addCase(new ApqSpanFlowTest());
+		runner.addCase(new PatternParseProbe());
+		runner.addCase(new ApqMatcherTest());
+		runner.addCase(new ApqSearchCliTest());
 		utest.ui.Report.create(runner);
 		runner.run();
 	}

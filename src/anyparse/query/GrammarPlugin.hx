@@ -24,4 +24,20 @@ interface GrammarPlugin {
 	 * exception. The engine itself never catches.
 	 */
 	public function parseFile(source:String):QueryNode;
+
+	/**
+	 * Parse a `apq search` pattern — language source extended with
+	 * `$X` / `$_` metavariables.
+	 *
+	 * The plugin is free to substitute the metavariable token before
+	 * invoking the grammar parser and to wrap the pattern in synthetic
+	 * decl/stmt scaffolding so the grammar accepts it; the returned
+	 * `Pattern.root` is the user's pattern subtree with all metavar
+	 * leaves reclassified to `kind='Metavar'`. See `Pattern` and the
+	 * pattern-syntax section of `docs/cli-query-tool.md`.
+	 *
+	 * Plugins throw on parse failure across every try-fallback attempt;
+	 * the CLI catches and surfaces the most-informative error.
+	 */
+	public function parsePattern(source:String):Pattern;
 }

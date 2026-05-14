@@ -65,6 +65,8 @@ class Build {
 		final ctx:LoweringCtx = new LoweringCtx();
 		ctx.mode = Mode.Fast;
 		ctx.trivia = readBoolOption(options, 'trivia', false);
+		ctx.spans = readBoolOption(options, 'spans', false);
+		if (ctx.spans) ctx.mode = Mode.Tolerant;
 
 		final shapeBuilder:ShapeBuilder = new ShapeBuilder(formatInfo);
 		final shape:ShapeBuilder.ShapeResult = shapeBuilder.build(rootType);
@@ -101,7 +103,7 @@ class Build {
 			? TPath({pack: packOf(shape.root).concat(['trivia']), name: 'Pairs', sub: rootSimple + 'T', params: []})
 			: TPath({pack: packOf(shape.root), name: rootSimple, params: []});
 		final rootFnName:String = rootBearing ? 'parse${rootSimple}T' : 'parse$rootSimple';
-		final fields:Array<Field> = Codegen.emit(rules, shape.root, rootReturnCT, formatInfo, ctx.trivia, rootFnName);
+		final fields:Array<Field> = Codegen.emit(rules, shape.root, rootReturnCT, formatInfo, ctx.trivia, rootFnName, ctx.spans);
 
 		#if anyparse_dump
 		final printer:haxe.macro.Printer = new haxe.macro.Printer();

@@ -1,34 +1,43 @@
 package anyparse.grammar.haxe;
 
 import anyparse.query.GrammarPlugin;
+import anyparse.query.Pattern;
 import anyparse.query.QueryNode;
+import anyparse.runtime.ParseError;
+import anyparse.runtime.Span;
+import haxe.Exception;
 
 /**
  * Haxe grammar binding for the `apq` query engine.
  *
- * Parses with the existing Plain-mode `HaxeModuleParser` and translates
- * the typed AST into a generic `QueryNode` tree using runtime type
- * introspection (`Type` / `Reflect`). The translation is intentionally
- * simple in Phase 1:
+ * Parses with the macro-generated span-mode `HaxeModuleSpanParser` and
+ * translates the typed AST into a generic `QueryNode` tree using
+ * runtime type introspection (`Type` / `Reflect`). The translation
+ * walks the typed AST in post-order and pops one `Span` per enum value
+ * visited from the parallel `spans` array the parser populates in
+ * matching post-order — see `Lowering.instrumentSpans` for the parser
+ * side of the contract.
  *
  *  - **Enum values become nodes.** `kind` is the constructor name
- *    verbatim (`ClassDecl`, `FnDecl`, `IfStmt`, …). Plain-mode parses
- *    never wrap nodes in any extra envelope; what you see in the
- *    `enum` declarations of the grammar package is what `apq ast`
- *    emits.
+ *    verbatim (`ClassDecl`, `FnDecl`, `IfStmt`, …). Each enum visit
+ *    pops the next span entry and attaches it to the produced
+ *    `QueryNode`.
  *  - **Anonymous structs are transparent.** Their fields contribute
  *    children to the enclosing enum-ctor node. A struct's `name` field
  *    (when a String) becomes the parent ctor's `name` slot.
  *  - **Arrays are transparent.** Their elements contribute children.
  *  - **Trivial-mode wrappers** (`{ node:T, leadingComments:…, … }`) are
- *    transparent on the `node` slot; the Plain-mode parser does not
+ *    transparent on the `node` slot; the span-mode parser does not
  *    produce them, but the descent is in place for a future
- *    Trivia-mode switch.
+ *    Trivia + span composition.
  *  - **Primitive leaves** (`String`/`Int`/`Float`/`Bool`) do not emit
  *    nodes — they are absorbed into name detection when applicable.
  *
  * The root is a synthetic `module` node so users have a single
- * top-level handle in selectors and JSON output.
+ * top-level handle in selectors and JSON output. The root carries no
+ * span — `HxModule` itself is a Seq (struct) so the parser does not
+ * push a span for the module rule. Its children (top-level decls)
+ * carry their own spans.
  */
 @:nullSafety(Strict)
 final class HaxeQueryPlugin implements GrammarPlugin {
@@ -38,47 +47,154 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 	public function langName():String return 'haxe';
 
 	public function parseFile(source:String):QueryNode {
-		final ast:HxModule = HaxeModuleParser.parse(source);
+		final result:{ast:HxModule, spans:Array<Span>} = HaxeModuleSpanParser.parse(source);
+		final cursor:Cursor = new Cursor(result.spans);
 		final children:Array<QueryNode> = [];
-		appendNodes(ast.decls, children);
+		appendNodes(result.ast.decls, children, cursor);
 		return new QueryNode('module', null, children);
 	}
 
-	private function appendNodes(value:Dynamic, into:Array<QueryNode>):Void {
+	public function parsePattern(source:String):Pattern {
+		// `$X` / `$_` are not valid Haxe identifier prefixes outside string
+		// interpolation, so we substitute them for reserved-identifier
+		// placeholders before parsing and reclassify the resulting leaves
+		// post-parse. The grammar parser stays unmodified.
+		final substituted:String = Metavar.substituteMetavarsHaxe(source);
+		final attempts:Array<{wrap:String->String, extract:QueryNode->Null<QueryNode>, category:PatternCategory}> = [
+			{wrap: src -> src, extract: extractFirstDecl, category: PatternCategory.Decl},
+			{wrap: wrapAsStmt, extract: extractFirstStmt, category: PatternCategory.Stmt},
+			{wrap: wrapAsExpr, extract: extractFirstExpr, category: PatternCategory.Expr},
+			{wrap: wrapAsMetaArgs, extract: extractFirstMeta, category: PatternCategory.MetaArgs},
+		];
+		var bestError:Null<String> = null;
+		for (attempt in attempts) {
+			final wrapped:String = attempt.wrap(substituted);
+			final tree:Null<QueryNode> = try parseFile(wrapped)
+				catch (e:ParseError) {
+					bestError = bestError ?? 'pattern: ${e.toString()}';
+					null;
+				}
+				catch (e:Exception) {
+					bestError = bestError ?? 'pattern: ${e.message}';
+					null;
+				};
+			if (tree == null) continue;
+			final extracted:Null<QueryNode> = attempt.extract(tree);
+			if (extracted == null) continue;
+			final reclassified:QueryNode = Metavar.reclassify(extracted);
+			return new Pattern(reclassified, attempt.category, source);
+		}
+		throw bestError ?? 'pattern: failed to parse as decl / stmt / expr / meta-args';
+	}
+
+	private static function wrapAsStmt(src:String):String {
+		return 'class _ApqPattern { static function _apq() { $src; } }';
+	}
+
+	private static function wrapAsExpr(src:String):String {
+		return 'class _ApqPattern { static function _apq() { var _v = $src; } }';
+	}
+
+	private static function wrapAsMetaArgs(src:String):String {
+		return 'class _ApqPattern { $src var _v:Int = 0; }';
+	}
+
+	private static function extractFirstDecl(module:QueryNode):Null<QueryNode> {
+		if (module.children.length == 0) return null;
+		return module.children[0];
+	}
+
+	private static function extractFirstStmt(module:QueryNode):Null<QueryNode> {
+		// module → ClassDecl wrapper → FunctionField → FnDecl struct →
+		// HxFnBody.BlockBody (enum) → HxFnBlock struct (flattened) →
+		// stmts[0]. We navigate by enum kind names; struct envelopes are
+		// transparent in the QueryNode tree.
+		final cls:Null<QueryNode> = findFirstByKind(module, 'ClassDecl');
+		if (cls == null) return null;
+		final block:Null<QueryNode> = findFirstByKind(cls, 'BlockBody');
+		if (block == null) return null;
+		if (block.children.length == 0) return null;
+		return block.children[0];
+	}
+
+	private static function extractFirstExpr(module:QueryNode):Null<QueryNode> {
+		final cls:Null<QueryNode> = findFirstByKind(module, 'ClassDecl');
+		if (cls == null) return null;
+		final varStmt:Null<QueryNode> = findFirstByKind(cls, 'VarStmt');
+		if (varStmt == null) return null;
+		// VarStmt → HxVarDecl struct (flattened) → init expr is the last
+		// child after name/type. Heuristic: the init is the last enum
+		// child that isn't a name/type placeholder.
+		if (varStmt.children.length == 0) return null;
+		return varStmt.children[varStmt.children.length - 1];
+	}
+
+	private static function extractFirstMeta(module:QueryNode):Null<QueryNode> {
+		final cls:Null<QueryNode> = findFirstByKind(module, 'ClassDecl');
+		if (cls == null) return null;
+		return findFirstByKind(cls, 'HxMeta')
+			?? findFirstByKind(cls, 'Meta')
+			?? findFirstByKindPrefix(cls, 'Meta');
+	}
+
+	private static function findFirstByKind(node:QueryNode, kind:String):Null<QueryNode> {
+		if (node.kind == kind) return node;
+		for (c in node.children) {
+			final found:Null<QueryNode> = findFirstByKind(c, kind);
+			if (found != null) return found;
+		}
+		return null;
+	}
+
+	private static function findFirstByKindPrefix(node:QueryNode, prefix:String):Null<QueryNode> {
+		if (StringTools.startsWith(node.kind, prefix)) return node;
+		for (c in node.children) {
+			final found:Null<QueryNode> = findFirstByKindPrefix(c, prefix);
+			if (found != null) return found;
+		}
+		return null;
+	}
+
+	private function appendNodes(value:Dynamic, into:Array<QueryNode>, cursor:Cursor):Void {
 		if (value == null) return;
 		if (value is String) return;
 		final t:Type.ValueType = Type.typeof(value);
 		switch t {
 			case TEnum(_):
-				into.push(makeEnumNode(value));
+				into.push(makeEnumNode(value, cursor));
 			case TObject:
 				if (Reflect.hasField(value, 'node')) {
-					appendNodes(Reflect.field(value, 'node'), into);
+					appendNodes(Reflect.field(value, 'node'), into, cursor);
 					return;
 				}
 				for (field in Reflect.fields(value)) {
-					if (field == 'name') continue;
-					appendNodes(Reflect.field(value, field), into);
+					if (field == 'name' || field == 'type') continue;
+					appendNodes(Reflect.field(value, field), into, cursor);
 				}
 			case TClass(_):
 				if (Std.isOfType(value, Array)) {
 					final arr:Array<Dynamic> = cast value;
-					for (e in arr) appendNodes(e, into);
+					for (e in arr) appendNodes(e, into, cursor);
 				}
 			case _:
 		}
 	}
 
-	private function makeEnumNode(value:Dynamic):QueryNode {
+	private function makeEnumNode(value:Dynamic, cursor:Cursor):QueryNode {
 		final ctor:String = Type.enumConstructor(value);
 		final params:Array<Dynamic> = Type.enumParameters(value);
 		var name:Null<String> = null;
 		final children:Array<QueryNode> = [];
 		for (p in params) {
 			if (name == null) name = extractName(p);
-			appendNodes(p, children);
+			appendNodes(p, children, cursor);
 		}
-		return new QueryNode(ctor, name, children);
+		// Post-order: children consumed their spans first; the enum's own
+		// span (pushed by the parser at this rule's return / left=
+		// assignment) is the next available entry. See
+		// `Lowering.instrumentSpans` for the push contract.
+		final span:Null<Span> = cursor.next();
+		return new QueryNode(ctor, name, children, span);
 	}
 
 	private function extractName(value:Dynamic):Null<String> {
@@ -87,13 +203,33 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		final t:Type.ValueType = Type.typeof(value);
 		switch t {
 			case TObject:
-				if (Reflect.hasField(value, 'name')) {
-					final n:Dynamic = Reflect.field(value, 'name');
+				// Try canonical name slots in priority order. `name` is the
+				// common case (HxClassDecl, HxFnDecl, ...); `type` covers
+				// `new T(...)` (HxNewExpr) and similar nominally-typed
+				// nodes; `node` unwraps Trivial<T> envelopes for the
+				// future Trivia + span composition.
+				for (field in ['name', 'type']) if (Reflect.hasField(value, field)) {
+					final n:Dynamic = Reflect.field(value, field);
 					if (n is String) return n;
 				}
 				if (Reflect.hasField(value, 'node')) return extractName(Reflect.field(value, 'node'));
 			case _:
 		}
 		return null;
+	}
+}
+
+@:nullSafety(Strict)
+private class Cursor {
+	private final spans:Array<Span>;
+	private var idx:Int = 0;
+
+	public function new(spans:Array<Span>) {
+		this.spans = spans;
+	}
+
+	public function next():Null<Span> {
+		if (idx >= spans.length) return null;
+		return spans[idx++];
 	}
 }

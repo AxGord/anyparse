@@ -26,6 +26,15 @@ import anyparse.format.Format;
  *                    for those Star elements with `collectTrivia(ctx)`
  *                    calls between them. Default `false` — existing
  *                    parsers keep their bare AST shape.
+ * - `spans`        — when true, the generated parser maintains a
+ *                    side-channel `ctx.parseSpans:Array<Span>` and
+ *                    pushes a `Span(_start, ctx.pos)` at every
+ *                    enum-ctor / struct-Seq return site, in source
+ *                    (post-)order. The public `parse(source)` entry
+ *                    returns `{ast:T, spans:Array<Span>}` instead of
+ *                    bare `T`. Consumers (e.g. the `apq` query plugin)
+ *                    walk the typed AST in post-order and pop spans
+ *                    from the array in lockstep. Default `false`.
  *
  * Strategies are free to mutate the fields they own, but only while
  * they are in their own `lower` call — the macro framework saves and
@@ -40,6 +49,7 @@ class LoweringCtx {
 	public var activeFormat:Null<Format> = null;
 	public var mode:Mode = Mode.Tolerant;
 	public var trivia:Bool = false;
+	public var spans:Bool = false;
 
 	public function new() {}
 }

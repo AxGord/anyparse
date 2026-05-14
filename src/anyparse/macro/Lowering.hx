@@ -46,8 +46,102 @@ class Lowering {
 
 	public function generate():Array<GeneratedRule> {
 		final rules:Array<GeneratedRule> = [];
-		for (typePath => node in shape.rules) for (rule in lowerRule(typePath, node)) rules.push(rule);
+		// Track which generated rules belong to an Alt grammar node — those
+		// produce enum values the QueryNode walker maps to a node and so
+		// need span instrumentation. Seq (struct) and Terminal rules
+		// contribute children/leaves to their enclosing enum's QueryNode;
+		// instrumenting them would push spans the post-order walker has no
+		// QueryNode to attach to, breaking lockstep consumption.
+		final altRuleNames:Map<String, Bool> = new Map();
+		for (typePath => node in shape.rules) {
+			for (rule in lowerRule(typePath, node)) {
+				rules.push(rule);
+				if (ctx.spans && node.kind == Alt) altRuleNames.set(rule.fnName, true);
+			}
+		}
+		if (ctx.spans) for (rule in rules) if (altRuleNames.exists(rule.fnName)) rule.body = instrumentSpans(rule.body);
 		return rules;
+	}
+
+	/**
+	 * ω-span-mode — when `ctx.spans=true`, walk the rule body Expr and:
+	 *
+	 * Known Phase 2 limitation: post-order alignment between parser
+	 * push order and consumer (`HaxeQueryPlugin`) walk order depends on
+	 * the Reflect-fields ordering for anonymous typedef structs. On
+	 * neko, that ordering is hash-keyed, so spans may misalign for
+	 * deeply-nested grammars (specifically inside Pratt-built binary
+	 * expressions reached through several struct hops). The OUTERMOST
+	 * match node visited by the matcher (which corresponds to the
+	 * last-pushed span at its descent level) still receives a correct
+	 * span — so `apq search`'s `file:line:col` per match is reliable.
+	 * Inner-binding text may report the wrong source slice. Phase 3+
+	 * will replace the side-channel with `SpanTypeSynth`-driven span
+	 * fields synthesised on every grammar enum constructor.
+	 *
+	 *  - prepend `final _start:Int = ctx.pos;` at the top of the body so
+	 *    every span-emit site sees a per-rule entry position;
+	 *  - inject `ctx.parseSpans.push(new Span(_start, ctx.pos))` AFTER
+	 *    every `left = $ctorCall;` assignment (Pratt-loop and Postfix-loop
+	 *    iterations build composite enum values via assignment and never
+	 *    enter a `return` statement themselves — their span has to be
+	 *    captured at the assignment site);
+	 *  - inject the same push BEFORE every `return $X;` whose returned
+	 *    expression is NOT a bare `left` identifier (`return left;` just
+	 *    yields the last assignment's value, which has already pushed its
+	 *    own span — re-pushing would duplicate). Alt branches that emit
+	 *    `return $ctorRef` / `return $ctorCall` / `return $structLit` all
+	 *    qualify and push.
+	 *
+	 * The push order is parser-emission post-order: deepest sub-call's
+	 * span lands first, outermost composition lands last. Consumers (the
+	 * `apq` query plugin) walk the typed AST in post-order via Reflect
+	 * and pop spans in lockstep, attaching one span per visited enum
+	 * value. Terminals (Strings/Ints) and Seq structs contribute no
+	 * enum-shaped QueryNodes — they consume no spans during the walk;
+	 * the parser sites that build them never trigger this instrumentor
+	 * (terminals have no enum-ctor build; Seq returns `$structLit` —
+	 * still instrumented and pushes — but consumed by the parent enum's
+	 * visit which produces a single QueryNode... see plugin notes for
+	 * the alignment contract).
+	 *
+	 * Failed `tryBranch` attempts throw `ParseError` before reaching
+	 * their `return`/assignment, so no span is recorded for a rolled-back
+	 * branch — `tryBranch`'s own `ctx.pos = _savedPos` rollback is
+	 * enough.
+	 */
+	private function instrumentSpans(body:Expr):Expr {
+		final transformed:Expr = transformForSpans(body);
+		return macro {
+			final _start:Int = ctx.pos;
+			$transformed;
+		};
+	}
+
+	private function transformForSpans(e:Expr):Expr {
+		return switch e.expr {
+			case EReturn(returnExpr) if (returnExpr != null && !isBareLeft(returnExpr)):
+				final mapped:Expr = transformForSpans(returnExpr);
+				macro {
+					final _v = $mapped;
+					ctx.parseSpans.push(new anyparse.runtime.Span(_start, ctx.pos));
+					return _v;
+				};
+			case EBinop(OpAssign, lhs, rhs) if (isBareLeft(lhs)):
+				final mappedRhs:Expr = transformForSpans(rhs);
+				macro {
+					left = $mappedRhs;
+					ctx.parseSpans.push(new anyparse.runtime.Span(_start, ctx.pos));
+				};
+			case _: ExprTools.map(e, transformForSpans);
+		};
+	}
+
+	private static function isBareLeft(e:Expr):Bool {
+		return switch e.expr {
+			case EConst(CIdent('left')): true;
+			case _: false;
+		};
 	}
 
 	private function lowerRule(typePath:String, node:ShapeNode):Array<GeneratedRule> {

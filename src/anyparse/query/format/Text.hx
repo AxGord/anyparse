@@ -3,7 +3,10 @@ package anyparse.query.format;
 import anyparse.format.text.SExprFormat;
 import anyparse.grammar.sexpr.SValue;
 import anyparse.grammar.sexpr.SValueWriter;
+import anyparse.query.Matcher.Match;
 import anyparse.query.QueryNode;
+import anyparse.runtime.Span;
+import anyparse.runtime.Span.Position;
 
 /**
  * S-expression renderer for `apq ast` output.
@@ -40,6 +43,56 @@ final class Text {
 			buf.add('\n');
 		}
 		return buf.toString();
+	}
+
+	public static function renderSearchMatches(file:String, source:String, matches:Array<Match>):String {
+		if (matches.length == 0) return '$file: no matches\n';
+		final buf:StringBuf = new StringBuf();
+		for (m in matches) {
+			final pos:Position = m.span.lineCol(source);
+			buf.add('$file:${pos.line}:${pos.col - 1}: match');
+			final bindingsCount:Int = countBindings(m);
+			if (bindingsCount > 0) {
+				buf.add(' (');
+				var first:Bool = true;
+				for (name => bound in m.bindings) {
+					if (!first) buf.add(', ');
+					first = false;
+					buf.add(name);
+					buf.add('=');
+					buf.add(summariseBound(source, bound));
+				}
+				buf.add(')');
+			}
+			buf.add('\n');
+		}
+		return buf.toString();
+	}
+
+	private static inline function countBindings(m:Match):Int {
+		var n:Int = 0;
+		for (_ in m.bindings) n++;
+		return n;
+	}
+
+	private static function summariseBound(source:String, bound:QueryNode):String {
+		// Name-position binding (e.g. `$E` in `new $E(...)`) records the
+		// matched name string in `bound.name`; the span is borrowed from
+		// the parent enum and is not source-tight to the name. Prefer
+		// the name string directly so the summary reads `E=IoError` not
+		// `E=new IoError(...)`.
+		if (bound.kind == 'NameOnly') {
+			final n:Null<String> = bound.name;
+			return n ?? '';
+		}
+		final span:Null<Span> = bound.span;
+		if (span == null) return '?';
+		final from:Int = span.from < 0 ? 0 : span.from;
+		final to:Int = span.to > source.length ? source.length : span.to;
+		if (from >= to) return '';
+		final slice:String = source.substring(from, to);
+		final flat:String = StringTools.replace(StringTools.replace(slice, '\n', ' '), '\r', '');
+		return StringTools.trim(flat);
 	}
 
 	private static function toSValue(node:QueryNode):SValue {
