@@ -72,14 +72,22 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		// boundary) become the frame's bindings, shadowing same-named
 		// outer bindings for any Read encountered inside.
 		//
-		// Known gaps (Phase 3.2b / 3.3 plugin work — these decl sites
-		// live on struct fields whose names are absorbed into a parent
-		// slot, so they do not surface as their own `QueryNode`s and
-		// the scope walker cannot bind on them yet):
+		// Known gaps (Phase 3.2b plugin work — these decl sites live on
+		// struct fields whose names are absorbed into a parent slot, so
+		// they do not surface as their own `QueryNode`s and the scope
+		// walker cannot bind on them yet):
 		//  - For-loop iterator variables (`HxForStmt.varName`,
 		//    `HxForExpr.varName`).
 		//  - Catch-clause exception names (`HxCatchClause.name`).
 		//  - Lambda-parameter names (`HxLambdaParam.name`).
+		//
+		// Write-parent kinds: the 13 assignment ctors on `HxExpr` whose
+		// first positional child carries the binding being modified.
+		// `Assign(left, right)` and all 12 compound `*Assign(left, right)`
+		// variants. Haxe has no `++` / `--` (postfix is `.` / `[]` / `(...)`)
+		// so the list is complete. Per the `RefShape` docstring, only the
+		// direct child-0 IdentExpr is reclassified Write; `obj.x = …` and
+		// `arr[i] = …` keep `obj` / `arr` / `i` as Reads.
 		return {
 			identKind: 'IdentExpr',
 			declHostKinds: [
@@ -100,6 +108,13 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 				'ThinParenLambdaExpr', 'ParenLambdaExpr',
 				'BlockBody', 'BlockExpr', 'BlockStmt',
 				'ForStmt', 'ForExpr',
+			],
+			writeParentKinds: [
+				'Assign',
+				'AddAssign', 'SubAssign', 'MulAssign', 'DivAssign', 'ModAssign',
+				'ShlAssign', 'ShrAssign', 'UShrAssign',
+				'BitOrAssign', 'BitAndAssign', 'BitXorAssign',
+				'NullCoalAssign',
 			],
 		};
 	}

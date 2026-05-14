@@ -23,12 +23,18 @@ import anyparse.runtime.Span;
  *
  * Each emitted hit carries a `bindingSpan`:
  *  - Decl hits self-bind (`bindingSpan == own span`).
- *  - Read hits bind to the innermost in-file declaration with a
- *    matching name (null when unresolved — typically a cross-file or
+ *  - Read / Write hits bind to the innermost in-file declaration with
+ *    a matching name (null when unresolved — typically a cross-file or
  *    implicit-`this` reference).
  *
- * Write detection via assign-parent context is Phase 3.3 territory;
- * 3.2 callers asking for `--writes` still get an empty result.
+ * Phase 3.3 scope: Write classification via `RefShape.writeParentKinds`.
+ * When a parent node's kind is in that set and the matching `identKind`
+ * child sits at child-index 0 of the parent, the hit is emitted as
+ * `Write` instead of `Read`. The flag does NOT propagate through
+ * intermediate non-ident wrappers — only a direct `IdentExpr` child
+ * of a write-parent ctor reclassifies. `arr[i] = v` and `obj.x = 1`
+ * therefore keep `arr`/`obj` as Reads, which matches the semantic
+ * intent of the `--writes` filter.
  *
  * Nodes carrying a null `span` are skipped — without source coordinates
  * the result is not addressable.
@@ -47,7 +53,7 @@ final class Refs {
 		return out;
 	}
 
-	private static function walk(target:String, node:QueryNode, shape:RefShape, scopes:ScopeStack, out:Array<RefHit>):Void {
+	private static function walk(target:String, node:QueryNode, shape:RefShape, scopes:ScopeStack, out:Array<RefHit>, isWriteTarget:Bool = false):Void {
 		final isScope:Bool = shape.scopeKinds.contains(node.kind);
 		if (isScope) {
 			final frame:ScopeFrame = new ScopeFrame(node);
@@ -58,7 +64,7 @@ final class Refs {
 		if (nname == target) {
 			final span:Null<Span> = node.span;
 			if (span != null) {
-				final kind:Null<RefKind> = classify(node.kind, shape);
+				final kind:Null<RefKind> = classify(node.kind, shape, isWriteTarget);
 				if (kind != null) {
 					final bindingSpan:Null<Span> = (kind == RefKind.Decl)
 						? span
@@ -67,7 +73,12 @@ final class Refs {
 				}
 			}
 		}
-		for (c in node.children) walk(target, c, shape, scopes, out);
+		final isWriteParent:Bool = shape.writeParentKinds.contains(node.kind);
+		final children:Array<QueryNode> = node.children;
+		for (i in 0...children.length) {
+			final childIsWriteTarget:Bool = isWriteParent && i == 0;
+			walk(target, children[i], shape, scopes, out, childIsWriteTarget);
+		}
 		if (isScope) scopes.pop();
 	}
 
@@ -101,12 +112,12 @@ final class Refs {
 		for (c in node.children) collectInto(target, c, shape, frame);
 	}
 
-	private static inline function classify(kind:String, shape:RefShape):Null<RefKind> {
+	private static inline function classify(kind:String, shape:RefShape, isWriteTarget:Bool):Null<RefKind> {
 		// Decl-host takes precedence over identKind: a single grammar
 		// would normally place the decl name on a different ctor than
 		// the reference ctor, but the contract leaves the option open.
 		if (shape.declHostKinds.contains(kind)) return RefKind.Decl;
-		if (kind == shape.identKind) return RefKind.Read;
+		if (kind == shape.identKind) return isWriteTarget ? RefKind.Write : RefKind.Read;
 		return null;
 	}
 }
@@ -120,10 +131,9 @@ final class Refs {
  *
  * `bindingSpan` is the span of the declaration this hit resolves to:
  *  - Decl hits self-bind (`bindingSpan == span`).
- *  - Read hits point to the innermost enclosing decl with a matching
- *    name, or null when unresolved (cross-file / implicit-`this` /
- *    grammar-gap on the binding's decl site).
- *  - Write hits (reserved for 3.3) follow the same rule as Read.
+ *  - Read / Write hits point to the innermost enclosing decl with a
+ *    matching name, or null when unresolved (cross-file / implicit-
+ *    `this` / grammar-gap on the binding's decl site).
  */
 @:nullSafety(Strict)
 final class RefHit {
@@ -144,9 +154,9 @@ final class RefHit {
 /**
  * Reference classification per `docs/cli-query-tool.md` JSON schema.
  *
- * Phase 3.2 emits `Decl` and `Read` only. `Write` is reserved for
- * Slice 3.3 (assign-parent detection); 3.2 callers asking for
- * `--writes` get an empty result.
+ * Phase 3.3 emits all three variants. `Write` covers any `identKind`
+ * that sits at child-index 0 of a `RefShape.writeParentKinds` ctor —
+ * see the walker docstring for the propagation rule.
  */
 enum abstract RefKind(Int) {
 	final Decl = 0;

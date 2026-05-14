@@ -13,16 +13,23 @@ import anyparse.runtime.Span;
 using Lambda;
 
 /**
- * Phase 3.1 probe — `Refs.find` walks a parsed QueryNode tree and
- * collects every name-matching hit classified as `decl` / `read` per
- * the plugin's `RefShape`.
+ * `Refs.find` walks a parsed QueryNode tree and collects every name-
+ * matching hit classified as `decl` / `read` / `write` per the
+ * plugin's `RefShape`.
  *
- * Covers:
- *  - Bare identifier read collection.
- *  - VarStmt / FnDecl / ClassDecl decl-host detection.
- *  - HxParam binding via the `Required` enum-ctor name slot.
+ * Covers across Phase 3.1 → 3.3:
+ *  - Bare identifier read collection (3.1).
+ *  - VarStmt / FnDecl / ClassDecl decl-host detection (3.1).
+ *  - HxParam binding via the `Required` enum-ctor name slot (3.1).
  *  - Field-access exclusion: `obj.foo` is `FieldAccess`, not
- *    `IdentExpr`; only the receiver `obj` qualifies as a read.
+ *    `IdentExpr`; only the receiver `obj` qualifies as a read (3.1).
+ *  - Lexical scope: inner local shadows outer field; function
+ *    bodies do not cross-resolve; read `bindingSpan` points at the
+ *    innermost enclosing decl (3.2).
+ *  - Write classification: direct `IdentExpr` child of an assign
+ *    ctor (bare / compound / null-coalescing) reclassifies to Write;
+ *    nested LHS shapes (`FieldAccess`, `IndexAccess`) keep their
+ *    inner identifiers as Reads (3.3).
  */
 class ApqRefsTest extends Test {
 
@@ -167,6 +174,83 @@ class ApqRefsTest extends Test {
 		final boundTo:Null<Span> = read.bindingSpan;
 		Assert.notNull(boundTo);
 		if (boundTo != null) Assert.equals(field.span.from, boundTo.from, 'method-body read resolves to class field');
+	}
+
+	public function testBareAssignClassifiedAsWrite():Void {
+		// `x = 1` — LHS is a direct IdentExpr child of Assign → Write.
+		final source:String = 'class X { static function f():Void { var x:Int = 0; x = 1; } }';
+		final hits:Array<RefHit> = findIn(source, 'x');
+		final decls:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		final writes:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Write);
+		final reads:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
+		Assert.equals(1, decls.length, 'one VarStmt decl — got ${describe(hits)}');
+		Assert.equals(1, writes.length, 'one Assign LHS write — got ${describe(hits)}');
+		Assert.equals(0, reads.length, 'Assign LHS must not double as a Read — got ${describe(hits)}');
+		final boundTo:Null<Span> = writes[0].bindingSpan;
+		Assert.notNull(boundTo);
+		if (boundTo != null) Assert.equals(decls[0].span.from, boundTo.from, 'write binds to var decl');
+	}
+
+	public function testCompoundAssignClassifiedAsWrite():Void {
+		// `x += 1` — LHS is a direct IdentExpr child of AddAssign → Write.
+		final source:String = 'class X { static function f():Void { var x:Int = 0; x += 1; } }';
+		final hits:Array<RefHit> = findIn(source, 'x');
+		final writes:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Write);
+		final reads:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
+		Assert.equals(1, writes.length, 'compound assign LHS classified as Write — got ${describe(hits)}');
+		Assert.equals(0, reads.length, 'compound assign LHS not classified as Read — got ${describe(hits)}');
+	}
+
+	public function testNullCoalAssignClassifiedAsWrite():Void {
+		// `x ??= 1` — last entry in writeParentKinds; confirms the full list
+		// participates, not just the leading `Assign` entry.
+		final source:String = 'class X { static function f():Void { var x:Null<Int> = null; x ??= 1; } }';
+		final hits:Array<RefHit> = findIn(source, 'x');
+		final writes:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Write);
+		Assert.equals(1, writes.length, 'NullCoalAssign LHS classified as Write — got ${describe(hits)}');
+	}
+
+	public function testFieldAccessLhsKeepsTargetUnaffected():Void {
+		// `obj.x = 1` — LHS is FieldAccess, not IdentExpr. There is no
+		// IdentExpr named `x` on the LHS (field name lives on FieldAccess's
+		// HxIdentLit slot, not a child node), so a search for `x` after the
+		// inner-scope `var x` decl returns the decl and zero Writes.
+		final source:String = 'class X { static function f():Void { var obj:Dynamic = null; var x:Int = 0; obj.x = 1; } }';
+		final hits:Array<RefHit> = findIn(source, 'x');
+		final writes:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Write);
+		Assert.equals(0, writes.length, '`obj.x = …` must not surface a Write on `x` — got ${describe(hits)}');
+	}
+
+	public function testIndexAccessLhsKeepsInnerIdentsAsReads():Void {
+		// `arr[i] = v` — LHS is IndexAccess wrapping two IdentExprs.
+		// Write reclassification fires only for the direct child of the
+		// Assign ctor; IdentExprs nested inside IndexAccess stay as Reads.
+		final source:String = 'class X { static function f():Void { var arr:Array<Int> = []; var i:Int = 0; var v:Int = 0; arr[i] = v; } }';
+		final arrHits:Array<RefHit> = findIn(source, 'arr');
+		final iHits:Array<RefHit> = findIn(source, 'i');
+		final vHits:Array<RefHit> = findIn(source, 'v');
+		Assert.equals(0, arrHits.filter(h -> h.kind == RefKind.Write).length, '`arr` must remain Read — got ${describe(arrHits)}');
+		Assert.isTrue(arrHits.exists(h -> h.kind == RefKind.Read), '`arr` Read inside IndexAccess expected — got ${describe(arrHits)}');
+		Assert.equals(0, iHits.filter(h -> h.kind == RefKind.Write).length, '`i` must remain Read — got ${describe(iHits)}');
+		Assert.isTrue(iHits.exists(h -> h.kind == RefKind.Read), '`i` Read inside IndexAccess expected — got ${describe(iHits)}');
+		Assert.equals(0, vHits.filter(h -> h.kind == RefKind.Write).length, '`v` on the RHS must remain Read — got ${describe(vHits)}');
+		Assert.isTrue(vHits.exists(h -> h.kind == RefKind.Read), '`v` Read on RHS expected — got ${describe(vHits)}');
+	}
+
+	public function testWriteBindingSpanResolvesInnermost():Void {
+		// Outer field + inner local with same name; inner `x = 1` binds to
+		// the inner local, not the outer field. Same shadowing rule as
+		// Reads — Slice 3.3 reuses Read's resolveInnermost path.
+		final source:String = 'class X { var x:Int = 0; static function f():Void { var x:Int = 0; x = 1; } }';
+		final hits:Array<RefHit> = findIn(source, 'x');
+		final decls:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		final writes:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Write);
+		Assert.equals(2, decls.length, 'field + local decls — got ${describe(hits)}');
+		Assert.equals(1, writes.length, 'one inner write — got ${describe(hits)}');
+		final innerDecl:RefHit = decls[1];
+		final boundTo:Null<Span> = writes[0].bindingSpan;
+		Assert.notNull(boundTo);
+		if (boundTo != null) Assert.equals(innerDecl.span.from, boundTo.from, 'write binds to INNER local, not outer field');
 	}
 
 	public function testDeclSelfBinding():Void {

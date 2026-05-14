@@ -73,16 +73,30 @@ interface GrammarPlugin {
  * enclosing frames. A kind can simultaneously be a scope-introducer,
  * a decl-host, and an ident — the three roles are orthogonal.
  *
- * Phase 3.2 scope: lexical scope-aware resolution. Read hits carry
- * the resolved binding's span (innermost enclosing decl with matching
- * name); unresolved reads carry null. Write classification via
- * assign-parent context (3.3) and plugin-contract enrichment for
- * transparent-struct decl sites (3.2b) layer on top without breaking
- * this shape.
+ * `writeParentKinds` is the set of node kinds whose first positional
+ * child, when an `identKind` node, is a write target rather than a
+ * read. The walker reclassifies that child's hit from `Read` to
+ * `Write`. The "first positional child" rule is intentional and
+ * implicit — sufficient for assign-style ctors in curly-brace
+ * grammars (e.g. `Assign(left, right)`, `AddAssign(left, right)`)
+ * where the LHS is the binding being modified. Nested LHS shapes
+ * (`FieldAccess`, `IndexAccess`, paren-wrapped, etc.) deliberately
+ * do not trigger a Write reclassification on inner identifiers —
+ * those inner identifiers remain Reads, which matches semantic
+ * expectation (`arr[i] = v` reads `arr` and `i`, writes `arr[i]`;
+ * `obj.x = 1` reads `obj`, writes `obj.x`).
+ *
+ * Phase 3.3 scope: write classification via parent-kind context.
+ * Compound assignments (`x += 1`) are classified as `Write` —
+ * `RefKind` carries one classification per hit; the read-then-write
+ * semantics of compound assigns folds into the `--writes` query
+ * intent. Plugin-contract enrichment for transparent-struct decl
+ * sites (3.2b) layers on top without breaking this shape.
  */
 @:nullSafety(Strict)
 typedef RefShape = {
 	var identKind:String;
 	var declHostKinds:Array<String>;
 	var scopeKinds:Array<String>;
+	var writeParentKinds:Array<String>;
 }

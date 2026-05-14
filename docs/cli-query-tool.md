@@ -78,6 +78,8 @@ apq refs --decls <name> <files>      # only declaration positions
 
 Scope awareness is lexical only: a local declaration shadows an outer name with the same identifier, and the tool correctly attributes references to the innermost binding. No type-based resolution. No cross-file resolution.
 
+Write classification is based on parent-context: an identifier reference is a `write` when it sits as the direct first operand of an assignment-shaped node declared by the grammar plugin (bare, compound, and null-coalescing assignments all qualify). Identifiers nested deeper on the LHS — e.g. inside field access or index access — remain `read`s, matching the semantic intent of the `--writes` query (the modified binding is the host, not the inner operands). Each LHS occurrence produces one hit: compound assignments (`x += 1`) are reported as a single `write` — the implicit read on the LHS is not emitted as a separate hit.
+
 ### `apq meta`
 
 Shortcut for "find declarations carrying a specific metadata annotation". Technically expressible as a `search` query, but common enough to deserve a first-class command.
@@ -230,14 +232,14 @@ Binding keys drop the leading `$` — pattern metavariable `$X` produces JSON ke
 ```
 
 The optional `binding` field carries the span of the declaration this hit
-resolves to. Declarations self-bind (`binding == span`). Reads point to the
-innermost enclosing in-file declaration with a matching name. The field is
-omitted when a read is unresolved — typically a cross-file reference, an
-inherited member from a base type, or a grammar gap where the decl site
-lives on a transparent struct field that does not surface as its own AST
-node (e.g. for-loop iterators, catch-clause exceptions, or lambda parameters
-in grammars that keep these names inside parent structs rather than on
-dedicated nodes).
+resolves to. Declarations self-bind (`binding == span`). Reads and writes
+point to the innermost enclosing in-file declaration with a matching name.
+The field is omitted when a read or write is unresolved — typically a
+cross-file reference, an inherited member from a base type, or a grammar
+gap where the decl site lives on a transparent struct field that does not
+surface as its own AST node (e.g. for-loop iterators, catch-clause
+exceptions, or lambda parameters in grammars that keep these names inside
+parent structs rather than on dedicated nodes).
 
 #### `meta`
 
