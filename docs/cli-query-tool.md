@@ -222,11 +222,22 @@ Binding keys drop the leading `$` — pattern metavariable `$X` produces JSON ke
     "file": "path/to/input",
     "kind": "read" | "write" | "decl",
     "span": Span,
-    "name": "the_symbol"
+    "name": "the_symbol",
+    "binding": Span                          // optional; see below
   },
   ...
 ]
 ```
+
+The optional `binding` field carries the span of the declaration this hit
+resolves to. Declarations self-bind (`binding == span`). Reads point to the
+innermost enclosing in-file declaration with a matching name. The field is
+omitted when a read is unresolved — typically a cross-file reference, an
+inherited member from a base type, or a grammar gap where the decl site
+lives on a transparent struct field that does not surface as its own AST
+node (e.g. for-loop iterators, catch-clause exceptions, or lambda parameters
+in grammars that keep these names inside parent structs rather than on
+dedicated nodes).
 
 #### `meta`
 

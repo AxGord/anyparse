@@ -54,12 +54,17 @@ final class Json {
 
 	public static function renderRefs(entries:Array<{file:String, source:String, hits:Array<RefHit>}>):String {
 		final out:Array<AstRefHit> = [];
-		for (entry in entries) for (h in entry.hits) out.push({
-			file: entry.file,
-			kind: h.kind.toString(),
-			span: spanToJson(h.span, entry.source),
-			name: h.name,
-		});
+		for (entry in entries) for (h in entry.hits) {
+			final bindingSpan:Null<Span> = h.bindingSpan;
+			final hit:AstRefHit = {
+				file: entry.file,
+				kind: h.kind.toString(),
+				span: spanToJson(h.span, entry.source),
+				name: h.name,
+			};
+			if (bindingSpan != null) hit.binding = spanToJson(bindingSpan, entry.source);
+			out.push(hit);
+		}
 		final envelope:AstRefHits = {hits: out};
 		return AstRefHitsWriter.write(envelope, JsonFormat.instance.defaultWriteOptions) + '\n';
 	}

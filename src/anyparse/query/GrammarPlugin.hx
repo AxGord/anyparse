@@ -54,7 +54,7 @@ interface GrammarPlugin {
 
 /**
  * Plugin-declared contract for `apq refs`. The walker reads these
- * three slots and never inspects grammar-specific node types.
+ * slots and never inspects grammar-specific node types.
  *
  * `identKind` is the `QueryNode.kind` value the plugin produces for a
  * bare identifier reference (e.g. `'IdentExpr'` for Haxe). Each such
@@ -66,13 +66,23 @@ interface GrammarPlugin {
  * takes precedence over identifier detection when a kind appears in
  * both sets.
  *
- * Phase 3.1 scope: name-only matches without lexical-scope analysis.
- * Read-vs-write classification (`HxExpr.Assign`-family detection) and
- * scope-aware shadowing are layered on top in Phase 3.2 / 3.3 without
- * breaking this shape.
+ * `scopeKinds` is the set of node kinds that introduce a fresh lexical
+ * scope (function body, block, for-loop, class body, …). The walker
+ * pushes a new frame on entering one of these and pops on exit;
+ * declarations inside the frame shadow same-named bindings in
+ * enclosing frames. A kind can simultaneously be a scope-introducer,
+ * a decl-host, and an ident — the three roles are orthogonal.
+ *
+ * Phase 3.2 scope: lexical scope-aware resolution. Read hits carry
+ * the resolved binding's span (innermost enclosing decl with matching
+ * name); unresolved reads carry null. Write classification via
+ * assign-parent context (3.3) and plugin-contract enrichment for
+ * transparent-struct decl sites (3.2b) layer on top without breaking
+ * this shape.
  */
 @:nullSafety(Strict)
 typedef RefShape = {
 	var identKind:String;
 	var declHostKinds:Array<String>;
+	var scopeKinds:Array<String>;
 }

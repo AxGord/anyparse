@@ -51,7 +51,13 @@ final class Text {
 		final buf:StringBuf = new StringBuf();
 		for (h in hits) {
 			final pos:Position = h.span.lineCol(source);
-			buf.add('$file:${pos.line}:${pos.col - 1}: [${h.kind.toString()}] ${h.name}\n');
+			buf.add('$file:${pos.line}:${pos.col - 1}: [${h.kind.toString()}] ${h.name}');
+			final bindingSpan:Null<Span> = h.bindingSpan;
+			if (bindingSpan != null && bindingSpan.from != h.span.from) {
+				final bp:Position = bindingSpan.lineCol(source);
+				buf.add(' -> ${bp.line}:${bp.col - 1}');
+			}
+			buf.add('\n');
 		}
 		return buf.toString();
 	}

@@ -8,6 +8,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.Refs;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
+import anyparse.runtime.Span;
 
 using Lambda;
 
@@ -87,6 +88,99 @@ class ApqRefsTest extends Test {
 		Assert.equals('write', RefKind.Write.toString());
 	}
 
+	public function testInnerLocalShadowsClassField():Void {
+		final source:String = 'class X { var n:Int = 0; static function f():Int { var n:Int = 1; return n; } }';
+		final hits:Array<RefHit> = findIn(source, 'n');
+		final decls:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		final reads:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
+		Assert.equals(2, decls.length, 'outer field + inner local decls expected — got ${describe(hits)}');
+		Assert.equals(1, reads.length, 'one read expected — got ${describe(hits)}');
+		final outerDecl:RefHit = decls[0];
+		final innerDecl:RefHit = decls[1];
+		Assert.isTrue(innerDecl.span.from > outerDecl.span.from, 'inner decl must follow outer in source');
+		final read:RefHit = reads[0];
+		final boundTo:Null<Span> = read.bindingSpan;
+		Assert.notNull(boundTo);
+		if (boundTo != null) Assert.equals(innerDecl.span.from, boundTo.from, 'read must bind to INNER decl, not outer — got ${describe(hits)}');
+		final outerBind:Null<Span> = outerDecl.bindingSpan;
+		final innerBind:Null<Span> = innerDecl.bindingSpan;
+		if (outerBind != null) Assert.equals(outerDecl.span.from, outerBind.from, 'outer decl self-binding');
+		if (innerBind != null) Assert.equals(innerDecl.span.from, innerBind.from, 'inner decl self-binding');
+	}
+
+	public function testFunctionParamShadowsClassField():Void {
+		final source:String = 'class X { var arg:Int = 0; static function f(arg:Int):Int { return arg; } }';
+		final hits:Array<RefHit> = findIn(source, 'arg');
+		final reads:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
+		final decls:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		Assert.equals(1, reads.length, 'one read at return position — got ${describe(hits)}');
+		Assert.equals(2, decls.length, 'field decl + param decl — got ${describe(hits)}');
+		final paramDecl:RefHit = decls[1];
+		final read:RefHit = reads[0];
+		final boundTo:Null<Span> = read.bindingSpan;
+		Assert.notNull(boundTo);
+		if (boundTo != null) Assert.equals(paramDecl.span.from, boundTo.from, 'read binds to param, not class field');
+	}
+
+	public function testSiblingFunctionsDoNotCrossResolve():Void {
+		final source:String = 'class X { static function a():Int { var n:Int = 0; return n; } '
+			+ 'static function b():Int { return n; } }';
+		final hits:Array<RefHit> = findIn(source, 'n');
+		final reads:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
+		Assert.equals(2, reads.length, 'two reads expected — got ${describe(hits)}');
+		// First read is inside a(); it binds to a()'s local. Second is in
+		// b(); it cannot see a()'s local and is unresolved at file level.
+		final innerARead:RefHit = reads[0];
+		final innerBRead:RefHit = reads[1];
+		Assert.notNull(innerARead.bindingSpan, 'a()-read should bind to its local — got ${describe(hits)}');
+		Assert.isNull(innerBRead.bindingSpan, 'b()-read must NOT cross-resolve to a()-local — got ${describe(hits)}');
+	}
+
+	public function testForLoopOuterReadBindsToOuterDecl():Void {
+		// 3.2b gap acknowledged: HxForStmt.varName is absorbed and does not
+		// surface as a separate decl-host. The test asserts what 3.2 CAN
+		// verify — that an outer `i` Read at `return i` binds to the outer
+		// `var i` decl, regardless of the for-loop iterator's invisibility.
+		final source:String = 'class X { static function f():Int { var i:Int = 0; '
+			+ 'for (i in 0...10) {} return i; } }';
+		final hits:Array<RefHit> = findIn(source, 'i');
+		final decls:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		final reads:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
+		Assert.equals(1, decls.length, 'only outer var i surfaces in 3.2 — got ${describe(hits)}');
+		Assert.equals(1, reads.length, 'only the return-site read surfaces — got ${describe(hits)}');
+		final outerDecl:RefHit = decls[0];
+		final read:RefHit = reads[0];
+		final boundTo:Null<Span> = read.bindingSpan;
+		Assert.notNull(boundTo);
+		if (boundTo != null) Assert.equals(outerDecl.span.from, boundTo.from, 'return-read binds to outer var i');
+	}
+
+	public function testClassFieldResolvedFromMethodBody():Void {
+		final source:String = 'class X { var n:Int = 0; static function f():Int { return n; } }';
+		final hits:Array<RefHit> = findIn(source, 'n');
+		final reads:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
+		final decls:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		Assert.equals(1, reads.length);
+		Assert.equals(1, decls.length);
+		final field:RefHit = decls[0];
+		final read:RefHit = reads[0];
+		final boundTo:Null<Span> = read.bindingSpan;
+		Assert.notNull(boundTo);
+		if (boundTo != null) Assert.equals(field.span.from, boundTo.from, 'method-body read resolves to class field');
+	}
+
+	public function testDeclSelfBinding():Void {
+		final hits:Array<RefHit> = findIn('class Foo { static function bar():Void { var n:Int = 0; } }', 'n');
+		for (h in hits) if (h.kind == RefKind.Decl) {
+			final boundTo:Null<Span> = h.bindingSpan;
+			Assert.notNull(boundTo);
+			if (boundTo != null) {
+				Assert.equals(h.span.from, boundTo.from, 'decl bindingSpan == own span');
+				Assert.equals(h.span.to, boundTo.to);
+			}
+		}
+	}
+
 	private static function findIn(source:String, name:String):Array<RefHit> {
 		final plugin:HaxeQueryPlugin = new HaxeQueryPlugin();
 		final tree:QueryNode = plugin.parseFile(source);
@@ -95,6 +189,10 @@ class ApqRefsTest extends Test {
 	}
 
 	private static function describe(hits:Array<RefHit>):String {
-		return '[' + hits.map(h -> '${h.kind.toString()}:${h.name}@${h.span.from}-${h.span.to}').join(', ') + ']';
+		return '[' + hits.map(h -> {
+			final base:String = '${h.kind.toString()}:${h.name}@${h.span.from}-${h.span.to}';
+			final b:Null<Span> = h.bindingSpan;
+			return b == null ? base : '$base->bind@${b.from}-${b.to}';
+		}).join(', ') + ']';
 	}
 }

@@ -66,9 +66,16 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		// `FinalMember`, `FnMember`), and function-parameter bindings via
 		// `HxParam`'s three Alt branches (`Required`/`Optional`/`Rest`).
 		//
-		// Known gaps (Phase 3.2 / 3.3 plugin work — these decl sites live
-		// on struct fields whose names are absorbed into a parent slot,
-		// so they do not surface as their own `QueryNode`s):
+		// Scope kinds: every node that opens a fresh lexical scope. The
+		// walker pushes a frame on enter and pops on exit; decl-hosts
+		// found in that scope's subtree (until the next inner scope
+		// boundary) become the frame's bindings, shadowing same-named
+		// outer bindings for any Read encountered inside.
+		//
+		// Known gaps (Phase 3.2b / 3.3 plugin work — these decl sites
+		// live on struct fields whose names are absorbed into a parent
+		// slot, so they do not surface as their own `QueryNode`s and
+		// the scope walker cannot bind on them yet):
 		//  - For-loop iterator variables (`HxForStmt.varName`,
 		//    `HxForExpr.varName`).
 		//  - Catch-clause exception names (`HxCatchClause.name`).
@@ -81,6 +88,18 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 				'VarMember', 'FinalMember', 'FnMember',
 				'VarStmt', 'FinalStmt',
 				'Required', 'Optional', 'Rest',
+			],
+			// `HxCatchClause*` are typedefs (anonymous structs), not enum
+			// ctors, so they would never match QueryNode.kind. The catch
+			// body's BlockStmt covers the lexical scope; the exception-
+			// name binding itself remains a 3.2b gap (per known-gaps
+			// comment above).
+			scopeKinds: [
+				'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'TypedefDecl',
+				'FnDecl', 'FnExpr', 'FnMember',
+				'ThinParenLambdaExpr', 'ParenLambdaExpr',
+				'BlockBody', 'BlockExpr', 'BlockStmt',
+				'ForStmt', 'ForExpr',
 			],
 		};
 	}
