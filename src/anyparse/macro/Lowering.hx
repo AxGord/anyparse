@@ -2915,6 +2915,17 @@ class Lowering {
 		} else {
 			macro {};
 		};
+		// ω-trivia-trailing-before-sep: capture trailing same-line comment
+		// BEFORE the optional sep-match. Source shape `elem /*c*/, next`
+		// previously broke sep-match (`,` not found after h-ws skip stops
+		// at `/`) and then `collectTrailing` consumed `/*c*/` AFTER the
+		// failed sep-match — the `,` was never matched and the next
+		// iteration's element parse failed on `,`. Reorder: first probe
+		// `collectTrailing` (rewinds on miss), then run sep-match. The
+		// post-sep `collectTrailing` still fires when the source carried
+		// the trailing after the sep (`elem, // c\n`) — covered by the
+		// `_trailingBeforeSep == null && _sepAfter` gate so we don't
+		// double-capture.
 		parseSteps.push(macro {
 			while (true) {
 				final _lead = collectTrivia(ctx);
@@ -2924,9 +2935,10 @@ class Lowering {
 					break;
 				}
 				final _node:$elemCT = $elemCall;
+				final _trailingBeforeSep:Null<String> = collectTrailing(ctx);
 				var _sepAfter:Bool = true;
 				$sepMatchExpr;
-				final _trailing:Null<String> = collectTrailing(ctx);
+				final _trailing:Null<String> = _trailingBeforeSep ?? (_sepAfter ? collectTrailing(ctx) : null);
 				$accumRef.push({
 					blankBefore: _lead.blankBefore,
 					blankAfterLeadingComments: _lead.blankAfterLeadingComments,
