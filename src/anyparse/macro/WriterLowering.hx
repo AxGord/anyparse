@@ -6892,12 +6892,19 @@ class WriterLowering {
 					_ti++;
 				}
 				final _hasTrivia:Bool = _requiresHardline || _hasSourceNewlines;
-				// ω-keep-objectlit: Keep emit gate. Fires when the wrap-rules
-				// runtime mode is Keep AND no comments/blanks force hardline
-				// (the comment+blank case falls back to legacy force-multi
-				// because Keep emit lives in the force-multi branch; the
-				// cascade-emits-comments path is reserved for Ignore mode).
-				final _keepEmit:Bool = $keepCheckExpr && !_requiresHardline;
+				// ω-keep-relax-gate: Keep emit gate. Fires whenever the
+				// wrap-rules runtime mode is Keep — comments and blanks no
+				// longer block Keep semantics. The force-multi loop below
+				// emits leadingComments/trailingComment + blanks per
+				// element, and the per-element swap honours source
+				// `newlineBefore` for inter-element breaks. Syntactic
+				// invariant: a line-trailing `// ...` comment ends the
+				// source line, so the next element always carries
+				// `newlineBefore=true` and gets `_dhl()` from the swap —
+				// no risk of `_dt(' ')` cuddling content after a `//`.
+				// The cascade-emits-comments path remains reserved for
+				// Ignore mode (`_hasInlineableTrivia` bucket).
+				final _keepEmit:Bool = $keepCheckExpr;
 				if (_hasTrivia) {
 					final _inner:Array<anyparse.core.Doc> = [];
 					$initCurrDocCommentExpr;
