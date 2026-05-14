@@ -67,6 +67,6 @@ typedef HxAbstractDecl = {
 	@:kw('abstract') var name:HxIdentLit;
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var typeParams:Null<Array<HxTypeParamDecl>>;
 	@:lead('(') @:trail(')') var underlyingType:HxType;
-	@:fmt(padLeading, lineLengthAwareSeps) var clauses:Array<HxAbstractClause>;
+	@:trivia @:tryparse @:fmt(padLeading, lineLengthAwareSeps) var clauses:Array<HxAbstractClause>;
 	@:fmt(leftCurly, emptyCurlyBreak, beginEndType, afterFieldsWithDocComments, existingBetweenFields, beforeDocCommentEmptyLines, blankBeforeFinalDocCommentInLeading, blankBeforeOrphanLineCommentTrail, interMemberBlankLines('member', 'VarMember', 'FnMember'), staticVarSubdivision, betweenMultilineCommentsBlanks) @:lead('{') @:trail('}') @:trivia var members:Array<HxMemberDecl>;
 }

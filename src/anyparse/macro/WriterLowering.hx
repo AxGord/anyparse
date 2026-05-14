@@ -1751,7 +1751,7 @@ class WriterLowering {
 					emitWriterStarField(
 						child, macro _optVal, innerParts,
 						child == node.children[node.children.length - 1],
-						typePath, isFirstField, isRaw, stalePrevBareRefBody
+						typePath, isFirstField, isRaw, stalePrevBareRefBody, prevTrailFieldName
 					);
 					// ω-typeparam-spacing: when the typeParamOpen=Before/Both
 					// path injects a leading-space Doc into innerParts, the
@@ -1862,7 +1862,7 @@ class WriterLowering {
 						: macro ($prev && $fieldAccess.length > 0) ? _dt(' ') : _de();
 					parts.push(withPadTrailingDrop(prevPadTrailing, baseExpr));
 				}
-				emitWriterStarField(child, fieldAccess, parts, child == node.children[node.children.length - 1], typePath, isFirstField, isRaw, stalePrevBareRefBody);
+				emitWriterStarField(child, fieldAccess, parts, child == node.children[node.children.length - 1], typePath, isFirstField, isRaw, stalePrevBareRefBody, prevTrailFieldName);
 				if (isBareTryparseStar(child)) {
 					final thisNonEmpty:Expr = macro $fieldAccess.length > 0;
 					prevAnyStarNonEmpty = prevAnyStarNonEmpty == null
@@ -2954,7 +2954,8 @@ class WriterLowering {
 	private function emitWriterStarField(
 		starNode:ShapeNode, fieldAccess:Expr, parts:Array<Expr>,
 		isLastField:Bool, typePath:String, isFirstField:Bool, isRaw:Bool,
-		prevBareRefBody:Null<PrevBodyInfo> = null
+		prevBareRefBody:Null<PrevBodyInfo> = null,
+		prevTrailFieldName:Null<String> = null
 	):Void {
 		final inner:ShapeNode = starNode.children[0];
 		if (inner.kind != Ref)
@@ -3218,6 +3219,20 @@ class WriterLowering {
 				// `HxConditionalDecl.body`) opted in via the metas drives the
 				// blank-line cascade between its sibling elements.
 				final cascadeInfos:CascadeInfos = readCascadeInfosFromStar(starNode, elemRefName);
+				// ω-trivia-tryparse-linelength: when the Star carries
+				// `@:fmt(lineLengthAwareSeps)`, swap inter-element + padLeading
+				// hard spaces for `_dile` probes + wrap in `_dn(_cols, ...)`.
+				// Sister to the non-trivia bare-Star `padLeading||padTrailing`
+				// branch's lineLengthAware path.
+				final tryparseLineLengthAware:Bool = starNode.fmtHasFlag('lineLengthAwareSeps');
+				// ω-trivia-tryparse-prior-after-trail: when the PREV sibling
+				// field has a synthesised `<priorField>AfterTrail:Null<String>`
+				// slot (mandatory Ref with `@:trail` in trivia-bearing mode),
+				// thread its access so the Star can inline-emit the captured
+				// trail-of-prev-field comment cuddled to the prev token.
+				final tryparsePriorAfterTrailExpr:Null<Expr> = prevTrailFieldName == null
+					? null
+					: {expr: EField(macro value, prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX), pos: Context.currentPos()};
 				parts.push(triviaTryparseStarExpr(
 					fieldAccess, elemFn, sepExpr, sameLineName != null, nestBody,
 					tryparseTrailBB, tryparseTrailLC, tryparseTrailBA, firstSepOverride, subsequentSepOverride,
@@ -3227,7 +3242,9 @@ class WriterLowering {
 					cascadeInfos.betweenCtorInfos, cascadeInfos.transitionAcrossInfos,
 					cascadeInfos.headCtorInfos,
 					metaLineEndOptField,
-					cascadeInfos.betweenSameCtorIfNotInfos
+					cascadeInfos.betweenSameCtorIfNotInfos,
+					tryparseLineLengthAware,
+					tryparsePriorAfterTrailExpr
 				));
 				return;
 			}
@@ -4506,7 +4523,15 @@ class WriterLowering {
 		// `leftCurly('anonFunctionLeftCurly')`) keeps the `_dt(' ')` Same
 		// default — the pre-slice heuristic that switched to `_de()` on
 		// any knob-form was tuned for the first-field-Star site only.
-		final defaultExpr:Expr = optSpaceUpstream ? macro _de() : macro _dt(' ');
+		// ω-trivia-tryparse-linelength: switch the `Same` (and `Keep` / non-
+		// `Next`) default from hard `_dt(' ')` to `_dossh()`
+		// (OptSpaceSkipAfterHardline) so a preceding hardline (e.g. our
+		// lineLengthAware-emitted trail-terminator after a trailing line
+		// comment) drops the space, leaving the next `{` at base indent
+		// without a leading space (`\n{` instead of `\n {`). Flat-mode
+		// width is identical (1) so layout decisions stay byte-identical
+		// outside the after-hardline state; `Next` branch unaffected.
+		final defaultExpr:Expr = optSpaceUpstream ? macro _de() : macro _dossh();
 		final cases:Array<Case> = [
 			{values: [nextPat], expr: macro _dhl(), guard: null},
 		];
@@ -7514,7 +7539,9 @@ class WriterLowering {
 		transitionAcrossInfos:Array<TransitionAcrossInfo> = null,
 		headCtorInfos:Array<HeadCtorBlankInfo> = null,
 		metaLineEndOptField:Null<String> = null,
-		betweenSameCtorIfNotInfos:Array<BetweenSameCtorIfNotInfo> = null
+		betweenSameCtorIfNotInfos:Array<BetweenSameCtorIfNotInfo> = null,
+		lineLengthAwareSeps:Bool = false,
+		priorAfterTrailExpr:Null<Expr> = null
 	):Expr {
 		// ω-bug-2c-inner-star — cascade emit for the tryparse-Star path.
 		// Cascade trackers + cascade-fire blank count come from
@@ -7672,6 +7699,54 @@ class WriterLowering {
 		};
 		final padLeadingExpr:Expr = macro $v{padLeading};
 		final padTrailingExpr:Expr = macro $v{padTrailing};
+		// ω-trivia-tryparse-linelength: when the Star carries
+		// `@:fmt(lineLengthAwareSeps)`, swap hard `_dt(' ')` separators
+		// (padLeading + inter-element default sep) for `_dile(opt.lineWidth,
+		// _dhl(), _dt(' '))` probes that decide flat-vs-break per the
+		// enclosing Group's line-length verdict, and wrap the final `_docs`
+		// in `_dn(_cols, _dc(_docs))` so break-mode hardlines indent +1.
+		// Mirrors the non-trivia bare-Star `padLeading||padTrailing` branch
+		// (WriterLowering.hx:3684-3708). First consumer: HxAbstractDecl.clauses
+		// after the @:trivia @:tryparse flip — closes wrap regressions
+		// (issue_364) under the trivia path that the non-trivia branch
+		// already handled via lineLengthAwareSeps.
+		final padLeadingSpaceDoc:Expr = lineLengthAwareSeps
+			? macro _dile(opt.lineWidth, _dhl(), _dt(' '))
+			: macro _dt(' ');
+		final subsequentSepDoc:Expr = lineLengthAwareSeps
+			? macro _dile(opt.lineWidth, _dhl(), _dt(' '))
+			: subsequentSepExpr;
+		// ω-trivia-tryparse-prior-after-trail: when the Star's PREVIOUS
+		// sibling field was a mandatory Ref carrying `@:trail` in trivia-
+		// bearing mode, its synth `<priorField>AfterTrail:Null<String>`
+		// slot holds the same-line `// comment` (stripped delimiters)
+		// that landed right after the trail literal. The non-trivia bare-
+		// Star path discards this — only `bodyPolicyWrap`-tagged Refs
+		// previously consumed it (WriterLowering.hx:2379). Inline-emit
+		// before padLeading so the trail-of-prev-field comment cuddles to
+		// the prev token visually. Null when caller did not thread the
+		// slot (default no-op).
+		final priorAfterTrailEmit:Expr = priorAfterTrailExpr == null
+			? macro {}
+			: macro {
+				final _pat:Null<String> = $priorAfterTrailExpr;
+				if (_pat != null) _docs.push(trailingCommentDoc(_pat, opt));
+			};
+		// ω-trivia-tryparse-linelength: when the LAST element carries a
+		// same-line `// trail`, the line comment runs until next physical
+		// `\n` — without a terminator the next field's lead literal would
+		// inline INSIDE the comment. Emit `_dhl()` OUTSIDE the Nest wrap
+		// (else next field's `{` lands at +1 indent). The terminator sits
+		// at base indent so the next field's leftCurlySeparator decides
+		// placement independently. Gated by `lineLengthAwareSeps` — non-
+		// opt-in callers stay byte-identical (`_de()` no-op).
+		final finalWrapDocs:Expr = lineLengthAwareSeps
+			? macro _dc([
+				_dn(_cols, _dc(_docs)),
+				(_arr.length > 0 && _arr[_arr.length - 1].trailingComment != null) ? _dhl() : _de()
+			])
+			: macro _dc(_docs);
+		final lastTrailTerminatorEmit:Expr = macro {};
 		// ω-metadata-line-end-function: runtime `_metaPolicy:Int` read from
 		// `opt.<metaLineEndOptField>` (default 0 = None when the flag is
 		// absent, byte-identical to pre-slice). Drives inter-element sep
@@ -7724,10 +7799,12 @@ class WriterLowering {
 			final _padHardline:Bool = (_padLeading || _padTrailing) && _arr.length > 0 && _arr[0].newlineBefore;
 			final _metaPolicy:Int = $metaPolicyExpr;
 			if (_arr.length == 0 && _trailLC.length == 0) _de() else {
+				final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 				final _docs:Array<anyparse.core.Doc> = [];
 				$cascadeInitPrev;
 				$cascadeHeadEmit;
-				if (_padLeading && _arr.length > 0) _docs.push(_padHardline ? _dhl() : _dt(' '));
+				$priorAfterTrailEmit;
+				if (_padLeading && _arr.length > 0) _docs.push(_padHardline ? _dhl() : $padLeadingSpaceDoc);
 				var _si:Int = 0;
 				while (_si < _arr.length) {
 					final _t = _arr[_si];
@@ -7782,7 +7859,7 @@ class WriterLowering {
 							_bli++;
 						}
 					} else if (_si > 0) {
-						_docs.push($subsequentSepExpr);
+						_docs.push($subsequentSepDoc);
 					} else if (_sepFirst) {
 						_docs.push($firstSepExpr);
 					}
@@ -7794,6 +7871,16 @@ class WriterLowering {
 				}
 				if (_padTrailing && _arr.length > 0) _docs.push(_padHardline ? _dhl() : _dt(' '));
 				else if (_metaPolicy != 0 && _arr.length > 0) _docs.push(_dhl());
+				// ω-trivia-tryparse-linelength: when the LAST element carries
+				// a same-line `// trail`, a `//` line comment runs until the
+				// next physical newline, so an inline ` ` separator before
+				// the next sibling's lead literal (`{`/`}`/...) would inline
+				// that sibling INSIDE the comment. Emit a terminating
+				// hardline so the next field's lead lands on its own line.
+				// Gated by `lineLengthAwareSeps` so non-opt-in callers stay
+				// byte-identical. First consumer: HxAbstractDecl.clauses
+				// terminating the last-clause trail before members `{` lead.
+				$lastTrailTerminatorEmit;
 				// Trail comments collected into a separate Doc array so the
 				// nestBody branch can render them at parent indent when the
 				// body has stmts (issue_392): a `// comment` on its own line
@@ -7818,7 +7905,6 @@ class WriterLowering {
 					// the empty line is trimmed by the renderer (default).
 					if (_trailBA) _trailDocs.push(_dhl());
 				}
-				final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 				// ω-force-flat-engine sister-coverage: tryparse Star is used
 				// for inner-Star bodies (case bodies, `HxConditionalDecl.body`)
 				// which can sit under wrap-cascade Flatten parents in expression
@@ -7845,7 +7931,7 @@ class WriterLowering {
 					}
 				} else {
 					for (_d in _trailDocs) _docs.push(_d);
-					_dwb(_dc(_docs));
+					_dwb($finalWrapDocs);
 				}
 			}
 		};
