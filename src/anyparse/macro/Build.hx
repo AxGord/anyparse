@@ -7,6 +7,7 @@ import haxe.macro.ExprTools;
 import haxe.macro.Type;
 import anyparse.core.LoweringCtx;
 import anyparse.core.Mode;
+import anyparse.core.ShapeTree;
 import anyparse.macro.strategy.Bin;
 import anyparse.macro.strategy.Kw;
 import anyparse.macro.strategy.Lit;
@@ -72,6 +73,7 @@ class Build {
 		final shape:ShapeBuilder.ShapeResult = shapeBuilder.build(rootType);
 		TriviaAnalysis.run(shape);
 		if (ctx.trivia) TriviaTypeSynth.arm(shape);
+		if (ctx.spans) SpanTypeSynth.arm(shape);
 
 		#if anyparse_trivia_dump
 		for (name => node in shape.rules) {
@@ -98,12 +100,18 @@ class Build {
 
 		final rootSimple:String = simpleName(shape.root);
 		final rootNode:anyparse.core.ShapeTree.ShapeNode = shape.rules.get(shape.root);
-		final rootBearing:Bool = ctx.trivia && rootNode != null && rootNode.annotations.get('trivia.bearing') == true;
-		final rootReturnCT:ComplexType = rootBearing
-			? TPath({pack: packOf(shape.root).concat(['trivia']), name: 'Pairs', sub: rootSimple + 'T', params: []})
-			: TPath({pack: packOf(shape.root), name: rootSimple, params: []});
-		final rootFnName:String = rootBearing ? 'parse${rootSimple}T' : 'parse$rootSimple';
-		final fields:Array<Field> = Codegen.emit(rules, shape.root, rootReturnCT, formatInfo, ctx.trivia, rootFnName, ctx.spans);
+		final rootTriviaBearing:Bool = ctx.trivia && rootNode != null && rootNode.annotations.get('trivia.bearing') == true;
+		final rootSpansBearing:Bool = ctx.spans && rootNode != null && rootNode.kind != Terminal;
+		final rootReturnCT:ComplexType = if (rootSpansBearing)
+			TPath({pack: packOf(shape.root).concat(['spans']), name: 'Pairs', sub: rootSimple + 'S', params: []});
+		else if (rootTriviaBearing)
+			TPath({pack: packOf(shape.root).concat(['trivia']), name: 'Pairs', sub: rootSimple + 'T', params: []});
+		else
+			TPath({pack: packOf(shape.root), name: rootSimple, params: []});
+		final rootFnName:String = if (rootSpansBearing) 'parse${rootSimple}S';
+		else if (rootTriviaBearing) 'parse${rootSimple}T';
+		else 'parse$rootSimple';
+		final fields:Array<Field> = Codegen.emit(rules, shape.root, rootReturnCT, formatInfo, ctx.trivia, rootFnName);
 
 		#if anyparse_dump
 		final printer:haxe.macro.Printer = new haxe.macro.Printer();

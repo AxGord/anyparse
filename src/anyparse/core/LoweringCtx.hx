@@ -26,15 +26,18 @@ import anyparse.format.Format;
  *                    for those Star elements with `collectTrivia(ctx)`
  *                    calls between them. Default `false` — existing
  *                    parsers keep their bare AST shape.
- * - `spans`        — when true, the generated parser maintains a
- *                    side-channel `ctx.parseSpans:Array<Span>` and
- *                    pushes a `Span(_start, ctx.pos)` at every
- *                    enum-ctor / struct-Seq return site, in source
- *                    (post-)order. The public `parse(source)` entry
- *                    returns `{ast:T, spans:Array<Span>}` instead of
- *                    bare `T`. Consumers (e.g. the `apq` query plugin)
- *                    walk the typed AST in post-order and pop spans
- *                    from the array in lockstep. Default `false`.
+ * - `spans`        — when true, the macro synthesizes paired `*S` AST
+ *                    types (struct/enum) in `<rootPack>.spans.Pairs`
+ *                    for every non-Terminal grammar rule. Each paired
+ *                    Alt ctor gains a trailing positional `_span:Span`
+ *                    arg the generated parser populates with
+ *                    `Span(_start, ctx.pos)` at every ctor build site.
+ *                    The public `parse(source)` entry returns the
+ *                    paired root `*S` value directly; consumers
+ *                    (e.g. the `apq` query plugin) read each enum
+ *                    value's span via `Type.enumParameters` last arg.
+ *                    Default `false` — existing parsers keep their
+ *                    bare AST shape.
  *
  * Strategies are free to mutate the fields they own, but only while
  * they are in their own `lower` call — the macro framework saves and

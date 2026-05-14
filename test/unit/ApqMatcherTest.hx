@@ -76,4 +76,32 @@ class ApqMatcherTest extends Test {
 		final matches:Array<Match> = Matcher.search(pattern, tree);
 		Assert.equals(1, matches.length, 'literal `return null` must match exactly once');
 	}
+
+	/**
+	 * Slice 2.5 regression — the Phase 2 side-channel mechanism mis-attributed
+	 * spans for inner bindings reached through deeply-nested Seq/Alt hops
+	 * (Reflect-fields hash-keyed ordering on neko disagreed with parser
+	 * push order). The in-AST `_span` mechanism makes the attribution
+	 * structural: each enum value carries its own span as the trailing
+	 * `Type.enumParameters` arg, so `$x` binding to an `IdentLit("n")`
+	 * inside `if ($x != null) return $x` must carry the source span
+	 * covering `n`, not some unrelated type slot.
+	 */
+	public function testInnerBindingSpanCoversSourceText():Void {
+		final plugin:HaxeQueryPlugin = new HaxeQueryPlugin();
+		final source:String = 'class X { static function f() { if (n != null) return n; } }';
+		final pattern:Pattern = plugin.parsePattern("if ($x != null) return $x");
+		final tree:QueryNode = plugin.parseFile(source);
+		final matches:Array<Match> = Matcher.search(pattern, tree);
+		Assert.equals(1, matches.length, 'pattern must match exactly once');
+		final m:Match = matches[0];
+		final bound:Null<QueryNode> = m.bindings.get('x');
+		Assert.notNull(bound, '$$x binding must be present');
+		if (bound == null) return;
+		final span = bound.span;
+		Assert.notNull(span, '$$x binding must carry a span');
+		if (span == null) return;
+		final slice:String = source.substring(span.from, span.to);
+		Assert.equals('n', StringTools.trim(slice), 'source slice for $$x must be "n", got "$slice"');
+	}
 }

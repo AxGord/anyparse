@@ -12,32 +12,32 @@ import haxe.Exception;
  *
  * Parses with the macro-generated span-mode `HaxeModuleSpanParser` and
  * translates the typed AST into a generic `QueryNode` tree using
- * runtime type introspection (`Type` / `Reflect`). The translation
- * walks the typed AST in post-order and pops one `Span` per enum value
- * visited from the parallel `spans` array the parser populates in
- * matching post-order — see `Lowering.instrumentSpans` for the parser
- * side of the contract.
+ * runtime type introspection (`Type` / `Reflect`). The span-mode parser
+ * returns the paired `HxModuleS` typed AST directly — each enum value
+ * carries its own `_span:Span` as the trailing positional arg
+ * (`SpanTypeSynth` synthesises these on every Alt ctor).
  *
  *  - **Enum values become nodes.** `kind` is the constructor name
- *    verbatim (`ClassDecl`, `FnDecl`, `IfStmt`, …). Each enum visit
- *    pops the next span entry and attaches it to the produced
- *    `QueryNode`.
+ *    verbatim (`ClassDecl`, `FnDecl`, `IfStmt`, …). The span is read
+ *    directly from the value's last positional arg (post-Phase-2:
+ *    in-AST instead of side-channel) so Reflect ordering of struct
+ *    fields can no longer desynchronise span attribution.
  *  - **Anonymous structs are transparent.** Their fields contribute
  *    children to the enclosing enum-ctor node. A struct's `name` field
  *    (when a String) becomes the parent ctor's `name` slot.
  *  - **Arrays are transparent.** Their elements contribute children.
  *  - **Trivial-mode wrappers** (`{ node:T, leadingComments:…, … }`) are
  *    transparent on the `node` slot; the span-mode parser does not
- *    produce them, but the descent is in place for a future
- *    Trivia + span composition.
- *  - **Primitive leaves** (`String`/`Int`/`Float`/`Bool`) do not emit
- *    nodes — they are absorbed into name detection when applicable.
+ *    produce them, but the descent is in place for a future Trivia +
+ *    Spans composition.
+ *  - **Primitive leaves** (`String`/`Int`/`Float`/`Bool`/`Span`) do not
+ *    emit nodes — they are absorbed into name detection or, in the
+ *    case of `Span`, attached to the enclosing enum node.
  *
  * The root is a synthetic `module` node so users have a single
  * top-level handle in selectors and JSON output. The root carries no
- * span — `HxModule` itself is a Seq (struct) so the parser does not
- * push a span for the module rule. Its children (top-level decls)
- * carry their own spans.
+ * span — `HxModule` itself is a Seq (struct) so no enum-ctor span
+ * applies. Its children (top-level decls) carry their own spans.
  */
 @:nullSafety(Strict)
 final class HaxeQueryPlugin implements GrammarPlugin {
@@ -47,10 +47,9 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 	public function langName():String return 'haxe';
 
 	public function parseFile(source:String):QueryNode {
-		final result:{ast:HxModule, spans:Array<Span>} = HaxeModuleSpanParser.parse(source);
-		final cursor:Cursor = new Cursor(result.spans);
+		final root:Dynamic = HaxeModuleSpanParser.parse(source);
 		final children:Array<QueryNode> = [];
-		appendNodes(result.ast.decls, children, cursor);
+		appendNodes(Reflect.field(root, 'decls'), children);
 		return new QueryNode('module', null, children);
 	}
 
@@ -155,45 +154,46 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		return null;
 	}
 
-	private function appendNodes(value:Dynamic, into:Array<QueryNode>, cursor:Cursor):Void {
+	private function appendNodes(value:Dynamic, into:Array<QueryNode>):Void {
 		if (value == null) return;
 		if (value is String) return;
+		if (Std.isOfType(value, Span)) return;
 		final t:Type.ValueType = Type.typeof(value);
 		switch t {
 			case TEnum(_):
-				into.push(makeEnumNode(value, cursor));
+				into.push(makeEnumNode(value));
 			case TObject:
 				if (Reflect.hasField(value, 'node')) {
-					appendNodes(Reflect.field(value, 'node'), into, cursor);
+					appendNodes(Reflect.field(value, 'node'), into);
 					return;
 				}
 				for (field in Reflect.fields(value)) {
 					if (field == 'name' || field == 'type') continue;
-					appendNodes(Reflect.field(value, field), into, cursor);
+					appendNodes(Reflect.field(value, field), into);
 				}
 			case TClass(_):
 				if (Std.isOfType(value, Array)) {
 					final arr:Array<Dynamic> = cast value;
-					for (e in arr) appendNodes(e, into, cursor);
+					for (e in arr) appendNodes(e, into);
 				}
 			case _:
 		}
 	}
 
-	private function makeEnumNode(value:Dynamic, cursor:Cursor):QueryNode {
+	private function makeEnumNode(value:Dynamic):QueryNode {
 		final ctor:String = Type.enumConstructor(value);
 		final params:Array<Dynamic> = Type.enumParameters(value);
 		var name:Null<String> = null;
+		var span:Null<Span> = null;
 		final children:Array<QueryNode> = [];
 		for (p in params) {
+			if (Std.isOfType(p, Span)) {
+				span = cast p;
+				continue;
+			}
 			if (name == null) name = extractName(p);
-			appendNodes(p, children, cursor);
+			appendNodes(p, children);
 		}
-		// Post-order: children consumed their spans first; the enum's own
-		// span (pushed by the parser at this rule's return / left=
-		// assignment) is the next available entry. See
-		// `Lowering.instrumentSpans` for the push contract.
-		final span:Null<Span> = cursor.next();
 		return new QueryNode(ctor, name, children, span);
 	}
 
@@ -216,20 +216,5 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 			case _:
 		}
 		return null;
-	}
-}
-
-@:nullSafety(Strict)
-private class Cursor {
-	private final spans:Array<Span>;
-	private var idx:Int = 0;
-
-	public function new(spans:Array<Span>) {
-		this.spans = spans;
-	}
-
-	public function next():Null<Span> {
-		if (idx >= spans.length) return null;
-		return spans[idx++];
 	}
 }

@@ -30,13 +30,12 @@ class Codegen {
 
 	public static function emit(
 		rules:Array<GeneratedRule>, rootTypePath:String, rootReturnCT:ComplexType,
-		formatInfo:FormatReader.FormatInfo, ?trivia:Bool = false, ?rootFnName:Null<String> = null,
-		?spans:Bool = false
+		formatInfo:FormatReader.FormatInfo, ?trivia:Bool = false, ?rootFnName:Null<String> = null
 	):Array<Field> {
 		final fields:Array<Field> = [];
 		fields.push(formatInfo.isBinary
 			? binaryEntry(rootTypePath, rootReturnCT, rootFnName)
-			: publicEntry(rootTypePath, rootReturnCT, rootFnName, spans));
+			: publicEntry(rootTypePath, rootReturnCT, rootFnName));
 		for (rule in rules) {
 			for (ereg in rule.eregs) fields.push(eregField(ereg));
 			fields.push(ruleField(rule));
@@ -59,45 +58,16 @@ class Codegen {
 
 	// -------- public entry point --------
 
-	private static function publicEntry(rootTypePath:String, rootReturnCT:ComplexType, ?rootFnName:Null<String>, ?spans:Bool = false):Field {
+	private static function publicEntry(rootTypePath:String, rootReturnCT:ComplexType, ?rootFnName:Null<String>):Field {
 		final rootFn:String = rootFnName ?? 'parse${simpleName(rootTypePath)}';
 		final parseCall:Expr = {
 			expr: ECall(macro $i{rootFn}, [macro ctx]),
 			pos: Context.currentPos(),
 		};
-		// Span-mode: the public entry returns `{ast:T, spans:Array<Span>}`.
-		// The side-channel `ctx.parseSpans` is populated by every rule's
-		// instrumented return (see `Lowering.instrumentSpans`); we expose
-		// it alongside the parsed root so consumers (the apq query plugin)
-		// can walk the typed AST in post-order and pop spans in lockstep.
-		if (spans) {
-			final spansBody:Expr = macro {
-				final ctx:anyparse.runtime.Parser = new anyparse.runtime.Parser(new anyparse.runtime.StringInput(source));
-				final _v = $parseCall;
-				skipWs(ctx);
-				if (ctx.pos != ctx.input.length) {
-					throw new anyparse.runtime.ParseError(
-						new anyparse.runtime.Span(ctx.pos, ctx.pos),
-						'trailing data after value'
-					);
-				}
-				return {ast: _v, spans: ctx.parseSpans};
-			};
-			final spansRetCT:ComplexType = TAnonymous([
-				{name: 'ast', kind: FVar(rootReturnCT), pos: Context.currentPos()},
-				{name: 'spans', kind: FVar(macro : Array<anyparse.runtime.Span>), pos: Context.currentPos()},
-			]);
-			return {
-				name: 'parse',
-				access: [APublic, AStatic],
-				kind: FFun({
-					args: [{name: 'source', type: macro : String}],
-					ret: spansRetCT,
-					expr: spansBody,
-				}),
-				pos: Context.currentPos(),
-			};
-		}
+		// Span-mode (`{spans:true}`) routes the root function through the
+		// paired `*S` typed AST whose enum values each carry a `_span`
+		// arg — the public entry just forwards the value, no side-channel
+		// envelope. Trivia and plain modes share the same return shape.
 		final body:Expr = macro {
 			final ctx:anyparse.runtime.Parser = new anyparse.runtime.Parser(new anyparse.runtime.StringInput(source));
 			final _v = $parseCall;

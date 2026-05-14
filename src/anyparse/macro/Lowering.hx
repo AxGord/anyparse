@@ -46,69 +46,63 @@ class Lowering {
 
 	public function generate():Array<GeneratedRule> {
 		final rules:Array<GeneratedRule> = [];
-		// Track which generated rules belong to an Alt grammar node — those
-		// produce enum values the QueryNode walker maps to a node and so
-		// need span instrumentation. Seq (struct) and Terminal rules
-		// contribute children/leaves to their enclosing enum's QueryNode;
-		// instrumenting them would push spans the post-order walker has no
-		// QueryNode to attach to, breaking lockstep consumption.
-		final altRuleNames:Map<String, Bool> = new Map();
+		// Track which generated rules need span instrumentation. With the
+		// in-AST `_span` arg mechanism, Alt rules need their ctor build
+		// sites rewritten to append the span arg; Seq rules need the
+		// `_start` snapshot in scope so their inner ctor builds (none at
+		// top level, but Pratt-like rules called from inside Seqs share
+		// the convention) compile uniformly. Terminal rules return raw
+		// primitives and have no ctor builds — skip them so their bodies
+		// stay untouched.
+		final spanRuleNames:Map<String, Bool> = new Map();
 		for (typePath => node in shape.rules) {
 			for (rule in lowerRule(typePath, node)) {
 				rules.push(rule);
-				if (ctx.spans && node.kind == Alt) altRuleNames.set(rule.fnName, true);
+				if (ctx.spans && node.kind != Terminal) spanRuleNames.set(rule.fnName, true);
 			}
 		}
-		if (ctx.spans) for (rule in rules) if (altRuleNames.exists(rule.fnName)) rule.body = instrumentSpans(rule.body);
+		if (ctx.spans) for (rule in rules) if (spanRuleNames.exists(rule.fnName)) rule.body = instrumentSpans(rule.body);
 		return rules;
 	}
 
 	/**
-	 * ω-span-mode — when `ctx.spans=true`, walk the rule body Expr and:
+	 * ω-span-mode-inast — when `ctx.spans=true`, walk the rule body Expr
+	 * and append a `Span(_start, ctx.pos)` positional arg to every ctor
+	 * build site so the constructed paired enum value carries its own
+	 * span in-AST.
 	 *
-	 * Known Phase 2 limitation: post-order alignment between parser
-	 * push order and consumer (`HaxeQueryPlugin`) walk order depends on
-	 * the Reflect-fields ordering for anonymous typedef structs. On
-	 * neko, that ordering is hash-keyed, so spans may misalign for
-	 * deeply-nested grammars (specifically inside Pratt-built binary
-	 * expressions reached through several struct hops). The OUTERMOST
-	 * match node visited by the matcher (which corresponds to the
-	 * last-pushed span at its descent level) still receives a correct
-	 * span — so `apq search`'s `file:line:col` per match is reliable.
-	 * Inner-binding text may report the wrong source slice. Phase 3+
-	 * will replace the side-channel with `SpanTypeSynth`-driven span
-	 * fields synthesised on every grammar enum constructor.
+	 * Prepends `final _start:Int = ctx.pos;` at the body top so every
+	 * downstream ctor call sees a per-rule entry position. Pratt and
+	 * Postfix loops reuse the same `_start` for every iteration — the
+	 * span of an iteration's freshly-built composite ctor covers (rule
+	 * entry, end of the right operand), which is the correct outer
+	 * coverage (`a + b + c` produces `Add(Add(a,b), c)` whose outer
+	 * `Add`'s span covers the whole expression).
 	 *
-	 *  - prepend `final _start:Int = ctx.pos;` at the top of the body so
-	 *    every span-emit site sees a per-rule entry position;
-	 *  - inject `ctx.parseSpans.push(new Span(_start, ctx.pos))` AFTER
-	 *    every `left = $ctorCall;` assignment (Pratt-loop and Postfix-loop
-	 *    iterations build composite enum values via assignment and never
-	 *    enter a `return` statement themselves — their span has to be
-	 *    captured at the assignment site);
-	 *  - inject the same push BEFORE every `return $X;` whose returned
-	 *    expression is NOT a bare `left` identifier (`return left;` just
-	 *    yields the last assignment's value, which has already pushed its
-	 *    own span — re-pushing would duplicate). Alt branches that emit
-	 *    `return $ctorRef` / `return $ctorCall` / `return $structLit` all
-	 *    qualify and push.
+	 * Ctor build shapes the walker rewrites:
+	 *  - `return $ctorRef;` where `$ctorRef` is the EField chain to a
+	 *    paired ctor (zero-arg branches, Case 0/1). Walker wraps the
+	 *    reference into `ECall(ctorRef, [spanArg])` so the paired ctor's
+	 *    single `_span` arg is supplied.
+	 *  - `return ECall($ctorRef, [args])` — every other ctor return
+	 *    (Cases 2/3/4/5 + multi-lit dispatch + prefix). Walker appends
+	 *    the span arg to the args list.
+	 *  - `left = ECall($ctorRef, [args])` — Pratt/Postfix iteration
+	 *    composites. Walker appends the span arg.
 	 *
-	 * The push order is parser-emission post-order: deepest sub-call's
-	 * span lands first, outermost composition lands last. Consumers (the
-	 * `apq` query plugin) walk the typed AST in post-order via Reflect
-	 * and pop spans in lockstep, attaching one span per visited enum
-	 * value. Terminals (Strings/Ints) and Seq structs contribute no
-	 * enum-shaped QueryNodes — they consume no spans during the walk;
-	 * the parser sites that build them never trigger this instrumentor
-	 * (terminals have no enum-ctor build; Seq returns `$structLit` —
-	 * still instrumented and pushes — but consumed by the parent enum's
-	 * visit which produces a single QueryNode... see plugin notes for
-	 * the alignment contract).
+	 * Seq struct returns (`return $structLit`) are left untouched —
+	 * `EObjectDecl` is structurally distinct and Seq paired typedefs
+	 * carry no `_span` field (their parent enum value's span covers
+	 * them in the consumer's QueryNode model).
+	 *
+	 * `return left;` at the tail of Pratt/Postfix loops is excluded by
+	 * the `isBareLeft` guard — `left` is already a paired value built
+	 * inside the loop iterations; re-wrapping it would be wrong.
 	 *
 	 * Failed `tryBranch` attempts throw `ParseError` before reaching
-	 * their `return`/assignment, so no span is recorded for a rolled-back
-	 * branch — `tryBranch`'s own `ctx.pos = _savedPos` rollback is
-	 * enough.
+	 * the ctor build site, so no incorrect span lands on a rolled-back
+	 * branch — `tryBranch`'s own `ctx.pos = _savedPos` rollback handles
+	 * recovery.
 	 */
 	private function instrumentSpans(body:Expr):Expr {
 		final transformed:Expr = transformForSpans(body);
@@ -121,19 +115,39 @@ class Lowering {
 	private function transformForSpans(e:Expr):Expr {
 		return switch e.expr {
 			case EReturn(returnExpr) if (returnExpr != null && !isBareLeft(returnExpr)):
-				final mapped:Expr = transformForSpans(returnExpr);
-				macro {
-					final _v = $mapped;
-					ctx.parseSpans.push(new anyparse.runtime.Span(_start, ctx.pos));
-					return _v;
-				};
+				final appended:Expr = appendSpanArg(returnExpr);
+				macro return $appended;
 			case EBinop(OpAssign, lhs, rhs) if (isBareLeft(lhs)):
-				final mappedRhs:Expr = transformForSpans(rhs);
-				macro {
-					left = $mappedRhs;
-					ctx.parseSpans.push(new anyparse.runtime.Span(_start, ctx.pos));
-				};
+				final appended:Expr = appendSpanArg(rhs);
+				macro left = $appended;
 			case _: ExprTools.map(e, transformForSpans);
+		};
+	}
+
+	/**
+	 * Append `new Span(_start, ctx.pos)` as a trailing positional arg
+	 * to a ctor build expression. Three shapes:
+	 *
+	 *  - `ECall(fn, args)` — typical ctor call. Args grow by one. Note:
+	 *    this matches BOTH paired ctor calls (the intended case) AND
+	 *    helper invocations that wrap the return value, but no helper
+	 *    is ever a top-level `return`/`left=` rhs in Lowering's output
+	 *    — the only top-level shapes for those positions are ctor refs/
+	 *    calls and Seq struct literals.
+	 *  - `EField` / `EConst(CIdent)` — bare ctor reference (Case 0/1
+	 *    paths `return $ctorRef;`). Wrap into a single-arg call so the
+	 *    paired ctor's `_span` arg is supplied.
+	 *  - Anything else (EObjectDecl from Seq, the rare untouched form)
+	 *    — pass through unchanged.
+	 */
+	private function appendSpanArg(e:Expr):Expr {
+		final spanArg:Expr = macro new anyparse.runtime.Span(_start, ctx.pos);
+		return switch e.expr {
+			case ECall(fn, args):
+				{expr: ECall(fn, args.concat([spanArg])), pos: e.pos};
+			case EField(_, _) | EConst(CIdent(_)):
+				{expr: ECall(e, [spanArg]), pos: e.pos};
+			case _: e;
 		};
 	}
 
@@ -1906,12 +1920,12 @@ class Lowering {
 						expr: ECall(macro $i{parseFnName(refName)}, [macro ctx]),
 						pos: Context.currentPos(),
 					};
-					// In trivia mode a bearing ref needs the Null<XxxT> wrap
-					// around the synth `*T` — `base.fieldType` captured the
-					// plain-mode `Null<Xxx>` form at shape-analysis time so we
-					// rebuild it here when the target is bearing; otherwise the
-					// cached annotation is re-used unchanged.
-					final fieldCT:ComplexType = isTriviaBearing(refName)
+					// In trivia or span mode a bearing ref needs the Null<XxxT>
+					// / Null<XxxS> wrap around the synth pair — `base.fieldType`
+					// captured the plain-mode `Null<Xxx>` form at shape-analysis
+					// time so we rebuild it here when the target is bearing;
+					// otherwise the cached annotation is re-used unchanged.
+					final fieldCT:ComplexType = (isSpanBearing(refName) || isTriviaBearing(refName))
 						? TPath({pack: [], name: 'Null', params: [TPType(ruleReturnCT(refName))]})
 						: child.annotations.get('base.fieldType');
 					if (absentOnLits != null) {
@@ -3446,7 +3460,7 @@ class Lowering {
 		return switch child.kind {
 			case Ref:
 				final refName:String = child.annotations.get('base.ref');
-				final fnName:String = 'parse${simpleName(refName)}';
+				final fnName:String = parseFnName(refName);
 				{expr: ECall(macro $i{fnName}, [macro ctx]), pos: Context.currentPos()};
 			case Star:
 				byNameStarParseExpr(child, fieldName);
@@ -3775,15 +3789,37 @@ class Lowering {
 		return node.annotations.get('trivia.bearing') == true;
 	}
 
-	/** `parse<name>T` when trivia-bearing, else `parse<name>` — every ref fn-name site goes through this. */
-	private function parseFnName(refName:String):String {
-		final simple:String = simpleName(refName);
-		return isTriviaBearing(refName) ? 'parse${simple}T' : 'parse$simple';
+	/**
+	 * True for every Alt/Seq rule when `ctx.spans=true`. Span synthesis
+	 * pairs all non-Terminal rules so the typed AST carries spans on
+	 * every enum value (Terminals stay as primitives — no carrier).
+	 */
+	private function isSpanBearing(refName:String):Bool {
+		if (!ctx.spans) return false;
+		final node:Null<ShapeNode> = shape.rules.get(refName);
+		if (node == null) return false;
+		return node.kind != Terminal;
 	}
 
-	/** Paired `*T` ComplexType in the synth module for bearing rules; plain TPath otherwise. */
+	/**
+	 * `parse<name>S` when span-bearing, `parse<name>T` when trivia-bearing,
+	 * else `parse<name>` — every ref fn-name site goes through this.
+	 * Span and trivia modes are mutually exclusive in current consumers
+	 * (`HaxeModuleSpanParser` uses `{spans:true}` only; `HaxeModuleTriviaParser`
+	 * uses `{trivia:true}` only). Composition is a future slice.
+	 */
+	private function parseFnName(refName:String):String {
+		final simple:String = simpleName(refName);
+		if (isSpanBearing(refName)) return 'parse${simple}S';
+		if (isTriviaBearing(refName)) return 'parse${simple}T';
+		return 'parse$simple';
+	}
+
+	/** Paired `*S` / `*T` ComplexType in the synth module for bearing rules; plain TPath otherwise. */
 	private function ruleReturnCT(refName:String):ComplexType {
 		final simple:String = simpleName(refName);
+		if (isSpanBearing(refName))
+			return TPath({pack: packOf(refName).concat(['spans']), name: 'Pairs', sub: simple + 'S', params: []});
 		if (isTriviaBearing(refName))
 			return TPath({pack: packOf(refName).concat(['trivia']), name: 'Pairs', sub: simple + 'T', params: []});
 		return TPath({pack: packOf(refName), name: simple, params: []});
@@ -3792,6 +3828,8 @@ class Lowering {
 	/** Enum-constructor field-path segments for `toFieldExpr` — routes through the synth module for bearing enums. */
 	private function ruleCtorPath(typePath:String, ctor:String):Array<String> {
 		final simple:String = simpleName(typePath);
+		if (isSpanBearing(typePath))
+			return packOf(typePath).concat(['spans', 'Pairs', simple + 'S', ctor]);
 		if (isTriviaBearing(typePath))
 			return packOf(typePath).concat(['trivia', 'Pairs', simple + 'T', ctor]);
 		return packOf(typePath).concat([simple, ctor]);
