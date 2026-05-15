@@ -242,6 +242,24 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
   interp 4855, 0 regressions. This supersedes the earlier
   "Slice C — `@:meta` prefix (typedef-coverage, NOT a sweep-mover)"
   estimate: it is *the* sweep-mover.
+- **Slice F — property accessors `var x(get,set):T` (sweep-mover).
+  ✅ DONE.** New `@:peg typedef HxAccessClause = { @:sep(',')
+  @:trail(')') var ids:Array<HxIdentLit>; }` (proven `HxNewExpr.args`
+  inner shape); `HxVarDecl` gains one optional field
+  `@:optional @:lead('(') var access:Null<HxAccessClause>;` between
+  `name` and `type`. `@:lead('(')` is the optional commit point
+  (same idiom as the existing `type`/`init` optional Refs). Zero core
+  macro change; accessors parse in every `HxVarDecl` position (class
+  member, anon-struct `VarField`/`FinalField`, var statement) —
+  permissive per the `HxHeritageClause`/`HxDecl` philosophy.
+  Strip-test recon at the post-Slice-C base (198/275) found accessors
+  in 21/77 failures, the *sole/first* blocker for **15** (verified
+  clean sweep, not masking — module `#if`'s 22-file bucket strip-tested
+  as gap≠sweep and was correctly skipped). New `HxAccessorSliceTest`
+  (keyword forms + method-name accessors + `final` + anon-struct +
+  whitespace + 4-form null regression + writer round-trip). Parse-rate
+  **198/275 → 214/276 (+16)**, exceeding the +15 estimate. neko 4887 /
+  js 4884 / interp 4887, 0 regressions.
 
 **Design decision (do not re-attempt without new infrastructure):**
 the flat one-line diagnostic renderers (`Text.renderRefs` /

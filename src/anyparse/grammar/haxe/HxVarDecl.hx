@@ -10,9 +10,18 @@ package anyparse.grammar.haxe;
  * (int / bool / null / identifier) — operators, calls, and field access
  * come with the Pratt slice.
  *
- * Modifiers (`public`, `private`, `static`, …), property accessors
- * (`(default, null)`), and default values are out of scope for this
- * session.
+ * Modifiers (`public`, `private`, `static`, …) and default values are
+ * out of scope for this session.
+ *
+ * Property accessors are supported via the optional `access` field —
+ * the parenthesised `(read, write)` pair (`(get, set)`,
+ * `(default, null)`, `(get, never)`, method-name accessors). It sits
+ * between `name` and the optional `:Type`; `@:lead('(')` is the
+ * optional commit point, the inner shape lives in `HxAccessClause`.
+ * `HxVarDecl` is shared by class members, anon-struct fields, and
+ * local var statements, so accessors parse in all of those positions —
+ * acceptable under the permissive philosophy: valid non-property code
+ * never places `(` immediately after a var name.
  *
  * The `var` keyword itself and the trailing `;` live on the enclosing
  * `HxClassMember.VarMember` constructor via `@:kw` / `@:trail` — this
@@ -69,6 +78,7 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxVarDecl = {
 	var name:HxIdentLit;
+	@:optional @:lead('(') var access:Null<HxAccessClause>;
 	@:optional @:fmt(typeHintColon,
 		indentValueIfCtor('Anon', 'indentVarTypeHintAnon', 'anonTypeLeftCurly'))
 		@:lead(':') var type:Null<HxType>;

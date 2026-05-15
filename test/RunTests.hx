@@ -2,6 +2,7 @@ import unit.ArParserTest;
 import unit.DocRendererTest;
 import unit.HaxeFirstSliceTest;
 import unit.HaxeModuleSliceTest;
+import unit.HxAccessorSliceTest;
 import unit.HxAssignSliceTest;
 import unit.HxBitwiseSliceTest;
 import unit.HxExprSliceTest;
@@ -191,6 +192,7 @@ class RunTests {
 		runner.addCase(new HxAbstractSliceTest());
 runner.addCase(new HxEnumAbstractSliceTest());
 		runner.addCase(new HxHeritageSliceTest());
+		runner.addCase(new HxAccessorSliceTest());
 		runner.addCase(new HxStringSliceTest());
 		runner.addCase(new HxArrowArraySliceTest());
 		runner.addCase(new HxThinArrowSliceTest());
