@@ -31,6 +31,7 @@ package anyparse.grammar.haxe;
  * See the parallel paragraph on `HxTryCatchExpr` for the rationale.
  */
 @:peg
+@:spanned('CatchClause')
 typedef HxCatchClauseExpr = {
 	@:kw('catch') @:lead('(') var name:HxIdentLit;
 	@:lead(':') @:trail(')') var type:HxType;

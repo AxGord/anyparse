@@ -72,26 +72,22 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		// boundary) become the frame's bindings, shadowing same-named
 		// outer bindings for any Read encountered inside.
 		//
-		// Known gaps (Phase 3.2b plugin work — these decl sites live on
-		// struct fields whose names are absorbed into a parent slot, so
-		// they do not surface as their own `QueryNode`s and the scope
-		// walker cannot bind on them yet).
-		//
 		// For-loop iterator variables (`HxForStmt.varName` /
-		// `HxForExpr.varName`) ARE resolved (Phase 3.2b-alpha): the
+		// `HxForExpr.varName`) are resolved (Phase 3.2b-alpha): the
 		// `varName` alias in `extractName` surfaces the iterator on the
 		// `ForStmt` / `ForExpr` ctor's `name` slot, and both kinds are
 		// listed in `selfScopeDeclKinds` so the iterator self-binds into
 		// the loop's own scope frame, visible to reads inside the body,
 		// not after the loop.
 		//
-		// Still deferred (Phase 3.2b-beta): these decl sites live on
-		// transparent typedef-structs that carry no runtime span
-		// (SpanTypeSynth synthesises spans only on enum-ctors), so a
-		// correct per-clause / per-param binding span needs a parser-arc
-		// change and is out of scope:
-		//  - Catch-clause exception names (`HxCatchClause.name`).
-		//  - Lambda-parameter names (`HxLambdaParam.name`).
+		// Catch-clause exception names and lambda-parameter names are
+		// resolved (Phase 3.2b-beta): their grammar typedefs are tagged
+		// `@:spanned('CatchClause')` / `@:spanned('LambdaParam')`, so the
+		// paired struct carries a per-instance `_span` + `_kind` and
+		// `appendNodes` surfaces it as an addressable node. `CatchClause`
+		// is a self-scoped decl (the exception var is visible only inside
+		// the clause body, like a for-loop iterator); `LambdaParam` is a
+		// decl-host that binds into the enclosing lambda scope frame.
 		//
 		// Write-parent kinds: the 13 assignment ctors on `HxExpr` whose
 		// first positional child carries the binding being modified.
@@ -108,18 +104,22 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 				'VarMember', 'FinalMember', 'FnMember',
 				'VarStmt', 'FinalStmt',
 				'Required', 'Optional', 'Rest',
+				// Lambda-parameter binding (`@:spanned('LambdaParam')`):
+				// binds into the enclosing lambda scope frame, like a
+				// function parameter.
+				'LambdaParam',
 			],
-			// `HxCatchClause*` are typedefs (anonymous structs), not enum
-			// ctors, so they would never match QueryNode.kind. The catch
-			// body's BlockStmt covers the lexical scope; the exception-
-			// name binding itself remains a 3.2b gap (per known-gaps
-			// comment above).
+			// `CatchClause` is surfaced by `appendNodes` from the
+			// `@:spanned('CatchClause')` paired struct; it opens a scope
+			// (the clause body) and self-binds the exception name into
+			// that frame (see `selfScopeDeclKinds`).
 			scopeKinds: [
 				'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'TypedefDecl',
 				'FnDecl', 'FnExpr', 'FnMember',
 				'ThinParenLambdaExpr', 'ParenLambdaExpr',
 				'BlockBody', 'BlockExpr', 'BlockStmt',
 				'ForStmt', 'ForExpr',
+				'CatchClause',
 			],
 			writeParentKinds: [
 				'Assign',
@@ -134,6 +134,7 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 			// only inside the loop, not to enclosing-scope siblings.
 			selfScopeDeclKinds: [
 				'ForStmt', 'ForExpr',
+				'CatchClause',
 			],
 		};
 	}
@@ -250,6 +251,23 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 			case TObject:
 				if (Reflect.hasField(value, 'node')) {
 					appendNodes(Reflect.field(value, 'node'), into);
+					return;
+				}
+				// `@:spanned('<Kind>')` Seq structs carry `_kind` + `_span`
+				// (see SpanTypeSynth / Lowering ω-spanned-struct): surface
+				// them as addressable nodes instead of descending
+				// transparently, so decl-bearing transparent structs (catch
+				// clause, lambda param) resolve in `apq refs`.
+				final kindVal:Dynamic = Reflect.hasField(value, '_kind') ? Reflect.field(value, '_kind') : null;
+				final spanVal:Dynamic = Reflect.hasField(value, '_span') ? Reflect.field(value, '_span') : null;
+				if (kindVal is String && Std.isOfType(spanVal, Span)) {
+					final kindStr:String = kindVal;
+					final spanObj:Span = cast spanVal;
+					final children:Array<QueryNode> = [];
+					for (field in Reflect.fields(value)) if (field != 'name' && field != 'type' && field != '_span' && field != '_kind') {
+						appendNodes(Reflect.field(value, field), children);
+					}
+					into.push(new QueryNode(kindStr, extractName(value), children, spanObj));
 					return;
 				}
 				for (field in Reflect.fields(value)) {

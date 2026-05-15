@@ -19,6 +19,7 @@ package anyparse.grammar.haxe;
  * ctor.
  */
 @:peg
+@:spanned('CatchClause')
 typedef HxCatchClauseStmtBare = {
 	@:kw('catch') @:lead('(') var name:HxIdentLit;
 	@:lead(':') @:trail(')') var type:HxType;

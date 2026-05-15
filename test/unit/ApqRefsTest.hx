@@ -217,6 +217,116 @@ class ApqRefsTest extends Test {
 		if (boundTo != null) Assert.equals(iterDecl.span.from, boundTo.from, 'comprehension read binds to the ForExpr iterator');
 	}
 
+	public function testCatchExceptionVisibleInClauseBody():Void {
+		// 3.2b-β: the catch-clause exception name surfaces as its own
+		// `CatchClause` decl (self-scoped, like a for-loop iterator). A
+		// read inside the clause body resolves to it.
+		final source:String = 'class X { static function f():Void { try {} catch (e:String) { g(e); } } }';
+		final hits:Array<RefHit> = findIn(source, 'e');
+		final decls:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		final reads:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
+		Assert.equals(1, decls.length, 'one CatchClause exception decl — got ${describe(hits)}');
+		Assert.equals(1, reads.length, 'one read at `g(e)` — got ${describe(hits)}');
+		final clauseDecl:RefHit = decls[0];
+		final boundTo:Null<Span> = reads[0].bindingSpan;
+		Assert.notNull(boundTo);
+		if (boundTo != null) Assert.equals(clauseDecl.span.from, boundTo.from, 'body read binds to the catch-clause exception');
+	}
+
+	public function testCatchExceptionShadowsOuter():Void {
+		// An outer `var e` plus a same-named catch exception: a read inside
+		// the clause body binds to the exception (innermost frame wins),
+		// shadowing the outer decl.
+		final source:String = 'class X { static function f():Void { var e:Int = 0; '
+			+ 'try {} catch (e:String) { g(e); } } }';
+		final hits:Array<RefHit> = findIn(source, 'e');
+		final decls:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		final reads:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
+		Assert.equals(2, decls.length, 'outer var e + CatchClause exception — got ${describe(hits)}');
+		Assert.equals(1, reads.length, 'one read at `g(e)` — got ${describe(hits)}');
+		final outerDecl:RefHit = decls[0];
+		final clauseDecl:RefHit = decls[1];
+		final boundTo:Null<Span> = reads[0].bindingSpan;
+		Assert.notNull(boundTo);
+		if (boundTo != null) {
+			Assert.equals(clauseDecl.span.from, boundTo.from, 'inner read binds to the exception, not the outer var');
+			Assert.notEquals(outerDecl.span.from, boundTo.from, 'inner read must NOT bind to the shadowed outer var');
+		}
+	}
+
+	public function testCatchExceptionFallsThroughAfter():Void {
+		// The exception binds INSIDE the clause only. A `return e` AFTER
+		// the try/catch resolves to the outer `var e`, not the exception.
+		final source:String = 'class X { static function f():Int { var e:Int = 0; '
+			+ 'try {} catch (e:String) {} return e; } }';
+		final hits:Array<RefHit> = findIn(source, 'e');
+		final decls:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		final reads:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
+		Assert.equals(2, decls.length, 'outer var e + CatchClause exception — got ${describe(hits)}');
+		Assert.equals(1, reads.length, 'only the return-site read surfaces — got ${describe(hits)}');
+		final outerDecl:RefHit = decls[0];
+		final boundTo:Null<Span> = reads[0].bindingSpan;
+		Assert.notNull(boundTo);
+		if (boundTo != null) Assert.equals(outerDecl.span.from, boundTo.from, 'return-read binds to outer var e, not the exception');
+	}
+
+	public function testTwoCatchClausesDistinctBindings():Void {
+		// Two catch clauses with the same exception name: each read binds
+		// to its OWN clause (separate scope frames, distinct spans).
+		final source:String = 'class X { static function f():Void { '
+			+ 'try {} catch (e:A) { g(e); } catch (e:B) { h(e); } } }';
+		final hits:Array<RefHit> = findIn(source, 'e');
+		final decls:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		final reads:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
+		Assert.equals(2, decls.length, 'two CatchClause exception decls — got ${describe(hits)}');
+		Assert.equals(2, reads.length, 'one read per clause body — got ${describe(hits)}');
+		final firstClause:RefHit = decls[0];
+		final secondClause:RefHit = decls[1];
+		Assert.isTrue(secondClause.span.from > firstClause.span.from, 'second clause follows first in source');
+		final firstBind:Null<Span> = reads[0].bindingSpan;
+		final secondBind:Null<Span> = reads[1].bindingSpan;
+		Assert.notNull(firstBind);
+		Assert.notNull(secondBind);
+		if (firstBind != null) Assert.equals(firstClause.span.from, firstBind.from, 'first read binds to first clause');
+		if (secondBind != null) Assert.equals(secondClause.span.from, secondBind.from, 'second read binds to second clause');
+	}
+
+	public function testLambdaParamVisibleInBody():Void {
+		// 3.2b-β: a lambda parameter surfaces as a `LambdaParam` decl-host
+		// bound into the enclosing lambda scope frame; a body read of the
+		// parameter resolves to it.
+		final source:String = 'class X { static function f():Void { var fn = (x) -> x + 1; } }';
+		final hits:Array<RefHit> = findIn(source, 'x');
+		final decls:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		final reads:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
+		Assert.equals(1, decls.length, 'one LambdaParam decl — got ${describe(hits)}');
+		Assert.equals(1, reads.length, 'one read at `x + 1` — got ${describe(hits)}');
+		final paramDecl:RefHit = decls[0];
+		final boundTo:Null<Span> = reads[0].bindingSpan;
+		Assert.notNull(boundTo);
+		if (boundTo != null) Assert.equals(paramDecl.span.from, boundTo.from, 'body read binds to the lambda parameter');
+	}
+
+	public function testLambdaParamShadowsOuter():Void {
+		// An outer `var x` plus a same-named lambda parameter: a read in
+		// the lambda body binds to the parameter (innermost frame wins).
+		final source:String = 'class X { static function f():Void { var x:Int = 0; '
+			+ 'var fn = (x) -> g(x); } }';
+		final hits:Array<RefHit> = findIn(source, 'x');
+		final decls:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		final reads:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
+		Assert.equals(2, decls.length, 'outer var x + LambdaParam — got ${describe(hits)}');
+		Assert.equals(1, reads.length, 'one read at `g(x)` — got ${describe(hits)}');
+		final outerDecl:RefHit = decls[0];
+		final paramDecl:RefHit = decls[1];
+		final boundTo:Null<Span> = reads[0].bindingSpan;
+		Assert.notNull(boundTo);
+		if (boundTo != null) {
+			Assert.equals(paramDecl.span.from, boundTo.from, 'inner read binds to the lambda parameter, not the outer var');
+			Assert.notEquals(outerDecl.span.from, boundTo.from, 'inner read must NOT bind to the shadowed outer var');
+		}
+	}
+
 	public function testClassFieldResolvedFromMethodBody():Void {
 		final source:String = 'class X { var n:Int = 0; static function f():Int { return n; } }';
 		final hits:Array<RefHit> = findIn(source, 'n');

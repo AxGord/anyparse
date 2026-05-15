@@ -28,6 +28,7 @@ package anyparse.grammar.haxe;
  * defaults; only non-block bodies see the difference.
  */
 @:peg
+@:spanned('CatchClause')
 typedef HxCatchClause = {
 	@:kw('catch') @:lead('(') var name:HxIdentLit;
 	@:lead(':') @:trail(')') var type:HxType;

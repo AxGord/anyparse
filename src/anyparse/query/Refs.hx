@@ -41,9 +41,13 @@ import anyparse.runtime.Span;
  * its own `name` into the frame it opens (not the enclosing one), so a
  * Haxe `for (i in xs) …` iterator is a `Decl` visible only inside the
  * loop body. Reads inside resolve to it via the innermost frame; reads
- * after the loop fall through to any enclosing binding. Catch-clause
- * and lambda-parameter names remain unresolved (3.2b-β — they live on
- * transparent typedef-structs with no runtime span).
+ * after the loop fall through to any enclosing binding.
+ *
+ * Phase 3.2b-β scope: catch-clause exception names and lambda-parameter
+ * names. Their `@:spanned`-tagged grammar structs now surface as
+ * addressable nodes, so a catch-clause exception is a self-scoped decl
+ * (visible only inside the clause body) and a lambda parameter is a
+ * decl-host bound into the enclosing lambda scope frame.
  *
  * Nodes carrying a null `span` are skipped — without source coordinates
  * the result is not addressable.

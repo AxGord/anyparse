@@ -17,6 +17,7 @@ package anyparse.grammar.haxe;
  * sole structural path for `@:overload(function(...)` metadata args.
  */
 @:peg
+@:spanned('LambdaParam')
 typedef HxLambdaParam = {
 	var name:HxIdentLit;
 	@:optional @:fmt(typeHintColon) @:lead(':') var type:Null<HxType>;

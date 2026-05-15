@@ -2278,6 +2278,18 @@ class Lowering {
 				if (_rem != 0 && ctx.pos < ctx.input.length) ctx.pos += $v{align} - _rem;
 			});
 		}
+		// ω-spanned-struct: a Seq typedef tagged `@:spanned('<Kind>')` opts
+		// out of QueryNode transparency. Its paired `*S` struct carries
+		// `_span` + `_kind` (synthesised by SpanTypeSynth); inject the
+		// matching values here so `HaxeQueryPlugin.appendNodes` can surface
+		// it as an addressable node. `_start` is in scope because
+		// `instrumentSpans` wraps the whole rule body for span-bearing
+		// (incl. Seq) rules. Flat/no-span builds skip both fields entirely.
+		final spannedKind:Null<String> = node.readMetaString(':spanned');
+		if (ctx.spans && spannedKind != null) {
+			structFields.push({field: '_span', expr: macro new anyparse.runtime.Span(_start, ctx.pos)});
+			structFields.push({field: '_kind', expr: macro $v{spannedKind}});
+		}
 		final structLiteral:Expr = {expr: EObjectDecl(structFields), pos: Context.currentPos()};
 		parseSteps.push(macro return $structLiteral);
 		return macro $b{parseSteps};

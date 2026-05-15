@@ -5,6 +5,8 @@ import anyparse.core.ShapeTree;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 
+using anyparse.macro.MetaInspect;
+
 /**
  * Atomic synthesis of paired `*S` typedefs / enums for every grammar
  * rule when `ctx.spans=true`.
@@ -24,12 +26,18 @@ import haxe.macro.Expr;
  *    String/Int/Float/Bool) are skipped — primitives cannot carry an
  *    extra field.
  *
- *  - **Spans live on enum ctors only.** Each Alt ctor gains a trailing
- *    positional arg `_span:Span`. Seq paired types are structurally
- *    identical to the raw form (their Ref fields swap to `*S` variants
- *    to keep the reference graph sound) and carry no span field — a
- *    Seq's parent enum value's span covers it (Seqs are transparent in
- *    the QueryNode consumer at `HaxeQueryPlugin.appendNodes`).
+ *  - **Spans live on enum ctors only, except `@:spanned` Seqs.** Each
+ *    Alt ctor gains a trailing positional arg `_span:Span`. Seq paired
+ *    types are structurally identical to the raw form (their Ref fields
+ *    swap to `*S` variants to keep the reference graph sound) and
+ *    normally carry no span field — a Seq's parent enum value's span
+ *    covers it (Seqs are transparent in the QueryNode consumer at
+ *    `HaxeQueryPlugin.appendNodes`). A Seq typedef annotated
+ *    `@:spanned('<Kind>')` opts out of transparency: its paired struct
+ *    gains `_span:Span` + `_kind:String` fields so the consumer can
+ *    surface it as an addressable `QueryNode` of the named kind. Used
+ *    for decl-bearing transparent structs (catch clause, lambda param)
+ *    whose name must resolve in `apq refs`.
  *
  *  - **No trivia wrapping.** Star element types pass through unmodified
  *    (no `Trivial<T>` envelope) — span synthesis does not need per-
@@ -52,6 +60,8 @@ class SpanTypeSynth {
 	private static inline final SYNTH_SUBPACK:String = 'spans';
 	private static inline final SYNTH_MODULE_LEAF:String = 'Pairs';
 	private static inline final SPAN_FIELD_NAME:String = '_span';
+	private static inline final KIND_FIELD_NAME:String = '_kind';
+	private static inline final SPANNED_META:String = ':spanned';
 
 	private static final shapes:Array<ShapeBuilder.ShapeResult> = [];
 	private static final defined:Map<String, Bool> = new Map();
@@ -79,6 +89,12 @@ class SpanTypeSynth {
 		return switch origNode.kind {
 			case Seq:
 				final fields:Array<Field> = [for (child in origNode.children) buildStructField(child, pos, synthPack)];
+				if (origNode.readMetaString(SPANNED_META) != null) {
+					final spanCT:ComplexType = TPath({pack: ['anyparse', 'runtime'], name: 'Span', params: []});
+					final stringCT:ComplexType = TPath({pack: [], name: 'String', params: []});
+					fields.push({name: SPAN_FIELD_NAME, kind: FVar(spanCT), pos: pos, access: [], meta: []});
+					fields.push({name: KIND_FIELD_NAME, kind: FVar(stringCT), pos: pos, access: [], meta: []});
+				}
 				final anon:ComplexType = TAnonymous(fields);
 				{pos: pos, pack: synthPack, name: pairedSimple, kind: TDAlias(anon), fields: []};
 			case Alt:
