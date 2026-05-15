@@ -11,6 +11,9 @@ import anyparse.query.Refs.RefHit;
 import anyparse.query.format.line.RefLine;
 import anyparse.query.format.line.RefLineList;
 import anyparse.query.format.line.RefLineListWriter;
+import anyparse.query.format.line.MetaLine;
+import anyparse.query.format.line.MetaLineList;
+import anyparse.query.format.line.MetaLineListWriter;
 import anyparse.query.format.line.SearchBindingPair;
 import anyparse.query.format.line.SearchLine;
 import anyparse.query.format.line.SearchLineList;
@@ -79,27 +82,24 @@ final class Text {
 
 	public static function renderMeta(file:String, source:String, hits:Array<MetaHit>):String {
 		if (hits.length == 0) return '$file: no meta\n';
-		final buf:StringBuf = new StringBuf();
-		for (h in hits) {
+		final lines:Array<MetaLine> = [for (h in hits) {
 			final span:Null<Span> = h.metaSpan;
-			if (span != null) {
+			final locPrefix:String = if (span != null) {
 				final pos:Position = span.lineCol(source);
-				buf.add('$file:${pos.line}:${pos.col - 1}: ');
-			} else {
-				buf.add('$file: ');
-			}
-			buf.add(h.annotation);
-			if (h.args.length > 0) {
-				buf.add('(');
-				buf.add(h.args.join(', '));
-				buf.add(')');
-			}
-			buf.add(' on ${h.declKind}');
+				'$file:${pos.line}:${pos.col - 1}';
+			} else file;
+			final ml:MetaLine = {
+				locPrefix: locPrefix,
+				annotation: h.annotation,
+				declKind: h.declKind,
+			};
+			if (h.args.length > 0) ml.args = h.args;
 			final dn:Null<String> = h.declName;
-			if (dn != null) buf.add(' $dn');
-			buf.add('\n');
-		}
-		return buf.toString();
+			if (dn != null) ml.declName = dn;
+			ml;
+		}];
+		final list:MetaLineList = {lines: lines};
+		return MetaLineListWriter.write(list, LineDiagFormat.instance.defaultWriteOptions);
 	}
 
 	public static function renderSearchMatches(file:String, source:String, matches:Array<Match>):String {
