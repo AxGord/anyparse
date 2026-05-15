@@ -27,10 +27,22 @@ package anyparse.grammar.haxe;
  * everything between the two literals in a single Group/IfBreak
  * decided by `opt.conditionWrap` plus the rest-of-line measurement.
  * Mirrors fork's `markPWrapping` `ForLoop` dispatch to `wrapCondition`.
+ *
+ * Map key-value iteration `for (k => v in m)` is supported via the
+ * optional `valueName` field — `@:optional @:lead('=>')`, the same
+ * optional-single-Ref-with-literal-commit pattern as
+ * `HxParamBody.defaultValue` (`@:optional @:lead('=')`) and
+ * `HxFnDecl.returnType` (`@:optional @:lead(':')`). Plain single-iter
+ * `for (v in m)` leaves it null (the `=>` peek fails on `in`). It
+ * sits inside the `conditionWrap` span (`varName` start … `iterable`
+ * end); the generic optional-Ref writer path emits ` => v` when
+ * present. Surfacing `valueName` as a second scope binding in the apq
+ * refs plugin is a separate, non-parse-blocking enhancement.
  */
 @:peg
 typedef HxForStmt = {
 	@:lead('(') @:fmt(condWrap('conditionWrap')) var varName:HxIdentLit;
+	@:optional @:lead('=>') var valueName:Null<HxIdentLit>;
 	@:kw('in') @:trail(')') @:fmt(condWrapEnd) var iterable:HxExpr;
 	@:fmt(bodyPolicy('forBody')) var body:HxStatement;
 };

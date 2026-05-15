@@ -433,6 +433,32 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
   `function`) to `ExprStmt` exactly as before K1. A future additive
   HxExpr inline-call slice would close it.
 
+- **Slice K2 — map key-value `for (k => v in m)` iteration. ✅ DONE.**
+  An optional `valueName` field added to BOTH `HxForStmt` and
+  `HxForExpr`: `@:optional @:lead('=>') var valueName:Null<HxIdentLit>`
+  between `varName` and the `in` keyword — the same
+  optional-single-Ref-with-literal-commit pattern as
+  `HxParamBody.defaultValue` (`@:optional @:lead('=')`) /
+  `HxFnDecl.returnType` (`@:optional @:lead(':')`). **Recon reversed
+  the pivot's "leans core" premise:** the single-ident→list framing was
+  wrong; the optional-second-ident framing is the established additive
+  opt-Ref pattern (zero core/synth/writer; synth/writer auto-handle
+  optional-Ref per the `returnType` precedent), so it landed additively
+  with no fresh fork needed (consistent-with-established-system, not a
+  genuine core-vs-additive choice). Plain `for (v in m)` keeps
+  `valueName == null` (the `=>` peek fails on `in`) — strict regression
+  guard. `HxForExpr`'s own doc had pre-tracked this as a future slice.
+  New `HxForKeyValueSliceTest` (8 cases: stmt kv / stmt single-null /
+  block-body / nested / expr-comprehension kv / expr single-null).
+  Parse-rate **250/278 → 252/278 corpus (+2)**; total **252/280 →
+  254/280** (newly passing `StrategyRegistry.hx`, `TriviaAnalysis.hx`).
+  neko 5059 / js 5056 / interp 5059, 0 regressions. Surfacing
+  `valueName` as a second apq-refs scope binding is a separate,
+  non-parse-blocking enhancement (deferred). K3 (multi-pattern
+  `case A, B:`) remains; it is a genuine `HxCaseBranch.pattern`
+  single→list shape change and DOES need the fresh additive-vs-core
+  fork.
+
 **Design decision (do not re-attempt without new infrastructure):**
 the flat one-line diagnostic renderers (`Text.renderRefs` /
 `renderSearchMatches` / `renderMeta`) **stay on hand-rolled

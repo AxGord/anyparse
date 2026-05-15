@@ -21,10 +21,11 @@ package anyparse.grammar.haxe;
  * `HxIfStmt`/`HxIfExpr` precedent: same source shape, different
  * body type.
  *
- * Map-key iteration `for (k => v in m)` is not yet supported — the
- * `varName:HxIdentLit` field shape mirrors `HxForStmt`'s current
- * limitation. Lifting requires a destructured-iter shape on both
- * forms, tracked as a future slice.
+ * Map key-value iteration `for (k => v in m)` is supported via the
+ * optional `valueName` field — `@:optional @:lead('=>')`, mirroring
+ * `HxForStmt`. The earlier "not yet supported" note is obsolete; the
+ * lift was the additive optional-single-Ref pattern (precedent
+ * `HxParamBody.defaultValue`), not a destructured-iter reshape.
  *
  * `@:fmt(bodyPolicy('expressionForBody'))` on `body` — distinct from
  * `HxForStmt`'s `forBody` knob because expression-position `for`
@@ -56,6 +57,7 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxForExpr = {
 	@:lead('(') var varName:HxIdentLit;
+	@:optional @:lead('=>') var valueName:Null<HxIdentLit>;
 	@:kw('in') @:trail(')') var iterable:HxExpr;
 	@:fmt(bodyPolicy('expressionForBody'), bodyAllmanIndentForCtor('ObjectLit', 'indentObjectLiteral')) var body:HxExpr;
 };
