@@ -90,7 +90,15 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
 - JSON output schema for all four commands **finalized** and documented (consolidates the per-command MVP-locked schemas from Phases 1–3). Subsequent versions may extend but not break.
 - Shell-composition examples in the spec (piping `apq meta | jq`, batching with `xargs`, etc.).
 
-**Exit condition**: JSON schemas committed to the spec. Five shell-composition examples documented and verified.
+**Slice status**:
+- 4.1 — `MetaShape` plugin contract (`metaKinds` + `declHostKinds`, sharing the decl-host set with `RefShape`) + the language-agnostic `Meta.find` walker. An annotation attributes to the decl-host sibling whose span starts immediately after it (source order, not flattened child order), falling back to the nearest enclosing decl-host ancestor for expression-level metadata.
+- 4.2 — `apq meta` command: `[<annotation>] <file-or-glob>` positional grammar, `--on <decl-kind>` and `--arg-contains <substring>` filters, text renderer.
+- 4.3 — `meta` JSON schema fileset (macro-generated, dogfooding the writer) + `ast` schema finalization (`span` is now part of the `ast` Node contract, present when source-addressable).
+- 4.4 — spec finalization wording (v1 stable, additive-only; envelope + omit-when-absent conventions documented) + five verified shell-composition examples + this close-out.
+
+**Status**: ✅ done. All four deliverables landed; JSON schemas finalized in the spec; five shell-composition examples documented and verified end-to-end.
+
+**Exit condition**: JSON schemas committed to the spec. Five shell-composition examples documented and verified. — **met.**
 
 ## Phase 5: Dogfood pass
 

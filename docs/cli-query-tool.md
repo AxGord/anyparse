@@ -160,9 +160,14 @@ Every command supports two output formats:
 
 Both formats include source spans (`file:line:col` or structured `{file, start, end}`) so results can be fed into editors and other tools.
 
-Per-command schemas are **MVP-locked** at the phase that ships each command (`ast` in Phase 1, `search` in Phase 2, `refs` in Phase 3) and **finalized** in Phase 4 once shell-composition usage validates the shape. Subsequent versions may extend schemas additively but not break them.
+Per-command schemas were MVP-locked at the phase that shipped each command (`ast` in Phase 1, `search` in Phase 2, `refs` in Phase 3) and are now **finalized** (Phase 4) after shell-composition usage validated the shape. The schemas below are the **v1 stable contract**: subsequent versions may extend them additively (new optional keys) but will not rename, remove, or retype an existing key.
 
-### Output JSON schemas (MVP sketches)
+Two cross-cutting finalized conventions:
+
+- **Envelope.** Multi-result commands (`search`, `refs`, `meta`) wrap their result array in a single top-level object — `{ "matches": [...] }` for `search`, `{ "hits": [...] }` for `refs` and `meta` — so the output is one well-formed JSON value per invocation. Consumers that want the bare array unwrap the single envelope key.
+- **Optional keys are omitted, not null.** When a value is absent (a node with no name, an unresolved reference's binding, a node with no source span) the key is left out of the object entirely rather than emitted as `null`. `jq` filters should use `// empty` or `?` accordingly.
+
+### Output JSON schemas (v1, finalized)
 
 All schemas share one span type:
 
@@ -186,49 +191,49 @@ Node = {
   "kind": "class" | "function" | "field" | ...,   // plugin-defined; see above
   "name": "Foo",                                   // omitted when node has no name
   "children": Node[],
-  "span": Span
+  "span": Span                                     // omitted when node has no source coordinates
 }
 ```
 
-When `--select` is used, the response wraps results in an array:
+`span` is present on source-addressable nodes (declarations, statements, expressions) and omitted on transparent inner structural nodes and the synthetic root, the same way `name` is omitted when absent. This is the finalized rule — earlier drafts left `span` out of the `ast` schema entirely; it is now part of the v1 contract.
 
-```
-{ "file": "...", "matches": Node[] }
-```
-
-When `--at` is used, `tree` is the smallest enclosing node only.
+When `--select` is used, the response is `{ "file": "...", "matches": Node[] }`. When `--at` is used, `tree` is the smallest enclosing node only.
 
 #### `search`
 
 ```
-[
-  {
-    "file": "path/to/input",
-    "span": Span,
-    "bindings": {
-      "X": { "text": "matched source text", "span": Span },
-      ...
-    }
-  },
-  ...
-]
+{
+  "matches": [
+    {
+      "file": "path/to/input",
+      "span": Span,
+      "bindings": [
+        { "name": "X", "text": "matched source text", "span": Span },
+        ...
+      ]
+    },
+    ...
+  ]
+}
 ```
 
-Binding keys drop the leading `$` — pattern metavariable `$X` produces JSON key `"X"`. `bindings` is empty (`{}`) for patterns that contain only literals or `$_` wildcards.
+`bindings` is a **static array** of `{ name, text, span }` objects (finalized v1 shape). The dynamic-object form sketched in earlier drafts (`{ "X": {...} }`, metavar names as JSON keys) was rejected so the schema stays static and macro-generated. `name` drops the leading `$` — pattern metavariable `$X` produces `"name": "X"`. The array is empty (`[]`) for patterns that contain only literals or `$_` wildcards.
 
 #### `refs`
 
 ```
-[
-  {
-    "file": "path/to/input",
-    "kind": "read" | "write" | "decl",
-    "span": Span,
-    "name": "the_symbol",
-    "binding": Span                          // optional; see below
-  },
-  ...
-]
+{
+  "hits": [
+    {
+      "file": "path/to/input",
+      "kind": "read" | "write" | "decl",
+      "span": Span,
+      "name": "the_symbol",
+      "binding": Span                        // optional; see below
+    },
+    ...
+  ]
+}
 ```
 
 The optional `binding` field carries the span of the declaration this hit
@@ -244,20 +249,77 @@ span, surfacing as an addressable node.
 #### `meta`
 
 ```
-[
-  {
-    "file": "path/to/input",
-    "annotation": "@:foo",                       // verbatim from source
-    "args": ["arg1", "arg2"],                    // [] when annotation takes no args
-    "decl": {
-      "kind": "class" | "function" | "field" | ...,
-      "name": "thingItIsAttachedTo",             // omitted for anonymous decls
-      "span": Span                               // span of the attached declaration
-    }
-  },
-  ...
-]
+{
+  "hits": [
+    {
+      "file": "path/to/input",
+      "annotation": "@:foo",                     // verbatim from source
+      "args": ["arg1", "arg2"],                  // [] when annotation takes no args
+      "decl": {
+        "kind": "class" | "function" | "field" | ...,
+        "name": "thingItIsAttachedTo",           // omitted for anonymous decls
+        "span": Span                             // span of the attached declaration
+      }
+    },
+    ...
+  ]
+}
 ```
+
+An annotation attributes to the declaration it precedes in source. When an annotation has no following declaration in its container (expression-level metadata) it attributes to the nearest enclosing declaration — a deliberate v1 simplification, not a finer expression-level target.
+
+## Shell composition
+
+The JSON envelopes are designed for `jq` / `xargs` pipelines. The
+five examples below were each run end-to-end against a real corpus
+and their output trimmed verbatim. Decl-kind tokens (`FnMember`,
+`VarMember`, …) are the Haxe grammar plugin's published vocabulary;
+another plugin publishes its own.
+
+**1 — names of every declaration carrying an annotation:**
+
+```
+$ apq meta @:inject --json src/ | jq -r '.hits[].decl.name'
+cache
+db
+```
+
+**2 — annotation inventory on functions in one file:**
+
+```
+$ apq meta --on FnMember --json Service.hx \
+    | jq -r '.hits[] | "\(.annotation) -> \(.decl.name)"'
+@:route -> list
+@:auth -> list
+@:route -> get
+```
+
+**3 — count occurrences of a configurable flag annotation:**
+
+```
+$ apq meta @:route --json src/ | jq '.hits | length'
+2
+```
+
+**4 — blast-radius check: how many sites write a symbol:**
+
+```
+$ apq refs --writes n --json Repo.hx | jq '.hits | length'
+2
+```
+
+**5 — batch a glob with `xargs`, project name + tag per hit:**
+
+```
+$ ls *.hx | xargs -I{} apq meta --on VarMember --json {} \
+    | jq -r '.hits[] | "\(.decl.name):\(.annotation)"'
+cache:@:inject
+db:@:inject
+```
+
+These compose because every command emits exactly one JSON value
+(the envelope), absent values are omitted rather than `null`, and
+spans are a stable two-element-array shape `jq` can index directly.
 
 ## Universalization invariant
 
