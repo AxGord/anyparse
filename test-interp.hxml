@@ -1,3 +1,8 @@
+# Dedicated CLI compile server (separate from vshaxe). Start once:
+#   haxe --wait 7822
+# Caches macro-expanded modules between runs. Restart the server if a
+# stale synthesized-type error appears.
+--connect 7822
 -cp src
 -cp test
 -lib utest

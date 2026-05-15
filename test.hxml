@@ -1,3 +1,9 @@
+# Dedicated CLI compile server (separate from vshaxe). Start once:
+#   haxe --wait 7822
+# Caches macro-expanded modules between runs (105 @:peg parsers / 22
+# @:build) so only changed modules recompile. If a stale synthesized-
+# type error appears, restart the server.
+--connect 7822
 -cp src
 -cp test
 -lib utest
