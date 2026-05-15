@@ -898,6 +898,7 @@ class Lowering {
 							while (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
 								ctx.pos++;
 								skipWs(ctx);
+								if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
 								_args.push($elemCall);
 								skipWs(ctx);
 							}
@@ -1419,6 +1420,7 @@ class Lowering {
 						while (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
 							ctx.pos++;
 							skipWs(ctx);
+							if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
 							_items.push($elemCall);
 							skipWs(ctx);
 						}
@@ -2460,6 +2462,7 @@ class Lowering {
 					while (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
 						ctx.pos++;
 						skipWs(ctx);
+						if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
 						$accumRef.push($elemCall);
 						skipWs(ctx);
 					}
@@ -2528,6 +2531,7 @@ class Lowering {
 					while (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
 						ctx.pos++;
 						skipWs(ctx);
+						if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
 						_items.push($elemCall);
 						skipWs(ctx);
 					}

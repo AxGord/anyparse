@@ -136,8 +136,13 @@ class HxParamSliceTest extends HxTestHelpers {
 		Assert.equals('String', (expectNamedType(b1.type).name : String));
 	}
 
-	public function testRejectsTrailingComma():Void {
-		Assert.raises(() -> HaxeParser.parse('class Foo { function f(a:Int,):Bool {} }'), ParseError);
+	public function testAcceptsTrailingComma():Void {
+		// L1 (apq-P5): a trailing `,` after the last param is valid
+		// Haxe — the strict struct-field sep loop now peeks the close
+		// after consuming a sep instead of forcing another param parse.
+		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function f(a:Int,):Bool {} }');
+		Assert.equals(1, decl.params.length);
+		Assert.equals('a', (expectRequiredParam(decl.params[0]).name : String));
 	}
 
 	public function testRejectsMissingType():Void {

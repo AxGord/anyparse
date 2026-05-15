@@ -461,10 +461,17 @@ class HxPostfixSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public function testRejectsTrailingComma():Void {
-		// `f(a,)` — trailing comma leaves `)` as the next token,
-		// which fails the argument expression parse and throws.
-		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Int = f(a,); }'), ParseError);
+	public function testAcceptsTrailingComma():Void {
+		// L1 (apq-P5): `f(a,)` — a trailing `,` before `)` is valid
+		// Haxe. The postfix-call args sep loop now peeks the close
+		// after consuming the sep instead of parsing an arg at `)`.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = f(a,); }');
+		switch decl.init {
+			case Call(IdentExpr(f), args):
+				Assert.equals('f', (f : String));
+				Assert.equals(1, args.length);
+			case null, _: Assert.fail('expected Call(f, [a]), got ${decl.init}');
+		}
 	}
 
 	public function testCallInModule():Void {

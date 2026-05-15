@@ -490,6 +490,33 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
   cluster (offset-25 rollback to `#if macro`, heterogeneous deep
   blockers) — no clean additive of K1/K2/K3 scale remains.
 
+- **Slice L — closing the 24-fail tail (NOT additive; core forks).**
+  Full strip-drill of all 24 self-parse fails (rollback offset is the
+  `#if macro` token, never the blocker — drill past it keeping braces
+  balanced) produced the innermost-blocker histogram: trailing comma
+  in collection literals **8**, `$`-reification in `macro` **5**, EReg
+  literal `~/.../` **4**, `switch` `case … if (c):` guard **2**, bare
+  `$` in single-quoted string **2**, singletons **3** (`macro`
+  member modifier, untyped fn param, hex `0x20`).
+
+  - **Slice L1 — trailing sep before close. ✅ DONE.** (commit
+    `3bb33df`.) The strict plain-mode sep loops in `Lowering`
+    (postfix-call args, Case-4 enum-Alt `ArrayExpr`, struct-field
+    Star `HxObjectLit.fields`, optional Star `HxTypeRef.params`)
+    consumed a sep then forced another element parse, rejecting the
+    universally-valid Haxe trailing comma. User-approved Option A
+    (universal core fix): `if (!($closeNotNextExpr)) break;` after
+    each sep consume, mirroring the trivia-mode postfix loop. Parser-
+    only, AST-shape preserved. **254/278 → 261/278 corpus (+7;
+    total 256/280 → 263/280)**: FormatReader, Bin,
+    HaxeFormatConfigLoader, HaxeQueryPlugin, query/Json, query/Meta,
+    + SpanTypeSynth (drilled "untyped fn param" innermost was a
+    compounding mis-ID — post-build is the only truth). WrapList /
+    TriviaTypeSynth stay red on a deeper compounding blocker. Three
+    stale `testRejectsTrailingComma` guards encoded the old (wrong-
+    vs-Haxe) reject-contract and were flipped to
+    `testAcceptsTrailingComma`. js 5108/5108, 0 regressions.
+
 **Design decision (do not re-attempt without new infrastructure):**
 the flat one-line diagnostic renderers (`Text.renderRefs` /
 `renderSearchMatches` / `renderMeta`) **stay on hand-rolled

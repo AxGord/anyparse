@@ -113,8 +113,14 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 		Assert.equals('Int', (expectNamedType(params[1]).name : String));
 	}
 
-	public function testRejectsTrailingComma():Void {
-		Assert.raises(() -> HaxeParser.parse('class Foo { function bar():Map<String, Int,> {} }'), ParseError);
+	public function testAcceptsTrailingComma():Void {
+		// L1 (apq-P5): a trailing `,` in a type-parameter list is
+		// valid Haxe — the optional Star sep loop now peeks `>`
+		// after consuming the sep.
+		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar():Map<String, Int,> {} }');
+		final params:Null<Array<HxType>> = expectNamedType(decl.returnType).params;
+		Assert.notNull(params);
+		Assert.equals(2, params.length);
 	}
 
 	public function testEmptyParamsParsesAsEmptyList():Void {
