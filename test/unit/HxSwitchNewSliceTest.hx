@@ -59,7 +59,8 @@ class HxSwitchNewSliceTest extends HxTestHelpers {
 		Assert.equals(1, sw.cases.length);
 		switch sw.cases[0] {
 			case CaseBranch(branch):
-				switch branch.pattern {
+				Assert.equals(1, branch.patterns.length);
+				switch branch.patterns[0] {
 					case IntLit(v): Assert.equals(1, v);
 					case null, _: Assert.fail('expected IntLit pattern');
 				}
@@ -95,7 +96,7 @@ class HxSwitchNewSliceTest extends HxTestHelpers {
 		Assert.equals(2, sw.cases.length);
 		switch sw.cases[0] {
 			case CaseBranch(b):
-				switch b.pattern {
+				switch b.patterns[0] {
 					case IntLit(v): Assert.equals(1, v);
 					case null, _: Assert.fail('expected IntLit');
 				}
@@ -168,7 +169,7 @@ class HxSwitchNewSliceTest extends HxTestHelpers {
 		Assert.equals(1, sw.cases.length);
 		switch sw.cases[0] {
 			case CaseBranch(b):
-				switch b.pattern {
+				switch b.patterns[0] {
 					case Call(operand, args):
 						switch operand {
 							case IdentExpr(v): Assert.equals('Foo', (v : String));

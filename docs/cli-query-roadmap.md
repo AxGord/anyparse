@@ -454,10 +454,41 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
   254/280** (newly passing `StrategyRegistry.hx`, `TriviaAnalysis.hx`).
   neko 5059 / js 5056 / interp 5059, 0 regressions. Surfacing
   `valueName` as a second apq-refs scope binding is a separate,
-  non-parse-blocking enhancement (deferred). K3 (multi-pattern
-  `case A, B:`) remains; it is a genuine `HxCaseBranch.pattern`
-  single→list shape change and DOES need the fresh additive-vs-core
-  fork.
+  non-parse-blocking enhancement (deferred).
+
+- **Slice K3 — multi-value `case A, B, C:` patterns. ✅ DONE.**
+  `HxCaseBranch.pattern:HxExpr` reshaped to
+  `patterns:Array<HxExpr>` with `@:sep(',') @:trail(':')` — the same
+  Star+sep+trail Lowering path as `HxFnDecl.typeParams`; a single
+  `case A:` is the one-element form. User-approved via the fresh
+  additive-vs-core fork (Option A "clean Star" over Option B
+  "additive opt-Star + `:`-relocation", which had an unprecedented
+  `@:optional @:lead+@:sep`-without-`@:trail` mechanism). It is a
+  shape change to an existing field, but the only consumer was
+  `test/unit/HxSwitchNewSliceTest.hx` (3 `.pattern` switch sites →
+  `.patterns[0]`); writer/synth/`HaxeQueryPlugin` use generic
+  reflection (zero ripple — confirmed by the gate). New
+  `HxMultiPatternCaseSliceTest` (7 cases: single-1-elem regression /
+  two / three-string / multi+block-body / mixed multi+single+default /
+  ctor-patterns). Parse-rate **252/278 → 254/278 corpus (+2)**; total
+  **254/280 → 256/280** (newly passing `HxExprUtil.hx` — the file
+  originally drilled to identify this blocker — and `query/Cli.hx`).
+  js 5083 / interp 5086, 0 regressions (neko dropped from the gate
+  per user directive #2 — "neko слишком медленный"; js = real codegen
+  target, interp = macro-VM divergence catch).
+
+  **Slice K arc complete.** Pivot recap: the inherited plan's
+  proxy-ordered bundle (objlit-comma → EReg → hex) was contradicted
+  by fresh post-build recon and replaced (user-approved) by the
+  drill-identified order — K1 local-fn-stmt (+3), K2 for-(k=>v) (+2),
+  K3 multi-pattern-case (+2). Net Slice K = **247/278 → 254/278
+  corpus (+7; total 249/280 → 256/280)**, 0 regressions across all
+  three sub-slices. K2 and K3 each had their "leans core" premise
+  tested by recon — K2 collapsed to a precedented additive opt-Ref;
+  K3 was a genuine but minimal-ripple shape change taken via the
+  explicit fork. Remaining 24 fail files are the chronic macro/query
+  cluster (offset-25 rollback to `#if macro`, heterogeneous deep
+  blockers) — no clean additive of K1/K2/K3 scale remains.
 
 **Design decision (do not re-attempt without new infrastructure):**
 the flat one-line diagnostic renderers (`Text.renderRefs` /

@@ -60,6 +60,7 @@ import unit.HxAnonMemberSliceTest;
 import unit.HxConditionalMemberSliceTest;
 import unit.HxLocalFnStmtSliceTest;
 import unit.HxForKeyValueSliceTest;
+import unit.HxMultiPatternCaseSliceTest;
 import unit.HxTypeParensSliceTest;
 import unit.HxTypeIntersectionSliceTest;
 import unit.HxPrefixSliceTest;
@@ -188,6 +189,7 @@ class RunTests {
 		runner.addCase(new HxConditionalMemberSliceTest());
 		runner.addCase(new HxLocalFnStmtSliceTest());
 		runner.addCase(new HxForKeyValueSliceTest());
+		runner.addCase(new HxMultiPatternCaseSliceTest());
 		runner.addCase(new HxTypeParensSliceTest());
 		runner.addCase(new HxTypeIntersectionSliceTest());
 		runner.addCase(new HxBodySliceTest());

@@ -5,13 +5,16 @@ package anyparse.grammar.haxe;
  *
  * The `case` keyword is consumed at the enum-branch level
  * (`@:kw('case')` on the `CaseBranch` ctor in `HxSwitchCase`).
- * This typedef describes the remainder: a pattern expression
- * followed by a colon, then zero or more body statements.
+ * This typedef describes the remainder: a comma-separated pattern
+ * list followed by a colon, then zero or more body statements.
  *
- * Patterns are parsed as `HxExpr` — identifiers, literals, and
- * constructor-like patterns (`Foo(x, y)` parses as a `Call`
- * expression) all work without new grammar types. Full pattern
- * matching (extractors, guards, OR patterns) is future work.
+ * `patterns` is a `@:sep(',') @:trail(':')` Star of `HxExpr` — the
+ * same Star+sep+trail shape as `HxFnDecl.typeParams`. A single
+ * `case A:` is a one-element list; `case A, B, C:` (Haxe multi-value
+ * case) is the multi-element form. Each pattern parses as `HxExpr` —
+ * identifiers, literals, and constructor-like patterns (`Foo(x, y)`
+ * parses as a `Call` expression) all work without new grammar types.
+ * Full pattern matching (extractors, guards) is future work.
  *
  * The body uses `@:tryparse` to force try-parse termination on the
  * last field (D49). The try-parse loop breaks when the next token
@@ -81,7 +84,7 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxCaseBranch = {
-	@:trail(':') var pattern:HxExpr;
+	@:sep(',') @:trail(':') var patterns:Array<HxExpr>;
 	@:trivia @:tryparse @:fmt(
 		nestBody, bodyPolicy('caseBody', 'expressionCase'),
 		flatChildOpt('ifBody=expressionCase', 'elseBody=expressionCase', 'forBody=expressionCase'),
