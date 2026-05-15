@@ -1,5 +1,6 @@
 package anyparse.query.format;
 
+import anyparse.format.text.LineDiagFormat;
 import anyparse.format.text.SExprFormat;
 import anyparse.grammar.sexpr.SValue;
 import anyparse.grammar.sexpr.SValueWriter;
@@ -7,6 +8,9 @@ import anyparse.query.Matcher.Match;
 import anyparse.query.Meta.MetaHit;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs.RefHit;
+import anyparse.query.format.line.RefLine;
+import anyparse.query.format.line.RefLineList;
+import anyparse.query.format.line.RefLineListWriter;
 import anyparse.runtime.Span;
 import anyparse.runtime.Span.Position;
 
@@ -49,18 +53,24 @@ final class Text {
 
 	public static function renderRefs(file:String, source:String, hits:Array<RefHit>):String {
 		if (hits.length == 0) return '$file: no refs\n';
-		final buf:StringBuf = new StringBuf();
-		for (h in hits) {
+		final lines:Array<RefLine> = [for (h in hits) {
 			final pos:Position = h.span.lineCol(source);
-			buf.add('$file:${pos.line}:${pos.col - 1}: [${h.kind.toString()}] ${h.name}');
+			final rl:RefLine = {
+				file: file,
+				line: pos.line,
+				col: pos.col - 1,
+				kind: h.kind.toString(),
+				name: h.name,
+			};
 			final bindingSpan:Null<Span> = h.bindingSpan;
 			if (bindingSpan != null && bindingSpan.from != h.span.from) {
 				final bp:Position = bindingSpan.lineCol(source);
-				buf.add(' -> ${bp.line}:${bp.col - 1}');
+				rl.binding = '${bp.line}:${bp.col - 1}';
 			}
-			buf.add('\n');
-		}
-		return buf.toString();
+			rl;
+		}];
+		final list:RefLineList = {lines: lines};
+		return RefLineListWriter.write(list, LineDiagFormat.instance.defaultWriteOptions);
 	}
 
 	public static function renderMeta(file:String, source:String, hits:Array<MetaHit>):String {
