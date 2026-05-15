@@ -42,6 +42,22 @@ import haxe.Exception;
 @:nullSafety(Strict)
 final class HaxeQueryPlugin implements GrammarPlugin {
 
+	/**
+	 * Binding-declaration kinds shared by `refShape` and `metaShape`
+	 * so the two contracts cannot drift. Top-level type decls,
+	 * statement-level var bindings, class-member bindings, function
+	 * parameters (`HxParam`'s three Alt branches) and the
+	 * `@:spanned('LambdaParam')` lambda-parameter struct.
+	 */
+	private static final DECL_HOST_KINDS:Array<String> = [
+		'VarDecl', 'FnDecl',
+		'ClassDecl', 'InterfaceDecl', 'EnumDecl', 'AbstractDecl', 'TypedefDecl',
+		'VarMember', 'FinalMember', 'FnMember',
+		'VarStmt', 'FinalStmt',
+		'Required', 'Optional', 'Rest',
+		'LambdaParam',
+	];
+
 	public function new() {}
 
 	public function langName():String return 'haxe';
@@ -98,17 +114,7 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		// `arr[i] = …` keep `obj` / `arr` / `i` as Reads.
 		return {
 			identKind: 'IdentExpr',
-			declHostKinds: [
-				'VarDecl', 'FnDecl',
-				'ClassDecl', 'InterfaceDecl', 'EnumDecl', 'AbstractDecl', 'TypedefDecl',
-				'VarMember', 'FinalMember', 'FnMember',
-				'VarStmt', 'FinalStmt',
-				'Required', 'Optional', 'Rest',
-				// Lambda-parameter binding (`@:spanned('LambdaParam')`):
-				// binds into the enclosing lambda scope frame, like a
-				// function parameter.
-				'LambdaParam',
-			],
+			declHostKinds: DECL_HOST_KINDS,
 			// `CatchClause` is surfaced by `appendNodes` from the
 			// `@:spanned('CatchClause')` paired struct; it opens a scope
 			// (the clause body) and self-binds the exception name into
@@ -136,6 +142,21 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 				'ForStmt', 'ForExpr',
 				'CatchClause',
 			],
+		};
+	}
+
+	public function metaShape():MetaShape {
+		// Annotation nodes come through the three `HxMetadata` enum
+		// ctors: `MetaCall` for the paren-bearing `@:name(args)` form
+		// (its arg expressions are children), `Meta` for the paren-less
+		// `@:name`, and `PlainMeta` for the verbatim raw catch-all
+		// (`@:name(args)` carried inline as the node's `name` slot).
+		// Decl-host kinds are shared with `refShape` so an annotation
+		// attributes to the same binding-declaration nodes the refs
+		// walker recognises.
+		return {
+			metaKinds: ['MetaCall', 'Meta', 'PlainMeta'],
+			declHostKinds: DECL_HOST_KINDS,
 		};
 	}
 

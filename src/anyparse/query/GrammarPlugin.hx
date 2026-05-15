@@ -50,6 +50,17 @@ interface GrammarPlugin {
 	 * contract and `RefShape` for field semantics.
 	 */
 	public function refShape():RefShape;
+
+	/**
+	 * Declare which `QueryNode.kind` values the `Meta` walker should
+	 * treat as annotation nodes and which kinds are declaration hosts
+	 * an annotation can attach to. Plugin-supplied so the walker stays
+	 * language-agnostic.
+	 *
+	 * See `docs/cli-query-tool.md` (`apq meta`) for the user-facing
+	 * contract and `MetaShape` for field semantics.
+	 */
+	public function metaShape():MetaShape;
 }
 
 /**
@@ -115,4 +126,35 @@ typedef RefShape = {
 	var scopeKinds:Array<String>;
 	var writeParentKinds:Array<String>;
 	var selfScopeDeclKinds:Array<String>;
+}
+
+/**
+ * Plugin-declared contract for `apq meta`. The walker reads these
+ * slots and never inspects grammar-specific node types.
+ *
+ * `metaKinds` is the set of `QueryNode.kind` values the plugin
+ * produces for a leading metadata annotation on a declaration (for
+ * Haxe: the `HxMetadata` enum ctors — `MetaCall` for `@:name(args)`,
+ * `Meta` for the paren-less `@:name`, `PlainMeta` for the verbatim
+ * raw catch-all). Each such node carries the verbatim annotation tag
+ * in its `name` slot; for the `MetaCall` form its argument
+ * expressions are its children. For the raw catch-all form the
+ * `name` slot is the entire raw slice (tag plus parenthesised args
+ * inline) — the walker splits it on the first `(`.
+ *
+ * `declHostKinds` is the set of node kinds an annotation attaches to
+ * — the same binding-declaration kinds declared in `RefShape`. The
+ * walker attributes an annotation node to the nearest following
+ * sibling whose kind is in this set (annotations precede their
+ * declaration in source, and the plugin emits children in source
+ * order). When no following decl-host sibling exists the annotation
+ * falls back to the nearest enclosing decl-host ancestor — this is
+ * the documented v1 behaviour for expression-level metadata, which
+ * attributes to its enclosing declaration rather than a finer
+ * expression target.
+ */
+@:nullSafety(Strict)
+typedef MetaShape = {
+	var metaKinds:Array<String>;
+	var declHostKinds:Array<String>;
 }
