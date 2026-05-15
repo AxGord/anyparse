@@ -787,6 +787,22 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    them. A binop-wide knob covering all Pratt-emitted operators is
  *    a separate slice.
  *
+ * Field added in slice ω-type-intersection (typedef rhs `&` spacing):
+ *  - `typedefIntersection` — whitespace AFTER the `&` joining the
+ *    operands of an intersection typedef (`HxIntersectionClause.type`'s
+ *    `@:lead('&')`). `After` (default) emits `& B`; combined with the
+ *    structural pre-`&` space supplied by the consuming Star's
+ *    `@:fmt(padLeading)` + inter-element separator (the same mechanism
+ *    that spaces `extends A implements B` heritage clauses — there is
+ *    no per-keyword knob there either), the rendered result is the
+ *    around-spaced `typedef X = A & B & C;` matching haxe-formatter's
+ *    `whitespace.binopPolicy: @:default(Around)`. `None` drops the
+ *    post-`&` space (`& B` → `&B`); `Both` / `Before` are exposed for
+ *    policy-shape parity (note `Both`/`Before` add a clause-internal
+ *    leading space on top of the structural one — use `After`/`None`
+ *    for predictable output). Sibling of `typedefAssign`; the two knobs
+ *    govern the `=` and `&` typedef-rhs joiners independently.
+ *
  * Field added in slice ω-typeparam-default-equals (declare-site
  * type-parameter default `=` spacing):
  *  - `typeParamDefaultEquals` — whitespace around the `=` joining a
@@ -1670,6 +1686,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	afterLeftCurly:KeepEmptyLinesPolicy,
 	beforeRightCurly:KeepEmptyLinesPolicy,
 	typedefAssign:WhitespacePolicy,
+	typedefIntersection:WhitespacePolicy,
 	typeParamDefaultEquals:WhitespacePolicy,
 	typeParamOpen:WhitespacePolicy,
 	typeParamClose:WhitespacePolicy,

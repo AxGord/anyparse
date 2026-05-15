@@ -2122,7 +2122,7 @@ class WriterLowering {
 			// future end-field with `@:lead` does not silently leak the lead
 			// literal into the spanned cond Doc.
 			if (leadText != null && !isOptional && !hasCondWrap && !hasCondWrapEnd)
-				parts.push(whitespacePolicyLead(child, leadText, ['objectFieldColon', 'typeHintColon', 'typeCheckColon', 'typedefAssign', 'functionTypeHaxe4', 'arrowFunctions']));
+				parts.push(whitespacePolicyLead(child, leadText, ['objectFieldColon', 'typeHintColon', 'typeCheckColon', 'typedefAssign', 'typedefIntersection', 'functionTypeHaxe4', 'arrowFunctions']));
 
 			// Field value
 			// ω-issue-257-else-in-return-switch: same dual-flag form as

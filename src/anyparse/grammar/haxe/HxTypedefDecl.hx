@@ -72,6 +72,18 @@ package anyparse.grammar.haxe;
  * `wrapping/issue_494_type_parameter` between flat-typedef → wrapped-
  * typedef pairs: long type parameter lists drive `blankLinesBeforeCtorIf`
  * to insert the `betweenTypes=1`-equivalent blank line.
+ *
+ * `intersections` is a bare `Array<HxIntersectionClause>` annotated
+ * `@:trivia @:tryparse @:fmt(padLeading)`, structurally identical to
+ * `HxClassDecl.heritage` and `HxAbstractDecl.clauses`. It captures the
+ * `& Type` tail of an intersection typedef (`typedef X = A & B & {…}`),
+ * with the first operand in `type` and each subsequent `& Type` as one
+ * `Part` clause. Scoping `&` to this tail (instead of an `HxType` Pratt
+ * operator) keeps `HxType` free of `&` so the `is`-operator right
+ * operand parser does not greedily consume the first `&` of a following
+ * expression-level `&&`. See `HxIntersectionClause` for the rationale.
+ * The common non-intersection typedef yields an empty array — the
+ * `@:tryparse` loop terminates immediately on the `;` trail.
  */
 @:peg
 @:fmt(multilineWhenFieldCtorAndOpt('type', 'Anon', 'anonTypeLeftCurly', 'anyparse.format.BracePlacement.Next'))
@@ -80,4 +92,5 @@ typedef HxTypedefDecl = {
 	@:kw('typedef') var name:HxIdentLit;
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var typeParams:Null<Array<HxTypeParamDecl>>;
 	@:fmt(typedefAssign, propagateTypedefContext) @:lead('=') var type:HxType;
+	@:trivia @:tryparse @:fmt(padLeading) var intersections:Array<HxIntersectionClause>;
 }

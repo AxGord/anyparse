@@ -261,6 +261,35 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
   **198/275 → 214/276 (+16)**, exceeding the +15 estimate. neko 4887 /
   js 4884 / interp 4887, 0 regressions.
 
+- **Slice G — typedef `&` intersection (`typedef X = A & B`). ✅ DONE.**
+  New `@:peg typedef HxIntersectionClause = { @:fmt(typedefIntersection)
+  @:lead('&') var type:HxType; }` consumed as a bare
+  `@:trivia @:tryparse @:fmt(padLeading) var intersections:Array<
+  HxIntersectionClause>` Star on `HxTypedefDecl` (structural sibling of
+  `HxClassDecl.heritage` / `HxAbstractDecl.clauses`): first operand stays
+  in `type`, each subsequent `& T` is one flat clause. **Scoped to the
+  typedef RHS deliberately, NOT added as an `HxType` Pratt operator** —
+  an `@:infix('&')` on `HxType` (the first-cut approach) made the
+  `is`-operator right-operand parser greedily eat the first `&` of a
+  following expression-level `&&` (the `HxType` Pratt op set has no
+  `&&` to win longest-match), regressing `HxBinopGroupWrapSliceTest`.
+  Scoping `&` to the tail keeps `HxType` `&`-free so the collision
+  cannot arise, and matches real Haxe grammar (intersection is a
+  typedef-rhs / constraint construct, not a general type operator).
+  Around-spacing is split exactly like the heritage clauses: post-`&`
+  space from the new `typedefIntersection:WhitespacePolicy` option
+  (default `After`, mirrors `typedefAssign`'s 4-site wiring —
+  `HxModuleWriteOptions` / `HaxeFormat` / `HaxeFormatConfigLoader` /
+  `whitespacePolicyLead` flag list), pre-`&` space structural via the
+  Star's `padLeading` + inter-element separator. `@:kw('&')` is
+  rejected (Case 3 `expectKw` word-boundary check would reject `A&B`).
+  Zero core macro change. New `HxTypeIntersectionSliceTest` (named /
+  empty-anon / non-empty-anon / flat-chain / bare-unaffected / writer
+  spacing / `is`-not-broken regression guard / round-trip). Parse-rate
+  **214/276 → 223/277 (+8 corpus** — the 8 sole-blocker `*WriteOptions.hx`
+  files, 62→54 fails; the new grammar file self-parses for the +1 total).
+  neko 4913 / js 4910 / interp 4913, 0 regressions.
+
 **Design decision (do not re-attempt without new infrastructure):**
 the flat one-line diagnostic renderers (`Text.renderRefs` /
 `renderSearchMatches` / `renderMeta`) **stay on hand-rolled

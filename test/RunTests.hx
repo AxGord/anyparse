@@ -57,6 +57,7 @@ import unit.HxTypeAnonSliceTest;
 import unit.HxAnonVarFieldSliceTest;
 import unit.HxAnonMemberSliceTest;
 import unit.HxTypeParensSliceTest;
+import unit.HxTypeIntersectionSliceTest;
 import unit.HxPrefixSliceTest;
 import unit.HxSameLineOptionsTest;
 import unit.HxTrailingCommaOptionsTest;
@@ -180,6 +181,7 @@ class RunTests {
 		runner.addCase(new HxAnonVarFieldSliceTest());
 		runner.addCase(new HxAnonMemberSliceTest());
 		runner.addCase(new HxTypeParensSliceTest());
+		runner.addCase(new HxTypeIntersectionSliceTest());
 		runner.addCase(new HxBodySliceTest());
 		runner.addCase(new HxNoBodyAbstractTest());
 		runner.addCase(new HxTernarySliceTest());

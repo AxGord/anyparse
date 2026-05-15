@@ -584,6 +584,7 @@ final class HaxeFormatConfigLoader {
 			afterLeftCurly: base.afterLeftCurly,
 			beforeRightCurly: base.beforeRightCurly,
 			typedefAssign: base.typedefAssign,
+			typedefIntersection: base.typedefIntersection,
 			typeParamDefaultEquals: base.typeParamDefaultEquals,
 			typeParamOpen: base.typeParamOpen,
 			typeParamClose: base.typeParamClose,
