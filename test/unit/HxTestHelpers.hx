@@ -7,6 +7,8 @@ import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxAbstractDecl;
 import anyparse.grammar.haxe.HxAnonField;
+import anyparse.grammar.haxe.HxAnonFieldBody;
+import anyparse.grammar.haxe.HxAnonMember;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxClassMember;
 import anyparse.grammar.haxe.HxDecl;
@@ -219,15 +221,72 @@ class HxTestHelpers extends Test {
 	}
 
 	/**
-	 * Asserts `t` is `HxType.Anon` and returns its field list.
-	 * Accepts `Null<HxType>` so callers can pass optional type slots
-	 * (e.g. `HxVarDecl.type`) directly; throws on any non-Anon input.
+	 * Asserts `t` is `HxType.Anon` and returns the field-KIND list,
+	 * projecting `HxAnonMember.field` out of each member so callers
+	 * that don't care about leading metadata stay unchanged. Accepts
+	 * `Null<HxType>` so callers can pass optional type slots (e.g.
+	 * `HxVarDecl.type`) directly; throws on any non-Anon input.
 	 */
 	private function expectAnon(t:Null<HxType>):Array<HxAnonField> {
+		return [for (m in expectAnonMembers(t)) m.field];
+	}
+
+	/**
+	 * Asserts `t` is `HxType.Anon` and returns its raw member list,
+	 * each member exposing the leading metadata Star alongside the
+	 * field kind. Use this when a test inspects `@:meta` prefixes.
+	 */
+	private function expectAnonMembers(t:Null<HxType>):Array<HxAnonMember> {
 		return switch t {
 			case null: throw 'expected HxType.Anon, got null';
 			case Anon(fields): fields;
 			case _: throw 'expected HxType.Anon, got non-Anon variant';
+		};
+	}
+
+	/**
+	 * Asserts `field` is the `var` class-notation anon field kind and
+	 * returns its `HxVarDecl`; throws on any other kind.
+	 */
+	private function expectVarField(field:HxAnonField):HxVarDecl {
+		return switch field {
+			case VarField(decl): decl;
+			case _: throw 'expected HxAnonField.VarField, got $field';
+		};
+	}
+
+	/**
+	 * Asserts `field` is the `final` class-notation anon field kind
+	 * and returns its `HxVarDecl`; throws on any other kind.
+	 */
+	private function expectFinalField(field:HxAnonField):HxVarDecl {
+		return switch field {
+			case FinalField(decl): decl;
+			case _: throw 'expected HxAnonField.FinalField, got $field';
+		};
+	}
+
+	/**
+	 * Asserts `field` is the `function` class-notation anon field kind
+	 * and returns its `HxFnDecl`; throws on any other kind.
+	 */
+	private function expectFnField(field:HxAnonField):HxFnDecl {
+		return switch field {
+			case FnField(decl): decl;
+			case _: throw 'expected HxAnonField.FnField, got $field';
+		};
+	}
+
+	/**
+	 * Asserts `field` is a short-form anon field (`name:Type` or
+	 * `?name:Type`) and returns its `HxAnonFieldBody`; throws on any
+	 * class-notation kind.
+	 */
+	private function expectShortFieldBody(field:HxAnonField):HxAnonFieldBody {
+		return switch field {
+			case Required(body): body;
+			case Optional(body): body;
+			case _: throw 'expected short HxAnonField, got $field';
 		};
 	}
 }

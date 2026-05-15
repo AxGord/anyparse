@@ -218,6 +218,31 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
   hunt continues (true movers require finding the *innermost* shared
   blocker, not the outermost visible construct).
 
+- **Slice C — anon-struct field-level metadata (THE sweep-mover).
+  ✅ DONE.** New `@:peg typedef HxAnonMember = { @:trivia @:tryparse
+  var meta:Array<HxMetadata>; var field:HxAnonField; }` wrapper;
+  `HxType.Anon` now iterates `Array<HxAnonMember>`. The exact
+  `HxMemberDecl`→`HxClassMember` split applied at the anon-struct
+  level (proven pattern, no rename, no core macro change). Closes
+  `typedef T = { @:lead('(') var x:Y; }` — the anyparse grammar DSL's
+  own shape and the dominant apq self-parse blocker. Drill-down +
+  strip-test recon (not surface grep) found it present in **87/159**
+  failures; the lesson applied *in reverse* — this time the visible
+  file-count *was* the innermost shared blocker. Parse-rate
+  **115/274 → 198/275 (+83)**, by far the largest single mover; the
+  plan's compounding-blocker pessimism was over-conservative because
+  typedef-field-meta was the *first* blocker for nearly all 87.
+  `HxTestHelpers.expectAnon` projects `.field` to keep ~50 existing
+  callers byte-unchanged; new `expectAnonMembers` for metadata-aware
+  tests; shared `expectVarField/FinalField/FnField/ShortFieldBody`
+  unwrap helpers promoted to the base (dedup with
+  `HxAnonVarFieldSliceTest`). New `HxAnonMemberSliceTest` (10 cases:
+  every field kind + multi-field mixed meta + no-meta byte-identical
+  regression + `#if`-nested dogfood shape). neko 4855 / js 4852 /
+  interp 4855, 0 regressions. This supersedes the earlier
+  "Slice C — `@:meta` prefix (typedef-coverage, NOT a sweep-mover)"
+  estimate: it is *the* sweep-mover.
+
 **Design decision (do not re-attempt without new infrastructure):**
 the flat one-line diagnostic renderers (`Text.renderRefs` /
 `renderSearchMatches` / `renderMeta`) **stay on hand-rolled

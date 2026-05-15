@@ -27,27 +27,6 @@ import anyparse.grammar.haxe.HxVarDecl;
  */
 class HxAnonVarFieldSliceTest extends HxTestHelpers {
 
-	private function expectVarField(field:HxAnonField):HxVarDecl {
-		return switch field {
-			case VarField(decl): decl;
-			case _: throw 'expected HxAnonField.VarField, got $field';
-		};
-	}
-
-	private function expectFinalField(field:HxAnonField):HxVarDecl {
-		return switch field {
-			case FinalField(decl): decl;
-			case _: throw 'expected HxAnonField.FinalField, got $field';
-		};
-	}
-
-	private function expectFnField(field:HxAnonField):HxFnDecl {
-		return switch field {
-			case FnField(decl): decl;
-			case _: throw 'expected HxAnonField.FnField, got $field';
-		};
-	}
-
 	private function anonOf(source:String):Array<HxAnonField> {
 		final ast:HxClassDecl = HaxeParser.parse(source);
 		final v:HxVarDecl = expectVarMember(ast.members[0].member);

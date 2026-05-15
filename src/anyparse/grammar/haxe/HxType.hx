@@ -23,9 +23,12 @@ package anyparse.grammar.haxe;
  *    output for the old-form arrow. The new (parenthesised) form
  *    `(args) -> ret` lives on the separate `ArrowFn` variant below.
  *
- *  - `Anon(fields:Array<HxAnonField>)` — anonymous structure type
+ *  - `Anon(fields:Array<HxAnonMember>)` — anonymous structure type
  *    `{x:Int, y:String}` or `{ var x:Int; var y:String; }`. Bracketed
- *    `HxAnonField` list reusing the Case 4 sep-peek Star pattern. The
+ *    `HxAnonMember` list reusing the Case 4 sep-peek Star pattern.
+ *    `HxAnonMember` wraps `HxAnonField` with a leading metadata Star
+ *    (the `HxMemberDecl` to `HxClassMember` relationship at the
+ *    anon-struct level) so `{ @:optional x:Int }` parses. The
  *    `@:sepAlt(';')` opt-in makes the separator tolerant in the
  *    non-trivia build: a close-driven loop consumes an OPTIONAL `,`
  *    OR `;` between fields, so `;`-terminated class-notation fields
@@ -36,8 +39,8 @@ package anyparse.grammar.haxe;
  *    type-param body), so no Alt-level ambiguity with `HxStatement.
  *    BlockStmt` or `HxExpr.ObjectLit` exists. Nested anon
  *    (`{f:{f:Int}}`) and arrow inside anon (`{cb:Int->Void}`) compose
- *    naturally through the recursive `HxType` value field on
- *    `HxAnonField`.
+ *    naturally through the recursive `HxType` value field reached via
+ *    `HxAnonMember.field`.
  *
  *  - `ArrowFn(fn:HxArrowFnType)` — new-form arrow function type
  *    `(args) -> ret` (Haxe 4 syntax). Structurally `(`-`,`-`)`
@@ -88,7 +91,7 @@ enum HxType {
 	Arrow(left:HxType, right:HxType);
 
 	@:trivia @:lead('{') @:trail('}') @:sep(',') @:sepAlt(';') @:fmt(anonTypeBracesOpen, anonTypeBracesClose, wrapRules('anonTypeWrap'), leftCurly('anonTypeLeftCurly'), rightCurly('anonTypeRightCurly'), beforeDocCommentEmptyLines, forceMultiInTypedef)
-	Anon(fields:Array<HxAnonField>);
+	Anon(fields:Array<HxAnonMember>);
 
 	ArrowFn(fn:HxArrowFnType);
 

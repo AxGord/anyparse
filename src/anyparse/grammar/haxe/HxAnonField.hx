@@ -3,6 +3,12 @@ package anyparse.grammar.haxe;
 /**
  * Single field entry in an anonymous structure type.
  *
+ * This enum is the field-KIND dispatch only. Leading metadata
+ * (`@:optional x:Int`, `@:lead('(') var v:T;`, ...) is carried by the
+ * `HxAnonMember` wrapper typedef, which `HxType.Anon` iterates — the
+ * same `HxMemberDecl` to `HxClassMember` split at the anon-struct
+ * level. `HxAnonField` itself never sees the metadata prefix.
+ *
  * Branches:
  *
  *  - `Optional(field:HxAnonFieldBody)` — the optional short form
