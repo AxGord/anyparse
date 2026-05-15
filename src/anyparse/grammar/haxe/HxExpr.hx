@@ -119,6 +119,21 @@ package anyparse.grammar.haxe;
  *    among the pure atom branches: the identifier regex is permissive
  *    and would otherwise match `null` / `true` / `false` as bare
  *    identifiers.
+ *  - `DollarBlockExpr` / `DollarReifExpr` / `DollarIdentExpr` — macro
+ *    reification escapes (`${expr}`, `$name{expr}`, `$ident`). Exact
+ *    expression-position mirror of the `HxStringSegment` interpolation
+ *    grammar (`Block` / `Ident`): the only structural addition is the
+ *    named-reification middle form `$i{}` / `$v{}` / `$p{}` / `$a{}` /
+ *    `$b{}` / `$e{}`, carried by the `HxDollarReif` typedef (`name`
+ *    ident then `@:lead("{")` recursive `HxExpr`, closed by the ctor's
+ *    `@:trail("}")` — same ctor-wraps-typedef shape as `NewExpr`/
+ *    `HxNewExpr`; enum-ctor params cannot carry inline metadata so the
+ *    brace lead lives on the typedef field). Declared in
+ *    this order so `tryBranch` resolves the shared `$` prefix: `${`
+ *    (longest) before `$`, and the brace-bearing `$name{…}` before the
+ *    bare `$ident` (the latter is reached only when no `{` follows).
+ *    These are purely syntactic — no reification semantics are applied;
+ *    the forms exist so anyparse can self-parse its own build macros.
  *
  * **Prefix branches** — unary operators, symbolic only. Each
  * `@:prefix(op)` ctor consumes its literal, recurses into the atom
@@ -259,6 +274,15 @@ enum HxExpr {
 	SingleStringExpr(v:HxInterpString);
 
 	RegexLit(v:HxRegexLit);
+
+	@:lead("${") @:trail("}")
+	DollarBlockExpr(expr:HxExpr);
+
+	@:lead("$") @:trail("}")
+	DollarReifExpr(v:HxDollarReif);
+
+	@:lead("$")
+	DollarIdentExpr(name:HxIdentLit);
 
 	@:trivia @:lead('[') @:trail(']') @:sep(',') @:fmt(trailingComma('trailingCommaArrays'), wrapRules('arrayLiteralWrap'))
 	ArrayExpr(elems:Array<HxExpr>);

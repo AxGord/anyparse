@@ -565,6 +565,37 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
     the slice adds a new `@:re` terminal; literal pattern, interp bug
     does not bite), 0 regressions.
 
+  - **Slice L4 — macro `$`-reification expression escapes. ✅ DONE.**
+    (commit pending.) Recon **reframed the inherited "CORE" label**:
+    `$x` / `${expr}` / `$i{}`-style escapes are an additive
+    expression-position mirror of the existing `HxStringSegment`
+    interpolation grammar (`Block`/`Ident`), not a Pratt/Lowering
+    fork — the documented "recon can reverse inherited leans-core"
+    pattern (opposite of L2's switch-guard). Three new `HxExpr` ctors,
+    declared so `tryBranch` resolves the shared `$` prefix:
+    `DollarBlockExpr` (`@:lead("${") @:trail("}")` + `HxExpr`),
+    `DollarReifExpr` (`@:lead("$") @:trail("}")` wrapping the new
+    `HxDollarReif` typedef — `name` ident then `@:lead("{")` recursive
+    `HxExpr`, exact `NewExpr`/`HxNewExpr` ctor-wraps-typedef shape),
+    `DollarIdentExpr` (`@:lead("$")` + ident). The first attempt put
+    `@:lead("{")` inline on an enum-ctor param — Haxe rejects metadata
+    there (`Unexpected @`); pivoting the brace lead onto a typedef
+    field (where `HxVarDecl` already precedents it) fixed it with no
+    core change. Zero Lowering/writer/synth edits, no hand-switch over
+    `HxExpr` ctors in `src/`. **263/278 → 263/278 corpus (no flip);
+    total 267/282 → 268/283** — the +1 num/denom is the new
+    `HxDollarReif.hx` self-parsing. Honest delta: **gap closed but not
+    a sweep-mover** — every `$`-reification cluster file (`Lowering`,
+    `WriterLowering`, `Codegen`, …) compounds on `macro : Type` type
+    reification (Codegen 34 / WriterCodegen 102 occurrences) plus
+    deeper blockers, so none flips on `$`-reification alone. `macro :
+    Type` is the next distinct sibling slice (cross-type Ref to
+    `HxType`, the `is`-operator precedent). New `HxDollarReifSliceTest`
+    (9 methods: each escape shape, `tryBranch` disambiguation,
+    `$type(e)` postfix, `macro $x` nesting, plain-ident regression,
+    round-trip). js 5179/5179, 0 regressions (interp not needed — no
+    `@:re` terminal added).
+
 **Design decision (do not re-attempt without new infrastructure):**
 the flat one-line diagnostic renderers (`Text.renderRefs` /
 `renderSearchMatches` / `renderMeta`) **stay on hand-rolled
