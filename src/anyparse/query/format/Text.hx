@@ -11,6 +11,10 @@ import anyparse.query.Refs.RefHit;
 import anyparse.query.format.line.RefLine;
 import anyparse.query.format.line.RefLineList;
 import anyparse.query.format.line.RefLineListWriter;
+import anyparse.query.format.line.SearchBindingPair;
+import anyparse.query.format.line.SearchLine;
+import anyparse.query.format.line.SearchLineList;
+import anyparse.query.format.line.SearchLineListWriter;
 import anyparse.runtime.Span;
 import anyparse.runtime.Span.Position;
 
@@ -100,33 +104,23 @@ final class Text {
 
 	public static function renderSearchMatches(file:String, source:String, matches:Array<Match>):String {
 		if (matches.length == 0) return '$file: no matches\n';
-		final buf:StringBuf = new StringBuf();
-		for (m in matches) {
+		final lines:Array<SearchLine> = [for (m in matches) {
 			final pos:Position = m.span.lineCol(source);
-			buf.add('$file:${pos.line}:${pos.col - 1}: match');
-			final bindingsCount:Int = countBindings(m);
-			if (bindingsCount > 0) {
-				buf.add(' (');
-				var first:Bool = true;
-				for (name => bound in m.bindings) {
-					if (!first) buf.add(', ');
-					first = false;
-					buf.add(name);
-					buf.add('=');
-					buf.add(summariseBound(source, bound));
-				}
-				buf.add(')');
-			}
-			buf.add('\n');
-		}
-		return buf.toString();
+			final sl:SearchLine = {
+				file: file,
+				line: pos.line,
+				col: pos.col - 1,
+			};
+			final pairs:Array<SearchBindingPair> = [
+				for (name => bound in m.bindings) {name: name, value: summariseBound(source, bound)}
+			];
+			if (pairs.length > 0) sl.bindings = pairs;
+			sl;
+		}];
+		final list:SearchLineList = {lines: lines};
+		return SearchLineListWriter.write(list, LineDiagFormat.instance.defaultWriteOptions);
 	}
 
-	private static inline function countBindings(m:Match):Int {
-		var n:Int = 0;
-		for (_ in m.bindings) n++;
-		return n;
-	}
 
 	private static function summariseBound(source:String, bound:QueryNode):String {
 		// Name-position binding (e.g. `$E` in `new $E(...)`) records the
