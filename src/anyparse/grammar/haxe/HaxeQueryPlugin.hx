@@ -75,9 +75,21 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		// Known gaps (Phase 3.2b plugin work — these decl sites live on
 		// struct fields whose names are absorbed into a parent slot, so
 		// they do not surface as their own `QueryNode`s and the scope
-		// walker cannot bind on them yet):
-		//  - For-loop iterator variables (`HxForStmt.varName`,
-		//    `HxForExpr.varName`).
+		// walker cannot bind on them yet).
+		//
+		// For-loop iterator variables (`HxForStmt.varName` /
+		// `HxForExpr.varName`) ARE resolved (Phase 3.2b-alpha): the
+		// `varName` alias in `extractName` surfaces the iterator on the
+		// `ForStmt` / `ForExpr` ctor's `name` slot, and both kinds are
+		// listed in `selfScopeDeclKinds` so the iterator self-binds into
+		// the loop's own scope frame, visible to reads inside the body,
+		// not after the loop.
+		//
+		// Still deferred (Phase 3.2b-beta): these decl sites live on
+		// transparent typedef-structs that carry no runtime span
+		// (SpanTypeSynth synthesises spans only on enum-ctors), so a
+		// correct per-clause / per-param binding span needs a parser-arc
+		// change and is out of scope:
 		//  - Catch-clause exception names (`HxCatchClause.name`).
 		//  - Lambda-parameter names (`HxLambdaParam.name`).
 		//
@@ -115,6 +127,13 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 				'ShlAssign', 'ShrAssign', 'UShrAssign',
 				'BitOrAssign', 'BitAndAssign', 'BitXorAssign',
 				'NullCoalAssign',
+			],
+			// Self-scoped decl kinds: scope-introducers whose own name binds
+			// into the frame they open (the for-loop iterator pattern). Listed
+			// in scopeKinds, absent from declHostKinds — the binding is visible
+			// only inside the loop, not to enclosing-scope siblings.
+			selfScopeDeclKinds: [
+				'ForStmt', 'ForExpr',
 			],
 		};
 	}
@@ -272,9 +291,10 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 				// Try canonical name slots in priority order. `name` is the
 				// common case (HxClassDecl, HxFnDecl, ...); `type` covers
 				// `new T(...)` (HxNewExpr) and similar nominally-typed
-				// nodes; `node` unwraps Trivial<T> envelopes for the
+				// nodes; `varName` covers for-loop iterators (HxForStmt /
+				// HxForExpr); `node` unwraps Trivial<T> envelopes for the
 				// future Trivia + span composition.
-				for (field in ['name', 'type']) if (Reflect.hasField(value, field)) {
+				for (field in ['name', 'type', 'varName']) if (Reflect.hasField(value, field)) {
 					final n:Dynamic = Reflect.field(value, field);
 					if (n is String) return n;
 				}

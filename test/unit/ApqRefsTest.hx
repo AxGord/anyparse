@@ -30,6 +30,9 @@ using Lambda;
  *    ctor (bare / compound / null-coalescing) reclassifies to Write;
  *    nested LHS shapes (`FieldAccess`, `IndexAccess`) keep their
  *    inner identifiers as Reads (3.3).
+ *  - Self-scoped decls: the `for` / array-comprehension iterator binds
+ *    into the loop's own scope (visible inside the body, shadowing an
+ *    outer same-named decl; not visible after the loop) (3.2b-α).
  */
 class ApqRefsTest extends Test {
 
@@ -144,22 +147,74 @@ class ApqRefsTest extends Test {
 	}
 
 	public function testForLoopOuterReadBindsToOuterDecl():Void {
-		// 3.2b gap acknowledged: HxForStmt.varName is absorbed and does not
-		// surface as a separate decl-host. The test asserts what 3.2 CAN
-		// verify — that an outer `i` Read at `return i` binds to the outer
-		// `var i` decl, regardless of the for-loop iterator's invisibility.
+		// 3.2b-α: the for-loop iterator now surfaces as its own `ForStmt`
+		// decl (self-scoped). The iterator binds INSIDE the loop only, so a
+		// `return i` AFTER the loop still resolves to the outer `var i` —
+		// two decls total (outer var + ForStmt), one read at the return.
 		final source:String = 'class X { static function f():Int { var i:Int = 0; '
 			+ 'for (i in 0...10) {} return i; } }';
 		final hits:Array<RefHit> = findIn(source, 'i');
 		final decls:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
 		final reads:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
-		Assert.equals(1, decls.length, 'only outer var i surfaces in 3.2 — got ${describe(hits)}');
+		Assert.equals(2, decls.length, 'outer var i + ForStmt iterator — got ${describe(hits)}');
 		Assert.equals(1, reads.length, 'only the return-site read surfaces — got ${describe(hits)}');
 		final outerDecl:RefHit = decls[0];
 		final read:RefHit = reads[0];
 		final boundTo:Null<Span> = read.bindingSpan;
 		Assert.notNull(boundTo);
-		if (boundTo != null) Assert.equals(outerDecl.span.from, boundTo.from, 'return-read binds to outer var i');
+		if (boundTo != null) Assert.equals(outerDecl.span.from, boundTo.from, 'return-read binds to outer var i, not the loop iterator');
+	}
+
+	public function testForIterVisibleInsideBody():Void {
+		// Read of `i` inside the loop body resolves to the ForStmt
+		// iterator (self-scoped decl), not to any enclosing binding.
+		final source:String = 'class X { static function f():Void { for (i in 0...10) { var x:Int = i; } } }';
+		final hits:Array<RefHit> = findIn(source, 'i');
+		final decls:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		final reads:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
+		Assert.equals(1, decls.length, 'one ForStmt iterator decl — got ${describe(hits)}');
+		Assert.equals(1, reads.length, 'one read at `var x = i` — got ${describe(hits)}');
+		final iterDecl:RefHit = decls[0];
+		final boundTo:Null<Span> = reads[0].bindingSpan;
+		Assert.notNull(boundTo);
+		if (boundTo != null) Assert.equals(iterDecl.span.from, boundTo.from, 'body read binds to the for-loop iterator');
+	}
+
+	public function testForIterShadowsOuter():Void {
+		// An outer `var i` plus a same-named loop iterator: a read inside
+		// the loop body binds to the iterator (innermost frame wins),
+		// shadowing the outer decl.
+		final source:String = 'class X { static function f():Void { var i:Int = 0; '
+			+ 'for (i in 0...10) { g(i); } } }';
+		final hits:Array<RefHit> = findIn(source, 'i');
+		final decls:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		final reads:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
+		Assert.equals(2, decls.length, 'outer var i + ForStmt iterator — got ${describe(hits)}');
+		Assert.equals(1, reads.length, 'one read at `g(i)` — got ${describe(hits)}');
+		final outerDecl:RefHit = decls[0];
+		final iterDecl:RefHit = decls[1];
+		final boundTo:Null<Span> = reads[0].bindingSpan;
+		Assert.notNull(boundTo);
+		if (boundTo != null) {
+			Assert.equals(iterDecl.span.from, boundTo.from, 'inner read binds to the iterator, not the outer var');
+			Assert.notEquals(outerDecl.span.from, boundTo.from, 'inner read must NOT bind to the shadowed outer var');
+		}
+	}
+
+	public function testForComprehensionIterBinds():Void {
+		// Expression-position `for` (array comprehension): the `ForExpr`
+		// iterator self-binds and the comprehension-body read resolves to
+		// it, same as the statement form.
+		final source:String = 'class X { static function f():Void { var ys = [for (i in 0...10) i * 2]; } }';
+		final hits:Array<RefHit> = findIn(source, 'i');
+		final decls:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		final reads:Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
+		Assert.equals(1, decls.length, 'one ForExpr iterator decl — got ${describe(hits)}');
+		Assert.equals(1, reads.length, 'one read at `i * 2` — got ${describe(hits)}');
+		final iterDecl:RefHit = decls[0];
+		final boundTo:Null<Span> = reads[0].bindingSpan;
+		Assert.notNull(boundTo);
+		if (boundTo != null) Assert.equals(iterDecl.span.from, boundTo.from, 'comprehension read binds to the ForExpr iterator');
 	}
 
 	public function testClassFieldResolvedFromMethodBody():Void {

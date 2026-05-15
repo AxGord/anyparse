@@ -36,6 +36,15 @@ import anyparse.runtime.Span;
  * therefore keep `arr`/`obj` as Reads, which matches the semantic
  * intent of the `--writes` filter.
  *
+ * Phase 3.2b-α scope: self-scoped declarations via
+ * `RefShape.selfScopeDeclKinds`. A scope-introducer in that set binds
+ * its own `name` into the frame it opens (not the enclosing one), so a
+ * Haxe `for (i in xs) …` iterator is a `Decl` visible only inside the
+ * loop body. Reads inside resolve to it via the innermost frame; reads
+ * after the loop fall through to any enclosing binding. Catch-clause
+ * and lambda-parameter names remain unresolved (3.2b-β — they live on
+ * transparent typedef-structs with no runtime span).
+ *
  * Nodes carrying a null `span` are skipped — without source coordinates
  * the result is not addressable.
  */
@@ -58,6 +67,12 @@ final class Refs {
 		if (isScope) {
 			final frame:ScopeFrame = new ScopeFrame(node);
 			collectDecls(target, node, shape, frame);
+			// Self-scoped decl (e.g. for-loop iterator): the scope node's
+			// own name binds INTO the frame it opens, visible only to
+			// reads inside the construct — opposite of a declHost name,
+			// which binds into the enclosing frame for siblings.
+			final selfSpan:Null<Span> = node.span;
+			if (selfSpan != null && node.name == target && shape.selfScopeDeclKinds.contains(node.kind)) frame.declare(target, selfSpan);
 			scopes.push(frame);
 		}
 		final nname:Null<String> = node.name;
@@ -117,6 +132,7 @@ final class Refs {
 		// would normally place the decl name on a different ctor than
 		// the reference ctor, but the contract leaves the option open.
 		if (shape.declHostKinds.contains(kind)) return RefKind.Decl;
+		if (shape.selfScopeDeclKinds.contains(kind)) return RefKind.Decl;
 		if (kind == shape.identKind) return isWriteTarget ? RefKind.Write : RefKind.Read;
 		return null;
 	}

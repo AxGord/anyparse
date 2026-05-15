@@ -71,7 +71,14 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
 - Test corpus exercising shadow vs reference cases (inner binding shadows outer, function-local vs class-field, for-loop variable scope, etc.).
 - Plugin contract documented for new grammars: what to declare to enable scope-aware refs.
 
-**Exit condition**: hand-crafted shadow/reference corpus returns correct results for every case. Plugin contract is one page or less.
+**Slice status**:
+- 3.1 — name-only walker, decl/read classification.
+- 3.2 — lexical scope + `bindingSpan` resolution.
+- 3.3 — write classification via parent-context.
+- 3.2b-α — loop-iterator binding via the `selfScopeDeclKinds` plugin contract field: a scope-introducer self-binds its own name into the frame it opens, so a `for`/comprehension induction variable is a declaration scoped to the loop body (shadows an outer same-named binding inside, falls through after).
+- 3.2b-β — *deferred*. Exception names in catch clauses and lambda parameter names sit on transparent typedef-structs that carry no addressable span (spans are synthesised only on enum-ctor nodes), so a correct per-clause / per-param binding span needs a parser-side span-synthesis change. Out of scope for the refs track; revisit when a second grammar exists to validate the contract enrichment rather than designing it against one language.
+
+**Exit condition**: hand-crafted shadow/reference corpus returns correct results for every case the engine supports — scope shadowing, function-local vs class-field, write classification, and loop-iterator scope. Catch/lambda binding resolution is explicitly out of the supported set pending 3.2b-β (documented limitation, not a silent gap). Plugin contract is one page or less.
 
 ## Phase 4: `apq meta` + JSON stabilization
 

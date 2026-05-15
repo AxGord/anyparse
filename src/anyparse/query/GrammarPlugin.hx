@@ -92,6 +92,21 @@ interface GrammarPlugin {
  * semantics of compound assigns folds into the `--writes` query
  * intent. Plugin-contract enrichment for transparent-struct decl
  * sites (3.2b) layers on top without breaking this shape.
+ *
+ * `selfScopeDeclKinds` (Phase 3.2b-α) is the set of scope-introducer
+ * kinds whose own `name` slot is a binding declared into THEIR OWN
+ * scope frame — the iterator/parameter-on-the-scope-node pattern (Haxe
+ * `for (i in xs) …`). Such a kind emits a `Decl` hit (self-bound, like
+ * `declHostKinds`) but, unlike `declHostKinds`, the binding is visible
+ * only *inside* the construct: a read of `i` after the loop does NOT
+ * resolve to it. This is the opposite of `declHostKinds`, where the
+ * name binds into the *enclosing* frame and is visible to siblings
+ * (function / type names). A kind here must also appear in `scopeKinds`
+ * (the walker only self-declares when it pushes a frame) and must NOT
+ * appear in `declHostKinds` (the two bind into different frames).
+ * Catch-clause and lambda-parameter bindings are NOT covered — they
+ * sit on transparent typedef-structs that carry no runtime span, so a
+ * correct per-clause/per-param binding span is deferred (3.2b-β).
  */
 @:nullSafety(Strict)
 typedef RefShape = {
@@ -99,4 +114,5 @@ typedef RefShape = {
 	var declHostKinds:Array<String>;
 	var scopeKinds:Array<String>;
 	var writeParentKinds:Array<String>;
+	var selfScopeDeclKinds:Array<String>;
 }

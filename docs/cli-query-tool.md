@@ -76,7 +76,7 @@ apq refs --reads <name> <files>      # only read positions
 apq refs --decls <name> <files>      # only declaration positions
 ```
 
-Scope awareness is lexical only: a local declaration shadows an outer name with the same identifier, and the tool correctly attributes references to the innermost binding. No type-based resolution. No cross-file resolution.
+Scope awareness is lexical only: a local declaration shadows an outer name with the same identifier, and the tool correctly attributes references to the innermost binding. A loop iterator (e.g. a `for`/comprehension induction variable) is a declaration scoped to the loop body: references inside the loop resolve to it and shadow an outer same-named binding, while references after the loop fall through to the enclosing scope. No type-based resolution. No cross-file resolution.
 
 Write classification is based on parent-context: an identifier reference is a `write` when it sits as the direct first operand of an assignment-shaped node declared by the grammar plugin (bare, compound, and null-coalescing assignments all qualify). Identifiers nested deeper on the LHS — e.g. inside field access or index access — remain `read`s, matching the semantic intent of the `--writes` query (the modified binding is the host, not the inner operands). Each LHS occurrence produces one hit: compound assignments (`x += 1`) are reported as a single `write` — the implicit read on the LHS is not emitted as a separate hit.
 
@@ -237,9 +237,11 @@ point to the innermost enclosing in-file declaration with a matching name.
 The field is omitted when a read or write is unresolved — typically a
 cross-file reference, an inherited member from a base type, or a grammar
 gap where the decl site lives on a transparent struct field that does not
-surface as its own AST node (e.g. for-loop iterators, catch-clause
-exceptions, or lambda parameters in grammars that keep these names inside
-parent structs rather than on dedicated nodes).
+surface as its own AST node. Loop-iterator bindings (`for` / comprehension
+induction variables) ARE resolved. Exception names in catch clauses and
+lambda parameter names remain unresolved in grammars that keep these names
+on transparent structs carrying no addressable span — a per-grammar
+limitation, not an engine one.
 
 #### `meta`
 
