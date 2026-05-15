@@ -98,6 +98,30 @@ enum HxDecl {
 	@:trailOpt(';')
 	TypedefDecl(decl:HxTypedefDecl);
 
+	/**
+	 * `enum abstract Name(Underlying) { Value*; }` — the modern Haxe
+	 * enum-abstract form (slice ω-enum-abstract). The `@:kw('enum')`
+	 * lives here; the payload reuses `HxAbstractDecl` verbatim, whose
+	 * `name` field owns `@:kw('abstract')`. The enum-value body
+	 * (`final A = 0;`, `var B;`) is ordinary `HxMemberDecl`, already
+	 * handled by `HxAbstractDecl.members`.
+	 *
+	 * Ordered BEFORE `EnumDecl` so `tryBranch` attempts the
+	 * `enum abstract` shape first. For a plain `enum Name { ... }` this
+	 * branch consumes `enum`, `HxAbstractDecl` fails on the missing
+	 * `abstract` keyword, `tryBranch` rolls back `ctx.pos`, and the
+	 * non-kw `EnumDecl` branch then succeeds — the same shared-keyword
+	 * rollback pattern as `PackageDecl`→`PackageEmpty` and
+	 * `ImportWildDecl`→`ImportDecl`. `@:kw('enum')` enforces a word
+	 * boundary (`enumerable` is rejected).
+	 *
+	 * The legacy `@:enum abstract` metadata form is orthogonal — the
+	 * `@:enum` tag rides the `HxTopLevelDecl.meta` Star and reaches the
+	 * plain `AbstractDecl` branch.
+	 */
+	@:kw('enum')
+	EnumAbstractDecl(decl:HxAbstractDecl);
+
 	EnumDecl(decl:HxEnumDecl);
 
 	InterfaceDecl(decl:HxInterfaceDecl);

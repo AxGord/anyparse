@@ -113,6 +113,13 @@ class HxTestHelpers extends Test {
 		};
 	}
 
+	private function expectEnumAbstractDecl(wrapper:HxTopLevelDecl):HxAbstractDecl {
+		return switch wrapper.decl {
+			case EnumAbstractDecl(ad): ad;
+			case _: throw 'expected EnumAbstractDecl, got ${wrapper.decl}';
+		};
+	}
+
 	private function fnBodyStmts(fn:HxFnDecl):Array<HxStatement> {
 		return switch fn.body {
 			case BlockBody(block): block.stmts;

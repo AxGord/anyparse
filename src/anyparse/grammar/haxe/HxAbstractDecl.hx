@@ -58,8 +58,12 @@ package anyparse.grammar.haxe;
  * knob set and stays on the bare `@:fmt(leftCurly)` until that slice
  * lands.
  *
- * `@:enum abstract` is deferred — it requires recognising the `enum`
- * keyword before `abstract` at the `HxDecl` level.
+ * `enum abstract Name(T) { ... }` is handled at the `HxDecl` level via
+ * the `EnumAbstractDecl` ctor (slice ω-enum-abstract), which consumes
+ * the leading `enum` keyword and reuses this `HxAbstractDecl` verbatim
+ * for the rest. The legacy `@:enum abstract` metadata form is
+ * orthogonal — the `@:enum` tag rides the `HxTopLevelDecl.meta` Star
+ * and reaches the plain `AbstractDecl` branch.
  */
 @:peg
 @:fmt(multilineWhenFieldNonEmpty('members'))

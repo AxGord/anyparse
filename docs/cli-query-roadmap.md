@@ -170,6 +170,21 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
   files) and module-level `#if` (~27). Slice C (`@:meta` prefix +
   `HxAnonField`→`HxAnonFieldKind` rename + wrapper typedef) is the
   remaining typedef-struct refinement.
+- **Slice D — `enum abstract` (sweep-mover). ✅ DONE.** Added
+  `@:kw('enum') EnumAbstractDecl(decl:HxAbstractDecl)` to `HxDecl`,
+  ordered before `EnumDecl`. The `enum` keyword is consumed at the
+  `HxDecl` level; the payload reuses `HxAbstractDecl` verbatim (its
+  `name` owns `@:kw('abstract')`, the enum-value body is ordinary
+  `HxMemberDecl`). Plain `enum Name { ... }` still routes to `EnumDecl`
+  via the shared-keyword `tryBranch` rollback (same pattern as
+  `PackageDecl`→`PackageEmpty`). Pure additive Alt-enum branch — zero
+  core Lowering / synth / writer change (WriterLowering generic
+  `@:kw`-ctor dispatch, `VarDecl`/`FnDecl` precedent). 8 new unit tests
+  (`HxEnumAbstractSliceTest`) cover parse, `private` modifier,
+  whitespace, plain-enum rollback regression, and writer round-trip;
+  neko + js + interp green, 0 regressions. **Parse-rate sweep
+  74/273 → 113/273 (+39)** — the predicted enum-abstract bucket
+  cleared. First confirmed sweep-mover of the D-track.
 
 **Design decision (do not re-attempt without new infrastructure):**
 the flat one-line diagnostic renderers (`Text.renderRefs` /
