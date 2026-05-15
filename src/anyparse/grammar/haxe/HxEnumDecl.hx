@@ -18,11 +18,18 @@ package anyparse.grammar.haxe;
  *
  * Constructors with parameters are supported via `HxEnumCtor.ParamCtor`
  * which wraps `HxEnumCtorDecl` — see `HxEnumCtor`.
+ *
+ * Each entry is an `HxEnumMember` (leading-metadata Star + `HxEnumCtor`)
+ * so `@:meta`-annotated constructors round-trip — the enum-body analog
+ * of `HxType.Anon` iterating `HxAnonMember`. The no-metadata case is
+ * transparent: an empty `meta` Star leaves the close-peek Star and the
+ * per-branch `@:trail(';')` behaving exactly as the bare `HxEnumCtor`
+ * form did.
  */
 @:peg
 @:fmt(multilineWhenFieldNonEmpty('ctors'))
 typedef HxEnumDecl = {
 	@:kw('enum') var name:HxIdentLit;
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var typeParams:Null<Array<HxTypeParamDecl>>;
-	@:fmt(beginEndType, existingBetweenFields, uniformBetween('betweenEnumCtors'), beforeDocCommentEmptyLines) @:lead('{') @:trail('}') @:trivia var ctors:Array<HxEnumCtor>;
+	@:fmt(beginEndType, existingBetweenFields, uniformBetween('betweenEnumCtors'), beforeDocCommentEmptyLines) @:lead('{') @:trail('}') @:trivia var ctors:Array<HxEnumMember>;
 }

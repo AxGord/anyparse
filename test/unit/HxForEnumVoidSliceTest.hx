@@ -6,9 +6,12 @@ import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxEnumCtor;
 import anyparse.grammar.haxe.HxEnumCtorDecl;
 import anyparse.grammar.haxe.HxEnumDecl;
+import anyparse.grammar.haxe.HxEnumMember;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxForStmt;
+import anyparse.grammar.haxe.HxMetadata;
+import anyparse.grammar.haxe.HxMetadataUtil;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxParam;
 import anyparse.grammar.haxe.HxStatement;
@@ -147,30 +150,30 @@ class HxForEnumVoidSliceTest extends HxTestHelpers {
 	public function testSimpleCtorStillWorks():Void {
 		final module:HxModule = HaxeModuleParser.parse('enum Color { Red; Green; Blue; }');
 		final ed:HxEnumDecl = expectEnumDecl(module.decls[0]);
-		Assert.equals(3, ed.ctors.length);
-		Assert.equals('Red', (expectSimpleCtor(ed.ctors[0]) : String));
-		Assert.equals('Green', (expectSimpleCtor(ed.ctors[1]) : String));
-		Assert.equals('Blue', (expectSimpleCtor(ed.ctors[2]) : String));
+		Assert.equals(3, enumCtors(ed).length);
+		Assert.equals('Red', (expectSimpleCtor(enumCtors(ed)[0]) : String));
+		Assert.equals('Green', (expectSimpleCtor(enumCtors(ed)[1]) : String));
+		Assert.equals('Blue', (expectSimpleCtor(enumCtors(ed)[2]) : String));
 	}
 
 	public function testSingleParamCtor():Void {
 		final module:HxModule = HaxeModuleParser.parse('enum Option { Some(v:Int); None; }');
 		final ed:HxEnumDecl = expectEnumDecl(module.decls[0]);
-		Assert.equals(2, ed.ctors.length);
-		final decl:HxEnumCtorDecl = expectParamCtor(ed.ctors[0]);
+		Assert.equals(2, enumCtors(ed).length);
+		final decl:HxEnumCtorDecl = expectParamCtor(enumCtors(ed)[0]);
 		Assert.equals('Some', (decl.name : String));
 		Assert.equals(1, decl.params.length);
 		final body = expectRequiredParam(decl.params[0]);
 		Assert.equals('v', (body.name : String));
 		Assert.equals('Int', (expectNamedType(body.type).name : String));
-		Assert.equals('None', (expectSimpleCtor(ed.ctors[1]) : String));
+		Assert.equals('None', (expectSimpleCtor(enumCtors(ed)[1]) : String));
 	}
 
 	public function testMultiParamCtor():Void {
 		final module:HxModule = HaxeModuleParser.parse('enum Color { Rgb(r:Int, g:Int, b:Int); }');
 		final ed:HxEnumDecl = expectEnumDecl(module.decls[0]);
-		Assert.equals(1, ed.ctors.length);
-		final decl:HxEnumCtorDecl = expectParamCtor(ed.ctors[0]);
+		Assert.equals(1, enumCtors(ed).length);
+		final decl:HxEnumCtorDecl = expectParamCtor(enumCtors(ed)[0]);
 		Assert.equals('Rgb', (decl.name : String));
 		Assert.equals(3, decl.params.length);
 		Assert.equals('r', (expectRequiredParam(decl.params[0]).name : String));
@@ -181,8 +184,8 @@ class HxForEnumVoidSliceTest extends HxTestHelpers {
 	public function testCtorWithDefaultValue():Void {
 		final module:HxModule = HaxeModuleParser.parse('enum E { A(x:Int = 0); }');
 		final ed:HxEnumDecl = expectEnumDecl(module.decls[0]);
-		Assert.equals(1, ed.ctors.length);
-		final decl:HxEnumCtorDecl = expectParamCtor(ed.ctors[0]);
+		Assert.equals(1, enumCtors(ed).length);
+		final decl:HxEnumCtorDecl = expectParamCtor(enumCtors(ed)[0]);
 		Assert.equals(1, decl.params.length);
 		final body = expectRequiredParam(decl.params[0]);
 		Assert.equals('x', (body.name : String));
@@ -196,41 +199,85 @@ class HxForEnumVoidSliceTest extends HxTestHelpers {
 	public function testMixedSimpleAndParamCtors():Void {
 		final module:HxModule = HaxeModuleParser.parse('enum Expr { Lit(v:Int); Add(a:Int, b:Int); Nil; }');
 		final ed:HxEnumDecl = expectEnumDecl(module.decls[0]);
-		Assert.equals(3, ed.ctors.length);
-		final lit:HxEnumCtorDecl = expectParamCtor(ed.ctors[0]);
+		Assert.equals(3, enumCtors(ed).length);
+		final lit:HxEnumCtorDecl = expectParamCtor(enumCtors(ed)[0]);
 		Assert.equals('Lit', (lit.name : String));
 		Assert.equals(1, lit.params.length);
-		final add:HxEnumCtorDecl = expectParamCtor(ed.ctors[1]);
+		final add:HxEnumCtorDecl = expectParamCtor(enumCtors(ed)[1]);
 		Assert.equals('Add', (add.name : String));
 		Assert.equals(2, add.params.length);
-		Assert.equals('Nil', (expectSimpleCtor(ed.ctors[2]) : String));
+		Assert.equals('Nil', (expectSimpleCtor(enumCtors(ed)[2]) : String));
+	}
+
+	// ---- Slice apq-P5-I: metadata on enum constructors ----
+
+	private function metaName(m:HxMetadata):String {
+		return switch m {
+			case MetaCall(call): (call.name : String);
+			case _: HxMetadataUtil.source(m);
+		};
+	}
+
+	public function testMetaCallBeforeSimpleCtor():Void {
+		final module:HxModule = HaxeModuleParser.parse("enum E { @:kw('public') Public; }");
+		final ed:HxEnumDecl = expectEnumDecl(module.decls[0]);
+		final members:Array<HxEnumMember> = enumMembers(ed);
+		Assert.equals(1, members.length);
+		Assert.equals(1, members[0].meta.length);
+		Assert.equals('@:kw', metaName(members[0].meta[0]));
+		Assert.equals('Public', (expectSimpleCtor(members[0].ctor) : String));
+	}
+
+	public function testMixedMetaAndBareCtors():Void {
+		final module:HxModule = HaxeModuleParser.parse("enum E { @:kw('x') A; B(p:Int); @:foo @:bar(1) C; }");
+		final ed:HxEnumDecl = expectEnumDecl(module.decls[0]);
+		final members:Array<HxEnumMember> = enumMembers(ed);
+		Assert.equals(3, members.length);
+		Assert.equals(1, members[0].meta.length);
+		Assert.equals('@:kw', metaName(members[0].meta[0]));
+		Assert.equals('A', (expectSimpleCtor(members[0].ctor) : String));
+		Assert.equals(0, members[1].meta.length);
+		Assert.equals('B', (expectParamCtor(members[1].ctor).name : String));
+		Assert.equals(2, members[2].meta.length);
+		Assert.equals('@:foo', metaName(members[2].meta[0]));
+		Assert.equals('@:bar', metaName(members[2].meta[1]));
+		Assert.equals('C', (expectSimpleCtor(members[2].ctor) : String));
+	}
+
+	public function testNoMetaCtorStaysEmpty():Void {
+		final module:HxModule = HaxeModuleParser.parse('enum Color { Red; Green; }');
+		final ed:HxEnumDecl = expectEnumDecl(module.decls[0]);
+		final members:Array<HxEnumMember> = enumMembers(ed);
+		Assert.equals(2, members.length);
+		Assert.equals(0, members[0].meta.length);
+		Assert.equals(0, members[1].meta.length);
 	}
 
 	public function testZeroParamCtorVsBareSimple():Void {
 		final module:HxModule = HaxeModuleParser.parse('enum E { A(); B; }');
 		final ed:HxEnumDecl = expectEnumDecl(module.decls[0]);
-		Assert.equals(2, ed.ctors.length);
-		final a:HxEnumCtorDecl = expectParamCtor(ed.ctors[0]);
+		Assert.equals(2, enumCtors(ed).length);
+		final a:HxEnumCtorDecl = expectParamCtor(enumCtors(ed)[0]);
 		Assert.equals('A', (a.name : String));
 		Assert.equals(0, a.params.length);
-		Assert.equals('B', (expectSimpleCtor(ed.ctors[1]) : String));
+		Assert.equals('B', (expectSimpleCtor(enumCtors(ed)[1]) : String));
 	}
 
 	public function testEnumCtorWhitespace():Void {
 		final module:HxModule = HaxeModuleParser.parse('  enum  E  {  A ( x : Int , y : Int ) ;  B ;  }  ');
 		final ed:HxEnumDecl = expectEnumDecl(module.decls[0]);
-		Assert.equals(2, ed.ctors.length);
-		final a:HxEnumCtorDecl = expectParamCtor(ed.ctors[0]);
+		Assert.equals(2, enumCtors(ed).length);
+		final a:HxEnumCtorDecl = expectParamCtor(enumCtors(ed)[0]);
 		Assert.equals(2, a.params.length);
-		Assert.equals('B', (expectSimpleCtor(ed.ctors[1]) : String));
+		Assert.equals('B', (expectSimpleCtor(enumCtors(ed)[1]) : String));
 	}
 
 	public function testEnumCtorInModule():Void {
 		final module:HxModule = HaxeModuleParser.parse('class Foo {} enum Option { Some(v:Int); None; }');
 		Assert.equals(2, module.decls.length);
 		final ed:HxEnumDecl = expectEnumDecl(module.decls[1]);
-		Assert.equals(2, ed.ctors.length);
-		final some:HxEnumCtorDecl = expectParamCtor(ed.ctors[0]);
+		Assert.equals(2, enumCtors(ed).length);
+		final some:HxEnumCtorDecl = expectParamCtor(enumCtors(ed)[0]);
 		Assert.equals('Some', (some.name : String));
 		Assert.equals(1, some.params.length);
 	}

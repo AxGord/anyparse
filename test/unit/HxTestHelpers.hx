@@ -15,6 +15,7 @@ import anyparse.grammar.haxe.HxDecl;
 import anyparse.grammar.haxe.HxEnumCtor;
 import anyparse.grammar.haxe.HxEnumCtorDecl;
 import anyparse.grammar.haxe.HxEnumDecl;
+import anyparse.grammar.haxe.HxEnumMember;
 import anyparse.grammar.haxe.HxFnBody;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxIdentLit;
@@ -143,6 +144,24 @@ class HxTestHelpers extends Test {
 			case ParamCtor(decl): decl;
 			case _: throw 'expected ParamCtor, got $ctor';
 		};
+	}
+
+	/**
+	 * Projects `HxEnumMember.ctor` out of each member so callers that
+	 * don't care about leading metadata stay unchanged — the enum-body
+	 * analog of `expectAnon`.
+	 */
+	private function enumCtors(ed:HxEnumDecl):Array<HxEnumCtor> {
+		return [for (m in ed.ctors) m.ctor];
+	}
+
+	/**
+	 * Returns the raw enum member list, each member exposing the
+	 * leading metadata Star alongside the constructor. Use this when a
+	 * test inspects `@:meta` prefixes — analog of `expectAnonMembers`.
+	 */
+	private function enumMembers(ed:HxEnumDecl):Array<HxEnumMember> {
+		return ed.ctors;
 	}
 
 	/**

@@ -320,6 +320,35 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
   `Scope` / `Selector` / `Span`, 54→49 fails). neko 4945 / js 4942 /
   interp 4945, 0 regressions.
 
+- **Slice I — metadata on enum constructors (`enum E { @:kw('x')
+  A; @:foo(1) B(p:Int); }`). ✅ DONE.** New `@:peg typedef
+  HxEnumMember = { @:trivia @:tryparse var meta:Array<HxMetadata>;
+  var ctor:HxEnumCtor; }`; `HxEnumDecl.ctors` now iterates
+  `Array<HxEnumMember>`. The exact enum-body analog of Slice C's
+  `HxAnonMember` (the `HxMemberDecl`↔`HxClassMember` split applied at
+  the enum-ctor position) — zero core / synth / writer change (the
+  generic paired-struct path + empty-`meta` transparency carry it,
+  same as the `HxType.Anon → HxAnonMember` precedent). AST-contract
+  shift: `ed.ctors[i]` is now `HxEnumMember`; `HxTestHelpers` grew
+  `enumCtors(ed)` (projects `m.ctor`, mirror of `expectAnon`) +
+  `enumMembers(ed)` (raw, mirror of `expectAnonMembers`);
+  `HxForEnumVoidSliceTest` / `HxTopLevelSliceTest` route `.ctors`
+  through `enumCtors`. Three new red-green cases
+  (`testMetaCallBeforeSimpleCtor` / `testMixedMetaAndBareCtors` /
+  `testNoMetaCtorStaysEmpty`). Parse-rate **228/277 → 246/278 (+17
+  corpus** — every enum-grammar self-parse file: `HxModifier` /
+  `HxDecl` / `HxType` / `HxExpr` / `HxStatement` / `HxParam` /
+  `HxSwitchCase` / `JValue` / `SValue` / …, 49→32 fails; the new
+  `HxEnumMember.hx` itself is the +1 to the file total). neko 4948 /
+  js 4945 / interp 4948, 0 regressions. **Scope-estimate lesson:**
+  the pre-build sed-strip ceiling (predicted single-digit) was a
+  *gross under-estimate* — per-line strip masked multi-line `@:meta`
+  and the all-`@:` over-strip created a false compounding picture.
+  Enum-ctor metadata was the *sole* blocker for these grammar files
+  (Slice C's `HxAnonMember` already covered anon-struct field metas).
+  Confirms estimates are unreliable in *both* directions; only the
+  post-build corpus measurement is truth.
+
 **Design decision (do not re-attempt without new infrastructure):**
 the flat one-line diagnostic renderers (`Text.renderRefs` /
 `renderSearchMatches` / `renderMeta`) **stay on hand-rolled
