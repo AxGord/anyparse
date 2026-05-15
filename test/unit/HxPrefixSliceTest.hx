@@ -161,14 +161,14 @@ class HxPrefixSliceTest extends HxTestHelpers {
 	}
 
 	public function testDoubleNeg():Void {
-		// `--a` → Neg(Neg(a)). The outer Neg consumes `-` then
-		// recurses into parseHxExprAtom, which tries every atom
-		// branch in source order and eventually reaches the Neg
-		// branch again: that inner call consumes the second `-`
-		// and recurses once more for `a`. Atom recursion
-		// terminates when the regex/literal branches finally
-		// match without rolling back.
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = --a; }');
+		// `- -a` → Neg(Neg(a)). The spaced form is genuine double
+		// negation: the outer Neg consumes the first `-` then recurses
+		// into parseHxExprAtom, which tries every atom branch in source
+		// order and eventually reaches the Neg branch again, consuming
+		// the second `-` and recursing once more for `a`. (The glued
+		// form `--a` is now the `PreDecr` pre-decrement operator — see
+		// HxIncrDecrSliceTest — so the space here is load-bearing.)
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = - -a; }');
 		switch decl.init {
 			case Neg(Neg(IdentExpr(a))): Assert.equals('a', (a : String));
 			case null, _:

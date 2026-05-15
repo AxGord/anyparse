@@ -4,8 +4,10 @@ package anyparse.grammar.haxe;
  * Haxe expression grammar — arrow operator, array/map literals, ternary,
  * null-coalescing, and the full infix/prefix/postfix suite.
  *
- * Atom constructors plus three unary-prefix constructors plus three
- * postfix constructors (field access, index access, call) plus one
+ * Atom constructors plus five unary-prefix constructors (including
+ * `++`/`--` pre-increment/decrement) plus five postfix constructors
+ * (field access, index access, call, `++`/`--` post-increment/decrement)
+ * plus one
  * ternary operator plus thirty-five binary-operator constructors
  * across ten precedence levels. Atoms, prefix and postfix are all
  * reached through a single `parseHxExprAtom` call — internally split
@@ -312,6 +314,12 @@ enum HxExpr {
 
 	IdentExpr(v:HxIdentLit);
 
+	@:prefix('++')
+	PreIncr(operand:HxExpr);
+
+	@:prefix('--')
+	PreDecr(operand:HxExpr);
+
 	@:prefix('-')
 	Neg(operand:HxExpr);
 
@@ -332,6 +340,12 @@ enum HxExpr {
 
 	@:postfix('(', ')') @:sep(',') @:fmt(trailingComma('trailingCommaArgs'), callParens, wrapRules('callParameterWrap'), methodChain('methodChainWrap'), propagateExprPosition)
 	Call(operand:HxExpr, args:Array<HxExpr>);
+
+	@:postfix('++')
+	PostIncr(operand:HxExpr);
+
+	@:postfix('--')
+	PostDecr(operand:HxExpr);
 
 	@:infix('*', 9)
 	Mul(left:HxExpr, right:HxExpr);

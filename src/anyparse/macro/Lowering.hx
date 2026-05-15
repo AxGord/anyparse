@@ -718,19 +718,23 @@ class Lowering {
 			final ctorPath:Array<String> = ruleCtorPath(typePath, ctor);
 			final ctorRef:Expr = MacroStringTools.toFieldExpr(ctorPath);
 			final branchBody:Expr = if (children.length == 1) {
-				if (close == null) {
-					Context.fatalError(
-						'Lowering: @:postfix single-child branch "$ctor" requires @:postfix(open, close) pair form',
-						Context.currentPos()
-					);
-					throw 'unreachable';
-				}
 				final ctorCall:Expr = {expr: ECall(ctorRef, [macro left]), pos: Context.currentPos()};
-				macro {
-					skipWs(ctx);
-					expectLit(ctx, $v{close});
-					left = $ctorCall;
-				};
+				if (close == null) {
+					// ω-postfix-single-literal: bare single-token postfix
+					// (`x++`, `x--`). The op literal is already consumed by
+					// the outer matchExpr dispatch; there is no close
+					// delimiter and no suffix child, so the branch only
+					// rewraps the accumulated `left` operand.
+					macro {
+						left = $ctorCall;
+					};
+				} else {
+					macro {
+						skipWs(ctx);
+						expectLit(ctx, $v{close});
+						left = $ctorCall;
+					};
+				}
 			} else if (children.length == 2 && children[1].kind == Star) {
 				// Star-suffix form: `Call(operand:T, args:Array<T>)` with
 				// @:postfix('(', ')') @:sep(','). The Star child wraps

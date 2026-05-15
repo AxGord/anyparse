@@ -290,6 +290,36 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
   files, 62→54 fails; the new grammar file self-parses for the +1 total).
   neko 4913 / js 4910 / interp 4913, 0 regressions.
 
+- **Slice H — pre/post increment & decrement (`++a`, `--a`, `a++`,
+  `a--`). ✅ DONE.** Four new `HxExpr` constructors: `PreIncr`/`PreDecr`
+  as `@:prefix` (declared before `@:prefix('-')` Neg — prefix branches
+  dispatch in `tryBranch` declaration order with no longest-match sort,
+  so `--` must precede `-` or `--a` folds to `Neg(Neg(a))`), and
+  `PostIncr`/`PostDecr` as bare single-literal `@:postfix` (no close
+  delimiter, no suffix child). The postfix shape required the **one
+  approved core macro change**: `Lowering`'s postfix fold previously
+  hard-`fatalError`'d on a single-child branch without a `(open,close)`
+  pair (`ω-postfix-single-literal`); it now emits a real
+  `left = Ctor(left)` body (the op literal is already consumed by the
+  outer `matchExpr` dispatch, whitespace by the postfix loop wrapper's
+  pre-dispatch `skipWs`). `WriterLowering` needed no change — its
+  `children.length == 1` postfix arm already emits
+  `_dc([operand, _dt(op + (close ?? ''))])`. `SpanTypeSynth` /
+  `TriviaTypeSynth` needed no change (single-Ref postfix flows the
+  generic paired-struct path, same shape as the prefix `Neg`/`Not`
+  precedent). Longest-match collisions verified safe: infix `+`/`-`
+  are in the separate Pratt loop (longest-sorted) and the postfix
+  dispatch prepends `!peekLit(longerOp)` guards; prefix relies on the
+  declaration-order placement. New `HxIncrDecrSliceTest` (pre/post
+  ident, field-access compose, infix-binding, infix-`+`/`-` and
+  prefix-`-` not-cannibalised regression guards, writer-form,
+  round-trip); pre-existing `HxPrefixSliceTest.testDoubleNeg` updated
+  to the spaced `- -a` form (the glued `--a` it used is now correctly
+  `PreDecr`, not `Neg(Neg(a))`). Parse-rate **223/277 → 228/277 (+5
+  corpus** — sole-blocker `DocMeasure` / `BlockCommentNormalizer` /
+  `Scope` / `Selector` / `Span`, 54→49 fails). neko 4945 / js 4942 /
+  interp 4945, 0 regressions.
+
 **Design decision (do not re-attempt without new infrastructure):**
 the flat one-line diagnostic renderers (`Text.renderRefs` /
 `renderSearchMatches` / `renderMeta`) **stay on hand-rolled
