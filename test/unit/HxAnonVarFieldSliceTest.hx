@@ -4,6 +4,7 @@ import utest.Assert;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxAnonField;
 import anyparse.grammar.haxe.HxClassDecl;
+import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxVarDecl;
 
 /**
@@ -37,6 +38,13 @@ class HxAnonVarFieldSliceTest extends HxTestHelpers {
 		return switch field {
 			case FinalField(decl): decl;
 			case _: throw 'expected HxAnonField.FinalField, got $field';
+		};
+	}
+
+	private function expectFnField(field:HxAnonField):HxFnDecl {
+		return switch field {
+			case FnField(decl): decl;
+			case _: throw 'expected HxAnonField.FnField, got $field';
 		};
 	}
 
@@ -134,6 +142,49 @@ class HxAnonVarFieldSliceTest extends HxTestHelpers {
 		Assert.equals(2, inner.length);
 		Assert.equals('a', (expectVarField(inner[0]).name : String));
 		Assert.equals('b', (expectVarField(inner[1]).name : String));
+	}
+
+	public function testSingleFnFieldNoBody():Void {
+		final fields:Array<HxAnonField> = anonOf('class Foo { var s:{ function f():Void; }; }');
+		Assert.equals(1, fields.length);
+		final decl:HxFnDecl = expectFnField(fields[0]);
+		Assert.equals('f', (decl.name : String));
+		Assert.equals(0, decl.params.length);
+		Assert.equals('Void', (expectNamedType(decl.returnType).name : String));
+		Assert.isTrue(decl.body.match(NoBody));
+	}
+
+	public function testFnFieldWithParams():Void {
+		final fields:Array<HxAnonField> = anonOf('class Foo { var s:{ function g(a:Int):Bool; }; }');
+		Assert.equals(1, fields.length);
+		final decl:HxFnDecl = expectFnField(fields[0]);
+		Assert.equals('g', (decl.name : String));
+		Assert.equals(1, decl.params.length);
+		Assert.equals('Bool', (expectNamedType(decl.returnType).name : String));
+	}
+
+	public function testMultiFnFieldsSemicolon():Void {
+		final fields:Array<HxAnonField> = anonOf('class Foo { var s:{ function a():Int; function b():String; }; }');
+		Assert.equals(2, fields.length);
+		Assert.equals('a', (expectFnField(fields[0]).name : String));
+		Assert.equals('b', (expectFnField(fields[1]).name : String));
+	}
+
+	public function testMixedFnAndShortForm():Void {
+		final fields:Array<HxAnonField> = anonOf('class Foo { var s:{ function f():Int; name:String }; }');
+		Assert.equals(2, fields.length);
+		Assert.equals('f', (expectFnField(fields[0]).name : String));
+		switch fields[1] {
+			case Required(body): Assert.equals('name', (body.name : String));
+			case _: Assert.fail('expected Required short field at index 1');
+		}
+	}
+
+	public function testMixedVarAndFnSemicolon():Void {
+		final fields:Array<HxAnonField> = anonOf('class Foo { var s:{ var x:Int; function g(a:Int):Bool; }; }');
+		Assert.equals(2, fields.length);
+		Assert.equals('x', (expectVarField(fields[0]).name : String));
+		Assert.equals('g', (expectFnField(fields[1]).name : String));
 	}
 
 	public function testCommaFormsRoundTrip():Void {

@@ -19,6 +19,13 @@ package anyparse.grammar.haxe;
  *    shape is identical to `VarField`, only the introducer keyword
  *    differs.
  *
+ *  - `FnField(decl:HxFnDecl)` — class-notation function field
+ *    `function name(params):Ret;` (interface-method shape) or with a
+ *    `{ … }` body. Mirrors `HxClassMember.FnMember`; the `function`
+ *    keyword is the `@:kw` dispatcher and the terminator (`;` for the
+ *    `NoBody` signature form, `}` for a braced body) is owned by
+ *    `HxFnBody`, not a per-branch `@:trail` — same as `FnMember`.
+ *
  *  - `Required(field:HxAnonFieldBody)` — the canonical short form
  *    `name:Type`. No keyword/lead — the branch matches when the next
  *    token is the field name (`HxIdentLit`).
@@ -30,11 +37,11 @@ package anyparse.grammar.haxe;
  * Branch order matters. `Optional` (`@:lead('?')`) comes first, then
  * the keyword-dispatched class-notation branches (`@:kw` enforces a
  * word boundary so a field literally named `vars` is not mistaken for
- * `var`), then the fallthrough `Required` catch-all LAST — its first
- * token is `HxIdentLit`, which would otherwise shadow the keyword
- * branches. This mirrors the `HxStatement` / `HxClassMember` pattern
- * where keyword-/lead-dispatched branches precede the no-guard
- * catch-all.
+ * `var`, nor `functions` for `function`), then the fallthrough
+ * `Required` catch-all LAST — its first token is `HxIdentLit`, which
+ * would otherwise shadow the keyword branches. This mirrors the
+ * `HxStatement` / `HxClassMember` pattern where keyword-/lead-
+ * dispatched branches precede the no-guard catch-all.
  *
  * Multi-field anon (`{ var a:T; var b:T; }`) parses in every build:
  * `HxType.Anon` opts into `@:sepAlt(';')`, which in the non-trivia
@@ -54,5 +61,6 @@ enum HxAnonField {
 	@:lead('?') Optional(field:HxAnonFieldBody);
 	@:kw('var') @:trail(';') VarField(decl:HxVarDecl);
 	@:kw('final') @:trail(';') FinalField(decl:HxVarDecl);
+	@:kw('function') FnField(decl:HxFnDecl);
 	Required(field:HxAnonFieldBody);
 }

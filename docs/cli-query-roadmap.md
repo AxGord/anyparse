@@ -154,6 +154,22 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
   (+18)**, neko 4743 / js 4740 / interp 4743 green, 0 regressions.
   Unblocks Slice B (function field) and Slice C (`@:meta` prefix),
   which shared the multi-field-anon prerequisite.
+- **Slice B — anon-type `function` field. ✅ DONE.** Added
+  `@:kw('function') FnField(decl:HxFnDecl)` to `HxAnonField`, a direct
+  mirror of `HxClassMember.FnMember`. `typedef T = { function f():Void; }`
+  and `{ var x:Int; function g(a:Int):Bool; }` now parse, riding the
+  Slice 0 close-driven loop (the `;`/`}` terminator is owned by
+  `HxFnBody`, not a per-branch `@:trail`). Pure additive Alt-enum
+  branch: the writer auto-dispatches via WriterLowering generic Case 3
+  single-Ref path (same as `VarField`/`FinalField`/`FnMember`) — zero
+  writer/synth change. neko 4761 / js 4758 / interp 4761 green, 0
+  regressions. Parse-rate sweep stays **flat at 74/273** — no
+  `src/**/*.hx` corpus file uses anon-struct-with-function-field, so
+  Slice B is correctness/coverage (unit-test-covered) rather than a
+  sweep-mover. Sweep-moving F1 buckets remain: enum abstract (~39
+  files) and module-level `#if` (~27). Slice C (`@:meta` prefix +
+  `HxAnonField`→`HxAnonFieldKind` rename + wrapper typedef) is the
+  remaining typedef-struct refinement.
 
 **Design decision (do not re-attempt without new infrastructure):**
 the flat one-line diagnostic renderers (`Text.renderRefs` /
