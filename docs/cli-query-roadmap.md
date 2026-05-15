@@ -500,7 +500,7 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
   member modifier, untyped fn param, hex `0x20`).
 
   - **Slice L1 — trailing sep before close. ✅ DONE.** (commit
-    `3bb33df`.) The strict plain-mode sep loops in `Lowering`
+    `a95ba68`.) The strict plain-mode sep loops in `Lowering`
     (postfix-call args, Case-4 enum-Alt `ArrayExpr`, struct-field
     Star `HxObjectLit.fields`, optional Star `HxTypeRef.params`)
     consumed a sep then forced another element parse, rejecting the
@@ -518,7 +518,7 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
     `testAcceptsTrailingComma`. js 5108/5108, 0 regressions.
 
   - **Slice L2 — EReg regex literal `~/pattern/flags`. ✅ DONE.**
-    (commit pending.) User-approved (additive track, chosen over the
+    (commit `acb7a64`.) User-approved (additive track, chosen over the
     core switch-guard slice). New `HxRegexLit` — exact mirror of
     `HxDoubleStringLit` (`@:re('~/(?:[^/\\\n]|\\.)*/[a-z]*')` +
     `@:rawString` + transparent `abstract(String) from String to
@@ -537,7 +537,7 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
     EReg — literal pattern, not `EReg.escape`, so the interp bug does
     not bite), 0 regressions.
   - **Slice L3 — `macro` member modifier + hex literal bundle. ✅
-    DONE.** (commit pending.) The last clean additive of the tail
+    DONE.** (commit `6561bb8`.) The last clean additive of the tail
     (the user's option-2 at the L2 fork); pure additive, no core
     fork. Two zero-ripple grammar extensions: (a) `@:kw('macro')
     Macro;` added to `HxMemberModifier` (flat keyword enum, sibling
@@ -566,7 +566,7 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
     does not bite), 0 regressions.
 
   - **Slice L4 — macro `$`-reification expression escapes. ✅ DONE.**
-    (commit pending.) Recon **reframed the inherited "CORE" label**:
+    (commit `70561fd`.) Recon **reframed the inherited "CORE" label**:
     `$x` / `${expr}` / `$i{}`-style escapes are an additive
     expression-position mirror of the existing `HxStringSegment`
     interpolation grammar (`Block`/`Ident`), not a Pratt/Lowering
