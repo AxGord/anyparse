@@ -18,7 +18,13 @@ package anyparse.grammar.haxe;
  * bodies, no `static`, mandatory `public`) are not the parser's
  * responsibility — they belong to a later analysis pass.
  *
- * `extends` is deferred to a future slice.
+ * `heritage` is the same bare `Array<HxHeritageClause>` field as
+ * `HxClassDecl.heritage` (`@:trivia @:tryparse @:fmt(padLeading)`),
+ * placed between `typeParams` and `members`. Haxe interfaces use
+ * `extends` (repeatable); the shared `HxHeritageClause` enum also
+ * carries `implements`, which simply never matches in interface
+ * position. The parser does not police that distinction — semantic
+ * analysis is a later pass.
  *
  * The `members` field carries the same `interMemberBlankLines` knob as
  * `HxClassDecl.members` and `HxAbstractDecl.members`, but uses the
@@ -41,5 +47,6 @@ package anyparse.grammar.haxe;
 typedef HxInterfaceDecl = {
 	@:kw('interface') var name:HxIdentLit;
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var typeParams:Null<Array<HxTypeParamDecl>>;
+	@:trivia @:tryparse @:fmt(padLeading) var heritage:Array<HxHeritageClause>;
 	@:fmt(leftCurly, emptyCurlyBreak, beginEndType, afterFieldsWithDocComments, existingBetweenFields, beforeDocCommentEmptyLines, blankBeforeFinalDocCommentInLeading, blankBeforeOrphanLineCommentTrail, interMemberBlankLines('member', 'VarMember', 'FnMember', 'interfaceBetweenVars', 'interfaceBetweenFunctions', 'interfaceAfterVars'), betweenMultilineCommentsBlanks) @:lead('{') @:trail('}') @:trivia var members:Array<HxMemberDecl>;
 }

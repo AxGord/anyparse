@@ -167,7 +167,9 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
   `src/**/*.hx` corpus file uses anon-struct-with-function-field, so
   Slice B is correctness/coverage (unit-test-covered) rather than a
   sweep-mover. Sweep-moving F1 buckets remain: enum abstract (~39
-  files) and module-level `#if` (~27). Slice C (`@:meta` prefix +
+  files); module-level `#if` was *thought* to be ~27 but Slice E
+  disproved this (it already parses — the bucket was masked heritage
+  failures; see Slice E). Slice C (`@:meta` prefix +
   `HxAnonField`→`HxAnonFieldKind` rename + wrapper typedef) is the
   remaining typedef-struct refinement.
 - **Slice D — `enum abstract` (sweep-mover). ✅ DONE.** Added
@@ -185,6 +187,36 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
   neko + js + interp green, 0 regressions. **Parse-rate sweep
   74/273 → 113/273 (+39)** — the predicted enum-abstract bucket
   cleared. First confirmed sweep-mover of the D-track.
+- **Slice E — class/interface heritage (`extends`/`implements`).
+  ✅ DONE (grammar gap closed; NOT a sweep-mover).** New
+  `@:peg enum HxHeritageClause { @:kw('extends') ExtendsClause(type:HxType);
+  @:kw('implements') ImplementsClause(type:HxType); }` — exact structural
+  twin of `HxAbstractClause` (`from`/`to`). Consumed as a bare
+  `@:trivia @:tryparse @:fmt(padLeading) var heritage:Array<HxHeritageClause>`
+  field placed between `typeParams` and `members` on **both**
+  `HxClassDecl` and `HxInterfaceDecl` (mirror of `HxAbstractDecl.clauses`).
+  Pure additive — zero core Lowering / SpanTypeSynth / TriviaTypeSynth /
+  WriterLowering change (the bare-Star Case-3-`@:kw` shape is already
+  driven generically for `HxAbstractClause`). Parser is intentionally
+  permissive (no policing of one-`extends`-per-class, `implements`-only-
+  for-classes, etc.). 11 new unit tests (`HxHeritageSliceTest`) cover
+  single/multi clauses, heritage-after-type-params, no-heritage-stays-
+  empty, heritage-inside-`#if`, writer round-trip, keyword word boundary;
+  neko + js + interp green, 0 regressions.
+  **Probe-first correction:** the prior histogram tagged "module-level
+  `#if` (~27)" as the next sweep-mover. Empirically **disproved** —
+  module `#if` already parses; `Skip.hx`-type failures were masked
+  *heritage* failures inside `#if macro` regions. But heritage is **also
+  not a sweep-mover**: parse-rate moved only **113/273 → 115/274 (+2)**.
+  29 of the 30 `extends`/`implements` failing files have *compounding*
+  deeper blockers (complex member bodies / other unsupported constructs
+  inside large `#if macro` regions), so closing heritage alone does not
+  flip them. Same lesson as Slice B: "closes a grammar gap" and "moves
+  the sweep" are independent; quantifying *files that contain* a
+  construct over-counts when those files have multiple blockers. The gap
+  was real and worth closing for correctness/coverage; the sweep-mover
+  hunt continues (true movers require finding the *innermost* shared
+  blocker, not the outermost visible construct).
 
 **Design decision (do not re-attempt without new infrastructure):**
 the flat one-line diagnostic renderers (`Text.renderRefs` /
