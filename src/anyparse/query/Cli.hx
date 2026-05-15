@@ -203,7 +203,10 @@ final class Cli {
 		final inputStr:String = positionals[positionals.length - 1];
 		final annotation:Null<String> = positionals.length == 2 ? positionals[0] : null;
 		if (annotation == null && onKind == null) {
-			stderr('apq meta: provide an <annotation> or --on <decl-kind>\n');
+			// One bare positional with no `--on`: ambiguous — it is taken
+			// as the <file-or-glob>, leaving no annotation/kind to scope
+			// the query. Spell out both halves the grammar needs.
+			stderr('apq meta: need an <annotation> or --on <decl-kind>, plus a <file-or-glob>\n');
 			printMetaUsage();
 			return EXIT_USAGE;
 		}
