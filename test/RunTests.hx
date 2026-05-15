@@ -57,6 +57,7 @@ import unit.HxTypeArrowSliceTest;
 import unit.HxTypeAnonSliceTest;
 import unit.HxAnonVarFieldSliceTest;
 import unit.HxAnonMemberSliceTest;
+import unit.HxConditionalMemberSliceTest;
 import unit.HxTypeParensSliceTest;
 import unit.HxTypeIntersectionSliceTest;
 import unit.HxPrefixSliceTest;
@@ -182,6 +183,7 @@ class RunTests {
 		runner.addCase(new HxTypeAnonSliceTest());
 		runner.addCase(new HxAnonVarFieldSliceTest());
 		runner.addCase(new HxAnonMemberSliceTest());
+		runner.addCase(new HxConditionalMemberSliceTest());
 		runner.addCase(new HxTypeParensSliceTest());
 		runner.addCase(new HxTypeIntersectionSliceTest());
 		runner.addCase(new HxBodySliceTest());

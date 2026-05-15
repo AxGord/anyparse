@@ -349,6 +349,52 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
   Confirms estimates are unreliable in *both* directions; only the
   post-build corpus measurement is truth.
 
+- **Slice J — member-scope `#if` conditional compilation
+  (`class C { #if sys function collect() {} #end }`). ✅ DONE.** New
+  `@:peg typedef HxConditionalMember` (cond / body / elseifs / elseBody)
+  + `HxElseifMember` twin, plus a `@:kw('#if') @:trail('#end')
+  Conditional(inner:HxConditionalMember)` ctor on `HxClassMember`. The
+  member-scope completion of the cond-comp arc — exact structural twin
+  of `HxConditionalStmt` / `HxElseifStmt` (statement scope) with element
+  type `HxMemberDecl`, the minimal shape WITHOUT the decl-scope
+  import/using blank-line cascades (members carry their own
+  `interMemberBlankLines` model; an import-ordering cascade has no
+  meaning at member scope). Zero core / synth / writer change — the Star
+  engine + `emitOptionalKwStarFieldSteps` + paired-struct synth carry
+  it, same as the decl/stmt cond-comp precedent. One edit point covers
+  class + interface + abstract (all three use `Array<HxMemberDecl>`). A
+  member-level `#if` reaches the new ctor only after the pre-existing
+  modifier-scope `HxMemberModifier.Conditional` is tried via the
+  modifiers Star and rolls back on the member introducer keyword (same
+  shared-`#if`, different-`@:trail` rollback as `PackageDecl` →
+  `PackageEmpty`). `HxTestHelpers` grew `expectConditionalMember`
+  (mirror of `expectFnMember`); ten red-green cases (single / then-plain
+  / else / elseif / nested / no-cond-regression / Glob-dogfood /
+  interface / abstract / empty-body-rejected). Parse-rate **246/278 →
+  247/278 corpus-relative (+1, `Glob.hx` — the confirmed
+  cond-comp-sole-blocker)**; total file count **246/278 → 249/280**
+  (the two new grammar twins also self-parse, +2 num/denom). neko 5005 /
+  js 5002 / interp 5005, 0 regressions. **Known limitation, shared
+  verbatim with the decl-scope precedent:** an *empty* body
+  (`#if cond #end`, zero members) is rejected, not accepted as a
+  zero-element Star — `HxMemberDecl`'s empty meta/modifier prefix Stars
+  consume nothing, then the mandatory `member:HxClassMember` field
+  throws on the terminator before the tryparse Star rolls back.
+  `HxConditionalDecl` behaves identically (`#if sys\n#end` at module
+  scope throws `expected HxDecl`); member scope mirrors it rather than
+  diverging. No real anyparse/dogfood source has an empty conditional
+  member body. `testEmptyConditionalBodyRejectedLikeDeclScope` pins the
+  actual contract via `Assert.raises(…, ParseError)` so a future
+  decl-scope fix (a core Lowering tryparse-Star-of-struct rollback
+  change spanning decl + stmt + member, out of additive-twin scope)
+  updates all scopes consistently. **Recon lesson (reconfirmed):**
+  post-build strip-test on the freshly rebuilt parser is the only
+  truth — the cond-comp preprocess-proxy correctly predicted "+1 sole
+  blocker" here; combined clean-additive ceiling (cond-comp + EReg +
+  trailing-comma + hex) measured at 6/32, so no Slice-C/I-scale
+  additive remains — the tail is heterogeneous with compounding
+  blockers.
+
 **Design decision (do not re-attempt without new infrastructure):**
 the flat one-line diagnostic renderers (`Text.renderRefs` /
 `renderSearchMatches` / `renderMeta`) **stay on hand-rolled

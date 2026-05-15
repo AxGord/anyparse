@@ -32,6 +32,33 @@ package anyparse.grammar.haxe;
  * legacy `final var x:Int;` form (modifier on `var`) is consequently
  * not accepted at the member position; modern `final x:Int;` is the
  * idiomatic spelling.
+ *
+ * `Conditional` covers `#if <cond> <members> [#elseif …] [#else …]
+ * #end` preprocessor regions wrapping whole member declarations — the
+ * member-scope completion of the cond-comp arc (`HxDecl.Conditional`
+ * at decl scope, `HxStatement.Conditional` at stmt scope,
+ * `HxMemberModifier.Conditional` for a modifier run). `@:kw('#if')`
+ * dispatches with a non-word-char boundary check (so `#iff` is
+ * rejected); `@:trail('#end')` consumes the closing directive after
+ * `HxConditionalMember` parses the cond atom, the member body Star,
+ * the optional `#elseif` chain, and the optional `#else` clause.
+ *
+ * Position at the end of the enum is by convention (mirror of
+ * `HxDecl.Conditional`); branch order does not matter for `#if`
+ * because no other `HxClassMember` ctor keyword starts with `#`. A
+ * member-level `#if` is reached here only AFTER the modifier-scope
+ * `HxMemberModifier.Conditional` is tried via the modifiers Star and
+ * rolls back: its `@:trail('#end')` fails on the member introducer
+ * keyword (`function` / `var` / `final`), `tryBranch` restores
+ * `ctx.pos`, and dispatch falls through to this ctor — the same
+ * shared-keyword rollback as `PackageDecl` to `PackageEmpty`. A pure
+ * modifier-conditional (`#if X public #end function f()`) still
+ * resolves at modifier scope and never reaches this ctor.
+ *
+ * The single `Conditional` ctor here covers class, interface, and
+ * abstract member contexts — all three use `Array<HxMemberDecl>`
+ * (`HxClassDecl.members`, `HxInterfaceDecl.members`,
+ * `HxAbstractDecl.members`).
  */
 @:peg
 enum HxClassMember {
@@ -44,4 +71,7 @@ enum HxClassMember {
 
 	@:kw('function')
 	FnMember(decl:HxFnDecl);
+
+	@:kw('#if') @:trail('#end')
+	Conditional(inner:HxConditionalMember);
 }

@@ -11,6 +11,7 @@ import anyparse.grammar.haxe.HxAnonFieldBody;
 import anyparse.grammar.haxe.HxAnonMember;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxClassMember;
+import anyparse.grammar.haxe.HxConditionalMember;
 import anyparse.grammar.haxe.HxDecl;
 import anyparse.grammar.haxe.HxEnumCtor;
 import anyparse.grammar.haxe.HxEnumCtorDecl;
@@ -78,6 +79,13 @@ class HxTestHelpers extends Test {
 		return switch member {
 			case FnMember(decl): decl;
 			case _: throw 'expected FnMember, got $member';
+		};
+	}
+
+	private function expectConditionalMember(member:HxClassMember):HxConditionalMember {
+		return switch member {
+			case Conditional(inner): inner;
+			case _: throw 'expected Conditional, got $member';
 		};
 	}
 
