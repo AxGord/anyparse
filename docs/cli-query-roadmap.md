@@ -536,6 +536,34 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
     5121/5121 + interp 5124/5124 (interp run because the slice touches
     EReg — literal pattern, not `EReg.escape`, so the interp bug does
     not bite), 0 regressions.
+  - **Slice L3 — `macro` member modifier + hex literal bundle. ✅
+    DONE.** (commit pending.) The last clean additive of the tail
+    (the user's option-2 at the L2 fork); pure additive, no core
+    fork. Two zero-ripple grammar extensions: (a) `@:kw('macro')
+    Macro;` added to `HxMemberModifier` (flat keyword enum, sibling
+    of `Inline`/`Extern`) — the macro-function modifier (`public
+    static macro function`), member-position only, deliberately NOT
+    in `HxModifier` (`macro class`/`macro typedef` are invalid Haxe);
+    (b) new `HxHexLit` — exact mirror of `HxRegexLit`
+    (`@:re('0[xX][0-9A-Fa-f]+')` + `@:rawString` + transparent
+    `abstract(String) from String to String`) — plus one
+    `HxExpr.HexLit(v:HxHexLit)` ctor declared before `IntLit` so
+    `0x20` is not split by the `[0-9]+` integer terminal. Zero
+    Lowering/writer/synth change (generic raw-String single-Ref path,
+    no hand-switch over either enum's ctors). **262/278 → 263/278
+    corpus (+1: `query/Text.hx` flipped via hex; total 265/281 →
+    267/282, the +1 denom is the new self-parsing `HxHexLit.hx`)**.
+    Honest delta note: `Build.hx` did NOT flip despite `macro` being
+    its drilled-innermost blocker — it is in the compounding
+    `$`-reification/`macro` cluster and a deeper blocker (`error at
+    25: expected HxDecl`) surfaced. The grammar gap is genuinely
+    closed; histogram drilled-innermost is not a flip predictor (the
+    documented lesson, confirmed both directions again). New
+    `HxMacroModHexSliceTest` (8 methods: lowercase/uppercase hex,
+    decimal/zero/float regression, round-trip, bare + Build-shape
+    `macro` modifier). js 5142/5142 + interp 5145/5145 (interp run as
+    the slice adds a new `@:re` terminal; literal pattern, interp bug
+    does not bite), 0 regressions.
 
 **Design decision (do not re-attempt without new infrastructure):**
 the flat one-line diagnostic renderers (`Text.renderRefs` /

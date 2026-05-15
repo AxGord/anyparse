@@ -19,6 +19,11 @@ package anyparse.grammar.haxe;
  *
  * **Atom branches** — all leaves, no operators:
  *
+ *  - `HexLit` — hexadecimal integer `0x20` / `0XFF`. `@:re @:rawString`
+ *    terminal (`HxHexLit`), source-verbatim like `RegexLit`. **Must
+ *    appear before `IntLit`**: the integer regex `[0-9]+` would match
+ *    the leading `0` and stop, leaving `x20` unconsumed. No overlap
+ *    with `FloatLit` (hex has no fractional/exponent form).
  *  - `FloatLit` — decimal with mandatory fractional part (`3.14`,
  *    `1.0e-3`). **Must appear before `IntLit`**: the enum-branch
  *    try-loop iterates in source order, and `3.14` has to be
@@ -236,6 +241,8 @@ package anyparse.grammar.haxe;
  */
 @:peg
 enum HxExpr {
+
+	HexLit(v:HxHexLit);
 
 	FloatLit(v:HxFloatLit);
 

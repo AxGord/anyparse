@@ -19,6 +19,14 @@ package anyparse.grammar.haxe;
  * supersedes it. No haxe-formatter fork fixture uses the legacy form;
  * the deprecation is intentional and matches Haxe 4+ idiom.
  *
+ * `Macro` is the macro-function modifier (`macro function f()` /
+ * `public static macro function g()`). It is member-position only and
+ * is deliberately absent from `HxModifier` — `macro class`/`macro
+ * typedef` are not valid Haxe, so the top-level modifier set must not
+ * accept it. The expression-position `macro {...}` reification keyword
+ * is a separate grammar concern and is unaffected: the modifier Star
+ * only runs at member-declaration start.
+ *
  * Keyword-only branches are zero-arg. The generated parser enforces
  * word boundaries via `expectKw` so `publicly` does not partially
  * match `public`.
@@ -41,6 +49,7 @@ enum HxMemberModifier {
 	@:kw('override') Override;
 	@:kw('dynamic') Dynamic;
 	@:kw('extern') Extern;
+	@:kw('macro') Macro;
 
 	@:kw('#if') @:trail('#end')
 	Conditional(inner:HxConditionalMod);
