@@ -36,19 +36,14 @@ package anyparse.grammar.haxe;
  * where keyword-/lead-dispatched branches precede the no-guard
  * catch-all.
  *
- * SCOPE LIMIT: only a SINGLE class-notation field per anon type
- * parses in a non-trivia build (`{trivia:false}`). `HxType.Anon`'s
- * Star is strictly `@:sep`-char-separated there (`Lowering.hx:1376`
- * hard-requires `,`, then `expectLit('}')`), so `{ var a:T; var b:T; }`
- * — the dominant anyparse-schema shape — fails: after the first
- * `;`-terminated field the loop sees no `,` and the close `expectLit`
- * fails on the next field. The trivia-mode path (`Lowering.hx:1349`)
- * is tolerant, but both `HaxeParser` (Fast) and the span parser used
- * by `apq` (Tolerant) are non-trivia builds, so neither benefits —
- * the discriminator is `ctx.trivia`, orthogonal to Fast/Tolerant.
- * Multi `;`-separated fields need a core dual-separator change to the
- * anon Star (tracked separately); this enum's branches are correct
- * and additive on their own.
+ * Multi-field anon (`{ var a:T; var b:T; }`) parses in every build:
+ * `HxType.Anon` opts into `@:sepAlt(';')`, which in the non-trivia
+ * build (`{trivia:false}`, used by both `HaxeParser` and the span
+ * parser `apq` uses) selects a close-driven loop that consumes an
+ * OPTIONAL `,` OR `;` between fields plus an optional trailing
+ * separator. `VarField`/`FinalField` keep their `@:trail(';')` (the
+ * field eats its own `;`); the loop tolerates that as well as
+ * `;`-separated short fields, classic `,`, mixed, and `{}`.
  *
  * The Alt-enum-split shape (over a Boolean presence flag) was chosen
  * because the macro pipeline currently supports `@:optional` only on

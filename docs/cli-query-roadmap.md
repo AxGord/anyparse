@@ -124,29 +124,36 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
   Phase 5 fix is **widening the Haxe grammar by top parse-failure
   cause**, which also advances anyparse main-roadmap Phase 3 — the
   two tracks intersect here.
-- **F2 — anon Star is strictly `,`-separated in plain mode.**
-  Histogram of the F1 bucket (fresh `bin/apq.n`, full `src/**/*.hx`,
-  52/273 baseline): the #1 cause (99 files) is anonymous-structure
+- **F2 — anon Star is strictly `,`-separated in plain mode. ✅
+  RESOLVED (Slice 0).** Histogram of the F1 bucket (fresh `bin/apq.n`,
+  full `src/**/*.hx`): the #1 cause (~99 files) is anonymous-structure
   types using class-notation fields (`{ var name:T; }`, `@:meta`
-  prefixes). Grammar branches `HxAnonField.VarField`/`FinalField`
-  landed (additive, +4 → 56/273, 0 regressions), but only the
-  SINGLE-field case parses: `HxType.Anon`'s `@:sep(',')` Star
-  hard-requires `,` in plain/fast mode (`Lowering.hx:1376-1389`),
-  while the dominant schema shape is multi `;`-separated
-  (`{ var a:T; var b:T; }`). Closing the bucket needs a **core
-  Lowering change**: an opt-in dual `,`/`;` separator + optional
-  trailing separator on the anon Star (drop `@:trail(';')` from the
-  class-notation branches; `;` becomes the Star separator), plus the
-  WriterLowering mirror. This invalidates the earlier "purely
-  additive, no core change" estimate — the trivia-mode path
-  (`Lowering.hx:1349`) is tolerant but both `HaxeParser` (Fast) and
-  the span parser used by `apq` (`HaxeModuleSpanParser`, Tolerant) are
-  non-trivia builds (`{trivia:false}`); the discriminator is
-  `ctx.trivia`, orthogonal to the Fast/Tolerant axis, so neither hits
-  the tolerant loop. High blast radius (the sep loop is generic across every
-  `@:sep` Star), so the dual-sep behavior must be annotation-gated to
-  `HxType.Anon`, not global. Decision pending before continuing the
-  grammar-widening track.
+  prefixes). `HxType.Anon`'s `@:sep(',')` Star hard-required `,` in
+  the non-trivia build, so only the SINGLE-field case parsed. The
+  discriminator is `ctx.trivia` (the macro build flag), orthogonal to
+  the Fast/Tolerant axis: both `HaxeParser` (Fast) and the span parser
+  `apq` uses (`HaxeModuleSpanParser`, Tolerant) are non-trivia
+  (`{trivia:false}`), so neither hit the tolerant trivia-mode path.
+  The sep loop is generic across every `@:sep` Star (HxObjectLit,
+  ArrayExpr `[1, 2]`, fn/type params), so a global `;` accept was
+  unacceptable. **Resolution**: a new opt-in meta `@:sepAlt(';')`
+  (registered in the `Lit` strategy → `lit.sepAltText`) gates a
+  tolerant close-driven loop in `Lowering` that consumes an OPTIONAL
+  `,` OR `;` between elements plus an optional trailing separator;
+  the pre-existing strict loop is byte-identical when the meta is
+  absent (zero global blast radius). The earlier "drop `@:trail(';')`
+  from the class-notation branches" prescription was superseded by a
+  lower-blast-radius refinement: `VarField`/`FinalField` KEEP
+  `@:trail(';')` (the field eats its own `;`), so there is no
+  synth/writer ctor-arity ripple; the close-driven loop tolerates
+  field-eaten `;`, Required `;`-separated fields, classic `,`, mixed,
+  trailing-sep, and `{}`. WriterLowering is verify-only (emits the
+  canonical `,`; the haxe-formatter corpus has no `;`-anon and apq
+  queries are read-only — per-element sep preservation for `;`-anon
+  write-back deferred to Phase 4). Result: parse-rate **56 → 74 / 273
+  (+18)**, neko 4743 / js 4740 / interp 4743 green, 0 regressions.
+  Unblocks Slice B (function field) and Slice C (`@:meta` prefix),
+  which shared the multi-field-anon prerequisite.
 
 **Design decision (do not re-attempt without new infrastructure):**
 the flat one-line diagnostic renderers (`Text.renderRefs` /

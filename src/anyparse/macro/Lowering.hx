@@ -1155,6 +1155,7 @@ class Lowering {
 		final leadText:Null<String> = branch.annotations.get('lit.leadText');
 		final trailText:Null<String> = branch.annotations.get('lit.trailText');
 		final sepText:Null<String> = branch.annotations.get('lit.sepText');
+		final sepAltText:Null<String> = branch.annotations.get('lit.sepAltText');
 
 		// Case 1: zero-arg ctor with @:lit(single). When the literal ends
 		// with a word character (`null`, `true`, `default`, …), emit the
@@ -1375,6 +1376,34 @@ class Lowering {
 			}
 			if (sepText != null) {
 				final sepCharCode:Int = sepText.charCodeAt(0);
+				// Opt-in (@:sepAlt) tolerant variant: a close-driven loop that
+				// consumes an OPTIONAL separator (sepText or sepAltText) between
+				// elements. Mirrors the trivia-build close-peek loop in plain
+				// mode so multi `;`-separated anon fields parse under the
+				// non-trivia HaxeParser / HaxeModuleSpanParser builds. Only the
+				// @:sepAlt branch (HxType.Anon) reaches this; the strict loop
+				// below stays byte-identical for every other @:sep Star.
+				if (sepAltText != null) {
+					final sepAltCharCode:Int = sepAltText.charCodeAt(0);
+					return macro {
+						skipWs(ctx);
+						expectLit(ctx, $v{leadText});
+						final _items:Array<$elemCT> = [];
+						skipWs(ctx);
+						while ($closeNotNextExpr) {
+							_items.push($elemCall);
+							skipWs(ctx);
+							if (ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}
+								|| ctx.input.charCodeAt(ctx.pos) == $v{sepAltCharCode}) {
+								ctx.pos++;
+								skipWs(ctx);
+							}
+						}
+						skipWs(ctx);
+						expectLit(ctx, $v{trailText});
+						return $ctorCall;
+					};
+				}
 				return macro {
 					skipWs(ctx);
 					expectLit(ctx, $v{leadText});

@@ -24,9 +24,14 @@ package anyparse.grammar.haxe;
  *    `(args) -> ret` lives on the separate `ArrowFn` variant below.
  *
  *  - `Anon(fields:Array<HxAnonField>)` — anonymous structure type
- *    `{x:Int, y:String}`. Bracketed comma-separated `HxAnonField`
- *    list reusing the same Case 4 sep-peek Star pattern as
- *    `HxObjectLit`. Dispatched by the `{` lead — type-position is
+ *    `{x:Int, y:String}` or `{ var x:Int; var y:String; }`. Bracketed
+ *    `HxAnonField` list reusing the Case 4 sep-peek Star pattern. The
+ *    `@:sepAlt(';')` opt-in makes the separator tolerant in the
+ *    non-trivia build: a close-driven loop consumes an OPTIONAL `,`
+ *    OR `;` between fields, so `;`-terminated class-notation fields
+ *    (`var`/`final`), `;`-separated short fields, classic `,`, mixed,
+ *    and an optional trailing separator all parse. Dispatched by the
+ *    `{` lead — type-position is
  *    always after `:` (var-decl, function-param, return type,
  *    type-param body), so no Alt-level ambiguity with `HxStatement.
  *    BlockStmt` or `HxExpr.ObjectLit` exists. Nested anon
@@ -82,7 +87,7 @@ enum HxType {
 	@:infix('->', 0, 'Right') @:fmt(tight)
 	Arrow(left:HxType, right:HxType);
 
-	@:trivia @:lead('{') @:trail('}') @:sep(',') @:fmt(anonTypeBracesOpen, anonTypeBracesClose, wrapRules('anonTypeWrap'), leftCurly('anonTypeLeftCurly'), rightCurly('anonTypeRightCurly'), beforeDocCommentEmptyLines, forceMultiInTypedef)
+	@:trivia @:lead('{') @:trail('}') @:sep(',') @:sepAlt(';') @:fmt(anonTypeBracesOpen, anonTypeBracesClose, wrapRules('anonTypeWrap'), leftCurly('anonTypeLeftCurly'), rightCurly('anonTypeRightCurly'), beforeDocCommentEmptyLines, forceMultiInTypedef)
 	Anon(fields:Array<HxAnonField>);
 
 	ArrowFn(fn:HxArrowFnType);

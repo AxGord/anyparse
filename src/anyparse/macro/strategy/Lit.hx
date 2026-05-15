@@ -35,6 +35,11 @@ import anyparse.core.Strategy;
  *  - `@:wrap("o","c")`              — shorthand for `@:lead`+`@:trail`.
  *  - `@:sep(",")`                   — separator between elements of a
  *                                     `Star` child of this node.
+ *  - `@:sepAlt(";")`               — opt-in alternate separator,
+ *                                     accepted alongside `@:sep` by the
+ *                                     tolerant close-driven loop (an
+ *                                     optional `,` OR `;` between
+ *                                     elements). Sets `lit.sepAltText`.
  *
  * Pass 2 (annotate) writes results under the `lit.*` namespace on the
  * shape node; Lowering and Codegen read them back in pass 3/4.
@@ -44,7 +49,7 @@ class Lit implements Strategy {
 	public var name(default, null):String = 'Lit';
 	public var runsAfter(default, null):Array<String> = [];
 	public var runsBefore(default, null):Array<String> = [];
-	public var ownedMeta(default, null):Array<String> = [':lit', ':lead', ':trail', ':trailOpt', ':wrap', ':sep'];
+	public var ownedMeta(default, null):Array<String> = [':lit', ':lead', ':trail', ':trailOpt', ':wrap', ':sep', ':sepAlt'];
 	public var runtimeContribution(default, null):RuntimeContrib = {ctxFields: [], helpers: [], cacheKeyContributors: []};
 
 	public function new() {}
@@ -53,7 +58,7 @@ class Lit implements Strategy {
 		final meta:Null<Metadata> = node.annotations.get('base.meta');
 		if (meta == null) return false;
 		for (entry in meta) switch entry.name {
-			case ':lit' | ':lead' | ':trail' | ':trailOpt' | ':wrap' | ':sep': return true;
+			case ':lit' | ':lead' | ':trail' | ':trailOpt' | ':wrap' | ':sep' | ':sepAlt': return true;
 			case _:
 		}
 		return false;
@@ -81,6 +86,8 @@ class Lit implements Strategy {
 				node.annotations.set('lit.trailText', stringOrFail(entry.params[1], ':wrap'));
 			case ':sep':
 				node.annotations.set('lit.sepText', singleString(entry.params, ':sep'));
+			case ':sepAlt':
+				node.annotations.set('lit.sepAltText', singleString(entry.params, ':sepAlt'));
 			case _:
 		}
 	}
