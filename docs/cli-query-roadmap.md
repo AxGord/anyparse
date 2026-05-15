@@ -124,6 +124,29 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
   Phase 5 fix is **widening the Haxe grammar by top parse-failure
   cause**, which also advances anyparse main-roadmap Phase 3 — the
   two tracks intersect here.
+- **F2 — anon Star is strictly `,`-separated in plain mode.**
+  Histogram of the F1 bucket (fresh `bin/apq.n`, full `src/**/*.hx`,
+  52/273 baseline): the #1 cause (99 files) is anonymous-structure
+  types using class-notation fields (`{ var name:T; }`, `@:meta`
+  prefixes). Grammar branches `HxAnonField.VarField`/`FinalField`
+  landed (additive, +4 → 56/273, 0 regressions), but only the
+  SINGLE-field case parses: `HxType.Anon`'s `@:sep(',')` Star
+  hard-requires `,` in plain/fast mode (`Lowering.hx:1376-1389`),
+  while the dominant schema shape is multi `;`-separated
+  (`{ var a:T; var b:T; }`). Closing the bucket needs a **core
+  Lowering change**: an opt-in dual `,`/`;` separator + optional
+  trailing separator on the anon Star (drop `@:trail(';')` from the
+  class-notation branches; `;` becomes the Star separator), plus the
+  WriterLowering mirror. This invalidates the earlier "purely
+  additive, no core change" estimate — the trivia-mode path
+  (`Lowering.hx:1349`) is tolerant but both `HaxeParser` (Fast) and
+  the span parser used by `apq` (`HaxeModuleSpanParser`, Tolerant) are
+  non-trivia builds (`{trivia:false}`); the discriminator is
+  `ctx.trivia`, orthogonal to the Fast/Tolerant axis, so neither hits
+  the tolerant loop. High blast radius (the sep loop is generic across every
+  `@:sep` Star), so the dual-sep behavior must be annotation-gated to
+  `HxType.Anon`, not global. Decision pending before continuing the
+  grammar-widening track.
 
 **Design decision (do not re-attempt without new infrastructure):**
 the flat one-line diagnostic renderers (`Text.renderRefs` /

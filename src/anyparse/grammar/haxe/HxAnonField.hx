@@ -3,37 +3,61 @@ package anyparse.grammar.haxe;
 /**
  * Single field entry in an anonymous structure type.
  *
- * Two branches:
+ * Branches:
  *
- *  - `Required(field:HxAnonFieldBody)` — the canonical form `name:Type`.
- *    No keyword/lead — the branch matches when the next token is the
- *    field name (`HxIdentLit`).
+ *  - `Optional(field:HxAnonFieldBody)` — the optional short form
+ *    `?name:Type` (`{?name:String}`). Dispatched by `@:lead('?')`.
  *
- *  - `Optional(field:HxAnonFieldBody)` — the optional form
- *    `?name:Type` (`{?name:String}`). Dispatched by `@:lead('?')`. The
- *    body is identical to `Required` after the `?` is consumed, so both
- *    branches share `HxAnonFieldBody` as their inner shape.
+ *  - `VarField(decl:HxVarDecl)` — class-notation mutable field
+ *    `var name:Type;`. Same shape as `HxClassMember.VarMember`:
+ *    `@:kw('var')` enforces a word boundary, the per-branch
+ *    `@:trail(';')` consumes the terminator. `HxVarDecl` covers the
+ *    optional `:Type` and optional `= init`.
  *
- * The Alt-enum-split shape was chosen over a Boolean presence flag
+ *  - `FinalField(decl:HxVarDecl)` — class-notation immutable field
+ *    `final name:Type;`. Mirrors `HxClassMember.FinalMember`; body
+ *    shape is identical to `VarField`, only the introducer keyword
+ *    differs.
+ *
+ *  - `Required(field:HxAnonFieldBody)` — the canonical short form
+ *    `name:Type`. No keyword/lead — the branch matches when the next
+ *    token is the field name (`HxIdentLit`).
+ *
+ * The body of the short forms is `HxAnonFieldBody` (`name : Type`),
+ * shared by `Optional` and `Required` so the `?` marker dispatches at
+ * the Alt-enum level without duplicating the name-and-type body.
+ *
+ * Branch order matters. `Optional` (`@:lead('?')`) comes first, then
+ * the keyword-dispatched class-notation branches (`@:kw` enforces a
+ * word boundary so a field literally named `vars` is not mistaken for
+ * `var`), then the fallthrough `Required` catch-all LAST — its first
+ * token is `HxIdentLit`, which would otherwise shadow the keyword
+ * branches. This mirrors the `HxStatement` / `HxClassMember` pattern
+ * where keyword-/lead-dispatched branches precede the no-guard
+ * catch-all.
+ *
+ * SCOPE LIMIT: only a SINGLE class-notation field per anon type
+ * parses in a non-trivia build (`{trivia:false}`). `HxType.Anon`'s
+ * Star is strictly `@:sep`-char-separated there (`Lowering.hx:1376`
+ * hard-requires `,`, then `expectLit('}')`), so `{ var a:T; var b:T; }`
+ * — the dominant anyparse-schema shape — fails: after the first
+ * `;`-terminated field the loop sees no `,` and the close `expectLit`
+ * fails on the next field. The trivia-mode path (`Lowering.hx:1349`)
+ * is tolerant, but both `HaxeParser` (Fast) and the span parser used
+ * by `apq` (Tolerant) are non-trivia builds, so neither benefits —
+ * the discriminator is `ctx.trivia`, orthogonal to Fast/Tolerant.
+ * Multi `;`-separated fields need a core dual-separator change to the
+ * anon Star (tracked separately); this enum's branches are correct
+ * and additive on their own.
+ *
+ * The Alt-enum-split shape (over a Boolean presence flag) was chosen
  * because the macro pipeline currently supports `@:optional` only on
- * `Ref` and `Star` fields. A presence-flag approach would require
- * extending Lowering / WriterLowering to handle `@:optional` on a
- * `Bool` field with `@:lead`/`@:kw`. The split keeps the macro infra
- * unchanged and reuses Case 3 (single-Ref-child branch with optional
- * lead) on both the parser and writer sides.
- *
- * Branch order matters: `Optional` comes first so the `@:lead('?')`
- * dispatch is tried before the fallthrough `Required`. This mirrors
- * the `HxStatement` pattern where keyword-/lead-dispatched branches
- * precede the no-guard catch-all (`ExprStmt`).
- *
- * The four corpus fixtures using this marker (issue_140, issue_642 and
- * two siblings) need additional grammar features (lambda `?param`,
- * type-param constraints) to pass end-to-end — landing the Alt-enum
- * split on its own only flips fixtures whose ONLY blocker is the `?`.
+ * `Ref` and `Star` fields.
  */
 @:peg
 enum HxAnonField {
 	@:lead('?') Optional(field:HxAnonFieldBody);
+	@:kw('var') @:trail(';') VarField(decl:HxVarDecl);
+	@:kw('final') @:trail(';') FinalField(decl:HxVarDecl);
 	Required(field:HxAnonFieldBody);
 }

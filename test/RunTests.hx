@@ -51,6 +51,7 @@ import unit.HxSpreadSliceTest;
 import unit.HxTypeParamSliceTest;
 import unit.HxTypeArrowSliceTest;
 import unit.HxTypeAnonSliceTest;
+import unit.HxAnonVarFieldSliceTest;
 import unit.HxTypeParensSliceTest;
 import unit.HxPrefixSliceTest;
 import unit.HxSameLineOptionsTest;
@@ -172,6 +173,7 @@ class RunTests {
 		runner.addCase(new HxTypeParamSliceTest());
 		runner.addCase(new HxTypeArrowSliceTest());
 		runner.addCase(new HxTypeAnonSliceTest());
+		runner.addCase(new HxAnonVarFieldSliceTest());
 		runner.addCase(new HxTypeParensSliceTest());
 		runner.addCase(new HxBodySliceTest());
 		runner.addCase(new HxNoBodyAbstractTest());

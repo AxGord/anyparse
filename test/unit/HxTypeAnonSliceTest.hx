@@ -6,7 +6,6 @@ import anyparse.grammar.haxe.HxAnonField;
 import anyparse.grammar.haxe.HxAnonFieldBody;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxFnDecl;
-import anyparse.grammar.haxe.HxType;
 import anyparse.grammar.haxe.HxVarDecl;
 
 /**
@@ -26,25 +25,17 @@ import anyparse.grammar.haxe.HxVarDecl;
  */
 class HxTypeAnonSliceTest extends HxTestHelpers {
 
-	private function expectAnon(t:Null<HxType>):Array<HxAnonField> {
-		return switch t {
-			case null: throw 'expected HxType.Anon, got null';
-			case Anon(fields): fields;
-			case _: throw 'expected HxType.Anon, got non-Anon variant';
-		};
-	}
-
 	private function expectRequired(field:HxAnonField):HxAnonFieldBody {
 		return switch field {
 			case Required(body): body;
-			case Optional(_): throw 'expected HxAnonField.Required, got Optional';
+			case _: throw 'expected HxAnonField.Required, got $field';
 		};
 	}
 
 	private function expectOptional(field:HxAnonField):HxAnonFieldBody {
 		return switch field {
 			case Optional(body): body;
-			case Required(_): throw 'expected HxAnonField.Optional, got Required';
+			case _: throw 'expected HxAnonField.Optional, got $field';
 		};
 	}
 

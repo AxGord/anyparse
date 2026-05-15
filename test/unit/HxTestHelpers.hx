@@ -6,6 +6,7 @@ import utest.Test;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxAbstractDecl;
+import anyparse.grammar.haxe.HxAnonField;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxClassMember;
 import anyparse.grammar.haxe.HxDecl;
@@ -207,6 +208,19 @@ class HxTestHelpers extends Test {
 			case null: throw 'expected HxType.Named, got null';
 			case Named(ref): ref;
 			case _: throw 'expected HxType.Named, got non-Named variant';
+		};
+	}
+
+	/**
+	 * Asserts `t` is `HxType.Anon` and returns its field list.
+	 * Accepts `Null<HxType>` so callers can pass optional type slots
+	 * (e.g. `HxVarDecl.type`) directly; throws on any non-Anon input.
+	 */
+	private function expectAnon(t:Null<HxType>):Array<HxAnonField> {
+		return switch t {
+			case null: throw 'expected HxType.Anon, got null';
+			case Anon(fields): fields;
+			case _: throw 'expected HxType.Anon, got non-Anon variant';
 		};
 	}
 }
