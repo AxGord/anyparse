@@ -110,6 +110,37 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
 - Targeted fixes for the top three friction items.
 - Decision on whether an indexing layer is needed for perf (parked from Phase 2).
 
+**Status**: 🔶 started.
+
+**Friction log** (append as found):
+- **F1 — grammar coverage gates everyday use.** Sampling `apq ast`
+  over `src/**/*.hx`: only ~17% parse (≈20 of the first 120). The
+  Phase 3 Haxe grammar is a skeleton — generics, complex
+  expressions, and macro-heavy files (`WriterLowering.hx`,
+  `Lowering.hx`, most `grammar/haxe/*`) fail (`expected HxDecl at N`).
+  Consequence: `apq`/`hxq` is reliable today only on the simpler
+  subset (`query/**`, `runtime/**`, `format/**` interfaces, schema
+  typedefs — including apq's own source). The single highest-leverage
+  Phase 5 fix is **widening the Haxe grammar by top parse-failure
+  cause**, which also advances anyparse main-roadmap Phase 3 — the
+  two tracks intersect here.
+
+**Design decision (do not re-attempt without new infrastructure):**
+the flat one-line diagnostic renderers (`Text.renderRefs` /
+`renderSearchMatches` / `renderMeta`) **stay on hand-rolled
+`StringBuf`** and are NOT converted to the declarative writer. A full
+attempt (commits d5579c7/6c833cc/70c9983, reverted in f98c8bd) proved
+the writer intrinsically emits a softline space between every
+adjacent struct field / array element; no `TextFormat` config
+(`entrySep=''`, `tightLeads`, `spacedLeads`) suppresses it on the
+required-field `@:lead` path, so a bespoke `path:line:col: [kind]
+name` line cannot be produced byte-exactly. The JSON path
+(`Ast*` schemas) and the tree S-expr path (`SValueWriter`) already
+dogfood the writer; the line format is the writer model's boundary,
+not a dogfood gap. Revisit only if the Doc pipeline gains a
+no-separator (`Concat`) layout mode. See
+`memory/feedback_anyparse_writer_intrinsic_field_space.md`.
+
 **Exit condition**: friction log written, top three items addressed, indexing decision recorded with rationale.
 
 ## Phase 6: Universalization proof
