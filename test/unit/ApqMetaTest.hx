@@ -7,6 +7,7 @@ import anyparse.query.GrammarPlugin.MetaShape;
 import anyparse.query.Meta;
 import anyparse.query.Meta.MetaHit;
 import anyparse.query.QueryNode;
+import anyparse.query.format.Json;
 
 using Lambda;
 
@@ -109,6 +110,20 @@ class ApqMetaTest extends Test {
 		final plugin:HaxeQueryPlugin = new HaxeQueryPlugin();
 		Assert.isTrue(plugin.metaShape().declHostKinds.contains(h.declKind),
 			'expression meta attributes to an enclosing decl-host — got ${h.declKind}');
+	}
+
+	public function testJsonRenderShapeMatchesSpec():Void {
+		final source:String = 'class X { @:foo(a, b) var n:Int; }';
+		final hits:Array<MetaHit> = findIn(source);
+		final out:String = Json.renderMeta([{file: 'x.hx', source: source, hits: hits}]);
+		Assert.isTrue(out.indexOf('"hits"') >= 0, 'envelope key present — got $out');
+		Assert.isTrue(out.indexOf('"annotation":"@:foo"') >= 0, 'annotation key/value — got $out');
+		Assert.isTrue(out.indexOf('"args"') >= 0, 'args array key — got $out');
+		Assert.isTrue(out.indexOf('"a"') >= 0 && out.indexOf('"b"') >= 0, 'arg values — got $out');
+		Assert.isTrue(out.indexOf('"decl"') >= 0, 'decl object — got $out');
+		Assert.isTrue(out.indexOf('"kind":"VarMember"') >= 0, 'decl kind — got $out');
+		Assert.isTrue(out.indexOf('"name":"n"') >= 0, 'decl name — got $out');
+		Assert.isTrue(out.indexOf('"span"') >= 0, 'decl span present — got $out');
 	}
 
 	private static function findIn(source:String):Array<MetaHit> {

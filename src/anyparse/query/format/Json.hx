@@ -2,12 +2,17 @@ package anyparse.query.format;
 
 import anyparse.format.text.JsonFormat;
 import anyparse.query.Matcher.Match;
+import anyparse.query.Meta.MetaHit;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.format.json.AstDumpJson;
 import anyparse.query.format.json.AstDumpJsonWriter;
 import anyparse.query.format.json.AstMatchesJson;
 import anyparse.query.format.json.AstMatchesJsonWriter;
+import anyparse.query.format.json.AstMetaDecl;
+import anyparse.query.format.json.AstMetaHit;
+import anyparse.query.format.json.AstMetaHits;
+import anyparse.query.format.json.AstMetaHitsWriter;
 import anyparse.query.format.json.AstNodeJson;
 import anyparse.query.format.json.AstRefHit;
 import anyparse.query.format.json.AstRefHits;
@@ -42,14 +47,35 @@ import anyparse.runtime.Span.Position;
 @:nullSafety(Strict)
 final class Json {
 
-	public static function renderTree(file:String, tree:QueryNode):String {
-		final dump:AstDumpJson = {file: file, tree: toAst(tree)};
+	public static function renderTree(file:String, source:String, tree:QueryNode):String {
+		final dump:AstDumpJson = {file: file, tree: toAst(tree, source)};
 		return AstDumpJsonWriter.write(dump, JsonFormat.instance.defaultWriteOptions) + '\n';
 	}
 
-	public static function renderMatches(file:String, matches:Array<QueryNode>):String {
-		final out:AstMatchesJson = {file: file, matches: matches.map(toAst)};
+	public static function renderMatches(file:String, source:String, matches:Array<QueryNode>):String {
+		final out:AstMatchesJson = {file: file, matches: matches.map(n -> toAst(n, source))};
 		return AstMatchesJsonWriter.write(out, JsonFormat.instance.defaultWriteOptions) + '\n';
+	}
+
+	public static function renderMeta(entries:Array<{file:String, source:String, hits:Array<MetaHit>}>):String {
+		final out:Array<AstMetaHit> = [];
+		for (entry in entries) for (h in entry.hits) {
+			final declSpan:Null<Span> = h.declSpan;
+			final decl:AstMetaDecl = {
+				kind: h.declKind,
+				span: declSpan == null ? emptySpan() : spanToJson(declSpan, entry.source),
+			};
+			final dn:Null<String> = h.declName;
+			if (dn != null) decl.name = dn;
+			out.push({
+				file: entry.file,
+				annotation: h.annotation,
+				args: h.args,
+				decl: decl,
+			});
+		}
+		final envelope:AstMetaHits = {hits: out};
+		return AstMetaHitsWriter.write(envelope, JsonFormat.instance.defaultWriteOptions) + '\n';
 	}
 
 	public static function renderRefs(entries:Array<{file:String, source:String, hits:Array<RefHit>}>):String {
@@ -79,12 +105,14 @@ final class Json {
 		return AstSearchMatchesWriter.write(envelope, JsonFormat.instance.defaultWriteOptions) + '\n';
 	}
 
-	private static function toAst(node:QueryNode):AstNodeJson {
-		final children:Array<AstNodeJson> = node.children.map(toAst);
+	private static function toAst(node:QueryNode, source:String):AstNodeJson {
+		final children:Array<AstNodeJson> = node.children.map(c -> toAst(c, source));
+		final ast:AstNodeJson = {kind: node.kind, children: children};
 		final n:Null<String> = node.name;
-		if (n == null) return {kind: node.kind, children: children};
-		final name:String = n;
-		return {kind: node.kind, name: name, children: children};
+		if (n != null) ast.name = n;
+		final span:Null<Span> = node.span;
+		if (span != null) ast.span = spanToJson(span, source);
+		return ast;
 	}
 
 	private static function collectBindings(m:Match, source:String):Array<AstSearchBinding> {

@@ -36,10 +36,10 @@ class ApqMetaCliTest extends Test {
 		#end
 	}
 
-	public function testJsonDeferred():Void {
+	public function testJsonOutputSucceeds():Void {
 		#if sys
 		final fixture:String = writeFixture('class X { @:foo var n:Int; }');
-		Assert.equals(2, Cli.run(['meta', '@:foo', '--json', fixture]));
+		Assert.equals(0, Cli.run(['meta', '@:foo', '--json', fixture]));
 		FileSystem.deleteFile(fixture);
 		#else
 		Assert.pass('non-sys target');

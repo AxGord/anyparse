@@ -207,11 +207,6 @@ final class Cli {
 			printMetaUsage();
 			return EXIT_USAGE;
 		}
-		if (json) {
-			stderr('apq meta: --json output deferred to a later slice\n');
-			return EXIT_USAGE;
-		}
-
 		final plugin:GrammarPlugin = pickPlugin(lang);
 		final shape:MetaShape = plugin.metaShape();
 
@@ -221,6 +216,7 @@ final class Cli {
 			return EXIT_RUNTIME;
 		}
 
+		final allEntries:Array<{file:String, source:String, hits:Array<MetaHit>}> = [];
 		for (path in paths) {
 			final source:String = readFile(path);
 			final tree:Null<QueryNode> = try plugin.parseFile(source)
@@ -239,7 +235,13 @@ final class Cli {
 				&& argMatches(h.args, argContains)
 				&& (onKind == null || h.declKind == onKind));
 			if (filtered.length == 0) continue;
-			sysPrint(Text.renderMeta(path, source, filtered));
+			allEntries.push({file: path, source: source, hits: filtered});
+		}
+
+		if (json) {
+			sysPrint(Json.renderMeta(allEntries));
+		} else {
+			for (entry in allEntries) sysPrint(Text.renderMeta(entry.file, entry.source, entry.hits));
 		}
 		return EXIT_OK;
 	}
@@ -441,12 +443,12 @@ final class Cli {
 			final selector:Selector = Selector.parse(selectExpr);
 			final raw:Array<QueryNode> = Engine.select(tree, selector);
 			final matches:Array<QueryNode> = depth < 0 ? raw : [for (m in raw) Engine.truncate(m, depth)];
-			sysPrint(json ? Json.renderMatches(file, matches) : Text.renderMatches(matches));
+			sysPrint(json ? Json.renderMatches(file, source, matches) : Text.renderMatches(matches));
 			return EXIT_OK;
 		}
 
 		final shaped:QueryNode = Engine.truncate(tree, depth);
-		sysPrint(json ? Json.renderTree(file, shaped) : Text.render(shaped));
+		sysPrint(json ? Json.renderTree(file, source, shaped) : Text.render(shaped));
 		return EXIT_OK;
 	}
 

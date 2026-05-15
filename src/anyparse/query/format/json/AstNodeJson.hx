@@ -13,6 +13,14 @@ package anyparse.query.format.json;
  * writer omits the key entirely when the runtime value is null,
  * matching the schema sketch in `docs/cli-query-tool.md`.
  *
+ * `span` is `@:optional` for the same reason — the span-mode parser
+ * carries source coordinates on enum-ctor nodes (top-level decls,
+ * statements, expressions); transparent inner struct nodes and the
+ * synthetic `module` root have none. The writer omits the key when
+ * absent, consistent with `name`. This is the finalized v1 shape:
+ * `span` present when the node is source-addressable, omitted
+ * otherwise.
+ *
  * Lives in its own top-level module so the macro pipeline's
  * `optionsComplexType` path resolution does not hit the sub-module
  * gotcha (see `feedback_writerlowering_mirror_lowering_byname.md`).
@@ -22,4 +30,5 @@ typedef AstNodeJson = {
 	var kind:String;
 	@:optional var name:String;
 	var children:Array<AstNodeJson>;
+	@:optional var span:AstSearchSpan;
 };
