@@ -1,6 +1,5 @@
 package anyparse.query.format;
 
-import anyparse.format.text.LineDiagFormat;
 import anyparse.format.text.SExprFormat;
 import anyparse.grammar.sexpr.SValue;
 import anyparse.grammar.sexpr.SValueWriter;
@@ -8,16 +7,6 @@ import anyparse.query.Matcher.Match;
 import anyparse.query.Meta.MetaHit;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs.RefHit;
-import anyparse.query.format.line.RefLine;
-import anyparse.query.format.line.RefLineList;
-import anyparse.query.format.line.RefLineListWriter;
-import anyparse.query.format.line.MetaLine;
-import anyparse.query.format.line.MetaLineList;
-import anyparse.query.format.line.MetaLineListWriter;
-import anyparse.query.format.line.SearchBindingPair;
-import anyparse.query.format.line.SearchLine;
-import anyparse.query.format.line.SearchLineList;
-import anyparse.query.format.line.SearchLineListWriter;
 import anyparse.runtime.Span;
 import anyparse.runtime.Span.Position;
 
@@ -60,67 +49,74 @@ final class Text {
 
 	public static function renderRefs(file:String, source:String, hits:Array<RefHit>):String {
 		if (hits.length == 0) return '$file: no refs\n';
-		final lines:Array<RefLine> = [for (h in hits) {
+		final buf:StringBuf = new StringBuf();
+		for (h in hits) {
 			final pos:Position = h.span.lineCol(source);
-			final rl:RefLine = {
-				file: file,
-				line: pos.line,
-				col: pos.col - 1,
-				kind: h.kind.toString(),
-				name: h.name,
-			};
+			buf.add('$file:${pos.line}:${pos.col - 1}: [${h.kind.toString()}] ${h.name}');
 			final bindingSpan:Null<Span> = h.bindingSpan;
 			if (bindingSpan != null && bindingSpan.from != h.span.from) {
 				final bp:Position = bindingSpan.lineCol(source);
-				rl.binding = '${bp.line}:${bp.col - 1}';
+				buf.add(' -> ${bp.line}:${bp.col - 1}');
 			}
-			rl;
-		}];
-		final list:RefLineList = {lines: lines};
-		return RefLineListWriter.write(list, LineDiagFormat.instance.defaultWriteOptions);
+			buf.add('\n');
+		}
+		return buf.toString();
 	}
 
 	public static function renderMeta(file:String, source:String, hits:Array<MetaHit>):String {
 		if (hits.length == 0) return '$file: no meta\n';
-		final lines:Array<MetaLine> = [for (h in hits) {
+		final buf:StringBuf = new StringBuf();
+		for (h in hits) {
 			final span:Null<Span> = h.metaSpan;
-			final locPrefix:String = if (span != null) {
+			if (span != null) {
 				final pos:Position = span.lineCol(source);
-				'$file:${pos.line}:${pos.col - 1}';
-			} else file;
-			final ml:MetaLine = {
-				locPrefix: locPrefix,
-				annotation: h.annotation,
-				declKind: h.declKind,
-			};
-			if (h.args.length > 0) ml.args = h.args;
+				buf.add('$file:${pos.line}:${pos.col - 1}: ');
+			} else {
+				buf.add('$file: ');
+			}
+			buf.add(h.annotation);
+			if (h.args.length > 0) {
+				buf.add('(');
+				buf.add(h.args.join(', '));
+				buf.add(')');
+			}
+			buf.add(' on ${h.declKind}');
 			final dn:Null<String> = h.declName;
-			if (dn != null) ml.declName = dn;
-			ml;
-		}];
-		final list:MetaLineList = {lines: lines};
-		return MetaLineListWriter.write(list, LineDiagFormat.instance.defaultWriteOptions);
+			if (dn != null) buf.add(' $dn');
+			buf.add('\n');
+		}
+		return buf.toString();
 	}
 
 	public static function renderSearchMatches(file:String, source:String, matches:Array<Match>):String {
 		if (matches.length == 0) return '$file: no matches\n';
-		final lines:Array<SearchLine> = [for (m in matches) {
+		final buf:StringBuf = new StringBuf();
+		for (m in matches) {
 			final pos:Position = m.span.lineCol(source);
-			final sl:SearchLine = {
-				file: file,
-				line: pos.line,
-				col: pos.col - 1,
-			};
-			final pairs:Array<SearchBindingPair> = [
-				for (name => bound in m.bindings) {name: name, value: summariseBound(source, bound)}
-			];
-			if (pairs.length > 0) sl.bindings = pairs;
-			sl;
-		}];
-		final list:SearchLineList = {lines: lines};
-		return SearchLineListWriter.write(list, LineDiagFormat.instance.defaultWriteOptions);
+			buf.add('$file:${pos.line}:${pos.col - 1}: match');
+			final bindingsCount:Int = countBindings(m);
+			if (bindingsCount > 0) {
+				buf.add(' (');
+				var first:Bool = true;
+				for (name => bound in m.bindings) {
+					if (!first) buf.add(', ');
+					first = false;
+					buf.add(name);
+					buf.add('=');
+					buf.add(summariseBound(source, bound));
+				}
+				buf.add(')');
+			}
+			buf.add('\n');
+		}
+		return buf.toString();
 	}
 
+	private static inline function countBindings(m:Match):Int {
+		var n:Int = 0;
+		for (_ in m.bindings) n++;
+		return n;
+	}
 
 	private static function summariseBound(source:String, bound:QueryNode):String {
 		// Name-position binding (e.g. `$E` in `new $E(...)`) records the
