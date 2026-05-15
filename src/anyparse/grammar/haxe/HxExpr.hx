@@ -31,6 +31,10 @@ package anyparse.grammar.haxe;
  *    does not eagerly consume `true`.
  *  - `NullLit` — `null`. Same word-boundary treatment via `expectKw`
  *    in the single-`@:lit` zero-arg case.
+ *  - `RegexLit` — EReg literal `~/pattern/flags`. `@:re @:rawString`
+ *    terminal (`HxRegexLit`), source-verbatim like `DoubleStringExpr`.
+ *    Declared before the `@:prefix('~')` ctor so the atom dispatch
+ *    tries the `~/` literal before bitwise-not.
  *  - `ArrayExpr` — array / map literal `[elems]`. Uses `@:lead('[')
  *    @:trail(']') @:sep(',')` — Case 4 in `lowerEnumBranch`, same
  *    pattern as `BlockStmt`. No conflict with postfix `IndexAccess`
@@ -246,6 +250,8 @@ enum HxExpr {
 	DoubleStringExpr(v:HxDoubleStringLit);
 
 	SingleStringExpr(v:HxInterpString);
+
+	RegexLit(v:HxRegexLit);
 
 	@:trivia @:lead('[') @:trail(']') @:sep(',') @:fmt(trailingComma('trailingCommaArrays'), wrapRules('arrayLiteralWrap'))
 	ArrayExpr(elems:Array<HxExpr>);

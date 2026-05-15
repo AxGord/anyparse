@@ -517,6 +517,26 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
     vs-Haxe) reject-contract and were flipped to
     `testAcceptsTrailingComma`. js 5108/5108, 0 regressions.
 
+  - **Slice L2 — EReg regex literal `~/pattern/flags`. ✅ DONE.**
+    (commit pending.) User-approved (additive track, chosen over the
+    core switch-guard slice). New `HxRegexLit` — exact mirror of
+    `HxDoubleStringLit` (`@:re('~/(?:[^/\\\n]|\\.)*/[a-z]*')` +
+    `@:rawString` + transparent `abstract(String) from String to
+    String`) — plus one `HxExpr.RegexLit(v:HxRegexLit)` ctor declared
+    before `@:prefix('~')` so `~/` is tried before bitwise-not. Zero
+    Lowering/writer/synth change (generic raw-String single-Ref path).
+    **261/278 → 262/278 corpus (+1: CFamilyCommentFormat; total
+    263/280 → 265/281, the +1 denom is the new self-parsing
+    `HxRegexLit.hx`)**. The histogram's EReg "4" was a drilled-
+    innermost count, not a flip count — JsonFormat / SExprFormat /
+    HaxeFormat carry EReg AND deeper compounding blockers (post-build
+    truth — drilled-innermost is not a flip predictor).
+    New `HxRegexLitSliceTest` (raw slice / flags / escaped slash /
+    corpus pattern / `~y` bitwise-not regression / round-trip). js
+    5121/5121 + interp 5124/5124 (interp run because the slice touches
+    EReg — literal pattern, not `EReg.escape`, so the interp bug does
+    not bite), 0 regressions.
+
 **Design decision (do not re-attempt without new infrastructure):**
 the flat one-line diagnostic renderers (`Text.renderRefs` /
 `renderSearchMatches` / `renderMeta`) **stay on hand-rolled
