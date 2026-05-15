@@ -140,6 +140,7 @@ import unit.PatternParseProbe;
 import unit.ApqMatcherTest;
 import unit.ApqRefsTest;
 import unit.ApqMetaTest;
+import unit.ApqMetaCliTest;
 import unit.ApqSearchCliTest;
 
 /**
@@ -291,6 +292,7 @@ class RunTests {
 		runner.addCase(new ApqMatcherTest());
 		runner.addCase(new ApqRefsTest());
 		runner.addCase(new ApqMetaTest());
+		runner.addCase(new ApqMetaCliTest());
 		runner.addCase(new ApqSearchCliTest());
 		utest.ui.Report.create(runner);
 		runner.run();

@@ -4,6 +4,7 @@ import anyparse.format.text.SExprFormat;
 import anyparse.grammar.sexpr.SValue;
 import anyparse.grammar.sexpr.SValueWriter;
 import anyparse.query.Matcher.Match;
+import anyparse.query.Meta.MetaHit;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs.RefHit;
 import anyparse.runtime.Span;
@@ -57,6 +58,31 @@ final class Text {
 				final bp:Position = bindingSpan.lineCol(source);
 				buf.add(' -> ${bp.line}:${bp.col - 1}');
 			}
+			buf.add('\n');
+		}
+		return buf.toString();
+	}
+
+	public static function renderMeta(file:String, source:String, hits:Array<MetaHit>):String {
+		if (hits.length == 0) return '$file: no meta\n';
+		final buf:StringBuf = new StringBuf();
+		for (h in hits) {
+			final span:Null<Span> = h.metaSpan;
+			if (span != null) {
+				final pos:Position = span.lineCol(source);
+				buf.add('$file:${pos.line}:${pos.col - 1}: ');
+			} else {
+				buf.add('$file: ');
+			}
+			buf.add(h.annotation);
+			if (h.args.length > 0) {
+				buf.add('(');
+				buf.add(h.args.join(', '));
+				buf.add(')');
+			}
+			buf.add(' on ${h.declKind}');
+			final dn:Null<String> = h.declName;
+			if (dn != null) buf.add(' $dn');
 			buf.add('\n');
 		}
 		return buf.toString();

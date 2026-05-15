@@ -1,8 +1,10 @@
 package anyparse.query;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.GrammarPlugin.MetaShape;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Matcher.Match;
+import anyparse.query.Meta.MetaHit;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
 import anyparse.query.format.Json;
@@ -50,9 +52,7 @@ final class Cli {
 			case 'ast': return runAst(rest);
 			case 'search': return runSearch(rest);
 			case 'refs': return runRefs(rest);
-			case 'meta':
-				stderr('apq: subcommand "$cmd" deferred to a later phase\n');
-				return EXIT_USAGE;
+			case 'meta': return runMeta(rest);
 			case _:
 				stderr('apq: unknown subcommand "$cmd"\n');
 				printUsage();
@@ -155,6 +155,100 @@ final class Cli {
 			for (entry in allEntries) sysPrint(Text.renderRefs(entry.file, entry.source, entry.hits));
 		}
 		return EXIT_OK;
+	}
+
+	private static function runMeta(args:Array<String>):Int {
+		var lang:String = 'haxe';
+		var json:Bool = false;
+		var argContains:Null<String> = null;
+		var onKind:Null<String> = null;
+		final positionals:Array<String> = [];
+
+		var i:Int = 0;
+		while (i < args.length) {
+			final a:String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--json':
+					json = true;
+				case '--arg-contains':
+					argContains = expectValue(args, ++i, '--arg-contains');
+				case '--on':
+					onKind = expectValue(args, ++i, '--on');
+				case '-h', '--help':
+					printMetaUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq meta: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					positionals.push(a);
+			}
+			i++;
+		}
+
+		// Positional grammar: [<annotation>] <file-or-glob>. With `--on`
+		// the annotation may be omitted (list every annotation on a kind).
+		if (positionals.length == 0) {
+			stderr('apq meta: missing <file-or-glob> argument\n');
+			printMetaUsage();
+			return EXIT_USAGE;
+		}
+		if (positionals.length > 2) {
+			stderr('apq meta: extra positional argument "${positionals[2]}"\n');
+			return EXIT_USAGE;
+		}
+		final inputStr:String = positionals[positionals.length - 1];
+		final annotation:Null<String> = positionals.length == 2 ? positionals[0] : null;
+		if (annotation == null && onKind == null) {
+			stderr('apq meta: provide an <annotation> or --on <decl-kind>\n');
+			printMetaUsage();
+			return EXIT_USAGE;
+		}
+		if (json) {
+			stderr('apq meta: --json output deferred to a later slice\n');
+			return EXIT_USAGE;
+		}
+
+		final plugin:GrammarPlugin = pickPlugin(lang);
+		final shape:MetaShape = plugin.metaShape();
+
+		final paths:Array<String> = Glob.expand(inputStr, '.hx');
+		if (paths.length == 0) {
+			stderr('apq meta: no input files matched "$inputStr"\n');
+			return EXIT_RUNTIME;
+		}
+
+		for (path in paths) {
+			final source:String = readFile(path);
+			final tree:Null<QueryNode> = try plugin.parseFile(source)
+				catch (e:ParseError) {
+					stderr('apq meta: $path: ${e.toString()}\n');
+					null;
+				}
+				catch (e:Exception) {
+					stderr('apq meta: $path: ${e.message}\n');
+					null;
+				};
+			if (tree == null) continue;
+			final raw:Array<MetaHit> = Meta.find(tree, shape, source);
+			final filtered:Array<MetaHit> = raw.filter(h ->
+				(annotation == null || h.annotation == annotation)
+				&& argMatches(h.args, argContains)
+				&& (onKind == null || h.declKind == onKind));
+			if (filtered.length == 0) continue;
+			sysPrint(Text.renderMeta(path, source, filtered));
+		}
+		return EXIT_OK;
+	}
+
+	private static function argMatches(args:Array<String>, sub:Null<String>):Bool {
+		if (sub == null) return true;
+		final needle:String = sub;
+		for (a in args) if (a.indexOf(needle) >= 0) return true;
+		return false;
 	}
 
 	private static inline function kindAllowed(k:RefKind, decls:Bool, reads:Bool, writes:Bool):Bool {
@@ -385,7 +479,7 @@ final class Cli {
 		sysPrint('  ast      Dump parsed AST (S-expr or JSON)\n');
 		sysPrint('  search   Structural pattern search\n');
 		sysPrint('  refs     Symbol references (name-only; scope-aware in Phase 3.2)\n');
-		sysPrint('  meta     Annotation-on-decl shortcut (deferred to Phase 4)\n');
+		sysPrint('  meta     Annotation-on-decl shortcut\n');
 		sysPrint('\n');
 		sysPrint('Global options:\n');
 		sysPrint('  --lang <name>   Pick grammar plugin (default: haxe)\n');
@@ -416,6 +510,18 @@ final class Cli {
 		sysPrint('\n');
 		sysPrint('Phase 3.1: name-only matching, no lexical scope. Filters combine\n');
 		sysPrint('inclusively — passing `--decls --reads` keeps both kinds.\n');
+	}
+
+	private static function printMetaUsage():Void {
+		sysPrint('Usage: apq meta [<annotation>] [options] <file-or-dir>\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --arg-contains <s>  Keep hits whose argument list contains <s>\n');
+		sysPrint('  --on <decl-kind>    Keep hits attached to the given decl kind\n');
+		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('\n');
+		sysPrint('<annotation> is the target language source syntax (e.g. `@:foo`).\n');
+		sysPrint('Omit it with `--on` to list every annotation on a decl kind.\n');
 	}
 
 	private static function printAstUsage():Void {
