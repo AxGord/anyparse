@@ -277,6 +277,24 @@ package anyparse.grammar.haxe;
  *    relative to other kw-led ctors does not matter because no other
  *    `HxStatement` ctor's keyword starts with `#`.
  *
+ *  - `LocalFnStmt` / `LocalInlineFnStmt` — named local function
+ *    declaration as a statement: `function g(...) {...}` and the
+ *    `inline function g(...) {...}` form. Both reuse `HxFnDecl` —
+ *    the exact payload of `HxClassMember.FnMember`, so the inner
+ *    `name <typeParams>(params):Ret body` grammar is shared and
+ *    needs no new types. `LocalFnStmt` dispatches on `@:kw('function')`;
+ *    `LocalInlineFnStmt` composes `@:kw('inline') @:lead('function')`
+ *    (the kw+lead single-Ref path, same as `HxDoWhileStmt`'s
+ *    `@:kw('while') @:lead('(')`). An anonymous function expression
+ *    `function() {}` / `function(x) trace(x)` is NOT a local-fn
+ *    statement — it has no name, so `HxFnDecl.name` (an `HxIdentLit`)
+ *    fails on `(` and `tryBranch` rolls the consumed `function`
+ *    keyword back to `ExprStmt` → `HxExpr.FnExpr` (same shared-kw
+ *    rollback pattern as `SwitchStmt`/`SwitchStmtBare`). Must appear
+ *    before `BlockStmt` / `ExprStmt`; order relative to the other
+ *    kw-led ctors does not matter (`function` / `inline` collide with
+ *    no other `HxStatement` keyword).
+ *
  *  - `BlockStmt` — `{ stmts }` block statement. No keyword guard —
  *    dispatched by the `{` literal. Uses Case 4 in
  *    `Lowering.lowerEnumBranch` (Array<Ref> with lead/trail, no sep).
@@ -340,6 +358,12 @@ enum HxStatement {
 
 	@:kw('#if') @:trail('#end')
 	Conditional(inner:HxConditionalStmt);
+
+	@:kw('function')
+	LocalFnStmt(decl:HxFnDecl);
+
+	@:kw('inline') @:lead('function')
+	LocalInlineFnStmt(decl:HxFnDecl);
 
 	@:fmt(leftCurly('blockLeftCurly'), emptyCurlyBreak('blockEmptyCurly'), rightCurly('blockRightCurly'), keepCurlyBlanks)
 	@:lead('{') @:trail('}') @:trivia

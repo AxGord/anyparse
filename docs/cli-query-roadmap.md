@@ -395,6 +395,44 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
   additive remains — the tail is heterogeneous with compounding
   blockers.
 
+- **Slice K1 — named local function statement
+  (`function g(){}` / `inline function g(){}` inside a body). ✅ DONE.**
+  Two additive `HxStatement` ctors that reuse `HxFnDecl` (the exact
+  payload of `HxClassMember.FnMember`, zero new grammar types):
+  `@:kw('function') LocalFnStmt(decl:HxFnDecl)` and
+  `@:kw('inline') @:lead('function') LocalInlineFnStmt(decl:HxFnDecl)`
+  (the kw+lead single-Ref compose path, same as `HxDoWhileStmt`'s
+  `@:kw('while') @:lead('(')`). Zero core / synth / writer change —
+  same generic single-Ref `@:kw` path as the cond-comp `Conditional`
+  ctor. An anonymous function expression `function() {}` /
+  `function(x) e` has no name, so `HxFnDecl.name` fails on `(` and
+  `tryBranch` rolls the consumed `function` keyword back to `ExprStmt`
+  → `HxExpr.FnExpr` (shared-kw rollback, same as
+  `SwitchStmt`/`SwitchStmtBare`). New `HxLocalFnStmtSliceTest` (9
+  cases: plain / params+return / typeParams+bare-expr-body / inline /
+  dogfood typed-inline-helper / nested / anon-assigned-rollback /
+  anon-callarg-rollback / no-local-fn-regression), tests written from
+  the probed `HxClassMember.FnMember` precedent contract. Parse-rate
+  **247/278 → 250/278 corpus-relative (+3)**; total file count
+  **249/280 → 252/280** (newly passing `Renderer.hx`,
+  `BinaryChainEmit.hx`, `MethodChainEmit.hx`). neko 5036 / js 5033 /
+  interp 5036, 0 regressions. **Strategic pivot:** fresh post-build
+  recon contradicted the plan's proxy-ordered Slice K bundle —
+  object-literal trailing comma was present in only 1/31 fail files
+  (≈ +0, masked); the real dominant blockers are local-fn-stmt,
+  `for (k => v in map)`, and multi-pattern `case A, B:`. User approved
+  re-prioritising Slice K to the recon order; local-fn-stmt is the
+  clean additive of the three and landed first. K2 = `for (k=>v)`,
+  K3 = multi-pattern case — both lean core (`HxForStmt.varName` /
+  `HxCaseBranch.pattern` shape changes), to be re-decided per
+  sub-slice via a fresh fork. **Known pre-existing limitation
+  (orthogonal, not a K1 regression):** an inline-call statement
+  `inline foo();` is still rejected — `inline` was never a
+  statement-start keyword and `ExprStmt` → `HxExpr` has no inline-call
+  atom; `inline foo()` rolls back from `LocalInlineFnStmt` (no
+  `function`) to `ExprStmt` exactly as before K1. A future additive
+  HxExpr inline-call slice would close it.
+
 **Design decision (do not re-attempt without new infrastructure):**
 the flat one-line diagnostic renderers (`Text.renderRefs` /
 `renderSearchMatches` / `renderMeta`) **stay on hand-rolled
