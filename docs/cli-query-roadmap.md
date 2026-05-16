@@ -707,13 +707,19 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
       corpus 263/278**; this is a query-value fix, NOT a sweep-mover.
       New `ApqRefsIncrDecrSliceTest` (4/4); js `test-js.hxml`
       5258/5258 ALL TESTS OK, 0 reg.
-    - **#1a — `meta` blind to enum-ctor annotations. ⬜ NEXT.**
-      `DECL_HOST_KINDS` lacks `SimpleCtor`/`ParamCtor`; `hxq meta
-      @:kw <grammarfile>` returns 0 hits despite 16+ real enum-ctor
-      `@:kw` (Slice I locus, +17 parse). Trivial additive (the
-      `MetaCall`+ctor nodes are already flattened siblings with
-      correct spans; `Meta.followingDeclHost` resolves once the kind
-      is recognised).
+    - **#1a — `meta` blind to enum-ctor annotations. ✅ DONE**
+      (commit `e0f300f`). `DECL_HOST_KINDS` lacked
+      `SimpleCtor`/`ParamCtor`; `hxq meta @:kw <grammarfile>`
+      returned 0 hits despite real enum-ctor `@:kw` (Slice I locus,
+      +17 parse). Fix = 2 ctor strings added to the shared
+      `DECL_HOST_KINDS` + doc-comment; the `MetaCall`+ctor nodes were
+      already flattened spanned siblings so `Meta.followingDeclHost`
+      resolves once the kind is a host (no `Meta.hx` change). Shared
+      array also makes `refs <Ctor>` see the enum ctor as a Decl —
+      intended bonus, zero regressions. Parser-neutral — **sweep flat
+      273/284, corpus 263/278**. `meta @:kw` on `HxStatement.hx` now
+      16/16 (was 0). New `ApqMetaEnumCtorSliceTest` (4/4); js
+      5270/5270 ALL TESTS OK, 0 reg (Slice #2 intact).
     - **#1b — `meta`/`refs` blind to anon-field members. ⬜ AFTER
       #1a.** `appendNodes` unconditionally skips the struct field
       named `type`, so a typedef's anon body (`HxType.Anon` members
