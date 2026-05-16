@@ -719,6 +719,50 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
     ALL TESTS OK 5381/5381, 0 regressions (interp not needed — no
     `@:re` terminal added).
 
+  - **Slice P — qualified constructor type path. ✅ DONE.**
+    (commit `7bca0fb`.) `HxNewExpr.type` was a bare `HxIdentLit`
+    (`@:re('[A-Za-z_][A-Za-z0-9_]*')`, no dot) so a module- or
+    pack-qualified constructor path could not be represented:
+    `new haxe.Exception(...)` mis-absorbed `.Exception(...)` as
+    postfix field-access at statement level (garbage AST —
+    `(VarStmt x (IdentExpr new))` plus a split `(Call (FieldAccess
+    …))`) and failed outright in switch-case-body position. Recon
+    **reversed the inherited "no precedent-matched escape" label a
+    7th time** (the L4/L5/M/N/O additive-reversal pattern; only L2
+    stayed CORE): the fix is a zero-ripple terminal swap to the
+    existing `HxTypeName` dotted terminal — `var type:HxTypeName;`
+    (in-grammar precedent `HxTypeRef.name:HxTypeName`). Both terminals
+    are `@:rawString abstract(String) from String to String`, so the
+    swap flows through the identical generic raw-String single-Ref
+    path (L2 `HxRegexLit` / L3 `HxHexLit` precedent), zero Lowering /
+    writer / synth, and `(ne.type : String)` call-sites are
+    unaffected. Precedent-matched additive — no fork. Type-parameter
+    brackets on the constructed type (Thread A, `new Map<K, V>()`)
+    are an orthogonal deferred gap (`gap≠sweep` — 0/11 fail files
+    use it). **Sweep-mover, exceeded recon: 273/284 → 278/284
+    (+5).** The strip-test predicted +3 (`SExprFormat`, `JsonFormat`,
+    `HaxeFormat` — their TRUE sole non-compounding blocker, the M/N
+    predictive-flip discriminator); `BinaryWriterLowering` and
+    `Codegen` additionally flipped — extrapolated as compounding
+    from the `Build.hx` offset-25 representative but never
+    individually strip-tested. Post-build sweep is the only truth
+    (reinforces the probe-estimate-unreliable rule in the
+    *under-count* direction). Fails 11 → 6 (`Build`,
+    `TriviaTypeSynth`, `Lowering`, `WriterLowering`, `WriterCodegen`
+    offset-25 macro + `WrapList`@1379). Corpus unchanged. Probes:
+    `new haxe.Exception("x")` → `(NewExpr haxe.Exception …)` whole
+    path, `new haxe.ds.StringMap()` deep path, `new Foo(1)`
+    regression-clean, switch-case `throw new haxe.Exception("oops")`
+    closed, `new Map<String, Int>()` still fails (Thread A deferred,
+    not a regression). Blast-radius pre-audit (architecture
+    signature-change + Slice O lesson) found only the `to String`-safe
+    `(ne.type : String)` site; the `@:nullSafety(Strict)` js gate
+    confirmed completeness. Tests added to the existing
+    `HxSwitchNewSliceTest` (the construct's test home — the Slice N
+    extend-not-create precedent, zero RunTests churn). js
+    `test-js.hxml` ALL TESTS OK 5404/5404, 0 regressions (interp not
+    needed — no `@:re` terminal added).
+
   - **Query-value validation pass (dogfood). ✅ DONE (all 3 gaps
     closed).** A
     decisive battery (`hxq ast/refs/search/meta` over a probe
