@@ -5,6 +5,7 @@ import utest.Test;
 import anyparse.query.Engine;
 import anyparse.query.QueryNode;
 import anyparse.query.Selector;
+import anyparse.runtime.Span;
 
 /**
  * Unit tests for the `--select` selector grammar (parser + matcher).
@@ -111,6 +112,46 @@ class ApqSelectorTest extends Test {
 		final fn:QueryNode = new QueryNode('FnMember', 'bar', [ret]);
 		final varM:QueryNode = new QueryNode('VarMember', 'x', []);
 		final cls:QueryNode = new QueryNode('ClassDecl', 'Foo', [varM, fn]);
+		return new QueryNode('module', null, [cls]);
+	}
+
+	public function testAtReturnsInnermostContainingNode():Void {
+		final tree:QueryNode = mkSpannedTree();
+		// Offset 22 is inside IdentExpr[20,25) ⊂ FnMember[10,40) ⊂ ClassDecl[0,50).
+		final n:Null<QueryNode> = Engine.at(tree, 22);
+		Assert.notNull(n);
+		Assert.equals('IdentExpr', n.kind);
+	}
+
+	public function testAtPicksEnclosingWhenBetweenInnerNodes():Void {
+		final tree:QueryNode = mkSpannedTree();
+		// Offset 12 is in FnMember[10,40) but before IdentExpr[20,25).
+		final n:Null<QueryNode> = Engine.at(tree, 12);
+		Assert.notNull(n);
+		Assert.equals('FnMember', n.kind);
+	}
+
+	public function testAtFallsBackToOuterNode():Void {
+		final tree:QueryNode = mkSpannedTree();
+		// Offset 5 is in ClassDecl[0,50) only (before FnMember[10,40)).
+		final n:Null<QueryNode> = Engine.at(tree, 5);
+		Assert.notNull(n);
+		Assert.equals('ClassDecl', n.kind);
+	}
+
+	public function testAtEndExclusiveAndOutOfRangeReturnNull():Void {
+		final tree:QueryNode = mkSpannedTree();
+		// 50 == ClassDecl.to (end-exclusive) and 60 past everything; the
+		// spanless module root never wins.
+		Assert.isNull(Engine.at(tree, 50));
+		Assert.isNull(Engine.at(tree, 60));
+	}
+
+	private function mkSpannedTree():QueryNode {
+		// module(no span) > ClassDecl[0,50) > FnMember[10,40) > IdentExpr[20,25)
+		final id:QueryNode = new QueryNode('IdentExpr', 'v', [], new Span(20, 25));
+		final fn:QueryNode = new QueryNode('FnMember', 'bar', [id], new Span(10, 40));
+		final cls:QueryNode = new QueryNode('ClassDecl', 'Foo', [fn], new Span(0, 50));
 		return new QueryNode('module', null, [cls]);
 	}
 }

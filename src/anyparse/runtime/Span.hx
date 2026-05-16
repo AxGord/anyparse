@@ -57,4 +57,28 @@ final class Span {
 	public function toString():String {
 		return from == to ? '$from' : '$from..$to';
 	}
+
+	/**
+	 * Inverse of `lineCol`: resolve a 1-indexed `line` / `col` within
+	 * `source` to a 0-indexed offset. Clamps a past-end position to the
+	 * end of the requested line (or `source.length`), mirroring
+	 * `lineCol`'s end-of-file behaviour, so a coordinate slightly past
+	 * real content still maps to a sensible offset.
+	 */
+	public static function offsetOf(source:String, line:Int, col:Int):Int {
+		if (line < 1 || col < 1) return 0;
+		var curLine:Int = 1;
+		var curCol:Int = 1;
+		for (i in 0...source.length) {
+			if (curLine == line && curCol == col) return i;
+			if (source.charCodeAt(i) == '\n'.code) {
+				if (curLine == line) return i;
+				curLine++;
+				curCol = 1;
+			} else {
+				curCol++;
+			}
+		}
+		return source.length;
+	}
 }

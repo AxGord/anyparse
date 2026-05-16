@@ -10,6 +10,7 @@ import anyparse.query.Refs.RefKind;
 import anyparse.query.format.Json;
 import anyparse.query.format.Text;
 import anyparse.runtime.ParseError;
+import anyparse.runtime.Span;
 import haxe.Exception;
 
 #if sys
@@ -442,11 +443,6 @@ final class Cli {
 			printAstUsage();
 			return EXIT_USAGE;
 		}
-		if (atExpr != null) {
-			stderr('apq ast: --at deferred to a later slice (needs AST span instrumentation)\n');
-			return EXIT_USAGE;
-		}
-
 		final plugin:GrammarPlugin = pickPlugin(lang);
 		final source:String = readFile(file);
 		final tree:QueryNode = try plugin.parseFile(source) catch (e:ParseError) {
@@ -455,6 +451,34 @@ final class Cli {
 		} catch (e:Exception) {
 			stderr('apq ast: $file: ${e.message}\n');
 			return EXIT_RUNTIME;
+		}
+
+		if (atExpr != null) {
+			final colonIdx:Int = atExpr.indexOf(':');
+			if (colonIdx < 0) {
+				stderr('apq ast: --at expects LINE:COL, got "$atExpr"\n');
+				return EXIT_USAGE;
+			}
+			final atLine:Null<Int> = Std.parseInt(atExpr.substring(0, colonIdx));
+			final atCol:Null<Int> = Std.parseInt(atExpr.substring(colonIdx + 1));
+			if (atLine == null || atCol == null) {
+				stderr('apq ast: --at expects integer LINE:COL, got "$atExpr"\n');
+				return EXIT_USAGE;
+			}
+			// Capture into non-null locals immediately after the null
+			// check — Strict narrows locals, not the Null<Int> bindings,
+			// and `Span.offsetOf` takes plain Int.
+			final atLineN:Int = atLine;
+			final atColN:Int = atCol;
+			if (atLineN < 1 || atColN < 1) {
+				stderr('apq ast: --at expects 1-indexed LINE:COL, got "$atExpr"\n');
+				return EXIT_USAGE;
+			}
+			final offset:Int = Span.offsetOf(source, atLineN, atColN);
+			final node:Null<QueryNode> = Engine.at(tree, offset);
+			final matches:Array<QueryNode> = node == null ? [] : [depth < 0 ? node : Engine.truncate(node, depth)];
+			sysPrint(json ? Json.renderMatches(file, source, matches) : Text.renderMatches(matches));
+			return EXIT_OK;
 		}
 
 		if (selectExpr != null) {
@@ -554,7 +578,7 @@ final class Cli {
 		sysPrint('  --json              Emit JSON instead of S-expr\n');
 		sysPrint('  --depth <n>         Truncate beyond depth n\n');
 		sysPrint('  --select <path>     Subtree(s) matching a selector (e.g. "ClassDecl > FnDecl:foo")\n');
-		sysPrint('  --at <line>:<col>   Smallest enclosing node (deferred)\n');
+		sysPrint('  --at <line>:<col>   Innermost node enclosing the 1-indexed position\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 	}
 

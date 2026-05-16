@@ -74,6 +74,53 @@ class SpanTest extends Test {
 		Assert.equals(1, p.col);
 	}
 
+	function testOffsetOfStart() {
+		Assert.equals(0, Span.offsetOf('hello\nworld', 1, 1));
+	}
+
+	function testOffsetOfMidFirstLine() {
+		Assert.equals(3, Span.offsetOf('hello\nworld', 1, 4));
+	}
+
+	function testOffsetOfAfterNewline() {
+		Assert.equals(6, Span.offsetOf('hello\nworld', 2, 1));
+	}
+
+	function testOffsetOfMidSecondLine() {
+		Assert.equals(8, Span.offsetOf('hello\nworld', 2, 3));
+	}
+
+	function testOffsetOfMultipleNewlines() {
+		Assert.equals(4, Span.offsetOf('a\nb\nc\nd', 3, 1));
+	}
+
+	function testOffsetOfColPastLineEndClampsToNewline() {
+		// col beyond line 1 content → clamp to the newline offset (5).
+		Assert.equals(5, Span.offsetOf('hello\nworld', 1, 99));
+	}
+
+	function testOffsetOfLinePastEndClampsToSourceLength() {
+		Assert.equals(11, Span.offsetOf('hello\nworld', 99, 1));
+	}
+
+	function testOffsetOfEmptySource() {
+		Assert.equals(0, Span.offsetOf('', 1, 1));
+	}
+
+	function testOffsetOfNonPositiveIsZero() {
+		Assert.equals(0, Span.offsetOf('hello', 0, 1));
+		Assert.equals(0, Span.offsetOf('hello', 1, 0));
+	}
+
+	function testOffsetOfRoundTripsLineCol() {
+		// offsetOf is the inverse of lineCol for in-range offsets.
+		final source:String = 'abc\nde\nfghi';
+		for (off in [0, 1, 3, 4, 6, 7, 10]) {
+			final p:{line:Int, col:Int} = new Span(off, off).lineCol(source);
+			Assert.equals(off, Span.offsetOf(source, p.line, p.col), 'round-trip failed at offset $off');
+		}
+	}
+
 	function testFieldsImmutable() {
 		final s:Span = new Span(2, 5);
 		Assert.equals(2, s.from);

@@ -1,5 +1,7 @@
 package anyparse.query;
 
+import anyparse.runtime.Span;
+
 /**
  * Generic tree-walker operations used by every `apq` subcommand.
  *
@@ -32,6 +34,21 @@ final class Engine {
 		return out;
 	}
 
+	/**
+	 * Innermost node whose span contains `offset` (0-indexed,
+	 * start-inclusive / end-exclusive — `from <= offset < to`).
+	 * Returns null when no spanned node covers the offset (e.g. it
+	 * falls in inter-token whitespace, or past end of source). The
+	 * synthetic root carries no span, so it never wins; its spanned
+	 * children are still searched.
+	 */
+	public static function at(tree:QueryNode, offset:Int):Null<QueryNode> {
+		// -1 is an inert placeholder: `atWalk` only compares the width
+		// when a best already exists (`curBest == null ||` short-circuits
+		// first), so the seed value never participates in the decision.
+		return atWalk(tree, offset, null, -1).node;
+	}
+
 	private static function truncateAt(node:QueryNode, depth:Int, maxDepth:Int):QueryNode {
 		if (depth >= maxDepth) return new QueryNode(node.kind, node.name, []);
 		final kids:Array<QueryNode> = [for (c in node.children) truncateAt(c, depth + 1, maxDepth)];
@@ -53,5 +70,32 @@ final class Engine {
 			}
 		}
 		if (segIdx == 0) for (c in node.children) walkSelect(c, sel, 0, out);
+	}
+
+	/**
+	 * Pre-order accumulator walk: threads the best (innermost)
+	 * containing node + its span width down the recursion. A child's
+	 * span is nested within its parent's, so on equal width the
+	 * later-visited (deeper) node replaces — yielding the innermost
+	 * match. `width <= best` (not `<`) lets a deeper equal-width node
+	 * (transparent single-child) win.
+	 */
+	private static function atWalk(node:QueryNode, offset:Int, best:Null<QueryNode>, bestWidth:Int):{node:Null<QueryNode>, width:Int} {
+		var curBest:Null<QueryNode> = best;
+		var curWidth:Int = bestWidth;
+		final span:Null<Span> = node.span;
+		if (span != null && offset >= span.from && offset < span.to) {
+			final width:Int = span.to - span.from;
+			if (curBest == null || width <= curWidth) {
+				curBest = node;
+				curWidth = width;
+			}
+		}
+		for (c in node.children) {
+			final r:{node:Null<QueryNode>, width:Int} = atWalk(c, offset, curBest, curWidth);
+			curBest = r.node;
+			curWidth = r.width;
+		}
+		return {node: curBest, width: curWidth};
 	}
 }

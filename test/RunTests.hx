@@ -163,6 +163,7 @@ import unit.ApqMetaAnonFieldSliceTest;
 import unit.ApqMetaCliTest;
 import unit.ApqTextRenderTest;
 import unit.ApqSearchCliTest;
+import unit.ApqAtCliTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -336,6 +337,7 @@ runner.addCase(new HxEnumAbstractSliceTest());
 		runner.addCase(new ApqMetaCliTest());
 		runner.addCase(new ApqTextRenderTest());
 		runner.addCase(new ApqSearchCliTest());
+		runner.addCase(new ApqAtCliTest());
 		utest.ui.Report.create(runner);
 		runner.run();
 	}
