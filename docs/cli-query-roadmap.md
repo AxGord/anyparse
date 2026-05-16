@@ -740,9 +740,27 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
       over `src` 0→86 lines, crash-free whole-tree. New
       `ApqMetaAnonFieldSliceTest` (7/7); js 5282/5282 ALL TESTS OK,
       0 reg (#2/#1a intact).
-    - Secondary (recorded, not yet scheduled): `search` rejects bare
-      statement/expression patterns (`switch $_ { $_ }` → "expected
-      HxDecl"; graceful EXIT 1).
+    - **#3 — `search` rejected bare stmt/expr patterns with a
+      trailing `;`. ✅ DONE** (commit `a2cccb6`). `return $_;` /
+      `trace($_);` → EXIT 1 "expected HxDecl". Executed-probe recon
+      (not the inherited "fallback doesn't reach switch-stmt" label):
+      `wrapAsStmt`/`wrapAsExpr` append their own `;`, so a user
+      trailing `;` makes `…;;`, which the Haxe grammar rejects (no
+      empty-statement production) — every cascade attempt fails and
+      the `bestError ??` idiom leaks the FIRST (decl) attempt's
+      meaningless wrapper-offset error. Fix = new
+      `trimTrailingSemicolons` scoped to the two wrappers (the
+      unwrapped decl attempt keeps the source so `typedef X = Y;`
+      patterns still parse) + total-failure throw replaced with an
+      actionable category-list message + dead `bestError` removed.
+      `switch $_ { $_ }` is genuinely invalid Haxe (switch body needs
+      `case`) — now rejected with the clear message, not the leaked
+      decl error; `switch $_ { case $_: $_; }` parses fine.
+      Parser-neutral — **sweep flat 273/284, corpus 263/278**. New
+      `PatternParseProbe` +4 red-green methods; js 5282 → 5291
+      assertions, 0 failures, ALL TESTS OK, 0 reg (#2/#1a/#1b
+      intact). Validation arc closed — all recorded query-value gaps
+      addressed.
 
 **Design decision (do not re-attempt without new infrastructure):**
 the flat one-line diagnostic renderers (`Text.renderRefs` /
