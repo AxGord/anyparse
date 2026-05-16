@@ -254,7 +254,20 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		final block:Null<QueryNode> = findFirstByKind(cls, 'BlockBody');
 		if (block == null) return null;
 		if (block.children.length == 0) return null;
-		return block.children[0];
+		final first:QueryNode = block.children[0];
+		// A bare expression-statement pattern (`$a + $b`, `$f($_)`,
+		// `trace($_);`) wraps its expression in a synthetic `ExprStmt`
+		// node. Returning that wrapper as the pattern root constrains
+		// matches to statement position only — the expression stays
+		// invisible in var-init / argument / sub-expression position (the
+		// common case). Reject it so the cascade proceeds to the Expr
+		// attempt, which yields the bare expression as the root; the
+		// matcher then walks every subtree and finds it anywhere.
+		// Non-expression statements (if/for/while/return/var/switch/try/
+		// throw) are not `ExprStmt` and pass through unchanged. Node-level
+		// analog of the `trimTrailingSemicolons` wrapper-artifact fix (#3).
+		if (first.kind == 'ExprStmt') return null;
+		return first;
 	}
 
 	private static function extractFirstExpr(module:QueryNode):Null<QueryNode> {

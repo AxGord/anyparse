@@ -87,14 +87,50 @@ class PatternParseProbe extends Test {
 	}
 
 	public function testExprPatternWithTrailingSemicolon():Void {
-		// `trace($_);` — call with trailing `;` is a valid expression-statement,
-		// so the Stmt cascade wins before Expr.
+		// `trace($_);` — a call written as a statement. The Stmt attempt
+		// parses it but its first statement is a synthetic `ExprStmt`
+		// wrapper; per the S1 fix the Stmt extractor rejects a bare
+		// `ExprStmt` so the cascade falls to the Expr attempt. The pattern
+		// is therefore an Expr rooted at the bare `Call` — matchable at
+		// every subtree (incl. argument / sub-expression position), not
+		// only statement position.
 		final plugin:HaxeQueryPlugin = new HaxeQueryPlugin();
 		final pattern:Pattern = plugin.parsePattern("trace($_);");
-		Assert.equals(PatternCategory.Stmt, pattern.category);
+		Assert.equals(PatternCategory.Expr, pattern.category);
+		Assert.equals('Call', pattern.root.kind);
 		final names:Array<String> = [];
 		collectMetavarNames(pattern.root, names);
 		Assert.isTrue(names.contains('_'), 'pattern must include the wildcard arg — got ${names.join(",")}');
+	}
+
+	public function testBareExpressionPatternIsNotStmtWrapped():Void {
+		// S1 red-green: a bare expression pattern (`$x + $x`) must NOT
+		// resolve to an `ExprStmt`-rooted Stmt pattern. The synthetic
+		// `ExprStmt` wrapper only unifies in statement position, so real
+		// `+` expressions in var-init / argument / sub-expression position
+		// (the common case) are invisible to `apq search`. The Stmt
+		// extractor rejects the bare `ExprStmt` and the cascade falls to
+		// the Expr attempt: category Expr, root the bare `Add`, which
+		// `Matcher.walk` then finds at every subtree.
+		final plugin:HaxeQueryPlugin = new HaxeQueryPlugin();
+		final pattern:Pattern = plugin.parsePattern("$x + $x");
+		Assert.equals(PatternCategory.Expr, pattern.category);
+		Assert.equals('Add', pattern.root.kind);
+		final xs:Int = countMetavarByName(pattern.root, 'x');
+		Assert.equals(2, xs, '$$x must appear twice in pattern AST — got $xs');
+	}
+
+	public function testRealStatementPatternStaysStmt():Void {
+		// S1 regression guard: the bare-`ExprStmt` rejection must NOT
+		// affect non-expression statements. `if`/`return` are not
+		// `ExprStmt`, so they still resolve via the Stmt attempt.
+		final plugin:HaxeQueryPlugin = new HaxeQueryPlugin();
+		final ifPat:Pattern = plugin.parsePattern("if ($_) return $_");
+		Assert.equals(PatternCategory.Stmt, ifPat.category);
+		Assert.equals('IfStmt', ifPat.root.kind);
+		final retPat:Pattern = plugin.parsePattern("return $_;");
+		Assert.equals(PatternCategory.Stmt, retPat.category);
+		Assert.equals('ReturnStmt', retPat.root.kind);
 	}
 
 	public function testInvalidPatternRaisesClearError():Void {
