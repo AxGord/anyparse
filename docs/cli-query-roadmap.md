@@ -856,6 +856,50 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
     fixed before commit. js `test-js.hxml` ALL TESTS OK 5445/5445,
     0 regressions (interp not needed — no `@:re` terminal).
 
+  - **Slice S — `in` binary infix operator. ✅ DONE.** (commit
+    `b90a9cf`.) `TriviaTypeSynth.hx:463` `macro $i{iterVar} in
+    $access` (an `EBinop(OpIn)` building an `EFor` head) failed —
+    `HxExpr` had no `in` binary-infix production. Recon-drilled the
+    offset-25 `#if macro` fail past byte 25 (member-bisect to
+    `shapePairedToRawUnwrap`'s `EFor` head) to the **sole
+    non-compounding blocker** (neutralizing only L463 made the whole
+    file parse). Reversed the inherited "offset-25 `#if macro`
+    compounding cluster / genuine CORE" label → **precedent-matched
+    additive with the Slice R codegen-path check applied and HELD at
+    post-build** (contrast Slice R, where the additive label reversed
+    to CORE because its precedent used a different codegen path):
+    `In(left:HxExpr, right:HxExpr)` is symmetric, so `Lowering.hx:479`
+    `isAsymmetric = false` → the generic `lowerPrattLoop` recursion
+    (the `Interval`/`And`/`Eq` path, NOT the `is` asymmetric
+    `right:HxType` special-case); `Lowering.hx:503`
+    `endsWithWordChar('in')` auto-selects `matchKw` word-boundary
+    dispatch (same mechanism as `is`, so `index`/`internal` is not
+    mis-read). 30+ existing symmetric `@:infix` ctors flow this exact
+    path → no CORE fork, no AskUserQuestion. **Zero
+    Lowering/writer/synth change** (WriterLowering's `_gather`
+    chain-switch is gated to `||`/`&&`/`+`/`-` only; HaxeQueryPlugin
+    Audit-3-lists N/A — `In` is a read-binop, absent from
+    `writeParentKinds`/`DECL_HOST_KINDS` like sibling
+    `Interval`/`Eq`). **Precedence:** Haxe `OpIn` priority 10 (looser
+    than arrow `=>`=9, tighter than assign `=`=11); anyparse collapses
+    Haxe's arrow+assign tiers into prec 0, so `in` maps to prec 0
+    left-assoc. Never chained in practice — the real `for (a in b)`
+    loop is the dedicated `@:kw('for')` HxForStmt production; the
+    infix `in` branch is reached only via a `macro $x in $y`
+    atomic-operand reification. **Sweep-mover, predicted exactly: 280
+    → 281/284 (+1).** TriviaTypeSynth strip-confirmed sole
+    non-compounding blocker → M/N predictive-flip discriminator held
+    precisely; `Lowering`/`WriterLowering`/`WriterCodegen` correctly
+    did NOT bonus-flip (not extrapolated — the Slice P lesson both
+    ways). Fails 4 → 3. Corpus unchanged. Probes: `a in
+    b`→`In(IdentExpr, IdentExpr)`; `internal` parses as one identifier
+    (no `in`-split); `for (i in 0...10)` unperturbed; `macro a in
+    b`→`MacroExpr(In(...))`; TriviaTypeSynth.hx now `(module …`. New
+    `HxPrattOpsTest` in-operator section (5 methods incl. a
+    `roundTrip` idempotency assertion — the generic spaced-infix
+    writer ripple held clean). js `test-js.hxml` ALL TESTS OK
+    5458/5458, 0 regressions (interp not needed — no `@:re` terminal).
+
   - **Query-value validation pass (dogfood). ✅ DONE (all 3 gaps
     closed).** A
     decisive battery (`hxq ast/refs/search/meta` over a probe
