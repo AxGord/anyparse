@@ -390,6 +390,103 @@ class HxSwitchNewSliceTest extends HxTestHelpers {
 		}
 	}
 
+	// ---- Qualified constructor path tests (Slice P) ----
+
+	public function testNewQualifiedTwoSegment():Void {
+		final body:Array<HxStatement> = parseBody('class C { function f():Void { new haxe.Exception("x"); } }');
+		Assert.equals(1, body.length);
+		switch body[0] {
+			case ExprStmt(expr):
+				switch expr {
+					case NewExpr(ne):
+						Assert.equals('haxe.Exception', (ne.type : String));
+						Assert.equals(1, ne.args.length);
+					case null, _: Assert.fail('expected NewExpr');
+				}
+			case null, _: Assert.fail('expected ExprStmt');
+		}
+	}
+
+	public function testNewQualifiedDeepPath():Void {
+		final body:Array<HxStatement> = parseBody('class C { function f():Void { new haxe.ds.StringMap(); } }');
+		Assert.equals(1, body.length);
+		switch body[0] {
+			case ExprStmt(expr):
+				switch expr {
+					case NewExpr(ne):
+						Assert.equals('haxe.ds.StringMap', (ne.type : String));
+						Assert.equals(0, ne.args.length);
+					case null, _: Assert.fail('expected NewExpr');
+				}
+			case null, _: Assert.fail('expected ExprStmt');
+		}
+	}
+
+	public function testNewQualifiedInSwitchBody():Void {
+		// The exact SExprFormat / JsonFormat / HaxeFormat self-parse blocker:
+		// a qualified `new` as a switch-case-body expression. Bare HxIdentLit
+		// mis-absorbed `.Exception(...)` as postfix at statement level and
+		// failed outright here; HxTypeName parses the whole dotted path.
+		final sw:HxSwitchStmt = parseSwitch(
+			'class C { function f():Void { switch (x) { case _: throw new haxe.Exception("oops"); } } }'
+		);
+		Assert.equals(1, sw.cases.length);
+		switch sw.cases[0] {
+			case CaseBranch(b):
+				Assert.equals(1, b.body.length);
+				switch b.body[0] {
+					case ThrowStmt(expr):
+						switch expr {
+							case NewExpr(ne):
+								Assert.equals('haxe.Exception', (ne.type : String));
+								Assert.equals(1, ne.args.length);
+							case null, _: Assert.fail('expected NewExpr');
+						}
+					case null, _: Assert.fail('expected ThrowStmt');
+				}
+			case null, _: Assert.fail('expected CaseBranch');
+		}
+	}
+
+	public function testNewUnqualifiedRegression():Void {
+		// HxTypeName is a strict superset of HxIdentLit — a bare type name
+		// must still parse identically after the terminal swap.
+		final body:Array<HxStatement> = parseBody('class C { function f():Void { new Foo(1); } }');
+		Assert.equals(1, body.length);
+		switch body[0] {
+			case ExprStmt(expr):
+				switch expr {
+					case NewExpr(ne):
+						Assert.equals('Foo', (ne.type : String));
+						Assert.equals(1, ne.args.length);
+					case null, _: Assert.fail('expected NewExpr');
+				}
+			case null, _: Assert.fail('expected ExprStmt');
+		}
+	}
+
+	public function testNewQualifiedPostfixChain():Void {
+		final body:Array<HxStatement> = parseBody('class C { function f():Void { new haxe.io.Bytes().length; } }');
+		Assert.equals(1, body.length);
+		switch body[0] {
+			case ExprStmt(expr):
+				switch expr {
+					case FieldAccess(operand, field):
+						Assert.equals('length', (field : String));
+						switch operand {
+							case NewExpr(ne): Assert.equals('haxe.io.Bytes', (ne.type : String));
+							case null, _: Assert.fail('expected NewExpr operand');
+						}
+					case null, _: Assert.fail('expected FieldAccess');
+				}
+			case null, _: Assert.fail('expected ExprStmt');
+		}
+	}
+
+	public function testNewQualifiedRoundTrip():Void {
+		roundTrip('class C { function f():Void { var e = new haxe.Exception("x"); throw new haxe.ds.StringMap(); } }');
+	}
+
 	// ---- Switch expression tests ----
 
 	/** Extract the SwitchExpr atom from a return/expr/var-init outer statement. */
