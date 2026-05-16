@@ -46,8 +46,12 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 	 * Binding-declaration kinds shared by `refShape` and `metaShape`
 	 * so the two contracts cannot drift. Top-level type decls,
 	 * statement-level var bindings, class-member bindings, function
-	 * parameters (`HxParam`'s three Alt branches) and the
-	 * `@:spanned('LambdaParam')` lambda-parameter struct.
+	 * parameters (`HxParam`'s three Alt branches), the
+	 * `@:spanned('LambdaParam')` lambda-parameter struct, and enum
+	 * constructors (`SimpleCtor` / `ParamCtor`) so an annotation on
+	 * an `enum E { @:kw('x') A; }` ctor attributes to that ctor — the
+	 * `MetaCall` and ctor nodes flatten as spanned siblings, so
+	 * `Meta.followingDeclHost` resolves once the kind is a host.
 	 */
 	private static final DECL_HOST_KINDS:Array<String> = [
 		'VarDecl', 'FnDecl',
@@ -56,6 +60,7 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		'VarStmt', 'FinalStmt',
 		'Required', 'Optional', 'Rest',
 		'LambdaParam',
+		'SimpleCtor', 'ParamCtor',
 	];
 
 	public function new() {}
