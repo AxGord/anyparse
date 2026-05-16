@@ -761,6 +761,44 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
       assertions, 0 failures, ALL TESTS OK, 0 reg (#2/#1a/#1b
       intact). Validation arc closed — all recorded query-value gaps
       addressed.
+    - **#4 — `search` expression patterns invisible outside
+      statement position. ✅ DONE** (commit `bae29e7`). Validation
+      arc (b) extended dogfood to the uncovered `search`
+      metavar-binding surface. Executed-probe recon DISPROVED the
+      inherited span-gating hypothesis (PostIncr/PreDecr carry spans,
+      `$x++` works) and reframed the real bug:
+      `HaxeQueryPlugin.extractFirstStmt` returned the synthetic
+      `(ExprStmt …)` enum-ctor wrapper as the pattern root. Real
+      expressions live under VarStmt-init / `Assign` / call-args,
+      never as a bare `ExprStmt`, so a Stmt-cascade-rooted pattern
+      unified only in statement position — every expression pattern
+      (`$a + $b`, `$f($_)`, `$x.foo()`) returned ~0 matches in the
+      common sub-expression case. Node-level analog of #3 (which
+      removed the text-level trailing-`;` wrapper artifact; this
+      removes the wrapper-node artifact). Fix = one guard in
+      `extractFirstStmt`: reject a first-statement of kind
+      `ExprStmt` so the cascade proceeds to the Expr attempt, which
+      yields the bare expression as the root (`Matcher.walk` then
+      finds it at every subtree); non-expression statements
+      (if/for/while/return/var/switch/try/throw) are not `ExprStmt`
+      and pass through unchanged. Parser-neutral, no QueryNode
+      contract change (appendNodes / `DECL_HOST_KINDS` /
+      writeParentKinds untouched). Evidence: whole-`src`
+      `search '$_ + $_'` 0 → 81 matches; `$x + $x` reuse-constraint
+      correct (a+a matched, a+b not); `trace($_)` now matches calls
+      anywhere; known-good unchanged (`i++`=8, `return $_;`=14).
+      **Sweep flat 273/284**, 0 crashes whole-`src`.
+      `PatternParseProbe` +2 methods + `testExprPatternWith
+      TrailingSemicolon` flipped Stmt→Expr (the old assertion
+      encoded the pre-fix limitation); js 5291 → 5299 assertions,
+      ALL TESTS OK, 0 reg (#2/#1a/#1b/#3 intact). Secondary gaps
+      surfaced by the same recon (NOT yet fixed): **S2** — `var $v
+      = 0` resolves via the Decl attempt to module-level `VarDecl`,
+      which matches neither class-field `VarMember` nor local
+      `VarStmt` (a var-decl kind-divergence; design fork, deferred);
+      **S3** — `runSearch` arg loop rejects any `--`-prefixed token
+      as an option so `--$x` patterns are unreachable (no `--`
+      end-of-options sentinel; clean UX additive, next slice).
 
 **Design decision (do not re-attempt without new infrastructure):**
 the flat one-line diagnostic renderers (`Text.renderRefs` /
