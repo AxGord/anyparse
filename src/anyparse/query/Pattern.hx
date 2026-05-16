@@ -29,10 +29,63 @@ final class Pattern {
 	public final category:PatternCategory;
 	public final source:String;
 
-	public function new(root:QueryNode, category:PatternCategory, source:String) {
+	/**
+	 * Plugin-supplied kind-equivalence consulted ONLY by the search
+	 * `Matcher`'s kind gate. `null` = strict string equality (the
+	 * default for any plugin that does not supply one).
+	 *
+	 * Lets a grammar declare that several position-specific
+	 * `QueryNode.kind` values denote the same construct for matching
+	 * (Haxe: a `var` declaration is `VarDecl` / `VarMember` /
+	 * `VarStmt` by position) WITHOUT collapsing those kinds in the
+	 * `QueryNode` tree — `ast` / `--select` / `refs` / `meta` keep
+	 * the precise per-position vocabulary (incl. the published
+	 * `--on VarMember`). Search-scoped by construction: a `Pattern`
+	 * exists only for `apq search`. The `Matcher` stays
+	 * language-agnostic — it consults this opaque relation, never the
+	 * grammar-specific kind names.
+	 */
+	public final kindEquivalence:Null<KindEquivalence>;
+
+	public function new(root:QueryNode, category:PatternCategory, source:String, ?kindEquivalence:Null<KindEquivalence>) {
 		this.root = root;
 		this.category = category;
 		this.source = source;
+		this.kindEquivalence = kindEquivalence;
+	}
+}
+
+/**
+ * A symmetric kind-equivalence relation over `QueryNode.kind` strings,
+ * built from a list of equivalence classes. Two kinds match iff they
+ * are the same string or canonicalise to the same class
+ * representative. Kinds in no class are equivalent only to themselves.
+ *
+ * Carried by `Pattern` and consulted only by the search `Matcher`, so
+ * the relation is scoped to pattern matching and never alters the
+ * `QueryNode` tree the other commands see.
+ */
+@:nullSafety(Strict)
+final class KindEquivalence {
+
+	final canonOf:Map<String, String>;
+
+	public function new(classes:Array<Array<String>>) {
+		canonOf = new Map();
+		for (group in classes) {
+			if (group.length == 0) continue;
+			final rep:String = group[0];
+			for (k in group) canonOf.set(k, rep);
+		}
+	}
+
+	public inline function canon(kind:String):String {
+		final c:Null<String> = canonOf.get(kind);
+		return c == null ? kind : c;
+	}
+
+	public inline function equivalent(a:String, b:String):Bool {
+		return a == b || canon(a) == canon(b);
 	}
 }
 

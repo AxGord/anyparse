@@ -2,6 +2,7 @@ package anyparse.grammar.haxe;
 
 import anyparse.query.GrammarPlugin;
 import anyparse.query.Pattern;
+import anyparse.query.Pattern.KindEquivalence;
 import anyparse.query.QueryNode;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
@@ -69,6 +70,26 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		'SimpleCtor', 'ParamCtor',
 		'VarField', 'FinalField', 'FnField',
 	];
+
+	/**
+	 * Search-only kind-equivalence. A Haxe `var` declaration surfaces
+	 * as three position-specific `QueryNode` kinds — module-level
+	 * `VarDecl`, class-field `VarMember`, local `VarStmt` — all
+	 * wrapping the same `HxVarDecl` struct (identical child shape). A
+	 * `var $v = …` pattern parses via the Decl attempt to `VarDecl`;
+	 * without this equivalence it would never match fields or locals
+	 * (the S2 dogfood gap). Carried on the `Pattern` and consulted
+	 * only by the search `Matcher`, so the `QueryNode` tree keeps the
+	 * precise per-position kinds: `ast` / `--select` / `refs` /
+	 * `meta` vocabulary — including the published `--on VarMember` —
+	 * is unchanged, and `DECL_HOST_KINDS` above stays correct (it
+	 * intentionally distinguishes the three for scope/decl-host
+	 * resolution). `final` declarations (`FinalMember` / `FinalStmt`
+	 * / `FinalField`) are deliberately a separate family: a different
+	 * keyword with immutability semantics, not in this gap's scope.
+	 */
+	private static final SEARCH_KIND_EQUIVALENCE:KindEquivalence =
+		new KindEquivalence([['VarDecl', 'VarMember', 'VarStmt']]);
 
 	public function new() {}
 
@@ -197,7 +218,7 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 			final extracted:Null<QueryNode> = attempt.extract(tree);
 			if (extracted == null) continue;
 			final reclassified:QueryNode = Metavar.reclassify(extracted);
-			return new Pattern(reclassified, attempt.category, source);
+			return new Pattern(reclassified, attempt.category, source, SEARCH_KIND_EQUIVALENCE);
 		}
 		// Every attempt's parser error is offset into a synthetic wrapper
 		// string, so leaking it (`expected HxDecl at 0`) only misleads.

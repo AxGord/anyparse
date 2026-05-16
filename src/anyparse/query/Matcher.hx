@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.Pattern.Metavar;
+import anyparse.query.Pattern.KindEquivalence;
 import anyparse.runtime.Span;
 
 /**
@@ -38,17 +39,17 @@ final class Matcher {
 	 */
 	public static function search(pattern:Pattern, tree:QueryNode):Array<Match> {
 		final out:Array<Match> = [];
-		walk(pattern.root, tree, out);
+		walk(pattern.root, tree, pattern.kindEquivalence, out);
 		return out;
 	}
 
-	private static function walk(pattern:QueryNode, input:QueryNode, out:Array<Match>):Void {
+	private static function walk(pattern:QueryNode, input:QueryNode, eq:Null<KindEquivalence>, out:Array<Match>):Void {
 		final bindings:Map<String, QueryNode> = new Map();
-		if (unify(pattern, input, bindings)) {
+		if (unify(pattern, input, eq, bindings)) {
 			final span:Null<Span> = input.span;
 			if (span != null) out.push(new Match(span, bindings));
 		}
-		for (c in input.children) walk(pattern, c, out);
+		for (c in input.children) walk(pattern, c, eq, out);
 	}
 
 	/**
@@ -59,7 +60,7 @@ final class Matcher {
 	 * share the same map so cross-position constraints (e.g. `$x = $x +
 	 * 1`) are enforced.
 	 */
-	private static function unify(pattern:QueryNode, input:QueryNode, bindings:Map<String, QueryNode>):Bool {
+	private static function unify(pattern:QueryNode, input:QueryNode, eq:Null<KindEquivalence>, bindings:Map<String, QueryNode>):Bool {
 		// Whole-subtree metavar (e.g. bare `$x` / `$_`).
 		if (pattern.kind == Metavar.KIND) {
 			final n:Null<String> = pattern.name;
@@ -72,8 +73,12 @@ final class Matcher {
 			}
 			return structurallyEqual(prior, input);
 		}
-		// Kind must match for non-metavar patterns.
-		if (pattern.kind != input.kind) return false;
+		// Kind must match for non-metavar patterns. A plugin may supply
+		// a search-only equivalence so position-variant kinds of one
+		// construct unify (Haxe `var`: VarDecl/VarMember/VarStmt); the
+		// matcher consults the opaque relation, never the kind names.
+		// `null` (no plugin equivalence) = strict string equality.
+		if (eq == null ? pattern.kind != input.kind : !eq.equivalent(pattern.kind, input.kind)) return false;
 		// Name-position match: either literal equality OR pattern carries
 		// a `$<name>` metavar binding for the name slot.
 		final pname:Null<String> = pattern.name;
@@ -101,7 +106,7 @@ final class Matcher {
 		final iChildren:Array<QueryNode> = input.children;
 		if (pChildren.length != iChildren.length) return false;
 		for (k in 0...pChildren.length) {
-			if (!unify(pChildren[k], iChildren[k], bindings)) return false;
+			if (!unify(pChildren[k], iChildren[k], eq, bindings)) return false;
 		}
 		return true;
 	}

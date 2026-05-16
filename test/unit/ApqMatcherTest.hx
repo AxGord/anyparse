@@ -77,6 +77,48 @@ class ApqMatcherTest extends Test {
 		Assert.equals(1, matches.length, 'literal `return null` must match exactly once');
 	}
 
+	public function testVarDeclPatternMatchesEveryPosition():Void {
+		// S2 red-green: a Haxe `var` decl surfaces as three
+		// position-specific kinds — module `VarDecl`, class-field
+		// `VarMember`, local `VarStmt` (all wrap the same `HxVarDecl`).
+		// `var $v = 0` parses via the Decl attempt to `VarDecl`; the
+		// plugin-supplied search-only kind-equivalence must let it match
+		// the field and the local too. The QueryNode tree keeps the
+		// precise kinds (ast/--select/refs/meta unchanged) — only the
+		// Matcher consults the equivalence.
+		final plugin:HaxeQueryPlugin = new HaxeQueryPlugin();
+		final source:String = 'class X {
+			var field = 0;
+			static function f() { var local = 0; }
+		}';
+		final pattern:Pattern = plugin.parsePattern("var $v = 0");
+		final tree:QueryNode = plugin.parseFile(source);
+		final matches:Array<Match> = Matcher.search(pattern, tree);
+		Assert.equals(2, matches.length, 'field + local var must both match — got ${matches.length}');
+		final names:Array<String> = [for (m in matches) {
+			final v = m.bindings.get('v');
+			v == null ? '<none>' : (v.name ?? '<noname>');
+		}];
+		Assert.isTrue(names.contains('field'), '$$v must bind class-field var — got ${names.join(",")}');
+		Assert.isTrue(names.contains('local'), '$$v must bind local var — got ${names.join(",")}');
+	}
+
+	public function testVarEquivalenceIsScoped():Void {
+		// S2 negative control: the var-decl equivalence must NOT
+		// over-collapse. `var $v = 0` must not match a `final`
+		// declaration (different keyword/semantics, deliberately a
+		// separate family) nor a function declaration.
+		final plugin:HaxeQueryPlugin = new HaxeQueryPlugin();
+		final source:String = 'class X {
+			final c = 0;
+			static function g() { return 0; }
+		}';
+		final pattern:Pattern = plugin.parsePattern("var $v = 0");
+		final tree:QueryNode = plugin.parseFile(source);
+		final matches:Array<Match> = Matcher.search(pattern, tree);
+		Assert.equals(0, matches.length, 'var pattern must not match final/fn — got ${matches.length}');
+	}
+
 	/**
 	 * Slice 2.5 regression — the Phase 2 side-channel mechanism mis-attributed
 	 * spans for inner bindings reached through deeply-nested Seq/Alt hops
