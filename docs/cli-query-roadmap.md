@@ -684,7 +684,8 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
     ALL TESTS OK 5247/5247, 0 regressions (interp not needed — no
     `@:re` terminal added).
 
-  - **Query-value validation pass (dogfood). 🔶 IN PROGRESS.** A
+  - **Query-value validation pass (dogfood). ✅ DONE (all 3 gaps
+    closed).** A
     decisive battery (`hxq ast/refs/search/meta` over a probe
     exercising every L1–N construct + real grammar/macro files +
     whole-`src` robustness sweep) confirmed the L1–N arc is
@@ -720,17 +721,25 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
       273/284, corpus 263/278**. `meta @:kw` on `HxStatement.hx` now
       16/16 (was 0). New `ApqMetaEnumCtorSliceTest` (4/4); js
       5270/5270 ALL TESTS OK, 0 reg (Slice #2 intact).
-    - **#1b — `meta`/`refs` blind to anon-field members. ⬜ AFTER
-      #1a.** `appendNodes` unconditionally skips the struct field
-      named `type`, so a typedef's anon body (`HxType.Anon` members
-      + their metadata, Slice C locus +83) surfaces with
-      `children:[]`. Fix must descend `type` ONLY when it is an enum
-      with ctor `Anon` (`HxType` is an enum; `Named` type-refs must
-      stay skipped or every typed `var x:Foo` spawns a phantom
-      child) + add `VarField/FinalField/FnField` to
-      `DECL_HOST_KINDS` (bare `Required`/`Optional` anon forms reuse
-      the existing HxParam entries). Targeted, larger blast radius
-      than #1a/#2.
+    - **#1b — `meta`/`refs` blind to anon-field members. ✅ DONE**
+      (commit `d4b5cdb`). `appendNodes` unconditionally skipped the
+      struct field named `type`, so a typedef's anon body
+      (`HxType.Anon` members + metadata, Slice C locus +83) surfaced
+      with `children:[]`. Fix = new `isAnonType(v)` gate: descend
+      `type` only when it is an `HxType.Anon` enum (both skip sites;
+      spanned-branch restructured, proven field-equivalent + the
+      Anon exception) — `HxType` is an enum so `Named`/`Arrow`/
+      `Parens`/`ArrowFn` type-refs stay skipped (no phantom child
+      per typed binding, guarded by a dedicated test) + add
+      `VarField/FinalField/FnField` to `DECL_HOST_KINDS` (bare
+      `Required`/`Optional` anon forms reuse the existing HxParam
+      entries). Generic gate also surfaces anon-in-var-hint members
+      — a correct bonus, not typedef-special-cased. Parser-neutral —
+      **sweep flat 273/284, corpus 263/278**; probe `TypedefDecl`
+      now `Anon→[@:m1, VarField f, @:m2, FnField g]`; `meta @:lead`
+      over `src` 0→86 lines, crash-free whole-tree. New
+      `ApqMetaAnonFieldSliceTest` (7/7); js 5282/5282 ALL TESTS OK,
+      0 reg (#2/#1a intact).
     - Secondary (recorded, not yet scheduled): `search` rejects bare
       statement/expression patterns (`switch $_ { $_ }` → "expected
       HxDecl"; graceful EXIT 1).
