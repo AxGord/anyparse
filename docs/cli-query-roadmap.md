@@ -820,6 +820,42 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
       assertions, ALL TESTS OK, 0 reg (#2/#1a/#1b/#3/#4 intact).
       S2 (var-decl kind-divergence) remains the only open Phase A
       gap — a design fork pending an AskUserQuestion decision.
+    - **#6 — `search 'var $v = …'` matched no fields/locals.
+      ✅ DONE** (commit `8e10818`). Gap S2. A Haxe `var` decl
+      surfaces as three position-specific kinds — module `VarDecl`,
+      class-field `VarMember`, local `VarStmt` (all wrap the same
+      `HxVarDecl`). `var $v = 0` parses via the Decl attempt to
+      `VarDecl`, so it matched neither fields nor locals (search=0
+      vs grep=6 in `src/anyparse/query`). Two-stage fork: user
+      chose plugin-side kind-normalization; recon then surfaced
+      that a literal global kind-collapse breaks the PUBLISHED
+      vocabulary (`docs/cli-query-tool.md` designates `VarMember`
+      published + ships a `--on VarMember` example) and the
+      `refs`/`meta` `DECL_HOST_KINDS` scope model — user re-scoped
+      to the strictly-better C-scoped variant. Fix = a search-only
+      `KindEquivalence` (new class in `Pattern.hx`) carried on the
+      `Pattern` (search-scoped by construction), supplied by
+      `HaxeQueryPlugin.parsePattern` as `[['VarDecl','VarMember',
+      'VarStmt']]`, consulted by `Matcher.unify` ONLY at the kind
+      gate. No `GrammarPlugin` interface change (avoids the
+      interface-trap); `Matcher` stays language-agnostic (opaque
+      relation). The QueryNode tree kinds are UNCHANGED — `ast` /
+      `--select` / `refs` / `meta` keep the precise per-position
+      vocabulary, `DECL_HOST_KINDS` stays correct (audit-3-lists:
+      reviewed, no contract change by design). `structurallyEqual`
+      (metavar deep-equality) deliberately stays strict; `final`
+      decls a deliberately separate family. Evidence:
+      `search 'var $v = 0'` module+field+local → 3 matches; whole
+      `src/anyparse/query` 0 → 8; negative `final`/fn → 0 (scope
+      upheld). **Zero-churn proven**: AST keeps VarDecl/VarMember/
+      VarStmt separate; `--select VarStmt`/`VarMember`,
+      `meta --on VarMember` still resolve; `ApqSelectorTest` /
+      `ApqAstIntegrationTest` / `ApqRefs*` / `ApqMeta*` green with
+      NO edits. **Sweep flat 273/284**, 0 crashes, `i++`=8 /
+      `$_ + $_`=81 unchanged. `ApqMatcherTest` +2 methods; js
+      5301 → 5305 assertions, ALL TESTS OK, 0 reg
+      (#2/#1a/#1b/#3/#4/#5 intact). **Phase A complete — all 3
+      `search` gaps (#4 S1 / #5 S3 / #6 S2) closed.**
 
 **Design decision (do not re-attempt without new infrastructure):**
 the flat one-line diagnostic renderers (`Text.renderRefs` /
