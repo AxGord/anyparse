@@ -856,6 +856,38 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
       5301 → 5305 assertions, ALL TESTS OK, 0 reg
       (#2/#1a/#1b/#3/#4/#5 intact). **Phase A complete — all 3
       `search` gaps (#4 S1 / #5 S3 / #6 S2) closed.**
+    - **Phase B — `ast --select PATH`: query-value-CORRECT, no
+      gap.** Selector/Engine path/name/`A > B`/any-depth all
+      correct on real files; anon-struct descent (#1b held),
+      enum-ctor kinds (#1a) resolve; no crashes, FAIL files clean
+      EXIT 1. A subagent flagged `--select EnumDecl` missing
+      `enum abstract` — recon REFRAMED by mechanism: `EnumDecl`
+      (ADT `SimpleCtor`/`ParamCtor` children) vs `EnumAbstractDecl`
+      (abstract members + underlying type) are genuinely distinct
+      constructs (Slice D made them distinct kinds deliberately);
+      collapsing them in the precise-navigation tool would be the
+      C-global anti-pattern #6 explicitly rejected. → discoverability
+      finding (docs publish a "vocabulary" concept but don't
+      enumerate it), not a code gap.
+    - **Phase C — `ast --at LINE:COL` deferral was stale; now
+      IMPLEMENTED** (commit `f03e498`). `Cli.hx` rejected `--at`
+      as "needs AST span instrumentation", but SpanTypeSynth Slice
+      2.5 already puts in-AST `_span` on 249/250 real-file nodes
+      (only the synthetic `module` root is span-less). User chose
+      to ship the bounded feature: new `Span.offsetOf` (inverse of
+      `lineCol`, 1-indexed, EOF-clamped), `Engine.at` (innermost
+      span containing the offset, start-incl/end-excl, language-
+      agnostic, mirrors `Engine.select`), Cli `--at` block parses
+      1-indexed LINE:COL and renders via `Json`/`Text.renderMatches`
+      exactly like `--select` (no enclosing node = clean empty
+      EXIT_OK). Parser-neutral — **sweep flat 273/284**. `SpanTest`
+      +10 `offsetOf` methods (incl. `lineCol` round-trip),
+      `ApqSelectorTest` +4 `Engine.at`, new `ApqAtCliTest` (4); js
+      5305 → 5334 assertions, ALL TESTS OK, 0 reg (#2/#1a/#1b/#3/
+      #4/#5/#6 intact). **Validation arc (b) complete + Phase C
+      finding actioned; methodology now spans all 4 commands and
+      the `ast` surface is feature-complete (tree / --depth /
+      --select / --at).**
 
 **Design decision (do not re-attempt without new infrastructure):**
 the flat one-line diagnostic renderers (`Text.renderRefs` /
