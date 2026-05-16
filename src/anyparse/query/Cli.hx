@@ -270,30 +270,45 @@ final class Cli {
 		var pattern:Null<String> = null;
 		var inputSpec:Null<String> = null;
 
+		// `--` is the standard end-of-options sentinel: every token after
+		// it is positional, never an option. A search pattern can legally
+		// start with `--` (`--$x` = prefix-decrement), which would
+		// otherwise be rejected as an unknown option — the sentinel is the
+		// only way to reach those patterns.
+		var optsEnded:Bool = false;
 		var i:Int = 0;
 		while (i < args.length) {
 			final a:String = args[i];
-			switch a {
-				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
-				case '--json':
-					json = true;
-				case '-h', '--help':
-					printSearchUsage();
-					return EXIT_OK;
-				case _:
-					if (StringTools.startsWith(a, '--')) {
-						stderr('apq search: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
-					if (pattern == null) {
-						pattern = a;
-					} else if (inputSpec == null) {
-						inputSpec = a;
-					} else {
-						stderr('apq search: extra positional argument "$a"\n');
-						return EXIT_USAGE;
-					}
+			var isOption:Bool = false;
+			if (!optsEnded) {
+				isOption = true;
+				switch a {
+					case '--lang':
+						lang = expectValue(args, ++i, '--lang');
+					case '--json':
+						json = true;
+					case '-h', '--help':
+						printSearchUsage();
+						return EXIT_OK;
+					case '--':
+						optsEnded = true;
+					case _:
+						if (StringTools.startsWith(a, '--')) {
+							stderr('apq search: unknown option "$a"\n');
+							return EXIT_USAGE;
+						}
+						isOption = false;
+				}
+			}
+			if (!isOption) {
+				if (pattern == null) {
+					pattern = a;
+				} else if (inputSpec == null) {
+					inputSpec = a;
+				} else {
+					stderr('apq search: extra positional argument "$a"\n');
+					return EXIT_USAGE;
+				}
 			}
 			i++;
 		}
@@ -501,6 +516,9 @@ final class Cli {
 		sysPrint("Pattern syntax: language source with `$X` / `$_` metavars.\n");
 		sysPrint("  $X      — bind a subtree; reuses must match structurally.\n");
 		sysPrint("  $_      — wildcard, no binding.\n");
+		sysPrint("\n");
+		sysPrint("Use `--` before a pattern that starts with `--` (e.g. the\n");
+		sysPrint("prefix-decrement pattern `--$x`): apq search -- '--\\$x' <file>\n");
 	}
 
 	private static function printRefsUsage():Void {
