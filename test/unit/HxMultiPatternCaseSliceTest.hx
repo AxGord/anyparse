@@ -11,10 +11,13 @@ import anyparse.grammar.haxe.HxSwitchStmt;
  * Slice apq-P5-K3: multi-value `case A, B, C:` patterns.
  *
  * `HxCaseBranch.pattern:HxExpr` became
- * `patterns:Array<HxExpr>` with `@:sep(',') @:trail(':')` — the same
- * Star+sep+trail shape as `HxFnDecl.typeParams`. A single `case A:`
- * is the one-element form (strict regression guard against the probed
- * pre-slice contract); `case A, B, C:` is the multi-element form.
+ * `patterns:Array<HxCasePattern>` with `@:sep(',') @:trail(':')` —
+ * the same Star+sep+trail shape as `HxFnDecl.typeParams`. A single
+ * `case A:` is the one-element form (strict regression guard against
+ * the probed pre-slice contract); `case A, B, C:` is the
+ * multi-element form. Each element's pattern expression is reached
+ * via `.expr` (slice M widened the element to `HxCasePattern` to
+ * carry an optional guard).
  *
  * Navigation mirrors `HxSwitchNewSliceTest` (which was updated for the
  * `.pattern` → `.patterns` field reshape).
@@ -43,9 +46,9 @@ class HxMultiPatternCaseSliceTest extends HxTestHelpers {
 		final sw:HxSwitchStmt = parseSwitch('class C { function f(x:Int):Void { switch (x) { case 1: y(); case _: z(); } } }');
 		final b:HxCaseBranch = caseBranch(sw.cases[0]);
 		Assert.equals(1, b.patterns.length);
-		switch b.patterns[0] {
+		switch b.patterns[0].expr {
 			case IntLit(v): Assert.equals(1, v);
-			case null, _: Assert.fail('expected IntLit pattern, got ${b.patterns[0]}');
+			case null, _: Assert.fail('expected IntLit pattern, got ${b.patterns[0].expr}');
 		}
 	}
 
@@ -55,11 +58,11 @@ class HxMultiPatternCaseSliceTest extends HxTestHelpers {
 		final sw:HxSwitchStmt = parseSwitch('class C { function f(x:Int):Void { switch (x) { case 1, 2: y(); case _: z(); } } }');
 		final b:HxCaseBranch = caseBranch(sw.cases[0]);
 		Assert.equals(2, b.patterns.length);
-		switch b.patterns[0] {
+		switch b.patterns[0].expr {
 			case IntLit(v): Assert.equals(1, v);
 			case null, _: Assert.fail('expected IntLit 1');
 		}
-		switch b.patterns[1] {
+		switch b.patterns[1].expr {
 			case IntLit(v): Assert.equals(2, v);
 			case null, _: Assert.fail('expected IntLit 2');
 		}
@@ -93,7 +96,7 @@ class HxMultiPatternCaseSliceTest extends HxTestHelpers {
 		final sw:HxSwitchStmt = parseSwitch('class C { function f(e:E):Void { switch (e) { case Foo(a), Bar(b): y(); case _: z(); } } }');
 		final b:HxCaseBranch = caseBranch(sw.cases[0]);
 		Assert.equals(2, b.patterns.length);
-		switch b.patterns[0] {
+		switch b.patterns[0].expr {
 			case Call(operand, _):
 				switch operand {
 					case IdentExpr(v): Assert.equals('Foo', (v : String));

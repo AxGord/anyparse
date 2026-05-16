@@ -8,13 +8,22 @@ package anyparse.grammar.haxe;
  * This typedef describes the remainder: a comma-separated pattern
  * list followed by a colon, then zero or more body statements.
  *
- * `patterns` is a `@:sep(',') @:trail(':')` Star of `HxExpr` — the
- * same Star+sep+trail shape as `HxFnDecl.typeParams`. A single
+ * `patterns` is a `@:sep(',') @:trail(':')` Star of `HxCasePattern`
+ * — the same Star+sep+trail shape as `HxFnDecl.typeParams`. A single
  * `case A:` is a one-element list; `case A, B, C:` (Haxe multi-value
- * case) is the multi-element form. Each pattern parses as `HxExpr` —
- * identifiers, literals, and constructor-like patterns (`Foo(x, y)`
- * parses as a `Call` expression) all work without new grammar types.
- * Full pattern matching (extractors, guards) is future work.
+ * case) is the multi-element form. Each element's `expr` parses as
+ * `HxExpr` — identifiers, literals, and constructor-like patterns
+ * (`Foo(x, y)` parses as a `Call` expression) all work without new
+ * grammar types.
+ *
+ * The element type widened from `HxExpr` to `HxCasePattern` to carry
+ * an optional `if (cond)` guard (`case P if (c):`). Only the element
+ * type changes; the Star's `@:sep(',') @:trail(':')` shape is
+ * unchanged, so no `Lowering` constraint is touched. Haxe binds one
+ * guard to the whole list, so it attaches to the last parsed element
+ * and round-trips byte-identically. See `HxCasePattern` for the
+ * element-wrap rationale. Full pattern matching (extractors) is
+ * future work.
  *
  * The body uses `@:tryparse` to force try-parse termination on the
  * last field (D49). The try-parse loop breaks when the next token
@@ -84,7 +93,7 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxCaseBranch = {
-	@:sep(',') @:trail(':') var patterns:Array<HxExpr>;
+	@:sep(',') @:trail(':') var patterns:Array<HxCasePattern>;
 	@:trivia @:tryparse @:fmt(
 		nestBody, bodyPolicy('caseBody', 'expressionCase'),
 		flatChildOpt('ifBody=expressionCase', 'elseBody=expressionCase', 'forBody=expressionCase'),
