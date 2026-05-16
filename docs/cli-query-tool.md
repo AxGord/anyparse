@@ -177,7 +177,7 @@ Span = { start: [line, col], end: [line, col] }
 
 `line` is 1-based, `col` is 0-based.
 
-**Kind vocabulary.** The string values of `kind` (in `ast.Node.kind`, `meta.decl.kind`, and the `ast --select` selector input) come from one **plugin-defined vocabulary** shared across all three surfaces. For a typical curly-brace language the kinds are short lowercase names like `class`, `function`, `field`, `case`. The vocabulary is published by each grammar plugin as part of its public contract.
+**Kind vocabulary.** The string values of `kind` (in `ast.Node.kind`, `meta.decl.kind`, and the `ast --select` selector input) come from one **plugin-defined vocabulary** shared across all three surfaces. For a typical curly-brace language the kinds are short lowercase names like `class`, `function`, `field`, `case`. The vocabulary is published by each grammar plugin as part of its public contract. See [Kind vocabulary](#kind-vocabulary) for the Haxe plugin's published list and how to discover any kind via `apq ast`.
 
 #### `ast`
 
@@ -267,6 +267,36 @@ span, surfacing as an addressable node.
 ```
 
 An annotation attributes to the declaration it precedes in source. When an annotation has no following declaration in its container (expression-level metadata) it attributes to the nearest enclosing declaration — a deliberate v1 simplification, not a finer expression-level target.
+
+### Kind vocabulary
+
+`kind` strings — in `Node.kind`, `meta.decl.kind`, and every `ast --select` segment — are exactly the grammar plugin's AST node-constructor names. There is no separate display mapping and the engine never enumerates kinds: each plugin publishes its own set as part of its public contract. Two practical consequences:
+
+- **Discovery is self-documenting.** `apq ast <file>` (S-expr) and `apq ast <file> --json` print the real `kind` of every node. That is the authoritative way to learn the kind of any construct in any language — the index below is a convenience list for the Haxe plugin, not a second source of truth.
+- **One surface keyword can be several kinds.** Kinds track the *construct*, not the spelling (see the `enum` example below).
+
+The Haxe grammar plugin publishes the following commonly-navigated declaration kinds — the values you pass to `ast --select`, read back as `decl.kind`, and (for declaration-host kinds) pass to `meta --on`. Another plugin publishes its own; this list is illustrative of the per-plugin contract, not part of the engine. It is the common subset, not the whole grammar — every node constructor is a valid `--select` segment, so when in doubt run `apq ast` and read the kind off the tree.
+
+| Group | Kinds |
+|---|---|
+| Module type decls | `ClassDecl`, `InterfaceDecl`, `EnumDecl`, `EnumAbstractDecl`, `AbstractDecl`, `TypedefDecl` |
+| Module var / fn | `VarDecl`, `FnDecl` |
+| Type members | `VarMember`, `FinalMember`, `FnMember` |
+| Anonymous-type fields | `VarField`, `FinalField`, `FnField` |
+| Local declarations | `VarStmt`, `FinalStmt` |
+| Enum constructors | `SimpleCtor`, `ParamCtor` |
+| Params & bindings | `Required`, `Optional`, `Rest`, `LambdaParam` |
+
+**Distinct constructs get distinct kinds — `enum` vs `enum abstract`.** These two look alike in source but parse to different kinds with different child shapes:
+
+```
+$ apq ast x.hx
+(module
+  (EnumDecl E (SimpleCtor A) (ParamCtor B (Required x)))
+  (EnumAbstractDecl EA (VarMember X (IntLit)) (VarMember Y (IntLit)) (Named Int)))
+```
+
+`EnumDecl` is an algebraic enum — its children are constructors (`SimpleCtor`, `ParamCtor`). `EnumAbstractDecl` is a typed-constant abstract — its children are `VarMember`s plus the underlying `Named` type. They are deliberately separate kinds because they are separate constructs, so `ast --select EnumDecl` does **not** match an `enum abstract`, and vice versa — by design. Select the kind that matches the construct, or run `apq ast` to see which kind a given declaration parsed to. The tool keeps these precise rather than collapsing them under one lossy `enum` label.
 
 ## Shell composition
 
