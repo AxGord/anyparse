@@ -52,6 +52,12 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 	 * an `enum E { @:kw('x') A; }` ctor attributes to that ctor — the
 	 * `MetaCall` and ctor nodes flatten as spanned siblings, so
 	 * `Meta.followingDeclHost` resolves once the kind is a host.
+	 * Anon-struct fields (`VarField` / `FinalField` / `FnField`, the
+	 * `var` / `final` / `function` forms of `HxAnonField`) so
+	 * `typedef T = { @:meta var f; }` field metadata + the field
+	 * binding surface — the bare `name:Type` forms reuse the
+	 * `Required` / `Optional` entries above. Reached only once
+	 * `appendNodes` descends the anon `type` (see `isAnonType`).
 	 */
 	private static final DECL_HOST_KINDS:Array<String> = [
 		'VarDecl', 'FnDecl',
@@ -61,6 +67,7 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		'Required', 'Optional', 'Rest',
 		'LambdaParam',
 		'SimpleCtor', 'ParamCtor',
+		'VarField', 'FinalField', 'FnField',
 	];
 
 	public function new() {}
@@ -294,14 +301,25 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 					final kindStr:String = kindVal;
 					final spanObj:Span = cast spanVal;
 					final children:Array<QueryNode> = [];
-					for (field in Reflect.fields(value)) if (field != 'name' && field != 'type' && field != '_span' && field != '_kind') {
+					for (field in Reflect.fields(value)) {
+						if (field == 'name' || field == '_span' || field == '_kind') continue;
+						// Mirror the generic branch: descend an anon-struct
+						// `type` (decl-host members), skip name-slot type-refs.
+						if (field == 'type' && !isAnonType(Reflect.field(value, 'type'))) continue;
 						appendNodes(Reflect.field(value, field), children);
 					}
 					into.push(new QueryNode(kindStr, extractName(value), children, spanObj));
 					return;
 				}
 				for (field in Reflect.fields(value)) {
-					if (field == 'name' || field == 'type') continue;
+					if (field == 'name') continue;
+					// `type` is normally a name-slot leaf (`new T(...)`,
+					// `var x:Foo`) and skipped — but an anon struct type
+					// (`typedef T = {…}`, `var x:{…}`) carries decl-host
+					// members + their metadata, so descend it. `HxType` is
+					// an enum; the `Anon` ctor gate keeps `Named` type-refs
+					// skipped (no phantom child per typed binding).
+					if (field == 'type' && !isAnonType(Reflect.field(value, 'type'))) continue;
 					appendNodes(Reflect.field(value, field), into);
 				}
 			case TClass(_):
@@ -350,5 +368,22 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 			case _:
 		}
 		return null;
+	}
+
+	/**
+	 * True when `v` is an `HxType.Anon` enum value — the anon-struct
+	 * type whose `fields` carry decl-host members + their metadata.
+	 * Gates the `appendNodes` `type`-field descent so only anon
+	 * bodies surface; `Named` / `Arrow` / `Parens` type-refs stay
+	 * skipped (descending them would emit a phantom child per typed
+	 * binding).
+	 */
+	private static inline function isAnonType(v:Dynamic):Bool {
+		if (v == null) return false;
+		final t:Type.ValueType = Type.typeof(v);
+		return switch t {
+			case TEnum(_): Type.enumConstructor(v) == 'Anon';
+			case _: false;
+		}
 	}
 }
