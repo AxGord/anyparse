@@ -626,6 +626,36 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
     regressions, `macro macro : Int` nesting, round-trip). js
     5199/5199, 0 regressions (interp not needed — no `@:re` terminal
     added).
+  - **Slice M — switch-guard `case P if (cond):`. ✅ DONE.**
+    (commit `e7479a9`.) Recon **reversed the inherited "CORE" label**
+    a 3rd time (the L4/L5 pattern; L2 had confirmed CORE only for the
+    *direct-mutation* shape — mutating `HxCaseBranch` itself hits two
+    `Lowering` fatalErrors: a `@:sep` Star requires `@:trail`;
+    `@:optional` + `@:trail` on a Ref is deferred). The **element-wrap**
+    shape sidesteps every ban: `HxCaseBranch.patterns` keeps
+    `@:sep(',') @:trail(':')` unchanged, only the element type widens
+    `HxExpr` → new `@:peg typedef HxCasePattern = { var expr:HxExpr;
+    @:optional @:kw('if') var guard:Null<HxExpr>; }` (K3
+    element-widening precedent). The guard is the `@:optional
+    @:kw('else')` word-keyword shape of `HxIfStmt.elseBody` /
+    `HxIfExpr.elseBranch` — `@:kw` (word-boundary `matchKw`, D47), NOT
+    `@:lead` (raw `matchLit`): caught in file-review, `case iffy:` must
+    not be read as guard `if y`. Zero core / Lowering / writer / synth
+    (generic optional-Ref keyword path, the same that emits ` else …`).
+    Haxe binds one guard to the whole list → it attaches to the last
+    parsed element; `case A, B if (c):` round-trips byte-identically.
+    **Breaks the gap≠sweep streak (first L-arc tail slice to move the
+    sweep): src self-parse 268/283 → 271/284** (+1 denom = new
+    self-parsing `HxCasePattern.hx`; **+2 real flips: `MetaInspect` +
+    `strategy/Pratt`** — the exact files the recon strip-drilled, which
+    did NOT compound, unlike L3/L4/L5's predicted files; switch-guard
+    was their genuine sole/innermost blocker). Corpus fixtures unchanged
+    263/278 (no fixture exercises switch-guard). Fails 15 → 13. New
+    `HxSwitchGuardSliceTest` (7 methods: guard present / absent,
+    multi-pattern last-element binding, call-pattern guard,
+    ternary-inside-guard `:` disambiguation, K3 non-guard regression,
+    round-trip). js `test-js.hxml` ALL TESTS OK 5229/5229, 0
+    regressions (interp not needed — no `@:re` terminal added).
 
 **Design decision (do not re-attempt without new infrastructure):**
 the flat one-line diagnostic renderers (`Text.renderRefs` /
