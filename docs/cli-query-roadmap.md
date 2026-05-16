@@ -900,6 +900,54 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
     writer ripple held clean). js `test-js.hxml` ALL TESTS OK
     5458/5458, 0 regressions (interp not needed — no `@:re` terminal).
 
+  - **Slice T — `$`-reification in type position. ✅ DONE.** (commit
+    `da75ff4`.) `WriterCodegen.hx` (`final _c:$optionsCT = …`,
+    `macro : Null<$optionsCT>` — 11 occurrences, all the bare
+    `$ident` form in type position) failed: `enum HxType` had no
+    `$`-lead variant, so `HxType` could never begin with `$`.
+    Recon-drilled the offset-25 `#if macro` fail past byte 25
+    (member-bisect → `:$ident` type hint) to the **sole
+    non-compounding blocker** (neutralizing only the `$`-in-type
+    forms made the whole file parse). Reversed the inherited
+    "offset-25 `#if macro` compounding cluster / genuine CORE" label
+    → **precedent-matched additive with the Slice R/S codegen-path
+    check applied and HELD at post-build a 2nd consecutive time**:
+    `HxType` is an `@:peg enum` (enum-Alt) → lowered by
+    `Lowering.lowerEnumBranch`, the SAME path as
+    `HxExpr.DollarIdentExpr` (`@:lead("$") DollarIdentExpr(name:
+    HxIdentLit)`, a prior slice's zero-change generic single-Ref
+    ctor); `@:lead`/`@:trail` are proven wired on HxType's enum-Alt
+    path by the existing `Anon` (`@:lead('{') @:trail('}')`). **Fix:**
+    one ctor `@:lead("$") DollarType(name:HxIdentLit);` after `Named`
+    (double-quoted `"$"` per the metadata-interpolation gotcha;
+    lead-keyed dispatch is unambiguous — no `HxType` ctor begins with
+    `$` and the `HxTypeRef` name terminal excludes `$`, so `Named`
+    never competes). No CORE fork, no AskUserQuestion. **Zero
+    Lowering/writer/synth change (verified):** the macro pipeline has
+    ZERO exhaustive `case Named(`/`Anon(`/`Parens(`/`ArrowFn(`
+    hand-switch — `HxType` ctors flow generically (the
+    metadata-driven-codegen invariant holds even for the 5-variant
+    cross-cutting `HxType`, not just `HxExpr`'s 60+-ctor pipeline);
+    the only src/ `HxType` switch (`HaxeTypeRewrites.hx:54`
+    `arrowFnOldStyleRewrite`) has a `case _: null` fallback so
+    `DollarType` safely hits it. Audit-3-lists N/A: `HaxeQueryPlugin`
+    `isAnonType` gates descent on `Type.enumConstructor(v) == 'Anon'`
+    (string-eq, not an exhaustive switch), so `DollarType` is a leaf
+    type-ref exactly like `Named` — not a decl-host / write-parent,
+    not descended. **Sweep-mover, predicted exactly: 281 → 282/284
+    (+1).** `WriterCodegen` strip-confirmed sole non-compounding
+    blocker → M/N predictive-flip discriminator held precisely;
+    `Lowering`/`WriterLowering` correctly did NOT bonus-flip (not
+    extrapolated). Fails 3 → 2. Corpus unchanged. Probes: `var
+    x:$ct`, `Null<$ct>`, plain `Int` (regression), expression-position
+    `$ct`→`DollarIdentExpr` (regression) all parse; WriterCodegen.hx
+    now `(module …`. New `HxDollarReifSliceTest` type-position section
+    (`typeOf` helper mirroring `initOf` + 4 methods incl. a
+    `roundTrip` idempotency assertion — the generic single-Ref
+    `@:lead` writer ripple held clean). js `test-js.hxml` ALL TESTS
+    OK 5466/5466, 0 regressions (interp not needed — no `@:re`
+    terminal).
+
   - **Query-value validation pass (dogfood). ✅ DONE (all 3 gaps
     closed).** A
     decisive battery (`hxq ast/refs/search/meta` over a probe
