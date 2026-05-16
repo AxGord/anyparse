@@ -763,6 +763,48 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
     `test-js.hxml` ALL TESTS OK 5404/5404, 0 regressions (interp not
     needed — no `@:re` terminal added).
 
+  - **Slice Q — empty statement `;`. ✅ DONE.** (commit `550cf3e`.)
+    `HxStatement` had no empty-statement production, so a `;` not
+    consumed as another statement's terminator — a lone `;`, or the
+    optional `;` after a brace-closed statement (`{ … };`,
+    `switch e { … };`, where `}` needs no terminator) — failed to
+    parse. Recon-drilled from WrapList @1379 (member-bisect →
+    `WrapList.isOPLShape`, whose case bodies are `switch arr[1] {…};`).
+    Recon **reversed the inherited "genuine CORE, no precedent-matched
+    escape" label an 8th time** (L4/L5/M/N/O/P pattern; the
+    "only-CORE-left" framing was itself an untrustworthy inherited
+    label). Fix = one zero-arg ctor `@:lit(';') EmptyStmt;` immediately
+    before the catch-all `ExprStmt` — the exact `HxFnBody.NoBody
+    @:lit(';')` precedent (sister to Slice N's
+    `HxStringSegment.LoneDollar @:lit("$")`): generic `@:lit` codegen,
+    zero Lowering/writer/synth. No other `HxStatement` starts with `;`
+    so placement is unambiguous; `expr;` still parses as `ExprStmt`.
+    Add-enum-ctor audit: `grep 'case VoidReturnStmt|case DoWhileStmt|…'
+    src/` → **zero** hand-written exhaustive switches over `HxStatement`
+    (macro pipeline consumes ctors generically); `@:nullSafety(Strict)`
+    js gate is the whole-program net. Audit-3-lists: `EmptyStmt` is
+    inert/zero-arg (no decl-host / write-parent / scope / metadata
+    locus) → no `HaxeQueryPlugin` change, verified post-build as a
+    childless `(EmptyStmt)` leaf. **Sweep-mover, predicted exactly:
+    278 → 279/284 (+1).** WrapList strip-confirmed sole
+    non-compounding blocker (`sed 's/};$/}/'` made it parse) → the M/N
+    predictive-flip discriminator held precisely (contrast Slice P's
+    under-count); the 5 offset-25 macro files did NOT bonus-flip
+    (correctly not extrapolated — the Slice P lesson, both
+    directions). Fails 6 → 5 (`Build`, `TriviaTypeSynth`, `Lowering`,
+    `WriterLowering`, `WriterCodegen` — all offset-25 `#if macro`).
+    Corpus unchanged. Probes: lone `;` / `{a;}; b;` / `;;` /
+    bare-switch-case-body-`;` parse with `EmptyStmt` nodes, `foo();`
+    still `ExprStmt` (regression-clean). Tests added to the existing
+    `HxControlFlowSliceTest` (statement/block test home — Slice N/P
+    extend-not-create precedent, zero RunTests churn), incl. a
+    `roundTrip` idempotency assertion. A self-caught test bug
+    (`SwitchStmt` → `SwitchStmtBare`: anyparse pairs parenthesized vs
+    bare switch ctors; `switch a {…}` without parens →
+    `SwitchStmtBare`) was fixed before commit. js `test-js.hxml` ALL
+    TESTS OK 5427/5427, 0 regressions (interp not needed — `@:lit(';')`
+    is a literal, no `@:re` terminal).
+
   - **Query-value validation pass (dogfood). ✅ DONE (all 3 gaps
     closed).** A
     decisive battery (`hxq ast/refs/search/meta` over a probe
