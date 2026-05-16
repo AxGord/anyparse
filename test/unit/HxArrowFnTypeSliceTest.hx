@@ -205,7 +205,7 @@ class HxArrowFnTypeSliceTest extends HxTestHelpers {
 	public function testArrowFnAsFnParamType():Void {
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar(cb:() -> Void):Void {} }');
 		Assert.equals(1, decl.params.length);
-		final paramType:HxType = expectRequiredParam(decl.params[0]).type;
+		final paramType:Null<HxType> = expectRequiredParam(decl.params[0]).type;
 		final fn:HxArrowFnType = expectArrowFnType(paramType);
 		Assert.equals(0, fn.args.length);
 		Assert.equals('Void', (expectNamedType(fn.ret).name : String));
@@ -228,8 +228,9 @@ class HxArrowFnTypeSliceTest extends HxTestHelpers {
 		// the args list, fails to match the trailing `->`, rolls back
 		// to `Parens` which wraps the inner Arrow.
 		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar(cb:(Int->Bool)):Void {} }');
-		final paramType:HxType = expectRequiredParam(decl.params[0]).type;
+		final paramType:Null<HxType> = expectRequiredParam(decl.params[0]).type;
 		switch paramType {
+			case null: Assert.fail('expected Parens, got null');
 			case Parens(_): Assert.pass();
 			case _: Assert.fail('expected Parens, got ${paramType}');
 		}

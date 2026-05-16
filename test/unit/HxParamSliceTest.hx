@@ -8,7 +8,7 @@ import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxParam;
-import anyparse.runtime.ParseError;
+import anyparse.grammar.haxe.HxParamBody;
 
 /**
  * Phase 3 function-parameter tests for the macro-generated Haxe parser.
@@ -145,8 +145,17 @@ class HxParamSliceTest extends HxTestHelpers {
 		Assert.equals('a', (expectRequiredParam(decl.params[0]).name : String));
 	}
 
-	public function testRejectsMissingType():Void {
-		Assert.raises(() -> HaxeParser.parse('class Foo { function f(x):Void {} }'), ParseError);
+	public function testAcceptsMissingType():Void {
+		// Slice O (apq-P5): an untyped parameter `function f(x)` is valid
+		// Haxe (the type is inferred). `HxParamBody.type` is now optional
+		// (`@:optional @:lead(':') Null<HxType>`, the exact `HxVarDecl.type`
+		// shape). This test was `testRejectsMissingType` — it encoded the
+		// pre-slice WRONG contract; it is kept as the positive contract.
+		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function f(x):Void {} }');
+		Assert.equals(1, decl.params.length);
+		final body:HxParamBody = expectRequiredParam(decl.params[0]);
+		Assert.equals('x', (body.name : String));
+		Assert.isNull(body.type);
 	}
 
 	public function testParamsThroughModuleRoot():Void {
