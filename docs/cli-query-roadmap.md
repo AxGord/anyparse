@@ -684,6 +684,41 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
     ALL TESTS OK 5247/5247, 0 regressions (interp not needed — no
     `@:re` terminal added).
 
+  - **Slice O — untyped function-declaration parameter. ✅ DONE.**
+    (commit `2f09fad`.) `function f(x)` (a named fn-decl param with
+    no `:Type`) is valid Haxe — the type is inferred — but failed to
+    parse: the param-body type annotation was a mandatory
+    `@:lead(':') var type:HxType`. Recon **reversed the inherited
+    "CORE-candidate" label a 6th time** (the L4/L5/M/N additive-
+    reversal pattern; only L2 stayed CORE). The fix is the EXACT
+    `HxVarDecl.type` shape — `@:optional @:fmt(typeHintColon)
+    @:lead(':') var type:Null<HxType>` on the one param-body type
+    field; the same body already carried `@:optional @:lead('=')
+    defaultValue`. Generic optional-Ref `@:lead` path, zero core /
+    Lowering / writer / synth (the sibling lambda param was already
+    untyped-tolerant; `HxVarDecl.type` proves the writer/synth path
+    end-to-end). Precedent-matched additive — no fork.
+    **gap≠sweep predicted by recon AND confirmed: sweep FLAT
+    273/284.** Pre-build strip/grep showed zero untyped named
+    fn-decl params in the entire 284-file source (strict-typed
+    codebase), so closing the gap moves no self-parse file — a real
+    Haxe-grammar gap closed for conceptual dogfood value, not a
+    sweep-mover (the L4/L5 pattern). Probes: `function f(x)` /
+    `function g(x, y:Int)` now parse; fully-typed params and
+    anonymous fn-expr params regression-clean. Corpus unchanged
+    263/278. Fails stay 11. A pre-slice reject-guard
+    (`HxParamSliceTest.testRejectsMissingType`, which asserted
+    `function f(x)` *raises*) was flipped to the positive contract
+    `testAcceptsMissingType` (the new-correctness-flips-old-reject-
+    guard rule). The `@:nullSafety(Strict)` js gate was the whole-
+    program net: it caught two `test/` sites
+    (`HxArrowFnTypeSliceTest`) reading `expectRequiredParam(...).type`
+    as a non-null `HxType` that a `src/`-only pre-audit missed —
+    widened to `Null<HxType>` + explicit `case null` arm. New
+    `HxParamBodyUntypedSliceTest` (11 methods). js `test-js.hxml`
+    ALL TESTS OK 5381/5381, 0 regressions (interp not needed — no
+    `@:re` terminal added).
+
   - **Query-value validation pass (dogfood). ✅ DONE (all 3 gaps
     closed).** A
     decisive battery (`hxq ast/refs/search/meta` over a probe
