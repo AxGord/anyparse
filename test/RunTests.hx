@@ -62,6 +62,7 @@ import unit.HxDollarReifSliceTest;
 import unit.HxLocalFnStmtSliceTest;
 import unit.HxForKeyValueSliceTest;
 import unit.HxMacroModHexSliceTest;
+import unit.HxMacroTypeExprSliceTest;
 import unit.HxMultiPatternCaseSliceTest;
 import unit.HxRegexLitSliceTest;
 import unit.HxTrailingSepSliceTest;
@@ -195,6 +196,7 @@ class RunTests {
 		runner.addCase(new HxLocalFnStmtSliceTest());
 		runner.addCase(new HxForKeyValueSliceTest());
 		runner.addCase(new HxMacroModHexSliceTest());
+		runner.addCase(new HxMacroTypeExprSliceTest());
 		runner.addCase(new HxMultiPatternCaseSliceTest());
 		runner.addCase(new HxRegexLitSliceTest());
 		runner.addCase(new HxTrailingSepSliceTest());
