@@ -684,6 +684,51 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
     ALL TESTS OK 5247/5247, 0 regressions (interp not needed — no
     `@:re` terminal added).
 
+  - **Query-value validation pass (dogfood). 🔶 IN PROGRESS.** A
+    decisive battery (`hxq ast/refs/search/meta` over a probe
+    exercising every L1–N construct + real grammar/macro files +
+    whole-`src` robustness sweep) confirmed the L1–N arc is
+    **parse-robust** (273/284, zero crashes/segfaults across all 284,
+    all 11 unparseable files degrade cleanly EXIT 0) and that
+    `refs`/`search` deliver real query-value — BUT surfaced that
+    **parse-rate ≠ query-value**: the decoupling is worst exactly
+    where parse-rate gained most. Three concrete gaps, the
+    `HaxeQueryPlugin` contract never co-evolved with the grammar
+    twins that raised parse-rate:
+    - **#2 — `++`/`--` write classification. ✅ DONE** (commit
+      `6f465ed`). Slice H added `PreIncr/PreDecr/PostIncr/PostDecr`
+      to `HxExpr` but `RefShape.writeParentKinds` was never extended;
+      `apq refs <v> --writes` misclassified `x++`/`--x` as `[read]`
+      and returned 0 writes for an only-incremented binding (stale
+      comment falsely claimed "Haxe has no ++/--"). Fix: 4 ctors
+      added to `writeParentKinds` + comment rewrite; `Refs.walk`
+      child-0 propagation already handles single-operand ctors (no
+      `Refs.hx` change). Parser-neutral — **sweep flat 273/284,
+      corpus 263/278**; this is a query-value fix, NOT a sweep-mover.
+      New `ApqRefsIncrDecrSliceTest` (4/4); js `test-js.hxml`
+      5258/5258 ALL TESTS OK, 0 reg.
+    - **#1a — `meta` blind to enum-ctor annotations. ⬜ NEXT.**
+      `DECL_HOST_KINDS` lacks `SimpleCtor`/`ParamCtor`; `hxq meta
+      @:kw <grammarfile>` returns 0 hits despite 16+ real enum-ctor
+      `@:kw` (Slice I locus, +17 parse). Trivial additive (the
+      `MetaCall`+ctor nodes are already flattened siblings with
+      correct spans; `Meta.followingDeclHost` resolves once the kind
+      is recognised).
+    - **#1b — `meta`/`refs` blind to anon-field members. ⬜ AFTER
+      #1a.** `appendNodes` unconditionally skips the struct field
+      named `type`, so a typedef's anon body (`HxType.Anon` members
+      + their metadata, Slice C locus +83) surfaces with
+      `children:[]`. Fix must descend `type` ONLY when it is an enum
+      with ctor `Anon` (`HxType` is an enum; `Named` type-refs must
+      stay skipped or every typed `var x:Foo` spawns a phantom
+      child) + add `VarField/FinalField/FnField` to
+      `DECL_HOST_KINDS` (bare `Required`/`Optional` anon forms reuse
+      the existing HxParam entries). Targeted, larger blast radius
+      than #1a/#2.
+    - Secondary (recorded, not yet scheduled): `search` rejects bare
+      statement/expression patterns (`switch $_ { $_ }` → "expected
+      HxDecl"; graceful EXIT 1).
+
 **Design decision (do not re-attempt without new infrastructure):**
 the flat one-line diagnostic renderers (`Text.renderRefs` /
 `renderSearchMatches` / `renderMeta`) **stay on hand-rolled
