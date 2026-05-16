@@ -656,6 +656,33 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
     ternary-inside-guard `:` disambiguation, K3 non-guard regression,
     round-trip). js `test-js.hxml` ALL TESTS OK 5229/5229, 0
     regressions (interp not needed — no `@:re` terminal added).
+  - **Slice N — lone `$` in single-quoted string. ✅ DONE.**
+    (commit `0040804`.) Recon **reversed the inherited "CORE
+    single-quote interp scan" label a 5th time** (the L4/L5/M
+    additive-reversal pattern). The single-quote string grammar had
+    no branch for a literal `$` that is NOT `$$`, `${`, or `$ident`
+    — real Haxe treats such a `$` as a literal dollar (`'$'`,
+    `'$ '`, `'$5'`, `'$'.code`). The fix is a segment-level enum
+    branch that sidesteps the `HxStringLitSegment` regex entirely:
+    one new zero-arg ctor `@:lit("$") LoneDollar;` declared LAST in
+    `HxStringSegment` (tryBranch fallthrough after `Ident` so `$$`
+    still binds `Dollar`, `${` `Block`, `$name` `Ident`). Exact
+    twin of the sibling `Dollar` (`@:lit("$$")`) — generic `@:lit`
+    codegen path, zero core / Lowering / writer / synth (the
+    `HxFnBody.NoBody` `@:lit(';')` writer precedent; no exhaustive
+    hand-switch over `HxStringSegment` ctors anywhere in `src/`).
+    Double-quoted `@:lit("$")` per the metadata-interpolation
+    gotcha. **2nd consecutive L-tail sweep-mover after Slice M:
+    src self-parse 271/284 → 273/284** (+2 real flips:
+    `query/Matcher.hx` + `query/Pattern.hx` — bare-`$` was their
+    TRUE sole-blocker with no compounding, so the recon strip-drill
+    predicted the flip; denom unchanged, `HxStringSegment.hx`
+    pre-existing). Corpus unchanged 263/278 (no fixture exercises
+    lone-`$`). Fails 13 → 11. New `HxStringSliceTest` methods (7:
+    alone / then-space / then-digit / mixed, `$name` & `$$`
+    ordering regressions, `'$'.code` round-trip). js `test-js.hxml`
+    ALL TESTS OK 5247/5247, 0 regressions (interp not needed — no
+    `@:re` terminal added).
 
 **Design decision (do not re-attempt without new infrastructure):**
 the flat one-line diagnostic renderers (`Text.renderRefs` /
