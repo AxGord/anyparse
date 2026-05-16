@@ -12,6 +12,17 @@ package anyparse.grammar.haxe;
  *  - `Named(ref:HxTypeRef)` — the named-and-optionally-parameterised
  *    type reference (`Int`, `Array<Int>`, `Map<String, Int>`,
  *    `haxe.io.Bytes`, `Foo<Bar<Baz>>`).
+ *  - `DollarType(name:HxIdentLit)` — a macro-reification escape
+ *    (`$ident`) used in type position: `var x:$optionsCT = …`,
+ *    `macro : Null<$optionsCT>` inside a `@:build`/macro helper.
+ *    The expression-position twin is `HxExpr.DollarIdentExpr`
+ *    (`@:lead("$")` + `HxIdentLit`); this is the type-position
+ *    mirror on the same enum-Alt path, dispatched by the `$` lead
+ *    (no other `HxType` variant begins with `$`, and the
+ *    `HxTypeRef` name terminal excludes `$`, so `Named` never
+ *    competes). Only the bare `$ident` form appears in type
+ *    position in the corpus; the `${expr}` / `$name{expr}`
+ *    reification forms stay expression-only.
  *  - `Arrow(left:HxType, right:HxType)` — function-arrow type in the
  *    old (curried) syntax: `Void->Void`, `Int->String->Void`,
  *    `Array<SymbolInformation>->Void`. Declared as an `@:infix('->')`
@@ -86,6 +97,9 @@ package anyparse.grammar.haxe;
 @:fmt(preWrite(HaxeTypeRewrites.arrowFnOldStyleRewrite))
 enum HxType {
 	Named(ref:HxTypeRef);
+
+	@:lead("$")
+	DollarType(name:HxIdentLit);
 
 	@:infix('->', 0, 'Right') @:fmt(tight)
 	Arrow(left:HxType, right:HxType);

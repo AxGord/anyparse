@@ -2,6 +2,7 @@ package unit;
 
 import utest.Assert;
 import anyparse.grammar.haxe.HxExpr;
+import anyparse.grammar.haxe.HxType;
 import anyparse.grammar.haxe.HxVarDecl;
 
 /**
@@ -30,6 +31,14 @@ class HxDollarReifSliceTest extends HxTestHelpers {
 		return switch decl.init {
 			case null: throw 'expected init expr, got null';
 			case e: e;
+		}
+	}
+
+	private function typeOf(source:String):HxType {
+		final decl:HxVarDecl = parseSingleVarDecl(source);
+		return switch decl.type {
+			case null: throw 'expected type annotation, got null';
+			case t: t;
 		}
 	}
 
@@ -117,5 +126,41 @@ class HxDollarReifSliceTest extends HxTestHelpers {
 			"class C { static function f() { var a = macro $i{name}; var b = macro ${x + 1}; var c = macro $foo; } }",
 			'L-dollar-reif'
 		);
+	}
+
+	// -------- $-reification in TYPE position (Slice apq-P5-T) --------
+
+	public function testDollarTypeHint():Void {
+		// `var x:$optionsCT = …` — the dominant WriterCodegen.hx shape
+		// (`final _c:$optionsCT = cast Reflect.copy(o);`).
+		switch typeOf("class C { var x:$ct = 1; }") {
+			case DollarType(name): Assert.equals('ct', (name : String));
+			case t: Assert.fail('expected DollarType(ct), got $t');
+		}
+	}
+
+	public function testDollarTypeInParams():Void {
+		// `Null<$optionsCT>` — WriterCodegen.hx:186
+		// `{name: 'options', type: macro : Null<$optionsCT>, …}`.
+		switch typeOf("class C { var x:Null<$ct> = null; }") {
+			case Named({name: nm, params: [DollarType(p)]}):
+				Assert.equals('Null', (nm : String));
+				Assert.equals('ct', (p : String));
+			case t: Assert.fail('expected Named(Null, [DollarType(ct)]), got $t');
+		}
+	}
+
+	public function testPlainTypeRegressionUnaffected():Void {
+		// No `$` — must still be a plain `Named` type-ref, not DollarType.
+		switch typeOf('class C { var x:Int = 1; }') {
+			case Named({name: nm}): Assert.equals('Int', (nm : String));
+			case t: Assert.fail('expected Named(Int), got $t');
+		}
+	}
+
+	public function testDollarTypeRoundTrip():Void {
+		// Writer ripple net: `$ct` in type position flows the generic
+		// single-Ref `@:lead("$")` writer path (DollarIdentExpr twin).
+		roundTrip("class C {\n\tvar x:$ct = 1;\n}\n", 'dollar-type');
 	}
 }
