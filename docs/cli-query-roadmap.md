@@ -903,7 +903,16 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
       collapsing them in the precise-navigation tool would be the
       C-global anti-pattern #6 explicitly rejected. → discoverability
       finding (docs publish a "vocabulary" concept but don't
-      enumerate it), not a code gap.
+      enumerate it), not a code gap. **Doc-note DELIVERED**
+      (`c51164f`): a `### Kind vocabulary` subsection now
+      enumerates the plugin's published declaration kinds and
+      the `enum` vs `enum abstract` distinct-kinds gotcha (with
+      verbatim `apq ast` child shapes), plus a forward-pointer
+      from the schema section. Genericize-safe by framing — the
+      *mechanism* (kind = node-constructor name, self-discoverable
+      via `apq ast`) is the universal statement; the *list* is an
+      explicit per-plugin example, not engine vocabulary. Closes
+      validation arc (b).
     - **Phase C — `ast --at LINE:COL` deferral was stale; now
       IMPLEMENTED** (commit `f03e498`). `Cli.hx` rejected `--at`
       as "needs AST span instrumentation", but SpanTypeSynth Slice
