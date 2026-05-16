@@ -1,5 +1,6 @@
 package unit;
 
+import haxe.Exception;
 import utest.Assert;
 import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
@@ -60,6 +61,56 @@ class PatternParseProbe extends Test {
 		collectMetavarNames(pattern.root, names);
 		Assert.isTrue(names.contains('name'), 'outside-string $$name must be a metavar');
 		Assert.isFalse(names.contains('x'), 'inside-string $$x must NOT be a metavar — got ${names.join(",")}');
+	}
+
+	public function testStmtPatternWithTrailingSemicolon():Void {
+		// `return $_;` — a statement pattern written the natural way, with
+		// its closing `;`. Before the trim fix `wrapAsStmt` produced `…;;`
+		// (no empty-statement production in the Haxe grammar) so every
+		// cascade attempt failed and the misleading decl error leaked.
+		final plugin:HaxeQueryPlugin = new HaxeQueryPlugin();
+		final pattern:Pattern = plugin.parsePattern("return $_;");
+		Assert.equals(PatternCategory.Stmt, pattern.category);
+		Assert.equals('ReturnStmt', pattern.root.kind);
+		final names:Array<String> = [];
+		collectMetavarNames(pattern.root, names);
+		Assert.isTrue(names.contains('_'), 'pattern must include the wildcard — got ${names.join(",")}');
+	}
+
+	public function testStmtPatternWithoutSemicolonStillParses():Void {
+		// Regression guard: the trim must not break the already-working
+		// no-trailing-`;` form.
+		final plugin:HaxeQueryPlugin = new HaxeQueryPlugin();
+		final pattern:Pattern = plugin.parsePattern("return $_");
+		Assert.equals(PatternCategory.Stmt, pattern.category);
+		Assert.equals('ReturnStmt', pattern.root.kind);
+	}
+
+	public function testExprPatternWithTrailingSemicolon():Void {
+		// `trace($_);` — call with trailing `;` is a valid expression-statement,
+		// so the Stmt cascade wins before Expr.
+		final plugin:HaxeQueryPlugin = new HaxeQueryPlugin();
+		final pattern:Pattern = plugin.parsePattern("trace($_);");
+		Assert.equals(PatternCategory.Stmt, pattern.category);
+		final names:Array<String> = [];
+		collectMetavarNames(pattern.root, names);
+		Assert.isTrue(names.contains('_'), 'pattern must include the wildcard arg — got ${names.join(",")}');
+	}
+
+	public function testInvalidPatternRaisesClearError():Void {
+		// `switch $_ { $_ }` is not valid Haxe in any position (a switch
+		// body needs `case`). The cascade must still reject it, but with
+		// an actionable message — not the leaked decl-attempt internal
+		// `expected HxDecl at 0`.
+		final plugin:HaxeQueryPlugin = new HaxeQueryPlugin();
+		try {
+			plugin.parsePattern("switch $_ { $_ }");
+			Assert.fail('invalid pattern must throw');
+		} catch (exception:Exception) {
+			final message:String = exception.message;
+			Assert.isTrue(message.indexOf('not valid') >= 0, 'clear message expected — got: $message');
+			Assert.isTrue(message.indexOf('expected HxDecl') < 0, 'must not leak parser-internal error — got: $message');
+		}
 	}
 
 	private static function collectMetavarNames(node:QueryNode, into:Array<String>):Void {

@@ -188,33 +188,51 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 			{wrap: wrapAsExpr, extract: extractFirstExpr, category: PatternCategory.Expr},
 			{wrap: wrapAsMetaArgs, extract: extractFirstMeta, category: PatternCategory.MetaArgs},
 		];
-		var bestError:Null<String> = null;
 		for (attempt in attempts) {
 			final wrapped:String = attempt.wrap(substituted);
 			final tree:Null<QueryNode> = try parseFile(wrapped)
-				catch (e:ParseError) {
-					bestError = bestError ?? 'pattern: ${e.toString()}';
-					null;
-				}
-				catch (e:Exception) {
-					bestError = bestError ?? 'pattern: ${e.message}';
-					null;
-				};
+				catch (e:ParseError) null
+				catch (e:Exception) null;
 			if (tree == null) continue;
 			final extracted:Null<QueryNode> = attempt.extract(tree);
 			if (extracted == null) continue;
 			final reclassified:QueryNode = Metavar.reclassify(extracted);
 			return new Pattern(reclassified, attempt.category, source);
 		}
-		throw bestError ?? 'pattern: failed to parse as decl / stmt / expr / meta-args';
+		// Every attempt's parser error is offset into a synthetic wrapper
+		// string, so leaking it (`expected HxDecl at 0`) only misleads.
+		// Report the actionable fact: the fragment is not valid in any
+		// supported pattern position.
+		throw 'pattern: not valid as a declaration, statement, expression, or metadata argument';
 	}
 
 	private static function wrapAsStmt(src:String):String {
-		return 'class _ApqPattern { static function _apq() { $src; } }';
+		return 'class _ApqPattern { static function _apq() { ${trimTrailingSemicolons(src)}; } }';
 	}
 
 	private static function wrapAsExpr(src:String):String {
-		return 'class _ApqPattern { static function _apq() { var _v = $src; } }';
+		return 'class _ApqPattern { static function _apq() { var _v = ${trimTrailingSemicolons(src)}; } }';
+	}
+
+	/**
+	 * Drop the trailing run of `;` and whitespace from a pattern fragment.
+	 * A statement or expression pattern is naturally written with a
+	 * closing `;` (`return $_;`), but `wrapAsStmt` / `wrapAsExpr` append
+	 * their own `;`; without trimming, the wrapped source becomes `…;;`
+	 * and the Haxe grammar — which has no empty-statement production —
+	 * rejects it, failing the whole cascade on a valid statement pattern.
+	 * The unwrapped decl attempt keeps the original source (a
+	 * `typedef X = Y;` decl pattern needs its `;`), so the trim is scoped
+	 * to the wrappers only.
+	 */
+	private static function trimTrailingSemicolons(src:String):String {
+		var end:Int = src.length;
+		while (end > 0) {
+			final c:Int = StringTools.fastCodeAt(src, end - 1);
+			if (c == ';'.code || c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code) end--;
+			else break;
+		}
+		return src.substring(0, end);
 	}
 
 	private static function wrapAsMetaArgs(src:String):String {
