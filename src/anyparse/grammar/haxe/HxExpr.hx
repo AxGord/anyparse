@@ -229,7 +229,20 @@ package anyparse.grammar.haxe;
  *  - prec 2 — `??` (null-coalescing, **right-assoc**)
  *  - prec 1 — `? :` (ternary, via `@:ternary`)
  *  - prec 0 — `=` `+=` `-=` `*=` `/=` `%=` `<<=` `>>=` `>>>=` `|=`
- *    `&=` `^=` `??=` `=>` (assignment + arrow, **right-assoc**)
+ *    `&=` `^=` `??=` `=>` (assignment + arrow, **right-assoc**), and
+ *    `in` (iterator / membership binder, **left-assoc**). Haxe's
+ *    `OpIn` has priority 10 — looser than the arrow `=>` (9), tighter
+ *    than assignment `=` (11). anyparse collapses Haxe's arrow and
+ *    assignment tiers into a single prec 0, so `in` maps to that same
+ *    loosest tier. The infix `in` branch is reached only via a
+ *    `macro $x in $y` reification (e.g. building an `EFor` head in a
+ *    build macro); a real `for (a in b)` loop is the dedicated
+ *    `@:kw('for')` HxForStmt production, not this branch. It is never
+ *    chained with an adjacent operator in the corpus, so the
+ *    left-assoc / prec-0 placement is the Haxe-faithful choice for the
+ *    isolated form. Word-boundary dispatch (`matchKw`, auto-selected
+ *    by `Lowering.endsWithWordChar`) keeps `index` / `internal` from
+ *    being mis-read as `in` (same mechanism as the `is` operator).
  *
  * Declaration order inside each precedence level puts longer literals
  * first (`<=` before `<`, `>>>` before `>>` before `>`, `>>>=` before
@@ -455,6 +468,9 @@ enum HxExpr {
 
 	@:ternary('?', ':', 1)
 	Ternary(cond:HxExpr, thenExpr:HxExpr, elseExpr:HxExpr);
+
+	@:infix('in', 0)
+	In(left:HxExpr, right:HxExpr);
 
 	@:infix('=', 0, 'Right')
 	Assign(left:HxExpr, right:HxExpr);

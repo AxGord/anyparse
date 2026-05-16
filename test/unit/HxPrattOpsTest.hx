@@ -376,6 +376,70 @@ class HxPrattOpsTest extends HxTestHelpers {
 		Assert.equals(src, out);
 	}
 
+	// -------- in operator --------
+
+	public function testIn():Void {
+		// `a in b` — binary `in` infix (Haxe `OpIn`). Symmetric ctor
+		// `In(left:HxExpr, right:HxExpr)`, prec 0 left-assoc.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = a in b; }');
+		switch decl.init {
+			case In(IdentExpr(l), IdentExpr(r)):
+				Assert.equals('a', (l : String));
+				Assert.equals('b', (r : String));
+			case null, _:
+				Assert.fail('expected In(a, b), got ${decl.init}');
+		}
+	}
+
+	public function testInWordBoundary():Void {
+		// `in` is dispatched via `matchKw` (word-boundary), so an
+		// identifier whose prefix is `in` (`internal`) is never split
+		// into the `in` operator + a stray `ternal` token.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x = internal; }');
+		switch decl.init {
+			case IdentExpr(n):
+				Assert.equals('internal', (n : String));
+			case null, _:
+				Assert.fail('expected IdentExpr(internal), got ${decl.init}');
+		}
+		final decl2:HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = a in internal; }');
+		switch decl2.init {
+			case In(IdentExpr(l), IdentExpr(r)):
+				Assert.equals('a', (l : String));
+				Assert.equals('internal', (r : String));
+			case null, _:
+				Assert.fail('expected In(a, internal), got ${decl2.init}');
+		}
+	}
+
+	public function testInForLoopRegression():Void {
+		// `for (i in 0...10) a();` — the real `for (a in b)` loop is the
+		// dedicated `@:kw('for')` HxForStmt production, NOT the infix
+		// `in` branch. Adding the infix ctor must not perturb it.
+		HaxeParser.parse('class Foo { static function f() { for (i in 0...10) a(); } }');
+		Assert.pass();
+	}
+
+	public function testInMacroReif():Void {
+		// The blocker contract: `macro $x in $y` builds an `EBinop(OpIn)`
+		// (TriviaTypeSynth.hx:463 constructs an `EFor` head this way).
+		// `macro a in b` → `MacroExpr(In(a, b))`.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x = macro a in b; }');
+		switch decl.init {
+			case MacroExpr(In(IdentExpr(l), IdentExpr(r))):
+				Assert.equals('a', (l : String));
+				Assert.equals('b', (r : String));
+			case null, _:
+				Assert.fail('expected MacroExpr(In(a, b)), got ${decl.init}');
+		}
+	}
+
+	public function testInRoundTrip():Void {
+		// Writer ripple net: `in` flows the generic symmetric-infix
+		// writer path (no `@:fmt` knob), idempotency must hold.
+		roundTrip('class Foo {\n\tvar x:Bool = a in b;\n}\n', 'in operator');
+	}
+
 	// -------- rejections --------
 
 	public function testRejectsTrailingLt():Void {
