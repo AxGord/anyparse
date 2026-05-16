@@ -805,6 +805,57 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
     TESTS OK 5427/5427, 0 regressions (interp not needed — `@:lit(';')`
     is a literal, no `@:re` terminal).
 
+  - **Slice R — `;` before `else` in an `if`-expression. ✅ DONE.**
+    (commit `23a3ecc`.) `if (c) e1; else e2` in value position
+    (`final x = if (a) b; else c;`, `g(if (a) b; else c)`) failed:
+    `HxIfExpr.thenBranch` — a `@:peg` **struct** field — could not
+    absorb the optional `;` Haxe accepts between the then-branch and
+    `else`. Recon-drilled from Build.hx offset-25 (`buildParser`
+    L105-113, `if (c) TPath({...}); else if (c) ...; else ...;`).
+    **The arc's first genuine CORE fork.** Recon initially
+    mis-labelled it precedent-matched-additive (a 9th reversal) — the
+    `@:trailOpt(';')` precedents (`HxStatement.VarStmt`/`FinalStmt`,
+    `HxDecl`, `HxConditionalStmt`) are all **enum Alt ctors**, and
+    `@:trailOpt` was implemented ONLY in `lowerEnumBranch`, NOT
+    `lowerStruct`. Post-build exposed it (6 test errors, Build.hx did
+    not flip) → genuine CORE, routed through **AskUserQuestion** (the
+    methodology's CORE gate, after 8 prior false-CORE→additive
+    reversals); user approved option (A) the universal core fix.
+    **Core change:** `Lowering.lowerStruct` now honors
+    `lit.trailOptional` — emits `matchLit` (optional, no-throw) for a
+    trailing literal on a struct Ref field when
+    `child.annotations.get('lit.trailOptional') == true`, mirroring
+    `lowerEnumBranch`'s `else if (trailOptional) matchLit` arm. Plain
+    `matchLit` in both modes, no trivia `trailPresent` synth
+    (idempotency, not byte presence, is the round-trip contract — no
+    `@:fmt(trailOptShapeGate)` consumer). `HxIfExpr.thenBranch` gains
+    `@:trailOpt(';')`; the `;` is consumed, not stored — AST identical
+    to the no-`;` form (regression-safe: `@:trailOpt` optional ⇒ no-op
+    when absent). **Zero blast radius beyond the gated path** — the
+    core change touches all struct-field codegen but only `@:trailOpt`
+    fields enter the new branch; no pre-existing test regressed
+    (critical confirmation for a core macro-codegen change).
+    **Sweep-mover, predicted exactly: 279 → 280/284 (+1).** Build.hx
+    strip-confirmed sole non-compounding blocker (perl-stripping
+    `;`-before-`else` made it parse) → M/N predictive-flip
+    discriminator held precisely; the 4 other offset-25 macro files
+    did NOT bonus-flip (correctly not extrapolated — the Slice P
+    lesson both ways). Fails 5 → 4 (`TriviaTypeSynth`, `Lowering`,
+    `WriterLowering`, `WriterCodegen`). Corpus unchanged. Probes:
+    `if(a)b;else c` / `g(if(a)b;else c)` / else-if-chain / `if(a)b;`
+    no-else parse as `IfExpr`; no-`;` `if(a)b else c` regression-clean;
+    Build.hx now `(module …`. New `HxIfExprTrailSemiSliceTest`
+    (6 methods incl. a `roundTrip` idempotency assertion — the
+    `@:trailOpt` writer-emit ripple risk; held clean). Known benign
+    semantic: `@:trailOpt(';')` `matchLit` is greedy, so a
+    class-member `var x = if (a) b;` needs `;;` (the if-expr eats one,
+    the member needs its own) — permissive-parser stance; the fn-body
+    `FinalStmt` optional-trail form is unaffected. Two self-caught
+    test-helper bugs (`parseSingleVarDecl` needs flat `class C { var x
+    = … }`, not a fn-wrapped `final`; `k()` is `Call` not `IdentExpr`)
+    fixed before commit. js `test-js.hxml` ALL TESTS OK 5445/5445,
+    0 regressions (interp not needed — no `@:re` terminal).
+
   - **Query-value validation pass (dogfood). ✅ DONE (all 3 gaps
     closed).** A
     decisive battery (`hxq ast/refs/search/meta` over a probe
