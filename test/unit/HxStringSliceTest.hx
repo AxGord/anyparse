@@ -188,6 +188,62 @@ class HxStringSliceTest extends HxTestHelpers {
 		assertIdent(parts[1], 'name');
 	}
 
+	// ======== lone `$` — literal dollar (not $$, ${, $ident) ========
+
+	/** `'$'` -> [LoneDollar] — bare dollar, the close quote follows. */
+	public function testSingleLoneDollarAlone():Void {
+		final parts:Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '$'; }").init);
+		Assert.equals(1, parts.length);
+		assertLoneDollar(parts[0]);
+	}
+
+	/** `'$ '` -> [LoneDollar, Literal(" ")] — dollar then space (not ident-start). */
+	public function testSingleLoneDollarThenSpace():Void {
+		final parts:Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '$ '; }").init);
+		Assert.equals(2, parts.length);
+		assertLoneDollar(parts[0]);
+		assertLiteral(parts[1], ' ');
+	}
+
+	/** `'$5'` -> [LoneDollar, Literal("5")] — digit is not an identifier start. */
+	public function testSingleLoneDollarThenDigit():Void {
+		final parts:Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '$5'; }").init);
+		Assert.equals(2, parts.length);
+		assertLoneDollar(parts[0]);
+		assertLiteral(parts[1], '5');
+	}
+
+	/** `'a $ b'` -> [Literal("a "), LoneDollar, Literal(" b")]. */
+	public function testSingleLoneDollarMixed():Void {
+		final parts:Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = 'a $ b'; }").init);
+		Assert.equals(3, parts.length);
+		assertLiteral(parts[0], 'a ');
+		assertLoneDollar(parts[1]);
+		assertLiteral(parts[2], ' b');
+	}
+
+	/** Regression: `'$name'` still binds to Ident (LoneDollar ordered after). */
+	public function testSingleLoneDollarIdentRegression():Void {
+		final parts:Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '$name'; }").init);
+		Assert.equals(1, parts.length);
+		assertIdent(parts[0], 'name');
+	}
+
+	/** Regression: `'$$'` still binds to Dollar, not two LoneDollar. */
+	public function testSingleLoneDollarEscapeRegression():Void {
+		final parts:Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '$$'; }").init);
+		Assert.equals(1, parts.length);
+		assertDollar(parts[0]);
+	}
+
+	/**
+	 * Round-trip the real-world shape that blocked self-parse:
+	 * `'$'` alone and `'$'.code` (Pattern.hx:97 / Matcher.hx:83).
+	 */
+	public function testSingleLoneDollarRoundTrip():Void {
+		roundTrip("class C { var x:String = '$'; var y:Int = '$'.code; }");
+	}
+
 	/** Whitespace preserved inside string — spaces are literal. */
 	public function testPreservesInternalWhitespace():Void {
 		final parts:Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '  hello  '; }").init);
@@ -315,6 +371,13 @@ class HxStringSliceTest extends HxTestHelpers {
 		switch part {
 			case Dollar:
 			case _: Assert.fail('expected Dollar, got $part');
+		}
+	}
+
+	private function assertLoneDollar(part:HxStringSegment):Void {
+		switch part {
+			case LoneDollar:
+			case _: Assert.fail('expected LoneDollar, got $part');
 		}
 	}
 }

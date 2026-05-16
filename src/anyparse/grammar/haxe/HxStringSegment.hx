@@ -15,6 +15,11 @@ package anyparse.grammar.haxe;
  *     NOT `@:raw` — whitespace skipping resumes inside the expression.
  *  4. `Ident` — `$name` interpolation. The `$` lead is consumed,
  *     then `parseHxIdentLit` matches the identifier.
+ *  5. `LoneDollar` — a literal `$` not followed by `$`, `{`, or an
+ *     identifier-start char (e.g. `'$'`, `'$ '`, `'$5'`). Must appear
+ *     LAST so `$$` binds to `Dollar`, `${` to `Block`, and `$name` to
+ *     `Ident`; only a `$` satisfying none of those falls through here.
+ *     Real Haxe treats such a `$` as a literal dollar.
  *
  * `@:raw` suppresses `skipWs` in the generated parse function — every
  * character between the enclosing `'` quotes is significant.
@@ -44,4 +49,7 @@ enum HxStringSegment {
 
 	@:lead("$")
 	Ident(name:HxIdentLit);
+
+	@:lit("$")
+	LoneDollar;
 }
