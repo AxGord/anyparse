@@ -105,13 +105,16 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		// the clause body, like a for-loop iterator); `LambdaParam` is a
 		// decl-host that binds into the enclosing lambda scope frame.
 		//
-		// Write-parent kinds: the 13 assignment ctors on `HxExpr` whose
-		// first positional child carries the binding being modified.
-		// `Assign(left, right)` and all 12 compound `*Assign(left, right)`
-		// variants. Haxe has no `++` / `--` (postfix is `.` / `[]` / `(...)`)
-		// so the list is complete. Per the `RefShape` docstring, only the
-		// direct child-0 IdentExpr is reclassified Write; `obj.x = …` and
-		// `arr[i] = …` keep `obj` / `arr` / `i` as Reads.
+		// Write-parent kinds: ctors on `HxExpr` whose first positional
+		// child carries the binding being modified. `Assign(left, right)`
+		// plus all 12 compound `*Assign(left, right)` variants, and the
+		// four increment/decrement ctors `PreIncr` / `PreDecr` /
+		// `PostIncr` / `PostDecr` (`HxExpr`, P5 Slice H — their single
+		// operand at child-0 is the mutated binding). `x++` / `++x` both
+		// read and write `x`; mirroring the compound-assign convention
+		// they classify as a single Write. Per the `RefShape` docstring,
+		// only the direct child-0 IdentExpr is reclassified Write;
+		// `obj.x = …` and `arr[i] = …` keep `obj` / `arr` / `i` as Reads.
 		return {
 			identKind: 'IdentExpr',
 			declHostKinds: DECL_HOST_KINDS,
@@ -133,6 +136,7 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 				'ShlAssign', 'ShrAssign', 'UShrAssign',
 				'BitOrAssign', 'BitAndAssign', 'BitXorAssign',
 				'NullCoalAssign',
+				'PreIncr', 'PreDecr', 'PostIncr', 'PostDecr',
 			],
 			// Self-scoped decl kinds: scope-introducers whose own name binds
 			// into the frame they open (the for-loop iterator pattern). Listed
