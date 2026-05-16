@@ -595,6 +595,37 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
     `$type(e)` postfix, `macro $x` nesting, plain-ident regression,
     round-trip). js 5179/5179, 0 regressions (interp not needed — no
     `@:re` terminal added).
+  - **Slice L5 — macro `: Type` type-reification expression. ✅ DONE.**
+    (commit `656c947`.) Recon **reversed the inherited "CORE" label**
+    again (the L4 pattern, opposite of L2's switch-guard): `macro :
+    Type` is one additive `HxExpr` atom ctor, `@:kw('macro')
+    @:lead(':') MacroTypeExpr(t:HxType)`, declared before `MacroExpr`
+    so `tryBranch` resolves the shared `macro` keyword (`macro :` →
+    `MacroTypeExpr`, anything else → `MacroExpr`). It is an asymmetric
+    cross-type Ref (right operand is `HxType`, not `HxExpr`) but flows
+    through the generic single-Ref atom path the same way
+    `MacroExpr(operand:HxExpr)` and `HxArrowParamBody.type:HxType` do —
+    `is`-operator's asymmetric special-casing is INFIX-recursion-only,
+    not needed for an atom. No typedef wrapper needed (single `HxType`
+    field, no per-param metadata, unlike L4). Zero Lowering / writer /
+    synth edits, no hand-switch over `HxExpr` ctors in `src/`. **263/278
+    → 263/278 corpus (no flip); total 268/283 → 268/283 (no
+    num/denom change — no new self-parsing file)**. Honest delta: **gap
+    closed but not a sweep-mover, the 4th slice running** — probes
+    confirm `macro : Int` / `macro : Array<String>` / `macro : Int ->
+    Void` now parse with correct `tryBranch` disambiguation (`macro a
+    + 1` stays `MacroExpr`, `macro { a; }` stays a block), but every
+    cluster file (`Codegen`, `WriterCodegen`, `Lowering`, …) compounds
+    on the remaining core blockers (switch-guard, bare-`$`
+    single-quote, untyped fn param), so none flips on `macro : Type`
+    alone. The pre-slice freq probe predicted the flat sweep; the
+    dogfood-conceptual value (the macro pipeline's type-reification
+    syntax now parses) is real and separate from the sweep number. New
+    `HxMacroTypeExprSliceTest` (9 methods: simple / parametrized / map
+    / function / anon type shapes, `macro a+1` and `macro {…}`
+    regressions, `macro macro : Int` nesting, round-trip). js
+    5199/5199, 0 regressions (interp not needed — no `@:re` terminal
+    added).
 
 **Design decision (do not re-attempt without new infrastructure):**
 the flat one-line diagnostic renderers (`Text.renderRefs` /
