@@ -799,6 +799,27 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
       **S3** — `runSearch` arg loop rejects any `--`-prefixed token
       as an option so `--$x` patterns are unreachable (no `--`
       end-of-options sentinel; clean UX additive, next slice).
+    - **#5 — `search` patterns starting with `--` unreachable.
+      ✅ DONE** (commit `0411921`). Gap S3 from #4's recon.
+      `Cli.runSearch` arg loop rejected any `--`-prefixed token as
+      an unknown option (EXIT 2), so a pattern that legally starts
+      with `--` (prefix-decrement `--$x`) had no escape hatch. Same
+      UX class as #3. Fix = standard getopt `--` end-of-options
+      sentinel scoped to `runSearch`: a bare `--` sets `optsEnded`,
+      after which every token is positional (loop restructured with
+      a shared positional block, no duplication); options before
+      `--` are still parsed + validated. Scoped to `search` only —
+      `--`-prefixed positionals are legitimate solely for patterns
+      (`refs`/`meta`/`ast` don't take them; minimal-correct, no
+      over-reach). Help text documents the sentinel. Parser-neutral,
+      no QueryNode contract change. Evidence: `search '--$x'` EXIT 2
+      (still rejected); `search -- '--$x'` EXIT 0 / 1 match;
+      `--bogus -- '$x'` EXIT 2 (regression guard); whole-`src`
+      `$_ + $_`=81 (no #4 regression). **Sweep flat 273/284**, 0
+      crashes. `ApqSearchCliTest` +2 methods; js 5299 → 5301
+      assertions, ALL TESTS OK, 0 reg (#2/#1a/#1b/#3/#4 intact).
+      S2 (var-decl kind-divergence) remains the only open Phase A
+      gap — a design fork pending an AskUserQuestion decision.
 
 **Design decision (do not re-attempt without new infrastructure):**
 the flat one-line diagnostic renderers (`Text.renderRefs` /
