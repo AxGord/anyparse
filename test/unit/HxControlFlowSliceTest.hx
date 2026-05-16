@@ -359,4 +359,96 @@ class HxControlFlowSliceTest extends HxTestHelpers {
 			case null, _: Assert.fail('expected ExprStmt (whiled is identifier)');
 		}
 	}
+
+	// --- empty statement `;` (Slice Q) ---
+
+	public function testEmptyStatementAlone():Void {
+		final body:Array<HxStatement> = parseBody('class C { function f():Void { ; } }');
+		Assert.equals(1, body.length);
+		switch body[0] {
+			case EmptyStmt: Assert.pass();
+			case null, _: Assert.fail('expected EmptyStmt');
+		}
+	}
+
+	public function testEmptyStatementAfterBlock():Void {
+		// `}` closes the block (no terminator needed), leaving the `;`
+		// as a standalone empty statement before the next statement.
+		final body:Array<HxStatement> = parseBody('class C { function f():Void { { a; }; b; } }');
+		Assert.equals(3, body.length);
+		switch body[0] {
+			case BlockStmt(stmts): Assert.equals(1, stmts.length);
+			case null, _: Assert.fail('expected BlockStmt');
+		}
+		switch body[1] {
+			case EmptyStmt: Assert.pass();
+			case null, _: Assert.fail('expected EmptyStmt');
+		}
+		switch body[2] {
+			case ExprStmt(_): Assert.pass();
+			case null, _: Assert.fail('expected ExprStmt');
+		}
+	}
+
+	public function testEmptyStatementInSwitchCaseBody():Void {
+		// The WrapList.isOPLShape blocker shape: a brace-closed nested
+		// switch as a case body, followed by the optional trailing `;`.
+		final body:Array<HxStatement> = parseBody(
+			'class C { function f():Void { switch a { case 1: switch b { case _: trace(9); }; case _: trace(0); } } }'
+		);
+		Assert.equals(1, body.length);
+		// `switch a {…}` (no parens) → SwitchStmtBare; the inner
+		// `switch b {…}` likewise. Mirrors WrapList.isOPLShape's
+		// unparenthesized `switch arr[1] {…};` case body verbatim.
+		switch body[0] {
+			case SwitchStmtBare(sw):
+				Assert.equals(2, sw.cases.length);
+				switch sw.cases[0] {
+					case CaseBranch(b):
+						Assert.equals(2, b.body.length);
+						switch b.body[0] {
+							case SwitchStmtBare(_): Assert.pass();
+							case null, _: Assert.fail('expected nested SwitchStmtBare');
+						}
+						switch b.body[1] {
+							case EmptyStmt: Assert.pass();
+							case null, _: Assert.fail('expected EmptyStmt after nested switch');
+						}
+					case null, _: Assert.fail('expected CaseBranch');
+				}
+			case null, _: Assert.fail('expected SwitchStmtBare');
+		}
+	}
+
+	public function testExprStmtRegressionUnaffected():Void {
+		// EmptyStmt only fires when the statement starts with `;`;
+		// `foo();` still parses as ExprStmt (consumes its own `;`).
+		final body:Array<HxStatement> = parseBody('class C { function f():Void { foo(); } }');
+		Assert.equals(1, body.length);
+		switch body[0] {
+			case ExprStmt(_): Assert.pass();
+			case null, _: Assert.fail('expected ExprStmt (not EmptyStmt)');
+		}
+	}
+
+	public function testEmptyStatementDoubled():Void {
+		final body:Array<HxStatement> = parseBody('class C { function f():Void { ;; } }');
+		Assert.equals(2, body.length);
+		switch body[0] {
+			case EmptyStmt: Assert.pass();
+			case null, _: Assert.fail('expected first EmptyStmt');
+		}
+		switch body[1] {
+			case EmptyStmt: Assert.pass();
+			case null, _: Assert.fail('expected second EmptyStmt');
+		}
+	}
+
+	public function testEmptyStatementRoundTrip():Void {
+		roundTrip('class C { function f():Void { { a; }; b; } }', 'empty-stmt-after-block');
+		roundTrip(
+			'class C { function f():Void { switch a { case 1: switch b { case _: trace(9); }; case _: trace(0); } } }',
+			'empty-stmt-in-switch-case'
+		);
+	}
 }

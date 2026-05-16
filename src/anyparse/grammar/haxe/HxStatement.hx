@@ -301,6 +301,16 @@ package anyparse.grammar.haxe;
  *    Must appear before `ExprStmt` so the `{` is not consumed by the
  *    expression parser.
  *
+ *  - `EmptyStmt` — a lone `;` (the Haxe empty statement). Zero-arg
+ *    ctor with `@:lit(';')`, the exact shape of `HxFnBody.NoBody`.
+ *    Covers a standalone `;` and the optional trailing `;` after a
+ *    brace-closed statement (`{ … };`, `switch e { … };`) — the `}`
+ *    closes the prior statement (no terminator needed), leaving the
+ *    `;` with no host. Placed immediately before `ExprStmt`: no other
+ *    `HxStatement` starts with `;`, so `@:lit(';')` only fires when
+ *    the statement literally begins with `;`; `expr;` still parses as
+ *    `ExprStmt` (its expression does not start with `;`).
+ *
  *  - `ExprStmt` — `expr;` expression-statement. Catch-all: any
  *    expression followed by a semicolon. Must appear last because it
  *    has no keyword guard — if placed before the keyword branches,
@@ -368,6 +378,9 @@ enum HxStatement {
 	@:fmt(leftCurly('blockLeftCurly'), emptyCurlyBreak('blockEmptyCurly'), rightCurly('blockRightCurly'), keepCurlyBlanks)
 	@:lead('{') @:trail('}') @:trivia
 	BlockStmt(stmts:Array<HxStatement>);
+
+	@:lit(';')
+	EmptyStmt;
 
 	@:trail(';')
 	ExprStmt(expr:HxExpr);
