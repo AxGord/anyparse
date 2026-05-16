@@ -6,12 +6,24 @@ package anyparse.grammar.haxe;
  * RHS of assignment, array element, etc.).
  *
  * Structurally parallel to `HxIfStmt` but both branches are `HxExpr`,
- * not `HxStatement` — no trailing `;`, no block-statement fallthrough.
- * The statement-level construct still dispatches through
+ * not `HxStatement` — no block-statement fallthrough. The
+ * statement-level construct still dispatches through
  * `HxStatement.IfStmt(HxIfStmt)` because enum-branch source order puts
  * `IfStmt` ahead of `ExprStmt` in `HxStatement` — the `if` keyword is
  * consumed by the statement branch before the expression parser ever
  * looks at it.
+ *
+ * `thenBranch` carries `@:trailOpt(';')`: Haxe accepts an optional
+ * `;` terminating the then-branch before `else` (or before the
+ * enclosing context when there is no `else`), e.g.
+ * `final x = if (c) a; else b;` — the formatter emits this shape, and
+ * `if (c) TPath({...}); else if (c) ...; else ...;` in macro code is
+ * the common form. Without it the `;` had no host and the parse
+ * failed. The `;` is consumed, not stored — the AST is identical to
+ * the no-semicolon form. Same `@:trailOpt(';')` meta as
+ * `HxStatement.VarStmt`/`FinalStmt` (there paired with
+ * `trailOptShapeGate`); here the generic writer-emit default applies
+ * since no corpus fixture pins a byte-exact `if-expr; else` layout.
  *
  * Dangling-else follows the same rule as `HxIfStmt`: the nearest
  * enclosing `if` greedily consumes the next `else`, so
@@ -110,6 +122,6 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxIfExpr = {
 	@:lead('(') @:trail(')') var cond:HxExpr;
-	@:fmt(bodyPolicy('expressionIfBody'), indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'), noSiblingFallback('ifBody'), inlineBlockBodyIfFlag('expressionIfWithBlocks')) var thenBranch:HxExpr;
+	@:trailOpt(';') @:fmt(bodyPolicy('expressionIfBody'), indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'), noSiblingFallback('ifBody'), inlineBlockBodyIfFlag('expressionIfWithBlocks')) var thenBranch:HxExpr;
 	@:optional @:kw('else') @:fmt(bodyPolicy('expressionElseBody'), sameLine('sameLineExpressionElse'), shapeAware, elseIf, inlineBlockBodyIfFlag('expressionIfWithBlocks')) var elseBranch:Null<HxExpr>;
 };

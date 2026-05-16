@@ -2200,6 +2200,28 @@ class Lowering {
 					});
 				}
 			}
+			// `@:trailOpt("close")` on a struct Ref field: optional
+			// trailing literal. The required-trail block above reads the
+			// `:trail` meta only (`trailText`), so a `@:trailOpt` field
+			// has `trailText == null` and is skipped there. Mirror
+			// `lowerEnumBranch`'s `lit.trailOptional` handling (the
+			// `else if (trailOptional) matchLit` arm): peek + consume the
+			// literal if present, do NOT throw if absent. The literal is
+			// consumed, not stored — the AST is identical to the
+			// no-literal form. Plain `matchLit` in both modes; no trivia
+			// `trailPresent` synth (the round-trip contract for the
+			// struct-field consumer is idempotency, not byte presence —
+			// no `@:fmt(trailOptShapeGate)` here). First consumer:
+			// `HxIfExpr.thenBranch` (`if (c) e1; else e2` in value
+			// position; the Build.hx offset-25 self-parse blocker).
+			final trailOptText:Null<String> =
+				child.annotations.get('lit.trailOptional') == true
+					? child.annotations.get('lit.trailText')
+					: null;
+			if (!isStar && !isOptional && trailOptText != null) {
+				parseSteps.push(macro skipWs(ctx));
+				parseSteps.push(macro matchLit(ctx, $v{trailOptText}));
+			}
 			// ω-cond-comp-expr-multiline: terminal-slot newline capture for
 			// bare Ref fields opted in via `@:fmt(captureSourceNewlineAfter)`.
 			// Mirrors `hasBeforeNewlineSlot` (which captures the gap BEFORE
