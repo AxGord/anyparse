@@ -298,6 +298,8 @@ $ apq ast x.hx
 
 `EnumDecl` is an algebraic enum — its children are constructors (`SimpleCtor`, `ParamCtor`). `EnumAbstractDecl` is a typed-constant abstract — its children are `VarMember`s plus the underlying `Named` type. They are deliberately separate kinds because they are separate constructs, so `ast --select EnumDecl` does **not** match an `enum abstract`, and vice versa — by design. Select the kind that matches the construct, or run `apq ast` to see which kind a given declaration parsed to. The tool keeps these precise rather than collapsing them under one lossy `enum` label.
 
+**The inverse case — one kind across scopes: `Conditional`.** Conditional compilation (`#if` / `#elseif` / `#else` / `#end`) parses to a single kind **`Conditional`** at *every* scope — module-decl, type-member, statement, and expression. There is no `ConditionalStmt` / `ConditionalDecl` / `ConditionalMember` / `ConditionalExpr`; those names return zero matches. Both branches are ordinary children in source order (the `#if` body, then the `#else` body), so `ast`, `--select Conditional`, `refs`, and `search` all descend into either branch with no special handling. Query conditional code by selecting `Conditional` (or just run `apq ast` and read it off the tree).
+
 ## Shell composition
 
 The JSON envelopes are designed for `jq` / `xargs` pipelines. The
