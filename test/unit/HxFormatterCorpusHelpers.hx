@@ -1,6 +1,6 @@
 package unit;
 
-#if sys
+#if (sys || nodejs)
 import sys.FileSystem;
 import sys.io.File;
 #end
@@ -40,7 +40,7 @@ final class HxFormatterCorpusHelpers {
 	 * browser-style js builds).
 	 */
 	public static function forkRoot():Null<String> {
-		#if sys
+		#if (sys || nodejs)
 		final root:Null<String> = Sys.getEnv(ENV_KEY);
 		if (root == null || root == '') return null;
 		if (!FileSystem.exists(root) || !FileSystem.isDirectory(root)) return null;
@@ -60,7 +60,7 @@ final class HxFormatterCorpusHelpers {
 	 * harness skips before calling this helper.
 	 */
 	public static function readHxTest(path:String):Null<HxTestCase> {
-		#if sys
+		#if (sys || nodejs)
 		final content:String = File.getContent(path);
 		final parts:Array<String> = content.split(SECTION_SEP);
 		if (parts.length != EXPECTED_SECTIONS) return null;

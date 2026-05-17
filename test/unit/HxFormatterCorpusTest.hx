@@ -4,7 +4,7 @@ import utest.Assert;
 import utest.Test;
 import haxe.Exception;
 import unit.HxFormatterCorpusHelpers.HxTestCase;
-#if sys
+#if (sys || nodejs)
 import sys.FileSystem;
 #end
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
@@ -114,7 +114,7 @@ class HxFormatterCorpusTest extends Test {
 			Assert.pass('$label: ANYPARSE_HXFORMAT_FORK unset, missing, or sys unavailable — corpus skipped');
 			return;
 		}
-		#if sys
+		#if (sys || nodejs)
 		final dir:String = root + '/' + subdir;
 		if (!FileSystem.exists(dir) || !FileSystem.isDirectory(dir)) {
 			Assert.fail('$label: expected corpus dir missing: $dir');
@@ -212,7 +212,7 @@ class HxFormatterCorpusTest extends Test {
 	}
 
 	private static function printParseReasons(label:String, reasons:Map<String, Int>):Void {
-		#if sys
+		#if (sys || nodejs)
 		final entries:Array<{reason:String, count:Int}> = [for (r => c in reasons) {reason: r, count: c}];
 		entries.sort((a, b) -> b.count - a.count);
 		Sys.println('$label skip-parse reasons:');

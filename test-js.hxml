@@ -6,6 +6,7 @@
 -cp src
 -cp test
 -lib utest
+-lib hxnodejs
 -main RunTests
 -js bin/test.js
 --cmd node bin/test.js
