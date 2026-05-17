@@ -1617,6 +1617,30 @@ recorded in `memory/project_apq_js_cli_fast_path.md`):
 
 **Exit condition**: no engine code modified to support the second grammar. All commands work. Smoke test green.
 
+## Deferred candidates (evidence-gated — do NOT build speculatively)
+
+Recorded so they are not lost, but explicitly **not** scheduled. Each
+is built ONLY when recurring practical need is demonstrated through
+real dogfood — not because it would be nice to have.
+
+- **Structural comment/doc-comment queries.** `apq`/`hxq` parses in
+  plain mode (`HaxeModuleSpanParser`, `trivia:false`) — comments are
+  dropped at the lexer, absent from the AST. Plain text-in-comment
+  search ("is `TODO` here?") is **already covered by grep** and must
+  stay there — adding it to hxq would duplicate a strictly-better
+  tool. The only differentiated capability would be *structural*:
+  comment ↔ node association ("the doc-comment of `f`", "comments on
+  declaration `X`", "orphan comments in this block", leading vs
+  trailing). That requires routing the query path through anyparse's
+  trivia-mode parser variant (`Trivial<T>`, paired `*T` synthesis)
+  and surfacing comment attachment in `HaxeQueryPlugin` — a real
+  slice with its own design, not an incremental add.
+  **Gate / trigger:** build this ONLY if the hxq→grep fallback
+  reports (the dogfood report rule) start *recurring* specifically
+  for *structural* comment association — not for plain comment-text
+  grep. Until that evidence accumulates, the answer is grep. This
+  trigger IS the exit criterion for "was deferral wrong".
+
 ## Non-goals across all phases
 
 These remain out of scope until and unless explicit slices are scheduled:
