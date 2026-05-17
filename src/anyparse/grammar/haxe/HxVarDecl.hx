@@ -55,6 +55,26 @@ package anyparse.grammar.haxe;
  * unchanged — the gate is inert because `{` already sits on the parent
  * line.
  *
+ * Multi-variable declarations (`var a, b = 1, c = 2;`, typed
+ * `var x:T = e1, y:T = e2;`) are supported via the `more` field: a
+ * `@:trivia @:tryparse var more:Array<HxVarMore>` Star carrying every
+ * binding after the first (each `HxVarMore` is `,` + a full
+ * `HxVarDecl`). `var a = 1, b = 2;` parses as
+ * `{name: a, init: 1, more: [{decl: {name: b, init: 2}}]}`. The
+ * `var`/`final` keyword and trailing `;` stay on the enclosing
+ * `VarStmt`/`FinalStmt` ctor, so the list needs no closing delimiter —
+ * the `@:tryparse` loop terminates when `HxVarMore`'s `@:lead(',')`
+ * misses (the ctor's `@:trailOpt(';')` or a `}` block-end ends the
+ * statement). Exact mirror of `HxTypedefDecl.intersections`
+ * (`@:trivia @:tryparse Array<HxIntersectionClause>` with an
+ * `@:lead(punctuation)` single-field element) — the established
+ * open-ended-list-led-by-a-token pattern. For single-binding
+ * declarations `more` is the empty array, so the writer emits nothing
+ * extra and every existing site is transparent. Like `access`, this is
+ * shared by class members and anon-struct fields where a comma list
+ * after a single binding is not standard Haxe — accepted under the
+ * permissive stance (valid single-binding code never places `,` there).
+ *
  * A second `@:fmt(indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'))`
  * entry (slice ω-indent-complex-value-expr) stacks on the same field —
  * when the bound `HxExpr` ctor is `IfExpr` AND
@@ -95,4 +115,5 @@ typedef HxVarDecl = {
 		indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'),
 		propagateExprPosition)
 	@:lead('=') var init:Null<HxExpr>;
+	@:trivia @:tryparse var more:Array<HxVarMore>;
 }
