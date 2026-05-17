@@ -44,6 +44,7 @@ class Codegen {
 		fields.push(matchLitField());
 		fields.push(peekLitField());
 		fields.push(matchKwField());
+		fields.push(peekKwField());
 		fields.push(expectLitField());
 		fields.push(expectKwField());
 		if (trivia) {
@@ -364,6 +365,47 @@ class Codegen {
 					final len:Int = lit.length;
 					if (ctx.pos + len > ctx.input.length) return false;
 					return ctx.input.substring(ctx.pos, ctx.pos + len) == lit;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * Non-consuming keyword peek: `peekLit` plus a trailing word-boundary
+	 * check, without ever advancing the cursor. Returns `true` only when
+	 * `keyword` is at `ctx.pos` AND the character immediately after it is
+	 * not a word character (`[A-Za-z0-9_]`), so `else` does not peek-match
+	 * the prefix of `elsewhere`. Distinct from `matchKw` (which consumes
+	 * on a successful boundary-checked match) — `peekKw` leaves `ctx.pos`
+	 * untouched in every path. Sole consumer: the Slice-V `ExprStmt`
+	 * trail-`;` gate in `Lowering`, which treats `;` as optional when an
+	 * `else` follows (an `ExprStmt` followed by `else` is only ever an
+	 * if-then-body in valid Haxe).
+	 */
+	private static function peekKwField():Field {
+		return {
+			name: 'peekKw',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [
+					{name: 'ctx', type: macro : anyparse.runtime.Parser},
+					{name: 'keyword', type: macro : String},
+				],
+				ret: macro : Bool,
+				expr: macro {
+					final len:Int = keyword.length;
+					if (ctx.pos + len > ctx.input.length) return false;
+					if (ctx.input.substring(ctx.pos, ctx.pos + len) != keyword) return false;
+					if (ctx.pos + len < ctx.input.length) {
+						final c:Int = ctx.input.charCodeAt(ctx.pos + len);
+						final isWord:Bool = (c >= 'a'.code && c <= 'z'.code)
+							|| (c >= 'A'.code && c <= 'Z'.code)
+							|| (c >= '0'.code && c <= '9'.code)
+							|| c == '_'.code;
+						if (isWord) return false;
+					}
+					return true;
 				},
 			}),
 			pos: Context.currentPos(),

@@ -51,6 +51,24 @@ package anyparse.grammar.haxe;
  * Dangling else is resolved correctly by construction: the inner `if`
  * greedily consumes the nearest `else`, leaving outer `if`s with no
  * else branch.
+ *
+ * A bare non-`;`-terminated then-body before `else` (e.g.
+ * `if (c) foo() else { … }`) is accepted via the Slice-X2 extension to
+ * the Slice-V `ExprStmt` trail gate: the trailing `;` is optional when
+ * an `else` keyword immediately follows (an `ExprStmt` followed by
+ * `else` is only ever an if-then-body in valid Haxe). The `;` is
+ * consumed-not-stored, so the AST is identical to the `;`-terminated
+ * form. No grammar metadata change is needed here — the relaxation
+ * lives entirely in the parser gate.
+ *
+ * Documented limitation (pinned): a bare non-`;` then-body with NO
+ * `else` at all and a block-end terminator (`{ if (c) foo() }`) is
+ * still rejected. Relaxing `;` before `}` is the Slice-V unguarded
+ * catch-all danger zone (it would break the Star-loop statement
+ * boundary). Exit criterion: a future slice that introduces a
+ * positionally-scoped soft-terminator for if/while/for bodies could
+ * lift this for all single-statement bodies without touching the
+ * general `ExprStmt` boundary mechanism.
  */
 @:peg
 typedef HxIfStmt = {

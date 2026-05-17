@@ -1669,10 +1669,27 @@ class Lowering {
 				// boundary preserved). Without the gate the emission is
 				// exactly the pre-slice three-line form (byte-identical for
 				// every other ctor).
+				// ω-slice-X2: extend the Slice-V gate so the trail `;` is
+				// ALSO optional when an `else` keyword immediately follows.
+				// An `ExprStmt` followed by `else` is only ever an
+				// if-then-body in valid Haxe (a stray `else` after any other
+				// statement was already a parse error), so relaxing the `;`
+				// there only newly-accepts the valid `if (c) bareExpr else
+				// …` form — it cannot regress a previously-valid input. The
+				// `peekKw` is non-consuming (the `else` belongs to
+				// `HxIfStmt.elseBody`'s own `@:optional @:kw('else')`). Still
+				// `parseGateCall`-guarded (sole consumer `HxStatement.
+				// ExprStmt`) → byte-identical for every other ctor. NOT
+				// relaxed: a bare no-`;` then-body with no `else` at all
+				// (block-end terminator) — that is the Slice-V unguarded-`}`
+				// danger zone and stays a documented limitation.
+				final gateCond:Null<Expr> = parseGateCall != null
+					? (macro ($parseGateCall || peekKw(ctx, "else")))
+					: null;
 				if (parseGateCall != null && triviaTrailOpt)
-					steps.push(macro final _trailPresent:Bool = $parseGateCall ? matchLit(ctx, $v{trailText}) : { expectLit(ctx, $v{trailText}); true; });
+					steps.push(macro final _trailPresent:Bool = $gateCond ? matchLit(ctx, $v{trailText}) : { expectLit(ctx, $v{trailText}); true; });
 				else if (parseGateCall != null && trailOptional)
-					steps.push(macro if ($parseGateCall) matchLit(ctx, $v{trailText}) else expectLit(ctx, $v{trailText}));
+					steps.push(macro if ($gateCond) matchLit(ctx, $v{trailText}) else expectLit(ctx, $v{trailText}));
 				else if (triviaTrailOpt) steps.push(macro final _trailPresent:Bool = matchLit(ctx, $v{trailText}));
 				else if (trailOptional) steps.push(macro matchLit(ctx, $v{trailText}));
 				else steps.push(macro expectLit(ctx, $v{trailText}));

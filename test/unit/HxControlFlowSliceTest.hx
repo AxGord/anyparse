@@ -547,4 +547,113 @@ class HxControlFlowSliceTest extends HxTestHelpers {
 		roundTrip('class C { function f():Void { macro { var x = 1; } } }', 'macro-block-no-semi');
 		roundTrip('class C { function f():Void { macro switch e { case _: 1; } } }', 'macro-switch-no-semi');
 	}
+
+	// --- Slice X2: bare no-`;` then-body before `else` (the sole
+	// remaining WriterLowering.hx self-parse blocker). The Slice-V
+	// ExprStmt trail gate is extended: `;` optional when an `else`
+	// keyword immediately follows (non-consuming peekKw). AST is
+	// identical to the `;`-terminated form (`;` consumed-not-stored).
+
+	public function testIfBareThenBlockElse():Void {
+		// THE WriterLowering.hx blocker shape: `if (cond) bareCall`
+		// newline `else { … }`. Pre-slice: `expected HxDecl` (IfStmt
+		// failed on the missing `;`, expr fallback can't host a block
+		// else-body).
+		final body:Array<HxStatement> = parseBody('class C { function f():Void { if (c) g()\nelse { h(); } } }');
+		Assert.equals(1, body.length);
+		switch body[0] {
+			case IfStmt(stmt):
+				switch stmt.thenBody {
+					case ExprStmt(_): Assert.pass();
+					case null, _: Assert.fail('expected ExprStmt then, got ${stmt.thenBody}');
+				}
+				switch stmt.elseBody {
+					case BlockStmt(stmts): Assert.equals(1, stmts.length);
+					case null, _: Assert.fail('expected BlockStmt else, got ${stmt.elseBody}');
+				}
+			case null, _: Assert.fail('expected IfStmt, got ${body[0]}');
+		}
+	}
+
+	public function testIfBareThenBareElseNoSemiStillRejected():Void {
+		// Documented limitation (pinned), same class as
+		// testBareThenNoElseNoSemiStillRejected: `if (c) g() else h()`
+		// with NO `;` anywhere. The else-peek relaxes the THEN-body `;`
+		// before `else` (so `g()` is fine), but the bare else-body
+		// `h()` is then a non-`;` statement immediately before the
+		// enclosing block-close `}` — relaxing `;` before `}` is the
+		// Slice-V unguarded catch-all danger zone, deliberately NOT
+		// done. A `;` or a brace-terminated else-body (`else { … }`)
+		// makes it parse (see testIfBareThenBlockElse / *SemiBlockElse).
+		// Same exit criterion as the no-else pin (a positionally-scoped
+		// soft-terminator for if/while/for bodies). See HxIfStmt doc.
+		Assert.raises(() -> parseBody('class C { function f():Void { if (c) g() else h() } }'));
+	}
+
+	public function testIfBareThenElseIfChain():Void {
+		// P12: bare-then `else if (…) bare-then else { block }`.
+		final body:Array<HxStatement> = parseBody(
+			'class C { function f():Void { if (c) g() else if (d) h() else { k(); } } }'
+		);
+		Assert.equals(1, body.length);
+		switch body[0] {
+			case IfStmt(stmt):
+				switch stmt.elseBody {
+					case IfStmt(inner):
+						switch inner.elseBody {
+							case BlockStmt(stmts): Assert.equals(1, stmts.length);
+							case null, _: Assert.fail('expected BlockStmt final else, got ${inner.elseBody}');
+						}
+					case null, _: Assert.fail('expected nested IfStmt else, got ${stmt.elseBody}');
+				}
+			case null, _: Assert.fail('expected IfStmt, got ${body[0]}');
+		}
+	}
+
+	public function testIfBareThenSemiBlockElseStillParses():Void {
+		// Regression (P7): the pre-existing `;`-terminated bare-then +
+		// block-else form must still parse — the gate is OR-extended,
+		// not replaced.
+		final body:Array<HxStatement> = parseBody('class C { function f():Void { if (c) g(); else { h(); } } }');
+		Assert.equals(1, body.length);
+		switch body[0] {
+			case IfStmt(stmt):
+				switch stmt.elseBody {
+					case BlockStmt(stmts): Assert.equals(1, stmts.length);
+					case null, _: Assert.fail('expected BlockStmt else, got ${stmt.elseBody}');
+				}
+			case null, _: Assert.fail('expected IfStmt, got ${body[0]}');
+		}
+	}
+
+	public function testElsePeekScopedToElseOnly():Void {
+		// The else-peek must NOT relax `;` for a bare then-body NOT
+		// followed by `else`: `if (c) g() h();` keeps the Slice-V
+		// `;`-required boundary (next token `h`, not `else`), so the
+		// IfStmt then-body's missing `;` is still fatal.
+		Assert.raises(() -> parseBody('class C { function f():Void { if (c) g() h(); } }'));
+	}
+
+	public function testSliceVBoundaryStillIntactWithX2():Void {
+		// The V −33 regression guard, re-pinned under Slice X2: a
+		// missing `;` between two non-brace calls (no `else` in sight)
+		// must still NOT parse — peekKw('else') is false here.
+		Assert.raises(() -> parseBody('class C { function f():Void { foo() bar(); } }'));
+	}
+
+	public function testBareThenNoElseNoSemiStillRejected():Void {
+		// Documented limitation (pinned): a bare non-`;` then-body with
+		// NO `else` and a block-end terminator stays REJECTED. Relaxing
+		// `;` before `}` is the Slice-V unguarded catch-all danger zone
+		// (it would break the Star-loop statement boundary). Exit
+		// criterion: a future positionally-scoped soft-terminator for
+		// if/while/for bodies could lift this without touching the
+		// general ExprStmt boundary mechanism. See HxIfStmt doc.
+		Assert.raises(() -> parseBody('class C { function f():Void { if (c) g() } }'));
+	}
+
+	public function testIfBareThenElseRoundTrip():Void {
+		roundTrip('class C { function f():Void { if (c) g()\nelse { h(); } } }', 'if-bare-then-block-else');
+		roundTrip('class C { function f():Void { if (c) g(); else { h(); } } }', 'if-bare-then-semi-block-else');
+	}
 }
