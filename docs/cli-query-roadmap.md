@@ -948,6 +948,61 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
     OK 5466/5466, 0 regressions (interp not needed — no `@:re`
     terminal).
 
+  - **Slice U — expression-position `var`/`final` declaration. ✅
+    DONE.** (commit `0a935fe`.) **First slice of the user-approved
+    macro-expression-grammar milestone** — the clean sole-blocker
+    tail (S/T) is exhausted (282/284); recon proved the last 2 fails
+    (`Lowering.hx`/`WriterLowering.hx`) are a compounding stack of ≥3
+    blockers sharing one root family, so the user chose the milestone
+    over a pivot. Slice U closes **blocker #1**: `HxExpr` had NO
+    expression-position `var`/`final` declaration production —
+    `macro final _x:Int = ctx.pos` hard-failed and untyped `macro var
+    x = e` silently misparsed (`var` swallowed as `IdentExpr` + stray
+    `Assign`); 8 sites in `Lowering.hx`, 13 in `WriterLowering.hx`.
+    **Fix:** two keyword-atom ctors `@:kw('var')
+    VarExpr(decl:HxVarDecl);` + `@:kw('final')
+    FinalExpr(decl:HxVarDecl);` (after `MacroExpr`, before `cast`) —
+    the exact mirror of `HxStatement.VarStmt`/`FinalStmt` reusing
+    `HxVarDecl` verbatim, MINUS `@:trailOpt(';')`/`@:fmt(...)` (an
+    expression has no statement terminator; the enclosing statement
+    owns any `;`). Codegen-path verified SAME (the Slice R/S/T
+    discipline, 3rd consecutive hold): `HxExpr` is a `@:peg enum` →
+    `Lowering.lowerEnumBranch`, the same path as `VarStmt`/`FinalStmt`;
+    `@:kw` keyword-lead proven on HxExpr's enum-Alt path by the
+    existing `MacroExpr`/`SwitchExpr`/`TryExpr`. The "genuine new
+    grammar capability" framing was about the *surface* (a production
+    `HxExpr` lacked), NOT the codegen path — the *mechanism* is
+    precedent-matched-additive, so no CORE fork beyond the milestone
+    approval. **Audit-3-lists LIVE (first in the arc — P–T were
+    N/A):** `VarExpr`/`FinalExpr` introduce a `name` binding →
+    `'VarExpr','FinalExpr'` added to `HaxeQueryPlugin`
+    `DECL_HOST_KINDS` (mirror `VarStmt`/`FinalStmt`), with the
+    lockstep anti-drift doc-comment extended in both required places.
+    Verified end-to-end (not just compiled): `apq refs q` on
+    `macro var q = 1` → `[decl] q`. `SEARCH_KIND_EQUIVALENCE`
+    deliberately EXCLUDED (search-only, no driver, `final` is a
+    documented separate family — Audit-3-lists means the lists the
+    change *semantically requires*, not every sibling list).
+    Regression-safe: statement-position `var x = …;` still binds
+    `HxStatement.VarStmt` (declared before the `ExprStmt` catch-all);
+    the new `HxExpr` ctors are reached only via direct-`HxExpr`
+    contexts (the `MacroExpr` operand). **Sweep FLAT 282/284 — the
+    predicted milestone-component outcome** (`gap≠sweep`, the L4/L5
+    pattern: a real grammar capability closes but
+    `Lowering`/`WriterLowering` compound on blockers #2/#3 — the exit
+    criterion is the capability + 0 regressions, NOT a sweep delta;
+    flat is success here, set in the plan upfront). Probes:
+    `macro var y = 1`→`MacroExpr(VarExpr)`, `macro final _x:Int =
+    ctx.pos`→`MacroExpr(FinalExpr)`, untyped `macro var y = e`→
+    `VarExpr` (no longer misparsed — the silent-degrade bug pinned as
+    a positive contract), statement `var x=1; final y=2;`→
+    `VarStmt`/`FinalStmt`. New tests: `HxDollarReifSliceTest` +4
+    (incl. the untyped-not-misparsed contract + `roundTrip`),
+    `HxControlFlowSliceTest` +1 (statement-position regression). js
+    `test-js.hxml` ALL TESTS OK 5482/5482, 0 regressions (interp not
+    needed — no `@:re` terminal). **Remaining: blockers #2
+    (`macro {…}` no-`;` statement) + #3+ — Slices V+.**
+
   - **Query-value validation pass (dogfood). ✅ DONE (all 3 gaps
     closed).** A
     decisive battery (`hxq ast/refs/search/meta` over a probe
