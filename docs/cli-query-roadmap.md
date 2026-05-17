@@ -1215,6 +1215,66 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
     sole fail `WriterLowering.hx`** (not 283/284 — the new terminal
     file shifted the denominator).
 
+  - **Slice X2 — bare no-`;` then-body before `else` (statement
+    position). ✅ DONE (commit `28be857`).** Blocker #2 — the SOLE
+    remaining src self-parse blocker (`WriterLowering.hx`). **MILESTONE
+    REACHED: the entire anyparse `src/` tree now self-parses through
+    apq — src self-parse 284/1/285 → 285/0/285; the
+    macro-expression-grammar arc S→X2 is complete.** Recon (11th
+    reversal in the arc) found the inherited "mirror Slice R
+    (`@:trailOpt(';')` on the field)" plan WRONG: `HxIfStmt.thenBody:
+    HxStatement` throws *inside* `parseHxStatement`→`ExprStmt`'s
+    Slice-V `;`-gate, before any field-level trail — a distinct
+    codegen path from Slice R's `HxIfExpr.thenBranch:HxExpr` (HxExpr
+    never consumes `;`). Genuine CORE, not precedent-additive; also
+    reversed the inherited P5/P6 "pass" sub-claims (both fail without
+    a `;`). User-approved CORE design via the per-slice
+    `AskUserQuestion` gate (user pre-chose to push the milestone
+    #1→#2; #2's CORE design got its own gate): **"else-peek gate"** —
+    extend the Slice-V `ExprStmt` trail gate so the `;` is optional
+    when an `else` keyword immediately follows. An `ExprStmt` followed
+    by `else` is only ever an if-then-body in valid Haxe (a stray
+    `else` after any other statement was already a parse error), so
+    OR-ing a non-consuming, word-boundary-checked `else`-peek only
+    *newly-accepts* the valid form — it cannot regress a
+    previously-valid input. New additive `peekKw` runtime helper
+    (`Codegen.hx`, `peekLit`/`matchKw` precedent); `gateCond =
+    (parseGateCall || peekKw(ctx, "else"))` in `Lowering.hx` is
+    `parseGateCall`-guarded (`HxStatement.ExprStmt` is the sole
+    consumer) so the no-gate arms are byte-identical → zero blast on
+    `VarStmt`/`FinalStmt`/`ReturnStmt`/`TypedefDecl` (verified vs `git
+    show HEAD`). **Pinned documented limitation** (`HxIfStmt` doc +
+    2 tests, exit criterion = a future positionally-scoped
+    soft-terminator for if/while/for bodies): a bare non-`;`
+    statement immediately before block-close `}` with no `else` after
+    it stays rejected — both P5 (then-body) and P6 (else-body); that
+    is the Slice-V unguarded-`}` catch-all danger zone (the −33
+    regression class) deliberately excluded. **gap≠sweep: a
+    TRUE-sole-blocker with NO compounding → the sweep flip 284→285
+    was PREDICTED EXACTLY** (the M/N strip-confirmed discriminator
+    APPLIED — NOT the U/V/X1 compounding-component FLAT pattern; the
+    first real predicted flip of the milestone tail). Recon STEP-4
+    strip-confirmed neutralizing the 5 identical sites (3885/3905/
+    3940/7762/8113) makes the whole file parse; no hidden #3 (X1
+    closed #1). js `test-js.hxml` **5532/5532, 0 errors / 0 failures,
+    ALL TESTS OK** (5516 baseline + 16 net; 0 regressions); 4/4
+    file-review APPROVE. Separate finding (user-deferred, own future
+    slice): the `apq ast` S-expr dump reverses then/else for the
+    IfStmt path (`if (c) {A} else {B}`) — refined to a **dump-layer
+    artifact** in `HaxeQueryPlugin` child order, NOT an AST-field bug
+    (the pre-existing green `testIfElseBlocks` asserts the AST-level
+    `thenBody`/`elseBody` correctly, so the writer / round-trip are
+    safe). One in-flight slip caught by the js-gate (not shipped):
+    a new test over-asserted P6 against the recon's own probe matrix
+    (which showed P6 fails) and the user-approved pinned scope —
+    fixed test-only to a pinned-rejection. The `--interp` gate
+    remains separately **pre-existing red** (`ApqSearchCliTest.hx`
+    `$x` single-quote CLI-arg literals); no `EReg`/regex in this
+    slice so interp is out of scope (js-only gate per protocol).
+    **Milestone complete — next direction is an `AskUserQuestion`
+    (Phase 4 AS3 / anyparse Phase 3 formatter / push the accumulated
+    commits / fix the pre-existing interp red / other).**
+
   - **Query-value validation pass (dogfood). ✅ DONE (all 3 gaps
     closed).** A
     decisive battery (`hxq ast/refs/search/meta` over a probe
