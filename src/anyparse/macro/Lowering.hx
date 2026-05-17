@@ -1463,6 +1463,33 @@ class Lowering {
 			// Pass the captured `matchLit` result through so the writer
 			// can preserve source presence of the trail literal.
 			final triviaTrailOpt:Bool = trailOptional && ctx.trivia && isTriviaBearing(typePath);
+			// ω-slice-V — parser-side shape-gated trail literal. A ctor
+			// carrying `@:fmt(trailOptParseGate('<adapter>'))` alongside
+			// `@:trailOpt(...)` makes the optional-trail decision depend on
+			// the just-parsed child `_raw`: `<adapter>(_raw)` true →
+			// `matchLit` (`;` optional, brace-terminated expr); false →
+			// `expectLit` (`;` required — THROWS to terminate the
+			// statement, preserving the Star-loop boundary). `<adapter>`
+			// is a plugin predicate reached via the schema instance, the
+			// same `formatInfo.schemaTypePath` `.instance.<m>` channel the
+			// generated parser already uses for `unescapeChar`. Strictly
+			// opt-in: `parseGate == null` → the unconditional emission
+			// below is byte-identical, so every other `@:trailOpt` ctor
+			// (`VarStmt` / `FinalStmt` / `ReturnStmt` / …) is untouched.
+			// Sole consumer: `HxStatement.ExprStmt` (the no-keyword
+			// catch-all, where a blanket optional `;` would break boundary
+			// detection — hence the shape gate instead).
+			final parseGate:Null<Array<String>> = branch.fmtReadStringArgs('trailOptParseGate');
+			final parseGateCall:Null<Expr> = if (parseGate != null && parseGate.length == 1) {
+				final fmtParts:Array<String> = formatInfo.schemaTypePath.split('.');
+				{
+					expr: ECall(
+						{expr: EField(macro $p{fmtParts}.instance, parseGate[0]), pos: Context.currentPos()},
+						[macro _raw]
+					),
+					pos: Context.currentPos(),
+				};
+			} else null;
 			// ω-string-interp-noformat: ctors with `@:fmt(captureSource)` +
 			// `@:lead`/`@:trail` carry a positional `sourceText:String` arg
 			// in trivia mode. The parser captures the byte slice between
@@ -1635,7 +1662,18 @@ class Lowering {
 				// `HxStatement.VarStmt` / `FinalStmt` for `var foo =
 				// switch (x) { case _: 1 }` without trailing `;` (slice
 				// ω-vardecl-trailOpt — the `}`-terminated rhs idiom).
-				if (triviaTrailOpt) steps.push(macro final _trailPresent:Bool = matchLit(ctx, $v{trailText}));
+				// ω-slice-V: when `@:fmt(trailOptParseGate(...))` is present
+				// (parseGateCall != null) the matchLit/expectLit choice is
+				// made at runtime from the parsed child shape, so a
+				// non-brace expr still hits `expectLit` (throws → statement
+				// boundary preserved). Without the gate the emission is
+				// exactly the pre-slice three-line form (byte-identical for
+				// every other ctor).
+				if (parseGateCall != null && triviaTrailOpt)
+					steps.push(macro final _trailPresent:Bool = $parseGateCall ? matchLit(ctx, $v{trailText}) : { expectLit(ctx, $v{trailText}); true; });
+				else if (parseGateCall != null && trailOptional)
+					steps.push(macro if ($parseGateCall) matchLit(ctx, $v{trailText}) else expectLit(ctx, $v{trailText}));
+				else if (triviaTrailOpt) steps.push(macro final _trailPresent:Bool = matchLit(ctx, $v{trailText}));
 				else if (trailOptional) steps.push(macro matchLit(ctx, $v{trailText}));
 				else steps.push(macro expectLit(ctx, $v{trailText}));
 			}

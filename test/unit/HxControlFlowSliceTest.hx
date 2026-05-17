@@ -469,4 +469,66 @@ class HxControlFlowSliceTest extends HxTestHelpers {
 			case null, _: Assert.fail('expected FinalStmt(y), got ${body[1]}');
 		}
 	}
+
+	// --- Slice V: macro-block / brace-terminated expr as no-`;` statement ---
+
+	public function testMacroBlockStatementNoSemi():Void {
+		// `macro { … }` as a statement has no trailing `;` — the
+		// shape gate (`stmtExprNoSemi` true for MacroExpr-over-BlockExpr)
+		// makes the `;` optional. Pre-slice this failed `expected HxDecl`.
+		final body:Array<HxStatement> = parseBody('class C { function f():Void { macro { var x = 1; } } }');
+		Assert.equals(1, body.length);
+		switch body[0] {
+			case ExprStmt(e):
+				switch e {
+					case MacroExpr(_): Assert.pass();
+					case null, _: Assert.fail('expected ExprStmt(MacroExpr), got ${body[0]}');
+				}
+			case null, _: Assert.fail('expected ExprStmt, got ${body[0]}');
+		}
+	}
+
+	public function testMacroSwitchStatementNoSemi():Void {
+		// Brace-terminated superset: `macro switch (e) { … }` — gate
+		// recurses into the MacroExpr operand (endsWithCloseBrace set).
+		final body:Array<HxStatement> = parseBody('class C { function f():Void { macro switch e { case _: 1; } } }');
+		Assert.equals(1, body.length);
+		switch body[0] {
+			case ExprStmt(e):
+				switch e {
+					case MacroExpr(_): Assert.pass();
+					case null, _: Assert.fail('expected ExprStmt(MacroExpr), got ${body[0]}');
+				}
+			case null, _: Assert.fail('expected ExprStmt, got ${body[0]}');
+		}
+	}
+
+	public function testNonBraceExprStillRequiresSemi():Void {
+		// Non-brace exprs keep the required `;` — the gate emits
+		// `expectLit`, which throws to terminate the statement so the
+		// Star loop boundary survives (the V −33 regression guard).
+		final body:Array<HxStatement> = parseBody('class C { function f():Void { foo(); bar(); } }');
+		Assert.equals(2, body.length);
+		// Missing `;` between two non-brace calls must NOT parse —
+		// mechanism B is stricter here than the reverted blanket
+		// `:trailOpt` approach (which leniently accepted `foo() bar()`).
+		Assert.raises(() -> parseBody('class C { function f():Void { foo() bar(); } }'));
+	}
+
+	public function testSwitchArmMultiStmtBoundaryPreserved():Void {
+		// The exact V minimal repro: a multi-statement switch-arm body.
+		// `foo(e)` (non-brace) requires `;` so `throw 'x'` is a separate
+		// statement, not over-consumed into the same expr.
+		final body:Array<HxStatement> = parseBody("class C { function f():Void { switch e { case _: foo(e); throw 'x'; } } }");
+		Assert.equals(1, body.length);
+		switch body[0] {
+			case SwitchStmtBare(_): Assert.pass();
+			case null, _: Assert.fail('expected SwitchStmtBare, got ${body[0]}');
+		}
+	}
+
+	public function testMacroBlockStatementRoundTrip():Void {
+		roundTrip('class C { function f():Void { macro { var x = 1; } } }', 'macro-block-no-semi');
+		roundTrip('class C { function f():Void { macro switch e { case _: 1; } } }', 'macro-switch-no-semi');
+	}
 }

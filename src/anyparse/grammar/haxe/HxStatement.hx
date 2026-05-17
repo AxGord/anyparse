@@ -312,10 +312,27 @@ package anyparse.grammar.haxe;
  *    `ExprStmt` (its expression does not start with `;`).
  *
  *  - `ExprStmt` — `expr;` expression-statement. Catch-all: any
- *    expression followed by a semicolon. Must appear last because it
- *    has no keyword guard — if placed before the keyword branches,
+ *    expression, optionally followed by `;`. Must appear last because
+ *    it has no keyword guard — if placed before the keyword branches,
  *    input like `return 1;` would attempt to parse `return` as an
  *    `IdentExpr` atom.
+ *
+ *    The trailing `;` is `@:trailOpt(';')` shape-gated parser-side via
+ *    `@:fmt(trailOptParseGate('stmtExprNoSemi'))` (slice ω-slice-V).
+ *    The `;` is REQUIRED — the parser throws to terminate the
+ *    statement, preserving multi-statement boundary detection in
+ *    blocks / switch-arms (the statement Star loop relies on
+ *    `expectLit` throwing) — UNLESS the parsed expr is
+ *    brace-terminated (`HxExprUtil.stmtExprNoSemi` true: `macro { … }`,
+ *    `macro switch (e) { … }`, and the `endsWithCloseBrace` set), where
+ *    it is optional, matching Haxe's rule that a `}`-closed statement
+ *    needs no `;`. A blanket `@:trailOpt` (no gate) on this no-keyword
+ *    catch-all would make `;` unconditionally optional and destroy
+ *    boundary detection; the gate keeps `expectLit` for every
+ *    non-brace expr. Trivia mode preserves the source's `;` presence
+ *    verbatim through the generic `isAltTrailOptBranch` `trailPresent`
+ *    synth slot (same path as `ReturnStmt`); plain mode falls back to
+ *    always emitting `;`.
  */
 @:peg
 enum HxStatement {
@@ -382,6 +399,6 @@ enum HxStatement {
 	@:lit(';')
 	EmptyStmt;
 
-	@:trail(';')
+	@:trailOpt(';') @:fmt(trailOptParseGate('stmtExprNoSemi'))
 	ExprStmt(expr:HxExpr);
 }

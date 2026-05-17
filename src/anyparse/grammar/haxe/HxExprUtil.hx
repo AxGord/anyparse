@@ -126,6 +126,54 @@ final class HxExprUtil {
 	}
 
 	/**
+	 * True iff `raw`, standing as a statement (`HxStatement.ExprStmt`),
+	 * is `}`-terminated so Haxe needs no trailing `;`. Drives the
+	 * parser-side `@:fmt(trailOptParseGate('stmtExprNoSemi'))` gate on
+	 * `ExprStmt`: gate true → `;` optional (consumed if present); gate
+	 * false → `;` required (the parser throws to terminate the
+	 * statement, preserving multi-statement boundary detection — the
+	 * property a blanket `:trailOpt` would destroy on the catch-all).
+	 *
+	 * **No `;`** (gate true):
+	 *  - `MacroExpr` whose operand is `BlockExpr` (`macro { … }`) or is
+	 *    itself in this set (`macro switch (e) { … }`,
+	 *    `macro try { … } catch …`) — recursive.
+	 *  - Everything `endsWithCloseBrace` accepts (`SwitchExpr` /
+	 *    `SwitchExprBare` / `FnExpr` block-body / `TryExpr` recursive):
+	 *    as a statement these are `}`-terminated too.
+	 *
+	 * **`;` required** (gate false): every other shape — `Call`,
+	 * assignment, binop, `IfExpr`, object literal, etc. (a bare
+	 * `BlockExpr` reaches `HxStatement.BlockStmt`, not `ExprStmt`).
+	 *
+	 * Distinct from `endsWithCloseBrace` (the writer-side `var x = …`
+	 * rhs predicate), which deliberately returns `false` for
+	 * `MacroExpr` / `BlockExpr` — the parser-statement gate needs the
+	 * opposite answer for `macro { … }`. `endsWithCloseBrace` is reused
+	 * read-only for the non-`MacroExpr` cases (the answer coincides
+	 * there) and is NOT modified.
+	 *
+	 * `Dynamic` argument so the same predicate fires on Plain-mode
+	 * `HxExpr` enum values and Trivia-mode `Trivial<HxExprT>` wrappers
+	 * (see `unwrap`).
+	 */
+	public static function stmtExprNoSemi(raw:Null<Dynamic>):Bool {
+		final e:Null<Dynamic> = unwrap(raw);
+		if (e == null) return false;
+		final ctor:Null<String> = Type.enumConstructor(e);
+		if (ctor == null) return false;
+		if (ctor == 'MacroExpr') {
+			final params:Null<Array<Dynamic>> = Type.enumParameters(e);
+			if (params == null || params.length == 0) return false;
+			final operand:Null<Dynamic> = unwrap(params[0]);
+			if (operand == null) return false;
+			final operandCtor:Null<String> = Type.enumConstructor(operand);
+			return operandCtor == 'BlockExpr' || stmtExprNoSemi(operand);
+		}
+		return endsWithCloseBrace(e);
+	}
+
+	/**
 	 * Returns the inner enum value for `raw`. Handles three shapes:
 	 *  - `null` → `null`
 	 *  - direct enum value (Plain-mode AST node) → `raw` unchanged

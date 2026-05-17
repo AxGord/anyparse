@@ -1433,4 +1433,14 @@ final class HaxeFormat implements TextFormat {
 			case _: throw new haxe.Exception('invalid escape: \\${String.fromCharCode(esc)}');
 		};
 	}
+
+	/**
+	 * Parser-side statement-terminator gate for
+	 * `@:fmt(trailOptParseGate('stmtExprNoSemi'))` on
+	 * `HxStatement.ExprStmt`. Reached from the generated parser via
+	 * `schema.instance.stmtExprNoSemi(_raw)` (the same channel as
+	 * `unescapeChar`); delegates to the AST predicate in `HxExprUtil`
+	 * so the grammar-AST logic stays beside `endsWithCloseBrace`.
+	 */
+	public inline function stmtExprNoSemi(raw:Null<Dynamic>):Bool return HxExprUtil.stmtExprNoSemi(raw);
 }
