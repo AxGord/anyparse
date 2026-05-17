@@ -1048,6 +1048,50 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
     cluster — the real sweep-mover masking both `Lowering.hx` and
     `WriterLowering.hx`).
 
+    **✅ Mechanism B DONE (commit `b6c7d1c`).** Fresh recon
+    **reframed the inherited design**: the memory's Option A (gate on
+    the *existing* writer-only `@:fmt(trailOptShapeGate(pred,field))`,
+    which `VarStmt`/`FinalStmt` carry) was falsified pre-build — it
+    would change those keyword-guarded ctors' lenient parse to strict
+    and **regress the pinned contract test**
+    `HxVarStmtTrailOptSliceTest.testVarFollowedBySecondVarNoSemi`
+    (`var x = 5\nvar y = 6;`, explicitly documented "so a future
+    strict-mode slice doesn't silently change the contract"). A pinned
+    contract test is *concrete* blast-radius evidence, not speculation
+    — the exact shared-codegen-path trap the V revert taught. **Option
+    B chosen**: a NEW dedicated **parser-only** meta
+    `@:fmt(trailOptParseGate('stmtExprNoSemi'))` carried *only* by
+    `ExprStmt`, distinct from the writer-only `trailOptShapeGate`
+    (trivia mode preserves source `;` via the generic
+    `isAltTrailOptBranch` `trailPresent` slot — the shape gate is a
+    plain-mode writer fallback ExprStmt never needs). New
+    `HxExprUtil.stmtExprNoSemi` (MacroExpr-over-`BlockExpr`/recursive +
+    delegate read-only to `endsWithCloseBrace`; the latter unmodified)
+    + `HaxeFormat.stmtExprNoSemi` schema-instance forwarder (the
+    `unescapeChar` parser→plugin precedent). `Lowering`'s single-Ref
+    trail emission gains a **guarded** conditional: `parseGate != null`
+    → `stmtExprNoSemi(_raw) ? matchLit : expectLit` (non-brace still
+    `expectLit`-throws → boundary preserved, the property V's blanket
+    `matchLit` destroyed); `parseGate == null` → byte-identical
+    pre-slice emission ⇒ **zero blast on
+    `VarStmt`/`FinalStmt`/`ReturnStmt`**. The new CORE machinery is
+    additive-GUARDED — the guard is what makes catch-all machinery safe
+    (concrete realization of the V "new rule"). Verified exactly as the
+    plan pre-declared: build clean; **src self-parse FLAT 282/284**,
+    fails *exactly* `Lowering.hx`+`WriterLowering.hx` (predicted
+    milestone-component success — gap≠sweep, blocker #3 still masks
+    both; M/N discriminator N/A to a compounding-stack component);
+    probes 5/5 (`macro {…}` + `macro switch {…}` parse; non-brace
+    `foo() bar();` correctly *rejected* — mechanism B is *stricter*
+    than the reverted blanket `:trailOpt`; V −33 switch-arm guard +
+    `VarStmt` leniency intact); js `test-js.hxml` **5496/5496 ALL TESTS
+    OK, 0 reg** (5482 baseline + 14 from 5 new `HxControlFlowSliceTest`
+    methods incl. roundTrip idempotency). 5 file-review agents APPROVE
+    (1 applied braceless-body style nit). Milestone **blocker #1 (U) +
+    #2 (V) closed**; next = re-recon **blocker #3** (offset-25
+    `#if macro` cluster — the real sweep-mover masking both fail
+    files).
+
   - **Query-value validation pass (dogfood). ✅ DONE (all 3 gaps
     closed).** A
     decisive battery (`hxq ast/refs/search/meta` over a probe
