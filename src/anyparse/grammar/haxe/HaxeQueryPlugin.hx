@@ -102,7 +102,7 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		final root:Dynamic = HaxeModuleSpanParser.parse(source);
 		final children:Array<QueryNode> = [];
 		appendNodes(Reflect.field(root, 'decls'), children);
-		return new QueryNode('module', null, children);
+		return new QueryNode('module', null, orderBySpan(children));
 	}
 
 	public function refShape():RefShape {
@@ -364,7 +364,7 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 						if (field == 'type' && !isAnonType(Reflect.field(value, 'type'))) continue;
 						appendNodes(Reflect.field(value, field), children);
 					}
-					into.push(new QueryNode(kindStr, extractName(value), children, spanObj));
+					into.push(new QueryNode(kindStr, extractName(value), orderBySpan(children), spanObj));
 					return;
 				}
 				for (field in Reflect.fields(value)) {
@@ -401,7 +401,7 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 			if (name == null) name = extractName(p);
 			appendNodes(p, children);
 		}
-		return new QueryNode(ctor, name, children, span);
+		return new QueryNode(ctor, name, orderBySpan(children), span);
 	}
 
 	private function extractName(value:Dynamic):Null<String> {
@@ -441,5 +441,27 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 			case TEnum(_): Type.enumConstructor(v) == 'Anon';
 			case _: false;
 		}
+	}
+
+	/**
+	 * Order a node's children by source position so the `apq ast`
+	 * dump is engine-independent. `appendNodes` flattens struct
+	 * fields via `Reflect.fields`, whose iteration order is
+	 * target-defined (neko hash order vs js insertion order), so
+	 * without this the then-body / else-body of an `IfStmt` (and any
+	 * other struct-bearing node) surface in different order on neko
+	 * vs node. Stable sort by span start; left untouched unless every
+	 * child carries a span, since a span-less node has no defined
+	 * source position to order against.
+	 */
+	private static function orderBySpan(children:Array<QueryNode>):Array<QueryNode> {
+		final indexed:Array<{from:Int, idx:Int, node:QueryNode}> = [];
+		for (i in 0...children.length) {
+			final s:Null<Span> = children[i].span;
+			if (s == null) return children;
+			indexed.push({from: s.from, idx: i, node: children[i]});
+		}
+		indexed.sort((a, b) -> a.from != b.from ? a.from - b.from : a.idx - b.idx);
+		return [for (e in indexed) e.node];
 	}
 }
