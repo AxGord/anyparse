@@ -13,7 +13,7 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
-#if sys
+#if (sys || nodejs)
 import sys.io.File;
 #end
 
@@ -34,7 +34,7 @@ final class Cli {
 	private static final EXIT_RUNTIME:Int = 1;
 
 	public static function main():Void {
-		#if sys
+		#if (sys || nodejs)
 		Sys.exit(run(Sys.args()));
 		#else
 		throw 'apq: only sys targets supported';
@@ -502,7 +502,7 @@ final class Cli {
 	}
 
 	private static function readFile(path:String):String {
-		#if sys
+		#if (sys || nodejs)
 		return File.getContent(path);
 		#else
 		throw 'apq: file IO requires a sys target';
@@ -583,13 +583,13 @@ final class Cli {
 	}
 
 	private static function stderr(s:String):Void {
-		#if sys
+		#if (sys || nodejs)
 		Sys.stderr().writeString(s);
 		#end
 	}
 
 	private static inline function sysPrint(s:String):Void {
-		#if sys
+		#if (sys || nodejs)
 		Sys.print(s);
 		#end
 	}

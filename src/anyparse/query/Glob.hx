@@ -1,6 +1,6 @@
 package anyparse.query;
 
-#if sys
+#if (sys || nodejs)
 import sys.FileSystem;
 #end
 
@@ -14,15 +14,16 @@ import sys.FileSystem;
  *
  * Phase 2 keeps glob handling deliberately small — `{src,test}/**`
  * compound patterns and brace expansion are deferred until a real
- * user-driven need surfaces. Non-sys targets get an empty result;
- * callers handle the empty case as a configuration / target mismatch.
+ * user-driven need surfaces. Targets without filesystem access (no
+ * `sys` and no `nodejs`) get an empty result; callers handle the empty
+ * case as a configuration / target mismatch.
  */
 @:nullSafety(Strict)
 final class Glob {
 
 	public static function expand(spec:String, extension:String):Array<String> {
 		final out:Array<String> = [];
-		#if sys
+		#if (sys || nodejs)
 		if (!FileSystem.exists(spec)) return out;
 		if (FileSystem.isDirectory(spec)) {
 			collect(spec, extension, out);
@@ -34,7 +35,7 @@ final class Glob {
 		return out;
 	}
 
-	#if sys
+	#if (sys || nodejs)
 	private static function collect(dir:String, extension:String, into:Array<String>):Void {
 		for (name in FileSystem.readDirectory(dir)) {
 			final path:String = dir + '/' + name;

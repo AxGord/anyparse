@@ -1,0 +1,5 @@
+-cp src
+-main anyparse.query.Cli
+-js bin/apq.js
+-lib hxnodejs
+-D js-es=6

@@ -1,26 +1,44 @@
 #!/usr/bin/env sh
-# `hxq` — Haxe-preset alias for `apq`. Invokes the neko binary built
-# by `haxe bin/apq.hxml` with `--lang haxe` prepended to the ast/search/…
-# subcommand's options.
+# `hxq` — Haxe-preset alias for `apq`. Prepends `--lang haxe` to the
+# ast/search/… subcommand's options.
+#
+# Engine dispatch: prefers the JS build `bin/apq.js` (run via node) when
+# present — it is ~1.4-2x faster than the neko build on every parsing
+# operation (V8 JIT vs neko bytecode; the fixed +22ms node startup is
+# absorbed within the first 100ms of real work). Falls back to the neko
+# build `bin/apq.n` when the JS build is absent. The neko build remains
+# the canonical engine for the self-parse sweep and the test suites;
+# this launcher only changes the default for interactive `hxq` use.
+#
+# Build: `haxe bin/apq-js.hxml` (JS, preferred) and/or
+#        `haxe bin/apq.hxml` (neko, canonical for sweep/tests).
 #
 # Usage: hxq <subcommand> [options] <file>
-#
-# Expects `bin/apq.n` to exist relative to this script.
 
 set -e
 
 here=$(cd "$(dirname "$0")" && pwd)
-binary="$here/apq.n"
+js="$here/apq.js"
+nn="$here/apq.n"
 
-if [ ! -f "$binary" ]; then
-    echo "hxq: $binary not found — run \`haxe bin/apq.hxml\` first" >&2
+if [ -f "$js" ]; then
+    runner="node"
+    binary="$js"
+elif [ -f "$nn" ]; then
+    runner="neko"
+    binary="$nn"
+else
+    echo "hxq: neither $js nor $nn found — run \`haxe bin/apq-js.hxml\` (preferred) or \`haxe bin/apq.hxml\`" >&2
     exit 1
 fi
 
+# With no user args, just run the binary (prints usage); otherwise inject
+# `--lang haxe` after the subcommand so `hxq <cmd> [opts] <file>` targets
+# the Haxe grammar.
 if [ "$#" -eq 0 ]; then
-    exec neko "$binary"
+    exec "$runner" "$binary"
 fi
 
 cmd="$1"
 shift
-exec neko "$binary" "$cmd" --lang haxe "$@"
+exec "$runner" "$binary" "$cmd" --lang haxe "$@"
