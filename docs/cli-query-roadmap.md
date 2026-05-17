@@ -1641,6 +1641,31 @@ real dogfood — not because it would be nice to have.
   grep. Until that evidence accumulates, the answer is grep. This
   trigger IS the exit criterion for "was deferral wrong".
 
+- **Semantic backend via real `haxe` (Tier 0 — two backends, one
+  surface).** `apq`/`hxq` is purely syntactic/structural on
+  arbitrary, partial, non-compiling, verbatim source with spans —
+  no types, no post-macro view. The strongest candidate extension,
+  because anyparse is macro-generation-centric (`@:build` →
+  generated parser/writer classes absent from source), so post-macro
+  visibility hits a real recurring pain here. **Load-bearing model
+  decision (do not relitigate):** the semantic answer comes from an
+  *optional* `apq --semantic` that, on a compilable project, shells
+  out to `haxe` (init-macro → post-macro JSON AST; `--display`
+  JSON-RPC for type/refs) and merges by span — an **addition, never
+  a substitution**; the syntactic core stays dependency-free and is
+  NEVER folded with the semantic path. Crosses three standing
+  Non-goals (type resolution, project loader, indexing-if-cached) +
+  toolchain coupling, and only covers *compiling* code (narrower
+  than it sounds — unavailable mid-slice when code is broken).
+  **Interim (no feature):** raw `haxe -D dump=pretty` / `--display`
+  on the compilable project already exposes the post-macro AST
+  ad hoc — use that first.
+  **Gate / trigger:** build only when post-macro generated-code
+  inspection becomes *recurring* friction in real slice work
+  (distinct from syntactic gaps, which the report rule already
+  catches) AND ad-hoc `haxe -D dump` has proven too clumsy for that
+  recurring use. That conjunction IS the exit criterion.
+
 ## Non-goals across all phases
 
 These remain out of scope until and unless explicit slices are scheduled:
