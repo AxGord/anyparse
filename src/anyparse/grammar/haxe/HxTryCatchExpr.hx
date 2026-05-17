@@ -58,9 +58,23 @@ package anyparse.grammar.haxe;
  * NOT carry the flag — its haxe-formatter contract on `sameLine.
  * tryCatch=next` breaks `} catch` to `}\ncatch` regardless of body
  * shape (see `testSameLineCatchAppliesToEveryCatch`).
+ *
+ * `body` carries `@:trailOpt(';')`: Haxe accepts an optional `;`
+ * terminating the try-expression body before `catch`, e.g.
+ * `return try call(); catch (e:Any) null;` — the bare-body form the
+ * formatter emits, and the shape macro code commonly writes. Same
+ * `@:trailOpt(';')` meta and lowerStruct path as `HxIfExpr.thenBranch`
+ * (the `;`-before-`else` precedent). The `;` is consumed, not stored
+ * (AST is identical to the no-semicolon form), so non-`;` callers are
+ * untouched and statement-scope `try` (own `HxStatement` production) is
+ * unaffected. Block-body forms (`try { … } catch { … }`) carry no `;`
+ * and are likewise unaffected. NOTE: the haxe-formatter reference
+ * preserves the `;` for the bare-body form; re-emitting it
+ * (source-presence + writer gate, cf. `HxExprUtil`) is a deferred
+ * follow-up — this slice closes the parse gap only.
  */
 @:peg
 typedef HxTryCatchExpr = {
-	@:fmt(bodyBreak('expressionTry'), blockBodyKeepsInline) var body:HxExpr;
+	@:trailOpt(';') @:fmt(bodyBreak('expressionTry'), blockBodyKeepsInline) var body:HxExpr;
 	@:trivia @:tryparse @:fmt(sameLine('expressionTry'), blockBodyKeepsInline) var catches:Array<HxCatchClauseExpr>;
 };

@@ -118,6 +118,62 @@ class HxTryExprSliceTest extends HxTestHelpers {
 		}
 	}
 
+	// ======== Optional `;` before catch (slice: HxTryCatchExpr.body @:trailOpt(';')) ========
+
+	/**
+	 * `var x = try foo(); catch (e:Any) null;` — optional `;` terminating
+	 * the try-expr body before `catch`. Consumed, not stored: the AST is
+	 * identical to the no-`;` form (cf. `testTryExprSimpleCatch`).
+	 */
+	public function testTryExprSemicolonBeforeCatch():Void {
+		final decl:HxVarDecl = parseSingleVarDecl('class C { var x:Dynamic = try foo(); catch (e:Any) null; }');
+		switch decl.init {
+			case TryExpr(stmt):
+				switch stmt.body {
+					case Call(IdentExpr(name), []): Assert.equals('foo', (name : String));
+					case _: Assert.fail('expected Call(foo,[]) body, got ${stmt.body}');
+				}
+				Assert.equals(1, stmt.catches.length);
+				Assert.equals('e', (stmt.catches[0].name : String));
+				switch stmt.catches[0].body {
+					case NullLit: Assert.pass();
+					case _: Assert.fail('expected NullLit catch body');
+				}
+			case _: Assert.fail('expected TryExpr, got ${decl.init}');
+		}
+	}
+
+	/** `return try foo(); catch (e:Any) null;` — `;` before catch in return position. */
+	public function testTryExprReturnSemicolonBeforeCatch():Void {
+		final fn:HxFnDecl = parseSingleFnDecl('class C { function m():Dynamic { return try foo(); catch (e:Any) null; } }');
+		final stmts:Array<HxStatement> = fnBodyStmts(fn);
+		switch stmts[0] {
+			case ReturnStmt(TryExpr(stmt)):
+				Assert.equals(1, stmt.catches.length);
+			case _: Assert.fail('expected ReturnStmt(TryExpr), got ${stmts[0]}');
+		}
+	}
+
+	/** `f(try a(); catch (e:Any) null)` — `;` before catch inside a call argument. */
+	public function testTryExprCallArgSemicolonBeforeCatch():Void {
+		final decl:HxVarDecl = parseSingleVarDecl('class C { var x:Dynamic = f(try a(); catch (e:Any) null); }');
+		switch decl.init {
+			case Call(IdentExpr(fname), [TryExpr(stmt)]):
+				Assert.equals('f', (fname : String));
+				Assert.equals(1, stmt.catches.length);
+			case _: Assert.fail('expected Call(f, [TryExpr]), got ${decl.init}');
+		}
+	}
+
+	/** No-`;` form is unaffected — optional trail does not change existing parses. */
+	public function testTryExprNoSemicolonRegression():Void {
+		final decl:HxVarDecl = parseSingleVarDecl('class C { var x:Dynamic = try foo() catch (e:Any) null; }');
+		switch decl.init {
+			case TryExpr(stmt): Assert.equals(1, stmt.catches.length);
+			case _: Assert.fail('expected TryExpr, got ${decl.init}');
+		}
+	}
+
 	// ======== Statement-form regression ========
 
 	/** `try { ... } catch (...) { ... }` at statement level stays TryCatchStmt. */
@@ -150,6 +206,16 @@ class HxTryExprSliceTest extends HxTestHelpers {
 
 	public function testRoundTripStatementForm():Void {
 		roundTrip('class C { function m():Void { try { foo(); } catch (e:Any) { bar; } } }', 'try-stmt regression');
+	}
+
+	/**
+	 * Idempotency for the `;`-before-catch form. The `;` is consumed and
+	 * not re-emitted (the first write normalises to the no-`;` form), so
+	 * the second write must match the first — byte-preservation of the
+	 * source `;` vs the haxe-formatter reference is a deferred follow-up.
+	 */
+	public function testRoundTripSemicolonBeforeCatch():Void {
+		roundTrip('class C { var x:Dynamic = try foo(); catch (e:Any) null; }', 'try-expr semicolon-before-catch');
 	}
 
 }
