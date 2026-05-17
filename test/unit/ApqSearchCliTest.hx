@@ -78,10 +78,10 @@ class ApqSearchCliTest extends Test {
 		// option and rejected (EXIT_USAGE). The `--` end-of-options
 		// sentinel makes every following token positional (standard
 		// getopt convention) so `--$x` (prefix-decrement) is searchable.
-		Assert.equals(2, Cli.run(['search', '--$x', fixture]),
+		Assert.equals(2, Cli.run(['search', "--$x", fixture]),
 			'pattern starting with -- must be rejected as an option without the sentinel');
-		final rc:Int = Cli.run(['search', '--', '--$x', fixture]);
-		Assert.equals(0, rc, 'after `--` the `--$x` pattern is positional and matches `--i`');
+		final rc:Int = Cli.run(['search', '--', "--$x", fixture]);
+		Assert.equals(0, rc, "after `--` the `--$x` pattern is positional and matches `--i`");
 		FileSystem.deleteFile(fixture);
 		#else
 		Assert.pass('non-sys target');
@@ -93,10 +93,10 @@ class ApqSearchCliTest extends Test {
 		final fixture:String = writeFixture('class X {}');
 		// Regression guard: the sentinel must NOT disable option
 		// validation for tokens BEFORE it.
-		Assert.equals(2, Cli.run(['search', '--bogus', '--', '$x', fixture]),
+		Assert.equals(2, Cli.run(['search', '--bogus', '--', "$x", fixture]),
 			'unknown option before `--` must still be rejected');
 		// Options before `--` are still honoured (no arg-parse error).
-		Assert.notEquals(2, Cli.run(['search', '--lang', 'haxe', '--', '$x + $x', fixture]),
+		Assert.notEquals(2, Cli.run(['search', '--lang', 'haxe', '--', "$x + $x", fixture]),
 			'--lang before -- still parsed; pattern after -- runs without arg error');
 		FileSystem.deleteFile(fixture);
 		#else
