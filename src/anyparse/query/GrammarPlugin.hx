@@ -61,6 +61,26 @@ interface GrammarPlugin {
 	 * contract and `MetaShape` for field semantics.
 	 */
 	public function metaShape():MetaShape;
+
+	/**
+	 * Parse `source` like `parseFile`, but additionally surface
+	 * type-position references (field/var type annotations, enum-ctor
+	 * parameter types, …) as addressable nodes. `parseFile` deliberately
+	 * drops these to keep the tree lean for `ast`/`search`/`refs`/`meta`;
+	 * this parallel projection is consumed ONLY by the `uses` walker, so
+	 * those four consumers stay byte-identical by construction.
+	 *
+	 * See `docs/cli-query-tool.md` (`apq uses`) and `TypeRefShape`.
+	 */
+	public function parseFileTypeRefs(source:String):QueryNode;
+
+	/**
+	 * Declare which `QueryNode.kind` values the `Uses` walker should
+	 * treat as type references. Plugin-supplied so the walker stays
+	 * language-agnostic. Only meaningful on a tree produced by
+	 * `parseFileTypeRefs`.
+	 */
+	public function typeRefShape():TypeRefShape;
 }
 
 /**
@@ -157,4 +177,22 @@ typedef RefShape = {
 typedef MetaShape = {
 	var metaKinds:Array<String>;
 	var declHostKinds:Array<String>;
+}
+
+/**
+ * Plugin-declared contract for `apq uses`. The walker reads this slot
+ * and never inspects grammar-specific node types.
+ *
+ * `typeRefKinds` is the set of `QueryNode.kind` values the plugin emits
+ * for a type-position reference on a `parseFileTypeRefs` tree (for Haxe:
+ * `'TypeRef'` for the name-slot `type` annotations the default
+ * projection drops, plus `'Named'` / `'NewExpr'` for type positions
+ * already present in both trees — return types, type-param
+ * constraints, `extends`/`implements`, `new T`). `Uses` emits every
+ * node whose kind is in this set and whose `name` slot matches the
+ * query target.
+ */
+@:nullSafety(Strict)
+typedef TypeRefShape = {
+	var typeRefKinds:Array<String>;
 }

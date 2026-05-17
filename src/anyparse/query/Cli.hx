@@ -3,10 +3,12 @@ package anyparse.query;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.MetaShape;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.query.Matcher.Match;
 import anyparse.query.Meta.MetaHit;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
+import anyparse.query.Uses.UsesHit;
 import anyparse.query.format.Json;
 import anyparse.query.format.Text;
 import anyparse.runtime.ParseError;
@@ -53,6 +55,7 @@ final class Cli {
 			case 'ast': return runAst(rest);
 			case 'search': return runSearch(rest);
 			case 'refs': return runRefs(rest);
+			case 'uses': return runUses(rest);
 			case 'meta': return runMeta(rest);
 			case _:
 				stderr('apq: unknown subcommand "$cmd"\n');
@@ -155,6 +158,80 @@ final class Cli {
 		} else {
 			for (entry in allEntries) sysPrint(Text.renderRefs(entry.file, entry.source, entry.hits));
 		}
+		return EXIT_OK;
+	}
+
+	private static function runUses(args:Array<String>):Int {
+		var lang:String = 'haxe';
+		var name:Null<String> = null;
+		var inputSpec:Null<String> = null;
+
+		var i:Int = 0;
+		while (i < args.length) {
+			final a:String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '-h', '--help':
+					printUsesUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq uses: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (name == null) {
+						name = a;
+					} else if (inputSpec == null) {
+						inputSpec = a;
+					} else {
+						stderr('apq uses: extra positional argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (name == null) {
+			stderr('apq uses: missing <type-name> argument\n');
+			printUsesUsage();
+			return EXIT_USAGE;
+		}
+		if (inputSpec == null) {
+			stderr('apq uses: missing <file-or-dir-or-glob> argument\n');
+			printUsesUsage();
+			return EXIT_USAGE;
+		}
+		final nameStr:String = name;
+		final inputStr:String = inputSpec;
+
+		final plugin:GrammarPlugin = pickPlugin(lang);
+		final shape:TypeRefShape = plugin.typeRefShape();
+
+		final paths:Array<String> = Glob.expand(inputStr, '.hx');
+		if (paths.length == 0) {
+			stderr('apq uses: no input files matched "$inputStr"\n');
+			return EXIT_RUNTIME;
+		}
+
+		final allEntries:Array<{file:String, source:String, hits:Array<UsesHit>}> = [];
+		for (path in paths) {
+			final source:String = readFile(path);
+			final tree:Null<QueryNode> = try plugin.parseFileTypeRefs(source)
+				catch (e:ParseError) {
+					stderr('apq uses: $path: ${e.toString()}\n');
+					null;
+				}
+				catch (e:Exception) {
+					stderr('apq uses: $path: ${e.message}\n');
+					null;
+				};
+			if (tree == null) continue;
+			final hits:Array<UsesHit> = Uses.find(nameStr, tree, shape);
+			if (hits.length == 0) continue;
+			allEntries.push({file: path, source: source, hits: hits});
+		}
+
+		for (entry in allEntries) sysPrint(Text.renderUses(entry.file, entry.source, entry.hits));
 		return EXIT_OK;
 	}
 
@@ -533,7 +610,8 @@ final class Cli {
 		sysPrint('Commands:\n');
 		sysPrint('  ast      Dump parsed AST (S-expr or JSON)\n');
 		sysPrint('  search   Structural pattern search\n');
-		sysPrint('  refs     Symbol references (name-only; scope-aware in Phase 3.2)\n');
+		sysPrint('  refs     Symbol references (value bindings; scope-aware)\n');
+		sysPrint('  uses     Type references (field/param/type-param positions)\n');
 		sysPrint('  meta     Annotation-on-decl shortcut\n');
 		sysPrint('\n');
 		sysPrint('Global options:\n');
@@ -568,6 +646,18 @@ final class Cli {
 		sysPrint('\n');
 		sysPrint('Phase 3.1: name-only matching, no lexical scope. Filters combine\n');
 		sysPrint('inclusively — passing `--decls --reads` keeps both kinds.\n');
+	}
+
+	private static function printUsesUsage():Void {
+		sysPrint('Usage: apq uses [options] <type-name> <file-or-dir-or-glob>\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('\n');
+		sysPrint('Finds type-position references — a field/var type annotation,\n');
+		sysPrint('an enum-constructor parameter type, a type parameter. Sister of\n');
+		sysPrint('`refs` (value bindings). `Array<T>` reports both `Array` and\n');
+		sysPrint('`T`. For "where is X declared" use `refs --decls` / `ast --select`.\n');
 	}
 
 	private static function printMetaUsage():Void {

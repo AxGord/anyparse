@@ -99,10 +99,37 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 	public function langName():String return 'haxe';
 
 	public function parseFile(source:String):QueryNode {
+		return buildTree(source, false);
+	}
+
+	public function parseFileTypeRefs(source:String):QueryNode {
+		return buildTree(source, true);
+	}
+
+	private function buildTree(source:String, withTypeRefs:Bool):QueryNode {
 		final root:Dynamic = HaxeModuleSpanParser.parse(source);
 		final children:Array<QueryNode> = [];
-		appendNodes(Reflect.field(root, 'decls'), children);
+		appendNodes(Reflect.field(root, 'decls'), children, withTypeRefs);
 		return new QueryNode('module', null, orderBySpan(children));
+	}
+
+	public function typeRefShape():TypeRefShape {
+		// Type-position references reach the `parseFileTypeRefs` tree via
+		// two complementary kinds, and `uses` must match both for a
+		// complete blast-radius answer:
+		//  - `TypeRef` — emitted by `appendTypeRefs` for the name-slot
+		//    `type` fields that the default projection deliberately drops
+		//    (var / class-member / anon / enum-ctor-param / fn-param
+		//    annotations), one node per nominal name (head + each param).
+		//  - `Named` / `NewExpr` — already present in BOTH projections
+		//    (they were never on the dropped `type` path): function/lambda
+		//    return types and type-param constraints (`Named`), `extends`
+		//    / `implements` heritage (a `Named` child of the clause), and
+		//    `new T(...)` (`NewExpr`).
+		// Listing them here only widens the `Uses` walker (kind-filtered);
+		// the `parseFile` tree and `ast`/`search`/`refs`/`meta` are
+		// untouched — zero regression by construction.
+		return { typeRefKinds: ['TypeRef', 'Named', 'NewExpr'] };
 	}
 
 	public function refShape():RefShape {
@@ -333,17 +360,17 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		return null;
 	}
 
-	private function appendNodes(value:Dynamic, into:Array<QueryNode>):Void {
+	private function appendNodes(value:Dynamic, into:Array<QueryNode>, withTypeRefs:Bool):Void {
 		if (value == null) return;
 		if (value is String) return;
 		if (Std.isOfType(value, Span)) return;
 		final t:Type.ValueType = Type.typeof(value);
 		switch t {
 			case TEnum(_):
-				into.push(makeEnumNode(value));
+				into.push(makeEnumNode(value, withTypeRefs));
 			case TObject:
 				if (Reflect.hasField(value, 'node')) {
-					appendNodes(Reflect.field(value, 'node'), into);
+					appendNodes(Reflect.field(value, 'node'), into, withTypeRefs);
 					return;
 				}
 				// `@:spanned('<Kind>')` Seq structs carry `_kind` + `_span`
@@ -361,8 +388,12 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 						if (field == 'name' || field == '_span' || field == '_kind') continue;
 						// Mirror the generic branch: descend an anon-struct
 						// `type` (decl-host members), skip name-slot type-refs.
-						if (field == 'type' && !isAnonType(Reflect.field(value, 'type'))) continue;
-						appendNodes(Reflect.field(value, field), children);
+						if (field == 'type' && !isAnonType(Reflect.field(value, 'type'))) {
+							if (withTypeRefs)
+								appendTypeRefs(Reflect.field(value, 'type'), children, spanObj);
+							continue;
+						}
+						appendNodes(Reflect.field(value, field), children, withTypeRefs);
 					}
 					into.push(new QueryNode(kindStr, extractName(value), orderBySpan(children), spanObj));
 					return;
@@ -374,20 +405,27 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 					// (`typedef T = {…}`, `var x:{…}`) carries decl-host
 					// members + their metadata, so descend it. `HxType` is
 					// an enum; the `Anon` ctor gate keeps `Named` type-refs
-					// skipped (no phantom child per typed binding).
-					if (field == 'type' && !isAnonType(Reflect.field(value, 'type'))) continue;
-					appendNodes(Reflect.field(value, field), into);
+					// skipped (no phantom child per typed binding) — unless
+					// `withTypeRefs` (the `parseFileTypeRefs` projection for
+					// `apq uses`), where the skipped name-slot type is
+					// surfaced as `TypeRef` node(s) instead.
+					if (field == 'type' && !isAnonType(Reflect.field(value, 'type'))) {
+						if (withTypeRefs)
+							appendTypeRefs(Reflect.field(value, 'type'), into, null);
+						continue;
+					}
+					appendNodes(Reflect.field(value, field), into, withTypeRefs);
 				}
 			case TClass(_):
 				if (Std.isOfType(value, Array)) {
 					final arr:Array<Dynamic> = cast value;
-					for (e in arr) appendNodes(e, into);
+					for (e in arr) appendNodes(e, into, withTypeRefs);
 				}
 			case _:
 		}
 	}
 
-	private function makeEnumNode(value:Dynamic):QueryNode {
+	private function makeEnumNode(value:Dynamic, withTypeRefs:Bool):QueryNode {
 		final ctor:String = Type.enumConstructor(value);
 		final params:Array<Dynamic> = Type.enumParameters(value);
 		var name:Null<String> = null;
@@ -399,9 +437,70 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 				continue;
 			}
 			if (name == null) name = extractName(p);
-			appendNodes(p, children);
+			appendNodes(p, children, withTypeRefs);
 		}
 		return new QueryNode(ctor, name, orderBySpan(children), span);
+	}
+
+	/**
+	 * Surface every nominal type name inside an `HxType` value as a
+	 * `TypeRef` `QueryNode` — used only by the `parseFileTypeRefs`
+	 * projection (`apq uses`). `Array<HxVarMore>` emits `TypeRef(Array)`
+	 * and `TypeRef(HxVarMore)` (the campaign cares about the inner
+	 * grammar type). Spans come from the span-mode `HxType` enum's own
+	 * `Span` param; `fallbackSpan` (the enclosing decl/struct span)
+	 * covers values that carry none. A node with no resolvable span is
+	 * dropped — consistent with the `Refs` walker's not-addressable rule.
+	 * `Anon` is intentionally not handled here: the anon-struct body is
+	 * surfaced by the existing decl-host descent in `appendNodes`.
+	 */
+	private function appendTypeRefs(value:Dynamic, into:Array<QueryNode>, fallbackSpan:Null<Span>):Void {
+		if (value == null) return;
+		if (value is String) return;
+		if (Std.isOfType(value, Span)) return;
+		final t:Type.ValueType = Type.typeof(value);
+		switch t {
+			case TEnum(_):
+				final ctor:String = Type.enumConstructor(value);
+				final params:Array<Dynamic> = Type.enumParameters(value);
+				var span:Null<Span> = fallbackSpan;
+				for (p in params) if (Std.isOfType(p, Span)) span = cast p;
+				switch ctor {
+					case 'Anon':
+						// handled by the decl-host descent, not here
+					case 'Named' | 'DollarType':
+						for (p in params) {
+							if (Std.isOfType(p, Span)) continue;
+							final nm:Null<String> = extractName(p);
+							if (nm != null && span != null)
+								into.push(new QueryNode('TypeRef', nm, [], span));
+							// recurse type parameters (`Array<HxVarMore>`)
+							appendTypeRefs(p, into, span);
+							break;
+						}
+					case _:
+						// Arrow / ArrowFn / Parens / … — recurse operands
+						for (p in params) if (!Std.isOfType(p, Span)) appendTypeRefs(p, into, span);
+				}
+			case TObject:
+				if (Reflect.hasField(value, 'node')) {
+					appendTypeRefs(Reflect.field(value, 'node'), into, fallbackSpan);
+					return;
+				}
+				// `HxTypeRef` (name slot already emitted by the `Named`
+				// arm) — descend `params` for nested type refs; skip the
+				// `name` String leaf.
+				for (field in Reflect.fields(value)) {
+					if (field == 'name' || field == '_span' || field == '_kind') continue;
+					appendTypeRefs(Reflect.field(value, field), into, fallbackSpan);
+				}
+			case TClass(_):
+				if (Std.isOfType(value, Array)) {
+					final arr:Array<Dynamic> = cast value;
+					for (e in arr) appendTypeRefs(e, into, fallbackSpan);
+				}
+			case _:
+		}
 	}
 
 	private function extractName(value:Dynamic):Null<String> {

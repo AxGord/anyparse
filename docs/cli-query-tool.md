@@ -31,13 +31,14 @@ This convention exists so that the user does not lock themselves into a Haxe-col
 
 ## Command surface
 
-Four commands in v1:
+Five commands:
 
 | Command  | Purpose                                                |
 |----------|--------------------------------------------------------|
 | `ast`    | Dump parsed AST as S-expr or JSON                      |
 | `search` | Structural pattern search with metavariables           |
-| `refs`   | Symbol references with lexical scope awareness         |
+| `refs`   | Value-binding references with lexical scope awareness  |
+| `uses`   | Type-position references (field/param/return/heritage) |
 | `meta`   | Metadata-on-declaration shortcut (specialization)      |
 
 ### `apq ast`
@@ -79,6 +80,31 @@ apq refs --decls <name> <files>      # only declaration positions
 Scope awareness is lexical only: a local declaration shadows an outer name with the same identifier, and the tool correctly attributes references to the innermost binding. A loop iterator (e.g. a `for`/comprehension induction variable) is a declaration scoped to the loop body: references inside the loop resolve to it and shadow an outer same-named binding, while references after the loop fall through to the enclosing scope. A catch-clause exception name is scoped the same way (visible only inside the clause body); a lambda parameter is a declaration scoped to the lambda body. No type-based resolution. No cross-file resolution.
 
 Write classification is based on parent-context: an identifier reference is a `write` when it sits as the direct first operand of an assignment-shaped node declared by the grammar plugin (bare, compound, and null-coalescing assignments all qualify). Identifiers nested deeper on the LHS — e.g. inside field access or index access — remain `read`s, matching the semantic intent of the `--writes` query (the modified binding is the host, not the inner operands). Each LHS occurrence produces one hit: compound assignments (`x += 1`) are reported as a single `write` — the implicit read on the LHS is not emitted as a separate hit.
+
+### `apq uses`
+
+Find **type-position** references to a named type — the sister of
+`refs` for the type axis. `refs` resolves value/identifier bindings and
+is deliberately blind to type positions; `uses` covers exactly those:
+field / var type annotations, enum-constructor and function parameter
+types, function/lambda return types, type-parameter constraints,
+`extends`/`implements` heritage, and `new T(...)`.
+
+```
+apq uses <type-name> <file-or-dir-or-glob>
+```
+
+A parameterized type reports every nominal name it contains:
+`Array<HxVarMore>` yields a hit for `Array` **and** for `HxVarMore`
+(the inner type is usually what a grammar blast-radius query cares
+about). No scope/binding resolution — a type occurrence has no
+shadowing semantics. No cross-file resolution.
+
+Implementation note: the default parse tree (consumed by
+`ast`/`search`/`refs`/`meta`) intentionally drops type-position nodes
+to stay lean; `uses` runs on a separate projection
+(`GrammarPlugin.parseFileTypeRefs`), so adding it leaves the other four
+commands byte-identical by construction.
 
 ### `apq meta`
 

@@ -7,6 +7,7 @@ import anyparse.query.Matcher.Match;
 import anyparse.query.Meta.MetaHit;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs.RefHit;
+import anyparse.query.Uses.UsesHit;
 import anyparse.runtime.Span;
 import anyparse.runtime.Span.Position;
 
@@ -59,6 +60,16 @@ final class Text {
 				buf.add(' -> ${bp.line}:${bp.col - 1}');
 			}
 			buf.add('\n');
+		}
+		return buf.toString();
+	}
+
+	public static function renderUses(file:String, source:String, hits:Array<UsesHit>):String {
+		if (hits.length == 0) return '$file: no uses\n';
+		final buf:StringBuf = new StringBuf();
+		for (h in hits) {
+			final pos:Position = h.span.lineCol(source);
+			buf.add('$file:${pos.line}:${pos.col - 1}: ${h.name}\n');
 		}
 		return buf.toString();
 	}
