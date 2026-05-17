@@ -211,4 +211,44 @@ class HxDollarReifSliceTest extends HxTestHelpers {
 			'macro-var-final'
 		);
 	}
+
+	// -------- expression-position throw (Slice apq-P5-W) --------
+
+	public function testMacroThrowExpr():Void {
+		// `macro throw e` — MacroExpr operand is an HxExpr; the new
+		// ThrowExpr atom (HxStatement.ThrowStmt twin / ReturnExpr analog)
+		// carries a single value:HxExpr. Pre-slice this hard-failed.
+		switch initOf("class C { var x = macro throw e; }") {
+			case MacroExpr(ThrowExpr(IdentExpr(v))): Assert.equals('e', (v : String));
+			case e: Assert.fail('expected MacroExpr(ThrowExpr(IdentExpr(e))), got $e');
+		}
+	}
+
+	public function testMacroThrowNewExpr():Void {
+		// The real Lowering.hx:3516 driver shape:
+		// `macro throw new anyparse.runtime.ParseError(...)`.
+		switch initOf('class C { var x = macro throw new E("boom"); }') {
+			case MacroExpr(ThrowExpr(NewExpr(_))): Assert.pass();
+			case e: Assert.fail('expected MacroExpr(ThrowExpr(NewExpr)), got $e');
+		}
+	}
+
+	public function testThrowExprPositionDirect():Void {
+		// Pure expression position, no macro — the direct ReturnExpr
+		// analog. `throw` is bottom-typed so it is a valid init expr;
+		// `decl.init` is an HxExpr, reached without the MacroExpr operand.
+		switch initOf("class C { var x = throw e; }") {
+			case ThrowExpr(IdentExpr(v)): Assert.equals('e', (v : String));
+			case e: Assert.fail('expected ThrowExpr(IdentExpr(e)), got $e');
+		}
+	}
+
+	public function testMacroThrowRoundTrip():Void {
+		// Writer ripple net: ThrowExpr emits via the generic single-Ref
+		// value:HxExpr path (ReturnExpr/CastExpr/MacroExpr precedent).
+		roundTrip(
+			'class C { static function f() { var a = macro throw e; var b = macro throw new E("x"); } }',
+			'macro-throw'
+		);
+	}
 }

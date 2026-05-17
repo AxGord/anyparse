@@ -470,6 +470,22 @@ class HxControlFlowSliceTest extends HxTestHelpers {
 		}
 	}
 
+	// --- Slice W regression: stmt-position throw unaffected by HxExpr.ThrowExpr ---
+
+	public function testStmtThrowNotShiftedByExprCtor():Void {
+		// Adding HxExpr.ThrowExpr must NOT make a statement-position
+		// `throw e;` parse as ExprStmt(ThrowExpr): HxStatement tries
+		// ThrowStmt (@:kw('throw'), declared before the ExprStmt
+		// catch-all) first. The whole HxThrowBodySliceTest suite is the
+		// writer-side net for this; this pins the parse-side AST shape.
+		final body:Array<HxStatement> = parseBody('class C { function f():Void { throw 1; } }');
+		Assert.equals(1, body.length);
+		switch body[0] {
+			case ThrowStmt(IntLit(v)): Assert.equals(1, (v : Int));
+			case null, _: Assert.fail('expected ThrowStmt(IntLit(1)), got ${body[0]}');
+		}
+	}
+
 	// --- Slice V: macro-block / brace-terminated expr as no-`;` statement ---
 
 	public function testMacroBlockStatementNoSemi():Void {

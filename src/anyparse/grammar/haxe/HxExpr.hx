@@ -147,6 +147,18 @@ package anyparse.grammar.haxe;
  *    still binds `HxStatement.VarStmt`/`FinalStmt`, declared before
  *    the `ExprStmt` catch-all. Exists so anyparse can self-parse the
  *    `macro var`/`macro final` reifications its own build macros use.
+ *  - `ThrowExpr` — expression-position `throw <expr>`. Bottom-typed
+ *    control-flow keyword-atom, the direct analog of the existing
+ *    `ReturnExpr` and the expression mirror of `HxStatement.ThrowStmt`,
+ *    reusing the same single `value:HxExpr` child — the only
+ *    difference from `ThrowStmt` is the absence of the statement-only
+ *    `@:trail(';')` / `@:fmt(bodyPolicy('throwBody'))`: an expression
+ *    has no statement terminator, the enclosing statement owns any
+ *    `;`. Reached when an `HxExpr` is parsed directly (notably the
+ *    `MacroExpr` operand: `macro throw new ParseError(...)`);
+ *    statement-position `throw e;` still binds `HxStatement.ThrowStmt`,
+ *    declared before the `ExprStmt` catch-all. Exists so anyparse can
+ *    self-parse the `macro throw` reifications its own build macros use.
  *
  * **Prefix branches** — unary operators, symbolic only. Each
  * `@:prefix(op)` ctor consumes its literal, recurses into the atom
@@ -375,6 +387,9 @@ enum HxExpr {
 
 	@:kw('return') @:fmt(propagateExprPosition)
 	ReturnExpr(value:HxExpr);
+
+	@:kw('throw')
+	ThrowExpr(value:HxExpr);
 
 	@:kw('function') @:fmt(anonFuncParens)
 	FnExpr(fn:HxFnExpr);
