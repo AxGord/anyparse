@@ -1003,6 +1003,51 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
     needed — no `@:re` terminal). **Remaining: blockers #2
     (`macro {…}` no-`;` statement) + #3+ — Slices V+.**
 
+  - **Slice V — `macro {…}` no-`;` statement (milestone blocker #2).
+    ⛔ ATTEMPTED → post-build FAILED → REVERTED (no commit).** The
+    naive fix `HxStatement.ExprStmt` `@:trail(';')` → `@:trailOpt(';')`
+    (recon + 2 file-reviews APPROVED it as the precedent-matched
+    `ReturnStmt` single-Ref `@:trailOpt` twin) was **empirically
+    falsified by the post-build sweep: 282 → 249/284 (−33
+    regressions), 49 broken js tests / 14 classes**. Root cause:
+    `ExprStmt` is the **unguarded universal catch-all**; the
+    `@:trailOpt` precedents (`ReturnStmt`/`VarStmt`) are safe only
+    because a following keyword re-anchors the statement-Star loop —
+    the catch-all has no re-anchor, so an unconditionally-optional
+    `;` destroys statement-boundary detection in multi-statement
+    switch-arms/blocks (the loop relies on `expectLit(';')` *throwing*
+    to terminate; `matchLit` never throws → over-consumes past the
+    boundary). Caught at the verify gate, reverted immediately
+    (`Δpass<0 → revert`); repo restored to 282/284 green, no bad
+    commit. **Cardinal methodology lesson:** the codegen-path check
+    (held S/T/U 3×) is *necessary but not sufficient* — it verifies
+    mechanism wiring, not semantic blast radius on a
+    universal/unguarded production. A keyword-guarded precedent
+    applied to the unguarded catch-all is a
+    same-path-but-different-semantics trap (sister to Slice R's
+    same-meta-but-different-path trap). Post-build is the only truth,
+    in both directions. The AskUserQuestion CORE-gate then worked as
+    designed: 3 concrete mechanisms presented, **user chose mechanism
+    B — parser-side shape-gated `;`** (`ExprStmt` `;` REQUIRED unless
+    the just-parsed expr is brace-terminated → optional; preserves
+    the catch-all boundary for non-brace exprs, exact Haxe
+    semantics). Critical recon finding for the mechanism-B slice:
+    `HxExprUtil.endsWithCloseBrace` **cannot be reused** — it is the
+    writer-side `var x = …` rhs predicate and by documented design
+    returns the *opposite* answer for `BlockExpr`/`MacroExpr` (a
+    cross-purpose collision); mechanism B needs a NEW dedicated
+    predicate (`stmtExprNoSemi`) plus new `Lowering` parser-gate
+    machinery (conditional `matchLit`-vs-`expectLit` by parsed-child
+    shape, gated on `@:fmt(trailOptShapeGate(pred,field))` read
+    parser-side at `Lowering.hx:1638-1640`). Deferred to its own
+    properly-planned slice (rushing a CORE catch-all change in a
+    long-context fix-loop is the exact failure mode that produced
+    this regression). Full design + the collision finding:
+    `memory/project_apq_p5_slice_v_exprstmt_nosemi.md`. After
+    mechanism B lands, re-recon blocker #3 (the offset-25 `#if macro`
+    cluster — the real sweep-mover masking both `Lowering.hx` and
+    `WriterLowering.hx`).
+
   - **Query-value validation pass (dogfood). ✅ DONE (all 3 gaps
     closed).** A
     decisive battery (`hxq ast/refs/search/meta` over a probe
