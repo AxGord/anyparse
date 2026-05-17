@@ -59,7 +59,7 @@ Output is deterministic so the tool is usable in CI and diff-based workflows.
 Find AST subtrees matching a pattern.
 
 ```
-apq search <pattern> <file-or-glob>
+apq search <pattern> <file-or-dir-or-glob>
 apq search <pattern> <files> --json
 ```
 
@@ -70,7 +70,7 @@ The pattern is a fragment of the target language, parsed by the same grammar plu
 Find references to a named symbol, with lexical scope awareness.
 
 ```
-apq refs <name> <file-or-glob>
+apq refs <name> <file-or-dir-or-glob>
 apq refs --writes <name> <files>     # only assignment positions
 apq refs --reads <name> <files>      # only read positions
 apq refs --decls <name> <files>      # only declaration positions
@@ -85,12 +85,35 @@ Write classification is based on parent-context: an identifier reference is a `w
 Shortcut for "find declarations carrying a specific metadata annotation". Technically expressible as a `search` query, but common enough to deserve a first-class command.
 
 ```
-apq meta <annotation> <file-or-glob>
+apq meta <annotation> <file-or-dir-or-glob>
 apq meta <annotation> --arg-contains <substring> <files>
 apq meta --on <decl-kind> <files>    # list every annotation on a kind
 ```
 
 `<annotation>` syntax is the **target language's user-source annotation syntax**, not anyparse grammar metadata — for Haxe it is `@:foo` or `@bar`; for AS3 it would be `[Foo]`; for Python it would be `@foo`. The preset alias picks the syntax.
+
+### Input path forms
+
+The trailing positional of `search` / `refs` / `meta` accepts one of three
+forms (resolved in-process — no shell expansion required, quote globs to
+avoid the shell pre-expanding them):
+
+- a **file** — parsed directly;
+- a **directory** — walked recursively, every `.hx` file parsed;
+- a **glob** — `*` (within a path segment), `**` (across segments;
+  `**/` also matches zero directories), `?` (one char), `[...]`
+  (character class, leading `!` negates). The literal prefix before the
+  first metacharacter is the walk root, so `src/grammar/haxe/*.hx` scans
+  only that directory while `src/**/Hx*.hx` scans the whole subtree.
+
+### Parse-failure locus
+
+When the parser cannot parse a file it reports the **farthest input
+position any terminal reached** (PEG max-position heuristic), not the
+position where the outermost rule bailed. Without this, recursive-descent
+backtracking collapses every failure to the file head (`expected <root>`);
+with it, the reported span points at the innermost blocking token, which
+is what diagnostics and recon tooling need.
 
 ## Pattern syntax for `search` (frozen for v1)
 

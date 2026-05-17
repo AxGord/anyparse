@@ -69,17 +69,35 @@ class Codegen {
 		// paired `*S` typed AST whose enum values each carry a `_span`
 		// arg — the public entry just forwards the value, no side-channel
 		// envelope. Trivia and plain modes share the same return shape.
+		// On any thrown `ParseError`, re-surface it at the farthest
+		// terminal-failure position when that is deeper than where the
+		// outermost rule bailed. Recursive-descent backtracking discards
+		// inner failure positions, so the raw throw's span collapses to
+		// the file head ("expected <root>"); `ctx.maxFailPos` recovers
+		// the real innermost blocker for recon / diagnostics. Success
+		// path is unchanged — only the error path is rewritten.
 		final body:Expr = macro {
 			final ctx:anyparse.runtime.Parser = new anyparse.runtime.Parser(new anyparse.runtime.StringInput(source));
-			final _v = $parseCall;
-			skipWs(ctx);
-			if (ctx.pos != ctx.input.length) {
-				throw new anyparse.runtime.ParseError(
-					new anyparse.runtime.Span(ctx.pos, ctx.pos),
-					'trailing data after value'
-				);
+			try {
+				final _v = $parseCall;
+				skipWs(ctx);
+				if (ctx.pos != ctx.input.length) {
+					throw new anyparse.runtime.ParseError(
+						new anyparse.runtime.Span(ctx.pos, ctx.pos),
+						'trailing data after value'
+					);
+				}
+				return _v;
+			} catch (e:anyparse.runtime.ParseError) {
+				if (ctx.maxFailPos > e.span.from) {
+					throw new anyparse.runtime.ParseError(
+						new anyparse.runtime.Span(ctx.maxFailPos, ctx.maxFailPos),
+						'unexpected input',
+						ctx.maxFailExpected
+					);
+				}
+				throw e;
 			}
-			return _v;
 		};
 		return {
 			name: 'parse',
@@ -331,8 +349,14 @@ class Codegen {
 				ret: macro : Bool,
 				expr: macro {
 					final len:Int = lit.length;
-					if (ctx.pos + len > ctx.input.length) return false;
-					if (ctx.input.substring(ctx.pos, ctx.pos + len) != lit) return false;
+					if (ctx.pos + len > ctx.input.length) {
+						ctx.recordFail(ctx.pos, lit);
+						return false;
+					}
+					if (ctx.input.substring(ctx.pos, ctx.pos + len) != lit) {
+						ctx.recordFail(ctx.pos, lit);
+						return false;
+					}
 					ctx.pos += len;
 					return true;
 				},

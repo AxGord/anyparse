@@ -109,7 +109,7 @@ final class Cli {
 			return EXIT_USAGE;
 		}
 		if (inputSpec == null) {
-			stderr('apq refs: missing <file-or-glob> argument\n');
+			stderr('apq refs: missing <file-or-dir-or-glob> argument\n');
 			printRefsUsage();
 			return EXIT_USAGE;
 		}
@@ -190,10 +190,10 @@ final class Cli {
 			i++;
 		}
 
-		// Positional grammar: [<annotation>] <file-or-glob>. With `--on`
+		// Positional grammar: [<annotation>] <file-or-dir-or-glob>. With `--on`
 		// the annotation may be omitted (list every annotation on a kind).
 		if (positionals.length == 0) {
-			stderr('apq meta: missing <file-or-glob> argument\n');
+			stderr('apq meta: missing <file-or-dir-or-glob> argument\n');
 			printMetaUsage();
 			return EXIT_USAGE;
 		}
@@ -205,9 +205,9 @@ final class Cli {
 		final annotation:Null<String> = positionals.length == 2 ? positionals[0] : null;
 		if (annotation == null && onKind == null) {
 			// One bare positional with no `--on`: ambiguous — it is taken
-			// as the <file-or-glob>, leaving no annotation/kind to scope
+			// as the <file-or-dir-or-glob>, leaving no annotation/kind to scope
 			// the query. Spell out both halves the grammar needs.
-			stderr('apq meta: need an <annotation> or --on <decl-kind>, plus a <file-or-glob>\n');
+			stderr('apq meta: need an <annotation> or --on <decl-kind>, plus a <file-or-dir-or-glob>\n');
 			printMetaUsage();
 			return EXIT_USAGE;
 		}
@@ -319,7 +319,7 @@ final class Cli {
 			return EXIT_USAGE;
 		}
 		if (inputSpec == null) {
-			stderr('apq search: missing <file-or-glob> argument\n');
+			stderr('apq search: missing <file-or-dir-or-glob> argument\n');
 			printSearchUsage();
 			return EXIT_USAGE;
 		}
@@ -542,7 +542,7 @@ final class Cli {
 	}
 
 	private static function printSearchUsage():Void {
-		sysPrint('Usage: apq search [options] <pattern> <file-or-dir>\n');
+		sysPrint('Usage: apq search [options] <pattern> <file-or-dir-or-glob>\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --json              Emit JSON instead of text\n');
@@ -557,7 +557,7 @@ final class Cli {
 	}
 
 	private static function printRefsUsage():Void {
-		sysPrint('Usage: apq refs [options] <name> <file-or-dir>\n');
+		sysPrint('Usage: apq refs [options] <name> <file-or-dir-or-glob>\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --json              Emit JSON instead of text\n');
@@ -571,7 +571,7 @@ final class Cli {
 	}
 
 	private static function printMetaUsage():Void {
-		sysPrint('Usage: apq meta [<annotation>] [options] <file-or-dir>\n');
+		sysPrint('Usage: apq meta [<annotation>] [options] <file-or-dir-or-glob>\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --arg-contains <s>  Keep hits whose argument list contains <s>\n');
