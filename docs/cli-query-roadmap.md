@@ -1147,6 +1147,74 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
     `WriterLowering.hx`'s distinct blocker set (its own slice; its
     blocker is NOT `macro throw`).
 
+  - **Slice X1 — `$ident` in the var/final name slot. ✅ DONE
+    (commit `b7aff78`).** Fresh recon of the sole remaining self-parse
+    fail `WriterLowering.hx` (strip-harness on a known-good control +
+    member-bisect + orthogonal-matrix STEP-D) found it is **COMPOUNDING
+    K=2** independent blockers, NOT one root: **#1** `$ident` in the
+    `var`/`final` binding-name slot (1 real site,
+    `WriterLowering.hx:1620` `final $localName:$fieldCT = $fieldAccess;`
+    — `:$fieldCT` already handled by Slice T `DollarType`, `=
+    $fieldAccess` by `DollarIdentExpr`, only `$localName` unparsed) and
+    **#2** an asymmetric `if (c) bareExpr else { block }` at statement
+    position (a genuine CORE `HxIfStmt` then/else parser-disambiguation —
+    its own later slice, its CORE design gated by an `AskUserQuestion`
+    before implementation). User chose to дожать the
+    macro-expression-grammar milestone (#1 → #2). This is **blocker #1
+    only**. The recon **reversed the inherited "signature-change blast
+    like Slice O" label** (10th reversal in the arc): Slice O was an
+    optionality/`Null<T>` flip; this is a transparent String-abstract
+    swap. `HxVarDecl.name` was `HxIdentLit` — a single struct Ref
+    terminal, not an enum, so the `DollarIdentExpr`/`DollarType`
+    enum-Alt precedent could not apply. Fix = a new **dedicated scoped
+    terminal** `HxVarNameLit` (exact `HxIdentLit` mirror; regex widened
+    by an optional leading `$`; double-quoted `@:re` so the `$` is not
+    interpolated; `@:rawString` verbatim) + one token swap
+    `HxVarDecl.name:HxIdentLit` → `:HxVarNameLit`. Both
+    `abstract(String) from/to String`, so the swap is transparent to
+    every `(decl.name : String)` consumer — parser (`Re` strategy +
+    `lowerTerminal` + `parseFnName`), `Trivia/SpanTypeSynth`, and the
+    writer (`lowerTerminal` + `writeFnFor`) are all metadata/name-driven
+    and pick it up with **zero edits** (two opus recon passes verified
+    file:line; **0 non-transparent blast**). Global `HxIdentLit` is
+    deliberately NOT widened (shared by
+    `IdentExpr`/`FieldAccess.field`/`DollarIdentExpr.name` → would
+    create `$`-ambiguity). The `${expr}` brace form is **deferred** (0
+    source sites; minimal-first, the W `propagateExprPosition`
+    precedent) and **pinned** as a documented limitation in the test.
+    Codegen-path check (S/T/U/V/W held 5×, X1 6×): terminal/`Re` path,
+    identical to `HxIdentLit` — **additive, not CORE**. Compounding
+    component → the self-parse sweep stays **FLAT** (sole fail
+    `WriterLowering.hx` still masked by blocker #2; the U/V
+    milestone-component pattern, exit = capability + 0 reg, NOT a
+    sweep-delta, declared upfront). Sweep **284/1/285** (the +1 total
+    is the new `HxVarNameLit.hx` source file itself, which parses; the
+    **fail set is unchanged** `{WriterLowering.hx}`). Probes 4/4
+    (`var $x = 1` parses [was error]; the full `macro final
+    $localName:$fieldCT = $fieldAccess` site parses; plain `var x = 1`
+    unaffected; `var ${e} = …` correctly rejected). `apq refs` on
+    `var x = 1; trace(x)` still resolves `[decl] x` + `[read] x`
+    (`HxIdentLit`→`HxVarNameLit` transparent to the reflective query
+    pipeline; Audit-3-lists N/A — `HxVarDecl` is already a decl-host
+    from Slice U, name is reflective-String). js `test-js.hxml`
+    **5516/5516 ALL TESTS OK, 0 reg** (5506 baseline + 10 from 5 new
+    `HxDollarReifSliceTest` methods incl. round-trip). One file-review
+    blocking catch (3 single-quoted `Assert` strings with a literal `$`
+    interpolated non-existent identifiers — fixed pre-commit; the
+    source strings were correctly double-quoted, the assert
+    expected/message strings were missed). Note: the `--interp` gate is
+    **pre-existing red** at `e892b23` (5× `Unknown identifier : x` in
+    untouched `test/unit/ApqSearchCliTest.hx` `$x` single-quoted
+    CLI-arg literals; reproduced byte-identical on clean HEAD with the
+    slice stashed) — NOT a slice regression; the binding gate is
+    js-only per protocol, and the new `@:re` terminal uses a literal
+    pattern (no `EReg.escape`, so the interp-EReg gotcha does not
+    apply). Milestone **blocker #1 closed**; next = blocker #2 (CORE
+    `HxIfStmt` then/else), its own slice with an `AskUserQuestion` CORE
+    gate before implementation. **New self-parse baseline: 284/285,
+    sole fail `WriterLowering.hx`** (not 283/284 — the new terminal
+    file shifted the denominator).
+
   - **Query-value validation pass (dogfood). ✅ DONE (all 3 gaps
     closed).** A
     decisive battery (`hxq ast/refs/search/meta` over a probe
