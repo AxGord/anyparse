@@ -1581,22 +1581,27 @@ recorded in `memory/project_apq_js_cli_fast_path.md`):
   below). Should a real need arise it gets its own phase with its
   own design slice, not a backdoor extension here.
 
-**Known / deferred (logged, not fixed — own future slices):**
-- **`apq ast` then/else branch-swap.** For the `HxIfStmt` path
-  (`if (c) {A} else {B}`) the S-expr dump prints `then`/`else`
-  reversed. **Refined to a dump-layer artifact** in
-  `HaxeQueryPlugin` child order, **NOT an AST-field bug**: the
-  pre-existing green `testIfElseBlocks` asserts `thenBody`/
-  `elseBody` correctly at the AST level, so writer and round-trip
-  are safe. User-deferred to its own investigation slice.
-  *Exit criterion:* `apq ast` child order for `HxIfStmt` matches
-  `thenBody` before `elseBody`, with a dump-order regression test;
-  no AST or writer change required.
-- **`ast` node ORDER differs node ↔ neko.** Same node *set*,
-  different child order (V8 vs neko map iteration). `refs` / `meta`
-  / `search` output is byte-identical across engines. Known
-  property, not a bug: any order-sensitive `ast` snapshot consumer
-  must use the neko build (documented in the `hxq` skill).
+**Known / deferred — both ✅ RESOLVED (branch-swap slice):**
+- **`apq ast` then/else branch-swap. ✅ RESOLVED.** For the
+  `HxIfStmt` path (`if (c) {A} else {B}`) the neko S-expr dump
+  printed `then`/`else` reversed. Root cause: `HaxeQueryPlugin.`
+  `appendNodes` flattened struct fields via `Reflect.fields`,
+  whose iteration order is target-defined (neko hash order vs js
+  insertion order) — a pure dump-layer artifact, NOT an AST-field
+  bug (the green `testIfElseBlocks` always asserted `thenBody`/
+  `elseBody` correctly, so writer/round-trip were never affected).
+  Fix: a `private static orderBySpan` helper stable-sorts each
+  constructed `QueryNode`'s children by source span start, applied
+  at the three node-construction sites (commit `9214c6b`). No AST
+  or writer change (exit criterion met). New `ApqIfStmtChildOrderTest`
+  dump-order regression test; js suite green (0 reg).
+- **`ast` node ORDER differs node ↔ neko. ✅ RESOLVED (same fix,
+  bonus).** The span-sort makes the `ast` S-expr output **byte-
+  identical across neko and node** (verified `diff`-clean on the
+  if/else probe — `FnMember` and every other struct-bearing node
+  now source-ordered on both engines). `refs` / `meta` / `search`
+  were already byte-identical; with this, order-sensitive `ast`
+  snapshots no longer need to pin a specific engine.
 
 **Exit condition**: friction log written, top three items addressed, indexing decision recorded with rationale. ✅ Met — F1/F2 resolved by the self-parse milestone and Slice 0, the perf cliff addressed by the node fast-path + subagent-scoping rule, and the indexing decision recorded above with measured numbers and a Non-goal cross-reference.
 
