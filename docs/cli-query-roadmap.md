@@ -1092,6 +1092,61 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
     `#if macro` cluster — the real sweep-mover masking both fail
     files).
 
+  - **Slice W — `throw` expression production (milestone blocker #3).
+    ✅ DONE (commit `038c299`).** Fresh recon (strip-harness validated
+    on a known-good control; member-bisect + in-member drill to a
+    focused diagnostic) **reversed the inherited "compounding
+    ≥3-blocker stack / offset-25 `#if macro` cluster / CORE" label**
+    (the 9th recon reversal in the arc): `Lowering.hx` has **exactly
+    one blocking construct, no compounding** — `macro throw <expr>`
+    (`lowerStructByName`, `case Error: macro throw new
+    anyparse.runtime.ParseError(…)`), i.e. `throw` as a leading token
+    in `HxExpr` position. The grammar's `HxExpr` had **no `throw`
+    production** (only `HxStatement.ThrowStmt`
+    `@:kw('throw') @:trail(';') @:fmt(bodyPolicy('throwBody'))`). The
+    "both fail files share one root family" assumption was **also
+    reversed**: `WriterLowering.hx` has zero `macro throw` and a
+    distinct blocker set (separate follow-up slice). Fix = one
+    precedent-matched additive enum-Alt ctor (the exact Slice U
+    pattern): `@:kw('throw') ThrowExpr(value:HxExpr);` next to
+    `ReturnExpr` — an exact mirror of the bottom-typed control-flow
+    sibling `@:kw('return') ReturnExpr(value:HxExpr)` and of
+    `ThrowStmt`, **minus** the statement-only `@:trail(';')` /
+    `@:fmt(bodyPolicy('throwBody'))` (an expression has no statement
+    terminator; Slice U dropped `@:trailOpt`/`@:fmt` the same way). No
+    `@:fmt(propagateExprPosition)` (minimal-first; that meta is a
+    writer-layout concern with no corpus fixture today). **Additive,
+    not CORE (V necessary-AND-sufficient):** `HxExpr` `@:peg enum` →
+    `lowerEnumBranch`, same path as `MacroExpr`/`ReturnExpr`/`VarExpr`
+    (codegen-path check held **5th consecutive S/T/U/V/W**); the new
+    ctor is **additive-guarded by `@:kw('throw')`** (reached only on
+    the `throw` keyword in `HxExpr` position — modifies no unguarded
+    catch-all, the V `ExprStmt` disaster's opposite). Zero
+    writer/synth/`HaxeQueryPlugin` change (generic single-`HxExpr`
+    child path — `ReturnExpr`/`CastExpr`/`MacroExpr` precedent;
+    Audit-3-lists **N/A** — `ThrowExpr` binds no name, verified
+    end-to-end via `apq refs e` → `[read] e` inside `throw e`). **Sweep
+    282 → 283/284 predicted EXACTLY** — a *true sole-blocker with no
+    compounding*, so the M/N strip-confirmed-discriminator applies
+    (NOT the U/V gap≠sweep milestone-component pattern); `Lowering.hx`
+    flips, sole remaining fail `WriterLowering.hx`. Probes 5/5
+    (`macro throw new E()` parses [was `error at 0`]; pure
+    expr-position `var x = throw e` parses; statement `throw 1;` still
+    `ThrowStmt`; `Lowering.hx` exit 0 with `ThrowExpr`×4; `return`
+    sibling no-regression). Grep-sister-ctor blast audit: zero `src/`
+    exhaustive `HxExpr` switches, 18 `test/` hits all narrow → no
+    `case ThrowExpr` arm needed. js `test-js.hxml` **5506/5506 ALL
+    TESTS OK, 0 reg** (5496 baseline + 10 from 4 new tests across
+    `HxDollarReifSliceTest` [macro-reification/expr home, the U
+    precedent] + `HxControlFlowSliceTest` [stmt-regression home];
+    `HxThrowBodySliceTest`'s green suite is already the writer-side net
+    — no redundant test). 3 file-review agents APPROVE, 0 nits. Clean
+    execution: 0 retries, 0 user correction, 0 hallucinations;
+    mandatory fresh `bin/apq.n` rebuild before the sweep (stale-binary
+    trap avoided). Milestone **blocker #3 closed**; next = re-recon
+    `WriterLowering.hx`'s distinct blocker set (its own slice; its
+    blocker is NOT `macro throw`).
+
   - **Query-value validation pass (dogfood). ✅ DONE (all 3 gaps
     closed).** A
     decisive battery (`hxq ast/refs/search/meta` over a probe
