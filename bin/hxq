@@ -13,11 +13,28 @@
 # Build: `haxe bin/apq-js.hxml` (JS, preferred) and/or
 #        `haxe bin/apq.hxml` (neko, canonical for sweep/tests).
 #
+# Install (optional, for a global `hxq`): symlink this script into a
+# PATH dir, e.g. `ln -s "$PWD/bin/hxq" ~/.local/bin/hxq`. The script
+# resolves its own real path through symlinks, so it still finds
+# `apq.js`/`apq.n` in the repo's bin/ regardless of the symlink location.
+#
 # Usage: hxq <subcommand> [options] <file>
 
 set -e
 
-here=$(cd "$(dirname "$0")" && pwd)
+# Resolve this script's real path, following symlinks (POSIX `readlink`,
+# no `-f` — portable BSD/macOS + Linux). Without this, invoking via a
+# symlink would make `here` the symlink's dir, not the repo bin/.
+src="$0"
+while [ -h "$src" ]; do
+    dir=$(cd -P "$(dirname "$src")" && pwd)
+    src=$(readlink "$src")
+    case "$src" in
+        /*) ;;
+        *) src="$dir/$src" ;;
+    esac
+done
+here=$(cd -P "$(dirname "$src")" && pwd)
 js="$here/apq.js"
 nn="$here/apq.n"
 
