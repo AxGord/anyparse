@@ -110,10 +110,19 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
 - Targeted fixes for the top three friction items.
 - Decision on whether an indexing layer is needed for perf (parked from Phase 2).
 
-**Status**: 🔶 started.
+**Status**: ✅ DONE (exit condition met — see closing summary below).
 
 **Friction log** (append as found):
-- **F1 — grammar coverage gates everyday use.** Sampling `apq ast`
+- **F1 — grammar coverage gates everyday use. ✅ RESOLVED
+  (self-parse milestone).** This was the #1 friction item. Resolved
+  by the macro-expression-grammar slice arc (Slices 0 → X2): the
+  entire anyparse `src/` tree now self-parses through apq —
+  **sweep 285 / 0 / 285**, the last blocker (`WriterLowering.hx`,
+  bare no-`;` then-body before `else`) closed by Slice X2's
+  user-approved CORE else-peek gate. `hxq`/`apq` is now reliable on
+  the whole codebase, not just the simpler subset. This track also
+  advanced anyparse main-roadmap Phase 3 (the two intersected here,
+  as predicted). Original symptom below for the record:
   over `src/**/*.hx`: only ~17% parse (≈20 of the first 120). The
   Phase 3 Haxe grammar is a skeleton — generics, complex
   expressions, and macro-heavy files (`WriterLowering.hx`,
@@ -1505,7 +1514,91 @@ not a dogfood gap. Revisit only if the Doc pipeline gains a
 no-separator (`Concat`) layout mode. See
 `memory/feedback_anyparse_writer_intrinsic_field_space.md`.
 
-**Exit condition**: friction log written, top three items addressed, indexing decision recorded with rationale.
+**Session friction findings (perf + tooling, append):**
+- **JS-CLI perf cliff → node fast-path (commit `97933c0`).** The
+  neko build was the only cliff hit in sustained dogfood: `apq refs`
+  over a glob and `ast` on a 4000-line file ran multi-second. A
+  proxy microbench (`node -e ''` startup) wrongly suggested JS
+  would not help; building and measuring the *real* JS CLI reversed
+  that — **node is 1.4–2× faster than neko** (see numbers in the
+  indexing decision below). New `bin/apq-js.hxml` target; `bin/hxq`
+  auto-dispatches `node bin/apq.js` when built, else `neko
+  bin/apq.n`. Neko stays byte-identical by construction (`nodejs`
+  undefined → `(sys||nodejs)≡sys`) and remains canonical for the
+  self-parse sweep and test suites.
+- **Speed-aware tool rule (codified in the `hxq` skill).** Dogfood
+  surfaced that hxq is *not* a universal default: text questions
+  ("does string X appear?") are ~20× faster via `grep` (~3 ms vs
+  ~60 ms hxq), structural questions are hxq's domain (correctness,
+  not speed), and heavy ops (`refs` over a glob, `ast` on a huge
+  file) belong in a subagent scoped to the smallest single file.
+  This decision rule now lives in the `hxq` skill as canon.
+- **`bin/hxq` symlink-safe + global command (commits `97933c0`,
+  `438b8d7`).** `bin/hxq` resolves its own real path through a
+  symlink, so a `~/.local/bin/hxq` symlink makes it a global
+  command usable from any cwd; auto-loaded in the anyparse domain
+  via the `coding-skill-selector` "By domain" entry.
+- **Pre-existing `--interp` red fixed (commit `15b7071`).**
+  `ApqSearchCliTest.hx` `$x` single-quote CLI-arg literals were
+  interpolated under the interp target; double-quoting restored a
+  green interp baseline (`5486/5486`), removing latent debt — the
+  js gate is the protocol default, interp run manually only on
+  EReg/regex slices.
+
+**Top three friction items — addressed:**
+1. **F1 (grammar coverage)** — resolved by the Slice 0 → X2
+   self-parse milestone (**285 / 0 / 285**; whole `src/` parses).
+2. **F2 (anon Star strictly `,`-separated)** — resolved by
+   Slice 0's opt-in `@:sepAlt(';')` close-driven loop (parse-rate
+   56 → 74; zero global blast radius).
+3. **Perf cliff (slow `refs`/big-`ast`)** — addressed by the node
+   fast-path (`97933c0`), the speed-aware text→grep / structure→hxq
+   / heavy→subagent rule (now skill canon), and the indexing
+   decision below (no persistent index needed).
+
+**Indexing-layer decision (parked from Phase 2): NOT NEEDED.**
+
+Rationale, from measured numbers on the dev machine (warm medians,
+recorded in `memory/project_apq_js_cli_fast_path.md`):
+
+- Single-file structural queries — the everyday case — are
+  sub-150 ms with no index: `ast` on a small (404-line) file
+  node 61 ms, `meta @:kw` node 58 ms, plain `grep` one file 3 ms.
+- The only perf cliff is *whole-tree* / *huge-file* work: `ast` on
+  `Lowering.hx` (3974 lines) node 3.3 s / neko 5.1 s; `refs` over
+  all of `src/` node ~24 s / neko ~33 s. These are inherently
+  batch-scale, run rarely, and are already mitigated **without an
+  index** by the dogfood rule of running them in a subagent scoped
+  to the smallest single file (skill canon) and by the node
+  fast-path (1.4–2× the neko baseline).
+- A persistent cross-invocation index would buy speed only for the
+  rare batch case while adding cache-invalidation complexity and
+  state — exactly the over-engineering the architecture skill
+  warns against (no pain that the simpler subagent-scoping doesn't
+  already cover).
+- **"Incremental indexing across invocations" is also an explicit
+  Non-goal of this roadmap** (see *Non-goals across all phases*
+  below). Should a real need arise it gets its own phase with its
+  own design slice, not a backdoor extension here.
+
+**Known / deferred (logged, not fixed — own future slices):**
+- **`apq ast` then/else branch-swap.** For the `HxIfStmt` path
+  (`if (c) {A} else {B}`) the S-expr dump prints `then`/`else`
+  reversed. **Refined to a dump-layer artifact** in
+  `HaxeQueryPlugin` child order, **NOT an AST-field bug**: the
+  pre-existing green `testIfElseBlocks` asserts `thenBody`/
+  `elseBody` correctly at the AST level, so writer and round-trip
+  are safe. User-deferred to its own investigation slice.
+  *Exit criterion:* `apq ast` child order for `HxIfStmt` matches
+  `thenBody` before `elseBody`, with a dump-order regression test;
+  no AST or writer change required.
+- **`ast` node ORDER differs node ↔ neko.** Same node *set*,
+  different child order (V8 vs neko map iteration). `refs` / `meta`
+  / `search` output is byte-identical across engines. Known
+  property, not a bug: any order-sensitive `ast` snapshot consumer
+  must use the neko build (documented in the `hxq` skill).
+
+**Exit condition**: friction log written, top three items addressed, indexing decision recorded with rationale. ✅ Met — F1/F2 resolved by the self-parse milestone and Slice 0, the perf cliff addressed by the node fast-path + subagent-scoping rule, and the indexing decision recorded above with measured numbers and a Non-goal cross-reference.
 
 ## Phase 6: Universalization proof
 
