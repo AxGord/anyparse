@@ -10,6 +10,14 @@ package anyparse.grammar.haxe;
  * (int / bool / null / identifier) — operators, calls, and field access
  * come with the Pratt slice.
  *
+ * The `name` field is `HxVarNameLit`, not `HxIdentLit`: the binding-name
+ * slot also accepts a macro-reification `$ident` prefix (`var $x = …`,
+ * `final $localName = …`). It is a dedicated scoped terminal so the
+ * shared `HxIdentLit` (used by `IdentExpr`/`FieldAccess.field`/
+ * `DollarIdentExpr.name`) is not widened into `$`-ambiguity. Both are
+ * `abstract(String) from/to String`, so the swap is transparent to
+ * every `(decl.name : String)` consumer. See `HxVarNameLit`.
+ *
  * Modifiers (`public`, `private`, `static`, …) and default values are
  * out of scope for this session.
  *
@@ -77,7 +85,7 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxVarDecl = {
-	var name:HxIdentLit;
+	var name:HxVarNameLit;
 	@:optional @:lead('(') var access:Null<HxAccessClause>;
 	@:optional @:fmt(typeHintColon,
 		indentValueIfCtor('Anon', 'indentVarTypeHintAnon', 'anonTypeLeftCurly'))

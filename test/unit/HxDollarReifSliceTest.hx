@@ -1,9 +1,11 @@
 package unit;
 
 import utest.Assert;
+import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxType;
 import anyparse.grammar.haxe.HxVarDecl;
+import anyparse.runtime.ParseError;
 
 /**
  * Slice apq-P5-L (tail): macro `$`-reification expression escapes.
@@ -250,5 +252,55 @@ class HxDollarReifSliceTest extends HxTestHelpers {
 			'class C { static function f() { var a = macro throw e; var b = macro throw new E("x"); } }',
 			'macro-throw'
 		);
+	}
+
+	// -------- $-reification in var/final NAME position (Slice apq-P5-X1) --------
+
+	public function testDollarVarName():Void {
+		// `var $x = 1` — the binding-name slot accepts a macro-reification
+		// `$ident`. Pre-slice the `$` made the name terminal fail to match.
+		final decl:HxVarDecl = parseSingleVarDecl("class C { var $x = 1; }");
+		Assert.equals("$x", (decl.name : String));
+	}
+
+	public function testDollarFinalNameMacroSite():Void {
+		// The exact WriterLowering.hx:1620 site shape:
+		// `final $localName:$fieldCT = $fieldAccess;`. The `$`-name is this
+		// slice; `:$fieldCT` is Slice T (DollarType); `= $fieldAccess` is
+		// DollarIdentExpr — all three compose in one HxVarDecl.
+		switch initOf("class C { var x = macro final $localName:$fieldCT = $fieldAccess; }") {
+			case MacroExpr(FinalExpr({name: nm, type: DollarType(tn),
+					init: DollarIdentExpr(rhs)})):
+				Assert.equals("$localName", (nm : String));
+				Assert.equals('fieldCT', (tn : String));
+				Assert.equals('fieldAccess', (rhs : String));
+			case e: Assert.fail('expected MacroExpr(FinalExpr(localName:fieldCT=fieldAccess)), got $e');
+		}
+	}
+
+	public function testPlainVarNameRegressionUnaffected():Void {
+		// No `$` — plain identifier names are unchanged by the widened
+		// name terminal (the HxIdentLit -> HxVarNameLit swap is transparent).
+		final decl:HxVarDecl = parseSingleVarDecl('class C { var x = 1; }');
+		Assert.equals('x', (decl.name : String));
+	}
+
+	public function testDollarVarNameRoundTrip():Void {
+		// Writer net: the `@:rawString` name terminal emits the matched
+		// slice (with the `$`) verbatim via the generic terminal path.
+		roundTrip(
+			"class C { static function f() { var $x = 1; } }",
+			'dollar-var-name'
+		);
+	}
+
+	public function testDollarBraceVarNameDeferredLimitation():Void {
+		// Pinned limitation: the `${expr}` brace-form binding name is
+		// deliberately NOT matched (no source site uses it; minimal-first).
+		// The widened terminal stops at `$` + ident, so `${e}` fails the
+		// name match and the parse is rejected. Exit criterion: add a
+		// brace production for the name slot when a real `var ${e} = …`
+		// site appears.
+		Assert.raises(() -> HaxeParser.parse("class C { var ${e} = 1; }"), ParseError);
 	}
 }
