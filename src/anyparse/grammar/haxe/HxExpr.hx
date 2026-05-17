@@ -134,6 +134,19 @@ package anyparse.grammar.haxe;
  *    bare `$ident` (the latter is reached only when no `{` follows).
  *    These are purely syntactic — no reification semantics are applied;
  *    the forms exist so anyparse can self-parse its own build macros.
+ *  - `VarExpr` / `FinalExpr` — expression-position `var`/`final`
+ *    local-binding declarations (`var name:Type = init`,
+ *    `final _x:Int = ctx.pos`). Keyword-atom mirror of
+ *    `HxStatement.VarStmt` / `FinalStmt`, reusing the same
+ *    `HxVarDecl` typedef verbatim — the only difference is the
+ *    absence of `@:trailOpt(';')` / `@:fmt(trailOptShapeGate(...))`:
+ *    an expression has no statement terminator, the enclosing
+ *    statement owns any `;`. Reached when an `HxExpr` is parsed
+ *    directly (notably the `MacroExpr` operand: `macro var x = e`,
+ *    `macro final _x:Int = ctx.pos`); statement-position `var`/`final`
+ *    still binds `HxStatement.VarStmt`/`FinalStmt`, declared before
+ *    the `ExprStmt` catch-all. Exists so anyparse can self-parse the
+ *    `macro var`/`macro final` reifications its own build macros use.
  *
  * **Prefix branches** — unary operators, symbolic only. Each
  * `@:prefix(op)` ctor consumes its literal, recurses into the atom
@@ -347,6 +360,12 @@ enum HxExpr {
 
 	@:kw('macro')
 	MacroExpr(operand:HxExpr);
+
+	@:kw('var')
+	VarExpr(decl:HxVarDecl);
+
+	@:kw('final')
+	FinalExpr(decl:HxVarDecl);
 
 	@:kw('cast')
 	TypedCastExpr(info:HxTypedCast);

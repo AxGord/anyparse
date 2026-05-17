@@ -451,4 +451,22 @@ class HxControlFlowSliceTest extends HxTestHelpers {
 			'empty-stmt-in-switch-case'
 		);
 	}
+
+	// --- Slice U regression: stmt-position var/final unaffected by HxExpr.VarExpr/FinalExpr ---
+
+	public function testStmtVarFinalNotShiftedByExprCtors():Void {
+		// Adding HxExpr.VarExpr/FinalExpr must NOT make a statement-position
+		// `var`/`final` parse as ExprStmt(VarExpr/FinalExpr): HxStatement
+		// tries VarStmt/FinalStmt (@:kw) before the ExprStmt catch-all.
+		final body:Array<HxStatement> = parseBody('class C { function f():Void { var x = 1; final y = 2; } }');
+		Assert.equals(2, body.length);
+		switch body[0] {
+			case VarStmt(d): Assert.equals('x', (d.name : String));
+			case null, _: Assert.fail('expected VarStmt(x), got ${body[0]}');
+		}
+		switch body[1] {
+			case FinalStmt(d): Assert.equals('y', (d.name : String));
+			case null, _: Assert.fail('expected FinalStmt(y), got ${body[1]}');
+		}
+	}
 }

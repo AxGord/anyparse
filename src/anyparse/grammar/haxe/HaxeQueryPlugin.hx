@@ -46,7 +46,9 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 	/**
 	 * Binding-declaration kinds shared by `refShape` and `metaShape`
 	 * so the two contracts cannot drift. Top-level type decls,
-	 * statement-level var bindings, class-member bindings, function
+	 * statement-level var bindings (plus their expression-position
+	 * `VarExpr` / `FinalExpr` twins — `macro var x = e` — wrapping the
+	 * same `HxVarDecl`), class-member bindings, function
 	 * parameters (`HxParam`'s three Alt branches), the
 	 * `@:spanned('LambdaParam')` lambda-parameter struct, and enum
 	 * constructors (`SimpleCtor` / `ParamCtor`) so an annotation on
@@ -65,6 +67,7 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		'ClassDecl', 'InterfaceDecl', 'EnumDecl', 'AbstractDecl', 'TypedefDecl',
 		'VarMember', 'FinalMember', 'FnMember',
 		'VarStmt', 'FinalStmt',
+		'VarExpr', 'FinalExpr',
 		'Required', 'Optional', 'Rest',
 		'LambdaParam',
 		'SimpleCtor', 'ParamCtor',
@@ -110,7 +113,8 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		//
 		// Decl-host kinds: any enum-ctor whose `extractName` walk resolves
 		// to a binding declaration. Top-level type decls (`ClassDecl`, …),
-		// statement-level var bindings (`VarStmt`, `FinalStmt`, top-level
+		// statement-level var bindings (`VarStmt`, `FinalStmt`, plus the
+		// expression-position `VarExpr`/`FinalExpr` twins, top-level
 		// `VarDecl`/`FnDecl`), class-member bindings (`VarMember`,
 		// `FinalMember`, `FnMember`), and function-parameter bindings via
 		// `HxParam`'s three Alt branches (`Required`/`Optional`/`Rest`).

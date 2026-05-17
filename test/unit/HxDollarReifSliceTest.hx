@@ -163,4 +163,52 @@ class HxDollarReifSliceTest extends HxTestHelpers {
 		// single-Ref `@:lead("$")` writer path (DollarIdentExpr twin).
 		roundTrip("class C {\n\tvar x:$ct = 1;\n}\n", 'dollar-type');
 	}
+
+	// -------- expression-position var/final (Slice apq-P5-U) --------
+
+	public function testMacroVarExpr():Void {
+		// `macro var y = 1` — MacroExpr operand is an HxExpr; the new
+		// VarExpr atom reuses HxVarDecl verbatim (HxStatement.VarStmt twin).
+		switch initOf("class C { var x = macro var y = 1; }") {
+			case MacroExpr(VarExpr({name: nm, init: IntLit(v)})):
+				Assert.equals('y', (nm : String));
+				Assert.equals(1, (v : Int));
+			case e: Assert.fail('expected MacroExpr(VarExpr(y=1)), got $e');
+		}
+	}
+
+	public function testMacroFinalTypedExpr():Void {
+		// The real Lowering.hx:1543 shape: `macro final _x:Int = ctx.pos`.
+		switch initOf("class C { var x = macro final _x:Int = ctx.pos; }") {
+			case MacroExpr(FinalExpr({name: nm, type: Named({name: tn}),
+					init: FieldAccess(IdentExpr(o), f)})):
+				Assert.equals('_x', (nm : String));
+				Assert.equals('Int', (tn : String));
+				Assert.equals('ctx', (o : String));
+				Assert.equals('pos', (f : String));
+			case e: Assert.fail('expected MacroExpr(FinalExpr(_x:Int=ctx.pos)), got $e');
+		}
+	}
+
+	public function testMacroVarUntypedNotMisparsed():Void {
+		// Pins the pre-slice silent-degrade bug as a positive contract:
+		// untyped `macro var y = e` previously misparsed (the `var`
+		// keyword swallowed as IdentExpr + a stray Assign). It must now
+		// be a clean VarExpr.
+		switch initOf("class C { var x = macro var y = e; }") {
+			case MacroExpr(VarExpr({name: nm, init: IdentExpr(rhs)})):
+				Assert.equals('y', (nm : String));
+				Assert.equals('e', (rhs : String));
+			case e: Assert.fail('expected MacroExpr(VarExpr(y=e)) [untyped not misparsed], got $e');
+		}
+	}
+
+	public function testMacroVarFinalExprRoundTrip():Void {
+		// Writer ripple net: VarExpr/FinalExpr emit via the generic
+		// HxVarDecl path (HxStatement.VarStmt minus the trailOpt/fmt).
+		roundTrip(
+			"class C { static function f() { var a = macro var y = 1; var b = macro final _z:Int = p; } }",
+			'macro-var-final'
+		);
+	}
 }
