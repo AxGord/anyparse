@@ -484,6 +484,17 @@ final class Cli {
 		if (selectExpr != null) {
 			final selector:Selector = Selector.parse(selectExpr);
 			final raw:Array<QueryNode> = Engine.select(tree, selector);
+			if (raw.length == 0) {
+				// Empty `--select` is indistinguishable from "wrong kind
+				// name". Kinds are the exact node-constructor names and the
+				// engine never enumerates them — so list the kinds actually
+				// present in this file, turning a silent miss into a
+				// self-correcting hint (no global kind table needed).
+				final present:Array<String> = collectKinds(tree);
+				stderr('apq ast: --select "$selectExpr" matched no nodes in $file. '
+					+ 'Kinds present here: ${present.join(", ")}. '
+					+ 'Kinds are exact node-constructor names — run `apq ast $file` to see the tree.\n');
+			}
 			final matches:Array<QueryNode> = depth < 0 ? raw : [for (m in raw) Engine.truncate(m, depth)];
 			sysPrint(json ? Json.renderMatches(file, source, matches) : Text.renderMatches(matches));
 			return EXIT_OK;
@@ -586,6 +597,19 @@ final class Cli {
 		#if (sys || nodejs)
 		Sys.stderr().writeString(s);
 		#end
+	}
+
+	/** Distinct node-constructor kinds present in a tree, sorted — the
+	 * self-discovery list shown when `--select` matches nothing. */
+	private static function collectKinds(root:QueryNode):Array<String> {
+		final seen:Array<String> = [];
+		function walk(n:QueryNode):Void {
+			if (!seen.contains(n.kind)) seen.push(n.kind);
+			for (c in n.children) walk(c);
+		}
+		walk(root);
+		seen.sort((a, b) -> a < b ? -1 : (a > b ? 1 : 0));
+		return seen;
 	}
 
 	private static inline function sysPrint(s:String):Void {
