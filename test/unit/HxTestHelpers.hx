@@ -305,6 +305,17 @@ class HxTestHelpers extends Test {
 	}
 
 	/**
+	 * Asserts `field` is the `> Type` structure-extension anon clause
+	 * and returns its `HxTypeRef`; throws on any other kind.
+	 */
+	private function expectExtendsField(field:HxAnonField):HxTypeRef {
+		return switch field {
+			case ExtendsField(type): type;
+			case _: throw 'expected HxAnonField.ExtendsField, got $field';
+		};
+	}
+
+	/**
 	 * Asserts `field` is a short-form anon field (`name:Type` or
 	 * `?name:Type`) and returns its `HxAnonFieldBody`; throws on any
 	 * class-notation kind.

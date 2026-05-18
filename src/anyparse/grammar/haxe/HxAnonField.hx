@@ -14,6 +14,26 @@ package anyparse.grammar.haxe;
  *  - `Optional(field:HxAnonFieldBody)` — the optional short form
  *    `?name:Type` (`{?name:String}`). Dispatched by `@:lead('?')`.
  *
+ *  - `ExtendsField(type:HxTypeRef)` — a structure-extension clause
+ *    `> Type` inside an anon struct (`typedef Bar = {> Foo, var
+ *    x:Int}`, `typedef T_3<S,T,R> = {> T_2<S,T>, v2:R}`). Dispatched
+ *    by `@:lead('>')`. Because the clause sits in the same
+ *    comma/semicolon list as the fields, it parses as one element of
+ *    the existing `HxType.Anon` `fields` Star — multiple extensions
+ *    (`{> A, > B, ...}`) and a following field list compose for free
+ *    through the `@:sep(',') @:sepAlt(';')` loop. `HxTypeRef` (named
+ *    + optional type params) is the precise target — Haxe structure
+ *    extension only takes a type path, never an inline anon. The `>`
+ *    is unambiguous at the field-dispatch point: no field name starts
+ *    with `>`, and the type-param close `>` is consumed inside
+ *    `HxTypeRef.params`, a different production. Single-Ref `@:lead`
+ *    branch — same generic writer/synth path as `HxType.DollarType`
+ *    (`@:lead("$")`); zero core/writer/synth ripple. The writer's
+ *    default tight emit (`>Foo`) differs from haxe-formatter's spaced
+ *    `> Foo`, so newly-parsing structure-extension fixtures land
+ *    byte-`fail` pending a follow-up writer-spacing slice — the
+ *    parse-additive skip-parse reduction is this slice's goal.
+ *
  *  - `VarField(decl:HxVarDecl)` — class-notation mutable field
  *    `var name:Type;`. Same shape as `HxClassMember.VarMember`:
  *    `@:kw('var')` enforces a word boundary, the per-branch
@@ -40,7 +60,8 @@ package anyparse.grammar.haxe;
  * shared by `Optional` and `Required` so the `?` marker dispatches at
  * the Alt-enum level without duplicating the name-and-type body.
  *
- * Branch order matters. `Optional` (`@:lead('?')`) comes first, then
+ * Branch order matters. The lead-dispatched branches `Optional`
+ * (`@:lead('?')`) and `ExtendsField` (`@:lead('>')`) come first, then
  * the keyword-dispatched class-notation branches (`@:kw` enforces a
  * word boundary so a field literally named `vars` is not mistaken for
  * `var`, nor `functions` for `function`), then the fallthrough
@@ -65,6 +86,7 @@ package anyparse.grammar.haxe;
 @:peg
 enum HxAnonField {
 	@:lead('?') Optional(field:HxAnonFieldBody);
+	@:lead('>') ExtendsField(type:HxTypeRef);
 	@:kw('var') @:trail(';') VarField(decl:HxVarDecl);
 	@:kw('final') @:trail(';') FinalField(decl:HxVarDecl);
 	@:kw('function') FnField(decl:HxFnDecl);

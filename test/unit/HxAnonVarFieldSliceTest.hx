@@ -5,6 +5,8 @@ import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxAnonField;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxFnDecl;
+import anyparse.grammar.haxe.HxType;
+import anyparse.grammar.haxe.HxTypeRef;
 import anyparse.grammar.haxe.HxVarDecl;
 
 /**
@@ -164,6 +166,65 @@ class HxAnonVarFieldSliceTest extends HxTestHelpers {
 		Assert.equals(2, fields.length);
 		Assert.equals('x', (expectVarField(fields[0]).name : String));
 		Assert.equals('g', (expectFnField(fields[1]).name : String));
+	}
+
+	public function testStructureExtensionSingle():Void {
+		// `typedef Bar = {> Foo, var x:Int}` — the `> Foo` extension
+		// parses as the first element of the same comma-separated list.
+		final fields:Array<HxAnonField> = anonOf('class C { var s:{> Foo, var x:Int;}; }');
+		Assert.equals(2, fields.length);
+		Assert.equals('Foo', (expectExtendsField(fields[0]).name : String));
+		Assert.equals('x', (expectVarField(fields[1]).name : String));
+	}
+
+	public function testStructureExtensionMulti():Void {
+		// `{> A, > B, var x:Int}` — multiple extensions compose for
+		// free through the @:sep(',') loop (lineends/issue_32 shape).
+		final fields:Array<HxAnonField> = anonOf('class C { var s:{> A, > B, var x:Int;}; }');
+		Assert.equals(3, fields.length);
+		Assert.equals('A', (expectExtendsField(fields[0]).name : String));
+		Assert.equals('B', (expectExtendsField(fields[1]).name : String));
+		Assert.equals('x', (expectVarField(fields[2]).name : String));
+	}
+
+	public function testStructureExtensionTypeParams():Void {
+		// `typedef T_3<S,T,R> = {> T_2<S,T>, v2:R}` —
+		// whitespace/issue_202 shape: the extended type carries its
+		// own type parameters via HxTypeRef.params.
+		final fields:Array<HxAnonField> = anonOf('class C { var s:{> T_2<S,T>, v2:R}; }');
+		Assert.equals(2, fields.length);
+		final ext:HxTypeRef = expectExtendsField(fields[0]);
+		Assert.equals('T_2', (ext.name : String));
+		final params:Null<Array<HxType>> = ext.params;
+		Assert.notNull(params);
+		Assert.equals(2, params.length);
+		switch fields[1] {
+			case Required(body): Assert.equals('v2', (body.name : String));
+			case _: Assert.fail('expected Required short field at index 1');
+		}
+	}
+
+	public function testStructureExtensionThenShortFields():Void {
+		// `{> Foo, foo:Int, ?bar:Int}` — extension followed by `var`-
+		// less short fields (lineends/issue_32 Bar2 shape).
+		final fields:Array<HxAnonField> = anonOf('class C { var s:{> Foo, foo:Int, ?bar:Int}; }');
+		Assert.equals(3, fields.length);
+		Assert.equals('Foo', (expectExtendsField(fields[0]).name : String));
+		switch fields[1] {
+			case Required(body): Assert.equals('foo', (body.name : String));
+			case _: Assert.fail('expected Required short field at index 1');
+		}
+		switch fields[2] {
+			case Optional(body): Assert.equals('bar', (body.name : String));
+			case _: Assert.fail('expected Optional short field at index 2');
+		}
+	}
+
+	public function testStructureExtensionOnly():Void {
+		// A struct that is nothing but an extension clause.
+		final fields:Array<HxAnonField> = anonOf('class C { var s:{> Foo}; }');
+		Assert.equals(1, fields.length);
+		Assert.equals('Foo', (expectExtendsField(fields[0]).name : String));
 	}
 
 	public function testCommaFormsRoundTrip():Void {
