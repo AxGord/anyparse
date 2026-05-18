@@ -14,6 +14,7 @@ import anyparse.grammar.haxe.HxClassMember;
 import anyparse.grammar.haxe.HxConditionalDecl;
 import anyparse.grammar.haxe.HxConditionalMember;
 import anyparse.grammar.haxe.HxConditionalStmt;
+import anyparse.grammar.haxe.HxConditionalType;
 import anyparse.grammar.haxe.HxDecl;
 import anyparse.grammar.haxe.HxEnumCtor;
 import anyparse.grammar.haxe.HxEnumCtorDecl;
@@ -282,6 +283,18 @@ class HxTestHelpers extends Test {
 			case null: throw 'expected HxType.Named, got null';
 			case Named(ref): ref;
 			case _: throw 'expected HxType.Named, got non-Named variant';
+		};
+	}
+
+	/**
+	 * Asserts `t` is `HxType.ConditionalType` and returns the inner
+	 * `HxConditionalType` body. Throws on null and on any other variant.
+	 */
+	private function expectConditionalType(t:Null<HxType>):HxConditionalType {
+		return switch t {
+			case null: throw 'expected HxType.ConditionalType, got null';
+			case ConditionalType(c): c;
+			case _: throw 'expected HxType.ConditionalType, got non-ConditionalType variant';
 		};
 	}
 

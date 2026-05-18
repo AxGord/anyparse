@@ -23,6 +23,16 @@ package anyparse.grammar.haxe;
  *    competes). Only the bare `$ident` form appears in type
  *    position in the corpus; the `${expr}` / `$name{expr}`
  *    reification forms stay expression-only.
+ *  - `ConditionalType(c:HxConditionalType)` — preprocessor-guarded
+ *    type-position region `#if cond T1; [#else T2;] #end`, the RHS of
+ *    a conditional typedef (`typedef X = #if (haxe_ver >= 4) A; #else
+ *    B; #end`). `@:kw('#if')` + `@:trail('#end')` host ctor, exact
+ *    twin of `HxExpr.ConditionalExpr` on the expression Pratt enum;
+ *    the body content lives in `HxConditionalType`. Dispatched by the
+ *    unique `#if` keyword lead — no other `HxType` atom begins with
+ *    `#`, and `#if` is word-boundary checked, so `Named` never
+ *    competes regardless of source order.
+ *
  *  - `Arrow(left:HxType, right:HxType)` — function-arrow type in the
  *    old (curried) syntax: `Void->Void`, `Int->String->Void`,
  *    `Array<SymbolInformation>->Void`. Declared as an `@:infix('->')`
@@ -100,6 +110,9 @@ enum HxType {
 
 	@:lead("$")
 	DollarType(name:HxIdentLit);
+
+	@:kw('#if') @:trail('#end')
+	ConditionalType(c:HxConditionalType);
 
 	@:infix('->', 0, 'Right') @:fmt(tight)
 	Arrow(left:HxType, right:HxType);
