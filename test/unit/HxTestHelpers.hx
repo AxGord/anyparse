@@ -11,12 +11,15 @@ import anyparse.grammar.haxe.HxAnonFieldBody;
 import anyparse.grammar.haxe.HxAnonMember;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxClassMember;
+import anyparse.grammar.haxe.HxConditionalDecl;
 import anyparse.grammar.haxe.HxConditionalMember;
+import anyparse.grammar.haxe.HxConditionalStmt;
 import anyparse.grammar.haxe.HxDecl;
 import anyparse.grammar.haxe.HxEnumCtor;
 import anyparse.grammar.haxe.HxEnumCtorDecl;
 import anyparse.grammar.haxe.HxEnumDecl;
 import anyparse.grammar.haxe.HxEnumMember;
+import anyparse.grammar.haxe.HxErrorMsg;
 import anyparse.grammar.haxe.HxFnBody;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxIdentLit;
@@ -86,6 +89,41 @@ class HxTestHelpers extends Test {
 		return switch member {
 			case Conditional(inner): inner;
 			case _: throw 'expected Conditional, got $member';
+		};
+	}
+
+	private function expectConditionalDecl(decl:HxDecl):HxConditionalDecl {
+		return switch decl {
+			case Conditional(inner): inner;
+			case _: throw 'expected Conditional, got $decl';
+		};
+	}
+
+	private function expectConditionalStmt(stmt:HxStatement):HxConditionalStmt {
+		return switch stmt {
+			case Conditional(inner): inner;
+			case _: throw 'expected Conditional, got $stmt';
+		};
+	}
+
+	private function expectErrorDecl(decl:HxDecl):HxErrorMsg {
+		return switch decl {
+			case ErrorDecl(message): message;
+			case _: throw 'expected ErrorDecl, got $decl';
+		};
+	}
+
+	private function expectErrorMember(member:HxClassMember):HxErrorMsg {
+		return switch member {
+			case ErrorMember(message): message;
+			case _: throw 'expected ErrorMember, got $member';
+		};
+	}
+
+	private function expectErrorStmt(stmt:HxStatement):HxErrorMsg {
+		return switch stmt {
+			case ErrorStmt(message): message;
+			case _: throw 'expected ErrorStmt, got $stmt';
 		};
 	}
 

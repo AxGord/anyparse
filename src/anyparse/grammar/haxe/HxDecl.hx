@@ -135,6 +135,22 @@ enum HxDecl {
 	FnDecl(decl:HxFnDecl);
 
 	/**
+	 * `#error "msg"` / `#error 'msg'` preprocessor directive (slice
+	 * ω-sharp-error). In the corpus it only ever appears as the body
+	 * of a `#if … #end` guard for an unsupported target, but the
+	 * directive is recognised wherever a declaration is, so it slots
+	 * into `HxDecl` directly (reachable from `HxConditionalDecl.body`
+	 * via `HxTopLevelDecl`). Structural twin of `@:kw('function')
+	 * FnDecl(decl:HxFnDecl)` — `@:kw` + single Ref payload, no
+	 * `@:trail`; `HxErrorMsg` captures the quoted message verbatim
+	 * (quotes included). `#error` shares no keyword prefix with any
+	 * other `HxDecl` ctor, so position is immaterial; placed by the
+	 * `Conditional` ctor so preprocessor directives cluster.
+	 */
+	@:kw('#error')
+	ErrorDecl(message:HxErrorMsg);
+
+	/**
 	 * `#if <cond> <decls> [#else <decls>] #end` preprocessor-guarded
 	 * region wrapping module-level declarations (slice ω-cond-comp-
 	 * decl). Mirror of `HxModifier.Conditional` at the decl scope:

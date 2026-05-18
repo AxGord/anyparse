@@ -72,6 +72,17 @@ enum HxClassMember {
 	@:kw('function')
 	FnMember(decl:HxFnDecl);
 
+	/**
+	 * `#error "msg"` / `#error 'msg'` preprocessor directive at member
+	 * scope (slice ω-sharp-error). Reachable from
+	 * `HxConditionalMember.body` (`Array<HxMemberDecl>`) — `#if cs
+	 * #error '…' #end` inside a class body. Structural twin of
+	 * `@:kw('function') FnMember(decl:HxFnDecl)`: `@:kw` + single Ref,
+	 * no `@:trail`. See `HxDecl.ErrorDecl` for the shared rationale.
+	 */
+	@:kw('#error')
+	ErrorMember(message:HxErrorMsg);
+
 	@:kw('#if') @:trail('#end')
 	Conditional(inner:HxConditionalMember);
 }

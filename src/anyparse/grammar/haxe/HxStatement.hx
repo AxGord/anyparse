@@ -383,6 +383,18 @@ enum HxStatement {
 	@:fmt(blockShape)
 	UntypedBlockStmt(body:HxUntypedFnBody);
 
+	/**
+	 * `#error "msg"` / `#error 'msg'` preprocessor directive at
+	 * statement scope (slice ω-sharp-error). Reachable from
+	 * `HxConditionalStmt.body` (`Array<HxStatement>`) — `#if cs #error
+	 * '…' #end` inside a function body. `@:kw` + single Ref, no
+	 * `@:trail` (like `LocalFnStmt`); falls before the `ExprStmt`
+	 * catch-all because `#error` is keyword-dispatched. See
+	 * `HxDecl.ErrorDecl` for the shared rationale.
+	 */
+	@:kw('#error')
+	ErrorStmt(message:HxErrorMsg);
+
 	@:kw('#if') @:trail('#end')
 	Conditional(inner:HxConditionalStmt);
 
