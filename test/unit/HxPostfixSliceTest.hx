@@ -86,6 +86,44 @@ class HxPostfixSliceTest extends HxTestHelpers {
 		}
 	}
 
+	public function testDollarFieldName():Void {
+		// `a.$name` — macro field-reification. The `$` rides inside the
+		// HxFieldNameLit slice, so the field string keeps it verbatim.
+		final decl:HxVarDecl = parseSingleVarDecl("class Foo { var x:Int = a.$name; }");
+		switch decl.init {
+			case FieldAccess(IdentExpr(o), f):
+				Assert.equals('a', (o : String));
+				Assert.equals("$name", (f : String));
+			case null, _:
+				Assert.fail('expected FieldAccess(IdentExpr(a), $$name), got ${decl.init}');
+		}
+	}
+
+	public function testDollarFieldChain():Void {
+		// `$struct.$name` — the corpus locus (dollar_chain / issue_100):
+		// dollar-ident receiver, dollar-ident field, left-recursive.
+		final decl:HxVarDecl = parseSingleVarDecl("class Foo { var x:Int = $struct.$name; }");
+		switch decl.init {
+			case FieldAccess(DollarIdentExpr(o), f):
+				Assert.equals('struct', (o : String));
+				Assert.equals("$name", (f : String));
+			case null, _:
+				Assert.fail('expected FieldAccess(DollarIdentExpr(struct), $$name), got ${decl.init}');
+		}
+	}
+
+	public function testPlainFieldRegressionUnaffected():Void {
+		// No `$` — the optional prefix must not alter plain field access.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a.b; }');
+		switch decl.init {
+			case FieldAccess(IdentExpr(o), f):
+				Assert.equals('a', (o : String));
+				Assert.equals('b', (f : String));
+			case null, _:
+				Assert.fail('expected FieldAccess(IdentExpr(a), b), got ${decl.init}');
+		}
+	}
+
 	public function testIndexChain():Void {
 		// `a[1][2]` → IndexAccess(IndexAccess(a, 1), 2). Same
 		// left-recursion property for the bracketed form.

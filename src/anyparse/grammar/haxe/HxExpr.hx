@@ -204,9 +204,12 @@ package anyparse.grammar.haxe;
  *    keeps extending `left` until no further postfix matches.
  *
  *  - `FieldAccess` — `.name` member access. The suffix is parsed as
- *    an `HxIdentLit` (the terminal identifier rule), so the field
- *    name ends up in the ctor as a single identifier string. No
- *    module path or type parameter syntax yet.
+ *    an `HxFieldNameLit` (the identifier terminal with an optional
+ *    leading `$` for macro field-reification — `obj.$name`), so the
+ *    field name ends up in the ctor as a single identifier string,
+ *    `$` included for the reification form. No module path or type
+ *    parameter syntax yet; the recursive `obj.${expr}` form is out of
+ *    scope (a regex terminal cannot carry a nested expression).
  *  - `IndexAccess` — `[expr]` index. The inner expression is parsed
  *    via `parseHxExpr` (not the atom wrapper), resetting precedence
  *    so arbitrary operators are allowed inside the brackets.
@@ -420,7 +423,7 @@ enum HxExpr {
 	Spread(operand:HxExpr);
 
 	@:postfix('.') @:fmt(methodChain('methodChainWrap'))
-	FieldAccess(operand:HxExpr, field:HxIdentLit);
+	FieldAccess(operand:HxExpr, field:HxFieldNameLit);
 
 	@:postfix('[', ']')
 	IndexAccess(operand:HxExpr, index:HxExpr);
