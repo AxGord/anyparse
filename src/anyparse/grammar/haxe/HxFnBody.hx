@@ -31,12 +31,17 @@ package anyparse.grammar.haxe;
  *  - `NoBody` — `;` only. The shape of an interface method or
  *    `@:overload` stub: `function foo():Void;`. Dispatched by the
  *    `;` literal.
- *  - `ExprBody(expr:HxExpr)` — single-expression body terminated by
- *    `;`: `function foo() trace("hi");`. Catch-all branch tried after
- *    the two literal-led siblings; `tryBranch`'s rollback ensures
- *    `BlockBody` (`{`-led) and `NoBody` (`;`-led) win on shared input.
- *    `@:trail(';')` is non-optional — real Haxe requires the
- *    terminator after an expression body. The kw→body separator is
+ *  - `ExprBody(expr:HxExpr)` — single-expression body, optionally
+ *    terminated by `;`: `function foo() trace("hi");` OR
+ *    `function foo() trace("hi")` with the `;` elided (e.g. as the
+ *    last class member before `}`, or a top-level decl before EOF).
+ *    Catch-all branch tried after the two literal-led siblings;
+ *    `tryBranch`'s rollback ensures `BlockBody` (`{`-led) and `NoBody`
+ *    (`;`-led) win on shared input. `@:trailOpt(';')` consumes the
+ *    terminator when present and tracks its source presence — Haxe
+ *    treats the `;` as optional here and the writer re-emits it
+ *    byte-faithfully (single-Ref Alt `trailPresent` arg, mirror of
+ *    `HxStatement.ExprStmt`). The kw→body separator is
  *    runtime-switchable via `@:fmt(bodyPolicy('functionBody'))`
  *    (slice ω-functionBody-policy) — `Next` (default) emits a
  *    hardline + Nest, `Same` emits a single space. The parent
@@ -66,6 +71,6 @@ enum HxFnBody {
 	@:lit(';')
 	NoBody;
 
-	@:trail(';') @:fmt(bodyPolicy('functionBody'))
+	@:trailOpt(';') @:fmt(bodyPolicy('functionBody'))
 	ExprBody(expr:HxExpr);
 }

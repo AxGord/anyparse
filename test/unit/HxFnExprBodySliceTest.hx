@@ -34,6 +34,13 @@ import anyparse.grammar.haxe.HxModuleWriter;
  * That slice lifts `return` into `HxExpr` as a kw-led atom, after
  * which `function f() return X;` parses through this `ExprBody`
  * branch with no further `HxFnBody` change.
+ *
+ * Slice 5 (Phase 3 skip-parse drill) widens the trailing `;` from
+ * `@:trail(';')` to `@:trailOpt(';')`, so the terminator may be
+ * elided — `function f() <expr>` as the last class member before
+ * `}`, or a top-level decl before EOF. Byte-twin of
+ * `HxStatement.ExprStmt`'s `@:trailOpt(';')`. Closes the
+ * `sameline/issue_83_anon_function_body_*` corpus cluster (×4).
  */
 class HxFnExprBodySliceTest extends HxTestHelpers {
 
@@ -119,6 +126,51 @@ class HxFnExprBodySliceTest extends HxTestHelpers {
 		// for `;`-led NoBody.
 		final once:String = HxModuleWriter.write(HaxeModuleParser.parse(src));
 		Assert.isTrue(once.indexOf(':Void ;') < 0, 'NoBody must not gain a space before `;` (got: $once)');
+	}
+
+	// ======== Slice 5 — elided trailing `;` (issue_83 cluster) ========
+
+	public function testClassMemberExprBodyNoSemi():Void {
+		// Last member before `}`, no trailing `;` — the issue_83 gap.
+		final ast:HxModule = HaxeModuleParser.parse('class Main {\n\tpublic static function main2() [1, 2, 3].map(function() trace(i))\n}');
+		final fn:HxFnDecl = parseSingleFnFromOnlyClass(ast);
+		Assert.equals('main2', (fn.name : String));
+		assertExprBody(fn.body);
+	}
+
+	public function testClassMemberExprBodyNoSemiMixed():Void {
+		// The exact issue_83 input: a `{}`-bodied member followed by a
+		// no-`;` expr-bodied member as the last member before `}`.
+		final src:String = 'class Main {\n\tpublic static function main() {\n\t\t[1, 2, 3].map(function() trace(i));\n\t}\n\tpublic static function main2() [1, 2, 3].map(function() trace(i))\n}';
+		final ast:HxModule = HaxeModuleParser.parse(src);
+		Assert.equals(1, ast.decls.length);
+		final cls:HxClassDecl = expectClassDecl(ast.decls[0]);
+		Assert.equals(2, cls.members.length);
+		switch expectFnMember(cls.members[0].member).body {
+			case BlockBody(_): Assert.pass();
+			case _: Assert.fail('member 0 expected BlockBody');
+		}
+		assertExprBody(expectFnMember(cls.members[1].member).body);
+	}
+
+	public function testToplevelFnExprBodyNoSemi():Void {
+		final ast:HxModule = HaxeModuleParser.parse('function f() trace("hi")');
+		Assert.equals(1, ast.decls.length);
+		switch ast.decls[0].decl {
+			case FnDecl(decl): assertExprBody(decl.body);
+			case _: Assert.fail('expected FnDecl, got ${ast.decls[0].decl}');
+		}
+	}
+
+	public function testRoundTripExprBodyNoSemi():Void {
+		roundTrip('class Main {\n\tpublic static function main2() [1, 2, 3].map(function() trace(i))\n}');
+		roundTrip('function f() trace("hi")');
+	}
+
+	public function testSemiFormStillParses():Void {
+		// Regression: the `;`-terminated form is unaffected by @:trailOpt.
+		final ast:HxModule = HaxeModuleParser.parse('class C {\n\tfunction f() doStuff(1, 2);\n}');
+		assertExprBody(parseSingleFnFromOnlyClass(ast).body);
 	}
 
 	// ======== Helpers ========
