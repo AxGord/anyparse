@@ -5,6 +5,7 @@ import anyparse.query.Matcher.Match;
 import anyparse.query.Meta.MetaHit;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs.RefHit;
+import anyparse.query.SourceSlice;
 import anyparse.query.format.json.AstDumpJson;
 import anyparse.query.format.json.AstDumpJsonWriter;
 import anyparse.query.format.json.AstMatchesJson;
@@ -52,8 +53,19 @@ final class Json {
 		return AstDumpJsonWriter.write(dump, JsonFormat.instance.defaultWriteOptions) + '\n';
 	}
 
-	public static function renderMatches(file:String, source:String, matches:Array<QueryNode>):String {
-		final out:AstMatchesJson = {file: file, matches: matches.map(n -> toAst(n, source))};
+	public static function renderMatches(file:String, source:String, matches:Array<QueryNode>, doc:Bool, src:Bool):String {
+		final out:AstMatchesJson = {file: file, matches: [for (n in matches) {
+			final ast:AstNodeJson = toAst(n, source);
+			if (doc) {
+				final d:Null<String> = SourceSlice.leadingDoc(source, n.span);
+				if (d != null) ast.doc = d;
+			}
+			if (src) {
+				final s:String = SourceSlice.slice(source, n.span);
+				if (s.length > 0) ast.source = s;
+			}
+			ast;
+		}]};
 		return AstMatchesJsonWriter.write(out, JsonFormat.instance.defaultWriteOptions) + '\n';
 	}
 
@@ -78,7 +90,7 @@ final class Json {
 		return AstMetaHitsWriter.write(envelope, JsonFormat.instance.defaultWriteOptions) + '\n';
 	}
 
-	public static function renderRefs(entries:Array<{file:String, source:String, hits:Array<RefHit>}>):String {
+	public static function renderRefs(entries:Array<{file:String, source:String, hits:Array<RefHit>}>, doc:Bool, src:Bool):String {
 		final out:Array<AstRefHit> = [];
 		for (entry in entries) for (h in entry.hits) {
 			final bindingSpan:Null<Span> = h.bindingSpan;
@@ -89,6 +101,14 @@ final class Json {
 				name: h.name,
 			};
 			if (bindingSpan != null) hit.binding = spanToJson(bindingSpan, entry.source);
+			if (doc) {
+				final d:Null<String> = SourceSlice.leadingDoc(entry.source, h.span);
+				if (d != null) hit.doc = d;
+			}
+			if (src) {
+				final s:String = SourceSlice.slice(entry.source, h.span);
+				if (s.length > 0) hit.source = s;
+			}
 			out.push(hit);
 		}
 		final envelope:AstRefHits = {hits: out};
@@ -119,7 +139,7 @@ final class Json {
 		final out:Array<AstSearchBinding> = [];
 		for (name => boundNode in m.bindings) {
 			final span:Null<Span> = boundNode.span;
-			final text:String = boundNode.kind == 'NameOnly' ? (boundNode.name ?? '') : sliceSource(source, span);
+			final text:String = boundNode.kind == 'NameOnly' ? (boundNode.name ?? '') : SourceSlice.slice(source, span);
 			out.push({
 				name: name,
 				text: text,
@@ -142,13 +162,5 @@ final class Json {
 
 	private static inline function emptySpan():AstSearchSpan {
 		return {start: [0, 0], end: [0, 0]};
-	}
-
-	private static function sliceSource(source:String, span:Null<Span>):String {
-		if (span == null) return '';
-		final from:Int = span.from < 0 ? 0 : span.from;
-		final to:Int = span.to > source.length ? source.length : span.to;
-		if (from >= to) return '';
-		return source.substring(from, to);
 	}
 }

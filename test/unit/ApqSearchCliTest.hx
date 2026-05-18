@@ -5,7 +5,6 @@ import utest.Test;
 import anyparse.query.Cli;
 
 #if sys
-import sys.io.File;
 import sys.FileSystem;
 #end
 
@@ -135,13 +134,8 @@ class ApqSearchCliTest extends Test {
 	}
 
 	#if sys
-	private static var fixtureCounter:Int = 0;
-
 	private static function writeFixture(source:String):String {
-		fixtureCounter++;
-		final path:String = '${haxe.io.Path.normalize(Sys.getCwd())}/tmp_apq_search_fixture_${Sys.time()}_$fixtureCounter.hx';
-		File.saveContent(path, source);
-		return path;
+		return CliFixture.write('apq_search', source);
 	}
 	#end
 }

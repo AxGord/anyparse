@@ -7,6 +7,7 @@ import anyparse.query.Matcher.Match;
 import anyparse.query.Meta.MetaHit;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs.RefHit;
+import anyparse.query.SourceSlice;
 import anyparse.query.Uses.UsesHit;
 import anyparse.runtime.Span;
 import anyparse.runtime.Span.Position;
@@ -38,17 +39,18 @@ final class Text {
 		return SValueWriter.write(toSValue(node), SExprFormat.instance.defaultWriteOptions) + '\n';
 	}
 
-	public static function renderMatches(matches:Array<QueryNode>):String {
+	public static function renderMatches(matches:Array<QueryNode>, source:String, doc:Bool, src:Bool):String {
 		if (matches.length == 0) return '(no matches)\n';
 		final buf:StringBuf = new StringBuf();
 		for (m in matches) {
 			buf.add(SValueWriter.write(toSValue(m), SExprFormat.instance.defaultWriteOptions));
 			buf.add('\n');
+			appendDocSource(buf, source, m.span, doc, src);
 		}
 		return buf.toString();
 	}
 
-	public static function renderRefs(file:String, source:String, hits:Array<RefHit>):String {
+	public static function renderRefs(file:String, source:String, hits:Array<RefHit>, doc:Bool, src:Bool):String {
 		if (hits.length == 0) return '$file: no refs\n';
 		final buf:StringBuf = new StringBuf();
 		for (h in hits) {
@@ -60,18 +62,47 @@ final class Text {
 				buf.add(' -> ${bp.line}:${bp.col - 1}');
 			}
 			buf.add('\n');
+			appendDocSource(buf, source, h.span, doc, src);
 		}
 		return buf.toString();
 	}
 
-	public static function renderUses(file:String, source:String, hits:Array<UsesHit>):String {
+	public static function renderUses(file:String, source:String, hits:Array<UsesHit>, doc:Bool, src:Bool):String {
 		if (hits.length == 0) return '$file: no uses\n';
 		final buf:StringBuf = new StringBuf();
 		for (h in hits) {
 			final pos:Position = h.span.lineCol(source);
 			buf.add('$file:${pos.line}:${pos.col - 1}: ${h.name}\n');
+			appendDocSource(buf, source, h.span, doc, src);
 		}
 		return buf.toString();
+	}
+
+	/**
+	 * Emit the optional `--doc` / `--source` blocks after a hit line.
+	 * Each block is 2-space indented and followed by a blank line.
+	 * No-op when neither flag is set or nothing resolves — so default
+	 * output is unchanged.
+	 */
+	private static function appendDocSource(buf:StringBuf, source:String, span:Null<Span>, doc:Bool, src:Bool):Void {
+		if (doc) {
+			final d:Null<String> = SourceSlice.leadingDoc(source, span);
+			if (d != null) {
+				buf.add(indentBlock(d));
+				buf.add('\n');
+			}
+		}
+		if (src) {
+			final s:String = SourceSlice.slice(source, span);
+			if (s.length > 0) {
+				buf.add(indentBlock(s));
+				buf.add('\n');
+			}
+		}
+	}
+
+	private static inline function indentBlock(text:String):String {
+		return '  ' + text.split('\n').join('\n  ') + '\n';
 	}
 
 	public static function renderMeta(file:String, source:String, hits:Array<MetaHit>):String {

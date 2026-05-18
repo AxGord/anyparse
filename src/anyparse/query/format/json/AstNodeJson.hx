@@ -24,6 +24,12 @@ package anyparse.query.format.json;
  * Lives in its own top-level module so the macro pipeline's
  * `optionsComplexType` path resolution does not hit the sub-module
  * gotcha (see `feedback_writerlowering_mirror_lowering_byname.md`).
+ *
+ * `doc` / `source` are the `--doc` / `--source` opt-ins, populated by
+ * `Json.renderMatches` on the per-match ROOT node only (never on
+ * recursed children). Both are `@:optional` — the writer omits the
+ * key when null, so default `apq ast --json` output stays
+ * byte-identical and the recursive child shape is unchanged.
  */
 @:peg @:schema(anyparse.format.text.JsonFormat) @:ws
 typedef AstNodeJson = {
@@ -31,4 +37,6 @@ typedef AstNodeJson = {
 	@:optional var name:String;
 	var children:Array<AstNodeJson>;
 	@:optional var span:AstSearchSpan;
+	@:optional var doc:String;
+	@:optional var source:String;
 };

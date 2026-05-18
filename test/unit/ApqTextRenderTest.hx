@@ -35,11 +35,11 @@ class ApqTextRenderTest extends Test {
 		final file:String = 'T.hx';
 		final hits:Array<RefHit> = refsOf(src, 'x');
 		Assert.isTrue(hits.length >= 2, 'fixture must yield decl+read');
-		Assert.equals(referenceRefs(file, src, hits), Text.renderRefs(file, src, hits));
+		Assert.equals(referenceRefs(file, src, hits), Text.renderRefs(file, src, hits, false, false));
 	}
 
 	public function testRenderRefsEmpty():Void {
-		Assert.equals('T.hx: no refs\n', Text.renderRefs('T.hx', 'class T {}', []));
+		Assert.equals('T.hx: no refs\n', Text.renderRefs('T.hx', 'class T {}', [], false, false));
 	}
 
 	public function testRenderSearchMatchesMatchesReference():Void {

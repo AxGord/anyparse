@@ -70,6 +70,8 @@ final class Cli {
 		var wantDecls:Bool = false;
 		var wantReads:Bool = false;
 		var wantWrites:Bool = false;
+		var wantDoc:Bool = false;
+		var wantSource:Bool = false;
 		var name:Null<String> = null;
 		var inputSpec:Null<String> = null;
 
@@ -87,6 +89,10 @@ final class Cli {
 					wantReads = true;
 				case '--writes':
 					wantWrites = true;
+				case '--doc':
+					wantDoc = true;
+				case '--source':
+					wantSource = true;
 				case '-h', '--help':
 					printRefsUsage();
 					return EXIT_OK;
@@ -154,15 +160,17 @@ final class Cli {
 		}
 
 		if (json) {
-			sysPrint(Json.renderRefs(allEntries));
+			sysPrint(Json.renderRefs(allEntries, wantDoc, wantSource));
 		} else {
-			for (entry in allEntries) sysPrint(Text.renderRefs(entry.file, entry.source, entry.hits));
+			for (entry in allEntries) sysPrint(Text.renderRefs(entry.file, entry.source, entry.hits, wantDoc, wantSource));
 		}
 		return EXIT_OK;
 	}
 
 	private static function runUses(args:Array<String>):Int {
 		var lang:String = 'haxe';
+		var wantDoc:Bool = false;
+		var wantSource:Bool = false;
 		var name:Null<String> = null;
 		var inputSpec:Null<String> = null;
 
@@ -172,6 +180,10 @@ final class Cli {
 			switch a {
 				case '--lang':
 					lang = expectValue(args, ++i, '--lang');
+				case '--doc':
+					wantDoc = true;
+				case '--source':
+					wantSource = true;
 				case '-h', '--help':
 					printUsesUsage();
 					return EXIT_OK;
@@ -231,7 +243,7 @@ final class Cli {
 			allEntries.push({file: path, source: source, hits: hits});
 		}
 
-		for (entry in allEntries) sysPrint(Text.renderUses(entry.file, entry.source, entry.hits));
+		for (entry in allEntries) sysPrint(Text.renderUses(entry.file, entry.source, entry.hits, wantDoc, wantSource));
 		return EXIT_OK;
 	}
 
@@ -487,6 +499,8 @@ final class Cli {
 		var depth:Int = -1;
 		var selectExpr:Null<String> = null;
 		var atExpr:Null<String> = null;
+		var wantDoc:Bool = false;
+		var wantSource:Bool = false;
 		var file:Null<String> = null;
 
 		var i:Int = 0;
@@ -509,6 +523,10 @@ final class Cli {
 					selectExpr = expectValue(args, ++i, '--select');
 				case '--at':
 					atExpr = expectValue(args, ++i, '--at');
+				case '--doc':
+					wantDoc = true;
+				case '--source':
+					wantSource = true;
 				case '-h', '--help':
 					printAstUsage();
 					return EXIT_OK;
@@ -565,7 +583,7 @@ final class Cli {
 			final offset:Int = Span.offsetOf(source, atLineN, atColN);
 			final node:Null<QueryNode> = Engine.at(tree, offset);
 			final matches:Array<QueryNode> = node == null ? [] : [depth < 0 ? node : Engine.truncate(node, depth)];
-			sysPrint(json ? Json.renderMatches(file, source, matches) : Text.renderMatches(matches));
+			sysPrint(json ? Json.renderMatches(file, source, matches, wantDoc, wantSource) : Text.renderMatches(matches, source, wantDoc, wantSource));
 			return EXIT_OK;
 		}
 
@@ -584,7 +602,7 @@ final class Cli {
 					+ 'Kinds are exact node-constructor names — run `apq ast $file` to see the tree.\n');
 			}
 			final matches:Array<QueryNode> = depth < 0 ? raw : [for (m in raw) Engine.truncate(m, depth)];
-			sysPrint(json ? Json.renderMatches(file, source, matches) : Text.renderMatches(matches));
+			sysPrint(json ? Json.renderMatches(file, source, matches, wantDoc, wantSource) : Text.renderMatches(matches, source, wantDoc, wantSource));
 			return EXIT_OK;
 		}
 
@@ -654,6 +672,8 @@ final class Cli {
 		sysPrint('  --decls             Filter to declarations\n');
 		sysPrint('  --reads             Filter to read references\n');
 		sysPrint('  --writes            Filter to write references (Phase 3.3)\n');
+		sysPrint('  --doc               Also emit each hit\'s leading doc-comment\n');
+		sysPrint('  --source            Also emit each hit\'s verbatim source slice\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 		sysPrint('\n');
 		sysPrint('Phase 3.1: name-only matching, no lexical scope. Filters combine\n');
@@ -664,6 +684,8 @@ final class Cli {
 		sysPrint('Usage: apq uses [options] <type-name> <file-or-dir-or-glob>\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
+		sysPrint('  --doc               Also emit each hit\'s leading doc-comment\n');
+		sysPrint('  --source            Also emit each hit\'s verbatim source slice\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 		sysPrint('\n');
 		sysPrint('Finds type-position references — a field/var type annotation,\n');
@@ -692,6 +714,8 @@ final class Cli {
 		sysPrint('  --depth <n>         Truncate beyond depth n\n');
 		sysPrint('  --select <path>     Subtree(s) matching a selector (e.g. "ClassDecl > FnDecl:foo")\n');
 		sysPrint('  --at <line>:<col>   Innermost node enclosing the 1-indexed position\n');
+		sysPrint('  --doc               With --select/--at: emit the match\'s leading doc-comment\n');
+		sysPrint('  --source            With --select/--at: emit the match\'s verbatim source slice\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 	}
 

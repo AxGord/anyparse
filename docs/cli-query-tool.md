@@ -51,6 +51,7 @@ apq ast <file> --json              # JSON output
 apq ast <file> --at <line>:<col>   # smallest node enclosing cursor
 apq ast <file> --select <path>     # subtree(s) matching a selector
 apq ast <file> --depth <n>         # truncate beyond depth n
+apq ast <file> --select <path> --doc --source   # + doc-comment / verbatim slice
 ```
 
 Output is deterministic so the tool is usable in CI and diff-based workflows.
@@ -80,6 +81,7 @@ apq refs <name> <file-or-dir-or-glob>
 apq refs --writes <name> <files>     # only assignment positions
 apq refs --reads <name> <files>      # only read positions
 apq refs --decls <name> <files>      # only declaration positions
+apq refs --decls <name> <files> --doc --source   # + doc-comment / verbatim slice
 ```
 
 Scope awareness is lexical only: a local declaration shadows an outer name with the same identifier, and the tool correctly attributes references to the innermost binding. A loop iterator (e.g. a `for`/comprehension induction variable) is a declaration scoped to the loop body: references inside the loop resolve to it and shadow an outer same-named binding, while references after the loop fall through to the enclosing scope. A catch-clause exception name is scoped the same way (visible only inside the clause body); a lambda parameter is a declaration scoped to the lambda body. No type-based resolution. No cross-file resolution.
@@ -110,6 +112,35 @@ Implementation note: the default parse tree (consumed by
 to stay lean; `uses` runs on a separate projection
 (`GrammarPlugin.parseFileTypeRefs`), so adding it leaves the other four
 commands byte-identical by construction.
+
+### `--doc` / `--source` (opt-in, on `refs` / `uses` / `ast`)
+
+For each declaration hit, also emit prose alongside the
+`file:line:col`, so a locate step doesn't force a follow-up full-file
+read (in this codebase the leading doc-comment *is* the spec).
+
+```
+apq refs <name> <files> --decls --doc      # + the hit's leading doc-comment block
+apq refs <name> <files> --decls --source   # + the hit's verbatim source slice
+apq uses <type> <files> --doc --source     # both (uses: text output only)
+apq ast <file> --select <path> --source    # the selected subtree's verbatim slice
+apq ast <file> --at <l>:<c> --doc          # the matched node's leading doc-comment
+```
+
+- `--doc` walks back from the hit's `span.from` over blank and
+  single-line `@…` annotation lines to the immediately-preceding
+  block-style or line-style comment and emits it verbatim. Multi-line
+  paren-continued metadata between the comment and the decl is a known
+  v1 limitation.
+- `--source` is the verbatim `source[span.from .. span.to]` cut — for a
+  declaration that is the whole decl including its body.
+- Both are **opt-in and purely additive**. Default `refs`/`uses`/`ast`
+  output (text and JSON) is byte-identical: the reconstruction is from
+  source offsets only — never a tree node — and the JSON `doc` /
+  `source` keys are `@:optional`, omitted unless the flag is set
+  (the `parseFileTypeRefs` separate-projection discipline at the
+  slice layer). `refs --json` and `ast --json` carry the extra keys;
+  `uses` has no JSON form, so `--doc`/`--source` there are text-only.
 
 ### `apq meta`
 
