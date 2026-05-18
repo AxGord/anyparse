@@ -21,10 +21,12 @@ import anyparse.grammar.haxe.HxEnumCtorDecl;
 import anyparse.grammar.haxe.HxEnumDecl;
 import anyparse.grammar.haxe.HxEnumMember;
 import anyparse.grammar.haxe.HxErrorMsg;
+import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnBody;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxIdentLit;
 import anyparse.grammar.haxe.HxInterfaceDecl;
+import anyparse.grammar.haxe.HxMacroClass;
 import anyparse.grammar.haxe.HxModuleWriter;
 import anyparse.grammar.haxe.HxParam;
 import anyparse.grammar.haxe.HxParamBody;
@@ -376,6 +378,20 @@ class HxTestHelpers extends Test {
 			case Required(body): body;
 			case Optional(body): body;
 			case _: throw 'expected short HxAnonField, got $field';
+		};
+	}
+
+	private function expectExprStmt(stmt:HxStatement):HxExpr {
+		return switch stmt {
+			case ExprStmt(expr): expr;
+			case _: throw 'expected ExprStmt, got $stmt';
+		};
+	}
+
+	private function expectMacroClassExpr(e:HxExpr):HxMacroClass {
+		return switch e {
+			case MacroClassExpr(v): v;
+			case _: throw 'expected MacroClassExpr, got $e';
 		};
 	}
 }

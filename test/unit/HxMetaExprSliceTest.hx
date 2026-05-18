@@ -89,13 +89,6 @@ class HxMetaExprSliceTest extends HxTestHelpers {
 		Assert.equals(src, out);
 	}
 
-	private function expectExprStmt(stmt:HxStatement):HxExpr {
-		return switch stmt {
-			case ExprStmt(expr): expr;
-			case _: throw 'expected ExprStmt, got $stmt';
-		};
-	}
-
 	private function expectCallArgs(expr:HxExpr):Array<HxExpr> {
 		return switch expr {
 			case Call(_, args): args;

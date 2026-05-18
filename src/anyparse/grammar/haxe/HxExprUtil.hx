@@ -135,6 +135,8 @@ final class HxExprUtil {
 	 * property a blanket `:trailOpt` would destroy on the catch-all).
 	 *
 	 * **No `;`** (gate true):
+	 *  - `MacroClassExpr` (`macro class … { members }`) — always
+	 *    `}`-terminated by the members block.
 	 *  - `MacroExpr` whose operand is `BlockExpr` (`macro { … }`) or is
 	 *    itself in this set (`macro switch (e) { … }`,
 	 *    `macro try { … } catch …`) — recursive.
@@ -162,6 +164,10 @@ final class HxExprUtil {
 		if (e == null) return false;
 		final ctor:Null<String> = Type.enumConstructor(e);
 		if (ctor == null) return false;
+		// `macro class … { members }` always ends with the members
+		// block's closing `}`, so a bare-statement `macro class {}`
+		// needs no trailing `;` — regardless of named / anon / empty.
+		if (ctor == 'MacroClassExpr') return true;
 		if (ctor == 'MacroExpr') {
 			final params:Null<Array<Dynamic>> = Type.enumParameters(e);
 			if (params == null || params.length == 0) return false;

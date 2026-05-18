@@ -374,6 +374,9 @@ enum HxExpr {
 	MacroTypeExpr(t:HxType);
 
 	@:kw('macro')
+	MacroClassExpr(v:HxMacroClass);
+
+	@:kw('macro')
 	MacroExpr(operand:HxExpr);
 
 	@:kw('var')
