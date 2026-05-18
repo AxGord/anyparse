@@ -1,12 +1,13 @@
-# Dedicated CLI compile server (separate from vshaxe). Start once:
-#   haxe --wait 7822
-# Caches macro-expanded modules between runs. Restart the server if a
-# stale synthesized-type error appears.
---connect 7822
+# Pure compile (no compile-server). Cold js compile is ~3s vs ~1.85s
+# warm-after-grammar-edit (measured); the ~1.2s saving is below the
+# test-run/corpus-sweep cycle noise and the `--connect` server carries
+# an intermittent stale-synthesized-type silent-hang footgun on exactly
+# the @:peg/@:build files every Phase-3 slice edits. Run protocol:
+#   haxe test-js.hxml                       # compile only
+#   ANYPARSE_HXFORMAT_FORK=… node bin/test.js   # run (env not via --cmd)
 -cp src
 -cp test
 -lib utest
 -lib hxnodejs
 -main RunTests
 -js bin/test.js
---cmd node bin/test.js
