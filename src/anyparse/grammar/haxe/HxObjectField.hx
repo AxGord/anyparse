@@ -3,9 +3,14 @@ package anyparse.grammar.haxe;
 /**
  * Single field entry in an anonymous object literal: `name : value`.
  *
- * The field name uses the `HxIdentLit` terminal — quoted-string keys
- * (`"key": value`) are deferred; Haxe itself only recently added that
- * form and the fork corpus uses bare identifiers exclusively.
+ * The field name uses the `HxObjectKeyLit` terminal: either a bare
+ * identifier or a double-quoted string literal (`{ "name": value }`,
+ * `{ "kebab-case": v }`). AST-contract note: a quoted key is stored
+ * WITH its surrounding quotes (`@:rawString` on the terminal), so
+ * `(name : String)` returns `"name"` for a quoted key and `name` for a
+ * bare one; the writer re-emits the slice verbatim → byte-for-byte
+ * round-trip. Single-quoted keys and escaped `\"` inside a key are
+ * deferred (see `HxObjectKeyLit`).
  *
  * The value is a full `HxExpr`, parsed with whitespace skipping and
  * the full operator precedence chain — nested object literals, arrays,
@@ -33,6 +38,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxObjectField = {
-	var name:HxIdentLit;
+	var name:HxObjectKeyLit;
 	@:fmt(objectFieldColon, indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'), propagateExprPosition) @:lead(':') var value:HxExpr;
 }

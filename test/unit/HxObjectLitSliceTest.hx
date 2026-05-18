@@ -102,4 +102,62 @@ class HxObjectLitSliceTest extends HxTestHelpers {
 			case null, _: Assert.fail('expected GtEq(v, ObjectLit)');
 		}
 	}
+
+	/**
+	 * Slice 12: a double-quoted string key is stored verbatim WITH its
+	 * surrounding quotes (`@:rawString` on `HxObjectKeyLit`).
+	 */
+	public function testQuotedKey():Void {
+		final decl:HxVarDecl = parseSingleVarDecl('class C { var x:Dynamic = {"name": 1}; }');
+		switch decl.init {
+			case ObjectLit(lit):
+				Assert.equals(1, lit.fields.length);
+				final field:HxObjectField = lit.fields[0];
+				Assert.equals('"name"', (field.name : String));
+				switch field.value {
+					case IntLit(v): Assert.equals(1, (v : Int));
+					case null, _: Assert.fail('expected IntLit(1)');
+				}
+			case null, _: Assert.fail('expected ObjectLit({"name":1})');
+		}
+	}
+
+	/**
+	 * Mixed bare + quoted keys in one literal, including a key that is
+	 * NOT a valid identifier (`"b-c"`) — the generalization payoff.
+	 */
+	public function testMixedBareAndQuotedKeys():Void {
+		final decl:HxVarDecl = parseSingleVarDecl('class C { var x:Dynamic = {a: 1, "b-c": 2}; }');
+		switch decl.init {
+			case ObjectLit(lit):
+				Assert.equals(2, lit.fields.length);
+				Assert.equals('a', (lit.fields[0].name : String));
+				Assert.equals('"b-c"', (lit.fields[1].name : String));
+			case null, _: Assert.fail('expected ObjectLit(2 mixed-key fields)');
+		}
+	}
+
+	/** Verbatim `whitespace/issue_60` shape + idempotent re-emit. */
+	public function testQuotedKeyIssue60RoundTrip():Void {
+		final decl:HxVarDecl = parseSingleVarDecl('class C { var x = {"i":0}; }');
+		switch decl.init {
+			case ObjectLit(lit):
+				Assert.equals('"i"', (lit.fields[0].name : String));
+			case null, _: Assert.fail('expected ObjectLit({"i":0})');
+		}
+		roundTrip('class C { function main() { var x = {"i":0}; } }', 'issue_60');
+	}
+
+	/**
+	 * Regression sentinel: a string VALUE (`{ x: "v" }`) is unaffected —
+	 * the key is bare, the value parses as a string-literal expression.
+	 */
+	public function testStringValueKeyUnaffected():Void {
+		final decl:HxVarDecl = parseSingleVarDecl('class C { var x:Dynamic = {x: "v"}; }');
+		switch decl.init {
+			case ObjectLit(lit):
+				Assert.equals('x', (lit.fields[0].name : String));
+			case null, _: Assert.fail('expected ObjectLit({x:"v"})');
+		}
+	}
 }
