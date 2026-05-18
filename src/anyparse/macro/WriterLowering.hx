@@ -2330,6 +2330,33 @@ class WriterLowering {
 							optParts.push(macro _dop(' '));
 						}
 						optParts.push(writeCall);
+					} else if (bodyPolicyFlag != null) {
+						// ω-absent-on-bodypolicy: optional Ref with no kw /
+						// lead but `@:fmt(bodyPolicy(...))`. The leftCurly
+						// branch below mirrors the mandatory-Ref `{`-ctor
+						// switch; this branch mirrors the mandatory-Ref
+						// `bodyPolicyWrap` path (the bare-Ref site below /
+						// the optional-kw site above) so the `)`→body
+						// separator survives. `bodyPolicyWrap` owns the
+						// separator AND the body emission; for the absent
+						// case the outer `_optVal != null` guard drops the
+						// whole thing to `_de()`. Present-body output is
+						// byte-identical to the pre-optional mandatory-Ref
+						// path (same wrap, same flag, no kw-trivia gap).
+						// First consumer: `HxCatchClause.body` (bodyless
+						// `catch (e:T)`).
+						final inlineBlockBodyArgs:Null<Array<String>> = child.fmtReadStringArgs('inlineBlockBodyIfFlag');
+						optParts.push(bodyPolicyWrap({
+							flagName: bodyPolicyFlag,
+							exprFlagName: bodyPolicyExprFlag,
+							writeCall: writeCall,
+							bodyValueExpr: macro _optVal,
+							bodyTypePath: refName,
+							hasElseIf: hasElseIf,
+							elseFieldName: elseFieldName,
+							indentObjArgs: indentObjArgs,
+							inlineBlockBodyArgs: inlineBlockBodyArgs,
+						}));
 					} else {
 						// ω-absent-on: optional Ref with no kw / lead — emit
 						// only the writeCall, but if `@:fmt(leftCurly)` is

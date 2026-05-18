@@ -105,6 +105,38 @@ class HxCatchBodySliceTest extends Test {
 		Assert.equals(BodyPolicy.Next, opts.catchBody);
 	}
 
+	// Slice 3 — body-less `catch (e:Type)` (`@:optional @:absentOn('}')`
+	// on `HxCatchClause.body`). Recon-confirmed sole blocker of the
+	// `whitespace/issue_583_*` cluster (×6) once Slice 2 multi-var
+	// landed. Parse-additive: the present-body path is unchanged.
+
+	public function testBodylessCatchParses():Void {
+		// `catch (e:Any)` directly followed by the function close `}` —
+		// must parse (body absent) instead of throwing.
+		Assert.notNull(HaxeModuleParser.parse('class M { function f():Void { try { a; } catch (e:Any) } }'));
+	}
+
+	public function testBodylessCatchAtClassClose():Void {
+		// The exact `whitespace/issue_583_*` shape: bodyless catch then
+		// the function close then the class close.
+		final src:String = 'class Main {\n\tstatic function main() {\n\t\ttry {\n\t\t\tvar v = 1;\n\t\t} catch (e:Any)\n\t}\n}';
+		Assert.notNull(HaxeModuleParser.parse(src));
+	}
+
+	public function testBodylessCatchWritesNoCrash():Void {
+		// The writer must not throw on an absent catch body; the catch
+		// header itself survives.
+		final out:String = writeWith('class M { function f():Void { try { a; } catch (e:Any) } }', BodyPolicy.Next);
+		Assert.isTrue(out.indexOf('catch (e:Any)') != -1, 'expected `catch (e:Any)` header in: <$out>');
+	}
+
+	public function testCatchWithBodyStillParses():Void {
+		// Regression sentinel — the present-body path is byte-identical
+		// to the pre-Slice-3 required-Ref path.
+		final out:String = writeWith('class M { function f():Void { try { a; } catch (e:Any) { b; } } }', BodyPolicy.Next);
+		Assert.isTrue(out.indexOf(') {') != -1, 'expected `) {` (block body) unaffected in: <$out>');
+	}
+
 	public function testCatchBodyAndTryPolicyIndependent():Void {
 		// Adding `catchBody` must NOT silence `tryPolicy` — the latter
 		// gates the `try`→body gap, which is a different field site.
