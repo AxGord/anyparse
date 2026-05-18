@@ -8,6 +8,7 @@ import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxEnumDecl;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxInterfaceDecl;
+import anyparse.grammar.haxe.HxIntersectionClause;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxTypedefDecl;
 import anyparse.grammar.haxe.HxType;
@@ -353,6 +354,101 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 
 	public function testRoundTripConstraintOnClass():Void {
 		roundTrip('class Box<T:Iterable> { var v:T; }');
+	}
+
+	// --- Slice 9: multi-bound constraint `<T:A & B>` (constraintMore Star) ---
+
+	public function testMultiBoundConstraintAbsentIsEmpty():Void {
+		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar<T:Iterable>():T {} }');
+		final tps:Null<Array<HxTypeParamDecl>> = decl.typeParams;
+		Assert.notNull(tps);
+		Assert.equals('Iterable', (expectNamedType(tps[0].constraint).name : String));
+		Assert.equals(0, tps[0].constraintMore.length);
+	}
+
+	public function testMultiBoundConstraintTwo():Void {
+		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar<T:Foo & Bar>():Void {} }');
+		final tps:Null<Array<HxTypeParamDecl>> = decl.typeParams;
+		Assert.notNull(tps);
+		Assert.equals(1, tps.length);
+		Assert.equals('T', (tps[0].name : String));
+		Assert.equals('Foo', (expectNamedType(tps[0].constraint).name : String));
+		final more:Array<HxIntersectionClause> = tps[0].constraintMore;
+		Assert.equals(1, more.length);
+		Assert.equals('Bar', (expectNamedType(more[0].type).name : String));
+	}
+
+	public function testMultiBoundConstraintThree():Void {
+		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar<T:A & B & C>():Void {} }');
+		final tps:Null<Array<HxTypeParamDecl>> = decl.typeParams;
+		Assert.notNull(tps);
+		Assert.equals('A', (expectNamedType(tps[0].constraint).name : String));
+		final more:Array<HxIntersectionClause> = tps[0].constraintMore;
+		Assert.equals(2, more.length);
+		Assert.equals('B', (expectNamedType(more[0].type).name : String));
+		Assert.equals('C', (expectNamedType(more[1].type).name : String));
+	}
+
+	public function testMultiBoundConstraintAnonHead():Void {
+		// Verbatim shape from corpus lineends/simons_type_parameter_constraints
+		// (`<T, O:{} & T>`), wrapped in a class — the module-level-function
+		// form is an orthogonal construct.
+		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function hasIdent<T, O:{} & T>(name:T):T { return false; } }');
+		final tps:Null<Array<HxTypeParamDecl>> = decl.typeParams;
+		Assert.notNull(tps);
+		Assert.equals(2, tps.length);
+		Assert.equals('T', (tps[0].name : String));
+		Assert.isNull(tps[0].constraint);
+		Assert.equals(0, tps[0].constraintMore.length);
+		Assert.equals('O', (tps[1].name : String));
+		final c:Null<HxType> = tps[1].constraint;
+		Assert.notNull(c);
+		switch c {
+			case Anon(_): // ok — `{}`
+			case null, _: Assert.fail('expected HxType.Anon for `{}` head, got $c');
+		}
+		final more:Array<HxIntersectionClause> = tps[1].constraintMore;
+		Assert.equals(1, more.length);
+		Assert.equals('T', (expectNamedType(more[0].type).name : String));
+	}
+
+	public function testMultiBoundConstraintOnClass():Void {
+		final ast:HxClassDecl = HaxeParser.parse('class Box<T:Foo & Bar> { }');
+		final tps:Null<Array<HxTypeParamDecl>> = ast.typeParams;
+		Assert.notNull(tps);
+		Assert.equals(1, tps.length);
+		Assert.equals('Foo', (expectNamedType(tps[0].constraint).name : String));
+		Assert.equals(1, tps[0].constraintMore.length);
+		Assert.equals('Bar', (expectNamedType(tps[0].constraintMore[0].type).name : String));
+	}
+
+	public function testMultiBoundConstraintWithDefault():Void {
+		// Field-ordering check: constraintMore Star precedes the
+		// `@:lead('=')` defaultValue — both must parse.
+		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar<T:Foo & Bar = Baz>():Void {} }');
+		final tps:Null<Array<HxTypeParamDecl>> = decl.typeParams;
+		Assert.notNull(tps);
+		Assert.equals('Foo', (expectNamedType(tps[0].constraint).name : String));
+		Assert.equals(1, tps[0].constraintMore.length);
+		Assert.equals('Bar', (expectNamedType(tps[0].constraintMore[0].type).name : String));
+		Assert.equals('Baz', (expectNamedType(tps[0].defaultValue).name : String));
+	}
+
+	public function testMultiBoundConstraintWhitespaceTolerance():Void {
+		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function bar < T : Foo & Bar > ():Void {} }');
+		final tps:Null<Array<HxTypeParamDecl>> = decl.typeParams;
+		Assert.notNull(tps);
+		Assert.equals('Foo', (expectNamedType(tps[0].constraint).name : String));
+		Assert.equals(1, tps[0].constraintMore.length);
+		Assert.equals('Bar', (expectNamedType(tps[0].constraintMore[0].type).name : String));
+	}
+
+	public function testRoundTripMultiBoundConstraint():Void {
+		roundTrip('class F { function get<T:Foo & Bar>():T {} }');
+	}
+
+	public function testRoundTripMultiBoundConstraintOnClass():Void {
+		roundTrip('class Box<T:Foo & Bar & Baz> { var v:T; }');
 	}
 
 	public function testModuleQualifiedTwoSegments():Void {
