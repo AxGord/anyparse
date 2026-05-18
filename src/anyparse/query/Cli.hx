@@ -345,6 +345,7 @@ final class Cli {
 	private static function runSearch(args:Array<String>):Int {
 		var lang:String = 'haxe';
 		var json:Bool = false;
+		var kind:Null<String> = null;
 		var pattern:Null<String> = null;
 		var inputSpec:Null<String> = null;
 
@@ -365,6 +366,8 @@ final class Cli {
 						lang = expectValue(args, ++i, '--lang');
 					case '--json':
 						json = true;
+					case '--kind':
+						kind = expectValue(args, ++i, '--kind');
 					case '-h', '--help':
 						printSearchUsage();
 						return EXIT_OK;
@@ -410,6 +413,14 @@ final class Cli {
 				return EXIT_RUNTIME;
 			};
 
+		// Non-fatal: a leaf pattern (bare name / lone metavar / bare
+		// literal) has no code shape — search only hits it in
+		// expression position, never a decl or type. Point at the
+		// right tool and proceed anyway (the user may genuinely want
+		// the identifier-expression occurrences).
+		if (parsed.isDegenerate())
+			stderr('apq search: pattern "$patternStr" has no code structure — search matches shape, not bare names. Declaration: apq refs $patternStr --decls | type users: apq uses $patternStr | subtree: apq ast --select. Searching anyway.\n');
+
 		final paths:Array<String> = Glob.expand(inputStr, '.hx');
 		if (paths.length == 0) {
 			stderr('apq search: no input files matched "$inputStr"\n');
@@ -430,7 +441,7 @@ final class Cli {
 					null;
 				};
 			if (tree == null) continue;
-			final matches:Array<Match> = Matcher.search(parsed, tree);
+			final matches:Array<Match> = Matcher.search(parsed, tree, kind);
 			if (matches.length == 0) continue;
 			allEntries.push({file: path, source: source, matches: matches});
 			for (m in matches) allMatches.push(m);
@@ -625,6 +636,7 @@ final class Cli {
 		sysPrint('Options:\n');
 		sysPrint('  --json              Emit JSON instead of text\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('  --kind <Kind>       Only match nodes of this AST kind\n');
 		sysPrint('\n');
 		sysPrint("Pattern syntax: language source with `$X` / `$_` metavars.\n");
 		sysPrint("  $X      — bind a subtree; reuses must match structurally.\n");

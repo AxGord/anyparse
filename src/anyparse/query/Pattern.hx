@@ -53,6 +53,15 @@ final class Pattern {
 		this.source = source;
 		this.kindEquivalence = kindEquivalence;
 	}
+
+	/**
+	 * A pattern whose resolved root is a single leaf (no children) —
+	 * a bare identifier, a lone metavar, or a bare literal. Such a
+	 * pattern carries no code shape: `search` would only match the
+	 * name in expression position, never a declaration or type. The
+	 * CLI uses this to nudge toward `refs --decls` / `uses` / `ast`.
+	 */
+	public inline function isDegenerate():Bool return root.children.length == 0;
 }
 
 /**

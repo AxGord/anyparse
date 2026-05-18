@@ -62,9 +62,14 @@ Find AST subtrees matching a pattern.
 ```
 apq search <pattern> <file-or-dir-or-glob>
 apq search <pattern> <files> --json
+apq search --kind <Kind> <pattern> <files>   # only match nodes of that AST kind
 ```
 
 The pattern is a fragment of the target language, parsed by the same grammar plugin, with the metavariable extension described in [Pattern syntax](#pattern-syntax-for-search) below. Each match prints the source location and the bindings of any metavariables.
+
+`--kind <Kind>` restricts matches to nodes whose AST kind equals `<Kind>` (e.g. `VarStmt`, `ParamCtor`, `ClassDecl` — the same vocabulary `ast --select`/`refs --on` use); the pattern still has to match structurally, this only narrows *where*.
+
+`search` is a **structural** query: the pattern is parsed as code shape. A degenerate pattern that resolves to a single leaf (a bare identifier, a lone metavar, a bare literal — no children) carries no shape and only ever matches that name in expression position. The CLI detects this and emits a non-fatal stderr nudge pointing at the right tool (`refs <name> --decls` for a declaration, `uses <Type>` for a type's consumers, `ast --select` for a subtree), then runs the search anyway.
 
 ### `apq refs`
 

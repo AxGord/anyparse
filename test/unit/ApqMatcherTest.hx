@@ -146,4 +146,50 @@ class ApqMatcherTest extends Test {
 		final slice:String = source.substring(span.from, span.to);
 		Assert.equals('n', StringTools.trim(slice), 'source slice for $$x must be "n", got "$slice"');
 	}
+
+	public function testKindFilterRestrictsByKind():Void {
+		// Same verified multi-kind input as testVarDeclPatternMatchesEveryPosition:
+		// `var $v = 0` matches the class-field (VarMember) and the local
+		// (VarStmt). The --kind filter must narrow Matcher.search to the
+		// requested AST kind only, without touching pattern semantics.
+		final plugin:HaxeQueryPlugin = new HaxeQueryPlugin();
+		final source:String = 'class X {
+			var field = 0;
+			static function f() { var local = 0; }
+		}';
+		final pattern:Pattern = plugin.parsePattern("var $v = 0");
+		final tree:QueryNode = plugin.parseFile(source);
+		Assert.equals(2, Matcher.search(pattern, tree).length, 'no filter — both match');
+		final onlyStmt:Array<Match> = Matcher.search(pattern, tree, 'VarStmt');
+		Assert.equals(1, onlyStmt.length, '--kind VarStmt — only the local var');
+		final localName:Null<QueryNode> = onlyStmt[0].bindings.get('v');
+		Assert.equals('local', localName == null ? '<none>' : (localName.name ?? '<noname>'));
+		Assert.equals(1, Matcher.search(pattern, tree, 'VarMember').length, '--kind VarMember — only the field');
+		Assert.equals(0, Matcher.search(pattern, tree, 'NoSuchKind').length, 'unknown kind — no matches');
+	}
+
+	public function testAnnotationPatternMatches():Void {
+		// MetaArgs cascade branch — previously untested. `@:foo($_)`
+		// must match each `@:foo(...)` annotation regardless of its
+		// single argument.
+		final plugin:HaxeQueryPlugin = new HaxeQueryPlugin();
+		final source:String = 'class X {
+			@:foo("a") var p:Int;
+			@:foo(1) var q:Int;
+		}';
+		final pattern:Pattern = plugin.parsePattern("@:foo($_)");
+		final tree:QueryNode = plugin.parseFile(source);
+		final matches:Array<Match> = Matcher.search(pattern, tree);
+		Assert.equals(2, matches.length, 'both @:foo(...) sites must match — got ${matches.length}');
+	}
+
+	public function testIsDegeneratePredicate():Void {
+		// A leaf pattern (bare ident / lone metavar) has no structure;
+		// a pattern with children does. Drives the CLI nudge.
+		final plugin:HaxeQueryPlugin = new HaxeQueryPlugin();
+		Assert.isTrue(plugin.parsePattern("Anon").isDegenerate(), 'bare identifier is degenerate');
+		Assert.isTrue(plugin.parsePattern("$x").isDegenerate(), 'lone metavar is degenerate');
+		Assert.isFalse(plugin.parsePattern("throw new $E($_)").isDegenerate(), 'throw-new has structure');
+		Assert.isFalse(plugin.parsePattern("return $x").isDegenerate(), 'return-stmt has structure');
+	}
 }

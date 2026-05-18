@@ -37,19 +37,21 @@ final class Matcher {
 	 * reported in pre-order — outer matches before any nested matches
 	 * that fall within them.
 	 */
-	public static function search(pattern:Pattern, tree:QueryNode):Array<Match> {
+	public static function search(pattern:Pattern, tree:QueryNode, ?kindFilter:String):Array<Match> {
 		final out:Array<Match> = [];
-		walk(pattern.root, tree, pattern.kindEquivalence, out);
+		walk(pattern.root, tree, pattern.kindEquivalence, out, kindFilter);
 		return out;
 	}
 
-	private static function walk(pattern:QueryNode, input:QueryNode, eq:Null<KindEquivalence>, out:Array<Match>):Void {
-		final bindings:Map<String, QueryNode> = new Map();
-		if (unify(pattern, input, eq, bindings)) {
-			final span:Null<Span> = input.span;
-			if (span != null) out.push(new Match(span, bindings));
+	private static function walk(pattern:QueryNode, input:QueryNode, eq:Null<KindEquivalence>, out:Array<Match>, kindFilter:Null<String>):Void {
+		if (kindFilter == null || input.kind == kindFilter) {
+			final bindings:Map<String, QueryNode> = new Map();
+			if (unify(pattern, input, eq, bindings)) {
+				final span:Null<Span> = input.span;
+				if (span != null) out.push(new Match(span, bindings));
+			}
 		}
-		for (c in input.children) walk(pattern, c, eq, out);
+		for (c in input.children) walk(pattern, c, eq, out, kindFilter);
 	}
 
 	/**

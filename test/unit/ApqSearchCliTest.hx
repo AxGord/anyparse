@@ -69,6 +69,36 @@ class ApqSearchCliTest extends Test {
 		#end
 	}
 
+	public function testDegeneratePatternStillExitsOk():Void {
+		#if sys
+		// `Anon` is a bare identifier — degenerate. The CLI emits a
+		// non-fatal stderr nudge and still runs the search (exit 0),
+		// not a usage/runtime error.
+		final fixture:String = writeFixture('class X {
+			static function a() { var Anon = 1; return Anon; }
+		}');
+		final rc:Int = Cli.run(['search', 'Anon', fixture]);
+		Assert.equals(0, rc, 'degenerate pattern must still exit 0 (non-fatal nudge)');
+		FileSystem.deleteFile(fixture);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testKindFlagAcceptedAndExitsOk():Void {
+		#if sys
+		final fixture:String = writeFixture('class X {
+			var field = 0;
+			static function f() { var local = 0; }
+		}');
+		final rc:Int = Cli.run(['search', '--kind', 'VarStmt', "var $v = 0", fixture]);
+		Assert.equals(0, rc, '--kind flag must be accepted and exit 0');
+		FileSystem.deleteFile(fixture);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	public function testDashDashSentinelAllowsOptionLikePattern():Void {
 		#if sys
 		final fixture:String = writeFixture('class X {
