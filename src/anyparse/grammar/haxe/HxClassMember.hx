@@ -20,9 +20,17 @@ package anyparse.grammar.haxe;
  * `final`, `function`) so the generated parser enforces a word
  * boundary on the match and `classy` does not look like a truncated
  * `class`, `finalists` does not look like `final` followed by `ists`.
- * The trailing `;` on `VarMember` and `FinalMember` is a
- * per-constructor `@:trail` that the macro emits after the sub-rule
- * value is parsed.
+ * The trailing `;` on `VarMember` and `FinalMember` is
+ * `@:trailOpt(';')` writer-gated by
+ * `@:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))` — the byte
+ * twin of `HxStatement.VarStmt` / `FinalStmt`. The `;` is consumed
+ * when present and may be omitted when the field initializer ends in
+ * `}` (`= function() { … }`, `= switch (e) { … }`, recursive
+ * `= try { … } catch …`), matching Haxe's rule that a `}`-closed
+ * initializer needs no terminator. Trivia mode preserves the source's
+ * `;` presence verbatim through the generic `isAltTrailOptBranch`
+ * `trailPresent` synth slot; plain mode falls back to always emitting
+ * `;` unless the gate fires.
  *
  * `final` reaching this enum (instead of being consumed as a member
  * modifier) is enabled by `HxMemberDecl.modifiers` carrying
@@ -63,10 +71,10 @@ package anyparse.grammar.haxe;
 @:peg
 enum HxClassMember {
 
-	@:kw('var') @:trail(';')
+	@:kw('var') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))
 	VarMember(decl:HxVarDecl);
 
-	@:kw('final') @:trail(';')
+	@:kw('final') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))
 	FinalMember(decl:HxVarDecl);
 
 	@:kw('function')

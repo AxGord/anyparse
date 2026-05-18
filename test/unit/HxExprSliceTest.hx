@@ -78,10 +78,16 @@ class HxExprSliceTest extends HxTestHelpers {
 		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Int = ; }'), ParseError);
 	}
 
-	public function testRejectsMissingSemicolonAfterInit():Void {
-		// `var x:Int = 42` — the VarMember's trailing `;` is missing;
-		// `HxClassMember` fails and the outer loop fails.
-		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Int = 42 }'), ParseError);
+	public function testAcceptsMissingSemicolonAfterInit():Void {
+		// `var x:Int = 42` — Phase 3 Slice 13 relaxed `HxClassMember`
+		// `VarMember` to `@:trailOpt(';')` (byte-twin of statement-level
+		// `HxStatement.VarStmt`). Parser-side `:trailOpt` is
+		// position-agnostic, so the missing `;` is accepted even though
+		// Haxe rejects it; the writer still re-emits canonical `;`, so
+		// round-trip is unaffected. See `HxMemberVarTrailOptSliceTest`.
+		final ast:HxClassDecl = HaxeParser.parse('class Foo { var x:Int = 42 }');
+		Assert.equals(1, ast.members.length);
+		assertIntLit(expectVarMember(ast.members[0].member).init, 42);
 	}
 
 	public function testMixedInitInClass():Void {

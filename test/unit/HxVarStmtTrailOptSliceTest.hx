@@ -1,8 +1,6 @@
 package unit;
 
 import utest.Assert;
-import anyparse.runtime.ParseError;
-import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxStatement;
 
 /**
@@ -17,8 +15,9 @@ import anyparse.grammar.haxe.HxStatement;
  * accepted even though Haxe rejects it), but the formatter only ever
  * emits canonical `;`, so the relaxed parse has no observable effect on
  * round-trip output. Member-level `HxClassMember.VarMember` /
- * `FinalMember` keep their mandatory `@:trail(';')` — `class Foo { var
- * x:Int = 42 }` still rejects.
+ * `FinalMember` were since converged to the same `@:trailOpt(';')`
+ * (Phase 3 Slice 13); member-level leniency lives in
+ * `HxMemberVarTrailOptSliceTest`. This file stays statement-scope.
  *
  * Mirrors slice ω-typedef-trailOpt's test shape (`HxTypedefSemiSliceTest`)
  * and reuses the same `:trailOpt` Lit-strategy mechanism (no new macro
@@ -89,20 +88,6 @@ class HxVarStmtTrailOptSliceTest extends HxTestHelpers {
 	public function testFinalWithSemiStillParses():Void {
 		final stmts:Array<HxStatement> = parseFunctionBody('final foo = 5;');
 		Assert.equals(1, stmts.length);
-	}
-
-	// ======== Member-level VarMember unchanged (still strict) ========
-
-	public function testMemberLevelVarStillRequiresSemi():Void {
-		// `HxClassMember.VarMember` retained `@:trail(';')` — only the
-		// statement-level `VarStmt` was relaxed. Verifying the boundary
-		// per `feedback_shared_enum_consumers.md`-style audit (different
-		// enums for different positions, intentionally divergent rules).
-		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Int = 42 }'), ParseError);
-	}
-
-	public function testMemberLevelFinalStillRequiresSemi():Void {
-		Assert.raises(() -> HaxeParser.parse('class Foo { final x:Int = 42 }'), ParseError);
 	}
 
 	// ======== Round-trip — writer emits canonical `;` ========
