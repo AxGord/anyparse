@@ -544,4 +544,141 @@ class HxPostfixSliceTest extends HxTestHelpers {
 		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Int = a[1; }'), ParseError);
 	}
 
+	// --- Slice 11: safe-navigation `?.` / force-navigation `!.` ---
+
+	public function testSafeFieldAccessSmoke():Void {
+		// `a?.b` — Haxe 4.3 null-safe navigation. Structural clone of
+		// FieldAccess, distinct ctor, same HxFieldNameLit suffix.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a?.b; }');
+		switch decl.init {
+			case SafeFieldAccess(IdentExpr(o), f):
+				Assert.equals('a', (o : String));
+				Assert.equals('b', (f : String));
+			case null, _:
+				Assert.fail('expected SafeFieldAccess(IdentExpr(a), b), got ${decl.init}');
+		}
+	}
+
+	public function testForceFieldAccessSmoke():Void {
+		// `a!.b` — the haxe-formatter corpus force/assert-navigation form.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a!.b; }');
+		switch decl.init {
+			case ForceFieldAccess(IdentExpr(o), f):
+				Assert.equals('a', (o : String));
+				Assert.equals('b', (f : String));
+			case null, _:
+				Assert.fail('expected ForceFieldAccess(IdentExpr(a), b), got ${decl.init}');
+		}
+	}
+
+	public function testForceFieldChain():Void {
+		// `obj!.field!.length` (corpus other/safe_navigation_operator) —
+		// left-recursive like FieldAccess: each `!.name` wraps the
+		// growing accumulator.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = obj!.field!.length; }');
+		switch decl.init {
+			case ForceFieldAccess(ForceFieldAccess(IdentExpr(o), field), length):
+				Assert.equals('obj', (o : String));
+				Assert.equals('field', (field : String));
+				Assert.equals('length', (length : String));
+			case null, _:
+				Assert.fail('expected ForceFieldAccess(ForceFieldAccess(obj, field), length), got ${decl.init}');
+		}
+	}
+
+	public function testSafeFieldChain():Void {
+		// `a?.b?.c` — same left-recursion for the safe-nav form.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a?.b?.c; }');
+		switch decl.init {
+			case SafeFieldAccess(SafeFieldAccess(IdentExpr(a), b), c):
+				Assert.equals('a', (a : String));
+				Assert.equals('b', (b : String));
+				Assert.equals('c', (c : String));
+			case null, _:
+				Assert.fail('expected SafeFieldAccess(SafeFieldAccess(a, b), c), got ${decl.init}');
+		}
+	}
+
+	public function testForceFieldAfterCall():Void {
+		// `foo(bar)!.method()` (corpus issue_599) — postfix `!.` applies
+		// to a Call accumulator, then `()` calls the result.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = foo(bar)!.method(); }');
+		switch decl.init {
+			case Call(ForceFieldAccess(Call(IdentExpr(foo), inner), m), outer):
+				Assert.equals('foo', (foo : String));
+				Assert.equals(1, inner.length);
+				Assert.equals('method', (m : String));
+				Assert.equals(0, outer.length);
+			case null, _:
+				Assert.fail('expected Call(ForceFieldAccess(Call(foo, [bar]), method), []), got ${decl.init}');
+		}
+	}
+
+	public function testSafeFieldSpaced():Void {
+		// `a ?. b` (corpus whitespace_null_safety_operator) — the
+		// postfix peek skips surrounding whitespace like plain `.`.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a ?. b; }');
+		switch decl.init {
+			case SafeFieldAccess(IdentExpr(o), f):
+				Assert.equals('a', (o : String));
+				Assert.equals('b', (f : String));
+			case null, _:
+				Assert.fail('expected SafeFieldAccess(IdentExpr(a), b), got ${decl.init}');
+		}
+	}
+
+	public function testMixedSafeThenPlainField():Void {
+		// `a?.b.c` → FieldAccess(SafeFieldAccess(a, b), c). Mixed
+		// navigation kinds compose through the one postfix loop.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a?.b.c; }');
+		switch decl.init {
+			case FieldAccess(SafeFieldAccess(IdentExpr(a), b), c):
+				Assert.equals('a', (a : String));
+				Assert.equals('b', (b : String));
+				Assert.equals('c', (c : String));
+			case null, _:
+				Assert.fail('expected FieldAccess(SafeFieldAccess(a, b), c), got ${decl.init}');
+		}
+	}
+
+	public function testNotEqualNotMisparsedAsForce():Void {
+		// Regression sentinel: `a != b` must stay NotEq — the two-char
+		// `!.` postfix peek must not peel the `!` off `!=`.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a != b; }');
+		switch decl.init {
+			case NotEq(IdentExpr(a), IdentExpr(b)):
+				Assert.equals('a', (a : String));
+				Assert.equals('b', (b : String));
+			case null, _:
+				Assert.fail('expected NotEq(IdentExpr(a), IdentExpr(b)), got ${decl.init}');
+		}
+	}
+
+	public function testNullCoalNotMisparsedAsSafe():Void {
+		// Regression sentinel: `a ?? b` must stay NullCoal — `?.`
+		// postfix must not match the `?` of `??`.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a ?? b; }');
+		switch decl.init {
+			case NullCoal(IdentExpr(a), IdentExpr(b)):
+				Assert.equals('a', (a : String));
+				Assert.equals('b', (b : String));
+			case null, _:
+				Assert.fail('expected NullCoal(IdentExpr(a), IdentExpr(b)), got ${decl.init}');
+		}
+	}
+
+	public function testTernaryNotMisparsedAsSafe():Void {
+		// Regression sentinel: `a ? b : c` must stay Ternary — `?.`
+		// postfix must not match the bare ternary `?`.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a ? b : c; }');
+		switch decl.init {
+			case Ternary(IdentExpr(a), IdentExpr(b), IdentExpr(c)):
+				Assert.equals('a', (a : String));
+				Assert.equals('b', (b : String));
+				Assert.equals('c', (c : String));
+			case null, _:
+				Assert.fail('expected Ternary(a, b, c), got ${decl.init}');
+		}
+	}
+
 }

@@ -210,6 +210,28 @@ package anyparse.grammar.haxe;
  *    `$` included for the reification form. No module path or type
  *    parameter syntax yet; the recursive `obj.${expr}` form is out of
  *    scope (a regex terminal cannot carry a nested expression).
+ *  - `SafeFieldAccess` / `ForceFieldAccess` — `?.name` (Haxe 4.3
+ *    null-safe navigation) and `!.name` (the haxe-formatter corpus's
+ *    force/assert-navigation form) member access. Structural clones of
+ *    `FieldAccess` differing only by the postfix literal; the suffix is
+ *    the same `HxFieldNameLit`, so they round-trip through the generic
+ *    postfix writer path (`operand` + `?.`/`!.` + `field`) with zero
+ *    writer fork. The whole `?.` / `!.` is one two-char postfix literal
+ *    rather than a bare postfix `?` / `!` plus a `.`: a bare postfix
+ *    `!` would mis-fire on `a != b` (its `!` peeled off `!=`) and a
+ *    bare postfix `?` would collide with the ternary `?` / `??`. As a
+ *    two-char literal the postfix peek only matches when the next two
+ *    chars are exactly `?.` / `!.`, so `a ?? b`, `a ? b : c`,
+ *    `a != b` all fall through the postfix loop into the Pratt loop
+ *    untouched (postfix runs in the atom wrapper, the ternary /
+ *    null-coalescing operators in the separate Pratt loop after it).
+ *    `@:fmt(methodChain(...))` is intentionally omitted — the corpus
+ *    forms are short and the plain postfix emit is byte-faithful;
+ *    chain-layout for `?.`/`!.` is a deferred formatting follow-up.
+ *    Left-recursive like `FieldAccess`: `obj!.field!.length` →
+ *    `ForceFieldAccess(ForceFieldAccess(obj, field), length)`. The
+ *    recursive `obj?.${expr}` computed-safe-nav form is out of scope
+ *    (same regex-terminal limit as `FieldAccess`).
  *  - `IndexAccess` — `[expr]` index. The inner expression is parsed
  *    via `parseHxExpr` (not the atom wrapper), resetting precedence
  *    so arbitrary operators are allowed inside the brackets.
@@ -427,6 +449,12 @@ enum HxExpr {
 
 	@:postfix('.') @:fmt(methodChain('methodChainWrap'))
 	FieldAccess(operand:HxExpr, field:HxFieldNameLit);
+
+	@:postfix('?.')
+	SafeFieldAccess(operand:HxExpr, field:HxFieldNameLit);
+
+	@:postfix('!.')
+	ForceFieldAccess(operand:HxExpr, field:HxFieldNameLit);
 
 	@:postfix('[', ']')
 	IndexAccess(operand:HxExpr, index:HxExpr);
