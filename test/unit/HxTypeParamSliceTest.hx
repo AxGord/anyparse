@@ -5,6 +5,8 @@ import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxAbstractDecl;
 import anyparse.grammar.haxe.HxClassDecl;
+import anyparse.grammar.haxe.HxEnumCtor;
+import anyparse.grammar.haxe.HxEnumCtorDecl;
 import anyparse.grammar.haxe.HxEnumDecl;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxInterfaceDecl;
@@ -587,5 +589,71 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 
 	public function testRoundTripDefaultMixed():Void {
 		roundTrip('class Pair<S = Int, T = String> { var s:S; var t:T; }');
+	}
+
+	// --- Slice 16: per-constructor type params `Bar<T>(…)` ---
+
+	public function testEnumCtorTypeParamSingle():Void {
+		// Exact corpus input — whitespace/issue_659_enum_type_params.
+		final ast:HxModule = HaxeModuleParser.parse('enum Foo<Child> { Bar<T>(options:Array<T>); }');
+		final ed:HxEnumDecl = expectEnumDecl(ast.decls[0]);
+		final ctors:Array<HxEnumCtor> = enumCtors(ed);
+		Assert.equals(1, ctors.length);
+		final d:HxEnumCtorDecl = expectParamCtor(ctors[0]);
+		Assert.equals('Bar', (d.name : String));
+		final tps:Null<Array<HxTypeParamDecl>> = d.typeParams;
+		Assert.notNull(tps);
+		Assert.equals(1, tps.length);
+		Assert.equals('T', (tps[0].name : String));
+		Assert.equals(1, d.params.length);
+	}
+
+	public function testEnumCtorTypeParamMulti():Void {
+		final ast:HxModule = HaxeModuleParser.parse('enum Foo { Baz<A, B>(a:A, b:B); }');
+		final d:HxEnumCtorDecl = expectParamCtor(enumCtors(expectEnumDecl(ast.decls[0]))[0]);
+		final tps:Null<Array<HxTypeParamDecl>> = d.typeParams;
+		Assert.notNull(tps);
+		Assert.equals(2, tps.length);
+		Assert.equals('A', (tps[0].name : String));
+		Assert.equals('B', (tps[1].name : String));
+		Assert.equals(2, d.params.length);
+	}
+
+	public function testEnumCtorTypeParamWhitespaceTolerance():Void {
+		final ast:HxModule = HaxeModuleParser.parse('enum Foo { Bar < T > ( x : Int ); }');
+		final d:HxEnumCtorDecl = expectParamCtor(enumCtors(expectEnumDecl(ast.decls[0]))[0]);
+		final tps:Null<Array<HxTypeParamDecl>> = d.typeParams;
+		Assert.notNull(tps);
+		Assert.equals(1, tps.length);
+		Assert.equals('T', (tps[0].name : String));
+	}
+
+	public function testEnumCtorWithoutTypeParamsIsNull():Void {
+		// Mis-fire sentinel: plain param ctor — optional Star absent.
+		final ast:HxModule = HaxeModuleParser.parse('enum Foo { Bar(x:Int); }');
+		final d:HxEnumCtorDecl = expectParamCtor(enumCtors(expectEnumDecl(ast.decls[0]))[0]);
+		Assert.isNull(d.typeParams);
+		Assert.equals(1, d.params.length);
+	}
+
+	public function testEnumSimpleCtorStillParses():Void {
+		// Mis-fire sentinel: zero-arg ctor unaffected by the new field.
+		final ast:HxModule = HaxeModuleParser.parse('enum Foo { None; }');
+		final ctors:Array<HxEnumCtor> = enumCtors(expectEnumDecl(ast.decls[0]));
+		Assert.equals('None', (expectSimpleCtor(ctors[0]) : String));
+	}
+
+	public function testRoundTripEnumCtorTypeParam():Void {
+		// The issue_659 input verbatim (declare-site + ctor-site type params).
+		roundTrip('enum Foo<Child> {\n\tBar<T>(options : Array<T>);\n}');
+	}
+
+	public function testRoundTripEnumCtorTypeParamMulti():Void {
+		roundTrip('enum Foo { Baz<A, B>(a:A, b:B); }');
+	}
+
+	public function testRoundTripEnumPlainCtorByteIdentical():Void {
+		// Optional Star absent ⇒ existing ctor round-trip unchanged.
+		roundTrip('enum Foo { Bar(x:Int); None; }');
 	}
 }
