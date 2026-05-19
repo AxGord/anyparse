@@ -28,6 +28,16 @@ import anyparse.grammar.haxe.HxModule;
  * `@:trailOpt(';')` mirroring `HxStatement.VarStmt`'s relaxation so a
  * `}`-terminated rhs at module level (rare) parses without trailing
  * `;`.
+ *
+ * Slice ω-module-final extends the same file with `HxDecl.FinalDecl`,
+ * so top-level `final …` parses. `final` is no longer a
+ * `HxModifier` modifier (it was eaten as the sealed-class marker
+ * before the binding form could dispatch); `HxDecl.FinalDecl` now
+ * owns the `final` keyword and an inner `HxFinalDecl` enum
+ * disambiguates `final class Foo {}` (`ClassForm`) from
+ * `final FOO = 1;` (`VarForm`) by ordered first-match with rollback,
+ * no lookahead. Strip-confirmed sole-blocker on
+ * `lineends/map_with_comment` and `emptylines/issue_644`.
  */
 class HxToplevelVarFnSliceTest extends HxTestHelpers {
 
@@ -65,6 +75,76 @@ class HxToplevelVarFnSliceTest extends HxTestHelpers {
 	public function testTwoToplevelVars():Void {
 		final ast:HxModule = HaxeModuleParser.parse('var a = 1;\nvar b = 2;');
 		Assert.equals(2, ast.decls.length);
+	}
+
+	// ======== Top-level `final` (slice ω-module-final) ========
+
+	public function testToplevelFinalSimple():Void {
+		final ast:HxModule = HaxeModuleParser.parse('final FOO = 1;');
+		Assert.equals(1, ast.decls.length);
+		switch ast.decls[0].decl {
+			case FinalDecl(VarForm(decl)):
+				Assert.equals('FOO', (decl.name : String));
+				Assert.notNull(decl.init);
+			case _: Assert.fail('expected FinalDecl(VarForm), got ${ast.decls[0].decl}');
+		}
+	}
+
+	public function testToplevelFinalTyped():Void {
+		final ast:HxModule = HaxeModuleParser.parse('final FOO:Int = 1;');
+		switch ast.decls[0].decl {
+			case FinalDecl(VarForm(decl)):
+				Assert.equals('FOO', (decl.name : String));
+				Assert.notNull(decl.type);
+			case _: Assert.fail('expected FinalDecl(VarForm)');
+		}
+	}
+
+	public function testToplevelFinalNoSemi():Void {
+		// `:trailOpt` lets a `}`-terminated rhs drop the `;` at module level,
+		// exactly as the `var` sibling does.
+		final ast:HxModule = HaxeModuleParser.parse('final foo = { 1; }');
+		switch ast.decls[0].decl {
+			case FinalDecl(VarForm(decl)): Assert.equals('foo', (decl.name : String));
+			case _: Assert.fail('expected FinalDecl(VarForm)');
+		}
+	}
+
+	public function testToplevelFinalClass():Void {
+		// `final class` (sealed-class) reaches dispatch via the ClassForm
+		// branch now that `final` is no longer a modifier.
+		final ast:HxModule = HaxeModuleParser.parse('final class Foo {}');
+		switch ast.decls[0].decl {
+			case FinalDecl(ClassForm(cls)): Assert.equals('Foo', (cls.name : String));
+			case _: Assert.fail('expected FinalDecl(ClassForm), got ${ast.decls[0].decl}');
+		}
+	}
+
+	public function testMixedVarFinalFn():Void {
+		final ast:HxModule = HaxeModuleParser.parse('var a = 1;\nfinal b = 2;\nfunction f() {}');
+		Assert.equals(3, ast.decls.length);
+		switch ast.decls[1].decl {
+			case FinalDecl(VarForm(decl)): Assert.equals('b', (decl.name : String));
+			case _: Assert.fail('expected FinalDecl(VarForm) at index 1');
+		}
+	}
+
+	public function testRoundTripFinal():Void {
+		roundTrip('final FOO:Int = 1;');
+	}
+
+	public function testRoundTripFinalClass():Void {
+		roundTrip('final class Foo {}');
+	}
+
+	public function testClassFinalMemberStillWorks():Void {
+		// Adding top-level FinalDecl must NOT cannibalize class-member
+		// `final` parsing.
+		final ast:HxModule = HaxeModuleParser.parse('class C { final x:Int = 1; }');
+		switch ast.decls[0].decl {
+			case ClassDecl(decl): Assert.equals(1, decl.members.length);
+			case _: Assert.fail('expected ClassDecl');
+		}
 	}
 
 	// ======== Top-level `function` ========

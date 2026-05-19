@@ -2,17 +2,22 @@ package anyparse.grammar.haxe;
 
 /**
  * Access and storage modifiers — top-level form, used by
- * `HxTopLevelDecl.modifiers` for `private`/`extern`/`final`/… in front
- * of a `class`/`typedef`/`enum`/`interface`/`abstract` declaration.
- * `Final` here is the sealed-class marker (`final class Foo {}`), not
- * a field-declaration introducer.
+ * `HxTopLevelDecl.modifiers` for `private`/`extern`/… in front of a
+ * `class`/`typedef`/`enum`/`interface`/`abstract` declaration.
  *
- * Class / interface / abstract members route through
- * `HxMemberModifier` (the same enum minus `Final`), so member-level
- * `final` reaches `HxClassMember.FinalMember` instead of being eaten
- * as a modifier. See `HxMemberModifier` for the rationale and the one
- * narrow exception (`HxConditionalMod` body still references this
- * full enum so legacy `#if X final var x:Int; #end` remains accepted).
+ * `Final` is deliberately NOT a modifier here. At the top-level scope
+ * `final` is ambiguous between the sealed-class marker
+ * (`final class Foo {}`) and a module-level immutable binding
+ * (`final FOO = 1;`). The grammar carries no lookahead, and a greedy
+ * try-parse modifier Star would eat the `final` of `final FOO = 1;`
+ * and then fail dispatch. So `final` is handled entirely at decl
+ * dispatch by `HxDecl.FinalDecl` → `HxFinalDecl` (ordered class-vs-var
+ * first-match with rollback) — the exact analog of `HxMemberModifier`
+ * dropping `Final` so member-level `final` reaches
+ * `HxClassMember.FinalMember`. `HxConditionalMod` shares this enum, so
+ * `final` inside a `#if … #end` modifier region is consequently no
+ * longer accepted (no haxe-formatter fixture exercises that legacy
+ * form; the modern `final` decl forms are covered at dispatch).
  *
  * Keyword-only branches are zero-arg. The generated parser enforces
  * word boundaries via `expectKw` so `publicly` does not partially match
@@ -39,7 +44,6 @@ enum HxModifier {
 	@:kw('static') Static;
 	@:kw('inline') Inline;
 	@:kw('override') Override;
-	@:kw('final') Final;
 	@:kw('dynamic') Dynamic;
 	@:kw('extern') Extern;
 

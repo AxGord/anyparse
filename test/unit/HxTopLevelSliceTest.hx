@@ -238,14 +238,21 @@ class HxTopLevelSliceTest extends HxTestHelpers {
 	}
 
 	public function testTopLevelExternFinalClass():Void {
-		// Multiple modifiers — semantic validity (`extern final class`) is
-		// the analysis pass's job, parser only checks syntax.
+		// Slice ω-module-final: `final` is no longer a modifier. `extern`
+		// stays the sole modifier; `final class` now parses as
+		// `HxDecl.FinalDecl(ClassForm(...))`. Semantic validity of
+		// `extern final class` is the analysis pass's job, not the parser's.
 		final module:HxModule = HaxeModuleParser.parse('extern final class Foo {}');
-		Assert.equals(2, module.decls[0].modifiers.length);
+		Assert.equals(1, module.decls[0].modifiers.length);
 		Assert.equals(Extern, module.decls[0].modifiers[0]);
-		Assert.equals(Final, module.decls[0].modifiers[1]);
-		final cls:HxClassDecl = expectClassDecl(module.decls[0]);
-		Assert.equals('Foo', (cls.name : String));
+		switch module.decls[0].decl {
+			case FinalDecl(fb):
+				switch fb {
+					case ClassForm(cls): Assert.equals('Foo', (cls.name : String));
+					case _: Assert.fail('expected ClassForm, got $fb');
+				}
+			case _: Assert.fail('expected FinalDecl, got ${module.decls[0].decl}');
+		}
 	}
 
 	public function testTopLevelMixedModifiers():Void {

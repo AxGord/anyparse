@@ -131,6 +131,24 @@ enum HxDecl {
 	@:kw('var') @:trailOpt(';')
 	VarDecl(decl:HxVarDecl);
 
+	/**
+	 * Top-level `final …` (slice ω-module-final), covering both
+	 * `final class Foo {}` (sealed class) and `final FOO = 1;`
+	 * (module-level immutable binding). `final` was previously eaten
+	 * only as the `HxModifier.Final` sealed-class marker, so the
+	 * binding form never reached dispatch; `Final` is now removed from
+	 * `HxModifier` (mirroring `HxMemberModifier`'s member-scope split)
+	 * and both forms are recognised here. `@:kw('final')` consumes the
+	 * keyword; the inner `HxFinalDecl` enum disambiguates class-vs-var
+	 * by ordered first-match with `tryBranch` rollback (no lookahead —
+	 * see `HxFinalDecl`). `@:trailOpt(';')` terminates the var form and
+	 * is harmlessly optional for the `}`-terminated class form. Placed
+	 * after `VarDecl`, before `FnDecl`, mirroring the `HxClassMember`
+	 * `VarMember`/`FinalMember`/`FnMember` ordering.
+	 */
+	@:kw('final') @:trailOpt(';')
+	FinalDecl(decl:HxFinalDecl);
+
 	@:kw('function')
 	FnDecl(decl:HxFnDecl);
 
