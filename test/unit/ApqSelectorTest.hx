@@ -28,6 +28,26 @@ class ApqSelectorTest extends Test {
 		Assert.equals('foo', s.segments[0].name);
 	}
 
+	public function testKindWithNameSpace():Void {
+		// Space is an accepted alias for `:` — the natural form.
+		final s:Selector = Selector.parse('FnMember paramBody');
+		Assert.equals('FnMember', s.segments[0].kind);
+		Assert.equals('paramBody', s.segments[0].name);
+	}
+
+	public function testKindWithNameMultiSpace():Void {
+		final s:Selector = Selector.parse('FnMember   bar');
+		Assert.equals('FnMember', s.segments[0].kind);
+		Assert.equals('bar', s.segments[0].name);
+	}
+
+	public function testKindNameSpaceMatches():Void {
+		final tree:QueryNode = mkTree();
+		final r:Array<QueryNode> = Engine.select(tree, Selector.parse('FnMember bar'));
+		Assert.equals(1, r.length);
+		Assert.equals('bar', r[0].name);
+	}
+
 	public function testDirectChildChain():Void {
 		final s:Selector = Selector.parse('class > field');
 		Assert.equals(2, s.segments.length);

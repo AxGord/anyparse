@@ -216,6 +216,7 @@ The selector is a minimal path language for navigating to subtrees.
 |---------------------|--------------------------------------------------|
 | `<kind>`            | Match any node of this kind                      |
 | `<kind>:<name>`     | Match a node of this kind with the given name    |
+| `<kind> <name>`     | Space is an accepted alias for `:`               |
 | `A > B`             | `B` is a direct child of `A`                     |
 
 Kind names come from the grammar plugin's public AST vocabulary — typically the user-facing node names (class, function, field, etc.), not internal type-name details.
