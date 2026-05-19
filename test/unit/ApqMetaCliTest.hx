@@ -90,6 +90,40 @@ class ApqMetaCliTest extends Test {
 		#end
 	}
 
+	// ===== Parse-failure contract (scan vs single-file) =====
+
+	public function testSingleUnparseableFileIsHardError():Void {
+		#if sys
+		// A single explicit file the user named that does not parse is
+		// the query's answer: it must be a hard error (EXIT_RUNTIME),
+		// mirroring `apq ast` — not a silent EXIT_OK "no matches".
+		final bad:String = writeFixture('class {');
+		Assert.equals(1, Cli.run(['meta', '@:foo', bad]));
+		FileSystem.deleteFile(bad);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testScanModeSkipsUnparseableFilesSilently():Void {
+		#if sys
+		// Directory-walk (scan) mode: an unparseable file is out of scope
+		// by nature — the walk must continue, exit EXIT_OK, and still
+		// process the parseable sibling (no per-file error noise, no
+		// abort, no non-zero exit).
+		final dir:String = CliFixture.writeDir('apq_meta', [
+			{name: 'good.hx', source: 'class G { @:foo var n:Int; }'},
+			{name: 'bad.hx', source: 'class {'},
+		]);
+		Assert.equals(0, Cli.run(['meta', '@:foo', dir]));
+		FileSystem.deleteFile('$dir/good.hx');
+		FileSystem.deleteFile('$dir/bad.hx');
+		FileSystem.deleteDirectory(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if sys
 	private static function writeFixture(source:String):String {
 		return CliFixture.write('apq_meta', source);

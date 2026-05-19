@@ -1,6 +1,7 @@
 package unit;
 
 #if sys
+import sys.FileSystem;
 import sys.io.File;
 
 /**
@@ -23,6 +24,19 @@ final class CliFixture {
 		final path:String = '${tempDir()}/tmp_${prefix}_fixture_${Sys.time()}_$counter.hx';
 		File.saveContent(path, source);
 		return path;
+	}
+
+	/**
+	 * Write each `{name, source}` into a fresh unique temp directory and
+	 * return the directory path — for exercising the CLI's directory-walk
+	 * (scan) mode with a mix of parseable and unparseable files.
+	 */
+	public static function writeDir(prefix:String, files:Array<{name:String, source:String}>):String {
+		counter++;
+		final dir:String = '${tempDir()}/tmp_${prefix}_dir_${Sys.time()}_$counter';
+		FileSystem.createDirectory(dir);
+		for (f in files) File.saveContent('$dir/${f.name}', f.source);
+		return dir;
 	}
 
 	private static function tempDir():String {

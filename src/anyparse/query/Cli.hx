@@ -138,19 +138,15 @@ final class Cli {
 			return EXIT_RUNTIME;
 		}
 
+		final singleFile:Bool = paths.length == 1 && paths[0] == inputStr;
 		final allEntries:Array<{file:String, source:String, hits:Array<RefHit>}> = [];
 		for (path in paths) {
 			final source:String = readFile(path);
-			final tree:Null<QueryNode> = try plugin.parseFile(source)
-				catch (e:ParseError) {
-					stderr('apq refs: $path: ${e.toString()}\n');
-					null;
-				}
-				catch (e:Exception) {
-					stderr('apq refs: $path: ${e.message}\n');
-					null;
-				};
-			if (tree == null) continue;
+			final tree:Null<QueryNode> = parseWalked('refs', plugin.parseFile, path, source, singleFile);
+			if (tree == null) {
+				if (singleFile) return EXIT_RUNTIME;
+				continue;
+			}
 			final raw:Array<RefHit> = Refs.find(nameStr, tree, shape);
 			final filtered:Array<RefHit> = anyFilter
 				? raw.filter(h -> kindAllowed(h.kind, wantDecls, wantReads, wantWrites))
@@ -225,19 +221,15 @@ final class Cli {
 			return EXIT_RUNTIME;
 		}
 
+		final singleFile:Bool = paths.length == 1 && paths[0] == inputStr;
 		final allEntries:Array<{file:String, source:String, hits:Array<UsesHit>}> = [];
 		for (path in paths) {
 			final source:String = readFile(path);
-			final tree:Null<QueryNode> = try plugin.parseFileTypeRefs(source)
-				catch (e:ParseError) {
-					stderr('apq uses: $path: ${e.toString()}\n');
-					null;
-				}
-				catch (e:Exception) {
-					stderr('apq uses: $path: ${e.message}\n');
-					null;
-				};
-			if (tree == null) continue;
+			final tree:Null<QueryNode> = parseWalked('uses', plugin.parseFileTypeRefs, path, source, singleFile);
+			if (tree == null) {
+				if (singleFile) return EXIT_RUNTIME;
+				continue;
+			}
 			final hits:Array<UsesHit> = Uses.find(nameStr, tree, shape);
 			if (hits.length == 0) continue;
 			allEntries.push({file: path, source: source, hits: hits});
@@ -309,19 +301,15 @@ final class Cli {
 			return EXIT_RUNTIME;
 		}
 
+		final singleFile:Bool = paths.length == 1 && paths[0] == inputStr;
 		final allEntries:Array<{file:String, source:String, hits:Array<MetaHit>}> = [];
 		for (path in paths) {
 			final source:String = readFile(path);
-			final tree:Null<QueryNode> = try plugin.parseFile(source)
-				catch (e:ParseError) {
-					stderr('apq meta: $path: ${e.toString()}\n');
-					null;
-				}
-				catch (e:Exception) {
-					stderr('apq meta: $path: ${e.message}\n');
-					null;
-				};
-			if (tree == null) continue;
+			final tree:Null<QueryNode> = parseWalked('meta', plugin.parseFile, path, source, singleFile);
+			if (tree == null) {
+				if (singleFile) return EXIT_RUNTIME;
+				continue;
+			}
 			final raw:Array<MetaHit> = Meta.find(tree, shape, source);
 			final filtered:Array<MetaHit> = raw.filter(h ->
 				(annotation == null || h.annotation == annotation)
@@ -439,20 +427,16 @@ final class Cli {
 			return EXIT_RUNTIME;
 		}
 
+		final singleFile:Bool = paths.length == 1 && paths[0] == inputStr;
 		final allMatches:Array<Match> = [];
 		final allEntries:Array<{file:String, source:String, matches:Array<Match>}> = [];
 		for (path in paths) {
 			final source:String = readFile(path);
-			final tree:Null<QueryNode> = try plugin.parseFile(source)
-				catch (e:ParseError) {
-					stderr('apq search: $path: ${e.toString()}\n');
-					null;
-				}
-				catch (e:Exception) {
-					stderr('apq search: $path: ${e.message}\n');
-					null;
-				};
-			if (tree == null) continue;
+			final tree:Null<QueryNode> = parseWalked('search', plugin.parseFile, path, source, singleFile);
+			if (tree == null) {
+				if (singleFile) return EXIT_RUNTIME;
+				continue;
+			}
 			final matches:Array<Match> = Matcher.search(parsed, tree, kind);
 			if (matches.length == 0) continue;
 			allEntries.push({file: path, source: source, matches: matches});
@@ -723,6 +707,29 @@ final class Cli {
 		#if (sys || nodejs)
 		Sys.stderr().writeString(s);
 		#end
+	}
+
+	/**
+	 * Parse one walked file for the scan subcommands
+	 * (`refs`/`uses`/`meta`/`search`). The behaviour on a parse failure
+	 * depends on how the input was given. When the user named exactly
+	 * one file (`singleFile`), the failure IS the query's answer: it is
+	 * reported and the caller turns it into a hard error, mirroring
+	 * `apq ast`. In directory / glob / multi-file scan mode an
+	 * unparseable file is out of scope by nature, so it is skipped
+	 * silently — no per-file error noise on every walk. Returns the
+	 * parsed tree, or `null` to skip (scan) / fail (single file).
+	 */
+	private static function parseWalked(cmd:String, parse:String -> QueryNode, path:String, source:String, singleFile:Bool):Null<QueryNode> {
+		return try parse(source)
+			catch (exception:ParseError) {
+				if (singleFile) stderr('apq $cmd: $path: ${exception.toString()}\n');
+				null;
+			}
+			catch (exception:Exception) {
+				if (singleFile) stderr('apq $cmd: $path: ${exception.message}\n');
+				null;
+			};
 	}
 
 	/** Distinct node-constructor kinds present in a tree, sorted — the
