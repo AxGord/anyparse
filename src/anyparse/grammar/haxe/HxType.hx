@@ -111,6 +111,33 @@ enum HxType {
 	@:lead("$")
 	DollarType(name:HxIdentLit);
 
+	/**
+	 * Optional-argument marker in a curried (Haxe-3) function type:
+	 * the `?` before a type in `Int->?Int->Void`. Single-Ref
+	 * `@:lead('?')` atom branch — identical generic parse / writer /
+	 * synth path to `DollarType` (`@:lead("$")`); zero core/writer/synth
+	 * ripple, no `HaxeQueryPlugin` change (the plugin's nominal-name
+	 * walker recurses `inner` through its generic `case _:` operand
+	 * descent, exactly as it does for `Arrow` / `Parens`).
+	 *
+	 * AST-shape note (deferred precision, not a round-trip defect):
+	 * because `inner:HxType` re-enters the full rule, `Int->?Int->Void`
+	 * groups as `Arrow(Int, OptionalArg(Arrow(Int, Void)))` rather than
+	 * the semantically tidier "optional first arg of the tail". The
+	 * writer re-emits structurally (`?` + rendered `inner`) so every
+	 * `?`-form round-trips byte-identically regardless of grouping —
+	 * the skip-parse / byte-round-trip corpus metric is fully met. A
+	 * precise optional-arg model (attaching `?` to a single `Arrow`
+	 * operand) is a non-compounding follow-up if a later analysis pass
+	 * needs the exact arity.
+	 *
+	 * The new-form parenthesised arrow `(?x:Int) -> Void` carries its
+	 * optionality on `HxArrowParam`, a separate production — this
+	 * branch covers only the curried `->`-chained shape.
+	 */
+	@:lead('?')
+	OptionalArg(inner:HxType);
+
 	@:kw('#if') @:trail('#end')
 	ConditionalType(c:HxConditionalType);
 

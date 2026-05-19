@@ -122,6 +122,45 @@ class HxTypeArrowSliceTest extends HxTestHelpers {
 		Assert.equals('Void', (expectNamedType(arr.right).name : String));
 	}
 
+	/**
+	 * Slice ω-curried-optional-arg (`whitespace/issue_173`): the `?`
+	 * optional-argument marker in a curried function type. Asserts the
+	 * `OptionalArg` branch is reached and the flattened leaf sequence is
+	 * preserved (grouping is intentionally not over-asserted — see the
+	 * `OptionalArg` AST-shape note in `HxType`).
+	 */
+	private function arrowLeaves(t:HxType, acc:Array<String>):Void {
+		switch t {
+			case Arrow(l, r): arrowLeaves(l, acc); arrowLeaves(r, acc);
+			case OptionalArg(inner): acc.push('?'); arrowLeaves(inner, acc);
+			case Named(ref): acc.push((ref.name : String));
+			case _: acc.push('<other>');
+		}
+	}
+
+	public function testCurriedOptionalArg():Void {
+		final ast:HxClassDecl = HaxeParser.parse('class Foo { var f:Int->?Int->Void; }');
+		final v:HxVarDecl = expectVarMember(ast.members[0].member);
+		final leaves:Array<String> = [];
+		arrowLeaves(switch v.type { case null: throw 'null type'; case t: t; }, leaves);
+		Assert.equals('Int,?,Int,Void', leaves.join(','));
+	}
+
+	public function testCurriedMultipleOptionalArgs():Void {
+		final ast:HxClassDecl = HaxeParser.parse('class Foo { var f:Int->?Int->?Int->?Int->?Int->Void; }');
+		final v:HxVarDecl = expectVarMember(ast.members[0].member);
+		final leaves:Array<String> = [];
+		arrowLeaves(switch v.type { case null: throw 'null type'; case t: t; }, leaves);
+		Assert.equals('Int,?,Int,?,Int,?,Int,?,Int,Void', leaves.join(','));
+	}
+
+	public function testOptionalArgRoundTrip():Void {
+		// `whitespace/issue_173` verbatim shapes — byte-identical re-emit
+		// is the corpus metric this slice targets.
+		roundTrip('class Main { public static function main() { var f:Int->?Int->Void; } }', 'issue_173-single');
+		roundTrip('class Main { public static function main() { var f:Int->?Int->?Int->?Int->?Int->Void; } }', 'issue_173-multi');
+	}
+
 	public function testRoundTripTight():Void {
 		// Default `@:fmt(tight)` — writer emits `Int->Void` without surrounding
 		// spaces, matching haxe-formatter's old-form arrow output.
