@@ -171,7 +171,7 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		//
 		// Write-parent kinds: ctors on `HxExpr` whose first positional
 		// child carries the binding being modified. `Assign(left, right)`
-		// plus all 12 compound `*Assign(left, right)` variants, and the
+		// plus every compound `*Assign(left, right)` variant, and the
 		// four increment/decrement ctors `PreIncr` / `PreDecr` /
 		// `PostIncr` / `PostDecr` (`HxExpr`, P5 Slice H — their single
 		// operand at child-0 is the mutated binding). `x++` / `++x` both
@@ -199,7 +199,7 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 				'AddAssign', 'SubAssign', 'MulAssign', 'DivAssign', 'ModAssign',
 				'ShlAssign', 'ShrAssign', 'UShrAssign',
 				'BitOrAssign', 'BitAndAssign', 'BitXorAssign',
-				'NullCoalAssign',
+				'NullCoalAssign', 'BoolAndAssign', 'BoolOrAssign',
 				'PreIncr', 'PreDecr', 'PostIncr', 'PostDecr',
 			],
 			// Self-scoped decl kinds: scope-introducers whose own name binds

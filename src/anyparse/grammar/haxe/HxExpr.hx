@@ -579,6 +579,12 @@ enum HxExpr {
 	@:infix('??=', 0, 'Right')
 	NullCoalAssign(left:HxExpr, right:HxExpr);
 
+	@:infix('&&=', 0, 'Right')
+	BoolAndAssign(left:HxExpr, right:HxExpr);
+
+	@:infix('||=', 0, 'Right')
+	BoolOrAssign(left:HxExpr, right:HxExpr);
+
 	@:infix('->', 0, 'Right')
 	ThinArrow(left:HxExpr, right:HxExpr);
 

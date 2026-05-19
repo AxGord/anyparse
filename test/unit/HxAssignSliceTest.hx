@@ -29,6 +29,14 @@ import anyparse.runtime.ParseError;
  *    `&=`/`&&`) without any code change — every test below that
  *    looks like a "base op still works" regression guard is in fact
  *    the spot check for that sort.
+ *  - boolean compound assigns slice (Slice 15): `&&=`, `||=`. Same
+ *    right-assoc concept, same prec 1, zero macro changes. The new
+ *    conflict set is the densest yet: `&&=` (len 3) must beat both
+ *    `&&` (len 2) and `&=` (len 2); `||=` (len 3) must beat `||`
+ *    (len 2) and `|=` (len 2) — three distinct operators sharing a
+ *    2-char prefix. The mis-fire sentinels below (`a && b` → `And`,
+ *    `a || b` → `Or`) are the spot check that the 3-char ops did
+ *    not swallow the shorter logical operators.
  *
  * Grammar coverage in this file:
  *  - `a = 1`, `a += 1`, `a -= 1`, `a *= 1`, `a /= 1`, `a %= 1`,
@@ -493,6 +501,79 @@ class HxAssignSliceTest extends HxTestHelpers {
 		// `;` terminator. Symmetric to `testRejectsAssignWithoutRhs`
 		// for the longest compound-assign literal in the grammar.
 		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Int = a >>>= ; }'), ParseError);
+	}
+
+	public function testBoolAndAssign():Void {
+		// `a &&= 1` — validates that `&&=` (len 3) wins over `&&`
+		// (len 2) AND over `&=` (len 2). Three operators share the
+		// `&` prefix; the D33 longest-match sort must reach the
+		// 3-char literal first.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a &&= 1; }');
+		switch decl.init {
+			case BoolAndAssign(IdentExpr(l), IntLit(r)):
+				Assert.equals('a', (l : String));
+				Assert.equals(1, (r : Int));
+			case null, _:
+				Assert.fail('expected BoolAndAssign(IdentExpr(a), IntLit(1)), got ${decl.init}');
+		}
+	}
+
+	public function testBoolOrAssign():Void {
+		// `a ||= 1` — symmetric to testBoolAndAssign for the `|`
+		// family: `||=` (len 3) wins over `||` (len 2) and `|=`
+		// (len 2).
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a ||= 1; }');
+		switch decl.init {
+			case BoolOrAssign(IdentExpr(l), IntLit(r)):
+				Assert.equals('a', (l : String));
+				Assert.equals(1, (r : Int));
+			case null, _:
+				Assert.fail('expected BoolOrAssign(IdentExpr(a), IntLit(1)), got ${decl.init}');
+		}
+	}
+
+	public function testBoolAndBaseStillWorks():Void {
+		// `a && b` — regression guard that adding the 3-char `&&=`
+		// did not shadow the 2-char `&&` logical-and base op. After
+		// `&& `, `b` is not `=`, so `&&` wins.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a && b; }');
+		switch decl.init {
+			case And(IdentExpr(l), IdentExpr(r)):
+				Assert.equals('a', (l : String));
+				Assert.equals('b', (r : String));
+			case null, _:
+				Assert.fail('expected And(a, b), got ${decl.init}');
+		}
+	}
+
+	public function testBoolOrBaseStillWorks():Void {
+		// `a || b` — same story as testBoolAndBaseStillWorks for the
+		// logical-or family. Adding `||=` must not steal input from
+		// `||`.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a || b; }');
+		switch decl.init {
+			case Or(IdentExpr(l), IdentExpr(r)):
+				Assert.equals('a', (l : String));
+				Assert.equals('b', (r : String));
+			case null, _:
+				Assert.fail('expected Or(a, b), got ${decl.init}');
+		}
+	}
+
+	public function testBoolAssignRightAssocChain():Void {
+		// a &&= b ||= c → BoolAndAssign(a, BoolOrAssign(b, c)).
+		// Slice-15 homogeneous right-fold, proving the new boolean
+		// compound assigns join the existing prec 1 chain alongside
+		// the bitwise/shift waves.
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a &&= b ||= c; }');
+		switch decl.init {
+			case BoolAndAssign(IdentExpr(a), BoolOrAssign(IdentExpr(b), IdentExpr(c))):
+				Assert.equals('a', (a : String));
+				Assert.equals('b', (b : String));
+				Assert.equals('c', (c : String));
+			case null, _:
+				Assert.fail('expected BoolAndAssign(a, BoolOrAssign(b, c)), got ${decl.init}');
+		}
 	}
 
 }
