@@ -144,6 +144,7 @@ final class Cli {
 
 		final singleFile:Bool = expanded.singleFile;
 		final allEntries:Array<{file:String, source:String, hits:Array<RefHit>}> = [];
+		var parseable:Int = 0;
 		for (path in paths) {
 			final source:String = readFile(path);
 			final tree:Null<QueryNode> = parseWalked('refs', plugin.parseFile, path, source, singleFile);
@@ -151,6 +152,7 @@ final class Cli {
 				if (singleFile) return EXIT_RUNTIME;
 				continue;
 			}
+			parseable++;
 			final raw:Array<RefHit> = Refs.find(nameStr, tree, shape);
 			final filtered:Array<RefHit> = anyFilter
 				? raw.filter(h -> kindAllowed(h.kind, wantDecls, wantReads, wantWrites))
@@ -158,6 +160,9 @@ final class Cli {
 			if (filtered.length == 0) continue;
 			allEntries.push({file: path, source: source, hits: filtered});
 		}
+
+		if (allEntries.length == 0)
+			stderr(emptyWalkerNudge('refs', nameStr, paths.length, parseable) + '\n');
 
 		final shown:Array<{file:String, source:String, hits:Array<RefHit>}> = limitEntries(allEntries, limit,
 			e -> e.hits.length,
@@ -230,6 +235,7 @@ final class Cli {
 
 		final singleFile:Bool = expanded.singleFile;
 		final allEntries:Array<{file:String, source:String, hits:Array<UsesHit>}> = [];
+		var parseable:Int = 0;
 		for (path in paths) {
 			final source:String = readFile(path);
 			final tree:Null<QueryNode> = parseWalked('uses', plugin.parseFileTypeRefs, path, source, singleFile);
@@ -237,10 +243,14 @@ final class Cli {
 				if (singleFile) return EXIT_RUNTIME;
 				continue;
 			}
+			parseable++;
 			final hits:Array<UsesHit> = Uses.find(nameStr, tree, shape);
 			if (hits.length == 0) continue;
 			allEntries.push({file: path, source: source, hits: hits});
 		}
+
+		if (allEntries.length == 0)
+			stderr(emptyWalkerNudge('uses', nameStr, paths.length, parseable) + '\n');
 
 		final shown:Array<{file:String, source:String, hits:Array<UsesHit>}> = limitEntries(allEntries, limit,
 			e -> e.hits.length,
@@ -321,6 +331,7 @@ final class Cli {
 
 		final singleFile:Bool = expanded.singleFile;
 		final allEntries:Array<{file:String, source:String, hits:Array<MetaHit>}> = [];
+		var parseable:Int = 0;
 		for (path in paths) {
 			final source:String = readFile(path);
 			final tree:Null<QueryNode> = parseWalked('meta', plugin.parseFile, path, source, singleFile);
@@ -328,6 +339,7 @@ final class Cli {
 				if (singleFile) return EXIT_RUNTIME;
 				continue;
 			}
+			parseable++;
 			final raw:Array<MetaHit> = Meta.find(tree, shape, source);
 			final filtered:Array<MetaHit> = raw.filter(h ->
 				(annotation == null || h.annotation == annotation)
@@ -336,6 +348,9 @@ final class Cli {
 			if (filtered.length == 0) continue;
 			allEntries.push({file: path, source: source, hits: filtered});
 		}
+
+		if (allEntries.length == 0)
+			stderr(emptyWalkerNudge('meta', null, paths.length, parseable) + '\n');
 
 		final shown:Array<{file:String, source:String, hits:Array<MetaHit>}> = limitEntries(allEntries, limit,
 			e -> e.hits.length,
@@ -421,6 +436,7 @@ final class Cli {
 
 		final singleFile:Bool = expanded.singleFile;
 		final allEntries:Array<{file:String, source:String, hits:Array<LitHit>}> = [];
+		var parseable:Int = 0;
 		for (path in paths) {
 			final source:String = readFile(path);
 			final tree:Null<QueryNode> = parseWalked('lit', plugin.parseFile, path, source, singleFile);
@@ -428,10 +444,14 @@ final class Cli {
 				if (singleFile) return EXIT_RUNTIME;
 				continue;
 			}
+			parseable++;
 			final hits:Array<LitHit> = Lit.find(targetStr, tree, exact, kindFilter);
 			if (hits.length == 0) continue;
 			allEntries.push({file: path, source: source, hits: hits});
 		}
+
+		if (allEntries.length == 0)
+			stderr(emptyWalkerNudge('lit', targetStr, paths.length, parseable) + '\n');
 
 		final shown:Array<{file:String, source:String, hits:Array<LitHit>}> = limitEntries(allEntries, limit,
 			e -> e.hits.length,
@@ -721,10 +741,17 @@ final class Cli {
 		// Non-fatal: a leaf pattern (bare name / lone metavar / bare
 		// literal) has no code shape — search only hits it in
 		// expression position, never a decl or type. Point at the
-		// right tool and proceed anyway (the user may genuinely want
-		// the identifier-expression occurrences).
+		// right tool (kind-aware) and proceed anyway.
+		//
+		// Kind branches:
+		//  - Metavar           — lone `$x` matches every node; refs/uses
+		//                        don't apply (no name to look up).
+		//  - Literal / *Lit    — literal value; `apq lit '<value>'` is
+		//                        the right tool (refs/uses don't apply).
+		//  - IdentExpr / other — bare identifier; refs/uses/lit all
+		//                        plausible depending on intent.
 		if (parsed.isDegenerate())
-			stderr('apq search: pattern "$patternStr" has no code structure — search matches shape, not bare names. Declaration: apq refs $patternStr --decls | type users: apq uses $patternStr | subtree: apq ast --select. Searching anyway.\n');
+			stderr(degenerateNudge(patternStr, parsed.root.kind) + '\n');
 
 		// `--explain`: emit the parsed pattern's S-expr to stderr at
 		// scan start. When 0 matches across all scanned files the
@@ -861,7 +888,24 @@ final class Cli {
 						return EXIT_USAGE;
 					}
 					if (file != null) {
-						stderr('apq ast: only one file argument supported (got "$file" and "$a")\n');
+						// `apq ast <TypeName> <dir>` is a common miss — `ast` is single-
+						// file, while `<TypeName> <dir>` is the refs/uses/meta surface.
+						// Detect the shape (first arg looks like a TypeName, second arg
+						// is an existing directory or .hx file) and route the user.
+						final maybeTypeArg:String = file;
+						final maybeDirArg:String = a;
+						if (looksLikeTypeName(maybeTypeArg) && looksLikePath(maybeDirArg))
+							stderr('apq ast: only one file argument supported (got "$maybeTypeArg" and "$maybeDirArg").\n'
+								+ '         "$maybeTypeArg" looks like a TypeName and "$maybeDirArg" like a path — `ast` is single-file.\n'
+								+ '         For type lookup across a directory:\n'
+								+ '           apq refs $maybeTypeArg $maybeDirArg --decls    # value bindings + decl site\n'
+								+ '           apq uses $maybeTypeArg $maybeDirArg            # type-position consumers\n'
+								+ '           apq blast $maybeTypeArg $maybeDirArg           # full change-impact (uses + refs + field-access)\n'
+								+ '           apq meta @:peg $maybeDirArg                    # all PEG decls in scope\n'
+								+ '         For a subtree of one file:\n'
+								+ '           apq ast <path-to-file.hx> --select Kind:$maybeTypeArg\n');
+						else
+							stderr('apq ast: only one file argument supported (got "$file" and "$a")\n');
 						return EXIT_USAGE;
 					}
 					file = a;
@@ -1183,6 +1227,100 @@ final class Cli {
 			for (c in n.children) walk(c);
 		}
 		walk(root);
+	}
+
+	/**
+	 * Heuristic: does the string look like a Haxe TypeName? First letter
+	 * uppercase ASCII, no `/`, no `.` (eliminates relative paths like
+	 * `./Foo.hx` and dotted accesses like `Foo.bar`). Used by `ast` to
+	 * detect `apq ast <TypeName> <dir>` (refs/uses surface mistakenly
+	 * fed to ast).
+	 */
+	private static function looksLikeTypeName(s:String):Bool {
+		if (s.length == 0) return false;
+		final c:Int = StringTools.fastCodeAt(s, 0);
+		if (c < 'A'.code || c > 'Z'.code) return false;
+		return s.indexOf('/') < 0 && s.indexOf('.') < 0;
+	}
+
+	/**
+	 * Heuristic: does the string look like a file/dir path? Contains `/`
+	 * or `.hx` suffix, OR is an existing filesystem entry. Pairs with
+	 * `looksLikeTypeName` to detect the `ast <TypeName> <dir>` shape.
+	 */
+	private static function looksLikePath(s:String):Bool {
+		if (s.indexOf('/') >= 0) return true;
+		if (StringTools.endsWith(s, '.hx')) return true;
+		#if (sys || nodejs)
+		return sys.FileSystem.exists(s);
+		#else
+		return false;
+		#end
+	}
+
+	/**
+	 * Build the per-kind nudge for `search` on a degenerate (single-leaf)
+	 * pattern. Kind-aware: a lone metavar has no name to refs/uses; a
+	 * literal value goes through `lit`; a bare identifier supports all
+	 * three (refs/uses/lit). Sister of `emptyWalkerNudge` — both emit
+	 * tool-suggestion messages on a structurally-valid-but-misaimed query.
+	 */
+	private static function degenerateNudge(patternStr:String, rootKind:String):String {
+		final prefix:String = 'apq search: pattern "$patternStr" ';
+		return switch rootKind {
+			case 'Metavar':
+				prefix + 'is a lone metavar — matches every node. Narrow with structural '
+					+ "context (e.g. \"$x.field\", \"func($x)\"), or look up by name: apq refs <name> --decls / apq uses <Type>. Searching anyway.";
+			case 'Literal' | 'StringLit' | 'BoolLit' | 'IntLit' | 'FloatLit'
+				| 'SingleStringExpr' | 'DoubleStringExpr' | 'RawString':
+				prefix + 'is a bare literal — for literal-content lookup use: apq lit \'$patternStr\' <files>. Searching anyway.';
+			case _:
+				// Bare identifier (IdentExpr) and anything else that
+				// parses to a single leaf.
+				prefix + 'has no code structure — search matches shape, not bare names. '
+					+ 'Try one of: apq refs $patternStr --decls (value binding), '
+					+ 'apq uses $patternStr (type position), '
+					+ 'apq lit \'$patternStr\' (string-literal content), '
+					+ 'apq ast --select. Searching anyway.';
+		}
+	}
+
+	/**
+	 * Stderr nudge emitted by walker subcommands (refs/uses/meta/lit) when
+	 * they return zero hits. Gives counts of files scanned vs parseable
+	 * (turns silent miss into observable signal) and a kind-aware tool
+	 * suggestion when the user likely picked the wrong subcommand.
+	 *
+	 * `name` is the lookup name (`refs <name>` / `uses <name>` / etc.) or
+	 * `null` when there is no name (e.g. `meta @:foo`). Suggestions:
+	 *   - `refs <X>` on UpperCase name → try `uses` or `blast` (likely a type).
+	 *   - `uses <x>` on lowerCase name → try `refs` or `lit` (likely a value/literal).
+	 *   - `lit/meta` — just the silent-miss summary (no clear cross-tool fix).
+	 */
+	private static function emptyWalkerNudge(cmd:String, name:Null<String>, scanned:Int, parseable:Int):String {
+		final summary:String = 'apq $cmd: 0 hits ($scanned file(s) scanned, $parseable parseable)';
+		if (name == null) return summary;
+		final n:String = name;
+		final first:Int = n.length > 0 ? StringTools.fastCodeAt(n, 0) : 0;
+		final isUpper:Bool = first >= 'A'.code && first <= 'Z'.code;
+		final isLower:Bool = first >= 'a'.code && first <= 'z'.code;
+		final hint:String = switch cmd {
+			case 'refs':
+				if (isUpper) ' — "$n" starts uppercase, looks like a TypeName. Try: apq uses $n <dir> (type positions) or apq blast $n <dir> (full change-impact, incl. field-access).';
+				else ' — "$n" has no value-binding here. Locals/params are NOT indexed. Try: apq lit \'$n\' <dir> (string-literal content) or apq search \'$$x.$n\' <dir> (field-access).';
+			case 'uses':
+				if (isLower) ' — "$n" starts lowercase, not a TypeName. Try: apq refs $n <dir> (value bindings) or apq lit \'$n\' <dir> (literal content).';
+				else ' — no type-position references. For full change-impact incl. `.field` access try: apq blast $n <dir>.';
+			case 'blast':
+				' — no declaration of "$n" in the scanned set (the heuristic section needs it). Either widen the scan, or use apq uses $n <dir> + apq refs $n <dir> directly.';
+			case 'lit':
+				' — no string-literal content matches "$n". Default --kind is Literal; widen with --kind Literal,IdentExpr or --any-kind, or try: apq refs $n <dir> --decls.';
+			case 'meta':
+				''; // meta has no <name> arg (annotation is its own thing) — leave silent.
+			case _:
+				'';
+		};
+		return summary + hint;
 	}
 
 	/** Distinct node-constructor kinds present in a tree, sorted — the
