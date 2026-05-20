@@ -4,6 +4,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.MetaShape;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.GrammarPlugin.TypeRefShape;
+import anyparse.query.Lit.LitHit;
 import anyparse.query.Matcher.Match;
 import anyparse.query.Meta.MetaHit;
 import anyparse.query.Refs.RefHit;
@@ -59,6 +60,7 @@ final class Cli {
 			case 'uses': return runUses(rest);
 			case 'meta': return runMeta(rest);
 			case 'blast': return runBlast(rest);
+			case 'lit': return runLit(rest);
 			case _:
 				stderr('apq: unknown subcommand "$cmd"\n');
 				printUsage();
@@ -347,6 +349,98 @@ final class Cli {
 	}
 
 	/**
+	 * `apq lit <text> <file-or-dir-or-glob>...` — leaf-name probe over
+	 * the parsed AST. Default kind filter `Literal` catches every
+	 * string-literal occurrence (the leaf inside `SingleStringExpr`
+	 * / `DoubleStringExpr` / `RawString`); pass `--kind <K1,K2>` to
+	 * widen (e.g. `Literal,IdentExpr`) or override.
+	 *
+	 * The structural alternative to `# HXQ_OK:prose`-escaped grep for
+	 * annotation-key / config-string lookups inside parseable `.hx`.
+	 * Skips comments and string interpolations as a side effect of
+	 * routing through the parser — no false positives from prose
+	 * inside doc-comments or `'$ident'` interpolation segments.
+	 */
+	private static function runLit(args:Array<String>):Int {
+		var lang:String = 'haxe';
+		var exact:Bool = false;
+		var limit:Int = -1;
+		var kindFilter:Array<String> = ['Literal'];
+		var target:Null<String> = null;
+		final inputSpecs:Array<String> = [];
+
+		var i:Int = 0;
+		while (i < args.length) {
+			final a:String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--exact':
+					exact = true;
+				case '--kind':
+					kindFilter = expectValue(args, ++i, '--kind').split(',');
+				case '--any-kind':
+					kindFilter = [];
+				case '--limit':
+					try limit = parseLimit(args, ++i) catch (e:Exception) {
+						stderr('${e.message}\n');
+						return EXIT_USAGE;
+					}
+				case '-h', '--help':
+					printLitUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq lit: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (target == null) target = a;
+					else inputSpecs.push(a);
+			}
+			i++;
+		}
+		if (target == null) {
+			stderr('apq lit: missing <text> argument\n');
+			printLitUsage();
+			return EXIT_USAGE;
+		}
+		if (inputSpecs.length == 0) {
+			stderr('apq lit: missing <file-or-dir-or-glob> argument\n');
+			printLitUsage();
+			return EXIT_USAGE;
+		}
+		final targetStr:String = target;
+
+		final plugin:GrammarPlugin = pickPlugin(lang);
+		final expanded:{paths:Array<String>, singleFile:Bool} = expandInputs(inputSpecs, '.hx');
+		final paths:Array<String> = expanded.paths;
+		if (paths.length == 0) {
+			stderr('apq lit: no input files matched ${inputSpecs.join(" ")}\n');
+			return EXIT_RUNTIME;
+		}
+
+		final singleFile:Bool = expanded.singleFile;
+		final allEntries:Array<{file:String, source:String, hits:Array<LitHit>}> = [];
+		for (path in paths) {
+			final source:String = readFile(path);
+			final tree:Null<QueryNode> = parseWalked('lit', plugin.parseFile, path, source, singleFile);
+			if (tree == null) {
+				if (singleFile) return EXIT_RUNTIME;
+				continue;
+			}
+			final hits:Array<LitHit> = Lit.find(targetStr, tree, exact, kindFilter);
+			if (hits.length == 0) continue;
+			allEntries.push({file: path, source: source, hits: hits});
+		}
+
+		final shown:Array<{file:String, source:String, hits:Array<LitHit>}> = limitEntries(allEntries, limit,
+			e -> e.hits.length,
+			(e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k)});
+		for (entry in shown) sysPrint(Lit.render(entry.file, entry.source, entry.hits));
+		return EXIT_OK;
+	}
+
+	/**
 	 * `apq blast <type-name> <file-or-dir-or-glob>...` — typedef→enum (or
 	 * any type-shape) change-impact checklist. Unions three signals the
 	 * lone `uses`/`refs` queries each miss:
@@ -556,6 +650,7 @@ final class Cli {
 		var json:Bool = false;
 		var kind:Null<String> = null;
 		var limit:Int = -1;
+		var explain:Bool = false;
 		var pattern:Null<String> = null;
 		final inputSpecs:Array<String> = [];
 
@@ -578,6 +673,8 @@ final class Cli {
 						json = true;
 					case '--kind':
 						kind = expectValue(args, ++i, '--kind');
+					case '--explain':
+						explain = true;
 					case '--limit':
 						try limit = parseLimit(args, ++i) catch (e:Exception) {
 							stderr('${e.message}\n');
@@ -629,6 +726,17 @@ final class Cli {
 		if (parsed.isDegenerate())
 			stderr('apq search: pattern "$patternStr" has no code structure — search matches shape, not bare names. Declaration: apq refs $patternStr --decls | type users: apq uses $patternStr | subtree: apq ast --select. Searching anyway.\n');
 
+		// `--explain`: emit the parsed pattern's S-expr to stderr at
+		// scan start. When 0 matches across all scanned files the
+		// closing diagnostic also prints the top input-kind histogram
+		// — the most common reason a structurally-valid pattern misses
+		// is a kind mismatch (e.g. searching `switch $x { … }` against
+		// a tree whose actual kind is `SwitchExpr`, not `Switch`).
+		if (explain) {
+			stderr('apq search: pattern parses as:\n');
+			stderr(Text.render(parsed.root));
+		}
+
 		final expanded:{paths:Array<String>, singleFile:Bool} = expandInputs(inputSpecs, '.hx');
 		final paths:Array<String> = expanded.paths;
 		if (paths.length == 0) {
@@ -638,6 +746,7 @@ final class Cli {
 
 		final singleFile:Bool = expanded.singleFile;
 		final allEntries:Array<{file:String, source:String, matches:Array<Match>}> = [];
+		final kindCounts:Map<String, Int> = new Map();
 		for (path in paths) {
 			final source:String = readFile(path);
 			final tree:Null<QueryNode> = parseWalked('search', plugin.parseFile, path, source, singleFile);
@@ -645,9 +754,31 @@ final class Cli {
 				if (singleFile) return EXIT_RUNTIME;
 				continue;
 			}
+			if (explain) tallyKinds(tree, kindCounts);
 			final matches:Array<Match> = Matcher.search(parsed, tree, kind);
 			if (matches.length == 0) continue;
 			allEntries.push({file: path, source: source, matches: matches});
+		}
+
+		// `--explain` closing diagnostic on 0 hits: print the kind
+		// histogram so the user can see whether the pattern's root
+		// kind even appears in the scanned input. The most common
+		// mismatch is "pattern parses as Kind X but inputs only
+		// expose Kind Y for the same construct" — visible at a
+		// glance once both lists are on screen.
+		if (explain && allEntries.length == 0) {
+			final patternKind:String = parsed.root.kind;
+			final entries:Array<{k:String, n:Int}> = [for (k => n in kindCounts) {k: k, n: n}];
+			entries.sort((a, b) -> a.n == b.n ? (a.k < b.k ? -1 : 1) : b.n - a.n);
+			final topN:Int = entries.length < 12 ? entries.length : 12;
+			stderr('apq search: 0 matches; pattern root kind is "$patternKind". Top kinds seen in input (${entries.length} distinct):\n');
+			for (k in 0...topN) {
+				final e = entries[k];
+				final marker:String = e.k == patternKind ? ' ← matches pattern root' : '';
+				stderr('  ${e.k} (${e.n})$marker\n');
+			}
+			if (!Lambda.exists(entries, e -> e.k == patternKind))
+				stderr('  (pattern root kind "$patternKind" NOT present in any scanned file — likely the wrong kind for this construct; check `apq ast <file>` to see the actual node shape)\n');
 		}
 
 		final shown:Array<{file:String, source:String, matches:Array<Match>}> = limitEntries(allEntries, limit,
@@ -891,6 +1022,7 @@ final class Cli {
 		sysPrint('  uses     Type references (field/param/type-param positions)\n');
 		sysPrint('  meta     Annotation-on-decl shortcut\n');
 		sysPrint('  blast    Change-impact checklist (uses + refs + member-access)\n');
+		sysPrint('  lit      Leaf-name probe (string literals, identifiers — prose-in-code)\n');
 		sysPrint('\n');
 		sysPrint('Global options:\n');
 		sysPrint('  --lang <name>   Pick grammar plugin (default: haxe)\n');
@@ -904,6 +1036,8 @@ final class Cli {
 		sysPrint('  --json              Emit JSON instead of text\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 		sysPrint('  --kind <Kind>       Only match nodes of this AST kind\n');
+		sysPrint('  --explain           Print parsed pattern AST; on 0 hits show input-kind histogram\n');
+		sysPrint('  --limit <n>         Stop after n hits total (default: no limit)\n');
 		sysPrint('\n');
 		sysPrint("Pattern syntax: language source with `$X` / `$_` metavars.\n");
 		sysPrint("  $X      — bind a subtree; reuses must match structurally.\n");
@@ -911,6 +1045,24 @@ final class Cli {
 		sysPrint("\n");
 		sysPrint("Use `--` before a pattern that starts with `--` (e.g. the\n");
 		sysPrint("prefix-decrement pattern `--$x`): apq search -- '--\\$x' <file>\n");
+	}
+
+	private static function printLitUsage():Void {
+		sysPrint('Usage: apq lit [options] <text> <file-or-dir-or-glob>...\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --exact             Require exact string equality (default: substring)\n');
+		sysPrint('  --kind <K1,K2,...>  Restrict to leaves of these kinds (default: Literal)\n');
+		sysPrint('  --any-kind          Match every named leaf regardless of kind\n');
+		sysPrint('  --limit <n>         Stop after n hits total (default: no limit)\n');
+		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('\n');
+		sysPrint("Walks parsed AST for leaf nodes whose `name` slot matches <text>.\n");
+		sysPrint("Default `--kind Literal` catches string-literal contents only —\n");
+		sysPrint("the structural alternative to `# HXQ_OK:prose` grep for annotation-\n");
+		sysPrint("key / config-string lookups (e.g. `apq lit 'lit.kwText' src/`).\n");
+		sysPrint("Skips comments and string interpolation as a side effect of routing\n");
+		sysPrint("through the parser — no false positives from doc-comments.\n");
 	}
 
 	private static function printBlastUsage():Void {
@@ -1017,6 +1169,20 @@ final class Cli {
 				if (singleFile) stderr('apq $cmd: $path: ${exception.message}\n');
 				null;
 			};
+	}
+
+	/**
+	 * Increment `counts[node.kind]` for every node in the tree. Used
+	 * by `apq search --explain` to build the kind histogram that
+	 * surfaces "pattern's root kind is not present in input" mismatches.
+	 */
+	private static function tallyKinds(root:QueryNode, counts:Map<String, Int>):Void {
+		function walk(n:QueryNode):Void {
+			final prev:Null<Int> = counts.get(n.kind);
+			counts.set(n.kind, prev == null ? 1 : prev + 1);
+			for (c in n.children) walk(c);
+		}
+		walk(root);
 	}
 
 	/** Distinct node-constructor kinds present in a tree, sorted — the
