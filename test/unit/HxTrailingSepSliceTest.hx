@@ -52,8 +52,8 @@ class HxTrailingSepSliceTest extends HxTestHelpers {
 		switch decl.init {
 			case ObjectLit(lit):
 				Assert.equals(2, lit.fields.length);
-				Assert.equals('a', (lit.fields[0].name : String));
-				Assert.equals('b', (lit.fields[1].name : String));
+				Assert.equals('a', (expectObjectFieldBody(lit.fields[0]).name : String));
+				Assert.equals('b', (expectObjectFieldBody(lit.fields[1]).name : String));
 			case null, _: Assert.fail('expected ObjectLit(2), got ${decl.init}');
 		}
 	}

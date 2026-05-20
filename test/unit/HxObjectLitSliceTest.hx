@@ -4,19 +4,23 @@ import utest.Assert;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxObjectLit;
-import anyparse.grammar.haxe.HxObjectField;
+import anyparse.grammar.haxe.HxObjectFieldBody;
 import anyparse.grammar.haxe.HxVarDecl;
 
 /**
  * Tests for slice χ₃: anonymous object literals `{name: value, ...}`.
  *
  * New grammar:
- *  - `HxObjectField` typedef: `name:HxIdentLit` + `@:lead(':') value:HxExpr`.
+ *  - `HxObjectFieldBody` typedef: `name:HxIdentLit` + `@:lead(':') value:HxExpr`.
+ *  - `HxObjectField` enum (Slice 18): `Field(body:HxObjectFieldBody)` +
+ *    `@:kw('#if') Conditional(inner:HxConditionalObjectField)`.
  *  - `HxObjectLit` typedef: `@:lead('{') @:trail('}') @:sep(',') fields:Array<HxObjectField>`.
  *  - `HxExpr.ObjectLit(lit:HxObjectLit)` atom branch — bare-Ref dispatch,
  *    the inner `@:lead('{')` drives `tryBranch` peek.
  *
- * Zero Lowering changes expected.
+ * Zero Lowering changes expected for this slice (Slice 18 adds the
+ * `@:sep+@:tryparse-no-close` branch used by `HxConditionalObjectField.body`,
+ * tested separately in `HxConditionalObjectFieldSliceTest`).
  */
 class HxObjectLitSliceTest extends HxTestHelpers {
 
@@ -33,9 +37,9 @@ class HxObjectLitSliceTest extends HxTestHelpers {
 		switch decl.init {
 			case ObjectLit(lit):
 				Assert.equals(1, lit.fields.length);
-				final field:HxObjectField = lit.fields[0];
-				Assert.equals('a', (field.name : String));
-				switch field.value {
+				final body:HxObjectFieldBody = expectObjectFieldBody(lit.fields[0]);
+				Assert.equals('a', (body.name : String));
+				switch body.value {
 					case IntLit(v): Assert.equals(1, (v : Int));
 					case null, _: Assert.fail('expected IntLit(1)');
 				}
@@ -48,9 +52,9 @@ class HxObjectLitSliceTest extends HxTestHelpers {
 		switch decl.init {
 			case ObjectLit(lit):
 				Assert.equals(3, lit.fields.length);
-				Assert.equals('a', (lit.fields[0].name : String));
-				Assert.equals('b', (lit.fields[1].name : String));
-				Assert.equals('c', (lit.fields[2].name : String));
+				Assert.equals('a', (expectObjectFieldBody(lit.fields[0]).name : String));
+				Assert.equals('b', (expectObjectFieldBody(lit.fields[1]).name : String));
+				Assert.equals('c', (expectObjectFieldBody(lit.fields[2]).name : String));
 			case null, _: Assert.fail('expected ObjectLit(3 fields)');
 		}
 	}
@@ -60,10 +64,10 @@ class HxObjectLitSliceTest extends HxTestHelpers {
 		switch decl.init {
 			case ObjectLit(outer):
 				Assert.equals(1, outer.fields.length);
-				switch outer.fields[0].value {
+				switch expectObjectFieldBody(outer.fields[0]).value {
 					case ObjectLit(inner):
 						Assert.equals(1, inner.fields.length);
-						Assert.equals('inner', (inner.fields[0].name : String));
+						Assert.equals('inner', (expectObjectFieldBody(inner.fields[0]).name : String));
 					case null, _: Assert.fail('expected nested ObjectLit');
 				}
 			case null, _: Assert.fail('expected ObjectLit');
@@ -74,7 +78,7 @@ class HxObjectLitSliceTest extends HxTestHelpers {
 		final decl:HxVarDecl = parseSingleVarDecl('class C { var x:Dynamic = {sum: a + b}; }');
 		switch decl.init {
 			case ObjectLit(lit):
-				switch lit.fields[0].value {
+				switch expectObjectFieldBody(lit.fields[0]).value {
 					case Add(IdentExpr(a), IdentExpr(b)):
 						Assert.equals('a', (a : String));
 						Assert.equals('b', (b : String));
@@ -98,7 +102,7 @@ class HxObjectLitSliceTest extends HxTestHelpers {
 		switch decl.init {
 			case GtEq(IdentExpr(v), ObjectLit(lit)):
 				Assert.equals('v', (v : String));
-				Assert.equals('major', (lit.fields[0].name : String));
+				Assert.equals('major', (expectObjectFieldBody(lit.fields[0]).name : String));
 			case null, _: Assert.fail('expected GtEq(v, ObjectLit)');
 		}
 	}
@@ -112,9 +116,9 @@ class HxObjectLitSliceTest extends HxTestHelpers {
 		switch decl.init {
 			case ObjectLit(lit):
 				Assert.equals(1, lit.fields.length);
-				final field:HxObjectField = lit.fields[0];
-				Assert.equals('"name"', (field.name : String));
-				switch field.value {
+				final body:HxObjectFieldBody = expectObjectFieldBody(lit.fields[0]);
+				Assert.equals('"name"', (body.name : String));
+				switch body.value {
 					case IntLit(v): Assert.equals(1, (v : Int));
 					case null, _: Assert.fail('expected IntLit(1)');
 				}
@@ -131,8 +135,8 @@ class HxObjectLitSliceTest extends HxTestHelpers {
 		switch decl.init {
 			case ObjectLit(lit):
 				Assert.equals(2, lit.fields.length);
-				Assert.equals('a', (lit.fields[0].name : String));
-				Assert.equals('"b-c"', (lit.fields[1].name : String));
+				Assert.equals('a', (expectObjectFieldBody(lit.fields[0]).name : String));
+				Assert.equals('"b-c"', (expectObjectFieldBody(lit.fields[1]).name : String));
 			case null, _: Assert.fail('expected ObjectLit(2 mixed-key fields)');
 		}
 	}
@@ -142,7 +146,7 @@ class HxObjectLitSliceTest extends HxTestHelpers {
 		final decl:HxVarDecl = parseSingleVarDecl('class C { var x = {"i":0}; }');
 		switch decl.init {
 			case ObjectLit(lit):
-				Assert.equals('"i"', (lit.fields[0].name : String));
+				Assert.equals('"i"', (expectObjectFieldBody(lit.fields[0]).name : String));
 			case null, _: Assert.fail('expected ObjectLit({"i":0})');
 		}
 		roundTrip('class C { function main() { var x = {"i":0}; } }', 'issue_60');
@@ -156,7 +160,7 @@ class HxObjectLitSliceTest extends HxTestHelpers {
 		final decl:HxVarDecl = parseSingleVarDecl('class C { var x:Dynamic = {x: "v"}; }');
 		switch decl.init {
 			case ObjectLit(lit):
-				Assert.equals('x', (lit.fields[0].name : String));
+				Assert.equals('x', (expectObjectFieldBody(lit.fields[0]).name : String));
 			case null, _: Assert.fail('expected ObjectLit({x:"v"})');
 		}
 	}

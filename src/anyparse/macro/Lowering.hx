@@ -2433,10 +2433,21 @@ class Lowering {
 	 *    terminates when `ctx.pos` reaches `ctx.input.length`. Used by
 	 *    module-root Star fields where the top level has no close
 	 *    delimiter.
+	 *  - No `@:trail`, **with** `@:sep(",")` + `@:tryparse` — try-parse
+	 *    with sep peek. Loop attempts to parse an element; on success,
+	 *    peeks the separator: if present, consumes it and continues; if
+	 *    absent, breaks. On element-parse fail, rewinds to before any
+	 *    whitespace skip and breaks (so the enclosing rule's close
+	 *    literal — e.g. `#end` on the wrapping ctor — sees the next
+	 *    token at its original position). Slice 18 use case:
+	 *    `HxConditionalObjectField.body` — comma-separated object-literal
+	 *    fields inside a `#if … #end` block, where `#end` is consumed by
+	 *    the enclosing `HxObjectField.Conditional` ctor, not by this
+	 *    Star.
 	 *
-	 * `@:sep` combined with no `@:trail` is rejected at compile time
-	 * because there is no unambiguous way to stop a sep-peek loop at
-	 * EOF or via try-parse.
+	 * `@:sep` combined with no `@:trail` AND no `@:tryparse` is rejected
+	 * at compile time because there is no unambiguous way to stop a
+	 * sep-peek loop at EOF without a fail-rewind signal.
 	 */
 	private function emitStarFieldSteps(starNode:ShapeNode, localName:String, parseSteps:Array<Expr>, isLastField:Bool):Void {
 		final inner:ShapeNode = starNode.children[0];
@@ -2453,8 +2464,8 @@ class Lowering {
 		final openText:Null<String> = starNode.annotations.get('lit.leadText');
 		final closeText:Null<String> = starNode.annotations.get('lit.trailText');
 		final sepText:Null<String> = starNode.annotations.get('lit.sepText');
-		if (closeText == null && sepText != null) {
-			Context.fatalError('Lowering: Star struct field with @:sep requires an explicit @:trail close literal', Context.currentPos());
+		if (closeText == null && sepText != null && !starNode.hasMeta(':tryparse')) {
+			Context.fatalError('Lowering: Star struct field with @:sep without @:trail requires @:tryparse for fail-rewind termination', Context.currentPos());
 		}
 		// Trivia-mode branch — @:trivia-annotated Star accumulates
 		// `Trivial<T>` wrappers instead of plain element values. Supports
@@ -2481,6 +2492,40 @@ class Lowering {
 			pos: Context.currentPos(),
 		});
 		final accumRef:Expr = macro $i{localName};
+		if (closeText == null && sepText != null && starNode.hasMeta(':tryparse')) {
+			// Try-parse with sep peek (Slice 18). After each successful
+			// element, peeks the next non-whitespace char: if it equals
+			// the sep, consumes it and continues; otherwise breaks. On
+			// element-parse fail, restores `_savedPos` (taken BEFORE
+			// `skipWs`) so the enclosing rule's close literal sees the
+			// pre-whitespace position — matches the rewind discipline of
+			// the regular tryparse-no-sep branch below. Empty input is
+			// accepted (zero-element Star) for the same reason: first
+			// `$elemCall` throws on `#end`, the rewind hits the original
+			// position, the enclosing `@:trail('#end')` consumes the
+			// directive at its native offset. The trailing-sep tolerance
+			// of the sep+close branch (consume sep then check close) is
+			// folded inline: after consuming the sep, the next iteration's
+			// element parse will fail on `#end` and rewind to just AFTER
+			// the consumed sep, so the enclosing close still sees `#end`.
+			final sepCharCode:Int = sepText.charCodeAt(0);
+			parseSteps.push(macro {
+				while (true) {
+					final _savedPos:Int = ctx.pos;
+					try {
+						skipWs(ctx);
+						$accumRef.push($elemCall);
+					} catch (_e:anyparse.runtime.ParseError) {
+						ctx.pos = _savedPos;
+						break;
+					}
+					skipWs(ctx);
+					if (ctx.pos >= ctx.input.length || ctx.input.charCodeAt(ctx.pos) != $v{sepCharCode}) break;
+					ctx.pos++;
+				}
+			});
+			return;
+		}
 		if (closeText == null && (!isLastField || starNode.hasMeta(':tryparse'))) {
 			// Try-parse mode: loop until element parse fails. Used by
 			// Star fields that are NOT the last field in a struct, OR

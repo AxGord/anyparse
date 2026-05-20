@@ -13,6 +13,7 @@ import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxClassMember;
 import anyparse.grammar.haxe.HxConditionalDecl;
 import anyparse.grammar.haxe.HxConditionalMember;
+import anyparse.grammar.haxe.HxConditionalObjectField;
 import anyparse.grammar.haxe.HxConditionalStmt;
 import anyparse.grammar.haxe.HxConditionalType;
 import anyparse.grammar.haxe.HxDecl;
@@ -28,6 +29,8 @@ import anyparse.grammar.haxe.HxIdentLit;
 import anyparse.grammar.haxe.HxInterfaceDecl;
 import anyparse.grammar.haxe.HxMacroClass;
 import anyparse.grammar.haxe.HxModuleWriter;
+import anyparse.grammar.haxe.HxObjectField;
+import anyparse.grammar.haxe.HxObjectFieldBody;
 import anyparse.grammar.haxe.HxParam;
 import anyparse.grammar.haxe.HxParamBody;
 import anyparse.grammar.haxe.HxStatement;
@@ -106,6 +109,20 @@ class HxTestHelpers extends Test {
 		return switch stmt {
 			case Conditional(inner): inner;
 			case _: throw 'expected Conditional, got $stmt';
+		};
+	}
+
+	private function expectObjectFieldBody(field:HxObjectField):HxObjectFieldBody {
+		return switch field {
+			case Field(body): body;
+			case _: throw 'expected Field, got $field';
+		};
+	}
+
+	private function expectConditionalObjectField(field:HxObjectField):HxConditionalObjectField {
+		return switch field {
+			case Conditional(inner): inner;
+			case _: throw 'expected Conditional, got $field';
 		};
 	}
 

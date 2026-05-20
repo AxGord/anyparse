@@ -4,7 +4,6 @@ import utest.Assert;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnDecl;
-import anyparse.grammar.haxe.HxObjectField;
 import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxVarDecl;
 
@@ -41,8 +40,7 @@ class HxBlockExprSliceTest extends HxTestHelpers {
 		switch decl.init {
 			case ObjectLit(lit):
 				Assert.equals(1, lit.fields.length);
-				final field:HxObjectField = lit.fields[0];
-				Assert.equals('a', (field.name : String));
+				Assert.equals('a', (expectObjectFieldBody(lit.fields[0]).name : String));
 			case null, _: Assert.fail('expected ObjectLit({a:1})');
 		}
 	}
