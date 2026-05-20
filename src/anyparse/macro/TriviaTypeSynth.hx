@@ -217,6 +217,28 @@ class TriviaTypeSynth {
 	public static inline final TRAIL_PRESENT_SUFFIX:String = 'TrailPresent';
 
 	/**
+	 * ω-condcomp-body-leading-sep — suffix for a `Bool` slot recording
+	 * whether the source had a leading separator INSIDE a `@:sep+@:tryparse`
+	 * (no-trail) Star body, between the enclosing keyword and the first
+	 * body element. Set by `Lowering.emitStarFieldSteps`'s pre-loop
+	 * sep-peek; consumed by `WriterLowering.emitWriterStarField`'s
+	 * padLeading branch as a runtime gate that swaps the leading-pad
+	 * `_dt(' ')` for `_dt(', ')`. Synthesised only for Stars opting in via
+	 * `@:fmt(sepBeforeOpt)` (which additionally REQUIRES `@:fmt(padLeading)`
+	 * and a `@:sep + @:tryparse` no-trail shape); other Stars skip the
+	 * slot. First consumer: `HxConditionalParam.body` (Slice 18f,
+	 * `whitespace/issue_582_type_hints_conditionals`).
+	 *
+	 * Limitation: an empty body (`#if X, #end`) drops the leading sep at
+	 * write time because the padLeading branch's empty-array short-circuit
+	 * returns `_de()` before any push runs. No corpus fixture exercises
+	 * the empty-body-with-leading-sep shape; rejected by parser-side rewind
+	 * as well (the body Star's first iter would have to fail on `#end`
+	 * AFTER the leading sep was consumed — rare and harmless).
+	 */
+	public static inline final SEP_BEFORE_SUFFIX:String = 'SepBefore';
+
+	/**
 	 * ω-trailopt-source-track — positional arg name appended to paired
 	 * Alt ctors that carry `@:trailOpt(...)`. The parser's `matchLit`
 	 * result lands here so the writer can gate trail emission on source
@@ -570,6 +592,11 @@ class TriviaTypeSynth {
 				if (child.readMetaString(':sep') != null && child.readMetaString(':trail') != null)
 					entries.push({field: fieldName + TRAIL_PRESENT_SUFFIX, expr: macro false});
 			}
+			// ω-condcomp-body-leading-sep: trivia-independent SepBefore
+			// default for raw→paired upcasts (Slice 18f). Sibling of the
+			// gate in `buildTypeDefinition`.
+			if (isSepBeforeOptStarField(child))
+				entries.push({field: fieldName + SEP_BEFORE_SUFFIX, expr: macro false});
 			if (isBareNonFirstRef(child, origNode))
 				entries.push({field: fieldName + BEFORE_NEWLINE_SUFFIX, expr: macro false});
 			if (isTrailRef(child))
@@ -720,6 +747,16 @@ class TriviaTypeSynth {
 					// would lose its comment at parse time.
 					if (isTriviaStarField(child))
 						for (extra in buildStarTrailingSlots(child, pos)) fields.push(extra);
+					// ω-condcomp-body-leading-sep: independent of @:trivia.
+					// Add a `<field>SepBefore:Bool` slot for Stars opting into
+					// `@:fmt(sepBeforeOpt)` (Slice 18f). First consumer is
+					// `HxConditionalParam.body`, which is a NON-trivia Star —
+					// the slot synthesis must not be gated on `isTriviaStarField`.
+					if (isSepBeforeOptStarField(child)) {
+						final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
+						final fieldName:String = child.annotations.get('base.fieldName');
+						fields.push({name: fieldName + SEP_BEFORE_SUFFIX, kind: FVar(boolCT), pos: pos, access: []});
+					}
 					// ω-issue-48-v2: bare non-first Ref fields grow a
 					// `BeforeNewline:Bool` slot capturing whether the source
 					// had a newline in the gap between the preceding content
@@ -882,6 +919,25 @@ class TriviaTypeSynth {
 
 	private static function isTriviaStarField(child:ShapeNode):Bool {
 		return child.kind == Star && child.annotations.get('trivia.starCollects') == true;
+	}
+
+	/**
+	 * Slice 18f opt-in: non-trivia `@:sep + @:tryparse` no-`@:trail` Star
+	 * field with `@:fmt(sepBeforeOpt)` requesting a `<field>SepBefore:Bool`
+	 * synth slot. The slot captures whether the source had a leading
+	 * separator inside the body (`#if cond, body` shape) for byte-roundtrip
+	 * re-emission by the writer.
+	 *
+	 * Independent of `@:trivia` (the gate fires for both trivia and plain
+	 * Stars) but coupled to the @:sep+@:tryparse no-trail shape — those
+	 * are the only Lowering / WriterLowering paths that interpret the
+	 * slot. Macro shape validation lives in `Lowering.emitStarFieldSteps`
+	 * (fatalError on missing `:sep` / `:tryparse` / present `:trail`) and
+	 * `WriterLowering.emitWriterStarField` (fatalError on missing
+	 * `padLeading`).
+	 */
+	private static function isSepBeforeOptStarField(child:ShapeNode):Bool {
+		return child.kind == Star && child.fmtHasFlag('sepBeforeOpt');
 	}
 
 	private static function buildStarTrailingSlots(child:ShapeNode, pos:Position):Array<Field> {

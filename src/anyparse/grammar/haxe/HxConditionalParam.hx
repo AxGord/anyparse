@@ -21,6 +21,20 @@ package anyparse.grammar.haxe;
  * ACCEPTED — `HxParam` is a bare sum-type, no mandatory wrapping struct
  * (same divergence as `HxObjectField` from the member-scope precedent).
  *
+ * Slice 18f opt-in (`@:fmt(sepBeforeOpt)`): tolerates a LEADING separator
+ * INSIDE the body, between `#if <cond>` and the first body element —
+ * `#if air, commandKey:Bool = false, ...` (fork fixture
+ * `whitespace/issue_582_type_hints_conditionals`, line 3 col 10). Parser-
+ * side: pre-loop sep-peek consumes the leading `,` and stores the result
+ * in a `bodySepBefore:Bool` synth slot on the paired type. Writer-side:
+ * the body's padLeading branch (`@:fmt(padLeading)` below) swaps the
+ * default `_dt(' ')` for `_dt(', ')` when `bodySepBefore` is true, re-
+ * emitting the leading sep for byte-roundtrip. Combined slot+writer
+ * mechanism is symmetric with Slice 12's `Trivial.sepAfter` (per-element
+ * post-sep flag) and Slice 18's `<field>TrailPresent` (post-last-element
+ * pre-close flag) — three orthogonal sep-position knobs covering the
+ * leading / inter-element / trailing slots of a sep-tryparse Star.
+ *
  * The body's `@:tryparse` Star naturally terminates after at least one
  * element when the next token is not a recognised `HxParam` dispatch —
  * `#elseif`, `#else`, and `#end` fail every branch's dispatch token, so
@@ -63,7 +77,7 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxConditionalParam = {
 	var cond:HxPpCondLit;
-	@:sep(',') @:tryparse @:fmt(padLeading, padTrailing) var body:Array<HxParam>;
+	@:sep(',') @:tryparse @:fmt(padLeading, padTrailing, sepBeforeOpt) var body:Array<HxParam>;
 	@:tryparse var elseifs:Array<HxElseifParam>;
 	@:optional @:kw('#else') @:tryparse @:fmt(padLeading, padTrailing) var elseBody:Null<Array<HxParam>>;
 };

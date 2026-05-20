@@ -3898,6 +3898,29 @@ class WriterLowering {
 				// trailing same-line content (members `{}` + close-trailing
 				// comment). First consumer is `HxAbstractDecl.clauses`.
 				final lineLengthAwareSeps:Bool = starNode.fmtHasFlag('lineLengthAwareSeps');
+				// ω-condcomp-body-leading-sep (Slice 18f): read the runtime
+				// `<field>SepBefore:Bool` slot synthesised by
+				// `TriviaTypeSynth.isSepBeforeOptStarField`. When true at
+				// write time, prepend the sep literal to the leading pad
+				// (`_dt(', ')` in place of `_dt(' ')`). Requires `padLeading`
+				// — the leading pad is the only Doc slot in this branch that
+				// fires adjacent to the enclosing kw (`#if cond`). Combining
+				// with `lineLengthAwareSeps` is rejected at macro time (no
+				// current consumer; the line-wrap probe would have to
+				// swallow the comma into the breakable probe, which the
+				// fork semantics for `#if cond, body` does NOT do).
+				//
+				// The slot lives on the trivia-paired typedef only (sister
+				// gate in `Lowering.lowerStruct` skips the plain-mode
+				// struct literal). Plain writer keeps the pre-slice
+				// `_dt(' ')` pad — no slot to read, byte-roundtrip parity
+				// with the no-slot pre-Slice-18f shape preserved.
+				final sepBeforeOpt:Bool = starNode.fmtHasFlag('sepBeforeOpt');
+				if (sepBeforeOpt && !padLeading)
+					Context.fatalError('WriterLowering: @:fmt(sepBeforeOpt) requires @:fmt(padLeading)', Context.currentPos());
+				if (sepBeforeOpt && lineLengthAwareSeps)
+					Context.fatalError('WriterLowering: @:fmt(sepBeforeOpt) is not compatible with @:fmt(lineLengthAwareSeps)', Context.currentPos());
+				final sepBeforeOptActive:Bool = sepBeforeOpt && ctx.trivia;
 				if (padLeading || padTrailing) {
 					if (lineLengthAwareSeps) {
 						final leadingPush:Expr = padLeading
@@ -3925,8 +3948,29 @@ class WriterLowering {
 							}
 						});
 					} else {
-						final leadingPush:Expr = padLeading ? macro _docs.push(_dt(' ')) : macro {};
+						final leadingPush:Expr = if (sepBeforeOptActive) {
+							final fieldName:String = starNode.annotations.get('base.fieldName');
+							final sepBeforeAccess:Expr = {
+								expr: EField(macro value, fieldName + TriviaTypeSynth.SEP_BEFORE_SUFFIX),
+								pos: Context.currentPos(),
+							};
+							final sepText:Null<String> = starNode.annotations.get('lit.sepText');
+							final sepLeadText:String = (sepText ?? ',') + ' ';
+							macro _docs.push($sepBeforeAccess ? _dt($v{sepLeadText}) : _dt(' '));
+						} else if (padLeading) macro _docs.push(_dt(' '));
+						else macro {};
 						final trailingPush:Expr = padTrailing ? macro _docs.push(_dt(' ')) : macro {};
+						// ω-condcomp-body-inter-sep (Slice 18f): the inter-element
+						// separator for this branch was historically `_dt(' ')` —
+						// designed for sep-less Stars where elements pack with one
+						// space (e.g. modifier runs). Sep-bearing Stars (e.g.
+						// `HxConditionalParam.body` / `HxConditionalObjectField.body`
+						// with `@:sep(',')`) emit their actual sep + space so multi-
+						// element bodies round-trip the source comma. Falls back to
+						// `' '` when sepText is absent — sep-less Stars stay byte-
+						// identical to pre-slice behaviour.
+						final sepTextForInter:Null<String> = starNode.annotations.get('lit.sepText');
+						final interSepText:String = sepTextForInter != null ? sepTextForInter + ' ' : ' ';
 						parts.push(macro {
 							final _arr = $fieldAccess;
 							if (_arr.length == 0) _de()
@@ -3936,7 +3980,7 @@ class WriterLowering {
 								var _si:Int = 0;
 								while (_si < _arr.length) {
 									_docs.push($elemCall);
-									if (_si < _arr.length - 1) _docs.push(_dt(' '));
+									if (_si < _arr.length - 1) _docs.push(_dt($v{interSepText}));
 									_si++;
 								}
 								$trailingPush;

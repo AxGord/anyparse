@@ -2381,6 +2381,19 @@ class Lowering {
 					structFields.push({field: fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX, expr: macro $i{trailPresentLocal}});
 				}
 			}
+			// ω-condcomp-body-leading-sep (Slice 18f): @:fmt(sepBeforeOpt)
+			// on a Star field grows a `<field>SepBefore:Bool` slot fed by
+			// the local declared inside `emitStarFieldSteps`'s
+			// @:sep+@:tryparse-no-trail branch. The slot lives on the
+			// trivia-paired typedef only (TriviaTypeSynth.buildTypeDefinition);
+			// the plain typedef shape is unchanged. Gating on `ctx.trivia`
+			// ensures plain-mode struct literals stay byte-identical to
+			// pre-slice (the captured local is still declared above and
+			// discarded — no field-shape mismatch).
+			if (ctx.trivia && isStar && child.fmtHasFlag('sepBeforeOpt')) {
+				final sepBeforeLocal:String = localName + 'SepBefore';
+				structFields.push({field: fieldName + TriviaTypeSynth.SEP_BEFORE_SUFFIX, expr: macro $i{sepBeforeLocal}});
+			}
 		}
 		// Binary: @:align — skip to next alignment boundary after all fields.
 		final align:Null<Int> = node.annotations.get('bin.align');
@@ -2508,7 +2521,41 @@ class Lowering {
 			// folded inline: after consuming the sep, the next iteration's
 			// element parse will fail on `#end` and rewind to just AFTER
 			// the consumed sep, so the enclosing close still sees `#end`.
+			//
+			// Slice 18f opt-in (`@:fmt(sepBeforeOpt)`): BEFORE entering the
+			// element loop, peek-and-consume a single leading sep INSIDE
+			// the body (between enclosing kw and first element). Captures
+			// true/false into `<localName>SepBefore` for the writer's
+			// padLeading runtime gate to re-emit the leading sep. Without
+			// this, `#if X, body #end` parses by other means only if the
+			// body Star tolerates a leading `,` — which it does NOT (no
+			// HxParam dispatch matches `,`, fail-rewind sticks at `,`).
+			// First consumer: `HxConditionalParam.body`
+			// (`whitespace/issue_582_type_hints_conditionals`).
 			final sepCharCode:Int = sepText.charCodeAt(0);
+			final hasSepBeforeOpt:Bool = starNode.fmtHasFlag('sepBeforeOpt');
+			if (hasSepBeforeOpt) {
+				final sepBeforeLocal:String = localName + 'SepBefore';
+				parseSteps.push({
+					expr: EVars([{
+						name: sepBeforeLocal,
+						type: macro:Bool,
+						expr: macro false,
+						isFinal: false,
+					}]),
+					pos: Context.currentPos(),
+				});
+				parseSteps.push(macro {
+					final _savedPos:Int = ctx.pos;
+					skipWs(ctx);
+					if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
+						ctx.pos++;
+						$i{sepBeforeLocal} = true;
+					} else {
+						ctx.pos = _savedPos;
+					}
+				});
+			}
 			parseSteps.push(macro {
 				while (true) {
 					final _savedPos:Int = ctx.pos;

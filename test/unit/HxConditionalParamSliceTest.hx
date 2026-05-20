@@ -164,4 +164,44 @@ class HxConditionalParamSliceTest extends HxTestHelpers {
 		Assert.equals('a', (expectRequiredParam(cond.body[0]).name : String));
 		Assert.equals('b', (expectRequiredParam(cond.body[1]).name : String));
 	}
+
+	// -- Slice 18f: leading comma INSIDE body, single element (issue_582 surface, type simplified) --
+	//
+	// Outer comma before `#if` is REQUIRED for plain-parser parity — the plain
+	// HaxeParser entry strictly enforces `@:sep+@:trail` Star sep between fn-
+	// params (see file-level testConditionalFirstRequiredFollows rationale).
+	// The trivia parser would tolerate the no-comma adjacency form via
+	// `Trivial.sepAfter`, but this slice-test stays plain-parser-friendly.
+	public function testLeadingSepBodySingle():Void {
+		final params:Array<HxParam> = paramsOf('class C { function foo(a:Int, #if x, b:Int #end) {} }');
+		Assert.equals(2, params.length);
+		Assert.equals('a', (expectRequiredParam(params[0]).name : String));
+		final cond:HxConditionalParam = expectConditionalParam(params[1]);
+		Assert.equals('x', (cond.cond : String));
+		Assert.equals(1, cond.body.length);
+		Assert.equals('b', (expectRequiredParam(cond.body[0]).name : String));
+	}
+
+	// -- Slice 18f: leading comma INSIDE body, multi-element (full issue_582 shape) --
+	public function testLeadingSepBodyMulti():Void {
+		final params:Array<HxParam> = paramsOf('class C { function foo(a:Int, #if x, b:Int, c:Int #end) {} }');
+		Assert.equals(2, params.length);
+		Assert.equals('a', (expectRequiredParam(params[0]).name : String));
+		final cond:HxConditionalParam = expectConditionalParam(params[1]);
+		Assert.equals('x', (cond.cond : String));
+		Assert.equals(2, cond.body.length);
+		Assert.equals('b', (expectRequiredParam(cond.body[0]).name : String));
+		Assert.equals('c', (expectRequiredParam(cond.body[1]).name : String));
+	}
+
+	// -- Slice 18f regression guard: NO leading comma still parses (default false slot) --
+	public function testNoLeadingSepBodyRegression():Void {
+		final params:Array<HxParam> = paramsOf('class C { function foo(a:Int, #if x b:Int #end) {} }');
+		Assert.equals(2, params.length);
+		Assert.equals('a', (expectRequiredParam(params[0]).name : String));
+		final cond:HxConditionalParam = expectConditionalParam(params[1]);
+		Assert.equals('x', (cond.cond : String));
+		Assert.equals(1, cond.body.length);
+		Assert.equals('b', (expectRequiredParam(cond.body[0]).name : String));
+	}
 }
