@@ -14,6 +14,7 @@ import anyparse.grammar.haxe.HxClassMember;
 import anyparse.grammar.haxe.HxConditionalDecl;
 import anyparse.grammar.haxe.HxConditionalMember;
 import anyparse.grammar.haxe.HxConditionalObjectField;
+import anyparse.grammar.haxe.HxConditionalParam;
 import anyparse.grammar.haxe.HxConditionalStmt;
 import anyparse.grammar.haxe.HxConditionalType;
 import anyparse.grammar.haxe.HxDecl;
@@ -245,6 +246,7 @@ class HxTestHelpers extends Test {
 			case Required(body): body;
 			case Optional(_): throw 'expected HxParam.Required, got Optional';
 			case Rest(_): throw 'expected HxParam.Required, got Rest';
+			case Conditional(_): throw 'expected HxParam.Required, got Conditional';
 		};
 	}
 
@@ -257,6 +259,7 @@ class HxTestHelpers extends Test {
 			case Optional(body): body;
 			case Required(_): throw 'expected HxParam.Optional, got Required';
 			case Rest(_): throw 'expected HxParam.Optional, got Rest';
+			case Conditional(_): throw 'expected HxParam.Optional, got Conditional';
 		};
 	}
 
@@ -270,6 +273,22 @@ class HxTestHelpers extends Test {
 			case Rest(body): body;
 			case Required(_): throw 'expected HxParam.Rest, got Required';
 			case Optional(_): throw 'expected HxParam.Rest, got Optional';
+			case Conditional(_): throw 'expected HxParam.Rest, got Conditional';
+		};
+	}
+
+	/**
+	 * Unwrap an `HxParam.Conditional` to its inner `HxConditionalParam`.
+	 * Throws on `Required` / `Optional` / `Rest`. Mirror of
+	 * `expectConditionalObjectField` (Slice 18); the fn-param-scope twin
+	 * of the cond-comp arc.
+	 */
+	private function expectConditionalParam(param:HxParam):HxConditionalParam {
+		return switch param {
+			case Conditional(inner): inner;
+			case Required(_): throw 'expected HxParam.Conditional, got Required';
+			case Optional(_): throw 'expected HxParam.Conditional, got Optional';
+			case Rest(_): throw 'expected HxParam.Conditional, got Rest';
 		};
 	}
 
@@ -279,11 +298,14 @@ class HxTestHelpers extends Test {
 	 * Use when the assertion only cares about `name`/`type`/`defaultValue`
 	 * and the `Required` vs `Optional` distinction is irrelevant for the
 	 * test (e.g. type-position tests that exercise `HxType` shapes
-	 * through parameter types).
+	 * through parameter types). Throws on `Conditional` — cond-comp
+	 * blocks carry no inline body and callers asserting param shape
+	 * must switch on `HxParam` directly.
 	 */
 	private function paramBody(param:HxParam):HxParamBody {
 		return switch param {
 			case Required(body) | Optional(body) | Rest(body): body;
+			case Conditional(_): throw 'expected HxParam.Required/Optional/Rest, got Conditional';
 		};
 	}
 
