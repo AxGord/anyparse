@@ -406,6 +406,15 @@ final class HxExprUtil {
 			case 'ImportDecl' | 'ImportWildDecl' | 'UsingDecl' | 'UsingWildDecl':
 				final path:Null<String> = params[0];
 				path == null ? null : {ctorName: ctor, path: path};
+			case 'ImportAliasDecl':
+				// First ctor arg is `HxImportAlias` struct, not a String —
+				// the lowering rejects multi-arg enum branches so the path
+				// lives in the wrapped struct's `path` field instead of
+				// being a positional sibling.
+				final aliasDecl:Null<Dynamic> = unwrapTrivialStruct(params[0]);
+				if (aliasDecl == null) return null;
+				final path:Null<String> = Reflect.field(aliasDecl, 'path');
+				path == null ? null : {ctorName: ctor, path: path};
 			case _: null;
 		};
 	}

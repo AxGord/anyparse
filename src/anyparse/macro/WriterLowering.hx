@@ -7413,10 +7413,24 @@ class WriterLowering {
 					guard: null,
 					expr: cp.isMatch
 						? macro {
+							// `_v0` is the matched ctor's first positional
+							// arg. For ctors whose first arg is a leaf path
+							// terminal (`HxTypeName` / `HxWildPath` abstracts
+							// over `String`), `_v0` IS the path string and
+							// `Reflect.hasField` returns false. For ctors
+							// whose first arg is a struct sub-rule carrying
+							// a `.path` field (`HxImportAlias`), the lookup
+							// extracts the dotted-ident path. Multi-arg
+							// enum branches are unsupported by the PEG
+							// lowering so this is the only struct-payload
+							// shape the cascade has to recognise.
+							final _v0Path:String = Reflect.hasField(_v0, 'path')
+								? Std.string(Reflect.field(_v0, 'path'))
+								: Std.string(_v0);
 							$tailKindIdent = 1;
-							$tailPathIdent = _v0;
+							$tailPathIdent = _v0Path;
 							$headKindIdent = 1;
-							$headPathIdent = _v0;
+							$headPathIdent = _v0Path;
 						}
 						: cp.isTransparent
 							? transparentBody
@@ -7827,7 +7841,7 @@ class WriterLowering {
 			var _piuI:Int = 0;
 			while (_piuI < _arr.length) {
 				if (!_hasPiu) switch _arr[_piuI].node.decl {
-					case PackageDecl(_) | PackageEmpty | ImportDecl(_) | ImportWildDecl(_) | UsingDecl(_) | UsingWildDecl(_):
+					case PackageDecl(_) | PackageEmpty | ImportDecl(_) | ImportAliasDecl(_) | ImportWildDecl(_) | UsingDecl(_) | UsingWildDecl(_):
 						_hasPiu = true;
 					case _:
 				}

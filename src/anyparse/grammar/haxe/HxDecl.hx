@@ -28,8 +28,16 @@ package anyparse.grammar.haxe;
  *    ones so `tryBranch` rollback tries the longer match first and
  *    falls through to the plain `HxTypeName` ctor when the `.*` tail
  *    isn't present (mirrors the `PackageDecl` → `PackageEmpty`
- *    rollback). Aliased (`import Std.is as isOfType;`) forms are out
- *    of scope — separate slice.
+ *    rollback).
+ *  - `ImportAliasDecl` — single-symbol aliased import
+ *    `import Std.is as isOfType;` (slice ω-import-as-alias). Payload is
+ *    `HxImportAlias` (path + mandatory `as <ident>` suffix). Placed
+ *    BEFORE the plain `ImportDecl` so `tryBranch` attempts the longer
+ *    match first; a missing `as` rolls back to the plain ctor (same
+ *    longer-match-first pattern as `ImportWildDecl` → `ImportDecl`).
+ *    `using ... as ...` is not legal Haxe and gets no twin ctor;
+ *    wildcard imports never carry `as` (`import foo.*` only) so there
+ *    is no `ImportWildAliasDecl` either.
  *
  *    Like `Package*`, the parser does not enforce ordering or
  *    position of imports relative to other top-level decls; semantic
@@ -86,6 +94,9 @@ enum HxDecl {
 
 	@:kw('using') @:trail(';')
 	UsingWildDecl(path:HxWildPath);
+
+	@:kw('import') @:trail(';')
+	ImportAliasDecl(decl:HxImportAlias);
 
 	@:kw('import') @:trail(';')
 	ImportDecl(path:HxTypeName);
