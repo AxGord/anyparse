@@ -8,6 +8,7 @@ import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxAbstractDecl;
 import anyparse.grammar.haxe.HxAnonField;
 import anyparse.grammar.haxe.HxAnonFieldBody;
+import anyparse.grammar.haxe.HxAnonVarBody;
 import anyparse.grammar.haxe.HxAnonMember;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxClassMember;
@@ -376,22 +377,30 @@ class HxTestHelpers extends Test {
 
 	/**
 	 * Asserts `field` is the `var` class-notation anon field kind and
-	 * returns its `HxVarDecl`; throws on any other kind.
+	 * returns its `HxVarDecl`; throws on any other kind. The Slice 27
+	 * `HxAnonVarBody` wrapper is unwrapped transparently — both
+	 * `Optional(decl)` (`var ?name:Type`) and `Plain(decl)` collapse
+	 * to the bare decl. Use `expectVarFieldOptional` when the test
+	 * needs to discriminate the `?` flag.
 	 */
 	private function expectVarField(field:HxAnonField):HxVarDecl {
 		return switch field {
-			case VarField(decl): decl;
+			case VarField(Optional(decl)): decl;
+			case VarField(Plain(decl)): decl;
 			case _: throw 'expected HxAnonField.VarField, got $field';
 		};
 	}
 
 	/**
 	 * Asserts `field` is the `final` class-notation anon field kind
-	 * and returns its `HxVarDecl`; throws on any other kind.
+	 * and returns its `HxVarDecl`; throws on any other kind. Slice 27
+	 * `HxAnonVarBody` wrapper is unwrapped transparently — see
+	 * `expectVarField`.
 	 */
 	private function expectFinalField(field:HxAnonField):HxVarDecl {
 		return switch field {
-			case FinalField(decl): decl;
+			case FinalField(Optional(decl)): decl;
+			case FinalField(Plain(decl)): decl;
 			case _: throw 'expected HxAnonField.FinalField, got $field';
 		};
 	}

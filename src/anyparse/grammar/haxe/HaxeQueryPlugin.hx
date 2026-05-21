@@ -550,6 +550,25 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 					if (n is String) return n;
 				}
 				if (Reflect.hasField(value, 'node')) return extractName(Reflect.field(value, 'node'));
+			case TEnum(_):
+				// Slice 27 — transparent unwrap for the single-Ref wrapper
+				// enum `HxAnonVarBody` (`Optional(decl)` / `Plain(decl)`):
+				// `HxAnonField.VarField` / `FinalField` now carries a post-
+				// keyword-`?` Alt-enum wrapper, so the name slot lives one
+				// level deeper than before. Scoped by ctor name to avoid
+				// surfacing names from arbitrary enum ctor payloads (the
+				// general TEnum recurse broke pattern-matcher
+				// `extractFirstExpr` / etc., which rely on name being null
+				// for non-decl enum nodes).
+				final ctor:String = Type.enumConstructor(value);
+				if (ctor == 'Optional' || ctor == 'Plain') {
+					final params:Array<Dynamic> = Type.enumParameters(value);
+					for (p in params) {
+						if (Std.isOfType(p, Span)) continue;
+						final n:Null<String> = extractName(p);
+						if (n != null) return n;
+					}
+				}
 			case _:
 		}
 		return null;

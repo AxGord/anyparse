@@ -3,6 +3,7 @@ package unit;
 import utest.Assert;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxAnonField;
+import anyparse.grammar.haxe.HxAnonVarBody;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxType;
@@ -283,5 +284,72 @@ class HxAnonVarFieldSliceTest extends HxTestHelpers {
 		final decl:HxVarDecl = expectVarField(fields[0]);
 		Assert.equals('name', (decl.name : String));
 		Assert.notNull(decl.access);
+	}
+
+	// ======== Slice 27 — `var ?` / `final ?` optional anon field ========
+	// Corpus motivators: `sameline/issue_104_typedef_with_finals`
+	// (`final ?additionalTimes:{ ... }`), `wrapping/issue_110_max_length`
+	// (same final-?-anon nest in a flatter shape), `indentation/issue_86_
+	// indentation_removed_from_comments` (`var ?implementation:{ ... }`
+	// with leading docs). Both keyword introducers and the bare short
+	// `?name:Type` form must coexist in the same anon body.
+
+	public function testVarOptionalField():Void {
+		final fields:Array<HxAnonField> = anonOf('class Foo { var s:{var ?x:Int}; }');
+		Assert.equals(1, fields.length);
+		final decl:HxVarDecl = expectVarField(fields[0]);
+		Assert.equals('x', (decl.name : String));
+		Assert.equals('Int', (expectNamedType(decl.type).name : String));
+		switch fields[0] {
+			case VarField(Optional(_)):
+			case _: Assert.fail('expected VarField(Optional(_)), got ${fields[0]}');
+		}
+	}
+
+	public function testFinalOptionalField():Void {
+		final fields:Array<HxAnonField> = anonOf('class Foo { var s:{final ?y:String}; }');
+		Assert.equals(1, fields.length);
+		final decl:HxVarDecl = expectFinalField(fields[0]);
+		Assert.equals('y', (decl.name : String));
+		Assert.equals('String', (expectNamedType(decl.type).name : String));
+		switch fields[0] {
+			case FinalField(Optional(_)):
+			case _: Assert.fail('expected FinalField(Optional(_)), got ${fields[0]}');
+		}
+	}
+
+	public function testFinalOptionalNestedAnon():Void {
+		// issue_104 motivator shape: `final ?additionalTimes:{ final arr:Float; }`.
+		final fields:Array<HxAnonField> = anonOf(
+			'class Foo { var s:{final ?additionalTimes:{final arrival:Float; final beforeProcessing:Float;}}; }'
+		);
+		Assert.equals(1, fields.length);
+		final outer:HxVarDecl = expectFinalField(fields[0]);
+		Assert.equals('additionalTimes', (outer.name : String));
+		final inner:Array<HxAnonField> = expectAnon(outer.type);
+		Assert.equals(2, inner.length);
+		Assert.equals('arrival', (expectFinalField(inner[0]).name : String));
+		Assert.equals('beforeProcessing', (expectFinalField(inner[1]).name : String));
+	}
+
+	public function testPlainAndOptionalMixed():Void {
+		// `Plain` VarField and `Optional` VarField in the same body.
+		final fields:Array<HxAnonField> = anonOf('class Foo { var s:{var a:Int; var ?b:String}; }');
+		Assert.equals(2, fields.length);
+		switch fields[0] {
+			case VarField(Plain(_)):
+			case _: Assert.fail('expected VarField(Plain(_)) at 0, got ${fields[0]}');
+		}
+		switch fields[1] {
+			case VarField(Optional(_)):
+			case _: Assert.fail('expected VarField(Optional(_)) at 1, got ${fields[1]}');
+		}
+		Assert.equals('a', (expectVarField(fields[0]).name : String));
+		Assert.equals('b', (expectVarField(fields[1]).name : String));
+	}
+
+	public function testOptionalKeywordFieldsRoundTrip():Void {
+		roundTrip('class Foo { var s:{ var ?x:Int; }; }', 'var-opt-single');
+		roundTrip('class Foo { var s:{ final ?y:String; }; }', 'final-opt-single');
 	}
 }
