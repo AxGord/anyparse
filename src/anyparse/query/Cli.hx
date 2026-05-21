@@ -40,6 +40,17 @@ final class Cli {
 	private static final SKIP_PATHS_SHOWN:Int = 5;
 	private static final FUZZY_MAX_DIST:Int = 3;
 	private static final FUZZY_TOP_K:Int = 3;
+	/**
+	 * Substring "did you mean" — `query` ≥ this length OR the substring
+	 * pre-filter is skipped (avoids `Hx` matching every grammar type).
+	 */
+	private static final FUZZY_SUBSTRING_MIN_QUERY:Int = 4;
+	/**
+	 * Substring "did you mean" — candidate's extra char count over
+	 * `query.length` must not exceed this (avoids `Foo` matching a huge
+	 * `FooSomeReallyLongName` and crowding out true neighbours).
+	 */
+	private static final FUZZY_SUBSTRING_MAX_EXTRA:Int = 8;
 
 	public static function main():Void {
 		#if (sys || nodejs)
@@ -1390,19 +1401,40 @@ final class Cli {
 	}
 
 	/**
-	 * Top-`FUZZY_TOP_K` candidates from `pool` whose Levenshtein
-	 * distance to `query` is at most `FUZZY_MAX_DIST`. Returns empty
-	 * when nothing qualifies — the caller emits the "did you mean"
-	 * line only when the result is non-empty (never invent suggestions).
+	 * Top-`FUZZY_TOP_K` "did you mean" candidates ranked in two tiers:
+	 *
+	 *  - Tier 0 — substring match: `query` is a contiguous substring of
+	 *    `cand` (prefix/suffix/inner). Score = extra char count
+	 *    `cand.length - query.length`. Catches the common grammar miss
+	 *    `HxTypeParam` → `HxTypeParamDecl` (Levenshtein distance 4 from
+	 *    appending "Decl" — beyond `FUZZY_MAX_DIST`, but `HxTypeParam` IS
+	 *    a substring of `HxTypeParamDecl`). Guarded by
+	 *    `FUZZY_SUBSTRING_MIN_QUERY` (avoids `Hx` matching everything)
+	 *    and `FUZZY_SUBSTRING_MAX_EXTRA` (avoids `Foo` crowding out true
+	 *    neighbours with a long-name match).
+	 *
+	 *  - Tier 1 — Levenshtein within `FUZZY_MAX_DIST`. Catches typos and
+	 *    transpositions a substring scan can't.
+	 *
+	 * A candidate that qualifies under Tier 0 is NOT also evaluated under
+	 * Tier 1 — the substring tier always wins, and we don't double-add.
+	 * Returns empty when nothing qualifies; the caller emits the "did you
+	 * mean" line only on a non-empty result (never fabricates hints).
 	 */
 	private static function findFuzzy(query:String, pool:Map<String, Bool>):Array<String> {
-		final scored:Array<{name:String, dist:Int}> = [];
+		final scored:Array<{name:String, tier:Int, score:Int}> = [];
+		final qLen:Int = query.length;
+		final substringEnabled:Bool = qLen >= FUZZY_SUBSTRING_MIN_QUERY;
 		for (cand in pool.keys()) {
 			if (cand == query) continue;
+			if (substringEnabled && cand.length > qLen && cand.length - qLen <= FUZZY_SUBSTRING_MAX_EXTRA && cand.indexOf(query) >= 0) {
+				scored.push({name: cand, tier: 0, score: cand.length - qLen});
+				continue;
+			}
 			final d:Int = levenshtein(query, cand);
-			if (d <= FUZZY_MAX_DIST) scored.push({name: cand, dist: d});
+			if (d <= FUZZY_MAX_DIST) scored.push({name: cand, tier: 1, score: d});
 		}
-		scored.sort((a, b) -> a.dist == b.dist ? (a.name < b.name ? -1 : 1) : a.dist - b.dist);
+		scored.sort((a, b) -> a.tier != b.tier ? a.tier - b.tier : (a.score != b.score ? a.score - b.score : (a.name < b.name ? -1 : 1)));
 		final take:Int = scored.length < FUZZY_TOP_K ? scored.length : FUZZY_TOP_K;
 		return [for (i in 0...take) scored[i].name];
 	}
