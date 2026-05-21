@@ -49,6 +49,23 @@ else
     exit 1
 fi
 
+# Stale-build warning: if any .hx under src/ is newer than the selected
+# binary, the user is invoking an outdated artifact. `find -newer …
+# -quit` short-circuits at the first hit (sub-50ms even on cold cache)
+# and stays silent when the repo layout doesn't match (e.g. shim copied
+# outside the source tree). Warning goes to stderr — exec proceeds.
+src_root="$here/../src"
+if [ -d "$src_root" ]; then
+    stale=$(find "$src_root" -name '*.hx' -newer "$binary" -print -quit 2>/dev/null || true)
+    if [ -n "$stale" ]; then
+        if [ "$runner" = "node" ]; then
+            echo "hxq: warning: src/ has .hx files newer than bin/apq.js — run \`haxe bin/apq-js.hxml\` to rebuild (first stale: $stale)" >&2
+        else
+            echo "hxq: warning: src/ has .hx files newer than bin/apq.n — run \`haxe bin/apq.hxml\` to rebuild (first stale: $stale)" >&2
+        fi
+    fi
+fi
+
 # With no user args, just run the binary (prints usage); otherwise inject
 # `--lang haxe` after the subcommand so `hxq <cmd> [opts] <file>` targets
 # the Haxe grammar.
