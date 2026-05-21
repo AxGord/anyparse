@@ -24,6 +24,12 @@ import anyparse.runtime.Span.Position;
  *   haxe -cp src -cp test -lib hxnodejs -main _ReconSkipParse -js /tmp/recon.js
  *   ANYPARSE_HXFORMAT_FORK=/Users/axg/dev/libs/haxe-formatter node /tmp/recon.js
  */
+typedef ReconCluster = {
+	var count:Int;
+	var examples:Array<String>;
+	var rawSample:String;
+};
+
 final class _ReconSkipParse {
 
 	private static final _forceBuildParser:Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
@@ -34,11 +40,37 @@ final class _ReconSkipParse {
 	];
 	private static inline final HXTEST_EXT:String = '.hxtest';
 	private static inline final HEAD_LEN:Int = 70;
+	private static inline final LOCUS_LEN:Int = 20;
+	private static inline final TOP_N_DEFAULT:Int = 30;
+	private static inline final EXAMPLES_PER_CLUSTER:Int = 2;
 
 	public static function main():Void {
 		final args:Array<String> = Sys.args();
-		if (args.length > 0) {
-			probeFile(args[0]);
+		// Parse args: `--top N` / `--all` are flags for sweep-mode; any
+		// non-flag arg is the single-file probe path.
+		var topN:Int = TOP_N_DEFAULT;
+		var probePath:Null<String> = null;
+		{
+			var i:Int = 0;
+			while (i < args.length) {
+				final a:String = args[i];
+				switch a {
+					case '--top':
+						if (i + 1 < args.length) {
+							final v:Null<Int> = Std.parseInt(args[i + 1]);
+							if (v != null && v > 0) topN = v;
+							i++;
+						}
+					case '--all':
+						topN = 999999;
+					case _:
+						if (!StringTools.startsWith(a, '--') && probePath == null) probePath = a;
+				}
+				i++;
+			}
+		}
+		if (probePath != null) {
+			probeFile(probePath);
 			return;
 		}
 		final root:Null<String> = HxFormatterCorpusHelpers.forkRoot();
@@ -50,7 +82,7 @@ final class _ReconSkipParse {
 			Sys.println('    haxe recon.hxml');
 			return;
 		}
-		final msgCounts:Map<String, Int> = [];
+		final clusters:Map<String, ReconCluster> = [];
 		var total:Int = 0;
 		for (bucket in SUBDIRS) {
 			final dir:String = '$root/test/testcases/$bucket';
@@ -67,23 +99,103 @@ final class _ReconSkipParse {
 					final pos:Position = exception.span.lineCol(tc.input);
 					final exp:String = normalize(exception.expected);
 					final src:String = normalize(snippet(tc.input, exception.span.from));
-					final key:String = '$exp @ $src';
-					final prev:Null<Int> = msgCounts[key];
-					msgCounts[key] = (prev == null ? 0 : prev) + 1;
+					final rawLocus:String = rawLocus(tc.input, exception.span.from);
+					final key:String = normalizeLocus(rawLocus);
+					addCluster(clusters, key, '$bucket/$name', rawLocus);
 					Sys.println('SKIP $bucket/$name :: ${pos.line}:${pos.col} expected="$exp" :: src="$src"');
 				} catch (exception:Exception) {
 					total++;
 					final key:String = '<non-ParseError> ' + normalize(exception.message);
-					final prev:Null<Int> = msgCounts[key];
-					msgCounts[key] = (prev == null ? 0 : prev) + 1;
+					addCluster(clusters, key, '$bucket/$name', '<exception>');
 					Sys.println('SKIP $bucket/$name :: $key :: head="${head(tc.input)}"');
 				}
 			}
 		}
-		Sys.println('--- skip-parse innermost-blocker histogram (total $total) ---');
-		final entries:Array<{msg:String, count:Int}> = [for (m => c in msgCounts) {msg: m, count: c}];
-		entries.sort((a:{msg:String, count:Int}, b:{msg:String, count:Int}) -> b.count - a.count);
-		for (entry in entries) Sys.println('  ${entry.count}× ${entry.msg}');
+		// Sort by count descending, take top N. Cluster key = normalized
+		// forward-locus from the fail position (identifiers > 4 chars
+		// collapsed to `_`, keywords ≤ 4 kept verbatim) — `final ?<id>`
+		// shapes from N different files cluster into ONE bucket, not N.
+		// `expected="…"` (almost always `//`) is dropped: the parser's
+		// expected-terminator carousel is uninformative; the locus IS
+		// the construct the parser couldn't consume.
+		final entries:Array<{key:String, cluster:ReconCluster}> = [
+			for (k => v in clusters) {key: k, cluster: v}
+		];
+		entries.sort((a, b) -> b.cluster.count - a.cluster.count);
+		final shown:Int = entries.length > topN ? topN : entries.length;
+		Sys.println('');
+		Sys.println('--- skip-parse construct-locus histogram (total $total, showing top $shown of ${entries.length}; --all overrides) ---');
+		for (idx in 0...shown) {
+			final entry = entries[idx];
+			final c:ReconCluster = entry.cluster;
+			final examplesStr:String = c.examples.length == 1
+				? c.examples[0]
+				: c.examples.join(', ');
+			final raw:String = normalize(c.rawSample);
+			Sys.println('  ${c.count}× "${entry.key}"  e.g. "${raw}"  in: $examplesStr');
+		}
+		if (entries.length > shown)
+			Sys.println('  … (${entries.length - shown} more, use --top N or --all to see)');
+	}
+
+	private static function addCluster(map:Map<String, ReconCluster>, key:String, file:String, rawLocus:String):Void {
+		final prev:Null<ReconCluster> = map[key];
+		if (prev == null) {
+			map[key] = {count: 1, examples: [file], rawSample: rawLocus};
+		} else {
+			prev.count++;
+			if (prev.examples.length < EXAMPLES_PER_CLUSTER) prev.examples.push(file);
+		}
+	}
+
+	/**
+	 * Raw forward locus — `LOCUS_LEN` chars starting AT the fail position.
+	 * Used both as the cluster's raw sample (display) and as input to the
+	 * normalizer (cluster key).
+	 */
+	private static function rawLocus(input:String, offset:Int):String {
+		final start:Int = offset > input.length ? input.length : offset;
+		final end:Int = start + LOCUS_LEN > input.length ? input.length : start + LOCUS_LEN;
+		return input.substring(start, end);
+	}
+
+	/**
+	 * Normalize the forward locus into a cluster key — identifier runs of
+	 * length > 4 collapse to `_`, shorter runs (Haxe short keywords
+	 * `var`, `is`, `as`, `in`, `for`, `try`, `new`, `if`, `else`, `case`,
+	 * etc.) are kept verbatim so they remain visible in the histogram.
+	 * Punctuation, operators, and whitespace pass through unchanged; the
+	 * existing `normalize` then escapes whitespace for one-line display.
+	 */
+	private static function normalizeLocus(raw:String):String {
+		final buf:StringBuf = new StringBuf();
+		var i:Int = 0;
+		while (i < raw.length) {
+			final c:Int = StringTools.fastCodeAt(raw, i);
+			final isIdStart:Bool = (c >= 'a'.code && c <= 'z'.code)
+				|| (c >= 'A'.code && c <= 'Z'.code)
+				|| c == '_'.code;
+			if (isIdStart) {
+				var j:Int = i + 1;
+				while (j < raw.length) {
+					final cj:Int = StringTools.fastCodeAt(raw, j);
+					final isIdCont:Bool = (cj >= 'a'.code && cj <= 'z'.code)
+						|| (cj >= 'A'.code && cj <= 'Z'.code)
+						|| (cj >= '0'.code && cj <= '9'.code)
+						|| cj == '_'.code;
+					if (!isIdCont) break;
+					j++;
+				}
+				final identLen:Int = j - i;
+				if (identLen > 4) buf.add('_');
+				else for (k in i...j) buf.addChar(StringTools.fastCodeAt(raw, k));
+				i = j;
+			} else {
+				buf.addChar(c);
+				i++;
+			}
+		}
+		return normalize(buf.toString());
 	}
 
 	private static function probeFile(path:String):Void {

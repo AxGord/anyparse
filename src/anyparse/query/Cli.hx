@@ -172,7 +172,7 @@ final class Cli {
 		final skipPaths:Array<String> = [];
 		final candidateNames:Map<String, Bool> = new Map();
 		for (path in paths) {
-			final source:String = readFile(path);
+			final source:String = readSourceForParse(path);
 			final tree:Null<QueryNode> = parseWalked('refs', plugin.parseFile, path, source, singleFile);
 			if (tree == null) {
 				if (singleFile) return EXIT_RUNTIME;
@@ -270,7 +270,7 @@ final class Cli {
 		final skipPaths:Array<String> = [];
 		final candidateNames:Map<String, Bool> = new Map();
 		for (path in paths) {
-			final source:String = readFile(path);
+			final source:String = readSourceForParse(path);
 			final tree:Null<QueryNode> = parseWalked('uses', plugin.parseFileTypeRefs, path, source, singleFile);
 			if (tree == null) {
 				if (singleFile) return EXIT_RUNTIME;
@@ -372,7 +372,7 @@ final class Cli {
 		final allEntries:Array<{file:String, source:String, hits:Array<MetaHit>}> = [];
 		final skipPaths:Array<String> = [];
 		for (path in paths) {
-			final source:String = readFile(path);
+			final source:String = readSourceForParse(path);
 			final tree:Null<QueryNode> = parseWalked('meta', plugin.parseFile, path, source, singleFile);
 			if (tree == null) {
 				if (singleFile) return EXIT_RUNTIME;
@@ -456,8 +456,8 @@ final class Cli {
 		final b:String = fileB;
 
 		final plugin:GrammarPlugin = pickPlugin(lang);
-		final sourceA:String = readFile(a);
-		final sourceB:String = readFile(b);
+		final sourceA:String = readSourceForParse(a);
+		final sourceB:String = readSourceForParse(b);
 		final treeA:QueryNode = try plugin.parseFile(sourceA) catch (e:ParseError) {
 			stderr('apq diff: $a: ${e.toString()}\n');
 			return EXIT_RUNTIME;
@@ -521,7 +521,7 @@ final class Cli {
 	private static function runStrip(args:Array<String>):Int {
 		var lang:String = 'haxe';
 		var showSource:Bool = false;
-		var file:Null<String> = null;
+		final files:Array<String> = [];
 		final patterns:Array<String> = [];
 		final replacements:Array<String> = [];
 		var pendingReplace:Null<String> = null;
@@ -563,11 +563,7 @@ final class Cli {
 						stderr('apq strip: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
-					if (file != null) {
-						stderr('apq strip: only one file argument supported (got "$file" and "$a")\n');
-						return EXIT_USAGE;
-					}
-					file = a;
+					files.push(a);
 			}
 			i++;
 		}
@@ -575,8 +571,8 @@ final class Cli {
 			stderr('apq strip: --replace "$pendingReplace" needs a --with\n');
 			return EXIT_USAGE;
 		}
-		if (file == null) {
-			stderr('apq strip: missing <file> argument\n');
+		if (files.length == 0) {
+			stderr('apq strip: missing <file> argument (one or more, applies same substitutions to each)\n');
 			printStripUsage();
 			return EXIT_USAGE;
 		}
@@ -585,33 +581,48 @@ final class Cli {
 			printStripUsage();
 			return EXIT_USAGE;
 		}
-		final filePath:String = file;
-		final source:String = readFile(filePath);
-		var stripped:String = source;
-		for (idx in 0...patterns.length)
-			stripped = StringTools.replace(stripped, patterns[idx], replacements[idx]);
-		if (stripped == source) {
-			stderr('apq strip: WARNING: no substitution changed the source (patterns matched 0 occurrences)\n');
-		}
-		if (showSource) {
-			stderr('--- stripped source ---\n$stripped\n--- end ---\n');
-		}
 		final plugin:GrammarPlugin = pickPlugin(lang);
-		try {
-			plugin.parseFile(stripped);
-			sysPrint('PARSE OK\n');
-			return EXIT_OK;
-		} catch (e:ParseError) {
-			sysPrint('PARSE FAIL: ${e.toString()}\n');
-			return EXIT_RUNTIME;
-		} catch (e:Exception) {
-			sysPrint('PARSE FAIL: ${e.message}\n');
-			return EXIT_RUNTIME;
+		final multi:Bool = files.length > 1;
+		var anyFailed:Bool = false;
+		var anyChanged:Bool = false;
+		var passCount:Int = 0;
+		var failCount:Int = 0;
+		for (filePath in files) {
+			final source:String = readSourceForParse(filePath);
+			var stripped:String = source;
+			for (idx in 0...patterns.length)
+				stripped = StringTools.replace(stripped, patterns[idx], replacements[idx]);
+			if (stripped != source) anyChanged = true;
+			if (showSource) {
+				stderr('--- stripped source (${filePath}) ---\n$stripped\n--- end ---\n');
+			}
+			final prefix:String = multi ? '$filePath: ' : '';
+			try {
+				plugin.parseFile(stripped);
+				sysPrint('${prefix}PARSE OK\n');
+				passCount++;
+			} catch (e:ParseError) {
+				sysPrint('${prefix}PARSE FAIL: ${e.toString()}\n');
+				failCount++;
+				anyFailed = true;
+			} catch (e:Exception) {
+				sysPrint('${prefix}PARSE FAIL: ${e.message}\n');
+				failCount++;
+				anyFailed = true;
+			}
 		}
+		if (!anyChanged) {
+			final scope:String = multi ? 'across all ${files.length} files' : '';
+			stderr('apq strip: WARNING: no substitution changed the source (patterns matched 0 occurrences${scope == '' ? '' : ' $scope'})\n');
+		}
+		if (multi) {
+			sysPrint('--- $passCount PARSE OK, $failCount PARSE FAIL (total ${files.length}) ---\n');
+		}
+		return anyFailed ? EXIT_RUNTIME : EXIT_OK;
 	}
 
 	private static function printStripUsage():Void {
-		sysPrint('Usage: apq strip [options] <file> --replace <pat> --with <repl> [...]\n');
+		sysPrint('Usage: apq strip [options] <file> [<file2> ...] --replace <pat> --with <repl> [...]\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --replace <pat>     Literal substring to replace (paired with the next --with)\n');
@@ -624,6 +635,12 @@ final class Cli {
 		sysPrint("grammar plugin. Emits PARSE OK / PARSE FAIL: <err> and exits 0/2 —\n");
 		sysPrint("scriptable sole-blocker confirmation for the skip-parse campaign.\n");
 		sysPrint("StringTools.replace semantics: every occurrence is replaced.\n");
+		sysPrint('\n');
+		sysPrint("Pass multiple file paths to run the SAME substitutions against each\n");
+		sysPrint("(batch mode); per-file output is prefixed with the path, and a final\n");
+		sysPrint("summary line totals pass/fail counts. Exit 0 only when ALL files\n");
+		sysPrint("PARSE OK; exit 2 when any file PARSE FAIL — useful for sole-blocker\n");
+		sysPrint("sweeps across a list of candidate fixtures.\n");
 	}
 
 	/**
@@ -683,8 +700,8 @@ final class Cli {
 		final inputPathFinal:String = inputPath;
 		final expectedPathFinal:String = expectedPath;
 		final plugin:GrammarPlugin = pickPlugin(lang);
-		final source:String = readFile(inputPathFinal);
-		final expected:String = readFile(expectedPathFinal);
+		final source:String = readSourceForParse(inputPathFinal);
+		final expected:String = readExpectedForCompare(expectedPathFinal);
 
 		final emitted:Null<String> = try (plain
 			? plugin.writeRoundTripPlain(source)
@@ -855,7 +872,7 @@ final class Cli {
 		final allEntries:Array<{file:String, source:String, hits:Array<LitHit>}> = [];
 		final skipPaths:Array<String> = [];
 		for (path in paths) {
-			final source:String = readFile(path);
+			final source:String = readSourceForParse(path);
 			final tree:Null<QueryNode> = parseWalked('lit', plugin.parseFile, path, source, singleFile);
 			if (tree == null) {
 				if (singleFile) return EXIT_RUNTIME;
@@ -962,7 +979,7 @@ final class Cli {
 		final declSpans:Array<Span> = [];
 		final valueTrees:Array<{path:String, source:String, tree:QueryNode}> = [];
 		for (path in paths) {
-			final source:String = readFile(path);
+			final source:String = readSourceForParse(path);
 			final tree:Null<QueryNode> = parseWalked('blast', plugin.parseFile, path, source, expanded.singleFile);
 			if (tree == null) {
 				if (expanded.singleFile) return EXIT_RUNTIME;
@@ -1103,7 +1120,7 @@ final class Cli {
 		// Mirrors `runBlast`'s caching discipline.
 		final valueTrees:Array<{path:String, source:String, tree:QueryNode}> = [];
 		for (path in paths) {
-			final source:String = readFile(path);
+			final source:String = readSourceForParse(path);
 			final tree:Null<QueryNode> = parseWalked('mentions', plugin.parseFile, path, source, expanded.singleFile);
 			if (tree == null) {
 				if (expanded.singleFile) return EXIT_RUNTIME;
@@ -1338,7 +1355,7 @@ final class Cli {
 		final allEntries:Array<{file:String, source:String, matches:Array<Match>}> = [];
 		final kindCounts:Map<String, Int> = new Map();
 		for (path in paths) {
-			final source:String = readFile(path);
+			final source:String = readSourceForParse(path);
 			final tree:Null<QueryNode> = parseWalked('search', plugin.parseFile, path, source, singleFile);
 			if (tree == null) {
 				if (singleFile) return EXIT_RUNTIME;
@@ -1510,7 +1527,7 @@ final class Cli {
 			return EXIT_USAGE;
 		}
 		final plugin:GrammarPlugin = pickPlugin(lang);
-		final source:String = readFile(file);
+		final source:String = readSourceForParse(file);
 
 		// `--writer-output`: parse + format-write through the plugin's
 		// round-trip pipeline. Independent of --select / --at / --json /
@@ -1675,6 +1692,56 @@ final class Cli {
 		#else
 		throw 'apq: file IO requires a sys target';
 		#end
+	}
+
+	/**
+	 * Read a file as **source for parsing**. Same as `readFile` for plain
+	 * `.hx` files; auto-extracts the input section (between the 1st and
+	 * 2nd `\n---\n` separators) when the path ends with `.hxtest` AND the
+	 * content has the canonical 3-section layout (`config / input /
+	 * expected`, as defined by `unit.HxFormatterCorpusHelpers`). This
+	 * collapses the recurring `.hxtest` strip-test dance — `awk` /
+	 * scratch-file extract followed by parse — into a direct
+	 * `hxq strip /path/case.hxtest --replace … --with …`.
+	 *
+	 * Non-3-section `.hxtest` files (malformed, or a fork variant) pass
+	 * through unchanged so the parser sees the raw bytes and the user
+	 * gets a normal parse-error trace, not a silent transformation.
+	 */
+	private static function readSourceForParse(path:String):String {
+		return readHxtestSectionOrRaw(path, 1);
+	}
+
+	/**
+	 * Read a file as **expected output bytes** for byte-comparison
+	 * (`writer-equals <input> <expected>`). Symmetric to
+	 * `readSourceForParse`: when the path ends with `.hxtest` and has the
+	 * canonical 3-section layout, returns section 3 (the fork's reference
+	 * formatted output); otherwise returns the raw bytes. Lets a fork
+	 * fixture serve as its own expected-bytes file in one command instead
+	 * of pre-extracting via `awk` / scratch file.
+	 */
+	private static function readExpectedForCompare(path:String):String {
+		return readHxtestSectionOrRaw(path, 2);
+	}
+
+	/**
+	 * Common backend for the two `.hxtest`-aware readers. `sectionIdx`
+	 * is the 0-based section index into the `\n---\n` split — `1` for
+	 * the input source, `2` for the expected output. Trims exactly one
+	 * leading and one trailing `\n` to mirror
+	 * `HxFormatterCorpusHelpers.stripPadNewlines`.
+	 */
+	private static function readHxtestSectionOrRaw(path:String, sectionIdx:Int):String {
+		final content:String = readFile(path);
+		if (!StringTools.endsWith(path, '.hxtest')) return content;
+		final parts:Array<String> = content.split('\n---\n');
+		if (parts.length != 3) return content;
+		var section:String = parts[sectionIdx];
+		if (section.length > 0 && section.charAt(0) == '\n') section = section.substr(1);
+		if (section.length > 0 && section.charAt(section.length - 1) == '\n')
+			section = section.substr(0, section.length - 1);
+		return section;
 	}
 
 	private static function expectValue(args:Array<String>, idx:Int, flag:String):String {

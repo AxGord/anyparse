@@ -63,6 +63,25 @@ class HxFormatterCorpusTest extends Test {
 	private static inline final MAX_DIFF_CONTEXT:Int = 40;
 	private static inline final MAX_REASON_LEN:Int = 120;
 	private static inline final SNIPPET_LEN:Int = 24;
+	private static inline final SWEEP_JSON_PATH:String = 'bin/.last-sweep.json';
+
+	// ω-sweep-delta — process-wide accumulator across every per-category
+	// `runCategory` invocation. The per-category prints stay (legacy
+	// behavior), and a single end-of-process aggregate prints the totals
+	// + delta vs the previously-recorded sweep (`bin/.last-sweep.json`,
+	// .gitignored). The accumulator collapses the manual "compare against
+	// the number I remember from `docs/roadmap.md`" loop at the tail of
+	// every slice — Δpass / Δfail / Δskip-parse appears automatically
+	// after `node bin/test.js` ends. The JSON file is rewritten only
+	// when total > 0 (`ANYPARSE_HXFORMAT_FORK` actually pointed at a
+	// fork checkout); a no-fork run leaves the baseline untouched.
+	private static var sweepRegistered:Bool = false;
+	private static var sweepPass:Int = 0;
+	private static var sweepFail:Int = 0;
+	private static var sweepSkipParse:Int = 0;
+	private static var sweepSkipWrite:Int = 0;
+	private static var sweepSkipConfig:Int = 0;
+	private static var sweepSkipMalformed:Int = 0;
 
 	public function new():Void {
 		super();
@@ -181,9 +200,81 @@ class HxFormatterCorpusTest extends Test {
 		for (line in failLines) Sys.println(line);
 		if (skipParse > 0) printParseReasons(label, parseReasons);
 
+		sweepPass += pass;
+		sweepFail += fail;
+		sweepSkipParse += skipParse;
+		sweepSkipWrite += skipWrite;
+		sweepSkipConfig += skipConfig;
+		sweepSkipMalformed += skipMalformed;
+		ensureSweepFinalizer();
+
 		Assert.isTrue(total > 0, '$label: no cases processed at $dir');
 		#end
 	}
+
+	/**
+	 * Lazy one-shot registration of the end-of-process sweep-delta
+	 * printer. Called from every `runCategory` invocation but the body
+	 * runs exactly once — uses Node.js's `process.on('exit')` because
+	 * Haxe `Sys` does not expose an at-exit hook and utest's
+	 * `teardownClass` is not present in the 1.13.x line we run on.
+	 */
+	private function ensureSweepFinalizer():Void {
+		if (sweepRegistered) return;
+		sweepRegistered = true;
+		#if nodejs
+		js.Node.process.on('exit', _ -> printSweepDelta());
+		#end
+	}
+
+	/**
+	 * Aggregate-totals + delta-vs-baseline report. Reads the previous
+	 * sweep's JSON (if any), formats the Δ triple, then overwrites the
+	 * file with the current run's totals. Guards against the no-fork run
+	 * (every counter still zero) so the baseline is never silently
+	 * zero-clobbered.
+	 */
+	private static function printSweepDelta():Void {
+		#if (sys || nodejs)
+		final total:Int = sweepPass + sweepFail + sweepSkipParse + sweepSkipWrite + sweepSkipConfig + sweepSkipMalformed;
+		if (total == 0) return;
+		var prevPass:Null<Int> = null;
+		var prevFail:Null<Int> = null;
+		var prevSkipParse:Null<Int> = null;
+		if (FileSystem.exists(SWEEP_JSON_PATH)) try {
+			final raw:String = sys.io.File.getContent(SWEEP_JSON_PATH);
+			final obj:Dynamic = haxe.Json.parse(raw);
+			if (Reflect.hasField(obj, 'pass') && Std.isOfType(Reflect.field(obj, 'pass'), Int))
+				prevPass = Reflect.field(obj, 'pass');
+			if (Reflect.hasField(obj, 'fail') && Std.isOfType(Reflect.field(obj, 'fail'), Int))
+				prevFail = Reflect.field(obj, 'fail');
+			if (Reflect.hasField(obj, 'skipParse') && Std.isOfType(Reflect.field(obj, 'skipParse'), Int))
+				prevSkipParse = Reflect.field(obj, 'skipParse');
+		} catch (_:Exception) {}
+		final deltaStr:String = if (prevPass != null && prevFail != null && prevSkipParse != null) {
+			final dPass:Int = sweepPass - (prevPass : Int);
+			final dFail:Int = sweepFail - (prevFail : Int);
+			final dSkipParse:Int = sweepSkipParse - (prevSkipParse : Int);
+			'  Δpass ${signed(dPass)} / Δfail ${signed(dFail)} / Δskip-parse ${signed(dSkipParse)}  vs last sweep ($prevPass / $prevFail / $prevSkipParse)';
+		} else '  (no previous sweep recorded)';
+		Sys.println('');
+		Sys.println('===== sweep totals: $sweepPass pass / $sweepFail fail / $sweepSkipParse skip-parse / $sweepSkipWrite skip-write / $sweepSkipConfig skip-config / $sweepSkipMalformed malformed (total $total) =====');
+		Sys.println(deltaStr);
+		try {
+			final json:String = haxe.Json.stringify({
+				pass: sweepPass,
+				fail: sweepFail,
+				skipParse: sweepSkipParse,
+				skipWrite: sweepSkipWrite,
+				skipConfig: sweepSkipConfig,
+				skipMalformed: sweepSkipMalformed,
+			});
+			sys.io.File.saveContent(SWEEP_JSON_PATH, json);
+		} catch (_:Exception) {}
+		#end
+	}
+
+	private static inline function signed(n:Int):String return n > 0 ? '+$n' : '$n';
 
 	/**
 	 * Classifies a parse failure into a stable category key suitable
