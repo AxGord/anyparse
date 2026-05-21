@@ -95,6 +95,24 @@ interface GrammarPlugin {
 	 * Plugins may throw on parse failure; callers handle the exception.
 	 */
 	public function writeRoundTrip(source:String):Null<String>;
+
+	/**
+	 * Optional: parse `source` with the plain (non-trivia) parser and
+	 * emit via the plain writer. Drops comments and source-layout
+	 * newlines — flattens to the writer's canonical form. Used by `apq
+	 * ast --writer-output-plain` and by `apq writer-equals --plain`
+	 * because this is what unit tests like
+	 * `HxModuleWriter.write(HaxeModuleParser.parse(src))` actually see.
+	 *
+	 * The trivia pipeline (`writeRoundTrip`) and the plain pipeline emit
+	 * different bytes on the same input — unit-test expected strings
+	 * MUST be probed via the plain entry. Return `null` when the
+	 * grammar plugin has no plain writer (binary grammars, plugins with
+	 * a single unified pipeline).
+	 *
+	 * Plugins may throw on parse failure; callers handle the exception.
+	 */
+	public function writeRoundTripPlain(source:String):Null<String>;
 }
 
 /**

@@ -18,11 +18,21 @@ final class CliFixture {
 
 	private static var counter:Int = 0;
 
-	/** Write `source` to a unique temp file and return its path. */
+	/** Write `source` to a unique temp `.hx` file and return its path. */
 	public static function write(prefix:String, source:String):String {
+		return writeAs(prefix, 'hx', source);
+	}
+
+	/**
+	 * Write `content` to a unique temp file with `extension` (no dot)
+	 * and return its path. Use the `.hx`-shorthand `write` when the
+	 * fixture is a Haxe source file; use this entry for expected-output
+	 * comparison files (`.txt`) or other extensions.
+	 */
+	public static function writeAs(prefix:String, extension:String, content:String):String {
 		counter++;
-		final path:String = '${tempDir()}/tmp_${prefix}_fixture_${Sys.time()}_$counter.hx';
-		File.saveContent(path, source);
+		final path:String = '${tempDir()}/tmp_${prefix}_fixture_${Sys.time()}_$counter.$extension';
+		File.saveContent(path, content);
 		return path;
 	}
 

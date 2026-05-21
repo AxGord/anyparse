@@ -119,6 +119,23 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		return HaxeModuleTriviaWriter.write(tree, opts);
 	}
 
+	/**
+	 * Parse + write round-trip via the PLAIN (non-trivia) pipeline.
+	 * Mirrors the unit-test entry
+	 * `HxModuleWriter.write(HaxeModuleParser.parse(source))` — flattens
+	 * source layout, drops comments. Used by `apq ast
+	 * --writer-output-plain` and `apq writer-equals` (default) so
+	 * expected strings built off the probe match what unit tests
+	 * actually see. The two pipelines emit different bytes on the same
+	 * input (anon-struct flattens, terminators differ); always probe
+	 * the pipeline that matches the test entry being constructed.
+	 */
+	public function writeRoundTripPlain(source:String):Null<String> {
+		final tree:Dynamic = HaxeModuleParser.parse(source);
+		final opts:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
+		return HxModuleWriter.write(tree, opts);
+	}
+
 	private function buildTree(source:String, withTypeRefs:Bool):QueryNode {
 		final root:Dynamic = HaxeModuleSpanParser.parse(source);
 		final children:Array<QueryNode> = [];

@@ -82,6 +82,7 @@ final class Cli {
 			case 'mentions': return runMentions(rest);
 			case 'diff': return runDiff(rest);
 			case 'strip': return runStrip(rest);
+			case 'writer-equals': return runWriterEquals(rest);
 			case _:
 				stderr('apq: unknown subcommand "$cmd"\n');
 				printUsage();
@@ -623,6 +624,140 @@ final class Cli {
 		sysPrint("grammar plugin. Emits PARSE OK / PARSE FAIL: <err> and exits 0/2 —\n");
 		sysPrint("scriptable sole-blocker confirmation for the skip-parse campaign.\n");
 		sysPrint("StringTools.replace semantics: every occurrence is replaced.\n");
+	}
+
+	/**
+	 * `apq writer-equals <input> <expected> [--plain] [--lang haxe]` —
+	 * byte-equality check on writer output. Parses `<input>`, writes via
+	 * the plugin's trivia pipeline (default) or plain pipeline (`--plain`),
+	 * compares the emitted bytes against the contents of `<expected>`.
+	 *
+	 * Exit 0 on match, 1 on byte-diff (or parse/write failure). On diff
+	 * prints a single `apq writer-equals: byte-diff @ <offset>  exp=<…>
+	 * act=<…>  (exp.len=…, act.len=…)` line — same shape as the corpus
+	 * harness's `describeDiff`. Constructed for the writer-bug iteration
+	 * loop where running a full Haxe probe + hxml + compile + node would
+	 * be 4× slower.
+	 *
+	 * Default writer is TRIVIA (matches corpus + `--writer-output`).
+	 * `--plain` selects the PLAIN writer that matches unit tests of the
+	 * form `HxModuleWriter.write(HaxeModuleParser.parse(src))`. Always
+	 * probe the pipeline that matches the test entry being constructed.
+	 */
+	private static function runWriterEquals(args:Array<String>):Int {
+		var lang:String = 'haxe';
+		var plain:Bool = false;
+		var inputPath:Null<String> = null;
+		var expectedPath:Null<String> = null;
+
+		var i:Int = 0;
+		while (i < args.length) {
+			final a:String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--plain':
+					plain = true;
+				case '-h', '--help':
+					printWriterEqualsUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq writer-equals: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (inputPath == null) inputPath = a;
+					else if (expectedPath == null) expectedPath = a;
+					else {
+						stderr('apq writer-equals: expects exactly two paths (input, expected); got extra "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (inputPath == null || expectedPath == null) {
+			stderr('apq writer-equals: missing <input> and/or <expected> argument\n');
+			printWriterEqualsUsage();
+			return EXIT_USAGE;
+		}
+		final inputPathFinal:String = inputPath;
+		final expectedPathFinal:String = expectedPath;
+		final plugin:GrammarPlugin = pickPlugin(lang);
+		final source:String = readFile(inputPathFinal);
+		final expected:String = readFile(expectedPathFinal);
+
+		final emitted:Null<String> = try (plain
+			? plugin.writeRoundTripPlain(source)
+			: plugin.writeRoundTrip(source))
+		catch (e:ParseError) {
+			stderr('apq writer-equals: $inputPathFinal: ${e.toString()}\n');
+			return EXIT_RUNTIME;
+		} catch (e:Exception) {
+			stderr('apq writer-equals: $inputPathFinal: ${e.message}\n');
+			return EXIT_RUNTIME;
+		}
+		if (emitted == null) {
+			final flagName:String = plain ? '--plain' : '(trivia)';
+			stderr('apq writer-equals: no writer wired up for lang "$lang" $flagName\n');
+			return EXIT_USAGE;
+		}
+		if (emitted == expected) return EXIT_OK;
+		sysPrint(describeByteDiff(emitted, expected) + '\n');
+		return EXIT_RUNTIME;
+	}
+
+	/**
+	 * Single-line byte-diff describing where `actual` first diverges from
+	 * `expected`, with windowed snippets around the divergence point.
+	 * Same shape as the corpus harness's `describeDiff` so writer-bug
+	 * iteration via `apq writer-equals` reads identical to the corpus
+	 * fail line.
+	 */
+	private static final BYTE_DIFF_WINDOW:Int = 40;
+	private static final BYTE_DIFF_LEAD:Int = 4;
+
+	private static function describeByteDiff(actual:String, expected:String):String {
+		final maxLen:Int = expected.length < actual.length ? expected.length : actual.length;
+		var diffAt:Int = -1;
+		for (idx in 0...maxLen)
+			if (StringTools.fastCodeAt(expected, idx) != StringTools.fastCodeAt(actual, idx)) {
+				diffAt = idx;
+				break;
+			}
+		if (diffAt == -1) diffAt = maxLen;
+		final start:Int = diffAt - BYTE_DIFF_LEAD < 0 ? 0 : diffAt - BYTE_DIFF_LEAD;
+		final expWin:String = escapeWindow(expected.substr(start, BYTE_DIFF_WINDOW));
+		final actWin:String = escapeWindow(actual.substr(start, BYTE_DIFF_WINDOW));
+		return 'apq writer-equals: byte-diff @ $diffAt'
+			+ '  exp=<$expWin>'
+			+ '  act=<$actWin>'
+			+ '  (exp.len=${expected.length}, act.len=${actual.length})';
+	}
+
+	private static function escapeWindow(s:String):String {
+		final buf:StringBuf = new StringBuf();
+		for (idx in 0...s.length) {
+			final c:Int = StringTools.fastCodeAt(s, idx);
+			switch c {
+				case '\n'.code: buf.add('\\n');
+				case '\t'.code: buf.add('\\t');
+				case '\r'.code: buf.add('\\r');
+				case _: buf.addChar(c);
+			}
+		}
+		return buf.toString();
+	}
+
+	private static function printWriterEqualsUsage():Void {
+		sysPrint('Usage: apq writer-equals [options] <input> <expected>\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --plain             Use the plain (non-trivia) writer (mirrors unit tests)\n');
+		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('\n');
+		sysPrint('Parse <input>, write through the grammar plugin (trivia pipeline by\n');
+		sysPrint('default, plain pipeline with --plain), compare against bytes of <expected>.\n');
+		sysPrint('Exit 0 on match, 1 on byte-diff or parse/write failure.\n');
 	}
 
 	/**
@@ -1282,6 +1417,7 @@ final class Cli {
 		var wantDoc:Bool = false;
 		var wantSource:Bool = false;
 		var writerOutput:Bool = false;
+		var writerOutputPlain:Bool = false;
 		var writerDiff:Bool = false;
 		var minChildren:Int = -1;
 		var maxChildren:Int = -1;
@@ -1313,6 +1449,9 @@ final class Cli {
 					wantSource = true;
 				case '--writer-output':
 					writerOutput = true;
+				case '--writer-output-plain':
+					writerOutput = true;
+					writerOutputPlain = true;
 				case '--diff':
 					writerDiff = true;
 				case '--min-children':
@@ -1386,7 +1525,10 @@ final class Cli {
 		// call. Exit non-zero when the writer output fails to re-parse
 		// (writer produced syntactically broken Haxe).
 		if (writerOutput) {
-			final emitted:Null<String> = try plugin.writeRoundTrip(source) catch (e:ParseError) {
+			final emitted:Null<String> = try (writerOutputPlain
+				? plugin.writeRoundTripPlain(source)
+				: plugin.writeRoundTrip(source))
+			catch (e:ParseError) {
 				stderr('apq ast: $file: ${e.toString()}\n');
 				return EXIT_RUNTIME;
 			} catch (e:Exception) {
@@ -1394,7 +1536,8 @@ final class Cli {
 				return EXIT_RUNTIME;
 			}
 			if (emitted == null) {
-				stderr('apq ast: --writer-output: no writer wired up for lang "$lang"\n');
+				final flagName:String = writerOutputPlain ? '--writer-output-plain' : '--writer-output';
+				stderr('apq ast: $flagName: no writer wired up for lang "$lang"\n');
 				return EXIT_USAGE;
 			}
 			if (!writerDiff) {
@@ -1490,8 +1633,23 @@ final class Cli {
 				if (maxChildren >= 0) filterParts.push('--max-children=$maxChildren');
 				if (preFilter.length > 0) filterParts.push('${preFilter.length} pre-filter match(es) dropped by child-count');
 				final filterNote:String = filterParts.length == 0 ? '' : ' (with ${filterParts.join(", ")})';
+				// Kind-fuzzy "did you mean" — surface the closest match in
+				// `present` for the first kind segment of `selectExpr`
+				// (split on `>`, `:`, whitespace). Same `findFuzzy`
+				// substring+Levenshtein two-tier shape as refs/uses on a
+				// 0-hit name, so a typo like `--select ParamCtorr` →
+				// `Did you mean: ParamCtor?` without re-reading the long
+				// `Kinds present here:` list. Silent when nothing close.
+				final firstKind:String = extractFirstKindToken(selectExpr);
+				final presentMap:Map<String, Bool> = [for (k in present) k => true];
+				final suggestions:Array<String> = firstKind.length > 0
+					? findFuzzy(firstKind, presentMap)
+					: [];
+				final fuzzyLine:String = suggestions.length > 0
+					? ' Did you mean: ${suggestions.join(", ")}?'
+					: '';
 				stderr('apq ast: --select "$selectExpr"$filterNote matched no nodes in $file. '
-					+ 'Kinds present here: ${present.join(", ")}. '
+					+ 'Kinds present here: ${present.join(", ")}.$fuzzyLine '
 					+ 'Kinds are exact node-constructor names — run `apq ast $file` to see the tree.\n');
 			}
 			final matches:Array<QueryNode> = depth < 0 ? raw : [for (m in raw) Engine.truncate(m, depth)];
@@ -1594,6 +1752,7 @@ final class Cli {
 		sysPrint('  mentions Every named-leaf occurrence (uses + refs + lit --any-kind --exact)\n');
 		sysPrint('  diff     Structural AST diff between two files\n');
 		sysPrint('  strip    Sed-strip + parse-check (sole-blocker confirmation)\n');
+		sysPrint('  writer-equals  Byte-equality check on writer output (trivia + --plain)\n');
 		sysPrint('\n');
 		sysPrint('Global options:\n');
 		sysPrint('  --lang <name>   Pick grammar plugin (default: haxe)\n');
@@ -1742,7 +1901,8 @@ final class Cli {
 		sysPrint('  --source            With --select/--at: emit the match\'s verbatim source slice\n');
 		sysPrint('  --min-children <n>  With --select: keep only matches with >= n direct children (e.g. multi-arg ParamCtor)\n');
 		sysPrint('  --max-children <n>  With --select: keep only matches with <= n direct children\n');
-		sysPrint('  --writer-output     Parse + format-write through the plugin pipeline and print the emitted source\n');
+		sysPrint('  --writer-output     Parse + format-write through the plugin trivia pipeline and print the emitted source\n');
+		sysPrint('  --writer-output-plain  Like --writer-output but uses the plain (non-trivia) writer — mirrors the unit-test entry HxModuleWriter.write(HaxeModuleParser.parse(src)); flattens source layout, drops comments\n');
 		sysPrint('  --diff              With --writer-output: AST-diff the input against the emitted output (writer-bug loop)\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 	}
@@ -2051,6 +2211,26 @@ final class Cli {
 			cur = tmp;
 		}
 		return prev[lb];
+	}
+
+	/**
+	 * Extract the leading kind token from a `--select` expression for
+	 * fuzzy "did you mean" lookup. Splits on `>` (chain step), `:`
+	 * (Kind:name binding), `[` (future syntax), and whitespace, returns
+	 * the first non-empty segment. Empty result → no suggestion line.
+	 */
+	private static function extractFirstKindToken(selectExpr:String):String {
+		final trimmed:String = StringTools.trim(selectExpr);
+		if (trimmed.length == 0) return '';
+		var end:Int = trimmed.length;
+		for (i in 0...trimmed.length) {
+			final c:Int = StringTools.fastCodeAt(trimmed, i);
+			if (c == '>'.code || c == ':'.code || c == '['.code || c == ' '.code || c == '\t'.code) {
+				end = i;
+				break;
+			}
+		}
+		return StringTools.trim(trimmed.substr(0, end));
 	}
 
 	/** Distinct node-constructor kinds present in a tree, sorted — the
