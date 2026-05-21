@@ -154,6 +154,32 @@ enum HxType {
 	 */
 	ConstStringType(v:HxDoubleStringLit);
 
+	/**
+	 * Macro-expression bracket list in a type-parameter slot —
+	 * `haxe.macro.MacroType<[…]>`. The `[…]` body is a comma-separated
+	 * list of expressions (typically build-macro calls like
+	 * `cdb.Module.build("data.cdb")`) that `haxe.macro.MacroType<T>`
+	 * wires through at compile time to inject a macro-built type.
+	 *
+	 * Verbatim byte-twin of `HxExpr.ArrayExpr`'s `@:lead('[')
+	 * @:trail(']') @:sep(',')` Star-of-HxExpr pattern, applied to a
+	 * type-position host. Cross-enum recursion (`HxType` → `HxExpr`)
+	 * is the same direction `HxExpr.MacroTypeExpr(t:HxType)` already
+	 * relies on. Generic Star writer emits `[elem1, elem2, …]`
+	 * byte-identically; no fmt directives wired — the corpus driver
+	 * (`whitespace/issue_622_bracket`) uses a single-element body,
+	 * multi-element trailing-comma and wrap policies are deferred to
+	 * a follow-up if a multi-element fixture ever lands in the corpus.
+	 *
+	 * Dispatched by the `[` lead — no other `HxType` atom begins with
+	 * `[`, so Alt-level ambiguity is impossible. The Star is unbounded
+	 * by the `@:sep+@:trail` mechanism, so empty `<[]>` parses as well
+	 * (no corpus fixture exercises the empty form; structural
+	 * completeness leftover).
+	 */
+	@:trivia @:lead('[') @:trail(']') @:sep(',')
+	BracketExprListType(elems:Array<HxExpr>);
+
 	@:kw('#if') @:trail('#end')
 	ConditionalType(c:HxConditionalType);
 
