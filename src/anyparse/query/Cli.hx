@@ -37,6 +37,10 @@ final class Cli {
 	private static final EXIT_USAGE:Int = 2;
 	private static final EXIT_RUNTIME:Int = 1;
 
+	private static final SKIP_PATHS_SHOWN:Int = 5;
+	private static final FUZZY_MAX_DIST:Int = 3;
+	private static final FUZZY_TOP_K:Int = 3;
+
 	public static function main():Void {
 		#if (sys || nodejs)
 		Sys.exit(run(Sys.args()));
@@ -144,25 +148,29 @@ final class Cli {
 
 		final singleFile:Bool = expanded.singleFile;
 		final allEntries:Array<{file:String, source:String, hits:Array<RefHit>}> = [];
-		var parseable:Int = 0;
+		final skipPaths:Array<String> = [];
+		final candidateNames:Map<String, Bool> = new Map();
 		for (path in paths) {
 			final source:String = readFile(path);
 			final tree:Null<QueryNode> = parseWalked('refs', plugin.parseFile, path, source, singleFile);
 			if (tree == null) {
 				if (singleFile) return EXIT_RUNTIME;
+				skipPaths.push(path);
 				continue;
 			}
-			parseable++;
 			final raw:Array<RefHit> = Refs.find(nameStr, tree, shape);
 			final filtered:Array<RefHit> = anyFilter
 				? raw.filter(h -> kindAllowed(h.kind, wantDecls, wantReads, wantWrites))
 				: raw;
-			if (filtered.length == 0) continue;
+			if (filtered.length == 0) {
+				collectNames(tree, candidateNames);
+				continue;
+			}
 			allEntries.push({file: path, source: source, hits: filtered});
 		}
 
 		if (allEntries.length == 0)
-			stderr(emptyWalkerNudge('refs', nameStr, paths.length, parseable) + '\n');
+			stderr(emptyWalkerNudge('refs', nameStr, paths.length, paths.length - skipPaths.length, skipPaths, candidateNames) + '\n');
 
 		final shown:Array<{file:String, source:String, hits:Array<RefHit>}> = limitEntries(allEntries, limit,
 			e -> e.hits.length,
@@ -235,22 +243,26 @@ final class Cli {
 
 		final singleFile:Bool = expanded.singleFile;
 		final allEntries:Array<{file:String, source:String, hits:Array<UsesHit>}> = [];
-		var parseable:Int = 0;
+		final skipPaths:Array<String> = [];
+		final candidateNames:Map<String, Bool> = new Map();
 		for (path in paths) {
 			final source:String = readFile(path);
 			final tree:Null<QueryNode> = parseWalked('uses', plugin.parseFileTypeRefs, path, source, singleFile);
 			if (tree == null) {
 				if (singleFile) return EXIT_RUNTIME;
+				skipPaths.push(path);
 				continue;
 			}
-			parseable++;
 			final hits:Array<UsesHit> = Uses.find(nameStr, tree, shape);
-			if (hits.length == 0) continue;
+			if (hits.length == 0) {
+				collectNames(tree, candidateNames);
+				continue;
+			}
 			allEntries.push({file: path, source: source, hits: hits});
 		}
 
 		if (allEntries.length == 0)
-			stderr(emptyWalkerNudge('uses', nameStr, paths.length, parseable) + '\n');
+			stderr(emptyWalkerNudge('uses', nameStr, paths.length, paths.length - skipPaths.length, skipPaths, candidateNames) + '\n');
 
 		final shown:Array<{file:String, source:String, hits:Array<UsesHit>}> = limitEntries(allEntries, limit,
 			e -> e.hits.length,
@@ -331,15 +343,15 @@ final class Cli {
 
 		final singleFile:Bool = expanded.singleFile;
 		final allEntries:Array<{file:String, source:String, hits:Array<MetaHit>}> = [];
-		var parseable:Int = 0;
+		final skipPaths:Array<String> = [];
 		for (path in paths) {
 			final source:String = readFile(path);
 			final tree:Null<QueryNode> = parseWalked('meta', plugin.parseFile, path, source, singleFile);
 			if (tree == null) {
 				if (singleFile) return EXIT_RUNTIME;
+				skipPaths.push(path);
 				continue;
 			}
-			parseable++;
 			final raw:Array<MetaHit> = Meta.find(tree, shape, source);
 			final filtered:Array<MetaHit> = raw.filter(h ->
 				(annotation == null || h.annotation == annotation)
@@ -350,7 +362,7 @@ final class Cli {
 		}
 
 		if (allEntries.length == 0)
-			stderr(emptyWalkerNudge('meta', null, paths.length, parseable) + '\n');
+			stderr(emptyWalkerNudge('meta', null, paths.length, paths.length - skipPaths.length, skipPaths, null) + '\n');
 
 		final shown:Array<{file:String, source:String, hits:Array<MetaHit>}> = limitEntries(allEntries, limit,
 			e -> e.hits.length,
@@ -436,22 +448,22 @@ final class Cli {
 
 		final singleFile:Bool = expanded.singleFile;
 		final allEntries:Array<{file:String, source:String, hits:Array<LitHit>}> = [];
-		var parseable:Int = 0;
+		final skipPaths:Array<String> = [];
 		for (path in paths) {
 			final source:String = readFile(path);
 			final tree:Null<QueryNode> = parseWalked('lit', plugin.parseFile, path, source, singleFile);
 			if (tree == null) {
 				if (singleFile) return EXIT_RUNTIME;
+				skipPaths.push(path);
 				continue;
 			}
-			parseable++;
 			final hits:Array<LitHit> = Lit.find(targetStr, tree, exact, kindFilter);
 			if (hits.length == 0) continue;
 			allEntries.push({file: path, source: source, hits: hits});
 		}
 
 		if (allEntries.length == 0)
-			stderr(emptyWalkerNudge('lit', targetStr, paths.length, parseable) + '\n');
+			stderr(emptyWalkerNudge('lit', targetStr, paths.length, paths.length - skipPaths.length, skipPaths, null) + '\n');
 
 		final shown:Array<{file:String, source:String, hits:Array<LitHit>}> = limitEntries(allEntries, limit,
 			e -> e.hits.length,
@@ -1287,40 +1299,139 @@ final class Cli {
 
 	/**
 	 * Stderr nudge emitted by walker subcommands (refs/uses/meta/lit) when
-	 * they return zero hits. Gives counts of files scanned vs parseable
-	 * (turns silent miss into observable signal) and a kind-aware tool
-	 * suggestion when the user likely picked the wrong subcommand.
+	 * they return zero hits. Composes up to three diagnostic layers:
 	 *
-	 * `name` is the lookup name (`refs <name>` / `uses <name>` / etc.) or
-	 * `null` when there is no name (e.g. `meta @:foo`). Suggestions:
-	 *   - `refs <X>` on UpperCase name → try `uses` or `blast` (likely a type).
-	 *   - `uses <x>` on lowerCase name → try `refs` or `lit` (likely a value/literal).
-	 *   - `lit/meta` — just the silent-miss summary (no clear cross-tool fix).
+	 *  - SUMMARY: counts of files scanned vs parseable — turns a silent
+	 *    miss into an observable signal.
+	 *  - KIND HINT: when `name` is non-null, a kind-aware tool suggestion
+	 *    (`refs <X>` on UpperCase → try `uses`/`blast`; `uses <x>` on
+	 *    lowercase → try `refs`/`lit`; etc.). `meta` has no `<name>` and
+	 *    skips this layer.
+	 *  - SKIP-PARSE WARNING: when `skipPaths` lists files that failed to
+	 *    parse, surface count + first few paths. The answer may be hiding
+	 *    in unparsed files, so silence here would mislead.
+	 *  - FUZZY DID-YOU-MEAN: for refs/uses with a non-null `candidates`
+	 *    name pool, suggest top-K candidates within Levenshtein distance.
+	 *    Silent when nothing close enough qualifies.
 	 */
-	private static function emptyWalkerNudge(cmd:String, name:Null<String>, scanned:Int, parseable:Int):String {
+	private static function emptyWalkerNudge(
+		cmd:String,
+		name:Null<String>,
+		scanned:Int,
+		parseable:Int,
+		?skipPaths:Array<String>,
+		?candidates:Map<String, Bool>
+	):String {
 		final summary:String = 'apq $cmd: 0 hits ($scanned file(s) scanned, $parseable parseable)';
-		if (name == null) return summary;
-		final n:String = name;
-		final first:Int = n.length > 0 ? StringTools.fastCodeAt(n, 0) : 0;
-		final isUpper:Bool = first >= 'A'.code && first <= 'Z'.code;
-		final isLower:Bool = first >= 'a'.code && first <= 'z'.code;
-		final hint:String = switch cmd {
-			case 'refs':
-				if (isUpper) ' — "$n" starts uppercase, looks like a TypeName. Try: apq uses $n <dir> (type positions) or apq blast $n <dir> (full change-impact, incl. field-access).';
-				else ' — "$n" has no value-binding here. Locals/params are NOT indexed. Try: apq lit \'$n\' <dir> (string-literal content) or apq search \'$$x.$n\' <dir> (field-access).';
-			case 'uses':
-				if (isLower) ' — "$n" starts lowercase, not a TypeName. Try: apq refs $n <dir> (value bindings) or apq lit \'$n\' <dir> (literal content).';
-				else ' — no type-position references. For full change-impact incl. `.field` access try: apq blast $n <dir>.';
-			case 'blast':
-				' — no declaration of "$n" in the scanned set (the heuristic section needs it). Either widen the scan, or use apq uses $n <dir> + apq refs $n <dir> directly.';
-			case 'lit':
-				' — no string-literal content matches "$n". Default --kind is Literal; widen with --kind Literal,IdentExpr or --any-kind, or try: apq refs $n <dir> --decls.';
-			case 'meta':
-				''; // meta has no <name> arg (annotation is its own thing) — leave silent.
-			case _:
-				'';
-		};
-		return summary + hint;
+		final tail:StringBuf = new StringBuf();
+		if (name != null) {
+			final n:String = name;
+			final first:Int = n.length > 0 ? StringTools.fastCodeAt(n, 0) : 0;
+			final isUpper:Bool = first >= 'A'.code && first <= 'Z'.code;
+			final isLower:Bool = first >= 'a'.code && first <= 'z'.code;
+			final hint:String = switch cmd {
+				case 'refs':
+					if (isUpper) ' — "$n" starts uppercase, looks like a TypeName. Try: apq uses $n <dir> (type positions) or apq blast $n <dir> (full change-impact, incl. field-access).';
+					else ' — "$n" has no value-binding here. Locals/params are NOT indexed. Try: apq lit \'$n\' <dir> (string-literal content) or apq search \'$$x.$n\' <dir> (field-access).';
+				case 'uses':
+					if (isLower) ' — "$n" starts lowercase, not a TypeName. Try: apq refs $n <dir> (value bindings) or apq lit \'$n\' <dir> (literal content).';
+					else ' — no type-position references. For full change-impact incl. `.field` access try: apq blast $n <dir>.';
+				case 'blast':
+					' — no declaration of "$n" in the scanned set (the heuristic section needs it). Either widen the scan, or use apq uses $n <dir> + apq refs $n <dir> directly.';
+				case 'lit':
+					' — no string-literal content matches "$n". Default --kind is Literal; widen with --kind Literal,IdentExpr or --any-kind, or try: apq refs $n <dir> --decls.';
+				case 'meta':
+					''; // meta has no <name> arg (annotation is its own thing) — leave silent.
+				case _:
+					'';
+			};
+			tail.add(hint);
+		}
+
+		// Skip-parse warning: parseable < scanned means the answer may
+		// be hiding in unparsed files. Surface this loudly so a 0-hit
+		// query on a broken corpus is not silently trusted.
+		if (skipPaths != null && skipPaths.length > 0) {
+			final n:Int = skipPaths.length;
+			tail.add('\napq $cmd: WARNING: $n file(s) skip-parse — answer may be hiding in unparsed files. Probe via: hxq ast <one-of-them> to verify parse failure.');
+			final shown:Int = n < SKIP_PATHS_SHOWN ? n : SKIP_PATHS_SHOWN;
+			for (i in 0...shown)
+				tail.add('\n  skip: ${skipPaths[i]}');
+			if (n > shown)
+				tail.add('\n  ... and ${n - shown} more');
+		}
+
+		// Fuzzy "did you mean": for refs/uses on 0 hits, propose the
+		// top-K decl/type names within Levenshtein distance. Stays
+		// silent when no candidate qualifies — don't fabricate hints.
+		if (name != null && candidates != null && (cmd == 'refs' || cmd == 'uses')) {
+			final suggestions:Array<String> = findFuzzy(name, candidates);
+			if (suggestions.length > 0)
+				tail.add('\napq $cmd: Did you mean: ${suggestions.join(", ")}?');
+		}
+
+		return summary + tail.toString();
+	}
+
+	/**
+	 * Collect every named leaf/inner-node into `out` for fuzzy
+	 * "did you mean" suggestions. The full vocabulary covered by the
+	 * walked tree — wider than just decls — keeps the suggestion list
+	 * useful for either refs (value bindings) or uses (type positions)
+	 * without needing a per-shape collector.
+	 */
+	private static function collectNames(root:QueryNode, out:Map<String, Bool>):Void {
+		function walk(n:QueryNode):Void {
+			final nm:Null<String> = n.name;
+			if (nm != null && nm.length > 0) out.set(nm, true);
+			for (c in n.children) walk(c);
+		}
+		walk(root);
+	}
+
+	/**
+	 * Top-`FUZZY_TOP_K` candidates from `pool` whose Levenshtein
+	 * distance to `query` is at most `FUZZY_MAX_DIST`. Returns empty
+	 * when nothing qualifies — the caller emits the "did you mean"
+	 * line only when the result is non-empty (never invent suggestions).
+	 */
+	private static function findFuzzy(query:String, pool:Map<String, Bool>):Array<String> {
+		final scored:Array<{name:String, dist:Int}> = [];
+		for (cand in pool.keys()) {
+			if (cand == query) continue;
+			final d:Int = levenshtein(query, cand);
+			if (d <= FUZZY_MAX_DIST) scored.push({name: cand, dist: d});
+		}
+		scored.sort((a, b) -> a.dist == b.dist ? (a.name < b.name ? -1 : 1) : a.dist - b.dist);
+		final take:Int = scored.length < FUZZY_TOP_K ? scored.length : FUZZY_TOP_K;
+		return [for (i in 0...take) scored[i].name];
+	}
+
+	/** Levenshtein edit distance (insert/delete/substitute = 1). */
+	private static function levenshtein(a:String, b:String):Int {
+		final la:Int = a.length;
+		final lb:Int = b.length;
+		if (la == 0) return lb;
+		if (lb == 0) return la;
+		var prev:Array<Int> = [for (j in 0...lb + 1) j];
+		var cur:Array<Int> = [for (j in 0...lb + 1) 0];
+		for (i in 1...la + 1) {
+			cur[0] = i;
+			final ai:Int = StringTools.fastCodeAt(a, i - 1);
+			for (j in 1...lb + 1) {
+				final cost:Int = ai == StringTools.fastCodeAt(b, j - 1) ? 0 : 1;
+				final del:Int = prev[j] + 1;
+				final ins:Int = cur[j - 1] + 1;
+				final sub:Int = prev[j - 1] + cost;
+				var m:Int = del < ins ? del : ins;
+				if (sub < m) m = sub;
+				cur[j] = m;
+			}
+			final tmp:Array<Int> = prev;
+			prev = cur;
+			cur = tmp;
+		}
+		return prev[lb];
 	}
 
 	/** Distinct node-constructor kinds present in a tree, sorted — the
