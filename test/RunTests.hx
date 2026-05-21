@@ -61,6 +61,7 @@ import unit.HxTypeArrowSliceTest;
 import unit.HxTypeAnonSliceTest;
 import unit.HxAnonVarFieldSliceTest;
 import unit.HxAnonMemberSliceTest;
+import unit.HxLocalVarMetaSliceTest;
 import unit.HxConditionalMemberSliceTest;
 import unit.HxConditionalObjectFieldSliceTest;
 import unit.HxConditionalParamSliceTest;
@@ -211,6 +212,7 @@ class RunTests {
 		runner.addCase(new HxTypeAnonSliceTest());
 		runner.addCase(new HxAnonVarFieldSliceTest());
 		runner.addCase(new HxAnonMemberSliceTest());
+		runner.addCase(new HxLocalVarMetaSliceTest());
 		runner.addCase(new HxConditionalMemberSliceTest());
 		runner.addCase(new HxConditionalObjectFieldSliceTest());
 		runner.addCase(new HxConditionalParamSliceTest());

@@ -102,9 +102,26 @@ package anyparse.grammar.haxe;
  * cuddled under Same — the wrap is inert because no internal hardlines
  * exist. Independent of `init` — both fields can carry their own
  * `indentValueIfCtor` entries simultaneously.
+ *
+ * Slice 20: a leading `@:trivia @:tryparse var meta:Array<HxMetadata>`
+ * Star captures inline metadata between the `var`/`final` keyword and
+ * the binding name on a local statement (`var @:name name = 'Foo';` —
+ * fork fixture `whitespace/var_meta_data`). Byte-twin of
+ * `HxAnonMember.meta` / `HxMemberDecl.meta`: no `@:lead`/`@:trail`/
+ * `@:sep`, the try-parse loop attempts an element each iteration and
+ * breaks when the next token isn't `@`. Reachable from every consumer
+ * (class member, anon struct field, top-level decl, `VarExpr`/
+ * `FinalExpr`, `HxVarMore`); on the dominant no-metadata case the Star
+ * is empty and every existing site stays byte-identical. At the
+ * class-member / anon-struct positions the outer wrapper's metadata
+ * (`HxMemberDecl.meta` / `HxAnonMember.meta`) is the canonical slot —
+ * the inner Star here is permissive, accepting the unusual
+ * `var @:meta x;` placement that would normally be written
+ * `@:meta var x;`.
  */
 @:peg
 typedef HxVarDecl = {
+	@:trivia @:tryparse var meta:Array<HxMetadata>;
 	var name:HxVarNameLit;
 	@:optional @:lead('(') var access:Null<HxAccessClause>;
 	@:optional @:fmt(typeHintColon,
