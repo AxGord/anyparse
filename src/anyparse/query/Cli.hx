@@ -77,6 +77,7 @@ final class Cli {
 			case 'meta': return runMeta(rest);
 			case 'blast': return runBlast(rest);
 			case 'lit': return runLit(rest);
+			case 'mentions': return runMentions(rest);
 			case _:
 				stderr('apq: unknown subcommand "$cmd"\n');
 				printUsage();
@@ -630,6 +631,143 @@ final class Cli {
 	}
 
 	/**
+	 * `apq mentions <name> <file-or-dir-or-glob>...` — every named-leaf
+	 * occurrence of an identifier. Unions three precise queries:
+	 *
+	 *  - `uses` — type-position references (field/param/return/extends).
+	 *  - `refs` — value-binding references (var/fn/param of that name).
+	 *  - `lit --any-kind --exact` — every other leaf carrying that name:
+	 *    case-patterns (`case Foo(_):` → `IdentExpr 'Foo'`), import path
+	 *    segments, `new Foo()` ctor calls, field-name slots.
+	 *
+	 * The "everything called X" question. Complementary to `blast`:
+	 * `blast` answers "what could break when I change type T's shape"
+	 * via a name-based field-access SUPERSET; `mentions` answers "where
+	 * is the literal token X tokenised in the AST" precisely. No
+	 * heuristic — every section is structural and exact-name. Use this
+	 * when refs/uses/blast all return 0 but you know the name appears
+	 * (case-patterns are the canonical example).
+	 */
+	private static function runMentions(args:Array<String>):Int {
+		var lang:String = 'haxe';
+		var limit:Int = -1;
+		var name:Null<String> = null;
+		final inputSpecs:Array<String> = [];
+
+		var i:Int = 0;
+		while (i < args.length) {
+			final a:String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--limit':
+					try limit = parseLimit(args, ++i) catch (e:Exception) {
+						stderr('${e.message}\n');
+						return EXIT_USAGE;
+					}
+				case '-h', '--help':
+					printMentionsUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq mentions: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (name == null) name = a;
+					else inputSpecs.push(a);
+			}
+			i++;
+		}
+		if (name == null) {
+			stderr('apq mentions: missing <name> argument\n');
+			printMentionsUsage();
+			return EXIT_USAGE;
+		}
+		if (inputSpecs.length == 0) {
+			stderr('apq mentions: missing <file-or-dir-or-glob> argument\n');
+			printMentionsUsage();
+			return EXIT_USAGE;
+		}
+		final target:String = name;
+
+		final plugin:GrammarPlugin = pickPlugin(lang);
+		final refShape:RefShape = plugin.refShape();
+		final typeShape:TypeRefShape = plugin.typeRefShape();
+
+		final expanded:{paths:Array<String>, singleFile:Bool} = expandInputs(inputSpecs, '.hx');
+		final paths:Array<String> = expanded.paths;
+		if (paths.length == 0) {
+			stderr('apq mentions: no input files matched ${inputSpecs.join(" ")}\n');
+			return EXIT_RUNTIME;
+		}
+
+		// Single value-AST pass per file, shared across all three sections.
+		// Mirrors `runBlast`'s caching discipline.
+		final valueTrees:Array<{path:String, source:String, tree:QueryNode}> = [];
+		for (path in paths) {
+			final source:String = readFile(path);
+			final tree:Null<QueryNode> = parseWalked('mentions', plugin.parseFile, path, source, expanded.singleFile);
+			if (tree == null) {
+				if (expanded.singleFile) return EXIT_RUNTIME;
+				continue;
+			}
+			valueTrees.push({path: path, source: source, tree: tree});
+		}
+
+		var any:Bool = false;
+
+		// Section 1 — type-position references (precise).
+		var usesHeader:Bool = false;
+		for (entry in valueTrees) {
+			final typeTree:Null<QueryNode> = parseWalked('mentions', plugin.parseFileTypeRefs, entry.path, entry.source, expanded.singleFile);
+			if (typeTree == null) continue;
+			final hits:Array<UsesHit> = Uses.find(target, typeTree, typeShape);
+			if (hits.length == 0) continue;
+			any = true;
+			if (!usesHeader) {
+				sysPrint('# uses (type positions)\n');
+				usesHeader = true;
+			}
+			sysPrint(Text.renderUses(entry.path, entry.source, hits, false, false));
+		}
+
+		// Section 2 — value-binding references (precise).
+		var refsHeader:Bool = false;
+		for (entry in valueTrees) {
+			final hits:Array<RefHit> = Refs.find(target, entry.tree, refShape);
+			if (hits.length == 0) continue;
+			any = true;
+			if (!refsHeader) {
+				sysPrint('# refs (value bindings)\n');
+				refsHeader = true;
+			}
+			sysPrint(Text.renderRefs(entry.path, entry.source, hits, false, false));
+		}
+
+		// Section 3 — every other leaf carrying this name (case-patterns,
+		// imports, new exprs, field-name slots). `lit` with empty kind
+		// filter + exact match. `--limit` caps this section only — the
+		// precise refs/uses sections are typically small.
+		final litEntries:Array<{file:String, source:String, hits:Array<LitHit>}> = [];
+		for (entry in valueTrees) {
+			final hits:Array<LitHit> = Lit.find(target, entry.tree, true, null);
+			if (hits.length == 0) continue;
+			litEntries.push({file: entry.path, source: entry.source, hits: hits});
+		}
+		if (litEntries.length > 0) {
+			any = true;
+			final shown:Array<{file:String, source:String, hits:Array<LitHit>}> = limitEntries(litEntries, limit,
+				e -> e.hits.length,
+				(e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k)});
+			sysPrint('# lit (every leaf — case-patterns / imports / new exprs / field-name slots)\n');
+			for (entry in shown) sysPrint(Lit.render(entry.file, entry.source, entry.hits));
+		}
+
+		if (!any) stderr('apq mentions: no uses / refs / lit-leaf of "$target" found\n');
+		return EXIT_OK;
+	}
+
+	/**
 	 * Collect the member names + declaration spans of every top-level
 	 * declaration named `typeName` (kind ends in `Decl` — the Haxe
 	 * decl-kind convention). `@:meta` / `@:fmt(...)` argument subtrees
@@ -1126,6 +1264,7 @@ final class Cli {
 		sysPrint('  meta     Annotation-on-decl shortcut\n');
 		sysPrint('  blast    Change-impact checklist (uses + refs + member-access)\n');
 		sysPrint('  lit      Leaf-name probe (string literals, identifiers — prose-in-code)\n');
+		sysPrint('  mentions Every named-leaf occurrence (uses + refs + lit --any-kind --exact)\n');
 		sysPrint('\n');
 		sysPrint('Global options:\n');
 		sysPrint('  --lang <name>   Pick grammar plugin (default: haxe)\n');
@@ -1184,6 +1323,26 @@ final class Cli {
 		sysPrint('          `uses`/`refs` are blind to (the typedef->enum gap).\n');
 		sysPrint('Needs the type\'s declaration in the scanned set for the\n');
 		sysPrint('heuristic; absent ⇒ that section is skipped (uses/refs stand).\n');
+	}
+
+	private static function printMentionsUsage():Void {
+		sysPrint('Usage: apq mentions [options] <name> <file-or-dir-or-glob>...\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --limit <n>         Cap the lit section at n hits\n');
+		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('\n');
+		sysPrint('Every named-leaf occurrence of an identifier. Unions:\n');
+		sysPrint('  uses  — type-position references (precise)\n');
+		sysPrint('  refs  — value-binding references (precise)\n');
+		sysPrint('  lit   — every other leaf with that exact name:\n');
+		sysPrint('          case-patterns (`case Foo(_):` → IdentExpr),\n');
+		sysPrint('          imports, `new Foo()`, field-name slots.\n');
+		sysPrint('\n');
+		sysPrint('Use this when refs/uses/blast return 0 but you know the\n');
+		sysPrint('name appears (case-patterns are the canonical example —\n');
+		sysPrint('blind to refs/uses/blast). All three sections are exact-\n');
+		sysPrint('name and structural; no heuristic / no over-match.\n');
 	}
 
 	private static function printRefsUsage():Void {
