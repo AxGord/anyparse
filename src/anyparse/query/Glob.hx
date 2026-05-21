@@ -35,21 +35,33 @@ final class Glob {
 	public static function expand(spec:String, extension:String):Array<String> {
 		final out:Array<String> = [];
 		#if (sys || nodejs)
-		if (isGlob(spec)) {
-			final base:String = globBase(spec);
-			final re:EReg = globToRegex(spec);
+		final norm:String = stripTrailingSlash(spec);
+		if (isGlob(norm)) {
+			final base:String = globBase(norm);
+			final re:EReg = globToRegex(norm);
 			final fsRoot:String = base == '' ? '.' : base;
 			if (FileSystem.exists(fsRoot) && FileSystem.isDirectory(fsRoot))
 				collectMatching(fsRoot, base, re, out);
-		} else if (FileSystem.exists(spec)) {
-			if (FileSystem.isDirectory(spec))
-				collect(spec, extension, out);
+		} else if (FileSystem.exists(norm)) {
+			if (FileSystem.isDirectory(norm))
+				collect(norm, extension, out);
 			else
-				out.push(spec);
+				out.push(norm);
 		}
 		out.sort((a:String, b:String) -> a < b ? -1 : (a > b ? 1 : 0));
 		#end
 		return out;
+	}
+
+	/**
+	 * Strip trailing `/` from a user-supplied path so downstream
+	 * `dir + '/' + name` concatenations don't produce `foo//bar`. Keeps
+	 * the root `'/'` and a bare `'.'` unchanged.
+	 */
+	private static function stripTrailingSlash(spec:String):String {
+		var end:Int = spec.length;
+		while (end > 1 && spec.charAt(end - 1) == '/') end--;
+		return end == spec.length ? spec : spec.substr(0, end);
 	}
 
 	#if (sys || nodejs)
