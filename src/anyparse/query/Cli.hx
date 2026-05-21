@@ -26,7 +26,8 @@ import sys.io.File;
  * `--lang`, dispatches on the subcommand.
  *
  * Phase 1 surface: `apq ast <file> [--lang L] [--json] [--depth N]
- * [--select PATH] [--at LINE:COL]`. Other subcommands (`search`,
+ * [--select PATH] [--at LINE:COL] [--min-children N] [--max-children N]`.
+ * Other subcommands (`search`,
  * `refs`, `meta`) are reserved — calling them prints a "deferred"
  * notice with the phase that owns each.
  */
@@ -876,6 +877,8 @@ final class Cli {
 		var atExpr:Null<String> = null;
 		var wantDoc:Bool = false;
 		var wantSource:Bool = false;
+		var minChildren:Int = -1;
+		var maxChildren:Int = -1;
 		var file:Null<String> = null;
 
 		var i:Int = 0;
@@ -902,6 +905,22 @@ final class Cli {
 					wantDoc = true;
 				case '--source':
 					wantSource = true;
+				case '--min-children':
+					final v:String = expectValue(args, ++i, '--min-children');
+					final parsed:Null<Int> = Std.parseInt(v);
+					if (parsed == null || parsed < 0) {
+						stderr('apq ast: --min-children expects a non-negative integer, got "$v"\n');
+						return EXIT_USAGE;
+					}
+					minChildren = parsed;
+				case '--max-children':
+					final v:String = expectValue(args, ++i, '--max-children');
+					final parsed:Null<Int> = Std.parseInt(v);
+					if (parsed == null || parsed < 0) {
+						stderr('apq ast: --max-children expects a non-negative integer, got "$v"\n');
+						return EXIT_USAGE;
+					}
+					maxChildren = parsed;
 				case '-h', '--help':
 					printAstUsage();
 					return EXIT_OK;
@@ -981,7 +1000,19 @@ final class Cli {
 
 		if (selectExpr != null) {
 			final selector:Selector = Selector.parse(selectExpr);
-			final raw:Array<QueryNode> = Engine.select(tree, selector);
+			final preFilter:Array<QueryNode> = Engine.select(tree, selector);
+			// ω-ast-child-count-filter: post-filter on direct-child count so
+			// "find all multi-arg ParamCtor ctors" is one query. The selector
+			// grammar (`Kind` / `Kind:name` / `Kind > Child`) is deliberately
+			// minimal and stays that way — arity is a numeric predicate, not
+			// a structural one, and lives on the CLI instead of the path.
+			final raw:Array<QueryNode> = (minChildren < 0 && maxChildren < 0)
+				? preFilter
+				: [
+					for (m in preFilter)
+						if ((minChildren < 0 || m.children.length >= minChildren)
+							&& (maxChildren < 0 || m.children.length <= maxChildren)) m
+				];
 			if (raw.length == 0) {
 				// Empty `--select` is indistinguishable from "wrong kind
 				// name". Kinds are the exact node-constructor names and the
@@ -989,7 +1020,12 @@ final class Cli {
 				// present in this file, turning a silent miss into a
 				// self-correcting hint (no global kind table needed).
 				final present:Array<String> = collectKinds(tree);
-				stderr('apq ast: --select "$selectExpr" matched no nodes in $file. '
+				final filterParts:Array<String> = [];
+				if (minChildren >= 0) filterParts.push('--min-children=$minChildren');
+				if (maxChildren >= 0) filterParts.push('--max-children=$maxChildren');
+				if (preFilter.length > 0) filterParts.push('${preFilter.length} pre-filter match(es) dropped by child-count');
+				final filterNote:String = filterParts.length == 0 ? '' : ' (with ${filterParts.join(", ")})';
+				stderr('apq ast: --select "$selectExpr"$filterNote matched no nodes in $file. '
 					+ 'Kinds present here: ${present.join(", ")}. '
 					+ 'Kinds are exact node-constructor names — run `apq ast $file` to see the tree.\n');
 			}
@@ -1206,6 +1242,8 @@ final class Cli {
 		sysPrint('  --at <line>:<col>   Innermost node enclosing the 1-indexed position\n');
 		sysPrint('  --doc               With --select/--at: emit the match\'s leading doc-comment\n');
 		sysPrint('  --source            With --select/--at: emit the match\'s verbatim source slice\n');
+		sysPrint('  --min-children <n>  With --select: keep only matches with >= n direct children (e.g. multi-arg ParamCtor)\n');
+		sysPrint('  --max-children <n>  With --select: keep only matches with <= n direct children\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 	}
 
