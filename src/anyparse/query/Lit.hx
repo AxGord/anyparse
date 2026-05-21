@@ -64,11 +64,13 @@ final class Lit {
 		for (c in node.children) walk(target, c, exact, filter, out);
 	}
 
-	public static function render(file:String, source:String, hits:Array<LitHit>):String {
+	public static function render(file:String, source:String, hits:Array<LitHit>, flat:Bool = false):String {
 		final buf:StringBuf = new StringBuf();
+		if (!flat && hits.length > 0) buf.add('$file:\n');
 		for (h in hits) {
 			final pos:Position = h.span.lineCol(source);
-			buf.add('$file:${pos.line}:${pos.col}: ${h.kind} \'${h.name}\'\n');
+			if (flat) buf.add('$file:${pos.line}:${pos.col}: ${h.kind} \'${h.name}\'\n');
+			else buf.add('  ${pos.line}:${pos.col}: ${h.kind} \'${h.name}\'\n');
 		}
 		return buf.toString();
 	}

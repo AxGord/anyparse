@@ -35,11 +35,14 @@ class ApqTextRenderTest extends Test {
 		final file:String = 'T.hx';
 		final hits:Array<RefHit> = refsOf(src, 'x');
 		Assert.isTrue(hits.length >= 2, 'fixture must yield decl+read');
-		Assert.equals(referenceRefs(file, src, hits), Text.renderRefs(file, src, hits, false, false));
+		// `flat=true` — the reference reproduction below mirrors the flat
+		// `file:line:col: …` form; the grouped (default) form is the
+		// pretty surface and not regression-locked here.
+		Assert.equals(referenceRefs(file, src, hits), Text.renderRefs(file, src, hits, false, false, true));
 	}
 
 	public function testRenderRefsEmpty():Void {
-		Assert.equals('T.hx: no refs\n', Text.renderRefs('T.hx', 'class T {}', [], false, false));
+		Assert.equals('T.hx: no refs\n', Text.renderRefs('T.hx', 'class T {}', [], false, false, true));
 	}
 
 	public function testRenderSearchMatchesMatchesReference():Void {
@@ -50,11 +53,11 @@ class ApqTextRenderTest extends Test {
 		final pattern:Pattern = plugin.parsePattern("throw new $E($_)");
 		final matches:Array<Match> = Matcher.search(pattern, tree);
 		Assert.isTrue(matches.length >= 1, 'fixture must yield a match');
-		Assert.equals(referenceSearch(file, src, matches), Text.renderSearchMatches(file, src, matches));
+		Assert.equals(referenceSearch(file, src, matches), Text.renderSearchMatches(file, src, matches, true));
 	}
 
 	public function testRenderSearchMatchesEmpty():Void {
-		Assert.equals('T.hx: no matches\n', Text.renderSearchMatches('T.hx', 'class T {}', []));
+		Assert.equals('T.hx: no matches\n', Text.renderSearchMatches('T.hx', 'class T {}', [], true));
 	}
 
 	public function testRenderMetaMatchesReference():Void {
@@ -62,11 +65,11 @@ class ApqTextRenderTest extends Test {
 		final file:String = 'T.hx';
 		final hits:Array<MetaHit> = metaOf(src);
 		Assert.isTrue(hits.length >= 2, 'fixture must yield two annotations');
-		Assert.equals(referenceMeta(file, src, hits), Text.renderMeta(file, src, hits));
+		Assert.equals(referenceMeta(file, src, hits), Text.renderMeta(file, src, hits, true));
 	}
 
 	public function testRenderMetaEmpty():Void {
-		Assert.equals('T.hx: no meta\n', Text.renderMeta('T.hx', 'class T {}', []));
+		Assert.equals('T.hx: no meta\n', Text.renderMeta('T.hx', 'class T {}', [], true));
 	}
 
 	// --- reference reproductions of the pre-refactor StringBuf format ---

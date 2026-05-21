@@ -93,6 +93,7 @@ final class Cli {
 		var wantWrites:Bool = false;
 		var wantDoc:Bool = false;
 		var wantSource:Bool = false;
+		var flat:Bool = false;
 		var limit:Int = -1;
 		var name:Null<String> = null;
 		final inputSpecs:Array<String> = [];
@@ -115,6 +116,8 @@ final class Cli {
 					wantDoc = true;
 				case '--source':
 					wantSource = true;
+				case '--flat':
+					flat = true;
 				case '--limit':
 					try limit = parseLimit(args, ++i) catch (e:Exception) {
 						stderr('${e.message}\n');
@@ -191,7 +194,7 @@ final class Cli {
 		if (json) {
 			sysPrint(Json.renderRefs(shown, wantDoc, wantSource));
 		} else {
-			for (entry in shown) sysPrint(Text.renderRefs(entry.file, entry.source, entry.hits, wantDoc, wantSource));
+			for (entry in shown) sysPrint(Text.renderRefs(entry.file, entry.source, entry.hits, wantDoc, wantSource, flat));
 		}
 		return EXIT_OK;
 	}
@@ -200,6 +203,7 @@ final class Cli {
 		var lang:String = 'haxe';
 		var wantDoc:Bool = false;
 		var wantSource:Bool = false;
+		var flat:Bool = false;
 		var limit:Int = -1;
 		var name:Null<String> = null;
 		final inputSpecs:Array<String> = [];
@@ -214,6 +218,8 @@ final class Cli {
 					wantDoc = true;
 				case '--source':
 					wantSource = true;
+				case '--flat':
+					flat = true;
 				case '--limit':
 					try limit = parseLimit(args, ++i) catch (e:Exception) {
 						stderr('${e.message}\n');
@@ -280,7 +286,7 @@ final class Cli {
 		final shown:Array<{file:String, source:String, hits:Array<UsesHit>}> = limitEntries(allEntries, limit,
 			e -> e.hits.length,
 			(e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k)});
-		for (entry in shown) sysPrint(Text.renderUses(entry.file, entry.source, entry.hits, wantDoc, wantSource));
+		for (entry in shown) sysPrint(Text.renderUses(entry.file, entry.source, entry.hits, wantDoc, wantSource, flat));
 		return EXIT_OK;
 	}
 
@@ -289,6 +295,7 @@ final class Cli {
 		var json:Bool = false;
 		var argContains:Null<String> = null;
 		var onKind:Null<String> = null;
+		var flat:Bool = false;
 		var limit:Int = -1;
 		final positionals:Array<String> = [];
 
@@ -304,6 +311,8 @@ final class Cli {
 					argContains = expectValue(args, ++i, '--arg-contains');
 				case '--on':
 					onKind = expectValue(args, ++i, '--on');
+				case '--flat':
+					flat = true;
 				case '--limit':
 					try limit = parseLimit(args, ++i) catch (e:Exception) {
 						stderr('${e.message}\n');
@@ -383,7 +392,7 @@ final class Cli {
 		if (json) {
 			sysPrint(Json.renderMeta(shown));
 		} else {
-			for (entry in shown) sysPrint(Text.renderMeta(entry.file, entry.source, entry.hits));
+			for (entry in shown) sysPrint(Text.renderMeta(entry.file, entry.source, entry.hits, flat));
 		}
 		return EXIT_OK;
 	}
@@ -404,6 +413,7 @@ final class Cli {
 	private static function runLit(args:Array<String>):Int {
 		var lang:String = 'haxe';
 		var exact:Bool = false;
+		var flat:Bool = false;
 		var limit:Int = -1;
 		var kindFilter:Array<String> = ['Literal'];
 		var target:Null<String> = null;
@@ -421,6 +431,8 @@ final class Cli {
 					kindFilter = expectValue(args, ++i, '--kind').split(',');
 				case '--any-kind':
 					kindFilter = [];
+				case '--flat':
+					flat = true;
 				case '--limit':
 					try limit = parseLimit(args, ++i) catch (e:Exception) {
 						stderr('${e.message}\n');
@@ -481,7 +493,7 @@ final class Cli {
 		final shown:Array<{file:String, source:String, hits:Array<LitHit>}> = limitEntries(allEntries, limit,
 			e -> e.hits.length,
 			(e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k)});
-		for (entry in shown) sysPrint(Lit.render(entry.file, entry.source, entry.hits));
+		for (entry in shown) sysPrint(Lit.render(entry.file, entry.source, entry.hits, flat));
 		return EXIT_OK;
 	}
 
@@ -508,6 +520,7 @@ final class Cli {
 	 */
 	private static function runBlast(args:Array<String>):Int {
 		var lang:String = 'haxe';
+		var flat:Bool = false;
 		var limit:Int = -1;
 		var name:Null<String> = null;
 		final inputSpecs:Array<String> = [];
@@ -518,6 +531,8 @@ final class Cli {
 			switch a {
 				case '--lang':
 					lang = expectValue(args, ++i, '--lang');
+				case '--flat':
+					flat = true;
 				case '--limit':
 					try limit = parseLimit(args, ++i) catch (e:Exception) {
 						stderr('${e.message}\n');
@@ -592,7 +607,7 @@ final class Cli {
 				sysPrint('# uses (type positions)\n');
 				usesHeader = true;
 			}
-			sysPrint(Text.renderUses(entry.path, entry.source, hits, false, false));
+			sysPrint(Text.renderUses(entry.path, entry.source, hits, false, false, flat));
 		}
 
 		// Section 2 — value-binding references (precise).
@@ -605,7 +620,7 @@ final class Cli {
 				sysPrint('# refs (value bindings)\n');
 				refsHeader = true;
 			}
-			sysPrint(Text.renderRefs(entry.path, entry.source, hits, false, false));
+			sysPrint(Text.renderRefs(entry.path, entry.source, hits, false, false, flat));
 		}
 
 		// Section 3 — heuristic member-name field-access (superset).
@@ -650,6 +665,7 @@ final class Cli {
 	 */
 	private static function runMentions(args:Array<String>):Int {
 		var lang:String = 'haxe';
+		var flat:Bool = false;
 		var limit:Int = -1;
 		var name:Null<String> = null;
 		final inputSpecs:Array<String> = [];
@@ -660,6 +676,8 @@ final class Cli {
 			switch a {
 				case '--lang':
 					lang = expectValue(args, ++i, '--lang');
+				case '--flat':
+					flat = true;
 				case '--limit':
 					try limit = parseLimit(args, ++i) catch (e:Exception) {
 						stderr('${e.message}\n');
@@ -728,7 +746,7 @@ final class Cli {
 				sysPrint('# uses (type positions)\n');
 				usesHeader = true;
 			}
-			sysPrint(Text.renderUses(entry.path, entry.source, hits, false, false));
+			sysPrint(Text.renderUses(entry.path, entry.source, hits, false, false, flat));
 		}
 
 		// Section 2 — value-binding references (precise).
@@ -741,7 +759,7 @@ final class Cli {
 				sysPrint('# refs (value bindings)\n');
 				refsHeader = true;
 			}
-			sysPrint(Text.renderRefs(entry.path, entry.source, hits, false, false));
+			sysPrint(Text.renderRefs(entry.path, entry.source, hits, false, false, flat));
 		}
 
 		// Section 3 — every other leaf carrying this name (case-patterns,
@@ -760,7 +778,7 @@ final class Cli {
 				e -> e.hits.length,
 				(e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k)});
 			sysPrint('# lit (every leaf — case-patterns / imports / new exprs / field-name slots)\n');
-			for (entry in shown) sysPrint(Lit.render(entry.file, entry.source, entry.hits));
+			for (entry in shown) sysPrint(Lit.render(entry.file, entry.source, entry.hits, flat));
 		}
 
 		if (!any) stderr('apq mentions: no uses / refs / lit-leaf of "$target" found\n');
@@ -833,6 +851,7 @@ final class Cli {
 		var kind:Null<String> = null;
 		var limit:Int = -1;
 		var explain:Bool = false;
+		var flat:Bool = false;
 		var pattern:Null<String> = null;
 		final inputSpecs:Array<String> = [];
 
@@ -857,6 +876,8 @@ final class Cli {
 						kind = expectValue(args, ++i, '--kind');
 					case '--explain':
 						explain = true;
+					case '--flat':
+						flat = true;
 					case '--limit':
 						try limit = parseLimit(args, ++i) catch (e:Exception) {
 							stderr('${e.message}\n');
@@ -987,7 +1008,7 @@ final class Cli {
 			combined.add(']}\n');
 			sysPrint(combined.toString());
 		} else {
-			for (entry in shown) sysPrint(Text.renderSearchMatches(entry.file, entry.source, entry.matches));
+			for (entry in shown) sysPrint(Text.renderSearchMatches(entry.file, entry.source, entry.matches, flat));
 		}
 		return EXIT_OK;
 	}
@@ -1279,6 +1300,7 @@ final class Cli {
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 		sysPrint('  --kind <Kind>       Only match nodes of this AST kind\n');
 		sysPrint('  --explain           Print parsed pattern AST; on 0 hits show input-kind histogram\n');
+		sysPrint('  --flat              Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
 		sysPrint('  --limit <n>         Stop after n hits total (default: no limit)\n');
 		sysPrint('\n');
 		sysPrint("Pattern syntax: language source with `$X` / `$_` metavars.\n");
@@ -1296,6 +1318,7 @@ final class Cli {
 		sysPrint('  --exact             Require exact string equality (default: substring)\n');
 		sysPrint('  --kind <K1,K2,...>  Restrict to leaves of these kinds (default: Literal)\n');
 		sysPrint('  --any-kind          Match every named leaf regardless of kind\n');
+		sysPrint('  --flat              Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
 		sysPrint('  --limit <n>         Stop after n hits total (default: no limit)\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 		sysPrint('\n');
@@ -1311,6 +1334,7 @@ final class Cli {
 		sysPrint('Usage: apq blast [options] <type-name> <file-or-dir-or-glob>...\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
+		sysPrint('  --flat              Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
 		sysPrint('  --limit <n>         Cap the heuristic section at n hits\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 		sysPrint('\n');
@@ -1329,6 +1353,7 @@ final class Cli {
 		sysPrint('Usage: apq mentions [options] <name> <file-or-dir-or-glob>...\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
+		sysPrint('  --flat              Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
 		sysPrint('  --limit <n>         Cap the lit section at n hits\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 		sysPrint('\n');
@@ -1355,6 +1380,7 @@ final class Cli {
 		sysPrint('  --writes            Filter to write references (Phase 3.3)\n');
 		sysPrint('  --doc               Also emit each hit\'s leading doc-comment\n');
 		sysPrint('  --source            Also emit each hit\'s verbatim source slice\n');
+		sysPrint('  --flat              Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
 		sysPrint('  --limit <n>         Stop after n hits total (default: no limit)\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 		sysPrint('\n');
@@ -1368,6 +1394,7 @@ final class Cli {
 		sysPrint('Options:\n');
 		sysPrint('  --doc               Also emit each hit\'s leading doc-comment\n');
 		sysPrint('  --source            Also emit each hit\'s verbatim source slice\n');
+		sysPrint('  --flat              Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
 		sysPrint('  --limit <n>         Stop after n hits total (default: no limit)\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 		sysPrint('\n');
@@ -1383,6 +1410,7 @@ final class Cli {
 		sysPrint('Options:\n');
 		sysPrint('  --arg-contains <s>  Keep hits whose argument list contains <s>\n');
 		sysPrint('  --on <decl-kind>    Keep hits attached to the given decl kind\n');
+		sysPrint('  --flat              Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
 		sysPrint('  --limit <n>         Stop after n hits total (default: no limit)\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 		sysPrint('\n');

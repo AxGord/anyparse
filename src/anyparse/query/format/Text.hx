@@ -50,12 +50,14 @@ final class Text {
 		return buf.toString();
 	}
 
-	public static function renderRefs(file:String, source:String, hits:Array<RefHit>, doc:Bool, src:Bool):String {
+	public static function renderRefs(file:String, source:String, hits:Array<RefHit>, doc:Bool, src:Bool, flat:Bool = false):String {
 		if (hits.length == 0) return '$file: no refs\n';
 		final buf:StringBuf = new StringBuf();
+		if (!flat) buf.add('$file:\n');
 		for (h in hits) {
 			final pos:Position = h.span.lineCol(source);
-			buf.add('$file:${pos.line}:${pos.col - 1}: [${h.kind.toString()}] ${h.name}');
+			if (flat) buf.add('$file:${pos.line}:${pos.col - 1}: [${h.kind.toString()}] ${h.name}');
+			else buf.add('  ${pos.line}:${pos.col - 1}: [${h.kind.toString()}] ${h.name}');
 			final bindingSpan:Null<Span> = h.bindingSpan;
 			if (bindingSpan != null && bindingSpan.from != h.span.from) {
 				final bp:Position = bindingSpan.lineCol(source);
@@ -67,12 +69,14 @@ final class Text {
 		return buf.toString();
 	}
 
-	public static function renderUses(file:String, source:String, hits:Array<UsesHit>, doc:Bool, src:Bool):String {
+	public static function renderUses(file:String, source:String, hits:Array<UsesHit>, doc:Bool, src:Bool, flat:Bool = false):String {
 		if (hits.length == 0) return '$file: no uses\n';
 		final buf:StringBuf = new StringBuf();
+		if (!flat) buf.add('$file:\n');
 		for (h in hits) {
 			final pos:Position = h.span.lineCol(source);
-			buf.add('$file:${pos.line}:${pos.col - 1}: ${h.name}\n');
+			if (flat) buf.add('$file:${pos.line}:${pos.col - 1}: ${h.name}\n');
+			else buf.add('  ${pos.line}:${pos.col - 1}: ${h.name}\n');
 			appendDocSource(buf, source, h.span, doc, src);
 		}
 		return buf.toString();
@@ -105,16 +109,19 @@ final class Text {
 		return '  ' + text.split('\n').join('\n  ') + '\n';
 	}
 
-	public static function renderMeta(file:String, source:String, hits:Array<MetaHit>):String {
+	public static function renderMeta(file:String, source:String, hits:Array<MetaHit>, flat:Bool = false):String {
 		if (hits.length == 0) return '$file: no meta\n';
 		final buf:StringBuf = new StringBuf();
+		if (!flat) buf.add('$file:\n');
 		for (h in hits) {
 			final span:Null<Span> = h.metaSpan;
 			if (span != null) {
 				final pos:Position = span.lineCol(source);
-				buf.add('$file:${pos.line}:${pos.col - 1}: ');
+				if (flat) buf.add('$file:${pos.line}:${pos.col - 1}: ');
+				else buf.add('  ${pos.line}:${pos.col - 1}: ');
 			} else {
-				buf.add('$file: ');
+				if (flat) buf.add('$file: ');
+				else buf.add('  (no-span): ');
 			}
 			buf.add(h.annotation);
 			if (h.args.length > 0) {
@@ -130,12 +137,14 @@ final class Text {
 		return buf.toString();
 	}
 
-	public static function renderSearchMatches(file:String, source:String, matches:Array<Match>):String {
+	public static function renderSearchMatches(file:String, source:String, matches:Array<Match>, flat:Bool = false):String {
 		if (matches.length == 0) return '$file: no matches\n';
 		final buf:StringBuf = new StringBuf();
+		if (!flat) buf.add('$file:\n');
 		for (m in matches) {
 			final pos:Position = m.span.lineCol(source);
-			buf.add('$file:${pos.line}:${pos.col - 1}: match');
+			if (flat) buf.add('$file:${pos.line}:${pos.col - 1}: match');
+			else buf.add('  ${pos.line}:${pos.col - 1}: match');
 			final bindingsCount:Int = countBindings(m);
 			if (bindingsCount > 0) {
 				buf.add(' (');
