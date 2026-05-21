@@ -81,6 +81,7 @@ final class Cli {
 			case 'lit': return runLit(rest);
 			case 'mentions': return runMentions(rest);
 			case 'diff': return runDiff(rest);
+			case 'strip': return runStrip(rest);
 			case _:
 				stderr('apq: unknown subcommand "$cmd"\n');
 				printUsage();
@@ -492,6 +493,139 @@ final class Cli {
 	}
 
 	/**
+	 * `apq strip <file> --replace <pat> --with <repl> [...]` — machinised
+	 * strip-test for the skip-parse campaign. Applies one or more
+	 * literal string substitutions to a file's bytes in declaration
+	 * order, then tries to parse the result via the grammar plugin.
+	 * Emits a single `PARSE OK` / `PARSE FAIL: <err>` verdict to stdout;
+	 * with `--show` also dumps the stripped source to stderr so a manual
+	 * scratch-file dance (`cat > /tmp/probe.hx <<EOF … EOF; hxq ast …`)
+	 * collapses to one command. Exits 0 on PARSE OK, non-zero on FAIL —
+	 * scriptable for batch sole-blocker confirmation.
+	 *
+	 * Pairing rule: each `--with <repl>` consumes the immediately
+	 * preceding `--replace <pat>`. Mismatch (more replaces than withs,
+	 * or `--with` first) is a usage error. `--delete <pat>` is the
+	 * shortcut for `--replace <pat> --with ''`. Repeat `--replace
+	 * <pat>` / `--delete <pat>` for multi-substitution; subs apply in
+	 * the order given. Substitutions are literal (no regex). Replaces
+	 * EVERY occurrence (`StringTools.replace` semantics) — use a more
+	 * specific pattern when only the first match should change.
+	 *
+	 * Lit-stripping context: `.hxtest` corpus fixtures carry a JSON
+	 * config block above a `---` separator. Strip operates on raw bytes;
+	 * pass an `.hx` scratch extract (the post-`---` body) or accept
+	 * that the config bytes will pass through unchanged.
+	 */
+	private static function runStrip(args:Array<String>):Int {
+		var lang:String = 'haxe';
+		var showSource:Bool = false;
+		var file:Null<String> = null;
+		final patterns:Array<String> = [];
+		final replacements:Array<String> = [];
+		var pendingReplace:Null<String> = null;
+
+		var i:Int = 0;
+		while (i < args.length) {
+			final a:String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--replace':
+					if (pendingReplace != null) {
+						stderr('apq strip: --replace "$pendingReplace" needs a --with before the next --replace\n');
+						return EXIT_USAGE;
+					}
+					pendingReplace = expectValue(args, ++i, '--replace');
+				case '--with':
+					if (pendingReplace == null) {
+						stderr('apq strip: --with requires a preceding --replace\n');
+						return EXIT_USAGE;
+					}
+					patterns.push(pendingReplace);
+					replacements.push(expectValue(args, ++i, '--with'));
+					pendingReplace = null;
+				case '--delete':
+					if (pendingReplace != null) {
+						stderr('apq strip: --replace "$pendingReplace" needs a --with before --delete\n');
+						return EXIT_USAGE;
+					}
+					patterns.push(expectValue(args, ++i, '--delete'));
+					replacements.push('');
+				case '--show':
+					showSource = true;
+				case '-h', '--help':
+					printStripUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq strip: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (file != null) {
+						stderr('apq strip: only one file argument supported (got "$file" and "$a")\n');
+						return EXIT_USAGE;
+					}
+					file = a;
+			}
+			i++;
+		}
+		if (pendingReplace != null) {
+			stderr('apq strip: --replace "$pendingReplace" needs a --with\n');
+			return EXIT_USAGE;
+		}
+		if (file == null) {
+			stderr('apq strip: missing <file> argument\n');
+			printStripUsage();
+			return EXIT_USAGE;
+		}
+		if (patterns.length == 0) {
+			stderr('apq strip: missing at least one --replace/--with or --delete\n');
+			printStripUsage();
+			return EXIT_USAGE;
+		}
+		final filePath:String = file;
+		final source:String = readFile(filePath);
+		var stripped:String = source;
+		for (idx in 0...patterns.length)
+			stripped = StringTools.replace(stripped, patterns[idx], replacements[idx]);
+		if (stripped == source) {
+			stderr('apq strip: WARNING: no substitution changed the source (patterns matched 0 occurrences)\n');
+		}
+		if (showSource) {
+			stderr('--- stripped source ---\n$stripped\n--- end ---\n');
+		}
+		final plugin:GrammarPlugin = pickPlugin(lang);
+		try {
+			plugin.parseFile(stripped);
+			sysPrint('PARSE OK\n');
+			return EXIT_OK;
+		} catch (e:ParseError) {
+			sysPrint('PARSE FAIL: ${e.toString()}\n');
+			return EXIT_RUNTIME;
+		} catch (e:Exception) {
+			sysPrint('PARSE FAIL: ${e.message}\n');
+			return EXIT_RUNTIME;
+		}
+	}
+
+	private static function printStripUsage():Void {
+		sysPrint('Usage: apq strip [options] <file> --replace <pat> --with <repl> [...]\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --replace <pat>     Literal substring to replace (paired with the next --with)\n');
+		sysPrint('  --with <repl>       Replacement for the most recent --replace\n');
+		sysPrint('  --delete <pat>      Shortcut for --replace <pat> --with \'\'\n');
+		sysPrint('  --show              Dump the stripped source to stderr (debug)\n');
+		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('\n');
+		sysPrint("Apply literal substitutions in order, then parse the result via the\n");
+		sysPrint("grammar plugin. Emits PARSE OK / PARSE FAIL: <err> and exits 0/2 —\n");
+		sysPrint("scriptable sole-blocker confirmation for the skip-parse campaign.\n");
+		sysPrint("StringTools.replace semantics: every occurrence is replaced.\n");
+	}
+
+	/**
 	 * `apq lit <text> <file-or-dir-or-glob>...` — leaf-name probe over
 	 * the parsed AST. Default kind filter `Literal` catches every
 	 * string-literal occurrence (the leaf inside `SingleStringExpr`
@@ -509,7 +643,10 @@ final class Cli {
 		var exact:Bool = false;
 		var flat:Bool = false;
 		var limit:Int = -1;
-		var kindFilter:Array<String> = ['Literal'];
+		// `null` = use smart default (resolved from <text> shape AFTER parsing
+		// — camelCase / snake_case → Literal+IdentExpr, otherwise Literal).
+		// Empty array = explicit `--any-kind`. Non-empty = explicit `--kind`.
+		var kindFilter:Null<Array<String>> = null;
 		var target:Null<String> = null;
 		final inputSpecs:Array<String> = [];
 
@@ -556,6 +693,20 @@ final class Cli {
 			return EXIT_USAGE;
 		}
 		final targetStr:String = target;
+		// Resolve smart-default kind filter from <text> shape:
+		// `trailOptShapeGate` / `MAX_LEN` / `endsWith_close_brace` look like
+		// identifiers, the default `Literal`-only would silently miss the
+		// `IdentExpr` / field-name leaves and force a re-run with
+		// `--kind Literal,IdentExpr` or `--any-kind`. Promote the default
+		// to `Literal,IdentExpr` for queries whose shape is unambiguously
+		// an identifier (camelCase: mixed-case letters; snake_case:
+		// contains `_` plus letters). Pure-lowercase / all-uppercase single
+		// words stay `Literal`-only — they ambiguously match string content
+		// and an `IdentExpr` widening would add noise (e.g. `hxq lit 'foo'`
+		// inside a corpus of strings).
+		final effectiveKindFilter:Array<String> = kindFilter != null
+			? kindFilter
+			: (looksLikeMixedIdentifier(targetStr) ? ['Literal', 'IdentExpr'] : ['Literal']);
 
 		final plugin:GrammarPlugin = pickPlugin(lang);
 		final expanded:{paths:Array<String>, singleFile:Bool} = expandInputs(inputSpecs, '.hx');
@@ -576,7 +727,7 @@ final class Cli {
 				skipPaths.push(path);
 				continue;
 			}
-			final hits:Array<LitHit> = Lit.find(targetStr, tree, exact, kindFilter);
+			final hits:Array<LitHit> = Lit.find(targetStr, tree, exact, effectiveKindFilter);
 			if (hits.length == 0) continue;
 			allEntries.push({file: path, source: source, hits: hits});
 		}
@@ -1131,6 +1282,7 @@ final class Cli {
 		var wantDoc:Bool = false;
 		var wantSource:Bool = false;
 		var writerOutput:Bool = false;
+		var writerDiff:Bool = false;
 		var minChildren:Int = -1;
 		var maxChildren:Int = -1;
 		var file:Null<String> = null;
@@ -1161,6 +1313,8 @@ final class Cli {
 					wantSource = true;
 				case '--writer-output':
 					writerOutput = true;
+				case '--diff':
+					writerDiff = true;
 				case '--min-children':
 					final v:String = expectValue(args, ++i, '--min-children');
 					final parsed:Null<Int> = Std.parseInt(v);
@@ -1224,6 +1378,13 @@ final class Cli {
 		// --depth / --doc / --source — emits the formatted source to stdout
 		// and exits. Used for fast writer-bug iteration (a single command
 		// vs full test runner round-trip).
+		//
+		// `--writer-output --diff`: instead of printing the emitted source,
+		// parse it back and structurally AST-diff against the parsed input.
+		// THE writer-bug iteration loop: see structurally what the writer
+		// added / removed / reshaped in one shot, without a second `hxq diff`
+		// call. Exit non-zero when the writer output fails to re-parse
+		// (writer produced syntactically broken Haxe).
 		if (writerOutput) {
 			final emitted:Null<String> = try plugin.writeRoundTrip(source) catch (e:ParseError) {
 				stderr('apq ast: $file: ${e.toString()}\n');
@@ -1236,8 +1397,34 @@ final class Cli {
 				stderr('apq ast: --writer-output: no writer wired up for lang "$lang"\n');
 				return EXIT_USAGE;
 			}
-			sysPrint(emitted);
+			if (!writerDiff) {
+				sysPrint(emitted);
+				return EXIT_OK;
+			}
+			final emittedSrc:String = emitted;
+			final treeIn:QueryNode = try plugin.parseFile(source) catch (e:ParseError) {
+				stderr('apq ast: --writer-output --diff: input $file: ${e.toString()}\n');
+				return EXIT_RUNTIME;
+			} catch (e:Exception) {
+				stderr('apq ast: --writer-output --diff: input $file: ${e.message}\n');
+				return EXIT_RUNTIME;
+			}
+			final treeOut:QueryNode = try plugin.parseFile(emittedSrc) catch (e:ParseError) {
+				stderr('apq ast: --writer-output --diff: writer output failed to re-parse: ${e.toString()}\n');
+				stderr('--- writer output ---\n$emittedSrc\n--- end ---\n');
+				return EXIT_RUNTIME;
+			} catch (e:Exception) {
+				stderr('apq ast: --writer-output --diff: writer output failed to re-parse: ${e.message}\n');
+				stderr('--- writer output ---\n$emittedSrc\n--- end ---\n');
+				return EXIT_RUNTIME;
+			}
+			final hits:Array<DiffHit> = Diff.diff(treeIn, treeOut);
+			sysPrint(Diff.render(file, source, '<writer-output>', emittedSrc, hits, false));
 			return EXIT_OK;
+		}
+		if (writerDiff) {
+			stderr('apq ast: --diff requires --writer-output (it diffs input vs writer-emitted output)\n');
+			return EXIT_USAGE;
 		}
 
 		final tree:QueryNode = try plugin.parseFile(source) catch (e:ParseError) {
@@ -1405,6 +1592,8 @@ final class Cli {
 		sysPrint('  blast    Change-impact checklist (uses + refs + member-access)\n');
 		sysPrint('  lit      Leaf-name probe (string literals, identifiers — prose-in-code)\n');
 		sysPrint('  mentions Every named-leaf occurrence (uses + refs + lit --any-kind --exact)\n');
+		sysPrint('  diff     Structural AST diff between two files\n');
+		sysPrint('  strip    Sed-strip + parse-check (sole-blocker confirmation)\n');
 		sysPrint('\n');
 		sysPrint('Global options:\n');
 		sysPrint('  --lang <name>   Pick grammar plugin (default: haxe)\n');
@@ -1435,18 +1624,21 @@ final class Cli {
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --exact             Require exact string equality (default: substring)\n');
-		sysPrint('  --kind <K1,K2,...>  Restrict to leaves of these kinds (default: Literal)\n');
+		sysPrint('  --kind <K1,K2,...>  Restrict to leaves of these kinds (default: shape-based, see below)\n');
 		sysPrint('  --any-kind          Match every named leaf regardless of kind\n');
 		sysPrint('  --flat              Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
 		sysPrint('  --limit <n>         Stop after n hits total (default: no limit)\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 		sysPrint('\n');
 		sysPrint("Walks parsed AST for leaf nodes whose `name` slot matches <text>.\n");
-		sysPrint("Default `--kind Literal` catches string-literal contents only —\n");
-		sysPrint("the structural alternative to `# HXQ_OK:prose` grep for annotation-\n");
-		sysPrint("key / config-string lookups (e.g. `apq lit 'lit.kwText' src/`).\n");
-		sysPrint("Skips comments and string interpolation as a side effect of routing\n");
-		sysPrint("through the parser — no false positives from doc-comments.\n");
+		sysPrint("Smart-default --kind: when <text> is camelCase / snake_case the\n");
+		sysPrint("default widens to `Literal,IdentExpr` (clearly an identifier query —\n");
+		sysPrint("`hxq lit trailOptShapeGate src/` finds both literals and identifier\n");
+		sysPrint("references without a re-run). Pure-lowercase / all-uppercase single\n");
+		sysPrint("words stay `Literal`-only — they ambiguously match string content and\n");
+		sysPrint("identifier widening would flood prose hits. Override with --kind /\n");
+		sysPrint("--any-kind. Skips comments and string interpolation as a side effect\n");
+		sysPrint("of routing through the parser — no false positives from doc-comments.\n");
 	}
 
 	private static function printBlastUsage():Void {
@@ -1551,6 +1743,7 @@ final class Cli {
 		sysPrint('  --min-children <n>  With --select: keep only matches with >= n direct children (e.g. multi-arg ParamCtor)\n');
 		sysPrint('  --max-children <n>  With --select: keep only matches with <= n direct children\n');
 		sysPrint('  --writer-output     Parse + format-write through the plugin pipeline and print the emitted source\n');
+		sysPrint('  --diff              With --writer-output: AST-diff the input against the emitted output (writer-bug loop)\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 	}
 
@@ -1609,6 +1802,52 @@ final class Cli {
 		final c:Int = StringTools.fastCodeAt(s, 0);
 		if (c < 'A'.code || c > 'Z'.code) return false;
 		return s.indexOf('/') < 0 && s.indexOf('.') < 0;
+	}
+
+	/**
+	 * Heuristic: is the string clearly an identifier rather than a string
+	 * fragment? Drives `lit`'s smart-default kind filter — when the query
+	 * is camelCase (`trailOptShapeGate`) or snake_case (`MAX_LEN`,
+	 * `endsWith_close_brace`) the user almost always wants the identifier
+	 * tier promoted alongside `Literal`. Pure-lowercase single words
+	 * (`foo`) and all-uppercase single words (`API`) stay ambiguous and
+	 * keep the conservative `Literal`-only default — widening them would
+	 * flood the result with prose hits.
+	 *
+	 * Rule: every char is alpha / digit / `_`, AND the string contains
+	 * either a lower-then-upper transition (camelCase) or a `_` between
+	 * letters (snake_case). Single letters / pure digits / strings with
+	 * spaces / punctuation never qualify.
+	 */
+	private static function looksLikeMixedIdentifier(s:String):Bool {
+		if (s.length < 2) return false;
+		var hasLower:Bool = false;
+		var hasUpper:Bool = false;
+		var hasUnderscore:Bool = false;
+		var hasLetter:Bool = false;
+		var mixedTransition:Bool = false;
+		var prevLower:Bool = false;
+		for (idx in 0...s.length) {
+			final c:Int = StringTools.fastCodeAt(s, idx);
+			final isLower:Bool = c >= 'a'.code && c <= 'z'.code;
+			final isUpper:Bool = c >= 'A'.code && c <= 'Z'.code;
+			final isDigit:Bool = c >= '0'.code && c <= '9'.code;
+			final isUnderscore:Bool = c == '_'.code;
+			if (!(isLower || isUpper || isDigit || isUnderscore)) return false;
+			if (isLower) { hasLower = true; hasLetter = true; }
+			if (isUpper) {
+				hasUpper = true; hasLetter = true;
+				if (prevLower) mixedTransition = true;
+			}
+			if (isUnderscore) hasUnderscore = true;
+			prevLower = isLower;
+		}
+		if (!hasLetter) return false;
+		// camelCase / PascalCase-with-internal-lower: lower→upper transition
+		if (mixedTransition) return true;
+		// snake_case: `_` between identifier chars
+		if (hasUnderscore && (hasLower || hasUpper)) return true;
+		return false;
 	}
 
 	/**
@@ -1695,7 +1934,10 @@ final class Cli {
 				case 'blast':
 					' — no declaration of "$n" in the scanned set (the heuristic section needs it). Either widen the scan, or use apq uses $n <dir> + apq refs $n <dir> directly.';
 				case 'lit':
-					' — no string-literal content matches "$n" (default: substring on Literal leaves; --exact for full equality). Widen the kind set with --kind Literal,IdentExpr or --any-kind (catches every leaf — incl. field-name slots), or try: apq refs $n <dir> --decls.';
+					if (looksLikeMixedIdentifier(n))
+						' — no Literal/IdentExpr leaf matches "$n" (camelCase/snake_case query → default kind widened to Literal+IdentExpr; --exact for full equality). Try --any-kind (every leaf — incl. field-name slots), apq refs $n <dir> --decls, or apq search \'$$x.$n\' <dir> (field-access shape).';
+					else
+						' — no string-literal content matches "$n" (default: substring on Literal leaves; --exact for full equality). Widen the kind set with --kind Literal,IdentExpr or --any-kind (catches every leaf — incl. field-name slots), or try: apq refs $n <dir> --decls.';
 				case 'meta':
 					''; // meta has no <name> arg (annotation is its own thing) — leave silent.
 				case _:
