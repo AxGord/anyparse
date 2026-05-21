@@ -1,0 +1,10 @@
+# Phase 3 skip-parse drill recon — rebuild after any grammar edit.
+# Runtime requires the haxe-formatter fork checkout: set
+# `ANYPARSE_HXFORMAT_FORK=/path/to/haxe-formatter` and run
+# `node /tmp/recon.js` (or pass a single .hxtest path as argv[0] to
+# probe one file).
+-cp src
+-cp test
+-lib hxnodejs
+-main _ReconSkipParse
+-js /tmp/recon.js

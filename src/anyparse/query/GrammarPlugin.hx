@@ -81,6 +81,20 @@ interface GrammarPlugin {
 	 * `parseFileTypeRefs`.
 	 */
 	public function typeRefShape():TypeRefShape;
+
+	/**
+	 * Optional: parse `source` with the grammar's pretty-printer-aware
+	 * pipeline (the format that preserves comments / blank lines where
+	 * available) and emit the formatted source back. Used by `apq ast
+	 * --writer-output` for fast writer-bug iteration without round-trip
+	 * through the project's test runner.
+	 *
+	 * Return `null` when the grammar plugin has no writer wired up — the
+	 * CLI surfaces a "no writer for lang X" error.
+	 *
+	 * Plugins may throw on parse failure; callers handle the exception.
+	 */
+	public function writeRoundTrip(source:String):Null<String>;
 }
 
 /**

@@ -4,6 +4,8 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.MetaShape;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.GrammarPlugin.TypeRefShape;
+import anyparse.query.Diff;
+import anyparse.query.Diff.DiffHit;
 import anyparse.query.Lit.LitHit;
 import anyparse.query.Matcher.Match;
 import anyparse.query.Meta.MetaHit;
@@ -78,6 +80,7 @@ final class Cli {
 			case 'blast': return runBlast(rest);
 			case 'lit': return runLit(rest);
 			case 'mentions': return runMentions(rest);
+			case 'diff': return runDiff(rest);
 			case _:
 				stderr('apq: unknown subcommand "$cmd"\n');
 				printUsage();
@@ -395,6 +398,97 @@ final class Cli {
 			for (entry in shown) sysPrint(Text.renderMeta(entry.file, entry.source, entry.hits, flat));
 		}
 		return EXIT_OK;
+	}
+
+	/**
+	 * `apq diff <a> <b>` — structural AST diff between two parseable
+	 * source files. Output is `file:L:C ↔ file:L:C: <diff>` per hit.
+	 * The pair walk is top-down without LCS realignment: it surfaces
+	 * "single edit" / "end-of-list change" / "subtree swap" cleanly,
+	 * but a mid-list insert into a long Star cascades every following
+	 * sibling as `differs`. For those cases use byte diff or `--limit`.
+	 */
+	private static function runDiff(args:Array<String>):Int {
+		var lang:String = 'haxe';
+		var flat:Bool = false;
+		var limit:Int = -1;
+		var fileA:Null<String> = null;
+		var fileB:Null<String> = null;
+
+		var i:Int = 0;
+		while (i < args.length) {
+			final a:String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--flat':
+					flat = true;
+				case '--limit':
+					try limit = parseLimit(args, ++i) catch (e:Exception) {
+						stderr('${e.message}\n');
+						return EXIT_USAGE;
+					}
+				case '-h', '--help':
+					printDiffUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq diff: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (fileA == null) fileA = a;
+					else if (fileB == null) fileB = a;
+					else {
+						stderr('apq diff: only two file arguments supported (got "$fileA", "$fileB", "$a")\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (fileA == null || fileB == null) {
+			stderr('apq diff: missing <a> <b> arguments\n');
+			printDiffUsage();
+			return EXIT_USAGE;
+		}
+		final a:String = fileA;
+		final b:String = fileB;
+
+		final plugin:GrammarPlugin = pickPlugin(lang);
+		final sourceA:String = readFile(a);
+		final sourceB:String = readFile(b);
+		final treeA:QueryNode = try plugin.parseFile(sourceA) catch (e:ParseError) {
+			stderr('apq diff: $a: ${e.toString()}\n');
+			return EXIT_RUNTIME;
+		} catch (e:Exception) {
+			stderr('apq diff: $a: ${e.message}\n');
+			return EXIT_RUNTIME;
+		}
+		final treeB:QueryNode = try plugin.parseFile(sourceB) catch (e:ParseError) {
+			stderr('apq diff: $b: ${e.toString()}\n');
+			return EXIT_RUNTIME;
+		} catch (e:Exception) {
+			stderr('apq diff: $b: ${e.message}\n');
+			return EXIT_RUNTIME;
+		}
+
+		var hits:Array<DiffHit> = Diff.diff(treeA, treeB);
+		if (limit >= 0 && hits.length > limit) hits = hits.slice(0, limit);
+		sysPrint(Diff.render(a, sourceA, b, sourceB, hits, flat));
+		return EXIT_OK;
+	}
+
+	private static function printDiffUsage():Void {
+		sysPrint('Usage: apq diff [options] <a> <b>\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --flat              Legacy flat `file:line:col:` per-hit format (default: paired-header)\n');
+		sysPrint('  --limit <n>         Stop after n hits (default: no limit)\n');
+		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('\n');
+		sysPrint("Structural AST diff: walks both trees pairwise and reports nodes\n");
+		sysPrint("where kind / name slot / child count diverges. No LCS realignment\n");
+		sysPrint("— mid-list inserts cascade the tail as `differs`. Useful for strip-\n");
+		sysPrint("test reconciliation when a byte diff is whitespace-noisy.\n");
 	}
 
 	/**
@@ -1036,6 +1130,7 @@ final class Cli {
 		var atExpr:Null<String> = null;
 		var wantDoc:Bool = false;
 		var wantSource:Bool = false;
+		var writerOutput:Bool = false;
 		var minChildren:Int = -1;
 		var maxChildren:Int = -1;
 		var file:Null<String> = null;
@@ -1064,6 +1159,8 @@ final class Cli {
 					wantDoc = true;
 				case '--source':
 					wantSource = true;
+				case '--writer-output':
+					writerOutput = true;
 				case '--min-children':
 					final v:String = expectValue(args, ++i, '--min-children');
 					final parsed:Null<Int> = Std.parseInt(v);
@@ -1121,6 +1218,28 @@ final class Cli {
 		}
 		final plugin:GrammarPlugin = pickPlugin(lang);
 		final source:String = readFile(file);
+
+		// `--writer-output`: parse + format-write through the plugin's
+		// round-trip pipeline. Independent of --select / --at / --json /
+		// --depth / --doc / --source — emits the formatted source to stdout
+		// and exits. Used for fast writer-bug iteration (a single command
+		// vs full test runner round-trip).
+		if (writerOutput) {
+			final emitted:Null<String> = try plugin.writeRoundTrip(source) catch (e:ParseError) {
+				stderr('apq ast: $file: ${e.toString()}\n');
+				return EXIT_RUNTIME;
+			} catch (e:Exception) {
+				stderr('apq ast: $file: ${e.message}\n');
+				return EXIT_RUNTIME;
+			}
+			if (emitted == null) {
+				stderr('apq ast: --writer-output: no writer wired up for lang "$lang"\n');
+				return EXIT_USAGE;
+			}
+			sysPrint(emitted);
+			return EXIT_OK;
+		}
+
 		final tree:QueryNode = try plugin.parseFile(source) catch (e:ParseError) {
 			stderr('apq ast: $file: ${e.toString()}\n');
 			return EXIT_RUNTIME;
@@ -1431,6 +1550,7 @@ final class Cli {
 		sysPrint('  --source            With --select/--at: emit the match\'s verbatim source slice\n');
 		sysPrint('  --min-children <n>  With --select: keep only matches with >= n direct children (e.g. multi-arg ParamCtor)\n');
 		sysPrint('  --max-children <n>  With --select: keep only matches with <= n direct children\n');
+		sysPrint('  --writer-output     Parse + format-write through the plugin pipeline and print the emitted source\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 	}
 
@@ -1575,7 +1695,7 @@ final class Cli {
 				case 'blast':
 					' — no declaration of "$n" in the scanned set (the heuristic section needs it). Either widen the scan, or use apq uses $n <dir> + apq refs $n <dir> directly.';
 				case 'lit':
-					' — no string-literal content matches "$n". Default --kind is Literal; widen with --kind Literal,IdentExpr or --any-kind, or try: apq refs $n <dir> --decls.';
+					' — no string-literal content matches "$n" (default: substring on Literal leaves; --exact for full equality). Widen the kind set with --kind Literal,IdentExpr or --any-kind (catches every leaf — incl. field-name slots), or try: apq refs $n <dir> --decls.';
 				case 'meta':
 					''; // meta has no <name> arg (annotation is its own thing) — leave silent.
 				case _:

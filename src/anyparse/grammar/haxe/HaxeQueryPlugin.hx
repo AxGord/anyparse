@@ -106,6 +106,19 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		return buildTree(source, true);
 	}
 
+	/**
+	 * Parse + write round-trip via the Trivia pipeline so comments and
+	 * blank lines survive. Uses `HaxeFormat.instance.defaultWriteOptions`
+	 * — the same defaults the corpus harness uses when no `hxformat.json`
+	 * config is provided. Used by `apq ast --writer-output` for
+	 * writer-bug probes without going through the full test runner.
+	 */
+	public function writeRoundTrip(source:String):Null<String> {
+		final tree:Dynamic = HaxeModuleTriviaParser.parse(source);
+		final opts:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
+		return HaxeModuleTriviaWriter.write(tree, opts);
+	}
+
 	private function buildTree(source:String, withTypeRefs:Bool):QueryNode {
 		final root:Dynamic = HaxeModuleSpanParser.parse(source);
 		final children:Array<QueryNode> = [];

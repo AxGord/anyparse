@@ -43,7 +43,11 @@ final class _ReconSkipParse {
 		}
 		final root:Null<String> = HxFormatterCorpusHelpers.forkRoot();
 		if (root == null) {
-			Sys.println('RECON: ANYPARSE_HXFORMAT_FORK unset/missing — abort');
+			Sys.println('RECON: ANYPARSE_HXFORMAT_FORK env var unset or points at a missing dir — abort.');
+			Sys.println('  set it to the haxe-formatter fork checkout containing test/testcases/, e.g.:');
+			Sys.println('    ANYPARSE_HXFORMAT_FORK=/path/to/haxe-formatter node /tmp/recon.js');
+			Sys.println('  rebuild after a grammar edit with:');
+			Sys.println('    haxe recon.hxml');
 			return;
 		}
 		final msgCounts:Map<String, Int> = [];
