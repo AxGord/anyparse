@@ -126,6 +126,23 @@ final class HxExprUtil {
 	}
 
 	/**
+	 * HxExpr `*Assign` ctor names — every right-associative `=` infix
+	 * (`Assign` plus the 14 compound forms `+=` / `-=` / `*=` / `/=` /
+	 * `%=` / `<<=` / `>>>=` / `>>=` / `|=` / `&=` / `^=` / `??=` /
+	 * `&&=` / `||=`). Used by `stmtExprNoSemi` to walk through an
+	 * assignment-statement's right operand: the last token of
+	 * `x = if (…) {…} else {…}` is the `}` of the else block, so the
+	 * trailing `;` is optional just like for a bare `if (…) {…} else
+	 * {…}` statement.
+	 */
+	private static final ASSIGN_CTORS:Array<String> = [
+		'Assign', 'AddAssign', 'SubAssign', 'MulAssign', 'DivAssign',
+		'ModAssign', 'ShlAssign', 'UShrAssign', 'ShrAssign',
+		'BitOrAssign', 'BitAndAssign', 'BitXorAssign',
+		'NullCoalAssign', 'BoolAndAssign', 'BoolOrAssign',
+	];
+
+	/**
 	 * True iff `raw`, standing as a statement (`HxStatement.ExprStmt`),
 	 * is `}`-terminated so Haxe needs no trailing `;`. Drives the
 	 * parser-side `@:fmt(trailOptParseGate('stmtExprNoSemi'))` gate on
@@ -140,20 +157,38 @@ final class HxExprUtil {
 	 *  - `MacroExpr` whose operand is `BlockExpr` (`macro { … }`) or is
 	 *    itself in this set (`macro switch (e) { … }`,
 	 *    `macro try { … } catch …`) — recursive.
+	 *  - `Assign` / compound-assign (`+=`, `??=`, `&&=`, …) whose right
+	 *    operand recursively satisfies the predicate — e.g.
+	 *    `fun.expr = if (…) {…} else {…}`, `x += switch (e) { … }`.
+	 *    The last token of the statement IS the RHS's last token, so
+	 *    the same `}`-terminated rule applies.
+	 *  - `IfExpr` whose `else` branch is block-shaped (recursive on
+	 *    `elseBranch`, or `thenBranch` when there is no `else`) —
+	 *    `if (…) {…} else {…}` reaches `ExprStmt` only via Assign /
+	 *    paren / arrow RHS; the statement-position `if` routes through
+	 *    `HxStatement.IfStmt` instead.
+	 *  - `BlockExpr` — recursion target only (a standalone block at
+	 *    statement position is `HxStatement.BlockStmt`, never
+	 *    `ExprStmt(BlockExpr)`), reached when an Assign's RHS or the
+	 *    body of an `IfExpr` branch is `{ … }`.
 	 *  - Everything `endsWithCloseBrace` accepts (`SwitchExpr` /
 	 *    `SwitchExprBare` / `FnExpr` block-body / `TryExpr` recursive):
 	 *    as a statement these are `}`-terminated too.
 	 *
 	 * **`;` required** (gate false): every other shape — `Call`,
-	 * assignment, binop, `IfExpr`, object literal, etc. (a bare
-	 * `BlockExpr` reaches `HxStatement.BlockStmt`, not `ExprStmt`).
+	 * non-assign binop, ternary, object literal at top-level Assign
+	 * RHS (`x = {a: 1}` keeps `;` — the corpus does not exempt it),
+	 * etc.
 	 *
 	 * Distinct from `endsWithCloseBrace` (the writer-side `var x = …`
 	 * rhs predicate), which deliberately returns `false` for
-	 * `MacroExpr` / `BlockExpr` — the parser-statement gate needs the
-	 * opposite answer for `macro { … }`. `endsWithCloseBrace` is reused
-	 * read-only for the non-`MacroExpr` cases (the answer coincides
-	 * there) and is NOT modified.
+	 * `MacroExpr` / `BlockExpr` / `IfExpr` — the parser-statement gate
+	 * needs the opposite answer for `macro { … }` and the Slice 19
+	 * Assign / IfExpr cases. `endsWithCloseBrace` is reused read-only
+	 * for the non-recursive tail cases (`SwitchExpr` etc., where the
+	 * answer coincides) and is NOT modified — `VarStmt`/`FinalStmt`'s
+	 * `@:fmt(trailOptShapeGate('endsWithCloseBrace'))` gate keeps its
+	 * stricter behaviour.
 	 *
 	 * `Dynamic` argument so the same predicate fires on Plain-mode
 	 * `HxExpr` enum values and Trivia-mode `Trivial<HxExprT>` wrappers
@@ -176,6 +211,35 @@ final class HxExprUtil {
 			final operandCtor:Null<String> = Type.enumConstructor(operand);
 			return operandCtor == 'BlockExpr' || stmtExprNoSemi(operand);
 		}
+		// Slice 19: walk through `*Assign` into its right operand —
+		// `x = if (…) {…} else {…}` ends with the else block's `}`.
+		if (ASSIGN_CTORS.contains(ctor)) {
+			final params:Null<Array<Dynamic>> = Type.enumParameters(e);
+			if (params == null || params.length < 2) return false;
+			return stmtExprNoSemi(params[1]);
+		}
+		// Slice 19: an `IfExpr` carries `thenBranch`/`elseBranch`; the
+		// statement's last token is the else branch's last token, or
+		// the then branch's when there is no `else`. `params[0]` is the
+		// `HxIfExpr` struct (Plain) / `HxIfExprT` struct (Trivia) — no
+		// outer enum wrapper, so we read its fields directly. The field
+		// values ARE wrapped (Plain `HxExpr` enum / Trivia `Trivial<HxExprT>`
+		// struct) so we run them through `stmtExprNoSemi` which calls
+		// `unwrap` at entry.
+		if (ctor == 'IfExpr') {
+			final params:Null<Array<Dynamic>> = Type.enumParameters(e);
+			if (params == null || params.length == 0) return false;
+			final ifExpr:Null<Dynamic> = params[0];
+			if (ifExpr == null) return false;
+			final elseBranch:Null<Dynamic> = Reflect.field(ifExpr, 'elseBranch');
+			if (elseBranch != null) return stmtExprNoSemi(elseBranch);
+			final thenBranch:Null<Dynamic> = Reflect.field(ifExpr, 'thenBranch');
+			return thenBranch != null && stmtExprNoSemi(thenBranch);
+		}
+		// Slice 19: recursion target. Standalone `{ … }` at statement
+		// position is `HxStatement.BlockStmt`, so this branch only
+		// fires when reached through Assign / IfExpr above.
+		if (ctor == 'BlockExpr') return true;
 		return endsWithCloseBrace(e);
 	}
 
