@@ -6986,9 +6986,18 @@ class WriterLowering {
 			// the previous `_docs.push($triviaElemCall)` shape.
 			macro {
 				final _docs:Array<anyparse.core.Doc> = [];
+				// Slice 18g: per-pair `sepBefore` flags so `WrapList.emit`
+				// can suppress the engine's inter-element comma when the
+				// source elided it (canonical: `HxParam.Conditional` body
+				// leading-sep elides the outer `,` ahead of the `#if`).
+				// `_sepBeforeFlags[i] = !_arr[i-1].sepAfter` for i >= 1;
+				// slot 0 is unused. Trailing-comma stays on the existing
+				// `appendTrailingComma` axis. Closes whitespace/issue_582.
+				final _sepBeforeFlags:Array<Bool> = [];
 				var _si2:Int = 0;
 				while (_si2 < _arr.length) {
 					final _t = _arr[_si2];
+					_sepBeforeFlags.push(_si2 == 0 ? false : !_arr[_si2 - 1].sepAfter);
 					final _elemBase:anyparse.core.Doc = $triviaElemCall;
 					final _parts:Array<anyparse.core.Doc> = [];
 					var _ci2:Int = 0;
@@ -7007,7 +7016,7 @@ class WriterLowering {
 				anyparse.format.wrap.WrapList.emit(
 					$v{openText}, $v{closeText}, $v{sepText},
 					_docs, opt, $openInsideDoc, $closeInsideDoc, false, $rulesExpr, $appendTrailingCommaExpr,
-					$wrapLeadFlatDoc, $wrapLeadBreakDoc, $forceExceedsExpr, $wrapTrailBreakDoc, $forceModeExpr, $compactContExpr, $v{groupRestProbe}
+					$wrapLeadFlatDoc, $wrapLeadBreakDoc, $forceExceedsExpr, $wrapTrailBreakDoc, $forceModeExpr, $compactContExpr, $v{groupRestProbe}, _sepBeforeFlags
 				);
 			};
 		} else {

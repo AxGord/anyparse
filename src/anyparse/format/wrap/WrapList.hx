@@ -81,6 +81,25 @@ class WrapList {
 	 * matching fork's `MarkLineEnds.markTypedef` parent-walk forcing
 	 * `=\n{\n\t...\n}` shape regardless of field count or fit.
 	 * Slice ω-typedef-anon-force-multi.
+	 *
+	 * `sepBeforeFlags`: optional per-element `Bool` array, length-aligned
+	 * with `items`. When `flags[i] == true`, the engine SKIPS the
+	 * separator that would otherwise land between `items[i-1]` and
+	 * `items[i]` — used by sep-Stars whose source omits a comma at a
+	 * specific inter-element slot (canonical case: a `Conditional`
+	 * (`#if`/`#end`) ctor inside `HxFnDecl.params` where the source
+	 * elides the outer comma in favour of the cond-comp block's own
+	 * leading sep). `flags[0]` is unused (no element precedes item 0)
+	 * and any out-of-bounds / null treats every slot as sep-emitting,
+	 * keeping pre-slice consumers byte-identical. The trailing-comma
+	 * decision stays on the existing `appendTrailingComma` axis.
+	 * Honoured by `shapeNoWrap`, `shapeOnePerLine`,
+	 * `shapeOnePerLineAfterFirst`, and `shapeFillLine` at chunk
+	 * boundaries; `shapeFillLineWithLeadingBreak`'s `Fill(items,
+	 * softSep)` packing keeps the legacy uniform softSep.
+	 * Slice 18g — first consumer is `HxFnDecl.params` via the wrap-rules
+	 * (`ignoreSourceNewlinesForWrap`) no-trivia branch in
+	 * `triviaSepStarExpr`.
 	 */
 	public static function emit(
 		open:String, close:String, sep:String,
@@ -93,7 +112,8 @@ class WrapList {
 		?trailBreak:Doc,
 		?forceMode:Null<WrapMode>,
 		compactContinuation:Bool = false,
-		groupRestProbe:Bool = false
+		groupRestProbe:Bool = false,
+		?sepBeforeFlags:Array<Bool>
 	):Doc {
 		// `Line('\n')` is not a Haxe-constant default — unwrap a null
 		// sentinel into the legacy hardcoded hardline here.
@@ -218,7 +238,7 @@ class WrapList {
 		// Per-state shape builder: picks the right lead based on the
 		// resolved mode (flat vs break-style layout).
 		function shapeAt(mode:WrapMode, lead:Doc):Doc {
-			final body:Doc = shape(mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreakDoc, groupRestProbe);
+			final body:Doc = shape(mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreakDoc, groupRestProbe, sepBeforeFlags);
 			return prependLead(body, lead);
 		}
 
@@ -721,13 +741,14 @@ class WrapList {
 	private static function shape(
 		mode:WrapMode, open:String, close:String, sep:String,
 		items:Array<Doc>, openInside:Doc, closeInside:Doc, cols:Int,
-		appendTrailingComma:Bool, trailBreak:Doc, groupRestProbe:Bool
+		appendTrailingComma:Bool, trailBreak:Doc, groupRestProbe:Bool,
+		sepBeforeFlags:Null<Array<Bool>>
 	):Doc {
 		return switch mode {
-			case NoWrap: shapeNoWrap(open, close, sep, items, openInside, closeInside);
-			case OnePerLine: shapeOnePerLine(open, close, sep, items, cols, appendTrailingComma, trailBreak);
-			case OnePerLineAfterFirst: shapeOnePerLineAfterFirst(open, close, sep, items, cols, appendTrailingComma);
-			case FillLine: shapeFillLine(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe);
+			case NoWrap: shapeNoWrap(open, close, sep, items, openInside, closeInside, sepBeforeFlags);
+			case OnePerLine: shapeOnePerLine(open, close, sep, items, cols, appendTrailingComma, trailBreak, sepBeforeFlags);
+			case OnePerLineAfterFirst: shapeOnePerLineAfterFirst(open, close, sep, items, cols, appendTrailingComma, sepBeforeFlags);
+			case FillLine: shapeFillLine(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags);
 			case FillLineWithLeadingBreak: shapeFillLineWithLeadingBreak(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
 			// ω-keep-objectlit: Keep cascade hits are pre-empted by the
 			// writer's trivia branch (`triviaSepStarExpr`) — at the engine
@@ -736,7 +757,7 @@ class WrapList {
 			// emit shape lives at the writer, not the engine, because it
 			// needs per-element `Trivial<T>.newlineBefore` access (already
 			// rendered Docs lose that signal).
-			case Keep: shapeNoWrap(open, close, sep, items, openInside, closeInside);
+			case Keep: shapeNoWrap(open, close, sep, items, openInside, closeInside, sepBeforeFlags);
 			// ω-cascade-emits-comments: Ignore is the sister policy on the
 			// source-newline axis. Like Keep, the writer's trivia branch
 			// pre-empts before reaching the engine — the cascade-emit
@@ -744,14 +765,25 @@ class WrapList {
 			// per-element `Trivial<T>.leadingComments` / `trailingComment`
 			// access. Defensive fallback so any leakage produces a
 			// sensible single-line layout.
-			case Ignore: shapeNoWrap(open, close, sep, items, openInside, closeInside);
-			case _: shapeNoWrap(open, close, sep, items, openInside, closeInside);
+			case Ignore: shapeNoWrap(open, close, sep, items, openInside, closeInside, sepBeforeFlags);
+			case _: shapeNoWrap(open, close, sep, items, openInside, closeInside, sepBeforeFlags);
 		};
+	}
+
+	/**
+	 * Slice 18g: returns `true` when `sepBeforeFlags[i]` is set, meaning
+	 * the engine should skip the separator between items `[i-1]` and `i`.
+	 * Null / out-of-bounds is treated as "do not skip" — pre-slice
+	 * behaviour preserved.
+	 */
+	private static inline function skipSepBefore(flags:Null<Array<Bool>>, i:Int):Bool {
+		return flags != null && i >= 0 && i < flags.length && flags[i];
 	}
 
 	private static function shapeNoWrap(
 		open:String, close:String, sep:String, items:Array<Doc>,
-		openInside:Doc, closeInside:Doc
+		openInside:Doc, closeInside:Doc,
+		sepBeforeFlags:Null<Array<Bool>> = null
 	):Doc {
 		// ω-arrow-body-close-paren-own-line slice 2: when the sole item
 		// carries a slice-1 arrow-body-line-wrap marker, escalate the shape
@@ -774,7 +806,13 @@ class WrapList {
 		}
 		final inner:Array<Doc> = [];
 		for (i in 0...items.length) {
-			if (i > 0) inner.push(Text(sep + ' '));
+			if (i > 0)
+				// Slice 18g: `sepBeforeFlags[i] == true` ⇒ source omitted
+				// the comma between items[i-1] and items[i] (canonical:
+				// `Conditional` cond-comp ctor whose body leads with sep).
+				// Emit a bare space so tokens don't glue; everything else
+				// stays byte-identical (`Text(sep + ' ')`).
+				inner.push(skipSepBefore(sepBeforeFlags, i) ? Text(' ') : Text(sep + ' '));
 			inner.push(items[i]);
 		}
 		// ω-force-flat-engine slice D: wrap inner content in `Flatten` so any
@@ -789,13 +827,21 @@ class WrapList {
 
 	private static function shapeOnePerLine(
 		open:String, close:String, sep:String, items:Array<Doc>, cols:Int,
-		appendTrailingComma:Bool, trailBreak:Doc
+		appendTrailingComma:Bool, trailBreak:Doc,
+		sepBeforeFlags:Null<Array<Bool>> = null
 	):Doc {
 		final inner:Array<Doc> = [];
 		for (i in 0...items.length) {
 			inner.push(Line('\n'));
 			inner.push(items[i]);
-			if (i < items.length - 1 || appendTrailingComma) inner.push(Text(sep));
+			final isLast:Bool = i == items.length - 1;
+			// Slice 18g: when `sepBeforeFlags[i+1] == true`, the source had
+			// no separator between this item and the next — suppress this
+			// item's trailing sep. Trailing-comma decision on the LAST item
+			// stays on `appendTrailingComma` (independent axis).
+			final nextSkips:Bool = !isLast && skipSepBefore(sepBeforeFlags, i + 1);
+			if ((!isLast && !nextSkips) || (isLast && appendTrailingComma))
+				inner.push(Text(sep));
 		}
 		// `trailBreak` per-construct rightCurly substitution
 		// (ω-wraplist-trailbreakdoc). Default `Line('\n')` preserves the
@@ -807,13 +853,16 @@ class WrapList {
 
 	private static function shapeOnePerLineAfterFirst(
 		open:String, close:String, sep:String, items:Array<Doc>, cols:Int,
-		appendTrailingComma:Bool
+		appendTrailingComma:Bool,
+		sepBeforeFlags:Null<Array<Bool>> = null
 	):Doc {
 		if (items.length == 1)
 			return Concat([Text(open), items[0], Text(close)]);
 		final tail:Array<Doc> = [];
 		for (i in 1...items.length) {
-			tail.push(Text(sep));
+			// Slice 18g: drop the trailing-sep on the previous item when
+			// the source elided the comma at this slot.
+			if (!skipSepBefore(sepBeforeFlags, i)) tail.push(Text(sep));
 			tail.push(Line('\n'));
 			tail.push(items[i]);
 		}
@@ -828,7 +877,8 @@ class WrapList {
 	private static function shapeFillLine(
 		open:String, close:String, sep:String, items:Array<Doc>,
 		openInside:Doc, closeInside:Doc, cols:Int,
-		appendTrailingComma:Bool, groupRestProbe:Bool
+		appendTrailingComma:Bool, groupRestProbe:Bool,
+		sepBeforeFlags:Null<Array<Bool>> = null
 	):Doc {
 		// Per-gap sep awareness (slice ω-fillline-pergap-sep): items split
 		// into chunks at every leading-hardline boundary. Within each
@@ -939,10 +989,29 @@ class WrapList {
 		var chunkStart:Int = 0;
 		for (i in 1...items.length + 1) {
 			final atEnd:Bool = i == items.length;
-			final hardLed:Bool = !atEnd && hasLeadingHardline(items[i]);
+			// Slice 18g: `sepBeforeFlags[i] == true` also forces a chunk
+			// split before `items[i]` so the inter-element slot routes
+			// through the chunk-boundary path (where the `Text(sep)`
+			// gate below honours the same flag). Without this, both
+			// elements would land in one chunk and be packed via
+			// `Fill(chunk, softSep)` with a uniform sep — no
+			// per-pair elision possible. Closes whitespace/issue_582
+			// where the outer `,` was elided in favour of the cond-comp
+			// body's own leading sep but neither element starts with a
+			// hardline at the Doc level.
+			final hardLed:Bool = !atEnd && (hasLeadingHardline(items[i]) || skipSepBefore(sepBeforeFlags, i));
 			if (atEnd || hardLed) {
 				if (chunkStart > 0) {
-					bodyParts.push(Text(sep));
+					// Slice 18g: the inter-chunk sep belongs immediately
+					// BEFORE `items[chunkStart]` (the first element of the
+					// current chunk we are about to push) — its flag is
+					// `sepBeforeFlags[chunkStart]`. When `true`, suppress
+					// the `Text(sep)` and keep only the forced `Line('\n')`.
+					// Closes whitespace/issue_582 where a `#if … #end`
+					// conditional-param body leads with its own sep and
+					// the outer comma was therefore elided.
+					if (!skipSepBefore(sepBeforeFlags, chunkStart))
+						bodyParts.push(Text(sep));
 					bodyParts.push(Line('\n'));
 				}
 				if (i - chunkStart == 1) {
