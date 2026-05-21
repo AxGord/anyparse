@@ -83,6 +83,7 @@ import unit.HxTypeParensSliceTest;
 import unit.HxTypeIntersectionSliceTest;
 import unit.HxConstStringTypeSliceTest;
 import unit.HxBracketExprListTypeSliceTest;
+import unit.HxInlineExprSliceTest;
 import unit.HxPrefixSliceTest;
 import unit.HxSameLineOptionsTest;
 import unit.HxTrailingCommaOptionsTest;
@@ -237,6 +238,7 @@ class RunTests {
 		runner.addCase(new HxTypeIntersectionSliceTest());
 		runner.addCase(new HxConstStringTypeSliceTest());
 		runner.addCase(new HxBracketExprListTypeSliceTest());
+		runner.addCase(new HxInlineExprSliceTest());
 		runner.addCase(new HxBodySliceTest());
 		runner.addCase(new HxNoBodyAbstractTest());
 		runner.addCase(new HxTernarySliceTest());

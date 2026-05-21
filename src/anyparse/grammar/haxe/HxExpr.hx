@@ -419,6 +419,9 @@ enum HxExpr {
 	@:kw('throw')
 	ThrowExpr(value:HxExpr);
 
+	@:kw('inline')
+	InlineExpr(operand:HxExpr);
+
 	@:kw('function') @:fmt(anonFuncParens)
 	FnExpr(fn:HxFnExpr);
 
