@@ -123,7 +123,7 @@ package anyparse.grammar.haxe;
 typedef HxVarDecl = {
 	@:trivia @:tryparse var meta:Array<HxMetadata>;
 	var name:HxVarNameLit;
-	@:optional @:lead('(') var access:Null<HxAccessClause>;
+	@:optional @:fmt(tightLead) @:lead('(') var access:Null<HxAccessClause>;
 	@:optional @:fmt(typeHintColon,
 		indentValueIfCtor('Anon', 'indentVarTypeHintAnon', 'anonTypeLeftCurly'))
 		@:lead(':') var type:Null<HxType>;

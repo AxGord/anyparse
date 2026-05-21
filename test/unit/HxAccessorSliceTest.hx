@@ -111,4 +111,37 @@ class HxAccessorSliceTest extends HxTestHelpers {
 		roundTrip('class C { final x(get, never):Int; }', 'final accessor idempotency');
 		roundTrip('typedef T = { var x(get, set):Int; }', 'anon accessor idempotency');
 	}
+
+	// -- Slice 26: writer must emit `(...)` tight, no space before `(` or
+	// -- after it. `@:fmt(tightLead)` on `HxVarDecl.access` collapses both
+	// -- the inter-field separator and the post-lead `_dop(' ')` for this
+	// -- single grammar site. Pre-slice bytes: `name ( default, null)`.
+
+	public function testWriterTightOpenParenClassMember():Void {
+		writerEquals(
+			'class C {\n\tpublic var x(default, null):Int;\n}',
+			'class C {\n\tpublic var x(default, null):Int;\n}\n',
+			'tight `(` on class member accessor'
+		);
+	}
+
+	public function testWriterTightOpenParenAnonStruct():Void {
+		// Plain `HxModuleWriter` flattens the anon struct (no trivia
+		// preservation) and re-emits a trailing `;`. The slice 26
+		// invariant under check is just the tight `(default, null)` —
+		// surrounding shape stays whatever the plain writer prints.
+		writerEquals(
+			'typedef T = {\n\tvar x(default, null):Int;\n}',
+			'typedef T = {var x(default, null):Int;};\n',
+			'tight `(` on anon-struct accessor'
+		);
+	}
+
+	public function testWriterTightOpenParenGetSet():Void {
+		writerEquals(
+			'class C {\n\tvar x(get, set):Int;\n}',
+			'class C {\n\tvar x(get, set):Int;\n}\n',
+			'tight `(` on `(get, set)`'
+		);
+	}
 }

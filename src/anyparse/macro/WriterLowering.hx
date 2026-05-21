@@ -2296,6 +2296,7 @@ class WriterLowering {
 							optParts.push(writeCall);
 						}
 					} else if (leadText != null) {
+						final isFieldTight:Bool = child.fmtHasFlag('tightLead');
 						if (isTightLead(leadText)) {
 							// ω-E-whitespace: `@:fmt(typeHintColon)` on
 							// optional-Ref tight leads routes through the same
@@ -2304,6 +2305,18 @@ class WriterLowering {
 							// tight `_dt(leadText)` byte-identical to the pre-
 							// flag path (`f():Void`).
 							optParts.push(whitespacePolicyLead(child, leadText, ['typeHintColon']));
+						} else if (isFieldTight) {
+							// Slice 26 — per-field `@:fmt(tightLead)`: opts an
+							// optional Ref's `@:lead` into tight emission
+							// without joining the format-level `tightLeads`
+							// list. No leading separator, no trailing
+							// `_dop(' ')` — bare `_dt(leadText)` only.
+							// Consumer: `HxVarDecl.access` (`@:lead('(')` for
+							// property accessor clause). Format-level
+							// `tightLeads` can't carry `(` because other
+							// `@:lead('(')` sites (`HxFnDecl.params`,
+							// `HxIfStmt.cond`, etc.) have distinct handlers.
+							optParts.push(macro _dt($v{leadText}));
 						} else if (firstFmtFlag(child, ['typeParamDefaultEquals']) != null) {
 							// ω-typeparam-default-equals: optional non-tight lead with
 							// `@:fmt(typeParamDefaultEquals)` collapses the

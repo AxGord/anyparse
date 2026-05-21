@@ -66,6 +66,17 @@ class HxTestHelpers extends Test {
 		Assert.equals(written1, written2, 'idempotency failed for ${label ?? source}');
 	}
 
+	/**
+	 * Byte-equality writer check: `write(parse(source))` must equal
+	 * `expected`. Strictest writer assertion — catches every spurious
+	 * space/newline. Idempotency alone (`roundTrip`) is not enough
+	 * because a buggy output can round-trip to itself.
+	 */
+	private function writerEquals(source:String, expected:String, ?label:String):Void {
+		final written:String = HxModuleWriter.write(HaxeModuleParser.parse(source));
+		Assert.equals(expected, written, 'writer-equals failed for ${label ?? source}');
+	}
+
 	private function parseSingleVarDecl(source:String):HxVarDecl {
 		final ast:HxClassDecl = HaxeParser.parse(source);
 		Assert.equals(1, ast.members.length);
