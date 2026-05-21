@@ -3921,6 +3921,27 @@ class WriterLowering {
 				if (sepBeforeOpt && lineLengthAwareSeps)
 					Context.fatalError('WriterLowering: @:fmt(sepBeforeOpt) is not compatible with @:fmt(lineLengthAwareSeps)', Context.currentPos());
 				final sepBeforeOptActive:Bool = sepBeforeOpt && ctx.trivia;
+				// ω-condcomp-body-softfill (Slice 18h): plain-mode
+				// `@:sep + @:tryparse` Star with `@:fmt(padLeading[, padTrailing])`
+				// can opt into Wadler `Fill(items, sep)` inter-element layout via
+				// `@:fmt(softFill)`. Items pack inline up to the current line
+				// budget and break the sep before any overflow item at the
+				// surrounding Nest's indent. Closes `whitespace/issue_582…`:
+				// `#if air, p1, p2, …, pN #end` inside an outer function-
+				// signature Star whose source wraps the body across multiple
+				// lines. The flat sep is `Concat([Text(sepText), Line(' ')])` —
+				// flat=`,` + ` `, break=`,` + newline+indent. The current
+				// outer-Group Nest from `wrapRules('functionSignatureWrap')`
+				// supplies the break-mode indent (matches `#if`'s column in
+				// every fork-corpus shape observed for cond-comp params).
+				// Mutually exclusive with `lineLengthAwareSeps` — the latter
+				// owns its own break primitive and the two would double-decide
+				// the wrap.
+				final softFill:Bool = starNode.fmtHasFlag('softFill');
+				if (softFill && lineLengthAwareSeps)
+					Context.fatalError('WriterLowering: @:fmt(softFill) is not compatible with @:fmt(lineLengthAwareSeps)', Context.currentPos());
+				if (softFill && !(padLeading || padTrailing))
+					Context.fatalError('WriterLowering: @:fmt(softFill) requires @:fmt(padLeading) or @:fmt(padTrailing)', Context.currentPos());
 				if (padLeading || padTrailing) {
 					if (lineLengthAwareSeps) {
 						final leadingPush:Expr = padLeading
@@ -3971,7 +3992,34 @@ class WriterLowering {
 						// identical to pre-slice behaviour.
 						final sepTextForInter:Null<String> = starNode.annotations.get('lit.sepText');
 						final interSepText:String = sepTextForInter != null ? sepTextForInter + ' ' : ' ';
-						parts.push(macro {
+						if (softFill) {
+							// ω-condcomp-body-softfill: route inter-element sep
+							// through `Fill(items, Concat([Text(sep), Line(' ')]))`.
+							// Flat mode renders the sep identically to the
+							// pre-softFill `Text(interSepText)` path (`, ` for
+							// sep-bearing Stars, ` ` for sep-less). Break mode
+							// emits `sep` + newline+indent before each overflow
+							// item — Fill picks per-item flat/break against the
+							// current Renderer budget.
+							final interSepLit:String = sepTextForInter ?? '';
+							parts.push(macro {
+								final _arr = $fieldAccess;
+								if (_arr.length == 0) _de()
+								else {
+									final _docs:Array<anyparse.core.Doc> = [];
+									$leadingPush;
+									final _items:Array<anyparse.core.Doc> = [];
+									var _si:Int = 0;
+									while (_si < _arr.length) {
+										_items.push($elemCall);
+										_si++;
+									}
+									_docs.push(_dfill(_items, _dc([_dt($v{interSepLit}), _dl()])));
+									$trailingPush;
+									_dc(_docs);
+								}
+							});
+						} else parts.push(macro {
 							final _arr = $fieldAccess;
 							if (_arr.length == 0) _de()
 							else {
