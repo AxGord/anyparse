@@ -80,6 +80,7 @@ import unit.HxSwitchGuardSliceTest;
 import unit.HxTrailingSepSliceTest;
 import unit.HxTypeParensSliceTest;
 import unit.HxTypeIntersectionSliceTest;
+import unit.HxConstStringTypeSliceTest;
 import unit.HxPrefixSliceTest;
 import unit.HxSameLineOptionsTest;
 import unit.HxTrailingCommaOptionsTest;
@@ -231,6 +232,7 @@ class RunTests {
 		runner.addCase(new HxTrailingSepSliceTest());
 		runner.addCase(new HxTypeParensSliceTest());
 		runner.addCase(new HxTypeIntersectionSliceTest());
+		runner.addCase(new HxConstStringTypeSliceTest());
 		runner.addCase(new HxBodySliceTest());
 		runner.addCase(new HxNoBodyAbstractTest());
 		runner.addCase(new HxTernarySliceTest());

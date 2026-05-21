@@ -138,6 +138,22 @@ enum HxType {
 	@:lead('?')
 	OptionalArg(inner:HxType);
 
+	/**
+	 * Constant string literal in a type-parameter slot —
+	 * `hl.Abstract<"hl_tls">`, `flixel.util.FlxSignal<"foo">`. Single-Ref
+	 * leaf wrapping the existing `HxDoubleStringLit` terminal; dispatch
+	 * is by the terminal's `@:re '"..."'` regex (same path
+	 * `HxExpr.DoubleStringExpr` uses, no `@:lead` needed — `"` is not a
+	 * legal start for any other `HxType` atom). Writer emits the raw
+	 * source slice verbatim via `HxDoubleStringLit`'s `@:rawString`
+	 * carrier, so the construct round-trips byte-identically with zero
+	 * writer fork. Only the string-literal const form is added — `Int`,
+	 * `Float`, identifier consts as type-param values appear in no
+	 * current skip-parse fixture and stay deferred to a follow-up slice
+	 * if they ever land in the corpus.
+	 */
+	ConstStringType(v:HxDoubleStringLit);
+
 	@:kw('#if') @:trail('#end')
 	ConditionalType(c:HxConditionalType);
 
