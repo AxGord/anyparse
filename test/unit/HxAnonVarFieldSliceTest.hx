@@ -232,4 +232,56 @@ class HxAnonVarFieldSliceTest extends HxTestHelpers {
 		roundTrip('class Foo { var s:{ final y:String; }; }', 'single-final');
 		roundTrip('class Foo { var s:{x:Int, y:String}; }', 'short-comma');
 	}
+
+	// ======== Slice 25 — `@:trailOpt(';')` on VarField/FinalField ========
+	// The classic-fork fixture `var x:{var name:Int;}` (no outer-field
+	// `;`, anon close `}` immediately follows the inner anon's close `}`)
+	// pre-slice failed VarField's mandatory `@:trail(';')`. Now `;` is
+	// optional, mirroring the `HxClassMember.VarMember` relaxation
+	// (Slice 13). HxType.Anon's existing `@:sepAlt(';')` close-driven
+	// loop handles the gap between adjacent fields.
+
+	public function testNestedAnonVarFieldNoTrailingSemi():Void {
+		// THE motivator (corpus issue_261, line 51-56 shape):
+		// `var s:{ var name:Int; }` with no outer trailing `;` followed by `}`.
+		final fields:Array<HxAnonField> = anonOf('class Foo { var s:{var x:{var name:Int;}}; }');
+		Assert.equals(1, fields.length);
+		final outer:HxVarDecl = expectVarField(fields[0]);
+		final inner:Array<HxAnonField> = expectAnon(outer.type);
+		Assert.equals(1, inner.length);
+		Assert.equals('name', (expectVarField(inner[0]).name : String));
+	}
+
+	public function testVarFieldNoSemiSingle():Void {
+		// `{ var x:Int }` — single VarField, no trailing `;`.
+		final fields:Array<HxAnonField> = anonOf('class Foo { var s:{var x:Int}; }');
+		Assert.equals(1, fields.length);
+		Assert.equals('x', (expectVarField(fields[0]).name : String));
+	}
+
+	public function testFinalFieldNoSemiSingle():Void {
+		final fields:Array<HxAnonField> = anonOf('class Foo { var s:{final y:Int}; }');
+		Assert.equals(1, fields.length);
+		Assert.equals('y', (expectFinalField(fields[0]).name : String));
+	}
+
+	public function testVarFieldsNoSemiBetween():Void {
+		// `{ var a:Int var b:Int }` — no separator at all between
+		// adjacent VarFields. Parser-side @:trailOpt is unconditional
+		// (same leniency as class-member case in Slice 13). Convergent
+		// with statement-level parser leniency.
+		final fields:Array<HxAnonField> = anonOf('class Foo { var s:{var a:Int var b:Int}; }');
+		Assert.equals(2, fields.length);
+		Assert.equals('a', (expectVarField(fields[0]).name : String));
+		Assert.equals('b', (expectVarField(fields[1]).name : String));
+	}
+
+	public function testPropAccessorAnonNoSemi():Void {
+		// Corpus shape `{ var name(default, never):Type }` with no `;`.
+		final fields:Array<HxAnonField> = anonOf('class Foo { var s:{var name(default, never):Int}; }');
+		Assert.equals(1, fields.length);
+		final decl:HxVarDecl = expectVarField(fields[0]);
+		Assert.equals('name', (decl.name : String));
+		Assert.notNull(decl.access);
+	}
 }

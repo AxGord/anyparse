@@ -37,12 +37,20 @@ package anyparse.grammar.haxe;
  *  - `VarField(decl:HxVarDecl)` — class-notation mutable field
  *    `var name:Type;`. Same shape as `HxClassMember.VarMember`:
  *    `@:kw('var')` enforces a word boundary, the per-branch
- *    `@:trail(';')` consumes the terminator. `HxVarDecl` covers the
- *    optional `:Type` and optional `= init`.
+ *    `@:trailOpt(';')` consumes the terminator if present.
+ *    `HxVarDecl` covers the optional `:Type` and optional `= init`.
+ *    Slice 25 flipped `@:trail` → `@:trailOpt`: the trailing `;` is
+ *    optional so that `var x:{var name:Int;}` (inner anon close `}`
+ *    immediately followed by outer anon close `}` with no field-level
+ *    `;`) parses. Parser-side relaxation is unconditional (mirrors
+ *    `HxClassMember.VarMember` from Slice 13); `HxType.Anon`'s existing
+ *    `@:sepAlt(';')` close-driven loop handles the gap between adjacent
+ *    fields.
  *
  *  - `FinalField(decl:HxVarDecl)` — class-notation immutable field
  *    `final name:Type;`. Mirrors `HxClassMember.FinalMember`; body
- *    shape is identical to `VarField`, only the introducer keyword
+ *    shape is identical to `VarField` including the Slice 25
+ *    `@:trailOpt(';')` relaxation, only the introducer keyword
  *    differs.
  *
  *  - `FnField(decl:HxFnDecl)` — class-notation function field
@@ -87,8 +95,8 @@ package anyparse.grammar.haxe;
 enum HxAnonField {
 	@:lead('?') Optional(field:HxAnonFieldBody);
 	@:lead('>') ExtendsField(type:HxTypeRef);
-	@:kw('var') @:trail(';') VarField(decl:HxVarDecl);
-	@:kw('final') @:trail(';') FinalField(decl:HxVarDecl);
+	@:kw('var') @:trailOpt(';') VarField(decl:HxVarDecl);
+	@:kw('final') @:trailOpt(';') FinalField(decl:HxVarDecl);
 	@:kw('function') FnField(decl:HxFnDecl);
 	Required(field:HxAnonFieldBody);
 }
