@@ -1563,6 +1563,26 @@ final class Cli {
 		var lang:String = 'haxe';
 		var flat:Bool = false;
 		var limit:Int = -1;
+		// `--mechanism <name>` extends `gates` from its original
+		// `trail-opt`-only scope (`@:fmt(trailOptParseGate(...))` /
+		// `trailOptShapeGate(...)`) to other Lowering mechanisms whose
+		// `--predict-relax`-style relaxation potential we want to
+		// inventory ahead of a slice:
+		//   - `optional-ref` — fields with `@:optional` + `@:lead` /
+		//     `@:kw` / `@:absentOn`. Already-relaxed precedent sites.
+		//   - `optional-ref-trail` — Slice 40's new pattern (`@:optional`
+		//     + `@:lead` + `@:trail` on a single Ref), used by
+		//     `HxAbstractDecl.underlyingType`. THE list of bracket-pair
+		//     fields you could optionalize via the Slice 40 mechanism.
+		//   - `mandatory-ref-lead-trail` — Ref fields with `@:lead` +
+		//     `@:trail` (bracket pair) WITHOUT `@:optional`. The
+		//     pre-Slice-40 shape — candidates to relax via Slice 40's
+		//     mechanism. THIS IS THE PREDICT-OPTIONAL FALLBACK list.
+		//   - `kw-lead` — fields with `@:kw`. Slice precedent for word-
+		//     keyword dispatch on a single field.
+		// Default value `trail-opt` preserves the bare `gates` output
+		// 1:1 (existing tests assume this).
+		var mechanism:String = 'trail-opt';
 		final inputSpecs:Array<String> = [];
 
 		var i:Int = 0;
@@ -1578,6 +1598,8 @@ final class Cli {
 						stderr('${e.message}\n');
 						return EXIT_USAGE;
 					}
+				case '--mechanism':
+					mechanism = expectValue(args, ++i, '--mechanism');
 				case '-h', '--help':
 					printGatesUsage();
 					return EXIT_OK;
@@ -1589,6 +1611,13 @@ final class Cli {
 					inputSpecs.push(a);
 			}
 			i++;
+		}
+		final validMechanisms:Array<String> = [
+			'trail-opt', 'optional-ref', 'optional-ref-trail', 'mandatory-ref-lead-trail', 'kw-lead'
+		];
+		if (!validMechanisms.contains(mechanism)) {
+			stderr('apq gates: unknown --mechanism "$mechanism" (valid: ${validMechanisms.join(", ")})\n');
+			return EXIT_USAGE;
 		}
 		// Default scope: the grammar tree for the selected lang.
 		final effectiveSpecs:Array<String> = inputSpecs.length > 0
@@ -1616,26 +1645,28 @@ final class Cli {
 				continue;
 			}
 			final raw:Array<MetaHit> = Meta.find(tree, shape, source);
-			final fileHits:Array<GateHit> = [];
-			for (h in raw) if (h.annotation == '@:fmt') for (arg in h.args) {
-				final extracted:Null<GateExtract> = extractGate(arg);
-				if (extracted == null) continue;
-				if (limit >= 0 && totalHits >= limit) break;
-				fileHits.push({
-					line: h.declSpan != null ? h.declSpan.lineCol(source).line : 0,
-					col: h.declSpan != null ? h.declSpan.lineCol(source).col : 0,
-					declKind: h.declKind,
-					declName: h.declName,
-					gateKind: extracted.gateKind,
-					predicate: extracted.predicate,
-				});
-				totalHits++;
-			}
+			final fileHits:Array<GateHit> = mechanism == 'trail-opt'
+				? collectTrailOptHits(raw, source, limit, totalHits)
+				: collectMechanismHits(raw, source, mechanism, limit, totalHits);
+			totalHits += fileHits.length;
 			if (fileHits.length > 0) allHits.push({file: path, source: source, hits: fileHits});
 		}
 
 		if (allHits.length == 0) {
-			stderr('apq gates: no `@:fmt(trailOptParseGate(...))` / `@:fmt(trailOptShapeGate(...))` annotations in ${paths.length} file(s) scanned\n');
+			final what:String = switch mechanism {
+				case 'trail-opt':
+					'`@:fmt(trailOptParseGate(...))` / `@:fmt(trailOptShapeGate(...))` annotations';
+				case 'optional-ref':
+					'`@:optional` Ref fields with `@:lead` / `@:kw` / `@:absentOn`';
+				case 'optional-ref-trail':
+					'`@:optional @:lead @:trail` Ref fields (Slice 40 bracket-pair pattern)';
+				case 'mandatory-ref-lead-trail':
+					'mandatory Ref fields with `@:lead` + `@:trail` (relax candidates for Slice 40 mechanism)';
+				case 'kw-lead':
+					'fields with `@:kw`';
+				case _: '<unknown mechanism>';
+			};
+			stderr('apq gates: no $what in ${paths.length} file(s) scanned\n');
 			return EXIT_OK;
 		}
 
@@ -1644,10 +1675,160 @@ final class Cli {
 			for (h in entry.hits) {
 				final declLabel:String = h.declName == null ? h.declKind : '${h.declKind} ${h.declName}';
 				final prefix:String = flat ? '${entry.file}:${h.line}:${h.col}: ' : '  ${h.line}:${h.col}: ';
-				sysPrint('$prefix$declLabel → ${h.gateKind}(\'${h.predicate}\')\n');
+				// trail-opt format preserved 1:1 for backwards-compat:
+				// `<DeclKind> <name?> → trailOptParseGate('<pred>')`.
+				// Other mechanisms render `<DeclKind> <name?> → <metas>`
+				// where `<metas>` is the relevant subset of `@:` annotations
+				// already-quoted in `predicate` (raw string from classifier).
+				final tail:String = mechanism == 'trail-opt'
+					? '${h.gateKind}(\'${h.predicate}\')'
+					: h.predicate;
+				sysPrint('$prefix$declLabel → $tail\n');
 			}
 		}
 		return EXIT_OK;
+	}
+
+	/**
+	 * Original trail-opt walker — extracted from `runGates` body to
+	 * peer with `collectMechanismHits` under the `--mechanism` switch.
+	 * Iterates raw MetaHits one at a time and pushes one `GateHit` per
+	 * matching `@:fmt(trailOpt*Gate(...))` argument; preserves the
+	 * pre-`--mechanism` output and limit semantics.
+	 */
+	private static function collectTrailOptHits(
+		raw:Array<MetaHit>, source:String, limit:Int, sharedTotal:Int
+	):Array<GateHit> {
+		final out:Array<GateHit> = [];
+		for (h in raw) if (h.annotation == '@:fmt') for (arg in h.args) {
+			final extracted:Null<GateExtract> = extractGate(arg);
+			if (extracted == null) continue;
+			if (limit >= 0 && sharedTotal + out.length >= limit) break;
+			out.push({
+				line: h.declSpan != null ? h.declSpan.lineCol(source).line : 0,
+				col: h.declSpan != null ? h.declSpan.lineCol(source).col : 0,
+				declKind: h.declKind,
+				declName: h.declName,
+				gateKind: extracted.gateKind,
+				predicate: extracted.predicate,
+			});
+		}
+		return out;
+	}
+
+	/**
+	 * `--mechanism <name>` walker. Groups raw MetaHits by their decl-host
+	 * span (one group = all annotations on a single field / branch /
+	 * ctor) and classifies each group by the requested mechanism's
+	 * meta-set signature. Output's `predicate` field carries the
+	 * rendered metas string (NOT a quoted symbol — the trail-opt
+	 * formatter is bypassed via the `mechanism != 'trail-opt'` branch
+	 * in the caller). Groups are emitted in source-order so the report
+	 * matches the file layout.
+	 */
+	private static function collectMechanismHits(
+		raw:Array<MetaHit>, source:String, mechanism:String, limit:Int, sharedTotal:Int
+	):Array<GateHit> {
+		// Group by declSpan.from; preserve first-seen order via parallel array.
+		final order:Array<Int> = [];
+		final groups:Map<Int, Array<MetaHit>> = [];
+		for (h in raw) {
+			final span:Null<Span> = h.declSpan;
+			if (span == null) continue;
+			final key:Int = span.from;
+			var bucket:Null<Array<MetaHit>> = groups[key];
+			if (bucket == null) {
+				bucket = [];
+				groups[key] = bucket;
+				order.push(key);
+			}
+			bucket.push(h);
+		}
+		final out:Array<GateHit> = [];
+		for (key in order) {
+			if (limit >= 0 && sharedTotal + out.length >= limit) break;
+			final metas:Null<Array<MetaHit>> = groups[key];
+			if (metas == null) continue;
+			final label:Null<String> = classifyMechanism(metas, mechanism);
+			if (label == null) continue;
+			final first:MetaHit = metas[0];
+			final fspan:Null<Span> = first.declSpan;
+			out.push({
+				line: fspan != null ? fspan.lineCol(source).line : 0,
+				col: fspan != null ? fspan.lineCol(source).col : 0,
+				declKind: first.declKind,
+				declName: first.declName,
+				gateKind: '', // unused for non-trail-opt mechanisms
+				predicate: (label : String),
+			});
+		}
+		return out;
+	}
+
+	/**
+	 * Mechanism classifier — returns the rendered metas label when the
+	 * meta set on a single decl/field matches the requested mechanism's
+	 * signature, `null` otherwise. The label is the small list of
+	 * `@:annotation(...)` tokens that drive the mechanism, joined with
+	 * single spaces — same shape a grammar author would see in the
+	 * source. `@:fmt(...)` flags are NOT included (they're orthogonal
+	 * to the mechanism dispatch); the label focuses on the parser-side
+	 * structural metas.
+	 */
+	private static function classifyMechanism(metas:Array<MetaHit>, mechanism:String):Null<String> {
+		var hasOptional:Bool = false;
+		var lead:Null<String> = null;
+		var trail:Null<String> = null;
+		var kw:Null<String> = null;
+		var absentOn:Null<String> = null;
+		var sep:Null<String> = null;
+		for (h in metas) switch h.annotation {
+			case '@:optional': hasOptional = true;
+			case '@:lead': lead = h.args.length > 0 ? h.args[0] : null;
+			case '@:trail': trail = h.args.length > 0 ? h.args[0] : null;
+			case '@:kw': kw = h.args.length > 0 ? h.args[0] : null;
+			case '@:absentOn': absentOn = h.args.length > 0 ? h.args[0] : null;
+			case '@:sep': sep = h.args.length > 0 ? h.args[0] : null;
+			case _:
+		}
+		return switch mechanism {
+			case 'optional-ref':
+				if (!hasOptional) null
+				else if (lead == null && kw == null && absentOn == null) null
+				// Star fields with @:sep are excluded — they're the angle-
+				// bracket array shape, not single Ref optional. Inspect
+				// declName / declKind manually if you need both.
+				else if (sep != null) null
+				else renderMetaList(hasOptional, kw, lead, trail, absentOn);
+			case 'optional-ref-trail':
+				// Slice 40's exact signature: optional + lead + trail, no sep.
+				if (hasOptional && lead != null && trail != null && sep == null)
+					renderMetaList(hasOptional, kw, lead, trail, absentOn);
+				else null;
+			case 'mandatory-ref-lead-trail':
+				// Pre-Slice-40 shape on a single Ref — the predict-optional
+				// fallback candidates (turn `@:lead + @:trail` into
+				// `@:optional @:lead + @:trail`). Exclude Star (`@:sep`)
+				// — angle-bracket arrays are not the target.
+				if (!hasOptional && lead != null && trail != null && sep == null)
+					renderMetaList(hasOptional, kw, lead, trail, absentOn);
+				else null;
+			case 'kw-lead':
+				if (kw != null) renderMetaList(hasOptional, kw, lead, trail, absentOn) else null;
+			case _: null;
+		};
+	}
+
+	private static function renderMetaList(
+		hasOptional:Bool, kw:Null<String>, lead:Null<String>, trail:Null<String>, absentOn:Null<String>
+	):String {
+		final parts:Array<String> = [];
+		if (hasOptional) parts.push('@:optional');
+		if (kw != null) parts.push('@:kw($kw)');
+		if (lead != null) parts.push('@:lead($lead)');
+		if (trail != null) parts.push('@:trail($trail)');
+		if (absentOn != null) parts.push('@:absentOn($absentOn)');
+		return parts.join(' ');
 	}
 
 	/**
@@ -1708,10 +1889,23 @@ final class Cli {
 	}
 
 	private static function printGatesUsage():Void {
-		sysPrint('Usage: apq gates [<file-or-dir-or-glob>...] [--flat] [--limit N]\n');
+		sysPrint('Usage: apq gates [<file-or-dir-or-glob>...] [--flat] [--limit N] [--mechanism <name>]\n');
 		sysPrint('\n');
-		sysPrint('List every ctor decl carrying `@:fmt(trailOptParseGate(\'<pred>\'))` or\n');
-		sysPrint('`@:fmt(trailOptShapeGate(\'<pred>\'))` and the predicate name it dispatches.\n');
+		sysPrint('Default (--mechanism trail-opt): list ctor decls carrying\n');
+		sysPrint('`@:fmt(trailOptParseGate(\'<pred>\'))` / `trailOptShapeGate(\'<pred>\')` and\n');
+		sysPrint('the predicate name they dispatch. Pre-`--mechanism` output 1:1.\n');
+		sysPrint('\n');
+		sysPrint('Other --mechanism values inventory grammar surface by Lowering pattern:\n');
+		sysPrint('  optional-ref          — `@:optional` Ref fields with @:lead/@:kw/@:absentOn\n');
+		sysPrint('                          (already-relaxed precedent sites).\n');
+		sysPrint('  optional-ref-trail    — `@:optional @:lead @:trail` Ref bracket-pair\n');
+		sysPrint('                          (Slice 40 mechanism — current consumers).\n');
+		sysPrint('  mandatory-ref-lead-trail\n');
+		sysPrint('                        — mandatory Ref with @:lead+@:trail (no @:optional).\n');
+		sysPrint('                          THE predict-optional fallback candidate list —\n');
+		sysPrint('                          fields you could relax via Slice 40\'s mechanism.\n');
+		sysPrint('  kw-lead               — fields with @:kw (keyword-dispatched).\n');
+		sysPrint('\n');
 		sysPrint('Default scope: src/anyparse/grammar/<lang>/ (haxe by default).\n');
 	}
 

@@ -83,6 +83,48 @@ class ApqDxTier4CliTest extends Test {
 			'apq gates default scope walks haxe grammar cleanly');
 	}
 
+	// `--mechanism <name>` extends `gates` from trail-opt only to other
+	// Lowering mechanisms (Slice 40 follow-up). Default value preserves
+	// the original output 1:1; explicit `--mechanism trail-opt` is
+	// equivalent; unknown names exit usage-error; every documented
+	// mechanism is walker-accepted on the default haxe grammar scope.
+	public function testGatesMechanismTrailOptExplicitMatchesDefault():Void {
+		Assert.equals(0, Cli.run(['gates', '--mechanism', 'trail-opt']),
+			'`gates --mechanism trail-opt` is equivalent to the bare default');
+	}
+
+	public function testGatesMechanismUnknownIsUsageError():Void {
+		Assert.equals(2, Cli.run(['gates', '--mechanism', 'bogus']),
+			'unknown --mechanism value exits with usage error');
+	}
+
+	public function testGatesMechanismOptionalRefTrailWalksGrammar():Void {
+		// `optional-ref-trail` is the Slice 40 mechanism — the haxe
+		// grammar has at least one consumer (HxAbstractDecl.underlyingType),
+		// so the walk surfaces ≥1 hit and exits cleanly.
+		Assert.equals(0, Cli.run(['gates', '--mechanism', 'optional-ref-trail']),
+			'optional-ref-trail walk on haxe grammar exits clean (has consumers)');
+	}
+
+	public function testGatesMechanismMandatoryRefLeadTrailWalksGrammar():Void {
+		// `mandatory-ref-lead-trail` is the predict-optional fallback
+		// candidate list — pre-Slice-40 bracket-pair fields that could
+		// be relaxed. Haxe grammar has many (HxIfStmt.cond, HxFnDecl,
+		// HxClassDecl.members, …) so this exits clean too.
+		Assert.equals(0, Cli.run(['gates', '--mechanism', 'mandatory-ref-lead-trail']),
+			'mandatory-ref-lead-trail walk on haxe grammar exits clean');
+	}
+
+	public function testGatesMechanismOptionalRefWalksGrammar():Void {
+		Assert.equals(0, Cli.run(['gates', '--mechanism', 'optional-ref']),
+			'optional-ref walk on haxe grammar exits clean');
+	}
+
+	public function testGatesMechanismKwLeadWalksGrammar():Void {
+		Assert.equals(0, Cli.run(['gates', '--mechanism', 'kw-lead']),
+			'kw-lead walk on haxe grammar exits clean');
+	}
+
 	public function testGatesOnEmptyDirEmitsEmpty():Void {
 		#if sys
 		final dir:String = mkTempDir('apq_gates_empty');
