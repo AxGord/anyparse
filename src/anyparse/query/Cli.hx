@@ -635,6 +635,17 @@ final class Cli {
 		// the pattern silently doesn't match, the corpus delta misleads;
 		// a single dry-run pass surfaces the typo before any apply.
 		var dryRun:Bool = false;
+		// --per-pattern: isolation diagnostic for multi-pattern strip on a
+		// single file. Runs the parse N+2 times — baseline (no patterns),
+		// each pattern in isolation, and the combined apply — surfacing
+		// whether each pattern is a sole-blocker, a partial contributor,
+		// or a no-op. Catches the interlocking-blockers trap where a
+		// combined-strip PARSE OK can mask that NO individual pattern
+		// unblocks alone (i.e. the slice requires N separate code
+		// mechanisms, not one). Single-file only — for multi-file sweeps
+		// the matrix would be NxM and the signal is in --dry-run +
+		// per-file PARSE OK/FAIL combinations.
+		var perPattern:Bool = false;
 		// `--from-cluster <key>` switches positional mode: the (single)
 		// positional becomes the corpus root (recon-style, env fallback
 		// to ANYPARSE_HXFORMAT_FORK/test/testcases); the file list is
@@ -678,6 +689,8 @@ final class Cli {
 					showSource = true;
 				case '--dry-run':
 					dryRun = true;
+				case '--per-pattern':
+					perPattern = true;
 				case '--from-cluster':
 					fromCluster = expectValue(args, ++i, '--from-cluster');
 				case '-h', '--help':
@@ -700,6 +713,21 @@ final class Cli {
 			stderr('apq strip: missing at least one --replace/--with or --delete\n');
 			printStripUsage();
 			return EXIT_USAGE;
+		}
+		// `--per-pattern` constraints: single-file only (the matrix
+		// would be NxM otherwise), incompatible with `--dry-run` (the
+		// dry-run path skips parse entirely so isolation diagnostics
+		// have no PARSE OK/FAIL signal) and `--from-cluster` (the
+		// cluster-mode discovers N files from a recon walk, never one).
+		if (perPattern) {
+			if (dryRun) {
+				stderr('apq strip: --per-pattern is incompatible with --dry-run (dry-run skips the parse step)\n');
+				return EXIT_USAGE;
+			}
+			if (fromCluster != null) {
+				stderr('apq strip: --per-pattern is incompatible with --from-cluster (single-file isolation only)\n');
+				return EXIT_USAGE;
+			}
 		}
 		// `--from-cluster` mode: discover files via recon walk, then
 		// fall through into the existing per-file substitution loop.
@@ -725,6 +753,17 @@ final class Cli {
 			return EXIT_USAGE;
 		}
 		final plugin:GrammarPlugin = pickPlugin(lang);
+		if (perPattern) {
+			if (files.length != 1) {
+				stderr('apq strip: --per-pattern takes exactly one file (got ${files.length})\n');
+				return EXIT_USAGE;
+			}
+			if (patterns.length < 2) {
+				stderr('apq strip: --per-pattern requires ≥2 patterns (got ${patterns.length}) — isolation diagnostic only useful when patterns can be tested independently\n');
+				return EXIT_USAGE;
+			}
+			return runStripPerPattern(plugin, files[0], patterns, replacements);
+		}
 		final multi:Bool = files.length > 1;
 		var anyFailed:Bool = false;
 		var anyChanged:Bool = false;
@@ -802,6 +841,74 @@ final class Cli {
 			sysPrint('--- $passCount PARSE OK, $failCount PARSE FAIL (total ${files.length}) ---\n');
 		}
 		return anyFailed ? EXIT_RUNTIME : EXIT_OK;
+	}
+
+	/**
+	 * `--per-pattern` isolation diagnostic. Runs the parse on:
+	 *  1. baseline (no patterns applied — the original source)
+	 *  2. each pattern in isolation (only that one applied)
+	 *  3. combined (all patterns applied, the regular strip behaviour)
+	 *
+	 * Output is one line per row, plus a final verdict that calls out
+	 * the interlocking-blockers signature: every isolated row FAIL +
+	 * combined OK means the slice needs N separate code mechanisms
+	 * (one per pattern), not one. The verdict is informational — exit
+	 * code follows the combined row, so a passing combination still
+	 * exits 0 even when every isolated row failed.
+	 *
+	 * Single-file only (caller-enforced) — for multi-file matrices the
+	 * `--dry-run` per-pattern totals + per-file PARSE OK/FAIL combination
+	 * already covers the use-case.
+	 */
+	private static function runStripPerPattern(
+		plugin:GrammarPlugin, filePath:String,
+		patterns:Array<String>, replacements:Array<String>
+	):Int {
+		final source:String = readSourceForParse(filePath);
+		inline function tryParse(s:String):{ok:Bool, msg:String} {
+			return try {
+				plugin.parseFile(s);
+				{ok: true, msg: ''};
+			} catch (e:ParseError) {
+				{ok: false, msg: e.toString()};
+			} catch (e:Exception) {
+				{ok: false, msg: e.message};
+			}
+		}
+		final baseline:{ok:Bool, msg:String} = tryParse(source);
+		sysPrint('baseline (no patterns): ${baseline.ok ? "PARSE OK" : "PARSE FAIL: " + baseline.msg}\n');
+		final isolatedResults:Array<{ok:Bool, hits:Int}> = [];
+		for (idx in 0...patterns.length) {
+			final hits:Int = countOccurrences(source, patterns[idx]);
+			final isolated:String = StringTools.replace(source, patterns[idx], replacements[idx]);
+			final r:{ok:Bool, msg:String} = tryParse(isolated);
+			isolatedResults.push({ok: r.ok, hits: hits});
+			final pat:String = patterns[idx];
+			sysPrint('pattern[$idx] "$pat" ($hits match${hits == 1 ? '' : 'es'}): ${r.ok ? "PARSE OK" : "PARSE FAIL: " + r.msg}\n');
+		}
+		var combinedStripped:String = source;
+		for (idx in 0...patterns.length)
+			combinedStripped = StringTools.replace(combinedStripped, patterns[idx], replacements[idx]);
+		final combined:{ok:Bool, msg:String} = tryParse(combinedStripped);
+		sysPrint('combined (all patterns): ${combined.ok ? "PARSE OK" : "PARSE FAIL: " + combined.msg}\n');
+		// Verdict — interlocking-blockers signature: combined OK + every
+		// isolated row FAIL. This is the slice-scope warning: each
+		// pattern targets a separate parse blocker, so the slice needs
+		// N code mechanisms, not one.
+		if (combined.ok && !baseline.ok) {
+			var anyIsolatedOk:Bool = false;
+			for (r in isolatedResults) if (r.ok) anyIsolatedOk = true;
+			if (!anyIsolatedOk) {
+				sysPrint('VERDICT interlocking blockers — every pattern alone still fails; the combination is required. Slice scope likely needs ${patterns.length} separate code mechanisms.\n');
+			} else {
+				var soleCount:Int = 0;
+				for (r in isolatedResults) if (r.ok) soleCount++;
+				sysPrint('VERDICT $soleCount of ${patterns.length} pattern${patterns.length == 1 ? '' : 's'} unblock alone — the rest are redundant (or compose into a tighter slice).\n');
+			}
+		} else if (!combined.ok && baseline.ok) {
+			sysPrint('VERDICT no-op — baseline already parses; the strip diagnostic does not apply.\n');
+		}
+		return combined.ok ? EXIT_OK : EXIT_RUNTIME;
 	}
 
 	/**
@@ -891,6 +998,10 @@ final class Cli {
 		sysPrint('  --delete <pat>      Shortcut for --replace <pat> --with \'\'\n');
 		sysPrint('  --show              Dump the stripped source to stderr (debug)\n');
 		sysPrint('  --dry-run           Skip parse, only verify each pattern matched ≥1 occurrence somewhere (typo guard)\n');
+		sysPrint('  --per-pattern       Isolation diagnostic for multi-pattern strip on a single file. Runs baseline,\n');
+		sysPrint('                      each pattern alone, and combined. Surfaces interlocking blockers (combined OK +\n');
+		sysPrint('                      every isolated row FAIL = slice needs N separate code mechanisms, not one).\n');
+		sysPrint('                      Requires single file and ≥2 patterns; incompatible with --dry-run / --from-cluster.\n');
 		sysPrint('  --from-cluster <key>\n');
 		sysPrint('                      Discover file list via a recon walk and filter by EXACT cluster\n');
 		sysPrint('                      key (same shape as `apq recon --cluster <key>`). Positional <dir>\n');
@@ -2484,7 +2595,7 @@ final class Cli {
 			return EXIT_USAGE;
 		}
 		final plugin:GrammarPlugin = pickPlugin(lang);
-		if (probePath != null) return runReconProbe(plugin, (probePath : String));
+		if (probePath != null) return runReconProbe(plugin, (probePath : String), predictStrip, patterns, replacements);
 		final rootFinal:String = rootDir ?? defaultReconRoot();
 		if (rootFinal == '') {
 			stderr("apq recon: no <dir> given and $ANYPARSE_HXFORMAT_FORK env var is unset.\n");
@@ -2499,29 +2610,103 @@ final class Cli {
 		return runReconSweep(plugin, rootFinal, topN, clusterFilter, predictStrip, patterns, replacements, showSource);
 	}
 
-	private static function runReconProbe(plugin:GrammarPlugin, path:String):Int {
+	private static function runReconProbe(
+		plugin:GrammarPlugin, path:String,
+		predictStrip:Bool, patterns:Array<String>, replacements:Array<String>
+	):Int {
 		if (!FileSystem.exists(path)) {
 			stderr('apq recon: --probe path "$path" does not exist\n');
 			return EXIT_RUNTIME;
 		}
-		final source:String = readSourceForParse(path);
+		final original:String = readSourceForParse(path);
+		// `--predict-strip --probe <file>` — apply substitutions to the
+		// single probed file's source, then re-run the strict trivia parse
+		// against the result. Mirrors the sweep-mode predict tag set
+		// (`PREDICT UNBLOCK` / `PREDICT STILL FAIL` / `PREDICT NO MATCH`)
+		// so a single-file dry-run stays semantically aligned with the
+		// corpus walk. Per-pattern match totals are printed for the typo
+		// guard (a `--replace` pattern matching 0 occurrences is the
+		// canonical pre-edit signal of a typo or whitespace mismatch).
+		// Without `--predict-strip`, the legacy PARSE OK / PARSE FAIL
+		// output is byte-identical to before.
+		if (predictStrip) return runReconProbePredict(plugin, path, original, patterns, replacements);
 		try {
-			if (!plugin.reconParse(source)) {
+			if (!plugin.reconParse(original)) {
 				stderr('apq recon: no recon parser wired up for this grammar plugin\n');
 				return EXIT_RUNTIME;
 			}
 			sysPrint('PARSE OK\n');
 			return EXIT_OK;
 		} catch (exception:ParseError) {
-			final pos:Position = exception.span.lineCol(source);
+			final pos:Position = exception.span.lineCol(original);
 			final exp:String = reconNormalize(exception.expected);
-			final snip:String = reconNormalize(reconSnippet(source, exception.span.from));
+			final snip:String = reconNormalize(reconSnippet(original, exception.span.from));
 			sysPrint('PARSE FAIL :: ${pos.line}:${pos.col} expected="$exp" :: src="$snip"\n');
 			return EXIT_RUNTIME;
 		} catch (exception:Exception) {
 			sysPrint('PARSE FAIL :: <non-ParseError> ${reconNormalize(exception.message)}\n');
 			return EXIT_RUNTIME;
 		}
+	}
+
+	private static function runReconProbePredict(
+		plugin:GrammarPlugin, path:String, original:String,
+		patterns:Array<String>, replacements:Array<String>
+	):Int {
+		// Capture the original fail-locus first so STILL FAIL can report
+		// the moved-locus hint (same signal as sweep-mode predict-strip).
+		var origLine:Int = 0;
+		var origCol:Int = 0;
+		try {
+			plugin.reconParse(original);
+		} catch (pe:ParseError) {
+			final pos:Position = pe.span.lineCol(original);
+			origLine = pos.line;
+			origCol = pos.col;
+		} catch (_:Exception) {}
+		final patternHits:Array<Int> = [for (_ in 0...patterns.length) 0];
+		var stripped:String = original;
+		var fileHits:Int = 0;
+		for (idx in 0...patterns.length) {
+			final hits:Int = countOccurrences(stripped, patterns[idx]);
+			patternHits[idx] = hits;
+			fileHits += hits;
+			stripped = StringTools.replace(stripped, patterns[idx], replacements[idx]);
+		}
+		var exitCode:Int = EXIT_OK;
+		if (fileHits == 0) {
+			sysPrint('PREDICT NO MATCH  $path\n');
+		} else {
+			try {
+				if (!plugin.reconParse(stripped)) {
+					stderr('apq recon: no recon parser wired up for this grammar plugin\n');
+					return EXIT_RUNTIME;
+				}
+				sysPrint('PREDICT UNBLOCK   $path\n');
+			} catch (pe:ParseError) {
+				final pos:Position = pe.span.lineCol(stripped);
+				final movedHint:String = (origLine > 0 && (pos.line != origLine || pos.col != origCol))
+					? ' (was $origLine:$origCol)' : '';
+				sysPrint('PREDICT STILL FAIL $path :: ${pos.line}:${pos.col}${movedHint} ${pe.message}\n');
+				exitCode = EXIT_RUNTIME;
+			} catch (e:Exception) {
+				sysPrint('PREDICT STILL FAIL $path :: <no locus> ${e.message}\n');
+				exitCode = EXIT_RUNTIME;
+			}
+		}
+		// Per-pattern totals — same typo guard contract as sweep mode.
+		for (idx in 0...patterns.length) {
+			final pat:String = patterns[idx];
+			final total:Int = patternHits[idx];
+			sysPrint('  pattern[$idx] "$pat" — $total match${total == 1 ? '' : 'es'}\n');
+		}
+		var anyZero:Bool = false;
+		for (h in patternHits) if (h == 0) anyZero = true;
+		if (anyZero) {
+			stderr('apq recon: --predict-strip --probe: WARNING: one or more patterns matched 0 occurrences — see per-pattern totals\n');
+			return EXIT_RUNTIME;
+		}
+		return exitCode;
 	}
 
 	private static function runReconSweep(
@@ -3056,7 +3241,11 @@ final class Cli {
 		sysPrint('  --replace <pat> --with <repl>\n');
 		sysPrint('                          Substitution pair (with --predict-strip; repeatable).\n');
 		sysPrint('  --delete <pat>          Shortcut for --replace <pat> --with "".\n');
-		sysPrint('  --probe <file>          Single-file probe instead of sweep.\n');
+		sysPrint('  --probe <file>          Single-file probe instead of sweep. Composes with\n');
+		sysPrint('                          --predict-strip: applies substitutions to the file and\n');
+		sysPrint('                          retries the parse, printing PREDICT UNBLOCK / STILL\n');
+		sysPrint('                          FAIL / NO MATCH + per-pattern totals + typo guard\n');
+		sysPrint('                          (same shape as sweep mode).\n');
 		sysPrint('  -h, --help              Show this help.\n');
 	}
 
@@ -3576,6 +3765,45 @@ final class Cli {
 	}
 
 	/**
+	 * Heuristic: does the query look like a leading-dot field-name slot
+	 * (`.expr`, `.body`)? A single `.` prefix followed by an identifier-
+	 * shaped tail. Used by the 0-hit nudge on `lit` / `refs` / `uses`:
+	 * a leading-dot literal is never a captured leaf (lit) / value
+	 * binding (refs) / type position (uses) — the user is looking for
+	 * a `$x.<rest>` field-access shape, the structural answer is
+	 * `apq search`.
+	 *
+	 * Returns the dot-stripped tail (`.expr` → `expr`) when the query
+	 * qualifies, null otherwise. Composes with `looksLikeDottedAccess`
+	 * (which rejects empty leading segments) — that heuristic is for
+	 * `Type.method` / `obj.field` SOURCE notation; this one is for the
+	 * field-name-only `.x` lookup intent.
+	 */
+	private static function looksLikeLeadingDotField(s:String):Null<String> {
+		if (s.length < 2) return null;
+		if (StringTools.fastCodeAt(s, 0) != '.'.code) return null;
+		final tail:String = s.substr(1);
+		// Tail must be a single identifier — multi-segment chains like
+		// `.obj.field` are not the intended shape (they would also
+		// produce false positives on the `obj.field` SOURCE form).
+		if (tail.indexOf('.') >= 0) return null;
+		final first:Int = StringTools.fastCodeAt(tail, 0);
+		final firstOk:Bool = (first >= 'a'.code && first <= 'z'.code)
+			|| (first >= 'A'.code && first <= 'Z'.code)
+			|| first == '_'.code;
+		if (!firstOk) return null;
+		for (idx in 1...tail.length) {
+			final c:Int = StringTools.fastCodeAt(tail, idx);
+			final ok:Bool = (c >= 'a'.code && c <= 'z'.code)
+				|| (c >= 'A'.code && c <= 'Z'.code)
+				|| (c >= '0'.code && c <= '9'.code)
+				|| c == '_'.code;
+			if (!ok) return null;
+		}
+		return tail;
+	}
+
+	/**
 	 * Heuristic: does the query look like a dotted member access
 	 * (`TypeName.method`, `obj.field`, `pkg.Module.entry`)? A single `.`
 	 * or `..` separator between identifier-shaped segments. Used by the
@@ -3687,8 +3915,18 @@ final class Cli {
 			final first:Int = n.length > 0 ? StringTools.fastCodeAt(n, 0) : 0;
 			final isUpper:Bool = first >= 'A'.code && first <= 'Z'.code;
 			final isLower:Bool = first >= 'a'.code && first <= 'z'.code;
+			final leadingDot:Null<String> = looksLikeLeadingDotField(n);
 			final dotted:Null<Array<String>> = looksLikeDottedAccess(n);
-			final hint:String = if (dotted != null && (cmd == 'lit' || cmd == 'refs' || cmd == 'uses')) {
+			final hint:String = if (leadingDot != null && (cmd == 'lit' || cmd == 'refs' || cmd == 'uses')) {
+				// Leading-dot query (`.expr`, `.body`) — user is hunting a
+				// field-access shape but typed the SLOT name only. lit
+				// won't capture the leading `.` (FieldAccess leaves are
+				// the identifier after `.`, the `.` is a postfix
+				// operator); refs/uses don't know about field positions.
+				// The structural answer is `apq search '$x.<tail>'`.
+				final t:String = leadingDot;
+				' — "$n" is a leading-dot field-name slot. $cmd matches leaf names / single bindings / type positions, never `expr.field` shape. Try: apq search \'$$x.$t\' <dir> (field-access shape), apq lit \'$t\' <dir> --any-kind (every leaf — field-name slots included), or apq refs $t <dir> --decls (where the field is declared).';
+			} else if (dotted != null && (cmd == 'lit' || cmd == 'refs' || cmd == 'uses')) {
 				// Dotted query (`TypeName.method`, `obj.field`) — never a
 				// leaf-name / value-binding / type-position match. The
 				// structural answer is `apq search` with the access shape.

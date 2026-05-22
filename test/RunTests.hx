@@ -205,6 +205,7 @@ import unit.ApqAstWriterOutputPlainTest;
 import unit.ApqAstSelectFuzzyTest;
 import unit.ApqStripFromClusterCliTest;
 import unit.ApqHxtestSection1ConfigTest;
+import unit.ApqHxqDxV8CliTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -418,6 +419,7 @@ runner.addCase(new HxEnumAbstractSliceTest());
 		runner.addCase(new ApqReconCliTest());
 		runner.addCase(new ApqStripFromClusterCliTest());
 		runner.addCase(new ApqHxtestSection1ConfigTest());
+		runner.addCase(new ApqHxqDxV8CliTest());
 		runner.addCase(new ApqDepthSemanticsTest());
 		runner.addCase(new ApqDxTier2CliTest());
 		utest.ui.Report.create(runner);
