@@ -104,6 +104,18 @@ final class Cli {
 	private static final SKIP_PATHS_SHOWN:Int = 5;
 	private static final FUZZY_MAX_DIST:Int = 3;
 
+	/**
+	 * `blast`'s heuristic field-access section (member-name SUPERSET) is
+	 * the only walker section that routinely emits hundreds of lines on a
+	 * common member name (`.name`, `.type`, `.value`). It is also the
+	 * least precise — every hit needs human verification — so flooding
+	 * the transcript with 1000+ lines wastes more than it gains. Smart-
+	 * default cap of 20 + a header hint pointing at `--all` (no cap) /
+	 * `--limit N` (explicit cap) gives the verify-each affordance without
+	 * the flood. Precise `uses` / `refs` sections above stay uncapped.
+	 */
+	private static final HEUR_DEFAULT_CAP:Int = 20;
+
 	private static final RECON_TOP_N_DEFAULT:Int = 30;
 	private static final RECON_EXAMPLES_PER_CLUSTER:Int = 2;
 	private static final RECON_HEAD_LEN:Int = 70;
@@ -1160,6 +1172,7 @@ final class Cli {
 		var lang:String = 'haxe';
 		var flat:Bool = false;
 		var limit:Int = -1;
+		var showAll:Bool = false;
 		var name:Null<String> = null;
 		final inputSpecs:Array<String> = [];
 
@@ -1176,6 +1189,8 @@ final class Cli {
 						stderr('${e.message}\n');
 						return EXIT_USAGE;
 					}
+				case '--all':
+					showAll = true;
 				case '-h', '--help':
 					printBlastUsage();
 					return EXIT_OK;
@@ -1272,9 +1287,25 @@ final class Cli {
 		for (entry in valueTrees)
 			collectMemberAccess(entry.tree, memberNames, declSpans, entry.path, entry.source, heur);
 		if (heur.length > 0) {
-			final capped:Array<{loc:String, line:String}> = (limit >= 0 && heur.length > limit) ? heur.slice(0, limit) : heur;
+			// Smart-default cap on the heuristic section — the typical
+			// transcript pain is `blast` flooding hundreds of `.member`
+			// lines when the type's member names are common identifiers
+			// (`.name`, `.type`, `.value`). Without `--limit` the
+			// heuristic now caps at HEUR_DEFAULT_CAP and prints a hint
+			// pointing at `--all` (no cap) or `--limit N` (explicit).
+			// Precise `uses` / `refs` sections above stay uncapped — they
+			// are name-bound and rarely flood.
+			final defaultCap:Int = showAll ? -1 : HEUR_DEFAULT_CAP;
+			final effectiveLimit:Int = limit >= 0 ? limit : defaultCap;
+			final capped:Array<{loc:String, line:String}> = (effectiveLimit >= 0 && heur.length > effectiveLimit)
+				? heur.slice(0, effectiveLimit) : heur;
+			final hint:String = (capped.length < heur.length)
+				? (limit >= 0
+					? ''
+					: ' — pass --all to show all, --limit N for explicit cap')
+				: '';
 			sysPrint('# heuristic field-access (member-name superset of "$typeName" — VERIFY each; '
-				+ 'name-based, over-matches; ${capped.length}/${heur.length} shown)\n');
+				+ 'name-based, over-matches; ${capped.length}/${heur.length} shown$hint)\n');
 			for (h in capped) sysPrint('${h.line}\n');
 			any = true;
 		}
@@ -2963,8 +2994,13 @@ final class Cli {
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --flat              Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
-		sysPrint('  --limit <n>         Cap the heuristic section at n hits\n');
+		sysPrint('  --limit <n>         Explicit cap on the heuristic section (overrides smart default)\n');
+		sysPrint('  --all               Disable the smart-default cap on the heuristic section\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('\n');
+		sysPrint('Heuristic field-access (`.member` superset) is capped at ${HEUR_DEFAULT_CAP} by default.\n');
+		sysPrint('Pass --all for the full list, or --limit N for an explicit cap.\n');
+		sysPrint('Precise uses / refs sections are uncapped.\n');
 		sysPrint('\n');
 		sysPrint('Change-impact checklist for a type. Unions three sections:\n');
 		sysPrint('  uses  — type-position references (precise)\n');
