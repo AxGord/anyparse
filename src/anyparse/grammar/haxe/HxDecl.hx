@@ -137,6 +137,23 @@ enum HxDecl {
 
 	InterfaceDecl(decl:HxInterfaceDecl);
 
+	/**
+	 * `abstract class Name { ... }` — Haxe 4.2+ abstract-class form
+	 * (slice ω-abstract-class). Shares the `abstract` keyword with the
+	 * adjacent `AbstractDecl(HxAbstractDecl)` type-form (`abstract
+	 * Name(Type) { ... }`); the two are separated by an ordered first-
+	 * match dispatch with `tryBranch` rollback — the exact shared-
+	 * keyword pattern used by `EnumAbstractDecl` → `EnumDecl` and
+	 * `FinalDecl`'s `ClassForm` / `VarForm`. `@:kw('abstract')` consumes
+	 * the keyword; the inner `HxClassDecl` then matches its own
+	 * `@:kw('class')` for `abstract class Foo`, or fails immediately on
+	 * `abstract Foo(Int)` (the type form), allowing rollback to the
+	 * following `AbstractDecl` ctor. Placed BEFORE `AbstractDecl` so the
+	 * longer-prefix shape is tried first.
+	 */
+	@:kw('abstract')
+	AbstractClassDecl(decl:HxClassDecl);
+
 	AbstractDecl(decl:HxAbstractDecl);
 
 	@:kw('var') @:trailOpt(';')

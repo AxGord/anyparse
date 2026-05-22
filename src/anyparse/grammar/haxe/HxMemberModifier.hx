@@ -50,6 +50,8 @@ enum HxMemberModifier {
 	@:kw('dynamic') Dynamic;
 	@:kw('extern') Extern;
 	@:kw('macro') Macro;
+	@:kw('abstract') Abstract;
+	@:kw('overload') Overload;
 
 	@:kw('#if') @:trail('#end')
 	Conditional(inner:HxConditionalMod);

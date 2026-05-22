@@ -46,6 +46,7 @@ enum HxModifier {
 	@:kw('override') Override;
 	@:kw('dynamic') Dynamic;
 	@:kw('extern') Extern;
+	@:kw('overload') Overload;
 
 	@:kw('#if') @:trail('#end')
 	Conditional(inner:HxConditionalMod);

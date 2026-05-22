@@ -70,6 +70,7 @@ import unit.HxSharpErrorSliceTest;
 import unit.HxConditionalTypeSliceTest;
 import unit.HxAssignStmtNoSemiSliceTest;
 import unit.HxMetaExprStmtNoSemiSliceTest;
+import unit.HxAbstractClassSliceTest;
 import unit.HxMacroClassSliceTest;
 import unit.HxDollarReifSliceTest;
 import unit.HxLocalFnStmtSliceTest;
@@ -232,6 +233,7 @@ class RunTests {
 		runner.addCase(new HxConditionalTypeSliceTest());
 		runner.addCase(new HxAssignStmtNoSemiSliceTest());
 		runner.addCase(new HxMetaExprStmtNoSemiSliceTest());
+		runner.addCase(new HxAbstractClassSliceTest());
 		runner.addCase(new HxMacroClassSliceTest());
 		runner.addCase(new HxDollarReifSliceTest());
 		runner.addCase(new HxLocalFnStmtSliceTest());
