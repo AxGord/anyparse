@@ -89,13 +89,22 @@ class Codegen {
 				}
 				return _v;
 			} catch (e:anyparse.runtime.ParseError) {
+				// Decorate the error with the source string so
+				// `ParseError.toString` can render `line:col` instead of
+				// the raw byte offset. The entry point is the natural
+				// attachment site — the in-body construction sites in
+				// generated code have no `source` reference, and only
+				// the top-level catch is what callers actually see.
 				if (ctx.maxFailPos > e.span.from) {
-					throw new anyparse.runtime.ParseError(
+					final farthest:anyparse.runtime.ParseError = new anyparse.runtime.ParseError(
 						new anyparse.runtime.Span(ctx.maxFailPos, ctx.maxFailPos),
 						'unexpected input',
 						ctx.maxFailExpected
 					);
+					farthest.source = source;
+					throw farthest;
 				}
+				e.source = source;
 				throw e;
 			}
 		};

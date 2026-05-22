@@ -21,7 +21,29 @@ import haxe.Exception;
 
 #if (sys || nodejs)
 import sys.io.File;
+import sys.FileSystem;
 #end
+
+/**
+ * Skip-entry for a walker's 0-hit nudge: a path the walk could not parse
+ * plus a human-readable failure locus (`LINE:COL <message>`). The locus
+ * lets the reader judge whether the parse failure is upstream of the
+ * searched-for content (warning critical) or far past it (can ignore)
+ * without a follow-up `hxq ast <path>` probe.
+ */
+typedef SkipEntry = {path:String, locus:String};
+
+/**
+ * Recon cluster bucket: how many fixtures fall under a normalised
+ * forward-locus key, a couple of example file paths, and one raw
+ * locus sample for display. The cluster KEY is shared via the map
+ * that owns the bucket; only the per-bucket payload lives here.
+ */
+typedef ReconCluster = {
+	var count:Int;
+	var examples:Array<String>;
+	var rawSample:String;
+};
 
 /**
  * `apq` CLI entry point. Parses argv, picks a grammar plugin via
@@ -42,6 +64,11 @@ final class Cli {
 
 	private static final SKIP_PATHS_SHOWN:Int = 5;
 	private static final FUZZY_MAX_DIST:Int = 3;
+
+	private static final RECON_TOP_N_DEFAULT:Int = 30;
+	private static final RECON_EXAMPLES_PER_CLUSTER:Int = 2;
+	private static final RECON_HEAD_LEN:Int = 70;
+	private static final RECON_LOCUS_LEN:Int = 20;
 	private static final FUZZY_TOP_K:Int = 3;
 	/**
 	 * Substring "did you mean" — `query` ≥ this length OR the substring
@@ -85,6 +112,13 @@ final class Cli {
 			case 'writer-equals': return runWriterEquals(rest);
 			case 'probe': return runProbe(rest);
 			case 'writer-probe': return runWriterProbe(rest);
+			case 'recon':
+				#if (sys || nodejs)
+				return runRecon(rest);
+				#else
+				stderr('apq recon: requires a sys target (filesystem walk)\n');
+				return EXIT_USAGE;
+				#end
 			case _:
 				stderr('apq: unknown subcommand "$cmd"\n');
 				printUsage();
@@ -171,14 +205,13 @@ final class Cli {
 
 		final singleFile:Bool = expanded.singleFile;
 		final allEntries:Array<{file:String, source:String, hits:Array<RefHit>}> = [];
-		final skipPaths:Array<String> = [];
+		final skipEntries:Array<SkipEntry> = [];
 		final candidateNames:Map<String, Bool> = new Map();
 		for (path in paths) {
 			final source:String = readSourceForParse(path);
-			final tree:Null<QueryNode> = parseWalked('refs', plugin.parseFile, path, source, singleFile);
+			final tree:Null<QueryNode> = parseWalked('refs', plugin.parseFile, path, source, singleFile, skipEntries);
 			if (tree == null) {
 				if (singleFile) return EXIT_RUNTIME;
-				skipPaths.push(path);
 				continue;
 			}
 			final raw:Array<RefHit> = Refs.find(nameStr, tree, shape);
@@ -193,7 +226,7 @@ final class Cli {
 		}
 
 		if (allEntries.length == 0)
-			stderr(emptyWalkerNudge('refs', nameStr, paths.length, paths.length - skipPaths.length, skipPaths, candidateNames) + '\n');
+			stderr(emptyWalkerNudge('refs', nameStr, paths.length, paths.length - skipEntries.length, skipEntries, candidateNames) + '\n');
 
 		final shown:Array<{file:String, source:String, hits:Array<RefHit>}> = limitEntries(allEntries, limit,
 			e -> e.hits.length,
@@ -269,14 +302,13 @@ final class Cli {
 
 		final singleFile:Bool = expanded.singleFile;
 		final allEntries:Array<{file:String, source:String, hits:Array<UsesHit>}> = [];
-		final skipPaths:Array<String> = [];
+		final skipEntries:Array<SkipEntry> = [];
 		final candidateNames:Map<String, Bool> = new Map();
 		for (path in paths) {
 			final source:String = readSourceForParse(path);
-			final tree:Null<QueryNode> = parseWalked('uses', plugin.parseFileTypeRefs, path, source, singleFile);
+			final tree:Null<QueryNode> = parseWalked('uses', plugin.parseFileTypeRefs, path, source, singleFile, skipEntries);
 			if (tree == null) {
 				if (singleFile) return EXIT_RUNTIME;
-				skipPaths.push(path);
 				continue;
 			}
 			final hits:Array<UsesHit> = Uses.find(nameStr, tree, shape);
@@ -288,7 +320,7 @@ final class Cli {
 		}
 
 		if (allEntries.length == 0)
-			stderr(emptyWalkerNudge('uses', nameStr, paths.length, paths.length - skipPaths.length, skipPaths, candidateNames) + '\n');
+			stderr(emptyWalkerNudge('uses', nameStr, paths.length, paths.length - skipEntries.length, skipEntries, candidateNames) + '\n');
 
 		final shown:Array<{file:String, source:String, hits:Array<UsesHit>}> = limitEntries(allEntries, limit,
 			e -> e.hits.length,
@@ -372,13 +404,12 @@ final class Cli {
 
 		final singleFile:Bool = expanded.singleFile;
 		final allEntries:Array<{file:String, source:String, hits:Array<MetaHit>}> = [];
-		final skipPaths:Array<String> = [];
+		final skipEntries:Array<SkipEntry> = [];
 		for (path in paths) {
 			final source:String = readSourceForParse(path);
-			final tree:Null<QueryNode> = parseWalked('meta', plugin.parseFile, path, source, singleFile);
+			final tree:Null<QueryNode> = parseWalked('meta', plugin.parseFile, path, source, singleFile, skipEntries);
 			if (tree == null) {
 				if (singleFile) return EXIT_RUNTIME;
-				skipPaths.push(path);
 				continue;
 			}
 			final raw:Array<MetaHit> = Meta.find(tree, shape, source);
@@ -391,7 +422,7 @@ final class Cli {
 		}
 
 		if (allEntries.length == 0)
-			stderr(emptyWalkerNudge('meta', null, paths.length, paths.length - skipPaths.length, skipPaths, null) + '\n');
+			stderr(emptyWalkerNudge('meta', null, paths.length, paths.length - skipEntries.length, skipEntries, null) + '\n');
 
 		final shown:Array<{file:String, source:String, hits:Array<MetaHit>}> = limitEntries(allEntries, limit,
 			e -> e.hits.length,
@@ -940,13 +971,12 @@ final class Cli {
 
 		final singleFile:Bool = expanded.singleFile;
 		final allEntries:Array<{file:String, source:String, hits:Array<LitHit>}> = [];
-		final skipPaths:Array<String> = [];
+		final skipEntries:Array<SkipEntry> = [];
 		for (path in paths) {
 			final source:String = readSourceForParse(path);
-			final tree:Null<QueryNode> = parseWalked('lit', plugin.parseFile, path, source, singleFile);
+			final tree:Null<QueryNode> = parseWalked('lit', plugin.parseFile, path, source, singleFile, skipEntries);
 			if (tree == null) {
 				if (singleFile) return EXIT_RUNTIME;
-				skipPaths.push(path);
 				continue;
 			}
 			final hits:Array<LitHit> = Lit.find(targetStr, tree, exact, effectiveKindFilter);
@@ -955,7 +985,7 @@ final class Cli {
 		}
 
 		if (allEntries.length == 0)
-			stderr(emptyWalkerNudge('lit', targetStr, paths.length, paths.length - skipPaths.length, skipPaths, null) + '\n');
+			stderr(emptyWalkerNudge('lit', targetStr, paths.length, paths.length - skipEntries.length, skipEntries, null) + '\n');
 
 		final shown:Array<{file:String, source:String, hits:Array<LitHit>}> = limitEntries(allEntries, limit,
 			e -> e.hits.length,
@@ -1525,6 +1555,14 @@ final class Cli {
 				case '--json':
 					json = true;
 				case '--depth':
+					// Depth is counted from the DISPLAYED ROOT, not from the
+					// module: with `--select` / `--at`, the root is the
+					// matched node (or each matched node, when --select
+					// returns several); without either, the root is the
+					// full module. So `--depth 0` always means "print just
+					// the root, no children" regardless of mode. The three
+					// `Engine.truncate` callsites below pass the right
+					// subtree-root in each branch.
 					final v:String = expectValue(args, ++i, '--depth');
 					final parsed:Null<Int> = Std.parseInt(v);
 					if (parsed == null) {
@@ -1949,6 +1987,283 @@ final class Cli {
 		};
 	}
 
+	/**
+	 * `apq recon` — corpus skip-parse drill harness. Walks a directory
+	 * looking for source files (`.hxtest` fixtures auto-extract section
+	 * 2), tries each via the plugin's trivia parser, and clusters the
+	 * failures by a normalised forward-locus key so the histogram shows
+	 * the actual stuck CONSTRUCT, not the parser's terminator carousel
+	 * (`expected="//"` is 90%+ of the raw signal and is dropped).
+	 *
+	 * Replaces the standalone `test/_ReconSkipParse.hx` + `/tmp/recon.js`
+	 * dance — same clustering logic, but in-process with the rest of
+	 * `hxq` so a single `haxe bin/apq-js.hxml` rebuild after a grammar
+	 * edit picks up the new parser surface. No separate hxml.
+	 *
+	 * Modes:
+	 *  - `apq recon <dir>` — sweep mode. Walks every `.hxtest` under
+	 *    `<dir>` recursively, prints `SKIP path :: line:col <locus>` per
+	 *    failure, then a histogram of the top clusters (--top default 30,
+	 *    --all overrides).
+	 *  - `apq recon --probe <file>` — single-file probe. Useful for
+	 *    confirming a hypothesis about ONE fixture after a grammar edit.
+	 */
+	#if (sys || nodejs)
+	private static function runRecon(args:Array<String>):Int {
+		var lang:String = 'haxe';
+		var topN:Int = RECON_TOP_N_DEFAULT;
+		var probePath:Null<String> = null;
+		var rootDir:Null<String> = null;
+		var i:Int = 0;
+		while (i < args.length) {
+			final a:String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--top':
+					final v:Null<Int> = Std.parseInt(expectValue(args, ++i, '--top'));
+					if (v == null || v <= 0) {
+						stderr('apq recon: --top requires a positive integer\n');
+						return EXIT_USAGE;
+					}
+					topN = v;
+				case '--all':
+					topN = 0x7fffffff;
+				case '--probe':
+					probePath = expectValue(args, ++i, '--probe');
+				case '-h', '--help':
+					printReconUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq recon: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (rootDir != null) {
+						stderr('apq recon: only one positional <dir> argument supported (got "$rootDir" and "$a")\n');
+						return EXIT_USAGE;
+					}
+					rootDir = a;
+			}
+			i++;
+		}
+		final plugin:GrammarPlugin = pickPlugin(lang);
+		if (probePath != null) return runReconProbe(plugin, (probePath : String));
+		final rootFinal:String = rootDir ?? defaultReconRoot();
+		if (rootFinal == '') {
+			stderr("apq recon: no <dir> given and $ANYPARSE_HXFORMAT_FORK env var is unset.\n");
+			stderr('  Either pass a directory:  apq recon /path/to/corpus\n');
+			stderr('  or export the fork root:  ANYPARSE_HXFORMAT_FORK=/path/to/haxe-formatter\n');
+			return EXIT_USAGE;
+		}
+		if (!FileSystem.exists(rootFinal) || !FileSystem.isDirectory(rootFinal)) {
+			stderr('apq recon: "$rootFinal" is not a directory.\n');
+			return EXIT_RUNTIME;
+		}
+		return runReconSweep(plugin, rootFinal, topN);
+	}
+
+	private static function runReconProbe(plugin:GrammarPlugin, path:String):Int {
+		if (!FileSystem.exists(path)) {
+			stderr('apq recon: --probe path "$path" does not exist\n');
+			return EXIT_RUNTIME;
+		}
+		final source:String = readSourceForParse(path);
+		try {
+			if (!plugin.reconParse(source)) {
+				stderr('apq recon: no recon parser wired up for this grammar plugin\n');
+				return EXIT_RUNTIME;
+			}
+			sysPrint('PARSE OK\n');
+			return EXIT_OK;
+		} catch (exception:ParseError) {
+			final pos:Position = exception.span.lineCol(source);
+			final exp:String = reconNormalize(exception.expected);
+			final snip:String = reconNormalize(reconSnippet(source, exception.span.from));
+			sysPrint('PARSE FAIL :: ${pos.line}:${pos.col} expected="$exp" :: src="$snip"\n');
+			return EXIT_RUNTIME;
+		} catch (exception:Exception) {
+			sysPrint('PARSE FAIL :: <non-ParseError> ${reconNormalize(exception.message)}\n');
+			return EXIT_RUNTIME;
+		}
+	}
+
+	private static function runReconSweep(plugin:GrammarPlugin, root:String, topN:Int):Int {
+		final clusters:Map<String, ReconCluster> = [];
+		var total:Int = 0;
+		var wired:Bool = true;
+		final stack:Array<String> = [root];
+		while (stack.length > 0) {
+			final dir:Null<String> = stack.pop();
+			if (dir == null) break;
+			final names:Array<String> = FileSystem.readDirectory(dir);
+			names.sort((a:String, b:String) -> a < b ? -1 : (a > b ? 1 : 0));
+			for (name in names) {
+				final path:String = '$dir/$name';
+				if (FileSystem.isDirectory(path)) {
+					stack.push(path);
+					continue;
+				}
+				if (!StringTools.endsWith(name, '.hxtest')) continue;
+				final source:String = readSourceForParse(path);
+				try {
+					if (!plugin.reconParse(source)) {
+						wired = false;
+						break;
+					}
+				} catch (exception:ParseError) {
+					total++;
+					final pos:Position = exception.span.lineCol(source);
+					final relPath:String = stripRootPrefix(path, root);
+					final exp:String = reconNormalize(exception.expected);
+					final snip:String = reconNormalize(reconSnippet(source, exception.span.from));
+					final rawLocus:String = reconRawLocus(source, exception.span.from);
+					final key:String = reconNormalizeLocus(rawLocus);
+					addReconCluster(clusters, key, relPath, rawLocus);
+					sysPrint('SKIP $relPath :: ${pos.line}:${pos.col} expected="$exp" :: src="$snip"\n');
+				} catch (exception:Exception) {
+					total++;
+					final relPath:String = stripRootPrefix(path, root);
+					final key:String = '<non-ParseError> ' + reconNormalize(exception.message);
+					addReconCluster(clusters, key, relPath, '<exception>');
+					sysPrint('SKIP $relPath :: $key\n');
+				}
+			}
+			if (!wired) break;
+		}
+		if (!wired) {
+			stderr('apq recon: no recon parser wired up for this grammar plugin\n');
+			return EXIT_RUNTIME;
+		}
+		final entries:Array<{key:String, cluster:ReconCluster}> = [
+			for (k => v in clusters) {key: k, cluster: v}
+		];
+		entries.sort((a, b) -> b.cluster.count - a.cluster.count);
+		final shown:Int = entries.length > topN ? topN : entries.length;
+		sysPrint('\n');
+		sysPrint('--- skip-parse construct-locus histogram (total $total, showing top $shown of ${entries.length}; --all overrides) ---\n');
+		for (idx in 0...shown) {
+			final entry = entries[idx];
+			final c:ReconCluster = entry.cluster;
+			final examplesStr:String = c.examples.length == 1
+				? c.examples[0]
+				: c.examples.join(', ');
+			final raw:String = reconNormalize(c.rawSample);
+			sysPrint('  ${c.count}× "${entry.key}"  e.g. "$raw"  in: $examplesStr\n');
+		}
+		if (entries.length > shown)
+			sysPrint('  … (${entries.length - shown} more, use --top N or --all to see)\n');
+		return EXIT_OK;
+	}
+
+	private static function defaultReconRoot():String {
+		final fork:Null<String> = Sys.getEnv('ANYPARSE_HXFORMAT_FORK');
+		if (fork == null || fork.length == 0) return '';
+		final candidate:String = '$fork/test/testcases';
+		return FileSystem.exists(candidate) && FileSystem.isDirectory(candidate) ? candidate : fork;
+	}
+
+	private static function stripRootPrefix(path:String, root:String):String {
+		if (StringTools.startsWith(path, root + '/')) return path.substr(root.length + 1);
+		if (path == root) return '.';
+		return path;
+	}
+
+	private static function addReconCluster(map:Map<String, ReconCluster>, key:String, file:String, rawLocus:String):Void {
+		final prev:Null<ReconCluster> = map[key];
+		if (prev == null) {
+			map[key] = {count: 1, examples: [file], rawSample: rawLocus};
+		} else {
+			prev.count++;
+			if (prev.examples.length < RECON_EXAMPLES_PER_CLUSTER) prev.examples.push(file);
+		}
+	}
+
+	/**
+	 * Raw forward locus — `RECON_LOCUS_LEN` chars starting AT the fail
+	 * position. Used both as the cluster's raw sample (display) and as
+	 * input to the normaliser (cluster key).
+	 */
+	private static function reconRawLocus(input:String, offset:Int):String {
+		final start:Int = offset > input.length ? input.length : offset;
+		final end:Int = start + RECON_LOCUS_LEN > input.length ? input.length : start + RECON_LOCUS_LEN;
+		return input.substring(start, end);
+	}
+
+	/**
+	 * Normalise the forward locus into a cluster key — identifier runs
+	 * of length > 4 collapse to `_`, shorter runs (Haxe short keywords
+	 * `var`, `is`, `as`, `in`, `for`, `try`, `new`, `if`, `else`,
+	 * `case`, etc.) are kept verbatim so they remain visible in the
+	 * histogram. Punctuation, operators and whitespace pass through.
+	 * `reconNormalize` then escapes whitespace for one-line display.
+	 */
+	private static function reconNormalizeLocus(raw:String):String {
+		final buf:StringBuf = new StringBuf();
+		var i:Int = 0;
+		while (i < raw.length) {
+			final c:Int = StringTools.fastCodeAt(raw, i);
+			final isIdStart:Bool = (c >= 'a'.code && c <= 'z'.code)
+				|| (c >= 'A'.code && c <= 'Z'.code)
+				|| c == '_'.code;
+			if (isIdStart) {
+				var j:Int = i + 1;
+				while (j < raw.length) {
+					final cj:Int = StringTools.fastCodeAt(raw, j);
+					final isIdCont:Bool = (cj >= 'a'.code && cj <= 'z'.code)
+						|| (cj >= 'A'.code && cj <= 'Z'.code)
+						|| (cj >= '0'.code && cj <= '9'.code)
+						|| cj == '_'.code;
+					if (!isIdCont) break;
+					j++;
+				}
+				final identLen:Int = j - i;
+				if (identLen > 4) buf.add('_');
+				else for (k in i...j) buf.addChar(StringTools.fastCodeAt(raw, k));
+				i = j;
+			} else {
+				buf.addChar(c);
+				i++;
+			}
+		}
+		return reconNormalize(buf.toString());
+	}
+
+	/**
+	 * Source window of `RECON_HEAD_LEN` characters centred on `offset`
+	 * — the text around the farthest-failure locus, for the human-
+	 * readable SKIP line. Whitespace is escaped by `reconNormalize`.
+	 */
+	private static function reconSnippet(input:String, offset:Int):String {
+		final half:Int = Std.int(RECON_HEAD_LEN / 2);
+		final centre:Int = offset > input.length ? input.length : offset;
+		final start:Int = centre - half < 0 ? 0 : centre - half;
+		final end:Int = centre + half > input.length ? input.length : centre + half;
+		return input.substring(start, end);
+	}
+
+	private static function reconNormalize(message:Null<String>):String {
+		if (message == null || message == '') return '<no message>';
+		return StringTools.replace(StringTools.replace(message, '\n', '\\n'), '\t', '\\t');
+	}
+	#end
+
+	private static function printReconUsage():Void {
+		sysPrint('Usage: apq recon [<dir>] [--top N | --all] [--probe <file>]\n');
+		sysPrint('\n');
+		sysPrint('Sweep mode: walks every .hxtest under <dir> (section-2 auto-extracted),\n');
+		sysPrint('runs the trivia parser, clusters failures by normalised forward-locus,\n');
+		sysPrint('and prints SKIP lines + histogram. Default <dir> is\n');
+		sysPrint("$ANYPARSE_HXFORMAT_FORK/test/testcases when the env var is set.\n");
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('  --top N             Show top N clusters (default: 30)\n');
+		sysPrint('  --all               Show every cluster\n');
+		sysPrint('  --probe <file>      Single-file probe instead of sweep\n');
+		sysPrint('  -h, --help          Show this help\n');
+	}
+
 	private static function readFile(path:String):String {
 		#if (sys || nodejs)
 		return File.getContent(path);
@@ -2108,6 +2423,7 @@ final class Cli {
 		sysPrint('  strip         Sed-strip + parse-check (sole-blocker confirmation)\n');
 		sysPrint('  writer-equals Byte-equality check on writer output (trivia + --plain)\n');
 		sysPrint('  writer-probe  Emit trivia + plain writer outputs side-by-side\n');
+		sysPrint('  recon         Skip-parse drill — corpus sweep + locus-cluster histogram\n');
 		sysPrint('\n');
 		sysPrint('Global options:\n');
 		sysPrint('  --lang <name>   Pick grammar plugin (default: haxe)\n');
@@ -2254,7 +2570,9 @@ final class Cli {
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --json              Emit JSON instead of S-expr\n');
-		sysPrint('  --depth <n>         Truncate beyond depth n\n');
+		sysPrint('  --depth <n>         Truncate beyond depth n. Counted from the displayed root:\n');
+		sysPrint('                      module (default), the matched node when paired with --select / --at.\n');
+		sysPrint('                      --depth 0 prints just the root with no children.\n');
 		sysPrint('  --select <path>     Subtree(s) matching a selector (e.g. "ClassDecl > FnDecl:foo")\n');
 		sysPrint('  --at <line>:<col>   Innermost node enclosing the 1-indexed position\n');
 		sysPrint('  --doc               With --select/--at: emit the match\'s leading doc-comment\n');
@@ -2316,16 +2634,41 @@ final class Cli {
 	 * silently — no per-file error noise on every walk. Returns the
 	 * parsed tree, or `null` to skip (scan) / fail (single file).
 	 */
-	private static function parseWalked(cmd:String, parse:String -> QueryNode, path:String, source:String, singleFile:Bool):Null<QueryNode> {
+	private static function parseWalked(
+		cmd:String,
+		parse:String -> QueryNode,
+		path:String,
+		source:String,
+		singleFile:Bool,
+		?skipOut:Array<SkipEntry>
+	):Null<QueryNode> {
 		return try parse(source)
 			catch (exception:ParseError) {
 				if (singleFile) stderr('apq $cmd: $path: ${exception.toString()}\n');
+				if (skipOut != null) skipOut.push({path: path, locus: formatParseErrorLocus(exception, source)});
 				null;
 			}
 			catch (exception:Exception) {
 				if (singleFile) stderr('apq $cmd: $path: ${exception.message}\n');
+				if (skipOut != null) skipOut.push({path: path, locus: exception.message});
 				null;
 			};
+	}
+
+	/**
+	 * Render a `ParseError` as the skip-entry locus suffix shown in the
+	 * 0-hit walker nudge: `LINE:COL <message>[ (expected <X>)]`.
+	 *
+	 * The locus tells the reader whether the parse failure is at the
+	 * top of the file (so the file is effectively invisible to the walk)
+	 * or far past where the searched name would plausibly live (warning
+	 * can be ignored). Saves a follow-up `hxq ast <path>` probe to read
+	 * the same information.
+	 */
+	private static function formatParseErrorLocus(exception:ParseError, source:String):String {
+		final pos:Position = exception.span.lineCol(source);
+		final base:String = '${pos.line}:${pos.col} ${exception.message}';
+		return exception.expected == null ? base : '$base (expected ${exception.expected})';
 	}
 
 	/**
@@ -2403,6 +2746,41 @@ final class Cli {
 	}
 
 	/**
+	 * Heuristic: does the query look like a dotted member access
+	 * (`TypeName.method`, `obj.field`, `pkg.Module.entry`)? A single `.`
+	 * or `..` separator between identifier-shaped segments. Used by the
+	 * 0-hit nudge on `lit` / `refs` / `uses`: a dotted name is never a
+	 * leaf-name, value-binding, or type-position match — it's a Call /
+	 * FieldAccess shape, the structural answer is `apq search`.
+	 *
+	 * Returns the split segments when the query qualifies, null otherwise.
+	 * Each segment must be a non-empty identifier (`[A-Za-z_][A-Za-z0-9_]*`)
+	 * and total segment count must be ≥ 2.
+	 */
+	private static function looksLikeDottedAccess(s:String):Null<Array<String>> {
+		if (s.indexOf('.') < 0) return null;
+		final parts:Array<String> = s.split('.');
+		if (parts.length < 2) return null;
+		for (p in parts) {
+			if (p.length == 0) return null;
+			final first:Int = StringTools.fastCodeAt(p, 0);
+			final firstOk:Bool = (first >= 'a'.code && first <= 'z'.code)
+				|| (first >= 'A'.code && first <= 'Z'.code)
+				|| first == '_'.code;
+			if (!firstOk) return null;
+			for (idx in 1...p.length) {
+				final c:Int = StringTools.fastCodeAt(p, idx);
+				final ok:Bool = (c >= 'a'.code && c <= 'z'.code)
+					|| (c >= 'A'.code && c <= 'Z'.code)
+					|| (c >= '0'.code && c <= '9'.code)
+					|| c == '_'.code;
+				if (!ok) return null;
+			}
+		}
+		return parts;
+	}
+
+	/**
 	 * Heuristic: does the string look like a file/dir path? Contains `/`
 	 * or `.hx` suffix, OR is an existing filesystem entry. Pairs with
 	 * `looksLikeTypeName` to detect the `ast <TypeName> <dir>` shape.
@@ -2454,9 +2832,12 @@ final class Cli {
 	 *    (`refs <X>` on UpperCase → try `uses`/`blast`; `uses <x>` on
 	 *    lowercase → try `refs`/`lit`; etc.). `meta` has no `<name>` and
 	 *    skips this layer.
-	 *  - SKIP-PARSE WARNING: when `skipPaths` lists files that failed to
-	 *    parse, surface count + first few paths. The answer may be hiding
-	 *    in unparsed files, so silence here would mislead.
+	 *  - SKIP-PARSE WARNING: when `skipEntries` lists files that failed to
+	 *    parse, surface count + first few paths AND their failure locus
+	 *    (`LINE:COL <message>`). The locus lets the reader judge whether
+	 *    the parse failure is upstream of the searched-for content (the
+	 *    file is effectively invisible — warning critical) or far past it
+	 *    (warning can be ignored) without a follow-up `hxq ast` probe.
 	 *  - FUZZY DID-YOU-MEAN: for refs/uses with a non-null `candidates`
 	 *    name pool, suggest top-K candidates within Levenshtein distance.
 	 *    Silent when nothing close enough qualifies.
@@ -2466,7 +2847,7 @@ final class Cli {
 		name:Null<String>,
 		scanned:Int,
 		parseable:Int,
-		?skipPaths:Array<String>,
+		?skipEntries:Array<SkipEntry>,
 		?candidates:Map<String, Bool>
 	):String {
 		final summary:String = 'apq $cmd: 0 hits ($scanned file(s) scanned, $parseable parseable)';
@@ -2476,7 +2857,21 @@ final class Cli {
 			final first:Int = n.length > 0 ? StringTools.fastCodeAt(n, 0) : 0;
 			final isUpper:Bool = first >= 'A'.code && first <= 'Z'.code;
 			final isLower:Bool = first >= 'a'.code && first <= 'z'.code;
-			final hint:String = switch cmd {
+			final dotted:Null<Array<String>> = looksLikeDottedAccess(n);
+			final hint:String = if (dotted != null && (cmd == 'lit' || cmd == 'refs' || cmd == 'uses')) {
+				// Dotted query (`TypeName.method`, `obj.field`) — never a
+				// leaf-name / value-binding / type-position match. The
+				// structural answer is `apq search` with the access shape.
+				final lhs:String = dotted[0];
+				final rhs:String = dotted[dotted.length - 1];
+				final lhsFirst:Int = StringTools.fastCodeAt(lhs, 0);
+				final lhsIsUpper:Bool = lhsFirst >= 'A'.code && lhsFirst <= 'Z'.code;
+				// LHS uppercase ⇒ static call shape; otherwise instance access.
+				if (lhsIsUpper)
+					' — "$n" is a dotted access (Type.method / pkg.Module). $cmd matches leaf names / single bindings / type positions, never `Type.method` shape. Try: apq search \'$n($$_)\' <dir> (call shape), apq search \'$lhs.$rhs\' <dir> (field-access shape), or apq refs $rhs <dir> --decls (where the method is declared).';
+				else
+					' — "$n" is a dotted access (obj.field). $cmd matches leaf names / single bindings, never `obj.field` shape. Try: apq search \'$$x.$rhs\' <dir> (field-access shape), apq search \'$n\' <dir> (literal access), or apq refs $rhs <dir> --decls (where the field is declared).';
+			} else switch cmd {
 				case 'refs':
 					if (isUpper) ' — "$n" starts uppercase, looks like a TypeName. Try: apq uses $n <dir> (type positions), apq blast $n <dir> (full change-impact incl. field-access), or apq lit \'$n\' <dir> --any-kind (every leaf — case-patterns / imports / new exprs).';
 					else ' — "$n" has no value-binding here. Locals/params are NOT indexed. Try: apq lit \'$n\' <dir> --any-kind (every leaf — strings/idents/field-names) or apq search \'$$x.$n\' <dir> (field-access shape).';
@@ -2501,12 +2896,14 @@ final class Cli {
 		// Skip-parse warning: parseable < scanned means the answer may
 		// be hiding in unparsed files. Surface this loudly so a 0-hit
 		// query on a broken corpus is not silently trusted.
-		if (skipPaths != null && skipPaths.length > 0) {
-			final n:Int = skipPaths.length;
-			tail.add('\napq $cmd: WARNING: $n file(s) skip-parse — answer may be hiding in unparsed files. Probe via: hxq ast <one-of-them> to verify parse failure.');
+		if (skipEntries != null && skipEntries.length > 0) {
+			final n:Int = skipEntries.length;
+			tail.add('\napq $cmd: WARNING: $n file(s) skip-parse — answer may be hiding in unparsed files. Locus shows the parse-failure position; if it is far past the construct you searched for, the warning can be ignored.');
 			final shown:Int = n < SKIP_PATHS_SHOWN ? n : SKIP_PATHS_SHOWN;
-			for (i in 0...shown)
-				tail.add('\n  skip: ${skipPaths[i]}');
+			for (i in 0...shown) {
+				final entry:SkipEntry = skipEntries[i];
+				tail.add('\n  skip: ${entry.path} :: ${entry.locus}');
+			}
 			if (n > shown)
 				tail.add('\n  ... and ${n - shown} more');
 		}

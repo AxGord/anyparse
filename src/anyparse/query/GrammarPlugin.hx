@@ -113,6 +113,20 @@ interface GrammarPlugin {
 	 * Plugins may throw on parse failure; callers handle the exception.
 	 */
 	public function writeRoundTripPlain(source:String):Null<String>;
+
+	/**
+	 * Optional: strict trivia-mode parse used by `apq recon` for corpus
+	 * skip-parse sweeps. Returns `true` on successful parse; throws
+	 * `ParseError` (or other `Exception`) on parse failure so the caller
+	 * can cluster by error locus; returns `false` when the plugin has no
+	 * trivia parser wired up (CLI surfaces a `no recon parser for lang X`
+	 * and exits).
+	 *
+	 * The trivia pipeline preserves comments / blank lines and matches
+	 * the surface accepted by the writer's round-trip path, so a recon
+	 * run mirrors what the corpus harness sees on each fixture.
+	 */
+	public function reconParse(source:String):Bool;
 }
 
 /**

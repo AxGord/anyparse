@@ -54,4 +54,38 @@ class ParseErrorTest extends Test {
 			throw new ParseError(new Span(0, 0), 'boom');
 		}, ParseError);
 	}
+
+	// -- `source` decoration: when attached, `toString` renders 1-indexed
+	// line:col via `Span.lineCol(source)` instead of the raw byte offset.
+
+	function testToStringWithSourceUsesLineCol() {
+		final src:String = 'class C {\n\tvar x:\n}';
+		final e:ParseError = new ParseError(new Span(17, 17), 'unexpected input');
+		e.source = src;
+		Assert.equals('error at 2:8: unexpected input', e.toString());
+	}
+
+	function testToStringWithSourceAndExpected() {
+		final src:String = 'class C {\n\tvar x:\n}';
+		final e:ParseError = new ParseError(new Span(17, 17), 'unexpected input', '//');
+		e.source = src;
+		Assert.equals('error at 2:8: unexpected input (expected //)', e.toString());
+	}
+
+	function testToStringWithoutSourceFallsBackToByteOffset() {
+		// `source` is null by default — pre-existing toString shape stays
+		// in effect for direct callers that don't attach the source.
+		final e:ParseError = new ParseError(new Span(17, 17), 'unexpected input');
+		Assert.equals('error at 17: unexpected input', e.toString());
+		Assert.isNull(e.source);
+	}
+
+	function testSourceIsMutableAfterConstruction() {
+		// The entry-point decorator attaches `source` post-construction,
+		// so the field must be settable on a thrown-and-caught error.
+		final e:ParseError = new ParseError(new Span(0, 0), 'boom');
+		Assert.isNull(e.source);
+		e.source = 'class X {}';
+		Assert.equals('class X {}', e.source);
+	}
 }

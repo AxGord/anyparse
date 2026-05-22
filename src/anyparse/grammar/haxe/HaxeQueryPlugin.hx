@@ -136,6 +136,19 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		return HxModuleWriter.write(tree, opts);
 	}
 
+	/**
+	 * Trivia-mode strict parse for `apq recon`. Returns `true` on
+	 * success; the surrounding `ParseError` propagates to the CLI on
+	 * failure so the recon clusters by `error.span` locus. Same entry
+	 * point the corpus harness drives, so a recon-OK fixture is a
+	 * fixture the harness can attempt to format (the byte-comparison
+	 * may still fail downstream, but the parse no longer blocks).
+	 */
+	public function reconParse(source:String):Bool {
+		HaxeModuleTriviaParser.parse(source);
+		return true;
+	}
+
 	private function buildTree(source:String, withTypeRefs:Bool):QueryNode {
 		final root:Dynamic = HaxeModuleSpanParser.parse(source);
 		final children:Array<QueryNode> = [];

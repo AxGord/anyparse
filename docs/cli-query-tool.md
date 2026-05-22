@@ -50,7 +50,10 @@ apq ast <file>                     # S-expr default, full tree
 apq ast <file> --json              # JSON output
 apq ast <file> --at <line>:<col>   # smallest node enclosing cursor
 apq ast <file> --select <path>     # subtree(s) matching a selector
-apq ast <file> --depth <n>         # truncate beyond depth n
+apq ast <file> --depth <n>         # truncate beyond depth n (counted from
+                                   # the displayed root: module by default,
+                                   # the matched node when paired with
+                                   # --select / --at; --depth 0 = root only)
 apq ast <file> --select <path> --doc --source   # + doc-comment / verbatim slice
 ```
 
