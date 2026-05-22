@@ -167,6 +167,15 @@ final class HxExprUtil {
 	 *    `if (…) {…} else {…}` reaches `ExprStmt` only via Assign /
 	 *    paren / arrow RHS; the statement-position `if` routes through
 	 *    `HxStatement.IfStmt` instead.
+	 *  - `MetaExpr` whose inner expression recursively satisfies the
+	 *    predicate — `@:nullSafety(Off) return switch (…) { … }`,
+	 *    `@:m if (…) { … }`. Routes through `ExprStmt` because the
+	 *    leading `@:` forces the meta-wrapped expression path; the
+	 *    statement's last token is the inner expr's last token.
+	 *  - `ReturnExpr` whose value recursively satisfies the predicate
+	 *    — `return switch (…) { … }` reaches `ExprStmt` only via
+	 *    `MetaExpr` (statement-position `return` routes through
+	 *    `HxStatement.ReturnStmt`).
 	 *  - `BlockExpr` — recursion target only (a standalone block at
 	 *    statement position is `HxStatement.BlockStmt`, never
 	 *    `ExprStmt(BlockExpr)`), reached when an Assign's RHS or the
@@ -210,6 +219,30 @@ final class HxExprUtil {
 			if (operand == null) return false;
 			final operandCtor:Null<String> = Type.enumConstructor(operand);
 			return operandCtor == 'BlockExpr' || stmtExprNoSemi(operand);
+		}
+		// Slice 28: walk through `@:meta expr` into its inner expression —
+		// `@:nullSafety(Off) return switch (…) { … }` and
+		// `@:nullSafety(Off) if (…) { … }` end with the inner expr's `}`.
+		// `params[0]` is the `HxMetaExpr` struct (Plain) / `HxMetaExprT`
+		// struct (Trivia); read `.expr` directly (same shape as `IfExpr`).
+		if (ctor == 'MetaExpr') {
+			final params:Null<Array<Dynamic>> = Type.enumParameters(e);
+			if (params == null || params.length == 0) return false;
+			final metaExpr:Null<Dynamic> = params[0];
+			if (metaExpr == null) return false;
+			final inner:Null<Dynamic> = Reflect.field(metaExpr, 'expr');
+			return inner != null && stmtExprNoSemi(inner);
+		}
+		// Slice 28: walk through `return expr` into its operand —
+		// `return switch (…) { … }` ends with the switch's `}`. The
+		// statement-position `return` routes through `HxStatement.ReturnStmt`,
+		// so this branch only fires when something forces expression-mode
+		// (e.g. `@:meta return switch (…) { … }` reaching `ExprStmt`
+		// through `MetaExpr`).
+		if (ctor == 'ReturnExpr') {
+			final params:Null<Array<Dynamic>> = Type.enumParameters(e);
+			if (params == null || params.length == 0) return false;
+			return stmtExprNoSemi(params[0]);
 		}
 		// Slice 19: walk through `*Assign` into its right operand —
 		// `x = if (…) {…} else {…}` ends with the else block's `}`.
