@@ -180,14 +180,18 @@ final class HxExprUtil {
 	 *    statement position is `HxStatement.BlockStmt`, never
 	 *    `ExprStmt(BlockExpr)`), reached when an Assign's RHS or the
 	 *    body of an `IfExpr` branch is `{ … }`.
+	 *  - `ObjectLit` — bare `{ foo: 1 }` at statement position
+	 *    (slice 30). `BlockStmt`'s greedy `{` attempt fails on the
+	 *    `IDENT:` field shape, so `ExprStmt(ObjectLit)` is reached and
+	 *    the `}` is the statement's last token. NOT triggered through
+	 *    Assign-RHS — `x = {a: 1};` keeps `;` strict per the corpus
+	 *    contract (Slice 19 carve-out in the `*Assign` arm below).
 	 *  - Everything `endsWithCloseBrace` accepts (`SwitchExpr` /
 	 *    `SwitchExprBare` / `FnExpr` block-body / `TryExpr` recursive):
 	 *    as a statement these are `}`-terminated too.
 	 *
 	 * **`;` required** (gate false): every other shape — `Call`,
-	 * non-assign binop, ternary, object literal at top-level Assign
-	 * RHS (`x = {a: 1}` keeps `;` — the corpus does not exempt it),
-	 * etc.
+	 * non-assign binop, ternary, etc.
 	 *
 	 * Distinct from `endsWithCloseBrace` (the writer-side `var x = …`
 	 * rhs predicate), which deliberately returns `false` for
@@ -246,10 +250,18 @@ final class HxExprUtil {
 		}
 		// Slice 19: walk through `*Assign` into its right operand —
 		// `x = if (…) {…} else {…}` ends with the else block's `}`.
+		// Slice 30 carve-out: `x = {a: 1}` keeps `;` strict (the corpus
+		// contract — distinct from bare `{a: 1}` at stmt position).
+		// The carve-out lives here, not in the ObjectLit direct-return
+		// below, so other recursive arms (Meta / Return / If) still see
+		// ObjectLit as brace-terminated.
 		if (ASSIGN_CTORS.contains(ctor)) {
 			final params:Null<Array<Dynamic>> = Type.enumParameters(e);
 			if (params == null || params.length < 2) return false;
-			return stmtExprNoSemi(params[1]);
+			final rhs:Null<Dynamic> = unwrap(params[1]);
+			if (rhs == null) return false;
+			if (Type.enumConstructor(rhs) == 'ObjectLit') return false;
+			return stmtExprNoSemi(rhs);
 		}
 		// Slice 19: an `IfExpr` carries `thenBranch`/`elseBranch`; the
 		// statement's last token is the else branch's last token, or
@@ -273,6 +285,13 @@ final class HxExprUtil {
 		// position is `HxStatement.BlockStmt`, so this branch only
 		// fires when reached through Assign / IfExpr above.
 		if (ctor == 'BlockExpr') return true;
+		// Slice 30: object literal at statement position is brace-
+		// terminated. `{ foo: 1 }` reaches `ExprStmt(ObjectLit)` after
+		// `BlockStmt`'s greedy `{` attempt fails on the `IDENT:` field
+		// shape, so the gate must allow `;` elision matching Haxe's
+		// rule that a `}`-closed statement needs no `;`. Twin of the
+		// `BlockExpr` arm above — direct ctor-name match, no recursion.
+		if (ctor == 'ObjectLit') return true;
 		return endsWithCloseBrace(e);
 	}
 
