@@ -4,10 +4,20 @@ package anyparse.grammar.haxe;
  * One pattern element inside a `case` pattern list, optionally
  * carrying a guard (`case P if (cond):`).
  *
- * `expr` is the pattern expression (`A`, `Foo(x)`, `"a"`, `1` …) —
- * the same `HxExpr` the K3 multi-value slice parsed directly. `guard`
- * is the optional `if (cond)` clause: `@:optional @:kw('if')`, the
- * exact shape of `HxIfStmt.elseBody` / `HxIfExpr.elseBranch`
+ * `expr` is the pattern body — the `HxCasePatternBody` Alt-enum split
+ * between the Haxe pattern-only `case var <ident>:` capture
+ * (`Capture(name:HxVarNameLit)`, Slice 34) and the regular pattern
+ * expression catch-all (`Plain(expr:HxExpr)`). Splitting the body
+ * out of bare `HxExpr` keeps the capture form from routing through
+ * `HxExpr.VarExpr`, whose `HxVarDecl` would otherwise commit the
+ * type-hint `@:optional @:lead(':')` peek on the case-element
+ * terminator `:` and fail trying to parse the statement body as an
+ * `HxType`. See `HxCasePatternBody` for the parse-order rationale and
+ * why the inner `Pattern(var foo, var bar)` form still flows through
+ * the Plain path unchanged.
+ *
+ * `guard` is the optional `if (cond)` clause: `@:optional @:kw('if')`,
+ * the exact shape of `HxIfStmt.elseBody` / `HxIfExpr.elseBranch`
  * (`@:optional @:kw('else') var x:Null<…>`) — a word-like keyword
  * lead, so `@:kw` (word-boundary `matchKw`, D47) not `@:lead`
  * (raw `matchLit`): `case ify:` must NOT be read as guard `if y`.
@@ -37,6 +47,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxCasePattern = {
-	var expr:HxExpr;
+	var expr:HxCasePatternBody;
 	@:optional @:kw('if') var guard:Null<HxExpr>;
 };

@@ -3,6 +3,7 @@ package unit;
 import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxCaseBranch;
+import anyparse.grammar.haxe.HxCasePatternBody;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxDefaultBranch;
 import anyparse.grammar.haxe.HxExpr;
@@ -61,8 +62,8 @@ class HxSwitchNewSliceTest extends HxTestHelpers {
 			case CaseBranch(branch):
 				Assert.equals(1, branch.patterns.length);
 				switch branch.patterns[0].expr {
-					case IntLit(v): Assert.equals(1, v);
-					case null, _: Assert.fail('expected IntLit pattern');
+					case Plain(IntLit(v)): Assert.equals(1, v);
+					case null, _: Assert.fail('expected Plain(IntLit) pattern');
 				}
 				Assert.equals(1, branch.body.length);
 			case null, _: Assert.fail('expected CaseBranch');
@@ -97,8 +98,8 @@ class HxSwitchNewSliceTest extends HxTestHelpers {
 		switch sw.cases[0] {
 			case CaseBranch(b):
 				switch b.patterns[0].expr {
-					case IntLit(v): Assert.equals(1, v);
-					case null, _: Assert.fail('expected IntLit');
+					case Plain(IntLit(v)): Assert.equals(1, v);
+					case null, _: Assert.fail('expected Plain(IntLit)');
 				}
 				Assert.equals(1, b.body.length);
 			case null, _: Assert.fail('expected CaseBranch');
@@ -170,13 +171,13 @@ class HxSwitchNewSliceTest extends HxTestHelpers {
 		switch sw.cases[0] {
 			case CaseBranch(b):
 				switch b.patterns[0].expr {
-					case Call(operand, args):
+					case Plain(Call(operand, args)):
 						switch operand {
 							case IdentExpr(v): Assert.equals('Foo', (v : String));
 							case null, _: Assert.fail('expected IdentExpr operand');
 						}
 						Assert.equals(2, args.length);
-					case null, _: Assert.fail('expected Call pattern');
+					case null, _: Assert.fail('expected Plain(Call) pattern');
 				}
 			case null, _: Assert.fail('expected CaseBranch');
 		}

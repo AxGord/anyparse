@@ -3,6 +3,7 @@ package unit;
 import utest.Assert;
 import anyparse.grammar.haxe.HxCaseBranch;
 import anyparse.grammar.haxe.HxCasePattern;
+import anyparse.grammar.haxe.HxCasePatternBody;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxSwitchCase;
@@ -52,10 +53,17 @@ class HxSwitchGuardSliceTest extends HxTestHelpers {
 		};
 	}
 
+	private function plainExpr(p:HxCasePattern):HxExpr {
+		return switch p.expr {
+			case Plain(e): e;
+			case body: throw 'expected Plain pattern body, got $body';
+		};
+	}
+
 	public function testCaseWithGuardPresent():Void {
 		final sw:HxSwitchStmt = parseSwitch('class C { function f(x:E):Void { switch (x) { case A if (b): y(); case _: z(); } } }');
 		final p:HxCasePattern = caseBranch(sw.cases[0]).patterns[0];
-		Assert.equals('A', identName(p.expr));
+		Assert.equals('A', identName(plainExpr(p)));
 		switch p.guard {
 			case ParenExpr(inner): Assert.equals('b', identName(inner));
 			case null: Assert.fail('expected guard ParenExpr, got null');
@@ -67,7 +75,7 @@ class HxSwitchGuardSliceTest extends HxTestHelpers {
 		final sw:HxSwitchStmt = parseSwitch('class C { function f(x:Int):Void { switch (x) { case 1: y(); case _: z(); } } }');
 		final p:HxCasePattern = caseBranch(sw.cases[0]).patterns[0];
 		Assert.isNull(p.guard);
-		switch p.expr {
+		switch plainExpr(p) {
 			case IntLit(v): Assert.equals(1, v);
 			case e: Assert.fail('expected IntLit pattern, got $e');
 		}
@@ -77,9 +85,9 @@ class HxSwitchGuardSliceTest extends HxTestHelpers {
 		final sw:HxSwitchStmt = parseSwitch('class C { function f(x:E):Void { switch (x) { case A, B if (b): y(); case _: z(); } } }');
 		final ps:Array<HxCasePattern> = caseBranch(sw.cases[0]).patterns;
 		Assert.equals(2, ps.length);
-		Assert.equals('A', identName(ps[0].expr));
+		Assert.equals('A', identName(plainExpr(ps[0])));
 		Assert.isNull(ps[0].guard);
-		Assert.equals('B', identName(ps[1].expr));
+		Assert.equals('B', identName(plainExpr(ps[1])));
 		Assert.notNull(ps[1].guard);
 	}
 
@@ -87,7 +95,7 @@ class HxSwitchGuardSliceTest extends HxTestHelpers {
 		final sw:HxSwitchStmt = parseSwitch('class C { function f(x:E):Void { switch (x) { case Foo(a) if (b): y(); case _: z(); } } }');
 		final p:HxCasePattern = caseBranch(sw.cases[0]).patterns[0];
 		Assert.notNull(p.guard);
-		switch p.expr {
+		switch plainExpr(p) {
 			case Call(operand, _): Assert.equals('Foo', identName(operand));
 			case e: Assert.fail('expected Call pattern Foo(a), got $e');
 		}
@@ -98,7 +106,7 @@ class HxSwitchGuardSliceTest extends HxTestHelpers {
 		// mistaken for the case `:` trail (HxExpr has no bare-`:` op).
 		final sw:HxSwitchStmt = parseSwitch('class C { function f(x:Int):Void { switch (x) { case 1 if (a ? b : c): y(); case _: z(); } } }');
 		final p:HxCasePattern = caseBranch(sw.cases[0]).patterns[0];
-		switch p.expr {
+		switch plainExpr(p) {
 			case IntLit(v): Assert.equals(1, v);
 			case e: Assert.fail('expected IntLit 1, got $e');
 		}

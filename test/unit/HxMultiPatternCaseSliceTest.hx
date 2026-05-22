@@ -2,6 +2,7 @@ package unit;
 
 import utest.Assert;
 import anyparse.grammar.haxe.HxCaseBranch;
+import anyparse.grammar.haxe.HxCasePatternBody;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxSwitchCase;
@@ -47,8 +48,8 @@ class HxMultiPatternCaseSliceTest extends HxTestHelpers {
 		final b:HxCaseBranch = caseBranch(sw.cases[0]);
 		Assert.equals(1, b.patterns.length);
 		switch b.patterns[0].expr {
-			case IntLit(v): Assert.equals(1, v);
-			case null, _: Assert.fail('expected IntLit pattern, got ${b.patterns[0].expr}');
+			case Plain(IntLit(v)): Assert.equals(1, v);
+			case null, _: Assert.fail('expected Plain(IntLit) pattern, got ${b.patterns[0].expr}');
 		}
 	}
 
@@ -59,12 +60,12 @@ class HxMultiPatternCaseSliceTest extends HxTestHelpers {
 		final b:HxCaseBranch = caseBranch(sw.cases[0]);
 		Assert.equals(2, b.patterns.length);
 		switch b.patterns[0].expr {
-			case IntLit(v): Assert.equals(1, v);
-			case null, _: Assert.fail('expected IntLit 1');
+			case Plain(IntLit(v)): Assert.equals(1, v);
+			case null, _: Assert.fail('expected Plain(IntLit 1)');
 		}
 		switch b.patterns[1].expr {
-			case IntLit(v): Assert.equals(2, v);
-			case null, _: Assert.fail('expected IntLit 2');
+			case Plain(IntLit(v)): Assert.equals(2, v);
+			case null, _: Assert.fail('expected Plain(IntLit 2)');
 		}
 	}
 
@@ -97,12 +98,12 @@ class HxMultiPatternCaseSliceTest extends HxTestHelpers {
 		final b:HxCaseBranch = caseBranch(sw.cases[0]);
 		Assert.equals(2, b.patterns.length);
 		switch b.patterns[0].expr {
-			case Call(operand, _):
+			case Plain(Call(operand, _)):
 				switch operand {
 					case IdentExpr(v): Assert.equals('Foo', (v : String));
 					case null, _: Assert.fail('expected IdentExpr Foo');
 				}
-			case null, _: Assert.fail('expected Call pattern Foo(a)');
+			case null, _: Assert.fail('expected Plain(Call) pattern Foo(a)');
 		}
 	}
 }

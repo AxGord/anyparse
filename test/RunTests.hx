@@ -84,6 +84,7 @@ import unit.HxMacroTypeExprSliceTest;
 import unit.HxMultiPatternCaseSliceTest;
 import unit.HxRegexLitSliceTest;
 import unit.HxSwitchGuardSliceTest;
+import unit.HxCaseCaptureSliceTest;
 import unit.HxTrailingSepSliceTest;
 import unit.HxTypeParensSliceTest;
 import unit.HxTypeIntersectionSliceTest;
@@ -257,6 +258,7 @@ class RunTests {
 		runner.addCase(new HxMultiPatternCaseSliceTest());
 		runner.addCase(new HxRegexLitSliceTest());
 		runner.addCase(new HxSwitchGuardSliceTest());
+		runner.addCase(new HxCaseCaptureSliceTest());
 		runner.addCase(new HxTrailingSepSliceTest());
 		runner.addCase(new HxTypeParensSliceTest());
 		runner.addCase(new HxTypeIntersectionSliceTest());
