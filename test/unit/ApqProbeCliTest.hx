@@ -98,4 +98,22 @@ class ApqProbeCliTest extends Test {
 		// only through the probe subcommand.
 		Assert.equals(0, Cli.run(['ast', '--code', 'class C {}']));
 	}
+
+	/**
+	 * `--spans` is in `AST_BOOL_FLAGS` so the probe walker treats it as
+	 * a no-value flag and forwards it intact to `runAst`. Verifies the
+	 * flag is recognized end-to-end (exit 0); content is checked
+	 * elsewhere.
+	 */
+	public function testInlineCodeWithSpans():Void {
+		Assert.equals(0, Cli.run(['probe', 'class C { var x = a ? 1. : 2.; }', '--spans']));
+	}
+
+	public function testAstSpansFlagDirect():Void {
+		Assert.equals(0, Cli.run(['ast', '--code', 'class C {}', '--spans']));
+	}
+
+	public function testAstSpansComposesWithDepth():Void {
+		Assert.equals(0, Cli.run(['ast', '--code', 'class C { var x:Int = 1; }', '--spans', '--depth', '4']));
+	}
 }

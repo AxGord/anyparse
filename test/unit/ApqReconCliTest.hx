@@ -375,6 +375,107 @@ class ApqReconCliTest extends Test {
 		#end
 	}
 
+	// -- --regression-probe: snapshot-diff mode --
+
+	public function testReconRegressionProbeIncompatibleWithProbe():Void {
+		Assert.equals(2, Cli.run(['recon', '--regression-probe', '--probe', '/x']),
+			'--regression-probe + --probe is mutually exclusive');
+	}
+
+	public function testReconRegressionProbeIncompatibleWithPredictStrip():Void {
+		Assert.equals(2, Cli.run(['recon', '--regression-probe', '--predict-strip', '--delete', 'x', '/x']),
+			'--regression-probe + --predict-strip is mutually exclusive');
+	}
+
+	public function testReconRegressionProbeIncompatibleWithCluster():Void {
+		Assert.equals(2, Cli.run(['recon', '--regression-probe', '--cluster', 'k', '/x']),
+			'--regression-probe + --cluster is mutually exclusive');
+	}
+
+	public function testReconRegressionProbeNoSnapshotExitsClean():Void {
+		#if sys
+		// In a temp directory with no snapshot file: regression-probe
+		// exits OK with a "no baseline" diagnostic (CWD doesn't have
+		// `bin/.last-sweep.json`). Run from a tmp CWD to guarantee that.
+		final dir:String = mkTempDir('apq_recon_regression_no_snap');
+		final savedCwd:String = Sys.getCwd();
+		Sys.setCwd(dir);
+		Assert.equals(0, Cli.run(['recon', '--regression-probe', dir]),
+			'--regression-probe with no snapshot is a clean OK exit (no baseline)');
+		Sys.setCwd(savedCwd);
+		cleanupDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testReconRegressionProbeUnblockOnFixtureNotInSnapshot():Void {
+		#if sys
+		// Fixture present locally but absent in the snapshot: silently
+		// ignored (no false UNBLOCK / REGRESSED line). Run in a tmp CWD
+		// with a hand-written empty-fixtures snapshot.
+		final dir:String = mkTempDir('apq_recon_regression_silent');
+		File.saveContent('$dir/good.hxtest', goodHxtest());
+		// Hand-write a snapshot with 0 fixtures — every local file is
+		// "not in baseline" → silent.
+		FileSystem.createDirectory('$dir/bin');
+		File.saveContent('$dir/bin/.last-sweep.json',
+			'{"pass":0,"fail":0,"skipParse":0,"skipWrite":0,"skipConfig":0,"skipMalformed":0,"fixtures":[{"path":"other/whatever.hxtest","status":"PASS"}]}');
+		final savedCwd:String = Sys.getCwd();
+		Sys.setCwd(dir);
+		Assert.equals(0, Cli.run(['recon', '--regression-probe', dir]),
+			'fixtures present locally but absent from snapshot are silent (no false flips)');
+		Sys.setCwd(savedCwd);
+		cleanupDir('$dir/bin');
+		cleanupDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testReconRegressionProbeFlagsRegression():Void {
+		#if sys
+		// Snapshot says fixture was PASS; the actual fixture is broken
+		// → REGRESSED line, exit non-zero. This is the load-bearing
+		// detection path.
+		final dir:String = mkTempDir('apq_recon_regression_hit');
+		File.saveContent('$dir/bad.hxtest', brokenHxtest());
+		FileSystem.createDirectory('$dir/bin');
+		File.saveContent('$dir/bin/.last-sweep.json',
+			'{"pass":1,"fail":0,"skipParse":0,"skipWrite":0,"skipConfig":0,"skipMalformed":0,"fixtures":[{"path":"bad.hxtest","status":"PASS"}]}');
+		final savedCwd:String = Sys.getCwd();
+		Sys.setCwd(dir);
+		Assert.equals(1, Cli.run(['recon', '--regression-probe', dir]),
+			'regressed fixture (was PASS, now skip-parse) is a runtime exit');
+		Sys.setCwd(savedCwd);
+		cleanupDir('$dir/bin');
+		cleanupDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testReconRegressionProbeFlagsUnblock():Void {
+		#if sys
+		// Snapshot says fixture was SKIP_PARSE; the actual fixture parses
+		// → UNBLOCKED line, exit OK (unblocks alone don't fail the probe).
+		final dir:String = mkTempDir('apq_recon_regression_unblock');
+		File.saveContent('$dir/good.hxtest', goodHxtest());
+		FileSystem.createDirectory('$dir/bin');
+		File.saveContent('$dir/bin/.last-sweep.json',
+			'{"pass":0,"fail":0,"skipParse":1,"skipWrite":0,"skipConfig":0,"skipMalformed":0,"fixtures":[{"path":"good.hxtest","status":"SKIP_PARSE"}]}');
+		final savedCwd:String = Sys.getCwd();
+		Sys.setCwd(dir);
+		Assert.equals(0, Cli.run(['recon', '--regression-probe', dir]),
+			'unblocked fixture (was SKIP_PARSE, now parses) is a clean OK exit');
+		Sys.setCwd(savedCwd);
+		cleanupDir('$dir/bin');
+		cleanupDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if sys
 	private static var counter:Int = 0;
 

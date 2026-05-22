@@ -35,15 +35,15 @@ import anyparse.runtime.Span.Position;
 @:nullSafety(Strict)
 final class Text {
 
-	public static function render(node:QueryNode):String {
-		return SValueWriter.write(toSValue(node), SExprFormat.instance.defaultWriteOptions) + '\n';
+	public static function render(node:QueryNode, spans:Bool = false):String {
+		return SValueWriter.write(toSValue(node, spans), SExprFormat.instance.defaultWriteOptions) + '\n';
 	}
 
-	public static function renderMatches(matches:Array<QueryNode>, source:String, doc:Bool, src:Bool):String {
+	public static function renderMatches(matches:Array<QueryNode>, source:String, doc:Bool, src:Bool, spans:Bool = false):String {
 		if (matches.length == 0) return '(no matches)\n';
 		final buf:StringBuf = new StringBuf();
 		for (m in matches) {
-			buf.add(SValueWriter.write(toSValue(m), SExprFormat.instance.defaultWriteOptions));
+			buf.add(SValueWriter.write(toSValue(m, spans), SExprFormat.instance.defaultWriteOptions));
 			buf.add('\n');
 			appendDocSource(buf, source, m.span, doc, src);
 		}
@@ -189,11 +189,15 @@ final class Text {
 		return StringTools.trim(flat);
 	}
 
-	private static function toSValue(node:QueryNode):SValue {
+	private static function toSValue(node:QueryNode, spans:Bool = false):SValue {
 		final items:Array<SValue> = [SAtom(node.kind)];
 		final n:Null<String> = node.name;
 		if (n != null) items.push(makeNameValue(n));
-		for (c in node.children) items.push(toSValue(c));
+		if (spans) {
+			final span:Null<Span> = node.span;
+			if (span != null) items.push(SAtom('@${span.from}-${span.to}'));
+		}
+		for (c in node.children) items.push(toSValue(c, spans));
 		return SList(items);
 	}
 

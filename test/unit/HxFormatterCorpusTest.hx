@@ -82,6 +82,15 @@ class HxFormatterCorpusTest extends Test {
 	private static var sweepSkipWrite:Int = 0;
 	private static var sweepSkipConfig:Int = 0;
 	private static var sweepSkipMalformed:Int = 0;
+	// ω-sweep-fixture-status: per-fixture status map for `apq recon
+	// --regression-probe`. Each runCategory iteration appends one entry
+	// per `.hxtest` it inspects. Path format is `<subdir>/<name>` (e.g.
+	// `whitespace/issue_195_macro_do_while.hxtest`), matching what
+	// `Cli.collectReconSkipRecords` reports — so the diff machinery can
+	// look up "what was this fixture's status last sweep?" by path alone.
+	// Status enum is restricted to the six categories runCategory emits:
+	// PASS / FAIL / SKIP_PARSE / SKIP_WRITE / SKIP_CONFIG / MALFORMED.
+	private static final sweepFixtures:Array<{path:String, status:String}> = [];
 
 	public function new():Void {
 		super();
@@ -154,13 +163,19 @@ class HxFormatterCorpusTest extends Test {
 
 		for (name in names) if (StringTools.endsWith(name, HXTEST_EXT)) {
 			final path:String = dir + '/' + name;
+			// Subdir-relative path for the sweep snapshot; matches what
+			// `apq recon` reports per-fixture, so `--regression-probe`
+			// can look up the previous status by this exact key.
+			final relPath:String = '$subdir/$name';
 			final tc:Null<HxTestCase> = HxFormatterCorpusHelpers.readHxTest(path);
 			if (tc == null) {
 				skipMalformed++;
+				sweepFixtures.push({path: relPath, status: 'MALFORMED'});
 				continue;
 			}
 			final opts:HxModuleWriteOptions = try HaxeFormatConfigLoader.loadHxFormatJson(tc.config) catch (exception:Exception) {
 				skipConfig++;
+				sweepFixtures.push({path: relPath, status: 'SKIP_CONFIG'});
 				continue;
 			};
 			// .hxtest fixtures strip exactly one trailing `\n` from each
@@ -177,10 +192,12 @@ class HxFormatterCorpusTest extends Test {
 				final reason:String = classifyParseFailure(exception, tc.input);
 				final prev:Null<Int> = parseReasons[reason];
 				parseReasons[reason] = (prev == null ? 0 : prev) + 1;
+				sweepFixtures.push({path: relPath, status: 'SKIP_PARSE'});
 				continue;
 			};
 			final actualRaw:String = try HaxeModuleTriviaWriter.write(module, opts) catch (exception:Exception) {
 				skipWrite++;
+				sweepFixtures.push({path: relPath, status: 'SKIP_WRITE'});
 				continue;
 			};
 			final actual:String = actualRaw.length > 0 && StringTools.fastCodeAt(actualRaw, actualRaw.length - 1) == '\n'.code
@@ -188,9 +205,11 @@ class HxFormatterCorpusTest extends Test {
 				: actualRaw;
 			if (actual == tc.expected) {
 				pass++;
+				sweepFixtures.push({path: relPath, status: 'PASS'});
 			} else {
 				fail++;
 				failLines.push('  [$name] ' + describeDiff(tc.expected, actual));
+				sweepFixtures.push({path: relPath, status: 'FAIL'});
 			}
 		}
 
@@ -261,6 +280,10 @@ class HxFormatterCorpusTest extends Test {
 		Sys.println('===== sweep totals: $sweepPass pass / $sweepFail fail / $sweepSkipParse skip-parse / $sweepSkipWrite skip-write / $sweepSkipConfig skip-config / $sweepSkipMalformed malformed (total $total) =====');
 		Sys.println(deltaStr);
 		try {
+			// `fixtures` array carries the per-fixture status map that
+			// `apq recon --regression-probe` reads to diff status FLIPS
+			// between sweeps. Backwards-compatible — older sweep readers
+			// (the in-process Δ-printer above) ignore the field.
 			final json:String = haxe.Json.stringify({
 				pass: sweepPass,
 				fail: sweepFail,
@@ -268,6 +291,7 @@ class HxFormatterCorpusTest extends Test {
 				skipWrite: sweepSkipWrite,
 				skipConfig: sweepSkipConfig,
 				skipMalformed: sweepSkipMalformed,
+				fixtures: sweepFixtures,
 			});
 			sys.io.File.saveContent(SWEEP_JSON_PATH, json);
 		} catch (_:Exception) {}

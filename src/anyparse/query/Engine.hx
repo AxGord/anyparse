@@ -64,21 +64,25 @@ final class Engine {
 	}
 
 	private static function truncateAt(node:QueryNode, depth:Int, maxDepth:Int):QueryNode {
-		if (depth >= maxDepth) return new QueryNode(node.kind, node.name, []);
+		// Spans are preserved across `truncate` / `truncateChildren` —
+		// `--spans` rendering needs them on every visible node, and
+		// shaping is a display concern that should not strip source-
+		// position info.
+		if (depth >= maxDepth) return new QueryNode(node.kind, node.name, [], node.span);
 		final kids:Array<QueryNode> = [for (c in node.children) truncateAt(c, depth + 1, maxDepth)];
-		return new QueryNode(node.kind, node.name, kids);
+		return new QueryNode(node.kind, node.name, kids, node.span);
 	}
 
 	private static function truncateChildrenAt(node:QueryNode, maxChildren:Int):QueryNode {
 		final all:Array<QueryNode> = node.children;
 		if (all.length <= maxChildren) {
 			final kids:Array<QueryNode> = [for (c in all) truncateChildrenAt(c, maxChildren)];
-			return new QueryNode(node.kind, node.name, kids);
+			return new QueryNode(node.kind, node.name, kids, node.span);
 		}
 		final kept:Array<QueryNode> = [for (i in 0...maxChildren) truncateChildrenAt(all[i], maxChildren)];
 		final omitted:Int = all.length - maxChildren;
 		kept.push(new QueryNode('...', '$omitted more', []));
-		return new QueryNode(node.kind, node.name, kept);
+		return new QueryNode(node.kind, node.name, kept, node.span);
 	}
 
 	private static function walkSelect(node:QueryNode, sel:Selector, segIdx:Int, out:Array<QueryNode>):Void {

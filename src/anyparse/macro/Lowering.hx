@@ -3461,9 +3461,23 @@ class Lowering {
 		final advanceLenExpr:Expr = captureGroup == null
 			? macro _matched.length
 			: macro $i{eregVar}.matched(0).length;
+		// ω-terminal-anchor-guard: `EReg.match` returns true even when the
+		// regex matches mid-string (the `^` anchor binds only to the FIRST
+		// alternative without an explicit non-capturing group — `^A|B` ≡
+		// `(^A)|B`, so the second alt silently scans the rest of input for
+		// an arbitrary match). Caught by Slice 36's `HxFloatLit` regex
+		// extension: `^[0-9]+\.[0-9]+|[0-9]+\.(?![\w.])` matched `1.` mid-
+		// buffer when the parser was sitting at an ident, overwriting the
+		// ident's position with the float slice. Defensive runtime check
+		// rejects any match that did not start at position 0 of `_rest` —
+		// `matchedPos().pos != 0` ⇒ same `ParseError` as `!match`. Cheap
+		// (one extra accessor call per terminal hit), universal (every
+		// `@:re`-driven terminal gets it), and catches the bug class
+		// instead of patching individual regexes after they leak into a
+		// slice's sweep delta.
 		return macro {
 			final _rest:String = ctx.input.substring(ctx.pos, ctx.input.length);
-			if (!$i{eregVar}.match(_rest)) {
+			if (!$i{eregVar}.match(_rest) || $i{eregVar}.matchedPos().pos != 0) {
 				throw new anyparse.runtime.ParseError(
 					new anyparse.runtime.Span(ctx.pos, ctx.pos),
 					$v{'expected $simple'}

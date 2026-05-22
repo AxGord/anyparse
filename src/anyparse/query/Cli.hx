@@ -1961,6 +1961,7 @@ final class Cli {
 		var minChildren:Int = -1;
 		var maxChildren:Int = -1;
 		var childrenLimit:Int = -1;
+		var spans:Bool = false;
 		var file:Null<String> = null;
 		// Inline source (`apq probe '<code>'` → `--code <s>`) or stdin
 		// (`apq ast --stdin`) bypass the file read for micro-probes
@@ -2041,6 +2042,17 @@ final class Cli {
 					codeArg = expectValue(args, ++i, '--code');
 				case '--stdin':
 					stdinFlag = true;
+				case '--spans':
+					// Append `@from-to` byte-range annotation to every
+					// rendered node — same-span duplicates (e.g. parser bug
+					// emitting two nodes at the same source position) become
+					// a trivial visual signal in the S-expr output. Slice 36's
+					// `^A|B` regex bug produced `(Ternary (FloatLit 1. @4-6)
+					// (FloatLit 1. @4-6) (FloatLit 2. @11-13))` — two
+					// FloatLits at the same span ⇒ mid-buffer match
+					// overwrote an earlier ident. Plain `(no-spans)` form
+					// stays default to keep transcripts compact.
+					spans = true;
 				case '-h', '--help':
 					printAstUsage();
 					return EXIT_OK;
@@ -2195,7 +2207,7 @@ final class Cli {
 			final offset:Int = Span.offsetOf(source, atLineN, atColN);
 			final node:Null<QueryNode> = Engine.at(tree, offset);
 			final matches:Array<QueryNode> = node == null ? [] : [shapeAstOutput(node, depth, childrenLimit)];
-			sysPrint(json ? Json.renderMatches(fileLabel, source, matches, wantDoc, wantSource) : Text.renderMatches(matches, source, wantDoc, wantSource));
+			sysPrint(json ? Json.renderMatches(fileLabel, source, matches, wantDoc, wantSource) : Text.renderMatches(matches, source, wantDoc, wantSource, spans));
 			return EXIT_OK;
 		}
 
@@ -2246,12 +2258,12 @@ final class Cli {
 					+ 'Kinds are exact node-constructor names — run `apq ast $fileLabel` to see the tree.\n');
 			}
 			final matches:Array<QueryNode> = [for (m in raw) shapeAstOutput(m, depth, childrenLimit)];
-			sysPrint(json ? Json.renderMatches(fileLabel, source, matches, wantDoc, wantSource) : Text.renderMatches(matches, source, wantDoc, wantSource));
+			sysPrint(json ? Json.renderMatches(fileLabel, source, matches, wantDoc, wantSource) : Text.renderMatches(matches, source, wantDoc, wantSource, spans));
 			return EXIT_OK;
 		}
 
 		final shaped:QueryNode = shapeAstOutput(tree, depth, childrenLimit);
-		sysPrint(json ? Json.renderTree(fileLabel, source, shaped) : Text.render(shaped));
+		sysPrint(json ? Json.renderTree(fileLabel, source, shaped) : Text.render(shaped, spans));
 		return EXIT_OK;
 	}
 
@@ -2376,7 +2388,7 @@ final class Cli {
 	private static final AST_BOOL_FLAGS:Array<String> = [
 		'--json', '--doc', '--source',
 		'--writer-output', '--writer-output-plain',
-		'--diff', '--stdin',
+		'--diff', '--stdin', '--spans',
 	];
 
 	private static inline function isAstBoolFlag(flag:String):Bool {
@@ -2504,6 +2516,16 @@ final class Cli {
 		var rootDir:Null<String> = null;
 		var clusterFilter:Null<String> = null;
 		var predictStrip:Bool = false;
+		// `--regression-probe`: read the prior sweep snapshot's per-fixture
+		// status map (`bin/.last-sweep.json` `fixtures` array) and diff
+		// against the current corpus's parse-OK/FAIL state. Surfaces every
+		// fixture whose parse status FLIPPED since the snapshot was
+		// written. Catches "I edited the grammar, am I breaking anything
+		// that was working?" pre-sweep — cheaper than a full corpus rerun
+		// because it only does the trivia parse step (no writer / no
+		// expected-bytes comparison). Mutually exclusive with --probe /
+		// --predict-strip / --cluster (separate diagnostic mode).
+		var regressionProbe:Bool = false;
 		// `--source`: drill-mode-only flag. When set in combination with
 		// `--cluster <key>`, the per-path output gains a windowed source
 		// snippet centred on the fail-locus. Outside drill it would
@@ -2538,6 +2560,8 @@ final class Cli {
 					showSource = true;
 				case '--predict-strip':
 					predictStrip = true;
+				case '--regression-probe':
+					regressionProbe = true;
 				case '--replace':
 					if (pendingReplace != null) {
 						stderr('apq recon: --replace "$pendingReplace" needs a --with before the next --replace\n');
@@ -2597,6 +2621,23 @@ final class Cli {
 			stderr('apq recon: --source requires --cluster <key> or --predict-strip (drill / STILL-FAIL modes only; would flood the sweep otherwise)\n');
 			return EXIT_USAGE;
 		}
+		// `--regression-probe` is its own mode — separate from probe /
+		// predict / cluster / source. Reject the combinations with a clear
+		// usage error instead of silently picking one path.
+		if (regressionProbe) {
+			if (probePath != null) {
+				stderr('apq recon: --regression-probe and --probe are mutually exclusive\n');
+				return EXIT_USAGE;
+			}
+			if (predictStrip) {
+				stderr('apq recon: --regression-probe and --predict-strip are mutually exclusive\n');
+				return EXIT_USAGE;
+			}
+			if (clusterFilter != null) {
+				stderr('apq recon: --regression-probe and --cluster are mutually exclusive\n');
+				return EXIT_USAGE;
+			}
+		}
 		final plugin:GrammarPlugin = pickPlugin(lang);
 		if (probePath != null) return runReconProbe(plugin, (probePath : String), predictStrip, patterns, replacements, showSource);
 		final rootFinal:String = rootDir ?? defaultReconRoot();
@@ -2610,7 +2651,146 @@ final class Cli {
 			stderr('apq recon: "$rootFinal" is not a directory.\n');
 			return EXIT_RUNTIME;
 		}
+		if (regressionProbe) return runReconRegressionProbe(plugin, rootFinal);
 		return runReconSweep(plugin, rootFinal, topN, clusterFilter, predictStrip, patterns, replacements, showSource);
+	}
+
+	/**
+	 * `apq recon --regression-probe` — load the prior sweep snapshot's
+	 * per-fixture status map (`bin/.last-sweep.json`'s `fixtures` array,
+	 * written by `HxFormatterCorpusTest.printSweepDelta`) and diff
+	 * against the current corpus's parse OK / SKIP_PARSE state.
+	 *
+	 * Surfaces every fixture whose parse status FLIPPED since the
+	 * snapshot:
+	 *   REGRESSED <path>: was PASS, now SKIP_PARSE :: line:col <locus>
+	 *   UNBLOCKED <path>: was SKIP_PARSE, now parses OK
+	 *
+	 * The probe only runs the trivia parser, NOT the writer — skip-write
+	 * / skip-config / malformed statuses are pre- or post-parse concerns
+	 * and stay orthogonal to grammar edits. PASS / FAIL / SKIP_WRITE in
+	 * the snapshot collapse to "parsed OK" for diff purposes (the writer
+	 * failed but the parser accepted the input).
+	 *
+	 * Exits 0 when no regressions found (unblocks alone are still
+	 * non-zero-friendly); non-zero exit when any REGRESSED line printed
+	 * — so a CI hook can fail the build before the user runs the full
+	 * sweep.
+	 */
+	private static function runReconRegressionProbe(plugin:GrammarPlugin, root:String):Int {
+		// Load the prior snapshot. Missing / unreadable / malformed JSON
+		// is a non-fatal "no baseline" — print a single info line and
+		// exit OK so a fresh checkout doesn't fail the probe.
+		final snapshotPath:String = 'bin/.last-sweep.json';
+		if (!FileSystem.exists(snapshotPath)) {
+			sysPrint('apq recon: no prior sweep snapshot at $snapshotPath — run `node bin/test.js` under $$ANYPARSE_HXFORMAT_FORK first to seed the baseline\n');
+			return EXIT_OK;
+		}
+		final prior:Map<String, String> = loadSweepFixtureStatus(snapshotPath);
+		if (prior.iterator().hasNext() == false) {
+			sysPrint('apq recon: snapshot at $snapshotPath has no `fixtures` array — older format, re-run `node bin/test.js` to refresh the baseline\n');
+			return EXIT_OK;
+		}
+		// Walk the current corpus and bucket each fixture as
+		// PARSE_OK or SKIP_PARSE. Reused machinery from `collectReconSkipRecords`
+		// — but we also need the OK list (which `collectReconSkipRecords`
+		// drops), so walk again with a simpler shape.
+		var regressed:Int = 0;
+		var unblocked:Int = 0;
+		var scanned:Int = 0;
+		final stack:Array<String> = [root];
+		while (stack.length > 0) {
+			final dir:Null<String> = stack.pop();
+			if (dir == null) break;
+			final names:Array<String> = FileSystem.readDirectory(dir);
+			names.sort((a:String, b:String) -> a < b ? -1 : (a > b ? 1 : 0));
+			for (name in names) {
+				final path:String = '$dir/$name';
+				if (FileSystem.isDirectory(path)) {
+					stack.push(path);
+					continue;
+				}
+				if (!StringTools.endsWith(name, '.hxtest')) continue;
+				final relPath:String = stripRootPrefix(path, root);
+				final priorStatus:Null<String> = prior[relPath];
+				if (priorStatus == null) continue; // present locally but absent from snapshot — silent
+				scanned++;
+				final source:String = readSourceForParse(path);
+				var currentParseOk:Bool = false;
+				var currentLine:Int = 0;
+				var currentCol:Int = 0;
+				var currentMsg:String = '';
+				try {
+					if (!plugin.reconParse(source)) {
+						stderr('apq recon: no recon parser wired up for this grammar plugin\n');
+						return EXIT_RUNTIME;
+					}
+					currentParseOk = true;
+				} catch (exception:ParseError) {
+					final pos:Position = exception.span.lineCol(source);
+					currentLine = pos.line;
+					currentCol = pos.col;
+					currentMsg = reconNormalize(exception.expected);
+				} catch (exception:Exception) {
+					currentMsg = reconNormalize(exception.message);
+				}
+				final priorParsed:Bool = priorStatus == 'PASS' || priorStatus == 'FAIL' || priorStatus == 'SKIP_WRITE';
+				final priorSkipParse:Bool = priorStatus == 'SKIP_PARSE';
+				if (priorParsed && !currentParseOk) {
+					regressed++;
+					final locus:String = currentLine > 0 ? ' :: $currentLine:$currentCol expected="$currentMsg"' : ' :: $currentMsg';
+					sysPrint('REGRESSED $relPath: was $priorStatus, now SKIP_PARSE$locus\n');
+				} else if (priorSkipParse && currentParseOk) {
+					unblocked++;
+					sysPrint('UNBLOCKED $relPath: was SKIP_PARSE, now parses OK\n');
+				}
+				// SKIP_CONFIG / MALFORMED in prior: orthogonal to grammar; silent.
+				// No flip: silent.
+			}
+		}
+		sysPrint('--- regression-probe: $regressed regressed, $unblocked unblocked, $scanned scanned vs snapshot ---\n');
+		return regressed > 0 ? EXIT_RUNTIME : EXIT_OK;
+	}
+
+	/**
+	 * Read `bin/.last-sweep.json`'s `fixtures` array (written by
+	 * `HxFormatterCorpusTest.printSweepDelta`) into a `path → status`
+	 * map. Returns an empty map on any parse / shape failure so the
+	 * caller can fail-soft with a "no baseline" diagnostic instead of
+	 * crashing on a malformed snapshot.
+	 */
+	private static function loadSweepFixtureStatus(path:String):Map<String, String> {
+		final out:Map<String, String> = [];
+		try {
+			final raw:String = sys.io.File.getContent(path);
+			final obj:Dynamic = haxe.Json.parse(raw);
+			if (!Reflect.hasField(obj, 'fixtures')) return out;
+			final fixtures:Dynamic = Reflect.field(obj, 'fixtures');
+			if (!Std.isOfType(fixtures, Array)) return out;
+			final arr:Array<Dynamic> = (fixtures : Array<Dynamic>);
+			for (entry in arr) {
+				final entryPath:Null<Dynamic> = Reflect.field(entry, 'path');
+				final entryStatus:Null<Dynamic> = Reflect.field(entry, 'status');
+				if (entryPath != null && entryStatus != null
+					&& Std.isOfType(entryPath, String) && Std.isOfType(entryStatus, String)) {
+					// Normalise snapshot path to match what
+					// `stripRootPrefix` emits for the recon walker. The
+					// corpus harness records paths as
+					// `test/testcases/<subdir>/<name>` (rooted at the fork);
+					// recon walks from `<fork>/test/testcases` so its
+					// stripped paths are `<subdir>/<name>`. Trim the leading
+					// `test/testcases/` here so the diff lookup is keyed
+					// the same way on both sides.
+					final raw:String = (entryPath : String);
+					final corpusPrefix:String = 'test/testcases/';
+					final normalised:String = StringTools.startsWith(raw, corpusPrefix)
+						? raw.substr(corpusPrefix.length)
+						: raw;
+					out[normalised] = (entryStatus : String);
+				}
+			}
+		} catch (_:Exception) {}
+		return out;
 	}
 
 	private static function runReconProbe(
@@ -3258,6 +3438,16 @@ final class Cli {
 		sysPrint('                          retries the parse, printing PREDICT UNBLOCK / STILL\n');
 		sysPrint('                          FAIL / NO MATCH + per-pattern totals + typo guard\n');
 		sysPrint('                          (same shape as sweep mode).\n');
+		sysPrint('  --regression-probe      Diff current corpus parse OK / SKIP_PARSE state against\n');
+		sysPrint('                          the prior sweep snapshot (`bin/.last-sweep.json`).\n');
+		sysPrint('                          Reports every fixture whose parse status FLIPPED since\n');
+		sysPrint('                          the snapshot — REGRESSED (was PASS / FAIL / SKIP_WRITE,\n');
+		sysPrint('                          now skip-parse) and UNBLOCKED (was SKIP_PARSE, now\n');
+		sysPrint('                          parses). Cheap pre-edit / post-edit sanity check —\n');
+		sysPrint('                          only runs the trivia parse, no writer / no expected-\n');
+		sysPrint('                          bytes diff. Non-zero exit when any regression found.\n');
+		sysPrint('                          Mutually exclusive with --probe / --predict-strip /\n');
+		sysPrint('                          --cluster.\n');
 		sysPrint('  -h, --help              Show this help.\n');
 	}
 
@@ -3603,6 +3793,7 @@ final class Cli {
 		sysPrint('  --source            With --select/--at: emit the match\'s verbatim source slice\n');
 		sysPrint('  --min-children <n>  With --select: keep only matches with >= n direct children (e.g. multi-arg ParamCtor)\n');
 		sysPrint('  --max-children <n>  With --select: keep only matches with <= n direct children\n');
+		sysPrint('  --spans             Append `@from-to` byte-range annotation to every rendered node — same-span duplicates (parser bug emitting two nodes at the same position) become a trivial visual signal.\n');
 		sysPrint('  --writer-output     Parse + format-write through the plugin trivia pipeline and print the emitted source\n');
 		sysPrint('  --writer-output-plain  Like --writer-output but uses the plain (non-trivia) writer — mirrors the unit-test entry HxModuleWriter.write(HaxeModuleParser.parse(src)); flattens source layout, drops comments\n');
 		sysPrint('  --diff              With --writer-output: AST-diff the input against the emitted output (writer-bug loop)\n');
