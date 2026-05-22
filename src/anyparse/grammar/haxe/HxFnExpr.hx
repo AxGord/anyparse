@@ -33,11 +33,11 @@ package anyparse.grammar.haxe;
  * before `params` and routes through the same `HxTypeParamDecl`
  * grammar as `HxFnDecl.typeParams`.
  *
- * Named local function expressions (`function foo() body` in
- * expression position) are out of scope for this slice — if the
- * input has an identifier between `function` and `(`, the
- * enclosing `tryBranch` rolls back the `function` keyword and
- * tries the next atom candidate.
+ * Named function expressions (`function foo() body` in expression
+ * position) are handled by the sibling `HxExpr.NamedFnExpr` ctor
+ * (Slice 32) — placed BEFORE `FnExpr` so the longer-prefix-first
+ * rule wins on an identifier after `function`; on a missing name
+ * the parser rolls back to `FnExpr` (this typedef).
  *
  * `body` is `@:optional` with `@:absentOn(...)` peek-ahead: when
  * the next non-trivia char after `params` (or `returnType`) is one

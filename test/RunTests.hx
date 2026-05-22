@@ -76,6 +76,7 @@ import unit.HxAbstractClassSliceTest;
 import unit.HxMacroClassSliceTest;
 import unit.HxDollarReifSliceTest;
 import unit.HxLocalFnStmtSliceTest;
+import unit.HxNamedFnExprSliceTest;
 import unit.HxForKeyValueSliceTest;
 import unit.HxMacroModHexSliceTest;
 import unit.HxMacroTypeExprSliceTest;
@@ -246,6 +247,7 @@ class RunTests {
 		runner.addCase(new HxMacroClassSliceTest());
 		runner.addCase(new HxDollarReifSliceTest());
 		runner.addCase(new HxLocalFnStmtSliceTest());
+		runner.addCase(new HxNamedFnExprSliceTest());
 		runner.addCase(new HxForKeyValueSliceTest());
 		runner.addCase(new HxMacroModHexSliceTest());
 		runner.addCase(new HxMacroTypeExprSliceTest());
