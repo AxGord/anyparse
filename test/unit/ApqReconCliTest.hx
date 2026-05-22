@@ -280,11 +280,76 @@ class ApqReconCliTest extends Test {
 
 	// -- --source: drill window guard --
 
-	public function testReconSourceWithoutClusterIsUsageError():Void {
-		// `--source` is drill-mode only. Outside `--cluster` it would
-		// flood every SKIP line — usage error caught BEFORE any FS I/O.
+	public function testReconSourceWithoutClusterOrPredictIsUsageError():Void {
+		// `--source` is valid only with `--cluster` (drill window) OR
+		// `--predict-strip` (STILL FAIL window). In plain sweep mode it
+		// would flood every SKIP line — usage error caught BEFORE any FS
+		// I/O.
 		Assert.equals(2, Cli.run(['recon', '--source', '/some/dir']),
-			'--source without --cluster is a usage error');
+			'--source without --cluster or --predict-strip is a usage error');
+	}
+
+	public function testReconPredictStripSourceProbeStillFailEmitsWindow():Void {
+		#if sys
+		// `--predict-strip --source --probe <file>` on a STILL FAIL
+		// outcome: applying the substitution shifts the bug but the
+		// stripped source still fails to parse. The new flag adds a src
+		// window around the NEW fail-locus so the moved-locus payload is
+		// visible without a separate Read of the stripped source.
+		final dir:String = mkTempDir('apq_recon_predict_source');
+		// 3-section .hxtest: config / input / expected. The `XYZ` token
+		// is the strip target — replacing it with `WAT` keeps the file
+		// broken (WAT is also invalid), so the strip moves the bug but
+		// does not resolve it. Probe mode prints PREDICT STILL FAIL +
+		// (with --source) a windowed source slice.
+		final fixture:String = '{}\n---\n\nclass C { var x:Int = 0 XYZ; }\n\n---\n\nclass C {\n\tvar x:Int = 0;\n}\n';
+		final fixturePath:String = '$dir/probe.hxtest';
+		File.saveContent(fixturePath, fixture);
+		Assert.equals(1, Cli.run([
+			'recon', '--probe', fixturePath, '--predict-strip', '--source',
+			'--replace', 'XYZ', '--with', 'WAT'
+		]), '--predict-strip --probe --source on STILL FAIL exits runtime (parse still fails)');
+		cleanupDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testReconPredictStripSourceProbeUnblockExitsZero():Void {
+		#if sys
+		// `--source` is additive — when the predict resolves to UNBLOCK
+		// (no STILL FAIL entries) it emits no extra windows and exit code
+		// stays 0. Guards against `--source` accidentally forcing
+		// runtime exit in the predict path.
+		final dir:String = mkTempDir('apq_recon_predict_source_ok');
+		final fixture:String = '{}\n---\n\nclass C { var x:Int = 0 XYZ; }\n\n---\n\nclass C {\n\tvar x:Int = 0;\n}\n';
+		final fixturePath:String = '$dir/probe.hxtest';
+		File.saveContent(fixturePath, fixture);
+		Assert.equals(0, Cli.run([
+			'recon', '--probe', fixturePath, '--predict-strip', '--source',
+			'--delete', ' XYZ'
+		]), '--predict-strip --probe --source on UNBLOCK is a clean exit');
+		cleanupDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testReconPredictStripSourceSweepStillFailEmitsWindow():Void {
+		#if sys
+		// Sweep-mode parallel of the probe test — STILL FAIL across a
+		// directory walk should still exit non-zero with --source active.
+		final dir:String = mkTempDir('apq_recon_predict_source_sweep');
+		final fixture:String = '{}\n---\n\nclass C { var x:Int = 0 XYZ; }\n\n---\n\nclass C {\n\tvar x:Int = 0;\n}\n';
+		File.saveContent('$dir/bad.hxtest', fixture);
+		Assert.equals(0, Cli.run([
+			'recon', '--predict-strip', '--source',
+			'--replace', 'XYZ', '--with', 'WAT', dir
+		]), '--predict-strip --source sweep STILL FAIL still emits, exits 0 (pattern matched)');
+		cleanupDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
 	}
 
 	public function testReconClusterSourceOnEmptyCorpusExitsRuntime():Void {

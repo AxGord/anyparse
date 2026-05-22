@@ -2587,15 +2587,18 @@ final class Cli {
 			stderr('apq recon: --replace/--with/--delete require --predict-strip\n');
 			return EXIT_USAGE;
 		}
-		// `--source` is meaningful only inside cluster drill — outside it
-		// would flood every SKIP line with a per-fixture window. Make
-		// the misuse a hard usage error so the flag never silently no-ops.
-		if (showSource && clusterFilter == null) {
-			stderr('apq recon: --source requires --cluster <key> (drill-mode only; would flood the sweep otherwise)\n');
+		// `--source` is meaningful only in modes where the per-path window
+		// adds signal — `--cluster <key>` drill OR `--predict-strip`
+		// STILL FAIL entries (where the new locus is the actionable
+		// payload). In plain sweep mode it would flood every SKIP line
+		// with a per-fixture window, so make the misuse a hard usage
+		// error rather than a silent no-op.
+		if (showSource && clusterFilter == null && !predictStrip) {
+			stderr('apq recon: --source requires --cluster <key> or --predict-strip (drill / STILL-FAIL modes only; would flood the sweep otherwise)\n');
 			return EXIT_USAGE;
 		}
 		final plugin:GrammarPlugin = pickPlugin(lang);
-		if (probePath != null) return runReconProbe(plugin, (probePath : String), predictStrip, patterns, replacements);
+		if (probePath != null) return runReconProbe(plugin, (probePath : String), predictStrip, patterns, replacements, showSource);
 		final rootFinal:String = rootDir ?? defaultReconRoot();
 		if (rootFinal == '') {
 			stderr("apq recon: no <dir> given and $ANYPARSE_HXFORMAT_FORK env var is unset.\n");
@@ -2612,7 +2615,8 @@ final class Cli {
 
 	private static function runReconProbe(
 		plugin:GrammarPlugin, path:String,
-		predictStrip:Bool, patterns:Array<String>, replacements:Array<String>
+		predictStrip:Bool, patterns:Array<String>, replacements:Array<String>,
+		showSource:Bool
 	):Int {
 		if (!FileSystem.exists(path)) {
 			stderr('apq recon: --probe path "$path" does not exist\n');
@@ -2629,7 +2633,7 @@ final class Cli {
 		// canonical pre-edit signal of a typo or whitespace mismatch).
 		// Without `--predict-strip`, the legacy PARSE OK / PARSE FAIL
 		// output is byte-identical to before.
-		if (predictStrip) return runReconProbePredict(plugin, path, original, patterns, replacements);
+		if (predictStrip) return runReconProbePredict(plugin, path, original, patterns, replacements, showSource);
 		try {
 			if (!plugin.reconParse(original)) {
 				stderr('apq recon: no recon parser wired up for this grammar plugin\n');
@@ -2651,7 +2655,8 @@ final class Cli {
 
 	private static function runReconProbePredict(
 		plugin:GrammarPlugin, path:String, original:String,
-		patterns:Array<String>, replacements:Array<String>
+		patterns:Array<String>, replacements:Array<String>,
+		showSource:Bool
 	):Int {
 		// Capture the original fail-locus first so STILL FAIL can report
 		// the moved-locus hint (same signal as sweep-mode predict-strip).
@@ -2688,6 +2693,7 @@ final class Cli {
 				final movedHint:String = (origLine > 0 && (pos.line != origLine || pos.col != origCol))
 					? ' (was $origLine:$origCol)' : '';
 				sysPrint('PREDICT STILL FAIL $path :: ${pos.line}:${pos.col}${movedHint} ${pe.message}\n');
+				if (showSource) printReconSourceWindow(stripped, pos.line);
 				exitCode = EXIT_RUNTIME;
 			} catch (e:Exception) {
 				sysPrint('PREDICT STILL FAIL $path :: <no locus> ${e.message}\n');
@@ -2752,7 +2758,7 @@ final class Cli {
 			filteredClusters = [wanted => hit];
 			filteredRecords = [for (r in records) if (r.clusterKey == wanted) r];
 		}
-		if (predictStrip) return runReconPredictStrip(filteredRecords, filteredClusters, plugin, patterns, replacements, clusterFilter);
+		if (predictStrip) return runReconPredictStrip(filteredRecords, filteredClusters, plugin, patterns, replacements, clusterFilter, showSource);
 		for (r in filteredRecords) sysPrint('${r.skipLine}\n');
 		if (clusterFilter != null) return printReconClusterDrill(filteredClusters, records.length, (clusterFilter : String), filteredRecords, showSource);
 		return printReconHistogram(clusters, records.length, topN);
@@ -2957,7 +2963,7 @@ final class Cli {
 	private static function runReconPredictStrip(
 		records:Array<ReconRecord>, clusters:Map<String, ReconCluster>,
 		plugin:GrammarPlugin, patterns:Array<String>, replacements:Array<String>,
-		clusterFilter:Null<String>
+		clusterFilter:Null<String>, showSource:Bool
 	):Int {
 		var unblockCount:Int = 0;
 		var stillFailCount:Int = 0;
@@ -2991,11 +2997,15 @@ final class Cli {
 				// common false-negative trap on slice candidates. Surface
 				// the new line:col + message so the reader sees the move at
 				// a glance instead of opening the stripped source to diff
-				// the locus by hand.
+				// the locus by hand. With `--source`, also emit a windowed
+				// src slice around the new locus — replaces the manual
+				// Read of the stripped source when the moved-locus hint
+				// alone is ambiguous.
 				final pos:Position = pe.span.lineCol(stripped);
 				final movedHint:String = (r.line > 0 && (pos.line != r.line || pos.col != r.col))
 					? ' (was ${r.line}:${r.col})' : '';
 				sysPrint('PREDICT STILL FAIL ${r.path} :: ${pos.line}:${pos.col}${movedHint} ${pe.message}\n');
+				if (showSource) printReconSourceWindow(stripped, pos.line);
 				stillFailCount++;
 			} catch (e:Exception) {
 				sysPrint('PREDICT STILL FAIL ${r.path} :: <no locus> ${e.message}\n');
@@ -3215,7 +3225,7 @@ final class Cli {
 
 	private static function printReconUsage():Void {
 		sysPrint('Usage: apq recon [<dir>] [--top N | --all] [--cluster <substr> [--source]]\n');
-		sysPrint('                 [--predict-strip --replace <pat> --with <repl> ...]\n');
+		sysPrint('                 [--predict-strip --replace <pat> --with <repl> ... [--source]]\n');
 		sysPrint('                 [--probe <file>]\n');
 		sysPrint('\n');
 		sysPrint('Sweep mode: walks every .hxtest under <dir> (section-2 auto-extracted),\n');
@@ -3233,7 +3243,9 @@ final class Cli {
 		sysPrint('                          0-match exits non-zero with top keys for ref.\n');
 		sysPrint('  --source                With --cluster, append a windowed source slice\n');
 		sysPrint('                          around the fail-locus for each path (L±3).\n');
-		sysPrint('                          Drill-mode only; usage error outside --cluster.\n');
+		sysPrint('                          With --predict-strip, also emits the window for\n');
+		sysPrint('                          each STILL FAIL entry around the NEW fail-locus\n');
+		sysPrint('                          (the moved-locus payload). Usage error otherwise.\n');
 		sysPrint('  --predict-strip         Apply substitutions to each skip-parse source\n');
 		sysPrint('                          and retry; print PREDICT UNBLOCK / STILL FAIL /\n');
 		sysPrint('                          NO MATCH per file. Requires --replace/--with or\n');
