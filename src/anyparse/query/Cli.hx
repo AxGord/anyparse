@@ -2022,12 +2022,32 @@ final class Cli {
 		// switches to `--stdin` when literal `-`).
 		var codeArg:Null<String> = null;
 		final forwarded:Array<String> = [];
+		// `--writer-probe` is a probe-only flag that diverts the source to
+		// `runWriterProbe`'s trivia+plain side-by-side emitter instead of
+		// the default `runAst` path. Lives here (not in `runAst`'s flag
+		// set) because writer-probe is a multi-pipeline aggregator with
+		// no `--depth` / `--select` knobs to compose with. `--lang` IS
+		// forwarded because `pickPlugin` needs it.
+		var writerProbeMode:Bool = false;
+		var lang:String = 'haxe';
 		var i:Int = 0;
 		while (i < args.length) {
 			final a:String = args[i];
 			if (a == '-h' || a == '--help') {
 				printProbeUsage();
 				return EXIT_OK;
+			}
+			if (a == '--writer-probe') {
+				writerProbeMode = true;
+				i++;
+				continue;
+			}
+			if (a == '--lang') {
+				lang = expectValue(args, ++i, '--lang');
+				forwarded.push('--lang');
+				forwarded.push(lang);
+				i++;
+				continue;
 			}
 			if (StringTools.startsWith(a, '--')) {
 				forwarded.push(a);
@@ -2055,6 +2075,16 @@ final class Cli {
 			return EXIT_USAGE;
 		}
 		final codeFinal:String = codeArg;
+		if (writerProbeMode) {
+			final source:String = codeFinal == '-' ? readStdin() : codeFinal;
+			final plugin:GrammarPlugin = pickPlugin(lang);
+			// `<probe>` is the synthetic file label — matches the byte
+			// shape `apq writer-probe` uses on real files and keeps any
+			// downstream error message format consistent.
+			final triviaOk:Bool = emitOneWriterProbe(plugin, source, '<probe>', lang, false, null);
+			final plainOk:Bool = emitOneWriterProbe(plugin, source, '<probe>', lang, true, null);
+			return (triviaOk && plainOk) ? EXIT_OK : EXIT_RUNTIME;
+		}
 		// `-` is the conventional Unix marker for stdin — route to the
 		// shared --stdin path on runAst so probe shares one source loader.
 		final injected:Array<String> = codeFinal == '-' ? ['--stdin'] : ['--code', codeFinal];
@@ -2604,11 +2634,21 @@ final class Cli {
 				}
 				sysPrint('PREDICT UNBLOCK   ${r.path}\n');
 				unblockCount++;
-			} catch (_:ParseError) {
-				sysPrint('PREDICT STILL FAIL ${r.path}\n');
+			} catch (pe:ParseError) {
+				// New locus after substitution. When it differs from the
+				// pre-strip locus the strip likely moved the problem (e.g.
+				// pattern matched a decl AND a use position), which is the
+				// common false-negative trap on slice candidates. Surface
+				// the new line:col + message so the reader sees the move at
+				// a glance instead of opening the stripped source to diff
+				// the locus by hand.
+				final pos:Position = pe.span.lineCol(stripped);
+				final movedHint:String = (r.line > 0 && (pos.line != r.line || pos.col != r.col))
+					? ' (was ${r.line}:${r.col})' : '';
+				sysPrint('PREDICT STILL FAIL ${r.path} :: ${pos.line}:${pos.col}${movedHint} ${pe.message}\n');
 				stillFailCount++;
-			} catch (_:Exception) {
-				sysPrint('PREDICT STILL FAIL ${r.path}\n');
+			} catch (e:Exception) {
+				sysPrint('PREDICT STILL FAIL ${r.path} :: <no locus> ${e.message}\n');
 				stillFailCount++;
 			}
 		}
@@ -3111,13 +3151,20 @@ final class Cli {
 	private static function printProbeUsage():Void {
 		sysPrint('Usage: apq probe <code> [ast-options]\n');
 		sysPrint('       apq probe - [ast-options]   (read code from stdin)\n');
+		sysPrint('       apq probe <code> --writer-probe   (trivia + plain side-by-side)\n');
 		sysPrint('\n');
 		sysPrint('Inline-source variant of `apq ast`. Accepts every ast option\n');
 		sysPrint('(--depth/--select/--at/--json/--writer-output/--writer-output-plain/\n');
 		sysPrint('--writer-output --diff/--min-children/--max-children/--lang).\n');
 		sysPrint('\n');
+		sysPrint('--writer-probe diverts to the `writer-probe` aggregator: emits BOTH\n');
+		sysPrint('the trivia and plain writer outputs separated by `=== trivia ===` /\n');
+		sysPrint('`=== plain ===` fences. Mirrors `apq writer-probe <file>` for inline\n');
+		sysPrint('source — no scratch file needed.\n');
+		sysPrint('\n');
 		sysPrint('Example:\n');
 		sysPrint("  apq probe 'class C { function f() { @:m return switch x { case _: 0; } } }' --depth 6\n");
+		sysPrint("  apq probe 'class C {}' --writer-probe\n");
 	}
 
 	private static function printWriterProbeUsage():Void {

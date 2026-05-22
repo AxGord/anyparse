@@ -259,6 +259,25 @@ class ApqReconCliTest extends Test {
 		#end
 	}
 
+	public function testReconPredictStripStillFailExitsClean():Void {
+		#if sys
+		final dir:String = mkTempDir('apq_recon_predict_stillfail');
+		// Strip pattern matches but the substitution leaves the body
+		// unparseable (rename `XYZ` to `WAT`, still not a token). The
+		// STILL FAIL branch now emits the new locus + the original locus
+		// when they differ — the test guards exit semantics (0 because
+		// the pattern matched ≥1 time) and prevents accidental
+		// regression of the format change.
+		final fixture:String = '{}\n---\n\nclass C { var x:Int = 0 XYZ; }\n\n---\n\nclass C {\n\tvar x:Int = 0;\n}\n';
+		File.saveContent('$dir/bad.hxtest', fixture);
+		Assert.equals(0, Cli.run(['recon', '--predict-strip', '--replace', 'XYZ', '--with', 'WAT', dir]),
+			'--predict-strip STILL FAIL exits 0 when pattern matched (the file still fails to parse, but pattern hit ≥1)');
+		cleanupDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	// -- --source: drill window guard --
 
 	public function testReconSourceWithoutClusterIsUsageError():Void {

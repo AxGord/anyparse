@@ -71,4 +71,18 @@ class ApqWriterProbeCliTest extends Test {
 	public function testTwoFilesExitsUsage():Void {
 		Assert.equals(2, Cli.run(['writer-probe', 'a.hx', 'b.hx']));
 	}
+
+	// -- `probe --writer-probe` inline-source variant --
+
+	public function testProbeWriterProbeFlagSucceedsOnInlineCode():Void {
+		// `probe '<code>' --writer-probe` mirrors `writer-probe <file>`
+		// for inline source — no scratch file needed. Same exit
+		// semantics: 0 iff both trivia + plain pipelines succeed.
+		Assert.equals(0, Cli.run(['probe', 'class C {}', '--writer-probe']));
+	}
+
+	public function testProbeWriterProbeUnparseableInputExitsRuntime():Void {
+		// Mirrors `writer-probe`'s unparseable-input contract.
+		Assert.equals(1, Cli.run(['probe', 'class C {', '--writer-probe']));
+	}
 }
