@@ -83,6 +83,8 @@ final class Cli {
 			case 'diff': return runDiff(rest);
 			case 'strip': return runStrip(rest);
 			case 'writer-equals': return runWriterEquals(rest);
+			case 'probe': return runProbe(rest);
+			case 'writer-probe': return runWriterProbe(rest);
 			case _:
 				stderr('apq: unknown subcommand "$cmd"\n');
 				printUsage();
@@ -521,6 +523,12 @@ final class Cli {
 	private static function runStrip(args:Array<String>):Int {
 		var lang:String = 'haxe';
 		var showSource:Bool = false;
+		// --dry-run: skip the parse step, only verify that every supplied
+		// --replace/--delete pattern actually matched at least once in
+		// at least one file. Typo guard for batch strip-sweeps — when
+		// the pattern silently doesn't match, the corpus delta misleads;
+		// a single dry-run pass surfaces the typo before any apply.
+		var dryRun:Bool = false;
 		final files:Array<String> = [];
 		final patterns:Array<String> = [];
 		final replacements:Array<String> = [];
@@ -555,6 +563,8 @@ final class Cli {
 					replacements.push('');
 				case '--show':
 					showSource = true;
+				case '--dry-run':
+					dryRun = true;
 				case '-h', '--help':
 					printStripUsage();
 					return EXIT_OK;
@@ -587,16 +597,32 @@ final class Cli {
 		var anyChanged:Bool = false;
 		var passCount:Int = 0;
 		var failCount:Int = 0;
+		// --dry-run: track per-pattern match totals across all files so a
+		// pattern that matched 0 occurrences ANYWHERE surfaces as a typo,
+		// even when other patterns in the same call did match.
+		final patternHits:Array<Int> = dryRun ? [for (_ in 0...patterns.length) 0] : [];
 		for (filePath in files) {
 			final source:String = readSourceForParse(filePath);
 			var stripped:String = source;
-			for (idx in 0...patterns.length)
+			var fileHits:Int = 0;
+			for (idx in 0...patterns.length) {
+				if (dryRun) {
+					final hits:Int = countOccurrences(stripped, patterns[idx]);
+					patternHits[idx] += hits;
+					fileHits += hits;
+				}
 				stripped = StringTools.replace(stripped, patterns[idx], replacements[idx]);
+			}
 			if (stripped != source) anyChanged = true;
 			if (showSource) {
 				stderr('--- stripped source (${filePath}) ---\n$stripped\n--- end ---\n');
 			}
 			final prefix:String = multi ? '$filePath: ' : '';
+			if (dryRun) {
+				final tag:String = fileHits > 0 ? 'WOULD CHANGE' : 'NO MATCH';
+				sysPrint('${prefix}$tag ($fileHits substitution${fileHits == 1 ? '' : 's'})\n');
+				continue;
+			}
 			try {
 				plugin.parseFile(stripped);
 				sysPrint('${prefix}PARSE OK\n');
@@ -611,6 +637,30 @@ final class Cli {
 				anyFailed = true;
 			}
 		}
+		if (dryRun) {
+			// Per-pattern summary first so a sweep over N files exposes
+			// each pattern's match count individually. Exit non-zero
+			// when ANY supplied pattern matched 0 occurrences — the
+			// guard's whole purpose is to catch a typo even when a
+			// sibling pattern in the same call did match. Use the
+			// global zero case for a stronger error message.
+			var anyZero:Bool = false;
+			for (idx in 0...patterns.length) {
+				final pat:String = patterns[idx];
+				final total:Int = patternHits[idx];
+				if (total == 0) anyZero = true;
+				sysPrint('  pattern[$idx] "$pat" — $total match${total == 1 ? '' : 'es'}\n');
+			}
+			if (!anyChanged) {
+				stderr('apq strip: --dry-run: WARNING: no pattern matched in any file (typo? pattern bytes vs. file bytes mismatch?)\n');
+				return EXIT_RUNTIME;
+			}
+			if (anyZero) {
+				stderr('apq strip: --dry-run: WARNING: one or more patterns matched 0 occurrences — see per-pattern totals above\n');
+				return EXIT_RUNTIME;
+			}
+			return EXIT_OK;
+		}
 		if (!anyChanged) {
 			final scope:String = multi ? 'across all ${files.length} files' : '';
 			stderr('apq strip: WARNING: no substitution changed the source (patterns matched 0 occurrences${scope == '' ? '' : ' $scope'})\n');
@@ -621,6 +671,25 @@ final class Cli {
 		return anyFailed ? EXIT_RUNTIME : EXIT_OK;
 	}
 
+	/**
+	 * Count non-overlapping occurrences of `needle` in `haystack`.
+	 * Matches `StringTools.replace`'s scan semantics — used by `apq
+	 * strip --dry-run` so the per-pattern hit count exactly tracks
+	 * how many substitutions the non-dry-run path would perform.
+	 */
+	private static function countOccurrences(haystack:String, needle:String):Int {
+		if (needle.length == 0) return 0;
+		var count:Int = 0;
+		var from:Int = 0;
+		while (true) {
+			final idx:Int = haystack.indexOf(needle, from);
+			if (idx < 0) break;
+			count++;
+			from = idx + needle.length;
+		}
+		return count;
+	}
+
 	private static function printStripUsage():Void {
 		sysPrint('Usage: apq strip [options] <file> [<file2> ...] --replace <pat> --with <repl> [...]\n');
 		sysPrint('\n');
@@ -629,6 +698,7 @@ final class Cli {
 		sysPrint('  --with <repl>       Replacement for the most recent --replace\n');
 		sysPrint('  --delete <pat>      Shortcut for --replace <pat> --with \'\'\n');
 		sysPrint('  --show              Dump the stripped source to stderr (debug)\n');
+		sysPrint('  --dry-run           Skip parse, only verify each pattern matched ≥1 occurrence somewhere (typo guard)\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 		sysPrint('\n');
 		sysPrint("Apply literal substitutions in order, then parse the result via the\n");
@@ -1439,6 +1509,12 @@ final class Cli {
 		var minChildren:Int = -1;
 		var maxChildren:Int = -1;
 		var file:Null<String> = null;
+		// Inline source (`apq probe '<code>'` → `--code <s>`) or stdin
+		// (`apq ast --stdin`) bypass the file read for micro-probes
+		// without a /tmp scratch file. Mutually exclusive with each
+		// other and with a file argument; checked after arg parsing.
+		var codeArg:Null<String> = null;
+		var stdinFlag:Bool = false;
 
 		var i:Int = 0;
 		while (i < args.length) {
@@ -1487,6 +1563,10 @@ final class Cli {
 						return EXIT_USAGE;
 					}
 					maxChildren = parsed;
+				case '--code':
+					codeArg = expectValue(args, ++i, '--code');
+				case '--stdin':
+					stdinFlag = true;
 				case '-h', '--help':
 					printAstUsage();
 					return EXIT_OK;
@@ -1521,13 +1601,29 @@ final class Cli {
 			i++;
 		}
 
-		if (file == null) {
-			stderr('apq ast: missing <file> argument\n');
+		// Source resolution: --code wins, then --stdin, then the file arg.
+		// Exactly one of the three must be set.
+		final sourceProvidersSet:Int = (codeArg != null ? 1 : 0) + (stdinFlag ? 1 : 0) + (file != null ? 1 : 0);
+		if (sourceProvidersSet == 0) {
+			stderr('apq ast: missing <file>, --code <s>, or --stdin\n');
 			printAstUsage();
 			return EXIT_USAGE;
 		}
+		if (sourceProvidersSet > 1) {
+			stderr('apq ast: <file>, --code, and --stdin are mutually exclusive\n');
+			return EXIT_USAGE;
+		}
 		final plugin:GrammarPlugin = pickPlugin(lang);
-		final source:String = readSourceForParse(file);
+		final source:String = codeArg != null ? (codeArg : String)
+			: stdinFlag ? readStdin()
+			: readSourceForParse((file : String));
+		// File label drives error / hit-location prefixes — keep it
+		// non-null for downstream renderers; <probe> / <stdin> are
+		// distinct so a `probe` call still looks like a probe in
+		// emitted diff headers and errors.
+		final fileLabel:String = codeArg != null ? '<probe>'
+			: stdinFlag ? '<stdin>'
+			: (file : String);
 
 		// `--writer-output`: parse + format-write through the plugin's
 		// round-trip pipeline. Independent of --select / --at / --json /
@@ -1546,10 +1642,10 @@ final class Cli {
 				? plugin.writeRoundTripPlain(source)
 				: plugin.writeRoundTrip(source))
 			catch (e:ParseError) {
-				stderr('apq ast: $file: ${e.toString()}\n');
+				stderr('apq ast: $fileLabel: ${e.toString()}\n');
 				return EXIT_RUNTIME;
 			} catch (e:Exception) {
-				stderr('apq ast: $file: ${e.message}\n');
+				stderr('apq ast: $fileLabel: ${e.message}\n');
 				return EXIT_RUNTIME;
 			}
 			if (emitted == null) {
@@ -1563,10 +1659,10 @@ final class Cli {
 			}
 			final emittedSrc:String = emitted;
 			final treeIn:QueryNode = try plugin.parseFile(source) catch (e:ParseError) {
-				stderr('apq ast: --writer-output --diff: input $file: ${e.toString()}\n');
+				stderr('apq ast: --writer-output --diff: input $fileLabel: ${e.toString()}\n');
 				return EXIT_RUNTIME;
 			} catch (e:Exception) {
-				stderr('apq ast: --writer-output --diff: input $file: ${e.message}\n');
+				stderr('apq ast: --writer-output --diff: input $fileLabel: ${e.message}\n');
 				return EXIT_RUNTIME;
 			}
 			final treeOut:QueryNode = try plugin.parseFile(emittedSrc) catch (e:ParseError) {
@@ -1579,7 +1675,7 @@ final class Cli {
 				return EXIT_RUNTIME;
 			}
 			final hits:Array<DiffHit> = Diff.diff(treeIn, treeOut);
-			sysPrint(Diff.render(file, source, '<writer-output>', emittedSrc, hits, false));
+			sysPrint(Diff.render(fileLabel, source, '<writer-output>', emittedSrc, hits, false));
 			return EXIT_OK;
 		}
 		if (writerDiff) {
@@ -1588,10 +1684,10 @@ final class Cli {
 		}
 
 		final tree:QueryNode = try plugin.parseFile(source) catch (e:ParseError) {
-			stderr('apq ast: $file: ${e.toString()}\n');
+			stderr('apq ast: $fileLabel: ${e.toString()}\n');
 			return EXIT_RUNTIME;
 		} catch (e:Exception) {
-			stderr('apq ast: $file: ${e.message}\n');
+			stderr('apq ast: $fileLabel: ${e.message}\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -1619,7 +1715,7 @@ final class Cli {
 			final offset:Int = Span.offsetOf(source, atLineN, atColN);
 			final node:Null<QueryNode> = Engine.at(tree, offset);
 			final matches:Array<QueryNode> = node == null ? [] : [depth < 0 ? node : Engine.truncate(node, depth)];
-			sysPrint(json ? Json.renderMatches(file, source, matches, wantDoc, wantSource) : Text.renderMatches(matches, source, wantDoc, wantSource));
+			sysPrint(json ? Json.renderMatches(fileLabel, source, matches, wantDoc, wantSource) : Text.renderMatches(matches, source, wantDoc, wantSource));
 			return EXIT_OK;
 		}
 
@@ -1665,18 +1761,185 @@ final class Cli {
 				final fuzzyLine:String = suggestions.length > 0
 					? ' Did you mean: ${suggestions.join(", ")}?'
 					: '';
-				stderr('apq ast: --select "$selectExpr"$filterNote matched no nodes in $file. '
+				stderr('apq ast: --select "$selectExpr"$filterNote matched no nodes in $fileLabel. '
 					+ 'Kinds present here: ${present.join(", ")}.$fuzzyLine '
-					+ 'Kinds are exact node-constructor names — run `apq ast $file` to see the tree.\n');
+					+ 'Kinds are exact node-constructor names — run `apq ast $fileLabel` to see the tree.\n');
 			}
 			final matches:Array<QueryNode> = depth < 0 ? raw : [for (m in raw) Engine.truncate(m, depth)];
-			sysPrint(json ? Json.renderMatches(file, source, matches, wantDoc, wantSource) : Text.renderMatches(matches, source, wantDoc, wantSource));
+			sysPrint(json ? Json.renderMatches(fileLabel, source, matches, wantDoc, wantSource) : Text.renderMatches(matches, source, wantDoc, wantSource));
 			return EXIT_OK;
 		}
 
 		final shaped:QueryNode = Engine.truncate(tree, depth);
-		sysPrint(json ? Json.renderTree(file, source, shaped) : Text.render(shaped));
+		sysPrint(json ? Json.renderTree(fileLabel, source, shaped) : Text.render(shaped));
 		return EXIT_OK;
+	}
+
+	/**
+	 * `apq probe '<code>' [ast-options]` — micro-AST probe with inline
+	 * source. Replaces the Write→hxq scratch-file dance for 3-5 line
+	 * code snippets: `hxq probe 'class C{function f(){…}}' --depth 5`
+	 * is byte-equivalent to `hxq ast --code 'class C{…}' --depth 5`
+	 * but reads as the call site of a probe, not as an ast inspection
+	 * of a file that doesn't exist.
+	 *
+	 * Accepts every `apq ast` flag (`--depth`, `--select`, `--at`,
+	 * `--json`, `--writer-output`, `--writer-output-plain`,
+	 * `--writer-output --diff`, `--min-children`, `--max-children`).
+	 * Pass `-` as the code argument to read source from stdin instead
+	 * — useful when the snippet has shell-quoting trouble or comes
+	 * from a heredoc / process substitution.
+	 */
+	private static function runProbe(args:Array<String>):Int {
+		// Bare `apq probe` → usage. Doing the check up front (before the
+		// argv walker) keeps the empty-args branch return 0, matching
+		// the convention of `apq <cmd>` (no args) elsewhere.
+		if (args.length == 0) {
+			printProbeUsage();
+			return EXIT_OK;
+		}
+		// The `hxq` shim auto-injects `--lang haxe` after the subcommand,
+		// so the code arg is NOT always at args[0]. Walk the array and
+		// pick the FIRST non-flag positional (skipping every `--flag`
+		// AND its value-bearing successor). All flags are forwarded to
+		// `runAst` verbatim; the positional becomes `--code <s>` (or
+		// switches to `--stdin` when literal `-`).
+		var codeArg:Null<String> = null;
+		final forwarded:Array<String> = [];
+		var i:Int = 0;
+		while (i < args.length) {
+			final a:String = args[i];
+			if (a == '-h' || a == '--help') {
+				printProbeUsage();
+				return EXIT_OK;
+			}
+			if (StringTools.startsWith(a, '--')) {
+				forwarded.push(a);
+				// Forward the option's value too. Boolean flags like
+				// `--json` / `--stdin` / `--writer-output` consume no
+				// value — track them by name so we don't eat the code
+				// positional. Anything else is value-bearing per `runAst`.
+				if (!isAstBoolFlag(a) && i + 1 < args.length) {
+					forwarded.push(args[i + 1]);
+					i++;
+				}
+				i++;
+				continue;
+			}
+			if (codeArg != null) {
+				stderr('apq probe: only one code argument supported (got "$codeArg" and "$a")\n');
+				return EXIT_USAGE;
+			}
+			codeArg = a;
+			i++;
+		}
+		if (codeArg == null) {
+			stderr('apq probe: missing <code> argument\n');
+			printProbeUsage();
+			return EXIT_USAGE;
+		}
+		final codeFinal:String = codeArg;
+		// `-` is the conventional Unix marker for stdin — route to the
+		// shared --stdin path on runAst so probe shares one source loader.
+		final injected:Array<String> = codeFinal == '-' ? ['--stdin'] : ['--code', codeFinal];
+		return runAst(injected.concat(forwarded));
+	}
+
+	/**
+	 * Boolean (value-less) `--flag` set for `runAst`. Listed explicitly
+	 * so `runProbe`'s argv walker can tell `--depth 5` (consumes 5)
+	 * from `--json` (consumes nothing). Stay in sync with the cases
+	 * in `runAst` that take no `expectValue` call.
+	 */
+	private static final AST_BOOL_FLAGS:Array<String> = [
+		'--json', '--doc', '--source',
+		'--writer-output', '--writer-output-plain',
+		'--diff', '--stdin',
+	];
+
+	private static inline function isAstBoolFlag(flag:String):Bool {
+		return AST_BOOL_FLAGS.contains(flag);
+	}
+
+	/**
+	 * `apq writer-probe <input> [--lang haxe]` — emit BOTH trivia and
+	 * plain writer outputs in one call, separated by labelled fences.
+	 * Replaces the `hxq ast … --writer-output` + `hxq ast …
+	 * --writer-output-plain` two-command dance when constructing a
+	 * unit-test `writerEquals` expected literal: side-by-side output
+	 * makes the pipeline divergence (anon structs flatten, terminators
+	 * change, comments drop in plain) immediately visible.
+	 *
+	 * Each pipeline runs independently; one failing does not abort the
+	 * other. Exit 0 only when both succeed. Output format:
+	 *   === trivia ===
+	 *   <bytes>
+	 *   === plain ===
+	 *   <bytes>
+	 *
+	 * The `=== trivia ===` / `=== plain ===` fences are deliberately
+	 * verbatim (no shell metacharacters) so a downstream `awk` /
+	 * `split` can pull either section without ambiguity.
+	 */
+	private static function runWriterProbe(args:Array<String>):Int {
+		var lang:String = 'haxe';
+		var file:Null<String> = null;
+		var i:Int = 0;
+		while (i < args.length) {
+			final a:String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '-h', '--help':
+					printWriterProbeUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq writer-probe: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (file != null) {
+						stderr('apq writer-probe: only one file argument supported (got "$file" and "$a")\n');
+						return EXIT_USAGE;
+					}
+					file = a;
+			}
+			i++;
+		}
+		if (file == null) {
+			stderr('apq writer-probe: missing <file> argument\n');
+			printWriterProbeUsage();
+			return EXIT_USAGE;
+		}
+		final fileFinal:String = file;
+		final plugin:GrammarPlugin = pickPlugin(lang);
+		final source:String = readSourceForParse(fileFinal);
+		final triviaOk:Bool = emitOneWriterProbe(plugin, source, fileFinal, lang, false);
+		final plainOk:Bool = emitOneWriterProbe(plugin, source, fileFinal, lang, true);
+		return (triviaOk && plainOk) ? EXIT_OK : EXIT_RUNTIME;
+	}
+
+	private static function emitOneWriterProbe(plugin:GrammarPlugin, source:String, file:String, lang:String, plain:Bool):Bool {
+		final label:String = plain ? 'plain' : 'trivia';
+		sysPrint('=== $label ===\n');
+		final emitted:Null<String> = try (plain
+			? plugin.writeRoundTripPlain(source)
+			: plugin.writeRoundTrip(source))
+		catch (e:ParseError) {
+			stderr('apq writer-probe: $label: $file: ${e.toString()}\n');
+			return false;
+		} catch (e:Exception) {
+			stderr('apq writer-probe: $label: $file: ${e.message}\n');
+			return false;
+		}
+		if (emitted == null) {
+			final flag:String = plain ? '--writer-output-plain' : '--writer-output';
+			stderr('apq writer-probe: $label: no writer wired up for lang "$lang" ($flag equivalent)\n');
+			return false;
+		}
+		sysPrint(emitted);
+		if (!StringTools.endsWith(emitted, '\n')) sysPrint('\n');
+		return true;
 	}
 
 	private static function pickPlugin(lang:String):GrammarPlugin {
@@ -1691,6 +1954,29 @@ final class Cli {
 		return File.getContent(path);
 		#else
 		throw 'apq: file IO requires a sys target';
+		#end
+	}
+
+	/**
+	 * Read all bytes from stdin and decode as UTF-8 source. Used by
+	 * `apq ast --stdin` (and `apq probe -`) to accept inline source
+	 * via shell pipe / heredoc / process substitution instead of
+	 * `--code <s>` or a file path.
+	 *
+	 * On Node, `Sys.stdin().readAll()` raises `haxe.io.Error.Blocked`
+	 * when stdin is a pipe (hxnodejs's sync stdin doesn't survive a
+	 * partial read). Fall back to Node's native `fs.readFileSync(0)`
+	 * which reads the full pipe to EOF synchronously.
+	 */
+	private static function readStdin():String {
+		#if nodejs
+		final fs:Dynamic = js.Lib.require('fs');
+		final buf:Dynamic = fs.readFileSync(0);
+		return (buf : Dynamic).toString('utf8');
+		#elseif sys
+		return Sys.stdin().readAll().toString();
+		#else
+		throw 'apq: stdin requires a sys target';
 		#end
 	}
 
@@ -1809,17 +2095,19 @@ final class Cli {
 		sysPrint('Usage: apq <command> [options] <file>\n');
 		sysPrint('\n');
 		sysPrint('Commands:\n');
-		sysPrint('  ast      Dump parsed AST (S-expr or JSON)\n');
-		sysPrint('  search   Structural pattern search\n');
-		sysPrint('  refs     Symbol references (value bindings; scope-aware)\n');
-		sysPrint('  uses     Type references (field/param/type-param positions)\n');
-		sysPrint('  meta     Annotation-on-decl shortcut\n');
-		sysPrint('  blast    Change-impact checklist (uses + refs + member-access)\n');
-		sysPrint('  lit      Leaf-name probe (string literals, identifiers — prose-in-code)\n');
-		sysPrint('  mentions Every named-leaf occurrence (uses + refs + lit --any-kind --exact)\n');
-		sysPrint('  diff     Structural AST diff between two files\n');
-		sysPrint('  strip    Sed-strip + parse-check (sole-blocker confirmation)\n');
-		sysPrint('  writer-equals  Byte-equality check on writer output (trivia + --plain)\n');
+		sysPrint('  ast           Dump parsed AST (S-expr or JSON)\n');
+		sysPrint('  probe         AST/writer probe with inline source (no file IO)\n');
+		sysPrint('  search        Structural pattern search\n');
+		sysPrint('  refs          Symbol references (value bindings; scope-aware)\n');
+		sysPrint('  uses          Type references (field/param/type-param positions)\n');
+		sysPrint('  meta          Annotation-on-decl shortcut\n');
+		sysPrint('  blast         Change-impact checklist (uses + refs + member-access)\n');
+		sysPrint('  lit           Leaf-name probe (string literals, identifiers — prose-in-code)\n');
+		sysPrint('  mentions      Every named-leaf occurrence (uses + refs + lit --any-kind --exact)\n');
+		sysPrint('  diff          Structural AST diff between two files\n');
+		sysPrint('  strip         Sed-strip + parse-check (sole-blocker confirmation)\n');
+		sysPrint('  writer-equals Byte-equality check on writer output (trivia + --plain)\n');
+		sysPrint('  writer-probe  Emit trivia + plain writer outputs side-by-side\n');
 		sysPrint('\n');
 		sysPrint('Global options:\n');
 		sysPrint('  --lang <name>   Pick grammar plugin (default: haxe)\n');
@@ -1957,7 +2245,12 @@ final class Cli {
 	}
 
 	private static function printAstUsage():Void {
-		sysPrint('Usage: apq ast [options] <file>\n');
+		sysPrint('Usage: apq ast [options] <file> | --code <s> | --stdin\n');
+		sysPrint('\n');
+		sysPrint('Source (exactly one):\n');
+		sysPrint('  <file>              Path to a parseable source file (or .hxtest — section 2 auto-extracted)\n');
+		sysPrint('  --code <s>          Inline source string (typically via the `probe` subcommand)\n');
+		sysPrint('  --stdin             Read all of stdin as source\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --json              Emit JSON instead of S-expr\n');
@@ -1972,6 +2265,38 @@ final class Cli {
 		sysPrint('  --writer-output-plain  Like --writer-output but uses the plain (non-trivia) writer — mirrors the unit-test entry HxModuleWriter.write(HaxeModuleParser.parse(src)); flattens source layout, drops comments\n');
 		sysPrint('  --diff              With --writer-output: AST-diff the input against the emitted output (writer-bug loop)\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+	}
+
+	private static function printProbeUsage():Void {
+		sysPrint('Usage: apq probe <code> [ast-options]\n');
+		sysPrint('       apq probe - [ast-options]   (read code from stdin)\n');
+		sysPrint('\n');
+		sysPrint('Inline-source variant of `apq ast`. Accepts every ast option\n');
+		sysPrint('(--depth/--select/--at/--json/--writer-output/--writer-output-plain/\n');
+		sysPrint('--writer-output --diff/--min-children/--max-children/--lang).\n');
+		sysPrint('\n');
+		sysPrint('Example:\n');
+		sysPrint("  apq probe 'class C { function f() { @:m return switch x { case _: 0; } } }' --depth 6\n");
+	}
+
+	private static function printWriterProbeUsage():Void {
+		sysPrint('Usage: apq writer-probe [options] <file>\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('\n');
+		sysPrint("Parse <file>, run BOTH the trivia and plain writer pipelines, and\n");
+		sysPrint("emit each output between labelled fences:\n");
+		sysPrint('  === trivia ===\n');
+		sysPrint('  <bytes>\n');
+		sysPrint('  === plain ===\n');
+		sysPrint('  <bytes>\n');
+		sysPrint('\n');
+		sysPrint("Replaces the two-command dance (`hxq ast … --writer-output` then\n");
+		sysPrint("`hxq ast … --writer-output-plain`) when constructing a unit-test\n");
+		sysPrint("`writerEquals` expected literal: side-by-side output makes the\n");
+		sysPrint("pipeline divergence (anon flatten, terminators, comments) visible.\n");
+		sysPrint("Exit 0 only when both pipelines succeed.\n");
 	}
 
 	private static function stderr(s:String):Void {
