@@ -411,6 +411,33 @@ enum HxStatement {
 	@:lit(';')
 	EmptyStmt;
 
+	/**
+	 * `....` placeholder statement (slice 35).
+	 *
+	 * Statement-level twin of `HxClassMember.EllipsisMember` (slice 33).
+	 * Accepts the literal four-dot token as a function-body statement,
+	 * matching the haxe-formatter test corpus convention for elided
+	 * function bodies (`function f() { .... }` placeholder fixtures).
+	 * Not standard Haxe syntax, but the formatter must round-trip these
+	 * files verbatim. SimpleCtor with `@:lit('....')` — twin of
+	 * `EmptyStmt(';')` (a literal-only token with no payload). No
+	 * `@:trail` because the placeholder has no terminator; trivia after
+	 * it (newlines, comments) is captured by the surrounding statement
+	 * Star slot. Placed before `ExprStmt` so the lit dispatch fires
+	 * before the expression catch-all; no other `HxStatement` ctor's
+	 * lit/keyword starts with `.`, so order relative to siblings is by
+	 * convention only.
+	 *
+	 * Distinct token from `HxClassMember.EllipsisMember`'s three-dot
+	 * `...`: the corpus convention uses 3 dots at member scope and 4
+	 * dots at statement scope. The three-dot `...` is also reused by
+	 * `HxExpr.@:infix('...', 5) Interval` at expression scope, so the
+	 * four-dot statement variant avoids any collision with the infix
+	 * range operator in expression position.
+	 */
+	@:lit('....')
+	EllipsisStmt;
+
 	@:trailOpt(';') @:fmt(trailOptParseGate('stmtExprNoSemi'))
 	ExprStmt(expr:HxExpr);
 }
