@@ -64,6 +64,7 @@ class HxFormatterCorpusTest extends Test {
 	private static inline final MAX_REASON_LEN:Int = 120;
 	private static inline final SNIPPET_LEN:Int = 24;
 	private static inline final SWEEP_JSON_PATH:String = 'bin/.last-sweep.json';
+	private static inline final SWEEP_PREV_PATH:String = 'bin/.prev-sweep.json';
 
 	// ω-sweep-delta — process-wide accumulator across every per-category
 	// `runCategory` invocation. The per-category prints stay (legacy
@@ -293,6 +294,18 @@ class HxFormatterCorpusTest extends Test {
 				skipMalformed: sweepSkipMalformed,
 				fixtures: sweepFixtures,
 			});
+			// Auto-rotate: before overwriting the current snapshot, copy
+			// the previous one to `bin/.prev-sweep.json` so the next
+			// `apq sweep --diff` / `apq sweep --prev` has a stable
+			// baseline without the user having to manually `cp` ahead
+			// of each slice. .gitignored alongside `.last-sweep.json`.
+			// Fail-soft: if the prior file is missing (fresh checkout)
+			// or unreadable, swallow the error and proceed with the
+			// write so the new snapshot still lands.
+			if (FileSystem.exists(SWEEP_JSON_PATH)) try {
+				final prior:String = sys.io.File.getContent(SWEEP_JSON_PATH);
+				sys.io.File.saveContent(SWEEP_PREV_PATH, prior);
+			} catch (_:Exception) {}
 			sys.io.File.saveContent(SWEEP_JSON_PATH, json);
 		} catch (_:Exception) {}
 		#end

@@ -3,6 +3,7 @@ bin/*.js
 bin/*.n.map
 bin/*.js.map
 bin/.last-sweep.json
+bin/.prev-sweep.json
 dump/
 *.n
 *.n.map

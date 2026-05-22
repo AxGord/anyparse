@@ -194,6 +194,13 @@ final class Cli {
 				stderr('apq sweep: requires a sys target (file read)\n');
 				return EXIT_USAGE;
 				#end
+			case 'test-summary':
+				#if (sys || nodejs)
+				return runTestSummary(rest);
+				#else
+				stderr('apq test-summary: requires a sys target (file or stdin read)\n');
+				return EXIT_USAGE;
+				#end
 			case _:
 				stderr('apq: unknown subcommand "$cmd"\n');
 				printUsage();
@@ -653,6 +660,14 @@ final class Cli {
 		// cluster. Direct complement to `recon --predict-strip`'s
 		// upper-bound prediction — this is the actual sweep apply.
 		var fromCluster:Null<String> = null;
+		// --regex: treat every --replace / --delete pattern as an EReg
+		// pattern (PCRE-ish, Haxe EReg dialect) instead of a literal
+		// substring. Application path switches to EReg.replace (global)
+		// for substitution and EReg.map for hit counting. The replacement
+		// string keeps its literal semantics — to use a backref, write
+		// e.g. `$1` per EReg.replace docs. Malformed regex is reported at
+		// arg-validation time with EXIT_USAGE before any FS I/O.
+		var regexMode:Bool = false;
 		final files:Array<String> = [];
 		final patterns:Array<String> = [];
 		final replacements:Array<String> = [];
@@ -685,6 +700,8 @@ final class Cli {
 					}
 					patterns.push(expectValue(args, ++i, '--delete'));
 					replacements.push('');
+				case '--regex':
+					regexMode = true;
 				case '--show':
 					showSource = true;
 				case '--dry-run':
@@ -714,6 +731,13 @@ final class Cli {
 			printStripUsage();
 			return EXIT_USAGE;
 		}
+		// Compile every pattern AHEAD of any FS I/O so a regex typo
+		// surfaces as a single usage error instead of an N-file partial
+		// apply. Indices stay aligned with `patterns` / `replacements`.
+		// Plain (literal) mode leaves `compiledRegex` null and falls
+		// through to the StringTools.replace path further down.
+		final compiledRegex:Null<Array<EReg>> = regexMode ? compileStripRegexes('strip', patterns) : null;
+		if (regexMode && compiledRegex == null) return EXIT_USAGE;
 		// `--per-pattern` constraints: single-file only (the matrix
 		// would be NxM otherwise), incompatible with `--dry-run` (the
 		// dry-run path skips parse entirely so isolation diagnostics
@@ -762,7 +786,7 @@ final class Cli {
 				stderr('apq strip: --per-pattern requires ≥2 patterns (got ${patterns.length}) — isolation diagnostic only useful when patterns can be tested independently\n');
 				return EXIT_USAGE;
 			}
-			return runStripPerPattern(plugin, files[0], patterns, replacements);
+			return runStripPerPattern(plugin, files[0], patterns, replacements, compiledRegex);
 		}
 		final multi:Bool = files.length > 1;
 		var anyFailed:Bool = false;
@@ -773,17 +797,26 @@ final class Cli {
 		// pattern that matched 0 occurrences ANYWHERE surfaces as a typo,
 		// even when other patterns in the same call did match.
 		final patternHits:Array<Int> = dryRun ? [for (_ in 0...patterns.length) 0] : [];
+		// Narrow `Null<Array<EReg>>` to `Array<EReg>` in one place — the
+		// inline `(compiledRegex : Array<EReg>)` cast does not satisfy
+		// strict null safety. Empty fallback keeps the regex-mode-off
+		// branch from indexing it.
+		final regexes:Array<EReg> = compiledRegex ?? [];
 		for (filePath in files) {
 			final source:String = readSourceForParse(filePath);
 			var stripped:String = source;
 			var fileHits:Int = 0;
 			for (idx in 0...patterns.length) {
 				if (dryRun) {
-					final hits:Int = countOccurrences(stripped, patterns[idx]);
+					final hits:Int = regexMode
+						? countRegexHits(regexes[idx], stripped)
+						: countOccurrences(stripped, patterns[idx]);
 					patternHits[idx] += hits;
 					fileHits += hits;
 				}
-				stripped = StringTools.replace(stripped, patterns[idx], replacements[idx]);
+				stripped = regexMode
+					? regexes[idx].replace(stripped, replacements[idx])
+					: StringTools.replace(stripped, patterns[idx], replacements[idx]);
 			}
 			if (stripped != source) anyChanged = true;
 			if (showSource) {
@@ -862,9 +895,11 @@ final class Cli {
 	 */
 	private static function runStripPerPattern(
 		plugin:GrammarPlugin, filePath:String,
-		patterns:Array<String>, replacements:Array<String>
+		patterns:Array<String>, replacements:Array<String>, compiledRegex:Null<Array<EReg>>
 	):Int {
 		final source:String = readSourceForParse(filePath);
+		final regexMode:Bool = compiledRegex != null;
+		final regexes:Array<EReg> = compiledRegex ?? [];
 		inline function tryParse(s:String):{ok:Bool, msg:String} {
 			return try {
 				plugin.parseFile(s);
@@ -879,8 +914,12 @@ final class Cli {
 		sysPrint('baseline (no patterns): ${baseline.ok ? "PARSE OK" : "PARSE FAIL: " + baseline.msg}\n');
 		final isolatedResults:Array<{ok:Bool, hits:Int}> = [];
 		for (idx in 0...patterns.length) {
-			final hits:Int = countOccurrences(source, patterns[idx]);
-			final isolated:String = StringTools.replace(source, patterns[idx], replacements[idx]);
+			final hits:Int = regexMode
+				? countRegexHits(regexes[idx], source)
+				: countOccurrences(source, patterns[idx]);
+			final isolated:String = regexMode
+				? regexes[idx].replace(source, replacements[idx])
+				: StringTools.replace(source, patterns[idx], replacements[idx]);
 			final r:{ok:Bool, msg:String} = tryParse(isolated);
 			isolatedResults.push({ok: r.ok, hits: hits});
 			final pat:String = patterns[idx];
@@ -888,7 +927,9 @@ final class Cli {
 		}
 		var combinedStripped:String = source;
 		for (idx in 0...patterns.length)
-			combinedStripped = StringTools.replace(combinedStripped, patterns[idx], replacements[idx]);
+			combinedStripped = regexMode
+				? regexes[idx].replace(combinedStripped, replacements[idx])
+				: StringTools.replace(combinedStripped, patterns[idx], replacements[idx]);
 		final combined:{ok:Bool, msg:String} = tryParse(combinedStripped);
 		sysPrint('combined (all patterns): ${combined.ok ? "PARSE OK" : "PARSE FAIL: " + combined.msg}\n');
 		// Verdict — interlocking-blockers signature: combined OK + every
@@ -988,6 +1029,46 @@ final class Cli {
 		return count;
 	}
 
+	/**
+	 * Compile every `--replace` / `--delete` pattern as an `EReg` with
+	 * the global flag `g` (needed so `replace` and `map` walk every
+	 * occurrence, matching the literal-mode `StringTools.replace`
+	 * semantics). On compile failure prints the offending pattern + EReg
+	 * error to stderr and returns `null` — caller exits `EXIT_USAGE`
+	 * before any FS I/O. Tool tag (`'strip'` / `'recon'`) is threaded for
+	 * the error message prefix so the user sees which subcommand owned
+	 * the typo.
+	 */
+	private static function compileStripRegexes(tool:String, patterns:Array<String>):Null<Array<EReg>> {
+		final out:Array<EReg> = [];
+		for (idx in 0...patterns.length) {
+			final pat:String = patterns[idx];
+			try {
+				out.push(new EReg(pat, 'g'));
+			} catch (e:Exception) {
+				stderr('apq $tool: --regex: pattern[$idx] "$pat" is not a valid EReg: ${e.message}\n');
+				return null;
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * Count every match of `re` in `s`. Uses `EReg.map` for the side
+	 * effect — the callback fires once per match (including zero-length
+	 * matches, which `EReg` advances past internally) and returns the
+	 * matched text unchanged so the produced string equals the input.
+	 * Cheap enough for predict-strip / strip --dry-run sweeps.
+	 */
+	private static function countRegexHits(re:EReg, s:String):Int {
+		var n:Int = 0;
+		re.map(s, m -> {
+			n++;
+			m.matched(0);
+		});
+		return n;
+	}
+
 	private static function printStripUsage():Void {
 		sysPrint('Usage: apq strip [options] <file> [<file2> ...] --replace <pat> --with <repl> [...]\n');
 		sysPrint('       apq strip --from-cluster <key> [<dir>] --replace <pat> --with <repl> [...]\n');
@@ -996,6 +1077,8 @@ final class Cli {
 		sysPrint('  --replace <pat>     Literal substring to replace (paired with the next --with)\n');
 		sysPrint('  --with <repl>       Replacement for the most recent --replace\n');
 		sysPrint('  --delete <pat>      Shortcut for --replace <pat> --with \'\'\n');
+		sysPrint('  --regex             Treat --replace / --delete patterns as EReg (global match)\n');
+		sysPrint('                      instead of literal substrings. Backrefs in --with via $1.\n');
 		sysPrint('  --show              Dump the stripped source to stderr (debug)\n');
 		sysPrint('  --dry-run           Skip parse, only verify each pattern matched ≥1 occurrence somewhere (typo guard)\n');
 		sysPrint('  --per-pattern       Isolation diagnostic for multi-pattern strip on a single file. Runs baseline,\n');
@@ -2590,6 +2673,16 @@ final class Cli {
 		// expected-bytes comparison). Mutually exclusive with --probe /
 		// --predict-strip / --cluster (separate diagnostic mode).
 		var regressionProbe:Bool = false;
+		// `--candidates <regex>`: cross-cluster construct enumeration.
+		// Walks the same skip-parse record set as the sweep, applies
+		// the EReg against each fixture's source, and prints
+		// `<path> :: N matches` for every file with ≥1 hit (sorted by
+		// count desc). Closes the gap where the histogram clusters by
+		// exact forward-locus, so a construct that lives in different
+		// multi-blocker fixtures (Slice 38's `new T<...>(` → 5 surfaced,
+		// 6 actually present) is undercounted. Mutually exclusive with
+		// --predict-strip / --cluster / --probe / --regression-probe.
+		var candidatesRegex:Null<String> = null;
 		// `--source`: drill-mode-only flag. When set in combination with
 		// `--cluster <key>`, the per-path output gains a windowed source
 		// snippet centred on the fail-locus. Outside drill it would
@@ -2601,6 +2694,14 @@ final class Cli {
 		final patterns:Array<String> = [];
 		final replacements:Array<String> = [];
 		var pendingReplace:Null<String> = null;
+		// --regex: same semantics as `apq strip --regex` — treat every
+		// --replace / --delete pattern as an EReg pattern. Lets one
+		// predict-strip call cover every site of a construct in the
+		// corpus (e.g. `new [A-Z]\w*<[^>]+>\(` matches every templated
+		// constructor call, not just one literal pair) — closes the
+		// pain where Slice 38's recon under-counted because the
+		// histogram clusters by exact forward-locus shape.
+		var regexMode:Bool = false;
 		var i:Int = 0;
 		while (i < args.length) {
 			final a:String = args[i];
@@ -2626,6 +2727,8 @@ final class Cli {
 					predictStrip = true;
 				case '--regression-probe':
 					regressionProbe = true;
+				case '--candidates':
+					candidatesRegex = expectValue(args, ++i, '--candidates');
 				case '--replace':
 					if (pendingReplace != null) {
 						stderr('apq recon: --replace "$pendingReplace" needs a --with before the next --replace\n');
@@ -2647,6 +2750,8 @@ final class Cli {
 					}
 					patterns.push(expectValue(args, ++i, '--delete'));
 					replacements.push('');
+				case '--regex':
+					regexMode = true;
 				case '-h', '--help':
 					printReconUsage();
 					return EXIT_OK;
@@ -2675,6 +2780,12 @@ final class Cli {
 			stderr('apq recon: --replace/--with/--delete require --predict-strip\n');
 			return EXIT_USAGE;
 		}
+		if (regexMode && !predictStrip) {
+			stderr('apq recon: --regex requires --predict-strip (regex applies to --replace patterns)\n');
+			return EXIT_USAGE;
+		}
+		final compiledRegex:Null<Array<EReg>> = regexMode ? compileStripRegexes('recon', patterns) : null;
+		if (regexMode && compiledRegex == null) return EXIT_USAGE;
 		// `--source` is meaningful only in modes where the per-path window
 		// adds signal — `--cluster <key>` drill OR `--predict-strip`
 		// STILL FAIL entries (where the new locus is the actionable
@@ -2702,8 +2813,14 @@ final class Cli {
 				return EXIT_USAGE;
 			}
 		}
+		if (candidatesRegex != null) {
+			if (probePath != null || predictStrip || clusterFilter != null || regressionProbe) {
+				stderr('apq recon: --candidates is mutually exclusive with --probe / --predict-strip / --cluster / --regression-probe\n');
+				return EXIT_USAGE;
+			}
+		}
 		final plugin:GrammarPlugin = pickPlugin(lang);
-		if (probePath != null) return runReconProbe(plugin, (probePath : String), predictStrip, patterns, replacements, showSource);
+		if (probePath != null) return runReconProbe(plugin, (probePath : String), predictStrip, patterns, replacements, compiledRegex, showSource);
 		final rootFinal:String = rootDir ?? defaultReconRoot();
 		if (rootFinal == '') {
 			stderr("apq recon: no <dir> given and $ANYPARSE_HXFORMAT_FORK env var is unset.\n");
@@ -2716,7 +2833,50 @@ final class Cli {
 			return EXIT_RUNTIME;
 		}
 		if (regressionProbe) return runReconRegressionProbe(plugin, rootFinal);
-		return runReconSweep(plugin, rootFinal, topN, clusterFilter, predictStrip, patterns, replacements, showSource);
+		if (candidatesRegex != null) return runReconCandidates(plugin, rootFinal, (candidatesRegex : String));
+		return runReconSweep(plugin, rootFinal, topN, clusterFilter, predictStrip, patterns, replacements, compiledRegex, showSource);
+	}
+
+	/**
+	 * `apq recon --candidates <regex>` — walk skip-parse fixtures and
+	 * count regex matches in each fixture's source. Reports one line per
+	 * file with ≥1 hit (`<path> :: N matches`) sorted by count desc, plus
+	 * a summary `--- candidates: K files matched (M total hits across N
+	 * skip-parse files) ---`.
+	 *
+	 * Use when the histogram's normalized forward-locus clusters can't
+	 * surface every fixture containing a construct of interest — the
+	 * regex sees the raw bytes, so multi-blocker fixtures whose locus
+	 * lives at a different shape are still found. Reuses the recon
+	 * walker (`collectReconSkipRecords`) so the file list matches every
+	 * other recon mode's view of the corpus exactly.
+	 *
+	 * Exit non-zero when 0 files matched (typo guard, mirrors
+	 * `strip --dry-run` / `recon --predict-strip` semantics).
+	 */
+	private static function runReconCandidates(plugin:GrammarPlugin, root:String, pattern:String):Int {
+		final re:EReg = try new EReg(pattern, 'g') catch (e:Exception) {
+			stderr('apq recon: --candidates: pattern "$pattern" is not a valid EReg: ${e.message}\n');
+			return EXIT_USAGE;
+		}
+		final walk:ReconWalkResult = collectReconSkipRecords(plugin, root);
+		if (!walk.wired) {
+			stderr('apq recon: --candidates: no recon parser wired up for this grammar plugin\n');
+			return EXIT_RUNTIME;
+		}
+		final hits:Array<{path:String, count:Int}> = [];
+		var totalHits:Int = 0;
+		for (r in walk.records) {
+			final n:Int = countRegexHits(re, r.source);
+			if (n > 0) {
+				hits.push({path: r.path, count: n});
+				totalHits += n;
+			}
+		}
+		hits.sort((a, b) -> b.count - a.count);
+		for (h in hits) sysPrint('${h.path} :: ${h.count} match${h.count == 1 ? '' : 'es'}\n');
+		sysPrint('--- candidates: ${hits.length} file${hits.length == 1 ? '' : 's'} matched ($totalHits total hit${totalHits == 1 ? '' : 's'} across ${walk.records.length} skip-parse file${walk.records.length == 1 ? '' : 's'}) ---\n');
+		return hits.length == 0 ? EXIT_RUNTIME : EXIT_OK;
 	}
 
 	/**
@@ -2860,7 +3020,7 @@ final class Cli {
 	private static function runReconProbe(
 		plugin:GrammarPlugin, path:String,
 		predictStrip:Bool, patterns:Array<String>, replacements:Array<String>,
-		showSource:Bool
+		compiledRegex:Null<Array<EReg>>, showSource:Bool
 	):Int {
 		if (!FileSystem.exists(path)) {
 			stderr('apq recon: --probe path "$path" does not exist\n');
@@ -2877,7 +3037,7 @@ final class Cli {
 		// canonical pre-edit signal of a typo or whitespace mismatch).
 		// Without `--predict-strip`, the legacy PARSE OK / PARSE FAIL
 		// output is byte-identical to before.
-		if (predictStrip) return runReconProbePredict(plugin, path, original, patterns, replacements, showSource);
+		if (predictStrip) return runReconProbePredict(plugin, path, original, patterns, replacements, compiledRegex, showSource);
 		try {
 			if (!plugin.reconParse(original)) {
 				stderr('apq recon: no recon parser wired up for this grammar plugin\n');
@@ -2900,7 +3060,7 @@ final class Cli {
 	private static function runReconProbePredict(
 		plugin:GrammarPlugin, path:String, original:String,
 		patterns:Array<String>, replacements:Array<String>,
-		showSource:Bool
+		compiledRegex:Null<Array<EReg>>, showSource:Bool
 	):Int {
 		// Capture the original fail-locus first so STILL FAIL can report
 		// the moved-locus hint (same signal as sweep-mode predict-strip).
@@ -2913,14 +3073,20 @@ final class Cli {
 			origLine = pos.line;
 			origCol = pos.col;
 		} catch (_:Exception) {}
+		final regexMode:Bool = compiledRegex != null;
+		final regexes:Array<EReg> = compiledRegex ?? [];
 		final patternHits:Array<Int> = [for (_ in 0...patterns.length) 0];
 		var stripped:String = original;
 		var fileHits:Int = 0;
 		for (idx in 0...patterns.length) {
-			final hits:Int = countOccurrences(stripped, patterns[idx]);
+			final hits:Int = regexMode
+				? countRegexHits(regexes[idx], stripped)
+				: countOccurrences(stripped, patterns[idx]);
 			patternHits[idx] = hits;
 			fileHits += hits;
-			stripped = StringTools.replace(stripped, patterns[idx], replacements[idx]);
+			stripped = regexMode
+				? regexes[idx].replace(stripped, replacements[idx])
+				: StringTools.replace(stripped, patterns[idx], replacements[idx]);
 		}
 		var exitCode:Int = EXIT_OK;
 		if (fileHits == 0) {
@@ -2963,7 +3129,7 @@ final class Cli {
 		plugin:GrammarPlugin, root:String, topN:Int,
 		clusterFilter:Null<String>, predictStrip:Bool,
 		patterns:Array<String>, replacements:Array<String>,
-		showSource:Bool
+		compiledRegex:Null<Array<EReg>>, showSource:Bool
 	):Int {
 		final walk:ReconWalkResult = collectReconSkipRecords(plugin, root);
 		if (!walk.wired) {
@@ -3002,7 +3168,7 @@ final class Cli {
 			filteredClusters = [wanted => hit];
 			filteredRecords = [for (r in records) if (r.clusterKey == wanted) r];
 		}
-		if (predictStrip) return runReconPredictStrip(filteredRecords, filteredClusters, plugin, patterns, replacements, clusterFilter, showSource);
+		if (predictStrip) return runReconPredictStrip(filteredRecords, filteredClusters, plugin, patterns, replacements, compiledRegex, clusterFilter, showSource);
 		for (r in filteredRecords) sysPrint('${r.skipLine}\n');
 		if (clusterFilter != null) return printReconClusterDrill(filteredClusters, records.length, (clusterFilter : String), filteredRecords, showSource);
 		return printReconHistogram(clusters, records.length, topN);
@@ -3207,8 +3373,10 @@ final class Cli {
 	private static function runReconPredictStrip(
 		records:Array<ReconRecord>, clusters:Map<String, ReconCluster>,
 		plugin:GrammarPlugin, patterns:Array<String>, replacements:Array<String>,
-		clusterFilter:Null<String>, showSource:Bool
+		compiledRegex:Null<Array<EReg>>, clusterFilter:Null<String>, showSource:Bool
 	):Int {
+		final regexMode:Bool = compiledRegex != null;
+		final regexes:Array<EReg> = compiledRegex ?? [];
 		var unblockCount:Int = 0;
 		var stillFailCount:Int = 0;
 		var noMatchCount:Int = 0;
@@ -3217,10 +3385,14 @@ final class Cli {
 			var stripped:String = r.source;
 			var fileHits:Int = 0;
 			for (idx in 0...patterns.length) {
-				final hits:Int = countOccurrences(stripped, patterns[idx]);
+				final hits:Int = regexMode
+					? countRegexHits(regexes[idx], stripped)
+					: countOccurrences(stripped, patterns[idx]);
 				patternHits[idx] += hits;
 				fileHits += hits;
-				stripped = StringTools.replace(stripped, patterns[idx], replacements[idx]);
+				stripped = regexMode
+					? regexes[idx].replace(stripped, replacements[idx])
+					: StringTools.replace(stripped, patterns[idx], replacements[idx]);
 			}
 			if (fileHits == 0) {
 				sysPrint('PREDICT NO MATCH  ${r.path}\n');
@@ -3388,6 +3560,13 @@ final class Cli {
 		var filePath:String = 'bin/.last-sweep.json';
 		var prevPath:Null<String> = null;
 		var diffPath:Null<String> = null;
+		// `--save <path>`: discoverable shorthand for "copy the current
+		// snapshot to <path> so I can `--prev` / `--diff` against it
+		// after the next sweep". Replaces the manual
+		// `cp bin/.last-sweep.json /tmp/prev.json` step that's easy to
+		// forget before a grammar slice. Performs the copy AFTER the
+		// totals print so the user still sees the snapshot's contents.
+		var savePath:Null<String> = null;
 		var i:Int = 0;
 		while (i < args.length) {
 			final a:String = args[i];
@@ -3397,7 +3576,18 @@ final class Cli {
 				case '--prev':
 					prevPath = expectValue(args, ++i, '--prev');
 				case '--diff':
-					diffPath = expectValue(args, ++i, '--diff');
+					// Allow bare `--diff` (no arg) → default to
+					// `bin/.prev-sweep.json` (auto-rotated by the corpus
+					// harness before every sweep write). The next-token
+					// check follows expectValue's contract: a `--`-prefixed
+					// token is a flag, not a value.
+					if (i + 1 < args.length && !StringTools.startsWith(args[i + 1], '--')) {
+						diffPath = expectValue(args, ++i, '--diff');
+					} else {
+						diffPath = 'bin/.prev-sweep.json';
+					}
+				case '--save':
+					savePath = expectValue(args, ++i, '--save');
 				case '--lang':
 					// hxq shim auto-injects --lang haxe; harmless here (sweep
 					// reads a JSON snapshot, no grammar plugin needed). Accept
@@ -3427,6 +3617,16 @@ final class Cli {
 				return EXIT_RUNTIME;
 			}
 			sysPrint('  Δpass ${sweepSigned(cur.pass - prev.pass)} / Δfail ${sweepSigned(cur.fail - prev.fail)} / Δskip-parse ${sweepSigned(cur.skipParse - prev.skipParse)}  vs $prevPath (${prev.pass} / ${prev.fail} / ${prev.skipParse})\n');
+		}
+		if (savePath != null) {
+			try {
+				final raw:String = sys.io.File.getContent(filePath);
+				sys.io.File.saveContent((savePath : String), raw);
+				sysPrint('apq sweep: saved snapshot $filePath -> $savePath\n');
+			} catch (e:Exception) {
+				stderr('apq sweep: --save failed: ${e.message}\n');
+				return EXIT_RUNTIME;
+			}
 		}
 		if (diffPath != null) return runSweepDiff(filePath, diffPath);
 		return EXIT_OK;
@@ -3508,7 +3708,7 @@ final class Cli {
 	private static inline function sweepSigned(n:Int):String return n > 0 ? '+$n' : '$n';
 
 	private static function printSweepUsage():Void {
-		sysPrint('Usage: apq sweep [--file <path>] [--prev <path>] [--diff <path>]\n');
+		sysPrint('Usage: apq sweep [--file <path>] [--prev <path>] [--diff <path>] [--save <path>]\n');
 		sysPrint('\n');
 		sysPrint('Read the corpus harness sweep snapshot (`bin/.last-sweep.json` by\n');
 		sysPrint('default) and print totals + optional delta vs a prior snapshot.\n');
@@ -3519,7 +3719,105 @@ final class Cli {
 		sysPrint('  --prev <path>   Compare against another snapshot, print Δ triple\n');
 		sysPrint('  --diff <path>   Per-fixture status diff vs another snapshot (PASS->FAIL,\n');
 		sysPrint('                  FAIL->PASS, ADDED/REMOVED entries). Composes with --prev.\n');
+		sysPrint('                  Auto-default: `bin/.prev-sweep.json` (the corpus harness\n');
+		sysPrint('                  auto-rotates this before each sweep write), no path needed.\n');
+		sysPrint('  --save <path>   Copy the current snapshot to <path>. Use before a grammar\n');
+		sysPrint('                  slice to capture a baseline for `--prev` / `--diff` later.\n');
 		sysPrint('  -h, --help      Show this help\n');
+	}
+
+	/**
+	 * `apq test-summary [<file>]` — parse a utest stdout transcript and
+	 * print `N tests / M assertions / F failures / E errors`. Replaces
+	 * the manual `grep -cE ': OK' /tmp/test.out` + assertion-count
+	 * one-liner I keep rebuilding after every test run.
+	 *
+	 * Source resolution: positional path (file), `-` (stdin), or default
+	 * `/tmp/test.out` when run with no positional and the file exists.
+	 * Always exits 0 on a successful parse, 1 on read failure — the test
+	 * outcome is informational (the test runner's exit code is the
+	 * authoritative pass/fail signal).
+	 *
+	 * Parse rules (utest 1.13.x format, what `node bin/test.js` emits):
+	 *  - `  testName: OK <dots>` — one line per test; trailing dots are
+	 *    one per assertion.
+	 *  - `  testName: FAIL` / `  testName: ERROR` — failure / error
+	 *    counters; case-insensitive substring match on the suffix.
+	 */
+	private static function runTestSummary(args:Array<String>):Int {
+		var sourcePath:Null<String> = null;
+		var i:Int = 0;
+		while (i < args.length) {
+			final a:String = args[i];
+			switch a {
+				case '-h', '--help':
+					printTestSummaryUsage();
+					return EXIT_OK;
+				case '--lang':
+					// Shim invariance — apq test-summary doesn't use a plugin.
+					expectValue(args, ++i, '--lang');
+				case _:
+					if (sourcePath != null) {
+						stderr('apq test-summary: only one positional source supported (got "$sourcePath" and "$a")\n');
+						return EXIT_USAGE;
+					}
+					sourcePath = a;
+			}
+			i++;
+		}
+		final raw:String = try {
+			if (sourcePath == null) {
+				if (sys.FileSystem.exists('/tmp/test.out')) sys.io.File.getContent('/tmp/test.out');
+				else {
+					stderr('apq test-summary: no source given and /tmp/test.out missing — pass <path> or `-` for stdin\n');
+					return EXIT_USAGE;
+				}
+			} else if (sourcePath == '-') {
+				readStdin();
+			} else {
+				sys.io.File.getContent((sourcePath : String));
+			}
+		} catch (e:Exception) {
+			stderr('apq test-summary: read failed: ${e.message}\n');
+			return EXIT_RUNTIME;
+		}
+		final okRe:EReg = ~/^\s+\w[\w.]*:\s+OK(\s+(\.+))?/;
+		var tests:Int = 0;
+		var assertions:Int = 0;
+		var failures:Int = 0;
+		var errors:Int = 0;
+		final lines:Array<String> = raw.split('\n');
+		for (line in lines) {
+			if (okRe.match(line)) {
+				tests++;
+				final dots:Null<String> = try okRe.matched(2) catch (_:Exception) null;
+				if (dots != null) assertions += (dots : String).length;
+				continue;
+			}
+			// FAIL / ERROR / FAILURE substrings — utest variants. Case-
+			// insensitive contains-check on a test-method-shaped prefix
+			// (leading whitespace + non-empty token + colon).
+			if (~/^\s+\w[\w.]*:\s+FAIL/.match(line)) failures++;
+			else if (~/^\s+\w[\w.]*:\s+ERR/.match(line)) errors++;
+		}
+		final src:String = sourcePath ?? '/tmp/test.out';
+		sysPrint('$tests tests / $assertions assertions / $failures failures / $errors errors  ($src)\n');
+		return EXIT_OK;
+	}
+
+	private static function printTestSummaryUsage():Void {
+		sysPrint('Usage: apq test-summary [<file> | -]\n');
+		sysPrint('\n');
+		sysPrint('Parse a utest stdout transcript and report tests / assertions / failures /\n');
+		sysPrint('errors. Source resolution:\n');
+		sysPrint('  <file>     — read from the given path\n');
+		sysPrint('  -          — read from stdin (heredoc / pipe / process subst.)\n');
+		sysPrint('  (default)  — `/tmp/test.out` if it exists, else usage error\n');
+		sysPrint('\n');
+		sysPrint('Parses lines of shape `  testName: OK <dots>` / `: FAIL` / `: ERROR`.\n');
+		sysPrint('Dot count after `OK` is the assertion count (one dot per assert).\n');
+		sysPrint('Always exits 0 on a successful parse — the test runner\'s exit code is\n');
+		sysPrint('the authoritative pass/fail signal.\n');
 	}
 	#end
 
@@ -3553,6 +3851,17 @@ final class Cli {
 		sysPrint('  --replace <pat> --with <repl>\n');
 		sysPrint('                          Substitution pair (with --predict-strip; repeatable).\n');
 		sysPrint('  --delete <pat>          Shortcut for --replace <pat> --with "".\n');
+		sysPrint('  --regex                 Treat --replace / --delete patterns as EReg patterns\n');
+		sysPrint('                          (global, applies to every match) instead of literal\n');
+		sysPrint('                          substrings. Requires --predict-strip. One regex\n');
+		sysPrint('                          covers every site of a construct in the corpus.\n');
+		sysPrint('  --candidates <regex>    Cross-cluster enumeration: walk skip-parse fixtures,\n');
+		sysPrint('                          print `<path> :: N matches` for every file with ≥1\n');
+		sysPrint('                          regex hit (sorted by count desc) + summary. Use when\n');
+		sysPrint('                          the histogram clusters by exact forward-locus and a\n');
+		sysPrint('                          construct lives in differently-shaped multi-blocker\n');
+		sysPrint('                          fixtures. Mutually exclusive with --predict-strip /\n');
+		sysPrint('                          --cluster / --probe / --regression-probe.\n');
 		sysPrint('  --probe <file>          Single-file probe instead of sweep. Composes with\n');
 		sysPrint('                          --predict-strip: applies substitutions to the file and\n');
 		sysPrint('                          retries the parse, printing PREDICT UNBLOCK / STILL\n');
@@ -3753,6 +4062,8 @@ final class Cli {
 		sysPrint('  writer-equals Byte-equality check on writer output (trivia + --plain)\n');
 		sysPrint('  writer-probe  Emit trivia + plain writer outputs side-by-side\n');
 		sysPrint('  recon         Skip-parse drill — corpus sweep + locus-cluster histogram\n');
+		sysPrint('  sweep         Read corpus sweep snapshot totals + Δ vs prior\n');
+		sysPrint('  test-summary  Parse utest stdout transcript into tests/assertions/failures\n');
 		sysPrint('\n');
 		sysPrint('Global options:\n');
 		sysPrint('  --lang <name>   Pick grammar plugin (default: haxe)\n');
