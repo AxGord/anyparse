@@ -2365,6 +2365,18 @@ class WriterLowering {
 							optParts.push(macro _dop(' '));
 						}
 						optParts.push(writeCall);
+						// ω-optional-ref-trail: bracket-pair close for an
+						// `@:optional @:lead(<open>) @:trail(<close>)` Ref.
+						// Pushed INSIDE optParts so the trail rides the
+						// `_optVal != null` runtime gate (absent value
+						// suppresses both lead and trail). Bracket-tight by
+						// design — no separator before the close, mirroring
+						// the mandatory-Ref trail emit (`!isOptional` arm
+						// below). First consumer: `HxAbstractDecl.
+						// underlyingType` (`(T)` group) for the bare-abstract
+						// shape (Slice 40).
+						if (trailText != null)
+							optParts.push(macro _dt($v{trailText}));
 					} else if (bodyPolicyFlag != null) {
 						// ω-absent-on-bodypolicy: optional Ref with no kw /
 						// lead but `@:fmt(bodyPolicy(...))`. The leftCurly
@@ -3028,7 +3040,13 @@ class WriterLowering {
 			// field shapes (Star, optional, no-trail, plain mode, non-
 			// bearing rule) clear the signal so downstream emission does
 			// not reference a synth slot that was never populated.
-			prevTrailFieldName = (!isOptional && !isStar && trailText != null
+			// Slice 40: optional Refs with `@:lead + @:trail` ALSO publish
+			// the slot (mirror of the parser-side `hasAfterTrailSlot`
+			// extension). The lead-led commit branch captures the
+			// post-trail `// comment` and the absent branch leaves the
+			// slot null — both feed the downstream tryparse Star's
+			// `tryparsePriorAfterTrailExpr` read uniformly.
+			prevTrailFieldName = (!isStar && trailText != null
 				&& ctx.trivia && isTriviaBearing(typePath))
 					? fieldName
 					: null;

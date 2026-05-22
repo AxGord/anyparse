@@ -847,12 +847,13 @@ class TriviaTypeSynth {
 	 * `@:trail` from `base.meta` directly (TriviaTypeSynth.arm runs
 	 * BEFORE the Lit strategy populates `lit.trailText`, same ordering
 	 * constraint as `isOptionalKw` / star-trailing predicates).
-	 * Optional Refs are excluded — their `@:trail` lives inside the peek
-	 * branch and is structurally different.
+	 * Optional Refs with `@:lead` + `@:trail` ARE included (Slice 40):
+	 * the lead-led commit branch in `Lowering` consumes the trail and
+	 * captures a same-line `// comment` into `<field>AfterTrail`, same as
+	 * the mandatory path. The absent branch leaves the slot null.
 	 */
 	private static function isTrailRef(child:ShapeNode):Bool {
 		if (child.kind != Ref) return false;
-		if (child.annotations.get('base.optional') == true) return false;
 		return child.readMetaString(':trail') != null;
 	}
 

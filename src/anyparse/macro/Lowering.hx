@@ -1755,18 +1755,16 @@ class Lowering {
 					Context.currentPos()
 				);
 			}
-			if (isOptional && !isStar && trailText != null) {
-				// A trail on an optional Ref field would have to live inside
-				// the peek branch — the current session only supports
-				// lead-only optional Ref fields. Reject explicitly rather
-				// than silently drop the trail; defer until a real grammar
-				// needs it. Optional Star fields are exempt — `@:trail` on
-				// a Star describes the close delimiter of the angle-/paren-
-				// bracketed list, not a free-floating post-field literal,
-				// and the close-peek emission already lives inside the
-				// matchLit-gated branch.
+			if (isOptional && !isStar && trailText != null && kwLead != null) {
+				// `@:trail` on an optional kw-led Ref has no consumer yet
+				// (the kw-led trivia capture path threads `_afterKw_*` /
+				// `_kwLeading_*` slots whose layout assumes no per-field
+				// trail). Defer until a grammar needs it; the lead-led
+				// shape (`@:optional @:lead('(') @:trail(')')`) is
+				// supported below — first consumer Slice 40 / `@:coreType`
+				// bare abstract via `HxAbstractDecl.underlyingType`.
 				Context.fatalError(
-					'Lowering: @:optional combined with @:trail is deferred (field "$fieldName")',
+					'Lowering: @:optional @:kw combined with @:trail is deferred (field "$fieldName")',
 					Context.currentPos()
 				);
 			}
@@ -1971,6 +1969,27 @@ class Lowering {
 			final bodyOnSameLineLocal:String = '_bodyOnSameLine_$fieldName';
 			final beforeKwLeadingLocal:String = '_beforeKwLeading_$fieldName';
 			final beforeKwTrailingLocal:String = '_beforeKwTrailing_$fieldName';
+			// ω-optional-ref-trail (Slice 40): pre-declare the
+			// `<field>AfterTrail` capture local before the parse step so
+			// the optional-Ref's lead-led commit branch can assign into
+			// it after `expectLit(trail)`, while the absent branch leaves
+			// the default `null`. Mandatory-Ref path declares the same
+			// local fresh post-trail (`final … = collectTrailing(ctx)`)
+			// — the names collide harmlessly because the mandatory and
+			// optional paths are mutually exclusive per field.
+			final hasOptionalRefAfterTrailSlot:Bool = child.kind == Ref && isOptional && !isStar
+				&& trailText != null && ctx.trivia && isTriviaBearing(typePath);
+			if (hasOptionalRefAfterTrailSlot) {
+				parseSteps.push({
+					expr: EVars([{
+						name: '_afterTrail_$fieldName',
+						type: (macro : Null<String>),
+						expr: macro null,
+						isFinal: false,
+					}]),
+					pos: Context.currentPos(),
+				});
+			}
 			if (hasKwTriviaSlots) {
 				parseSteps.push({
 					expr: EVars([{name: afterKwLocal, type: (macro : Null<String>), expr: macro null, isFinal: false}]),
@@ -2006,10 +2025,28 @@ class Lowering {
 						);
 					}
 					final refName:String = child.annotations.get('base.ref');
-					final subCall:Expr = {
+					final subCallRaw:Expr = {
 						expr: ECall(macro $i{parseFnName(refName)}, [macro ctx]),
 						pos: Context.currentPos(),
 					};
+					// ω-optional-ref-trail: consume the per-field `@:trail`
+					// literal AFTER the sub-rule parse, INSIDE the lead-led
+					// commit branch. Mirrors the mandatory-Ref trail emit
+					// (see post-switch block) but threaded into the optional
+					// path so the commit-miss branch (lead absent) does not
+					// expect a close. First consumer: `HxAbstractDecl.
+					// underlyingType` for the `@:coreType` bare-abstract
+					// shape `abstract Foo from Int to Int {}` (Slice 40).
+					final captureAfterTrail:Expr = hasOptionalRefAfterTrailSlot
+						? macro $i{'_afterTrail_$fieldName'} = collectTrailing(ctx)
+						: macro {};
+					final subCall:Expr = trailText != null ? macro {
+						final _v = $subCallRaw;
+						skipWs(ctx);
+						expectLit(ctx, $v{trailText});
+						$captureAfterTrail;
+						_v;
+					} : subCallRaw;
 					// In trivia or span mode a bearing ref needs the Null<XxxT>
 					// / Null<XxxS> wrap around the synth pair — `base.fieldType`
 					// captured the plain-mode `Null<Xxx>` form at shape-analysis
@@ -2226,10 +2263,15 @@ class Lowering {
 			}
 			// Per-field trail. Skipped for Star fields — `emitStarFieldSteps`
 			// already emitted the close literal as part of the loop wrappers.
-			// Also skipped for optional fields — a trail on an optional
-			// should live inside the peek branch, which is not supported in
-			// this session (the grammar has no such case yet).
-			final hasAfterTrailSlot:Bool = child.kind == Ref && !isStar && !isOptional && trailText != null
+			// Mandatory Ref path: the close + same-line `// comment`
+			// capture live here. Optional Ref + lead + trail (Slice 40):
+			// the trail consumption AND `collectTrailing` capture live
+			// inside the lead-led commit branch (see the Ref-with-trail
+			// splicing into `subCall` above); the slot is still emitted
+			// to the struct literal via the post-switch `hasAfterTrailSlot`
+			// branch below — `_afterTrail_<field>` is pre-declared in the
+			// optional-Ref step to default-null in the absent branch.
+			final hasAfterTrailSlot:Bool = child.kind == Ref && !isStar && trailText != null
 				&& ctx.trivia && isTriviaBearing(typePath);
 			final afterTrailLocal:String = '_afterTrail_$fieldName';
 			if (!isStar && !isOptional && trailText != null) {

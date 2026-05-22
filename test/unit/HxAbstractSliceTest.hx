@@ -178,6 +178,40 @@ class HxAbstractSliceTest extends HxTestHelpers {
 		Assert.equals('Color', (ed.name : String));
 	}
 
+	// -- Bare abstract (no underlying type) — Slice 40 --
+
+	public function testBareAbstractNoUnderlying():Void {
+		final module:HxModule = HaxeModuleParser.parse('abstract Foo {}');
+		Assert.equals(1, module.decls.length);
+		final ad:HxAbstractDecl = expectAbstractDecl(module.decls[0]);
+		Assert.equals('Foo', (ad.name : String));
+		Assert.isNull(ad.underlyingType);
+		Assert.equals(0, ad.clauses.length);
+		Assert.equals(0, ad.members.length);
+	}
+
+	public function testBareAbstractFromTo():Void {
+		final module:HxModule = HaxeModuleParser.parse('abstract Foo from Int to Int {}');
+		Assert.equals(1, module.decls.length);
+		final ad:HxAbstractDecl = expectAbstractDecl(module.decls[0]);
+		Assert.equals('Foo', (ad.name : String));
+		Assert.isNull(ad.underlyingType);
+		Assert.equals(2, ad.clauses.length);
+		switch ad.clauses[0] {
+			case FromClause(type): Assert.equals('Int', (expectNamedType(type).name : String));
+			case _: Assert.fail('expected FromClause');
+		}
+	}
+
+	public function testBareAbstractTypeParamsFromTo():Void {
+		final module:HxModule = HaxeModuleParser.parse('abstract Foo<T> from T to T {}');
+		Assert.equals(1, module.decls.length);
+		final ad:HxAbstractDecl = expectAbstractDecl(module.decls[0]);
+		Assert.equals('Foo', (ad.name : String));
+		Assert.isNull(ad.underlyingType);
+		Assert.equals(2, ad.clauses.length);
+	}
+
 	// -- Word boundary --
 
 	public function testWordBoundaryAbstractly():Void {
