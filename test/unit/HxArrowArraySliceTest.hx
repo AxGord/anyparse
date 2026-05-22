@@ -112,8 +112,8 @@ class HxArrowArraySliceTest extends HxTestHelpers {
 		switch decl.init {
 			case ParenLambdaExpr(lambda):
 				Assert.equals(1, lambda.params.length);
-				Assert.equals('x', (lambda.params[0].name : String));
-				Assert.isNull(lambda.params[0].type);
+				Assert.equals('x', (lambdaParamBody(lambda.params[0]).name : String));
+				Assert.isNull(lambdaParamBody(lambda.params[0]).type);
 			case null, _: Assert.fail('expected ParenLambdaExpr, got ${decl.init}');
 		}
 	}
@@ -124,8 +124,8 @@ class HxArrowArraySliceTest extends HxTestHelpers {
 		switch decl.init {
 			case ParenLambdaExpr(lambda):
 				Assert.equals(2, lambda.params.length);
-				Assert.equals('x', (lambda.params[0].name : String));
-				Assert.equals('y', (lambda.params[1].name : String));
+				Assert.equals('x', (lambdaParamBody(lambda.params[0]).name : String));
+				Assert.equals('y', (lambdaParamBody(lambda.params[1]).name : String));
 				switch lambda.body {
 					case Add(IdentExpr(l), IdentExpr(r)):
 						Assert.equals('x', (l : String));
@@ -142,8 +142,8 @@ class HxArrowArraySliceTest extends HxTestHelpers {
 		switch decl.init {
 			case ParenLambdaExpr(lambda):
 				Assert.equals(1, lambda.params.length);
-				Assert.equals('x', (lambda.params[0].name : String));
-				Assert.notNull(lambda.params[0].type);
+				Assert.equals('x', (lambdaParamBody(lambda.params[0]).name : String));
+				Assert.notNull(lambdaParamBody(lambda.params[0]).type);
 			case null, _: Assert.fail('expected ParenLambdaExpr, got ${decl.init}');
 		}
 	}
@@ -154,10 +154,10 @@ class HxArrowArraySliceTest extends HxTestHelpers {
 		switch decl.init {
 			case ParenLambdaExpr(lambda):
 				Assert.equals(2, lambda.params.length);
-				Assert.equals('x', (lambda.params[0].name : String));
-				Assert.notNull(lambda.params[0].type);
-				Assert.equals('y', (lambda.params[1].name : String));
-				Assert.notNull(lambda.params[1].type);
+				Assert.equals('x', (lambdaParamBody(lambda.params[0]).name : String));
+				Assert.notNull(lambdaParamBody(lambda.params[0]).type);
+				Assert.equals('y', (lambdaParamBody(lambda.params[1]).name : String));
+				Assert.notNull(lambdaParamBody(lambda.params[1]).type);
 			case null, _: Assert.fail('expected ParenLambdaExpr, got ${decl.init}');
 		}
 	}
@@ -190,8 +190,8 @@ class HxArrowArraySliceTest extends HxTestHelpers {
 		switch decl.init {
 			case ParenLambdaExpr(lambda):
 				Assert.equals(2, lambda.params.length);
-				Assert.equals('x', (lambda.params[0].name : String));
-				Assert.equals('y', (lambda.params[1].name : String));
+				Assert.equals('x', (lambdaParamBody(lambda.params[0]).name : String));
+				Assert.equals('y', (lambdaParamBody(lambda.params[1]).name : String));
 			case null, _: Assert.fail('expected ParenLambdaExpr, got ${decl.init}');
 		}
 	}
@@ -316,11 +316,11 @@ class HxArrowArraySliceTest extends HxTestHelpers {
 			case ArrayExpr(elems):
 				Assert.equals(2, elems.length);
 				switch elems[0] {
-					case ParenLambdaExpr(l): Assert.equals('x', (l.params[0].name : String));
+					case ParenLambdaExpr(l): Assert.equals('x', (lambdaParamBody(l.params[0]).name : String));
 					case null, _: Assert.fail('expected ParenLambdaExpr in first');
 				}
 				switch elems[1] {
-					case ParenLambdaExpr(l): Assert.equals('y', (l.params[0].name : String));
+					case ParenLambdaExpr(l): Assert.equals('y', (lambdaParamBody(l.params[0]).name : String));
 					case null, _: Assert.fail('expected ParenLambdaExpr in second');
 				}
 			case null, _: Assert.fail('expected ArrayExpr, got ${decl.init}');

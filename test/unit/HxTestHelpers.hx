@@ -29,6 +29,8 @@ import anyparse.grammar.haxe.HxFnBody;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxIdentLit;
 import anyparse.grammar.haxe.HxInterfaceDecl;
+import anyparse.grammar.haxe.HxLambdaParam;
+import anyparse.grammar.haxe.HxLambdaParamBody;
 import anyparse.grammar.haxe.HxMacroClass;
 import anyparse.grammar.haxe.HxModuleWriter;
 import anyparse.grammar.haxe.HxObjectField;
@@ -437,6 +439,20 @@ class HxTestHelpers extends Test {
 			case Required(body): body;
 			case Optional(body): body;
 			case _: throw 'expected short HxAnonField, got $field';
+		};
+	}
+
+	/**
+	 * Unwraps a `HxLambdaParam` (`Optional` or `Required`) to its
+	 * `HxLambdaParamBody`. The Slice 31 Alt-enum split made the bare
+	 * `name` / `type` slots live one level deeper; this helper restores
+	 * the pre-split call shape for tests that don't discriminate the
+	 * `?` flag.
+	 */
+	private function lambdaParamBody(param:HxLambdaParam):HxLambdaParamBody {
+		return switch param {
+			case Optional(body): body;
+			case Required(body): body;
 		};
 	}
 
