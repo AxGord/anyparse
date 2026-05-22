@@ -6,6 +6,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.query.Diff;
 import anyparse.query.Diff.DiffHit;
+import anyparse.query.Cases.CasesHit;
 import anyparse.query.Lit.LitHit;
 import anyparse.query.Matcher.Match;
 import anyparse.query.Meta.MetaHit;
@@ -32,6 +33,14 @@ import sys.FileSystem;
  * without a follow-up `hxq ast <path>` probe.
  */
 typedef SkipEntry = {path:String, locus:String};
+
+/**
+ * Corpus harness sweep snapshot (`bin/.last-sweep.json` schema).
+ * Mirrors `HxFormatterCorpusTest.printSweepDelta`'s write contract —
+ * `apq sweep` reads the JSON and reports totals + delta without
+ * re-running the corpus.
+ */
+typedef SweepTotals = {pass:Int, fail:Int, skipParse:Int, skipWrite:Int, skipConfig:Int, skipMalformed:Int};
 
 /**
  * Recon cluster bucket: how many fixtures fall under a normalised
@@ -165,6 +174,7 @@ final class Cli {
 			case 'blast': return runBlast(rest);
 			case 'lit': return runLit(rest);
 			case 'mentions': return runMentions(rest);
+			case 'cases': return runCases(rest);
 			case 'diff': return runDiff(rest);
 			case 'strip': return runStrip(rest);
 			case 'writer-equals': return runWriterEquals(rest);
@@ -175,6 +185,13 @@ final class Cli {
 				return runRecon(rest);
 				#else
 				stderr('apq recon: requires a sys target (filesystem walk)\n');
+				return EXIT_USAGE;
+				#end
+			case 'sweep':
+				#if (sys || nodejs)
+				return runSweep(rest);
+				#else
+				stderr('apq sweep: requires a sys target (file read)\n');
 				return EXIT_USAGE;
 				#end
 			case _:
@@ -1125,6 +1142,8 @@ final class Cli {
 		final singleFile:Bool = expanded.singleFile;
 		final allEntries:Array<{file:String, source:String, hits:Array<LitHit>}> = [];
 		final skipEntries:Array<SkipEntry> = [];
+		// Cache parsed trees so the auto-widen retry path doesn't reparse.
+		final trees:Array<{path:String, source:String, tree:QueryNode}> = [];
 		for (path in paths) {
 			final source:String = readSourceForParse(path);
 			final tree:Null<QueryNode> = parseWalked('lit', plugin.parseFile, path, source, singleFile, skipEntries);
@@ -1132,19 +1151,139 @@ final class Cli {
 				if (singleFile) return EXIT_RUNTIME;
 				continue;
 			}
+			trees.push({path: path, source: source, tree: tree});
 			final hits:Array<LitHit> = Lit.find(targetStr, tree, exact, effectiveKindFilter);
 			if (hits.length == 0) continue;
 			allEntries.push({file: path, source: source, hits: hits});
 		}
 
+		// Auto-widen on 0-hit when kind was the smart-default (user didn't
+		// pass --kind / --any-kind). Retry with --any-kind; if THAT finds
+		// hits, show them with a stderr note so the next reflex is to add
+		// `--any-kind` explicitly. Common case: CamelCase TypeName queries
+		// that live as `ImportDecl` / `NewExpr` only (e.g. test-runner
+		// imports) — default kind set (Literal,IdentExpr or Literal alone)
+		// misses both. Silent on real 0-hits — the wider walk also empty.
+		var autoWidened:Bool = false;
+		if (allEntries.length == 0 && kindFilter == null) {
+			for (entry in trees) {
+				final hits:Array<LitHit> = Lit.find(targetStr, entry.tree, exact, []);
+				if (hits.length == 0) continue;
+				allEntries.push({file: entry.path, source: entry.source, hits: hits});
+			}
+			if (allEntries.length > 0) autoWidened = true;
+		}
+
 		if (allEntries.length == 0)
 			stderr(emptyWalkerNudge('lit', targetStr, paths.length, paths.length - skipEntries.length, skipEntries, null) + '\n');
+		else if (autoWidened) {
+			final tried:String = effectiveKindFilter.join(',');
+			stderr('apq lit: NOTE auto-widened to --any-kind (default kind=$tried returned 0 hits). Pass `--any-kind` explicitly to silence this notice.\n');
+		}
 
 		final shown:Array<{file:String, source:String, hits:Array<LitHit>}> = limitEntries(allEntries, limit,
 			e -> e.hits.length,
 			(e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k)});
 		for (entry in shown) sysPrint(Lit.render(entry.file, entry.source, entry.hits, flat));
 		return EXIT_OK;
+	}
+
+	/**
+	 * `apq cases <Ctor> <file-or-dir-or-glob>...` — precise case-pattern
+	 * lookup. Finds every `case <Ctor>(_):` / `case <Ctor>:` / `case A |
+	 * <Ctor>:` shape across the input tree. Solves the "search 'case
+	 * Foo(_)' is not a valid pattern" pain — case-patterns are not
+	 * parseable as top-level decl/stmt/expr, and `mentions` over-matches
+	 * (imports, NewExpr, IdentExpr in non-pattern positions). Walks the
+	 * QueryNode tree for `CaseBranch` nodes and emits one hit per
+	 * matching pattern slot.
+	 */
+	private static function runCases(args:Array<String>):Int {
+		var lang:String = 'haxe';
+		var flat:Bool = false;
+		var limit:Int = -1;
+		var target:Null<String> = null;
+		final inputSpecs:Array<String> = [];
+
+		var i:Int = 0;
+		while (i < args.length) {
+			final a:String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--flat':
+					flat = true;
+				case '--limit':
+					try limit = parseLimit(args, ++i) catch (e:Exception) {
+						stderr('${e.message}\n');
+						return EXIT_USAGE;
+					}
+				case '-h', '--help':
+					printCasesUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq cases: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (target == null) target = a;
+					else inputSpecs.push(a);
+			}
+			i++;
+		}
+		if (target == null) {
+			stderr('apq cases: missing <Ctor> argument\n');
+			printCasesUsage();
+			return EXIT_USAGE;
+		}
+		if (inputSpecs.length == 0) {
+			stderr('apq cases: missing <file-or-dir-or-glob> argument\n');
+			printCasesUsage();
+			return EXIT_USAGE;
+		}
+		final targetStr:String = target;
+
+		final plugin:GrammarPlugin = pickPlugin(lang);
+		final expanded:{paths:Array<String>, singleFile:Bool} = expandInputs(inputSpecs, '.hx');
+		final paths:Array<String> = expanded.paths;
+		if (paths.length == 0) {
+			stderr('apq cases: no input files matched ${inputSpecs.join(" ")}\n');
+			return EXIT_RUNTIME;
+		}
+
+		final singleFile:Bool = expanded.singleFile;
+		final allEntries:Array<{file:String, source:String, hits:Array<CasesHit>}> = [];
+		final skipEntries:Array<SkipEntry> = [];
+		for (path in paths) {
+			final source:String = readSourceForParse(path);
+			final tree:Null<QueryNode> = parseWalked('cases', plugin.parseFile, path, source, singleFile, skipEntries);
+			if (tree == null) {
+				if (singleFile) return EXIT_RUNTIME;
+				continue;
+			}
+			final hits:Array<CasesHit> = Cases.find(targetStr, tree);
+			if (hits.length == 0) continue;
+			allEntries.push({file: path, source: source, hits: hits});
+		}
+
+		if (allEntries.length == 0)
+			stderr(emptyWalkerNudge('cases', targetStr, paths.length, paths.length - skipEntries.length, skipEntries, null) + '\n');
+
+		final shown:Array<{file:String, source:String, hits:Array<CasesHit>}> = limitEntries(allEntries, limit,
+			e -> e.hits.length,
+			(e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k)});
+		for (entry in shown) sysPrint(Cases.render(entry.file, entry.source, entry.hits, flat));
+		return EXIT_OK;
+	}
+
+	private static function printCasesUsage():Void {
+		sysPrint('Usage: apq cases <Ctor> <file-or-dir-or-glob>... [--flat] [--limit N]\n');
+		sysPrint('\n');
+		sysPrint('Match every switch case-pattern whose top-level ctor is <Ctor>:\n');
+		sysPrint('  case Ctor:           case Ctor(_):         case A | Ctor:\n');
+		sysPrint('\n');
+		sysPrint('Use when `search \'case Foo(_)\'` rejects the pattern and `mentions` over-\n');
+		sysPrint('matches (imports / NewExpr / IdentExpr in non-pattern positions).\n');
 	}
 
 	/**
@@ -1710,6 +1849,7 @@ final class Cli {
 		var writerDiff:Bool = false;
 		var minChildren:Int = -1;
 		var maxChildren:Int = -1;
+		var childrenLimit:Int = -1;
 		var file:Null<String> = null;
 		// Inline source (`apq probe '<code>'` → `--code <s>`) or stdin
 		// (`apq ast --stdin`) bypass the file read for micro-probes
@@ -1773,6 +1913,19 @@ final class Cli {
 						return EXIT_USAGE;
 					}
 					maxChildren = parsed;
+				case '--children-limit':
+					// Cap direct-child count per node in the rendered output
+					// (different beast from --max-children: that one FILTERS
+					// matches by arity, this one TRUNCATES the printed tree
+					// horizontally with an `(... N more)` sentinel). Composes
+					// with --depth N for "first N children up to depth M".
+					final v:String = expectValue(args, ++i, '--children-limit');
+					final parsed:Null<Int> = Std.parseInt(v);
+					if (parsed == null || parsed < 0) {
+						stderr('apq ast: --children-limit expects a non-negative integer, got "$v"\n');
+						return EXIT_USAGE;
+					}
+					childrenLimit = parsed;
 				case '--code':
 					codeArg = expectValue(args, ++i, '--code');
 				case '--stdin':
@@ -1930,7 +2083,7 @@ final class Cli {
 			}
 			final offset:Int = Span.offsetOf(source, atLineN, atColN);
 			final node:Null<QueryNode> = Engine.at(tree, offset);
-			final matches:Array<QueryNode> = node == null ? [] : [depth < 0 ? node : Engine.truncate(node, depth)];
+			final matches:Array<QueryNode> = node == null ? [] : [shapeAstOutput(node, depth, childrenLimit)];
 			sysPrint(json ? Json.renderMatches(fileLabel, source, matches, wantDoc, wantSource) : Text.renderMatches(matches, source, wantDoc, wantSource));
 			return EXIT_OK;
 		}
@@ -1981,14 +2134,26 @@ final class Cli {
 					+ 'Kinds present here: ${present.join(", ")}.$fuzzyLine '
 					+ 'Kinds are exact node-constructor names — run `apq ast $fileLabel` to see the tree.\n');
 			}
-			final matches:Array<QueryNode> = depth < 0 ? raw : [for (m in raw) Engine.truncate(m, depth)];
+			final matches:Array<QueryNode> = [for (m in raw) shapeAstOutput(m, depth, childrenLimit)];
 			sysPrint(json ? Json.renderMatches(fileLabel, source, matches, wantDoc, wantSource) : Text.renderMatches(matches, source, wantDoc, wantSource));
 			return EXIT_OK;
 		}
 
-		final shaped:QueryNode = Engine.truncate(tree, depth);
+		final shaped:QueryNode = shapeAstOutput(tree, depth, childrenLimit);
 		sysPrint(json ? Json.renderTree(fileLabel, source, shaped) : Text.render(shaped));
 		return EXIT_OK;
+	}
+
+	/**
+	 * Apply `--depth N` then `--children-limit N` shaping in one place.
+	 * Depth truncate first (cheaper — drops sub-trees wholesale), then
+	 * per-level child cap on what remains. Both clamps are optional;
+	 * negative inputs are no-ops.
+	 */
+	private static function shapeAstOutput(node:QueryNode, depth:Int, childrenLimit:Int):QueryNode {
+		var out:QueryNode = depth < 0 ? node : Engine.truncate(node, depth);
+		if (childrenLimit >= 0) out = Engine.truncateChildren(out, childrenLimit);
+		return out;
 	}
 
 	/**
@@ -2765,6 +2930,101 @@ final class Cli {
 	private static function reconNormalize(message:Null<String>):String {
 		if (message == null || message == '') return '<no message>';
 		return StringTools.replace(StringTools.replace(message, '\n', '\\n'), '\t', '\\t');
+	}
+
+	/**
+	 * `apq sweep` — read-only view on the corpus harness's
+	 * `bin/.last-sweep.json` snapshot. Prints totals (+ Δ vs a prior
+	 * snapshot if `--prev <path>` is given) without re-running the
+	 * corpus. THE no-corpus-rerun lookup for "what does the last sweep
+	 * say" — closes the manual `cat bin/.last-sweep.json | grep` +
+	 * `tail /tmp/sweep.log | grep ===== sweep totals` dance.
+	 *
+	 * Default path is `bin/.last-sweep.json` (matches the corpus
+	 * harness's `SWEEP_JSON_PATH` constant). `--file <path>` overrides
+	 * — useful for sanity-checking an alternate snapshot. Exit 0 when
+	 * the file is read; exit 1 when it doesn't exist or is unparseable.
+	 */
+	private static function runSweep(args:Array<String>):Int {
+		var filePath:String = 'bin/.last-sweep.json';
+		var prevPath:Null<String> = null;
+		var i:Int = 0;
+		while (i < args.length) {
+			final a:String = args[i];
+			switch a {
+				case '--file':
+					filePath = expectValue(args, ++i, '--file');
+				case '--prev':
+					prevPath = expectValue(args, ++i, '--prev');
+				case '--lang':
+					// hxq shim auto-injects --lang haxe; harmless here (sweep
+					// reads a JSON snapshot, no grammar plugin needed). Accept
+					// + consume the value to keep shim invariance.
+					expectValue(args, ++i, '--lang');
+				case '-h', '--help':
+					printSweepUsage();
+					return EXIT_OK;
+				case _:
+					stderr('apq sweep: unknown option "$a"\n');
+					printSweepUsage();
+					return EXIT_USAGE;
+			}
+			i++;
+		}
+		final cur:Null<SweepTotals> = loadSweepJson(filePath);
+		if (cur == null) {
+			stderr('apq sweep: cannot read $filePath (missing or unparseable)\n');
+			return EXIT_RUNTIME;
+		}
+		final total:Int = cur.pass + cur.fail + cur.skipParse + cur.skipWrite + cur.skipConfig + cur.skipMalformed;
+		sysPrint('${cur.pass} pass / ${cur.fail} fail / ${cur.skipParse} skip-parse / ${cur.skipWrite} skip-write / ${cur.skipConfig} skip-config / ${cur.skipMalformed} malformed (total $total)\n');
+		if (prevPath != null) {
+			final prev:Null<SweepTotals> = loadSweepJson(prevPath);
+			if (prev == null) {
+				stderr('apq sweep: cannot read --prev $prevPath\n');
+				return EXIT_RUNTIME;
+			}
+			sysPrint('  Δpass ${sweepSigned(cur.pass - prev.pass)} / Δfail ${sweepSigned(cur.fail - prev.fail)} / Δskip-parse ${sweepSigned(cur.skipParse - prev.skipParse)}  vs $prevPath (${prev.pass} / ${prev.fail} / ${prev.skipParse})\n');
+		}
+		return EXIT_OK;
+	}
+
+	private static function loadSweepJson(path:String):Null<SweepTotals> {
+		if (!sys.FileSystem.exists(path)) return null;
+		return try {
+			final raw:String = sys.io.File.getContent(path);
+			final obj:Dynamic = haxe.Json.parse(raw);
+			final pass:Null<Int> = Reflect.hasField(obj, 'pass') ? Reflect.field(obj, 'pass') : null;
+			final fail:Null<Int> = Reflect.hasField(obj, 'fail') ? Reflect.field(obj, 'fail') : null;
+			final skipParse:Null<Int> = Reflect.hasField(obj, 'skipParse') ? Reflect.field(obj, 'skipParse') : null;
+			final skipWrite:Null<Int> = Reflect.hasField(obj, 'skipWrite') ? Reflect.field(obj, 'skipWrite') : null;
+			final skipConfig:Null<Int> = Reflect.hasField(obj, 'skipConfig') ? Reflect.field(obj, 'skipConfig') : null;
+			final skipMalformed:Null<Int> = Reflect.hasField(obj, 'skipMalformed') ? Reflect.field(obj, 'skipMalformed') : null;
+			if (pass == null || fail == null || skipParse == null) return null;
+			{
+				pass: pass,
+				fail: fail,
+				skipParse: skipParse,
+				skipWrite: skipWrite ?? 0,
+				skipConfig: skipConfig ?? 0,
+				skipMalformed: skipMalformed ?? 0,
+			};
+		} catch (_:Exception) null;
+	}
+
+	private static inline function sweepSigned(n:Int):String return n > 0 ? '+$n' : '$n';
+
+	private static function printSweepUsage():Void {
+		sysPrint('Usage: apq sweep [--file <path>] [--prev <path>]\n');
+		sysPrint('\n');
+		sysPrint('Read the corpus harness sweep snapshot (`bin/.last-sweep.json` by\n');
+		sysPrint('default) and print totals + optional delta vs a prior snapshot.\n');
+		sysPrint('No corpus rerun — only reads JSON.\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --file <path>   Snapshot file (default: bin/.last-sweep.json)\n');
+		sysPrint('  --prev <path>   Compare against another snapshot, print Δ triple\n');
+		sysPrint('  -h, --help      Show this help\n');
 	}
 	#end
 

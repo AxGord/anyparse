@@ -24,6 +24,20 @@ final class Engine {
 	}
 
 	/**
+	 * Cap direct-child count to `maxChildren` at every level. Returns a
+	 * copy where every node with more than `maxChildren` direct children
+	 * has the overflow replaced by a single sentinel `(... N more)` leaf.
+	 * `maxChildren < 0` is a no-op.
+	 *
+	 * Compose with `truncate` for "show first N children up to depth M"
+	 * — useful on long member lists / array literals where depth alone
+	 * doesn't compress the horizontal width.
+	 */
+	public static function truncateChildren(node:QueryNode, maxChildren:Int):QueryNode {
+		return maxChildren < 0 ? node : truncateChildrenAt(node, maxChildren);
+	}
+
+	/**
 	 * Walk `tree` and return every node that matches `selector`.
 	 * Combinators in `selector` walk left-to-right; only direct-child
 	 * relationships are tested per the v1 selector spec.
@@ -53,6 +67,18 @@ final class Engine {
 		if (depth >= maxDepth) return new QueryNode(node.kind, node.name, []);
 		final kids:Array<QueryNode> = [for (c in node.children) truncateAt(c, depth + 1, maxDepth)];
 		return new QueryNode(node.kind, node.name, kids);
+	}
+
+	private static function truncateChildrenAt(node:QueryNode, maxChildren:Int):QueryNode {
+		final all:Array<QueryNode> = node.children;
+		if (all.length <= maxChildren) {
+			final kids:Array<QueryNode> = [for (c in all) truncateChildrenAt(c, maxChildren)];
+			return new QueryNode(node.kind, node.name, kids);
+		}
+		final kept:Array<QueryNode> = [for (i in 0...maxChildren) truncateChildrenAt(all[i], maxChildren)];
+		final omitted:Int = all.length - maxChildren;
+		kept.push(new QueryNode('...', '$omitted more', []));
+		return new QueryNode(node.kind, node.name, kept);
 	}
 
 	private static function walkSelect(node:QueryNode, sel:Selector, segIdx:Int, out:Array<QueryNode>):Void {
