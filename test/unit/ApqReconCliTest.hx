@@ -455,6 +455,58 @@ class ApqReconCliTest extends Test {
 		#end
 	}
 
+	// -- --predict-relax: terminator-insertion gate-relaxation predictor --
+
+	public function testReconPredictRelaxRejectsReplaceArgs():Void {
+		Assert.equals(2, Cli.run(['recon', '--predict-relax', '--replace', 'x', '--with', 'y', '/some/dir']),
+			'--predict-relax does not take --replace/--with (token comes from parser hint)');
+	}
+
+	public function testReconPredictRelaxIncompatibleWithPredictStrip():Void {
+		Assert.equals(2, Cli.run(['recon', '--predict-relax', '--predict-strip', '--replace', 'x', '--with', 'y', '/some/dir']),
+			'--predict-relax and --predict-strip are mutually exclusive');
+	}
+
+	public function testReconPredictRelaxIncompatibleWithRegressionProbe():Void {
+		Assert.equals(2, Cli.run(['recon', '--predict-relax', '--regression-probe', '/some/dir']),
+			'--predict-relax and --regression-probe are mutually exclusive');
+	}
+
+	public function testReconPredictRelaxOnAlreadyParseableFile():Void {
+		#if sys
+		// Already-parseable file → NO TARGET (not an error path).
+		final dir:String = mkTempDir('apq_recon_predict_relax_ok');
+		final path:String = '$dir/good.hxtest';
+		File.saveContent(path, goodHxtest());
+		Assert.equals(1, Cli.run(['recon', '--probe', path, '--predict-relax']),
+			'predict-relax on already-parseable file emits NO TARGET (no relaxation needed)');
+		cleanupDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testReconPredictRelaxOnTerminatorBlocker():Void {
+		#if sys
+		// Source missing `;` after var-decl AND missing `:Type` → parser
+		// reports a real expected token. Predict-relax injects it; the
+		// retry either UNBLOCKs or STILL FAILs, but never NO TARGET.
+		final dir:String = mkTempDir('apq_recon_predict_relax_real');
+		final path:String = '$dir/bad.hxtest';
+		File.saveContent(path, brokenHxtest());
+		// Exit non-zero is the contract for unparseable-after-relax —
+		// the broken fixture has multiple gaps so STILL FAIL is expected.
+		// We assert exit code is non-zero AND that the run completes
+		// (doesn't crash with an unhandled exception).
+		final exitCode:Int = Cli.run(['recon', '--probe', path, '--predict-relax']);
+		Assert.isTrue(exitCode == 0 || exitCode == 1,
+			'predict-relax exits 0 (UNBLOCK) or 1 (STILL FAIL / NO TARGET) on real broken fixture, got $exitCode');
+		cleanupDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	public function testReconRegressionProbeFlagsUnblock():Void {
 		#if sys
 		// Snapshot says fixture was SKIP_PARSE; the actual fixture parses

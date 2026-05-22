@@ -94,6 +94,58 @@ typedef ReconWalkResult = {
 };
 
 /**
+ * One trail-opt gate annotation hit surfaced by `apq gates`. `line`/`col`
+ * point at the decl host the `@:fmt` is attached to (1-indexed, derived
+ * from the decl span via `Span.lineCol`). `gateKind` is the call name
+ * (`trailOptParseGate` / `trailOptShapeGate`), `predicate` the quoted
+ * inner symbol — the field name to look up on the schema instance.
+ */
+typedef GateHit = {
+	var line:Int;
+	var col:Int;
+	var declKind:String;
+	var declName:Null<String>;
+	var gateKind:String;
+	var predicate:String;
+};
+
+/**
+ * Intermediate parse result of `extractGate` — `gateKind` is the call
+ * name without parens, `predicate` the quoted inner symbol. `null` from
+ * the extractor means the `@:fmt` argument is not a gate call.
+ */
+typedef GateExtract = {gateKind:String, predicate:String};
+
+/**
+ * Outcome of one predict-relax probe — what `tryPredictRelax` returns
+ * and `reportPredictRelax` consumes.
+ *
+ *  - `Unblock` — patched source parses; the slice candidate is gate
+ *    relaxation on the ctor at `origLine:origCol`.
+ *  - `StillFail` — patched source still fails; `newLine:newCol`
+ *    carries the new fail-locus (moved-locus hint applies).
+ *  - `NoTarget` — original error had no usable `expected` hint
+ *    (typically `//` or empty), so there was nothing to inject.
+ */
+enum PredictRelaxKind {
+	Unblock;
+	StillFail;
+	NoTarget;
+}
+
+typedef PredictRelaxResult = {
+	var kind:PredictRelaxKind;
+	var original:String;
+	var patched:String;
+	var injected:String;
+	var origLine:Int;
+	var origCol:Int;
+	var newLine:Int;
+	var newCol:Int;
+	var message:String;
+};
+
+/**
  * `apq` CLI entry point. Parses argv, picks a grammar plugin via
  * `--lang`, dispatches on the subcommand.
  *
@@ -175,6 +227,7 @@ final class Cli {
 			case 'lit': return runLit(rest);
 			case 'mentions': return runMentions(rest);
 			case 'cases': return runCases(rest);
+			case 'gates': return runGates(rest);
 			case 'diff': return runDiff(rest);
 			case 'strip': return runStrip(rest);
 			case 'writer-equals': return runWriterEquals(rest);
@@ -1478,6 +1531,190 @@ final class Cli {
 		return EXIT_OK;
 	}
 
+	/**
+	 * `apq gates [<file-or-dir-or-glob>...]` — list every ctor decl
+	 * carrying `@:fmt(trailOptParseGate('<predicate>'))` or
+	 * `@:fmt(trailOptShapeGate('<predicate>'))`. THE structural answer
+	 * to "which ctors gate their trailing terminator on a runtime
+	 * predicate, and what predicate?" — the data you need before
+	 * picking a gate-relaxation slice (Slice 30 / 39 pattern). Without
+	 * this, the gate predicate is invisible until you grep the grammar
+	 * by hand.
+	 *
+	 * Default scope: `src/anyparse/grammar/<lang>/` when run with no
+	 * positional. Otherwise walks every file/dir/glob given.
+	 *
+	 * Output (per hit, grouped by file):
+	 *   <file>:
+	 *     <L>:<C>: <DeclKind> <name?> → <gate-call>
+	 *
+	 * Two recognised gate flavours:
+	 *  - `trailOptParseGate('<predicate>')` — drives the runtime gate
+	 *    on `@:trailOpt` (parser-side). Predicate lives on
+	 *    `HxExprUtil.<predicate>` (or the schema plugin's instance).
+	 *  - `trailOptShapeGate('<predicate>')` — drives the writer-side
+	 *    decision for `var x = …` rhs and similar.
+	 *
+	 * Mutually intelligible with `apq meta @:fmt <dir>
+	 * --arg-contains trailOptParseGate` — `gates` is the focused view
+	 * that extracts just the predicate name and groups by gate flavour.
+	 */
+	private static function runGates(args:Array<String>):Int {
+		var lang:String = 'haxe';
+		var flat:Bool = false;
+		var limit:Int = -1;
+		final inputSpecs:Array<String> = [];
+
+		var i:Int = 0;
+		while (i < args.length) {
+			final a:String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--flat':
+					flat = true;
+				case '--limit':
+					try limit = parseLimit(args, ++i) catch (e:Exception) {
+						stderr('${e.message}\n');
+						return EXIT_USAGE;
+					}
+				case '-h', '--help':
+					printGatesUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq gates: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					inputSpecs.push(a);
+			}
+			i++;
+		}
+		// Default scope: the grammar tree for the selected lang.
+		final effectiveSpecs:Array<String> = inputSpecs.length > 0
+			? inputSpecs
+			: ['src/anyparse/grammar/$lang/'];
+
+		final plugin:GrammarPlugin = pickPlugin(lang);
+		final shape:MetaShape = plugin.metaShape();
+		final expanded:{paths:Array<String>, singleFile:Bool} = expandInputs(effectiveSpecs, '.hx');
+		final paths:Array<String> = expanded.paths;
+		if (paths.length == 0) {
+			stderr('apq gates: no input files matched ${effectiveSpecs.join(" ")}\n');
+			return EXIT_RUNTIME;
+		}
+
+		final singleFile:Bool = expanded.singleFile;
+		final skipEntries:Array<SkipEntry> = [];
+		final allHits:Array<{file:String, source:String, hits:Array<GateHit>}> = [];
+		var totalHits:Int = 0;
+		for (path in paths) {
+			final source:String = readSourceForParse(path);
+			final tree:Null<QueryNode> = parseWalked('gates', plugin.parseFile, path, source, singleFile, skipEntries);
+			if (tree == null) {
+				if (singleFile) return EXIT_RUNTIME;
+				continue;
+			}
+			final raw:Array<MetaHit> = Meta.find(tree, shape, source);
+			final fileHits:Array<GateHit> = [];
+			for (h in raw) if (h.annotation == '@:fmt') for (arg in h.args) {
+				final extracted:Null<GateExtract> = extractGate(arg);
+				if (extracted == null) continue;
+				if (limit >= 0 && totalHits >= limit) break;
+				fileHits.push({
+					line: h.declSpan != null ? h.declSpan.lineCol(source).line : 0,
+					col: h.declSpan != null ? h.declSpan.lineCol(source).col : 0,
+					declKind: h.declKind,
+					declName: h.declName,
+					gateKind: extracted.gateKind,
+					predicate: extracted.predicate,
+				});
+				totalHits++;
+			}
+			if (fileHits.length > 0) allHits.push({file: path, source: source, hits: fileHits});
+		}
+
+		if (allHits.length == 0) {
+			stderr('apq gates: no `@:fmt(trailOptParseGate(...))` / `@:fmt(trailOptShapeGate(...))` annotations in ${paths.length} file(s) scanned\n');
+			return EXIT_OK;
+		}
+
+		for (entry in allHits) {
+			if (!flat) sysPrint('${entry.file}:\n');
+			for (h in entry.hits) {
+				final declLabel:String = h.declName == null ? h.declKind : '${h.declKind} ${h.declName}';
+				final prefix:String = flat ? '${entry.file}:${h.line}:${h.col}: ' : '  ${h.line}:${h.col}: ';
+				sysPrint('$prefix$declLabel → ${h.gateKind}(\'${h.predicate}\')\n');
+			}
+		}
+		return EXIT_OK;
+	}
+
+	/**
+	 * Parse `trailOptParseGate('<pred>')` or `trailOptShapeGate('<pred>')`
+	 * out of a single `@:fmt` argument string. Returns `null` if the
+	 * arg isn't a gate call — `@:fmt(...)` carries many other flags
+	 * (`tightLead`, `wrapRules(...)`, `bodyPolicy(...)`, …) which
+	 * `gates` deliberately ignores. Hand-rolled parser to keep the
+	 * walker independent of the format/wrap plugin types.
+	 */
+	private static function extractGate(arg:String):Null<GateExtract> {
+		final trimmed:String = StringTools.trim(arg);
+		final markers:Array<String> = ['trailOptParseGate', 'trailOptShapeGate'];
+		for (m in markers) if (StringTools.startsWith(trimmed, m)) {
+			final after:String = StringTools.trim(trimmed.substr(m.length));
+			if (!StringTools.startsWith(after, '(')) continue;
+			final inner:String = StringTools.trim(after.substring(1, after.lastIndexOf(')')));
+			// `trailOptShapeGate` takes multiple args (`'endsWithCloseBrace', 'init'`);
+			// extract just the FIRST quoted string — that's the predicate
+			// method name on the schema instance. Subsequent args are
+			// flag-bearing (typically a field-name selector) and not part
+			// of the predicate identity.
+			final firstArg:String = sliceFirstQuotedArg(inner);
+			final stripped:String = stripQuotes(firstArg);
+			if (stripped.length == 0) continue;
+			return {gateKind: m, predicate: stripped};
+		}
+		return null;
+	}
+
+	/**
+	 * Pick the first comma-separated argument from a paren-list body.
+	 * Quote-aware: a comma INSIDE a `'…'` / `"…"` doesn't terminate the
+	 * arg. Returns the trimmed first segment; the whole string when no
+	 * top-level comma exists.
+	 */
+	private static function sliceFirstQuotedArg(inner:String):String {
+		var inSingle:Bool = false;
+		var inDouble:Bool = false;
+		for (i in 0...inner.length) {
+			final c:Int = StringTools.fastCodeAt(inner, i);
+			if (!inDouble && c == "'".code) inSingle = !inSingle;
+			else if (!inSingle && c == '"'.code) inDouble = !inDouble;
+			else if (!inSingle && !inDouble && c == ','.code)
+				return StringTools.trim(inner.substring(0, i));
+		}
+		return StringTools.trim(inner);
+	}
+
+	private static inline function stripQuotes(s:String):String {
+		final t:String = StringTools.trim(s);
+		if (t.length < 2) return t;
+		final first:String = t.charAt(0);
+		final last:String = t.charAt(t.length - 1);
+		if ((first == "'" && last == "'") || (first == '"' && last == '"'))
+			return t.substring(1, t.length - 1);
+		return t;
+	}
+
+	private static function printGatesUsage():Void {
+		sysPrint('Usage: apq gates [<file-or-dir-or-glob>...] [--flat] [--limit N]\n');
+		sysPrint('\n');
+		sysPrint('List every ctor decl carrying `@:fmt(trailOptParseGate(\'<pred>\'))` or\n');
+		sysPrint('`@:fmt(trailOptShapeGate(\'<pred>\'))` and the predicate name it dispatches.\n');
+		sysPrint('Default scope: src/anyparse/grammar/<lang>/ (haxe by default).\n');
+	}
+
 	private static function printCasesUsage():Void {
 		sysPrint('Usage: apq cases <Ctor> <file-or-dir-or-glob>... [--flat] [--limit N]\n');
 		sysPrint('\n');
@@ -2066,6 +2303,7 @@ final class Cli {
 		var maxChildren:Int = -1;
 		var childrenLimit:Int = -1;
 		var spans:Bool = false;
+		var countOnly:Bool = false;
 		var file:Null<String> = null;
 		// Inline source (`apq probe '<code>'` → `--code <s>`) or stdin
 		// (`apq ast --stdin`) bypass the file read for micro-probes
@@ -2157,6 +2395,15 @@ final class Cli {
 					// overwrote an earlier ident. Plain `(no-spans)` form
 					// stays default to keep transcripts compact.
 					spans = true;
+				case '--count':
+					// ω-ast-count: print just the integer direct-child count
+					// at the displayed root (the module by default; each
+					// matched node when paired with `--select`). Composes
+					// with `--select` — one line per match. Skips writer-
+					// output / json / spans / doc / source rendering; only
+					// the count is emitted. Replaces hand-counting members
+					// when sanity-checking a corpus-driver test assertion.
+					countOnly = true;
 				case '-h', '--help':
 					printAstUsage();
 					return EXIT_OK;
@@ -2310,6 +2557,10 @@ final class Cli {
 			}
 			final offset:Int = Span.offsetOf(source, atLineN, atColN);
 			final node:Null<QueryNode> = Engine.at(tree, offset);
+			if (countOnly) {
+				if (node != null) sysPrint('${node.children.length}\n');
+				return EXIT_OK;
+			}
 			final matches:Array<QueryNode> = node == null ? [] : [shapeAstOutput(node, depth, childrenLimit)];
 			sysPrint(json ? Json.renderMatches(fileLabel, source, matches, wantDoc, wantSource) : Text.renderMatches(matches, source, wantDoc, wantSource, spans));
 			return EXIT_OK;
@@ -2361,11 +2612,19 @@ final class Cli {
 					+ 'Kinds present here: ${present.join(", ")}.$fuzzyLine '
 					+ 'Kinds are exact node-constructor names — run `apq ast $fileLabel` to see the tree.\n');
 			}
+			if (countOnly) {
+				for (m in raw) sysPrint('${m.children.length}\n');
+				return EXIT_OK;
+			}
 			final matches:Array<QueryNode> = [for (m in raw) shapeAstOutput(m, depth, childrenLimit)];
 			sysPrint(json ? Json.renderMatches(fileLabel, source, matches, wantDoc, wantSource) : Text.renderMatches(matches, source, wantDoc, wantSource, spans));
 			return EXIT_OK;
 		}
 
+		if (countOnly) {
+			sysPrint('${tree.children.length}\n');
+			return EXIT_OK;
+		}
 		final shaped:QueryNode = shapeAstOutput(tree, depth, childrenLimit);
 		sysPrint(json ? Json.renderTree(fileLabel, source, shaped) : Text.render(shaped, spans));
 		return EXIT_OK;
@@ -2683,6 +2942,17 @@ final class Cli {
 		// 6 actually present) is undercounted. Mutually exclusive with
 		// --predict-strip / --cluster / --probe / --regression-probe.
 		var candidatesRegex:Null<String> = null;
+		// `--predict-relax`: terminator-insertion predictor. For each
+		// skip-parse fixture, take the ParseError's `expected` hint as
+		// the missing token and INSERT it at the fail-locus. If the
+		// patched source parses, the slice candidate is gate-relaxation
+		// (make the terminator optional via `@:trailOpt` / `@:fmt(trailOptParseGate(…))`).
+		// If STILL FAIL, the gap is deeper than the immediate terminator.
+		// Complement to `--predict-strip` (which models the OPPOSITE —
+		// remove tokens to advance past a syntax mismatch): predict-relax
+		// models "the parser would accept missing X at this position".
+		// Mutex with --predict-strip / --regression-probe / --candidates.
+		var predictRelax:Bool = false;
 		// `--source`: drill-mode-only flag. When set in combination with
 		// `--cluster <key>`, the per-path output gains a windowed source
 		// snippet centred on the fail-locus. Outside drill it would
@@ -2725,6 +2995,8 @@ final class Cli {
 					showSource = true;
 				case '--predict-strip':
 					predictStrip = true;
+				case '--predict-relax':
+					predictRelax = true;
 				case '--regression-probe':
 					regressionProbe = true;
 				case '--candidates':
@@ -2814,12 +3086,27 @@ final class Cli {
 			}
 		}
 		if (candidatesRegex != null) {
-			if (probePath != null || predictStrip || clusterFilter != null || regressionProbe) {
-				stderr('apq recon: --candidates is mutually exclusive with --probe / --predict-strip / --cluster / --regression-probe\n');
+			if (probePath != null || predictStrip || clusterFilter != null || regressionProbe || predictRelax) {
+				stderr('apq recon: --candidates is mutually exclusive with --probe / --predict-strip / --cluster / --regression-probe / --predict-relax\n');
+				return EXIT_USAGE;
+			}
+		}
+		if (predictRelax) {
+			if (predictStrip) {
+				stderr('apq recon: --predict-relax and --predict-strip are mutually exclusive (opposite models — strip removes tokens, relax inserts the expected one)\n');
+				return EXIT_USAGE;
+			}
+			if (regressionProbe) {
+				stderr('apq recon: --predict-relax and --regression-probe are mutually exclusive\n');
+				return EXIT_USAGE;
+			}
+			if (patterns.length > 0) {
+				stderr('apq recon: --predict-relax does not take --replace/--with/--delete (the injected token comes from the parser`s `expected` hint)\n');
 				return EXIT_USAGE;
 			}
 		}
 		final plugin:GrammarPlugin = pickPlugin(lang);
+		if (predictRelax && probePath != null) return runReconProbeRelax(plugin, (probePath : String), showSource);
 		if (probePath != null) return runReconProbe(plugin, (probePath : String), predictStrip, patterns, replacements, compiledRegex, showSource);
 		final rootFinal:String = rootDir ?? defaultReconRoot();
 		if (rootFinal == '') {
@@ -2834,7 +3121,160 @@ final class Cli {
 		}
 		if (regressionProbe) return runReconRegressionProbe(plugin, rootFinal);
 		if (candidatesRegex != null) return runReconCandidates(plugin, rootFinal, (candidatesRegex : String));
+		if (predictRelax) return runReconSweepRelax(plugin, rootFinal, clusterFilter, showSource);
 		return runReconSweep(plugin, rootFinal, topN, clusterFilter, predictStrip, patterns, replacements, compiledRegex, showSource);
+	}
+
+	/**
+	 * `apq recon --probe <file> --predict-relax` — single-file
+	 * terminator-insertion predictor. Parses `<file>`, captures the
+	 * `ParseError.expected` hint, INSERTS that token at the fail-locus,
+	 * and retries. Three outcomes:
+	 *  - `PREDICT RELAX UNBLOCK` — patched source parses; the slice
+	 *    candidate is gate-relaxation on the ctor at the fail-locus
+	 *    (make the terminator optional via `@:trailOpt` /
+	 *    `@:fmt(trailOptParseGate(...))`).
+	 *  - `PREDICT RELAX STILL FAIL` — patched source still fails; the
+	 *    gap is deeper than just the missing terminator. NEW locus
+	 *    printed (moved-locus hint same shape as predict-strip).
+	 *  - `PREDICT RELAX NO TARGET` — original error has no `expected`
+	 *    hint to inject. Rare; usually means the parser ran out of
+	 *    grammar branches entirely rather than failing at a specific
+	 *    terminator expectation.
+	 *
+	 * Doesn't take --replace/--with — the injected token comes from
+	 * the parser's own error hint.
+	 */
+	private static function runReconProbeRelax(plugin:GrammarPlugin, path:String, showSource:Bool):Int {
+		final original:String = readSourceForParse(path);
+		final res:PredictRelaxResult = tryPredictRelax(plugin, original);
+		return reportPredictRelax(path, original, res, showSource);
+	}
+
+	/**
+	 * Sweep-mode predict-relax. Walks every skip-parse fixture under
+	 * `root`, runs `tryPredictRelax`, prints per-file outcome plus a
+	 * summary `--- relax: K unblock, M still fail, P no target ---`.
+	 * Filtered by `--cluster <key>` when set (same exact-match key
+	 * semantics as predict-strip).
+	 */
+	private static function runReconSweepRelax(plugin:GrammarPlugin, root:String, clusterFilter:Null<String>, showSource:Bool):Int {
+		final walk:ReconWalkResult = collectReconSkipRecords(plugin, root);
+		if (!walk.wired) {
+			stderr('apq recon: no recon parser wired up for this grammar plugin\n');
+			return EXIT_RUNTIME;
+		}
+		var records:Array<ReconRecord> = walk.records;
+		if (clusterFilter != null) {
+			final filter:String = clusterFilter;
+			records = records.filter(r -> r.clusterKey == filter);
+			if (records.length == 0) {
+				stderr('apq recon: --cluster "$filter" matched no skip-parse records (predict-relax mode)\n');
+				return EXIT_RUNTIME;
+			}
+		}
+		var unblockCount:Int = 0;
+		var stillFailCount:Int = 0;
+		var noTargetCount:Int = 0;
+		for (r in records) {
+			final res:PredictRelaxResult = tryPredictRelax(plugin, r.source);
+			reportPredictRelax(r.path, r.source, res, showSource);
+			switch res.kind {
+				case Unblock: unblockCount++;
+				case StillFail: stillFailCount++;
+				case NoTarget: noTargetCount++;
+			}
+		}
+		sysPrint('--- relax: $unblockCount unblock, $stillFailCount still fail, $noTargetCount no target (of ${records.length} skip-parse files) ---\n');
+		return EXIT_OK;
+	}
+
+	/**
+	 * Run a single predict-relax probe on `source`. Returns one of the
+	 * three result kinds with the patched source / new locus / injected
+	 * token packed inside for the reporter to render.
+	 */
+	private static function tryPredictRelax(plugin:GrammarPlugin, source:String):PredictRelaxResult {
+		var origLine:Int = 0;
+		var origCol:Int = 0;
+		var injected:Null<String> = null;
+		var insertAt:Int = -1;
+		try {
+			plugin.reconParse(source);
+			// Already-parseable file given to predict-relax. Not an
+			// error — could be a `--probe` call on a fixture that
+			// landed after a recent slice. Surface as NoTarget with a
+			// distinct message so the user knows.
+			return {kind: NoTarget, original: source, patched: source, injected: '', origLine: 0, origCol: 0, newLine: 0, newCol: 0, message: 'source already parses (no relaxation needed)'};
+		} catch (pe:ParseError) {
+			final pos:Position = pe.span.lineCol(source);
+			origLine = pos.line;
+			origCol = pos.col;
+			final expected:Null<String> = pe.expected;
+			if (expected == null) {
+				return {kind: NoTarget, original: source, patched: source, injected: '', origLine: origLine, origCol: origCol, newLine: 0, newCol: 0, message: pe.message};
+			}
+			injected = stripExpectedHint((expected : String));
+			insertAt = pe.span.from;
+		} catch (e:Exception) {
+			return {kind: NoTarget, original: source, patched: source, injected: '', origLine: 0, origCol: 0, newLine: 0, newCol: 0, message: e.message};
+		}
+		if (injected == null || injected.length == 0 || insertAt < 0) {
+			return {kind: NoTarget, original: source, patched: source, injected: '', origLine: origLine, origCol: origCol, newLine: 0, newCol: 0, message: 'expected hint is empty after quote-strip'};
+		}
+		final injectedFinal:String = injected;
+		final patched:String = source.substr(0, insertAt) + injectedFinal + source.substr(insertAt);
+		try {
+			plugin.reconParse(patched);
+			return {kind: Unblock, original: source, patched: patched, injected: injectedFinal, origLine: origLine, origCol: origCol, newLine: 0, newCol: 0, message: ''};
+		} catch (pe2:ParseError) {
+			final pos2:Position = pe2.span.lineCol(patched);
+			return {kind: StillFail, original: source, patched: patched, injected: injectedFinal, origLine: origLine, origCol: origCol, newLine: pos2.line, newCol: pos2.col, message: pe2.message};
+		} catch (e:Exception) {
+			return {kind: StillFail, original: source, patched: patched, injected: injectedFinal, origLine: origLine, origCol: origCol, newLine: 0, newCol: 0, message: e.message};
+		}
+	}
+
+	private static function reportPredictRelax(path:String, original:String, res:PredictRelaxResult, showSource:Bool):Int {
+		switch res.kind {
+			case Unblock:
+				sysPrint('PREDICT RELAX UNBLOCK   $path :: inserting "${res.injected}" at ${res.origLine}:${res.origCol} unblocks parse\n');
+				return EXIT_OK;
+			case StillFail:
+				final movedHint:String = movedLocusHint(res.origLine, res.origCol, res.newLine, res.newCol);
+				sysPrint('PREDICT RELAX STILL FAIL $path :: ${res.newLine}:${res.newCol}${movedHint} after inserting "${res.injected}" — ${res.message}\n');
+				if (showSource && res.newLine > 0) printReconSourceWindow(res.patched, res.newLine);
+				return EXIT_RUNTIME;
+			case NoTarget:
+				sysPrint('PREDICT RELAX NO TARGET $path :: at ${res.origLine}:${res.origCol} — ${res.message}\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
+	/**
+	 * Strip the `expected="<X>"` hint down to a literal token. Hints
+	 * arrive as raw strings from `ParseError.expected` — they may be
+	 * `";"`, `;`, `'}'`, `// (comment-or-end marker)`, etc. Recognise
+	 * the three common terminator shapes and return the bare char.
+	 * Returns the trimmed input unchanged for anything else; the
+	 * caller's parse retry will surface bogus-injection as STILL FAIL.
+	 */
+	private static function stripExpectedHint(hint:String):String {
+		final t:String = StringTools.trim(hint);
+		if (t.length == 0) return t;
+		// `"<x>"` or `'<x>'` form.
+		if (t.length >= 2) {
+			final first:String = t.charAt(0);
+			final last:String = t.charAt(t.length - 1);
+			if ((first == '"' && last == '"') || (first == "'" && last == "'"))
+				return t.substring(1, t.length - 1);
+		}
+		// `//` is the canonical "comment or end" marker the parser
+		// emits when it ran out of brace-/Star-terminating options. No
+		// token to inject — return empty so the caller routes to
+		// NO TARGET.
+		if (t == '//' || t == '<no message>') return '';
+		return t;
 	}
 
 	/**
@@ -3100,8 +3540,7 @@ final class Cli {
 				sysPrint('PREDICT UNBLOCK   $path\n');
 			} catch (pe:ParseError) {
 				final pos:Position = pe.span.lineCol(stripped);
-				final movedHint:String = (origLine > 0 && (pos.line != origLine || pos.col != origCol))
-					? ' (was $origLine:$origCol)' : '';
+				final movedHint:String = movedLocusHint(origLine, origCol, pos.line, pos.col);
 				sysPrint('PREDICT STILL FAIL $path :: ${pos.line}:${pos.col}${movedHint} ${pe.message}\n');
 				if (showSource) printReconSourceWindow(stripped, pos.line);
 				exitCode = EXIT_RUNTIME;
@@ -3351,6 +3790,35 @@ final class Cli {
 	}
 
 	/**
+	 * Render the predict-strip "moved locus" suffix. Three regimes:
+	 *  - Same locus → empty (no hint needed).
+	 *  - NEW > ORIG (line strictly greater, or same line + col strictly
+	 *    greater) → ` (was L:C, advanced)` — strip uncovered a downstream
+	 *    blocker; the substitution's effect was forward, so the residual
+	 *    fail is a real second blocker.
+	 *  - NEW < ORIG (line less, or same line + col less) → ` (was L:C,
+	 *    moved BACKWARD — strip may have damaged earlier syntax, or your
+	 *    substitution model doesn't match the actual blocker mechanism;
+	 *    verify with `apq probe` on the unstripped fragment)` — the
+	 *    common Slice 39-style failure mode where token substitution
+	 *    can't model gate-relaxation.
+	 *  - Same line, col differs → ` (was L:C)` — neutral; the strip
+	 *    shifted things within one line, usually inconsequential.
+	 *
+	 * `origLine == 0` means the original error had no locus (rare —
+	 * `<no locus>` already printed instead); guard returns empty.
+	 */
+	private static inline function movedLocusHint(origLine:Int, origCol:Int, newLine:Int, newCol:Int):String {
+		if (origLine <= 0) return '';
+		if (newLine == origLine && newCol == origCol) return '';
+		final forward:Bool = newLine > origLine || (newLine == origLine && newCol > origCol);
+		final backward:Bool = newLine < origLine || (newLine == origLine && newCol < origCol);
+		if (forward && newLine != origLine) return ' (was $origLine:$origCol, advanced)';
+		if (backward) return ' (was $origLine:$origCol, moved BACKWARD — strip may have damaged earlier syntax or modelled the wrong mechanism; verify with `apq probe`)';
+		return ' (was $origLine:$origCol)';
+	}
+
+	/**
 	 * `--predict-strip` output: for each skip-parse record, apply the
 	 * supplied --replace / --with / --delete substitutions to the
 	 * extracted source and re-run the plugin's trivia parser.
@@ -3418,8 +3886,7 @@ final class Cli {
 				// Read of the stripped source when the moved-locus hint
 				// alone is ambiguous.
 				final pos:Position = pe.span.lineCol(stripped);
-				final movedHint:String = (r.line > 0 && (pos.line != r.line || pos.col != r.col))
-					? ' (was ${r.line}:${r.col})' : '';
+				final movedHint:String = movedLocusHint(r.line, r.col, pos.line, pos.col);
 				sysPrint('PREDICT STILL FAIL ${r.path} :: ${pos.line}:${pos.col}${movedHint} ${pe.message}\n');
 				if (showSource) printReconSourceWindow(stripped, pos.line);
 				stillFailCount++;
@@ -4057,6 +4524,8 @@ final class Cli {
 		sysPrint('  blast         Change-impact checklist (uses + refs + member-access)\n');
 		sysPrint('  lit           Leaf-name probe (string literals, identifiers — prose-in-code)\n');
 		sysPrint('  mentions      Every named-leaf occurrence (uses + refs + lit --any-kind --exact)\n');
+		sysPrint('  cases         Precise case-pattern lookup (case Ctor: / case Ctor(_): / case A | Ctor:)\n');
+		sysPrint('  gates         List @:fmt(trailOptParseGate/trailOptShapeGate) annotations + predicate names\n');
 		sysPrint('  diff          Structural AST diff between two files\n');
 		sysPrint('  strip         Sed-strip + parse-check (sole-blocker confirmation)\n');
 		sysPrint('  writer-equals Byte-equality check on writer output (trivia + --plain)\n');
@@ -4225,6 +4694,7 @@ final class Cli {
 		sysPrint('  --min-children <n>  With --select: keep only matches with >= n direct children (e.g. multi-arg ParamCtor)\n');
 		sysPrint('  --max-children <n>  With --select: keep only matches with <= n direct children\n');
 		sysPrint('  --spans             Append `@from-to` byte-range annotation to every rendered node — same-span duplicates (parser bug emitting two nodes at the same position) become a trivial visual signal.\n');
+		sysPrint('  --count             Print just the integer direct-child count at the displayed root (one line per match with --select). Sanity-check for member counts before writing a corpus-driver test assertion.\n');
 		sysPrint('  --writer-output     Parse + format-write through the plugin trivia pipeline and print the emitted source\n');
 		sysPrint('  --writer-output-plain  Like --writer-output but uses the plain (non-trivia) writer — mirrors the unit-test entry HxModuleWriter.write(HaxeModuleParser.parse(src)); flattens source layout, drops comments\n');
 		sysPrint('  --diff              With --writer-output: AST-diff the input against the emitted output (writer-bug loop)\n');
