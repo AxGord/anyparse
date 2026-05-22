@@ -170,6 +170,56 @@ class HxPrattSliceTest extends HxTestHelpers {
 		}
 	}
 
+	/**
+	 * Slice 36: trailing-dot float literal `1.` (and `5.`, `12.`) —
+	 * source-verbatim because `HxFloatLit` is now `@:rawString`
+	 * String-backed. Mirrors `whitespace/issue_197_ternary_floats`.
+	 */
+	public function testFloatLitTrailingDot():Void {
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Float = 1.; }');
+		switch decl.init {
+			case FloatLit(v):
+				Assert.equals('1.', (v : String));
+				Assert.floatEquals(1.0, (v : Float));
+			case null, _: Assert.fail('expected FloatLit("1."), got ${decl.init}');
+		}
+	}
+
+	/**
+	 * Slice 36 guard: `0...10` interval operator still parses as
+	 * `IntLit` + range op + `IntLit`. The float regex's negative
+	 * lookahead `(?![\w.])` cancels the trailing-dot match when the
+	 * follow-up byte is another `.` (range operator) — without the
+	 * guard the regex would consume `0.` and leave `..10` stranded.
+	 */
+	public function testFloatLitTrailingDotDoesNotEatRangeOp():Void {
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Array<Int> = [for (i in 0...10) i]; }');
+		// Just assert the parse succeeded — the AST shape for array
+		// comprehension is verified elsewhere; here we only need to
+		// confirm `0...10` did not collapse into `(0.).(.10)`.
+		Assert.notNull(decl);
+		Assert.notNull(decl.init);
+	}
+
+	/**
+	 * Slice 36 guard: ternary with bare identifier condition + two
+	 * trailing-dot floats — `a ? 1. : 2.`. Caught the un-anchored
+	 * second alt during slice development (the regex's `^` only bound
+	 * to the first alt without an explicit non-capturing group, so
+	 * the second alt scanned mid-buffer and overwrote `a` with `1.`).
+	 */
+	public function testFloatLitTrailingDotInTernary():Void {
+		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x = a ? 1. : 2.; }');
+		switch decl.init {
+			case Ternary(IdentExpr(c), FloatLit(t), FloatLit(e)):
+				Assert.equals('a', (c : String));
+				Assert.equals('1.', (t : String));
+				Assert.equals('2.', (e : String));
+			case null, _:
+				Assert.fail('expected Ternary(IdentExpr("a"), FloatLit("1."), FloatLit("2.")), got ${decl.init}');
+		}
+	}
+
 	public function testBareIntStillParses():Void {
 		// Guard: adding FloatLit before IntLit must not break bare
 		// integer parsing. `42` has no `.`, so FloatLit fails and
