@@ -63,6 +63,25 @@ typedef ReconRecord = {
 	var clusterKey:String;
 	var source:String;
 	var skipLine:String;
+	/**
+	 * 1-indexed line of the parse-fail locus inside `source`. `0` when
+	 * the record came from a non-`ParseError` exception (no span); the
+	 * `--source` drill prints `<no locus>` for those.
+	 */
+	var line:Int;
+	/** 1-indexed column at the parse-fail locus; `0` for non-`ParseError`. */
+	var col:Int;
+};
+
+/**
+ * Result of one corpus walk. `wired == false` means the plugin's recon
+ * parser is missing — both `runReconSweep` and `strip --from-cluster`
+ * surface that as a hard runtime error before consuming the records.
+ */
+typedef ReconWalkResult = {
+	var wired:Bool;
+	var records:Array<ReconRecord>;
+	var clusters:Map<String, ReconCluster>;
 };
 
 /**
@@ -89,6 +108,13 @@ final class Cli {
 	private static final RECON_EXAMPLES_PER_CLUSTER:Int = 2;
 	private static final RECON_HEAD_LEN:Int = 70;
 	private static final RECON_LOCUS_LEN:Int = 20;
+	/**
+	 * `recon --cluster <key> --source` drill: lines printed either side
+	 * of the fail-locus row. 3 is enough to see the construct's frame
+	 * (decl line + open brace + the failing body line) without flooding
+	 * the drill output when a cluster has dozens of paths.
+	 */
+	private static final RECON_SOURCE_WINDOW_RADIUS:Int = 3;
 	private static final FUZZY_TOP_K:Int = 3;
 	/**
 	 * Substring "did you mean" — `query` ≥ this length OR the substring
@@ -580,6 +606,13 @@ final class Cli {
 		// the pattern silently doesn't match, the corpus delta misleads;
 		// a single dry-run pass surfaces the typo before any apply.
 		var dryRun:Bool = false;
+		// `--from-cluster <key>` switches positional mode: the (single)
+		// positional becomes the corpus root (recon-style, env fallback
+		// to ANYPARSE_HXFORMAT_FORK/test/testcases); the file list is
+		// derived from a recon walk of that root, filtered to the named
+		// cluster. Direct complement to `recon --predict-strip`'s
+		// upper-bound prediction — this is the actual sweep apply.
+		var fromCluster:Null<String> = null;
 		final files:Array<String> = [];
 		final patterns:Array<String> = [];
 		final replacements:Array<String> = [];
@@ -616,6 +649,8 @@ final class Cli {
 					showSource = true;
 				case '--dry-run':
 					dryRun = true;
+				case '--from-cluster':
+					fromCluster = expectValue(args, ++i, '--from-cluster');
 				case '-h', '--help':
 					printStripUsage();
 					return EXIT_OK;
@@ -632,13 +667,31 @@ final class Cli {
 			stderr('apq strip: --replace "$pendingReplace" needs a --with\n');
 			return EXIT_USAGE;
 		}
-		if (files.length == 0) {
-			stderr('apq strip: missing <file> argument (one or more, applies same substitutions to each)\n');
+		if (patterns.length == 0) {
+			stderr('apq strip: missing at least one --replace/--with or --delete\n');
 			printStripUsage();
 			return EXIT_USAGE;
 		}
-		if (patterns.length == 0) {
-			stderr('apq strip: missing at least one --replace/--with or --delete\n');
+		// `--from-cluster` mode: discover files via recon walk, then
+		// fall through into the existing per-file substitution loop.
+		// Conflict guards live here so a bad mix is surfaced before
+		// any FS I/O or plugin call.
+		if (fromCluster != null) {
+			if (files.length > 1) {
+				stderr('apq strip: --from-cluster takes at most one positional (corpus root); got ${files.length} (${files.join(", ")})\n');
+				return EXIT_USAGE;
+			}
+			final discovered:Null<Array<String>> = resolveStripFromCluster(lang, files.length == 1 ? files[0] : null, (fromCluster : String));
+			if (discovered == null) return EXIT_RUNTIME;
+			// Replace the positional list with the cluster's path list so
+			// the rest of runStrip is mode-agnostic. A non-null `discovered`
+			// is non-empty by construction (any cluster keyed in the map
+			// has at least one path; the no-match path returned null
+			// above), so no zero-length branch needed here.
+			files.resize(0);
+			for (p in (discovered : Array<String>)) files.push(p);
+		} else if (files.length == 0) {
+			stderr('apq strip: missing <file> argument (one or more, applies same substitutions to each)\n');
 			printStripUsage();
 			return EXIT_USAGE;
 		}
@@ -723,6 +776,64 @@ final class Cli {
 	}
 
 	/**
+	 * Resolve the `strip --from-cluster <key>` path list: run a recon
+	 * walk over the corpus root, filter by cluster key, return absolute
+	 * paths (so the file loop reads the actual files, not the
+	 * stripped-relative names recon stores). On miss (unknown key) or
+	 * setup error, prints to stderr and returns `null` — caller exits
+	 * `EXIT_RUNTIME`.
+	 *
+	 * `rootArg` is the explicit positional (if any); fall back to
+	 * `defaultReconRoot()` (env var) on null.
+	 */
+	private static function resolveStripFromCluster(lang:String, rootArg:Null<String>, key:String):Null<Array<String>> {
+		#if (sys || nodejs)
+		final root:String = rootArg ?? defaultReconRoot();
+		if (root == '') {
+			stderr("apq strip: --from-cluster requires a corpus root (positional <dir> or $ANYPARSE_HXFORMAT_FORK env var).\n");
+			return null;
+		}
+		if (!FileSystem.exists(root) || !FileSystem.isDirectory(root)) {
+			stderr('apq strip: --from-cluster: "$root" is not a directory.\n');
+			return null;
+		}
+		final plugin:GrammarPlugin = pickPlugin(lang);
+		final walk:ReconWalkResult = collectReconSkipRecords(plugin, root);
+		if (!walk.wired) {
+			stderr('apq strip: --from-cluster: no recon parser wired up for lang "$lang"\n');
+			return null;
+		}
+		final cluster:Null<ReconCluster> = walk.clusters[key];
+		if (cluster == null) {
+			stderr('apq strip: --from-cluster "$key" matched no cluster key (exact match).\n');
+			final keyEntries:Array<{key:String, count:Int}> = [
+				for (k => v in walk.clusters) {key: k, count: v.count}
+			];
+			keyEntries.sort((a, b) -> b.count - a.count);
+			final preview:Int = keyEntries.length > 10 ? 10 : keyEntries.length;
+			if (preview == 0) {
+				stderr('  (no skip-parse failures in this sweep)\n');
+			} else {
+				stderr('  available keys (${keyEntries.length} total, showing top $preview by frequency):\n');
+				for (idx in 0...preview) stderr('    "${keyEntries[idx].key}"  (${keyEntries[idx].count}×)\n');
+				if (keyEntries.length > preview)
+					stderr('    … (${keyEntries.length - preview} more — run `apq recon` on the same root to see the full histogram)\n');
+			}
+			return null;
+		}
+		// ReconCluster.paths are root-relative (e.g. `issue_582.hxtest`);
+		// rejoin with the root so file IO uses absolute paths regardless
+		// of CWD.
+		final out:Array<String> = [for (p in cluster.paths) '$root/$p'];
+		out.sort((a:String, b:String) -> a < b ? -1 : (a > b ? 1 : 0));
+		return out;
+		#else
+		stderr('apq strip: --from-cluster requires a sys target (filesystem walk)\n');
+		return null;
+		#end
+	}
+
+	/**
 	 * Count non-overlapping occurrences of `needle` in `haystack`.
 	 * Matches `StringTools.replace`'s scan semantics — used by `apq
 	 * strip --dry-run` so the per-pattern hit count exactly tracks
@@ -743,6 +854,7 @@ final class Cli {
 
 	private static function printStripUsage():Void {
 		sysPrint('Usage: apq strip [options] <file> [<file2> ...] --replace <pat> --with <repl> [...]\n');
+		sysPrint('       apq strip --from-cluster <key> [<dir>] --replace <pat> --with <repl> [...]\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --replace <pat>     Literal substring to replace (paired with the next --with)\n');
@@ -750,6 +862,11 @@ final class Cli {
 		sysPrint('  --delete <pat>      Shortcut for --replace <pat> --with \'\'\n');
 		sysPrint('  --show              Dump the stripped source to stderr (debug)\n');
 		sysPrint('  --dry-run           Skip parse, only verify each pattern matched ≥1 occurrence somewhere (typo guard)\n');
+		sysPrint('  --from-cluster <key>\n');
+		sysPrint('                      Discover file list via a recon walk and filter by EXACT cluster\n');
+		sysPrint('                      key (same shape as `apq recon --cluster <key>`). Positional <dir>\n');
+		sysPrint("                      becomes the corpus root (env fallback to $ANYPARSE_HXFORMAT_FORK\n");
+		sysPrint('                      /test/testcases). Apply complement of `recon --predict-strip`.\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 		sysPrint('\n');
 		sysPrint("Apply literal substitutions in order, then parse the result via the\n");
@@ -823,10 +940,14 @@ final class Cli {
 		final plugin:GrammarPlugin = pickPlugin(lang);
 		final source:String = readSourceForParse(inputPathFinal);
 		final expected:String = readExpectedForCompare(expectedPathFinal);
+		// `.hxtest` input → section-1 config drives writer options so a
+		// fork fixture reproduces the corpus harness's writer surface in
+		// one command. Plain inputs stay on plugin defaults.
+		final optsJson:Null<String> = readWriteOptionsJsonOrNull(inputPathFinal);
 
 		final emitted:Null<String> = try (plain
-			? plugin.writeRoundTripPlain(source)
-			: plugin.writeRoundTrip(source))
+			? plugin.writeRoundTripPlain(source, optsJson)
+			: plugin.writeRoundTrip(source, optsJson))
 		catch (e:ParseError) {
 			stderr('apq writer-equals: $inputPathFinal: ${e.toString()}\n');
 			return EXIT_RUNTIME;
@@ -1696,9 +1817,15 @@ final class Cli {
 		// call. Exit non-zero when the writer output fails to re-parse
 		// (writer produced syntactically broken Haxe).
 		if (writerOutput) {
+			// `.hxtest` section-1 (writer config JSON) auto-applies for
+			// the file-path mode — drives `HxModuleWriteOptions` via
+			// `HaxeFormatConfigLoader` so a fixture reproduces the corpus
+			// harness's writer settings in a single command. `--code` /
+			// `--stdin` modes have no path → defaults stay.
+			final optsJson:Null<String> = file != null ? readWriteOptionsJsonOrNull((file : String)) : null;
 			final emitted:Null<String> = try (writerOutputPlain
-				? plugin.writeRoundTripPlain(source)
-				: plugin.writeRoundTrip(source))
+				? plugin.writeRoundTripPlain(source, optsJson)
+				: plugin.writeRoundTrip(source, optsJson))
 			catch (e:ParseError) {
 				stderr('apq ast: $fileLabel: ${e.toString()}\n');
 				return EXIT_RUNTIME;
@@ -1972,17 +2099,21 @@ final class Cli {
 		final fileFinal:String = file;
 		final plugin:GrammarPlugin = pickPlugin(lang);
 		final source:String = readSourceForParse(fileFinal);
-		final triviaOk:Bool = emitOneWriterProbe(plugin, source, fileFinal, lang, false);
-		final plainOk:Bool = emitOneWriterProbe(plugin, source, fileFinal, lang, true);
+		// `.hxtest` section-1 config drives BOTH labelled probes so the
+		// trivia ↔ plain comparison reflects the corpus harness's actual
+		// writer surface for this fixture.
+		final optsJson:Null<String> = readWriteOptionsJsonOrNull(fileFinal);
+		final triviaOk:Bool = emitOneWriterProbe(plugin, source, fileFinal, lang, false, optsJson);
+		final plainOk:Bool = emitOneWriterProbe(plugin, source, fileFinal, lang, true, optsJson);
 		return (triviaOk && plainOk) ? EXIT_OK : EXIT_RUNTIME;
 	}
 
-	private static function emitOneWriterProbe(plugin:GrammarPlugin, source:String, file:String, lang:String, plain:Bool):Bool {
+	private static function emitOneWriterProbe(plugin:GrammarPlugin, source:String, file:String, lang:String, plain:Bool, optsJson:Null<String>):Bool {
 		final label:String = plain ? 'plain' : 'trivia';
 		sysPrint('=== $label ===\n');
 		final emitted:Null<String> = try (plain
-			? plugin.writeRoundTripPlain(source)
-			: plugin.writeRoundTrip(source))
+			? plugin.writeRoundTripPlain(source, optsJson)
+			: plugin.writeRoundTrip(source, optsJson))
 		catch (e:ParseError) {
 			stderr('apq writer-probe: $label: $file: ${e.toString()}\n');
 			return false;
@@ -2036,6 +2167,11 @@ final class Cli {
 		var rootDir:Null<String> = null;
 		var clusterFilter:Null<String> = null;
 		var predictStrip:Bool = false;
+		// `--source`: drill-mode-only flag. When set in combination with
+		// `--cluster <key>`, the per-path output gains a windowed source
+		// snippet centred on the fail-locus. Outside drill it would
+		// flood every SKIP line; usage error guards that.
+		var showSource:Bool = false;
 		// Twin of `runStrip`'s arg-parsing: --replace X --with Y pairs
 		// plus --delete X shortcut. Patterns and replacements arrays
 		// stay aligned by construction. Active only with --predict-strip.
@@ -2061,6 +2197,8 @@ final class Cli {
 					probePath = expectValue(args, ++i, '--probe');
 				case '--cluster':
 					clusterFilter = expectValue(args, ++i, '--cluster');
+				case '--source':
+					showSource = true;
 				case '--predict-strip':
 					predictStrip = true;
 				case '--replace':
@@ -2112,6 +2250,13 @@ final class Cli {
 			stderr('apq recon: --replace/--with/--delete require --predict-strip\n');
 			return EXIT_USAGE;
 		}
+		// `--source` is meaningful only inside cluster drill — outside it
+		// would flood every SKIP line with a per-fixture window. Make
+		// the misuse a hard usage error so the flag never silently no-ops.
+		if (showSource && clusterFilter == null) {
+			stderr('apq recon: --source requires --cluster <key> (drill-mode only; would flood the sweep otherwise)\n');
+			return EXIT_USAGE;
+		}
 		final plugin:GrammarPlugin = pickPlugin(lang);
 		if (probePath != null) return runReconProbe(plugin, (probePath : String));
 		final rootFinal:String = rootDir ?? defaultReconRoot();
@@ -2125,7 +2270,7 @@ final class Cli {
 			stderr('apq recon: "$rootFinal" is not a directory.\n');
 			return EXIT_RUNTIME;
 		}
-		return runReconSweep(plugin, rootFinal, topN, clusterFilter, predictStrip, patterns, replacements);
+		return runReconSweep(plugin, rootFinal, topN, clusterFilter, predictStrip, patterns, replacements, showSource);
 	}
 
 	private static function runReconProbe(plugin:GrammarPlugin, path:String):Int {
@@ -2156,8 +2301,63 @@ final class Cli {
 	private static function runReconSweep(
 		plugin:GrammarPlugin, root:String, topN:Int,
 		clusterFilter:Null<String>, predictStrip:Bool,
-		patterns:Array<String>, replacements:Array<String>
+		patterns:Array<String>, replacements:Array<String>,
+		showSource:Bool
 	):Int {
+		final walk:ReconWalkResult = collectReconSkipRecords(plugin, root);
+		if (!walk.wired) {
+			stderr('apq recon: no recon parser wired up for this grammar plugin\n');
+			return EXIT_RUNTIME;
+		}
+		final clusters:Map<String, ReconCluster> = walk.clusters;
+		final records:Array<ReconRecord> = walk.records;
+		// `--cluster <key>` filter: exact match against the normalised
+		// cluster key (the histogram label, with `\n`/`\t` escaped).
+		// Exact rather than substring because `}\n}` (canonical) would
+		// substring-match every Haxe file's `…}\n}` tail. 0-match exits
+		// non-zero; downstream output (SKIP / PREDICT / cluster drill)
+		// walks the filtered records and the single-cluster map.
+		var filteredRecords:Array<ReconRecord> = records;
+		var filteredClusters:Map<String, ReconCluster> = clusters;
+		if (clusterFilter != null) {
+			final wanted:String = (clusterFilter : String);
+			final hit:Null<ReconCluster> = clusters[wanted];
+			if (hit == null) {
+				stderr('apq recon: --cluster "$wanted" matched no cluster key (exact match).\n');
+				final keyEntries:Array<{key:String, count:Int}> = [
+					for (k => v in clusters) {key: k, count: v.count}
+				];
+				keyEntries.sort((a, b) -> b.count - a.count);
+				final preview:Int = keyEntries.length > 10 ? 10 : keyEntries.length;
+				if (preview == 0) {
+					stderr('  (no skip-parse failures in this sweep)\n');
+				} else {
+					stderr('  available keys (${keyEntries.length} total, showing top $preview by frequency):\n');
+					for (idx in 0...preview) stderr('    "${keyEntries[idx].key}"  (${keyEntries[idx].count}×)\n');
+					if (keyEntries.length > preview) stderr('    … (${keyEntries.length - preview} more — run without --cluster to see the full histogram)\n');
+				}
+				return EXIT_RUNTIME;
+			}
+			filteredClusters = [wanted => hit];
+			filteredRecords = [for (r in records) if (r.clusterKey == wanted) r];
+		}
+		if (predictStrip) return runReconPredictStrip(filteredRecords, filteredClusters, plugin, patterns, replacements, clusterFilter);
+		for (r in filteredRecords) sysPrint('${r.skipLine}\n');
+		if (clusterFilter != null) return printReconClusterDrill(filteredClusters, records.length, (clusterFilter : String), filteredRecords, showSource);
+		return printReconHistogram(clusters, records.length, topN);
+	}
+
+	/**
+	 * Corpus-walk extracted from `runReconSweep` so the same skip-parse
+	 * record list drives both the recon sweep (histogram / cluster drill
+	 * / predict-strip) and `strip --from-cluster` (apply substitutions
+	 * to every file in a named cluster). Recurses into subdirs, parses
+	 * each `.hxtest` via the plugin's trivia parser, and clusters
+	 * failures by normalised forward-locus. `wired == false` when the
+	 * plugin returns `false` from `reconParse` — surfaces the same
+	 * "no recon parser for lang X" error in both callers.
+	 */
+	private static function collectReconSkipRecords(plugin:GrammarPlugin, root:String):ReconWalkResult {
 		final clusters:Map<String, ReconCluster> = [];
 		final records:Array<ReconRecord> = [];
 		var wired:Bool = true;
@@ -2193,6 +2393,8 @@ final class Cli {
 						clusterKey: key,
 						source: source,
 						skipLine: 'SKIP $relPath :: ${pos.line}:${pos.col} expected="$exp" :: src="$snip"',
+						line: pos.line,
+						col: pos.col,
 					});
 				} catch (exception:Exception) {
 					final relPath:String = stripRootPrefix(path, root);
@@ -2203,49 +2405,14 @@ final class Cli {
 						clusterKey: key,
 						source: source,
 						skipLine: 'SKIP $relPath :: $key',
+						line: 0,
+						col: 0,
 					});
 				}
 			}
 			if (!wired) break;
 		}
-		if (!wired) {
-			stderr('apq recon: no recon parser wired up for this grammar plugin\n');
-			return EXIT_RUNTIME;
-		}
-		// `--cluster <key>` filter: exact match against the normalised
-		// cluster key (the histogram label, with `\n`/`\t` escaped).
-		// Exact rather than substring because `}\n}` (canonical) would
-		// substring-match every Haxe file's `…}\n}` tail. 0-match exits
-		// non-zero; downstream output (SKIP / PREDICT / cluster drill)
-		// walks the filtered records and the single-cluster map.
-		var filteredRecords:Array<ReconRecord> = records;
-		var filteredClusters:Map<String, ReconCluster> = clusters;
-		if (clusterFilter != null) {
-			final wanted:String = (clusterFilter : String);
-			final hit:Null<ReconCluster> = clusters[wanted];
-			if (hit == null) {
-				stderr('apq recon: --cluster "$wanted" matched no cluster key (exact match).\n');
-				final keyEntries:Array<{key:String, count:Int}> = [
-					for (k => v in clusters) {key: k, count: v.count}
-				];
-				keyEntries.sort((a, b) -> b.count - a.count);
-				final preview:Int = keyEntries.length > 10 ? 10 : keyEntries.length;
-				if (preview == 0) {
-					stderr('  (no skip-parse failures in this sweep)\n');
-				} else {
-					stderr('  available keys (${keyEntries.length} total, showing top $preview by frequency):\n');
-					for (idx in 0...preview) stderr('    "${keyEntries[idx].key}"  (${keyEntries[idx].count}×)\n');
-					if (keyEntries.length > preview) stderr('    … (${keyEntries.length - preview} more — run without --cluster to see the full histogram)\n');
-				}
-				return EXIT_RUNTIME;
-			}
-			filteredClusters = [wanted => hit];
-			filteredRecords = [for (r in records) if (r.clusterKey == wanted) r];
-		}
-		if (predictStrip) return runReconPredictStrip(filteredRecords, filteredClusters, plugin, patterns, replacements, clusterFilter);
-		for (r in filteredRecords) sysPrint('${r.skipLine}\n');
-		if (clusterFilter != null) return printReconClusterDrill(filteredClusters, records.length, (clusterFilter : String));
-		return printReconHistogram(clusters, records.length, topN);
+		return {wired: wired, records: records, clusters: clusters};
 	}
 
 	private static function printReconHistogram(clusters:Map<String, ReconCluster>, total:Int, topN:Int):Int {
@@ -2276,14 +2443,27 @@ final class Cli {
 	 * `examples` array). Sorted descending by cluster size; paths
 	 * sorted ascending so output is stable. Replaces the global
 	 * histogram in this mode.
+	 *
+	 * When `showSource` is true, each printed path is followed by a
+	 * fenced window of source bytes around the fail-locus
+	 * (`RECON_SOURCE_WINDOW_RADIUS` lines either side). Replaces the
+	 * manual Read-per-path step after `--cluster` drill.
 	 */
-	private static function printReconClusterDrill(matches:Map<String, ReconCluster>, totalAcrossSweep:Int, needle:String):Int {
+	private static function printReconClusterDrill(
+		matches:Map<String, ReconCluster>, totalAcrossSweep:Int, needle:String,
+		records:Array<ReconRecord>, showSource:Bool
+	):Int {
 		final entries:Array<{key:String, cluster:ReconCluster}> = [
 			for (k => v in matches) {key: k, cluster: v}
 		];
 		entries.sort((a, b) -> b.cluster.count - a.cluster.count);
 		var matched:Int = 0;
 		for (e in entries) matched += e.cluster.count;
+		// Map path → record so the windowed source / locus lookup stays
+		// O(1) per path even in clusters with hundreds of fixtures.
+		// Built once for the drill block regardless of `showSource`
+		// (cost is negligible vs the walk itself).
+		final byPath:Map<String, ReconRecord> = [for (r in records) r.path => r];
 		sysPrint('\n');
 		sysPrint('--- cluster drill for "$needle" (${entries.length} cluster${entries.length == 1 ? '' : 's'}, $matched of $totalAcrossSweep skip-parse paths) ---\n');
 		for (entry in entries) {
@@ -2291,9 +2471,56 @@ final class Cli {
 			sysPrint('  cluster "${entry.key}" — ${c.count} path${c.count == 1 ? '' : 's'}:\n');
 			final sorted:Array<String> = c.paths.copy();
 			sorted.sort((a, b) -> a < b ? -1 : (a > b ? 1 : 0));
-			for (p in sorted) sysPrint('    $p\n');
+			for (p in sorted) {
+				if (!showSource) {
+					sysPrint('    $p\n');
+					continue;
+				}
+				final rec:Null<ReconRecord> = byPath[p];
+				if (rec == null) {
+					sysPrint('    $p   <no record>\n');
+					continue;
+				}
+				if (rec.line <= 0) {
+					sysPrint('    $p   <no locus>\n');
+					continue;
+				}
+				sysPrint('    $p at ${rec.line}:${rec.col}\n');
+				printReconSourceWindow(rec.source, rec.line);
+			}
 		}
 		return EXIT_OK;
+	}
+
+	/**
+	 * Emit a windowed source slice centred on `failLine` (1-indexed) to
+	 * stdout, with a `>>` marker on the fail row and right-aligned line
+	 * numbers. Window radius is `RECON_SOURCE_WINDOW_RADIUS` either
+	 * side; lines past EOF are silently clipped so a fail near the top
+	 * or bottom prints as much context as is available.
+	 */
+	private static function printReconSourceWindow(source:String, failLine:Int):Void {
+		final lines:Array<String> = source.split('\n');
+		final radius:Int = RECON_SOURCE_WINDOW_RADIUS;
+		final start:Int = failLine - radius < 1 ? 1 : failLine - radius;
+		final end:Int = failLine + radius > lines.length ? lines.length : failLine + radius;
+		sysPrint('      --- src window (L±$radius) ---\n');
+		// Compute the gutter width from `end` so all rows line up; e.g.
+		// a 3-digit end-line gives a 3-char gutter.
+		final gutter:Int = ('$end').length;
+		for (ln in start...end + 1) {
+			final marker:String = ln == failLine ? '>>' : '  ';
+			final num:String = padLeft('$ln', gutter);
+			final body:String = lines[ln - 1];
+			sysPrint('      $marker$num | $body\n');
+		}
+		sysPrint('      --- end ---\n');
+	}
+
+	private static inline function padLeft(s:String, width:Int):String {
+		var out:String = s;
+		while (out.length < width) out = ' ' + out;
+		return out;
 	}
 
 	/**
@@ -2471,7 +2698,7 @@ final class Cli {
 	#end
 
 	private static function printReconUsage():Void {
-		sysPrint('Usage: apq recon [<dir>] [--top N | --all] [--cluster <substr>]\n');
+		sysPrint('Usage: apq recon [<dir>] [--top N | --all] [--cluster <substr> [--source]]\n');
 		sysPrint('                 [--predict-strip --replace <pat> --with <repl> ...]\n');
 		sysPrint('                 [--probe <file>]\n');
 		sysPrint('\n');
@@ -2488,6 +2715,9 @@ final class Cli {
 		sysPrint('                          histogram. EXACT match against the cluster key\n');
 		sysPrint('                          shown in the histogram (with \\n / \\t escapes).\n');
 		sysPrint('                          0-match exits non-zero with top keys for ref.\n');
+		sysPrint('  --source                With --cluster, append a windowed source slice\n');
+		sysPrint('                          around the fail-locus for each path (L±3).\n');
+		sysPrint('                          Drill-mode only; usage error outside --cluster.\n');
 		sysPrint('  --predict-strip         Apply substitutions to each skip-parse source\n');
 		sysPrint('                          and retry; print PREDICT UNBLOCK / STILL FAIL /\n');
 		sysPrint('                          NO MATCH per file. Requires --replace/--with or\n');
@@ -2575,6 +2805,28 @@ final class Cli {
 		if (parts.length != 3) return content;
 		var section:String = parts[sectionIdx];
 		if (section.length > 0 && section.charAt(0) == '\n') section = section.substr(1);
+		if (section.length > 0 && section.charAt(section.length - 1) == '\n')
+			section = section.substr(0, section.length - 1);
+		return section;
+	}
+
+	/**
+	 * Section-1 (writer config JSON) auto-extract for `.hxtest` inputs.
+	 * Returns `null` for non-`.hxtest` paths and for `.hxtest` files
+	 * that don't have the canonical 3-section layout, so writer entry
+	 * points fall back to plugin defaults. When the 3-section layout is
+	 * present, returns the trimmed JSON bytes (matching the corpus
+	 * harness's reader convention) ready to feed into
+	 * `plugin.writeRoundTrip(source, optsJson)`. Twin of
+	 * `readSourceForParse` (section 2) and `readExpectedForCompare`
+	 * (section 3).
+	 */
+	private static function readWriteOptionsJsonOrNull(path:String):Null<String> {
+		if (!StringTools.endsWith(path, '.hxtest')) return null;
+		final content:String = readFile(path);
+		final parts:Array<String> = content.split('\n---\n');
+		if (parts.length != 3) return null;
+		var section:String = parts[0];
 		if (section.length > 0 && section.charAt(section.length - 1) == '\n')
 			section = section.substr(0, section.length - 1);
 		return section;

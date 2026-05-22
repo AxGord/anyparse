@@ -108,14 +108,21 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 
 	/**
 	 * Parse + write round-trip via the Trivia pipeline so comments and
-	 * blank lines survive. Uses `HaxeFormat.instance.defaultWriteOptions`
+	 * blank lines survive. Defaults to `HaxeFormat.instance.defaultWriteOptions`
 	 * — the same defaults the corpus harness uses when no `hxformat.json`
-	 * config is provided. Used by `apq ast --writer-output` for
-	 * writer-bug probes without going through the full test runner.
+	 * config is provided. When `optsJson` is non-null, it is parsed as an
+	 * `hxformat.json`-shaped payload via `HaxeFormatConfigLoader` so a
+	 * `.hxtest` fixture's section-1 config (or any inline JSON) drives the
+	 * writer for this one call. `loadHxFormatJson('{}')` is byte-identical
+	 * to the defaults, so an empty config is a true no-op. Used by `apq ast
+	 * --writer-output` for writer-bug probes without going through the full
+	 * test runner.
 	 */
-	public function writeRoundTrip(source:String):Null<String> {
+	public function writeRoundTrip(source:String, ?optsJson:String):Null<String> {
 		final tree:Dynamic = HaxeModuleTriviaParser.parse(source);
-		final opts:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
+		final opts:HxModuleWriteOptions = optsJson == null
+			? HaxeFormat.instance.defaultWriteOptions
+			: HaxeFormatConfigLoader.loadHxFormatJson(optsJson);
 		return HaxeModuleTriviaWriter.write(tree, opts);
 	}
 
@@ -129,10 +136,17 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 	 * actually see. The two pipelines emit different bytes on the same
 	 * input (anon-struct flattens, terminators differ); always probe
 	 * the pipeline that matches the test entry being constructed.
+	 *
+	 * `optsJson` follows the same convention as `writeRoundTrip` — a
+	 * non-null `hxformat.json`-shaped payload routes through
+	 * `HaxeFormatConfigLoader.loadHxFormatJson`; `null` keeps the
+	 * defaults.
 	 */
-	public function writeRoundTripPlain(source:String):Null<String> {
+	public function writeRoundTripPlain(source:String, ?optsJson:String):Null<String> {
 		final tree:Dynamic = HaxeModuleParser.parse(source);
-		final opts:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
+		final opts:HxModuleWriteOptions = optsJson == null
+			? HaxeFormat.instance.defaultWriteOptions
+			: HaxeFormatConfigLoader.loadHxFormatJson(optsJson);
 		return HxModuleWriter.write(tree, opts);
 	}
 

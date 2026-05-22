@@ -92,9 +92,17 @@ interface GrammarPlugin {
 	 * Return `null` when the grammar plugin has no writer wired up — the
 	 * CLI surfaces a "no writer for lang X" error.
 	 *
+	 * `optsJson` is an optional, language-defined JSON config string
+	 * driving writer options (e.g. an `hxformat.json`-shaped payload for
+	 * the Haxe plugin). `null` → plugin uses its built-in defaults; non-
+	 * null → plugin parses and applies. Plugins that don't recognise the
+	 * format may ignore the argument (the CLI threads `.hxtest` section-1
+	 * here so a single fixture reproduces the corpus harness's writer
+	 * settings without manually rebuilding options).
+	 *
 	 * Plugins may throw on parse failure; callers handle the exception.
 	 */
-	public function writeRoundTrip(source:String):Null<String>;
+	public function writeRoundTrip(source:String, ?optsJson:String):Null<String>;
 
 	/**
 	 * Optional: parse `source` with the plain (non-trivia) parser and
@@ -110,9 +118,12 @@ interface GrammarPlugin {
 	 * grammar plugin has no plain writer (binary grammars, plugins with
 	 * a single unified pipeline).
 	 *
+	 * `optsJson` follows the same convention as `writeRoundTrip` — a
+	 * language-defined JSON config or `null` for defaults.
+	 *
 	 * Plugins may throw on parse failure; callers handle the exception.
 	 */
-	public function writeRoundTripPlain(source:String):Null<String>;
+	public function writeRoundTripPlain(source:String, ?optsJson:String):Null<String>;
 
 	/**
 	 * Optional: strict trivia-mode parse used by `apq recon` for corpus

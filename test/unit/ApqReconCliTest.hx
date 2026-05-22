@@ -259,6 +259,38 @@ class ApqReconCliTest extends Test {
 		#end
 	}
 
+	// -- --source: drill window guard --
+
+	public function testReconSourceWithoutClusterIsUsageError():Void {
+		// `--source` is drill-mode only. Outside `--cluster` it would
+		// flood every SKIP line — usage error caught BEFORE any FS I/O.
+		Assert.equals(2, Cli.run(['recon', '--source', '/some/dir']),
+			'--source without --cluster is a usage error');
+	}
+
+	public function testReconClusterSourceOnEmptyCorpusExitsRuntime():Void {
+		#if sys
+		final dir:String = mkTempDir('apq_recon_source_empty');
+		Assert.equals(1, Cli.run(['recon', '--cluster', 'anything', '--source', dir]),
+			'--cluster --source on an empty sweep is a runtime exit (no key match)');
+		cleanupDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testReconClusterSourceUnknownKeyExitsRuntime():Void {
+		#if sys
+		final dir:String = mkTempDir('apq_recon_source_miss');
+		File.saveContent('$dir/bad.hxtest', brokenHxtest());
+		Assert.equals(1, Cli.run(['recon', '--cluster', 'xyz-not-present', '--source', dir]),
+			'--cluster --source with a non-matching key exits runtime');
+		cleanupDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if sys
 	private static var counter:Int = 0;
 
