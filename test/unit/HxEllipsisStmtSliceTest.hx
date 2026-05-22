@@ -64,7 +64,7 @@ class HxEllipsisStmtSliceTest extends HxTestHelpers {
 
 	private function expectFnBodyBlock(body:HxFnBody):Array<HxStatement> {
 		return switch body {
-			case BlockBody(stmts): stmts;
+			case BlockBody(block): block.stmts;
 			case _: throw 'expected BlockBody, got $body';
 		};
 	}

@@ -66,7 +66,7 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		'VarDecl', 'FnDecl',
 		'ClassDecl', 'InterfaceDecl', 'EnumDecl', 'AbstractDecl', 'TypedefDecl',
 		'VarMember', 'FinalMember', 'FnMember',
-		'VarStmt', 'FinalStmt',
+		'VarStmt', 'FinalStmt', 'StaticVarStmt', 'StaticFinalStmt',
 		'VarExpr', 'FinalExpr',
 		'Required', 'Optional', 'Rest',
 		'LambdaParam',

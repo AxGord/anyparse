@@ -966,18 +966,31 @@ class WriterLowering {
 			// hardline-Nest based on body ctor shape. Statement-form
 			// `HxTryCatchStmt.body` opts into this; the parent kw `try` must
 			// drop its trailing space so the wrap is the sole separator.
+			// ω-kw-word-lead-spacing (Slice 37): a ctor-level `@:lead` whose
+			// first char is a word character is a second keyword, NOT a
+			// tight symbol delimiter. Word-word adjacency between kw and
+			// lead (e.g. `@:kw('static') @:lead('var')` → `static var`,
+			// `@:kw('inline') @:lead('function')` → `inline function`)
+			// requires a separating space on BOTH sides of the lead: kw
+			// keeps its trailing space, AND the lead emit appends a
+			// trailing space so the body's first token doesn't collide.
+			// Symbol leads (`(`, `{`, `<`, `:`, `?`, `->`, `${`, …) stay
+			// tight under the strip — `while (` vs `while(` is owned by
+			// the field-level path, and ctor-level symbol leads were the
+			// only consumers of the pre-slice `leadText != null` clause.
+			final leadIsWord:Bool = leadText != null && isWordStart(leadText);
 			final stripKwTrailingSpace:Bool = ctorBodyPolicyFlag != null
 				|| subStructStartsWithBodyPolicy(refName)
 				|| subStructStartsWithBodyBreak(refName)
 				|| subStructStartsWithBareBodyBreaks(refName)
 				|| subStructStartsWithTightLead(refName)
-				// Combined kw + `@:lead` on the same single-Ref branch
-				// composes as a tight visual unit: kw and lead literal
-				// render adjacent without a separating space. Strip the
-				// kw's trailing space so the lead literal abuts the kw.
-				// Symmetric with the parser-side composition in Lowering
-				// Case 3.
-				|| leadText != null;
+				// Combined kw + symbol `@:lead` on the same single-Ref
+				// branch composes as a tight visual unit: kw and lead
+				// literal render adjacent without a separating space.
+				// Strip the kw's trailing space so the lead literal abuts
+				// the kw. Symmetric with the parser-side composition in
+				// Lowering Case 3. Word-lead branches (above) bypass.
+				|| (leadText != null && !leadIsWord);
 			// ω-if-policy / ω-control-flow-policies / ω-try-policy /
 			// ω-anon-fn-paren-policy: an enum branch with `@:fmt(<flag>)`
 			// whose runtime value is `WhitespacePolicy` opts into a
@@ -1012,7 +1025,16 @@ class WriterLowering {
 					parts.push(macro _dt($v{kwText}));
 				}
 			}
-			if (leadText != null) parts.push(macro _dt($v{leadText}));
+			if (leadText != null) {
+				// ω-kw-word-lead-spacing (Slice 37): word-keyword lead
+				// also gets a trailing space so it doesn't fuse with the
+				// body's first token (e.g. `static final @Test` —
+				// HxVarDecl's first field is a meta Star). Symbol leads
+				// stay tight as before — the open delim glues to whatever
+				// follows.
+				final leadEmit:String = leadIsWord ? leadText + ' ' : leadText;
+				parts.push(macro _dt($v{leadEmit}));
+			}
 			parts.push(bodyExpr);
 			if (trailText != null) {
 				// ω-trailopt-source-track: in trivia mode, the parser
@@ -8514,6 +8536,21 @@ class WriterLowering {
 	private static function simpleName(typePath:String):String {
 		final idx:Int = typePath.lastIndexOf('.');
 		return idx == -1 ? typePath : typePath.substring(idx + 1);
+	}
+
+	/**
+	 * `true` when `s` is a non-empty string whose first character is a
+	 * Haxe identifier-start (`a-zA-Z_`). Used by Case 3 single-Ref
+	 * emission to detect word-keyword `@:lead` (e.g. `var`, `final`,
+	 * `function`) — these are second keywords that need spacing on both
+	 * sides, unlike symbol leads (`(`, `{`, `<`, `:`, `?`, `->`, `${`).
+	 */
+	private static function isWordStart(s:String):Bool {
+		if (s == null || s.length == 0) return false;
+		final c:Int = StringTools.fastCodeAt(s, 0);
+		return (c >= 'a'.code && c <= 'z'.code)
+			|| (c >= 'A'.code && c <= 'Z'.code)
+			|| c == '_'.code;
 	}
 
 	private static function packOf(typePath:String):Array<String> {

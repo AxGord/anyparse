@@ -6,6 +6,21 @@ package anyparse.grammar.haxe;
  * Branches in source order — keyword-dispatched branches first,
  * block statement next, expression-statement catch-all last:
  *
+ *  - `StaticVarStmt` / `StaticFinalStmt` — `static var name = init;` /
+ *    `static final name = init;` static-local declarations (Haxe 4.3
+ *    feature, persists across function calls). Byte-twin of
+ *    `VarStmt` / `FinalStmt` — same `HxVarDecl` payload, same trail-opt
+ *    shape gate. The `static` prefix dispatches via `@:kw('static')` +
+ *    `@:lead('var')` / `@:lead('final')` — kw+lead single-Ref pattern
+ *    (precedent: `LocalInlineFnStmt` `@:kw('inline') @:lead('function')`,
+ *    `HxDoWhileStmt`'s `@:kw('while') @:lead('(')`). Multi-var (Slice 2)
+ *    and leading meta (Slice 20) compose for free via the shared
+ *    `HxVarDecl` body — `static final @Test a = 1, b = 2;` round-trips
+ *    without grammar additions. Placed before the bare `VarStmt` /
+ *    `FinalStmt` because `static` is a distinct kw that never collides
+ *    with a leading `var` / `final` ident, so branch order is
+ *    documentation, not dispatch.
+ *
  *  - `VarStmt` — `var name:Type = init;` local variable declaration.
  *    Reuses `HxVarDecl` from the class-member grammar. The `var`
  *    keyword is consumed here (not in `HxVarDecl` itself, which is
@@ -336,6 +351,12 @@ package anyparse.grammar.haxe;
  */
 @:peg
 enum HxStatement {
+	@:kw('static') @:lead('var') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))
+	StaticVarStmt(decl:HxVarDecl);
+
+	@:kw('static') @:lead('final') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))
+	StaticFinalStmt(decl:HxVarDecl);
+
 	@:kw('var') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))
 	VarStmt(decl:HxVarDecl);
 

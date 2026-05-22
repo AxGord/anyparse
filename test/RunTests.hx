@@ -69,6 +69,8 @@ import unit.HxConditionalObjectFieldSliceTest;
 import unit.HxConditionalParamSliceTest;
 import unit.HxSharpErrorSliceTest;
 import unit.HxEllipsisMemberSliceTest;
+import unit.HxEllipsisStmtSliceTest;
+import unit.HxStaticLocalStmtSliceTest;
 import unit.HxConditionalTypeSliceTest;
 import unit.HxAssignStmtNoSemiSliceTest;
 import unit.HxMetaExprStmtNoSemiSliceTest;
@@ -244,6 +246,8 @@ class RunTests {
 		runner.addCase(new HxConditionalParamSliceTest());
 		runner.addCase(new HxSharpErrorSliceTest());
 		runner.addCase(new HxEllipsisMemberSliceTest());
+		runner.addCase(new HxEllipsisStmtSliceTest());
+		runner.addCase(new HxStaticLocalStmtSliceTest());
 		runner.addCase(new HxConditionalTypeSliceTest());
 		runner.addCase(new HxAssignStmtNoSemiSliceTest());
 		runner.addCase(new HxMetaExprStmtNoSemiSliceTest());
