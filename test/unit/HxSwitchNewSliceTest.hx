@@ -11,6 +11,7 @@ import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxNewExpr;
 import anyparse.grammar.haxe.HxStatement;
+import anyparse.grammar.haxe.HxType;
 import anyparse.grammar.haxe.HxSwitchCase;
 import anyparse.grammar.haxe.HxSwitchStmt;
 import anyparse.runtime.ParseError;
@@ -486,6 +487,60 @@ class HxSwitchNewSliceTest extends HxTestHelpers {
 
 	public function testNewQualifiedRoundTrip():Void {
 		roundTrip('class C { function f():Void { var e = new haxe.Exception("x"); throw new haxe.ds.StringMap(); } }');
+	}
+
+	public function testNewSingleTypeParam():Void {
+		final body:Array<HxStatement> = parseBody('class C { function f():Void { new Map<Int>(); } }');
+		Assert.equals(1, body.length);
+		switch body[0] {
+			case ExprStmt(expr):
+				switch expr {
+					case NewExpr(ne):
+						Assert.equals('Map', (ne.type : String));
+						Assert.notNull(ne.params);
+						Assert.equals(1, (ne.params : Array<HxType>).length);
+						Assert.equals(0, ne.args.length);
+					case null, _: Assert.fail('expected NewExpr');
+				}
+			case null, _: Assert.fail('expected ExprStmt');
+		}
+	}
+
+	public function testNewMultiTypeParams():Void {
+		final body:Array<HxStatement> = parseBody('class C { function f():Void { new Holder<RecordItem1, RecordItem1, Void>("a", true, "b"); } }');
+		Assert.equals(1, body.length);
+		switch body[0] {
+			case ExprStmt(expr):
+				switch expr {
+					case NewExpr(ne):
+						Assert.equals('Holder', (ne.type : String));
+						Assert.notNull(ne.params);
+						Assert.equals(3, (ne.params : Array<HxType>).length);
+						Assert.equals(3, ne.args.length);
+					case null, _: Assert.fail('expected NewExpr');
+				}
+			case null, _: Assert.fail('expected ExprStmt');
+		}
+	}
+
+	public function testNewWithoutTypeParamsRegression():Void {
+		final body:Array<HxStatement> = parseBody('class C { function f():Void { new Foo(1); } }');
+		Assert.equals(1, body.length);
+		switch body[0] {
+			case ExprStmt(expr):
+				switch expr {
+					case NewExpr(ne):
+						Assert.equals('Foo', (ne.type : String));
+						Assert.isNull(ne.params);
+						Assert.equals(1, ne.args.length);
+					case null, _: Assert.fail('expected NewExpr');
+				}
+			case null, _: Assert.fail('expected ExprStmt');
+		}
+	}
+
+	public function testNewTypeParamsRoundTrip():Void {
+		roundTrip('class C { function f():Void { var h = new Holder<RecordItem1, RecordItem1, Void>("a", true, "b"); var m = new Map<String, Int>(); } }');
 	}
 
 	// ---- Switch expression tests ----

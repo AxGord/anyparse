@@ -19,9 +19,15 @@ package anyparse.grammar.haxe;
  * `@:rawString abstract(String) from String to String`, so this is a
  * zero-ripple terminal swap on the generic raw-String single-Ref path
  * (same precedent as `HxTypeRef.name:HxTypeName`); call-site string
- * comparisons (`(ne.type : String)`) are unaffected. Type-parameter
- * brackets on the constructed type (`new Map<K, V>()`) are a separate,
- * orthogonal grammar gap left for a later slice.
+ * comparisons (`(ne.type : String)`) are unaffected.
+ *
+ * `params` carries the optional angle-bracketed type-parameter list
+ * for `new Map<K, V>()` / `new Holder<A, B, C>(args)`. Byte-twin of
+ * `HxTypeRef.params` — same `@:optional @:lead('<') @:trail('>')
+ * @:sep(',')` shape over `Array<HxType>`, so the full type Alt
+ * (named, function, anon-struct) composes naturally as a type-param.
+ * Empty Star degrades to no output via the standard optional-Star
+ * Lowering path. Zero new Lowering branches.
  *
  * The argument list reuses the sep-peek Star field pattern — same as
  * function parameters in `HxFnDecl` and call args in
@@ -30,5 +36,6 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxNewExpr = {
 	var type:HxTypeName;
+	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var params:Null<Array<HxType>>;
 	@:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaArgs'), wrapRules('callParameterWrap')) var args:Array<HxExpr>;
 };
