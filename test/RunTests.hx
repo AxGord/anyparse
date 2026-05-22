@@ -75,6 +75,7 @@ import unit.HxConditionalTypeSliceTest;
 import unit.HxAssignStmtNoSemiSliceTest;
 import unit.HxMetaExprStmtNoSemiSliceTest;
 import unit.HxObjectLitStmtNoSemiSliceTest;
+import unit.HxArrayExprStmtNoSemiSliceTest;
 import unit.HxAbstractClassSliceTest;
 import unit.HxMacroClassSliceTest;
 import unit.HxDollarReifSliceTest;
@@ -254,6 +255,7 @@ class RunTests {
 		runner.addCase(new HxAssignStmtNoSemiSliceTest());
 		runner.addCase(new HxMetaExprStmtNoSemiSliceTest());
 		runner.addCase(new HxObjectLitStmtNoSemiSliceTest());
+		runner.addCase(new HxArrayExprStmtNoSemiSliceTest());
 		runner.addCase(new HxAbstractClassSliceTest());
 		runner.addCase(new HxMacroClassSliceTest());
 		runner.addCase(new HxDollarReifSliceTest());

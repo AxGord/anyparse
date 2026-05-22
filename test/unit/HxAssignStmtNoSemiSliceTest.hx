@@ -120,6 +120,12 @@ class HxAssignStmtNoSemiSliceTest extends HxTestHelpers {
 		Assert.raises(() -> HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = {a: 1}\n\t}\n}'));
 	}
 
+	// -- Regression: Assign+ArrayExpr without `;` MUST still throw (Slice 39 carve-out, same as ObjectLit) --
+
+	public function testNoArrayExprAssignRegression():Void {
+		Assert.raises(() -> HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = [1, 2, 3]\n\t}\n}'));
+	}
+
 	// -- Regression: pre-slice path — Assign+IfExpr WITH `;` still parses --
 
 	public function testAssignIfWithSemiUnchanged():Void {
