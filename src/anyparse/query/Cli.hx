@@ -38,11 +38,31 @@ typedef SkipEntry = {path:String, locus:String};
  * forward-locus key, a couple of example file paths, and one raw
  * locus sample for display. The cluster KEY is shared via the map
  * that owns the bucket; only the per-bucket payload lives here.
+ *
+ * `paths` holds the full path list (every file in the cluster) for
+ * `apq recon --cluster <substr>` drill — distinct from `examples`,
+ * which is capped at `RECON_EXAMPLES_PER_CLUSTER` for the histogram
+ * "e.g. … in: A, B" display.
  */
 typedef ReconCluster = {
 	var count:Int;
 	var examples:Array<String>;
+	var paths:Array<String>;
 	var rawSample:String;
+};
+
+/**
+ * Per-failure record captured during the recon sweep. Mode-dependent
+ * output (histogram / cluster drill / predict-strip) reads these
+ * after the walk instead of printing inline, so cluster filtering
+ * and substitution prediction stay decoupled from the file-system
+ * traversal loop.
+ */
+typedef ReconRecord = {
+	var path:String;
+	var clusterKey:String;
+	var source:String;
+	var skipLine:String;
 };
 
 /**
@@ -2014,6 +2034,14 @@ final class Cli {
 		var topN:Int = RECON_TOP_N_DEFAULT;
 		var probePath:Null<String> = null;
 		var rootDir:Null<String> = null;
+		var clusterFilter:Null<String> = null;
+		var predictStrip:Bool = false;
+		// Twin of `runStrip`'s arg-parsing: --replace X --with Y pairs
+		// plus --delete X shortcut. Patterns and replacements arrays
+		// stay aligned by construction. Active only with --predict-strip.
+		final patterns:Array<String> = [];
+		final replacements:Array<String> = [];
+		var pendingReplace:Null<String> = null;
 		var i:Int = 0;
 		while (i < args.length) {
 			final a:String = args[i];
@@ -2031,6 +2059,31 @@ final class Cli {
 					topN = 0x7fffffff;
 				case '--probe':
 					probePath = expectValue(args, ++i, '--probe');
+				case '--cluster':
+					clusterFilter = expectValue(args, ++i, '--cluster');
+				case '--predict-strip':
+					predictStrip = true;
+				case '--replace':
+					if (pendingReplace != null) {
+						stderr('apq recon: --replace "$pendingReplace" needs a --with before the next --replace\n');
+						return EXIT_USAGE;
+					}
+					pendingReplace = expectValue(args, ++i, '--replace');
+				case '--with':
+					if (pendingReplace == null) {
+						stderr('apq recon: --with requires a preceding --replace\n');
+						return EXIT_USAGE;
+					}
+					patterns.push(pendingReplace);
+					replacements.push(expectValue(args, ++i, '--with'));
+					pendingReplace = null;
+				case '--delete':
+					if (pendingReplace != null) {
+						stderr('apq recon: --replace "$pendingReplace" needs a --with before --delete\n');
+						return EXIT_USAGE;
+					}
+					patterns.push(expectValue(args, ++i, '--delete'));
+					replacements.push('');
 				case '-h', '--help':
 					printReconUsage();
 					return EXIT_OK;
@@ -2047,6 +2100,18 @@ final class Cli {
 			}
 			i++;
 		}
+		if (pendingReplace != null) {
+			stderr('apq recon: --replace "$pendingReplace" needs a --with\n');
+			return EXIT_USAGE;
+		}
+		if (predictStrip && patterns.length == 0) {
+			stderr('apq recon: --predict-strip requires at least one --replace/--with or --delete\n');
+			return EXIT_USAGE;
+		}
+		if (!predictStrip && patterns.length > 0) {
+			stderr('apq recon: --replace/--with/--delete require --predict-strip\n');
+			return EXIT_USAGE;
+		}
 		final plugin:GrammarPlugin = pickPlugin(lang);
 		if (probePath != null) return runReconProbe(plugin, (probePath : String));
 		final rootFinal:String = rootDir ?? defaultReconRoot();
@@ -2060,7 +2125,7 @@ final class Cli {
 			stderr('apq recon: "$rootFinal" is not a directory.\n');
 			return EXIT_RUNTIME;
 		}
-		return runReconSweep(plugin, rootFinal, topN);
+		return runReconSweep(plugin, rootFinal, topN, clusterFilter, predictStrip, patterns, replacements);
 	}
 
 	private static function runReconProbe(plugin:GrammarPlugin, path:String):Int {
@@ -2088,9 +2153,13 @@ final class Cli {
 		}
 	}
 
-	private static function runReconSweep(plugin:GrammarPlugin, root:String, topN:Int):Int {
+	private static function runReconSweep(
+		plugin:GrammarPlugin, root:String, topN:Int,
+		clusterFilter:Null<String>, predictStrip:Bool,
+		patterns:Array<String>, replacements:Array<String>
+	):Int {
 		final clusters:Map<String, ReconCluster> = [];
-		var total:Int = 0;
+		final records:Array<ReconRecord> = [];
 		var wired:Bool = true;
 		final stack:Array<String> = [root];
 		while (stack.length > 0) {
@@ -2112,7 +2181,6 @@ final class Cli {
 						break;
 					}
 				} catch (exception:ParseError) {
-					total++;
 					final pos:Position = exception.span.lineCol(source);
 					final relPath:String = stripRootPrefix(path, root);
 					final exp:String = reconNormalize(exception.expected);
@@ -2120,13 +2188,22 @@ final class Cli {
 					final rawLocus:String = reconRawLocus(source, exception.span.from);
 					final key:String = reconNormalizeLocus(rawLocus);
 					addReconCluster(clusters, key, relPath, rawLocus);
-					sysPrint('SKIP $relPath :: ${pos.line}:${pos.col} expected="$exp" :: src="$snip"\n');
+					records.push({
+						path: relPath,
+						clusterKey: key,
+						source: source,
+						skipLine: 'SKIP $relPath :: ${pos.line}:${pos.col} expected="$exp" :: src="$snip"',
+					});
 				} catch (exception:Exception) {
-					total++;
 					final relPath:String = stripRootPrefix(path, root);
 					final key:String = '<non-ParseError> ' + reconNormalize(exception.message);
 					addReconCluster(clusters, key, relPath, '<exception>');
-					sysPrint('SKIP $relPath :: $key\n');
+					records.push({
+						path: relPath,
+						clusterKey: key,
+						source: source,
+						skipLine: 'SKIP $relPath :: $key',
+					});
 				}
 			}
 			if (!wired) break;
@@ -2135,6 +2212,43 @@ final class Cli {
 			stderr('apq recon: no recon parser wired up for this grammar plugin\n');
 			return EXIT_RUNTIME;
 		}
+		// `--cluster <key>` filter: exact match against the normalised
+		// cluster key (the histogram label, with `\n`/`\t` escaped).
+		// Exact rather than substring because `}\n}` (canonical) would
+		// substring-match every Haxe file's `…}\n}` tail. 0-match exits
+		// non-zero; downstream output (SKIP / PREDICT / cluster drill)
+		// walks the filtered records and the single-cluster map.
+		var filteredRecords:Array<ReconRecord> = records;
+		var filteredClusters:Map<String, ReconCluster> = clusters;
+		if (clusterFilter != null) {
+			final wanted:String = (clusterFilter : String);
+			final hit:Null<ReconCluster> = clusters[wanted];
+			if (hit == null) {
+				stderr('apq recon: --cluster "$wanted" matched no cluster key (exact match).\n');
+				final keyEntries:Array<{key:String, count:Int}> = [
+					for (k => v in clusters) {key: k, count: v.count}
+				];
+				keyEntries.sort((a, b) -> b.count - a.count);
+				final preview:Int = keyEntries.length > 10 ? 10 : keyEntries.length;
+				if (preview == 0) {
+					stderr('  (no skip-parse failures in this sweep)\n');
+				} else {
+					stderr('  available keys (${keyEntries.length} total, showing top $preview by frequency):\n');
+					for (idx in 0...preview) stderr('    "${keyEntries[idx].key}"  (${keyEntries[idx].count}×)\n');
+					if (keyEntries.length > preview) stderr('    … (${keyEntries.length - preview} more — run without --cluster to see the full histogram)\n');
+				}
+				return EXIT_RUNTIME;
+			}
+			filteredClusters = [wanted => hit];
+			filteredRecords = [for (r in records) if (r.clusterKey == wanted) r];
+		}
+		if (predictStrip) return runReconPredictStrip(filteredRecords, filteredClusters, plugin, patterns, replacements, clusterFilter);
+		for (r in filteredRecords) sysPrint('${r.skipLine}\n');
+		if (clusterFilter != null) return printReconClusterDrill(filteredClusters, records.length, (clusterFilter : String));
+		return printReconHistogram(clusters, records.length, topN);
+	}
+
+	private static function printReconHistogram(clusters:Map<String, ReconCluster>, total:Int, topN:Int):Int {
 		final entries:Array<{key:String, cluster:ReconCluster}> = [
 			for (k => v in clusters) {key: k, cluster: v}
 		];
@@ -2156,6 +2270,113 @@ final class Cli {
 		return EXIT_OK;
 	}
 
+	/**
+	 * `--cluster <substr>` drill output: one block per matching
+	 * cluster with the FULL path list (not the histogram's capped
+	 * `examples` array). Sorted descending by cluster size; paths
+	 * sorted ascending so output is stable. Replaces the global
+	 * histogram in this mode.
+	 */
+	private static function printReconClusterDrill(matches:Map<String, ReconCluster>, totalAcrossSweep:Int, needle:String):Int {
+		final entries:Array<{key:String, cluster:ReconCluster}> = [
+			for (k => v in matches) {key: k, cluster: v}
+		];
+		entries.sort((a, b) -> b.cluster.count - a.cluster.count);
+		var matched:Int = 0;
+		for (e in entries) matched += e.cluster.count;
+		sysPrint('\n');
+		sysPrint('--- cluster drill for "$needle" (${entries.length} cluster${entries.length == 1 ? '' : 's'}, $matched of $totalAcrossSweep skip-parse paths) ---\n');
+		for (entry in entries) {
+			final c:ReconCluster = entry.cluster;
+			sysPrint('  cluster "${entry.key}" — ${c.count} path${c.count == 1 ? '' : 's'}:\n');
+			final sorted:Array<String> = c.paths.copy();
+			sorted.sort((a, b) -> a < b ? -1 : (a > b ? 1 : 0));
+			for (p in sorted) sysPrint('    $p\n');
+		}
+		return EXIT_OK;
+	}
+
+	/**
+	 * `--predict-strip` output: for each skip-parse record, apply the
+	 * supplied --replace / --with / --delete substitutions to the
+	 * extracted source and re-run the plugin's trivia parser.
+	 *
+	 * Per-file tag:
+	 *  - `PREDICT UNBLOCK` — substitution changed the source AND the
+	 *    re-parse now succeeds; the grammar/strip-test change being
+	 *    modelled would unblock this fixture.
+	 *  - `PREDICT STILL FAIL` — substitution changed the source but
+	 *    re-parse still fails (different blocker survives downstream).
+	 *  - `PREDICT NO MATCH` — substitution patterns matched 0 times;
+	 *    the fixture is unaffected by the proposed change. Typo
+	 *    signal when this fires across the WHOLE sweep.
+	 *
+	 * Summary line at the end: total / unblock / still-fail / no-match
+	 * counts. Exits non-zero only if ALL patterns matched 0 occurrences
+	 * across the whole filtered set (mirror of `strip --dry-run`'s
+	 * pattern-typo guard).
+	 */
+	private static function runReconPredictStrip(
+		records:Array<ReconRecord>, clusters:Map<String, ReconCluster>,
+		plugin:GrammarPlugin, patterns:Array<String>, replacements:Array<String>,
+		clusterFilter:Null<String>
+	):Int {
+		var unblockCount:Int = 0;
+		var stillFailCount:Int = 0;
+		var noMatchCount:Int = 0;
+		final patternHits:Array<Int> = [for (_ in 0...patterns.length) 0];
+		for (r in records) {
+			var stripped:String = r.source;
+			var fileHits:Int = 0;
+			for (idx in 0...patterns.length) {
+				final hits:Int = countOccurrences(stripped, patterns[idx]);
+				patternHits[idx] += hits;
+				fileHits += hits;
+				stripped = StringTools.replace(stripped, patterns[idx], replacements[idx]);
+			}
+			if (fileHits == 0) {
+				sysPrint('PREDICT NO MATCH  ${r.path}\n');
+				noMatchCount++;
+				continue;
+			}
+			try {
+				if (!plugin.reconParse(stripped)) {
+					stderr('apq recon: no recon parser wired up for this grammar plugin\n');
+					return EXIT_RUNTIME;
+				}
+				sysPrint('PREDICT UNBLOCK   ${r.path}\n');
+				unblockCount++;
+			} catch (_:ParseError) {
+				sysPrint('PREDICT STILL FAIL ${r.path}\n');
+				stillFailCount++;
+			} catch (_:Exception) {
+				sysPrint('PREDICT STILL FAIL ${r.path}\n');
+				stillFailCount++;
+			}
+		}
+		sysPrint('\n');
+		final scope:String = clusterFilter == null ? 'whole sweep' : 'cluster "$clusterFilter"';
+		sysPrint('--- predict-strip ($scope): ${records.length} skip-parse file${records.length == 1 ? '' : 's'}; ');
+		sysPrint('$unblockCount would unblock, $stillFailCount still fail, $noMatchCount unchanged ---\n');
+		for (idx in 0...patterns.length) {
+			final pat:String = patterns[idx];
+			final total:Int = patternHits[idx];
+			sysPrint('  pattern[$idx] "$pat" — $total match${total == 1 ? '' : 'es'}\n');
+		}
+		// Mirror `strip --dry-run`: every supplied pattern matching 0
+		// across the whole filtered set is a typo signal worth surfacing
+		// non-zero. A pattern matching SOMEWHERE but not everywhere is
+		// expected behaviour for a targeted predicate; only the global
+		// 0 case is the guard.
+		var anyZero:Bool = false;
+		for (h in patternHits) if (h == 0) anyZero = true;
+		if (anyZero) {
+			stderr('apq recon: --predict-strip: WARNING: one or more patterns matched 0 occurrences anywhere in the filtered set — see per-pattern totals\n');
+			return EXIT_RUNTIME;
+		}
+		return EXIT_OK;
+	}
+
 	private static function defaultReconRoot():String {
 		final fork:Null<String> = Sys.getEnv('ANYPARSE_HXFORMAT_FORK');
 		if (fork == null || fork.length == 0) return '';
@@ -2172,9 +2393,10 @@ final class Cli {
 	private static function addReconCluster(map:Map<String, ReconCluster>, key:String, file:String, rawLocus:String):Void {
 		final prev:Null<ReconCluster> = map[key];
 		if (prev == null) {
-			map[key] = {count: 1, examples: [file], rawSample: rawLocus};
+			map[key] = {count: 1, examples: [file], paths: [file], rawSample: rawLocus};
 		} else {
 			prev.count++;
+			prev.paths.push(file);
 			if (prev.examples.length < RECON_EXAMPLES_PER_CLUSTER) prev.examples.push(file);
 		}
 	}
@@ -2249,7 +2471,9 @@ final class Cli {
 	#end
 
 	private static function printReconUsage():Void {
-		sysPrint('Usage: apq recon [<dir>] [--top N | --all] [--probe <file>]\n');
+		sysPrint('Usage: apq recon [<dir>] [--top N | --all] [--cluster <substr>]\n');
+		sysPrint('                 [--predict-strip --replace <pat> --with <repl> ...]\n');
+		sysPrint('                 [--probe <file>]\n');
 		sysPrint('\n');
 		sysPrint('Sweep mode: walks every .hxtest under <dir> (section-2 auto-extracted),\n');
 		sysPrint('runs the trivia parser, clusters failures by normalised forward-locus,\n');
@@ -2257,11 +2481,22 @@ final class Cli {
 		sysPrint("$ANYPARSE_HXFORMAT_FORK/test/testcases when the env var is set.\n");
 		sysPrint('\n');
 		sysPrint('Options:\n');
-		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
-		sysPrint('  --top N             Show top N clusters (default: 30)\n');
-		sysPrint('  --all               Show every cluster\n');
-		sysPrint('  --probe <file>      Single-file probe instead of sweep\n');
-		sysPrint('  -h, --help          Show this help\n');
+		sysPrint('  --lang <name>           Grammar plugin (default: haxe)\n');
+		sysPrint('  --top N                 Show top N clusters (default: 30)\n');
+		sysPrint('  --all                   Show every cluster\n');
+		sysPrint('  --cluster <key>         Drill into ONE cluster: full path list instead of\n');
+		sysPrint('                          histogram. EXACT match against the cluster key\n');
+		sysPrint('                          shown in the histogram (with \\n / \\t escapes).\n');
+		sysPrint('                          0-match exits non-zero with top keys for ref.\n');
+		sysPrint('  --predict-strip         Apply substitutions to each skip-parse source\n');
+		sysPrint('                          and retry; print PREDICT UNBLOCK / STILL FAIL /\n');
+		sysPrint('                          NO MATCH per file. Requires --replace/--with or\n');
+		sysPrint('                          --delete; combinable with --cluster.\n');
+		sysPrint('  --replace <pat> --with <repl>\n');
+		sysPrint('                          Substitution pair (with --predict-strip; repeatable).\n');
+		sysPrint('  --delete <pat>          Shortcut for --replace <pat> --with "".\n');
+		sysPrint('  --probe <file>          Single-file probe instead of sweep.\n');
+		sysPrint('  -h, --help              Show this help.\n');
 	}
 
 	private static function readFile(path:String):String {
