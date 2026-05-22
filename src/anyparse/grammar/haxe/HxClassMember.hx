@@ -91,6 +91,22 @@ enum HxClassMember {
 	@:kw('#error')
 	ErrorMember(message:HxErrorMsg);
 
+	/**
+	 * `...` placeholder member (slice 33).
+	 *
+	 * Accepts the literal three-dot token as a class-body member,
+	 * matching the haxe-formatter test corpus convention for elided
+	 * code (`class A { ... }` placeholder fixtures). Not standard
+	 * Haxe syntax, but the formatter must round-trip these files
+	 * verbatim. SimpleCtor with `@:lit('...')` — twin of
+	 * `HxStatement.EmptyStmt(';')` (a literal-only token with no
+	 * payload). No `@:trail` because the placeholder has no
+	 * terminator; trivia after it (newlines, comments) is captured
+	 * by the surrounding `HxMemberDecl` Star slot.
+	 */
+	@:lit('...')
+	EllipsisMember;
+
 	@:kw('#if') @:trail('#end')
 	Conditional(inner:HxConditionalMember);
 }
