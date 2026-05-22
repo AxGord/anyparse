@@ -1285,9 +1285,17 @@ final class Cli {
 			if (allEntries.length > 0) autoWidened = true;
 		}
 
-		if (allEntries.length == 0)
-			stderr(emptyWalkerNudge('lit', targetStr, paths.length, paths.length - skipEntries.length, skipEntries, null) + '\n');
-		else if (autoWidened) {
+		if (allEntries.length == 0) {
+			// DX v10: regex-like query → emit the regex-not-supported note
+			// BEFORE the generic walker nudge. The generic nudge's dotted-
+			// access heuristic mis-fires on patterns like `foo\|bar` and
+			// sends the user toward `search '$x.field'`, which is wrong.
+			final regexLabel:Null<String> = looksLikeRegex(targetStr);
+			if (regexLabel != null)
+				stderr('apq lit: NOTE "$targetStr" looks like a regex (contains $regexLabel) — lit is substring-only. Run separate lit calls per alternative, or use apq refs / apq uses / apq search for shape-aware lookup.\n');
+			else
+				stderr(emptyWalkerNudge('lit', targetStr, paths.length, paths.length - skipEntries.length, skipEntries, null) + '\n');
+		} else if (autoWidened) {
 			final tried:String = effectiveKindFilter.join(',');
 			stderr('apq lit: NOTE auto-widened to --any-kind (default kind=$tried returned 0 hits). Pass `--any-kind` explicitly to silence this notice.\n');
 		}
@@ -1832,6 +1840,19 @@ final class Cli {
 			return EXIT_USAGE;
 		}
 		final patternStr:String = pattern;
+
+		// DX v10: macro reification (`$v{...}` / `$i{...}` / `$a{...}` /
+		// `$b{...}` / `$p{...}` / `$e{...}` / `$es{...}`) is a Haxe macro-
+		// time construct, not an AST shape — the pattern parser rejects it
+		// with a generic "not valid as expression" message that sends the
+		// user toward search debugging instead of `lit` (the right tool
+		// for literal-string lookup, where the macro-time string slot lives).
+		// Detect the sigil before parsing and point at the right tool.
+		final reif:Null<String> = detectMacroReification(patternStr);
+		if (reif != null) {
+			stderr('apq search: pattern "$patternStr" contains macro reification ($reif) which is a macro-time construct, not an AST shape pattern. For literal-string lookup use: apq lit \'<text>\' <files>. For identifier shape patterns use a metavar `$$x` (lowercase).\n');
+			return EXIT_USAGE;
+		}
 
 		final plugin:GrammarPlugin = pickPlugin(lang);
 		final parsed:Pattern = try plugin.parsePattern(patternStr)
@@ -2477,7 +2498,50 @@ final class Cli {
 		}
 		sysPrint(emitted);
 		if (!StringTools.endsWith(emitted, '\n')) sysPrint('\n');
+		// DX v10: source-preservation note. The trivia pipeline is meant
+		// to round-trip source bytes verbatim (subject to the writer's
+		// fidelity); a byte-diff signals an actual writer-fidelity gap
+		// (e.g. `HxVarMore` `,` collapses the space, `static var` was
+		// pre-Slice-37 producing `staticvar`). Plain pipeline is allowed
+		// to canonicalise, so the check is trivia-only. The note is
+		// stderr — stdout stays the labelled output, exit code unchanged.
+		if (!plain) writerProbeSourcePreservationNote(source, emitted);
 		return true;
+	}
+
+	private static function writerProbeSourcePreservationNote(source:String, emitted:String):Void {
+		if (source == emitted) return;
+		final minLen:Int = source.length < emitted.length ? source.length : emitted.length;
+		var diffAt:Int = minLen;
+		for (i in 0...minLen) if (StringTools.fastCodeAt(source, i) != StringTools.fastCodeAt(emitted, i)) {
+			diffAt = i;
+			break;
+		}
+		// Show a small window around the divergence on each side so the
+		// reader can immediately see the missing/extra bytes without
+		// re-running a diff tool.
+		final wnd:Int = 8;
+		final sFrom:Int = diffAt - wnd >= 0 ? diffAt - wnd : 0;
+		final sExp:String = escapeProbeWindow(source.substring(sFrom, diffAt + wnd < source.length ? diffAt + wnd : source.length));
+		final sAct:String = escapeProbeWindow(emitted.substring(sFrom, diffAt + wnd < emitted.length ? diffAt + wnd : emitted.length));
+		stderr('apq writer-probe: NOTE trivia output differs from source at offset $diffAt (writer-fidelity gap)\n');
+		stderr('  source : "$sExp"\n');
+		stderr('  emitted: "$sAct"\n');
+	}
+
+	private static function escapeProbeWindow(s:String):String {
+		final buf:StringBuf = new StringBuf();
+		for (i in 0...s.length) {
+			final c:Int = StringTools.fastCodeAt(s, i);
+			switch c {
+				case '\n'.code: buf.add('\\n');
+				case '\t'.code: buf.add('\\t');
+				case '\r'.code: buf.add('\\r');
+				case '"'.code: buf.add('\\"');
+				case _: buf.addChar(c);
+			}
+		}
+		return buf.toString();
 	}
 
 	private static function pickPlugin(lang:String):GrammarPlugin {
@@ -3323,6 +3387,7 @@ final class Cli {
 	private static function runSweep(args:Array<String>):Int {
 		var filePath:String = 'bin/.last-sweep.json';
 		var prevPath:Null<String> = null;
+		var diffPath:Null<String> = null;
 		var i:Int = 0;
 		while (i < args.length) {
 			final a:String = args[i];
@@ -3331,6 +3396,8 @@ final class Cli {
 					filePath = expectValue(args, ++i, '--file');
 				case '--prev':
 					prevPath = expectValue(args, ++i, '--prev');
+				case '--diff':
+					diffPath = expectValue(args, ++i, '--diff');
 				case '--lang':
 					// hxq shim auto-injects --lang haxe; harmless here (sweep
 					// reads a JSON snapshot, no grammar plugin needed). Accept
@@ -3361,6 +3428,57 @@ final class Cli {
 			}
 			sysPrint('  Δpass ${sweepSigned(cur.pass - prev.pass)} / Δfail ${sweepSigned(cur.fail - prev.fail)} / Δskip-parse ${sweepSigned(cur.skipParse - prev.skipParse)}  vs $prevPath (${prev.pass} / ${prev.fail} / ${prev.skipParse})\n');
 		}
+		if (diffPath != null) return runSweepDiff(filePath, diffPath);
+		return EXIT_OK;
+	}
+
+	/**
+	 * Per-fixture status diff between two sweep snapshots. THE answer to
+	 * "which fixtures flipped between these two runs" — replaces the
+	 * ad-hoc python3 reads against `bin/.last-sweep.json`'s `fixtures`
+	 * array. Composes with `--prev` (totals delta is printed first, then
+	 * the per-fixture rows; the two are orthogonal).
+	 *
+	 * Output shape: one line per changed path, plus a transition-count
+	 * breakdown summary. Sorted by path for deterministic output.
+	 */
+	private static function runSweepDiff(curPath:String, prevPath:String):Int {
+		final cur:Map<String, String> = loadSweepFixtureStatus(curPath);
+		final prev:Map<String, String> = loadSweepFixtureStatus(prevPath);
+		if (!cur.iterator().hasNext()) {
+			stderr('apq sweep: --diff: $curPath has no `fixtures` array — re-run `node bin/test.js` under $$ANYPARSE_HXFORMAT_FORK to seed it\n');
+			return EXIT_RUNTIME;
+		}
+		if (!prev.iterator().hasNext()) {
+			stderr('apq sweep: --diff: $prevPath has no `fixtures` array\n');
+			return EXIT_RUNTIME;
+		}
+		final allPaths:Map<String, Bool> = [];
+		for (k in cur.keys()) allPaths.set(k, true);
+		for (k in prev.keys()) allPaths.set(k, true);
+		final sorted:Array<String> = [for (k in allPaths.keys()) k];
+		sorted.sort((a:String, b:String) -> a < b ? -1 : (a > b ? 1 : 0));
+		final transitions:Map<String, Int> = [];
+		var changed:Int = 0;
+		for (path in sorted) {
+			final ps:Null<String> = prev.get(path);
+			final cs:Null<String> = cur.get(path);
+			if (ps == cs) continue;
+			changed++;
+			final key:String = if (ps == null) 'ADDED($cs)'
+				else if (cs == null) 'REMOVED($ps)'
+				else '$ps->$cs';
+			transitions.set(key, (transitions.get(key) ?? 0) + 1);
+			if (ps == null) sysPrint('ADDED $path (now $cs)\n');
+			else if (cs == null) sysPrint('REMOVED $path (was $ps)\n');
+			else sysPrint('$ps -> $cs: $path\n');
+		}
+		final breakdown:Array<String> = [for (k => v in transitions) '$k: $v'];
+		breakdown.sort((a:String, b:String) -> a < b ? -1 : (a > b ? 1 : 0));
+		if (changed == 0)
+			sysPrint('--- sweep --diff: 0 fixtures changed (snapshots identical) ---\n');
+		else
+			sysPrint('--- sweep --diff: $changed fixtures changed (${breakdown.join(", ")}) ---\n');
 		return EXIT_OK;
 	}
 
@@ -3390,7 +3508,7 @@ final class Cli {
 	private static inline function sweepSigned(n:Int):String return n > 0 ? '+$n' : '$n';
 
 	private static function printSweepUsage():Void {
-		sysPrint('Usage: apq sweep [--file <path>] [--prev <path>]\n');
+		sysPrint('Usage: apq sweep [--file <path>] [--prev <path>] [--diff <path>]\n');
 		sysPrint('\n');
 		sysPrint('Read the corpus harness sweep snapshot (`bin/.last-sweep.json` by\n');
 		sysPrint('default) and print totals + optional delta vs a prior snapshot.\n');
@@ -3399,6 +3517,8 @@ final class Cli {
 		sysPrint('Options:\n');
 		sysPrint('  --file <path>   Snapshot file (default: bin/.last-sweep.json)\n');
 		sysPrint('  --prev <path>   Compare against another snapshot, print Δ triple\n');
+		sysPrint('  --diff <path>   Per-fixture status diff vs another snapshot (PASS->FAIL,\n');
+		sysPrint('                  FAIL->PASS, ADDED/REMOVED entries). Composes with --prev.\n');
 		sysPrint('  -h, --help      Show this help\n');
 	}
 	#end
@@ -4018,6 +4138,44 @@ final class Cli {
 	 * Each segment must be a non-empty identifier (`[A-Za-z_][A-Za-z0-9_]*`)
 	 * and total segment count must be ≥ 2.
 	 */
+	/**
+	 * DX v10: detect regex-like queries handed to `lit`. `lit` is
+	 * substring-only; users who reach for `\|` (regex alternation),
+	 * `[^...]` (character class negation), or `(?:...)` (non-capturing
+	 * group) typically have a regex mental model and end up confused
+	 * when the default 0-hit nudge talks about dotted access. Returns
+	 * a short label describing what was detected, or null when the
+	 * query carries no regex-specific syntax. Plain `?`, `*`, `[`, `]`
+	 * are common in identifiers/globs and do NOT trip the heuristic
+	 * alone — only the genuinely regex-only forms.
+	 */
+	private static function looksLikeRegex(s:String):Null<String> {
+		if (s.indexOf('\\|') >= 0) return '`\\|` (regex alternation)';
+		if (s.indexOf('[^') >= 0) return '`[^...]` (negated character class)';
+		if (s.indexOf('(?:') >= 0) return '`(?:...)` (non-capturing group)';
+		if (s.indexOf('(?=') >= 0) return '`(?=...)` (lookahead)';
+		if (s.indexOf('(?!') >= 0) return '`(?!...)` (negative lookahead)';
+		return null;
+	}
+
+	/**
+	 * DX v10: detect Haxe macro reification sigils in a search pattern.
+	 * `$v{}` / `$i{}` / `$a{}` / `$b{}` / `$p{}` / `$e{}` / `$es{}` are
+	 * macro-time constructs; the pattern parser rejects them with a
+	 * generic message that misdirects the user. Returns the matched
+	 * sigil (e.g. "`$v{}`") for the error message, or null when the
+	 * pattern carries none. Plain metavars `$x` (followed by letter, not
+	 * `{` + reif tag) pass through.
+	 */
+	private static function detectMacroReification(s:String):Null<String> {
+		final tags:Array<String> = ['v', 'i', 'a', 'b', 'p', 'e', 'es'];
+		for (tag in tags) {
+			final probe:String = "$" + tag + "{";
+			if (s.indexOf(probe) >= 0) return "`$" + tag + "{...}`";
+		}
+		return null;
+	}
+
 	private static function looksLikeDottedAccess(s:String):Null<Array<String>> {
 		if (s.indexOf('.') < 0) return null;
 		final parts:Array<String> = s.split('.');

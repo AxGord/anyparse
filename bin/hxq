@@ -54,14 +54,58 @@ fi
 # -quit` short-circuits at the first hit (sub-50ms even on cold cache)
 # and stays silent when the repo layout doesn't match (e.g. shim copied
 # outside the source tree). Warning goes to stderr — exec proceeds.
+#
+# UX (DX v10):
+#   HXQ_QUIET=1         — skip the stale check entirely (no warning, no
+#                         work). Takes precedence over HXQ_AUTO_REBUILD.
+#   HXQ_AUTO_REBUILD=1  — run the appropriate `haxe bin/<hxml>` before
+#                         exec when stale; abort on build failure.
+#   Otherwise: the warning is throttled to one emission per (binary
+#   mtime). A per-user cache file `$XDG_CACHE_HOME/hxq/warned` (default
+#   `$HOME/.cache/hxq/warned`) stores the mtime of the last binary
+#   we've already warned about; subsequent invocations skip the warning
+#   until the build rebuilds (different mtime ⇒ stored mtime mismatches
+#   ⇒ warning fires again). One file ever per user — no /tmp accumulation,
+#   no symlink-in-/tmp attack surface.
 src_root="$here/../src"
-if [ -d "$src_root" ]; then
+if [ "${HXQ_QUIET:-}" != "1" ] && [ -d "$src_root" ]; then
     stale=$(find "$src_root" -name '*.hx' -newer "$binary" -print -quit 2>/dev/null || true)
     if [ -n "$stale" ]; then
         if [ "$runner" = "node" ]; then
-            echo "hxq: warning: src/ has .hx files newer than bin/apq.js — run \`haxe bin/apq-js.hxml\` to rebuild (first stale: $stale)" >&2
+            bin_name="bin/apq.js"
+            hxml_path="$here/apq-js.hxml"
+            hxml_name="bin/apq-js.hxml"
         else
-            echo "hxq: warning: src/ has .hx files newer than bin/apq.n — run \`haxe bin/apq.hxml\` to rebuild (first stale: $stale)" >&2
+            bin_name="bin/apq.n"
+            hxml_path="$here/apq.hxml"
+            hxml_name="bin/apq.hxml"
+        fi
+        if [ "${HXQ_AUTO_REBUILD:-}" = "1" ]; then
+            # Rebuild in-process. On failure print the build's stderr
+            # and bail — running a stale binary after a failed rebuild
+            # would be misleading.
+            echo "hxq: auto-rebuilding ($hxml_name)..." >&2
+            if ! (cd "$here/.." && haxe "$hxml_path") >&2; then
+                echo "hxq: auto-rebuild failed; aborting (clear HXQ_AUTO_REBUILD to bypass)" >&2
+                exit 1
+            fi
+        else
+            # mtime-keyed throttle. Portable mtime: `stat` differs
+            # across BSD/macOS (`-f %m`) and GNU (`-c %Y`).
+            if mtime=$(stat -f %m "$binary" 2>/dev/null); then :
+            elif mtime=$(stat -c %Y "$binary" 2>/dev/null); then :
+            else mtime="unknown"
+            fi
+            cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/hxq"
+            marker="$cache_dir/warned"
+            last=""
+            [ -r "$marker" ] && last=$(cat "$marker" 2>/dev/null || true)
+            if [ "$last" != "$mtime" ]; then
+                echo "hxq: warning: src/ has .hx files newer than $bin_name — run \`haxe $hxml_name\` to rebuild (first stale: $stale)" >&2
+                echo "hxq: (silenced for this binary mtime; set HXQ_AUTO_REBUILD=1 to auto-rebuild, HXQ_QUIET=1 to disable check)" >&2
+                mkdir -p "$cache_dir" 2>/dev/null || true
+                printf '%s' "$mtime" > "$marker" 2>/dev/null || true
+            fi
         fi
     fi
 fi

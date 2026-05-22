@@ -58,6 +58,21 @@ final class Cases {
 			case 'BitOr':
 				final kids:Array<QueryNode> = pat.children;
 				kids.length >= 2 && (matchPattern(target, kids[0]) || matchPattern(target, kids[1]));
+			case 'Plain':
+				// Slice 34: every `case <expr>:` (other than `case var X:`) is
+				// wrapped in `HxCasePatternBody.Plain(expr:HxExpr)` — the inner
+				// `IdentExpr`/`Call`/`BitOr` we care about lives one child
+				// deeper. Without this arm, `cases <Ctor>` returned 0 hits on
+				// every post-Slice-34 Haxe source (the killer-use-case for
+				// "added a new enum ctor → audit all exhaustive switches").
+				final kids:Array<QueryNode> = pat.children;
+				kids.length > 0 && matchPattern(target, kids[0]);
+			case 'Capture':
+				// Slice 34: `case var X:` — `HxCasePatternBody.Capture(name)`
+				// carries an `HxVarNameLit` child, never matches an enum ctor.
+				// Explicit `false` documents the design (vs falling through
+				// the default arm and looking like an oversight).
+				false;
 			case _:
 				false;
 		};
