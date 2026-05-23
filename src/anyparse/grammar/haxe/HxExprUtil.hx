@@ -191,6 +191,17 @@ final class HxExprUtil {
 	 *    statement's last token, same as `}` for ObjectLit / BlockExpr.
 	 *    NOT triggered through Assign-RHS — `x = [1, 2];` keeps `;`
 	 *    strict (same carve-out as ObjectLit). Drives `sameline/issue_365_array_comprehension`.
+	 *  - `Is` — bare `x is Type` at statement position (slice 43).
+	 *    NOT brace-terminated — `Is`'s last token is the type-ref leaf
+	 *    (typically an ident like `String`). The corpus contract from
+	 *    `whitespace/issue_605_operator_is` allows `{x is String}` as
+	 *    a single-stmt block with no trailing `;` before the closing
+	 *    `}`. Permissive extension of "last-stmt-in-block" semantics,
+	 *    consistent with the existing permissive handling of
+	 *    `{a:1} {b:2}` (two ObjectLit stmts without `;`). NOT
+	 *    triggered through Assign-RHS — `x = a is Int;` keeps `;`
+	 *    strict (same carve-out as ObjectLit / ArrayExpr /
+	 *    DollarBlockExpr).
 	 *  - Everything `endsWithCloseBrace` accepts (`SwitchExpr` /
 	 *    `SwitchExprBare` / `FnExpr` block-body / `TryExpr` recursive):
 	 *    as a statement these are `}`-terminated too.
@@ -255,20 +266,20 @@ final class HxExprUtil {
 		}
 		// Slice 19: walk through `*Assign` into its right operand —
 		// `x = if (…) {…} else {…}` ends with the else block's `}`.
-		// Slice 30 / 39 / 42 carve-out: `x = {a: 1}`, `x = [1, 2, 3]`
-		// and `x = ${expr}` keep `;` strict (the corpus contract —
-		// distinct from bare `{a: 1}` / `[1, 2, 3]` / `${expr}` at
-		// stmt position). The carve-out lives here, not in the
-		// ObjectLit / ArrayExpr / DollarBlockExpr direct-returns below,
-		// so other recursive arms (Meta / Return / If) still see them
-		// as brace-terminated.
+		// Slice 30 / 39 / 42 / 43 carve-out: `x = {a: 1}`, `x = [1, 2, 3]`,
+		// `x = ${expr}` and `x = a is Int` keep `;` strict (the corpus
+		// contract — distinct from bare `{a: 1}` / `[1, 2, 3]` /
+		// `${expr}` / `a is Int` at stmt position). The carve-out lives
+		// here, not in the ObjectLit / ArrayExpr / DollarBlockExpr / Is
+		// direct-returns below, so other recursive arms (Meta / Return /
+		// If) still see them as brace-terminated.
 		if (ASSIGN_CTORS.contains(ctor)) {
 			final params:Null<Array<Dynamic>> = Type.enumParameters(e);
 			if (params == null || params.length < 2) return false;
 			final rhs:Null<Dynamic> = unwrap(params[1]);
 			if (rhs == null) return false;
 			final rhsCtor:Null<String> = Type.enumConstructor(rhs);
-			if (rhsCtor == 'ObjectLit' || rhsCtor == 'ArrayExpr' || rhsCtor == 'DollarBlockExpr') return false;
+			if (rhsCtor == 'ObjectLit' || rhsCtor == 'ArrayExpr' || rhsCtor == 'DollarBlockExpr' || rhsCtor == 'Is') return false;
 			return stmtExprNoSemi(rhs);
 		}
 		// Slice 19: an `IfExpr` carries `thenBranch`/`elseBranch`; the
@@ -317,6 +328,18 @@ final class HxExprUtil {
 		// twin of `ObjectLit` / `ArrayExpr` direct-returns; the `*Assign`
 		// arm above carves `x = ${expr}` out so RHS keeps `;` strict.
 		if (ctor == 'DollarBlockExpr') return true;
+		// Slice 43: `Is` operator at statement position. Departs from
+		// the brace-terminated rule of the other direct-returns above —
+		// `Is`'s last token is a type-ref leaf (`String` ident in
+		// `x is String`), not `}` / `]`. Corpus driver:
+		// `whitespace/issue_605_operator_is` (`{x is String}` as the
+		// sole stmt of an outer brace-block — the inner ExprStmt has no
+		// `;` before the closing `}`). Permissive extension of
+		// "last-stmt-in-block" semantics consistent with the existing
+		// `{a:1} {b:2}` (two ObjectLit stmts no `;`) acceptance. The
+		// `*Assign` arm above carves `x = a is Int` out so RHS keeps
+		// `;` strict.
+		if (ctor == 'Is') return true;
 		return endsWithCloseBrace(e);
 	}
 
