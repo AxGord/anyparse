@@ -2849,10 +2849,23 @@ class WriterLowering {
 							final allmanCtor:Null<String> = child.fmtReadString('allmanIndentForCtor');
 							if (allmanCtor != null) {
 								final ctorMatchExpr:Expr = macro Type.enumConstructor($fieldAccess) == $v{allmanCtor};
+								// Non-matching ctor falls through to the same
+								// BeforeNewline-aware separator the plain
+								// bare-Ref non-first branch uses below
+								// (ω-issue-48-v2 mechanism). In trivia mode the
+								// synth slot `<f>BeforeNewline` records whether
+								// source had a newline before this field's
+								// first token; preserve it so `@:m if (…)` etc.
+								// honour source-side line breaks the same way
+								// the rest of the writer does. Plain mode (no
+								// trivia signal) keeps the unconditional space.
+								final sepExpr:Expr = ctx.trivia && isTriviaBearing(typePath)
+									? macro ${beforeNewlineAccess(fieldName)} ? _dhl() : _dt(' ')
+									: macro _dt(' ');
 								parts.push(macro {
 									final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 									final _doc:anyparse.core.Doc = $writeCall;
-									$ctorMatchExpr ? _dn(_cols, _dc([_dhl(), _doc])) : _dc([_dt(' '), _doc]);
+									$ctorMatchExpr ? _dn(_cols, _dc([_dhl(), _doc])) : _dc([$sepExpr, _doc]);
 								});
 							} else if (child.fmtHasFlag('nestBodyOnSourceNewline') && ctx.trivia && isTriviaBearing(typePath)) {
 								// ω-cond-comp-expr-body-nest: source-shape-driven
