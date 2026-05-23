@@ -35,6 +35,49 @@ import sys.FileSystem;
 typedef SkipEntry = {path:String, locus:String};
 
 /**
+ * Discriminator on the first-failure locus utest emitted —
+ * `Fail` covers `FAIL` / `FAILURE` rows; `Error` covers `ERROR` rows
+ * (an unhandled exception inside the test body). Used by callers to
+ * pick the user-facing label without string comparison.
+ */
+enum abstract TestSummaryFailureKind(Int) {
+
+	final Fail = 0;
+
+	final Error = 1;
+}
+
+/**
+ * First-failure locus captured by `Cli.parseTestSummary` from a utest
+ * stdout transcript. `className` is the unindented CamelCase test class
+ * header utest emits above the test group; empty string when the
+ * transcript doesn't carry one. `line` is the 1-indexed source line
+ * decoded from the detail row's `line: N, …` prefix, or `-1` when only
+ * a bare detail was emitted (utest's `Print.formatFailure` omits the
+ * prefix for plain-string failures).
+ */
+typedef TestSummaryFailureLocus = {
+	className:String,
+	testName:String,
+	line:Int,
+	message:String,
+	kind:TestSummaryFailureKind,
+};
+
+/**
+ * Structured result of parsing a utest stdout transcript. `firstFailure`
+ * is null when the run had no failures or errors; otherwise it carries
+ * the first encountered locus (subsequent failures only bump counters).
+ */
+typedef TestSummaryResult = {
+	tests:Int,
+	assertions:Int,
+	failures:Int,
+	errors:Int,
+	firstFailure:Null<TestSummaryFailureLocus>,
+};
+
+/**
  * Corpus harness sweep snapshot (`bin/.last-sweep.json` schema).
  * Mirrors `HxFormatterCorpusTest.printSweepDelta`'s write contract —
  * `apq sweep` reads the JSON and reports totals + delta without
@@ -5033,28 +5076,117 @@ final class Cli {
 			stderr('apq test-summary: read failed: ${e.message}\n');
 			return EXIT_RUNTIME;
 		}
-		final okRe:EReg = ~/^\s+\w[\w.]*:\s+OK(\s+(\.+))?/;
+		final result:TestSummaryResult = parseTestSummary(raw);
+		final src:String = sourcePath ?? '/tmp/test.out';
+		sysPrint('${result.tests} tests / ${result.assertions} assertions / ${result.failures} failures / ${result.errors} errors  ($src)\n');
+		final ff:Null<TestSummaryFailureLocus> = result.firstFailure;
+		if (ff != null) {
+			final classQual:String = ff.className.length > 0 ? '${ff.className}.' : '';
+			final lineFrag:String = ff.line >= 0 ? '  line:${ff.line}' : '';
+			final msgFrag:String = ff.message.length > 0 ? '  ${ff.message}' : '';
+			final label:String = ff.kind == TestSummaryFailureKind.Error ? 'error' : 'failure';
+			sysPrint('first $label: $classQual${ff.testName}$lineFrag$msgFrag\n');
+		}
+		return EXIT_OK;
+	}
+
+	/**
+	 * Pure parser over a utest stdout transcript. Exposed for unit tests so
+	 * the structured result (counts + first-failure locus) can be asserted
+	 * directly without the stdout-capture round-trip Cli.run would impose.
+	 *
+	 * Line shape recognition (utest 1.13.x):
+	 *  - `  testName: OK <dots>` — pass; dot-count adds to assertions.
+	 *  - `  testName: FAIL[URE] <…>` — failure counter.
+	 *  - `  testName: ERR[OR] <…>` — error counter.
+	 *  - `ClassName` (unindented CamelCase token, no colon) — class header;
+	 *    tracked so first-failure carries its qualifier.
+	 *  - `    <detail>` (4-space indent) following a fail/err — the
+	 *    failure's detail line. `line: N, <msg>` and
+	 *    `fileName: X, line: N, <msg>` shapes are decoded into structured
+	 *    fields; bare detail falls into `message`.
+	 *
+	 * The detail capture only fires for the FIRST fail/err — once
+	 * `firstFailure` is set, subsequent failures only bump counters.
+	 */
+	public static function parseTestSummary(raw:String):TestSummaryResult {
+		final okRe:EReg = ~/^\s+(\w[\w.]*):\s+OK(\s+(\.+))?/;
+		final failRe:EReg = ~/^\s+(\w[\w.]*):\s+FAIL/;
+		final errRe:EReg = ~/^\s+(\w[\w.]*):\s+ERR/;
+		final classRe:EReg = ~/^([A-Z]\w*)$/;
+		final detailFullRe:EReg = ~/^\s*fileName:\s*([^,]+),\s*line:\s*(\d+),\s*(.*)$/;
+		final detailLineRe:EReg = ~/^\s*line:\s*(\d+),\s*(.*)$/;
+		// Bare-message detail: any non-zero indent + non-empty content.
+		// Widened from `\s{4,}` because utest's indent isn't guaranteed
+		// 4-space (tabs / 2-space variants exist in older transcripts).
+		final detailBareRe:EReg = ~/^\s+(\S.*)$/;
 		var tests:Int = 0;
 		var assertions:Int = 0;
 		var failures:Int = 0;
 		var errors:Int = 0;
-		final lines:Array<String> = raw.split('\n');
-		for (line in lines) {
+		var currentClass:String = '';
+		var firstFailure:Null<TestSummaryFailureLocus> = null;
+		var awaitingDetail:Bool = false;
+		for (line in raw.split('\n')) {
+			if (awaitingDetail) {
+				awaitingDetail = false;
+				final locus:Null<TestSummaryFailureLocus> = firstFailure;
+				if (locus != null && tryCaptureDetail(locus, line, detailFullRe, detailLineRe, detailBareRe)) continue;
+				// Fall through: the line was NOT a detail row (utest emitted
+				// no detail for this failure, or the next test row arrived
+				// immediately). Re-process via the normal regex chain so we
+				// don't silently swallow it.
+			}
 			if (okRe.match(line)) {
 				tests++;
-				final dots:Null<String> = try okRe.matched(2) catch (_:Exception) null;
+				final dots:Null<String> = try okRe.matched(3) catch (_:Exception) null;
 				if (dots != null) assertions += (dots : String).length;
-				continue;
+			} else if (failRe.match(line)) {
+				failures++;
+				if (firstFailure == null) {
+					firstFailure = {className: currentClass, testName: failRe.matched(1), line: -1, message: '', kind: TestSummaryFailureKind.Fail};
+					awaitingDetail = true;
+				}
+			} else if (errRe.match(line)) {
+				errors++;
+				if (firstFailure == null) {
+					firstFailure = {className: currentClass, testName: errRe.matched(1), line: -1, message: '', kind: TestSummaryFailureKind.Error};
+					awaitingDetail = true;
+				}
+			} else if (classRe.match(line)) {
+				currentClass = classRe.matched(1);
 			}
-			// FAIL / ERROR / FAILURE substrings — utest variants. Case-
-			// insensitive contains-check on a test-method-shaped prefix
-			// (leading whitespace + non-empty token + colon).
-			if (~/^\s+\w[\w.]*:\s+FAIL/.match(line)) failures++;
-			else if (~/^\s+\w[\w.]*:\s+ERR/.match(line)) errors++;
 		}
-		final src:String = sourcePath ?? '/tmp/test.out';
-		sysPrint('$tests tests / $assertions assertions / $failures failures / $errors errors  ($src)\n');
-		return EXIT_OK;
+		return {tests: tests, assertions: assertions, failures: failures, errors: errors, firstFailure: firstFailure};
+	}
+
+	private static function tryCaptureDetail(
+		locus:TestSummaryFailureLocus, line:String, full:EReg, lineOnly:EReg, bare:EReg
+	):Bool {
+		// Disambiguate bare detail from regular test rows: a fail/err line
+		// fits `bare` too (`^\s+\S.*`). The fail/err regexes already
+		// consumed those, so we additionally require the bare branch to
+		// NOT look like an indented test row (contain `: OK|FAIL|ERR`).
+		if (full.match(line)) {
+			locus.line = parsePositiveInt(full.matched(2));
+			locus.message = StringTools.trim(full.matched(3));
+			return true;
+		}
+		if (lineOnly.match(line)) {
+			locus.line = parsePositiveInt(lineOnly.matched(1));
+			locus.message = StringTools.trim(lineOnly.matched(2));
+			return true;
+		}
+		if (bare.match(line) && !~/:\s+(OK|FAIL|ERR)/.match(line)) {
+			locus.message = StringTools.trim(bare.matched(1));
+			return true;
+		}
+		return false;
+	}
+
+	private static inline function parsePositiveInt(s:String):Int {
+		final v:Null<Int> = Std.parseInt(s);
+		return v ?? -1;
 	}
 
 	private static function printTestSummaryUsage():Void {
@@ -5068,6 +5200,9 @@ final class Cli {
 		sysPrint('\n');
 		sysPrint('Parses lines of shape `  testName: OK <dots>` / `: FAIL` / `: ERROR`.\n');
 		sysPrint('Dot count after `OK` is the assertion count (one dot per assert).\n');
+		sysPrint('When any FAIL / ERROR is present, appends a second line with the first\n');
+		sysPrint('failure\'s locus: `first failure: ClassName.testName  line:N  <message>`\n');
+		sysPrint('(class header / line / message included when utest emitted them).\n');
 		sysPrint('Always exits 0 on a successful parse — the test runner\'s exit code is\n');
 		sysPrint('the authoritative pass/fail signal.\n');
 	}

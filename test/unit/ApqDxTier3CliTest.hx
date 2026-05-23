@@ -3,6 +3,9 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.query.Cli;
+import anyparse.query.Cli.TestSummaryFailureKind;
+import anyparse.query.Cli.TestSummaryFailureLocus;
+import anyparse.query.Cli.TestSummaryResult;
 
 #if sys
 import sys.FileSystem;
@@ -145,6 +148,112 @@ class ApqDxTier3CliTest extends Test {
 			return;
 		}
 		Assert.equals(2, Cli.run(['test-summary']));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	// First-failure locus capture — parseTestSummary returns a structured
+	// result so the counts and the locus shape can be asserted without a
+	// stdout-capture round-trip through Cli.run.
+
+	public function testTestSummaryFirstFailureCapturesClassAndLine():Void {
+		#if sys
+		// utest 1.13.x FAILURE shape: `  testName: FAILURE F\n    line: N, <msg>`.
+		// Class header sits one line above the test group at column 0.
+		final transcript:String = 'FailProbe\n  testOk: OK .\n  testIntentionalFail: FAILURE F\n    line: 9, intentional\n';
+		final r:TestSummaryResult = Cli.parseTestSummary(transcript);
+		// `tests` is the OK-pass count (legacy contract — matches the
+		// existing `N tests / F failures / E errors` semantics where N is
+		// passes, not the run total).
+		Assert.equals(1, r.tests);
+		Assert.equals(1, r.assertions);
+		Assert.equals(1, r.failures);
+		Assert.equals(0, r.errors);
+		final ff:Null<TestSummaryFailureLocus> = r.firstFailure;
+		Assert.notNull(ff);
+		if (ff != null) {
+			Assert.equals('FailProbe', ff.className);
+			Assert.equals('testIntentionalFail', ff.testName);
+			Assert.equals(9, ff.line);
+			Assert.equals('intentional', ff.message);
+			Assert.isTrue(ff.kind == TestSummaryFailureKind.Fail);
+		}
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testTestSummaryFirstErrorCapturesMessage():Void {
+		#if sys
+		// utest ERROR shape: `  testName: ERROR E\n    <bare message>` —
+		// no `line:` prefix, just the thrown payload. line stays -1.
+		final transcript:String = 'FailProbe\n  testIntentionalError: ERROR E\n    intentional error\n';
+		final r:TestSummaryResult = Cli.parseTestSummary(transcript);
+		Assert.equals(0, r.tests);
+		Assert.equals(1, r.errors);
+		Assert.equals(0, r.failures);
+		final ff:Null<TestSummaryFailureLocus> = r.firstFailure;
+		Assert.notNull(ff);
+		if (ff != null) {
+			Assert.isTrue(ff.kind == TestSummaryFailureKind.Error);
+			Assert.equals(-1, ff.line);
+			Assert.equals('intentional error', ff.message);
+		}
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testTestSummaryFirstFailureOnlyCapturesFirst():Void {
+		#if sys
+		// Mixed transcript with both FAILURE and ERROR — counters bump for
+		// both, firstFailure stays on the earliest (FAILURE before ERROR
+		// in source order).
+		final transcript:String = 'ClassA\n  testOne: FAILURE F\n    line: 5, first\n  testTwo: ERROR E\n    second\n';
+		final r:TestSummaryResult = Cli.parseTestSummary(transcript);
+		Assert.equals(1, r.failures);
+		Assert.equals(1, r.errors);
+		final ff:Null<TestSummaryFailureLocus> = r.firstFailure;
+		Assert.notNull(ff);
+		if (ff != null) {
+			Assert.equals('testOne', ff.testName);
+			Assert.isTrue(ff.kind == TestSummaryFailureKind.Fail);
+			Assert.equals(5, ff.line);
+		}
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testTestSummaryNoFailuresHasNullLocus():Void {
+		#if sys
+		final transcript:String = '  testFoo: OK ...\n  testBar: OK .\n';
+		final r:TestSummaryResult = Cli.parseTestSummary(transcript);
+		Assert.equals(2, r.tests);
+		Assert.equals(4, r.assertions);
+		Assert.isNull(r.firstFailure);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testTestSummaryFailureWithoutDetailDoesNotEatNextRow():Void {
+		#if sys
+		// Two adjacent failures with NO detail row between them —
+		// awaitingDetail must NOT silently consume the second fail's
+		// header line.
+		final transcript:String = 'ClassA\n  testOne: FAILURE F\n  testTwo: FAILURE F\n    line: 7, second\n';
+		final r:TestSummaryResult = Cli.parseTestSummary(transcript);
+		Assert.equals(2, r.failures);
+		final ff:Null<TestSummaryFailureLocus> = r.firstFailure;
+		Assert.notNull(ff);
+		if (ff != null) {
+			Assert.equals('testOne', ff.testName);
+			// No detail row followed testOne — line / message stay empty.
+			Assert.equals(-1, ff.line);
+			Assert.equals('', ff.message);
+		}
 		#else
 		Assert.pass('non-sys target');
 		#end
