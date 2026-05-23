@@ -336,6 +336,13 @@ final class Cli {
 				stderr('apq test-summary: requires a sys target (file or stdin read)\n');
 				return EXIT_USAGE;
 				#end
+			case 'self-status':
+				#if (sys || nodejs)
+				return runSelfStatus(rest);
+				#else
+				stderr('apq self-status: requires a sys target (filesystem walk)\n');
+				return EXIT_USAGE;
+				#end
 			case _:
 				stderr('apq: unknown subcommand "$cmd"\n');
 				printUsage();
@@ -445,7 +452,10 @@ final class Cli {
 		if (allEntries.length == 0)
 			stderr(emptyWalkerNudge('refs', nameStr, paths.length, paths.length - skipEntries.length, skipEntries, candidateNames) + '\n');
 
-		final shown:Array<{file:String, source:String, hits:Array<RefHit>}> = limitEntries(allEntries, limit,
+		var totalHits:Int = 0;
+		for (e in allEntries) totalHits += e.hits.length;
+		final cappedLimit:Int = effectiveAutoLimit('refs', limit, totalHits);
+		final shown:Array<{file:String, source:String, hits:Array<RefHit>}> = limitEntries(allEntries, cappedLimit,
 			e -> e.hits.length,
 			(e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k)});
 		if (json) {
@@ -539,7 +549,10 @@ final class Cli {
 		if (allEntries.length == 0)
 			stderr(emptyWalkerNudge('uses', nameStr, paths.length, paths.length - skipEntries.length, skipEntries, candidateNames) + '\n');
 
-		final shown:Array<{file:String, source:String, hits:Array<UsesHit>}> = limitEntries(allEntries, limit,
+		var totalHits:Int = 0;
+		for (e in allEntries) totalHits += e.hits.length;
+		final cappedLimit:Int = effectiveAutoLimit('uses', limit, totalHits);
+		final shown:Array<{file:String, source:String, hits:Array<UsesHit>}> = limitEntries(allEntries, cappedLimit,
 			e -> e.hits.length,
 			(e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k)});
 		for (entry in shown) sysPrint(Text.renderUses(entry.file, entry.source, entry.hits, wantDoc, wantSource, flat));
@@ -641,7 +654,10 @@ final class Cli {
 		if (allEntries.length == 0)
 			stderr(emptyWalkerNudge('meta', null, paths.length, paths.length - skipEntries.length, skipEntries, null) + '\n');
 
-		final shown:Array<{file:String, source:String, hits:Array<MetaHit>}> = limitEntries(allEntries, limit,
+		var totalHits:Int = 0;
+		for (e in allEntries) totalHits += e.hits.length;
+		final cappedLimit:Int = effectiveAutoLimit('meta', limit, totalHits);
+		final shown:Array<{file:String, source:String, hits:Array<MetaHit>}> = limitEntries(allEntries, cappedLimit,
 			e -> e.hits.length,
 			(e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k)});
 		if (json) {
@@ -1546,7 +1562,10 @@ final class Cli {
 			stderr('apq lit: NOTE auto-widened to --any-kind (default kind=$tried returned 0 hits). Pass `--any-kind` explicitly to silence this notice.\n');
 		}
 
-		final shown:Array<{file:String, source:String, hits:Array<LitHit>}> = limitEntries(allEntries, limit,
+		var totalHits:Int = 0;
+		for (e in allEntries) totalHits += e.hits.length;
+		final cappedLimit:Int = effectiveAutoLimit('lit', limit, totalHits);
+		final shown:Array<{file:String, source:String, hits:Array<LitHit>}> = limitEntries(allEntries, cappedLimit,
 			e -> e.hits.length,
 			(e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k)});
 		for (entry in shown) sysPrint(Lit.render(entry.file, entry.source, entry.hits, flat));
@@ -1713,7 +1732,10 @@ final class Cli {
 		if (allEntries.length == 0)
 			stderr(emptyWalkerNudge('cases', targetStr, paths.length, paths.length - skipEntries.length, skipEntries, null) + '\n');
 
-		final shown:Array<{file:String, source:String, hits:Array<CasesHit>}> = limitEntries(allEntries, limit,
+		var totalHits:Int = 0;
+		for (e in allEntries) totalHits += e.hits.length;
+		final cappedLimit:Int = effectiveAutoLimit('cases', limit, totalHits);
+		final shown:Array<{file:String, source:String, hits:Array<CasesHit>}> = limitEntries(allEntries, cappedLimit,
 			e -> e.hits.length,
 			(e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k)});
 		for (entry in shown) sysPrint(Cases.render(entry.file, entry.source, entry.hits, flat));
@@ -2420,7 +2442,10 @@ final class Cli {
 		}
 		if (litEntries.length > 0) {
 			any = true;
-			final shown:Array<{file:String, source:String, hits:Array<LitHit>}> = limitEntries(litEntries, limit,
+			var totalHits:Int = 0;
+			for (e in litEntries) totalHits += e.hits.length;
+			final cappedLimit:Int = effectiveAutoLimit('mentions', limit, totalHits);
+			final shown:Array<{file:String, source:String, hits:Array<LitHit>}> = limitEntries(litEntries, cappedLimit,
 				e -> e.hits.length,
 				(e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k)});
 			sysPrint('# lit (every leaf — case-patterns / imports / new exprs / field-name slots)\n');
@@ -2650,7 +2675,10 @@ final class Cli {
 				stderr('  (pattern root kind "$patternKind" NOT present in any scanned file — likely the wrong kind for this construct; check `apq ast <file>` to see the actual node shape)\n');
 		}
 
-		final shown:Array<{file:String, source:String, matches:Array<Match>}> = limitEntries(allEntries, limit,
+		var totalHits:Int = 0;
+		for (e in allEntries) totalHits += e.matches.length;
+		final cappedLimit:Int = effectiveAutoLimit('search', limit, totalHits);
+		final shown:Array<{file:String, source:String, matches:Array<Match>}> = limitEntries(allEntries, cappedLimit,
 			e -> e.matches.length,
 			(e, k) -> {file: e.file, source: e.source, matches: e.matches.slice(0, k)});
 		if (json) {
@@ -3392,6 +3420,18 @@ final class Cli {
 		// pain where Slice 38's recon under-counted because the
 		// histogram clusters by exact forward-locus shape.
 		var regexMode:Bool = false;
+		// `--writer-equals [--writer-equals-plain] [--expected <path>]`:
+		// chain a writer round-trip + byte-equality check onto a probe-mode
+		// PARSE OK. Closes the "predicted +1 via predict-strip, got skip→fail
+		// because the writer round-trip diverges" gap that bit Slice 50 —
+		// running predict-strip alone tells you ONLY about parse, not byte-
+		// PASS. The combo flag is probe-only (single-file) because the
+		// expected comparison needs a paired source/expected (sections 2/3
+		// of an `.hxtest`, or `--expected <path>` for plain `.hx`). Sweep
+		// mode already has the corpus harness doing this comparison.
+		var writerEqualsAfter:Bool = false;
+		var writerEqualsPlain:Bool = false;
+		var expectedPath:Null<String> = null;
 		var i:Int = 0;
 		while (i < args.length) {
 			final a:String = args[i];
@@ -3448,6 +3488,13 @@ final class Cli {
 					replacements.push('');
 				case '--regex':
 					regexMode = true;
+				case '--writer-equals':
+					writerEqualsAfter = true;
+				case '--writer-equals-plain':
+					writerEqualsAfter = true;
+					writerEqualsPlain = true;
+				case '--expected':
+					expectedPath = expectValue(args, ++i, '--expected');
 				case '-h', '--help':
 					printReconUsage();
 					return EXIT_OK;
@@ -3552,9 +3599,27 @@ final class Cli {
 				return EXIT_USAGE;
 			}
 		}
+		if (writerEqualsAfter) {
+			if (probePath == null) {
+				stderr('apq recon: --writer-equals requires --probe <file> (single-file mode; sweep mode already does byte-comparison via the corpus harness)\n');
+				return EXIT_USAGE;
+			}
+			if (predictStrip) {
+				stderr('apq recon: --writer-equals is incompatible with --predict-strip (the stripped source diverges from expected by construction — apply the slice first, then probe + writer-equals on the unstripped source)\n');
+				return EXIT_USAGE;
+			}
+			if (predictRelax) {
+				stderr('apq recon: --writer-equals is incompatible with --predict-relax (relax synthesises a missing token; expected bytes won`t match the patched source)\n');
+				return EXIT_USAGE;
+			}
+		}
+		if (expectedPath != null && !writerEqualsAfter) {
+			stderr('apq recon: --expected requires --writer-equals\n');
+			return EXIT_USAGE;
+		}
 		final plugin:GrammarPlugin = pickPlugin(lang);
 		if (predictRelax && probePath != null) return runReconProbeRelax(plugin, (probePath : String), showSource);
-		if (probePath != null) return runReconProbe(plugin, (probePath : String), predictStrip, patterns, replacements, compiledRegex, showSource);
+		if (probePath != null) return runReconProbe(plugin, (probePath : String), predictStrip, patterns, replacements, compiledRegex, showSource, writerEqualsAfter, writerEqualsPlain, expectedPath, lang);
 		final rootFinal:String = rootDir ?? defaultReconRoot();
 		if (rootFinal == '') {
 			stderr("apq recon: no <dir> given and $ANYPARSE_HXFORMAT_FORK env var is unset.\n");
@@ -4288,7 +4353,9 @@ final class Cli {
 	private static function runReconProbe(
 		plugin:GrammarPlugin, path:String,
 		predictStrip:Bool, patterns:Array<String>, replacements:Array<String>,
-		compiledRegex:Null<Array<EReg>>, showSource:Bool
+		compiledRegex:Null<Array<EReg>>, showSource:Bool,
+		writerEqualsAfter:Bool = false, writerEqualsPlain:Bool = false,
+		expectedPathOpt:Null<String> = null, lang:String = 'haxe'
 	):Int {
 		if (!FileSystem.exists(path)) {
 			stderr('apq recon: --probe path "$path" does not exist\n');
@@ -4312,6 +4379,7 @@ final class Cli {
 				return EXIT_RUNTIME;
 			}
 			sysPrint('PARSE OK\n');
+			if (writerEqualsAfter) return runProbeWriterCheck(plugin, path, original, writerEqualsPlain, expectedPathOpt, lang);
 			return EXIT_OK;
 		} catch (exception:ParseError) {
 			final pos:Position = exception.span.lineCol(original);
@@ -4323,6 +4391,72 @@ final class Cli {
 			sysPrint('PARSE FAIL :: <non-ParseError> ${reconNormalize(exception.message)}\n');
 			return EXIT_RUNTIME;
 		}
+	}
+
+	/**
+	 * ω-probe-writer-check: chain a writer round-trip + byte-equality check
+	 * onto a probe-mode PARSE OK. Reuses `runWriterEquals`'s machinery so
+	 * the byte-diff format stays identical to the corpus harness's fail
+	 * line. Closes the "predicted +1 via predict-strip, got skip→fail
+	 * because writer round-trip diverges" gap.
+	 *
+	 * Expected bytes resolution:
+	 *  - explicit `--expected <path>` always wins.
+	 *  - `.hxtest` input → section 3 (the fork's reference formatted output).
+	 *  - plain `.hx` → byte-identity round-trip (compare against source).
+	 *
+	 * Last case turns the call into a writer-idempotency check: parse the
+	 * source, write back, expect the same bytes. Useful for sanity-probing
+	 * a grammar edit's writer round-trip on hand-rolled scratch inputs
+	 * (`/tmp/probe.hx`) without typing the expected bytes twice.
+	 */
+	private static function runProbeWriterCheck(
+		plugin:GrammarPlugin, inputPath:String, source:String,
+		plain:Bool, expectedPathOpt:Null<String>, lang:String
+	):Int {
+		// `.hxtest` expected sections drop one trailing `\n` via
+		// `stripPadNewlines` (the corpus harness adds `finalNewline=true`
+		// and trims back one `\n` from `actualRaw` to keep the compare
+		// symmetric). Mirror that here so a corpus-PASS fixture round-trips
+		// to `WRITER PASS` via the probe, not a spurious off-by-newline
+		// mismatch. Raw `.hx` inputs skip the strip — the user supplied
+		// expected bytes verbatim.
+		final hxtestMode:Bool = expectedPathOpt == null && StringTools.endsWith(inputPath, '.hxtest');
+		final expectedSource:String = if (expectedPathOpt != null) {
+			readExpectedForCompare((expectedPathOpt : String));
+		} else if (hxtestMode) {
+			readExpectedForCompare(inputPath);
+		} else {
+			source;
+		};
+		final optsJson:Null<String> = readWriteOptionsJsonOrNull(inputPath);
+		final emittedRaw:Null<String> = try (plain
+			? plugin.writeRoundTripPlain(source, optsJson)
+			: plugin.writeRoundTrip(source, optsJson))
+		catch (e:ParseError) {
+			sysPrint('WRITER FAIL :: ${e.toString()}\n');
+			return EXIT_RUNTIME;
+		} catch (e:Exception) {
+			sysPrint('WRITER FAIL :: ${e.message}\n');
+			return EXIT_RUNTIME;
+		}
+		if (emittedRaw == null) {
+			final flagName:String = plain ? '--writer-equals-plain' : '--writer-equals';
+			stderr('apq recon: no writer wired up for lang "$lang" ($flagName)\n');
+			return EXIT_USAGE;
+		}
+		final emitted:String = (emittedRaw : String);
+		final emittedNormalised:String = hxtestMode
+			&& emitted.length > 0
+			&& StringTools.fastCodeAt(emitted, emitted.length - 1) == '\n'.code
+				? emitted.substr(0, emitted.length - 1)
+				: emitted;
+		if (emittedNormalised == expectedSource) {
+			sysPrint('WRITER PASS\n');
+			return EXIT_OK;
+		}
+		sysPrint('WRITER FAIL :: ${describeByteDiff(emittedNormalised, expectedSource)}\n');
+		return EXIT_RUNTIME;
 	}
 
 	private static function runReconProbePredict(
@@ -5091,6 +5225,112 @@ final class Cli {
 	}
 
 	/**
+	 * `apq self-status [<dir>]` — walk `<dir>` recursively (default `src/`),
+	 * try every `.hx` file via the grammar plugin's trivia parser, print
+	 * one `SKIP <path> :: LINE:COL <message>` line per failure plus a
+	 * footer `--- self-status: M parseable, N skip-parse (total T) ---`.
+	 *
+	 * Solves the dogfooding gap where `hxq` walkers silently skip
+	 * unparseable files: the user finds out a file is unparseable only by
+	 * grepping warnings emitted by `lit` / `refs` / `uses` etc., one at a
+	 * time. `self-status` surfaces the full skip-parse set in one call.
+	 *
+	 * Exit code is 0 even when files skip-parse — this is a status report,
+	 * not a check. `--strict` flips to non-zero on any skip-parse so CI
+	 * wiring can guard against regressions.
+	 */
+	private static function runSelfStatus(args:Array<String>):Int {
+		var lang:String = 'haxe';
+		var rootDir:Null<String> = null;
+		var strict:Bool = false;
+		var i:Int = 0;
+		while (i < args.length) {
+			final a:String = args[i];
+			switch a {
+				case '-h', '--help':
+					printSelfStatusUsage();
+					return EXIT_OK;
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--strict':
+					strict = true;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq self-status: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (rootDir != null) {
+						stderr('apq self-status: only one positional <dir> supported (got "$rootDir" and "$a")\n');
+						return EXIT_USAGE;
+					}
+					rootDir = a;
+			}
+			i++;
+		}
+		final root:String = rootDir ?? 'src';
+		if (!FileSystem.exists(root) || !FileSystem.isDirectory(root)) {
+			stderr('apq self-status: "$root" is not a directory.\n');
+			return EXIT_RUNTIME;
+		}
+		final plugin:GrammarPlugin = pickPlugin(lang);
+		var parseable:Int = 0;
+		var skipParse:Int = 0;
+		final skipLines:Array<String> = [];
+		final stack:Array<String> = [root];
+		while (stack.length > 0) {
+			final dir:Null<String> = stack.pop();
+			if (dir == null) break;
+			final names:Array<String> = FileSystem.readDirectory(dir);
+			names.sort((a:String, b:String) -> a < b ? -1 : (a > b ? 1 : 0));
+			for (name in names) {
+				final path:String = '$dir/$name';
+				if (FileSystem.isDirectory(path)) {
+					stack.push(path);
+					continue;
+				}
+				if (!StringTools.endsWith(name, '.hx')) continue;
+				final source:String = try readSourceForParse(path) catch (_:Exception) continue;
+				try {
+					if (!plugin.reconParse(source)) {
+						stderr('apq self-status: no recon parser wired up for grammar plugin "$lang"\n');
+						return EXIT_RUNTIME;
+					}
+					parseable++;
+				} catch (exception:ParseError) {
+					skipParse++;
+					final pos:Position = exception.span.lineCol(source);
+					final exp:String = reconNormalize(exception.expected);
+					skipLines.push('SKIP $path :: ${pos.line}:${pos.col} expected="$exp"');
+				} catch (exception:Exception) {
+					skipParse++;
+					skipLines.push('SKIP $path :: <non-ParseError> ${reconNormalize(exception.message)}');
+				}
+			}
+		}
+		skipLines.sort((a, b) -> a < b ? -1 : (a > b ? 1 : 0));
+		for (line in skipLines) sysPrint('$line\n');
+		final total:Int = parseable + skipParse;
+		sysPrint('--- self-status: $parseable parseable, $skipParse skip-parse (total $total) ---\n');
+		return (strict && skipParse > 0) ? EXIT_RUNTIME : EXIT_OK;
+	}
+
+	private static function printSelfStatusUsage():Void {
+		sysPrint('apq self-status [<dir>] [--strict]\n');
+		sysPrint('\n');
+		sysPrint('Walks <dir> recursively (default `src/`) and prints which `.hx` files\n');
+		sysPrint('the grammar plugin cannot parse. Each failure shows as:\n');
+		sysPrint('  SKIP <path> :: LINE:COL expected="<X>"\n');
+		sysPrint('\n');
+		sysPrint('Closes the dogfood gap: hxq walkers silently skip unparseable files;\n');
+		sysPrint('self-status surfaces the full set in one call.\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --strict       Exit non-zero when any file skip-parses (CI guard).\n');
+		sysPrint('  --lang <name>  Grammar plugin (default `haxe`).\n');
+		sysPrint('  -h, --help     Show this help.\n');
+	}
+
+	/**
 	 * Pure parser over a utest stdout transcript. Exposed for unit tests so
 	 * the structured result (counts + first-failure locus) can be asserted
 	 * directly without the stdout-capture round-trip Cli.run would impose.
@@ -5290,6 +5530,19 @@ final class Cli {
 		sysPrint('                          view of which field-optionalization would unblock\n');
 		sysPrint('                          which fixtures. Mutually exclusive with every other\n');
 		sysPrint('                          recon mode.\n');
+		sysPrint('  --writer-equals         After --probe PARSE OK, also run writer round-trip +\n');
+		sysPrint('                          byte-equality check vs the fixture\'s expected section\n');
+		sysPrint('                          (or `--expected <path>` for plain .hx). Prints WRITER\n');
+		sysPrint('                          PASS / FAIL upfront so you see whether the slice would\n');
+		sysPrint('                          yield +1 PASS or skip→fail without running the corpus\n');
+		sysPrint('                          sweep. Incompatible with --predict-strip / --predict-\n');
+		sysPrint('                          relax (their patched source diverges from expected by\n');
+		sysPrint('                          construction). Requires --probe.\n');
+		sysPrint('  --writer-equals-plain   Same as --writer-equals but routes through the PLAIN\n');
+		sysPrint('                          (non-trivia) pipeline (HxModuleParser → HxModuleWriter).\n');
+		sysPrint('  --expected <path>       Override the expected-bytes source (default: .hxtest\n');
+		sysPrint('                          section 3, or the input itself for raw .hx). Requires\n');
+		sysPrint('                          --writer-equals.\n');
 		sysPrint('  -h, --help              Show this help.\n');
 	}
 
@@ -5455,6 +5708,28 @@ final class Cli {
 		return n;
 	}
 
+	/**
+	 * Walker flood guard. When the caller did NOT pass `--limit` (`limit < 0`)
+	 * and the total hit count exceeds `AUTO_LIMIT_THRESHOLD`, returns the
+	 * threshold AND prints a stderr nudge so the user sees the truncation
+	 * happened. Otherwise returns `limit` unchanged.
+	 *
+	 * Killer case: `apq lit '/*' src/ --any-kind` previously flooded ~165KB
+	 * of leaf hits. Now it caps to `AUTO_LIMIT_THRESHOLD` automatically and
+	 * surfaces the count so the user can re-run with an explicit `--limit N`
+	 * for a precise budget.
+	 *
+	 * `--limit 0` (any explicit value) is honoured verbatim — the guard
+	 * only fires on the implicit "no limit" default.
+	 */
+	private static function effectiveAutoLimit(cmdName:String, limit:Int, totalHits:Int):Int {
+		if (limit >= 0 || totalHits <= AUTO_LIMIT_THRESHOLD) return limit;
+		stderr('apq $cmdName: auto-capped to $AUTO_LIMIT_THRESHOLD of $totalHits hits — pass `--limit N` for an explicit cap.\n');
+		return AUTO_LIMIT_THRESHOLD;
+	}
+
+	private static inline final AUTO_LIMIT_THRESHOLD:Int = 500;
+
 	private static function printUsage():Void {
 		sysPrint('apq — anyparse query CLI\n');
 		sysPrint('\n');
@@ -5479,6 +5754,7 @@ final class Cli {
 		sysPrint('  recon         Skip-parse drill — corpus sweep + locus-cluster histogram\n');
 		sysPrint('  sweep         Read corpus sweep snapshot totals + Δ vs prior\n');
 		sysPrint('  test-summary  Parse utest stdout transcript into tests/assertions/failures\n');
+		sysPrint('  self-status   List .hx files the grammar plugin cannot parse (dogfood gap)\n');
 		sysPrint('\n');
 		sysPrint('Global options:\n');
 		sysPrint('  --lang <name>   Pick grammar plugin (default: haxe)\n');

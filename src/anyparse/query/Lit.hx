@@ -69,10 +69,38 @@ final class Lit {
 		if (!flat && hits.length > 0) buf.add('$file:\n');
 		for (h in hits) {
 			final pos:Position = h.span.lineCol(source);
-			if (flat) buf.add('$file:${pos.line}:${pos.col}: ${h.kind} \'${h.name}\'\n');
-			else buf.add('  ${pos.line}:${pos.col}: ${h.kind} \'${h.name}\'\n');
+			final shown:String = displayText(h.name);
+			if (flat) buf.add('$file:${pos.line}:${pos.col}: ${h.kind} \'$shown\'\n');
+			else buf.add('  ${pos.line}:${pos.col}: ${h.kind} \'$shown\'\n');
 		}
 		return buf.toString();
+	}
+
+	/**
+	 * Truncate hit content for rendering: collapse to the first source line,
+	 * suffix `… +N more` when bytes were dropped. Captured `name` keeps
+	 * the full content for downstream consumers — only the printed display
+	 * truncates. Killer case: a `lit '/*' src/ --any-kind` over a corpus
+	 * heavy with multi-line `/** … *\/` doc-comments previously dumped
+	 * thousands of body lines verbatim (~190KB for src/). Now each hit
+	 * occupies one line; the user still sees locus + kind + first line.
+	 */
+	private static inline final DISPLAY_MAX:Int = 120;
+
+	private static function displayText(name:String):String {
+		final nl:Int = name.indexOf('\n');
+		final firstLine:String = nl < 0 ? name : name.substring(0, nl);
+		// Count trailing lines so the user sees how much was hidden.
+		var trailingLines:Int = 0;
+		var i:Int = nl;
+		while (i >= 0 && i < name.length) {
+			trailingLines++;
+			i = name.indexOf('\n', i + 1);
+		}
+		final tail:String = trailingLines > 0 ? ' … +$trailingLines lines' : '';
+		if (firstLine.length <= DISPLAY_MAX) return firstLine + tail;
+		final dropChars:Int = firstLine.length - DISPLAY_MAX;
+		return firstLine.substring(0, DISPLAY_MAX) + ' … +$dropChars chars' + tail;
 	}
 }
 
