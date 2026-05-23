@@ -146,6 +146,45 @@ typedef PredictRelaxResult = {
 };
 
 /**
+ * One Slice-40-relaxation candidate surfaced by `apq recon
+ * --permissive-construct`. The same data `gates --mechanism
+ * mandatory-ref-lead-trail` reports for a single mandatory `@:lead` +
+ * `@:trail` Ref field, plus the extracted bracket-pair tokens the
+ * predictor strips from each skip-parse fixture's source to model the
+ * `@:optional` relaxation in advance of the grammar edit.
+ *
+ *  - `file:line:col` — locator on the grammar source (where the field
+ *    is declared); same shape as `apq gates` output so the user can jump
+ *    straight to the declaration.
+ *  - `declKind` / `declName` — owning ctor / field identity (e.g.
+ *    `VarField` + `cond`).
+ *  - `lead` / `trail` — the bracket-pair tokens; the predictor's strip
+ *    function deletes `<lead>BALANCED<trail>` (symmetric) or `<lead>…`
+ *    (asymmetric) from each fixture and re-parses to predict an UNBLOCK
+ *    upper bound.
+ */
+typedef PermissiveCandidate = {
+	var file:String;
+	var line:Int;
+	var col:Int;
+	var declKind:String;
+	var declName:Null<String>;
+	var lead:String;
+	var trail:String;
+};
+
+/**
+ * Result of one `stripBalancedPairs` pass — the patched source plus a
+ * `count` of strip occurrences so the predictor can report NO MATCH
+ * (count == 0, fixture doesn't contain the construct) distinctly from
+ * STILL FAIL (count > 0 but post-strip parse still errors).
+ */
+typedef StripResult = {
+	var out:String;
+	var count:Int;
+};
+
+/**
  * `apq` CLI entry point. Parses argv, picks a grammar plugin via
  * `--lang`, dispatches on the subcommand.
  *
@@ -1717,19 +1756,18 @@ final class Cli {
 	}
 
 	/**
-	 * `--mechanism <name>` walker. Groups raw MetaHits by their decl-host
-	 * span (one group = all annotations on a single field / branch /
-	 * ctor) and classifies each group by the requested mechanism's
-	 * meta-set signature. Output's `predicate` field carries the
-	 * rendered metas string (NOT a quoted symbol — the trail-opt
-	 * formatter is bypassed via the `mechanism != 'trail-opt'` branch
-	 * in the caller). Groups are emitted in source-order so the report
-	 * matches the file layout.
+	 * Bucket raw MetaHits by their `declSpan.from` — one bucket per
+	 * field / branch / ctor that carries annotations. Returns the
+	 * grouping map plus a parallel `order` array that preserves
+	 * first-seen source order so downstream emitters render in file
+	 * layout, not Map iteration order.
+	 *
+	 * Shared by `collectMechanismHits` (gates --mechanism) and
+	 * `collectPermissiveCandidates` (recon --permissive-construct).
+	 * Both consumers need the same grouping shape; factoring it out
+	 * keeps the bucket-build logic single-sourced.
 	 */
-	private static function collectMechanismHits(
-		raw:Array<MetaHit>, source:String, mechanism:String, limit:Int, sharedTotal:Int
-	):Array<GateHit> {
-		// Group by declSpan.from; preserve first-seen order via parallel array.
+	private static function groupMetaHitsByDeclSpan(raw:Array<MetaHit>):{order:Array<Int>, groups:Map<Int, Array<MetaHit>>} {
 		final order:Array<Int> = [];
 		final groups:Map<Int, Array<MetaHit>> = [];
 		for (h in raw) {
@@ -1744,10 +1782,27 @@ final class Cli {
 			}
 			bucket.push(h);
 		}
+		return {order: order, groups: groups};
+	}
+
+	/**
+	 * `--mechanism <name>` walker. Groups raw MetaHits by their decl-host
+	 * span (one group = all annotations on a single field / branch /
+	 * ctor) and classifies each group by the requested mechanism's
+	 * meta-set signature. Output's `predicate` field carries the
+	 * rendered metas string (NOT a quoted symbol — the trail-opt
+	 * formatter is bypassed via the `mechanism != 'trail-opt'` branch
+	 * in the caller). Groups are emitted in source-order so the report
+	 * matches the file layout.
+	 */
+	private static function collectMechanismHits(
+		raw:Array<MetaHit>, source:String, mechanism:String, limit:Int, sharedTotal:Int
+	):Array<GateHit> {
+		final grouped:{order:Array<Int>, groups:Map<Int, Array<MetaHit>>} = groupMetaHitsByDeclSpan(raw);
 		final out:Array<GateHit> = [];
-		for (key in order) {
+		for (key in grouped.order) {
 			if (limit >= 0 && sharedTotal + out.length >= limit) break;
-			final metas:Null<Array<MetaHit>> = groups[key];
+			final metas:Null<Array<MetaHit>> = grouped.groups[key];
 			if (metas == null) continue;
 			final label:Null<String> = classifyMechanism(metas, mechanism);
 			if (label == null) continue;
@@ -3147,6 +3202,16 @@ final class Cli {
 		// models "the parser would accept missing X at this position".
 		// Mutex with --predict-strip / --regression-probe / --candidates.
 		var predictRelax:Bool = false;
+		// `--permissive-construct`: field-optionalization predictor.
+		// Walks every `mandatory-ref-lead-trail` candidate from
+		// `gates --mechanism mandatory-ref-lead-trail` (Slice 40's relax-
+		// candidate inventory), strips the bracket-pair `<lead>...<trail>`
+		// from each skip-parse fixture, and re-parses. Aggregates
+		// UNBLOCK / STILL FAIL / NO MATCH per candidate so the user sees
+		// which field-optionalization would unblock which fixtures
+		// BEFORE committing to a Slice 40-style edit. Mutex with every
+		// other recon mode — it's its own pipeline.
+		var permissiveConstruct:Bool = false;
 		// `--source`: drill-mode-only flag. When set in combination with
 		// `--cluster <key>`, the per-path output gains a windowed source
 		// snippet centred on the fail-locus. Outside drill it would
@@ -3193,6 +3258,8 @@ final class Cli {
 					predictRelax = true;
 				case '--regression-probe':
 					regressionProbe = true;
+				case '--permissive-construct':
+					permissiveConstruct = true;
 				case '--candidates':
 					candidatesRegex = expectValue(args, ++i, '--candidates');
 				case '--replace':
@@ -3299,6 +3366,13 @@ final class Cli {
 				return EXIT_USAGE;
 			}
 		}
+		if (permissiveConstruct) {
+			if (probePath != null || predictStrip || predictRelax || regressionProbe || clusterFilter != null
+				|| candidatesRegex != null || patterns.length > 0) {
+				stderr('apq recon: --permissive-construct is its own mode — mutually exclusive with --probe / --predict-strip / --predict-relax / --regression-probe / --cluster / --candidates / --replace/--with/--delete\n');
+				return EXIT_USAGE;
+			}
+		}
 		final plugin:GrammarPlugin = pickPlugin(lang);
 		if (predictRelax && probePath != null) return runReconProbeRelax(plugin, (probePath : String), showSource);
 		if (probePath != null) return runReconProbe(plugin, (probePath : String), predictStrip, patterns, replacements, compiledRegex, showSource);
@@ -3315,6 +3389,7 @@ final class Cli {
 		}
 		if (regressionProbe) return runReconRegressionProbe(plugin, rootFinal);
 		if (candidatesRegex != null) return runReconCandidates(plugin, rootFinal, (candidatesRegex : String));
+		if (permissiveConstruct) return runReconPermissive(plugin, rootFinal, lang);
 		if (predictRelax) return runReconSweepRelax(plugin, rootFinal, clusterFilter, showSource);
 		return runReconSweep(plugin, rootFinal, topN, clusterFilter, predictStrip, patterns, replacements, compiledRegex, showSource);
 	}
@@ -3511,6 +3586,297 @@ final class Cli {
 		for (h in hits) sysPrint('${h.path} :: ${h.count} match${h.count == 1 ? '' : 'es'}\n');
 		sysPrint('--- candidates: ${hits.length} file${hits.length == 1 ? '' : 's'} matched ($totalHits total hit${totalHits == 1 ? '' : 's'} across ${walk.records.length} skip-parse file${walk.records.length == 1 ? '' : 's'}) ---\n');
 		return hits.length == 0 ? EXIT_RUNTIME : EXIT_OK;
+	}
+
+	/**
+	 * `apq recon --permissive-construct` — field-optionalization
+	 * predictor for Slice 40's `@:optional + @:lead + @:trail` mechanism.
+	 * Walks every `mandatory-ref-lead-trail` candidate surfaced by
+	 * `gates --mechanism mandatory-ref-lead-trail`, simulates the
+	 * relaxation by stripping the `<lead>...<trail>` bracket-pair from
+	 * each skip-parse fixture, and re-parses. Aggregates UNBLOCK /
+	 * STILL FAIL / NO MATCH counts per candidate field — gives the user
+	 * a static upper-bound view of which field-optionalization would
+	 * unblock which fixtures BEFORE editing the grammar.
+	 *
+	 * Strip semantics depend on the lead/trail shape:
+	 *  - Symmetric pair (`(`, `{`, `[` as lead with matching closer):
+	 *    delete the WHOLE `<lead>...<trail>` block, paren-depth balanced
+	 *    (nested same-pair allowed, strings/comments skipped).
+	 *  - Asymmetric (lead is `:` / `,` / `=` etc., trail is `)` / `}`):
+	 *    delete from `<lead>` UP TO (exclusive of) `<trail>`. The trail
+	 *    belongs to an enclosing construct and stays — models e.g.
+	 *    `catch (e:Type)` -> `catch (e)`.
+	 *
+	 * Multi-char macro/string leads (`${`, `"`, `'`) are filtered out at
+	 * candidate-collection time — they describe interpolation/string
+	 * delimiters that don't relax via Slice 40's mechanism.
+	 *
+	 * Output: one block per candidate that has ≥1 UNBLOCK or STILL FAIL
+	 * (NO-MATCH-only candidates are summarized in the footer to keep the
+	 * useful signal visible).
+	 */
+	private static function runReconPermissive(plugin:GrammarPlugin, root:String, lang:String):Int {
+		final walk:ReconWalkResult = collectReconSkipRecords(plugin, root);
+		if (!walk.wired) {
+			stderr('apq recon: --permissive-construct: no recon parser wired up for this grammar plugin\n');
+			return EXIT_RUNTIME;
+		}
+		final records:Array<ReconRecord> = walk.records;
+		final candidates:Array<PermissiveCandidate> = collectPermissiveCandidates(plugin, lang);
+		if (candidates.length == 0) {
+			stderr('apq recon: --permissive-construct: no mandatory-ref-lead-trail candidates found in src/anyparse/grammar/$lang/ (cross-check with `apq gates --mechanism mandatory-ref-lead-trail`)\n');
+			return EXIT_RUNTIME;
+		}
+		sysPrint('=== permissive-construct: ${candidates.length} candidate${candidates.length == 1 ? '' : 's'} from gates --mechanism mandatory-ref-lead-trail, ${records.length} skip-parse fixture${records.length == 1 ? '' : 's'} ===\n');
+		var totalUnblocks:Int = 0;
+		var candidatesWithSignal:Int = 0;
+		final noSignalLabels:Array<String> = [];
+		for (cand in candidates) {
+			final unblocks:Array<String> = [];
+			final stillFails:Array<String> = [];
+			var noMatchCount:Int = 0;
+			for (r in records) {
+				final stripped:StripResult = stripBalancedPairs(r.source, cand.lead, cand.trail);
+				if (stripped.count == 0) {
+					noMatchCount++;
+					continue;
+				}
+				final ok:Bool = try plugin.reconParse(stripped.out) catch (exception:Exception) false;
+				if (ok) unblocks.push(r.path);
+				else stillFails.push(r.path);
+			}
+			final nameSuffix:String = cand.declName != null ? ' ${cand.declName}' : '';
+			final label:String = '${cand.file}:${cand.line}: ${cand.declKind}$nameSuffix @:lead(\'${cand.lead}\') @:trail(\'${cand.trail}\')';
+			if (unblocks.length == 0 && stillFails.length == 0) {
+				noSignalLabels.push('$label ($noMatchCount NO MATCH)');
+				continue;
+			}
+			candidatesWithSignal++;
+			totalUnblocks += unblocks.length;
+			sysPrint('\nCANDIDATE $label\n');
+			sysPrint('  ${unblocks.length} UNBLOCK / ${stillFails.length} STILL FAIL / $noMatchCount NO MATCH\n');
+			for (p in unblocks) sysPrint('    UNBLOCK: $p\n');
+			for (p in stillFails) sysPrint('    STILL FAIL: $p\n');
+		}
+		sysPrint('\n--- permissive-construct summary: $candidatesWithSignal of ${candidates.length} candidate${candidates.length == 1 ? '' : 's'} have ≥1 UNBLOCK or STILL FAIL ($totalUnblocks UNBLOCK${totalUnblocks == 1 ? '' : 's'} total) across ${records.length} skip-parse files ---\n');
+		if (noSignalLabels.length > 0) {
+			sysPrint('--- NO MATCH only (${noSignalLabels.length} candidate${noSignalLabels.length == 1 ? '' : 's'} with no fixture match) ---\n');
+			for (l in noSignalLabels) sysPrint('  $l\n');
+		}
+		return totalUnblocks == 0 ? EXIT_RUNTIME : EXIT_OK;
+	}
+
+	/**
+	 * Enumerate `mandatory-ref-lead-trail` candidates by walking the
+	 * grammar tree (`src/anyparse/grammar/<lang>/`) the same way `apq
+	 * gates --mechanism mandatory-ref-lead-trail` does. Returns the lead
+	 * and trail tokens (not just the rendered metas string) so the
+	 * predictor's strip function can target the bracket-pair directly.
+	 *
+	 * Filters out macro/string-lead candidates (`${`, `$`, `'`, `"`) —
+	 * they describe interpolation/string delimiters whose `@:optional`
+	 * relaxation isn't the Slice 40 mechanism. Single-char leads only —
+	 * the strip function depth-tracker assumes one byte per lead/trail.
+	 */
+	private static function collectPermissiveCandidates(plugin:GrammarPlugin, lang:String):Array<PermissiveCandidate> {
+		final out:Array<PermissiveCandidate> = [];
+		final grammarDir:String = 'src/anyparse/grammar/$lang/';
+		if (!FileSystem.exists(grammarDir) || !FileSystem.isDirectory(grammarDir)) return out;
+		final expanded:{paths:Array<String>, singleFile:Bool} = expandInputs([grammarDir], '.hx');
+		final shape:MetaShape = plugin.metaShape();
+		final skipEntries:Array<SkipEntry> = [];
+		for (path in expanded.paths) {
+			final source:String = readSourceForParse(path);
+			final tree:Null<QueryNode> = parseWalked('recon', plugin.parseFile, path, source, false, skipEntries);
+			if (tree == null) continue;
+			final raw:Array<MetaHit> = Meta.find(tree, shape, source);
+			final grouped:{order:Array<Int>, groups:Map<Int, Array<MetaHit>>} = groupMetaHitsByDeclSpan(raw);
+			for (key in grouped.order) {
+				final metas:Null<Array<MetaHit>> = grouped.groups[key];
+				if (metas == null) continue;
+				var hasOptional:Bool = false;
+				var lead:Null<String> = null;
+				var trail:Null<String> = null;
+				var sep:Null<String> = null;
+				for (h in metas) switch h.annotation {
+					case '@:optional': hasOptional = true;
+					case '@:lead': lead = h.args.length > 0 ? stripQuotes(h.args[0]) : null;
+					case '@:trail': trail = h.args.length > 0 ? stripQuotes(h.args[0]) : null;
+					case '@:sep': sep = h.args.length > 0 ? h.args[0] : null;
+					case _:
+				}
+				if (hasOptional || lead == null || trail == null || sep != null) continue;
+				final leadStr:String = (lead : String);
+				final trailStr:String = (trail : String);
+				// Skip macro/string delimiters — their @:optional
+				// relaxation isn't the Slice 40 mechanism (interpolation,
+				// string body, etc.).
+				if (leadStr.length != 1 || trailStr.length != 1) continue;
+				if (leadStr == '"' || leadStr == "'") continue;
+				if (leadStr == '$') continue;
+				final first:MetaHit = metas[0];
+				final fspan:Null<Span> = first.declSpan;
+				final pos:Null<Position> = fspan != null ? fspan.lineCol(source) : null;
+				out.push({
+					file: path,
+					line: pos != null ? pos.line : 0,
+					col: pos != null ? pos.col : 0,
+					declKind: first.declKind,
+					declName: first.declName,
+					lead: leadStr,
+					trail: trailStr,
+				});
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * Single-pass `<lead>...<trail>` strip on `source`. Symmetric leads
+	 * (`(`, `{`, `[`) consume the whole balanced pair; asymmetric leads
+	 * (`:`, `,`, `=` etc.) consume from lead UP TO the trail (the trail
+	 * char itself remains in output — it belongs to the enclosing
+	 * construct). String literals (single- or double-quoted) and
+	 * comments (line- or block-style) are skipped verbatim so a `:`
+	 * inside a string doesn't trigger a spurious strip.
+	 *
+	 * Returns the patched source plus a `count` of strip occurrences —
+	 * `count == 0` lets the caller distinguish NO MATCH (fixture lacks
+	 * the construct) from STILL FAIL (fixture has it but post-strip
+	 * parse still errors).
+	 */
+	private static function stripBalancedPairs(source:String, lead:String, trail:String):StripResult {
+		if (lead.length != 1 || trail.length != 1) return {out: source, count: 0};
+		final leadCode:Int = StringTools.fastCodeAt(lead, 0);
+		final trailCode:Int = StringTools.fastCodeAt(trail, 0);
+		final isSymmetric:Bool = isBracketOpener(leadCode);
+		final buf:StringBuf = new StringBuf();
+		var i:Int = 0;
+		var count:Int = 0;
+		while (i < source.length) {
+			final triviaEnd:Int = skipStringOrComment(source, i);
+			if (triviaEnd > i) {
+				buf.addSub(source, i, triviaEnd - i);
+				i = triviaEnd;
+				continue;
+			}
+			final c:Int = StringTools.fastCodeAt(source, i);
+			if (c == leadCode) {
+				final endIdx:Int = findPairEnd(source, i + 1, leadCode, trailCode, isSymmetric);
+				if (endIdx >= 0) {
+					count++;
+					i = endIdx;
+					continue;
+				}
+			}
+			buf.addChar(c);
+			i++;
+		}
+		return {out: buf.toString(), count: count};
+	}
+
+	/**
+	 * Scan from `startIdx` looking for the matching trail. Returns the
+	 * index PAST the strip region (caller does `i = endIdx` to skip it):
+	 *  - Symmetric: returns index past the closing trail char (`<lead>...<trail>` consumed whole)
+	 *  - Asymmetric: returns index AT the trail char (trail stays in output)
+	 *
+	 * `-1` when no match found (mismatched / unterminated). The caller
+	 * keeps the lead char as-is in that case.
+	 */
+	private static function findPairEnd(source:String, startIdx:Int, leadCode:Int, trailCode:Int, isSymmetric:Bool):Int {
+		var i:Int = startIdx;
+		var depth:Int = isSymmetric ? 1 : 0;
+		while (i < source.length) {
+			final triviaEnd:Int = skipStringOrComment(source, i);
+			if (triviaEnd > i) {
+				i = triviaEnd;
+				continue;
+			}
+			final c:Int = StringTools.fastCodeAt(source, i);
+			if (isSymmetric) {
+				if (c == leadCode) {
+					depth++;
+					i++;
+					continue;
+				}
+				if (c == trailCode) {
+					depth--;
+					i++;
+					if (depth == 0) return i;
+					continue;
+				}
+			} else {
+				if (depth == 0 && c == trailCode) return i;
+				if (isBracketOpener(c)) {
+					depth++;
+					i++;
+					continue;
+				}
+				if (isBracketCloser(c)) {
+					if (depth == 0) return -1;
+					depth--;
+					i++;
+					continue;
+				}
+			}
+			i++;
+		}
+		return -1;
+	}
+
+	private static inline function isBracketOpener(c:Int):Bool {
+		return c == '('.code || c == '{'.code || c == '['.code;
+	}
+
+	private static inline function isBracketCloser(c:Int):Bool {
+		return c == ')'.code || c == '}'.code || c == ']'.code;
+	}
+
+	/**
+	 * If `source[i]` starts a string literal (single- or double-quoted)
+	 * or comment (line-style or block-style), return the index PAST it;
+	 * otherwise return `i`. Handles backslash escapes inside strings,
+	 * multi-line block comments. Used by the permissive-construct strip
+	 * to skip trivia bytes so a `:` inside `"foo:bar"` doesn't trigger a
+	 * spurious asymmetric pair-match.
+	 */
+	private static function skipStringOrComment(source:String, i:Int):Int {
+		if (i >= source.length) return i;
+		final c:Int = StringTools.fastCodeAt(source, i);
+		if (c == '/'.code && i + 1 < source.length) {
+			final c2:Int = StringTools.fastCodeAt(source, i + 1);
+			if (c2 == '/'.code) {
+				var j:Int = i + 2;
+				while (j < source.length && StringTools.fastCodeAt(source, j) != '\n'.code) j++;
+				return j;
+			}
+			if (c2 == '*'.code) {
+				var j:Int = i + 2;
+				while (j + 1 < source.length) {
+					if (StringTools.fastCodeAt(source, j) == '*'.code
+						&& StringTools.fastCodeAt(source, j + 1) == '/'.code)
+						return j + 2;
+					j++;
+				}
+				return source.length;
+			}
+		}
+		if (c == '"'.code || c == "'".code) {
+			var j:Int = i + 1;
+			while (j < source.length) {
+				final cj:Int = StringTools.fastCodeAt(source, j);
+				if (cj == '\\'.code) {
+					j += 2;
+					continue;
+				}
+				if (cj == c) return j + 1;
+				j++;
+			}
+			return source.length;
+		}
+		return i;
 	}
 
 	/**
@@ -4538,6 +4904,16 @@ final class Cli {
 		sysPrint('                          bytes diff. Non-zero exit when any regression found.\n');
 		sysPrint('                          Mutually exclusive with --probe / --predict-strip /\n');
 		sysPrint('                          --cluster.\n');
+		sysPrint('  --permissive-construct  Field-optionalization predictor for Slice 40\'s\n');
+		sysPrint('                          `@:optional + @:lead + @:trail` mechanism. Walks every\n');
+		sysPrint('                          `mandatory-ref-lead-trail` candidate from `apq gates\n');
+		sysPrint('                          --mechanism mandatory-ref-lead-trail`, strips the\n');
+		sysPrint('                          `<lead>...<trail>` bracket-pair from each skip-parse\n');
+		sysPrint('                          fixture, re-parses, and aggregates UNBLOCK / STILL FAIL\n');
+		sysPrint('                          / NO MATCH per candidate. THE pre-edit upper-bound\n');
+		sysPrint('                          view of which field-optionalization would unblock\n');
+		sysPrint('                          which fixtures. Mutually exclusive with every other\n');
+		sysPrint('                          recon mode.\n');
 		sysPrint('  -h, --help              Show this help.\n');
 	}
 

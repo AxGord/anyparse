@@ -507,6 +507,56 @@ class ApqReconCliTest extends Test {
 		#end
 	}
 
+	// -- --permissive-construct: field-optionalization predictor --
+
+	public function testReconPermissiveConstructIncompatibleWithProbe():Void {
+		Assert.equals(2, Cli.run(['recon', '--permissive-construct', '--probe', '/some/file', '/some/dir']),
+			'--permissive-construct is its own mode — mutually exclusive with --probe');
+	}
+
+	public function testReconPermissiveConstructIncompatibleWithPredictStrip():Void {
+		Assert.equals(2, Cli.run(['recon', '--permissive-construct', '--predict-strip', '--replace', 'x', '--with', 'y', '/some/dir']),
+			'--permissive-construct is its own mode — mutually exclusive with --predict-strip');
+	}
+
+	public function testReconPermissiveConstructIncompatibleWithCluster():Void {
+		Assert.equals(2, Cli.run(['recon', '--permissive-construct', '--cluster', 'X', '/some/dir']),
+			'--permissive-construct is its own mode — mutually exclusive with --cluster');
+	}
+
+	public function testReconPermissiveConstructIncompatibleWithCandidates():Void {
+		Assert.equals(2, Cli.run(['recon', '--permissive-construct', '--candidates', 'foo', '/some/dir']),
+			'--permissive-construct is its own mode — mutually exclusive with --candidates');
+	}
+
+	public function testReconPermissiveConstructIncompatibleWithRegressionProbe():Void {
+		Assert.equals(2, Cli.run(['recon', '--permissive-construct', '--regression-probe', '/some/dir']),
+			'--permissive-construct is its own mode — mutually exclusive with --regression-probe');
+	}
+
+	public function testReconPermissiveConstructIncompatibleWithPredictRelax():Void {
+		Assert.equals(2, Cli.run(['recon', '--permissive-construct', '--predict-relax', '/some/dir']),
+			'--permissive-construct is its own mode — mutually exclusive with --predict-relax');
+	}
+
+	public function testReconPermissiveConstructRunsOnEmptyCorpus():Void {
+		#if sys
+		// Empty corpus → no skip-parse fixtures, no UNBLOCKs possible →
+		// exit non-zero (no signal) but no crash. Validates that the
+		// predictor handles the zero-records edge case cleanly.
+		final dir:String = mkTempDir('apq_recon_permissive_empty');
+		final exitCode:Int = Cli.run(['recon', '--permissive-construct', dir]);
+		// Either OK (no candidates found in non-haxe lang scope) or
+		// RUNTIME (no unblocks across empty fixture set). Crash would be
+		// the failure mode this test guards against.
+		Assert.isTrue(exitCode == 0 || exitCode == 1,
+			'permissive-construct exits 0 or 1 on empty corpus, got $exitCode');
+		cleanupDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	public function testReconRegressionProbeFlagsUnblock():Void {
 		#if sys
 		// Snapshot says fixture was SKIP_PARSE; the actual fixture parses
