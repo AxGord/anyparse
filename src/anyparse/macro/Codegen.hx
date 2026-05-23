@@ -232,9 +232,12 @@ class Codegen {
 
 	private static function buildSkipWsBody(patterns:Array<FormatReader.CommentPattern>):Expr {
 		final commentStmts:Array<Expr> = [for (p in patterns) commentSkipBlock(p)];
+		// 0xFEFF is the UTF-8 BOM codepoint, treated as invisible
+		// horizontal whitespace anywhere in the input. Real-world editors
+		// emit it at the file head; tolerating it inline costs nothing.
 		return macro while (ctx.pos < ctx.input.length) {
 			final c:Int = ctx.input.charCodeAt(ctx.pos);
-			if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code) {
+			if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code || c == 0xFEFF) {
 				ctx.pos++;
 				continue;
 			}
@@ -278,7 +281,7 @@ class Codegen {
 		final commentStmts:Array<Expr> = [for (p in formatInfo.commentPatterns) commentSkipAndStashBlock(p)];
 		final body:Expr = macro while (ctx.pos < ctx.input.length) {
 			final c:Int = ctx.input.charCodeAt(ctx.pos);
-			if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code) {
+			if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code || c == 0xFEFF) {
 				ctx.pos++;
 				continue;
 			}
@@ -612,7 +615,7 @@ class Codegen {
 					}
 					continue;
 				}
-				if (c == ' '.code || c == '\t'.code || c == '\r'.code) {
+				if (c == ' '.code || c == '\t'.code || c == '\r'.code || c == 0xFEFF) {
 					ctx.pos++;
 					continue;
 				}
@@ -656,7 +659,7 @@ class Codegen {
 			final _savedPos:Int = ctx.pos;
 			while (ctx.pos < ctx.input.length) {
 				final c:Int = ctx.input.charCodeAt(ctx.pos);
-				if (c == ' '.code || c == '\t'.code || c == '\r'.code) {
+				if (c == ' '.code || c == '\t'.code || c == '\r'.code || c == 0xFEFF) {
 					ctx.pos++;
 					continue;
 				}
@@ -805,7 +808,7 @@ class Codegen {
 			final _savedPos:Int = ctx.pos;
 			while (ctx.pos < ctx.input.length) {
 				final c:Int = ctx.input.charCodeAt(ctx.pos);
-				if (c == ' '.code || c == '\t'.code || c == '\r'.code) {
+				if (c == ' '.code || c == '\t'.code || c == '\r'.code || c == 0xFEFF) {
 					ctx.pos++;
 					continue;
 				}
