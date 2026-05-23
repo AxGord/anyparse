@@ -4196,7 +4196,30 @@ class WriterLowering {
 			return macro return _dt(escapeString(value));
 		}
 
-		if (raw) return macro return _dt(value);
+		if (raw) {
+			// ω-numeric-normalize-suffix (Slice 47): `@:writeNormalize('<id>')`
+			// on a `@:rawString` terminal wraps the emit through a built-in
+			// normalisation transform before `_dt`. Currently one variant —
+			// `'stripSuffixUnderscore'` — drops the optional underscore that
+			// precedes a Haxe 5 typed numeric suffix (`_i32` → `i32`,
+			// `_f64` → `f64`), matching haxe-formatter's canonicalisation
+			// convention: source-form `12_0_i32` round-trips as `12_0i32`,
+			// `1_2.3_4_f64` as `1_2.3_4f64`. Source-fidelity loss is the
+			// trade — haxe-formatter normalises here and no fixture preserves
+			// the underscore-before-suffix form on output. Generic enough
+			// for future numeric-shape canonicalisations; the registry is
+			// the switch below, keep it small.
+			final normalize:Null<String> = node.readMetaString(':writeNormalize');
+			if (normalize == 'stripSuffixUnderscore') {
+				return macro {
+					var _s:String = (cast value : String);
+					final _re = ~/_([iuf](?:8|16|32|64))$/;
+					if (_re.match(_s)) _s = _s.substr(0, _re.matchedPos().pos) + _re.matched(1);
+					return _dt(_s);
+				};
+			}
+			return macro return _dt(value);
+		}
 
 		return switch underlying {
 			case 'Float': macro return _dt(formatFloat(value));
