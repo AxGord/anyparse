@@ -255,19 +255,20 @@ final class HxExprUtil {
 		}
 		// Slice 19: walk through `*Assign` into its right operand —
 		// `x = if (…) {…} else {…}` ends with the else block's `}`.
-		// Slice 30 / 39 carve-out: `x = {a: 1}` and `x = [1, 2, 3]`
-		// keep `;` strict (the corpus contract — distinct from bare
-		// `{a: 1}` / `[1, 2, 3]` at stmt position). The carve-out
-		// lives here, not in the ObjectLit / ArrayExpr direct-returns
-		// below, so other recursive arms (Meta / Return / If) still
-		// see them as brace-terminated.
+		// Slice 30 / 39 / 42 carve-out: `x = {a: 1}`, `x = [1, 2, 3]`
+		// and `x = ${expr}` keep `;` strict (the corpus contract —
+		// distinct from bare `{a: 1}` / `[1, 2, 3]` / `${expr}` at
+		// stmt position). The carve-out lives here, not in the
+		// ObjectLit / ArrayExpr / DollarBlockExpr direct-returns below,
+		// so other recursive arms (Meta / Return / If) still see them
+		// as brace-terminated.
 		if (ASSIGN_CTORS.contains(ctor)) {
 			final params:Null<Array<Dynamic>> = Type.enumParameters(e);
 			if (params == null || params.length < 2) return false;
 			final rhs:Null<Dynamic> = unwrap(params[1]);
 			if (rhs == null) return false;
 			final rhsCtor:Null<String> = Type.enumConstructor(rhs);
-			if (rhsCtor == 'ObjectLit' || rhsCtor == 'ArrayExpr') return false;
+			if (rhsCtor == 'ObjectLit' || rhsCtor == 'ArrayExpr' || rhsCtor == 'DollarBlockExpr') return false;
 			return stmtExprNoSemi(rhs);
 		}
 		// Slice 19: an `IfExpr` carries `thenBranch`/`elseBranch`; the
@@ -308,6 +309,14 @@ final class HxExprUtil {
 		// `*Assign` arm above carves `x = [1, 2, 3]` out so RHS arrays
 		// keep `;` strict.
 		if (ctor == 'ArrayExpr') return true;
+		// Slice 42: macro block-reification `${expr}` at statement position
+		// is `}`-terminated (`@:lead("${") @:trail("}")` on the ctor —
+		// the closing `}` is the statement's last token). Drives
+		// `lineends/issue_215_macro_with_dollar_block` (`macro { $e0;
+		// ${loop(el)} };` — `${…}` as last stmt of macro block). Byte-
+		// twin of `ObjectLit` / `ArrayExpr` direct-returns; the `*Assign`
+		// arm above carves `x = ${expr}` out so RHS keeps `;` strict.
+		if (ctor == 'DollarBlockExpr') return true;
 		return endsWithCloseBrace(e);
 	}
 
