@@ -507,6 +507,51 @@ class ApqReconCliTest extends Test {
 		#end
 	}
 
+	// -- --no-target-cluster: drill into ONE footer NO TARGET bucket --
+
+	public function testReconNoTargetClusterRequiresPredictRelax():Void {
+		Assert.equals(2, Cli.run(['recon', '--no-target-cluster', 'foo', '/some/dir']),
+			'--no-target-cluster without --predict-relax is a usage error');
+	}
+
+	public function testReconNoTargetClusterIncompatibleWithCluster():Void {
+		Assert.equals(2, Cli.run(['recon', '--predict-relax', '--no-target-cluster', 'foo', '--cluster', 'bar', '/some/dir']),
+			'--cluster and --no-target-cluster are mutually exclusive (different drill namespaces)');
+	}
+
+	public function testReconNoTargetClusterIncompatibleWithProbe():Void {
+		Assert.equals(2, Cli.run(['recon', '--predict-relax', '--no-target-cluster', 'foo', '--probe', '/some/file']),
+			'--no-target-cluster requires sweep mode — mutex with --probe');
+	}
+
+	public function testReconNoTargetClusterZeroMatchExitsRuntime():Void {
+		#if sys
+		// Corpus with one broken fixture; a deliberately-non-matching
+		// expected-msg filter exits runtime (1) with the available-keys
+		// diagnostic on stderr.
+		final dir:String = mkTempDir('apq_recon_no_target_cluster_miss');
+		File.saveContent('$dir/bad.hxtest', brokenHxtest());
+		Assert.equals(1, Cli.run(['recon', '--predict-relax', '--no-target-cluster', 'this-message-does-not-exist', dir]),
+			'--no-target-cluster with no matching expected-msg exits runtime');
+		cleanupDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testReconNoTargetClusterEmptyCorpusExitsRuntime():Void {
+		#if sys
+		// Empty corpus (no skip-parse records) → no NO TARGET records to
+		// match → 0-match runtime exit, no crash.
+		final dir:String = mkTempDir('apq_recon_no_target_cluster_empty');
+		Assert.equals(1, Cli.run(['recon', '--predict-relax', '--no-target-cluster', 'anything', dir]),
+			'--no-target-cluster on an empty sweep is a runtime exit (no records to filter)');
+		cleanupDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	// -- --permissive-construct: field-optionalization predictor --
 
 	public function testReconPermissiveConstructIncompatibleWithProbe():Void {

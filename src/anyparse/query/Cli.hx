@@ -1356,6 +1356,16 @@ final class Cli {
 		// — camelCase / snake_case → Literal+IdentExpr, otherwise Literal).
 		// Empty array = explicit `--any-kind`. Non-empty = explicit `--kind`.
 		var kindFilter:Null<Array<String>> = null;
+		// `--include-comments` shorthand: widens the effective kind filter
+		// to ALSO match against the source's comments (line `//…` and block
+		// `/* … */` / `/** … */`). Comments are NOT in the parse tree
+		// (`parseFile` returns the plain projection that drops trivia), so
+		// matching them takes a separate pass over the raw source. When
+		// explicit `--kind Comment` (or any list containing `Comment`) is
+		// set, or `--any-kind`, the same pass fires — `--include-comments`
+		// is sugar for "AST kinds AS DEFAULTED PLUS comments" without
+		// having to spell out the AST kinds.
+		var includeComments:Bool = false;
 		var target:Null<String> = null;
 		final inputSpecs:Array<String> = [];
 
@@ -1371,6 +1381,8 @@ final class Cli {
 					kindFilter = expectValue(args, ++i, '--kind').split(',');
 				case '--any-kind':
 					kindFilter = [];
+				case '--include-comments':
+					includeComments = true;
 				case '--flat':
 					flat = true;
 				case '--limit':
@@ -1416,6 +1428,17 @@ final class Cli {
 		final effectiveKindFilter:Array<String> = kindFilter != null
 			? kindFilter
 			: (looksLikeMixedIdentifier(targetStr) ? ['Literal', 'IdentExpr'] : ['Literal']);
+		// Comment scan fires when the user explicitly opted in (`--include-comments`),
+		// when the kind filter is the catch-all (`--any-kind` ⇒ empty array),
+		// or when `Comment` appears in an explicit `--kind` list. The
+		// catch-all `--any-kind` is opt-in too (the user asked for "every
+		// leaf"), but the default kind filter (smart-resolved Literal or
+		// Literal+IdentExpr) deliberately stays comment-free — silent
+		// `--include-comments`-by-default would flood doc-comment-heavy
+		// queries with noise the AST walk was designed to skip.
+		final scanComments:Bool = includeComments
+			|| (kindFilter != null && kindFilter.length == 0)
+			|| effectiveKindFilter.contains('Comment');
 
 		final plugin:GrammarPlugin = pickPlugin(lang);
 		final expanded:{paths:Array<String>, singleFile:Bool} = expandInputs(inputSpecs, '.hx');
@@ -1439,7 +1462,12 @@ final class Cli {
 			}
 			trees.push({path: path, source: source, tree: tree});
 			final hits:Array<LitHit> = Lit.find(targetStr, tree, exact, effectiveKindFilter);
+			if (scanComments) appendCommentHits(targetStr, source, exact, hits);
 			if (hits.length == 0) continue;
+			// AST walk emits in depth-first source order; comment hits are
+			// appended after. Sort by span.from so the rendered file group
+			// stays in source order regardless of which pass produced the hit.
+			if (scanComments) hits.sort((a, b) -> a.span.from - b.span.from);
 			allEntries.push({file: path, source: source, hits: hits});
 		}
 
@@ -1480,6 +1508,85 @@ final class Cli {
 			(e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k)});
 		for (entry in shown) sysPrint(Lit.render(entry.file, entry.source, entry.hits, flat));
 		return EXIT_OK;
+	}
+
+	/**
+	 * Comment lexer — scans `source` for C-style line comments (`//…`) and
+	 * block comments (slash-star and slash-star-star doc forms), filters
+	 * by `target`, and appends each match as a `Comment`-kind `LitHit`
+	 * to `out`. Captured text is the comment BODY, not including the
+	 * delimiters: a `//foo` line yields a body of `foo` (with any leading
+	 * space the source happened to carry); a slash-star block yields
+	 * everything between the open and close. Substring match by default;
+	 * `exact=true` requires `body == target`.
+	 *
+	 * The lexer is string-literal-aware — `"…"` / `'…'` regions are
+	 * skipped so a `//` inside a string does not start a comment match,
+	 * and backslash-escaped quotes inside strings stay quoted. The lexer
+	 * is grammar-agnostic for C-style comment syntax (Haxe, C/C++, Java,
+	 * JavaScript/TypeScript, Rust, Go, Swift, …). Languages with different
+	 * comment delimiters (Python `#`, SQL `--`, Lisp `;`) need a plugin-
+	 * supplied scanner — deferred until a non-C-style grammar lands.
+	 *
+	 * UTF-16 unit indexing matches `Span`'s `from`/`to` convention so the
+	 * rendered `line:col` resolves via the standard `Span.lineCol(source)`
+	 * call without any conversion.
+	 */
+	private static function appendCommentHits(target:String, source:String, exact:Bool, out:Array<LitHit>):Void {
+		final n:Int = source.length;
+		var i:Int = 0;
+		while (i < n) {
+			final c:Int = StringTools.fastCodeAt(source, i);
+			if (c == '"'.code || c == "'".code) {
+				final quote:Int = c;
+				i++;
+				while (i < n) {
+					final ch:Int = StringTools.fastCodeAt(source, i);
+					if (ch == '\\'.code) {
+						i += 2;
+						continue;
+					}
+					if (ch == quote) {
+						i++;
+						break;
+					}
+					i++;
+				}
+				continue;
+			}
+			if (c == '/'.code && i + 1 < n) {
+				final next:Int = StringTools.fastCodeAt(source, i + 1);
+				if (next == '/'.code) {
+					final start:Int = i;
+					i += 2;
+					while (i < n && StringTools.fastCodeAt(source, i) != '\n'.code) i++;
+					final body:String = source.substring(start + 2, i);
+					final match:Bool = exact ? body == target : body.indexOf(target) >= 0;
+					if (match) out.push(new LitHit('Comment', body, new Span(start, i)));
+					continue;
+				}
+				if (next == '*'.code) {
+					final start:Int = i;
+					i += 2;
+					var closed:Bool = false;
+					while (i + 1 < n) {
+						if (StringTools.fastCodeAt(source, i) == '*'.code && StringTools.fastCodeAt(source, i + 1) == '/'.code) {
+							i += 2;
+							closed = true;
+							break;
+						}
+						i++;
+					}
+					if (!closed) i = n;
+					final bodyEnd:Int = closed ? i - 2 : n;
+					final body:String = source.substring(start + 2, bodyEnd);
+					final match:Bool = exact ? body == target : body.indexOf(target) >= 0;
+					if (match) out.push(new LitHit('Comment', body, new Span(start, i)));
+					continue;
+				}
+			}
+			i++;
+		}
 	}
 
 	/**
@@ -3217,6 +3324,17 @@ final class Cli {
 		// snippet centred on the fail-locus. Outside drill it would
 		// flood every SKIP line; usage error guards that.
 		var showSource:Bool = false;
+		// `--no-target-cluster <expected-msg>`: drill into ONE bucket of the
+		// `--predict-relax` footer NO TARGET breakdown — the histogram that
+		// aggregates per-file `NoTarget` outcomes by `res.message`
+		// (`70× expected hint is empty after quote-strip` / `12× expected
+		// HxDecl` / …). Footer keys live in a different namespace than
+		// `--cluster <key>` (which drills by normalised forward-locus on
+		// `r.clusterKey`); there was previously no path from the footer
+		// aggregate to the file list. Active only in sweep predict-relax
+		// mode; mutex with `--cluster` (one drill at a time) and `--probe`
+		// (single-file, no aggregation).
+		var noTargetClusterFilter:Null<String> = null;
 		// Twin of `runStrip`'s arg-parsing: --replace X --with Y pairs
 		// plus --delete X shortcut. Patterns and replacements arrays
 		// stay aligned by construction. Active only with --predict-strip.
@@ -3250,6 +3368,8 @@ final class Cli {
 					probePath = expectValue(args, ++i, '--probe');
 				case '--cluster':
 					clusterFilter = expectValue(args, ++i, '--cluster');
+				case '--no-target-cluster':
+					noTargetClusterFilter = expectValue(args, ++i, '--no-target-cluster');
 				case '--source':
 					showSource = true;
 				case '--predict-strip':
@@ -3325,8 +3445,8 @@ final class Cli {
 		// payload). In plain sweep mode it would flood every SKIP line
 		// with a per-fixture window, so make the misuse a hard usage
 		// error rather than a silent no-op.
-		if (showSource && clusterFilter == null && !predictStrip) {
-			stderr('apq recon: --source requires --cluster <key> or --predict-strip (drill / STILL-FAIL modes only; would flood the sweep otherwise)\n');
+		if (showSource && clusterFilter == null && noTargetClusterFilter == null && !predictStrip) {
+			stderr('apq recon: --source requires --cluster <key> / --no-target-cluster <key> / --predict-strip (drill / STILL-FAIL modes only; would flood the sweep otherwise)\n');
 			return EXIT_USAGE;
 		}
 		// `--regression-probe` is its own mode — separate from probe /
@@ -3366,6 +3486,20 @@ final class Cli {
 				return EXIT_USAGE;
 			}
 		}
+		if (noTargetClusterFilter != null) {
+			if (!predictRelax) {
+				stderr('apq recon: --no-target-cluster requires --predict-relax (the footer NO TARGET breakdown is only produced in predict-relax sweep mode)\n');
+				return EXIT_USAGE;
+			}
+			if (clusterFilter != null) {
+				stderr('apq recon: --cluster and --no-target-cluster are mutually exclusive (one drill at a time — --cluster drills by forward-locus, --no-target-cluster drills by expected-message)\n');
+				return EXIT_USAGE;
+			}
+			if (probePath != null) {
+				stderr('apq recon: --no-target-cluster requires sweep mode (no NO TARGET aggregation in --probe mode — pass a corpus directory instead)\n');
+				return EXIT_USAGE;
+			}
+		}
 		if (permissiveConstruct) {
 			if (probePath != null || predictStrip || predictRelax || regressionProbe || clusterFilter != null
 				|| candidatesRegex != null || patterns.length > 0) {
@@ -3390,7 +3524,7 @@ final class Cli {
 		if (regressionProbe) return runReconRegressionProbe(plugin, rootFinal);
 		if (candidatesRegex != null) return runReconCandidates(plugin, rootFinal, (candidatesRegex : String));
 		if (permissiveConstruct) return runReconPermissive(plugin, rootFinal, lang);
-		if (predictRelax) return runReconSweepRelax(plugin, rootFinal, clusterFilter, showSource);
+		if (predictRelax) return runReconSweepRelax(plugin, rootFinal, clusterFilter, noTargetClusterFilter, showSource);
 		return runReconSweep(plugin, rootFinal, topN, clusterFilter, predictStrip, patterns, replacements, compiledRegex, showSource);
 	}
 
@@ -3424,10 +3558,23 @@ final class Cli {
 	 * Sweep-mode predict-relax. Walks every skip-parse fixture under
 	 * `root`, runs `tryPredictRelax`, prints per-file outcome plus a
 	 * summary `--- relax: K unblock, M still fail, P no target ---`.
-	 * Filtered by `--cluster <key>` when set (same exact-match key
-	 * semantics as predict-strip).
+	 *
+	 * Drill modes (mutually exclusive):
+	 *  - `--cluster <key>` — filter to records whose normalised
+	 *    forward-locus matches `key` exactly (same shape as predict-strip
+	 *    cluster drill); ALL outcomes (Unblock / StillFail / NoTarget)
+	 *    print per-file.
+	 *  - `--no-target-cluster <expected-msg>` — filter to records whose
+	 *    `tryPredictRelax` returns `NoTarget` with `res.message` equal to
+	 *    `expected-msg`. THE bridge from the footer NO TARGET histogram
+	 *    (the `70× expected hint is empty after quote-strip` aggregate) to
+	 *    the file list — the only way to see every fixture in one bucket.
+	 *    Unblock / StillFail records are filtered out by construction
+	 *    (they don't belong to the NO TARGET footer).
+	 *  - Neither set — full sweep with per-file Unblock / StillFail lines
+	 *    plus a footer NO TARGET histogram by `res.message`.
 	 */
-	private static function runReconSweepRelax(plugin:GrammarPlugin, root:String, clusterFilter:Null<String>, showSource:Bool):Int {
+	private static function runReconSweepRelax(plugin:GrammarPlugin, root:String, clusterFilter:Null<String>, noTargetClusterFilter:Null<String>, showSource:Bool):Int {
 		final walk:ReconWalkResult = collectReconSkipRecords(plugin, root);
 		if (!walk.wired) {
 			stderr('apq recon: no recon parser wired up for this grammar plugin\n');
@@ -3441,6 +3588,36 @@ final class Cli {
 				stderr('apq recon: --cluster "$filter" matched no skip-parse records (predict-relax mode)\n');
 				return EXIT_RUNTIME;
 			}
+		}
+		// `--no-target-cluster`: drill into one bucket of the footer NO TARGET
+		// breakdown. We must classify every record through `tryPredictRelax`
+		// first (the bucket key lives on the result, not on the raw record),
+		// so the filter runs after classification. Top-N reasons collected
+		// alongside for the 0-match diagnostic.
+		if (noTargetClusterFilter != null) {
+			final filter:String = noTargetClusterFilter;
+			final matched:Array<{record:ReconRecord, result:PredictRelaxResult}> = [];
+			final noTargetReasonsTop:Array<{key:String, count:Int}> = [];
+			for (r in records) {
+				final res:PredictRelaxResult = tryPredictRelax(plugin, r.source);
+				if (res.kind != NoTarget) continue;
+				bumpReasonCount(noTargetReasonsTop, res.message);
+				if (res.message == filter) matched.push({record: r, result: res});
+			}
+			if (matched.length == 0) {
+				stderr('apq recon: --no-target-cluster "$filter" matched no NO TARGET records (predict-relax mode)\n');
+				if (noTargetReasonsTop.length > 0) {
+					noTargetReasonsTop.sort((a, b) -> b.count - a.count);
+					final maxKeys:Int = noTargetReasonsTop.length < NO_TARGET_TOP_N ? noTargetReasonsTop.length : NO_TARGET_TOP_N;
+					stderr('  available NO TARGET keys (top $maxKeys):\n');
+					for (entry in noTargetReasonsTop.slice(0, NO_TARGET_TOP_N))
+						stderr('    ${entry.count}× ${entry.key}\n');
+				}
+				return EXIT_RUNTIME;
+			}
+			for (m in matched) reportPredictRelax(m.record.path, m.record.source, m.result, showSource);
+			sysPrint('--- relax (no-target-cluster "$filter"): ${matched.length} files ---\n');
+			return EXIT_OK;
 		}
 		var unblockCount:Int = 0;
 		var stillFailCount:Int = 0;
@@ -3463,24 +3640,17 @@ final class Cli {
 					reportPredictRelax(r.path, r.source, res, showSource);
 					stillFailCount++;
 				case NoTarget:
-					if (keepNoTargetPerFile) {
+					if (keepNoTargetPerFile)
 						reportPredictRelax(r.path, r.source, res, showSource);
-					} else {
-						final reason:String = res.message;
-						var hit:Null<{key:String, count:Int}> = null;
-						for (e in noTargetReasons) if (e.key == reason) { hit = e; break; }
-						if (hit == null)
-							noTargetReasons.push({key: reason, count: 1});
-						else
-							hit.count++;
-					}
+					else
+						bumpReasonCount(noTargetReasons, res.message);
 					noTargetCount++;
 			}
 		}
 		sysPrint('--- relax: $unblockCount unblock, $stillFailCount still fail, $noTargetCount no target (of ${records.length} skip-parse files) ---\n');
 		if (!keepNoTargetPerFile && noTargetReasons.length > 0) {
 			noTargetReasons.sort((a, b) -> b.count - a.count);
-			sysPrint('   no target breakdown (use --cluster <key> to drill into a specific shape):\n');
+			sysPrint('   no target breakdown (use --no-target-cluster <key> to drill into a specific shape, or --cluster <locus-key> for forward-locus drill):\n');
 			for (entry in noTargetReasons)
 				sysPrint('     ${entry.count}× ${entry.key}\n');
 		}
@@ -3531,6 +3701,24 @@ final class Cli {
 		} catch (e:Exception) {
 			return {kind: StillFail, original: source, patched: patched, injected: injectedFinal, origLine: origLine, origCol: origCol, newLine: 0, newCol: 0, message: e.message};
 		}
+	}
+
+	/**
+	 * NO-TARGET diagnostic list cap — both `--no-target-cluster` 0-match
+	 * stderr and the sweep footer breakdown surface at most this many
+	 * keys before truncating.
+	 */
+	private static inline final NO_TARGET_TOP_N:Int = 10;
+
+	/**
+	 * Find-or-insert a `{key, count}` entry in `reasons` by exact key
+	 * match. Shared by the predict-relax sweep footer (`runReconSweepRelax`
+	 * NoTarget arm) and the `--no-target-cluster` drill 0-match
+	 * diagnostic — both build the same expected-message histogram.
+	 */
+	private static function bumpReasonCount(reasons:Array<{key:String, count:Int}>, key:String):Void {
+		for (e in reasons) if (e.key == key) { e.count++; return; }
+		reasons.push({key: key, count: 1});
 	}
 
 	private static function reportPredictRelax(path:String, original:String, res:PredictRelaxResult, showSource:Bool):Int {
@@ -4895,6 +5083,16 @@ final class Cli {
 		sysPrint('                          histogram. EXACT match against the cluster key\n');
 		sysPrint('                          shown in the histogram (with \\n / \\t escapes).\n');
 		sysPrint('                          0-match exits non-zero with top keys for ref.\n');
+		sysPrint('  --no-target-cluster <expected-msg>\n');
+		sysPrint('                          With --predict-relax: drill into ONE bucket of the\n');
+		sysPrint('                          footer NO TARGET breakdown — print every fixture\n');
+		sysPrint('                          whose predict-relax outcome is NoTarget with\n');
+		sysPrint('                          message == <expected-msg>. EXACT match against the\n');
+		sysPrint('                          key shown in the footer histogram. Bridges the\n');
+		sysPrint('                          footer aggregate to the file list — --cluster uses\n');
+		sysPrint('                          a different namespace (forward-locus on raw bytes).\n');
+		sysPrint('                          0-match exits non-zero with top NO TARGET keys.\n');
+		sysPrint('                          Mutex with --cluster / --probe.\n');
 		sysPrint('  --source                With --cluster, append a windowed source slice\n');
 		sysPrint('                          around the fail-locus for each path (L±3).\n');
 		sysPrint('                          With --predict-strip, also emits the window for\n');
@@ -5161,12 +5359,24 @@ final class Cli {
 		sysPrint('Usage: apq lit [options] <text> <file-or-dir-or-glob>...\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
-		sysPrint('  --exact             Require exact string equality (default: substring)\n');
-		sysPrint('  --kind <K1,K2,...>  Restrict to leaves of these kinds (default: shape-based, see below)\n');
-		sysPrint('  --any-kind          Match every named leaf regardless of kind\n');
-		sysPrint('  --flat              Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
-		sysPrint('  --limit <n>         Stop after n hits total (default: no limit)\n');
-		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('  --exact              Require exact string equality (default: substring)\n');
+		sysPrint('  --kind <K1,K2,...>   Restrict to leaves of these kinds (default: shape-based, see below)\n');
+		sysPrint('                       The synthetic kind `Comment` triggers a comment-only\n');
+		sysPrint('                       scan (no AST walk) — `--kind Comment` searches `//…`\n');
+		sysPrint('                       and `/* … */` bodies only.\n');
+		sysPrint('  --any-kind           Match every named leaf regardless of kind (also\n');
+		sysPrint('                       scans comments).\n');
+		sysPrint('  --include-comments   Scan source comments ALONGSIDE the AST walk. Sugar\n');
+		sysPrint('                       for "default kinds AS-IS, plus Comment" — keeps the\n');
+		sysPrint('                       smart-default `--kind` resolution and adds comment\n');
+		sysPrint('                       bodies. Use when the same text may live in either a\n');
+		sysPrint('                       string literal or a `//`/`/**` comment (TODO/FIXME\n');
+		sysPrint('                       hunts, doc-keyword cross-checks). Comments are\n');
+		sysPrint('                       string-literal-aware: `//` inside `"…"`/`\'…\'` is\n');
+		sysPrint('                       not a comment.\n');
+		sysPrint('  --flat               Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
+		sysPrint('  --limit <n>          Stop after n hits total (default: no limit)\n');
+		sysPrint('  --lang <name>        Grammar plugin (default: haxe)\n');
 		sysPrint('\n');
 		sysPrint("Walks parsed AST for leaf nodes whose `name` slot matches <text>.\n");
 		sysPrint("Smart-default --kind: when <text> is camelCase / snake_case the\n");
@@ -5175,8 +5385,9 @@ final class Cli {
 		sysPrint("references without a re-run). Pure-lowercase / all-uppercase single\n");
 		sysPrint("words stay `Literal`-only — they ambiguously match string content and\n");
 		sysPrint("identifier widening would flood prose hits. Override with --kind /\n");
-		sysPrint("--any-kind. Skips comments and string interpolation as a side effect\n");
-		sysPrint("of routing through the parser — no false positives from doc-comments.\n");
+		sysPrint("--any-kind. AST kinds skip comments and string interpolation by routing\n");
+		sysPrint("through the parser; `--include-comments` / `--kind Comment` re-enables\n");
+		sysPrint("them via a separate string-literal-aware scan over the raw source.\n");
 	}
 
 	private static function printBlastUsage():Void {

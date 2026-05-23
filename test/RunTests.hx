@@ -212,6 +212,7 @@ import unit.ApqStripFromClusterCliTest;
 import unit.ApqHxtestSection1ConfigTest;
 import unit.ApqHxqDxV8CliTest;
 import unit.ApqHxqDxV10CliTest;
+import unit.ApqLitCommentsCliTest;
 import unit.ApqDxTier3CliTest;
 import unit.ApqDxTier4CliTest;
 
@@ -434,6 +435,7 @@ runner.addCase(new HxEnumAbstractSliceTest());
 		runner.addCase(new ApqHxtestSection1ConfigTest());
 		runner.addCase(new ApqHxqDxV8CliTest());
 		runner.addCase(new ApqHxqDxV10CliTest());
+		runner.addCase(new ApqLitCommentsCliTest());
 		runner.addCase(new ApqDxTier3CliTest());
 		runner.addCase(new ApqDxTier4CliTest());
 		runner.addCase(new ApqDepthSemanticsTest());
