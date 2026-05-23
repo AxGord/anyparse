@@ -109,4 +109,45 @@ final class DocMeasure {
 		}
 		return total;
 	}
+
+	/**
+	 * Right-spine walk: does this `Doc` render with its last visible
+	 * non-whitespace character equal to `}`? Used by the BlockBody Star
+	 * primitive (`@:sep(';', tailRelax, blockEnded)`) to decide whether
+	 * the separator can be omitted between two elements — when the prior
+	 * element ends with `}` (block, object literal, anon struct, etc.) the
+	 * Haxe-style grammar permits the next element to follow directly.
+	 *
+	 * Whitespace-only fragments (`Line(' ')`, `OptHardline`, blank
+	 * `Text`) are transparently skipped. `IfBreak` / `IfWidthExceeds` /
+	 * `IfLineExceeds` / `IfFullLineExceeds` / `IfFirstLineExceeds` use
+	 * the flat-side representative — mirrors `flatTokenWidth`. `Fill`
+	 * scans its items right-to-left, ignoring the inter-item separator
+	 * (its text would not appear after the last item).
+	 */
+	public static function endsWithCloseBrace(d:Doc):Bool {
+		final stack:Array<Doc> = [d];
+		while (stack.length > 0) {
+			final node:Doc = stack.pop();
+			switch node {
+				case Empty | OptHardline | OptHardlineSkipAtOpenDelim
+						| OptHardlineSkipBeforeHardline | OptSpaceSkipAfterHardline:
+				case Text(s) | OptSpace(s) | Line(s):
+					final t:String = StringTools.rtrim(s);
+					if (t.length > 0) return StringTools.fastCodeAt(t, t.length - 1) == '}'.code;
+				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner)
+						| BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner):
+					stack.push(inner);
+				case Concat(items):
+					for (it in items) stack.push(it);
+				case IfBreak(_, flatDoc) | IfWidthExceeds(_, _, flatDoc)
+						| IfFirstLineExceeds(_, _, flatDoc) | IfLineExceeds(_, _, flatDoc)
+						| IfFullLineExceeds(_, _, flatDoc):
+					stack.push(flatDoc);
+				case Fill(items, _, _) | FillWithRestProbe(items, _, _):
+					for (it in items) stack.push(it);
+			}
+		}
+		return false;
+	}
 }

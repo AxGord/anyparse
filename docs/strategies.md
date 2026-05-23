@@ -91,6 +91,8 @@ Lowers literal glue around fields into `Lit` nodes in a `Seq`. A field with `@:l
 
 `@:sep(",", tailRelax)` is the opt-in two-arg form that makes "trailing sep before close is accepted" an explicit grammar contract. The bare ident `tailRelax` is the only recognised second arg. Semantically a no-op against current `Lowering.hx` behaviour — the close-peek Star loop already tolerates a trailing sep — but the annotation earmarks consumers for the BlockBody Star refactor (project memory `project_blockbody_star_tail_relax_debt`) and documents intent at the grammar site. First consumers: `JArray` / `JObject` in the JSON grammar.
 
+`@:sep(";", tailRelax, blockEnded)` is the three-arg form that additionally turns on **block-ended exemption** — between two elements, the separator may be omitted when the prior element ended with `}`. Parser side: after each successful element the cursor position is captured before the next `skipWs`; the byte-level `}` check decides whether the loop accepts the next element without a leading sep. Writer side: `DocMeasure.endsWithCloseBrace` performs the same check on each element's rendered Doc, suppressing sep emission when true. Combined with tail-relax this implements the full Haxe `BlockBody` separator policy without per-stmt `@:trailOpt(';')` and `stmtExprNoSemi` carve-outs. First consumer: the `MiniBlock` pilot grammar under `test/unit/miniblock/`; the HxStatement / `BlockBody` migration that retires the per-stmt mechanism lands in a follow-up session. The ident must appear after `tailRelax` — `@:sep("text", blockEnded)` without tail-relax is rejected at compile time.
+
 ### Re
 
 Owns: `@:re`.

@@ -47,6 +47,24 @@ import anyparse.core.Strategy;
  *                                     consumers for the BlockBody
  *                                     refactor. Sets
  *                                     `lit.sepTailRelax:true`.
+ *  - `@:sep(";", tailRelax, blockEnded)` — opt-in: between two elements,
+ *                                     sep may be omitted when the prior
+ *                                     element ended with `}`. Parser-side
+ *                                     check is byte-level on `_prevEndPos
+ *                                     - 1`; writer-side uses
+ *                                     `DocMeasure.endsWithCloseBrace` on
+ *                                     each element's rendered Doc. `blockEnded`
+ *                                     must come AFTER `tailRelax` —
+ *                                     `@:sep(";", blockEnded)` is rejected
+ *                                     at compile time (second arg must
+ *                                     match `tailRelax` ident). First
+ *                                     consumer: `MiniBlock` pilot grammar
+ *                                     under `test/unit/miniblock/`; the
+ *                                     HxStatement / BlockBody migration
+ *                                     that retires per-stmt
+ *                                     `@:trailOpt(';')` lands in a
+ *                                     follow-up session. Sets
+ *                                     `lit.sepBlockEnded:true`.
  *  - `@:sepAlt(";")`               — opt-in alternate separator,
  *                                     accepted alongside `@:sep` by the
  *                                     tolerant close-driven loop (an
@@ -97,14 +115,20 @@ class Lit implements Strategy {
 				node.annotations.set('lit.leadText', stringOrFail(entry.params[0], ':wrap'));
 				node.annotations.set('lit.trailText', stringOrFail(entry.params[1], ':wrap'));
 			case ':sep':
-				if (entry.params.length == 0 || entry.params.length > 2)
-					Context.fatalError('@:sep expects 1 or 2 arguments: @:sep("text") or @:sep("text", tailRelax)', entry.pos);
+				if (entry.params.length == 0 || entry.params.length > 3)
+					Context.fatalError('@:sep expects 1-3 arguments: @:sep("text"), @:sep("text", tailRelax), or @:sep("text", tailRelax, blockEnded)', entry.pos);
 				node.annotations.set('lit.sepText', stringOrFail(entry.params[0], ':sep'));
-				if (entry.params.length == 2) switch entry.params[1].expr {
+				if (entry.params.length >= 2) switch entry.params[1].expr {
 					case EConst(CIdent('tailRelax')):
 						node.annotations.set('lit.sepTailRelax', true);
 					case _:
 						Context.fatalError('@:sep second argument must be the ident `tailRelax`', entry.params[1].pos);
+				}
+				if (entry.params.length == 3) switch entry.params[2].expr {
+					case EConst(CIdent('blockEnded')):
+						node.annotations.set('lit.sepBlockEnded', true);
+					case _:
+						Context.fatalError('@:sep third argument must be the ident `blockEnded`', entry.params[2].pos);
 				}
 			case ':sepAlt':
 				node.annotations.set('lit.sepAltText', singleString(entry.params, ':sepAlt'));

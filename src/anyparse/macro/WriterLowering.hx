@@ -1505,6 +1505,31 @@ class WriterLowering {
 					false, false, null, false, null, anonFnClear, emptyCurlyKnob, rightCurlyKnob, rightCurlyAnonFnKnob
 				));
 			}
+		} else if (sepText != null && branch.annotations.get('lit.sepBlockEnded') == true) {
+			// Block-ended exemption (Session 2 pilot — mirror of
+			// `emitWriterStarField`). Suppress between-element sep
+			// emission when the prior element's rendered Doc ends with
+			// `}` (right-spine `DocMeasure.endsWithCloseBrace` check).
+			// Strictly opt-in via `@:sep('text', tailRelax, blockEnded)`.
+			parts.push(macro {
+				final _args = $argsAccess;
+				final _docs:Array<anyparse.core.Doc> = [_dt($v{leadText})];
+				var _i:Int = 0;
+				while (_i < _args.length) {
+					final _elemDoc:anyparse.core.Doc = $elemCall;
+					if (_i > 0) {
+						final _priorDoc:anyparse.core.Doc = _docs[_docs.length - 1];
+						if (!anyparse.core.DocMeasure.endsWithCloseBrace(_priorDoc)) {
+							_docs.push(_dt($v{sepText}));
+						}
+						_docs.push(_dt(' '));
+					}
+					_docs.push(_elemDoc);
+					_i++;
+				}
+				_docs.push(_dt($v{trailText}));
+				_dc(_docs);
+			});
 		} else if (sepText != null) {
 			// See `emitWriterStarField` — `@:sep('\n')` routes to a flat
 			// hardline-join emission (format-neutral).
@@ -3732,6 +3757,39 @@ class WriterLowering {
 				var _si:Int = 0;
 				while (_si < _arr.length) {
 					_docs.push($elemCall);
+					_si++;
+				}
+				_docs.push(_dt($v{closeText}));
+				_dc(_docs);
+			});
+			return;
+		}
+
+		// Block-ended exemption (Session 2 pilot). When the Star carries
+		// `@:sep(<text>, tailRelax, blockEnded)`, between-element sep is
+		// suppressed if the prior element's rendered Doc ends with `}`.
+		// Mirrors the parser-side blockEnded branch in
+		// `Lowering.emitStarFieldSteps`: the right-spine `DocMeasure.endsWithCloseBrace`
+		// check replaces the AST-shape `endsWithCloseBrace` predicate that
+		// today lives in `HxExprUtil` / `stmtExprNoSemi`. Pilot scope: this
+		// single emit path. The migration of HxStatement/BlockBody to the
+		// new primitive will additionally need trivia-mode coverage.
+		final blockEnded:Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
+		if (closeText != null && sepText != null && blockEnded) {
+			parts.push(macro {
+				final _arr = $fieldAccess;
+				final _docs:Array<anyparse.core.Doc> = [_dt($v{openText ?? ''})];
+				var _si:Int = 0;
+				while (_si < _arr.length) {
+					final _elemDoc:anyparse.core.Doc = $elemCall;
+					if (_si > 0) {
+						final _priorDoc:anyparse.core.Doc = _docs[_docs.length - 1];
+						if (!anyparse.core.DocMeasure.endsWithCloseBrace(_priorDoc)) {
+							_docs.push(_dt($v{sepText}));
+						}
+						_docs.push(_dt(' '));
+					}
+					_docs.push(_elemDoc);
 					_si++;
 				}
 				_docs.push(_dt($v{closeText}));

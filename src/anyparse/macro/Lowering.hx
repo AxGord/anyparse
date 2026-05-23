@@ -1422,6 +1422,46 @@ class Lowering {
 						return $ctorCall;
 					};
 				}
+				// Block-ended exemption (Session 2 pilot — mirror of
+				// `emitStarFieldSteps`). When the enum branch carries
+				// `@:sep('text', tailRelax, blockEnded)`, sep between two
+				// elements may be omitted when the prior element ended
+				// with `}`. Strictly opt-in: when `lit.sepBlockEnded` is
+				// absent the byte-identical pre-existing path runs.
+				final blockEnded:Bool = branch.annotations.get('lit.sepBlockEnded') == true;
+				if (blockEnded) {
+					return macro {
+						skipWs(ctx);
+						expectLit(ctx, $v{leadText});
+						final _items:Array<$elemCT> = [];
+						skipWs(ctx);
+						if ($closeNotNextExpr) {
+							var _prevEndPos:Int = ctx.pos;
+							_items.push($elemCall);
+							_prevEndPos = ctx.pos;
+							skipWs(ctx);
+							while ($closeNotNextExpr) {
+								if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
+									ctx.pos++;
+									skipWs(ctx);
+									if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
+									_items.push($elemCall);
+									_prevEndPos = ctx.pos;
+									skipWs(ctx);
+								} else if (_prevEndPos > 0 && ctx.input.charCodeAt(_prevEndPos - 1) == '}'.code) {
+									_items.push($elemCall);
+									_prevEndPos = ctx.pos;
+									skipWs(ctx);
+								} else {
+									expectLit(ctx, $v{sepText});
+								}
+							}
+						}
+						skipWs(ctx);
+						expectLit(ctx, $v{trailText});
+						return $ctorCall;
+					};
+				}
 				return macro {
 					skipWs(ctx);
 					expectLit(ctx, $v{leadText});
@@ -2727,7 +2767,45 @@ class Lowering {
 		final closeNotNextExpr:Expr = closeText.length == 1
 			? macro ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}
 			: macro ctx.pos < ctx.input.length && !peekLit(ctx, $v{closeText});
-		if (sepText != null) {
+		final blockEnded:Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
+		if (sepText != null && blockEnded) {
+			// Block-ended exemption (Session 2 pilot). After a successful
+			// element, sep may be omitted if the element ended with `}`
+			// (byte-level check on `_prevEndPos - 1`). Mirrors the
+			// `endsWithCloseBrace`/`stmtExprNoSemi` logic but moved into
+			// the Star primitive so per-stmt `@:trailOpt(';')` can
+			// eventually disappear. Tail-relax (trailing sep tolerated
+			// before close) is folded in too: after consuming a sep, if
+			// the next char is the close, we break.
+			final sepCharCode:Int = sepText.charCodeAt(0);
+			parseSteps.push(macro {
+				skipWs(ctx);
+				if ($closeNotNextExpr) {
+					var _prevEndPos:Int = ctx.pos;
+					$accumRef.push($elemCall);
+					_prevEndPos = ctx.pos;
+					skipWs(ctx);
+					while ($closeNotNextExpr) {
+						if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
+							ctx.pos++;
+							skipWs(ctx);
+							if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
+							$accumRef.push($elemCall);
+							_prevEndPos = ctx.pos;
+							skipWs(ctx);
+						} else if (_prevEndPos > 0 && ctx.input.charCodeAt(_prevEndPos - 1) == '}'.code) {
+							// Block-ended: prior element ended with `}`,
+							// sep omitted is allowed. Parse next element.
+							$accumRef.push($elemCall);
+							_prevEndPos = ctx.pos;
+							skipWs(ctx);
+						} else {
+							expectLit(ctx, $v{sepText}); // throws expected-sep
+						}
+					}
+				}
+			});
+		} else if (sepText != null) {
 			final sepCharCode:Int = sepText.charCodeAt(0);
 			parseSteps.push(macro {
 				skipWs(ctx);
