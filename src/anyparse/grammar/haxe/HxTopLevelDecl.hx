@@ -43,7 +43,7 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxTopLevelDecl = {
 	@:trivia @:tryparse var meta:Array<HxMetadata>;
-	@:trivia @:tryparse var modifiers:Array<HxModifier>;
+	@:trivia @:tryparse @:fmt(forceInlineSep) var modifiers:Array<HxModifier>;
 	@:fmt(setBoolFlagFromStarCtor('_classExtern', 'modifiers', 'Extern'))
 	var decl:HxDecl;
 }

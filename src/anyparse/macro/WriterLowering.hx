@@ -3458,6 +3458,15 @@ class WriterLowering {
 				// Sister to the non-trivia bare-Star `padLeading||padTrailing`
 				// branch's lineLengthAware path.
 				final tryparseLineLengthAware:Bool = starNode.fmtHasFlag('lineLengthAwareSeps');
+				// ω-slice-45 / issue_626: `@:fmt(forceInlineSep)` on a `@:trivia
+				// @:tryparse` Star collapses every source linebreak between
+				// consecutive elements to a single space. First consumers are
+				// the modifier Stars on `HxMemberDecl.modifiers` and
+				// `HxTopLevelDecl.modifiers` so multi-line `static\n\toverload`
+				// round-trips as `static overload`. Comment trivia between
+				// elements is out of scope — flag's contract is "treat
+				// inter-element whitespace trivia as one space".
+				final tryparseForceInlineSep:Bool = starNode.fmtHasFlag('forceInlineSep');
 				// ω-trivia-tryparse-prior-after-trail: when the PREV sibling
 				// field has a synthesised `<priorField>AfterTrail:Null<String>`
 				// slot (mandatory Ref with `@:trail` in trivia-bearing mode),
@@ -3477,7 +3486,8 @@ class WriterLowering {
 					metaLineEndOptField,
 					cascadeInfos.betweenSameCtorIfNotInfos,
 					tryparseLineLengthAware,
-					tryparsePriorAfterTrailExpr
+					tryparsePriorAfterTrailExpr,
+					tryparseForceInlineSep
 				));
 				return;
 			}
@@ -8048,7 +8058,8 @@ class WriterLowering {
 		metaLineEndOptField:Null<String> = null,
 		betweenSameCtorIfNotInfos:Array<BetweenSameCtorIfNotInfo> = null,
 		lineLengthAwareSeps:Bool = false,
-		priorAfterTrailExpr:Null<Expr> = null
+		priorAfterTrailExpr:Null<Expr> = null,
+		forceInlineSep:Bool = false
 	):Expr {
 		// ω-bug-2c-inner-star — cascade emit for the tryparse-Star path.
 		// Cascade trackers + cascade-fire blank count come from
@@ -8078,7 +8089,12 @@ class WriterLowering {
 		// emit at most one newline between consecutive `@:meta` tokens, and
 		// `MarkEmptyLines` has no rule that adds blanks between At tokens.
 		// Non-meta Stars keep the cascade-driven source-blank pass through.
-		final cascadeBlanksCount:Expr = metaLineEndOptField != null
+		//
+		// ω-slice-45: `forceInlineSep` Stars short-circuit cascade blanks too
+		// — the dedicated inter-element branch (below) always emits a single
+		// space, so source blank-line trivia must NOT leak through via the
+		// `_t.newlineBefore` fallback.
+		final cascadeBlanksCount:Expr = metaLineEndOptField != null || forceInlineSep
 			? macro 0
 			: cascadeEmit.blanksCount;
 		// ω-before-package — head-of-Star override (e.g. `beforePackage`).
@@ -8344,6 +8360,31 @@ class WriterLowering {
 						// any source newline between consecutive metas to a
 						// single space, producing the canonical `@A @B @C`
 						// inline shape ahead of the trailing hardline.
+						_docs.push(_dt(' '));
+					} else if (_si > 0 && $v{forceInlineSep}
+						&& Type.enumParameters(cast _arr[_si - 1].node).length == 0
+						&& Type.enumParameters(cast _t.node).length == 0) {
+						// ω-slice-45: `@:fmt(forceInlineSep)` collapses every
+						// source linebreak between consecutive SimpleCtor
+						// elements to a single space. Modifier Stars
+						// (`HxMemberDecl.modifiers`, `HxTopLevelDecl.modifiers`)
+						// opt in so multi-line `static\n\toverload` round-trips
+						// as `static overload`. ParamCtor elements (current
+						// consumers: `Conditional(inner:HxConditionalMod)` —
+						// the `#if … #end` modifier region) are gated OUT so
+						// the existing CondMod layout (issue_332 V1/V4: source
+						// newline between `#end` and the next keyword
+						// preserved) stays byte-identical. Plugin-agnostic
+						// ctor classification via `Type.enumParameters` — no
+						// reflection by ctor name. The `cast` suppresses
+						// macro-time type-checking on `.node` (struct-shaped
+						// Star elements like `HxMemberDeclT`/`HxTopLevelDeclT`
+						// would otherwise fail `EnumValue` unification — dead-
+						// code elimination runs AFTER type-check); compile-
+						// time `$v{forceInlineSep}` short-circuit keeps the
+						// runtime reflection cost on opted-in modifier Stars
+						// only, where `.node` IS an enum (`HxMemberModifier` /
+						// `HxModifier`).
 						_docs.push(_dt(' '));
 					} else if (_si > 0 && _t.newlineBefore) {
 						// ω-cond-mod-newline: preserve a single source newline

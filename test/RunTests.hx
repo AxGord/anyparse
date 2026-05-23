@@ -80,6 +80,7 @@ import unit.HxDollarBlockExprStmtNoSemiSliceTest;
 import unit.HxIsStmtNoSemiSliceTest;
 import unit.HxStmtBlockEndNoSemiSliceTest;
 import unit.HxAbstractClassSliceTest;
+import unit.HxModifierFlattenSliceTest;
 import unit.HxMacroClassSliceTest;
 import unit.HxDollarReifSliceTest;
 import unit.HxLocalFnStmtSliceTest;
@@ -265,6 +266,7 @@ class RunTests {
 		runner.addCase(new HxIsStmtNoSemiSliceTest());
 		runner.addCase(new HxStmtBlockEndNoSemiSliceTest());
 		runner.addCase(new HxAbstractClassSliceTest());
+		runner.addCase(new HxModifierFlattenSliceTest());
 		runner.addCase(new HxMacroClassSliceTest());
 		runner.addCase(new HxDollarReifSliceTest());
 		runner.addCase(new HxLocalFnStmtSliceTest());
