@@ -143,8 +143,19 @@ class ApqDxTier4CliTest extends Test {
 	// --- 3. recon --predict-relax ---
 
 	public function testPredictRelaxAccepted():Void {
+		#if sys
+		// `--predict-relax` without --probe / <dir> falls back to
+		// `$ANYPARSE_HXFORMAT_FORK/test/testcases` — scope the env so
+		// the usage-error path is reachable. Twin of
+		// `ApqReconCliTest.testReconNoArgsAndNoEnvIsUsageError`.
+		final saved:Null<String> = Sys.getEnv('ANYPARSE_HXFORMAT_FORK');
+		Sys.putEnv('ANYPARSE_HXFORMAT_FORK', '');
 		Assert.equals(2, Cli.run(['recon', '--predict-relax']),
 			'--predict-relax without --probe or a dir still needs a target (here: usage error)');
+		if (saved != null) Sys.putEnv('ANYPARSE_HXFORMAT_FORK', saved);
+		#else
+		Assert.pass('non-sys target');
+		#end
 	}
 
 	public function testPredictRelaxRejectsReplaceWith():Void {
