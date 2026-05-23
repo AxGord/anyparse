@@ -3035,8 +3035,19 @@ final class Cli {
 				final fuzzyLine:String = suggestions.length > 0
 					? ' Did you mean: ${suggestions.join(", ")}?'
 					: '';
+				// Cross-project hint: when the first kind token starts uppercase
+				// (TypeName-shaped — e.g. `HxCatchClause`, `HxModule`), the user
+				// is likely hunting a decl that lives in OTHER files. `ast` is
+				// single-file by design; point them at the multi-file walkers
+				// (`refs --decls` / `uses` / `blast`) that DO recurse a dir.
+				// Silent when the token is lowercase (field-shaped) or empty.
+				final crossProjectHint:String = firstKind.length > 0
+					&& StringTools.fastCodeAt(firstKind, 0) >= 'A'.code
+					&& StringTools.fastCodeAt(firstKind, 0) <= 'Z'.code
+					? ' If "$firstKind" is a TypeName declared elsewhere, ast is single-file; try apq refs $firstKind src/ --decls (declaration sites), apq uses $firstKind src/ (type positions), or apq blast $firstKind src/ (full change-impact).'
+					: '';
 				stderr('apq ast: --select "$selectExpr"$filterNote matched no nodes in $fileLabel. '
-					+ 'Kinds present here: ${present.join(", ")}.$fuzzyLine '
+					+ 'Kinds present here: ${present.join(", ")}.$fuzzyLine$crossProjectHint '
 					+ 'Kinds are exact node-constructor names — run `apq ast $fileLabel` to see the tree.\n');
 			}
 			if (countOnly) {
@@ -3153,8 +3164,15 @@ final class Cli {
 			return EXIT_USAGE;
 		}
 		final codeFinal:String = codeArg;
+		// ω-probe-staging: persist the probe source to a fixed scratch
+		// path so a follow-up `strip` / `recon --probe` / `writer-equals`
+		// can target the same bytes without re-heredoc-ing them. The
+		// stdin path is also captured (we read once, write to /tmp, then
+		// hand the bytes to runAst via --code instead of --stdin so the
+		// downstream loader sees the same source we staged).
+		final stagedSource:Null<String> = stageProbeSource(codeFinal);
 		if (writerProbeMode) {
-			final source:String = codeFinal == '-' ? readStdin() : codeFinal;
+			final source:String = stagedSource ?? (codeFinal == '-' ? readStdin() : codeFinal);
 			final plugin:GrammarPlugin = pickPlugin(lang);
 			// `<probe>` is the synthetic file label — matches the byte
 			// shape `apq writer-probe` uses on real files and keeps any
@@ -3163,11 +3181,56 @@ final class Cli {
 			final plainOk:Bool = emitOneWriterProbe(plugin, source, '<probe>', lang, true, null);
 			return (triviaOk && plainOk) ? EXIT_OK : EXIT_RUNTIME;
 		}
-		// `-` is the conventional Unix marker for stdin — route to the
-		// shared --stdin path on runAst so probe shares one source loader.
-		final injected:Array<String> = codeFinal == '-' ? ['--stdin'] : ['--code', codeFinal];
+		// When stdin was staged, prefer --code over --stdin so runAst
+		// loads the bytes we just persisted (avoids a double stdin read
+		// on a now-empty stream). Falls through to the original --stdin
+		// path when staging was skipped (#if !sys or codeFinal != '-').
+		final injected:Array<String> = if (stagedSource != null) ['--code', stagedSource];
+			else if (codeFinal == '-') ['--stdin'];
+			else ['--code', codeFinal];
 		return runAst(injected.concat(forwarded));
 	}
+
+	/**
+	 * Resolve the probe source bytes (from arg or stdin), persist them to
+	 * `/tmp/anyparse-last-probe.hx`, and emit a stderr nudge naming the
+	 * path. Returns the resolved bytes UNCONDITIONALLY on `sys` (whether
+	 * or not the write succeeded) so the caller can re-use them via
+	 * `--code` instead of attempting a second stdin read on an already-
+	 * drained stream. Returns `null` only on `#if !sys` (no FileSystem
+	 * access — the caller falls through to the original argv-passthrough
+	 * path).
+	 *
+	 * Inline-arg and stdin-source both stage on `sys`: the user can
+	 * re-run `strip /tmp/anyparse-last-probe.hx …` straight after any
+	 * `probe` invocation. A write failure (read-only /tmp, disk full,
+	 * permission) skips the nudge but still returns the resolved bytes —
+	 * losing the stdin read AND failing the probe would be the worse
+	 * outcome.
+	 *
+	 * `STAGE_PROBE_PATH` is a constant (not a flag) — the scratch path
+	 * is single-slot by design (a chained `recon --probe` should target
+	 * the LAST probe, not pick from a history).
+	 */
+	private static function stageProbeSource(codeArg:String):Null<String> {
+		#if (sys || nodejs)
+		final source:String = codeArg == '-' ? readStdin() : codeArg;
+		try {
+			sys.io.File.saveContent(STAGE_PROBE_PATH, source);
+			stderr('apq probe: staged source -> $STAGE_PROBE_PATH (use it with `apq strip $STAGE_PROBE_PATH …` or `apq recon --probe $STAGE_PROBE_PATH`).\n');
+		} catch (_:Exception) {
+			// Write failed (read-only /tmp, disk full, permission). Skip
+			// the nudge but STILL return the read bytes so the caller can
+			// use `--code` instead of `--stdin` — a second stdin read on
+			// an already-drained stream would silently parse empty input.
+		}
+		return source;
+		#else
+		return null;
+		#end
+	}
+
+	private static inline final STAGE_PROBE_PATH:String = '/tmp/anyparse-last-probe.hx';
 
 	/**
 	 * Boolean (value-less) `--flag` set for `runAst`. Listed explicitly
@@ -3622,9 +3685,10 @@ final class Cli {
 		if (probePath != null) return runReconProbe(plugin, (probePath : String), predictStrip, patterns, replacements, compiledRegex, showSource, writerEqualsAfter, writerEqualsPlain, expectedPath, lang);
 		final rootFinal:String = rootDir ?? defaultReconRoot();
 		if (rootFinal == '') {
-			stderr("apq recon: no <dir> given and $ANYPARSE_HXFORMAT_FORK env var is unset.\n");
+			stderr("apq recon: no <dir> given and $ANYPARSE_HXFORMAT_FORK env var is unset (no cached path at ~/.config/anyparse/fork_path either).\n");
 			stderr('  Either pass a directory:  apq recon /path/to/corpus\n');
 			stderr('  or export the fork root:  ANYPARSE_HXFORMAT_FORK=/path/to/haxe-formatter\n');
+			stderr('  (first env-supplied run caches the path under ~/.config/anyparse/; subsequent runs work without re-exporting)\n');
 			return EXIT_USAGE;
 		}
 		if (!FileSystem.exists(rootFinal) || !FileSystem.isDirectory(rootFinal)) {
@@ -4881,11 +4945,131 @@ final class Cli {
 	}
 
 	private static function defaultReconRoot():String {
-		final fork:Null<String> = Sys.getEnv('ANYPARSE_HXFORMAT_FORK');
+		final fork:Null<String> = resolveForkPath();
 		if (fork == null || fork.length == 0) return '';
 		final candidate:String = '$fork/test/testcases';
-		return FileSystem.exists(candidate) && FileSystem.isDirectory(candidate) ? candidate : fork;
+		final resolved:String = FileSystem.exists(candidate) && FileSystem.isDirectory(candidate) ? candidate : fork;
+		// Write-cache: persist the env-supplied path to
+		// `~/.config/anyparse/fork_path` so the next `apq recon` works
+		// WITHOUT re-exporting the env var. Env always wins; the cache
+		// is consulted only by `resolveForkPath` when env is unset.
+		// `tryWriteForkPathCache` short-circuits when the on-disk value
+		// already matches, so steady-state writes are no-ops.
+		#if (sys || nodejs)
+		final envFork:Null<String> = Sys.getEnv('ANYPARSE_HXFORMAT_FORK');
+		if (envFork != null && envFork.length > 0) tryWriteForkPathCache(envFork);
+		#end
+		return resolved;
 	}
+
+	/**
+	 * Resolve the haxe-formatter fork path with env > config-cache
+	 * precedence. The env var IS the canonical source — the cache
+	 * exists only to spare the user from re-exporting it on every
+	 * session. A cached path that no longer points at a directory is
+	 * dropped silently (a stale config should never block a `recon` run
+	 * — the user gets the same `env var is unset` usage error as before).
+	 */
+	private static function resolveForkPath():Null<String> {
+		final env:Null<String> = Sys.getEnv('ANYPARSE_HXFORMAT_FORK');
+		if (env != null && env.length > 0) return env;
+		#if (sys || nodejs)
+		final cached:Null<String> = readForkPathCache();
+		if (cached != null && cached.length > 0 && FileSystem.exists(cached) && FileSystem.isDirectory(cached))
+			return cached;
+		#end
+		return null;
+	}
+
+	/**
+	 * Emit a stderr nudge when any `.hx` file under `src/` or `test/` is
+	 * newer than `bin/test.js` — the next `node bin/test.js` will run
+	 * STALE bytes and a 0-delta sweep / clean test-summary can lie. Drives
+	 * the documented `[[feedback-rebuild-test-js-after-macro-edit]]`
+	 * trap: `bin/apq.js` auto-rebuilds (the hxq shim handles it) but
+	 * `bin/test.js` is a separate build artefact whose staleness has no
+	 * gate elsewhere in the workflow.
+	 *
+	 * Silent on `#if !sys`, on missing `bin/test.js` (caller will hit a
+	 * clean error from the missing binary), or when nothing under src/
+	 * or test/ is newer. Best-effort: a FileSystem failure short-circuits
+	 * without raising — the user always gets the requested totals.
+	 */
+	private static function warnIfTestJsStale(cmd:String):Void {
+		#if (sys || nodejs)
+		final binPath:String = 'bin/test.js';
+		if (!FileSystem.exists(binPath)) return;
+		try {
+			final binTime:Float = FileSystem.stat(binPath).mtime.getTime();
+			if (anyHxNewerThan('src', binTime) || anyHxNewerThan('test', binTime)) {
+				stderr('apq $cmd: WARNING: src/ or test/ is newer than bin/test.js — re-run `haxe test-js.hxml && node bin/test.js` before trusting these totals\n');
+			}
+		} catch (_:Exception) {}
+		#end
+	}
+
+	#if (sys || nodejs)
+	private static function anyHxNewerThan(root:String, threshold:Float):Bool {
+		if (!FileSystem.exists(root) || !FileSystem.isDirectory(root)) return false;
+		final stack:Array<String> = [root];
+		while (stack.length > 0) {
+			final dir:Null<String> = stack.pop();
+			if (dir == null) break;
+			try {
+				for (name in FileSystem.readDirectory(dir)) {
+					final path:String = '$dir/$name';
+					if (FileSystem.isDirectory(path)) {
+						stack.push(path);
+						continue;
+					}
+					if (!StringTools.endsWith(name, '.hx')) continue;
+					if (FileSystem.stat(path).mtime.getTime() > threshold) return true;
+				}
+			} catch (_:Exception) {}
+		}
+		return false;
+	}
+
+	private static function forkPathCacheFile():Null<String> {
+		final home:Null<String> = Sys.getEnv('HOME');
+		if (home == null || home.length == 0) return null;
+		return '$home/.config/anyparse/fork_path';
+	}
+
+	private static function readForkPathCache():Null<String> {
+		final path:Null<String> = forkPathCacheFile();
+		if (path == null || !FileSystem.exists(path)) return null;
+		try {
+			final raw:String = sys.io.File.getContent(path);
+			final trimmed:String = StringTools.trim(raw);
+			return trimmed.length > 0 ? trimmed : null;
+		} catch (_:Exception) {
+			return null;
+		}
+	}
+
+	private static function tryWriteForkPathCache(value:String):Void {
+		final path:Null<String> = forkPathCacheFile();
+		if (path == null) return;
+		// Skip write when the cache already matches — avoids a useless
+		// disk hit on every recon invocation under the same env.
+		try {
+			if (FileSystem.exists(path)) {
+				final existing:String = StringTools.trim(sys.io.File.getContent(path));
+				if (existing == value) return;
+			}
+		} catch (_:Exception) {}
+		try {
+			final dir:String = haxe.io.Path.directory(path);
+			if (dir.length > 0 && !FileSystem.exists(dir)) FileSystem.createDirectory(dir);
+			sys.io.File.saveContent(path, value);
+		} catch (_:Exception) {
+			// Best-effort cache write — never block recon on a write
+			// failure (read-only HOME, disk full, permission). The env
+			// path stays valid for the current run.
+		}
+	}
+	#end
 
 	private static function stripRootPrefix(path:String, root:String):String {
 		if (StringTools.startsWith(path, root + '/')) return path.substr(root.length + 1);
@@ -5037,6 +5221,7 @@ final class Cli {
 			stderr('apq sweep: cannot read $filePath (missing or unparseable)\n');
 			return EXIT_RUNTIME;
 		}
+		warnIfTestJsStale('sweep');
 		final total:Int = cur.pass + cur.fail + cur.skipParse + cur.skipWrite + cur.skipConfig + cur.skipMalformed;
 		sysPrint('${cur.pass} pass / ${cur.fail} fail / ${cur.skipParse} skip-parse / ${cur.skipWrite} skip-write / ${cur.skipConfig} skip-config / ${cur.skipMalformed} malformed (total $total)\n');
 		if (prevPath != null) {
@@ -5212,6 +5397,7 @@ final class Cli {
 		}
 		final result:TestSummaryResult = parseTestSummary(raw);
 		final src:String = sourcePath ?? '/tmp/test.out';
+		warnIfTestJsStale('test-summary');
 		sysPrint('${result.tests} tests / ${result.assertions} assertions / ${result.failures} failures / ${result.errors} errors  ($src)\n');
 		final ff:Null<TestSummaryFailureLocus> = result.firstFailure;
 		if (ff != null) {
@@ -5243,6 +5429,7 @@ final class Cli {
 		var lang:String = 'haxe';
 		var rootDir:Null<String> = null;
 		var strict:Bool = false;
+		var showSource:Bool = false;
 		var i:Int = 0;
 		while (i < args.length) {
 			final a:String = args[i];
@@ -5254,6 +5441,8 @@ final class Cli {
 					lang = expectValue(args, ++i, '--lang');
 				case '--strict':
 					strict = true;
+				case '--source':
+					showSource = true;
 				case _:
 					if (StringTools.startsWith(a, '--')) {
 						stderr('apq self-status: unknown option "$a"\n');
@@ -5300,7 +5489,8 @@ final class Cli {
 					skipParse++;
 					final pos:Position = exception.span.lineCol(source);
 					final exp:String = reconNormalize(exception.expected);
-					skipLines.push('SKIP $path :: ${pos.line}:${pos.col} expected="$exp"');
+					final src:String = showSource ? ' :: src="' + reconNormalize(reconSnippet(source, exception.span.from)) + '"' : '';
+					skipLines.push('SKIP $path :: ${pos.line}:${pos.col} expected="$exp"$src');
 				} catch (exception:Exception) {
 					skipParse++;
 					skipLines.push('SKIP $path :: <non-ParseError> ${reconNormalize(exception.message)}');
@@ -5315,17 +5505,21 @@ final class Cli {
 	}
 
 	private static function printSelfStatusUsage():Void {
-		sysPrint('apq self-status [<dir>] [--strict]\n');
+		sysPrint('apq self-status [<dir>] [--strict] [--source]\n');
 		sysPrint('\n');
 		sysPrint('Walks <dir> recursively (default `src/`) and prints which `.hx` files\n');
 		sysPrint('the grammar plugin cannot parse. Each failure shows as:\n');
 		sysPrint('  SKIP <path> :: LINE:COL expected="<X>"\n');
+		sysPrint('\n');
+		sysPrint('With --source the SKIP line gains a `:: src="<window>"` tail showing\n');
+		sysPrint('the bytes around the fail-locus (same format as `recon --probe`).\n');
 		sysPrint('\n');
 		sysPrint('Closes the dogfood gap: hxq walkers silently skip unparseable files;\n');
 		sysPrint('self-status surfaces the full set in one call.\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --strict       Exit non-zero when any file skip-parses (CI guard).\n');
+		sysPrint('  --source       Append windowed source around each fail-locus.\n');
 		sysPrint('  --lang <name>  Grammar plugin (default `haxe`).\n');
 		sysPrint('  -h, --help     Show this help.\n');
 	}
@@ -6319,9 +6513,9 @@ final class Cli {
 			} else switch cmd {
 				case 'refs':
 					if (isUpper) ' — "$n" starts uppercase, looks like a TypeName. Try: apq uses $n <dir> (type positions), apq blast $n <dir> (full change-impact incl. field-access), or apq lit \'$n\' <dir> --any-kind (every leaf — case-patterns / imports / new exprs).';
-					else ' — "$n" has no value-binding here. Locals/params are NOT indexed. Try: apq lit \'$n\' <dir> --any-kind (every leaf — strings/idents/field-names) or apq search \'$$x.$n\' <dir> (field-access shape).';
+					else ' — "$n" has no value-binding here. Locals/params are NOT indexed. Try: apq lit \'$n\' <dir> --any-kind (every leaf — strings/idents/field-names) or apq search \'$$x.$n\' <dir> (field-access shape).${macroEmitHint(n)}';
 				case 'uses':
-					if (isLower) ' — "$n" starts lowercase, not a TypeName. Try: apq refs $n <dir> (value bindings) or apq lit \'$n\' <dir> --any-kind (every leaf).';
+					if (isLower) ' — "$n" starts lowercase, not a TypeName. Try: apq refs $n <dir> (value bindings) or apq lit \'$n\' <dir> --any-kind (every leaf).${macroEmitHint(n)}';
 					else ' — no type-position references. For full change-impact incl. `.field` access try: apq blast $n <dir>, or apq lit \'$n\' <dir> --any-kind (every leaf — incl. case-patterns).';
 				case 'blast':
 					' — no declaration of "$n" in the scanned set (the heuristic section needs it). Either widen the scan, or use apq uses $n <dir> + apq refs $n <dir> directly.';
@@ -6363,6 +6557,44 @@ final class Cli {
 		}
 
 		return summary + tail.toString();
+	}
+
+	/**
+	 * Append a hint when `name` appears to be macro-generated — scan
+	 * `src/anyparse/macro/*.hx` for a `<name>Field` Field-builder function
+	 * declaration (the canonical `Codegen.<name>Field()` shape that emits
+	 * runtime helpers like `peekKw` / `matchLit` / `expectLit`). When found,
+	 * point the user at the macro source where the literal name appears,
+	 * since the runtime caller search (refs/uses) cannot reach the FFun
+	 * `name: '<name>'` string-literal slot inside the builder body.
+	 *
+	 * Returns empty string when:
+	 *  - `sys` target not available (no FileSystem access);
+	 *  - `src/anyparse/macro` doesn't exist (running outside the project);
+	 *  - no `<name>Field` function found in any macro source.
+	 *
+	 * Sniff is conservative (substring match for the exact FFun signature
+	 * prefix `function <name>Field(`) — false positives require an
+	 * unrelated function with that exact suffix, which the project does
+	 * not produce.
+	 */
+	private static function macroEmitHint(name:String):String {
+		#if (sys || nodejs)
+		final macroDir:String = 'src/anyparse/macro';
+		if (!FileSystem.exists(macroDir) || !FileSystem.isDirectory(macroDir)) return '';
+		final marker:String = 'function ${name}Field(';
+		try {
+			for (entry in FileSystem.readDirectory(macroDir)) {
+				if (!StringTools.endsWith(entry, '.hx')) continue;
+				final src:String = sys.io.File.getContent('$macroDir/$entry');
+				if (src.indexOf(marker) < 0) continue;
+				return ' If "$name" is a macro-emitted parser runtime helper, the emit site lives in src/anyparse/macro/$entry — try apq lit \'$name\' src/anyparse/macro/ --any-kind to see the FFun name slot.';
+			}
+		} catch (_:Exception) {}
+		return '';
+		#else
+		return '';
+		#end
 	}
 
 	/**

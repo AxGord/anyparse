@@ -219,6 +219,7 @@ import unit.ApqHxqDxV10CliTest;
 import unit.ApqLitCommentsCliTest;
 import unit.ApqDxTier3CliTest;
 import unit.ApqDxTier4CliTest;
+import unit.ApqDxTier5CliTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -446,6 +447,7 @@ runner.addCase(new HxEnumAbstractSliceTest());
 		runner.addCase(new ApqLitCommentsCliTest());
 		runner.addCase(new ApqDxTier3CliTest());
 		runner.addCase(new ApqDxTier4CliTest());
+		runner.addCase(new ApqDxTier5CliTest());
 		runner.addCase(new ApqDepthSemanticsTest());
 		runner.addCase(new ApqDxTier2CliTest());
 		utest.ui.Report.create(runner);
