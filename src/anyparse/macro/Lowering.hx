@@ -870,6 +870,7 @@ class Lowering {
 								newlineBefore: _lead.newlineBefore,
 								leadingComments: _lead.leadingComments,
 								trailingComment: _trailing,
+								trailingBeforeSep: false,
 								sepAfter: _sepAfter,
 								node: _node,
 							});
@@ -1360,15 +1361,27 @@ class Lowering {
 							break;
 						}
 						final _node:$elemCT = $elemCall;
+						// ω-trivia-trailing-before-sep (Slice 50 mirror of
+						// emitStarFieldSteps :3339): probe a same-line trailing
+						// comment BEFORE the sep-match so `elem /*c*/ , next`
+						// shape parses. Without this, the pre-sep horizontal-ws
+						// skip stops at `/`, sep-match fails, the next iteration
+						// tries to parse `,` as element start → SKIP_PARSE.
+						// Captured into the existing `trailingComment` slot via
+						// coalescing — the synth wrapper's `trailingBeforeSep`
+						// flag records the position so the writer can emit at
+						// the source position instead of always after sep.
+						final _trailingBeforeSep:Null<String> = collectTrailingFull(ctx);
 						var _sepAfter:Bool = true;
 						$sepMatchExpr;
-						final _trailing:Null<String> = collectTrailingFull(ctx);
+						final _trailing:Null<String> = _trailingBeforeSep ?? (_sepAfter ? collectTrailingFull(ctx) : null);
 						_items.push({
 							blankBefore: _lead.blankBefore,
 							blankAfterLeadingComments: _lead.blankAfterLeadingComments,
 							newlineBefore: _lead.newlineBefore,
 							leadingComments: _lead.leadingComments,
 							trailingComment: _trailing,
+							trailingBeforeSep: _trailingBeforeSep != null,
 							sepAfter: _sepAfter,
 							node: _node,
 						});
@@ -2915,6 +2928,7 @@ class Lowering {
 							newlineBefore: _lead.newlineBefore,
 							leadingComments: _lead.leadingComments,
 							trailingComment: _trailing,
+							trailingBeforeSep: false,
 							sepAfter: true,
 							node: _node,
 						});
@@ -3224,6 +3238,7 @@ class Lowering {
 								newlineBefore: _lead.newlineBefore,
 								leadingComments: _lead.leadingComments,
 								trailingComment: _trailing,
+								trailingBeforeSep: false,
 								sepAfter: true,
 								node: _node,
 							});
@@ -3255,6 +3270,7 @@ class Lowering {
 							newlineBefore: _lead.newlineBefore,
 							leadingComments: _lead.leadingComments,
 							trailingComment: _trailing,
+							trailingBeforeSep: false,
 							sepAfter: true,
 							node: _node,
 						});
@@ -3346,6 +3362,7 @@ class Lowering {
 					newlineBefore: _lead.newlineBefore,
 					leadingComments: _lead.leadingComments,
 					trailingComment: _trailing,
+					trailingBeforeSep: _trailingBeforeSep != null,
 					sepAfter: _sepAfter,
 					node: _node,
 				});

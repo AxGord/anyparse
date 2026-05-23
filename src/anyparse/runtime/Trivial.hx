@@ -59,6 +59,14 @@ package anyparse.runtime;
  *    Trailing capture rejects block comments with internal newlines —
  *    a newline-bearing block is left for the next element's leading
  *    capture, so this slot never carries `\n`.
+ *  - `trailingBeforeSep` — true when the captured `trailingComment` sat
+ *    between the element and the separator in source (`elem /*c*\/,
+ *    next`), false when after the separator (`elem, /*c*\/`). Default
+ *    `false` preserves the legacy after-sep emission position; sites
+ *    that capture before-sep trivia set this to `true` so the writer
+ *    can route the comment to the source-faithful position. Ignored
+ *    when `trailingComment` is null. Sister to `sepAfter` — both are
+ *    source-position flags on the same per-element slot.
  *  - `sepAfter` — source had a separator (e.g. `,`) immediately AFTER
  *    this element, before either the next element's leading trivia or
  *    the close literal. Defaults to `true` so non-tracking sites
@@ -84,6 +92,7 @@ typedef Trivial<T> = {
 	var newlineBefore:Bool;
 	var leadingComments:Array<String>;
 	var trailingComment:Null<String>;
+	var trailingBeforeSep:Bool;
 	var sepAfter:Bool;
 	var node:T;
 }

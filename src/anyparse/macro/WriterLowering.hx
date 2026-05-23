@@ -7380,10 +7380,18 @@ class WriterLowering {
 						// previously emitted the comma unconditionally.
 						final _isLast:Bool = _si == _arr.length - 1;
 						final _emitSep:Bool = _isLast ? $appendTrailingCommaExpr : _t.sepAfter;
+						final _tc:Null<String> = _t.trailingComment;
+						// ω-trivia-trailing-before-sep: emit `elem /*c*/, next`
+						// instead of `elem, /*c*/ next` when the source captured
+						// the trailing comment between the element and the sep.
+						// Falls through to the legacy after-sep position for
+						// every existing capture site (`trailingBeforeSep:false`
+						// default in producer pushes, see Lowering.hx).
+						if (_tc != null && _t.trailingBeforeSep)
+							_line = _dc([_line, trailingCommentDocVerbatim(_tc, opt)]);
 						if (_emitSep)
 							_line = _dc([_line, _dt($v{sepText})]);
-						final _tc:Null<String> = _t.trailingComment;
-						if (_tc != null)
+						if (_tc != null && !_t.trailingBeforeSep)
 							_line = _dc([_line, trailingCommentDocVerbatim(_tc, opt)]);
 						_inner.push(_line);
 						_si++;
