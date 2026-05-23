@@ -150,4 +150,48 @@ final class DocMeasure {
 		}
 		return false;
 	}
+
+	/**
+	 * True iff the rightmost emitted byte of `d` is `}` (block-closed)
+	 * OR `;` (already-statement-terminated). Used by Session-3
+	 * `@:sep(';', tailRelax, blockEnded)` Star writers to suppress
+	 * between-element sep emission when the prior element's rendered
+	 * Doc already terminates a statement — covers both block-shaped
+	 * forms (`if (c) {...}`) and inner-statement forms whose own
+	 * `@:trail(';')` already emitted `;` (e.g. `if (c) return;`,
+	 * `VoidReturnStmt`).
+	 *
+	 * Sibling of `endsWithCloseBrace`; same right-spine walk + same
+	 * whitespace-skipping semantics. Two-byte fallback (`}` or `;`)
+	 * keeps the inter-stmt model correct without requiring the parser
+	 * side to know when an inner construct consumed `;`.
+	 */
+	public static function endsWithStmtTerminator(d:Doc):Bool {
+		final stack:Array<Doc> = [d];
+		while (stack.length > 0) {
+			final node:Doc = stack.pop();
+			switch node {
+				case Empty | OptHardline | OptHardlineSkipAtOpenDelim
+						| OptHardlineSkipBeforeHardline | OptSpaceSkipAfterHardline:
+				case Text(s) | OptSpace(s) | Line(s):
+					final t:String = StringTools.rtrim(s);
+					if (t.length > 0) {
+						final c:Int = StringTools.fastCodeAt(t, t.length - 1);
+						return c == '}'.code || c == ';'.code;
+					}
+				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner)
+						| BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner):
+					stack.push(inner);
+				case Concat(items):
+					for (it in items) stack.push(it);
+				case IfBreak(_, flatDoc) | IfWidthExceeds(_, _, flatDoc)
+						| IfFirstLineExceeds(_, _, flatDoc) | IfLineExceeds(_, _, flatDoc)
+						| IfFullLineExceeds(_, _, flatDoc):
+					stack.push(flatDoc);
+				case Fill(items, _, _) | FillWithRestProbe(items, _, _):
+					for (it in items) stack.push(it);
+			}
+		}
+		return false;
+	}
 }

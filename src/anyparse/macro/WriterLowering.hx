@@ -165,8 +165,12 @@ class WriterLowering {
 			// `TriviaTypeSynth.buildEnumCtor`) so positions stay deterministic.
 			// Writer reads via `argNames[5]` in `lowerEnumStar`. Sister to
 			// struct-Star `<field>TrailPresent` synth slot.
+			// ω-blockended-trivia-meta-arity (Session 3): hasMeta over
+			// readMetaString — multi-arg `@:sep('text', tailRelax, blockEnded)`
+			// gates the same as 1-arg `@:sep(',')`. Sister to TriviaTypeSynth
+			// L1076 fix; positions stay deterministic between synth + writer.
 			final hasArrayLitTrailPresent:Bool = hasOpenTrailing
-				&& branch.readMetaString(':sep') != null;
+				&& branch.hasMeta(':sep');
 			final extraArgs:Int = ((hasCloseTrailing || hasTrailOptFlag || hasCaptureSource) ? 1 : 0)
 				+ (hasOpenTrailing ? 3 : 0)
 				+ (hasArrayLitTrailPresent ? 1 : 0)
@@ -1380,7 +1384,15 @@ class WriterLowering {
 			// branch can defer layout to `WrapList.emit` (mirrors the
 			// struct-Star path in `lowerStruct`). First Alt-branch
 			// consumer is `HxExpr.ArrayExpr.elems` (`arrayLiteralWrap`).
-			if (sepText != null) {
+			// ω-blockended-trivia (Session 3): enum-Alt mirror — when the
+			// trivia-mode `@:sep+@:lead+@:trail` branch carries the
+			// `blockEnded` flag (HxStatement.BlockStmt / HxExpr.BlockExpr
+			// after Session 3 migration), skip the `triviaSepStarExpr`
+			// flat-or-multi dispatch and fall through to the block-mode
+			// dispatch with sepText/blockEnded threaded into
+			// `triviaBlockStarExpr`.
+			final altBlockEndedFlag:Bool = branch.annotations.get('lit.sepBlockEnded') == true;
+			if (sepText != null && !altBlockEndedFlag) {
 				final wrapRulesField:Null<String> = branch.fmtReadString('wrapRules');
 				// ω-arraylit-trailing-comma-dispatch: enum-Alt branches
 				// (e.g. `HxExpr.ArrayExpr`) carry `@:fmt(trailingComma(
@@ -1502,7 +1514,11 @@ class WriterLowering {
 				parts.push(triviaBlockStarExpr(
 					argsAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn,
 					leadText, trailText, true, false, false, false, null, false, emptyCurlyBreak, false, keepCurlyBlanks,
-					false, false, null, false, null, anonFnClear, emptyCurlyKnob, rightCurlyKnob, rightCurlyAnonFnKnob
+					false, false, null, false, null, anonFnClear, emptyCurlyKnob, rightCurlyKnob, rightCurlyAnonFnKnob,
+					// ω-blockended-trivia (Session 3): enum-Alt sep+blockEnded
+					// routes here when `altBlockEndedFlag` fires; pass sepText
+					// only in that case so unrelated callers stay byte-identical.
+					altBlockEndedFlag ? sepText : null, altBlockEndedFlag
 				));
 			}
 		} else if (sepText != null && branch.annotations.get('lit.sepBlockEnded') == true) {
@@ -3265,8 +3281,19 @@ class WriterLowering {
 		if (isTriviaStar) {
 			if (isRaw)
 				Context.fatalError('WriterLowering: @:trivia Star does not support @:raw', Context.currentPos());
-			if (sepText != null && (closeText == null || starNode.hasMeta(':tryparse')))
-				Context.fatalError('WriterLowering: @:trivia + @:sep requires close-peek (@:trail), not EOF/@:tryparse', Context.currentPos());
+			// ω-blockended-trivia-tryparse (Session 3): @:trivia + @:sep +
+			// @:tryparse is now allowed when the `blockEnded` flag is
+			// present (sole consumer: HxCaseBranch.body / HxDefaultBranch.stmts).
+			// EOF mode (closeText == null, no @:tryparse) still rejects.
+			final writerBlockEnded:Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
+			if (sepText != null && closeText == null && !starNode.hasMeta(':tryparse'))
+				Context.fatalError('WriterLowering: @:trivia + @:sep requires close-peek (@:trail) or @:tryparse', Context.currentPos());
+			if (sepText != null && starNode.hasMeta(':tryparse') && !writerBlockEnded)
+				Context.fatalError(
+					'WriterLowering: @:trivia + @:sep + @:tryparse requires blockEnded flag '
+					+ '(@:sep(text, tailRelax, blockEnded))',
+					Context.currentPos()
+				);
 			// ω-orphan-trivia / ω-close-trailing: Seq-struct call sites
 			// drive the trailing slots synthesised on the paired type.
 			// Alt-branch Star call sites (`HxStatement.BlockStmt`) have
@@ -3528,6 +3555,14 @@ class WriterLowering {
 				final tryparsePriorAfterTrailExpr:Null<Expr> = prevTrailFieldName == null
 					? null
 					: {expr: EField(macro value, prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX), pos: Context.currentPos()};
+				// ω-blockended-trivia-tryparse (Session 3): thread the Star's
+				// `@:sep('text', tailRelax, blockEnded)` annotation into
+				// `triviaTryparseStarExpr` so the helper can inject `;`
+				// between two non-`}`-ending elements. Non-blockEnded
+				// tryparse Stars (every existing consumer) pass null sepText
+				// and the helper splices a no-op.
+				final tryparseSepText:Null<String> = starNode.annotations.get('lit.sepText');
+				final tryparseBlockEnded:Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
 				parts.push(triviaTryparseStarExpr(
 					fieldAccess, elemFn, sepExpr, sameLineName != null, nestBody,
 					tryparseTrailBB, tryparseTrailLC, tryparseTrailBA, firstSepOverride, subsequentSepOverride,
@@ -3540,7 +3575,8 @@ class WriterLowering {
 					cascadeInfos.betweenSameCtorIfNotInfos,
 					tryparseLineLengthAware,
 					tryparsePriorAfterTrailExpr,
-					tryparseForceInlineSep
+					tryparseForceInlineSep,
+					tryparseBlockEnded ? tryparseSepText : null, tryparseBlockEnded
 				));
 				return;
 			}
@@ -3580,7 +3616,16 @@ class WriterLowering {
 				// inline / leading / trailing comments are present, the
 				// list cannot collapse to a single line regardless of
 				// what the cascade would say.
-				if (sepText != null) {
+				// ω-blockended-trivia (Session 3): `@:sep('text', tailRelax,
+				// blockEnded)` on a block-mode trivia Star (HxFnBlock.stmts
+				// / HxBlockExpr.stmts / HxBlockStmt.stmts) keeps the
+				// per-element hardlined block layout — sep emit moves
+				// INSIDE `triviaBlockStarExpr` (extended), NOT through the
+				// flat-or-multi `triviaSepStarExpr`. Detect the flag here
+				// and skip the sep dispatch so the fall-through reaches
+				// the block dispatch with sepText/blockEnded threaded.
+				final blockEndedFlag:Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
+				if (sepText != null && !blockEndedFlag) {
 					// ω-cascade-emits-comments: emit the funcParamParens /
 					// typeParamOpen space inside the @:trivia + sep
 					// dispatch — the @:trivia path returns BEFORE the
@@ -3720,7 +3765,13 @@ class WriterLowering {
 					interMemberInfo, indentCaseLabelsGate, emptyCurlyBreak, beginEndType, keepCurlyBlanks,
 					lineCommentTrailBlank, blankBeforeFinalDocInLeading, staticVarSubdivInfo,
 					betweenMultilineCommentsBlanks, uniformBetweenOptField, anonFnClear, emptyCurlyKnob,
-					rightCurlyKnob, rightCurlyAnonFnKnob
+					rightCurlyKnob, rightCurlyAnonFnKnob,
+					// ω-blockended-trivia (Session 3): thread sepText +
+					// blockEnded flag when the Star opted into
+					// `@:sep('text', tailRelax, blockEnded)`. Null sepText
+					// preserves pre-slice byte-identical output for every
+					// existing block-mode caller.
+					blockEndedFlag ? sepText : null, blockEndedFlag
 				));
 			} else if (isLastField) {
 				if (openText != null) parts.push(macro _dt($v{openText}));
@@ -6343,7 +6394,15 @@ class WriterLowering {
 		clearAnonFnBodyOnElems:Bool = false,
 		emptyCurlyKnob:Null<String> = null,
 		rightCurlyKnob:Null<String> = null,
-		rightCurlyAnonFnKnob:Null<String> = null
+		rightCurlyAnonFnKnob:Null<String> = null,
+		// ω-blockended-trivia (Session 3): when the Star carries
+		// `@:sep('text', tailRelax, blockEnded)`, the block-mode emit
+		// gains between-element sep emission, gated on
+		// `!DocMeasure.endsWithCloseBrace(priorElemDoc)`. Null sepText →
+		// pre-slice byte-identical (no inter-stmt sep emit — per-stmt
+		// `;` lives inside each element's own Doc via @:trailOpt).
+		sepText:Null<String> = null,
+		blockEnded:Bool = false
 	):Expr {
 		// ω-arrow-lambda-body-context: when the call site opts in via
 		// `@:fmt(leftCurlyAnonFnOverride(...))` on the parent Star, the per-
@@ -6857,6 +6916,35 @@ class WriterLowering {
 				}
 			}
 			: macro {};
+		// ω-blockended-trivia (Session 3): between-element sep emission in
+		// block-mode trivia Star. Sep emitted BEFORE the per-iter hardline
+		// so the output is `<priorElem>;<\n><indent><currElem>` when the
+		// prior element wasn't already statement-terminated. Predicate is
+		// `endsWithStmtTerminator` (accepts both `}` block-close AND `;`
+		// already-emitted-by-inner-construct) so shapes like
+		// `if (c) return;` round-trip without double-`;`. Null sepText /
+		// non-blockEnded → no-op (byte-identical to pre-slice).
+		final blockSepBeforeHardlineExpr:Expr = (sepText != null && blockEnded)
+			? macro {
+				if (_si > 0 && _priorElemDoc != null
+						&& !anyparse.core.DocMeasure.endsWithStmtTerminator(_priorElemDoc)) {
+					_inner.push(_dt($v{sepText}));
+				}
+			}
+			: macro {};
+		// ω-blockended-trivia-trail-sep (Session 3): after the last element
+		// the loop has run, source-trail sep emission. Source had `;`
+		// before close iff the LAST element's `sepAfter` is true. Emit
+		// `;` to preserve byte-fidelity; suppress when the last element
+		// already ends with `}` / `;` (block-close OR inner @:trail(';')).
+		final blockTrailSepEmitExpr:Expr = (sepText != null && blockEnded)
+			? macro {
+				if (_arr.length > 0 && _priorElemDoc != null && _arr[_arr.length - 1].sepAfter
+						&& !anyparse.core.DocMeasure.endsWithStmtTerminator(_priorElemDoc)) {
+					_inner.push(_dt($v{sepText}));
+				}
+			}
+			: macro {};
 		return macro {
 			final _arr = $fieldAccess;
 			final _trailLC:Array<String> = $trailLC;
@@ -6885,10 +6973,17 @@ class WriterLowering {
 				$initCurrDocCommentExpr;
 				$initCurrSplitLeadingExpr;
 				$initPrevKindExpr;
+				// ω-blockended-trivia (Session 3): tracks the prior iteration's
+				// rendered element Doc so the between-element sep emission can
+				// query `DocMeasure.endsWithStmtTerminator`. Null on the first
+				// iteration (no `_si > 0`-gated emit yet). Always declared so
+				// the inserted expr is a no-op when sepText is null.
+				var _priorElemDoc:Null<anyparse.core.Doc> = null;
 				var _si:Int = 0;
 				while (_si < _arr.length) {
 					final _t = _arr[_si];
 					$initCurrKindExpr;
+					$blockSepBeforeHardlineExpr;
 					_inner.push(_dhl());
 					if (_si == 0) $beginTypeExpr;
 					$blankBeforeExpr;
@@ -6905,9 +7000,17 @@ class WriterLowering {
 					final _elem:anyparse.core.Doc = $triviaElemCall;
 					final _tc:Null<String> = _t.trailingComment;
 					_inner.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDocVerbatim(_tc, opt)) : _elem);
+					_priorElemDoc = _elem;
 					$trackPrevKindExpr;
 					_si++;
 				}
+				// ω-blockended-trivia-trail-sep (Session 3): after the last
+				// element, if source had `;` AND prior doesn't already
+				// terminate (covers `}` block-close and `;` from inner
+				// `@:trail(';')`), emit `;` so source-fidelity is preserved.
+				// Without this, `{ stmt1; stmt2; }` round-trips as
+				// `{ stmt1; stmt2 }` (valid Haxe but byte-diff).
+				$blockTrailSepEmitExpr;
 				if (_trailLC.length > 0) {
 					_inner.push(_dhl());
 					if ($extraInnerTrailBlankExpr) _inner.push(_dhl());
@@ -8219,7 +8322,14 @@ class WriterLowering {
 		betweenSameCtorIfNotInfos:Array<BetweenSameCtorIfNotInfo> = null,
 		lineLengthAwareSeps:Bool = false,
 		priorAfterTrailExpr:Null<Expr> = null,
-		forceInlineSep:Bool = false
+		forceInlineSep:Bool = false,
+		// ω-blockended-trivia-tryparse (Session 3): when the tryparse
+		// Star carries `@:sep('text', tailRelax, blockEnded)`, the
+		// per-iteration emit inserts `;` (or other sepText) between two
+		// non-`}`-ending elements before the existing hardline / space
+		// dispatch. Null sepText → byte-identical to pre-slice.
+		sepText:Null<String> = null,
+		blockEnded:Bool = false
 	):Expr {
 		// ω-bug-2c-inner-star — cascade emit for the tryparse-Star path.
 		// Cascade trackers + cascade-fire blank count come from
@@ -8457,6 +8567,33 @@ class WriterLowering {
 				_refuseFn == null || !_refuseFn(_arr[0].node);
 			})
 			: (macro true);
+		// ω-blockended-trivia-tryparse (Session 3): inject `;` between two
+		// not-yet-statement-terminated elements. Predicate is
+		// `endsWithStmtTerminator` (accepts `}` and `;`) so case-body
+		// stmts like `case x: foo();` (where ExprStmt's last byte is the
+		// inner Call's `)`) get a `;` while `case x: return;` doesn't
+		// double-emit. Null sepText / non-blockEnded → no-op.
+		final tryparseBlockEndedSepEmit:Expr = (sepText != null && blockEnded)
+			? macro {
+				if (_si > 0 && _priorElemDoc != null
+						&& !anyparse.core.DocMeasure.endsWithStmtTerminator(_priorElemDoc)) {
+					_docs.push(_dt($v{sepText}));
+				}
+			}
+			: macro {};
+		// ω-blockended-trivia-tryparse-trail (Session 3): post-loop tail
+		// sep emit so the last element of a case-body keeps its source
+		// `;` (e.g. `case X: foo();` survives round-trip). Same
+		// `endsWithStmtTerminator` gate so already-terminated last
+		// elements (`case X: { return; }`) don't double-emit.
+		final tryparseBlockEndedTrailEmit:Expr = (sepText != null && blockEnded)
+			? macro {
+				if (_arr.length > 0 && _priorElemDoc != null && _arr[_arr.length - 1].sepAfter
+						&& !anyparse.core.DocMeasure.endsWithStmtTerminator(_priorElemDoc)) {
+					_docs.push(_dt($v{sepText}));
+				}
+			}
+			: macro {};
 		return macro {
 			final _arr = $fieldAccess;
 			final _trailLC:Array<String> = $trailLC;
@@ -8488,11 +8625,17 @@ class WriterLowering {
 				$cascadeHeadEmit;
 				$priorAfterTrailEmit;
 				if (_padLeading && _arr.length > 0) _docs.push(_padHardline ? _dhl() : $padLeadingSpaceDoc);
+				// ω-blockended-trivia-tryparse (Session 3): see comment near
+				// tryparseBlockEndedSepEmit construction. Always declared so
+				// the splice site reads it safely; when sepText is null /
+				// blockEnded false, the splice expands to `{}` (no read).
+				var _priorElemDoc:Null<anyparse.core.Doc> = null;
 				var _si:Int = 0;
 				while (_si < _arr.length) {
 					final _t = _arr[_si];
 					$cascadeInitCurr;
 					$cascadeCurrCompute;
+					$tryparseBlockEndedSepEmit;
 					if (_t.leadingComments.length > 0) {
 						_docs.push(_dhl());
 						if (_t.blankBefore && _si > 0) _docs.push(_dhl());
@@ -8574,9 +8717,11 @@ class WriterLowering {
 					final _elem:anyparse.core.Doc = $triviaElemCall;
 					final _tc:Null<String> = _t.trailingComment;
 					_docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDocVerbatim(_tc, opt)) : _elem);
+					_priorElemDoc = _elem;
 					$cascadeTrackPrev;
 					_si++;
 				}
+				$tryparseBlockEndedTrailEmit;
 				if (_padTrailing && _arr.length > 0) _docs.push(_padHardline ? _dhl() : _dt(' '));
 				else if (_metaPolicy != 0 && _arr.length > 0) _docs.push(_dhl());
 				// ω-trivia-tryparse-linelength: when the LAST element carries

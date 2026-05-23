@@ -521,7 +521,14 @@ class TriviaTypeSynth {
 				n += 3; // openTrailing + trailingBlankBefore + trailingLeading
 				// ω-arraylit-source-trail-comma: + trailPresent when @:sep is
 				// present (mirrors `buildEnumCtor` gate).
-				if (branch.readMetaString(':sep') != null) n++;
+				// ω-blockended-trivia-meta-arity (Session 3): hasMeta over
+				// readMetaString — must match `buildEnumCtor` L1093 gate so the
+				// paired-to-raw switch pattern's `_` placeholder count stays
+				// in sync with the Alt ctor's extra-arg count. Latent today
+				// (no `:trivia + :lead + :trail + :sep(>1-arg)` Alt branch
+				// in the live grammar) but blocks the next BlockStmt /
+				// BlockExpr migration.
+				if (branch.hasMeta(':sep')) n++;
 			}
 		}
 		if (isAltTrailOptBranch(branch)) n++; // trailPresent
@@ -589,7 +596,11 @@ class TriviaTypeSynth {
 					entries.push({field: fieldName + TRAILING_OPEN_SUFFIX, expr: macro (null : Null<String>)});
 				if (child.hasMeta(':tryparse') && child.fmtHasFlag('nestBody'))
 					entries.push({field: fieldName + TRAILING_BLANK_AFTER_SUFFIX, expr: macro false});
-				if (child.readMetaString(':sep') != null && child.readMetaString(':trail') != null)
+				// ω-blockended-trivia-meta-arity (Session 3): hasMeta over
+				// readMetaString — gate must match `buildStarTrailingSlots`
+				// at L1002. Multi-arg `@:sep('text', tailRelax, blockEnded)`
+				// (3-arg form) lands on the same code path as 1-arg `@:sep(',')`.
+				if (child.hasMeta(':sep') && child.hasMeta(':trail'))
 					entries.push({field: fieldName + TRAIL_PRESENT_SUFFIX, expr: macro false});
 			}
 			// ω-condcomp-body-leading-sep: trivia-independent SepBefore
@@ -663,7 +674,10 @@ class TriviaTypeSynth {
 				// state — preWrite plugin rewrites don't preserve source
 				// trailing-sep presence, so the writer falls back to the
 				// knob-only path (`appendTrailingCommaExpr = knob`).
-				if (branch.readMetaString(':sep') != null) defaults.push(macro false);
+				// ω-blockended-trivia-meta-arity (Session 3): hasMeta over
+				// readMetaString — must match `buildEnumCtor` L1076 gate so
+				// raw-to-paired ctor arg count matches the paired ctor's arity.
+				if (branch.hasMeta(':sep')) defaults.push(macro false);
 			}
 		}
 		if (isAltTrailOptBranch(branch)) defaults.push(macro false); // trailPresent
@@ -999,7 +1013,13 @@ class TriviaTypeSynth {
 		// break-mode when the source committed to a multi-line list.
 		// Reads `:sep` / `:trail` directly from `base.meta` for the same
 		// pre-Lit-pass ordering reason as the gates above.
-		if (child.readMetaString(':sep') != null && child.readMetaString(':trail') != null) {
+		//
+		// ω-blockended-trivia-meta-arity (Session 3): `hasMeta` instead of
+		// `readMetaString` so multi-arg `@:sep('text', tailRelax, blockEnded)`
+		// counts the same as 1-arg `@:sep(',')`. Parser-side gate reads
+		// `lit.sepText` (set by Lit strategy after both 1- and 3-arg forms)
+		// — synth must match the parser to keep ctor / struct arity in sync.
+		if (child.hasMeta(':sep') && child.hasMeta(':trail')) {
 			fields.push({name: fieldName + TRAIL_PRESENT_SUFFIX, kind: FVar(boolCT), pos: pos, access: []});
 		}
 		return fields;
@@ -1073,7 +1093,11 @@ class TriviaTypeSynth {
 				// runtime field-name probe stays consistent. Gated on `@:sep`
 				// so block-style trivia ctors (`BlockStmt`, `BlockExpr`) keep
 				// their pre-slice 5-arg shape.
-				if (branch.readMetaString(':sep') != null) {
+				// ω-blockended-trivia-meta-arity (Session 3): `hasMeta` over
+				// `readMetaString` so `@:sep('text', tailRelax, blockEnded)`
+				// (3-arg form) gates the same as 1-arg `@:sep(',')`. Sister
+				// fix in `buildStarTrailingSlots`.
+				if (branch.hasMeta(':sep')) {
 					args.push({name: TRAIL_PRESENT_ARG_NAME, type: boolCT});
 				}
 			}

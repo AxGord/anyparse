@@ -3164,9 +3164,29 @@ class Lowering {
 		elemCT:ComplexType, elemCall:Expr, openText:Null<String>, closeText:Null<String>
 	):Void {
 		final sepText:Null<String> = starNode.annotations.get('lit.sepText');
-		if (sepText != null && (closeText == null || starNode.hasMeta(':tryparse'))) {
+		final blockEndedFlag:Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
+		// ω-blockended-trivia-tryparse (Session 3): the historical
+		// `@:trivia + @:sep + (EOF | @:tryparse)` reject is relaxed for
+		// the specific shape `@:sep(text, tailRelax, blockEnded) +
+		// @:tryparse`. The blockEnded flag supplies the missing
+		// termination signal: between two elements, sep may be absent
+		// when the prior element ended with `}`, and sep-absent +
+		// non-blockEnded gracefully exits the tryparse loop (tryparse
+		// semantic: element is valid but no-more-sep means we're done).
+		// First consumers: HxCaseBranch.body, HxDefaultBranch.stmts —
+		// the case/default-body Stars that previously relied on per-
+		// statement `@:trailOpt(';')` to consume `;` and on element-
+		// parse failure to terminate at next `case`/`default`/`}`.
+		if (sepText != null && closeText == null && !starNode.hasMeta(':tryparse')) {
 			Context.fatalError(
-				'Lowering: @:trivia + @:sep requires close-peek (@:trail), not EOF/@:tryparse',
+				'Lowering: @:trivia + @:sep requires @:trail (close-peek) or @:tryparse',
+				Context.currentPos()
+			);
+		}
+		if (sepText != null && starNode.hasMeta(':tryparse') && !blockEndedFlag) {
+			Context.fatalError(
+				'Lowering: @:trivia + @:sep + @:tryparse requires the blockEnded flag '
+				+ '(@:sep(text, tailRelax, blockEnded)) — termination semantic undefined otherwise',
 				Context.currentPos()
 			);
 		}
@@ -3303,6 +3323,94 @@ class Lowering {
 		}
 		final accumRef:Expr = macro $i{localName};
 		if (tryparse) {
+			// ω-blockended-trivia-tryparse (Session 3): `@:tryparse +
+			// @:sep(text, tailRelax, blockEnded)` fork — permissive
+			// matchLit on sep (consistent with the close-peek trivia
+			// path's existing semantics). Element-parse failure still
+			// rewinds + breaks via the existing try/catch. The
+			// `blockEnded` flag does NOT affect parsing — it lives on
+			// the writer side (suppress sep emission when prior ends
+			// with `}` / `;`). Both nestBody and non-nestBody variants
+			// emit; nestBody keeps the orphan-trail capture on parse
+			// failure.
+			if (sepText != null) {
+				if (nestBody) {
+					parseSteps.push(macro {
+						while (true) {
+							final _savedPos:Int = ctx.pos;
+							final _lead = collectTrivia(ctx);
+							final _afterTriviaPos:Int = ctx.pos;
+							try {
+								final _node:$elemCT = $elemCall;
+								final _trailingBeforeSep:Null<String> = collectTrailingFull(ctx);
+								var _sepAfter:Bool = false;
+								while (ctx.pos < ctx.input.length) {
+									final _hwc:Int = ctx.input.charCodeAt(ctx.pos);
+									if (_hwc == ' '.code || _hwc == '\t'.code || _hwc == '\r'.code) ctx.pos++;
+									else break;
+								}
+								_sepAfter = matchLit(ctx, $v{sepText});
+								final _trailing:Null<String> = _trailingBeforeSep ?? (_sepAfter ? collectTrailingFull(ctx) : null);
+								$i{trailPresentLocal} = _sepAfter;
+								$accumRef.push({
+									blankBefore: _lead.blankBefore,
+									blankAfterLeadingComments: _lead.blankAfterLeadingComments,
+									newlineBefore: _lead.newlineBefore,
+									leadingComments: _lead.leadingComments,
+									trailingComment: _trailing,
+									trailingBeforeSep: _trailingBeforeSep != null,
+									sepAfter: _sepAfter,
+									node: _node,
+								});
+							} catch (_e:anyparse.runtime.ParseError) {
+								if (!_lead.blankBefore && _lead.leadingComments.length > 0) {
+									$i{trailBBLocal} = _lead.blankBefore;
+									$i{trailLCLocal} = _lead.leadingComments;
+									$i{trailBALocal} = _lead.blankAfterLeadingComments;
+									ctx.pos = _afterTriviaPos;
+								} else {
+									ctx.pos = _savedPos;
+								}
+								break;
+							}
+						}
+					});
+					return;
+				}
+				parseSteps.push(macro {
+					while (true) {
+						final _savedPos:Int = ctx.pos;
+						final _lead = collectTrivia(ctx);
+						try {
+							final _node:$elemCT = $elemCall;
+							final _trailingBeforeSep:Null<String> = collectTrailingFull(ctx);
+							var _sepAfter:Bool = false;
+							while (ctx.pos < ctx.input.length) {
+								final _hwc:Int = ctx.input.charCodeAt(ctx.pos);
+								if (_hwc == ' '.code || _hwc == '\t'.code || _hwc == '\r'.code) ctx.pos++;
+								else break;
+							}
+							_sepAfter = matchLit(ctx, $v{sepText});
+							final _trailing:Null<String> = _trailingBeforeSep ?? (_sepAfter ? collectTrailingFull(ctx) : null);
+							$i{trailPresentLocal} = _sepAfter;
+							$accumRef.push({
+								blankBefore: _lead.blankBefore,
+								blankAfterLeadingComments: _lead.blankAfterLeadingComments,
+								newlineBefore: _lead.newlineBefore,
+								leadingComments: _lead.leadingComments,
+								trailingComment: _trailing,
+								trailingBeforeSep: _trailingBeforeSep != null,
+								sepAfter: _sepAfter,
+								node: _node,
+							});
+						} catch (_e:anyparse.runtime.ParseError) {
+							ctx.pos = _savedPos;
+							break;
+						}
+					}
+				});
+				return;
+			}
 			// Try-parse termination: each iteration saves `ctx.pos` before
 			// `collectTrivia`, attempts the element parse, and rewinds to
 			// the saved pos on failure so the captured trivia is fully
@@ -3415,6 +3523,19 @@ class Lowering {
 		// (lineends/issue_111). Sep-less Stars push `sepAfter: true`
 		// (default declared just inside the loop body) so the writer's
 		// always-emit branch fires unchanged.
+		// ω-blockended-trivia (Session 3): Stars carrying
+		// `@:sep('text', tailRelax, blockEnded)` keep the existing
+		// matchLit-permissive sep loop on the parser side — sep is
+		// optional, source-fidelity flows through `_sepAfter` to the
+		// per-element wrapper. The `blockEnded` flag controls
+		// WRITER-side sep emission (suppress `;` when prior ends with
+		// `}` or `;`). Trying to enforce strict expectLit-on-miss here
+		// fails on shapes like `if (c) return;` where the inner stmt's
+		// own `;` was already consumed by an inner `@:trail(';')` /
+		// embedded VoidReturnStmt — the byte at `_prevEndPos - 1` is
+		// `;` not `}`. Permissive parser keeps backwards-compatibility
+		// with the old per-stmt-@:trailOpt model byte-for-byte.
+		final blockEnded:Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
 		final sepMatchExpr:Expr = if (sepText != null) {
 			macro {
 				while (ctx.pos < ctx.input.length) {
