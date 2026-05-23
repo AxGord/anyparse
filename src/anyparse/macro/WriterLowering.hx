@@ -6919,15 +6919,22 @@ class WriterLowering {
 		// ω-blockended-trivia (Session 3): between-element sep emission in
 		// block-mode trivia Star. Sep emitted BEFORE the per-iter hardline
 		// so the output is `<priorElem>;<\n><indent><currElem>` when the
-		// prior element wasn't already statement-terminated. Predicate is
-		// `endsWithStmtTerminator` (accepts both `}` block-close AND `;`
-		// already-emitted-by-inner-construct) so shapes like
-		// `if (c) return;` round-trip without double-`;`. Null sepText /
+		// prior element wasn't already statement-terminated. Null sepText /
 		// non-blockEnded → no-op (byte-identical to pre-slice).
+		//
+		// ω-phase-g (Session 4): source-fidelity OR `_arr[_si - 1].sepAfter`.
+		// Trust the parser: if it consumed a sep after the prior element,
+		// preserve it on output even when the prior already ends with `}`
+		// (covers source like `if (c) {body}; foo();` where author wrote
+		// the redundant `;` after the brace). The `endsWithStmtTerminator`
+		// arm stays as a safety net for raw/programmatic AST inputs whose
+		// `Trivial<T>` defaults leave `sepAfter=false` even when the source
+		// shape demands a sep.
 		final blockSepBeforeHardlineExpr:Expr = (sepText != null && blockEnded)
 			? macro {
 				if (_si > 0 && _priorElemDoc != null
-						&& !anyparse.core.DocMeasure.endsWithStmtTerminator(_priorElemDoc)) {
+						&& (_arr[_si - 1].sepAfter
+							|| !anyparse.core.DocMeasure.endsWithStmtTerminator(_priorElemDoc))) {
 					_inner.push(_dt($v{sepText}));
 				}
 			}
@@ -8568,15 +8575,22 @@ class WriterLowering {
 			})
 			: (macro true);
 		// ω-blockended-trivia-tryparse (Session 3): inject `;` between two
-		// not-yet-statement-terminated elements. Predicate is
-		// `endsWithStmtTerminator` (accepts `}` and `;`) so case-body
-		// stmts like `case x: foo();` (where ExprStmt's last byte is the
-		// inner Call's `)`) get a `;` while `case x: return;` doesn't
-		// double-emit. Null sepText / non-blockEnded → no-op.
+		// not-yet-statement-terminated elements. Null sepText /
+		// non-blockEnded → no-op.
+		//
+		// ω-phase-g (Session 4): source-fidelity OR `_arr[_si - 1].sepAfter`.
+		// Trust the parser: if it consumed a sep after the prior element,
+		// preserve it on output even when the prior already ends with `}`
+		// or `;` (covers source like `case x: if(c){body}; foo();` where
+		// the author wrote the redundant `;` after the brace). The
+		// `endsWithStmtTerminator` arm stays as a safety net for raw /
+		// programmatic AST inputs whose `Trivial<T>` defaults leave
+		// `sepAfter=false` even when the source shape demands a sep.
 		final tryparseBlockEndedSepEmit:Expr = (sepText != null && blockEnded)
 			? macro {
 				if (_si > 0 && _priorElemDoc != null
-						&& !anyparse.core.DocMeasure.endsWithStmtTerminator(_priorElemDoc)) {
+						&& (_arr[_si - 1].sepAfter
+							|| !anyparse.core.DocMeasure.endsWithStmtTerminator(_priorElemDoc))) {
 					_docs.push(_dt($v{sepText}));
 				}
 			}
