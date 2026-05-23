@@ -3440,13 +3440,15 @@ final class Cli {
 		final compiledRegex:Null<Array<EReg>> = regexMode ? compileStripRegexes('recon', patterns) : null;
 		if (regexMode && compiledRegex == null) return EXIT_USAGE;
 		// `--source` is meaningful only in modes where the per-path window
-		// adds signal — `--cluster <key>` drill OR `--predict-strip`
-		// STILL FAIL entries (where the new locus is the actionable
-		// payload). In plain sweep mode it would flood every SKIP line
-		// with a per-fixture window, so make the misuse a hard usage
-		// error rather than a silent no-op.
-		if (showSource && clusterFilter == null && noTargetClusterFilter == null && !predictStrip) {
-			stderr('apq recon: --source requires --cluster <key> / --no-target-cluster <key> / --predict-strip (drill / STILL-FAIL modes only; would flood the sweep otherwise)\n');
+		// adds signal — `--cluster <key>` drill, `--no-target-cluster
+		// <key>` drill, `--predict-strip` STILL FAIL entries, or
+		// `--predict-relax` (STILL FAIL in sweep mode, both STILL FAIL +
+		// NO TARGET in probe / drill modes). In plain sweep mode without
+		// any of those it would flood every SKIP line with a per-fixture
+		// window, so make the misuse a hard usage error rather than a
+		// silent no-op.
+		if (showSource && clusterFilter == null && noTargetClusterFilter == null && !predictStrip && !predictRelax) {
+			stderr('apq recon: --source requires --cluster <key> / --no-target-cluster <key> / --predict-strip / --predict-relax (drill / STILL-FAIL modes only; would flood the sweep otherwise)\n');
 			return EXIT_USAGE;
 		}
 		// `--regression-probe` is its own mode — separate from probe /
@@ -3733,6 +3735,12 @@ final class Cli {
 				return EXIT_RUNTIME;
 			case NoTarget:
 				sysPrint('PREDICT RELAX NO TARGET $path :: at ${res.origLine}:${res.origCol} — ${res.message}\n');
+				// NoTarget has no patched source (the parser found no
+				// `expected` hint to inject), so the window is anchored on
+				// the ORIGINAL fail-locus. `origLine == 0` is the
+				// "already-parseable" / pre-error path (no usable locus);
+				// skip the window for those.
+				if (showSource && res.origLine > 0) printReconSourceWindow(res.original, res.origLine);
 				return EXIT_RUNTIME;
 		}
 	}
@@ -5097,7 +5105,13 @@ final class Cli {
 		sysPrint('                          around the fail-locus for each path (L±3).\n');
 		sysPrint('                          With --predict-strip, also emits the window for\n');
 		sysPrint('                          each STILL FAIL entry around the NEW fail-locus\n');
-		sysPrint('                          (the moved-locus payload). Usage error otherwise.\n');
+		sysPrint('                          (the moved-locus payload). With --predict-relax,\n');
+		sysPrint('                          emits the window for STILL FAIL (around NEW locus\n');
+		sysPrint('                          in patched source) and for NO TARGET entries in\n');
+		sysPrint('                          drill/probe modes (around the ORIGINAL fail-locus,\n');
+		sysPrint('                          which has no patch). Sweep-mode NO TARGET stays\n');
+		sysPrint('                          collapsed into the footer histogram. Usage error\n');
+		sysPrint('                          outside these modes.\n');
 		sysPrint('  --predict-strip         Apply substitutions to each skip-parse source\n');
 		sysPrint('                          and retry; print PREDICT UNBLOCK / STILL FAIL /\n');
 		sysPrint('                          NO MATCH per file. Requires --replace/--with or\n');

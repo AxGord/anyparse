@@ -552,6 +552,65 @@ class ApqReconCliTest extends Test {
 		#end
 	}
 
+	// -- --predict-relax --source: windowed src for STILL FAIL + NO TARGET --
+
+	public function testReconPredictRelaxSourceProbeNoTargetEmitsWindow():Void {
+		#if sys
+		// `--predict-relax --source --probe <file>` on a NO TARGET outcome
+		// (the parser returned no usable `expected` hint to inject) prints
+		// a windowed source slice anchored on the ORIGINAL fail-locus —
+		// distinct from `--predict-strip` where the window anchors on the
+		// NEW (post-substitution) locus. THE drill payload for triaging
+		// the NO TARGET cluster.
+		final dir:String = mkTempDir('apq_recon_predict_relax_source_probe');
+		// `{foo: bar}` parses as a module-level object literal, which the
+		// HxDecl gate rejects with no usable terminator hint — reliable
+		// NO TARGET outcome anchored at 1:1.
+		final fixture:String = '{}\n---\n\n{foo: bar}\n\n---\n\n{foo: bar}\n';
+		final fixturePath:String = '$dir/probe.hxtest';
+		File.saveContent(fixturePath, fixture);
+		Assert.equals(1, Cli.run([
+			'recon', '--probe', fixturePath, '--predict-relax', '--source'
+		]), '--predict-relax --probe --source on NO TARGET exits runtime (no terminator to inject)');
+		cleanupDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testReconPredictRelaxSourceSweepAllowed():Void {
+		// Plain sweep `--predict-relax --source` is ALLOWED — the validation
+		// guard recognises predict-relax as a non-flooding mode (sweep keeps
+		// NO TARGET collapsed in the footer; STILL FAIL is small). Pre-edit
+		// this combination was rejected as a usage error.
+		#if sys
+		final dir:String = mkTempDir('apq_recon_predict_relax_source_sweep');
+		// Empty corpus → sweep runs cleanly without flooding.
+		Assert.equals(0, Cli.run(['recon', '--predict-relax', '--source', dir]),
+			'--predict-relax --source sweep on empty corpus exits 0 (NO TARGET stays collapsed)');
+		cleanupDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testReconPredictRelaxNoTargetClusterSourceAllowed():Void {
+		#if sys
+		// `--predict-relax --no-target-cluster <msg> --source` combines the
+		// footer-bucket drill with the per-path source window. Empty corpus
+		// → 0 matched records → runtime exit (parallel of the
+		// non-`--source` test above), proves the combination is accepted.
+		final dir:String = mkTempDir('apq_recon_relax_no_target_source');
+		Assert.equals(1, Cli.run([
+			'recon', '--predict-relax', '--no-target-cluster', 'anything',
+			'--source', dir
+		]), '--predict-relax --no-target-cluster --source on empty corpus is a runtime exit');
+		cleanupDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	// -- --permissive-construct: field-optionalization predictor --
 
 	public function testReconPermissiveConstructIncompatibleWithProbe():Void {
