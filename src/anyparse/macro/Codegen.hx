@@ -414,10 +414,12 @@ class Codegen {
 	 * not a word character (`[A-Za-z0-9_]`), so `else` does not peek-match
 	 * the prefix of `elsewhere`. Distinct from `matchKw` (which consumes
 	 * on a successful boundary-checked match) — `peekKw` leaves `ctx.pos`
-	 * untouched in every path. Sole consumer: the Slice-V `ExprStmt`
-	 * trail-`;` gate in `Lowering`, which treats `;` as optional when an
-	 * `else` follows (an `ExprStmt` followed by `else` is only ever an
-	 * if-then-body in valid Haxe).
+	 * untouched in every path. Sole consumer: the `ExprStmt` trail-`;`
+	 * gate in `Lowering` (Slice-V plus ω-slice-X2/X3/X4), which treats `;`
+	 * as optional when `else` / `case` / `default` follows the just-parsed
+	 * expression (each keyword is reserved and unambiguously signals a
+	 * statement-arm separator — if-then-body, switch case label, switch
+	 * default label respectively).
 	 */
 	private static function peekKwField():Field {
 		return {

@@ -1729,8 +1729,26 @@ class Lowering {
 				// Star `@:trail('}')`. Sole consumer remains `HxStatement.
 				// ExprStmt`. Closes the `expected="//"` cluster's bare-call/
 				// bare-ident drivers (issue_357 array-comprehension etc.).
+				// ω-slice-X4 (Slice 51 — `case`/`default`-terminator): extend
+				// the gate further so the trail `;` is optional when the
+				// next non-trivia bytes form a word-boundary-checked
+				// `case` or `default` keyword. `case` and `default` are
+				// reserved in Haxe and legal ONLY as switch arm labels, so
+				// an `ExprStmt` followed by either keyword can only be the
+				// last stmt of a switch arm — the next `case`/`default`
+				// label itself is unambiguously the arm separator,
+				// regardless of the just-parsed expr's kind. Closes the
+				// `Cli.hx` dogfooding gap (try-expr-catch `try x = foo()
+				// catch (e:Exception) { … }` as the body of a switch arm
+				// followed by another `case`). Byte-twin of the `peekKw("else")`
+				// disjunct above — same word-boundary check, same
+				// non-consuming nature (the `case`/`default` belongs to the
+				// enclosing switch's `Star` of case clauses). Sole consumer
+				// remains `HxStatement.ExprStmt`. Cascade-safe: `f() g()`
+				// inside a switch arm still throws (`g` is neither `case`
+				// nor `default`).
 				final gateCond:Null<Expr> = parseGateCall != null
-					? (macro ($parseGateCall || peekKw(ctx, "else") || peekLit(ctx, "}")))
+					? (macro ($parseGateCall || peekKw(ctx, "else") || peekLit(ctx, "}") || peekKw(ctx, "case") || peekKw(ctx, "default")))
 					: null;
 				if (parseGateCall != null && triviaTrailOpt)
 					steps.push(macro final _trailPresent:Bool = $gateCond ? matchLit(ctx, $v{trailText}) : { expectLit(ctx, $v{trailText}); true; });
