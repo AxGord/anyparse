@@ -575,19 +575,18 @@ class HxControlFlowSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public function testIfBareThenBareElseNoSemiStillRejected():Void {
-		// Documented limitation (pinned), same class as
-		// testBareThenNoElseNoSemiStillRejected: `if (c) g() else h()`
-		// with NO `;` anywhere. The else-peek relaxes the THEN-body `;`
-		// before `else` (so `g()` is fine), but the bare else-body
-		// `h()` is then a non-`;` statement immediately before the
-		// enclosing block-close `}` — relaxing `;` before `}` is the
-		// Slice-V unguarded catch-all danger zone, deliberately NOT
-		// done. A `;` or a brace-terminated else-body (`else { … }`)
-		// makes it parse (see testIfBareThenBlockElse / *SemiBlockElse).
-		// Same exit criterion as the no-else pin (a positionally-scoped
-		// soft-terminator for if/while/for bodies). See HxIfStmt doc.
-		Assert.raises(() -> parseBody('class C { function f():Void { if (c) g() else h() } }'));
+	public function testIfBareThenBareElseNoSemiBeforeCloseBrace():Void {
+		// Post-Slice-44 (ω-slice-X3): the documented "danger zone" of the
+		// pre-slice gate (bare else-body before enclosing `}`) is closed
+		// by the parse-time peek-`}` disjunct. `if (c) g() else h()`
+		// with NO `;` anywhere now parses: the else-peek relaxes the
+		// then-body `;`, and the bare else-body `h()` is followed by
+		// the enclosing block's `}` — peek-`}` triggers and the `;` is
+		// elided. The "positionally-scoped soft-terminator" the prior
+		// limitation comment named as the exit criterion IS the new
+		// peek-`}` disjunct.
+		final body:Array<HxStatement> = parseBody('class C { function f():Void { if (c) g() else h() } }');
+		Assert.equals(1, body.length);
 	}
 
 	public function testIfBareThenElseIfChain():Void {
@@ -641,15 +640,17 @@ class HxControlFlowSliceTest extends HxTestHelpers {
 		Assert.raises(() -> parseBody('class C { function f():Void { foo() bar(); } }'));
 	}
 
-	public function testBareThenNoElseNoSemiStillRejected():Void {
-		// Documented limitation (pinned): a bare non-`;` then-body with
-		// NO `else` and a block-end terminator stays REJECTED. Relaxing
-		// `;` before `}` is the Slice-V unguarded catch-all danger zone
-		// (it would break the Star-loop statement boundary). Exit
-		// criterion: a future positionally-scoped soft-terminator for
-		// if/while/for bodies could lift this without touching the
-		// general ExprStmt boundary mechanism. See HxIfStmt doc.
-		Assert.raises(() -> parseBody('class C { function f():Void { if (c) g() } }'));
+	public function testBareThenNoElseNoSemiBeforeCloseBrace():Void {
+		// Post-Slice-44 (ω-slice-X3): the documented limitation is
+		// closed. A bare non-`;` then-body with NO `else` and a block-
+		// end terminator now parses — the body `g()` is followed by
+		// the enclosing block's `}` so the parse-time peek-`}`
+		// disjunct on `ExprStmt`'s gate elides the `;`. Multi-stmt
+		// boundary detection is preserved (a bare-then followed by
+		// another stmt with no `;` between them still throws — see
+		// `testBareCallFollowedByBareCallStillRejected` above).
+		final body:Array<HxStatement> = parseBody('class C { function f():Void { if (c) g() } }');
+		Assert.equals(1, body.length);
 	}
 
 	public function testIfBareThenElseRoundTrip():Void {

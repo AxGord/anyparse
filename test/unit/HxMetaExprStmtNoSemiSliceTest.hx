@@ -81,13 +81,25 @@ class HxMetaExprStmtNoSemiSliceTest extends HxTestHelpers {
 		Assert.equals(2, stmts.length);
 	}
 
-	// -- Regression: non-brace meta operand still requires `;`. The
-	// gate must remain false for `@:meta x + 1` so the catch-all
-	// throws and multi-statement boundary detection works.
+	// -- Post-Slice-44 (ω-slice-X3): a meta wrapping a non-brace
+	// operand before `}` now parses via the parse-time peek-`}`
+	// disjunct. The intrinsic gate's MetaExpr arm only recurses into
+	// brace-terminated inners; peek-`}` accepts when the enclosing
+	// block's `}` is next. Boundary detection still works when the
+	// next byte is NOT `}` (multi-stmt `@:m x + 1\n\tnext-stmt`
+	// remains required to throw).
 
-	public function testMetaPlainExprRequiresSemi():Void {
-		Assert.raises(() -> HaxeParser.parse(
+	public function testMetaPlainExprBeforeCloseBraceNoSemi():Void {
+		final cls:HxClassDecl = HaxeParser.parse(
 			'class C {\n\tfunction f() {\n\t\t@:nullSafety(Off) x + 1\n\t}\n}'
+		);
+		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+		Assert.equals(1, stmts.length);
+	}
+
+	public function testMetaPlainExprFollowedByIdentRegression():Void {
+		Assert.raises(() -> HaxeParser.parse(
+			'class C {\n\tfunction f() {\n\t\t@:nullSafety(Off) x + 1\n\t\ty = 5\n\t}\n}'
 		));
 	}
 

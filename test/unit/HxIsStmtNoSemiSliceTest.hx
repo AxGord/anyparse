@@ -68,12 +68,15 @@ class HxIsStmtNoSemiSliceTest extends HxTestHelpers {
 		Assert.isTrue(e.match(Is(_, _)));
 	}
 
-	// -- Regression: Assign+Is RHS without `;` MUST still throw
-	// (carve-out, twin of Slice 30 / 39 / 42 ObjectLit / ArrayExpr /
-	// DollarBlockExpr) --
+	// -- Post-Slice-44 (ω-slice-X3): Assign+Is RHS before `}` now parses
+	// via the parse-time peek-`}` disjunct. The intrinsic Assign-RHS
+	// carve-out in `stmtExprNoSemi` (`rhsCtor == 'Is'`) remains
+	// load-bearing for the case where the next byte is NOT `}`.
 
-	public function testNoIsAssignRegression():Void {
-		Assert.raises(() -> HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = a is Int\n\t}\n}'));
+	public function testIsAssignBeforeCloseBraceNoSemi():Void {
+		final cls:HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = a is Int\n\t}\n}');
+		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+		Assert.equals(1, stmts.length);
 	}
 
 	// -- Regression: Assign+Is RHS with `;` parses --

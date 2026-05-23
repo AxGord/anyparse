@@ -47,12 +47,17 @@ class HxAssignStmtNoSemiSliceTest extends HxTestHelpers {
 		Assert.isTrue(e.match(Assign(_, IfExpr(_))));
 	}
 
-	// -- Negative: Assign + IfExpr (block then + bare else) — bare
-	// else's last token is NOT `}`, so the gate returns false and `;`
-	// is required. Documents the discrimination boundary.
+	// -- Post-Slice-44: Assign + IfExpr (block then + bare else) before
+	// `}` now parses via the peek-`}` disjunct (ω-slice-X3). The bare
+	// else's last token is the `2` literal, not `}`, but the enclosing
+	// block's `}` is the next non-trivia byte so the gate elides `;`.
+	// Pre-Slice-44 this raised on the missing `;`; the new behaviour
+	// matches Haxe's last-stmt-in-block elision rule.
 
-	public function testAssignIfBlockThenBareElseRequiresSemi():Void {
-		Assert.raises(() -> HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = if (a) { 1; } else 2\n\t}\n}'));
+	public function testAssignIfBlockThenBareElseBeforeCloseBrace():Void {
+		final cls:HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = if (a) { 1; } else 2\n\t}\n}');
+		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+		Assert.equals(1, stmts.length);
 	}
 
 	// -- Isolated: Assign + IfExpr no else — body is block --
@@ -108,22 +113,42 @@ class HxAssignStmtNoSemiSliceTest extends HxTestHelpers {
 		);
 	}
 
-	// -- Regression: plain Assign without `;` MUST still throw (gate-false catch-all) --
+	// -- Post-Slice-44 (ω-slice-X3): Assign with non-brace RHS before
+	// `}` now parses — the enclosing block's close brace acts as the
+	// statement separator via the parse-time peek-`}` disjunct. The
+	// intrinsic Assign-RHS carve-out in `stmtExprNoSemi` (`rhsCtor ==
+	// 'ObjectLit' | 'ArrayExpr' | 'DollarBlockExpr' | 'Is'`) only
+	// gates the recursive intrinsic check; peek-`}` overrides it when
+	// `}` is the next non-trivia byte (the carve-out remains
+	// load-bearing for the boundary-detection case below where the
+	// next byte is NOT `}`).
 
-	public function testNoPlainAssignRegression():Void {
-		Assert.raises(() -> HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = a + b\n\t}\n}'));
+	public function testPlainAssignBeforeCloseBraceNoSemi():Void {
+		final cls:HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = a + b\n\t}\n}');
+		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+		Assert.equals(1, stmts.length);
 	}
 
-	// -- Regression: Assign+ObjectLit without `;` MUST still throw (kept strict) --
-
-	public function testNoObjectLitAssignRegression():Void {
-		Assert.raises(() -> HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = {a: 1}\n\t}\n}'));
+	public function testObjectLitAssignBeforeCloseBraceNoSemi():Void {
+		final cls:HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = {a: 1}\n\t}\n}');
+		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+		Assert.equals(1, stmts.length);
 	}
 
-	// -- Regression: Assign+ArrayExpr without `;` MUST still throw (Slice 39 carve-out, same as ObjectLit) --
+	public function testArrayExprAssignBeforeCloseBraceNoSemi():Void {
+		final cls:HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = [1, 2, 3]\n\t}\n}');
+		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+		Assert.equals(1, stmts.length);
+	}
 
-	public function testNoArrayExprAssignRegression():Void {
-		Assert.raises(() -> HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = [1, 2, 3]\n\t}\n}'));
+	// -- Regression: Assign-stmt boundary detection. When the next byte
+	// after a `;`-less Assign is ANOTHER stmt token (ident, kw) — NOT
+	// `}` — the gate's peek-`}` disjunct stays false and the `;`
+	// remains required. Pins the multi-stmt boundary that the carve-out
+	// originally guarded.
+
+	public function testAssignFollowedByIdentRegression():Void {
+		Assert.raises(() -> HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = a + b\n\t\ty = c\n\t}\n}'));
 	}
 
 	// -- Regression: pre-slice path — Assign+IfExpr WITH `;` still parses --

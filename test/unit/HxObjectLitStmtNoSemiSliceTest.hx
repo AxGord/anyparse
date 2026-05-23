@@ -106,13 +106,30 @@ class HxObjectLitStmtNoSemiSliceTest extends HxTestHelpers {
 		Assert.isTrue(e.match(ObjectLit(_)));
 	}
 
-	// -- Regression: non-brace expression still requires `;`. The gate
-	// must remain false for `foo()` so the catch-all throws and
-	// multi-statement boundary detection works.
+	// -- Post-Slice-44 (ω-slice-X3): a bare Call as the last stmt of a
+	// block now elides `;` via the parse-time peek-`}` disjunct. The
+	// intrinsic gate stays false on `Call` (this predicate's catch-all
+	// `endsWithCloseBrace` returns false for non-brace exprs) — peek-`}`
+	// supplies the elision because the enclosing block's `}` is the
+	// next non-trivia byte. Multi-stmt boundary detection still works
+	// (see the `testCallFollowedByIdentRegression` below).
 
-	public function testCallExprStillRequiresSemi():Void {
-		Assert.raises(() -> HaxeParser.parse(
+	public function testCallExprBeforeCloseBraceNoSemi():Void {
+		final cls:HxClassDecl = HaxeParser.parse(
 			'class C {\n\tfunction f() {\n\t\tfoo()\n\t}\n}'
+		);
+		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+		Assert.equals(1, stmts.length);
+	}
+
+	// -- Regression: Call followed by another ident-led stmt (no `;`
+	// between them) MUST still throw. Pins multi-stmt boundary
+	// detection — peek-`}` is the ONLY new disjunct; ident lookahead
+	// stays strict.
+
+	public function testCallFollowedByIdentRegression():Void {
+		Assert.raises(() -> HaxeParser.parse(
+			'class C {\n\tfunction f() {\n\t\tfoo()\n\t\tbar()\n\t}\n}'
 		));
 	}
 

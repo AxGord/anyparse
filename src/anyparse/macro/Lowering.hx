@@ -1679,12 +1679,28 @@ class Lowering {
 				// `peekKw` is non-consuming (the `else` belongs to
 				// `HxIfStmt.elseBody`'s own `@:optional @:kw('else')`). Still
 				// `parseGateCall`-guarded (sole consumer `HxStatement.
-				// ExprStmt`) → byte-identical for every other ctor. NOT
-				// relaxed: a bare no-`;` then-body with no `else` at all
-				// (block-end terminator) — that is the Slice-V unguarded-`}`
-				// danger zone and stays a documented limitation.
+				// ExprStmt`) → byte-identical for every other ctor.
+				// ω-slice-X3 (Slice 44 — `}`-terminator): extend the gate
+				// further so the trail `;` is optional when the next non-
+				// trivia byte is `}`. An `ExprStmt` followed by `}` is only
+				// ever the last stmt of an enclosing block in valid Haxe —
+				// the closing brace itself is unambiguously the statement
+				// separator, regardless of the just-parsed expr's kind. This
+				// generalises the per-ctor extensions accumulated across
+				// Slices 19/28/30/39/42/43 (BlockExpr / MetaExpr-ReturnExpr /
+				// ObjectLit / ArrayExpr / DollarBlockExpr / Is) — each only
+				// got `;` elision because its OWN tail token happened to
+				// close a brace/bracket; the principled invariant is
+				// extrinsic, not intrinsic. Cascade-safe: `f(); g();` keeps
+				// the inter-stmt `;` because `peekLit("}")` only succeeds
+				// when `}` is genuinely next; `f() g()` (no `;`, no `}`)
+				// still throws on the missing `;`. The `peekLit` is
+				// non-consuming — the `}` belongs to the enclosing block's
+				// Star `@:trail('}')`. Sole consumer remains `HxStatement.
+				// ExprStmt`. Closes the `expected="//"` cluster's bare-call/
+				// bare-ident drivers (issue_357 array-comprehension etc.).
 				final gateCond:Null<Expr> = parseGateCall != null
-					? (macro ($parseGateCall || peekKw(ctx, "else")))
+					? (macro ($parseGateCall || peekKw(ctx, "else") || peekLit(ctx, "}")))
 					: null;
 				if (parseGateCall != null && triviaTrailOpt)
 					steps.push(macro final _trailPresent:Bool = $gateCond ? matchLit(ctx, $v{trailText}) : { expectLit(ctx, $v{trailText}); true; });

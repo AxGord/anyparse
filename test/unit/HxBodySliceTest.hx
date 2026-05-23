@@ -255,8 +255,16 @@ class HxBodySliceTest extends HxTestHelpers {
 		}
 	}
 
-	public function testRejectsMissingSemicolon():Void {
-		Assert.raises(() -> HaxeParser.parse('class Foo { function f():Void { 1 } }'), ParseError);
+	// Post-Slice-44 (ω-slice-X3): a bare expr as the last stmt of a
+	// block elides its `;` via the parse-time peek-`}` disjunct. Pre-
+	// Slice-44 this test asserted `function f():Void { 1 }` throws on
+	// the missing `;`; the new gate accepts it because `}` is the next
+	// non-trivia byte. Multi-stmt boundary (`1 2` no `;`) still throws
+	// — see `HxStmtBlockEndNoSemiSliceTest.testBareCallFollowedByIdentRegression`.
+
+	public function testAcceptsMissingSemicolonBeforeCloseBrace():Void {
+		final cls:HxClassDecl = HaxeParser.parse('class Foo { function f():Void { 1 } }');
+		Assert.equals(1, cls.members.length);
 	}
 
 	public function testRejectsUnclosedBrace():Void {

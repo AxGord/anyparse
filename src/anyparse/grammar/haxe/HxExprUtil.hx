@@ -207,7 +207,27 @@ final class HxExprUtil {
 	 *    as a statement these are `}`-terminated too.
 	 *
 	 * **`;` required** (gate false): every other shape — `Call`,
-	 * non-assign binop, ternary, etc.
+	 * non-assign binop, ternary, etc. — BUT see below.
+	 *
+	 * **Note (Slice 44, ω-slice-X3): this predicate is no longer the sole
+	 * authority on `ExprStmt`'s trail-`;` elision.** The parse-time gate in
+	 * `Lowering.hx` is a 3-disjunct OR — the intrinsic check here, plus
+	 * `peekKw(ctx, "else")` (Slice X2: if-then-body before `else`), plus
+	 * `peekLit(ctx, "}")` (Slice X3: any expr as the last stmt of an
+	 * enclosing block). The peek-`}` disjunct generalises the per-ctor
+	 * direct-return arms above (every brace/bracket-terminated expr only
+	 * got `;` elision because its OWN tail token happened to close one —
+	 * but the principled invariant is extrinsic: when the next non-trivia
+	 * byte IS the enclosing block's `}`, the closing brace itself acts as
+	 * the statement separator). Concretely: a bare `Call` / `IdentExpr` /
+	 * non-assign-binop as the last stmt of a fn body, switch arm, or
+	 * block-bodied for/while/if now elides its `;` at the parser level via
+	 * the peek-`}` disjunct, NOT via any change to this predicate. The
+	 * intrinsic arms below remain load-bearing for the recursive paths
+	 * (Assign / Meta / Return / If recursing into RHS or branch) where the
+	 * peek-`}` disjunct cannot reach (the lookahead is checked at the
+	 * outer `ExprStmt`, not at the inner recursion). Search for
+	 * `ω-slice-X3` in `Lowering.hx` to find the gateCond site.
 	 *
 	 * Distinct from `endsWithCloseBrace` (the writer-side `var x = …`
 	 * rhs predicate), which deliberately returns `false` for

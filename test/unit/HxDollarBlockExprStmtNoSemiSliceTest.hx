@@ -61,11 +61,16 @@ class HxDollarBlockExprStmtNoSemiSliceTest extends HxTestHelpers {
 		Assert.isTrue(e.match(DollarBlockExpr(_)));
 	}
 
-	// -- Regression: Assign+DollarBlockExpr without `;` MUST still throw
-	// (carve-out, twin of Slice 30 / 39 ObjectLit / ArrayExpr) --
+	// -- Post-Slice-44 (ω-slice-X3): Assign+DollarBlockExpr before `}`
+	// now parses via the parse-time peek-`}` disjunct. The intrinsic
+	// Assign-RHS carve-out in `stmtExprNoSemi` (`rhsCtor ==
+	// 'DollarBlockExpr'`) remains load-bearing for the case where the
+	// next byte is NOT `}` (see `HxAssignStmtNoSemiSliceTest.testAssignFollowedByIdentRegression`).
 
-	public function testNoDollarBlockAssignRegression():Void {
-		Assert.raises(() -> HaxeParser.parse("class C {\n\tfunction f() {\n\t\tx = ${expr}\n\t}\n}"));
+	public function testDollarBlockAssignBeforeCloseBraceNoSemi():Void {
+		final cls:HxClassDecl = HaxeParser.parse("class C {\n\tfunction f() {\n\t\tx = ${expr}\n\t}\n}");
+		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+		Assert.equals(1, stmts.length);
 	}
 
 	// -- Corpus driver: issue_215 input verbatim --
