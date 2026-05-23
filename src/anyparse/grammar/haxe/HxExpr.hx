@@ -410,7 +410,7 @@ enum HxExpr {
 	@:kw('cast')
 	TypedCastExpr(info:HxTypedCast);
 
-	@:kw('cast')
+	@:kw('cast') @:fmt(atomOperand, tightOnParenOperand('ParenExpr', 'ECheckTypeExpr'))
 	CastExpr(operand:HxExpr);
 
 	@:kw('return') @:fmt(propagateExprPosition)

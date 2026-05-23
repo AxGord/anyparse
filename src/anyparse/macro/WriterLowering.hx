@@ -1014,7 +1014,22 @@ class WriterLowering {
 			final parenSidePolicySpace:Null<Expr> = stripKwTrailingSpace
 				? null
 				: kwTrailingSpacePolicyParenSide(branch, ['anonFuncParens']);
-			final kwTrailSpace:Null<Expr> = kwSidePolicySpace ?? parenSidePolicySpace;
+			// ω-cast-tight-on-paren (Slice 46): `@:fmt(tightOnParenOperand('A',
+			// 'B', …))` on a kw-led single-Ref branch suppresses the kw's
+			// trailing space at runtime when the operand's enum ctor matches
+			// any name in the list. Consumed by `HxExpr.CastExpr`
+			// (alongside `@:fmt(atomOperand)`) so `cast (x)` / `cast (x:Int)`
+			// (operand = `ParenExpr` / `ECheckTypeExpr` at atom level) emit
+			// tight `cast(x)` / `cast(x : Int)` per haxe-formatter's
+			// cast-as-function-call convention, while bare `cast x` (operand
+			// = `IdentExpr`, anything not listed) keeps the existing
+			// `cast x` shape. Sub-call's `parseXxxAtom` routing ensures
+			// operand truly is the leading-`(` ctor, not a Pratt wrapper
+			// (`Is(ParenExpr, ...)`) that would slip past the ctor match.
+			final ctorTightSpace:Null<Expr> = stripKwTrailingSpace
+				? null
+				: kwTrailingSpaceOnOperandCtor(branch, argNames);
+			final kwTrailSpace:Null<Expr> = kwSidePolicySpace ?? parenSidePolicySpace ?? ctorTightSpace;
 			final parts:Array<Expr> = [];
 			if (kwLead != null) {
 				if (kwTrailSpace != null) {
@@ -5106,6 +5121,49 @@ class WriterLowering {
 		];
 		final optAccess:Expr = optFieldAccess(flagName);
 		return {expr: ESwitch(optAccess, cases, macro _de()), pos: Context.currentPos()};
+	}
+
+	/**
+	 * Operand-ctor-dispatched counterpart of `kwTrailingSpacePolicy` —
+	 * same kw-after slot, but the choice between ` ` and `_de()` is
+	 * driven at runtime by the operand's enum constructor name rather
+	 * than a `WhitespacePolicy` option. Reads
+	 * `@:fmt(tightOnParenOperand('A', 'B', …))` from the branch; when
+	 * the operand's runtime `Type.enumConstructor(...)` matches any of
+	 * the listed names, emits `_de()` (kw fuses tight to the operand's
+	 * leading `(`); otherwise emits `_dt(' ')`.
+	 *
+	 * Returns `null` when the flag is absent so the call site falls
+	 * through to the pre-slice fixed `kwLead + ' '` emission. Requires
+	 * the branch to be a single-Ref ctor — `argNames[0]` carries the
+	 * operand binding (mirror of `bodyPolicy`'s value-arg dispatch in
+	 * the indent-wrap path).
+	 *
+	 * Consumed by `@:fmt(tightOnParenOperand('ParenExpr',
+	 * 'ECheckTypeExpr'))` on `HxExpr.CastExpr` (paired with
+	 * `@:fmt(atomOperand)` in Lowering so the operand binds at atom
+	 * level and the listed ctors actually appear as the operand's
+	 * runtime ctor — without atom-binding, `cast (x) is Bool` would
+	 * carry operand=`Is(...)` and the ctor match would never fire).
+	 * Emits tight `cast(x)` / `cast(x : Int)` per haxe-formatter's
+	 * cast-as-function-call convention, while bare `cast x` (operand =
+	 * `IdentExpr`) keeps the spaced shape.
+	 */
+	private static function kwTrailingSpaceOnOperandCtor(branch:ShapeNode, argNames:Array<String>):Null<Expr> {
+		final names:Null<Array<String>> = branch.fmtReadStringArgs('tightOnParenOperand');
+		if (names == null || names.length == 0) return null;
+		if (argNames.length == 0) return null;
+		final operandAccess:Expr = macro $i{argNames[0]};
+		final ctorEquals:Array<Expr> = [for (n in names) macro _ctor == $v{n}];
+		var matchExpr:Expr = ctorEquals[0];
+		for (i in 1...ctorEquals.length) {
+			final next:Expr = ctorEquals[i];
+			matchExpr = macro $matchExpr || $next;
+		}
+		return macro {
+			final _ctor:String = Type.enumConstructor($operandAccess);
+			$matchExpr ? _de() : _dt(' ');
+		};
 	}
 
 	/**

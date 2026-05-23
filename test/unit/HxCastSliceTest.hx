@@ -9,26 +9,34 @@ import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxType;
 
 /**
- * Tests for the SMALL slice adding the `cast` keyword as a proper pair
- * of expression atoms in the Haxe grammar.
+ * Tests for the `cast` keyword expression atoms in the Haxe grammar.
  *
  * - `TypedCastExpr(info:HxTypedCast)` — `cast(target, Type)` checked
  *   cast. Wraps `HxTypedCast` typedef carrying `target:HxExpr` after
  *   `(` and `type:HxType` after `,` with closing `)`. Same field-pair
  *   pattern as `HxCatchClause` (`catch (name:Type)`).
- * - `CastExpr(operand:HxExpr)` — bare `cast x` unsafe cast. Operand is
- *   the full `HxExpr` (Pratt-resolved), matching Haxe semantics where
- *   `cast` disables type-checking for the entire RHS.
+ * - `CastExpr(operand:HxExpr)` — bare `cast x` unsafe cast. Operand
+ *   parses at atom-level (Slice 46 `@:fmt(atomOperand)`), matching
+ *   Haxe's unary-operator binding: `cast` binds tighter than any
+ *   binary infix, so `cast a + b` is `Add(CastExpr(a), b)` and
+ *   `cast (x) is Bool` is `Is(CastExpr(ParenExpr(x)), Bool)`.
  *
  * Source order in `HxExpr` puts `TypedCastExpr` before `CastExpr` so
  * the parenthesised form tries first; the `tryBranch` rollback in
  * `Lowering` reverts when the comma is absent (`cast (x)` / `cast x`)
  * and the bare branch picks up the operand.
  *
- * Before this slice, `cast(x, T)` parsed incidentally as
- * `Call(IdentExpr("cast"), [IdentExpr(x), IdentExpr(T)])` — byte-perfect
+ * `@:fmt(tightOnParenOperand('ParenExpr', 'ECheckTypeExpr'))` (Slice
+ * 46) drops the kw trailing space when the operand is a leading-`(`
+ * ctor — so `cast (x)` round-trips as tight `cast(x)` and
+ * `cast (x:Int)` as `cast(x : Int)`, matching haxe-formatter's
+ * cast-as-function-call convention.
+ *
+ * Before the proper grammar/Pratt rules, `cast(x, T)` parsed
+ * incidentally as `Call(IdentExpr("cast"), [...])` — byte-perfect
  * round-trip but semantic loss (`T` stored as expression, not type).
- * The slice fixes the AST shape; round-trip output is unchanged.
+ * The cast slice fixed the AST shape; Slice 46 fixed the unary binding
+ * tightness exposed by `cast … is X` fixtures.
  */
 class HxCastSliceTest extends HxTestHelpers {
 
@@ -133,17 +141,57 @@ class HxCastSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public function testCastScopesFullExpression():Void {
-		// `cast a + b` — `cast` wraps the full expression (matches Haxe
-		// semantics: the keyword disables type-checking for the entire
-		// RHS, not just the next atom). Implementation: operand is `HxExpr`
-		// (Pratt-resolved), parallel to `UntypedExpr`.
+	public function testCastBindsAtomNotFullExpression():Void {
+		// Slice 46: `cast a + b` — `cast` is a unary operator that binds
+		// tighter than any binary infix (Haxe semantics: `cast a` is the
+		// expression that becomes the left operand of `+`). Implementation:
+		// `@:fmt(atomOperand)` on `CastExpr` routes operand parse to
+		// `parseHxExprAtom`, so the trailing `+ b` stays for the outer
+		// Pratt loop. Pre-slice this parsed as `CastExpr(Add(a, b))`.
 		final decl = parseSingleVarDecl('class C { var f:Int = cast a + b; }');
 		switch decl.init {
-			case CastExpr(Add(IdentExpr(a), IdentExpr(b))):
+			case Add(CastExpr(IdentExpr(a)), IdentExpr(b)):
 				Assert.equals('a', (a : String));
 				Assert.equals('b', (b : String));
-			case null, _: Assert.fail('expected CastExpr(Add(a, b)), got ${decl.init}');
+			case null, _: Assert.fail('expected Add(CastExpr(a), b), got ${decl.init}');
+		}
+	}
+
+	public function testCastBindsTighterThanIs():Void {
+		// Slice 46: `cast x is Bool` — atom-bound `cast x` becomes the
+		// left of `is`. Pre-slice parsed as `CastExpr(Is(x, Bool))`.
+		final decl = parseSingleVarDecl('class C { var f:Bool = cast x is Bool; }');
+		switch decl.init {
+			case Is(CastExpr(IdentExpr(name)), _):
+				Assert.equals('x', (name : String));
+			case null, _: Assert.fail('expected Is(CastExpr(x), Bool), got ${decl.init}');
+		}
+	}
+
+	public function testCastParenIsBindsTighterThanIs():Void {
+		// Slice 46: `cast (x) is Bool` — operand `(x)` is ParenExpr atom,
+		// then `is Bool` is the outer Pratt operator. The
+		// `tightOnParenOperand` writer knob then drops the kw trailing
+		// space (operand=ParenExpr) so output is `cast(x) is Bool`.
+		final decl = parseSingleVarDecl('class C { var f:Bool = cast (x) is Bool; }');
+		switch decl.init {
+			case Is(CastExpr(ParenExpr(IdentExpr(name))), _):
+				Assert.equals('x', (name : String));
+			case null, _: Assert.fail('expected Is(CastExpr(ParenExpr(x)), Bool), got ${decl.init}');
+		}
+	}
+
+	public function testCastECheckTypeBindsTighterThanIs():Void {
+		// Slice 46: `cast (x:Int) is Bool` — operand `(x:Int)` is
+		// ECheckTypeExpr atom; `is Bool` is the outer Pratt operator.
+		final decl = parseSingleVarDecl('class C { var f:Bool = cast (x:Int) is Bool; }');
+		switch decl.init {
+			case Is(CastExpr(ECheckTypeExpr(info)), _):
+				switch info.expr {
+					case IdentExpr(name): Assert.equals('x', (name : String));
+					case _: Assert.fail('expected IdentExpr(x) as ECheckType expr');
+				}
+			case null, _: Assert.fail('expected Is(CastExpr(ECheckTypeExpr(...)), Bool), got ${decl.init}');
 		}
 	}
 
@@ -171,6 +219,45 @@ class HxCastSliceTest extends HxTestHelpers {
 		roundTrip('class C { var f:Int = cast foo(); }', 'cast foo()');
 		roundTrip('class C { var f:Int = cast (x); }', 'cast (x)');
 		roundTrip('class C { function m():Void { cast foo(); } }', 'stmt-level cast');
+	}
+
+	// ======== Slice 46 writer: tight `cast(` on paren-form operand ========
+
+	public function testWriterCastParenTight():Void {
+		// Slice 46 (writer half): `cast (x)` round-trips as tight
+		// `cast(x)` because operand=ParenExpr is in the
+		// `tightOnParenOperand` list. Bare `cast x` keeps the space.
+		writerEquals(
+			'class C { var f:Int = cast (x); }',
+			'class C {\n\tvar f:Int = cast(x);\n}\n',
+			'tight `cast(x)` on ParenExpr operand'
+		);
+	}
+
+	public function testWriterCastECheckTypeTight():Void {
+		writerEquals(
+			'class C { var f:Int = cast (x:Int); }',
+			'class C {\n\tvar f:Int = cast(x : Int);\n}\n',
+			'tight `cast(x : Int)` on ECheckTypeExpr operand'
+		);
+	}
+
+	public function testWriterCastIdentSpaced():Void {
+		writerEquals(
+			'class C { var f:Int = cast x; }',
+			'class C {\n\tvar f:Int = cast x;\n}\n',
+			'spaced `cast x` on bare IdentExpr operand (knob does not fire)'
+		);
+	}
+
+	public function testWriterCastIsBoolTight():Void {
+		// The pre-Slice-46 fixture-failing case: `cast (x) is Bool`
+		// round-trips as `cast(x) is Bool` with tight cast paren.
+		writerEquals(
+			'class C { function m():Void { (cast (x) is Bool); } }',
+			'class C {\n\tfunction m():Void {\n\t\t(cast(x) is Bool);\n\t}\n}\n',
+			'tight `cast(x)` survives the outer `is Bool` Pratt frame'
+		);
 	}
 
 	// ======== Combined: nested cast forms ========

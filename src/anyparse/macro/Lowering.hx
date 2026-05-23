@@ -1452,8 +1452,25 @@ class Lowering {
 		// one of the two is emitted per branch.
 		if (litList == null && children.length == 1 && children[0].kind == Ref) {
 			final refName:String = children[0].annotations.get('base.ref');
+			// ω-cast-bind-tightness (Slice 46): `@:fmt(atomOperand)` on a
+			// single-Ref kw branch routes the operand parse to the
+			// `${parseFn}Atom` variant of the sub-rule instead of the
+			// full Pratt entry. The operand binds at atom level (atom
+			// wrapper — includes postfix loop and prefix, excludes infix
+			// Pratt), so a trailing binary operator stays for the outer
+			// Pratt loop instead of being swallowed into the operand.
+			// Mirrors `@:prefix` semantics for word-keyword unary operators
+			// without requiring the prefix-extension work. Consumed by
+			// `HxExpr.CastExpr` so `cast (x) is Bool` parses as
+			// `Is(CastExpr(ParenExpr(x)), Bool)` (Haxe-faithful), not as
+			// `CastExpr(Is(ParenExpr(x), Bool))`. The atom fn name pattern
+			// `${baseFn}Atom` matches all three pipeline-mode fn-name
+			// conventions (`parseHxExpr` / `parseHxExprS` / `parseHxExprT`
+			// → `parseHxExprAtom` / `parseHxExprSAtom` / `parseHxExprTAtom`).
+			final atomOperand:Bool = branch.fmtHasFlag('atomOperand');
+			final subFnName:String = atomOperand ? '${parseFnName(refName)}Atom' : parseFnName(refName);
 			final callSub:Expr = {
-				expr: ECall(macro $i{parseFnName(refName)}, [macro ctx]),
+				expr: ECall(macro $i{subFnName}, [macro ctx]),
 				pos: Context.currentPos(),
 			};
 			final trailOptional:Bool = branch.annotations.get('lit.trailOptional') == true;
