@@ -89,6 +89,8 @@ Lowers literal glue around fields into `Lit` nodes in a `Seq`. A field with `@:l
 
 `@:trailOpt(";")` is the optional-on-parse variant of `@:trail`. The parser emits `matchLit` (peek + consume-if-present) instead of `expectLit` (throws on absence); the writer keeps emitting the literal as canonical output. First consumer: `HxDecl.TypedefDecl` for `typedef Foo = T` without trailing `;`. Source-fidelity (preserve presence per input) is a separate slice.
 
+`@:sep(",", tailRelax)` is the opt-in two-arg form that makes "trailing sep before close is accepted" an explicit grammar contract. The bare ident `tailRelax` is the only recognised second arg. Semantically a no-op against current `Lowering.hx` behaviour — the close-peek Star loop already tolerates a trailing sep — but the annotation earmarks consumers for the BlockBody Star refactor (project memory `project_blockbody_star_tail_relax_debt`) and documents intent at the grammar site. First consumers: `JArray` / `JObject` in the JSON grammar.
+
 ### Re
 
 Owns: `@:re`.

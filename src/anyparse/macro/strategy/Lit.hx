@@ -35,6 +35,18 @@ import anyparse.core.Strategy;
  *  - `@:wrap("o","c")`              — shorthand for `@:lead`+`@:trail`.
  *  - `@:sep(",")`                   — separator between elements of a
  *                                     `Star` child of this node.
+ *  - `@:sep(",", tailRelax)`        — opt-in: make the intent explicit
+ *                                     that a sep immediately before the
+ *                                     close terminator is accepted as
+ *                                     tail (no required following
+ *                                     element). Mirrors the current
+ *                                     implicit close-peek behaviour
+ *                                     (`Lowering.hx:emitStarFieldSteps`
+ *                                     L1 — "tolerate trailing sep
+ *                                     before close") and earmarks
+ *                                     consumers for the BlockBody
+ *                                     refactor. Sets
+ *                                     `lit.sepTailRelax:true`.
  *  - `@:sepAlt(";")`               — opt-in alternate separator,
  *                                     accepted alongside `@:sep` by the
  *                                     tolerant close-driven loop (an
@@ -85,7 +97,15 @@ class Lit implements Strategy {
 				node.annotations.set('lit.leadText', stringOrFail(entry.params[0], ':wrap'));
 				node.annotations.set('lit.trailText', stringOrFail(entry.params[1], ':wrap'));
 			case ':sep':
-				node.annotations.set('lit.sepText', singleString(entry.params, ':sep'));
+				if (entry.params.length == 0 || entry.params.length > 2)
+					Context.fatalError('@:sep expects 1 or 2 arguments: @:sep("text") or @:sep("text", tailRelax)', entry.pos);
+				node.annotations.set('lit.sepText', stringOrFail(entry.params[0], ':sep'));
+				if (entry.params.length == 2) switch entry.params[1].expr {
+					case EConst(CIdent('tailRelax')):
+						node.annotations.set('lit.sepTailRelax', true);
+					case _:
+						Context.fatalError('@:sep second argument must be the ident `tailRelax`', entry.params[1].pos);
+				}
 			case ':sepAlt':
 				node.annotations.set('lit.sepAltText', singleString(entry.params, ':sepAlt'));
 			case _:

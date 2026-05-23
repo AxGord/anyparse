@@ -149,4 +149,49 @@ class JsonParserTest extends Test {
 	public function testRejectsInvalidNumber():Void {
 		Assert.raises(() -> JValueParser.parse('12abc'));
 	}
+
+	// ------------------------------------------------------------------
+	// @:sep(',', tailRelax) — first consumer ahead of the BlockBody
+	// Star tail-relax refactor (project memory:
+	// project_blockbody_star_tail_relax_debt). The annotation makes the
+	// existing implicit close-peek behaviour (Lowering.hx
+	// emitStarFieldSteps "tolerate trailing sep before close") explicit;
+	// these tests pin that the trailing sep is accepted on JArray /
+	// JObject and reject the degenerate "sep with no preceding element"
+	// shape.
+	// ------------------------------------------------------------------
+
+	public function testArrayTrailingCommaAccepted():Void {
+		parseEq('[1,2,3,]', JArray([JNumber(1), JNumber(2), JNumber(3)]));
+	}
+
+	public function testArrayTrailingCommaWithSpaces():Void {
+		parseEq('[1, 2, 3, ]', JArray([JNumber(1), JNumber(2), JNumber(3)]));
+	}
+
+	public function testObjectTrailingCommaAccepted():Void {
+		parseEq('{"x":1,"y":2,}', JObject([
+			{key: 'x', value: JNumber(1)},
+			{key: 'y', value: JNumber(2)},
+		]));
+	}
+
+	public function testObjectTrailingCommaWithSpaces():Void {
+		parseEq('{"x":1, "y":2, }', JObject([
+			{key: 'x', value: JNumber(1)},
+			{key: 'y', value: JNumber(2)},
+		]));
+	}
+
+	public function testRejectsArrayLeadingComma():Void {
+		Assert.raises(() -> JValueParser.parse('[,1]'));
+	}
+
+	public function testRejectsArraySoloComma():Void {
+		Assert.raises(() -> JValueParser.parse('[,]'));
+	}
+
+	public function testRejectsObjectSoloComma():Void {
+		Assert.raises(() -> JValueParser.parse('{,}'));
+	}
 }

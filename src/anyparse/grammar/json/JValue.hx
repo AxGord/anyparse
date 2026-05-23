@@ -20,7 +20,9 @@ package anyparse.grammar.json;
  *  - `@:ws` turns on cross-cutting whitespace consumption before every
  *    terminal in this grammar.
  *  - Per-constructor `@:lit` / `@:lead` / `@:trail` / `@:sep` metadata
- *    describe the literal glue for each JSON value shape.
+ *    describe the literal glue for each JSON value shape. `@:sep`
+ *    carries an optional `tailRelax` second arg (e.g. `@:sep(',',
+ *    tailRelax)`) marking trailing-sep tolerance as explicit intent.
  */
 @:peg
 @:schema(anyparse.format.text.JsonFormat)
@@ -36,9 +38,9 @@ enum JValue {
 	JNumber(v:JNumberLit);
 	JString(v:JStringLit);
 
-	@:lead('[') @:trail(']') @:sep(',')
+	@:lead('[') @:trail(']') @:sep(',', tailRelax)
 	JArray(items:Array<JValue>);
 
-	@:lead('{') @:trail('}') @:sep(',')
+	@:lead('{') @:trail('}') @:sep(',', tailRelax)
 	JObject(entries:Array<JEntry>);
 }
