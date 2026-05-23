@@ -3445,16 +3445,45 @@ final class Cli {
 		var unblockCount:Int = 0;
 		var stillFailCount:Int = 0;
 		var noTargetCount:Int = 0;
+		// Cluster scope (`--cluster <key>`) means the user already narrowed
+		// to a handful of fixtures and likely wants per-file NO TARGET lines
+		// for inspection. Full-sweep scope dumps tens of NO TARGET lines that
+		// are mostly cond-comp `//` catch-all noise — collapse those by
+		// `expected` message into a footer histogram, keep UNBLOCK / STILL
+		// FAIL per-file (low count, actionable).
+		final keepNoTargetPerFile:Bool = clusterFilter != null;
+		final noTargetReasons:Array<{key:String, count:Int}> = [];
 		for (r in records) {
 			final res:PredictRelaxResult = tryPredictRelax(plugin, r.source);
-			reportPredictRelax(r.path, r.source, res, showSource);
 			switch res.kind {
-				case Unblock: unblockCount++;
-				case StillFail: stillFailCount++;
-				case NoTarget: noTargetCount++;
+				case Unblock:
+					reportPredictRelax(r.path, r.source, res, showSource);
+					unblockCount++;
+				case StillFail:
+					reportPredictRelax(r.path, r.source, res, showSource);
+					stillFailCount++;
+				case NoTarget:
+					if (keepNoTargetPerFile) {
+						reportPredictRelax(r.path, r.source, res, showSource);
+					} else {
+						final reason:String = res.message;
+						var hit:Null<{key:String, count:Int}> = null;
+						for (e in noTargetReasons) if (e.key == reason) { hit = e; break; }
+						if (hit == null)
+							noTargetReasons.push({key: reason, count: 1});
+						else
+							hit.count++;
+					}
+					noTargetCount++;
 			}
 		}
 		sysPrint('--- relax: $unblockCount unblock, $stillFailCount still fail, $noTargetCount no target (of ${records.length} skip-parse files) ---\n');
+		if (!keepNoTargetPerFile && noTargetReasons.length > 0) {
+			noTargetReasons.sort((a, b) -> b.count - a.count);
+			sysPrint('   no target breakdown (use --cluster <key> to drill into a specific shape):\n');
+			for (entry in noTargetReasons)
+				sysPrint('     ${entry.count}× ${entry.key}\n');
+		}
 		return EXIT_OK;
 	}
 
