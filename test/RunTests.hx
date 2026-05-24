@@ -167,6 +167,7 @@ import unit.JsonParserTest;
 import unit.JsonRoundTripTest;
 import unit.JsonTypedParserTest;
 import unit.StarBlockEndedTest;
+import unit.StarSepStartsElementTest;
 import unit.SpanTest;
 import unit.ParseErrorTest;
 import unit.InputTest;
@@ -234,6 +235,7 @@ class RunTests {
 		runner.addCase(new JsonParserTest());
 		runner.addCase(new JsonRoundTripTest());
 		runner.addCase(new StarBlockEndedTest());
+		runner.addCase(new StarSepStartsElementTest());
 		runner.addCase(new HaxeFirstSliceTest());
 		runner.addCase(new HaxeModuleSliceTest());
 		runner.addCase(new HxExprSliceTest());

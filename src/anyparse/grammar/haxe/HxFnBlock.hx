@@ -17,20 +17,28 @@ package anyparse.grammar.haxe;
  * `Type.enumConstructor`), and the Star inside this typedef provides
  * the `{` lead and `}` trail with its own statement-trivia capture.
  *
- * Session 8 activation attempt of option (b2) AST-shape adapter
- * ([[project-blockbody-star-session8-activation-attempt]]):
- * adding `@:sep(';', tailRelax, blockEnded('stmtNoSemi'))` here
- * collapsed `;;` from 2 EmptyStmt → 1 + sep-consumed (2 test
- * failures in `HxControlFlowSliceTest`). The Star's sep-first
- * branch competes with `EmptyStmt`'s `;` body — both match the
- * same byte and sep wins. Resolving requires `@:tryparse`-style
- * element-first speculation in the blockEnded Lowering branch
- * (out of session scope). Reverted to no `@:sep` so per-stmt
- * `@:trailOpt(';')` + `stmtExprNoSemi` carve-outs continue to be
- * the sole terminator mechanism.
+ * Session 9 activation (BlockBody Star tail-relax refactor,
+ * [[project-blockbody-star-tail-relax-debt]]): wired up
+ * `@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))`.
+ * The `sepStartsElement` flag (Session 9 mechanism in `Lit.hx` +
+ * `Lowering.hx`) resolves the EmptyStmt-vs-sep byte-ambiguity that
+ * blocked Session 8's activation: when block-ended is TRUE the `;`
+ * byte at pos ALWAYS starts the next element (HxStatement-semantics),
+ * never a separator. So `;;` parses as 2 EmptyStmt, `{a;};b;` as
+ * `[BlockStmt, EmptyStmt, ExprStmt]`. Without the flag the default
+ * permissive-sep policy is sep-first and the `;` is greedily
+ * consumed as a separator, losing one EmptyStmt.
+ *
+ * Per-stmt `@:trailOpt(';')` ownership remains in additive mode for
+ * this session — the full BlockBody Star migration (move `;` from
+ * per-stmt to BlockBody-level only) is a follow-up that deletes the
+ * `stmtExprNoSemi` carve-outs in `HxExprUtil`.
  */
 @:peg
 @:fmt(multilineWhenFieldNonEmpty('stmts'))
 typedef HxFnBlock = {
-	@:fmt(emptyCurlyBreak, keepCurlyBlanks, rightCurlyAnonFnOverride('anonFunctionRightCurly')) @:lead('{') @:trail('}') @:trivia var stmts:Array<HxStatement>;
+	@:fmt(emptyCurlyBreak, keepCurlyBlanks, rightCurlyAnonFnOverride('anonFunctionRightCurly'))
+	@:lead('{') @:trail('}') @:trivia
+	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
+	var stmts:Array<HxStatement>;
 }

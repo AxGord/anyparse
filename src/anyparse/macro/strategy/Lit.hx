@@ -129,7 +129,7 @@ class Lit implements Strategy {
 				node.annotations.set('lit.trailText', stringOrFail(entry.params[1], ':wrap'));
 			case ':sep':
 				if (entry.params.length == 0 || entry.params.length > 3)
-					Context.fatalError('@:sep expects 1-3 arguments: @:sep("text"), @:sep("text", tailRelax), or @:sep("text", tailRelax, blockEnded[(\'<predicate>\')])', entry.pos);
+					Context.fatalError('@:sep expects 1-3 arguments: @:sep("text"), @:sep("text", tailRelax), or @:sep("text", tailRelax, blockEnded[(\'<predicate>\'[, sepStartsElement])])', entry.pos);
 				node.annotations.set('lit.sepText', stringOrFail(entry.params[0], ':sep'));
 				if (entry.params.length >= 2) switch entry.params[1].expr {
 					case EConst(CIdent('tailRelax')):
@@ -149,12 +149,24 @@ class Lit implements Strategy {
 					// reached through the same channel as `trailOptParseGate`
 					// (see Lowering.hx L1552 for the sister mechanism).
 					case ECall({expr: EConst(CIdent('blockEnded'))}, callArgs):
-						if (callArgs.length != 1)
-							Context.fatalError('@:sep `blockEnded(\'<predicate>\')` expects exactly one string argument', entry.params[2].pos);
+						if (callArgs.length < 1 || callArgs.length > 2)
+							Context.fatalError('@:sep `blockEnded(...)` expects 1-2 arguments: predicate name [, sepStartsElement]', entry.params[2].pos);
 						node.annotations.set('lit.sepBlockEnded', true);
 						node.annotations.set('lit.sepBlockEndedPredicate', stringOrFail(callArgs[0], ':sep'));
+						// Optional 2nd arg `sepStartsElement` (Session 9 BlockBody Star) —
+						// flips byte-ambiguity policy: when block-ended is TRUE, the sep
+						// byte at pos belongs to the NEXT element, never a separator.
+						// Required for grammars where the sep char can ALSO be a valid
+						// element body (Haxe `EmptyStmt` whose body IS `;`). Without this
+						// flag the default permissive-sep semantics applies.
+						if (callArgs.length == 2) switch callArgs[1].expr {
+							case EConst(CIdent('sepStartsElement')):
+								node.annotations.set('lit.sepStartsElement', true);
+							case _:
+								Context.fatalError('@:sep `blockEnded(...)` second argument must be the ident `sepStartsElement`', callArgs[1].pos);
+						}
 					case _:
-						Context.fatalError('@:sep third argument must be `blockEnded` or `blockEnded(\'<predicate>\')`', entry.params[2].pos);
+						Context.fatalError('@:sep third argument must be `blockEnded` or `blockEnded(\'<predicate>\'[, sepStartsElement])`', entry.params[2].pos);
 				}
 			case ':sepAlt':
 				node.annotations.set('lit.sepAltText', singleString(entry.params, ':sepAlt'));

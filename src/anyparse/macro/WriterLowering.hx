@@ -1524,9 +1524,32 @@ class WriterLowering {
 		} else if (sepText != null && branch.annotations.get('lit.sepBlockEnded') == true) {
 			// Block-ended exemption (Session 2 pilot — mirror of
 			// `emitWriterStarField`). Suppress between-element sep
-			// emission when the prior element's rendered Doc ends with
-			// `}` (right-spine `DocMeasure.endsWithCloseBrace` check).
-			// Strictly opt-in via `@:sep('text', tailRelax, blockEnded)`.
+			// emission when EITHER:
+			//   (a) the prior element's rendered Doc ends with `}` or `;`
+			//       (`DocMeasure.endsWithStmtTerminator` — Session 8 widened
+			//       from `endsWithCloseBrace` to include `;` so per-stmt
+			//       `@:trail/@:trailOpt(';')` baked terminators suppress
+			//       sep too), OR
+			//   (b) the schema-instance predicate returns true on the prior
+			//       element's AST (Session 7 option b2 — AST-shape adapter
+			//       e.g. `Atom('end')` in the MiniBlockStrict pilot, or
+			//       `HxStatement.Conditional(#if…#end)` whose byte-end
+			//       `d` misses (a) but predicate matches the AST shape).
+			// Mirrors the struct-field plain-mode site at L3845-3880 and
+			// the parser-side blockEnded branch in `Lowering.emitStarFieldSteps`
+			// (`b == '}'.code || b == ';'.code || $predicateCall`).
+			// Strictly opt-in via `@:sep('text', tailRelax, blockEnded[('pred'[, sepStartsElement])])`.
+			final predicateName:Null<String> = branch.annotations.get('lit.sepBlockEndedPredicate');
+			final predicateCheckPrior:Expr = if (predicateName != null) {
+				final fmtParts:Array<String> = formatInfo.schemaTypePath.split('.');
+				{
+					expr: ECall(
+						{expr: EField(macro $p{fmtParts}.instance, predicateName), pos: Context.currentPos()},
+						[macro _args[_i - 1]]
+					),
+					pos: Context.currentPos(),
+				};
+			} else macro false;
 			parts.push(macro {
 				final _args = $argsAccess;
 				final _docs:Array<anyparse.core.Doc> = [_dt($v{leadText})];
@@ -1535,10 +1558,11 @@ class WriterLowering {
 					final _elemDoc:anyparse.core.Doc = $elemCall;
 					if (_i > 0) {
 						final _priorDoc:anyparse.core.Doc = _docs[_docs.length - 1];
-						if (!anyparse.core.DocMeasure.endsWithCloseBrace(_priorDoc)) {
+						final _priorEnds:Bool = anyparse.core.DocMeasure.endsWithStmtTerminator(_priorDoc) || $predicateCheckPrior;
+						if (!_priorEnds) {
 							_docs.push(_dt($v{sepText}));
+							_docs.push(_dt(' '));
 						}
-						_docs.push(_dt(' '));
 					}
 					_docs.push(_elemDoc);
 					_i++;
