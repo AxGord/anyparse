@@ -354,7 +354,7 @@ enum HxStatement {
 	@:kw('static') @:lead('var')
 	StaticVarStmt(decl:HxVarDecl);
 
-	@:kw('static') @:lead('final') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))
+	@:kw('static') @:lead('final')
 	StaticFinalStmt(decl:HxVarDecl);
 
 	@:kw('var') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))

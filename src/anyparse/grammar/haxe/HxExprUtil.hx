@@ -434,7 +434,7 @@ final class HxExprUtil {
 		// this disjunction — its body no longer ends with `;`, so the
 		// Star's `@:sep` must claim the byte instead of routing it to a
 		// next element.
-		if (ctor == 'VarStmt' || ctor == 'FinalStmt' || ctor == 'StaticFinalStmt')
+		if (ctor == 'VarStmt' || ctor == 'FinalStmt')
 			return true;
 		// Brace-terminated stmts — `}` is the last token. Byte-check
 		// `'}'` would also match; AST branch makes the intent explicit.
