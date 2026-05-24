@@ -1481,7 +1481,7 @@ class Lowering {
 								while ($closeNotNextExpr) {
 									final _isBE:Bool = _prevEndPos > 0 && {
 										final _b:Int = ctx.input.charCodeAt(_prevEndPos - 1);
-										_b == '}'.code || _b == ';'.code || $predicateCall;
+										_b == ';'.code || $predicateCall;
 									};
 									if (_isBE) {
 										// block-ended: sep byte at pos belongs to next element
@@ -1525,7 +1525,7 @@ class Lowering {
 									skipWs(ctx);
 								} else if (_prevEndPos > 0 && {
 									final _b:Int = ctx.input.charCodeAt(_prevEndPos - 1);
-									_b == '}'.code || _b == ';'.code || $predicateCall;
+									_b == ';'.code || $predicateCall;
 								}) {
 									_items.push($elemCall);
 									_prevEndPos = ctx.pos;
@@ -2222,13 +2222,34 @@ class Lowering {
 					final captureAfterTrail:Expr = hasOptionalRefAfterTrailSlot
 						? macro $i{'_afterTrail_$fieldName'} = collectTrailing(ctx)
 						: macro {};
-					final subCall:Expr = trailText != null ? macro {
+					// ω-optional-ref-trailOpt (Session 11 path b): consume
+					// the per-field `@:trailOpt(';')` literal AFTER the
+					// sub-rule parse, INSIDE the lead/kw commit branch.
+					// Mirrors the mandatory `@:trail` arm above but uses
+					// peek+consume+rewind (no throw on miss) so existing
+					// self-consuming inner stmts (ReturnStmt-pre-S10.3,
+					// ExprStmt, etc.) stay no-op. First consumer:
+					// `HxIfStmt.elseBody` (`if (c) ...; else ...;` —
+					// post-S10.3 ReturnStmt migration target). The
+					// post-switch `lit.trailOptional` block (~L2500) is
+					// gated `!isOptional`, so this arm is the optional+kw
+					// path's sole emitter.
+					final trailOptText:Null<String> = child.annotations.get('lit.trailOptional') == true
+						? child.annotations.get('lit.trailText')
+						: null;
+					final subCall:Expr = if (trailText != null) macro {
 						final _v = $subCallRaw;
 						skipWs(ctx);
 						expectLit(ctx, $v{trailText});
 						$captureAfterTrail;
 						_v;
-					} : subCallRaw;
+					} else if (trailOptText != null) macro {
+						final _v = $subCallRaw;
+						final _trailOptWsPos:Int = ctx.pos;
+						skipWs(ctx);
+						if (!matchLit(ctx, $v{trailOptText})) ctx.pos = _trailOptWsPos;
+						_v;
+					} else subCallRaw;
 					// In trivia or span mode a bearing ref needs the Null<XxxT>
 					// / Null<XxxS> wrap around the synth pair — `base.fieldType`
 					// captured the plain-mode `Null<Xxx>` form at shape-analysis
@@ -2910,7 +2931,7 @@ class Lowering {
 						while ($closeNotNextExpr) {
 							final _isBE:Bool = _prevEndPos > 0 && {
 								final _b:Int = ctx.input.charCodeAt(_prevEndPos - 1);
-								_b == '}'.code || _b == ';'.code || $predicateCall;
+								_b == ';'.code || $predicateCall;
 							};
 							if (_isBE) {
 								// block-ended: sep byte at pos belongs to next element
@@ -2948,9 +2969,9 @@ class Lowering {
 								skipWs(ctx);
 							} else if (_prevEndPos > 0 && {
 								final _b:Int = ctx.input.charCodeAt(_prevEndPos - 1);
-								_b == '}'.code || _b == ';'.code || $predicateCall;
+								_b == ';'.code || $predicateCall;
 							}) {
-								// Block-ended: prior element ended with `}` / `;`
+								// Block-ended: prior element ended with `;`
 								// (byte-check) or the AST-shape predicate
 								// returned true. No sep needed; parse next.
 								$accumRef.push($elemCall);

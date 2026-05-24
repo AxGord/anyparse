@@ -363,7 +363,7 @@ enum HxStatement {
 	@:kw('final') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))
 	FinalStmt(decl:HxVarDecl);
 
-	@:kw('return') @:trailOpt(';')
+	@:kw('return')
 	@:fmt(bodyPolicy('returnBody'),
 		indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'),
 		indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'),

@@ -377,10 +377,6 @@ final class HxExprUtil {
 	 *
 	 *  - `ExprStmt(expr)` → recurse `stmtExprNoSemi(expr)` (carve-out
 	 *    semantics for ObjectLit / ArrayExpr / IfExpr-with-else / Is / …).
-	 *  - `ReturnStmt(value)` → recurse `stmtExprNoSemi(value)` so
-	 *    `return switch (…) { … }` as a stmt elides its `;` when next is
-	 *    not the close. Matches the MetaExpr / Assign recursive arms in
-	 *    `stmtExprNoSemi` that already handle `return`-inside-Meta.
 	 *  - `VarStmt` / `FinalStmt` / `StaticVarStmt` / `StaticFinalStmt`
 	 *    → check `decl.init` is brace-terminated via `endsWithCloseBrace`
 	 *    (matches the writer-side `@:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))`
@@ -388,9 +384,10 @@ final class HxExprUtil {
 	 *  - Brace-terminated stmts (`BlockStmt` / `IfStmt` / `WhileStmt` /
 	 *    `ForStmt` / `SwitchStmt(Bare)` / `TryCatchStmt` / `LocalFnStmt` /
 	 *    `LocalInlineFnStmt` / `UntypedBlockStmt`) → true unconditionally
-	 *    (closing `}` is the stmt's last token, and the parser-side
-	 *    byte-check `'}'` would also pass — keeping the AST branch is
-	 *    explicit so removing the byte-check fast-path later is safe).
+	 *    (closing `}` is the stmt's last token). Post-Session-11 the
+	 *    parser-side `}` byte-check fast-path is removed — the AST branch
+	 *    is now the sole path for these ctors, alongside Conditional /
+	 *    EllipsisStmt below.
 	 *  - Sep-terminated stmts (`VoidReturnStmt` / `ThrowStmt` /
 	 *    `DoWhileStmt` / `ErrorStmt` / `EmptyStmt` / `TryCatchStmtBare`)
 	 *    → true (their `@:trail(';')` / `@:lit(';')` already consumed the
@@ -413,13 +410,6 @@ final class HxExprUtil {
 		// ExprStmt: delegate to the inner-expr predicate, which already
 		// covers ObjectLit / ArrayExpr / IfExpr-with-else / Is / Assign-RHS-recursion.
 		if (ctor == 'ExprStmt') {
-			final params:Null<Array<Dynamic>> = Type.enumParameters(s);
-			return params != null && params.length > 0 && stmtExprNoSemi(params[0]);
-		}
-		// ReturnStmt(value:HxExpr): same recursion target — `return
-		// switch (…) { … } y = 5` elides its `;` because the switch's
-		// `}` is the stmt's last token.
-		if (ctor == 'ReturnStmt') {
 			final params:Null<Array<Dynamic>> = Type.enumParameters(s);
 			return params != null && params.length > 0 && stmtExprNoSemi(params[0]);
 		}

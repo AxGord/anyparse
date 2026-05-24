@@ -82,6 +82,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxTryCatchStmt = {
-	@:fmt(bodyPolicy('tryBody'), kwPolicy('tryPolicy'), bodyPolicyOverride('UntypedBlockStmt', 'untypedBody'), beforeNewlineSlotFirst) var body:HxStatement;
+	@:trailOpt(';') @:fmt(bodyPolicy('tryBody'), kwPolicy('tryPolicy'), bodyPolicyOverride('UntypedBlockStmt', 'untypedBody'), beforeNewlineSlotFirst) var body:HxStatement;
 	@:trivia @:tryparse @:fmt(sameLine('sameLineCatch'), bareBodyBreaks) var catches:Array<HxCatchClause>;
 };

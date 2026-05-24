@@ -54,5 +54,5 @@ package anyparse.grammar.haxe;
 typedef HxCatchClause = {
 	@:kw('catch') @:lead('(') var name:HxIdentLit;
 	@:lead(':') @:trail(')') var type:HxType;
-	@:optional @:absentOn('}') @:fmt(bodyPolicy('catchBody')) var body:Null<HxStatement>;
+	@:optional @:absentOn('}') @:trailOpt(';') @:fmt(bodyPolicy('catchBody')) var body:Null<HxStatement>;
 };
