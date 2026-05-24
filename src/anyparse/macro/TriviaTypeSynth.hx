@@ -1249,6 +1249,30 @@ class TriviaTypeSynth {
 	}
 
 	/**
+	 * True when a struct typedef field carries `@:trailOpt(...)`. The
+	 * struct-field analog of `isAltTrailOptBranch` — destined to gate
+	 * synthesis of a `_trailPresent_<fieldName>:Bool` slot on the
+	 * paired-T struct so the writer can preserve source presence of
+	 * the optional trail literal in trivia mode (today struct-field
+	 * `@:trailOpt` is parser-permissive but writer-canonical — always
+	 * re-emits, breaking source-preservation contracts for fixtures
+	 * like `wrapping/issue_366_nested_array_comprehension` where
+	 * fork's section-3 preserves the optional `;`).
+	 *
+	 * Predicate only as of Phase 1 (no consumers yet); Phase 2 will
+	 * wire it into the struct-typedef arm of `arm()` to add the per-
+	 * field positional slot, Phase 3 the parser-side capture, Phase 4
+	 * the writer-side emit. See [[project-blockbody-star-session14-design]].
+	 *
+	 * Disjoint from `isAltTrailOptBranch` (struct typedef field vs
+	 * enum Alt branch — orthogonal contexts; same `@:trailOpt` meta
+	 * but different host kind).
+	 */
+	public static function isStructFieldTrailOpt(field:ShapeNode):Bool {
+		return field.readMetaString(':trailOpt') != null;
+	}
+
+	/**
 	 * True when the branch opts into source-byte capture via
 	 * `@:fmt(captureSource('<optionFieldName>'))`. The synth-pair ctor
 	 * grows a positional `sourceText:String` arg; the parser fills it
