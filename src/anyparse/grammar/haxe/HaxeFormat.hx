@@ -1443,4 +1443,17 @@ final class HaxeFormat implements TextFormat {
 	 * so the grammar-AST logic stays beside `endsWithCloseBrace`.
 	 */
 	public inline function stmtExprNoSemi(raw:Null<Dynamic>):Bool return HxExprUtil.stmtExprNoSemi(raw);
+
+	/**
+	 * HxStatement-level sister of `stmtExprNoSemi`. Wired through
+	 * `@:sep(';', tailRelax, blockEnded('stmtNoSemi'))` on BlockBody
+	 * Star containers (Session 6 option b2 — AST-shape adapter). The
+	 * generated parser calls
+	 * `schema.instance.stmtNoSemi(_arr[_arr.length - 1])` after each
+	 * pushed element to decide whether the next-element gate may skip
+	 * the `;` separator. Delegates to the AST predicate in `HxExprUtil`
+	 * so all the per-ctor logic (including recursive `ExprStmt(expr)` →
+	 * `stmtExprNoSemi(expr)`) stays beside `endsWithCloseBrace`.
+	 */
+	public inline function stmtNoSemi(raw:Null<Dynamic>):Bool return HxExprUtil.stmtNoSemi(raw);
 }

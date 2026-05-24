@@ -269,6 +269,28 @@ class Lowering {
 		return eregs;
 	}
 
+	/**
+	 * Build the `schema.instance.<predicate>(<accum>[<accum>.length - 1])`
+	 * call expression for `@:sep('text', tailRelax, blockEnded('<predicate>'))`
+	 * (Session 6 option b2 — AST-shape adapter). Sister of `parseGateCall`
+	 * at L1553 — same schema-instance channel as `trailOptParseGate` /
+	 * `unescapeChar`. The predicate is invoked between elements to decide
+	 * whether the separator is elidable based on the prior element's
+	 * AST shape (e.g. `HxStatement.ExprStmt(ArrayExpr(_))` → Slice 39
+	 * `;`-elision; `HxStatement.BlockStmt(_)` → trivially `;`-elidable).
+	 */
+	private function buildBlockEndedPredicateCall(predicateName:String, accumRef:Expr):Expr {
+		final fmtParts:Array<String> = formatInfo.schemaTypePath.split('.');
+		final lastElem:Expr = macro $accumRef[$accumRef.length - 1];
+		return {
+			expr: ECall(
+				{expr: EField(macro $p{fmtParts}.instance, predicateName), pos: Context.currentPos()},
+				[lastElem]
+			),
+			pos: Context.currentPos(),
+		};
+	}
+
 	private static function hasPrattBranch(node:ShapeNode):Bool {
 		for (branch in node.children) {
 			if (branch.annotations.get('pratt.prec') != null || branch.annotations.get('ternary.op') != null) return true;
@@ -1426,10 +1448,18 @@ class Lowering {
 				// `emitStarFieldSteps`). When the enum branch carries
 				// `@:sep('text', tailRelax, blockEnded)`, sep between two
 				// elements may be omitted when the prior element ended
-				// with `}`. Strictly opt-in: when `lit.sepBlockEnded` is
-				// absent the byte-identical pre-existing path runs.
+				// with `}` or `;` (byte-check). The optional
+				// `blockEnded('<predicate>')` form additionally consults a
+				// schema-instance predicate on the just-pushed element to
+				// decide sep-elision based on AST shape (Session 6 option
+				// b2 — see `buildBlockEndedPredicateCall`). Strictly
+				// opt-in: when `lit.sepBlockEnded` is absent the
+				// byte-identical pre-existing path runs.
 				final blockEnded:Bool = branch.annotations.get('lit.sepBlockEnded') == true;
 				if (blockEnded) {
+					final predicateName:Null<String> = branch.annotations.get('lit.sepBlockEndedPredicate');
+					final accumRefForPred:Expr = macro _items;
+					final predicateCall:Expr = predicateName != null ? buildBlockEndedPredicateCall(predicateName, accumRefForPred) : macro false;
 					return macro {
 						skipWs(ctx);
 						expectLit(ctx, $v{leadText});
@@ -1448,7 +1478,10 @@ class Lowering {
 									_items.push($elemCall);
 									_prevEndPos = ctx.pos;
 									skipWs(ctx);
-								} else if (_prevEndPos > 0 && ctx.input.charCodeAt(_prevEndPos - 1) == '}'.code) {
+								} else if (_prevEndPos > 0 && {
+									final _b:Int = ctx.input.charCodeAt(_prevEndPos - 1);
+									_b == '}'.code || _b == ';'.code || $predicateCall;
+								}) {
 									_items.push($elemCall);
 									_prevEndPos = ctx.pos;
 									skipWs(ctx);
@@ -2800,13 +2833,19 @@ class Lowering {
 		if (sepText != null && blockEnded) {
 			// Block-ended exemption (Session 2 pilot). After a successful
 			// element, sep may be omitted if the element ended with `}`
-			// (byte-level check on `_prevEndPos - 1`). Mirrors the
-			// `endsWithCloseBrace`/`stmtExprNoSemi` logic but moved into
-			// the Star primitive so per-stmt `@:trailOpt(';')` can
-			// eventually disappear. Tail-relax (trailing sep tolerated
-			// before close) is folded in too: after consuming a sep, if
-			// the next char is the close, we break.
+			// (byte-level check on `_prevEndPos - 1`) — or, when the
+			// `@:sep('text', tailRelax, blockEnded('<predicate>'))` form
+			// supplies a schema-instance predicate, when that predicate
+			// returns `true` for the just-pushed element (Session 6 option
+			// b2 — AST-shape adapter). Byte-check also accepts `;` so the
+			// migration is additive with per-stmt `@:trailOpt(';')` /
+			// `@:trail(';')` ctors whose terminator was already consumed.
+			// Tail-relax (trailing sep tolerated before close) is folded in
+			// too: after consuming a sep, if the next char is the close,
+			// we break.
 			final sepCharCode:Int = sepText.charCodeAt(0);
+			final predicateName:Null<String> = starNode.annotations.get('lit.sepBlockEndedPredicate');
+			final predicateCall:Expr = predicateName != null ? buildBlockEndedPredicateCall(predicateName, accumRef) : macro false;
 			parseSteps.push(macro {
 				skipWs(ctx);
 				if ($closeNotNextExpr) {
@@ -2822,9 +2861,13 @@ class Lowering {
 							$accumRef.push($elemCall);
 							_prevEndPos = ctx.pos;
 							skipWs(ctx);
-						} else if (_prevEndPos > 0 && ctx.input.charCodeAt(_prevEndPos - 1) == '}'.code) {
-							// Block-ended: prior element ended with `}`,
-							// sep omitted is allowed. Parse next element.
+						} else if (_prevEndPos > 0 && {
+							final _b:Int = ctx.input.charCodeAt(_prevEndPos - 1);
+							_b == '}'.code || _b == ';'.code || $predicateCall;
+						}) {
+							// Block-ended: prior element ended with `}` / `;`
+							// (byte-check) or the AST-shape predicate
+							// returned true. No sep needed; parse next.
 							$accumRef.push($elemCall);
 							_prevEndPos = ctx.pos;
 							skipWs(ctx);

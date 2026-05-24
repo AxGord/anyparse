@@ -364,6 +364,98 @@ final class HxExprUtil {
 	}
 
 	/**
+	 * ω-stmt-no-semi — HxStatement-level twin of `stmtExprNoSemi`. Returns
+	 * true iff a prior statement of shape `raw` does NOT need a trailing
+	 * `;` before the next statement in a BlockBody Star.
+	 *
+	 * Wired through `HaxeFormat.stmtNoSemi` as the schema-instance
+	 * predicate consumed by the `@:sep(';', tailRelax, blockEnded('stmtNoSemi'))`
+	 * meta on BlockBody containers (Session 6 option b2 — AST-shape
+	 * adapter in the Star primitive). Sister of `stmtExprNoSemi`, which
+	 * operates on the inner `HxExpr` of `ExprStmt`; this predicate accepts
+	 * the wrapping `HxStatement` enum value and dispatches:
+	 *
+	 *  - `ExprStmt(expr)` → recurse `stmtExprNoSemi(expr)` (carve-out
+	 *    semantics for ObjectLit / ArrayExpr / IfExpr-with-else / Is / …).
+	 *  - `ReturnStmt(value)` → recurse `stmtExprNoSemi(value)` so
+	 *    `return switch (…) { … }` as a stmt elides its `;` when next is
+	 *    not the close. Matches the MetaExpr / Assign recursive arms in
+	 *    `stmtExprNoSemi` that already handle `return`-inside-Meta.
+	 *  - `VarStmt` / `FinalStmt` / `StaticVarStmt` / `StaticFinalStmt`
+	 *    → check `decl.init` is brace-terminated via `endsWithCloseBrace`
+	 *    (matches the writer-side `@:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))`
+	 *    gate). `var x = { … } y = …` elides its `;`.
+	 *  - Brace-terminated stmts (`BlockStmt` / `IfStmt` / `WhileStmt` /
+	 *    `ForStmt` / `SwitchStmt(Bare)` / `TryCatchStmt` / `LocalFnStmt` /
+	 *    `LocalInlineFnStmt` / `UntypedBlockStmt`) → true unconditionally
+	 *    (closing `}` is the stmt's last token, and the parser-side
+	 *    byte-check `'}'` would also pass — keeping the AST branch is
+	 *    explicit so removing the byte-check fast-path later is safe).
+	 *  - Sep-terminated stmts (`VoidReturnStmt` / `ThrowStmt` /
+	 *    `DoWhileStmt` / `ErrorStmt` / `EmptyStmt` / `TryCatchStmtBare`)
+	 *    → true (their `@:trail(';')` / `@:lit(';')` already consumed the
+	 *    sep; byte at `_prevEndPos - 1` is `;` so byte-check also passes).
+	 *  - `Conditional` (`#if … #end`) → true (`#end`-terminated; byte at
+	 *    `_prevEndPos - 1` is `d` so byte-check does NOT cover this case,
+	 *    AST predicate is the only path).
+	 *  - `EllipsisStmt` (`....` placeholder) → true (no terminator; byte
+	 *    at `_prevEndPos - 1` is `.`, AST predicate is the only path).
+	 *
+	 * `Dynamic` argument so the same predicate fires on Plain-mode
+	 * `HxStatement` enum values and Trivia-mode `Trivial<HxStatementT>`
+	 * struct wrappers (see `unwrap`).
+	 */
+	public static function stmtNoSemi(raw:Null<Dynamic>):Bool {
+		final s:Null<Dynamic> = unwrap(raw);
+		if (s == null) return false;
+		final ctor:Null<String> = Type.enumConstructor(s);
+		if (ctor == null) return false;
+		// ExprStmt: delegate to the inner-expr predicate, which already
+		// covers ObjectLit / ArrayExpr / IfExpr-with-else / Is / Assign-RHS-recursion.
+		if (ctor == 'ExprStmt') {
+			final params:Null<Array<Dynamic>> = Type.enumParameters(s);
+			return params != null && params.length > 0 && stmtExprNoSemi(params[0]);
+		}
+		// ReturnStmt(value:HxExpr): same recursion target — `return
+		// switch (…) { … } y = 5` elides its `;` because the switch's
+		// `}` is the stmt's last token.
+		if (ctor == 'ReturnStmt') {
+			final params:Null<Array<Dynamic>> = Type.enumParameters(s);
+			return params != null && params.length > 0 && stmtExprNoSemi(params[0]);
+		}
+		// Var-statements: unconditionally permissive. The pre-refactor
+		// parser used a position-agnostic `@:trailOpt(';')` matchLit on
+		// these ctors (the `trailOptShapeGate('endsWithCloseBrace', 'init')`
+		// meta is consumed WRITER-side only, by `WriterLowering`'s
+		// `trailOptShapeGateWrap`). The test contract is explicit
+		// (HxVarStmtTrailOptSliceTest.testVarFollowedBySecondVarNoSemi —
+		// `var x = 5 var y = 6;` accepted even though real Haxe rejects).
+		// Returning `true` unconditionally preserves that leniency so
+		// migrating the BlockBody Star to own sep semantics is byte-
+		// identical with the old behaviour. A future strict-mode slice
+		// could narrow this to `endsWithCloseBrace(init)` to match real
+		// Haxe; that would intentionally break the lenient test.
+		if (ctor == 'VarStmt' || ctor == 'FinalStmt' || ctor == 'StaticVarStmt' || ctor == 'StaticFinalStmt')
+			return true;
+		// Brace-terminated stmts — `}` is the last token. Byte-check
+		// `'}'` would also match; AST branch makes the intent explicit.
+		if (ctor == 'BlockStmt' || ctor == 'IfStmt' || ctor == 'WhileStmt' || ctor == 'ForStmt'
+				|| ctor == 'SwitchStmt' || ctor == 'SwitchStmtBare' || ctor == 'TryCatchStmt'
+				|| ctor == 'LocalFnStmt' || ctor == 'LocalInlineFnStmt' || ctor == 'UntypedBlockStmt')
+			return true;
+		// Sep-terminated stmts — their own `@:trail(';')` / `@:lit(';')`
+		// consumed the sep; byte at `_prevEndPos - 1` is `;` so byte-check
+		// also passes. AST branch is explicit.
+		if (ctor == 'VoidReturnStmt' || ctor == 'ThrowStmt' || ctor == 'DoWhileStmt'
+				|| ctor == 'ErrorStmt' || ctor == 'EmptyStmt' || ctor == 'TryCatchStmtBare')
+			return true;
+		// `#if … #end` ends with `d`; byte-check misses, AST predicate
+		// is required. `....` placeholder ends with `.`; same reasoning.
+		if (ctor == 'Conditional' || ctor == 'EllipsisStmt') return true;
+		return false;
+	}
+
+	/**
 	 * Returns the inner enum value for `raw`. Handles three shapes:
 	 *  - `null` → `null`
 	 *  - direct enum value (Plain-mode AST node) → `raw` unchanged

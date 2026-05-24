@@ -49,22 +49,35 @@ import anyparse.core.Strategy;
  *                                     `lit.sepTailRelax:true`.
  *  - `@:sep(";", tailRelax, blockEnded)` — opt-in: between two elements,
  *                                     sep may be omitted when the prior
- *                                     element ended with `}`. Parser-side
- *                                     check is byte-level on `_prevEndPos
- *                                     - 1`; writer-side uses
+ *                                     element ended with `}` or `;`
+ *                                     (parser-side byte-level check on
+ *                                     `_prevEndPos - 1`); writer-side uses
  *                                     `DocMeasure.endsWithCloseBrace` on
- *                                     each element's rendered Doc. `blockEnded`
- *                                     must come AFTER `tailRelax` —
- *                                     `@:sep(";", blockEnded)` is rejected
- *                                     at compile time (second arg must
- *                                     match `tailRelax` ident). First
- *                                     consumer: `MiniBlock` pilot grammar
- *                                     under `test/unit/miniblock/`; the
- *                                     HxStatement / BlockBody migration
- *                                     that retires per-stmt
- *                                     `@:trailOpt(';')` lands in a
- *                                     follow-up session. Sets
+ *                                     each element's rendered Doc.
+ *                                     `blockEnded` must come AFTER
+ *                                     `tailRelax` — `@:sep(";",
+ *                                     blockEnded)` is rejected at compile
+ *                                     time (second arg must match
+ *                                     `tailRelax` ident). Sets
  *                                     `lit.sepBlockEnded:true`.
+ *  - `@:sep(";", tailRelax, blockEnded('<predicate>'))` — option b2 form
+ *                                     (Session 6): in addition to the
+ *                                     byte-check `}` / `;`, the Star
+ *                                     primitive calls a schema-instance
+ *                                     predicate
+ *                                     (`schema.instance.<predicate>(_arr[_arr.length
+ *                                     - 1])`) on the just-pushed element
+ *                                     to decide sep-elision by AST shape.
+ *                                     Required to cover ident-terminated
+ *                                     stmts (`x is String` — Slice 43) and
+ *                                     `]`-terminated stmts (`[1,2,3]` —
+ *                                     Slice 39) which the byte-check can't
+ *                                     cover safely. Reaches the predicate
+ *                                     through the same channel as
+ *                                     `trailOptParseGate` (see
+ *                                     `Lowering.buildBlockEndedPredicateCall`).
+ *                                     Sets both `lit.sepBlockEnded:true`
+ *                                     and `lit.sepBlockEndedPredicate:<name>`.
  *  - `@:sepAlt(";")`               — opt-in alternate separator,
  *                                     accepted alongside `@:sep` by the
  *                                     tolerant close-driven loop (an
@@ -116,7 +129,7 @@ class Lit implements Strategy {
 				node.annotations.set('lit.trailText', stringOrFail(entry.params[1], ':wrap'));
 			case ':sep':
 				if (entry.params.length == 0 || entry.params.length > 3)
-					Context.fatalError('@:sep expects 1-3 arguments: @:sep("text"), @:sep("text", tailRelax), or @:sep("text", tailRelax, blockEnded)', entry.pos);
+					Context.fatalError('@:sep expects 1-3 arguments: @:sep("text"), @:sep("text", tailRelax), or @:sep("text", tailRelax, blockEnded[(\'<predicate>\')])', entry.pos);
 				node.annotations.set('lit.sepText', stringOrFail(entry.params[0], ':sep'));
 				if (entry.params.length >= 2) switch entry.params[1].expr {
 					case EConst(CIdent('tailRelax')):
@@ -127,8 +140,21 @@ class Lit implements Strategy {
 				if (entry.params.length == 3) switch entry.params[2].expr {
 					case EConst(CIdent('blockEnded')):
 						node.annotations.set('lit.sepBlockEnded', true);
+					// `blockEnded('predicateName')` — option (b2) AST-shape
+					// adapter: instead of (or in addition to) the byte-check
+					// `_prevEndPos - 1 == '}'`, the Star primitive calls
+					// `schema.instance.<predicateName>(_arr[_arr.length - 1])`
+					// to decide whether sep is elidable. The predicate is a
+					// schema-method on the plugin's HaxeFormat-shaped class,
+					// reached through the same channel as `trailOptParseGate`
+					// (see Lowering.hx L1552 for the sister mechanism).
+					case ECall({expr: EConst(CIdent('blockEnded'))}, callArgs):
+						if (callArgs.length != 1)
+							Context.fatalError('@:sep `blockEnded(\'<predicate>\')` expects exactly one string argument', entry.params[2].pos);
+						node.annotations.set('lit.sepBlockEnded', true);
+						node.annotations.set('lit.sepBlockEndedPredicate', stringOrFail(callArgs[0], ':sep'));
 					case _:
-						Context.fatalError('@:sep third argument must be the ident `blockEnded`', entry.params[2].pos);
+						Context.fatalError('@:sep third argument must be `blockEnded` or `blockEnded(\'<predicate>\')`', entry.params[2].pos);
 				}
 			case ':sepAlt':
 				node.annotations.set('lit.sepAltText', singleString(entry.params, ':sepAlt'));
