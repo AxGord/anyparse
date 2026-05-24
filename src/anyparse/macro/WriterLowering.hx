@@ -1558,7 +1558,7 @@ class WriterLowering {
 					final _elemDoc:anyparse.core.Doc = $elemCall;
 					if (_i > 0) {
 						final _priorDoc:anyparse.core.Doc = _docs[_docs.length - 1];
-						final _priorEnds:Bool = anyparse.core.DocMeasure.endsWithStmtTerminator(_priorDoc) || $predicateCheckPrior;
+						final _priorEnds:Bool = anyparse.core.DocMeasure.endsWithSemi(_priorDoc) || $predicateCheckPrior;
 						if (!_priorEnds) {
 							_docs.push(_dt($v{sepText}));
 							_docs.push(_dt(' '));
@@ -3910,7 +3910,7 @@ class WriterLowering {
 						_items.push(_dhl());
 						_items.push(_elemDoc);
 						if (_si < _arr.length - 1
-								&& !anyparse.core.DocMeasure.endsWithStmtTerminator(_elemDoc)
+								&& !anyparse.core.DocMeasure.endsWithSemi(_elemDoc)
 								&& !($predicateCheck)) {
 							_items.push(_dt($v{sepText}));
 						}
@@ -3918,7 +3918,7 @@ class WriterLowering {
 						_si++;
 					}
 					if (_lastElemDoc != null
-							&& !anyparse.core.DocMeasure.endsWithStmtTerminator(_lastElemDoc)
+							&& !anyparse.core.DocMeasure.endsWithSemi(_lastElemDoc)
 							&& !($lastPredicateCheck)) {
 						_items.push(_dt($v{sepText}));
 					}
@@ -7009,7 +7009,12 @@ class WriterLowering {
 		// the redundant `;` after the brace). The `endsWithStmtTerminator`
 		// arm stays as a safety net for raw/programmatic AST inputs whose
 		// `Trivial<T>` defaults leave `sepAfter=false` even when the source
-		// shape demands a sep.
+		// shape demands a sep. NOTE: `endsWithStmtTerminator` (NOT
+		// `endsWithSemi`) here — between-element doesn't have predicate
+		// access, so the `}` byte must double as a "prior self-terminated"
+		// signal. Migrated stmts (Session 10) reach the between-element
+		// path via `sepAfter=true` instead (Star consumed the source `;`),
+		// which short-circuits the OR before the doc-check.
 		final blockSepBeforeHardlineExpr:Expr = (sepText != null && blockEnded)
 			? macro {
 				if (_si > 0 && _priorElemDoc != null
@@ -7022,12 +7027,13 @@ class WriterLowering {
 		// ω-blockended-trivia-trail-sep (Session 3): after the last element
 		// the loop has run, source-trail sep emission. Source had `;`
 		// before close iff the LAST element's `sepAfter` is true. Emit
-		// `;` to preserve byte-fidelity; suppress when the last element
-		// already ends with `}` / `;` (block-close OR inner @:trail(';')).
+		// `;` to preserve byte-fidelity; suppress only when the last element
+		// already ends with `;` (inner `@:trail(';')` baked it in) — `}`
+		// alone no longer suppresses (see `blockSepBeforeHardlineExpr`).
 		final blockTrailSepEmitExpr:Expr = (sepText != null && blockEnded)
 			? macro {
 				if (_arr.length > 0 && _priorElemDoc != null && _arr[_arr.length - 1].sepAfter
-						&& !anyparse.core.DocMeasure.endsWithStmtTerminator(_priorElemDoc)) {
+						&& !anyparse.core.DocMeasure.endsWithSemi(_priorElemDoc)) {
 					_inner.push(_dt($v{sepText}));
 				}
 			}
@@ -8677,13 +8683,14 @@ class WriterLowering {
 			: macro {};
 		// ω-blockended-trivia-tryparse-trail (Session 3): post-loop tail
 		// sep emit so the last element of a case-body keeps its source
-		// `;` (e.g. `case X: foo();` survives round-trip). Same
-		// `endsWithStmtTerminator` gate so already-terminated last
-		// elements (`case X: { return; }`) don't double-emit.
+		// `;` (e.g. `case X: foo();` survives round-trip). `endsWithSemi`
+		// (not `endsWithStmtTerminator`) — see `blockTrailSepEmitExpr`
+		// rationale: under BlockBody Star sep-ownership a trailing `}`
+		// is the inner value's, not the stmt's terminator.
 		final tryparseBlockEndedTrailEmit:Expr = (sepText != null && blockEnded)
 			? macro {
 				if (_arr.length > 0 && _priorElemDoc != null && _arr[_arr.length - 1].sepAfter
-						&& !anyparse.core.DocMeasure.endsWithStmtTerminator(_priorElemDoc)) {
+						&& !anyparse.core.DocMeasure.endsWithSemi(_priorElemDoc)) {
 					_docs.push(_dt($v{sepText}));
 				}
 			}

@@ -235,9 +235,12 @@ final class HxExprUtil {
 	 * needs the opposite answer for `macro { … }` and the Slice 19
 	 * Assign / IfExpr cases. `endsWithCloseBrace` is reused read-only
 	 * for the non-recursive tail cases (`SwitchExpr` etc., where the
-	 * answer coincides) and is NOT modified — `VarStmt`/`FinalStmt`'s
-	 * `@:fmt(trailOptShapeGate('endsWithCloseBrace'))` gate keeps its
-	 * stricter behaviour.
+	 * answer coincides) and is NOT modified — `HxClassMember.VarMember`/
+	 * `FinalMember`'s writer-side `@:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))`
+	 * gate keeps its stricter behaviour. Post Sessions 10.1-10.5 the
+	 * statement-side `Var`/`Final`/`StaticVar`/`StaticFinalStmt` ctors
+	 * no longer carry `trailOptShapeGate` — they own no `@:trailOpt(';')`
+	 * at all; the BlockBody Star sep claims the trailing byte instead.
 	 *
 	 * `Dynamic` argument so the same predicate fires on Plain-mode
 	 * `HxExpr` enum values and Trivia-mode `Trivial<HxExprT>` wrappers
@@ -377,10 +380,11 @@ final class HxExprUtil {
 	 *
 	 *  - `ExprStmt(expr)` → recurse `stmtExprNoSemi(expr)` (carve-out
 	 *    semantics for ObjectLit / ArrayExpr / IfExpr-with-else / Is / …).
-	 *  - `VarStmt` / `FinalStmt` / `StaticVarStmt` / `StaticFinalStmt`
-	 *    → check `decl.init` is brace-terminated via `endsWithCloseBrace`
-	 *    (matches the writer-side `@:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))`
-	 *    gate). `var x = { … } y = …` elides its `;`.
+	 *    Migrated var-family ctors (`StaticVarStmt` / `StaticFinalStmt` /
+	 *    `VarStmt` / `FinalStmt` — Sessions 10.1-10.5) are NOT in this
+	 *    predicate: their per-stmt `@:trailOpt(';')` is gone, the BlockBody
+	 *    Star owns the trailing `;`, and the predicate returning FALSE for
+	 *    them is the correct signal that the Star must claim the byte.
 	 *  - Brace-terminated stmts (`BlockStmt` / `IfStmt` / `WhileStmt` /
 	 *    `ForStmt` / `SwitchStmt(Bare)` / `TryCatchStmt` / `LocalFnStmt` /
 	 *    `LocalInlineFnStmt` / `UntypedBlockStmt`) → true unconditionally
@@ -413,19 +417,6 @@ final class HxExprUtil {
 			final params:Null<Array<Dynamic>> = Type.enumParameters(s);
 			return params != null && params.length > 0 && stmtExprNoSemi(params[0]);
 		}
-		// Var-statements still carrying per-stmt `@:trailOpt(';')` are
-		// unconditionally permissive: their `@:trailOpt` consumes the
-		// optional `;`, so byte at `_prevEndPos - 1` IS `;` and the AST
-		// predicate must also pass for sepStartsElement gating to behave.
-		// The test contract is explicit (HxVarStmtTrailOptSliceTest.
-		// testVarFollowedBySecondVarNoSemi — `var x = 5 var y = 6;`
-		// accepted even though real Haxe rejects). As each ctor migrates
-		// to BlockBody Star sep-ownership (Session 10), it drops out of
-		// this disjunction — its body no longer ends with `;`, so the
-		// Star's `@:sep` must claim the byte instead of routing it to a
-		// next element.
-		if (ctor == 'VarStmt' || ctor == 'FinalStmt')
-			return true;
 		// Brace-terminated stmts — `}` is the last token. Byte-check
 		// `'}'` would also match; AST branch makes the intent explicit.
 		if (ctor == 'BlockStmt' || ctor == 'IfStmt' || ctor == 'WhileStmt' || ctor == 'ForStmt'

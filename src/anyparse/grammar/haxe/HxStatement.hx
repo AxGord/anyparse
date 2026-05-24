@@ -357,10 +357,10 @@ enum HxStatement {
 	@:kw('static') @:lead('final')
 	StaticFinalStmt(decl:HxVarDecl);
 
-	@:kw('var') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))
+	@:kw('var')
 	VarStmt(decl:HxVarDecl);
 
-	@:kw('final') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))
+	@:kw('final')
 	FinalStmt(decl:HxVarDecl);
 
 	@:kw('return')
@@ -427,6 +427,7 @@ enum HxStatement {
 
 	@:fmt(leftCurly('blockLeftCurly'), emptyCurlyBreak('blockEmptyCurly'), rightCurly('blockRightCurly'), keepCurlyBlanks)
 	@:lead('{') @:trail('}') @:trivia
+	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	BlockStmt(stmts:Array<HxStatement>);
 
 	@:lit(';')

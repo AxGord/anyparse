@@ -194,4 +194,46 @@ final class DocMeasure {
 		}
 		return false;
 	}
+
+	/**
+	 * Stricter sister of `endsWithStmtTerminator`: returns true only when
+	 * the rightmost non-whitespace byte is `;`. Used by BlockBody Star
+	 * trail / between-element sep emission to skip a redundant `;`
+	 * already baked by an inner stmt's own `@:trail(';')` /
+	 * `@:trailOpt(';')`. Crucially does NOT treat `}` as a terminator —
+	 * with the BlockBody Star sep-ownership model (Session 9/10), a
+	 * trailing `}` belongs to the stmt's inner value expression (e.g.
+	 * `var x = {a:1}`) and the Star still owns the trailing `;`. Compare:
+	 * `endsWithStmtTerminator` was correct under the pre-Session-10 model
+	 * where every brace-ending stmt was self-contained; after migration,
+	 * the `}` arm conflates value-block-close with stmt-block-close.
+	 */
+	public static function endsWithSemi(d:Doc):Bool {
+		final stack:Array<Doc> = [d];
+		while (stack.length > 0) {
+			final node:Doc = stack.pop();
+			switch node {
+				case Empty | OptHardline | OptHardlineSkipAtOpenDelim
+						| OptHardlineSkipBeforeHardline | OptSpaceSkipAfterHardline:
+				case Text(s) | OptSpace(s) | Line(s):
+					final t:String = StringTools.rtrim(s);
+					if (t.length > 0) {
+						final c:Int = StringTools.fastCodeAt(t, t.length - 1);
+						return c == ';'.code;
+					}
+				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner)
+						| BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner):
+					stack.push(inner);
+				case Concat(items):
+					for (it in items) stack.push(it);
+				case IfBreak(_, flatDoc) | IfWidthExceeds(_, _, flatDoc)
+						| IfFirstLineExceeds(_, _, flatDoc) | IfLineExceeds(_, _, flatDoc)
+						| IfFullLineExceeds(_, _, flatDoc):
+					stack.push(flatDoc);
+				case Fill(items, _, _) | FillWithRestProbe(items, _, _):
+					for (it in items) stack.push(it);
+			}
+		}
+		return false;
+	}
 }

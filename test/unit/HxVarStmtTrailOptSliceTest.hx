@@ -61,12 +61,19 @@ class HxVarStmtTrailOptSliceTest extends HxTestHelpers {
 	}
 
 	public function testVarFollowedBySecondVarNoSemi():Void {
-		// Lenient case: `var x = 5` (no `;`) followed by another statement.
-		// Real Haxe rejects this; we accept it because `:trailOpt` is
-		// position-agnostic. Documenting the leniency here so a future
-		// strict-mode slice doesn't silently change the contract.
-		final stmts:Array<HxStatement> = parseFunctionBody('var x = 5\nvar y = 6;');
-		Assert.equals(2, stmts.length);
+		// Pre-S10.4: `var x = 5` (no `;`) followed by another statement was
+		// accepted because the per-stmt `@:trailOpt(';')` was position-
+		// agnostic. After S10.4 the BlockBody Star owns sep emission and
+		// `;` between non-block-ended stmts is required — matches real
+		// Haxe's strict rejection.
+		Assert.raises(() -> parseFunctionBody('var x = 5\nvar y = 6;'));
+	}
+
+	public function testFinalFollowedBySecondFinalNoSemi():Void {
+		// Sister contract of `testVarFollowedBySecondVarNoSemi` — S10.5
+		// migrated `FinalStmt` to BlockBody Star sep-ownership, so the
+		// same strict-rejection contract applies to `final` declarations.
+		Assert.raises(() -> parseFunctionBody('final x = 5\nfinal y = 6;'));
 	}
 
 	// ======== Trailing `;` still accepted (canonical input) ========
