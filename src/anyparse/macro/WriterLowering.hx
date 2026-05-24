@@ -3879,6 +3879,24 @@ class WriterLowering {
 					pos: Context.currentPos(),
 				};
 			} else macro false;
+			// Phase G2 (Session 10) — trail-emit-on-last for plain mode.
+			// Mirror of between-element gate below, queried on the last
+			// element. Required when per-stmt `@:trailOpt(';')` is removed
+			// from a ctor (Session 10 migration) — the element's Doc no
+			// longer bakes `;`, so the Star owns trailing emit. Mirrors
+			// trivia mode's `blockTrailSepEmitExpr` (L7002-7009) minus the
+			// source-fidelity `sepAfter` gate (plain mode has no per-pair
+			// state — always emit when non-block-ended).
+			final lastPredicateCheck:Expr = if (predicateName != null) {
+				final fmtParts:Array<String> = formatInfo.schemaTypePath.split('.');
+				{
+					expr: ECall(
+						{expr: EField(macro $p{fmtParts}.instance, predicateName), pos: Context.currentPos()},
+						[macro _arr[_arr.length - 1]]
+					),
+					pos: Context.currentPos(),
+				};
+			} else macro false;
 			parts.push(macro {
 				final _arr = $fieldAccess;
 				if (_arr.length == 0) {
@@ -3886,6 +3904,7 @@ class WriterLowering {
 				} else {
 					final _items:Array<anyparse.core.Doc> = [];
 					var _si:Int = 0;
+					var _lastElemDoc:Null<anyparse.core.Doc> = null;
 					while (_si < _arr.length) {
 						final _elemDoc:anyparse.core.Doc = $elemCall;
 						_items.push(_dhl());
@@ -3895,7 +3914,13 @@ class WriterLowering {
 								&& !($predicateCheck)) {
 							_items.push(_dt($v{sepText}));
 						}
+						_lastElemDoc = _elemDoc;
 						_si++;
+					}
+					if (_lastElemDoc != null
+							&& !anyparse.core.DocMeasure.endsWithStmtTerminator(_lastElemDoc)
+							&& !($lastPredicateCheck)) {
+						_items.push(_dt($v{sepText}));
 					}
 					final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 					_dc([_dt($v{openText ?? ''}), _dn(_cols, _dc(_items)), _dhl(), _dt($v{closeText})]);

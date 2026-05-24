@@ -423,19 +423,18 @@ final class HxExprUtil {
 			final params:Null<Array<Dynamic>> = Type.enumParameters(s);
 			return params != null && params.length > 0 && stmtExprNoSemi(params[0]);
 		}
-		// Var-statements: unconditionally permissive. The pre-refactor
-		// parser used a position-agnostic `@:trailOpt(';')` matchLit on
-		// these ctors (the `trailOptShapeGate('endsWithCloseBrace', 'init')`
-		// meta is consumed WRITER-side only, by `WriterLowering`'s
-		// `trailOptShapeGateWrap`). The test contract is explicit
-		// (HxVarStmtTrailOptSliceTest.testVarFollowedBySecondVarNoSemi —
-		// `var x = 5 var y = 6;` accepted even though real Haxe rejects).
-		// Returning `true` unconditionally preserves that leniency so
-		// migrating the BlockBody Star to own sep semantics is byte-
-		// identical with the old behaviour. A future strict-mode slice
-		// could narrow this to `endsWithCloseBrace(init)` to match real
-		// Haxe; that would intentionally break the lenient test.
-		if (ctor == 'VarStmt' || ctor == 'FinalStmt' || ctor == 'StaticVarStmt' || ctor == 'StaticFinalStmt')
+		// Var-statements still carrying per-stmt `@:trailOpt(';')` are
+		// unconditionally permissive: their `@:trailOpt` consumes the
+		// optional `;`, so byte at `_prevEndPos - 1` IS `;` and the AST
+		// predicate must also pass for sepStartsElement gating to behave.
+		// The test contract is explicit (HxVarStmtTrailOptSliceTest.
+		// testVarFollowedBySecondVarNoSemi — `var x = 5 var y = 6;`
+		// accepted even though real Haxe rejects). As each ctor migrates
+		// to BlockBody Star sep-ownership (Session 10), it drops out of
+		// this disjunction — its body no longer ends with `;`, so the
+		// Star's `@:sep` must claim the byte instead of routing it to a
+		// next element.
+		if (ctor == 'VarStmt' || ctor == 'FinalStmt' || ctor == 'StaticFinalStmt')
 			return true;
 		// Brace-terminated stmts — `}` is the last token. Byte-check
 		// `'}'` would also match; AST branch makes the intent explicit.
