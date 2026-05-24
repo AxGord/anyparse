@@ -7,21 +7,24 @@ package unit.miniblock;
  * `Atom(s)` — bare identifier.
  * `Block(items)` — `{` ... `}` with `;` separator between elements;
  *   trailing `;` tolerated (tail-relax); between two elements `;` may
- *   be omitted when the prior element ends with `}` (block-ended
- *   exemption). The `@:sep(';', tailRelax, blockEnded)` annotation
- *   drives both relaxations.
+ *   be omitted when the prior element ends with `}` OR when the format
+ *   instance's `endsImplicitly` predicate accepts the prior element's
+ *   AST shape (Session 7 option b2 — AST-shape adapter). The
+ *   `@:sep(';', tailRelax, blockEnded('endsImplicitly'))` annotation
+ *   wires both byte-check and predicate paths.
  *
- * Reuses `anyparse.format.text.JsonFormat` purely as a whitespace
- * carrier — none of JSON's literal escape / number policy applies to
- * `MiniBlock`. A dedicated `MiniBlockFormat` is overkill for a pilot.
+ * Schema is `MiniBlockFormat`, a dedicated pilot format — see its file
+ * for the `endsImplicitly` predicate semantics and the rationale for
+ * not reusing `JsonFormat` here (the predicate API forced a dedicated
+ * format class).
  */
 @:peg
-@:schema(anyparse.format.text.JsonFormat)
+@:schema(unit.miniblock.MiniBlockFormat)
 @:ws
 enum MiniBlock {
 
 	Atom(s:MiniAtomLit);
 
-	@:lead('{') @:trail('}') @:sep(';', tailRelax, blockEnded)
+	@:lead('{') @:trail('}') @:sep(';', tailRelax, blockEnded('endsImplicitly'))
 	Block(items:Array<MiniBlock>);
 }

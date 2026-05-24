@@ -3816,35 +3816,66 @@ class WriterLowering {
 			return;
 		}
 
-		// Block-ended exemption (Session 2 pilot). When the Star carries
-		// `@:sep(<text>, tailRelax, blockEnded)`, between-element sep is
-		// suppressed if the prior element's rendered Doc ends with `}`.
+		// Block-ended exemption (Session 2 pilot → Session 8 layout fix +
+		// writer-side predicate consultation). When the Star carries
+		// `@:sep(<text>, tailRelax, blockEnded[('<predicate>')])`,
+		// between-element sep is suppressed when EITHER:
+		//   (a) the prior element's rendered Doc ends with `}` OR `;`
+		//       (per-stmt `@:trail/@:trailOpt(';')` baked terminator —
+		//       `DocMeasure.endsWithStmtTerminator` one-walk check), OR
+		//   (b) the format-instance predicate returns true on the prior
+		//       element's AST (Session 7 option b2 — AST-shape adapter,
+		//       e.g. `HxStatement.Conditional(#if…#end)` ends `#end`
+		//       byte-wise so (a) misses, but the predicate accepts the
+		//       AST shape).
 		// Mirrors the parser-side blockEnded branch in
-		// `Lowering.emitStarFieldSteps`: the right-spine `DocMeasure.endsWithCloseBrace`
-		// check replaces the AST-shape `endsWithCloseBrace` predicate that
-		// today lives in `HxExprUtil` / `stmtExprNoSemi`. Pilot scope: this
-		// single emit path. The migration of HxStatement/BlockBody to the
-		// new primitive will additionally need trivia-mode coverage.
+		// `Lowering.emitStarFieldSteps`: byte-check `}`∪`;` (or-extended
+		// `b == '}'.code || b == ';'.code || $predicateCall`). Predicate
+		// is omitted iff `lit.sepBlockEndedPredicate` is absent — the
+		// `false` fallback keeps the byte-check fast path untouched.
+		//
+		// Layout mirrors `blockBody` (WriterCodegen.hx:730-758): empty →
+		// flat `open+close`; non-empty → `_dc([_dt(open), _dn(cols,
+		// _dc([_dhl, item, [sep?]]*)), _dhl, _dt(close)])`. This replaces
+		// the prior flat `_dc([open, item, _dt(' '), item, …, close])`
+		// that had no multiline primitive — Session 7's HxFnBlock.stmts
+		// smoke test regressed 35 unit tests because function bodies
+		// collapsed to one line; the blockBody-shape layout restores
+		// parity with the non-`@:sep` path at L3981.
 		final blockEnded:Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
 		if (closeText != null && sepText != null && blockEnded) {
+			final predicateName:Null<String> = starNode.annotations.get('lit.sepBlockEndedPredicate');
+			final predicateCheck:Expr = if (predicateName != null) {
+				final fmtParts:Array<String> = formatInfo.schemaTypePath.split('.');
+				{
+					expr: ECall(
+						{expr: EField(macro $p{fmtParts}.instance, predicateName), pos: Context.currentPos()},
+						[macro _arr[_si]]
+					),
+					pos: Context.currentPos(),
+				};
+			} else macro false;
 			parts.push(macro {
 				final _arr = $fieldAccess;
-				final _docs:Array<anyparse.core.Doc> = [_dt($v{openText ?? ''})];
-				var _si:Int = 0;
-				while (_si < _arr.length) {
-					final _elemDoc:anyparse.core.Doc = $elemCall;
-					if (_si > 0) {
-						final _priorDoc:anyparse.core.Doc = _docs[_docs.length - 1];
-						if (!anyparse.core.DocMeasure.endsWithCloseBrace(_priorDoc)) {
-							_docs.push(_dt($v{sepText}));
+				if (_arr.length == 0) {
+					_dc([_dt($v{openText ?? ''}), _dt($v{closeText})]);
+				} else {
+					final _items:Array<anyparse.core.Doc> = [];
+					var _si:Int = 0;
+					while (_si < _arr.length) {
+						final _elemDoc:anyparse.core.Doc = $elemCall;
+						_items.push(_dhl());
+						_items.push(_elemDoc);
+						if (_si < _arr.length - 1
+								&& !anyparse.core.DocMeasure.endsWithStmtTerminator(_elemDoc)
+								&& !($predicateCheck)) {
+							_items.push(_dt($v{sepText}));
 						}
-						_docs.push(_dt(' '));
+						_si++;
 					}
-					_docs.push(_elemDoc);
-					_si++;
+					final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+					_dc([_dt($v{openText ?? ''}), _dn(_cols, _dc(_items)), _dhl(), _dt($v{closeText})]);
 				}
-				_docs.push(_dt($v{closeText}));
-				_dc(_docs);
 			});
 			return;
 		}

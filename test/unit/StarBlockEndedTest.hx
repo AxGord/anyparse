@@ -136,6 +136,24 @@ class StarBlockEndedTest extends Test {
 		}
 	}
 
+	public function testParsePredicateOnlyExemption():Void {
+		// Session 7 (b2) predicate-only path: `end` doesn't end with
+		// `}`/`;` byte-wise, so the byte-check alone would reject
+		// `{end b}`. `MiniBlockFormat.endsImplicitly` returns true on
+		// `Atom('end')`, which is the SOLE reason the sep between
+		// `end` and `b` may be elided. Companion to the existing
+		// negative `testParseAtomsWithoutSepThrows` (`{a b}` rejected
+		// because neither byte-check nor predicate accept `Atom('a')`).
+		final ast:MiniBlock = MiniBlockParser.parse('{end b}');
+		switch ast {
+			case Block([Atom(a), Atom(b)]):
+				Assert.equals('end', (a : String));
+				Assert.equals('b', (b : String));
+			case _:
+				Assert.fail('expected Block([Atom(end), Atom(b)]), got $ast');
+		}
+	}
+
 	// ---- Parser: negative cases ----
 
 	public function testParseAtomsWithoutSepThrows():Void {

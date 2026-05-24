@@ -16,6 +16,18 @@ package anyparse.grammar.haxe;
  * the recursive call when the runtime branch is `BlockBody` (gated via
  * `Type.enumConstructor`), and the Star inside this typedef provides
  * the `{` lead and `}` trail with its own statement-trivia capture.
+ *
+ * Session 8 activation attempt of option (b2) AST-shape adapter
+ * ([[project-blockbody-star-session8-activation-attempt]]):
+ * adding `@:sep(';', tailRelax, blockEnded('stmtNoSemi'))` here
+ * collapsed `;;` from 2 EmptyStmt → 1 + sep-consumed (2 test
+ * failures in `HxControlFlowSliceTest`). The Star's sep-first
+ * branch competes with `EmptyStmt`'s `;` body — both match the
+ * same byte and sep wins. Resolving requires `@:tryparse`-style
+ * element-first speculation in the blockEnded Lowering branch
+ * (out of session scope). Reverted to no `@:sep` so per-stmt
+ * `@:trailOpt(';')` + `stmtExprNoSemi` carve-outs continue to be
+ * the sole terminator mechanism.
  */
 @:peg
 @:fmt(multilineWhenFieldNonEmpty('stmts'))
