@@ -28,6 +28,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxDoWhileStmt = {
-	@:fmt(bodyPolicy('doBody')) var body:HxStatement;
+	@:trailOpt(';') @:fmt(bodyPolicy('doBody')) var body:HxStatement;
 	@:kw('while') @:lead('(') @:trail(')') @:fmt(sameLine('sameLineDoWhile')) var cond:HxExpr;
 };

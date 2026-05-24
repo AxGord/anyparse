@@ -44,5 +44,5 @@ typedef HxForStmt = {
 	@:lead('(') @:fmt(condWrap('conditionWrap')) var varName:HxIdentLit;
 	@:optional @:lead('=>') var valueName:Null<HxIdentLit>;
 	@:kw('in') @:trail(')') @:fmt(condWrapEnd) var iterable:HxExpr;
-	@:fmt(bodyPolicy('forBody')) var body:HxStatement;
+	@:trailOpt(';') @:fmt(bodyPolicy('forBody')) var body:HxStatement;
 };

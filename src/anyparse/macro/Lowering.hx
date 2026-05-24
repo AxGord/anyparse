@@ -2420,8 +2420,37 @@ class Lowering {
 					? child.annotations.get('lit.trailText')
 					: null;
 			if (!isStar && !isOptional && trailOptText != null) {
-				parseSteps.push(macro skipWs(ctx));
-				parseSteps.push(macro matchLit(ctx, $v{trailOptText}));
+				// ω-trailopt-rewind-on-miss-struct (BlockBody Star Session 5):
+				// trail-absence must REWIND pos to pre-trivia so trivia stays
+				// observable to the next field/Star. Bare `skipWs(ctx)` (the
+				// pre-Session-5 form) silently advances past whitespace and
+				// comments even when the optional trail literal is absent —
+				// breaking BOTH trivia-mode round-trip (statement-context
+				// hosts where the field-level `@:trailOpt(';')` sits between
+				// two statement siblings — HxIfStmt.thenBody / .elseBody /
+				// HxWhileStmt.body / HxForStmt.body / HxDoWhileStmt.body
+				// added in Session 5 Step 1) AND plain-mode block-ended Star
+				// detection (the close-peek Star at L2796-2833 reads
+				// `ctx.input.charCodeAt(_prevEndPos - 1) == '}'.code` to
+				// decide if sep is exempt; if `skipWs` advanced `_prevEndPos`
+				// past the closing `}` to the next token, the check reads a
+				// space instead of `}` and the exemption misses). The
+				// optional-kw pattern at L2296 uses the same `ctx.pos = _wsPos`
+				// rewind on miss — this mirrors it for optional-trail. On
+				// `;` hit: advance past it normally. On miss: rewind pos so
+				// the preceding trivia is re-observable. Applied in BOTH
+				// modes — plain mode also benefits (downstream block-ended
+				// Star checks need pre-trivia pos). Existing expression-
+				// context consumers (HxIfExpr.thenBranch, HxConditionalType.type,
+				// HxConditionalTypeElse.type, HxTryCatchExpr.body,
+				// HxFnBody.ExprBody) see no observable change — their
+				// downstream parsers re-scan the same trivia via their own
+				// skipWs / collectTrivia.
+				parseSteps.push(macro {
+					final _trailOptWsPos:Int = ctx.pos;
+					skipWs(ctx);
+					if (!matchLit(ctx, $v{trailOptText})) ctx.pos = _trailOptWsPos;
+				});
 			}
 			// ω-cond-comp-expr-multiline: terminal-slot newline capture for
 			// bare Ref fields opted in via `@:fmt(captureSourceNewlineAfter)`.
