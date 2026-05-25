@@ -647,6 +647,16 @@ final class HaxeFormatConfigLoader {
 		if (cfg.trailingCommas != null) applyTrailingCommas(cfg.trailingCommas, result);
 		if (cfg.lineEnds != null) applyLineEnds(cfg.lineEnds, result);
 		if (cfg.whitespace != null) applyWhitespace(cfg.whitespace, result);
+		// ω-D5-curly-blanks-fork-default: fork's `EmptyLinesConfig` declares
+		// `afterLeftCurly` / `beforeRightCurly` `@:default(Remove)`. Anyparse's
+		// `defaultWriteOptions` ships `Keep` (dogfood track preserves source
+		// blanks the user wrote when no config is supplied), so any JSON load
+		// path must re-baseline to the fork canonical before `applyEmptyLines`
+		// merges JSON overrides on top. Reset BEFORE the section-presence
+		// guard so a fixture that omits the entire `emptyLines` block still
+		// gets the fork default (corpus parity Δ 0/0/0 invariant).
+		result.afterLeftCurly = KeepEmptyLinesPolicy.Remove;
+		result.beforeRightCurly = KeepEmptyLinesPolicy.Remove;
 		if (cfg.emptyLines != null) applyEmptyLines(cfg.emptyLines, result);
 		return result;
 	}
@@ -1208,6 +1218,9 @@ final class HaxeFormatConfigLoader {
 		// our `HaxeFormat.defaultWriteOptions` default, so the override only
 		// kicks in when the fixture explicitly sets a different value.
 		if (section.maxAnywhereInFile != null) opt.maxConsecutiveBlanks = section.maxAnywhereInFile;
+		// ω-D5-curly-blanks-fork-default: see `loadHxFormatJson` head — fork
+		// canonical `Remove` is re-applied at JSON-load entry before this
+		// section runs, so here we only honour an explicit JSON override.
 		if (section.afterLeftCurly != null)
 			opt.afterLeftCurly = keepEmptyLinesToRuntime(section.afterLeftCurly);
 		if (section.beforeRightCurly != null)
