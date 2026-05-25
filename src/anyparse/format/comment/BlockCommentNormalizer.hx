@@ -38,6 +38,17 @@ class BlockCommentNormalizer {
 			catch (_:haxe.Exception) null;
 		if (parsed == null) return Text(content);
 		if (opt.commentStyle == CommentStyle.Verbatim) {
+			// Parser's `@:sep('\n') @:trail('*/')` Star elides the trailing
+			// separator: source `Xx\n*/` parses as N lines (not N+1 with an
+			// empty trailing line). The writer therefore loses the `\n` that
+			// would have placed `*/` on its own line. Detect the
+			// `<content>\n*/` close-on-own-line shape and append a synthetic
+			// empty line so normalize's `body == '' last line` branch routes
+			// to the canonical ` */` close pad.
+			if (StringTools.endsWith(content, '\n*/') && parsed.lines.length > 0) {
+				final lastBody:String = parsed.lines[parsed.lines.length - 1].body;
+				if (lastBody.length > 0) parsed.lines.push({ws: '', body: ''});
+			}
 			final lines:Array<BlockCommentLine> = parsed.lines;
 			if (lines.length <= 1) return Text(content);
 			if (isJavadocStyle(lines)) return javadocBytePreserveDoc(content, parsed);
