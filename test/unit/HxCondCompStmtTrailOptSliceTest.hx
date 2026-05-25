@@ -19,6 +19,12 @@ import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
  * Fix: align `HxConditionalStmt.body` / `elseBody` and `HxElseifStmt.body`
  * with the `BlockStmt` sep meta. The trivia pipeline (`apq ast --writer-
  * output`, dogfooded test files) now round-trips byte-identically.
+ *
+ * Slice D4: `elseBody` was wired LAST because the kw-led optional Star
+ * path (`Lowering.emitOptionalKwStarFieldSteps`) silently ignored
+ * `@:sep`. Adding the meta on its own would not have closed the bug —
+ * the engine had to learn the same sep-consumption shape its
+ * non-optional sibling (`emitTriviaStarFieldSteps`) already had.
  */
 class HxCondCompStmtTrailOptSliceTest extends Test {
 
@@ -35,6 +41,16 @@ class HxCondCompStmtTrailOptSliceTest extends Test {
 
 	public function testElseifBodyKeepsSemiTight():Void {
 		roundTrip('class T {\n\tstatic function f():Void {\n\t\t#if sys\n\t\tfinal a = 1;\n\t\t#elseif js\n\t\tfinal b = 2;\n\t\t#end\n\t}\n}');
+	}
+
+	// Slice D4 — single-stmt elseBody.
+	public function testElseBodyKeepsSemiTight():Void {
+		roundTrip('class T {\n\tstatic function f():Void {\n\t\t#if sys\n\t\tfinal a = 1;\n\t\t#else\n\t\tfinal b = 2;\n\t\t#end\n\t}\n}');
+	}
+
+	// Slice D4 — multi-stmt elseBody, both inter-element and trailing sep.
+	public function testElseBodyMultiStmtKeepsSemiTight():Void {
+		roundTrip('class T {\n\tstatic function f():Void {\n\t\t#if sys\n\t\tfinal a = 1;\n\t\t#else\n\t\tfinal b = 2;\n\t\tfinal c = 3;\n\t\t#end\n\t}\n}');
 	}
 
 	private static function roundTrip(source:String):Void {

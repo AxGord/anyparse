@@ -3208,6 +3208,23 @@ class Lowering {
 			Context.fatalError('Lowering: @:optional @:kw Star + @:fmt(nestBody) is not supported', Context.currentPos());
 		if (!starNode.hasMeta(':tryparse'))
 			Context.fatalError('Lowering: @:optional @:kw Star requires @:tryparse', Context.currentPos());
+		// Slice D4: `@:sep('text', tailRelax, blockEnded(...))` is supported
+		// on kw-led optional Stars. Pre-D4 the engine silently ignored sep
+		// on this path — `HxConditionalStmt.elseBody` (`#if … #else <stmt>;
+		// #end`) decomposed `final x = 1;` into `FinalStmt + EmptyStmt(';')`
+		// and the writer's sep-less inter-element pad produced `final x = 1 ;`.
+		// Mirror of the sister `emitTriviaStarFieldSteps` (3422) /
+		// WriterLowering (3380) contract: sep without `blockEnded` is rejected
+		// because termination semantic is undefined without it.
+		final sepText:Null<String> = starNode.annotations.get('lit.sepText');
+		final blockEndedFlag:Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
+		if (sepText != null && !blockEndedFlag) {
+			Context.fatalError(
+				'Lowering: @:optional @:kw Star + @:sep requires the blockEnded flag '
+				+ '(@:sep(text, tailRelax, blockEnded)) — termination semantic undefined otherwise',
+				Context.currentPos()
+			);
+		}
 		final elemRefName:String = inner.annotations.get('base.ref');
 		final elemFn:String = parseFnName(elemRefName);
 		final elemCT:ComplexType = ruleReturnCT(elemRefName);
@@ -3246,7 +3263,47 @@ class Lowering {
 		// `_savedPos` on failure. Trivia mode wraps in `Trivial<T>` and
 		// scans `_lead` / `_trailing` per element; plain mode pushes the
 		// raw element. Mirrors the regular tryparse Star paths.
-		final loopBody:Expr = if (isTriviaCollects) {
+		//
+		// Slice D4: with `@:sep`, mirror the non-nestBody branch of
+		// `emitTriviaStarFieldSteps` (line ~3616) — capture trailing-before-
+		// sep, h-ws skip, matchLit(sep), set `Trivial.sepAfter` from the
+		// match result so the writer's `triviaTryparseStarExpr` blockEnded
+		// gate consults the source-fidelity signal. Plain mode just
+		// consumes the optional sep so the next iteration's element parse
+		// doesn't match a bare `;` as `HxStatement.EmptyStmt`.
+		final loopBody:Expr = if (isTriviaCollects && sepText != null) {
+			macro {
+				while (true) {
+					final _savedPos:Int = ctx.pos;
+					final _lead = collectTrivia(ctx);
+					try {
+						final _node:$elemCT = $elemCall;
+						final _trailingBeforeSep:Null<String> = collectTrailingFull(ctx);
+						var _sepAfter:Bool = false;
+						while (ctx.pos < ctx.input.length) {
+							final _hwc:Int = ctx.input.charCodeAt(ctx.pos);
+							if (_hwc == ' '.code || _hwc == '\t'.code || _hwc == '\r'.code) ctx.pos++;
+							else break;
+						}
+						_sepAfter = matchLit(ctx, $v{sepText});
+						final _trailing:Null<String> = _trailingBeforeSep ?? (_sepAfter ? collectTrailingFull(ctx) : null);
+						_items.push({
+							blankBefore: _lead.blankBefore,
+							blankAfterLeadingComments: _lead.blankAfterLeadingComments,
+							newlineBefore: _lead.newlineBefore,
+							leadingComments: _lead.leadingComments,
+							trailingComment: _trailing,
+							trailingBeforeSep: _trailingBeforeSep != null,
+							sepAfter: _sepAfter,
+							node: _node,
+						});
+					} catch (_e:anyparse.runtime.ParseError) {
+						ctx.pos = _savedPos;
+						break;
+					}
+				}
+			};
+		} else if (isTriviaCollects) {
 			macro {
 				while (true) {
 					final _savedPos:Int = ctx.pos;
@@ -3264,6 +3321,25 @@ class Lowering {
 							sepAfter: true,
 							node: _node,
 						});
+					} catch (_e:anyparse.runtime.ParseError) {
+						ctx.pos = _savedPos;
+						break;
+					}
+				}
+			};
+		} else if (sepText != null) {
+			macro {
+				while (true) {
+					final _savedPos:Int = ctx.pos;
+					try {
+						skipWs(ctx);
+						_items.push($elemCall);
+						while (ctx.pos < ctx.input.length) {
+							final _hwc:Int = ctx.input.charCodeAt(ctx.pos);
+							if (_hwc == ' '.code || _hwc == '\t'.code || _hwc == '\r'.code) ctx.pos++;
+							else break;
+						}
+						matchLit(ctx, $v{sepText});
 					} catch (_e:anyparse.runtime.ParseError) {
 						ctx.pos = _savedPos;
 						break;

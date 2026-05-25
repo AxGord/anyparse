@@ -47,6 +47,15 @@ package anyparse.grammar.haxe;
  * splices the kw-Ref commit machinery with the tryparse Star loop —
  * `#else` is the commit point, miss leaves the field `null` so the
  * writer skips the entire clause.
+ *
+ * Slice D4: `elseBody` carries the same
+ * `@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))`
+ * meta as `body` / `HxElseifStmt.body`. Pre-D4 the engine silently
+ * ignored sep on the kw-led optional Star path — `#if … #else final x
+ * = 1; #end` decomposed into `FinalStmt + EmptyStmt(';')` and the
+ * writer produced `final x = 1 ;`. The fix extends
+ * `emitOptionalKwStarFieldSteps` with the same sep-consumption shape
+ * the non-optional `@:trivia + @:tryparse + @:sep` branch uses.
  */
 @:peg
 typedef HxConditionalStmt = {
@@ -55,5 +64,7 @@ typedef HxConditionalStmt = {
 		@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 		var body:Array<HxStatement>;
 	@:trivia @:tryparse var elseifs:Array<HxElseifStmt>;
-	@:optional @:kw('#else') @:trivia @:tryparse @:fmt(padLeading, padTrailing) var elseBody:Null<Array<HxStatement>>;
+	@:optional @:kw('#else') @:trivia @:tryparse @:fmt(padLeading, padTrailing)
+		@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
+		var elseBody:Null<Array<HxStatement>>;
 };
