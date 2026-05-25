@@ -334,8 +334,8 @@ class HxDoWhileThrowTryCatchSliceTest extends HxTestHelpers {
 		}
 		Assert.equals(1, tc.catches.length);
 		final c:HxCatchClause = tc.catches[0];
-		Assert.equals('e', (c.name : String));
-		Assert.equals('E', (expectNamedType(c.type).name : String));
+		Assert.equals('e', (c.param.name : String));
+		Assert.equals('E', (expectNamedType(c.param.type).name : String));
 		switch c.body {
 			case BlockStmt(stmts):
 				Assert.equals(1, stmts.length);
@@ -371,10 +371,10 @@ class HxDoWhileThrowTryCatchSliceTest extends HxTestHelpers {
 			'class C { function f():Void { try { } catch (e1:E1) { a; } catch (e2:E2) { b; } } }'
 		);
 		Assert.equals(2, tc.catches.length);
-		Assert.equals('e1', (tc.catches[0].name : String));
-		Assert.equals('E1', (expectNamedType(tc.catches[0].type).name : String));
-		Assert.equals('e2', (tc.catches[1].name : String));
-		Assert.equals('E2', (expectNamedType(tc.catches[1].type).name : String));
+		Assert.equals('e1', (tc.catches[0].param.name : String));
+		Assert.equals('E1', (expectNamedType(tc.catches[0].param.type).name : String));
+		Assert.equals('e2', (tc.catches[1].param.name : String));
+		Assert.equals('E2', (expectNamedType(tc.catches[1].param.type).name : String));
 	}
 
 	public function testTryCatchNested():Void {
@@ -388,7 +388,7 @@ class HxDoWhileThrowTryCatchSliceTest extends HxTestHelpers {
 				switch stmts[0] {
 					case TryCatchStmt(inner):
 						Assert.equals(1, inner.catches.length);
-						Assert.equals('e2', (inner.catches[0].name : String));
+						Assert.equals('e2', (inner.catches[0].param.name : String));
 					case null, _: Assert.fail('expected TryCatchStmt');
 				}
 			case null, _: Assert.fail('expected BlockStmt');
@@ -407,8 +407,8 @@ class HxDoWhileThrowTryCatchSliceTest extends HxTestHelpers {
 		switch stmts[0] {
 			case TryCatchStmt(tc):
 				Assert.equals(1, tc.catches.length);
-				Assert.equals('ex', (tc.catches[0].name : String));
-				Assert.equals('Exception', (expectNamedType(tc.catches[0].type).name : String));
+				Assert.equals('ex', (tc.catches[0].param.name : String));
+				Assert.equals('Exception', (expectNamedType(tc.catches[0].param.type).name : String));
 			case null, _: Assert.fail('expected TryCatchStmt');
 		}
 	}
@@ -418,8 +418,8 @@ class HxDoWhileThrowTryCatchSliceTest extends HxTestHelpers {
 			'class C { function f():Void { try  {  }  catch  (  e  :  E  )  {  }  } }'
 		);
 		Assert.equals(1, tc.catches.length);
-		Assert.equals('e', (tc.catches[0].name : String));
-		Assert.equals('E', (expectNamedType(tc.catches[0].type).name : String));
+		Assert.equals('e', (tc.catches[0].param.name : String));
+		Assert.equals('E', (expectNamedType(tc.catches[0].param.type).name : String));
 	}
 
 	public function testWordBoundaryTrying():Void {

@@ -3,7 +3,7 @@ package anyparse.grammar.haxe;
 /**
  * Expression-position catch clause grammar.
  *
- * Shape: `catch (name:Type) body`.
+ * Shape: `catch (name[:Type]) body`.
  *
  * Structurally parallel to `HxCatchClause` but the `body` field is
  * `HxExpr`, not `HxStatement` — used inside `HxTryCatchExpr` where
@@ -13,10 +13,11 @@ package anyparse.grammar.haxe;
  * Block bodies (`catch (e:T) { ... }`) still parse — `HxExpr.BlockExpr`
  * absorbs the block form via `tryBranch` rollback against `ObjectLit`.
  *
- * The `catch` keyword and opening `(` are both on the `name` field —
- * `@:kw('catch')` emits `expectKw` and `@:lead('(')` emits
- * `expectLit`, both sequentially (D50). The closing `)` is
- * `@:trail(')')` on the `type` field.
+ * The `catch` keyword, opening `(`, and closing `)` all sit on the
+ * `param` wrapper field — `@:kw('catch')` emits `expectKw`, `@:lead('(')`
+ * emits `expectLit`, both sequentially (D50), and `@:trail(')')` emits
+ * the matching closer after the inner `HxCatchParam` shape parses. The
+ * type annotation is optional inside the wrapper (`catch (_)` is legal).
  *
  * `@:fmt(bodyBreak('expressionTry'))` on the `body` field wraps the
  * catch body in a SameLinePolicy switch. `Same` keeps the existing
@@ -33,7 +34,6 @@ package anyparse.grammar.haxe;
 @:peg
 @:spanned('CatchClause')
 typedef HxCatchClauseExpr = {
-	@:kw('catch') @:lead('(') var name:HxIdentLit;
-	@:lead(':') @:trail(')') var type:HxType;
+	@:kw('catch') @:lead('(') @:trail(')') var param:HxCatchParam;
 	@:fmt(bodyBreak('expressionTry'), blockBodyKeepsInline) var body:HxExpr;
 };

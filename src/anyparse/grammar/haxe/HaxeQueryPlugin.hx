@@ -576,6 +576,12 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 					final n:Dynamic = Reflect.field(value, field);
 					if (n is String) return n;
 				}
+				// `param` unwraps HxCatchClause / HxCatchClauseStmtBare /
+				// HxCatchClauseExpr — the catch-param shape (name + optional
+				// `:Type`) lives in `param:HxCatchParam`, lifted there to
+				// support the bare `catch (name)` form (e.g. `catch (_)`).
+				// Mirror of the `node` unwrap for Trivial<T> envelopes.
+				if (Reflect.hasField(value, 'param')) return extractName(Reflect.field(value, 'param'));
 				if (Reflect.hasField(value, 'node')) return extractName(Reflect.field(value, 'node'));
 			case TEnum(_):
 				// Slice 27 — transparent unwrap for the single-Ref wrapper

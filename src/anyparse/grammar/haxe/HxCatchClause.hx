@@ -3,15 +3,19 @@ package anyparse.grammar.haxe;
 /**
  * Catch clause grammar (block-body form).
  *
- * Shape: `catch (name:Type) body`.
+ * Shape: `catch (name[:Type]) body`.
  *
- * The `catch` keyword and opening `(` are both on the `name` field —
- * `@:kw('catch')` emits `expectKw` and `@:lead('(')` emits
- * `expectLit`, both sequentially (D50). The closing `)` is
- * `@:trail(')')` on the `type` field. The `body` is a bare
- * `HxStatement` Ref — any statement branch (including `BlockStmt`)
- * is accepted. The bare-expression sibling `HxCatchClauseStmtBare`
- * carries the same name/type fields with `body:HxExpr`.
+ * The `catch` keyword, opening `(`, and closing `)` all sit on the
+ * `param` wrapper field — `@:kw('catch')` emits `expectKw`, `@:lead('(')`
+ * emits `expectLit`, both sequentially (D50), and `@:trail(')')` emits
+ * the matching closer after the inner shape parses. The inner shape
+ * (name + optional `:Type`) lives in `HxCatchParam` so the type
+ * annotation can be omitted (`catch (_)`); a single field can't combine
+ * `@:optional` with a mandatory `@:trail`, so the closer is hoisted onto
+ * the always-present wrapper. The `body` is a bare `HxStatement` Ref —
+ * any statement branch (including `BlockStmt`) is accepted. The
+ * bare-expression sibling `HxCatchClauseStmtBare` carries the same param
+ * field with `body:HxExpr`.
  *
  * `body` is `@:optional` with `@:absentOn('}')` peek-ahead — a
  * body-less `catch (e:Type)` directly followed by the enclosing
@@ -52,7 +56,6 @@ package anyparse.grammar.haxe;
 @:peg
 @:spanned('CatchClause')
 typedef HxCatchClause = {
-	@:kw('catch') @:lead('(') var name:HxIdentLit;
-	@:lead(':') @:trail(')') var type:HxType;
+	@:kw('catch') @:lead('(') @:trail(')') var param:HxCatchParam;
 	@:optional @:absentOn('}') @:trailOpt(';') @:fmt(bodyPolicy('catchBody')) var body:Null<HxStatement>;
 };

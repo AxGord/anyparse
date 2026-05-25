@@ -39,7 +39,7 @@ class HxTryExprSliceTest extends HxTestHelpers {
 					case _: Assert.fail('expected Call(foo,[]), got ${stmt.body}');
 				}
 				Assert.equals(1, stmt.catches.length);
-				Assert.equals('e', (stmt.catches[0].name : String));
+				Assert.equals('e', (stmt.catches[0].param.name : String));
 				switch stmt.catches[0].body {
 					case NullLit: Assert.pass();
 					case _: Assert.fail('expected NullLit catch body');
@@ -69,8 +69,8 @@ class HxTryExprSliceTest extends HxTestHelpers {
 		switch decl.init {
 			case TryExpr(stmt):
 				Assert.equals(2, stmt.catches.length);
-				Assert.equals('e', (stmt.catches[0].name : String));
-				Assert.equals('f', (stmt.catches[1].name : String));
+				Assert.equals('e', (stmt.catches[0].param.name : String));
+				Assert.equals('f', (stmt.catches[1].param.name : String));
 			case _: Assert.fail('expected TryExpr');
 		}
 	}
@@ -134,7 +134,7 @@ class HxTryExprSliceTest extends HxTestHelpers {
 					case _: Assert.fail('expected Call(foo,[]) body, got ${stmt.body}');
 				}
 				Assert.equals(1, stmt.catches.length);
-				Assert.equals('e', (stmt.catches[0].name : String));
+				Assert.equals('e', (stmt.catches[0].param.name : String));
 				switch stmt.catches[0].body {
 					case NullLit: Assert.pass();
 					case _: Assert.fail('expected NullLit catch body');
