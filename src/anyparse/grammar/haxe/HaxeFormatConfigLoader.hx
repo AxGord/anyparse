@@ -643,6 +643,17 @@ final class HaxeFormatConfigLoader {
 		};
 		if (cfg.indentation != null) applyIndentation(cfg.indentation, result);
 		if (cfg.wrapping != null) applyWrapping(cfg.wrapping, result);
+		// ω-D6-casebody-fork-default: fork's `SameLineConfig` declares
+		// `caseBody: Next`. Anyparse's `defaultWriteOptions` ships `Keep`
+		// (dogfood track preserves source `case X(v): body;` shape when no
+		// config is supplied), so any JSON load path must re-baseline to
+		// the fork canonical before `applySameLine` merges JSON overrides
+		// on top. Reset BEFORE the section-presence guard so a fixture
+		// that omits the entire `sameLine` block still gets the fork
+		// default (corpus parity Δ 0/0/0 invariant). Sister to the
+		// `afterLeftCurly`/`beforeRightCurly` re-baseline above
+		// `applyEmptyLines`.
+		result.caseBody = BodyPolicy.Next;
 		if (cfg.sameLine != null) applySameLine(cfg.sameLine, result);
 		if (cfg.trailingCommas != null) applyTrailingCommas(cfg.trailingCommas, result);
 		if (cfg.lineEnds != null) applyLineEnds(cfg.lineEnds, result);

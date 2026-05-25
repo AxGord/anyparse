@@ -43,9 +43,14 @@ final class HxCaseBodyPolicySliceTest extends Test {
 		super();
 	}
 
-	public function testDefaultsCaseBodyNextExpressionCaseKeep():Void {
+	public function testDefaultsCaseBodyKeepExpressionCaseKeep():Void {
+		// Slice D6 (dogfood) — `caseBody` default flipped from `Next` to
+		// `Keep` so the no-config (dogfood) writer-equals path preserves
+		// user-written `case X(v): body;` shape. The fork-canonical `Next`
+		// is preserved by re-baselining in `HaxeFormatConfigLoader.
+		// loadHxFormatJson` before `applySameLine` merges JSON overrides.
 		final defaults:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
-		Assert.equals(BodyPolicy.Next, defaults.caseBody);
+		Assert.equals(BodyPolicy.Keep, defaults.caseBody);
 		Assert.equals(BodyPolicy.Keep, defaults.expressionCase);
 	}
 
