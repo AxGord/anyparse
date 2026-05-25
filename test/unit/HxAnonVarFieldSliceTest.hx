@@ -7,6 +7,7 @@ import anyparse.grammar.haxe.HxAnonVarBody;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxType;
+import anyparse.grammar.haxe.HxTypeArg;
 import anyparse.grammar.haxe.HxTypeRef;
 import anyparse.grammar.haxe.HxVarDecl;
 
@@ -196,7 +197,7 @@ class HxAnonVarFieldSliceTest extends HxTestHelpers {
 		Assert.equals(2, fields.length);
 		final ext:HxTypeRef = expectExtendsField(fields[0]);
 		Assert.equals('T_2', (ext.name : String));
-		final params:Null<Array<HxType>> = ext.params;
+		final params:Null<Array<HxTypeArg>> = ext.params;
 		Assert.notNull(params);
 		Assert.equals(2, params.length);
 		switch fields[1] {

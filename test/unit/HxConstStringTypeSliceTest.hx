@@ -36,7 +36,7 @@ class HxConstStringTypeSliceTest extends HxTestHelpers {
 		Assert.equals('hl.Abstract', (inner.name : String));
 		Assert.notNull(inner.params);
 		Assert.equals(1, inner.params.length);
-		final lit:HxDoubleStringLit = expectConstString(inner.params[0]);
+		final lit:HxDoubleStringLit = expectConstString(inner.params[0].type);
 		Assert.equals('"hl_tls"', (lit : String));
 	}
 
@@ -52,7 +52,7 @@ class HxConstStringTypeSliceTest extends HxTestHelpers {
 		final inner:HxTypeRef = expectNamedType(ad.underlyingType);
 		Assert.equals('Array', (inner.name : String));
 		Assert.equals(1, inner.params.length);
-		Assert.equals('Int', (expectNamedType(inner.params[0]).name : String));
+		Assert.equals('Int', (expectNamedType(inner.params[0].type).name : String));
 	}
 
 	public function testRoundTripIssue39():Void {

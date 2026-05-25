@@ -98,7 +98,7 @@ class HxTypeAnonSliceTest extends HxTestHelpers {
 		final ref = expectNamedType(expectRequired(fields[0]).type);
 		Assert.equals('Array', (ref.name : String));
 		Assert.equals(1, ref.params.length);
-		Assert.equals('Int', (expectNamedType(ref.params[0]).name : String));
+		Assert.equals('Int', (expectNamedType(ref.params[0].type).name : String));
 	}
 
 	public function testAnonInsideTypeParam():Void {
@@ -107,7 +107,7 @@ class HxTypeAnonSliceTest extends HxTestHelpers {
 		final outerRef = expectNamedType(v.type);
 		Assert.equals('Array', (outerRef.name : String));
 		Assert.equals(1, outerRef.params.length);
-		final fields = expectAnon(outerRef.params[0]);
+		final fields = expectAnon(outerRef.params[0].type);
 		Assert.equals(1, fields.length);
 		Assert.equals('x', (expectRequired(fields[0]).name : String));
 	}

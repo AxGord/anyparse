@@ -13,6 +13,7 @@ import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
 import anyparse.grammar.haxe.HxType;
+import anyparse.grammar.haxe.HxTypeArg;
 import anyparse.grammar.haxe.HxTypeRef;
 import anyparse.grammar.haxe.HxTypedefDecl;
 import anyparse.grammar.haxe.HxVarDecl;
@@ -150,11 +151,11 @@ class HxArrowFnTypeSliceTest extends HxTestHelpers {
 		final argType:HxType = expectPositionalParam(fn.args[0]);
 		final ref:HxTypeRef = expectNamedType(argType);
 		Assert.equals('Array', (ref.name : String));
-		final params:Null<Array<HxType>> = ref.params;
+		final params:Null<Array<HxTypeArg>> = ref.params;
 		Assert.notNull(params);
 		if (params == null) return;
 		Assert.equals(1, params.length);
-		Assert.equals('Int', (expectNamedType(params[0]).name : String));
+		Assert.equals('Int', (expectNamedType(params[0].type).name : String));
 	}
 
 	public function testCurriedArrowAsPositionalArg():Void {

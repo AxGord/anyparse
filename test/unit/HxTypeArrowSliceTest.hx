@@ -83,7 +83,7 @@ class HxTypeArrowSliceTest extends HxTestHelpers {
 		Assert.equals('Array', (leftRef.name : String));
 		Assert.notNull(leftRef.params);
 		Assert.equals(1, leftRef.params.length);
-		Assert.equals('Int', (expectNamedType(leftRef.params[0]).name : String));
+		Assert.equals('Int', (expectNamedType(leftRef.params[0].type).name : String));
 		Assert.equals('Void', (expectNamedType(arr.right).name : String));
 	}
 
@@ -94,7 +94,7 @@ class HxTypeArrowSliceTest extends HxTestHelpers {
 		Assert.equals('Array', (outerRef.name : String));
 		Assert.notNull(outerRef.params);
 		Assert.equals(1, outerRef.params.length);
-		final inner = expectArrow(outerRef.params[0]);
+		final inner = expectArrow(outerRef.params[0].type);
 		Assert.equals('Int', (expectNamedType(inner.left).name : String));
 		Assert.equals('Void', (expectNamedType(inner.right).name : String));
 	}

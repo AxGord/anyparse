@@ -156,7 +156,7 @@ class HxDollarReifSliceTest extends HxTestHelpers {
 		// `Null<$optionsCT>` — WriterCodegen.hx:186
 		// `{name: 'options', type: macro : Null<$optionsCT>, …}`.
 		switch typeOf("class C { var x:Null<$ct> = null; }") {
-			case Named({name: nm, params: [DollarType(p)]}):
+			case Named({name: nm, params: [{type: DollarType(p)}]}):
 				Assert.equals('Null', (nm : String));
 				Assert.equals('ct', (p : String));
 			case t: Assert.fail('expected Named(Null, [DollarType(ct)]), got $t');

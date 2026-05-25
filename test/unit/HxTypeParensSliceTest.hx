@@ -67,7 +67,7 @@ class HxTypeParensSliceTest extends HxTestHelpers {
 		Assert.equals('Array', (ref.name : String));
 		Assert.notNull(ref.params);
 		Assert.equals(1, ref.params.length);
-		Assert.equals('Int', (expectNamedType(ref.params[0]).name : String));
+		Assert.equals('Int', (expectNamedType(ref.params[0].type).name : String));
 	}
 
 	public function testNestedParens():Void {
@@ -121,7 +121,7 @@ class HxTypeParensSliceTest extends HxTestHelpers {
 		Assert.equals('Array', (outerRef.name : String));
 		Assert.notNull(outerRef.params);
 		Assert.equals(1, outerRef.params.length);
-		final inner:HxType = expectParensType(outerRef.params[0]);
+		final inner:HxType = expectParensType(outerRef.params[0].type);
 		Assert.equals('Int', (expectNamedType(inner).name : String));
 	}
 

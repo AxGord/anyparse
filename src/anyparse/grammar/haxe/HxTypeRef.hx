@@ -18,13 +18,18 @@ package anyparse.grammar.haxe;
  * flat at the cost of forfeiting structured access to individual pack
  * segments. A future analysis pass can split on `.` if needed.
  *
- * `params` carries `Array<HxType>` (not `Array<HxTypeRef>`) so type
- * parameters compose with the full Alt — once arrow / anon-struct
- * variants land, `Array<Int -> Void>` and `Map<{a:Int}, B>` parse
- * naturally without revisiting the element type.
+ * `params` carries `Array<HxTypeArg>` (not `Array<HxType>`): each
+ * element is an `HxType` with an optional structural-intersection tail
+ * (`A & B & C` inside `EitherType<…, A & B & C>`). The wrapper exists
+ * so intersection composes at the type-arg position without adding `&`
+ * to the general `HxType` Pratt op set (see `HxTypeArg` doc). The Alt
+ * composes normally inside the wrapper — `Array<Int -> Void>` and
+ * `Map<{a:Int}, B>` parse via the `.type` field; the empty-intersection
+ * case yields `.intersections == []` and the writer emits nothing
+ * extra.
  */
 @:peg
 typedef HxTypeRef = {
 	var name:HxTypeName;
-	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var params:Null<Array<HxType>>;
+	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var params:Null<Array<HxTypeArg>>;
 }

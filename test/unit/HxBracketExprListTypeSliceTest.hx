@@ -38,7 +38,7 @@ class HxBracketExprListTypeSliceTest extends HxTestHelpers {
 		Assert.equals('haxe.macro.MacroType', (ref.name : String));
 		Assert.notNull(ref.params);
 		Assert.equals(1, ref.params.length);
-		final elems:Array<HxExpr> = expectBracketExprList(ref.params[0]);
+		final elems:Array<HxExpr> = expectBracketExprList(ref.params[0].type);
 		Assert.equals(1, elems.length);
 	}
 
@@ -48,7 +48,7 @@ class HxBracketExprListTypeSliceTest extends HxTestHelpers {
 		Assert.equals(1, module.decls.length);
 		final td:HxTypedefDecl = expectTypedefDecl(module.decls[0]);
 		final ref:HxTypeRef = expectNamedType(td.type);
-		final elems:Array<HxExpr> = expectBracketExprList(ref.params[0]);
+		final elems:Array<HxExpr> = expectBracketExprList(ref.params[0].type);
 		Assert.equals(0, elems.length);
 	}
 
@@ -58,7 +58,7 @@ class HxBracketExprListTypeSliceTest extends HxTestHelpers {
 		Assert.equals(1, module.decls.length);
 		final td:HxTypedefDecl = expectTypedefDecl(module.decls[0]);
 		final ref:HxTypeRef = expectNamedType(td.type);
-		final elems:Array<HxExpr> = expectBracketExprList(ref.params[0]);
+		final elems:Array<HxExpr> = expectBracketExprList(ref.params[0].type);
 		Assert.equals(2, elems.length);
 	}
 
@@ -69,7 +69,7 @@ class HxBracketExprListTypeSliceTest extends HxTestHelpers {
 		final ref:HxTypeRef = expectNamedType(td.type);
 		Assert.equals('Array', (ref.name : String));
 		Assert.equals(1, ref.params.length);
-		Assert.equals('Int', (expectNamedType(ref.params[0]).name : String));
+		Assert.equals('Int', (expectNamedType(ref.params[0].type).name : String));
 	}
 
 	public function testRoundTripIssue622():Void {
