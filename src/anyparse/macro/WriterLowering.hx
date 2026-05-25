@@ -1952,6 +1952,19 @@ class WriterLowering {
 			final kwLead:Null<String> = child.readMetaString(':kw');
 			final leadText:Null<String> = child.readMetaString(':lead');
 			final trailText:Null<String> = child.readMetaString(':trail');
+			// `@:trailOpt(LIT)` sets `lit.trailText`+`lit.trailOptional=true`
+			// in `strategy/Lit.hx` (uniform with `@:trail`). The writer reads
+			// it as a separate `trailOptText` to keep the existing `trailText`
+			// (raw `@:trail` only) consumers untouched — `condWrap` requires
+			// `@:trail` semantics, `prevTrailFieldName` synthesises an
+			// `AfterTrail` slot only for `@:trail` (`TriviaTypeSynth.isTrailRef`),
+			// and span-mode condWrap pulls from `:trail` directly. The trail-
+			// emit branches below treat `trailText` (always-emit) and
+			// `trailOptText` (source-tracked via Phase 4 gate) as parallel
+			// sources for the trail literal Doc push.
+			final trailOptText:Null<String> = child.annotations.get('lit.trailOptional') == true
+				? (child.annotations.get('lit.trailText') : Null<String>)
+				: null;
 			final isStar:Bool = child.kind == Star;
 			final isOptional:Bool = child.annotations.get('base.optional') == true;
 			final hasElseIf:Bool = child.fmtHasFlag('elseIf');
@@ -1991,6 +2004,26 @@ class WriterLowering {
 				expr: EField(macro value, fieldName),
 				pos: Context.currentPos(),
 			};
+
+			// ω-struct-trailopt-source-track (Session 14 Phase 4): trivia-
+			// bearing struct-typedef Ref field carrying `@:trailOpt(LIT)`
+			// reads `value.<field>TrailPresent:Null<Bool>` (slot synthesised
+			// by `TriviaTypeSynth.buildStructFieldTrailPresentSlot` Phase 2,
+			// populated by `Lowering.lowerStruct`'s `_trailPresent_<field>`
+			// capture Phase 3). The writer gates trail re-emission on the
+			// captured value: `true` -> emit, `false` -> suppress, `null` ->
+			// fall through to canonical emit (covers raw->paired upcasts
+			// from `Converters.rawToPaired_*` where preWrite plugins don't
+			// preserve source presence). Gate fires on BOTH the mandatory-
+			// Ref trail-push (~L3085) and the optional-Ref + lead + trail
+			// push (~L2458), mirroring the two Lowering capture paths.
+			final hasStructFieldTrailOptSlot:Bool = !isStar
+				&& child.kind == Ref
+				&& child.annotations.get('lit.trailOptional') == true
+				&& ctx.trivia && isTriviaBearing(typePath);
+			final structTrailOptAccess:Null<Expr> = hasStructFieldTrailOptSlot
+				? {expr: EField(macro value, fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX), pos: Context.currentPos()}
+				: null;
 
 			if (isStar) {
 				if (isOptional) {
@@ -2457,6 +2490,22 @@ class WriterLowering {
 						// shape (Slice 40).
 						if (trailText != null)
 							optParts.push(macro _dt($v{trailText}));
+						// ω-struct-trailopt-source-track (Session 14 Phase 4):
+						// optional Ref + kw/lead + `@:trailOpt(LIT)` lands here
+						// as a parallel push (`trailText` covers `@:trail`,
+						// `trailOptText` covers `@:trailOpt`; the two are
+						// mutually exclusive in the same field). Gate on
+						// `hasStructFieldTrailOptSlot` (trivia mode + bearing)
+						// so plain mode and non-bearing rules preserve pre-
+						// Phase-4 silent-drop behaviour for now (no slot to
+						// consult, no canonical answer either — earlier code
+						// simply never reached this trail at all). The
+						// `<field>TrailPresent` slot is `null` only on raw->
+						// paired upcasts from `Converters.rawToPaired_*`; the
+						// `==false` test degrades safely there — null falls
+						// through to canonical emit.
+						else if (hasStructFieldTrailOptSlot && trailOptText != null)
+							optParts.push(macro $structTrailOptAccess == false ? _de() : _dt($v{trailOptText}));
 					} else if (bodyPolicyFlag != null) {
 						// ω-absent-on-bodypolicy: optional Ref with no kw /
 						// lead but `@:fmt(bodyPolicy(...))`. The leftCurly
@@ -3084,6 +3133,22 @@ class WriterLowering {
 			// Trail
 			if (!isOptional && trailText != null && !hasCondWrap && !hasCondWrapEnd)
 				parts.push(macro _dt($v{trailText}));
+			// ω-struct-trailopt-source-track (Session 14 Phase 4): mandatory-
+			// Ref `@:trailOpt(LIT)` field gates the trail emission on the
+			// synth slot `<field>TrailPresent:Null<Bool>` so the writer
+			// preserves source presence (true -> `;`, false -> ``) rather
+			// than always re-emitting the canonical trail. Gate on
+			// `hasStructFieldTrailOptSlot` (trivia mode + bearing) so plain
+			// mode and non-bearing rules preserve pre-Phase-4 silent-drop
+			// behaviour for now — pre-Phase-4 the writer never reached the
+			// trail emit for mandatory-Ref `@:trailOpt` (it read trail from
+			// `:trail` only, not `:trailOpt`), so no fixture in the corpus
+			// exercised source-preservation for these fields. `null` on
+			// `<field>TrailPresent` is reserved for raw->paired upcasts
+			// from `Converters.rawToPaired_*` and falls through to
+			// canonical emit via the `==false` test.
+			if (hasStructFieldTrailOptSlot && !isOptional && !hasCondWrap && !hasCondWrapEnd && trailOptText != null)
+				parts.push(macro $structTrailOptAccess == false ? _de() : _dt($v{trailOptText}));
 
 			// ω-pad-trailing-ref: bare-Ref `@:fmt(padTrailing)` — mandatory
 			// Ref always fires, so push a trailing space unconditionally and

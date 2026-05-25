@@ -2,7 +2,10 @@ package unit;
 
 import utest.Assert;
 import utest.Test;
+import anyparse.grammar.haxe.HaxeFormat;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
+import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 
 /**
  * Session 14 Phase 3 — struct-field `@:trailOpt(LIT)` parser capture.
@@ -106,5 +109,37 @@ class HxStructFieldTrailPresentSliceTest extends Test {
 			case _: throw 'expected IfExpr';
 		};
 		Assert.equals(false, ifExpr.thenBranchTrailPresent);
+	}
+
+	/**
+	 * Session 14 Phase 4 — writer round-trip preserves source `;` presence
+	 * on a struct-field `@:trailOpt(';')` slot. Mandatory-Ref path
+	 * (`HxIfExpr.thenBranch`): source `if (a) b; else c;` keeps the
+	 * trailing `;`, source `if (a) b else c;` keeps the absence. Pre-
+	 * Phase-4 the writer silently dropped the trail (mandatory-Ref
+	 * `@:trailOpt` had no emit branch at all — `trailText` reads only
+	 * from `@:trail`, not `@:trailOpt`); pre-Phase-4 the present-`;`
+	 * variant lost the `;` and the absent-`;` variant matched by accident.
+	 *
+	 * Source strings are written in the trivia writer's canonical Allman
+	 * layout (tab indent, multi-line braces) so the round-trip can be
+	 * byte-equal — the writer normalises whitespace structurally, so a
+	 * single-line input would not round-trip with `Assert.equals(src, out)`
+	 * even with Phase 4 working.
+	 */
+	public function testThenBranchRoundTripPreservesTrail():Void {
+		final src:String = 'class M {\n\tstatic function f() {\n\t\tfinal x = if (a) b; else c;\n\t}\n}\n';
+		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), defaultOpts());
+		Assert.equals(src, out);
+	}
+
+	public function testThenBranchRoundTripSuppressesAbsentTrail():Void {
+		final src:String = 'class M {\n\tstatic function f() {\n\t\tfinal x = if (a) b else c;\n\t}\n}\n';
+		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), defaultOpts());
+		Assert.equals(src, out);
+	}
+
+	private inline function defaultOpts():HxModuleWriteOptions {
+		return HaxeFormat.instance.defaultWriteOptions;
 	}
 }
