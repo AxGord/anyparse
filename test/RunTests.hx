@@ -224,6 +224,7 @@ import unit.ApqLitCommentsCliTest;
 import unit.ApqDxTier3CliTest;
 import unit.ApqDxTier4CliTest;
 import unit.ApqDxTier5CliTest;
+import unit.HxCondCompStmtTrailOptSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -266,6 +267,7 @@ class RunTests {
 		runner.addCase(new HxEllipsisMemberSliceTest());
 		runner.addCase(new HxEllipsisStmtSliceTest());
 		runner.addCase(new HxStaticLocalStmtSliceTest());
+		runner.addCase(new HxCondCompStmtTrailOptSliceTest());
 		runner.addCase(new HxConditionalTypeSliceTest());
 		runner.addCase(new HxAssignStmtNoSemiSliceTest());
 		runner.addCase(new HxMetaExprStmtNoSemiSliceTest());
