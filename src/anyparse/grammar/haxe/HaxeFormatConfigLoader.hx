@@ -654,6 +654,22 @@ final class HaxeFormatConfigLoader {
 		// `afterLeftCurly`/`beforeRightCurly` re-baseline above
 		// `applyEmptyLines`.
 		result.caseBody = BodyPolicy.Next;
+		// ω-D7-ctrlflow-body-fork-default: fork's `SameLineConfig` declares
+		// `ifBody`/`forBody`/`whileBody`/`doWhileBody: Next`. Anyparse's
+		// `defaultWriteOptions` ships `Keep` for the same four knobs (dogfood
+		// track preserves source `if (cond) stmt;` / `for (x in xs) stmt;` /
+		// `while (cond) stmt;` / `do stmt while (cond);` shape when no config
+		// is supplied), so any JSON load path must re-baseline to the fork
+		// canonical before `applySameLine` merges JSON overrides on top. Same
+		// outside-section-guard placement as `caseBody` above so a fixture
+		// that omits the entire `sameLine` block still gets the fork default
+		// (corpus parity Δ 0/0/0 invariant). `elseBody` intentionally stays
+		// at fork canonical (`Next`) in both default and re-baseline — see
+		// HaxeFormat.defaultWriteOptions.
+		result.ifBody = BodyPolicy.Next;
+		result.forBody = BodyPolicy.Next;
+		result.whileBody = BodyPolicy.Next;
+		result.doBody = BodyPolicy.Next;
 		if (cfg.sameLine != null) applySameLine(cfg.sameLine, result);
 		if (cfg.trailingCommas != null) applyTrailingCommas(cfg.trailingCommas, result);
 		if (cfg.lineEnds != null) applyLineEnds(cfg.lineEnds, result);
