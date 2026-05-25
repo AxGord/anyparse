@@ -3,7 +3,6 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.query.Cli;
-
 #if sys
 import sys.FileSystem;
 #end
@@ -16,7 +15,6 @@ import sys.FileSystem;
  * does not crash rather than intercepting output.
  */
 class ApqMetaCliTest extends Test {
-
 	public function testHelpReturnsOk():Void {
 		#if sys
 		Assert.equals(0, Cli.run(['meta', '--help']));
@@ -37,7 +35,7 @@ class ApqMetaCliTest extends Test {
 
 	public function testJsonOutputSucceeds():Void {
 		#if sys
-		final fixture:String = writeFixture('class X { @:foo var n:Int; }');
+		final fixture:String = writeFixture('class X { @:foo var n:Int; }') ;
 		Assert.equals(0, Cli.run(['meta', '@:foo', '--json', fixture]));
 		FileSystem.deleteFile(fixture);
 		#else
@@ -47,7 +45,7 @@ class ApqMetaCliTest extends Test {
 
 	public function testEndToEndAnnotationFilter():Void {
 		#if sys
-		final fixture:String = writeFixture('class X { @:foo var n:Int; @:bar function y():Void {} }');
+		final fixture:String = writeFixture('class X { @:foo var n:Int; @:bar function y():Void {} }') ;
 		Assert.equals(0, Cli.run(['meta', '@:foo', fixture]));
 		FileSystem.deleteFile(fixture);
 		#else
@@ -57,7 +55,7 @@ class ApqMetaCliTest extends Test {
 
 	public function testOnKindModeWithoutAnnotation():Void {
 		#if sys
-		final fixture:String = writeFixture('class X { @:foo var n:Int; }');
+		final fixture:String = writeFixture('class X { @:foo var n:Int; }') ;
 		Assert.equals(0, Cli.run(['meta', '--on', 'VarMember', fixture]));
 		FileSystem.deleteFile(fixture);
 		#else
@@ -67,7 +65,7 @@ class ApqMetaCliTest extends Test {
 
 	public function testArgContainsFilter():Void {
 		#if sys
-		final fixture:String = writeFixture('class X { @:foo(groupRestProbe) var n:Int; }');
+		final fixture:String = writeFixture('class X { @:foo(groupRestProbe) var n:Int; }') ;
 		Assert.equals(0, Cli.run(['meta', '@:foo', '--arg-contains', 'groupRestProbe', fixture]));
 		FileSystem.deleteFile(fixture);
 		#else
@@ -77,14 +75,15 @@ class ApqMetaCliTest extends Test {
 
 	public function testUnknownLangFailsCleanly():Void {
 		#if sys
-		final fixture:String = writeFixture('class X {}');
+		final fixture:String = writeFixture('class X {}') ;
 		try {
 			Cli.run(['meta', '@:foo', '--lang', 'pyx', fixture]);
 			Assert.pass('cli returned cleanly for unknown lang');
 		} catch (_) {
 			Assert.pass('cli surfaced unknown-lang failure');
 		}
-		if (FileSystem.exists(fixture)) FileSystem.deleteFile(fixture);
+		if (FileSystem.exists(fixture))
+			FileSystem.deleteFile(fixture);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -94,10 +93,11 @@ class ApqMetaCliTest extends Test {
 
 	public function testSingleUnparseableFileIsHardError():Void {
 		#if sys
+
 		// A single explicit file the user named that does not parse is
 		// the query's answer: it must be a hard error (EXIT_RUNTIME),
 		// mirroring `apq ast` — not a silent EXIT_OK "no matches".
-		final bad:String = writeFixture('class {');
+		final bad:String = writeFixture('class {') ;
 		Assert.equals(1, Cli.run(['meta', '@:foo', bad]));
 		FileSystem.deleteFile(bad);
 		#else
@@ -107,6 +107,7 @@ class ApqMetaCliTest extends Test {
 
 	public function testScanModeSkipsUnparseableFilesSilently():Void {
 		#if sys
+
 		// Directory-walk (scan) mode: an unparseable file is out of scope
 		// by nature — the walk must continue, exit EXIT_OK, and still
 		// process the parseable sibling (no per-file error noise, no
@@ -114,7 +115,7 @@ class ApqMetaCliTest extends Test {
 		final dir:String = CliFixture.writeDir('apq_meta', [
 			{name: 'good.hx', source: 'class G { @:foo var n:Int; }'},
 			{name: 'bad.hx', source: 'class {'},
-		]);
+		]) ;
 		Assert.equals(0, Cli.run(['meta', '@:foo', dir]));
 		FileSystem.deleteFile('$dir/good.hx');
 		FileSystem.deleteFile('$dir/bad.hx');
