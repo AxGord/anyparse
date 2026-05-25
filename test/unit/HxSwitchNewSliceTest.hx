@@ -543,6 +543,44 @@ class HxSwitchNewSliceTest extends HxTestHelpers {
 		roundTrip('class C { function f():Void { var h = new Holder<RecordItem1, RecordItem1, Void>("a", true, "b"); var m = new Map<String, Int>(); } }');
 	}
 
+	// Slice 54 — macro type-reification in `new` target (`new $tp()`,
+	// `new $tp.Sub()`). HxNewTypeName terminal twin of HxTypeName with
+	// an optional leading `$` on the first ident segment.
+
+	public function testNewDollarReifiedType():Void {
+		final body:Array<HxStatement> = parseBody("class C { function f():Void { new $tp(); } }");
+		Assert.equals(1, body.length);
+		switch body[0] {
+			case ExprStmt(expr):
+				switch expr {
+					case NewExpr(ne):
+						Assert.equals("$tp", (ne.type : String));
+						Assert.equals(0, ne.args.length);
+					case null, _: Assert.fail('expected NewExpr');
+				}
+			case null, _: Assert.fail('expected ExprStmt');
+		}
+	}
+
+	public function testNewDollarReifiedDottedType():Void {
+		final body:Array<HxStatement> = parseBody("class C { function f():Void { new $tp.Sub(\"x\"); } }");
+		Assert.equals(1, body.length);
+		switch body[0] {
+			case ExprStmt(expr):
+				switch expr {
+					case NewExpr(ne):
+						Assert.equals("$tp.Sub", (ne.type : String));
+						Assert.equals(1, ne.args.length);
+					case null, _: Assert.fail('expected NewExpr');
+				}
+			case null, _: Assert.fail('expected ExprStmt');
+		}
+	}
+
+	public function testNewDollarRoundTrip():Void {
+		roundTrip("class C { function f():Void { cases.push(macro {name: $v{tp.name}, exec: new $tp()}); } }");
+	}
+
 	// ---- Switch expression tests ----
 
 	/** Extract the SwitchExpr atom from a return/expr/var-init outer statement. */
