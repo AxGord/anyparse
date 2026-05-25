@@ -144,7 +144,7 @@ class HxDoWhileThrowTryCatchSliceTest extends HxTestHelpers {
 	public function testDoWhileSmoke():Void {
 		final dw:HxDoWhileStmt = parseDoWhile('class C { function f():Void { do { x; } while (y); } }');
 		switch dw.body {
-			case BlockStmt(stmts):
+			case BlockBody(stmts):
 				Assert.equals(1, stmts.length);
 				switch stmts[0] {
 					case ExprStmt(expr):
@@ -154,7 +154,7 @@ class HxDoWhileThrowTryCatchSliceTest extends HxTestHelpers {
 						}
 					case null, _: Assert.fail('expected ExprStmt');
 				}
-			case null, _: Assert.fail('expected BlockStmt body');
+			case null, _: Assert.fail('expected BlockBody body');
 		}
 		switch dw.cond {
 			case IdentExpr(v): Assert.equals('y', (v : String));
@@ -165,7 +165,7 @@ class HxDoWhileThrowTryCatchSliceTest extends HxTestHelpers {
 	public function testDoWhileSingleStatement():Void {
 		final dw:HxDoWhileStmt = parseDoWhile('class C { function f():Void { do x = 1; while (y); } }');
 		switch dw.body {
-			case ExprStmt(expr):
+			case ExprBody(expr):
 				switch expr {
 					case Assign(left, right):
 						switch left {
@@ -178,7 +178,7 @@ class HxDoWhileThrowTryCatchSliceTest extends HxTestHelpers {
 						}
 					case null, _: Assert.fail('expected Assign');
 				}
-			case null, _: Assert.fail('expected ExprStmt body');
+			case null, _: Assert.fail('expected ExprBody body');
 		}
 		switch dw.cond {
 			case IdentExpr(v): Assert.equals('y', (v : String));
@@ -189,8 +189,8 @@ class HxDoWhileThrowTryCatchSliceTest extends HxTestHelpers {
 	public function testDoWhileExpressionCond():Void {
 		final dw:HxDoWhileStmt = parseDoWhile('class C { function f():Void { do { } while (a + b); } }');
 		switch dw.body {
-			case BlockStmt(stmts): Assert.equals(0, stmts.length);
-			case null, _: Assert.fail('expected BlockStmt');
+			case BlockBody(stmts): Assert.equals(0, stmts.length);
+			case null, _: Assert.fail('expected BlockBody');
 		}
 		switch dw.cond {
 			case Add(left, right):
@@ -211,20 +211,20 @@ class HxDoWhileThrowTryCatchSliceTest extends HxTestHelpers {
 			'class C { function f():Void { do do x; while (a); while (b); } }'
 		);
 		switch dw.body {
-			case DoWhileStmt(inner):
+			case InnerDoWhile(inner):
 				switch inner.body {
-					case ExprStmt(expr):
+					case ExprBody(expr):
 						switch expr {
 							case IdentExpr(v): Assert.equals('x', (v : String));
 							case null, _: Assert.fail('expected IdentExpr');
 						}
-					case null, _: Assert.fail('expected ExprStmt inner body');
+					case null, _: Assert.fail('expected ExprBody inner body');
 				}
 				switch inner.cond {
 					case IdentExpr(v): Assert.equals('a', (v : String));
 					case null, _: Assert.fail('expected IdentExpr inner cond');
 				}
-			case null, _: Assert.fail('expected DoWhileStmt inner');
+			case null, _: Assert.fail('expected InnerDoWhile body');
 		}
 		switch dw.cond {
 			case IdentExpr(v): Assert.equals('b', (v : String));
@@ -237,12 +237,66 @@ class HxDoWhileThrowTryCatchSliceTest extends HxTestHelpers {
 			'class C { function f():Void { do  {  x ;  }  while  (  y  )  ; } }'
 		);
 		switch dw.body {
-			case BlockStmt(stmts): Assert.equals(1, stmts.length);
-			case null, _: Assert.fail('expected BlockStmt');
+			case BlockBody(stmts): Assert.equals(1, stmts.length);
+			case null, _: Assert.fail('expected BlockBody');
 		}
 		switch dw.cond {
 			case IdentExpr(v): Assert.equals('y', (v : String));
 			case null, _: Assert.fail('expected IdentExpr');
+		}
+	}
+
+	public function testDoWhileMacroBlockReification():Void {
+		final dw:HxDoWhileStmt = parseDoWhile(
+			"class C { function f():Void { do $block while (c); } }"
+		);
+		switch dw.body {
+			case ExprBody(expr):
+				switch expr {
+					case DollarIdentExpr(name): Assert.equals('block', (name : String));
+					case null, _: Assert.fail('expected DollarIdentExpr');
+				}
+			case null, _: Assert.fail('expected ExprBody body');
+		}
+		switch dw.cond {
+			case IdentExpr(v): Assert.equals('c', (v : String));
+			case null, _: Assert.fail('expected IdentExpr cond');
+		}
+	}
+
+	public function testDoWhileBarePostIncr():Void {
+		final dw:HxDoWhileStmt = parseDoWhile(
+			'class C { function f():Void { do a++ while (true); } }'
+		);
+		switch dw.body {
+			case ExprBody(expr):
+				switch expr {
+					case PostIncr(operand):
+						switch operand {
+							case IdentExpr(v): Assert.equals('a', (v : String));
+							case null, _: Assert.fail('expected IdentExpr operand');
+						}
+					case null, _: Assert.fail('expected PostIncr');
+				}
+			case null, _: Assert.fail('expected ExprBody body');
+		}
+	}
+
+	public function testDoWhileBarePreIncr():Void {
+		final dw:HxDoWhileStmt = parseDoWhile(
+			'class C { function f():Void { do ++a while (true); } }'
+		);
+		switch dw.body {
+			case ExprBody(expr):
+				switch expr {
+					case PreIncr(operand):
+						switch operand {
+							case IdentExpr(v): Assert.equals('a', (v : String));
+							case null, _: Assert.fail('expected IdentExpr operand');
+						}
+					case null, _: Assert.fail('expected PreIncr');
+				}
+			case null, _: Assert.fail('expected ExprBody body');
 		}
 	}
 
