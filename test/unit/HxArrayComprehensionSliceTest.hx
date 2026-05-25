@@ -164,6 +164,48 @@ class HxArrayComprehensionSliceTest extends HxTestHelpers {
 		roundTrip('class M {\n\tstatic function f() {\n\t\tvar d = [for (x in xs) if (x > 0) x else 0];\n\t}\n}');
 	}
 
+	// ======== Trailing-`;` on for-body (Slice 52) ========
+	// `@:trailOpt(';')` on HxForExpr.body — accepts source-preserving `;` after
+	// the for-body inside array comprehensions. Unblocks issue_366
+	// (nested array-comp shape). Stmt-position `for (i in xs) trace(i);`
+	// stays on ForStmt — the `;` belongs to the outer ExprStmt / ForStmt
+	// trail, not to ForExpr's optional trail.
+
+	public function testArrayCompForBodyWithTrailingSemicolon():Void {
+		// issue_366 shape: bare for-body followed by `;` before `]`.
+		final init:HxExpr = parseVarInit('class M { static function f() { var a = [for (y in 0...10) new Point(y);]; } }');
+		final elems:Array<HxExpr> = expectArrayExpr(init);
+		Assert.equals(1, elems.length);
+		final fe:HxForExpr = expectForExpr(elems[0]);
+		Assert.equals('y', (fe.varName : String));
+	}
+
+	public function testNestedArrayCompWithInnerTrailingSemicolon():Void {
+		// issue_366 verbatim shape: outer for-comp whose body is an inner
+		// array-comp with a `;`-terminated for-body element.
+		final init:HxExpr = parseVarInit(
+			'class M { static function f() { var grid = [for (x in 0...10) [for (y in 0...10) new Point(x, y);]]; } }'
+		);
+		final outerElems:Array<HxExpr> = expectArrayExpr(init);
+		final outer:HxForExpr = expectForExpr(outerElems[0]);
+		final innerArr:Array<HxExpr> = expectArrayExpr(outer.body);
+		final inner:HxForExpr = expectForExpr(innerArr[0]);
+		Assert.equals('y', (inner.varName : String));
+	}
+
+	public function testStatementForUnaffectedByForExprTrailOpt():Void {
+		// Regression: stmt-position `for (i in xs) trace(i);` must keep
+		// dispatching through HxStatement.ForStmt. The `;` belongs to ForStmt's
+		// body trail, NOT to ForExpr's new @:trailOpt — verifies the two
+		// dispatch paths stay disjoint.
+		final stmts:Array<HxStatement> = fnBodyStmts(parseSingleFnDecl('class M { static function f() { for (i in 0...10) trace(i); } }'));
+		Assert.equals(1, stmts.length);
+		switch stmts[0] {
+			case ForStmt(_):
+			case _: Assert.fail('expected ForStmt at statement position, got ${stmts[0]}');
+		}
+	}
+
 	// ======== helpers ========
 
 	private function parseVarInit(source:String):HxExpr {
