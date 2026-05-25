@@ -211,8 +211,16 @@ class TriviaTypeSynth {
 	 * source-trailing-comma + an opt-in `@:fmt(trailingComma(...))` knob
 	 * forces the wrap cascade into break-mode (typically `OnePerLine`),
 	 * round-tripping the source's "I want this list multi-line" intent.
-	 * Synthesised only for Stars carrying both `@:sep` and `@:trail`;
-	 * other Stars skip the slot. First consumer: `HxObjectLit.fields`.
+	 * First consumer: `HxObjectLit.fields`.
+	 *
+	 * Dual consumer (Session 14 Phase 2 scaffold,
+	 * `buildStructFieldTrailPresentSlot`): struct typedef Ref fields with
+	 * `@:trailOpt(LIT)` reuse the same suffix on an `@:optional Null<Bool>`
+	 * slot. Both consumers encode "trail literal was present in source";
+	 * disjoint host kinds (Star vs Ref) within one Seq cannot collide on
+	 * field name. Until Phase 4 wires the writer, the Phase 2 consumer's
+	 * slot is omitted from struct literals (no `Lowering` touch) and reads
+	 * `null` at runtime.
 	 */
 	public static inline final TRAIL_PRESENT_SUFFIX:String = 'TrailPresent';
 
@@ -799,6 +807,28 @@ class TriviaTypeSynth {
 					// and `elseExpr` are absent).
 					if (isPadTrailingTerminalRef(child))
 						fields.push(buildNewlineAfterSlot(child, pos));
+					// ω-struct-trailopt-source-track (Session 14 Phase 2 scaffold):
+					// struct typedef fields carrying `@:trailOpt(LIT)` grow an
+					// `@:optional` `<field>TrailPresent:Null<Bool>` slot. The
+					// `@:optional` + `Null<>` shape lets Phase 2 land additively
+					// without forcing every paired-struct literal in `Lowering`
+					// to populate the slot — Phase 3 will wire parser capture
+					// (matchLit result), Phase 4 will wire writer emit (gate
+					// trail re-emission on source presence). Until then, the
+					// slot is omitted from struct literals (no Lowering touch)
+					// and `null` at runtime, semantically "no source info".
+					//
+					// Sister to `buildStarTrailingSlots`'s `<field>TrailPresent`
+					// for Star `@:sep+@:trail` (same suffix constant — both
+					// encode "trail literal was present in source"; disjoint
+					// host context, no name collision possible within one Seq).
+					//
+					// Beneficiary fixtures (Session 14 design): `wrapping/
+					// issue_366_nested_array_comprehension` (nested `;` preserved),
+					// `whitespace/issue_195`/`221` (do-while bare-body — Slice 36
+					// pivot). See [[project-blockbody-star-session14-design]].
+					if (isStructFieldTrailOpt(child))
+						fields.push(buildStructFieldTrailPresentSlot(child, pos));
 				}
 				final anon:ComplexType = TAnonymous(fields);
 				{pos: pos, pack: synthPack, name: pairedSimple, kind: TDAlias(anon), fields: []};
@@ -877,6 +907,25 @@ class TriviaTypeSynth {
 		final strCT:ComplexType = TPath({pack: [], name: 'String', params: []});
 		final nullStrCT:ComplexType = TPath({pack: [], name: 'Null', params: [TPType(strCT)]});
 		return {name: fieldName + AFTER_TRAIL_SUFFIX, kind: FVar(nullStrCT), pos: pos, access: []};
+	}
+
+	/**
+	 * Session 14 Phase 2 scaffold: build the `<field>TrailPresent` slot for
+	 * struct typedef fields gated by `isStructFieldTrailOpt`. Slot is
+	 * `@:optional Null<Bool>` so paired-struct construction in `Lowering`
+	 * can omit it until Phase 3 (parser capture) and Phase 4 (writer emit)
+	 * land. After Phase 4, the slot semantically becomes "true → source
+	 * had trail literal; false → absent; null → no source info (e.g.
+	 * synthesised paired-T from a writer-only path)". Suffix shared with
+	 * `buildStarTrailingSlots`'s `@:sep+@:trail` Star case (disjoint host
+	 * — Ref vs Star within one Seq cannot collide on field name).
+	 */
+	private static function buildStructFieldTrailPresentSlot(child:ShapeNode, pos:Position):Field {
+		final fieldName:String = child.annotations.get('base.fieldName');
+		final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
+		final nullBoolCT:ComplexType = TPath({pack: [], name: 'Null', params: [TPType(boolCT)]});
+		final meta:Metadata = [{name: ':optional', params: [], pos: pos}];
+		return {name: fieldName + TRAIL_PRESENT_SUFFIX, kind: FVar(nullBoolCT), pos: pos, access: [], meta: meta};
 	}
 
 	/**
@@ -1259,10 +1308,12 @@ class TriviaTypeSynth {
 	 * like `wrapping/issue_366_nested_array_comprehension` where
 	 * fork's section-3 preserves the optional `;`).
 	 *
-	 * Predicate only as of Phase 1 (no consumers yet); Phase 2 will
-	 * wire it into the struct-typedef arm of `arm()` to add the per-
-	 * field positional slot, Phase 3 the parser-side capture, Phase 4
-	 * the writer-side emit. See [[project-blockbody-star-session14-design]].
+	 * Phase 2 (Session 14) wires this as the gate inside `buildTypeDefinition`'s
+	 * Seq arm — every matching field grows an `@:optional Null<Bool>`
+	 * `<field>TrailPresent` slot via `buildStructFieldTrailPresentSlot`.
+	 * Phase 3 will add the parser-side capture (`matchLit` result),
+	 * Phase 4 the writer-side emit (gate trail re-emission on source
+	 * presence). See [[project-blockbody-star-session14-design]].
 	 *
 	 * Disjoint from `isAltTrailOptBranch` (struct typedef field vs
 	 * enum Alt branch — orthogonal contexts; same `@:trailOpt` meta
