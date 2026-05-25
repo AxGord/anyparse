@@ -2172,6 +2172,42 @@ class Lowering {
 					pos: Context.currentPos(),
 				});
 			}
+			// ω-struct-trailopt-source-track (Session 14 Phase 3): struct
+			// typedef Ref fields carrying `@:trailOpt(LIT)` capture matchLit
+			// presence into `_trailPresent_<field>:Bool`. Mirrors the
+			// synth-side `<field>TrailPresent` slot pushed by
+			// `TriviaTypeSynth.buildStructFieldTrailPresentSlot` (Phase 2).
+			// Local is pre-declared `false` here so BOTH the mandatory-Ref
+			// path (post-switch L2517) and the optional-Ref + trailOpt path
+			// (inside the Ref-isOptional switch arm L2237) can write into
+			// the same name (the two paths are mutually exclusive per
+			// field — `!isOptional` vs `isOptional`).
+			//
+			// Phase 4 will read this on the writer side to gate trail
+			// re-emission on source presence; until then the captured
+			// value is unobserved and Δsweep stays 0.
+			final hasStructFieldTrailOptSlot:Bool = child.kind == Ref && !isStar
+				&& child.annotations.get('lit.trailOptional') == true
+				&& ctx.trivia && isTriviaBearing(typePath);
+			final trailPresentLocal:String = '_trailPresent_$fieldName';
+			if (hasStructFieldTrailOptSlot) {
+				parseSteps.push({
+					expr: EVars([{
+						name: trailPresentLocal,
+						type: (macro : Bool),
+						expr: macro false,
+						isFinal: false,
+					}]),
+					pos: Context.currentPos(),
+				});
+			}
+			// Splicing the same `Expr` into two `macro` blocks is safe —
+			// macro Expr values are AST snapshots, not consumed on splice.
+			// Shared between the optional-Ref subCall arm and the mandatory-
+			// Ref post-switch matchLit (mutually exclusive per field).
+			final captureTrailPresentExpr:Expr = hasStructFieldTrailOptSlot
+				? macro $i{trailPresentLocal} = true
+				: macro {};
 			if (hasKwTriviaSlots) {
 				parseSteps.push({
 					expr: EVars([{name: afterKwLocal, type: (macro : Null<String>), expr: macro null, isFinal: false}]),
@@ -2247,7 +2283,8 @@ class Lowering {
 						final _v = $subCallRaw;
 						final _trailOptWsPos:Int = ctx.pos;
 						skipWs(ctx);
-						if (!matchLit(ctx, $v{trailOptText})) ctx.pos = _trailOptWsPos;
+						if (matchLit(ctx, $v{trailOptText})) $captureTrailPresentExpr;
+						else ctx.pos = _trailOptWsPos;
 						_v;
 					} else subCallRaw;
 					// In trivia or span mode a bearing ref needs the Null<XxxT>
@@ -2545,10 +2582,20 @@ class Lowering {
 				// HxFnBody.ExprBody) see no observable change — their
 				// downstream parsers re-scan the same trivia via their own
 				// skipWs / collectTrivia.
+				//
+				// ω-struct-trailopt-source-track (Session 14 Phase 3): when
+				// the field's paired-T type carries a synth
+				// `<field>TrailPresent:Null<Bool>` slot, capture `matchLit`'s
+				// hit into `_trailPresent_<field>` for the writer (Phase 4
+				// will read it). Pre-declared `false` above so the miss
+				// branch leaves the local untouched. `captureTrailPresentExpr`
+				// is the shared splice — disjoint from the optional-Ref arm
+				// which feeds the same Expr into a different subCall body.
 				parseSteps.push(macro {
 					final _trailOptWsPos:Int = ctx.pos;
 					skipWs(ctx);
-					if (!matchLit(ctx, $v{trailOptText})) ctx.pos = _trailOptWsPos;
+					if (matchLit(ctx, $v{trailOptText})) $captureTrailPresentExpr;
+					else ctx.pos = _trailOptWsPos;
 				});
 			}
 			// ω-cond-comp-expr-multiline: terminal-slot newline capture for
@@ -2601,6 +2648,16 @@ class Lowering {
 				});
 			}
 			structFields.push({field: fieldName, expr: macro $i{localName}});
+			// ω-struct-trailopt-source-track (Session 14 Phase 3): push the
+			// `<field>TrailPresent` slot fed by the optional-Ref / mandatory-
+			// Ref `@:trailOpt` capture above. Phase 4 wires the writer
+			// reader; until then the populated true/false value is
+			// unobserved (the slot's `@:optional Null<Bool>` shape would
+			// also accept omission, but explicit push keeps the field
+			// shape consistent and gives the writer a defined value at
+			// every site).
+			if (hasStructFieldTrailOptSlot)
+				structFields.push({field: fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX, expr: macro $i{trailPresentLocal}});
 			if (hasAfterTrailSlot)
 				structFields.push({field: fieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX, expr: macro $i{afterTrailLocal}});
 			if (hasBeforeNewlineSlot)

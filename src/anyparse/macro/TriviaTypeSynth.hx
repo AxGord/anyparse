@@ -622,6 +622,18 @@ class TriviaTypeSynth {
 				entries.push({field: fieldName + AFTER_TRAIL_SUFFIX, expr: macro (null : Null<String>)});
 			if (isPadTrailingTerminalRef(child))
 				entries.push({field: fieldName + NEWLINE_AFTER_SUFFIX, expr: macro false});
+			// ω-struct-trailopt-source-track (Session 14 Phase 3): struct
+			// typedef fields carrying `@:trailOpt(LIT)` grow a
+			// `<field>TrailPresent:Null<Bool>` slot on the paired-T struct
+			// (synthesised by `buildStructFieldTrailPresentSlot`). Default
+			// to `null` on raw→paired upcasts — preWrite plugin rewrites
+			// don't preserve source presence, so the writer falls back to
+			// canonical re-emission. The slot is `@:optional` so omission
+			// would also compile, but explicit `null` push mirrors the
+			// `isTrailRef` / `isPadTrailingTerminalRef` sibling pattern and
+			// keeps the raw→paired struct literal shape stable.
+			if (isStructFieldTrailOpt(child))
+				entries.push({field: fieldName + TRAIL_PRESENT_SUFFIX, expr: macro (null : Null<Bool>)});
 		}
 		final structLit:Expr = {expr: EObjectDecl([for (e in entries) {field: e.field, expr: e.expr}]), pos: pos};
 		return macro return $structLit;
