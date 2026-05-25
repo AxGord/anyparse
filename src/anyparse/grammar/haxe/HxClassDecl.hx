@@ -31,13 +31,17 @@ package anyparse.grammar.haxe;
  * reshape this field.
  *
  * `heritage` is a bare `Array<HxHeritageClause>` between `typeParams`
- * and `members`, annotated `@:trivia @:tryparse @:fmt(padLeading)` —
- * the structural twin of `HxAbstractDecl.clauses` (`from`/`to`). The
- * `@:tryparse` loop attempts `HxHeritageClause` on each iteration and
- * terminates naturally when the next token isn't `extends`/`implements`
- * (i.e. the `{` of `members`), so the common no-heritage case adds no
- * output. The parser accepts any number/order of `extends`/`implements`
- * for both classes and interfaces; semantic policing is a later pass.
+ * and `members`, annotated `@:trivia @:tryparse @:fmt(padLeading,
+ * lineLengthAwareSeps)` — the structural twin of `HxAbstractDecl.clauses`
+ * (`from`/`to`). The `@:tryparse` loop attempts `HxHeritageClause` on
+ * each iteration and terminates naturally when the next token isn't
+ * `extends`/`implements` (i.e. the `{` of `members`), so the common
+ * no-heritage case adds no output. The parser accepts any number/order
+ * of `extends`/`implements` for both classes and interfaces; semantic
+ * policing is a later pass. `lineLengthAwareSeps` mirrors abstract
+ * `clauses`: when the full decl line exceeds `opt.lineWidth`, the first
+ * `extends`/`implements` clause breaks to the next line at +1 indent
+ * (ω-abstract-clauses-linewrap engine).
  *
  * The members field is a `Star` field wrapped in `{` / `}`
  * with no separator between items — each `HxMemberDecl` is
@@ -51,6 +55,6 @@ package anyparse.grammar.haxe;
 typedef HxClassDecl = {
 	@:kw('class') var name:HxIdentLit;
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var typeParams:Null<Array<HxTypeParamDecl>>;
-	@:trivia @:tryparse @:fmt(padLeading) var heritage:Array<HxHeritageClause>;
+	@:trivia @:tryparse @:fmt(padLeading, lineLengthAwareSeps) var heritage:Array<HxHeritageClause>;
 	@:fmt(leftCurly, emptyCurlyBreak, beginEndType, afterFieldsWithDocComments, existingBetweenFields, beforeDocCommentEmptyLines, blankBeforeFinalDocCommentInLeading, blankBeforeOrphanLineCommentTrail, interMemberBlankLines('member', 'VarMember', 'FnMember'), staticVarSubdivision, betweenMultilineCommentsBlanks) @:lead('{') @:trail('}') @:trivia var members:Array<HxMemberDecl>;
 }

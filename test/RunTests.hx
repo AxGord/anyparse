@@ -25,6 +25,7 @@ import unit.HxDoWhileThrowTryCatchSliceTest;
 import unit.HxAbstractSliceTest;
 import unit.HxEnumAbstractSliceTest;
 import unit.HxHeritageSliceTest;
+import unit.HxHeritageLineWrapSliceTest;
 import unit.HxStringSliceTest;
 import unit.HxParamBodyUntypedSliceTest;
 import unit.HxIfExprTrailSemiSliceTest;
@@ -305,6 +306,7 @@ class RunTests {
 		runner.addCase(new HxAbstractSliceTest());
 runner.addCase(new HxEnumAbstractSliceTest());
 		runner.addCase(new HxHeritageSliceTest());
+		runner.addCase(new HxHeritageLineWrapSliceTest());
 		runner.addCase(new HxAccessorSliceTest());
 		runner.addCase(new HxStringSliceTest());
 		runner.addCase(new HxParamBodyUntypedSliceTest());
