@@ -2,6 +2,14 @@
 	"wrapping": {
 		"callParameter": {
 			"defaultWrap": "keep"
+		},
+		"objectLiteral": {
+			"defaultWrap": "keep",
+			"rules": []
+		},
+		"arrayWrap": {
+			"defaultWrap": "keep",
+			"rules": []
 		}
 	},
 	"sameLine": {
