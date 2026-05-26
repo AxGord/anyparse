@@ -655,18 +655,22 @@ final class HaxeFormatConfigLoader {
 		// `applyEmptyLines`.
 		result.caseBody = BodyPolicy.Next;
 		// ω-D7-ctrlflow-body-fork-default: fork's `SameLineConfig` declares
-		// `ifBody`/`forBody`/`whileBody`/`doWhileBody: Next`. Anyparse's
-		// `defaultWriteOptions` ships `Keep` for the same four knobs (dogfood
-		// track preserves source `if (cond) stmt;` / `for (x in xs) stmt;` /
-		// `while (cond) stmt;` / `do stmt while (cond);` shape when no config
-		// is supplied), so any JSON load path must re-baseline to the fork
-		// canonical before `applySameLine` merges JSON overrides on top. Same
-		// outside-section-guard placement as `caseBody` above so a fixture
-		// that omits the entire `sameLine` block still gets the fork default
-		// (corpus parity Δ 0/0/0 invariant). `elseBody` intentionally stays
-		// at fork canonical (`Next`) in both default and re-baseline — see
-		// HaxeFormat.defaultWriteOptions.
+		// `ifBody`/`elseBody`/`forBody`/`whileBody`/`doWhileBody: Next`.
+		// Anyparse's `defaultWriteOptions` ships `Keep` for the same five
+		// knobs (dogfood track preserves source `if (cond) stmt;` /
+		// `else stmt;` / `for (x in xs) stmt;` / `while (cond) stmt;` /
+		// `do stmt while (cond);` shape when no config is supplied), so any
+		// JSON load path must re-baseline to the fork canonical before
+		// `applySameLine` merges JSON overrides on top. Same outside-section-
+		// guard placement as `caseBody` above so a fixture that omits the
+		// entire `sameLine` block still gets the fork default (corpus parity
+		// Δ 0/0/0 invariant). `elseBody` flip (D8) is safe under the
+		// ω-D8-keep-block-trivia engine fix in WriterLowering's
+		// `bodyPolicyWrap`: Keep + block ctor + captured kw-trivia now
+		// routes through `blockLayoutExpr` (Allman) instead of
+		// `nextLayoutExpr` (which over-indented `{` by +cols).
 		result.ifBody = BodyPolicy.Next;
+		result.elseBody = BodyPolicy.Next;
 		result.forBody = BodyPolicy.Next;
 		result.whileBody = BodyPolicy.Next;
 		result.doBody = BodyPolicy.Next;

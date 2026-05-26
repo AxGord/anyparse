@@ -6043,6 +6043,24 @@ class WriterLowering {
 					: _dn(_cols, _dc([_dhl(), _body]));
 			}
 		}
+		// ω-D8-keep-block-trivia: hoisted out of the bodySwitch construction
+		// below so the Keep next-layout arm (see `keepNextLayoutExpr` below)
+		// can route block ctors through `blockLayoutExpr`. The previous
+		// declaration site at the head of `bodySwitch` worked for the non-
+		// Keep dispatch but was too late for the Keep arm. No behavioural
+		// change — same value computed once, consumed by both `bodySwitch`
+		// and `keepNextLayoutExpr`.
+		final blockSplit:{tagged:Array<Expr>, untagged:Array<Expr>} = collectBlockCtorPatternsByLeftCurly(bodyTypePath);
+		// ω-D8-keep-elseif-override: hoisted so the Keep arm can apply the
+		// `opt.elseIf == Next` override for `else if (…)` bodies (mirrors
+		// the non-Keep `bodySwitch` arm at the existing `outerCases` push
+		// below). Without the hoist + Keep dispatch, Keep would short-
+		// circuit the elseIf override — user-set `elseIf=Next` would lose
+		// to `elseBody=Keep`'s source-preservation. Same value also
+		// consumed by the existing non-Keep dispatch (one read site each).
+		final ifStmtPattern:Null<Expr> = hasElseIf
+			? (findCtorPattern(bodyTypePath, 'IfStmt') ?? findCtorPattern(bodyTypePath, 'IfExpr'))
+			: null;
 		// ω-keep-policy: `Keep` dispatches at runtime between same and
 		// next layouts based on the trivia-mode parser's captured
 		// `<field>BodyOnSameLine:Bool` slot. When the caller did not
@@ -6051,9 +6069,61 @@ class WriterLowering {
 		// loader lossy-mapped `keep` to `Same`). Handled by the outer
 		// `keepPat` case below; a `_` catch-all in `policyCases` would
 		// be unreachable because the outer switch short-circuits Keep.
-		final keepLayoutExpr:Expr = bodyOnSameLineExpr != null
-			? macro ($bodyOnSameLineExpr ? $sameLayoutExpr : $nextLayoutExpr)
+		// ω-D8-keep-block-trivia: when Keep dispatches into the
+		// next-layout arm (body NOT on same line as kw) AND the body is
+		// a block ctor, route through `blockLayoutExpr` instead of
+		// `nextLayoutExpr`. `nextLayoutExpr` wraps body in
+		// `Nest(_cols, [hardline, body])` which is correct for non-block
+		// stmt bodies (`else // c\n\tb();` — body wants +cols indent)
+		// but adds an extra +cols step to a block-ctor `{`, putting it
+		// one indent below parent col instead of Allman-aligned with the
+		// kw. The `outerKeepCases` arm short-circuits the block-aware
+		// `bodySwitch` below, so Keep never sees the existing block
+		// split — replicate the split here. `blockLayoutExpr` uses
+		// `sameSepBlock` (= `kwGapDoc(_, _, _cols, isNextExpr, opt)` when
+		// hasKwSlots) which emits captured trivia + trailing hardline at
+		// parent col, then body emits its `{` at parent col — Allman
+		// shape, byte-identical to the non-Keep block path. When
+		// `blockSplit.tagged` is empty, `keepNextLayoutExpr` collapses to
+		// `nextLayoutExpr` (no behavioural change for body types without
+		// block ctors).
+		final keepNextLayoutExpr:Expr = if (blockSplit.tagged.length > 0) {
+			final cases:Array<Case> = [
+				{values: blockSplit.tagged, expr: blockLayoutExpr, guard: null},
+			];
+			cases.push({values: [macro _], expr: nextLayoutExpr, guard: null});
+			{expr: ESwitch(bodyValueExpr, cases, null), pos: Context.currentPos()};
+		}
+		else nextLayoutExpr;
+		final keepBaseExpr:Expr = bodyOnSameLineExpr != null
+			? macro ($bodyOnSameLineExpr ? $sameLayoutExpr : $keepNextLayoutExpr)
 			: sameLayoutExpr;
+		// ω-D8-keep-elseif-override: when body is an `IfStmt` / `IfExpr`
+		// (else-if shape) AND `opt.elseIf == Next`, force the nested
+		// `if` onto the next line by routing through `nextLayoutExpr` —
+		// matches the non-Keep `elseIfSwitch` semantics below. User-set
+		// `elseIf=Next` is an explicit override and must beat Keep's
+		// source-shape preservation, same way `elseIf=Same` is already
+		// observable over `elseBody=Next` via the non-Keep `bodySwitch`
+		// arm. Default (`elseIf=Same`) falls through to `keepBaseExpr`
+		// so inline source `else if` shapes are preserved verbatim.
+		final keepLayoutExpr:Expr = if (ifStmtPattern != null) {
+			final kpPath:Array<String> = ['anyparse', 'format', 'KeywordPlacement'];
+			final kpNextPat:Expr = MacroStringTools.toFieldExpr(kpPath.concat(['Next']));
+			final elseIfCases:Array<Case> = [
+				{values: [kpNextPat], expr: nextLayoutExpr, guard: null},
+			];
+			final elseIfSwitchForKeep:Expr = {
+				expr: ESwitch(macro opt.elseIf, elseIfCases, keepBaseExpr),
+				pos: Context.currentPos(),
+			};
+			final outerKeepBodyCases:Array<Case> = [
+				{values: [ifStmtPattern], expr: elseIfSwitchForKeep, guard: null},
+			];
+			outerKeepBodyCases.push({values: [macro _], expr: keepBaseExpr, guard: null});
+			{expr: ESwitch(bodyValueExpr, outerKeepBodyCases, null), pos: Context.currentPos()};
+		}
+		else keepBaseExpr;
 		final policyCases:Array<Case> = [
 			{values: [samePat], expr: sameLayoutExpr, guard: null},
 			{values: [nextPat], expr: nextLayoutExpr, guard: null},
@@ -6061,14 +6131,12 @@ class WriterLowering {
 		];
 		final policySwitch:Expr = {expr: ESwitch(optFlag, policyCases, sameLayoutExpr), pos: Context.currentPos()};
 
-		final blockSplit:{tagged:Array<Expr>, untagged:Array<Expr>} = collectBlockCtorPatternsByLeftCurly(bodyTypePath);
 		// ω-expression-if-next-with-fitline-body: `hasElseIf` with body type
 		// HxStatement matches `IfStmt`; with body type HxExpr matches `IfExpr`
 		// (HxIfExpr.elseBranch). The override fires when the else-body is
 		// itself an if-construct so `else if` cuddles via opt.elseIf semantics.
-		final ifStmtPattern:Null<Expr> = hasElseIf
-			? (findCtorPattern(bodyTypePath, 'IfStmt') ?? findCtorPattern(bodyTypePath, 'IfExpr'))
-			: null;
+		// `ifStmtPattern` declared above near `blockSplit` so it's also
+		// available to `keepLayoutExpr`.
 		final outerCases:Array<Case> = [];
 		if (ifStmtPattern != null) {
 			final kpPath:Array<String> = ['anyparse', 'format', 'KeywordPlacement'];
