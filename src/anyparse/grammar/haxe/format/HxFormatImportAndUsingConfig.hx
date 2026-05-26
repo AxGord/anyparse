@@ -24,6 +24,13 @@ package anyparse.grammar.haxe.format;
  * `beforeType` added in slice ω-imports-using-before-type — feeds
  * `opt.beforeType`. Matches haxe-formatter's
  * `emptyLines.importAndUsing.beforeType: @:default(1)`.
+ *
+ * `keepSourceBlankAcrossConditional` added in Slice D12 — feeds
+ * `opt.keepSourceBlankAcrossConditional`. Anyparse-specific knob with
+ * no fork analogue: opt-in `true` preserves source blanks at
+ * `(prevImport, #if … importB; #end)` boundaries where the head/tail
+ * transparency rules would otherwise drop them via `betweenImports=0`.
+ * Default `false` keeps fork-compatible (override-source-blank) behaviour.
  */
 @:peg typedef HxFormatImportAndUsingConfig = {
 
@@ -34,4 +41,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var betweenImportsLevel:String;
 
 	@:optional var beforeType:Int;
+
+	@:optional var keepSourceBlankAcrossConditional:Bool;
 };

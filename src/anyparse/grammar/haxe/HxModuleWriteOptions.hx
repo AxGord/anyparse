@@ -1720,6 +1720,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	beforeUsing:Int,
 	betweenImports:Int,
 	betweenImportsLevel:HxBetweenImportsLevel,
+	keepSourceBlankAcrossConditional:Bool,
 	beforeType:Int,
 	afterMultilineDecl:Int,
 	beforeMultilineDecl:Int,

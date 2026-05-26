@@ -734,6 +734,7 @@ final class HaxeFormat implements TextFormat {
 		beforeUsing: 1,
 		betweenImports: 0,
 		betweenImportsLevel: HxBetweenImportsLevel.All,
+		keepSourceBlankAcrossConditional: false,
 		beforeType: 1,
 		afterMultilineDecl: 1,
 		beforeMultilineDecl: 1,

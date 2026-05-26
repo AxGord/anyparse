@@ -619,6 +619,7 @@ final class HaxeFormatConfigLoader {
 			beforeUsing: base.beforeUsing,
 			betweenImports: base.betweenImports,
 			betweenImportsLevel: base.betweenImportsLevel,
+			keepSourceBlankAcrossConditional: base.keepSourceBlankAcrossConditional,
 			beforeType: base.beforeType,
 			afterMultilineDecl: base.afterMultilineDecl,
 			beforeMultilineDecl: base.beforeMultilineDecl,
@@ -1266,6 +1267,8 @@ final class HaxeFormatConfigLoader {
 				if (mapped != null) opt.betweenImportsLevel = mapped;
 			}
 			if (importAndUsing.beforeType != null) opt.beforeType = importAndUsing.beforeType;
+			if (importAndUsing.keepSourceBlankAcrossConditional != null)
+				opt.keepSourceBlankAcrossConditional = importAndUsing.keepSourceBlankAcrossConditional;
 		}
 	}
 

@@ -8274,7 +8274,19 @@ class WriterLowering {
 			// short-circuit on `$adapterAccess != null` keeps the path inert
 			// when no adapter is wired (cascade falls through to the fallback /
 			// source-driven blank count).
-			blanksCountExpr = macro ($currKindIdent == 1 && $prevKindIdent == 1 && $adapterAccess != null && $differCall ? $countAccess : $fallback);
+			//
+			// ω-D12-keep-source-blank-across-conditional — when
+			// `opt.keepSourceBlankAcrossConditional` is opt-in `true` AND the
+			// current item has a captured source blank (`_t.blankBefore`), the
+			// emitted count is widened to `max(countAccess, 1)` so a real
+			// source blank around `(prevImport, #if … importB; #end)` survives
+			// the head/tail-transparency override path with `betweenImports=0`.
+			// Default `false` preserves fork byte-identical behaviour — the
+			// override emits `$countAccess` unchanged.
+			final betweenChosen:Expr = macro (
+				opt.keepSourceBlankAcrossConditional && _t.blankBefore && $countAccess < 1 ? 1 : $countAccess
+			);
+			blanksCountExpr = macro ($currKindIdent == 1 && $prevKindIdent == 1 && $adapterAccess != null && $differCall ? $betweenChosen : $fallback);
 		}
 		for (i in 0...transitionInfos.length) {
 			final idx:Int = transitionInfos.length - 1 - i;
