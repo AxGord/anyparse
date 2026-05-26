@@ -176,7 +176,7 @@ class WriterLowering {
 				+ (hasArrayLitTrailPresent ? 1 : 0)
 				+ (hasBodyPolicyKw ? 1 : 0)
 				+ (hasWrapOpenNewline ? 1 : 0)
-				+ (hasPostfixCloseTrailing ? 1 : 0);
+				+ (hasPostfixCloseTrailing ? 2 : 0);
 			final argNames:Array<String> = [for (i in 0...children.length + extraArgs) '_v$i'];
 
 			// Build pattern
@@ -406,7 +406,7 @@ class WriterLowering {
 				var _hasCallPrev:Bool = false;
 				while (true) {
 					switch _cursor {
-						case Call(_op, _args, _trailClose):
+						case Call(_op, _args, _trailClose, _):
 							switch _op {
 								case FieldAccess(_prev, _fld):
 									final _argDocs:Array<anyparse.core.Doc> = $argDocsExpr;
@@ -416,7 +416,7 @@ class WriterLowering {
 										: _dc([_dt('.' + _fld), _argsDoc]);
 									_segs.unshift(_segDoc);
 									switch _prev {
-										case Call(_, _, _): _hasCallPrev = true;
+										case Call(_, _, _, _): _hasCallPrev = true;
 										case _:
 									}
 									_cursor = _prev;
@@ -427,7 +427,7 @@ class WriterLowering {
 						case FieldAccess(_prev, _fld):
 							_segs.unshift(_dt('.' + _fld));
 							switch _prev {
-								case Call(_, _, _): _hasCallPrev = true;
+								case Call(_, _, _, _): _hasCallPrev = true;
 								case _:
 							}
 							_cursor = _prev;
@@ -1219,25 +1219,40 @@ class WriterLowering {
 				// and build the args list Doc by hand — `_dhl()` between
 				// args when source had `\n` before the next arg
 				// (`Trivial<T>.newlineBefore`), `_dt(' ')` otherwise.
-				// args[0] is always glued to the open paren (no leading
-				// break) because args[0].newlineBefore can be polluted by
-				// `ctx.pendingTrivia` drained from upstream kw-Ref rules
-				// (e.g. `catch (e:E)\n\t\ttrace(e);` leaks `\n` into
-				// args[0]). Inter-arg signals (i ≥ 1) are reliable —
-				// captured by the loop's `collectTrivia(ctx)` AFTER the
-				// previous sep. Sister to `triviaSepStarExpr`'s
-				// `ω-keep-objectlit` per-element source-aware leading.
+				//
+				// ω-D9A-keep-callargs-v2: args[0]'s leading source-vertical
+				// signal is captured by a dedicated parser slot
+				// `argsOpenNewline` (positional `argNames[3]`, sibling of
+				// `closeTrailing` at `argNames[2]`). `Trivial<T>.newlineBefore`
+				// for args[0] is unreliable because upstream kw-Ref rules
+				// (e.g. `catch (e:E)\n\t\ttrace(e);`) drain `ctx.pendingTrivia`
+				// into the first `collectTrivia`. The slot is captured BEFORE
+				// the per-iter `skipWs(ctx)` so the post-open `\n` is
+				// preserved verbatim. Inter-arg signals (i ≥ 1) stay on
+				// `Trivial.newlineBefore` — captured by the loop's
+				// `collectTrivia(ctx)` AFTER the previous sep, where
+				// pendingTrivia is already drained.
+				//
+				// When `argsOpenNewline=true` the emit also adds a trailing
+				// `_dhl()` between the last arg and the close lit so the
+				// source-vertical fixture's `\n)` shape round-trips. Sister
+				// to `triviaSepStarExpr`'s `ω-keep-objectlit` per-element
+				// source-aware leading.
 				//
 				// JSON-driven: the loader maps `"defaultWrap": "keep"` on
 				// the named wrap-rules section → `Keep`. Default
 				// `NoWrap` cascades route to `wrapListExpr` (legacy
 				// byte-identical).
+				final argsOpenNewlineExpr:Expr = {expr: EConst(CIdent(argNames[3])), pos: Context.currentPos()};
 				final keepDoc:Expr = macro {
+					final _kArgsOpenNewline:Bool = $argsOpenNewlineExpr;
 					final _kInner:Array<anyparse.core.Doc> = [];
 					var _kj:Int = 0;
 					while (_kj < _docs.length) {
 						if (_kj > 0)
 							_kInner.push(_args[_kj].newlineBefore ? _dhl() : _dt(' '));
+						else if (_kArgsOpenNewline)
+							_kInner.push(_dhl());
 						_kInner.push(_docs[_kj]);
 						final _kIsLast:Bool = _kj == _docs.length - 1;
 						if (!_kIsLast)
@@ -1247,11 +1262,13 @@ class WriterLowering {
 						_kj++;
 					}
 					final _kCols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-					_dwb(_dc([
+					final _kOuter:Array<anyparse.core.Doc> = [
 						_dt($v{postfixOp}),
 						_dn(_kCols, _dc(_kInner)),
-						_dt($v{postfixClose}),
-					]));
+					];
+					if (_kArgsOpenNewline) _kOuter.push(_dhl());
+					_kOuter.push(_dt($v{postfixClose}));
+					_dwb(_dc(_kOuter));
 				};
 				macro $rulesExpr.defaultMode == anyparse.format.wrap.WrapMode.Keep ? $keepDoc : $wrapListExpr;
 			} else {
@@ -1511,10 +1528,16 @@ class WriterLowering {
 				// reader present for symmetry with the struct-path
 				// dual-dispatch.
 				final ignoreSourceNewlines:Bool = branch.fmtHasFlag('ignoreSourceNewlinesForWrap');
+				// ω-bropen-keep-sep: forward `@:fmt(keepCurlyBlanks)` from
+				// the enum-Alt branch into `triviaSepStarExpr`'s opt-in.
+				// Sister to the trivia-block path's read at the else arm
+				// (line ~1542); enables `HxType.Anon` to honour
+				// `opt.afterLeftCurly` / `opt.beforeRightCurly` Keep.
+				final keepCurlyBlanksAlt:Bool = branch.fmtHasFlag('keepCurlyBlanks');
 				parts.push(triviaSepStarExpr(
 					argsAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, leadText, trailText, sepText,
 					wrapRulesField, knobLeftCurly, knobRightCurly, sepTrailPresentAccess, trailingCommaField, openInsideExpr, closeInsideExpr, beforeDocComments,
-					forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines
+					forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines, keepCurlyBlanksAlt
 				));
 			} else {
 				// ω-bropen-keep: forward `@:fmt(keepCurlyBlanks)` from the
@@ -3812,13 +3835,17 @@ class WriterLowering {
 					// through the cascade no-trivia branch. Currently
 					// `HxFnDecl.params` (Slice 4c).
 					final ignoreSourceNewlines:Bool = starNode.fmtHasFlag('ignoreSourceNewlinesForWrap');
+					// ω-bropen-keep-sep: read `@:fmt(keepCurlyBlanks)` on the
+					// struct-Star path. Sister to the enum-Alt path's read.
+					final keepCurlyBlanksStar:Bool = starNode.fmtHasFlag('keepCurlyBlanks');
 					parts.push(triviaSepStarExpr(
 						fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn,
 						openText ?? '', closeText, sepText, wrapRulesField,
 						leftCurlyOwnedBySep ? knobLeftCurly : null,
 						knobRightCurly,
 						trailPresentAccess, trailingCommaField,
-						null, null, false, forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines
+						null, null, false, forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines,
+						keepCurlyBlanksStar
 					));
 					return;
 				}
@@ -7352,7 +7379,8 @@ class WriterLowering {
 		forceMultiInTypedef:Bool = false,
 		bodyAwareCompactIndent:Bool = false,
 		groupRestProbe:Bool = false,
-		ignoreSourceNewlinesForWrap:Bool = false
+		ignoreSourceNewlinesForWrap:Bool = false,
+		keepCurlyBlanks:Bool = false
 	):Expr {
 		// ω-trivia-sep-anontype-braces (Phase B1): when the call site
 		// reads `@:fmt(anonTypeBracesOpen)` / `objectLiteralBracesOpen`
@@ -7364,6 +7392,33 @@ class WriterLowering {
 		// knobs (e.g. `HxExpr.ArrayExpr.elems`).
 		final openInsideDoc:Expr = openInsideExpr ?? macro _de();
 		final closeInsideDoc:Expr = closeInsideExpr ?? macro _de();
+		// ω-bropen-keep-sep: opt-in via `@:fmt(keepCurlyBlanks)` on a
+		// sep-Star (currently `HxType.Anon.fields`). Sister to the block-
+		// Star path's ω-bropen-keep at `triviaBlockStarExpr` (which
+		// channels through `emitBeginExtras = beginEndType || keepCurly-
+		// Blanks` and the shared `beginTypeExpr` / `endTypeExpr` blocks).
+		// The sep-Star's existing `_inner` per-iter leading `_dhl()` (or
+		// `blankBeforeExpr` for `_si > 0`) doesn't fire for the open-side
+		// blank because `blankBeforeExpr` is gated on `_si > 0`. Push one
+		// extra `_dhl()` at the head of `_inner` when source had a blank
+		// between `{` and the first element AND the runtime opted into
+		// Keep. Symmetric end-side push before `_trailLC` handling. Other
+		// sep-Star consumers default `keepCurlyBlanks=false` → both pushes
+		// are `macro {}` and the helper stays byte-identical for them.
+		final keepCurlyBeginExpr:Expr = keepCurlyBlanks
+			? macro {
+				if (opt.afterLeftCurly == anyparse.format.KeepEmptyLinesPolicy.Keep
+						&& _arr.length > 0 && _arr[0].blankBefore)
+					_inner.push(_dhl());
+			}
+			: macro {};
+		final keepCurlyEndExpr:Expr = keepCurlyBlanks
+			? macro {
+				if (opt.beforeRightCurly == anyparse.format.KeepEmptyLinesPolicy.Keep
+						&& _trailBB && _arr.length > 0)
+					_inner.push(_dhl());
+			}
+			: macro {};
 		// ω-trivia-sep-doc-comment-cascade (Phase B2): mirror the
 		// `_currHasDocComment` / `addByCurrDocExpr` machinery from
 		// `triviaBlockStarExpr` so sep-Stars (e.g. `HxType.Anon.fields`
@@ -7769,6 +7824,7 @@ class WriterLowering {
 				if (_hasTrivia) {
 					final _inner:Array<anyparse.core.Doc> = [];
 					$initCurrDocCommentExpr;
+					$keepCurlyBeginExpr;
 					var _si:Int = 0;
 					while (_si < _arr.length) {
 						final _t = _arr[_si];
@@ -7827,6 +7883,7 @@ class WriterLowering {
 						_inner.push(_line);
 						_si++;
 					}
+					$keepCurlyEndExpr;
 					if (_trailLC.length > 0) {
 						_inner.push(_dhl());
 						if (_trailBB && _arr.length > 0) _inner.push(_dhl());

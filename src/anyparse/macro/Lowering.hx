@@ -806,8 +806,16 @@ class Lowering {
 				// the next postfix step's leading-trivia. Without the slot,
 				// the inner `skipWs(ctx)` of the next postfix iteration eats
 				// the comment.
+				//
+				// ω-D9A-keep-callargs-v2: alongside `_trailClose`, the ctor
+				// call grows a fourth positional `_argsOpenNewline:Bool`
+				// captured BEFORE the per-iter `skipWs`/`collectTrivia` (see
+				// macro block below). The signal feeds `lowerPostfixStar`'s
+				// Keep-mode args[0] hardline; `Trivial.newlineBefore` for
+				// args[0] is unreliable due to upstream `ctx.pendingTrivia`
+				// leak so a separate parser-side capture is required.
 				final ctorCallTrivia:Expr = {
-					expr: ECall(ctorRef, [macro left, macro _args, macro _trailClose]),
+					expr: ECall(ctorRef, [macro left, macro _args, macro _trailClose, macro _argsOpenNewline]),
 					pos: Context.currentPos(),
 				};
 				// ω-postfix-starsuffix-trivia: when TriviaAnalysis marks
@@ -852,7 +860,20 @@ class Lowering {
 					// the sweep yielded comments NOT at sep do we rewind
 					// — preserving them for the next iter's `_lead`.
 					macro {
+						// ω-D9A-keep-callargs-v2: capture source-vertical signal
+						// BEFORE per-iter `skipWs`/`collectTrivia` so the
+						// post-open `\n` is preserved as a dedicated bool slot.
+						// Reading `Trivial.newlineBefore` for args[0] would be
+						// polluted by `ctx.pendingTrivia` drained from upstream
+						// kw-Ref rules (see project_phase3_slice_d9a_revert).
+						// `_openPos` sits right after the outer postfix
+						// dispatch consumed the open lit (e.g. `(`); after
+						// `skipWs(ctx)` `ctx.pos` lands at the first
+						// non-whitespace byte, so the byte range covers exactly
+						// the post-open inter-token whitespace.
+						final _openPos:Int = ctx.pos;
 						skipWs(ctx);
+						final _argsOpenNewline:Bool = hasNewlineIn(ctx.input, _openPos, ctx.pos);
 						final _args:Array<$wrappedCT> = [];
 						while (true) {
 							final _lead = collectTrivia(ctx);

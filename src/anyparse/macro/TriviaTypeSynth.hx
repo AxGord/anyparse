@@ -543,7 +543,11 @@ class TriviaTypeSynth {
 		if (isCaptureSourceBranch(branch)) n++; // sourceText
 		if (isAltBodyPolicyKwBranch(branch)) n++; // bodyOnSameLine
 		if (isAltWrapOpenNewlineBranch(branch)) n++; // wrapOpenNewline
-		if (isPostfixCloseTrailingBranch(branch)) n++; // closeTrailing (postfix variant)
+		// ω-D9A-keep-callargs-v2: postfix close-trailing gate adds TWO slots
+		// — closeTrailing + argsOpenNewline (see `buildEnumCtor`). Keep the
+		// count in sync so the `pairedToRaw` switch pattern's `_` placeholder
+		// count matches the paired ctor's arity.
+		if (isPostfixCloseTrailingBranch(branch)) n += 2;
 		return n;
 	}
 
@@ -704,7 +708,16 @@ class TriviaTypeSynth {
 		if (isCaptureSourceBranch(branch)) defaults.push(macro ''); // sourceText
 		if (isAltBodyPolicyKwBranch(branch)) defaults.push(macro false); // bodyOnSameLine
 		if (isAltWrapOpenNewlineBranch(branch)) defaults.push(macro false); // wrapOpenNewline
-		if (isPostfixCloseTrailingBranch(branch)) defaults.push(macro (null : Null<String>)); // closeTrailing
+		if (isPostfixCloseTrailingBranch(branch)) {
+			defaults.push(macro (null : Null<String>)); // closeTrailing
+			// ω-D9A-keep-callargs-v2: argsOpenNewline default for raw→paired
+			// wraps. `false` matches the parser's initial state for source
+			// without a leading-newline after the postfix open. preWrite
+			// plugin rewrites don't preserve open-paren source shape, so the
+			// writer falls back to default (glued first arg) — consistent
+			// with the existing closeTrailing=null fallback.
+			defaults.push(macro false); // argsOpenNewline
+		}
 		return defaults;
 	}
 
@@ -1230,6 +1243,20 @@ class TriviaTypeSynth {
 			final strCT:ComplexType = TPath({pack: [], name: 'String', params: []});
 			final nullStrCT:ComplexType = TPath({pack: [], name: 'Null', params: [TPType(strCT)]});
 			args.push({name: 'closeTrailing', type: nullStrCT});
+			// ω-D9A-keep-callargs-v2: parallel positional `argsOpenNewline:Bool`
+			// slot capturing whether source had `\n` between the postfix open
+			// literal (e.g. `(`) and the first arg's leading non-whitespace.
+			// Drives `WriterLowering.lowerPostfixStar`'s Keep-mode args[0]
+			// hardline + trailing-before-close hardline. The per-element
+			// `Trivial.newlineBefore` for args[0] is polluted by upstream
+			// `ctx.pendingTrivia` drained from kw-Ref rules (see
+			// project_phase3_slice_d9a_revert "Critical engine finding"),
+			// so the open-newline signal needs its own slot captured by
+			// `Lowering` BEFORE the per-iter `skipWs(ctx)` / `collectTrivia(ctx)`
+			// can lose it. Co-occurs with `closeTrailing` so the writer
+			// reads via `argNames[3]` (closeTrailing stays at argNames[2]).
+			final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
+			args.push({name: 'argsOpenNewline', type: boolCT});
 		}
 		return {name: ctorName, kind: FFun({args: args, ret: null, expr: null}), pos: pos, access: []};
 	}

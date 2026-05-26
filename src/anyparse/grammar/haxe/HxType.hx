@@ -186,7 +186,7 @@ enum HxType {
 	@:infix('->', 0, 'Right') @:fmt(tight)
 	Arrow(left:HxType, right:HxType);
 
-	@:trivia @:lead('{') @:trail('}') @:sep(',') @:sepAlt(';') @:fmt(anonTypeBracesOpen, anonTypeBracesClose, wrapRules('anonTypeWrap'), leftCurly('anonTypeLeftCurly'), rightCurly('anonTypeRightCurly'), beforeDocCommentEmptyLines, forceMultiInTypedef)
+	@:trivia @:lead('{') @:trail('}') @:sep(',') @:sepAlt(';') @:fmt(anonTypeBracesOpen, anonTypeBracesClose, wrapRules('anonTypeWrap'), leftCurly('anonTypeLeftCurly'), rightCurly('anonTypeRightCurly'), beforeDocCommentEmptyLines, forceMultiInTypedef, keepCurlyBlanks)
 	Anon(fields:Array<HxAnonMember>);
 
 	ArrowFn(fn:HxArrowFnType);
