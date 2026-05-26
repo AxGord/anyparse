@@ -1501,7 +1501,13 @@ class Lowering {
 								skipWs(ctx);
 								while ($closeNotNextExpr) {
 									final _isBE:Bool = _prevEndPos > 0 && {
-										final _b:Int = ctx.input.charCodeAt(_prevEndPos - 1);
+										var _pebRew:Int = _prevEndPos - 1;
+										while (_pebRew > 0) {
+											final _bc:Int = ctx.input.charCodeAt(_pebRew);
+											if (_bc == ' '.code || _bc == '\t'.code || _bc == '\n'.code || _bc == '\r'.code) _pebRew--;
+											else break;
+										}
+										final _b:Int = ctx.input.charCodeAt(_pebRew);
 										_b == ';'.code || $predicateCall;
 									};
 									if (_isBE) {
@@ -1545,7 +1551,13 @@ class Lowering {
 									_prevEndPos = ctx.pos;
 									skipWs(ctx);
 								} else if (_prevEndPos > 0 && {
-									final _b:Int = ctx.input.charCodeAt(_prevEndPos - 1);
+									var _pebRew:Int = _prevEndPos - 1;
+									while (_pebRew > 0) {
+										final _bc:Int = ctx.input.charCodeAt(_pebRew);
+										if (_bc == ' '.code || _bc == '\t'.code || _bc == '\n'.code || _bc == '\r'.code) _pebRew--;
+										else break;
+									}
+									final _b:Int = ctx.input.charCodeAt(_pebRew);
 									_b == ';'.code || $predicateCall;
 								}) {
 									_items.push($elemCall);
@@ -2908,6 +2920,51 @@ class Lowering {
 					}
 				});
 			}
+			final sepBlockEnded:Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
+			if (sepBlockEnded) {
+				// Block-ended exemption (mirror of the closeText+sep branch at
+				// line ~2977): after a successful element, sep may be omitted
+				// if the element ended with `;` / `}` (byte-level check on
+				// `_prevEndPos - 1`) — or, when `blockEnded('<predicate>')`
+				// supplies a schema-instance predicate, when that predicate
+				// returns `true` for the just-pushed element. On block-ended,
+				// the next iteration's `elemCall` parses the next stmt
+				// directly; on no-match it rewinds and breaks, letting the
+				// enclosing `@:trail` close consume the trailing token.
+				// Consumers: `HxConditionalStmt.body` / `elseBody`,
+				// `HxElseifStmt.body` (2+ stmts inside `#if … #end` without
+				// inter-stmt `;` between brace-terminated stmts).
+				final predicateName:Null<String> = starNode.annotations.get('lit.sepBlockEndedPredicate');
+				final predicateCall:Expr = predicateName != null ? buildBlockEndedPredicateCall(predicateName, accumRef) : macro false;
+				parseSteps.push(macro {
+					while (true) {
+						final _savedPos:Int = ctx.pos;
+						try {
+							skipWs(ctx);
+							$accumRef.push($elemCall);
+						} catch (_e:anyparse.runtime.ParseError) {
+							ctx.pos = _savedPos;
+							break;
+						}
+						final _prevEndPos:Int = ctx.pos;
+						skipWs(ctx);
+						final _isBE:Bool = _prevEndPos > 0 && {
+							var _pebRew:Int = _prevEndPos - 1;
+							while (_pebRew > 0) {
+								final _bc:Int = ctx.input.charCodeAt(_pebRew);
+								if (_bc == ' '.code || _bc == '\t'.code || _bc == '\n'.code || _bc == '\r'.code) _pebRew--;
+								else break;
+							}
+							final _b:Int = ctx.input.charCodeAt(_pebRew);
+							_b == ';'.code || $predicateCall;
+						};
+						if (_isBE) continue;
+						if (ctx.pos >= ctx.input.length || ctx.input.charCodeAt(ctx.pos) != $v{sepCharCode}) break;
+						ctx.pos++;
+					}
+				});
+				return;
+			}
 			parseSteps.push(macro {
 				while (true) {
 					final _savedPos:Int = ctx.pos;
@@ -3008,7 +3065,13 @@ class Lowering {
 						skipWs(ctx);
 						while ($closeNotNextExpr) {
 							final _isBE:Bool = _prevEndPos > 0 && {
-								final _b:Int = ctx.input.charCodeAt(_prevEndPos - 1);
+								var _pebRew:Int = _prevEndPos - 1;
+								while (_pebRew > 0) {
+									final _bc:Int = ctx.input.charCodeAt(_pebRew);
+									if (_bc == ' '.code || _bc == '\t'.code || _bc == '\n'.code || _bc == '\r'.code) _pebRew--;
+									else break;
+								}
+								final _b:Int = ctx.input.charCodeAt(_pebRew);
 								_b == ';'.code || $predicateCall;
 							};
 							if (_isBE) {
@@ -3046,12 +3109,22 @@ class Lowering {
 								_prevEndPos = ctx.pos;
 								skipWs(ctx);
 							} else if (_prevEndPos > 0 && {
-								final _b:Int = ctx.input.charCodeAt(_prevEndPos - 1);
+								var _pebRew:Int = _prevEndPos - 1;
+								while (_pebRew > 0) {
+									final _bc:Int = ctx.input.charCodeAt(_pebRew);
+									if (_bc == ' '.code || _bc == '\t'.code || _bc == '\n'.code || _bc == '\r'.code) _pebRew--;
+									else break;
+								}
+								final _b:Int = ctx.input.charCodeAt(_pebRew);
 								_b == ';'.code || $predicateCall;
 							}) {
 								// Block-ended: prior element ended with `;`
-								// (byte-check) or the AST-shape predicate
-								// returned true. No sep needed; parse next.
+								// (byte-check after walking back over
+								// whitespace — covers stmts whose own
+								// `@:trailOpt(';')` consumed `;` and then
+								// the trailing `skipWs` advanced past it)
+								// or the AST-shape predicate returned true.
+								// No sep needed; parse next.
 								$accumRef.push($elemCall);
 								_prevEndPos = ctx.pos;
 								skipWs(ctx);

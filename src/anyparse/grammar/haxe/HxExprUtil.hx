@@ -98,6 +98,71 @@ final class HxExprUtil {
 		if (ctor == null) return false;
 		return switch ctor {
 			case 'SwitchExpr', 'SwitchExprBare': true;
+			// `{ … }` block expression — `}` is the literal last token.
+			case 'BlockExpr': true;
+			// `{ k: v, … }` object literal — `}` last token.
+			case 'ObjectLit': true;
+			// `macro class … { members }` — `}` of the members block.
+			case 'MacroClassExpr': true;
+			// `macro <operand>` / `@:meta <operand>` — pure wrappers,
+			// recurse on the wrapped expression. Required for the
+			// `final x = macro for/if/…` idiom in macro-heavy code where
+			// the outer stmt's trailing `;` was consumed by the operand's
+			// own `@:trailOpt(';')` (so the predicate must declare
+			// block-ended without seeing the `;` byte at `_prevEndPos-1`).
+			case 'MacroExpr':
+				final params:Null<Array<Dynamic>> = Type.enumParameters(e);
+				params != null && params.length > 0 && endsWithCloseBrace(params[0]);
+			case 'MetaExpr':
+				final params:Null<Array<Dynamic>> = Type.enumParameters(e);
+				if (params == null || params.length == 0) false;
+				else {
+					final metaExpr:Null<Dynamic> = params[0];
+					if (metaExpr == null) false;
+					else {
+						final inner:Null<Dynamic> = Reflect.field(metaExpr, 'expr');
+						inner != null && endsWithCloseBrace(inner);
+					}
+				}
+			// `a ? b : c` — last evaluated branch is `c` (elseExpr).
+			case 'Ternary':
+				final params:Null<Array<Dynamic>> = Type.enumParameters(e);
+				params != null && params.length >= 3 && endsWithCloseBrace(params[2]);
+			// `for (…) body` / `while (…) body` — body's own `@:trailOpt(';')`
+			// either consumed `;` (block-ended via `;`-byte) OR body itself
+			// ends with `}` (recurse). Either way, no further sep is required
+			// before the next stmt.
+			case 'ForExpr':
+				final stmt:Null<Dynamic> = Type.enumParameters(e)[0];
+				if (stmt == null) false;
+				else {
+					final body:Null<Dynamic> = Reflect.field(stmt, 'body');
+					body != null && endsWithCloseBrace(body);
+				}
+			case 'WhileExpr':
+				final stmt:Null<Dynamic> = Type.enumParameters(e)[0];
+				if (stmt == null) false;
+				else {
+					final body:Null<Dynamic> = Reflect.field(stmt, 'body');
+					body != null && endsWithCloseBrace(body);
+				}
+			// `if (c) then else else'` — recurse on the last evaluated
+			// branch (else if present, otherwise then). Pre-fix Pattern B
+			// `final v = if (a) {…} else {…}` left the outer stmt visible
+			// to `stmtNoSemi` as `FinalStmt` whose init was `IfExpr`; the
+			// outer `FinalStmt` handler delegates to `endsWithCloseBrace`,
+			// so the recursive case here closes the loop.
+			case 'IfExpr':
+				final stmt:Null<Dynamic> = Type.enumParameters(e)[0];
+				if (stmt == null) false;
+				else {
+					final elseBranch:Null<Dynamic> = Reflect.field(stmt, 'elseBranch');
+					if (elseBranch != null) endsWithCloseBrace(elseBranch);
+					else {
+						final thenBranch:Null<Dynamic> = Reflect.field(stmt, 'thenBranch');
+						thenBranch != null && endsWithCloseBrace(thenBranch);
+					}
+				}
 			case 'FnExpr':
 				final fn:Null<Dynamic> = Type.enumParameters(e)[0];
 				if (fn == null) false;
@@ -110,8 +175,10 @@ final class HxExprUtil {
 				if (stmt == null) false;
 				else {
 					final catches:Null<Array<Dynamic>> = Reflect.field(stmt, 'catches');
-					if (catches == null || catches.length == 0) false;
-					else {
+					if (catches == null || catches.length == 0) {
+						final body:Null<Dynamic> = Reflect.field(stmt, 'body');
+						body != null && endsWithCloseBrace(body);
+					} else {
 						final last:Null<Dynamic> = catches[catches.length - 1];
 						if (last == null) false;
 						else {
@@ -432,6 +499,21 @@ final class HxExprUtil {
 		// `#if … #end` ends with `d`; byte-check misses, AST predicate
 		// is required. `....` placeholder ends with `.`; same reasoning.
 		if (ctor == 'Conditional' || ctor == 'EllipsisStmt') return true;
+		// `var x = expr` / `final x = expr` / static-variant stmts whose
+		// init expression ends with `}` (Switch / TryCatch / FnExpr with
+		// BlockBody). Byte-check on `_prevEndPos - 1` misses these because
+		// the stmt's own trailing `skipWs` (before `@:trailOpt(';')`'s
+		// `matchLit`) advances past the brace + newline + tabs when no
+		// trailing `;` is present, leaving `_prevEndPos` past the `}`.
+		// Delegate to `endsWithCloseBrace` on the `HxVarDecl.init` field.
+		if (ctor == 'VarStmt' || ctor == 'FinalStmt' || ctor == 'StaticVarStmt' || ctor == 'StaticFinalStmt') {
+			final params:Null<Array<Dynamic>> = Type.enumParameters(s);
+			if (params == null || params.length == 0) return false;
+			final decl:Null<Dynamic> = params[0];
+			if (decl == null) return false;
+			final init:Null<Dynamic> = Reflect.field(decl, 'init');
+			return init != null && endsWithCloseBrace(init);
+		}
 		return false;
 	}
 

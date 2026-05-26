@@ -5490,10 +5490,7 @@ final class Cli {
 				if (!StringTools.endsWith(name, '.hx')) continue;
 				final source:String = try readSourceForParse(path) catch (_:Exception) continue;
 				try {
-					if (!plugin.reconParse(source)) {
-						stderr('apq self-status: no recon parser wired up for grammar plugin "$lang"\n');
-						return EXIT_RUNTIME;
-					}
+					plugin.parseFile(source);
 					parseable++;
 				} catch (exception:ParseError) {
 					skipParse++;
