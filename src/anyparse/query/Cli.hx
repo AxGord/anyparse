@@ -1278,6 +1278,7 @@ final class Cli {
 		var plain:Bool = false;
 		var inputPath:Null<String> = null;
 		var expectedPath:Null<String> = null;
+		var configPath:Null<String> = null;
 
 		var i:Int = 0;
 		while (i < args.length) {
@@ -1287,6 +1288,8 @@ final class Cli {
 					lang = expectValue(args, ++i, '--lang');
 				case '--plain':
 					plain = true;
+				case '--config':
+					configPath = expectValue(args, ++i, '--config');
 				case '-h', '--help':
 					printWriterEqualsUsage();
 					return EXIT_OK;
@@ -1314,10 +1317,14 @@ final class Cli {
 		final plugin:GrammarPlugin = pickPlugin(lang);
 		final source:String = readSourceForParse(inputPathFinal);
 		final expected:String = readExpectedForCompare(expectedPathFinal);
-		// `.hxtest` input → section-1 config drives writer options so a
-		// fork fixture reproduces the corpus harness's writer surface in
-		// one command. Plain inputs stay on plugin defaults.
-		final optsJson:Null<String> = readWriteOptionsJsonOrNull(inputPathFinal);
+		// Config precedence: section-1 from a `.hxtest` input wins (per-
+		// fixture intent), fall back to `--config <path>` (project-wide
+		// opt-in for plain `.hx` files — dogfood `.hxformat.json` etc.),
+		// then plugin defaults.
+		final sectionOpts:Null<String> = readWriteOptionsJsonOrNull(inputPathFinal);
+		final optsJson:Null<String> = sectionOpts != null
+			? sectionOpts
+			: (configPath != null ? readFile(configPath) : null);
 
 		final emitted:Null<String> = try (plain
 			? plugin.writeRoundTripPlain(source, optsJson)
@@ -1387,6 +1394,9 @@ final class Cli {
 		sysPrint('Options:\n');
 		sysPrint('  --plain             Use the plain (non-trivia) writer (mirrors unit tests)\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('  --config <path>     Load writer options from JSON file (hxformat.json-shaped).\n');
+		sysPrint('                      Used for plain .hx inputs (dogfood opt-in); a .hxtest section-1\n');
+		sysPrint('                      always wins over this flag.\n');
 		sysPrint('\n');
 		sysPrint('Parse <input>, write through the grammar plugin (trivia pipeline by\n');
 		sysPrint('default, plain pipeline with --plain), compare against bytes of <expected>.\n');

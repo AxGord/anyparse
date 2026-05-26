@@ -1,0 +1,19 @@
+{
+	"wrapping": {
+		"callParameter": {
+			"defaultWrap": "keep"
+		}
+	},
+	"sameLine": {
+		"ifBody": "keep",
+		"elseBody": "keep",
+		"forBody": "keep",
+		"whileBody": "keep",
+		"doWhileBody": "keep",
+		"caseBody": "keep"
+	},
+	"emptyLines": {
+		"afterLeftCurly": "keep",
+		"beforeRightCurly": "keep"
+	}
+}

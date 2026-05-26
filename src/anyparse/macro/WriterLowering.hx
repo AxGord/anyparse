@@ -1212,7 +1212,51 @@ class WriterLowering {
 		final fillDouble:Bool = branch.fmtHasFlag('fillDoubleIndent');
 		final sepListCall:Expr = if (wrapRulesField != null) {
 			final rulesExpr:Expr = optFieldAccess(wrapRulesField);
-			macro anyparse.format.wrap.WrapList.emit($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, _de(), _de(), false, $rulesExpr, $tcExpr);
+			final wrapListExpr:Expr = macro anyparse.format.wrap.WrapList.emit($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, _de(), _de(), false, $rulesExpr, $tcExpr);
+			if (isTriviaStar) {
+				// ω-D9A-keep-callargs: when the wrap-rules' runtime config
+				// sets `defaultMode == WrapMode.Keep`, bypass the cascade
+				// and build the args list Doc by hand — `_dhl()` between
+				// args when source had `\n` before the next arg
+				// (`Trivial<T>.newlineBefore`), `_dt(' ')` otherwise.
+				// args[0] is always glued to the open paren (no leading
+				// break) because args[0].newlineBefore can be polluted by
+				// `ctx.pendingTrivia` drained from upstream kw-Ref rules
+				// (e.g. `catch (e:E)\n\t\ttrace(e);` leaks `\n` into
+				// args[0]). Inter-arg signals (i ≥ 1) are reliable —
+				// captured by the loop's `collectTrivia(ctx)` AFTER the
+				// previous sep. Sister to `triviaSepStarExpr`'s
+				// `ω-keep-objectlit` per-element source-aware leading.
+				//
+				// JSON-driven: the loader maps `"defaultWrap": "keep"` on
+				// the named wrap-rules section → `Keep`. Default
+				// `NoWrap` cascades route to `wrapListExpr` (legacy
+				// byte-identical).
+				final keepDoc:Expr = macro {
+					final _kInner:Array<anyparse.core.Doc> = [];
+					var _kj:Int = 0;
+					while (_kj < _docs.length) {
+						if (_kj > 0)
+							_kInner.push(_args[_kj].newlineBefore ? _dhl() : _dt(' '));
+						_kInner.push(_docs[_kj]);
+						final _kIsLast:Bool = _kj == _docs.length - 1;
+						if (!_kIsLast)
+							_kInner.push(_dt($v{elemSep}));
+						else if ($tcExpr)
+							_kInner.push(_dt($v{elemSep}));
+						_kj++;
+					}
+					final _kCols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+					_dwb(_dc([
+						_dt($v{postfixOp}),
+						_dn(_kCols, _dc(_kInner)),
+						_dt($v{postfixClose}),
+					]));
+				};
+				macro $rulesExpr.defaultMode == anyparse.format.wrap.WrapMode.Keep ? $keepDoc : $wrapListExpr;
+			} else {
+				wrapListExpr;
+			}
 		} else if (useFill) {
 			macro fillList($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr, _de(), _de(), false, $v{fillDouble});
 		} else {
