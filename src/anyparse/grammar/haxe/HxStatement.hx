@@ -351,16 +351,16 @@ package anyparse.grammar.haxe;
  */
 @:peg
 enum HxStatement {
-	@:kw('static') @:lead('var')
+	@:kw('static') @:lead('var') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))
 	StaticVarStmt(decl:HxVarDecl);
 
-	@:kw('static') @:lead('final')
+	@:kw('static') @:lead('final') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))
 	StaticFinalStmt(decl:HxVarDecl);
 
-	@:kw('var')
+	@:kw('var') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))
 	VarStmt(decl:HxVarDecl);
 
-	@:kw('final')
+	@:kw('final') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))
 	FinalStmt(decl:HxVarDecl);
 
 	@:kw('return')

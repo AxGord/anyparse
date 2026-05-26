@@ -64,7 +64,7 @@ class HxStructFieldTrailPresentSliceTest extends Test {
 				case _: throw 'expected BlockBody';
 			};
 		final varDecl:anyparse.grammar.haxe.trivia.Pairs.HxVarDeclT = switch stmts[0].node {
-			case FinalStmt(decl): decl;
+			case FinalStmt(decl, _): decl;
 			case _: throw 'expected FinalStmt';
 		};
 		final init:anyparse.grammar.haxe.trivia.Pairs.HxExprT = switch varDecl.init {
@@ -97,7 +97,7 @@ class HxStructFieldTrailPresentSliceTest extends Test {
 				case _: throw 'expected BlockBody';
 			};
 		final varDecl:anyparse.grammar.haxe.trivia.Pairs.HxVarDeclT = switch stmts[0].node {
-			case FinalStmt(decl): decl;
+			case FinalStmt(decl, _): decl;
 			case _: throw 'expected FinalStmt';
 		};
 		final init:anyparse.grammar.haxe.trivia.Pairs.HxExprT = switch varDecl.init {
