@@ -18,7 +18,8 @@
 		"forBody": "keep",
 		"whileBody": "keep",
 		"doWhileBody": "keep",
-		"caseBody": "keep"
+		"caseBody": "keep",
+		"functionBody": "keep"
 	},
 	"emptyLines": {
 		"afterLeftCurly": "keep",
