@@ -23,6 +23,7 @@
 	"emptyLines": {
 		"afterLeftCurly": "keep",
 		"beforeRightCurly": "keep",
+		"afterFieldsWithDocComments": "ignore",
 		"importAndUsing": {
 			"keepSourceBlankAcrossConditional": true
 		}
