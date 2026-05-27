@@ -733,6 +733,14 @@ class Codegen {
 				ctx.pos++;
 			}
 			_leading.push(ctx.input.substring(_start, ctx.pos));
+			// ω-D14-blank-between-leading-clear: a blank captured before this
+			// comment (when _leading was non-empty) was conflated with
+			// "blank AFTER the last leading comment" via the _nl >= 2 +
+			// _leading.length > 0 branch above. With a NEW comment now
+			// captured, that earlier blank is actually "blank BETWEEN
+			// comments" — clear the slot so it doesn't propagate to the
+			// writer's blank-before-body emit gate.
+			_blankAfterLeadingComments = false;
 			_nl = 0;
 			continue;
 		}
@@ -748,6 +756,8 @@ class Codegen {
 				ctx.pos++;
 			}
 			_leading.push(ctx.input.substring(_start, _end));
+			// ω-D14-blank-between-leading-clear: see line-terminated branch.
+			_blankAfterLeadingComments = false;
 			_nl = 0;
 			continue;
 		}
