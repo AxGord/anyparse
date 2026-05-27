@@ -21,5 +21,5 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxTypedCast = {
 	@:lead('(') var target:HxExpr;
-	@:lead(',') @:trail(')') var type:HxType;
+	@:lead(',') @:fmt(spaceAfterLead) @:trail(')') var type:HxType;
 };

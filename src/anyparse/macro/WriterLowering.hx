@@ -5692,7 +5692,20 @@ class WriterLowering {
 	 */
 	private static function whitespacePolicyLead(child:ShapeNode, leadText:String, flagNames:Array<String>):Expr {
 		final flagName:Null<String> = firstFmtFlag(child, flagNames);
-		if (flagName == null) return macro _dt($v{leadText});
+		if (flagName == null) {
+			// Writer Slice 10: opt-in `@:fmt(spaceAfterLead)` on a struct-
+			// field mandatory `@:lead(LIT)` appends an OptSpace after the
+			// lead literal — mirror of Slice 4's enum-ctor `spaceAfterLead`
+			// path (line ~1075) for the struct-field side. Used by
+			// `HxVarMore.decl` (`@:lead(',')`) and `HxTypedCast.type`
+			// (`@:lead(',')`) to emit `, b` and `cast(x, T)` respectively
+			// instead of tight `,b` / `cast(x,T)`. The space is `_dop` so
+			// the renderer can drop it when the value emits a leading
+			// hardline.
+			if (child.fmtHasFlag('spaceAfterLead'))
+				return macro _dc([_dt($v{leadText}), _dop(' ')]);
+			return macro _dt($v{leadText});
+		}
 		final wpPath:Array<String> = ['anyparse', 'format', 'WhitespacePolicy'];
 		final beforePat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Before']));
 		final afterPat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['After']));
