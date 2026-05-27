@@ -48,16 +48,27 @@ package anyparse.grammar.haxe;
  * preventing a double space in `Same` and a dangling space before a
  * hardline in `Next`.
  *
- * `@:fmt(blockBodyKeepsInline)` (ω-block-shape-aware) on both `body`
- * and `catches` makes the body-break and per-catch separator shape-
- * aware: when the body's runtime ctor is a block-form (`BlockExpr`),
- * the layout collapses to inline (`try { … }` / `} catch (…) { … }`)
+ * `@:fmt(blockBodyKeepsInline)` (ω-block-shape-aware) on `body` makes
+ * the body-break shape-aware: when the body's runtime ctor is a block-
+ * form (`BlockExpr`), the layout collapses to inline (`try { … }`)
  * regardless of `expressionTry=Next`. Block bodies have their own
  * visual structure — breaking `try \n\t{ … }` would split a brace pair
- * across the leading hardline. Statement-form `HxTryCatchStmt` does
- * NOT carry the flag — its haxe-formatter contract on `sameLine.
- * tryCatch=next` breaks `} catch` to `}\ncatch` regardless of body
- * shape (see `testSameLineCatchAppliesToEveryCatch`).
+ * across the leading hardline.
+ *
+ * `@:fmt(blockBodyKeepsInline('sameLineCatch'))` (ω-block-body-alt-
+ * samelinepolicy) on `catches` is the knob form of the same flag —
+ * when the prev body's runtime ctor is a block, the catch separator
+ * is driven by `sameLine.tryCatch` (the statement-form knob) instead
+ * of the bare-body branch's `sameLine('expressionTry')`. Matches
+ * haxe-formatter, where `tryCatch=next` breaks `} catch` to `}\ncatch`
+ * for both statement-form and block-bodied expression-form (e.g.
+ * `return try { … } catch ...`) while `expressionTry` continues to
+ * drive bare-bodied expression-form (`var x = try foo() catch (...)
+ * bar;`). Statement-form `HxTryCatchStmt` does NOT carry the flag —
+ * its catches Star opts into the dual `bareBodyBreaks` shape that
+ * forces hardline before each catch whenever the prev body is non-
+ * block, regardless of policy (see
+ * `testSameLineCatchAppliesToEveryCatch`).
  *
  * `body` carries `@:trailOpt(';')`: Haxe accepts an optional `;`
  * terminating the try-expression body before `catch`, e.g.
@@ -76,5 +87,5 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxTryCatchExpr = {
 	@:trailOpt(';') @:fmt(bodyBreak('expressionTry'), blockBodyKeepsInline) var body:HxExpr;
-	@:trivia @:tryparse @:fmt(sameLine('expressionTry'), blockBodyKeepsInline) var catches:Array<HxCatchClauseExpr>;
+	@:trivia @:tryparse @:fmt(sameLine('expressionTry'), blockBodyKeepsInline('sameLineCatch')) var catches:Array<HxCatchClauseExpr>;
 };

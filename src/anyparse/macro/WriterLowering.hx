@@ -3608,10 +3608,11 @@ class WriterLowering {
 				final elemBodyField:Null<String> = sameLineName != null && blockPatterns.length > 0
 					? findElementBodyField(elemRefName, prevBareRefBody.typePath)
 					: null;
+				final blockKeepsInlineBranch:Expr = blockBodyKeepsInlineBranch(starNode);
 				final firstSepOverride:Null<Expr> = if (blockPatterns.length == 0) closeTrailingFirstOverride;
 				else {
 					final fallback:Expr = closeTrailingFirstOverride ?? sepExpr;
-					final blockBranch:Expr = blockShapeAware ? (macro _dt(' ')) : fallback;
+					final blockBranch:Expr = blockShapeAware ? blockKeepsInlineBranch : fallback;
 					final bareBranch:Expr = blockShapeAware ? fallback : (macro _dhl());
 					final cases:Array<Case> = [
 						{values: blockPatterns, expr: blockBranch, guard: null},
@@ -3625,7 +3626,7 @@ class WriterLowering {
 						expr: EField(macro _arr[_si - 1].node, elemBodyField),
 						pos: Context.currentPos(),
 					};
-					final blockBranch:Expr = blockShapeAware ? (macro _dt(' ')) : sepExpr;
+					final blockBranch:Expr = blockShapeAware ? blockKeepsInlineBranch : sepExpr;
 					final bareBranch:Expr = blockShapeAware ? sepExpr : (macro _dhl());
 					final cases:Array<Case> = [
 						{values: blockPatterns, expr: blockBranch, guard: null},
@@ -4267,7 +4268,8 @@ class WriterLowering {
 						_dc(_docs);
 					});
 				} else {
-					final firstBlockBranch:Expr = blockShapeAware ? (macro _dt(' ')) : sepExpr;
+					final blockKeepsInlineBranch:Expr = blockBodyKeepsInlineBranch(starNode);
+					final firstBlockBranch:Expr = blockShapeAware ? blockKeepsInlineBranch : sepExpr;
 					final firstBareBranch:Expr = blockShapeAware ? sepExpr : (macro _dhl());
 					final firstShapeCases:Array<Case> = [
 						{values: blockPatterns, expr: firstBlockBranch, guard: null},
@@ -4283,7 +4285,7 @@ class WriterLowering {
 							expr: EField(macro _arr[_si - 1], elemBodyField),
 							pos: Context.currentPos(),
 						};
-						final subBlockBranch:Expr = blockShapeAware ? (macro _dt(' ')) : sepExpr;
+						final subBlockBranch:Expr = blockShapeAware ? blockKeepsInlineBranch : sepExpr;
 						final subBareBranch:Expr = blockShapeAware ? sepExpr : (macro _dhl());
 						final cases:Array<Case> = [
 							{values: blockPatterns, expr: subBlockBranch, guard: null},
@@ -4754,6 +4756,28 @@ class WriterLowering {
 			{values: [keepPat], expr: keepExpr, guard: null},
 		];
 		return {expr: ESwitch(optFlag, cases, macro _dt(' ')), pos: Context.currentPos()};
+	}
+
+	/**
+	 * ω-block-body-alt-samelinepolicy: block-body branch of the catches-
+	 * Star sep override. Bare `@:fmt(blockBodyKeepsInline)` returns
+	 * `_dt(' ')` — block bodies stay inline regardless of policy
+	 * (existing behavior). The knob form
+	 * `@:fmt(blockBodyKeepsInline('<sameLineFlag>'))` redirects the
+	 * block-body branch through `sameLinePolicySwitch` on the named
+	 * runtime option, so the catch separator after a block body follows
+	 * a different SameLine policy than the bare-body branch's
+	 * `sameLine('<expressionFlag>')`. Consumed by
+	 * `HxTryCatchExpr.catches` to match haxe-formatter, where a
+	 * block-bodied expression-position `try` honours `sameLine.tryCatch`
+	 * (`} catch` vs `}\ncatch`) while a bare-body expression-position
+	 * `try` keeps reading `sameLine.expressionTry`.
+	 */
+	private static function blockBodyKeepsInlineBranch(starNode:ShapeNode):Expr {
+		final altPolicy:Null<String> = starNode.fmtReadString('blockBodyKeepsInline');
+		return altPolicy == null
+			? macro _dt(' ')
+			: sameLinePolicySwitch(optFieldAccess(altPolicy), macro _dt(' '));
 	}
 
 	/**
