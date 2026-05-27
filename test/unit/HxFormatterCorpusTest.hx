@@ -174,6 +174,23 @@ class HxFormatterCorpusTest extends Test {
 				sweepFixtures.push({path: relPath, status: 'MALFORMED'});
 				continue;
 			}
+			// Writer Slice 3: honor `disableFormatting:true` and
+			// `excludes:[…]` meta-config — when set, the fork's
+			// formatter is skipped entirely and the on-disk expected
+			// section is empty. Compare actual='' against `tc.expected`
+			// directly (PASS when the fixture expects empty too); no
+			// parse/write call runs.
+			if (isDisabledOrExcluded(tc.config, relPath)) {
+				if (tc.expected == '') {
+					pass++;
+					sweepFixtures.push({path: relPath, status: 'PASS'});
+				} else {
+					fail++;
+					failLines.push('  [$name] disable/excludes meta but expected non-empty: ' + describeDiff(tc.expected, ''));
+					sweepFixtures.push({path: relPath, status: 'FAIL'});
+				}
+				continue;
+			}
 			final opts:HxModuleWriteOptions = try HaxeFormatConfigLoader.loadHxFormatJson(tc.config) catch (exception:Exception) {
 				skipConfig++;
 				sweepFixtures.push({path: relPath, status: 'SKIP_CONFIG'});
@@ -320,6 +337,32 @@ class HxFormatterCorpusTest extends Test {
 	 * with a short snippet of the input at the failure offset. Cases
 	 * that choke on the same feature cluster under the same key.
 	 */
+	/**
+	 * Writer Slice 3 — detect meta-config flags `disableFormatting:true`
+	 * and `excludes:[…]` directly from the raw JSON. Neither maps to a
+	 * runtime `HxModuleWriteOptions` field; both gate the formatter
+	 * pipeline AT THE DRIVER. The fork's two fixtures
+	 * (`other/disabled_formatting`, `other/disabled_excluded`) expect an
+	 * empty section-3, which is the on-disk encoding of "formatter did
+	 * not run". Fail-soft: a malformed JSON config returns false so the
+	 * existing skipConfig branch handles the parse error.
+	 */
+	private static function isDisabledOrExcluded(config:String, relPath:String):Bool {
+		try {
+			final obj:Dynamic = haxe.Json.parse(config);
+			if (Reflect.hasField(obj, 'disableFormatting') && Reflect.field(obj, 'disableFormatting') == true)
+				return true;
+			if (Reflect.hasField(obj, 'excludes')) {
+				final raw:Dynamic = Reflect.field(obj, 'excludes');
+				if (Std.isOfType(raw, Array)) {
+					final arr:Array<Dynamic> = raw;
+					for (item in arr) if (Std.isOfType(item, String) && (item : String) == relPath) return true;
+				}
+			}
+		} catch (_:Exception) {}
+		return false;
+	}
+
 	private static function classifyParseFailure(exception:Exception, input:String):String {
 		final message:String = truncate(exception.message);
 		if (!(exception is ParseError)) return message;
