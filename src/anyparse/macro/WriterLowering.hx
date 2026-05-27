@@ -1051,7 +1051,13 @@ class WriterLowering {
 				// HxVarDecl's first field is a meta Star). Symbol leads
 				// stay tight as before — the open delim glues to whatever
 				// follows.
-				final leadEmit:String = leadIsWord ? leadText + ' ' : leadText;
+				// Writer Slice 4: opt-in `@:fmt(spaceAfterLead)` on a
+				// symbol-lead enum ctor adds a trailing space — used by
+				// `HxAnonField.ExtendsField` (`@:lead('>')`) to emit
+				// `> Foo` matching haxe-formatter's structure-extension
+				// convention (`typedef Bar = { > Foo, ... }`).
+				final spaceAfterLead:Bool = branch.fmtHasFlag('spaceAfterLead');
+				final leadEmit:String = (leadIsWord || spaceAfterLead) ? leadText + ' ' : leadText;
 				parts.push(macro _dt($v{leadEmit}));
 			}
 			parts.push(bodyExpr);

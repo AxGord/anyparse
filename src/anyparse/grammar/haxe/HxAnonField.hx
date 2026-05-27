@@ -99,7 +99,7 @@ package anyparse.grammar.haxe;
 @:peg
 enum HxAnonField {
 	@:lead('?') Optional(field:HxAnonFieldBody);
-	@:lead('>') ExtendsField(type:HxTypeRef);
+	@:lead('>') @:fmt(spaceAfterLead) ExtendsField(type:HxTypeRef);
 	@:kw('var') @:trailOpt(';') VarField(body:HxAnonVarBody);
 	@:kw('final') @:trailOpt(';') FinalField(body:HxAnonVarBody);
 	@:kw('function') FnField(decl:HxFnDecl);
