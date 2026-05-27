@@ -27,10 +27,11 @@ package anyparse.grammar.haxe;
  * `Both` matches haxe-formatter's
  * `whitespace.functionTypeHaxe4Policy: @:default(Around)` — emits
  * `(args) -> ret`. Setting the runtime policy to `None` produces the
- * tight `(args)->ret` shape. The old (curried) form `Int->Bool` keeps
- * its own `@:fmt(tight)` on `HxType.Arrow` and is unaffected by this
- * knob, mirroring haxe-formatter's separate
- * `functionTypeHaxe3Policy: @:default(None)` default.
+ * tight `(args)->ret` shape. The old (curried) form `Int->Bool` runs
+ * through the sibling `@:fmt(functionTypeHaxe3)` on `HxType.Arrow`
+ * gated by `opt.functionTypeHaxe3` (haxe-formatter's
+ * `functionTypeHaxe3Policy: @:default(None)`), so the two arrow shapes
+ * are independently configurable.
  *
  * Structurally identical to `HxThinParenLambda` (the expression-form
  * `(params) -> body` arrow lambda) — same `(`-`,`-`)` Star pattern over

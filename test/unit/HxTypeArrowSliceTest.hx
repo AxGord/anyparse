@@ -162,8 +162,10 @@ class HxTypeArrowSliceTest extends HxTestHelpers {
 	}
 
 	public function testRoundTripTight():Void {
-		// Default `@:fmt(tight)` — writer emits `Int->Void` without surrounding
-		// spaces, matching haxe-formatter's old-form arrow output.
+		// Default `@:fmt(functionTypeHaxe3)` + `opt.functionTypeHaxe3 = None`
+		// — writer emits `Int->Void` without surrounding spaces, matching
+		// haxe-formatter's old-form arrow output. Writer Slice 6 added the
+		// runtime knob; `None` reproduces the pre-slice `@:fmt(tight)` shape.
 		roundTrip('class Foo { var f:Void->Void; }', 'simple-arrow');
 		roundTrip('class Foo { var f:Int->String->Void; }', 'right-assoc-arrow');
 		roundTrip('class Foo { var f:Array<Int>->Void; }', 'arrow-with-type-param-left');

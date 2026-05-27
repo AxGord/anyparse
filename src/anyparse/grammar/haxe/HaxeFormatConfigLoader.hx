@@ -304,8 +304,9 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   `HxArrowFnType.ret`'s `@:lead('->')`). Default `Around` (= `Both`)
  *   emits `(Int) -> Bool`; `"none"` emits the tight `(Int)->Bool`. The
  *   sibling `functionTypeHaxe3Policy` (old-form curried `Int->Bool`)
- *   maps to `@:fmt(tight)` on `HxType.Arrow` and is fixed at parse
- *   time — no JSON key is exposed.
+ *   routes to `opt.functionTypeHaxe3` via the same enum / same
+ *   collapse — default `None` emits the tight `Int->Bool`, `"around"`
+ *   flips to spaced `Int -> Bool`. Wired in Writer Slice 6.
  * - `whitespace.arrowFunctionsPolicy` (ω-arrow-fn-expr): same enum
  *   / same collapse, routed to `opt.arrowFunctions` (the `->`
  *   separator inside a parenthesised arrow lambda expression,
@@ -613,6 +614,7 @@ final class HaxeFormatConfigLoader {
 			indentComplexValueExpressions: base.indentComplexValueExpressions,
 			indentVarTypeHintAnon: base.indentVarTypeHintAnon,
 			functionTypeHaxe4: base.functionTypeHaxe4,
+			functionTypeHaxe3: base.functionTypeHaxe3,
 			arrowFunctions: base.arrowFunctions,
 			afterPackage: base.afterPackage,
 			beforePackage: base.beforePackage,
@@ -1152,6 +1154,8 @@ final class HaxeFormatConfigLoader {
 			opt.typeParamDefaultEquals = whitespaceToRuntime(section.binopPolicy);
 		if (section.functionTypeHaxe4Policy != null)
 			opt.functionTypeHaxe4 = whitespaceToRuntime(section.functionTypeHaxe4Policy);
+		if (section.functionTypeHaxe3Policy != null)
+			opt.functionTypeHaxe3 = whitespaceToRuntime(section.functionTypeHaxe3Policy);
 		if (section.arrowFunctionsPolicy != null)
 			opt.arrowFunctions = whitespaceToRuntime(section.arrowFunctionsPolicy);
 		if (section.ifPolicy != null)

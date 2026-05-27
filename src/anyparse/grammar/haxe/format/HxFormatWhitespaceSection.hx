@@ -4,10 +4,10 @@ package anyparse.grammar.haxe.format;
  * `whitespace` section of a haxe-formatter `hxformat.json` config.
  *
  * Only keys whose runtime knob already exists on `HxModuleWriteOptions`
- * are modelled here. Missing keys (`functionTypeHaxe3Policy`,
- * `catchPolicy`, `ternaryPolicy`, …) are silently dropped by the
- * ByName struct parser's `UnknownPolicy.Skip` — they land with the
- * slice that introduces the matching writer knob.
+ * are modelled here. Missing keys (`catchPolicy`, `ternaryPolicy`, …)
+ * are silently dropped by the ByName struct parser's
+ * `UnknownPolicy.Skip` — they land with the slice that introduces the
+ * matching writer knob.
  *
  * Added in slice ψ₇ (feeds `opt.objectFieldColon`).
  *
@@ -61,8 +61,9 @@ package anyparse.grammar.haxe.format;
  *    ret`'s `@:lead('->')`). `Around` (default) emits
  *    `(Int) -> Bool`; `None` keeps the tight `(Int)->Bool` form. The
  *    sibling `functionTypeHaxe3Policy` (old-form curried `Int->Bool`)
- *    has its own `@:fmt(tight)` on `HxType.Arrow` and stays tight by
- *    construction — no JSON-side knob needed.
+ *    feeds `opt.functionTypeHaxe3` via the same enum / same collapse —
+ *    default `None` emits the tight `Int->Bool`, `"around"` flips to
+ *    spaced `Int -> Bool`. Wired in Writer Slice 6.
  *
  * Extended in slice ω-arrow-fn-expr:
  *  - `arrowFunctionsPolicy` feeds `opt.arrowFunctions` (the `->`
@@ -141,6 +142,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var binopPolicy:HxFormatWhitespacePolicy;
 
 	@:optional var functionTypeHaxe4Policy:HxFormatWhitespacePolicy;
+
+	@:optional var functionTypeHaxe3Policy:HxFormatWhitespacePolicy;
 
 	@:optional var arrowFunctionsPolicy:HxFormatWhitespacePolicy;
 

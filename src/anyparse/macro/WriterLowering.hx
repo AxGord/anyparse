@@ -568,7 +568,14 @@ class WriterLowering {
 			// idiomatic shape — the policy is grammar-level (per-operator),
 			// not format-level, because tightness is a property of the
 			// specific operator literal, not the language as a whole.
-			final isTight:Bool = branch.fmtHasFlag('tight');
+			// ω-arrow-fn-type-haxe3: a per-ctor whitespace-policy flag
+			// (e.g. `@:fmt(functionTypeHaxe3)` on `HxType.Arrow`) puts the
+			// op literal under a runtime switch on `opt.<flag>` so the
+			// spacing follows the user's `hxformat.json` config. Default
+			// `WhitespacePolicy.None` preserves the historic tight shape
+			// without `@:fmt(tight)` needed in tandem.
+			final infixPolicyFlag:Null<String> = firstFmtFlag(branch, ['functionTypeHaxe3']);
+			final isTight:Bool = branch.fmtHasFlag('tight') || infixPolicyFlag != null;
 			// Assignment-class operators (prec=0: `=`, `+=`, `<<=`, `??=`, …)
 			// keep flat emission. The break point for a long assignment lives
 			// inside its RHS chain (which has its own Group), not at the `=`
@@ -600,12 +607,15 @@ class WriterLowering {
 				// trailing-space-before-newline. Flat emission is unchanged
 				// — the next Text from `$rightCall` flushes the OptSpace.
 				// Tight ops keep the original single-Text shape (no spaces).
+				final opEmitExpr:Expr = infixPolicyFlag != null
+					? whitespacePolicyInfix(opText, infixPolicyFlag)
+					: macro _dt($v{opWithSpaces});
 				final innerExpr:Expr = isAssign && !isTight
 					? macro _dc([
 						$leftCall, _dt(' '), _dt($v{opText}), _dop(' '), $rightCall,
 					])
 					: macro _dc([
-						$leftCall, _dt($v{opWithSpaces}), $rightCall,
+						$leftCall, $opEmitExpr, $rightCall,
 					]);
 				return macro {
 					final _inner:anyparse.core.Doc = $innerExpr;
@@ -5665,6 +5675,32 @@ class WriterLowering {
 		];
 		final optAccess:Expr = optFieldAccess(flagName);
 		return {expr: ESwitch(optAccess, cases, macro _dt($v{leadText})), pos: Context.currentPos()};
+	}
+
+	/**
+	 * Infix-op sister of `whitespacePolicyLead`: emit the operator literal
+	 * (e.g. `->` on `HxType.Arrow`) under a runtime switch on
+	 * `opt.<flagName>:WhitespacePolicy`. Default `None` falls through to
+	 * the tight `_dt(opText)`, preserving the pre-flag layout for the
+	 * historic `@:fmt(tight)` shape; `Around` / `Before` / `After` add
+	 * the matching adjacent spaces. Both adjacent spaces emit as plain
+	 * `_dt` (not `_dop`) — an infix op sits between two value Docs that
+	 * never emit leading or trailing hardlines on their own at the op
+	 * boundary, so OptSpace would not pay off the way it does on a
+	 * `@:lead` site whose value may break.
+	 */
+	private static function whitespacePolicyInfix(opText:String, flagName:String):Expr {
+		final wpPath:Array<String> = ['anyparse', 'format', 'WhitespacePolicy'];
+		final beforePat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Before']));
+		final afterPat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['After']));
+		final bothPat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
+		final cases:Array<Case> = [
+			{values: [beforePat], expr: macro _dt($v{' ' + opText}), guard: null},
+			{values: [afterPat], expr: macro _dt($v{opText + ' '}), guard: null},
+			{values: [bothPat], expr: macro _dt($v{' ' + opText + ' '}), guard: null},
+		];
+		final optAccess:Expr = optFieldAccess(flagName);
+		return {expr: ESwitch(optAccess, cases, macro _dt($v{opText})), pos: Context.currentPos()};
 	}
 
 	/**

@@ -1221,8 +1221,22 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    are exposed for parity with the policy shape. The knob only
  *    applies at sites tagged with `@:fmt(functionTypeHaxe4)` in the
  *    grammar — `HxArrowFnType.ret` is the only consumer; the old-form
- *    curried arrow `Int->Bool` keeps its own `@:fmt(tight)` on
- *    `HxType.Arrow` and is unaffected.
+ *    curried arrow `Int->Bool` rides the sibling
+ *    `@:fmt(functionTypeHaxe3)` on `HxType.Arrow` (see below).
+ *
+ * Field added in Writer Slice 6 (old-form curried arrow `->` spacing):
+ *  - `functionTypeHaxe3` — whitespace around the `->` separator in an
+ *    old-form (Haxe 3) curried function type `Int->Bool`,
+ *    `Array<SymbolInformation>->Void`, … (`HxType.Arrow`'s `@:infix
+ *    ('->')`). `None` (default) emits `Int->Bool` without surrounding
+ *    spaces, matching haxe-formatter's
+ *    `whitespace.functionTypeHaxe3Policy: @:default(None)`. `Both`
+ *    flips to spaced `Int -> Bool`; `Before` / `After` are exposed for
+ *    parity with the policy shape. The knob only applies at sites
+ *    tagged with `@:fmt(functionTypeHaxe3)` — `HxType.Arrow` is the
+ *    sole consumer. Independent of `functionTypeHaxe4` (the new-form
+ *    sibling) so a config can space one arrow form while keeping the
+ *    other tight (matches haxe-formatter's separate policies).
  *
  * Field added in slice ω-arrow-fn-expr (parenthesised arrow lambda
  * expression `->` spacing):
@@ -1714,6 +1728,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	indentComplexValueExpressions:Bool,
 	indentVarTypeHintAnon:Bool,
 	functionTypeHaxe4:WhitespacePolicy,
+	functionTypeHaxe3:WhitespacePolicy,
 	arrowFunctions:WhitespacePolicy,
 	afterPackage:Int,
 	beforePackage:Int,

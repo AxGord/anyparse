@@ -39,10 +39,14 @@ package anyparse.grammar.haxe;
  *    branch with `Right` associativity at precedence `0` — same Pratt
  *    pattern that powers `HxExpr`. The macro auto-detects the Pratt
  *    branch in `Lowering` and emits a precedence-climbing loop wrapping
- *    the atom dispatcher. Carries `@:fmt(tight)` so the writer emits
- *    `Int->Void` without surrounding spaces, matching haxe-formatter's
- *    output for the old-form arrow. The new (parenthesised) form
- *    `(args) -> ret` lives on the separate `ArrowFn` variant below.
+ *    the atom dispatcher. Carries `@:fmt(functionTypeHaxe3)` so the
+ *    writer gates the `->` spacing on `opt.functionTypeHaxe3:
+ *    WhitespacePolicy` (haxe-formatter's `whitespace.
+ *    functionTypeHaxe3Policy: @:default(None)`); default `None` emits
+ *    `Int->Void` without surrounding spaces, `"around"` flips to
+ *    spaced `Int -> Void`. The new (parenthesised) form `(args) -> ret`
+ *    lives on the separate `ArrowFn` variant below and is gated by the
+ *    sibling `functionTypeHaxe4Policy` knob.
  *
  *  - `Anon(fields:Array<HxAnonMember>)` — anonymous structure type
  *    `{x:Int, y:String}` or `{ var x:Int; var y:String; }`. Bracketed
@@ -183,7 +187,7 @@ enum HxType {
 	@:kw('#if') @:trail('#end')
 	ConditionalType(c:HxConditionalType);
 
-	@:infix('->', 0, 'Right') @:fmt(tight)
+	@:infix('->', 0, 'Right') @:fmt(functionTypeHaxe3)
 	Arrow(left:HxType, right:HxType);
 
 	@:trivia @:lead('{') @:trail('}') @:sep(',') @:sepAlt(';') @:fmt(anonTypeBracesOpen, anonTypeBracesClose, wrapRules('anonTypeWrap'), leftCurly('anonTypeLeftCurly'), rightCurly('anonTypeRightCurly'), beforeDocCommentEmptyLines, forceMultiInTypedef, keepCurlyBlanks)

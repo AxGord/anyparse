@@ -475,8 +475,17 @@ final class HaxeFormat implements TextFormat {
 	 * to `None` produces the tight `(args)->ret` form and requires
 	 * `"whitespace": { "functionTypeHaxe4Policy": "none" }` in
 	 * `hxformat.json`. The old-form curried arrow `Int->Bool` is on a
-	 * separate axis (`@:fmt(tight)` on `HxType.Arrow`, mirroring upstream's
-	 * `functionTypeHaxe3Policy: @:default(None)`) and is unaffected.
+	 * separate axis (`@:fmt(functionTypeHaxe3)` on `HxType.Arrow` →
+	 * `opt.functionTypeHaxe3`, default `None` — see field doc below).
+	 *
+	 * `functionTypeHaxe3` default (Writer Slice 6) is `None` — the `->`
+	 * separator inside an old-form curried arrow type (`HxType.Arrow`)
+	 * emits `Int->Bool` tight, matching haxe-formatter's
+	 * `whitespace.functionTypeHaxe3Policy: @:default(None)`. Setting to
+	 * `Both` (via `"whitespace": { "functionTypeHaxe3Policy": "around" }`)
+	 * flips to spaced `Int -> Bool`. Independent of `functionTypeHaxe4`,
+	 * so a config can space one arrow form while keeping the other
+	 * tight.
 	 *
 	 * `arrowFunctions` default (ω-arrow-fn-expr) is `Both` — the `->`
 	 * separator inside a parenthesised arrow lambda expression
@@ -728,6 +737,7 @@ final class HaxeFormat implements TextFormat {
 		indentComplexValueExpressions: false,
 		indentVarTypeHintAnon: true,
 		functionTypeHaxe4: WhitespacePolicy.Both,
+		functionTypeHaxe3: WhitespacePolicy.None,
 		arrowFunctions: WhitespacePolicy.Both,
 		afterPackage: 1,
 		beforePackage: 0,
