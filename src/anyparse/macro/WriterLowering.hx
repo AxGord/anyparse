@@ -8984,7 +8984,19 @@ class WriterLowering {
 					$cascadeCurrCompute;
 					$tryparseBlockEndedSepEmit;
 					if (_t.leadingComments.length > 0) {
-						_docs.push(_dhl());
+						// ω-D16-padleading-first-comment-no-dup: padLeading
+						// already emitted `_dhl()` for the first element when
+						// `_padHardline` is true (driven by `_arr[0].newlineBefore`).
+						// Both reflect the SAME source newline between the
+						// prior token and the stmt's trivia — a second `_dhl()`
+						// here produces a spurious blank line (visible as
+						// `#if sys\n\n\t\t// comment` for HxConditionalStmt.body
+						// with `@:fmt(padLeading)` and a leading line comment
+						// on the first body stmt). Skip the dup only on the
+						// first iteration when padLeading fired as a hardline;
+						// inter-stmt path (`_si > 0`) and non-padLeading
+						// consumers stay byte-identical.
+						if (!(_si == 0 && _padLeading && _padHardline)) _docs.push(_dhl());
 						if (_t.blankBefore && _si > 0) _docs.push(_dhl());
 						var _ci:Int = 0;
 						while (_ci < _t.leadingComments.length) {
