@@ -393,7 +393,7 @@ enum HxExpr {
 	@:kw('untyped')
 	UntypedAtom;
 
-	@:kw('macro') @:lead(':')
+	@:kw('macro') @:lead(':') @:fmt(spaceBeforeLead)
 	MacroTypeExpr(t:HxType);
 
 	@:kw('macro')

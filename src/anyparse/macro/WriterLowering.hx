@@ -994,7 +994,12 @@ class WriterLowering {
 				// Strip the kw's trailing space so the lead literal abuts
 				// the kw. Symmetric with the parser-side composition in
 				// Lowering Case 3. Word-lead branches (above) bypass.
-				|| (leadText != null && !leadIsWord);
+				// Writer Slice 5: opt-in `@:fmt(spaceBeforeLead)` keeps
+				// the kw's trailing space so `kw symLead` emits with a
+				// separating space — used by `HxExpr.MacroTypeExpr`
+				// (`@:kw('macro') @:lead(':')`) to emit `macro :Type`
+				// matching haxe-formatter's type-reification convention.
+				|| (leadText != null && !leadIsWord && !branch.fmtHasFlag('spaceBeforeLead'));
 			// ω-if-policy / ω-control-flow-policies / ω-try-policy /
 			// ω-anon-fn-paren-policy: an enum branch with `@:fmt(<flag>)`
 			// whose runtime value is `WhitespacePolicy` opts into a
