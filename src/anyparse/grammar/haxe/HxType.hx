@@ -184,7 +184,7 @@ enum HxType {
 	@:trivia @:lead('[') @:trail(']') @:sep(',')
 	BracketExprListType(elems:Array<HxExpr>);
 
-	@:kw('#if') @:trail('#end')
+	@:kw('#if') @:trail('#end') @:fmt(spaceBeforeTrail)
 	ConditionalType(c:HxConditionalType);
 
 	@:infix('->', 0, 'Right') @:fmt(functionTypeHaxe3)

@@ -1087,12 +1087,23 @@ class WriterLowering {
 				// mode preserves authored source verbatim.
 				final isTriviaTrailOpt:Bool = ctx.trivia
 					&& TriviaTypeSynth.isAltTrailOptBranch(branch);
+				// Writer Slice 9: opt-in `@:fmt(spaceBeforeTrail)` on the
+				// enum ctor inserts a leading space into the trail literal
+				// so a word-start trail (e.g. `#end`) does not fuse with
+				// the body's last word character. Mirror of Slice 4's
+				// `spaceAfterLead` for the trail emit. Used by
+				// `HxType.ConditionalType` (`@:kw('#if') @:trail('#end')`)
+				// so `#if cond WebGLContext #end` re-emits the leading
+				// space rather than `WebGLContext#end`.
+				final trailEmit:String = branch.fmtHasFlag('spaceBeforeTrail')
+					? ' ' + trailText
+					: trailText;
 				final trailExpr:Expr = if (isTriviaTrailOpt) {
 					final flagAccess:Expr = macro $i{argNames[1]};
-					macro $flagAccess ? _dt($v{trailText}) : _de();
+					macro $flagAccess ? _dt($v{trailEmit}) : _de();
 				} else {
-					trailOptShapeGateWrap(branch, trailText, argNames[0])
-						?? macro _dt($v{trailText});
+					trailOptShapeGateWrap(branch, trailEmit, argNames[0])
+						?? macro _dt($v{trailEmit});
 				};
 				parts.push(trailExpr);
 			}
