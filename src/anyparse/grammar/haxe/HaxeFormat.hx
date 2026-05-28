@@ -886,6 +886,13 @@ final class HaxeFormat implements TextFormat {
 					conditions: [{cond: WrapConditionType.AnyItemLengthLargerThan, value: 30}],
 				},
 				{
+					mode: WrapMode.FillLineWithLeadingBreak,
+					conditions: [
+						{cond: WrapConditionType.AllItemLengthsLessThan, value: 10},
+						{cond: WrapConditionType.ItemCountLargerThan, value: 10},
+					],
+				},
+				{
 					mode: WrapMode.OnePerLine,
 					conditions: [{cond: WrapConditionType.ItemCountLargerThan, value: 4}],
 				},

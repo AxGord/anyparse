@@ -1566,10 +1566,16 @@ class WriterLowering {
 				// (line ~1542); enables `HxType.Anon` to honour
 				// `opt.afterLeftCurly` / `opt.beforeRightCurly` Keep.
 				final keepCurlyBlanksAlt:Bool = branch.fmtHasFlag('keepCurlyBlanks');
+					// ω-array-reflow: enum-Alt branch reader for
+					// `@:fmt(reflowSourceMultiline)` — opt-in for source-
+					// multiline lists (currently `HxExpr.ArrayExpr`) re-flowed
+					// by the wrap cascade instead of forced one-per-line.
+					// Threads into `triviaSepStarExpr`'s `_smlKeep` gate.
+					final reflowSourceMultilineAlt:Bool = branch.fmtHasFlag('reflowSourceMultiline');
 				parts.push(triviaSepStarExpr(
 					argsAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, leadText, trailText, sepText,
 					wrapRulesField, knobLeftCurly, knobRightCurly, sepTrailPresentAccess, trailingCommaField, openInsideExpr, closeInsideExpr, beforeDocComments,
-					forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines, keepCurlyBlanksAlt
+					forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines, keepCurlyBlanksAlt, reflowSourceMultilineAlt
 				));
 			} else {
 				// ω-bropen-keep: forward `@:fmt(keepCurlyBlanks)` from the
@@ -3871,6 +3877,13 @@ class WriterLowering {
 					// ω-bropen-keep-sep: read `@:fmt(keepCurlyBlanks)` on the
 					// struct-Star path. Sister to the enum-Alt path's read.
 					final keepCurlyBlanksStar:Bool = starNode.fmtHasFlag('keepCurlyBlanks');
+						// ω-array-reflow: struct-Star path reader for
+						// `@:fmt(reflowSourceMultiline)`. Sister to the enum-Alt
+						// read; threads into `triviaSepStarExpr`'s `_smlKeep`
+						// gate. No struct-Star consumer opts in yet (first
+						// consumer `HxExpr.ArrayExpr` is enum-Alt) — present for
+						// dual-dispatch symmetry.
+						final reflowSourceMultilineStar:Bool = starNode.fmtHasFlag('reflowSourceMultiline');
 					parts.push(triviaSepStarExpr(
 						fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn,
 						openText ?? '', closeText, sepText, wrapRulesField,
@@ -3878,7 +3891,7 @@ class WriterLowering {
 						knobRightCurly,
 						trailPresentAccess, trailingCommaField,
 						null, null, false, forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines,
-						keepCurlyBlanksStar
+						keepCurlyBlanksStar, reflowSourceMultilineStar
 					));
 					return;
 				}
@@ -7475,7 +7488,8 @@ class WriterLowering {
 		bodyAwareCompactIndent:Bool = false,
 		groupRestProbe:Bool = false,
 		ignoreSourceNewlinesForWrap:Bool = false,
-		keepCurlyBlanks:Bool = false
+		keepCurlyBlanks:Bool = false,
+		reflowSourceMultiline:Bool = false
 	):Expr {
 		// ω-trivia-sep-anontype-braces (Phase B1): when the call site
 		// reads `@:fmt(anonTypeBracesOpen)` / `objectLiteralBracesOpen`
@@ -7799,11 +7813,26 @@ class WriterLowering {
 					_docs.push(_parts.length == 1 ? _parts[0] : _dc(_parts));
 					_si2++;
 				}
-				anyparse.format.wrap.WrapList.emit(
+				final _wlResult:anyparse.core.Doc = anyparse.format.wrap.WrapList.emit(
 					$v{openText}, $v{closeText}, $v{sepText},
 					_docs, opt, $openInsideDoc, $closeInsideDoc, false, $rulesExpr, $appendTrailingCommaExpr,
-					$wrapLeadFlatDoc, $wrapLeadBreakDoc, $forceExceedsExpr, $wrapTrailBreakDoc, $forceModeExpr, $compactContExpr, $v{groupRestProbe}, _sepBeforeFlags
+					$wrapLeadFlatDoc, $wrapLeadBreakDoc, $forceExceedsExpr, $wrapTrailBreakDoc, $forceModeExpr, $compactContExpr, $v{groupRestProbe}, _sepBeforeFlags, _smlKeep
 				);
+				// ω-array-reflow: a source-multiline list re-flowed through the
+				// cascade carries internal hardlines but lacks the BodyGroup
+				// wrapper the force-multi path (`_dwb(_dbg(...))`) applies.
+				// Without BodyGroup, an enclosing call-arg `Group.fitsFlat`
+				// SEES the list's hardline (BodyGroup is deferred from fitsFlat,
+				// a bare Concat/Nest is not) and commits the call to MBreak —
+				// stacking the call's continuation `Nest` on top of the list's
+				// own `Nest` (+1 indent) and, for a trailing-arg list, breaking
+				// the arg onto its own line. Wrapping the re-flowed list in
+				// BodyGroup defers its hardline exactly like force-multi: the
+				// call stays MFlat (no continuation-Nest bump) and the list's
+				// internal break decides independently at the call's flat
+				// indent. Only fires under `_smlKeep`; every other consumer
+				// keeps the bare cascade Doc.
+				_smlKeep ? _dbg(_wlResult) : _wlResult;
 			};
 		} else {
 			macro {
@@ -7916,7 +7945,22 @@ class WriterLowering {
 				// The cascade-emits-comments path remains reserved for
 				// Ignore mode (`_hasInlineableTrivia` bucket).
 				final _keepEmit:Bool = $keepCheckExpr;
-				if (_hasTrivia) {
+				// ω-array-reflow: when the Star opted into
+				// `@:fmt(reflowSourceMultiline)` AND its only "multi-line"
+				// signal is bare source newlines (no hardline-requiring
+				// trivia, no Keep / Ignore policy), divert away from the
+				// force-multi (one-`_dhl()`-per-element) path and let the
+				// wrap cascade re-flow the list. `_smlKeep` gates that
+				// diversion; `WrapList.emit`'s `sourceMultilineKeep` floor
+				// then guarantees the cascade never collapses such a list
+				// fully flat (NoWrap → OnePerLine), so the source's
+				// "stay multi-line" intent is honoured while width-driven
+				// packing (FillLine / FillLineWithLeadingBreak) applies.
+				final _smlKeep:Bool = $v{reflowSourceMultiline}
+					&& _hasSourceNewlines && !_requiresHardline
+					&& !_keepEmit && !_ignoreEmit;
+				final _forceMulti:Bool = _hasTrivia && !_smlKeep;
+				if (_forceMulti) {
 					final _inner:Array<anyparse.core.Doc> = [];
 					$initCurrDocCommentExpr;
 					$keepCurlyBeginExpr;

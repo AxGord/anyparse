@@ -113,7 +113,8 @@ class WrapList {
 		?forceMode:Null<WrapMode>,
 		compactContinuation:Bool = false,
 		groupRestProbe:Bool = false,
-		?sepBeforeFlags:Array<Bool>
+		?sepBeforeFlags:Array<Bool>,
+		sourceMultilineKeep:Bool = false
 	):Doc {
 		// `Line('\n')` is not a Haxe-constant default — unwrap a null
 		// sentinel into the legacy hardcoded hardline here.
@@ -183,7 +184,7 @@ class WrapList {
 		// runtime aren't covered, but no current consumer combines
 		// `defaultAdditionalIndent > 0` with such thresholds.
 		final additional:Int = rules.defaultAdditionalIndent ?? 0;
-		final probeMode:WrapMode = decideWithLineLengthState(rules, items.length, maxLen, total, true, anyHardline, _ -> false);
+		final probeMode:WrapMode = floorSourceMultiline(decideWithLineLengthState(rules, items.length, maxLen, total, true, anyHardline, _ -> false), sourceMultilineKeep);
 		final cascadeForcesBreak:Bool = probeMode == OnePerLine || probeMode == OnePerLineAfterFirst || probeMode == FillLineWithLeadingBreak;
 		// ω-functionsignature-body-aware-indent: fork drops the paren-bump
 		// `+1` from FillLine / NoWrap continuation when the wrapped signature
@@ -230,9 +231,9 @@ class WrapList {
 		// `opt._inTypedefBody ? WrapMode.OnePerLine : null`.
 		function evalAt(exceeds:Bool, firing:Array<Int>):WrapMode {
 			if (forceMode != null) return forceMode;
-			return decideWithLineLengthState(rules, items.length, maxLen, total,
+			return floorSourceMultiline(decideWithLineLengthState(rules, items.length, maxLen, total,
 				exceeds, anyHardline,
-				t -> t == opt.lineWidth ? exceeds : firing.contains(t));
+				t -> t == opt.lineWidth ? exceeds : firing.contains(t)), sourceMultilineKeep);
 		}
 
 		// Per-state shape builder: picks the right lead based on the
@@ -736,6 +737,20 @@ class WrapList {
 			case NoWrap: true;
 			case _: false;
 		};
+	}
+
+	/**
+	 * ω-array-reflow: when `on` is set (the caller threaded
+	 * `@:fmt(reflowSourceMultiline)`'s runtime `_smlKeep` gate), a cascade
+	 * resolution of `NoWrap` is floored to `OnePerLine`. The source list
+	 * already spans multiple lines, so collapsing it fully flat would
+	 * discard the author's "stay multi-line" intent; flooring keeps the
+	 * list broken while still letting width-driven modes (`FillLine`,
+	 * `FillLineWithLeadingBreak`) reflow it. No-op when `on` is false —
+	 * every pre-slice consumer stays byte-identical.
+	 */
+	private static inline function floorSourceMultiline(mode:WrapMode, on:Bool):WrapMode {
+		return on && mode == NoWrap ? OnePerLine : mode;
 	}
 
 	private static function shape(

@@ -347,7 +347,7 @@ enum HxExpr {
 	@:lead("$")
 	DollarIdentExpr(name:HxIdentLit);
 
-	@:trivia @:lead('[') @:trail(']') @:sep(',') @:fmt(trailingComma('trailingCommaArrays'), wrapRules('arrayLiteralWrap'))
+	@:trivia @:lead('[') @:trail(']') @:sep(',') @:fmt(trailingComma('trailingCommaArrays'), wrapRules('arrayLiteralWrap'), reflowSourceMultiline)
 	ArrayExpr(elems:Array<HxExpr>);
 
 	ObjectLit(lit:HxObjectLit);
