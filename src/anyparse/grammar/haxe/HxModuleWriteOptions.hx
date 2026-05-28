@@ -1711,6 +1711,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	objectLiteralWrap:WrapRules,
 	callParameterWrap:WrapRules,
 	arrayLiteralWrap:WrapRules,
+	multiVarWrap:WrapRules,
 	anonTypeWrap:WrapRules,
 	methodChainWrap:WrapRules,
 	opBoolChainWrap:WrapRules,
@@ -1751,4 +1752,5 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	_fnSigBodyEmpty:Bool,
 	_chainModeOverride:Null<WrapMode>,
 	_callArgChainNest:Bool,
+	_suppressMore:Bool,
 };

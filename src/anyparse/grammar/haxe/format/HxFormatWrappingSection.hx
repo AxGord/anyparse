@@ -78,6 +78,18 @@ package anyparse.grammar.haxe.format;
  *    fork-mirror defaults: `{rules: [anyItemLength>=50 → FillLine,
  *    totalItemLength>=70 → FillLine], defaultMode: NoWrap}`. Short
  *    `<T>` / `<K, V>` lists stay flat; long lists pack Wadler-style.
+ *  - `multiVar`: `WrapRules` cascade → `multiVarWrap`. Drives break
+ *    shape for multi-variable declaration binding lists
+ *    (`var a = 1, b = 2, c = 3;` — `HxVarDecl.more`). Slice
+ *    ω-multivar-wrap-ingest landed the cascade with fork-mirror
+ *    defaults: `{rules: [allItemLengths < 15 → FillLine,
+ *    lineLength >= 80 → OnePerLineAfterFirst,
+ *    exceedsMaxLineLength → OnePerLineAfterFirst], defaultMode: NoWrap}`.
+ *    Short bindings pack inline; wide bindings break one-per-line with
+ *    the first binding kept inline with `var`. The fork's rule 1
+ *    `anyItemLength <= n` (MIN ≤ n) is mapped to `AllItemLengthsLessThan`
+ *    (MAX ≤ n) — anyparse has no min≤n condition; the two coincide on
+ *    every corpus target.
  *  - `expressionWrapping`: `WrapRules` cascade →
  *    `expressionWrappingWrap` (slice
  *    ω-expressionwrapping-cascade-ingest — foundational scaffold).
@@ -114,6 +126,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var maxLineLength:Int;
 
 	@:optional var arrayWrap:HxFormatWrapRules;
+
+	@:optional var multiVar:HxFormatWrapRules;
 
 	@:optional var anonType:HxFormatWrapRules;
 

@@ -107,6 +107,18 @@ class WriterCodegen {
 				fields.push(setCallArgChainNestField(optionsCT));
 				fields.push(clearCallArgChainNestField(optionsCT));
 			}
+			// ω-multivar-wrap: opt-fanout helper pair for the multi-var
+			// declaration head-only emit (`HxVarDecl.more` wrapping).
+			// `_setSuppressMore` flags a recursive `writeHxVarDeclT` self-call
+			// so it emits only the head binding (the `more` Star degrades to
+			// `_de()`); `_clearSuppressMore` resets the flag before the head's
+			// own nested-init writes so a var decl inside an initializer keeps
+			// its own `more`. Sister to `_setCallArgChainNest`/
+			// `_clearCallArgChainNest`. Gated on `_suppressMore:Bool`.
+			if (optionsHasField(optionsTypePath, '_suppressMore')) {
+				fields.push(setSuppressMoreField(optionsCT));
+				fields.push(clearSuppressMoreField(optionsCT));
+			}
 			// Layout helpers
 			fields.push(blockBodyField());
 			fields.push(sepListField());
@@ -695,6 +707,59 @@ class WriterCodegen {
 					if (!o._callArgChainNest) return o;
 					final _c:$optionsCT = _copyOpt(o);
 					_c._callArgChainNest = false;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * ω-multivar-wrap — opt-fanout shim for the multi-var head-only emit.
+	 * Idempotent sister to `_setCallArgChainNest`: returns `o` unchanged
+	 * when `_suppressMore` is already `true`; otherwise returns a
+	 * `_copyOpt(o)` with the flag flipped on. A recursive `writeHxVarDeclT`
+	 * self-call made with the flag set emits only the head binding — the
+	 * `more` Star field degrades to `_de()`. Emitted only when the opt
+	 * typedef declares `_suppressMore:Bool` (currently `HxModuleWriteOptions`).
+	 */
+	private static function setSuppressMoreField(optionsCT:ComplexType):Field {
+		return {
+			name: '_setSuppressMore',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{name: 'o', type: optionsCT}],
+				ret: optionsCT,
+				expr: macro {
+					if (o._suppressMore) return o;
+					final _c:$optionsCT = _copyOpt(o);
+					_c._suppressMore = true;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * ω-multivar-wrap — sister reset helper to `_setSuppressMore`. Returns
+	 * the input opt unchanged when `_suppressMore` is already `false` (no
+	 * allocation off the multi-var path); otherwise returns a `_copyOpt(o)`
+	 * with the flag cleared. Consumed before the head binding's own nested
+	 * writes so a var decl nested inside an initializer keeps its own
+	 * `more`. Paired with `_setSuppressMore` emission.
+	 */
+	private static function clearSuppressMoreField(optionsCT:ComplexType):Field {
+		return {
+			name: '_clearSuppressMore',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{name: 'o', type: optionsCT}],
+				ret: optionsCT,
+				expr: macro {
+					if (!o._suppressMore) return o;
+					final _c:$optionsCT = _copyOpt(o);
+					_c._suppressMore = false;
 					return _c;
 				},
 			}),

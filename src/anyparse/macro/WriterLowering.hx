@@ -2044,6 +2044,25 @@ class WriterLowering {
 		var fieldIdx:Int = -1;
 		var spanStartPartsIdx:Int = -1;
 
+		// ω-multivar-wrap: detect the struct-level
+		// `@:fmt(multiVarWrap('<knob>', '<moreField>'))` opt-in (sole
+		// consumer: `HxVarDecl`). When present, the named right-recursive
+		// list field is routed through the `<knob>` `WrapRules` cascade at
+		// the return-folding step below: the head binding plus each chain
+		// link become head-only item Docs and are spliced into one
+		// `WrapList.emit('', '', ',', …)`. The per-field emit of the
+		// `<moreField>` Star is gated on the runtime `_suppressMore` entry
+		// flag so a recursive head-only self-call drops it to `_de()`. Off
+		// every other struct (args == null) → byte-identical to pre-slice.
+		final multiVarArgs:Null<Array<String>> = node.fmtReadStringArgs('multiVarWrap');
+		final multiVarKnob:Null<String> = multiVarArgs != null ? multiVarArgs[0] : null;
+		final multiVarMoreField:Null<String> = multiVarArgs != null ? multiVarArgs[1] : null;
+		if (multiVarArgs != null && multiVarArgs.length != 2)
+			Context.fatalError(
+				'WriterLowering: @:fmt(multiVarWrap) expects 2 string args (knobFieldName, moreFieldName), got ${multiVarArgs.length}',
+				Context.currentPos()
+			);
+
 		for (child in node.children) {
 			fieldIdx++;
 			final fieldName:Null<String> = child.annotations.get('base.fieldName');
@@ -2277,7 +2296,21 @@ class WriterLowering {
 						: macro ($prev && $fieldAccess.length > 0) ? _dt(' ') : _de();
 					parts.push(withPadTrailingDrop(prevPadTrailing, baseExpr));
 				}
+				// ω-multivar-wrap: gate the `<moreField>` Star emit on the
+				// runtime `_suppressMore` entry flag. A recursive head-only
+				// self-call (`writeHxVarDeclT(value, _setSuppressMore(opt))`,
+				// emitted in the return-fold below) sets the flag so this
+				// field drops to `_de()`, yielding the head binding alone.
+				// `_suppressMoreEntry` is the entry-captured local declared by
+				// the return-fold wrapper; it is in scope because that wrapper
+				// brackets the entire emitted body.
+				final isMultiVarMoreField:Bool = multiVarMoreField != null && fieldName == multiVarMoreField;
+				final multiVarPartsStart:Int = parts.length;
 				emitWriterStarField(child, fieldAccess, parts, child == node.children[node.children.length - 1], typePath, isFirstField, isRaw, stalePrevBareRefBody, prevTrailFieldName);
+				if (isMultiVarMoreField) for (i in multiVarPartsStart...parts.length) {
+					final entry:Expr = parts[i];
+					parts[i] = macro _suppressMoreEntry ? _de() : $entry;
+				}
 				if (isBareTryparseStar(child)) {
 					final thisNonEmpty:Expr = macro $fieldAccess.length > 0;
 					prevAnyStarNonEmpty = prevAnyStarNonEmpty == null
@@ -3363,7 +3396,71 @@ class WriterLowering {
 			}
 		}
 
-		final dcExpr:Expr = dcCall(parts);
+		// ω-multivar-wrap: when the struct opted into
+		// `@:fmt(multiVarWrap('<knob>', '<moreField>'))`, bracket the whole
+		// emitted body so the `<moreField>` Star gate (`_suppressMoreEntry ?
+		// _de() : …`) and the head-only recursive self-calls resolve. The
+		// generated body:
+		//   final _suppressMoreEntry = opt._suppressMore;  // entry snapshot
+		//   final opt = _clearSuppressMore(opt);           // head fields never
+		//                                                  // see the flag, so a
+		//                                                  // var decl nested in
+		//                                                  // an initializer keeps
+		//                                                  // its own `more`
+		//   final _headPlusMore = _dc([parts]);            // head + (gated) more
+		//   if (!_suppressMoreEntry && value.<more>.length > 0) {
+		//     final _items = [ writeHxVarDeclT(value, _setSuppressMore(opt)) ];
+		//     var _ml = value.<more>;        // Array<Trivial<HxVarMoreT>>
+		//     while (_ml.length > 0) {
+		//       final _link = _ml[0].node;   // HxVarMoreT
+		//       _items.push(writeHxVarDeclT(_link.decl, _setSuppressMore(opt)));
+		//       _ml = _link.decl.<more>;     // walk the right-recursion
+		//     }
+		//     return WrapList.emit('', '', ',', _items, opt, Empty, Empty,
+		//       false, opt.<knob>);
+		//   }
+		//   return _headPlusMore;
+		// `WrapList.shapeOnePerLineAfterFirst('', '', ',', …)` byte-reproduces
+		// `head,\n\ttail,\n\ttail` (head inline, tail at +cols); the cascade's
+		// column-aware `LineLengthLargerThan(80)` fires on the wide ~108-col
+		// decl while `AllItemLengthsLessThan(15)` packs short lists FillLine.
+		// Each item is head-only, so the continuation Nest is single-level —
+		// the right-recursion never stacks Nests.
+		final dcExpr:Expr = if (multiVarKnob == null || multiVarMoreField == null) dcCall(parts);
+		else {
+			final knobName:String = multiVarKnob;
+			final moreFieldName:String = multiVarMoreField;
+			final headPlusMore:Expr = dcCall(parts);
+			final knobAccess:Expr = optFieldAccess(knobName);
+			final selfFn:String = writeFnFor(typePath);
+			final selfIdent:Expr = {expr: EConst(CIdent(selfFn)), pos: Context.currentPos()};
+			final moreAccess:Expr = {expr: EField(macro value, moreFieldName), pos: Context.currentPos()};
+			final linkMoreAccess:Expr = {expr: EField(macro _link.decl, moreFieldName), pos: Context.currentPos()};
+			// In trivia mode the Star collects `Trivial<HxVarMoreT>` so the
+			// element is reached via `.node`; in plain mode the Star holds the
+			// raw `HxVarMore` directly. Both yield a value whose `.decl` is the
+			// next `HxVarDecl(T)` link, so the rest of the walk is identical.
+			final linkBind:Expr = ctx.trivia ? (macro final _link = _ml[0].node) : (macro final _link = _ml[0]);
+			macro {
+				final _suppressMoreEntry:Bool = opt._suppressMore;
+				final opt = _clearSuppressMore(opt);
+				final _headPlusMore:anyparse.core.Doc = $headPlusMore;
+				if (!_suppressMoreEntry && $moreAccess.length > 0) {
+					final _items:Array<anyparse.core.Doc> = [$selfIdent(value, _setSuppressMore(opt))];
+					var _ml = $moreAccess;
+					while (_ml.length > 0) {
+						$linkBind;
+						_items.push($selfIdent(_link.decl, _setSuppressMore(opt)));
+						_ml = $linkMoreAccess;
+					}
+					anyparse.format.wrap.WrapList.emit(
+						'', '', ',', _items, opt,
+						anyparse.core.Doc.Empty, anyparse.core.Doc.Empty,
+						false, $knobAccess
+					);
+				} else _headPlusMore;
+			};
+		}
 
 		// ω-functionsignature-body-aware-indent: struct-level
 		// `@:fmt(propagateFnBodyEmpty('<bodyField>'))` flags `opt._fnSigBodyEmpty`

@@ -719,6 +719,7 @@ final class HaxeFormat implements TextFormat {
 		objectLiteralWrap: HaxeFormat.defaultObjectLiteralWrap(),
 		callParameterWrap: HaxeFormat.defaultCallParameterWrap(),
 		arrayLiteralWrap: HaxeFormat.defaultArrayLiteralWrap(),
+		multiVarWrap: HaxeFormat.defaultMultiVarWrap(),
 		anonTypeWrap: HaxeFormat.defaultAnonTypeWrap(),
 		methodChainWrap: HaxeFormat.defaultMethodChainWrap(),
 		opBoolChainWrap: HaxeFormat.defaultOpBoolChainWrap(),
@@ -760,6 +761,7 @@ final class HaxeFormat implements TextFormat {
 		_fnSigBodyEmpty: false,
 		_chainModeOverride: null,
 		_callArgChainNest: false,
+		_suppressMore: false,
 		blockCommentAdapter: anyparse.format.comment.BlockCommentNormalizer.processCapturedBlockComment,
 		lineCommentAdapter: anyparse.format.comment.LineCommentNormalizer.normalizeLineComment,
 		endsWithCloseBrace: HxExprUtil.endsWithCloseBrace,
@@ -899,6 +901,45 @@ final class HaxeFormat implements TextFormat {
 				},
 				{
 					mode: WrapMode.OnePerLine,
+					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
+				},
+			],
+			defaultMode: WrapMode.NoWrap,
+		};
+	}
+
+	/**
+	 * Default `WrapRules` cascade for `HxVarDecl.more` — the binding list
+	 * of a multi-variable declaration (`var a = 1, b = 2, c = 3;`).
+	 * Ported from haxe-formatter's `wrapping.multiVar` rule set in
+	 * `resources/default-hxformat.json` (AxGord fork): short items pack
+	 * via `FillLine`, wide bindings break one-per-line-after-first once
+	 * the column or the configured `maxLineLength` is exceeded.
+	 *
+	 * Divergence note: the fork's rule 1 condition is `anyItemLength <= n`
+	 * (MIN item length ≤ n — "at least one short binding"); anyparse has
+	 * no min≤n `WrapConditionType`, so `AllItemLengthsLessThan` (MAX ≤ n —
+	 * "every binding short") is used instead. The two coincide on every
+	 * corpus target (issue_355 bindings ~30 > 15 → both miss; issue_430
+	 * bindings ≤ 3 → both fire); they diverge only on mixed-width wide
+	 * decls, which fail regardless. Returned as a fresh struct on each
+	 * call so test code that mutates the
+	 * `defaultWriteOptions.multiVarWrap` substruct doesn't corrupt the
+	 * singleton.
+	 */
+	public static function defaultMultiVarWrap():WrapRules {
+		return {
+			rules: [
+				{
+					mode: WrapMode.FillLine,
+					conditions: [{cond: WrapConditionType.AllItemLengthsLessThan, value: 15}],
+				},
+				{
+					mode: WrapMode.OnePerLineAfterFirst,
+					conditions: [{cond: WrapConditionType.LineLengthLargerThan, value: 80}],
+				},
+				{
+					mode: WrapMode.OnePerLineAfterFirst,
 					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
 				},
 			],

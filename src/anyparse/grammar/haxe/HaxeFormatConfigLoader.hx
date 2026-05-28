@@ -596,6 +596,7 @@ final class HaxeFormatConfigLoader {
 			objectLiteralWrap: base.objectLiteralWrap,
 			callParameterWrap: base.callParameterWrap,
 			arrayLiteralWrap: base.arrayLiteralWrap,
+			multiVarWrap: base.multiVarWrap,
 			anonTypeWrap: base.anonTypeWrap,
 			methodChainWrap: base.methodChainWrap,
 			opBoolChainWrap: base.opBoolChainWrap,
@@ -637,6 +638,7 @@ final class HaxeFormatConfigLoader {
 			_fnSigBodyEmpty: base._fnSigBodyEmpty,
 			_chainModeOverride: base._chainModeOverride,
 			_callArgChainNest: base._callArgChainNest,
+			_suppressMore: base._suppressMore,
 			blockCommentAdapter: base.blockCommentAdapter,
 			lineCommentAdapter: base.lineCommentAdapter,
 			endsWithCloseBrace: base.endsWithCloseBrace,
@@ -720,6 +722,7 @@ final class HaxeFormatConfigLoader {
 	private static function applyWrapping(section:HxFormatWrappingSection, opt:HxModuleWriteOptions):Void {
 		if (section.maxLineLength != null) opt.lineWidth = section.maxLineLength;
 		if (section.arrayWrap != null) opt.arrayLiteralWrap = wrapRulesFromConfig(section.arrayWrap, opt.arrayLiteralWrap);
+		if (section.multiVar != null) opt.multiVarWrap = wrapRulesFromConfig(section.multiVar, opt.multiVarWrap);
 		if (section.anonType != null) opt.anonTypeWrap = wrapRulesFromConfig(section.anonType, opt.anonTypeWrap);
 		if (section.methodChain != null) opt.methodChainWrap = wrapRulesFromConfig(section.methodChain, opt.methodChainWrap);
 		if (section.opBoolChain != null) opt.opBoolChainWrap = wrapRulesFromConfig(section.opBoolChain, opt.opBoolChainWrap);

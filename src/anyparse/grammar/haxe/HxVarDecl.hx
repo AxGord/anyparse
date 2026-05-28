@@ -75,6 +75,17 @@ package anyparse.grammar.haxe;
  * after a single binding is not standard Haxe — accepted under the
  * permissive stance (valid single-binding code never places `,` there).
  *
+ * The struct-level `@:fmt(multiVarWrap('multiVarWrap', 'more'))` (slice
+ * ω-multivar-wrap) routes the binding list through the `multiVarWrap`
+ * `WrapRules` cascade when `more` is non-empty: the head binding plus
+ * each `more`-chain binding become head-only item Docs (via a
+ * consumed-once `opt._suppressMore` flag that degrades the `more` Star
+ * to nothing on the recursive head emit), spliced into one
+ * `WrapList.emit('', '', ',', …)`. Drives `var a = …,\n\tb = …,\n\tc = …`
+ * one-per-line-after-first / fill-line packing per the cascade. The
+ * first arg names the `WriteOptions` knob, the second names the
+ * right-recursive list field to walk.
+ *
  * A second `@:fmt(indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'))`
  * entry (slice ω-indent-complex-value-expr) stacks on the same field —
  * when the bound `HxExpr` ctor is `IfExpr` AND
@@ -120,6 +131,7 @@ package anyparse.grammar.haxe;
  * `@:meta var x;`.
  */
 @:peg
+@:fmt(multiVarWrap('multiVarWrap', 'more'))
 typedef HxVarDecl = {
 	@:trivia @:tryparse var meta:Array<HxMetadata>;
 	var name:HxVarNameLit;
