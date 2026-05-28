@@ -665,30 +665,35 @@ class WriterLowering {
 				return macro {
 					final _items:Array<anyparse.core.Doc> = [];
 					final _ops:Array<String> = [];
+					// ω-condwrap-call-arg-nest + ω-callarg-chain-nest: suppress
+					// the chain's OWN continuation `Nest(cols, …)` when an outer
+					// context already supplied the `+cols` indent — either a
+					// condWrap `FillLineWithLeadingBreak` brkShape
+					// (`_chainModeOverride`, set at the `@:fmt(condWrap)` site via
+					// `_setChainModeOverride`; only that mode expands
+					// `WrapList.emitCondition` to `Nest(cols, [Line('\n'),
+					// condDoc])`), or a leading-break call argument
+					// (`_callArgChainNest`, set at the call's per-arg writer call
+					// when `callParameterWrap.defaultMode == FLWLB`, whose
+					// `shapeFillLineWithLeadingBreak` Nests the arg at +cols).
+					// Read the flag from the inbound opt, then CLEAR
+					// `_callArgChainNest` so only the OUTERMOST chain consumes it
+					// — leaf operands / nested chains (written via `makeWriteCall`,
+					// which threads this same `opt`) keep their own Nest.
+					// `_chainModeOverride` is deliberately NOT cleared: condWrap
+					// collapses every chain in the condition. Safe to read both
+					// fields directly: only Haxe declares `||`/`&&`/`+`/`-` chain
+					// infix (HxModuleWriteOptions carries the fields).
+					final _chainNestSuppress:Bool =
+						opt._chainModeOverride == anyparse.format.wrap.WrapMode.FillLineWithLeadingBreak
+						|| opt._callArgChainNest;
+					final opt = _clearCallArgChainNest(opt);
 					function _gather(_e:$argTypeCT):Void $gatherSwitch;
 					_gather($i{argNames[0]});
 					_ops.push($v{opText});
 					_gather($i{argNames[1]});
-					// ω-condwrap-call-arg-nest: pair `_chainModeOverride`
-					// (set by the `@:fmt(condWrap)` site via
-					// `_setChainModeOverride`) with chain-Nest suppression
-					// — but only when the cond cascade picks
-					// `FillLineWithLeadingBreak`. Reason: only that mode
-					// expands `WrapList.emitCondition` to `brkShape`
-					// (`Nest(cols, [Line('\n'), condDoc])`) which gives the
-					// chain its `+cols` outer indent. Other override modes
-					// (`FillLine`, `OnePerLine`, `OnePerLineAfterFirst`)
-					// fall through to `flatShape` (`(condDoc)`) — no
-					// outer Nest, so the chain's OWN `Nest(cols, …)` is
-					// what supplies the continuation indent and must NOT
-					// be suppressed (else chain breaks land at `outer`
-					// instead of `outer+cols`). Safe to read
-					// `_chainModeOverride` directly: only Haxe declares
-					// `||`/`&&`/`+`/`-` chain infix
-					// (HxModuleWriteOptions carries the field).
 					final _inner:anyparse.core.Doc = anyparse.format.wrap.BinaryChainEmit.emit(
-						_items, _ops, opt, $chainRulesExpr,
-						opt._chainModeOverride == anyparse.format.wrap.WrapMode.FillLineWithLeadingBreak
+						_items, _ops, opt, $chainRulesExpr, _chainNestSuppress
 					);
 					if ($v{prec} < ctxPrec) _dc([_dt('('), _inner, _dt(')')]) else _inner;
 				};
@@ -1207,7 +1212,25 @@ class WriterLowering {
 		// expression-position and any case body deeper than them picks
 		// `expressionCase` via the dispatched flat-gate.
 		final propagateExpr:Bool = branch.fmtHasFlag('propagateExprPosition');
-		final elemOptArg:Expr = propagateExpr ? macro _setExprPosition(opt) : macro opt;
+		// ω-callarg-chain-nest: ctor-level `@:fmt(callArgChainNest)` opt-in on a
+		// call-arg postfix Star (`HxExpr.Call`). When the call uses leading-break
+		// wrapping (`callParameterWrap.defaultMode == FillLineWithLeadingBreak`),
+		// the per-element opt is wrapped in `_setCallArgChainNest` so a chain
+		// argument suppresses its own continuation Nest — the leading-break
+		// call-arg Nest already supplies the +cols indent. Runtime-gated on the
+		// cascade default (mirror of the condWrap `_chainModeOverride` path);
+		// consumed exactly once at the chain dispatch via `_clearCallArgChainNest`.
+		// `wrapRulesField` is read here (and reused by the sepList dispatch below)
+		// so the per-element opt and the args-list cascade share one lookup.
+		final wrapRulesField:Null<String> = branch.fmtReadString('wrapRules');
+		final wantChainNest:Bool = branch.fmtHasFlag('callArgChainNest');
+		var elemOptArg:Expr = propagateExpr ? macro _setExprPosition(opt) : macro opt;
+		if (wantChainNest && wrapRulesField != null) {
+			final wrapRulesAccess:Expr = optFieldAccess(wrapRulesField);
+			elemOptArg = macro $wrapRulesAccess.defaultMode == anyparse.format.wrap.WrapMode.FillLineWithLeadingBreak
+				? _setCallArgChainNest($elemOptArg)
+				: $elemOptArg;
+		}
 		final elemCallArgs:Array<Expr> = [elemRead, elemOptArg];
 		if (isSelfRef && hasPratt) elemCallArgs.push(macro -1);
 		final elemCall:Expr = {
@@ -1239,7 +1262,6 @@ class WriterLowering {
 		// engine. `@:fmt(fill)` / `@:fmt(fillDoubleIndent)` remain orthogonal
 		// for postfix-Star sites that opt into Wadler fillSep without a
 		// per-construct cascade.
-		final wrapRulesField:Null<String> = branch.fmtReadString('wrapRules');
 		final useFill:Bool = branch.fmtHasFlag('fill');
 		final fillDouble:Bool = branch.fmtHasFlag('fillDoubleIndent');
 		final sepListCall:Expr = if (wrapRulesField != null) {

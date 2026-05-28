@@ -95,6 +95,18 @@ class WriterCodegen {
 				fields.push(setChainModeOverrideField(optionsCT));
 				fields.push(resolveChainLocField());
 			}
+			// ω-callarg-chain-nest: opt-fanout helper pair for the
+			// `@:fmt(callArgChainNest)` opt-in on a call-arg Star (currently
+			// `HxExpr.Call`). `_setCallArgChainNest` flags a chain arg of a
+			// leading-break call so its own continuation Nest collapses to the
+			// inherited indent (the call-arg Nest already supplies +cols);
+			// `_clearCallArgChainNest` consumes the flag at the outermost chain
+			// so nested chains keep their own Nest. Sister to
+			// `_setAnonFnBody`/`_clearAnonFnBody`. Gated on `_callArgChainNest:Bool`.
+			if (optionsHasField(optionsTypePath, '_callArgChainNest')) {
+				fields.push(setCallArgChainNestField(optionsCT));
+				fields.push(clearCallArgChainNestField(optionsCT));
+			}
 			// Layout helpers
 			fields.push(blockBodyField());
 			fields.push(sepListField());
@@ -626,6 +638,63 @@ class WriterCodegen {
 					if (!o._inTypedefBody) return o;
 					final _c:$optionsCT = _copyOpt(o);
 					_c._inTypedefBody = false;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * ω-callarg-chain-nest — opt-fanout shim for the `@:fmt(callArgChainNest)`
+	 * opt-in. Idempotent sister to `_setExprPosition` — returns `o` unchanged
+	 * when `_callArgChainNest` is already `true`; otherwise returns a
+	 * `_copyOpt(o)` with the flag flipped on. Threaded into a call's per-arg
+	 * writer call (gated at runtime on `callParameterWrap.defaultMode ==
+	 * FillLineWithLeadingBreak`) so a chain argument suppresses its own
+	 * continuation Nest — the leading-break call-arg Nest already supplies the
+	 * +cols indent, mirroring the condWrap `_chainModeOverride` path. Emitted
+	 * only when the opt typedef declares `_callArgChainNest:Bool` (currently
+	 * `HxModuleWriteOptions`).
+	 */
+	private static function setCallArgChainNestField(optionsCT:ComplexType):Field {
+		return {
+			name: '_setCallArgChainNest',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{name: 'o', type: optionsCT}],
+				ret: optionsCT,
+				expr: macro {
+					if (o._callArgChainNest) return o;
+					final _c:$optionsCT = _copyOpt(o);
+					_c._callArgChainNest = true;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * ω-callarg-chain-nest — sister reset helper to `_setCallArgChainNest`.
+	 * Returns the input opt unchanged when `_callArgChainNest` is already
+	 * `false` (no allocation off the call-arg path); otherwise returns a
+	 * `_copyOpt(o)` with the flag cleared. Consumed at the outermost chain
+	 * dispatch (`makeInfixWriteCall`) so the flag fires exactly once — leaf
+	 * operands / nested chains fall back to their own continuation Nest. Paired
+	 * with `_setCallArgChainNest` emission.
+	 */
+	private static function clearCallArgChainNestField(optionsCT:ComplexType):Field {
+		return {
+			name: '_clearCallArgChainNest',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{name: 'o', type: optionsCT}],
+				ret: optionsCT,
+				expr: macro {
+					if (!o._callArgChainNest) return o;
+					final _c:$optionsCT = _copyOpt(o);
+					_c._callArgChainNest = false;
 					return _c;
 				},
 			}),

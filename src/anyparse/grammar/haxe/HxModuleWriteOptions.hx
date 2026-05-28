@@ -1750,4 +1750,5 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	_inTypedefBody:Bool,
 	_fnSigBodyEmpty:Bool,
 	_chainModeOverride:Null<WrapMode>,
+	_callArgChainNest:Bool,
 };
