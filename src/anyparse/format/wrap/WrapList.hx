@@ -276,8 +276,34 @@ class WrapList {
 		if (extraThresholds.length == 0) {
 			final modeFlat:WrapMode = evalAt(false, []);
 			final modeBreak:WrapMode = evalAt(true, []);
-			if (modeFlat == modeBreak)
+			if (modeFlat == modeBreak) {
+				// ω-iffirstline-callarg: both states resolve to `NoWrap`
+				// (the cascade's NoWrap rules shadow a break `defaultMode`),
+				// so the legacy collapse commits flat — blind to the call-
+				// prefix column. A short single arg whose flat width fits
+				// the cascade's `noWrap` rule still overflows `maxLineLength`
+				// at its actual column, leaving the call paren glued
+				// (under-wrap). When the shadowed default is a break mode,
+				// probe the first rendered line instead: break the paren
+				// (default-mode shape) iff the glued flat line exceeds
+				// `lineWidth`, else keep it glued. Mirrors fork's
+				// `MarkWrappingBase.determineWrapType2` — break the call
+				// paren iff the collapsed flat line at its column exceeds
+				// `maxLineLength`, keeping the inner arg flat. Arrow lambdas
+				// own a dedicated wrap path (`isArrowBodyMarker`), so the
+				// sole-arrow case is excluded — the generic paren-break
+				// shape conflicts with `applyArrowWrapping`'s break-after-
+				// `->` layout. `forceMode != null` already bypasses the
+				// cascade, so it is excluded too.
+				final dm:WrapMode = rules.defaultMode;
+				final dmBreak:Bool = dm == OnePerLine || dm == OnePerLineAfterFirst
+					|| dm == FillLine || dm == FillLineWithLeadingBreak;
+				final soleArrow:Bool = items.length == 1 && isArrowBodyMarker(items[0]);
+				if (modeFlat == NoWrap && dmBreak && forceMode == null && !soleArrow)
+					return WrapBoundary(IfFirstLineExceeds(opt.lineWidth,
+						shapeAt(dm, leadBreak), shapeAt(NoWrap, leadFlat)));
 				return WrapBoundary(shapeAt(modeFlat, leadFor(modeFlat)));
+			}
 			final flatWithLead:Doc = shapeAt(modeFlat, leadFlat);
 			final breakWithLead:Doc = shapeAt(modeBreak, leadBreak);
 			return WrapBoundary(Group(IfBreak(breakWithLead, flatWithLead)));
