@@ -725,8 +725,8 @@ final class HaxeFormatConfigLoader {
 		if (section.multiVar != null) opt.multiVarWrap = wrapRulesFromConfig(section.multiVar, opt.multiVarWrap);
 		if (section.anonType != null) opt.anonTypeWrap = wrapRulesFromConfig(section.anonType, opt.anonTypeWrap);
 		if (section.methodChain != null) opt.methodChainWrap = wrapRulesFromConfig(section.methodChain, opt.methodChainWrap);
-		if (section.opBoolChain != null) opt.opBoolChainWrap = wrapRulesFromConfig(section.opBoolChain, opt.opBoolChainWrap);
-		if (section.opAddSubChain != null) opt.opAddSubChainWrap = wrapRulesFromConfig(section.opAddSubChain, opt.opAddSubChainWrap);
+		if (section.opBoolChain != null) opt.opBoolChainWrap = wrapRulesFromConfig(section.opBoolChain, opt.opBoolChainWrap, true);
+		if (section.opAddSubChain != null) opt.opAddSubChainWrap = wrapRulesFromConfig(section.opAddSubChain, opt.opAddSubChainWrap, true);
 		if (section.callParameter != null) opt.callParameterWrap = wrapRulesFromConfig(section.callParameter, opt.callParameterWrap);
 		if (section.objectLiteral != null) opt.objectLiteralWrap = wrapRulesFromConfig(section.objectLiteral, opt.objectLiteralWrap);
 		if (section.conditionWrapping != null) opt.conditionWrap = wrapRulesFromConfig(section.conditionWrapping, opt.conditionWrap);
@@ -756,18 +756,33 @@ final class HaxeFormatConfigLoader {
 	 * the construct's flat width). A configured `rules: []` resets the
 	 * cascade to empty (unconditional `defaultMode`); an absent `rules`
 	 * key preserves the runtime baseline cascade.
+	 *
+	 * `clearRulesOnDefaultWrap` (chain classes only) mirrors the fork's
+	 * json2object replace-semantics for `opBoolChain` / `opAddSubChain`:
+	 * a user block that sets `defaultWrap` but omits `rules` selects that
+	 * mode unconditionally (the fork's parsed config object carries an
+	 * empty `rules` array, replacing the built-in cascade). Anyparse's
+	 * default preserves `base.rules` on rules-absent so partial configs
+	 * keep sensible gates — but for the two chain classes the fork's
+	 * `wrapping.opBoolChain.defaultWrap: fillLine` fixtures expect the
+	 * built-in `itemCount<=3`/`totalItemLength<=120`/`itemCount>=4` gates
+	 * gone, so the user's `defaultWrap` is the primary mode. Scoped to
+	 * the chain callsites; every other wrap class keeps the rules-
+	 * preserve default. Only triggers when `defaultWrap` resolved (an
+	 * unrecognised string falls through to the preserve path).
 	 */
-	private static function wrapRulesFromConfig(cfg:HxFormatWrapRules, base:WrapRules):WrapRules {
-		final defaultMode:WrapMode = cfg.defaultWrap != null
-			? wrapModeFromString(cfg.defaultWrap) ?? base.defaultMode
-			: base.defaultMode;
+	private static function wrapRulesFromConfig(cfg:HxFormatWrapRules, base:WrapRules, clearRulesOnDefaultWrap:Bool = false):WrapRules {
+		final resolvedDefault:Null<WrapMode> = cfg.defaultWrap != null ? wrapModeFromString(cfg.defaultWrap) : null;
+		final defaultMode:WrapMode = resolvedDefault ?? base.defaultMode;
 		final defaultLocation:Null<WrappingLocation> = cfg.defaultLocation != null
 			? wrappingLocationFromString(cfg.defaultLocation) ?? base.defaultLocation
 			: base.defaultLocation;
 		final defaultAdditionalIndent:Null<Int> = cfg.defaultAdditionalIndent ?? base.defaultAdditionalIndent;
 		final src:Null<Array<HxFormatWrapRule>> = cfg.rules;
-		if (src == null)
-			return {rules: base.rules, defaultMode: defaultMode, defaultLocation: defaultLocation, defaultAdditionalIndent: defaultAdditionalIndent};
+		if (src == null) {
+			final inheritedRules:Array<WrapRule> = clearRulesOnDefaultWrap && resolvedDefault != null ? [] : base.rules;
+			return {rules: inheritedRules, defaultMode: defaultMode, defaultLocation: defaultLocation, defaultAdditionalIndent: defaultAdditionalIndent};
+		}
 		final rules:Array<WrapRule> = [];
 		for (raw in src) {
 			final mapped:Null<WrapRule> = wrapRuleFromConfig(raw);
