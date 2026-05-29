@@ -597,6 +597,7 @@ final class HaxeFormatConfigLoader {
 			callParameterWrap: base.callParameterWrap,
 			arrayLiteralWrap: base.arrayLiteralWrap,
 			multiVarWrap: base.multiVarWrap,
+			casePatternWrap: base.casePatternWrap,
 			anonTypeWrap: base.anonTypeWrap,
 			methodChainWrap: base.methodChainWrap,
 			opBoolChainWrap: base.opBoolChainWrap,
@@ -723,6 +724,7 @@ final class HaxeFormatConfigLoader {
 		if (section.maxLineLength != null) opt.lineWidth = section.maxLineLength;
 		if (section.arrayWrap != null) opt.arrayLiteralWrap = wrapRulesFromConfig(section.arrayWrap, opt.arrayLiteralWrap);
 		if (section.multiVar != null) opt.multiVarWrap = wrapRulesFromConfig(section.multiVar, opt.multiVarWrap);
+		if (section.casePattern != null) opt.casePatternWrap = wrapRulesFromConfig(section.casePattern, opt.casePatternWrap);
 		if (section.anonType != null) opt.anonTypeWrap = wrapRulesFromConfig(section.anonType, opt.anonTypeWrap);
 		if (section.methodChain != null) opt.methodChainWrap = wrapRulesFromConfig(section.methodChain, opt.methodChainWrap);
 		if (section.opBoolChain != null) opt.opBoolChainWrap = wrapRulesFromConfig(section.opBoolChain, opt.opBoolChainWrap, true);

@@ -25,6 +25,15 @@ package anyparse.grammar.haxe;
  * element-wrap rationale. Full pattern matching (extractors) is
  * future work.
  *
+ * `@:fmt(wrapRules('casePatternWrap'))` (slice ω-casepattern-wrap-ingest)
+ * routes the comma-separated pattern list through `WrapList.emit` with
+ * the `casePatternWrap` cascade (fork-mirror of `wrapping.casePattern`):
+ * single/double patterns stay flat (`NoWrap`), three-or-more pack
+ * Wadler-style via `FillLine`, overflow also fills. The Star has no
+ * `@:lead`, so `WrapList` derives `open=''`/`close=':'`/`sep=','` — the
+ * first pattern stays inline after the upstream `case ` keyword and the
+ * `:` glues to the last pattern.
+ *
  * The body uses `@:tryparse` to force try-parse termination on the
  * last field (D49). The try-parse loop breaks when the next token
  * is `case`, `default`, or `}` — none of which parse as an
@@ -93,7 +102,7 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxCaseBranch = {
-	@:sep(',') @:trail(':') var patterns:Array<HxCasePattern>;
+	@:sep(',') @:trail(':') @:fmt(wrapRules('casePatternWrap')) var patterns:Array<HxCasePattern>;
 	@:trivia @:tryparse @:fmt(
 		nestBody, bodyPolicy('caseBody', 'expressionCase'),
 		flatChildOpt('ifBody=expressionCase', 'elseBody=expressionCase', 'forBody=expressionCase'),

@@ -90,6 +90,13 @@ package anyparse.grammar.haxe.format;
  *    `anyItemLength <= n` (MIN ≤ n) is mapped to `AllItemLengthsLessThan`
  *    (MAX ≤ n) — anyparse has no min≤n condition; the two coincide on
  *    every corpus target.
+ *  - `casePattern`: `WrapRules` cascade → `casePatternWrap`. Drives break
+ *    shape for comma-separated `case` pattern lists (`case A, B, C:` —
+ *    `HxCaseBranch.patterns`). Slice ω-casepattern-wrap-ingest landed the
+ *    cascade with fork-mirror defaults (`config/WrapConfig.hx`
+ *    `wrapping.casePattern`): `{rules: [itemCount > 2 → FillLine,
+ *    exceedsMaxLineLength → FillLine], defaultMode: NoWrap}`. Single/double
+ *    patterns stay flat; lists of three or more pack Wadler-style.
  *  - `expressionWrapping`: `WrapRules` cascade →
  *    `expressionWrappingWrap` (slice
  *    ω-expressionwrapping-cascade-ingest — foundational scaffold).
@@ -128,6 +135,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var arrayWrap:HxFormatWrapRules;
 
 	@:optional var multiVar:HxFormatWrapRules;
+
+	@:optional var casePattern:HxFormatWrapRules;
 
 	@:optional var anonType:HxFormatWrapRules;
 

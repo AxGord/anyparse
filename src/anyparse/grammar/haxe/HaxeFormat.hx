@@ -720,6 +720,7 @@ final class HaxeFormat implements TextFormat {
 		callParameterWrap: HaxeFormat.defaultCallParameterWrap(),
 		arrayLiteralWrap: HaxeFormat.defaultArrayLiteralWrap(),
 		multiVarWrap: HaxeFormat.defaultMultiVarWrap(),
+		casePatternWrap: HaxeFormat.defaultCasePatternWrap(),
 		anonTypeWrap: HaxeFormat.defaultAnonTypeWrap(),
 		methodChainWrap: HaxeFormat.defaultMethodChainWrap(),
 		opBoolChainWrap: HaxeFormat.defaultOpBoolChainWrap(),
@@ -940,6 +941,35 @@ final class HaxeFormat implements TextFormat {
 				},
 				{
 					mode: WrapMode.OnePerLineAfterFirst,
+					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
+				},
+			],
+			defaultMode: WrapMode.NoWrap,
+		};
+	}
+
+	/**
+	 * Default `WrapRules` cascade for `HxCaseBranch.patterns` — the
+	 * comma-separated pattern list of a multi-value `case` label
+	 * (`case A, B, C:`). Ported verbatim from haxe-formatter's
+	 * `wrapping.casePattern` rule set in `config/WrapConfig.hx` (AxGord
+	 * fork): single/double patterns stay flat (`NoWrap` default), lists
+	 * of three or more pack Wadler-style via `FillLine`, and any list
+	 * that overflows `maxLineLength` also fills. Consumed at the fork's
+	 * `markSingleCasePatternChain`. Returned as a fresh struct on each
+	 * call so test code that mutates the
+	 * `defaultWriteOptions.casePattern` substruct doesn't corrupt the
+	 * singleton.
+	 */
+	public static function defaultCasePatternWrap():WrapRules {
+		return {
+			rules: [
+				{
+					mode: WrapMode.FillLine,
+					conditions: [{cond: WrapConditionType.ItemCountLargerThan, value: 2}],
+				},
+				{
+					mode: WrapMode.FillLine,
 					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
 				},
 			],

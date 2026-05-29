@@ -1712,6 +1712,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	callParameterWrap:WrapRules,
 	arrayLiteralWrap:WrapRules,
 	multiVarWrap:WrapRules,
+	casePatternWrap:WrapRules,
 	anonTypeWrap:WrapRules,
 	methodChainWrap:WrapRules,
 	opBoolChainWrap:WrapRules,
