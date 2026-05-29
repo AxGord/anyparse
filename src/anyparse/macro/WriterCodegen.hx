@@ -430,6 +430,23 @@ class WriterCodegen {
 				],
 				macro anyparse.core.Doc.IfFirstLineExceeds(n, br, fl)
 			),
+			// ω-ifnaturalfirstlineexceeds-infra: natural-shape first-line
+			// probe. Fires `br` when the NATURAL first line of `fl` (rendered
+			// speculatively at the current column, resolving each inner Group
+			// by its own fitsFlat decision) reaches `n` — distinguishing a
+			// NoWrap-pinned RHS (full flat width → break) from a RHS that
+			// wraps its own call-args (short natural first line → stay inline).
+			// Enum ctors can't be called in macro{}, so consumers (macro-
+			// generated WriterLowering) call this generated wrapper.
+			docHelper(
+				'_dinfle',
+				[
+					{name: 'n', type: macro : Int},
+					{name: 'br', type: macro : anyparse.core.Doc},
+					{name: 'fl', type: macro : anyparse.core.Doc}
+				],
+				macro anyparse.core.Doc.IfNaturalFirstLineExceeds(n, br, fl)
+			),
 			// ω-abstract-clauses-linewrap: column-threshold probe consuming
 			// rest-of-stack flat width. Fires `br` when
 			// `col + flatTokenWidth(fl) + flatTokenWidthOfRestStack(stack) >= n`.

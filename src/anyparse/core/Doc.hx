@@ -120,6 +120,37 @@ package anyparse.core;
  *                      `IfLineExceeds`); `fitsFlat` and cascade-rule
  *                      static walks forward to `fl`. Slice
  *                      ω-iffulllineexceeds-primitive.
+ * - `IfNaturalFirstLineExceeds(n, br, fl)` — natural-shape sibling of
+ *                      `IfFirstLineExceeds`. Where `IfFirstLineExceeds`
+ *                      probes `col + flatTokenWidthFirstLine(fl)` — a
+ *                      purely FLAT first-line walk that descends every
+ *                      inner `Group`/`IfBreak`/`If*Exceeds` taking the
+ *                      FLAT branch — this primitive probes
+ *                      `naturalFirstLineWidth(fl, col, indent, width)`:
+ *                      it renders `fl` SPECULATIVELY at the current pen,
+ *                      resolving each inner Group by its OWN `fitsFlat`
+ *                      decision (the real flat/break choice the renderer
+ *                      would make at the running column), and measures
+ *                      the width of the first PHYSICAL line — up to the
+ *                      first naturally-produced hardline (a forced
+ *                      `Line('\n')`, an `OptHardline*`, or a soft `Line`
+ *                      reached inside a Group that `fitsFlat` chose to
+ *                      break). Crosses `n` iff that natural first line
+ *                      reaches `n`. This distinguishes a RHS pinned
+ *                      NoWrap (keeps its full flat width → crosses →
+ *                      break) from a RHS that wraps its own call-args
+ *                      (short natural first line, e.g. `foo(` then a
+ *                      hardline → does NOT cross → stay inline) — a
+ *                      distinction the flat `IfFirstLineExceeds` cannot
+ *                      make (it over-measures both). `BodyGroup` is
+ *                      DEFERRED (Departure 2, same as the flat siblings).
+ *                      Canonical consumer: assignment break-after-`=` on
+ *                      a type-param-carrying LHS. `fitsFlat` and the
+ *                      static flat walks forward to `fl`;
+ *                      `startsWithHardline`/`isOPLShape` recurse `br`
+ *                      (break-side leading-edge walkers, mirror the
+ *                      `If*Exceeds` siblings). Slice
+ *                      ω-ifnaturalfirstlineexceeds-infra.
  * - `Fill(items, sep, ?tailReserve)` — Wadler `fillSep`. In flat mode,
  *                      emits items joined by `sep` flat. In break mode,
  *                      packs items left-to-right: before each `items[i]`
@@ -246,6 +277,7 @@ enum Doc {
 	IfFirstLineExceeds(n:Int, breakDoc:Doc, flatDoc:Doc);
 	IfLineExceeds(n:Int, breakDoc:Doc, flatDoc:Doc);
 	IfFullLineExceeds(n:Int, breakDoc:Doc, flatDoc:Doc);
+	IfNaturalFirstLineExceeds(n:Int, breakDoc:Doc, flatDoc:Doc);
 	Fill(items:Array<Doc>, sep:Doc, ?tailReserve:Int);
 
 	/**

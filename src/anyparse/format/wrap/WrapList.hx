@@ -631,6 +631,11 @@ class WrapList {
 					// Asymmetric BG semantic only applies to renderer-
 					// side rest-of-stack probe.
 					stack.push(flatDoc);
+				case IfNaturalFirstLineExceeds(_, _, flatDoc):
+					// Mirror the flat siblings: forward to flat side. The
+					// natural-first-line decision is renderer-side; this
+					// static length walk sees the flat shape.
+					stack.push(flatDoc);
 				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
 					var k:Int = items.length;
 					while (k > 0) {
@@ -721,6 +726,10 @@ class WrapList {
 			case IfLineExceeds(_, brk, _):
 				node = brk;
 			case IfFullLineExceeds(_, brk, _):
+				node = brk;
+			case IfNaturalFirstLineExceeds(_, brk, _):
+				// Break-side leading-edge walk: descend the break branch
+				// (mirrors the If*Exceeds siblings).
 				node = brk;
 			case Concat(items):
 				final first:Null<Doc> = items.find(it -> !isLeadingTransparent(it));
@@ -1270,6 +1279,7 @@ class WrapList {
 			case IfFirstLineExceeds(_, _, _): false;
 			case IfLineExceeds(_, _, _): false;
 			case IfFullLineExceeds(_, _, _): false;
+			case IfNaturalFirstLineExceeds(_, _, _): false;
 			case Concat(items):
 				for (it in items) {
 					if (hasLeadingHardline(it)) return true;

@@ -630,6 +630,35 @@ class Renderer {
 						final pushMode:Mode = fullLineCrosses ? MBreak : f.mode;
 						stack.push(new Frame(f.indent, pushMode, fullLineCrosses ? breakDoc : flatDoc));
 					}
+				case IfNaturalFirstLineExceeds(n, breakDoc, flatDoc):
+					// Natural-shape first-line probe: render `flatDoc`
+					// speculatively at the current pen, resolving each inner
+					// Group/BodyGroup/GroupWithRestProbe by its OWN `fitsFlat`
+					// decision, and measure the first physical line. Crosses
+					// iff that line reaches `n`. Unlike `IfFirstLineExceeds`
+					// (which walks flatDoc purely flat and over-measures any
+					// RHS whose own call-args wrap), this picks `flatDoc` when
+					// the RHS's natural first line is short (call-args wrap)
+					// and `breakDoc` when the RHS stays wide (NoWrap-pinned).
+					// Canonical consumer: assignment break-after-`=`.
+					//
+					// Mode propagation matches the other If*Exceeds: brk-side
+					// forces MBreak so a break shape carrying hardlines + Nest
+					// renders correctly under an enclosing MFlat context;
+					// flat-side preserves f.mode.
+					//
+					// `naturalFirstLineWidth` already folds `col` into its
+					// accumulator (per-Group `fitsFlat(width - col, ...)` needs
+					// the live running column), so the compare RHS is bare `n`
+					// — NOT `col + n`, unlike the flat siblings whose measurers
+					// return a from-zero width.
+					if (f.forceFlat) {
+						stack.push(new Frame(f.indent, f.mode, flatDoc, true));
+					} else {
+						final naturalCrosses:Bool = (naturalFirstLineWidth(flatDoc, col, f.indent, width) >= n);
+						final pushMode:Mode = naturalCrosses ? MBreak : f.mode;
+						stack.push(new Frame(f.indent, pushMode, naturalCrosses ? breakDoc : flatDoc));
+					}
 				case Fill(items, sep, tailReserveOpt) | FillWithRestProbe(items, sep, tailReserveOpt):
 					// Paired arm: identical entry shape for both ctors. The
 					// rest-probe semantic lives in FillCont resumption (see
@@ -848,6 +877,13 @@ class Renderer {
 					// is a render-time decision. `fitsFlat` sees only
 					// the flat shape (slice ω-iffulllineexceeds-primitive).
 					local.push(new Frame(f.indent, MFlat, flatDoc));
+				case IfNaturalFirstLineExceeds(_, _, flatDoc):
+					// Mirror the flat siblings: the natural-first-line
+					// probe is a render-time decision, transparent to an
+					// enclosing Group's `fitsFlat` measurement — which
+					// sees only the flat shape (slice
+					// ω-ifnaturalfirstlineexceeds-infra).
+					local.push(new Frame(f.indent, MFlat, flatDoc));
 				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
 					// Flat measurement of Fill: items joined by sep flat.
 					// `tailReserve` is a render-time per-item-fit knob, NOT
@@ -950,6 +986,12 @@ class Renderer {
 					stack.push(flatDoc);
 				case IfFullLineExceeds(_, _, flatDoc):
 					stack.push(flatDoc);
+				case IfNaturalFirstLineExceeds(_, _, flatDoc):
+					// Forward to flat side: the natural-first-line probe
+					// is a render-time decision; this static flat walk
+					// (the flat-side measurer of the sibling
+					// `IfFirstLineExceeds`) sees only the flat shape.
+					stack.push(flatDoc);
 				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
 					var k:Int = items.length;
 					while (k > 0) {
@@ -969,6 +1011,149 @@ class Renderer {
 			}
 		}
 		return total;
+	}
+
+	/**
+	 * Natural-shape first-line measurer (ω-natural-first-line). Walks `d`
+	 * resolving each inner `Group`/`BodyGroup`/`GroupWithRestProbe` by its
+	 * OWN `fitsFlat` decision (the real flat/break choice the renderer
+	 * would make at the running column), and returns the absolute column
+	 * the FIRST physical line reaches — everything up to (not including)
+	 * the first naturally-produced hardline.
+	 *
+	 * Differs from `flatTokenWidthFirstLine`, which descends every Group
+	 * flat: here a Group that does NOT fit at the running column commits
+	 * to break, its first inner soft `Line` renders as a hardline, and
+	 * first-line accumulation stops there. A Group that fits stays flat
+	 * and contributes its full flat width to the running line.
+	 *
+	 * `BodyGroup` is DEFERRED (zero width, no first-line termination) —
+	 * its content decides its own flat/break later and is invisible to a
+	 * parent's first-line probe (Departure 2, mirrors `fitsFlat` /
+	 * `flatTokenWidthFirstLine`).
+	 *
+	 * `startCol` is folded into the accumulator so each per-Group
+	 * `fitsFlat(width - col, ...)` budget uses the live running column —
+	 * the same Group fits or breaks depending on where on the line it
+	 * starts. The return value already includes `startCol`; the
+	 * `IfNaturalFirstLineExceeds` render arm therefore compares the raw
+	 * result against `n` (NOT `col + result`).
+	 *
+	 * Pure stack walk: allocates its own work-stack + `col`/`aborted`
+	 * locals, reads only its args, mutates no render state (invariant #1).
+	 *
+	 * Used exclusively by the `IfNaturalFirstLineExceeds` render arm.
+	 */
+	private static function naturalFirstLineWidth(d:Doc, startCol:Int, indent:Int, width:Int):Int {
+		var col:Int = startCol;
+		var aborted:Bool = false;
+		// Work items carry their own indent + mode: MFlat once a parent
+		// Group committed flat, MBreak inside a broken Group's subtree.
+		final stack:Array<{doc:Doc, indent:Int, mode:Mode}> = [{doc: d, indent: indent, mode: MBreak}];
+		while (stack.length > 0 && !aborted) {
+			final node:{doc:Doc, indent:Int, mode:Mode} = stack.pop();
+			switch node.doc {
+				case Empty:
+				case Text(s):
+					col += s.length;
+				case Line(flat):
+					if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) {
+						// Forced hardline always terminates the first line.
+						aborted = true;
+					} else if (node.mode == MBreak) {
+						// Soft line inside a BROKEN Group renders as a newline.
+						aborted = true;
+					} else {
+						// Soft line inside a FLAT Group renders as its flat string.
+						col += flat.length;
+					}
+				case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
+					// All three are hardlines by intent (mirror
+					// `flatTokenWidthFirstLine`); treat as a first-line
+					// terminator (their render-time drops can't be predicted).
+					aborted = true;
+				case Nest(n, inner):
+					// Indent bump observed only on a hardline in MBreak
+					// (mirrors render loop Nest arm). Propagate mode.
+					final nextIndent:Int = node.mode == MBreak ? node.indent + n : node.indent;
+					stack.push({doc: inner, indent: nextIndent, mode: node.mode});
+				case Concat(items):
+					var i:Int = items.length;
+					while (--i >= 0) stack.push({doc: items[i], indent: node.indent, mode: node.mode});
+				case Group(inner) | GroupWithRestProbe(inner):
+					// THE natural decision: resolve THIS Group by its own
+					// fit at the running column. (GroupWithRestProbe's
+					// rest-of-stack bias is a render-time refinement needing
+					// the live render stack, which the probe doesn't have;
+					// treat identically to Group — matches every static
+					// walker collapsing GroupWithRestProbe into Group.)
+					if (node.mode == MFlat) {
+						// Parent already committed flat → child renders flat.
+						stack.push({doc: inner, indent: node.indent, mode: MFlat});
+					} else if (fitsFlat(width - col, node.indent, inner)) {
+						stack.push({doc: inner, indent: node.indent, mode: MFlat});
+					} else {
+						stack.push({doc: inner, indent: node.indent, mode: MBreak});
+					}
+				case BodyGroup(_):
+					// Deferred (Departure 2): BG decides its own layout,
+					// invisible to the parent's first-line probe.
+				case IfBreak(breakDoc, flatDoc):
+					// Pick by the running mode (mirrors render IfBreak;
+					// forceFlat can't be set here — the arm short-circuits
+					// force-flat before calling this probe).
+					stack.push({doc: node.mode == MFlat ? flatDoc : breakDoc, indent: node.indent, mode: node.mode});
+				case IfWidthExceeds(nn, breakDoc, flatDoc):
+					final crosses:Bool = (col + DocMeasure.flatTokenWidth(flatDoc) >= nn);
+					stack.push({doc: crosses ? breakDoc : flatDoc, indent: node.indent, mode: crosses ? MBreak : node.mode});
+				case IfFirstLineExceeds(nn, breakDoc, flatDoc):
+					final crosses:Bool = (col + flatTokenWidthFirstLine(flatDoc) >= nn);
+					stack.push({doc: crosses ? breakDoc : flatDoc, indent: node.indent, mode: crosses ? MBreak : node.mode});
+				case IfLineExceeds(nn, breakDoc, flatDoc):
+					// Rest-of-stack term is 0 here: the natural probe is a
+					// self-contained subtree walk with no render-stack to
+					// look ahead over — matches the subtree-local view the
+					// consumer wants. Own-width probe only.
+					final crosses:Bool = (col + DocMeasure.flatTokenWidth(flatDoc) >= nn);
+					stack.push({doc: crosses ? breakDoc : flatDoc, indent: node.indent, mode: crosses ? MBreak : node.mode});
+				case IfFullLineExceeds(nn, breakDoc, flatDoc):
+					final crosses:Bool = (col + DocMeasure.flatTokenWidth(flatDoc) >= nn);
+					stack.push({doc: crosses ? breakDoc : flatDoc, indent: node.indent, mode: crosses ? MBreak : node.mode});
+				case IfNaturalFirstLineExceeds(nn, breakDoc, flatDoc):
+					// Self-reference: resolve recursively at the running col
+					// over a strictly smaller subtree (bounded by finite tree).
+					final crosses:Bool = (naturalFirstLineWidth(flatDoc, col, node.indent, width) >= nn);
+					stack.push({doc: crosses ? breakDoc : flatDoc, indent: node.indent, mode: crosses ? MBreak : node.mode});
+				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
+					// Flat interleave tagged with node.mode (so a broken
+					// sep's Line terminates the first line). Slight
+					// over-measure when items pack onto multiple lines; the
+					// canonical consumer (assignment RHS) does not place a
+					// bare Fill as the probed flatDoc head. See Doc stanza.
+					var k:Int = items.length;
+					while (k > 0) {
+						k--;
+						stack.push({doc: items[k], indent: node.indent, mode: node.mode});
+						if (k > 0) stack.push({doc: sep, indent: node.indent, mode: node.mode});
+					}
+				case OptSpace(s):
+					col += s.length;
+				case OptSpaceSkipAfterHardline:
+					col += 1;
+				case Flatten(inner):
+					// Force-flat region: descend inner as MFlat so every
+					// nested Group stays flat (matches render's forceFlat
+					// Group push). A literal Line('\n') inside is handled by
+					// the Line arm's flat[0]=='\n' check first, terminating
+					// the first line — consistent with render.
+					stack.push({doc: inner, indent: node.indent, mode: MFlat});
+				case WrapBoundary(inner):
+					// Reset to natural: descend with the running mode (a
+					// nested cascade decides its own Groups). Mirrors render.
+					stack.push({doc: inner, indent: node.indent, mode: node.mode});
+			}
+		}
+		return col;
 	}
 
 	/**
@@ -1058,6 +1243,11 @@ class Renderer {
 						inner.push({doc: flatDoc, mode: MFlat});
 					case IfFullLineExceeds(_, _, flatDoc):
 						inner.push({doc: flatDoc, mode: MFlat});
+					case IfNaturalFirstLineExceeds(_, _, flatDoc):
+						// Forward to flat side: the natural-first-line
+						// probe is a render-time decision; this static
+						// rest-of-stack walk sees only the flat shape.
+						inner.push({doc: flatDoc, mode: MFlat});
 					case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
 						var k:Int = items.length;
 						while (k > 0) {
@@ -1144,6 +1334,11 @@ class Renderer {
 					case IfLineExceeds(_, _, flatDoc):
 						inner.push({doc: flatDoc, mode: MFlat});
 					case IfFullLineExceeds(_, _, flatDoc):
+						inner.push({doc: flatDoc, mode: MFlat});
+					case IfNaturalFirstLineExceeds(_, _, flatDoc):
+						// Forward to flat side: the natural-first-line
+						// probe is a render-time decision; this static
+						// rest-of-stack walk sees only the flat shape.
 						inner.push({doc: flatDoc, mode: MFlat});
 					case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
 						var k:Int = items.length;
