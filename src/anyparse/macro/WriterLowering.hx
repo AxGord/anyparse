@@ -425,7 +425,23 @@ class WriterLowering {
 									break;
 							}
 						case FieldAccess(_prev, _fld):
-							_segs.unshift(_dt('.' + _fld));
+							// ω-methodchain-glue-bare-field: a bare `.field`
+							// access that precedes an already-collected segment
+							// (a Call to its right) is NOT its own chain
+							// break-item — it glues onto that segment's lead,
+							// mirroring fork `MarkWrapping.isDotAfterPClose` (a
+							// `.` counts as a chain item only when its previous
+							// token is `)`). So `holder.firstField.inner
+							// .filter(args)` stays ONE item, not three. When
+							// `_segs` is empty the bare field is a trailing
+							// access (its own item per fork's PClose-after rule
+							// for `a().b`); keep current shape. Without this glue
+							// every leading bare FieldAccess over-segments the
+							// chain and inflates the cascade item count.
+							if (_segs.length > 0)
+								_segs[0] = _dc([_dt('.' + _fld), _segs[0]]);
+							else
+								_segs.unshift(_dt('.' + _fld));
 							switch _prev {
 								case Call(_, _, _, _): _hasCallPrev = true;
 								case _:
@@ -465,7 +481,14 @@ class WriterLowering {
 									break;
 							}
 						case FieldAccess(_prev, _fld):
-							_segs.unshift(_dt('.' + _fld));
+							// ω-methodchain-glue-bare-field (plain-mode twin of
+							// the trivia branch above): glue a bare leading
+							// `.field` onto the already-collected segment to its
+							// right rather than over-segmenting the chain.
+							if (_segs.length > 0)
+								_segs[0] = _dc([_dt('.' + _fld), _segs[0]]);
+							else
+								_segs.unshift(_dt('.' + _fld));
 							switch _prev {
 								case Call(_, _): _hasCallPrev = true;
 								case _:
