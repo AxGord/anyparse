@@ -76,11 +76,16 @@ class HxStringSliceTest extends HxTestHelpers {
 		assertLiteral(parts[0], 'hello');
 	}
 
-	/** Escape sequences in single-quoted string: `\n`, `\'`, `\\`. */
+	/**
+	 * Escape sequences in single-quoted string: `\n`, `\'`, `\\`.
+	 * ω-singlestring-rawstring: HxStringLitSegment now stores the raw
+	 * source slice — escape sequences are NOT decoded. Asserts the
+	 * verbatim form: `a\nb\'c\\d` (each `\X` is two chars in storage).
+	 */
 	public function testSingleEscapes():Void {
 		final parts:Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = 'a\\nb\\'c\\\\d'; }").init);
 		Assert.equals(1, parts.length);
-		assertLiteral(parts[0], "a\nb'c\\d");
+		assertLiteral(parts[0], "a\\nb\\'c\\\\d");
 	}
 
 	/** `$$` in single-quoted string -> Dollar segment. */
