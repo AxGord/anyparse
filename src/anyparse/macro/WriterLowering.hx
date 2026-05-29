@@ -1059,6 +1059,21 @@ class WriterLowering {
 				if (kwTrailSpace != null) {
 					parts.push(macro _dt($v{kwLead}));
 					parts.push(kwTrailSpace);
+				} else if (branch.fmtHasFlag('deferKwSpace') && !stripKwTrailingSpace) {
+					// ω-multivar-wrap one_line: opt-in `@:fmt(deferKwSpace)` on a
+					// kw-led single-Ref ctor emits the kw's trailing space as a
+					// deferred `_dop(' ')` (OptSpace) instead of a hard `_dt(kw ')`.
+					// The renderer flushes it as a real space before the next Text
+					// (flat / head-inline cases — byte-identical), but DROPS it when
+					// the sub-call leads with a break-mode hardline. Used by
+					// `HxStatement.VarStmt` / `FinalStmt`: when the `HxVarDecl`
+					// body routes its `more` list through `multiVarWrap` with
+					// `defaultWrap: onePerLine`, the head binding breaks too
+					// (`var\n\trawRead,…`), so the `var `
+					// trailing space must collapse into the break — mirror of the
+					// assign-op `=`→`_dop(' ')` split (ω-binop-wraprules).
+					parts.push(macro _dt($v{kwLead}));
+					parts.push(macro _dop(' '));
 				} else {
 					final kwText:String = stripKwTrailingSpace ? kwLead : kwLead + ' ';
 					parts.push(macro _dt($v{kwText}));
@@ -3456,7 +3471,14 @@ class WriterLowering {
 					anyparse.format.wrap.WrapList.emit(
 						'', '', ',', _items, opt,
 						anyparse.core.Doc.Empty, anyparse.core.Doc.Empty,
-						false, $knobAccess
+						false, $knobAccess,
+						// appendTrailingComma / leadFlat / leadBreak / forceExceeds
+						false, anyparse.core.Doc.Empty, anyparse.core.Doc.Empty, false,
+						// trailBreak: the statement's `;` (or block-end) follows the
+						// last binding directly — no close delimiter here, so the
+						// default `Line('\n')` would push the `;` onto its own line
+						// under OnePerLine. `Empty` glues the `;` to the last binding.
+						anyparse.core.Doc.Empty
 					);
 				} else _headPlusMore;
 			};

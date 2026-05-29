@@ -357,10 +357,10 @@ enum HxStatement {
 	@:kw('static') @:lead('final') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))
 	StaticFinalStmt(decl:HxVarDecl);
 
-	@:kw('var') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))
+	@:kw('var') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'), deferKwSpace)
 	VarStmt(decl:HxVarDecl);
 
-	@:kw('final') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))
+	@:kw('final') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'), deferKwSpace)
 	FinalStmt(decl:HxVarDecl);
 
 	@:kw('return') @:trailOpt(';')
