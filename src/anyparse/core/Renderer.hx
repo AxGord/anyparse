@@ -1047,11 +1047,70 @@ class Renderer {
 	private static function naturalFirstLineWidth(d:Doc, startCol:Int, indent:Int, width:Int):Int {
 		var col:Int = startCol;
 		var aborted:Bool = false;
-		// Work items carry their own indent + mode: MFlat once a parent
-		// Group committed flat, MBreak inside a broken Group's subtree.
-		final stack:Array<{doc:Doc, indent:Int, mode:Mode}> = [{doc: d, indent: indent, mode: MBreak}];
+		// Work items carry their own indent + mode + forceFlat — a faithful
+		// mirror of `render`'s Frame fields (mode + forceFlat are independent:
+		// MFlat means "a parent Group committed flat"; forceFlat means "inside
+		// a `Flatten` region, suppress every Group's own fit decision"). A
+		// `WrapBoundary` inside a `Flatten` resets forceFlat (mode preserved)
+		// so a nested wrap-cascade's Group re-evaluates `fitsFlat` and may
+		// break — exactly as the renderer does.
+		final stack:Array<{doc:Doc, indent:Int, mode:Mode, forceFlat:Bool}> =
+			[{doc: d, indent: indent, mode: MBreak, forceFlat: false}];
+		// Rest-of-stack flat width: the same-line content the probe's pending
+		// work-stack will still emit AFTER the current `If*Exceeds` node, up to
+		// the first hardline. Mirrors render's `flatTokenWidthOfRestStackFull`
+		// over the live render stack — the difference being our pending stack
+		// IS that lookahead. A chain's `IfFullLineExceeds` must see the trailing
+		// close-delims (`))`, `;`) that ride the same line, or it under-fires
+		// and the chain stays flat when render would break it.
+		inline function restStackWidth():Int {
+			var total:Int = 0;
+			var i:Int = stack.length - 1;
+			var aborted2:Bool = false;
+			while (i >= 0 && !aborted2) {
+				final f = stack[i];
+				i--;
+				final inner:Array<{doc:Doc, mode:Mode}> = [{doc: f.doc, mode: f.mode}];
+				while (inner.length > 0 && !aborted2) {
+					final nd = inner.pop();
+					switch nd.doc {
+						case Empty:
+						case Text(s): total += s.length;
+						case Line(fl):
+							if (nd.mode == MBreak) aborted2 = true;
+							else if (fl.length > 0 && StringTools.fastCodeAt(fl, 0) == '\n'.code) aborted2 = true;
+							else total += fl.length;
+						case Nest(_, innerDoc): inner.push({doc: innerDoc, mode: nd.mode});
+						case Concat(items):
+							var k = items.length;
+							while (--k >= 0) inner.push({doc: items[k], mode: nd.mode});
+						case Group(innerDoc) | BodyGroup(innerDoc) | GroupWithRestProbe(innerDoc):
+							inner.push({doc: innerDoc, mode: MFlat});
+						case IfBreak(_, fl): inner.push({doc: fl, mode: MFlat});
+						case IfWidthExceeds(_, _, fl) | IfFirstLineExceeds(_, _, fl)
+								| IfLineExceeds(_, _, fl) | IfFullLineExceeds(_, _, fl)
+								| IfNaturalFirstLineExceeds(_, _, fl):
+							inner.push({doc: fl, mode: MFlat});
+						case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
+							var k = items.length;
+							while (k > 0) {
+								k--;
+								inner.push({doc: items[k], mode: MFlat});
+								if (k > 0) inner.push({doc: sep, mode: MFlat});
+							}
+						case OptSpace(s): total += s.length;
+						case OptSpaceSkipAfterHardline: total += 1;
+						case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
+							aborted2 = true;
+						case Flatten(innerDoc) | WrapBoundary(innerDoc):
+							inner.push({doc: innerDoc, mode: nd.mode});
+					}
+				}
+			}
+			return total;
+		}
 		while (stack.length > 0 && !aborted) {
-			final node:{doc:Doc, indent:Int, mode:Mode} = stack.pop();
+			final node:{doc:Doc, indent:Int, mode:Mode, forceFlat:Bool} = stack.pop();
 			switch node.doc {
 				case Empty:
 				case Text(s):
@@ -1074,83 +1133,120 @@ class Renderer {
 					aborted = true;
 				case Nest(n, inner):
 					// Indent bump observed only on a hardline in MBreak
-					// (mirrors render loop Nest arm). Propagate mode.
+					// (mirrors render loop Nest arm). Propagate mode + forceFlat.
 					final nextIndent:Int = node.mode == MBreak ? node.indent + n : node.indent;
-					stack.push({doc: inner, indent: nextIndent, mode: node.mode});
+					stack.push({doc: inner, indent: nextIndent, mode: node.mode, forceFlat: node.forceFlat});
 				case Concat(items):
 					var i:Int = items.length;
-					while (--i >= 0) stack.push({doc: items[i], indent: node.indent, mode: node.mode});
-				case Group(inner) | GroupWithRestProbe(inner):
-					// THE natural decision: resolve THIS Group by its own
-					// fit at the running column. (GroupWithRestProbe's
-					// rest-of-stack bias is a render-time refinement needing
-					// the live render stack, which the probe doesn't have;
-					// treat identically to Group — matches every static
-					// walker collapsing GroupWithRestProbe into Group.)
-					if (node.mode == MFlat) {
-						// Parent already committed flat → child renders flat.
-						stack.push({doc: inner, indent: node.indent, mode: MFlat});
+					while (--i >= 0) stack.push({doc: items[i], indent: node.indent, mode: node.mode, forceFlat: node.forceFlat});
+				case Group(inner) | GroupWithRestProbe(inner) | BodyGroup(inner):
+					// THE natural decision: resolve THIS Group by its own fit
+					// at the running column — a faithful mirror of render's
+					// `Group`/`BodyGroup` arm (forceFlat short-circuits to
+					// flat, else `fitsFlat(width - col, ...)` decides). NOTE:
+					// BodyGroup is handled HERE (same as render), NOT deferred
+					// — deferring it would under-measure a RHS whose own body
+					// breaks, hiding the overflow from the parent =-probe.
+					// (GroupWithRestProbe's rest-stack bias needs the live
+					// render stack the probe lacks; treat as plain Group —
+					// matches every static walker.)
+					if (node.forceFlat) {
+						stack.push({doc: inner, indent: node.indent, mode: MFlat, forceFlat: true});
 					} else if (fitsFlat(width - col, node.indent, inner)) {
-						stack.push({doc: inner, indent: node.indent, mode: MFlat});
+						stack.push({doc: inner, indent: node.indent, mode: MFlat, forceFlat: false});
 					} else {
-						stack.push({doc: inner, indent: node.indent, mode: MBreak});
+						stack.push({doc: inner, indent: node.indent, mode: MBreak, forceFlat: false});
 					}
-				case BodyGroup(_):
-					// Deferred (Departure 2): BG decides its own layout,
-					// invisible to the parent's first-line probe.
 				case IfBreak(breakDoc, flatDoc):
-					// Pick by the running mode (mirrors render IfBreak;
-					// forceFlat can't be set here — the arm short-circuits
-					// force-flat before calling this probe).
-					stack.push({doc: node.mode == MFlat ? flatDoc : breakDoc, indent: node.indent, mode: node.mode});
+					// Pick by mode (mirrors render IfBreak): forceFlat or MFlat
+					// -> flat side; MBreak -> break side. Propagate forceFlat.
+					final picked:Doc = (node.forceFlat || node.mode == MFlat) ? flatDoc : breakDoc;
+					stack.push({doc: picked, indent: node.indent, mode: node.mode, forceFlat: node.forceFlat});
 				case IfWidthExceeds(nn, breakDoc, flatDoc):
-					final crosses:Bool = (col + DocMeasure.flatTokenWidth(flatDoc) >= nn);
-					stack.push({doc: crosses ? breakDoc : flatDoc, indent: node.indent, mode: crosses ? MBreak : node.mode});
-				case IfFirstLineExceeds(nn, breakDoc, flatDoc):
-					final crosses:Bool = (col + flatTokenWidthFirstLine(flatDoc) >= nn);
-					stack.push({doc: crosses ? breakDoc : flatDoc, indent: node.indent, mode: crosses ? MBreak : node.mode});
+					if (node.forceFlat) {
+						stack.push({doc: flatDoc, indent: node.indent, mode: MFlat, forceFlat: true});
+					} else {
+						final crosses:Bool = (col + DocMeasure.flatTokenWidth(flatDoc) >= nn);
+						stack.push({doc: crosses ? breakDoc : flatDoc, indent: node.indent, mode: crosses ? MBreak : node.mode, forceFlat: false});
+					}
+				case IfFirstLineExceeds(_, _, flatDoc):
+					// Forward to flatDoc — do NOT let this probe's break branch
+					// terminate the first line. In an assignment RHS this ctor
+					// is the callarg under-wrap probe (WrapList emits it ONLY
+					// when the call-arg cascade resolved modeFlat == NoWrap but
+					// the default mode would break): the bracket is NoWrap-
+					// PINNED, so for the parent =-break decision it is measured
+					// kept-flat (fork's findFirstWrapBracket treats the call
+					// paren as kept, and Pass 2 fires when the line still
+					// overflows because the NoWrap call did not wrap). A
+					// genuinely WRAPPABLE sub-bracket living inside this
+					// flatDoc behind a `WrapBoundary` still breaks via the
+					// Group arm (forceFlat reset) — yielding a short first line
+					// and NO =-break, which protects the wrappable-RHS family.
+					stack.push({doc: flatDoc, indent: node.indent, mode: node.mode, forceFlat: node.forceFlat});
 				case IfLineExceeds(nn, breakDoc, flatDoc):
-					// Rest-of-stack term is 0 here: the natural probe is a
-					// self-contained subtree walk with no render-stack to
-					// look ahead over — matches the subtree-local view the
-					// consumer wants. Own-width probe only.
-					final crosses:Bool = (col + DocMeasure.flatTokenWidth(flatDoc) >= nn);
-					stack.push({doc: crosses ? breakDoc : flatDoc, indent: node.indent, mode: crosses ? MBreak : node.mode});
+					// Own flat width PLUS the rest-of-stack lookahead (the
+					// same-line content the pending work-stack will still emit).
+					// The lookahead lets a chain probe see trailing close-delims
+					// that ride the same line and break.
+					// APPROXIMATION: restStackWidth BG-DESCENDS (mirrors render's
+					// flatTokenWidthOfRestStackFull), whereas render's own
+					// IfLineExceeds uses the BG-DEFER flatTokenWidthOfRestStack.
+					// The canonical assignment-RHS consumer never sits an
+					// IfLineExceeds head with a trailing same-line body BodyGroup,
+					// so descend-vs-defer is inert here — one rest walker suffices
+					// (YAGNI); split it only if a future consumer needs defer.
+					if (node.forceFlat) {
+						stack.push({doc: flatDoc, indent: node.indent, mode: MFlat, forceFlat: true});
+					} else {
+						final crosses:Bool = (col + DocMeasure.flatTokenWidth(flatDoc) + restStackWidth() >= nn);
+						stack.push({doc: crosses ? breakDoc : flatDoc, indent: node.indent, mode: crosses ? MBreak : node.mode, forceFlat: false});
+					}
 				case IfFullLineExceeds(nn, breakDoc, flatDoc):
-					final crosses:Bool = (col + DocMeasure.flatTokenWidth(flatDoc) >= nn);
-					stack.push({doc: crosses ? breakDoc : flatDoc, indent: node.indent, mode: crosses ? MBreak : node.mode});
+					// Mirror render's IfFullLineExceeds: own flat width plus the
+					// rest-of-stack lookahead (restStackWidth descends sibling
+					// BodyGroups in the rest walk, as render's variant does).
+					if (node.forceFlat) {
+						stack.push({doc: flatDoc, indent: node.indent, mode: MFlat, forceFlat: true});
+					} else {
+						final crosses:Bool = (col + DocMeasure.flatTokenWidth(flatDoc) + restStackWidth() >= nn);
+						stack.push({doc: crosses ? breakDoc : flatDoc, indent: node.indent, mode: crosses ? MBreak : node.mode, forceFlat: false});
+					}
 				case IfNaturalFirstLineExceeds(nn, breakDoc, flatDoc):
 					// Self-reference: resolve recursively at the running col
 					// over a strictly smaller subtree (bounded by finite tree).
-					final crosses:Bool = (naturalFirstLineWidth(flatDoc, col, node.indent, width) >= nn);
-					stack.push({doc: crosses ? breakDoc : flatDoc, indent: node.indent, mode: crosses ? MBreak : node.mode});
+					if (node.forceFlat) {
+						stack.push({doc: flatDoc, indent: node.indent, mode: MFlat, forceFlat: true});
+					} else {
+						final crosses:Bool = (naturalFirstLineWidth(flatDoc, col, node.indent, width) >= nn);
+						stack.push({doc: crosses ? breakDoc : flatDoc, indent: node.indent, mode: crosses ? MBreak : node.mode, forceFlat: false});
+					}
 				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
-					// Flat interleave tagged with node.mode (so a broken
-					// sep's Line terminates the first line). Slight
-					// over-measure when items pack onto multiple lines; the
-					// canonical consumer (assignment RHS) does not place a
-					// bare Fill as the probed flatDoc head. See Doc stanza.
+					// Flat interleave tagged with node.mode (so a broken sep's
+					// Line terminates the first line). Slight over-measure when
+					// items pack onto multiple lines; the canonical consumer
+					// (assignment RHS) does not place a bare Fill as the probed
+					// flatDoc head. See Doc stanza.
 					var k:Int = items.length;
 					while (k > 0) {
 						k--;
-						stack.push({doc: items[k], indent: node.indent, mode: node.mode});
-						if (k > 0) stack.push({doc: sep, indent: node.indent, mode: node.mode});
+						stack.push({doc: items[k], indent: node.indent, mode: node.mode, forceFlat: node.forceFlat});
+						if (k > 0) stack.push({doc: sep, indent: node.indent, mode: node.mode, forceFlat: node.forceFlat});
 					}
 				case OptSpace(s):
 					col += s.length;
 				case OptSpaceSkipAfterHardline:
 					col += 1;
 				case Flatten(inner):
-					// Force-flat region: descend inner as MFlat so every
-					// nested Group stays flat (matches render's forceFlat
-					// Group push). A literal Line('\n') inside is handled by
-					// the Line arm's flat[0]=='\n' check first, terminating
-					// the first line — consistent with render.
-					stack.push({doc: inner, indent: node.indent, mode: MFlat});
+					// Enter force-flat region (mirror render's Flatten arm):
+					// push inner MFlat + forceFlat=true so every nested Group
+					// stays flat until a WrapBoundary resets the flag.
+					stack.push({doc: inner, indent: node.indent, mode: MFlat, forceFlat: true});
 				case WrapBoundary(inner):
-					// Reset to natural: descend with the running mode (a
-					// nested cascade decides its own Groups). Mirrors render.
-					stack.push({doc: inner, indent: node.indent, mode: node.mode});
+					// Reset force-flat (mirror render's WrapBoundary arm): mode
+					// preserved, forceFlat=false so a nested wrap-cascade's
+					// Groups re-evaluate their own fit and may break.
+					stack.push({doc: inner, indent: node.indent, mode: node.mode, forceFlat: false});
 			}
 		}
 		return col;
