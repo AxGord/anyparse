@@ -873,6 +873,40 @@ class WrapList {
 		appendTrailingComma:Bool, trailBreak:Doc, groupRestProbe:Bool,
 		sepBeforeFlags:Null<Array<Bool>>
 	):Doc {
+		// ω-inc5 sole-arrow uniform escalation: a call whose SOLE arg is an
+		// arrow lambda whose body wraps gets the SAME close-on-own-line +
+		// params-glued-to-open shape regardless of the cascade-resolved wrap
+		// mode. Without this intercept, FillLine routes to `shapeFillLine`
+		// (close glued to body) and FillLineWithLeadingBreak to
+		// `shapeFillLineWithLeadingBreak` (paren OPENS, arrow onto its own
+		// line) — both wrong. Mirrors fork's `applyArrowWrapping` (MarkWrapping
+		// .hx:1962), a late dedicated pass that overrides the generic call-arg
+		// wrap: arrow params + `->` stay glued to the open paren, body breaks,
+		// and `lineEndBefore(pClose)` puts the close paren on its own line.
+		//
+		// NoWrap path already did this via `shapeNoWrap`; this lifts the same
+		// `Group(IfBreak)` decision to the auto-overflow break modes FillLine
+		// and FillLineWithLeadingBreak. `applyArrowWrapping` overrides the
+		// config-driven call-arg wrap uniformly — even a `callParameter:
+		// fillLineWithLeadingBreak` config keeps the sole arrow glued to the
+		// open paren (`condition_chain_in_arrow_lambda`).
+		//
+		// Gates:
+		//  - NoWrap is excluded (already handled by `shapeNoWrap`; preserves the
+		//    baseline open-vs-glue split for `condition_wrapping_nested` /
+		//    `paren_indent_call`, both NoWrap).
+		//  - FillLineWithLeadingBreak additionally requires the body to
+		//    STRUCTURALLY break (`arrowBodyBreaks`): a single-expression body
+		//    that fits one continuation line keeps the generic open-paren shape,
+		//    mirroring fork `preferLambdaSignatureInlineOverWrap` (2986-2992,
+		//    cites `condition_wrapping_nested`/`paren_indent_call` by name).
+		//  - Block-body lambdas (`() -> { … }`) are excluded (`arrowBodyIsBlock`):
+		//    the block owns its own multi-line layout, close stays glued (`})`),
+		//    matching fork `applyArrowWrapping`'s `bodyFirst.match(BrOpen)` skip
+		//    (`issue_538`).
+		if (items.length == 1 && isArrowBodyMarker(items[0]) && !arrowBodyIsBlock(items[0])
+				&& (mode == FillLine || (mode == FillLineWithLeadingBreak && arrowBodyBreaks(items[0]))))
+			return arrowBodyCloseParenShape(open, close, openInside, closeInside, items[0]);
 		return switch mode {
 			case NoWrap: shapeNoWrap(open, close, sep, items, openInside, closeInside, sepBeforeFlags);
 			case OnePerLine: shapeOnePerLine(open, close, sep, items, cols, appendTrailingComma, trailBreak, sepBeforeFlags);
@@ -909,6 +943,82 @@ class WrapList {
 		return flags != null && i >= 0 && i < flags.length && flags[i];
 	}
 
+	/**
+	 * ω-inc5: the sole-arrow-arg close-paren shape. `Group(IfBreak(close on
+	 * its own line, close glued))` — the Group's `fitsFlat` walks the arrow's
+	 * inline body (`IfLineExceeds.flat`), so MFlat fires iff the body fits at
+	 * the column (close glued); else MBreak (close on its own line). The arrow
+	 * params + `->` always stay glued to `open` in both branches. Mirrors fork
+	 * `applyArrowWrapping`'s `lineEndBefore(pClose)`. Extracted from
+	 * `shapeNoWrap`'s arrow escalation so every break mode reuses one shape.
+	 */
+	private static function arrowBodyCloseParenShape(
+		open:String, close:String, openInside:Doc, closeInside:Doc, arrowItem:Doc
+	):Doc {
+		final flatShape:Doc = Concat([Text(open), openInside, arrowItem, closeInside, Text(close)]);
+		final brkShape:Doc = Concat([Text(open), openInside, arrowItem, Line('\n'), closeInside, Text(close)]);
+		return Group(IfBreak(brkShape, flatShape));
+	}
+
+	// ω-inc5: does the arrow body's FLAT side carry a structural hardline
+	// (multi-statement block / if-else-if chain) — i.e. the body wraps
+	// regardless of width? Walks to the marker `IfLineExceeds(_, _, flatBody)`
+	// and reports `flatLength(flatBody) < 0`. Used to keep the generic open-paren
+	// shape for a single-expression FLWLB body that fits one continuation line
+	// (fork `preferLambdaSignatureInlineOverWrap` 2986-2992).
+	private static function arrowBodyBreaks(item:Doc):Bool {
+		return switch item {
+			case WrapBoundary(IfLineExceeds(_, _, flatBody)): flatLength(flatBody) < 0;
+			case Concat(arr) if (arr.length > 0): arrowBodyBreaks(arr[arr.length - 1]);
+			case _: false;
+		};
+	}
+
+	// ω-inc5: true iff the arrow body (the marker's flat side) is a `{ }` block.
+	// Fork's `preferLambdaSignatureInlineOverWrap` (2980-2981) and the close-
+	// paren-own-line escalation EXPLICITLY skip block-body lambdas — the block
+	// owns its own multi-line layout (open brace placed by the curly policy), so
+	// the outer close paren stays glued (`})`, not `}\n)`). Walks to the marker's
+	// flat body; the first visible content token of a block body is `{` (skipping
+	// transparent wrappers, leading hardlines and OptSpace inserted by an
+	// `anonFunctionCurly` newline policy).
+	private static function arrowBodyIsBlock(item:Doc):Bool {
+		return switch item {
+			case WrapBoundary(IfLineExceeds(_, _, flatBody)): firstVisibleTextStartsWith(flatBody, '{'.code);
+			case Concat(arr) if (arr.length > 0): arrowBodyIsBlock(arr[arr.length - 1]);
+			case _: false;
+		};
+	}
+
+	// First visible Text leaf's leading char-code, comparing to `c`. Skips
+	// transparent wrappers (Empty / Line / OptSpace* / leading Concat slot /
+	// Group family / Nest / Flatten / WrapBoundary). Returns false if no Text
+	// leaf is reached before a non-skippable, non-`c` token.
+	private static function firstVisibleTextStartsWith(d:Doc, c:Int):Bool {
+		return switch d {
+			case Text(s): s.length > 0 && StringTools.fastCodeAt(s, 0) == c;
+			case Concat(arr):
+				var found:Bool = false;
+				var hit:Bool = false;
+				for (it in arr) if (!found) switch it {
+					case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline
+							| OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
+					case _:
+						found = true;
+						hit = firstVisibleTextStartsWith(it, c);
+				}
+				hit;
+			case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i)
+					| Flatten(i) | HardFlatten(i) | CollapseProbe(i) | WrapBoundary(i):
+				firstVisibleTextStartsWith(i, c);
+			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat)
+					| IfLineExceeds(_, _, flat) | IfFullLineExceeds(_, _, flat)
+					| IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat):
+				firstVisibleTextStartsWith(flat, c);
+			case _: false;
+		};
+	}
+
 	private static function shapeNoWrap(
 		open:String, close:String, sep:String, items:Array<Doc>,
 		openInside:Doc, closeInside:Doc,
@@ -928,11 +1038,8 @@ class WrapList {
 		// independently (WrapBoundary resets forceFlat), but the outer
 		// close paren has no mechanism to follow that decision. Group +
 		// IfBreak emits both close placements and picks consistently.
-		if (items.length == 1 && isArrowBodyMarker(items[0])) {
-			final flatShape:Doc = Concat([Text(open), openInside, items[0], closeInside, Text(close)]);
-			final brkShape:Doc = Concat([Text(open), openInside, items[0], Line('\n'), closeInside, Text(close)]);
-			return Group(IfBreak(brkShape, flatShape));
-		}
+		if (items.length == 1 && isArrowBodyMarker(items[0]))
+			return arrowBodyCloseParenShape(open, close, openInside, closeInside, items[0]);
 		final inner:Array<Doc> = [];
 		for (i in 0...items.length) {
 			if (i > 0)
