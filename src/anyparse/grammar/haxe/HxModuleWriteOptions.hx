@@ -1733,6 +1733,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	metadataCallParameterWrap:WrapRules,
 	typeParameterWrap:WrapRules,
 	expressionWrappingWrap:WrapRules,
+	implementsExtendsWrap:WrapRules,
 	expressionTry:SameLinePolicy,
 	indentCaseLabels:Bool,
 	indentObjectLiteral:Bool,

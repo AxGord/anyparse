@@ -741,6 +741,7 @@ final class HaxeFormat implements TextFormat {
 		metadataCallParameterWrap: HaxeFormat.defaultMetadataCallParameterWrap(),
 		typeParameterWrap: HaxeFormat.defaultTypeParameterWrap(),
 		expressionWrappingWrap: HaxeFormat.defaultExpressionWrappingWrap(),
+		implementsExtendsWrap: HaxeFormat.defaultImplementsExtendsWrap(),
 		addLineCommentSpace: true,
 		expressionTry: SameLinePolicy.Same,
 		indentCaseLabels: true,
@@ -1470,6 +1471,42 @@ final class HaxeFormat implements TextFormat {
 				},
 			],
 			defaultMode: WrapMode.NoWrap,
+		};
+	}
+
+	/**
+	 * B4 ω-implements-extends-wrap: default `wrapping.implementsExtends`
+	 * cascade for class/interface heritage clauses, ported from the fork's
+	 * `WrapConfig.implementsExtends` `@:default`. FillLine once the glued
+	 * decl line exceeds 140 (or >4 clauses, or exceeds maxLineLength), at
+	 * a continuation indent of 2 (8 spaces). anyparse `WrapRule` carries no
+	 * per-rule `additionalIndent`, so the fork's per-rule `additionalIndent:
+	 * 2` is modelled as `defaultAdditionalIndent: 2` (every break-mode
+	 * shape in this cascade shares the same indent, so the per-rule vs
+	 * default distinction is byte-equivalent here). Consumed by the
+	 * dedicated heritage emit in `WriterLowering.triviaTryparseStarExpr`.
+	 *
+	 * Fresh struct per call (mutation safety) — same convention as the
+	 * other `default*Wrap` helpers.
+	 */
+	public static function defaultImplementsExtendsWrap():WrapRules {
+		return {
+			rules: [
+				{
+					mode: WrapMode.FillLine,
+					conditions: [{cond: WrapConditionType.LineLengthLargerThan, value: 140}],
+				},
+				{
+					mode: WrapMode.FillLine,
+					conditions: [{cond: WrapConditionType.ItemCountLargerThan, value: 4}],
+				},
+				{
+					mode: WrapMode.FillLine,
+					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
+				},
+			],
+			defaultMode: WrapMode.NoWrap,
+			defaultAdditionalIndent: 2,
 		};
 	}
 

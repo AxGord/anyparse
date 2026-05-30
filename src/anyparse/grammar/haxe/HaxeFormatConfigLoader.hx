@@ -619,6 +619,7 @@ final class HaxeFormatConfigLoader {
 			metadataCallParameterWrap: base.metadataCallParameterWrap,
 			typeParameterWrap: base.typeParameterWrap,
 			expressionWrappingWrap: base.expressionWrappingWrap,
+			implementsExtendsWrap: base.implementsExtendsWrap,
 			addLineCommentSpace: base.addLineCommentSpace,
 			expressionTry: base.expressionTry,
 			indentCaseLabels: base.indentCaseLabels,
@@ -749,6 +750,7 @@ final class HaxeFormatConfigLoader {
 		if (section.metadataCallParameter != null) opt.metadataCallParameterWrap = wrapRulesFromConfig(section.metadataCallParameter, opt.metadataCallParameterWrap);
 		if (section.typeParameter != null) opt.typeParameterWrap = wrapRulesFromConfig(section.typeParameter, opt.typeParameterWrap);
 		if (section.expressionWrapping != null) opt.expressionWrappingWrap = wrapRulesFromConfig(section.expressionWrapping, opt.expressionWrappingWrap);
+		if (section.implementsExtends != null) opt.implementsExtendsWrap = wrapRulesFromConfig(section.implementsExtends, opt.implementsExtendsWrap, true);
 	}
 
 	/**
@@ -793,8 +795,19 @@ final class HaxeFormatConfigLoader {
 		final defaultAdditionalIndent:Null<Int> = cfg.defaultAdditionalIndent ?? base.defaultAdditionalIndent;
 		final src:Null<Array<HxFormatWrapRule>> = cfg.rules;
 		if (src == null) {
-			final inheritedRules:Array<WrapRule> = clearRulesOnDefaultWrap && resolvedDefault != null ? [] : base.rules;
-			return {rules: inheritedRules, defaultMode: defaultMode, defaultLocation: defaultLocation, defaultAdditionalIndent: defaultAdditionalIndent};
+			final clearing:Bool = clearRulesOnDefaultWrap && resolvedDefault != null;
+			final inheritedRules:Array<WrapRule> = clearing ? [] : base.rules;
+			// B4 ω-implements-extends-wrap: when a `defaultWrap`-only block
+			// CLEARS the built-in cascade (chain classes + implementsExtends),
+			// the fork models continuation indent as a PER-RULE
+			// `additionalIndent` — so a rules-less `defaultWrap` carries NO
+			// extra indent. Don't inherit the base cascade's
+			// `defaultAdditionalIndent` (which encodes the cleared rules' indent);
+			// honour an explicit `defaultAdditionalIndent` if present, else 0.
+			// Chain emitters ignore `defaultAdditionalIndent` (WrapRules doc), so
+			// this is a no-op for opBoolChain / opAddSubChain.
+			final clearedIndent:Null<Int> = clearing ? (cfg.defaultAdditionalIndent ?? 0) : defaultAdditionalIndent;
+			return {rules: inheritedRules, defaultMode: defaultMode, defaultLocation: defaultLocation, defaultAdditionalIndent: clearedIndent};
 		}
 		final rules:Array<WrapRule> = [];
 		for (raw in src) {

@@ -163,4 +163,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var typeParameter:HxFormatWrapRules;
 
 	@:optional var expressionWrapping:HxFormatWrapRules;
+
+	@:optional var implementsExtends:HxFormatWrapRules;
 };

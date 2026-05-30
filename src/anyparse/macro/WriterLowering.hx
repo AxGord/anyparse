@@ -4057,6 +4057,19 @@ class WriterLowering {
 				// Sister to the non-trivia bare-Star `padLeading||padTrailing`
 				// branch's lineLengthAware path.
 				final tryparseLineLengthAware:Bool = starNode.fmtHasFlag('lineLengthAwareSeps');
+				// B4 ω-implements-extends-wrap: `@:fmt(heritageWrap)` on a
+				// `@:trivia @:tryparse` Star (HxClassDecl.heritage /
+				// HxInterfaceDecl.heritage) routes a MULTI-clause heritage list
+				// (`extends A implements B …`) through the fork's
+				// `wrapping.implementsExtends` FillLine layout: when the full
+				// glued decl line is long, pack clauses from the front and break
+				// the overflow clause(s) at additionalIndent 2 (8 spaces). The
+				// single-clause path stays on the existing `lineLengthAwareSeps`
+				// 1-tab break-before-keyword (matches fork single-clause +
+				// `extends_break_before_keyword_not_type_params`). Abstract
+				// `clauses` (from/to) never carries this flag — its
+				// `lineLengthAwareSeps` behaviour is untouched.
+				final tryparseHeritageWrap:Bool = starNode.fmtHasFlag('heritageWrap');
 				// ω-slice-45 / issue_626: `@:fmt(forceInlineSep)` on a `@:trivia
 				// @:tryparse` Star collapses every source linebreak between
 				// consecutive elements to a single space. First consumers are
@@ -4095,7 +4108,8 @@ class WriterLowering {
 					tryparseLineLengthAware,
 					tryparsePriorAfterTrailExpr,
 					tryparseForceInlineSep,
-					tryparseBlockEnded ? tryparseSepText : null, tryparseBlockEnded
+					tryparseBlockEnded ? tryparseSepText : null, tryparseBlockEnded,
+					tryparseHeritageWrap
 				));
 				return;
 			}
@@ -9280,7 +9294,12 @@ class WriterLowering {
 		// non-`}`-ending elements before the existing hardline / space
 		// dispatch. Null sepText → byte-identical to pre-slice.
 		sepText:Null<String> = null,
-		blockEnded:Bool = false
+		blockEnded:Bool = false,
+		// B4 ω-implements-extends-wrap: HxClassDecl/HxInterfaceDecl heritage
+		// Star. When true, MULTI-clause heritage uses fork FillLine layout
+		// (pack-from-front, break overflow clause at additionalIndent 2);
+		// single-clause stays on the lineLengthAwareSeps 1-tab break path.
+		heritageWrap:Bool = false
 	):Expr {
 		// ω-bug-2c-inner-star — cascade emit for the tryparse-Star path.
 		// Cascade trackers + cascade-fire blank count come from
@@ -9553,6 +9572,119 @@ class WriterLowering {
 				}
 			}
 			: macro {};
+		// B4 ω-implements-extends-wrap: dedicated heritage emit bypassing
+		// the shared incremental loop. MULTI-clause heritage packs clauses
+		// from the front via `Fill` and breaks the overflow clause(s) at
+		// additionalIndent 2 (8 spaces) — the fork `wrapping.implementsExtends`
+		// default FillLine layout. SINGLE-clause heritage stays byte-identical
+		// to the `lineLengthAwareSeps` path (`_dile` leading break at 1 tab,
+		// type params intact) so `extends_break_before_keyword_not_type_params`
+		// and the meta-priority single-clause cases hold. Falls back to a plain
+		// space-join when any clause carries leading/trailing comments (no
+		// fork-corpus heritage fixture exercises that path).
+		if (heritageWrap) {
+			return macro {
+				final _arr = $fieldAccess;
+				if (_arr.length == 0) _de()
+				else {
+					final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+					final _writerOpt = $writerOptExpr;
+					var _hasComments:Bool = false;
+					var _hci:Int = 0;
+					while (_hci < _arr.length) {
+						if (_arr[_hci].leadingComments.length > 0 || _arr[_hci].trailingComment != null)
+							_hasComments = true;
+						_hci++;
+					}
+					final _items:Array<anyparse.core.Doc> = [];
+					var _hi:Int = 0;
+					while (_hi < _arr.length) {
+						final _t = _arr[_hi];
+						_items.push($triviaElemCall);
+						_hi++;
+					}
+					if (_hasComments) {
+						final _docs:Array<anyparse.core.Doc> = [_dt(' ')];
+						var _hj:Int = 0;
+						while (_hj < _items.length) {
+							if (_hj > 0) _docs.push(_dt(' '));
+							_docs.push(_items[_hj]);
+							_hj++;
+						}
+						_dc(_docs);
+					} else if (_items.length <= 1) {
+						_dn(_cols, _dc([_dile(opt.lineWidth, _dhl(), _dt(' ')), _items[0]]));
+					} else {
+						// B4 ω-implements-extends-wrap: config-driven multi-clause
+						// layout. Resolve the fork-style WrapRules cascade at write
+						// time from opt.implementsExtendsWrap. lineLength rules gate
+						// via IfLineExceeds (prefix-aware); itemCount / defaultMode
+						// resolve as plain Haxe. additionalIndent comes from the
+						// cascade (defaultAdditionalIndent; anyparse WrapRule has no
+						// per-rule indent — see HaxeFormat.defaultImplementsExtendsWrap).
+						final _rules = opt.implementsExtendsWrap;
+						final _ai:Int = _cols * (_rules.defaultAdditionalIndent ?? 0);
+						// Resolve mode + lineLength threshold from the first matching
+						// rule (itemCount evaluated now; lineLength deferred to the
+						// render gate via _thr). _thr<0 means "apply mode always".
+						var _mode:anyparse.format.wrap.WrapMode = _rules.defaultMode;
+						var _thr:Int = -1;
+						var _ri:Int = 0;
+						var _matched:Bool = false;
+						while (_ri < _rules.rules.length && !_matched) {
+							final _rule = _rules.rules[_ri];
+							_ri++;
+							var _llThr:Int = -1;
+							var _ok:Bool = true;
+							var _ci2:Int = 0;
+							while (_ci2 < _rule.conditions.length) {
+								final _cond = _rule.conditions[_ci2];
+								_ci2++;
+								switch (_cond.cond) {
+									case anyparse.format.wrap.WrapConditionType.ItemCountLargerThan:
+										if (_arr.length < _cond.value) _ok = false;
+									case anyparse.format.wrap.WrapConditionType.ItemCountLessThan:
+										if (_arr.length > _cond.value) _ok = false;
+									case anyparse.format.wrap.WrapConditionType.LineLengthLargerThan:
+										_llThr = _cond.value;
+									case anyparse.format.wrap.WrapConditionType.ExceedsMaxLineLength:
+										_llThr = opt.lineWidth;
+									case _:
+										_ok = false;
+								}
+							}
+							if (_ok) { _mode = _rule.mode; _thr = _llThr; _matched = true; }
+						}
+						// Build the broken layout for the resolved mode, plus the
+						// all-glued (space-joined) fallback used when the lineLength
+						// gate does not fire.
+						final _glued:Array<anyparse.core.Doc> = [_dt(' ')];
+						var _gj:Int = 0;
+						while (_gj < _items.length) { if (_gj > 0) _glued.push(_dt(' ')); _glued.push(_items[_gj]); _gj++; }
+						final _gluedDoc:anyparse.core.Doc = _dc(_glued);
+						final _broken:anyparse.core.Doc = switch (_mode) {
+							case anyparse.format.wrap.WrapMode.OnePerLine:
+								final _ds:Array<anyparse.core.Doc> = [];
+								var _k:Int = 0;
+								while (_k < _items.length) { _ds.push(_dhl()); _ds.push(_items[_k]); _k++; }
+								_dn(_ai, _dc(_ds));
+							case anyparse.format.wrap.WrapMode.OnePerLineAfterFirst:
+								final _ds:Array<anyparse.core.Doc> = [_dt(' '), _items[0]];
+								var _k:Int = 1;
+								while (_k < _items.length) { _ds.push(_dhl()); _ds.push(_items[_k]); _k++; }
+								_dn(_ai, _dc(_ds));
+							case anyparse.format.wrap.WrapMode.FillLine | anyparse.format.wrap.WrapMode.FillLineWithLeadingBreak:
+								_dn(_ai, _dc([_dt(' '), _dfill(_items, _dl())]));
+							case _:
+								_gluedDoc;
+						};
+						if (_mode == anyparse.format.wrap.WrapMode.NoWrap) _gluedDoc;
+						else if (_thr < 0) _broken;
+						else _dile(_thr, _broken, _gluedDoc);
+					}
+				}
+			};
+		}
 		return macro {
 			final _arr = $fieldAccess;
 			final _trailLC:Array<String> = $trailLC;
