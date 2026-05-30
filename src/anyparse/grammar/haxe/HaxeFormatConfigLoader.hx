@@ -20,6 +20,7 @@ import anyparse.format.wrap.WrappingLocation;
 import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
 import anyparse.grammar.haxe.format.HxFormatBodyPolicy;
 import anyparse.grammar.haxe.format.HxFormatBracesConfigSection;
+import anyparse.grammar.haxe.format.HxFormatBracketConfigSection;
 import anyparse.grammar.haxe.format.HxFormatClassEmptyLinesConfig;
 import anyparse.grammar.haxe.format.HxFormatCommentEmptyLinesPolicy;
 import anyparse.grammar.haxe.format.HxFormatConfig;
@@ -593,6 +594,14 @@ final class HaxeFormatConfigLoader {
 			anonTypeBracesClose: base.anonTypeBracesClose,
 			objectLiteralBracesOpen: base.objectLiteralBracesOpen,
 			objectLiteralBracesClose: base.objectLiteralBracesClose,
+			accessBracketsOpen: base.accessBracketsOpen,
+			accessBracketsClose: base.accessBracketsClose,
+			arrayLiteralBracketsOpen: base.arrayLiteralBracketsOpen,
+			arrayLiteralBracketsClose: base.arrayLiteralBracketsClose,
+			mapLiteralBracketsOpen: base.mapLiteralBracketsOpen,
+			mapLiteralBracketsClose: base.mapLiteralBracketsClose,
+			comprehensionBracketsOpen: base.comprehensionBracketsOpen,
+			comprehensionBracketsClose: base.comprehensionBracketsClose,
 			objectLiteralWrap: base.objectLiteralWrap,
 			callParameterWrap: base.callParameterWrap,
 			arrayLiteralWrap: base.arrayLiteralWrap,
@@ -644,6 +653,7 @@ final class HaxeFormatConfigLoader {
 			lineCommentAdapter: base.lineCommentAdapter,
 			endsWithCloseBrace: base.endsWithCloseBrace,
 			caseBodyRefusesFlat: base.caseBodyRefusesFlat,
+			arrayBracketKind: base.arrayBracketKind,
 			betweenImportsPathDiffers: base.betweenImportsPathDiffers,
 			betweenImportsTailLeafClassify: base.betweenImportsTailLeafClassify,
 			betweenImportsHeadLeafClassify: base.betweenImportsHeadLeafClassify,
@@ -1224,6 +1234,44 @@ final class HaxeFormatConfigLoader {
 					opt.objectLiteralBracesOpen = whitespaceToRuntime(objectLit.openingPolicy);
 				if (objectLit.closingPolicy != null)
 					opt.objectLiteralBracesClose = whitespaceToRuntime(objectLit.closingPolicy);
+			}
+		}
+		// ω-bracket-config: `whitespace.bracketConfig.*` → the eight
+		// `{access|arrayLiteral|mapLiteral|comprehension}Brackets{Open|
+		// Close}` knobs. Mirrors the `bracesConfig` block above; each of
+		// the four bracket kinds reuses the `HxFormatParenPolicySection`
+		// opening / closing policy pair. `HxExpr.IndexAccess` reads the
+		// `accessBrackets` pair; `HxExpr.ArrayExpr` runtime-dispatches
+		// among the other three on its first element's enum constructor.
+		final bracket:Null<HxFormatBracketConfigSection> = section.bracketConfig;
+		if (bracket != null) {
+			final access:Null<HxFormatParenPolicySection> = bracket.accessBrackets;
+			if (access != null) {
+				if (access.openingPolicy != null)
+					opt.accessBracketsOpen = whitespaceToRuntime(access.openingPolicy);
+				if (access.closingPolicy != null)
+					opt.accessBracketsClose = whitespaceToRuntime(access.closingPolicy);
+			}
+			final arrayLit:Null<HxFormatParenPolicySection> = bracket.arrayLiteralBrackets;
+			if (arrayLit != null) {
+				if (arrayLit.openingPolicy != null)
+					opt.arrayLiteralBracketsOpen = whitespaceToRuntime(arrayLit.openingPolicy);
+				if (arrayLit.closingPolicy != null)
+					opt.arrayLiteralBracketsClose = whitespaceToRuntime(arrayLit.closingPolicy);
+			}
+			final mapLit:Null<HxFormatParenPolicySection> = bracket.mapLiteralBrackets;
+			if (mapLit != null) {
+				if (mapLit.openingPolicy != null)
+					opt.mapLiteralBracketsOpen = whitespaceToRuntime(mapLit.openingPolicy);
+				if (mapLit.closingPolicy != null)
+					opt.mapLiteralBracketsClose = whitespaceToRuntime(mapLit.closingPolicy);
+			}
+			final compr:Null<HxFormatParenPolicySection> = bracket.comprehensionBrackets;
+			if (compr != null) {
+				if (compr.openingPolicy != null)
+					opt.comprehensionBracketsOpen = whitespaceToRuntime(compr.openingPolicy);
+				if (compr.closingPolicy != null)
+					opt.comprehensionBracketsClose = whitespaceToRuntime(compr.closingPolicy);
 			}
 		}
 	}

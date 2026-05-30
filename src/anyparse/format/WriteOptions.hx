@@ -206,6 +206,16 @@ typedef WriteOptions = {
 	 *    iteration's curr side. Together they cover bidirectional
 	 *    transparency for a `Conditional` containing imports/usings.
 	 *
+	 *  - `arrayBracketKind(raw) → Int` — classifies the first element of
+	 *    an array-`[…]` ctor into a bracket kind code so the writer picks
+	 *    the matching interior-spacing policy (one grammar ctor covers
+	 *    array-literal / map-literal / comprehension; the kind is decided
+	 *    by element shape at write time). Drives `@:fmt(bracketKindPad)`
+	 *    on the array-literal ctor: the writer reads the kind, then
+	 *    selects the corresponding `*BracketsOpen` / `*BracketsClose`
+	 *    policy field. Returns the default kind (0) for null / non-enum
+	 *    shapes — the tight bracket has no padding either way.
+	 *
 	 * Formats that don't opt into a gate leave the field null; the
 	 * writer helper checks `null` before invoking and falls back to
 	 * the unconditional non-refusal path.
@@ -215,4 +225,5 @@ typedef WriteOptions = {
 	?betweenImportsPathDiffers:Null<(String, String, Int) -> Bool>,
 	?betweenImportsTailLeafClassify:Null<Dynamic -> Null<{ctorName:String, path:String}>>,
 	?betweenImportsHeadLeafClassify:Null<Dynamic -> Null<{ctorName:String, path:String}>>,
+	?arrayBracketKind:Null<Dynamic -> Int>,
 };

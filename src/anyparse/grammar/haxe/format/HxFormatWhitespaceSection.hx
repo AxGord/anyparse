@@ -164,4 +164,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var parenConfig:HxFormatParenConfigSection;
 
 	@:optional var bracesConfig:HxFormatBracesConfigSection;
+
+	@:optional var bracketConfig:HxFormatBracketConfigSection;
 };

@@ -761,8 +761,22 @@ class WriterLowering {
 					pos: Context.currentPos(),
 				};
 				final close:String = postfixClose ?? '';
-				if (close.length > 0)
+				if (close.length > 0) {
+					// ω-bracket-config: `HxExpr.IndexAccess` (`@:postfix('[',
+					// ']') @:fmt(accessBrackets)`) is the sole close-bearing
+					// two-child postfix ctor. With the flag, pad the inside of
+					// the subscript brackets per `accessBracketsOpen` /
+					// `accessBracketsClose` (`arr[ i ]`); without it, the slots
+					// collapse to `_de()` so the default `arr[i]` stays byte-
+					// identical. The `index` is a mandatory Ref (never empty),
+					// so no empty-bracket guard is needed here.
+					if (branch.fmtHasFlag('accessBrackets')) {
+						final openInside:Expr = policyInsideSpace('accessBracketsOpen', false);
+						final closeInside:Expr = policyInsideSpace('accessBracketsClose', true);
+						return macro _dc([$operandCall, _dt($v{postfixOp}), $openInside, $suffixCall, $closeInside, _dt($v{close})]);
+					}
 					return macro _dc([$operandCall, _dt($v{postfixOp}), $suffixCall, _dt($v{close})]);
+				}
 				return macro _dc([$operandCall, _dt($v{postfixOp}), $suffixCall]);
 			}
 			Context.fatalError('WriterLowering: unsupported postfix shape', Context.currentPos());
@@ -1727,10 +1741,17 @@ class WriterLowering {
 					// by the wrap cascade instead of forced one-per-line.
 					// Threads into `triviaSepStarExpr`'s `_smlKeep` gate.
 					final reflowSourceMultilineAlt:Bool = branch.fmtHasFlag('reflowSourceMultiline');
+					// ω-bracket-config: enum-Alt branch reader for
+					// `@:fmt(bracketKindPad)` (`HxExpr.ArrayExpr`). When set,
+					// `triviaSepStarExpr` overrides the static open/close
+					// inside-space Docs with a runtime dispatch on the first
+					// element's bracket kind (array-literal / map / comprehension
+					// → the matching `*BracketsOpen`/`*BracketsClose` policy).
+					final bracketKindPadAlt:Bool = branch.fmtHasFlag('bracketKindPad');
 				parts.push(triviaSepStarExpr(
 					argsAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, leadText, trailText, sepText,
 					wrapRulesField, knobLeftCurly, knobRightCurly, sepTrailPresentAccess, trailingCommaField, openInsideExpr, closeInsideExpr, beforeDocComments,
-					forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines, keepCurlyBlanksAlt, reflowSourceMultilineAlt
+					forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines, keepCurlyBlanksAlt, reflowSourceMultilineAlt, bracketKindPadAlt
 				));
 			} else {
 				// ω-bropen-keep: forward `@:fmt(keepCurlyBlanks)` from the
@@ -1848,8 +1869,21 @@ class WriterLowering {
 				});
 			} else {
 				final tcExpr:Expr = trailingCommaExpr(branch);
-				final openInsideExpr:Expr = delimInsidePolicySpace(branch, ['anonTypeBracesOpen'], false) ?? macro _de();
-				final closeInsideExpr:Expr = delimInsidePolicySpace(branch, ['anonTypeBracesClose'], true) ?? macro _de();
+				// ω-bracket-config: `@:fmt(bracketKindPad)` (`HxExpr.ArrayExpr`,
+				// plain-mode `sepList` path) overrides the static anonTypeBraces
+				// inside-space with a runtime dispatch on the first element's
+				// bracket kind. Reads `_args[0]` (the plain `HxExpr` element,
+				// bound just below at the `final _args = $argsAccess` site).
+				// `opt.arrayBracketKind` null-guards an empty list, so `_args[0]`
+				// on `[]` resolves to the default `ArrayLiteral` → `_de()`,
+				// keeping empty brackets tight.
+				final bracketKindPad:Bool = branch.fmtHasFlag('bracketKindPad');
+				final openInsideExpr:Expr = bracketKindPad
+					? arrayBracketInsidePolicySpace(macro _args[0], false)
+					: (delimInsidePolicySpace(branch, ['anonTypeBracesOpen'], false) ?? macro _de());
+				final closeInsideExpr:Expr = bracketKindPad
+					? arrayBracketInsidePolicySpace(macro _args[0], true)
+					: (delimInsidePolicySpace(branch, ['anonTypeBracesClose'], true) ?? macro _de());
 				// ω-anontype-wraprules: forward `@:fmt(wrapRules('<field>'))`
 				// to `WrapList.emit` for non-trivia-collecting Alt-Star
 				// nodes only. `@:trivia`-annotated branches (e.g.
@@ -5957,6 +5991,19 @@ class WriterLowering {
 	private static function delimInsidePolicySpace(starNode:ShapeNode, flagNames:Array<String>, isClose:Bool):Null<Expr> {
 		final flagName:Null<String> = firstFmtFlag(starNode, flagNames);
 		if (flagName == null) return null;
+		return policyInsideSpace(flagName, isClose);
+	}
+
+	/**
+	 * Build the inside-delimiter space Doc Expr for a named
+	 * `WhitespacePolicy` opt field: a runtime switch emitting `_dt(' ')`
+	 * for `After`/`Both` (open side) or `Before`/`Both` (close side), else
+	 * `_de()`. Shared core of `delimInsidePolicySpace` (where the flag name
+	 * IS the opt field name, e.g. `anonTypeBracesOpen`) and the
+	 * `HxExpr.IndexAccess` `accessBracketsOpen`/`Close` path (where the
+	 * `@:fmt(accessBrackets)` flag name differs from the two opt fields).
+	 */
+	private static function policyInsideSpace(optFieldName:String, isClose:Bool):Expr {
 		final wpPath:Array<String> = ['anyparse', 'format', 'WhitespacePolicy'];
 		final beforePat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Before']));
 		final afterPat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['After']));
@@ -5965,8 +6012,61 @@ class WriterLowering {
 		final cases:Array<Case> = [
 			{values: matchValues, expr: macro _dt(' '), guard: null},
 		];
-		final optAccess:Expr = optFieldAccess(flagName);
+		final optAccess:Expr = optFieldAccess(optFieldName);
 		return {expr: ESwitch(optAccess, cases, macro _de()), pos: Context.currentPos()};
+	}
+
+	/**
+	 * ω-bracket-config: runtime-dispatched sibling of
+	 * `delimInsidePolicySpace` for the `HxExpr.ArrayExpr` `[…]` Star,
+	 * whose ONE ctor covers three fork bracket kinds (array-literal /
+	 * map-literal / comprehension). The kind is decided at write time by
+	 * `opt.arrayBracketKind(<first element>)` (the plugin classifier on
+	 * the first element's enum ctor: `Arrow`→map, `ForExpr`/`WhileExpr`→
+	 * comprehension, else array-literal). The resolved kind selects one of
+	 * the three `{arrayLiteral|mapLiteral|comprehension}Brackets<Open|
+	 * Close>` policy fields, then the same open→After/Both / close→Before/
+	 * Both → `_dt(' ')` collapse as `delimInsidePolicySpace` produces the
+	 * inside-space Doc.
+	 *
+	 * `firstAccess` is the runtime Expr reading the first Star element
+	 * (`_arr[0].node` in trivia mode, `_args[0]` in plain mode — both
+	 * normalised by the plugin's `unwrap`). Emitted as a block so the
+	 * classifier runs once per side. Default `None` on every kind keeps
+	 * the tight `[1]` / `[1 => "a"]` / `[for …]` byte-identical to the
+	 * pre-slice layout. Empty `[]` never reaches this helper — both emit
+	 * paths short-circuit `items.length == 0` before padding.
+	 */
+	private static function arrayBracketInsidePolicySpace(firstAccess:Expr, isClose:Bool):Expr {
+		final wpPath:Array<String> = ['anyparse', 'format', 'WhitespacePolicy'];
+		final beforePat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Before']));
+		final afterPat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['After']));
+		final bothPat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
+		final matchValues:Array<Expr> = isClose ? [beforePat, bothPat] : [afterPat, bothPat];
+		final spaceCases:Array<Case> = [
+			{values: matchValues, expr: macro _dt(' '), guard: null},
+		];
+		final suffix:String = isClose ? 'Close' : 'Open';
+		final mapField:Expr = optFieldAccess('mapLiteralBrackets' + suffix);
+		final comprField:Expr = optFieldAccess('comprehensionBrackets' + suffix);
+		final arrayField:Expr = optFieldAccess('arrayLiteralBrackets' + suffix);
+		final kindCases:Array<Case> = [
+			{values: [macro 1], expr: mapField, guard: null},
+			{values: [macro 2], expr: comprField, guard: null},
+		];
+		final policyExpr:Expr = {expr: ESwitch(macro _abk, kindCases, arrayField), pos: Context.currentPos()};
+		final spaceSwitch:Expr = {expr: ESwitch(macro _abp, spaceCases, macro _de()), pos: Context.currentPos()};
+		// `arrayBracketKind` is `Null<Dynamic -> Int>` (an opt-in adapter);
+		// capture into a local + null-check before calling, mirroring the
+		// `caseBodyRefusesFlat` pattern. Null (format didn't wire it) → kind
+		// 0 (ArrayLiteral) so the default `arrayLiteralBrackets` policy
+		// applies — its `None` default keeps the tight `[1]` form.
+		return macro {
+			final _abkFn:Null<Dynamic -> Int> = opt.arrayBracketKind;
+			final _abk:Int = _abkFn == null ? 0 : _abkFn($firstAccess);
+			final _abp:anyparse.format.WhitespacePolicy = $policyExpr;
+			$spaceSwitch;
+		};
 	}
 
 	/**
@@ -7811,7 +7911,8 @@ class WriterLowering {
 		groupRestProbe:Bool = false,
 		ignoreSourceNewlinesForWrap:Bool = false,
 		keepCurlyBlanks:Bool = false,
-		reflowSourceMultiline:Bool = false
+		reflowSourceMultiline:Bool = false,
+		bracketKindPad:Bool = false
 	):Expr {
 		// ω-trivia-sep-anontype-braces (Phase B1): when the call site
 		// reads `@:fmt(anonTypeBracesOpen)` / `objectLiteralBracesOpen`
@@ -7821,8 +7922,20 @@ class WriterLowering {
 		// `delimInsidePolicySpace` plumbing). Null fall-through keeps
 		// `_de()` — backward-compatible for callers that don't have the
 		// knobs (e.g. `HxExpr.ArrayExpr.elems`).
-		final openInsideDoc:Expr = openInsideExpr ?? macro _de();
-		final closeInsideDoc:Expr = closeInsideExpr ?? macro _de();
+		//
+		// ω-bracket-config: `@:fmt(bracketKindPad)` (`HxExpr.ArrayExpr`)
+		// supersedes the static path — the inside-space depends on the
+		// first element's bracket kind, decided at runtime. Both override
+		// Docs reference `_arr[0].node`, which is safe everywhere they are
+		// spliced: the empty-`[]` form short-circuits before any emit that
+		// uses them (`_arr.length == 0` guard near the function tail and
+		// `WrapList.emit`'s own `items.length == 0` guard).
+		final openInsideDoc:Expr = bracketKindPad
+			? arrayBracketInsidePolicySpace(macro _arr[0].node, false)
+			: (openInsideExpr ?? macro _de());
+		final closeInsideDoc:Expr = bracketKindPad
+			? arrayBracketInsidePolicySpace(macro _arr[0].node, true)
+			: (closeInsideExpr ?? macro _de());
 		// ω-bropen-keep-sep: opt-in via `@:fmt(keepCurlyBlanks)` on a
 		// sep-Star (currently `HxType.Anon.fields`). Sister to the block-
 		// Star path's ω-bropen-keep at `triviaBlockStarExpr` (which

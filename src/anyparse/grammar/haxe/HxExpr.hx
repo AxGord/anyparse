@@ -347,7 +347,7 @@ enum HxExpr {
 	@:lead("$")
 	DollarIdentExpr(name:HxIdentLit);
 
-	@:trivia @:lead('[') @:trail(']') @:sep(',') @:fmt(trailingComma('trailingCommaArrays'), wrapRules('arrayLiteralWrap'), reflowSourceMultiline)
+	@:trivia @:lead('[') @:trail(']') @:sep(',') @:fmt(trailingComma('trailingCommaArrays'), wrapRules('arrayLiteralWrap'), reflowSourceMultiline, bracketKindPad)
 	ArrayExpr(elems:Array<HxExpr>);
 
 	ObjectLit(lit:HxObjectLit);
@@ -463,7 +463,7 @@ enum HxExpr {
 	@:postfix('!.')
 	ForceFieldAccess(operand:HxExpr, field:HxFieldNameLit);
 
-	@:postfix('[', ']')
+	@:postfix('[', ']') @:fmt(accessBrackets)
 	IndexAccess(operand:HxExpr, index:HxExpr);
 
 	@:postfix('(', ')') @:sep(',') @:fmt(trailingComma('trailingCommaArgs'), callParens, wrapRules('callParameterWrap'), methodChain('methodChainWrap'), propagateExprPosition, callArgChainNest)
