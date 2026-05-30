@@ -707,16 +707,25 @@ class WriterLowering {
 					// collapses every chain in the condition. Safe to read both
 					// fields directly: only Haxe declares `||`/`&&`/`+`/`-` chain
 					// infix (HxModuleWriteOptions carries the fields).
-					final _chainNestSuppress:Bool =
-						opt._chainModeOverride == anyparse.format.wrap.WrapMode.FillLineWithLeadingBreak
-						|| opt._callArgChainNest;
+					// `_condWrapForced` distinguishes the cond-wrap collapse
+					// (`_chainModeOverride == FLWLB`, set at the `@:fmt(condWrap)`
+					// site) from a leading-break CALL-ARG (`_callArgChainNest`):
+					// both suppress the chain's own Nest, but only the cond-wrap
+					// case is a chain-UNWRAP candidate (ω-chain-keep-flat). A
+					// call-arg chain must keep its configured break shape (fork
+					// `unwrapBoolOps` fires inside `applyArrowWrapping`, never for
+					// a chain that is itself a call argument — `opbool_in_call_
+					// leading_break_preserved`, `opsub_chain_in_single_param_call`).
+					final _condWrapForced:Bool =
+						opt._chainModeOverride == anyparse.format.wrap.WrapMode.FillLineWithLeadingBreak;
+					final _chainNestSuppress:Bool = _condWrapForced || opt._callArgChainNest;
 					final opt = _clearCallArgChainNest(opt);
 					function _gather(_e:$argTypeCT):Void $gatherSwitch;
 					_gather($i{argNames[0]});
 					_ops.push($v{opText});
 					_gather($i{argNames[1]});
 					final _inner:anyparse.core.Doc = anyparse.format.wrap.BinaryChainEmit.emit(
-						_items, _ops, opt, $chainRulesExpr, _chainNestSuppress
+						_items, _ops, opt, $chainRulesExpr, _chainNestSuppress, _condWrapForced
 					);
 					if ($v{prec} < ctxPrec) _dc([_dt('('), _inner, _dt(')')]) else _inner;
 				};

@@ -472,7 +472,7 @@ class WrapList {
 		// depth (chains wrap their output once → ops at depth 1; a call/array
 		// wraps its args one level deeper → ops at depth ≥ 2). Verified against
 		// fork EXPECTED on every affected fixture.
-		if (isTopLevelChain(condDoc))
+		if (isTopLevelChain(condDoc) && !chainKeepFlatCandidate(condDoc))
 			return WrapBoundary(IfLineExceeds(opt.lineWidth, shapeFor(modeBreak), shapeFor(modeFlat)));
 		return WrapBoundary(IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, shapeFor(modeBreak), shapeFor(modeFlat)));
 	}
@@ -500,7 +500,7 @@ class WrapList {
 				case WrapBoundary(i): w(i, depth + 1);
 				case IfBreak(b, _) | IfWidthExceeds(_, b, _) | IfFirstLineExceeds(_, b, _)
 						| IfLineExceeds(_, b, _) | IfFullLineExceeds(_, b, _)
-						| IfNaturalFirstLineExceeds(_, b, _): w(b, depth);
+						| IfNaturalFirstLineExceeds(_, b, _) | IfNaturalFirstLineFitsOpenDelim(_, b, _): w(b, depth);
 				case Concat(items): for (it in items) w(it, depth);
 				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
 					w(sep, depth);
@@ -510,6 +510,36 @@ class WrapList {
 						case '+' | '-' | '||' | '&&': found = true;
 						case _:
 					}
+				case _:
+			}
+		}
+		w(d, 0);
+		return found;
+	}
+
+	/**
+	 * True iff `d`'s outermost wrap level is a chain that emitted the
+	 * keep-flat probe `IfNaturalFirstLineFitsOpenDelim` (its flat mode
+	 * was `NoWrap` — see `BinaryChainEmit.emit` ω-chain-keep-flat). Such
+	 * a chain no longer hides behind a `Group(IfBreak)` break-branch, so
+	 * the natural-first-line measurer sees its full flat NoWrap shape and
+	 * the cond-paren decision can glue when the chain's 2nd operand
+	 * absorbs the overflow into its own inner call/paren. Used by
+	 * `emitCondition` to skip the legacy `IfLineExceeds` route for such
+	 * chains (which would otherwise always open the cond paren on the
+	 * full flat width). Pure stack walk to the first `WrapBoundary` child.
+	 */
+	private static function chainKeepFlatCandidate(d:Doc):Bool {
+		var found:Bool = false;
+		function w(n:Doc, depth:Int):Void {
+			if (found || depth > 1) return;
+			switch n {
+				case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i)
+						| Flatten(i) | HardFlatten(i) | CollapseProbe(i): w(i, depth);
+				case WrapBoundary(i): w(i, depth + 1);
+				case IfNaturalFirstLineFitsOpenDelim(_, _, _):
+					if (depth == 1) found = true;
+				case Concat(items): for (it in items) w(it, depth);
 				case _:
 			}
 		}

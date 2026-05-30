@@ -77,7 +77,7 @@ final class BinaryChainEmit {
 	public static function emit(
 		items:Array<Doc>, ops:Array<String>,
 		opt:WriteOptions, rules:WrapRules,
-		nestSuppress:Bool = false
+		nestSuppress:Bool = false, condWrapForced:Bool = false
 	):Doc {
 		if (items.length == 0) return WrapBoundary(Empty);
 		if (items.length == 1) return WrapBoundary(items[0]);
@@ -195,6 +195,32 @@ final class BinaryChainEmit {
 		if (extraThresholds.length == 0) {
 			final flat:{mode:WrapMode, location:WrappingLocation} = evalAt(false, []);
 			final brk:{mode:WrapMode, location:WrappingLocation} = evalAt(true, []);
+			// ω-chain-keep-flat (increment-6 — CONSTRAINED probe): UNWRAP the
+			// chain to a single flat NoWrap line ONLY in the cond-wrap context
+			// (`condWrapForced` — the chain was collapsed to a forced mode
+			// inside an active `@:fmt(condWrap)` paren, NOT a leading-break
+			// call-arg) AND only when a NON-FIRST operand is a call/arrow
+			// whose open delim absorbs the overflow.
+			// Mirrors fork `unwrapBoolOps`/`unwrapAddOps` which fire ONLY inside
+			// `applyArrowWrapping` (an operand-call owns the wrap), never for a
+			// bare break-mode chain. Gates (each excludes a measured regression):
+			//  - `condWrapForced` — scope to cond-wrap (excludes string_concat /
+			//    issue_299 plain assignment AND call-arg chains —
+			//    opbool_in_call_leading_break_preserved / opsub_chain_in_single_param_call).
+			//  - `isChainOps(ops)` — `&&`/`||`/`+`/`-` only (excludes ternary
+			//    `?`/`:` — the ternary dispatch shares this engine).
+			//  - `!leadingOperandOpensDelim(items[0])` — operand-1 must not be a
+			//    paren-expr/array that itself leads with an open delim (excludes
+			//    condition_first_operand_paren_no_merge, where the fork breaks
+			//    the chain instead of gluing to operand-1's `(`).
+			final unwrapCandidate:Bool = condWrapForced && isChainOps(ops)
+				&& !leadingOperandOpensDelim(items[0]);
+			// `condWrapForced` forces the chain rules to {rules:[], defaultMode:FLWLB}
+			// (WriterCodegen._setChainModeOverride), so flat == brk == that one break
+			// mode here — pivot the NoWrap UNWRAP shape against the forced break shape.
+			if (unwrapCandidate && isBreakMode(flat.mode))
+				return WrapBoundary(IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, shapeAt(flat),
+					shape(NoWrap, flat.location, items, ops, cols)));
 			if (sameRule(flat, brk)) return WrapBoundary(shapeAt(flat));
 			return WrapBoundary(Group(IfBreak(shapeAt(brk), shapeAt(flat))));
 		}
@@ -281,6 +307,68 @@ final class BinaryChainEmit {
 
 	private static inline function sameRule(a:{mode:WrapMode, location:WrappingLocation}, b:{mode:WrapMode, location:WrappingLocation}):Bool {
 		return a.mode == b.mode && a.location == b.location;
+	}
+
+	/**
+	 * True for modes that lay the chain across multiple lines
+	 * (`OnePerLine` / `OnePerLineAfterFirst` / `FillLine` /
+	 * `FillLineWithLeadingBreak`). `NoWrap` / `Keep` / `Ignore` keep the
+	 * chain inline. Used by the ω-chain-keep-flat unwrap pivot.
+	 */
+	private static inline function isBreakMode(m:WrapMode):Bool {
+		return m == OnePerLine || m == OnePerLineAfterFirst
+			|| m == FillLine || m == FillLineWithLeadingBreak;
+	}
+
+	/**
+	 * True iff every operator is a binary chain operator (`&&` / `||` /
+	 * `+` / `-`) — i.e. NOT a ternary (`?` / `:`). The ternary dispatch
+	 * reuses this engine with a degenerate 3-item chain; the keep-flat
+	 * unwrap must not fire there.
+	 */
+	private static function isChainOps(ops:Array<String>):Bool {
+		for (o in ops) switch o {
+			case '&&' | '||' | '+' | '-':
+			case _: return false;
+		}
+		return ops.length > 0;
+	}
+
+	/**
+	 * True iff the FIRST operand's rendered first token is an open
+	 * delimiter (`(` / `[` / `{`) — i.e. operand-1 is itself a
+	 * paren-expression / array / object literal that leads with an open
+	 * delim. The keep-flat unwrap must NOT fire then: the chain's natural
+	 * first line would end at operand-1's own `(` (a degenerate prefix),
+	 * gluing the cond paren to `((` when the fork breaks the chain at its
+	 * own operator instead (`condition_first_operand_paren_no_merge`).
+	 * Only a LATER operand-call absorbing the overflow is a valid unwrap.
+	 */
+	private static function leadingOperandOpensDelim(item0:Doc):Bool {
+		return switch item0 {
+			case Text(s): s.length > 0 && (StringTools.fastCodeAt(s, 0) == '('.code
+				|| StringTools.fastCodeAt(s, 0) == '['.code
+				|| StringTools.fastCodeAt(s, 0) == '{'.code);
+			case Concat(arr):
+				var hit:Bool = false;
+				var done:Bool = false;
+				for (it in arr) if (!done) switch it {
+					case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline
+							| OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
+					case _:
+						done = true;
+						hit = leadingOperandOpensDelim(it);
+				}
+				hit;
+			case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i)
+					| Flatten(i) | HardFlatten(i) | CollapseProbe(i) | WrapBoundary(i):
+				leadingOperandOpensDelim(i);
+			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat)
+					| IfLineExceeds(_, _, flat) | IfFullLineExceeds(_, _, flat)
+					| IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat):
+				leadingOperandOpensDelim(flat);
+			case _: false;
+		};
 	}
 
 	private static function shape(mode:WrapMode, location:WrappingLocation, items:Array<Doc>, ops:Array<String>, cols:Int):Doc {
