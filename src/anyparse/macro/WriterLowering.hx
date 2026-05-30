@@ -9912,7 +9912,13 @@ class WriterLowering {
 				Context.currentPos()
 			);
 		final fieldName:String = args[0];
-		final varCtor:String = args[1];
+		// The var-ctor arg accepts a `|`-separated set so grammars whose
+		// element enum splits the "var" family across multiple ctors (Haxe:
+		// `VarMember` for `var x`, `FinalMember` for `final x` / `static
+		// final x`) classify every member of that family as kind 1. Mirrors
+		// the fork's `FieldUtils.getFieldType`, which folds `Kwd(KwdFinal)`
+		// into the same `Var(...)` field kind as `Kwd(KwdVar)`.
+		final varCtors:Array<String> = args[1].split('|');
 		final fnCtor:String = args[2];
 		final betweenVarsField:String = args.length == 6 ? args[3] : 'betweenVars';
 		final betweenFunctionsField:String = args.length == 6 ? args[4] : 'betweenFunctions';
@@ -9960,7 +9966,7 @@ class WriterLowering {
 			final pattern:Expr = arity == 0
 				? ctorIdent
 				: {expr: ECall(ctorIdent, [for (_ in 0...arity) macro _]), pos: pos};
-			final kindExpr:Expr = if (ctorName == varCtor) macro 1;
+			final kindExpr:Expr = if (varCtors.contains(ctorName)) macro 1;
 				else if (ctorName == fnCtor) macro 2;
 				else macro 0;
 			cases.push({values: [pattern], guard: null, expr: kindExpr});
