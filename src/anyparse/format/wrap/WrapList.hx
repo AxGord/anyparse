@@ -662,8 +662,8 @@ class WrapList {
 					// containing one forces the wrap engine into break
 					// mode unconditionally.
 					return -1;
-				case Flatten(inner) | WrapBoundary(inner):
-					// ω-force-flat-engine slice A: pass-through. Both
+				case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner):
+					// ω-force-flat-engine slice A: pass-through. All four
 					// markers are render-time state; cascade-evaluator
 					// width measurements stay structural.
 					stack.push(inner);
@@ -739,7 +739,7 @@ class WrapList {
 				final first:Null<Doc> = items.find(it -> !isLeadingTransparent(it));
 				if (first == null) return false;
 				node = first;
-			case Flatten(inner) | WrapBoundary(inner):
+			case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner):
 				// ω-force-flat-engine slice A: pass-through. Render-time
 				// state — leading-hardline detection sees the marker's
 				// `inner` as if no wrapper were present.
@@ -1288,10 +1288,10 @@ class WrapList {
 				false;
 			case Fill(items, _, _) | FillWithRestProbe(items, _, _):
 				items.length > 0 && hasLeadingHardline(items[0]);
-			// ω-force-flat-engine slice A: pass-through. Both markers are
-			// render-time state — their `inner` carries the same leading
+			// ω-force-flat-engine slice A: pass-through. All four markers
+			// are render-time state — their `inner` carries the same leading
 			// hardline answer it would without the wrap.
-			case Flatten(inner) | WrapBoundary(inner): hasLeadingHardline(inner);
+			case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner): hasLeadingHardline(inner);
 		};
 	}
 
@@ -1301,5 +1301,61 @@ class WrapList {
 			case Concat([]): true;
 			case _: false;
 		};
+	}
+
+	/**
+	 * True iff `d` is a binary-op chain whose TOP-LEVEL separators are all
+	 * `+` / `-` (opAddSub), with no top-level `||` / `&&` / `?` / `:`. The
+	 * walk descends through transparent render wrappers and the chain's own
+	 * `Group`/`IfBreak`/`Fill` cascade, collecting operator-text separators,
+	 * but does NOT recurse into operand sub-chains (`WrapBoundary` marks a
+	 * sub-chain/operand boundary in the `BinaryChainEmit` output). A chain
+	 * with no operator separators at all (single operand) is NOT a pure
+	 * opAddSub chain.
+	 */
+	public static function isPureOpAddSubChain(d:Doc):Bool {
+		// Operator separators recorded per WrapBoundary depth. The chain's
+		// own top-level separators sit at the SHALLOWEST depth that has any
+		// operator (the chain emit wraps its whole output in a WrapBoundary,
+		// so the chain level is depth >= 1; operand sub-chains nest deeper).
+		// The TOP-LEVEL operator class is the operator set at that minimum
+		// depth — nested operand ops at deeper levels are irrelevant.
+		var addSubDepth:Int = -1;
+		var otherDepth:Int = -1;
+		function record(isAdd:Bool, depth:Int):Void {
+			if (isAdd) { if (addSubDepth < 0 || depth < addSubDepth) addSubDepth = depth; }
+			else { if (otherDepth < 0 || depth < otherDepth) otherDepth = depth; }
+		}
+		function w(n:Doc, depth:Int):Void {
+			switch n {
+				case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i)
+						| Flatten(i) | HardFlatten(i) | CollapseProbe(i): w(i, depth);
+				case WrapBoundary(i): w(i, depth + 1);
+				case IfBreak(b, f) | IfWidthExceeds(_, b, f) | IfFirstLineExceeds(_, b, f)
+						| IfLineExceeds(_, b, f) | IfFullLineExceeds(_, b, f)
+						| IfNaturalFirstLineExceeds(_, b, f):
+					// Both branches of a chain cascade carry the same
+					// separators; walk only the break branch to avoid
+					// double-counting.
+					w(b, depth);
+				case Concat(items): for (it in items) w(it, depth);
+				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
+					w(sep, depth);
+					for (it in items) w(it, depth);
+				case Text(t):
+					switch StringTools.trim(t) {
+						case '+' | '-': record(true, depth);
+						case '||' | '&&' | '?' | ':': record(false, depth);
+						case _:
+					}
+				case _:
+			}
+		}
+		w(d, 0);
+		// Pure opAddSub iff an add/sub separator exists and no other-class
+		// separator appears at the SAME-OR-SHALLOWER depth (the chain's top
+		// level is opAddSub; any `||`/`&&`/`?`/`:` at that level disqualifies).
+		if (addSubDepth < 0) return false;
+		return otherDepth < 0 || otherDepth > addSubDepth;
 	}
 }

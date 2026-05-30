@@ -1174,6 +1174,101 @@ class WriterLowering {
 				final leadDoc:Expr = parts[0];
 				final innerDoc:Expr = parts[1];
 				final trailDoc:Expr = parts[2];
+				// ω-hardflatten (increment-2): expression-paren collapse
+				// consumer (C2a/B). Ctor opted into
+				// `@:fmt(expressionParenHardFlatten)` (HxExpr.ParenExpr).
+				// Emit `IfFullLineExceeds(opt.lineWidth, OPEN, GLUED)`:
+				//  - GLUED  `(<inner>)` — flat-side, byte-identical to the
+				//    pre-slice concat. Taken when the full rendered line
+				//    (paren + everything trailing it on the same source line)
+				//    fits within `lineWidth`.
+				//  - OPEN   `(\n\t<HardFlatten(inner)>\n)` — break-side. The
+				//    paren opens; the inner subtree is pinned force-flat via
+				//    `HardFlatten` so an inner opAddSub chain collapses to ONE
+				//    line UNCONDITIONALLY (fork `collapseInnerChainBreaks`).
+				// The enclosing op-chain's outer-collapse (`) / 2 - D` riding
+				// the close-paren line, fork `collapseChainBreaksAfter`) is
+				// resolved by `CollapsePass` — the Doc→Doc pre-render pass that
+				// reads which parens WOULD open (the `IfFullLineExceeds`
+				// decision) and commits the chain to its glued shape, breaking
+				// the branch-blind circular coupling.
+				if (branch.fmtHasFlag('expressionParenHardFlatten')) {
+					// Leading-hardline (opBool/ternary already one-per-line)
+					// defer-open shape. Honors `captureWrapOpenNewline`: when the
+					// source had a `\n` after the open delim, the break shape
+					// opens `(\n<inner>\n)` (first operand on its own line —
+					// fork issue_187_oneline `!(\n a.y…)`); otherwise the glued-
+					// open `(<inner>\n)`. Computed at macro time so the null-
+					// `wrapOpenNewlineExpr` case (plain mode / no opt-in) is not
+					// spliced.
+					final hardlineOpenShape:Expr = wrapOpenNewlineExpr != null
+						? macro($wrapOpenNewlineExpr
+							? _dc([$leadDoc, _dhl(), _wrapInner, _dhl(), _wrapTrail])
+							: _dc([$leadDoc, _wrapInner, _dhl(), _wrapTrail]))
+						: macro _dc([$leadDoc, _wrapInner, _dhl(), _wrapTrail]);
+					return macro {
+						final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space
+							? opt.indentSize : opt.tabWidth;
+						final _wrapInner:anyparse.core.Doc = $innerDoc;
+						final _wrapTrail:anyparse.core.Doc = $trailDoc;
+						// Operator-class gate (design-inc2 Step B, refined): the
+						// HardFlatten inner-collapse mirrors fork's
+						// `collapseInnerChainBreaks` which matches ONLY
+						// opAdd/opSub. Route by the inner's TOP-LEVEL operator
+						// class:
+						//  - leading-hardline inner (opBool/ternary already
+						//    committed one-per-line at the chain level) → defer
+						//    ENTIRELY to the pre-existing `@:wrap`
+						//    close-on-own-line behavior, byte-identical to
+						//    baseline. Covers issue_187_oneline.
+						//  - pure opAddSub chain (the anchor) →
+						//    `IfFullLineExceeds(open + HardFlatten(inner),
+						//    glued)`; the inner opAddSub chain is pinned flat
+						//    unconditionally once the paren opens
+						//    (`collapseInnerChainBreaks`), and `CollapsePass`
+						//    reads the open decision to glue the enclosing
+						//    chain's tail onto the close-paren line
+						//    (`collapseChainBreaksAfter`).
+						//  - opBool / ternary inner (NOT pure opAddSub, NOT
+						//    leading-hardline) → `IfFullLineExceeds(open +
+						//    PLAIN inner, glued)`: the paren opens when the full
+						//    line exceeds, but the inner is NOT hard-flattened —
+						//    its own wrap cascade decides flatten-vs-break at the
+						//    deeper paren indent. This matches the fork: opBool
+						//    that fits at the deeper indent stays flat
+						//    (opbool_inner_chain_additional_indent /
+						//    opboolchain_paren_fillline), opBool/ternary that
+						//    overflows keeps its per-operator break. `CollapsePass`
+						//    ignores this branch (no HardFlatten marker), so the
+						//    renderer's own `IfFullLineExceeds` resolves the open.
+						anyparse.format.wrap.WrapList.startsWithHardline(_wrapInner)
+							? _dg(_dib(
+								$hardlineOpenShape,
+								_dc([$leadDoc, _wrapInner, _wrapTrail])
+							))
+							: anyparse.format.wrap.WrapList.isPureOpAddSubChain(_wrapInner)
+								? _dfle(
+									opt.lineWidth,
+									_dc([
+										$leadDoc,
+										_dn(_cols, _dc([_dhl(), _dcp(_dhf(_wrapInner))])),
+										_dhl(),
+										_wrapTrail
+									]),
+									_dc([$leadDoc, _wrapInner, _wrapTrail])
+								)
+								: _dfle(
+									opt.lineWidth,
+									_dc([
+										$leadDoc,
+										_dn(_cols, _dc([_dhl(), _dcp(_wrapInner)])),
+										_dhl(),
+										_wrapTrail
+									]),
+									_dc([$leadDoc, _wrapInner, _wrapTrail])
+								);
+					};
+				}
 				// omega-paren-wrap-source-newline: when the ctor opted into
 				// `@:fmt(captureWrapOpenNewline)` and the parser captured a
 				// source `\n` between open delim and inner sub-rule's first

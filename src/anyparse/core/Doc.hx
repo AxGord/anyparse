@@ -408,4 +408,56 @@ enum Doc {
 	 * it as transparent pass-through.
 	 */
 	WrapBoundary(inner:Doc);
+
+	/**
+	 * Force-flat propagation marker whose region survives an inner
+	 * `WrapBoundary` (ω-hardflatten / increment-2 chain-collapse). Behaves
+	 * exactly like `Flatten(inner)` — every nested `Group`/`BodyGroup`
+	 * forced `MFlat`, every `IfBreak`/`If*Exceeds` takes the flat branch,
+	 * `Fill` collapses to a sep-join, `OptHardline*` drops, `Line(flat)`
+	 * renders flat — EXCEPT that an inner `WrapBoundary` does NOT reset
+	 * the force-flat state. The renderer propagates a `Frame.hardFlat`
+	 * flag through every structural push; the `WrapBoundary` arm checks
+	 * `if (f.hardFlat) keep-force-flat else reset`.
+	 *
+	 * This is the anyparse analogue of haxe-formatter's
+	 * `collapseInnerChainBreaks` (MarkWrapping.hx:3288): once an expression
+	 * paren opens, its inner opAddSub chain is flattened to one line
+	 * UNCONDITIONALLY (regardless of width), because the chain's own
+	 * `WrapBoundary(Group(IfBreak))` would otherwise re-float to its own
+	 * fit decision and break. `HardFlatten` pins the whole subtree flat
+	 * through that boundary — "the opened paren owns its content".
+	 *
+	 * `Flatten` inside a `HardFlatten` INHERITS the hard region (the
+	 * `hardFlat` flag is already set); a top-level `Flatten` does NOT
+	 * become hard.
+	 *
+	 * Like `Flatten`/`WrapBoundary`, this is rendering-time state — all
+	 * Doc walkers treat it as a transparent pass-through (descend `inner`).
+	 * Only `Renderer` interprets the hard-region semantic.
+	 */
+	HardFlatten(inner:Doc);
+
+	/**
+	 * Expression-paren collapse-candidate marker (ω-collapse-probe /
+	 * increment-2). Wraps the OPEN (break) branch of an expression-paren's
+	 * `IfFullLineExceeds(open, glued)`. Purely render-transparent — the
+	 * renderer pushes `inner` with the enclosing frame's mode and force-flat
+	 * flags UNCHANGED, so it adds no layout effect of its own (unlike
+	 * `HardFlatten`, which force-flattens). Its sole purpose is to let
+	 * `CollapsePass` recognise the paren as a collapse candidate REGARDLESS
+	 * of the inner's operator class:
+	 *  - opAddSub inner → `CollapseProbe(HardFlatten(inner))` (the inner is
+	 *    pinned flat unconditionally, fork `collapseInnerChainBreaks`);
+	 *  - opBool / ternary inner → `CollapseProbe(inner)` (the inner keeps its
+	 *    own wrap cascade; only the enclosing chain is committed to glued).
+	 * In both cases `CollapsePass` reads the measure-render's open decision at
+	 * the `IfFullLineExceeds` node and commits the enclosing op-chain to its
+	 * glued shape (fork `collapseChainBreaksAfter`), breaking the branch-blind
+	 * circular coupling between paren-open and chain-break.
+	 *
+	 * Like `Flatten`/`WrapBoundary`/`HardFlatten`, all Doc walkers treat it
+	 * as a transparent pass-through (descend `inner`).
+	 */
+	CollapseProbe(inner:Doc);
 }

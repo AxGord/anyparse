@@ -83,11 +83,23 @@ private class Frame {
 	 */
 	public var forceFlat:Bool;
 
-	public inline function new(indent:Int, mode:Mode, doc:Doc, forceFlat:Bool = false) {
+	/**
+	 * Hard-force-flat flag (ω-hardflatten / increment-2). When `true`, the
+	 * frame is inside a `Doc.HardFlatten` region: `forceFlat` is also `true`
+	 * (the hard region is a force-flat region), BUT an inner `WrapBoundary`
+	 * does NOT reset `forceFlat` — it keeps `forceFlat` (and `hardFlat`)
+	 * propagating downward. Entered via `Doc.HardFlatten(inner)`; never
+	 * reset (the region survives every `WrapBoundary` until the subtree
+	 * drains). Default `false` keeps every existing call-site unchanged.
+	 */
+	public var hardFlat:Bool;
+
+	public inline function new(indent:Int, mode:Mode, doc:Doc, forceFlat:Bool = false, hardFlat:Bool = false) {
 		this.indent = indent;
 		this.mode = mode;
 		this.doc = doc;
 		this.forceFlat = forceFlat;
+		this.hardFlat = hardFlat;
 		this.fillRest = null;
 		this.fillIdx = 0;
 		this.fillSep = null;
@@ -97,9 +109,9 @@ private class Frame {
 
 	public static inline function fillCont(
 		indent:Int, rest:Array<Doc>, idx:Int, sep:Doc, tailReserve:Int,
-		forceFlat:Bool = false, restProbe:Bool = false
+		forceFlat:Bool = false, restProbe:Bool = false, hardFlat:Bool = false
 	):Frame {
-		final f:Frame = new Frame(indent, MBreak, Empty, forceFlat);
+		final f:Frame = new Frame(indent, MBreak, Empty, forceFlat, hardFlat);
 		f.fillRest = rest;
 		f.fillIdx = idx;
 		f.fillSep = sep;
@@ -155,8 +167,17 @@ class Renderer {
 		lineEnd:String = '\n',
 		finalNewline:Bool = false,
 		trailingWhitespace:Bool = false,
-		maxConsecutiveBlanks:Int = -1
+		maxConsecutiveBlanks:Int = -1,
+		?decisions:Array<{node:Doc, crosses:Bool}>
 	):String {
+		// ω-collapse-commit (increment-2): when `decisions != null` this is a
+		// MEASURE-ONLY pass driven by `CollapsePass.run`. At every
+		// `IfFullLineExceeds` node the renderer records the `crosses` boolean
+		// keyed by the node's identity, so the Doc→Doc collapse pass can read
+		// which expression parens WOULD open at their true render column —
+		// then commit the open + chain-glue in a rewritten Doc (breaking the
+		// branch-blind circular coupling between paren-open and chain-break).
+		// `null` (the generated `write` call site) leaves render unchanged.
 		final buf:StringBuf = new StringBuf();
 		final stack:Array<Frame> = [new Frame(0, MBreak, doc)];
 		var col:Int = 0;
@@ -262,9 +283,9 @@ class Renderer {
 						: 0;
 					final fits:Bool = fitsFlat(width - col - tailReserve - restW, f.indent, Concat([fillSep, fillRest[idx]]));
 					if (idx + 1 < fillRest.length)
-						stack.push(Frame.fillCont(f.indent, fillRest, idx + 1, fillSep, tailReserve, f.forceFlat, f.fillRestProbe));
-					stack.push(new Frame(f.indent, MBreak, fillRest[idx], f.forceFlat));
-					stack.push(new Frame(f.indent, fits ? MFlat : MBreak, fillSep, f.forceFlat));
+						stack.push(Frame.fillCont(f.indent, fillRest, idx + 1, fillSep, tailReserve, f.forceFlat, f.fillRestProbe, f.hardFlat));
+					stack.push(new Frame(f.indent, MBreak, fillRest[idx], f.forceFlat, f.hardFlat));
+					stack.push(new Frame(f.indent, fits ? MFlat : MBreak, fillSep, f.forceFlat, f.hardFlat));
 				}
 				continue;
 			}
@@ -466,17 +487,19 @@ class Renderer {
 					// indent; canonical Wadler cumulative nesting gives
 					// outer+inner instead.
 					final nextIndent:Int = f.mode == MBreak ? f.indent + n : f.indent;
-					stack.push(new Frame(nextIndent, f.mode, inner, f.forceFlat));
+					stack.push(new Frame(nextIndent, f.mode, inner, f.forceFlat, f.hardFlat));
 				case Concat(items):
 					var i:Int = items.length;
-					while (--i >= 0) stack.push(new Frame(f.indent, f.mode, items[i], f.forceFlat));
+					while (--i >= 0) stack.push(new Frame(f.indent, f.mode, items[i], f.forceFlat, f.hardFlat));
 				case Group(inner) | BodyGroup(inner):
 					// Force-flat (slice B): skip `fitsFlat` entirely and push
 					// the inner as MFlat with `forceFlat=true` propagated.
 					// The `Flatten` region committed to flat for the whole
 					// subtree at entry — local fit measurement is moot here.
+					// `hardFlat` rides along so an inner `WrapBoundary` keeps
+					// the force-flat region (HardFlatten semantic).
 					if (f.forceFlat) {
-						stack.push(new Frame(f.indent, MFlat, inner, true));
+						stack.push(new Frame(f.indent, MFlat, inner, true, f.hardFlat));
 					} else if (fitsFlat(width - col, f.indent, inner)) {
 						stack.push(new Frame(f.indent, MFlat, inner));
 					} else {
@@ -495,7 +518,7 @@ class Renderer {
 					// rest-of-stack lookahead — same walker, different
 					// consumer (Group-style fit instead of explicit branch).
 					if (f.forceFlat) {
-						stack.push(new Frame(f.indent, MFlat, inner, true));
+						stack.push(new Frame(f.indent, MFlat, inner, true, f.hardFlat));
 					} else {
 						final restW:Int = flatTokenWidthOfRestStack(stack);
 						if (fitsFlat(width - col - restW, f.indent, inner)) {
@@ -507,9 +530,9 @@ class Renderer {
 				case IfBreak(breakDoc, flatDoc):
 					// Force-flat (slice B): always pick `flatDoc`, propagate
 					// `forceFlat=true` so the chosen branch keeps the region
-					// semantic for its own descendants.
+					// semantic for its own descendants. `hardFlat` rides along.
 					final picked:Doc = (f.forceFlat || f.mode == MFlat) ? flatDoc : breakDoc;
-					stack.push(new Frame(f.indent, f.mode, picked, f.forceFlat));
+					stack.push(new Frame(f.indent, f.mode, picked, f.forceFlat, f.hardFlat));
 				case IfWidthExceeds(n, breakDoc, flatDoc):
 					// Column-aware probe: rule fires when `col +
 					// DocMeasure.flatTokenWidth(flatDoc) >= n` (matches the
@@ -543,7 +566,7 @@ class Renderer {
 					// the inline alternative; it respects the enclosing
 					// context's mode.
 					if (f.forceFlat) {
-						stack.push(new Frame(f.indent, f.mode, flatDoc, true));
+						stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
 					} else {
 						final crosses:Bool = (col + DocMeasure.flatTokenWidth(flatDoc) >= n);
 						final pushMode:Mode = crosses ? MBreak : f.mode;
@@ -568,7 +591,7 @@ class Renderer {
 					// an enclosing `MFlat` context; flat-side preserves
 					// `f.mode` as the inline alternative.
 					if (f.forceFlat) {
-						stack.push(new Frame(f.indent, f.mode, flatDoc, true));
+						stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
 					} else {
 						final firstLineCrosses:Bool = (col + flatTokenWidthFirstLine(flatDoc) >= n);
 						final pushMode:Mode = firstLineCrosses ? MBreak : f.mode;
@@ -598,7 +621,7 @@ class Renderer {
 					// the inline alternative; it should respect the enclosing
 					// context's mode. Slice ω-iflineexceeds-infra.
 					if (f.forceFlat) {
-						stack.push(new Frame(f.indent, f.mode, flatDoc, true));
+						stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
 					} else {
 						final lineCrosses:Bool = (col + DocMeasure.flatTokenWidth(flatDoc) + flatTokenWidthOfRestStack(stack) >= n);
 						final pushMode:Mode = lineCrosses ? MBreak : f.mode;
@@ -624,11 +647,52 @@ class Renderer {
 					// forces `MBreak` (slice ω-iflineexceeds-brk-mode
 					// sister-arm sweep); flat-side preserves `f.mode`.
 					if (f.forceFlat) {
-						stack.push(new Frame(f.indent, f.mode, flatDoc, true));
+						stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
+						// Measure-only capture: inside a force-flat region the
+						// flat branch is always taken (record `false` = no open).
+						if (decisions != null) decisions.push({node: f.doc, crosses: false});
 					} else {
 						final fullLineCrosses:Bool = (col + DocMeasure.flatTokenWidth(flatDoc) + flatTokenWidthOfRestStackFull(stack) >= n);
-						final pushMode:Mode = fullLineCrosses ? MBreak : f.mode;
-						stack.push(new Frame(f.indent, pushMode, fullLineCrosses ? breakDoc : flatDoc));
+						// ω-collapse-commit: record the open/glued decision at
+						// this node's true render column for the Doc→Doc pass.
+						// Keyed by node identity (enum `==` is reference equality
+						// on JS — see CollapsePass). `ObjectMap` rejects enum
+						// keys (`K:{}` constraint), so a side list is used.
+						//
+						// For a collapse-candidate paren (`breakDoc` carries a
+						// `CollapseProbe`), the recorded `crosses` (= "this paren
+						// commits to open") is GATED by operator class:
+						//  - opAddSub inner (probe wraps `HardFlatten`) → open
+						//    iff `fullLineCrosses` (unconditional once the line
+						//    overflows — fork `collapseInnerChainBreaks` owns the
+						//    content even past width: the anchor's 117-wide inner
+						//    opens at 120 even though it won't fit at the deeper
+						//    indent).
+						//  - opBool / ternary inner (probe wraps the plain inner)
+						//    → open iff `fullLineCrosses` AND the inner rendered
+						//    FLAT fits at the paren's continuation indent
+						//    (`f.indent + flatWidth(inner) < n`). When the
+						//    inner can't be made a single fitting line, opening
+						//    the paren does not help (the fork keeps the paren
+						//    glued and lets the inner chain break one-per-line at
+						//    its own indent — issue_187's nested `((Y)||(Z))`,
+						//    ternary_nested). This is the anyparse analogue of the
+						//    fork's fit-gated `tryCollapseBreakBefore`.
+						// The same operator-class gate drives BOTH the captured
+						// decision AND the live render's open/glue: a candidate
+						// paren whose opBool/ternary inner cannot be made a
+						// fitting flat line must STAY GLUED in the emitted output
+						// too (otherwise the final render would open it via the
+						// raw `fullLineCrosses`, producing the `(\n inner` shape
+						// the fork rejects — issue_187 nested / ternary_nested).
+						// For a non-candidate `IfFullLineExceeds` (no
+						// `CollapseProbe`) `collapseParenCommitsOpen` returns the
+						// raw `fullLineCrosses`, so this is byte-identical to the
+						// pre-slice behaviour off the collapse path.
+						final commits:Bool = collapseParenCommitsOpen(breakDoc, fullLineCrosses, f.indent, n);
+						if (decisions != null) decisions.push({node: f.doc, crosses: commits});
+						final pushMode:Mode = commits ? MBreak : f.mode;
+						stack.push(new Frame(f.indent, pushMode, commits ? breakDoc : flatDoc));
 					}
 				case IfNaturalFirstLineExceeds(n, breakDoc, flatDoc):
 					// Natural-shape first-line probe: render `flatDoc`
@@ -653,7 +717,7 @@ class Renderer {
 					// — NOT `col + n`, unlike the flat siblings whose measurers
 					// return a from-zero width.
 					if (f.forceFlat) {
-						stack.push(new Frame(f.indent, f.mode, flatDoc, true));
+						stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
 					} else {
 						final naturalCrosses:Bool = (naturalFirstLineWidth(flatDoc, col, f.indent, width) >= n);
 						final pushMode:Mode = naturalCrosses ? MBreak : f.mode;
@@ -681,8 +745,8 @@ class Renderer {
 						var k:Int = items.length;
 						while (k > 0) {
 							k--;
-							stack.push(new Frame(f.indent, MFlat, items[k], f.forceFlat));
-							if (k > 0) stack.push(new Frame(f.indent, MFlat, sep, f.forceFlat));
+							stack.push(new Frame(f.indent, MFlat, items[k], f.forceFlat, f.hardFlat));
+							if (k > 0) stack.push(new Frame(f.indent, MFlat, sep, f.forceFlat, f.hardFlat));
 						}
 					} else {
 						// Per-item fill: push items[0] first, then a FillCont
@@ -695,8 +759,8 @@ class Renderer {
 						// of the dispatch loop.
 						final tailReserve:Int = tailReserveOpt ?? 0;
 						if (items.length > 1)
-							stack.push(Frame.fillCont(f.indent, items, 1, sep, tailReserve, f.forceFlat, restProbe));
-						stack.push(new Frame(f.indent, MBreak, items[0], f.forceFlat));
+							stack.push(Frame.fillCont(f.indent, items, 1, sep, tailReserve, f.forceFlat, restProbe, f.hardFlat));
+						stack.push(new Frame(f.indent, MBreak, items[0], f.forceFlat, f.hardFlat));
 					}
 				case Flatten(inner):
 					// ω-force-flat-engine slice B: enter force-flat region.
@@ -708,16 +772,52 @@ class Renderer {
 					// is idempotent. Note: no emitter constructs `Flatten`
 					// yet (slice D opt-in); this arm is exercise-tested
 					// only after slice C/D land.
-					stack.push(new Frame(f.indent, MFlat, inner, true));
+					stack.push(new Frame(f.indent, MFlat, inner, true, f.hardFlat));
 				case WrapBoundary(inner):
-					// ω-force-flat-engine slice B: reset force-flat. Push
+					// ω-force-flat-engine slice B: reset force-flat — UNLESS
+					// inside a `HardFlatten` region (`f.hardFlat`). Push
 					// `inner` with the enclosing frame's mode preserved and
 					// `forceFlat=false` so nested wrap-cascade outputs
 					// evaluate their own conditions independently inside a
 					// parent's force-flat region. When the enclosing context
 					// did NOT have force-flat active, this is a no-op pass-
 					// through (same shape as the prior slice-A arm).
-					stack.push(new Frame(f.indent, f.mode, inner, false));
+					//
+					// ω-hardflatten: when `f.hardFlat` is set the enclosing
+					// region is a `HardFlatten` — its "the opened paren owns
+					// its content, flatten unconditionally" semantic must
+					// survive this boundary. Keep `forceFlat=true` and
+					// `hardFlat=true` (mode pinned MFlat) so an inner chain's
+					// `WrapBoundary(Group(IfBreak))` stays flat rather than
+					// re-floating to its own fit (mirror fork's
+					// `collapseInnerChainBreaks`).
+					if (f.hardFlat) {
+						stack.push(new Frame(f.indent, MFlat, inner, true, true));
+					} else {
+						stack.push(new Frame(f.indent, f.mode, inner, false, false));
+					}
+				case HardFlatten(inner):
+					// ω-hardflatten: enter a force-flat region whose
+					// `forceFlat` survives every inner `WrapBoundary`. Push
+					// `inner` MFlat with `forceFlat=true` AND `hardFlat=true`
+					// so the `WrapBoundary` arm above keeps the region instead
+					// of resetting. This is the anyparse analogue of fork's
+					// `collapseInnerChainBreaks` (the unconditional inner
+					// opAddSub-chain flatten once an expression paren opens).
+					stack.push(new Frame(f.indent, MFlat, inner, true, true));
+				case CollapseProbe(inner):
+					// ω-collapse-probe (increment-2): pure render pass-through.
+					// Marks an expression-paren collapse-candidate open branch
+					// for `CollapsePass` WITHOUT altering layout — `inner` is
+					// pushed with the enclosing frame's mode and flags
+					// unchanged, so a marked opBool/ternary inner keeps its own
+					// wrap cascade (no force-flat) while a marked opAddSub inner
+					// carries its `HardFlatten` underneath. The marker exists
+					// solely so `CollapsePass.isCandidate` can recognise the
+					// paren and commit the enclosing chain to glued (mirror
+					// fork `collapseChainBreaksAfter`) regardless of operator
+					// class. Transparent to every Doc walker.
+					stack.push(new Frame(f.indent, f.mode, inner, f.forceFlat, f.hardFlat));
 			}
 		}
 
@@ -726,6 +826,77 @@ class Renderer {
 		if (finalNewline && !StringTools.endsWith(capped, lineEnd)) return capped + lineEnd;
 		return capped;
 	}
+
+	/**
+	 * Decide whether a collapse-candidate expression paren COMMITS to open
+	 * for the `CollapsePass` decision list (ω-collapse-commit). `breakDoc` is
+	 * the paren's OPEN branch from `IfFullLineExceeds(n, breakDoc, glued)`;
+	 * `fullLineCrosses` is the raw full-line-overflow result; `indent` is the
+	 * paren's render indent; `n` the line-width threshold.
+	 *
+	 * The open branch carries a `CollapseProbe` (the consumer's marker). The
+	 * gate is operator-class-aware via the probe's payload:
+	 *  - `CollapseProbe(HardFlatten(_))` (opAddSub inner) → commit iff
+	 *    `fullLineCrosses` (unconditional once the line overflows — the
+	 *    opened paren owns its content even past width).
+	 *  - `CollapseProbe(plain)` (opBool / ternary inner) → commit iff
+	 *    `fullLineCrosses` AND the inner rendered FLAT fits at the paren's
+	 *    continuation indent (`indent + flatTokenWidth(inner) < n`). `indent`
+	 *    is the paren node's render indent, which the chain's own `Nest`
+	 *    already advanced to the continuation level — so the opened inner
+	 *    sits at exactly `indent` (no extra `cols`). When the inner can't be
+	 *    made a single fitting line, opening the paren does not help.
+	 * When `breakDoc` carries no `CollapseProbe` (a non-candidate
+	 * `IfFullLineExceeds`, e.g. a chain-emit probe), the raw `fullLineCrosses`
+	 * is returned unchanged.
+	 */
+	private static function collapseParenCommitsOpen(breakDoc:Doc, fullLineCrosses:Bool, indent:Int, n:Int):Bool {
+		final probe:Null<{inner:Doc, hard:Bool}> = findCollapseProbe(breakDoc);
+		if (probe == null) return fullLineCrosses;
+		if (probe.hard) return fullLineCrosses;
+		if (!fullLineCrosses) return false;
+		return indent + DocMeasure.flatTokenWidth(probe.inner) < n;
+	}
+
+	/**
+	 * Locate the `CollapseProbe` in a candidate paren's open branch and
+	 * report its inner Doc plus whether that inner is a `HardFlatten`
+	 * (opAddSub) vs a plain chain (opBool / ternary). Returns null when no
+	 * `CollapseProbe` is present (non-candidate node).
+	 */
+	private static function findCollapseProbe(d:Doc):Null<{inner:Doc, hard:Bool}> {
+		final stack:Array<Doc> = [d];
+		while (stack.length > 0) {
+			final node:Doc = (cast stack.pop() : Doc);
+			switch node {
+				case CollapseProbe(inner):
+					final hard:Bool = switch inner {
+						case HardFlatten(_): true;
+						case _: false;
+					};
+					return {inner: inner, hard: hard};
+				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner)
+						| BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner)
+						| HardFlatten(inner):
+					stack.push(inner);
+				case Concat(items):
+					for (it in items) stack.push(it);
+				case IfBreak(brk, fl) | IfWidthExceeds(_, brk, fl)
+						| IfFirstLineExceeds(_, brk, fl) | IfLineExceeds(_, brk, fl)
+						| IfFullLineExceeds(_, brk, fl) | IfNaturalFirstLineExceeds(_, brk, fl):
+					stack.push(brk);
+					stack.push(fl);
+				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
+					for (it in items) stack.push(it);
+					stack.push(sep);
+				case Empty | Text(_) | Line(_) | OptSpace(_) | OptHardline
+						| OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline
+						| OptSpaceSkipAfterHardline:
+			}
+		}
+		return null;
+	}
+
 
 	/**
 		Collapses runs of consecutive `lineEnd` sequences down to
@@ -917,8 +1088,8 @@ class Renderer {
 					// one must commit to MBreak.
 					budget = -1;
 					break;
-				case Flatten(inner) | WrapBoundary(inner):
-					// ω-force-flat-engine slice A: pass-through. Both
+				case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner):
+					// ω-force-flat-engine slice A: pass-through. All four
 					// markers are render-time state, transparent to flat-
 					// width measurement — descend `inner` with the same
 					// MFlat frame. Slice B's `forceFlat` dispatch lives in
@@ -1003,9 +1174,9 @@ class Renderer {
 					total += s.length;
 				case OptSpaceSkipAfterHardline:
 					total += 1;
-				case Flatten(inner) | WrapBoundary(inner):
+				case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner):
 					// ω-force-flat-engine slice A: transparent to first-
-					// line walk. Both markers are render-time state; the
+					// line walk. All four markers are render-time state; the
 					// static first-line probe sees only structural width.
 					stack.push(inner);
 			}
@@ -1102,7 +1273,7 @@ class Renderer {
 						case OptSpaceSkipAfterHardline: total += 1;
 						case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
 							aborted2 = true;
-						case Flatten(innerDoc) | WrapBoundary(innerDoc):
+						case Flatten(innerDoc) | WrapBoundary(innerDoc) | HardFlatten(innerDoc) | CollapseProbe(innerDoc):
 							inner.push({doc: innerDoc, mode: nd.mode});
 					}
 				}
@@ -1237,16 +1408,28 @@ class Renderer {
 					col += s.length;
 				case OptSpaceSkipAfterHardline:
 					col += 1;
-				case Flatten(inner):
+				case Flatten(inner) | HardFlatten(inner):
 					// Enter force-flat region (mirror render's Flatten arm):
 					// push inner MFlat + forceFlat=true so every nested Group
 					// stays flat until a WrapBoundary resets the flag.
+					// `HardFlatten` is treated as `Flatten` here (documented
+					// increment-2 approximation: this measurer tracks a single
+					// `forceFlat` bool, not the WrapBoundary-surviving `hardFlat`
+					// state; inert for the `IfNaturalFirstLineExceeds` consumer
+					// whose flatDoc never contains HardFlatten).
 					stack.push({doc: inner, indent: node.indent, mode: MFlat, forceFlat: true});
 				case WrapBoundary(inner):
 					// Reset force-flat (mirror render's WrapBoundary arm): mode
 					// preserved, forceFlat=false so a nested wrap-cascade's
 					// Groups re-evaluate their own fit and may break.
 					stack.push({doc: inner, indent: node.indent, mode: node.mode, forceFlat: false});
+				case CollapseProbe(inner):
+					// ω-collapse-probe: transparent pass-through. The marker has
+					// no force-flat effect — descend `inner` preserving the
+					// frame's mode and forceFlat (inert for this measurer; the
+					// `IfNaturalFirstLineExceeds` consumer's flatDoc never
+					// contains a CollapseProbe).
+					stack.push({doc: inner, indent: node.indent, mode: node.mode, forceFlat: node.forceFlat});
 			}
 		}
 		return col;
@@ -1357,7 +1540,7 @@ class Renderer {
 						total += 1;
 					case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
 						aborted = true;
-					case Flatten(innerDoc) | WrapBoundary(innerDoc):
+					case Flatten(innerDoc) | WrapBoundary(innerDoc) | HardFlatten(innerDoc) | CollapseProbe(innerDoc):
 						// ω-force-flat-engine slice A: pass-through. The
 						// rest-of-stack probe measures structural width;
 						// force-flat markers add no width.
@@ -1449,7 +1632,7 @@ class Renderer {
 						total += 1;
 					case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
 						aborted = true;
-					case Flatten(innerDoc) | WrapBoundary(innerDoc):
+					case Flatten(innerDoc) | WrapBoundary(innerDoc) | HardFlatten(innerDoc) | CollapseProbe(innerDoc):
 						// ω-force-flat-engine slice A: pass-through. Sister
 						// of the `flatTokenWidthOfRestStack` arm.
 						inner.push({doc: innerDoc, mode: node.mode});

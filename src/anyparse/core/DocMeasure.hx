@@ -105,8 +105,8 @@ final class DocMeasure {
 					total += s.length;
 				case OptSpaceSkipAfterHardline:
 					total += 1;
-				case Flatten(inner) | WrapBoundary(inner):
-					// ω-force-flat-engine slice A: pass-through. Both
+				case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner):
+					// ω-force-flat-engine slice A: pass-through. All four
 					// markers are render-time state; structural token-width
 					// measurement is independent of force-flat propagation.
 					stack.push(inner);
@@ -141,7 +141,8 @@ final class DocMeasure {
 					final t:String = StringTools.rtrim(s);
 					if (t.length > 0) return StringTools.fastCodeAt(t, t.length - 1) == '}'.code;
 				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner)
-						| BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner):
+						| BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner)
+						| CollapseProbe(inner):
 					stack.push(inner);
 				case Concat(items):
 					for (it in items) stack.push(it);
@@ -185,7 +186,8 @@ final class DocMeasure {
 						return c == '}'.code || c == ';'.code;
 					}
 				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner)
-						| BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner):
+						| BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner)
+						| CollapseProbe(inner):
 					stack.push(inner);
 				case Concat(items):
 					for (it in items) stack.push(it);
@@ -227,7 +229,8 @@ final class DocMeasure {
 						return c == ';'.code;
 					}
 				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner)
-						| BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner):
+						| BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner)
+						| CollapseProbe(inner):
 					stack.push(inner);
 				case Concat(items):
 					for (it in items) stack.push(it);

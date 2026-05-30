@@ -191,7 +191,9 @@ class WriterCodegen {
 		final body:Expr = macro {
 			final _opt:$optionsCT = options ?? $defaultOptsExpr;
 			return anyparse.core.Renderer.render(
-				$writeCall,
+				anyparse.core.CollapsePass.run(
+					$writeCall, _opt.lineWidth, _opt.indentChar, _opt.tabWidth
+				),
 				_opt.lineWidth,
 				_opt.indentChar,
 				_opt.tabWidth,
@@ -480,6 +482,34 @@ class WriterCodegen {
 			// can reset force-flat for their inner content the same way the
 			// 4 cascade-emit functions do via Slice C's wraps.
 			docHelper('_dwb', [{name: 'inner', type: macro : anyparse.core.Doc}], macro anyparse.core.Doc.WrapBoundary(inner)),
+			// ω-iffulllineexceeds-primitive: full-line probe consuming the
+			// primitive's own flat width PLUS the BG-descending rest-of-stack
+			// lookahead. Fires `br` when `col + flatTokenWidth(fl) +
+			// flatTokenWidthOfRestStackFull(stack) >= n`. Used by the
+			// expression-paren collapse consumer (C2a/B) to decide paren-open.
+			docHelper(
+				'_dfle',
+				[
+					{name: 'n', type: macro : Int},
+					{name: 'br', type: macro : anyparse.core.Doc},
+					{name: 'fl', type: macro : anyparse.core.Doc}
+				],
+				macro anyparse.core.Doc.IfFullLineExceeds(n, br, fl)
+			),
+			// ω-hardflatten (increment-2): HardFlatten helper. Pins the
+			// subtree force-flat through every inner WrapBoundary — the
+			// inner-collapse half of the chain-collapse family (fork's
+			// `collapseInnerChainBreaks`). Consumed by the ParenExpr
+			// `@:fmt(expressionParenHardFlatten)` open-branch emit.
+			docHelper('_dhf', [{name: 'inner', type: macro : anyparse.core.Doc}], macro anyparse.core.Doc.HardFlatten(inner)),
+			// ω-collapse-probe (increment-2): CollapseProbe helper. Render-
+			// transparent marker on an expression-paren collapse-candidate
+			// open branch so `CollapsePass` recognises the paren and commits
+			// the enclosing op-chain to glued, regardless of the inner's
+			// operator class (opAddSub wraps a HardFlatten inside; opBool /
+			// ternary wraps the plain inner). Consumed by the ParenExpr
+			// `@:fmt(expressionParenHardFlatten)` open-branch emit.
+			docHelper('_dcp', [{name: 'inner', type: macro : anyparse.core.Doc}], macro anyparse.core.Doc.CollapseProbe(inner)),
 		];
 	}
 

@@ -122,11 +122,12 @@ class D {
 			case OptHardlineSkipAtOpenDelim: Empty;
 			case OptHardlineSkipBeforeHardline: Empty;
 			case OptSpaceSkipAfterHardline: Text(' ');
-			// ω-force-flat-engine slice A: both markers collapse — outer
-			// `flatten` already applies the force-flat transform, so a
-			// nested `Flatten` is idempotent and a nested `WrapBoundary`
-			// is moot (we're committing to flat at the structural level).
-			case Flatten(inner) | WrapBoundary(inner): flatten(inner);
+			// ω-force-flat-engine slice A: all four markers collapse —
+			// outer `flatten` already applies the force-flat transform, so
+			// a nested `Flatten`/`HardFlatten`/`CollapseProbe` is idempotent
+			// and a nested `WrapBoundary` is moot (we commit to flat at the
+			// structural level).
+			case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner): flatten(inner);
 		};
 	}
 }
