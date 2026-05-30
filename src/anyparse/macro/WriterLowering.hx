@@ -846,6 +846,16 @@ class WriterLowering {
 			// flag at the same call site so the runtime IfFirstLineExceeds
 			// wrap is opt-in per ctor (currently `HxStatement.ReturnStmt`).
 			final ctorWidthAware:Bool = branch.fmtHasFlag('widthAware');
+			// ω-return-body-single-line: read the
+			// `@:fmt(bodyPolicySingleLine('<flag>', '<multiCtor>'...))` knob
+			// (currently `HxStatement.ReturnStmt`) so `bodyPolicyWrap` can split
+			// the policy between single-line and multi-line value shapes. Arg 0
+			// is the single-line flag name; the remaining args name the value
+			// ctors treated as multi-line (control-flow / block), which keep the
+			// base `returnBody` policy.
+			final ctorSingleLineArgs:Null<Array<String>> = branch.fmtReadStringArgs('bodyPolicySingleLine');
+			final ctorSingleLineFlag:Null<String> = ctorSingleLineArgs == null ? null : ctorSingleLineArgs[0];
+			final ctorSingleLineMultiCtors:Null<Array<String>> = ctorSingleLineArgs == null ? null : ctorSingleLineArgs.slice(1);
 			// ω-issue-257-firstline: when the ctor is the bodyPolicy-kw-Ref
 			// shape (predicate matches `HxStatement.ReturnStmt`) and trivia
 			// mode + bearing typePath, the synth ctor carries a positional
@@ -928,6 +938,8 @@ class WriterLowering {
 					indentObjArgs: indentArgs,
 					widthAware: ctorWidthAware,
 					ifExprIndentArgs: ifExprIndentArgs,
+					singleLineFlagName: ctorSingleLineFlag,
+					singleLineMultiCtors: ctorSingleLineMultiCtors,
 				})
 				: subCall;
 
@@ -6335,10 +6347,36 @@ class WriterLowering {
 		// `case POpen: if(c) a; else b;` of a return-switch when
 		// `expressionIf=Same`.
 		final exprFlagName:Null<String> = opts.exprFlagName;
-		final defaultOptFlag:Expr = if (exprFlagName == null) optFieldAccess(flagName) else {
+		final baseOptFlag:Expr = if (exprFlagName == null) optFieldAccess(flagName) else {
 			final stmtAccess:Expr = optFieldAccess(flagName);
 			final exprAccess:Expr = optFieldAccess(exprFlagName);
 			macro (opt._inExprPosition ? $exprAccess : $stmtAccess);
+		};
+		// ω-return-body-single-line: when the field carries
+		// `@:fmt(bodyPolicySingleLine('<flagName>', '<multiCtor>'...))` (e.g.
+		// `HxStatement.ReturnStmt`), the resolved policy splits on the value's
+		// AST shape — mirroring haxe-formatter's `shouldReturnBeSameLine` /
+		// `shouldReturnChildsBeSameLine` (MarkSameLine.hx): a value whose ctor
+		// is a control-flow / block construct (`if` / `switch` / `for` /
+		// `while` / `try` / `{ … }`, listed verbatim as the trailing meta args)
+		// keeps the base `returnBody` policy; every other value (literal,
+		// ident, ternary, array/object/comprehension, call …) reads the
+		// `opt.<singleLineFlag>` (`returnBodySingleLine`) knob. The control-flow
+		// ctor names are passed declaratively from the grammar so the writer
+		// macro stays format-neutral. Orthogonal to the expr-position dual-flag
+		// above: expr-position picks stmt-vs-expr knob, this picks
+		// singleLine-vs-multiLine. With no multi-ctor args the value always
+		// resolves to the single-line knob.
+		final singleLineFlagName:Null<String> = opts.singleLineFlagName;
+		final singleLineMultiCtors:Null<Array<String>> = opts.singleLineMultiCtors;
+		final defaultOptFlag:Expr = if (singleLineFlagName == null) baseOptFlag else {
+			final singleLineAccess:Expr = optFieldAccess(singleLineFlagName);
+			final ctors:Array<String> = singleLineMultiCtors ?? [];
+			final ctorExpr:Expr = macro Type.enumConstructor($bodyValueExpr);
+			var isMultiLine:Expr = macro false;
+			for (ctorName in ctors)
+				isMultiLine = macro $isMultiLine || $ctorExpr == $v{ctorName};
+			macro ($isMultiLine ? $baseOptFlag : $singleLineAccess);
 		};
 		final ctorOverriddenOptFlag:Expr = if (policyOverrides == null || policyOverrides.length == 0) defaultOptFlag
 		else {
@@ -11070,6 +11108,8 @@ typedef PrevBodyInfo = {
  *   - `ifExprIndentArgs`    — `(ctorName, optField)` pair for the IfExpr-as-value RHS-style indent in flat path.
  *   - `fallbackFlagName`    — name of a fallback `BodyPolicy` flag activated when the sibling `else` is absent.
  *   - `inlineBlockBodyArgs` — `(flagName)` 1-tuple for the inline-collapse override on `BlockExpr` bodies (slice ω-expression-if-with-blocks).
+ *   - `singleLineFlagName`  — name of the `BodyPolicy` knob used when the value is NOT a control-flow / block ctor (slice ω-return-body-single-line).
+ *   - `singleLineMultiCtors`— value ctor names treated as multi-line (keep the base policy); all other ctors read `singleLineFlagName`.
  */
 typedef WrapBodyOpts = {
 	flagName:String,
@@ -11091,6 +11131,8 @@ typedef WrapBodyOpts = {
 	?ifExprIndentArgs:Array<String>,
 	?fallbackFlagName:String,
 	?inlineBlockBodyArgs:Array<String>,
+	?singleLineFlagName:Null<String>,
+	?singleLineMultiCtors:Null<Array<String>>,
 };
 
 /**

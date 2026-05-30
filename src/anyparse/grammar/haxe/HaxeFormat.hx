@@ -654,6 +654,7 @@ final class HaxeFormat implements TextFormat {
 		whileBody: BodyPolicy.Keep,
 		doBody: BodyPolicy.Keep,
 		returnBody: BodyPolicy.FitLine,
+		returnBodySingleLine: BodyPolicy.FitLine,
 		throwBody: BodyPolicy.Same,
 		catchBody: BodyPolicy.Next,
 		tryBody: BodyPolicy.Next,

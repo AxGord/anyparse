@@ -1646,6 +1646,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	whileBody:BodyPolicy,
 	doBody:BodyPolicy,
 	returnBody:BodyPolicy,
+	returnBodySingleLine:BodyPolicy,
 	throwBody:BodyPolicy,
 	catchBody:BodyPolicy,
 	tryBody:BodyPolicy,

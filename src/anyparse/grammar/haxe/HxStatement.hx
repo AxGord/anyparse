@@ -365,6 +365,7 @@ enum HxStatement {
 
 	@:kw('return') @:trailOpt(';')
 	@:fmt(bodyPolicy('returnBody'),
+		bodyPolicySingleLine('returnBodySingleLine', 'IfExpr', 'ForExpr', 'WhileExpr', 'SwitchExpr', 'SwitchExprBare', 'TryExpr', 'BlockExpr'),
 		indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'),
 		indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'),
 		widthAware,

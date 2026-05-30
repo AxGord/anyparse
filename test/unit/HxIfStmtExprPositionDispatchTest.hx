@@ -103,16 +103,34 @@ final class HxIfStmtExprPositionDispatchTest extends Test {
 		Assert.isTrue(out.indexOf('if (c)\n') != -1, 'statement-position must keep ifBody=Next break: <$out>');
 	}
 
-	public function testReturnStmtBodyStillUsesSingleFlag():Void {
-		// `HxStatement.ReturnStmt` keeps single-flag bodyPolicy
-		// (`returnBody`) — backward-compat probe for the
-		// `fmtReadString` → `fmtReadStringArgs` rewrite. With
-		// returnBody=Next the body should break; default Same.
+	public function testReturnSingleLineValueUsesSingleLineFlag():Void {
+		// ω-return-body-single-line: a single-line value (`42`) is driven
+		// by `returnBodySingleLine`, NOT `returnBody` — mirrors the fork's
+		// `shouldReturnBeSameLine` AST split. `returnBody=Next` alone must
+		// NOT break a single-line value; `returnBodySingleLine=Next` does.
 		final src:String = 'class M { function f():Int { return 42; } }';
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.returnBody = BodyPolicy.Next;
+		opts.returnBodySingleLine = BodyPolicy.Same;
+		final outSame:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		Assert.isTrue(outSame.indexOf('return 42;') != -1, 'single-line value follows returnBodySingleLine=Same (not returnBody=Next): <$outSame>');
+
+		opts.returnBodySingleLine = BodyPolicy.Next;
+		final outNext:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		Assert.isTrue(outNext.indexOf('return\n') != -1, 'returnBodySingleLine=Next must break a single-line value: <$outNext>');
+	}
+
+	public function testReturnMultiLineValueUsesReturnBody():Void {
+		// ω-return-body-single-line: a control-flow value (`if`) is driven
+		// by `returnBody`, NOT `returnBodySingleLine`. With returnBody=Next
+		// the if-body breaks onto the next line regardless of the
+		// single-line knob.
+		final src:String = 'class M { function f():Int { return if (c) 1 else 2; } }';
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		opts.returnBody = BodyPolicy.Next;
+		opts.returnBodySingleLine = BodyPolicy.Same;
 		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-		Assert.isTrue(out.indexOf('return\n') != -1, 'returnBody=Next must break before value: <$out>');
+		Assert.isTrue(out.indexOf('return\n') != -1, 'control-flow value follows returnBody=Next (breaks) despite returnBodySingleLine=Same: <$out>');
 	}
 
 	private inline function writeWithDefaults(src:String):String {

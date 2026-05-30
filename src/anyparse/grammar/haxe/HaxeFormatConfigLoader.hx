@@ -532,6 +532,7 @@ final class HaxeFormatConfigLoader {
 			whileBody: base.whileBody,
 			doBody: base.doBody,
 			returnBody: base.returnBody,
+			returnBodySingleLine: base.returnBodySingleLine,
 			throwBody: base.throwBody,
 			catchBody: base.catchBody,
 			tryBody: base.tryBody,
@@ -897,6 +898,17 @@ final class HaxeFormatConfigLoader {
 		if (section.whileBody != null) opt.whileBody = bodyPolicyToRuntime(section.whileBody);
 		if (section.doWhileBody != null) opt.doBody = bodyPolicyToRuntime(section.doWhileBody);
 		if (section.returnBody != null) opt.returnBody = bodyPolicyToRuntime(section.returnBody);
+		// ω-return-body-single-line: `sameLine.returnBodySingleLine` refines
+		// the kw→value separator for returns whose value is NOT a control-flow
+		// or block construct (literals, idents, ternaries, array / object /
+		// comprehension literals, calls). Control-flow / block values
+		// (`if` / `switch` / `for` / `while` / `try` / `{ … }`) keep using
+		// `returnBody`. The runtime dual-dispatch lives in `bodyPolicyWrap`
+		// via the `bodyPolicySingleLine('returnBodySingleLine', '<ctor>'...)`
+		// knob on `HxStatement.ReturnStmt`; the discriminator matches the
+		// value's `Type.enumConstructor` against the listed control-flow ctors,
+		// mirroring the fork's `shouldReturnBeSameLine` AST classification.
+		if (section.returnBodySingleLine != null) opt.returnBodySingleLine = bodyPolicyToRuntime(section.returnBodySingleLine);
 		if (section.catchBody != null) opt.catchBody = bodyPolicyToRuntime(section.catchBody);
 		if (section.tryBody != null) opt.tryBody = bodyPolicyToRuntime(section.tryBody);
 		if (section.caseBody != null) opt.caseBody = bodyPolicyToRuntime(section.caseBody);

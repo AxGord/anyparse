@@ -22,11 +22,18 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
  * `wrapping.maxLineLength` pass. Strict `Same` (no wrap) requires an
  * explicit `hxformat.json` override.
  *
- * The sibling JSON knob `sameLine.returnBodySingleLine` (refining the
- * policy for returns whose value is single-line) is parsed and silently
- * dropped — single-line refinement is a separate axis not yet wired
- * through the runtime. Verified via a dedicated test that asserts the
- * loader does not error on the key.
+ * The sibling JSON knob `sameLine.returnBodySingleLine` (ω-return-body-
+ * single-line) refines the policy for returns whose value renders as a
+ * single line — literals, idents, ternaries, array / object /
+ * comprehension literals, calls. Control-flow / block values
+ * (`if` / `switch` / `for` / `while` / `try` / `{ … }`) keep using
+ * `returnBody`. The runtime split lives in `bodyPolicyWrap` via the
+ * `bodyPolicySingleLine('returnBodySingleLine', '<ctor>'...)` knob on
+ * `HxStatement.ReturnStmt`, mirroring the fork's `shouldReturnBeSameLine`
+ * AST classification. Default `FitLine` keeps single-line behaviour
+ * byte-identical to pre-slice (single-line values went through the
+ * `FitLine` `returnBody`; they now go through the `FitLine`
+ * `returnBodySingleLine`).
  */
 @:nullSafety(Strict)
 class HxReturnBodySliceTest extends Test {
@@ -126,16 +133,29 @@ class HxReturnBodySliceTest extends Test {
 		Assert.equals(BodyPolicy.FitLine, opts.returnBody);
 	}
 
-	public function testConfigLoaderTolerateReturnBodySingleLine():Void {
+	public function testConfigLoaderMapsReturnBodySingleLine():Void {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"sameLine": {"returnBody": "next", "returnBodySingleLine": "same"}}'
 		);
 		Assert.equals(BodyPolicy.Next, opts.returnBody);
+		Assert.equals(BodyPolicy.Same, opts.returnBodySingleLine);
+	}
+
+	public function testConfigLoaderReturnBodySingleLineDefault():Void {
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		Assert.equals(BodyPolicy.FitLine, opts.returnBodySingleLine);
 	}
 
 	private inline function writeWith(src:String, policy:BodyPolicy):String {
 		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		// ω-return-body-single-line: set both axes so these mechanism tests
+		// observe `policy` regardless of whether the return value renders as a
+		// single line (driven by `returnBodySingleLine`) or multi-line / control-
+		// flow (driven by `returnBody`). The single-value fixtures here are
+		// single-line, so without the single-line field they'd silently fall to
+		// its default and ignore `policy`.
 		opts.returnBody = policy;
+		opts.returnBodySingleLine = policy;
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}
 }
