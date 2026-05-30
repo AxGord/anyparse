@@ -278,6 +278,32 @@ enum Doc {
 	IfLineExceeds(n:Int, breakDoc:Doc, flatDoc:Doc);
 	IfFullLineExceeds(n:Int, breakDoc:Doc, flatDoc:Doc);
 	IfNaturalFirstLineExceeds(n:Int, breakDoc:Doc, flatDoc:Doc);
+
+	/**
+	 * Condition-paren-glue decision (ω-cond-paren-glued, increment-4).
+	 * Renders `flatDoc` (the GLUED `(cond)` shape) iff the cond's NATURAL
+	 * first line both (a) fits within `n` AND (b) ENDS at an open delimiter
+	 * (`(` / `[` / `{` or an arrow `->`) — meaning the inner construct (call /
+	 * array / arrow lambda) leading-broke right after it, so the cond prefix
+	 * stays on the open line
+	 * (`if (!list.exists(\n\t…\n))`). Otherwise renders `breakDoc` (the open
+	 * `(\n cond \n)` shape).
+	 *
+	 * Distinguishes the fork's two condition layouts at one render decision:
+	 *  - inner call leading-breaks (first line ends at `(`) → keep cond glued
+	 *    (`condition_wrapping_nested`, `arrow_wrapping_collapse_after_condition`);
+	 *  - inner call fillLine-PACKS its first arg onto the open line, or the
+	 *    cond is a bare chain whose own operator breaks (first line ends mid-
+	 *    args / at an operand) → open the cond paren
+	 *    (`condition_wrapping_for`, `condition_wrapping_if`).
+	 *
+	 * The natural-first-line semantic (each inner `Group` resolved by its own
+	 * `fitsFlat` at the running column, first physical line measured) is
+	 * shared with `IfNaturalFirstLineExceeds`; the added (b) end-on-open-delim
+	 * test is what separates leading-break from packed inner constructs. Pure
+	 * render-time decision — all static Doc walkers forward to `flatDoc`.
+	 */
+	IfNaturalFirstLineFitsOpenDelim(n:Int, breakDoc:Doc, flatDoc:Doc);
 	Fill(items:Array<Doc>, sep:Doc, ?tailReserve:Int);
 
 	/**

@@ -89,7 +89,7 @@ final class DocMeasure {
 					// primitive's own subtree width uses this same
 					// `flatTokenWidth` (defer BG) — sister forwarding.
 					stack.push(flatDoc);
-				case IfNaturalFirstLineExceeds(_, _, flatDoc):
+				case IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc):
 					// Forward to flat side: the natural-first-line probe is a
 					// render-time decision; static token-width walks see only
 					// the flat shape (sister of the IfFirstLineExceeds arm).
@@ -148,7 +148,8 @@ final class DocMeasure {
 					for (it in items) stack.push(it);
 				case IfBreak(_, flatDoc) | IfWidthExceeds(_, _, flatDoc)
 						| IfFirstLineExceeds(_, _, flatDoc) | IfLineExceeds(_, _, flatDoc)
-						| IfFullLineExceeds(_, _, flatDoc) | IfNaturalFirstLineExceeds(_, _, flatDoc):
+						| IfFullLineExceeds(_, _, flatDoc) | IfNaturalFirstLineExceeds(_, _, flatDoc)
+						| IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc):
 					stack.push(flatDoc);
 				case Fill(items, _, _) | FillWithRestProbe(items, _, _):
 					for (it in items) stack.push(it);
@@ -193,7 +194,8 @@ final class DocMeasure {
 					for (it in items) stack.push(it);
 				case IfBreak(_, flatDoc) | IfWidthExceeds(_, _, flatDoc)
 						| IfFirstLineExceeds(_, _, flatDoc) | IfLineExceeds(_, _, flatDoc)
-						| IfFullLineExceeds(_, _, flatDoc) | IfNaturalFirstLineExceeds(_, _, flatDoc):
+						| IfFullLineExceeds(_, _, flatDoc) | IfNaturalFirstLineExceeds(_, _, flatDoc)
+						| IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc):
 					stack.push(flatDoc);
 				case Fill(items, _, _) | FillWithRestProbe(items, _, _):
 					for (it in items) stack.push(it);
@@ -236,7 +238,8 @@ final class DocMeasure {
 					for (it in items) stack.push(it);
 				case IfBreak(_, flatDoc) | IfWidthExceeds(_, _, flatDoc)
 						| IfFirstLineExceeds(_, _, flatDoc) | IfLineExceeds(_, _, flatDoc)
-						| IfFullLineExceeds(_, _, flatDoc) | IfNaturalFirstLineExceeds(_, _, flatDoc):
+						| IfFullLineExceeds(_, _, flatDoc) | IfNaturalFirstLineExceeds(_, _, flatDoc)
+						| IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc):
 					stack.push(flatDoc);
 				case Fill(items, _, _) | FillWithRestProbe(items, _, _):
 					for (it in items) stack.push(it);

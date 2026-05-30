@@ -723,6 +723,28 @@ class Renderer {
 						final pushMode:Mode = naturalCrosses ? MBreak : f.mode;
 						stack.push(new Frame(f.indent, pushMode, naturalCrosses ? breakDoc : flatDoc));
 					}
+				case IfNaturalFirstLineFitsOpenDelim(n, breakDoc, flatDoc):
+					// ω-cond-paren-glued (increment-4 a1): render `flatDoc` (the
+					// GLUED `(cond)` shape) iff its NATURAL first line both fits
+					// within `n` AND ends at an open delimiter (`(`/`[`/`{` or an
+					// arrow `->`) — i.e. the inner construct (call / array / arrow
+					// lambda) LEADING-broke right after that delimiter so the cond
+					// prefix stays on the open line
+					// (`if (!list.exists(\n\t…\n))`). Otherwise render `breakDoc`
+					// (open the cond paren). The end-on-open-delim test separates
+					// a leading-broken inner call (keep glued) from one that
+					// fillLine-PACKS its first arg onto the open line, or a bare
+					// chain whose own operator breaks (open the paren). Mirrors
+					// `IfNaturalFirstLineExceeds`'s mode propagation.
+					if (f.forceFlat) {
+						stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
+					} else {
+						final fits:Bool = naturalFirstLineWidth(flatDoc, col, f.indent, width) < n;
+						final gluable:Bool = naturalFirstLineGluable(flatDoc, col, f.indent, width);
+						final glue:Bool = fits && gluable;
+						final pushMode:Mode = glue ? f.mode : MBreak;
+						stack.push(new Frame(f.indent, pushMode, glue ? flatDoc : breakDoc));
+					}
 				case Fill(items, sep, tailReserveOpt) | FillWithRestProbe(items, sep, tailReserveOpt):
 					// Paired arm: identical entry shape for both ctors. The
 					// rest-probe semantic lives in FillCont resumption (see
@@ -883,7 +905,8 @@ class Renderer {
 					for (it in items) stack.push(it);
 				case IfBreak(brk, fl) | IfWidthExceeds(_, brk, fl)
 						| IfFirstLineExceeds(_, brk, fl) | IfLineExceeds(_, brk, fl)
-						| IfFullLineExceeds(_, brk, fl) | IfNaturalFirstLineExceeds(_, brk, fl):
+						| IfFullLineExceeds(_, brk, fl) | IfNaturalFirstLineExceeds(_, brk, fl)
+						| IfNaturalFirstLineFitsOpenDelim(_, brk, fl):
 					stack.push(brk);
 					stack.push(fl);
 				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
@@ -1048,7 +1071,7 @@ class Renderer {
 					// is a render-time decision. `fitsFlat` sees only
 					// the flat shape (slice ω-iffulllineexceeds-primitive).
 					local.push(new Frame(f.indent, MFlat, flatDoc));
-				case IfNaturalFirstLineExceeds(_, _, flatDoc):
+				case IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc):
 					// Mirror the flat siblings: the natural-first-line
 					// probe is a render-time decision, transparent to an
 					// enclosing Group's `fitsFlat` measurement — which
@@ -1157,7 +1180,7 @@ class Renderer {
 					stack.push(flatDoc);
 				case IfFullLineExceeds(_, _, flatDoc):
 					stack.push(flatDoc);
-				case IfNaturalFirstLineExceeds(_, _, flatDoc):
+				case IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc):
 					// Forward to flat side: the natural-first-line probe
 					// is a render-time decision; this static flat walk
 					// (the flat-side measurer of the sibling
@@ -1260,7 +1283,7 @@ class Renderer {
 						case IfBreak(_, fl): inner.push({doc: fl, mode: MFlat});
 						case IfWidthExceeds(_, _, fl) | IfFirstLineExceeds(_, _, fl)
 								| IfLineExceeds(_, _, fl) | IfFullLineExceeds(_, _, fl)
-								| IfNaturalFirstLineExceeds(_, _, fl):
+								| IfNaturalFirstLineExceeds(_, _, fl) | IfNaturalFirstLineFitsOpenDelim(_, _, fl):
 							inner.push({doc: fl, mode: MFlat});
 						case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
 							var k = items.length;
@@ -1392,6 +1415,13 @@ class Renderer {
 						final crosses:Bool = (naturalFirstLineWidth(flatDoc, col, node.indent, width) >= nn);
 						stack.push({doc: crosses ? breakDoc : flatDoc, indent: node.indent, mode: crosses ? MBreak : node.mode, forceFlat: false});
 					}
+				case IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc):
+					// Forward to flatDoc: a nested cond-paren-glue probe's own
+					// decision is render-time. This static natural-first-line
+					// measurer sees the flat (glued) side — the canonical
+					// consumer (assignment break-after-=) never nests this ctor,
+					// so the approximation is inert here.
+					stack.push({doc: flatDoc, indent: node.indent, mode: node.mode, forceFlat: node.forceFlat});
 				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
 					// Flat interleave tagged with node.mode (so a broken sep's
 					// Line terminates the first line). Slight over-measure when
@@ -1433,6 +1463,162 @@ class Renderer {
 			}
 		}
 		return col;
+	}
+
+	/**
+	 * Natural-shape first-line END-DELIMITER probe (ω-cond-paren-glued,
+	 * increment-4). Walks `d` exactly like `naturalFirstLineWidth` —
+	 * resolving each inner `Group`/`BodyGroup`/`GroupWithRestProbe` by its
+	 * OWN `fitsFlat` decision at the running column — and returns whether the
+	 * LAST non-whitespace character emitted on the FIRST physical line is an
+	 * open delimiter (`(`/`[`/`{` or an arrow `->`).
+	 *
+	 * Returns `true` ("glue is OK") when EITHER (a) the whole cond fit on the
+	 * first line with NO inner break (the walk never hit a hardline — a short
+	 * cond like `shortCond` stays flat), OR (b) an inner break DID happen and
+	 * the last char before it is an open delimiter (`(`/`[`/`{` or arrow `->`)
+	 * — the inner construct LEADING-broke right after it (`if (!list.exists(`
+	 * then `\n`), so the cond prefix sits on the open line and the cond paren
+	 * stays glued. Returns `false` when an inner break happened on packed args
+	 * / an operand (the inner construct fillLine-packed, or the cond's own
+	 * chain operator breaks) — `emitCondition` then opens the cond paren.
+	 *
+	 * Pure stack walk: own work-stack + locals, reads only its args, mutates
+	 * no render state (invariant #1). Structure mirrors `naturalFirstLineWidth`
+	 * minus the width accumulation; only the last-emitted-char class is kept.
+	 */
+	private static function naturalFirstLineGluable(d:Doc, startCol:Int, indent:Int, width:Int):Bool {
+		var col:Int = startCol;
+		var aborted:Bool = false;
+		var lastOpenDelim:Bool = false;
+		final stack:Array<{doc:Doc, indent:Int, mode:Mode, forceFlat:Bool}> =
+			[{doc: d, indent: indent, mode: MBreak, forceFlat: false}];
+		inline function recordText(s:String):Void {
+			// Last non-whitespace char of the emitted run sets the "leading-
+			// break delimiter" state: glue when the inner construct breaks
+			// right after an open delimiter (`(`/`[`/`{`) OR after an arrow
+			// `->` (an arrow lambda whose body leads-breaks, keeping the
+			// `…exists((u) ->` prefix glued — `arrow_wrapping_collapse_after_
+			// condition`).
+			var i:Int = s.length - 1;
+			while (i >= 0) {
+				final c:Int = StringTools.fastCodeAt(s, i);
+				if (c == ' '.code || c == '\t'.code) { i--; continue; }
+				final arrow:Bool = c == '>'.code && i > 0 && StringTools.fastCodeAt(s, i - 1) == '-'.code;
+				lastOpenDelim = (c == '('.code || c == '['.code || c == '{'.code || arrow);
+				break;
+			}
+		}
+		while (stack.length > 0 && !aborted) {
+			final node:{doc:Doc, indent:Int, mode:Mode, forceFlat:Bool} = stack.pop();
+			switch node.doc {
+				case Empty:
+				case Text(s):
+					if (s.length > 0) { col += s.length; recordText(s); }
+				case Line(flat):
+					if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) {
+						aborted = true;
+					} else if (node.mode == MBreak) {
+						aborted = true;
+					} else if (flat.length > 0) {
+						col += flat.length;
+						recordText(flat);
+					}
+				case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
+					aborted = true;
+				case Nest(n, inner):
+					final nextIndent:Int = node.mode == MBreak ? node.indent + n : node.indent;
+					stack.push({doc: inner, indent: nextIndent, mode: node.mode, forceFlat: node.forceFlat});
+				case Concat(items):
+					var i:Int = items.length;
+					while (--i >= 0) stack.push({doc: items[i], indent: node.indent, mode: node.mode, forceFlat: node.forceFlat});
+				case Group(inner) | GroupWithRestProbe(inner) | BodyGroup(inner):
+					if (node.forceFlat) {
+						stack.push({doc: inner, indent: node.indent, mode: MFlat, forceFlat: true});
+					} else if (fitsFlat(width - col, node.indent, inner)) {
+						stack.push({doc: inner, indent: node.indent, mode: MFlat, forceFlat: false});
+					} else {
+						stack.push({doc: inner, indent: node.indent, mode: MBreak, forceFlat: false});
+					}
+				case IfBreak(breakDoc, flatDoc):
+					final picked:Doc = (node.forceFlat || node.mode == MFlat) ? flatDoc : breakDoc;
+					stack.push({doc: picked, indent: node.indent, mode: node.mode, forceFlat: node.forceFlat});
+				case IfWidthExceeds(nn, breakDoc, flatDoc):
+					if (node.forceFlat) {
+						stack.push({doc: flatDoc, indent: node.indent, mode: MFlat, forceFlat: true});
+					} else {
+						final crosses:Bool = (col + DocMeasure.flatTokenWidth(flatDoc) >= nn);
+						stack.push({doc: crosses ? breakDoc : flatDoc, indent: node.indent, mode: crosses ? MBreak : node.mode, forceFlat: false});
+					}
+				case IfFirstLineExceeds(_, _, flatDoc):
+					stack.push({doc: flatDoc, indent: node.indent, mode: node.mode, forceFlat: node.forceFlat});
+				case IfLineExceeds(nn, breakDoc, flatDoc) | IfFullLineExceeds(nn, breakDoc, flatDoc):
+					// No rest-stack lookahead is needed here: the cond's own
+					// first line determines glue-vs-open; the trailing ` {`
+					// lookahead is already covered by the width arm of the
+					// sibling `naturalFirstLineWidth` probe in the render
+					// decision. Resolve flat unless forced — these probes never
+					// sit at the head of a cond's flatShape spine.
+					if (node.forceFlat) {
+						stack.push({doc: flatDoc, indent: node.indent, mode: MFlat, forceFlat: true});
+					} else {
+						final crosses:Bool = (col + DocMeasure.flatTokenWidth(flatDoc) >= nn);
+						stack.push({doc: crosses ? breakDoc : flatDoc, indent: node.indent, mode: crosses ? MBreak : node.mode, forceFlat: false});
+					}
+				case IfNaturalFirstLineExceeds(nn, breakDoc, flatDoc):
+					// Self-class sibling: resolve recursively at the running col
+					// over a strictly smaller subtree (mirror the width probe's
+					// own arm; bounded by the finite tree).
+					if (node.forceFlat) {
+						stack.push({doc: flatDoc, indent: node.indent, mode: MFlat, forceFlat: true});
+					} else {
+						final crosses:Bool = (naturalFirstLineWidth(flatDoc, col, node.indent, width) >= nn);
+						stack.push({doc: crosses ? breakDoc : flatDoc, indent: node.indent, mode: crosses ? MBreak : node.mode, forceFlat: false});
+					}
+				case IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc):
+					// Forward to flatDoc: a nested cond-paren-glue probe's own
+					// decision is render-time. This natural-first-line gluable
+					// walk sees the flat (glued) side — the canonical consumer
+					// (emitCondition) never nests this ctor inside another, so
+					// the approximation is inert here.
+					stack.push({doc: flatDoc, indent: node.indent, mode: node.mode, forceFlat: node.forceFlat});
+				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
+					// Flat interleave tagged with node.mode (so a broken sep's
+					// Line terminates the first line). Mirror `naturalFirstLine
+					// Width`'s Fill arm; the canonical consumer does not place a
+					// bare Fill as the probed flatDoc head.
+					var k:Int = items.length;
+					while (k > 0) {
+						k--;
+						stack.push({doc: items[k], indent: node.indent, mode: node.mode, forceFlat: node.forceFlat});
+						if (k > 0) stack.push({doc: sep, indent: node.indent, mode: node.mode, forceFlat: node.forceFlat});
+					}
+				case OptSpace(s):
+					col += s.length;
+					recordText(s);
+				case OptSpaceSkipAfterHardline:
+					col += 1;
+				case Flatten(inner) | HardFlatten(inner):
+					// Enter force-flat region (mirror render's Flatten arm):
+					// push inner MFlat + forceFlat=true so every nested Group
+					// stays flat until a WrapBoundary resets the flag.
+					stack.push({doc: inner, indent: node.indent, mode: MFlat, forceFlat: true});
+				case WrapBoundary(inner):
+					// Reset force-flat (mirror render's WrapBoundary arm): mode
+					// preserved, forceFlat=false so a nested wrap-cascade's
+					// Groups re-evaluate their own fit and may break.
+					stack.push({doc: inner, indent: node.indent, mode: node.mode, forceFlat: false});
+				case CollapseProbe(inner):
+					// Transparent pass-through (mirror the width probe): descend
+					// `inner` preserving mode + forceFlat. Inert for this
+					// measurer — emitCondition's flatShape carries no CollapseProbe.
+					stack.push({doc: inner, indent: node.indent, mode: node.mode, forceFlat: node.forceFlat});
+			}
+		}
+		// Glue is OK when the cond fit flat with no inner break (a short cond
+		// stays glued), OR an inner break happened right after an open delimiter
+		// (the inner construct leading-broke, cond prefix on the open line).
+		return !aborted || lastOpenDelim;
 	}
 
 	/**
@@ -1522,7 +1708,7 @@ class Renderer {
 						inner.push({doc: flatDoc, mode: MFlat});
 					case IfFullLineExceeds(_, _, flatDoc):
 						inner.push({doc: flatDoc, mode: MFlat});
-					case IfNaturalFirstLineExceeds(_, _, flatDoc):
+					case IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc):
 						// Forward to flat side: the natural-first-line
 						// probe is a render-time decision; this static
 						// rest-of-stack walk sees only the flat shape.
@@ -1614,7 +1800,7 @@ class Renderer {
 						inner.push({doc: flatDoc, mode: MFlat});
 					case IfFullLineExceeds(_, _, flatDoc):
 						inner.push({doc: flatDoc, mode: MFlat});
-					case IfNaturalFirstLineExceeds(_, _, flatDoc):
+					case IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc):
 						// Forward to flat side: the natural-first-line
 						// probe is a render-time decision; this static
 						// rest-of-stack walk sees only the flat shape.

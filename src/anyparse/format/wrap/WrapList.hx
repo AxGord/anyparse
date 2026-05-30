@@ -435,7 +435,86 @@ class WrapList {
 		// `flatTokenWidthOfRestStack` lookahead so the probe accounts for
 		// what lands on the same line if the flat branch fires. Closes
 		// the Wadler-style local-Group blindspot for cond-wrap sites.
-		return WrapBoundary(IfLineExceeds(opt.lineWidth, shapeFor(modeBreak), shapeFor(modeFlat)));
+		//
+		// ω-cond-paren-glued (increment-4 sub-mechanism a1): `IfLineExceeds`
+		// measures the cond's FLAT width — it over-fires when the cond is a
+		// DELIMITER-BOUNDED construct (`!list.exists(args)`) whose inner call
+		// args can wrap their OWN paren. The fork keeps `if (` / `while (`
+		// GLUED whenever such a cond's NATURAL first line (`if (!list.exists(`,
+		// inner call allowed to break) fits, and lets only that inner construct
+		// break (`if (!list.exists(\n\t…\n))`). `flatShape` omits the
+		// leading/trailing hardline around the cond, so a glued `flatShape`
+		// over a cond whose inner call wraps IS that fork shape. The
+		// natural-first-line probe (inc1 `IfNaturalFirstLineExceeds`: each
+		// inner Group resolved by its own `fitsFlat`, first physical line
+		// measured, plus the same rest-of-stack ` {` lookahead) picks
+		// `brkShape` only when even the glued first line overflows.
+		//
+		// The glued shape is correct ONLY when the inner construct LEADING-
+		// breaks (its first line ends right at the open delimiter). The
+		// `IfNaturalFirstLineFitsOpenDelim` primitive renders the glued
+		// `flatShape` iff the cond's natural first line both FITS and ENDS at
+		// an open delimiter (`(`/`[`); otherwise it opens the cond paren. This
+		// distinguishes:
+		//  - inner call leading-breaks → glue (`condition_wrapping_nested`,
+		//    `arrow_wrapping_collapse_after_condition`);
+		//  - inner call fillLine-PACKS its first arg onto the open line
+		//    (`condition_wrapping_for`), OR the cond is a bare chain whose own
+		//    operator breaks (`condition_wrapping_if`, `condition_wrapping_for`)
+		//    → open the cond paren (the natural first line ends mid-args / at an
+		//    operand, not at an open delim).
+		// The legacy `IfLineExceeds` (open iff flat cond + rest-stack exceeds)
+		// is kept ONLY when the cond is a top-level binary chain — there the
+		// chain's own Group-break would give a deceptively short natural first
+		// line, so the width-based probe (which sees the full flat chain) is
+		// the right open trigger. Discriminator `isTopLevelChain`: a top-level
+		// operator (`+`/`-`/`||`/`&&`) at the cond's own outermost `WrapBoundary`
+		// depth (chains wrap their output once → ops at depth 1; a call/array
+		// wraps its args one level deeper → ops at depth ≥ 2). Verified against
+		// fork EXPECTED on every affected fixture.
+		if (isTopLevelChain(condDoc))
+			return WrapBoundary(IfLineExceeds(opt.lineWidth, shapeFor(modeBreak), shapeFor(modeFlat)));
+		return WrapBoundary(IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, shapeFor(modeBreak), shapeFor(modeFlat)));
+	}
+
+	/**
+	 * True iff `d`'s OWN outermost wrap level carries a binary-operator
+	 * separator (`+` / `-` / `||` / `&&`) — i.e. `d` is a top-level binary
+	 * chain whose own operators break, rather than a delimiter-bounded
+	 * construct (call / array / prefix-call) whose inner args break one
+	 * level deeper. The `BinaryChainEmit` output wraps the whole chain in a
+	 * single `WrapBoundary`, so the chain's top-level operators sit at
+	 * `WrapBoundary` depth 1; a `WrapList.emit` call/array wraps its args
+	 * in their own `WrapBoundary`, putting any operand operators at depth ≥ 2.
+	 * Mirror of `isPureOpAddSubChain`'s depth-tracking walk but answers the
+	 * coarser "any top-level operator at depth 1" question used by the
+	 * cond-paren-glued discriminator in `emitCondition`.
+	 */
+	private static function isTopLevelChain(d:Doc):Bool {
+		var found:Bool = false;
+		function w(n:Doc, depth:Int):Void {
+			if (found || depth > 1) return;
+			switch n {
+				case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i)
+						| Flatten(i) | HardFlatten(i) | CollapseProbe(i): w(i, depth);
+				case WrapBoundary(i): w(i, depth + 1);
+				case IfBreak(b, _) | IfWidthExceeds(_, b, _) | IfFirstLineExceeds(_, b, _)
+						| IfLineExceeds(_, b, _) | IfFullLineExceeds(_, b, _)
+						| IfNaturalFirstLineExceeds(_, b, _): w(b, depth);
+				case Concat(items): for (it in items) w(it, depth);
+				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
+					w(sep, depth);
+					for (it in items) w(it, depth);
+				case Text(t):
+					if (depth == 1) switch StringTools.trim(t) {
+						case '+' | '-' | '||' | '&&': found = true;
+						case _:
+					}
+				case _:
+			}
+		}
+		w(d, 0);
+		return found;
 	}
 
 	/**
@@ -631,7 +710,7 @@ class WrapList {
 					// Asymmetric BG semantic only applies to renderer-
 					// side rest-of-stack probe.
 					stack.push(flatDoc);
-				case IfNaturalFirstLineExceeds(_, _, flatDoc):
+				case IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc):
 					// Mirror the flat siblings: forward to flat side. The
 					// natural-first-line decision is renderer-side; this
 					// static length walk sees the flat shape.
@@ -727,7 +806,7 @@ class WrapList {
 				node = brk;
 			case IfFullLineExceeds(_, brk, _):
 				node = brk;
-			case IfNaturalFirstLineExceeds(_, brk, _):
+			case IfNaturalFirstLineExceeds(_, brk, _) | IfNaturalFirstLineFitsOpenDelim(_, brk, _):
 				// Break-side leading-edge walk: descend the break branch
 				// (mirrors the If*Exceeds siblings).
 				node = brk;
@@ -1280,6 +1359,7 @@ class WrapList {
 			case IfLineExceeds(_, _, _): false;
 			case IfFullLineExceeds(_, _, _): false;
 			case IfNaturalFirstLineExceeds(_, _, _): false;
+			case IfNaturalFirstLineFitsOpenDelim(_, _, _): false;
 			case Concat(items):
 				for (it in items) {
 					if (hasLeadingHardline(it)) return true;
@@ -1333,7 +1413,7 @@ class WrapList {
 				case WrapBoundary(i): w(i, depth + 1);
 				case IfBreak(b, f) | IfWidthExceeds(_, b, f) | IfFirstLineExceeds(_, b, f)
 						| IfLineExceeds(_, b, f) | IfFullLineExceeds(_, b, f)
-						| IfNaturalFirstLineExceeds(_, b, f):
+						| IfNaturalFirstLineExceeds(_, b, f) | IfNaturalFirstLineFitsOpenDelim(_, b, f):
 					// Both branches of a chain cascade carry the same
 					// separators; walk only the break branch to avoid
 					// double-counting.
