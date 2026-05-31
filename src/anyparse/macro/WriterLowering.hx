@@ -3116,6 +3116,26 @@ class WriterLowering {
 							'WriterLowering: @:fmt(setBoolFlagFromStarCtor) expects 3 string args (optField, starField, ctorName), got ${boolFlagArgs.length}',
 							Context.currentPos()
 						);
+					// ω-switch-subject-nowrap (condition_wrapping_switch): the
+					// fork NEVER wraps a switch subject — `markPWrapping`'s
+					// `case SwitchCondition:` falls through with an empty body
+					// (no `wrapCondition` / `wrapExpressionParen`), unlike
+					// `IfCondition` / `WhileCondition` / `ForLoop`. Thread
+					// `_setChainModeOverride(opt, NoWrap)` into the subject
+					// `expr` sub-call so a top-level `+`/`-`/`&&`/`||` chain in
+					// the subject stays flat regardless of the
+					// `opAddSubChain` / `opBoolChain` config. Mirror of the
+					// string-interp `captureSource`→NoWrap site (above): the
+					// override swaps ONLY `opBoolChainWrap` / `opAddSubChainWrap`
+					// to a degenerate `{rules: [], defaultMode: NoWrap}` cascade,
+					// so nested `Call` / `ArrayLiteral` parens inside the subject
+					// keep their own wrap config (matching the fork's per-`Call`
+					// `markPWrapping` recursion). `NoWrap` is distinct from the
+					// `FillLineWithLeadingBreak` cond-wrap mode, so the chain
+					// dispatch's `_condWrapForced` gate (== FLWLB) stays false —
+					// no interaction with the inc6 chain-unwrap path. Carried by
+					// `HxSwitchStmt.expr` / `HxSwitchStmtBare.expr`.
+					final switchSubjectNoWrap:Bool = child.fmtHasFlag('switchSubjectNoWrap');
 					final optArgExpr:Expr = if (boolFlagArgs != null) {
 						macro _wo;
 					} else {
@@ -3123,6 +3143,8 @@ class WriterLowering {
 						if (propagateExpr) e = macro _setExprPosition($e);
 						if (propagateAnonFn) e = macro _setAnonFnBody($e);
 						if (propagateTypedef) e = macro _setTypedefBody($e);
+						if (switchSubjectNoWrap)
+							e = macro _setChainModeOverride($e, anyparse.format.wrap.WrapMode.NoWrap);
 						e;
 					};
 					final baseRawWriteCall:Expr = {
