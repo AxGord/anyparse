@@ -1785,10 +1785,15 @@ class WriterLowering {
 					// element's bracket kind (array-literal / map / comprehension
 					// → the matching `*BracketsOpen`/`*BracketsClose` policy).
 					final bracketKindPadAlt:Bool = branch.fmtHasFlag('bracketKindPad');
+					// ω-arraymatrix-wrap: enum-Alt branch reader for
+					// `@:fmt(arrayMatrixWrap)` (`HxExpr.ArrayExpr`). Marks the
+					// Star as matrix-eligible so `triviaSepStarExpr` attempts a
+					// source-grid layout before the wrap cascade.
+					final matrixWrapAlt:Bool = branch.fmtHasFlag('arrayMatrixWrap');
 				parts.push(triviaSepStarExpr(
 					argsAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, leadText, trailText, sepText,
 					wrapRulesField, knobLeftCurly, knobRightCurly, sepTrailPresentAccess, trailingCommaField, openInsideExpr, closeInsideExpr, beforeDocComments,
-					forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines, keepCurlyBlanksAlt, reflowSourceMultilineAlt, bracketKindPadAlt
+					forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines, keepCurlyBlanksAlt, reflowSourceMultilineAlt, bracketKindPadAlt, matrixWrapAlt
 				));
 			} else {
 				// ω-bropen-keep: forward `@:fmt(keepCurlyBlanks)` from the
@@ -4315,6 +4320,13 @@ class WriterLowering {
 						// consumer `HxExpr.ArrayExpr` is enum-Alt) — present for
 						// dual-dispatch symmetry.
 						final reflowSourceMultilineStar:Bool = starNode.fmtHasFlag('reflowSourceMultiline');
+						// ω-arraymatrix-wrap: struct-Star path reader for
+						// `@:fmt(arrayMatrixWrap)`. Sister to the enum-Alt read;
+						// no struct-Star consumer opts in yet (first consumer
+						// `HxExpr.ArrayExpr` is enum-Alt) — present for dual-
+						// dispatch symmetry. `bracketKindPad` is not read on this
+						// path (passed false) so matrix slots in after it.
+						final matrixWrapStar:Bool = starNode.fmtHasFlag('arrayMatrixWrap');
 					parts.push(triviaSepStarExpr(
 						fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn,
 						openText ?? '', closeText, sepText, wrapRulesField,
@@ -4322,7 +4334,7 @@ class WriterLowering {
 						knobRightCurly,
 						trailPresentAccess, trailingCommaField,
 						null, null, false, forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines,
-						keepCurlyBlanksStar, reflowSourceMultilineStar
+						keepCurlyBlanksStar, reflowSourceMultilineStar, false, matrixWrapStar
 					));
 					return;
 				}
@@ -8152,7 +8164,8 @@ class WriterLowering {
 		ignoreSourceNewlinesForWrap:Bool = false,
 		keepCurlyBlanks:Bool = false,
 		reflowSourceMultiline:Bool = false,
-		bracketKindPad:Bool = false
+		bracketKindPad:Bool = false,
+		matrixWrap:Bool = false
 	):Expr {
 		// ω-trivia-sep-anontype-braces (Phase B1): when the call site
 		// reads `@:fmt(anonTypeBracesOpen)` / `objectLiteralBracesOpen`
@@ -8449,6 +8462,31 @@ class WriterLowering {
 			// `macro false`, keeping the engine byte-identical to pre-slice
 			// for non-opt-in sites.
 			final compactContExpr:Expr = bodyAwareCompactIndent ? (macro opt._fnSigBodyEmpty) : (macro false);
+			// ω-arraymatrix-wrap: when the Star opted into
+			// `@:fmt(arrayMatrixWrap)` (currently `HxExpr.ArrayExpr`) and the
+			// runtime policy preserves the source grid, attempt a one-pass
+			// grid layout BEFORE the wrap cascade. The matrix detector reads
+			// per-element `newlineBefore` (row boundaries) and the rendered
+			// cell widths; on a uniform matrix (>=2 columns, equal rows, no
+			// multi-line cell) it returns the aligned/unaligned grid Doc,
+			// which is wrapped in BodyGroup (sister to the `_smlKeep` path)
+			// so an enclosing Group's `fitsFlat` defers the grid's hardlines
+			// and the call/assign context stays inline. `tryLayout` returns
+			// null for non-matrix shapes → fall through to the cascade.
+			// Gated on the same source-multiline-without-blocking-trivia
+			// condition as `_smlKeep`; only fires when `matrixWrap` is set,
+			// so every other sep-Star consumer is byte-identical (`macro {}`).
+			final matrixComputeExpr:Expr = matrixWrap ? macro {
+				if (opt.arrayMatrixWrap != anyparse.format.ArrayMatrixWrap.NoMatrixWrap
+						&& _hasSourceNewlines && !_requiresHardline && !_keepEmit && !_ignoreEmit) {
+					final _rowStart:Array<Bool> = [for (_mi in 0..._arr.length) _mi == 0 || _arr[_mi].newlineBefore];
+					final _mcols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+					_matrixDoc = anyparse.format.wrap.MatrixWrap.tryLayout(
+						_docs, _rowStart, opt.arrayMatrixWrap,
+						$v{openText}, $v{closeText}, $v{sepText}, $appendTrailingCommaExpr, _mcols
+					);
+				}
+			} : macro {};
 			// ω-cascade-emits-comments: wrap each per-element Doc with its
 			// leading comments (each followed by a hardline) and an inline
 			// block-style trailing comment (line-style trailings are not
@@ -8488,6 +8526,12 @@ class WriterLowering {
 					_docs.push(_parts.length == 1 ? _parts[0] : _dc(_parts));
 					_si2++;
 				}
+				// ω-arraymatrix-wrap: grid layout attempt before the cascade.
+				// `_matrixDoc` stays null for non-matrix shapes (or when the
+				// flag is off — `matrixComputeExpr` is then `macro {}`), so the
+				// trailing expression falls through to the wrap cascade.
+				var _matrixDoc:Null<anyparse.core.Doc> = null;
+				$matrixComputeExpr;
 				final _wlResult:anyparse.core.Doc = anyparse.format.wrap.WrapList.emit(
 					$v{openText}, $v{closeText}, $v{sepText},
 					_docs, opt, $openInsideDoc, $closeInsideDoc, false, $rulesExpr, $appendTrailingCommaExpr,
@@ -8507,7 +8551,7 @@ class WriterLowering {
 				// internal break decides independently at the call's flat
 				// indent. Only fires under `_smlKeep`; every other consumer
 				// keeps the bare cascade Doc.
-				_smlKeep ? _dbg(_wlResult) : _wlResult;
+				_matrixDoc != null ? _dbg(_matrixDoc) : (_smlKeep ? _dbg(_wlResult) : _wlResult);
 			};
 		} else {
 			macro {
@@ -8584,6 +8628,14 @@ class WriterLowering {
 				// at the no-trivia branch collapses to `_docs.push(_elem)`
 				// because `_parts.length==1` on no-comment elements.
 				final _ignoreEmit:Bool = $ignoreCheckExpr;
+				// ω-arraymatrix-wrap: `NoMatrixWrap` ignores the source grid
+				// entirely — like the `Ignore` policy it DROPS source newlines
+				// so the cascade (not the force-multi path) drives layout: a
+				// short matrix-shaped array collapses flat, a wide one width-
+				// packs. Only meaningful on a matrix-eligible Star (`matrixWrap`
+				// compile-time flag); every other consumer leaves it false.
+				final _matrixOff:Bool = $v{matrixWrap}
+					&& opt.arrayMatrixWrap == anyparse.format.ArrayMatrixWrap.NoMatrixWrap;
 				var _requiresHardline:Bool = _trailLC.length > 0 || _trailOpen != null;
 				var _hasSourceNewlines:Bool = false;
 				var _hasInlineableTrivia:Bool = false;
@@ -8602,7 +8654,7 @@ class WriterLowering {
 						else
 							_requiresHardline = true;
 					}
-					if (_t.newlineBefore && !_ignoreEmit)
+					if (_t.newlineBefore && !_ignoreEmit && !_matrixOff)
 						_hasSourceNewlines = true;
 					_ti++;
 				}
@@ -8631,6 +8683,9 @@ class WriterLowering {
 				// fully flat (NoWrap → OnePerLine), so the source's
 				// "stay multi-line" intent is honoured while width-driven
 				// packing (FillLine / FillLineWithLeadingBreak) applies.
+				// Under `NoMatrixWrap` (`_matrixOff`) `_hasSourceNewlines` was
+				// already forced false above, so `_smlKeep` collapses here and
+				// the cascade drives layout — no extra gate needed.
 				final _smlKeep:Bool = $v{reflowSourceMultiline}
 					&& _hasSourceNewlines && !_requiresHardline
 					&& !_keepEmit && !_ignoreEmit;

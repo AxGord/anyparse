@@ -1,5 +1,6 @@
 package anyparse.format.comment;
 
+import anyparse.format.ArrayMatrixWrap;
 import anyparse.format.CommentStyle;
 import anyparse.format.Encoding;
 import anyparse.format.IndentChar;
@@ -77,6 +78,7 @@ final class CFamilyCommentFormat implements TextFormat {
 		trailingWhitespace: false,
 		maxConsecutiveBlanks: -1,
 		commentStyle: Verbatim,
+		arrayMatrixWrap: ArrayMatrixWrap.NoMatrixWrap,
 		addLineCommentSpace: true,
 	};
 

@@ -93,6 +93,20 @@ typedef WriteOptions = {
 	addLineCommentSpace:Bool,
 
 	/**
+	 * Layout policy for matrix-shaped array literals (an array literal
+	 * whose source rows each carry the same number of elements). When the
+	 * writer detects such a grid it preserves the row structure — and,
+	 * under `MatrixWrapWithAlign`, right-aligns each column — instead of
+	 * reflowing the elements one-per-line or width-packing them.
+	 * `NoMatrixWrap` disables detection and routes the literal through the
+	 * normal wrap cascade. Fed by haxe-formatter's
+	 * `wrapping.arrayMatrixWrap` knob through `HaxeFormatConfigLoader`;
+	 * other grammars set it via their format default. Format-neutral so
+	 * any array-of-rows grammar can reuse the policy.
+	 */
+	arrayMatrixWrap:ArrayMatrixWrap,
+
+	/**
 	 * Cap on consecutive line-end runs in the rendered output. Read once
 	 * by `Renderer.render` as the final post-pass: any run of `N+1` or
 	 * more consecutive `lineEnd` sequences is truncated to exactly

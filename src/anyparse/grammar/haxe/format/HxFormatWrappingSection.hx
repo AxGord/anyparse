@@ -123,14 +123,20 @@ package anyparse.grammar.haxe.format;
  * `lineLength >= n` predicate are silently dropped at load time so the
  * cascade falls through to the next rule).
  *
- * The remaining per-construct cascades (`arrayMatrixWrap`, …) land
- * with their own slices when each gains JSON-side wiring; matching
- * `WriteOptions` fields don't exist yet and need new fields plus
- * grammar `@:fmt` wiring.
+ *  - `arrayMatrixWrap`: string → `arrayMatrixWrap` (slice
+ *    ω-arraymatrix-wrap). Not a `WrapRules` cascade — a three-way enum
+ *    policy (`noMatrixWrap` / `matrixWrapNoAlign` / `matrixWrapWithAlign`)
+ *    selecting whether the writer preserves a source-detected matrix
+ *    grid and whether columns are right-aligned. Default (config absent)
+ *    is `matrixWrapWithAlign`, matching haxe-formatter. Resolved via
+ *    `ArrayMatrixWrap.resolve`; unknown strings fall back to the format
+ *    default.
  */
 @:peg typedef HxFormatWrappingSection = {
 
 	@:optional var maxLineLength:Int;
+
+	@:optional var arrayMatrixWrap:String;
 
 	@:optional var arrayWrap:HxFormatWrapRules;
 

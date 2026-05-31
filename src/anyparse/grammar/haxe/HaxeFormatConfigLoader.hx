@@ -1,5 +1,6 @@
 package anyparse.grammar.haxe;
 
+import anyparse.format.ArrayMatrixWrap;
 import anyparse.format.BodyPolicy;
 import anyparse.format.BracePlacement;
 import anyparse.format.CommentEmptyLinesPolicy;
@@ -634,6 +635,7 @@ final class HaxeFormatConfigLoader {
 			typeParameterWrap: base.typeParameterWrap,
 			expressionWrappingWrap: base.expressionWrappingWrap,
 			implementsExtendsWrap: base.implementsExtendsWrap,
+			arrayMatrixWrap: base.arrayMatrixWrap,
 			addLineCommentSpace: base.addLineCommentSpace,
 			expressionTry: base.expressionTry,
 			indentCaseLabels: base.indentCaseLabels,
@@ -748,6 +750,10 @@ final class HaxeFormatConfigLoader {
 
 	private static function applyWrapping(section:HxFormatWrappingSection, opt:HxModuleWriteOptions):Void {
 		if (section.maxLineLength != null) opt.lineWidth = section.maxLineLength;
+		if (section.arrayMatrixWrap != null) {
+			final resolved:Null<ArrayMatrixWrap> = ArrayMatrixWrap.resolve(section.arrayMatrixWrap);
+			if (resolved != null) opt.arrayMatrixWrap = resolved;
+		}
 		if (section.arrayWrap != null) opt.arrayLiteralWrap = wrapRulesFromConfig(section.arrayWrap, opt.arrayLiteralWrap);
 		if (section.multiVar != null) opt.multiVarWrap = wrapRulesFromConfig(section.multiVar, opt.multiVarWrap);
 		if (section.casePattern != null) opt.casePatternWrap = wrapRulesFromConfig(section.casePattern, opt.casePatternWrap);

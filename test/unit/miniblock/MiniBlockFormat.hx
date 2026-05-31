@@ -1,5 +1,6 @@
 package unit.miniblock;
 
+import anyparse.format.ArrayMatrixWrap;
 import anyparse.format.CommentStyle;
 import anyparse.format.Encoding;
 import anyparse.format.IndentChar;
@@ -74,6 +75,7 @@ final class MiniBlockFormat {
 		trailingWhitespace: false,
 		maxConsecutiveBlanks: -1,
 		commentStyle: Verbatim,
+		arrayMatrixWrap: ArrayMatrixWrap.NoMatrixWrap,
 		addLineCommentSpace: true,
 	};
 

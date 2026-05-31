@@ -1,5 +1,6 @@
 package anyparse.grammar.haxe;
 
+import anyparse.format.ArrayMatrixWrap;
 import anyparse.format.BodyPolicy;
 import anyparse.format.BracePlacement;
 import anyparse.format.CommentEmptyLinesPolicy;
@@ -756,6 +757,7 @@ final class HaxeFormat implements TextFormat {
 		typeParameterWrap: HaxeFormat.defaultTypeParameterWrap(),
 		expressionWrappingWrap: HaxeFormat.defaultExpressionWrappingWrap(),
 		implementsExtendsWrap: HaxeFormat.defaultImplementsExtendsWrap(),
+		arrayMatrixWrap: ArrayMatrixWrap.MatrixWrapWithAlign,
 		addLineCommentSpace: true,
 		expressionTry: SameLinePolicy.Same,
 		indentCaseLabels: true,

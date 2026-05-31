@@ -2,6 +2,7 @@ package unit;
 
 import utest.Assert;
 import utest.Test;
+import anyparse.format.ArrayMatrixWrap;
 import anyparse.format.IndentChar;
 import anyparse.format.WriteOptions;
 import anyparse.format.text.JsonFormat;
@@ -40,6 +41,7 @@ class WriteOptionsTest extends Test {
 			trailingWhitespace: false,
 			maxConsecutiveBlanks: -1,
 			commentStyle: Verbatim,
+			arrayMatrixWrap: ArrayMatrixWrap.NoMatrixWrap,
 			addLineCommentSpace: true,
 		};
 		final out:String = JValueWriter.write(ast, opts);
