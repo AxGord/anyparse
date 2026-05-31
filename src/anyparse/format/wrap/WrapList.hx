@@ -373,13 +373,19 @@ class WrapList {
 	 */
 	public static function emitCondition(
 		open:String, close:String,
-		condDoc:Doc, opt:WriteOptions, rules:WrapRules
+		condDoc:Doc, opt:WriteOptions, rules:WrapRules,
+		// ω-condition-parens (Stage C): inner padding Docs for the FLAT
+		// shape (`if( cond )`). `openInside` follows `Text(open)`,
+		// `closeInside` precedes `Text(close)`. Both default `Empty` →
+		// byte-identical tight `(cond)`. Break shape leaves the cond on its
+		// own line so inner pads do not apply there.
+		openInside:Doc = Empty, closeInside:Doc = Empty
 	):Doc {
 		final cols:Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
 		final condW:Int = DocMeasure.flatTokenWidth(condDoc);
 		final hasHardline:Bool = flatLength(condDoc) < 0;
 
-		final flatShape:Doc = Concat([Text(open), condDoc, Text(close)]);
+		final flatShape:Doc = Concat([Text(open), openInside, condDoc, closeInside, Text(close)]);
 		// `Nest(cols, [Line('\n'), condDoc])` puts BOTH the post-open
 		// hardline AND `condDoc` itself at the bumped indent base
 		// (outer+cols). Inner break engines that emit their own

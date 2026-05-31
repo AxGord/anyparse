@@ -1092,7 +1092,7 @@ class WriterLowering {
 			// pre-slice `kwLead + ' '` (or stripped) emission.
 			final kwSidePolicySpace:Null<Expr> = stripKwTrailingSpace
 				? null
-				: kwTrailingSpacePolicy(branch, ['ifPolicy', 'forPolicy', 'whilePolicy', 'switchPolicy', 'tryPolicy']);
+				: kwTrailingSpacePolicy(branch, ['ifPolicy', 'forPolicy', 'whilePolicy', 'switchPolicy', 'tryPolicy', 'sharpCondParensGap']);
 			final parenSidePolicySpace:Null<Expr> = stripKwTrailingSpace
 				? null
 				: kwTrailingSpacePolicyParenSide(branch, ['anonFuncParens']);
@@ -1414,6 +1414,22 @@ class WriterLowering {
 		// `openDelimPolicySpace` returns null when the flag is absent so
 		// the pre-slice tight emission stays byte-identical.
 		final openSpace:Null<Expr> = openDelimPolicySpace(branch, ['callParens']);
+		// ω-call-parens-inside (Stage B): `@:fmt(callParensInside)` opts the
+		// call-arg `(`/`)` into runtime inner padding driven by
+		// `opt.callParensInsideOpen` / `opt.callParensInsideClose` (the
+		// `after`/`before` sub-policies of fork's `parenConfig.callParens`).
+		// Threaded into the WrapList.emit / fillList / sepList `openInside` /
+		// `closeInside` slots (the same slots `triviaSepStarExpr` uses for
+		// anon-type braces). Default `None` on both → `_de()`, byte-identical
+		// to the tight `bar1(x)`. Empty `()` short-circuits before padding in
+		// every emit path (`items.length == 0` guard).
+		final callInsideFlag:Bool = branch.fmtHasFlag('callParensInside');
+		final callInsideOpen:Expr = callInsideFlag
+			? policyInsideSpace('callParensInsideOpen', false)
+			: macro _de();
+		final callInsideClose:Expr = callInsideFlag
+			? policyInsideSpace('callParensInsideClose', true)
+			: macro _de();
 		// ω-fill-primitive: `@:fmt(fill)` routes the args list through the
 		// Fill helper so items pack inline as long as each fits in the
 		// remaining budget; on overflow the separator before the offending
@@ -1434,7 +1450,7 @@ class WriterLowering {
 		final fillDouble:Bool = branch.fmtHasFlag('fillDoubleIndent');
 		final sepListCall:Expr = if (wrapRulesField != null) {
 			final rulesExpr:Expr = optFieldAccess(wrapRulesField);
-			final wrapListExpr:Expr = macro anyparse.format.wrap.WrapList.emit($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, _de(), _de(), false, $rulesExpr, $tcExpr);
+			final wrapListExpr:Expr = macro anyparse.format.wrap.WrapList.emit($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $callInsideOpen, $callInsideClose, false, $rulesExpr, $tcExpr);
 			if (isTriviaStar) {
 				// ω-D9A-keep-callargs: when the wrap-rules' runtime config
 				// sets `defaultMode == WrapMode.Keep`, bypass the cascade
@@ -1497,9 +1513,9 @@ class WriterLowering {
 				wrapListExpr;
 			}
 		} else if (useFill) {
-			macro fillList($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr, _de(), _de(), false, $v{fillDouble});
+			macro fillList($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr, $callInsideOpen, $callInsideClose, false, $v{fillDouble});
 		} else {
-			macro sepList($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr, _de(), _de(), false, false);
+			macro sepList($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr, $callInsideOpen, $callInsideClose, false, false);
 		};
 		final dcArgs:Array<Expr> = [operandCall];
 		if (openSpace != null) dcArgs.push(openSpace);
@@ -1820,7 +1836,12 @@ class WriterLowering {
 					// ω-blockended-trivia (Session 3): enum-Alt sep+blockEnded
 					// routes here when `altBlockEndedFlag` fires; pass sepText
 					// only in that case so unrelated callers stay byte-identical.
-					altBlockEndedFlag ? sepText : null, altBlockEndedFlag
+					// ω-condcomp-stray-semi (Stage A): thread the predicate name
+					// + schema path so the inter-element sep consults the AST
+					// shape (suppresses stray `;` after a `#if … #end` element).
+					altBlockEndedFlag ? sepText : null, altBlockEndedFlag,
+					altBlockEndedFlag ? (branch.annotations.get('lit.sepBlockEndedPredicate') : Null<String>) : null,
+					altBlockEndedFlag ? formatInfo.schemaTypePath : null
 				));
 			}
 		} else if (sepText != null && branch.annotations.get('lit.sepBlockEnded') == true) {
@@ -2587,6 +2608,20 @@ class WriterLowering {
 					parts.push(macro _dt($v{kwLead}));
 					final policySpace:Null<Expr> = kwTrailingSpacePolicyParenSide(child, ['anonFuncParens']);
 					if (policySpace != null) parts.push(policySpace);
+				} else if (firstFmtFlag(child, ['catchParensGap', 'whilePolicy']) != null) {
+					// ω-condition-parens (Stage C): kw-led struct-field cond
+					// whose `kw`→`(` gap tracks a kw-after `WhitespacePolicy`
+					// knob. `catchParensGap` (`HxCatchClause.param`,
+					// `@:kw('catch')`) and `whilePolicy` (`HxDoWhileStmt.cond`,
+					// `@:kw('while')` — the trailing `while` of a `do … while`)
+					// both use kw-after semantics (`After`/`Both` → space,
+					// `None` → tight). Defaults keep `catch (` / `} while (`
+					// byte-identical; fed from
+					// `parenConfig.{catch|while}ConditionParens.openingPolicy`
+					// (flipped to the kw-after axis) in `applyConditionParens`.
+					parts.push(macro _dt($v{kwLead}));
+					final policySpace:Null<Expr> = kwTrailingSpacePolicy(child, ['catchParensGap', 'whilePolicy']);
+					if (policySpace != null) parts.push(policySpace);
 				} else {
 					parts.push(macro _dt($v{kwLead + ' '}));
 				}
@@ -2605,7 +2640,7 @@ class WriterLowering {
 			// future end-field with `@:lead` does not silently leak the lead
 			// literal into the spanned cond Doc.
 			if (leadText != null && !isOptional && !hasCondWrap && !hasCondWrapEnd)
-				parts.push(whitespacePolicyLead(child, leadText, ['objectFieldColon', 'typeHintColon', 'typeCheckColon', 'typedefAssign', 'typedefIntersection', 'functionTypeHaxe4', 'arrowFunctions']));
+				parts.push(whitespacePolicyLead(child, leadText, ['objectFieldColon', 'typeHintColon', 'typeCheckColon', 'typedefAssign', 'typedefIntersection', 'functionTypeHaxe4', 'arrowFunctions', 'catchParensInsideOpen', 'switchCondParensInsideOpen', 'whileCondParensInsideOpen']));
 
 			// Field value
 			// ω-issue-257-else-in-return-switch: same dual-flag form as
@@ -3067,9 +3102,41 @@ class WriterLowering {
 					// when the body is a multi-line ObjectLit, leaving `{`
 					// at parent indent).
 					final indentObjArgs:Null<Array<String>> = child.fmtReadStringArgs('indentValueIfCtor');
+					// ω-condition-parens (Stage C): `@:fmt(sharpCondParensInside(
+					// '<insideOpenKnob>', '<insideCloseKnob>'))` on the verbatim
+					// `#if (cond)` condition (`HxConditionalStmt.cond`, a
+					// `@:rawString HxPpCondLit` whose capture INCLUDES the outer
+					// parens). The cond writer emits the captured string verbatim,
+					// so the inner pad cannot ride the lead/trail path — it
+					// rewrites the opaque string at write time. When the string is
+					// wrapped in matching outer parens (`(…)`), inject inner spaces
+					// per `opt.<knob>` (`After`/`Both` → open pad, `Before`/`Both`
+					// → close pad); non-parenthesised conds (`#if php`) pass
+					// through unchanged. Null policies → no pad → byte-identical
+					// to the verbatim capture.
+					final sharpInsideArgs:Null<Array<String>> = child.fmtReadStringArgs('sharpCondParensInside');
+					final effRawWriteCall:Expr = if (sharpInsideArgs != null && sharpInsideArgs.length == 2) {
+						final openKnob:Expr = optFieldAccess(sharpInsideArgs[0]);
+						final closeKnob:Expr = optFieldAccess(sharpInsideArgs[1]);
+						final wpAfter:Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'WhitespacePolicy', 'After']);
+						final wpBoth:Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'WhitespacePolicy', 'Both']);
+						final wpBefore:Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'WhitespacePolicy', 'Before']);
+						macro {
+							final _condStr:String = ($fieldAccess : String);
+							if (_condStr.length >= 2 && StringTools.fastCodeAt(_condStr, 0) == '('.code
+									&& StringTools.fastCodeAt(_condStr, _condStr.length - 1) == ')'.code) {
+								final _inner:String = _condStr.substr(1, _condStr.length - 2);
+								final _op:anyparse.format.WhitespacePolicy = $openKnob;
+								final _cp:anyparse.format.WhitespacePolicy = $closeKnob;
+								final _openPad:String = (_op == $wpAfter || _op == $wpBoth) ? ' ' : '';
+								final _closePad:String = (_cp == $wpBefore || _cp == $wpBoth) ? ' ' : '';
+								_dt('(' + _openPad + _inner + _closePad + ')');
+							} else _dt(_condStr);
+						}
+					} else rawWriteCall;
 					final writeCall:Expr = bodyPolicyFlag != null && indentObjArgs != null
-						? rawWriteCall
-						: maybeIndentValueIfCtor(rawWriteCall, fieldAccess, child);
+						? effRawWriteCall
+						: maybeIndentValueIfCtor(effRawWriteCall, fieldAccess, child);
 					// bodyPolicy on a first field: the parent enum-branch
 					// Case 3 strips its kwLead trailing space so the
 					// separator here is the sole transition token. Non-
@@ -3426,6 +3493,18 @@ class WriterLowering {
 							// same shadowed opt; harmless because the
 							// cond knob itself is preserved by `_copyOpt`.
 							final condKnobAccess:Expr = optFieldAccess(condWrapArgs[0]);
+							// ω-condition-parens (Stage C): `@:fmt(condParensInside(
+							// '<insideOpenKnob>', '<insideCloseKnob>'))` on the
+							// condWrap cond field pads the FLAT `( cond )` shape via
+							// `opt.<knob>:WhitespacePolicy`. Null when absent →
+							// `_de()` inner Docs → tight `(cond)` byte-identical.
+							final condInsideArgs:Null<Array<String>> = child.fmtReadStringArgs('condParensInside');
+							final condInsideOpen:Expr = (condInsideArgs != null && condInsideArgs.length == 2)
+								? policyInsideSpace(condInsideArgs[0], false)
+								: macro _de();
+							final condInsideClose:Expr = (condInsideArgs != null && condInsideArgs.length == 2)
+								? policyInsideSpace(condInsideArgs[1], true)
+								: macro _de();
 							parts.push(macro {
 								final _condRules:anyparse.format.wrap.WrapRules = $condKnobAccess;
 								final _condMode:anyparse.format.wrap.WrapMode = _condRules.defaultMode;
@@ -3433,7 +3512,8 @@ class WriterLowering {
 									_condMode == anyparse.format.wrap.WrapMode.NoWrap ? null : _condMode;
 								final opt = _setChainModeOverride(opt, _chainOvr);
 								anyparse.format.wrap.WrapList.emitCondition(
-									$v{leadText}, $v{trailText}, $writeCall, opt, $condKnobAccess
+									$v{leadText}, $v{trailText}, $writeCall, opt, $condKnobAccess,
+									$condInsideOpen, $condInsideClose
 								);
 							});
 						} else if (child.fmtHasFlag('arrowBodyLineWrap')) {
@@ -3498,8 +3578,12 @@ class WriterLowering {
 			}
 
 			// Trail
+			// ω-condition-parens (Stage C): `@:fmt(catchParensInsideClose)` on
+			// a mandatory-Ref `@:trail(')')` field routes the close literal
+			// through `opt.catchParensInsideClose` (`Before`/`Both` → inner
+			// ` )` pad). No flag → tight `_dt(trailText)` byte-identical.
 			if (!isOptional && trailText != null && !hasCondWrap && !hasCondWrapEnd)
-				parts.push(macro _dt($v{trailText}));
+				parts.push(whitespacePolicyTrail(child, trailText, ['catchParensInsideClose', 'switchCondParensInsideClose', 'whileCondParensInsideClose']));
 			// ω-struct-trailopt-source-track (Session 14 Phase 4): mandatory-
 			// Ref `@:trailOpt(LIT)` field gates the trail emission on the
 			// synth slot `<field>TrailPresent:Null<Bool>` so the writer
@@ -4324,7 +4408,14 @@ class WriterLowering {
 					// `@:sep('text', tailRelax, blockEnded)`. Null sepText
 					// preserves pre-slice byte-identical output for every
 					// existing block-mode caller.
-					blockEndedFlag ? sepText : null, blockEndedFlag
+					// ω-condcomp-stray-semi (Stage A): also thread the
+					// blockEnded predicate name + schema path so the
+					// between-element / trailing sep consults `stmtNoSemi`
+					// on the prior element's AST (suppresses the stray `;`
+					// after a `#if … #end` stmt).
+					blockEndedFlag ? sepText : null, blockEndedFlag,
+					blockEndedFlag ? (starNode.annotations.get('lit.sepBlockEndedPredicate') : Null<String>) : null,
+					blockEndedFlag ? formatInfo.schemaTypePath : null
 				));
 			} else if (isLastField) {
 				if (openText != null) parts.push(macro _dt($v{openText}));
@@ -6222,6 +6313,31 @@ class WriterLowering {
 	}
 
 	/**
+	 * ω-condition-parens (Stage C): trail-side sister of
+	 * `whitespacePolicyLead`. Emit a `@:trail(text)` close literal under a
+	 * runtime switch on `opt.<flagName>:WhitespacePolicy`, prepending an
+	 * INNER space (` )`) when the policy carries the `before` side
+	 * (`Before` / `Both`). The close literal sits right after a value Doc,
+	 * so the inner space is a plain `_dt(' ')` (the value never emits a
+	 * trailing hardline at the paren boundary). Picks the first flag from
+	 * `flagNames` present on `child`; no flag → tight `_dt(trailText)`,
+	 * byte-identical to the pre-slice mandatory-trail path. Used by
+	 * `catchParensInsideClose` (`HxCatchClause.param` `@:trail(')')`).
+	 */
+	private static function whitespacePolicyTrail(child:ShapeNode, trailText:String, flagNames:Array<String>):Expr {
+		final flagName:Null<String> = firstFmtFlag(child, flagNames);
+		if (flagName == null) return macro _dt($v{trailText});
+		final wpPath:Array<String> = ['anyparse', 'format', 'WhitespacePolicy'];
+		final beforePat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Before']));
+		final bothPat:Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
+		final cases:Array<Case> = [
+			{values: [beforePat, bothPat], expr: macro _dt($v{' ' + trailText}), guard: null},
+		];
+		final optAccess:Expr = optFieldAccess(flagName);
+		return {expr: ESwitch(optAccess, cases, macro _dt($v{trailText})), pos: Context.currentPos()};
+	}
+
+	/**
 	 * Build a Doc expression that wraps a bare-Ref body field with a
 	 * runtime-switched separator driven by `@:fmt(bodyPolicy("flagName"))`.
 	 *
@@ -7303,8 +7419,36 @@ class WriterLowering {
 		// pre-slice byte-identical (no inter-stmt sep emit — per-stmt
 		// `;` lives inside each element's own Doc via @:trailOpt).
 		sepText:Null<String> = null,
-		blockEnded:Bool = false
+		blockEnded:Bool = false,
+		// ω-condcomp-stray-semi (Stage A): the schema-instance predicate name
+		// (`lit.sepBlockEndedPredicate`, e.g. `stmtNoSemi`) consulted on the
+		// PRIOR / LAST element's AST when deciding between-element / trailing
+		// sep elision. Mirror of the plain-mode block-Star path (L4400): a
+		// `#if … #end` stmt ends with `d` so the `endsWithStmtTerminator` byte
+		// check misses, but `stmtNoSemi` accepts the `Conditional` AST shape.
+		// `blockEndedSchemaPath` is the dotted format-instance path (e.g.
+		// `anyparse.grammar.haxe.HaxeFormat`) used to build the
+		// `<schema>.instance.<predicate>(elem)` call. Both null → byte-
+		// identical to the pre-fix path (no predicate consult).
+		blockEndedPredicate:Null<String> = null,
+		blockEndedSchemaPath:Null<String> = null
 	):Expr {
+		// ω-condcomp-stray-semi (Stage A): build the schema-instance
+		// predicate-call Expr for a given element-access Expr. Mirrors the
+		// plain-mode block-Star path (L4400-4428). Returns `macro false` when
+		// no predicate is wired so the OR-extended byte/sepAfter checks below
+		// stay byte-identical for callers without `blockEnded('<pred>')`.
+		final blockEndedPredCall:Expr->Expr = function(elemAccess:Expr):Expr {
+			if (blockEndedPredicate == null || blockEndedSchemaPath == null) return macro false;
+			final fmtParts:Array<String> = blockEndedSchemaPath.split('.');
+			return {
+				expr: ECall(
+					{expr: EField(macro $p{fmtParts}.instance, blockEndedPredicate), pos: Context.currentPos()},
+					[elemAccess]
+				),
+				pos: Context.currentPos(),
+			};
+		};
 		// ω-arrow-lambda-body-context: when the call site opts in via
 		// `@:fmt(leftCurlyAnonFnOverride(...))` on the parent Star, the per-
 		// element write call passes `_clearAnonFnBody(opt)` so the flag is
@@ -7831,16 +7975,24 @@ class WriterLowering {
 		// arm stays as a safety net for raw/programmatic AST inputs whose
 		// `Trivial<T>` defaults leave `sepAfter=false` even when the source
 		// shape demands a sep. NOTE: `endsWithStmtTerminator` (NOT
-		// `endsWithSemi`) here — between-element doesn't have predicate
-		// access, so the `}` byte must double as a "prior self-terminated"
-		// signal. Migrated stmts (Session 10) reach the between-element
-		// path via `sepAfter=true` instead (Star consumed the source `;`),
-		// which short-circuits the OR before the doc-check.
+		// `endsWithSemi`) here. Migrated stmts (Session 10) reach the
+		// between-element path via `sepAfter=true` instead (Star consumed
+		// the source `;`), which short-circuits the OR before the doc-check.
+		//
+		// ω-condcomp-stray-semi (Stage A): AND a `!predicate(prior)` guard
+		// onto the byte-fallback arm — a `#if … #end` stmt ends with `d`
+		// (byte check misses), but `stmtNoSemi` accepts the `Conditional`
+		// shape so the spurious `;` between `#end` and the next stmt is
+		// suppressed. The `sepAfter` source-fidelity OR stays in front; the
+		// predicate only gates the byte-fallback. `macro false` when no
+		// predicate wired → byte-identical to the pre-fix path.
+		final priorPredCall:Expr = blockEndedPredCall(macro _arr[_si - 1].node);
+		final lastPredCall:Expr = blockEndedPredCall(macro _arr[_arr.length - 1].node);
 		final blockSepBeforeHardlineExpr:Expr = (sepText != null && blockEnded)
 			? macro {
 				if (_si > 0 && _priorElemDoc != null
 						&& (_arr[_si - 1].sepAfter
-							|| !anyparse.core.DocMeasure.endsWithStmtTerminator(_priorElemDoc))) {
+							|| (!anyparse.core.DocMeasure.endsWithStmtTerminator(_priorElemDoc) && !($priorPredCall)))) {
 					_inner.push(_dt($v{sepText}));
 				}
 			}
@@ -7854,7 +8006,8 @@ class WriterLowering {
 		final blockTrailSepEmitExpr:Expr = (sepText != null && blockEnded)
 			? macro {
 				if (_arr.length > 0 && _priorElemDoc != null && _arr[_arr.length - 1].sepAfter
-						&& !anyparse.core.DocMeasure.endsWithSemi(_priorElemDoc)) {
+						&& !anyparse.core.DocMeasure.endsWithSemi(_priorElemDoc)
+						&& !($lastPredCall)) {
 					_inner.push(_dt($v{sepText}));
 				}
 			}
@@ -9744,7 +9897,17 @@ class WriterLowering {
 			final _padTrailing:Bool = $padTrailingExpr;
 			final _padHardline:Bool = (_padLeading || _padTrailing) && _arr.length > 0 && _arr[0].newlineBefore;
 			final _metaPolicy:Int = $metaPolicyExpr;
-			if (_arr.length == 0 && _trailLC.length == 0) _de() else {
+			// ω-condcomp-empty-body-newline (Stage A): an EMPTY cond-comp body
+			// / elseBody Star (`HxConditionalStmt`/`Decl`/… `body` carries BOTH
+			// `@:fmt(padLeading, padTrailing)`) must still emit a single
+			// hardline so `#if(cond)\n#end` keeps its interior newline rather
+			// than collapsing to `#if(cond)#end`. The `padLeading && padTrailing`
+			// gate is cond-comp-EXCLUSIVE (the expr-position `elseifs` Star has
+			// padTrailing ONLY) — every other tryparse-Star consumer leaves
+			// both false, so the empty body stays `_de()` byte-identical.
+			if (_arr.length == 0 && _trailLC.length == 0)
+				(_padLeading && _padTrailing) ? _dhl() : _de();
+			else {
 				final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 				final _docs:Array<anyparse.core.Doc> = [];
 				$cascadeInitPrev;

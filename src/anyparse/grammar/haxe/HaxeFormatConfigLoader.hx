@@ -603,6 +603,20 @@ final class HaxeFormatConfigLoader {
 			mapLiteralBracketsClose: base.mapLiteralBracketsClose,
 			comprehensionBracketsOpen: base.comprehensionBracketsOpen,
 			comprehensionBracketsClose: base.comprehensionBracketsClose,
+			callParensInsideOpen: base.callParensInsideOpen,
+			callParensInsideClose: base.callParensInsideClose,
+			ifCondParensInsideOpen: base.ifCondParensInsideOpen,
+			ifCondParensInsideClose: base.ifCondParensInsideClose,
+			whileCondParensInsideOpen: base.whileCondParensInsideOpen,
+			whileCondParensInsideClose: base.whileCondParensInsideClose,
+			switchCondParensInsideOpen: base.switchCondParensInsideOpen,
+			switchCondParensInsideClose: base.switchCondParensInsideClose,
+			catchParensGap: base.catchParensGap,
+			catchParensInsideOpen: base.catchParensInsideOpen,
+			catchParensInsideClose: base.catchParensInsideClose,
+			sharpCondParensGap: base.sharpCondParensGap,
+			sharpCondParensInsideOpen: base.sharpCondParensInsideOpen,
+			sharpCondParensInsideClose: base.sharpCondParensInsideClose,
 			objectLiteralWrap: base.objectLiteralWrap,
 			callParameterWrap: base.callParameterWrap,
 			arrayLiteralWrap: base.arrayLiteralWrap,
@@ -1234,8 +1248,25 @@ final class HaxeFormatConfigLoader {
 			if (funcParam != null && funcParam.openingPolicy != null)
 				opt.funcParamParens = whitespaceToRuntime(funcParam.openingPolicy);
 			final call:Null<HxFormatParenPolicySection> = paren.callParens;
-			if (call != null && call.openingPolicy != null)
-				opt.callParens = whitespaceToRuntime(call.openingPolicy);
+			if (call != null) {
+				// ω-call-parens-inside (Stage B): `callParens.openingPolicy`
+				// drives TWO axes of the open `(` token, mirroring fork's
+				// per-token whitespace policy. The `before` sub-policy is the
+				// gap BEFORE `(` (existing `opt.callParens`); the `after`
+				// sub-policy is the INNER pad right after `(` (new
+				// `opt.callParensInsideOpen`). `closingPolicy.before` is the
+				// inner pad before `)` (`opt.callParensInsideClose`). So
+				// `openingPolicy: "onlyAfter"` keeps `bar1(` tight AND pads
+				// `( {…`; `closingPolicy: "before"` pads `…} )`.
+				final callOpening:Null<HxFormatWhitespacePolicy> = call.openingPolicy;
+				if (callOpening != null) {
+					opt.callParens = whitespaceToRuntime(callOpening);
+					opt.callParensInsideOpen = whitespaceToRuntime(callOpening);
+				}
+				final callClosing:Null<HxFormatWhitespacePolicy> = call.closingPolicy;
+				if (callClosing != null)
+					opt.callParensInsideClose = whitespaceToRuntime(callClosing);
+			}
 			final anonFunc:Null<HxFormatParenPolicySection> = paren.anonFuncParamParens;
 			if (anonFunc != null) {
 				if (anonFunc.openingPolicy != null)
@@ -1243,6 +1274,18 @@ final class HaxeFormatConfigLoader {
 				if (anonFunc.removeInnerWhenEmpty != null)
 					opt.anonFuncParamParensKeepInnerWhenEmpty = !anonFunc.removeInnerWhenEmpty;
 			}
+			// ω-condition-parens (Stage C): apply the `conditionParens`
+			// catch-all FIRST (haxe-formatter scopes it to if / while / switch
+			// / `#if`), then the per-category sections override. Each section's
+			// `openingPolicy` drives the kw→`(` gap (paren-side `before`,
+			// flipped to the kw-after knob) AND the inner `( ` pad
+			// (`after`); `closingPolicy.before` drives the inner ` )` pad.
+			applyConditionParens(paren.conditionParens, opt, true);
+			applyConditionParens(paren.ifConditionParens, opt, false, 'if');
+			applyConditionParens(paren.whileConditionParens, opt, false, 'while');
+			applyConditionParens(paren.switchConditionParens, opt, false, 'switch');
+			applyConditionParens(paren.catchParens, opt, false, 'catch');
+			applyConditionParens(paren.sharpConditionParens, opt, false, 'sharp');
 		}
 		final braces:Null<HxFormatBracesConfigSection> = section.bracesConfig;
 		if (braces != null) {
@@ -1462,6 +1505,85 @@ final class HaxeFormatConfigLoader {
 			case HxFormatWhitespacePolicy.Around: WhitespacePolicy.Both;
 			case _: WhitespacePolicy.None;
 		};
+	}
+
+	/**
+	 * ω-condition-parens (Stage C): map a condition-paren `openingPolicy`'s
+	 * `before` sub-policy (gap BEFORE the `(` = gap AFTER the keyword) onto
+	 * the kw-after `WhitespacePolicy` consumed by `@:fmt(ifPolicy)` etc.
+	 * (`After`/`Both` → space). Paren `Before`/`Both`/`OnlyBefore` carry a
+	 * before-`(` space → kw `After`; everything else (`After`/`OnlyAfter`/
+	 * `None`) → kw `None` (no space). So `openingPolicy: "onlyAfter"`
+	 * collapses `if (` to `if(` while still padding the inner `( `.
+	 */
+	private static function parenGapToKwAfter(policy:HxFormatWhitespacePolicy):WhitespacePolicy {
+		return switch policy {
+			case HxFormatWhitespacePolicy.Before | HxFormatWhitespacePolicy.OnlyBefore
+				| HxFormatWhitespacePolicy.Around | HxFormatWhitespacePolicy.NoneAfter: WhitespacePolicy.After;
+			case _: WhitespacePolicy.None;
+		};
+	}
+
+	/**
+	 * ω-condition-parens (Stage C): apply one `parenConfig` condition-paren
+	 * section to `opt`. `category` is null for the `conditionParens`
+	 * catch-all (fans out to if / while / switch / sharp simultaneously),
+	 * or one of `'if'|'while'|'switch'|'catch'|'sharp'`. `openingPolicy`
+	 * drives the kw→`(` gap (paren-before flipped to the kw-after knob —
+	 * reuses `ifPolicy`/`whilePolicy`/`switchPolicy` for those three, the
+	 * dedicated `catchParensGap`/`sharpCondParensGap` for the other two)
+	 * AND the inner `( ` pad (`openingPolicy` → `*InsideOpen`);
+	 * `closingPolicy` drives the inner ` )` pad (`*InsideClose`).
+	 */
+	private static function applyConditionParens(section:Null<HxFormatParenPolicySection>, opt:HxModuleWriteOptions,
+			isCatchAll:Bool, ?category:String):Void {
+		if (section == null) return;
+		final opening:Null<HxFormatWhitespacePolicy> = section.openingPolicy;
+		final closing:Null<HxFormatWhitespacePolicy> = section.closingPolicy;
+		final gap:Null<WhitespacePolicy> = opening != null ? parenGapToKwAfter(opening) : null;
+		final insideOpen:Null<WhitespacePolicy> = opening != null ? whitespaceToRuntime(opening) : null;
+		final insideClose:Null<WhitespacePolicy> = closing != null ? whitespaceToRuntime(closing) : null;
+		inline function applyIf():Void {
+			if (gap != null) opt.ifPolicy = gap;
+			if (insideOpen != null) opt.ifCondParensInsideOpen = insideOpen;
+			if (insideClose != null) opt.ifCondParensInsideClose = insideClose;
+		}
+		inline function applyWhile():Void {
+			if (gap != null) opt.whilePolicy = gap;
+			if (insideOpen != null) opt.whileCondParensInsideOpen = insideOpen;
+			if (insideClose != null) opt.whileCondParensInsideClose = insideClose;
+		}
+		inline function applySwitch():Void {
+			if (gap != null) opt.switchPolicy = gap;
+			if (insideOpen != null) opt.switchCondParensInsideOpen = insideOpen;
+			if (insideClose != null) opt.switchCondParensInsideClose = insideClose;
+		}
+		inline function applyCatch():Void {
+			if (gap != null) opt.catchParensGap = gap;
+			if (insideOpen != null) opt.catchParensInsideOpen = insideOpen;
+			if (insideClose != null) opt.catchParensInsideClose = insideClose;
+		}
+		inline function applySharp():Void {
+			if (gap != null) opt.sharpCondParensGap = gap;
+			if (insideOpen != null) opt.sharpCondParensInsideOpen = insideOpen;
+			if (insideClose != null) opt.sharpCondParensInsideClose = insideClose;
+		}
+		if (isCatchAll) {
+			applyIf();
+			applyWhile();
+			applySwitch();
+			applyCatch();
+			applySharp();
+			return;
+		}
+		switch category {
+			case 'if': applyIf();
+			case 'while': applyWhile();
+			case 'switch': applySwitch();
+			case 'catch': applyCatch();
+			case 'sharp': applySharp();
+			case _:
+		}
 	}
 
 	private static function keywordPlacementToRuntime(policy:HxFormatKeywordPlacement):KeywordPlacement {

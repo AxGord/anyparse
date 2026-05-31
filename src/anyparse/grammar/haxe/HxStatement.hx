@@ -417,7 +417,7 @@ enum HxStatement {
 	@:kw('#error')
 	ErrorStmt(message:HxErrorMsg);
 
-	@:kw('#if') @:trail('#end')
+	@:kw('#if') @:trail('#end') @:fmt(sharpCondParensGap)
 	Conditional(inner:HxConditionalStmt);
 
 	@:kw('function')

@@ -1717,6 +1717,31 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	mapLiteralBracketsClose:WhitespacePolicy,
 	comprehensionBracketsOpen:WhitespacePolicy,
 	comprehensionBracketsClose:WhitespacePolicy,
+	callParensInsideOpen:WhitespacePolicy,
+	callParensInsideClose:WhitespacePolicy,
+	// ω-condition-parens (Stage C): per-condition-paren INNER pad, fed by
+	// `whitespace.parenConfig.{if|while|switch}ConditionParens` /
+	// `catchParens` / `sharpConditionParens` / `conditionParens`
+	// (catch-all). `InsideOpen` (from `openingPolicy.after`) is the inner
+	// `( ` pad; `InsideClose` (from `closingPolicy.before`) is the inner
+	// ` )` pad. The keyword→`(` gap reuses the existing `ifPolicy` /
+	// `whilePolicy` / `switchPolicy` / `tryPolicy` knobs (fed from the
+	// same `openingPolicy.before` via a paren→kw flip in the loader);
+	// `catchParensGap` / `sharpCondParensGap` are dedicated because catch
+	// (`@:kw('catch')`) and `#if` (`HxConditionalStmt`) have no pre-
+	// existing gap knob. Default None → tight `if (a)` / `catch (e)`.
+	ifCondParensInsideOpen:WhitespacePolicy,
+	ifCondParensInsideClose:WhitespacePolicy,
+	whileCondParensInsideOpen:WhitespacePolicy,
+	whileCondParensInsideClose:WhitespacePolicy,
+	switchCondParensInsideOpen:WhitespacePolicy,
+	switchCondParensInsideClose:WhitespacePolicy,
+	catchParensGap:WhitespacePolicy,
+	catchParensInsideOpen:WhitespacePolicy,
+	catchParensInsideClose:WhitespacePolicy,
+	sharpCondParensGap:WhitespacePolicy,
+	sharpCondParensInsideOpen:WhitespacePolicy,
+	sharpCondParensInsideClose:WhitespacePolicy,
 	objectLiteralWrap:WrapRules,
 	callParameterWrap:WrapRules,
 	arrayLiteralWrap:WrapRules,
