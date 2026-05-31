@@ -6686,9 +6686,35 @@ class WriterLowering {
 		// pre-slice `_dt(' ')` emission. Sister fix to the kw-led
 		// optional-Ref lead-value split at line 2129 which uses the same
 		// idiom for `var x =\n{...}` object-literal-leftCurly-Next.
-		final fitInnerExpr:Expr = macro anyparse.format.wrap.WrapList.flatLength(_body) == -1
-			? _dc([_dop(' '), _body])
-			: _dbg(_dn(_cols, _dc([_dl(), _body])));
+		// ω-return-fitline-natural-glue (inc8): for return-style FitLine bodies
+		// (`singleLineFlagName != null` = `ReturnStmt`), keep `return <head>`
+		// GLUED iff the body's NATURAL first line fits at the `return ` column,
+		// letting a binary chain / call SELF-break its operators / args at
+		// +1cols — mirroring fork's `shouldWrapReturnExpr`. A body that
+		// CANNOT self-break (atomic long literal / ident) has a natural first
+		// line == its whole flat width → overflows → wholesale next-line break
+		// (`return\n\t<body>`), matching `HxReturnBodySliceTest.
+		// testFitLineBreaksLongValue`. The `_dinfle` (`IfNaturalFirstLineExceeds`,
+		// inc1 downward probe) resolves the body's inner Groups by their own
+		// `fitsFlat`, so a chain whose operand-Group breaks reports its short
+		// natural first line (`return prefix`) and glues; the chain's own
+		// `Nest(cols)` then supplies the single +1 continuation indent (no
+		// double-Nest, because the glue branch adds no Nest of its own). The
+		// `flatLength == -1` already-multiline case glues unconditionally
+		// (the body owns its layout). if/for/while/etc. FitLine bodies
+		// (`singleLineFlagName == null`) keep the legacy `BodyGroup` wholesale
+		// break — fork treats their body as one atomic unit
+		// (`sameline/fitline_{if,for}`, `if_for_chain_*`).
+		final fitInnerExpr:Expr = if (singleLineFlagName != null)
+			macro anyparse.format.wrap.WrapList.flatLength(_body) == -1
+				? _dc([_dop(' '), _body])
+				: _dinfle(opt.lineWidth,
+					_dn(_cols, _dc([_dhl(), _body])),
+					_dc([_dop(' '), _body]));
+		else
+			macro anyparse.format.wrap.WrapList.flatLength(_body) == -1
+				? _dc([_dop(' '), _body])
+				: _dbg(_dn(_cols, _dc([_dl(), _body])));
 		final fitExpr:Expr = if (elseFieldName == null) macro {
 			final _body:anyparse.core.Doc = $writeCall;
 			$fitInnerExpr;
