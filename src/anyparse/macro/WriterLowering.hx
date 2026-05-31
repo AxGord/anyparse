@@ -854,7 +854,34 @@ class WriterLowering {
 			// expression-position frame. Idempotent — already-true opt
 			// passes through.
 			final propagateExpr:Bool = branch.fmtHasFlag('propagateExprPosition');
-			final ctorOptArg:Expr = propagateExpr ? macro _setExprPosition(opt) : macro opt;
+			// ω-string-interp-noformat-flat: the interpolation `${expr}` body
+			// (`@:fmt(captureSource(...))` ctor — `HxStringSegment.Block`)
+			// threads `_setChainModeOverride(opt, NoWrap)` into the sub-call
+			// so the descendant chain emit collapses its cascade to `NoWrap`
+			// — an inner `+`/`-`/`&&` chain stays flat regardless of the
+			// `opAddSubChain`/`opBoolChain` config (the fork never wraps
+			// expressions inside interpolations). Reuses the existing
+			// chain-override channel (no new opt field): `_setChainModeOverride`
+			// swaps `opBoolChainWrap`/`opAddSubChainWrap` to a degenerate
+			// `{rules: [], defaultMode: NoWrap}` cascade. `NoWrap` is distinct
+			// from the `FillLineWithLeadingBreak` cond-wrap mode, so the
+			// chain dispatch's `_condWrapForced` gate (== FLWLB) stays false —
+			// no interaction with the inc6 chain-unwrap path. The HardFlatten
+			// wrap at `bodyExpr` (below) covers width-conditional breaks +
+			// non-chain Groups; this NoWrap channel covers the unconditional
+			// `onePerLine` chain shape whose `Line('\n')` flat form would
+			// survive HardFlatten. Composes with `propagateExpr`. Gated on the
+			// `captureSource` flag alone (Haxe-only today, and `HxModuleWriteOptions`
+			// carries the chain-override channel) — mirrors the `@:fmt(condWrap)`
+			// site (L3592), which calls `_setChainModeOverride` ungated for the
+			// same reason: the flag's presence implies the grammar's channel.
+			final interpFlat:Bool = branch.fmtHasFlag('captureSource');
+			final ctorOptArg:Expr = {
+				var _o:Expr = macro opt;
+				if (propagateExpr) _o = macro _setExprPosition($_o);
+				if (interpFlat) _o = macro _setChainModeOverride($_o, anyparse.format.wrap.WrapMode.NoWrap);
+				_o;
+			};
 			final subCall:Expr = if (isSelfRef && hasPratt)
 				{expr: ECall(macro $i{subFn}, [macro $i{argNames[0]}, ctorOptArg, macro -1]), pos: Context.currentPos()}
 			else
@@ -1026,7 +1053,7 @@ class WriterLowering {
 			final captureSourceOpt:Null<String> = ctx.trivia
 				? branch.fmtReadString('captureSource')
 				: null;
-			final bodyExpr:Expr = if (captureSourceOpt != null) {
+			var bodyExpr:Expr = if (captureSourceOpt != null) {
 				final sourceAccess:Expr = macro $i{argNames[1]};
 				final optAccess:Expr = optFieldAccess(captureSourceOpt);
 				// Mirror haxe-formatter `MarkTokenText.printStringToken`
@@ -1046,6 +1073,24 @@ class WriterLowering {
 				// verbatim. Closes `whitespace/issue_72_whitespace_in_string_interpolation`.
 				macro $optAccess && $sourceAccess.indexOf('{') < 0 && $sourceAccess.indexOf('}') < 0 ? $indentWrapped : _dt($sourceAccess);
 			} else indentWrapped;
+
+			// ω-string-interp-noformat-flat: an interpolation `${expr}` body
+			// (the `@:fmt(captureSource(...))` ctor — `HxStringSegment.Block`)
+			// re-renders the inner expression when `formatStringInterpolation`
+			// is true, but the fork NEVER wraps expressions inside string
+			// interpolations — they stay on one line regardless of the chain
+			// wrap config (`opAddSubChain`/`opBoolChain` onePerLine/fillLine).
+			// Pin the re-rendered body force-flat through `HardFlatten` so an
+			// inner `+`/`-`/`&&` chain (or any nested Group) collapses to one
+			// line: `${topRightPointX - 7.5}` instead of breaking the chain
+			// one-per-line at the operator. Mirror of fork — `printStringToken`
+			// formats the fragment in isolation with no surrounding wrap
+			// context. HardFlatten survives the chain's inner `WrapBoundary`
+			// (Renderer.hx ω-hardflatten) where plain `Flatten` would re-float.
+			// The verbatim branch (`_dt(sourceAccess)`) is a single Text —
+			// HardFlatten is a no-op there. Closes `opadd_chain_string_concat`
+			// inner-interp breaks / `opadd_chain_trailing_indent`.
+			if (branch.fmtHasFlag('captureSource')) bodyExpr = macro _dhf($bodyExpr);
 
 			// When the sub-struct opens with a bare-Ref @:fmt(bodyPolicy(...)) field,
 			// the sub-struct's writer emits the header→body separator via
