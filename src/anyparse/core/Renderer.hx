@@ -689,7 +689,7 @@ class Renderer {
 						// `CollapseProbe`) `collapseParenCommitsOpen` returns the
 						// raw `fullLineCrosses`, so this is byte-identical to the
 						// pre-slice behaviour off the collapse path.
-						final commits:Bool = collapseParenCommitsOpen(breakDoc, fullLineCrosses, f.indent, n);
+						final commits:Bool = collapseParenCommitsOpen(breakDoc, fullLineCrosses, f.indent, n, stack);
 						if (decisions != null) decisions.push({node: f.doc, crosses: commits});
 						final pushMode:Mode = commits ? MBreak : f.mode;
 						stack.push(new Frame(f.indent, pushMode, commits ? breakDoc : flatDoc));
@@ -872,12 +872,103 @@ class Renderer {
 	 * `IfFullLineExceeds`, e.g. a chain-emit probe), the raw `fullLineCrosses`
 	 * is returned unchanged.
 	 */
-	private static function collapseParenCommitsOpen(breakDoc:Doc, fullLineCrosses:Bool, indent:Int, n:Int):Bool {
+	private static function collapseParenCommitsOpen(breakDoc:Doc, fullLineCrosses:Bool, indent:Int, n:Int, restStack:Array<Frame>):Bool {
 		final probe:Null<{inner:Doc, hard:Bool}> = findCollapseProbe(breakDoc);
 		if (probe == null) return fullLineCrosses;
-		if (probe.hard) return fullLineCrosses;
+		if (probe.hard) {
+			// ω-opadd-paren-tail-glue (opadd_chain* B1-remainder): an opAddSub
+			// inner paren OPENS + collapses (fork `collapseInnerChainBreaks` +
+			// `collapseChainBreaksAfter`) ONLY when there is real same-line
+			// content AFTER the close `)` — the trailing chain (`) / 2 - X`)
+			// rides the close line, so the inner must collapse to one line for
+			// it to fit (`expression_paren_wrapping`). When the paren sits at
+			// the TAIL of its expression (close followed only by close-delims /
+			// `;` / `,`, e.g. `return 1 * ((chain));`), the fork keeps the paren
+			// GLUED and lets the inner chain wrap one-per-line at `+1` indent
+			// (`opadd_chain`). The discriminator is purely "does real content
+			// trail the close paren on the same line" — a render-time rest-of-
+			// stack scan, mirroring the fork's late `collapseChainBreaksAfter`
+			// reading committed tokens after the close. No trailing content →
+			// stay glued (return false); the chain self-breaks inside.
+			if (!fullLineCrosses) return false;
+			return restStackHasTrailingContent(restStack);
+		}
 		if (!fullLineCrosses) return false;
 		return indent + DocMeasure.flatTokenWidth(probe.inner) < n;
+	}
+
+	/**
+	 * True iff the rest-of-stack (the work items still pending AFTER the
+	 * current collapse-candidate paren frame) emits any real same-line content
+	 * before the next hardline — "real" meaning a token that is NOT a closing
+	 * delimiter (`)` / `]` / `}`), statement / element terminator (`;` / `,`),
+	 * or whitespace. Used by `collapseParenCommitsOpen`'s opAddSub branch to
+	 * distinguish a paren at the expression TAIL (only `));` / `,` trails →
+	 * keep glued) from one with a trailing chain (`) / 2 - X` → open + collapse).
+	 *
+	 * Stack-iterative left-spine scan over each pending Frame's flat shape;
+	 * aborts only at a FORCED hardline (a `\n` `Line` flat-replacement or an
+	 * opt-hardline) — a soft `Line` is descended past, because whether it
+	 * ultimately breaks is a not-yet-made Group verdict at the paren's render
+	 * point (single-pass commit) and the STRUCTURAL "is there a binary
+	 * continuation after `)`" question is mode-independent. Returns at the
+	 * first real character found.
+	 */
+	private static function restStackHasTrailingContent(restStack:Array<Frame>):Bool {
+		var i:Int = restStack.length - 1;
+		while (i >= 0) {
+			final f:Frame = restStack[i];
+			i--;
+			final inner:Array<{doc:Doc, mode:Mode}> = [{doc: f.doc, mode: f.mode}];
+			while (inner.length > 0) {
+				final nd:{doc:Doc, mode:Mode} = inner.pop();
+				switch nd.doc {
+					case Empty | OptSpace(_) | OptSpaceSkipAfterHardline:
+					case Text(s):
+						for (ci in 0...s.length) {
+							final c:Int = StringTools.fastCodeAt(s, ci);
+							if (c == ' '.code || c == '\t'.code) continue;
+							if (c == ')'.code || c == ']'.code || c == '}'.code
+									|| c == ';'.code || c == ','.code) continue;
+							return true;
+						}
+					case Line(flat):
+						// Only a FORCED hardline (`\n` flat-replacement) terminates
+						// the trailing-content scan — a soft `Line` is mode-decided
+						// by an enclosing Group whose break verdict is NOT yet made
+						// at the paren's render point (single-pass commit). Whether
+						// the trailing chain (`/ 2 - X`) ultimately rides the close
+						// line or wraps is irrelevant to the STRUCTURAL question the
+						// fork's `collapseChainBreaksAfter` asks: "is there a binary
+						// continuation after the close `)` at all". So descend PAST a
+						// soft Line and keep scanning for a real token.
+						if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) return false;
+					case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
+						return false;
+					case Nest(_, innerDoc):
+						inner.push({doc: innerDoc, mode: nd.mode});
+					case Concat(items):
+						var k:Int = items.length;
+						while (--k >= 0) inner.push({doc: items[k], mode: nd.mode});
+					case Group(innerDoc) | BodyGroup(innerDoc) | GroupWithRestProbe(innerDoc):
+						inner.push({doc: innerDoc, mode: MFlat});
+					case IfBreak(_, fl) | IfWidthExceeds(_, _, fl) | IfFirstLineExceeds(_, _, fl)
+							| IfLineExceeds(_, _, fl) | IfFullLineExceeds(_, _, fl)
+							| IfNaturalFirstLineExceeds(_, _, fl) | IfNaturalFirstLineFitsOpenDelim(_, _, fl):
+						inner.push({doc: fl, mode: MFlat});
+					case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
+						var k:Int = items.length;
+						while (k > 0) {
+							k--;
+							inner.push({doc: items[k], mode: MFlat});
+							if (k > 0) inner.push({doc: sep, mode: MFlat});
+						}
+					case Flatten(innerDoc) | WrapBoundary(innerDoc) | HardFlatten(innerDoc) | CollapseProbe(innerDoc):
+						inner.push({doc: innerDoc, mode: nd.mode});
+				}
+			}
+		}
+		return false;
 	}
 
 	/**

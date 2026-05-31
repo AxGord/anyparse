@@ -863,6 +863,52 @@ class WrapList {
 	}
 
 	/**
+	 * True iff `d`'s first rendered visible token is an open delimiter
+	 * (`(` / `[` / `{`) — i.e. the construct is a paren-expression / call /
+	 * array / object literal whose open bracket leads. Left-spine walk that
+	 * descends through transparent render wrappers and the flat side of every
+	 * render-decision (`Group` / `If*`), skipping leading whitespace
+	 * fragments. O(left-spine), no re-measure.
+	 *
+	 * Used by the generic non-chain infix emit (ω-binop-open-delim-glue) to
+	 * keep the operator GLUED (`a * (chain)`) when its right operand opens a
+	 * delimiter that will absorb the line break inside its own brackets —
+	 * mirrors the fork, where `*` / `/` / `%` / compare / shift / bitwise /
+	 * `is` / `??` are NEVER wrap-marked (`MarkWrapping` wrap-marks only
+	 * `OpAdd` / `OpLt` type-param / `OpArrow`), so the operator never breaks;
+	 * only its bracketed operand does. Structural sister of
+	 * `startsWithHardline` (this checks the FLAT leading edge for an open
+	 * delim; that checks the BREAK leading edge for a hardline).
+	 */
+	public static function startsWithOpenDelim(d:Doc):Bool {
+		var node:Doc = d;
+		while (true) switch node {
+			case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline
+					| OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
+				return false;
+			case Text(s):
+				return s.length > 0 && (StringTools.fastCodeAt(s, 0) == '('.code
+					|| StringTools.fastCodeAt(s, 0) == '['.code
+					|| StringTools.fastCodeAt(s, 0) == '{'.code);
+			case Nest(_, inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner)
+					| Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner):
+				node = inner;
+			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat)
+					| IfLineExceeds(_, _, flat) | IfFullLineExceeds(_, _, flat)
+					| IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat):
+				node = flat;
+			case Concat(items):
+				final first:Null<Doc> = items.find(it -> !isLeadingTransparent(it));
+				if (first == null) return false;
+				node = first;
+			case Fill(items, _, _) | FillWithRestProbe(items, _, _):
+				final first:Null<Doc> = items.find(it -> !isLeadingTransparent(it));
+				if (first == null) return false;
+				node = first;
+		}
+	}
+
+	/**
 	 * Wrap `body` with `lead` unless `lead` is `Empty` — avoids a
 	 * pointless single-element `Concat` for the common no-lead path.
 	 */

@@ -731,18 +731,46 @@ class WriterLowering {
 				};
 			}
 			// Group/Line/Nest wrap for non-tight non-assign non-chain
-			// infix (compare, shift, bitwise, `is`, `??`): lets the
-			// renderer pick flat (Line(' ') → space) when the chain's
+			// infix (compare, shift, bitwise, `is`, `??`, `*`/`/`/`%`): lets
+			// the renderer pick flat (Line(' ') → space) when the chain's
 			// full flat width fits in the remaining columns, else break.
 			// Per-binary Group cascading from G.1 (ω-binop-group-wrap).
+			//
+			// ω-binop-open-delim-glue (opadd_chain* B1-remainder): these
+			// operators are NOT wrap-points in the fork — `MarkWrapping`
+			// wrap-marks ONLY `Binop(OpAdd)` / `Binop(OpLt)` (type param) /
+			// `Binop(OpArrow)`; `*`/`/`/`%`/`>`/`<<`/`&`/`is`/`??`/compare
+			// never break at the operator, only their bracketed operands
+			// break. The legacy `Group(Concat([left, Nest(cols, [Line, op,
+			// right])]))` breaks the soft `Line` whenever the content carries
+			// a committed hardline — which happens when the RIGHT operand is
+			// a paren-wrapped chain that wraps one-per-line (e.g.
+			// `return 1 * (a + b + c + …)`). The enclosing `Mul` Group then
+			// over-breaks `1\n\t* (…` where the fork keeps `1 * (` glued and
+			// lets ONLY the inner paren's chain wrap. When the right operand
+			// STARTS WITH an open delimiter (`(`/`[`/`{` — a paren-expr /
+			// call / array / object whose bracket absorbs the break),
+			// emit the operator GLUED (flat `left op right`, no Group/Line):
+			// the bracketed operand carries the wrap inside its own delims.
+			// `startsWithOpenDelim` is an O(left-spine) structural check
+			// (NO render-time re-measure) so it is exponential-safe even on
+			// deeply nested same-class binary trees (`(a * (b * (c …)))`) —
+			// each level just glues, no probe nesting. Non-delim right
+			// operands (leaf idents, prefix-op exprs) keep the legacy Group
+			// break unchanged. Byte-inert when the bracketed operand does
+			// not wrap (no hardline → the legacy Group never broke → glued
+			// shape is byte-identical to the flat Group resolution).
 			final opAfterText:String = opText + ' ';
 			return macro {
 				final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space
 					? opt.indentSize : opt.tabWidth;
-				final _inner:anyparse.core.Doc = _dg(_dc([
-					$leftCall,
-					_dn(_cols, _dc([_dl(), _dt($v{opAfterText}), $rightCall])),
-				]));
+				final _right:anyparse.core.Doc = $rightCall;
+				final _inner:anyparse.core.Doc = anyparse.format.wrap.WrapList.startsWithOpenDelim(_right)
+					? _dc([$leftCall, _dt($v{opWithSpaces}), _right])
+					: _dg(_dc([
+						$leftCall,
+						_dn(_cols, _dc([_dl(), _dt($v{opAfterText}), _right])),
+					]));
 				if ($v{prec} < ctxPrec) _dc([_dt('('), _inner, _dt(')')]) else _inner;
 			};
 		}
