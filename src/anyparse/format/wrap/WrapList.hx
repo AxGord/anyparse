@@ -239,7 +239,7 @@ class WrapList {
 		// Per-state shape builder: picks the right lead based on the
 		// resolved mode (flat vs break-style layout).
 		function shapeAt(mode:WrapMode, lead:Doc):Doc {
-			final body:Doc = shape(mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreakDoc, groupRestProbe, sepBeforeFlags);
+			final body:Doc = shape(mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreakDoc, groupRestProbe, sepBeforeFlags, opt.lineWidth);
 			return prependLead(body, lead);
 		}
 
@@ -953,7 +953,7 @@ class WrapList {
 		mode:WrapMode, open:String, close:String, sep:String,
 		items:Array<Doc>, openInside:Doc, closeInside:Doc, cols:Int,
 		appendTrailingComma:Bool, trailBreak:Doc, groupRestProbe:Bool,
-		sepBeforeFlags:Null<Array<Bool>>
+		sepBeforeFlags:Null<Array<Bool>>, lineWidth:Int
 	):Doc {
 		// ω-inc5 sole-arrow uniform escalation: a call whose SOLE arg is an
 		// arrow lambda whose body wraps gets the SAME close-on-own-line +
@@ -989,6 +989,20 @@ class WrapList {
 		if (items.length == 1 && isArrowBodyMarker(items[0]) && !arrowBodyIsBlock(items[0])
 				&& (mode == FillLine || (mode == FillLineWithLeadingBreak && arrowBodyBreaks(items[0]))))
 			return arrowBodyCloseParenShape(open, close, openInside, closeInside, items[0]);
+		// ω-callparam-single-arg-glue PROTOTYPE: a FLWLB call whose SOLE arg is a
+		// non-arrow head ending at an open delim (`new X(` / `f(`) keeps the outer
+		// open paren GLUED to that head iff the arg's natural first line both fits
+		// and ends at an open delim; the inner construct self-breaks its own args.
+		// Method-chain args are EXCLUDED — their break is at a `.` dot (not an open
+		// delim), and the natural-first-line measurer diverges from render for a
+		// chain operand (the documented inc6/inc7 wall): glue would mis-keep the
+		// outer paren glued when the fork breaks it (`method_chain_single_arg_break_parens`).
+		if (mode == FillLineWithLeadingBreak && items.length == 1 && !isArrowBodyMarker(items[0])
+				&& !isMethodChainItem(items[0])) {
+			final glued:Doc = Concat([Text(open), openInside, items[0], closeInside, Text(close)]);
+			final broken:Doc = shapeFillLineWithLeadingBreak(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
+			return IfNaturalFirstLineFitsOpenDelim(lineWidth, broken, glued);
+		}
 		return switch mode {
 			case NoWrap: shapeNoWrap(open, close, sep, items, openInside, closeInside, sepBeforeFlags);
 			case OnePerLine: shapeOnePerLine(open, close, sep, items, cols, appendTrailingComma, trailBreak, sepBeforeFlags);
@@ -1068,6 +1082,49 @@ class WrapList {
 		return switch item {
 			case WrapBoundary(IfLineExceeds(_, _, flatBody)): firstVisibleTextStartsWith(flatBody, '{'.code);
 			case Concat(arr) if (arr.length > 0): arrowBodyIsBlock(arr[arr.length - 1]);
+			case _: false;
+		};
+	}
+
+	// ω-callparam-single-arg-glue: true iff `item`'s OWN outermost layout breaks
+	// at a `.` dot rather than at the head construct's own open delimiter — i.e.
+	// `item` is a method chain. `MethodChainEmit.shape*` emits
+	// `Concat([receiver, seg0, Nest(cols, Concat([Line, seg1, …]))])`: a
+	// `Line('\n')` whose following sibling's first visible Text starts with `.`,
+	// sitting at the item's own top level (or inside the chain-tail `Nest`). The
+	// single-arg glue must skip these — the natural-first-line measurer diverges
+	// from render for a chain operand (it under-measures the chain ignoring the
+	// outer close + rest stack), so gluing would keep the outer paren glued where
+	// the fork opens it.
+	//
+	// Descent is deliberately NARROW: only the item's own wrap-shape wrappers and
+	// the bare chain-tail `Nest` are followed. A nested `Group` / `WrapBoundary`
+	// is a SUB-construct's own break (e.g. the inner args of `new X(a.b().c())`) —
+	// NOT this item's top-level layout — so we do NOT recurse through it.
+	private static function isMethodChainItem(item:Doc):Bool {
+		return switch item {
+			case WrapBoundary(inner) | Group(inner) | BodyGroup(inner)
+					| GroupWithRestProbe(inner) | Nest(_, inner)
+					| Flatten(inner) | HardFlatten(inner) | CollapseProbe(inner):
+				isMethodChainItem(inner);
+			case IfBreak(brk, _) | IfWidthExceeds(_, brk, _) | IfFirstLineExceeds(_, brk, _)
+					| IfLineExceeds(_, brk, _) | IfFullLineExceeds(_, brk, _)
+					| IfNaturalFirstLineExceeds(_, brk, _) | IfNaturalFirstLineFitsOpenDelim(_, brk, _):
+				isMethodChainItem(brk);
+			case Concat(arr):
+				var hit:Bool = false;
+				for (k in 0...arr.length) if (!hit) switch arr[k] {
+					case Line(flat) if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code
+							&& k + 1 < arr.length && firstVisibleTextStartsWith(arr[k + 1], '.'.code)):
+						hit = true;
+					// Follow ONLY a bare chain-tail `Nest` (where MethodChainEmit
+					// parks segments 1..N). Sub-construct `Group`/`WrapBoundary`
+					// children are NOT this item's own layout — skip them.
+					case Nest(_, nested):
+						hit = isMethodChainItem(nested);
+					case _:
+				}
+				hit;
 			case _: false;
 		};
 	}
