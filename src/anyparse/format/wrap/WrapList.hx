@@ -909,6 +909,67 @@ class WrapList {
 	}
 
 	/**
+	 * True iff `d`'s last rendered visible token is a close delimiter
+	 * (`)` / `]` / `}`) — i.e. the construct is a paren-expression / call /
+	 * array / object literal / index access whose close bracket trails. The
+	 * right-spine mirror of `startsWithOpenDelim`: descends through transparent
+	 * render wrappers and the flat side of every render-decision (`Group` /
+	 * `If*`), skipping trailing whitespace fragments, taking the LAST visible
+	 * element of every `Concat` / `Fill`. O(right-spine), no re-measure.
+	 *
+	 * Used by the generic non-chain infix emit (ω-binop-close-delim-glue) to
+	 * keep a never-wrap-marked operator (`*` / `/` / `%` / compare / shift /
+	 * bitwise / `is` / `??`) GLUED to its LEFT operand's close-paren line
+	 * (`[…].indexOf(x) < 0`) when that operand opens a delimiter that absorbs
+	 * the line break inside its own brackets. Without it, the legacy
+	 * `Group(Line)` over-breaks the operator (`].indexOf(x)\n\t< 0`) once the
+	 * left operand's bracket wraps and injects a committed hardline. Mirrors the
+	 * fork: compare ops are never wrap-marked, so they ride the close-delim line.
+	 */
+	public static function endsWithCloseDelim(d:Doc):Bool {
+		var node:Doc = d;
+		while (true) switch node {
+			case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline
+					| OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
+				return false;
+			case Text(s):
+				if (s.length == 0) return false;
+				final c:Int = StringTools.fastCodeAt(s, s.length - 1);
+				return c == ')'.code || c == ']'.code || c == '}'.code;
+			case Nest(_, inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner)
+					| Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner):
+				node = inner;
+			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat)
+					| IfLineExceeds(_, _, flat) | IfFullLineExceeds(_, _, flat)
+					| IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat):
+				node = flat;
+			case Concat(items):
+				final last:Null<Doc> = findLastNonTrailingTransparent(items);
+				if (last == null) return false;
+				node = last;
+			case Fill(items, _, _) | FillWithRestProbe(items, _, _):
+				final last:Null<Doc> = findLastNonTrailingTransparent(items);
+				if (last == null) return false;
+				node = last;
+		}
+	}
+
+	/**
+	 * Last element of `items` that is not a trailing-transparent fragment
+	 * (whitespace / opt-hardline), scanning from the end. Right-spine sister of
+	 * the `items.find(it -> !isLeadingTransparent(it))` head scan.
+	 */
+	private static function findLastNonTrailingTransparent(items:Array<Doc>):Null<Doc> {
+		var i:Int = items.length - 1;
+		while (i >= 0) {
+			final it:Doc = items[i];
+			if (!isLeadingTransparent(it)) return it;
+			i--;
+		}
+		return null;
+	}
+
+	/**
 	 * Wrap `body` with `lead` unless `lead` is `Empty` — avoids a
 	 * pointless single-element `Concat` for the common no-lead path.
 	 */

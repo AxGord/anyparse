@@ -764,11 +764,23 @@ class WriterLowering {
 			return macro {
 				final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space
 					? opt.indentSize : opt.tabWidth;
+				final _left:anyparse.core.Doc = $leftCall;
 				final _right:anyparse.core.Doc = $rightCall;
+				// ω-binop-close-delim-glue (cond-paren-OPEN sibling): when the
+				// LEFT operand ENDS with a close delim (`[…].indexOf(x)`,
+				// `(chain)`), the bracketed operand wraps inside its own brackets
+				// and the never-wrap-marked operator (`<`/`>`/`*`/`/`/compare)
+				// must RIDE the close-delim line (`].indexOf(x) < 0`), not break
+				// onto its own line. The right-spine mirror of the existing
+				// `startsWithOpenDelim(_right)` head-glue; both keep the operator
+				// glued so only the bracketed operand carries the break. Byte-
+				// inert when the left operand does not wrap (no committed hardline
+				// → the legacy Group never broke → glued shape is byte-identical).
 				final _inner:anyparse.core.Doc = anyparse.format.wrap.WrapList.startsWithOpenDelim(_right)
-					? _dc([$leftCall, _dt($v{opWithSpaces}), _right])
+						|| anyparse.format.wrap.WrapList.endsWithCloseDelim(_left)
+					? _dc([_left, _dt($v{opWithSpaces}), _right])
 					: _dg(_dc([
-						$leftCall,
+						_left,
 						_dn(_cols, _dc([_dl(), _dt($v{opAfterText}), _right])),
 					]));
 				if ($v{prec} < ctxPrec) _dc([_dt('('), _inner, _dt(')')]) else _inner;
