@@ -888,10 +888,25 @@ class WriterLowering {
 			// site (L3592), which calls `_setChainModeOverride` ungated for the
 			// same reason: the flag's presence implies the grammar's channel.
 			final interpFlat:Bool = branch.fmtHasFlag('captureSource');
+			// ω-expr-paren-in-condition (cond F2): the `ParenExpr`
+			// (`@:fmt(expressionParenHardFlatten)`) inner chain is HardFlatten-
+			// collapsed by default. When this paren sits inside a condition
+			// (`opt._parenInCondition`, set at the `@:fmt(condWrap)` site) AND the
+			// user configured `expressionWrapping` to fillLine, thread the fillLine
+			// mode as a `_chainModeOverride` into the paren's OWN inner writeCall so
+			// its chain wraps fillLine — and CLEAR `_parenInCondition` so a nested
+			// expr paren inside this one does not re-trigger. Runtime-gated so a
+			// standalone expr paren (flag false, e.g. `expression_paren_wrapping`)
+			// is byte-identical (`opt` passed through unchanged).
+			final parenHardFlatten:Bool = branch.fmtHasFlag('expressionParenHardFlatten');
 			final ctorOptArg:Expr = {
 				var _o:Expr = macro opt;
 				if (propagateExpr) _o = macro _setExprPosition($_o);
 				if (interpFlat) _o = macro _setChainModeOverride($_o, anyparse.format.wrap.WrapMode.NoWrap);
+				if (parenHardFlatten) _o = macro(opt._parenInCondition
+					? _setChainModeOverride(_clearParenInCondition($_o),
+						anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap))
+					: $_o);
 				_o;
 			};
 			final subCall:Expr = if (isSelfRef && hasPratt)
@@ -1367,15 +1382,44 @@ class WriterLowering {
 								_dc([$leadDoc, _wrapInner, _wrapTrail])
 							))
 							: anyparse.format.wrap.WrapList.isPureOpAddSubChain(_wrapInner)
-								? _dfle(
-									opt.lineWidth,
-									_dc([
-										$leadDoc,
-										_dn(_cols, _dc([_dhl(), _dcp(_dhf(_wrapInner))])),
-										_dhl(),
-										_wrapTrail
-									]),
-									_dc([$leadDoc, _wrapInner, _wrapTrail])
+								? (
+									// ω-expr-paren-in-condition (cond F2): when this expr
+									// paren sits inside a condition (`opt._parenInCondition`)
+									// AND `expressionWrapping` is configured fillLine, its
+									// inner opAddSub chain was emitted under a fillLine
+									// `_chainModeOverride` (threaded at `ctorOptArg`) and
+									// carries its OWN fillLine break shape. Open the paren on
+									// the RAW full-line-exceeds verdict (NO `_dcp`
+									// CollapseProbe — the inner is fillLine-wrapped, not a
+									// collapse candidate) and render the chain's plain break
+									// shape at the deeper paren indent. The fork fillLine-
+									// wraps expr-paren content inside a condition. Without the
+									// flag (every standalone expr paren, e.g.
+									// `expression_paren_wrapping`) keep the unconditional
+									// HardFlatten collapse via the `_dcp(_dhf(...))`
+									// CollapseProbe — byte-inert.
+									opt._parenInCondition
+										&& anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
+										? _dfle(
+											opt.lineWidth,
+											_dc([
+												$leadDoc,
+												_dn(_cols, _dc([_dhl(), _wrapInner])),
+												_dhl(),
+												_wrapTrail
+											]),
+											_dc([$leadDoc, _wrapInner, _wrapTrail])
+										)
+										: _dfle(
+											opt.lineWidth,
+											_dc([
+												$leadDoc,
+												_dn(_cols, _dc([_dhl(), _dcp(_dhf(_wrapInner))])),
+												_dhl(),
+												_wrapTrail
+											]),
+											_dc([$leadDoc, _wrapInner, _wrapTrail])
+										)
 								)
 								: _dfle(
 									opt.lineWidth,
@@ -3622,7 +3666,20 @@ class WriterLowering {
 								final _condMode:anyparse.format.wrap.WrapMode = _condRules.defaultMode;
 								final _chainOvr:Null<anyparse.format.wrap.WrapMode> =
 									_condMode == anyparse.format.wrap.WrapMode.NoWrap ? null : _condMode;
-								final opt = _setChainModeOverride(opt, _chainOvr);
+								// ω-expr-paren-in-condition (cond F2): mark the condition
+								// content so an expression paren INSIDE it routes its inner
+								// chain through `expressionWrapping` (fillLine) instead of
+								// the unconditional HardFlatten collapse — the fork applies
+								// `expressionWrapping` to expr parens regardless of context.
+								// The flag is consumed ONLY at the `ParenExpr` lowering (it
+								// threads the fillLine `_chainModeOverride` into the paren's
+								// OWN inner chain and clears the flag), so the condition's
+								// top-level chain (`a && b`) is untouched. Byte-inert for
+								// the universal default `expressionWrappingWrap`
+								// (`{rules: [], defaultMode: NoWrap}` → false).
+								final _parenCond:Bool =
+									anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null;
+								final opt = _setParenInCondition(_setChainModeOverride(opt, _chainOvr), _parenCond);
 								anyparse.format.wrap.WrapList.emitCondition(
 									$v{leadText}, $v{trailText}, $writeCall, opt, $condKnobAccess,
 									$condInsideOpen, $condInsideClose

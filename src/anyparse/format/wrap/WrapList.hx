@@ -863,6 +863,31 @@ class WrapList {
 	}
 
 	/**
+	 * ω-expr-paren-in-condition (cond F2): returns the fillLine-family
+	 * `WrapMode` an `expressionWrapping` cascade WOULD produce when its
+	 * content overflows, or `null` when the cascade never fillLine-wraps.
+	 *
+	 * The fork applies `expressionWrapping` (fillLineWithLeadingBreak) to
+	 * an expression paren whose content exceeds the line; anyparse routes
+	 * an in-condition expr paren through the `expressionParenHardFlatten`
+	 * branch (HardFlatten → inner chain collapsed flat). When the
+	 * configured `expressionWrappingWrap` cascade has a fillLine-family
+	 * rule (or default), this surfaces that mode so the cond-emit site can
+	 * thread it as a `_chainModeOverride` into the in-condition paren's
+	 * inner chain — making the inner chain wrap fillLine instead of
+	 * collapsing flat. Returns `null` for the universal default
+	 * (`{rules: [], defaultMode: NoWrap}`) so every default-config
+	 * consumer is byte-inert.
+	 */
+	public static function effectiveExpressionWrapMode(rules:WrapRules):Null<WrapMode> {
+		inline function isFill(m:WrapMode):Bool
+			return m == FillLine || m == FillLineWithLeadingBreak;
+		if (isFill(rules.defaultMode)) return rules.defaultMode;
+		final fillRule:Null<WrapRule> = rules.rules.find(r -> isFill(r.mode));
+		return fillRule != null ? fillRule.mode : null;
+	}
+
+	/**
 	 * True iff `d`'s first rendered visible token is an open delimiter
 	 * (`(` / `[` / `{`) — i.e. the construct is a paren-expression / call /
 	 * array / object literal whose open bracket leads. Left-spine walk that

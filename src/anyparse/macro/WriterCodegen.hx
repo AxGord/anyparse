@@ -119,6 +119,17 @@ class WriterCodegen {
 				fields.push(setSuppressMoreField(optionsCT));
 				fields.push(clearSuppressMoreField(optionsCT));
 			}
+			// ω-expr-paren-in-condition (cond F2): opt-fanout helper pair for
+			// the `@:fmt(condWrap)` site. `_setParenInCondition` marks the
+			// condition content so an expression paren inside it routes its
+			// inner chain through `expressionWrapping` (fillLine);
+			// `_clearParenInCondition` consumes the flag at the paren's inner
+			// writeCall so a nested expr paren does not re-trigger. Gated on
+			// `_parenInCondition:Bool`.
+			if (optionsHasField(optionsTypePath, '_parenInCondition')) {
+				fields.push(setParenInConditionField(optionsCT));
+				fields.push(clearParenInConditionField(optionsCT));
+			}
 			// Layout helpers
 			fields.push(blockBodyField());
 			fields.push(sepListField());
@@ -754,6 +765,62 @@ class WriterCodegen {
 					if (!o._callArgChainNest) return o;
 					final _c:$optionsCT = _copyOpt(o);
 					_c._callArgChainNest = false;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * ω-expr-paren-in-condition (cond F2) — opt-fanout shim for the
+	 * `@:fmt(condWrap)` site. Sets `_parenInCondition` to the supplied
+	 * value (idempotent: returns `o` unchanged when already equal — no
+	 * allocation when the condition does not request the flag). Read ONLY
+	 * by the `ParenExpr` lowering, which threads a fillLine
+	 * `_chainModeOverride` into the paren's own inner chain when set. Sister
+	 * to `_setCallArgChainNest`. Gated on `_parenInCondition:Bool`.
+	 */
+	private static function setParenInConditionField(optionsCT:ComplexType):Field {
+		return {
+			name: '_setParenInCondition',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [
+					{name: 'o', type: optionsCT},
+					{name: 'v', type: macro : Bool},
+				],
+				ret: optionsCT,
+				expr: macro {
+					if (o._parenInCondition == v) return o;
+					final _c:$optionsCT = _copyOpt(o);
+					_c._parenInCondition = v;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * ω-expr-paren-in-condition — sister reset helper to
+	 * `_setParenInCondition`. Returns `o` unchanged when `_parenInCondition`
+	 * is already `false`; otherwise returns a `_copyOpt(o)` with the flag
+	 * cleared. Consumed at the `ParenExpr` inner writeCall so a nested expr
+	 * paren inside the in-condition paren does not re-trigger the fillLine
+	 * override. Paired with `_setParenInCondition`.
+	 */
+	private static function clearParenInConditionField(optionsCT:ComplexType):Field {
+		return {
+			name: '_clearParenInCondition',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{name: 'o', type: optionsCT}],
+				ret: optionsCT,
+				expr: macro {
+					if (!o._parenInCondition) return o;
+					final _c:$optionsCT = _copyOpt(o);
+					_c._parenInCondition = false;
 					return _c;
 				},
 			}),
