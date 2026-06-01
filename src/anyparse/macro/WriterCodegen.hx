@@ -141,6 +141,25 @@ class WriterCodegen {
 				fields.push(setVarKwNewlineField(optionsCT));
 				fields.push(clearVarKwNewlineField(optionsCT));
 			}
+			// ω-keep-chain (increment: opadd_chain_keep): opt-fanout helper pair
+			// for the opAddSub / opBool chain emit. `_setKeepFlatInner` marks the
+			// leaf-operand opt so an inner `ParenExpr` stays GLUED (no width-driven
+			// re-open) under `WrapMode.Keep`; `_clearKeepFlatInner` resets it.
+			// Sister to `_setVarKwNewline` / `_setParenInCondition`. Gated on
+			// `_keepFlatInner:Bool`.
+			if (optionsHasField(optionsTypePath, '_keepFlatInner')) {
+				fields.push(setKeepFlatInnerField(optionsCT));
+				fields.push(clearKeepFlatInnerField(optionsCT));
+			}
+			// ω-keep-chain (increment: opadd_chain_keep): opt-fanout helper pair
+			// for the enclosing-`ParenExpr` → keep-chain signal. `_setKeepChainInParen`
+			// marks the inner opt so a `WrapMode.Keep` chain suppresses its headBreak
+			// + Nest; `_clearKeepChainInParen` resets it at the chain emit so nested
+			// chains / leaf operands don't re-trigger. Gated on `_keepChainInParen:Bool`.
+			if (optionsHasField(optionsTypePath, '_keepChainInParen')) {
+				fields.push(setKeepChainInParenField(optionsCT));
+				fields.push(clearKeepChainInParenField(optionsCT));
+			}
 			// Layout helpers
 			fields.push(blockBodyField());
 			fields.push(sepListField());
@@ -888,6 +907,110 @@ class WriterCodegen {
 					if (!o._varKwNewline) return o;
 					final _c:$optionsCT = _copyOpt(o);
 					_c._varKwNewline = false;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * ω-keep-chain (increment: opadd_chain_keep) — opt-fanout shim for the
+	 * opAddSub / opBool chain emit. Sets `_keepFlatInner` to the supplied value
+	 * (idempotent: returns `o` unchanged when already equal — no allocation when
+	 * the chain is not in keep mode). Read ONLY by the `ParenExpr`
+	 * (`@:fmt(expressionParenHardFlatten)`) emit, which takes the GLUED branch
+	 * unconditionally so a kept chain's inner parens stay flat regardless of
+	 * line width. Sister to `_setVarKwNewline`. Gated on `_keepFlatInner:Bool`.
+	 */
+	private static function setKeepFlatInnerField(optionsCT:ComplexType):Field {
+		return {
+			name: '_setKeepFlatInner',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [
+					{name: 'o', type: optionsCT},
+					{name: 'v', type: macro : Bool},
+				],
+				ret: optionsCT,
+				expr: macro {
+					if (o._keepFlatInner == v) return o;
+					final _c:$optionsCT = _copyOpt(o);
+					_c._keepFlatInner = v;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * ω-keep-chain (increment: opadd_chain_keep) — sister reset helper to
+	 * `_setKeepFlatInner`. Returns `o` unchanged when `_keepFlatInner` is already
+	 * `false`; otherwise returns a `_copyOpt(o)` with the flag cleared. Paired
+	 * with `_setKeepFlatInner`.
+	 */
+	private static function clearKeepFlatInnerField(optionsCT:ComplexType):Field {
+		return {
+			name: '_clearKeepFlatInner',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{name: 'o', type: optionsCT}],
+				ret: optionsCT,
+				expr: macro {
+					if (!o._keepFlatInner) return o;
+					final _c:$optionsCT = _copyOpt(o);
+					_c._keepFlatInner = false;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * ω-keep-chain (increment: opadd_chain_keep) — opt-fanout shim set by an
+	 * enclosing `ParenExpr` so a `WrapMode.Keep` chain suppresses its headBreak +
+	 * Nest (the return-head newline + continuation indent are supplied at the
+	 * value level). Idempotent. Gated on `_keepChainInParen:Bool`.
+	 */
+	private static function setKeepChainInParenField(optionsCT:ComplexType):Field {
+		return {
+			name: '_setKeepChainInParen',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [
+					{name: 'o', type: optionsCT},
+					{name: 'v', type: macro : Bool},
+				],
+				ret: optionsCT,
+				expr: macro {
+					if (o._keepChainInParen == v) return o;
+					final _c:$optionsCT = _copyOpt(o);
+					_c._keepChainInParen = v;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * ω-keep-chain (increment: opadd_chain_keep) — sister reset helper to
+	 * `_setKeepChainInParen`. Cleared at the chain emit so nested chains / leaf
+	 * operands inside the kept chain do not re-trigger the suppression.
+	 */
+	private static function clearKeepChainInParenField(optionsCT:ComplexType):Field {
+		return {
+			name: '_clearKeepChainInParen',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{name: 'o', type: optionsCT}],
+				ret: optionsCT,
+				expr: macro {
+					if (!o._keepChainInParen) return o;
+					final _c:$optionsCT = _copyOpt(o);
+					_c._keepChainInParen = false;
 					return _c;
 				},
 			}),

@@ -669,6 +669,8 @@ final class HaxeFormatConfigLoader {
 			_suppressMore: base._suppressMore,
 			_parenInCondition: base._parenInCondition,
 			_varKwNewline: base._varKwNewline,
+			_keepFlatInner: base._keepFlatInner,
+			_keepChainInParen: base._keepChainInParen,
 			blockCommentAdapter: base.blockCommentAdapter,
 			lineCommentAdapter: base.lineCommentAdapter,
 			endsWithCloseBrace: base.endsWithCloseBrace,

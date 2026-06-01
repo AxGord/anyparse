@@ -746,14 +746,34 @@ class WriterLowering {
 				// below) so it does not leak to a nested chain / the multiVar
 				// fold. Trivia-keep only; in Plain / non-keep the field is false
 				// and untouched → byte-inert.
+				// ω-keep-chain (increment: opadd_chain_keep): drop the chain
+				// `_headBreak` when this Keep chain is wrapped by a return-context
+				// `ParenExpr` (`_keepChainInParen`, declared just above) — the
+				// `return`→value source newline is reproduced at the value level
+				// (`returnBody` FitLine), NOT inside the paren. A bare-value chain
+				// (opbool case-2) has `_keepChainInParen == false` → keeps headBreak.
 				final headDecl:Expr = threadBreaks
-					? macro final _headBreak:Bool = opt._varKwNewline
+					? macro final _headBreak:Bool = opt._varKwNewline && !_keepChainInParen
 					: macro {};
 				// Fold `_clearVarKwNewline` into the `_clearCallArgChainNest`
 				// re-bind so the head-break flag is consumed once at the
 				// outermost chain (leaf/nested chains see it cleared).
+				// ω-keep-chain (increment: opadd_chain_keep): additionally mark
+				// `_keepFlatInner` on the leaf-operand opt when THIS chain's config
+				// resolves to `WrapMode.Keep` (`$chainRulesExpr.defaultMode == Keep`).
+				// A kept chain preserves source line structure verbatim (operand
+				// lines may exceed `lineWidth`), so its operands' inner `ParenExpr`
+				// must stay GLUED — the flag flips the `expressionParenHardFlatten`
+				// emit to the unconditional-glue branch. Runtime-gated so a non-keep
+				// chain (NoWrap / FillLine / OnePerLine) passes the flag through false
+				// → byte-inert. The `_setKeepFlatInner` re-bind wraps the existing
+				// clear chain so the flag rides the SAME opt the leaf `makeWriteCall`s
+				// thread. Trivia+chain-only (`threadBreaks`); Plain keeps the legacy form.
 				final clearOptExpr:Expr = threadBreaks
-					? macro _clearVarKwNewline(_clearCallArgChainNest(opt))
+					? macro _setKeepFlatInner(
+						_clearKeepChainInParen(_clearVarKwNewline(_clearCallArgChainNest(opt))),
+						$chainRulesExpr.defaultMode == anyparse.format.wrap.WrapMode.Keep
+					)
 					: macro _clearCallArgChainNest(opt);
 				final breaksDecl:Expr = threadBreaks
 					? macro final _breaks:Array<Bool> = []
@@ -812,7 +832,17 @@ class WriterLowering {
 					// leading_break_preserved`, `opsub_chain_in_single_param_call`).
 					final _condWrapForced:Bool =
 						opt._chainModeOverride == anyparse.format.wrap.WrapMode.FillLineWithLeadingBreak;
-					final _chainNestSuppress:Bool = _condWrapForced || opt._callArgChainNest;
+					// ω-keep-chain (increment: opadd_chain_keep): a `WrapMode.Keep`
+					// chain wrapped by an enclosing `ParenExpr` in a return-head-break
+					// context (`opt._keepChainInParen`, set at the paren's inner opt)
+					// suppresses its OWN continuation `Nest` — the value-level break
+					// already supplied the +cols, so the chain operators co-indent
+					// with the head (no +2cols compounding). The `$headDecl` below
+					// likewise drops the chain `_headBreak`. Gated on the chain config
+					// being Keep so non-keep chains in a paren are byte-inert.
+					final _keepChainInParen:Bool = opt._keepChainInParen
+						&& $chainRulesExpr.defaultMode == anyparse.format.wrap.WrapMode.Keep;
+					final _chainNestSuppress:Bool = _condWrapForced || opt._callArgChainNest || _keepChainInParen;
 					$headDecl;
 					final opt = $clearOptExpr;
 					function _gather(_e:$argTypeCT):Void $gatherSwitch;
@@ -1010,6 +1040,21 @@ class WriterLowering {
 					? _setChainModeOverride(_clearParenInCondition($_o),
 						anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap))
 					: $_o);
+				// ω-keep-chain (increment: opadd_chain_keep): a `ParenExpr`
+				// (`@:fmt(expressionParenHardFlatten)`) wrapping a chain marks the
+				// inner opt `_keepChainInParen`. A `WrapMode.Keep` chain reads it to
+				// (a) SUPPRESS its own `_headBreak` — the `return`→value source
+				// newline is reproduced at the VALUE level (`returnBody` FitLine
+				// breaks `return\n\tvalue`), not inside the paren (`(\n head`); and
+				// (b) SUPPRESS its continuation `Nest` — the value-level break Nest
+				// already supplies the +cols, so the chain operators continue at that
+				// SAME indent (no compounding to +2cols). Mirrors fork keep2 keeping
+				// the `return`→`1` newline at the value and the chain ops co-indented
+				// with the head. Non-keep chains ignore the flag (gated on `isKeep`)
+				// → byte-inert. A BARE chain return value (opbool case-2) has NO
+				// enclosing `ParenExpr`, so the flag stays false and its chain keeps
+				// its own headBreak + Nest. Trivia-only.
+				if (parenHardFlatten && ctx.trivia) _o = macro _setKeepChainInParen($_o, true);
 				if (kwNewlineExpr != null) _o = macro _setVarKwNewline($_o, $kwNewlineExpr);
 				_o;
 			};
@@ -1135,6 +1180,7 @@ class WriterLowering {
 					ifExprIndentArgs: ifExprIndentArgs,
 					singleLineFlagName: ctorSingleLineFlag,
 					singleLineMultiCtors: ctorSingleLineMultiCtors,
+					kwNewlineExpr: kwNewlineExpr,
 				})
 				: subCall;
 
@@ -1450,8 +1496,22 @@ class WriterLowering {
 							? opt.indentSize : opt.tabWidth;
 						final _wrapInner:anyparse.core.Doc = $innerDoc;
 						final _wrapTrail:anyparse.core.Doc = $trailDoc;
+						// ω-keep-chain (increment: opadd_chain_keep): when this expr
+						// paren is an operand of a `WrapMode.Keep` chain
+						// (`opt._keepFlatInner`, set on the leaf-operand opt at the
+						// chain emit), the kept chain preserves source line structure
+						// verbatim — its operand lines may exceed `lineWidth`. The
+						// inner paren must therefore stay GLUED `(<inner>)`
+						// UNCONDITIONALLY, NOT re-open via the width-driven
+						// `IfFullLineExceeds` probe below (which would force
+						// `(\n\tHardFlatten(inner)\n)`). Mirrors fork `keep2`'s
+						// `noLineEndBefore` lock on operand-interior boundaries.
+						// Byte-identical to the existing GLUED flat side, so a
+						// standalone expr paren (flag false) is byte-inert.
+						opt._keepFlatInner
+							? _dc([$leadDoc, _wrapInner, _wrapTrail])
 						// Operator-class gate (design-inc2 Step B, refined): the
-						// HardFlatten inner-collapse mirrors fork's
+						// HardFlatten inner-collapse mirrors fork's (`:`-branch below).
 						// `collapseInnerChainBreaks` which matches ONLY
 						// opAdd/opSub. Route by the inner's TOP-LEVEL operator
 						// class:
@@ -1480,7 +1540,7 @@ class WriterLowering {
 						//    overflows keeps its per-operator break. `CollapsePass`
 						//    ignores this branch (no HardFlatten marker), so the
 						//    renderer's own `IfFullLineExceeds` resolves the open.
-						anyparse.format.wrap.WrapList.startsWithHardline(_wrapInner)
+						: anyparse.format.wrap.WrapList.startsWithHardline(_wrapInner)
 							? _dg(_dib(
 								$hardlineOpenShape,
 								_dc([$leadDoc, _wrapInner, _wrapTrail])
@@ -6820,6 +6880,10 @@ class WriterLowering {
 		// resolves to the single-line knob.
 		final singleLineFlagName:Null<String> = opts.singleLineFlagName;
 		final singleLineMultiCtors:Null<Array<String>> = opts.singleLineMultiCtors;
+		// ω-keep-chain (increment: opadd_chain_keep): the ctor's captured
+		// `return`→value source newline; drives the FitLine head-break when the
+		// body is an already-multiline keep-chain. Null → no head-break (legacy).
+		final kwNewlineExpr:Null<Expr> = opts.kwNewlineExpr;
 		final defaultOptFlag:Expr = if (singleLineFlagName == null) baseOptFlag else {
 			final singleLineAccess:Expr = optFieldAccess(singleLineFlagName);
 			final ctors:Array<String> = singleLineMultiCtors ?? [];
@@ -7133,9 +7197,40 @@ class WriterLowering {
 		// (`singleLineFlagName == null`) keep the legacy `BodyGroup` wholesale
 		// break — fork treats their body as one atomic unit
 		// (`sameline/fitline_{if,for}`, `if_for_chain_*`).
+		// ω-keep-chain (increment: opadd_chain_keep): for an already-multiline
+		// body (`flatLength == -1`) the inc8 return path glues `return <body>`
+		// ("body owns its layout"). But when the source placed a newline after
+		// `return` (`kwNewlineExpr` true — a `WrapMode.Keep` chain nested in
+		// `1 * (…)` whose own `_headBreak` was suppressed by the enclosing
+		// ParenExpr) the head newline must be reproduced at the VALUE level:
+		// break `return\n\t<body>` so `1 * (…)` lands at +1cols and the chain's
+		// operators continue at that same indent. Mirrors fork keep2 preserving
+		// the `return`→`1` source newline. `kwNewlineExpr` null (plain / non-
+		// bearing) keeps the legacy unconditional glue → byte-inert.
+		// The head-break fires ONLY when (a) the source placed a newline after
+		// `return` (`kwNewlineExpr`), (b) a chain KEEP config is active
+		// (`opAddSubChain`/`opBoolChain` defaultWrap=keep) — so the whole gate is
+		// byte-inert under every non-keep config, and (c) the body does NOT already
+		// start with a hardline. A BARE chain return value (opbool case-2)
+		// self-breaks its head (`shapeKeep` headBreak → leading `\n`), so
+		// `startsWithHardline(_body)` is true and we keep the legacy glue (the chain
+		// owns the head break — no double `\n`). A chain nested in `1 * (…)` (opadd)
+		// had its headBreak suppressed (`_keepChainInParen`) and starts with
+		// `1 * (` (Text), so the value-level head-break fires. The chain keep-config
+		// fields are referenced only inside the `kwNewlineExpr != null` branch,
+		// which is spliced solely for the Haxe trivia `ReturnStmt` ctor (the only
+		// opt carrying those fields) — format-neutral for every other grammar.
+		final multilineGlue:Expr = kwNewlineExpr != null
+			? macro($kwNewlineExpr
+					&& (opt.opAddSubChainWrap.defaultMode == anyparse.format.wrap.WrapMode.Keep
+						|| opt.opBoolChainWrap.defaultMode == anyparse.format.wrap.WrapMode.Keep)
+					&& !anyparse.format.wrap.WrapList.startsWithHardline(_body)
+				? _dn(_cols, _dc([_dhl(), _body]))
+				: _dc([_dop(' '), _body]))
+			: macro _dc([_dop(' '), _body]);
 		final fitInnerExpr:Expr = if (singleLineFlagName != null)
 			macro anyparse.format.wrap.WrapList.flatLength(_body) == -1
-				? _dc([_dop(' '), _body])
+				? $multilineGlue
 				: _dinfle(opt.lineWidth,
 					_dn(_cols, _dc([_dhl(), _body])),
 					_dc([_dop(' '), _body]));
@@ -11825,6 +11920,15 @@ typedef WrapBodyOpts = {
 	?inlineBlockBodyArgs:Array<String>,
 	?singleLineFlagName:Null<String>,
 	?singleLineMultiCtors:Null<Array<String>>,
+	// ω-keep-chain (increment: opadd_chain_keep) — runtime `Bool` access to the
+	// ctor's captured `return`→value source newline (the `captureKwNewline` synth
+	// slot, ReturnStmt only). When true AND the body is already-multiline
+	// (`flatLength == -1`, e.g. a `WrapMode.Keep` chain nested in `1 * (…)`), the
+	// FitLine return path breaks `return\n\t<body>` instead of gluing — preserving
+	// the source's head newline at the VALUE level (the inner chain has had its
+	// own `_headBreak` suppressed by the enclosing ParenExpr's `_setKeepChainInParen`).
+	// Null in plain mode / non-bearing ctors → byte-inert (legacy glue).
+	?kwNewlineExpr:Null<Expr>,
 };
 
 /**

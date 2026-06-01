@@ -1791,4 +1791,22 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	_suppressMore:Bool,
 	_parenInCondition:Bool,
 	_varKwNewline:Bool,
+	// ω-keep-chain (increment: opadd_chain_keep) — set on the leaf-operand opt
+	// when an opAddSub / opBool chain resolves to `WrapMode.Keep`. Read by the
+	// `ParenExpr` (`@:fmt(expressionParenHardFlatten)`) emit to take the GLUED
+	// branch UNCONDITIONALLY: a kept chain preserves the source line structure
+	// verbatim (operand lines may exceed `lineWidth`), so its inner parens must
+	// NOT re-open via the width-driven `IfFullLineExceeds` probe — mirror fork's
+	// `keep2` `noLineEndBefore` lock on operand boundaries with no source break.
+	// Default false → non-keep / Plain are byte-inert.
+	_keepFlatInner:Bool,
+	// ω-keep-chain (increment: opadd_chain_keep) — set by an enclosing
+	// `ParenExpr` (`@:fmt(expressionParenHardFlatten)`) on its inner opt. A
+	// `WrapMode.Keep` opAddSub / opBool chain reads it to suppress BOTH its own
+	// `_headBreak` (the source return-head newline is reproduced at the
+	// return-VALUE level instead) AND its continuation `Nest` (the value-level
+	// break already supplies the +cols, so chain operators co-indent with the
+	// head rather than compounding to +2cols). Non-keep chains ignore it (gated
+	// on `isKeep`). Default false → Plain / direct-value chains byte-inert.
+	_keepChainInParen:Bool,
 };
