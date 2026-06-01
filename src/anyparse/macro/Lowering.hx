@@ -601,9 +601,22 @@ class Lowering {
 					var _scanI:Int = _preWsPos;
 					var _hadComment:Bool = false;
 					var _hadNewline:Bool = false;
+					// ω-keep-pratt-blank: track a blank line (≥2 newlines with
+					// only horizontal whitespace between them) inside the
+					// Pratt-consumed run, mirroring `collectTrivia`'s `_nl >= 2`
+					// semantics so the source-blank signal survives the no-op
+					// tail loop the same way the single-newline signal does.
+					var _nlRun:Int = 0;
+					var _hadBlank:Bool = false;
 					while (_scanI < ctx.pos) {
 						final _ch:Int = ctx.input.charCodeAt(_scanI);
-						if (_ch == '\n'.code) _hadNewline = true;
+						if (_ch == '\n'.code) {
+							_hadNewline = true;
+							_nlRun++;
+							if (_nlRun >= 2) _hadBlank = true;
+						} else if (_ch != ' '.code && _ch != '\t'.code && _ch != '\r'.code) {
+							_nlRun = 0;
+						}
 						if (_ch == '/'.code && _scanI + 1 < ctx.pos) {
 							final _c2:Int = ctx.input.charCodeAt(_scanI + 1);
 							if (_c2 == '/'.code || _c2 == '*'.code) {
@@ -628,16 +641,22 @@ class Lowering {
 						// `bodyBeforeNewline` slots never fire (e.g. function-body
 						// `untyped` after `:Type\n\tuntyped {…}` — the body field's
 						// pre-field collectTrivia sees pos already past the `\n`).
+						// ω-keep-pratt-blank: also carry `blankBefore` when the run
+						// held a blank line, so a `var b = function(){…}\n\nfinal a`
+						// brace-terminated `@:trailOpt(';')`-absent decl preserves
+						// its source blank line (issue_644). Without this the bit was
+						// hardcoded `false` and the blank collapsed to a single `\n`.
 						final _pt = ctx.pendingTrivia;
 						if (_pt == null) {
 							ctx.pendingTrivia = {
-								blankBefore: false,
+								blankBefore: _hadBlank,
 								blankAfterLeadingComments: false,
 								newlineBefore: true,
 								leadingComments: [],
 							};
 						} else {
 							_pt.newlineBefore = true;
+							if (_hadBlank) _pt.blankBefore = true;
 						}
 					}
 					break;
@@ -1106,9 +1125,23 @@ class Lowering {
 					var _scanI:Int = _preWsPos;
 					var _hadComment:Bool = false;
 					var _hadNewline:Bool = false;
+					// ω-keep-pratt-blank: mirror the Pratt-loop blank tracking —
+					// a blank line (≥2 newlines separated only by horizontal
+					// whitespace) inside the postfix-consumed run must survive
+					// the no-op tail so a brace-terminated value followed by a
+					// blank line (`var b = function(){…}\n\nfinal a`, issue_644)
+					// carries `blankBefore` to the next decl's `collectTrivia`.
+					var _nlRun:Int = 0;
+					var _hadBlank:Bool = false;
 					while (_scanI < ctx.pos) {
 						final _ch:Int = ctx.input.charCodeAt(_scanI);
-						if (_ch == '\n'.code) _hadNewline = true;
+						if (_ch == '\n'.code) {
+							_hadNewline = true;
+							_nlRun++;
+							if (_nlRun >= 2) _hadBlank = true;
+						} else if (_ch != ' '.code && _ch != '\t'.code && _ch != '\r'.code) {
+							_nlRun = 0;
+						}
 						if (_ch == '/'.code && _scanI + 1 < ctx.pos) {
 							final _c2:Int = ctx.input.charCodeAt(_scanI + 1);
 							if (_c2 == '/'.code || _c2 == '*'.code) {
@@ -1124,13 +1157,14 @@ class Lowering {
 						final _pt = ctx.pendingTrivia;
 						if (_pt == null) {
 							ctx.pendingTrivia = {
-								blankBefore: false,
+								blankBefore: _hadBlank,
 								blankAfterLeadingComments: false,
 								newlineBefore: true,
 								leadingComments: [],
 							};
 						} else {
 							_pt.newlineBefore = true;
+							if (_hadBlank) _pt.blankBefore = true;
 						}
 					}
 					break;
@@ -4029,6 +4063,24 @@ class Lowering {
 			parseSteps.push(macro {
 				while (true) {
 					final _savedPos:Int = ctx.pos;
+					// ω-keep-pratt-blank: snapshot the incoming `pendingTrivia`
+					// BEFORE `collectTrivia` drains it. On element-parse failure
+					// the cursor rewinds to `_savedPos`, but `collectTrivia`
+					// already nulled `pendingTrivia` — a stash-only blank-line
+					// signal (left by a brace-terminated value's Pratt / postfix
+					// no-op tail, living in bytes BEFORE `_savedPos` and NOT
+					// re-scannable) would otherwise be lost. Restored on rollback
+					// ONLY when the just-parsed value ended with `}` (scan back
+					// past trailing whitespace to the last non-ws byte): the fork
+					// preserves a source blank after a brace-terminated value
+					// (`var b = function(){…}` / `typedef T = {…}`, issue_644 /
+					// typedef_fields) but collapses it after a non-brace value
+					// (`typedef Bar = Float`, issue_216). Re-scannable trivia
+					// AFTER `_savedPos` stays in the input — restoring `_lead`
+					// instead would double-count re-scannable comments
+					// (issue_216 / issue_321). Byte-inert when the snapshot is
+					// null or the value is not brace-terminated.
+					final _savedPending = ctx.pendingTrivia;
 					final _lead = collectTrivia(ctx);
 					// ω-keep-newline-after-sep (increment 1): `collectTrivia`
 					// leaves the cursor at the element's first token — for a
@@ -4077,6 +4129,22 @@ class Lowering {
 						});
 					} catch (_e:anyparse.runtime.ParseError) {
 						ctx.pos = _savedPos;
+						// ω-keep-pratt-blank: restore the pre-iteration stash only
+						// when the just-parsed value ended with `}` — scan back from
+						// `_savedPos` past trailing whitespace to the last content
+						// byte. Brace-terminated → preserve the source blank to the
+						// next sibling (issue_644 / typedef_fields); otherwise keep
+						// the baseline drop (issue_216).
+						if (_savedPending != null) {
+							var _bpRew:Int = _savedPos - 1;
+							while (_bpRew > 0) {
+								final _bpc:Int = ctx.input.charCodeAt(_bpRew);
+								if (_bpc == ' '.code || _bpc == '\t'.code || _bpc == '\n'.code || _bpc == '\r'.code) _bpRew--;
+								else break;
+							}
+							if (_bpRew >= 0 && ctx.input.charCodeAt(_bpRew) == '}'.code)
+								ctx.pendingTrivia = _savedPending;
+						}
 						break;
 					}
 				}
