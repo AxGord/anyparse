@@ -34,6 +34,19 @@ package anyparse.grammar.haxe;
  * first pattern stays inline after the upstream `case ` keyword and the
  * `:` glues to the last pattern.
  *
+ * `@:fmt(beforeNewlineSlotFirst)` (slice ω-casepattern-keep) opts this
+ * FIRST field into the source-newline-before capture channel. Paired
+ * with `@:fmt(forwardNewlineForBody)` on the parent `HxSwitchCase.
+ * CaseBranch` ctor (which omits the post-`case` `skipWs`), the field's
+ * pre-field `collectTrivia` scans the `case`→pattern gap and records
+ * `newlineBefore` onto the synth `patternsBeforeNewline:Bool` slot. The
+ * writer's struct-Star emit reads the slot and, when `opt.leftCurly ==
+ * Next` (the `lineEnds.leftCurly: before`/`both` configs), wraps the
+ * pattern Doc in `_dn(_cols, _dc([_dhl, …]))` so `case\n\t{pattern}`
+ * round-trips verbatim. Byte-inert otherwise: `leftCurly == Same` and
+ * absent source newline (`case {pattern}`) both keep the pattern glued
+ * to the upstream `case ` keyword.
+ *
  * The body uses `@:tryparse` to force try-parse termination on the
  * last field (D49). The try-parse loop breaks when the next token
  * is `case`, `default`, or `}` — none of which parse as an
@@ -102,7 +115,7 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxCaseBranch = {
-	@:sep(',') @:trail(':') @:fmt(wrapRules('casePatternWrap')) var patterns:Array<HxCasePattern>;
+	@:sep(',') @:trail(':') @:fmt(wrapRules('casePatternWrap'), beforeNewlineSlotFirst) var patterns:Array<HxCasePattern>;
 	@:trivia @:tryparse @:fmt(
 		nestBody, bodyPolicy('caseBody', 'expressionCase'),
 		flatChildOpt('ifBody=expressionCase', 'elseBody=expressionCase', 'forBody=expressionCase'),

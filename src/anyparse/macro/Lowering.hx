@@ -2214,7 +2214,26 @@ class Lowering {
 			final isFirstFieldNlOptIn:Bool = isBareTriviaRefNoLead
 				&& isFirstField
 				&& child.fmtHasFlag('beforeNewlineSlotFirst');
-			final hasBeforeNewlineSlot:Bool = isBareTriviaRefNoLead && (!isFirstField || isFirstFieldNlOptIn);
+			// ω-casepattern-keep: extend the first-field source-newline-before
+			// capture to a bare (lead-less, non-optional) trivia Star whose
+			// parent omits its post-kw `skipWs` via `forwardNewlineForBody`.
+			// The condition Star (`HxCaseBranch.patterns`, `@:sep(',')
+			// @:trail(':')`) then captures `newlineBefore` for the `case`→
+			// pattern gap onto a `<field>BeforeNewline:Bool` slot, mirroring
+			// the bare-Ref first-field case (`HxTryCatchStmt.body`). Gated on
+			// the `beforeNewlineSlotFirst` opt-in so every other bare trivia
+			// Star (no opt-in) keeps the plain pre-field `skipWs`.
+			final isBareTriviaStarNoLead:Bool = isStar
+				&& !isOptional
+				&& kwLead == null
+				&& leadText == null
+				&& ctx.trivia
+				&& isTriviaBearing(typePath);
+			final isFirstFieldStarNlOptIn:Bool = isBareTriviaStarNoLead
+				&& isFirstField
+				&& child.fmtHasFlag('beforeNewlineSlotFirst');
+			final hasBeforeNewlineSlot:Bool = (isBareTriviaRefNoLead && (!isFirstField || isFirstFieldNlOptIn))
+				|| isFirstFieldStarNlOptIn;
 			final beforeNlLocal:String = '_beforeNl_$fieldName';
 			// ω-optional-star-rewind: when the field is `@:optional Star`
 			// with `@:lead` (e.g. `HxTypeRef.params:Array<HxType>` —

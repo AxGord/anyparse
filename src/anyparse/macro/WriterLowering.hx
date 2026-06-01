@@ -5113,6 +5113,44 @@ class WriterLowering {
 			} else {
 				macro sepList($v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $tcExpr, $openInsideExpr, $closeInsideExpr, $keepInnerExpr, false);
 			};
+			// ω-casepattern-keep: a FIRST-field bare Star that opts into
+			// `@:fmt(beforeNewlineSlotFirst)` (only `HxCaseBranch.patterns`)
+			// reads the synth `<field>BeforeNewline:Bool` slot. When the
+			// source broke right after the parent `case` keyword AND
+			// `opt.leftCurly == Next` (the `lineEnds.leftCurly: before`/`both`
+			// configs where fork puts a line-end before the pattern's `{`),
+			// wrap the pattern list Doc in `_dn(_cols, _dc([_dhl, …]))` so
+			// `case\n\t{pattern}` round-trips verbatim. The body field follows
+			// on the `:`-glued line, governed by its own `caseBody`/
+			// `expressionCase` keep. Gated on trivia + bearing + the opt-in
+			// flag so every non-bearing / plain-mode emit (no slot) keeps the
+			// unconditional glued list; gated on `leftCurly == Next` at
+			// runtime so `Same` configs and the absent-newline source shape
+			// (`case {pattern}`) stay byte-identical. The parent
+			// `HxSwitchCase.CaseBranch` ctor carries `@:fmt(deferKwSpace)`, so
+			// the `case ` trailing space drops cleanly before the hardline.
+			// Mirrors the bare-Ref first-field channel (`HxTryCatchStmt.body`
+			// / `bodyPolicyWrap` Next branch `_dn(_cols, [_dhl, body])`).
+			final firstStarNlKeep:Bool = isFirstField
+				&& ctx.trivia
+				&& isTriviaBearing(typePath)
+				&& starNode.fmtHasFlag('beforeNewlineSlotFirst');
+			final patternListExpr:Expr = if (firstStarNlKeep) {
+				final nlFieldName:String = starNode.annotations.get('base.fieldName');
+				final beforeNlAccess:Expr = {
+					expr: EField(macro value, nlFieldName + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX),
+					pos: Context.currentPos(),
+				};
+				macro {
+					final _patListDoc:anyparse.core.Doc = $listCall;
+					final _patBeforeNl:Bool = $beforeNlAccess
+						&& opt.leftCurly == anyparse.format.BracePlacement.Next;
+					final _patCols:Int = opt.indentChar == anyparse.format.IndentChar.Space
+						? opt.indentSize
+						: opt.tabWidth;
+					_patBeforeNl ? _dn(_patCols, _dc([_dhl(), _patListDoc])) : _patListDoc;
+				};
+			} else macro $listCall;
 			parts.push(macro {
 				final _arr = $fieldAccess;
 				final _docs:Array<anyparse.core.Doc> = [];
@@ -5121,7 +5159,7 @@ class WriterLowering {
 					_docs.push($elemCall);
 					_si++;
 				}
-				$listCall;
+				$patternListExpr;
 			});
 		} else if (closeText != null) {
 			// Mirror of the trivia-path gate: knob-form leftCurly fires

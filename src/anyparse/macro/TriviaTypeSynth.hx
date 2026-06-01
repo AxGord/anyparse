@@ -696,7 +696,7 @@ class TriviaTypeSynth {
 			// gate in `buildTypeDefinition`.
 			if (isSepBeforeOptStarField(child))
 				entries.push({field: fieldName + SEP_BEFORE_SUFFIX, expr: macro false});
-			if (isBareNonFirstRef(child, origNode))
+			if (isBareNonFirstRef(child, origNode) || isBareFirstStarNlOptIn(child, origNode))
 				entries.push({field: fieldName + BEFORE_NEWLINE_SUFFIX, expr: macro false});
 			if (isTrailRef(child))
 				entries.push({field: fieldName + AFTER_TRAIL_SUFFIX, expr: macro (null : Null<String>)});
@@ -895,7 +895,7 @@ class TriviaTypeSynth {
 					// had a newline in the gap between the preceding content
 					// and the sub-rule's first token. Consumed by the
 					// writer's inter-field separator.
-					if (isBareNonFirstRef(child, origNode))
+					if (isBareNonFirstRef(child, origNode) || isBareFirstStarNlOptIn(child, origNode))
 						fields.push(buildBeforeNewlineSlot(child, pos));
 					// ω-trivia-after-trail: any mandatory Ref field with
 					// `@:trail` grows a `<field>AfterTrail:Null<String>` slot
@@ -998,6 +998,27 @@ class TriviaTypeSynth {
 		// `Lowering.hasBeforeNewlineSlot` / Case 3 post-kw skipWs gate.
 		if (child == parent.children[0]) return child.fmtHasFlag('beforeNewlineSlotFirst');
 		return true;
+	}
+
+	/**
+	 * ω-casepattern-keep — true for a bare (lead-less, kw-less,
+	 * non-optional) trivia Star that is the FIRST field of its struct and
+	 * opts into the source-newline-before channel via
+	 * `@:fmt(beforeNewlineSlotFirst)`. Sister of `isBareNonFirstRef`'s
+	 * first-field allowance, but for a Star value (`HxCaseBranch.patterns`,
+	 * `@:sep(',') @:trail(':')`) rather than a bare Ref. Such a field grows
+	 * a `<field>BeforeNewline:Bool` slot recording whether the source broke
+	 * right after the parent's `case` keyword (whose post-kw `skipWs` the
+	 * parent ctor omits via `@:fmt(forwardNewlineForBody)`). Read by the
+	 * writer's struct-Star emit under `opt.leftCurly == Next`.
+	 */
+	private static function isBareFirstStarNlOptIn(child:ShapeNode, parent:ShapeNode):Bool {
+		if (child.kind != Star) return false;
+		if (child.annotations.get('base.optional') == true) return false;
+		if (child.readMetaString(':kw') != null) return false;
+		if (child.readMetaString(':lead') != null) return false;
+		if (child != parent.children[0]) return false;
+		return child.fmtHasFlag('beforeNewlineSlotFirst');
 	}
 
 	private static function buildBeforeNewlineSlot(child:ShapeNode, pos:Position):Field {
