@@ -2124,6 +2124,21 @@ class Lowering {
 			final lenPrefix:Null<{width:Int, encoding:String}> = child.annotations.get('bin.lengthPrefix');
 			if (lenPrefix != null)
 				emitBinLengthPrefix(fieldName, lenPrefix.width, lenPrefix.encoding, parseSteps);
+			// ω-condition-wrap-keep: a mandatory-Ref condition field of a
+			// `@:fmt(condWrap)` struct opted in via
+			// `@:fmt(captureCondOpenNewline)` captures whether the source broke
+			// right after the open paren (`if (\n\tcond`). The probe spans the
+			// gap between the end of the `@:lead('(')` literal (BEFORE its
+			// post-lead `skipWs`) and the cond's first token (AFTER the
+			// pre-field `skipWs` at L~2224). Trivia+bearing only — plain mode
+			// keeps the original struct shape (no slot synthesised). Read by
+			// the writer's single-Ref condWrap emit under `WrapMode.Keep`.
+			final hasCondOpenNewlineSlot:Bool = child.kind == Ref
+				&& !isStar && !isOptional && leadText != null
+				&& ctx.trivia && isTriviaBearing(typePath)
+				&& child.fmtHasFlag('condWrap')
+				&& child.fmtHasFlag('captureCondOpenNewline');
+			final condOpenNewlineLocal:String = '_condOpenNewline_$fieldName';
 			if (!isStar && !isOptional) {
 				if (kwLead != null) {
 					parseSteps.push(macro skipWs(ctx));
@@ -2132,6 +2147,11 @@ class Lowering {
 				if (leadText != null) {
 					parseSteps.push(macro skipWs(ctx));
 					parseSteps.push(macro expectLit(ctx, $v{leadText}));
+					// ω-condition-wrap-keep: record the byte position right
+					// after the open paren (BEFORE the pre-field `skipWs` below)
+					// so the `hasNewlineIn` probe spans exactly the `(`→cond gap.
+					if (hasCondOpenNewlineSlot)
+						parseSteps.push(macro final _condLeadEnd:Int = ctx.pos);
 				}
 			}
 			// Field value — by kind.
@@ -2223,6 +2243,23 @@ class Lowering {
 					});
 				} else parseSteps.push(macro skipWs(ctx));
 			}
+			// ω-condition-wrap-keep: the pre-field `skipWs` above advanced
+			// `ctx.pos` to the cond's first token, so `hasNewlineIn` over
+			// `[_condLeadEnd, ctx.pos)` answers "did the source break right
+			// after `(`?". Captured into the local that the struct literal
+			// writes onto the `<field>CondOpenNewline:Bool` synth slot. Runs
+			// only for the opted-in condWrap cond field; `_condLeadEnd` was
+			// declared right after the lead `expectLit` above.
+			if (hasCondOpenNewlineSlot)
+				parseSteps.push({
+					expr: EVars([{
+						name: condOpenNewlineLocal,
+						type: (macro : Bool),
+						expr: macro hasNewlineIn(ctx.input, _condLeadEnd, ctx.pos),
+						isFinal: true,
+					}]),
+					pos: Context.currentPos(),
+				});
 			// ω-issue-316: for `@:optional @:kw(...)` Ref fields in Trivia
 			// mode, declare per-field locals that capture (a) a same-line
 			// trailing comment after the kw and (b) own-line leading comments
@@ -2770,6 +2807,11 @@ class Lowering {
 				structFields.push({field: fieldName + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX, expr: macro $i{beforeNlLocal}});
 			if (hasNewlineAfterSlot)
 				structFields.push({field: fieldName + TriviaTypeSynth.NEWLINE_AFTER_SUFFIX, expr: macro $i{newlineAfterLocal}});
+			// ω-condition-wrap-keep: push the `<field>CondOpenNewline:Bool`
+			// slot fed by the open-paren newline probe above. Read by the
+			// writer's single-Ref condWrap emit under `WrapMode.Keep`.
+			if (hasCondOpenNewlineSlot)
+				structFields.push({field: fieldName + TriviaTypeSynth.CONDITION_OPEN_NEWLINE_SUFFIX, expr: macro $i{condOpenNewlineLocal}});
 			if (hasKwTriviaSlots) {
 				structFields.push({field: fieldName + TriviaTypeSynth.AFTER_KW_SUFFIX, expr: macro $i{afterKwLocal}});
 				structFields.push({field: fieldName + TriviaTypeSynth.KW_LEADING_SUFFIX, expr: macro $i{kwLeadingLocal}});

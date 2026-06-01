@@ -153,6 +153,24 @@ class TriviaTypeSynth {
 	public static inline final NEWLINE_AFTER_SUFFIX:String = 'NewlineAfter';
 
 	/**
+	 * ω-condition-wrap-keep — source-shape slot synthesised on paired Seq
+	 * types alongside the mandatory-Ref condition field of a `@:fmt(condWrap)`
+	 * struct (`HxIfStmt.cond` / `HxWhileStmt.cond`) that opts in via
+	 * `@:fmt(captureCondOpenNewline)`. Records whether the source placed a
+	 * newline right AFTER the condition's open paren `@:lead('(')` and before
+	 * the cond's first token (`if (\n\tcond` vs `if (cond`). Read by the
+	 * single-Ref condWrap emit in `WriterLowering`, which threads it into
+	 * `WrapList.emitCondition`'s `sourceOpenNewline` arg so a `WrapMode.Keep`
+	 * condition reproduces the author's post-`(` break verbatim.
+	 *
+	 * Sister to `NewlineAfter` (which captures the gap AFTER a bare-Ref
+	 * field's last token); this captures the gap AFTER the field's lead
+	 * literal. Plain mode keeps the original struct shape (no slot); the
+	 * writer falls back to the width-driven glue.
+	 */
+	public static inline final CONDITION_OPEN_NEWLINE_SUFFIX:String = 'CondOpenNewline';
+
+	/**
 	 * ω-orphan-trivia — suffixes for trailing-trivia sibling slots
 	 * synthesised on paired Seq types alongside `@:trivia` Star fields.
 	 * `TrailingLeading` carries the own-line comments captured AFTER
@@ -662,6 +680,13 @@ class TriviaTypeSynth {
 				entries.push({field: fieldName + AFTER_TRAIL_SUFFIX, expr: macro (null : Null<String>)});
 			if (isPadTrailingTerminalRef(child))
 				entries.push({field: fieldName + NEWLINE_AFTER_SUFFIX, expr: macro false});
+			// ω-condition-wrap-keep: raw→paired upcast default for the
+			// `<field>CondOpenNewline:Bool` slot. preWrite plugin rewrites
+			// don't preserve the source's post-`(` break, so the upcast
+			// defaults to `false` → the writer falls back to the width-
+			// driven glue. Mirrors the `isPadTrailingTerminalRef` sibling.
+			if (isCondOpenNewlineRef(child))
+				entries.push({field: fieldName + CONDITION_OPEN_NEWLINE_SUFFIX, expr: macro false});
 			// ω-struct-trailopt-source-track (Session 14 Phase 3): struct
 			// typedef fields carrying `@:trailOpt(LIT)` grow a
 			// `<field>TrailPresent:Null<Bool>` slot on the paired-T struct
@@ -870,6 +895,15 @@ class TriviaTypeSynth {
 					// and `elseExpr` are absent).
 					if (isPadTrailingTerminalRef(child))
 						fields.push(buildNewlineAfterSlot(child, pos));
+					// ω-condition-wrap-keep: the mandatory-Ref condition field
+					// of a `@:fmt(condWrap)` struct opted in via
+					// `@:fmt(captureCondOpenNewline)` grows a `CondOpenNewline:Bool`
+					// slot capturing whether the source broke right after the
+					// condition's open paren (`if (\n\tcond`). Read by the
+					// single-Ref condWrap emit so a `WrapMode.Keep` condition
+					// reproduces the author's post-`(` break.
+					if (isCondOpenNewlineRef(child))
+						fields.push(buildCondOpenNewlineSlot(child, pos));
 					// ω-struct-trailopt-source-track (Session 14 Phase 2 scaffold):
 					// struct typedef fields carrying `@:trailOpt(LIT)` grow an
 					// `@:optional` `<field>TrailPresent:Null<Bool>` slot. The
@@ -1020,6 +1054,32 @@ class TriviaTypeSynth {
 		final fieldName:String = child.annotations.get('base.fieldName');
 		final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
 		return {name: fieldName + NEWLINE_AFTER_SUFFIX, kind: FVar(boolCT), pos: pos, access: []};
+	}
+
+	/**
+	 * ω-condition-wrap-keep — true for the mandatory-Ref condition field of a
+	 * `@:fmt(condWrap)` struct (`HxIfStmt.cond` / `HxWhileStmt.cond`) that opts
+	 * into source-shape capture via `@:fmt(captureCondOpenNewline)`. Such a
+	 * field grows a `<field>CondOpenNewline:Bool` slot recording whether the
+	 * source broke right after the open paren. Requires `condWrap` (the field
+	 * carries the `@:lead('(')` open delimiter whose post-`(` gap is probed)
+	 * and a bare mandatory Ref (the condWrap contract). Disjoint from
+	 * `isPadTrailingTerminalRef` (which keys on `captureSourceNewlineAfter`).
+	 * Reads the flags via `fmtHasFlag`, which works at arm-time (`base.meta`
+	 * populated by `ShapeBuilder` before `arm()` runs — same path the sister
+	 * predicates rely on).
+	 */
+	private static function isCondOpenNewlineRef(child:ShapeNode):Bool {
+		if (child.kind != Ref) return false;
+		if (child.annotations.get('base.optional') == true) return false;
+		if (!child.fmtHasFlag('condWrap')) return false;
+		return child.fmtHasFlag('captureCondOpenNewline');
+	}
+
+	private static function buildCondOpenNewlineSlot(child:ShapeNode, pos:Position):Field {
+		final fieldName:String = child.annotations.get('base.fieldName');
+		final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
+		return {name: fieldName + CONDITION_OPEN_NEWLINE_SUFFIX, kind: FVar(boolCT), pos: pos, access: []};
 	}
 
 	private static function buildKwTriviaSlots(child:ShapeNode, pos:Position):Array<Field> {

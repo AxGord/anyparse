@@ -72,7 +72,7 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxIfStmt = {
-	@:lead('(') @:trail(')') @:fmt(condWrap('conditionWrap'), condParensInside('ifCondParensInsideOpen', 'ifCondParensInsideClose')) var cond:HxExpr;
+	@:lead('(') @:trail(')') @:fmt(condWrap('conditionWrap'), condParensInside('ifCondParensInsideOpen', 'ifCondParensInsideClose'), captureCondOpenNewline) var cond:HxExpr;
 	@:trailOpt(';') @:fmt(bodyPolicy('ifBody', 'expressionIfBody'), fitLineIfWithElse) var thenBody:HxStatement;
 	@:optional @:trailOpt(';') @:kw('else') @:fmt(sameLine('sameLineElse'), shapeAware, bodyPolicy('elseBody', 'expressionElseBody'), elseIf, fitLineIfWithElse) var elseBody:Null<HxStatement>;
 };

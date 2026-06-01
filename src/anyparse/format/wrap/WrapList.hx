@@ -380,7 +380,19 @@ class WrapList {
 		// `closeInside` precedes `Text(close)`. Both default `Empty` →
 		// byte-identical tight `(cond)`. Break shape leaves the cond on its
 		// own line so inner pads do not apply there.
-		openInside:Doc = Empty, closeInside:Doc = Empty
+		openInside:Doc = Empty, closeInside:Doc = Empty,
+		// ω-condition-wrap-keep — the source placed a newline right after the
+		// open paren (`if (\n\tcond`). Captured at parse time onto the cond
+		// field's `<field>CondOpenNewline:Bool` synth slot (mandatory-Ref
+		// `@:fmt(condWrap)` + `@:fmt(captureCondOpenNewline)`) and threaded by
+		// the single-Ref condWrap emit in `WriterLowering`. Consumed ONLY under
+		// `WrapMode.Keep` (`rules.defaultMode == Keep`) → forces `brkShape`
+		// (`(\n\tcond\n)`) so a kept condition round-trips the author's
+		// post-`(` break verbatim while the inner chain self-breaks per the
+		// already-landed chain source-newline mechanism. Default false →
+		// every non-keep / non-bearing caller (span mode, plain mode) is
+		// byte-inert.
+		sourceOpenNewline:Bool = false
 	):Doc {
 		final cols:Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
 		final condW:Int = DocMeasure.flatTokenWidth(condDoc);
@@ -405,6 +417,23 @@ class WrapList {
 			Line('\n'),
 			Text(close),
 		]);
+
+		// ω-condition-wrap-keep: a `WrapMode.Keep` condition whose source
+		// placed a newline right after the open paren (`if (\n\tcond`) breaks
+		// the cond onto its own line verbatim — `brkShape` reproduces BOTH the
+		// post-`(` break AND the `)` on its own line. Without this, the
+		// width-driven decision below glues `if (cond` whenever the cond fits
+		// flat (or returns the chain's own hardline-bearing flat shape via the
+		// `hasHardline` branch), dropping the author's structural break. Gated
+		// on `rules.defaultMode == Keep` so every other wrap mode (and the
+		// non-bearing default `sourceOpenNewline == false`) is byte-inert. The
+		// inner chain self-breaks via the already-landed chain source-newline
+		// mechanism (`BinaryChainEmit.shapeKeep`), so `condDoc` already carries
+		// the `&& operand` continuation breaks — `brkShape`'s `Nest(cols)` just
+		// indents them under the bumped base. Pre-empts the `hasHardline` and
+		// `isTopLevelChain` branches below, both of which would otherwise glue.
+		if (sourceOpenNewline && rules.defaultMode == WrapMode.Keep)
+			return WrapBoundary(brkShape);
 
 		inline function decideAt(exceeds:Bool):WrapMode {
 			return decideWithLineLengthState(

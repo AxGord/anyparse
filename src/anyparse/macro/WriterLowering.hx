@@ -3825,6 +3825,38 @@ class WriterLowering {
 							final condInsideClose:Expr = (condInsideArgs != null && condInsideArgs.length == 2)
 								? policyInsideSpace(condInsideArgs[1], true)
 								: macro _de();
+							// ω-condition-wrap-keep: read the `<field>CondOpenNewline:Bool`
+							// synth slot (populated by `Lowering` when the source broke
+							// right after the open paren) and thread it into
+							// `emitCondition`'s `sourceOpenNewline` arg. Under
+							// `WrapMode.Keep` the engine forces `brkShape` so the
+							// author's post-`(` break round-trips. Gated on trivia +
+							// bearing + the field opting in via
+							// `@:fmt(captureCondOpenNewline)`; otherwise the slot does
+							// not exist, so we pass a literal `false` → byte-inert
+							// (plain mode, non-keep modes, non-opted condWrap fields).
+							final hasCondOpenNewlineSlot:Bool = ctx.trivia
+								&& isTriviaBearing(typePath)
+								&& child.fmtHasFlag('captureCondOpenNewline');
+							final condOpenNewlineExpr:Expr = hasCondOpenNewlineSlot
+								? {expr: EField(macro value, fieldName + TriviaTypeSynth.CONDITION_OPEN_NEWLINE_SUFFIX), pos: Context.currentPos()}
+								: macro false;
+							// ω-condition-wrap-keep: only the trivia-bearing Haxe cond
+							// path (slot present) sets `_keepChainInParen` — the
+							// `_setKeepChainInParen` helper exists only on opt types that
+							// declare `_keepChainInParen` (Haxe `HxModuleWriteOptions`). A
+							// generic `@:fmt(condWrap)` grammar without the slot emits the
+							// plain opt shadow → no reference to the Haxe-only helper. The
+							// runtime `sourceOpenNewline` + Keep gate further narrows the
+							// flag to force-broken keep conds.
+							final condKeepChainInParen:Expr = hasCondOpenNewlineSlot
+								? macro {
+									final _condKeepBrk:Bool = $condOpenNewlineExpr
+										&& _condMode == anyparse.format.wrap.WrapMode.Keep;
+									final opt = _condKeepBrk ? _setKeepChainInParen(opt, true) : opt;
+									opt;
+								}
+								: macro opt;
 							parts.push(macro {
 								final _condRules:anyparse.format.wrap.WrapRules = $condKnobAccess;
 								final _condMode:anyparse.format.wrap.WrapMode = _condRules.defaultMode;
@@ -3844,9 +3876,24 @@ class WriterLowering {
 								final _parenCond:Bool =
 									anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null;
 								final opt = _setParenInCondition(_setChainModeOverride(opt, _chainOvr), _parenCond);
+								// ω-condition-wrap-keep: when the cond paren is force-broken
+								// (source newline after `(` + Keep mode → `emitCondition`
+								// returns `brkShape`), the `brkShape`'s `Nest(cols, condDoc)`
+								// already supplies the +cols paren indent. Mark the cond
+								// chain's opt `_keepChainInParen` so its OWN continuation
+								// `Nest` is suppressed (chain operators co-indent with the
+								// head at outer+cols, not compounding to outer+2cols) AND its
+								// own `_headBreak` is dropped (`brkShape`'s leading `Line`
+								// already put the head operand on its own line). Reuses the
+								// f9d6a53 `_keepChainInParen` channel (gated there on the
+								// chain config being Keep). `condKeepChainInParen` is a
+								// macro-time no-op (`opt`) for non-Haxe / non-bearing grammars
+								// so the Haxe-only `_setKeepChainInParen` helper is never
+								// referenced there.
+								final opt = $condKeepChainInParen;
 								anyparse.format.wrap.WrapList.emitCondition(
 									$v{leadText}, $v{trailText}, $writeCall, opt, $condKnobAccess,
-									$condInsideOpen, $condInsideClose
+									$condInsideOpen, $condInsideClose, $condOpenNewlineExpr
 								);
 							});
 						} else if (child.fmtHasFlag('arrowBodyLineWrap')) {

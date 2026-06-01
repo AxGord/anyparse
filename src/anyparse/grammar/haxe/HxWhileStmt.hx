@@ -12,6 +12,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxWhileStmt = {
-	@:lead('(') @:trail(')') @:fmt(condWrap('conditionWrap'), condParensInside('whileCondParensInsideOpen', 'whileCondParensInsideClose')) var cond:HxExpr;
+	@:lead('(') @:trail(')') @:fmt(condWrap('conditionWrap'), condParensInside('whileCondParensInsideOpen', 'whileCondParensInsideClose'), captureCondOpenNewline) var cond:HxExpr;
 	@:trailOpt(';') @:fmt(bodyPolicy('whileBody')) var body:HxStatement;
 };
