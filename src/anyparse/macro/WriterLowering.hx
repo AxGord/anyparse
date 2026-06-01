@@ -7717,18 +7717,48 @@ class WriterLowering {
 	 * at the body-placement override — tagged patterns emit a
 	 * leftCurly-aware separator, untagged patterns fall back to the
 	 * pre-slice single-space layout.
+	 *
+	 * ω-issue-303-array-comprehension — only genuine curly-brace block
+	 * bodies (`{ … }`, lead `{`) are partitioned here. Bracket-delimited
+	 * list ctors (`[ … ]`, lead `[` — `HxExpr.ArrayExpr`, incl. array
+	 * comprehensions `[for (x in xs) …]`) match `isBlockCtorBranch`'s
+	 * shape (lead + trail + single `Star`) but are VALUE expressions, not
+	 * block bodies: they must obey the resolved body policy
+	 * (`returnBody` / `returnBodySingleLine`), not the unconditional
+	 * keyword-glue the block-split override forces. Excluding them here
+	 * lets `bodyPolicyWrap`'s `bodySwitch` fall through to the policy
+	 * switch — mirroring fork `MarkSameLine.shouldReturnBeSameLine`, which
+	 * routes a single-line `return [for …];` value to
+	 * `sameLine.returnBodySingleLine` instead of force-gluing it. The
+	 * single-vs-multi-line distinction is handled downstream by the
+	 * policy's own layout (`Same` width-probe / `Next` break / `Keep`
+	 * source-shape), so no source-line probe is needed at this point.
 	 */
 	private function collectBlockCtorPatternsByLeftCurly(bodyTypePath:String):{tagged:Array<Expr>, untagged:Array<Expr>} {
 		final rule:Null<ShapeNode> = shape.rules.get(bodyTypePath);
 		if (rule == null || rule.kind != Alt) return {tagged: [], untagged: []};
 		final tagged:Array<Expr> = [];
 		final untagged:Array<Expr> = [];
-		for (branch in rule.children) if (isBlockCtorBranch(branch)) {
+		for (branch in rule.children) if (isCurlyBlockCtorBranch(branch)) {
 			final pattern:Expr = branchCtorPattern(bodyTypePath, branch);
 			if (branch.fmtHasFlag('leftCurly')) tagged.push(pattern);
 			else untagged.push(pattern);
 		}
 		return {tagged: tagged, untagged: untagged};
+	}
+
+	/**
+	 * `isBlockCtorBranch` narrowed to genuine curly-brace block bodies:
+	 * the branch must be a block-ctor shape (lead + trail + single `Star`)
+	 * AND its `@:lead` literal must open a curly brace (`{`). Bracket
+	 * list ctors (`[ … ]`) and any other delimiter are excluded. Used by
+	 * the body-placement block-split so `[for …]`-style value lists follow
+	 * the resolved body policy instead of the keyword-glue override.
+	 */
+	private static function isCurlyBlockCtorBranch(branch:ShapeNode):Bool {
+		if (!isBlockCtorBranch(branch)) return false;
+		final leadText:Null<String> = branch.annotations.get('lit.leadText');
+		return leadText != null && StringTools.startsWith(leadText, '{');
 	}
 
 	private function branchCtorPattern(bodyTypePath:String, branch:ShapeNode):Expr {
