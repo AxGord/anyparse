@@ -7345,20 +7345,42 @@ class WriterLowering {
 		// fields are referenced only inside the `kwNewlineExpr != null` branch,
 		// which is spliced solely for the Haxe trivia `ReturnStmt` ctor (the only
 		// opt carrying those fields) — format-neutral for every other grammar.
+		//
+		// ω-return-value-expr-if-indent: in the return-style FitLine glue
+		// path (`singleLineFlagName != null` = `ReturnStmt`) the body is
+		// emitted INLINE with `return` (no FitLine break) when it is already
+		// multi-line (`flatLength == -1`) or when its natural first line fits
+		// (`_dinfle` flat branch). For a value-expression `if`/`else` written
+		// across source lines under `expressionIf=keep`, that glue path
+		// previously emitted the body at the ambient indent — dropping the
+		// value-expression indent step that `wrapIfExprNest`
+		// (`@:fmt(indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'))`)
+		// already applies on the Same flat-path. Route the glued body through
+		// `wrapIfExprNest` so the internal then/else hardlines pick up `+cols`,
+		// matching the struct-field `HxVarDecl.init` semantic (which wraps the
+		// whole if-expr write via `maybeIndentValueIfCtor`). The wrap is
+		// ctor-gated (`Type.enumConstructor(value) == 'IfExpr'`) AND opt-gated
+		// (`indentComplexValueExpressions`, default `false`), so it is byte-
+		// inert for every non-IfExpr value and every config that does not opt
+		// in. On a single-line if-expr (`_dinfle` flat) the Nest has no
+		// hardlines to indent and is inert. The chain-keep branch
+		// (`kwNewlineExpr` true) keeps the bare `_body` — chains are not
+		// `IfExpr` so the wrap would be inert there anyway.
+		final gluedBody:Expr = wrapIfExprNest(macro _body);
 		final multilineGlue:Expr = kwNewlineExpr != null
 			? macro($kwNewlineExpr
 					&& (opt.opAddSubChainWrap.defaultMode == anyparse.format.wrap.WrapMode.Keep
 						|| opt.opBoolChainWrap.defaultMode == anyparse.format.wrap.WrapMode.Keep)
 					&& !anyparse.format.wrap.WrapList.startsWithHardline(_body)
 				? _dn(_cols, _dc([_dhl(), _body]))
-				: _dc([_dop(' '), _body]))
-			: macro _dc([_dop(' '), _body]);
+				: _dc([_dop(' '), $gluedBody]))
+			: macro _dc([_dop(' '), $gluedBody]);
 		final fitInnerExpr:Expr = if (singleLineFlagName != null)
 			macro anyparse.format.wrap.WrapList.flatLength(_body) == -1
 				? $multilineGlue
 				: _dinfle(opt.lineWidth,
 					_dn(_cols, _dc([_dhl(), _body])),
-					_dc([_dop(' '), _body]));
+					_dc([_dop(' '), $gluedBody]));
 		else
 			macro anyparse.format.wrap.WrapList.flatLength(_body) == -1
 				? _dc([_dop(' '), _body])
