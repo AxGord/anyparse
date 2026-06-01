@@ -5691,7 +5691,44 @@ class WriterLowering {
 			};
 			macro ($bpAccess == $samePat || ($bpAccess == $keepPat && !$slotAccess));
 		} else macro $bpAccess == $samePat;
-		return withPadTrailingDrop(prevPadTrailing, macro $isInlineExpr ? $flagBased : $shapeAwareSwitch);
+		// ω-ifelse-semicolon-next-line: when the body is forced inline
+		// (`isInlineExpr` — e.g. `sameLine.ifBody:same`) the pre-slice
+		// shape obeyed `flagBased` (`sameLineElse`), gluing `else` after a
+		// `;`-terminated non-block then-body. Mirror fork's
+		// `MarkSameLine.markElse` Semicolon branch: when the rendered
+		// then-body ends with a `;` (the token immediately before `else`)
+		// AND `opt.ifElseSemicolonNextLine` is set, break `else` onto its
+		// own line instead. The discriminator is the then-body's RENDERED
+		// Doc, re-derived by re-rendering the then-body value through its
+		// own write fn and inspecting the right-spine tail via
+		// `DocMeasure.endsWithSemi` (a bounded right-spine walk — NOT a
+		// layout probe). `endsWithSemi` treats ONLY `;` as a terminator,
+		// not `}`, so block then-bodies (`if (c) {…} else …`) keep gluing
+		// and `;`-omitting non-blocks (`if (c) foo else …`) keep gluing —
+		// matching the fixtures' rows. Re-rendering is pure (no state
+		// mutation, INVARIANT #1) and produces the same Doc as the actual
+		// emit, so the tail byte is authoritative.
+		//
+		// Gated on the opt-in `@:fmt(semicolonNextLineElse)` flag, present
+		// ONLY on `HxIfStmt.elseBody`. The fork's `ifElseSemicolonNextLine`
+		// is a statement-`if` rule, so two more gates pin it tightly:
+		//   - macro-time `ctx.trivia`: source-`;`-presence is only knowable
+		//     in the trivia pipeline (the corpus harness). The plain writer
+		//     canonicalises `;`, so "did the source have `;`" is meaningless
+		//     there — plain mode stays byte-identical (falls to `flagBased`).
+		//   - runtime `!opt._inExprPosition`: value-position `if`
+		//     (`return switch … case A: if (c) a(); else b()`, or
+		//     `final x = if (a) b; else c`) is governed by
+		//     `sameLineExpressionElse`, not the statement rule — keep `else`
+		//     glued there. Mirrors fork's `MarkSameLine.markElse` (statement
+		//     `if` only).
+		final inlineSep:Expr = if (ctx.trivia && child.fmtHasFlag('semicolonNextLineElse')) {
+			final prevWriteFn:String = writeFnFor(prevBody.typePath);
+			final prevAccess:Expr = prevBody.access;
+			final prevDoc:Expr = {expr: ECall(macro $i{prevWriteFn}, [prevAccess, macro opt]), pos: Context.currentPos()};
+			macro (!opt._inExprPosition && opt.ifElseSemicolonNextLine && anyparse.core.DocMeasure.endsWithSemi($prevDoc) ? _dhl() : $flagBased);
+		} else flagBased;
+		return withPadTrailingDrop(prevPadTrailing, macro $isInlineExpr ? $inlineSep : $shapeAwareSwitch);
 	}
 
 	/**

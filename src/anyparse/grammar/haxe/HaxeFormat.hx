@@ -693,6 +693,7 @@ final class HaxeFormat implements TextFormat {
 		tryPolicy: WhitespacePolicy.After,
 		elseIf: KeywordPlacement.Same,
 		fitLineIfWithElse: false,
+		ifElseSemicolonNextLine: true,
 		afterFieldsWithDocComments: CommentEmptyLinesPolicy.One,
 		existingBetweenFields: KeepEmptyLinesPolicy.Keep,
 		externExistingBetweenFields: KeepEmptyLinesPolicy.Keep,

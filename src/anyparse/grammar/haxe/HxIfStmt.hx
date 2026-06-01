@@ -29,6 +29,22 @@ package anyparse.grammar.haxe;
  * `while`/`catch` are integral to the loop/try structure and stay
  * inline with the preceding body terminator regardless of shape.
  *
+ * `@:fmt(semicolonNextLineElse)` on `elseBody` (no argument — ψ₆
+ * principle) is the inline-shape counterpart of `shapeAware`. When the
+ * then-body is forced inline (`sameLine.ifBody:same`) `shapeAware`'s own
+ * gate suppresses the break, so a `;`-terminated non-block then-body
+ * would otherwise glue `else` (`if (c) foo; else …`). This flag breaks
+ * `else` onto its own line in that case when the then-body's trailing
+ * `;` was present in source AND `opt.ifElseSemicolonNextLine` is true —
+ * mirroring haxe-formatter's `MarkSameLine.markElse` Semicolon branch
+ * (`sameLine.ifElseSemicolonNextLine`, default true). Block then-bodies
+ * (close on `}`, no trailing `;`) and no-`;` non-block bodies keep
+ * gluing. The flag lives on `HxIfStmt.elseBody` ONLY — the value-
+ * position twin `HxIfExpr.elseBranch` shares the `shapeAware` +
+ * `@:trailOpt` shape but is a value expression governed by
+ * `sameLineExpressionElse`, so it intentionally omits this flag and
+ * keeps `else` glued (`final x = if (a) b; else c`).
+ *
  * `@:fmt(elseIf)` on `elseBody` (no argument — ψ₆ principle) activates
  * the `opt.elseIf:KeywordPlacement` knob for the `IfStmt` ctor only:
  * when the else branch is itself an if, the separator between `else`
@@ -74,5 +90,5 @@ package anyparse.grammar.haxe;
 typedef HxIfStmt = {
 	@:lead('(') @:trail(')') @:fmt(condWrap('conditionWrap'), condParensInside('ifCondParensInsideOpen', 'ifCondParensInsideClose'), captureCondOpenNewline) var cond:HxExpr;
 	@:trailOpt(';') @:fmt(bodyPolicy('ifBody', 'expressionIfBody'), fitLineIfWithElse) var thenBody:HxStatement;
-	@:optional @:trailOpt(';') @:kw('else') @:fmt(sameLine('sameLineElse'), shapeAware, bodyPolicy('elseBody', 'expressionElseBody'), elseIf, fitLineIfWithElse) var elseBody:Null<HxStatement>;
+	@:optional @:trailOpt(';') @:kw('else') @:fmt(sameLine('sameLineElse'), shapeAware, semicolonNextLineElse, bodyPolicy('elseBody', 'expressionElseBody'), elseIf, fitLineIfWithElse) var elseBody:Null<HxStatement>;
 };

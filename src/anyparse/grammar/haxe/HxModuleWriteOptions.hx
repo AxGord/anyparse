@@ -1684,6 +1684,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	tryPolicy:WhitespacePolicy,
 	elseIf:KeywordPlacement,
 	fitLineIfWithElse:Bool,
+	ifElseSemicolonNextLine:Bool,
 	afterFieldsWithDocComments:CommentEmptyLinesPolicy,
 	existingBetweenFields:KeepEmptyLinesPolicy,
 	externExistingBetweenFields:KeepEmptyLinesPolicy,

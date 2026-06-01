@@ -571,6 +571,7 @@ final class HaxeFormatConfigLoader {
 			tryPolicy: base.tryPolicy,
 			elseIf: base.elseIf,
 			fitLineIfWithElse: base.fitLineIfWithElse,
+			ifElseSemicolonNextLine: base.ifElseSemicolonNextLine,
 			afterFieldsWithDocComments: base.afterFieldsWithDocComments,
 			existingBetweenFields: base.existingBetweenFields,
 			externExistingBetweenFields: base.externExistingBetweenFields,
@@ -1024,6 +1025,7 @@ final class HaxeFormatConfigLoader {
 		}
 		if (section.elseIf != null) opt.elseIf = keywordPlacementToRuntime(section.elseIf);
 		if (section.fitLineIfWithElse != null) opt.fitLineIfWithElse = section.fitLineIfWithElse;
+		if (section.ifElseSemicolonNextLine != null) opt.ifElseSemicolonNextLine = section.ifElseSemicolonNextLine;
 		if (section.expressionTry != null) opt.expressionTry = sameLineToRuntime(section.expressionTry);
 		if (section.expressionIfWithBlocks != null) opt.expressionIfWithBlocks = section.expressionIfWithBlocks;
 	}
