@@ -507,19 +507,64 @@ class Lowering {
 					expr: ECall(macro $i{loopFnName}, [macro ctx, macro $v{nextMinPrec}]),
 					pos: Context.currentPos(),
 				};
+				// ω-keep-chain (increment 2): in Trivia mode, infix ctors carrying
+				// `@:fmt(captureChainNewline)` (the chain ctors Add/Sub/And/Or)
+				// grow a 3rd positional `chainNewline:Bool` synth arg holding
+				// whether the source had a newline anywhere in the gap before
+				// this ctor's RIGHT operand. Two sources:
+				//  (1) `hasNewlineIn(ctx.input, _preWsPos, ctx.pos)` — the gap
+				//      [before-op .. after-op-WS] scan. Correct whenever the gap
+				//      newline is NOT pre-consumed by a higher-prec left-operand
+				//      recursion (covers `a +\n b` and any chain whose left
+				//      operand is an atom).
+				//  (2) `ctx.pendingTrivia.newlineBefore` (boolean OR, `&&`/`||`
+				//      ONLY) — when the left operand is itself an infix sub-expr
+				//      (`X == Y && …`), its right-operand recursion's no-match
+				//      already CONSUMED the `\n` before this operator and stashed
+				//      the signal into pendingTrivia (the ω-untyped-keep stash),
+				//      so the span scan misses it. Scoped to the boolean
+				//      operators because their operands are routinely
+				//      higher-precedence comparisons that pre-consume the gap;
+				//      `+`/`-` keep relies on the span scan alone to avoid the
+				//      head-leading-newline pollution that the stash carries when
+				//      an additive chain is the head of a freshly-opened paren
+				//      (`!(\n a.y + b.h …`). The flag is cleared after the read so
+				//      it does not leak to the next operand. O(1), no recursive
+				//      probe. Plain mode keeps the 2-arg ctor (synth widens only
+				//      in Trivia).
+				final captureChainNl:Bool = ctx.trivia && branch.fmtHasFlag('captureChainNewline');
+				final isBoolChainOp:Bool = opText == '&&' || opText == '||';
 				final ctorCall:Expr = {
-					expr: ECall(ctorRef, [macro left, macro _right]),
+					expr: ECall(ctorRef, captureChainNl
+						? [macro left, macro _right, macro _chainNl]
+						: [macro left, macro _right]),
 					pos: Context.currentPos(),
 				};
+				// `_chainNl` is declared in the commit block; the right-operand
+				// parse + ctor build live in the SAME block so it stays in scope
+				// for `$ctorCall`. Non-capturing branches keep the legacy body.
+				final chainNlValue:Expr = isBoolChainOp
+					? macro hasNewlineIn(ctx.input, _preWsPos, ctx.pos)
+						|| (ctx.pendingTrivia != null && ctx.pendingTrivia.newlineBefore)
+					: macro hasNewlineIn(ctx.input, _preWsPos, ctx.pos);
+				final commitBody:Expr = captureChainNl
+					? macro {
+						$skipCall;
+						final _chainNl:Bool = $chainNlValue;
+						if (ctx.pendingTrivia != null) ctx.pendingTrivia.newlineBefore = false;
+						final _right:$rightCT = $rightCall;
+						left = $ctorCall;
+					}
+					: macro {
+						$skipCall;
+						final _right:$rightCT = $rightCall;
+						left = $ctorCall;
+					};
 				macro {
 					if ($v{precValue} < minPrec) {
 						ctx.pos = _savedPos;
 						_matched = false;
-					} else {
-						$skipCall;
-						final _right:$rightCT = $rightCall;
-						left = $ctorCall;
-					}
+					} else $commitBody;
 				};
 			};
 			final matchFnName:String = endsWithWordChar(opText) ? 'matchKw' : 'matchLit';

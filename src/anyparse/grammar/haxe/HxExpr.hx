@@ -484,10 +484,10 @@ enum HxExpr {
 	@:infix('%', 9)
 	Mod(left:HxExpr, right:HxExpr);
 
-	@:infix('+', 8)
+	@:infix('+', 8) @:fmt(captureChainNewline)
 	Add(left:HxExpr, right:HxExpr);
 
-	@:infix('-', 8)
+	@:infix('-', 8) @:fmt(captureChainNewline)
 	Sub(left:HxExpr, right:HxExpr);
 
 	@:infix('<<', 7)
@@ -532,10 +532,10 @@ enum HxExpr {
 	@:infix('is', 5)
 	Is(left:HxExpr, right:HxType);
 
-	@:infix('&&', 4)
+	@:infix('&&', 4) @:fmt(captureChainNewline)
 	And(left:HxExpr, right:HxExpr);
 
-	@:infix('||', 3)
+	@:infix('||', 3) @:fmt(captureChainNewline)
 	Or(left:HxExpr, right:HxExpr);
 
 	@:infix('??', 2, 'Right')

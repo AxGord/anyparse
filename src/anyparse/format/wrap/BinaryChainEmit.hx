@@ -77,7 +77,8 @@ final class BinaryChainEmit {
 	public static function emit(
 		items:Array<Doc>, ops:Array<String>,
 		opt:WriteOptions, rules:WrapRules,
-		nestSuppress:Bool = false, condWrapForced:Bool = false
+		nestSuppress:Bool = false, condWrapForced:Bool = false,
+		?sourceBreakBefore:Array<Bool>, headBreak:Bool = false
 	):Doc {
 		if (items.length == 0) return WrapBoundary(Empty);
 		if (items.length == 1) return WrapBoundary(items[0]);
@@ -163,7 +164,7 @@ final class BinaryChainEmit {
 		}
 
 		function shapeAt(r:{mode:WrapMode, location:WrappingLocation}):Doc {
-			return shape(r.mode, r.location, items, ops, cols);
+			return shape(r.mode, r.location, items, ops, cols, sourceBreakBefore, headBreak);
 		}
 
 		// Force-break path: cascade evaluated only against
@@ -220,7 +221,7 @@ final class BinaryChainEmit {
 			// mode here — pivot the NoWrap UNWRAP shape against the forced break shape.
 			if (unwrapCandidate && isBreakMode(flat.mode))
 				return WrapBoundary(IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, shapeAt(flat),
-					shape(NoWrap, flat.location, items, ops, cols)));
+					shape(NoWrap, flat.location, items, ops, cols, sourceBreakBefore, headBreak)));
 			if (sameRule(flat, brk)) return WrapBoundary(shapeAt(flat));
 			return WrapBoundary(Group(IfBreak(shapeAt(brk), shapeAt(flat))));
 		}
@@ -371,23 +372,23 @@ final class BinaryChainEmit {
 		};
 	}
 
-	private static function shape(mode:WrapMode, location:WrappingLocation, items:Array<Doc>, ops:Array<String>, cols:Int):Doc {
+	private static function shape(mode:WrapMode, location:WrappingLocation, items:Array<Doc>, ops:Array<String>, cols:Int, ?sourceBreakBefore:Array<Bool>, headBreak:Bool = false):Doc {
 		return switch mode {
 			case NoWrap: shapeNoWrap(items, ops);
 			case OnePerLine: shapeOnePerLine(items, ops, cols, location);
 			case OnePerLineAfterFirst: shapeOnePerLineAfterFirst(items, ops, cols, location);
 			case FillLine | FillLineWithLeadingBreak: shapeFillLine(items, ops, cols, location);
-			// ω-keep-objectlit: JSON `"defaultWrap": "keep"` on chain
-			// configs (opAddSubChain, opBoolChain, etc.) routed to
-			// shapeNoWrap. Preserves pre-recognition baseline byte-
-			// identically — before loader recognized "keep", these
-			// configs fell back to `base.defaultMode = NoWrap` via
-			// `cfg.defaultWrap != null ? wrapModeFromString(_) ?? base.defaultMode : base.defaultMode`.
-			// Real per-element chain-Keep semantics (mirror of fork's
-			// `keepLineEnds`/`markKeepLineEnds`) is a follow-up slice;
-			// no current fixture exercises it for chain operators where
-			// shapeNoWrap differs from the source's existing layout.
-			case Keep: shapeNoWrap(items, ops);
+			// ω-keep-chain (increment 2): JSON `"defaultWrap": "keep"` on chain
+			// configs (opAddSubChain, opBoolChain) preserves the source's
+			// per-operator line breaks verbatim — break before operand `i`
+			// iff the parser captured a source newline in that operator's
+			// gap (`sourceBreakBefore[i-1]`), else glue with ` op `. The
+			// signal is the per-infix-ctor `chainNewline` synth slot
+			// captured at parse time in `lowerPrattLoop`; mirror of fork's
+			// `keepLineEnds`/`markKeepLineEnds` per-token `isOriginalNewlineBefore`.
+			// When the signal is absent (null — plain mode / non-capturing
+			// ctor) shapeKeep degrades to shapeNoWrap → byte-inert.
+			case Keep: shapeKeep(items, ops, cols, location, sourceBreakBefore, headBreak);
 			// ω-cascade-emits-comments: Ignore sister to Keep — the writer
 			// pre-empts at the trivia branch. Defensive fallback to
 			// shapeNoWrap on engine leakage.
@@ -403,6 +404,66 @@ final class BinaryChainEmit {
 			inner.push(items[i + 1]);
 		}
 		return Concat(inner);
+	}
+
+	/**
+	 * `WrapMode.Keep` shaper — reproduces the source's per-operator line
+	 * breaks. `sourceBreakBefore` is parallel to `ops`: entry `i` is true
+	 * when the parser captured a source newline in the gap of operator `i`
+	 * (between operand `i` and operand `i+1`). When true the continuation
+	 * breaks at the chain's one-tab `Nest(cols)` indent; when false the
+	 * operands stay glued with ` op `.
+	 *
+	 *  - `BeforeLast`: a broken gap lands the operator at the START of the
+	 *    continuation line (`a\n\t&& b`). Matches haxe-formatter's default
+	 *    chain break shape. A glued gap emits ` op operand` inline.
+	 *  - `AfterLast`: a broken gap suffixes the operator to the previous
+	 *    line and lands the next operand at the start of the continuation
+	 *    line (`a +\n\tb`). A glued gap emits ` op operand` inline.
+	 *
+	 * `headBreak` (the source had a newline between the call-site keyword —
+	 * e.g. `return` — and the chain head) prepends a `Line('\n')` INSIDE the
+	 * `Nest` so the head operand lands on its own continuation line
+	 * (`return\n\t\t\thead\n\t\t\t&& …`). Default false keeps the head glued.
+	 *
+	 * When `sourceBreakBefore` is null (plain mode / non-capturing ctor)
+	 * or every entry is false AND `headBreak` is false, the output is
+	 * byte-identical to `shapeNoWrap` — inert for the non-keep hot path.
+	 */
+	private static function shapeKeep(items:Array<Doc>, ops:Array<String>, cols:Int, location:WrappingLocation, ?sourceBreakBefore:Array<Bool>, headBreak:Bool = false):Doc {
+		final breaks:Array<Bool> = sourceBreakBefore ?? [];
+		// First operand stays at the call-site column (unless `headBreak`);
+		// only the continuation tail is nested at the chain's one-tab indent,
+		// so a broken gap lands its line at `base + cols` while a glued gap
+		// keeps the operands inline (mirror `shapeOnePerLineAfterFirst`).
+		final tail:Array<Doc> = [];
+		switch location {
+			case BeforeLast:
+				for (i in 0...ops.length) {
+					if (i < breaks.length && breaks[i]) {
+						tail.push(Line('\n'));
+						tail.push(Text(ops[i] + ' '));
+					} else {
+						tail.push(Text(' ' + ops[i] + ' '));
+					}
+					tail.push(items[i + 1]);
+				}
+			case AfterLast:
+				for (i in 0...ops.length) {
+					if (i < breaks.length && breaks[i]) {
+						tail.push(Text(' ' + ops[i]));
+						tail.push(Line('\n'));
+					} else {
+						tail.push(Text(' ' + ops[i] + ' '));
+					}
+					tail.push(items[i + 1]);
+				}
+		}
+		// `headBreak` puts the head operand on its own continuation line:
+		// the whole chain (head + tail) is nested and led by a `Line('\n')`.
+		if (headBreak)
+			return Nest(cols, Concat([Line('\n'), items[0]].concat(tail)));
+		return Concat([items[0], Nest(cols, Concat(tail))]);
 	}
 
 	private static function shapeOnePerLineAfterFirst(items:Array<Doc>, ops:Array<String>, cols:Int, location:WrappingLocation):Doc {

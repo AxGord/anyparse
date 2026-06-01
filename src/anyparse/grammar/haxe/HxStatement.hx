@@ -369,6 +369,7 @@ enum HxStatement {
 		indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'),
 		indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'),
 		widthAware,
+		captureKwNewline,
 		propagateExprPosition)
 	ReturnStmt(value:HxExpr);
 

@@ -317,6 +317,22 @@ class TriviaTypeSynth {
 	 */
 	public static inline final KW_NEWLINE_ARG_NAME:String = 'kwNewline';
 
+	/**
+	 * ω-keep-chain (increment 2) — positional arg name appended to paired
+	 * infix enum ctors carrying `@:fmt(captureChainNewline)` (the Pratt
+	 * binary-chain ctors `HxExpr.Add` / `Sub` / `And` / `Or`). The parser
+	 * captures, at the `lowerPrattLoop` operator-match site, whether the
+	 * source had a newline anywhere in the gap before this ctor's RIGHT
+	 * operand (covering both `a\n&& b` and `a +\n b` shapes). The writer's
+	 * chain `_gather` reads it into a `_breaks` array parallel to `_ops`
+	 * and threads it to `BinaryChainEmit.emit(..., sourceBreakBefore)` so a
+	 * `WrapMode.Keep` chain round-trips the source per-operator line breaks.
+	 * Plain mode keeps the original 2-operand ctor arity (no slot; chain
+	 * always glues via `shapeNoWrap`). Sister to `kwNewline` — same parser-
+	 * capture-onto-synth-arg channel, but on the Pratt/infix enum-ctor path.
+	 */
+	public static inline final CHAIN_NEWLINE_ARG_NAME:String = 'chainNewline';
+
 	private static inline final PAIRED_SUFFIX:String = 'T';
 	private static inline final SYNTH_SUBPACK:String = 'trivia';
 	private static inline final SYNTH_MODULE_LEAF:String = 'Pairs';
@@ -562,6 +578,7 @@ class TriviaTypeSynth {
 		if (isAltBodyPolicyKwBranch(branch)) n++; // bodyOnSameLine
 		if (isAltWrapOpenNewlineBranch(branch)) n++; // wrapOpenNewline
 		if (isAltKwNewlineBranch(branch)) n++; // kwNewline (increment 1b)
+		if (isAltChainNewlineBranch(branch)) n++; // chainNewline (increment 2)
 		// ω-D9A-keep-callargs-v2: postfix close-trailing gate adds TWO slots
 		// — closeTrailing + argsOpenNewline (see `buildEnumCtor`). Keep the
 		// count in sync so the `pairedToRaw` switch pattern's `_` placeholder
@@ -728,6 +745,7 @@ class TriviaTypeSynth {
 		if (isAltBodyPolicyKwBranch(branch)) defaults.push(macro false); // bodyOnSameLine
 		if (isAltWrapOpenNewlineBranch(branch)) defaults.push(macro false); // wrapOpenNewline
 		if (isAltKwNewlineBranch(branch)) defaults.push(macro false); // kwNewline (increment 1b)
+		if (isAltChainNewlineBranch(branch)) defaults.push(macro false); // chainNewline (increment 2)
 		if (isPostfixCloseTrailingBranch(branch)) {
 			defaults.push(macro (null : Null<String>)); // closeTrailing
 			// ω-D9A-keep-callargs-v2: argsOpenNewline default for raw→paired
@@ -1262,6 +1280,20 @@ class TriviaTypeSynth {
 			final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
 			args.push({name: KW_NEWLINE_ARG_NAME, type: boolCT});
 		}
+		// ω-keep-chain (increment 2): Pratt/infix enum ctors opting into
+		// per-operand source-newline capture via `@:fmt(captureChainNewline)`
+		// (`HxExpr.Add` / `Sub` / `And` / `Or`) grow a positional
+		// `chainNewline:Bool` arg holding `hasNewlineIn` over the gap before
+		// this ctor's RIGHT operand. Disjoint from every predicate above
+		// (these ctors carry no @:trivia / @:lead / @:kw / @:wrap / bodyPolicy),
+		// so it composes additively as the LAST appended slot. Follows
+		// kwNewline in the ordering so WriterLowering's `altSlotAccess` walker
+		// reaches it as the terminal `ChainNewline` slot. First consumers:
+		// HxExpr.{Add, Sub, And, Or}.
+		if (isAltChainNewlineBranch(branch)) {
+			final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
+			args.push({name: CHAIN_NEWLINE_ARG_NAME, type: boolCT});
+		}
 		// ω-postfix-call-trailing: Star-suffix `@:postfix(open, close) @:sep(...)`
 		// branches whose Star already auto-collects per-arg trivia
 		// (`trivia.starCollects=true`, set by `TriviaAnalysis.markPostfixStarSuffix`)
@@ -1500,6 +1532,24 @@ class TriviaTypeSynth {
 		if (branch.children[0].kind != Ref) return false;
 		if (!branch.hasMeta(':kw')) return false;
 		return branch.fmtHasFlag('captureKwNewline');
+	}
+
+	/**
+	 * ω-keep-chain (increment 2) — true when the branch is a binary `@:infix`
+	 * enum ctor carrying `@:fmt(captureChainNewline)` (the Pratt chain ctors
+	 * `HxExpr.Add` / `Sub` / `And` / `Or`). Such ctors grow a positional
+	 * `chainNewline:Bool` arg in the synth pair so the chain `_gather` can
+	 * reproduce the source per-operator line breaks under `WrapMode.Keep`.
+	 * Requires the `@:infix` meta (the parser commit point — the
+	 * `lowerPrattLoop` operator-match site captures the gap newline) and
+	 * exactly two operand children. Disjoint from every sister predicate
+	 * (chain ctors carry no `@:kw` / `@:lead` / `@:trail` / `@:wrap` /
+	 * bodyPolicy). First consumers: `HxExpr.{Add, Sub, And, Or}`.
+	 */
+	public static function isAltChainNewlineBranch(branch:ShapeNode):Bool {
+		if (branch.children.length != 2) return false;
+		if (!branch.hasMeta(':infix')) return false;
+		return branch.fmtHasFlag('captureChainNewline');
 	}
 
 	private static function shapeToComplexType(node:ShapeNode, synthPack:Array<String>):ComplexType {

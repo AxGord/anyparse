@@ -144,6 +144,14 @@ class WriterLowering {
 			// into the inner writeCall. Disjoint from the wrap/bodyPolicy kw
 			// predicates; composes additively in `extraArgs`.
 			final hasKwNewline:Bool = ctx.trivia && TriviaTypeSynth.isAltKwNewlineBranch(branch);
+			// ω-keep-chain (increment 2): Pratt/infix ctors with
+			// `@:fmt(captureChainNewline)` (the chain ctors Add/Sub/And/Or)
+			// grow a positional `chainNewline:Bool` arg captured by the parser
+			// (gap newline before the ctor's right operand). Read via
+			// `altSlotAccess(..., ChainNewline)` to feed the chain `_gather`'s
+			// `_breaks` array. Disjoint from every Alt/postfix predicate (chain
+			// ctors are bare infix); composes additively in `extraArgs`.
+			final hasChainNewline:Bool = ctx.trivia && TriviaTypeSynth.isAltChainNewlineBranch(branch);
 			// ω-open-trailing-alt: same-line trailing comment after the
 			// open lit grows a parallel positional arg next to closeTrailing.
 			// Synth gate is `isAltCloseTrailingBranch && @:lead present`,
@@ -185,6 +193,7 @@ class WriterLowering {
 				+ (hasBodyPolicyKw ? 1 : 0)
 				+ (hasWrapOpenNewline ? 1 : 0)
 				+ (hasKwNewline ? 1 : 0)
+				+ (hasChainNewline ? 1 : 0)
 				+ (hasPostfixCloseTrailing ? 2 : 0);
 			final argNames:Array<String> = [for (i in 0...children.length + extraArgs) '_v$i'];
 
@@ -683,20 +692,96 @@ class WriterLowering {
 				// `||`, assign inside `+`) gets the parens it needs;
 				// same-class operators are consumed by the extractor.
 				final leafCall:Expr = makeWriteCall(writeFnName, macro _e, hasPratt, prec);
-				final gatherSwitch:Expr = isChainBool
-					? macro switch _e {
-						case Or(_l, _r): _gather(_l); _ops.push('||'); _gather(_r);
-						case And(_l, _r): _gather(_l); _ops.push('&&'); _gather(_r);
-						case _: _items.push($leafCall);
-					}
-					: macro switch _e {
-						case Add(_l, _r): _gather(_l); _ops.push('+'); _gather(_r);
-						case Sub(_l, _r): _gather(_l); _ops.push('-'); _gather(_r);
-						case _: _items.push($leafCall);
-					};
+				// ω-keep-chain (increment 2): in Trivia mode the chain ctors
+				// Add/Sub/And/Or carry a 3rd `chainNewline:Bool` synth arg (the
+				// per-operand source-newline). Bind it (`_nl`) and push into the
+				// `_breaks` array parallel to `_ops` so `BinaryChainEmit.emit`'s
+				// `WrapMode.Keep` shaper can reproduce the source line breaks. In
+				// Plain mode the ctors keep 2-operand arity and no `_breaks` is
+				// threaded (chain stays glued via shapeNoWrap) → byte-inert.
+				// Outer-ctor chainNewline (read via altSlotAccess; null in Plain)
+				// — the gap before THIS branch's right operand (`argNames[1]`),
+				// pushed between the two top-level gathers to stay parallel to
+				// the outer `_ops.push(opText)`.
+				final outerChainNl:Null<Expr> = ctx.trivia
+					? altSlotAccess(branch, children.length, argNames, ChainNewline)
+					: null;
+				// All four chain ctors (Or/And/Add/Sub) carry `captureChainNewline`,
+				// so `outerChainNl` is non-null in Trivia mode; the `!= null` guard
+				// keeps `_breaks` declaration and the gatherSwitch's `_breaks.push`
+				// strictly in lockstep (no half-wired state).
+				final threadBreaks:Bool = ctx.trivia && outerChainNl != null;
+				final gatherSwitch:Expr = if (threadBreaks) {
+					isChainBool
+						? macro switch _e {
+							case Or(_l, _r, _nl): _gather(_l); _ops.push('||'); _breaks.push(_nl); _gather(_r);
+							case And(_l, _r, _nl): _gather(_l); _ops.push('&&'); _breaks.push(_nl); _gather(_r);
+							case _: _items.push($leafCall);
+						}
+						: macro switch _e {
+							case Add(_l, _r, _nl): _gather(_l); _ops.push('+'); _breaks.push(_nl); _gather(_r);
+							case Sub(_l, _r, _nl): _gather(_l); _ops.push('-'); _breaks.push(_nl); _gather(_r);
+							case _: _items.push($leafCall);
+						};
+				} else {
+					isChainBool
+						? macro switch _e {
+							case Or(_l, _r): _gather(_l); _ops.push('||'); _gather(_r);
+							case And(_l, _r): _gather(_l); _ops.push('&&'); _gather(_r);
+							case _: _items.push($leafCall);
+						}
+						: macro switch _e {
+							case Add(_l, _r): _gather(_l); _ops.push('+'); _gather(_r);
+							case Sub(_l, _r): _gather(_l); _ops.push('-'); _gather(_r);
+							case _: _items.push($leafCall);
+						};
+				}
+				// `_breaks` (parallel to `_ops`) only exists in Trivia mode.
+				// ω-keep-chain head break (increment 2): a `return`→head source
+				// newline is delivered via the shared `opt._varKwNewline` channel
+				// (set by the `ReturnStmt` Case-3 `_setVarKwNewline` threading;
+				// the same field VarStmt uses). Read it as the chain head break
+				// (single `EVars` → declared at the outer block scope) and CLEAR
+				// it on `opt` (folded into the `_clearCallArgChainNest` re-bind
+				// below) so it does not leak to a nested chain / the multiVar
+				// fold. Trivia-keep only; in Plain / non-keep the field is false
+				// and untouched → byte-inert.
+				final headDecl:Expr = threadBreaks
+					? macro final _headBreak:Bool = opt._varKwNewline
+					: macro {};
+				// Fold `_clearVarKwNewline` into the `_clearCallArgChainNest`
+				// re-bind so the head-break flag is consumed once at the
+				// outermost chain (leaf/nested chains see it cleared).
+				final clearOptExpr:Expr = threadBreaks
+					? macro _clearVarKwNewline(_clearCallArgChainNest(opt))
+					: macro _clearCallArgChainNest(opt);
+				final breaksDecl:Expr = threadBreaks
+					? macro final _breaks:Array<Bool> = []
+					: macro {};
+				// Top-level gather: head operand, the outer operator, the outer
+				// ctor's source-newline (parallel to that operator), tail operand.
+				final outerBreakPush:Expr = threadBreaks
+					? macro _breaks.push(${outerChainNl})
+					: macro {};
+				final gatherInvoke:Expr = macro {
+					_gather($i{argNames[0]});
+					_ops.push($v{opText});
+					$outerBreakPush;
+					_gather($i{argNames[1]});
+				};
+				// Thread `_breaks` (sourceBreakBefore) + `_headBreak` only in
+				// Trivia mode; Plain keeps the legacy 6-arg call (chain glues).
+				final emitCall:Expr = threadBreaks
+					? macro anyparse.format.wrap.BinaryChainEmit.emit(
+						_items, _ops, opt, $chainRulesExpr, _chainNestSuppress, _condWrapForced, _breaks, _headBreak
+					)
+					: macro anyparse.format.wrap.BinaryChainEmit.emit(
+						_items, _ops, opt, $chainRulesExpr, _chainNestSuppress, _condWrapForced
+					);
 				return macro {
 					final _items:Array<anyparse.core.Doc> = [];
 					final _ops:Array<String> = [];
+					$breaksDecl;
 					// ω-condwrap-call-arg-nest + ω-callarg-chain-nest: suppress
 					// the chain's OWN continuation `Nest(cols, …)` when an outer
 					// context already supplied the `+cols` indent — either a
@@ -728,14 +813,11 @@ class WriterLowering {
 					final _condWrapForced:Bool =
 						opt._chainModeOverride == anyparse.format.wrap.WrapMode.FillLineWithLeadingBreak;
 					final _chainNestSuppress:Bool = _condWrapForced || opt._callArgChainNest;
-					final opt = _clearCallArgChainNest(opt);
+					$headDecl;
+					final opt = $clearOptExpr;
 					function _gather(_e:$argTypeCT):Void $gatherSwitch;
-					_gather($i{argNames[0]});
-					_ops.push($v{opText});
-					_gather($i{argNames[1]});
-					final _inner:anyparse.core.Doc = anyparse.format.wrap.BinaryChainEmit.emit(
-						_items, _ops, opt, $chainRulesExpr, _chainNestSuppress, _condWrapForced
-					);
+					$gatherInvoke;
+					final _inner:anyparse.core.Doc = $emitCall;
 					if ($v{prec} < ctxPrec) _dc([_dt('('), _inner, _dt(')')]) else _inner;
 				};
 			}
@@ -11629,7 +11711,8 @@ class WriterLowering {
 	 *
 	 * The slot order mirrors `TriviaTypeSynth.buildEnumCtor` push order:
 	 *   CloseTrailing (+ 3 conditional `:lead && !:tryparse` slots) →
-	 *   TrailOpt → CaptureSource → BodyPolicyKw → WrapOpenNewline → KwNewline.
+	 *   TrailOpt → CaptureSource → BodyPolicyKw → WrapOpenNewline →
+	 *   KwNewline → ChainNewline.
 	 *
 	 * Centralising this walker keeps idx accounting in lockstep with
 	 * `buildEnumCtor`; future slot additions become a single chain extend
@@ -11643,6 +11726,7 @@ class WriterLowering {
 			case BodyPolicyKw:    TriviaTypeSynth.isAltBodyPolicyKwBranch(branch);
 			case WrapOpenNewline: TriviaTypeSynth.isAltWrapOpenNewlineBranch(branch);
 			case KwNewline:       TriviaTypeSynth.isAltKwNewlineBranch(branch);
+			case ChainNewline:    TriviaTypeSynth.isAltChainNewlineBranch(branch);
 		};
 		if (!hasSlot) return null;
 		var idx:Int = baseIdx;
@@ -11659,6 +11743,8 @@ class WriterLowering {
 		if (TriviaTypeSynth.isAltBodyPolicyKwBranch(branch)) idx++;
 		if (slot == WrapOpenNewline) return macro $i{argNames[idx]};
 		if (TriviaTypeSynth.isAltWrapOpenNewlineBranch(branch)) idx++;
+		if (slot == KwNewline) return macro $i{argNames[idx]};
+		if (TriviaTypeSynth.isAltKwNewlineBranch(branch)) idx++;
 		return macro $i{argNames[idx]};
 	}
 }
@@ -12138,5 +12224,6 @@ enum abstract AltSlot(Int) {
 	final BodyPolicyKw = 3;
 	final WrapOpenNewline = 4;
 	final KwNewline = 5;
+	final ChainNewline = 6;
 }
 #end
