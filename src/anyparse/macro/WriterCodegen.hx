@@ -130,6 +130,17 @@ class WriterCodegen {
 				fields.push(setParenInConditionField(optionsCT));
 				fields.push(clearParenInConditionField(optionsCT));
 			}
+			// ω-keep-kw-newline (increment 1b): opt-fanout helper pair for the
+			// VarStmt-family `@:fmt(captureKwNewline)` ctors. `_setVarKwNewline`
+			// records the source `var`→head newline so the `HxVarDecl` multiVar
+			// fold can break the head binding under `WrapMode.Keep`;
+			// `_clearVarKwNewline` resets it at the fold so recursive head/link
+			// self-calls do not re-trigger. Sister to `_setParenInCondition` /
+			// `_clearParenInCondition`. Gated on `_varKwNewline:Bool`.
+			if (optionsHasField(optionsTypePath, '_varKwNewline')) {
+				fields.push(setVarKwNewlineField(optionsCT));
+				fields.push(clearVarKwNewlineField(optionsCT));
+			}
 			// Layout helpers
 			fields.push(blockBodyField());
 			fields.push(sepListField());
@@ -821,6 +832,62 @@ class WriterCodegen {
 					if (!o._parenInCondition) return o;
 					final _c:$optionsCT = _copyOpt(o);
 					_c._parenInCondition = false;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * ω-keep-kw-newline (increment 1b) — opt-fanout shim for the VarStmt-family
+	 * `@:fmt(captureKwNewline)` ctors. Sets `_varKwNewline` to the supplied
+	 * value (idempotent: returns `o` unchanged when already equal — no
+	 * allocation when the source kept `var x = …` on one line). Read ONLY by
+	 * the `HxVarDecl` multiVar fold, which uses it for the head break
+	 * (`_breaks[0]`) under `WrapMode.Keep`. Sister to `_setParenInCondition`.
+	 * Gated on `_varKwNewline:Bool`.
+	 */
+	private static function setVarKwNewlineField(optionsCT:ComplexType):Field {
+		return {
+			name: '_setVarKwNewline',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [
+					{name: 'o', type: optionsCT},
+					{name: 'v', type: macro : Bool},
+				],
+				ret: optionsCT,
+				expr: macro {
+					if (o._varKwNewline == v) return o;
+					final _c:$optionsCT = _copyOpt(o);
+					_c._varKwNewline = v;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * ω-keep-kw-newline (increment 1b) — sister reset helper to
+	 * `_setVarKwNewline`. Returns `o` unchanged when `_varKwNewline` is already
+	 * `false`; otherwise returns a `_copyOpt(o)` with the flag cleared.
+	 * Consumed at the `HxVarDecl` multiVar fold so the recursive head/link
+	 * self-calls do not re-trigger the head break. Paired with
+	 * `_setVarKwNewline`.
+	 */
+	private static function clearVarKwNewlineField(optionsCT:ComplexType):Field {
+		return {
+			name: '_clearVarKwNewline',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{name: 'o', type: optionsCT}],
+				ret: optionsCT,
+				expr: macro {
+					if (!o._varKwNewline) return o;
+					final _c:$optionsCT = _copyOpt(o);
+					_c._varKwNewline = false;
 					return _c;
 				},
 			}),

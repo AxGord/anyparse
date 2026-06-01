@@ -79,6 +79,18 @@ package anyparse.runtime;
  *    Sister to the Star's own `trailPresent:Bool` synth slot — last
  *    element's `sepAfter` is the same value, kept separate to avoid
  *    cross-coupling existing trailing-comma logic.
+ *  - `newlineAfterSep` — at least one source newline sat AFTER this
+ *    element's leading separator literal (the `@:lead(',')` of a
+ *    `@:lead(LIT)`-prefixed link such as `HxVarMore`), before the link
+ *    payload. The forward-looking cousin of `newlineBefore`: for links
+ *    whose first token is the separator, `newlineBefore` records the gap
+ *    BEFORE the comma (usually empty — `getRaw(read),`), while the
+ *    source break the writer's `Keep` wrap must reproduce lands AFTER the
+ *    comma (`,\n  next`). `@:optional` so only the bare-tryparse trivia
+ *    Star loop that can compute it sets the field; every other
+ *    `Trivial<T>` literal site omits it and reads default `false`.
+ *    Consumed ONLY under `WrapMode.Keep` (multiVar fold) — byte-inert
+ *    for every non-keep construct.
  *  - `node` — the wrapped AST node itself.
  *
  * Shape is flat (no inner `trivia` struct) — until an actual use case
@@ -94,5 +106,6 @@ typedef Trivial<T> = {
 	var trailingComment:Null<String>;
 	var trailingBeforeSep:Bool;
 	var sepAfter:Bool;
+	@:optional var newlineAfterSep:Bool;
 	var node:T;
 }

@@ -1790,4 +1790,5 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	_callArgChainNest:Bool,
 	_suppressMore:Bool,
 	_parenInCondition:Bool,
+	_varKwNewline:Bool,
 };

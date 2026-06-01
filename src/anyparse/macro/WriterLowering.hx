@@ -136,6 +136,14 @@ class WriterLowering {
 			// from the kw-bearing predicates (no kw on @:wrap ctors); composes
 			// additively in `extraArgs`.
 			final hasWrapOpenNewline:Bool = ctx.trivia && TriviaTypeSynth.isAltWrapOpenNewlineBranch(branch);
+			// ω-keep-kw-newline (increment 1b): mandatory-`@:kw` VarStmt-family
+			// ctors with `@:fmt(captureKwNewline)` grow a positional
+			// `kwNewline:Bool` arg captured by the parser (gap newline between
+			// the last keyword / lead literal and the inner `decl` Ref). Read
+			// via `altSlotAccess(..., KwNewline)` to thread `_setVarKwNewline`
+			// into the inner writeCall. Disjoint from the wrap/bodyPolicy kw
+			// predicates; composes additively in `extraArgs`.
+			final hasKwNewline:Bool = ctx.trivia && TriviaTypeSynth.isAltKwNewlineBranch(branch);
 			// ω-open-trailing-alt: same-line trailing comment after the
 			// open lit grows a parallel positional arg next to closeTrailing.
 			// Synth gate is `isAltCloseTrailingBranch && @:lead present`,
@@ -176,6 +184,7 @@ class WriterLowering {
 				+ (hasArrayLitTrailPresent ? 1 : 0)
 				+ (hasBodyPolicyKw ? 1 : 0)
 				+ (hasWrapOpenNewline ? 1 : 0)
+				+ (hasKwNewline ? 1 : 0)
 				+ (hasPostfixCloseTrailing ? 2 : 0);
 			final argNames:Array<String> = [for (i in 0...children.length + extraArgs) '_v$i'];
 
@@ -899,6 +908,18 @@ class WriterLowering {
 			// standalone expr paren (flag false, e.g. `expression_paren_wrapping`)
 			// is byte-identical (`opt` passed through unchanged).
 			final parenHardFlatten:Bool = branch.fmtHasFlag('expressionParenHardFlatten');
+			// ω-keep-kw-newline (increment 1b): when this VarStmt-family ctor
+			// captured a `var`→head newline (the synth `kwNewline:Bool` slot),
+			// thread `_setVarKwNewline(opt, true)` into the inner `decl`
+			// writeCall so the `HxVarDecl` multiVar fold reproduces the head
+			// break under `WrapMode.Keep`. The helper is idempotent and
+			// allocation-free when the flag matches, so a same-line `var x = …`
+			// (kwNewline false) leaves `opt` unchanged — byte-inert. Trivia-
+			// only (the slot exists only on bearing trivia ctors); plain mode
+			// leaves `kwNewlineExpr` null and the head stays glued to `var `.
+			final kwNewlineExpr:Null<Expr> = (ctx.trivia && isTriviaBearing(typePath))
+				? altSlotAccess(branch, children.length, argNames, KwNewline)
+				: null;
 			final ctorOptArg:Expr = {
 				var _o:Expr = macro opt;
 				if (propagateExpr) _o = macro _setExprPosition($_o);
@@ -907,6 +928,7 @@ class WriterLowering {
 					? _setChainModeOverride(_clearParenInCondition($_o),
 						anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap))
 					: $_o);
+				if (kwNewlineExpr != null) _o = macro _setVarKwNewline($_o, $kwNewlineExpr);
 				_o;
 			};
 			final subCall:Expr = if (isSelfRef && hasPratt)
@@ -3901,15 +3923,41 @@ class WriterLowering {
 			// raw `HxVarMore` directly. Both yield a value whose `.decl` is the
 			// next `HxVarDecl(T)` link, so the rest of the walk is identical.
 			final linkBind:Expr = ctx.trivia ? (macro final _link = _ml[0].node) : (macro final _link = _ml[0]);
+			// ω-keep-newline-after-sep (increment 1): when this fold's
+			// `WrapList.emit` resolves to `WrapMode.Keep`, the engine
+			// reproduces each comma-link's source break iff the source
+			// placed a newline AFTER the comma (`,\n  next`). That signal
+			// lives on the trivia Star element's `Trivial.newlineAfterSep`
+			// slot, so it is only available in trivia mode.
+			// ω-keep-kw-newline (increment 1b): the HEAD break (`_breaks[0]`)
+			// reproduces the source `var`→head newline (`var\n\trawRead`). The
+			// `HxStatement.VarStmt` writer threads it onto `opt._varKwNewline`
+			// (set only when the parser captured a newline after the `var` /
+			// `final` keyword); this fold reads it for `_breaks[0]` and clears
+			// the flag so the recursive head/link self-calls do not re-trigger.
+			// Each loop step appends the link's `newlineAfterSep` flag, keeping
+			// `_breaks` index-aligned with `_items`. In plain mode the Star
+			// holds raw `HxVarMore` (no trivia) — `_breaks` stays empty and
+			// `sourceBreakBefore` is passed `null`, so Keep falls back to
+			// the legacy `shapeNoWrap` glue (byte-inert vs pre-slice).
+			final breakDecl:Expr = ctx.trivia
+				? (macro final _breaks:Array<Bool> = [_varKwNewlineHead])
+				: (macro final _breaks:Null<Array<Bool>> = null);
+			final breakStepPush:Expr = ctx.trivia
+				? (macro _breaks.push(_ml[0].newlineAfterSep == true))
+				: (macro {});
 			macro {
 				final _suppressMoreEntry:Bool = opt._suppressMore;
-				final opt = _clearSuppressMore(opt);
+				final _varKwNewlineHead:Bool = opt._varKwNewline;
+				final opt = _clearSuppressMore(_clearVarKwNewline(opt));
 				final _headPlusMore:anyparse.core.Doc = $headPlusMore;
 				if (!_suppressMoreEntry && $moreAccess.length > 0) {
 					final _items:Array<anyparse.core.Doc> = [$selfIdent(value, _setSuppressMore(opt))];
+					$breakDecl;
 					var _ml = $moreAccess;
 					while (_ml.length > 0) {
 						$linkBind;
+						$breakStepPush;
 						_items.push($selfIdent(_link.decl, _setSuppressMore(opt)));
 						_ml = $linkMoreAccess;
 					}
@@ -3923,7 +3971,13 @@ class WriterLowering {
 						// last binding directly — no close delimiter here, so the
 						// default `Line('\n')` would push the `;` onto its own line
 						// under OnePerLine. `Empty` glues the `;` to the last binding.
-						anyparse.core.Doc.Empty
+						anyparse.core.Doc.Empty,
+						// forceMode / compactContinuation / groupRestProbe /
+						// sepBeforeFlags / sourceMultilineKeep — defaults; then
+						// sourceBreakBefore: the per-link source-break flags that
+						// drive `WrapList.shapeKeep` under `WrapMode.Keep` (null in
+						// plain mode → legacy glue).
+						null, false, false, null, false, _breaks
 					);
 				} else _headPlusMore;
 			};
@@ -11575,7 +11629,7 @@ class WriterLowering {
 	 *
 	 * The slot order mirrors `TriviaTypeSynth.buildEnumCtor` push order:
 	 *   CloseTrailing (+ 3 conditional `:lead && !:tryparse` slots) →
-	 *   TrailOpt → CaptureSource → BodyPolicyKw → WrapOpenNewline.
+	 *   TrailOpt → CaptureSource → BodyPolicyKw → WrapOpenNewline → KwNewline.
 	 *
 	 * Centralising this walker keeps idx accounting in lockstep with
 	 * `buildEnumCtor`; future slot additions become a single chain extend
@@ -11588,6 +11642,7 @@ class WriterLowering {
 			case CaptureSource:   TriviaTypeSynth.isCaptureSourceBranch(branch);
 			case BodyPolicyKw:    TriviaTypeSynth.isAltBodyPolicyKwBranch(branch);
 			case WrapOpenNewline: TriviaTypeSynth.isAltWrapOpenNewlineBranch(branch);
+			case KwNewline:       TriviaTypeSynth.isAltKwNewlineBranch(branch);
 		};
 		if (!hasSlot) return null;
 		var idx:Int = baseIdx;
@@ -11602,6 +11657,8 @@ class WriterLowering {
 		if (TriviaTypeSynth.isCaptureSourceBranch(branch)) idx++;
 		if (slot == BodyPolicyKw) return macro $i{argNames[idx]};
 		if (TriviaTypeSynth.isAltBodyPolicyKwBranch(branch)) idx++;
+		if (slot == WrapOpenNewline) return macro $i{argNames[idx]};
+		if (TriviaTypeSynth.isAltWrapOpenNewlineBranch(branch)) idx++;
 		return macro $i{argNames[idx]};
 	}
 }
@@ -12080,5 +12137,6 @@ enum abstract AltSlot(Int) {
 	final CaptureSource = 2;
 	final BodyPolicyKw = 3;
 	final WrapOpenNewline = 4;
+	final KwNewline = 5;
 }
 #end

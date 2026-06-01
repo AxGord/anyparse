@@ -1704,11 +1704,23 @@ class Lowering {
 			final triviaWrapOpenNewline:Bool = ctx.trivia
 				&& isTriviaBearing(typePath)
 				&& TriviaTypeSynth.isAltWrapOpenNewlineBranch(branch);
+			// ω-keep-kw-newline (increment 1b): mandatory-`@:kw` VarStmt-family
+			// ctors with `@:fmt(captureKwNewline)` carry a positional
+			// `kwNewline:Bool` arg. The parser captures whether the gap between
+			// the LAST keyword / lead literal (`var` / `final`) and the inner
+			// `decl` Ref's first token crossed a newline, so the writer's
+			// `HxVarDecl` multiVar fold reproduces the source `var`→head newline
+			// under `WrapMode.Keep`. Trivia-only; plain mode keeps the original
+			// ctor arity (head always glued to `var `).
+			final triviaKwNewline:Bool = ctx.trivia
+				&& isTriviaBearing(typePath)
+				&& TriviaTypeSynth.isAltKwNewlineBranch(branch);
 			final ctorArgs:Array<Expr> = [macro _raw];
 			if (triviaTrailOpt) ctorArgs.push(macro _trailPresent);
 			if (triviaCaptureSource) ctorArgs.push(macro _sourceText);
 			if (triviaBodyPolicyKw) ctorArgs.push(macro _bodyOnSameLine);
 			if (triviaWrapOpenNewline) ctorArgs.push(macro _wrapOpenNewline);
+			if (triviaKwNewline) ctorArgs.push(macro _varKwNewline);
 			final ctorCall:Expr = {expr: ECall(ctorRef, ctorArgs), pos: Context.currentPos()};
 			final kwLead:Null<String> = branch.annotations.get('kw.leadText');
 			final steps:Array<Expr> = [macro skipWs(ctx)];
@@ -1741,8 +1753,16 @@ class Lowering {
 			// different routes — combining them is a grammar error.
 			if (forwardNewlineForBody && triviaBodyPolicyKw)
 				Context.fatalError('Lowering: @:fmt(forwardNewlineForBody) on a @:fmt(bodyPolicy(...)) branch is a conflict — both channels capture the post-kw newline; pick one.', Context.currentPos());
+			// ω-keep-kw-newline (increment 1b): track the byte position right
+			// after the LAST consumed keyword / lead literal (BEFORE its post-
+			// literal `skipWs`) so the `_varKwNewline` probe spans the gap up to
+			// the inner `decl` Ref's first token. Reassigned after each
+			// `expectKw` / `expectLit` so the last one wins (`static var` →
+			// after `var`). Declared only when the branch opts in.
+			if (triviaKwNewline) steps.push(macro var _lastLitEnd:Int = ctx.pos);
 			if (kwLead != null) {
 				steps.push(macro expectKw(ctx, $v{kwLead}));
+				if (triviaKwNewline) steps.push(macro _lastLitEnd = ctx.pos);
 				// ω-issue-257-firstline: capture `_kwEndPos` BEFORE the
 				// post-kw `skipWs` so `_bodyOnSameLine` can probe whether
 				// the gap up to the body's first token crossed a newline.
@@ -1755,6 +1775,7 @@ class Lowering {
 			}
 			if (leadText != null) {
 				steps.push(macro expectLit(ctx, $v{leadText}));
+				if (triviaKwNewline) steps.push(macro _lastLitEnd = ctx.pos);
 				// omega-paren-wrap-source-newline: capture _leadEndPos BEFORE
 				// the post-lead skipWs so _wrapOpenNewline can probe whether
 				// the gap up to the inner sub-rule's first token crossed a
@@ -1765,6 +1786,13 @@ class Lowering {
 				if (triviaWrapOpenNewline)
 					steps.push(macro final _wrapOpenNewline:Bool = hasNewlineIn(ctx.input, _leadEndPos, ctx.pos));
 			}
+			// ω-keep-kw-newline (increment 1b): the gap probe runs AFTER both the
+			// kw and lead skipWs but BEFORE `_raw = callSub`, so `ctx.pos` sits at
+			// the inner `decl` Ref's first token. `_lastLitEnd` holds the end of
+			// the last literal before its skipWs, so `hasNewlineIn` spans exactly
+			// the `var`→head gap.
+			if (triviaKwNewline)
+				steps.push(macro final _varKwNewline:Bool = hasNewlineIn(ctx.input, _lastLitEnd, ctx.pos));
 			// Capture _start_pos AFTER any lead literal AND its skipWs, so
 			// the substring spans only what lives between lead and trail.
 			// In `@:raw` rules the `skipWs` call gets stripped by the rule-
@@ -3871,9 +3899,40 @@ class Lowering {
 				while (true) {
 					final _savedPos:Int = ctx.pos;
 					final _lead = collectTrivia(ctx);
+					// ω-keep-newline-after-sep (increment 1): `collectTrivia`
+					// leaves the cursor at the element's first token — for a
+					// `@:lead(LIT)`-prefixed link (e.g. `HxVarMore`'s
+					// `@:lead(',')`) that token IS the separator literal.
+					// Record it so we can probe the newline AFTER the
+					// separator (before the link payload): `_lead.newlineBefore`
+					// only sees the gap BEFORE the comma (usually empty —
+					// `getRaw(read),`), while the source break the writer's
+					// `Keep` wrap must reproduce lands `,\n  next`. Additive
+					// (an `@:optional Trivial.newlineAfterSep` slot, read only
+					// under `WrapMode.Keep`) → byte-inert for non-keep.
+					final _leadStart:Int = ctx.pos;
 					try {
 						final _node:$elemCT = $elemCall;
 						final _trailing:Null<String> = collectTrailingFull(ctx);
+						// Skip the contiguous non-whitespace separator
+						// punctuation, then OR-in any newline in the
+						// immediately-following whitespace run.
+						var _nlAfterSep:Bool = false;
+						var _nlScan:Int = _leadStart;
+						while (_nlScan < ctx.input.length) {
+							final _sc:Int = ctx.input.charCodeAt(_nlScan);
+							if (_sc == ' '.code || _sc == '\t'.code || _sc == '\r'.code || _sc == '\n'.code) break;
+							_nlScan++;
+						}
+						while (_nlScan < ctx.input.length) {
+							final _wc:Int = ctx.input.charCodeAt(_nlScan);
+							if (_wc == '\n'.code) {
+								_nlAfterSep = true;
+								break;
+							}
+							if (_wc != ' '.code && _wc != '\t'.code && _wc != '\r'.code) break;
+							_nlScan++;
+						}
 						$accumRef.push({
 							blankBefore: _lead.blankBefore,
 							blankAfterLeadingComments: _lead.blankAfterLeadingComments,
@@ -3882,6 +3941,7 @@ class Lowering {
 							trailingComment: _trailing,
 							trailingBeforeSep: false,
 							sepAfter: true,
+							newlineAfterSep: _nlAfterSep,
 							node: _node,
 						});
 					} catch (_e:anyparse.runtime.ParseError) {

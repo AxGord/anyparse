@@ -114,7 +114,8 @@ class WrapList {
 		compactContinuation:Bool = false,
 		groupRestProbe:Bool = false,
 		?sepBeforeFlags:Array<Bool>,
-		sourceMultilineKeep:Bool = false
+		sourceMultilineKeep:Bool = false,
+		?sourceBreakBefore:Array<Bool>
 	):Doc {
 		// `Line('\n')` is not a Haxe-constant default — unwrap a null
 		// sentinel into the legacy hardcoded hardline here.
@@ -239,7 +240,7 @@ class WrapList {
 		// Per-state shape builder: picks the right lead based on the
 		// resolved mode (flat vs break-style layout).
 		function shapeAt(mode:WrapMode, lead:Doc):Doc {
-			final body:Doc = shape(mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreakDoc, groupRestProbe, sepBeforeFlags, opt.lineWidth);
+			final body:Doc = shape(mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreakDoc, groupRestProbe, sepBeforeFlags, opt.lineWidth, sourceBreakBefore);
 			return prependLead(body, lead);
 		}
 
@@ -1039,7 +1040,8 @@ class WrapList {
 		mode:WrapMode, open:String, close:String, sep:String,
 		items:Array<Doc>, openInside:Doc, closeInside:Doc, cols:Int,
 		appendTrailingComma:Bool, trailBreak:Doc, groupRestProbe:Bool,
-		sepBeforeFlags:Null<Array<Bool>>, lineWidth:Int
+		sepBeforeFlags:Null<Array<Bool>>, lineWidth:Int,
+		sourceBreakBefore:Null<Array<Bool>> = null
 	):Doc {
 		// ω-inc5 sole-arrow uniform escalation: a call whose SOLE arg is an
 		// arrow lambda whose body wraps gets the SAME close-on-own-line +
@@ -1102,7 +1104,16 @@ class WrapList {
 			// emit shape lives at the writer, not the engine, because it
 			// needs per-element `Trivial<T>.newlineBefore` access (already
 			// rendered Docs lose that signal).
-			case Keep: shapeNoWrap(open, close, sep, items, openInside, closeInside, sepBeforeFlags);
+			//
+			// ω-keep-newline-after-sep (increment 1): the multiVar fold
+			// DOES carry the per-link source-break signal into the engine
+			// via `sourceBreakBefore` (built from `Trivial.newlineAfterSep`).
+			// When present, `shapeKeep` reproduces each comma-link's source
+			// break; absent (every other Keep consumer) keeps the legacy
+			// defensive `shapeNoWrap` glue so the change is byte-inert.
+			case Keep: sourceBreakBefore != null
+				? shapeKeep(open, close, sep, items, cols, appendTrailingComma, sourceBreakBefore)
+				: shapeNoWrap(open, close, sep, items, openInside, closeInside, sepBeforeFlags);
 			// ω-cascade-emits-comments: Ignore is the sister policy on the
 			// source-newline axis. Like Keep, the writer's trivia branch
 			// pre-empts before reaching the engine — the cascade-emit
@@ -1333,6 +1344,57 @@ class WrapList {
 			Nest(cols, Concat(tail)),
 			Text(close),
 		]);
+	}
+
+	/**
+	 * ω-keep-newline-after-sep (increment 1): the `WrapMode.Keep` engine
+	 * shape. Reproduces each link's source layout per the
+	 * `sourceBreakBefore` flags (built by the multiVar fold from
+	 * `Trivial.newlineAfterSep`): each link gets its separator then either a
+	 * forced hardline at the continuation indent (`sourceBreakBefore[i] ==
+	 * true`) or a literal space (source kept it on the same line).
+	 * ω-keep-kw-newline (increment 1b): the head (`items[0]`,
+	 * `sourceBreakBefore[0]`) likewise breaks onto its own continuation line
+	 * when the source put a newline after the `var` / `final` keyword
+	 * (`var\n\trawRead`); otherwise it stays glued to the open delim.
+	 * Structurally the `shapeOnePerLineAfterFirst` skeleton with a per-link
+	 * break/space decision instead of an unconditional hardline. Only
+	 * reached when the caller threads `sourceBreakBefore` (multiVar fold);
+	 * every other Keep consumer stays on the legacy `shapeNoWrap` glue.
+	 */
+	private static function shapeKeep(
+		open:String, close:String, sep:String, items:Array<Doc>, cols:Int,
+		appendTrailingComma:Bool, sourceBreakBefore:Array<Bool>
+	):Doc {
+		// ω-keep-kw-newline (increment 1b): the head (`items[0]`) breaks onto
+		// its own line at the continuation indent when `sourceBreakBefore[0]`
+		// is set — the multiVar fold maps the source `var`→head newline
+		// (`var\n\t\t\trawRead`) onto that flag. When unset (the default, and
+		// every other Keep consumer) the head stays glued to the open delim.
+		final headBreak:Bool = sourceBreakBefore.length > 0 && sourceBreakBefore[0];
+		if (items.length == 1) {
+			if (!headBreak) return Concat([Text(open), items[0], Text(close)]);
+			return Concat([Text(open), Nest(cols, Concat([Line('\n'), items[0]])), Text(close)]);
+		}
+		// `nested` holds everything inside the continuation Nest: the optional
+		// leading head break, the head itself (when broken), then each link's
+		// separator + per-link break/space + item. When the head is glued the
+		// Nest contains only the tail and `items[0]` rides the open delim line.
+		final nested:Array<Doc> = [];
+		if (headBreak) {
+			nested.push(Line('\n'));
+			nested.push(items[0]);
+		}
+		for (i in 1...items.length) {
+			nested.push(Text(sep));
+			final brk:Bool = i < sourceBreakBefore.length && sourceBreakBefore[i];
+			nested.push(brk ? Line('\n') : Text(' '));
+			nested.push(items[i]);
+		}
+		if (appendTrailingComma) nested.push(Text(sep));
+		return headBreak
+			? Concat([Text(open), Nest(cols, Concat(nested)), Text(close)])
+			: Concat([Text(open), items[0], Nest(cols, Concat(nested)), Text(close)]);
 	}
 
 	private static function shapeFillLine(

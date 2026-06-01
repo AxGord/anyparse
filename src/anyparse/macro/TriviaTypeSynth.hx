@@ -299,6 +299,24 @@ class TriviaTypeSynth {
 	 */
 	public static inline final WRAP_OPEN_NEWLINE_ARG_NAME:String = 'wrapOpenNewline';
 
+	/**
+	 * ω-keep-kw-newline (increment 1b) — positional arg name appended to
+	 * paired Alt ctors carrying `@:fmt(captureKwNewline)` on the mandatory-
+	 * `@:kw` VarStmt-family enum ctors (`VarStmt` / `FinalStmt` /
+	 * `StaticVarStmt` / `StaticFinalStmt`). The parser captures whether the
+	 * source had a newline between the LAST keyword / lead literal
+	 * (`var` / `final`) and the inner `decl` Ref's first token — i.e. the
+	 * author wrote `var\n\trawRead` (newline) vs `var rawRead` (same line).
+	 * The writer threads the flag into the `HxVarDecl` multiVar fold's
+	 * `WrapMode.Keep` head break (`_breaks[0]`) so a kept multi-var decl
+	 * round-trips the source-author `var`→head newline. Plain mode keeps
+	 * the original ctor arity (no slot; head always glued to `var `).
+	 * Sister to `bodyOnSameLine` / `wrapOpenNewline` — same parser-capture-
+	 * onto-synth-arg channel, but on the mandatory-kw enum-ctor path rather
+	 * than the optional-kw Ref path.
+	 */
+	public static inline final KW_NEWLINE_ARG_NAME:String = 'kwNewline';
+
 	private static inline final PAIRED_SUFFIX:String = 'T';
 	private static inline final SYNTH_SUBPACK:String = 'trivia';
 	private static inline final SYNTH_MODULE_LEAF:String = 'Pairs';
@@ -543,6 +561,7 @@ class TriviaTypeSynth {
 		if (isCaptureSourceBranch(branch)) n++; // sourceText
 		if (isAltBodyPolicyKwBranch(branch)) n++; // bodyOnSameLine
 		if (isAltWrapOpenNewlineBranch(branch)) n++; // wrapOpenNewline
+		if (isAltKwNewlineBranch(branch)) n++; // kwNewline (increment 1b)
 		// ω-D9A-keep-callargs-v2: postfix close-trailing gate adds TWO slots
 		// — closeTrailing + argsOpenNewline (see `buildEnumCtor`). Keep the
 		// count in sync so the `pairedToRaw` switch pattern's `_` placeholder
@@ -708,6 +727,7 @@ class TriviaTypeSynth {
 		if (isCaptureSourceBranch(branch)) defaults.push(macro ''); // sourceText
 		if (isAltBodyPolicyKwBranch(branch)) defaults.push(macro false); // bodyOnSameLine
 		if (isAltWrapOpenNewlineBranch(branch)) defaults.push(macro false); // wrapOpenNewline
+		if (isAltKwNewlineBranch(branch)) defaults.push(macro false); // kwNewline (increment 1b)
 		if (isPostfixCloseTrailingBranch(branch)) {
 			defaults.push(macro (null : Null<String>)); // closeTrailing
 			// ω-D9A-keep-callargs-v2: argsOpenNewline default for raw→paired
@@ -1228,6 +1248,20 @@ class TriviaTypeSynth {
 			final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
 			args.push({name: WRAP_OPEN_NEWLINE_ARG_NAME, type: boolCT});
 		}
+		// ω-keep-kw-newline (increment 1b): mandatory-`@:kw` VarStmt-family Alt
+		// branches opting into source-shape capture via `@:fmt(captureKwNewline)`
+		// grow a positional `kwNewline:Bool` arg holding `hasNewlineIn` over the
+		// gap between the last keyword / lead literal (`var` / `final`) and the
+		// inner `decl` Ref's first token. Disjoint from isAltWrapOpenNewlineBranch
+		// (those are kw-less @:wrap ctors) and isAltBodyPolicyKwBranch (VarStmt
+		// carries no @:fmt(bodyPolicy(...))) — composes additively. The arg
+		// follows wrapOpenNewline and precedes the postfix closeTrailing in this
+		// ordering so indices in WriterLowering stay deterministic. First
+		// consumers: HxStatement.{VarStmt, FinalStmt, StaticVarStmt, StaticFinalStmt}.
+		if (isAltKwNewlineBranch(branch)) {
+			final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
+			args.push({name: KW_NEWLINE_ARG_NAME, type: boolCT});
+		}
 		// ω-postfix-call-trailing: Star-suffix `@:postfix(open, close) @:sep(...)`
 		// branches whose Star already auto-collects per-arg trivia
 		// (`trivia.starCollects=true`, set by `TriviaAnalysis.markPostfixStarSuffix`)
@@ -1445,6 +1479,27 @@ class TriviaTypeSynth {
 		final hasLeadTrail:Bool = branch.hasMeta(':lead') && branch.hasMeta(':trail');
 		if (!(hasWrap || hasLeadTrail)) return false;
 		return branch.fmtHasFlag('captureWrapOpenNewline');
+	}
+
+	/**
+	 * ω-keep-kw-newline (increment 1b) — true when the branch is a single-Ref
+	 * mandatory-`@:kw` Alt ctor carrying `@:fmt(captureKwNewline)` (the
+	 * VarStmt-family: `VarStmt` / `FinalStmt` / `StaticVarStmt` /
+	 * `StaticFinalStmt`). Such ctors grow a positional `kwNewline:Bool` arg in
+	 * the synth pair so the `HxVarDecl` multiVar fold can reproduce the
+	 * source-author `var`→head newline under `WrapMode.Keep`. Requires the
+	 * mandatory `@:kw` for the parser commit point. Disjoint from
+	 * `isAltWrapOpenNewlineBranch` (those are kw-less @:wrap ctors). Reads the
+	 * flag via `fmtHasFlag`, which works at arm-time (`base.meta` populated by
+	 * `ShapeBuilder` before `arm()` runs — same path the sister predicates
+	 * rely on). First consumers: `HxStatement.{VarStmt, FinalStmt,
+	 * StaticVarStmt, StaticFinalStmt}`.
+	 */
+	public static function isAltKwNewlineBranch(branch:ShapeNode):Bool {
+		if (branch.children.length != 1) return false;
+		if (branch.children[0].kind != Ref) return false;
+		if (!branch.hasMeta(':kw')) return false;
+		return branch.fmtHasFlag('captureKwNewline');
 	}
 
 	private static function shapeToComplexType(node:ShapeNode, synthPack:Array<String>):ComplexType {

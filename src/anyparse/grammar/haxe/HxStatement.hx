@@ -351,16 +351,16 @@ package anyparse.grammar.haxe;
  */
 @:peg
 enum HxStatement {
-	@:kw('static') @:lead('var') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))
+	@:kw('static') @:lead('var') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'), captureKwNewline)
 	StaticVarStmt(decl:HxVarDecl);
 
-	@:kw('static') @:lead('final') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))
+	@:kw('static') @:lead('final') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'), captureKwNewline)
 	StaticFinalStmt(decl:HxVarDecl);
 
-	@:kw('var') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'), deferKwSpace)
+	@:kw('var') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'), deferKwSpace, captureKwNewline)
 	VarStmt(decl:HxVarDecl);
 
-	@:kw('final') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'), deferKwSpace)
+	@:kw('final') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'), deferKwSpace, captureKwNewline)
 	FinalStmt(decl:HxVarDecl);
 
 	@:kw('return') @:trailOpt(';')
