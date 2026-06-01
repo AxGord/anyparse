@@ -675,6 +675,37 @@ class WrapList {
 	}
 
 	/**
+	 * ω-keep-fnsig-newline: width-independent Keep predicate for the trivia
+	 * source-newline-preservation path (`WriterLowering.triviaSepStarExpr`'s
+	 * `_keepEmit` gate). The trivia branch decides whether to reproduce each
+	 * element's source `newlineBefore` BEFORE per-element Docs (and thus
+	 * rendered widths) exist, so it cannot consult the column-aware cascade
+	 * the no-trivia `emit` path uses. This resolves the cascade for the known
+	 * `itemCount` (= element count) across BOTH the fits and exceeds states
+	 * (and both `lineLengthFires` outcomes, paired with the exceeds probe);
+	 * returns `true` only when EVERY probed state yields `Keep`. That is
+	 * exactly the set of configs whose Keep decision is width-independent:
+	 *  - `defaultWrap: keep` with `rules: []` (e.g.
+	 *    `issue_238_keep_wrapping_function_signature`) — `decide*` falls
+	 *    through to `defaultMode == Keep` in every state.
+	 *  - a structural rule such as `itemCount >= 0 -> keep` (e.g.
+	 *    `wrapping_of_function_signature_keep`) — matches in every state.
+	 * A genuinely width-conditional rule (`lineLength >= 140 -> keep`)
+	 * disagrees across the probes and correctly returns `false`, so the
+	 * trivia path does NOT force keep when the source-layout intent is
+	 * actually gated on rendered width — that case stays on the legacy
+	 * cascade. Item-length / total-length conditions cannot be evaluated
+	 * pre-render either, so they are probed as "not firing"; no current
+	 * function-signature keep fixture uses them.
+	 */
+	public static function cascadeIsKeep(rules:WrapRules, itemCount:Int):Bool {
+		inline function at(exceeds:Bool):WrapMode {
+			return decideWithLineLengthState(rules, itemCount, 0, 0, exceeds, false, _ -> exceeds);
+		}
+		return at(false) == WrapMode.Keep && at(true) == WrapMode.Keep;
+	}
+
+	/**
 	 * Walks the cascade and returns the matched rule's `mode` paired with
 	 * its effective `location` (`BeforeLast` / `AfterLast`), so chain-emit
 	 * consumers can render per-rule operator placement. `LineLengthLargerThan`

@@ -2822,8 +2822,13 @@ class Lowering {
 			}
 			if (ctx.trivia && isStar && child.annotations.get('trivia.starCollects') == true) {
 				final trailBBLocal:String = trailingBlankBeforeLocalName(localName);
+				final trailNLLocal:String = trailingNewlineBeforeLocalName(localName);
 				final trailLCLocal:String = trailingLeadingLocalName(localName);
 				structFields.push({field: fieldName + TriviaTypeSynth.TRAILING_BLANK_BEFORE_SUFFIX, expr: macro $i{trailBBLocal}});
+				// ω-keep-fnsig-newline: sibling close-newline push, unconditional
+				// next to TrailingBlankBefore so the struct-literal field set
+				// matches the synth-define exactly.
+				structFields.push({field: fieldName + TriviaTypeSynth.TRAILING_NEWLINE_BEFORE_SUFFIX, expr: macro $i{trailNLLocal}});
 				structFields.push({field: fieldName + TriviaTypeSynth.TRAILING_LEADING_SUFFIX, expr: macro $i{trailLCLocal}});
 				// ω-close-trailing: the synth slot exists only for close-peek
 				// Stars (see `TriviaTypeSynth.buildStarTrailingSlots`). Gate
@@ -3454,6 +3459,7 @@ class Lowering {
 		// slots exist purely to satisfy synth-paired-type field shape.
 		if (isTriviaCollects) {
 			final trailBBLocal:String = trailingBlankBeforeLocalName(localName);
+			final trailNLLocal:String = trailingNewlineBeforeLocalName(localName);
 			final trailLCLocal:String = trailingLeadingLocalName(localName);
 			final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
 			final arrayStrCT:ComplexType = TPath({
@@ -3461,6 +3467,12 @@ class Lowering {
 			});
 			parseSteps.push({
 				expr: EVars([{name: trailBBLocal, type: boolCT, expr: macro false, isFinal: false}]),
+				pos: Context.currentPos(),
+			});
+			// ω-keep-fnsig-newline: sibling zero-init local so the struct-literal
+			// push of TrailingNewlineBefore has a defined value on this path too.
+			parseSteps.push({
+				expr: EVars([{name: trailNLLocal, type: boolCT, expr: macro false, isFinal: false}]),
 				pos: Context.currentPos(),
 			});
 			parseSteps.push({
@@ -3781,6 +3793,7 @@ class Lowering {
 		// trivia propagates outward through the enclosing Star's own
 		// `collectTrivia` scan rather than being stashed here.
 		final trailBBLocal:String = trailingBlankBeforeLocalName(localName);
+		final trailNLLocal:String = trailingNewlineBeforeLocalName(localName);
 		final trailLCLocal:String = trailingLeadingLocalName(localName);
 		final trailBALocal:String = trailingBlankAfterLocalName(localName);
 		final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
@@ -3790,6 +3803,18 @@ class Lowering {
 		parseSteps.push({
 			expr: EVars([{
 				name: trailBBLocal,
+				type: boolCT,
+				expr: macro false,
+				isFinal: false,
+			}]),
+			pos: Context.currentPos(),
+		});
+		// ω-keep-fnsig-newline: sibling close-newline local, declared
+		// unconditionally next to `trailBBLocal`. Assigned from the terminal
+		// `_lead.newlineBefore` at each close-peek break below.
+		parseSteps.push({
+			expr: EVars([{
+				name: trailNLLocal,
 				type: boolCT,
 				expr: macro false,
 				isFinal: false,
@@ -4118,6 +4143,10 @@ class Lowering {
 				final _lead = collectTrivia(ctx);
 				if ($terminationCheck) {
 					$i{trailBBLocal} = _lead.blankBefore;
+					// ω-keep-fnsig-newline: capture the close-newline alongside
+					// the close-blank so a kept signature reproduces a glued vs
+					// own-line close.
+					$i{trailNLLocal} = _lead.newlineBefore;
 					$i{trailLCLocal} = _lead.leadingComments;
 					break;
 				}
@@ -4175,6 +4204,16 @@ class Lowering {
 	 * that pushes it into the struct literal).
 	 */
 	public static inline function trailingBlankBeforeLocalName(localName:String):String return '${localName}_trailBB';
+
+	/**
+	 * ω-keep-fnsig-newline: name of the `Bool` local that records whether the
+	 * source had at least one newline (not necessarily a blank line) between
+	 * the last `@:trivia` Star element and the close literal. Sibling of
+	 * `trailingBlankBeforeLocalName`; set from the same terminal
+	 * `_lead.newlineBefore`. Consumed by the writer's `_keepEmit` close
+	 * placement to round-trip a kept signature's glued-vs-own-line close.
+	 */
+	public static inline function trailingNewlineBeforeLocalName(localName:String):String return '${localName}_trailNL';
 
 	/**
 	 * Name of the `Array<String>` local that records the own-line

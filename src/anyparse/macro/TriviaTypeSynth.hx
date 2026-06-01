@@ -183,6 +183,25 @@ class TriviaTypeSynth {
 	public static inline final TRAILING_LEADING_SUFFIX:String = 'TrailingLeading';
 
 	/**
+	 * ω-keep-fnsig-newline — suffix for a `Bool` flag recording whether the
+	 * source placed at least one newline between the last `@:trivia` Star
+	 * element and the close literal (`param7:Int\n)` vs `param7:Int)`).
+	 * Sibling of `TrailingBlankBefore` (which records a BLANK line — 2+
+	 * newlines), captured from the same terminal `_lead.newlineBefore` at the
+	 * Star's close-peek. Consumed ONLY by `triviaSepStarExpr`'s `_keepEmit`
+	 * close-placement: under a kept function signature, the close `)` breaks
+	 * onto its own line iff the author put a newline there, so a kept
+	 * signature round-trips both `param7:Int)` (glued — e.g.
+	 * `wrapping_of_function_signature_keep`) and `\n\t):FastMatrix3` (own line
+	 * — e.g. `issue_238_keep_wrapping_function_signature`). Synthesised
+	 * unconditionally alongside `TrailingBlankBefore` so the slot arity stays
+	 * in lockstep (struct field, name-matched — no positional ctor risk).
+	 * Default `false` (no newline before close) for every non-keep / non-
+	 * bearing consumer — byte-inert.
+	 */
+	public static inline final TRAILING_NEWLINE_BEFORE_SUFFIX:String = 'TrailingNewlineBefore';
+
+	/**
 	 * ω-close-trailing — suffix for the same-line trailing comment
 	 * captured immediately after a `@:trivia` Star's close literal.
 	 * Synthesised only for close-peek Stars (those with `@:trail`);
@@ -655,6 +674,9 @@ class TriviaTypeSynth {
 			}
 			if (isTriviaStarField(child)) {
 				entries.push({field: fieldName + TRAILING_BLANK_BEFORE_SUFFIX, expr: macro false});
+				// ω-keep-fnsig-newline: sibling default for the close-newline
+				// slot (raw→paired upcast). Mirrors TRAILING_BLANK_BEFORE_SUFFIX.
+				entries.push({field: fieldName + TRAILING_NEWLINE_BEFORE_SUFFIX, expr: macro false});
 				entries.push({field: fieldName + TRAILING_LEADING_SUFFIX, expr: macro ([] : Array<String>)});
 				if (child.readMetaString(':trail') != null)
 					entries.push({field: fieldName + TRAILING_CLOSE_SUFFIX, expr: macro (null : Null<String>)});
@@ -1135,6 +1157,10 @@ class TriviaTypeSynth {
 		final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
 		final fields:Array<Field> = [
 			{name: fieldName + TRAILING_BLANK_BEFORE_SUFFIX, kind: FVar(boolCT), pos: pos, access: []},
+			// ω-keep-fnsig-newline: sibling slot recording a single newline (not
+			// a blank line) before the close. Defined unconditionally alongside
+			// TrailingBlankBefore so the arity stays locked.
+			{name: fieldName + TRAILING_NEWLINE_BEFORE_SUFFIX, kind: FVar(boolCT), pos: pos, access: []},
 			{name: fieldName + TRAILING_LEADING_SUFFIX, kind: FVar(arrayStrCT), pos: pos, access: []},
 		];
 		// ω-close-trailing: close-peek Stars (those with `@:trail`)

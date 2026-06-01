@@ -4329,6 +4329,11 @@ class WriterLowering {
 			final trailBBAccess:Null<Expr> = fieldName == null
 				? null
 				: {expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_BLANK_BEFORE_SUFFIX), pos: Context.currentPos()};
+			// ω-keep-fnsig-newline: accessor for the close-newline slot, threaded
+			// into `triviaSepStarExpr` for the `_keepEmit` close placement.
+			final trailNLAccess:Null<Expr> = fieldName == null
+				? null
+				: {expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_NEWLINE_BEFORE_SUFFIX), pos: Context.currentPos()};
 			final trailLCAccess:Null<Expr> = fieldName == null
 				? null
 				: {expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_LEADING_SUFFIX), pos: Context.currentPos()};
@@ -4741,7 +4746,10 @@ class WriterLowering {
 						knobRightCurly,
 						trailPresentAccess, trailingCommaField,
 						null, null, false, forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines,
-						keepCurlyBlanksStar, reflowSourceMultilineStar, false, matrixWrapStar
+						keepCurlyBlanksStar, reflowSourceMultilineStar, false, matrixWrapStar,
+						// ω-keep-fnsig-newline: close-newline accessor for the
+						// struct-Star keep close placement (HxFnDecl.params).
+						trailNLAccess
 					));
 					return;
 				}
@@ -8607,7 +8615,12 @@ class WriterLowering {
 		keepCurlyBlanks:Bool = false,
 		reflowSourceMultiline:Bool = false,
 		bracketKindPad:Bool = false,
-		matrixWrap:Bool = false
+		matrixWrap:Bool = false,
+		// ω-keep-fnsig-newline: accessor for the close-newline slot
+		// (`value.<field>TrailingNewlineBefore`). Threaded only by callers that
+		// pass it; null for every other call site → the keep close placement
+		// degrades to the legacy own-line close (byte-inert).
+		trailNLAccess:Null<Expr> = null
 	):Expr {
 		// ω-trivia-sep-anontype-braces (Phase B1): when the call site
 		// reads `@:fmt(anonTypeBracesOpen)` / `objectLiteralBracesOpen`
@@ -8711,6 +8724,9 @@ class WriterLowering {
 		};
 		final emptyText:String = openText + closeText;
 		final trailBB:Expr = trailBBAccess ?? macro false;
+		// ω-keep-fnsig-newline: close-newline splice (`value.<field>Trailing
+		// NewlineBefore`), null for non-bearing callers → defaults to `false`.
+		final trailNL:Expr = trailNLAccess ?? macro false;
 		final trailLC:Expr = trailLCAccess ?? macro ([] : Array<String>);
 		final trailClose:Expr = trailCloseAccess ?? macro (null : Null<String>);
 		final trailOpen:Expr = trailOpenAccess ?? macro (null : Null<String>);
@@ -8732,10 +8748,22 @@ class WriterLowering {
 		// cases (e.g. `issue_187_multi_line_wrapped_assignment_oneline`)
 		// where the JSON-config Keep slipped past loader's silent-drop
 		// previously. Real chain-Keep semantics is a follow-up slice.
+		// ω-keep-fnsig-newline: detect Keep from the FULL cascade, not just
+		// `defaultMode`. A function-signature keep config can select Keep via
+		// either `defaultWrap: keep` (→ `defaultMode == Keep`, e.g.
+		// `issue_238_keep_wrapping_function_signature`) OR a width-independent
+		// cascade rule (`itemCount >= 0 -> keep`, e.g.
+		// `wrapping_of_function_signature_keep`). `cascadeIsKeep` resolves the
+		// cascade for the runtime element count across both fit/exceed states
+		// and returns true only when EVERY state yields Keep — equivalent to
+		// the bare `defaultMode == Keep` read for the `rules: []` case, and
+		// additively true for the always-firing structural rule. Width-gated
+		// keep rules (`lineLength >= n`) disagree across states → false, so the
+		// trivia path stays on the legacy cascade for them.
 		final keepCheckExpr:Expr = wrapRulesField != null
 			? {
 				final rulesAccess:Expr = optFieldAccess(wrapRulesField);
-				macro $rulesAccess.defaultMode == anyparse.format.wrap.WrapMode.Keep;
+				macro anyparse.format.wrap.WrapList.cascadeIsKeep($rulesAccess, _arr.length);
 			}
 			: macro false;
 		// ω-cascade-emits-comments: Ignore-mode runtime check, sister to
@@ -8812,6 +8840,24 @@ class WriterLowering {
 		// the close to the last body token (Inline), `_dhl()` keeps
 		// it on its own line (Same).
 		final wrapTrailBreakDoc:Expr = triviaTrailDoc;
+		// ω-keep-fnsig-newline: close-delimiter placement for the trivia
+		// force-multi KEEP path. Function signatures (the only Star carrying
+		// `@:fmt(ignoreSourceNewlinesForWrap)`) preserve the SOURCE close
+		// placement under keep: the close `)` stays glued to the last
+		// parameter (`param7:Int)` — `wrapping_of_function_signature_keep`) when
+		// the source had no newline before it, but drops to its own indented
+		// line (`\n\t):FastMatrix3` — `issue_238_keep_wrapping_function_signature`)
+		// when the author put one there. `_trailNL` carries that source signal
+		// (captured at the Star's close-peek into the `TrailingNewlineBefore`
+		// slot). When `_keepEmit` is live: `_dhl()` if the source broke before
+		// close, `_de()` (glued) otherwise. Object-literals / arrays (no
+		// intrinsic flag) keep their own-line close unchanged, and non-keep
+		// params (`_keepEmit == false`) stay on the legacy break — both byte-
+		// inert. Only consumed at the trivia branch's `_parts` assembly; the
+		// no-trivia cascade reads `wrapTrailBreakDoc`.
+		final triviaTrailDocKeepAware:Expr = ignoreSourceNewlinesForWrap
+			? macro(_keepEmit ? (_trailNL ? _dhl() : _de()) : $triviaTrailDoc)
+			: triviaTrailDoc;
 		// ω-wraprules-objlit: when the Star carries
 		// `@:fmt(wrapRules('<field>'))`, defer the no-trivia branch's
 		// layout decision to the runtime `WrapList.emit` engine. The
@@ -9016,6 +9062,9 @@ class WriterLowering {
 			final _arr = $fieldAccess;
 			final _trailLC:Array<String> = $trailLC;
 			final _trailBB:Bool = $trailBB;
+			// ω-keep-fnsig-newline: source newline-before-close signal,
+			// consumed by `triviaTrailDocKeepAware` under `_keepEmit`.
+			final _trailNL:Bool = $trailNL;
 			final _trailClose:Null<String> = $trailClose;
 			final _trailOpen:Null<String> = $trailOpen;
 			// ω-open-trailing-alt: empty Star with only a same-line block-
@@ -9069,7 +9118,22 @@ class WriterLowering {
 				// `_requiresHardline=true` (legacy bucket); cascade rewrite
 				// at the no-trivia branch collapses to `_docs.push(_elem)`
 				// because `_parts.length==1` on no-comment elements.
-				final _ignoreEmit:Bool = $ignoreCheckExpr;
+				// ω-keep-fnsig-newline: `_keepEmit` is read FIRST so the
+				// `_ignoreEmit` gate below can yield to it. The only Star
+				// carrying the intrinsic `@:fmt(ignoreSourceNewlinesForWrap)`
+				// flag (so `ignoreCheckExpr == macro true`) is `HxFnDecl.params`;
+				// it ALSO reads `wrapRules('functionSignatureWrap')`. When the
+				// JSON config sets that rule to `keep`, the author opted into
+				// source-newline preservation explicitly, so Keep must win over
+				// the per-construct Ignore default. For every JSON-config consumer
+				// `defaultMode` is a single value — Keep and Ignore are mutually
+				// exclusive — so `!_keepEmit` only ever flips the params-in-Keep
+				// case; all other Stars (Ignore-mode object-literals / arrays,
+				// default-mode params) keep the prior `_ignoreEmit` value byte-
+				// for-byte. The force-multi per-element swap further below reads
+				// this same `_keepEmit` for the source-`newlineBefore` dispatch.
+				final _keepEmit:Bool = $keepCheckExpr;
+				final _ignoreEmit:Bool = $ignoreCheckExpr && !_keepEmit;
 				// ω-arraymatrix-wrap: `NoMatrixWrap` ignores the source grid
 				// entirely — like the `Ignore` policy it DROPS source newlines
 				// so the cascade (not the force-multi path) drives layout: a
@@ -9113,7 +9177,8 @@ class WriterLowering {
 				// no risk of `_dt(' ')` cuddling content after a `//`.
 				// The cascade-emits-comments path remains reserved for
 				// Ignore mode (`_hasInlineableTrivia` bucket).
-				final _keepEmit:Bool = $keepCheckExpr;
+				// `_keepEmit` itself is declared above (hoisted so the
+				// `_ignoreEmit` gate can yield to it — ω-keep-fnsig-newline).
 				// ω-array-reflow: when the Star opted into
 				// `@:fmt(reflowSourceMultiline)` AND its only "multi-line"
 				// signal is bare source newlines (no hardline-requiring
@@ -9212,7 +9277,7 @@ class WriterLowering {
 					_parts.push(_dt($v{openText}));
 					if (_trailOpen != null) _parts.push(trailingCommentDocVerbatim(_trailOpen, opt));
 					_parts.push(_innerWrap);
-					_parts.push($triviaTrailDoc);
+					_parts.push($triviaTrailDocKeepAware);
 					_parts.push(_dt($v{closeText}));
 					if (_trailClose != null)
 						_parts.push(trailingCommentDocVerbatim(_trailClose, opt));
