@@ -3636,30 +3636,62 @@ class WriterLowering {
 							// path — which fires during the parent struct's parse,
 							// when the gap is still in play.
 							//
-							// First consumer: `HxFnDecl.body` for
-							// `bodyPolicyForCtor('UntypedBlockBody', 'untypedBody')`.
-							final bodyPolicyForCtorArgs:Null<Array<String>> = child.fmtReadStringArgs('bodyPolicyForCtor');
-							if (bodyPolicyForCtorArgs != null) {
-								if (bodyPolicyForCtorArgs.length != 2)
-									Context.fatalError('WriterLowering: @:fmt(bodyPolicyForCtor(...)) requires (ctorName, flagName), got ${bodyPolicyForCtorArgs.length} args', Context.currentPos());
-								final wrapCtorName:String = bodyPolicyForCtorArgs[0];
-								final wrapFlagName:String = bodyPolicyForCtorArgs[1];
+							// ω-fnbody-keep: `bodyPolicyForCtor` accepts MULTIPLE
+							// `('<ctor>', '<flagName>')` pairs (repeatable), each
+							// routing its own runtime ctor to a `bodyPolicyWrap`
+							// with the named policy flag. Built as a ternary chain
+							// — `Type.enumConstructor(body) == ctorᵢ ? wrapᵢ : …` —
+							// falling through to the per-ctor `sep + writeCall`
+							// `defaultPair` for every ctor with no pair. Consumers:
+							// `HxFnDecl.body` for `('UntypedBlockBody', 'untypedBody')`
+							// (the `untyped {…}` body) AND `('ExprBody', 'functionBody')`
+							// (the `return …` / bare-expr body). Both share ONE root
+							// cause — the signature→body source-newline gap is consumed
+							// by the parent struct's pre-field `skipWs` before the branch
+							// sub-rule probes, so the slot must be read at the parent
+							// (where `bodyBeforeNewline` IS captured), NOT inside the
+							// branch (a kw-less branch grows no `bodyOnSameLine` slot and
+							// the gap is already gone). `ExprBody` therefore drops its
+							// prior branch-local `@:fmt(bodyPolicy('functionBody'))`; the
+							// separator + Keep dispatch now live entirely on this parent
+							// wrap. `bodyValueExpr` is the `HxFnBody` value: only
+							// `bodyPolicyWrap`'s ctor-override / single-line / block-split
+							// paths consult it, none of which `functionBody` / `untypedBody`
+							// (plain policies, no override args) reach — so Same/Next
+							// output stays byte-identical to the pre-slice inner-branch
+							// emission.
+							final bodyPolicyForCtorPairs:Array<Array<String>> = child.fmtReadStringArgsAll('bodyPolicyForCtor');
+							if (bodyPolicyForCtorPairs.length > 0) {
 								final hasBeforeNlSlot:Bool = ctx.trivia && isTriviaBearing(typePath)
 									&& !isFirstField && kwLead == null && leadText == null;
 								final wrapBodyOnSameLineExpr:Null<Expr> = hasBeforeNlSlot
 									? beforeNewlineNotAccess(fieldName)
 									: null;
-								final wrapOutput:Expr = bodyPolicyWrap({
-									flagName: wrapFlagName,
-									writeCall: writeCall,
-									bodyValueExpr: fieldAccess,
-									bodyTypePath: refName,
-									hasElseIf: false,
-									elseFieldName: null,
-									bodyOnSameLineExpr: wrapBodyOnSameLineExpr,
-								});
 								final defaultPair:Expr = macro _dc([$sepExpr, $writeCall]);
-								parts.push(macro $ctorExpr == $v{wrapCtorName} ? $wrapOutput : $defaultPair);
+								// Fold the pairs into a ternary chain. Iterate in reverse
+								// so the first-declared pair sits at the chain head
+								// (tested first at runtime).
+								var chain:Expr = defaultPair;
+								var i:Int = bodyPolicyForCtorPairs.length - 1;
+								while (i >= 0) {
+									final pair:Array<String> = bodyPolicyForCtorPairs[i];
+									if (pair.length != 2)
+										Context.fatalError('WriterLowering: @:fmt(bodyPolicyForCtor(...)) requires (ctorName, flagName), got ${pair.length} args', Context.currentPos());
+									final wrapCtorName:String = pair[0];
+									final wrapFlagName:String = pair[1];
+									final wrapOutput:Expr = bodyPolicyWrap({
+										flagName: wrapFlagName,
+										writeCall: writeCall,
+										bodyValueExpr: fieldAccess,
+										bodyTypePath: refName,
+										hasElseIf: false,
+										elseFieldName: null,
+										bodyOnSameLineExpr: wrapBodyOnSameLineExpr,
+									});
+									chain = macro $ctorExpr == $v{wrapCtorName} ? $wrapOutput : $chain;
+									i--;
+								}
+								parts.push(chain);
 							} else {
 								parts.push(sepExpr);
 								parts.push(writeCall);

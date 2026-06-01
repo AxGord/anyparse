@@ -41,14 +41,18 @@ package anyparse.grammar.haxe;
  *    terminator when present and tracks its source presence — Haxe
  *    treats the `;` as optional here and the writer re-emits it
  *    byte-faithfully (single-Ref Alt `trailPresent` arg, mirror of
- *    `HxStatement.ExprStmt`). The kw→body separator is
- *    runtime-switchable via `@:fmt(bodyPolicy('functionBody'))`
- *    (slice ω-functionBody-policy) — `Next` (default) emits a
- *    hardline + Nest, `Same` emits a single space. The parent
- *    `HxFnDecl.body` field's Case 5 (Ref + `@:fmt(leftCurly)`)
- *    suppresses its fixed `_dt(' ')` for ctors carrying ctor-level
- *    `@:fmt(bodyPolicy(...))` so the wrap inside this branch's writer
- *    fully owns the kw-to-body separator.
+ *    `HxStatement.ExprStmt`). The signature→body separator is
+ *    runtime-switchable via the PARENT `HxFnDecl.body`'s
+ *    `@:fmt(bodyPolicyForCtor('ExprBody', 'functionBody'))` (slice
+ *    ω-fnbody-keep) — `Next` (default) emits a hardline + Nest, `Same`
+ *    emits a single space, `Keep` reproduces the source newline-or-not
+ *    via the parent struct's `bodyBeforeNewline:Bool` synth slot. The
+ *    wrap lives at the parent (not on this branch) for the same reason
+ *    `UntypedBlockBody`'s does: the signature→body gap is consumed by
+ *    the parent struct's pre-field `skipWs` BEFORE this branch's
+ *    sub-rule probes, so a branch-local slot would always read "no
+ *    newline". Mirrors the `UntypedBlockBody`/`untypedBody` pairing
+ *    already wired through `bodyPolicyForCtor`.
  *
  * Branch order matters for dispatch: UntypedBlockBody → BlockBody →
  * NoBody → ExprBody. UntypedBlockBody dispatches via the inner
@@ -71,6 +75,6 @@ enum HxFnBody {
 	@:lit(';')
 	NoBody;
 
-	@:trailOpt(';') @:fmt(bodyPolicy('functionBody'))
+	@:trailOpt(';')
 	ExprBody(expr:HxExpr);
 }
