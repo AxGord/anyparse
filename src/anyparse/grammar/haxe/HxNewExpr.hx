@@ -38,12 +38,24 @@ package anyparse.grammar.haxe;
  * Lowering path. Zero new Lowering branches.
  *
  * The argument list reuses the sep-peek Star field pattern — same as
- * function parameters in `HxFnDecl` and call args in
- * `HxExpr.Call`. Zero Lowering changes.
+ * function parameters in `HxFnDecl` and call args in `HxExpr.Call`.
+ * It carries `@:trivia` so the args' Star collects per-element
+ * `Trivial<HxExpr>` source trivia (the same routing as
+ * `HxFnDecl.params`) and the writer drives layout through
+ * `triviaSepStarExpr`. `@:fmt(ignoreSourceNewlinesForWrap)` mirrors
+ * `HxFnDecl.params`: under the DEFAULT (non-keep) `callParameter`
+ * config the intrinsic Ignore semantic DROPS the per-argument source
+ * newlines so the wrap cascade (FillLine / OnePerLine / …) — not the
+ * source grid — drives layout, byte-identical to the prior no-trivia
+ * path. Under a `callParameter` `defaultWrap: keep` config the
+ * `triviaSepStarExpr` `_keepEmit` gate (resolved via `cascadeIsKeep`)
+ * wins over Ignore and the per-element `newlineBefore` swap preserves
+ * the source per-argument line breaks (the
+ * `new FastMatrix3(a, b, c,\n d, e, f, …)` grid).
  */
 @:peg
 typedef HxNewExpr = {
 	var type:HxNewTypeName;
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var params:Null<Array<HxType>>;
-	@:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaArgs'), wrapRules('callParameterWrap')) var args:Array<HxExpr>;
+	@:trivia @:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaArgs'), wrapRules('callParameterWrap'), ignoreSourceNewlinesForWrap) var args:Array<HxExpr>;
 };
