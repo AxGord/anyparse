@@ -802,6 +802,13 @@ class TriviaTypeSynth {
 			// writer falls back to default (glued first arg) — consistent
 			// with the existing closeTrailing=null fallback.
 			defaults.push(macro false); // argsOpenNewline
+			// ω-keep-callclose-newline: argsCloseNewline default for raw→paired
+			// wraps. `false` matches the parser's initial state for source whose
+			// close glued (no newline before the postfix close). preWrite plugin
+			// rewrites don't preserve close-paren source shape, so the writer
+			// falls back to the glued close — consistent with the sibling
+			// argsOpenNewline=false / closeTrailing=null fallbacks.
+			defaults.push(macro false); // argsCloseNewline
 		}
 		return defaults;
 	}
@@ -1430,6 +1437,18 @@ class TriviaTypeSynth {
 			// reads via `argNames[3]` (closeTrailing stays at argNames[2]).
 			final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
 			args.push({name: 'argsOpenNewline', type: boolCT});
+			// ω-keep-callclose-newline: sibling positional `argsCloseNewline:Bool`
+			// recording whether source had `\n` between the last arg (or the open
+			// lit for an empty list) and the postfix close literal (e.g. `arg\n)`
+			// vs `arg)`). Sibling of `argsOpenNewline` — captured by `Lowering`'s
+			// close-peek `skipWs(ctx)` window right before `expectLit(close)`.
+			// Consumed ONLY by `WriterLowering.lowerPostfixStar`'s Keep-mode
+			// method-chain close placement: when the Call's `methodChain` rules are
+			// `Keep` and this is false (source glued the close), the outer call's
+			// close `)` stays glued to the chain's last token (`})));`) instead of
+			// the `shapeFillLine` `isChainOPLBreak` own-line break. Reads via
+			// `argNames[4]` (argsOpenNewline stays at argNames[3]).
+			args.push({name: 'argsCloseNewline', type: boolCT});
 		}
 		return {name: ctorName, kind: FFun({args: args, ret: null, expr: null}), pos: pos, access: []};
 	}

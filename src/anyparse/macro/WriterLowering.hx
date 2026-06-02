@@ -166,6 +166,11 @@ class WriterLowering {
 			// next postfix iteration. Disjoint from the four Alt-side
 			// predicates (different ctor shapes), so the predicates compose
 			// additively in `extraArgs` without collision.
+			// ω-keep-callclose-newline: the synth now grows THREE positionals on
+			// these branches — closeTrailing (argNames[2]), argsOpenNewline
+			// (argNames[3]), argsCloseNewline (argNames[4]); `extraArgs` below
+			// reserves all three so the writer-side arg names stay aligned with
+			// the parser-pushed ctor arity.
 			final hasPostfixCloseTrailing:Bool = ctx.trivia && TriviaTypeSynth.isPostfixCloseTrailingBranch(branch);
 			// ω-orphan-trivia-alt: when the branch grows openTrailing it
 			// also grows trailingBlankBefore (`argNames[3]`) and
@@ -194,7 +199,7 @@ class WriterLowering {
 				+ (hasWrapOpenNewline ? 1 : 0)
 				+ (hasKwNewline ? 1 : 0)
 				+ (hasChainNewline ? 1 : 0)
-				+ (hasPostfixCloseTrailing ? 2 : 0);
+				+ (hasPostfixCloseTrailing ? 3 : 0);
 			final argNames:Array<String> = [for (i in 0...children.length + extraArgs) '_v$i'];
 
 			// Build pattern
@@ -434,7 +439,11 @@ class WriterLowering {
 				var _hasCallPrev:Bool = false;
 				while (true) {
 					switch _cursor {
-						case Call(_op, _args, _trailClose, _):
+						// ω-keep-callclose-newline: trivia Call ctor grew a 5th
+						// positional `argsCloseNewline`; the chain walk ignores it
+						// here (close placement is decided by the outer call's
+						// `lowerPostfixStar`, not the per-segment chain emit).
+						case Call(_op, _args, _trailClose, _, _):
 							switch _op {
 								case FieldAccess(_prev, _fld, _nl):
 									final _argDocs:Array<anyparse.core.Doc> = $argDocsExpr;
@@ -445,7 +454,7 @@ class WriterLowering {
 									_segs.unshift(_segDoc);
 									_breaks.unshift(_nl);
 									switch _prev {
-										case Call(_, _, _, _): _hasCallPrev = true;
+										case Call(_, _, _, _, _): _hasCallPrev = true;
 										case _:
 									}
 									_cursor = _prev;
@@ -482,7 +491,7 @@ class WriterLowering {
 								_breaks.unshift(_nl);
 							}
 							switch _prev {
-								case Call(_, _, _, _): _hasCallPrev = true;
+								case Call(_, _, _, _, _): _hasCallPrev = true;
 								case _:
 							}
 							_cursor = _prev;
@@ -1706,6 +1715,18 @@ class WriterLowering {
 		// so the per-element opt and the args-list cascade share one lookup.
 		final wrapRulesField:Null<String> = branch.fmtReadString('wrapRules');
 		final wantChainNest:Bool = branch.fmtHasFlag('callArgChainNest');
+		// ω-keep-callclose-newline: the postfix-Star ctor that drives method
+		// chains (`HxExpr.Call`) carries `@:fmt(methodChain('<field>'))`. When the
+		// chain config is `Keep`, a chain sole-arg renders source-faithfully via
+		// `MethodChainEmit.shapeKeep` — a length-2-Nest shape that
+		// `shapeFillLine`'s `isChainOPLBreak` cannot tell apart from a genuine
+		// OnePerLine chain, so it would force the OUTER call's close `)` onto its
+		// own line. Under Keep we instead follow the source: keep `)` glued unless
+		// the parser recorded a newline before it (`argsCloseNewline`). The signal
+		// is computed only when the ctor carries both `methodChain` and is a
+		// trivia Star (the parser-captured slot exists); every other postfix Star
+		// passes the engine default `keepCloseGlued = false` and stays byte-inert.
+		final methodChainField:Null<String> = branch.fmtReadString('methodChain');
 		var elemOptArg:Expr = propagateExpr ? macro _setExprPosition(opt) : macro opt;
 		if (wantChainNest && wrapRulesField != null) {
 			final wrapRulesAccess:Expr = optFieldAccess(wrapRulesField);
@@ -1764,7 +1785,24 @@ class WriterLowering {
 		final fillDouble:Bool = branch.fmtHasFlag('fillDoubleIndent');
 		final sepListCall:Expr = if (wrapRulesField != null) {
 			final rulesExpr:Expr = optFieldAccess(wrapRulesField);
-			final wrapListExpr:Expr = macro anyparse.format.wrap.WrapList.emit($v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $callInsideOpen, $callInsideClose, false, $rulesExpr, $tcExpr);
+			// ω-keep-callclose-newline: keep the outer call's close `)` glued iff
+			// the chain config is Keep AND the parser saw no newline before the
+			// close (`argsCloseNewline == false`). Only a trivia Star carrying
+			// `methodChain` has the parser slot; otherwise the signal is constant
+			// `false` (byte-inert legacy close placement).
+			final keepCloseGluedExpr:Expr = (isTriviaStar && methodChainField != null)
+				? {
+					final chainRulesExpr:Expr = optFieldAccess(methodChainField);
+					final closeNlExpr:Expr = {expr: EConst(CIdent(argNames[4])), pos: Context.currentPos()};
+					macro $chainRulesExpr.defaultMode == anyparse.format.wrap.WrapMode.Keep && !$closeNlExpr;
+				}
+				: macro false;
+			final wrapListExpr:Expr = macro anyparse.format.wrap.WrapList.emit(
+				$v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt,
+				$callInsideOpen, $callInsideClose, false, $rulesExpr, $tcExpr,
+				_de(), _de(), false, null, null, false, false,
+				null, false, null, $keepCloseGluedExpr
+			);
 			if (isTriviaStar) {
 				// ω-D9A-keep-callargs: when the wrap-rules' runtime config
 				// sets `defaultMode == WrapMode.Keep`, bypass the cascade

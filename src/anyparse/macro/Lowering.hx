@@ -879,7 +879,7 @@ class Lowering {
 				// args[0] is unreliable due to upstream `ctx.pendingTrivia`
 				// leak so a separate parser-side capture is required.
 				final ctorCallTrivia:Expr = {
-					expr: ECall(ctorRef, [macro left, macro _args, macro _trailClose, macro _argsOpenNewline]),
+					expr: ECall(ctorRef, [macro left, macro _args, macro _trailClose, macro _argsOpenNewline, macro _argsCloseNewline]),
 					pos: Context.currentPos(),
 				};
 				// ω-postfix-starsuffix-trivia: when TriviaAnalysis marks
@@ -939,9 +939,20 @@ class Lowering {
 						skipWs(ctx);
 						final _argsOpenNewline:Bool = hasNewlineIn(ctx.input, _openPos, ctx.pos);
 						final _args:Array<$wrappedCT> = [];
+						// ω-keep-callclose-newline: source-vertical signal for the
+						// gap before the postfix close literal. `collectTrivia`'s
+						// final iteration (the close-peek break) reports whether a
+						// newline preceded the close in `_lead.newlineBefore`
+						// (`arg\n)` vs `arg)`). Captured on the break and threaded
+						// to the writer's Keep-mode chain close placement. Default
+						// `false` for the never-iterated impossible path.
+						var _argsCloseNewline:Bool = false;
 						while (true) {
 							final _lead = collectTrivia(ctx);
-							if (!($closeNotNextExpr)) break;
+							if (!($closeNotNextExpr)) {
+								_argsCloseNewline = _lead.newlineBefore;
+								break;
+							}
 							final _node:$elemCT = $elemCall;
 							var _trailing:Null<String> = null;
 							// Step 1: same-line trail capture. Returns

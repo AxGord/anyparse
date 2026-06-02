@@ -115,7 +115,16 @@ class WrapList {
 		groupRestProbe:Bool = false,
 		?sepBeforeFlags:Array<Bool>,
 		sourceMultilineKeep:Bool = false,
-		?sourceBreakBefore:Array<Bool>
+		?sourceBreakBefore:Array<Bool>,
+		// ω-keep-callclose-newline: when the SOLE call-arg is a Keep-mode method
+		// chain whose source had NO newline before the outer close `)` (the chain
+		// glued the close — `})));`), keep the close glued instead of routing
+		// through `shapeFillLine`'s `isChainOPLBreak` close-on-own-line break. Set
+		// only by `WriterLowering.lowerPostfixStar` when the Call ctor's
+		// `methodChain` rules are `Keep` and the parser's `argsCloseNewline` slot
+		// is false. Default `false` → every non-keep / source-broke caller keeps
+		// the legacy chain-OPL close placement, so the change is byte-inert.
+		keepCloseGlued:Bool = false
 	):Doc {
 		// `Line('\n')` is not a Haxe-constant default — unwrap a null
 		// sentinel into the legacy hardcoded hardline here.
@@ -240,7 +249,7 @@ class WrapList {
 		// Per-state shape builder: picks the right lead based on the
 		// resolved mode (flat vs break-style layout).
 		function shapeAt(mode:WrapMode, lead:Doc):Doc {
-			final body:Doc = shape(mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreakDoc, groupRestProbe, sepBeforeFlags, opt.lineWidth, sourceBreakBefore);
+			final body:Doc = shape(mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreakDoc, groupRestProbe, sepBeforeFlags, opt.lineWidth, sourceBreakBefore, keepCloseGlued);
 			return prependLead(body, lead);
 		}
 
@@ -1101,7 +1110,8 @@ class WrapList {
 		items:Array<Doc>, openInside:Doc, closeInside:Doc, cols:Int,
 		appendTrailingComma:Bool, trailBreak:Doc, groupRestProbe:Bool,
 		sepBeforeFlags:Null<Array<Bool>>, lineWidth:Int,
-		sourceBreakBefore:Null<Array<Bool>> = null
+		sourceBreakBefore:Null<Array<Bool>> = null,
+		keepCloseGlued:Bool = false
 	):Doc {
 		// ω-inc5 sole-arrow uniform escalation: a call whose SOLE arg is an
 		// arrow lambda whose body wraps gets the SAME close-on-own-line +
@@ -1155,7 +1165,7 @@ class WrapList {
 			case NoWrap: shapeNoWrap(open, close, sep, items, openInside, closeInside, sepBeforeFlags);
 			case OnePerLine: shapeOnePerLine(open, close, sep, items, cols, appendTrailingComma, trailBreak, sepBeforeFlags);
 			case OnePerLineAfterFirst: shapeOnePerLineAfterFirst(open, close, sep, items, cols, appendTrailingComma, sepBeforeFlags);
-			case FillLine: shapeFillLine(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags);
+			case FillLine: shapeFillLine(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags, keepCloseGlued);
 			case FillLineWithLeadingBreak: shapeFillLineWithLeadingBreak(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
 			// ω-keep-objectlit: Keep cascade hits are pre-empted by the
 			// writer's trivia branch (`triviaSepStarExpr`) — at the engine
@@ -1461,7 +1471,8 @@ class WrapList {
 		open:String, close:String, sep:String, items:Array<Doc>,
 		openInside:Doc, closeInside:Doc, cols:Int,
 		appendTrailingComma:Bool, groupRestProbe:Bool,
-		sepBeforeFlags:Null<Array<Bool>> = null
+		sepBeforeFlags:Null<Array<Bool>> = null,
+		keepCloseGlued:Bool = false
 	):Doc {
 		// Per-gap sep awareness (slice ω-fillline-pergap-sep): items split
 		// into chunks at every leading-hardline boundary. Within each
@@ -1523,7 +1534,20 @@ class WrapList {
 				Text(open), openInside, items[0], tail0,
 				closeInside, Text(close),
 			]);
-			if (isChainOPLBreak(items[0])) {
+			// ω-keep-callclose-newline: under a Keep-mode method-chain sole arg
+			// whose source glued the outer close `)` (`argsCloseNewline == false`,
+			// surfaced as `keepCloseGlued`), the chain renders via
+			// `MethodChainEmit.shapeKeep` — a `Concat([receiver, Nest(...)])` whose
+			// length-2-Nest signature is INDISTINGUISHABLE from a genuine
+			// OnePerLine chain at `isChainOPLBreak`. The OPL gate would force the
+			// outer close onto its own line (`}))\n\t\t);`), but the fork keeps it
+			// where the source put it (`})));`). The keep signal carries the source
+			// intent directly (no width re-probe), so we short-circuit to the glued
+			// shape — the source-faithful close for the `})));` case. A keep chain
+			// whose source DID break before the close has `keepCloseGlued == false`
+			// (the parser captured a newline) and falls through to the OPL break,
+			// reproducing the author's own-line close.
+			if (!keepCloseGlued && isChainOPLBreak(items[0])) {
 				final brkShape:Doc = Concat([
 					Text(open), openInside, items[0], tail0,
 					closeInside, Line('\n'), Text(close),
