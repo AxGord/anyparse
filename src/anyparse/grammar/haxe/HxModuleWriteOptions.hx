@@ -1653,6 +1653,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	caseBody:BodyPolicy,
 	expressionCase:BodyPolicy,
 	functionBody:BodyPolicy,
+	anonFunctionBody:BodyPolicy,
 	untypedBody:BodyPolicy,
 	expressionIfBody:BodyPolicy,
 	expressionElseBody:BodyPolicy,

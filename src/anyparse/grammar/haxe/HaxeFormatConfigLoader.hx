@@ -540,6 +540,7 @@ final class HaxeFormatConfigLoader {
 			caseBody: base.caseBody,
 			expressionCase: base.expressionCase,
 			functionBody: base.functionBody,
+			anonFunctionBody: base.anonFunctionBody,
 			untypedBody: base.untypedBody,
 			expressionIfBody: base.expressionIfBody,
 			expressionElseBody: base.expressionElseBody,
@@ -952,6 +953,14 @@ final class HaxeFormatConfigLoader {
 		if (section.caseBody != null) opt.caseBody = bodyPolicyToRuntime(section.caseBody);
 		if (section.expressionCase != null) opt.expressionCase = bodyPolicyToRuntime(section.expressionCase);
 		if (section.functionBody != null) opt.functionBody = bodyPolicyToRuntime(section.functionBody);
+		// Slice ω-anonfnbody-keep: `sameLine.anonFunctionBody` drives the
+		// signature→body separator on `HxFnExpr.body`'s `ExprBody` branch
+		// (the bare-expr anon-fn body, e.g. `function() trace(i)`), the
+		// expression-position sibling of `functionBody`. Wired through
+		// `@:fmt(bodyPolicyForCtor('ExprBody', 'anonFunctionBody'))` on the
+		// `HxFnExpr.body` optional Ref. Default `Same` reproduces the
+		// pre-slice cuddle, so the knob is byte-inert until set.
+		if (section.anonFunctionBody != null) opt.anonFunctionBody = bodyPolicyToRuntime(section.anonFunctionBody);
 		if (section.untypedBody != null) opt.untypedBody = bodyPolicyToRuntime(section.untypedBody);
 		// Slice ω-expr-body-keep: the JSON key `sameLine.expressionIf`
 		// is parsed via the schema (so unknown-key validation passes)

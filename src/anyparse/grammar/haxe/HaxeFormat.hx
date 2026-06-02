@@ -662,6 +662,7 @@ final class HaxeFormat implements TextFormat {
 		caseBody: BodyPolicy.Keep,
 		expressionCase: BodyPolicy.Keep,
 		functionBody: BodyPolicy.Next,
+		anonFunctionBody: BodyPolicy.Same,
 		untypedBody: BodyPolicy.Same,
 		expressionIfBody: BodyPolicy.Keep,
 		expressionElseBody: BodyPolicy.Keep,

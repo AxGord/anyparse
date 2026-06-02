@@ -166,6 +166,8 @@ package anyparse.grammar.haxe.format;
 
 	@:optional var functionBody:HxFormatBodyPolicy;
 
+	@:optional var anonFunctionBody:HxFormatBodyPolicy;
+
 	@:optional var untypedBody:HxFormatBodyPolicy;
 
 	@:optional var expressionIf:HxFormatBodyPolicy;

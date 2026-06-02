@@ -3351,6 +3351,26 @@ class WriterLowering {
 							? leftCurlySeparator(child)
 							: null;
 						final lcCtors:Array<String> = lcSep == null ? [] : leftCurlyTargetCtors(refName);
+						// ω-anonfnbody-keep: optional-Ref mirror of the
+						// mandatory-Ref `bodyPolicyForCtor` chain (see the
+						// `HxFnDecl.body` site below, slice ω-fnbody-keep). When
+						// `@:fmt(bodyPolicyForCtor('<ctor>', '<flagName>'))` pairs
+						// are present, route each matched runtime ctor through
+						// `bodyPolicyWrap` (which owns the signature→body
+						// separator AND the body emission) and fall through to the
+						// per-ctor `sep + writeCall` default for every other ctor.
+						// Consumer: `HxFnExpr.body` for `('ExprBody',
+						// 'anonFunctionBody')` — the bare-expr anon-fn body. The
+						// gap-at-parent rationale matches the mandatory-Ref path:
+						// the signature→body source-newline gap is consumed by the
+						// parent struct's pre-field `skipWs` before this branch's
+						// sub-rule probes, so the `Keep`-policy slot must be read
+						// at the parent (`<field>BeforeNewline`), NOT inside the
+						// kw-less `ExprBody` branch (which grows no slot). Default
+						// `anonFunctionBody=Same` reproduces the prior ExprBody
+						// `_dt(' ')` cuddle byte-for-byte, so this is inert until
+						// the knob is set to `Next` / `Keep`.
+						final bodyPolicyForCtorPairs:Array<Array<String>> = child.fmtReadStringArgsAll('bodyPolicyForCtor');
 						if (lcSep != null && lcCtors.length > 0) {
 							final spaceCtors:Array<String> = spacePrefixCtors(refName, lcCtors);
 							final ctorExpr:Expr = macro Type.enumConstructor(_optVal);
@@ -3361,9 +3381,48 @@ class WriterLowering {
 							}
 							for (lc in lcCtors)
 								sepExpr = macro $ctorExpr == $v{lc} ? $lcSep : $sepExpr;
-							optParts.push(sepExpr);
-						}
-						optParts.push(writeCall);
+							if (bodyPolicyForCtorPairs.length > 0) {
+								// The `<field>BeforeNewline` Keep-dispatch slot is
+								// synthesised only for NON-optional bare Refs
+								// (`TriviaTypeSynth.isBareNonFirstRef` excludes
+								// `@:optional`). This optional-Ref path therefore has
+								// no slot — pass `null`, so `Same` / `Next` work and
+								// `Keep` degrades to the no-slot default. Supporting
+								// `Keep` here would require extending slot synthesis
+								// to optional Refs (a separate, larger change — the
+								// `sourceMultilineKeep` wall noted in slice ω-fnbody-keep).
+								final wrapBodyOnSameLineExpr:Null<Expr> = null;
+								final defaultPair:Expr = macro _dc([$sepExpr, $writeCall]);
+								// Fold the pairs into a ternary chain. Iterate in
+								// reverse so the first-declared pair sits at the
+								// chain head (tested first at runtime).
+								var chain:Expr = defaultPair;
+								var i:Int = bodyPolicyForCtorPairs.length - 1;
+								while (i >= 0) {
+									final pair:Array<String> = bodyPolicyForCtorPairs[i];
+									if (pair.length != 2)
+										Context.fatalError('WriterLowering: @:fmt(bodyPolicyForCtor(...)) requires (ctorName, flagName), got ${pair.length} args', Context.currentPos());
+									final wrapCtorName:String = pair[0];
+									final wrapFlagName:String = pair[1];
+									final wrapOutput:Expr = bodyPolicyWrap({
+										flagName: wrapFlagName,
+										writeCall: writeCall,
+										bodyValueExpr: macro _optVal,
+										bodyTypePath: refName,
+										hasElseIf: false,
+										elseFieldName: null,
+										bodyOnSameLineExpr: wrapBodyOnSameLineExpr,
+									});
+									chain = macro $ctorExpr == $v{wrapCtorName} ? $wrapOutput : $chain;
+									i--;
+								}
+								optParts.push(chain);
+							} else {
+								optParts.push(sepExpr);
+								optParts.push(writeCall);
+							}
+						} else
+							optParts.push(writeCall);
 					}
 					// ω-pad-trailing-ref: optional-Ref `@:fmt(padTrailing)`
 					// pushes a trailing space INSIDE optParts so the pad is

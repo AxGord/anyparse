@@ -63,5 +63,5 @@ typedef HxFnExpr = {
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var typeParams:Null<Array<HxTypeParamDecl>>;
 	@:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams'), keepInnerWhenEmpty('anonFuncParamParensKeepInnerWhenEmpty'), wrapRules('anonFunctionSignatureWrap'), bodyAwareCompactIndent) var params:Array<HxLambdaParam>;
 	@:optional @:fmt(typeHintColon) @:lead(':') var returnType:Null<HxType>;
-	@:optional @:absentOn(',', ')', ';', '}', ']') @:fmt(leftCurly('anonFunctionLeftCurly'), propagateAnonFnContext) var body:Null<HxFnExprBody>;
+	@:optional @:absentOn(',', ')', ';', '}', ']') @:fmt(leftCurly('anonFunctionLeftCurly'), propagateAnonFnContext, bodyPolicyForCtor('ExprBody', 'anonFunctionBody')) var body:Null<HxFnExprBody>;
 }
