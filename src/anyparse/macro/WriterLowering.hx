@@ -1521,6 +1521,34 @@ class WriterLowering {
 							? _dc([$leadDoc, _dhl(), _wrapInner, _dhl(), _wrapTrail])
 							: _dc([$leadDoc, _wrapInner, _dhl(), _wrapTrail]))
 						: macro _dc([$leadDoc, _wrapInner, _dhl(), _wrapTrail]);
+					// ω-keep-chain (increment: opbool-expr-paren-keep): an
+					// expression paren whose inner is a kept chain that DID NOT
+					// open with a leading hardline (head glued to the open delim,
+					// only INTERNAL operator gaps broke — the `return !(chain)`
+					// shape) is invisible to the `startsWithHardline` gate below,
+					// so it falls through to the width-driven `_dfle` collapse
+					// (glued head, no `(`-indent, glued `)`). When the source
+					// placed a newline right after the open delim
+					// (`wrapOpenNewlineExpr`) AND the inner already broke
+					// (`flatLength < 0`, the kept chain reproduced its source
+					// `||`/`+` gaps), open the paren condition-style:
+					// `( + Nest(cols, [hardline, inner]) + hardline + )`. The
+					// inner chain own continuation `Nest` is already suppressed
+					// (cols=0) and its `_headBreak` dropped via `_keepChainInParen`
+					// (set at the `ctorOptArg` site), so the PAREN `Nest(cols)`
+					// supplies the +cols indent (head + every `||` continuation at
+					// outer+cols) and the leading `Line` supplies the head break —
+					// mirroring `WrapList.emitCondition` `brkShape` for the
+					// `if (\n cond \n)` keep case. Computed at macro time so the
+					// null-`wrapOpenNewlineExpr` case (plain / no opt-in) is not
+					// spliced; the runtime `flatLength` gate keeps it byte-inert for a
+					// flat (non-broken) paren content and for non-keep configs (where
+					// the inner does not source-break). `_keepFlatInner` (operand of a
+					// kept chain) is excluded by the outer ternary below.
+					final keepOpenGate:Expr = wrapOpenNewlineExpr != null
+						? macro($wrapOpenNewlineExpr
+							&& anyparse.format.wrap.WrapList.flatLength(_wrapInner) < 0)
+						: macro false;
 					return macro {
 						final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space
 							? opt.indentSize : opt.tabWidth;
@@ -1575,6 +1603,24 @@ class WriterLowering {
 								$hardlineOpenShape,
 								_dc([$leadDoc, _wrapInner, _wrapTrail])
 							))
+						// ω-keep-chain (increment: opbool-expr-paren-keep): the kept
+						// chain head glued to `(` (no leading hardline) + only internal
+						// `||`/`+` gaps broke. `startsWithHardline` is false here, so
+						// without this branch the paren falls into the width `_dfle`
+						// collapse. Open condition-style (mirror `emitCondition.brkShape`):
+						// the inner chain already nestSuppressed (cols=0) + headBreak-
+						// dropped, so the PAREN supplies `Nest(cols, [hardline, inner])`
+						// (head + every continuation at outer+cols) and the trailing
+						// hardline puts `)` on its own line. Gated runtime on
+						// `keepOpenGate` (source open-newline + inner broke) → byte-inert
+						// otherwise. Ordered AFTER the `startsWithHardline` branch
+						// (disjoint: that branch owns the inner-LEADS-with-hardline
+						// shape — onePerLine chains, whose own Nest must not be
+						// double-bumped by this branch's `Nest(cols)`); this branch
+						// fires only for a glued-head kept chain where
+						// `startsWithHardline` is false.
+						: $keepOpenGate
+							? _dc([$leadDoc, _dn(_cols, _dc([_dhl(), _wrapInner])), _dhl(), _wrapTrail])
 							: anyparse.format.wrap.WrapList.isPureOpAddSubChain(_wrapInner)
 								? (
 									// ω-expr-paren-in-condition (cond F2): when this expr
@@ -9123,6 +9169,50 @@ class WriterLowering {
 		final appendTrailingCommaExpr:Expr = trailPresentAccess != null && trailingCommaField != null
 			? macro $trailPresentAccess || $knobAccessOrFalse
 			: knobAccessOrFalse;
+		// ω-arraymatrix-keep: matrix-align takes precedence over the Keep
+		// cascade. The non-Keep matrix attempt (`matrixComputeExpr`, in the
+		// no-trivia/cascade branch) is gated `!_keepEmit` and so never fires
+		// under a `"defaultWrap": "keep"` array — a kept matrix lands in the
+		// force-multi path, which preserves the source rows but emits no
+		// column padding. The fork runs `tryMatrixWrap` BEFORE
+		// `applyWrappingPlace` inside `arrayLiteralWrapping`, so matrix grid
+		// layout wins over the array's keep/noWrap rules; this expr mirrors
+		// that for the Keep case. Computed at the outer Star scope (the
+		// no-trivia branch's `_matrixDoc` is unreachable under Keep) and
+		// gated on `_keepEmit` + the same source-multiline-without-hardline
+		// condition the non-Keep path uses (`!_requiresHardline`,
+		// `_hasSourceNewlines`). The matrix detector reads per-element
+		// `newlineBefore` (row boundaries) and the bare rendered cell Docs;
+		// on a uniform grid it returns the aligned/unaligned Doc, else null
+		// → fall through to force-multi. Cells under `!_requiresHardline`
+		// carry no comments (any leading/trailing comment forces a hardline
+		// under Keep, see the predicate split below), so the bare
+		// `$triviaElemCall` render matches the no-trivia branch's `_docs`
+		// exactly. Only meaningful when the Star opted into
+		// `@:fmt(arrayMatrixWrap)` (`matrixWrap` compile-time flag); every
+		// other sep-Star consumer leaves it `macro null` and stays byte-
+		// identical.
+		final keepMatrixComputeExpr:Expr = matrixWrap ? macro {
+			if (_keepEmit && !_requiresHardline && _hasSourceNewlines
+					&& opt.arrayMatrixWrap != anyparse.format.ArrayMatrixWrap.NoMatrixWrap) {
+				final _kdocs:Array<anyparse.core.Doc> = [];
+				final _krow:Array<Bool> = [];
+				var _kmi:Int = 0;
+				while (_kmi < _arr.length) {
+					final _t = _arr[_kmi];
+					_kdocs.push($triviaElemCall);
+					_krow.push(_kmi == 0 || _t.newlineBefore);
+					_kmi++;
+				}
+				final _kmcols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+				anyparse.format.wrap.MatrixWrap.tryLayout(
+					_kdocs, _krow, opt.arrayMatrixWrap,
+					$v{openText}, $v{closeText}, $v{sepText}, $appendTrailingCommaExpr, _kmcols
+				);
+			} else {
+				(null : Null<anyparse.core.Doc>);
+			}
+		} : macro (null : Null<anyparse.core.Doc>);
 		// ω-typedef-anon-force-multi: 15th positional arg to
 		// `WrapList.emit` — a runtime `Null<WrapMode>` predicate. When
 		// the Star opted into `@:fmt(forceMultiInTypedef)` AND the
@@ -9415,7 +9505,18 @@ class WriterLowering {
 					&& _hasSourceNewlines && !_requiresHardline
 					&& !_keepEmit && !_ignoreEmit;
 				final _forceMulti:Bool = _hasTrivia && !_smlKeep;
-				if (_forceMulti) {
+				// ω-arraymatrix-keep: attempt the matrix grid BEFORE the keep
+				// force-multi emit. `_keepMatrixDoc` is non-null only for a
+				// matrix-eligible Star (`matrixWrap`) under Keep with a
+				// uniform source grid; otherwise null → fall through to the
+				// existing force-multi / cascade dispatch byte-identically.
+				// Wrapped in `_dwb(_dbg(...))` like the force-multi path so a
+				// matrix nested inside a force-flat region keeps its indent
+				// and an enclosing Group defers the grid's hardlines.
+				final _keepMatrixDoc:Null<anyparse.core.Doc> = $keepMatrixComputeExpr;
+				if (_keepMatrixDoc != null) {
+					_dwb(_dbg(_keepMatrixDoc));
+				} else if (_forceMulti) {
 					final _inner:Array<anyparse.core.Doc> = [];
 					$initCurrDocCommentExpr;
 					$keepCurlyBeginExpr;

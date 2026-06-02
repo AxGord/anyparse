@@ -25,7 +25,7 @@ import anyparse.format.ArrayMatrixWrap;
  * (fewer than two columns, ragged rows, or any multi-line cell); the
  * caller then falls through to the normal wrap cascade.
  */
-class MatrixWrap {
+final class MatrixWrap {
 
 	/**
 	 * Attempts a grid layout. Returns the grid `Doc` on success or
@@ -108,7 +108,7 @@ class MatrixWrap {
 		final stack:Array<Doc> = [d];
 		while (stack.length > 0) {
 			final node:Doc = stack.pop();
-			switch (node) {
+			switch node {
 				case Empty | Text(_) | OptSpace(_) | OptSpaceSkipAfterHardline:
 				case Line(flat):
 					if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code)
