@@ -419,6 +419,16 @@ class WriterLowering {
 		return isCallTriviaStar
 			? macro {
 				final _segs:Array<anyparse.core.Doc> = [];
+				// ω-keep-chain (increment 9): `_breaks` is parallel to `_segs`
+				// — entry `i` is whether the source had a newline in the gap
+				// before segment `i`'s `.field` lead (the FieldAccess ctor's
+				// captured `chainNewline` synth slot). Built in lockstep with
+				// `_segs.unshift` so a `WrapMode.Keep` method-chain round-trips
+				// the source per-segment dot-boundary line breaks via
+				// `MethodChainEmit.shapeKeep`. Trivia-mode only; Plain keeps the
+				// 2-arg ctor patterns below and threads no `_breaks` (null →
+				// shapeNoWrap, byte-inert).
+				final _breaks:Array<Bool> = [];
 				var _cursor = value;
 				var _receiver = value;
 				var _hasCallPrev:Bool = false;
@@ -426,13 +436,14 @@ class WriterLowering {
 					switch _cursor {
 						case Call(_op, _args, _trailClose, _):
 							switch _op {
-								case FieldAccess(_prev, _fld):
+								case FieldAccess(_prev, _fld, _nl):
 									final _argDocs:Array<anyparse.core.Doc> = $argDocsExpr;
 									final _argsDoc:anyparse.core.Doc = $argsListExpr;
 									final _segDoc:anyparse.core.Doc = _trailClose != null
 										? _dc([_dt('.' + _fld), _argsDoc, trailingCommentDocVerbatim(_trailClose, opt)])
 										: _dc([_dt('.' + _fld), _argsDoc]);
 									_segs.unshift(_segDoc);
+									_breaks.unshift(_nl);
 									switch _prev {
 										case Call(_, _, _, _): _hasCallPrev = true;
 										case _:
@@ -442,7 +453,7 @@ class WriterLowering {
 									_receiver = _cursor;
 									break;
 							}
-						case FieldAccess(_prev, _fld):
+						case FieldAccess(_prev, _fld, _nl):
 							// ω-methodchain-glue-bare-field: a bare `.field`
 							// access that precedes an already-collected segment
 							// (a Call to its right) is NOT its own chain
@@ -456,10 +467,20 @@ class WriterLowering {
 							// for `a().b`); keep current shape. Without this glue
 							// every leading bare FieldAccess over-segments the
 							// chain and inflates the cascade item count.
-							if (_segs.length > 0)
+							//
+							// ω-keep-chain: when the bare field glues onto
+							// `_segs[0]` it becomes that segment's NEW leading
+							// dot, so its source-newline (`_nl`) REPLACES the
+							// existing `_breaks[0]` (the break-before now refers
+							// to the glued lead). When `_segs` is empty the bare
+							// field is its own segment → push its `_nl` parallel.
+							if (_segs.length > 0) {
 								_segs[0] = _dc([_dt('.' + _fld), _segs[0]]);
-							else
+								_breaks[0] = _nl;
+							} else {
 								_segs.unshift(_dt('.' + _fld));
+								_breaks.unshift(_nl);
+							}
 							switch _prev {
 								case Call(_, _, _, _): _hasCallPrev = true;
 								case _:
@@ -472,7 +493,7 @@ class WriterLowering {
 				}
 				if (_segs.length >= 2 && _hasCallPrev) {
 					final _recDoc:anyparse.core.Doc = $writeIdent(_receiver, opt, $precExpr);
-					return anyparse.format.wrap.MethodChainEmit.emit(_recDoc, _segs, opt, $chainRulesExpr);
+					return anyparse.format.wrap.MethodChainEmit.emit(_recDoc, _segs, opt, $chainRulesExpr, _breaks);
 				}
 				$body;
 			}

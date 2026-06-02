@@ -454,7 +454,7 @@ enum HxExpr {
 	@:prefix('...') @:fmt(tight)
 	Spread(operand:HxExpr);
 
-	@:postfix('.') @:fmt(methodChain('methodChainWrap'))
+	@:postfix('.') @:fmt(methodChain('methodChainWrap'), captureChainNewline)
 	FieldAccess(operand:HxExpr, field:HxFieldNameLit);
 
 	@:postfix('?.')

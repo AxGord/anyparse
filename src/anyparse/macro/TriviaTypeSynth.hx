@@ -1642,20 +1642,27 @@ class TriviaTypeSynth {
 	}
 
 	/**
-	 * ω-keep-chain (increment 2) — true when the branch is a binary `@:infix`
-	 * enum ctor carrying `@:fmt(captureChainNewline)` (the Pratt chain ctors
-	 * `HxExpr.Add` / `Sub` / `And` / `Or`). Such ctors grow a positional
-	 * `chainNewline:Bool` arg in the synth pair so the chain `_gather` can
-	 * reproduce the source per-operator line breaks under `WrapMode.Keep`.
-	 * Requires the `@:infix` meta (the parser commit point — the
-	 * `lowerPrattLoop` operator-match site captures the gap newline) and
-	 * exactly two operand children. Disjoint from every sister predicate
-	 * (chain ctors carry no `@:kw` / `@:lead` / `@:trail` / `@:wrap` /
-	 * bodyPolicy). First consumers: `HxExpr.{Add, Sub, And, Or}`.
+	 * ω-keep-chain — true when the branch is a binary chain enum ctor
+	 * carrying `@:fmt(captureChainNewline)`. Two consumer families:
+	 *  - `@:infix` Pratt chain ctors `HxExpr.Add` / `Sub` / `And` / `Or`
+	 *    (increment 2 — the `lowerPrattLoop` operator-match site captures the
+	 *    gap newline before the ctor's RIGHT operand);
+	 *  - `@:postfix('.')` method-chain ctor `HxExpr.FieldAccess` (increment 9
+	 *    — the `lowerPostfixLoop` gap before the `.` dispatch captures the
+	 *    source newline before the `.field` segment).
+	 * Such ctors grow a positional `chainNewline:Bool` arg in the synth pair
+	 * so the chain emit (`BinaryChainEmit` / `MethodChainEmit`) can reproduce
+	 * the source per-boundary line breaks under `WrapMode.Keep`. Requires
+	 * exactly two operand children (`left,right` infix / `operand,field`
+	 * postfix). Disjoint from every sister predicate (chain ctors carry no
+	 * `@:kw` / `@:lead` / `@:trail` / `@:wrap` / bodyPolicy, and the
+	 * `@:postfix('.')` FieldAccess carries no close delimiter so it is NOT a
+	 * postfix-close-trailing branch). Consumers: `HxExpr.{Add, Sub, And, Or,
+	 * FieldAccess}`.
 	 */
 	public static function isAltChainNewlineBranch(branch:ShapeNode):Bool {
 		if (branch.children.length != 2) return false;
-		if (!branch.hasMeta(':infix')) return false;
+		if (!branch.hasMeta(':infix') && !branch.hasMeta(':postfix')) return false;
 		return branch.fmtHasFlag('captureChainNewline');
 	}
 

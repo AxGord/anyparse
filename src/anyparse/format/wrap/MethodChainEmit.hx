@@ -36,7 +36,8 @@ import anyparse.format.WriteOptions;
 class MethodChainEmit {
 
 	public static function emit(
-		receiver:Doc, segments:Array<Doc>, opt:WriteOptions, rules:WrapRules
+		receiver:Doc, segments:Array<Doc>, opt:WriteOptions, rules:WrapRules,
+		?sourceBreakBefore:Array<Bool>
 	):Doc {
 		if (segments.length == 0) return WrapBoundary(receiver);
 
@@ -96,7 +97,7 @@ class MethodChainEmit {
 		}
 
 		function shapeAt(mode:WrapMode):Doc {
-			return shape(mode, receiver, segments, cols);
+			return shape(mode, receiver, segments, cols, sourceBreakBefore);
 		}
 
 		// Normal path: cascade evaluated against (exceeds=false /
@@ -193,18 +194,26 @@ class MethodChainEmit {
 	}
 
 	private static function shape(
-		mode:WrapMode, receiver:Doc, segments:Array<Doc>, cols:Int
+		mode:WrapMode, receiver:Doc, segments:Array<Doc>, cols:Int,
+		?sourceBreakBefore:Array<Bool>
 	):Doc {
 		return switch mode {
 			case NoWrap: shapeNoWrap(receiver, segments);
 			case OnePerLine: shapeOnePerLine(receiver, segments, cols);
 			case OnePerLineAfterFirst: shapeOnePerLineAfterFirst(receiver, segments, cols);
-			// ω-keep-objectlit: JSON `"defaultWrap": "keep"` on method-chain
-			// configs (methodChain.defaultWrap = "keep" in
-			// `wrapping_method_chain_keep.hxtest`) routed to shapeNoWrap.
-			// Preserves pre-recognition baseline byte-identically — real
-			// per-segment chain-Keep semantics is a follow-up slice.
-			case Keep: shapeNoWrap(receiver, segments);
+			// ω-keep-chain (increment 9): JSON `"defaultWrap": "keep"` on
+			// method-chain configs (`methodChain.defaultWrap = "keep"`)
+			// reproduces the source's per-segment dot-boundary line breaks
+			// verbatim — break before segment `i` iff the parser captured a
+			// source newline in that `.field`'s leading gap
+			// (`sourceBreakBefore[i]`), else glue the segment inline. The
+			// signal is the per-FieldAccess-ctor `chainNewline` synth slot
+			// captured at parse time in `lowerPostfixLoop` (mirror of the
+			// Pratt-operand `captureChainNewline` channel and fork's
+			// `markMethodChaining` + per-Dot `isOriginalNewlineBefore`). When
+			// the signal is absent (null — plain mode / non-capturing ctor)
+			// `shapeKeep` degrades to `shapeNoWrap` → byte-inert.
+			case Keep: shapeKeep(receiver, segments, cols, sourceBreakBefore);
 			// ω-cascade-emits-comments: Ignore sister to Keep — defensive
 			// fallback on engine leakage.
 			case Ignore: shapeNoWrap(receiver, segments);
@@ -238,6 +247,38 @@ class MethodChainEmit {
 			tail.push(segments[i]);
 		}
 		return Concat([receiver, segments[0], Nest(cols, Concat(tail))]);
+	}
+
+	/**
+	 * `WrapMode.Keep` shaper — reproduces the source's per-segment dot-
+	 * boundary line breaks. `sourceBreakBefore` is parallel to `segments`:
+	 * entry `i` is true when the parser captured a source newline in the
+	 * gap before segment `i`'s `.field` lead. When true the segment breaks
+	 * onto its own line at the chain's one-tab `Nest(cols)` indent; when
+	 * false the segment glues inline onto the running line (mirror fork's
+	 * `markMethodChaining` keep semantics — break at a Dot iff that Dot was
+	 * `isOriginalNewlineBefore`).
+	 *
+	 * The receiver and the leading run of glued segments stay at the call-
+	 * site column; only broken segments (and any further segments after
+	 * them) land at `base + cols`. The whole segment tail is nested so a
+	 * broken gap's continuation line indents one tab deeper, while glued
+	 * gaps keep the segments on the same rendered line (mirror
+	 * `shapeOnePerLineAfterFirst`'s `Nest` placement).
+	 *
+	 * When `sourceBreakBefore` is null (plain mode / non-capturing ctor) or
+	 * every entry is false, the output is byte-identical to `shapeNoWrap` —
+	 * inert for the non-keep method-chain hot path.
+	 */
+	private static function shapeKeep(receiver:Doc, segments:Array<Doc>, cols:Int, ?sourceBreakBefore:Array<Bool>):Doc {
+		final breaks:Array<Bool> = sourceBreakBefore ?? [];
+		final tail:Array<Doc> = [];
+		for (i in 0...segments.length) {
+			if (i < breaks.length && breaks[i])
+				tail.push(Line('\n'));
+			tail.push(segments[i]);
+		}
+		return Concat([receiver, Nest(cols, Concat(tail))]);
 	}
 
 	private static function shapeOnePerLine(receiver:Doc, segments:Array<Doc>, cols:Int):Doc {

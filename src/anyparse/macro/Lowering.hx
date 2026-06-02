@@ -1065,13 +1065,39 @@ class Lowering {
 					pos: Context.currentPos(),
 				};
 				final suffixCT:ComplexType = ruleReturnCT(suffixRef);
-				final ctorCall:Expr = {expr: ECall(ctorRef, [macro left, macro _suffix]), pos: Context.currentPos()};
+				// ω-keep-chain (increment 9): a `@:postfix('.')` ctor carrying
+				// `@:fmt(captureChainNewline)` (`HxExpr.FieldAccess`) grows a 3rd
+				// positional `chainNewline:Bool` synth arg in Trivia mode holding
+				// whether the source had a newline in the gap BEFORE the `.`
+				// dispatch. `_preWsPos` (the trivia while-loop's pre-skipWs save)
+				// to `ctx.pos` (just past the matched `.`) spans exactly the
+				// dot-leading gap; the `.` is a single non-newline char so the
+				// scan is equivalent to the gap before it. The writer's chain
+				// dispatch reads it into a `_breaks` array parallel to `_segs`
+				// and threads it to `MethodChainEmit.emit(..., sourceBreakBefore)`
+				// so a `WrapMode.Keep` method-chain round-trips the source per-
+				// segment dot-boundary line breaks. Plain mode keeps the original
+				// 2-arg ctor arity (no slot; chain always glues via shapeNoWrap).
+				final captureChainNl:Bool = ctx.trivia && branch.fmtHasFlag('captureChainNewline');
+				final ctorCall:Expr = {
+					expr: ECall(ctorRef, captureChainNl
+						? [macro left, macro _suffix, macro _chainNl]
+						: [macro left, macro _suffix]),
+					pos: Context.currentPos(),
+				};
 				if (close == null) {
-					macro {
-						skipWs(ctx);
-						final _suffix:$suffixCT = $suffixCall;
-						left = $ctorCall;
-					};
+					captureChainNl
+						? macro {
+							final _chainNl:Bool = hasNewlineIn(ctx.input, _preWsPos, ctx.pos);
+							skipWs(ctx);
+							final _suffix:$suffixCT = $suffixCall;
+							left = $ctorCall;
+						}
+						: macro {
+							skipWs(ctx);
+							final _suffix:$suffixCT = $suffixCall;
+							left = $ctorCall;
+						};
 				} else {
 					macro {
 						skipWs(ctx);
