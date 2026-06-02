@@ -761,6 +761,7 @@ final class HaxeFormat implements TextFormat {
 		implementsExtendsWrap: HaxeFormat.defaultImplementsExtendsWrap(),
 		arrayMatrixWrap: ArrayMatrixWrap.MatrixWrapWithAlign,
 		addLineCommentSpace: true,
+		compressSuccessiveParenthesis: true,
 		expressionTry: SameLinePolicy.Same,
 		indentCaseLabels: true,
 		indentObjectLiteral: true,

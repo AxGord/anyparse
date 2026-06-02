@@ -108,6 +108,7 @@ final class JsonFormat implements TextFormat {
 		commentStyle: Verbatim,
 		arrayMatrixWrap: ArrayMatrixWrap.NoMatrixWrap,
 		addLineCommentSpace: true,
+		compressSuccessiveParenthesis: true,
 	};
 
 	private function new() {}

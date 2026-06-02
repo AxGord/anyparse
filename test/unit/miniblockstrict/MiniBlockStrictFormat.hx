@@ -60,6 +60,7 @@ final class MiniBlockStrictFormat {
 		commentStyle: Verbatim,
 		arrayMatrixWrap: ArrayMatrixWrap.NoMatrixWrap,
 		addLineCommentSpace: true,
+		compressSuccessiveParenthesis: true,
 	};
 
 	private function new() {}

@@ -1805,12 +1805,38 @@ class WriterLowering {
 		// to the tight `bar1(x)`. Empty `()` short-circuits before padding in
 		// every emit path (`items.length == 0` guard).
 		final callInsideFlag:Bool = branch.fmtHasFlag('callParensInside');
-		final callInsideOpen:Expr = callInsideFlag
+		var callInsideOpen:Expr = callInsideFlag
 			? policyInsideSpace('callParensInsideOpen', false)
 			: macro _de();
 		final callInsideClose:Expr = callInsideFlag
 			? policyInsideSpace('callParensInsideClose', true)
 			: macro _de();
+		// ω-compress-successive-paren: mirror fork's
+		// `whitespace.compressSuccessiveParenthesis` for a paren-call open
+		// `(` immediately followed by an object-literal `{` argument. The
+		// fork's `successiveParenthesis` keeps the brace's `Before` policy
+		// space (`( {`) when the knob is `false`, and removes it (`({`) when
+		// `true`. In anyparse the inter-bracket pad lives in the WrapList /
+		// fillList / sepList `openInside` slot — so when the open delim is a
+		// `(` (compile-time `postfixOp == '('`) we make `openInside` a
+		// runtime-conditional space: emit `_dt(' ')` iff
+		// `!opt.compressSuccessiveParenthesis` AND the first call argument
+		// renders as an object literal (its enum ctor is `ObjectLit`). Only
+		// the first arg can sit directly after `(` (later args are preceded
+		// by `, `), so the check is on `_args[0]`. Default `true` keeps the
+		// glued `TPath({…})` layout byte-identical. `_args` is in scope where
+		// this Expr is spliced (the emit call sits inside the
+		// `final _args = $argsAccess; …` body). Trivia mode wraps each elem in
+		// `Trivial<T>` (`.node` holds the paired enum); plain mode is the raw
+		// enum — mirror `elemRead`'s `isTriviaStar` branch.
+		if (postfixOp == '(') {
+			final firstArgNode:Expr = isTriviaStar ? macro _args[0].node : macro _args[0];
+			final firstArgObjLit:Expr = macro _args.length > 0
+				&& Type.enumConstructor(cast $firstArgNode) == 'ObjectLit';
+			callInsideOpen = macro !opt.compressSuccessiveParenthesis && $firstArgObjLit
+				? _dt(' ')
+				: $callInsideOpen;
+		}
 		// ω-fill-primitive: `@:fmt(fill)` routes the args list through the
 		// Fill helper so items pack inline as long as each fits in the
 		// remaining budget; on overflow the separator before the offending
@@ -9105,6 +9131,29 @@ class WriterLowering {
 					macro $rulesAccess.defaultMode == anyparse.format.wrap.WrapMode.Ignore;
 				}
 				: macro false);
+		// ω-nowrap-flat: pure-`noWrap` runtime check, sister to
+		// `keepCheckExpr` / `ignoreCheckExpr`. Fires only when the
+		// wrap-rules JSON config selects `"defaultWrap": "noWrap"` with an
+		// EMPTY rule cascade (`{rules: [], defaultMode: NoWrap}` — the shape
+		// the loader builds for a user `arrayWrap.defaultWrap: noWrap` block,
+		// see `Loader.wrapRulesFromConfig`). This is the fork's `noWrap()`
+		// policy (`MarkWrappingBase.noWrap` → `noWrappingBetween`): every
+		// element cuddles flat, and the ONLY break is the unsuppressible
+		// `lineEndAfter` a `//` line-comment forces. Distinct from the
+		// built-in `defaultArrayLiteralWrap` cascade (non-empty `rules`), so
+		// the gate stays false for the default config → byte-inert there.
+		// Used to (a) defeat the `reflowSourceMultiline` floor so a
+		// source-multiline list collapses fully flat under explicit noWrap,
+		// and (b) swap the force-multi per-element hardline for a space
+		// (break only after a line-comment) when a mid-list `//` forced the
+		// list into the trivia branch.
+		final noWrapFlatCheckExpr:Expr = wrapRulesField != null
+			? {
+				final rulesAccess:Expr = optFieldAccess(wrapRulesField);
+				macro $rulesAccess.defaultMode == anyparse.format.wrap.WrapMode.NoWrap
+					&& $rulesAccess.rules.length == 0;
+			}
+			: macro false;
 		// ω-objectlit-leftCurly-cascade: when the call site delegates
 		// leftCurly emission to this helper (knob-form leftCurly + wrap-
 		// rules), build runtime accessors for the knob value that:
@@ -9501,6 +9550,20 @@ class WriterLowering {
 				// this same `_keepEmit` for the source-`newlineBefore` dispatch.
 				final _keepEmit:Bool = $keepCheckExpr;
 				final _ignoreEmit:Bool = $ignoreCheckExpr && !_keepEmit;
+				// ω-nowrap-flat: pure-`noWrap` config (empty cascade) — yields
+				// to Keep/Ignore (mutually exclusive `defaultMode`s, so this
+				// only ever flips for an actual NoWrap config). Scoped to the
+				// ARRAY-LITERAL Star via the `reflowSourceMultiline` compile
+				// flag (the only Star carrying it). The fork flattens noWrap
+				// arrays (`arrayLiteralWrapping` → `applyWrappingPlace`) but
+				// does NOT flatten a source-multiline OBJECT literal under
+				// noWrap — `objectLiteralWrapping` force-one-per-lines any
+				// `!isOriginalSameLine` body BEFORE consulting the rule. Object
+				// literals (no `reflowSourceMultiline`) therefore keep their
+				// legacy source-multiline force-multi shape. Drives the fork's
+				// `noWrap()` flat-with-comment-break layout below.
+				final _noWrapFlat:Bool = $v{reflowSourceMultiline}
+					&& $noWrapFlatCheckExpr && !_keepEmit && !_ignoreEmit;
 				// ω-arraymatrix-wrap: `NoMatrixWrap` ignores the source grid
 				// entirely — like the `Ignore` policy it DROPS source newlines
 				// so the cascade (not the force-multi path) drives layout: a
@@ -9512,6 +9575,24 @@ class WriterLowering {
 				var _requiresHardline:Bool = _trailLC.length > 0 || _trailOpen != null;
 				var _hasSourceNewlines:Bool = false;
 				var _hasInlineableTrivia:Bool = false;
+				// ω-nowrap-flat: the noWrap-flatten path applies only to a plain
+				// element list. Two kinds of item make a list NON-flattenable,
+				// mirroring the fork (`MarkWrapping.arrayLiteralWrapping`):
+				//  - a `for`/`while` ARRAY-COMPREHENSION item: the fork returns
+				//    early from `arrayLiteralWrapping` when the first item is
+				//    `Kwd(KwdFor)`/`Kwd(KwdWhile)` under `comprehensionFor: keep`,
+				//    leaving the comprehension's layout to the sameLine/forBody
+				//    policy — so the noWrap arrayWrap rule never touches it.
+				//  - an item that renders with its own forced hardline (block
+				//    body, etc.): cannot be cuddled flat (the inner construct
+				//    keeps its mandatory breaks). Probed via
+				//    `WrapList.flatLength(item) < 0`, the same "has forced
+				//    hardline" signal the cascade's `HasMultilineItems` uses.
+				// Both flow into `_anyMultilineItem`, which gates the flatten
+				// off → such lists keep the legacy `_smlKeep`/force-multi shape.
+				// Only computed under `_noWrapFlat` (every other path leaves it
+				// false → no extra per-element render / reflection).
+				var _anyMultilineItem:Bool = false;
 				var _ti:Int = 0;
 				while (_ti < _arr.length) {
 					final _t = _arr[_ti];
@@ -9529,9 +9610,45 @@ class WriterLowering {
 					}
 					if (_t.newlineBefore && !_ignoreEmit && !_matrixOff)
 						_hasSourceNewlines = true;
+					if (_noWrapFlat) {
+						// `Type.enumConstructor` returns null for a non-enum
+						// payload (e.g. an object-literal field struct) — the
+						// `==` comparisons then simply miss. Typed `Null<String>`
+						// so the null path is explicit.
+						final _itemCtor:Null<String> = Type.enumConstructor(cast _t.node);
+						if (_itemCtor == 'ForExpr' || _itemCtor == 'WhileExpr'
+								|| anyparse.format.wrap.WrapList.flatLength($triviaElemCall) < 0)
+							_anyMultilineItem = true;
+					}
 					_ti++;
 				}
 				final _hasTrivia:Bool = _requiresHardline || _hasSourceNewlines;
+				// ω-nowrap-flat: matrix grid wins over noWrap-flatten, mirroring
+				// the fork (`arrayLiteralWrapping` calls `tryMatrixWrap` BEFORE
+				// `applyWrappingPlace`). Probe whether the source rows form a
+				// uniform grid; if so, leave `_noWrapFlatten` off so the array
+				// flows to the existing `_smlKeep` / no-trivia matrix path
+				// (column-aligned grid). Only computed for a matrix-eligible
+				// Star (`matrixWrap`) under noWrap with no comment/blank
+				// hardline; every other path leaves it false.
+				final _matrixSucceeds:Bool = if ($v{matrixWrap} && _noWrapFlat && !_anyMultilineItem
+						&& !_requiresHardline
+						&& opt.arrayMatrixWrap != anyparse.format.ArrayMatrixWrap.NoMatrixWrap) {
+					final _pdocs:Array<anyparse.core.Doc> = [];
+					final _prow:Array<Bool> = [];
+					var _pi:Int = 0;
+					while (_pi < _arr.length) {
+						final _t = _arr[_pi];
+						_pdocs.push($triviaElemCall);
+						_prow.push(_pi == 0 || _t.newlineBefore);
+						_pi++;
+					}
+					final _pcols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+					anyparse.format.wrap.MatrixWrap.tryLayout(
+						_pdocs, _prow, opt.arrayMatrixWrap,
+						$v{openText}, $v{closeText}, $v{sepText}, $appendTrailingCommaExpr, _pcols
+					) != null;
+				} else false;
 				// ω-keep-relax-gate: Keep emit gate. Fires whenever the
 				// wrap-rules runtime mode is Keep — comments and blanks no
 				// longer block Keep semantics. The force-multi loop below
@@ -9560,10 +9677,31 @@ class WriterLowering {
 				// Under `NoMatrixWrap` (`_matrixOff`) `_hasSourceNewlines` was
 				// already forced false above, so `_smlKeep` collapses here and
 				// the cascade drives layout — no extra gate needed.
+				// ω-nowrap-flat: under an explicit pure-`noWrap` array config a
+				// source-multiline list whose items carry NO intrinsic hardline
+				// (`_anyMultilineItem`: a `for`/`while` comprehension or a
+				// hardline-bearing item) AND that is not a uniform matrix grid
+				// (`_matrixSucceeds`) must collapse to the fork's `noWrap()` flat
+				// shape — every element cuddled, the close glued, and the only
+				// break the one a `//` line-comment forces. Both the comment
+				// case (`_requiresHardline` via a line-comment) and the plain
+				// case route through the FORCE-MULTI per-element loop below: its
+				// `_noWrapFlatten` branch
+				// lays the list out flat AND preserves the source trailing comma
+				// (`appendTrailingCommaExpr`) — which the no-trivia cascade's
+				// `shapeNoWrap` would have dropped. A comprehension / multi-line
+				// item or a matrix-grid array keeps the legacy `_smlKeep` reflow
+				// (its layout is owned by another path).
+				final _noWrapFlatten:Bool = _noWrapFlat && !_anyMultilineItem && !_matrixSucceeds;
+				// ω-nowrap-flat: `_smlKeep` reflow stays ON for a comprehension /
+				// multi-line-item / matrix noWrap array — those keep their HEAD
+				// source-multiline shape. It is disabled ONLY when the array
+				// actually flattens (`_noWrapFlatten`), so the flatten routes
+				// through the force-multi flat loop below instead of reflow.
 				final _smlKeep:Bool = $v{reflowSourceMultiline}
 					&& _hasSourceNewlines && !_requiresHardline
-					&& !_keepEmit && !_ignoreEmit;
-				final _forceMulti:Bool = _hasTrivia && !_smlKeep;
+					&& !_keepEmit && !_ignoreEmit && !_noWrapFlatten;
+				final _forceMulti:Bool = (_hasTrivia && !_smlKeep) || _noWrapFlatten;
 				// ω-arraymatrix-keep: attempt the matrix grid BEFORE the keep
 				// force-multi emit. `_keepMatrixDoc` is non-null only for a
 				// matrix-eligible Star (`matrixWrap`) under Keep with a
@@ -9596,6 +9734,23 @@ class WriterLowering {
 									_inner.push(_dt(' '));
 							} else if (_t.newlineBefore) {
 								_inner.push(_dhl());
+							}
+						} else if (_noWrapFlatten) {
+							// ω-nowrap-flat: cuddle every element flat (space sep),
+							// mirroring the fork's `noWrap()` line-end suppression.
+							// The ONLY break is the unsuppressible newline a `//`
+							// line-comment forces — emit it on the element that
+							// FOLLOWS a line-comment-bearing element (the comment
+							// ends its own source line). First element glues to the
+							// open delimiter (no leading break). A list with a
+							// multi-line item falls through to the legacy `_dhl()`
+							// one-per-line shape (its items cannot be cuddled).
+							if (_si > 0) {
+								final _prevTc:Null<String> = _arr[_si - 1].trailingComment;
+								if (_prevTc != null && !StringTools.startsWith(_prevTc, '/*'))
+									_inner.push(_dhl());
+								else
+									_inner.push(_dt(' '));
 							}
 						} else {
 							_inner.push(_dhl());
@@ -9655,7 +9810,12 @@ class WriterLowering {
 					_parts.push(_dt($v{openText}));
 					if (_trailOpen != null) _parts.push(trailingCommentDocVerbatim(_trailOpen, opt));
 					_parts.push(_innerWrap);
-					_parts.push($triviaTrailDocKeepAware);
+					// ω-nowrap-flat: glue the close delimiter to the last
+					// element (`0]`) — the fork's `noWrap()` calls
+					// `noLineEndBefore(close)`. Only when the list actually
+					// cuddled flat (`_noWrapFlatten`); otherwise keep the legacy
+					// own-line close (`triviaTrailDocKeepAware`).
+					_parts.push(_noWrapFlatten ? _de() : $triviaTrailDocKeepAware);
 					_parts.push(_dt($v{closeText}));
 					if (_trailClose != null)
 						_parts.push(trailingCommentDocVerbatim(_trailClose, opt));

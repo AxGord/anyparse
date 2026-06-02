@@ -126,6 +126,16 @@ package anyparse.grammar.haxe.format;
  *    `sourceText:String` arg on `HxStringSegmentT.Block`, populated
  *    by Lowering Case 3 when the grammar ctor carries
  *    `@:fmt(captureSource)`.
+ *
+ * Extended in slice ω-compress-successive-paren:
+ *  - `compressSuccessiveParenthesis` feeds
+ *    `opt.compressSuccessiveParenthesis`. Bool — when `true`
+ *    (haxe-formatter default) a call-arg open `(` glues tight to a
+ *    following object-literal `{` argument (`TPath({…})`); when `false`
+ *    a leading space is kept (`TPath( {…})`), mirroring the fork's
+ *    `successiveParenthesis` policy that removes the brace's `Before`
+ *    spacing only under compression. Consumed by the `HxExpr.Call`
+ *    paren-open Star in `WriterLowering.lowerPostfixStar`.
  */
 @:peg typedef HxFormatWhitespaceSection = {
 
@@ -158,6 +168,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var tryPolicy:HxFormatWhitespacePolicy;
 
 	@:optional var addLineCommentSpace:Bool;
+
+	@:optional var compressSuccessiveParenthesis:Bool;
 
 	@:optional var formatStringInterpolation:Bool;
 

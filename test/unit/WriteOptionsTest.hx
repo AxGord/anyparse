@@ -43,6 +43,7 @@ class WriteOptionsTest extends Test {
 			commentStyle: Verbatim,
 			arrayMatrixWrap: ArrayMatrixWrap.NoMatrixWrap,
 			addLineCommentSpace: true,
+			compressSuccessiveParenthesis: true,
 		};
 		final out:String = JValueWriter.write(ast, opts);
 		Assert.equals(JValueWriter.write(ast), out);

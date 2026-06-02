@@ -93,6 +93,22 @@ typedef WriteOptions = {
 	addLineCommentSpace:Bool,
 
 	/**
+	 * When `true` (default), whitespace between two successive opening
+	 * brackets is compressed away: a call-arg open `(` immediately
+	 * followed by a bracket-opening argument (`{` object literal) glues
+	 * tight — `TPath({…})`. When `false`, the inner bracket keeps its
+	 * own natural opening spacing, so an object-literal first argument
+	 * renders `TPath( {…})` with a leading space. Mirrors haxe-formatter's
+	 * `whitespace.compressSuccessiveParenthesis` (fork default `true`):
+	 * the fork removes the brace's `Before` policy when its predecessor
+	 * is an open `(`; this knob `false` preserves it. Default `true`
+	 * keeps every corpus case byte-identical to the pre-knob glued
+	 * layout. Format-neutral so any paren-call grammar can reuse it,
+	 * though only the Haxe writer currently emits the space.
+	 */
+	compressSuccessiveParenthesis:Bool,
+
+	/**
 	 * Layout policy for matrix-shaped array literals (an array literal
 	 * whose source rows each carry the same number of elements). When the
 	 * writer detects such a grid it preserves the row structure — and,

@@ -343,6 +343,12 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
  *   `// foo`; decoration runs (`//*****`, `//------`, `////`) survive
  *   tight via the `^[/\*\-\s]+` guard. `false` skips the space-insert
  *   pass (still rtrims the body). Routed to `opt.addLineCommentSpace`.
+ * - `whitespace.compressSuccessiveParenthesis`
+ *   (ω-compress-successive-paren): boolean — `true` (default) glues a
+ *   call-arg open `(` tight to a following object-literal `{` argument
+ *   (`TPath({…})`); `false` keeps a leading space (`TPath( {…})`).
+ *   Routed to `opt.compressSuccessiveParenthesis`. Consumed by the
+ *   `HxExpr.Call` paren-open Star in `WriterLowering.lowerPostfixStar`.
  * - `whitespace.formatStringInterpolation` (ω-string-interp-noformat):
  *   boolean — `true` (default) re-renders each `${expr}` segment of a
  *   single-quoted Haxe string by recursing into the parsed `HxExpr`
@@ -639,6 +645,7 @@ final class HaxeFormatConfigLoader {
 			implementsExtendsWrap: base.implementsExtendsWrap,
 			arrayMatrixWrap: base.arrayMatrixWrap,
 			addLineCommentSpace: base.addLineCommentSpace,
+			compressSuccessiveParenthesis: base.compressSuccessiveParenthesis,
 			expressionTry: base.expressionTry,
 			indentCaseLabels: base.indentCaseLabels,
 			indentObjectLiteral: base.indentObjectLiteral,
@@ -1261,6 +1268,8 @@ final class HaxeFormatConfigLoader {
 			opt.tryPolicy = whitespaceToRuntime(section.tryPolicy);
 		if (section.addLineCommentSpace != null)
 			opt.addLineCommentSpace = section.addLineCommentSpace;
+		if (section.compressSuccessiveParenthesis != null)
+			opt.compressSuccessiveParenthesis = section.compressSuccessiveParenthesis;
 		if (section.formatStringInterpolation != null)
 			opt.formatStringInterpolation = section.formatStringInterpolation;
 		final paren:Null<HxFormatParenConfigSection> = section.parenConfig;
