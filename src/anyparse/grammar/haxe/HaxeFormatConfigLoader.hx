@@ -691,6 +691,7 @@ final class HaxeFormatConfigLoader {
 			betweenImportsPathDiffers: base.betweenImportsPathDiffers,
 			betweenImportsTailLeafClassify: base.betweenImportsTailLeafClassify,
 			betweenImportsHeadLeafClassify: base.betweenImportsHeadLeafClassify,
+			elementIsConditional: base.elementIsConditional,
 		};
 		if (cfg.indentation != null) applyIndentation(cfg.indentation, result);
 		if (cfg.wrapping != null) applyWrapping(cfg.wrapping, result);

@@ -267,4 +267,15 @@ typedef WriteOptions = {
 	?betweenImportsTailLeafClassify:Null<Dynamic -> Null<{ctorName:String, path:String}>>,
 	?betweenImportsHeadLeafClassify:Null<Dynamic -> Null<{ctorName:String, path:String}>>,
 	?arrayBracketKind:Null<Dynamic -> Int>,
+	/**
+	 * `elementIsConditional(elementNode) → Bool` — true iff a cond-comp
+	 * body / elseBody Star element is itself a nested preprocessor
+	 * `Conditional`. Drives the `alignedNestedIncrease` indent rule:
+	 * under that policy the engine wraps a nested-conditional element
+	 * (markers + body) one indent step deeper than the surrounding
+	 * region, accumulating per conditional depth (top-level → no shift).
+	 * Null (every non-opt-in format) → the engine never wraps, byte-
+	 * identical to the pre-policy layout.
+	 */
+	?elementIsConditional:Null<Dynamic -> Bool>,
 };

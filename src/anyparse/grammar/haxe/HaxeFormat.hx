@@ -807,6 +807,7 @@ final class HaxeFormat implements TextFormat {
 		betweenImportsPathDiffers: HxBetweenImportsLevel.pathDiffers,
 		betweenImportsTailLeafClassify: HxExprUtil.tailLeafClassifyImports,
 		betweenImportsHeadLeafClassify: HxExprUtil.headLeafClassifyImports,
+		elementIsConditional: HxExprUtil.elementIsConditional,
 	};
 
 	private function new() {}

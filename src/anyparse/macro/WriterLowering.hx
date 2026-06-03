@@ -11028,6 +11028,21 @@ class WriterLowering {
 			? macro (opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedIncrease
 				|| opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedDecrease)
 			: macro false;
+		// ω-cond-indent-policy AlignedNestedIncrease: distinct from the
+		// `condIncreaseGateExpr` body-nest above. Here the body assembly
+		// stays byte-identical to the default `Aligned` layout (the gate
+		// above is FALSE for AlignedNestedIncrease), and instead each body
+		// element that is ITSELF a nested `Conditional` is wrapped — markers
+		// AND guarded body together, plus its leading inter-element
+		// separator — one indent step deeper at the per-element splice site
+		// below. Recursion through each nested conditional's own body Star
+		// accumulates the shift per conditional depth, mirroring fork's
+		// `Indenter.calcConsecutiveConditionalLevel`. Only the cond-comp
+		// body Stars carry `condBodyIndent`, so every other tryparse Star
+		// consumer keeps the gate false → byte-identical.
+		final condNestedIncreaseGateExpr:Expr = condBodyIndent
+			? macro (opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedNestedIncrease)
+			: macro false;
 		final lastTrailTerminatorEmit:Expr = macro {};
 		// ω-metadata-line-end-function: runtime `_metaPolicy:Int` read from
 		// `opt.<metaLineEndOptField>` (default 0 = None when the flag is
@@ -11068,11 +11083,23 @@ class WriterLowering {
 		// `endsWithStmtTerminator` arm stays as a safety net for raw /
 		// programmatic AST inputs whose `Trivial<T>` defaults leave
 		// `sepAfter=false` even when the source shape demands a sep.
+		// ω-cond-indent-policy / nested-conditional-no-semi: a prior element
+		// that is itself a preprocessor `Conditional` (`#if … #end`) closes
+		// on `#end`, which `endsWithStmtTerminator` (a `}`/`;` right-spine
+		// byte check) cannot see — so the between-element `;` was injected
+		// after a nested conditional's `#end` (e.g. `#if x return a(); #end;
+		// a();`). Suppress it via the same plugin-supplied
+		// `opt.elementIsConditional` adapter: a `#end`-closed region needs no
+		// statement separator. Source-driven `sepAfter` still wins (an author
+		// who wrote a redundant `;` keeps it). Adapter-null formats fall back
+		// to the pre-existing byte-shape gate unchanged.
 		final tryparseBlockEndedSepEmit:Expr = (sepText != null && blockEnded)
 			? macro {
 				if (_si > 0 && _priorElemDoc != null
 						&& (_arr[_si - 1].sepAfter
-							|| !anyparse.core.DocMeasure.endsWithStmtTerminator(_priorElemDoc))) {
+							|| (!anyparse.core.DocMeasure.endsWithStmtTerminator(_priorElemDoc)
+								&& !(opt.elementIsConditional != null
+									&& opt.elementIsConditional(_arr[_si - 1].node))))) {
 					_docs.push(_dt($v{sepText}));
 				}
 			}
@@ -11246,6 +11273,13 @@ class WriterLowering {
 				// lands at the surrounding statement indent; the body content
 				// inside `_docs` is wrapped in `_dn(_cols, …)` at assembly.
 				final _condIncrease:Bool = $condIncreaseGateExpr;
+				// ω-cond-indent-policy AlignedNestedIncrease: per-element gate.
+				// True only on the cond-comp body Stars under that policy; each
+				// element that is a nested `Conditional` (recognised via the
+				// plugin-supplied `opt.elementIsConditional` adapter) is wrapped
+				// `+1` at the splice below. Adapter null (non-opt-in formats)
+				// ⇒ no wrap.
+				final _condNestedIncrease:Bool = $condNestedIncreaseGateExpr;
 				var _condTrailPad:Null<anyparse.core.Doc> = null;
 				$cascadeInitPrev;
 				$cascadeHeadEmit;
@@ -11259,6 +11293,12 @@ class WriterLowering {
 				var _si:Int = 0;
 				while (_si < _arr.length) {
 					final _t = _arr[_si];
+					// ω-cond-indent-policy AlignedNestedIncrease: remember where
+					// THIS element's docs begin (its leading inter-element
+					// separator + the element body) so the splice at loop tail
+					// can wrap the whole span `+1` when the element is a nested
+					// conditional. Captured before any separator push.
+					final _condNestLen:Int = _docs.length;
 					$cascadeInitCurr;
 					$cascadeCurrCompute;
 					$tryparseBlockEndedSepEmit;
@@ -11355,6 +11395,23 @@ class WriterLowering {
 					final _elem:anyparse.core.Doc = $triviaElemCall;
 					final _tc:Null<String> = _t.trailingComment;
 					_docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDocVerbatim(_tc, opt)) : _elem);
+					// ω-cond-indent-policy AlignedNestedIncrease: if this body
+					// element is itself a nested `Conditional`, lift its whole
+					// span (leading separator + markers + guarded body, captured
+					// from `_condNestLen`) into a `_dn(_cols, …)` so the
+					// `#if`/`#elseif`/`#else`/`#end` markers AND body render one
+					// indent step deeper than the surrounding region. The leading
+					// separator is inside the span so the `#if` marker line (which
+					// renders at the PRECEDING hardline's indent) also shifts.
+					// Recursion through the nested conditional's own body Star
+					// accumulates the shift per depth. Adapter-null formats and
+					// non-conditional elements leave `_docs` untouched (byte-
+					// identical).
+					if (_condNestedIncrease && opt.elementIsConditional != null
+							&& opt.elementIsConditional(_t.node) && _docs.length > _condNestLen) {
+						final _condNestSpan:Array<anyparse.core.Doc> = _docs.splice(_condNestLen, _docs.length - _condNestLen);
+						_docs.push(_dn(_cols, _dc(_condNestSpan)));
+					}
 					_priorElemDoc = _elem;
 					$cascadeTrackPrev;
 					_si++;

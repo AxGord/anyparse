@@ -92,6 +92,41 @@ final class HxExprUtil {
 	}
 
 	/**
+	 * True iff a `#if … #end` body / elseBody Star element is itself a
+	 * nested preprocessor `Conditional`. Drives the writer-side
+	 * `alignedNestedIncrease` indent rule: the engine wraps a nested
+	 * conditional element (its `#if`/`#elseif`/`#else`/`#end` markers AND
+	 * guarded body) one indent level deeper than the surrounding region,
+	 * accumulating per conditional depth. Mirrors haxe-formatter's
+	 * `Indenter.calcConsecutiveConditionalLevel` (`AlignedNestedIncrease`
+	 * adds `+consecutive-#if-depth` to the whole region) — a top-level
+	 * conditional (depth 0) gets no shift; only conditionals enclosed in
+	 * another conditional's body increase.
+	 *
+	 * The element shape differs per Star: `HxConditionalDecl.body`
+	 * elements are `HxTopLevelDeclT` structs whose `.decl` field holds
+	 * the `HxDecl`/`HxDeclT` enum (the `Conditional` ctor lives there);
+	 * `HxConditionalStmt.body` elements are the `HxStatement`/`HxStatementT`
+	 * enum directly. `raw` is the already-unwrapped `Trivial<T>.node`
+	 * payload, so this handles both: a bare enum → match its ctor;
+	 * a struct → read `.decl` then match. Returns `false` for null,
+	 * missing `.decl`, or any non-`Conditional` ctor. Wired on
+	 * `WriteOptions.elementIsConditional` so the engine stays
+	 * format-neutral (no `HxDecl`/`HxStatement` reference in the macro).
+	 */
+	public static function elementIsConditional(raw:Null<Dynamic>):Bool {
+		if (raw == null) return false;
+		// Statement element: bare `HxStatementT` enum — `Conditional` ctor
+		// sits directly on the value.
+		if (Type.getEnum(raw) != null) return Type.enumConstructor(raw) == 'Conditional';
+		// Decl element: `HxTopLevelDeclT` struct — the `Conditional` ctor
+		// lives on the wrapped `.decl` enum.
+		final decl:Null<Dynamic> = Reflect.field(raw, 'decl');
+		if (decl == null || Type.getEnum(decl) == null) return false;
+		return Type.enumConstructor(decl) == 'Conditional';
+	}
+
+	/**
 	 * Classify a `HxExpr.ArrayExpr` by its first element so the writer can
 	 * pick the matching `whitespace.bracketConfig.*` inner-padding policy.
 	 * One grammar ctor (`ArrayExpr`) covers three fork bracket kinds; the
