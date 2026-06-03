@@ -1735,20 +1735,26 @@ class WriterLowering {
 
 			final case3Doc:Expr = if (parts.length == 1) parts[0]
 			else dcCall(parts);
-			// ω-cond-indent-policy FixedZero: a cond-comp ctor opting into
-			// `@:fmt(conditionalMarkerDedent)` (the `#if … #end`
+			// ω-cond-indent-policy FixedZero/AlignedDecrease: a cond-comp ctor
+			// opting into `@:fmt(conditionalMarkerDedent)` (the `#if … #end`
 			// `HxStatement`/`HxClassMember`/`HxDecl` `Conditional` ctors) wraps
-			// its whole construct Doc in `_dcmz` (ConditionalMarkerZero) at
-			// runtime ONLY when `opt.conditionalPolicy == FixedZero`. The render-
-			// time scope flushes every `#`-leading fresh line (`#if`/`#elseif`/
-			// `#else`/`#end` markers — including nested ones, which sit inside the
-			// same construct Doc) at column 0 while body content keeps its frame
-			// indent. Every other policy (`Aligned` default, `AlignedIncrease`,
-			// `AlignedDecrease`, …) leaves the ctor unwrapped → byte-identical.
+			// its whole construct Doc in a render-time marker scope:
+			//  - `FixedZero` → `_dcmz` (ConditionalMarkerZero): every `#`-leading
+			//    fresh line (`#if`/`#elseif`/`#else`/`#end`, incl. nested ones)
+			//    flushes at column 0 while body content keeps its frame indent.
+			//  - `AlignedDecrease` → `_dcmd` (ConditionalMarkerDecrease): EVERY
+			//    fresh line (markers AND body) shifts one indent level shallower,
+			//    moving the increase-style body accumulation (already applied via
+			//    `condIncreaseGateExpr`, which also fires for `AlignedDecrease`)
+			//    `-1` uniformly.
+			// Every other policy (`Aligned` default, `AlignedIncrease`, …) leaves
+			// the ctor unwrapped → byte-identical.
 			return branch.fmtHasFlag('conditionalMarkerDedent')
 				? macro (opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.FixedZero
 					? _dcmz($case3Doc)
-					: $case3Doc)
+					: (opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedDecrease
+						? _dcmd($case3Doc)
+						: $case3Doc))
 				: case3Doc;
 		}
 
@@ -10857,12 +10863,17 @@ class WriterLowering {
 			: macro _dc(_docs);
 		// ω-cond-indent-policy: runtime gate — the Star carries
 		// `@:fmt(conditionalBodyIndent)` (compile-time `condBodyIndent`)
-		// AND the active `opt.conditionalPolicy` is `AlignedIncrease`. When
-		// false (default `Aligned`, every other policy, every non-cond Star)
-		// the body assembly stays byte-identical. The enum is `Int`-backed
-		// so the comparison is a plain integer test in the hot path.
+		// AND the active `opt.conditionalPolicy` is `AlignedIncrease` OR
+		// `AlignedDecrease`. Both layouts accumulate the body `+1` per nesting
+		// depth identically (`_dn(_cols, …)`); `AlignedDecrease` then shifts the
+		// whole construct `-1` uniformly at render time via the
+		// `ConditionalMarkerDecrease` wrap (see `case3Doc` gate below). When
+		// false (default `Aligned`, `FixedZero`, every non-cond Star) the body
+		// assembly stays byte-identical. The enum is `Int`-backed so the
+		// comparison is a plain integer test in the hot path.
 		final condIncreaseGateExpr:Expr = condBodyIndent
-			? macro (opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedIncrease)
+			? macro (opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedIncrease
+				|| opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedDecrease)
 			: macro false;
 		final lastTrailTerminatorEmit:Expr = macro {};
 		// ω-metadata-line-end-function: runtime `_metaPolicy:Int` read from

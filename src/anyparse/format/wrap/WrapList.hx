@@ -542,7 +542,7 @@ class WrapList {
 			switch n {
 				case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i)
 						| Flatten(i) | HardFlatten(i) | CollapseProbe(i)
-						| ConditionalMarkerZero(i): w(i, depth);
+						| ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i): w(i, depth);
 				case WrapBoundary(i): w(i, depth + 1);
 				case IfBreak(b, _) | IfWidthExceeds(_, b, _) | IfFirstLineExceeds(_, b, _)
 						| IfLineExceeds(_, b, _) | IfFullLineExceeds(_, b, _)
@@ -582,7 +582,7 @@ class WrapList {
 			switch n {
 				case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i)
 						| Flatten(i) | HardFlatten(i) | CollapseProbe(i)
-						| ConditionalMarkerZero(i): w(i, depth);
+						| ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i): w(i, depth);
 				case WrapBoundary(i): w(i, depth + 1);
 				case IfNaturalFirstLineFitsOpenDelim(_, _, _):
 					if (depth == 1) found = true;
@@ -858,6 +858,10 @@ class WrapList {
 					// ω-cond-indent-policy FixedZero: render-time marker,
 					// transparent to static length measurement — descend `inner`.
 					stack.push(inner);
+				case ConditionalMarkerDecrease(inner):
+					// ω-cond-indent-policy AlignedDecrease: render-time marker,
+					// transparent to static length measurement — descend `inner`.
+					stack.push(inner);
 			}
 		}
 		return total;
@@ -939,6 +943,10 @@ class WrapList {
 				// ω-cond-indent-policy FixedZero: render-time marker,
 				// transparent — descend `inner` for leading-hardline detection.
 				node = inner;
+			case ConditionalMarkerDecrease(inner):
+				// ω-cond-indent-policy AlignedDecrease: render-time marker,
+				// transparent — descend `inner` for leading-hardline detection.
+				node = inner;
 		}
 	}
 
@@ -997,7 +1005,7 @@ class WrapList {
 					|| StringTools.fastCodeAt(s, 0) == '{'.code);
 			case Nest(_, inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner)
 					| Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner)
-					| ConditionalMarkerZero(inner):
+					| ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
 				node = inner;
 			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat)
 					| IfLineExceeds(_, _, flat) | IfFullLineExceeds(_, _, flat)
@@ -1044,7 +1052,7 @@ class WrapList {
 				return c == ')'.code || c == ']'.code || c == '}'.code;
 			case Nest(_, inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner)
 					| Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner)
-					| ConditionalMarkerZero(inner):
+					| ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
 				node = inner;
 			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat)
 					| IfLineExceeds(_, _, flat) | IfFullLineExceeds(_, _, flat)
@@ -1285,7 +1293,7 @@ class WrapList {
 			case WrapBoundary(inner) | Group(inner) | BodyGroup(inner)
 					| GroupWithRestProbe(inner) | Nest(_, inner)
 					| Flatten(inner) | HardFlatten(inner) | CollapseProbe(inner)
-					| ConditionalMarkerZero(inner):
+					| ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
 				isMethodChainItem(inner);
 			case IfBreak(brk, _) | IfWidthExceeds(_, brk, _) | IfFirstLineExceeds(_, brk, _)
 					| IfLineExceeds(_, brk, _) | IfFullLineExceeds(_, brk, _)
@@ -1329,7 +1337,7 @@ class WrapList {
 				hit;
 			case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i)
 					| Flatten(i) | HardFlatten(i) | CollapseProbe(i) | WrapBoundary(i)
-					| ConditionalMarkerZero(i):
+					| ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
 				firstVisibleTextStartsWith(i, c);
 			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat)
 					| IfLineExceeds(_, _, flat) | IfFullLineExceeds(_, _, flat)
@@ -1867,6 +1875,9 @@ class WrapList {
 			// ω-cond-indent-policy FixedZero: render-time marker, transparent —
 			// leading-hardline answer matches the marker's `inner`.
 			case ConditionalMarkerZero(inner): hasLeadingHardline(inner);
+			// ω-cond-indent-policy AlignedDecrease: render-time marker, transparent
+			// — leading-hardline answer matches the marker's `inner`.
+			case ConditionalMarkerDecrease(inner): hasLeadingHardline(inner);
 		};
 	}
 
@@ -1905,7 +1916,7 @@ class WrapList {
 			switch n {
 				case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i)
 						| Flatten(i) | HardFlatten(i) | CollapseProbe(i)
-						| ConditionalMarkerZero(i): w(i, depth);
+						| ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i): w(i, depth);
 				case WrapBoundary(i): w(i, depth + 1);
 				case IfBreak(b, f) | IfWidthExceeds(_, b, f) | IfFirstLineExceeds(_, b, f)
 						| IfLineExceeds(_, b, f) | IfFullLineExceeds(_, b, f)

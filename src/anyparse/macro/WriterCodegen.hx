@@ -233,11 +233,12 @@ class WriterCodegen {
 			final _opt:$optionsCT = options ?? $defaultOptsExpr;
 			return anyparse.core.Renderer.render(
 				anyparse.core.CollapsePass.run(
-					$writeCall, _opt.lineWidth, _opt.indentChar, _opt.tabWidth
+					$writeCall, _opt.lineWidth, _opt.indentChar, _opt.tabWidth, _opt.indentSize
 				),
 				_opt.lineWidth,
 				_opt.indentChar,
 				_opt.tabWidth,
+				_opt.indentSize,
 				_opt.lineEnd,
 				_opt.finalNewline,
 				_opt.trailingWhitespace,
@@ -558,6 +559,13 @@ class WriterCodegen {
 			// Emitted by the generated writer only under
 			// `opt.conditionalPolicy == FixedZero`. Structurally transparent.
 			docHelper('_dcmz', [{name: 'inner', type: macro : anyparse.core.Doc}], macro anyparse.core.Doc.ConditionalMarkerZero(inner)),
+			// ω-cond-indent-policy AlignedDecrease: ConditionalMarkerDecrease
+			// helper. Wraps a whole `#if … #end` construct Doc; at render time
+			// EVERY fresh line (markers AND body) is shifted one indent level
+			// shallower, moving the increase-style layout `-1` uniformly. Emitted
+			// by the generated writer only under
+			// `opt.conditionalPolicy == AlignedDecrease`. Structurally transparent.
+			docHelper('_dcmd', [{name: 'inner', type: macro : anyparse.core.Doc}], macro anyparse.core.Doc.ConditionalMarkerDecrease(inner)),
 		];
 	}
 

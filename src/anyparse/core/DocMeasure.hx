@@ -115,6 +115,11 @@ final class DocMeasure {
 					// transparent to static token-width measurement — descend
 					// `inner`.
 					stack.push(inner);
+				case ConditionalMarkerDecrease(inner):
+					// ω-cond-indent-policy AlignedDecrease: render-time marker,
+					// transparent to static token-width measurement — descend
+					// `inner`.
+					stack.push(inner);
 			}
 		}
 		return total;
@@ -147,7 +152,8 @@ final class DocMeasure {
 					if (t.length > 0) return StringTools.fastCodeAt(t, t.length - 1) == '}'.code;
 				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner)
 						| BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner)
-						| CollapseProbe(inner) | ConditionalMarkerZero(inner):
+						| CollapseProbe(inner) | ConditionalMarkerZero(inner)
+						| ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 				case Concat(items):
 					for (it in items) stack.push(it);
@@ -193,7 +199,8 @@ final class DocMeasure {
 					}
 				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner)
 						| BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner)
-						| CollapseProbe(inner) | ConditionalMarkerZero(inner):
+						| CollapseProbe(inner) | ConditionalMarkerZero(inner)
+						| ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 				case Concat(items):
 					for (it in items) stack.push(it);
@@ -237,7 +244,8 @@ final class DocMeasure {
 					}
 				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner)
 						| BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner)
-						| CollapseProbe(inner) | ConditionalMarkerZero(inner):
+						| CollapseProbe(inner) | ConditionalMarkerZero(inner)
+						| ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 				case Concat(items):
 					for (it in items) stack.push(it);

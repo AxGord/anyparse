@@ -117,7 +117,7 @@ final class MatrixWrap {
 					return true;
 				case Nest(_, inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner)
 					| Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner)
-					| ConditionalMarkerZero(inner):
+					| ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 				case Concat(parts):
 					for (p in parts) stack.push(p);

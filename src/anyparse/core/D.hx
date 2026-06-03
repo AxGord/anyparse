@@ -134,6 +134,11 @@ class D {
 			// `#`-marker col-0 re-indent is render-only and moot under a forced-
 			// flat collapse.
 			case ConditionalMarkerZero(inner): flatten(inner);
+			// ω-cond-indent-policy AlignedDecrease: render-time marker,
+			// structurally transparent to the flatten transform — descend
+			// `inner`. The uniform -1 re-indent is render-only and moot under a
+			// forced-flat collapse.
+			case ConditionalMarkerDecrease(inner): flatten(inner);
 		};
 	}
 }

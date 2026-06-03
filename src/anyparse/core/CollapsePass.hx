@@ -64,7 +64,7 @@ final class CollapsePass {
 	 * returned Doc is structurally equivalent to `doc` (render-identical).
 	 */
 	public static function run(
-		doc:Doc, width:Int, indentChar:IndentChar, tabWidth:Int
+		doc:Doc, width:Int, indentChar:IndentChar, tabWidth:Int, indentSize:Int = 1
 	):Doc {
 		// Fast path: skip the measure render entirely when the Doc has no
 		// collapse-candidate paren — the overwhelming common case. Keeps
@@ -74,7 +74,7 @@ final class CollapsePass {
 		final decisions:Array<{node:Doc, crosses:Bool}> = [];
 		// Measure-only render: populates `decisions` at every
 		// `IfFullLineExceeds`. The returned string is discarded.
-		Renderer.render(doc, width, indentChar, tabWidth, '\n', false, false, -1, decisions);
+		Renderer.render(doc, width, indentChar, tabWidth, indentSize, '\n', false, false, -1, decisions);
 
 		return rewrite(doc, decisions);
 	}
@@ -252,7 +252,7 @@ final class CollapsePass {
 				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner)
 						| BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner)
 						| HardFlatten(inner) | CollapseProbe(inner)
-						| ConditionalMarkerZero(inner):
+						| ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 				case Concat(items):
 					for (it in items) stack.push(it);
@@ -289,6 +289,7 @@ final class CollapsePass {
 			case HardFlatten(inner): HardFlatten(f(inner));
 			case CollapseProbe(inner): CollapseProbe(f(inner));
 			case ConditionalMarkerZero(inner): ConditionalMarkerZero(f(inner));
+			case ConditionalMarkerDecrease(inner): ConditionalMarkerDecrease(f(inner));
 			case Concat(items): Concat([for (it in items) f(it)]);
 			case IfBreak(brk, fl): IfBreak(f(brk), f(fl));
 			case IfWidthExceeds(n, brk, fl): IfWidthExceeds(n, f(brk), f(fl));

@@ -518,4 +518,44 @@ enum Doc {
 	 * `Renderer.render` interprets the marker re-indent.
 	 */
 	ConditionalMarkerZero(inner:Doc);
+
+	/**
+	 * Conditional-compilation marker decrease scope (ω-cond-indent-policy
+	 * AlignedDecrease). Render-time-only: wraps the WHOLE `#if … #end`
+	 * construct Doc (kw + cond + body + `#else`/`#elseif` clauses + trail),
+	 * exactly like `ConditionalMarkerZero`. While rendering `inner`, EVERY
+	 * fresh physical line — both the preprocessor markers
+	 * (`#if`/`#elseif`/`#else`/`#end`, incl. nested ones) AND the guarded
+	 * body content — is re-indented one indent level shallower (clamped at
+	 * column `0`). This is the anyparse analogue of haxe-formatter's
+	 * `ConditionalIndentationPolicy.AlignedDecrease`: the body still
+	 * accumulates `+1` per nesting depth (driven by the same
+	 * `@:fmt(conditionalBodyIndent)` body-nest as `AlignedIncrease`), but
+	 * the whole construct is shifted `-1` uniformly relative to the
+	 * `AlignedIncrease` layout, so markers sit one level left of the
+	 * enclosing statement indent and body one level left of the increase
+	 * body.
+	 *
+	 * The discrimination is purely "fresh line, anything emitted" — read at
+	 * the Text-flush point in `Renderer.render`. Unlike
+	 * `ConditionalMarkerZero` (which fixes only `#`-leading lines at column
+	 * `0`), this shifts every line by the same `-1` level, so the relative
+	 * accumulation between body and markers is preserved while the whole
+	 * block moves left. Nested conditionals compose: each nested
+	 * `#if`/`#end` line is still a fresh line inside the same scope, so it
+	 * too gets the single uniform `-1` (applied once per physical line, not
+	 * per nesting depth).
+	 *
+	 * Emitted by the generated writer ONLY when `opt.conditionalPolicy ==
+	 * AlignedDecrease` and the cond-comp ctor carries
+	 * `@:fmt(conditionalMarkerDedent)`; every other policy leaves the
+	 * construct unwrapped (byte-identical).
+	 *
+	 * Pure render-time state via a per-render depth counter (a local in
+	 * `render`, NOT a static — invariant #1), pushed on entry and popped via
+	 * a sentinel on scope exit. Structurally transparent — every static Doc
+	 * walker descends `inner` exactly like `ConditionalMarkerZero`; only
+	 * `Renderer.render` interprets the marker re-indent.
+	 */
+	ConditionalMarkerDecrease(inner:Doc);
 }
