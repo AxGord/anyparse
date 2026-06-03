@@ -85,8 +85,16 @@ class BlockCommentNormalizer {
 		final segments:Array<String> = content.split('\n');
 		if (segments.length <= 1) return Text(content);
 		final lines:Array<BlockCommentLine> = comment.lines;
-		final closingWs:String = lines[lines.length - 1].ws;
-		final closeStructLen:Int = structuralCloseLen(closingWs);
+		final closeLine:BlockCommentLine = lines[lines.length - 1];
+		final closingWs:String = closeLine.ws;
+		// A decoration close (all-stars body, the `**` of `**/`) sits AT the base
+		// column with no pad — its whole ws is structural base indent, so strip it
+		// in full. A bare `*/` close (empty body) carries a single-space pad before
+		// the delimiter that must survive (it mirrors the ` * ` continuation offset);
+		// structuralCloseLen drops that pad space. Treating every close as padded
+		// over-kept one space on each space-indented javadoc continuation (issue_141).
+		final closeIsDecoration:Bool = isAllStars(closeLine.body);
+		final closeStructLen:Int = closeIsDecoration ? closingWs.length : structuralCloseLen(closingWs);
 		final closeStruct:String = closingWs.substr(0, closeStructLen);
 		final docs:Array<Doc> = [Text(segments[0])];
 		for (i in 1...segments.length) {
