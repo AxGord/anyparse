@@ -796,6 +796,7 @@ final class HaxeFormat implements TextFormat {
 		_suppressMore: false,
 		_parenInCondition: false,
 		_varKwNewline: false,
+		_inFieldLevelVar: false,
 		_keepFlatInner: false,
 		_keepChainInParen: false,
 		blockCommentAdapter: anyparse.format.comment.BlockCommentNormalizer.processCapturedBlockComment,

@@ -1488,6 +1488,28 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    The underscore prefix marks it as internal — no JSON loader entry,
  *    no `hxformat.json` ingest. Default `false`.
  *
+ * Internal field added in slice ω-fieldlevel-var-value-expr-indent
+ * (fork's `Indenter.isFieldLevelVar` forcing `indentComplexValueExpressions`
+ * on class-member `var`/`final` initializers):
+ *  - `_inFieldLevelVar` — write-time-only signal flagging that the
+ *    current writer call is descending into a class-member `var`/`final`
+ *    initializer (NOT a local-var statement). Set via
+ *    `@:fmt(propagateFieldLevelVar)` + `_setFieldLevelVar` opt-fanout on
+ *    `HxClassMember.VarMember` / `FinalMember`. Consumed by the
+ *    `indentValueIfCtor('IfExpr', 'indentComplexValueExpressions')` entry
+ *    on `HxVarDecl.init` — when the flag is true the
+ *    `indentComplexValueExpressions` knob gate is bypassed (forced on), so
+ *    a member `var x = if (…) … else …` (or `= untyped if …`) indents its
+ *    if/else branches one step deeper regardless of the config knob. This
+ *    mirrors fork's `Indenter.calcFromCandidates` which sets
+ *    `indentComplexValueExpressions = true` whenever `isFieldLevelVar`
+ *    holds. Local-var initializers (reached via `HxStatement.VarStmt` /
+ *    `HxExpr.VarExpr`, never through `VarMember`) keep the flag false and
+ *    stay knob-gated — matching fork's candidate walk that returns false
+ *    once a `KwdFunction` is hit. The underscore prefix marks it as
+ *    internal — no JSON loader entry, no `hxformat.json` ingest. Default
+ *    `false`.
+ *
  * Internal field added in slice ω-functionsignature-body-aware-indent
  * (fork's body-aware continuation indent on wrapped function signatures):
  *  - `_fnSigBodyEmpty` — write-time-only signal flagging that the
@@ -1793,6 +1815,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	_suppressMore:Bool,
 	_parenInCondition:Bool,
 	_varKwNewline:Bool,
+	_inFieldLevelVar:Bool,
 	// ω-keep-chain (increment: opadd_chain_keep) — set on the leaf-operand opt
 	// when an opAddSub / opBool chain resolves to `WrapMode.Keep`. Read by the
 	// `ParenExpr` (`@:fmt(expressionParenHardFlatten)`) emit to take the GLUED

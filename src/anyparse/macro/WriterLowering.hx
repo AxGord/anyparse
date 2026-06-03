@@ -1073,6 +1073,16 @@ class WriterLowering {
 			// standalone expr paren (flag false, e.g. `expression_paren_wrapping`)
 			// is byte-identical (`opt` passed through unchanged).
 			final parenHardFlatten:Bool = branch.fmtHasFlag('expressionParenHardFlatten');
+			// ω-fieldlevel-var-value-expr-indent: when this kw-Ref ctor carries
+			// `@:fmt(propagateFieldLevelVar)` (class-member `var`/`final` —
+			// `HxClassMember.VarMember` / `FinalMember`), wrap the sub-call's opt
+			// arg in `_setFieldLevelVar` so the descendant `HxVarDecl.init` write
+			// forces the `indentComplexValueExpressions` value-expr indent for an
+			// if/switch/try value (fork's `Indenter.isFieldLevelVar`). Local-var
+			// inits route through `HxStatement.VarStmt` / `HxExpr.VarExpr` — never
+			// this ctor — so the flag stays false there and they remain
+			// knob-gated. Idempotent helper; allocation-free when already set.
+			final propagateFieldLevelVar:Bool = branch.fmtHasFlag('propagateFieldLevelVar');
 			// ω-keep-kw-newline (increment 1b): when this VarStmt-family ctor
 			// captured a `var`→head newline (the synth `kwNewline:Bool` slot),
 			// thread `_setVarKwNewline(opt, true)` into the inner `decl`
@@ -1088,6 +1098,7 @@ class WriterLowering {
 			final ctorOptArg:Expr = {
 				var _o:Expr = macro opt;
 				if (propagateExpr) _o = macro _setExprPosition($_o);
+				if (propagateFieldLevelVar) _o = macro _setFieldLevelVar($_o);
 				if (interpFlat) _o = macro _setChainModeOverride($_o, anyparse.format.wrap.WrapMode.NoWrap);
 				if (parenHardFlatten) _o = macro(opt._parenInCondition
 					? _setChainModeOverride(_clearParenInCondition($_o),
@@ -6452,11 +6463,43 @@ class WriterLowering {
 	 */
 	private function indentValueIfCtorWrap(writeCall:Expr, fieldAccess:Expr, ctorName:String, optField:String, ?leftCurlyField:String):Expr {
 		final optAccess:Expr = optFieldAccess(optField);
-		final ctorMatch:Expr = macro Type.enumConstructor($fieldAccess) == $v{ctorName};
-		final condExpr:Expr = if (leftCurlyField == null) macro $optAccess && $ctorMatch
+		// ω-fieldlevel-var-value-expr-indent: the `indentComplexValueExpressions`
+		// entry (value-position `if`/`switch`/`try` on a `var`/`final` RHS)
+		// differs from the ObjectLit/Anon entries on two axes the fork's
+		// token-tree indenter treats specially:
+		//   1. Transparent prefix keywords. `var x = untyped if (…) … else …`
+		//      parses with `UntypedExpr(IfExpr(…))` as the RHS ctor, so a plain
+		//      top-ctor check misses `IfExpr`. The fork's `findIndentingCandidates`
+		//      keeps `untyped`/`inline`/`cast`/`macro` in the candidate chain, so
+		//      the inner `if` still indents. Mirror it by unwrapping those single-
+		//      operand prefix wrappers before matching the ctor.
+		//   2. Field-level force. The fork's `Indenter.isFieldLevelVar` sets
+		//      `indentComplexValueExpressions = true` unconditionally for a class-
+		//      member `var`/`final` RHS, regardless of the config knob — so the
+		//      gate also fires when `opt._inFieldLevelVar` (set at
+		//      `VarMember`/`FinalMember` via `_setFieldLevelVar`). Local-var inits
+		//      keep the flag false and stay knob-gated.
+		// Both axes are scoped to this one optField at macro time, so the
+		// ObjectLit/Anon entries and every non-Haxe grammar stay byte-identical
+		// (no `opt._inFieldLevelVar` / wrapper-unwrap code is emitted for them).
+		final isComplexValueExpr:Bool = optField == 'indentComplexValueExpressions';
+		final ctorMatch:Expr = isComplexValueExpr
+			? macro {
+				var _eff:Dynamic = $fieldAccess;
+				var _effCtor:String = Type.enumConstructor(_eff);
+				while (_effCtor == 'UntypedExpr' || _effCtor == 'InlineExpr'
+						|| _effCtor == 'CastExpr' || _effCtor == 'MacroExpr') {
+					_eff = Type.enumParameters(_eff)[0];
+					_effCtor = Type.enumConstructor(_eff);
+				}
+				_effCtor == $v{ctorName};
+			}
+			: macro Type.enumConstructor($fieldAccess) == $v{ctorName};
+		final gateAccess:Expr = isComplexValueExpr ? macro(opt._inFieldLevelVar || $optAccess) : optAccess;
+		final condExpr:Expr = if (leftCurlyField == null) macro $gateAccess && $ctorMatch
 		else {
 			final leftCurlyAccess:Expr = optFieldAccess(leftCurlyField);
-			macro $optAccess && $leftCurlyAccess == anyparse.format.BracePlacement.Next && $ctorMatch;
+			macro $gateAccess && $leftCurlyAccess == anyparse.format.BracePlacement.Next && $ctorMatch;
 		};
 		return macro {
 			final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;

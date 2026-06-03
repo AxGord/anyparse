@@ -32,6 +32,19 @@ package anyparse.grammar.haxe;
  * `trailPresent` synth slot; plain mode falls back to always emitting
  * `;` unless the gate fires.
  *
+ * `@:fmt(propagateFieldLevelVar)` on `VarMember` / `FinalMember` (slice
+ * ω-fieldlevel-var-value-expr-indent) threads `_setFieldLevelVar` into the
+ * `decl` writer call so the descendant `HxVarDecl.init` write knows it is a
+ * class-member initializer. The
+ * `indentValueIfCtor('IfExpr', 'indentComplexValueExpressions')` entry on
+ * `init` then forces its value-expr indent regardless of the config knob —
+ * a member `var x = if (…) … else …` (or `= untyped if …`) indents its
+ * branches one step deeper. Mirrors haxe-formatter's
+ * `Indenter.isFieldLevelVar`, which sets `indentComplexValueExpressions`
+ * true for any field-level var/assignment RHS. Local-var statements reach
+ * `HxVarDecl` through `HxStatement.VarStmt` / `HxExpr.VarExpr`, never this
+ * ctor, so they keep the flag false and stay knob-gated.
+ *
  * `final` reaching this enum (instead of being consumed as a member
  * modifier) is enabled by `HxMemberDecl.modifiers` carrying
  * `Array<HxMemberModifier>` — the modifier enum without `Final`. The
@@ -71,10 +84,10 @@ package anyparse.grammar.haxe;
 @:peg
 enum HxClassMember {
 
-	@:kw('var') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))
+	@:kw('var') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'), propagateFieldLevelVar)
 	VarMember(decl:HxVarDecl);
 
-	@:kw('final') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))
+	@:kw('final') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'), propagateFieldLevelVar)
 	FinalMember(decl:HxVarDecl);
 
 	@:kw('function')

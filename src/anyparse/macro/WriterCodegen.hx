@@ -80,6 +80,20 @@ class WriterCodegen {
 				fields.push(setTypedefBodyField(optionsCT));
 				fields.push(clearTypedefBodyField(optionsCT));
 			}
+			// ω-fieldlevel-var-value-expr-indent: opt-fanout helper pair for
+			// `@:fmt(propagateFieldLevelVar)` (class-member `var`/`final` ctor
+			// init dispatch) and the function-body clear. `_setFieldLevelVar`
+			// flags the descendant `HxVarDecl.init` write so the
+			// `indentValueIfCtor('IfExpr', 'indentComplexValueExpressions')`
+			// entry forces its indent (fork's `isFieldLevelVar`);
+			// `_clearFieldLevelVar` resets the flag at a function-body boundary
+			// so a nested local var inside a member initializer stays
+			// knob-gated. Sister to `_setAnonFnBody`/`_clearAnonFnBody`. Gated
+			// on `_inFieldLevelVar:Bool` field presence on the opt typedef.
+			if (optionsHasField(optionsTypePath, '_inFieldLevelVar')) {
+				fields.push(setFieldLevelVarField(optionsCT));
+				fields.push(clearFieldLevelVarField(optionsCT));
+			}
 			// ω-chain-fillline-in-condwrap: opt-fanout helper for
 			// `@:fmt(condWrap)` site. Forces `BinaryChainEmit.emit`'s
 			// cascade to a single mode by swapping `opBoolChainWrap` /
@@ -753,6 +767,64 @@ class WriterCodegen {
 					if (!o._inTypedefBody) return o;
 					final _c:$optionsCT = _copyOpt(o);
 					_c._inTypedefBody = false;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * ω-fieldlevel-var-value-expr-indent — opt-fanout shim for the
+	 * `propagateFieldLevelVar` meta. Idempotent sister to `_setExprPosition`
+	 * — returns `o` unchanged when `_inFieldLevelVar` is already `true`;
+	 * otherwise returns a `_copyOpt(o)` with the flag flipped on. Consumed at
+	 * `HxClassMember.VarMember` / `FinalMember`'s single-Ref ctor opt-arg so
+	 * the descendant `HxVarDecl.init` write forces the
+	 * `indentComplexValueExpressions` value-expr indent (fork's
+	 * `Indenter.isFieldLevelVar`). Emitted only when the opt typedef declares
+	 * `_inFieldLevelVar:Bool` (currently `HxModuleWriteOptions`).
+	 */
+	private static function setFieldLevelVarField(optionsCT:ComplexType):Field {
+		return {
+			name: '_setFieldLevelVar',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{name: 'o', type: optionsCT}],
+				ret: optionsCT,
+				expr: macro {
+					if (o._inFieldLevelVar) return o;
+					final _c:$optionsCT = _copyOpt(o);
+					_c._inFieldLevelVar = true;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * ω-fieldlevel-var-value-expr-indent — sister reset helper to
+	 * `_setFieldLevelVar`. Returns the input opt unchanged when
+	 * `_inFieldLevelVar` is already `false`; otherwise returns a `_copyOpt(o)`
+	 * with the flag cleared. Threaded into a function-body writer call so a
+	 * local `var x = if (…)` nested inside a member initializer reverts to the
+	 * knob-gated value-expr indent — matching fork's candidate walk that
+	 * returns false once a `KwdFunction` is crossed. Emitted only when the opt
+	 * typedef carries `_inFieldLevelVar:Bool` — paired with `_setFieldLevelVar`
+	 * emission.
+	 */
+	private static function clearFieldLevelVarField(optionsCT:ComplexType):Field {
+		return {
+			name: '_clearFieldLevelVar',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{name: 'o', type: optionsCT}],
+				ret: optionsCT,
+				expr: macro {
+					if (!o._inFieldLevelVar) return o;
+					final _c:$optionsCT = _copyOpt(o);
+					_c._inFieldLevelVar = false;
 					return _c;
 				},
 			}),

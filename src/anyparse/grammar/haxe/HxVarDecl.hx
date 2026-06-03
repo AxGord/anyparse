@@ -98,6 +98,17 @@ package anyparse.grammar.haxe;
  * placement check would be inert. Other RHS ctors (calls, binops,
  * literals other than ObjectLit/IfExpr) are unaffected.
  *
+ * Slice ω-fieldlevel-var-value-expr-indent extends this `IfExpr` entry on
+ * two axes specific to the `indentComplexValueExpressions` knob (see
+ * `WriterLowering.indentValueIfCtorWrap`): (1) the ctor match unwraps the
+ * transparent prefix-keyword wrappers `untyped` / `inline` / `cast` /
+ * `macro`, so `var x = untyped if (…) … else …` (`UntypedExpr(IfExpr(…))`)
+ * still indents the inner `if`; (2) when the RHS is a class-member
+ * initializer (`opt._inFieldLevelVar`, set at `HxClassMember.VarMember` /
+ * `FinalMember` via `@:fmt(propagateFieldLevelVar)`) the indent is forced
+ * regardless of the config knob, matching fork's `Indenter.isFieldLevelVar`.
+ * Local-var initializers keep the flag false and stay knob-gated.
+ *
  * `@:fmt(indentValueIfCtor('Anon', 'indentVarTypeHintAnon',
  * 'anonTypeLeftCurly'))` on the `type` field (slice ω-var-type-hint-
  * anon-indent) extends the same RHS-style indent rule to the type-hint
