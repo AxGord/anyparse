@@ -2,6 +2,7 @@ package unit.miniblockstrict;
 
 import anyparse.format.ArrayMatrixWrap;
 import anyparse.format.CommentStyle;
+import anyparse.format.ConditionalIndentationPolicy;
 import anyparse.format.Encoding;
 import anyparse.format.IndentChar;
 import anyparse.format.WriteOptions;
@@ -59,6 +60,7 @@ final class MiniBlockStrictFormat {
 		maxConsecutiveBlanks: -1,
 		commentStyle: Verbatim,
 		arrayMatrixWrap: ArrayMatrixWrap.NoMatrixWrap,
+		conditionalPolicy: ConditionalIndentationPolicy.Aligned,
 		addLineCommentSpace: true,
 		compressSuccessiveParenthesis: true,
 	};

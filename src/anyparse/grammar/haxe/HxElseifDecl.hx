@@ -32,7 +32,7 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxElseifDecl = {
 	@:kw('#elseif') var cond:HxPpCondLit;
-	@:trivia @:tryparse @:fmt(padLeading, padTrailing)
+	@:trivia @:tryparse @:fmt(padLeading, padTrailing, conditionalBodyIndent)
 	@:fmt(blankLinesOnTransitionAcross('decl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', '|', 'UsingDecl', 'UsingWildDecl', 'beforeUsing'))
 	@:fmt(blankLinesOnTransitionAcross('decl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', 'UsingDecl', 'UsingWildDecl', '|', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'TypedefDecl', 'FnDecl', 'beforeType'))
 	@:fmt(blankLinesBetweenSameCtorByLevel('decl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', 'betweenImportsLevel', 'betweenImports', 'betweenImportsPathDiffers'))

@@ -123,6 +123,17 @@ typedef WriteOptions = {
 	arrayMatrixWrap:ArrayMatrixWrap,
 
 	/**
+	 * Indentation policy for preprocessor conditional-compilation
+	 * (`#if`/`#elseif`/`#else`/`#end`) blocks. See
+	 * `ConditionalIndentationPolicy`. Default `Aligned` keeps the writer
+	 * byte-identical to the pre-policy behaviour (markers and body both
+	 * at the surrounding statement indent). Fed by haxe-formatter's
+	 * `indentation.conditionalPolicy` knob through `HaxeFormatConfigLoader`;
+	 * format-neutral so any preprocessor-conditional grammar can reuse it.
+	 */
+	conditionalPolicy:ConditionalIndentationPolicy,
+
+	/**
 	 * Cap on consecutive line-end runs in the rendered output. Read once
 	 * by `Renderer.render` as the final post-pass: any run of `N+1` or
 	 * more consecutive `lineEnd` sequences is truncated to exactly

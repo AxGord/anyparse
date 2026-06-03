@@ -5,6 +5,7 @@ import anyparse.format.BodyPolicy;
 import anyparse.format.BracePlacement;
 import anyparse.format.CommentEmptyLinesPolicy;
 import anyparse.format.CommentStyle;
+import anyparse.format.ConditionalIndentationPolicy;
 import anyparse.format.EmptyCurly;
 import anyparse.format.Encoding;
 import anyparse.format.IndentChar;
@@ -760,6 +761,7 @@ final class HaxeFormat implements TextFormat {
 		expressionWrappingWrap: HaxeFormat.defaultExpressionWrappingWrap(),
 		implementsExtendsWrap: HaxeFormat.defaultImplementsExtendsWrap(),
 		arrayMatrixWrap: ArrayMatrixWrap.MatrixWrapWithAlign,
+		conditionalPolicy: ConditionalIndentationPolicy.Aligned,
 		addLineCommentSpace: true,
 		compressSuccessiveParenthesis: true,
 		expressionTry: SameLinePolicy.Same,

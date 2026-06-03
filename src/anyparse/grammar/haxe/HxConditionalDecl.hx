@@ -30,7 +30,7 @@ package anyparse.grammar.haxe;
  * the clause loop fully terminates before the optional `#else`.
  *
  * Writer-side output mirrors `HxConditionalMod`: the
- * `@:fmt(padLeading, padTrailing)` flag pair on `body` and `elseBody`
+ * `@:fmt(padLeading, padTrailing, conditionalBodyIndent)` flag pair on `body` and `elseBody`
  * adds a leading + trailing pad around each Star when non-empty,
  * closing the `#if`/`#else`/`#end` boundary gaps that the default
  * internal-only sep leaves glued. The pads switch from a literal space
@@ -61,7 +61,7 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxConditionalDecl = {
 	var cond:HxPpCondLit;
-	@:trivia @:tryparse @:fmt(padLeading, padTrailing)
+	@:trivia @:tryparse @:fmt(padLeading, padTrailing, conditionalBodyIndent)
 	@:fmt(blankLinesOnTransitionAcross('decl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', '|', 'UsingDecl', 'UsingWildDecl', 'beforeUsing'))
 	@:fmt(blankLinesOnTransitionAcross('decl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', 'UsingDecl', 'UsingWildDecl', '|', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'TypedefDecl', 'FnDecl', 'beforeType'))
 	@:fmt(blankLinesBetweenSameCtorByLevel('decl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', 'betweenImportsLevel', 'betweenImports', 'betweenImportsPathDiffers'))
@@ -70,7 +70,7 @@ typedef HxConditionalDecl = {
 	@:fmt(blankLinesBetweenSameCtorHeadTransparent('decl', 'Conditional', 'betweenImportsHeadLeafClassify'))
 	var body:Array<HxTopLevelDecl>;
 	@:trivia @:tryparse var elseifs:Array<HxElseifDecl>;
-	@:optional @:kw('#else') @:trivia @:tryparse @:fmt(padLeading, padTrailing)
+	@:optional @:kw('#else') @:trivia @:tryparse @:fmt(padLeading, padTrailing, conditionalBodyIndent)
 	@:fmt(blankLinesOnTransitionAcross('decl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', '|', 'UsingDecl', 'UsingWildDecl', 'beforeUsing'))
 	@:fmt(blankLinesOnTransitionAcross('decl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', 'UsingDecl', 'UsingWildDecl', '|', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'TypedefDecl', 'FnDecl', 'beforeType'))
 	@:fmt(blankLinesBetweenSameCtorByLevel('decl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', 'betweenImportsLevel', 'betweenImports', 'betweenImportsPathDiffers'))

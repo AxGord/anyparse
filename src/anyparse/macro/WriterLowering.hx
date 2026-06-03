@@ -4774,6 +4774,22 @@ class WriterLowering {
 				// shapes the two newlines are correlated.
 				final tryparsePadLeading:Bool = starNode.fmtHasFlag('padLeading');
 				final tryparsePadTrailing:Bool = starNode.fmtHasFlag('padTrailing');
+				// ω-cond-indent-policy: `@:fmt(conditionalBodyIndent)` on a
+				// `@:trivia @:tryparse` cond-comp body / elseBody / elseif-body
+				// Star opts the body content into the runtime
+				// `opt.conditionalPolicy` indent rule. When the policy is
+				// `AlignedIncrease`, the body content (leading pad hardline +
+				// each body element) is wrapped in `_dn(_cols, …)` so it sits
+				// one level deeper than the `#if`/`#else`/`#end` markers, while
+				// the trailing pad hardline (the `\n` before `#else`/`#end`)
+				// is emitted OUTSIDE the nest so the close marker stays at the
+				// surrounding statement indent. Nesting accumulates per
+				// conditional depth (a nested `#if` body re-enters the same
+				// `_dn`). DEFAULT `Aligned` → the runtime gate is false → the
+				// pre-policy `else` branch fires → byte-identical. Only the
+				// cond-comp body Stars carry this flag, so every other tryparse
+				// Star consumer is untouched.
+				final tryparseCondBodyIndent:Bool = starNode.fmtHasFlag('conditionalBodyIndent');
 				// ω-issue-423-mech-a: `@:fmt(propagateExprPosition)` on a
 				// `@:trivia @:tryparse` Star marks the body as an expression-
 				// position frame for descendants. The runtime block emits an
@@ -4864,7 +4880,8 @@ class WriterLowering {
 					tryparsePriorAfterTrailExpr,
 					tryparseForceInlineSep,
 					tryparseBlockEnded ? tryparseSepText : null, tryparseBlockEnded,
-					tryparseHeritageWrap
+					tryparseHeritageWrap,
+					tryparseCondBodyIndent
 				));
 				return;
 			}
@@ -10610,7 +10627,10 @@ class WriterLowering {
 		// Star. When true, MULTI-clause heritage uses fork FillLine layout
 		// (pack-from-front, break overflow clause at additionalIndent 2);
 		// single-clause stays on the lineLengthAwareSeps 1-tab break path.
-		heritageWrap:Bool = false
+		heritageWrap:Bool = false,
+		// ω-cond-indent-policy: cond-comp body Star opts into the runtime
+		// `opt.conditionalPolicy` indent rule. Default false → byte-inert.
+		condBodyIndent:Bool = false
 	):Expr {
 		// ω-bug-2c-inner-star — cascade emit for the tryparse-Star path.
 		// Cascade trackers + cascade-fire blank count come from
@@ -10820,6 +10840,15 @@ class WriterLowering {
 				(_arr.length > 0 && _arr[_arr.length - 1].trailingComment != null) ? _dhl() : _de()
 			])
 			: macro _dc(_docs);
+		// ω-cond-indent-policy: runtime gate — the Star carries
+		// `@:fmt(conditionalBodyIndent)` (compile-time `condBodyIndent`)
+		// AND the active `opt.conditionalPolicy` is `AlignedIncrease`. When
+		// false (default `Aligned`, every other policy, every non-cond Star)
+		// the body assembly stays byte-identical. The enum is `Int`-backed
+		// so the comparison is a plain integer test in the hot path.
+		final condIncreaseGateExpr:Expr = condBodyIndent
+			? macro (opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedIncrease)
+			: macro false;
 		final lastTrailTerminatorEmit:Expr = macro {};
 		// ω-metadata-line-end-function: runtime `_metaPolicy:Int` read from
 		// `opt.<metaLineEndOptField>` (default 0 = None when the flag is
@@ -11033,6 +11062,12 @@ class WriterLowering {
 			else {
 				final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 				final _docs:Array<anyparse.core.Doc> = [];
+				// ω-cond-indent-policy: when active, the trailing pad hardline
+				// (the `\n` before `#else`/`#end`) is held OUT of `_docs` so it
+				// lands at the surrounding statement indent; the body content
+				// inside `_docs` is wrapped in `_dn(_cols, …)` at assembly.
+				final _condIncrease:Bool = $condIncreaseGateExpr;
+				var _condTrailPad:Null<anyparse.core.Doc> = null;
 				$cascadeInitPrev;
 				$cascadeHeadEmit;
 				$priorAfterTrailEmit;
@@ -11146,7 +11181,15 @@ class WriterLowering {
 					_si++;
 				}
 				$tryparseBlockEndedTrailEmit;
-				if (_padTrailing && _arr.length > 0) _docs.push(_padHardline ? _dhl() : _dt(' '));
+				// ω-cond-indent-policy: under AlignedIncrease hold the trailing
+				// pad out of `_docs` so the close marker (`#else`/`#end`)
+				// renders at the surrounding indent rather than at body+1. The
+				// pad doc is identical to the pre-policy push; only its
+				// placement (outside the `_dn`) changes. Other policies /
+				// non-cond Stars keep the inline push (`_condIncrease` false →
+				// byte-identical).
+				if (_condIncrease && _padTrailing && _arr.length > 0) _condTrailPad = _padHardline ? _dhl() : _dt(' ');
+				else if (_padTrailing && _arr.length > 0) _docs.push(_padHardline ? _dhl() : _dt(' '));
 				else if (_metaPolicy != 0 && _arr.length > 0) _docs.push(_dhl());
 				// ω-trivia-tryparse-linelength: when the LAST element carries
 				// a same-line `// trail`, a `//` line comment runs until the
@@ -11206,6 +11249,17 @@ class WriterLowering {
 						for (_d in _trailDocs) _docs.push(_d);
 						_dwb(_dn(_cols, _dc(_docs)));
 					}
+				} else if (_condIncrease) {
+					// ω-cond-indent-policy: AlignedIncrease — body content
+					// (leading pad + each body element, all inside `_docs`)
+					// nests one level deeper; the trailing close-marker pad
+					// (`_condTrailPad`, held out above) renders at the
+					// surrounding indent. `_trailDocs` (orphan trail comments)
+					// is empty for cond-comp bodies but appended defensively
+					// inside the nest to preserve the pre-policy ordering.
+					for (_d in _trailDocs) _docs.push(_d);
+					final _nested:anyparse.core.Doc = _dn(_cols, _dc(_docs));
+					_dwb(_condTrailPad != null ? _dc([_nested, _condTrailPad]) : _nested);
 				} else {
 					for (_d in _trailDocs) _docs.push(_d);
 					_dwb($finalWrapDocs);

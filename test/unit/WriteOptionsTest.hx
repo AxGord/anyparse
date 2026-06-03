@@ -3,6 +3,7 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.format.ArrayMatrixWrap;
+import anyparse.format.ConditionalIndentationPolicy;
 import anyparse.format.IndentChar;
 import anyparse.format.WriteOptions;
 import anyparse.format.text.JsonFormat;
@@ -42,6 +43,7 @@ class WriteOptionsTest extends Test {
 			maxConsecutiveBlanks: -1,
 			commentStyle: Verbatim,
 			arrayMatrixWrap: ArrayMatrixWrap.NoMatrixWrap,
+			conditionalPolicy: ConditionalIndentationPolicy.Aligned,
 			addLineCommentSpace: true,
 			compressSuccessiveParenthesis: true,
 		};

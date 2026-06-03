@@ -4,6 +4,7 @@ import anyparse.format.ArrayMatrixWrap;
 import anyparse.format.BodyPolicy;
 import anyparse.format.BracePlacement;
 import anyparse.format.CommentEmptyLinesPolicy;
+import anyparse.format.ConditionalIndentationPolicy;
 import anyparse.format.EmptyCurly;
 import anyparse.format.IndentChar;
 import anyparse.format.KeepEmptyLinesPolicy;
@@ -644,6 +645,7 @@ final class HaxeFormatConfigLoader {
 			expressionWrappingWrap: base.expressionWrappingWrap,
 			implementsExtendsWrap: base.implementsExtendsWrap,
 			arrayMatrixWrap: base.arrayMatrixWrap,
+			conditionalPolicy: base.conditionalPolicy,
 			addLineCommentSpace: base.addLineCommentSpace,
 			compressSuccessiveParenthesis: base.compressSuccessiveParenthesis,
 			expressionTry: base.expressionTry,
@@ -759,6 +761,11 @@ final class HaxeFormatConfigLoader {
 		if (section.indentObjectLiteral != null) opt.indentObjectLiteral = section.indentObjectLiteral;
 		if (section.indentComplexValueExpressions != null) opt.indentComplexValueExpressions = section.indentComplexValueExpressions;
 		if (section.indentVarTypeHintAnon != null) opt.indentVarTypeHintAnon = section.indentVarTypeHintAnon;
+		final policyName:Null<String> = section.conditionalPolicy;
+		if (policyName != null) {
+			final resolved:Null<ConditionalIndentationPolicy> = policyName;
+			if (resolved != null) opt.conditionalPolicy = resolved;
+		}
 	}
 
 	private static function applyWrapping(section:HxFormatWrappingSection, opt:HxModuleWriteOptions):Void {

@@ -23,7 +23,11 @@ package anyparse.grammar.haxe.format;
  * the var-type-hint RHS picks up one extra indent step in front of its
  * `{` (`true`, default) — fires only when `lineEnds.anonTypeCurly.leftCurly`
  * is Allman (`both`/`before`). No fork analogue; the fork applies the
- * indent unconditionally under Allman.
+ * indent unconditionally under Allman. `conditionalPolicy` selects the
+ * indentation rule for `#if`/`#elseif`/`#else`/`#end` blocks (one of
+ * `"aligned"` (default), `"alignedIncrease"`, `"alignedDecrease"`,
+ * `"fixedZero"`, …) — see `ConditionalIndentationPolicy`. Unknown
+ * strings leave the format default (`Aligned`).
  */
 @:peg typedef HxFormatIndentationSection = {
 
@@ -40,4 +44,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var indentComplexValueExpressions:Bool;
 
 	@:optional var indentVarTypeHintAnon:Bool;
+
+	@:optional var conditionalPolicy:String;
 };
