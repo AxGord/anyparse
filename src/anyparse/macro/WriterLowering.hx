@@ -9370,13 +9370,9 @@ class WriterLowering {
 			? macro $trailPresentAccess && $knobAccessOrFalse
 			: macro false;
 		// ω-meta-allman-objectlit: when source had a trailing `,`, preserve
-		// it in any multi-line shape regardless of the knob. Flat `NoWrap`
-		// never appends (`shapeNoWrap` ignores `appendTrailingComma`), so
-		// the disjunction degrades to the pre-slice behaviour for the
-		// knob-off + flat-cascade case (`testSourceTrailingCommaIgnored-
-		// WhenKnobOff` still asserts `{i: 0}`). The change only matters
-		// when the layout is forced multi-line by some other signal —
-		// surrounding hardlines (e.g. the meta-Allman wrap from
+		// it in any multi-line shape regardless of the knob. The change
+		// matters when the layout is forced multi-line by some other signal
+		// — surrounding hardlines (e.g. the meta-Allman wrap from
 		// `HxMetaExpr.expr`'s `@:fmt(allmanIndentForCtor)`), natural
 		// cascade fit, or `forceExceeds` — at which point the source's
 		// `,` round-trips like the rest of the multi-line shape.
@@ -9386,6 +9382,17 @@ class WriterLowering {
 		final appendTrailingCommaExpr:Expr = trailPresentAccess != null && trailingCommaField != null
 			? macro $trailPresentAccess || $knobAccessOrFalse
 			: knobAccessOrFalse;
+		// ω-nowrap-source-trail-comma: the FLAT (`NoWrap`) trailing-comma signal
+		// is source-presence ONLY (`<field>TrailPresent`), NOT the knob-inclusive
+		// `appendTrailingComma`. The fork is source-faithful for single-line
+		// lists: `{a: 1,}` / `[1, 2,]` / `f(x,)` keep their trailing `,` flat,
+		// while a list whose source had none stays comma-free even with the knob
+		// on (the knob only forces the break-mode layout via `forceExceeds`).
+		// Null `trailPresentAccess` (Stars without a source-trail slot) → `false`,
+		// byte-identical to the pre-slice flat shape.
+		final flatTrailingCommaExpr:Expr = trailPresentAccess != null
+			? trailPresentAccess
+			: macro false;
 		// ω-arraymatrix-keep: matrix-align takes precedence over the Keep
 		// cascade. The non-Keep matrix attempt (`matrixComputeExpr`, in the
 		// no-trivia/cascade branch) is gated `!_keepEmit` and so never fires
@@ -9548,7 +9555,11 @@ class WriterLowering {
 				final _wlResult:anyparse.core.Doc = anyparse.format.wrap.WrapList.emit(
 					$v{openText}, $v{closeText}, $v{sepText},
 					_docs, opt, $openInsideDoc, $closeInsideDoc, false, $rulesExpr, $appendTrailingCommaExpr,
-					$wrapLeadFlatDoc, $wrapLeadBreakDoc, $forceExceedsExpr, $wrapTrailBreakDoc, $forceModeExpr, $compactContExpr, $v{groupRestProbe}, _sepBeforeFlags, _smlKeep
+					$wrapLeadFlatDoc, $wrapLeadBreakDoc, $forceExceedsExpr, $wrapTrailBreakDoc, $forceModeExpr, $compactContExpr, $v{groupRestProbe}, _sepBeforeFlags, _smlKeep,
+					// ω-nowrap-source-trail-comma: sourceBreakBefore + keepCloseGlued
+					// left at their defaults; flatTrailingComma carries the source-
+					// only `,` signal into the NoWrap shape.
+					null, false, $flatTrailingCommaExpr
 				);
 				// ω-array-reflow: a source-multiline list re-flowed through the
 				// cascade carries internal hardlines but lacks the BodyGroup

@@ -61,15 +61,16 @@ final class HxObjectLitSourceTrailCommaSliceTest extends Test {
 			'expected flat `{i: 0}` when source had no trailing `,`, got: <$out>');
 	}
 
-	public function testSourceTrailingCommaIgnoredWhenKnobOff():Void {
-		// Default knob (`false`) — `forceExceeds` conjunction stays
-		// false even with source trailing `,`. Cascade picks NoWrap and
-		// the trailing `,` is dropped (writer doesn't append in flat
-		// mode regardless of the knob).
+	public function testSourceTrailingCommaPreservedFlatWhenKnobOff():Void {
+		// Default knob (`false`) — `forceExceeds` conjunction stays false,
+		// so the cascade picks NoWrap (flat). The trailing `,` is now
+		// preserved source-faithfully (`flatTrailingComma = trailPresent`):
+		// the fork keeps a single-line `{i: 0,}` flat with its comma. The
+		// knob only forces break-mode, never adds/removes the flat comma.
 		final src:String = 'class M {\n\tfunction f():Void {\n\t\tvar x:Dynamic = {i: 0,}\n\t}\n}';
 		final out:String = formatWithKnob(src, false);
-		Assert.isTrue(out.indexOf('{i: 0}') != -1,
-			'expected flat `{i: 0}` when knob is off, got: <$out>');
+		Assert.isTrue(out.indexOf('{i: 0,}') != -1,
+			'expected flat `{i: 0,}` (source `,` preserved) when knob is off, got: <$out>');
 	}
 
 	public function testSourceTrailingCommaMultiFieldKnobOn():Void {

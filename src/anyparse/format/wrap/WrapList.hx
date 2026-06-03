@@ -124,7 +124,14 @@ class WrapList {
 		// `methodChain` rules are `Keep` and the parser's `argsCloseNewline` slot
 		// is false. Default `false` → every non-keep / source-broke caller keeps
 		// the legacy chain-OPL close placement, so the change is byte-inert.
-		keepCloseGlued:Bool = false
+		keepCloseGlued:Bool = false,
+		// ω-nowrap-source-trail-comma: source-only trailing-comma signal forwarded
+		// to the flat (`NoWrap`) shape. The writer passes `<field>TrailPresent`
+		// here (NOT the `trailPresent || knob` value of `appendTrailingComma`), so
+		// a single-line list preserves its source `,` while the knob still only
+		// drives break-mode. Default `false` → every other caller stays byte-
+		// identical.
+		flatTrailingComma:Bool = false
 	):Doc {
 		// `Line('\n')` is not a Haxe-constant default — unwrap a null
 		// sentinel into the legacy hardcoded hardline here.
@@ -249,7 +256,7 @@ class WrapList {
 		// Per-state shape builder: picks the right lead based on the
 		// resolved mode (flat vs break-style layout).
 		function shapeAt(mode:WrapMode, lead:Doc):Doc {
-			final body:Doc = shape(mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreakDoc, groupRestProbe, sepBeforeFlags, opt.lineWidth, sourceBreakBefore, keepCloseGlued);
+			final body:Doc = shape(mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreakDoc, groupRestProbe, sepBeforeFlags, opt.lineWidth, sourceBreakBefore, keepCloseGlued, flatTrailingComma);
 			return prependLead(body, lead);
 		}
 
@@ -1131,7 +1138,15 @@ class WrapList {
 		appendTrailingComma:Bool, trailBreak:Doc, groupRestProbe:Bool,
 		sepBeforeFlags:Null<Array<Bool>>, lineWidth:Int,
 		sourceBreakBefore:Null<Array<Bool>> = null,
-		keepCloseGlued:Bool = false
+		keepCloseGlued:Bool = false,
+		// ω-nowrap-source-trail-comma: source-only trailing-comma signal for the
+		// FLAT (`NoWrap`) layout. Distinct from `appendTrailingComma` (= source
+		// `<field>TrailPresent` OR per-construct knob): the knob forces break-mode
+		// + a comma on the broken last element, but must NOT add a comma to a
+		// single-line flat list whose source had none. So the flat shape keys on
+		// source presence alone. Default `false` keeps every non-threaded caller
+		// byte-identical.
+		flatTrailingComma:Bool = false
 	):Doc {
 		// ω-inc5 sole-arrow uniform escalation: a call whose SOLE arg is an
 		// arrow lambda whose body wraps gets the SAME close-on-own-line +
@@ -1182,7 +1197,7 @@ class WrapList {
 			return IfNaturalFirstLineFitsOpenDelim(lineWidth, broken, glued);
 		}
 		return switch mode {
-			case NoWrap: shapeNoWrap(open, close, sep, items, openInside, closeInside, sepBeforeFlags);
+			case NoWrap: shapeNoWrap(open, close, sep, items, openInside, closeInside, sepBeforeFlags, flatTrailingComma);
 			case OnePerLine: shapeOnePerLine(open, close, sep, items, cols, appendTrailingComma, trailBreak, sepBeforeFlags);
 			case OnePerLineAfterFirst: shapeOnePerLineAfterFirst(open, close, sep, items, cols, appendTrailingComma, sepBeforeFlags);
 			case FillLine: shapeFillLine(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags, keepCloseGlued);
@@ -1203,7 +1218,7 @@ class WrapList {
 			// defensive `shapeNoWrap` glue so the change is byte-inert.
 			case Keep: sourceBreakBefore != null
 				? shapeKeep(open, close, sep, items, cols, appendTrailingComma, sourceBreakBefore)
-				: shapeNoWrap(open, close, sep, items, openInside, closeInside, sepBeforeFlags);
+				: shapeNoWrap(open, close, sep, items, openInside, closeInside, sepBeforeFlags, flatTrailingComma);
 			// ω-cascade-emits-comments: Ignore is the sister policy on the
 			// source-newline axis. Like Keep, the writer's trivia branch
 			// pre-empts before reaching the engine — the cascade-emit
@@ -1211,8 +1226,8 @@ class WrapList {
 			// per-element `Trivial<T>.leadingComments` / `trailingComment`
 			// access. Defensive fallback so any leakage produces a
 			// sensible single-line layout.
-			case Ignore: shapeNoWrap(open, close, sep, items, openInside, closeInside, sepBeforeFlags);
-			case _: shapeNoWrap(open, close, sep, items, openInside, closeInside, sepBeforeFlags);
+			case Ignore: shapeNoWrap(open, close, sep, items, openInside, closeInside, sepBeforeFlags, flatTrailingComma);
+			case _: shapeNoWrap(open, close, sep, items, openInside, closeInside, sepBeforeFlags, flatTrailingComma);
 		};
 	}
 
@@ -1350,7 +1365,8 @@ class WrapList {
 	private static function shapeNoWrap(
 		open:String, close:String, sep:String, items:Array<Doc>,
 		openInside:Doc, closeInside:Doc,
-		sepBeforeFlags:Null<Array<Bool>> = null
+		sepBeforeFlags:Null<Array<Bool>> = null,
+		flatTrailingComma:Bool = false
 	):Doc {
 		// ω-arrow-body-close-paren-own-line slice 2: when the sole item
 		// carries a slice-1 arrow-body-line-wrap marker, escalate the shape
@@ -1379,6 +1395,16 @@ class WrapList {
 				inner.push(skipSepBefore(sepBeforeFlags, i) ? Text(' ') : Text(sep + ' '));
 			inner.push(items[i]);
 		}
+		// ω-nowrap-source-trail-comma: preserve a source trailing comma in the
+		// flat (single-line) layout. `flatTrailingComma` is the source-only
+		// `<field>TrailPresent` signal — true only when the source actually had
+		// a `,` after the last element (NOT the knob, which only forces break-
+		// mode). The fork is source-faithful here: a single-line `{a: 1,}` /
+		// `[1, 2,]` / `f(x,)` keeps its trailing comma flat. Lists without a
+		// source comma pass `false` and stay byte-identical. Empty lists
+		// short-circuit before reaching this shape.
+		if (flatTrailingComma && items.length > 0)
+			inner.push(Text(sep));
 		// ω-force-flat-engine slice D: wrap inner content in `Flatten` so any
 		// Group/IfBreak/Fill nested inside a NoWrap-cascade construct is forced
 		// to its flat branch by the renderer (Frame.forceFlat propagation).
