@@ -1571,6 +1571,14 @@ class Lowering {
 							trailingComment: _trailing,
 							trailingBeforeSep: _trailingBeforeSep != null,
 							sepAfter: _sepAfter,
+							// ω-643-leading-block-glue: the last leading comment
+							// sat on the same source line as the element (no
+							// newline between the comment and the element's first
+							// token). The writer keeps a same-line BLOCK comment
+							// glued; line-style is filtered at emit. Empty
+							// leadingComments → false (nothing to glue).
+							leadingCommentsGlued: _lead.leadingComments.length > 0
+								&& !_lead.newlineAfterLeadingComments,
 							node: _node,
 						});
 					}

@@ -624,10 +624,20 @@ class Codegen {
 				$b{commentStmts};
 				break;
 			}
+			// ω-643-leading-block-glue: `_nl` was reset to 0 by the last
+			// `commentCaptureBlock` and then counts every newline between
+			// that comment's close and the node's first token. When the
+			// run held ≥1 captured comment AND no newline followed the last
+			// one, the comment is glued to the node on the same source line
+			// (`/* c */ field`). The writer keeps a same-line block comment
+			// on the field's line instead of force-breaking. False whenever
+			// `_leading` is empty (no leading comment to glue).
+			final _newlineAfterLeadingComments:Bool = _nl > 0;
 			return {
 				blankBefore: _blankBefore,
 				blankAfterLeadingComments: _blankAfterLeadingComments,
 				newlineBefore: _newlineBefore,
+				newlineAfterLeadingComments: _leading.length > 0 && _newlineAfterLeadingComments,
 				leadingComments: _leading,
 			};
 		};
@@ -636,7 +646,7 @@ class Codegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [{name: 'ctx', type: macro : anyparse.runtime.Parser}],
-				ret: macro : {blankBefore:Bool, blankAfterLeadingComments:Bool, newlineBefore:Bool, leadingComments:Array<String>},
+				ret: macro : {blankBefore:Bool, blankAfterLeadingComments:Bool, newlineBefore:Bool, newlineAfterLeadingComments:Bool, leadingComments:Array<String>},
 				expr: body,
 			}),
 			pos: Context.currentPos(),

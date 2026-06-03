@@ -91,6 +91,18 @@ package anyparse.runtime;
  *    `Trivial<T>` literal site omits it and reads default `false`.
  *    Consumed ONLY under `WrapMode.Keep` (multiVar fold) — byte-inert
  *    for every non-keep construct.
+ *  - `leadingCommentsGlued` — the LAST captured leading comment sat on
+ *    the SAME source line as the node (no newline between the comment's
+ *    close and the node's first token), AND that comment is block-style
+ *    (`/* … *\/`). Records the `/* c *\/ field` glue intent so the writer
+ *    keeps the comment on the field's line instead of force-breaking
+ *    after it (lineends/issue_643 — leading block comment in a typedef
+ *    anon-struct field). `@:optional` so only the trivia sep-Star loop
+ *    that can compute it sets the field; every other `Trivial<T>`
+ *    literal site omits it and reads default `false` (= break after the
+ *    comment, byte-identical to pre-slice). Line-style `//` leading
+ *    comments are never glued — they always end their source line — so
+ *    the producer only sets this `true` for a same-line block comment.
  *  - `node` — the wrapped AST node itself.
  *
  * Shape is flat (no inner `trivia` struct) — until an actual use case
@@ -107,5 +119,6 @@ typedef Trivial<T> = {
 	var trailingBeforeSep:Bool;
 	var sepAfter:Bool;
 	@:optional var newlineAfterSep:Bool;
+	@:optional var leadingCommentsGlued:Bool;
 	var node:T;
 }

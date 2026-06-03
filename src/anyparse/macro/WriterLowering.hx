@@ -9943,7 +9943,18 @@ class WriterLowering {
 						var _ci:Int = 0;
 						while (_ci < _t.leadingComments.length) {
 							_inner.push(leadingCommentDoc(_t.leadingComments[_ci], opt));
-							_inner.push(_dhl());
+							// ω-643-leading-block-glue: the LAST leading comment
+							// keeps the element on its line (single space, no
+							// break) when the source glued a block-style comment
+							// to it (`/* c */ field` — `leadingCommentsGlued`).
+							// Line-style `//` always ends its line → never glued.
+							// Intermediate comments and the non-glued case keep
+							// the legacy hardline. Default-false (every non-trivia
+							// -sep-Star producer) preserves the pre-slice break.
+							final _isLastLead:Bool = _ci == _t.leadingComments.length - 1;
+							final _glueLead:Bool = _isLastLead && _t.leadingCommentsGlued == true
+								&& StringTools.startsWith(_t.leadingComments[_ci], '/*');
+							_inner.push(_glueLead ? _dt(' ') : _dhl());
 							_ci++;
 						}
 						if (_t.blankAfterLeadingComments && _t.leadingComments.length > 0) _inner.push(_dhl());
