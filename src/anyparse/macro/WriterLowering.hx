@@ -9974,6 +9974,23 @@ class WriterLowering {
 			final tlhs:Expr = {expr: EConst(CIdent('_prevKindBefore' + i)), pos: pos};
 			final trhs:Expr = {expr: EConst(CIdent('_currKindBefore' + i)), pos: pos};
 			trackPrev.push(macro $tlhs = $trhs);
+			// ω-before-multiline-prev-not — second binary classify-switch on
+			// the same classifier field, tracking whether the element matched
+			// an excluded-prev ctor (e.g. `Conditional`). Only built when the
+			// info carries `prevExcludeCases`; the ternary below adds a
+			// `_prevKindPrevExcl != 1` guard so the override is suppressed when
+			// the previous sibling was excluded (falls through to source).
+			final prevExcludeCases:Null<Array<Case>> = info.prevExcludeCases;
+			if (prevExcludeCases != null) {
+				prevVars.push({name: '_prevKindPrevExcl' + i, type: macro:Int, expr: macro 0});
+				currVars.push({name: '_currKindPrevExcl' + i, type: macro:Int, expr: macro 0});
+				final exclSwitch:Expr = {expr: ESwitch(classifierAccess, prevExcludeCases, null), pos: pos};
+				final exclLhs:Expr = {expr: EConst(CIdent('_currKindPrevExcl' + i)), pos: pos};
+				currCompute.push(macro $exclLhs = $exclSwitch);
+				final exclTlhs:Expr = {expr: EConst(CIdent('_prevKindPrevExcl' + i)), pos: pos};
+				final exclTrhs:Expr = {expr: EConst(CIdent('_currKindPrevExcl' + i)), pos: pos};
+				trackPrev.push(macro $exclTlhs = $exclTrhs);
+			}
 		}
 
 		// Between-ctor cascade — kind+path trackers, head AND tail axes,
@@ -10210,7 +10227,20 @@ class WriterLowering {
 			final currIdent:Expr = {expr: EConst(CIdent('_currKindBefore' + idx)), pos: pos};
 			final prevIdent:Expr = {expr: EConst(CIdent('_prevKindBefore' + idx)), pos: pos};
 			final fallback:Expr = blanksCountExpr;
-			blanksCountExpr = macro ($currIdent == 1 && $prevIdent != 1 ? $beforeAccess : $fallback);
+			// ω-before-multiline-prev-not — gate construction: when the info
+			// carries `prevExcludeCases`, the fire condition gains a
+			// `_prevKindPrevExcl != 1` guard so the override falls through to
+			// the source-driven fallback when the previous sibling matched an
+			// excluded ctor (e.g. a cond-comp `#if … #end`). Without
+			// `prevExcludeCases` the gate is the original two-term form —
+			// byte-identical for every existing `blankLinesBeforeCtor{,If}`.
+			final gate:Expr = if (info.prevExcludeCases == null)
+				macro $currIdent == 1 && $prevIdent != 1;
+			else {
+				final prevExclIdent:Expr = {expr: EConst(CIdent('_prevKindPrevExcl' + idx)), pos: pos};
+				macro $currIdent == 1 && $prevIdent != 1 && $prevExclIdent != 1;
+			}
+			blanksCountExpr = macro ($gate ? $beforeAccess : $fallback);
 		}
 		// ω-between-single-line-types — splice in priority between `before`
 		// (just wrapped) and `between` (about to wrap). Fires `opt.<f>`
@@ -11674,6 +11704,9 @@ class WriterLowering {
 		final beforeCtorIfAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBeforeCtorIf');
 		for (args in beforeCtorIfAllArgs)
 			beforeCtorInfos.push(buildBeforeCtorBlankInfoIf(elemRefName, args));
+		final beforeCtorIfPrevNotAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBeforeCtorIfPrevNot');
+		for (args in beforeCtorIfPrevNotAllArgs)
+			beforeCtorInfos.push(buildBeforeCtorBlankInfoIfPrevNot(elemRefName, args));
 		final betweenCtorAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBetweenSameCtorByLevel');
 		final tailTransparentAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBetweenSameCtorTailTransparent');
 		final headTransparentAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBetweenSameCtorHeadTransparent');
@@ -11850,6 +11883,7 @@ class WriterLowering {
 			classifierFieldName: r.fieldName,
 			classifyCases: r.cases,
 			optField: r.optField,
+			prevExcludeCases: null,
 		};
 	}
 
@@ -11874,6 +11908,60 @@ class WriterLowering {
 			classifierFieldName: r.fieldName,
 			classifyCases: r.cases,
 			optField: r.optField,
+			prevExcludeCases: null,
+		};
+	}
+
+	/**
+	 * ω-before-multiline-prev-not — predicate-gated `blankLinesBeforeCtor`
+	 * variant that ALSO suppresses the override when the previous sibling
+	 * matched an excluded ctor. Args shape:
+	 * `(classifierField, predicateName, TargetCtor1, …, '|', ExcludeCtor1,
+	 * …, optField)`. The `'|'` separator splits the target set (left) from
+	 * the excluded-prev set (right). The target side resolves exactly like
+	 * `buildBeforeCtorBlankInfoIf` (predicate-gated kind tracker); the
+	 * excluded side builds a second binary classify-switch on the SAME
+	 * classifier field (kind=1 for any excluded ctor) stored in
+	 * `prevExcludeCases`. The cascade consumer (`buildCascadeEmit`) adds a
+	 * `&& _prevKindPrevExcl != 1` guard so the override falls through to the
+	 * source-driven blank count when the prev sibling was excluded.
+	 *
+	 * Drives the "do not force a blank before a multiline type decl when
+	 * the preceding sibling is a cond-comp `#if … #end` with no source
+	 * blank" rule (issue_298): `Conditional`-prev → respect source.
+	 */
+	private function buildBeforeCtorBlankInfoIfPrevNot(elemRefName:String, args:Array<String>):BeforeCtorBlankInfo {
+		final sepIdx:Int = args.indexOf('|');
+		if (args.length < 5 || sepIdx < 0)
+			Context.fatalError(
+				'WriterLowering: @:fmt(blankLinesBeforeCtorIfPrevNot) expects ≥ 5 string args (classifierField, predicateName, TargetCtor1, …, "|", ExcludeCtor1, …, optField) with a "|" separator, got ${args.length}',
+				Context.currentPos()
+			);
+		final classifier:String = args[0];
+		final predicateName:String = args[1];
+		final optField:String = args[args.length - 1];
+		final targetCtors:Array<String> = args.slice(2, sepIdx);
+		final excludeCtors:Array<String> = args.slice(sepIdx + 1, args.length - 1);
+		if (targetCtors.length == 0 || excludeCtors.length == 0)
+			Context.fatalError(
+				'WriterLowering: @:fmt(blankLinesBeforeCtorIfPrevNot) requires ≥ 1 target ctor before "|" and ≥ 1 excluded ctor after it',
+				Context.currentPos()
+			);
+		// Target side: predicate-gated kind tracker, same resolution as
+		// `buildBeforeCtorBlankInfoIf` (classifier + ctors + optField, with
+		// the predicate name threaded in).
+		final targetArgs:Array<String> = [classifier].concat(targetCtors).concat([optField]);
+		final target:CtorBlankResolution = resolveCtorBlankArgs(elemRefName, targetArgs, 'blankLinesBeforeCtorIfPrevNot', predicateName);
+		// Excluded side: bare binary classify-switch on the same classifier
+		// field — no predicate, kind=1 for any excluded ctor. `optField` is
+		// reused only to satisfy the resolver arity; its result is discarded.
+		final excludeArgs:Array<String> = [classifier].concat(excludeCtors).concat([optField]);
+		final exclude:CtorBlankResolution = resolveCtorBlankArgs(elemRefName, excludeArgs, 'blankLinesBeforeCtorIfPrevNot', null);
+		return {
+			classifierFieldName: target.fieldName,
+			classifyCases: target.cases,
+			optField: target.optField,
+			prevExcludeCases: exclude.cases,
 		};
 	}
 
@@ -12907,6 +12995,18 @@ typedef BeforeCtorBlankInfo = {
 	classifierFieldName:String,
 	classifyCases:Array<Case>,
 	optField:String,
+	// ω-before-multiline-prev-not — when non-null, a second binary
+	// classify-switch (kind=1 if the element's classifier ctor is in the
+	// excluded-prev set, e.g. `Conditional`). The before-ctor cascade
+	// ternary gains an extra `&& _prevKindPrevExcl != 1` guard so the
+	// override is suppressed when the previous sibling matched an excluded
+	// ctor — the cascade then falls through to the source-driven
+	// `_t.blankBefore` count. Closes the spurious-blank-after-`#end` bug
+	// (issue_298): a cond-comp `#if … #end` immediately before a multiline
+	// class no longer forces `beforeMultilineDecl` regardless of source.
+	// Null for the plain `blankLinesBeforeCtor{,If}` builders → no extra
+	// tracker, byte-identical cascade.
+	?prevExcludeCases:Null<Array<Case>>,
 };
 
 /**

@@ -143,6 +143,23 @@ package anyparse.grammar.haxe;
  * single-line type-decl runs. Zero runtime reflection — the macro
  * walks the grammar shape and emits direct `Array.length > 0` /
  * enum-`switch` checks.
+ *
+ * `@:fmt(blankLinesBeforeCtorIfPrevNot(classifierField, predicateName,
+ * TargetCtor1, …, '|', ExcludeCtor1, …, optField))` (slice
+ * ω-before-multiline-prev-not) is the prev-aware variant of
+ * `blankLinesBeforeCtorIf`: same predicate-gated target side, but the
+ * override is ADDITIONALLY suppressed when the previous sibling's
+ * classifier ctor sits in the excluded set after the `'|'` separator —
+ * the cascade then falls through to the source-driven `blankBefore`
+ * count instead of forcing `opt.<optField>`. Used here to exclude
+ * `Conditional` (`#if … #end`): a cond-comp directive immediately before
+ * a multiline type decl with NO source blank no longer gets a spurious
+ * forced blank (matches haxe-formatter, which preserves the source
+ * blank-or-not across a preprocessor `#end → type` boundary). When the
+ * source DID have a blank, the source-driven fallback still emits it, so
+ * the `#if … #end\n\nclass` round-trip stays byte-identical. Resolved by
+ * `WriterLowering.buildBeforeCtorBlankInfoIfPrevNot`; the excluded set
+ * drives a second binary classify-switch tracked into the prev-side.
  */
 @:peg
 @:schema(anyparse.grammar.haxe.HaxeFormat)
@@ -158,7 +175,7 @@ typedef HxModule = {
 	@:fmt(blankLinesBetweenSameCtorTailTransparent('decl', 'Conditional', 'betweenImportsTailLeafClassify'))
 	@:fmt(blankLinesBetweenSameCtorHeadTransparent('decl', 'Conditional', 'betweenImportsHeadLeafClassify'))
 	@:fmt(blankLinesAfterCtorIf('decl', 'multiline', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'FnDecl', 'TypedefDecl', 'afterMultilineDecl'))
-	@:fmt(blankLinesBeforeCtorIf('decl', 'multiline', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'FnDecl', 'TypedefDecl', 'beforeMultilineDecl'))
+	@:fmt(blankLinesBeforeCtorIfPrevNot('decl', 'multiline', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'FnDecl', 'TypedefDecl', '|', 'Conditional', 'beforeMultilineDecl'))
 	@:fmt(blankLinesBetweenSameCtorIfNot('decl', 'multiline', 'TypedefDecl', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'betweenSingleLineTypes'))
 	@:fmt(blankBeforeOrphanLineCommentTrail)
 	@:fmt(blankBeforeLineCommentLed)
