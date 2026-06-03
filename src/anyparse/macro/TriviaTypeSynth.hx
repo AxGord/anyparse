@@ -370,6 +370,25 @@ class TriviaTypeSynth {
 	 */
 	public static inline final CHAIN_NEWLINE_ARG_NAME:String = 'chainNewline';
 
+	/**
+	 * ω-keep-chain-receiver-comment — positional arg name appended to the
+	 * `@:postfix('.')` method-chain ctor `HxExpr.FieldAccess` (alongside its
+	 * `chainNewline:Bool` slot). Holds the verbatim same-line trailing comment
+	 * captured by the parser in the gap BEFORE the `.` dispatch — i.e. the
+	 * trailing comment of the FieldAccess's operand. For a chain whose receiver
+	 * is a bare value (`owner // test\n\t.addEntity()…`) the inner-most
+	 * FieldAccess's operand IS that receiver, so this slot carries the
+	 * receiver's trailing comment; the chain dispatch threads it onto the
+	 * receiver Doc under `WrapMode.Keep` so the comment survives the per-segment
+	 * break. Null for operands whose trailing comment is already captured
+	 * elsewhere — a Call operand's `)`-trailing comment is held by the Call's
+	 * `closeTrailing` slot, so `collectTrailingFull` finds nothing left at the
+	 * dot gap and this slot stays null (byte-inert). Postfix-only (the infix
+	 * chain ctors capture operand trivia through the Pratt stash, not here).
+	 * Plain mode keeps the original 2-arg FieldAccess ctor (no slot).
+	 */
+	public static inline final CHAIN_LEAD_COMMENT_ARG_NAME:String = 'chainLeadComment';
+
 	private static inline final PAIRED_SUFFIX:String = 'T';
 	private static inline final SYNTH_SUBPACK:String = 'trivia';
 	private static inline final SYNTH_MODULE_LEAF:String = 'Pairs';
@@ -616,6 +635,7 @@ class TriviaTypeSynth {
 		if (isAltWrapOpenNewlineBranch(branch)) n++; // wrapOpenNewline
 		if (isAltKwNewlineBranch(branch)) n++; // kwNewline (increment 1b)
 		if (isAltChainNewlineBranch(branch)) n++; // chainNewline (increment 2)
+		if (isPostfixChainCommentBranch(branch)) n++; // chainLeadComment (receiver-comment)
 		// ω-D9A-keep-callargs-v2: postfix close-trailing gate adds TWO slots
 		// — closeTrailing + argsOpenNewline (see `buildEnumCtor`). Keep the
 		// count in sync so the `pairedToRaw` switch pattern's `_` placeholder
@@ -793,6 +813,7 @@ class TriviaTypeSynth {
 		if (isAltWrapOpenNewlineBranch(branch)) defaults.push(macro false); // wrapOpenNewline
 		if (isAltKwNewlineBranch(branch)) defaults.push(macro false); // kwNewline (increment 1b)
 		if (isAltChainNewlineBranch(branch)) defaults.push(macro false); // chainNewline (increment 2)
+		if (isPostfixChainCommentBranch(branch)) defaults.push(macro (null : Null<String>)); // chainLeadComment (receiver-comment)
 		if (isPostfixCloseTrailingBranch(branch)) {
 			defaults.push(macro (null : Null<String>)); // closeTrailing
 			// ω-D9A-keep-callargs-v2: argsOpenNewline default for raw→paired
@@ -1408,6 +1429,18 @@ class TriviaTypeSynth {
 			final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
 			args.push({name: CHAIN_NEWLINE_ARG_NAME, type: boolCT});
 		}
+		// ω-keep-chain-receiver-comment: the `@:postfix('.')` FieldAccess ctor
+		// grows a `chainLeadComment:Null<String>` slot immediately after its
+		// `chainNewline:Bool` slot, holding the verbatim trailing comment of its
+		// operand captured at the dot gap. Postfix-only (isPostfixChainCommentBranch
+		// excludes the infix chain ctors), so it appends after chainNewline on the
+		// single FieldAccess branch and stays disjoint from the closeTrailing
+		// family below (FieldAccess carries no close delimiter).
+		if (isPostfixChainCommentBranch(branch)) {
+			final strCT:ComplexType = TPath({pack: [], name: 'String', params: []});
+			final nullStrCT:ComplexType = TPath({pack: [], name: 'Null', params: [TPType(strCT)]});
+			args.push({name: CHAIN_LEAD_COMMENT_ARG_NAME, type: nullStrCT});
+		}
 		// ω-postfix-call-trailing: Star-suffix `@:postfix(open, close) @:sep(...)`
 		// branches whose Star already auto-collects per-arg trivia
 		// (`trivia.starCollects=true`, set by `TriviaAnalysis.markPostfixStarSuffix`)
@@ -1682,6 +1715,23 @@ class TriviaTypeSynth {
 	public static function isAltChainNewlineBranch(branch:ShapeNode):Bool {
 		if (branch.children.length != 2) return false;
 		if (!branch.hasMeta(':infix') && !branch.hasMeta(':postfix')) return false;
+		return branch.fmtHasFlag('captureChainNewline');
+	}
+
+	/**
+	 * ω-keep-chain-receiver-comment — true when the branch is the
+	 * `@:postfix('.')` method-chain ctor (`HxExpr.FieldAccess`): a postfix
+	 * branch carrying `@:fmt(captureChainNewline)`. Such a branch grows a
+	 * positional `chainLeadComment:Null<String>` slot (in addition to
+	 * `chainNewline:Bool`) holding the verbatim trailing comment of its operand
+	 * captured before the `.` dispatch. Strictly narrower than
+	 * `isAltChainNewlineBranch` — the infix chain ctors (Add/Sub/And/Or) are
+	 * excluded since they capture operand trivia through the Pratt stash, not a
+	 * dedicated slot. Two operand children (`operand,field`).
+	 */
+	public static function isPostfixChainCommentBranch(branch:ShapeNode):Bool {
+		if (branch.children.length != 2) return false;
+		if (!branch.hasMeta(':postfix')) return false;
 		return branch.fmtHasFlag('captureChainNewline');
 	}
 

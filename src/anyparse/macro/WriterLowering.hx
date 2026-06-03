@@ -152,6 +152,13 @@ class WriterLowering {
 			// `_breaks` array. Disjoint from every Alt/postfix predicate (chain
 			// ctors are bare infix); composes additively in `extraArgs`.
 			final hasChainNewline:Bool = ctx.trivia && TriviaTypeSynth.isAltChainNewlineBranch(branch);
+			// ω-keep-chain-receiver-comment: the `@:postfix('.')` FieldAccess ctor
+			// grows a `chainLeadComment:Null<String>` slot after its `chainNewline`
+			// slot (operand's dot-gap trailing comment). Reserve it in `extraArgs`
+			// so the general FieldAccess pattern destructures the right arity; the
+			// keep-mode chain dispatch reads it directly off its hand-written
+			// `FieldAccess(_prev, _fld, _nl, _opTrail)` pattern. Postfix-only.
+			final hasChainLeadComment:Bool = ctx.trivia && TriviaTypeSynth.isPostfixChainCommentBranch(branch);
 			// ω-open-trailing-alt: same-line trailing comment after the
 			// open lit grows a parallel positional arg next to closeTrailing.
 			// Synth gate is `isAltCloseTrailingBranch && @:lead present`,
@@ -199,6 +206,7 @@ class WriterLowering {
 				+ (hasWrapOpenNewline ? 1 : 0)
 				+ (hasKwNewline ? 1 : 0)
 				+ (hasChainNewline ? 1 : 0)
+				+ (hasChainLeadComment ? 1 : 0)
 				+ (hasPostfixCloseTrailing ? 3 : 0);
 			final argNames:Array<String> = [for (i in 0...children.length + extraArgs) '_v$i'];
 
@@ -437,6 +445,14 @@ class WriterLowering {
 				var _cursor = value;
 				var _receiver = value;
 				var _hasCallPrev:Bool = false;
+				// ω-keep-chain-receiver-comment: the inner-most FieldAccess carries
+				// its operand's dot-gap trailing comment in the synth
+				// `chainLeadComment` slot. When that operand IS the chain receiver
+				// (a bare value, the `case _:` of the `switch _prev` below), stash
+				// the comment so it can be reattached to the receiver Doc after the
+				// walk — a `Keep` chain would otherwise drop it when the per-segment
+				// break replaces the source `owner // test` layout.
+				var _recTrail:Null<String> = null;
 				while (true) {
 					switch _cursor {
 						// ω-keep-callclose-newline: trivia Call ctor grew a 5th
@@ -445,7 +461,7 @@ class WriterLowering {
 						// `lowerPostfixStar`, not the per-segment chain emit).
 						case Call(_op, _args, _trailClose, _, _):
 							switch _op {
-								case FieldAccess(_prev, _fld, _nl):
+								case FieldAccess(_prev, _fld, _nl, _opTrail):
 									final _argDocs:Array<anyparse.core.Doc> = $argDocsExpr;
 									final _argsDoc:anyparse.core.Doc = $argsListExpr;
 									final _segDoc:anyparse.core.Doc = _trailClose != null
@@ -455,14 +471,14 @@ class WriterLowering {
 									_breaks.unshift(_nl);
 									switch _prev {
 										case Call(_, _, _, _, _): _hasCallPrev = true;
-										case _:
+										case _: if (_opTrail != null) _recTrail = _opTrail;
 									}
 									_cursor = _prev;
 								case _:
 									_receiver = _cursor;
 									break;
 							}
-						case FieldAccess(_prev, _fld, _nl):
+						case FieldAccess(_prev, _fld, _nl, _opTrail):
 							// ω-methodchain-glue-bare-field: a bare `.field`
 							// access that precedes an already-collected segment
 							// (a Call to its right) is NOT its own chain
@@ -492,7 +508,7 @@ class WriterLowering {
 							}
 							switch _prev {
 								case Call(_, _, _, _, _): _hasCallPrev = true;
-								case _:
+								case _: if (_opTrail != null) _recTrail = _opTrail;
 							}
 							_cursor = _prev;
 						case _:
@@ -501,7 +517,14 @@ class WriterLowering {
 					}
 				}
 				if (_segs.length >= 2 && _hasCallPrev) {
-					final _recDoc:anyparse.core.Doc = $writeIdent(_receiver, opt, $precExpr);
+					final _recBaseDoc:anyparse.core.Doc = $writeIdent(_receiver, opt, $precExpr);
+					// ω-keep-chain-receiver-comment: glue the receiver's captured
+					// trailing comment (`owner // test`) to its Doc before the first
+					// forced segment break. `trailingCommentDocVerbatim` prepends the
+					// leading space, so `_dc([recv, ' // test'])` reproduces the source.
+					final _recDoc:anyparse.core.Doc = _recTrail != null
+						? _dc([_recBaseDoc, trailingCommentDocVerbatim(_recTrail, opt)])
+						: _recBaseDoc;
 					return anyparse.format.wrap.MethodChainEmit.emit(_recDoc, _segs, opt, $chainRulesExpr, _breaks);
 				}
 				$body;
@@ -12472,6 +12495,7 @@ class WriterLowering {
 			case WrapOpenNewline: TriviaTypeSynth.isAltWrapOpenNewlineBranch(branch);
 			case KwNewline:       TriviaTypeSynth.isAltKwNewlineBranch(branch);
 			case ChainNewline:    TriviaTypeSynth.isAltChainNewlineBranch(branch);
+			case ChainLeadComment: TriviaTypeSynth.isPostfixChainCommentBranch(branch);
 		};
 		if (!hasSlot) return null;
 		var idx:Int = baseIdx;
@@ -12490,6 +12514,8 @@ class WriterLowering {
 		if (TriviaTypeSynth.isAltWrapOpenNewlineBranch(branch)) idx++;
 		if (slot == KwNewline) return macro $i{argNames[idx]};
 		if (TriviaTypeSynth.isAltKwNewlineBranch(branch)) idx++;
+		if (slot == ChainNewline) return macro $i{argNames[idx]};
+		if (TriviaTypeSynth.isAltChainNewlineBranch(branch)) idx++;
 		return macro $i{argNames[idx]};
 	}
 }
@@ -12979,5 +13005,6 @@ enum abstract AltSlot(Int) {
 	final WrapOpenNewline = 4;
 	final KwNewline = 5;
 	final ChainNewline = 6;
+	final ChainLeadComment = 7;
 }
 #end

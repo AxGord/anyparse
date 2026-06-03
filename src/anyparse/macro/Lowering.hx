@@ -751,6 +751,16 @@ class Lowering {
 		if (postfixBranches.length == 0) {
 			Context.fatalError('Lowering: lowerPostfixLoop called with no postfix branches', Context.currentPos());
 		}
+		// ω-keep-chain-receiver-comment: when this postfix enum has a method-chain
+		// `@:fmt(captureChainNewline)` branch (`HxExpr.FieldAccess`), capture the
+		// operand's trailing comment at the loop's pre-skipWs site so a bare chain
+		// receiver's same-line comment survives the per-iteration `skipWs`. The
+		// captured value feeds the FieldAccess ctor's `chainLeadComment` slot;
+		// trivia-mode only and gated on the branch flag so every other postfix loop
+		// emits the legacy body unchanged (byte-inert non-keep / non-chain).
+		var _hasChainBranch:Bool = false;
+		for (b in postfixBranches) if (b.fmtHasFlag('captureChainNewline')) _hasChainBranch = true;
+		final wantOpTrail:Bool = ctx.trivia && _hasChainBranch;
 		// Longest-first sort — same macro-time policy as lowerPrattLoop (D33).
 		postfixBranches.sort((a, b) -> {
 			final la:Int = (a.annotations.get('postfix.op') : String).length;
@@ -1090,9 +1100,16 @@ class Lowering {
 				// segment dot-boundary line breaks. Plain mode keeps the original
 				// 2-arg ctor arity (no slot; chain always glues via shapeNoWrap).
 				final captureChainNl:Bool = ctx.trivia && branch.fmtHasFlag('captureChainNewline');
+				// ω-keep-chain-receiver-comment: the FieldAccess ctor grows a 4th
+				// positional `chainLeadComment:Null<String>` slot after `chainNewline`.
+				// It reads `_opTrailComment` — the operand's trailing comment captured
+				// at the loop's pre-skipWs site (see the trivia postfix loop below).
+				// The slot lets the writer's keep-mode chain dispatch reattach a bare
+				// receiver's trailing comment (`owner // test`) that the per-iteration
+				// `skipWs` would otherwise eat.
 				final ctorCall:Expr = {
 					expr: ECall(ctorRef, captureChainNl
-						? [macro left, macro _suffix, macro _chainNl]
+						? [macro left, macro _suffix, macro _chainNl, macro _opTrailComment]
 						: [macro left, macro _suffix]),
 					pos: Context.currentPos(),
 				};
@@ -1151,10 +1168,22 @@ class Lowering {
 		// `newlineBefore=false` and the writer's pad-as-hardline lift
 		// fires false on the `expr → elseifs[0]` boundary even when
 		// source is multi-line.
+		// ω-keep-chain-receiver-comment: capture the operand's same-line trailing
+		// comment at the dot gap BEFORE the per-iteration `skipWs` eats it.
+		// `collectTrailingFull` consumes only horizontal ws + a same-line comment
+		// (rewinding on none) and stops at the newline, so the subsequent `skipWs`
+		// lands at the identical position — position-inert for every branch — while
+		// the FieldAccess branch reads `_opTrailComment` into its `chainLeadComment`
+		// slot. Declared `null` when this enum has no chain branch so the local stays
+		// in scope for the branch bodies without invoking the helper.
+		final opTrailCapture:Expr = wantOpTrail
+			? macro final _opTrailComment:Null<String> = collectTrailingFull(ctx)
+			: macro final _opTrailComment:Null<String> = null;
 		if (ctx.trivia) return macro {
 			var left:$returnCT = $coreCall;
 			while (true) {
 				final _preWsPos:Int = ctx.pos;
+				$opTrailCapture;
 				skipWs(ctx);
 				var _matched:Bool = true;
 				$opChain;
