@@ -41,6 +41,27 @@ class MethodChainEmit {
 	):Doc {
 		if (segments.length == 0) return WrapBoundary(receiver);
 
+		// ω-chain-comment-forced-break: a method-chain segment (or the
+		// receiver) whose rendered Doc ENDS with a line comment cannot be
+		// followed by the next `.field` on the same physical line — the
+		// comment would swallow it. `commentForcedBreak` is parallel to
+		// `segments`: entry `i` is true when the thing rendered immediately
+		// before segment `i` (receiver for i=0, else segment i-1) ends with
+		// a line comment. The signal is read structurally from the already-
+		// built Docs (`endsWithLineComment`), so every receiver shape (bare
+		// ident with a glued `// …`, `new T()` with its own trailing slot,
+		// a call receiver) is covered uniformly. When any entry fires we
+		// route every cascade-decided shape through `shapeKeep` with a mask
+		// = `commentForcedBreak[i] OR (the cascade mode breaks at i)`, so
+		// the chain breaks at comment boundaries while preserving the
+		// cascade's width-driven breaks (the wide chains still break
+		// everywhere via `IfFullLineExceeds`). When nothing fires (the
+		// non-comment hot path) `shapeAt` uses the original `shape(mode, …)`
+		// exactly as before → byte-inert.
+		final commentForcedBreak:Array<Bool> = [for (i in 0...segments.length)
+			endsWithLineComment(i == 0 ? receiver : segments[i - 1])];
+		final hasCommentBreak:Bool = commentForcedBreak.indexOf(true) != -1;
+
 		// Token-text width metric: chain segment length is the segment's
 		// rendered width with `BodyGroup` content deferred (mirrors
 		// `Renderer.fitsFlat`'s BG-defer in Departure 2 — block / lambda /
@@ -97,6 +118,13 @@ class MethodChainEmit {
 		}
 
 		function shapeAt(mode:WrapMode):Doc {
+			// `Keep` mode already reproduces the source per-segment layout
+			// (incl. the comment-bearing dot breaks) via `sourceBreakBefore`,
+			// so leave it untouched — the comment-forced mask is only needed
+			// for the NON-keep cascade modes that would otherwise glue a
+			// `.field` onto a line comment.
+			if (hasCommentBreak && mode != Keep)
+				return shapeKeep(receiver, segments, cols, commentBreakMask(mode, segments.length, commentForcedBreak));
 			return shape(mode, receiver, segments, cols, sourceBreakBefore);
 		}
 
@@ -224,6 +252,82 @@ class MethodChainEmit {
 			// demands it.
 			case _: shapeOnePerLineAfterFirst(receiver, segments, cols);
 		};
+	}
+
+	/**
+	 * ω-chain-comment-forced-break — does `doc` end with a line comment on
+	 * its rendered last line? Walks the rightmost leaf of the Doc tree: a
+	 * trailing line comment is a `Text` atom whose trimmed content starts
+	 * with `//` (the verbatim `trailingCommentDocVerbatim` output for a line
+	 * comment is `' // …'`; a block comment is `' /* … *\/'` and is NOT a
+	 * forced break — content can follow it on the same line). Containers
+	 * recurse into their last child; layout atoms (`Line` / `OptHardline` /
+	 * `Empty`) are transparent — a `Line` after the comment Text still
+	 * leaves the comment as the last *visible* token, so they're skipped
+	 * while scanning right-to-left. Conditional / measured ctors
+	 * (`IfBreak`, `Group`, `BodyGroup`, …) descend into the structural child
+	 * that carries the token stream; for the comment probe the break-side /
+	 * inner subtree is sufficient since both branches end with the same
+	 * trailing comment token by construction.
+	 */
+	private static function endsWithLineComment(doc:Doc):Bool {
+		return switch doc {
+			case Text(s):
+				final t:String = StringTools.trim(s);
+				StringTools.startsWith(t, '//');
+			case Concat(items):
+				var i:Int = items.length - 1;
+				var found:Bool = false;
+				var decided:Bool = false;
+				while (i >= 0 && !decided) {
+					switch items[i] {
+						// Layout atoms are transparent — skip past them to the
+						// last token-bearing child.
+						case Line(_), OptHardline, OptHardlineSkipAtOpenDelim,
+							OptHardlineSkipBeforeHardline, OptSpaceSkipAfterHardline, Empty:
+							i--;
+						case _:
+							found = endsWithLineComment(items[i]);
+							decided = true;
+					}
+				}
+				found;
+			case Nest(_, inner), Group(inner), BodyGroup(inner),
+				GroupWithRestProbe(inner), Flatten(inner), WrapBoundary(inner),
+				HardFlatten(inner), CollapseProbe(inner):
+				endsWithLineComment(inner);
+			case IfBreak(breakDoc, _), IfWidthExceeds(_, breakDoc, _),
+				IfFirstLineExceeds(_, breakDoc, _), IfLineExceeds(_, breakDoc, _),
+				IfFullLineExceeds(_, breakDoc, _), IfNaturalFirstLineExceeds(_, breakDoc, _),
+				IfNaturalFirstLineFitsOpenDelim(_, breakDoc, _):
+				endsWithLineComment(breakDoc);
+			case _:
+				false;
+		};
+	}
+
+	/**
+	 * ω-chain-comment-forced-break — build the `shapeKeep` break mask for a
+	 * comment-bearing chain under a cascade-decided `mode`. Each entry is
+	 * `commentForced[i] OR modeBreaksAt(i)` so the chain breaks at every
+	 * line-comment boundary AND wherever the width-driven cascade mode
+	 * would have broken:
+	 *  - `NoWrap`               → breaks nowhere (mask = comment only);
+	 *  - `OnePerLine`           → breaks before every segment incl. seg0;
+	 *  - everything else        → breaks before segments 1…n (the
+	 *    `OnePerLineAfterFirst` / Fill family — seg0 glued to receiver
+	 *    unless a comment forces it).
+	 */
+	private static function commentBreakMask(mode:WrapMode, count:Int, commentForced:Array<Bool>):Array<Bool> {
+		return [for (i in 0...count) {
+			final forced:Bool = i < commentForced.length && commentForced[i];
+			final modeBreaks:Bool = switch mode {
+				case NoWrap: false;
+				case OnePerLine: true;
+				case _: i >= 1;
+			};
+			forced || modeBreaks;
+		}];
 	}
 
 	private static function shapeNoWrap(receiver:Doc, segments:Array<Doc>):Doc {
