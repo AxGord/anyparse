@@ -316,6 +316,20 @@ package anyparse.grammar.haxe;
  * param and zero-param lambdas (`(x, y) => body`, `() => body`)
  * parse via `ParenLambdaExpr` atom with `tryBranch` backtracking.
  * Switch case `=>` is deferred.
+ *
+ * **Value-position switch** (`SwitchExpr` / `SwitchExprBare`): a switch
+ * parsed as an `HxExpr` (rather than `HxStatement.SwitchStmt`) is by
+ * grammar in value position — `directionIndex += switch (e) {…}`,
+ * `var x = switch …`, `f(switch …)`. Its ctors carry
+ * `@:fmt(propagateExprPosition)` so the descendant cases see
+ * `opt._inExprPosition = true` and route their body-placement through
+ * the `expressionCase` policy (default `Keep`, preserve same-line
+ * source) instead of the statement-position `caseBody` policy (default
+ * `Next`, break). Mirrors the fork's `MarkSameLine.markCase` →
+ * `isReturnExpression` parent-walk: a value-yielding switch's short
+ * `case X: e;` bodies stay glued. Same channel as the `ParenExpr` /
+ * `ReturnExpr` ctors above. Statement-position `SwitchStmt` does NOT
+ * carry the flag, so its bodies keep the `caseBody`-default break.
  */
 @:peg
 enum HxExpr {
@@ -378,10 +392,10 @@ enum HxExpr {
 	@:kw('while') @:fmt(whilePolicy)
 	WhileExpr(stmt:HxWhileExpr);
 
-	@:kw('switch') @:fmt(switchPolicy)
+	@:kw('switch') @:fmt(switchPolicy, propagateExprPosition)
 	SwitchExpr(stmt:HxSwitchStmt);
 
-	@:kw('switch') @:fmt(switchPolicy)
+	@:kw('switch') @:fmt(switchPolicy, propagateExprPosition)
 	SwitchExprBare(stmt:HxSwitchStmtBare);
 
 	@:kw('try')
