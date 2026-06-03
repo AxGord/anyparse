@@ -129,6 +129,11 @@ class D {
 			// and a nested `WrapBoundary` is moot (we commit to flat at the
 			// structural level).
 			case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner): flatten(inner);
+			// ω-cond-indent-policy FixedZero: render-time marker, structurally
+			// transparent to the flatten transform — descend `inner`. The
+			// `#`-marker col-0 re-indent is render-only and moot under a forced-
+			// flat collapse.
+			case ConditionalMarkerZero(inner): flatten(inner);
 		};
 	}
 }

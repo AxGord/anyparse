@@ -551,6 +551,13 @@ class WriterCodegen {
 			// ternary wraps the plain inner). Consumed by the ParenExpr
 			// `@:fmt(expressionParenHardFlatten)` open-branch emit.
 			docHelper('_dcp', [{name: 'inner', type: macro : anyparse.core.Doc}], macro anyparse.core.Doc.CollapseProbe(inner)),
+			// ω-cond-indent-policy FixedZero: ConditionalMarkerZero helper.
+			// Wraps a whole `#if … #end` construct Doc; at render time every
+			// fresh `#`-leading line (a `#if`/`#elseif`/`#else`/`#end` marker)
+			// is flushed at column 0 while body lines keep their frame indent.
+			// Emitted by the generated writer only under
+			// `opt.conditionalPolicy == FixedZero`. Structurally transparent.
+			docHelper('_dcmz', [{name: 'inner', type: macro : anyparse.core.Doc}], macro anyparse.core.Doc.ConditionalMarkerZero(inner)),
 		];
 	}
 

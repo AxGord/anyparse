@@ -212,6 +212,6 @@ enum HxDecl {
 	 * matter for `#if` because no other `HxDecl` ctor's keyword starts
 	 * with `#`.
 	 */
-	@:kw('#if') @:trail('#end')
+	@:kw('#if') @:trail('#end') @:fmt(conditionalMarkerDedent)
 	Conditional(inner:HxConditionalDecl);
 }

@@ -107,6 +107,6 @@ enum HxClassMember {
 	@:lit('...')
 	EllipsisMember;
 
-	@:kw('#if') @:trail('#end')
+	@:kw('#if') @:trail('#end') @:fmt(conditionalMarkerDedent)
 	Conditional(inner:HxConditionalMember);
 }

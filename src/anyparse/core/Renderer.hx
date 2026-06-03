@@ -94,6 +94,18 @@ private class Frame {
 	 */
 	public var hardFlat:Bool;
 
+	/**
+	 * Conditional-marker-zero pop sentinel (ω-cond-indent-policy FixedZero).
+	 * A frame with `popMarkerZero = true` carries `doc = Empty` and exists
+	 * solely to decrement the render-local `markerZeroDepth` counter once a
+	 * `ConditionalMarkerZero(inner)`'s `inner` has fully drained.
+	 * `ConditionalMarkerZero(inner)` pushes this sentinel FIRST, then `inner`
+	 * — LIFO drains `inner` (and everything it pushes above the sentinel)
+	 * before the sentinel surfaces, so the decrement lands exactly at scope
+	 * exit. Default `false`.
+	 */
+	public var popMarkerZero:Bool;
+
 	public inline function new(indent:Int, mode:Mode, doc:Doc, forceFlat:Bool = false, hardFlat:Bool = false) {
 		this.indent = indent;
 		this.mode = mode;
@@ -105,6 +117,7 @@ private class Frame {
 		this.fillSep = null;
 		this.fillTailReserve = 0;
 		this.fillRestProbe = false;
+		this.popMarkerZero = false;
 	}
 
 	public static inline function fillCont(
@@ -198,6 +211,13 @@ class Renderer {
 		// pair of parallel `lastEmittedWas{Hardline,OpenDelim}` Bools
 		// whose mutex was conventional, not type-enforced.
 		var lastEmit:LastEmit = Other;
+		// ω-cond-indent-policy FixedZero: per-render nesting depth of active
+		// `ConditionalMarkerZero` scopes (render-local, NOT a static —
+		// invariant #1). Incremented on entry, decremented via a `popMarkerZero`
+		// sentinel on scope exit. When `> 0`, a fresh-line Text whose first byte
+		// is `#` (a `#if`/`#elseif`/`#else`/`#end` marker) is flushed at column
+		// `0` instead of its frame indent; body lines keep their indent.
+		var markerZeroDepth:Int = 0;
 
 		inline function endsWithOpenDelim(s:String):Bool {
 			if (s.length == 0) return false;
@@ -246,6 +266,15 @@ class Renderer {
 
 		while (stack.length > 0) {
 			final f:Frame = stack.pop();
+			// ω-cond-indent-policy FixedZero: pop sentinel. A
+			// `ConditionalMarkerZero` frame pushed this `doc=Empty` sentinel
+			// BEFORE its `inner`; by the time it surfaces, `inner` has fully
+			// drained, so the matching depth increment is undone here at scope
+			// exit. Emit nothing.
+			if (f.popMarkerZero) {
+				if (markerZeroDepth > 0) markerZeroDepth--;
+				continue;
+			}
 			final fillRest:Null<Array<Doc>> = f.fillRest;
 			if (fillRest != null) {
 				final fillSep:Doc = f.fillSep;
@@ -294,6 +323,17 @@ class Renderer {
 					// nothing
 				case Text(s):
 					if (s.length > 0) {
+						// ω-cond-indent-policy FixedZero: inside a
+						// `ConditionalMarkerZero` scope, a fresh-line token that
+						// starts with `#` is a preprocessor marker
+						// (`#if`/`#elseif`/`#else`/`#end`) — flush it at column 0
+						// regardless of the frame indent. Body lines (any other
+						// first byte) keep their pending frame indent.
+						final freshLine:Bool = lastEmit == Hardline && pendingOptSpace == null && pendingHardline < 0;
+						if (markerZeroDepth > 0 && freshLine && pendingIndent > 0
+								&& StringTools.fastCodeAt(s, 0) == '#'.code) {
+							pendingIndent = 0;
+						}
 						flushPendingHardline();
 						flushOptSpace();
 						if (pendingIndent >= 0) {
@@ -840,6 +880,20 @@ class Renderer {
 					// fork `collapseChainBreaksAfter`) regardless of operator
 					// class. Transparent to every Doc walker.
 					stack.push(new Frame(f.indent, f.mode, inner, f.forceFlat, f.hardFlat));
+				case ConditionalMarkerZero(inner):
+					// ω-cond-indent-policy FixedZero: enter a marker-zero scope.
+					// Increment the render-local depth so the Text-flush re-indents
+					// `#`-leading fresh lines to column 0, then push a
+					// `popMarkerZero` sentinel BELOW `inner` so the depth unwinds
+					// exactly at scope exit (LIFO: `inner` and everything it spawns
+					// drain before the sentinel surfaces). Layout-transparent
+					// otherwise — `inner` renders at the same indent/mode/force-flat
+					// as the wrapper frame; only the `#`-marker lines move.
+					markerZeroDepth++;
+					final popMz:Frame = new Frame(f.indent, f.mode, Empty, f.forceFlat, f.hardFlat);
+					popMz.popMarkerZero = true;
+					stack.push(popMz);
+					stack.push(new Frame(f.indent, f.mode, inner, f.forceFlat, f.hardFlat));
 			}
 		}
 
@@ -965,6 +1019,10 @@ class Renderer {
 						}
 					case Flatten(innerDoc) | WrapBoundary(innerDoc) | HardFlatten(innerDoc) | CollapseProbe(innerDoc):
 						inner.push({doc: innerDoc, mode: nd.mode});
+					case ConditionalMarkerZero(innerDoc):
+						// ω-cond-indent-policy FixedZero: render-time marker,
+						// transparent to the trailing-content scan — descend `inner`.
+						inner.push({doc: innerDoc, mode: nd.mode});
 				}
 			}
 		}
@@ -990,7 +1048,7 @@ class Renderer {
 					return {inner: inner, hard: hard};
 				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner)
 						| BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner)
-						| HardFlatten(inner):
+						| HardFlatten(inner) | ConditionalMarkerZero(inner):
 					stack.push(inner);
 				case Concat(items):
 					for (it in items) stack.push(it);
@@ -1209,6 +1267,12 @@ class Renderer {
 					// MFlat frame. Slice B's `forceFlat` dispatch lives in
 					// `render()`, not in static `fitsFlat` walks.
 					local.push(new Frame(f.indent, MFlat, inner));
+				case ConditionalMarkerZero(inner):
+					// ω-cond-indent-policy FixedZero: render-time marker,
+					// transparent to flat-width measurement — descend `inner` at
+					// the same MFlat frame. The `#`-marker col-0 re-indent is
+					// render-only and never narrows the fit budget.
+					local.push(new Frame(f.indent, MFlat, inner));
 			}
 		}
 
@@ -1292,6 +1356,10 @@ class Renderer {
 					// ω-force-flat-engine slice A: transparent to first-
 					// line walk. All four markers are render-time state; the
 					// static first-line probe sees only structural width.
+					stack.push(inner);
+				case ConditionalMarkerZero(inner):
+					// ω-cond-indent-policy FixedZero: render-time marker,
+					// transparent to the first-line walk — descend `inner`.
 					stack.push(inner);
 			}
 		}
@@ -1388,6 +1456,10 @@ class Renderer {
 						case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
 							aborted2 = true;
 						case Flatten(innerDoc) | WrapBoundary(innerDoc) | HardFlatten(innerDoc) | CollapseProbe(innerDoc):
+							inner.push({doc: innerDoc, mode: nd.mode});
+						case ConditionalMarkerZero(innerDoc):
+							// ω-cond-indent-policy FixedZero: render-time marker,
+							// transparent to the rest-of-stack width walk — descend `inner`.
 							inner.push({doc: innerDoc, mode: nd.mode});
 					}
 				}
@@ -1551,6 +1623,11 @@ class Renderer {
 					// `IfNaturalFirstLineExceeds` consumer's flatDoc never
 					// contains a CollapseProbe).
 					stack.push({doc: inner, indent: node.indent, mode: node.mode, forceFlat: node.forceFlat});
+				case ConditionalMarkerZero(inner):
+					// ω-cond-indent-policy FixedZero: render-time marker,
+					// transparent to the natural-first-line width walk — descend
+					// `inner` preserving mode + forceFlat.
+					stack.push({doc: inner, indent: node.indent, mode: node.mode, forceFlat: node.forceFlat});
 			}
 		}
 		return col;
@@ -1704,6 +1781,11 @@ class Renderer {
 					// `inner` preserving mode + forceFlat. Inert for this
 					// measurer — emitCondition's flatShape carries no CollapseProbe.
 					stack.push({doc: inner, indent: node.indent, mode: node.mode, forceFlat: node.forceFlat});
+				case ConditionalMarkerZero(inner):
+					// ω-cond-indent-policy FixedZero: render-time marker,
+					// transparent to the natural-first-line gluable walk — descend
+					// `inner` preserving mode + forceFlat.
+					stack.push({doc: inner, indent: node.indent, mode: node.mode, forceFlat: node.forceFlat});
 			}
 		}
 		// Glue is OK when the cond fit flat with no inner break (a short cond
@@ -1822,6 +1904,10 @@ class Renderer {
 						// rest-of-stack probe measures structural width;
 						// force-flat markers add no width.
 						inner.push({doc: innerDoc, mode: node.mode});
+					case ConditionalMarkerZero(innerDoc):
+						// ω-cond-indent-policy FixedZero: render-time marker,
+						// transparent to the rest-of-stack width walk — descend `inner`.
+						inner.push({doc: innerDoc, mode: node.mode});
 				}
 			}
 		}
@@ -1912,6 +1998,10 @@ class Renderer {
 					case Flatten(innerDoc) | WrapBoundary(innerDoc) | HardFlatten(innerDoc) | CollapseProbe(innerDoc):
 						// ω-force-flat-engine slice A: pass-through. Sister
 						// of the `flatTokenWidthOfRestStack` arm.
+						inner.push({doc: innerDoc, mode: node.mode});
+					case ConditionalMarkerZero(innerDoc):
+						// ω-cond-indent-policy FixedZero: render-time marker,
+						// transparent to the rest-of-stack width walk — descend `inner`.
 						inner.push({doc: innerDoc, mode: node.mode});
 				}
 			}

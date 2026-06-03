@@ -251,7 +251,8 @@ final class CollapsePass {
 						| OptSpaceSkipAfterHardline:
 				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner)
 						| BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner)
-						| HardFlatten(inner) | CollapseProbe(inner):
+						| HardFlatten(inner) | CollapseProbe(inner)
+						| ConditionalMarkerZero(inner):
 					stack.push(inner);
 				case Concat(items):
 					for (it in items) stack.push(it);
@@ -287,6 +288,7 @@ final class CollapsePass {
 			case WrapBoundary(inner): WrapBoundary(f(inner));
 			case HardFlatten(inner): HardFlatten(f(inner));
 			case CollapseProbe(inner): CollapseProbe(f(inner));
+			case ConditionalMarkerZero(inner): ConditionalMarkerZero(f(inner));
 			case Concat(items): Concat([for (it in items) f(it)]);
 			case IfBreak(brk, fl): IfBreak(f(brk), f(fl));
 			case IfWidthExceeds(n, brk, fl): IfWidthExceeds(n, f(brk), f(fl));

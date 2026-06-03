@@ -1733,8 +1733,23 @@ class WriterLowering {
 				};
 			}
 
-			return if (parts.length == 1) parts[0]
+			final case3Doc:Expr = if (parts.length == 1) parts[0]
 			else dcCall(parts);
+			// ω-cond-indent-policy FixedZero: a cond-comp ctor opting into
+			// `@:fmt(conditionalMarkerDedent)` (the `#if … #end`
+			// `HxStatement`/`HxClassMember`/`HxDecl` `Conditional` ctors) wraps
+			// its whole construct Doc in `_dcmz` (ConditionalMarkerZero) at
+			// runtime ONLY when `opt.conditionalPolicy == FixedZero`. The render-
+			// time scope flushes every `#`-leading fresh line (`#if`/`#elseif`/
+			// `#else`/`#end` markers — including nested ones, which sit inside the
+			// same construct Doc) at column 0 while body content keeps its frame
+			// indent. Every other policy (`Aligned` default, `AlignedIncrease`,
+			// `AlignedDecrease`, …) leaves the ctor unwrapped → byte-identical.
+			return branch.fmtHasFlag('conditionalMarkerDedent')
+				? macro (opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.FixedZero
+					? _dcmz($case3Doc)
+					: $case3Doc)
+				: case3Doc;
 		}
 
 		Context.fatalError('WriterLowering: unsupported enum branch shape for ${simpleName(typePath)}', Context.currentPos());

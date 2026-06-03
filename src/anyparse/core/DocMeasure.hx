@@ -110,6 +110,11 @@ final class DocMeasure {
 					// markers are render-time state; structural token-width
 					// measurement is independent of force-flat propagation.
 					stack.push(inner);
+				case ConditionalMarkerZero(inner):
+					// ω-cond-indent-policy FixedZero: render-time marker,
+					// transparent to static token-width measurement — descend
+					// `inner`.
+					stack.push(inner);
 			}
 		}
 		return total;
@@ -142,7 +147,7 @@ final class DocMeasure {
 					if (t.length > 0) return StringTools.fastCodeAt(t, t.length - 1) == '}'.code;
 				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner)
 						| BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner)
-						| CollapseProbe(inner):
+						| CollapseProbe(inner) | ConditionalMarkerZero(inner):
 					stack.push(inner);
 				case Concat(items):
 					for (it in items) stack.push(it);
@@ -188,7 +193,7 @@ final class DocMeasure {
 					}
 				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner)
 						| BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner)
-						| CollapseProbe(inner):
+						| CollapseProbe(inner) | ConditionalMarkerZero(inner):
 					stack.push(inner);
 				case Concat(items):
 					for (it in items) stack.push(it);
@@ -232,7 +237,7 @@ final class DocMeasure {
 					}
 				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner)
 						| BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner)
-						| CollapseProbe(inner):
+						| CollapseProbe(inner) | ConditionalMarkerZero(inner):
 					stack.push(inner);
 				case Concat(items):
 					for (it in items) stack.push(it);

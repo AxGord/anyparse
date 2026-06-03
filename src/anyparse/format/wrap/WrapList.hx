@@ -541,7 +541,8 @@ class WrapList {
 			if (found || depth > 1) return;
 			switch n {
 				case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i)
-						| Flatten(i) | HardFlatten(i) | CollapseProbe(i): w(i, depth);
+						| Flatten(i) | HardFlatten(i) | CollapseProbe(i)
+						| ConditionalMarkerZero(i): w(i, depth);
 				case WrapBoundary(i): w(i, depth + 1);
 				case IfBreak(b, _) | IfWidthExceeds(_, b, _) | IfFirstLineExceeds(_, b, _)
 						| IfLineExceeds(_, b, _) | IfFullLineExceeds(_, b, _)
@@ -580,7 +581,8 @@ class WrapList {
 			if (found || depth > 1) return;
 			switch n {
 				case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i)
-						| Flatten(i) | HardFlatten(i) | CollapseProbe(i): w(i, depth);
+						| Flatten(i) | HardFlatten(i) | CollapseProbe(i)
+						| ConditionalMarkerZero(i): w(i, depth);
 				case WrapBoundary(i): w(i, depth + 1);
 				case IfNaturalFirstLineFitsOpenDelim(_, _, _):
 					if (depth == 1) found = true;
@@ -852,6 +854,10 @@ class WrapList {
 					// markers are render-time state; cascade-evaluator
 					// width measurements stay structural.
 					stack.push(inner);
+				case ConditionalMarkerZero(inner):
+					// ω-cond-indent-policy FixedZero: render-time marker,
+					// transparent to static length measurement — descend `inner`.
+					stack.push(inner);
 			}
 		}
 		return total;
@@ -929,6 +935,10 @@ class WrapList {
 				// state — leading-hardline detection sees the marker's
 				// `inner` as if no wrapper were present.
 				node = inner;
+			case ConditionalMarkerZero(inner):
+				// ω-cond-indent-policy FixedZero: render-time marker,
+				// transparent — descend `inner` for leading-hardline detection.
+				node = inner;
 		}
 	}
 
@@ -986,7 +996,8 @@ class WrapList {
 					|| StringTools.fastCodeAt(s, 0) == '['.code
 					|| StringTools.fastCodeAt(s, 0) == '{'.code);
 			case Nest(_, inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner)
-					| Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner):
+					| Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner)
+					| ConditionalMarkerZero(inner):
 				node = inner;
 			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat)
 					| IfLineExceeds(_, _, flat) | IfFullLineExceeds(_, _, flat)
@@ -1032,7 +1043,8 @@ class WrapList {
 				final c:Int = StringTools.fastCodeAt(s, s.length - 1);
 				return c == ')'.code || c == ']'.code || c == '}'.code;
 			case Nest(_, inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner)
-					| Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner):
+					| Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner)
+					| ConditionalMarkerZero(inner):
 				node = inner;
 			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat)
 					| IfLineExceeds(_, _, flat) | IfFullLineExceeds(_, _, flat)
@@ -1272,7 +1284,8 @@ class WrapList {
 		return switch item {
 			case WrapBoundary(inner) | Group(inner) | BodyGroup(inner)
 					| GroupWithRestProbe(inner) | Nest(_, inner)
-					| Flatten(inner) | HardFlatten(inner) | CollapseProbe(inner):
+					| Flatten(inner) | HardFlatten(inner) | CollapseProbe(inner)
+					| ConditionalMarkerZero(inner):
 				isMethodChainItem(inner);
 			case IfBreak(brk, _) | IfWidthExceeds(_, brk, _) | IfFirstLineExceeds(_, brk, _)
 					| IfLineExceeds(_, brk, _) | IfFullLineExceeds(_, brk, _)
@@ -1315,7 +1328,8 @@ class WrapList {
 				}
 				hit;
 			case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i)
-					| Flatten(i) | HardFlatten(i) | CollapseProbe(i) | WrapBoundary(i):
+					| Flatten(i) | HardFlatten(i) | CollapseProbe(i) | WrapBoundary(i)
+					| ConditionalMarkerZero(i):
 				firstVisibleTextStartsWith(i, c);
 			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat)
 					| IfLineExceeds(_, _, flat) | IfFullLineExceeds(_, _, flat)
@@ -1850,6 +1864,9 @@ class WrapList {
 			// are render-time state — their `inner` carries the same leading
 			// hardline answer it would without the wrap.
 			case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner): hasLeadingHardline(inner);
+			// ω-cond-indent-policy FixedZero: render-time marker, transparent —
+			// leading-hardline answer matches the marker's `inner`.
+			case ConditionalMarkerZero(inner): hasLeadingHardline(inner);
 		};
 	}
 
@@ -1887,7 +1904,8 @@ class WrapList {
 		function w(n:Doc, depth:Int):Void {
 			switch n {
 				case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i)
-						| Flatten(i) | HardFlatten(i) | CollapseProbe(i): w(i, depth);
+						| Flatten(i) | HardFlatten(i) | CollapseProbe(i)
+						| ConditionalMarkerZero(i): w(i, depth);
 				case WrapBoundary(i): w(i, depth + 1);
 				case IfBreak(b, f) | IfWidthExceeds(_, b, f) | IfFirstLineExceeds(_, b, f)
 						| IfLineExceeds(_, b, f) | IfFullLineExceeds(_, b, f)

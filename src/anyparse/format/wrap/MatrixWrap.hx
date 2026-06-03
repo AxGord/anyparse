@@ -116,7 +116,8 @@ final class MatrixWrap {
 				case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
 					return true;
 				case Nest(_, inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner)
-					| Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner):
+					| Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner)
+					| ConditionalMarkerZero(inner):
 					stack.push(inner);
 				case Concat(parts):
 					for (p in parts) stack.push(p);

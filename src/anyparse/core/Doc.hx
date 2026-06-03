@@ -486,4 +486,36 @@ enum Doc {
 	 * as a transparent pass-through (descend `inner`).
 	 */
 	CollapseProbe(inner:Doc);
+
+	/**
+	 * Conditional-compilation marker fixed-zero scope (ω-cond-indent-policy
+	 * FixedZero). Render-time-only: wraps the WHOLE `#if … #end` construct
+	 * Doc (kw + cond + body + `#else`/`#elseif` clauses + trail). While
+	 * rendering `inner`, any physical line whose FIRST non-whitespace byte is
+	 * `#` — i.e. a preprocessor marker (`#if`/`#elseif`/`#else`/`#end`) — is
+	 * re-indented to absolute column `0`; every other line (the guarded body
+	 * content) keeps its frame indent. This is the anyparse analogue of
+	 * haxe-formatter's `ConditionalIndentationPolicy.FixedZero`, where the
+	 * conditional markers sit flush-left and the body stays at the enclosing
+	 * statement indent.
+	 *
+	 * The discrimination is purely "fresh line whose first emitted token
+	 * starts with `#`" — read at the Text-flush point in `Renderer.render`
+	 * where the byte string is already known. Nested conditionals are handled
+	 * for free: a nested `#if`/`#end` is still a `#`-leading fresh line inside
+	 * the same scope, so it too lands at `0`, while its body stays at its
+	 * (un-accumulated) frame indent — matching the fork's non-incrementing
+	 * FixedZero body layout.
+	 *
+	 * Emitted by the generated writer ONLY when `opt.conditionalPolicy ==
+	 * FixedZero` and the cond-comp ctor carries `@:fmt(conditionalMarkerDedent)`;
+	 * every other policy leaves the construct unwrapped (byte-identical).
+	 *
+	 * Pure render-time state via a per-render depth counter (a local in
+	 * `render`, NOT a static — invariant #1), pushed on entry and popped via a
+	 * sentinel on scope exit. Structurally transparent — every static Doc
+	 * walker descends `inner` exactly like `WrapBoundary`; only
+	 * `Renderer.render` interprets the marker re-indent.
+	 */
+	ConditionalMarkerZero(inner:Doc);
 }
