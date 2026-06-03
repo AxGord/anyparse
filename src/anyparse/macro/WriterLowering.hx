@@ -6263,11 +6263,14 @@ class WriterLowering {
 	 * ω-block-shape-aware (block-body shape-awareness): when the field
 	 * also carries `@:fmt(blockBodyKeepsInline)` AND the body's type has
 	 * block ctors (collected via `collectBlockCtorPatterns`), an outer
-	 * ctor switch forces the inline `' ' + body` layout for those ctors
-	 * regardless of the `opt.<flag>` policy — block bodies have their
-	 * own visual structure (`{ ... }` already opens its own line), so a
-	 * body-break would emit `try \n\t{ ... }` instead of the canonical
-	 * `try { ... }`. Non-block ctors still honour the policy switch.
+	 * ctor switch suppresses the `opt.<flag>` body-break policy for those
+	 * ctors — block bodies have their own visual structure (`{ ... }`),
+	 * so a policy body-break would emit `try \n\t{ ... }` instead of the
+	 * brace-paired layout. The block branch instead defers to
+	 * `opt.blockLeftCurly` (ω-block-allman-leftcurly): `Same` cuddles the
+	 * brace inline (`try { ... }`), `Next` (Allman, `lineEnds.leftCurly =
+	 * "both"`) breaks it onto its own line at the statement base indent
+	 * (`try\n{ ... }`). Non-block ctors still honour the policy switch.
 	 * Opt-in via the flag because statement-form siblings
 	 * (`HxTryCatchStmt.body` etc.) want the OPPOSITE — `} catch` breaks
 	 * to `}\ncatch` on `Next` regardless of body shape (see
@@ -6287,10 +6290,28 @@ class WriterLowering {
 		];
 		final flagSwitch:Expr = {expr: ESwitch(optFlag, flagCases, sameLayoutExpr), pos: Context.currentPos()};
 		final blockPatterns:Array<Expr> = shapeAware ? collectBlockCtorPatterns(bodyTypePath) : [];
+		// ω-block-allman-leftcurly: when the body's runtime ctor is a block,
+		// the inline `' ' + body` layout cuddles the brace (`try { … }`). That
+		// is correct under `blockLeftCurly = Same`, but Allman (`Next`,
+		// `lineEnds.leftCurly = "both"`) wants the brace on its own line at the
+		// statement's base indent (`try\n{ … }`). `BlockExpr`'s own
+		// `@:fmt(leftCurly('blockLeftCurly'))` separator is owned by this body
+		// field, not emitted by the writeCall, so the gate lives here. `_dhl()`
+		// (plain hardline, current indent — no extra Nest) mirrors
+		// `leftCurlySeparator`'s `Next` branch so the brace sits at the same
+		// column as the keyword, matching haxe-formatter's expression-form
+		// try-catch Allman layout.
+		final blockLayoutExpr:Expr = {
+			final brace:Expr = optFieldAccess('blockLeftCurly');
+			final braceNextPat:Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BracePlacement', 'Next']);
+			final allmanLayoutExpr:Expr = macro _dc([_dhl(), $writeCall]);
+			final braceCases:Array<Case> = [{values: [braceNextPat], expr: allmanLayoutExpr, guard: null}];
+			{expr: ESwitch(brace, braceCases, sameLayoutExpr), pos: Context.currentPos()};
+		};
 		final wrapExpr:Expr = if (blockPatterns.length == 0) flagSwitch
 		else {
 			final shapeCases:Array<Case> = [
-				{values: blockPatterns, expr: sameLayoutExpr, guard: null},
+				{values: blockPatterns, expr: blockLayoutExpr, guard: null},
 				{values: [macro _], expr: flagSwitch, guard: null},
 			];
 			{expr: ESwitch(bodyAccess, shapeCases, null), pos: Context.currentPos()};
