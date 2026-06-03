@@ -5074,6 +5074,13 @@ class WriterLowering {
 				final staticVarSubdivInfo:Null<StaticVarSubdivisionInfo> = (staticVarSubdiv && interMemberInfo != null)
 					? buildStaticVarSubdivisionInfo(elemRefName, staticVarSubdivArgs ?? [])
 					: null;
+				// ω-cond-leading-doc-lookthrough: only meaningful alongside
+				// `beforeDocCommentEmptyLines` (the policy whose doc-comment scan
+				// it widens). Inert otherwise — the resolved info is dropped.
+				final condLeadingDocArgs:Null<Array<String>> = starNode.fmtReadStringArgs('beforeDocCondLookThrough');
+				final condLeadingDocInfo:Null<CondLeadingDocLookThroughInfo> = (condLeadingDocArgs != null && beforeDocComments)
+					? buildCondLeadingDocLookThroughInfo(elemRefName, condLeadingDocArgs)
+					: null;
 				final betweenMultilineCommentsBlanks:Bool = starNode.fmtHasFlag('betweenMultilineCommentsBlanks');
 				final uniformBetweenArgs:Null<Array<String>> = starNode.fmtReadStringArgs('uniformBetween');
 				if (uniformBetweenArgs != null && uniformBetweenArgs.length != 1)
@@ -5125,7 +5132,8 @@ class WriterLowering {
 					// after a `#if … #end` stmt).
 					blockEndedFlag ? sepText : null, blockEndedFlag,
 					blockEndedFlag ? (starNode.annotations.get('lit.sepBlockEndedPredicate') : Null<String>) : null,
-					blockEndedFlag ? formatInfo.schemaTypePath : null
+					blockEndedFlag ? formatInfo.schemaTypePath : null,
+					condLeadingDocInfo
 				));
 			} else if (isLastField) {
 				if (openText != null) parts.push(macro _dt($v{openText}));
@@ -8303,7 +8311,12 @@ class WriterLowering {
 		// `<schema>.instance.<predicate>(elem)` call. Both null → byte-
 		// identical to the pre-fix path (no predicate consult).
 		blockEndedPredicate:Null<String> = null,
-		blockEndedSchemaPath:Null<String> = null
+		blockEndedSchemaPath:Null<String> = null,
+		// ω-cond-leading-doc-lookthrough: when set (only alongside
+		// `beforeDocCommentEmptyLines`), the `_currHasDocComment` scan looks
+		// through a `#if … #end` member to its first inner member's leading
+		// doc-comment. Null → byte-identical to the pre-fix path.
+		condLeadingDocInfo:Null<CondLeadingDocLookThroughInfo> = null
 	):Expr {
 		// ω-condcomp-stray-semi (Stage A): build the schema-instance
 		// predicate-call Expr for a given element-access Expr. Mirrors the
@@ -8531,6 +8544,40 @@ class WriterLowering {
 		final addByCurrDocExpr:Expr = beforeDocCommentEmptyLines
 			? macro (_currHasDocComment && opt.beforeDocCommentEmptyLines == anyparse.format.CommentEmptyLinesPolicy.One)
 			: macro false;
+		// ω-cond-leading-doc-lookthrough: when the element is a `#if … #end`
+		// member whose first inner member opens with `/**`, treat the
+		// Conditional as doc-comment-led (the inner doc-comment lives on the
+		// inner member's leading, never on the `#if` directive). Spliced into
+		// `currHasDocComputeExpr` only when the look-through info resolved.
+		final condLeadingDocExpr:Expr = condLeadingDocInfo != null ? {
+			final pos:Position = Context.currentPos();
+			final classifierAccess:Expr = {
+				expr: EField(macro _t.node, condLeadingDocInfo.classifierFieldName),
+				pos: pos,
+			};
+			final bodyAccess:Expr = {
+				expr: EField(macro _inner, condLeadingDocInfo.bodyFieldName),
+				pos: pos,
+			};
+			final scanBody:Expr = macro {
+				final _condBody = $bodyAccess;
+				if (_condBody.length > 0) {
+					var _ctdi:Int = 0;
+					while (_ctdi < _condBody[0].leadingComments.length) {
+						if (StringTools.startsWith(_condBody[0].leadingComments[_ctdi], '/**')) {
+							_currHasDocComment = true;
+							break;
+						}
+						_ctdi++;
+					}
+				}
+			};
+			final lookThroughSwitch:Expr = {
+				expr: ESwitch(classifierAccess, [{values: [condLeadingDocInfo.condCasePattern], guard: null, expr: scanBody}], macro {}),
+				pos: pos,
+			};
+			macro if (!_currHasDocComment) $lookThroughSwitch;
+		} : macro {};
 		final currHasDocComputeExpr:Expr = beforeDocCommentEmptyLines ? macro {
 			_currHasDocComment = false;
 			var _cdci:Int = 0;
@@ -8541,6 +8588,7 @@ class WriterLowering {
 				}
 				_cdci++;
 			}
+			$condLeadingDocExpr;
 		} : macro {};
 		// ω-extern-existing-between-split-leading: per-element scan that
 		// flips `_currHasSplitLeading` true when the element's leading
@@ -11582,6 +11630,80 @@ class WriterLowering {
 	}
 
 	/**
+	 * ω-cond-leading-doc-lookthrough — resolve
+	 * `@:fmt(beforeDocCondLookThrough('<classifierField>', '<condCtor>',
+	 * '<bodyField>'))` into the case pattern + body field name that
+	 * `triviaBlockStarExpr` uses to look through a `#if … #end` member to
+	 * its first inner member's leading doc-comment.
+	 *
+	 * Inspects the element Seq rule's named classifier field to locate the
+	 * member-dispatch enum, verifies the named `<condCtor>` variant exists
+	 * with exactly one arg (the conditional-body wrapper), and builds the
+	 * `case <condCtor>(_inner):` pattern. `<bodyField>` is taken on trust as
+	 * a Star field on that wrapper — its `[0].leadingComments` shape matches
+	 * every trivia-collected Star element, so no per-shape validation beyond
+	 * the ctor existence is needed.
+	 */
+	private function buildCondLeadingDocLookThroughInfo(elemRefName:String, args:Array<String>):CondLeadingDocLookThroughInfo {
+		if (args.length != 3)
+			Context.fatalError(
+				'WriterLowering: @:fmt(beforeDocCondLookThrough) expects exactly 3 string args (classifierField, condCtor, bodyField), got ${args.length}',
+				Context.currentPos()
+			);
+		final fieldName:String = args[0];
+		final condCtor:String = args[1];
+		final bodyField:String = args[2];
+		final elemRule:Null<ShapeNode> = shape.rules.get(elemRefName);
+		if (elemRule == null || elemRule.kind != Seq)
+			Context.fatalError(
+				'WriterLowering: @:fmt(beforeDocCondLookThrough) requires element rule $elemRefName to be a Seq struct',
+				Context.currentPos()
+			);
+		var classifierNode:Null<ShapeNode> = null;
+		for (child in elemRule.children) if (child.annotations.get('base.fieldName') == fieldName) {
+			classifierNode = child;
+			break;
+		}
+		if (classifierNode == null || classifierNode.kind != Ref)
+			Context.fatalError(
+				'WriterLowering: @:fmt(beforeDocCondLookThrough) classifier field "$fieldName" must be a plain Ref to an enum rule on $elemRefName',
+				Context.currentPos()
+			);
+		final enumRuleName:Null<String> = classifierNode.annotations.get('base.ref');
+		final enumRule:Null<ShapeNode> = enumRuleName == null ? null : shape.rules.get(enumRuleName);
+		if (enumRule == null || enumRule.kind != Alt)
+			Context.fatalError(
+				'WriterLowering: @:fmt(beforeDocCondLookThrough) classifier target for "$fieldName" must be an Alt (enum)',
+				Context.currentPos()
+			);
+		var condBranch:Null<ShapeNode> = null;
+		for (branch in enumRule.children) if (branch.annotations.get('base.ctor') == condCtor) {
+			condBranch = branch;
+			break;
+		}
+		if (condBranch == null)
+			Context.fatalError(
+				'WriterLowering: @:fmt(beforeDocCondLookThrough) condCtor "$condCtor" not found on enum $enumRuleName',
+				Context.currentPos()
+			);
+		if (condBranch.children.length != 1)
+			Context.fatalError(
+				'WriterLowering: @:fmt(beforeDocCondLookThrough) condCtor "$condCtor" must take exactly one arg (the conditional-body wrapper), got ${condBranch.children.length}',
+				Context.currentPos()
+			);
+		final pos:Position = Context.currentPos();
+		final condCasePattern:Expr = {
+			expr: ECall({expr: EConst(CIdent(condCtor)), pos: pos}, [macro _inner]),
+			pos: pos,
+		};
+		return {
+			classifierFieldName: fieldName,
+			condCasePattern: condCasePattern,
+			bodyFieldName: bodyField,
+		};
+	}
+
+	/**
 	 * ω-class-static-var-cascade — resolve `@:fmt(staticVarSubdivision)` /
 	 * `@:fmt(staticVarSubdivision('<modifierField>', '<staticCtor>',
 	 * '<afterStaticVarsField>'))` into the data the per-iteration kind
@@ -12825,6 +12947,38 @@ typedef StaticVarSubdivisionInfo = {
 	modifierFieldName:String,
 	staticCtorName:String,
 	afterStaticVarsField:String,
+};
+
+/**
+ * ω-cond-leading-doc-lookthrough — resolved data for
+ * `@:fmt(beforeDocCondLookThrough('<classifierField>', '<condCtor>',
+ * '<bodyField>'))`. Produced by
+ * `WriterLowering.buildCondLeadingDocLookThroughInfo`. When present on a
+ * trivia-bearing member Star that also opted into
+ * `@:fmt(beforeDocCommentEmptyLines)`, `triviaBlockStarExpr`'s
+ * `_currHasDocComment` scan looks THROUGH a preprocessor `#if … #end`
+ * member (the `<condCtor>` ctor on the `<classifierField>` classifier enum)
+ * to the FIRST element of its `<bodyField>` Star: when that inner member's
+ * leading trivia starts with `/**`, the Conditional is treated as
+ * doc-comment-led for the `beforeDocCommentEmptyLines` policy.
+ *
+ * Mirrors fork's `MarkEmptyLines`, which makes a conditional wrapper
+ * transparent for doc-comment adjacency: `beforeDocCommentEmptyLines = None`
+ * then strips the source blank between a field and a `#if` whose body opens
+ * with a documented member (issue_188, the class-member analogue of the
+ * issue_298 `#end → type-decl` transparency). The Conditional's OWN leading
+ * never carries the inner doc-comment (the `/**` belongs to the inner
+ * member, not the `#if` directive), so the plain `_t.leadingComments` scan
+ * misses it without this look-through.
+ *
+ * `condCasePattern` is a ready-to-use `case <condCtor>(_inner):` pattern
+ * binding the single ctor arg; `bodyFieldName` is the trivia Star field on
+ * that arg whose `[0].leadingComments` is scanned.
+ */
+typedef CondLeadingDocLookThroughInfo = {
+	classifierFieldName:String,
+	condCasePattern:Expr,
+	bodyFieldName:String,
 };
 
 /**
