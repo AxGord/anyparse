@@ -41,6 +41,19 @@ package anyparse.grammar.haxe;
  * that gate is what suppresses the inter-field space ahead of `;` for
  * `NoBody` while preserving the policy-aware ` {` / `\n\t{` for
  * `BlockBody`. `HxFnBody` is trivia-bearing (paired type `HxFnBodyT`).
+ *
+ * The `@:fmt(metaBlockGlue('ExprBody', 'MetaExpr', 'BlockExpr'))` flag
+ * handles a metadata-prefixed block body — `function f():Ret @:meta
+ * { … }`. Such a body parses as `ExprBody(MetaExpr(_, BlockExpr))`
+ * (the metadata routes it through the HxExpr parser instead of the
+ * `BlockBody` branch), so the default `bodyPolicyForCtor('ExprBody',
+ * 'functionBody')` would treat it like a non-block expression body and
+ * break the metadata onto its own line (plus an extra body indent
+ * step). `metaBlockGlue` makes `WriterLowering` detect the
+ * meta-wrapped-block runtime shape and glue `<sig> @:meta {` on the
+ * signature line instead, the block's own Nest supplying the body
+ * indent. A meta-wrapped non-block body (`@:meta return x`) keeps the
+ * `functionBody` policy.
  */
 @:peg
 @:fmt(multilineWhenFieldShape('body'), propagateFnBodyEmpty('body'))
@@ -49,5 +62,5 @@ typedef HxFnDecl = {
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var typeParams:Null<Array<HxTypeParamDecl>>;
 	@:trivia @:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams'), funcParamParens, wrapRules('functionSignatureWrap'), bodyAwareCompactIndent, groupRestProbe, ignoreSourceNewlinesForWrap) var params:Array<HxParam>;
 	@:optional @:fmt(typeHintColon) @:lead(':') var returnType:Null<HxType>;
-	@:fmt(leftCurly('blockLeftCurly'), bodyPolicyForCtor('UntypedBlockBody', 'untypedBody'), bodyPolicyForCtor('ExprBody', 'functionBody')) var body:HxFnBody;
+	@:fmt(leftCurly('blockLeftCurly'), bodyPolicyForCtor('UntypedBlockBody', 'untypedBody'), bodyPolicyForCtor('ExprBody', 'functionBody'), metaBlockGlue('ExprBody', 'MetaExpr', 'BlockExpr')) var body:HxFnBody;
 }

@@ -3927,6 +3927,17 @@ class WriterLowering {
 								final wrapBodyOnSameLineExpr:Null<Expr> = hasBeforeNlSlot
 									? beforeNewlineNotAccess(fieldName)
 									: null;
+								// ω-fnbody-meta-block-glue: `@:fmt(metaBlockGlue('<exprBodyCtor>',
+								// '<metaCtor>', '<blockCtor>'))` names the runtime descent so
+								// `bodyPolicyWrap` can route a metadata-wrapped block body
+								// (`@:meta { … }`) to the glued layout. Attached only to the
+								// wrap whose `wrapCtorName` matches the named expr-body ctor —
+								// the guard is inert on every other body ctor anyway, but the
+								// gate keeps the emitted descent localised. Consumer:
+								// `HxFnDecl.body` with `('ExprBody', 'MetaExpr', 'BlockExpr')`.
+								final metaBlockGlueArgs:Null<Array<String>> = child.fmtReadStringArgs('metaBlockGlue');
+								if (metaBlockGlueArgs != null && metaBlockGlueArgs.length != 3)
+									Context.fatalError('WriterLowering: @:fmt(metaBlockGlue(...)) requires (exprBodyCtor, metaCtor, blockCtor), got ${metaBlockGlueArgs.length} args', Context.currentPos());
 								final defaultPair:Expr = macro _dc([$sepExpr, $writeCall]);
 								// Fold the pairs into a ternary chain. Iterate in reverse
 								// so the first-declared pair sits at the chain head
@@ -3939,6 +3950,9 @@ class WriterLowering {
 										Context.fatalError('WriterLowering: @:fmt(bodyPolicyForCtor(...)) requires (ctorName, flagName), got ${pair.length} args', Context.currentPos());
 									final wrapCtorName:String = pair[0];
 									final wrapFlagName:String = pair[1];
+									final wrapMetaBlockGlue:Null<Array<String>> = metaBlockGlueArgs != null && metaBlockGlueArgs[0] == wrapCtorName
+										? metaBlockGlueArgs
+										: null;
 									final wrapOutput:Expr = bodyPolicyWrap({
 										flagName: wrapFlagName,
 										writeCall: writeCall,
@@ -3947,6 +3961,7 @@ class WriterLowering {
 										hasElseIf: false,
 										elseFieldName: null,
 										bodyOnSameLineExpr: wrapBodyOnSameLineExpr,
+										metaBlockGlueArgs: wrapMetaBlockGlue,
 									});
 									chain = macro $ctorExpr == $v{wrapCtorName} ? $wrapOutput : $chain;
 									i--;
@@ -7393,6 +7408,10 @@ class WriterLowering {
 		// `return`→value source newline; drives the FitLine head-break when the
 		// body is an already-multiline keep-chain. Null → no head-break (legacy).
 		final kwNewlineExpr:Null<Expr> = opts.kwNewlineExpr;
+		// ω-fnbody-meta-block-glue: ctor-name triple `(ExprBody, MetaExpr,
+		// BlockExpr)` declaratively naming the runtime descent for the
+		// meta-wrapped-block discriminator. Null → byte-inert.
+		final metaBlockGlueArgs:Null<Array<String>> = opts.metaBlockGlueArgs;
 		final defaultOptFlag:Expr = if (singleLineFlagName == null) baseOptFlag else {
 			final singleLineAccess:Expr = optFieldAccess(singleLineFlagName);
 			final ctors:Array<String> = singleLineMultiCtors ?? [];
@@ -7962,9 +7981,46 @@ class WriterLowering {
 			};
 		};
 
+		// ω-fnbody-meta-block-glue: outermost runtime override. When the body
+		// is an `ExprBody` whose inner expression is a metadata-wrapped BLOCK
+		// (`@:meta { … }`, nested metas unwrapped), the metadata + block must
+		// stay cuddled to the signature line — `):Ret @:privateAccess {` — with
+		// the block's own internal Nest supplying the single body-indent step.
+		// Route such bodies to the glued `sameLayoutExpr` (` ` + body), which
+		// bypasses both the `functionBody`/`untypedBody` policy break AND the
+		// extra body Nest. A meta-wrapped non-block body (`@:meta return x`)
+		// keeps the policy dispatch (`functionBody:next` → metadata on its own
+		// line); a plain block body never reaches `ExprBody` (it parses as
+		// `BlockBody`). The descent reads `MetaExpr`'s HxMetaExpr struct via
+		// `Reflect.field(_, 'expr')` for the next ctor check, mirroring the
+		// `indentComplexValueExpressions` wrapper-unwrap loop. Sits OUTSIDE
+		// `finalWrapExpr` so it stacks above every policy axis — a meta-block
+		// IS a block body, always glued.
+		final mbgWrapExpr:Expr = if (metaBlockGlueArgs == null) finalWrapExpr
+		else {
+			if (metaBlockGlueArgs.length != 3)
+				Context.fatalError('WriterLowering: bodyPolicyWrap metaBlockGlueArgs requires (exprBodyCtor, metaCtor, blockCtor), got ${metaBlockGlueArgs.length} args', Context.currentPos());
+			final exprBodyCtor:String = metaBlockGlueArgs[0];
+			final metaCtor:String = metaBlockGlueArgs[1];
+			final blockCtor:String = metaBlockGlueArgs[2];
+			macro {
+				final _mbgIsMetaBlock:Bool = if (Type.enumConstructor($bodyValueExpr) != $v{exprBodyCtor}) false
+				else {
+					var _mbgInner:Dynamic = Type.enumParameters($bodyValueExpr)[0];
+					var _mbgSawMeta:Bool = false;
+					while (Type.enumConstructor(_mbgInner) == $v{metaCtor}) {
+						_mbgSawMeta = true;
+						_mbgInner = Reflect.field(Type.enumParameters(_mbgInner)[0], 'expr');
+					}
+					_mbgSawMeta && Type.enumConstructor(_mbgInner) == $v{blockCtor};
+				};
+				_mbgIsMetaBlock ? $sameLayoutExpr : $finalWrapExpr;
+			};
+		};
+
 		return macro {
 			final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-			$finalWrapExpr;
+			$mbgWrapExpr;
 		};
 	}
 
@@ -13154,6 +13210,20 @@ typedef WrapBodyOpts = {
 	// own `_headBreak` suppressed by the enclosing ParenExpr's `_setKeepChainInParen`).
 	// Null in plain mode / non-bearing ctors → byte-inert (legacy glue).
 	?kwNewlineExpr:Null<Expr>,
+	// ω-fnbody-meta-block-glue — when true, the body-placement override
+	// detects an `ExprBody` whose inner expression is a metadata-wrapped
+	// BLOCK (`@:meta { … }`, runtime shape `ExprBody(MetaExpr(_, BlockExpr))`,
+	// nested metas unwrapped) and routes it to the glued `sameLayoutExpr`
+	// (` ` + body) instead of the policy switch. The metadata + block then
+	// stay cuddled to the signature line (`):Ret @:privateAccess {`) and the
+	// block's own internal Nest supplies the single body-indent step — the
+	// `functionBody`/`untypedBody` policy never breaks the metadata onto its
+	// own line and never adds the spurious extra Nest. Non-block metadata
+	// bodies (`@:meta return x`) and every non-meta body keep the policy
+	// dispatch unchanged. The ctor names (`ExprBody`/`MetaExpr`/`BlockExpr`)
+	// are passed declaratively from the grammar flag to keep the macro
+	// format-neutral. Null/false → byte-inert.
+	?metaBlockGlueArgs:Null<Array<String>>,
 };
 
 /**
