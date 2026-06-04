@@ -2342,7 +2342,17 @@ class Lowering {
 				&& child.fmtHasFlag('beforeNewlineSlotFirst');
 			final hasBeforeNewlineSlot:Bool = (isBareTriviaRefNoLead && (!isFirstField || isFirstFieldNlOptIn))
 				|| isFirstFieldStarNlOptIn;
+			// ω-598-member-leading-comment: the bare non-first Ref host (e.g.
+			// `HxMemberDecl.member`) additionally captures the `collectTrivia`
+			// run's `leadingComments` into a `<field>BeforeLeading` slot. Gated
+			// on the bare-Ref host (matches `TriviaTypeSynth.isBareNonFirstRef`),
+			// NOT the Star-opt-in host. Without it, a multiline block comment
+			// sitting between the last modifier and the member keyword (rejected
+			// by the modifier Star's `collectTrailingFull` for its internal
+			// newline) is scanned here but discarded.
+			final hasBeforeLeadingSlot:Bool = isBareTriviaRefNoLead && (!isFirstField || isFirstFieldNlOptIn);
 			final beforeNlLocal:String = '_beforeNl_$fieldName';
+			final beforeLeadingLocal:String = '_beforeLeadCm_$fieldName';
 			// ω-optional-star-rewind: when the field is `@:optional Star`
 			// with `@:lead` (e.g. `HxTypeRef.params:Array<HxType>` —
 			// `<...>`), defer the pre-field `skipWs` into the emit so the
@@ -2353,7 +2363,38 @@ class Lowering {
 			// issue_216 / issue_321 cluster's parser-side bug.
 			final optStarWithLead:Bool = isStar && isOptional && kwLead == null;
 			if (!triviaEofStar && !isOptionalRef && !isOptionalKwStar && !optStarWithLead) {
-				if (hasBeforeNewlineSlot) {
+				if (hasBeforeLeadingSlot) {
+					// ω-598-member-leading-comment: capture the full
+					// `collectTrivia` result once, then split into the
+					// `newlineBefore` bool (BeforeNewline slot) and the
+					// verbatim `leadingComments` array (BeforeLeading slot).
+					// The array holds a comment dropped in the gap between the
+					// last modifier and the member keyword; emitted by the
+					// writer's bare-Ref non-first separator. Empty in the
+					// common case (no inter-modifier comment) → byte-inert.
+					final arrayStrCT:ComplexType = TPath({
+						pack: [], name: 'Array', params: [TPType(TPath({pack: [], name: 'String', params: []}))]
+					});
+					parseSteps.push(macro final _beforeTrivia = collectTrivia(ctx));
+					parseSteps.push({
+						expr: EVars([{
+							name: beforeNlLocal,
+							type: (macro : Bool),
+							expr: macro _beforeTrivia.newlineBefore,
+							isFinal: true,
+						}]),
+						pos: Context.currentPos(),
+					});
+					parseSteps.push({
+						expr: EVars([{
+							name: beforeLeadingLocal,
+							type: arrayStrCT,
+							expr: macro _beforeTrivia.leadingComments,
+							isFinal: true,
+						}]),
+						pos: Context.currentPos(),
+					});
+				} else if (hasBeforeNewlineSlot) {
 					// Route through `collectTrivia` — drains any
 					// `pendingTrivia` stash from a preceding empty
 					// bare-tryparse Star and captures `newlineBefore` into
@@ -2932,6 +2973,10 @@ class Lowering {
 				structFields.push({field: fieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX, expr: macro $i{afterTrailLocal}});
 			if (hasBeforeNewlineSlot)
 				structFields.push({field: fieldName + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX, expr: macro $i{beforeNlLocal}});
+			// ω-598-member-leading-comment: push the verbatim leading-comment
+			// run captured alongside the BeforeNewline scan above.
+			if (hasBeforeLeadingSlot)
+				structFields.push({field: fieldName + TriviaTypeSynth.BEFORE_LEADING_SUFFIX, expr: macro $i{beforeLeadingLocal}});
 			if (hasNewlineAfterSlot)
 				structFields.push({field: fieldName + TriviaTypeSynth.NEWLINE_AFTER_SUFFIX, expr: macro $i{newlineAfterLocal}});
 			// ω-condition-wrap-keep: push the `<field>CondOpenNewline:Bool`

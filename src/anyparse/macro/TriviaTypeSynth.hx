@@ -131,6 +131,24 @@ class TriviaTypeSynth {
 	public static inline final BEFORE_NEWLINE_SUFFIX:String = 'BeforeNewline';
 
 	/**
+	 * ω-598-member-leading-comment — sibling source-shape slot synthesised on
+	 * paired Seq types alongside the same bare non-first Ref fields that grow
+	 * `BeforeNewline` (`isBareNonFirstRef`). Records the verbatim comments
+	 * captured in the gap between the preceding content and the sub-rule's
+	 * first token — the run that `BeforeNewline`'s `collectTrivia` scans but
+	 * whose `.leadingComments` was previously discarded (only the
+	 * `.newlineBefore` bool was kept). Load-bearing for
+	 * `lineends/issue_598_multiline_comment_var`: a multiline block comment
+	 * between a member modifier (`public`) and the `var` keyword is rejected
+	 * by the modifier Star's `collectTrailingFull` (internal newline) and
+	 * lands in this gap with no slot — dropped at parse. Empty array (the
+	 * common case, including the empty-modifiers path where the comment is
+	 * captured upstream) is byte-inert at write time. Consumed by the
+	 * writer's bare-Ref non-first inter-field separator.
+	 */
+	public static inline final BEFORE_LEADING_SUFFIX:String = 'BeforeLeading';
+
+	/**
 	 * ω-cond-comp-expr-multiline — source-shape slot synthesised on
 	 * paired Seq types alongside bare-Ref fields that carry
 	 * `@:fmt(captureSourceNewlineAfter)`. Records whether the source
@@ -718,6 +736,12 @@ class TriviaTypeSynth {
 				entries.push({field: fieldName + SEP_BEFORE_SUFFIX, expr: macro false});
 			if (isBareNonFirstRef(child, origNode) || isBareFirstStarNlOptIn(child, origNode))
 				entries.push({field: fieldName + BEFORE_NEWLINE_SUFFIX, expr: macro false});
+			// ω-598-member-leading-comment: raw→paired upcast default — preWrite
+			// plugin rewrites carry no source comments, so the slot defaults to
+			// the empty array (byte-inert emit). Mirrors the BeforeNewline
+			// sibling above, gated on the same bare-Ref host.
+			if (isBareNonFirstRef(child, origNode))
+				entries.push({field: fieldName + BEFORE_LEADING_SUFFIX, expr: macro ([] : Array<String>)});
 			if (isTrailRef(child))
 				entries.push({field: fieldName + AFTER_TRAIL_SUFFIX, expr: macro (null : Null<String>)});
 			if (isPadTrailingTerminalRef(child))
@@ -925,6 +949,13 @@ class TriviaTypeSynth {
 					// writer's inter-field separator.
 					if (isBareNonFirstRef(child, origNode) || isBareFirstStarNlOptIn(child, origNode))
 						fields.push(buildBeforeNewlineSlot(child, pos));
+					// ω-598-member-leading-comment: only the bare non-first Ref
+					// host (e.g. `HxMemberDecl.member`) grows the leading-comment
+					// companion — its `BeforeNewline` `collectTrivia` scan owns
+					// the pre-field gap. The Star-opt-in host reads a different
+					// parser local, so it keeps `BeforeNewline` only.
+					if (isBareNonFirstRef(child, origNode))
+						fields.push(buildBeforeLeadingSlot(child, pos));
 					// ω-trivia-after-trail: any mandatory Ref field with
 					// `@:trail` grows a `<field>AfterTrail:Null<String>` slot
 					// holding a same-line `// comment` captured right after
@@ -1053,6 +1084,20 @@ class TriviaTypeSynth {
 		final fieldName:String = child.annotations.get('base.fieldName');
 		final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
 		return {name: fieldName + BEFORE_NEWLINE_SUFFIX, kind: FVar(boolCT), pos: pos, access: []};
+	}
+
+	/**
+	 * ω-598-member-leading-comment — `<field>BeforeLeading:Array<String>`
+	 * companion to `buildBeforeNewlineSlot`, gated on the same
+	 * `isBareNonFirstRef` host. Holds the verbatim comments the
+	 * `BeforeNewline` `collectTrivia` scan captured in the pre-field gap.
+	 */
+	private static function buildBeforeLeadingSlot(child:ShapeNode, pos:Position):Field {
+		final fieldName:String = child.annotations.get('base.fieldName');
+		final arrayStrCT:ComplexType = TPath({
+			pack: [], name: 'Array', params: [TPType(TPath({pack: [], name: 'String', params: []}))]
+		});
+		return {name: fieldName + BEFORE_LEADING_SUFFIX, kind: FVar(arrayStrCT), pos: pos, access: []};
 	}
 
 	/**

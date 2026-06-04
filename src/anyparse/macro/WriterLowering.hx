@@ -4087,7 +4087,36 @@ class WriterLowering {
 										final prev:Expr = prevAnyStarNonEmpty;
 										macro $prev ? ($nlAccess ? _dhl() : _dt(' ')) : _de();
 									} else macro $nlAccess ? _dhl() : _dt(' ');
-									parts.push(withPadTrailingDrop(prevPadTrailing, triviaSepExpr));
+									// ω-598-member-leading-comment: a bare non-first
+									// Ref field (e.g. `HxMemberDecl.member`) may carry
+									// comments the parser captured in the gap between the
+									// preceding content and this field's first token —
+									// notably a multiline block comment between a member
+									// modifier (`public`) and the `var` keyword, which the
+									// modifier Star's `collectTrailingFull` rejects. Emit
+									// each captured comment after the separator, glued to
+									// the preceding line, then a hardline before the
+									// field. Empty slot → the original separator
+									// unchanged (byte-inert). Gated on `child.kind == Ref`
+									// to match `TriviaTypeSynth.isBareNonFirstRef`, the
+									// only host that grows the `BeforeLeading` slot.
+									final sepWithLeading:Expr = child.kind == Ref ? {
+										final leadAccess:Expr = beforeLeadingAccess(fieldName);
+										macro {
+											final _sep598:anyparse.core.Doc = $triviaSepExpr;
+											final _leadCm598:Array<String> = $leadAccess;
+											if (_leadCm598.length == 0) _sep598;
+											else {
+												final _p598:Array<anyparse.core.Doc> = [_sep598];
+												for (_c598 in _leadCm598) {
+													_p598.push(leadingCommentDoc(_c598, opt));
+													_p598.push(_dhl());
+												}
+												_dc(_p598);
+											}
+										}
+									} : triviaSepExpr;
+									parts.push(withPadTrailingDrop(prevPadTrailing, sepWithLeading));
 								} else if (prevAnyStarNonEmpty != null) {
 									final prev:Expr = prevAnyStarNonEmpty;
 									parts.push(withPadTrailingDrop(prevPadTrailing, macro $prev ? _dt(' ') : _de()));
@@ -11750,6 +11779,21 @@ class WriterLowering {
 	private static inline function beforeNewlineAccess(fieldName:String):Expr {
 		return {
 			expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * ω-598-member-leading-comment — build `value.<fieldName>BeforeLeading`,
+	 * the `Array<String>` of verbatim comments the parser captured in the gap
+	 * before a bare non-first Ref field (synth via
+	 * `TriviaTypeSynth.isBareNonFirstRef`). Non-empty only when a comment was
+	 * dropped between the preceding content (e.g. a member modifier) and the
+	 * field's first token; emitted by the bare-Ref non-first separator.
+	 */
+	private static inline function beforeLeadingAccess(fieldName:String):Expr {
+		return {
+			expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_LEADING_SUFFIX),
 			pos: Context.currentPos(),
 		};
 	}
