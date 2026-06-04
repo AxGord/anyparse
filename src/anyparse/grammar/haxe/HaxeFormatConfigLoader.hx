@@ -47,6 +47,7 @@ import anyparse.grammar.haxe.format.HxFormatSameLinePolicy;
 import anyparse.grammar.haxe.format.HxFormatSameLineSection;
 import anyparse.grammar.haxe.format.HxFormatTrailingCommaPolicy;
 import anyparse.grammar.haxe.format.HxFormatTrailingCommasSection;
+import anyparse.grammar.haxe.format.HxFormatTypedefEmptyLinesConfig;
 import anyparse.grammar.haxe.format.HxFormatWhitespacePolicy;
 import anyparse.grammar.haxe.format.HxFormatWhitespaceSection;
 import anyparse.grammar.haxe.format.HxFormatWrapCondition;
@@ -595,6 +596,10 @@ final class HaxeFormatConfigLoader {
 			betweenEnumCtors: base.betweenEnumCtors,
 			beginType: base.beginType,
 			endType: base.endType,
+			typedefBeginType: base.typedefBeginType,
+			typedefBetweenFields: base.typedefBetweenFields,
+			typedefExistingBetweenFields: base.typedefExistingBetweenFields,
+			typedefEndType: base.typedefEndType,
 			afterLeftCurly: base.afterLeftCurly,
 			beforeRightCurly: base.beforeRightCurly,
 			typedefAssign: base.typedefAssign,
@@ -1432,6 +1437,19 @@ final class HaxeFormatConfigLoader {
 			if (enumSection.betweenFields != null) opt.betweenEnumCtors = enumSection.betweenFields;
 			if (enumSection.beginType != null) opt.beginType = enumSection.beginType;
 			if (enumSection.endType != null) opt.endType = enumSection.endType;
+		}
+		// ω-typedef-between-fields: `typedefEmptyLines` routes the four
+		// sub-keys to the dedicated typedef-scoped knobs (no shared-knob
+		// last-write-wins, unlike `enumEmptyLines`). Drives the
+		// `HxType.Anon.fields` `@:sep`-Star force-multi blank inserts when
+		// the descendant anon body carries `_inTypedefBody == true`.
+		final typedefSection:Null<HxFormatTypedefEmptyLinesConfig> = section.typedefEmptyLines;
+		if (typedefSection != null) {
+			if (typedefSection.existingBetweenFields != null)
+				opt.typedefExistingBetweenFields = keepEmptyLinesToRuntime(typedefSection.existingBetweenFields);
+			if (typedefSection.betweenFields != null) opt.typedefBetweenFields = typedefSection.betweenFields;
+			if (typedefSection.beginType != null) opt.typedefBeginType = typedefSection.beginType;
+			if (typedefSection.endType != null) opt.typedefEndType = typedefSection.endType;
 		}
 		if (section.afterPackage != null) opt.afterPackage = section.afterPackage;
 		if (section.beforePackage != null) opt.beforePackage = section.beforePackage;

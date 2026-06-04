@@ -190,7 +190,17 @@ enum HxType {
 	@:infix('->', 0, 'Right') @:fmt(functionTypeHaxe3)
 	Arrow(left:HxType, right:HxType);
 
-	@:trivia @:lead('{') @:trail('}') @:sep(',') @:sepAlt(';') @:fmt(anonTypeBracesOpen, anonTypeBracesClose, wrapRules('anonTypeWrap'), leftCurly('anonTypeLeftCurly'), rightCurly('anonTypeRightCurly'), beforeDocCommentEmptyLines, forceMultiInTypedef, keepCurlyBlanks)
+	/**
+	 * `@:fmt(typedefBodyBlanks)` (slice ω-typedef-between-fields) opts this
+	 * sep-Star into typedef-scoped blank-line injection. Active only when
+	 * the descendant anon body sees `opt._inTypedefBody == true` (set by
+	 * `HxTypedefDecl.type`'s `propagateTypedefContext`), so the
+	 * `emptyLines.typedefEmptyLines.beginType` / `betweenFields` knobs
+	 * insert blank lines after the opening `{` and between adjacent fields
+	 * in the `@:sep`-Star force-multi branch — without touching inline
+	 * anon-type uses (`var x:{a:Int}`), which never carry the flag.
+	 */
+	@:trivia @:lead('{') @:trail('}') @:sep(',') @:sepAlt(';') @:fmt(anonTypeBracesOpen, anonTypeBracesClose, wrapRules('anonTypeWrap'), leftCurly('anonTypeLeftCurly'), rightCurly('anonTypeRightCurly'), beforeDocCommentEmptyLines, forceMultiInTypedef, keepCurlyBlanks, typedefBodyBlanks)
 	Anon(fields:Array<HxAnonMember>);
 
 	ArrowFn(fn:HxArrowFnType);

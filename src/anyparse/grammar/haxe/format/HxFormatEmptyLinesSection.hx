@@ -9,7 +9,7 @@ package anyparse.grammar.haxe.format;
  * `beforeRightCurly`, `afterLeftCurly`,
  * `afterReturn`, `beforeBlocks`, `afterBlocks`, `enumAbstractEmptyLines`,
  * `macroClassEmptyLines`,
- * `typedefEmptyLines`, `conditionalsEmptyLines`, …) are silently dropped
+ * `conditionalsEmptyLines`, …) are silently dropped
  * by the ByName struct parser's `UnknownPolicy.Skip` — they land with
  * the slice that introduces the matching writer knob.
  *
@@ -48,6 +48,18 @@ package anyparse.grammar.haxe.format;
  * (`existingBetweenFields`, `beginType`, `endType`) share the global
  * runtime knobs with class / interface / abstract sections (last-write
  * wins for fixtures that mix sections).
+ *
+ * `typedefEmptyLines` nested section added in slice
+ * ω-typedef-between-fields. Drives blank-line behaviour inside a
+ * `typedef Foo = { … }` anonymous-struct body via DEDICATED runtime
+ * knobs (`opt.typedefBeginType`, `opt.typedefBetweenFields`,
+ * `opt.typedefExistingBetweenFields`, `opt.typedefEndType`) — kept
+ * separate from the class / enum scopes' shared knobs because the
+ * typedef-RHS anon renders through the `@:sep`-Star writer path, not the
+ * class-body Star path that consumes the shared `beginType` / `endType`.
+ * Mirrors fork's distinct `TypedefFieldsEmptyLinesConfig`. All four
+ * knobs default to the no-blank baseline (`0` / `Keep`), so fixtures
+ * that omit `typedefEmptyLines` are byte-identical to pre-slice.
  *
  * `abstractEmptyLines` nested section added in slice
  * ω-abstract-static-fn-cascade. Reuses `HxFormatClassEmptyLinesConfig`
@@ -124,6 +136,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var interfaceEmptyLines:HxFormatInterfaceEmptyLinesConfig;
 
 	@:optional var enumEmptyLines:HxFormatEnumEmptyLinesConfig;
+
+	@:optional var typedefEmptyLines:HxFormatTypedefEmptyLinesConfig;
 
 	@:optional var afterPackage:Int;
 

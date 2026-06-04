@@ -1738,6 +1738,19 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	betweenEnumCtors:Int,
 	beginType:Int,
 	endType:Int,
+	// ω-typedef-between-fields: dedicated typedef-RHS anon-body blank-line
+	// knobs (fork's `TypedefFieldsEmptyLinesConfig`), read only by the
+	// `@:sep`-Star force-multi branch under `_inTypedefBody`. Kept distinct
+	// from the class-scoped `beginType` / `endType` (which the typedef anon
+	// path never reads) so typedef + class scopes never cross-contaminate.
+	// `typedefExistingBetweenFields` governs source-blank pass-through when
+	// `typedefBetweenFields == 0`; a positive `typedefBetweenFields` forces
+	// that exact count regardless of the policy. Defaults `0` / `0` / `Keep`
+	// / `0` keep every non-typedef-config fixture byte-identical.
+	typedefBeginType:Int,
+	typedefBetweenFields:Int,
+	typedefExistingBetweenFields:KeepEmptyLinesPolicy,
+	typedefEndType:Int,
 	afterLeftCurly:KeepEmptyLinesPolicy,
 	beforeRightCurly:KeepEmptyLinesPolicy,
 	typedefAssign:WhitespacePolicy,

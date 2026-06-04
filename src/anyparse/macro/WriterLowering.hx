@@ -2251,6 +2251,15 @@ class WriterLowering {
 				// (line ~1542); enables `HxType.Anon` to honour
 				// `opt.afterLeftCurly` / `opt.beforeRightCurly` Keep.
 				final keepCurlyBlanksAlt:Bool = branch.fmtHasFlag('keepCurlyBlanks');
+				// ω-typedef-between-fields: enum-Alt branch reader for
+				// `@:fmt(typedefBodyBlanks)` (currently `HxType.Anon`).
+				// When set AND the descendant anon sees
+				// `opt._inTypedefBody == true`, the force-multi branch in
+				// `triviaSepStarExpr` injects `opt.typedefBeginType` blanks
+				// after `{` and `opt.typedefBetweenFields` blanks between
+				// adjacent fields. Inline anon-type uses never carry the
+				// flag, staying byte-identical to pre-slice.
+				final typedefBodyBlanksAlt:Bool = branch.fmtHasFlag('typedefBodyBlanks');
 					// ω-array-reflow: enum-Alt branch reader for
 					// `@:fmt(reflowSourceMultiline)` — opt-in for source-
 					// multiline lists (currently `HxExpr.ArrayExpr`) re-flowed
@@ -2272,7 +2281,11 @@ class WriterLowering {
 				parts.push(triviaSepStarExpr(
 					argsAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, leadText, trailText, sepText,
 					wrapRulesField, knobLeftCurly, knobRightCurly, sepTrailPresentAccess, trailingCommaField, openInsideExpr, closeInsideExpr, beforeDocComments,
-					forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines, keepCurlyBlanksAlt, reflowSourceMultilineAlt, bracketKindPadAlt, matrixWrapAlt
+					forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines, keepCurlyBlanksAlt, reflowSourceMultilineAlt, bracketKindPadAlt, matrixWrapAlt,
+					// ω-keep-fnsig-newline: enum-Alt has no close-newline slot;
+					// pass null so the ω-typedef-between-fields flag lands on the
+					// next positional param.
+					null, typedefBodyBlanksAlt
 				));
 			} else {
 				// ω-bropen-keep: forward `@:fmt(keepCurlyBlanks)` from the
@@ -5073,7 +5086,10 @@ class WriterLowering {
 						keepCurlyBlanksStar, reflowSourceMultilineStar, false, matrixWrapStar,
 						// ω-keep-fnsig-newline: close-newline accessor for the
 						// struct-Star keep close placement (HxFnDecl.params).
-						trailNLAccess
+						trailNLAccess,
+						// ω-typedef-between-fields: no struct-Star consumer opts
+						// into typedef-body blanks (HxType.Anon is enum-Alt).
+						false
 					));
 					return;
 				}
@@ -9243,7 +9259,14 @@ class WriterLowering {
 		// (`value.<field>TrailingNewlineBefore`). Threaded only by callers that
 		// pass it; null for every other call site → the keep close placement
 		// degrades to the legacy own-line close (byte-inert).
-		trailNLAccess:Null<Expr> = null
+		trailNLAccess:Null<Expr> = null,
+		// ω-typedef-between-fields: opt-in for typedef-RHS anon-body blank
+		// inserts (currently `HxType.Anon` via `@:fmt(typedefBodyBlanks)`).
+		// When true, the force-multi branch reads `opt.typedefBeginType` /
+		// `opt.typedefBetweenFields` gated on `opt._inTypedefBody` to push
+		// blank `_dhl()` after `{` and between adjacent fields. Default
+		// false → every other sep-Star caller is byte-identical.
+		typedefBodyBlanks:Bool = false
 	):Expr {
 		// ω-trivia-sep-anontype-braces (Phase B1): when the call site
 		// reads `@:fmt(anonTypeBracesOpen)` / `objectLiteralBracesOpen`
@@ -9294,6 +9317,55 @@ class WriterLowering {
 					_inner.push(_dhl());
 			}
 			: macro {};
+		// ω-typedef-between-fields: typedef-RHS anon-body blank inserts.
+		// Active only when this Star opted into `@:fmt(typedefBodyBlanks)`
+		// (`HxType.Anon`) AND the parent `HxTypedefDecl.type` flipped
+		// `opt._inTypedefBody = true` via `propagateTypedefContext`. Inline
+		// anon-type uses (`var x:{a:Int}`) never see `_inTypedefBody`, so
+		// the inserts stay scoped to the typedef RHS even though both share
+		// the `HxType.Anon` ctor. Counts are explicit overrides: a positive
+		// `typedefBeginType` / `typedefEndType` pushes exactly that many
+		// blanks regardless of source. The non-typedef-body case is `macro
+		// {}` (compile-time gate), so every other sep-Star caller is
+		// byte-identical.
+		final typedefBeginExpr:Expr = typedefBodyBlanks
+			? macro {
+				if (opt._inTypedefBody && opt.typedefBeginType > 0 && _arr.length > 0) {
+					var _tbi:Int = 0;
+					while (_tbi < opt.typedefBeginType) {
+						_inner.push(_dhl());
+						_tbi++;
+					}
+				}
+			}
+			: macro {};
+		final typedefEndExpr:Expr = typedefBodyBlanks
+			? macro {
+				if (opt._inTypedefBody && opt.typedefEndType > 0 && _arr.length > 0) {
+					var _tei:Int = 0;
+					while (_tei < opt.typedefEndType) {
+						_inner.push(_dhl());
+						_tei++;
+					}
+				}
+			}
+			: macro {};
+		// Per-element between-fields blank: pushed before the element for
+		// `_si > 0`. `existingBetweenFields == Remove` (default-Keep) only
+		// governs the fall-through source-blank pass-through handled by the
+		// sister `blankBeforeExpr`; a positive `typedefBetweenFields` forces
+		// the exact count here.
+		final typedefBetweenExpr:Expr = typedefBodyBlanks
+			? macro {
+				if (_si > 0 && opt._inTypedefBody && opt.typedefBetweenFields > 0) {
+					var _tfi:Int = 0;
+					while (_tfi < opt.typedefBetweenFields) {
+						_inner.push(_dhl());
+						_tfi++;
+					}
+				}
+			}
+			: macro {};
 		// ω-trivia-sep-doc-comment-cascade (Phase B2): mirror the
 		// `_currHasDocComment` / `addByCurrDocExpr` machinery from
 		// `triviaBlockStarExpr` so sep-Stars (e.g. `HxType.Anon.fields`
@@ -9321,14 +9393,28 @@ class WriterLowering {
 		final initCurrDocCommentExpr:Expr = beforeDocCommentEmptyLines
 			? macro var _currHasDocComment:Bool = false
 			: macro {};
+		// ω-typedef-between-fields: runtime predicate that strips the
+		// source-captured inter-field blank for a typedef RHS body. Fires
+		// when this Star opted into `@:fmt(typedefBodyBlanks)` AND the anon
+		// is in typedef context AND EITHER a forced `typedefBetweenFields`
+		// count owns the slot (the `$typedefBetweenExpr` pushes the exact
+		// count, so the source blank must not stack on top) OR
+		// `typedefExistingBetweenFields == Remove` collapses source blanks.
+		// `false` for every non-typedef caller (compile-time gate) → the
+		// existing source-blank pass-through is byte-identical.
+		final typedefStripBetweenExpr:Expr = typedefBodyBlanks
+			? macro (opt._inTypedefBody
+				&& (opt.typedefBetweenFields > 0
+					|| opt.typedefExistingBetweenFields == anyparse.format.KeepEmptyLinesPolicy.Remove))
+			: macro false;
 		final blankBeforeExpr:Expr = beforeDocCommentEmptyLines ? macro {
 			$currHasDocComputeExpr;
-			final _stripBlank:Bool = $stripByCurrDocExpr;
+			final _stripBlank:Bool = $stripByCurrDocExpr || $typedefStripBetweenExpr;
 			final _addBlank:Bool = $addByCurrDocExpr;
 			final _sourceBlank:Bool = _t.blankBefore && !_stripBlank;
 			if (_si > 0 && (_sourceBlank || _addBlank)) _inner.push(_dhl());
 		} : macro {
-			if (_t.blankBefore && _si > 0) _inner.push(_dhl());
+			if (_t.blankBefore && _si > 0 && !($typedefStripBetweenExpr)) _inner.push(_dhl());
 		};
 		// ω-typedef-anon-force-multi: when the Star carries
 		// `@:fmt(forceMultiInTypedef)`, the outermost typedef-RHS anon
@@ -10002,6 +10088,7 @@ class WriterLowering {
 					final _inner:Array<anyparse.core.Doc> = [];
 					$initCurrDocCommentExpr;
 					$keepCurlyBeginExpr;
+					$typedefBeginExpr;
 					var _si:Int = 0;
 					while (_si < _arr.length) {
 						final _t = _arr[_si];
@@ -10041,6 +10128,7 @@ class WriterLowering {
 							_inner.push(_dhl());
 						}
 						$blankBeforeExpr;
+						$typedefBetweenExpr;
 						var _ci:Int = 0;
 						while (_ci < _t.leadingComments.length) {
 							_inner.push(leadingCommentDoc(_t.leadingComments[_ci], opt));
@@ -10089,6 +10177,7 @@ class WriterLowering {
 						_si++;
 					}
 					$keepCurlyEndExpr;
+					$typedefEndExpr;
 					if (_trailLC.length > 0) {
 						_inner.push(_dhl());
 						if (_trailBB && _arr.length > 0) _inner.push(_dhl());
