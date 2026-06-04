@@ -5086,9 +5086,18 @@ class WriterLowering {
 				final lineCommentTrailBlank:Bool = starNode.fmtHasFlag('blankBeforeOrphanLineCommentTrail');
 				final blankBeforeFinalDocInLeading:Bool = starNode.fmtHasFlag('blankBeforeFinalDocCommentInLeading');
 				final interMemberArgs:Null<Array<String>> = starNode.fmtReadStringArgs('interMemberBlankLines');
+				// ω-interblank-cond-lookthrough: opt-in `@:fmt(interMember
+				// CondLookThrough('<classifierField>', '<condCtor>',
+				// '<bodyField>'))` makes `buildInterMemberClassifyInfo` classify
+				// a `#if … #end` member by its FIRST inner member's kind instead
+				// of the flat `0` ("other"). Mirrors `beforeDocCondLookThrough`'s
+				// doc-comment look-through so two consecutive function-bearing
+				// conditional members get a `betweenFunctions` blank. Inert unless
+				// `interMemberBlankLines` is also present (the policy it widens).
+				final interMemberCondArgs:Null<Array<String>> = starNode.fmtReadStringArgs('interMemberCondLookThrough');
 				final interMemberInfo:Null<InterMemberClassifyInfo> = interMemberArgs == null
 					? null
-					: buildInterMemberClassifyInfo(elemRefName, interMemberArgs);
+					: buildInterMemberClassifyInfo(elemRefName, interMemberArgs, interMemberCondArgs);
 				// `fmtHasFlag` accepts both bare-identifier (`staticVarSubdivision`)
 				// and call form (`staticVarSubdivision('modifiers', 'Static',
 				// 'afterStaticVars')`) — `fmtReadStringArgs` is null in the
@@ -11711,8 +11720,32 @@ class WriterLowering {
 	 * `0`. Iterating every variant (instead of emitting a wildcard
 	 * default) keeps the switch exhaustive without relying on Haxe's
 	 * unused-pattern warnings for the single-grammar two-variant case.
+	 *
+	 * ω-interblank-cond-lookthrough — when `condArgs` is non-null (the
+	 * Star also carried `@:fmt(interMemberCondLookThrough('<classifier
+	 * Field>', '<condCtor>', '<bodyField>'))`), the `<condCtor>` variant's
+	 * top-level case classifies the member by its FIRST inner member's
+	 * kind, read from a nested switch on
+	 * `_inner.<bodyField>[0].node.<classifierField>` (the body Star is
+	 * trivia-collected, so its elements carry the `.node` raw accessor).
+	 * An empty body falls back to `0`.
+	 *
+	 * The look-through is FUNCTION-ONLY: only a `fnCtor` inner member maps
+	 * to kind `2`; var-family inner members (and a nested `<condCtor>`)
+	 * map to `0`. This is the byte-safe subset of the fork's
+	 * `markClassFieldEmptyLines`, which pairs the REAL inner fields across
+	 * the `#if … #end` boundary with full static-ness / visibility
+	 * arbitration and doc-comment-policy override. anyparse classifies a
+	 * whole conditional MEMBER as one outer-loop unit, so a var-bearing
+	 * conditional cannot reproduce that field-vs-field arbitration and
+	 * over-fires the static-var subdivision cascade (`afterStaticVars`) and
+	 * the `none`-doc-comment strip. Functions carry no member-scope
+	 * subdivision and surfaced no doc-comment-strip conflict in the corpus,
+	 * so two consecutive function-bearing conditional members get a
+	 * `betweenFunctions` blank and nothing else changes. (See the inner-case
+	 * builder comment for the regression detail.)
 	 */
-	private function buildInterMemberClassifyInfo(elemRefName:String, args:Array<String>):InterMemberClassifyInfo {
+	private function buildInterMemberClassifyInfo(elemRefName:String, args:Array<String>, ?condArgs:Array<String>):InterMemberClassifyInfo {
 		if (args.length != 3 && args.length != 6)
 			Context.fatalError(
 				'WriterLowering: @:fmt(interMemberBlankLines) expects 3 or 6 string args (classifierField, varCtor, fnCtor [, betweenVarsField, betweenFunctionsField, afterVarsField]), got ${args.length}',
@@ -11730,6 +11763,24 @@ class WriterLowering {
 		final betweenVarsField:String = args.length == 6 ? args[3] : 'betweenVars';
 		final betweenFunctionsField:String = args.length == 6 ? args[4] : 'betweenFunctions';
 		final afterVarsField:String = args.length == 6 ? args[5] : 'afterVars';
+		// ω-interblank-cond-lookthrough: validate + unpack the optional
+		// look-through config. The classifier field must match
+		// `interMemberBlankLines`'s — both switches read the same enum.
+		final condArgsResolved:Null<Array<String>> = (condArgs != null && condArgs.length > 0) ? condArgs : null;
+		if (condArgsResolved != null) {
+			if (condArgsResolved.length != 3)
+				Context.fatalError(
+					'WriterLowering: @:fmt(interMemberCondLookThrough) expects exactly 3 string args (classifierField, condCtor, bodyField), got ${condArgsResolved.length}',
+					Context.currentPos()
+				);
+			if (condArgsResolved[0] != fieldName)
+				Context.fatalError(
+					'WriterLowering: @:fmt(interMemberCondLookThrough) classifierField "${condArgsResolved[0]}" must match interMemberBlankLines classifierField "$fieldName"',
+					Context.currentPos()
+				);
+		}
+		final condCtor:Null<String> = condArgsResolved != null ? condArgsResolved[1] : null;
+		final bodyField:Null<String> = condArgsResolved != null ? condArgsResolved[2] : null;
 		final elemRule:Null<ShapeNode> = shape.rules.get(elemRefName);
 		if (elemRule == null || elemRule.kind != Seq)
 			Context.fatalError(
@@ -11764,18 +11815,68 @@ class WriterLowering {
 				Context.currentPos()
 			);
 		final pos:Position = Context.currentPos();
+		// Base var/fn/other kind mapping for the TOP-level classify switch:
+		// var family → `1`, fn → `2`, everything else → `0`.
+		inline function kindFor(ctorName:String):Expr {
+			return if (varCtors.contains(ctorName)) macro 1;
+				else if (ctorName == fnCtor) macro 2;
+				else macro 0;
+		}
+		// `case <Ctor>(_, …):` pattern for one enum variant, binding the
+		// single ctor arg to `_inner` when `bindInner` (the look-through
+		// ctor needs the wrapper to reach its body Star).
+		inline function patternFor(branch:ShapeNode, ctorName:String, bindInner:Bool):Expr {
+			final arity:Int = branch.children.length;
+			final ctorIdent:Expr = {expr: EConst(CIdent(ctorName)), pos: pos};
+			return arity == 0
+				? ctorIdent
+				: {expr: ECall(ctorIdent, [for (i in 0...arity) (bindInner && i == 0) ? macro _inner : macro _]), pos: pos};
+		}
+		// Nested classify cases for the look-through switch. The look-through
+		// is deliberately FUNCTION-ONLY: an inner `fnCtor` member yields kind
+		// `2`, EVERYTHING else (including var-family ctors and a nested
+		// `condCtor`) yields `0`. The fork's `markClassFieldEmptyLines` pairs
+		// the REAL inner fields across the `#if … #end` boundary, factoring in
+		// each field's static-ness and visibility (afterStaticVars /
+		// afterPrivateVars), and lets the doc-comment policy override the
+		// field-type blank for doc-comment-led members. anyparse classifies a
+		// whole conditional MEMBER as one outer-loop unit, so promoting a
+		// var-bearing conditional to kind `1`/`3` cannot reproduce that
+		// field-vs-field static/visibility/doc-comment arbitration and instead
+		// over-fires the static-var subdivision cascade (afterStaticVars) and
+		// the `none`-doc-comment strip. The function family carries no such
+		// subdivision at member scope (afterStaticFunctions etc. are not
+		// modelled here) and no doc-comment-strip conflict surfaced in the
+		// corpus, so fn-only is the byte-safe subset: two consecutive
+		// function-bearing conditional members get a `betweenFunctions` blank,
+		// nothing else changes.
+		final innerCases:Array<Case> = condArgsResolved == null ? [] : [
+			for (branch in enumRule.children) if (branch.annotations.get('base.ctor') != null) {
+				final ctorName:String = branch.annotations.get('base.ctor');
+				{values: [patternFor(branch, ctorName, false)], guard: null, expr: (ctorName == fnCtor ? macro 2 : macro 0)};
+			}
+		];
 		final cases:Array<Case> = [];
 		for (branch in enumRule.children) {
 			final ctorName:Null<String> = branch.annotations.get('base.ctor');
 			if (ctorName == null) continue;
-			final arity:Int = branch.children.length;
-			final ctorIdent:Expr = {expr: EConst(CIdent(ctorName)), pos: pos};
-			final pattern:Expr = arity == 0
-				? ctorIdent
-				: {expr: ECall(ctorIdent, [for (_ in 0...arity) macro _]), pos: pos};
-			final kindExpr:Expr = if (varCtors.contains(ctorName)) macro 1;
-				else if (ctorName == fnCtor) macro 2;
-				else macro 0;
+			final isLookThrough:Bool = condCtor != null && ctorName == condCtor;
+			final pattern:Expr = patternFor(branch, ctorName, isLookThrough);
+			final kindExpr:Expr = if (isLookThrough) {
+				// `_inner.<bodyField>[0].node.<classifierField>` — the body
+				// Star is trivia-collected so `[0]` is a trivia wrapper with
+				// a `.node` raw accessor; `.node.<classifierField>` is the
+				// inner member's classifier enum.
+				final innerBodyAccess:Expr = {expr: EField(macro _inner, bodyField), pos: pos};
+				final innerClassifier:Expr = {
+					expr: EField({expr: EField(macro $innerBodyAccess[0], 'node'), pos: pos}, fieldName),
+					pos: pos,
+				};
+				final innerSwitch:Expr = {expr: ESwitch(innerClassifier, innerCases, null), pos: pos};
+				macro ($innerBodyAccess.length > 0 ? $innerSwitch : 0);
+			} else {
+				kindFor(ctorName);
+			}
 			cases.push({values: [pattern], guard: null, expr: kindExpr});
 		}
 		return {

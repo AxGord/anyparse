@@ -56,5 +56,5 @@ typedef HxClassDecl = {
 	@:kw('class') var name:HxIdentLit;
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var typeParams:Null<Array<HxTypeParamDecl>>;
 	@:trivia @:tryparse @:fmt(padLeading, lineLengthAwareSeps, heritageWrap) var heritage:Array<HxHeritageClause>;
-	@:fmt(leftCurly, emptyCurlyBreak, beginEndType, afterFieldsWithDocComments, existingBetweenFields, beforeDocCommentEmptyLines, beforeDocCondLookThrough('member', 'Conditional', 'body'), blankBeforeFinalDocCommentInLeading, blankBeforeOrphanLineCommentTrail, interMemberBlankLines('member', 'VarMember|FinalMember', 'FnMember'), staticVarSubdivision, betweenMultilineCommentsBlanks) @:lead('{') @:trail('}') @:trivia var members:Array<HxMemberDecl>;
+	@:fmt(leftCurly, emptyCurlyBreak, beginEndType, afterFieldsWithDocComments, existingBetweenFields, beforeDocCommentEmptyLines, beforeDocCondLookThrough('member', 'Conditional', 'body'), blankBeforeFinalDocCommentInLeading, blankBeforeOrphanLineCommentTrail, interMemberBlankLines('member', 'VarMember|FinalMember', 'FnMember'), interMemberCondLookThrough('member', 'Conditional', 'body'), staticVarSubdivision, betweenMultilineCommentsBlanks) @:lead('{') @:trail('}') @:trivia var members:Array<HxMemberDecl>;
 }
