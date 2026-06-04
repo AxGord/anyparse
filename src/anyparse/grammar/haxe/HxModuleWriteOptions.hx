@@ -1829,6 +1829,21 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	beforeType:Int,
 	afterMultilineDecl:Int,
 	beforeMultilineDecl:Int,
+	// ω-after-conditional-block — number of blank lines forced after a
+	// module-level `#if … #end` (`HxDecl.Conditional`) whose tail leaf is
+	// NEITHER an import / using NOR a type-level decl. Mirrors fork's
+	// behaviour: at module top level there is no keep-existing-blanks pass
+	// (that only runs inside function bodies), so a `#if … #error … #end`
+	// followed by a type decl collapses to zero blanks unless a mark pass
+	// re-adds one. Fork's `markImports` re-adds `importAndUsing.beforeType`
+	// (=1) when the conditional's tail is an import / using, and
+	// `betweenTypes` (=1) re-adds one when the tail is a type-level decl;
+	// every other tail (error, package directive, opaque conditional) keeps
+	// the module default of 0. Default `0` strips the source blank for those
+	// other-tailed conditionals; the import- / type-tailed cases fall
+	// through to the source-driven count (kept). See
+	// `HxExprUtil.tailLeafKeepsBlankAfterConditional` for the gate adapter.
+	afterConditionalBlock:Int,
 	afterFileHeaderComment:Int,
 	betweenMultilineComments:Int,
 	betweenSingleLineTypes:Int,

@@ -281,6 +281,15 @@ typedef WriteOptions = {
 	?betweenImportsPathDiffers:Null<(String, String, Int) -> Bool>,
 	?betweenImportsTailLeafClassify:Null<Dynamic -> Null<{ctorName:String, path:String}>>,
 	?betweenImportsHeadLeafClassify:Null<Dynamic -> Null<{ctorName:String, path:String}>>,
+	// ω-after-conditional-block — `tailLeafKeepsBlankAfterConditional(payload)
+	// → Null<{ctorName, path}>`. Non-null iff a module-level `#if … #end`
+	// (`HxDecl.Conditional`) tail leaf is a decl after which fork keeps /
+	// re-adds a blank before the next decl (import / using OR type-level
+	// decl). Drives the `@:fmt(blankLinesAfterCtorIfTailLeafNull(...))`
+	// override on `HxModule.decls`: null (e.g. `#error` tail) → force
+	// `afterConditionalBlock` (=0) blanks; non-null → source-driven count.
+	// Null adapter (every non-opt-in format) → the override never fires.
+	?tailLeafKeepsBlankAfterConditional:Null<Dynamic -> Null<{ctorName:String, path:String}>>,
 	?arrayBracketKind:Null<Dynamic -> Int>,
 	/**
 	 * `elementIsConditional(elementNode) → Bool` — true iff a cond-comp

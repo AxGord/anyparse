@@ -154,12 +154,38 @@ package anyparse.grammar.haxe;
  * count instead of forcing `opt.<optField>`. Used here to exclude
  * `Conditional` (`#if … #end`): a cond-comp directive immediately before
  * a multiline type decl with NO source blank no longer gets a spurious
- * forced blank (matches haxe-formatter, which preserves the source
- * blank-or-not across a preprocessor `#end → type` boundary). When the
- * source DID have a blank, the source-driven fallback still emits it, so
- * the `#if … #end\n\nclass` round-trip stays byte-identical. Resolved by
- * `WriterLowering.buildBeforeCtorBlankInfoIfPrevNot`; the excluded set
- * drives a second binary classify-switch tracked into the prev-side.
+ * forced blank. When the source DID have a blank, the source-driven
+ * fallback emits it — but whether fork keeps that blank depends on the
+ * conditional's TAIL content, handled by the after-side override below.
+ * Resolved by `WriterLowering.buildBeforeCtorBlankInfoIfPrevNot`; the
+ * excluded set drives a second binary classify-switch tracked into the
+ * prev-side.
+ *
+ * `@:fmt(blankLinesAfterCtorIfTailLeafNull(classifierField, Ctor,
+ * tailAdapterField, optField))` (slice ω-after-conditional-block) is the
+ * after-side counterpart: it forces `opt.<optField>` blank lines AFTER a
+ * previous element matching `Ctor` (`Conditional`) whose tail-leaf
+ * classify (via the `tailAdapterField` adapter, here
+ * `tailLeafKeepsBlankAfterConditional`) returns null — i.e. the
+ * conditional's last decl is NEITHER an import / using NOR a type-level
+ * decl. Mirrors fork's actual module-level behaviour: there is no
+ * keep-existing-blanks pass at top level (that runs only inside function
+ * bodies), so a `#if … #end` followed by a decl starts at zero blanks;
+ * fork's `markImports` re-adds one (`beforeType`) when the conditional's
+ * tail is an import / using, and `betweenTypes` (default 1) re-adds one
+ * when the tail is a type-level decl. Default
+ * `afterConditionalBlock = 0` therefore strips the source blank for an
+ * `#if … #error … #end → class` boundary (sharp_error) while leaving
+ * byte-identical the import-tailed case (issue_322 / issue_85: tail is
+ * `import` → adapter non-null → source-driven blank kept) and the
+ * type-tailed case (issue_4_no_empty_line_before_sharp_end_2: tail is a
+ * `class` → adapter non-null → kept). As an after-info it sits OUTERMOST
+ * in the cascade priority (after > between > transition > before >
+ * source), so it wins over the `blankLinesBeforeCtorIfPrevNot` exclusion
+ * above for the error-tailed conditional. Resolved by
+ * `WriterLowering.buildAfterCtorBlankInfoIfTailLeafNull`; the matched
+ * classify case binds `_v0` (the conditional payload) so the adapter has
+ * the wrapper to walk tail-first.
  */
 @:peg
 @:schema(anyparse.grammar.haxe.HaxeFormat)
@@ -175,6 +201,7 @@ typedef HxModule = {
 	@:fmt(blankLinesBetweenSameCtorTailTransparent('decl', 'Conditional', 'betweenImportsTailLeafClassify'))
 	@:fmt(blankLinesBetweenSameCtorHeadTransparent('decl', 'Conditional', 'betweenImportsHeadLeafClassify'))
 	@:fmt(blankLinesAfterCtorIf('decl', 'multiline', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'FnDecl', 'TypedefDecl', 'afterMultilineDecl'))
+	@:fmt(blankLinesAfterCtorIfTailLeafNull('decl', 'Conditional', 'tailLeafKeepsBlankAfterConditional', 'afterConditionalBlock'))
 	@:fmt(blankLinesBeforeCtorIfPrevNot('decl', 'multiline', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'FnDecl', 'TypedefDecl', '|', 'Conditional', 'beforeMultilineDecl'))
 	@:fmt(blankLinesBetweenSameCtorIfNot('decl', 'multiline', 'TypedefDecl', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'betweenSingleLineTypes'))
 	@:fmt(blankBeforeOrphanLineCommentTrail)

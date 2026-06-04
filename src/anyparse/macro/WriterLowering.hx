@@ -10347,9 +10347,53 @@ class WriterLowering {
 			prevVars.push({name: '_prevKindAfter' + i, type: macro:Int, expr: macro 0});
 			currVars.push({name: '_currKindAfter' + i, type: macro:Int, expr: macro 0});
 			final classifierAccess:Expr = {expr: EField(macro _t.node, info.classifierFieldName), pos: pos};
-			final switchExpr:Expr = {expr: ESwitch(classifierAccess, info.classifyCases, null), pos: pos};
-			final lhs:Expr = {expr: EConst(CIdent('_currKindAfter' + i)), pos: pos};
-			currCompute.push(macro $lhs = $switchExpr);
+			final kindIdent:Expr = {expr: EConst(CIdent('_currKindAfter' + i)), pos: pos};
+			if (info.tailAdapterOptField == null) {
+				final switchExpr:Expr = {expr: ESwitch(classifierAccess, info.classifyCases, null), pos: pos};
+				currCompute.push(macro $kindIdent = $switchExpr);
+			} else {
+				// ω-after-conditional-block — additionally track whether the
+				// matched element's tail-leaf classify returns null (tail is NOT
+				// import / using). The matched classify case binds `_v0` (the
+				// wrapper payload); run the adapter on it inside that case body so
+				// both trackers are set from one switch. `info.classifyCases` has
+				// `expr: 1` on the matched (`_v0`-binding) case and `expr: 0`
+				// elsewhere — rewrite each into a `{kind = …; tailNull = …}` block.
+				currVars.push({name: '_currTailNullAfter' + i, type: macro:Int, expr: macro 0});
+				prevVars.push({name: '_prevTailNullAfter' + i, type: macro:Int, expr: macro 0});
+				final tailNullIdent:Expr = {expr: EConst(CIdent('_currTailNullAfter' + i)), pos: pos};
+				final adapterAccess:Expr = {expr: EField(macro opt, info.tailAdapterOptField), pos: pos};
+				final dualCases:Array<Case> = [
+					for (c in info.classifyCases) {
+						// The builder marks the single matched (`_v0`-binding) case
+						// with `expr: macro 1`; every non-matched case is `macro 0`.
+						final isMatchCase:Bool = switch (c.expr != null ? c.expr.expr : null) {
+							case EConst(CInt('1', _)): true;
+							case _: false;
+						};
+						{
+							values: c.values,
+							guard: c.guard,
+							expr: isMatchCase
+								// `_v0` is in scope (bound by the case pattern). A null
+								// adapter or a null classify result both mean "tail is
+								// not an import / using" → tailNull = 1 → override fires.
+								? macro {
+									$kindIdent = 1;
+									$tailNullIdent = ($adapterAccess == null || $adapterAccess(_v0) == null) ? 1 : 0;
+								}
+								: macro {
+									$kindIdent = 0;
+									$tailNullIdent = 0;
+								},
+						}
+					}
+				];
+				currCompute.push({expr: ESwitch(classifierAccess, dualCases, null), pos: pos});
+				final tnLhs:Expr = {expr: EConst(CIdent('_prevTailNullAfter' + i)), pos: pos};
+				final tnRhs:Expr = {expr: EConst(CIdent('_currTailNullAfter' + i)), pos: pos};
+				trackPrev.push(macro $tnLhs = $tnRhs);
+			}
 			final tlhs:Expr = {expr: EConst(CIdent('_prevKindAfter' + i)), pos: pos};
 			final trhs:Expr = {expr: EConst(CIdent('_currKindAfter' + i)), pos: pos};
 			trackPrev.push(macro $tlhs = $trhs);
@@ -10707,7 +10751,18 @@ class WriterLowering {
 			final afterAccess:Expr = {expr: EField(macro opt, info.optField), pos: pos};
 			final prevIdent:Expr = {expr: EConst(CIdent('_prevKindAfter' + idx)), pos: pos};
 			final fallback:Expr = blanksCountExpr;
-			blanksCountExpr = macro ($prevIdent == 1 ? $afterAccess : $fallback);
+			// ω-after-conditional-block — tail-adapter infos gain a
+			// `_prevTailNullAfter != 0` guard so the override fires only when
+			// the previous element matched the ctor AND its tail leaf was NOT
+			// an import / using (adapter returned null). Plain after-ctor infos
+			// keep the bare `_prevKind == 1` gate, byte-identical.
+			final gate:Expr = if (info.tailAdapterOptField == null)
+				macro $prevIdent == 1;
+			else {
+				final prevTailNullIdent:Expr = {expr: EConst(CIdent('_prevTailNullAfter' + idx)), pos: pos};
+				macro $prevIdent == 1 && $prevTailNullIdent == 1;
+			}
+			blanksCountExpr = macro ($gate ? $afterAccess : $fallback);
 		}
 
 		// ω-before-package — head-of-Star cascade. Each info contributes a
@@ -12395,6 +12450,10 @@ class WriterLowering {
 		final afterCtorIfAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesAfterCtorIf');
 		for (args in afterCtorIfAllArgs)
 			afterCtorInfos.push(buildAfterCtorBlankInfoIf(elemRefName, args));
+		// ω-after-conditional-block — tail-leaf-gated after-ctor override.
+		final afterCtorIfTailNullAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesAfterCtorIfTailLeafNull');
+		for (args in afterCtorIfTailNullAllArgs)
+			afterCtorInfos.push(buildAfterCtorBlankInfoIfTailLeafNull(elemRefName, args));
 		final beforeCtorAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBeforeCtor');
 		final beforeCtorInfos:Array<BeforeCtorBlankInfo> = [
 			for (args in beforeCtorAllArgs) buildBeforeCtorBlankInfo(elemRefName, args, null)
@@ -12562,6 +12621,77 @@ class WriterLowering {
 			classifierFieldName: r.fieldName,
 			classifyCases: r.cases,
 			optField: r.optField,
+		};
+	}
+
+	/**
+	 * ω-after-conditional-block — resolve
+	 * `@:fmt(blankLinesAfterCtorIfTailLeafNull(classifierField, CtorName,
+	 * tailAdapterField, optField))` (arity exactly 4). Like
+	 * `blankLinesAfterCtor` it forces `opt.<optField>` blank lines after a
+	 * previous element matching `CtorName`, but the override is gated at
+	 * runtime on the previous element's tail-leaf classify (run via the
+	 * named `WriteOptions` adapter on the matched ctor's first positional
+	 * arg, bound as `_v0`) returning null — i.e. the wrapper's tail leaf is
+	 * NOT one of the adapter's recognised ctors. The single matched case
+	 * binds `_v0`; every other ctor stays kind `0` with the plain wildcard
+	 * pattern. Used to mirror fork's module-level `#if … #end → type`
+	 * boundary: a conditional whose tail is an import / using keeps the
+	 * source blank (adapter returns non-null → override suppressed → source-
+	 * driven count), every other tail (error, metadata, expression)
+	 * collapses to `opt.afterConditionalBlock` (=0). Only one ctor name is
+	 * accepted — the tail-leaf gate is meaningful only for a transparent
+	 * wrapper ctor (`Conditional`).
+	 */
+	private function buildAfterCtorBlankInfoIfTailLeafNull(elemRefName:String, args:Array<String>):AfterCtorBlankInfo {
+		if (args.length != 4)
+			Context.fatalError(
+				'WriterLowering: @:fmt(blankLinesAfterCtorIfTailLeafNull) expects exactly 4 string args (classifierField, CtorName, tailAdapterField, optField), got ${args.length}',
+				Context.currentPos()
+			);
+		final fieldName:String = args[0];
+		final ctorName:String = args[1];
+		final tailAdapterField:String = args[2];
+		final optField:String = args[3];
+		final r:{enumRule:ShapeNode, enumRuleName:String} = resolveClassifierEnum(elemRefName, fieldName, 'blankLinesAfterCtorIfTailLeafNull');
+		final enumRule:ShapeNode = r.enumRule;
+		final enumRuleName:String = r.enumRuleName;
+		final pos:Position = Context.currentPos();
+		final cases:Array<Case> = [];
+		var matched:Bool = false;
+		for (branch in enumRule.children) {
+			final branchCtor:Null<String> = branch.annotations.get('base.ctor');
+			if (branchCtor == null) continue;
+			final arity:Int = branch.children.length + branchSynthExtraArity(enumRuleName, branch);
+			final ctorIdent:Expr = {expr: EConst(CIdent(branchCtor)), pos: pos};
+			final isMatch:Bool = branchCtor == ctorName;
+			if (isMatch) {
+				matched = true;
+				if (arity < 1)
+					Context.fatalError(
+						'WriterLowering: @:fmt(blankLinesAfterCtorIfTailLeafNull) ctor "$ctorName" must have arity ≥ 1 (first arg is the wrapper payload bound to _v0 and passed to the tail-leaf classifier adapter); got arity $arity',
+						Context.currentPos()
+					);
+				final binders:Array<Expr> = [for (i in 0...arity) i == 0 ? macro _v0 : macro _];
+				final pattern:Expr = {expr: ECall(ctorIdent, binders), pos: pos};
+				cases.push({values: [pattern], guard: null, expr: macro 1});
+			} else {
+				final pattern:Expr = arity == 0
+					? ctorIdent
+					: {expr: ECall(ctorIdent, [for (_ in 0...arity) macro _]), pos: pos};
+				cases.push({values: [pattern], guard: null, expr: macro 0});
+			}
+		}
+		if (!matched)
+			Context.fatalError(
+				'WriterLowering: @:fmt(blankLinesAfterCtorIfTailLeafNull) ctor "$ctorName" not found in enum $enumRuleName',
+				Context.currentPos()
+			);
+		return {
+			classifierFieldName: fieldName,
+			classifyCases: cases,
+			optField: optField,
+			tailAdapterOptField: tailAdapterField,
 		};
 	}
 
@@ -13611,6 +13741,19 @@ typedef AfterCtorBlankInfo = {
 	classifierFieldName:String,
 	classifyCases:Array<Case>,
 	optField:String,
+	// ω-after-conditional-block — when non-null, the after-ctor override is
+	// ADDITIONALLY gated on the previous element's tail-leaf classify
+	// returning null. `tailAdapterOptField` names a `WriteOptions`
+	// `Dynamic -> Null<{ctorName, path}>` adapter (e.g.
+	// `betweenImportsTailLeafClassify`) run on the matched ctor's first
+	// positional arg (`_v0`); a null result means the wrapper's tail leaf is
+	// NOT one of the recognised ctors (import / using), so the override
+	// fires. Non-null (tail IS an import / using) suppresses the override and
+	// the cascade falls through to the source-driven blank count. The
+	// matched classify case binds `_v0` so the adapter has the payload to
+	// walk. Null for every plain `blankLinesAfterCtor{,If}` — those keep the
+	// original bare `_prevKind == 1` gate, byte-identical.
+	?tailAdapterOptField:Null<String>,
 };
 
 /**

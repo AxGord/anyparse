@@ -760,6 +760,88 @@ final class HxExprUtil {
 	}
 
 	/**
+	 * ω-after-conditional-block — tail-leaf classifier for the module-level
+	 * `#if … #end → decl` blank decision. Returns non-null `{ctorName, path}`
+	 * when the conditional's tail leaf is a decl after which fork KEEPS (or
+	 * re-adds) a blank line before the following decl, null otherwise.
+	 *
+	 * The non-null (keep-blank) set unions fork's two relevant mark passes:
+	 *  - `markImports` re-adds `importAndUsing.beforeType` after a `#end`
+	 *    whose conditional tail is an import / using.
+	 *  - `betweenTypes` adds `emptyLines.betweenTypes` (default 1) after a
+	 *    `#end` whose conditional tail is a type-level decl — fork's
+	 *    `betweenTypes` filter walks into `#if` subtrees and treats
+	 *    `class / interface / abstract / enum / typedef / var / function /
+	 *    final` as participating types.
+	 * Every other tail (e.g. `#error`, package directive, an empty / nested
+	 * opaque conditional) is in neither pass → the module default of zero
+	 * blanks stands, so the `WriterLowering` after-ctor override fires.
+	 *
+	 * Wired on `WriteOptions.tailLeafKeepsBlankAfterConditional` and passed
+	 * to `@:fmt(blankLinesAfterCtorIfTailLeafNull(... 'Conditional',
+	 * 'tailLeafKeepsBlankAfterConditional', 'afterConditionalBlock'))`. The
+	 * `path` field is unused by the gate (only nullness matters); it is the
+	 * captured path for import-family leaves and `''` for type-level leaves.
+	 *
+	 * Tail-walk structure mirrors `tailLeafClassifyImports` (elseBody →
+	 * elseifs[last..0].body → body, last element of the chosen branch).
+	 */
+	public static function tailLeafKeepsBlankAfterConditional(payload:Null<Dynamic>):Null<{ctorName:String, path:String}> {
+		if (payload == null) return null;
+		final elseBody:Null<Array<Dynamic>> = Reflect.field(payload, 'elseBody');
+		if (elseBody != null && elseBody.length > 0)
+			return classifyKeepsBlankElement(elseBody[elseBody.length - 1]);
+		final elseifs:Null<Array<Dynamic>> = Reflect.field(payload, 'elseifs');
+		if (elseifs != null && elseifs.length > 0) {
+			var i:Int = elseifs.length - 1;
+			while (i >= 0) {
+				final clause:Null<Dynamic> = unwrapTrivialStruct(elseifs[i]);
+				if (clause != null) {
+					final clauseBody:Null<Array<Dynamic>> = Reflect.field(clause, 'body');
+					if (clauseBody != null && clauseBody.length > 0)
+						return classifyKeepsBlankElement(clauseBody[clauseBody.length - 1]);
+				}
+				i--;
+			}
+		}
+		final body:Null<Array<Dynamic>> = Reflect.field(payload, 'body');
+		if (body != null && body.length > 0)
+			return classifyKeepsBlankElement(body[body.length - 1]);
+		return null;
+	}
+
+	/**
+	 * ω-after-conditional-block — leaf classifier for
+	 * `tailLeafKeepsBlankAfterConditional`. Same element-unwrap path as
+	 * `classifyTopLevelDeclElement` but a broader recognised ctor set
+	 * (import / using family AND type-level decls). On a nested
+	 * `Conditional` it recurses tail-first into the wrapped payload. Returns
+	 * `{ctorName, path}` (non-null) for a keep-blank tail, null otherwise.
+	 */
+	private static function classifyKeepsBlankElement(elem:Null<Dynamic>):Null<{ctorName:String, path:String}> {
+		final inner:Null<Dynamic> = unwrapTrivialStruct(elem);
+		if (inner == null) return null;
+		final decl:Null<Dynamic> = Reflect.field(inner, 'decl');
+		if (decl == null) return null;
+		final ctor:Null<String> = Type.enumConstructor(decl);
+		if (ctor == null) return null;
+		final params:Null<Array<Dynamic>> = Type.enumParameters(decl);
+		if (params == null || params.length == 0) return null;
+		return switch ctor {
+			case 'Conditional': tailLeafKeepsBlankAfterConditional(params[0]);
+			// Import / using family — fork's `markImports` re-adds a blank.
+			case 'ImportDecl' | 'ImportWildDecl' | 'UsingDecl' | 'UsingWildDecl' | 'ImportAliasDecl':
+				{ctorName: ctor, path: ''};
+			// Type-level decls — fork's `betweenTypes` (default 1) adds a blank.
+			case 'ClassDecl' | 'InterfaceDecl' | 'AbstractClassDecl' | 'AbstractDecl'
+				| 'EnumDecl' | 'EnumAbstractDecl' | 'TypedefDecl' | 'FnDecl'
+				| 'VarDecl' | 'FinalDecl':
+				{ctorName: ctor, path: ''};
+			case _: null;
+		};
+	}
+
+	/**
 	 * Unwrap a `Trivial<T>` wrapper struct around another struct (e.g.
 	 * `Trivial<HxTopLevelDeclT>` → `HxTopLevelDeclT`). Distinct from
 	 * `unwrap` above because that one targets enum values and uses

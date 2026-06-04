@@ -787,6 +787,7 @@ final class HaxeFormat implements TextFormat {
 		beforeType: 1,
 		afterMultilineDecl: 1,
 		beforeMultilineDecl: 1,
+		afterConditionalBlock: 0,
 		afterFileHeaderComment: 1,
 		betweenMultilineComments: 0,
 		betweenSingleLineTypes: 0,
@@ -814,6 +815,7 @@ final class HaxeFormat implements TextFormat {
 		betweenImportsPathDiffers: HxBetweenImportsLevel.pathDiffers,
 		betweenImportsTailLeafClassify: HxExprUtil.tailLeafClassifyImports,
 		betweenImportsHeadLeafClassify: HxExprUtil.headLeafClassifyImports,
+		tailLeafKeepsBlankAfterConditional: HxExprUtil.tailLeafKeepsBlankAfterConditional,
 		elementIsConditional: HxExprUtil.elementIsConditional,
 	};
 

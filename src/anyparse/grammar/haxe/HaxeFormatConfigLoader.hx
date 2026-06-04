@@ -672,6 +672,7 @@ final class HaxeFormatConfigLoader {
 			beforeType: base.beforeType,
 			afterMultilineDecl: base.afterMultilineDecl,
 			beforeMultilineDecl: base.beforeMultilineDecl,
+			afterConditionalBlock: base.afterConditionalBlock,
 			afterFileHeaderComment: base.afterFileHeaderComment,
 			betweenMultilineComments: base.betweenMultilineComments,
 			betweenSingleLineTypes: base.betweenSingleLineTypes,
@@ -699,6 +700,7 @@ final class HaxeFormatConfigLoader {
 			betweenImportsPathDiffers: base.betweenImportsPathDiffers,
 			betweenImportsTailLeafClassify: base.betweenImportsTailLeafClassify,
 			betweenImportsHeadLeafClassify: base.betweenImportsHeadLeafClassify,
+			tailLeafKeepsBlankAfterConditional: base.tailLeafKeepsBlankAfterConditional,
 			elementIsConditional: base.elementIsConditional,
 		};
 		if (cfg.indentation != null) applyIndentation(cfg.indentation, result);
