@@ -35,6 +35,22 @@ while [ -h "$src" ]; do
     esac
 done
 here=$(cd -P "$(dirname "$src")" && pwd)
+
+# Worktree awareness: when invoked from inside a git worktree (or clone)
+# whose own bin/ holds a built engine, prefer THAT engine + its src/ over
+# the symlink-resolved one above. Without this, `hxq` run from a campaign
+# worktree queries the MAIN tree's apq.js and stale-checks the MAIN src/
+# — silently testing the wrong parser (the worktree's grammar edits are
+# invisible). Falls back to the symlink-resolved `here` when CWD is
+# outside a git tree (e.g. reading a reference library), when the
+# worktree's engine isn't built yet, or when CWD is the main tree
+# (then $wt_top/bin == $here, no change). `|| true` keeps `set -e` happy
+# when git is absent or CWD is not a repo.
+wt_top=$(git rev-parse --show-toplevel 2>/dev/null || true)
+if [ -n "$wt_top" ] && [ "$wt_top/bin" != "$here" ] && { [ -f "$wt_top/bin/apq.js" ] || [ -f "$wt_top/bin/apq.n" ]; }; then
+    here="$wt_top/bin"
+fi
+
 js="$here/apq.js"
 nn="$here/apq.n"
 
