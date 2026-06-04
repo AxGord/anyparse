@@ -8,7 +8,7 @@ package anyparse.grammar.haxe.format;
  * are modelled here. Missing keys (`beforeVars`, `beforeFunctions`,
  * `afterFunctions`, `beforeStaticVars`, `betweenStaticVars`,
  * `beforeStaticFunctions`, `afterStaticFunctions`,
- * `betweenStaticFunctions`, `finalNewline`, `afterImports`,
+ * `finalNewline`, `afterImports`,
  * `afterLastFunction`, `afterPrivate`, `afterPublic`, `afterOverride`,
  * `afterStatic`, `afterInline`, `afterMacro`, `finalizeEmptyLines`, …)
  * are silently dropped by the ByName struct parser's
@@ -30,6 +30,15 @@ package anyparse.grammar.haxe.format;
  * `emptyLines.classEmptyLines.afterStaticVars: @:default(1)`. Fires
  * only when the consumer Star also carries `@:fmt(staticVarSubdivision)`
  * (class + abstract members; interface skips).
+ *
+ * `betweenStaticFunctions` added in slice ω-abstract-static-fn-cascade —
+ * Int count routed to `opt.betweenStaticFunctions`. Default `1`, matching
+ * fork's `emptyLines.classEmptyLines.betweenStaticFunctions:
+ * @:default(1)`. Fires only when the consumer Star also carries
+ * `@:fmt(staticVarSubdivision)` and BOTH neighbours are static functions
+ * (kind `4`); the default `1` is byte-identical to the pre-slice
+ * `betweenFunctions` blank, so it only changes output when a config
+ * lowers it (`abstractEmptyLines.betweenStaticFunctions: 0`).
  */
 @:peg typedef HxFormatClassEmptyLinesConfig = {
 
@@ -42,6 +51,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var afterVars:Int;
 
 	@:optional var afterStaticVars:Int;
+
+	@:optional var betweenStaticFunctions:Int;
 
 	@:optional var beginType:Int;
 

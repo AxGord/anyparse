@@ -9,7 +9,6 @@ package anyparse.grammar.haxe.format;
  * `beforeRightCurly`, `afterLeftCurly`,
  * `afterReturn`, `beforeBlocks`, `afterBlocks`, `enumAbstractEmptyLines`,
  * `macroClassEmptyLines`,
- * `abstractEmptyLines`,
  * `typedefEmptyLines`, `conditionalsEmptyLines`, …) are silently dropped
  * by the ByName struct parser's `UnknownPolicy.Skip` — they land with
  * the slice that introduces the matching writer knob.
@@ -49,6 +48,17 @@ package anyparse.grammar.haxe.format;
  * (`existingBetweenFields`, `beginType`, `endType`) share the global
  * runtime knobs with class / interface / abstract sections (last-write
  * wins for fixtures that mix sections).
+ *
+ * `abstractEmptyLines` nested section added in slice
+ * ω-abstract-static-fn-cascade. Reuses `HxFormatClassEmptyLinesConfig`
+ * (fork shares `ClassFieldsEmptyLinesConfig` across class / abstract /
+ * extern scopes). Only the `betweenStaticFunctions` sub-key is consumed
+ * today (feeds the shared `opt.betweenStaticFunctions` knob through the
+ * static-function cascade arm on `HxAbstractDecl.members`); the other
+ * per-slot sub-keys share the global runtime knobs with the
+ * `classEmptyLines` section (last-write wins for fixtures that mix
+ * sections), landing alongside their abstract-scoped runtime knobs as
+ * future fixtures need them.
  *
  * `afterPackage` added in slice ω-after-package (feeds
  * `opt.afterPackage`). Non-negative Int — exact number of blank lines
@@ -108,6 +118,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var classEmptyLines:HxFormatClassEmptyLinesConfig;
 
 	@:optional var externClassEmptyLines:HxFormatClassEmptyLinesConfig;
+
+	@:optional var abstractEmptyLines:HxFormatClassEmptyLinesConfig;
 
 	@:optional var interfaceEmptyLines:HxFormatInterfaceEmptyLinesConfig;
 

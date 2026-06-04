@@ -704,6 +704,7 @@ final class HaxeFormat implements TextFormat {
 		betweenFunctions: 1,
 		afterVars: 1,
 		afterStaticVars: 1,
+		betweenStaticFunctions: 1,
 		interfaceBetweenVars: 0,
 		interfaceBetweenFunctions: 0,
 		interfaceAfterVars: 0,

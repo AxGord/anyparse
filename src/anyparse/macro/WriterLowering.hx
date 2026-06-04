@@ -8759,9 +8759,14 @@ class WriterLowering {
 		// `@:fmt(staticVarSubdivision)`, augment the per-iteration kind
 		// switch with a sibling-Star scan that promotes kind `1` (instance
 		// var) to kind `3` (static var) on encountering a `Static`-ctor
-		// modifier. Kind `2` (function) is left alone — fork's
-		// classifier-cascade DOES split static functions, but no current
-		// fixture exercises that arm; defer until one does.
+		// modifier.
+		//
+		// ω-abstract-static-fn-cascade: the same scan also promotes kind `2`
+		// (function) to kind `4` (static function), mirroring fork's
+		// classifier-cascade static-function split. The (4,4) pair then
+		// routes to `betweenStaticFunctions` in the cascade arm below; with
+		// the default `betweenStaticFunctions: 1` this is byte-identical to
+		// the pre-slice `betweenFunctions` blank.
 		final staticVarSubdiv:Bool = staticVarSubdivInfo != null;
 		final staticPromoteExpr:Expr = staticVarSubdiv ? {
 			final pos:Position = Context.currentPos();
@@ -8771,8 +8776,8 @@ class WriterLowering {
 			};
 			final staticIdent:Expr = {expr: EConst(CIdent(staticVarSubdivInfo.staticCtorName)), pos: pos};
 			macro {
-				if (_currKind == 1) for (_m in $modAccess) if (_m.node.match($staticIdent)) {
-					_currKind = 3;
+				if (_currKind == 1 || _currKind == 2) for (_m in $modAccess) if (_m.node.match($staticIdent)) {
+					_currKind = _currKind == 1 ? 3 : 4;
 					break;
 				}
 			};
@@ -8825,9 +8830,21 @@ class WriterLowering {
 			// equivalent — and is not modeled separately until a fixture
 			// requires it). When subdivision is off, kind `3` is unreachable
 			// and the cascade collapses to the pre-slice three arms.
+			//
+			// ω-abstract-static-fn-cascade: kind `4` represents static-fn.
+			// The function family is {2, 4}. A (4,4) pair fires the new
+			// `betweenStaticFunctions` knob; every other fn-fn pair
+			// ((2,2)/(2,4)/(4,2)) keeps reading `betweenFunctions` (fork's
+			// `afterStaticFunctions` default equals `betweenFunctions` —
+			// `1` — so the static-difference pairs need no separate knob).
+			// var↔fn transitions treat {1,3} as var and {2,4} as fn.
 			if (staticVarSubdiv) {
 				final afterStaticVarsAccess:Expr = {
 					expr: EField(macro opt, staticVarSubdivInfo.afterStaticVarsField),
+					pos: pos,
+				};
+				final betweenStaticFnAccess:Expr = {
+					expr: EField(macro opt, staticVarSubdivInfo.betweenStaticFunctionsField),
 					pos: pos,
 				};
 				macro (!opt._classExtern && (
@@ -8835,9 +8852,13 @@ class WriterLowering {
 					|| (_prevKind == 3 && _currKind == 3 && $betweenVarsAccess > 0)
 					|| (((_prevKind == 1 && _currKind == 3) || (_prevKind == 3 && _currKind == 1))
 						&& $afterStaticVarsAccess > 0)
-					|| (_prevKind == 2 && _currKind == 2 && $betweenFnAccess > 0)
-					|| ((((_prevKind == 1 || _prevKind == 3) && _currKind == 2)
-						|| (_prevKind == 2 && (_currKind == 1 || _currKind == 3)))
+					|| (_prevKind == 4 && _currKind == 4 && $betweenStaticFnAccess > 0)
+					|| (((_prevKind == 2 && _currKind == 2)
+						|| (_prevKind == 2 && _currKind == 4)
+						|| (_prevKind == 4 && _currKind == 2))
+						&& $betweenFnAccess > 0)
+					|| (((((_prevKind == 1 || _prevKind == 3) && (_currKind == 2 || _currKind == 4)))
+						|| ((_prevKind == 2 || _prevKind == 4) && (_currKind == 1 || _currKind == 3)))
 						&& $afterVarsAccess > 0)
 				));
 			} else {
@@ -12021,12 +12042,17 @@ class WriterLowering {
 	/**
 	 * ω-class-static-var-cascade — resolve `@:fmt(staticVarSubdivision)` /
 	 * `@:fmt(staticVarSubdivision('<modifierField>', '<staticCtor>',
-	 * '<afterStaticVarsField>'))` into the data the per-iteration kind
-	 * switch reads to promote kind `1` (instance var) to kind `3` (static
-	 * var). The zero-arg form defaults to the `('modifiers', 'Static',
-	 * 'afterStaticVars')` triple — matches the canonical
-	 * `HxMemberDecl.modifiers` Star + `HxMemberModifier.Static` ctor +
-	 * `HxModuleWriteOptions.afterStaticVars` knob.
+	 * '<afterStaticVarsField>' [, '<betweenStaticFunctionsField>']))` into
+	 * the data the per-iteration kind switch reads to promote kind `1`
+	 * (instance var) to kind `3` (static var) and kind `2` (function) to
+	 * kind `4` (static function). The zero-arg form defaults to the
+	 * `('modifiers', 'Static', 'afterStaticVars', 'betweenStaticFunctions')`
+	 * quadruple — matches the canonical `HxMemberDecl.modifiers` Star +
+	 * `HxMemberModifier.Static` ctor + the matching `HxModuleWriteOptions`
+	 * knobs.
+	 *
+	 * ω-abstract-static-fn-cascade — the optional 4th arg names the
+	 * `betweenStaticFunctions` opt knob consulted at a (4,4) static-fn pair.
 	 *
 	 * The companion meta is read alongside `@:fmt(interMemberBlankLines)`;
 	 * `@:fmt(staticVarSubdivision)` without `interMemberBlankLines` is
@@ -12035,14 +12061,15 @@ class WriterLowering {
 	 * modifier field exists on the element Seq rule and that it's a Star.
 	 */
 	private function buildStaticVarSubdivisionInfo(elemRefName:String, args:Array<String>):StaticVarSubdivisionInfo {
-		if (args.length != 0 && args.length != 3)
+		if (args.length != 0 && args.length != 3 && args.length != 4)
 			Context.fatalError(
-				'WriterLowering: @:fmt(staticVarSubdivision) expects 0 or 3 string args (modifierField, staticCtor, afterStaticVarsField), got ${args.length}',
+				'WriterLowering: @:fmt(staticVarSubdivision) expects 0, 3 or 4 string args (modifierField, staticCtor, afterStaticVarsField [, betweenStaticFunctionsField]), got ${args.length}',
 				Context.currentPos()
 			);
-		final modifierField:String = args.length == 3 ? args[0] : 'modifiers';
-		final staticCtor:String = args.length == 3 ? args[1] : 'Static';
-		final afterStaticVarsField:String = args.length == 3 ? args[2] : 'afterStaticVars';
+		final modifierField:String = args.length >= 3 ? args[0] : 'modifiers';
+		final staticCtor:String = args.length >= 3 ? args[1] : 'Static';
+		final afterStaticVarsField:String = args.length >= 3 ? args[2] : 'afterStaticVars';
+		final betweenStaticFunctionsField:String = args.length == 4 ? args[3] : 'betweenStaticFunctions';
 		final elemRule:Null<ShapeNode> = shape.rules.get(elemRefName);
 		if (elemRule == null || elemRule.kind != Seq)
 			Context.fatalError(
@@ -12099,6 +12126,7 @@ class WriterLowering {
 			modifierFieldName: modifierField,
 			staticCtorName: staticCtor,
 			afterStaticVarsField: afterStaticVarsField,
+			betweenStaticFunctionsField: betweenStaticFunctionsField,
 		};
 	}
 
@@ -13266,6 +13294,15 @@ typedef InterMemberClassifyInfo = {
  * `<afterStaticVarsField>` opt knob, leaving (1,1)/(3,3)/(2,2)/var↔fn
  * arms on the existing `betweenVars` / `betweenFunctions` / `afterVars`.
  *
+ * ω-abstract-static-fn-cascade — the same sibling-Star scan also promotes
+ * base kind `2` (function) to kind `4` (static function) on encountering
+ * the `<staticCtor>` modifier. A (4,4) pair routes to the
+ * `<betweenStaticFunctionsField>` opt knob; kinds `2` and `4` are both
+ * treated as the "function" family for the var↔fn `afterVars` arm, and a
+ * (2,4)/(4,2) static-difference falls back to `betweenFunctions` (fork's
+ * `afterStaticFunctions` default equals `betweenFunctions` — `1` — so no
+ * separate knob is modelled until a fixture distinguishes them).
+ *
  * Class and abstract members opt in; interface members do NOT — fork's
  * `InterfaceFieldsEmptyLinesConfig` lacks `afterStaticVars` and treats
  * static-var transitions as plain `betweenVars`. Skipping the meta on
@@ -13276,6 +13313,7 @@ typedef StaticVarSubdivisionInfo = {
 	modifierFieldName:String,
 	staticCtorName:String,
 	afterStaticVarsField:String,
+	betweenStaticFunctionsField:String,
 };
 
 /**

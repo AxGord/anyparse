@@ -588,6 +588,7 @@ final class HaxeFormatConfigLoader {
 			betweenFunctions: base.betweenFunctions,
 			afterVars: base.afterVars,
 			afterStaticVars: base.afterStaticVars,
+			betweenStaticFunctions: base.betweenStaticFunctions,
 			interfaceBetweenVars: base.interfaceBetweenVars,
 			interfaceBetweenFunctions: base.interfaceBetweenFunctions,
 			interfaceAfterVars: base.interfaceAfterVars,
@@ -1396,8 +1397,21 @@ final class HaxeFormatConfigLoader {
 			if (classSection.betweenFunctions != null) opt.betweenFunctions = classSection.betweenFunctions;
 			if (classSection.afterVars != null) opt.afterVars = classSection.afterVars;
 			if (classSection.afterStaticVars != null) opt.afterStaticVars = classSection.afterStaticVars;
+			if (classSection.betweenStaticFunctions != null)
+				opt.betweenStaticFunctions = classSection.betweenStaticFunctions;
 			if (classSection.beginType != null) opt.beginType = classSection.beginType;
 			if (classSection.endType != null) opt.endType = classSection.endType;
+		}
+		// ω-abstract-static-fn-cascade: `abstractEmptyLines` reuses the
+		// shared `HxFormatClassEmptyLinesConfig` runtime knobs (fork shares
+		// `ClassFieldsEmptyLinesConfig` across class / abstract scopes). Only
+		// `betweenStaticFunctions` is consumed today — the rest land with
+		// their abstract-scoped fixtures. Last-write wins against any
+		// `classEmptyLines` block that set the same shared knob.
+		final abstractSection:Null<HxFormatClassEmptyLinesConfig> = section.abstractEmptyLines;
+		if (abstractSection != null) {
+			if (abstractSection.betweenStaticFunctions != null)
+				opt.betweenStaticFunctions = abstractSection.betweenStaticFunctions;
 		}
 		final externClassSection:Null<HxFormatClassEmptyLinesConfig> = section.externClassEmptyLines;
 		if (externClassSection != null) {

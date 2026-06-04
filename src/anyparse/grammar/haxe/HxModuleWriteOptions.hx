@@ -732,6 +732,21 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    the existing zero-blank invariant from
  *    `ω-extern-class-no-blanks`.
  *
+ * Field added in slice ω-abstract-static-fn-cascade (static-vs-instance
+ * function subdivision in `interMemberBlankLines`):
+ *  - `betweenStaticFunctions` — blank-line count emitted between two
+ *    consecutive static functions (kind `4`). Default `1`, matching
+ *    haxe-formatter's `emptyLines.classEmptyLines.betweenStaticFunctions:
+ *    @:default(1)`. Byte-identical to the pre-slice `betweenFunctions`
+ *    blank at the default, so it only changes output when a config lowers
+ *    it (`abstractEmptyLines.betweenStaticFunctions: 0` in
+ *    `issue_356_functions_without_implementation`). Fires only when the
+ *    grammar Star ALSO carries `@:fmt(staticVarSubdivision)` (class and
+ *    abstract members opt in; interface members do not) AND both
+ *    neighbours are static functions. The cascade arm is gated by
+ *    `!opt._classExtern`, preserving the extern-class zero-blank
+ *    invariant.
+ *
  * Fields added in slice ω-class-begin-end-type (head/tail blank lines
  * inside class/interface/abstract bodies):
  *  - `beginType` — exact blank-line count emitted between the opening
@@ -1716,6 +1731,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	betweenFunctions:Int,
 	afterVars:Int,
 	afterStaticVars:Int,
+	betweenStaticFunctions:Int,
 	interfaceBetweenVars:Int,
 	interfaceBetweenFunctions:Int,
 	interfaceAfterVars:Int,
