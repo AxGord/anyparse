@@ -20,12 +20,15 @@ package anyparse.grammar.haxe;
  * parse behaviour to `HxClassDecl.members` (`@:lead('{') @:trail('}')
  * @:trivia` with no `@:sep`) — each `HxMemberDecl` self-terminates
  * via its own `;` / `{}` tail and the loop ends on the closing `}`.
- * The `@:fmt(…)` formatting knobs `HxClassDecl.members` carries are
- * intentionally omitted: they only shape writer output, never parsing.
- * The default member layout is acceptable for a first implementation
- * (newly-parsing fixtures may land in `fail` rather than `pass` via
- * the established deferred-byte-reemit caveat; the hard invariant is
- * zero byte-regression on already-passing fixtures).
+ * `members` carries `@:fmt(interMemberBlankLines(...))` — the same
+ * inter-member blank cascade `HxClassDecl.members` uses — so a `macro
+ * class` body gets blank lines between its members (afterVars /
+ * betweenFunctions) like a regular class body (emptylines/issue_377).
+ * The remaining `@:fmt(…)` knobs `HxClassDecl.members` carries
+ * (leftCurly / beforeDocComment / staticVarSubdivision / …) stay
+ * omitted: they only shape writer output, never parsing, and no corpus
+ * fixture needs them on a macro-class body yet. The hard invariant is
+ * zero byte-regression on already-passing fixtures.
  *
  * `@:trivia` on `members` makes `HxMacroClass` transitively
  * trivia-bearing; the paired `HxMacroClassT` is synthesised
@@ -35,5 +38,5 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxMacroClass = {
 	var head:HxMacroClassHead;
-	@:lead('{') @:trail('}') @:trivia var members:Array<HxMemberDecl>;
+	@:fmt(interMemberBlankLines('member', 'VarMember|FinalMember', 'FnMember')) @:lead('{') @:trail('}') @:trivia var members:Array<HxMemberDecl>;
 }
