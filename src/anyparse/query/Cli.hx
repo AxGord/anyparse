@@ -431,9 +431,11 @@ final class Cli {
 		final allEntries:Array<{file:String, source:String, hits:Array<RefHit>}> = [];
 		final skipEntries:Array<SkipEntry> = [];
 		final candidateNames:Map<String, Bool> = new Map();
+		var scanned:Int = 0;
 		for (path in paths) {
 			final source:String = readSourceForParse(path);
-			final tree:Null<QueryNode> = parseWalked('refs', plugin.parseFile, path, source, singleFile, skipEntries);
+			final tree:Null<QueryNode> = parseWalked('refs', plugin.parseFile, path, source, singleFile, skipEntries, nameStr);
+			streamProgress('refs', ++scanned, paths.length, singleFile);
 			if (tree == null) {
 				if (singleFile) return EXIT_RUNTIME;
 				continue;
@@ -531,9 +533,11 @@ final class Cli {
 		final allEntries:Array<{file:String, source:String, hits:Array<UsesHit>}> = [];
 		final skipEntries:Array<SkipEntry> = [];
 		final candidateNames:Map<String, Bool> = new Map();
+		var scanned:Int = 0;
 		for (path in paths) {
 			final source:String = readSourceForParse(path);
-			final tree:Null<QueryNode> = parseWalked('uses', plugin.parseFileTypeRefs, path, source, singleFile, skipEntries);
+			final tree:Null<QueryNode> = parseWalked('uses', plugin.parseFileTypeRefs, path, source, singleFile, skipEntries, nameStr);
+			streamProgress('uses', ++scanned, paths.length, singleFile);
 			if (tree == null) {
 				if (singleFile) return EXIT_RUNTIME;
 				continue;
@@ -1522,9 +1526,19 @@ final class Cli {
 		final skipEntries:Array<SkipEntry> = [];
 		// Cache parsed trees so the auto-widen retry path doesn't reparse.
 		final trees:Array<{path:String, source:String, tree:QueryNode}> = [];
+		// `lit` matches DECODED literal values; the raw file holds the
+		// ESCAPED form, so a raw-substring pre-filter can false-negative
+		// when the searched key carries a backslash (an escape sequence).
+		// Opt the pre-filter OUT for backslash-bearing keys — for plain
+		// keys (identifiers, annotation keys, prose without escapes) the
+		// decoded value and the raw bytes coincide, so the pre-filter is
+		// a strict necessary condition and safe.
+		final litPrefilterKey:Null<String> = targetStr.indexOf('\\') < 0 ? targetStr : null;
+		var scanned:Int = 0;
 		for (path in paths) {
 			final source:String = readSourceForParse(path);
-			final tree:Null<QueryNode> = parseWalked('lit', plugin.parseFile, path, source, singleFile, skipEntries);
+			final tree:Null<QueryNode> = parseWalked('lit', plugin.parseFile, path, source, singleFile, skipEntries, litPrefilterKey);
+			streamProgress('lit', ++scanned, paths.length, singleFile);
 			if (tree == null) {
 				if (singleFile) return EXIT_RUNTIME;
 				continue;
@@ -1727,9 +1741,11 @@ final class Cli {
 		final singleFile:Bool = expanded.singleFile;
 		final allEntries:Array<{file:String, source:String, hits:Array<CasesHit>}> = [];
 		final skipEntries:Array<SkipEntry> = [];
+		var scanned:Int = 0;
 		for (path in paths) {
 			final source:String = readSourceForParse(path);
-			final tree:Null<QueryNode> = parseWalked('cases', plugin.parseFile, path, source, singleFile, skipEntries);
+			final tree:Null<QueryNode> = parseWalked('cases', plugin.parseFile, path, source, singleFile, skipEntries, targetStr);
+			streamProgress('cases', ++scanned, paths.length, singleFile);
 			if (tree == null) {
 				if (singleFile) return EXIT_RUNTIME;
 				continue;
@@ -2243,9 +2259,16 @@ final class Cli {
 		final memberNames:Array<String> = [];
 		final declSpans:Array<Span> = [];
 		final valueTrees:Array<{path:String, source:String, tree:QueryNode}> = [];
+		// Pass 1 is NOT pre-filtered on `typeName`: the heuristic
+		// field-access section (Section 3) matches MEMBER names, which
+		// can occur in files that never name the type textually
+		// (`obj.someField` with no mention of the type). Dropping such a
+		// file would lose a heuristic hit, so every file is parsed here.
+		var scanned:Int = 0;
 		for (path in paths) {
 			final source:String = readSourceForParse(path);
 			final tree:Null<QueryNode> = parseWalked('blast', plugin.parseFile, path, source, expanded.singleFile);
+			streamProgress('blast', ++scanned, paths.length, expanded.singleFile);
 			if (tree == null) {
 				if (expanded.singleFile) return EXIT_RUNTIME;
 				continue;
@@ -2257,10 +2280,13 @@ final class Cli {
 		var any:Bool = false;
 
 		// Section 1 — type-position references (precise). The header is
-		// emitted once, before the first file with a hit.
+		// emitted once, before the first file with a hit. The type-refs
+		// re-parse IS pre-filtered on `typeName`: a type-position match
+		// always names the type verbatim, so a file lacking that
+		// substring cannot contribute a `uses` hit.
 		var usesHeader:Bool = false;
 		for (entry in valueTrees) {
-			final typeTree:Null<QueryNode> = parseWalked('blast', plugin.parseFileTypeRefs, entry.path, entry.source, expanded.singleFile);
+			final typeTree:Null<QueryNode> = parseWalked('blast', plugin.parseFileTypeRefs, entry.path, entry.source, expanded.singleFile, null, typeName);
 			if (typeTree == null) continue;
 			final hits:Array<UsesHit> = Uses.find(typeName, typeTree, typeShape);
 			if (hits.length == 0) continue;
@@ -2398,11 +2424,19 @@ final class Cli {
 		}
 
 		// Single value-AST pass per file, shared across all three sections.
-		// Mirrors `runBlast`'s caching discipline.
+		// Mirrors `runBlast`'s caching discipline. All three sections
+		// (uses / refs / lit-exact) search for `target` verbatim, so the
+		// raw-substring pre-filter is a strict necessary condition.
+		// Section 3 (`lit`) matches decoded literal values, so the key is
+		// opted out of the pre-filter when it carries a backslash — same
+		// escaped-literal caution as `runLit`.
+		final mentionsPrefilterKey:Null<String> = target.indexOf('\\') < 0 ? target : null;
 		final valueTrees:Array<{path:String, source:String, tree:QueryNode}> = [];
+		var scanned:Int = 0;
 		for (path in paths) {
 			final source:String = readSourceForParse(path);
-			final tree:Null<QueryNode> = parseWalked('mentions', plugin.parseFile, path, source, expanded.singleFile);
+			final tree:Null<QueryNode> = parseWalked('mentions', plugin.parseFile, path, source, expanded.singleFile, null, mentionsPrefilterKey);
+			streamProgress('mentions', ++scanned, paths.length, expanded.singleFile);
 			if (tree == null) {
 				if (expanded.singleFile) return EXIT_RUNTIME;
 				continue;
@@ -2412,10 +2446,12 @@ final class Cli {
 
 		var any:Bool = false;
 
-		// Section 1 — type-position references (precise).
+		// Section 1 — type-position references (precise). The type-refs
+		// re-parse is pre-filtered on `target` (a type position always
+		// names the type verbatim).
 		var usesHeader:Bool = false;
 		for (entry in valueTrees) {
-			final typeTree:Null<QueryNode> = parseWalked('mentions', plugin.parseFileTypeRefs, entry.path, entry.source, expanded.singleFile);
+			final typeTree:Null<QueryNode> = parseWalked('mentions', plugin.parseFileTypeRefs, entry.path, entry.source, expanded.singleFile, null, target);
 			if (typeTree == null) continue;
 			final hits:Array<UsesHit> = Uses.find(target, typeTree, typeShape);
 			if (hits.length == 0) continue;
@@ -6183,6 +6219,37 @@ final class Cli {
 	}
 
 	/**
+	 * Heartbeat interval for the multi-file walk progress line — emit a
+	 * stderr `scanned K/N` every this many files so a corpus-wide walk
+	 * never goes silent (a watchdog reading a redirected stream sees
+	 * steady byte growth). Tuned so a several-hundred-file `src/` walk
+	 * yields ~10–20 lines rather than one-per-file flooding.
+	 */
+	private static inline final PROGRESS_INTERVAL:Int = 25;
+
+	/**
+	 * Per-file walk progress heartbeat (multi-file scans only). Writes a
+	 * `scanned <done>/<total>` line to **stderr** — never stdout — so the
+	 * walker's machine-readable hit output stays byte-identical while a
+	 * long run still produces incremental output. Fires every
+	 * `PROGRESS_INTERVAL` files plus once at completion, and is a no-op
+	 * for single-file queries (`singleFile`), tiny scans (`total <=
+	 * PROGRESS_INTERVAL`), or when `HXQ_NO_PROGRESS` is set (so a caller
+	 * merging streams via `2>&1` can suppress it).
+	 *
+	 * `done` is 1-based (the count of files processed so far, inclusive
+	 * of the current one).
+	 */
+	private static function streamProgress(cmd:String, done:Int, total:Int, singleFile:Bool):Void {
+		if (singleFile || total <= PROGRESS_INTERVAL) return;
+		#if (sys || nodejs)
+		if (Sys.getEnv('HXQ_NO_PROGRESS') != null) return;
+		#end
+		if (done % PROGRESS_INTERVAL == 0 || done == total)
+			stderr('apq $cmd: scanned $done/$total files…\n');
+	}
+
+	/**
 	 * Parse one walked file for the scan subcommands
 	 * (`refs`/`uses`/`meta`/`search`). The behaviour on a parse failure
 	 * depends on how the input was given. When the user named exactly
@@ -6192,6 +6259,32 @@ final class Cli {
 	 * unparseable file is out of scope by nature, so it is skipped
 	 * silently — no per-file error noise on every walk. Returns the
 	 * parsed tree, or `null` to skip (scan) / fail (single file).
+	 *
+	 * Substring pre-filter: a name-walker only ever emits hits whose
+	 * leaf text equals `searchKey`. An identifier / annotation key is
+	 * carried verbatim into the AST (never escaped, case-sensitive), so
+	 * `source.indexOf(searchKey) >= 0` is a strict necessary condition
+	 * for ANY hit — if the raw bytes do not contain the key, no parse
+	 * can produce a match. When `searchKey` is non-null and absent from
+	 * `source`, the file is skipped WITHOUT parsing (the dominant cost
+	 * on a corpus-wide walk) and WITHOUT a skip-entry: the file parses
+	 * fine, it is a confirmed no-match, not a parse failure. The raw
+	 * read is shared with the parse — the caller already read `source`
+	 * once and passes the same buffer here, so the pre-filter adds no
+	 * extra IO.
+	 *
+	 * `lit` searches the DECODED literal value while the raw file holds
+	 * the ESCAPED form, so a raw `indexOf` can false-negative on a key
+	 * containing escape sequences. Callers that cannot guarantee the key
+	 * appears verbatim in source (e.g. `lit` on a backslash-bearing key)
+	 * pass `searchKey == null` to opt out — correctness over speed.
+	 *
+	 * The pre-filter is suppressed in `singleFile` mode: there a `null`
+	 * tree means "parse failed" and the caller turns it into a hard
+	 * error. A pre-filter skip is a confirmed no-match, NOT a parse
+	 * failure, so suppressing it preserves the single-file contract
+	 * (parse the named file, emit 0 hits + nudge, exit 0). The win is a
+	 * corpus-wide-scan win anyway — skipping one named file is moot.
 	 */
 	private static function parseWalked(
 		cmd:String,
@@ -6199,8 +6292,10 @@ final class Cli {
 		path:String,
 		source:String,
 		singleFile:Bool,
-		?skipOut:Array<SkipEntry>
+		?skipOut:Array<SkipEntry>,
+		?searchKey:String
 	):Null<QueryNode> {
+		if (!singleFile && searchKey != null && source.indexOf(searchKey) < 0) return null;
 		return try parse(source)
 			catch (exception:ParseError) {
 				if (singleFile) stderr('apq $cmd: $path: ${exception.toString()}\n');
