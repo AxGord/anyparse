@@ -652,6 +652,7 @@ final class HaxeFormatConfigLoader {
 			implementsExtendsWrap: base.implementsExtendsWrap,
 			arrayMatrixWrap: base.arrayMatrixWrap,
 			conditionalPolicy: base.conditionalPolicy,
+			alignInlineSwitchCaseBody: base.alignInlineSwitchCaseBody,
 			addLineCommentSpace: base.addLineCommentSpace,
 			compressSuccessiveParenthesis: base.compressSuccessiveParenthesis,
 			expressionTry: base.expressionTry,
@@ -770,6 +771,7 @@ final class HaxeFormatConfigLoader {
 		if (section.indentObjectLiteral != null) opt.indentObjectLiteral = section.indentObjectLiteral;
 		if (section.indentComplexValueExpressions != null) opt.indentComplexValueExpressions = section.indentComplexValueExpressions;
 		if (section.indentVarTypeHintAnon != null) opt.indentVarTypeHintAnon = section.indentVarTypeHintAnon;
+		if (section.alignInlineSwitchCaseBody != null) opt.alignInlineSwitchCaseBody = section.alignInlineSwitchCaseBody;
 		final policyName:Null<String> = section.conditionalPolicy;
 		if (policyName != null) {
 			final resolved:Null<ConditionalIndentationPolicy> = policyName;

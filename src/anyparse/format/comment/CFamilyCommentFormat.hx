@@ -80,6 +80,7 @@ final class CFamilyCommentFormat implements TextFormat {
 		commentStyle: Verbatim,
 		arrayMatrixWrap: ArrayMatrixWrap.NoMatrixWrap,
 		conditionalPolicy: ConditionalIndentationPolicy.Aligned,
+		alignInlineSwitchCaseBody: false,
 		addLineCommentSpace: true,
 		compressSuccessiveParenthesis: true,
 	};

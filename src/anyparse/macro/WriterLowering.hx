@@ -11787,7 +11787,20 @@ class WriterLowering {
 					// Doc in `_dn(_cols, ...)` is a no-op in the flat path
 					// (no \n inside the body) and applies +1 indent on every
 					// inner newline when the body wraps. Issue_121 fixtures.
-					_dwb(_dn(_cols, _dc(_docs)));
+					//
+					// ω-align-inline-switch-case-body: under
+					// `opt.alignInlineSwitchCaseBody` the case `:` must NOT
+					// add this extra level: a wrapped argument already
+					// indents relative to the case line via its own
+					// container, so the `_dn(_cols, ...)` over-indents the
+					// content and its closing bracket by one tab (mirrors
+					// fork `Indenter.alignInlineSwitchCaseBody` skipping the
+					// `mustIndent` on the case DblDot for same-line bodies).
+					// Default `false` keeps the `_dn` (byte-identical to all
+					// existing flat-case fixtures); inline non-wrapping
+					// bodies have no inner newline so dropping it is a no-op
+					// there too.
+					_dwb(opt.alignInlineSwitchCaseBody ? _dc(_docs) : _dn(_cols, _dc(_docs)));
 				} else if (_nestBody) {
 					if (_arr.length > 0 && _trailDocs.length > 0) {
 						_dwb(_dc([_dn(_cols, _dc(_docs)), _dc(_trailDocs)]));

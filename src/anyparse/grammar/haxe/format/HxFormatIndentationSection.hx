@@ -28,6 +28,13 @@ package anyparse.grammar.haxe.format;
  * `"aligned"` (default), `"alignedIncrease"`, `"alignedDecrease"`,
  * `"fixedZero"`, …) — see `ConditionalIndentationPolicy`. Unknown
  * strings leave the format default (`Aligned`).
+ * `alignInlineSwitchCaseBody` toggles whether an inline case body
+ * (`case X: expr` on one line) whose argument wraps keeps the extra
+ * indent step the case `:` normally adds (`false`, default — content
+ * nests at case+2) or drops it so the wrapped argument aligns relative
+ * to the case line via its own container (`true` — content nests at
+ * case+1); matches haxe-formatter's
+ * `indentation.alignInlineSwitchCaseBody: @:default(false)`.
  */
 @:peg typedef HxFormatIndentationSection = {
 
@@ -46,4 +53,6 @@ package anyparse.grammar.haxe.format;
 	@:optional var indentVarTypeHintAnon:Bool;
 
 	@:optional var conditionalPolicy:String;
+
+	@:optional var alignInlineSwitchCaseBody:Bool;
 };

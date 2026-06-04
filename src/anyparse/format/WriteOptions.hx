@@ -134,6 +134,21 @@ typedef WriteOptions = {
 	conditionalPolicy:ConditionalIndentationPolicy,
 
 	/**
+	 * When `true`, an inline case body (`case X: expr` on one line) whose
+	 * argument wraps does NOT receive the extra indent level the case `:`
+	 * normally adds — the wrapped argument already indents relative to the
+	 * case line via its own container, so a second level would over-indent
+	 * the content and its closing bracket. Opt-in: a body that starts on
+	 * its own line is unaffected (it never reaches the inline-flat path).
+	 * Default `false` keeps the case `:` indent, matching the pre-knob
+	 * layout where a wrapped inline body nests at case+2. Fed by
+	 * haxe-formatter's `indentation.alignInlineSwitchCaseBody` knob through
+	 * `HaxeFormatConfigLoader`; format-neutral so any colon-delimited
+	 * case-body grammar can reuse it.
+	 */
+	alignInlineSwitchCaseBody:Bool,
+
+	/**
 	 * Cap on consecutive line-end runs in the rendered output. Read once
 	 * by `Renderer.render` as the final post-pass: any run of `N+1` or
 	 * more consecutive `lineEnd` sequences is truncated to exactly
