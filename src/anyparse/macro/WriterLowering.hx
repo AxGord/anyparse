@@ -8905,7 +8905,18 @@ class WriterLowering {
 			$currKindComputeExpr;
 			$currHasSplitLeadingComputeExpr;
 			final _stripBlank:Bool = $stripByDocExpr || $stripByExistingExpr || $stripByCurrDocExpr || $stripBySplitLeadingExpr;
-			final _addBlank:Bool = !$addSuppressOnSplitLeadingExpr && ($addByDocExpr || $addByCurrDocExpr || $addByInterMemberExpr || $addByUniformBetweenExpr);
+			// ω-beforedoc-none-precedence: fork's `markDocCommentEmptyLines`
+			// applies `beforeDocCommentEmptyLines` to the before-doc slot AFTER
+			// `afterFieldsWithDocComments` (the prior field's after-slot is the
+			// same physical gap), so the before-policy is the last write and
+			// wins. When the current element opens with a doc comment and the
+			// before-policy is `None`, the slot is forced to zero blanks —
+			// `$stripByCurrDocExpr` already zeroes `_sourceBlank`, so AND-out
+			// every add (`afterFieldsWithDocComments.One`, the interMember /
+			// uniform adds) too. Byte-inert when the Star carries no
+			// `beforeDocCommentEmptyLines` flag (`$stripByCurrDocExpr` is the
+			// compile-time literal `false`) or the runtime policy is not `None`.
+			final _addBlank:Bool = !$stripByCurrDocExpr && !$addSuppressOnSplitLeadingExpr && ($addByDocExpr || $addByCurrDocExpr || $addByInterMemberExpr || $addByUniformBetweenExpr);
 			final _sourceBlank:Bool = _t.blankBefore && !_stripBlank;
 			if (_si > 0 && (_sourceBlank || _addBlank)) _inner.push(_dhl());
 		} : macro {
