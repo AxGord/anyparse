@@ -6,6 +6,7 @@ import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxClassMember;
 import anyparse.grammar.haxe.HxExpr;
+import anyparse.grammar.haxe.HxFinalModifierMember;
 import anyparse.grammar.haxe.HxInterfaceDecl;
 import anyparse.grammar.haxe.HxMemberDecl;
 import anyparse.grammar.haxe.HxMemberModifier;
@@ -149,6 +150,48 @@ class HxFinalMemberSliceTest extends HxTestHelpers {
 		Assert.raises(() -> HaxeParser.parse('class A { final var x:Int; }'), ParseError);
 	}
 
+	// ======== FinalModifiedMember: `final` as a method modifier ========
+
+	public function testFinalStaticFunctionIsModifiedMember():Void {
+		// `final static function main()` — `final` is a non-overridable
+		// METHOD modifier here, not a field introducer. It must parse as a
+		// SINGLE member (`FinalModifiedMember`), not split into a bogus
+		// `final <name=static>` field plus a `function main` member
+		// (issue_5_final_lineend).
+		final ast:HxClassDecl = HaxeParser.parse('class A { final static function main():Void {} }');
+		Assert.equals(1, ast.members.length);
+		final rest:HxFinalModifierMember = expectFinalModifiedMember(ast.members[0].member);
+		Assert.equals(1, rest.modifiers.length);
+		Assert.equals(Static, rest.modifiers[0]);
+		Assert.equals('main', (rest.fn.name : String));
+	}
+
+	public function testFinalFunctionNoModifiersIsModifiedMember():Void {
+		// `final function f()` — bare `final` method modifier, empty modifier
+		// run before the `function` keyword.
+		final ast:HxClassDecl = HaxeParser.parse('class A { final function f():Void {} }');
+		final rest:HxFinalModifierMember = expectFinalModifiedMember(ast.members[0].member);
+		Assert.equals(0, rest.modifiers.length);
+		Assert.equals('f', (rest.fn.name : String));
+	}
+
+	public function testFinalInlineFunctionModifierOrder():Void {
+		final ast:HxClassDecl = HaxeParser.parse('class A { final inline function g():Void {} }');
+		final rest:HxFinalModifierMember = expectFinalModifiedMember(ast.members[0].member);
+		Assert.equals(1, rest.modifiers.length);
+		Assert.equals(Inline, rest.modifiers[0]);
+		Assert.equals('g', (rest.fn.name : String));
+	}
+
+	public function testFinalFieldStaysFinalMemberWhenFollowedByName():Void {
+		// Ordered first-match: `FinalModifiedMember` is tried first but its
+		// mandatory `function` keyword fails on the field name `foo`, so the
+		// plain immutable-field form still reaches `FinalMember`.
+		final ast:HxClassDecl = HaxeParser.parse('class A { final foo:Int = 1; }');
+		final decl:HxVarDecl = expectFinalMember(ast.members[0].member);
+		Assert.equals('foo', (decl.name : String));
+	}
+
 	// ======== Round-trip ========
 
 	public function testFinalMemberRoundTrip():Void {
@@ -160,12 +203,28 @@ class HxFinalMemberSliceTest extends HxTestHelpers {
 		roundTrip('class A { var a:Int; final b:Int = 1; final c = 2; }');
 	}
 
+	public function testFinalModifiedMemberRoundTrip():Void {
+		roundTrip('class A { final static function main():Void {} }');
+		roundTrip('class A { final function f():Void {} }');
+		roundTrip('class A { final inline function g():Void {} }');
+		// The original issue_5_final_lineend shape: a `final` field followed
+		// by a `final static function` — must keep both members distinct.
+		roundTrip('class Main { final foo:Int = 1; final static function main():Void {} }');
+	}
+
 	// ======== helpers ========
 
 	private function expectFinalMember(member:HxClassMember):HxVarDecl {
 		return switch member {
 			case FinalMember(decl): decl;
 			case _: throw 'expected FinalMember, got $member';
+		};
+	}
+
+	private function expectFinalModifiedMember(member:HxClassMember):HxFinalModifierMember {
+		return switch member {
+			case FinalModifiedMember(rest): rest;
+			case _: throw 'expected FinalModifiedMember, got $member';
 		};
 	}
 }

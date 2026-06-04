@@ -54,6 +54,13 @@ package anyparse.grammar.haxe;
  * not accepted at the member position; modern `final x:Int;` is the
  * idiomatic spelling.
  *
+ * The one case where member-position `final` IS a modifier — the
+ * non-overridable method form `final [static|inline …] function f()` —
+ * is handled by `FinalModifiedMember`, tried via ordered first-match
+ * BEFORE `FinalMember` (it requires the `function` keyword, so plain
+ * `final x:Int;` and the rejected `final var x;` fall through to
+ * `FinalMember`). See `HxFinalModifierMember`.
+ *
  * `Conditional` covers `#if <cond> <members> [#elseif …] [#else …]
  * #end` preprocessor regions wrapping whole member declarations — the
  * member-scope completion of the cond-comp arc (`HxDecl.Conditional`
@@ -86,6 +93,24 @@ enum HxClassMember {
 
 	@:kw('var') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'), propagateFieldLevelVar)
 	VarMember(decl:HxVarDecl);
+
+	/**
+	 * `final` as a non-overridable METHOD MODIFIER (`final static function
+	 * main()`, `final function f()`, `final inline function g()`) rather
+	 * than the introducer of an immutable field. Tried BEFORE `FinalMember`
+	 * so the modifier form wins when `final` precedes an optional modifier
+	 * run and the `function` keyword; for a plain `final foo:Int;` (and the
+	 * rejected legacy `final var x;`) the inner `HxFinalModifierMember`'s
+	 * mandatory `@:kw('function')` fails on the field name / `var` keyword,
+	 * `tryBranch` restores `ctx.pos`, and dispatch falls through to
+	 * `FinalMember`. Mirrors `HxFinalDecl`'s ordered class-vs-var
+	 * first-match at the top-level decl scope. No `@:trailOpt(';')`: the
+	 * inner function block `}` is self-terminating, so this branch carries
+	 * no terminator of its own. See `HxFinalModifierMember` for full
+	 * rationale (issue_5_final_lineend).
+	 */
+	@:kw('final')
+	FinalModifiedMember(rest:HxFinalModifierMember);
 
 	@:kw('final') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'), propagateFieldLevelVar)
 	FinalMember(decl:HxVarDecl);

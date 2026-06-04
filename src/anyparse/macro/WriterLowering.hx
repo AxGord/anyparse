@@ -11936,7 +11936,14 @@ class WriterLowering {
 		// the fork's `FieldUtils.getFieldType`, which folds `Kwd(KwdFinal)`
 		// into the same `Var(...)` field kind as `Kwd(KwdVar)`.
 		final varCtors:Array<String> = args[1].split('|');
-		final fnCtor:String = args[2];
+		// The fn-ctor arg also accepts a `|`-separated set, symmetric with the
+		// var-ctor set, so a grammar whose "function" family spans multiple
+		// ctors (Haxe: `FnMember` for `function f()`, `FinalModifiedMember` for
+		// the `final`-modifier form `final static function f()`) classifies
+		// every member of that family as kind 2. Mirrors the fork's
+		// `FieldUtils.getFieldType`, which classifies a `final`-modified
+		// `function` as the same `Function(...)` kind as a plain `function`.
+		final fnCtors:Array<String> = args[2].split('|');
 		final betweenVarsField:String = args.length == 6 ? args[3] : 'betweenVars';
 		final betweenFunctionsField:String = args.length == 6 ? args[4] : 'betweenFunctions';
 		final afterVarsField:String = args.length == 6 ? args[5] : 'afterVars';
@@ -11996,7 +12003,7 @@ class WriterLowering {
 		// var family → `1`, fn → `2`, everything else → `0`.
 		inline function kindFor(ctorName:String):Expr {
 			return if (varCtors.contains(ctorName)) macro 1;
-				else if (ctorName == fnCtor) macro 2;
+				else if (fnCtors.contains(ctorName)) macro 2;
 				else macro 0;
 		}
 		// `case <Ctor>(_, …):` pattern for one enum variant, binding the
@@ -12030,7 +12037,7 @@ class WriterLowering {
 		final innerCases:Array<Case> = condArgsResolved == null ? [] : [
 			for (branch in enumRule.children) if (branch.annotations.get('base.ctor') != null) {
 				final ctorName:String = branch.annotations.get('base.ctor');
-				{values: [patternFor(branch, ctorName, false)], guard: null, expr: (ctorName == fnCtor ? macro 2 : macro 0)};
+				{values: [patternFor(branch, ctorName, false)], guard: null, expr: (fnCtors.contains(ctorName) ? macro 2 : macro 0)};
 			}
 		];
 		final cases:Array<Case> = [];
