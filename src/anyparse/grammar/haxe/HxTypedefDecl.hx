@@ -84,6 +84,17 @@ package anyparse.grammar.haxe;
  * expression-level `&&`. See `HxIntersectionClause` for the rationale.
  * The common non-intersection typedef yields an empty array — the
  * `@:tryparse` loop terminates immediately on the `;` trail.
+ *
+ * `@:fmt(operandBreakAfterMultilineBrace)` (ω-typedef-intersection-operand-
+ * break) on the Star makes each `& Type` clause whose PRECEDING clause
+ * rendered multi-line and ended with a close brace break onto its own line:
+ * `typedef X = A & {\n…\n} & B` emits `} &\n\tB` (the `&` rides the `}` line,
+ * `B` breaks one tab in), matching fork `MarkLineEnds`'s `lineEndAfter` on
+ * the `&` after a `BrClose`. The discriminator is purely structural (the
+ * prior clause Doc has a committed hardline and ends with `}`), so single-
+ * line intersections (`A & B`, `A & {x:Int} & B`) stay glued. Threaded with
+ * the per-clause `@:fmt(typedefIntersectionBreak)` on `HxIntersectionClause.
+ * type`, which reads the per-element `opt._intersectionOperandBreak`.
  */
 @:peg
 @:fmt(multilineWhenFieldCtorAndOpt('type', 'Anon', 'anonTypeLeftCurly', 'anyparse.format.BracePlacement.Next'))
@@ -92,5 +103,5 @@ typedef HxTypedefDecl = {
 	@:kw('typedef') var name:HxIdentLit;
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var typeParams:Null<Array<HxTypeParamDecl>>;
 	@:fmt(typedefAssign, propagateTypedefContext) @:lead('=') var type:HxType;
-	@:trivia @:tryparse @:fmt(padLeading) var intersections:Array<HxIntersectionClause>;
+	@:trivia @:tryparse @:fmt(padLeading, operandBreakAfterMultilineBrace) var intersections:Array<HxIntersectionClause>;
 }

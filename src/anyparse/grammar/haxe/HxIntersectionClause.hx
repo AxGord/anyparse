@@ -33,6 +33,17 @@ package anyparse.grammar.haxe;
  * non-optional-lead `whitespacePolicyLead` path; sibling mechanism of
  * `HxTypedefDecl.type`'s `@:fmt(typedefAssign)` `=` spacing.
  *
+ * `@:fmt(typedefIntersectionBreak)` (ω-typedef-intersection-operand-break)
+ * makes the `&`→operand whitespace a runtime decision: when the consuming
+ * Star sets `opt._intersectionOperandBreak == true` (this clause follows a
+ * multi-line brace-closed operand — `A & {\n…\n} & B`), the lead emits
+ * `&` glued to the preceding `}` line followed by a hardline + one-tab nest
+ * before the operand (`} &\n\tB`), mirroring fork `MarkLineEnds`'s
+ * `lineEndAfter` on the `&` after a `BrClose`. When the flag is false (every
+ * single-line intersection: `A & B`, `A & {x:Int} & B`) it falls through to
+ * the `typedefIntersection` After space, byte-identical to the pre-slice
+ * layout. The flag wins over `typedefIntersection` when both are present.
+ *
  * Consumed as a bare
  * `@:trivia @:tryparse var intersections:Array<HxIntersectionClause>`
  * Star on `HxTypedefDecl` (same shape as `HxClassDecl.heritage` and
@@ -43,5 +54,5 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxIntersectionClause = {
-	@:fmt(typedefIntersection) @:lead('&') var type:HxType;
+	@:fmt(typedefIntersection, typedefIntersectionBreak) @:lead('&') var type:HxType;
 }

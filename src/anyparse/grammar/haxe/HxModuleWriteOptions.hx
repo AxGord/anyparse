@@ -1863,4 +1863,15 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// head rather than compounding to +2cols). Non-keep chains ignore it (gated
 	// on `isKeep`). Default false → Plain / direct-value chains byte-inert.
 	_keepChainInParen:Bool,
+	// ω-typedef-intersection-operand-break — set per-element by
+	// `HxTypedefDecl.intersections`'s trivia-Star loop on the opt passed to a
+	// `& Type` clause whose PRECEDING clause rendered multi-line and ended with
+	// a close brace (a broke anon-struct operand: `A & {\n…\n} & B`). The clause
+	// reads it via `@:fmt(typedefIntersectionBreak)` on
+	// `HxIntersectionClause.type` and emits the `&`→operand whitespace as a
+	// hardline + one-tab nest (`} &\n\tB`) instead of the `typedefIntersection`
+	// After space (`} & B`), mirroring fork's `MarkLineEnds` `lineEndAfter` on
+	// the `&` that follows a `BrClose`. Default false → single-line
+	// intersections (`A & B`, `A & {x:Int} & B`) stay glued byte-identically.
+	_intersectionOperandBreak:Bool,
 };

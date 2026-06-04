@@ -689,6 +689,7 @@ final class HaxeFormatConfigLoader {
 			_inFieldLevelVar: base._inFieldLevelVar,
 			_keepFlatInner: base._keepFlatInner,
 			_keepChainInParen: base._keepChainInParen,
+			_intersectionOperandBreak: base._intersectionOperandBreak,
 			blockCommentAdapter: base.blockCommentAdapter,
 			lineCommentAdapter: base.lineCommentAdapter,
 			endsWithCloseBrace: base.endsWithCloseBrace,

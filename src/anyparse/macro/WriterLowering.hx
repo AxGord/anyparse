@@ -3151,8 +3151,29 @@ class WriterLowering {
 			// puts `@:lead` on the end field, but mirror the trail gate so a
 			// future end-field with `@:lead` does not silently leak the lead
 			// literal into the spanned cond Doc.
-			if (leadText != null && !isOptional && !hasCondWrap && !hasCondWrapEnd)
-				parts.push(whitespacePolicyLead(child, leadText, ['objectFieldColon', 'typeHintColon', 'typeCheckColon', 'typedefAssign', 'typedefIntersection', 'functionTypeHaxe4', 'arrowFunctions', 'catchParensInsideOpen', 'switchCondParensInsideOpen', 'whileCondParensInsideOpen']));
+			if (leadText != null && !isOptional && !hasCondWrap && !hasCondWrapEnd) {
+				// ω-typedef-intersection-operand-break: `HxIntersectionClause.type`
+				// (`@:lead('&') @:fmt(typedefIntersection, typedefIntersectionBreak)`)
+				// makes the `&`→operand whitespace a runtime decision. When the
+				// consuming Star (`HxTypedefDecl.intersections`) sets
+				// `opt._intersectionOperandBreak == true` — this clause follows a
+				// multi-line brace-closed operand (`A & {\n…\n} & B`) — emit the
+				// `&` glued to the preceding `}` line, then a hardline + one-tab
+				// nest before the operand value (`} &\n\tB`). The `Nest(cols, …)`
+				// wraps only the hardline so the newline's trailing indent is
+				// bumped one level; the operand renders right after at base+cols.
+				// Mirrors fork `MarkLineEnds`'s `lineEndAfter` on the `&` that
+				// follows a `BrClose`. Flag false (every single-line intersection)
+				// falls through to the `typedefIntersection` After space, byte-
+				// identical to the pre-slice layout.
+				if (child.fmtHasFlag('typedefIntersectionBreak')) {
+					final gluedLead:Expr = whitespacePolicyLead(child, leadText, ['typedefIntersection']);
+					parts.push(macro opt._intersectionOperandBreak
+						? _dc([_dt($v{leadText}), _dn(opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth, _dhl())])
+						: $gluedLead);
+				} else
+					parts.push(whitespacePolicyLead(child, leadText, ['objectFieldColon', 'typeHintColon', 'typeCheckColon', 'typedefAssign', 'typedefIntersection', 'functionTypeHaxe4', 'arrowFunctions', 'catchParensInsideOpen', 'switchCondParensInsideOpen', 'whileCondParensInsideOpen']));
+			}
 
 			// Field value
 			// ω-issue-257-else-in-return-switch: same dual-flag form as
@@ -4954,6 +4975,13 @@ class WriterLowering {
 				// elements is out of scope — flag's contract is "treat
 				// inter-element whitespace trivia as one space".
 				final tryparseForceInlineSep:Bool = starNode.fmtHasFlag('forceInlineSep');
+				// ω-typedef-intersection-operand-break: `@:fmt(
+				// operandBreakAfterMultilineBrace)` on a `@:trivia @:tryparse`
+				// Star makes each element whose PRECEDING element rendered
+				// multi-line and ended with a close brace receive a per-element
+				// opt copy with `_intersectionOperandBreak = true`. Consumer:
+				// `HxTypedefDecl.intersections` (the `& Type` clause Star).
+				final tryparseOperandBreakAfterMultilineBrace:Bool = starNode.fmtHasFlag('operandBreakAfterMultilineBrace');
 				// ω-trivia-tryparse-prior-after-trail: when the PREV sibling
 				// field has a synthesised `<priorField>AfterTrail:Null<String>`
 				// slot (mandatory Ref with `@:trail` in trivia-bearing mode),
@@ -4985,7 +5013,8 @@ class WriterLowering {
 					tryparseForceInlineSep,
 					tryparseBlockEnded ? tryparseSepText : null, tryparseBlockEnded,
 					tryparseHeritageWrap,
-					tryparseCondBodyIndent
+					tryparseCondBodyIndent,
+					tryparseOperandBreakAfterMultilineBrace
 				));
 				return;
 			}
@@ -11045,7 +11074,17 @@ class WriterLowering {
 		heritageWrap:Bool = false,
 		// ω-cond-indent-policy: cond-comp body Star opts into the runtime
 		// `opt.conditionalPolicy` indent rule. Default false → byte-inert.
-		condBodyIndent:Bool = false
+		condBodyIndent:Bool = false,
+		// ω-typedef-intersection-operand-break: when true, each Star element
+		// whose PRECEDING element rendered multi-line and ended with a close
+		// brace (a broke anon-struct operand) receives a per-element opt copy
+		// with `_intersectionOperandBreak = true`, so the element's
+		// `@:fmt(typedefIntersectionBreak)` lead emits `&\n\t` before the
+		// operand. The discriminator is purely structural — `flatLength(prev) <
+		// 0` (prev has a committed hardline) AND `endsWithCloseDelim(prev)`
+		// (prev ends with `}`/`)`/`]`) — so single-line intersections stay
+		// glued. First (and only) consumer: `HxTypedefDecl.intersections`.
+		operandBreakAfterMultilineBrace:Bool = false
 	):Expr {
 		// ω-bug-2c-inner-star — cascade emit for the tryparse-Star path.
 		// Cascade trackers + cascade-fire blank count come from
@@ -11097,6 +11136,35 @@ class WriterLowering {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, macro _writerOpt]),
 			pos: Context.currentPos(),
 		};
+		// ω-typedef-intersection-operand-break: per-iteration element call for
+		// the MAIN inter-element loop only (the heritage/wrap fast paths keep
+		// `triviaElemCall`/`_writerOpt`). Flag off (every Star but
+		// `HxTypedefDecl.intersections`) ⇒ identical to `triviaElemCall`,
+		// byte-inert. Flag on ⇒ when the prior element rendered multi-line AND
+		// ended with a close delim, hand the element a `_copyOpt` with
+		// `_intersectionOperandBreak = true` so its
+		// `@:fmt(typedefIntersectionBreak)` lead breaks `&\n\t` before the
+		// operand; otherwise the shared `_writerOpt` (stays glued — no copy,
+		// no mutation of the shared opt).
+		final triviaElemCallMaybeBreak:Expr = operandBreakAfterMultilineBrace
+			? {
+				expr: ECall(macro $i{elemFn}, [macro _t.node, macro _elemOpt]),
+				pos: Context.currentPos(),
+			}
+			: triviaElemCall;
+		// Single `final _elemOpt = …;` declaration spliced at loop scope (NOT a
+		// nested EBlock — that would isolate `_elemOpt` from the element call).
+		// Flag on ⇒ when the prior element rendered multi-line AND ended with a
+		// close delim, fan the opt through `_setIntersectionBreak` (idempotent
+		// `_copyOpt` + flag set), else the shared `_writerOpt` (no copy, shared
+		// opt untouched). Flag off ⇒ `macro {}` (no local — `triviaElemCall`
+		// uses `_writerOpt` directly, byte-identical to the pre-slice loop).
+		final elemOptInit:Expr = operandBreakAfterMultilineBrace
+			? macro final _elemOpt = (_priorElemDoc != null
+				&& anyparse.format.wrap.WrapList.flatLength(_priorElemDoc) < 0
+				&& anyparse.format.wrap.WrapList.endsWithCloseDelim(_priorElemDoc))
+				? _setIntersectionBreak(_writerOpt) : _writerOpt
+			: macro {};
 		final sepBeforeFirstExpr:Expr = macro $v{sepBeforeFirst};
 		final nestBodyExpr:Expr = macro $v{nestBody};
 		final trailBB:Expr = trailBBAccess ?? macro false;
@@ -11633,7 +11701,8 @@ class WriterLowering {
 					} else if (_sepFirst) {
 						_docs.push($firstSepExpr);
 					}
-					final _elem:anyparse.core.Doc = $triviaElemCall;
+					$elemOptInit;
+					final _elem:anyparse.core.Doc = $triviaElemCallMaybeBreak;
 					final _tc:Null<String> = _t.trailingComment;
 					_docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDocVerbatim(_tc, opt)) : _elem);
 					// ω-cond-indent-policy AlignedNestedIncrease: if this body

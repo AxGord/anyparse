@@ -80,6 +80,12 @@ class WriterCodegen {
 				fields.push(setTypedefBodyField(optionsCT));
 				fields.push(clearTypedefBodyField(optionsCT));
 			}
+			// ω-typedef-intersection-operand-break: opt-fanout helper for the
+			// per-element `& Type`-clause break in `HxTypedefDecl.intersections`.
+			// Idempotent sister to `_setTypedefBody`. Gated on
+			// `_intersectionOperandBreak:Bool` field presence on the opt typedef.
+			if (optionsHasField(optionsTypePath, '_intersectionOperandBreak'))
+				fields.push(setIntersectionBreakField(optionsCT));
 			// ω-fieldlevel-var-value-expr-indent: opt-fanout helper pair for
 			// `@:fmt(propagateFieldLevelVar)` (class-member `var`/`final` ctor
 			// init dispatch) and the function-body clear. `_setFieldLevelVar`
@@ -767,6 +773,35 @@ class WriterCodegen {
 					if (!o._inTypedefBody) return o;
 					final _c:$optionsCT = _copyOpt(o);
 					_c._inTypedefBody = false;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * ω-typedef-intersection-operand-break — opt-fanout shim for the per-
+	 * element `& Type`-clause break in `HxTypedefDecl.intersections`.
+	 * Idempotent sister to `_setTypedefBody` — returns `o` unchanged when
+	 * `_intersectionOperandBreak` is already `true`; otherwise returns a
+	 * `_copyOpt(o)` with the flag flipped on. Consumed by the trivia-Star
+	 * loop when the prior `& Type` clause rendered multi-line and ended with
+	 * a close brace, so the next clause's `@:fmt(typedefIntersectionBreak)`
+	 * lead breaks `&\n\t` before the operand. Emitted only when the opt
+	 * typedef declares `_intersectionOperandBreak:Bool`.
+	 */
+	private static function setIntersectionBreakField(optionsCT:ComplexType):Field {
+		return {
+			name: '_setIntersectionBreak',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{name: 'o', type: optionsCT}],
+				ret: optionsCT,
+				expr: macro {
+					if (o._intersectionOperandBreak) return o;
+					final _c:$optionsCT = _copyOpt(o);
+					_c._intersectionOperandBreak = true;
 					return _c;
 				},
 			}),
