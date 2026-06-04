@@ -2982,9 +2982,24 @@ class WriterLowering {
 					final baseExpr:Expr = ctx.trivia
 						? macro {
 							final _next = $fieldAccess;
-							if ($prev && _next.length > 0)
-								_next[0].newlineBefore ? _dhl() : _dt(' ');
-							else _de();
+							if ($prev && _next.length > 0) {
+								if (_next[0].newlineBefore) {
+									// ω-meta-leading-doc-no-blank: when the next bare-
+									// tryparse Star's first element carries a leading
+									// comment (e.g. a `/** */` doc-comment) directly after
+									// the prior Star with NO source blank line between
+									// them, suppress this inter-Star separator hardline.
+									// The Star's own leading-comment emit already pushes a
+									// single `_dhl()` before the comment; emitting both
+									// here produces a spurious blank line (issue_578:
+									// `@:jsRequire(...)\n/**` → `@:jsRequire(...)\n\n/**`).
+									// Source-faithful: a real authored blank
+									// (`blankBefore`) keeps the separator so the blank
+									// round-trips. No leading comment → unchanged
+									// `_dhl()` (the common meta→modifiers newline path).
+									(_next[0].leadingComments.length > 0 && !_next[0].blankBefore) ? _de() : _dhl();
+								} else _dt(' ');
+							} else _de();
 						}
 						: macro ($prev && $fieldAccess.length > 0) ? _dt(' ') : _de();
 					parts.push(withPadTrailingDrop(prevPadTrailing, baseExpr));
