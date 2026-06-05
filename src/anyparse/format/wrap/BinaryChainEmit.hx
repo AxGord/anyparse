@@ -238,7 +238,28 @@ final class BinaryChainEmit {
 			// (fork never `unwrapAddOps` them).
 			if (isAddSubOps(ops))
 				return WrapBoundary(Group(IfBreak(CollapseAddProbe(shapeAt(brk)), shapeAt(flat))));
-			return WrapBoundary(Group(IfBreak(shapeAt(brk), shapeAt(flat))));
+			// ω-opbool-reeval-after-callparam (CollapsePass increment 2): an opBool
+			// chain (`&&`/`||`) whose BROKEN shape is FillLine operator-TRAILING
+			// (`AfterLast`) and that contains a function-call operand. TAG the broken
+			// branch with `CollapseBoolProbe`. The marker is render-transparent
+			// (byte-inert on its own); `CollapsePass` flips it to operator-LEADING
+			// ONLY when a contained call operand overflows at its flat column (fork
+			// `reEvaluateOpBoolAfterCallParam` — strip the call breaks, re-apply
+			// opBool with `useTrailing: false`). Gated to opBool + FillLine +
+			// AfterLast + has-call so every other chain stays byte-identical.
+			// `!nestSuppress` excludes a chain that is itself a CALL ARGUMENT
+			// (`_callArgChainNest`) or wrapped by a return-context paren
+			// (`_keepChainInParen`) — fork `reEvaluateOpBoolAfterCallParam` flips
+			// only condition / bare-value opBool chains, never a chain that is a
+			// call argument (`opbool_in_call_leading_break_preserved`, which keeps
+			// its trailing layout). At this final-IfBreak path `condWrapForced` is
+			// already false (the cond-wrap collapse takes the inc6 path above), so
+			// `nestSuppress` here means call-arg / keep-in-paren.
+			final boolReevalTag:Bool = isOpBoolOps(ops) && brk.location == AfterLast
+				&& (brk.mode == FillLine || brk.mode == FillLineWithLeadingBreak)
+				&& !nestSuppress && containsCallOperand(items);
+			final brkShape:Doc = boolReevalTag ? CollapseBoolProbe(shapeAt(brk)) : shapeAt(brk);
+			return WrapBoundary(Group(IfBreak(brkShape, shapeAt(flat))));
 		}
 
 		if (extraThresholds.length == 1) {
@@ -351,6 +372,34 @@ final class BinaryChainEmit {
 	}
 
 	/**
+	 * True iff every operator is an opBool chain operator (`&&` / `||`) —
+	 * i.e. NOT an opAddSub (`+`/`-`) or a ternary (`?`/`:`). Drives the
+	 * ω-opbool-reeval-after-callparam `CollapseBoolProbe` marker: only a pure
+	 * opBool chain's trailing FillLine shape is tagged for the break-direction
+	 * flip (mirror fork `reEvaluateOpBoolAfterCallParam`, which fires only on
+	 * `OpBoolChainWrapping` places).
+	 */
+	private static function isOpBoolOps(ops:Array<String>):Bool {
+		for (o in ops) switch o {
+			case '&&' | '||':
+			case _: return false;
+		}
+		return ops.length > 0;
+	}
+
+	/**
+	 * True iff any operand `Doc` is a top-level function call
+	 * (`DocMeasure.operandIsCall`). The ω-opbool-reeval gate mirrors fork
+	 * `hasSimpleCallParamBreaksBetween` (an inner `POpen` that wrapped); a chain
+	 * with NO call operand can never have a callParameter wrap to re-evaluate
+	 * after, so the marker is skipped (byte-inert).
+	 */
+	private static function containsCallOperand(items:Array<Doc>):Bool {
+		for (it in items) if (DocMeasure.operandIsCall(it)) return true;
+		return false;
+	}
+
+	/**
 	 * True iff every operator is an opAddSub chain operator (`+` / `-`) —
 	 * i.e. NOT an opBool (`&&`/`||`) or a ternary (`?`/`:`). Drives the
 	 * ω-unwrap-add-ops `CollapseAddProbe` marker: only a pure opAddSub
@@ -393,7 +442,7 @@ final class BinaryChainEmit {
 				}
 				hit;
 			case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i)
-					| Flatten(i) | HardFlatten(i) | CollapseProbe(i) | CollapseAddProbe(i) | WrapBoundary(i)
+					| Flatten(i) | HardFlatten(i) | CollapseProbe(i) | CollapseAddProbe(i) | CollapseBoolProbe(i) | WrapBoundary(i)
 					| ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
 				leadingOperandOpensDelim(i);
 			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat)

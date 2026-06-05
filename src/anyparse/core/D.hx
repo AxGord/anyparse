@@ -129,7 +129,7 @@ class D {
 			// a nested `Flatten`/`HardFlatten`/`CollapseProbe` is idempotent
 			// and a nested `WrapBoundary` is moot (we commit to flat at the
 			// structural level).
-			case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner): flatten(inner);
+			case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner): flatten(inner);
 			// ω-cond-indent-policy FixedZero: render-time marker, structurally
 			// transparent to the flatten transform — descend `inner`. The
 			// `#`-marker col-0 re-indent is render-only and moot under a forced-

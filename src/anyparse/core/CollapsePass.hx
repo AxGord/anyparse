@@ -67,13 +67,15 @@ final class CollapsePass {
 		doc:Doc, width:Int, indentChar:IndentChar, tabWidth:Int, indentSize:Int = 1
 	):Doc {
 		// Fast path: skip the measure render entirely when the Doc carries
-		// NEITHER a forward collapse-candidate paren (`CollapseProbe`) NOR an
-		// inverse inner-add-chain marker (`CollapseAddProbe`) — the
-		// overwhelming common case. Keeps the pass cost ~one structural walk
-		// for non-collapse outputs.
+		// NONE of a forward collapse-candidate paren (`CollapseProbe`), an
+		// inverse inner-add-chain marker (`CollapseAddProbe`), or an opBool
+		// re-eval direction marker (`CollapseBoolProbe`) — the overwhelming
+		// common case. Keeps the pass cost ~one structural walk for non-collapse
+		// outputs.
 		final hasParenProbe:Bool = hasCandidate(doc);
 		final hasAddProbe:Bool = hasAddCandidate(doc);
-		if (!hasParenProbe && !hasAddProbe) return doc;
+		final hasBoolProbe:Bool = hasBoolCandidate(doc);
+		if (!hasParenProbe && !hasAddProbe && !hasBoolProbe) return doc;
 
 		final decisions:Array<{node:Doc, crosses:Bool, ?indent:Int}> = [];
 		// Measure-only render: populates `decisions` at every
@@ -156,6 +158,16 @@ final class CollapsePass {
 		// still applies to inner parens.
 		final tagged:Null<{marker:Doc, brk:Doc, flat:Doc}> = taggedAddChain(d);
 		if (tagged != null) return rewriteTaggedAddChain(tagged, decisions, insideBroken, width);
+
+		// OPBOOL-REEVAL direction (ω-opbool-reeval-after-callparam): a tagged
+		// opBool chain `CollapseBoolProbe(<trailing FillLine shape>)`. When the
+		// chain wrapped (marker crossed) AND a contained call operand overflows
+		// at its flat position (the fork's `reEvaluateOpBoolAfterCallParam`
+		// gate), flip the chain to operator-LEADING; otherwise unwrap to the
+		// bare trailing shape (byte-inert). Returns null when `d` is not the
+		// marker — falls through to the rest of the rewrite.
+		final boolFlip:Null<Doc> = rewriteBoolProbe(d, decisions, insideBroken, width);
+		if (boolFlip != null) return boolFlip;
 
 		// Standalone candidate paren that opens (no enclosing chain
 		// committed it): commit to the open branch directly.
@@ -381,12 +393,159 @@ final class CollapsePass {
 		};
 	}
 
+	/**
+	 * ω-opbool-reeval-after-callparam (CollapsePass increment 2). When `d` is a
+	 * `CollapseBoolProbe(trailingShape)` marker reached in the measure pass (the
+	 * chain laid operator-TRAILING) AND a contained call operand overflows at
+	 * its flat column, flip the chain to operator-LEADING (fork
+	 * `reEvaluateOpBoolAfterCallParam` — strip the call breaks, re-apply opBool
+	 * with `useTrailing: false`). Otherwise unwrap to the bare trailing shape
+	 * (byte-inert). Returns null when `d` is not the marker.
+	 *
+	 * The `trailingShape` is the FillLine `AfterLast` layout
+	 * `Group(Nest(cols, Fill(items, Line(' '))))` whose Fill items are operand
+	 * Docs each suffixed by `Text(' op')` (last item bare). The flip rebuilds
+	 * the same FillLine with `BeforeLast` enrichment (each continuation item
+	 * prefixed by `Text('op ')`). The call-overflow test reuses the captured
+	 * visual start column and `DocMeasure.flatTokenWidth` (O(1) per operand, no
+	 * recursive natural-first-line probe).
+	 */
+	private static function rewriteBoolProbe(d:Doc, decisions:Array<{node:Doc, crosses:Bool, ?indent:Int}>, insideBroken:Bool, width:Int):Null<Doc> {
+		final inner:Null<Doc> = switch d {
+			case CollapseBoolProbe(i): i;
+			case _: null;
+		};
+		if (inner == null) return null;
+		// Reaching the marker in the measure pass = the chain laid trailing.
+		// Absent a recorded decision the marker was never measured (e.g. the
+		// natural-first-line-fits-open-delim branch unwrapped flat) — keep the
+		// trailing shape unchanged (recursed so nested operand parens resolve).
+		final col:Null<Int> = capturedIndent(d, decisions);
+		if (col == null) return rewrite(inner, decisions, insideBroken, width);
+		final parts:Null<{cols:Int, items:Array<Doc>, sep:Doc}> = afterLastFillParts(inner);
+		if (parts == null) return rewrite(inner, decisions, insideBroken, width);
+		// Recover the bare operands + their operators from the AfterLast-enriched
+		// Fill items (item i<last = Concat([operand_i, Text(' op')]); last =
+		// operand_last). Null when any item is not the expected shape.
+		final chain:Null<{operands:Array<Doc>, ops:Array<String>}> = splitAfterLastItems(parts.items);
+		if (chain == null) return rewrite(inner, decisions, insideBroken, width);
+		if (!callOperandOverflows(chain.operands, chain.ops, col, width)) return rewrite(inner, decisions, insideBroken, width);
+		// Flip: rebuild the FillLine with BeforeLast enrichment (op leads each
+		// continuation operand) — the fork `useTrailing: false` leading layout.
+		// A call operand that fits flat at its continuation column is FORCE-FLAT
+		// (fork `restoreInnerCallParamsAfterOpBoolWrap` keeps the call flat unless
+		// `indent + callWidth > maxLen`), so the leading `&& call` rides one line
+		// even though the `&& ` prefix pushes the visual line a few cols past the
+		// width — matching the fork output. `col` (the chain's first-operand
+		// column) is a conservative upper bound on the continuation indent for
+		// `if (`/`while (`/`for (` conditions (prefix width >= one indent level),
+		// so `col + callWidth <= width` implies the call fits at the continuation
+		// — flatten only then; otherwise leave the call's own wrapping intact.
+		// Each operand is recursed through `rewrite` first (so a nested paren /
+		// add-chain operand still resolves its own collapse), then a fitting call
+		// operand is force-flat.
+		final beforeItems:Array<Doc> = [
+			flattenIfFittingCall(rewrite(chain.operands[0], decisions, insideBroken, width), col, width),
+		];
+		for (i in 0...chain.ops.length)
+			beforeItems.push(Concat([Text(chain.ops[i] + ' '),
+				flattenIfFittingCall(rewrite(chain.operands[i + 1], decisions, insideBroken, width), col, width)]));
+		return Group(Nest(parts.cols, Fill(beforeItems, parts.sep)));
+	}
+
+	/**
+	 * Destructure the trailing FillLine `Group(Nest(cols, Fill(items, sep, _)))`
+	 * shape (the `CollapseBoolProbe` payload) into its Nest indent, Fill items,
+	 * and separator. Null when `d` is not that exact shape.
+	 */
+	private static function afterLastFillParts(d:Doc):Null<{cols:Int, items:Array<Doc>, sep:Doc}> {
+		return switch d {
+			case Group(Nest(cols, Fill(items, sep, _))): {cols: cols, items: items, sep: sep};
+			case _: null;
+		};
+	}
+
+	/**
+	 * Recover the bare operand Docs and operator strings from an AfterLast-
+	 * enriched Fill item array. Item `i` (i < last) is
+	 * `Concat([operand_i, Text(' op')])`; the last item is `operand_last`. The
+	 * trailing `Text(' op')` carries a leading space then the operator. Returns
+	 * null when any non-last item is not that 2-element Concat shape (so a
+	 * structurally-unexpected payload falls back to the trailing shape).
+	 */
+	private static function splitAfterLastItems(items:Array<Doc>):Null<{operands:Array<Doc>, ops:Array<String>}> {
+		if (items.length < 2) return null;
+		final operands:Array<Doc> = [];
+		final ops:Array<String> = [];
+		for (i in 0...items.length) {
+			if (i == items.length - 1) {
+				operands.push(items[i]);
+				break;
+			}
+			switch items[i] {
+				case Concat([operand, Text(opText)]):
+					operands.push(operand);
+					final trimmed:String = StringTools.ltrim(opText);
+					if (trimmed.length == 0) return null;
+					ops.push(trimmed);
+				case _: return null;
+			}
+		}
+		return {operands: operands, ops: ops};
+	}
+
+	/**
+	 * True iff some call operand's flat right edge overflows `width` at its flat
+	 * column — the anyparse analogue of fork `hasSimpleCallParamBreaksBetween`
+	 * (an inner `callParameter` that wrapped in the all-flat layout). `startCol`
+	 * is the captured visual column where operand 0 begins; each subsequent
+	 * operand sits at `prev + flatWidth(operand) + (' ' + op + ' ').length`.
+	 * Only CALL operands count (mirror fork — a non-call overflowing operand
+	 * just breaks the chain at its operators, no direction flip).
+	 */
+	private static function callOperandOverflows(operands:Array<Doc>, ops:Array<String>, startCol:Int, width:Int):Bool {
+		var pos:Int = startCol;
+		for (i in 0...operands.length) {
+			final w:Int = DocMeasure.flatTokenWidth(operands[i]);
+			if (DocMeasure.operandIsCall(operands[i]) && pos + w > width) return true;
+			pos += w;
+			if (i < ops.length) pos += ops[i].length + 2;
+		}
+		return false;
+	}
+
+	/**
+	 * Force a call operand FLAT (`HardFlatten`, survives the operand's own
+	 * `WrapBoundary`) when it fits flat at a continuation column conservatively
+	 * bounded by `contColUpper` — the fork `restoreInnerCallParamsAfterOpBoolWrap`
+	 * "keep the call flat unless it still overflows" decision. A non-call operand,
+	 * or a call too long to fit flat, is returned unchanged (keeps its own
+	 * wrapping). `HardFlatten` (not `Flatten`) because the call operand carries
+	 * a `WrapBoundary` whose force-flat a plain `Flatten` would not survive.
+	 */
+	private static function flattenIfFittingCall(operand:Doc, contColUpper:Int, width:Int):Doc {
+		if (!DocMeasure.operandIsCall(operand)) return operand;
+		return contColUpper + DocMeasure.flatTokenWidth(operand) <= width ? HardFlatten(operand) : operand;
+	}
+
 	/** True iff `d`'s subtree contains any `CollapseAddProbe` marker. */
 	private static function hasAddCandidate(d:Doc):Bool {
 		var found:Bool = false;
 		walk(d, node -> {
 			if (!found) switch node {
 				case CollapseAddProbe(_): found = true;
+				case _:
+			}
+		});
+		return found;
+	}
+
+	/** True iff `d`'s subtree contains any `CollapseBoolProbe` marker. */
+	private static function hasBoolCandidate(d:Doc):Bool {
+		var found:Bool = false;
+		walk(d, node -> {
+			if (!found) switch node {
+				case CollapseBoolProbe(_): found = true;
 				case _:
 			}
 		});
@@ -542,6 +701,7 @@ final class CollapsePass {
 				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner)
 						| BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner)
 						| HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner)
+						| CollapseBoolProbe(inner)
 						| ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 				case Concat(items):
@@ -580,6 +740,7 @@ final class CollapsePass {
 			case HardFlatten(inner): HardFlatten(f(inner));
 			case CollapseProbe(inner): CollapseProbe(f(inner));
 			case CollapseAddProbe(inner): CollapseAddProbe(f(inner));
+			case CollapseBoolProbe(inner): CollapseBoolProbe(f(inner));
 			case ConditionalMarkerZero(inner): ConditionalMarkerZero(f(inner));
 			case ConditionalMarkerDecrease(inner): ConditionalMarkerDecrease(f(inner));
 			case Concat(items): Concat([for (it in items) f(it)]);

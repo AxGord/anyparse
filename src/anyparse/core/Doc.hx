@@ -546,6 +546,42 @@ enum Doc {
 	CollapseAddProbe(inner:Doc);
 
 	/**
+	 * opBool-chain break-DIRECTION re-evaluation marker
+	 * (ω-opbool-reeval-after-callparam / CollapsePass increment 2). Wraps the
+	 * operator-TRAILING (`location: AfterLast`) FillLine shape of an opBool
+	 * chain (`&&` / `||`) emitted inside an active cond-wrap context
+	 * (`condWrapForced`) whose operands include a function call.
+	 *
+	 * Sister of `CollapseAddProbe` but for the break-DIRECTION axis rather
+	 * than the collapse axis. The anyparse analogue of haxe-formatter's
+	 * `reEvaluateOpBoolAfterCallParam` (MarkWrapping.hx:673): when a contained
+	 * `callParameter` would wrap in the all-flat layout — i.e. the call
+	 * operand's flat right edge overflows `maxLineLength` at its flat column —
+	 * the fork re-applies the opBool chain wrap with the call breaks stripped,
+	 * flipping the operator from trailing to LEADING (`&&` starts the
+	 * continuation line) and gluing the now-fitting call flat onto its own
+	 * line.
+	 *
+	 * Purely render-transparent — the renderer pushes `inner` (the trailing
+	 * shape) with the enclosing frame's mode and force-flat flags UNCHANGED
+	 * (like `CollapseAddProbe`), so absent a flip the output is byte-identical
+	 * to the trailing shape. In the measure-only pass (`decisions != null`)
+	 * the render dispatch records whether the marker was reached in break mode
+	 * (`crosses = f.mode == MBreak`) AND the actual visual column the chain
+	 * starts at (`indent = col`) keyed by node identity. `CollapsePass` reads
+	 * that decision, walks the trailing FillLine's operands to test whether a
+	 * call operand overflows at its flat position, and — only then — rewrites
+	 * the marker to the operator-LEADING FillLine shape (fork
+	 * `useTrailing: false`). When no call operand overflows, the marker
+	 * unwraps to its bare `inner` (byte-identical).
+	 *
+	 * Like `Flatten`/`WrapBoundary`/`HardFlatten`/`CollapseProbe`/
+	 * `CollapseAddProbe`, all Doc walkers treat it as a transparent
+	 * pass-through (descend `inner`).
+	 */
+	CollapseBoolProbe(inner:Doc);
+
+	/**
 	 * Conditional-compilation marker fixed-zero scope (ω-cond-indent-policy
 	 * FixedZero). Render-time-only: wraps the WHOLE `#if … #end` construct
 	 * Doc (kw + cond + body + `#else`/`#elseif` clauses + trail). While

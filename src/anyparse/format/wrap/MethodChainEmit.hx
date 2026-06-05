@@ -295,6 +295,7 @@ class MethodChainEmit {
 			case Nest(_, inner), Group(inner), BodyGroup(inner),
 				GroupWithRestProbe(inner), Flatten(inner), WrapBoundary(inner),
 				HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
+				CollapseBoolProbe(inner),
 				ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 				endsWithLineComment(inner);
 			case IfBreak(breakDoc, _), IfWidthExceeds(_, breakDoc, _),
