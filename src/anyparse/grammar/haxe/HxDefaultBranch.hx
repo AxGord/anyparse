@@ -56,6 +56,6 @@ typedef HxDefaultBranch = {
 	@:lead(':') @:trivia @:tryparse @:fmt(
 		nestBody, bodyPolicy('caseBody', 'expressionCase'),
 		flatChildOpt('ifBody=expressionCase', 'elseBody=expressionCase', 'forBody=expressionCase'),
-		propagateExprPosition, refuseFlatOnComplexExpr
+		propagateExprPosition, clearExprPositionNonTail, refuseFlatOnComplexExpr
 	) var stmts:Array<HxStatement>;
 };

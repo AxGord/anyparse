@@ -361,7 +361,7 @@ enum HxExpr {
 	@:lead("$")
 	DollarIdentExpr(name:HxIdentLit);
 
-	@:trivia @:lead('[') @:trail(']') @:sep(',') @:fmt(trailingComma('trailingCommaArrays'), wrapRules('arrayLiteralWrap'), reflowSourceMultiline, bracketKindPad, arrayMatrixWrap)
+	@:trivia @:lead('[') @:trail(']') @:sep(',') @:fmt(trailingComma('trailingCommaArrays'), wrapRules('arrayLiteralWrap'), reflowSourceMultiline, bracketKindPad, arrayMatrixWrap, propagateExprPosition)
 	ArrayExpr(elems:Array<HxExpr>);
 
 	ObjectLit(lit:HxObjectLit);
@@ -413,7 +413,7 @@ enum HxExpr {
 	@:kw('macro')
 	MacroClassExpr(v:HxMacroClass);
 
-	@:kw('macro')
+	@:kw('macro') @:fmt(clearExprPosition)
 	MacroExpr(operand:HxExpr);
 
 	@:kw('var')
@@ -561,49 +561,49 @@ enum HxExpr {
 	@:infix('in', 0)
 	In(left:HxExpr, right:HxExpr);
 
-	@:infix('=', 0, 'Right')
+	@:infix('=', 0, 'Right') @:fmt(propagateExprPosition)
 	Assign(left:HxExpr, right:HxExpr);
 
-	@:infix('+=', 0, 'Right')
+	@:infix('+=', 0, 'Right') @:fmt(propagateExprPosition)
 	AddAssign(left:HxExpr, right:HxExpr);
 
-	@:infix('-=', 0, 'Right')
+	@:infix('-=', 0, 'Right') @:fmt(propagateExprPosition)
 	SubAssign(left:HxExpr, right:HxExpr);
 
-	@:infix('*=', 0, 'Right')
+	@:infix('*=', 0, 'Right') @:fmt(propagateExprPosition)
 	MulAssign(left:HxExpr, right:HxExpr);
 
-	@:infix('/=', 0, 'Right')
+	@:infix('/=', 0, 'Right') @:fmt(propagateExprPosition)
 	DivAssign(left:HxExpr, right:HxExpr);
 
-	@:infix('%=', 0, 'Right')
+	@:infix('%=', 0, 'Right') @:fmt(propagateExprPosition)
 	ModAssign(left:HxExpr, right:HxExpr);
 
-	@:infix('<<=', 0, 'Right')
+	@:infix('<<=', 0, 'Right') @:fmt(propagateExprPosition)
 	ShlAssign(left:HxExpr, right:HxExpr);
 
-	@:infix('>>>=', 0, 'Right')
+	@:infix('>>>=', 0, 'Right') @:fmt(propagateExprPosition)
 	UShrAssign(left:HxExpr, right:HxExpr);
 
-	@:infix('>>=', 0, 'Right')
+	@:infix('>>=', 0, 'Right') @:fmt(propagateExprPosition)
 	ShrAssign(left:HxExpr, right:HxExpr);
 
-	@:infix('|=', 0, 'Right')
+	@:infix('|=', 0, 'Right') @:fmt(propagateExprPosition)
 	BitOrAssign(left:HxExpr, right:HxExpr);
 
-	@:infix('&=', 0, 'Right')
+	@:infix('&=', 0, 'Right') @:fmt(propagateExprPosition)
 	BitAndAssign(left:HxExpr, right:HxExpr);
 
-	@:infix('^=', 0, 'Right')
+	@:infix('^=', 0, 'Right') @:fmt(propagateExprPosition)
 	BitXorAssign(left:HxExpr, right:HxExpr);
 
-	@:infix('??=', 0, 'Right')
+	@:infix('??=', 0, 'Right') @:fmt(propagateExprPosition)
 	NullCoalAssign(left:HxExpr, right:HxExpr);
 
-	@:infix('&&=', 0, 'Right')
+	@:infix('&&=', 0, 'Right') @:fmt(propagateExprPosition)
 	BoolAndAssign(left:HxExpr, right:HxExpr);
 
-	@:infix('||=', 0, 'Right')
+	@:infix('||=', 0, 'Right') @:fmt(propagateExprPosition)
 	BoolOrAssign(left:HxExpr, right:HxExpr);
 
 	@:infix('->', 0, 'Right') @:fmt(propagateExprPosition)

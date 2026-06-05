@@ -127,6 +127,25 @@ final class HxExprUtil {
 	}
 
 	/**
+	 * `operandIsBlockExpr(operandNode) → Bool` — true iff a `macro <operand>`
+	 * reification's operand is a block (`macro { … }`). Wired on
+	 * `WriteOptions.operandIsBlockExpr` to drive `@:fmt(clearExprPosition)` on
+	 * `HxExpr.MacroExpr`: a macro-BLOCK's statements are reified code and yield
+	 * nothing to the enclosing expression position, so the operand reverts to
+	 * statement-position body policy (the block-tail SI-2 expression frame is
+	 * dropped). A non-block operand (`macro if (1) 2 else 3`) is TRANSPARENT —
+	 * `macro` does not change expression-vs-statement position — so the clear
+	 * must NOT fire there. The operand is a bare `HxExpr`/`HxExprT` Ref (not a
+	 * `Trivial<T>`-wrapped Star element), but `unwrap` is applied defensively
+	 * to mirror the sibling adapters. Returns false for null / non-enum.
+	 */
+	public static function operandIsBlockExpr(raw:Null<Dynamic>):Bool {
+		final e:Null<Dynamic> = unwrap(raw);
+		if (e == null || Type.getEnum(e) == null) return false;
+		return Type.enumConstructor(e) == 'BlockExpr';
+	}
+
+	/**
 	 * Classify a `HxExpr.ArrayExpr` by its first element so the writer can
 	 * pick the matching `whitespace.bracketConfig.*` inner-padding policy.
 	 * One grammar ctor (`ArrayExpr`) covers three fork bracket kinds; the

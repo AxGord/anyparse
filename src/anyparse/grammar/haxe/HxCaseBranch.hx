@@ -119,6 +119,6 @@ typedef HxCaseBranch = {
 	@:trivia @:tryparse @:fmt(
 		nestBody, bodyPolicy('caseBody', 'expressionCase'),
 		flatChildOpt('ifBody=expressionCase', 'elseBody=expressionCase', 'forBody=expressionCase'),
-		propagateExprPosition, refuseFlatOnComplexExpr
+		propagateExprPosition, clearExprPositionNonTail, refuseFlatOnComplexExpr
 	) var body:Array<HxStatement>;
 };

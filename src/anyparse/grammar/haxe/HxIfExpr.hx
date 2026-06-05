@@ -122,6 +122,6 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxIfExpr = {
 	@:lead('(') @:trail(')') var cond:HxExpr;
-	@:trailOpt(';') @:fmt(bodyPolicy('expressionIfBody'), indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'), noSiblingFallback('ifBody'), inlineBlockBodyIfFlag('expressionIfWithBlocks')) var thenBranch:HxExpr;
-	@:optional @:kw('else') @:fmt(bodyPolicy('expressionElseBody'), sameLine('sameLineExpressionElse'), shapeAware, elseIf, inlineBlockBodyIfFlag('expressionIfWithBlocks')) var elseBranch:Null<HxExpr>;
+	@:trailOpt(';') @:fmt(bodyPolicy('ifBody', 'expressionIfBody'), indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'), noSiblingFallback('ifBody'), inlineBlockBodyIfFlag('expressionIfWithBlocks')) var thenBranch:HxExpr;
+	@:optional @:kw('else') @:fmt(bodyPolicy('elseBody', 'expressionElseBody'), sameLine('sameLineExpressionElse'), shapeAware, elseIf, inlineBlockBodyIfFlag('expressionIfWithBlocks')) var elseBranch:Null<HxExpr>;
 };

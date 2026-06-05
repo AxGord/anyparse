@@ -1048,6 +1048,17 @@ class WriterLowering {
 			// expression-position frame. Idempotent — already-true opt
 			// passes through.
 			final propagateExpr:Bool = branch.fmtHasFlag('propagateExprPosition');
+			// ω-value-yielded-if-tail-barrier (macro-block clear): when this kw-
+			// Ref ctor carries `@:fmt(clearExprPosition)` (HxExpr.MacroExpr), the
+			// sub-call's opt arg is wrapped in `_clearExprPosition` ONLY when the
+			// operand is a block (`macro { … }`) — gated at runtime via the
+			// plugin-supplied `opt.operandIsBlockExpr` adapter so a non-block
+			// `macro <expr>` (e.g. `macro if (1) 2 else 3`) stays transparent and
+			// keeps its inherited expression-position frame. The block's reified
+			// statements revert to statement-position body policy (dropping the
+			// SI-2 block-tail frame). Null adapter (non-opt-in formats) → never
+			// fires. Idempotent helper; allocation-free when already cleared.
+			final clearExpr:Bool = branch.fmtHasFlag('clearExprPosition');
 			// ω-string-interp-noformat-flat: the interpolation `${expr}` body
 			// (`@:fmt(captureSource(...))` ctor — `HxStringSegment.Block`)
 			// threads `_setChainModeOverride(opt, NoWrap)` into the sub-call
@@ -1106,6 +1117,10 @@ class WriterLowering {
 			final ctorOptArg:Expr = {
 				var _o:Expr = macro opt;
 				if (propagateExpr) _o = macro _setExprPosition($_o);
+				if (clearExpr) {
+					final _operandAccess:Expr = macro $i{argNames[0]};
+					_o = macro(opt.operandIsBlockExpr != null && opt.operandIsBlockExpr($_operandAccess) ? _clearExprPosition($_o) : $_o);
+				}
 				if (propagateFieldLevelVar) _o = macro _setFieldLevelVar($_o);
 				if (interpFlat) _o = macro _setChainModeOverride($_o, anyparse.format.wrap.WrapMode.NoWrap);
 				if (parenHardFlatten) _o = macro(opt._parenInCondition
@@ -2286,6 +2301,11 @@ class WriterLowering {
 					// Star as matrix-eligible so `triviaSepStarExpr` attempts a
 					// source-grid layout before the wrap cascade.
 					final matrixWrapAlt:Bool = branch.fmtHasFlag('arrayMatrixWrap');
+					// ω-value-yielded-if-tail-barrier (array-element expr-position):
+					// `@:fmt(propagateExprPosition)` on the ArrayExpr ctor flags each
+					// element as expression-position so a value-if array element stays
+					// glued (`expressionIfBody`). False on every other enum-Alt sep-Star.
+					final propagateExprPositionAlt:Bool = branch.fmtHasFlag('propagateExprPosition');
 				parts.push(triviaSepStarExpr(
 					argsAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, leadText, trailText, sepText,
 					wrapRulesField, knobLeftCurly, knobRightCurly, sepTrailPresentAccess, trailingCommaField, openInsideExpr, closeInsideExpr, beforeDocComments,
@@ -2293,7 +2313,8 @@ class WriterLowering {
 					// ω-keep-fnsig-newline: enum-Alt has no close-newline slot;
 					// pass null so the ω-typedef-between-fields flag lands on the
 					// next positional param.
-					null, typedefBodyBlanksAlt
+					null, typedefBodyBlanksAlt,
+					propagateExprPositionAlt
 				));
 			} else {
 				// ω-bropen-keep: forward `@:fmt(keepCurlyBlanks)` from the
@@ -4960,6 +4981,14 @@ class WriterLowering {
 				// `HxDefaultBranch.stmts` so a case nested in another case's
 				// body inherits expression context.
 				final propagateExprPosition:Bool = starNode.fmtHasFlag('propagateExprPosition');
+				// ω-value-yielded-if-tail-barrier (case-body extension of SI-2):
+				// `@:fmt(clearExprPositionNonTail)` on a case / default body Star
+				// (paired with `propagateExprPosition`) clears `_inExprPosition`
+				// for every NON-tail body statement, so a discarded statement-if
+				// reverts to the statement-position `ifBody` policy while the
+				// body's yielded tail keeps the expression frame. False → byte-
+				// identical (every other tryparse-Star consumer is untouched).
+				final clearExprPositionNonTail:Bool = starNode.fmtHasFlag('clearExprPositionNonTail');
 				// ω-issue-423-mech-b: `@:fmt(refuseFlatOnComplexExpr)` AND-s the
 				// runtime `_flatCase` gate with `!opt.caseBodyRefusesFlat(_arr[0].node)`,
 				// dispatching through the plugin-supplied adapter on
@@ -5047,7 +5076,8 @@ class WriterLowering {
 					tryparseBlockEnded ? tryparseSepText : null, tryparseBlockEnded,
 					tryparseHeritageWrap,
 					tryparseCondBodyIndent,
-					tryparseOperandBreakAfterMultilineBrace
+					tryparseOperandBreakAfterMultilineBrace,
+					clearExprPositionNonTail
 				));
 				return;
 			}
@@ -9421,7 +9451,14 @@ class WriterLowering {
 		// `opt.typedefBetweenFields` gated on `opt._inTypedefBody` to push
 		// blank `_dhl()` after `{` and between adjacent fields. Default
 		// false → every other sep-Star caller is byte-identical.
-		typedefBodyBlanks:Bool = false
+		typedefBodyBlanks:Bool = false,
+		// ω-value-yielded-if-tail-barrier (array-element expr-position): when
+		// the sep-Star ctor carries `@:fmt(propagateExprPosition)` (HxExpr.
+		// ArrayExpr), wrap each element's opt arg in `_setExprPosition` so an
+		// array element that is a value-if (`[if (c) a else b, …]`) reads the
+		// expression-position `expressionIfBody` policy and stays glued.
+		// Default false → every other sep-Star caller is byte-identical.
+		propagateExprPosition:Bool = false
 	):Expr {
 		// ω-trivia-sep-anontype-braces (Phase B1): when the call site
 		// reads `@:fmt(anonTypeBracesOpen)` / `objectLiteralBracesOpen`
@@ -9579,9 +9616,12 @@ class WriterLowering {
 		// (`typedef T = {a:{b:Int}}` — inner `{b:Int}`) reverts to
 		// default fit-driven wrap. Sister to `_clearAnonFnBody` on the
 		// block-Star path.
-		final elemOptArg:Expr = forceMultiInTypedef
-			? macro _clearTypedefBody(opt)
-			: macro opt;
+		final elemOptArg:Expr = if (forceMultiInTypedef)
+			macro _clearTypedefBody(opt);
+		else if (propagateExprPosition)
+			macro _setExprPosition(opt);
+		else
+			macro opt;
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, elemOptArg]),
 			pos: Context.currentPos(),
@@ -11225,7 +11265,20 @@ class WriterLowering {
 		// 0` (prev has a committed hardline) AND `endsWithCloseDelim(prev)`
 		// (prev ends with `}`/`)`/`]`) — so single-line intersections stay
 		// glued. First (and only) consumer: `HxTypedefDecl.intersections`.
-		operandBreakAfterMultilineBrace:Bool = false
+		operandBreakAfterMultilineBrace:Bool = false,
+		// ω-value-yielded-if-tail-barrier (case-body extension of SI-2): when
+		// the case-body / default-body Star carries
+		// `@:fmt(clearExprPositionNonTail)` (paired with
+		// `@:fmt(propagateExprPosition)`), every NON-tail body statement's
+		// element-opt is wrapped in `_clearExprPosition` so a discarded
+		// statement (e.g. `if (c) return x;` before the tail) reverts to the
+		// statement-position `ifBody` policy. The body's LAST statement (the
+		// case's yielded value when the switch is itself in expression
+		// position) keeps the inherited expression-position frame. Mirrors the
+		// `triviaBlockStarExpr` SI-2 mechanism for BlockExpr / BlockStmt; the
+		// case body routes through THIS Star (`@:tryparse`), not
+		// `triviaBlockStarExpr`. False → byte-identical to the pre-slice call.
+		clearExprPositionNonTail:Bool = false
 	):Expr {
 		// ω-bug-2c-inner-star — cascade emit for the tryparse-Star path.
 		// Cascade trackers + cascade-fire blank count come from
@@ -11273,8 +11326,19 @@ class WriterLowering {
 		// receive a copy-on-flat opt with named fields swapped, build the
 		// per-pair override block. The caller-side helper has already parsed
 		// `'from=to'` args into [from, to] pairs.
+		// ω-value-yielded-if-tail-barrier (case-body extension): the per-element
+		// opt argument. When `clearExprPositionNonTail` is set (case / default
+		// body Star), every body statement EXCEPT the tail gets
+		// `_clearExprPosition` so a discarded statement-if reverts to the
+		// statement-position `ifBody` policy; only the body's last statement
+		// (the switch's yielded value at expression position) keeps the
+		// inherited frame. `_si` / `_arr` are in scope at the element-call
+		// splice. Flag off ⇒ the IDENTICAL `_writerOpt` Doc as before.
+		final caseTailOptArg:Expr = clearExprPositionNonTail
+			? macro(_si == _arr.length - 1 ? _writerOpt : _clearExprPosition(_writerOpt))
+			: macro _writerOpt;
 		final triviaElemCall:Expr = {
-			expr: ECall(macro $i{elemFn}, [macro _t.node, macro _writerOpt]),
+			expr: ECall(macro $i{elemFn}, [macro _t.node, caseTailOptArg]),
 			pos: Context.currentPos(),
 		};
 		// ω-typedef-intersection-operand-break: per-iteration element call for

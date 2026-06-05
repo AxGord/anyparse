@@ -278,6 +278,16 @@ typedef WriteOptions = {
 	 */
 	?endsWithCloseBrace:Null<Dynamic -> Bool>,
 	?caseBodyRefusesFlat:Null<Dynamic -> Bool>,
+	// ω-value-yielded-if-tail-barrier (macro-block clear): `operandIsBlockExpr(
+	// operandNode) → Bool` — true iff a `macro <operand>` reification's operand
+	// is a block (`macro { … }`). Drives `@:fmt(clearExprPosition)` on
+	// `HxExpr.MacroExpr`: a macro-BLOCK's statements are reified code (none
+	// yielded to the enclosing expression position), so the operand reverts to
+	// statement-position body policy and the block-tail SI-2 frame is dropped.
+	// A `macro <expr>` (non-block operand, e.g. `macro if (1) 2 else 3`) stays
+	// TRANSPARENT — `macro` does not change expression-vs-statement position.
+	// Null (every non-opt-in format) → the clear never fires, byte-identical.
+	?operandIsBlockExpr:Null<Dynamic -> Bool>,
 	?betweenImportsPathDiffers:Null<(String, String, Int) -> Bool>,
 	?betweenImportsTailLeafClassify:Null<Dynamic -> Null<{ctorName:String, path:String}>>,
 	?betweenImportsHeadLeafClassify:Null<Dynamic -> Null<{ctorName:String, path:String}>>,
