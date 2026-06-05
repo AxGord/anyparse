@@ -688,10 +688,18 @@ class WriterLowering {
 			final rightChild:ShapeNode = children[1];
 			final rightRef:Null<String> = rightChild.kind == Ref ? rightChild.annotations.get('base.ref') : null;
 			final isAsymmetric:Bool = rightRef != null && simpleName(rightRef) != simpleName(typePath);
+			// ω-value-yielded-if-tail-barrier (SI-1): when the infix ctor carries
+			// `@:fmt(propagateExprPosition)` (e.g. `HxExpr.ThinArrow` `->` /
+			// `Arrow` `=>`), wrap the `.right` operand's opt arg in
+			// `_setExprPosition` so the arrow body inherits the expression-
+			// position frame (its value IS the arrow's yielded value). The `.left`
+			// operand stays on `macro opt` (default null). Null when the flag is
+			// absent → byte-identical to the pre-slice call.
+			final rightOptExpr:Null<Expr> = branch.fmtHasFlag('propagateExprPosition') ? macro _setExprPosition(opt) : null;
 			final leftCall:Expr = makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, leftCtx);
 			final rightCall:Expr = isAsymmetric
-				? makeWriteCall(writeFnFor(rightRef), macro $i{argNames[1]}, false, -1)
-				: makeWriteCall(writeFnName, macro $i{argNames[1]}, hasPratt, rightCtx);
+				? makeWriteCall(writeFnFor(rightRef), macro $i{argNames[1]}, false, -1, rightOptExpr)
+				: makeWriteCall(writeFnName, macro $i{argNames[1]}, hasPratt, rightCtx, rightOptExpr);
 			if (isTight || isAssign) {
 				// Assign / arrow ops (prec 0, non-tight): split the trailing
 				// space into `_dop(' ')` (OptSpace) so the renderer drops it
@@ -2338,7 +2346,12 @@ class WriterLowering {
 					// shape (suppresses stray `;` after a `#if … #end` element).
 					altBlockEndedFlag ? sepText : null, altBlockEndedFlag,
 					altBlockEndedFlag ? (branch.annotations.get('lit.sepBlockEndedPredicate') : Null<String>) : null,
-					altBlockEndedFlag ? formatInfo.schemaTypePath : null
+					altBlockEndedFlag ? formatInfo.schemaTypePath : null,
+					// ω-value-yielded-if-tail-barrier (SI-2): BlockExpr / BlockStmt
+					// route here (enum-Alt). `condLeadingDocInfo` stays null (its
+					// default); thread the tail-barrier flag so non-tail block
+					// statements drop the inherited expression-position frame.
+					null, branch.fmtHasFlag('clearExprPositionNonTail')
 				));
 			}
 		} else if (sepText != null && branch.annotations.get('lit.sepBlockEnded') == true) {
@@ -5277,7 +5290,12 @@ class WriterLowering {
 					blockEndedFlag ? sepText : null, blockEndedFlag,
 					blockEndedFlag ? (starNode.annotations.get('lit.sepBlockEndedPredicate') : Null<String>) : null,
 					blockEndedFlag ? formatInfo.schemaTypePath : null,
-					condLeadingDocInfo
+					condLeadingDocInfo,
+					// ω-value-yielded-if-tail-barrier (SI-2): the Seq-struct /
+					// fn-block caller (e.g. `HxFnBlock.stmts`) keeps the barrier
+					// OFF — a function body's statements are not in expression
+					// position, so `_inExprPosition` is already false here.
+					false
 				));
 			} else if (isLastField) {
 				if (openText != null) parts.push(macro _dt($v{openText}));
@@ -8583,7 +8601,15 @@ class WriterLowering {
 		// `beforeDocCommentEmptyLines`), the `_currHasDocComment` scan looks
 		// through a `#if … #end` member to its first inner member's leading
 		// doc-comment. Null → byte-identical to the pre-fix path.
-		condLeadingDocInfo:Null<CondLeadingDocLookThroughInfo> = null
+		condLeadingDocInfo:Null<CondLeadingDocLookThroughInfo> = null,
+		// ω-value-yielded-if-tail-barrier (SI-2): when the parent Star carries
+		// `@:fmt(clearExprPositionNonTail)` (BlockExpr / BlockStmt), every
+		// NON-tail block statement's element-opt is wrapped in
+		// `_clearExprPosition` so the expression-position frame inherited from
+		// an enclosing arrow-body / return is dropped for statements whose value
+		// is discarded. The block's LAST statement (its yielded value) keeps the
+		// frame. False → byte-identical to the pre-slice element call.
+		clearExprPositionNonTail:Bool = false
 	):Expr {
 		// ω-condcomp-stray-semi (Stage A): build the schema-instance
 		// predicate-call Expr for a given element-access Expr. Mirrors the
@@ -8611,8 +8637,19 @@ class WriterLowering {
 		final elemOptExpr:Expr = clearAnonFnBodyOnElems
 			? macro _clearAnonFnBody(opt)
 			: macro opt;
+		// ω-value-yielded-if-tail-barrier (SI-2): the per-element opt arg. When
+		// `clearExprPositionNonTail` is set (BlockExpr / BlockStmt), every block
+		// statement EXCEPT the tail gets `_clearExprPosition` so a discarded
+		// statement-if reverts to the statement-position `ifBody` policy; only
+		// the block's last statement (its yielded value) keeps the inherited
+		// expression-position frame. `_si` / `_arr` are in scope at the single
+		// splice site (`while (_si < _arr.length)` over `final _arr = …`). The
+		// non-flag path emits the IDENTICAL `elemOptExpr` Doc as before.
+		final elemCallOptArg:Expr = clearExprPositionNonTail
+			? macro(_si == _arr.length - 1 ? $elemOptExpr : _clearExprPosition($elemOptExpr))
+			: elemOptExpr;
 		final triviaElemCall:Expr = {
-			expr: ECall(macro $i{elemFn}, [macro _t.node, elemOptExpr]),
+			expr: ECall(macro $i{elemFn}, [macro _t.node, elemCallOptArg]),
 			pos: Context.currentPos(),
 		};
 		final emptyText:String = openText + closeText;
@@ -11996,8 +12033,13 @@ class WriterLowering {
 		};
 	}
 
-	private static function makeWriteCall(writeFnName:String, valueExpr:Expr, hasPratt:Bool, ctxPrec:Int):Expr {
-		final args:Array<Expr> = [valueExpr, macro opt];
+	private static function makeWriteCall(writeFnName:String, valueExpr:Expr, hasPratt:Bool, ctxPrec:Int, ?optExpr:Expr):Expr {
+		// ω-value-yielded-if-tail-barrier (SI-1): callers may override the opt
+		// arg threaded into the sub-call (e.g. `_setExprPosition(opt)` for the
+		// infix `->`/`=>` `.right` operand). Null → the historic `macro opt`,
+		// keeping non-overriding callers byte-identical.
+		final optArg:Expr = optExpr != null ? optExpr : macro opt;
+		final args:Array<Expr> = [valueExpr, optArg];
 		if (hasPratt) args.push(macro $v{ctxPrec});
 		return {
 			expr: ECall(macro $i{writeFnName}, args),

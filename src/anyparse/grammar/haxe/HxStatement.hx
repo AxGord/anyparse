@@ -427,7 +427,7 @@ enum HxStatement {
 	@:kw('inline') @:lead('function')
 	LocalInlineFnStmt(decl:HxFnDecl);
 
-	@:fmt(leftCurly('blockLeftCurly'), emptyCurlyBreak('blockEmptyCurly'), rightCurly('blockRightCurly'), keepCurlyBlanks)
+	@:fmt(leftCurly('blockLeftCurly'), emptyCurlyBreak('blockEmptyCurly'), rightCurly('blockRightCurly'), keepCurlyBlanks, clearExprPositionNonTail)
 	@:lead('{') @:trail('}') @:trivia
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	BlockStmt(stmts:Array<HxStatement>);

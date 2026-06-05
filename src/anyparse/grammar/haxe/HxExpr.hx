@@ -366,7 +366,7 @@ enum HxExpr {
 
 	ObjectLit(lit:HxObjectLit);
 
-	@:fmt(leftCurly('blockLeftCurly'), leftCurlyAnonFnOverride('anonFunctionLeftCurly'), emptyCurlyBreak('blockEmptyCurly'), rightCurly('blockRightCurly'), keepCurlyBlanks)
+	@:fmt(leftCurly('blockLeftCurly'), leftCurlyAnonFnOverride('anonFunctionLeftCurly'), emptyCurlyBreak('blockEmptyCurly'), rightCurly('blockRightCurly'), keepCurlyBlanks, clearExprPositionNonTail)
 	@:lead('{') @:trail('}') @:trivia
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	BlockExpr(stmts:Array<HxStatement>);
@@ -606,9 +606,9 @@ enum HxExpr {
 	@:infix('||=', 0, 'Right')
 	BoolOrAssign(left:HxExpr, right:HxExpr);
 
-	@:infix('->', 0, 'Right')
+	@:infix('->', 0, 'Right') @:fmt(propagateExprPosition)
 	ThinArrow(left:HxExpr, right:HxExpr);
 
-	@:infix('=>', 0, 'Right')
+	@:infix('=>', 0, 'Right') @:fmt(propagateExprPosition)
 	Arrow(left:HxExpr, right:HxExpr);
 }

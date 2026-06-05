@@ -59,8 +59,16 @@ class WriterCodegen {
 			// grammars whose options struct doesn't declare it (e.g. Json,
 			// Bin) skip the helper to avoid a compile-time field-resolution
 			// error. Per-grammar opt-in lives in the typedef itself.
-			if (optionsHasInExprPosition(optionsTypePath))
+			// ω-value-yielded-if-tail-barrier: `_clearExprPosition` is the
+			// sister reset, consumed by `triviaBlockStarExpr`'s per-element
+			// call for `@:fmt(clearExprPositionNonTail)` Stars (BlockExpr /
+			// BlockStmt) so only the block's tail statement keeps the
+			// expression-position frame. Gated on the same field as
+			// `_setExprPosition`.
+			if (optionsHasInExprPosition(optionsTypePath)) {
 				fields.push(setExprPositionField(optionsCT));
+				fields.push(clearExprPositionField(optionsCT));
+			}
 			// ω-anonfunction-empty-curly: opt-fanout helper for
 			// `propagateAnonFnContext`. Returns the input opt unchanged when
 			// `_inAnonFnBody` is already true; otherwise returns a `_copyOpt`
@@ -652,6 +660,37 @@ class WriterCodegen {
 					if (o._inExprPosition) return o;
 					final _c:$optionsCT = _copyOpt(o);
 					_c._inExprPosition = true;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * ω-value-yielded-if-tail-barrier — sister reset helper to
+	 * `_setExprPosition`. Returns the input opt unchanged when
+	 * `_inExprPosition` is already `false` (no allocation on non-expr
+	 * descents); otherwise returns a `_copyOpt(o)` with the flag cleared.
+	 * Consumed by `triviaBlockStarExpr`'s per-element call when the parent
+	 * Star carries `@:fmt(clearExprPositionNonTail)` (BlockExpr / BlockStmt)
+	 * so the expression-position frame is cleared for every NON-tail block
+	 * statement — a Haxe block yields the value of its LAST statement, so
+	 * only the tail keeps `_inExprPosition`. Emitted only when the opt
+	 * typedef carries `_inExprPosition:Bool` — paired with `_setExprPosition`
+	 * emission.
+	 */
+	private static function clearExprPositionField(optionsCT:ComplexType):Field {
+		return {
+			name: '_clearExprPosition',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{name: 'o', type: optionsCT}],
+				ret: optionsCT,
+				expr: macro {
+					if (!o._inExprPosition) return o;
+					final _c:$optionsCT = _copyOpt(o);
+					_c._inExprPosition = false;
 					return _c;
 				},
 			}),
