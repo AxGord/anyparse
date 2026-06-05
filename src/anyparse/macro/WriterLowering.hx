@@ -3783,6 +3783,19 @@ class WriterLowering {
 						final afterTrailExpr:Null<Expr> = prevTrailFieldName == null
 							? null
 							: {expr: EField(macro value, prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX), pos: Context.currentPos()};
+						// ω-556-then-body-leading-comment: the bare non-first Ref
+						// body grows a `<field>BeforeLeading:Array<String>` slot
+						// (`isBareNonFirstRef`, same host as the BeforeNewline
+						// signal below). Thread it into `bodyPolicyWrap` so own-line
+						// comments captured between the preceding token (the cond's
+						// `)` trail / the prior body terminator) and the body's
+						// first token survive round-trip. The kw-led else-body path
+						// already has this via `kwLeadingExpr`; this closes the
+						// bare-Ref then-body asymmetry. Gated on the same
+						// `(!isFirstField || firstFieldNlOptIn)` predicate the parser
+						// uses for `hasBeforeLeadingSlot`; null off the slot path →
+						// byte-inert. (`firstFieldNlOptIn` is declared just below
+						// alongside `bodyOnSameLineExpr` — both share the gate.)
 						// Slice ω-expr-body-keep: `BodyPolicy.Keep` on bare-Ref
 						// body fields reads the source-shape signal from the
 						// existing `<field>BeforeNewline:Bool` synth slot
@@ -3806,6 +3819,12 @@ class WriterLowering {
 						final firstFieldNlOptIn:Bool = isFirstField && child.fmtHasFlag('beforeNewlineSlotFirst');
 						final bodyOnSameLineExpr:Null<Expr> = ctx.trivia && (!isFirstField || firstFieldNlOptIn)
 							? beforeNewlineNotAccess(fieldName)
+							: null;
+						// ω-556-then-body-leading-comment: own-line leading-comment
+						// slot, same gate as `bodyOnSameLineExpr` (the BeforeNewline
+						// sibling shares the `isBareNonFirstRef` host).
+						final beforeLeadingExpr:Null<Expr> = ctx.trivia && (!isFirstField || firstFieldNlOptIn)
+							? beforeLeadingAccess(fieldName)
 							: null;
 						// ω-untyped-body-stmt-override: forward all
 						// `@:fmt(bodyPolicyOverride('<ctor>', '<flag>'))`
@@ -3854,6 +3873,7 @@ class WriterLowering {
 							bodyOnSameLineExpr: bodyOnSameLineExpr,
 							kwPolicyFlagName: kwPolicyFlag,
 							afterTrailExpr: afterTrailExpr,
+							beforeLeadingExpr: beforeLeadingExpr,
 							indentObjArgs: indentObjArgs,
 							policyOverrides: policyOverrides,
 							bodyAllmanIndentArgs: bodyAllmanIndentArgs,
@@ -7392,6 +7412,7 @@ class WriterLowering {
 		final bodyOnSameLineExpr:Null<Expr> = opts.bodyOnSameLineExpr;
 		final kwPolicyFlagName:Null<String> = opts.kwPolicyFlagName;
 		final afterTrailExpr:Null<Expr> = opts.afterTrailExpr;
+		final beforeLeadingExpr:Null<Expr> = opts.beforeLeadingExpr;
 		final indentObjArgs:Null<Array<String>> = opts.indentObjArgs;
 		final policyOverrides:Null<Array<Array<String>>> = opts.policyOverrides;
 		final bodyAllmanIndentArgs:Null<Array<String>> = opts.bodyAllmanIndentArgs;
@@ -8015,13 +8036,41 @@ class WriterLowering {
 		// pre-slice wrap unchanged. The ternary evaluates `$writeCall`
 		// only on its taken branch, mirroring how the policy switch
 		// already evaluates a single layout per call.
-		final wrapExpr:Expr = if (afterTrailExpr == null) coreWrapExpr
+		//
+		// ω-556-then-body-leading-comment: own-line comments captured BEFORE
+		// a bare-Ref body (`<field>BeforeLeading:Array<String>`, the
+		// `isBareNonFirstRef` host — currently `HxIfStmt.thenBody`) compose on
+		// the SAME forced Next-layout. The kw-led else-body path threads its
+		// own `kwLeadingExpr` into `bodyPolicyWrap`, so its leading `//`
+		// survives; the bare-Ref then-body had no leading-comment channel and
+		// dropped them at write (the parser captured them — round-trip-
+		// identical AST — but the writer never read the slot). When the slot
+		// is non-empty, each comment renders on its own line at +cols indent
+		// (after any cuddled `afterTrail` prefix), then the body. Empty slot
+		// AND null `afterTrail` → fall through to `coreWrapExpr` (byte-inert).
+		final wrapExpr:Expr = if (afterTrailExpr == null && beforeLeadingExpr == null) coreWrapExpr
 		else {
-			final forcedLayout:Expr = macro _dc([
-				trailingCommentDoc($afterTrailExpr, opt),
-				_dn(_cols, _dc([_dhl(), $writeCall])),
-			]);
-			macro $afterTrailExpr != null ? $forcedLayout : $coreWrapExpr;
+			// Runtime guard: fire the forced Next-layout iff there is an
+			// after-trail comment OR at least one own-line leading comment.
+			final afterTrailRt:Expr = afterTrailExpr == null ? macro null : afterTrailExpr;
+			final beforeLeadingRt:Expr = beforeLeadingExpr == null ? macro ([] : Array<String>) : beforeLeadingExpr;
+			macro {
+				final _at556:Null<String> = $afterTrailRt;
+				final _bl556:Array<String> = $beforeLeadingRt;
+				if (_at556 == null && _bl556.length == 0) $coreWrapExpr;
+				else {
+					final _outer556:Array<anyparse.core.Doc> = [];
+					if (_at556 != null) _outer556.push(trailingCommentDoc(_at556, opt));
+					final _inner556:Array<anyparse.core.Doc> = [_dhl()];
+					for (_c556 in _bl556) {
+						_inner556.push(leadingCommentDoc(_c556, opt));
+						_inner556.push(_dhl());
+					}
+					_inner556.push($writeCall);
+					_outer556.push(_dn(_cols, _dc(_inner556)));
+					_dc(_outer556);
+				}
+			};
 		};
 		// ω-issue-168: outermost runtime override — when the field carries
 		// `@:fmt(bodyAllmanIndentForCtor('<ctor>', '<optField>',
@@ -13560,6 +13609,7 @@ typedef PrevBodyInfo = {
  *   - `bodyOnSameLineExpr`  — runtime `Bool` driving the `Keep` branch's flat-vs-break choice.
  *   - `kwPolicyFlagName`    — name of a sibling `WhitespacePolicy` knob driving the `Same` separator (kw-policy mode).
  *   - `afterTrailExpr`      — runtime access to captured after-kw trailing comment (forces `Next` shape).
+ *   - `beforeLeadingExpr`   — runtime access to the `Array<String>` of own-line comments captured before a bare-Ref body (forces `Next` shape; composes with `afterTrailExpr`).
  *   - `indentObjArgs`       — `(ctorName, optField, lcField)` triple for the `indentObjGuardedNext` rule.
  *   - `policyOverrides`     — list of `(ctorName, flagName)` pairs cascading the runtime body-policy override.
  *   - `bodyAllmanIndentArgs`— `(ctorName, optField)` pair for the multi-line Allman+indent override.
@@ -13583,6 +13633,7 @@ typedef WrapBodyOpts = {
 	?bodyOnSameLineExpr:Null<Expr>,
 	?kwPolicyFlagName:Null<String>,
 	?afterTrailExpr:Null<Expr>,
+	?beforeLeadingExpr:Null<Expr>,
 	?indentObjArgs:Array<String>,
 	?policyOverrides:Array<Array<String>>,
 	?bodyAllmanIndentArgs:Array<String>,
