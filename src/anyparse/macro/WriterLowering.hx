@@ -1718,6 +1718,8 @@ class WriterLowering {
 											_dc([$leadDoc, _wrapInner, _wrapTrail])
 										)
 								)
+								: anyparse.format.wrap.WrapList.isTopLevelTernary(_wrapInner)
+									? _dc([$leadDoc, _wrapInner, _wrapTrail])
 								: _dfle(
 									opt.lineWidth,
 									_dc([

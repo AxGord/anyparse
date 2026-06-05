@@ -66,46 +66,154 @@ final class CollapsePass {
 	public static function run(
 		doc:Doc, width:Int, indentChar:IndentChar, tabWidth:Int, indentSize:Int = 1
 	):Doc {
-		// Fast path: skip the measure render entirely when the Doc has no
-		// collapse-candidate paren — the overwhelming common case. Keeps
-		// the pass cost ~one structural walk for non-collapse outputs.
-		if (!hasCandidate(doc)) return doc;
+		// Fast path: skip the measure render entirely when the Doc carries
+		// NEITHER a forward collapse-candidate paren (`CollapseProbe`) NOR an
+		// inverse inner-add-chain marker (`CollapseAddProbe`) — the
+		// overwhelming common case. Keeps the pass cost ~one structural walk
+		// for non-collapse outputs.
+		final hasParenProbe:Bool = hasCandidate(doc);
+		final hasAddProbe:Bool = hasAddCandidate(doc);
+		if (!hasParenProbe && !hasAddProbe) return doc;
 
 		final decisions:Array<{node:Doc, crosses:Bool}> = [];
 		// Measure-only render: populates `decisions` at every
-		// `IfFullLineExceeds`. The returned string is discarded.
+		// `IfFullLineExceeds` (forward) AND every reached `CollapseAddProbe`
+		// (inverse — recorded `crosses = reached-in-break-mode`). The returned
+		// string is discarded.
 		Renderer.render(doc, width, indentChar, tabWidth, indentSize, '\n', false, false, -1, decisions);
 
-		return rewrite(doc, decisions);
+		// ONE top-down rewrite over the ORIGINAL `doc` (so every decision —
+		// `IfFullLineExceeds` forward, `CollapseAddProbe` inverse — is keyed by
+		// the node identity the measure render saw). The walk threads
+		// `insideBroken` for the inverse direction (outer-add-chain-broke ⇒
+		// inner-add-chain-collapse). A separate second pass would rebuild the
+		// tree and lose the other direction's node identities, so both are
+		// resolved in this single pass.
+		return rewrite(doc, decisions, false);
 	}
 
 	/**
-	 * Structural top-down rewrite. Three behaviours:
-	 *  - An enclosing op-chain whose `flat` (NoWrap/glued) branch contains
-	 *    a candidate paren that opens → commit chain to glued + commit the
-	 *    inner paren.
+	 * Structural top-down rewrite. Behaviours:
+	 *  - INVERSE (ω-unwrap-add-ops): a tagged opAddSub chain
+	 *    `WrapBoundary(Group(IfBreak(CollapseAddProbe(brk), flat)))` inside a
+	 *    BROKEN outer add-chain (`insideBroken`) collapses to its `flat`
+	 *    (NoWrap-glued-separators) branch; the outermost broken add-chain
+	 *    keeps its IfBreak but marks its broken branch `insideBroken` so
+	 *    nested add-chains collapse. See `rewriteTaggedAddChain`.
+	 *  - FORWARD: an enclosing op-chain whose `flat` (NoWrap/glued) branch
+	 *    contains a candidate paren that opens → commit chain to glued +
+	 *    commit the inner paren.
 	 *  - A standalone candidate paren that opens → commit it to its open
 	 *    branch (no chain wrapper to glue).
-	 *  - Everything else → rebuild structurally, recursing into children.
+	 *  - Everything else → rebuild structurally, recursing into children
+	 *    (threading `insideBroken`).
 	 */
-	private static function rewrite(d:Doc, decisions:Array<{node:Doc, crosses:Bool}>):Doc {
-		// Op-chain emitted by `BinaryChainEmit.emit`. When the chain's flat
-		// (glued) branch contains a candidate paren that WOULD open, commit
-		// the chain to its glued shape so the post-close-paren operands ride
-		// the close-paren line (fork `collapseChainBreaksAfter`); the inner
-		// paren then opens within it via `commitOpens`.
+	private static function rewrite(d:Doc, decisions:Array<{node:Doc, crosses:Bool}>, insideBroken:Bool):Doc {
+		// FORWARD direction takes precedence: when the chain's flat (glued)
+		// branch contains a candidate paren that WOULD open, commit the chain
+		// to its glued shape (fork `collapseChainBreaksAfter`) via
+		// `commitOpens`. This runs BEFORE the inverse add-probe intercept
+		// because a tagged opAddSub chain (`CollapseAddProbe` on its brk) can
+		// ALSO be a forward-glue candidate (the `expression_paren_wrapping`
+		// anchor: `(paren) / 2 - …`). `chainGluedIfOpens` reads only the flat
+		// branch, so the `CollapseAddProbe` on the discarded brk is moot here —
+		// taking the inverse intercept first would re-`WrapBoundary` the chain
+		// with the original brk and double-indent the opened paren.
 		final glued:Null<Doc> = chainGluedIfOpens(d, decisions);
 		if (glued != null) return WrapBoundary(commitOpens(glued, decisions));
+
+		// INVERSE direction (ω-unwrap-add-ops): a tagged opAddSub chain that is
+		// NOT a forward-glue candidate. Its helper decides collapse-vs-keep from
+		// `insideBroken` + the chain's break decision and recurses through
+		// `rewrite` so the forward paren-collapse still applies to inner parens.
+		final tagged:Null<{marker:Doc, brk:Doc, flat:Doc}> = taggedAddChain(d);
+		if (tagged != null) return rewriteTaggedAddChain(tagged, decisions, insideBroken);
 
 		// Standalone candidate paren that opens (no enclosing chain
 		// committed it): commit to the open branch directly.
 		switch d {
 			case IfFullLineExceeds(_, open, _) if (isCandidate(d) && opens(d, decisions)):
-				return rewrite(open, decisions);
+				return rewrite(open, decisions, insideBroken);
 			case _:
 		}
 
-		return mapChildren(d, child -> rewrite(child, decisions));
+		return mapChildren(d, child -> rewrite(child, decisions, insideBroken));
+	}
+
+	/**
+	 * Inverse-direction handler (ω-unwrap-add-ops): collapse an INNER
+	 * opAddSub chain's `+`/`-` breaks when it sits inside an OUTER opAddSub
+	 * chain that committed to its broken form. The anyparse analogue of fork
+	 * `unwrapAddOps` (strip `+`/`-` line-ends inside a wrapped region).
+	 *
+	 * `tagged` is a destructured tagged chain
+	 * `WrapBoundary(Group(IfBreak(CollapseAddProbe(brk), flat)))`. The chain
+	 * BROKE iff the measure render reached its `CollapseAddProbe` in break
+	 * mode (`opensAdd`). `insideBroken` = "an ancestor add-chain broke and
+	 * owns this subtree":
+	 *
+	 *  - `insideBroken` → COLLAPSE: discard the broken branch, keep the
+	 *    `flat` (NoWrap-glued-separators) branch. Each operand keeps its OWN
+	 *    wrapping (a ternary / call operand still breaks via its own Group) —
+	 *    exactly fork's `unwrapAddOps`, which glues `+`/`-` without touching
+	 *    inner constructs. Recurse `flat` (back through `rewrite`) with
+	 *    `insideBroken` still true (fork strips nested add-ops recursively).
+	 *  - NOT `insideBroken` → an OUTER (outermost so far) add-chain: strip the
+	 *    now-consumed marker but keep the IfBreak (the chain decides
+	 *    break/flat itself at render). Recurse the broken branch with
+	 *    `insideBroken = broke` so nested add-chains collapse only when THIS
+	 *    chain actually broke; recurse `flat` with `insideBroken = false`.
+	 *    Byte-inert when the chain did not break (marker stripped, structure
+	 *    unchanged — and an un-stripped marker would render transparently
+	 *    anyway).
+	 *
+	 * Only opAddSub chains are tagged (`BinaryChainEmit` gates on
+	 * `isAddSubOps`). An enclosing opBool chain — which fork's `unwrapAddOps`
+	 * does NOT trigger from (it strips ONLY `+`/`-`) — is NOT tagged, so its
+	 * inner add-chains stay untouched (byte-inert). This is why
+	 * `opbool_reeval_strips_opadd_breaks` (an opBool-outer re-measure case
+	 * that would over-collapse to an overflowing single line) is NOT flipped.
+	 */
+	private static function rewriteTaggedAddChain(
+		tagged:{marker:Doc, brk:Doc, flat:Doc},
+		decisions:Array<{node:Doc, crosses:Bool}>, insideBroken:Bool
+	):Doc {
+		if (insideBroken)
+			return WrapBoundary(rewrite(tagged.flat, decisions, true));
+		final broke:Bool = opens(tagged.marker, decisions);
+		return WrapBoundary(Group(IfBreak(
+			rewrite(tagged.brk, decisions, broke),
+			rewrite(tagged.flat, decisions, false)
+		)));
+	}
+
+	/**
+	 * If `d` is a tagged opAddSub chain
+	 * `WrapBoundary(Group(IfBreak(CollapseAddProbe(brk), flat)))`, return the
+	 * marker node (for the measure-decision lookup), the marked broken shape,
+	 * and the sibling flat shape. Otherwise null.
+	 */
+	private static function taggedAddChain(d:Doc):Null<{marker:Doc, brk:Doc, flat:Doc}> {
+		return switch d {
+			case WrapBoundary(Group(IfBreak(marker, flat))):
+				switch marker {
+					case CollapseAddProbe(brk): {marker: marker, brk: brk, flat: flat};
+					case _: null;
+				}
+			case _: null;
+		};
+	}
+
+	/** True iff `d`'s subtree contains any `CollapseAddProbe` marker. */
+	private static function hasAddCandidate(d:Doc):Bool {
+		var found:Bool = false;
+		walk(d, node -> {
+			if (!found) switch node {
+				case CollapseAddProbe(_): found = true;
+				case _:
+			}
+		});
+		return found;
 	}
 
 	/**
@@ -196,10 +304,15 @@ final class CollapsePass {
 		};
 	}
 
-	/** True iff the measure pass recorded `crosses == true` for node `d`. */
+	/**
+	 * True iff the measure pass recorded `crosses == true` for node `d`.
+	 * Used for BOTH the forward `IfFullLineExceeds` paren-open decision and
+	 * the inverse `CollapseAddProbe` chain-broke decision — the lookup is the
+	 * same node-identity match for either marker kind.
+	 */
 	private static function opens(d:Doc, decisions:Array<{node:Doc, crosses:Bool}>):Bool {
 		// Node identity match — enum `==` is reference equality on JS, so this
-		// finds the decision recorded for this exact `IfFullLineExceeds` node.
+		// finds the decision recorded for this exact node.
 		final entry:Null<{node:Doc, crosses:Bool}> = decisions.find(e -> e.node == d);
 		return entry != null && entry.crosses;
 	}
@@ -251,7 +364,7 @@ final class CollapsePass {
 						| OptSpaceSkipAfterHardline:
 				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner)
 						| BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner)
-						| HardFlatten(inner) | CollapseProbe(inner)
+						| HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner)
 						| ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 				case Concat(items):
@@ -289,6 +402,7 @@ final class CollapsePass {
 			case WrapBoundary(inner): WrapBoundary(f(inner));
 			case HardFlatten(inner): HardFlatten(f(inner));
 			case CollapseProbe(inner): CollapseProbe(f(inner));
+			case CollapseAddProbe(inner): CollapseAddProbe(f(inner));
 			case ConditionalMarkerZero(inner): ConditionalMarkerZero(f(inner));
 			case ConditionalMarkerDecrease(inner): ConditionalMarkerDecrease(f(inner));
 			case Concat(items): Concat([for (it in items) f(it)]);

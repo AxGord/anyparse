@@ -950,6 +950,24 @@ class Renderer {
 					// fork `collapseChainBreaksAfter`) regardless of operator
 					// class. Transparent to every Doc walker.
 					stack.push(new Frame(f.indent, f.mode, inner, f.forceFlat, f.hardFlat));
+				case CollapseAddProbe(inner):
+					// ω-unwrap-add-ops (inverse CollapsePass): an inner opAddSub
+					// chain's BROKEN shape, reached ONLY when that chain's own
+					// `IfBreak` picked `brk` — so arriving here means the inner
+					// add-chain broke. Pure render pass-through (no layout effect),
+					// EXACTLY like `CollapseProbe`. In the measure-only pass
+					// (`decisions != null`) record the break-mode fact keyed by node
+					// identity: `crosses = f.mode == MBreak` ("inner add-chain broke
+					// in a break context"). `CollapsePass` reads this PLUS the
+					// enclosing-chain-broke fact and rewrites this marker to
+					// `HardFlatten(inner)` only inside a broken outer chain;
+					// otherwise it unwraps to bare `inner` (byte-inert). On the
+					// real emit pass (`decisions == null`) this never collapses on
+					// its own — the marker is always already rewritten away by
+					// `CollapsePass.run` before render, so reaching it here in the
+					// emit pass is a defensive pass-through.
+					if (decisions != null) decisions.push({node: f.doc, crosses: f.mode == MBreak});
+					stack.push(new Frame(f.indent, f.mode, inner, f.forceFlat, f.hardFlat));
 				case ConditionalMarkerZero(inner):
 					// ω-cond-indent-policy FixedZero: enter a marker-zero scope.
 					// Increment the render-local depth so the Text-flush re-indents
@@ -1101,7 +1119,7 @@ class Renderer {
 							inner.push({doc: items[k], mode: MFlat});
 							if (k > 0) inner.push({doc: sep, mode: MFlat});
 						}
-					case Flatten(innerDoc) | WrapBoundary(innerDoc) | HardFlatten(innerDoc) | CollapseProbe(innerDoc):
+					case Flatten(innerDoc) | WrapBoundary(innerDoc) | HardFlatten(innerDoc) | CollapseProbe(innerDoc) | CollapseAddProbe(innerDoc):
 						inner.push({doc: innerDoc, mode: nd.mode});
 					case ConditionalMarkerZero(innerDoc):
 						// ω-cond-indent-policy FixedZero: render-time marker,
@@ -1136,7 +1154,7 @@ class Renderer {
 					return {inner: inner, hard: hard};
 				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner)
 						| BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner)
-						| HardFlatten(inner) | ConditionalMarkerZero(inner)
+						| HardFlatten(inner) | CollapseAddProbe(inner) | ConditionalMarkerZero(inner)
 						| ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 				case Concat(items):
@@ -1350,7 +1368,7 @@ class Renderer {
 					// one must commit to MBreak.
 					budget = -1;
 					break;
-				case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner):
+				case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner):
 					// ω-force-flat-engine slice A: pass-through. All four
 					// markers are render-time state, transparent to flat-
 					// width measurement — descend `inner` with the same
@@ -1448,7 +1466,7 @@ class Renderer {
 					total += s.length;
 				case OptSpaceSkipAfterHardline:
 					total += 1;
-				case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner):
+				case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner):
 					// ω-force-flat-engine slice A: transparent to first-
 					// line walk. All four markers are render-time state; the
 					// static first-line probe sees only structural width.
@@ -1555,7 +1573,7 @@ class Renderer {
 						case OptSpaceSkipAfterHardline: total += 1;
 						case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
 							aborted2 = true;
-						case Flatten(innerDoc) | WrapBoundary(innerDoc) | HardFlatten(innerDoc) | CollapseProbe(innerDoc):
+						case Flatten(innerDoc) | WrapBoundary(innerDoc) | HardFlatten(innerDoc) | CollapseProbe(innerDoc) | CollapseAddProbe(innerDoc):
 							inner.push({doc: innerDoc, mode: nd.mode});
 						case ConditionalMarkerZero(innerDoc):
 							// ω-cond-indent-policy FixedZero: render-time marker,
@@ -1720,12 +1738,12 @@ class Renderer {
 					// preserved, forceFlat=false so a nested wrap-cascade's
 					// Groups re-evaluate their own fit and may break.
 					stack.push({doc: inner, indent: node.indent, mode: node.mode, forceFlat: false});
-				case CollapseProbe(inner):
-					// ω-collapse-probe: transparent pass-through. The marker has
-					// no force-flat effect — descend `inner` preserving the
-					// frame's mode and forceFlat (inert for this measurer; the
-					// `IfNaturalFirstLineExceeds` consumer's flatDoc never
-					// contains a CollapseProbe).
+				case CollapseProbe(inner) | CollapseAddProbe(inner):
+					// ω-collapse-probe / ω-unwrap-add-ops: transparent pass-through.
+					// Neither marker has a force-flat effect — descend `inner`
+					// preserving the frame's mode and forceFlat (inert for this
+					// measurer; the `IfNaturalFirstLineExceeds` consumer's flatDoc
+					// never contains a collapse probe).
 					stack.push({doc: inner, indent: node.indent, mode: node.mode, forceFlat: node.forceFlat});
 				case ConditionalMarkerZero(inner):
 					// ω-cond-indent-policy FixedZero: render-time marker,
@@ -1885,10 +1903,10 @@ class Renderer {
 					// preserved, forceFlat=false so a nested wrap-cascade's
 					// Groups re-evaluate their own fit and may break.
 					stack.push({doc: inner, indent: node.indent, mode: node.mode, forceFlat: false});
-				case CollapseProbe(inner):
+				case CollapseProbe(inner) | CollapseAddProbe(inner):
 					// Transparent pass-through (mirror the width probe): descend
 					// `inner` preserving mode + forceFlat. Inert for this
-					// measurer — emitCondition's flatShape carries no CollapseProbe.
+					// measurer — emitCondition's flatShape carries no collapse probe.
 					stack.push({doc: inner, indent: node.indent, mode: node.mode, forceFlat: node.forceFlat});
 				case ConditionalMarkerZero(inner):
 					// ω-cond-indent-policy FixedZero: render-time marker,
@@ -2013,7 +2031,7 @@ class Renderer {
 						total += 1;
 					case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
 						aborted = true;
-					case Flatten(innerDoc) | WrapBoundary(innerDoc) | HardFlatten(innerDoc) | CollapseProbe(innerDoc):
+					case Flatten(innerDoc) | WrapBoundary(innerDoc) | HardFlatten(innerDoc) | CollapseProbe(innerDoc) | CollapseAddProbe(innerDoc):
 						// ω-force-flat-engine slice A: pass-through. The
 						// rest-of-stack probe measures structural width;
 						// force-flat markers add no width.
@@ -2113,7 +2131,7 @@ class Renderer {
 						total += 1;
 					case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
 						aborted = true;
-					case Flatten(innerDoc) | WrapBoundary(innerDoc) | HardFlatten(innerDoc) | CollapseProbe(innerDoc):
+					case Flatten(innerDoc) | WrapBoundary(innerDoc) | HardFlatten(innerDoc) | CollapseProbe(innerDoc) | CollapseAddProbe(innerDoc):
 						// ω-force-flat-engine slice A: pass-through. Sister
 						// of the `flatTokenWidthOfRestStack` arm.
 						inner.push({doc: innerDoc, mode: node.mode});

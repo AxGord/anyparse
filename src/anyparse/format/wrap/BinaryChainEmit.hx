@@ -223,6 +223,21 @@ final class BinaryChainEmit {
 				return WrapBoundary(IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, shapeAt(flat),
 					shape(NoWrap, flat.location, items, ops, cols, sourceBreakBefore, headBreak)));
 			if (sameRule(flat, brk)) return WrapBoundary(shapeAt(flat));
+			// ω-unwrap-add-ops (inverse CollapsePass): for a pure opAddSub
+			// chain (`+`/`-` only) whose broken shape differs from its flat
+			// (NoWrap-glued) shape, TAG the broken branch with
+			// `CollapseAddProbe`. The marker is render-transparent (byte-inert
+			// on its own); it lets `CollapsePass` recognise this `Group(IfBreak)`
+			// as an inner add-chain and, ONLY when an enclosing op-chain
+			// committed to its broken form, collapse this IfBreak to its `flat`
+			// (NoWrap) branch — gluing the `+`/`-` separators while leaving each
+			// operand's OWN wrapping intact (a ternary / call operand still
+			// breaks via its own Group). Mirrors fork `unwrapAddOps`, which
+			// strips `+`/`-` line-ends inside a wrapped region without touching
+			// inner ternary/call breaks. opBool / ternary chains are NOT tagged
+			// (fork never `unwrapAddOps` them).
+			if (isAddSubOps(ops))
+				return WrapBoundary(Group(IfBreak(CollapseAddProbe(shapeAt(brk)), shapeAt(flat))));
 			return WrapBoundary(Group(IfBreak(shapeAt(brk), shapeAt(flat))));
 		}
 
@@ -336,6 +351,22 @@ final class BinaryChainEmit {
 	}
 
 	/**
+	 * True iff every operator is an opAddSub chain operator (`+` / `-`) —
+	 * i.e. NOT an opBool (`&&`/`||`) or a ternary (`?`/`:`). Drives the
+	 * ω-unwrap-add-ops `CollapseAddProbe` marker: only a pure opAddSub
+	 * chain's broken shape is wrapped, so `CollapsePass` collapses ONLY
+	 * inner `+`/`-` chains (mirror fork `unwrapAddOps`, which strips ONLY
+	 * `Binop(OpAdd)` / `Binop(OpSub)` line-ends, never `&&`/`||`).
+	 */
+	private static function isAddSubOps(ops:Array<String>):Bool {
+		for (o in ops) switch o {
+			case '+' | '-':
+			case _: return false;
+		}
+		return ops.length > 0;
+	}
+
+	/**
 	 * True iff the FIRST operand's rendered first token is an open
 	 * delimiter (`(` / `[` / `{`) — i.e. operand-1 is itself a
 	 * paren-expression / array / object literal that leads with an open
@@ -362,7 +393,7 @@ final class BinaryChainEmit {
 				}
 				hit;
 			case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i)
-					| Flatten(i) | HardFlatten(i) | CollapseProbe(i) | WrapBoundary(i)
+					| Flatten(i) | HardFlatten(i) | CollapseProbe(i) | CollapseAddProbe(i) | WrapBoundary(i)
 					| ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
 				leadingOperandOpensDelim(i);
 			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat)

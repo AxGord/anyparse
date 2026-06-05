@@ -512,6 +512,40 @@ enum Doc {
 	CollapseProbe(inner:Doc);
 
 	/**
+	 * Inner-opAddSub-chain collapse-candidate marker (ω-unwrap-add-ops /
+	 * inverse-direction CollapsePass increment). Wraps the BROKEN (`brk`)
+	 * shape of an opAddSub chain's own `IfBreak(brk, flat)` pivot — the
+	 * marker is therefore rendered ONLY when that inner chain commits to
+	 * its broken form (its enclosing `IfBreak` picked `brk`).
+	 *
+	 * Sister of `CollapseProbe` but the INVERSE direction: where
+	 * `CollapseProbe` lets an expression paren OPEN and glue the enclosing
+	 * chain, `CollapseAddProbe` lets an INNER opAddSub chain COLLAPSE its
+	 * `+`/`-` breaks (HardFlatten) when it sits inside an OUTER op-chain
+	 * (opBool / opAddSub) that committed to its own broken shape. This is
+	 * the anyparse analogue of haxe-formatter's `unwrapAddOps`
+	 * (MarkWrapping.hx:4139): once a surrounding region wraps, the inner
+	 * `Binop(OpAdd)` / `Binop(OpSub)` line-ends are stripped
+	 * UNCONDITIONALLY so the add-chain rides one continuation line.
+	 *
+	 * Purely render-transparent — the renderer pushes `inner` with the
+	 * enclosing frame's mode and force-flat flags UNCHANGED (like
+	 * `CollapseProbe`), so it adds no layout effect of its own. In the
+	 * measure-only pass (`decisions != null`) the render dispatch records
+	 * whether the marker was reached in break mode (`crosses = f.mode ==
+	 * MBreak`) keyed by node identity; `CollapsePass` reads that decision
+	 * plus the enclosing-chain-broke fact and rewrites
+	 * `CollapseAddProbe(brk)` → `HardFlatten(brk)` (collapsing the inner
+	 * add-chain to one flat line) only inside a broken outer chain. Absent
+	 * any enclosing broken chain the marker is rewritten back to its bare
+	 * `inner` → byte-identical.
+	 *
+	 * Like `Flatten`/`WrapBoundary`/`HardFlatten`/`CollapseProbe`, all Doc
+	 * walkers treat it as a transparent pass-through (descend `inner`).
+	 */
+	CollapseAddProbe(inner:Doc);
+
+	/**
 	 * Conditional-compilation marker fixed-zero scope (ω-cond-indent-policy
 	 * FixedZero). Render-time-only: wraps the WHOLE `#if … #end` construct
 	 * Doc (kw + cond + body + `#else`/`#elseif` clauses + trail). While
