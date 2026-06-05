@@ -115,6 +115,7 @@ class D {
 			case IfFullLineExceeds(_, _, fl): flatten(fl);
 			case IfNaturalFirstLineExceeds(_, _, fl): flatten(fl);
 			case IfNaturalFirstLineFitsOpenDelim(_, _, fl): flatten(fl);
+			case IfArrowContinuationFits(_, _, _, _, fl): flatten(fl);
 			case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
 				final flatSep:Doc = flatten(sep);
 				Concat(intersperse([for (i in items) flatten(i)], flatSep));

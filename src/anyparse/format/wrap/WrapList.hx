@@ -825,7 +825,7 @@ class WrapList {
 					// Asymmetric BG semantic only applies to renderer-
 					// side rest-of-stack probe.
 					stack.push(flatDoc);
-				case IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc):
+				case IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc) | IfArrowContinuationFits(_, _, _, _, flatDoc):
 					// Mirror the flat siblings: forward to flat side. The
 					// natural-first-line decision is renderer-side; this
 					// static length walk sees the flat shape.
@@ -929,7 +929,7 @@ class WrapList {
 				node = brk;
 			case IfFullLineExceeds(_, brk, _):
 				node = brk;
-			case IfNaturalFirstLineExceeds(_, brk, _) | IfNaturalFirstLineFitsOpenDelim(_, brk, _):
+			case IfNaturalFirstLineExceeds(_, brk, _) | IfNaturalFirstLineFitsOpenDelim(_, brk, _) | IfArrowContinuationFits(_, _, _, brk, _):
 				// Break-side leading-edge walk: descend the break branch
 				// (mirrors the If*Exceeds siblings).
 				node = brk;
@@ -1016,7 +1016,8 @@ class WrapList {
 				node = inner;
 			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat)
 					| IfLineExceeds(_, _, flat) | IfFullLineExceeds(_, _, flat)
-					| IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat):
+					| IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat)
+					| IfArrowContinuationFits(_, _, _, _, flat):
 				node = flat;
 			case Concat(items):
 				final first:Null<Doc> = items.find(it -> !isLeadingTransparent(it));
@@ -1063,7 +1064,8 @@ class WrapList {
 				node = inner;
 			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat)
 					| IfLineExceeds(_, _, flat) | IfFullLineExceeds(_, _, flat)
-					| IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat):
+					| IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat)
+					| IfArrowContinuationFits(_, _, _, _, flat):
 				node = flat;
 			case Concat(items):
 				final last:Null<Doc> = findLastNonTrailingTransparent(items);
@@ -1182,6 +1184,37 @@ class WrapList {
 		if (items.length == 1 && isArrowBodyMarker(items[0]) && !arrowBodyIsBlock(items[0])
 				&& (mode == FillLine || (mode == FillLineWithLeadingBreak && arrowBodyBreaks(items[0]))))
 			return arrowBodyCloseParenShape(open, close, openInside, closeInside, items[0]);
+		// ω-inc5-cont sole-arrow head-glue on continuation OVERFLOW: a FLWLB sole-
+		// arrow whose body does NOT structurally break (single expression) but
+		// would OVERFLOW its continuation line. inc5 only glued the head for
+		// structurally-multiline bodies (`arrowBodyBreaks`); a single-expression
+		// body that fits one continuation line keeps the OPEN-paren shape
+		// (`f(\n\t(p) -> body\n)` — `paren_indent_call`, `condition_wrapping_nested`),
+		// but one that overflows must glue the arrow head to the open paren and
+		// break the body (`f((p) ->\n\tbody\n)` — `lambda_wrapped_after_single_arg_collapse`).
+		// The discriminator is a CONTINUATION-INDENT width probe: the arrow's flat
+		// `(params) -> body` measured at `f.indent + cols` (NOT the open-paren
+		// column). `IfArrowContinuationFits` re-bases the measure there; flatWidth
+		// is the arrow item's column-independent flat token width (>= 0 since the
+		// body has no structural hardline here). Mirrors fork
+		// `preferLambdaSignatureInlineOverWrap`.
+		// The arrow BODY must not be a top-level binary chain (opBool / opAddSub /
+		// ternary): such a body, when it overflows, is the fork's condition-chain
+		// case (`condition_wrapping_nested_with_opbool` — the C1 family deferred
+		// from inc5) where fork OPENS the paren and puts the arrow on its own
+		// continuation line regardless of width. Head-glue is fork-correct only
+		// for a single non-chain body (call / method chain).
+		if (mode == FillLineWithLeadingBreak && items.length == 1
+				&& isArrowBodyMarker(items[0]) && !arrowBodyIsBlock(items[0])
+				&& !arrowBodyBreaks(items[0])) {
+			final body:Null<Doc> = arrowBodyDoc(items[0]);
+			final arrowFlatWidth:Int = DocMeasure.flatTokenWidth(items[0]);
+			if (arrowFlatWidth >= 0 && body != null && !isTopLevelChain(body)) {
+				final glueShape:Doc = arrowBodyCloseParenShape(open, close, openInside, closeInside, items[0]);
+				final openShape:Doc = shapeFillLineWithLeadingBreak(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
+				return IfArrowContinuationFits(cols, arrowFlatWidth, lineWidth, glueShape, openShape);
+			}
+		}
 		// ω-callparam-single-arg-glue PROTOTYPE: a FLWLB call whose SOLE arg is a
 		// non-arrow head ending at an open delim (`new X(` / `f(`) keeps the outer
 		// open paren GLUED to that head iff the arg's natural first line both fits
@@ -1269,6 +1302,17 @@ class WrapList {
 			case WrapBoundary(IfLineExceeds(_, _, flatBody)): flatLength(flatBody) < 0;
 			case Concat(arr) if (arr.length > 0): arrowBodyBreaks(arr[arr.length - 1]);
 			case _: false;
+		};
+	}
+
+	// ω-inc5-cont: the arrow body's FLAT side (the marker's `flatBody`), or null
+	// if `item` is not a recognized arrow-body marker. Used to inspect the body
+	// shape (e.g. `isTopLevelChain`) when deciding head-glue.
+	private static function arrowBodyDoc(item:Doc):Null<Doc> {
+		return switch item {
+			case WrapBoundary(IfLineExceeds(_, _, flatBody)): flatBody;
+			case Concat(arr) if (arr.length > 0): arrowBodyDoc(arr[arr.length - 1]);
+			case _: null;
 		};
 	}
 
@@ -1886,6 +1930,7 @@ class WrapList {
 			case IfFullLineExceeds(_, _, _): false;
 			case IfNaturalFirstLineExceeds(_, _, _): false;
 			case IfNaturalFirstLineFitsOpenDelim(_, _, _): false;
+			case IfArrowContinuationFits(_, _, _, _, _): false;
 			case Concat(items):
 				for (it in items) {
 					if (hasLeadingHardline(it)) return true;
@@ -1946,7 +1991,8 @@ class WrapList {
 				case WrapBoundary(i): w(i, depth + 1);
 				case IfBreak(b, f) | IfWidthExceeds(_, b, f) | IfFirstLineExceeds(_, b, f)
 						| IfLineExceeds(_, b, f) | IfFullLineExceeds(_, b, f)
-						| IfNaturalFirstLineExceeds(_, b, f) | IfNaturalFirstLineFitsOpenDelim(_, b, f):
+						| IfNaturalFirstLineExceeds(_, b, f) | IfNaturalFirstLineFitsOpenDelim(_, b, f)
+						| IfArrowContinuationFits(_, _, _, b, f):
 					// Both branches of a chain cascade carry the same
 					// separators; walk only the break branch to avoid
 					// double-counting.

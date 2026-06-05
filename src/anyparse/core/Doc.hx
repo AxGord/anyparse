@@ -304,6 +304,30 @@ enum Doc {
 	 * render-time decision — all static Doc walkers forward to `flatDoc`.
 	 */
 	IfNaturalFirstLineFitsOpenDelim(n:Int, breakDoc:Doc, flatDoc:Doc);
+
+	/**
+	 * Sole-arrow call-arg head-glue decision (ω-inc5-cont). Renders `flatDoc`
+	 * (the OPEN-paren shape — `f(\n\t(params) -> body\n)`) iff the arrow's flat
+	 * `(params) -> body` would FIT on one continuation line measured AT THE
+	 * CONTINUATION INDENT `f.indent + extraIndent`, not the current pen column.
+	 * Otherwise renders `breakDoc` (the GLUE shape — `f((params) ->\n\tbody\n)`,
+	 * arrow head glued to the open paren, body broken).
+	 *
+	 * Distinct from every other `If*Exceeds`: the threshold is checked at the
+	 * NEXT-LINE continuation column (`f.indent + extraIndent`), because the
+	 * decision must be committed BEFORE the arrow head is emitted (at the open-
+	 * paren column) yet the relevant width is the body's own continuation line.
+	 * Mirrors fork `MarkWrapping.preferLambdaSignatureInlineOverWrap` — keep the
+	 * lambda signature inline on its own continuation line when it fits, else
+	 * pull the signature up onto the open-paren line and break the body. Pure
+	 * render-time decision — all static Doc walkers forward to `flatDoc`.
+	 *
+	 * `flatWidth` is the arrow item's FLAT token width, precomputed at lowering
+	 * (`DocMeasure.flatTokenWidth`) — column-independent, so no render-time
+	 * measurer call is needed; the arm just checks
+	 * `f.indent + extraIndent + flatWidth < n`.
+	 */
+	IfArrowContinuationFits(extraIndent:Int, flatWidth:Int, n:Int, breakDoc:Doc, flatDoc:Doc);
 	Fill(items:Array<Doc>, sep:Doc, ?tailReserve:Int);
 
 	/**

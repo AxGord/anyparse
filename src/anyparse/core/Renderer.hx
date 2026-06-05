@@ -835,6 +835,26 @@ class Renderer {
 						final pushMode:Mode = glue ? f.mode : MBreak;
 						stack.push(new Frame(f.indent, pushMode, glue ? flatDoc : breakDoc));
 					}
+				case IfArrowContinuationFits(extraIndent, flatWidth, n, breakDoc, flatDoc):
+					// ω-inc5-cont: render `flatDoc` (OPEN-paren shape, arrow on its
+					// own continuation line) iff the arrow's flat `(params) -> body`
+					// fits at the CONTINUATION indent `f.indent + extraIndent` — NOT
+					// the current pen column. The decision is committed here (at the
+					// open-paren column) but the relevant width is the body's own
+					// continuation line, so the probe re-bases the measure to a fresh
+					// line at `f.indent + extraIndent`. `flatWidth` is the arrow
+					// item's flat token width, precomputed at lowering (column-
+					// independent), so the arm needs no render-time measurer. Mirrors
+					// fork `preferLambdaSignatureInlineOverWrap`: keep the signature
+					// inline on the continuation when it fits, else pull it up onto
+					// the open-paren line and break the body.
+					if (f.forceFlat) {
+						stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
+					} else {
+						final contFits:Bool = (f.indent + extraIndent + flatWidth < n);
+						final pushMode:Mode = contFits ? f.mode : MBreak;
+						stack.push(new Frame(f.indent, pushMode, contFits ? flatDoc : breakDoc));
+					}
 				case Fill(items, sep, tailReserveOpt) | FillWithRestProbe(items, sep, tailReserveOpt):
 					// Paired arm: identical entry shape for both ctors. The
 					// rest-probe semantic lives in FillCont resumption (see
@@ -1072,7 +1092,7 @@ class Renderer {
 						inner.push({doc: innerDoc, mode: MFlat});
 					case IfBreak(_, fl) | IfWidthExceeds(_, _, fl) | IfFirstLineExceeds(_, _, fl)
 							| IfLineExceeds(_, _, fl) | IfFullLineExceeds(_, _, fl)
-							| IfNaturalFirstLineExceeds(_, _, fl) | IfNaturalFirstLineFitsOpenDelim(_, _, fl):
+							| IfNaturalFirstLineExceeds(_, _, fl) | IfNaturalFirstLineFitsOpenDelim(_, _, fl) | IfArrowContinuationFits(_, _, _, _, fl):
 						inner.push({doc: fl, mode: MFlat});
 					case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
 						var k:Int = items.length;
@@ -1124,7 +1144,8 @@ class Renderer {
 				case IfBreak(brk, fl) | IfWidthExceeds(_, brk, fl)
 						| IfFirstLineExceeds(_, brk, fl) | IfLineExceeds(_, brk, fl)
 						| IfFullLineExceeds(_, brk, fl) | IfNaturalFirstLineExceeds(_, brk, fl)
-						| IfNaturalFirstLineFitsOpenDelim(_, brk, fl):
+						| IfNaturalFirstLineFitsOpenDelim(_, brk, fl)
+						| IfArrowContinuationFits(_, _, _, brk, fl):
 					stack.push(brk);
 					stack.push(fl);
 				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
@@ -1289,7 +1310,7 @@ class Renderer {
 					// is a render-time decision. `fitsFlat` sees only
 					// the flat shape (slice ω-iffulllineexceeds-primitive).
 					local.push(new Frame(f.indent, MFlat, flatDoc));
-				case IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc):
+				case IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc) | IfArrowContinuationFits(_, _, _, _, flatDoc):
 					// Mirror the flat siblings: the natural-first-line
 					// probe is a render-time decision, transparent to an
 					// enclosing Group's `fitsFlat` measurement — which
@@ -1410,7 +1431,7 @@ class Renderer {
 					stack.push(flatDoc);
 				case IfFullLineExceeds(_, _, flatDoc):
 					stack.push(flatDoc);
-				case IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc):
+				case IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc) | IfArrowContinuationFits(_, _, _, _, flatDoc):
 					// Forward to flat side: the natural-first-line probe
 					// is a render-time decision; this static flat walk
 					// (the flat-side measurer of the sibling
@@ -1521,7 +1542,7 @@ class Renderer {
 						case IfBreak(_, fl): inner.push({doc: fl, mode: MFlat});
 						case IfWidthExceeds(_, _, fl) | IfFirstLineExceeds(_, _, fl)
 								| IfLineExceeds(_, _, fl) | IfFullLineExceeds(_, _, fl)
-								| IfNaturalFirstLineExceeds(_, _, fl) | IfNaturalFirstLineFitsOpenDelim(_, _, fl):
+								| IfNaturalFirstLineExceeds(_, _, fl) | IfNaturalFirstLineFitsOpenDelim(_, _, fl) | IfArrowContinuationFits(_, _, _, _, fl):
 							inner.push({doc: fl, mode: MFlat});
 						case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
 							var k = items.length;
@@ -1661,7 +1682,7 @@ class Renderer {
 						final crosses:Bool = (naturalFirstLineWidth(flatDoc, col, node.indent, width) >= nn);
 						stack.push({doc: crosses ? breakDoc : flatDoc, indent: node.indent, mode: crosses ? MBreak : node.mode, forceFlat: false});
 					}
-				case IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc):
+				case IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc) | IfArrowContinuationFits(_, _, _, _, flatDoc):
 					// Forward to flatDoc: a nested cond-paren-glue probe's own
 					// decision is render-time. This static natural-first-line
 					// measurer sees the flat (glued) side — the canonical
@@ -1831,7 +1852,7 @@ class Renderer {
 						final crosses:Bool = (naturalFirstLineWidth(flatDoc, col, node.indent, width) >= nn);
 						stack.push({doc: crosses ? breakDoc : flatDoc, indent: node.indent, mode: crosses ? MBreak : node.mode, forceFlat: false});
 					}
-				case IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc):
+				case IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc) | IfArrowContinuationFits(_, _, _, _, flatDoc):
 					// Forward to flatDoc: a nested cond-paren-glue probe's own
 					// decision is render-time. This natural-first-line gluable
 					// walk sees the flat (glued) side — the canonical consumer
@@ -1974,7 +1995,7 @@ class Renderer {
 						inner.push({doc: flatDoc, mode: MFlat});
 					case IfFullLineExceeds(_, _, flatDoc):
 						inner.push({doc: flatDoc, mode: MFlat});
-					case IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc):
+					case IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc) | IfArrowContinuationFits(_, _, _, _, flatDoc):
 						// Forward to flat side: the natural-first-line
 						// probe is a render-time decision; this static
 						// rest-of-stack walk sees only the flat shape.
@@ -2074,7 +2095,7 @@ class Renderer {
 						inner.push({doc: flatDoc, mode: MFlat});
 					case IfFullLineExceeds(_, _, flatDoc):
 						inner.push({doc: flatDoc, mode: MFlat});
-					case IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc):
+					case IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc) | IfArrowContinuationFits(_, _, _, _, flatDoc):
 						// Forward to flat side: the natural-first-line
 						// probe is a render-time decision; this static
 						// rest-of-stack walk sees only the flat shape.

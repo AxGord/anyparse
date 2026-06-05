@@ -259,7 +259,8 @@ final class CollapsePass {
 				case IfBreak(brk, fl) | IfWidthExceeds(_, brk, fl)
 						| IfFirstLineExceeds(_, brk, fl) | IfLineExceeds(_, brk, fl)
 						| IfFullLineExceeds(_, brk, fl) | IfNaturalFirstLineExceeds(_, brk, fl)
-						| IfNaturalFirstLineFitsOpenDelim(_, brk, fl):
+						| IfNaturalFirstLineFitsOpenDelim(_, brk, fl)
+						| IfArrowContinuationFits(_, _, _, brk, fl):
 					stack.push(brk);
 					stack.push(fl);
 				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
@@ -298,6 +299,7 @@ final class CollapsePass {
 			case IfFullLineExceeds(n, brk, fl): IfFullLineExceeds(n, f(brk), f(fl));
 			case IfNaturalFirstLineExceeds(n, brk, fl): IfNaturalFirstLineExceeds(n, f(brk), f(fl));
 			case IfNaturalFirstLineFitsOpenDelim(n, brk, fl): IfNaturalFirstLineFitsOpenDelim(n, f(brk), f(fl));
+			case IfArrowContinuationFits(ei, fw, n, brk, fl): IfArrowContinuationFits(ei, fw, n, f(brk), f(fl));
 			case Fill(items, sep, tr): Fill([for (it in items) f(it)], f(sep), tr);
 			case FillWithRestProbe(items, sep, tr): FillWithRestProbe([for (it in items) f(it)], f(sep), tr);
 		};
