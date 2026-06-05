@@ -343,6 +343,13 @@ final class Cli {
 				stderr('apq self-status: requires a sys target (filesystem walk)\n');
 				return EXIT_USAGE;
 				#end
+			case 'source':
+				#if (sys || nodejs)
+				return runSource(rest);
+				#else
+				stderr('apq source: requires a sys target (file read)\n');
+				return EXIT_USAGE;
+				#end
 			case _:
 				stderr('apq: unknown subcommand "$cmd"\n');
 				printUsage();
@@ -604,15 +611,26 @@ final class Cli {
 			i++;
 		}
 
-		// Positional grammar: [<annotation>] <file-or-dir-or-glob>...
+		// Positional grammar: [<annotation>[(<arg>)]] <file-or-dir-or-glob>...
 		// The annotation, when present, is the leading positional and is
 		// recognised by its `@` sigil (Haxe annotations always start with
 		// `@`; file/dir/glob specs never do) — this disambiguates without
 		// a positional-count cap, so multiple input specs are accepted.
 		// With `--on` the annotation may be omitted entirely.
-		final annotation:Null<String> = positionals.length > 0 && StringTools.startsWith(positionals[0], '@')
+		//
+		// The annotation may carry an inline arg filter `@:tag(arg)` — the
+		// trailing `(...)` is split off the tag here. `argFilter` keeps only
+		// hits whose meta has a TOP-LEVEL argument that is either the bare
+		// ident `arg` OR a call `arg(...)` (callee match), the precise
+		// counterpart to the `--arg-contains` substring scan. `@:fmt` is the
+		// driving case (`@:fmt(propagateExprPosition)`), but the split is
+		// tag-agnostic. `@:tag` with no `(...)` leaves the tag untouched and
+		// `argFilter` null (the historical no-arg behaviour).
+		final rawAnnotation:Null<String> = positionals.length > 0 && StringTools.startsWith(positionals[0], '@')
 			? positionals[0] : null;
-		final inputSpecs:Array<String> = annotation != null ? positionals.slice(1) : positionals.copy();
+		final annotation:Null<String> = rawAnnotation != null ? annotationTag(rawAnnotation) : null;
+		final argFilter:Null<String> = rawAnnotation != null ? annotationArgFilter(rawAnnotation) : null;
+		final inputSpecs:Array<String> = rawAnnotation != null ? positionals.slice(1) : positionals.copy();
 		if (inputSpecs.length == 0) {
 			stderr('apq meta: missing <file-or-dir-or-glob> argument\n');
 			printMetaUsage();
@@ -650,6 +668,7 @@ final class Cli {
 			final filtered:Array<MetaHit> = raw.filter(h ->
 				(annotation == null || h.annotation == annotation)
 				&& argMatches(h.args, argContains)
+				&& argFilterMatches(h.args, argFilter)
 				&& (onKind == null || h.declKind == onKind));
 			if (filtered.length == 0) continue;
 			allEntries.push({file: path, source: source, hits: filtered});
@@ -2551,6 +2570,51 @@ final class Cli {
 		if (sub == null) return true;
 		final needle:String = sub;
 		for (a in args) if (a.indexOf(needle) >= 0) return true;
+		return false;
+	}
+
+	/**
+	 * Split the tag off an `@:tag(arg)` annotation positional. Returns the
+	 * leading `@:tag` (trimmed, sans any `(...)` suffix); the historical
+	 * bare `@:tag` form passes through unchanged.
+	 */
+	private static function annotationTag(annotation:String):String {
+		final parenIdx:Int = annotation.indexOf('(');
+		return StringTools.trim(parenIdx < 0 ? annotation : annotation.substring(0, parenIdx));
+	}
+
+	/**
+	 * Extract the inline arg filter from an `@:tag(arg)` annotation
+	 * positional — the text between the first `(` and the matching last
+	 * `)`, trimmed. Returns `null` when the annotation has no `(...)`
+	 * suffix (no arg filter) or when the parens are empty.
+	 */
+	private static function annotationArgFilter(annotation:String):Null<String> {
+		final parenIdx:Int = annotation.indexOf('(');
+		if (parenIdx < 0) return null;
+		final closeIdx:Int = annotation.lastIndexOf(')');
+		final raw:String = closeIdx > parenIdx ? annotation.substring(parenIdx + 1, closeIdx) : '';
+		final trimmed:String = StringTools.trim(raw);
+		return trimmed.length == 0 ? null : trimmed;
+	}
+
+	/**
+	 * Precise inline arg filter (`@:tag(arg)`): keep a hit only when one of
+	 * its TOP-LEVEL meta args is either the bare ident `arg` OR a call
+	 * `arg(...)` (callee match). This is the structural counterpart to the
+	 * `--arg-contains` substring scan — `propagateExprPosition` matches a
+	 * `propagateExprPosition` arg but NOT a `myPropagateExprPositionExtra`
+	 * one. `filter == null` is "no inline arg filter" (every hit passes).
+	 */
+	private static function argFilterMatches(args:Array<String>, filter:Null<String>):Bool {
+		if (filter == null) return true;
+		final needle:String = filter;
+		for (a in args) {
+			final arg:String = StringTools.trim(a);
+			if (arg == needle) return true;
+			if (StringTools.startsWith(arg, '$needle('))
+				return true;
+		}
 		return false;
 	}
 
@@ -5567,6 +5631,143 @@ final class Cli {
 		sysPrint('  -h, --help     Show this help.\n');
 	}
 
+	#if (sys || nodejs)
+	/**
+	 * `apq source <file> [--range SPEC] [--number]` — emit a file's RAW
+	 * verbatim lines with NO AST parse, so it works on ANY file (parseable
+	 * or skip-parse). Default output is unprefixed lines — directly usable
+	 * for anchoring an Edit — replacing the `git show … > /tmp/.txt` /
+	 * `node readFileSync` dance (the Read tool fabricates `.hx` past the
+	 * first lines; cat/sed/grep are gated; this hxq subcommand is allowed).
+	 *
+	 * `--range SPEC` is 1-based inclusive: `L` (single line), `L:L2`
+	 * (range), `L:` (L to EOF), `:L2` (start to L2). Out-of-range bounds
+	 * clamp to the file (friendly, no crash). `--number` / `-n` switches to
+	 * `cat -n`-style `<lineno>\t<line>` output for navigation.
+	 */
+	private static function runSource(args:Array<String>):Int {
+		var range:Null<String> = null;
+		var number:Bool = false;
+		var file:Null<String> = null;
+
+		var i:Int = 0;
+		while (i < args.length) {
+			final a:String = args[i];
+			switch a {
+				case '--range':
+					range = expectValue(args, ++i, '--range');
+				case '--number', '-n':
+					number = true;
+				// The hxq shim auto-injects `--lang haxe`; `source` does no
+				// parsing, so accept and ignore it (1 value consumed).
+				case '--lang':
+					expectValue(args, ++i, '--lang');
+				case '-h', '--help':
+					printSourceUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq source: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (file != null) {
+						stderr('apq source: only one file argument supported (got "$file" and "$a")\n');
+						return EXIT_USAGE;
+					}
+					file = a;
+			}
+			i++;
+		}
+
+		if (file == null) {
+			stderr('apq source: missing <file> argument\n');
+			printSourceUsage();
+			return EXIT_USAGE;
+		}
+		final path:String = file;
+		if (!FileSystem.exists(path)) {
+			stderr('apq source: no such file "$path"\n');
+			return EXIT_RUNTIME;
+		}
+		if (FileSystem.isDirectory(path)) {
+			stderr('apq source: "$path" is a directory (source views one file)\n');
+			return EXIT_RUNTIME;
+		}
+
+		final content:String = readFile(path);
+		// Split on `\n` so a trailing newline does not synthesise a spurious
+		// empty final line — the standard "lines = N+1 splits, last empty"
+		// is dropped to keep line numbers aligned with an editor's view.
+		final lines:Array<String> = content.split('\n');
+		if (lines.length > 0 && lines[lines.length - 1] == '') lines.pop();
+
+		final bounds:Null<{from:Int, to:Int}> = parseRangeSpec(range, lines.length);
+		if (bounds == null) {
+			stderr('apq source: bad --range "$range" (use L, L:L2, L:, or :L2 — 1-based)\n');
+			return EXIT_USAGE;
+		}
+
+		final buf:StringBuf = new StringBuf();
+		for (n in bounds.from...bounds.to + 1) {
+			final line:String = lines[n - 1];
+			if (number) buf.add('$n\t');
+			buf.add(line);
+			buf.add('\n');
+		}
+		sysPrint(buf.toString());
+		return EXIT_OK;
+	}
+
+	/**
+	 * Parse a `source --range` spec into a 1-based inclusive `{from, to}`
+	 * line pair, clamped to `[1, lineCount]`. Forms: `null`/`""` → whole
+	 * file; `L` → single line; `L:L2` → range; `L:` → L to EOF; `:L2` →
+	 * start to L2. Returns `null` on a malformed spec (non-int part, or an
+	 * inverted range after clamping). An empty file (`lineCount == 0`)
+	 * yields an empty `{1, 0}` range so the caller prints nothing.
+	 */
+	private static function parseRangeSpec(spec:Null<String>, lineCount:Int):Null<{from:Int, to:Int}> {
+		if (lineCount == 0) return {from: 1, to: 0};
+		if (spec == null || spec.length == 0) return {from: 1, to: lineCount};
+		final colon:Int = spec.indexOf(':');
+		if (colon < 0) {
+			final single:Null<Int> = Std.parseInt(spec);
+			if (single == null) return null;
+			final clamped:Int = clampLine(single, lineCount);
+			return {from: clamped, to: clamped};
+		}
+		final loStr:String = spec.substring(0, colon);
+		final hiStr:String = spec.substring(colon + 1);
+		final lo:Null<Int> = loStr.length == 0 ? 1 : Std.parseInt(loStr);
+		final hi:Null<Int> = hiStr.length == 0 ? lineCount : Std.parseInt(hiStr);
+		if (lo == null || hi == null) return null;
+		final from:Int = clampLine(lo, lineCount);
+		final to:Int = clampLine(hi, lineCount);
+		if (from > to) return null;
+		return {from: from, to: to};
+	}
+
+	/** Clamp a 1-based line number into `[1, lineCount]`. */
+	private static inline function clampLine(n:Int, lineCount:Int):Int {
+		return n < 1 ? 1 : (n > lineCount ? lineCount : n);
+	}
+
+	private static function printSourceUsage():Void {
+		sysPrint('Usage: apq source [options] <file>\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --range <spec>  1-based inclusive lines: L | L:L2 | L: | :L2 (default: whole file)\n');
+		sysPrint('  --number, -n    Prefix each line with `<lineno>\\t` (cat -n style; default: raw)\n');
+		sysPrint('  -h, --help      Show this help\n');
+		sysPrint('\n');
+		sysPrint('Emits RAW verbatim lines of <file> with NO AST parse — works on any\n');
+		sysPrint('file (parseable or skip-parse). Default (raw, no prefix) output is\n');
+		sysPrint('directly usable for Edit-anchoring; out-of-range bounds clamp to the\n');
+		sysPrint('file. The gate-blessed replacement for `git show`/`readFileSync` to\n');
+		sysPrint('view verbatim `.hx` bytes.\n');
+	}
+	#end
+
 	/**
 	 * Pure parser over a utest stdout transcript. Exposed for unit tests so
 	 * the structured result (counts + first-failure locus) can be asserted
@@ -5992,6 +6193,7 @@ final class Cli {
 		sysPrint('  sweep         Read corpus sweep snapshot totals + Δ vs prior\n');
 		sysPrint('  test-summary  Parse utest stdout transcript into tests/assertions/failures\n');
 		sysPrint('  self-status   List .hx files the grammar plugin cannot parse (dogfood gap)\n');
+		sysPrint('  source        Emit RAW verbatim file lines (no parse; --range L:L2)\n');
 		sysPrint('\n');
 		sysPrint('Global options:\n');
 		sysPrint('  --lang <name>   Pick grammar plugin (default: haxe)\n');
@@ -6132,10 +6334,10 @@ final class Cli {
 	}
 
 	private static function printMetaUsage():Void {
-		sysPrint('Usage: apq meta [<annotation>] [options] <file-or-dir-or-glob>...\n');
+		sysPrint('Usage: apq meta [<annotation>[(<arg>)]] [options] <file-or-dir-or-glob>...\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
-		sysPrint('  --arg-contains <s>  Keep hits whose argument list contains <s>\n');
+		sysPrint('  --arg-contains <s>  Keep hits whose argument list contains <s> (substring)\n');
 		sysPrint('  --on <decl-kind>    Keep hits attached to the given decl kind\n');
 		sysPrint('  --flat              Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
 		sysPrint('  --limit <n>         Stop after n hits total (default: no limit)\n');
@@ -6144,6 +6346,11 @@ final class Cli {
 		sysPrint('<annotation> is the target language source syntax (e.g. `@:foo`),\n');
 		sysPrint('recognised by its leading `@`. Omit it with `--on` to list every\n');
 		sysPrint('annotation on a decl kind.\n');
+		sysPrint('\n');
+		sysPrint('Inline arg filter `@:tag(arg)` keeps only hits whose meta has a\n');
+		sysPrint('top-level argument that is the bare ident `arg` OR a call `arg(...)`\n');
+		sysPrint('(callee match) — e.g. `apq meta \'@:fmt(propagateExprPosition)\' src/`.\n');
+		sysPrint('Unlike --arg-contains (substring), the inline form is exact per arg.\n');
 	}
 
 	private static function printAstUsage():Void {
