@@ -75,21 +75,24 @@ final class CollapsePass {
 		final hasAddProbe:Bool = hasAddCandidate(doc);
 		if (!hasParenProbe && !hasAddProbe) return doc;
 
-		final decisions:Array<{node:Doc, crosses:Bool}> = [];
+		final decisions:Array<{node:Doc, crosses:Bool, ?indent:Int}> = [];
 		// Measure-only render: populates `decisions` at every
 		// `IfFullLineExceeds` (forward) AND every reached `CollapseAddProbe`
-		// (inverse — recorded `crosses = reached-in-break-mode`). The returned
-		// string is discarded.
+		// (inverse — recorded `crosses = reached-in-break-mode`, plus `indent`
+		// = the add-tail's continuation column for the head-break re-measure).
+		// The returned string is discarded.
 		Renderer.render(doc, width, indentChar, tabWidth, indentSize, '\n', false, false, -1, decisions);
 
 		// ONE top-down rewrite over the ORIGINAL `doc` (so every decision —
 		// `IfFullLineExceeds` forward, `CollapseAddProbe` inverse — is keyed by
 		// the node identity the measure render saw). The walk threads
 		// `insideBroken` for the inverse direction (outer-add-chain-broke ⇒
-		// inner-add-chain-collapse). A separate second pass would rebuild the
-		// tree and lose the other direction's node identities, so both are
-		// resolved in this single pass.
-		return rewrite(doc, decisions, false);
+		// inner-add-chain-collapse) and `width` for the head-break re-measure
+		// (does the glued-flat add-tail fit at its captured continuation
+		// indent). A separate second pass would rebuild the tree and lose the
+		// other direction's node identities, so both are resolved in this
+		// single pass.
+		return rewrite(doc, decisions, false, width);
 	}
 
 	/**
@@ -100,6 +103,19 @@ final class CollapsePass {
 	 *    (NoWrap-glued-separators) branch; the outermost broken add-chain
 	 *    keeps its IfBreak but marks its broken branch `insideBroken` so
 	 *    nested add-chains collapse. See `rewriteTaggedAddChain`.
+	 *  - HEAD-BREAK (ω-opadd-head-break-remeasure): a tagged opAddSub chain
+	 *    NOT inside a broken outer add-chain (its enclosing context is an
+	 *    opBool / compare op, e.g. `… && <head> + a + b > …`) whose FillLine
+	 *    `brk` over-packs operand 2 onto the head line. When the chain broke
+	 *    and the glued-flat tail (`+ a + b`) fits at its captured continuation
+	 *    indent, commit to a break-AFTER-HEAD shape (head on its own line, the
+	 *    rest of the chain glued flat on the continuation). See
+	 *    `rewriteTaggedAddChain`.
+	 *  - COMPARE-OP-GLUE (ω-opadd-head-break-remeasure leg 2): a never-wrap-
+	 *    marked compare/multiplicative operator Group whose LEFT operand is a
+	 *    head-break-committing add-chain keeps the operator glued to the now-
+	 *    flat add-tail (`… + a + b > limit`) instead of breaking onto its own
+	 *    line. See `compareOpGluedToHeadBreak`.
 	 *  - FORWARD: an enclosing op-chain whose `flat` (NoWrap/glued) branch
 	 *    contains a candidate paren that opens → commit chain to glued +
 	 *    commit the inner paren.
@@ -108,7 +124,7 @@ final class CollapsePass {
 	 *  - Everything else → rebuild structurally, recursing into children
 	 *    (threading `insideBroken`).
 	 */
-	private static function rewrite(d:Doc, decisions:Array<{node:Doc, crosses:Bool}>, insideBroken:Bool):Doc {
+	private static function rewrite(d:Doc, decisions:Array<{node:Doc, crosses:Bool, ?indent:Int}>, insideBroken:Bool, width:Int):Doc {
 		// FORWARD direction takes precedence: when the chain's flat (glued)
 		// branch contains a candidate paren that WOULD open, commit the chain
 		// to its glued shape (fork `collapseChainBreaksAfter`) via
@@ -122,22 +138,34 @@ final class CollapsePass {
 		final glued:Null<Doc> = chainGluedIfOpens(d, decisions);
 		if (glued != null) return WrapBoundary(commitOpens(glued, decisions));
 
-		// INVERSE direction (ω-unwrap-add-ops): a tagged opAddSub chain that is
-		// NOT a forward-glue candidate. Its helper decides collapse-vs-keep from
-		// `insideBroken` + the chain's break decision and recurses through
-		// `rewrite` so the forward paren-collapse still applies to inner parens.
+		// COMPARE-OP-GLUE (leg 2): a never-wrap-marked binary operator Group
+		// `Group(Concat([<head-break add-chain>, Nest(cols, [Line, op, right])]))`
+		// whose left operand commits to the head-break shape — keep the
+		// operator glued to the flat add-tail. Detected at the PARENT (the
+		// add-chain itself is descended via `commitHeadBreak` inside the
+		// helper). Returns null when the shape / commit does not apply, so the
+		// common path stays byte-inert.
+		final compareGlued:Null<Doc> = compareOpGluedToHeadBreak(d, decisions, width);
+		if (compareGlued != null) return compareGlued;
+
+		// INVERSE / HEAD-BREAK direction: a tagged opAddSub chain that is NOT a
+		// forward-glue candidate and not the left operand of a compare-op glue
+		// (handled above). Its helper decides collapse / head-break / keep from
+		// `insideBroken` + the chain's break decision + the captured continuation
+		// indent, and recurses through `rewrite` so the forward paren-collapse
+		// still applies to inner parens.
 		final tagged:Null<{marker:Doc, brk:Doc, flat:Doc}> = taggedAddChain(d);
-		if (tagged != null) return rewriteTaggedAddChain(tagged, decisions, insideBroken);
+		if (tagged != null) return rewriteTaggedAddChain(tagged, decisions, insideBroken, width);
 
 		// Standalone candidate paren that opens (no enclosing chain
 		// committed it): commit to the open branch directly.
 		switch d {
 			case IfFullLineExceeds(_, open, _) if (isCandidate(d) && opens(d, decisions)):
-				return rewrite(open, decisions, insideBroken);
+				return rewrite(open, decisions, insideBroken, width);
 			case _:
 		}
 
-		return mapChildren(d, child -> rewrite(child, decisions, insideBroken));
+		return mapChildren(d, child -> rewrite(child, decisions, insideBroken, width));
 	}
 
 	/**
@@ -158,33 +186,182 @@ final class CollapsePass {
 	 *    exactly fork's `unwrapAddOps`, which glues `+`/`-` without touching
 	 *    inner constructs. Recurse `flat` (back through `rewrite`) with
 	 *    `insideBroken` still true (fork strips nested add-ops recursively).
-	 *  - NOT `insideBroken` → an OUTER (outermost so far) add-chain: strip the
-	 *    now-consumed marker but keep the IfBreak (the chain decides
-	 *    break/flat itself at render). Recurse the broken branch with
-	 *    `insideBroken = broke` so nested add-chains collapse only when THIS
-	 *    chain actually broke; recurse `flat` with `insideBroken = false`.
-	 *    Byte-inert when the chain did not break (marker stripped, structure
-	 *    unchanged — and an un-stripped marker would render transparently
-	 *    anyway).
+	 *  - NOT `insideBroken` → an OUTER (outermost so far) add-chain. Two
+	 *    sub-cases:
+	 *     * HEAD-BREAK (ω-opadd-head-break-remeasure): the chain BROKE and its
+	 *       FillLine `brk` over-packs operand 2 onto the head line, but the
+	 *       glued-flat tail (`+ a + b`) fits at the captured continuation
+	 *       indent. The order-dependent re-measure: fork's opAdd first-line
+	 *       budget includes the unbroken `&&` / `if (` prefix (tighter), so the
+	 *       chain breaks after the FIRST operand (the call) and the rest rides
+	 *       the continuation FLAT. anyparse's bottom-up Fill over-packs because
+	 *       it measures after `&&` broke (looser budget). Commit to the
+	 *       break-after-head shape (`commitHeadBreak`) — head on its own line,
+	 *       tail glued flat at `indent`. The full-`flat` collapse is WRONG here
+	 *       (NoWrap `<call> + a + b` overflows); head-break keeps only the head
+	 *       on its line.
+	 *     * KEEP: not a head-break candidate — strip the now-consumed marker but
+	 *       keep the IfBreak (the chain decides break/flat itself at render).
+	 *       Recurse the broken branch with `insideBroken = broke` so nested
+	 *       add-chains collapse only when THIS chain actually broke; recurse
+	 *       `flat` with `insideBroken = false`. Byte-inert when the chain did
+	 *       not break (marker stripped, structure unchanged — and an un-stripped
+	 *       marker would render transparently anyway).
 	 *
 	 * Only opAddSub chains are tagged (`BinaryChainEmit` gates on
 	 * `isAddSubOps`). An enclosing opBool chain — which fork's `unwrapAddOps`
 	 * does NOT trigger from (it strips ONLY `+`/`-`) — is NOT tagged, so its
-	 * inner add-chains stay untouched (byte-inert). This is why
-	 * `opbool_reeval_strips_opadd_breaks` (an opBool-outer re-measure case
-	 * that would over-collapse to an overflowing single line) is NOT flipped.
+	 * inner add-chains stay untouched for the COLLAPSE direction. The HEAD-BREAK
+	 * direction, however, fires for an add-chain that itself broke regardless of
+	 * the enclosing class — exactly the opBool-outer re-measure case
+	 * `opbool_reeval_strips_opadd_breaks`.
 	 */
 	private static function rewriteTaggedAddChain(
 		tagged:{marker:Doc, brk:Doc, flat:Doc},
-		decisions:Array<{node:Doc, crosses:Bool}>, insideBroken:Bool
+		decisions:Array<{node:Doc, crosses:Bool, ?indent:Int}>, insideBroken:Bool, width:Int
 	):Doc {
 		if (insideBroken)
-			return WrapBoundary(rewrite(tagged.flat, decisions, true));
+			return WrapBoundary(rewrite(tagged.flat, decisions, true, width));
 		final broke:Bool = opens(tagged.marker, decisions);
+		// HEAD-BREAK re-measure: when the chain broke and the glued-flat tail
+		// fits at its captured continuation indent, commit to break-after-head.
+		final headBreak:Null<Doc> = broke ? commitHeadBreak(tagged, decisions, width) : null;
+		if (headBreak != null) return WrapBoundary(headBreak);
 		return WrapBoundary(Group(IfBreak(
-			rewrite(tagged.brk, decisions, broke),
-			rewrite(tagged.flat, decisions, false)
+			rewrite(tagged.brk, decisions, broke, width),
+			rewrite(tagged.flat, decisions, false, width)
 		)));
+	}
+
+	/**
+	 * ω-opadd-head-break-remeasure. If the tagged add-chain's broken `brk`
+	 * shape is the FillLine layout `Group(Nest(cols, Fill([head, tail…],
+	 * Line(' '))))` produced by `BinaryChainEmit.shapeFillLine` (BeforeLast)
+	 * AND the captured continuation indent + the glued-flat tail width fits in
+	 * `width`, return the break-after-head shape:
+	 *
+	 *   Concat([ head, Nest(cols, Concat([Line('\n'), gluedFlatTail])) ])
+	 *
+	 * where `head` is Fill item 0 (rewritten through `rewrite` so its own inner
+	 * parens / sub-chains still resolve) and `gluedFlatTail` is the remaining
+	 * Fill items joined by single spaces (each item already carries its leading
+	 * `op ` from `shapeFillLine`, so the join is a plain ` ` — `+ a` ` ` `+ b`
+	 * → `+ a + b`).
+	 *
+	 * Returns null when the brk is not the recognised FillLine shape, the chain
+	 * has < 2 tail operands, the continuation indent was not captured, or the
+	 * flat tail does not fit — every non-matching case falls through to the
+	 * legacy `Group(IfBreak)` (byte-inert).
+	 *
+	 * O(1) re-measure: `indent + DocMeasure.flatTokenWidth(gluedFlatTail)` —
+	 * column-independent flat width + the captured continuation column. No
+	 * recursive natural-first-line probe across the binary spine (mirror the
+	 * forward `collapseParenCommitsOpen` fit gate).
+	 */
+	private static function commitHeadBreak(
+		tagged:{marker:Doc, brk:Doc, flat:Doc},
+		decisions:Array<{node:Doc, crosses:Bool, ?indent:Int}>, width:Int
+	):Null<Doc> {
+		final fill:Null<{cols:Int, items:Array<Doc>}> = fillLineParts(tagged.brk);
+		if (fill == null || fill.items.length < 2) return null;
+		final indent:Null<Int> = capturedIndent(tagged.marker, decisions);
+		if (indent == null) return null;
+		final head:Doc = fill.items[0];
+		// Glue the tail operands (each already prefixed with `op `) by single
+		// spaces — the NoWrap continuation `+ a + b`.
+		final tailParts:Array<Doc> = [];
+		for (i in 1...fill.items.length) {
+			if (i > 1) tailParts.push(Text(' '));
+			tailParts.push(fill.items[i]);
+		}
+		final gluedTail:Doc = Concat(tailParts);
+		if (indent + DocMeasure.flatTokenWidth(gluedTail) > width) return null;
+		// Head keeps its own inner wrapping (the call may still break its args);
+		// the tail rides one continuation line at the chain's one-tab indent.
+		return Concat([
+			rewrite(head, decisions, false, width),
+			Nest(fill.cols, Concat([Line('\n'), gluedTail])),
+		]);
+	}
+
+	/**
+	 * Destructure the FillLine brk shape
+	 * `Group(Nest(cols, Fill(items, Line(' '), _)))` (BeforeLast) into its
+	 * Nest indent and the Fill operand array. Null when `d` is not that exact
+	 * shape — so a non-FillLine `brk` (OnePerLine / OnePerLineAfterFirst) is
+	 * not head-broken (those modes are not the over-pack case this targets).
+	 */
+	private static function fillLineParts(d:Doc):Null<{cols:Int, items:Array<Doc>}> {
+		return switch d {
+			case Group(Nest(cols, Fill(items, _, _))): {cols: cols, items: items};
+			case _: null;
+		};
+	}
+
+	/**
+	 * The captured continuation indent (column) for the add-chain marker, or
+	 * null when the measure pass did not record one (the marker was not reached
+	 * in break mode, or the decision predates the indent capture).
+	 */
+	private static function capturedIndent(marker:Doc, decisions:Array<{node:Doc, crosses:Bool, ?indent:Int}>):Null<Int> {
+		final entry:Null<{node:Doc, crosses:Bool, ?indent:Int}> = decisions.find(e -> e.node == marker && e.crosses);
+		return entry == null ? null : entry.indent;
+	}
+
+	/**
+	 * ω-opadd-head-break-remeasure leg 2 — compare-op glue. The generic
+	 * non-chain infix emit lays a never-wrap-marked operator (`>` / `<` / `*`
+	 * / `/` / compare / shift / bitwise / `is` / `??`) as
+	 *
+	 *   Group(Concat([ <left>, Nest(cols, Concat([Line(' '), Text('op '), <right>])) ]))
+	 *
+	 * — the soft `Line(' ')` breaks whenever `<left>` carries a committed
+	 * hardline. When `<left>` is an add-chain that commits to the head-break
+	 * shape (head on one line, `+ a + b` flat on the continuation), the fork
+	 * keeps the never-wrap-marked operator GLUED to the flat add-tail
+	 * (`+ a + b > limit`) — the operator is never a wrap-point. Rewrite the
+	 * Group to glue: commit the left to head-break, FLATTEN the operator
+	 * continuation (its soft `Line(' )` → a single space), so `op right` rides
+	 * the add-tail line.
+	 *
+	 * Returns null unless `d` is exactly that Group-of-two shape whose left
+	 * operand commits head-break — every other Group / operator falls through
+	 * to the normal rewrite (byte-inert). The right-hand `Nest` keeps its
+	 * structure under the `Flatten` so a multi-line RIGHT operand still wraps
+	 * inside its own brackets; only the leading operator `Line` is collapsed.
+	 */
+	private static function compareOpGluedToHeadBreak(d:Doc, decisions:Array<{node:Doc, crosses:Bool, ?indent:Int}>, width:Int):Null<Doc> {
+		final parts:Null<{group:Doc, left:Doc, cont:Doc}> = switch d {
+			case Group(Concat([left, cont])) | GroupWithRestProbe(Concat([left, cont])):
+				{group: d, left: left, cont: cont};
+			case _: null;
+		};
+		if (parts == null) return null;
+		// The continuation must be the never-wrap-marked operator layout
+		// `Nest(cols, Concat([Line(' '), Text('op '), right]))` — a SOFT space
+		// Line (not a hardline) leads it. A chain / call continuation has a
+		// different shape and is left untouched.
+		final isOpCont:Bool = switch parts.cont {
+			case Nest(_, Concat(citems)) if (citems.length >= 1):
+				switch citems[0] {
+					case Line(s): s == ' ';
+					case _: false;
+				}
+			case _: false;
+		};
+		if (!isOpCont) return null;
+		final tagged:Null<{marker:Doc, brk:Doc, flat:Doc}> = taggedAddChain(parts.left);
+		if (tagged == null) return null;
+		if (!opens(tagged.marker, decisions)) return null;
+		final headBreak:Null<Doc> = commitHeadBreak(tagged, decisions, width);
+		if (headBreak == null) return null;
+		// Glue: left commits head-break (WrapBoundary preserved to match the
+		// add-chain's own boundary scoping); the operator continuation is
+		// flattened so its leading space-`Line` stays a space.
+		return Group(Concat([
+			WrapBoundary(headBreak),
+			Flatten(rewrite(parts.cont, decisions, false, width)),
+		]));
 	}
 
 	/**
@@ -222,7 +399,7 @@ final class CollapsePass {
 	 * Used on a chain's committed-glued (`flat`) branch so the inner paren
 	 * opens within the glued tail.
 	 */
-	private static function commitOpens(d:Doc, decisions:Array<{node:Doc, crosses:Bool}>):Doc {
+	private static function commitOpens(d:Doc, decisions:Array<{node:Doc, crosses:Bool, ?indent:Int}>):Doc {
 		switch d {
 			case IfFullLineExceeds(_, open, _) if (isCandidate(d) && opens(d, decisions)):
 				return commitOpens(open, decisions);
@@ -274,7 +451,7 @@ final class CollapsePass {
 	 * anchor's `opAddSubChain` config (`defaultWrap: noWrap`) is the
 	 * NoWrap shape `items[0] op items[1] …`.
 	 */
-	private static function chainGluedIfOpens(d:Doc, decisions:Array<{node:Doc, crosses:Bool}>):Null<Doc> {
+	private static function chainGluedIfOpens(d:Doc, decisions:Array<{node:Doc, crosses:Bool, ?indent:Int}>):Null<Doc> {
 		final flat:Null<Doc> = switch d {
 			case WrapBoundary(Group(IfBreak(_, fl))): fl;
 			case WrapBoundary(Group(IfWidthExceeds(_, _, fl))): fl;
@@ -310,15 +487,15 @@ final class CollapsePass {
 	 * the inverse `CollapseAddProbe` chain-broke decision — the lookup is the
 	 * same node-identity match for either marker kind.
 	 */
-	private static function opens(d:Doc, decisions:Array<{node:Doc, crosses:Bool}>):Bool {
+	private static function opens(d:Doc, decisions:Array<{node:Doc, crosses:Bool, ?indent:Int}>):Bool {
 		// Node identity match — enum `==` is reference equality on JS, so this
 		// finds the decision recorded for this exact node.
-		final entry:Null<{node:Doc, crosses:Bool}> = decisions.find(e -> e.node == d);
+		final entry:Null<{node:Doc, crosses:Bool, ?indent:Int}> = decisions.find(e -> e.node == d);
 		return entry != null && entry.crosses;
 	}
 
 	/** True iff `d`'s subtree contains a candidate paren that opens. */
-	private static function subtreeOpens(d:Doc, decisions:Array<{node:Doc, crosses:Bool}>):Bool {
+	private static function subtreeOpens(d:Doc, decisions:Array<{node:Doc, crosses:Bool, ?indent:Int}>):Bool {
 		var found:Bool = false;
 		walk(d, node -> {
 			if (!found && isCandidate(node) && opens(node, decisions)) found = true;

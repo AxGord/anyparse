@@ -200,7 +200,7 @@ class Renderer {
 		finalNewline:Bool = false,
 		trailingWhitespace:Bool = false,
 		maxConsecutiveBlanks:Int = -1,
-		?decisions:Array<{node:Doc, crosses:Bool}>
+		?decisions:Array<{node:Doc, crosses:Bool, ?indent:Int}>
 	):String {
 		// ω-collapse-commit (increment-2): when `decisions != null` this is a
 		// MEASURE-ONLY pass driven by `CollapsePass.run`. At every
@@ -966,7 +966,15 @@ class Renderer {
 					// its own — the marker is always already rewritten away by
 					// `CollapsePass.run` before render, so reaching it here in the
 					// emit pass is a defensive pass-through.
-					if (decisions != null) decisions.push({node: f.doc, crosses: f.mode == MBreak});
+					//
+					// ω-opadd-head-break-remeasure: also record `f.indent` — the
+					// COLUMN the add-tail renders at (the chain's continuation
+					// indent). `CollapsePass` uses it for an O(1) order-dependent
+					// re-measure: keep the tail glued-flat on the continuation iff
+					// it fits at this captured indent (mirror the forward
+					// `collapseParenCommitsOpen` fit gate). Optional field — the
+					// forward `IfFullLineExceeds` push sites leave it null.
+					if (decisions != null) decisions.push({node: f.doc, crosses: f.mode == MBreak, indent: f.indent});
 					stack.push(new Frame(f.indent, f.mode, inner, f.forceFlat, f.hardFlat));
 				case ConditionalMarkerZero(inner):
 					// ω-cond-indent-policy FixedZero: enter a marker-zero scope.
