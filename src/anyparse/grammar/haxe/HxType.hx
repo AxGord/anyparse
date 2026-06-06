@@ -200,7 +200,7 @@ enum HxType {
 	 * in the `@:sep`-Star force-multi branch — without touching inline
 	 * anon-type uses (`var x:{a:Int}`), which never carry the flag.
 	 */
-	@:trivia @:lead('{') @:trail('}') @:sep(',') @:sepAlt(';') @:fmt(anonTypeBracesOpen, anonTypeBracesClose, wrapRules('anonTypeWrap'), leftCurly('anonTypeLeftCurly'), rightCurly('anonTypeRightCurly'), beforeDocCommentEmptyLines, forceMultiInTypedef, keepCurlyBlanks, typedefBodyBlanks)
+	@:trivia @:lead('{') @:trail('}') @:sep(',') @:sepAlt(';') @:fmt(anonTypeBracesOpen, anonTypeBracesClose, wrapRules('anonTypeWrap'), leftCurly('anonTypeLeftCurly'), rightCurly('anonTypeRightCurly'), beforeDocCommentEmptyLines, forceMultiInTypedef, keepCurlyBlanks, typedefBodyBlanks, groupRestProbe)
 	Anon(fields:Array<HxAnonMember>);
 
 	ArrowFn(fn:HxArrowFnType);

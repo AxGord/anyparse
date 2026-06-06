@@ -360,7 +360,24 @@ class WrapList {
 			}
 			final flatWithLead:Doc = shapeAt(modeFlat, leadFlat);
 			final breakWithLead:Doc = shapeAt(modeBreak, leadBreak);
-			return WrapBoundary(Group(IfBreak(breakWithLead, flatWithLead)));
+			// ω-group-rest-probe cascade-disagree: when the cascade resolves
+			// to different modes at flat (`exceeds=false`) vs break
+			// (`exceeds=true`), the outer Group's own `fitsFlat` decides
+			// which branch the renderer commits to. A plain `Group` measures
+			// only the wrap construct's flat width from its column — blind to
+			// same-line content trailing AFTER the close delim. When the
+			// Star opted into `@:fmt(groupRestProbe)`, route through
+			// `GroupWithRestProbe` so the fit decision subtracts
+			// `flatTokenWidthOfRestStack` (the trailing `):Void {}` after a
+			// wrapped anon param type, etc.) — matching fork's `lengthAfter`
+			// bias at the cascade-Group layer. Sister to the agree-path
+			// `groupOrRestProbe` in `shapeFillLine`. Every current
+			// `groupRestProbe` consumer (functionSignatureWrap empty-rules /
+			// typeParameterWrap exceeds-independent rules) resolves both
+			// states identically and never reaches this branch, so the only
+			// behavioural change is for cascades whose NoWrap rule is gated
+			// on `ExceedsMaxLineLength` (anonTypeWrap) — byte-inert elsewhere.
+			return WrapBoundary(groupOrRestProbe(IfBreak(breakWithLead, flatWithLead), groupRestProbe));
 		}
 
 		if (extraThresholds.length == 1) {
