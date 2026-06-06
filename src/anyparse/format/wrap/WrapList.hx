@@ -1304,6 +1304,38 @@ class WrapList {
 			final broken:Doc = shapeFillLineWithLeadingBreak(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
 			return IfNaturalFirstLineFitsOpenDelim(lineWidth, broken, glued);
 		}
+		// ω-callparam-multiarg-block-lambda: a FLWLB MULTI-arg call whose LAST arg
+		// is a block-bodied paren-param lambda (`f(x, () -> { … })`) keeps ALL args
+		// GLUED to the open paren iff the glued flat first line (up to the block
+		// `{`) fits `lineWidth`; the lambda's block body self-breaks at its `{` and
+		// the enclosing `)` glues to the block close (`});`). Without this, the
+		// cascade-resolved FLWLB shape OPENS the outer paren (`f(\n\tx, () -> {…`),
+		// pushing every arg + the whole body one indent deeper. Mirrors fork
+		// `applyArrowWrapping` (MarkWrapping.hx:2336-2356): the arrow head is
+		// collapsed (no break after `->`) when the head line fits, and the block
+		// body's own brace layout supplies the only break — the enclosing call paren
+		// is never opened. The `reEvaluateMultiArgCallParamAfterContextWraps` pass
+		// (713-748) then leaves the collapsed multi-arg call as-is.
+		//
+		// DISJOINT from the sole-arrow paths above (inc5 / inc5-cont / ThinArrow,
+		// all `items.length == 1`): this gates on `items.length > 1`, so sole-arrow
+		// handling is untouched. The block-body discriminator is STRUCTURAL
+		// (`arrowBodyIsBlock` — the body's first visible Text is `{`), needing no
+		// post-layout "did it break" fact: a block with statements always carries
+		// hardlines.
+		//
+		// Render-time first-line probe (O(1) `flatTokenWidthFirstLine`, capped at
+		// the block-open hardline — NO recursive spine probe, PERF safe):
+		//  - `IfFirstLineExceeds(lineWidth, openShape, glueShape)`: glue iff the
+		//    GLUED head line `f(x, () -> {` fits; else fall back to the generic
+		//    open-paren FLWLB shape (`firstLineLen > maxLen → continue` in fork).
+		if (mode == FillLineWithLeadingBreak && items.length > 1
+				&& isArrowBodyMarker(items[items.length - 1])
+				&& arrowBodyIsBlock(items[items.length - 1])) {
+			final glueShape:Doc = multiArgBlockLambdaGlueShape(open, close, sep, items, openInside, closeInside, sepBeforeFlags);
+			final openShape:Doc = shapeFillLineWithLeadingBreak(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
+			return IfFirstLineExceeds(lineWidth, openShape, glueShape);
+		}
 		return switch mode {
 			case NoWrap: shapeNoWrap(open, close, sep, items, openInside, closeInside, sepBeforeFlags, flatTrailingComma);
 			case OnePerLine: shapeOnePerLine(open, close, sep, items, cols, appendTrailingComma, trailBreak, sepBeforeFlags);
@@ -1508,6 +1540,28 @@ class WrapList {
 			Nest(cols, Concat([Line('\n'), body])),
 			Line('\n'), closeInside, Text(close),
 		]);
+	}
+
+	// ω-callparam-multiarg-block-lambda glue shape: `f(a, b, () -> {`-style — open
+	// paren glued, all args joined inline with `sep + ' '`, close glued. The
+	// `shapeNoWrap` skeleton WITHOUT its `Flatten` wrapper: the last arg (a block-
+	// bodied lambda) must keep its OWN multi-line break (the block's brace layout),
+	// so the inner content must NOT be force-flattened. The enclosing `)` glues to
+	// the block close `}` (`})`), the surrounding statement adds `;` → `});`.
+	// Mirrors fork `applyArrowWrapping`'s collapsed arrow head + the block's own
+	// brace break. `sepBeforeFlags` is honoured identically to `shapeNoWrap` so a
+	// source-elided separator (cond-comp ctor) stays byte-faithful.
+	private static function multiArgBlockLambdaGlueShape(
+		open:String, close:String, sep:String, items:Array<Doc>,
+		openInside:Doc, closeInside:Doc, sepBeforeFlags:Null<Array<Bool>>
+	):Doc {
+		final inner:Array<Doc> = [];
+		for (i in 0...items.length) {
+			if (i > 0)
+				inner.push(skipSepBefore(sepBeforeFlags, i) ? Text(' ') : Text(sep + ' '));
+			inner.push(items[i]);
+		}
+		return Concat([Text(open), openInside, Concat(inner), closeInside, Text(close)]);
 	}
 
 	// ω-callparam-single-arg-glue: true iff `item`'s OWN outermost layout breaks
