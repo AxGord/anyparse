@@ -134,7 +134,8 @@ final class BinaryChainEmit {
 		// inside the same cond keep their own Nest because their
 		// continuation legitimately wants the +2cols (paren+1 +
 		// callArg+1) layout.
-		final cols:Int = nestSuppress ? 0 : (opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth);
+		final indentUnit:Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
+		final cols:Int = nestSuppress ? 0 : indentUnit;
 
 		// Column-aware `LineLengthLargerThan` thresholds — mirror
 		// `WrapList.emit`'s threshold-aware enumeration pattern (slice
@@ -164,7 +165,7 @@ final class BinaryChainEmit {
 		}
 
 		function shapeAt(r:{mode:WrapMode, location:WrappingLocation}):Doc {
-			return shape(r.mode, r.location, items, ops, cols, sourceBreakBefore, headBreak);
+			return shape(r.mode, r.location, items, ops, cols, indentUnit, sourceBreakBefore, headBreak);
 		}
 
 		// Force-break path: cascade evaluated only against
@@ -221,7 +222,7 @@ final class BinaryChainEmit {
 			// mode here — pivot the NoWrap UNWRAP shape against the forced break shape.
 			if (unwrapCandidate && isBreakMode(flat.mode))
 				return WrapBoundary(IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, shapeAt(flat),
-					shape(NoWrap, flat.location, items, ops, cols, sourceBreakBefore, headBreak)));
+					shape(NoWrap, flat.location, items, ops, cols, indentUnit, sourceBreakBefore, headBreak)));
 			if (sameRule(flat, brk)) return WrapBoundary(shapeAt(flat));
 			// ω-unwrap-add-ops (inverse CollapsePass): for a pure opAddSub
 			// chain (`+`/`-` only) whose broken shape differs from its flat
@@ -453,12 +454,12 @@ final class BinaryChainEmit {
 		};
 	}
 
-	private static function shape(mode:WrapMode, location:WrappingLocation, items:Array<Doc>, ops:Array<String>, cols:Int, ?sourceBreakBefore:Array<Bool>, headBreak:Bool = false):Doc {
+	private static function shape(mode:WrapMode, location:WrappingLocation, items:Array<Doc>, ops:Array<String>, cols:Int, indentUnit:Int, ?sourceBreakBefore:Array<Bool>, headBreak:Bool = false):Doc {
 		return switch mode {
 			case NoWrap: shapeNoWrap(items, ops);
 			case OnePerLine: shapeOnePerLine(items, ops, cols, location);
 			case OnePerLineAfterFirst: shapeOnePerLineAfterFirst(items, ops, cols, location);
-			case FillLine | FillLineWithLeadingBreak: shapeFillLine(items, ops, cols, location);
+			case FillLine | FillLineWithLeadingBreak: shapeFillLine(items, ops, cols, indentUnit, location);
 			// ω-keep-chain (increment 2): JSON `"defaultWrap": "keep"` on chain
 			// configs (opAddSubChain, opBoolChain) preserves the source's
 			// per-operator line breaks verbatim — break before operand `i`
@@ -617,7 +618,7 @@ final class BinaryChainEmit {
 		return Nest(cols, Concat(inner));
 	}
 
-	private static function shapeFillLine(items:Array<Doc>, ops:Array<String>, cols:Int, location:WrappingLocation):Doc {
+	private static function shapeFillLine(items:Array<Doc>, ops:Array<String>, cols:Int, indentUnit:Int, location:WrappingLocation):Doc {
 		// Soft-line packing through `Fill`. Per-item-fit decision packs
 		// operands inline until the next one would overflow, then the
 		// soft-line between two operands breaks at the chain's standard
@@ -634,9 +635,19 @@ final class BinaryChainEmit {
 		//    the continuation line —
 		//    `dirty || (X) || (Y) ||\n\t(Z) || (W)`.
 		//
-		// `Fill(items, sep)` fits each item against the remaining
-		// budget; wrapping in `Nest(cols)` gives the continuation lines
-		// the chain's one-tab indent.
+		// `Fill(items, sep)` fits each item against the remaining budget.
+		// `BeforeLast` nests at `cols` (the chain's normal one-tab
+		// continuation indent, collapsed to 0 by `nestSuppress` when an
+		// outer call-arg / cond paren already supplied the +1) — the
+		// leading `op ` on each continuation line is the visual chain
+		// marker, so under suppression the continuation co-indents with
+		// the chain base. `AfterLast` instead nests at `indentUnit` (one
+		// indent level, NEVER suppressed): the trailing operator leaves
+		// no marker at the start of the continuation line, so the +1
+		// indent disambiguates the wrapped operand from a sibling
+		// statement — mirror fork `wrapFillLine2AfterLast`'s
+		// `indent + 1 + addIndent`. For a non-suppressed chain
+		// (`cols == indentUnit`) both branches are byte-identical.
 		final enriched:Array<Doc> = switch location {
 			case BeforeLast:
 				final acc:Array<Doc> = [items[0]];
@@ -648,6 +659,17 @@ final class BinaryChainEmit {
 				acc.push(items[items.length - 1]);
 				acc;
 		}
-		return Group(Nest(cols, Fill(enriched, Line(' '))));
+		// AfterLast continuation indent is +1 ONLY for an opAddSub (`+`/`-`)
+		// chain: the trailing operator leaves the wrapped operand bare at the
+		// start of its line, so a one-level indent disambiguates it from a
+		// sibling statement (fork `wrapFillLine2AfterLast`'s `indent + 1`). An
+		// opBool (`&&`/`||`) AfterLast chain keeps the legacy `cols` indent —
+		// under nest-suppression (call-arg / `if (` condition) it co-indents
+		// with the chain base (+0), matching the fork-preserved trailing layout
+		// of `opbool_in_call_leading_break_preserved` /
+		// `condition_wrapping_priority_over_opbool`. For a non-suppressed chain
+		// (`cols == indentUnit`) both arms are byte-identical.
+		final nestCols:Int = location == AfterLast && isAddSubOps(ops) ? indentUnit : cols;
+		return Group(Nest(nestCols, Fill(enriched, Line(' '))));
 	}
 }

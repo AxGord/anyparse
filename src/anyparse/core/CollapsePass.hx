@@ -290,6 +290,18 @@ final class CollapsePass {
 	):Null<Doc> {
 		final fill:Null<{cols:Int, items:Array<Doc>}> = fillLineParts(tagged.brk);
 		if (fill == null || fill.items.length < 2) return null;
+		// ω-opadd-afterlast-cont-indent: the head-break re-measure GLUES the tail
+		// operands assuming each carries a LEADING `op ` (the BeforeLast
+		// enrichment). An AfterLast FillLine encodes the operator as a TRAILING
+		// `Text(' op')` on each non-last item, so the same gluing would emit the
+		// operators in the wrong slot. AfterLast also keeps its natural fillLine
+		// packing (fork `wrapFillLine2AfterLast` breaks before the overflowing
+		// item at `indent + 1`, never collapsing to a head-break). Skip the
+		// re-measure for AfterLast so the underlying Fill renders verbatim — its
+		// `Nest(indentUnit)` already lands continuation operands one level past
+		// the chain base (the trailing operator leaves no leading marker, so the
+		// +1 indent disambiguates the wrapped operand).
+		if (fillItemsAreAfterLast(fill.items)) return null;
 		// ω-methodchain-reeval-after-callparam (axis 2): a `cols == 0` FillLine brk
 		// is a nest-suppressed add-chain — set when the chain is a CALL ARGUMENT
 		// (`_callArgChainNest`, leading-break call args). In that context fork
@@ -331,6 +343,29 @@ final class CollapsePass {
 		return switch d {
 			case Group(Nest(cols, Fill(items, _, _))): {cols: cols, items: items};
 			case _: null;
+		};
+	}
+
+	/**
+	 * True iff the FillLine `items` carry the AfterLast enrichment from
+	 * `BinaryChainEmit.shapeFillLine` — each non-last item is
+	 * `Concat([operand, Text(' op')])` (the operator TRAILS the operand). The
+	 * BeforeLast enrichment instead prefixes each continuation operand with a
+	 * leading `Text('op ')`, so its first item is the bare head and continuation
+	 * items START (not end) with a `Text`. Decisive signal: AfterLast's first
+	 * item is a `Concat` whose LAST child is `Text(t)` with `t` beginning with a
+	 * space (the ` op` suffix). A BeforeLast head operand — string literal,
+	 * identifier, call (`…)`), nested sub-chain — never ends in a
+	 * space-prefixed `Text`, so this stays specific to AfterLast.
+	 */
+	private static function fillItemsAreAfterLast(items:Array<Doc>):Bool {
+		return switch items[0] {
+			case Concat(parts) if (parts.length >= 2):
+				switch parts[parts.length - 1] {
+					case Text(t): t.length >= 2 && StringTools.fastCodeAt(t, 0) == ' '.code;
+					case _: false;
+				}
+			case _: false;
 		};
 	}
 
