@@ -316,9 +316,46 @@ class WrapList {
 				final dmBreak:Bool = dm == OnePerLine || dm == OnePerLineAfterFirst
 					|| dm == FillLine || dm == FillLineWithLeadingBreak;
 				final soleArrow:Bool = items.length == 1 && isArrowBodyMarker(items[0]);
-				if (modeFlat == NoWrap && dmBreak && forceMode == null && !soleArrow)
+				if (modeFlat == NoWrap && dmBreak && forceMode == null && !soleArrow) {
+					// ω-thinarrow-break leg-3: a sole bare-ident infix arrow
+					// (`call(item -> body)`) whose body chain BREAKS (leg-2
+					// `bareArrowBodyBreaks` — e.g. an `||` opBoolChain configured to
+					// fillLine on overflow) glues the arrow HEAD to the open paren
+					// and breaks AFTER `->`, instead of the generic open-paren shape
+					// (`call(\n\titem -> body\n)`). The INVERSE of `isArrowBodyMarker`
+					// (paren-param) handling above — paren-param arrows are excluded
+					// (`isArrowBodyMarker(items[0])` ⇒ `soleArrow`), so only the
+					// bare-ident infix path reaches here. Mirrors fork
+					// `applyArrowWrapping` (MarkWrapping.hx:2336-2378) + the single-
+					// arg call `hasInnerBreak` gate.
+					//
+					// Block-body bare arrows are excluded (body's first visible Text is
+					// `{`): the block owns its own multi-line layout, matching fork's
+					// BrOpen skip in `applyArrowWrapping`'s collapse loop.
+					//
+					// Two nested render-time first-line probes (both O(1)
+					// `flatTokenWidthFirstLine`, no recursive spine probe across the
+					// chain — PERF safe):
+					//  - OUTER `IfFirstLineExceeds(lineWidth, brk, flat)`: break iff
+					//    the whole-flat `call(item -> body)` first line overflows.
+					//  - INNER `IfFirstLineExceeds(lineWidth, openShape, glueShape)`:
+					//    within the break branch, fall back to the generic open-paren
+					//    shape iff the GLUED head line `call(item ->` itself overflows
+					//    (fork `firstLineLen > maxLen → continue`); else GLUE.
+					if (items.length == 1) {
+						final split:Null<{head:Doc, body:Doc}> = bareArrowSplit(items[0]);
+						if (split != null && !firstVisibleTextStartsWith(split.body, '{'.code)
+								&& bareArrowBodyBreaks(split.body)) {
+							final openShape:Doc = shapeAt(dm, leadBreak);
+							final flatShape:Doc = shapeAt(NoWrap, leadFlat);
+							final glueShape:Doc = bareArrowGlueShape(open, close, openInside, closeInside, split.head, split.body, cols);
+							final brk:Doc = IfFirstLineExceeds(opt.lineWidth, openShape, glueShape);
+							return WrapBoundary(IfFirstLineExceeds(opt.lineWidth, brk, flatShape));
+						}
+					}
 					return WrapBoundary(IfFirstLineExceeds(opt.lineWidth,
 						shapeAt(dm, leadBreak), shapeAt(NoWrap, leadFlat)));
+				}
 				return WrapBoundary(shapeAt(modeFlat, leadFor(modeFlat)));
 			}
 			final flatWithLead:Doc = shapeAt(modeFlat, leadFlat);
@@ -1368,6 +1405,109 @@ class WrapList {
 			case Concat(arr) if (arr.length > 0): arrowBodyIsBlock(arr[arr.length - 1]);
 			case _: false;
 		};
+	}
+
+	// ω-thinarrow-break (ThinArrow break-after-`->` foundation): split a
+	// bare-ident infix arrow item (`item -> body`, lowered by the Pratt path as
+	// `Concat([head, Text(' '), Text('->'), OptSpace(' '), body])` — NOT the
+	// paren-param `(params) -> body` `arrowBodyLineWrap` marker which carries its
+	// own `_dwb(_dile(...))` shape) into `{head, body}` at the top-level `->`/`=>`
+	// operator Text. `head` is every element up to AND including the operator
+	// Text; `body` is the operand(s) after the OptSpace. Returns `null` when
+	// `item` is not a recognisable bare-ident arrow Concat — pure structural
+	// recogniser, byte-inert standalone (it only inspects). The OptSpace between
+	// `->` and the body is dropped: leg-3's glue shape replaces it with a forced
+	// `Line('\n')` (break AFTER `->`), so the inline space must not survive.
+	private static function bareArrowSplit(item:Doc):Null<{head:Doc, body:Doc}> {
+		final arr:Null<Array<Doc>> = switch item {
+			case Concat(a): a;
+			case _: null;
+		};
+		if (arr == null) return null;
+		var opIdx:Int = -1;
+		for (i in 0...arr.length) switch arr[i] {
+			case Text(s) if (opIdx < 0 && (s == '->' || s == '=>')): opIdx = i;
+			case _:
+		}
+		if (opIdx < 0) return null;
+		final headParts:Array<Doc> = [for (i in 0...opIdx + 1) arr[i]];
+		// Body = everything after the operator, skipping a single leading OptSpace
+		// (the `_dop(' ')` post-arrow space the Pratt codegen emits).
+		final bodyParts:Array<Doc> = [];
+		for (i in opIdx + 1...arr.length) switch arr[i] {
+			case OptSpace(_) if (bodyParts.length == 0):
+			case _: bodyParts.push(arr[i]);
+		}
+		if (bodyParts.length == 0) return null;
+		final body:Doc = bodyParts.length == 1 ? bodyParts[0] : Concat(bodyParts);
+		return {head: Concat(headParts), body: body};
+	}
+
+	// ω-thinarrow-break leg-2 discriminator: true iff the bare-ident arrow's body
+	// chain CAN break — its Doc carries a render-time break conditional. The
+	// chain emitter (`BinaryChainEmit.emit`) returns `WrapBoundary(shapeAt(flat))`
+	// (NO conditional) when both cascade states resolve to the same mode
+	// (`sameRule(flat, brk)`), and `WrapBoundary(Group(IfBreak(brk, flat)))` (a
+	// conditional) when the chain can break. So the presence of an `IfBreak` /
+	// `IfLineExceeds` / `IfWidthExceeds` / … conditional inside the body's wrap
+	// level IS the breakable signal.
+	// For #5 the `||` opBool chain (config REPLACE rules: NoWrap when fits /
+	// fillLine when exceeds) emits `WrapBoundary(Group(IfBreak(...)))` →
+	// breakable. For the inverse sibling (`opbool_in_call_no_extra_indent`,
+	// default opBool rules) the 2-operand chain resolves NoWrap for both states →
+	// `WrapBoundary(flat)` with no conditional → NOT breakable, so the call keeps
+	// the generic open-paren shape. Mirrors fork
+	// `reEvaluateSingleArgCallParam`'s `hasInnerBreak` (MarkWrapping.hx:521-530):
+	// the single-arg call glues the arrow head only when the inner content
+	// actually broke. Stack walk down the body's transparent wrappers + Concat
+	// children to the first render-time conditional (does not descend into a
+	// conditional's own branches — a nested sub-construct break is the operand's
+	// own layout, like fork's per-token `whitespaceAfter == Newline` scan).
+	private static function bareArrowBodyBreaks(body:Doc):Bool {
+		final stack:Array<Doc> = [body];
+		while (stack.length > 0) {
+			final node:Doc = stack.pop();
+			switch node {
+				case IfBreak(_, _) | IfWidthExceeds(_, _, _) | IfFirstLineExceeds(_, _, _)
+						| IfLineExceeds(_, _, _) | IfFullLineExceeds(_, _, _)
+						| IfNaturalFirstLineExceeds(_, _, _) | IfNaturalFirstLineFitsOpenDelim(_, _, _)
+						| IfArrowContinuationFits(_, _, _, _, _):
+					return true;
+				case WrapBoundary(inner) | Group(inner) | BodyGroup(inner)
+						| GroupWithRestProbe(inner) | Nest(_, inner) | Flatten(inner)
+						| HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner)
+						| ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
+					stack.push(inner);
+				case Concat(arr):
+					for (it in arr) stack.push(it);
+				case Fill(items, _, _) | FillWithRestProbe(items, _, _):
+					return items.length > 0;
+				case Line(s):
+					if (s.length > 0 && StringTools.fastCodeAt(s, 0) == '\n'.code) return true;
+				case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
+					return true;
+				case _:
+			}
+		}
+		return false;
+	}
+
+	// ω-thinarrow-break leg-3 glue shape: `call(item ->\n\tbody\n)` — arrow head
+	// glued to the open paren, forced break AFTER `->`, body on the +cols
+	// continuation indent, close on its own line. The INVERSE of the generic
+	// open-paren FLWLB shape (`call(\n\titem -> body\n)`). Mirrors fork
+	// `applyArrowWrapping` (MarkWrapping.hx:2336-2378): restore the break after
+	// the arrow and put the enclosing call's `)` on its own line, leaving the
+	// open paren glued to the arrow head.
+	private static function bareArrowGlueShape(
+		open:String, close:String, openInside:Doc, closeInside:Doc,
+		head:Doc, body:Doc, cols:Int
+	):Doc {
+		return Concat([
+			Text(open), openInside, head,
+			Nest(cols, Concat([Line('\n'), body])),
+			Line('\n'), closeInside, Text(close),
+		]);
 	}
 
 	// ω-callparam-single-arg-glue: true iff `item`'s OWN outermost layout breaks
