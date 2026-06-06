@@ -1439,6 +1439,15 @@ class WriterLowering {
 				|| subStructStartsWithBodyBreak(refName)
 				|| subStructStartsWithBareBodyBreaks(refName)
 				|| subStructStartsWithTightLead(refName)
+				// Opt-in `@:fmt(tightKw)`: unconditionally strip the kw's
+				// trailing space so it abuts the sub-struct's leading
+				// symbol. Used by `HxExpr.TypedCastExpr` (`@:kw('cast')` +
+				// `HxTypedCast.target`'s `@:lead('(')`) to emit tight
+				// `cast(expr, Type)` per haxe-formatter's cast-as-function-
+				// call convention. The typed-cast remainder always opens
+				// with `(`, so no operand-ctor dispatch is needed — unlike
+				// the bare `CastExpr`'s runtime `tightOnParenOperand`.
+				|| branch.fmtHasFlag('tightKw')
 				// Combined kw + symbol `@:lead` on the same single-Ref
 				// branch composes as a tight visual unit: kw and lead
 				// literal render adjacent without a separating space.

@@ -422,7 +422,7 @@ enum HxExpr {
 	@:kw('final')
 	FinalExpr(decl:HxVarDecl);
 
-	@:kw('cast')
+	@:kw('cast') @:fmt(tightKw)
 	TypedCastExpr(info:HxTypedCast);
 
 	@:kw('cast') @:fmt(atomOperand, tightOnParenOperand('ParenExpr', 'ECheckTypeExpr'))
