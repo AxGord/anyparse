@@ -38,9 +38,26 @@ package anyparse.grammar.haxe;
  * an arg list, same `@:lead('->')` body commit point. The two diverge
  * only in their inner element type (`HxArrowParam` vs `HxLambdaParam`)
  * and consumer site (`HxType` vs `HxExpr`).
+ *
+ * `args` opts into the wrap engine via
+ * `@:fmt(wrapRules('functionSignatureWrap'), groupRestProbe)` — the same
+ * `functionSignatureWrap` cascade `HxFnDecl.params` uses, because
+ * haxe-formatter routes BOTH function declarations and function-TYPE
+ * signatures through its `wrapping.functionSignature` class (verified by
+ * the `issue_531_conditional_typedef*` fixtures, whose configs override
+ * `functionSignature`). The cascade's `defaultMode: FillLine` packs the
+ * param list inline while it fits and breaks after a `,` on overflow,
+ * with `defaultAdditionalIndent: 1` placing the continuation one indent
+ * deeper. `groupRestProbe` biases the outer Group toward MBreak when
+ * the trailing `-> ReturnType` adds same-line content past the close
+ * paren. The function-decl-specific flags (`funcParamParens`,
+ * `bodyAwareCompactIndent`, `ignoreSourceNewlinesForWrap`,
+ * `trailingComma`) are intentionally omitted — a function type has no
+ * keyword-to-paren gap, no body-empty signal, and no source trailing
+ * comma in its param list.
  */
 @:peg
 typedef HxArrowFnType = {
-	@:lead('(') @:trail(')') @:sep(',') var args:Array<HxArrowParam>;
+	@:lead('(') @:trail(')') @:sep(',') @:fmt(wrapRules('functionSignatureWrap'), groupRestProbe) var args:Array<HxArrowParam>;
 	@:fmt(functionTypeHaxe4) @:lead('->') var ret:HxType;
 }
