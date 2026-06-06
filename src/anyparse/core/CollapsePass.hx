@@ -68,14 +68,16 @@ final class CollapsePass {
 	):Doc {
 		// Fast path: skip the measure render entirely when the Doc carries
 		// NONE of a forward collapse-candidate paren (`CollapseProbe`), an
-		// inverse inner-add-chain marker (`CollapseAddProbe`), or an opBool
-		// re-eval direction marker (`CollapseBoolProbe`) — the overwhelming
+		// inverse inner-add-chain marker (`CollapseAddProbe`), an opBool
+		// re-eval direction marker (`CollapseBoolProbe`), or a method-chain
+		// dot-break re-eval marker (`CollapseChainProbe`) — the overwhelming
 		// common case. Keeps the pass cost ~one structural walk for non-collapse
 		// outputs.
 		final hasParenProbe:Bool = hasCandidate(doc);
 		final hasAddProbe:Bool = hasAddCandidate(doc);
 		final hasBoolProbe:Bool = hasBoolCandidate(doc);
-		if (!hasParenProbe && !hasAddProbe && !hasBoolProbe) return doc;
+		final hasChainProbe:Bool = hasChainCandidate(doc);
+		if (!hasParenProbe && !hasAddProbe && !hasBoolProbe && !hasChainProbe) return doc;
 
 		final decisions:Array<{node:Doc, crosses:Bool, ?indent:Int}> = [];
 		// Measure-only render: populates `decisions` at every
@@ -168,6 +170,18 @@ final class CollapsePass {
 		// marker — falls through to the rest of the rewrite.
 		final boolFlip:Null<Doc> = rewriteBoolProbe(d, decisions, insideBroken, width);
 		if (boolFlip != null) return boolFlip;
+
+		// METHODCHAIN-REEVAL re-glue (ω-methodchain-reeval-after-callparam,
+		// subroot-E): a tagged method-chain
+		// `CollapseChainProbe(IfFullLineExceeds(w, dotBreak, glued))`. When the
+		// chain dot-broke ONLY because a segment's call args wrapped — i.e. the
+		// glued FIRST line (with those args broken) still fits at the captured
+		// column — STRIP the chain break (re-glue), mirroring fork
+		// `reEvaluateMethodChainAfterCallParam`. Otherwise keep the width-driven
+		// `IfFullLineExceeds`. Returns null when `d` is not the marker (the
+		// common path stays byte-inert).
+		final chainFlip:Null<Doc> = rewriteChainProbe(d, decisions, insideBroken, width);
+		if (chainFlip != null) return chainFlip;
 
 		// Standalone candidate paren that opens (no enclosing chain
 		// committed it): commit to the open branch directly.
@@ -276,6 +290,16 @@ final class CollapsePass {
 	):Null<Doc> {
 		final fill:Null<{cols:Int, items:Array<Doc>}> = fillLineParts(tagged.brk);
 		if (fill == null || fill.items.length < 2) return null;
+		// ω-methodchain-reeval-after-callparam (axis 2): a `cols == 0` FillLine brk
+		// is a nest-suppressed add-chain — set when the chain is a CALL ARGUMENT
+		// (`_callArgChainNest`, leading-break call args). In that context fork
+		// keeps the natural fillLine-`beforeLast` packing (pack operands until the
+		// next overflows, break before it) rather than the head-break shape (head
+		// alone on line 1, whole tail glued on the continuation). Suppress the
+		// head-break re-measure here so the underlying Fill renders beforeLast.
+		// Non-call-arg add-chains (`cols != 0`, e.g. an `if (… && <opAdd> > …)`
+		// compare operand handled by leg 2) keep the head-break.
+		if (fill.cols == 0) return null;
 		final indent:Null<Int> = capturedIndent(tagged.marker, decisions);
 		if (indent == null) return null;
 		final head:Doc = fill.items[0];
@@ -454,6 +478,103 @@ final class CollapsePass {
 	}
 
 	/**
+	 * ω-methodchain-reeval-after-callparam (CollapsePass increment 3, subroot-E).
+	 * `d` is a `CollapseChainProbe(IfFullLineExceeds(w, breakShape, glueShape))`
+	 * marker emitted by `MethodChainEmit.emit` for a chain whose width-driven
+	 * BREAK shape is a dot-break and whose glued (`NoWrap`) shape's last segment
+	 * is a breakable call. The marker carries the captured chain-receiver column
+	 * (`decisions[*].indent`).
+	 *
+	 * Fork analogue: `MarkWrapping.reEvaluateMethodChainAfterCallParam` STRIPS
+	 * method-chain breaks (re-glues the chain) when a contained callParameter
+	 * actually wrapped — the chain dot-broke only because the segment's call
+	 * args broke, not because the glued chain head itself overflowed. anyparse's
+	 * `IfFullLineExceeds` probe sees the FULL glued flat width (including the
+	 * call's now-breakable args) and over-eagerly dot-breaks. This re-measure
+	 * fixes that:
+	 *  - if the FULL glued flat fits at `col` → the renderer already picks the
+	 *    glued branch; no flip needed (recurse `inner`, byte-inert).
+	 *  - if the FULL glued flat OVERFLOWS but the glued FIRST LINE — receiver +
+	 *    every segment with the last segment's call args broken (the line ends
+	 *    at that call's open delim) — FITS at `col`, the overflow is absorbed by
+	 *    the breakable call: STRIP the chain break (return the recursed
+	 *    `glueShape`, whose call args wrap inside the glued chain).
+	 *  - otherwise the chain genuinely needs the dot-break → keep `inner`.
+	 *
+	 * O(1) re-measure: `col + flatTokenWidth(prefix)` over the flat chain
+	 * segments + the last call's prefix-to-open-delim — a flat token-width sum,
+	 * NO recursive natural-FL probe across a spine (PERF TRAP). Returns null
+	 * when `d` is not the marker.
+	 */
+	private static function rewriteChainProbe(d:Doc, decisions:Array<{node:Doc, crosses:Bool, ?indent:Int}>, insideBroken:Bool, width:Int):Null<Doc> {
+		final inner:Null<Doc> = switch d {
+			case CollapseChainProbe(i): i;
+			case _: null;
+		};
+		if (inner == null) return null;
+		final col:Null<Int> = capturedIndent(d, decisions);
+		// No recorded column → marker never measured (e.g. a flat-mode parent
+		// short-circuited) → keep the glued/IfFLE shape unchanged.
+		if (col == null) return rewrite(inner, decisions, insideBroken, width);
+		final glueShape:Null<Doc> = switch inner {
+			case IfFullLineExceeds(_, _, glue): glue;
+			case _: null;
+		};
+		if (glueShape == null) return rewrite(inner, decisions, insideBroken, width);
+		// The chain only needs re-glue if its full glued flat would overflow
+		// (otherwise the IfFullLineExceeds already picks glued — no flip).
+		if (col + DocMeasure.flatTokenWidth(glueShape) <= width)
+			return rewrite(inner, decisions, insideBroken, width);
+		// The glued first line ends at the last segment's call open delim (its
+		// args break onto their own lines). It fits iff `col + prefix <= width`.
+		final prefix:Null<Int> = gluedFirstLineWidth(glueShape);
+		if (prefix == null || col + prefix > width)
+			return rewrite(inner, decisions, insideBroken, width);
+		// Re-glue: the call args wrap inside the glued chain (fork strips the
+		// chain break, keeps the callParameter break). Recurse so inner parens /
+		// sub-chains still resolve.
+		return rewrite(glueShape, decisions, insideBroken, width);
+	}
+
+	/**
+	 * ω-methodchain-reeval-after-callparam — the rendered width of the glued
+	 * chain's FIRST line when the last segment's call args break. `glue` is the
+	 * NoWrap `Concat([receiver, seg0, …, segN])`; the first line is every part
+	 * flat EXCEPT the last segment, which contributes only its prefix up to (and
+	 * including) the first open delimiter (`(`/`[`/`{`) — the point the call
+	 * args break after. Null when `glue` is not the expected Concat shape or the
+	 * last segment has no open delim (not a breakable call).
+	 */
+	private static function gluedFirstLineWidth(glue:Doc):Null<Int> {
+		final parts:Null<Array<Doc>> = switch glue {
+			case Concat(items) if (items.length >= 2): items;
+			case _: null;
+		};
+		if (parts == null) return null;
+		final last:Doc = parts[parts.length - 1];
+		final lastPrefix:Null<Int> = flatPrefixToOpenDelim(last);
+		if (lastPrefix == null) return null;
+		var total:Int = lastPrefix;
+		for (i in 0...parts.length - 1) total += DocMeasure.flatTokenWidth(parts[i]);
+		return total;
+	}
+
+	/**
+	 * The flat-text width of `seg` up to and including its first open delimiter
+	 * (`(`/`[`/`{`). Null when the segment has no open delim. Used to size the
+	 * `.field(` prefix of a chain's last call segment — the part that stays on
+	 * the glued first line when the call's args break.
+	 */
+	private static function flatPrefixToOpenDelim(seg:Doc):Null<Int> {
+		final flat:String = DocMeasure.flatText(seg);
+		for (i in 0...flat.length) {
+			final c:Int = StringTools.fastCodeAt(flat, i);
+			if (c == '('.code || c == '['.code || c == '{'.code) return i + 1;
+		}
+		return null;
+	}
+
+	/**
 	 * Destructure the trailing FillLine `Group(Nest(cols, Fill(items, sep, _)))`
 	 * shape (the `CollapseBoolProbe` payload) into its Nest indent, Fill items,
 	 * and separator. Null when `d` is not that exact shape.
@@ -546,6 +667,18 @@ final class CollapsePass {
 		walk(d, node -> {
 			if (!found) switch node {
 				case CollapseBoolProbe(_): found = true;
+				case _:
+			}
+		});
+		return found;
+	}
+
+	/** True iff `d`'s subtree contains any `CollapseChainProbe` marker. */
+	private static function hasChainCandidate(d:Doc):Bool {
+		var found:Bool = false;
+		walk(d, node -> {
+			if (!found) switch node {
+				case CollapseChainProbe(_): found = true;
 				case _:
 			}
 		});
@@ -701,7 +834,7 @@ final class CollapsePass {
 				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner)
 						| BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner)
 						| HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner)
-						| CollapseBoolProbe(inner)
+						| CollapseBoolProbe(inner) | CollapseChainProbe(inner)
 						| ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 				case Concat(items):
@@ -741,6 +874,7 @@ final class CollapsePass {
 			case CollapseProbe(inner): CollapseProbe(f(inner));
 			case CollapseAddProbe(inner): CollapseAddProbe(f(inner));
 			case CollapseBoolProbe(inner): CollapseBoolProbe(f(inner));
+			case CollapseChainProbe(inner): CollapseChainProbe(f(inner));
 			case ConditionalMarkerZero(inner): ConditionalMarkerZero(f(inner));
 			case ConditionalMarkerDecrease(inner): ConditionalMarkerDecrease(f(inner));
 			case Concat(items): Concat([for (it in items) f(it)]);

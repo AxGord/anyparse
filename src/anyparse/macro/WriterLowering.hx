@@ -382,11 +382,39 @@ class WriterLowering {
 		final cbStar:ShapeNode = cb.children[1];
 		final isCallTriviaStar:Bool = ctx.trivia
 			&& cbStar.annotations.get('trivia.starCollects') == true;
+		// ω-methodchain-reeval-after-callparam (axis 2): a chain segment's call
+		// args bypass the normal `HxExpr.Call` postfix path's per-arg
+		// `_setCallArgChainNest` wrapping (the chain segment goes through
+		// `argsListExpr` here, not `lowerPostfixStar`). When the call uses
+		// leading-break wrapping (`callParameterWrap.defaultMode == FLWLB`) AND
+		// the Call ctor opted into `callArgChainNest`, wrap each segment-arg's
+		// opt in `_setCallArgChainNest` so a chain / opAddSub argument suppresses
+		// its OWN continuation Nest (the leading-break call-arg already supplies
+		// the +cols). Without this an opAddSub arg of a re-glued chain's segment
+		// call (the #3 `getInstance().add(<opAdd>)` shape) over-nests its
+		// fillLine-beforeLast continuation by one tab. Runtime-gated on the
+		// cascade default; mirror of the `lowerPostfixStar` path.
+		final chainArgWantsNest:Bool = cb.fmtHasFlag('callArgChainNest');
+		final segArgOpt:Expr = chainArgWantsNest
+			? macro ($callRulesExpr.defaultMode == anyparse.format.wrap.WrapMode.FillLineWithLeadingBreak
+				? _setCallArgChainNest(opt) : opt)
+			: macro opt;
+		// ω-methodchain-reeval-after-callparam (axis 1 discriminator): the chain
+		// re-glue (fork `reEvaluateMethodChainAfterCallParam`) fires ONLY when the
+		// segment call's args wrap with a LEADING BREAK after the open paren
+		// (`isNewLineAfter(POpen)`) — i.e. the call uses
+		// `callParameterWrap.defaultMode == FillLineWithLeadingBreak`. A
+		// `FillLine` default (glued first arg) or a glued arrow/lambda body that
+		// breaks is NOT an `isNewLineAfter(POpen)` and keeps its dot-break. Pass
+		// the runtime FLWLB fact to `MethodChainEmit.emit`.
+		final segCallLeadingBreakExpr:Expr =
+			macro $callRulesExpr.defaultMode == anyparse.format.wrap.WrapMode.FillLineWithLeadingBreak;
 		final argDocsExpr:Expr = isCallTriviaStar
 			? macro {
 				final _argDocs:Array<anyparse.core.Doc> = [];
+				final _segArgOpt = $segArgOpt;
 				for (_a in _args) {
-					final _aDoc:anyparse.core.Doc = $writeIdent(_a.node, opt, -1);
+					final _aDoc:anyparse.core.Doc = $writeIdent(_a.node, _segArgOpt, -1);
 					final _aTc:Null<String> = _a.trailingComment;
 					// `trailingCommentDocVerbatim` already prepends ' '.
 					_argDocs.push(_aTc != null
@@ -395,7 +423,10 @@ class WriterLowering {
 				}
 				_argDocs;
 			}
-			: macro [for (_a in _args) $writeIdent(_a, opt, -1)];
+			: macro {
+				final _segArgOpt = $segArgOpt;
+				[for (_a in _args) $writeIdent(_a, _segArgOpt, -1)];
+			};
 		// Receiver renders at the postfix precedence so a binop /
 		// ternary receiver gets parenthesised — `(a + b).foo().bar()`
 		// must keep its parens or the chain misreads as
@@ -525,7 +556,14 @@ class WriterLowering {
 					final _recDoc:anyparse.core.Doc = _recTrail != null
 						? _dc([_recBaseDoc, trailingCommentDocVerbatim(_recTrail, opt)])
 						: _recBaseDoc;
-					return anyparse.format.wrap.MethodChainEmit.emit(_recDoc, _segs, opt, $chainRulesExpr, _breaks);
+					// ω-methodchain-reeval-after-callparam nest-suppress prereq:
+					// a chain that is itself a CALL ARGUMENT (`_callArgChainNest`)
+					// keeps its own dot-break — fork
+					// `reEvaluateMethodChainAfterCallParam` never strips chain
+					// breaks for a chain inside a breaking outer call
+					// (`method_chain_single_arg_break_parens`). Mirror the
+					// `BinaryChainEmit` `_chainNestSuppress` gate.
+					return anyparse.format.wrap.MethodChainEmit.emit(_recDoc, _segs, opt, $chainRulesExpr, _breaks, opt._callArgChainNest, $segCallLeadingBreakExpr);
 				}
 				$body;
 			}
@@ -572,7 +610,10 @@ class WriterLowering {
 				}
 				if (_segs.length >= 2 && _hasCallPrev) {
 					final _recDoc:anyparse.core.Doc = $writeIdent(_receiver, opt, $precExpr);
-					return anyparse.format.wrap.MethodChainEmit.emit(_recDoc, _segs, opt, $chainRulesExpr);
+					// ω-methodchain-reeval-after-callparam nest-suppress prereq
+					// (plain-mode twin): pass `sourceBreakBefore = null` then the
+					// `_callArgChainNest` gate.
+					return anyparse.format.wrap.MethodChainEmit.emit(_recDoc, _segs, opt, $chainRulesExpr, null, opt._callArgChainNest, $segCallLeadingBreakExpr);
 				}
 				$body;
 			};

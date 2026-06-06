@@ -442,7 +442,7 @@ final class BinaryChainEmit {
 				}
 				hit;
 			case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i)
-					| Flatten(i) | HardFlatten(i) | CollapseProbe(i) | CollapseAddProbe(i) | CollapseBoolProbe(i) | WrapBoundary(i)
+					| Flatten(i) | HardFlatten(i) | CollapseProbe(i) | CollapseAddProbe(i) | CollapseBoolProbe(i) | CollapseChainProbe(i) | WrapBoundary(i)
 					| ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
 				leadingOperandOpensDelim(i);
 			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat)

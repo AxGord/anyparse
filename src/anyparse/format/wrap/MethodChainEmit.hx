@@ -37,7 +37,8 @@ class MethodChainEmit {
 
 	public static function emit(
 		receiver:Doc, segments:Array<Doc>, opt:WriteOptions, rules:WrapRules,
-		?sourceBreakBefore:Array<Bool>
+		?sourceBreakBefore:Array<Bool>, nestSuppress:Bool = false,
+		segCallLeadingBreak:Bool = false
 	):Doc {
 		if (segments.length == 0) return WrapBoundary(receiver);
 
@@ -148,7 +149,8 @@ class MethodChainEmit {
 			// lambdas like `xs.map(λ).filter(λ)` don't inflate the
 			// probe), rest-of-stack DESCENDS BG (sibling body after
 			// chain IS visible). Slice ω-iffulllineexceeds-primitive.
-			return WrapBoundary(IfFullLineExceeds(opt.lineWidth, shapeAt(modeBreak), shapeAt(modeFlat)));
+			final ifFLE:Doc = IfFullLineExceeds(opt.lineWidth, shapeAt(modeBreak), shapeAt(modeFlat));
+			return WrapBoundary(maybeTagReglue(ifFLE, modeBreak, modeFlat, segments, nestSuppress, segCallLeadingBreak));
 		}
 
 		if (extraThresholds.length == 1) {
@@ -174,7 +176,16 @@ class MethodChainEmit {
 			final modeYY:WrapMode = evalAt(true, [t]);
 			if (modeNN == modeNY && modeNY == modeYY) return WrapBoundary(shapeAt(modeNN));
 			final brk:Doc = (modeNY == modeYY) ? shapeAt(modeYY) : Group(IfWidthExceeds(t, shapeAt(modeYY), shapeAt(modeNY)));
-			return WrapBoundary(IfFullLineExceeds(opt.lineWidth, brk, shapeAt(modeNN)));
+			final ifFLE:Doc = IfFullLineExceeds(opt.lineWidth, brk, shapeAt(modeNN));
+			// ω-methodchain-reeval-after-callparam: re-glue tag also for the
+			// `t > lineWidth` extra-threshold case (the default cascade's
+			// `LineLengthLargerThan 160` against a maxLineLength < 160 — the #3
+			// `manager.getInstance().add(<wrapping-args>)` shape). The break side
+			// is a single dot-break only when `modeNY == modeYY` (no inner
+			// `IfWidthExceeds` split); tag using that break mode.
+			return WrapBoundary(modeNY == modeYY
+				? maybeTagReglue(ifFLE, modeNY, modeNN, segments, nestSuppress, segCallLeadingBreak)
+				: ifFLE);
 		}
 
 		// 2+ extra thresholds — full enumeration without impossibility
@@ -295,7 +306,7 @@ class MethodChainEmit {
 			case Nest(_, inner), Group(inner), BodyGroup(inner),
 				GroupWithRestProbe(inner), Flatten(inner), WrapBoundary(inner),
 				HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
-				CollapseBoolProbe(inner),
+				CollapseBoolProbe(inner), CollapseChainProbe(inner),
 				ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 				endsWithLineComment(inner);
 			case IfBreak(breakDoc, _), IfWidthExceeds(_, breakDoc, _),
@@ -336,6 +347,86 @@ class MethodChainEmit {
 		final inner:Array<Doc> = [receiver];
 		for (s in segments) inner.push(s);
 		return Concat(inner);
+	}
+
+	/**
+	 * ω-methodchain-reeval-after-callparam (CollapsePass increment 3, subroot-E):
+	 * wrap a chain's `IfFullLineExceeds(width, breakShape, glueShape)` in a
+	 * `CollapseChainProbe` so `CollapsePass.rewriteChainProbe` can STRIP the
+	 * chain dot-break (re-glue) when the chain dot-broke ONLY because a segment's
+	 * call args wrapped — fork `reEvaluateMethodChainAfterCallParam` (strip
+	 * method-chain breaks, keep callParameter breaks). Gate: the width-driven
+	 * BREAK mode is a dot-break (`OnePerLine*`) over a glued `NoWrap` flat mode,
+	 * the chain is NOT itself a call argument (`!nestSuppress` — fork never
+	 * strips chain breaks for a chain inside a breaking outer call, e.g.
+	 * `method_chain_single_arg_break_parens`), and the glued last segment is a
+	 * breakable call (`reGluableChain`). Every non-matching chain stays the bare
+	 * `IfFullLineExceeds` (byte-inert).
+	 *
+	 * `segCallLeadingBreak` is the load-bearing discriminator vs fork's
+	 * `isNewLineAfter(POpen)`: the segment call's args must wrap with a LEADING
+	 * BREAK (first arg on its own line — `callParameterWrap.defaultMode == FLWLB`),
+	 * NOT a glued first arg (`FillLine` default) or a glued arrow/lambda whose
+	 * BODY breaks (`.map(x -> {…})`). Without this gate the re-glue over-fires on
+	 * chains fork keeps dot-broken (`arrow_wrapping_method_chain`,
+	 * `issue_311_line_break_before_popen`, `issue_180_middle_of_function_call`,
+	 * `issue_231_anon_function_parameter`) whose segment call glues its first
+	 * arg / arrow param to the open paren.
+	 */
+	private static function maybeTagReglue(
+		ifFLE:Doc, breakMode:WrapMode, flatMode:WrapMode,
+		segments:Array<Doc>, nestSuppress:Bool, segCallLeadingBreak:Bool
+	):Doc {
+		final reGluable:Bool = !nestSuppress && segCallLeadingBreak
+			&& isDotBreak(breakMode) && flatMode == NoWrap
+			&& reGluableChain(segments);
+		return reGluable ? CollapseChainProbe(ifFLE) : ifFLE;
+	}
+
+	/**
+	 * ω-methodchain-reeval-after-callparam — is `mode` a dot-break chain shape
+	 * (`OnePerLine` / `OnePerLineAfterFirst`)? The re-glue flip only tags a
+	 * chain whose width-driven BREAK shape actually splits at a Dot; a chain
+	 * whose break shape is itself `NoWrap` / `Keep` has no dot-break to strip.
+	 */
+	private static function isDotBreak(mode:WrapMode):Bool {
+		return switch mode {
+			case OnePerLine | OnePerLineAfterFirst: true;
+			case _: false;
+		};
+	}
+
+	/**
+	 * ω-methodchain-reeval-after-callparam — is this chain a re-glue candidate?
+	 * The glued (`NoWrap`) layout's overflow must come from a SEGMENT'S call
+	 * args (which can break independently), not from the receiver / a non-call
+	 * segment. Mirror fork `reEvaluateMethodChainAfterCallParam`'s precondition
+	 * `hasCallParamBreaksInChain` (a `POpen` with `isNewLineAfter`): the last
+	 * segment must be a call (`.field(args)`) whose args can wrap. The
+	 * `CollapsePass` re-measure then confirms the glued first line (up to that
+	 * call's open delim) fits at the captured column before stripping the break.
+	 * Conservative: requires the LAST segment to be the breakable call (the #3
+	 * `manager.getInstance().add(<args>)` shape); a chain whose breakable call
+	 * is mid-chain keeps its dot-break (out of scope, byte-inert).
+	 */
+	private static function reGluableChain(segments:Array<Doc>):Bool {
+		if (segments.length == 0) return false;
+		return segmentOpensCall(segments[segments.length - 1]);
+	}
+
+	/**
+	 * True iff the chain segment `seg` is a call `.field(args)` whose flat text
+	 * contains an open delimiter (`(`/`[`/`{`) after the leading `.field` — i.e.
+	 * a breakable call whose args can wrap onto their own lines. A bare
+	 * `.field` access (no call) has no breakable args.
+	 */
+	private static function segmentOpensCall(seg:Doc):Bool {
+		final flat:String = DocMeasure.flatText(seg);
+		for (i in 0...flat.length) {
+			final c:Int = StringTools.fastCodeAt(flat, i);
+			if (c == '('.code || c == '['.code || c == '{'.code) return true;
+		}
+		return false;
 	}
 
 	private static function shapeOnePerLineAfterFirst(receiver:Doc, segments:Array<Doc>, cols:Int):Doc {

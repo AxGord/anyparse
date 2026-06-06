@@ -946,7 +946,7 @@ class WrapList {
 					// containing one forces the wrap engine into break
 					// mode unconditionally.
 					return -1;
-				case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner):
+				case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner):
 					// ω-force-flat-engine slice A: pass-through. All four
 					// markers are render-time state; cascade-evaluator
 					// width measurements stay structural.
@@ -1031,7 +1031,7 @@ class WrapList {
 				final first:Null<Doc> = items.find(it -> !isLeadingTransparent(it));
 				if (first == null) return false;
 				node = first;
-			case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner):
+			case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner):
 				// ω-force-flat-engine slice A: pass-through. Render-time
 				// state — leading-hardline detection sees the marker's
 				// `inner` as if no wrapper were present.
@@ -1102,7 +1102,7 @@ class WrapList {
 					|| StringTools.fastCodeAt(s, 0) == '{'.code);
 			case Nest(_, inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner)
 					| Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner)
-					| CollapseBoolProbe(inner)
+					| CollapseBoolProbe(inner) | CollapseChainProbe(inner)
 					| ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
 				node = inner;
 			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat)
@@ -1151,7 +1151,7 @@ class WrapList {
 				return c == ')'.code || c == ']'.code || c == '}'.code;
 			case Nest(_, inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner)
 					| Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner)
-					| CollapseBoolProbe(inner)
+					| CollapseBoolProbe(inner) | CollapseChainProbe(inner)
 					| ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
 				node = inner;
 			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat)
@@ -2191,7 +2191,7 @@ class WrapList {
 			// ω-force-flat-engine slice A: pass-through. All four markers
 			// are render-time state — their `inner` carries the same leading
 			// hardline answer it would without the wrap.
-			case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner): hasLeadingHardline(inner);
+			case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner): hasLeadingHardline(inner);
 			// ω-cond-indent-policy FixedZero: render-time marker, transparent —
 			// leading-hardline answer matches the marker's `inner`.
 			case ConditionalMarkerZero(inner): hasLeadingHardline(inner);

@@ -582,6 +582,44 @@ enum Doc {
 	CollapseBoolProbe(inner:Doc);
 
 	/**
+	 * method-chain re-glue (dot-break re-evaluation) marker
+	 * (ω-methodchain-reeval-after-callparam / CollapsePass increment 3 —
+	 * subroot-E). `MethodChainEmit.emit` wraps a chain's width-driven
+	 * `IfFullLineExceeds(w, dotBreakShape, gluedShape)` in this marker when the
+	 * BREAK shape is a dot-break over a glued `NoWrap` flat shape, the chain is
+	 * not itself a call argument, and its glued last segment is a breakable call
+	 * whose args wrap with a LEADING BREAK (`callParameterWrap.defaultMode ==
+	 * FillLineWithLeadingBreak`).
+	 *
+	 * Sister of `CollapseBoolProbe`, but for the method-chain DOT-break axis
+	 * rather than the opBool operator-direction axis. The anyparse analogue of
+	 * haxe-formatter's `reEvaluateMethodChainAfterCallParam` (`MarkWrapping.hx`):
+	 * when a contained `callParameter` actually wrapped (`isNewLineAfter(POpen)`
+	 * — the segment's call args broke at layout time), the fork STRIPS the chain
+	 * dot-break (re-glues the chain — `manager.getInstance().add(` on one line,
+	 * args wrapping inside the glued call) instead of the over-eager
+	 * dot-then-call-broke layout anyparse's width probe produces (it sees the
+	 * full glued flat width including the now-breakable args).
+	 *
+	 * Like `CollapseBoolProbe`, the marker is purely render-transparent — the
+	 * renderer pushes `inner` with the enclosing frame's mode and force-flat
+	 * flags UNCHANGED, so absent a flip the output is byte-identical to the
+	 * `IfFullLineExceeds` it wraps. In the measure-only pass (`decisions != null`)
+	 * the render dispatch records the actual visual column the chain receiver
+	 * starts at (`indent = col`) keyed by node identity. `CollapsePass.
+	 * rewriteChainProbe` reads that column and — only when the full glued flat
+	 * overflows BUT the glued first line (with the last call's args broken) fits
+	 * at `col` (an O(1) flat-token-width re-measure, NO recursive spine probe) —
+	 * rewrites the marker to the glued shape. Otherwise it keeps the
+	 * `IfFullLineExceeds` (byte-identical).
+	 *
+	 * Like `Flatten`/`WrapBoundary`/`HardFlatten`/`CollapseProbe`/
+	 * `CollapseAddProbe`/`CollapseBoolProbe`, all Doc walkers treat it as a
+	 * transparent pass-through (descend `inner`).
+	 */
+	CollapseChainProbe(inner:Doc);
+
+	/**
 	 * Conditional-compilation marker fixed-zero scope (ω-cond-indent-policy
 	 * FixedZero). Render-time-only: wraps the WHOLE `#if … #end` construct
 	 * Doc (kw + cond + body + `#else`/`#elseif` clauses + trail). While

@@ -105,7 +105,7 @@ final class DocMeasure {
 					total += s.length;
 				case OptSpaceSkipAfterHardline:
 					total += 1;
-				case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner):
+				case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner):
 					// ω-force-flat-engine slice A: pass-through. All four
 					// markers are render-time state; structural token-width
 					// measurement is independent of force-flat propagation.
@@ -145,7 +145,7 @@ final class DocMeasure {
 				case OptSpace(s): buf.add(s);
 				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner) | BodyGroup(inner)
 						| Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner)
-						| CollapseAddProbe(inner) | CollapseBoolProbe(inner)
+						| CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner)
 						| ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 				case Concat(items):
@@ -238,7 +238,7 @@ final class DocMeasure {
 					if (t.length > 0) return StringTools.fastCodeAt(t, t.length - 1) == '}'.code;
 				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner)
 						| BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner)
-						| CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner)
+						| CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner)
 						| ConditionalMarkerZero(inner)
 						| ConditionalMarkerDecrease(inner):
 					stack.push(inner);
@@ -287,7 +287,7 @@ final class DocMeasure {
 					}
 				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner)
 						| BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner)
-						| CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner)
+						| CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner)
 						| ConditionalMarkerZero(inner)
 						| ConditionalMarkerDecrease(inner):
 					stack.push(inner);
@@ -334,7 +334,7 @@ final class DocMeasure {
 					}
 				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner)
 						| BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner)
-						| CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner)
+						| CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner)
 						| ConditionalMarkerZero(inner)
 						| ConditionalMarkerDecrease(inner):
 					stack.push(inner);
