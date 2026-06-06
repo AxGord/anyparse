@@ -94,7 +94,7 @@ final class DocMeasure {
 					// render-time decision; static token-width walks see only
 					// the flat shape (sister of the IfFirstLineExceeds arm).
 					stack.push(flatDoc);
-				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
+				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
 					var k:Int = items.length;
 					while (k > 0) {
 						k--;
@@ -156,7 +156,7 @@ final class DocMeasure {
 						| IfNaturalFirstLineExceeds(_, _, fl) | IfNaturalFirstLineFitsOpenDelim(_, _, fl)
 						| IfArrowContinuationFits(_, _, _, _, fl):
 					stack.push(fl);
-				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
+				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
 					var k:Int = items.length;
 					while (k > 0) {
 						k--;
@@ -250,7 +250,7 @@ final class DocMeasure {
 						| IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc)
 						| IfArrowContinuationFits(_, _, _, _, flatDoc):
 					stack.push(flatDoc);
-				case Fill(items, _, _) | FillWithRestProbe(items, _, _):
+				case Fill(items, _, _) | FillWithRestProbe(items, _, _) | FillBreakAfterWrap(items, _, _):
 					for (it in items) stack.push(it);
 			}
 		}
@@ -299,7 +299,7 @@ final class DocMeasure {
 						| IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc)
 						| IfArrowContinuationFits(_, _, _, _, flatDoc):
 					stack.push(flatDoc);
-				case Fill(items, _, _) | FillWithRestProbe(items, _, _):
+				case Fill(items, _, _) | FillWithRestProbe(items, _, _) | FillBreakAfterWrap(items, _, _):
 					for (it in items) stack.push(it);
 			}
 		}
@@ -346,7 +346,7 @@ final class DocMeasure {
 						| IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc)
 						| IfArrowContinuationFits(_, _, _, _, flatDoc):
 					stack.push(flatDoc);
-				case Fill(items, _, _) | FillWithRestProbe(items, _, _):
+				case Fill(items, _, _) | FillWithRestProbe(items, _, _) | FillBreakAfterWrap(items, _, _):
 					for (it in items) stack.push(it);
 			}
 		}

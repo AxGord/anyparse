@@ -846,7 +846,7 @@ final class CollapsePass {
 						| IfArrowContinuationFits(_, _, _, brk, fl):
 					stack.push(brk);
 					stack.push(fl);
-				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
+				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
 					for (it in items) stack.push(it);
 					stack.push(sep);
 			}
@@ -888,6 +888,7 @@ final class CollapsePass {
 			case IfArrowContinuationFits(ei, fw, n, brk, fl): IfArrowContinuationFits(ei, fw, n, f(brk), f(fl));
 			case Fill(items, sep, tr): Fill([for (it in items) f(it)], f(sep), tr);
 			case FillWithRestProbe(items, sep, tr): FillWithRestProbe([for (it in items) f(it)], f(sep), tr);
+			case FillBreakAfterWrap(items, sep, tr): FillBreakAfterWrap([for (it in items) f(it)], f(sep), tr);
 		};
 	}
 }

@@ -122,7 +122,7 @@ final class MatrixWrap {
 					stack.push(inner);
 				case Concat(parts):
 					for (p in parts) stack.push(p);
-				case Fill(parts, sep, _) | FillWithRestProbe(parts, sep, _):
+				case Fill(parts, sep, _) | FillWithRestProbe(parts, sep, _) | FillBreakAfterWrap(parts, sep, _):
 					for (p in parts) stack.push(p);
 					stack.push(sep);
 				case IfBreak(brk, flat) | IfWidthExceeds(_, brk, flat)

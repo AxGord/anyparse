@@ -616,7 +616,7 @@ class WrapList {
 						| IfNaturalFirstLineExceeds(_, b, _) | IfNaturalFirstLineFitsOpenDelim(_, b, _)
 						| IfArrowContinuationFits(_, _, _, b, _): w(b, depth);
 				case Concat(items): for (it in items) w(it, depth);
-				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
+				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
 					w(sep, depth);
 					for (it in items) w(it, depth);
 				case Text(t):
@@ -645,7 +645,7 @@ class WrapList {
 						| IfLineExceeds(_, b, _) | IfFullLineExceeds(_, b, _)
 						| IfNaturalFirstLineExceeds(_, b, _) | IfNaturalFirstLineFitsOpenDelim(_, b, _): w(b, depth);
 				case Concat(items): for (it in items) w(it, depth);
-				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
+				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
 					w(sep, depth);
 					for (it in items) w(it, depth);
 				case Text(t):
@@ -920,7 +920,7 @@ class WrapList {
 					// natural-first-line decision is renderer-side; this
 					// static length walk sees the flat shape.
 					stack.push(flatDoc);
-				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
+				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
 					var k:Int = items.length;
 					while (k > 0) {
 						k--;
@@ -1027,7 +1027,7 @@ class WrapList {
 				final first:Null<Doc> = items.find(it -> !isLeadingTransparent(it));
 				if (first == null) return false;
 				node = first;
-			case Fill(items, _, _) | FillWithRestProbe(items, _, _):
+			case Fill(items, _, _) | FillWithRestProbe(items, _, _) | FillBreakAfterWrap(items, _, _):
 				final first:Null<Doc> = items.find(it -> !isLeadingTransparent(it));
 				if (first == null) return false;
 				node = first;
@@ -1114,7 +1114,7 @@ class WrapList {
 				final first:Null<Doc> = items.find(it -> !isLeadingTransparent(it));
 				if (first == null) return false;
 				node = first;
-			case Fill(items, _, _) | FillWithRestProbe(items, _, _):
+			case Fill(items, _, _) | FillWithRestProbe(items, _, _) | FillBreakAfterWrap(items, _, _):
 				final first:Null<Doc> = items.find(it -> !isLeadingTransparent(it));
 				if (first == null) return false;
 				node = first;
@@ -1163,7 +1163,7 @@ class WrapList {
 				final last:Null<Doc> = findLastNonTrailingTransparent(items);
 				if (last == null) return false;
 				node = last;
-			case Fill(items, _, _) | FillWithRestProbe(items, _, _):
+			case Fill(items, _, _) | FillWithRestProbe(items, _, _) | FillBreakAfterWrap(items, _, _):
 				final last:Null<Doc> = findLastNonTrailingTransparent(items);
 				if (last == null) return false;
 				node = last;
@@ -1529,7 +1529,7 @@ class WrapList {
 					stack.push(inner);
 				case Concat(arr):
 					for (it in arr) stack.push(it);
-				case Fill(items, _, _) | FillWithRestProbe(items, _, _):
+				case Fill(items, _, _) | FillWithRestProbe(items, _, _) | FillBreakAfterWrap(items, _, _):
 					return items.length > 0;
 				case Line(s):
 					if (s.length > 0 && StringTools.fastCodeAt(s, 0) == '\n'.code) return true;
@@ -2144,7 +2144,18 @@ class WrapList {
 		// Slice ω-fill-tail-reserve.
 		final tailReserve:Int = sep.length + 1
 			+ (appendTrailingComma ? sep.length : 0);
-		final inner:Doc = items.length == 1 ? items[0] : Fill(items, softSep, tailReserve);
+		// ω-fill-break-after-wrap: `FillBreakAfterWrap` forces the separator
+		// before an item to break when the preceding arg self-wrapped (e.g. a
+		// long opAddSub chain arg that fills across continuation lines). Plain
+		// `Fill` would glue the trailing scalar args onto the wrapped arg's
+		// short last line (`+ "…", 10212`); the break-after-wrap variant puts
+		// them on a fresh continuation line where they fill-pack among
+		// themselves — matching fork's `wrapFillLineWithLeading2AfterLast`
+		// flat-width accounting. Fixes `opadd_multiparam_before_last` and
+		// `callparam_fill_pack_after_opadd_first_arg`; corrects the outer-arg
+		// layout of `opadd_multiparam_{after_last,continuation_indent}` too
+		// (those stay FAIL only on a separate opAddSub-internal indent defect).
+		final inner:Doc = items.length == 1 ? items[0] : FillBreakAfterWrap(items, softSep, tailReserve);
 		final tail:Doc = appendTrailingComma ? Text(sep) : Empty;
 		return Concat([
 			Text(open), openInside,
@@ -2186,7 +2197,7 @@ class WrapList {
 					if (!isLeadingTransparent(it)) return false;
 				}
 				false;
-			case Fill(items, _, _) | FillWithRestProbe(items, _, _):
+			case Fill(items, _, _) | FillWithRestProbe(items, _, _) | FillBreakAfterWrap(items, _, _):
 				items.length > 0 && hasLeadingHardline(items[0]);
 			// ω-force-flat-engine slice A: pass-through. All four markers
 			// are render-time state — their `inner` carries the same leading
@@ -2247,7 +2258,7 @@ class WrapList {
 					// double-counting.
 					w(b, depth);
 				case Concat(items): for (it in items) w(it, depth);
-				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
+				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
 					w(sep, depth);
 					for (it in items) w(it, depth);
 				case Text(t):

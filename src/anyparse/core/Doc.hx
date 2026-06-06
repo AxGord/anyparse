@@ -352,6 +352,34 @@ enum Doc {
 	 * difference is rendering-time only.
 	 */
 	FillWithRestProbe(items:Array<Doc>, sep:Doc, ?tailReserve:Int);
+
+	/**
+	 * Break-after-wrapped-item `Fill` variant (ω-fill-break-after-wrap). At
+	 * render time, the per-item-fit probe additionally forces the separator
+	 * before `items[i]` to BREAK whenever the preceding item `items[i-1]`
+	 * self-wrapped — i.e. it emitted a physical newline while rendering,
+	 * overflowing its own continuation line. Plain `Fill` packs the follower
+	 * onto the wrapped item's short last-line column (render-order dependent);
+	 * this variant instead matches haxe-formatter's
+	 * `wrapFillLineWithLeading2AfterLast` flat-width `lineLength` accounting,
+	 * where an item whose flat width overflows `maxLineLength` pushes the next
+	 * item onto its own continuation line regardless of where the wrapped item
+	 * visually ends.
+	 *
+	 * Used by `WrapList.shapeFillLineWithLeadingBreak` for the OUTER call-
+	 * argument list of a `fillLineWithLeadingBreak` call whose first arg is a
+	 * self-wrapping opAddSub chain: the chain wraps across continuation lines,
+	 * then the trailing scalar args (`, 10212` / `, getStyle(), 430, 20`) start
+	 * on a fresh continuation line and fill-pack among themselves — exactly
+	 * `opadd_multiparam_{before,after}_last` and `opadd_multiparam_continuation_
+	 * indent`.
+	 *
+	 * All static Doc walkers (`flatTokenWidth`, `flatTokenWidthFirstLine`,
+	 * `flatLength`, `hasLeadingHardline`, …) treat this primitive identically
+	 * to `Fill(items, sep, tailReserve)` — the break-after-wrap semantic is a
+	 * render-time decision only.
+	 */
+	FillBreakAfterWrap(items:Array<Doc>, sep:Doc, ?tailReserve:Int);
 	OptSpace(s:String);
 	OptHardline;
 	OptHardlineSkipAtOpenDelim;

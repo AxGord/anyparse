@@ -59,6 +59,19 @@ private class Frame {
 	public var fillTailReserve:Int;
 
 	/**
+	 * ω-fill-break-after-wrap: the render's physical-line count at the moment
+	 * item `fillIdx - 1` STARTS rendering (snapshotted when this continuation
+	 * frame is pushed). At resumption the renderer compares it to the current
+	 * `lineCount`: a higher count means item `fillIdx - 1` emitted a newline
+	 * while rendering — it self-wrapped past its continuation line — so the
+	 * separator before item `fillIdx` is forced to break, matching fork's
+	 * flat-width `lineLength` overflow accounting. `-1` disables the check
+	 * (the legacy per-item-fit probe alone decides), preserving byte-identical
+	 * behavior for every Fill not opting in.
+	 */
+	public var fillLineStart:Int;
+
+	/**
 	 * Rest-of-stack-aware per-item-fit flag (ω-fill-rest-probe). When
 	 * `true`, the FillCont resumption probe at the top of the dispatch
 	 * loop subtracts `flatTokenWidthOfRestStack(stack)` from the budget
@@ -129,13 +142,15 @@ private class Frame {
 		this.fillSep = null;
 		this.fillTailReserve = 0;
 		this.fillRestProbe = false;
+		this.fillLineStart = -1;
 		this.popMarkerZero = false;
 		this.popMarkerDecrease = false;
 	}
 
 	public static inline function fillCont(
 		indent:Int, rest:Array<Doc>, idx:Int, sep:Doc, tailReserve:Int,
-		forceFlat:Bool = false, restProbe:Bool = false, hardFlat:Bool = false
+		forceFlat:Bool = false, restProbe:Bool = false, hardFlat:Bool = false,
+		lineStart:Int = -1
 	):Frame {
 		final f:Frame = new Frame(indent, MBreak, Empty, forceFlat, hardFlat);
 		f.fillRest = rest;
@@ -143,6 +158,7 @@ private class Frame {
 		f.fillSep = sep;
 		f.fillTailReserve = tailReserve;
 		f.fillRestProbe = restProbe;
+		f.fillLineStart = lineStart;
 		return f;
 	}
 }
@@ -230,6 +246,18 @@ class Renderer {
 		// pair of parallel `lastEmittedWas{Hardline,OpenDelim}` Bools
 		// whose mutex was conventional, not type-enforced.
 		var lastEmit:LastEmit = Other;
+		// fill-break-after-wrap: monotonic count of physical newlines
+		// committed to `buf`. Incremented at every site that writes
+		// `lineEnd` (break-mode `Line`, `OptHardline`,
+		// `OptHardlineSkipAtOpenDelim`, `flushPendingHardline`). A
+		// `Doc.Fill` continuation frame snapshots this at the line where its
+		// previous item starts (`fillLineStart`); if the count advanced while
+		// that item rendered, the item self-wrapped (overflowed its
+		// continuation line) and the next item is forced to break — mirroring
+		// fork's `wrapFillLine*2AfterLast`, where an item whose flat width
+		// overflows pushes `lineLength` past `maxLineLength` and breaks the
+		// follower. Render-local (NOT a static — invariant #1).
+		var lineCount:Int = 0;
 		// ω-cond-indent-policy FixedZero: per-render nesting depth of active
 		// `ConditionalMarkerZero` scopes (render-local, NOT a static —
 		// invariant #1). Incremented on entry, decremented via a `popMarkerZero`
@@ -286,6 +314,7 @@ class Renderer {
 					writeIndent(buf, pendingIndent, indentChar, tabWidth);
 				}
 				buf.add(lineEnd);
+				lineCount++;
 				pendingIndent = pendingHardline;
 				col = pendingHardline;
 				lastEmit = Hardline;
@@ -348,9 +377,28 @@ class Renderer {
 					final restW:Int = (f.fillRestProbe && idx == fillRest.length - 1)
 						? flatTokenWidthOfRestStack(stack)
 						: 0;
-					final fits:Bool = fitsFlat(width - col - tailReserve - restW, f.indent, Concat([fillSep, fillRest[idx]]));
-					if (idx + 1 < fillRest.length)
-						stack.push(Frame.fillCont(f.indent, fillRest, idx + 1, fillSep, tailReserve, f.forceFlat, f.fillRestProbe, f.hardFlat));
+					// ω-fill-break-after-wrap: the just-drained previous item
+					// (`fillRest[idx - 1]`) self-wrapped when the render's
+					// physical-line count advanced past the snapshot taken when
+					// it started. A self-wrapped item overflowed its
+					// continuation line, so fork's `lineLength` accounting would
+					// push the follower onto its own line regardless of the
+					// short post-wrap pen column. Force the separator to break
+					// in that case, mirroring `wrapFillLine*2AfterLast`. Gated
+					// on `fillLineStart >= 0` so non-opting / force-flat Fills
+					// stay byte-identical via the legacy `fits` probe alone.
+					final prevWrapped:Bool = f.fillLineStart >= 0 && lineCount > f.fillLineStart;
+					final fits:Bool = !prevWrapped
+						&& fitsFlat(width - col - tailReserve - restW, f.indent, Concat([fillSep, fillRest[idx]]));
+					if (idx + 1 < fillRest.length) {
+						// Snapshot the line where `fillRest[idx]` STARTS: when the
+						// separator breaks (`!fits`) the item begins on the next
+						// physical line, so the snapshot must account for that
+						// break (which hasn't been emitted yet). Disabled-mode
+						// (`fillLineStart < 0`) propagates `-1`.
+						final nextStart:Int = f.fillLineStart < 0 ? -1 : (fits ? lineCount : lineCount + 1);
+						stack.push(Frame.fillCont(f.indent, fillRest, idx + 1, fillSep, tailReserve, f.forceFlat, f.fillRestProbe, f.hardFlat, nextStart));
+					}
 					stack.push(new Frame(f.indent, MBreak, fillRest[idx], f.forceFlat, f.hardFlat));
 					stack.push(new Frame(f.indent, fits ? MFlat : MBreak, fillSep, f.forceFlat, f.hardFlat));
 				}
@@ -421,6 +469,7 @@ class Renderer {
 							writeIndent(buf, pendingIndent, indentChar, tabWidth);
 						}
 						buf.add(lineEnd);
+						lineCount++;
 						pendingIndent = f.indent;
 						col = f.indent;
 						lastEmit = Hardline;
@@ -464,6 +513,7 @@ class Renderer {
 							writeIndent(buf, pendingIndent, indentChar, tabWidth);
 						}
 						buf.add(lineEnd);
+						lineCount++;
 						pendingIndent = f.indent;
 						col = f.indent;
 						lastEmit = Hardline;
@@ -530,6 +580,7 @@ class Renderer {
 								writeIndent(buf, pendingIndent, indentChar, tabWidth);
 							}
 							buf.add(lineEnd);
+							lineCount++;
 							pendingIndent = f.indent;
 							col = f.indent;
 							lastEmit = Hardline;
@@ -855,8 +906,8 @@ class Renderer {
 						final pushMode:Mode = contFits ? f.mode : MBreak;
 						stack.push(new Frame(f.indent, pushMode, contFits ? flatDoc : breakDoc));
 					}
-				case Fill(items, sep, tailReserveOpt) | FillWithRestProbe(items, sep, tailReserveOpt):
-					// Paired arm: identical entry shape for both ctors. The
+				case Fill(items, sep, tailReserveOpt) | FillWithRestProbe(items, sep, tailReserveOpt) | FillBreakAfterWrap(items, sep, tailReserveOpt):
+					// Shared arm: identical entry shape for all three ctors. The
 					// rest-probe semantic lives in FillCont resumption (see
 					// top of dispatch loop) — we just tag the FillCont frame
 					// with the originating ctor's `restProbe` flag. The
@@ -890,8 +941,20 @@ class Renderer {
 						// each subsequent probe — see Fill case at the top
 						// of the dispatch loop.
 						final tailReserve:Int = tailReserveOpt ?? 0;
+						// ω-fill-break-after-wrap: opt-in via the
+						// `FillBreakAfterWrap` ctor only. When set, snapshot the
+						// current physical-line count as the line where items[0]
+						// starts; the continuation frame compares it on resume to
+						// detect a self-wrapped item[0] and force the follower to
+						// break. Plain `Fill` / `FillWithRestProbe` pass `-1`
+						// (disabled) so every existing call-site stays byte-
+						// identical. Disabled for force-flat (no breaks possible).
+						final breakAfterWrap:Bool = switch f.doc {
+							case FillBreakAfterWrap(_, _, _): true;
+							case _: false;
+						};
 						if (items.length > 1)
-							stack.push(Frame.fillCont(f.indent, items, 1, sep, tailReserve, f.forceFlat, restProbe, f.hardFlat));
+							stack.push(Frame.fillCont(f.indent, items, 1, sep, tailReserve, f.forceFlat, restProbe, f.hardFlat, (breakAfterWrap && !f.forceFlat) ? lineCount : -1));
 						stack.push(new Frame(f.indent, MBreak, items[0], f.forceFlat, f.hardFlat));
 					}
 				case Flatten(inner):
@@ -1154,7 +1217,7 @@ class Renderer {
 							| IfLineExceeds(_, _, fl) | IfFullLineExceeds(_, _, fl)
 							| IfNaturalFirstLineExceeds(_, _, fl) | IfNaturalFirstLineFitsOpenDelim(_, _, fl) | IfArrowContinuationFits(_, _, _, _, fl):
 						inner.push({doc: fl, mode: MFlat});
-					case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
+					case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
 						var k:Int = items.length;
 						while (k > 0) {
 							k--;
@@ -1210,7 +1273,7 @@ class Renderer {
 						| IfArrowContinuationFits(_, _, _, brk, fl):
 					stack.push(brk);
 					stack.push(fl);
-				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
+				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
 					for (it in items) stack.push(it);
 					stack.push(sep);
 				case Empty | Text(_) | Line(_) | OptSpace(_) | OptHardline
@@ -1379,7 +1442,7 @@ class Renderer {
 					// sees only the flat shape (slice
 					// ω-ifnaturalfirstlineexceeds-infra).
 					local.push(new Frame(f.indent, MFlat, flatDoc));
-				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
+				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
 					// Flat measurement of Fill: items joined by sep flat.
 					// `tailReserve` is a render-time per-item-fit knob, NOT
 					// a flat-width adjustment — irrelevant when the enclosing
@@ -1499,7 +1562,7 @@ class Renderer {
 					// (the flat-side measurer of the sibling
 					// `IfFirstLineExceeds`) sees only the flat shape.
 					stack.push(flatDoc);
-				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
+				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
 					var k:Int = items.length;
 					while (k > 0) {
 						k--;
@@ -1606,7 +1669,7 @@ class Renderer {
 								| IfLineExceeds(_, _, fl) | IfFullLineExceeds(_, _, fl)
 								| IfNaturalFirstLineExceeds(_, _, fl) | IfNaturalFirstLineFitsOpenDelim(_, _, fl) | IfArrowContinuationFits(_, _, _, _, fl):
 							inner.push({doc: fl, mode: MFlat});
-						case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
+						case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
 							var k = items.length;
 							while (k > 0) {
 								k--;
@@ -1751,7 +1814,7 @@ class Renderer {
 					// consumer (assignment break-after-=) never nests this ctor,
 					// so the approximation is inert here.
 					stack.push({doc: flatDoc, indent: node.indent, mode: node.mode, forceFlat: node.forceFlat});
-				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
+				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
 					// Flat interleave tagged with node.mode (so a broken sep's
 					// Line terminates the first line). Slight over-measure when
 					// items pack onto multiple lines; the canonical consumer
@@ -1921,7 +1984,7 @@ class Renderer {
 					// (emitCondition) never nests this ctor inside another, so
 					// the approximation is inert here.
 					stack.push({doc: flatDoc, indent: node.indent, mode: node.mode, forceFlat: node.forceFlat});
-				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
+				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
 					// Flat interleave tagged with node.mode (so a broken sep's
 					// Line terminates the first line). Mirror `naturalFirstLine
 					// Width`'s Fill arm; the canonical consumer does not place a
@@ -2062,7 +2125,7 @@ class Renderer {
 						// probe is a render-time decision; this static
 						// rest-of-stack walk sees only the flat shape.
 						inner.push({doc: flatDoc, mode: MFlat});
-					case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
+					case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
 						var k:Int = items.length;
 						while (k > 0) {
 							k--;
@@ -2162,7 +2225,7 @@ class Renderer {
 						// probe is a render-time decision; this static
 						// rest-of-stack walk sees only the flat shape.
 						inner.push({doc: flatDoc, mode: MFlat});
-					case Fill(items, sep, _) | FillWithRestProbe(items, sep, _):
+					case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
 						var k:Int = items.length;
 						while (k > 0) {
 							k--;
