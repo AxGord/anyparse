@@ -1122,6 +1122,77 @@ class WrapList {
 	}
 
 	/**
+	 * True iff `d`'s first visible Text leaf starts with a COLLECTION open
+	 * delimiter — `[` (array literal) or `{` (object / map literal). The
+	 * narrower sibling of `startsWithOpenDelim`: that matches `(` too (paren-
+	 * expr / call), this restricts to the two literal-collection brackets.
+	 * Used by the multi-arg-trailing-collection glue intercept in `shape()` to
+	 * recognise a trailing array / object-literal arg (whose internal break the
+	 * call head can absorb at the open paren) while excluding a trailing paren-
+	 * expr or call arg. Same left-spine descent through transparent render
+	 * wrappers + the flat side of every render-decision. O(left-spine), no
+	 * re-measure.
+	 */
+	private static function startsWithCollectionDelim(d:Doc):Bool {
+		var node:Doc = d;
+		while (true) switch node {
+			case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline
+					| OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
+				return false;
+			case Text(s):
+				return s.length > 0 && (StringTools.fastCodeAt(s, 0) == '['.code
+					|| StringTools.fastCodeAt(s, 0) == '{'.code);
+			case Nest(_, inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner)
+					| Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner)
+					| CollapseBoolProbe(inner) | CollapseChainProbe(inner)
+					| ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
+				node = inner;
+			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat)
+					| IfLineExceeds(_, _, flat) | IfFullLineExceeds(_, _, flat)
+					| IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat)
+					| IfArrowContinuationFits(_, _, _, _, flat):
+				node = flat;
+			case Concat(items):
+				final first:Null<Doc> = items.find(it -> !isLeadingTransparent(it));
+				if (first == null) return false;
+				node = first;
+			case Fill(items, _, _) | FillWithRestProbe(items, _, _) | FillBreakAfterWrap(items, _, _):
+				final first:Null<Doc> = items.find(it -> !isLeadingTransparent(it));
+				if (first == null) return false;
+				node = first;
+		}
+	}
+
+	/**
+	 * Returns the index of the SOLE multi-line arg in `items` when that arg is a
+	 * breaking collection literal (`startsWithCollectionDelim` AND `flatLength <
+	 * 0`), and EVERY other arg renders single-line (`flatLength >= 0`); else -1.
+	 *
+	 * The multi-arg-collection-glue intercept's structural predicate: gluing all
+	 * args inline is a valid fixed point ONLY when exactly one arg breaks and it
+	 * is the collection — the other (flat) args then ride the open-paren line
+	 * (before it) or the collection's close line (after it). A second multi-line
+	 * arg, or a multi-line arrow / method-chain / paren-expr arg, would place a
+	 * break in a spot the all-inline glue can't absorb, so we bail (-1).
+	 *
+	 * `flatLength(item) < 0` short-circuits on the first hardline per arg (no full
+	 * re-measure); the scan is O(Σ arg spines up to first hardline).
+	 */
+	private static function soleMultilineCollectionArg(items:Array<Doc>):Int {
+		var collIdx:Int = -1;
+		for (i in 0...items.length) if (flatLength(items[i]) < 0) {
+			// A second multi-line arg, or a multi-line arg that is not a plain
+			// breaking collection — the all-inline glue is not a fixed point.
+			if (collIdx >= 0) return -1;
+			final it:Doc = items[i];
+			if (isArrowBodyMarker(it) || isMethodChainItem(it) || !startsWithCollectionDelim(it))
+				return -1;
+			collIdx = i;
+		}
+		return collIdx;
+	}
+
+	/**
 	 * True iff `d`'s last rendered visible token is a close delimiter
 	 * (`)` / `]` / `}`) — i.e. the construct is a paren-expression / call /
 	 * array / object literal / index access whose close bracket trails. The
@@ -1351,6 +1422,57 @@ class WrapList {
 				&& arrowBodyIsBlock(items[items.length - 1])) {
 			final glueShape:Doc = multiArgBlockLambdaGlueShape(open, close, sep, items, openInside, closeInside, sepBeforeFlags);
 			final openShape:Doc = shapeFillLineWithLeadingBreak(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
+			return IfFirstLineExceeds(lineWidth, openShape, glueShape);
+		}
+		// ω-callparam-multiarg-collection-glue: a `FillLine` / FLWLB MULTI-arg call
+		// whose SOLE multi-line arg is a BREAKING collection literal (array `[…]` /
+		// object `{…}` whose first visible Text is `[`/`{` AND that carries an
+		// internal hardline → renders multi-line) keeps ALL args GLUED to the open
+		// paren iff the glued flat first line (up to the collection's own break)
+		// fits `lineWidth`; the collection self-breaks at its `[`/`{` and every
+		// other arg stays inline — the args before it on the open-paren line, the
+		// args after it glued onto the collection's close line (`f(a, [\n…\n], b)`).
+		//
+		// Without this, `shapeFillLine`'s outer `Group` aborts `fitsFlat` on the
+		// collection's internal hardline and commits MBreak, so the `Fill` breaks
+		// EVERY soft sep — ALL args open onto their own lines (`f(\n\ta,\n\t[\n…`).
+		// The glued fixed point (head + flat args inline, only the collection self-
+		// breaks) is only reached on a LATER write once the source already broke
+		// (the collection arg's own Doc shifts), so the writer OSCILLATES — write 1
+		// ≠ write 2. The break decision is SOURCE-DEPENDENT (incoming layout changes
+		// the collection arg's internal Doc → flips the outer Group), which is
+		// exactly the non-idempotence. This intercept replaces that source-blind
+		// Group decision with the deterministic `IfFirstLineExceeds` width probe, so
+		// the FIRST write already produces the glued fixed point.
+		//
+		// Sibling of the block-lambda intercept above: same
+		// `IfFirstLineExceeds(lineWidth, openShape, glueShape)` O(1) first-line
+		// width probe + reused `multiArgBlockLambdaGlueShape` (glue all items
+		// inline with `sep + ' '`; the lone multi-line collection self-breaks).
+		// `openShape` is the mode's own break shape (`shapeFillLine` /
+		// `shapeFillLineWithLeadingBreak`) — the unchanged fallback for a too-wide
+		// glued head. The discriminator is STRUCTURAL + spine-bounded:
+		//  - `items.length > 1` (DISJOINT from the single-arg / sole-arrow paths,
+		//    all `items.length == 1`);
+		//  - EXACTLY ONE arg renders multi-line (`flatLength(...) < 0`), and it is
+		//    a collection literal (first visible Text `[`/`{`, NOT `(` — a paren-
+		//    expr / call arg is excluded), NOT an arrow (block-lambda owns the
+		//    FLWLB gate above) and NOT a method chain (a chain breaks at a `.` dot,
+		//    not at an open delim — gluing would keep the paren glued where the
+		//    fork opens it, the documented inc6/inc7 chain-operand wall). Requiring
+		//    the collection to be the SOLE multi-line arg keeps the all-inline glue
+		//    a valid fixed point: every OTHER arg is flat, so it rides either the
+		//    open-paren line (before the collection) or the collection-close line
+		//    (after it). `flatLength` short-circuits on the first hardline per arg —
+		//    no full re-measure. The collection may sit at ANY position
+		//    (`docHelper('_dib', [\n…\n], macro …)` — the canonical churning site —
+		//    has it in the MIDDLE, not last).
+		if ((mode == FillLine || mode == FillLineWithLeadingBreak) && items.length > 1
+				&& soleMultilineCollectionArg(items) >= 0) {
+			final glueShape:Doc = multiArgBlockLambdaGlueShape(open, close, sep, items, openInside, closeInside, sepBeforeFlags);
+			final openShape:Doc = mode == FillLineWithLeadingBreak
+				? shapeFillLineWithLeadingBreak(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma)
+				: shapeFillLine(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags, keepCloseGlued);
 			return IfFirstLineExceeds(lineWidth, openShape, glueShape);
 		}
 		return switch mode {
