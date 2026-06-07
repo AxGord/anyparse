@@ -4,25 +4,29 @@ import haxe.Exception;
 import utest.Assert;
 import utest.Test;
 // Import JValue first so its `@:build` macros define the sibling Fast
-// parser, Fast writer and the transform `map` before the imports below
+// parser, Fast writer and the deep transform before the imports below
 // resolve.
 import anyparse.grammar.json.JValue;
+import anyparse.grammar.json.JStringLit;
 import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueWriter;
-import anyparse.grammar.json.JValueTransform;
+import anyparse.grammar.json.JValueAst;
 import anyparse.grammar.json.JValueTools;
 
 /**
  * First-slice coverage for `Build.buildTransform` — the macro-generated
- * shallow `map` over the `JValue` family.
+ * DEEP multi-type transform over the `JValue` family.
  *
- * Verifies two things end-to-end:
- *  - DEEP transforms composed by calling `JValueTransform.map` inside a
- *    recursive `f` mutate every node of the tree (numbers doubled,
- *    strings upper-cased) and the result both compares structurally and
- *    round-trips byte-correctly through the existing writer.
- *  - The identity map (`f = x -> x`, applied deeply) leaves the tree
- *    unchanged and byte-identical through the writer.
+ * The macro emits `JValueAst.transform(root, visit)` plus a
+ * `JValueTransform` hook typedef (one optional `T -> T` per grammar
+ * type). Unlike the earlier shallow `map`, the walk is whole-tree:
+ * setting a single per-type hook rewrites every node of that type at any
+ * depth, and an empty `{}` is a structural identity. Verifies:
+ *  - DEEP per-type hooks (double every number leaf, upper-case every
+ *    string leaf) mutate every matching node and round-trip
+ *    byte-correctly through the existing writer.
+ *  - The identity transform (`{}`) leaves the tree unchanged and
+ *    byte-identical through the writer.
  *
  * Covers object, array, nested-mixed and primitive shapes.
  */
@@ -33,64 +37,84 @@ class JValueTransformSliceTest extends Test {
 		super();
 	}
 
-	// ---------------- deep recursive transformers ----------------
+	// ---------------- deep per-type hooks ----------------
 
-	/**
-	 * Deep map: double every number leaf. Recurses into children first
-	 * via `JValueTransform.map`, then applies the leaf change at this
-	 * node — the canonical `ExprTools.map` composition.
-	 */
+	/** Deep transform: double every `JNumber` leaf, in one walk. */
 	private static function deepDouble(node:JValue):JValue {
-		final mapped:JValue = JValueTransform.map(node, deepDouble);
-		return switch mapped {
-			case JNumber(v): JNumber((v : Float) * 2);
-			case _: mapped;
-		};
+		return JValueAst.transform(node, {
+			jValue: function(v:JValue):JValue {
+				return switch v {
+					case JNumber(n): JNumber((n : Float) * 2);
+					case _: v;
+				};
+			},
+		});
 	}
 
-	/** Deep map: upper-case every string leaf (object keys are left intact). */
+	/** Deep transform: upper-case every `JString` leaf (object keys left intact). */
 	private static function deepUpper(node:JValue):JValue {
-		final mapped:JValue = JValueTransform.map(node, deepUpper);
-		return switch mapped {
-			case JString(v): JString((v : String).toUpperCase());
-			case _: mapped;
-		};
+		return JValueAst.transform(node, {
+			jValue: function(v:JValue):JValue {
+				return switch v {
+					case JString(s): JString((s : String).toUpperCase());
+					case _: v;
+				};
+			},
+		});
 	}
 
-	/** Identity leaf function, composed deeply. */
+	/** Identity transform: empty `visit`, deep no-op. */
 	private static function deepIdentity(node:JValue):JValue {
-		return JValueTransform.map(node, deepIdentity);
+		return JValueAst.transform(node, {});
 	}
 
-	// ---------------- shallow-contract assertions ----------------
+	// ---------------- per-type-hook contract ----------------
 
-	public function testShallowDoesNotRecurse():Void {
-		// A shallow map with identity `f` on a nested array leaves the
-		// tree equal; the point is that `map` itself does not descend —
-		// `f` is the identity so the single level it touches is a no-op.
+	public function testEmptyVisitIsIdentity():Void {
 		final ast:JValue = JArray([JNumber(1), JArray([JNumber(2)])]);
-		final out:JValue = JValueTransform.map(ast, x -> x);
-		Assert.isTrue(JValueTools.equals(ast, out), 'shallow identity changed the tree');
+		final out:JValue = JValueAst.transform(ast, {});
+		Assert.isTrue(JValueTools.equals(ast, out), 'empty visit changed the tree');
 	}
 
-	public function testShallowAppliesToImmediateChildrenOnly():Void {
-		// Replace immediate children with JNull. The nested JNumber(2)
-		// inside the inner array must survive untouched, because `map` is
-		// shallow — it only sees the two top-level array elements.
+	public function testHookRewritesEveryNodeOfType():Void {
+		// A `jValue` hook that replaces every value node with JNull
+		// collapses the whole tree to the outermost rewrite (bottom-up:
+		// children become JNull first, then the array itself).
 		final ast:JValue = JArray([JNumber(1), JArray([JNumber(2)])]);
-		final out:JValue = JValueTransform.map(ast, _ -> JNull);
-		final expected:JValue = JArray([JNull, JNull]);
-		Assert.isTrue(JValueTools.equals(expected, out), 'shallow map touched a non-immediate child');
+		final out:JValue = JValueAst.transform(ast, {jValue: _ -> JNull});
+		Assert.isTrue(JValueTools.equals(JNull, out), 'jValue hook did not rewrite every node');
 	}
 
-	public function testShallowObjectEntryValueIsImmediate():Void {
-		// An object entry's `value` is reached as an immediate family
-		// child even though it sits one struct level deep; its key is a
-		// non-family leaf and must be copied verbatim.
+	public function testTerminalHookFiresOnNestedLeaves():Void {
+		// A `jStringLit` hook rewrites the key terminal of every object
+		// entry AND the string value — a Terminal-rule hook is a valid
+		// rewrite site reached at any depth.
+		final ast:JValue = JObject([{key: 'a', value: JString('x')}]);
+		final out:JValue = JValueAst.transform(ast, {jStringLit: (s:JStringLit) -> bang(s)});
+		final expected:JValue = JObject([{key: 'a!', value: JString('x!')}]);
+		Assert.isTrue(JValueTools.equals(expected, out), 'jStringLit hook missed nested string terminals');
+	}
+
+	/** Append `!` to a JSON string terminal (transparent over String). */
+	private static function bang(s:JStringLit):JStringLit {
+		return (s : String) + '!';
+	}
+
+	public function testEntryHookSeesTransformedChildren():Void {
+		// Bottom-up: the inner `value` is doubled by the `jValue` hook
+		// BEFORE the `jEntry` hook runs, so an entry-level inspection sees
+		// the already-transformed child.
 		final ast:JValue = JObject([{key: 'a', value: JNumber(5)}]);
-		final out:JValue = JValueTransform.map(ast, _ -> JBool(true));
-		final expected:JValue = JObject([{key: 'a', value: JBool(true)}]);
-		Assert.isTrue(JValueTools.equals(expected, out), 'object-entry value not mapped, or key not preserved');
+		final out:JValue = JValueAst.transform(ast, {
+			jValue: function(v:JValue):JValue {
+				return switch v {
+					case JNumber(n): JNumber((n : Float) * 2);
+					case _: v;
+				};
+			},
+		});
+		final expected:JValue = JObject([{key: 'a', value: JNumber(10)}]);
+		Assert.isTrue(JValueTools.equals(expected, out), 'object-entry value not deep-transformed');
 	}
 
 	// ---------------- deep doubling ----------------
@@ -179,7 +203,7 @@ class JValueTransformSliceTest extends Test {
 			final ast:JValue = cases[i];
 			final out:JValue = deepIdentity(ast);
 			Assert.isTrue(JValueTools.equals(ast, out), 'identity changed the tree for case[$i]');
-			// And the identity-mapped tree writes byte-identically.
+			// And the identity-transformed tree writes byte-identically.
 			Assert.equals(JValueWriter.write(ast), JValueWriter.write(out), 'identity byte-regressed for case[$i]');
 		}
 	}

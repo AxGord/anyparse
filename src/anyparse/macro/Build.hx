@@ -122,25 +122,35 @@ class Build {
 	}
 
 	/**
-	 * `@:build` entry point for the generic AST `map` — the
-	 * `haxe.macro.ExprTools.map` analog for a `@:peg` grammar's root
-	 * family. Applied to a marker class with the grammar root as its
-	 * single argument:
+	 * `@:build` entry point for the generic AST transform — a deep
+	 * whole-tree rewrite with per-node-type hooks, the multi-type
+	 * generalization of `haxe.macro.ExprTools.map`. Applied to a marker
+	 * class with the grammar root as its single argument:
 	 *
 	 * ```haxe
-	 * @:build(anyparse.macro.Build.buildTransform(anyparse.grammar.json.JValue))
-	 * class JValueTransform {}
+	 * @:build(anyparse.macro.Build.buildTransform(anyparse.grammar.haxe.HxModule))
+	 * class HxModuleAst {}
 	 * ```
 	 *
 	 * It resolves the root type and its `@:schema` format, runs
 	 * `ShapeBuilder` to obtain the same `ShapeTree` the parser and writer
-	 * see, then hands the tree to `TransformLowering` → `TransformCodegen`
-	 * to emit a single shallow `map(node, f)` function. The transform pass
-	 * is strategy-/format-policy-agnostic: it needs only the base shape
-	 * (`Alt`/`Seq`/`Star`/`Ref`/`Terminal` kinds with `base.*`
-	 * annotations) to know which children are family nodes versus
-	 * copied-through leaves — so it skips the strategy-annotate, trivia
-	 * and span passes the parser/writer run.
+	 * see, then hands the tree to `TransformLowering` → `TransformCodegen`,
+	 * which emit:
+	 *  - one `private static _transform<T>(node:T, visit):T` per grammar
+	 *    type reachable from the root — a bottom-up walk that recurses
+	 *    every grammar-typed child via its own `_transform`, rebuilds the
+	 *    node, then applies the matching `visit` hook if set;
+	 *  - the public `transform(root:Root, visit):Root` entry; and
+	 *  - a `<RootSimple>Transform` typedef (one optional `T -> T` hook per
+	 *    grammar type) for the `visit` argument.
+	 *
+	 * The transform pass is strategy-/format-policy-agnostic: it needs
+	 * only the base shape (`Alt`/`Seq`/`Star`/`Ref`/`Terminal` kinds with
+	 * `base.*` annotations) to know which children are grammar nodes
+	 * versus copied-through primitive leaves — so it skips the
+	 * strategy-annotate, trivia and span passes the parser/writer run.
+	 * Plain types only: the `*T` trivia/span paired types are not
+	 * generated over (format-preserving transform is a later slice).
 	 */
 	public static macro function buildTransform(target:Expr):Array<Field> {
 		final targetTypePath:String = ExprTools.toString(target);
@@ -162,8 +172,8 @@ class Build {
 		final shapeBuilder:ShapeBuilder = new ShapeBuilder(formatInfo);
 		final shape:ShapeBuilder.ShapeResult = shapeBuilder.build(rootType);
 
-		final rule:TransformLowering.TransformRule = new TransformLowering(shape).generate();
-		final fields:Array<Field> = TransformCodegen.emit(rule);
+		final result:TransformLowering.TransformResult = new TransformLowering(shape).generate();
+		final fields:Array<Field> = TransformCodegen.emit(result);
 
 		#if anyparse_dump
 		final printer:haxe.macro.Printer = new haxe.macro.Printer();
