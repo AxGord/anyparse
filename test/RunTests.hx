@@ -170,6 +170,7 @@ import unit.HaxeWriterRoundTripTest;
 import unit.HxFormatterCorpusTest;
 import unit.JsonParserTest;
 import unit.JsonRoundTripTest;
+import unit.JValueTransformSliceTest;
 import unit.JsonTypedParserTest;
 import unit.StarBlockEndedTest;
 import unit.StarSepStartsElementTest;
@@ -242,6 +243,7 @@ class RunTests {
 		runner.addCase(new DocRendererTest());
 		runner.addCase(new JsonParserTest());
 		runner.addCase(new JsonRoundTripTest());
+		runner.addCase(new JValueTransformSliceTest());
 		runner.addCase(new StarBlockEndedTest());
 		runner.addCase(new StarSepStartsElementTest());
 		runner.addCase(new HaxeFirstSliceTest());

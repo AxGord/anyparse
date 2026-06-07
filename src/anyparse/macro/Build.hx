@@ -121,6 +121,58 @@ class Build {
 		return fields;
 	}
 
+	/**
+	 * `@:build` entry point for the generic AST `map` — the
+	 * `haxe.macro.ExprTools.map` analog for a `@:peg` grammar's root
+	 * family. Applied to a marker class with the grammar root as its
+	 * single argument:
+	 *
+	 * ```haxe
+	 * @:build(anyparse.macro.Build.buildTransform(anyparse.grammar.json.JValue))
+	 * class JValueTransform {}
+	 * ```
+	 *
+	 * It resolves the root type and its `@:schema` format, runs
+	 * `ShapeBuilder` to obtain the same `ShapeTree` the parser and writer
+	 * see, then hands the tree to `TransformLowering` → `TransformCodegen`
+	 * to emit a single shallow `map(node, f)` function. The transform pass
+	 * is strategy-/format-policy-agnostic: it needs only the base shape
+	 * (`Alt`/`Seq`/`Star`/`Ref`/`Terminal` kinds with `base.*`
+	 * annotations) to know which children are family nodes versus
+	 * copied-through leaves — so it skips the strategy-annotate, trivia
+	 * and span passes the parser/writer run.
+	 */
+	public static macro function buildTransform(target:Expr):Array<Field> {
+		final targetTypePath:String = ExprTools.toString(target);
+		final rootType:Type = Context.getType(targetTypePath);
+
+		final rootMeta:Metadata = switch rootType {
+			case TEnum(ref, _): ref.get().meta.get();
+			case TType(ref, _): ref.get().meta.get();
+			case TAbstract(ref, _): ref.get().meta.get();
+			case TInst(ref, _): ref.get().meta.get();
+			case _:
+				Context.fatalError('Build.buildTransform: unsupported target type $targetTypePath', Context.currentPos());
+				throw 'unreachable';
+		};
+
+		final schemaTypePath:String = readSchemaMeta(rootMeta, targetTypePath);
+		final formatInfo:FormatReader.FormatInfo = FormatReader.resolve(schemaTypePath);
+
+		final shapeBuilder:ShapeBuilder = new ShapeBuilder(formatInfo);
+		final shape:ShapeBuilder.ShapeResult = shapeBuilder.build(rootType);
+
+		final rule:TransformLowering.TransformRule = new TransformLowering(shape).generate();
+		final fields:Array<Field> = TransformCodegen.emit(rule);
+
+		#if anyparse_dump
+		final printer:haxe.macro.Printer = new haxe.macro.Printer();
+		for (f in fields) Sys.println('// transform field: ${printer.printField(f)}');
+		#end
+
+		return fields;
+	}
+
 	public static macro function buildWriter(target:Expr, ?options:Expr, ?buildOptions:Expr):Array<Field> {
 		final targetTypePath:String = ExprTools.toString(target);
 		final rootType:Type = Context.getType(targetTypePath);
