@@ -7773,9 +7773,26 @@ class WriterLowering {
 			if (ifExprIndentArgs == null) return bodyExpr;
 			final ifCtorName:String = ifExprIndentArgs[0];
 			final ifOptAccess:Expr = optFieldAccess(ifExprIndentArgs[1]);
+			// ω-value-if-block-body-no-indent: a value-position `if (…) { … }`
+			// whose then-branch is a real `BlockExpr` already owns its body indent
+			// via the block's `{ }` Nest. Mirror the fork `Indenter`
+			// `case Kwd(KwdIf): … case Block: continue;` arm — a block-typed if-body
+			// makes the indenter SKIP the value-expr indent step (before the
+			// knob/field-level check). The then-branch lives at
+			// `Reflect.field(enumParameters(value)[0], 'thenBranch')` (same
+			// `enumParameters[0]` + `Reflect.field` descent as the `metaBlockGlue`
+			// precedent); Trivia mode wraps it in `Trivial<HxExpr>` (unwrap via
+			// `node`), Plain mode holds the raw enum. Gated on `ifCtorName ==
+			// 'IfExpr'` so non-if entries stay byte-identical.
 			return macro {
 				final _bIfn:anyparse.core.Doc = $bodyExpr;
-				($ifOptAccess && Type.enumConstructor($bodyValueExpr) == $v{ifCtorName}) ? _dn(_cols, _bIfn) : _bIfn;
+				var _ifBlockBody:Bool = false;
+				if ($v{ifCtorName} == 'IfExpr' && Type.enumConstructor($bodyValueExpr) == 'IfExpr') {
+					var _then:Dynamic = Reflect.field(Type.enumParameters($bodyValueExpr)[0], 'thenBranch');
+					if (Reflect.hasField(_then, 'node')) _then = Reflect.field(_then, 'node');
+					_ifBlockBody = Type.enumConstructor(_then) == 'BlockExpr';
+				}
+				($ifOptAccess && Type.enumConstructor($bodyValueExpr) == $v{ifCtorName} && !_ifBlockBody) ? _dn(_cols, _bIfn) : _bIfn;
 			};
 		}
 		final sameLayoutExpr:Expr = if (widthAware == true) {
