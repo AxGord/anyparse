@@ -1850,6 +1850,20 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	formatStringInterpolation:Bool,
 	metadataFunctionLineEnd:MetadataLineEndPolicy,
 	_inExprPosition:Bool,
+	// ω-expressionif-collapse — narrow companion to `_inExprPosition`, set
+	// ONLY on the immediate value of a value-yielded `if`/`else` branch
+	// (`HxIfExpr.thenBranch` / `elseBranch` carrying
+	// `@:fmt(propagateValueIfBranch)`). Read by `HxObjectLit.fields`
+	// (`@:fmt(reflowInExprPosition)`) so a source-multiline object literal
+	// that is the DIRECT branch value collapses to single-line — mirroring
+	// fork's "collapse object literal only when it is a value-if branch
+	// body" rule, while leaving source-multiline object literals everywhere
+	// else (var-init, call-args, array-elements) untouched. Cleared by
+	// `_setExprPosition` on any descent into a fresh expression-position
+	// frame (call-arg / array-element / operand / arrow-body) so the flag
+	// never leaks into an object literal nested deeper than the immediate
+	// branch value. Default `false`.
+	_inValueIfBranch:Bool,
 	_classExtern:Bool,
 	_inAnonFnBody:Bool,
 	_inTypedefBody:Bool,

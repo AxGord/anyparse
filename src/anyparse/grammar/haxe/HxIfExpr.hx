@@ -118,10 +118,22 @@ package anyparse.grammar.haxe;
  * `bodyPolicyWrap`'s kw-trivia slot path (`nextLayoutKwGapDoc`) which
  * the current gate excludes; threading `indentObjArgs` into that helper
  * is deferred until a corpus consumer needs it.
+ *
+ * `@:fmt(propagateValueIfBranch)` on both branches — sets the narrow
+ * `opt._inValueIfBranch` flag on the branch's direct value writer call
+ * (via `_setValueIfBranch`, which gates on `opt._inExprPosition` so a
+ * statement-position `if` never flips it). Read by `HxObjectLit.fields`
+ * (`@:fmt(reflowInExprPosition)`) so a source-multiline object literal
+ * that is the immediate branch value collapses to single-line — mirroring
+ * haxe-formatter's rule of collapsing object literals only when they are
+ * the value of a value-yielded `if`/`else` branch. The flag is cleared on
+ * any deeper expression-position descent (`_setExprPosition` resets it),
+ * so an object literal nested as e.g. a call argument inside the branch
+ * (`if (c) f({obj})`) keeps its source-multiline shape.
  */
 @:peg
 typedef HxIfExpr = {
 	@:lead('(') @:trail(')') var cond:HxExpr;
-	@:trailOpt(';') @:fmt(bodyPolicy('ifBody', 'expressionIfBody'), indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'), noSiblingFallback('ifBody'), inlineBlockBodyIfFlag('expressionIfWithBlocks')) var thenBranch:HxExpr;
-	@:optional @:kw('else') @:fmt(bodyPolicy('elseBody', 'expressionElseBody'), sameLine('sameLineExpressionElse'), shapeAware, elseIf, inlineBlockBodyIfFlag('expressionIfWithBlocks')) var elseBranch:Null<HxExpr>;
+	@:trailOpt(';') @:fmt(bodyPolicy('ifBody', 'expressionIfBody'), indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'), noSiblingFallback('ifBody'), inlineBlockBodyIfFlag('expressionIfWithBlocks'), propagateValueIfBranch) var thenBranch:HxExpr;
+	@:optional @:kw('else') @:fmt(bodyPolicy('elseBody', 'expressionElseBody'), sameLine('sameLineExpressionElse'), shapeAware, elseIf, inlineBlockBodyIfFlag('expressionIfWithBlocks'), propagateValueIfBranch) var elseBranch:Null<HxExpr>;
 };

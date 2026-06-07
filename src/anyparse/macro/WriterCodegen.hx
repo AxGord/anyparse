@@ -65,9 +65,21 @@ class WriterCodegen {
 			// BlockStmt) so only the block's tail statement keeps the
 			// expression-position frame. Gated on the same field as
 			// `_setExprPosition`.
+			// ω-expressionif-collapse: `_setExprPosition` additionally clears
+			// the narrow `_inValueIfBranch` flag when the opt typedef carries
+			// it (consumed-once discipline). The `_setValueIfBranch` setter +
+			// `_clearValueIfBranch` reset are emitted alongside, gated on the
+			// same field presence. `_clearValueIfBranch` is consumed by the
+			// block-Star barrier (an object literal inside a `{ … }`-shaped
+			// branch is the block's value, not the branch's immediate value).
+			final hasValueIfBranch:Bool = optionsHasField(optionsTypePath, '_inValueIfBranch');
 			if (optionsHasInExprPosition(optionsTypePath)) {
-				fields.push(setExprPositionField(optionsCT));
+				fields.push(setExprPositionField(optionsCT, hasValueIfBranch));
 				fields.push(clearExprPositionField(optionsCT));
+			}
+			if (hasValueIfBranch) {
+				fields.push(setValueIfBranchField(optionsCT));
+				fields.push(clearValueIfBranchField(optionsCT));
 			}
 			// ω-anonfunction-empty-curly: opt-fanout helper for
 			// `propagateAnonFnContext`. Returns the input opt unchanged when
@@ -648,18 +660,99 @@ class WriterCodegen {
 	 * grammars whose `HxModuleWriteOptions`-equivalent struct lacks the
 	 * field would fail field-resolution at codegen time. Currently
 	 * declared on `HxModuleWriteOptions` only (Haxe grammar).
+	 *
+	 * ω-expressionif-collapse: when the opt typedef ALSO carries
+	 * `_inValueIfBranch:Bool` (`clearsValueIfBranch == true`), entering a
+	 * fresh expression-position frame CLEARS that narrow flag — a call
+	 * argument / array element / operand / arrow body is a new value
+	 * context, never the immediate value of a value-if branch. This is
+	 * the consumed-once discipline: the flag set on a branch value
+	 * survives only the transparent descent into the branch's own object
+	 * literal (those ctors carry no `propagateExprPosition`, so they never
+	 * call this helper), and is dropped the moment a propagating ctor
+	 * re-establishes expression position one level deeper.
 	 */
-	private static function setExprPositionField(optionsCT:ComplexType):Field {
+	private static function setExprPositionField(optionsCT:ComplexType, clearsValueIfBranch:Bool):Field {
+		final body:Expr = clearsValueIfBranch
+			? macro {
+				if (o._inExprPosition && !o._inValueIfBranch) return o;
+				final _c:$optionsCT = _copyOpt(o);
+				_c._inExprPosition = true;
+				_c._inValueIfBranch = false;
+				return _c;
+			}
+			: macro {
+				if (o._inExprPosition) return o;
+				final _c:$optionsCT = _copyOpt(o);
+				_c._inExprPosition = true;
+				return _c;
+			};
 		return {
 			name: '_setExprPosition',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
 				args: [{name: 'o', type: optionsCT}],
 				ret: optionsCT,
+				expr: body,
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * ω-expressionif-collapse — opt-fanout shim for the
+	 * `propagateValueIfBranch` meta on `HxIfExpr.thenBranch` / `elseBranch`.
+	 * Sets the narrow `_inValueIfBranch` flag ONLY when the branch is
+	 * value-yielded — gated on `o._inExprPosition` so a statement-position
+	 * `if` (whose branches are statements, not values) never flips it.
+	 * Idempotent: returns `o` unchanged when not in expression position or
+	 * when the flag is already set. Read by `HxObjectLit.fields`
+	 * (`@:fmt(reflowInExprPosition)`) to collapse a source-multiline object
+	 * literal that is the direct branch value. Emitted only when the opt
+	 * typedef carries `_inValueIfBranch:Bool`.
+	 */
+	private static function setValueIfBranchField(optionsCT:ComplexType):Field {
+		return {
+			name: '_setValueIfBranch',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{name: 'o', type: optionsCT}],
+				ret: optionsCT,
 				expr: macro {
-					if (o._inExprPosition) return o;
+					if (!o._inExprPosition || o._inValueIfBranch) return o;
 					final _c:$optionsCT = _copyOpt(o);
-					_c._inExprPosition = true;
+					_c._inValueIfBranch = true;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * ω-expressionif-collapse — sister reset to `_setValueIfBranch`.
+	 * Returns `o` unchanged when `_inValueIfBranch` is already `false`;
+	 * otherwise returns a `_copyOpt(o)` with the flag cleared. Consumed by
+	 * `triviaBlockStarExpr`'s per-element call when the parent Star carries
+	 * `@:fmt(clearExprPositionNonTail)` (BlockExpr): an object literal
+	 * inside a BLOCK-shaped branch (`if (c) { …; {obj} }`) is the value of
+	 * the block, not the immediate value of the value-if branch, so the
+	 * narrow collapse frame must not reach it — the block is an opaque
+	 * barrier for the value-if-branch semantic even though the block's tail
+	 * keeps the broad `_inExprPosition` frame. Emitted alongside
+	 * `_setValueIfBranch`.
+	 */
+	private static function clearValueIfBranchField(optionsCT:ComplexType):Field {
+		return {
+			name: '_clearValueIfBranch',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{name: 'o', type: optionsCT}],
+				ret: optionsCT,
+				expr: macro {
+					if (!o._inValueIfBranch) return o;
+					final _c:$optionsCT = _copyOpt(o);
+					_c._inValueIfBranch = false;
 					return _c;
 				},
 			}),

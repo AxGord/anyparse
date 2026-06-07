@@ -87,8 +87,20 @@ package anyparse.grammar.haxe;
  *    for Same. The engine's `Group(IfBreak)` wrap picks cuddled vs
  *    Allman per the wrap cascade's flat/break decision — short
  *    literals chosen NoWrap stay cuddled even under `Next`.
+ *
+ * `@:fmt(reflowInExprPosition)` (slice ω-expressionif-collapse) — when
+ * `opt._inValueIfBranch` is set at write time (this object literal is the
+ * immediate value of a value-yielded `if`/`else` branch, propagated by
+ * `HxIfExpr.thenBranch` / `elseBranch`'s `@:fmt(propagateValueIfBranch)`),
+ * the sep-Star's Ignore-mode check fires, dropping element `newlineBefore`
+ * signals so the wrap cascade collapses a source-multiline literal to
+ * single-line. Combined with the `objectLiteralBracesOpen`/`Close` padding
+ * this yields `{ width: VALUE_C, height: VALUE_D }` from a multi-line
+ * source branch value. Source-multiline object literals in every OTHER
+ * context (var-init, call-args, array-elements) keep their shape because
+ * the flag is cleared on each expression-position descent.
  */
 @:peg
 typedef HxObjectLit = {
-	@:fmt(objectLiteralBracesOpen, objectLiteralBracesClose, wrapRules('objectLiteralWrap'), leftCurly('objectLiteralLeftCurly'), rightCurly('objectLiteralRightCurly'), trailingComma('trailingCommaObjectLits')) @:lead('{') @:trail('}') @:sep(',') @:trivia var fields:Array<HxObjectField>;
+	@:fmt(objectLiteralBracesOpen, objectLiteralBracesClose, wrapRules('objectLiteralWrap'), leftCurly('objectLiteralLeftCurly'), rightCurly('objectLiteralRightCurly'), trailingComma('trailingCommaObjectLits'), reflowInExprPosition) @:lead('{') @:trail('}') @:sep(',') @:trivia var fields:Array<HxObjectField>;
 }

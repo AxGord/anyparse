@@ -3302,14 +3302,19 @@ class WriterLowering {
 					// `propagateExprPosition` should a future field combine
 					// both metas.
 					final propagateAnonFn:Bool = child.fmtHasFlag('propagateAnonFnContext');
-					final optArgExpr:Expr = if (propagateExpr && propagateAnonFn)
-						macro _setAnonFnBody(_setExprPosition(opt));
-					else if (propagateExpr)
-						macro _setExprPosition(opt);
-					else if (propagateAnonFn)
-						macro _setAnonFnBody(opt);
-					else
-						macro opt;
+					// ω-expressionif-collapse (mechanism B set-site): optional-kw
+					// body sister of the mandatory-Ref set-site — HxIfExpr.
+					// elseBranch carries `@:fmt(propagateValueIfBranch)` so the
+					// `else`-branch object-literal value collapses identically to
+					// the then-branch. The helper gates on `opt._inExprPosition`.
+					final propagateValueIfBranch:Bool = child.fmtHasFlag('propagateValueIfBranch');
+					final optArgExpr:Expr = {
+						var e:Expr = macro opt;
+						if (propagateExpr) e = macro _setExprPosition($e);
+						if (propagateAnonFn) e = macro _setAnonFnBody($e);
+						if (propagateValueIfBranch) e = macro _setValueIfBranch($e);
+						e;
+					};
 					final rawWriteCall:Expr = {
 						expr: ECall(macro $i{writeFn}, [macro _optVal, optArgExpr]),
 						pos: Context.currentPos(),
@@ -3736,6 +3741,10 @@ class WriterLowering {
 					// no interaction with the inc6 chain-unwrap path. Carried by
 					// `HxSwitchStmt.expr` / `HxSwitchStmtBare.expr`.
 					final switchSubjectNoWrap:Bool = child.fmtHasFlag('switchSubjectNoWrap');
+					// ω-expressionif-collapse (mechanism B set-site):
+					// `@:fmt(propagateValueIfBranch)` on a mandatory Ref
+					// (HxIfExpr.thenBranch) opts into the value-if-branch frame.
+					final propagateValueIfBranch:Bool = child.fmtHasFlag('propagateValueIfBranch');
 					final optArgExpr:Expr = if (boolFlagArgs != null) {
 						macro _wo;
 					} else {
@@ -3745,6 +3754,12 @@ class WriterLowering {
 						if (propagateTypedef) e = macro _setTypedefBody($e);
 						if (switchSubjectNoWrap)
 							e = macro _setChainModeOverride($e, anyparse.format.wrap.WrapMode.NoWrap);
+						// ω-expressionif-collapse (mechanism B set-site): wrap opt
+						// in `_setValueIfBranch` when the mandatory Ref carries
+						// `@:fmt(propagateValueIfBranch)` (HxIfExpr.thenBranch). The
+						// helper gates on `opt._inExprPosition` so only a value-if
+						// branch (not a statement-`if`) flips the narrow flag.
+						if (propagateValueIfBranch) e = macro _setValueIfBranch($e);
 						e;
 					};
 					final baseRawWriteCall:Expr = {
@@ -5249,20 +5264,43 @@ class WriterLowering {
 						// dispatch symmetry. `bracketKindPad` is not read on this
 						// path (passed false) so matrix slots in after it.
 						final matrixWrapStar:Bool = starNode.fmtHasFlag('arrayMatrixWrap');
+						// ω-expressionif-collapse (mechanism A): the struct-Star
+						// trivia path previously passed literal `null, null` for
+						// the inside-of-delimiter spacing slots, so a Star carrying
+						// `@:fmt(objectLiteralBracesOpen, objectLiteralBracesClose)`
+						// (HxObjectLit.fields) never produced `{ x }` padding. Read
+						// the policy Doc the same way the plain `@:sep` path
+						// (~5560) and the enum-Alt path (~2363) do —
+						// `delimInsidePolicySpace` returns null when no delim
+						// policy flag is present, so every other struct-Star stays
+						// byte-identical.
+						final openInsideStar:Null<Expr> = delimInsidePolicySpace(starNode, ['typeParamOpen', 'objectLiteralBracesOpen'], false);
+						final closeInsideStar:Null<Expr> = delimInsidePolicySpace(starNode, ['typeParamClose', 'objectLiteralBracesClose'], true);
+						// ω-expressionif-collapse (mechanism B read-site):
+						// `@:fmt(reflowInExprPosition)` (HxObjectLit.fields) opts
+						// the Star into source-newline ignore — but only at runtime
+						// when `opt._inValueIfBranch` is set (the immediate value of
+						// a value-if branch). Default false → byte-inert.
+						final reflowInExprBranchStar:Bool = starNode.fmtHasFlag('reflowInExprPosition');
 					parts.push(triviaSepStarExpr(
 						fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn,
 						openText ?? '', closeText, sepText, wrapRulesField,
 						leftCurlyOwnedBySep ? knobLeftCurly : null,
 						knobRightCurly,
 						trailPresentAccess, trailingCommaField,
-						null, null, false, forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines,
+						openInsideStar, closeInsideStar, false, forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines,
 						keepCurlyBlanksStar, reflowSourceMultilineStar, false, matrixWrapStar,
 						// ω-keep-fnsig-newline: close-newline accessor for the
 						// struct-Star keep close placement (HxFnDecl.params).
 						trailNLAccess,
 						// ω-typedef-between-fields: no struct-Star consumer opts
 						// into typedef-body blanks (HxType.Anon is enum-Alt).
-						false
+						false,
+						// ω-expressionif-collapse: struct-Star consumers do not opt
+						// into the postfix-Star expression-position propagation.
+						false,
+						// ω-expressionif-collapse (mechanism B): reflow gate flag.
+						reflowInExprBranchStar
 					));
 					return;
 				}
@@ -8744,8 +8782,18 @@ class WriterLowering {
 		// expression-position frame. `_si` / `_arr` are in scope at the single
 		// splice site (`while (_si < _arr.length)` over `final _arr = …`). The
 		// non-flag path emits the IDENTICAL `elemOptExpr` Doc as before.
+		// ω-expressionif-collapse: a BLOCK-shaped branch (`if (c) { …; {obj} }`)
+		// is an opaque barrier for the value-if-branch collapse — an object
+		// literal that is the block's value is NOT the immediate value of the
+		// value-if branch, so `_clearValueIfBranch` drops the narrow flag for
+		// every block element (tail included). The broad `_inExprPosition`
+		// frame still threads through (only non-tail clears it, per SI-2), so
+		// this composes with the existing tail-keeps-expr-position rule.
+		// `clearExprPositionNonTail` is carried only by Haxe BlockExpr /
+		// BlockStmt, whose opt typedef always declares `_inValueIfBranch` —
+		// so the helper reference is safe inside this branch.
 		final elemCallOptArg:Expr = clearExprPositionNonTail
-			? macro(_si == _arr.length - 1 ? $elemOptExpr : _clearExprPosition($elemOptExpr))
+			? macro(_si == _arr.length - 1 ? _clearValueIfBranch($elemOptExpr) : _clearValueIfBranch(_clearExprPosition($elemOptExpr)))
 			: elemOptExpr;
 		final triviaElemCall:Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, elemCallOptArg]),
@@ -9527,7 +9575,16 @@ class WriterLowering {
 		// array element that is a value-if (`[if (c) a else b, …]`) reads the
 		// expression-position `expressionIfBody` policy and stays glued.
 		// Default false → every other sep-Star caller is byte-identical.
-		propagateExprPosition:Bool = false
+		propagateExprPosition:Bool = false,
+		// ω-expressionif-collapse (mechanism B): when the sep-Star ctor
+		// carries `@:fmt(reflowInExprPosition)` (HxObjectLit.fields), the
+		// Ignore-mode runtime check (`ignoreCheckExpr`) additionally fires
+		// when `opt._inValueIfBranch` is set, so a source-multiline object
+		// literal that is the direct value of a value-if branch drops its
+		// element `newlineBefore` signals and the wrap cascade collapses it
+		// to single-line. Default false → every other sep-Star caller is
+		// byte-identical.
+		reflowInExprPosition:Bool = false
 	):Expr {
 		// ω-trivia-sep-anontype-braces (Phase B1): when the call site
 		// reads `@:fmt(anonTypeBracesOpen)` / `objectLiteralBracesOpen`
@@ -9747,7 +9804,16 @@ class WriterLowering {
 		// Architecture per [[feedback-grammar-annotation-keep-too-aggressive]]:
 		// intrinsic flags + JSON checks are disjoined here, no separate
 		// override channel.
-		final ignoreCheckExpr:Expr = ignoreSourceNewlinesForWrap
+		//
+		// ω-expressionif-collapse (mechanism B): `@:fmt(reflowInExprPosition)`
+		// adds a THIRD, runtime-gated disjunct — Ignore fires when
+		// `opt._inValueIfBranch` is set, i.e. the object literal is the direct
+		// value of a value-if branch. Combined with mechanism A's `{ x }`
+		// padding this collapses `{\n width: …\n}` to `{ width: … }` only in
+		// that one context (var-init / call-arg object literals keep their
+		// source-multiline shape because the flag is cleared on every
+		// expression-position descent).
+		final ignoreBase:Expr = ignoreSourceNewlinesForWrap
 			? macro true
 			: (wrapRulesField != null
 				? {
@@ -9755,6 +9821,9 @@ class WriterLowering {
 					macro $rulesAccess.defaultMode == anyparse.format.wrap.WrapMode.Ignore;
 				}
 				: macro false);
+		final ignoreCheckExpr:Expr = reflowInExprPosition
+			? macro ($ignoreBase) || opt._inValueIfBranch
+			: ignoreBase;
 		// ω-nowrap-flat: pure-`noWrap` runtime check, sister to
 		// `keepCheckExpr` / `ignoreCheckExpr`. Fires only when the
 		// wrap-rules JSON config selects `"defaultWrap": "noWrap"` with an

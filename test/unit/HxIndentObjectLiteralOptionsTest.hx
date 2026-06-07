@@ -223,14 +223,18 @@ class HxIndentObjectLiteralOptionsTest extends Test {
 		Assert.isTrue(out.indexOf('for (usage in markedUsages) {\n') != -1, 'expected source-cuddled `{` under indentObjectLiteral=false in: <$out>');
 	}
 
-	public function testIfExprObjLitDoesNotGetForRule():Void {
-		// Asymmetry pin — `HxIfExpr.thenBranch` does NOT carry
-		// `bodyAllmanIndentForCtor`. With default `indentObjectLiteral=true`
-		// the `if (cond) {<multi obj-lit>}` shape stays cuddled, matching
-		// fork's per-construct rule (verified via fork CLI 2026-05-05).
+	public function testIfExprObjLitCollapsesInValueBranch():Void {
+		// ω-expressionif-collapse — a source-multiline object literal that is
+		// the DIRECT value of a value-yielded `if`/`else` branch collapses to
+		// single-line under `sameLine.expressionIf != Keep` (default `Same`).
+		// Verified byte-for-byte against fork CLI (Haxe Formatter 1.18.0,
+		// default config) 2026-06-07: `var x = if (cond) {a: 1, b: 2} else
+		// {a: 3, b: 4};` — `shouldCollapseInExpressionIf` collapses the
+		// fitting object branch value. The earlier assertion pinned the
+		// pre-collapse behaviour; this is the fork-aligned update.
 		final src:String = 'class M {\n\tpublic static function main() {\n\t\tvar x = if (cond) {\n\t\t\ta: 1,\n\t\t\tb: 2\n\t\t} else {\n\t\t\ta: 3,\n\t\t\tb: 4\n\t\t};\n\t}\n}';
 		final out:String = writeWithCfg(src, '{}');
-		Assert.isTrue(out.indexOf('if (cond) {\n') != -1, 'expected `if (cond) {` cuddled (no for-rule on HxIfExpr) in: <$out>');
+		Assert.isTrue(out.indexOf('var x = if (cond) {a: 1, b: 2} else {a: 3, b: 4};') != -1, 'expected collapsed value-if object-literal branches in: <$out>');
 	}
 
 	private inline function writeWithCfg(src:String, cfg:String):String {

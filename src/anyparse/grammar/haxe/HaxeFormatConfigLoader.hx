@@ -679,6 +679,7 @@ final class HaxeFormatConfigLoader {
 			formatStringInterpolation: base.formatStringInterpolation,
 			metadataFunctionLineEnd: base.metadataFunctionLineEnd,
 			_inExprPosition: base._inExprPosition,
+			_inValueIfBranch: base._inValueIfBranch,
 			_classExtern: base._classExtern,
 			_inAnonFnBody: base._inAnonFnBody,
 			_inTypedefBody: base._inTypedefBody,
