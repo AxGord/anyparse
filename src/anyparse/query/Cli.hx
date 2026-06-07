@@ -284,7 +284,16 @@ final class Cli {
 	private static final FUZZY_SUBSTRING_MAX_EXTRA:Int = 8;
 
 	public static function main():Void {
-		#if (sys || nodejs)
+		#if nodejs
+		// Set the exit code and let Node exit naturally — do NOT call
+		// `Sys.exit` -> `process.exit`. `process.exit` terminates before async
+		// `process.stdout`/`stderr` writes to a pipe fd flush, truncating
+		// captured output at the ~8 KB pipe buffer (file / TTY fds write
+		// synchronously, which is why `apq … > file` was always complete). `run`
+		// is fully synchronous, so the event loop empties immediately and Node
+		// drains stdout/stderr before exiting with this code.
+		js.Node.process.exitCode = run(Sys.args());
+		#elseif sys
 		Sys.exit(run(Sys.args()));
 		#else
 		throw 'apq: only sys targets supported';
