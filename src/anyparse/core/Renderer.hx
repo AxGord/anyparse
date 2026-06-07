@@ -989,7 +989,28 @@ class Renderer {
 					if (f.hardFlat) {
 						stack.push(new Frame(f.indent, MFlat, inner, true, true));
 					} else {
-						stack.push(new Frame(f.indent, f.mode, inner, false, false));
+						// Escaping an active force-flat region (`f.forceFlat`
+						// set by an enclosing `Flatten`, which pins mode MFlat):
+						// restore `MBreak`. Past the boundary the inner content
+						// re-decides its own layout — an inner Group re-resolves
+						// flat via its own `fitsFlat`, so fitting content does
+						// NOT break, but raw unconditional hardlines the inner
+						// emits (e.g. an anon-struct TYPE field-list forced one-
+						// per-line by its count rule, nested inside the
+						// `Array<…>` type-param `Flatten`) now render in break
+						// mode — their `Nest` observes the indent bump
+						// (`f.indent + n`) instead of being skipped in MFlat, so
+						// the field lands at the correct statement-relative
+						// indent rather than the unbumped base (write was non-
+						// idempotent: a re-write sees genuinely multiline source
+						// and resolves MBreak, indenting correctly). Mirrors the
+						// brk-side `MBreak` force the `If*Exceeds` arms already
+						// apply for this "forced hardline under an enclosing
+						// MFlat from a `Flatten`/`WrapBoundary`" case. When
+						// `f.forceFlat` was already false (no enclosing force-
+						// flat — the no-op pass-through), preserve `f.mode`.
+						final boundaryMode:Mode = f.forceFlat ? MBreak : f.mode;
+						stack.push(new Frame(f.indent, boundaryMode, inner, false, false));
 					}
 				case HardFlatten(inner):
 					// ω-hardflatten: enter a force-flat region whose
