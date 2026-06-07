@@ -12736,10 +12736,48 @@ class WriterLowering {
 	 * meta is rejected at compile time as dead code.
 	 */
 	private function readCascadeInfosFromStar(starNode:ShapeNode, elemRefName:String):CascadeInfos {
+		// ω-leading-trivia-multiline — `@:fmt(multilineWhenLeadingTriviaSpansLines(
+		// '<metaField>', '<declField>'))` on the Star builds a per-element
+		// `_t`-scoped boolean OR-ed into the `'multiline'` predicate of every
+		// predicate-gated blank rule below (afterMultilineDecl /
+		// beforeMultilineDecl / betweenSingleLineTypes). The element is treated
+		// as multi-line when its leading-trivia slot holds a comment (covers a
+		// leading doc-comment before an otherwise single-line decl) OR the named
+		// meta Star is non-empty AND the source broke before the dispatch
+		// keyword (`<declField>BeforeNewline` synth slot — meta-on-own-line).
+		// The inter-decl blank SEPARATOR (`_t.blankBefore` / `_t.newlineBefore`)
+		// is deliberately NOT consulted — a pure-blank leading gap is still
+		// single-line, mirroring fork `getTypeInfo`'s `findLowestIndex` span
+		// which counts only the type's own leading comment + leading meta.
+		// Absent flag → null → byte-identical to pre-slice.
+		final triviaMultilineArgs:Null<Array<String>> = starNode.fmtReadStringArgs('multilineWhenLeadingTriviaSpansLines');
+		final triviaMultilineExpr:Null<Expr> = if (triviaMultilineArgs == null) null
+			else {
+				if (triviaMultilineArgs.length != 2)
+					Context.fatalError(
+						'WriterLowering: @:fmt(multilineWhenLeadingTriviaSpansLines) expects exactly 2 string args (metaField, declField), got ${triviaMultilineArgs.length}',
+						Context.currentPos()
+					);
+				final pos:Position = Context.currentPos();
+				final metaField:String = triviaMultilineArgs[0];
+				final declField:String = triviaMultilineArgs[1];
+				final metaAccess:Expr = {expr: EField(macro _t.node, metaField), pos: pos};
+				final beforeNlAccess:Expr = {expr: EField(macro _t.node, declField + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX), pos: pos};
+				macro (_t.leadingComments.length > 0 || ($metaAccess.length > 0 && $beforeNlAccess));
+			}
 		final afterCtorAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesAfterCtor');
 		final afterCtorInfos:Array<AfterCtorBlankInfo> = [
 			for (args in afterCtorAllArgs) buildAfterCtorBlankInfo(elemRefName, args, null)
 		];
+		// NB: the trivia-multiline override is intentionally NOT threaded into
+		// `blankLinesAfterCtorIf` (afterMultilineDecl). Fork `betweenTypes`
+		// inserts the blank in the gap BEFORE a leading-comment / meta-on-own-
+		// line type (its multi-line span is its LEADING layout), so only the
+		// before-side and the inverted between-single-line-types rule consume
+		// it. Firing it on the AFTER side too would insert a spurious blank
+		// after a doc-commented type whose successor is single-line and whose
+		// source gap the writer otherwise tightens
+		// (lineends/issue_216_typedef_without_semicolon_unstable_comments).
 		final afterCtorIfAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesAfterCtorIf');
 		for (args in afterCtorIfAllArgs)
 			afterCtorInfos.push(buildAfterCtorBlankInfoIf(elemRefName, args));
@@ -12756,7 +12794,7 @@ class WriterLowering {
 			beforeCtorInfos.push(buildBeforeCtorBlankInfoIf(elemRefName, args));
 		final beforeCtorIfPrevNotAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBeforeCtorIfPrevNot');
 		for (args in beforeCtorIfPrevNotAllArgs)
-			beforeCtorInfos.push(buildBeforeCtorBlankInfoIfPrevNot(elemRefName, args));
+			beforeCtorInfos.push(buildBeforeCtorBlankInfoIfPrevNot(elemRefName, args, triviaMultilineExpr));
 		final betweenCtorAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBetweenSameCtorByLevel');
 		final tailTransparentAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBetweenSameCtorTailTransparent');
 		final headTransparentAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBetweenSameCtorHeadTransparent');
@@ -12834,6 +12872,18 @@ class WriterLowering {
 					Context.currentPos()
 				);
 		}
+		// NB: the trivia-multiline override is intentionally NOT threaded into
+		// `blankLinesBetweenSameCtorIfNot` (betweenSingleLineTypes, inverted).
+		// That rule's blank between two single-line type pairs is OWNED by it
+		// when `opt > 0`; flipping a leading-comment / meta-on-own-line type to
+		// NOT-single-line there would SUPPRESS the user-configured
+		// `betweenSingleLineTypes` blank (the fork still emits a blank for the
+		// pair, just via `betweenTypes` instead). The before-side rule, which
+		// sits one priority step BELOW it in the cascade, supplies the
+		// multi-line blank when `betweenSingleLineTypes` falls through (opt 0),
+		// so both fork paths are covered without double-counting
+		// (lineends/issue_216_…_empty_lines: betweenSingleLineTypes=1 keeps the
+		// blank around the doc-commented type pair).
 		final betweenSameCtorIfNotAllArgs:Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBetweenSameCtorIfNot');
 		final betweenSameCtorIfNotInfos:Array<BetweenSameCtorIfNotInfo> = [
 			for (args in betweenSameCtorIfNotAllArgs) buildBetweenSameCtorBlankInfoIfNot(elemRefName, args)
@@ -13051,7 +13101,7 @@ class WriterLowering {
 	 * the preceding sibling is a cond-comp `#if … #end` with no source
 	 * blank" rule (issue_298): `Conditional`-prev → respect source.
 	 */
-	private function buildBeforeCtorBlankInfoIfPrevNot(elemRefName:String, args:Array<String>):BeforeCtorBlankInfo {
+	private function buildBeforeCtorBlankInfoIfPrevNot(elemRefName:String, args:Array<String>, triviaMultilineExpr:Null<Expr> = null):BeforeCtorBlankInfo {
 		final sepIdx:Int = args.indexOf('|');
 		if (args.length < 5 || sepIdx < 0)
 			Context.fatalError(
@@ -13072,7 +13122,7 @@ class WriterLowering {
 		// `buildBeforeCtorBlankInfoIf` (classifier + ctors + optField, with
 		// the predicate name threaded in).
 		final targetArgs:Array<String> = [classifier].concat(targetCtors).concat([optField]);
-		final target:CtorBlankResolution = resolveCtorBlankArgs(elemRefName, targetArgs, 'blankLinesBeforeCtorIfPrevNot', predicateName);
+		final target:CtorBlankResolution = resolveCtorBlankArgs(elemRefName, targetArgs, 'blankLinesBeforeCtorIfPrevNot', predicateName, false, triviaMultilineExpr);
 		// Excluded side: bare binary classify-switch on the same classifier
 		// field — no predicate, kind=1 for any excluded ctor. `optField` is
 		// reused only to satisfy the resolver arity; its result is discarded.
@@ -13430,7 +13480,7 @@ class WriterLowering {
 	 * both knobs in sync on shape-validation messages and the classifier
 	 * lookup path.
 	 */
-	private function resolveCtorBlankArgs(elemRefName:String, args:Array<String>, metaName:String, predicateName:Null<String>, predicateInvert:Bool = false):CtorBlankResolution {
+	private function resolveCtorBlankArgs(elemRefName:String, args:Array<String>, metaName:String, predicateName:Null<String>, predicateInvert:Bool = false, triviaMultilineExpr:Null<Expr> = null):CtorBlankResolution {
 		if (args.length < 3)
 			Context.fatalError(
 				'WriterLowering: @:fmt($metaName) expects ≥ 3 string args (classifierField, CtorName1, [CtorName2, …], optField), got ${args.length}',
@@ -13467,7 +13517,7 @@ class WriterLowering {
 			if (isMatch) matched.push(ctorName);
 			final kindExpr:Expr = if (!isMatch) macro 0;
 				else if (predicateName == null) macro 1;
-				else buildPredicateGatedKind(branch, ctorName, predicateName, metaName, enumRuleName, predicateInvert);
+				else buildPredicateGatedKind(branch, ctorName, predicateName, metaName, enumRuleName, predicateInvert, triviaMultilineExpr);
 			// When a predicate gate is active, the case pattern must bind the
 			// first arg as `_v0` so the predicate can reference it. Plain
 			// (non-predicated) and zero-arg ctors keep the original wildcard
@@ -13509,7 +13559,7 @@ class WriterLowering {
 	 * and apply `multilineCtor`-tagged ctor's arg-type predicate;
 	 * untagged ctors emit `false`.
 	 */
-	private function buildPredicateGatedKind(branch:ShapeNode, ctorName:String, predicateName:String, metaName:String, enumRuleName:String, invert:Bool = false):Expr {
+	private function buildPredicateGatedKind(branch:ShapeNode, ctorName:String, predicateName:String, metaName:String, enumRuleName:String, invert:Bool = false, triviaMultilineExpr:Null<Expr> = null):Expr {
 		if (predicateName != 'multiline')
 			Context.fatalError(
 				'WriterLowering: @:fmt($metaName) predicate "$predicateName" is not registered (currently only "multiline" is supported)',
@@ -13521,13 +13571,28 @@ class WriterLowering {
 		// "single-line side of the pair". Untagged ctors (no relevant
 		// `multilineWhen…` meta on payload type) return `null` predicate
 		// → kind=1 unconditionally under invert (single-line by default).
-		if (branch.children.length == 0) return invert ? macro 1 : macro 0;
-		final argNode:ShapeNode = branch.children[0];
-		final argTypeName:Null<String> = argNode.annotations.get('base.ref');
-		if (argTypeName == null) return invert ? macro 1 : macro 0;
-		final pred:Null<Expr> = buildMultilinePredicate(argTypeName, macro _v0);
-		if (pred == null) return invert ? macro 1 : macro 0;
-		return invert ? macro ($pred ? 0 : 1) : macro ($pred ? 1 : 0);
+		//
+		// ω-leading-trivia-multiline — when the Star carries
+		// `@:fmt(multilineWhenLeadingTriviaSpansLines(...))`, `triviaMultilineExpr`
+		// is a per-element `_t`-scoped boolean (leading comment present OR
+		// meta-on-own-line). It OR-folds into the structural predicate so a
+		// payload that renders single-line by its own shape is still treated
+		// as multi-line when its leading layout crosses source lines (fork
+		// `getTypeInfo` includes leading comment + leading meta in the
+		// `oneLine` span). Null → byte-identical to the pre-slice paths.
+		final structPred:Null<Expr> = if (branch.children.length == 0) null
+			else {
+				final argNode:ShapeNode = branch.children[0];
+				final argTypeName:Null<String> = argNode.annotations.get('base.ref');
+				if (argTypeName == null) null
+				else buildMultilinePredicate(argTypeName, macro _v0);
+			}
+		final cond:Null<Expr> = if (structPred != null && triviaMultilineExpr != null) macro ($structPred || $triviaMultilineExpr);
+			else if (structPred != null) structPred;
+			else if (triviaMultilineExpr != null) triviaMultilineExpr;
+			else null;
+		if (cond == null) return invert ? macro 1 : macro 0;
+		return invert ? macro ($cond ? 0 : 1) : macro ($cond ? 1 : 0);
 	}
 
 	/**

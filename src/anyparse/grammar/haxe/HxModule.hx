@@ -186,6 +186,30 @@ package anyparse.grammar.haxe;
  * `WriterLowering.buildAfterCtorBlankInfoIfTailLeafNull`; the matched
  * classify case binds `_v0` (the conditional payload) so the adapter has
  * the wrapper to walk tail-first.
+ *
+ * `@:fmt(multilineWhenLeadingTriviaSpansLines('meta', 'decl'))` (slice
+ * ω-leading-trivia-multiline) is an element-level override OR-ed into
+ * the `'multiline'` predicate that the three blank rules above gate on.
+ * The structural `'multiline'` predicate only inspects the decl payload
+ * (`_v0`), so a single-line `typedef` preceded by its own leading
+ * doc-comment, or carrying metadata on its OWN line, is wrongly
+ * classified single-line. This flag widens the per-element kind to
+ * multi-line when EITHER the element's leading-trivia slot holds a
+ * comment (`_t.leadingComments.length > 0`) OR the named meta field is
+ * non-empty AND the source broke before the dispatch keyword
+ * (`_t.node.meta.length > 0 && _t.node.declBeforeNewline`). This mirrors
+ * fork `MarkEmptyLines.getTypeInfo`, whose `oneLine =
+ * isSameLine(findLowestIndex(typeToken), lastToken)` — `findLowestIndex`
+ * reaches the type's leading comment and leading metadata, so any
+ * internal newline (comment→decl, meta→decl) makes the type multi-line.
+ * The inter-decl blank SEPARATOR between two decls lives in a different
+ * trivia slot (`_t.blankBefore` / `_t.newlineBefore`) and is NOT counted
+ * — a pure-blank leading gap is still single-line. The first arg names
+ * the metadata Star field, the second the bare-Ref dispatch field whose
+ * synth `<field>BeforeNewline` slot records the meta→keyword break.
+ * Resolved by `WriterLowering.readCascadeInfosFromStar` →
+ * `buildPredicateGatedKind`. Closes `whitespace/issue_202` (doc-comment
+ * before typedef) and `emptylines/issue_255` (metadata-on-own-line).
  */
 @:peg
 @:schema(anyparse.grammar.haxe.HaxeFormat)
@@ -204,6 +228,7 @@ typedef HxModule = {
 	@:fmt(blankLinesAfterCtorIfTailLeafNull('decl', 'Conditional', 'tailLeafKeepsBlankAfterConditional', 'afterConditionalBlock'))
 	@:fmt(blankLinesBeforeCtorIfPrevNot('decl', 'multiline', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'FnDecl', 'TypedefDecl', '|', 'Conditional', 'beforeMultilineDecl'))
 	@:fmt(blankLinesBetweenSameCtorIfNot('decl', 'multiline', 'TypedefDecl', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'betweenSingleLineTypes'))
+	@:fmt(multilineWhenLeadingTriviaSpansLines('meta', 'decl'))
 	@:fmt(blankBeforeOrphanLineCommentTrail)
 	@:fmt(blankBeforeLineCommentLed)
 	@:fmt(afterFileHeaderCommentBlanks)
