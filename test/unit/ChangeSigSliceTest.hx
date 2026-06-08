@@ -273,6 +273,39 @@ class ChangeSigSliceTest extends Test {
 		assertRefused(source, 2, 8, '1,0');
 	}
 
+	/**
+	 * Reorder a `final` METHOD's three parameters `2,0,1` (new order c, a,
+	 * b). The query projection surfaces the method name off the inner
+	 * `HxFinalModifierMember.fn`, so `Refs` indexes the `FinalModifiedMember`
+	 * decl like a plain method: the bare `d(...)` call binds to it and the
+	 * `this.d(...)` call matches structurally. A method reorder carries a
+	 * non-null cross-file advisory.
+	 */
+	public function testReorderFinalMethod():Void {
+		final source:String =
+			'class C {\n'
+			+ '\tfinal function d(a:Int, b:String, c:Int):Void {\n'
+			+ '\t\ttrace(a);\n'
+			+ '\t}\n'
+			+ '\tpublic function caller():Void {\n'
+			+ '\t\td(1, "x", 3);\n'
+			+ '\t\tthis.d(7, "y", 9);\n'
+			+ '\t}\n'
+			+ '}';
+		final expected:String =
+			'class C {\n'
+			+ '\tfinal function d(c:Int, a:Int, b:String):Void {\n'
+			+ '\t\ttrace(a);\n'
+			+ '\t}\n'
+			+ '\tpublic function caller():Void {\n'
+			+ '\t\td(3, 1, "x");\n'
+			+ '\t\tthis.d(9, 7, "y");\n'
+			+ '\t}\n'
+			+ '}';
+		// Line 2 col 1 — the `final` method decl, as `apq refs --decls` prints.
+		assertChangeSig(source, 2, 1, '2,0,1', expected, true);
+	}
+
 	private function assertChangeSig(source:String, line:Int, col:Int, perm:String, expected:String, advisoryNonNull:Bool):Void {
 		final result:ChangeSigResult = changeSigOf(source, line, col, perm);
 		switch result {

@@ -106,6 +106,25 @@ class AddParamSliceTest extends Test {
 	}
 
 	/**
+	 * Add an optional parameter to a `final` METHOD
+	 * (`FinalModifiedMember`). The query projection surfaces the method
+	 * name off the inner `HxFinalModifierMember.fn`, so the operation
+	 * resolves a final method exactly like a plain `FnMember`.
+	 */
+	public function testAddToFinalMethod():Void {
+		final source:String =
+			'class C {\n'
+			+ '\tfinal function d(a:Int):Void {}\n'
+			+ '}';
+		final expected:String =
+			'class C {\n'
+			+ '\tfinal function d(a:Int, ?b:String):Void {}\n'
+			+ '}';
+		// Line 2 col 16 — the `d` final-method name token.
+		assertAdd(source, 2, 16, '?b:String', expected);
+	}
+
+	/**
 	 * Add a function-typed optional parameter — the `->` in the type does
 	 * not confuse the parameter-name parse or the insertion.
 	 */

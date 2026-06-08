@@ -89,9 +89,6 @@ final class ExtractVar {
 	 */
 	private static final BLOCK_KINDS:Array<String> = ['BlockBody', 'BlockStmt'];
 
-	/** Function-declaration kinds — the scope that owns the hoisted local. */
-	private static final FN_KINDS:Array<String> = ['FnMember', 'LocalFnStmt'];
-
 	/**
 	 * Binding-introducing kinds whose name would collide with the hoisted
 	 * `final <name>`: parameters, locals, nested local functions, loop
@@ -188,7 +185,7 @@ final class ExtractVar {
 	private static function nameDeclaredInEnclosingFunction(tree:QueryNode, cursor:Int, name:String):Bool {
 		// Deepest function declaration whose span contains the cursor (a
 		// function name always passes `innermostWhere`'s renameable filter).
-		final fn:Null<QueryNode> = RefactorSupport.innermostWhere(tree, cursor, node -> FN_KINDS.contains(node.kind));
+		final fn:Null<QueryNode> = RefactorSupport.innermostWhere(tree, cursor, node -> RefactorSupport.FN_DECL_KINDS.contains(node.kind));
 		if (fn == null) return false;
 		var found:Bool = false;
 		function scan(node:QueryNode):Void {

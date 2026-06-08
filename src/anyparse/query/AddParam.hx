@@ -27,8 +27,9 @@ enum AddParamResult {
  *
  *  1. Parses the source and inverts the printed `apq refs` column to a
  *     raw offset, identically to `Rename` / `Inline` / `ExtractVar`.
- *  2. Resolves the innermost `FnMember` (method) / `LocalFnStmt`
- *     (local function) whose span contains the cursor.
+ *  2. Resolves the innermost `FnMember` (method) / `FinalModifiedMember`
+ *     (`final` method) / `LocalFnStmt` (local function) whose span
+ *     contains the cursor.
  *  3. Verifies the new parameter is BACKWARD-COMPATIBLE — it must be
  *     optional (`?name:T`) or defaulted (`name:T = v`). A required
  *     parameter is refused.
@@ -61,9 +62,6 @@ enum AddParamResult {
 @:nullSafety(Strict)
 final class AddParam {
 
-	/** Function-declaration kinds — methods and local functions. */
-	private static final FN_KINDS:Array<String> = ['FnMember', 'LocalFnStmt'];
-
 	/** Parameter-node kinds in a function declaration's leading children. */
 	private static final PARAM_KINDS:Array<String> = ['Required', 'Optional'];
 
@@ -84,7 +82,7 @@ final class AddParam {
 		// position copied from `refs` output maps back to the real offset.
 		final cursor:Int = Span.offsetOf(source, line, col + 1);
 
-		final fn:Null<QueryNode> = RefactorSupport.innermostWhere(tree, cursor, node -> FN_KINDS.contains(node.kind));
+		final fn:Null<QueryNode> = RefactorSupport.innermostWhere(tree, cursor, node -> RefactorSupport.FN_DECL_KINDS.contains(node.kind));
 		if (fn == null)
 			return Err('position $line:$col is not on a function');
 		final fnNode:QueryNode = fn;

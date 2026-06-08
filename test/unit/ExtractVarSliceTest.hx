@@ -219,6 +219,51 @@ class ExtractVarSliceTest extends Test {
 		assertRefused(source, 3, 9, 'x');
 	}
 
+	/**
+	 * Extract an expression inside a `final` METHOD body. The enclosing
+	 * function is a `FinalModifiedMember`; the projection surfaces its name
+	 * off the inner `HxFinalModifierMember.fn`, so the hoist resolves the
+	 * scope exactly like a plain `FnMember` body.
+	 */
+	public function testExtractInsideFinalMethod():Void {
+		final source:String =
+			'class C {\n'
+			+ '\tfinal function d(a:Int, b:Int):Int {\n'
+			+ '\t\tvar y = a + b * 2;\n'
+			+ '\t\treturn y;\n'
+			+ '\t}\n'
+			+ '}';
+		final expected:String =
+			'class C {\n'
+			+ '\tfinal function d(a:Int, b:Int):Int {\n'
+			+ '\t\tfinal t = a + b * 2;\n'
+			+ '\t\tvar y = t;\n'
+			+ '\t\treturn y;\n'
+			+ '\t}\n'
+			+ '}';
+		// Line 3 col 10 — the `a` in `a + b * 2`.
+		assertExtract(source, 3, 10, 't', expected);
+	}
+
+	/**
+	 * Refuse a name that collides with a parameter of the enclosing `final`
+	 * METHOD. This exercises the enclosing-function resolution
+	 * (`nameDeclaredInEnclosingFunction`): the `FinalModifiedMember` must be
+	 * recognised as the enclosing function so its param `x` is found —
+	 * before the fix the nameless final-method node failed `innermostWhere`
+	 * and the collision was silently missed.
+	 */
+	public function testRefuseCollidesFinalMethodParam():Void {
+		final source:String =
+			'class C {\n'
+			+ '\tfinal function d(a:Int, b:Int, x:Int):Int {\n'
+			+ '\t\treturn a + b;\n'
+			+ '\t}\n'
+			+ '}';
+		// Line 3 col 9 — the `a`; name `x` already names a param of the final method.
+		assertRefused(source, 3, 9, 'x');
+	}
+
 	private function assertExtract(source:String, line:Int, col:Int, name:String, expected:String):Void {
 		final result:ExtractResult = extractOf(source, line, col, name);
 		switch result {

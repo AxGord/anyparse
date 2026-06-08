@@ -146,6 +146,35 @@ class RenameSliceTest extends Test {
 		}
 	}
 
+	/**
+	 * Rename a `final` METHOD (`FinalModifiedMember`) → `ren`: the decl, the
+	 * bare `d(...)` call, and the `this.d(...)` access all change. The query
+	 * projection surfaces the method name off the inner
+	 * `HxFinalModifierMember.fn`, and `FinalModifiedMember` is a
+	 * `FIELD_MEMBER_KINDS` member, so the `this.<name>` augmentation fires
+	 * exactly like a plain `FnMember`.
+	 */
+	public function testRenameFinalMethod():Void {
+		final source:String =
+			'class C {\n'
+			+ '\tfinal function d(a:Int):Void {}\n'
+			+ '\tfunction caller():Void {\n'
+			+ '\t\td(1);\n'
+			+ '\t\tthis.d(2);\n'
+			+ '\t}\n'
+			+ '}';
+		final expected:String =
+			'class C {\n'
+			+ '\tfinal function ren(a:Int):Void {}\n'
+			+ '\tfunction caller():Void {\n'
+			+ '\t\tren(1);\n'
+			+ '\t\tthis.ren(2);\n'
+			+ '\t}\n'
+			+ '}';
+		// Line 2 col 1 — the `final` method decl, as `apq refs --decls` prints.
+		assertRename(source, 2, 1, 'ren', expected);
+	}
+
 	private function assertRename(source:String, line:Int, col:Int, newName:String, expected:String):Void {
 		final result:RenameResult = renameOf(source, line, col, newName);
 		switch result {

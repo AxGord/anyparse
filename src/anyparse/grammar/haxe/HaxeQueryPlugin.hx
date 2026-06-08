@@ -65,7 +65,7 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 	private static final DECL_HOST_KINDS:Array<String> = [
 		'VarDecl', 'FnDecl',
 		'ClassDecl', 'InterfaceDecl', 'EnumDecl', 'AbstractDecl', 'TypedefDecl',
-		'VarMember', 'FinalMember', 'FnMember',
+		'VarMember', 'FinalMember', 'FnMember', 'FinalModifiedMember',
 		'VarStmt', 'FinalStmt', 'StaticVarStmt', 'StaticFinalStmt',
 		'VarExpr', 'FinalExpr',
 		'Required', 'Optional', 'Rest',
@@ -200,7 +200,9 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		// statement-level var bindings (`VarStmt`, `FinalStmt`, plus the
 		// expression-position `VarExpr`/`FinalExpr` twins, top-level
 		// `VarDecl`/`FnDecl`), class-member bindings (`VarMember`,
-		// `FinalMember`, `FnMember`), and function-parameter bindings via
+		// `FinalMember`, `FnMember`, plus `FinalModifiedMember` — the `final`
+		// METHOD form, whose name `extractName` lifts off the inner
+		// `HxFinalModifierMember.fn`), and function-parameter bindings via
 		// `HxParam`'s three Alt branches (`Required`/`Optional`/`Rest`).
 		//
 		// Scope kinds: every node that opens a fresh lexical scope. The
@@ -245,7 +247,7 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 			// that frame (see `selfScopeDeclKinds`).
 			scopeKinds: [
 				'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'TypedefDecl',
-				'FnDecl', 'FnExpr', 'FnMember',
+				'FnDecl', 'FnExpr', 'FnMember', 'FinalModifiedMember',
 				'ThinParenLambdaExpr', 'ParenLambdaExpr',
 				'BlockBody', 'BlockExpr', 'BlockStmt',
 				'ForStmt', 'ForExpr',
@@ -583,6 +585,17 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 				// Mirror of the `node` unwrap for Trivial<T> envelopes.
 				if (Reflect.hasField(value, 'param')) return extractName(Reflect.field(value, 'param'));
 				if (Reflect.hasField(value, 'node')) return extractName(Reflect.field(value, 'node'));
+				// `fn` unwraps `HxFinalModifierMember` — the
+				// `{ modifiers, fn:HxFnDecl }` body of a `final` METHOD
+				// (`HxClassMember.FinalModifiedMember`). The method name lives
+				// on the inner `HxFnDecl`, so surface it onto the
+				// `FinalModifiedMember` node — parity with the plain `FnMember`,
+				// whose `HxFnDecl` is the ctor's direct param. Self-guarding: a
+				// non-name-bearing `fn` value (lambda `HxFnExpr` / arrow
+				// `HxArrowFnType`) yields null, and those are reached as `fn`
+				// VALUES of an enum ctor, never as a struct CARRYING an `fn`
+				// field — so no other node is affected.
+				if (Reflect.hasField(value, 'fn')) return extractName(Reflect.field(value, 'fn'));
 			case TEnum(_):
 				// Slice 27 — transparent unwrap for the single-Ref wrapper
 				// enum `HxAnonVarBody` (`Optional(decl)` / `Plain(decl)`):

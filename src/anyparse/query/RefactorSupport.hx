@@ -58,11 +58,29 @@ final class RefactorSupport {
 	 * decl node carries one of these kinds is a class member, not a local
 	 * — used to gate `this.<name>` augmentation in `Rename` and to refuse
 	 * inlining a free identifier that may be a property getter in
-	 * `Inline`.
+	 * `Inline`. `FinalModifiedMember` is the `final` METHOD form
+	 * (`final function f()`); the query projection surfaces its name off
+	 * the inner `HxFinalModifierMember.fn`, so it is a member like
+	 * `FnMember` for `this.<name>` purposes.
 	 */
 	public static final FIELD_MEMBER_KINDS:Array<String> = [
-		'VarMember', 'FinalMember', 'FnMember',
+		'VarMember', 'FinalMember', 'FnMember', 'FinalModifiedMember',
 		'VarField', 'FinalField', 'FnField',
+	];
+
+	/**
+	 * Function-declaration kinds — class methods (`FnMember`, plus the
+	 * `final` method form `FinalModifiedMember`) and named local functions
+	 * (`LocalFnStmt`). All expose their parameter list as the leading
+	 * `Required` / `Optional` children of the decl node. Shared by
+	 * `AddParam`, `ExtractVar`, and `ChangeSig` so the three operations
+	 * recognise the same set of function declarations. A `final` method's
+	 * name is surfaced by the query projection (off the inner
+	 * `HxFinalModifierMember.fn`), so it resolves through `resolveCursorNode`
+	 * / `innermostWhere` exactly like a plain method.
+	 */
+	public static final FN_DECL_KINDS:Array<String> = [
+		'FnMember', 'FinalModifiedMember', 'LocalFnStmt',
 	];
 
 	/**

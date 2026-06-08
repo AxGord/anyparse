@@ -37,10 +37,10 @@ enum ChangeSigResult {
  *  1. Parses the source and inverts the printed `apq refs` column to a
  *     raw offset, identically to `Rename` / `Inline` / `ExtractVar`.
  *  2. Resolves the function declaration at `line:col`. A cursor that
- *     lands directly on a `FnMember` (method) or `LocalFnStmt` (named
- *     local function) decl IS the declaration; a cursor on a bare
- *     `name(...)` call resolves back to the method decl through the
- *     shared `Refs` binding resolver.
+ *     lands directly on a `FnMember` (method), `FinalModifiedMember`
+ *     (`final` method), or `LocalFnStmt` (named local function) decl IS
+ *     the declaration; a cursor on a bare `name(...)` call resolves back
+ *     to the method decl through the shared `Refs` binding resolver.
  *  3. Reads the function's parameters — the leading `Required` /
  *     `Optional` children of the decl, in source order (the trailing
  *     `Named` return-type child and the body are excluded).
@@ -59,8 +59,11 @@ enum ChangeSigResult {
  * Call-site collection differs by declaration kind because the `Refs`
  * resolver indexes methods but not local functions:
  *
- *  - `FnMember` (method): bare `name(...)` calls resolve through `Refs`
- *    to the decl binding; `this.name(...)` calls are matched
+ *  - `FnMember` / `FinalModifiedMember` (method, plain or `final`): bare
+ *    `name(...)` calls resolve through `Refs` to the decl binding — the
+ *    query projection surfaces a `final` method's name off the inner
+ *    `HxFinalModifierMember.fn`, so `Refs` indexes it as a decl exactly
+ *    like a plain method; `this.name(...)` calls are matched
  *    structurally (a `FieldAccess` named `name` whose receiver is
  *    `this`), exactly like `Rename`'s `this.<name>` handling. Any
  *    `obj.name(...)` (non-`this` receiver) or unresolved bare call is a
@@ -85,13 +88,6 @@ enum ChangeSigResult {
 @:nullSafety(Strict)
 final class ChangeSig {
 
-	/**
-	 * Decl kinds the cursor's resolved node must carry to be a reorder
-	 * target: a class method or a named local function. Both expose their
-	 * leading `Required` / `Optional` children as the parameter list.
-	 */
-	private static final FN_DECL_KINDS:Array<String> = ['FnMember', 'LocalFnStmt'];
-
 	/** Parameter slot kinds — the leading children of a function decl. */
 	private static final PARAM_KINDS:Array<String> = ['Required', 'Optional'];
 
@@ -104,7 +100,7 @@ final class ChangeSig {
 	 * local var / final / param bindings.
 	 */
 	private static final NAME_CLASH_KINDS:Array<String> = [
-		'LocalFnStmt', 'FnMember', 'VarMember', 'FinalMember', 'FnField', 'VarField', 'FinalField',
+		'LocalFnStmt', 'FnMember', 'FinalModifiedMember', 'VarMember', 'FinalMember', 'FnField', 'VarField', 'FinalField',
 		'FnDecl', 'VarDecl',
 		'VarStmt', 'FinalStmt', 'StaticVarStmt', 'StaticFinalStmt',
 		'Required', 'Optional', 'Rest',
@@ -149,7 +145,7 @@ final class ChangeSig {
 		if (declNode == null)
 			return Err('could not resolve a function binding for "$name" at $line:$col');
 		final decl:QueryNode = declNode;
-		if (!FN_DECL_KINDS.contains(decl.kind))
+		if (!RefactorSupport.FN_DECL_KINDS.contains(decl.kind))
 			return Err('"$name" is not a function (change-sig reorders function parameters)');
 		final declSpan:Null<Span> = decl.span;
 		if (declSpan == null)
@@ -170,8 +166,11 @@ final class ChangeSig {
 		};
 
 		// Collect the call sites and prove the set is complete. The two
-		// decl kinds use different strategies (see the class docstring).
-		final isMethod:Bool = decl.kind == 'FnMember';
+		// strategies differ by method-vs-local (see the class docstring): a
+		// class method (`FnMember` or the `final` form `FinalModifiedMember`)
+		// uses the `Refs`-bound collector; only a `LocalFnStmt` takes the
+		// uniqueness-based local-function path.
+		final isMethod:Bool = decl.kind != 'LocalFnStmt';
 		final collected:CollectResult = isMethod
 			? collectMethodCalls(tree, source, name, binding, shape)
 			: collectLocalFnCalls(tree, source, name, binding);
@@ -218,15 +217,16 @@ final class ChangeSig {
 
 	/**
 	 * The function declaration node the cursor identifies. When the cursor
-	 * already sits on a `FnMember` / `LocalFnStmt` decl, that node is
-	 * returned directly. Otherwise the cursor is on a call / reference and
+	 * already sits on a `FnMember` / `FinalModifiedMember` / `LocalFnStmt`
+	 * decl, that node is returned directly. Otherwise the cursor is on a
+	 * call / reference and
 	 * the binding is resolved back to its decl through the shared
 	 * resolver: `resolveBindingFrom` yields the decl's `span.from`, and
 	 * `nodeAtFrom` looks the decl node up by that offset. Returns null when
 	 * nothing resolves.
 	 */
 	private static function resolveDeclNode(cursorNode:QueryNode, tree:QueryNode, name:String, shape:RefShape):Null<QueryNode> {
-		if (FN_DECL_KINDS.contains(cursorNode.kind)) return cursorNode;
+		if (RefactorSupport.FN_DECL_KINDS.contains(cursorNode.kind)) return cursorNode;
 
 		final hits:Array<RefHit> = Refs.find(name, tree, shape);
 		final bindingFrom:Null<Int> = RefactorSupport.resolveBindingFrom(cursorNode, hits);
