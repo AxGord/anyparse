@@ -3,6 +3,7 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.query.CrossRename;
 import anyparse.query.CrossRename.CrossRenameResult;
@@ -140,7 +141,7 @@ class CrossRenameSliceTest extends Test {
 		final dup:String = 'class Foo {}';
 		final result:CrossRenameResult = CrossRename.crossRenameType('a.hx', a, 1, 6, 'Bar', [
 			{file: 'a.hx', source: a}, {file: 'dup.hx', source: dup},
-		], plugin(), typeRefShape());
+		], plugin(), typeRefShape(), refShape());
 		assertErr(result);
 	}
 
@@ -156,7 +157,7 @@ class CrossRenameSliceTest extends Test {
 		// Line 2: the field name `field` at col 5 — a value decl, not a type.
 		final result:CrossRenameResult = CrossRename.crossRenameType('a.hx', a, 2, 5, 'renamed', [
 			{file: 'a.hx', source: a},
-		], plugin(), typeRefShape());
+		], plugin(), typeRefShape(), refShape());
 		assertErr(result);
 	}
 
@@ -169,7 +170,7 @@ class CrossRenameSliceTest extends Test {
 		final broken:String = 'class @@@ not valid haxe @@@';
 		final result:CrossRenameResult = CrossRename.crossRenameType('a.hx', a, 1, 6, 'Bar', [
 			{file: 'a.hx', source: a}, {file: 'broken.hx', source: broken},
-		], plugin(), typeRefShape());
+		], plugin(), typeRefShape(), refShape());
 		assertErr(result);
 	}
 
@@ -178,7 +179,7 @@ class CrossRenameSliceTest extends Test {
 		final a:String = 'class Foo {}';
 		final result:CrossRenameResult = CrossRename.crossRenameType('a.hx', a, 1, 6, 'Foo', [
 			{file: 'a.hx', source: a},
-		], plugin(), typeRefShape());
+		], plugin(), typeRefShape(), refShape());
 		assertErr(result);
 	}
 
@@ -187,7 +188,7 @@ class CrossRenameSliceTest extends Test {
 		final a:String = 'class Foo {}';
 		final result:CrossRenameResult = CrossRename.crossRenameType('a.hx', a, 1, 6, '1bad', [
 			{file: 'a.hx', source: a},
-		], plugin(), typeRefShape());
+		], plugin(), typeRefShape(), refShape());
 		assertErr(result);
 	}
 
@@ -239,6 +240,114 @@ class CrossRenameSliceTest extends Test {
 	}
 
 	/**
+	 * Static-receiver coverage: file A declares `class Foo` with a static
+	 * method and a static var; file B accesses them as `Foo.create()` and
+	 * `Foo.CONST`. Each receiver is a `FieldAccess` whose `IdentExpr Foo`
+	 * does NOT resolve to a value binding (no in-file value named `Foo`),
+	 * so it is the type used as a static namespace and IS renamed —
+	 * alongside the import segment and the `:Foo` return-type position.
+	 */
+	public function testStaticReceiverRenamed():Void {
+		final a:String =
+			'class Foo {\n'
+			+ '\tpublic static function create():Foo return null;\n'
+			+ '\tpublic static var CONST = 1;\n'
+			+ '}';
+		final b:String =
+			'import pkg.Foo;\n'
+			+ 'class C {\n'
+			+ '\tfunction m() {\n'
+			+ '\t\tFoo.create();\n'
+			+ '\t\tvar v = Foo.CONST;\n'
+			+ '\t}\n'
+			+ '}';
+		final expectedA:String =
+			'class Bar {\n'
+			+ '\tpublic static function create():Bar return null;\n'
+			+ '\tpublic static var CONST = 1;\n'
+			+ '}';
+		final expectedB:String =
+			'import pkg.Bar;\n'
+			+ 'class C {\n'
+			+ '\tfunction m() {\n'
+			+ '\t\tBar.create();\n'
+			+ '\t\tvar v = Bar.CONST;\n'
+			+ '\t}\n'
+			+ '}';
+		final changes:Array<FileChange> = okChanges('a.hx', a, 1, 6, 'Bar', [
+			{file: 'a.hx', source: a}, {file: 'b.hx', source: b},
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedA, changeFor(changes, 'a.hx').newSource);
+		// decl name + `:Foo` return type.
+		Assert.equals(2, changeFor(changes, 'a.hx').count);
+		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+		// import segment + `Foo.create()` + `Foo.CONST`.
+		Assert.equals(3, changeFor(changes, 'b.hx').count);
+	}
+
+	/**
+	 * A static-receiver occurrence SHADOWED by a local value of the same
+	 * name is NOT renamed. File B's `var Foo = makeThing(); Foo.run();`
+	 * binds `Foo` to a local value, so its `Foo.run()` receiver resolves
+	 * to that binding (`bindingSpan != null`) and is excluded — even
+	 * though file A declares a type `Foo`. Only file A's decl name
+	 * changes; file B is left byte-for-byte untouched (no `FileChange`).
+	 */
+	public function testShadowingLocalValueNotRenamed():Void {
+		final a:String =
+			'class Foo {\n'
+			+ '\tpublic static function create():Void {}\n'
+			+ '}';
+		final b:String =
+			'class C {\n'
+			+ '\tfunction m() {\n'
+			+ '\t\tvar Foo = makeThing();\n'
+			+ '\t\tFoo.run();\n'
+			+ '\t}\n'
+			+ '}';
+		final changes:Array<FileChange> = okChanges('a.hx', a, 1, 6, 'Widget', [
+			{file: 'a.hx', source: a}, {file: 'b.hx', source: b},
+		]);
+		// Only the type declaration in a.hx is renamed.
+		Assert.equals(1, changes.length);
+		Assert.equals('class Widget {\n\tpublic static function create():Void {}\n}', changeFor(changes, 'a.hx').newSource);
+		// b.hx emitted no change: the local-value receiver is untouched.
+		Assert.isNull(changeOrNull(changes, 'b.hx'));
+	}
+
+	/**
+	 * A bare value-position `IdentExpr Foo` (a `Class<Foo>` value and a
+	 * `case Foo:` pattern) is NOT a `FieldAccess` receiver, so it is left
+	 * untouched — the documented residual. Only file A's decl name is
+	 * renamed; file B's `var c = Foo;` and `case Foo:` survive verbatim.
+	 */
+	public function testBareValuePositionNotRenamed():Void {
+		final a:String =
+			'class Foo {\n'
+			+ '\tpublic static function create():Void {}\n'
+			+ '}';
+		final b:String =
+			'class C {\n'
+			+ '\tfunction m(e) {\n'
+			+ '\t\tvar c = Foo;\n'
+			+ '\t\tvar r = switch e {\n'
+			+ '\t\t\tcase Foo: 1;\n'
+			+ '\t\t\tcase _: 0;\n'
+			+ '\t\t};\n'
+			+ '\t}\n'
+			+ '}';
+		final changes:Array<FileChange> = okChanges('a.hx', a, 1, 6, 'Widget', [
+			{file: 'a.hx', source: a}, {file: 'b.hx', source: b},
+		]);
+		// Only the type declaration in a.hx is renamed.
+		Assert.equals(1, changes.length);
+		Assert.equals('class Widget {\n\tpublic static function create():Void {}\n}', changeFor(changes, 'a.hx').newSource);
+		// b.hx emitted no change: bare `Foo` value / case-pattern untouched.
+		Assert.isNull(changeOrNull(changes, 'b.hx'));
+	}
+
+	/**
 	 * Drive a successful rename and return the changes, asserting the
 	 * result is `Ok`, the advisory is present, and every rewrite
 	 * re-parses (the op already validates this; the test makes it
@@ -246,7 +355,7 @@ class CrossRenameSliceTest extends Test {
 	 */
 	private function okChanges(cursorFile:String, cursorSource:String, line:Int, col:Int, newName:String,
 			scopeFiles:Array<{file:String, source:String}>):Array<FileChange> {
-		final result:CrossRenameResult = CrossRename.crossRenameType(cursorFile, cursorSource, line, col, newName, scopeFiles, plugin(), typeRefShape());
+		final result:CrossRenameResult = CrossRename.crossRenameType(cursorFile, cursorSource, line, col, newName, scopeFiles, plugin(), typeRefShape(), refShape());
 		switch result {
 			case Ok(changes, advisory):
 				Assert.notNull(advisory);
@@ -275,11 +384,20 @@ class CrossRenameSliceTest extends Test {
 		return {file: file, newSource: '', count: 0};
 	}
 
+	private function changeOrNull(changes:Array<FileChange>, file:String):Null<FileChange> {
+		for (c in changes) if (c.file == file) return c;
+		return null;
+	}
+
 	private static function plugin():HaxeQueryPlugin {
 		return new HaxeQueryPlugin();
 	}
 
 	private static function typeRefShape():TypeRefShape {
 		return new HaxeQueryPlugin().typeRefShape();
+	}
+
+	private static function refShape():RefShape {
+		return new HaxeQueryPlugin().refShape();
 	}
 }

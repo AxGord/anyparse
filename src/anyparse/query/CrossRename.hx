@@ -1,6 +1,8 @@
 package anyparse.query;
 
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.GrammarPlugin.TypeRefShape;
+import anyparse.query.Refs.RefKind;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -57,16 +59,26 @@ typedef FileChange = {
  *    located precisely (the earlier segments are lower-case packages,
  *    but the splice anchors on the segment after the final `.` so a
  *    package segment that happens to match the type name is never hit).
+ *  - Static-receiver access `T.staticMethod()` / `T.CONST` — a
+ *    `FieldAccess` whose receiver child is an `IdentExpr T` that does
+ *    NOT resolve to a value binding. Such a receiver is the type used
+ *    as a static namespace; it is still in the type namespace, so
+ *    renaming it is safe. A FieldAccess receiver is never an
+ *    enum-constructor (ctors are bare `T` / `T(args)` / `case T:`,
+ *    never `T.x`), and a value named `T` used as `T.x()` DOES resolve
+ *    (an in-file binding) and is excluded — so this stays zero false
+ *    positives.
  *
  * ## Documented residual (loud-fail, not silent)
  *
  * A type-namespace occurrence this operation does NOT rewrite leaves a
  * dangling `T` that fails to COMPILE — it is never a silent semantic
- * change. Excluded in v1:
+ * change. Excluded:
  *
- *  - Static-receiver access `T.staticMethod()` — a bare value-position
- *    `IdentExpr T`. Including it would risk a same-named
- *    enum-constructor / value false positive, so it is out of scope.
+ *  - Bare `Class<T>` value-position `IdentExpr T` (e.g. `var c = T;`) —
+ *    a bare unresolved `T` is indistinguishable from a nullary
+ *    enum-constructor `T`, so it stays a residual. Only the
+ *    FieldAccess-RECEIVER form is safe to rename.
  *  - Aliased imports `import pkg.T as U;` — the node's name slot is the
  *    alias `U`, not `T`, so the `pkg.T` segment is not matched. The
  *    alias `U` (used in type positions) IS covered, but the import's
@@ -99,9 +111,9 @@ final class CrossRename {
 
 	/** The advisory appended to every successful rename. */
 	private static final ADVISORY:String =
-		'type-namespace rename only — verify static-receiver accesses '
-		+ '(`T.staticMethod()`), aliased imports (`import pkg.T as U;`), '
-		+ 'and any cross-package declarations by hand.';
+		'type-namespace rename only — verify bare `Class<T>` value uses '
+		+ '(`var c = T;`), aliased imports (`import pkg.T as U;`), and any '
+		+ 'cross-package declarations by hand.';
 
 	/**
 	 * Rename the type declaration at `line:col` (in `cursorFile` /
@@ -120,7 +132,8 @@ final class CrossRename {
 	 * or an `Err` describing why the rename could not be applied.
 	 */
 	public static function crossRenameType(cursorFile:String, cursorSource:String, line:Int, col:Int, newName:String,
-			scopeFiles:Array<{file:String, source:String}>, plugin:GrammarPlugin, typeRefShape:TypeRefShape):CrossRenameResult {
+			scopeFiles:Array<{file:String, source:String}>, plugin:GrammarPlugin, typeRefShape:TypeRefShape,
+			refShape:RefShape):CrossRenameResult {
 		if (!RefactorSupport.isIdentifier(newName)) return Err('new name "$newName" is not a valid identifier');
 
 		// 1. Resolve the type declaration the cursor sits on.
@@ -172,7 +185,7 @@ final class CrossRename {
 		// 4. Collect occurrence spans + apply edits per file.
 		final changes:Array<FileChange> = [];
 		for (entry in parsed) {
-			final occurrences:Array<Span> = collectOccurrences(entry.source, typeName, entry.tree, plugin, typeRefShape);
+			final occurrences:Array<Span> = collectOccurrences(entry.source, typeName, entry.tree, plugin, typeRefShape, refShape);
 			if (occurrences.length == 0) continue;
 			final edits:Array<{span:Span, text:String}> = [for (occ in occurrences) {span: occ, text: newName}];
 			final newSource:String = RefactorSupport.applyEdits(entry.source, edits);
@@ -241,13 +254,20 @@ final class CrossRename {
 	 *     the `parseFile` tree.
 	 *  c. Imports / using — `ImportDecl` / `UsingDecl` whose dotted path's
 	 *     LAST segment is `typeName`.
+	 *  d. Static-receiver access — a `FieldAccess` whose receiver child
+	 *     is an `IdentExpr` named `typeName` that does NOT resolve to a
+	 *     value binding (`T.staticMethod()` / `T.CONST`). The value-
+	 *     resolved receiver offsets are computed once from `Refs.find`:
+	 *     any read / write whose `bindingSpan` is non-null is an in-file
+	 *     value named `typeName` and is EXCLUDED, leaving only the
+	 *     type-as-namespace receivers.
 	 *
 	 * Each returned span is the identifier token `[from, from+len)`.
 	 * Spans are deduped by `from` offset (a node can be matched by more
 	 * than one collector).
 	 */
 	private static function collectOccurrences(source:String, typeName:String, tree:QueryNode, plugin:GrammarPlugin,
-			typeRefShape:TypeRefShape):Array<Span> {
+			typeRefShape:TypeRefShape, refShape:RefShape):Array<Span> {
 		final out:Array<Span> = [];
 		final seen:Array<Int> = [];
 		inline function add(identFrom:Int):Void
@@ -258,8 +278,18 @@ final class CrossRename {
 		for (hit in Uses.find(typeName, typeRefTree, typeRefShape))
 			add(RefactorSupport.identTokenOffset(source, hit.span, typeName));
 
-		// b. Declaration names + c. imports / using (one walk of the
-		//    parseFile tree — both read node kinds from it).
+		// d-prep. Receiver offsets that resolve to a value binding — an
+		// in-file var / param / field named `typeName`. A static-receiver
+		// occurrence is renamed only when its receiver is NOT in this set
+		// (an unresolved receiver is the type used as a namespace).
+		final valueResolved:Array<Int> = [
+			for (h in Refs.find(typeName, tree, refShape))
+				if ((h.kind == RefKind.Read || h.kind == RefKind.Write) && h.bindingSpan != null) h.span.from
+		];
+
+		// b. Declaration names + c. imports / using + d. static-receiver
+		//    accesses (one walk of the parseFile tree — every arm reads
+		//    node kinds from it).
 		function walk(node:QueryNode):Void {
 			final span:Null<Span> = node.span;
 			if (span != null) {
@@ -268,7 +298,14 @@ final class CrossRename {
 				else if (node.kind == 'ImportDecl' || node.kind == 'UsingDecl')
 					add(importSegmentOffset(source, span, node.name, typeName));
 			}
-			for (c in node.children) walk(c);
+			final children:Array<QueryNode> = node.children;
+			if (node.kind == 'FieldAccess' && children.length > 0) {
+				final recv:QueryNode = children[0];
+				final recvSpan:Null<Span> = recv.span;
+				if (recv.kind == 'IdentExpr' && recv.name == typeName && recvSpan != null && !valueResolved.contains(recvSpan.from))
+					add(RefactorSupport.identTokenOffset(source, recvSpan, typeName));
+			}
+			for (c in children) walk(c);
 		}
 		walk(tree);
 

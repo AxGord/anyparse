@@ -628,7 +628,8 @@ final class Cli {
 		}
 
 		final typeRefShape:TypeRefShape = plugin.typeRefShape();
-		final result:CrossRenameResult = CrossRename.crossRenameType(filePath, source, line, col, newName, scopeFiles, plugin, typeRefShape);
+		final refShape:RefShape = plugin.refShape();
+		final result:CrossRenameResult = CrossRename.crossRenameType(filePath, source, line, col, newName, scopeFiles, plugin, typeRefShape, refShape);
 		switch result {
 			case Ok(changes, advisory):
 				var totalOccurrences:Int = 0;
@@ -6793,13 +6794,14 @@ final class Cli {
 		sysPrint('With --scope <dir> the cursor MUST be on a TYPE declaration (class /\n');
 		sysPrint('interface / enum / typedef / abstract); that type is renamed across\n');
 		sysPrint('every .hx file under <dir> — type positions, new T, cast, extends /\n');
-		sysPrint('implements, type params, the decl name, and import / using segments.\n');
-		sysPrint('Type-namespace only: static-receiver accesses (T.staticMethod()) and\n');
-		sysPrint('aliased imports are NOT rewritten (a missed form dangles into a compile\n');
-		sysPrint('error, never a silent change). The rename refuses if the type is\n');
-		sysPrint('declared in more than one file under scope, if any scope file does not\n');
-		sysPrint('parse, or if any rewritten file fails to re-parse — the write is atomic.\n');
-		sysPrint('Without --write a per-file occurrence summary is printed.\n');
+		sysPrint('implements, type params, the decl name, import / using segments, and\n');
+		sysPrint('static-receiver accesses (T.staticMethod() / T.CONST whose receiver is\n');
+		sysPrint('not a value binding). Type-namespace only: bare Class<T> value uses\n');
+		sysPrint('(var c = T;) and aliased imports are NOT rewritten (a missed form\n');
+		sysPrint('dangles into a compile error, never a silent change). The rename refuses\n');
+		sysPrint('if the type is declared in more than one file under scope, if any scope\n');
+		sysPrint('file does not parse, or if any rewritten file fails to re-parse — the\n');
+		sysPrint('write is atomic. Without --write a per-file occurrence summary is printed.\n');
 	}
 
 	private static function printInlineUsage():Void {
