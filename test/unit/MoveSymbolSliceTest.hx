@@ -81,6 +81,53 @@ class MoveSymbolSliceTest extends Test {
 	}
 
 	/**
+	 * Move a `final class Foo` (the dominant style) from `pkg/A.hx` to
+	 * `pkg/B.hx`. The cut span is the OUTER `FinalDecl` span, so the WHOLE
+	 * `final class Foo {…}` relocates WITH its `final ` keyword — A is left
+	 * with no orphaned `final`, and B gains `final class Foo`. The importer
+	 * is repointed exactly as for a plain class.
+	 */
+	public function testMoveFinalClass():Void {
+		final a:String =
+			'package pkg;\n'
+			+ '\n'
+			+ 'final class Foo {\n'
+			+ '\tpublic var x:Int = 1;\n'
+			+ '}';
+		final b:String =
+			'package pkg;\n'
+			+ '\n'
+			+ 'class B {}';
+		final user:String =
+			'package pkg;\n'
+			+ '\n'
+			+ 'import pkg.A.Foo;\n'
+			+ '\n'
+			+ 'class User {\n'
+			+ '\tvar f:Foo;\n'
+			+ '}';
+		// `final class Foo` on line 3; `Foo` at display col 12.
+		final changes:Array<MoveChange> = okChanges('pkg/A.hx', 3, 12, 'pkg/B.hx', [
+			{file: 'pkg/A.hx', source: a}, {file: 'pkg/B.hx', source: b}, {file: 'pkg/User.hx', source: user},
+		]);
+		Assert.equals(3, changes.length);
+
+		final newA:String = changeFor(changes, 'pkg/A.hx').newSource;
+		final newB:String = changeFor(changes, 'pkg/B.hx').newSource;
+		final newUser:String = changeFor(changes, 'pkg/User.hx').newSource;
+
+		// The whole final class — keyword included — left A and landed in B.
+		Assert.isFalse(StringTools.contains(newA, 'final class Foo'), 'final class gone from A');
+		Assert.isFalse(StringTools.contains(newA, 'final'), 'no orphaned final keyword in A');
+		Assert.isTrue(StringTools.contains(newB, 'final class Foo'), 'final class Foo lands in B');
+		Assert.isTrue(StringTools.contains(newB, 'public var x:Int = 1;'), 'final class body lands in B');
+
+		// Importer repointed exactly as for a plain class.
+		Assert.isTrue(StringTools.contains(newUser, 'import pkg.B.Foo;'), 'User import repointed');
+		Assert.isFalse(StringTools.contains(newUser, 'import pkg.A.Foo;'), 'old import gone from User');
+	}
+
+	/**
 	 * Dependency import carried: Foo's body references a cross-package
 	 * type `Ext` that A imports (`import ext.Ext;`). Moving Foo to B
 	 * carries that import into B so the relocated body still resolves.

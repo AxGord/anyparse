@@ -71,6 +71,55 @@ class CrossRenameSliceTest extends Test {
 	}
 
 	/**
+	 * `final class` rename — the dominant style. File A declares
+	 * `final class Foo`; the named node is the inner `ClassForm` so the
+	 * decl-name occurrence is collected through the final-aware
+	 * `typeDeclOf` path. After the rename the `final ` keyword is
+	 * PRESERVED and the decl token becomes `Bar`; file B's type positions
+	 * (field, arg, return, `new`) all rename, and an import segment too.
+	 */
+	public function testFinalClassRename():Void {
+		final a:String =
+			'final class Foo {\n'
+			+ '\tpublic function new() {}\n'
+			+ '}';
+		final b:String =
+			'import pkg.Foo;\n'
+			+ 'class Use {\n'
+			+ '\tvar f:Foo;\n'
+			+ '\tfunction g(a:Foo):Foo {\n'
+			+ '\t\treturn new Foo();\n'
+			+ '\t}\n'
+			+ '}';
+		final expectedA:String =
+			'final class Bar {\n'
+			+ '\tpublic function new() {}\n'
+			+ '}';
+		final expectedB:String =
+			'import pkg.Bar;\n'
+			+ 'class Use {\n'
+			+ '\tvar f:Bar;\n'
+			+ '\tfunction g(a:Bar):Bar {\n'
+			+ '\t\treturn new Bar();\n'
+			+ '\t}\n'
+			+ '}';
+		// `final class Foo` — `Foo` starts at display col 12 (after
+		// `final class `).
+		final changes:Array<FileChange> = okChanges('a.hx', a, 1, 12, 'Bar', [
+			{file: 'a.hx', source: a}, {file: 'b.hx', source: b},
+		]);
+		Assert.equals(2, changes.length);
+		final newA:String = changeFor(changes, 'a.hx').newSource;
+		Assert.equals(expectedA, newA);
+		// The `final ` keyword survives and the decl token is renamed.
+		Assert.isTrue(StringTools.startsWith(newA, 'final class Bar'), 'final keyword preserved, decl renamed');
+		Assert.equals(1, changeFor(changes, 'a.hx').count);
+		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+		// import segment + field + arg + return + new = 5 occurrences.
+		Assert.equals(5, changeFor(changes, 'b.hx').count);
+	}
+
+	/**
 	 * Import rename: file B has `import pkg.Foo;` plus a `var f:Foo;`
 	 * type position. Both the import's LAST dotted segment and the type
 	 * position are renamed; the lower-case package segment is untouched.

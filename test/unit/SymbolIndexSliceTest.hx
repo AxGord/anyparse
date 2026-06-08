@@ -96,6 +96,39 @@ class SymbolIndexSliceTest extends Test {
 		Assert.isTrue(fi.types[0].isMain);
 	}
 
+	/**
+	 * A `final class` is INDEXED — it parses as a nameless `FinalDecl`
+	 * wrapper whose inner `ClassForm` holds the name, so the final-aware
+	 * `typeDeclOf` path picks it up where a plain `node.name` guard would
+	 * silently drop it. Its `kind` is normalised to `ClassDecl`, it is the
+	 * module's main type, and the cross-file queries resolve it.
+	 */
+	public function testFinalClassIndexed():Void {
+		final index:SymbolIndex = SymbolIndex.build([
+			{file: 'src/pkg/sub/Foo.hx', source: 'package pkg.sub;\nfinal class Foo {\n\tpublic var x:Int = 1;\n}'},
+			{file: 'src/pkg/sub/User.hx', source: 'package pkg.sub;\nimport pkg.sub.Foo;\nclass User {}'},
+		], plugin());
+
+		final info:Null<FileInfo> = index.fileInfo('src/pkg/sub/Foo.hx');
+		Assert.notNull(info);
+		final fi:FileInfo = (info : FileInfo);
+		// The final class is recorded as a single main-type ClassDecl.
+		Assert.equals(1, fi.types.length);
+		final foo:TypeDeclInfo = fi.types[0];
+		Assert.equals('Foo', foo.name);
+		Assert.equals('ClassDecl', foo.kind);
+		Assert.isTrue(foo.isMain);
+		// The full span includes the `final ` keyword (starts at offset 17,
+		// right after `package pkg.sub;\n`).
+		Assert.equals(17, foo.span.from);
+
+		// Cross-file queries now resolve the final class.
+		final declarers:Array<FileInfo> = index.declaringFiles('Foo');
+		Assert.equals(1, declarers.length);
+		Assert.equals('src/pkg/sub/Foo.hx', declarers[0].file);
+		Assert.equals('pkg.sub.Foo', index.importPathOf('Foo'));
+	}
+
 	/** `declaringFiles` reports 0 / 1 / many declarers of a type name. */
 	public function testDeclaringFilesCount():Void {
 		final index:SymbolIndex = SymbolIndex.build([

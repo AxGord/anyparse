@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.GrammarPlugin.TypeRefShape;
+import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
@@ -93,15 +94,6 @@ typedef MoveChange = {
 @:nullSafety(Strict)
 final class MoveSymbol {
 
-	/**
-	 * Type-declaration kinds the cursor may land on. Mirrors the five
-	 * top-level Haxe decls (and `SymbolIndex.TYPE_DECL_KINDS`); a
-	 * type-position occurrence can only ever resolve to one of these.
-	 */
-	private static final TYPE_DECL_KINDS:Array<String> = [
-		'ClassDecl', 'InterfaceDecl', 'EnumDecl', 'TypedefDecl', 'AbstractDecl',
-	];
-
 	/** The advisory appended to every successful move. */
 	private static final ADVISORY:String =
 		'verify imports in the destination — dependencies reached via a '
@@ -137,18 +129,19 @@ final class MoveSymbol {
 		if (cursorSource == null)
 			return Err('cursor file $cursorFile is not in the scope file set');
 
-		// 2. Resolve the type declaration the cursor sits on.
+		// 2. Resolve the type declaration the cursor sits on. `fullSpan` is
+		//    the FULL decl span — for a `final class` that is the OUTER
+		//    `FinalDecl` span (includes the `final ` keyword) so the cut and
+		//    the dependency-body scan both cover `final class X {…}` whole.
 		final cursorTree:QueryNode = try plugin.parseFile(cursorSource)
 			catch (exception:ParseError) return Err('$cursorFile does not parse: ${exception.toString()}')
 			catch (exception:Exception) return Err('$cursorFile does not parse: ${exception.message}');
 		final cursor:Int = Span.offsetOf(cursorSource, line, col + 1);
-		final declNode:Null<QueryNode> = resolveTypeDeclAtCursor(cursorTree, cursor, cursorSource);
-		if (declNode == null)
+		final declMatch:Null<TypeDeclMatch> = RefactorSupport.resolveTypeDeclAtCursor(cursorTree, cursor, cursorSource);
+		if (declMatch == null)
 			return Err('position $line:$col is not on a type declaration');
-		final typeName:Null<String> = declNode.name;
-		final declSpan:Null<Span> = declNode.span;
-		if (typeName == null || declSpan == null)
-			return Err('position $line:$col is not on a type declaration');
+		final typeName:String = declMatch.name;
+		final declSpan:Span = declMatch.fullSpan;
 
 		// 3. Guards.
 		final declarers:Array<FileInfo> = index.declaringFiles(typeName);
@@ -190,7 +183,7 @@ final class MoveSymbol {
 			plugin, typeRefShape, typeName);
 
 		// 6. Compute the new import path the moved type is reached by.
-		final destBasename:String = baseNameOf(destFile);
+		final destBasename:String = RefactorSupport.baseNameOf(destFile);
 		final newImportPath:String = typeName == destBasename ? destInfo.module : '${destInfo.module}.$typeName';
 
 		// 7. Assemble per-file edits.
@@ -264,31 +257,6 @@ final class MoveSymbol {
 			return Err('move of "$typeName" changed nothing');
 
 		return Ok(changes, ADVISORY);
-	}
-
-	/**
-	 * Resolve the cursor to the type declaration it sits on: the
-	 * innermost type-decl node whose span contains `cursor` and whose own
-	 * name identifier-token contains the cursor OR whose `span.from ==
-	 * cursor` (the `apq refs --decls` convention). Returns null when the
-	 * cursor is not on a type declaration. Mirrors
-	 * `CrossRename.resolveTypeDeclAtCursor`.
-	 */
-	private static function resolveTypeDeclAtCursor(tree:QueryNode, cursor:Int, source:String):Null<QueryNode> {
-		var best:Null<QueryNode> = null;
-		function walk(node:QueryNode):Void {
-			final span:Null<Span> = node.span;
-			if (span != null && cursor >= span.from && cursor < span.to && TYPE_DECL_KINDS.contains(node.kind)) {
-				final name:Null<String> = node.name;
-				if (name != null) {
-					final onName:Bool = RefactorSupport.identTokenContains(node, cursor, source);
-					if (onName || span.from == cursor) best = node;
-				}
-			}
-			for (c in node.children) walk(c);
-		}
-		walk(tree);
-		return best;
 	}
 
 	/**
@@ -552,12 +520,5 @@ final class MoveSymbol {
 			else break;
 		}
 		return i;
-	}
-
-	/** File basename: path tail after the last `/`, with `.hx` removed. */
-	private static function baseNameOf(file:String):String {
-		final slash:Int = file.lastIndexOf('/');
-		final tail:String = slash < 0 ? file : file.substr(slash + 1);
-		return StringTools.endsWith(tail, '.hx') ? tail.substr(0, tail.length - '.hx'.length) : tail;
 	}
 }

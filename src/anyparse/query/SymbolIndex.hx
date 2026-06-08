@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
@@ -116,16 +117,6 @@ typedef FileInfo = {
  */
 @:nullSafety(Strict)
 final class SymbolIndex {
-
-	/**
-	 * Grammar decl-node kinds that count as a top-level type
-	 * declaration. Mirrors the five top-level Haxe decls (and
-	 * `CrossRename.TYPE_DECL_KINDS`); a type-position occurrence can
-	 * only ever resolve to one of these.
-	 */
-	private static final TYPE_DECL_KINDS:Array<String> = [
-		'ClassDecl', 'InterfaceDecl', 'EnumDecl', 'TypedefDecl', 'AbstractDecl',
-	];
 
 	private final _files:Array<FileInfo>;
 	private final _skipped:Array<String>;
@@ -249,12 +240,23 @@ final class SymbolIndex {
 	 * basename drives the module path and the per-type `isMain` flag.
 	 */
 	private static function extractFileInfo(file:String, tree:QueryNode):FileInfo {
-		final basename:String = baseNameOf(file);
+		final basename:String = RefactorSupport.baseNameOf(file);
 		var pkg:String = '';
 		final imports:Array<ImportInfo> = [];
 		final types:Array<TypeDeclInfo> = [];
 
 		for (node in tree.children) {
+			// Type declarations resolve through the final-aware helper FIRST
+			// — a `final class` is a nameless `FinalDecl` wrapper whose inner
+			// `ClassForm` holds the name, so a plain `node.name` guard would
+			// drop it. `typeDeclOf` normalises both shapes and yields the
+			// FULL span (including the `final ` keyword for a final class).
+			final typeDecl:Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
+			if (typeDecl != null) {
+				types.push({name: typeDecl.name, kind: typeDecl.kind, span: typeDecl.fullSpan, isMain: typeDecl.name == basename});
+				continue;
+			}
+
 			final nullableName:Null<String> = node.name;
 			final nullableSpan:Null<Span> = node.span;
 			if (nullableName == null || nullableSpan == null) {
@@ -274,21 +276,12 @@ final class SymbolIndex {
 				case 'ImportAliasDecl': imports.push({raw: name, kind: ImportKind.Alias, alias: name, span: span});
 				case 'ImportWildDecl': imports.push({raw: name, kind: ImportKind.Wild, alias: null, span: span});
 				case 'UsingDecl': imports.push({raw: name, kind: ImportKind.Using, alias: null, span: span});
-				case _ if (TYPE_DECL_KINDS.contains(node.kind)):
-					types.push({name: name, kind: node.kind, span: span, isMain: name == basename});
 				case _:
 			}
 		}
 
 		final module:String = pkg == '' ? basename : '$pkg.$basename';
 		return {file: file, pkg: pkg, module: module, imports: imports, types: types};
-	}
-
-	/** File basename: the path tail after the last `/`, with a `.hx` suffix removed. */
-	private static function baseNameOf(file:String):String {
-		final slash:Int = file.lastIndexOf('/');
-		final tail:String = slash < 0 ? file : file.substr(slash + 1);
-		return StringTools.endsWith(tail, '.hx') ? tail.substr(0, tail.length - '.hx'.length) : tail;
 	}
 
 	/** Does `segment` begin with an upper-case ASCII letter? */

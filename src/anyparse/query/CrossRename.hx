@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.GrammarPlugin.TypeRefShape;
+import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefKind;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
@@ -100,15 +101,6 @@ typedef FileChange = {
 @:nullSafety(Strict)
 final class CrossRename {
 
-	/**
-	 * Type-declaration kinds the cursor may land on and that the scope
-	 * walk counts / collects. Mirrors the five top-level Haxe decls; a
-	 * type-position occurrence can only ever resolve to one of these.
-	 */
-	private static final TYPE_DECL_KINDS:Array<String> = [
-		'ClassDecl', 'InterfaceDecl', 'EnumDecl', 'TypedefDecl', 'AbstractDecl',
-	];
-
 	/** The advisory appended to every successful rename. */
 	private static final ADVISORY:String =
 		'type-namespace rename only — verify bare `Class<T>` value uses '
@@ -205,39 +197,29 @@ final class CrossRename {
 	}
 
 	/**
-	 * Resolve the cursor to the type declaration it sits on: the
-	 * innermost node whose span contains `cursor`, whose kind is a
-	 * type-decl kind, and whose own name identifier-token contains the
-	 * cursor OR whose `span.from == cursor` (the `apq refs --decls`
-	 * convention, where the printed column maps to the decl's span start
-	 * — the `class` / `enum` keyword). Returns null when the cursor is
-	 * not on a type declaration.
+	 * Resolve the cursor to the type declaration it sits on, returning the
+	 * node that carries the type NAME (the decl node itself, or the inner
+	 * `ClassForm` of a `final class`). The rest of the rename reads
+	 * `.name` off it. Final-aware via
+	 * `RefactorSupport.resolveTypeDeclAtCursor`. Returns null when the
+	 * cursor is not on a type declaration.
 	 */
 	private static function resolveTypeDeclAtCursor(tree:QueryNode, cursor:Int, source:String):Null<QueryNode> {
-		var best:Null<QueryNode> = null;
-		function walk(node:QueryNode):Void {
-			final span:Null<Span> = node.span;
-			if (span != null && cursor >= span.from && cursor < span.to && TYPE_DECL_KINDS.contains(node.kind)) {
-				final name:Null<String> = node.name;
-				if (name != null) {
-					final onName:Bool = RefactorSupport.identTokenContains(node, cursor, source);
-					if (onName || span.from == cursor) best = node;
-				}
-			}
-			for (c in node.children) walk(c);
-		}
-		walk(tree);
-		return best;
+		final m:Null<TypeDeclMatch> = RefactorSupport.resolveTypeDeclAtCursor(tree, cursor, source);
+		return m == null ? null : m.nameNode;
 	}
 
 	/**
 	 * Count the type-declaration nodes named `typeName` in `tree` (a
 	 * `parseFile` tree). Drives the cross-scope uniqueness proof.
+	 * Final-aware: a `final class` is recognised through its `FinalDecl`
+	 * wrapper so it counts toward uniqueness exactly like a plain class.
 	 */
 	private static function countTypeDecls(tree:QueryNode, typeName:String):Int {
 		var count:Int = 0;
 		function walk(node:QueryNode):Void {
-			if (node.name == typeName && TYPE_DECL_KINDS.contains(node.kind)) count++;
+			final m:Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
+			if (m != null && m.name == typeName) count++;
 			for (c in node.children) walk(c);
 		}
 		walk(tree);
@@ -292,12 +274,16 @@ final class CrossRename {
 		//    node kinds from it).
 		function walk(node:QueryNode):Void {
 			final span:Null<Span> = node.span;
-			if (span != null) {
-				if (node.name == typeName && TYPE_DECL_KINDS.contains(node.kind))
-					add(RefactorSupport.identTokenOffset(source, span, typeName));
-				else if (node.kind == 'ImportDecl' || node.kind == 'UsingDecl')
-					add(importSegmentOffset(source, span, node.name, typeName));
-			}
+			// b. Declaration name — final-aware: for a `final class` the
+			//    named node is the inner `ClassForm`, so anchor the splice on
+			//    `typeDeclOf(...).nameNode` (its span holds the name token),
+			//    NOT on the `FinalDecl` wrapper, which carries no name.
+			final decl:Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
+			if (decl != null && decl.name == typeName) {
+				final nameSpan:Null<Span> = decl.nameNode.span;
+				if (nameSpan != null) add(RefactorSupport.identTokenOffset(source, nameSpan, typeName));
+			} else if (span != null && (node.kind == 'ImportDecl' || node.kind == 'UsingDecl'))
+				add(importSegmentOffset(source, span, node.name, typeName));
 			final children:Array<QueryNode> = node.children;
 			if (node.kind == 'FieldAccess' && children.length > 0) {
 				final recv:QueryNode = children[0];

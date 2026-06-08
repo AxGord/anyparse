@@ -7,6 +7,36 @@ import anyparse.runtime.Span;
 using Lambda;
 
 /**
+ * One resolved top-level type declaration, normalised across the plain
+ * and `final`-wrapped grammar shapes so every consumer compares uniformly.
+ *
+ *  - A plain `class C {}` parses as a single `ClassDecl C` node — `name`
+ *    and `kind` come from the node, `nameNode` IS the node, and `fullSpan`
+ *    is the node's own span.
+ *  - A `final class C {}` parses as `FinalDecl(ClassForm C …)` — the OUTER
+ *    `FinalDecl` carries NO name and a span that INCLUDES the `final `
+ *    keyword; the INNER `ClassForm` carries the name `C` and a span that
+ *    EXCLUDES `final `. For this shape `kind` is normalised to `ClassDecl`
+ *    (a final class IS a class), `nameNode` is the inner `ClassForm` (it
+ *    holds the name token, so `identTokenContains` and the decl-name
+ *    occurrence anchor on it), and `fullSpan` is the OUTER `FinalDecl`
+ *    span so a move cuts `final class C {…}` WITH its `final ` keyword.
+ *
+ * `final` is the only modifier that WRAPS a decl (it is legal in Haxe
+ * only on `class` — `final interface` / `final abstract` are parse
+ * errors). Every other modifier (`private` / `public` / `extern`) is a
+ * SEPARATE preceding sibling node (`Private` / `Extern`) that leaves the
+ * named decl node a plain `ClassDecl` / … — those already resolve through
+ * the node-on-node branch, so no wrapper handling is needed for them.
+ */
+typedef TypeDeclMatch = {
+	var name:String;
+	var kind:String;
+	var nameNode:QueryNode;
+	var fullSpan:Span;
+}
+
+/**
  * Cursor-resolution and identifier/span primitives shared by the
  * scope-correct refactoring operations (`Rename`, `Inline`). Every
  * member is `public static` and behaviour-preserving: the bodies were
@@ -33,6 +63,18 @@ final class RefactorSupport {
 	public static final FIELD_MEMBER_KINDS:Array<String> = [
 		'VarMember', 'FinalMember', 'FnMember',
 		'VarField', 'FinalField', 'FnField',
+	];
+
+	/**
+	 * The grammar decl-node kinds that count as a top-level type
+	 * declaration in their PLAIN (non-`final`) shape. A `final class`'s
+	 * named node is a `ClassForm` — NOT in this list — so callers that
+	 * need to recognise a final class must go through `typeDeclOf`, which
+	 * handles the `FinalDecl` wrapper. Shared by `SymbolIndex`,
+	 * `CrossRename`, and `MoveSymbol`.
+	 */
+	public static final TYPE_DECL_KINDS:Array<String> = [
+		'ClassDecl', 'InterfaceDecl', 'EnumDecl', 'TypedefDecl', 'AbstractDecl',
 	];
 
 	/**
@@ -151,6 +193,66 @@ final class RefactorSupport {
 	/** Is `kind` a class-member declaration (field / method)? */
 	public static inline function isFieldMemberKind(kind:String):Bool {
 		return FIELD_MEMBER_KINDS.contains(kind);
+	}
+
+	/**
+	 * Recognise `node` as a top-level type declaration, normalised across
+	 * the plain and `final`-wrapped shapes (see `TypeDeclMatch`). Returns
+	 * null when `node` is neither a plain type-decl nor a `final class`
+	 * wrapper, or when the resolved decl has no name / no span.
+	 *
+	 *  - `node.kind` ∈ `TYPE_DECL_KINDS` with a name → the node names
+	 *    itself (`kind` = the node kind, `fullSpan` = the node's span).
+	 *  - `node.kind == 'FinalDecl'` wrapping a named `ClassForm` first
+	 *    child → the inner `ClassForm` names the decl; `kind` normalises to
+	 *    `ClassDecl` and `fullSpan` is the OUTER span (includes `final `).
+	 */
+	public static function typeDeclOf(node:QueryNode):Null<TypeDeclMatch> {
+		final span:Null<Span> = node.span;
+		if (span == null) return null;
+
+		final name:Null<String> = node.name;
+		if (name != null && TYPE_DECL_KINDS.contains(node.kind))
+			return {name: name, kind: node.kind, nameNode: node, fullSpan: span};
+
+		if (node.kind == 'FinalDecl' && node.children.length > 0) {
+			final inner:QueryNode = node.children[0];
+			final innerName:Null<String> = inner.name;
+			if (inner.kind == 'ClassForm' && innerName != null)
+				return {name: innerName, kind: 'ClassDecl', nameNode: inner, fullSpan: span};
+		}
+		return null;
+	}
+
+	/**
+	 * Resolve the cursor to the type declaration it sits on: the
+	 * innermost (deepest pre-order) decl whose `fullSpan` contains the
+	 * cursor and whose name identifier-token contains the cursor OR whose
+	 * `fullSpan.from == cursor` (the `apq refs --decls` convention, where
+	 * the printed column maps to the decl's span start — the `final` /
+	 * `class` / `enum` keyword). Final-aware via `typeDeclOf`. Returns
+	 * null when the cursor is not on a type declaration.
+	 */
+	public static function resolveTypeDeclAtCursor(tree:QueryNode, cursor:Int, source:String):Null<TypeDeclMatch> {
+		var best:Null<TypeDeclMatch> = null;
+		function walk(node:QueryNode):Void {
+			final m:Null<TypeDeclMatch> = typeDeclOf(node);
+			if (m != null) {
+				final span:Span = m.fullSpan;
+				if (cursor >= span.from && cursor < span.to
+					&& (identTokenContains(m.nameNode, cursor, source) || span.from == cursor)) best = m;
+			}
+			for (c in node.children) walk(c);
+		}
+		walk(tree);
+		return best;
+	}
+
+	/** File basename: the path tail after the last `/`, with a `.hx` suffix removed. */
+	public static function baseNameOf(file:String):String {
+		final slash:Int = file.lastIndexOf('/');
+		final tail:String = slash < 0 ? file : file.substr(slash + 1);
+		return StringTools.endsWith(tail, '.hx') ? tail.substr(0, tail.length - '.hx'.length) : tail;
 	}
 
 	/**
