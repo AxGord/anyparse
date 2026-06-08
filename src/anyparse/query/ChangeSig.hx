@@ -274,6 +274,7 @@ final class ChangeSig {
 
 		final sites:Array<QueryNode> = [];
 		final consumedFroms:Array<Int> = [];
+		var thisSiteCount:Int = 0;
 		var error:Null<String> = null;
 		function walk(node:QueryNode):Void {
 			if (error != null) return;
@@ -290,6 +291,7 @@ final class ChangeSig {
 							error = 'cannot prove all call sites target "$name": unresolved call at ${posOf(source, node.span)} — change-sig needs every call site resolvable';
 					case CalleeThis:
 						sites.push(node);
+						thisSiteCount++;
 					case CalleeOtherReceiver(recv):
 						error = 'cannot resolve receiver-qualified call `$recv.$name(...)` at ${posOf(source, node.span)} — change-sig requires every call site resolvable (supported for local functions and methods called only via bare `$name(...)` / `this.$name(...)`)';
 					case CalleeNone:
@@ -301,18 +303,49 @@ final class ChangeSig {
 			}
 		}
 		walk(tree);
-		// A binding read that was NOT consumed as a call callee is the
-		// method used as a first-class value (e.g. `var fn = foo;`). Its
-		// indirect calls cannot be tracked, so reordering would silently
-		// break them — refuse rather than misorder. (A method captured via
-		// `this.foo` / `obj.foo` as a value is not a bare read and is out
-		// of reach here — a documented residual.)
+		// Refuse the method captured as a first-class value, whose indirect
+		// calls cannot be tracked — reordering would silently break them.
+		// Three capture forms: a bare `var fn = foo;` (a binding read not
+		// consumed as a call callee), a `var f = this.foo;` (a `this.foo`
+		// field access beyond the `this.foo(...)` call count), and a
+		// `var f = obj.foo;` (any non-`this` receiver field access — its
+		// call form already errored above).
 		if (error == null) {
 			final dangling:Null<RefHit> = boundReads.find(h -> !consumedFroms.contains(h.span.from));
 			if (dangling != null)
 				error = '"$name" is referenced as a value (not called) at ${posOf(source, dangling.span)} — change-sig cannot track indirect calls through a captured reference';
 		}
+		if (error == null) error = fieldAccessValueCapture(tree, source, name, thisSiteCount);
 		return error != null ? CErr(error) : COk(sites);
+	}
+
+	/**
+	 * Detect a method captured as a value via a field access — a
+	 * `this.name` / `obj.name` `FieldAccess` that is not a call callee. A
+	 * non-`this` receiver field access is always a refusal (its call form
+	 * has already errored, so any remaining one is a value capture); a
+	 * `this.name` field access is a refusal only for the surplus beyond
+	 * the `this.name(...)` call sites (each call contributes exactly one
+	 * `this.name` access). Returns the diagnostic or null when no value
+	 * capture is present.
+	 */
+	private static function fieldAccessValueCapture(tree:QueryNode, source:String, name:String, thisSiteCount:Int):Null<String> {
+		var thisAccess:Int = 0;
+		var error:Null<String> = null;
+		function scan(node:QueryNode):Void {
+			if (error != null) return;
+			if (node.kind == 'FieldAccess' && node.name == name && node.children.length > 0) {
+				final recv:QueryNode = node.children[0];
+				if (recv.kind == 'IdentExpr' && recv.name == 'this') thisAccess++;
+				else error = '"$name" is referenced as a value (not called) at ${posOf(source, node.span)} — change-sig cannot track indirect calls through a captured reference';
+			}
+			for (c in node.children) scan(c);
+		}
+		scan(tree);
+		if (error != null) return error;
+		if (thisAccess > thisSiteCount)
+			return '"$name" is referenced as a value (not called) via `this.$name` — change-sig cannot track indirect calls through a captured reference';
+		return null;
 	}
 
 	/**

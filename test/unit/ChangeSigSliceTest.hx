@@ -255,6 +255,24 @@ class ChangeSigSliceTest extends Test {
 		assertRefused(source, 3, 11, '1,0');
 	}
 
+	/**
+	 * Refuse when a method is captured via `this.g` as a first-class value
+	 * (not just called): `var f = this.g;` — change-sig cannot track the
+	 * indirect call, so the reorder is refused. (Bare `var f = g;` is
+	 * caught by the binding-read guard; this exercises the `this.g` form.)
+	 */
+	public function testRefuseMethodCapturedViaThis():Void {
+		final source:String =
+			'class C {\n'
+			+ '\tpublic function g(a:Int, b:Int):Void {}\n'
+			+ '\tpublic function caller():Void {\n'
+			+ '\t\tthis.g(1, 2);\n'
+			+ '\t\tvar f = this.g;\n'
+			+ '\t}\n'
+			+ '}';
+		assertRefused(source, 2, 8, '1,0');
+	}
+
 	private function assertChangeSig(source:String, line:Int, col:Int, perm:String, expected:String, advisoryNonNull:Bool):Void {
 		final result:ChangeSigResult = changeSigOf(source, line, col, perm);
 		switch result {
