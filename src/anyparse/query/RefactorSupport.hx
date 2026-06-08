@@ -215,4 +215,20 @@ final class RefactorSupport {
 	public static inline function isIdentChar(c:Int):Bool {
 		return isIdentStartChar(c) || (c >= '0'.code && c <= '9'.code);
 	}
+
+	/**
+	 * Parse a non-negative decimal integer, returning null when the string
+	 * has any non-digit character — so a coordinate like `3:1x` or a
+	 * permutation index `2x` is rejected rather than silently resolving to
+	 * the leading digits. Shared by the CLI coordinate parser and the
+	 * change-signature permutation parser.
+	 */
+	public static function parseStrictInt(s:String):Null<Int> {
+		if (s.length == 0) return null;
+		for (j in 0...s.length) {
+			final c:Int = StringTools.fastCodeAt(s, j);
+			if (c < '0'.code || c > '9'.code) return null;
+		}
+		return Std.parseInt(s);
+	}
 }

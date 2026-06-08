@@ -14,6 +14,8 @@ import anyparse.query.Inline;
 import anyparse.query.Inline.InlineResult;
 import anyparse.query.ExtractVar;
 import anyparse.query.ExtractVar.ExtractResult;
+import anyparse.query.ChangeSig;
+import anyparse.query.ChangeSig.ChangeSigResult;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
 import anyparse.query.Rename;
@@ -321,6 +323,7 @@ final class Cli {
 			case 'rename': return runRename(rest);
 			case 'inline': return runInline(rest);
 			case 'extract-var': return runExtractVar(rest);
+			case 'change-sig': return runChangeSig(rest);
 			case 'uses': return runUses(rest);
 			case 'meta': return runMeta(rest);
 			case 'blast': return runBlast(rest);
@@ -749,6 +752,93 @@ final class Cli {
 	}
 
 	/**
+	 * `apq change-sig <file> <line>:<col> <perm> [--write]` — reorder the
+	 * parameters of the function whose decl / binding is at `<line>:<col>`
+	 * per `<perm>` (a comma-separated 0-based list of the OLD parameter
+	 * indices in their NEW order, e.g. `2,0,1`), permuting the positional
+	 * arguments at every resolvable in-file call site to match. The reorder
+	 * is a SLOT SWAP — only the parameter / argument contents move, so the
+	 * existing layout is preserved. `<line>:<col>` uses the same column
+	 * convention `apq refs` prints. Without `--write` the rewritten source
+	 * is emitted to stdout; with `--write` it overwrites the file in place.
+	 * A reorder of a method also emits a cross-file advisory to stderr
+	 * (callers in other files cannot be seen). A cursor not on a function,
+	 * a malformed / non-permutation `<perm>`, an unresolvable / receiver-
+	 * qualified call site, an arity mismatch, or an unparseable result,
+	 * exits non-zero with the file untouched.
+	 */
+	private static function runChangeSig(args:Array<String>):Int {
+		var lang:String = 'haxe';
+		var write:Bool = false;
+		var file:Null<String> = null;
+		var posSpec:Null<String> = null;
+		var permSpec:Null<String> = null;
+
+		var i:Int = 0;
+		while (i < args.length) {
+			final a:String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--write':
+					write = true;
+				case '-h', '--help':
+					printChangeSigUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq change-sig: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (file == null) file = a;
+					else if (posSpec == null) posSpec = a;
+					else if (permSpec == null) permSpec = a;
+					else {
+						stderr('apq change-sig: unexpected extra argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (file == null || posSpec == null || permSpec == null) {
+			stderr('apq change-sig: expected <file> <line>:<col> <perm>\n');
+			printChangeSigUsage();
+			return EXIT_USAGE;
+		}
+		final pos:Null<Position> = parseLineCol(posSpec);
+		if (pos == null) {
+			stderr('apq change-sig: malformed position "$posSpec" — expected <line>:<col>\n');
+			return EXIT_USAGE;
+		}
+
+		final filePath:String = file;
+		final permStr:String = permSpec;
+		final source:String = try readFile(filePath)
+			catch (exception:Exception) {
+				stderr('apq change-sig: $filePath: ${exception.message}\n');
+				return EXIT_RUNTIME;
+			};
+
+		final plugin:GrammarPlugin = pickPlugin(lang);
+		final shape:RefShape = plugin.refShape();
+		final result:ChangeSigResult = ChangeSig.changeSig(source, pos.line, pos.col, permStr, plugin, shape);
+		switch result {
+			case Ok(text, advisory):
+				if (write) {
+					writeFile(filePath, text);
+					stderr('apq change-sig: wrote $filePath\n');
+				} else {
+					sysPrint(text);
+				}
+				if (advisory != null) stderr('apq change-sig: $advisory\n');
+				return EXIT_OK;
+			case Err(message):
+				stderr('apq change-sig: $message\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
+	/**
 	 * Parse a `<line>:<col>` coordinate. Both components must be
 	 * non-negative integers; returns null on any malformed shape so the
 	 * caller emits a usage error rather than silently clamping.
@@ -756,26 +846,10 @@ final class Cli {
 	private static function parseLineCol(spec:String):Null<Position> {
 		final colon:Int = spec.indexOf(':');
 		if (colon <= 0 || colon >= spec.length - 1) return null;
-		final line:Null<Int> = parseStrictInt(spec.substring(0, colon));
-		final col:Null<Int> = parseStrictInt(spec.substring(colon + 1));
+		final line:Null<Int> = RefactorSupport.parseStrictInt(spec.substring(0, colon));
+		final col:Null<Int> = RefactorSupport.parseStrictInt(spec.substring(colon + 1));
 		if (line == null || col == null) return null;
 		return {line: line, col: col};
-	}
-
-	/**
-	 * Parse a non-negative decimal integer, returning null when the string
-	 * has any non-digit character. Stricter than the shared
-	 * `parsePositiveInt` (which delegates to `Std.parseInt` and tolerates
-	 * trailing garbage), so a coordinate like `3:1x` is rejected rather
-	 * than silently resolving to `3:1`.
-	 */
-	private static function parseStrictInt(s:String):Null<Int> {
-		if (s.length == 0) return null;
-		for (j in 0...s.length) {
-			final c:Int = StringTools.fastCodeAt(s, j);
-			if (c < '0'.code || c > '9'.code) return null;
-		}
-		return Std.parseInt(s);
 	}
 
 	private static function runUses(args:Array<String>):Int {
@@ -6492,6 +6566,7 @@ final class Cli {
 		sysPrint('  rename        Scope-correct, format-preserving symbol rename\n');
 		sysPrint('  inline        Inline a local variable into its uses\n');
 		sysPrint('  extract-var   Hoist an expression into a new local final\n');
+		sysPrint('  change-sig    Reorder a function\'s parameters + call-site args\n');
 		sysPrint('  uses          Type references (field/param/type-param positions)\n');
 		sysPrint('  meta          Annotation-on-decl shortcut\n');
 		sysPrint('  blast         Change-impact checklist (uses + refs + member-access)\n');
@@ -6687,6 +6762,31 @@ final class Cli {
 		sysPrint('convention `apq refs` prints. The rewrite is verified to re-parse; a\n');
 		sysPrint('cursor not on an expression start, an enclosing statement outside a\n');
 		sysPrint('block, or an unparseable result exits non-zero with the file untouched.\n');
+	}
+
+	private static function printChangeSigUsage():Void {
+		sysPrint('Usage: apq change-sig <file> <line>:<col> <perm>  (perm = comma-separated 0-based new order, e.g. 2,0,1)\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
+		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('\n');
+		sysPrint('Scope-correct, format-preserving change-signature (parameter reorder).\n');
+		sysPrint('The function whose declaration / binding is at <line>:<col> has its\n');
+		sysPrint('parameters reordered per <perm> — a comma-separated 0-based list giving\n');
+		sysPrint('the NEW order of OLD parameter indices (for g(a,b,c), `2,0,1` reorders\n');
+		sysPrint('to c,a,b). The positional arguments at every resolvable in-file call\n');
+		sysPrint('site are permuted to match. The reorder is a slot swap — only the\n');
+		sysPrint('parameter / argument contents move, so the existing layout is preserved.\n');
+		sysPrint('Methods (called via bare `name(...)` / `this.name(...)`) and named local\n');
+		sysPrint('functions are supported; a receiver-qualified `obj.name(...)` call, an\n');
+		sysPrint('unresolvable call, or a call with omitted optional arguments is refused\n');
+		sysPrint('(change-sig never leaves a call site with stale argument order). A method\n');
+		sysPrint('reorder also emits a cross-file advisory (callers in other files are out\n');
+		sysPrint('of scope). <line>:<col> uses the same column convention `apq refs`\n');
+		sysPrint('prints. The rewrite is verified to re-parse; a cursor not on a function,\n');
+		sysPrint('a non-permutation <perm>, or an unparseable result, exits non-zero with\n');
+		sysPrint('the file untouched.\n');
 	}
 
 	private static function printUsesUsage():Void {
