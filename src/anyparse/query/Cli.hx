@@ -10,6 +10,8 @@ import anyparse.query.Cases.CasesHit;
 import anyparse.query.Lit.LitHit;
 import anyparse.query.Matcher.Match;
 import anyparse.query.Meta.MetaHit;
+import anyparse.query.Inline;
+import anyparse.query.Inline.InlineResult;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
 import anyparse.query.Rename;
@@ -315,6 +317,7 @@ final class Cli {
 			case 'search': return runSearch(rest);
 			case 'refs': return runRefs(rest);
 			case 'rename': return runRename(rest);
+			case 'inline': return runInline(rest);
 			case 'uses': return runUses(rest);
 			case 'meta': return runMeta(rest);
 			case 'blast': return runBlast(rest);
@@ -568,6 +571,93 @@ final class Cli {
 				return EXIT_OK;
 			case Err(message):
 				stderr('apq rename: $message\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
+	/**
+	 * `apq inline <file> <line>:<col> [--write]` — scope-correct,
+	 * format-preserving inline of the local `var` / `final` binding
+	 * identified by the symbol at `<line>:<col>`. Every read of the
+	 * binding is replaced with the binding's initializer source text
+	 * (parenthesised when the initializer is an operator expression), the
+	 * declaration line is deleted, and the result is verified to re-parse.
+	 * Reuses the `refs` resolver — the same scope-aware engine `rename`
+	 * uses — so the EXACT binding under the cursor is targeted.
+	 *
+	 * The inline refuses unless the binding is single-assignment and its
+	 * initializer is side-effect-free (no calls / field access / new /
+	 * collections / lambdas / interpolation) and depends only on stable
+	 * locals — a conservative whitelist that never trades correctness for
+	 * reach. `<line>:<col>` uses the same column convention `apq refs`
+	 * prints. Without `--write` the rewritten source is emitted to stdout;
+	 * with `--write` it overwrites the file in place. A cursor that is not
+	 * on an inlinable local, an unsafe initializer, or a rewrite that
+	 * fails to re-parse exits non-zero with the source untouched.
+	 */
+	private static function runInline(args:Array<String>):Int {
+		var lang:String = 'haxe';
+		var write:Bool = false;
+		var file:Null<String> = null;
+		var posSpec:Null<String> = null;
+
+		var i:Int = 0;
+		while (i < args.length) {
+			final a:String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--write':
+					write = true;
+				case '-h', '--help':
+					printInlineUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq inline: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (file == null) file = a;
+					else if (posSpec == null) posSpec = a;
+					else {
+						stderr('apq inline: unexpected extra argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (file == null || posSpec == null) {
+			stderr('apq inline: expected <file> <line>:<col>\n');
+			printInlineUsage();
+			return EXIT_USAGE;
+		}
+		final pos:Null<Position> = parseLineCol(posSpec);
+		if (pos == null) {
+			stderr('apq inline: malformed position "$posSpec" — expected <line>:<col>\n');
+			return EXIT_USAGE;
+		}
+
+		final filePath:String = file;
+		final source:String = try readFile(filePath)
+			catch (exception:Exception) {
+				stderr('apq inline: $filePath: ${exception.message}\n');
+				return EXIT_RUNTIME;
+			};
+
+		final plugin:GrammarPlugin = pickPlugin(lang);
+		final shape:RefShape = plugin.refShape();
+		final result:InlineResult = Inline.inlineVar(source, pos.line, pos.col, plugin, shape);
+		switch result {
+			case Ok(text):
+				if (write) {
+					writeFile(filePath, text);
+					stderr('apq inline: wrote $filePath\n');
+				} else {
+					sysPrint(text);
+				}
+				return EXIT_OK;
+			case Err(message):
+				stderr('apq inline: $message\n');
 				return EXIT_RUNTIME;
 		}
 	}
@@ -6314,6 +6404,7 @@ final class Cli {
 		sysPrint('  search        Structural pattern search\n');
 		sysPrint('  refs          Symbol references (value bindings; scope-aware)\n');
 		sysPrint('  rename        Scope-correct, format-preserving symbol rename\n');
+		sysPrint('  inline        Inline a local variable into its uses\n');
 		sysPrint('  uses          Type references (field/param/type-param positions)\n');
 		sysPrint('  meta          Annotation-on-decl shortcut\n');
 		sysPrint('  blast         Change-impact checklist (uses + refs + member-access)\n');
@@ -6468,6 +6559,26 @@ final class Cli {
 		sysPrint('intended binding. The rewrite is verified to re-parse; a cursor not on\n');
 		sysPrint('a renameable identifier, or an unparseable result, exits non-zero with\n');
 		sysPrint('the file untouched.\n');
+	}
+
+	private static function printInlineUsage():Void {
+		sysPrint('Usage: apq inline <file> <line>:<col> [--write]\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
+		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('\n');
+		sysPrint('Scope-correct, format-preserving inline of the local var / final\n');
+		sysPrint('binding identified by the symbol at <line>:<col>. Every read of the\n');
+		sysPrint('binding is replaced with its initializer source (parenthesised when\n');
+		sysPrint('the initializer is an operator expression) and the declaration line is\n');
+		sysPrint('removed. The inline refuses unless the binding is single-assignment and\n');
+		sysPrint('its initializer is side-effect-free (no calls / field access / new /\n');
+		sysPrint('collections / lambdas / interpolation) and reads only stable locals.\n');
+		sysPrint('<line>:<col> uses the same column convention `apq refs` prints. The\n');
+		sysPrint('rewrite is verified to re-parse; a cursor not on an inlinable local, an\n');
+		sysPrint('unsafe initializer, or an unparseable result, exits non-zero with the\n');
+		sysPrint('file untouched.\n');
 	}
 
 	private static function printUsesUsage():Void {

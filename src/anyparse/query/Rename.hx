@@ -7,8 +7,6 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
-using Lambda;
-
 /**
  * Outcome of a `Rename.rename` call. `Ok` carries the format-preserving
  * rewritten source; `Err` carries a human-readable diagnostic (cursor
@@ -59,11 +57,6 @@ enum RenameResult {
 @:nullSafety(Strict)
 final class Rename {
 
-	private static final FIELD_MEMBER_KINDS:Array<String> = [
-		'VarMember', 'FinalMember', 'FnMember',
-		'VarField', 'FinalField', 'FnField',
-	];
-
 	/**
 	 * Rename the binding of the symbol at `line:col` to `newName` in
 	 * `source`. `plugin` / `shape` are the caller-owned grammar plugin and
@@ -73,7 +66,7 @@ final class Rename {
 	 * never mutated — the caller decides whether to write the result.
 	 */
 	public static function rename(source:String, line:Int, col:Int, newName:String, plugin:GrammarPlugin, shape:RefShape):RenameResult {
-		if (!isIdentifier(newName)) return Err('new name "$newName" is not a valid identifier');
+		if (!RefactorSupport.isIdentifier(newName)) return Err('new name "$newName" is not a valid identifier');
 
 		final tree:QueryNode = try plugin.parseFile(source)
 			catch (exception:ParseError) return Err('source does not parse: ${exception.toString()}')
@@ -83,7 +76,7 @@ final class Rename {
 		// position copied from `refs` output maps back to the real offset.
 		final cursor:Int = Span.offsetOf(source, line, col + 1);
 
-		final node:Null<QueryNode> = resolveCursorNode(tree, cursor, source);
+		final node:Null<QueryNode> = RefactorSupport.resolveCursorNode(tree, cursor, source);
 		if (node == null)
 			return Err('position $line:$col is not on a renameable identifier');
 		// `resolveCursorNode` only returns nodes whose name is a renameable
@@ -94,7 +87,7 @@ final class Rename {
 
 		final hits:Array<RefHit> = Refs.find(targetName, tree, shape);
 
-		final bindingFrom:Null<Int> = resolveBindingFrom(node, hits);
+		final bindingFrom:Null<Int> = RefactorSupport.resolveBindingFrom(node, hits);
 		if (bindingFrom == null)
 			return Err('could not resolve a binding for "$targetName" at $line:$col');
 		final binding:Int = bindingFrom;
@@ -104,7 +97,7 @@ final class Rename {
 		if (occurrences.length == 0)
 			return Err('no occurrences resolved for "$targetName" at $line:$col');
 
-		final rewritten:String = spliceRename(source, occurrences, targetName, newName);
+		final rewritten:String = spliceRename(source, occurrences, newName);
 		if (rewritten == source)
 			return Err('rename "$targetName" -> "$newName" is a no-op');
 
@@ -116,97 +109,6 @@ final class Rename {
 	}
 
 	/**
-	 * Resolve the cursor to the named occurrence node it sits on, in two
-	 * tiers (innermost-wins within each):
-	 *
-	 *  1. A named node whose IDENTIFIER TOKEN contains the cursor — the
-	 *     precise case (reads / writes whose span is the bare identifier,
-	 *     params whose span starts at the name, a cursor placed directly
-	 *     on a decl's name).
-	 *  2. Failing that, a decl-host-shaped named node whose `span.from`
-	 *     EQUALS the cursor — the `apq refs --decls` convention, where the
-	 *     printed column maps to the decl's span start (the `var` / `for`
-	 *     keyword), not the identifier inside it.
-	 *
-	 * Returns null when neither tier matches — a cursor on whitespace, a
-	 * delimiter, or any non-identifier byte.
-	 */
-	private static function resolveCursorNode(tree:QueryNode, cursor:Int, source:String):Null<QueryNode> {
-		final tokenHit:Null<QueryNode> = innermostWhere(tree, cursor, node -> identTokenContains(node, cursor, source));
-		if (tokenHit != null) return tokenHit;
-		return innermostWhere(tree, cursor, node -> {
-			final span:Null<Span> = node.span;
-			return span != null && span.from == cursor && isRenameableName(node.name);
-		});
-	}
-
-	/**
-	 * Innermost (deepest, last-starting) named node satisfying `pred`
-	 * whose span contains `cursor`. Descends the whole tree, keeping the
-	 * last match in pre-order — a tighter enclosing node is visited after
-	 * its ancestors, so the final assignment is the innermost. `module` /
-	 * receiver `this` nodes are excluded via `isRenameableName`.
-	 */
-	private static function innermostWhere(tree:QueryNode, cursor:Int, pred:QueryNode -> Bool):Null<QueryNode> {
-		var best:Null<QueryNode> = null;
-		function walk(node:QueryNode):Void {
-			final span:Null<Span> = node.span;
-			if (span != null && cursor >= span.from && cursor < span.to && isRenameableName(node.name) && pred(node)) best = node;
-			for (c in node.children) walk(c);
-		}
-		walk(tree);
-		return best;
-	}
-
-	/**
-	 * Does the identifier token of `node` (the first word-boundary
-	 * occurrence of its name within its span) contain `cursor`?
-	 */
-	private static function identTokenContains(node:QueryNode, cursor:Int, source:String):Bool {
-		final span:Null<Span> = node.span;
-		final name:Null<String> = node.name;
-		if (span == null || name == null) return false;
-		final identFrom:Int = identTokenOffset(source, span, name);
-		if (identFrom < 0) return false;
-		return cursor >= identFrom && cursor < identFrom + name.length;
-	}
-
-	/**
-	 * Resolve which binding the cursor node belongs to, as the `from`
-	 * offset of that binding's declaration:
-	 *
-	 *  - The cursor node sits on a Decl hit (`span.from` matches) → the
-	 *    decl binds itself.
-	 *  - It sits on a Read / Write hit → follow the hit's `bindingSpan`.
-	 *  - It is a `this.<field>` field access (no matching ref hit) → the
-	 *    member decl of the same name.
-	 *
-	 * Returns null when nothing resolves (e.g. an unbound cross-file
-	 * read).
-	 */
-	private static function resolveBindingFrom(node:QueryNode, hits:Array<RefHit>):Null<Int> {
-		final span:Null<Span> = node.span;
-		if (span == null) return null;
-		final nodeFrom:Int = span.from;
-
-		final hit:Null<RefHit> = hits.find(h -> h.span.from == nodeFrom);
-		if (hit != null) {
-			if (hit.kind == RefKind.Decl) return hit.span.from;
-			final boundTo:Null<Span> = hit.bindingSpan;
-			return boundTo == null ? null : boundTo.from;
-		}
-
-		// Cursor is on a node that the resolver does not emit as a ref
-		// hit — the `this.<field>` field-access case. Bind it to the sole
-		// member decl of the same name.
-		if (node.kind == 'FieldAccess') {
-			final memberDecl:Null<RefHit> = hits.find(h -> h.kind == RefKind.Decl);
-			return memberDecl == null ? null : memberDecl.span.from;
-		}
-		return null;
-	}
-
-	/**
 	 * Is the node whose span starts at `from` a class-member declaration
 	 * (a field / method)? Drives whether the occurrence set is augmented
 	 * with `this.<name>` field accesses.
@@ -215,7 +117,7 @@ final class Rename {
 		var found:Bool = false;
 		function walk(node:QueryNode):Void {
 			final span:Null<Span> = node.span;
-			if (span != null && span.from == from && FIELD_MEMBER_KINDS.contains(node.kind)) found = true;
+			if (span != null && span.from == from && RefactorSupport.isFieldMemberKind(node.kind)) found = true;
 			for (c in node.children) walk(c);
 		}
 		walk(tree);
@@ -251,12 +153,12 @@ final class Rename {
 					final b:Null<Span> = h.bindingSpan;
 					b == null ? null : b.from;
 			};
-			if (boundFrom == binding) add(identTokenOffset(source, h.span, targetName));
+			if (boundFrom == binding) add(RefactorSupport.identTokenOffset(source, h.span, targetName));
 		}
 
 		if (isFieldBinding) {
 			for (access in collectThisFieldAccesses(targetName, tree))
-				add(identTokenOffset(source, access, targetName));
+				add(RefactorSupport.identTokenOffset(source, access, targetName));
 		}
 		return out;
 	}
@@ -282,63 +184,14 @@ final class Rename {
 	}
 
 	/**
-	 * Apply the rename by splicing each occurrence's identifier token with
-	 * `newName`. Occurrences are sorted descending by start offset and
-	 * rewritten end-to-start so earlier offsets remain valid as later
-	 * ones change length.
+	 * Apply the rename by replacing each occurrence's identifier-token span
+	 * with `newName`. Each occurrence span already covers exactly the name
+	 * bytes; `RefactorSupport.applyEdits` sorts the edits descending and
+	 * splices end-to-start so earlier offsets remain valid as later ones
+	 * change length.
 	 */
-	private static function spliceRename(source:String, occurrences:Array<Span>, oldName:String, newName:String):String {
-		final sorted:Array<Span> = occurrences.copy();
-		sorted.sort((a, b) -> b.from - a.from);
-		var result:String = source;
-		for (occ in sorted)
-			result = result.substring(0, occ.from) + newName + result.substring(occ.from + oldName.length);
-		return result;
-	}
-
-	/**
-	 * Offset of the first word-boundary occurrence of `name` within
-	 * `[span.from, span.to)`, or -1 when not found. A word boundary
-	 * requires the characters immediately before and after the match to
-	 * be non-identifier characters (or the span edge), so renaming `x`
-	 * inside `var x = xs[0]` matches the binding `x`, not the `x` inside
-	 * `xs`.
-	 */
-	private static function identTokenOffset(source:String, span:Span, name:String):Int {
-		final from:Int = span.from < 0 ? 0 : span.from;
-		final to:Int = span.to <= source.length ? span.to : source.length;
-		var i:Int = from;
-		while (i + name.length <= to) {
-			final at:Int = source.indexOf(name, i);
-			if (at < 0 || at + name.length > to) return -1;
-			final beforeOk:Bool = at == 0 || !isIdentChar(StringTools.fastCodeAt(source, at - 1));
-			final afterIdx:Int = at + name.length;
-			final afterOk:Bool = afterIdx >= source.length || !isIdentChar(StringTools.fastCodeAt(source, afterIdx));
-			if (beforeOk && afterOk) return at;
-			i = at + 1;
-		}
-		return -1;
-	}
-
-	/** A name is renameable when it is a valid identifier and not `this`. */
-	private static inline function isRenameableName(name:Null<String>):Bool {
-		return name != null && name != 'this' && isIdentifier(name);
-	}
-
-	/** Whole-string check: a non-empty identifier (`[A-Za-z_][A-Za-z0-9_]*`). */
-	private static function isIdentifier(s:String):Bool {
-		if (s.length == 0) return false;
-		final first:Int = StringTools.fastCodeAt(s, 0);
-		if (!isIdentStartChar(first)) return false;
-		for (i in 1...s.length) if (!isIdentChar(StringTools.fastCodeAt(s, i))) return false;
-		return true;
-	}
-
-	private static inline function isIdentStartChar(c:Int):Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || c == '_'.code;
-	}
-
-	private static inline function isIdentChar(c:Int):Bool {
-		return isIdentStartChar(c) || (c >= '0'.code && c <= '9'.code);
+	private static function spliceRename(source:String, occurrences:Array<Span>, newName:String):String {
+		final edits:Array<{span:Span, text:String}> = [for (occ in occurrences) {span: occ, text: newName}];
+		return RefactorSupport.applyEdits(source, edits);
 	}
 }
