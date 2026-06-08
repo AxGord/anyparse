@@ -14,6 +14,8 @@ import anyparse.query.Inline;
 import anyparse.query.Inline.InlineResult;
 import anyparse.query.ExtractVar;
 import anyparse.query.ExtractVar.ExtractResult;
+import anyparse.query.AddParam;
+import anyparse.query.AddParam.AddParamResult;
 import anyparse.query.ChangeSig;
 import anyparse.query.ChangeSig.ChangeSigResult;
 import anyparse.query.CrossRename;
@@ -329,6 +331,7 @@ final class Cli {
 			case 'move': return runMove(rest);
 			case 'inline': return runInline(rest);
 			case 'extract-var': return runExtractVar(rest);
+			case 'add-param': return runAddParam(rest);
 			case 'change-sig': return runChangeSig(rest);
 			case 'uses': return runUses(rest);
 			case 'meta': return runMeta(rest);
@@ -931,6 +934,89 @@ final class Cli {
 				return EXIT_OK;
 			case Err(message):
 				stderr('apq extract-var: $message\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
+	/**
+	 * `apq add-param <file> <line>:<col> <paramText> [--write]` — add
+	 * `<paramText>` as a new trailing parameter to the function whose
+	 * declaration is at `<line>:<col>`. The parameter MUST be
+	 * backward-compatible — optional (`?name:T`) or defaulted
+	 * (`name:T = v`) — so existing call sites need no update; this is a
+	 * decl-only operation that touches no call site. `<paramText>` is a
+	 * single positional (the user quotes it when it contains spaces) and is
+	 * taken verbatim. `<line>:<col>` uses the same column convention
+	 * `apq refs` prints. Without `--write` the rewritten source is emitted
+	 * to stdout; with `--write` it overwrites the file in place. A cursor
+	 * not on a function, a required parameter, a name collision, or an
+	 * unparseable result exits non-zero with the file untouched.
+	 */
+	private static function runAddParam(args:Array<String>):Int {
+		var lang:String = 'haxe';
+		var write:Bool = false;
+		var file:Null<String> = null;
+		var posSpec:Null<String> = null;
+		var paramText:Null<String> = null;
+
+		var i:Int = 0;
+		while (i < args.length) {
+			final a:String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--write':
+					write = true;
+				case '-h', '--help':
+					printAddParamUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq add-param: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (file == null) file = a;
+					else if (posSpec == null) posSpec = a;
+					else if (paramText == null) paramText = a;
+					else {
+						stderr('apq add-param: unexpected extra argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (file == null || posSpec == null || paramText == null) {
+			stderr('apq add-param: expected <file> <line>:<col> <paramText>\n');
+			printAddParamUsage();
+			return EXIT_USAGE;
+		}
+		final pos:Null<Position> = parseLineCol(posSpec);
+		if (pos == null) {
+			stderr('apq add-param: malformed position "$posSpec" — expected <line>:<col>\n');
+			return EXIT_USAGE;
+		}
+
+		final filePath:String = file;
+		final paramStr:String = paramText;
+		final source:String = try readFile(filePath)
+			catch (exception:Exception) {
+				stderr('apq add-param: $filePath: ${exception.message}\n');
+				return EXIT_RUNTIME;
+			};
+
+		final plugin:GrammarPlugin = pickPlugin(lang);
+		final result:AddParamResult = AddParam.addParam(source, pos.line, pos.col, paramStr, plugin);
+		switch result {
+			case Ok(text):
+				if (write) {
+					writeFile(filePath, text);
+					stderr('apq add-param: wrote $filePath\n');
+				} else {
+					sysPrint(text);
+				}
+				return EXIT_OK;
+			case Err(message):
+				stderr('apq add-param: $message\n');
 				return EXIT_RUNTIME;
 		}
 	}
@@ -6751,6 +6837,7 @@ final class Cli {
 		sysPrint('  move          Move a type declaration to another file (same package)\n');
 		sysPrint('  inline        Inline a local variable into its uses\n');
 		sysPrint('  extract-var   Hoist an expression into a new local final\n');
+		sysPrint('  add-param     Add a backward-compatible parameter to a function\n');
 		sysPrint('  change-sig    Reorder a function\'s parameters + call-site args\n');
 		sysPrint('  uses          Type references (field/param/type-param positions)\n');
 		sysPrint('  meta          Annotation-on-decl shortcut\n');
@@ -6985,6 +7072,27 @@ final class Cli {
 		sysPrint('convention `apq refs` prints. The rewrite is verified to re-parse; a\n');
 		sysPrint('cursor not on an expression start, an enclosing statement outside a\n');
 		sysPrint('block, or an unparseable result exits non-zero with the file untouched.\n');
+	}
+
+	private static function printAddParamUsage():Void {
+		sysPrint('Usage: apq add-param <file> <line>:<col> <paramText> [--write]\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
+		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('\n');
+		sysPrint('Add a backward-compatible parameter to a function declaration. The\n');
+		sysPrint('function whose declaration is at <line>:<col> gains <paramText> as a new\n');
+		sysPrint('trailing parameter (e.g. `?flag:Bool`, `count:Int = 0`, `?cb:Void->Void`).\n');
+		sysPrint('The parameter MUST be optional (`?name:T`) or defaulted (`name:T = v`),\n');
+		sysPrint('so existing call sites need no update — a required parameter would break\n');
+		sysPrint('them and is refused. This is a DECL-ONLY operation: no call site is\n');
+		sysPrint('touched, which makes it safe for methods AND local functions alike.\n');
+		sysPrint('Quote <paramText> if it contains spaces. <line>:<col> uses the same\n');
+		sysPrint('column convention `apq refs` prints. The rewrite is verified to\n');
+		sysPrint('re-parse; a cursor not on a function, a required parameter, a name\n');
+		sysPrint('collision, or an unparseable result exits non-zero with the file\n');
+		sysPrint('untouched.\n');
 	}
 
 	private static function printChangeSigUsage():Void {
