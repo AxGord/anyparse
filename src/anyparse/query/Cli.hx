@@ -18,6 +18,9 @@ import anyparse.query.ChangeSig;
 import anyparse.query.ChangeSig.ChangeSigResult;
 import anyparse.query.CrossRename;
 import anyparse.query.CrossRename.CrossRenameResult;
+import anyparse.query.MoveSymbol;
+import anyparse.query.MoveSymbol.MoveResult;
+import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
 import anyparse.query.Rename;
@@ -323,6 +326,7 @@ final class Cli {
 			case 'search': return runSearch(rest);
 			case 'refs': return runRefs(rest);
 			case 'rename': return runRename(rest);
+			case 'move': return runMove(rest);
 			case 'inline': return runInline(rest);
 			case 'extract-var': return runExtractVar(rest);
 			case 'change-sig': return runChangeSig(rest);
@@ -645,6 +649,118 @@ final class Cli {
 				return EXIT_OK;
 			case Err(message):
 				stderr('apq rename: $message\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
+	/**
+	 * `apq move <file> <line>:<col> <dest-file> --scope <dir> [--write]` —
+	 * move the TYPE declaration at `<line>:<col>` (in `<file>`) into
+	 * `<dest-file>` (same package), fixing imports across `<scope>`. Reads
+	 * every scope file from disk (plus the cursor and destination files
+	 * when they sit outside the scope directory), drives the pure
+	 * `MoveSymbol.moveType`, and on success either writes each changed
+	 * file (`--write`) or prints a per-file `moved` / `updated` summary.
+	 * The whole rewrite is atomic — the pure op re-parses every rewritten
+	 * file before returning, so a write either touches all changed files
+	 * or none. `<line>:<col>` uses the same column convention `apq refs`
+	 * prints.
+	 */
+	private static function runMove(args:Array<String>):Int {
+		var lang:String = 'haxe';
+		var write:Bool = false;
+		var scope:Null<String> = null;
+		var file:Null<String> = null;
+		var posSpec:Null<String> = null;
+		var destFileArg:Null<String> = null;
+
+		var i:Int = 0;
+		while (i < args.length) {
+			final a:String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--write':
+					write = true;
+				case '--scope':
+					scope = expectValue(args, ++i, '--scope');
+				case '-h', '--help':
+					printMoveUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq move: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (file == null) file = a;
+					else if (posSpec == null) posSpec = a;
+					else if (destFileArg == null) destFileArg = a;
+					else {
+						stderr('apq move: unexpected extra argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (file == null || posSpec == null || destFileArg == null) {
+			stderr('apq move: expected <file> <line>:<col> <dest-file>\n');
+			printMoveUsage();
+			return EXIT_USAGE;
+		}
+		if (scope == null) {
+			stderr('apq move: --scope <dir> is required (imports are fixed across the scope)\n');
+			printMoveUsage();
+			return EXIT_USAGE;
+		}
+		final pos:Null<Position> = parseLineCol(posSpec);
+		if (pos == null) {
+			stderr('apq move: malformed position "$posSpec" — expected <line>:<col>\n');
+			return EXIT_USAGE;
+		}
+
+		final cursorFile:String = file;
+		final destFile:String = destFileArg;
+		final scopeDir:String = scope;
+		final plugin:GrammarPlugin = pickPlugin(lang);
+
+		// Gather scope files = expandInputs(scope) ∪ {cursorFile, destFile}.
+		final expanded:{paths:Array<String>, singleFile:Bool} = expandInputs([scopeDir], '.hx');
+		final paths:Array<String> = expanded.paths;
+		if (!paths.contains(cursorFile)) paths.push(cursorFile);
+		if (!paths.contains(destFile)) paths.push(destFile);
+		if (paths.length == 0) {
+			stderr('apq move: --scope $scopeDir matched no .hx files\n');
+			return EXIT_RUNTIME;
+		}
+
+		final scopeFiles:Array<{file:String, source:String}> = [];
+		for (path in paths) {
+			final fileSource:String = try readSourceForParse(path)
+				catch (exception:Exception) {
+					stderr('apq move: $path: ${exception.message}\n');
+					return EXIT_RUNTIME;
+				};
+			scopeFiles.push({file: path, source: fileSource});
+		}
+
+		final typeRefShape:TypeRefShape = plugin.typeRefShape();
+		final result:MoveResult = MoveSymbol.moveType(cursorFile, pos.line, pos.col, destFile, scopeFiles, plugin, typeRefShape);
+		switch result {
+			case Ok(changes, advisory):
+				if (write) {
+					for (c in changes) writeFile(c.file, c.newSource);
+					stderr('apq move: wrote ${changes.length} file(s)\n');
+				} else {
+					for (c in changes) {
+						final tag:String = c.file == cursorFile || c.file == destFile ? 'moved' : 'updated';
+						sysPrint('${c.file}: $tag\n');
+					}
+					sysPrint('total: ${changes.length} file(s)\n');
+				}
+				if (advisory != null) stderr('apq move: $advisory\n');
+				return EXIT_OK;
+			case Err(message):
+				stderr('apq move: $message\n');
 				return EXIT_RUNTIME;
 		}
 	}
@@ -6632,6 +6748,7 @@ final class Cli {
 		sysPrint('  search        Structural pattern search\n');
 		sysPrint('  refs          Symbol references (value bindings; scope-aware)\n');
 		sysPrint('  rename        Scope-correct, format-preserving symbol rename\n');
+		sysPrint('  move          Move a type declaration to another file (same package)\n');
 		sysPrint('  inline        Inline a local variable into its uses\n');
 		sysPrint('  extract-var   Hoist an expression into a new local final\n');
 		sysPrint('  change-sig    Reorder a function\'s parameters + call-site args\n');
@@ -6802,6 +6919,31 @@ final class Cli {
 		sysPrint('if the type is declared in more than one file under scope, if any scope\n');
 		sysPrint('file does not parse, or if any rewritten file fails to re-parse — the\n');
 		sysPrint('write is atomic. Without --write a per-file occurrence summary is printed.\n');
+	}
+
+	private static function printMoveUsage():Void {
+		sysPrint('Usage: apq move <file> <line>:<col> <dest-file> --scope <dir> [--write]\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --scope <dir>       Directory whose .hx imports are fixed (required)\n');
+		sysPrint('  --write             Write each changed file in place (default: print summary)\n');
+		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('\n');
+		sysPrint('Move the TYPE declaration (class / interface / enum / typedef /\n');
+		sysPrint('abstract) at <line>:<col> in <file> into <dest-file>, which must be in\n');
+		sysPrint('the SAME PACKAGE. The decl is relocated verbatim — its leading\n');
+		sysPrint('doc-comment and @:meta lines move with it. Every file under --scope that\n');
+		sysPrint('imported the type through its old module path is repointed at the new\n');
+		sysPrint('path, and the type-position imports the moved body depends on are carried\n');
+		sysPrint('into the destination (best-effort: a dependency reached via a static\n');
+		sysPrint('receiver T.x() or a value position is not auto-detected and may need a\n');
+		sysPrint('manual import — surfaced in the advisory). <line>:<col> uses the same\n');
+		sysPrint('column convention `apq refs` prints.\n');
+		sysPrint('\n');
+		sysPrint('Refuses a cross-package move, an ambiguous / missing type, a decl that\n');
+		sysPrint('shares a source line with other code, any scope file that does not parse,\n');
+		sysPrint('or any rewritten file that fails to re-parse — the write is atomic\n');
+		sysPrint('(all changed files or none). Same-package moves only in this increment.\n');
 	}
 
 	private static function printInlineUsage():Void {
