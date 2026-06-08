@@ -63,7 +63,7 @@ class ApqAstIntegrationTest extends Test {
 				Json.renderTree(path, source, tree);
 				final truncated:QueryNode = Engine.truncate(tree, 2);
 				Text.render(truncated);
-				final matches:Array<QueryNode> = Engine.select(tree, probeSelector);
+				final matches:Array<QueryNode> = Engine.select(tree, probeSelector, plugin.selectKindEquivalence());
 				if (matches.length > 0) Json.renderMatches(path, source, matches, false, false);
 				parsedOk++;
 			} catch (e:Exception) {

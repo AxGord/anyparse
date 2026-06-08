@@ -387,6 +387,8 @@ $ apq ast x.hx
 
 `EnumDecl` is an algebraic enum — its children are constructors (`SimpleCtor`, `ParamCtor`). `EnumAbstractDecl` is a typed-constant abstract — its children are `VarMember`s plus the underlying `Named` type. They are deliberately separate kinds because they are separate constructs, so `ast --select EnumDecl` does **not** match an `enum abstract`, and vice versa — by design. Select the kind that matches the construct, or run `apq ast` to see which kind a given declaration parsed to. The tool keeps these precise rather than collapsing them under one lossy `enum` label.
 
+**`final` is a wrapper shape, and `--select` folds it.** The `final` modifier wraps a declaration in an extra node: `final class C` parses to `FinalDecl(ClassForm C …)` — the named node is `ClassForm`, not `ClassDecl` — and `final function f()` parses to `FinalModifiedMember` rather than `FnMember`. Unlike `enum` vs `enum abstract` (genuinely different constructs), a `final class` *is* a class and a `final function` *is* a method — same construct, just a wrapper. So `ast --select` deliberately **folds** these: `--select ClassDecl` also matches a `final class`'s `ClassForm`, and `--select FnMember` also matches a `final function`'s `FinalModifiedMember` (chains too — `--select 'ClassDecl > FnMember'` reaches a final method inside a final class). This folding is `--select`-only and limited to the `final` wrappers; the precise per-position kinds (`VarMember` vs `VarStmt`, `EnumDecl` vs `EnumAbstractDecl`) are unchanged. A `final` FIELD (`final x:Int` → `FinalMember`) is **not** folded into `VarMember` — it is its own kind, not a wrapper.
+
 ## Shell composition
 
 The JSON envelopes are designed for `jq` / `xargs` pipelines. The

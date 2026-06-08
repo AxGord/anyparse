@@ -94,6 +94,19 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 	private static final SEARCH_KIND_EQUIVALENCE:KindEquivalence =
 		new KindEquivalence([['VarDecl', 'VarMember', 'VarStmt']]);
 
+	/**
+	 * `--select` kind-equivalence: folds the `final` modifier-wrapper
+	 * shapes onto their plain counterparts so `--select ClassDecl` matches
+	 * a `final class` (projected as `FinalDecl(ClassForm …)` — the named
+	 * node is `ClassForm`) and `--select FnMember` matches a `final
+	 * function` (`FinalModifiedMember`). Distinct from
+	 * `SEARCH_KIND_EQUIVALENCE` — `--select` keeps its precise per-position
+	 * kinds; only the final-wrapper folding is shared. NOT the Var/Final
+	 * family (a `final` FIELD is a separate kind by design, not a wrapper).
+	 */
+	private static final SELECT_KIND_EQUIVALENCE:KindEquivalence =
+		new KindEquivalence([['ClassDecl', 'ClassForm'], ['FnMember', 'FinalModifiedMember']]);
+
 	public function new() {}
 
 	public function langName():String return 'haxe';
@@ -285,6 +298,10 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 			metaKinds: ['MetaCall', 'Meta', 'PlainMeta'],
 			declHostKinds: DECL_HOST_KINDS,
 		};
+	}
+
+	public function selectKindEquivalence():KindEquivalence {
+		return SELECT_KIND_EQUIVALENCE;
 	}
 
 	public function parsePattern(source:String):Pattern {

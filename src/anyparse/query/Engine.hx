@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.Pattern.KindEquivalence;
 import anyparse.runtime.Span;
 
 /**
@@ -41,10 +42,16 @@ final class Engine {
 	 * Walk `tree` and return every node that matches `selector`.
 	 * Combinators in `selector` walk left-to-right; only direct-child
 	 * relationships are tested per the v1 selector spec.
+	 *
+	 * `equiv` (when supplied) is the grammar's kind-equivalence relation,
+	 * threaded into each segment's kind test so `--select ClassDecl` also
+	 * matches a `final class`'s `ClassForm` (and `FnMember` a `final`
+	 * method's `FinalModifiedMember`). Omitting it keeps the exact-kind
+	 * behaviour — the matcher stays language-agnostic by default.
 	 */
-	public static function select(tree:QueryNode, selector:Selector):Array<QueryNode> {
+	public static function select(tree:QueryNode, selector:Selector, ?equiv:KindEquivalence):Array<QueryNode> {
 		final out:Array<QueryNode> = [];
-		walkSelect(tree, selector, 0, out);
+		walkSelect(tree, selector, 0, out, equiv);
 		return out;
 	}
 
@@ -85,21 +92,21 @@ final class Engine {
 		return new QueryNode(node.kind, node.name, kept, node.span);
 	}
 
-	private static function walkSelect(node:QueryNode, sel:Selector, segIdx:Int, out:Array<QueryNode>):Void {
+	private static function walkSelect(node:QueryNode, sel:Selector, segIdx:Int, out:Array<QueryNode>, ?equiv:KindEquivalence):Void {
 		// At each segIdx, try to match the current segment against `node`.
 		// If matched and last segment: collect `node`. If matched and more segments:
 		// recurse into children with segIdx+1.
 		// Also, regardless of match, recurse into children with segIdx=0
 		// so the first segment can fire deeper in the tree (top-level any-depth match).
-		final matched:Bool = sel.segments[segIdx].matches(node);
+		final matched:Bool = sel.segments[segIdx].matches(node, equiv);
 		if (matched) {
 			if (segIdx == sel.segments.length - 1) {
 				out.push(node);
 			} else {
-				for (c in node.children) walkSelect(c, sel, segIdx + 1, out);
+				for (c in node.children) walkSelect(c, sel, segIdx + 1, out, equiv);
 			}
 		}
-		if (segIdx == 0) for (c in node.children) walkSelect(c, sel, 0, out);
+		if (segIdx == 0) for (c in node.children) walkSelect(c, sel, 0, out, equiv);
 	}
 
 	/**

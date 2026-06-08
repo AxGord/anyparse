@@ -1,5 +1,7 @@
 package anyparse.query;
 
+import anyparse.query.Pattern.KindEquivalence;
+
 /**
  * Plugin contract for a grammar that the query engine can operate on.
  *
@@ -61,6 +63,21 @@ interface GrammarPlugin {
 	 * contract and `MetaShape` for field semantics.
 	 */
 	public function metaShape():MetaShape;
+
+	/**
+	 * Kind-equivalence relation for `apq ast --select`: groups
+	 * `QueryNode.kind` values a `--select <Kind>` should treat as one, so
+	 * a selector matches the grammar's wrapper-shaped variants of a decl.
+	 * For Haxe this folds the `final` wrappers — `ClassDecl ≡ ClassForm`
+	 * (a `final class`'s named inner node) and `FnMember ≡
+	 * FinalModifiedMember` (a `final` method) — so `--select ClassDecl` /
+	 * `--select FnMember` cover final declarations too. Deliberately
+	 * SEPARATE from the search-only `SEARCH_KIND_EQUIVALENCE`: `--select`
+	 * keeps its precise per-position kinds (`VarMember` ≠ `VarStmt`), only
+	 * the final-wrapper folding is added. A plugin with no wrapper shapes
+	 * returns an empty relation (every kind equivalent only to itself).
+	 */
+	public function selectKindEquivalence():KindEquivalence;
 
 	/**
 	 * Parse `source` like `parseFile`, but additionally surface

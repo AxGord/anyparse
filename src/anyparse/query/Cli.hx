@@ -3752,7 +3752,10 @@ final class Cli {
 
 		if (selectExpr != null) {
 			final selector:Selector = Selector.parse(selectExpr);
-			final preFilter:Array<QueryNode> = Engine.select(tree, selector);
+			// Pass the grammar's kind-equivalence so `--select ClassDecl` /
+			// `--select FnMember` also match `final class` / `final function`
+			// (the `final`-wrapper shapes ClassForm / FinalModifiedMember).
+			final preFilter:Array<QueryNode> = Engine.select(tree, selector, plugin.selectKindEquivalence());
 			// ω-ast-child-count-filter: post-filter on direct-child count so
 			// "find all multi-arg ParamCtor ctors" is one query. The selector
 			// grammar (`Kind` / `Kind:name` / `Kind > Child`) is deliberately

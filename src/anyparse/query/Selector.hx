@@ -1,5 +1,7 @@
 package anyparse.query;
 
+import anyparse.query.Pattern.KindEquivalence;
+
 /**
  * Parsed `--select` path expression.
  *
@@ -90,8 +92,18 @@ final class SelectorSegment {
 		this.name = name;
 	}
 
-	public function matches(node:QueryNode):Bool {
-		if (node.kind != kind) return false;
+	/**
+	 * Does `node` match this segment? `equiv` (when non-null) widens the
+	 * kind test through the grammar's kind-equivalence relation, so a
+	 * `--select ClassDecl` matches the `final class` inner `ClassForm` and
+	 * `--select FnMember` matches a `final function`'s `FinalModifiedMember`
+	 * (see `GrammarPlugin.selectKindEquivalence`). A null `equiv` keeps the
+	 * exact-kind behaviour, so the matcher stays usable without a plugin
+	 * (synthetic-tree callers / tests).
+	 */
+	public function matches(node:QueryNode, ?equiv:KindEquivalence):Bool {
+		final kindMatch:Bool = equiv == null ? node.kind == kind : equiv.equivalent(node.kind, kind);
+		if (!kindMatch) return false;
 		if (name == null) return true;
 		return node.name == name;
 	}
