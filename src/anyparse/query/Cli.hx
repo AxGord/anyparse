@@ -16,6 +16,8 @@ import anyparse.query.ExtractVar;
 import anyparse.query.ExtractVar.ExtractResult;
 import anyparse.query.ChangeSig;
 import anyparse.query.ChangeSig.ChangeSigResult;
+import anyparse.query.CrossRename;
+import anyparse.query.CrossRename.CrossRenameResult;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
 import anyparse.query.Rename;
@@ -514,6 +516,7 @@ final class Cli {
 	private static function runRename(args:Array<String>):Int {
 		var lang:String = 'haxe';
 		var write:Bool = false;
+		var scope:Null<String> = null;
 		var file:Null<String> = null;
 		var posSpec:Null<String> = null;
 		var newName:Null<String> = null;
@@ -526,6 +529,8 @@ final class Cli {
 					lang = expectValue(args, ++i, '--lang');
 				case '--write':
 					write = true;
+				case '--scope':
+					scope = expectValue(args, ++i, '--scope');
 				case '-h', '--help':
 					printRenameUsage();
 					return EXIT_OK;
@@ -564,6 +569,10 @@ final class Cli {
 			};
 
 		final plugin:GrammarPlugin = pickPlugin(lang);
+
+		if (scope != null)
+			return runRenameScope(filePath, source, pos.line, pos.col, newNameStr, scope, write, plugin);
+
 		final shape:RefShape = plugin.refShape();
 		final result:RenameResult = Rename.rename(source, pos.line, pos.col, newNameStr, plugin, shape);
 		switch result {
@@ -574,6 +583,64 @@ final class Cli {
 				} else {
 					sysPrint(text);
 				}
+				return EXIT_OK;
+			case Err(message):
+				stderr('apq rename: $message\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
+	/**
+	 * `apq rename <file> <l>:<c> <newName> --scope <dir>` — cross-file
+	 * TYPE rename. The cursor's binding MUST be a type declaration; that
+	 * type is renamed across every `.hx` file under `<dir>` (plus the
+	 * cursor file if it sits outside the scope). Reads the scope files
+	 * from disk, drives the pure `CrossRename.crossRenameType`, and on
+	 * success either writes each changed file (`--write`) or prints a
+	 * per-file occurrence summary. The whole rewrite is atomic — the
+	 * pure op validates every rewritten file before returning, so a
+	 * write either touches all changed files or none.
+	 */
+	private static function runRenameScope(filePath:String, source:String, line:Int, col:Int, newName:String, scope:String,
+			write:Bool, plugin:GrammarPlugin):Int {
+		final expanded:{paths:Array<String>, singleFile:Bool} = expandInputs([scope], '.hx');
+		final paths:Array<String> = expanded.paths;
+		// The cursor file's declaration must be covered even if it sits
+		// outside the scope directory — add it when expandInputs missed it.
+		if (!paths.contains(filePath)) paths.push(filePath);
+		if (paths.length == 0) {
+			stderr('apq rename: --scope $scope matched no .hx files\n');
+			return EXIT_RUNTIME;
+		}
+
+		final scopeFiles:Array<{file:String, source:String}> = [];
+		for (path in paths) {
+			if (path == filePath) {
+				scopeFiles.push({file: path, source: source});
+				continue;
+			}
+			final fileSource:String = try readSourceForParse(path)
+				catch (exception:Exception) {
+					stderr('apq rename: $path: ${exception.message}\n');
+					return EXIT_RUNTIME;
+				};
+			scopeFiles.push({file: path, source: fileSource});
+		}
+
+		final typeRefShape:TypeRefShape = plugin.typeRefShape();
+		final result:CrossRenameResult = CrossRename.crossRenameType(filePath, source, line, col, newName, scopeFiles, plugin, typeRefShape);
+		switch result {
+			case Ok(changes, advisory):
+				var totalOccurrences:Int = 0;
+				for (c in changes) totalOccurrences += c.count;
+				if (write) {
+					for (c in changes) writeFile(c.file, c.newSource);
+					stderr('apq rename: wrote ${changes.length} file(s), $totalOccurrences occurrence(s)\n');
+				} else {
+					for (c in changes) sysPrint('${c.file}: ${c.count} occurrence(s)\n');
+					sysPrint('total: ${changes.length} file(s), $totalOccurrences occurrence(s)\n');
+				}
+				if (advisory != null) stderr('apq rename: $advisory\n');
 				return EXIT_OK;
 			case Err(message):
 				stderr('apq rename: $message\n');
@@ -6707,10 +6774,11 @@ final class Cli {
 	}
 
 	private static function printRenameUsage():Void {
-		sysPrint('Usage: apq rename <file> <line>:<col> <newName> [--write]\n');
+		sysPrint('Usage: apq rename <file> <line>:<col> <newName> [--write] [--scope <dir>]\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
+		sysPrint('  --scope <dir>       Cross-file TYPE rename across every .hx under <dir>\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 		sysPrint('\n');
 		sysPrint('Scope-correct, format-preserving rename of the binding identified by\n');
@@ -6721,6 +6789,17 @@ final class Cli {
 		sysPrint('intended binding. The rewrite is verified to re-parse; a cursor not on\n');
 		sysPrint('a renameable identifier, or an unparseable result, exits non-zero with\n');
 		sysPrint('the file untouched.\n');
+		sysPrint('\n');
+		sysPrint('With --scope <dir> the cursor MUST be on a TYPE declaration (class /\n');
+		sysPrint('interface / enum / typedef / abstract); that type is renamed across\n');
+		sysPrint('every .hx file under <dir> — type positions, new T, cast, extends /\n');
+		sysPrint('implements, type params, the decl name, and import / using segments.\n');
+		sysPrint('Type-namespace only: static-receiver accesses (T.staticMethod()) and\n');
+		sysPrint('aliased imports are NOT rewritten (a missed form dangles into a compile\n');
+		sysPrint('error, never a silent change). The rename refuses if the type is\n');
+		sysPrint('declared in more than one file under scope, if any scope file does not\n');
+		sysPrint('parse, or if any rewritten file fails to re-parse — the write is atomic.\n');
+		sysPrint('Without --write a per-file occurrence summary is printed.\n');
 	}
 
 	private static function printInlineUsage():Void {

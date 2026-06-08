@@ -231,4 +231,18 @@ final class RefactorSupport {
 		}
 		return Std.parseInt(s);
 	}
+
+	/**
+	 * Push a `[from, from+length)` span into `out`, deduped by `from`: a
+	 * non-negative `from` not already in `seen` is recorded and appended.
+	 * The dedup-and-collect idiom shared by the occurrence collectors of
+	 * `Rename` and `CrossRename` (the same identifier-token offset can be
+	 * surfaced by more than one walker).
+	 */
+	public static function pushUniqueSpan(out:Array<Span>, seen:Array<Int>, from:Int, length:Int):Void {
+		if (from >= 0 && !seen.contains(from)) {
+			seen.push(from);
+			out.push(new Span(from, from + length));
+		}
+	}
 }

@@ -139,12 +139,8 @@ final class Rename {
 	private static function collectOccurrences(source:String, targetName:String, hits:Array<RefHit>, binding:Int, isFieldBinding:Bool, tree:QueryNode):Array<Span> {
 		final out:Array<Span> = [];
 		final seen:Array<Int> = [];
-		inline function add(identFrom:Int):Void {
-			if (identFrom >= 0 && !seen.contains(identFrom)) {
-				seen.push(identFrom);
-				out.push(new Span(identFrom, identFrom + targetName.length));
-			}
-		}
+		inline function add(identFrom:Int):Void
+			RefactorSupport.pushUniqueSpan(out, seen, identFrom, targetName.length);
 
 		for (h in hits) {
 			final boundFrom:Null<Int> = switch h.kind {
