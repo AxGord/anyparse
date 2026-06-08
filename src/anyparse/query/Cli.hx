@@ -12,6 +12,8 @@ import anyparse.query.Matcher.Match;
 import anyparse.query.Meta.MetaHit;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
+import anyparse.query.Rename;
+import anyparse.query.Rename.RenameResult;
 import anyparse.query.Uses.UsesHit;
 import anyparse.query.format.Json;
 import anyparse.query.format.Text;
@@ -312,6 +314,7 @@ final class Cli {
 			case 'ast': return runAst(rest);
 			case 'search': return runSearch(rest);
 			case 'refs': return runRefs(rest);
+			case 'rename': return runRename(rest);
 			case 'uses': return runUses(rest);
 			case 'meta': return runMeta(rest);
 			case 'blast': return runBlast(rest);
@@ -482,6 +485,121 @@ final class Cli {
 			for (entry in shown) sysPrint(Text.renderRefs(entry.file, entry.source, entry.hits, wantDoc, wantSource, flat));
 		}
 		return EXIT_OK;
+	}
+
+	/**
+	 * `apq rename <file> <line>:<col> <newName> [--write]` — scope-correct,
+	 * format-preserving rename of the binding identified by the symbol at
+	 * `<line>:<col>`. Position-based so the EXACT binding is selected
+	 * (`apq refs <name> --reads` shows distinct bindings for shadowed
+	 * names). Reuses the `refs` resolver to collect the binding's full
+	 * occurrence set, then span-rewrites only those identifier tokens.
+	 *
+	 * `<line>:<col>` uses the same column convention `apq refs` PRINTS, so
+	 * a coordinate copied straight from `apq refs --decls` output selects
+	 * the intended binding. Without `--write` the rewritten source is
+	 * emitted to stdout; with `--write` it overwrites the file in place.
+	 * A cursor that is not on a renameable identifier, or a rewrite that
+	 * fails to re-parse, exits non-zero with the source untouched.
+	 */
+	private static function runRename(args:Array<String>):Int {
+		var lang:String = 'haxe';
+		var write:Bool = false;
+		var file:Null<String> = null;
+		var posSpec:Null<String> = null;
+		var newName:Null<String> = null;
+
+		var i:Int = 0;
+		while (i < args.length) {
+			final a:String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--write':
+					write = true;
+				case '-h', '--help':
+					printRenameUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq rename: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (file == null) file = a;
+					else if (posSpec == null) posSpec = a;
+					else if (newName == null) newName = a;
+					else {
+						stderr('apq rename: unexpected extra argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (file == null || posSpec == null || newName == null) {
+			stderr('apq rename: expected <file> <line>:<col> <newName>\n');
+			printRenameUsage();
+			return EXIT_USAGE;
+		}
+		final pos:Null<Position> = parseLineCol(posSpec);
+		if (pos == null) {
+			stderr('apq rename: malformed position "$posSpec" — expected <line>:<col>\n');
+			return EXIT_USAGE;
+		}
+
+		final filePath:String = file;
+		final newNameStr:String = newName;
+		final source:String = try readFile(filePath)
+			catch (exception:Exception) {
+				stderr('apq rename: $filePath: ${exception.message}\n');
+				return EXIT_RUNTIME;
+			};
+
+		final plugin:GrammarPlugin = pickPlugin(lang);
+		final shape:RefShape = plugin.refShape();
+		final result:RenameResult = Rename.rename(source, pos.line, pos.col, newNameStr, plugin, shape);
+		switch result {
+			case Ok(text):
+				if (write) {
+					writeFile(filePath, text);
+					stderr('apq rename: wrote $filePath\n');
+				} else {
+					sysPrint(text);
+				}
+				return EXIT_OK;
+			case Err(message):
+				stderr('apq rename: $message\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
+	/**
+	 * Parse a `<line>:<col>` coordinate. Both components must be
+	 * non-negative integers; returns null on any malformed shape so the
+	 * caller emits a usage error rather than silently clamping.
+	 */
+	private static function parseLineCol(spec:String):Null<Position> {
+		final colon:Int = spec.indexOf(':');
+		if (colon <= 0 || colon >= spec.length - 1) return null;
+		final line:Null<Int> = parseStrictInt(spec.substring(0, colon));
+		final col:Null<Int> = parseStrictInt(spec.substring(colon + 1));
+		if (line == null || col == null) return null;
+		return {line: line, col: col};
+	}
+
+	/**
+	 * Parse a non-negative decimal integer, returning null when the string
+	 * has any non-digit character. Stricter than the shared
+	 * `parsePositiveInt` (which delegates to `Std.parseInt` and tolerates
+	 * trailing garbage), so a coordinate like `3:1x` is rejected rather
+	 * than silently resolving to `3:1`.
+	 */
+	private static function parseStrictInt(s:String):Null<Int> {
+		if (s.length == 0) return null;
+		for (j in 0...s.length) {
+			final c:Int = StringTools.fastCodeAt(s, j);
+			if (c < '0'.code || c > '9'.code) return null;
+		}
+		return Std.parseInt(s);
 	}
 
 	private static function runUses(args:Array<String>):Int {
@@ -6001,6 +6119,14 @@ final class Cli {
 		#end
 	}
 
+	private static function writeFile(path:String, content:String):Void {
+		#if (sys || nodejs)
+		File.saveContent(path, content);
+		#else
+		throw 'apq: file IO requires a sys target';
+		#end
+	}
+
 	/**
 	 * Read all bytes from stdin and decode as UTF-8 source. Used by
 	 * `apq ast --stdin` (and `apq probe -`) to accept inline source
@@ -6187,6 +6313,7 @@ final class Cli {
 		sysPrint('  probe         AST/writer probe with inline source (no file IO)\n');
 		sysPrint('  search        Structural pattern search\n');
 		sysPrint('  refs          Symbol references (value bindings; scope-aware)\n');
+		sysPrint('  rename        Scope-correct, format-preserving symbol rename\n');
 		sysPrint('  uses          Type references (field/param/type-param positions)\n');
 		sysPrint('  meta          Annotation-on-decl shortcut\n');
 		sysPrint('  blast         Change-impact checklist (uses + refs + member-access)\n');
@@ -6324,6 +6451,23 @@ final class Cli {
 		sysPrint('\n');
 		sysPrint('Phase 3.1: name-only matching, no lexical scope. Filters combine\n');
 		sysPrint('inclusively — passing `--decls --reads` keeps both kinds.\n');
+	}
+
+	private static function printRenameUsage():Void {
+		sysPrint('Usage: apq rename <file> <line>:<col> <newName> [--write]\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
+		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('\n');
+		sysPrint('Scope-correct, format-preserving rename of the binding identified by\n');
+		sysPrint('the symbol at <line>:<col>. The position selects the EXACT binding —\n');
+		sysPrint('a shadowing param / loop var / field with the same name is left\n');
+		sysPrint('untouched. <line>:<col> uses the same column convention `apq refs`\n');
+		sysPrint('prints, so a coordinate copied from `apq refs --decls` selects the\n');
+		sysPrint('intended binding. The rewrite is verified to re-parse; a cursor not on\n');
+		sysPrint('a renameable identifier, or an unparseable result, exits non-zero with\n');
+		sysPrint('the file untouched.\n');
 	}
 
 	private static function printUsesUsage():Void {
