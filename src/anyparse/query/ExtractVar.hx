@@ -89,6 +89,18 @@ final class ExtractVar {
 	 */
 	private static final BLOCK_KINDS:Array<String> = ['BlockBody', 'BlockStmt'];
 
+	/** Function-declaration kinds — the scope that owns the hoisted local. */
+	private static final FN_KINDS:Array<String> = ['FnMember', 'LocalFnStmt'];
+
+	/**
+	 * Binding-introducing kinds whose name would collide with the hoisted
+	 * `final <name>`: parameters, locals, nested local functions, loop
+	 * iterators, catch variables.
+	 */
+	private static final BINDING_DECL_KINDS:Array<String> = [
+		'Required', 'Optional', 'VarStmt', 'FinalStmt', 'LocalFnStmt', 'ForStmt', 'CatchClause',
+	];
+
 	/**
 	 * Extract the expression starting at `line:col` in `source` into a
 	 * fresh `final <name> = <expr>;` hoisted before the enclosing
@@ -129,6 +141,12 @@ final class ExtractVar {
 			return Err('"$name": cannot extract — the enclosing statement has no source span');
 		final hoistSpan:Span = stmtSpan;
 
+		// Refuse a name that already binds a parameter / local in the
+		// enclosing function — the hoisted `final <name>` would shadow or
+		// redeclare it (a compile error or a silent shadow).
+		if (nameDeclaredInEnclosingFunction(tree, cursor, name))
+			return Err('"$name" already names a parameter or local in this function — choose a different name to extract');
+
 		// The hoisted decl is inserted at the start of the enclosing
 		// statement's line, carrying that statement's leading indentation.
 		final lineStart:Int = lineStartOf(source, hoistSpan.from);
@@ -156,6 +174,30 @@ final class ExtractVar {
 			catch (exception:Exception) return Err('rewritten source does not parse: ${exception.message}');
 
 		return Ok(rewritten);
+	}
+
+	/**
+	 * Is `name` already declared as a parameter or local binding within the
+	 * function enclosing `cursor`? The hoisted `final name = …` would shadow
+	 * or redeclare it. Conservative + structural: scans the whole enclosing
+	 * function for any binding-introducing node named `name` — no scope
+	 * analysis, so a same-named binding in a disjoint sibling block
+	 * over-refuses (safe). Returns false when `cursor` is not inside a
+	 * function (the block-statement guard already covers that path).
+	 */
+	private static function nameDeclaredInEnclosingFunction(tree:QueryNode, cursor:Int, name:String):Bool {
+		// Deepest function declaration whose span contains the cursor (a
+		// function name always passes `innermostWhere`'s renameable filter).
+		final fn:Null<QueryNode> = RefactorSupport.innermostWhere(tree, cursor, node -> FN_KINDS.contains(node.kind));
+		if (fn == null) return false;
+		var found:Bool = false;
+		function scan(node:QueryNode):Void {
+			if (found) return;
+			if (node.name == name && BINDING_DECL_KINDS.contains(node.kind)) found = true;
+			for (c in node.children) scan(c);
+		}
+		scan(fn);
+		return found;
 	}
 
 	/**

@@ -203,6 +203,22 @@ class ExtractVarSliceTest extends Test {
 		assertRefused(source, 3, 10, '1bad');
 	}
 
+	/**
+	 * Refuse extracting into a name that already binds a parameter in the
+	 * enclosing function — the hoisted `final x` would shadow / redeclare
+	 * the param `x`.
+	 */
+	public function testRefuseNameCollidesWithParam():Void {
+		final source:String =
+			'class C {\n'
+			+ '\tfunction f(a:Int, b:Int, x:Int):Int {\n'
+			+ '\t\treturn a + b;\n'
+			+ '\t}\n'
+			+ '}';
+		// Line 3 col 9 — the `a`; name `x` already names a parameter.
+		assertRefused(source, 3, 9, 'x');
+	}
+
 	private function assertExtract(source:String, line:Int, col:Int, name:String, expected:String):Void {
 		final result:ExtractResult = extractOf(source, line, col, name);
 		switch result {
