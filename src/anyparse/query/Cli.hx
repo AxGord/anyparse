@@ -12,6 +12,8 @@ import anyparse.query.Matcher.Match;
 import anyparse.query.Meta.MetaHit;
 import anyparse.query.Inline;
 import anyparse.query.Inline.InlineResult;
+import anyparse.query.ExtractVar;
+import anyparse.query.ExtractVar.ExtractResult;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
 import anyparse.query.Rename;
@@ -318,6 +320,7 @@ final class Cli {
 			case 'refs': return runRefs(rest);
 			case 'rename': return runRename(rest);
 			case 'inline': return runInline(rest);
+			case 'extract-var': return runExtractVar(rest);
 			case 'uses': return runUses(rest);
 			case 'meta': return runMeta(rest);
 			case 'blast': return runBlast(rest);
@@ -658,6 +661,89 @@ final class Cli {
 				return EXIT_OK;
 			case Err(message):
 				stderr('apq inline: $message\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
+	/**
+	 * `apq extract-var <file> <line>:<col> <name> [--write]` — hoist the
+	 * expression starting at `<line>:<col>` into a fresh local
+	 * `final <name> = <expr>;` inserted on its own line immediately before
+	 * the nearest enclosing block-level statement (at that statement's
+	 * indentation), replacing the expression occurrence with `<name>`. The
+	 * inverse of `inline`. The enclosing statement must be a direct child
+	 * of a `{ }` block — an expression buried in a braceless branch is
+	 * refused. `<line>:<col>` uses the same column convention `apq refs`
+	 * prints. Without `--write` the rewritten source is emitted to stdout;
+	 * with `--write` it overwrites the file in place. A cursor not on an
+	 * expression start, an enclosing statement outside a block, or an
+	 * unparseable result exits non-zero with the file untouched.
+	 */
+	private static function runExtractVar(args:Array<String>):Int {
+		var lang:String = 'haxe';
+		var write:Bool = false;
+		var file:Null<String> = null;
+		var posSpec:Null<String> = null;
+		var name:Null<String> = null;
+
+		var i:Int = 0;
+		while (i < args.length) {
+			final a:String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--write':
+					write = true;
+				case '-h', '--help':
+					printExtractVarUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq extract-var: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (file == null) file = a;
+					else if (posSpec == null) posSpec = a;
+					else if (name == null) name = a;
+					else {
+						stderr('apq extract-var: unexpected extra argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (file == null || posSpec == null || name == null) {
+			stderr('apq extract-var: expected <file> <line>:<col> <name>\n');
+			printExtractVarUsage();
+			return EXIT_USAGE;
+		}
+		final pos:Null<Position> = parseLineCol(posSpec);
+		if (pos == null) {
+			stderr('apq extract-var: malformed position "$posSpec" — expected <line>:<col>\n');
+			return EXIT_USAGE;
+		}
+
+		final filePath:String = file;
+		final nameStr:String = name;
+		final source:String = try readFile(filePath)
+			catch (exception:Exception) {
+				stderr('apq extract-var: $filePath: ${exception.message}\n');
+				return EXIT_RUNTIME;
+			};
+
+		final plugin:GrammarPlugin = pickPlugin(lang);
+		final result:ExtractResult = ExtractVar.extractVar(source, pos.line, pos.col, nameStr, plugin);
+		switch result {
+			case Ok(text):
+				if (write) {
+					writeFile(filePath, text);
+					stderr('apq extract-var: wrote $filePath\n');
+				} else {
+					sysPrint(text);
+				}
+				return EXIT_OK;
+			case Err(message):
+				stderr('apq extract-var: $message\n');
 				return EXIT_RUNTIME;
 		}
 	}
@@ -6405,6 +6491,7 @@ final class Cli {
 		sysPrint('  refs          Symbol references (value bindings; scope-aware)\n');
 		sysPrint('  rename        Scope-correct, format-preserving symbol rename\n');
 		sysPrint('  inline        Inline a local variable into its uses\n');
+		sysPrint('  extract-var   Hoist an expression into a new local final\n');
 		sysPrint('  uses          Type references (field/param/type-param positions)\n');
 		sysPrint('  meta          Annotation-on-decl shortcut\n');
 		sysPrint('  blast         Change-impact checklist (uses + refs + member-access)\n');
@@ -6579,6 +6666,27 @@ final class Cli {
 		sysPrint('rewrite is verified to re-parse; a cursor not on an inlinable local, an\n');
 		sysPrint('unsafe initializer, or an unparseable result, exits non-zero with the\n');
 		sysPrint('file untouched.\n');
+	}
+
+	private static function printExtractVarUsage():Void {
+		sysPrint('Usage: apq extract-var <file> <line>:<col> <name> [--write]\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
+		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('\n');
+		sysPrint('Scope-correct, format-preserving extract-variable — the inverse of\n');
+		sysPrint('inline. The expression starting at <line>:<col> is hoisted into a fresh\n');
+		sysPrint('local `final <name> = <expr>;` inserted on its own line immediately\n');
+		sysPrint('before the nearest enclosing block-level statement (at that statement\'s\n');
+		sysPrint('indentation), and the expression occurrence is replaced with <name>.\n');
+		sysPrint('The cursor must point at the FIRST token of an expression; the\n');
+		sysPrint('outermost expression starting there is selected. The enclosing\n');
+		sysPrint('statement must be a direct child of a { } block — an expression buried\n');
+		sysPrint('in a braceless branch is refused. <line>:<col> uses the same column\n');
+		sysPrint('convention `apq refs` prints. The rewrite is verified to re-parse; a\n');
+		sysPrint('cursor not on an expression start, an enclosing statement outside a\n');
+		sysPrint('block, or an unparseable result exits non-zero with the file untouched.\n');
 	}
 
 	private static function printUsesUsage():Void {
