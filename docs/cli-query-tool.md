@@ -180,6 +180,22 @@ backtracking collapses every failure to the file head (`expected <root>`);
 with it, the reported span points at the innermost blocking token, which
 is what diagnostics and recon tooling need.
 
+## Mutation commands (source rewriting)
+
+Distinct from the read-only query commands above: these **rewrite** source. Without `--write` the rewrite goes to stdout; with `--write` it overwrites the file in place. Cursor positions use the same column convention `apq refs` prints. Two sub-families differ in how they format the result:
+
+- **Refactoring ops** — scope-correct edits driven by the `refs` / `Scope` binding resolver, **format-preserving** (span-splice — everything outside the edit is byte-verbatim) and re-parse-validated: `rename` (`--scope <dir>` for cross-file type rename), `inline`, `extract-var`, `change-sig`, `move`, `add-param`, `remove-param`. These move EXISTING tokens, so no new code is formatted.
+
+- **Structural insert / replace ops** — these introduce NEW code, so they are **writer-emitted**, not spliced as-is: the raw new text is placed, then the WHOLE file is re-emitted through the writer (the trivia/comment-preserving pipeline), which formats the inserted code by the grammar's own rules and re-parse-validates in one step (an unparseable result is rejected). Because a whole-file rewrite would also reflow any unrelated hand-wrapping, the file must already be **writer-canonical** (`write(parse(f)) == f`); a non-canonical file is refused unless `--reformat` is passed (which opts into canonicalising the whole file — the gofmt workflow). Requires a grammar with a writer.
+
+| Command | Purpose |
+|---|---|
+| `apq add-member <file> --type <T> '<memberText>' [--reformat]` | Append `<memberText>` to the body of type `<T>` (writer-formatted); append-only — ordering is the formatting layer's job |
+| `apq add-import <file> <module.path> [--using] [--reformat]` | Add an `import` (or `using`) after the last import / using, else after `package`, else at file top; a same-kind duplicate is refused |
+| `apq replace-node <file> (--select <sel> \| --at <l>:<c>) '<newSource>' [--reformat]` | Replace one node's source span (writer-formatted); `--select` reuses the `ast` selector (must match exactly one node), `--at` the innermost node at the cursor |
+
+Run `apq <op> --help` for the full per-op flag reference and safety boundary. The hxq skill (`~/.claude/skills/hxq/SKILL.md`) carries the authoritative safety-boundary table for every mutation op.
+
 ## Pattern syntax for `search` (frozen for v1)
 
 The pattern is parsed by the active grammar plugin **with a metavariable extension**: any identifier-shaped token starting with `$` is treated as a metavariable rather than a concrete identifier.

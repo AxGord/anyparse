@@ -144,9 +144,9 @@ final class AddParam {
 	 */
 	private static function parseParamName(paramText:String):Null<String> {
 		var i:Int = 0;
-		while (i < paramText.length && isSpace(StringTools.fastCodeAt(paramText, i))) i++;
+		while (i < paramText.length && RefactorSupport.isSpace(StringTools.fastCodeAt(paramText, i))) i++;
 		if (i < paramText.length && StringTools.fastCodeAt(paramText, i) == '?'.code) i++;
-		while (i < paramText.length && isSpace(StringTools.fastCodeAt(paramText, i))) i++;
+		while (i < paramText.length && RefactorSupport.isSpace(StringTools.fastCodeAt(paramText, i))) i++;
 		final start:Int = i;
 		if (i >= paramText.length || !RefactorSupport.isIdentStartChar(StringTools.fastCodeAt(paramText, i))) return null;
 		i++;
@@ -173,10 +173,10 @@ final class AddParam {
 		// trailing comma. Anything else means the resolved node is not the
 		// final parameter and the insertion would be unsafe.
 		var j:Int = spanTo;
-		while (j < source.length && isSpace(StringTools.fastCodeAt(source, j))) j++;
+		while (j < source.length && RefactorSupport.isSpace(StringTools.fastCodeAt(source, j))) j++;
 		if (j < source.length && StringTools.fastCodeAt(source, j) == ','.code) {
 			j++;
-			while (j < source.length && isSpace(StringTools.fastCodeAt(source, j))) j++;
+			while (j < source.length && RefactorSupport.isSpace(StringTools.fastCodeAt(source, j))) j++;
 		}
 		if (j >= source.length || StringTools.fastCodeAt(source, j) != ')'.code) return -1;
 
@@ -184,7 +184,7 @@ final class AddParam {
 		// whitespace included in the span (multi-line parameter lists carry
 		// the newline / indentation up to the next token in the span).
 		var k:Int = spanTo;
-		while (k > span.from && isSpace(StringTools.fastCodeAt(source, k - 1))) k--;
+		while (k > span.from && RefactorSupport.isSpace(StringTools.fastCodeAt(source, k - 1))) k--;
 		return k;
 	}
 
@@ -204,10 +204,5 @@ final class AddParam {
 			i++;
 		}
 		return -1;
-	}
-
-	/** Is `c` an ASCII space / tab / newline / carriage return? */
-	private static inline function isSpace(c:Int):Bool {
-		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
 	}
 }

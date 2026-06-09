@@ -20,6 +20,11 @@ import anyparse.query.ChangeSig;
 import anyparse.query.ChangeSig.ChangeSigResult;
 import anyparse.query.RemoveParam;
 import anyparse.query.RemoveParam.RemoveParamResult;
+import anyparse.query.AddMember;
+import anyparse.query.AddImport;
+import anyparse.query.ReplaceNode;
+import anyparse.query.ReplaceNode.ReplaceTarget;
+import anyparse.query.RefactorSupport.EditResult;
 import anyparse.query.CrossRename;
 import anyparse.query.CrossRename.CrossRenameResult;
 import anyparse.query.MoveSymbol;
@@ -336,6 +341,9 @@ final class Cli {
 			case 'add-param': return runAddParam(rest);
 			case 'change-sig': return runChangeSig(rest);
 			case 'remove-param': return runRemoveParam(rest);
+			case 'add-member': return runAddMember(rest);
+			case 'add-import': return runAddImport(rest);
+			case 'replace-node': return runReplaceNode(rest);
 			case 'uses': return runUses(rest);
 			case 'meta': return runMeta(rest);
 			case 'blast': return runBlast(rest);
@@ -1020,6 +1028,274 @@ final class Cli {
 				return EXIT_OK;
 			case Err(message):
 				stderr('apq add-param: $message\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
+	/**
+	 * `apq add-member <file> --type <TypeName> <memberText> [--reformat] [--write]`
+	 * — append `<memberText>` as a new member of the type named
+	 * `<TypeName>`. The member is WRITER-FORMATTED: the raw text is placed
+	 * before the body's closing `}` and the whole file is re-emitted through
+	 * the writer (which also re-parse-validates). The file must already be
+	 * writer-canonical, else it is refused unless `--reformat` is given.
+	 * Without `--write` the rewritten source is emitted to stdout; with
+	 * `--write` it overwrites the file in place. An unknown / ambiguous type
+	 * name, a non-canonical file without `--reformat`, or an unparseable
+	 * result, exits non-zero with the file untouched.
+	 */
+	private static function runAddMember(args:Array<String>):Int {
+		var lang:String = 'haxe';
+		var write:Bool = false;
+		var reformat:Bool = false;
+		var typeName:Null<String> = null;
+		var file:Null<String> = null;
+		var memberText:Null<String> = null;
+
+		var i:Int = 0;
+		while (i < args.length) {
+			final a:String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--type':
+					typeName = expectValue(args, ++i, '--type');
+				case '--write':
+					write = true;
+				case '--reformat':
+					reformat = true;
+				case '-h', '--help':
+					printAddMemberUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq add-member: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (file == null) file = a;
+					else if (memberText == null) memberText = a;
+					else {
+						stderr('apq add-member: unexpected extra argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (file == null || typeName == null || memberText == null) {
+			stderr('apq add-member: expected <file> --type <TypeName> <memberText>\n');
+			printAddMemberUsage();
+			return EXIT_USAGE;
+		}
+
+		final filePath:String = file;
+		final typeStr:String = typeName;
+		final memberStr:String = memberText;
+		final source:String = try readFile(filePath)
+			catch (exception:Exception) {
+				stderr('apq add-member: $filePath: ${exception.message}\n');
+				return EXIT_RUNTIME;
+			};
+
+		final plugin:GrammarPlugin = pickPlugin(lang);
+		final result:EditResult = AddMember.addMember(source, typeStr, memberStr, reformat, plugin);
+		switch result {
+			case Ok(text):
+				if (write) {
+					writeFile(filePath, text);
+					stderr('apq add-member: wrote $filePath\n');
+				} else {
+					sysPrint(text);
+				}
+				return EXIT_OK;
+			case Err(message):
+				stderr('apq add-member: $message\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
+	/**
+	 * `apq add-import <file> <module.path> [--using] [--reformat] [--write]`
+	 * — add an `import <module.path>;` (or `using` with `--using`) after the
+	 * last existing import / using, else after the `package` declaration,
+	 * else at the file start. The result is WRITER-FORMATTED (the whole file
+	 * is re-emitted through the writer, which also re-parse-validates); the
+	 * file must already be canonical, else it is refused unless `--reformat`
+	 * is given. An already-present import of the same kind is refused.
+	 * Without `--write` the rewritten source is emitted to stdout; with
+	 * `--write` it overwrites the file in place. An empty path, a duplicate,
+	 * a non-canonical file without `--reformat`, or an unparseable result
+	 * exits non-zero with the file untouched.
+	 */
+	private static function runAddImport(args:Array<String>):Int {
+		var lang:String = 'haxe';
+		var write:Bool = false;
+		var reformat:Bool = false;
+		var isUsing:Bool = false;
+		var file:Null<String> = null;
+		var path:Null<String> = null;
+
+		var i:Int = 0;
+		while (i < args.length) {
+			final a:String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--using':
+					isUsing = true;
+				case '--write':
+					write = true;
+				case '--reformat':
+					reformat = true;
+				case '-h', '--help':
+					printAddImportUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq add-import: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (file == null) file = a;
+					else if (path == null) path = a;
+					else {
+						stderr('apq add-import: unexpected extra argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (file == null || path == null) {
+			stderr('apq add-import: expected <file> <module.path> [--using]\n');
+			printAddImportUsage();
+			return EXIT_USAGE;
+		}
+
+		final filePath:String = file;
+		final pathStr:String = path;
+		final source:String = try readFile(filePath)
+			catch (exception:Exception) {
+				stderr('apq add-import: $filePath: ${exception.message}\n');
+				return EXIT_RUNTIME;
+			};
+
+		final plugin:GrammarPlugin = pickPlugin(lang);
+		final result:EditResult = AddImport.addImport(source, pathStr, isUsing, reformat, plugin);
+		switch result {
+			case Ok(text):
+				if (write) {
+					writeFile(filePath, text);
+					stderr('apq add-import: wrote $filePath\n');
+				} else {
+					sysPrint(text);
+				}
+				return EXIT_OK;
+			case Err(message):
+				stderr('apq add-import: $message\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
+	/**
+	 * `apq replace-node <file> (--select <sel> | --at <line>:<col>) <newSource> [--reformat] [--write]`
+	 * — replace the source span of a single node with `<newSource>`. The
+	 * target is addressed by an `ast`-style `--select` selector (which must
+	 * match exactly one node) OR by a cursor `--at <line>:<col>` in the same
+	 * column convention `apq refs` prints. The result is WRITER-FORMATTED:
+	 * the whole file is re-emitted through the writer (which also re-parse-
+	 * validates), so the replacement is laid out by the grammar's rules. The
+	 * file must already be canonical, else it is refused unless `--reformat`
+	 * is given. Without `--write` the rewritten source is emitted to stdout;
+	 * with `--write` it overwrites the file in place. A target that resolves
+	 * to no / multiple nodes, a non-canonical file without `--reformat`, or
+	 * an unparseable result, exits non-zero with the file untouched.
+	 */
+	private static function runReplaceNode(args:Array<String>):Int {
+		var lang:String = 'haxe';
+		var write:Bool = false;
+		var reformat:Bool = false;
+		var selectExpr:Null<String> = null;
+		var atSpec:Null<String> = null;
+		var file:Null<String> = null;
+		var newSource:Null<String> = null;
+
+		var i:Int = 0;
+		while (i < args.length) {
+			final a:String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--select':
+					selectExpr = expectValue(args, ++i, '--select');
+				case '--at':
+					atSpec = expectValue(args, ++i, '--at');
+				case '--write':
+					write = true;
+				case '--reformat':
+					reformat = true;
+				case '-h', '--help':
+					printReplaceNodeUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq replace-node: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (file == null) file = a;
+					else if (newSource == null) newSource = a;
+					else {
+						stderr('apq replace-node: unexpected extra argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (file == null || newSource == null) {
+			stderr('apq replace-node: expected <file> (--select <sel> | --at <line>:<col>) <newSource>\n');
+			printReplaceNodeUsage();
+			return EXIT_USAGE;
+		}
+		// Exactly one of --select / --at must be given.
+		if ((selectExpr == null) == (atSpec == null)) {
+			stderr('apq replace-node: provide exactly one of --select <sel> or --at <line>:<col>\n');
+			return EXIT_USAGE;
+		}
+
+		final target:ReplaceTarget = if (selectExpr != null)
+			BySelector(selectExpr);
+		else if (atSpec != null) {
+			final pos:Null<Position> = parseLineCol(atSpec);
+			if (pos == null) {
+				stderr('apq replace-node: malformed position "$atSpec" — expected <line>:<col>\n');
+				return EXIT_USAGE;
+			}
+			ByPosition(pos.line, pos.col);
+		} else {
+			// Unreachable given the exactly-one guard above; keeps the
+			// if-expression exhaustive and null-safe.
+			stderr('apq replace-node: provide exactly one of --select <sel> or --at <line>:<col>\n');
+			return EXIT_USAGE;
+		};
+
+		final filePath:String = file;
+		final newSrc:String = newSource;
+		final source:String = try readFile(filePath)
+			catch (exception:Exception) {
+				stderr('apq replace-node: $filePath: ${exception.message}\n');
+				return EXIT_RUNTIME;
+			};
+
+		final plugin:GrammarPlugin = pickPlugin(lang);
+		final result:EditResult = ReplaceNode.replaceNode(source, target, newSrc, reformat, plugin);
+		switch result {
+			case Ok(text):
+				if (write) {
+					writeFile(filePath, text);
+					stderr('apq replace-node: wrote $filePath\n');
+				} else {
+					sysPrint(text);
+				}
+				return EXIT_OK;
+			case Err(message):
+				stderr('apq replace-node: $message\n');
 				return EXIT_RUNTIME;
 		}
 	}
@@ -6941,6 +7217,9 @@ final class Cli {
 		sysPrint('  add-param     Add a backward-compatible parameter to a function\n');
 		sysPrint('  change-sig    Reorder a function\'s parameters + call-site args\n');
 		sysPrint('  remove-param  Remove a function parameter + call-site args\n');
+		sysPrint('  add-member    Append a member to a type body (writer-formatted, canonical-gated)\n');
+		sysPrint('  add-import    Add an import / using to a module (writer-formatted, canonical-gated)\n');
+		sysPrint('  replace-node  Replace a node\'s source span (--select / --at; writer-formatted)\n');
 		sysPrint('  uses          Type references (field/param/type-param positions)\n');
 		sysPrint('  meta          Annotation-on-decl shortcut\n');
 		sysPrint('  blast         Change-impact checklist (uses + refs + member-access)\n');
@@ -7194,6 +7473,69 @@ final class Cli {
 		sysPrint('column convention `apq refs` prints. The rewrite is verified to\n');
 		sysPrint('re-parse; a cursor not on a function, a required parameter, a name\n');
 		sysPrint('collision, or an unparseable result exits non-zero with the file\n');
+		sysPrint('untouched.\n');
+	}
+
+	private static function printAddMemberUsage():Void {
+		sysPrint('Usage: apq add-member <file> --type <TypeName> <memberText> [--reformat] [--write]\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --type <TypeName>   Type whose body gains the member (required)\n');
+		sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
+		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
+		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('\n');
+		sysPrint('Append <memberText> as a new member of <TypeName>. The member is\n');
+		sysPrint('WRITER-FORMATTED — indented and laid out by the grammar\'s rules, not\n');
+		sysPrint('inserted as-is — by re-emitting the whole file through the writer (this\n');
+		sysPrint('also re-parse-validates). Works for class / interface / abstract / enum /\n');
+		sysPrint('typedef bodies; positioning is append-only (ordering is the formatting\n');
+		sysPrint('layer\'s job). The file must already be in canonical form (its own writer\n');
+		sysPrint('output); otherwise it is refused unless --reformat is given (which\n');
+		sysPrint('canonicalises the whole file). Quote <memberText> if it contains spaces.\n');
+		sysPrint('An unknown / ambiguous type name, a non-canonical file without --reformat,\n');
+		sysPrint('or an unparseable result, exits non-zero with the file untouched.\n');
+	}
+
+	private static function printAddImportUsage():Void {
+		sysPrint('Usage: apq add-import <file> <module.path> [--using] [--reformat] [--write]\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --using             Add a `using` instead of an `import`\n');
+		sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
+		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
+		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('\n');
+		sysPrint('Add `import <module.path>;` (or `using` with --using) after the last\n');
+		sysPrint('existing import / using, else after the `package` declaration, else at the\n');
+		sysPrint('start of the file. The result is WRITER-FORMATTED (the whole file is\n');
+		sysPrint('re-emitted through the writer, which also re-parse-validates). The file\n');
+		sysPrint('must already be canonical; otherwise it is refused unless --reformat is\n');
+		sysPrint('given. An import of the same kind already present is refused (a no-op). An\n');
+		sysPrint('empty path, a duplicate, a non-canonical file without --reformat, or an\n');
+		sysPrint('unparseable result exits non-zero with the file untouched.\n');
+	}
+
+	private static function printReplaceNodeUsage():Void {
+		sysPrint('Usage: apq replace-node <file> (--select <sel> | --at <line>:<col>) <newSource> [--reformat] [--write]\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --select <sel>      Address the node by an ast-style selector\n');
+		sysPrint('                      (Kind / Kind:name / A > B); must match exactly one\n');
+		sysPrint('  --at <line>:<col>   Address the innermost node at the cursor\n');
+		sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
+		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
+		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('\n');
+		sysPrint('Replace the source span of a single node with <newSource>. Provide\n');
+		sysPrint('exactly one of --select or --at. --at uses the same column convention\n');
+		sysPrint('`apq refs` prints (NOT the raw 1-indexed `ast --at`). The result is\n');
+		sysPrint('WRITER-FORMATTED — the whole file is re-emitted through the writer (which\n');
+		sysPrint('also re-parse-validates), so the replacement is laid out by the grammar\'s\n');
+		sysPrint('rules. The file must already be canonical; otherwise it is refused unless\n');
+		sysPrint('--reformat is given. Quote <newSource> if it contains spaces. A target\n');
+		sysPrint('that resolves to no / multiple nodes, a non-canonical file without\n');
+		sysPrint('--reformat, or an unparseable result, exits non-zero with the file\n');
 		sysPrint('untouched.\n');
 	}
 

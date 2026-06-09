@@ -2,9 +2,23 @@ package anyparse.query;
 
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
+import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
+import haxe.Exception;
 
 using Lambda;
+
+/**
+ * Outcome of a source-mutation operation: `Ok` carries the rewritten
+ * source, `Err` a human-readable diagnostic. Shared by the structural
+ * INSERT / REPLACE ops (`AddMember` / `AddImport` / `ReplaceNode`),
+ * which all funnel their finalize through `RefactorSupport.canonicalize`
+ * and therefore return the same shape.
+ */
+enum EditResult {
+	Ok(text:String);
+	Err(message:String);
+}
 
 /**
  * One resolved top-level type declaration, normalised across the plain
@@ -314,6 +328,48 @@ final class RefactorSupport {
 		return result;
 	}
 
+	/**
+	 * Finalize a structural mutation through the WRITER, so inserted /
+	 * replaced code is formatted by the grammar's own rules rather than
+	 * kept as-is. The shared tail of `AddMember` / `AddImport` /
+	 * `ReplaceNode`:
+	 *
+	 *  1. Canonical gate — unless `reformat`, the source must already be
+	 *     writer-canonical (`writeRoundTrip(source) == source`). A
+	 *     non-canonical file is refused, because a whole-file rewrite would
+	 *     also reflow its unrelated hand-wrapping into a surprise diff.
+	 *     `--reformat` opts into that whole-file canonicalisation.
+	 *  2. Splice the caller's edits (raw text) into the source.
+	 *  3. Re-emit the WHOLE spliced file through `writeRoundTrip` (the
+	 *     trivia / comment-preserving pipeline). This BOTH validates (an
+	 *     unparseable splice throws → `Err`) AND canonically formats the
+	 *     inserted code together with the rest of the file.
+	 *
+	 * The caller supplies only the edit position + raw text; indentation
+	 * and layout of the result are the writer's job. Requires a grammar
+	 * with a writer (`writeRoundTrip` non-null); a writer-less grammar is
+	 * refused.
+	 */
+	public static function canonicalize(source:String, edits:Array<{span:Span, text:String}>, reformat:Bool, plugin:GrammarPlugin):EditResult {
+		if (!reformat) {
+			final canon:Null<String> = try plugin.writeRoundTrip(source)
+				catch (exception:ParseError) return Err('source does not parse: ${exception.toString()}')
+				catch (exception:Exception) return Err('source does not parse: ${exception.message}');
+			if (canon == null)
+				return Err('the "${plugin.langName()}" grammar has no writer — cannot writer-format the result');
+			if (canon != source)
+				return Err('file is not in canonical form — re-run with --reformat to canonicalise the whole file, or format it first');
+		}
+
+		final spliced:String = applyEdits(source, edits);
+		final result:Null<String> = try plugin.writeRoundTrip(spliced)
+			catch (exception:ParseError) return Err('result does not parse: ${exception.toString()}')
+			catch (exception:Exception) return Err('result does not parse: ${exception.message}');
+		if (result == null)
+			return Err('the "${plugin.langName()}" grammar has no writer — cannot writer-format the result');
+		return Ok(result);
+	}
+
 	/** A name is renameable when it is a valid identifier and not `this`. */
 	public static inline function isRenameableName(name:Null<String>):Bool {
 		return name != null && name != 'this' && isIdentifier(name);
@@ -334,6 +390,11 @@ final class RefactorSupport {
 
 	public static inline function isIdentChar(c:Int):Bool {
 		return isIdentStartChar(c) || (c >= '0'.code && c <= '9'.code);
+	}
+
+	/** Is `c` an ASCII space / tab / newline / carriage return? */
+	public static inline function isSpace(c:Int):Bool {
+		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
 	}
 
 	/**
