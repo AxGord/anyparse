@@ -18,6 +18,8 @@ import anyparse.query.AddParam;
 import anyparse.query.AddParam.AddParamResult;
 import anyparse.query.ChangeSig;
 import anyparse.query.ChangeSig.ChangeSigResult;
+import anyparse.query.RemoveParam;
+import anyparse.query.RemoveParam.RemoveParamResult;
 import anyparse.query.CrossRename;
 import anyparse.query.CrossRename.CrossRenameResult;
 import anyparse.query.MoveSymbol;
@@ -333,6 +335,7 @@ final class Cli {
 			case 'extract-var': return runExtractVar(rest);
 			case 'add-param': return runAddParam(rest);
 			case 'change-sig': return runChangeSig(rest);
+			case 'remove-param': return runRemoveParam(rest);
 			case 'uses': return runUses(rest);
 			case 'meta': return runMeta(rest);
 			case 'blast': return runBlast(rest);
@@ -1104,6 +1107,101 @@ final class Cli {
 				return EXIT_OK;
 			case Err(message):
 				stderr('apq change-sig: $message\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
+	/**
+	 * `apq remove-param <file> <line>:<col> <index> [--write]` — remove the
+	 * parameter at 0-based `<index>` from the function whose decl / binding
+	 * is at `<line>:<col>`, deleting the corresponding positional argument
+	 * at every resolvable in-file call site. The inverse of `add-param`,
+	 * but — unlike `add-param` (decl-only, backward-compat-safe) — removing
+	 * a parameter BREAKS calls, so it updates call sites with the SAME
+	 * strict completeness proof `change-sig` uses (an unresolvable /
+	 * receiver-qualified call, a value capture, or an arity mismatch is
+	 * refused). The removed parameter must be unused in the body — a
+	 * remaining use is refused (the result would reference an undefined
+	 * identifier). `<line>:<col>` uses the same column convention `apq refs`
+	 * prints. Without `--write` the rewritten source is emitted to stdout;
+	 * with `--write` it overwrites the file in place. A removal on a method
+	 * also emits a cross-file advisory to stderr (callers in other files
+	 * cannot be seen). A cursor not on a function, an out-of-range index, a
+	 * used parameter, an unresolvable call, an arity mismatch, or an
+	 * unparseable result, exits non-zero with the file untouched.
+	 */
+	private static function runRemoveParam(args:Array<String>):Int {
+		var lang:String = 'haxe';
+		var write:Bool = false;
+		var file:Null<String> = null;
+		var posSpec:Null<String> = null;
+		var indexSpec:Null<String> = null;
+
+		var i:Int = 0;
+		while (i < args.length) {
+			final a:String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--write':
+					write = true;
+				case '-h', '--help':
+					printRemoveParamUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq remove-param: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (file == null) file = a;
+					else if (posSpec == null) posSpec = a;
+					else if (indexSpec == null) indexSpec = a;
+					else {
+						stderr('apq remove-param: unexpected extra argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (file == null || posSpec == null || indexSpec == null) {
+			stderr('apq remove-param: expected <file> <line>:<col> <index>\n');
+			printRemoveParamUsage();
+			return EXIT_USAGE;
+		}
+		final pos:Null<Position> = parseLineCol(posSpec);
+		if (pos == null) {
+			stderr('apq remove-param: malformed position "$posSpec" — expected <line>:<col>\n');
+			return EXIT_USAGE;
+		}
+		final index:Null<Int> = RefactorSupport.parseStrictInt(indexSpec);
+		if (index == null) {
+			stderr('apq remove-param: malformed index "$indexSpec" — expected a non-negative integer\n');
+			return EXIT_USAGE;
+		}
+		final paramIndex:Int = index;
+
+		final filePath:String = file;
+		final source:String = try readFile(filePath)
+			catch (exception:Exception) {
+				stderr('apq remove-param: $filePath: ${exception.message}\n');
+				return EXIT_RUNTIME;
+			};
+
+		final plugin:GrammarPlugin = pickPlugin(lang);
+		final shape:RefShape = plugin.refShape();
+		final result:RemoveParamResult = RemoveParam.removeParam(source, pos.line, pos.col, paramIndex, plugin, shape);
+		switch result {
+			case Ok(text, advisory):
+				if (write) {
+					writeFile(filePath, text);
+					stderr('apq remove-param: wrote $filePath\n');
+				} else {
+					sysPrint(text);
+				}
+				if (advisory != null) stderr('apq remove-param: $advisory\n');
+				return EXIT_OK;
+			case Err(message):
+				stderr('apq remove-param: $message\n');
 				return EXIT_RUNTIME;
 		}
 	}
@@ -6842,6 +6940,7 @@ final class Cli {
 		sysPrint('  extract-var   Hoist an expression into a new local final\n');
 		sysPrint('  add-param     Add a backward-compatible parameter to a function\n');
 		sysPrint('  change-sig    Reorder a function\'s parameters + call-site args\n');
+		sysPrint('  remove-param  Remove a function parameter + call-site args\n');
 		sysPrint('  uses          Type references (field/param/type-param positions)\n');
 		sysPrint('  meta          Annotation-on-decl shortcut\n');
 		sysPrint('  blast         Change-impact checklist (uses + refs + member-access)\n');
@@ -7121,6 +7220,34 @@ final class Cli {
 		sysPrint('prints. The rewrite is verified to re-parse; a cursor not on a function,\n');
 		sysPrint('a non-permutation <perm>, or an unparseable result, exits non-zero with\n');
 		sysPrint('the file untouched.\n');
+	}
+
+	private static function printRemoveParamUsage():Void {
+		sysPrint('Usage: apq remove-param <file> <line>:<col> <index> [--write]  (index = 0-based parameter to remove)\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
+		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('\n');
+		sysPrint('Scope-correct, format-preserving remove-parameter — the inverse of\n');
+		sysPrint('add-param. The function whose declaration / binding is at <line>:<col>\n');
+		sysPrint('loses the parameter at 0-based <index>, and the corresponding positional\n');
+		sysPrint('argument is deleted at every resolvable in-file call site (the separating\n');
+		sysPrint('comma goes too, so the surviving list stays well-formed). Unlike\n');
+		sysPrint('add-param (decl-only, always backward-compatible), removing a parameter\n');
+		sysPrint('BREAKS calls, so remove-param updates call sites with the SAME strict\n');
+		sysPrint('completeness proof change-sig uses: a receiver-qualified `obj.name(...)`\n');
+		sysPrint('call, an unresolvable call, a value capture, or a call with omitted\n');
+		sysPrint('optional arguments is refused (the removal never leaves a call with a\n');
+		sysPrint('stale argument). The removed parameter must be unused in the body — a\n');
+		sysPrint('remaining use is refused (the result would reference an undefined\n');
+		sysPrint('identifier). Methods (called via bare `name(...)` / `this.name(...)`) and\n');
+		sysPrint('named local functions are supported; a method removal also emits a\n');
+		sysPrint('cross-file advisory (callers in other files are out of scope).\n');
+		sysPrint('<line>:<col> uses the same column convention `apq refs` prints. The\n');
+		sysPrint('rewrite is verified to re-parse; a cursor not on a function, an\n');
+		sysPrint('out-of-range index, a used parameter, or an unparseable result, exits\n');
+		sysPrint('non-zero with the file untouched.\n');
 	}
 
 	private static function printUsesUsage():Void {
