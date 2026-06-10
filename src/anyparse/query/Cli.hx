@@ -1500,6 +1500,7 @@ final class Cli {
 		var typeName: Null<String> = null;
 		var file: Null<String> = null;
 		var memberText: Null<String> = null;
+		var fromFile: Null<String> = null;
 
 		var i: Int = 0;
 		while (i < args.length) {
@@ -1509,6 +1510,8 @@ final class Cli {
 					lang = expectValue(args, ++i, '--lang');
 				case '--type':
 					typeName = expectValue(args, ++i, '--type');
+				case '--from-file':
+					fromFile = expectValue(args, ++i, '--from-file');
 				case '--write':
 					write = true;
 				case '--reformat':
@@ -1532,8 +1535,13 @@ final class Cli {
 			}
 			i++;
 		}
+		if (fromFile != null || memberText == '-') {
+			final resolved: Null<String> = resolveCodeArg('add-member', memberText, fromFile);
+			if (resolved == null) return EXIT_RUNTIME;
+			memberText = resolved;
+		}
 		if (file == null || typeName == null || memberText == null) {
-			stderr('apq add-member: expected <file> --type <TypeName> <memberText>\n');
+			stderr('apq add-member: expected <file> --type <TypeName> (<memberText> | --from-file <path> | -)\n');
 			printAddMemberUsage();
 			return EXIT_USAGE;
 		}
@@ -1671,6 +1679,7 @@ final class Cli {
 		var appendSpec: Null<String> = null;
 		var file: Null<String> = null;
 		var code: Null<String> = null;
+		var fromFile: Null<String> = null;
 
 		var i: Int = 0;
 		while (i < args.length) {
@@ -1684,6 +1693,8 @@ final class Cli {
 					beforeSpec = expectValue(args, ++i, '--before');
 				case '--append':
 					appendSpec = expectValue(args, ++i, '--append');
+				case '--from-file':
+					fromFile = expectValue(args, ++i, '--from-file');
 				case '--write':
 					write = true;
 				case '--reformat':
@@ -1707,8 +1718,13 @@ final class Cli {
 			}
 			i++;
 		}
+		if (fromFile != null || code == '-') {
+			final resolved: Null<String> = resolveCodeArg('add-element', code, fromFile);
+			if (resolved == null) return EXIT_RUNTIME;
+			code = resolved;
+		}
 		if (file == null || code == null) {
-			stderr('apq add-element: expected <file> (--after <line>:<col> | --before <line>:<col> | --append <line>:<col>) <code>\n');
+			stderr('apq add-element: expected <file> (--after <line>:<col> | --before <line>:<col> | --append <line>:<col>) (<code> | --from-file <path> | -)\n');
 			printAddElementUsage();
 			return EXIT_USAGE;
 		}
@@ -1776,6 +1792,7 @@ final class Cli {
 		var atSpec: Null<String> = null;
 		var file: Null<String> = null;
 		var newSource: Null<String> = null;
+		var fromFile: Null<String> = null;
 
 		var i: Int = 0;
 		while (i < args.length) {
@@ -1787,6 +1804,8 @@ final class Cli {
 					selectExpr = expectValue(args, ++i, '--select');
 				case '--at':
 					atSpec = expectValue(args, ++i, '--at');
+				case '--from-file':
+					fromFile = expectValue(args, ++i, '--from-file');
 				case '--write':
 					write = true;
 				case '--reformat':
@@ -1810,8 +1829,13 @@ final class Cli {
 			}
 			i++;
 		}
+		if (fromFile != null || newSource == '-') {
+			final resolved: Null<String> = resolveCodeArg('replace-node', newSource, fromFile);
+			if (resolved == null) return EXIT_RUNTIME;
+			newSource = resolved;
+		}
 		if (file == null || newSource == null) {
-			stderr('apq replace-node: expected <file> (--select <sel> | --at <line>:<col>) <newSource>\n');
+			stderr('apq replace-node: expected <file> (--select <sel> | --at <line>:<col>) (<newSource> | --from-file <path> | -)\n');
 			printReplaceNodeUsage();
 			return EXIT_USAGE;
 		}
@@ -7841,6 +7865,39 @@ final class Cli {
 	}
 
 	/**
+	 * Resolve the new-code text for a writer-emit mutation op (`add-member`
+	 * / `replace-node` / `add-element`) when it comes from somewhere other
+	 * than the inline positional argument: a `--from-file <path>`, or stdin
+	 * when the positional is the literal `-` (mirroring `apq probe -`). This
+	 * is the quote-safe input path for code containing `$` or `'` that the
+	 * shell would otherwise mangle as a positional argument. Called only
+	 * when `fromFile != null` or `code == '-'`; returns the resolved text,
+	 * or null after printing the reason to stderr (the caller then exits
+	 * non-zero). `opName` names the op in those messages.
+	 */
+	private static function resolveCodeArg(opName: String, code: Null<String>, fromFile: Null<String>): Null<String> {
+		if (fromFile != null && code != null) {
+			stderr('apq $opName: provide the code inline, via --from-file, or as - for stdin — not more than one\n');
+			return null;
+		}
+		if (fromFile != null) {
+			try {
+				return readFile(fromFile);
+			} catch (exception: Exception) {
+				stderr('apq $opName: $fromFile: ${exception.message}\n');
+				return null;
+			}
+		}
+		// code == '-' → read the new code from stdin.
+		try {
+			return readStdin();
+		} catch (exception: Exception) {
+			stderr('apq $opName: reading stdin: ${exception.message}\n');
+			return null;
+		}
+	}
+
+	/**
 	 * Read a file as **source for parsing**. Same as `readFile` for plain
 	 * `.hx` files; auto-extracts the input section (between the 1st and
 	 * 2nd `\n---\n` separators) when the path ends with `.hxtest` AND the
@@ -8116,7 +8173,7 @@ final class Cli {
 	}
 
 	private static function printAddElementUsage(): Void {
-		sysPrint('Usage: apq add-element <file> (--after <l>:<c> | --before <l>:<c> | --append <l>:<c>) <code> [options]\n');
+		sysPrint('Usage: apq add-element <file> (--after <l>:<c> | --before <l>:<c> | --append <l>:<c>) (<code> | --from-file <path> | -) [options]\n');
 		sysPrint('\n');
 		sysPrint('Insert <code> as a new element into a list-shaped slot. With --after / --before,\n');
 		sysPrint('<l>:<c> points at an existing SIBLING element (a statement in a block, a case in\n');
@@ -8124,12 +8181,14 @@ final class Cli {
 		sysPrint('the CONTAINER itself (block / array / object / call / new / class / switch); the\n');
 		sysPrint('element is added as the last child — which also works on an empty container that\n');
 		sysPrint('has no sibling to point at. The slot separator (comma or newline) is added\n');
-		sysPrint('automatically; the element is writer-formatted + re-parse-validated.\n');
+		sysPrint('automatically; the element is writer-formatted + re-parse-validated. The element\n');
+		sysPrint('text may be inline, from --from-file, or stdin when it is the literal `-`.\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --after <l>:<c>   Insert after the sibling element at this position\n');
 		sysPrint('  --before <l>:<c>  Insert before the sibling element at this position\n');
 		sysPrint('  --append <l>:<c>  Append as the last child of the container at this position\n');
+		sysPrint('  --from-file <path> Read the element text from a file instead of the argument\n');
 		sysPrint('  --write           Overwrite the file in place (default: print to stdout)\n');
 		sysPrint('  --reformat        Canonicalise the whole file if it is not already canonical\n');
 		sysPrint('  --lang <name>     Grammar plugin (default: haxe)\n');
@@ -8384,15 +8443,19 @@ final class Cli {
 	}
 
 	private static function printAddMemberUsage(): Void {
-		sysPrint('Usage: apq add-member <file> --type <TypeName> <memberText> [--reformat] [--write]\n');
+		sysPrint('Usage: apq add-member <file> --type <TypeName> (<memberText> | --from-file <path> | -) [--reformat] [--write]\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --type <TypeName>   Type whose body gains the member (required)\n');
+		sysPrint('  --from-file <path>  Read <memberText> from a file instead of the argument\n');
 		sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
 		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 		sysPrint('\n');
-		sysPrint('Append <memberText> as a new member of <TypeName>. The member is\n');
+		sysPrint('The member text may be given inline, read from a file with --from-file, or\n');
+		sysPrint('read from stdin when it is the literal `-` (heredoc-friendly for code with\n');
+		sysPrint('`$` or quotes the shell would mangle). Append <memberText> as a new member\n');
+		sysPrint('of <TypeName>. The member is\n');
 		sysPrint('WRITER-FORMATTED — indented and laid out by the grammar\'s rules, not\n');
 		sysPrint('inserted as-is — by re-emitting the whole file through the writer (this\n');
 		sysPrint('also re-parse-validates). Works for class / interface / abstract / enum /\n');
@@ -8424,17 +8487,21 @@ final class Cli {
 	}
 
 	private static function printReplaceNodeUsage(): Void {
-		sysPrint('Usage: apq replace-node <file> (--select <sel> | --at <line>:<col>) <newSource> [--reformat] [--write]\n');
+		sysPrint('Usage: apq replace-node <file> (--select <sel> | --at <line>:<col>) (<newSource> | --from-file <path> | -) [--reformat] [--write]\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --select <sel>      Address the node by an ast-style selector\n');
 		sysPrint('                      (Kind / Kind:name / A > B); must match exactly one\n');
 		sysPrint('  --at <line>:<col>   Address the innermost node at the cursor\n');
+		sysPrint('  --from-file <path>  Read <newSource> from a file instead of the argument\n');
 		sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
 		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 		sysPrint('\n');
-		sysPrint('Replace the source span of a single node with <newSource>. Provide\n');
+		sysPrint('The new source may be inline, read from a file with --from-file, or read\n');
+		sysPrint('from stdin when it is the literal `-` (heredoc-friendly for code with `$`\n');
+		sysPrint('or quotes the shell would mangle). Replace the source span of a single\n');
+		sysPrint('node with <newSource>. Provide\n');
 		sysPrint('exactly one of --select or --at. --at uses the same column convention\n');
 		sysPrint('`apq refs` prints (NOT the raw 1-indexed `ast --at`). The result is\n');
 		sysPrint('WRITER-FORMATTED — the whole file is re-emitted through the writer (which\n');
