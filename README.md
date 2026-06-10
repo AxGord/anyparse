@@ -1,32 +1,253 @@
 # anyparse
 
-Declarative parser, writer and pretty-printer library for Haxe.
+**Structural code tooling for Haxe — query and transform source through typed ASTs instead of text.**
 
-**Status: early walking skeleton.** Not usable yet.
+anyparse parses source into a typed AST and gives you two things on top of it:
 
-## Goals
+- **`hxq` / `apq` — a structural alternative to grep.** Find code by its *shape*
+  (every `return $x;`, every `a * b`, every declaration named `area`) instead of by
+  regex over lines.
+- **Scope-correct, AST-level editing.** Rename, inline, extract, reorder parameters,
+  move types between files — each resolved against real scopes and re-parse-validated,
+  so the rewrite is correct by construction and the rest of the file stays byte-for-byte
+  intact. These are the kind of edits that automated tools — and AI coding assistants —
+  can apply safely, because the tool understands the code rather than pattern-matching it.
 
-- **Format-agnostic**: grammars for any format (JSON, XML, YAML, binary, custom) are described declaratively as Haxe types with metadata.
-- **Language-agnostic**: the same engine handles programming languages through PEG, Pratt and indent-sensitive strategies.
-- **Plugin architecture**: grammars and format descriptions live in their own packages. Adding a new language or format is a haxelib package, not a core change.
-- **Cross-family ready**: common AST types for language families (curly-brace, Lisp, ML) are themselves plugins. A structural round-trip test between families is part of the architectural contract.
-- **Performance**: generated parsers and writers are specialized per type at compile time, targeting speed comparable to hand-written code.
-- **Two build modes per grammar**: `Fast` for maximum throughput (bare types, throw on error) and `Tolerant` for IDE-class use cases (error recovery, spans, incremental-ready).
-- **One AST, one writer**: no "generate string, then parse and reformat" two-pass pipeline. Writers work directly on typed AST through a Doc-based pretty-printer.
+Underneath sits a macro-based **platform**: describe a grammar declaratively as Haxe
+types with metadata, and a `@:build` macro generates a specialized parser, writer and
+AST-transform for it. The Haxe grammar that powers `hxq` is itself just one such
+plugin; JSON and the `ar` binary archive format are others.
+
+## Status
+
+**Working and dogfooded** — `hxq`/`apq` are used to query and restyle this repo's own
+source — not the "walking skeleton" earlier revisions described.
+
+- `hxq`/`apq` ship a full structural-query CLI plus a set of scope-correct
+  refactoring operations (listed below), all exercised by the test suite.
+- **3179 tests / 7355 assertions / 0 failures** on the JS target.
+- The Haxe writer round-trips against the AxGord/haxe-formatter corpus
+  (945 fixtures: 755 byte-exact, 113 formatting deltas, 75 not-yet-parsed) with a hard
+  no-regression invariant.
+
+What is **not** done yet, stated plainly:
+
+- The **query/refactoring CLI is Haxe-only** today. The grammar platform handles
+  multiple formats (JSON / Haxe / `ar` binary / S-expr), but `hxq`/`apq` resolve only
+  the Haxe grammar plugin — JSON-aware refactoring is not wired up.
+- The Haxe grammar covers the language broadly but not exhaustively (75 corpus fixtures
+  still fail to parse).
+- The generic `buildTransform` walks plain typed ASTs; a *format-preserving* transform
+  (carrying comments/spans through) is a later slice.
+
+This is **Phase 3** of the roadmap (Haxe grammar + formatter). See
+[`docs/roadmap.md`](docs/roadmap.md).
+
+## Install / build
+
+Requires [Haxe](https://haxe.org) 4.x and Node.js (for the JS-based CLI).
+
+```sh
+git clone https://github.com/AxGord/anyparse
+cd anyparse
+haxe bin/apq-js.hxml          # builds bin/apq.js — the query/refactor CLI
+```
+
+`bin/hxq` is a thin launcher that runs `apq` with the Haxe grammar preselected. Put it
+on your `PATH` for a global `hxq`:
+
+```sh
+ln -s "$PWD/bin/hxq" ~/.local/bin/hxq
+```
+
+After that, `hxq <cmd> …` == `node bin/apq.js <cmd> --lang haxe …`. The launcher
+auto-rebuilds when `src/` changes.
+
+## Quickstart
+
+Given `Sample.hx`:
+
+```haxe
+class Sample {
+	public function area(width:Int, height:Int):Int {
+		final total = width * height;
+		return total;
+	}
+}
+```
+
+**Find by structure, not regex.** Match every multiplication, every `return`, or a
+declaration by name:
+
+```sh
+$ hxq search '$a * $b' Sample.hx
+Sample.hx:
+  3:16: match (a=width, b=height)
+
+$ hxq ast Sample.hx --select 'FnMember:area'
+(FnMember
+  area
+  (Required width)
+  (Required height)
+  (Named Int)
+  (BlockBody
+    (FinalStmt total (Mul (IdentExpr width) (IdentExpr height)))
+    (ReturnStmt (IdentExpr total))))
+```
+
+**Resolve a symbol with scope awareness** — declarations, reads and writes, each
+pointing back at its binding:
+
+```sh
+$ hxq refs total Sample.hx
+Sample.hx:
+  3:2: [decl] total
+  4:9: [read] total -> 3:2
+```
+
+**Refactor at the AST level.** Operations take a `<line>:<col>` cursor (the exact
+coordinate `refs` prints), print the rewrite to stdout, and apply in place with
+`--write`. Everything but the touched span stays byte-identical, and a result that does
+not re-parse is rejected rather than written.
+
+```sh
+$ hxq rename Sample.hx 3:8 prod          # rename the binding at the cursor + its uses
+class Sample {
+	public function area(width:Int, height:Int):Int {
+		final prod = width * height;
+		return prod;
+	}
+}
+
+$ hxq inline Sample.hx 3:8               # inline the local into its single use
+class Sample {
+	public function area(width:Int, height:Int):Int {
+		return (width * height);
+	}
+}
+
+$ hxq change-sig Sample.hx 2:18 1,0      # reorder params (+ resolvable call sites)
+class Sample {
+	public function area(height:Int, width:Int):Int {
+		final total = width * height;
+		return total;
+	}
+}
+```
+
+Every query and most refactors accept `--json` for machine-readable output — the
+combination of stable line:col coordinates, JSON, and re-parse validation is what makes
+these operations safe to drive from scripts or coding agents.
+
+For the full flag set on any command: `hxq <cmd> --help`.
+
+## Features
+
+### Structural query (read-only)
+
+| Command | Finds |
+|---|---|
+| `ast` | the parsed AST (S-expr or `--json`), or a subtree by `--select` / `--at` |
+| `search` | expression/statement **shapes** with `$x` metavars (`recv.add($x)`) |
+| `refs` | value bindings — `--decls` / `--reads` / `--writes`, scope-resolved |
+| `uses` | type-position references (fields, params, type params) |
+| `blast` | full change-impact for a type (uses + refs + member access) |
+| `mentions` / `lit` / `cases` | every named occurrence / string-or-ident leaves / switch case-patterns |
+| `meta` | declarations carrying a given `@:metadata` |
+| `diff` | structural AST diff between two files |
+| `source` | raw verbatim lines (no parse) — for files the grammar can't yet read |
+
+### Scope-correct refactoring (rewrites)
+
+All resolve against real scopes (never by-name text replace), preserve formatting
+(span-splice; everything else verbatim), and are re-parse-validated.
+
+| Command | Operation |
+|---|---|
+| `rename` | rename the binding at the cursor + its in-file occurrences; `--scope <dir>` does a cross-file **type** rename (decl, type positions, `new`/cast/`extends`, import/using segments, `T.staticMethod()`) atomically |
+| `inline` / `inline-method` | inline a local variable into its reads / a single-return function into its call sites |
+| `extract-var` / `extract-method` | hoist an expression into a `final`, or a statement run into a local function |
+| `change-sig` / `add-param` / `remove-param` | reorder params + call-site args / append a backward-compatible param / drop a param + its arguments |
+| `move` | move a type declaration to another file in the same package, carrying deps and repointing importers |
+| `symbols` / `importers` | list top-level type declarations across a scope / files importing a module |
+
+A second family — `add-member`, `add-import`, `add-element`, `replace-node` — *inserts*
+new code: the snippet is placed at an AST-resolved position, then the file is re-emitted
+through the writer so the new code is formatted by the grammar's own rules and
+re-parse-validated in one step.
+
+### Grammar platform
+
+A `@:build` macro reads a grammar (Haxe types annotated with `@:lit`, `@:kw`,
+`@:infix`, `@:prefix`, `@:postfix`, …) plus a `@:schema(Format)` and emits:
+
+- **`buildParser`** — a specialized parser, in either **Fast** mode (bare types, throw
+  on error, maximum throughput) or **Tolerant** mode (spans, error recovery, IDE-class
+  use). Two parsers from one grammar, chosen at the call site.
+- **`buildWriter`** — a writer/pretty-printer driving a Wadler-style Doc IR. **One AST,
+  one writer** — no "emit text, then re-parse and reformat" two-pass pipeline.
+- **`buildTransform`** — a deep, bottom-up whole-tree rewrite with per-node-type hooks
+  (the multi-type generalization of `ExprTools.map`).
+
+Parsing strategies are plugins (`Pratt`, `Kw`, `Lit`, `Prefix`/`Postfix`/`Ternary`,
+`Re`, `Skip`, and `Bin` for binary formats). Grammars shipped today:
+
+- **haxe** — the full language grammar (all five top-level decls, members, control flow,
+  31 binary + prefix/postfix operators via Pratt, string interpolation, lambdas,
+  literals) — parser + writer + the query plugin behind `hxq`.
+- **json** — a text format: parser + writer.
+- **ar** — a binary archive (Unix `ar`): byte-perfect parser + writer through the same
+  pipeline.
+- **sexpr** — S-expression writer, used for the `ast` dump output.
+
+## Design goals
+
+The project deliberately started from a universal-parser framing: be ready for the next
+format or language rather than rewrite the same parser machinery each time. The points
+below are the design direction — the Status and Features sections above mark what is
+delivered today.
+
+- **Format-agnostic** — grammars for any format (JSON, XML, YAML, binary, custom)
+  described declaratively as Haxe types with metadata. *Today: JSON, Haxe and the `ar`
+  binary format.*
+- **Language-agnostic** — programming languages handled by the same engine through
+  Pratt, keyword/literal and (planned) indent-sensitive strategies.
+- **Plugin architecture** — grammars and format descriptions live in their own packages;
+  adding a language or format is a new package, not a core change.
+- **Cross-family ready** — common AST types for language families (curly-brace, Lisp, ML)
+  are themselves plugins, with a structural round-trip between families as an
+  architectural contract. *Not yet implemented — see
+  [`docs/cross-family-contract.md`](docs/cross-family-contract.md).*
+- **Performance** — generated parsers and writers are specialized per type at compile
+  time, targeting hand-written speed.
+
+The **Fast/Tolerant** two-mode build and the **one-AST-one-writer** guarantee (described
+under *Grammar platform* above) are part of this direction and already in place.
 
 ## Non-goals (by design)
 
-- Automatic deep semantic translation between radically different languages (e.g., Python ↔ Rust). The framework provides infrastructure for user-written transforms, not magic.
-- Own native code generator. Integrate with LLVM/WASM if binary emission is needed.
-- Continuous live-background incremental parsing. Use tree-sitter for that class of use case.
+- **Not an automatic cross-language translator.** Deep semantic translation between
+  unlike languages (Python ↔ Rust) is out of scope; the platform provides infrastructure
+  for *user-written* transforms, not magic.
+- **Not a native code generator.** Integrate with LLVM/WASM if binary emission is needed.
+- **Not a live-background incremental parser.** On-demand reparse with caching is in
+  scope; continuous tree-sitter-style incrementality is not.
 
-## Running tests
+## Running the tests
 
-```
+```sh
 haxe test.hxml          # neko (fast compile, fast run, default)
-haxe test-js.hxml       # js/node
+haxe test-js.hxml       # js/node — then: node bin/test.js
 haxe test-interp.hxml   # Haxe macro interpreter (no compile step)
 ```
+
+The corpus round-trip layer runs only when `ANYPARSE_HXFORMAT_FORK` points at a
+haxe-formatter fixtures checkout.
+
+## Documentation
+
+Deeper reference lives in [`docs/`](docs/): `architecture.md`, `design-principles.md`,
+`roadmap.md`, `strategies.md`, `formats.md`, `cli-query-tool.md`, and `testing.md`.
 
 ## License
 
