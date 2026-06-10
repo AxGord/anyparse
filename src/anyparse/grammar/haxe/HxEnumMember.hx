@@ -34,6 +34,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxEnumMember = {
-	@:trivia @:tryparse var meta:Array<HxMetadata>;
-	var ctor:HxEnumCtor;
+	@:trivia @:tryparse var meta: Array<HxMetadata>;
+	var ctor: HxEnumCtor;
 }

@@ -14,15 +14,16 @@ package anyparse.runtime;
 @:nullSafety(Strict)
 final class Node<T> {
 
-	public final value:T;
-	public final span:Span;
-	public final errors:Array<ParseError>;
-	public final id:Int;
+	public final value: T;
+	public final span: Span;
+	public final errors: Array<ParseError>;
+	public final id: Int;
 
-	public function new(value:T, span:Span, errors:Array<ParseError>, id:Int) {
+	public function new(value: T, span: Span, errors: Array<ParseError>, id: Int) {
 		this.value = value;
 		this.span = span;
 		this.errors = errors;
 		this.id = id;
 	}
+
 }

@@ -29,6 +29,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxTypeArg = {
-	var type:HxType;
-	@:trivia @:tryparse @:fmt(padLeading) var intersections:Array<HxIntersectionClause>;
+	var type: HxType;
+	@:trivia @:tryparse @:fmt(padLeading) var intersections: Array<HxIntersectionClause>;
 }

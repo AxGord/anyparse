@@ -24,8 +24,10 @@ using Lambda;
  * Mirrors `CrossRenameResult`.
  */
 enum MoveResult {
-	Ok(changes:Array<MoveChange>, advisory:Null<String>);
-	Err(message:String);
+
+	Ok(changes: Array<MoveChange>, advisory: Null<String>);
+	Err(message: String);
+
 }
 
 /**
@@ -37,8 +39,8 @@ enum MoveResult {
  * meaningless; the CLI reports the file as "moved" / "updated" instead.
  */
 typedef MoveChange = {
-	var file:String;
-	var newSource:String;
+	var file: String;
+	var newSource: String;
 }
 
 /**
@@ -95,8 +97,7 @@ typedef MoveChange = {
 final class MoveSymbol {
 
 	/** The advisory appended to every successful move. */
-	private static final ADVISORY:String =
-		'verify imports in the destination — dependencies reached via a '
+	private static final ADVISORY: String = 'verify imports in the destination — dependencies reached via a '
 		+ 'static receiver (T.staticMethod()) or a value position are not '
 		+ 'auto-detected and may need a manual import; same-package moves only.';
 
@@ -112,85 +113,81 @@ final class MoveSymbol {
 	 * Returns `Ok(changes, advisory)` with only the files that changed,
 	 * or an `Err` describing why the move could not be applied.
 	 */
-	public static function moveType(cursorFile:String, line:Int, col:Int, destFile:String,
-			scopeFiles:Array<{file:String, source:String}>, plugin:GrammarPlugin, typeRefShape:TypeRefShape):MoveResult {
+	public static function moveType(
+		cursorFile: String, line: Int, col: Int, destFile: String, scopeFiles: Array<{ file: String, source: String }>,
+		plugin: GrammarPlugin, typeRefShape: TypeRefShape
+	): MoveResult {
 
 		// 1. Build the cross-file index; refuse on any skip-parse — a file
 		//    we cannot read cannot be proven free of references to the type.
-		final index:SymbolIndex = SymbolIndex.build(scopeFiles, plugin);
-		final skipped:Array<String> = index.skippedFiles();
-		if (skipped.length > 0)
-			return Err('cannot move across scope: ${skipped.length} file(s) do not parse: ${skipped.join(", ")}');
+		final index: SymbolIndex = SymbolIndex.build(scopeFiles, plugin);
+		final skipped: Array<String> = index.skippedFiles();
+		if (skipped.length > 0) return Err('cannot move across scope: ${skipped.length} file(s) do not parse: ${skipped.join(", ")}');
 
 		// Source text lookup for every scope file (the index keeps only
 		// structural info, not the raw bytes).
-		final sourceOf:Map<String, String> = [for (entry in scopeFiles) entry.file => entry.source];
-		final cursorSource:Null<String> = sourceOf[cursorFile];
-		if (cursorSource == null)
-			return Err('cursor file $cursorFile is not in the scope file set');
+		final sourceOf: Map<String, String> = [for (entry in scopeFiles) entry.file => entry.source];
+		final cursorSource: Null<String> = sourceOf[cursorFile];
+		if (cursorSource == null) return Err('cursor file $cursorFile is not in the scope file set');
 
 		// 2. Resolve the type declaration the cursor sits on. `fullSpan` is
 		//    the FULL decl span — for a `final class` that is the OUTER
 		//    `FinalDecl` span (includes the `final ` keyword) so the cut and
 		//    the dependency-body scan both cover `final class X {…}` whole.
-		final cursorTree:QueryNode = try plugin.parseFile(cursorSource)
-			catch (exception:ParseError) return Err('$cursorFile does not parse: ${exception.toString()}')
-			catch (exception:Exception) return Err('$cursorFile does not parse: ${exception.message}');
-		final cursor:Int = Span.offsetOf(cursorSource, line, col + 1);
-		final declMatch:Null<TypeDeclMatch> = RefactorSupport.resolveTypeDeclAtCursor(cursorTree, cursor, cursorSource);
-		if (declMatch == null)
-			return Err('position $line:$col is not on a type declaration');
-		final typeName:String = declMatch.name;
-		final declSpan:Span = declMatch.fullSpan;
+		final cursorTree: QueryNode = try plugin.parseFile(cursorSource) catch (exception: ParseError) return Err(
+			'$cursorFile does not parse: ${exception.toString()}'
+		)
+		catch (exception: Exception) return Err('$cursorFile does not parse: ${exception.message}');
+		final cursor: Int = Span.offsetOf(cursorSource, line, col + 1);
+		final declMatch: Null<TypeDeclMatch> = RefactorSupport.resolveTypeDeclAtCursor(cursorTree, cursor, cursorSource);
+		if (declMatch == null) return Err('position $line:$col is not on a type declaration');
+		final typeName: String = declMatch.name;
+		final declSpan: Span = declMatch.fullSpan;
 
 		// 3. Guards.
-		final declarers:Array<FileInfo> = index.declaringFiles(typeName);
-		if (declarers.length == 0)
-			return Err('no type "$typeName" declared under scope');
-		if (declarers.length > 1)
-			return Err('type "$typeName" is declared in ${declarers.length} files under scope — ambiguous, refusing');
+		final declarers: Array<FileInfo> = index.declaringFiles(typeName);
+		if (declarers.length == 0) return Err('no type "$typeName" declared under scope');
+		if (declarers.length > 1) return Err('type "$typeName" is declared in ${declarers.length} files under scope — ambiguous, refusing');
 		if (declarers[0].file != cursorFile)
 			return Err('the type "$typeName" at the cursor is not the one declared under scope — refusing');
-		if (cursorFile == destFile)
-			return Err('source and destination are the same file — nothing to move');
+		if (cursorFile == destFile) return Err('source and destination are the same file — nothing to move');
 
-		final cursorInfo:Null<FileInfo> = index.fileInfo(cursorFile);
-		final destInfo:Null<FileInfo> = index.fileInfo(destFile);
-		if (destInfo == null)
-			return Err('destination file $destFile is not a parseable file under scope');
-		if (cursorInfo == null)
-			return Err('$cursorFile is not indexed');
+		final cursorInfo: Null<FileInfo> = index.fileInfo(cursorFile);
+		final destInfo: Null<FileInfo> = index.fileInfo(destFile);
+		if (destInfo == null) return Err('destination file $destFile is not a parseable file under scope');
+		if (cursorInfo == null) return Err('$cursorFile is not indexed');
 		if (cursorInfo.pkg != destInfo.pkg)
-			return Err('cross-package move not supported in this increment '
-				+ '(source package "${cursorInfo.pkg}" != destination package "${destInfo.pkg}")');
+			return Err(
+				'cross-package move not supported in this increment '
+				+ '(source package "${cursorInfo.pkg}" != destination package "${destInfo.pkg}")'
+			);
 
 		// 4. Cut span: extend backward over leading doc-comment / @:meta /
 		//    indentation, and forward over one trailing newline. Refuse a
 		//    decl sharing a source line with other code.
-		final cut:Null<Span> = computeCutSpan(cursorSource, declSpan);
-		if (cut == null)
-			return Err('the type "$typeName" shares a source line with other code — refusing to move');
-		final declText:String = cursorSource.substring(cut.from, cut.to);
+		final cut: Null<Span> = computeCutSpan(cursorSource, declSpan);
+		if (cut == null) return Err('the type "$typeName" shares a source line with other code — refusing to move');
+		final declText: String = cursorSource.substring(cut.from, cut.to);
 
 		// 5. Dependency imports to carry: type-position names referenced
 		//    INSIDE the decl that the source imports explicitly and the
 		//    destination lacks.
-		final destSource:Null<String> = sourceOf[destFile];
-		if (destSource == null)
-			return Err('destination file $destFile is not in the scope file set');
-		final oldImportPath:Null<String> = index.importPathOf(typeName);
-		final carried:Array<ImportInfo> = dependencyImportsToCarry(cursorSource, declSpan, cursorInfo, destInfo,
-			plugin, typeRefShape, typeName);
+		final destSource: Null<String> = sourceOf[destFile];
+		if (destSource == null) return Err('destination file $destFile is not in the scope file set');
+		final oldImportPath: Null<String> = index.importPathOf(typeName);
+		final carried: Array<ImportInfo> = dependencyImportsToCarry(
+			cursorSource, declSpan, cursorInfo, destInfo, plugin, typeRefShape, typeName
+		);
 
 		// 6. Compute the new import path the moved type is reached by.
-		final destBasename:String = RefactorSupport.baseNameOf(destFile);
-		final newImportPath:String = typeName == destBasename ? destInfo.module : '${destInfo.module}.$typeName';
+		final destBasename: String = RefactorSupport.baseNameOf(destFile);
+		final newImportPath: String = typeName == destBasename ? destInfo.module : '${destInfo.module}.$typeName';
 
 		// 7. Assemble per-file edits.
 		//    Per-file edit accumulators keyed by file path.
-		final editsByFile:Map<String, Array<{span:Span, text:String}>> = [];
-		inline function editsFor(file:String):Array<{span:Span, text:String}> {
-			var arr:Null<Array<{span:Span, text:String}>> = editsByFile[file];
+		final editsByFile: Map<String, Array<{ span: Span, text: String }>> = [];
+		inline function editsFor(file: String): Array<{ span: Span, text: String }> {
+			var arr: Null<Array<{ span: Span, text: String }>> = editsByFile[file];
 			if (arr == null) {
 				arr = [];
 				editsByFile[file] = arr;
@@ -199,26 +196,25 @@ final class MoveSymbol {
 		}
 
 		// 7a. Cut the decl from the source file.
-		editsFor(cursorFile).push({span: cut, text: ''});
+		editsFor(cursorFile).push({ span: cut, text: '' });
 
 		// 7b. Insert the decl (plus carried imports) into the destination.
 		//     The carried imports go at the destination's import region;
 		//     the decl text is appended after the existing content.
-		final destInsertEdits:Array<{span:Span, text:String}> = buildDestInsertEdits(destSource, destInfo, declText, carried);
+		final destInsertEdits: Array<{ span: Span, text: String }> = buildDestInsertEdits(destSource, destInfo, declText, carried);
 		for (e in destInsertEdits) editsFor(destFile).push(e);
 
 		// 7c. Rewrite cross-file importers: every file (other than dest)
 		//     whose import `raw` equals the old import path is repointed at
 		//     the new path. Computed BEFORE the move via the index.
 		if (oldImportPath != null && oldImportPath != newImportPath) {
-			final oldModule:String = SymbolIndex.moduleOf(oldImportPath);
+			final oldModule: String = SymbolIndex.moduleOf(oldImportPath);
 			for (importer in index.filesImportingModule(oldModule)) {
 				if (importer.file == destFile) continue; // dest handled in 7d.
-				final importerSource:Null<String> = sourceOf[importer.file];
+				final importerSource: Null<String> = sourceOf[importer.file];
 				if (importerSource == null) continue;
-				for (imp in importer.imports)
-					if (imp.raw == oldImportPath)
-						editsFor(importer.file).push({span: imp.span, text: importStatementText(imp, newImportPath)});
+				for (imp in importer.imports) if (imp.raw == oldImportPath)
+					editsFor(importer.file).push({ span: imp.span, text: importStatementText(imp, newImportPath) });
 			}
 		}
 
@@ -229,32 +225,33 @@ final class MoveSymbol {
 		//     is now redundant (the type is local) and is removed.
 		if (oldImportPath != null) {
 			if (sourceStillUsesType(cursorSource, cut, plugin, typeRefShape, typeName)) {
-				final insert:Null<{span:Span, text:String}> = addImportEdit(cursorSource, cursorInfo, newImportPath);
+				final insert: Null<{ span: Span, text: String }> = addImportEdit(cursorSource, cursorInfo, newImportPath);
 				if (insert != null) editsFor(cursorFile).push(insert);
 			}
-			for (imp in destInfo.imports)
-				if (imp.raw == oldImportPath)
-					editsFor(destFile).push({span: removeImportSpan(destSource, imp), text: ''});
+			for (imp in destInfo.imports) if (imp.raw == oldImportPath)
+				editsFor(destFile).push({ span: removeImportSpan(destSource, imp), text: '' });
 		}
 
 		// 8. Apply edits per file, re-parse each, collect changed files.
-		final changes:Array<MoveChange> = [];
+		final changes: Array<MoveChange> = [];
 		for (file => edits in editsByFile) {
-			final original:Null<String> = sourceOf[file];
+			final original: Null<String> = sourceOf[file];
 			if (original == null) continue;
-			final newSource:String = RefactorSupport.applyEdits(original, edits);
+			final newSource: String = RefactorSupport.applyEdits(original, edits);
 			if (newSource == original) continue;
 
 			// 9. Atomic validation: every rewritten file must re-parse.
-			try plugin.parseFile(newSource)
-				catch (exception:ParseError) return Err('rewritten $file does not parse: ${exception.toString()}')
-				catch (exception:Exception) return Err('rewritten $file does not parse: ${exception.message}');
+			try
+				plugin.parseFile(newSource)
+			catch (exception: ParseError)
+				return Err('rewritten $file does not parse: ${exception.toString()}')
+			catch (exception: Exception)
+				return Err('rewritten $file does not parse: ${exception.message}');
 
-			changes.push({file: file, newSource: newSource});
+			changes.push({ file: file, newSource: newSource });
 		}
 
-		if (changes.length == 0)
-			return Err('move of "$typeName" changed nothing');
+		if (changes.length == 0) return Err('move of "$typeName" changed nothing');
 
 		return Ok(changes, ADVISORY);
 	}
@@ -270,29 +267,31 @@ final class MoveSymbol {
 	 * source line with other code (the line-up-to the decl is not pure
 	 * whitespace), which a whole-line cut cannot safely express.
 	 */
-	private static function computeCutSpan(source:String, declSpan:Span):Null<Span> {
+	private static function computeCutSpan(source: String, declSpan: Span): Null<Span> {
 		// Start of the decl's own line.
-		final lineStart:Int = lineStartOf(source, declSpan.from);
+		final lineStart: Int = lineStartOf(source, declSpan.from);
 		// The characters between the line start and the decl must be pure
 		// whitespace (the decl's indentation) — otherwise the decl shares a
 		// line with other code and a whole-line cut would corrupt it.
 		if (!isBlank(source, lineStart, declSpan.from)) return null;
 
 		// Walk backward over contiguous preceding trivia / meta lines.
-		var cutStart:Int = lineStart;
+		var cutStart: Int = lineStart;
 		while (cutStart > 0) {
 			// `cutStart` is at the start of the current line; step to the
 			// previous line.
-			final prevLineEnd:Int = cutStart - 1; // the '\n' terminating the previous line
-			final prevLineStart:Int = lineStartOf(source, prevLineEnd);
-			final prevLine:String = source.substring(prevLineStart, prevLineEnd);
-			if (isContiguousTriviaLine(prevLine)) cutStart = prevLineStart;
-			else break;
+			final prevLineEnd: Int = cutStart - 1; // the '\n' terminating the previous line
+			final prevLineStart: Int = lineStartOf(source, prevLineEnd);
+			final prevLine: String = source.substring(prevLineStart, prevLineEnd);
+			if (isContiguousTriviaLine(prevLine))
+				cutStart = prevLineStart;
+			else
+				break;
 		}
 
 		// Extend forward over one trailing newline so the cut removes the
 		// whole decl block including its line terminator.
-		var cutEnd:Int = declSpan.to;
+		var cutEnd: Int = declSpan.to;
 		if (cutEnd < source.length && source.charAt(cutEnd) == '\n') cutEnd++;
 
 		return new Span(cutStart, cutEnd);
@@ -314,38 +313,39 @@ final class MoveSymbol {
 	 * module, nor needed — only the source's genuine cross-module
 	 * explicit imports are carried.
 	 */
-	private static function dependencyImportsToCarry(source:String, declSpan:Span, cursorInfo:FileInfo, destInfo:FileInfo,
-			plugin:GrammarPlugin, typeRefShape:TypeRefShape, typeName:String):Array<ImportInfo> {
-		final typeRefTree:QueryNode = plugin.parseFileTypeRefs(source);
+	private static function dependencyImportsToCarry(
+		source: String, declSpan: Span, cursorInfo: FileInfo, destInfo: FileInfo, plugin: GrammarPlugin, typeRefShape: TypeRefShape,
+		typeName: String
+	): Array<ImportInfo> {
+		final typeRefTree: QueryNode = plugin.parseFileTypeRefs(source);
 		// Distinct dependency names referenced in a type position inside
 		// the decl. Walk every type-ref hit and keep those inside the span.
-		final depNames:Array<String> = [];
-		function collectDeps(node:QueryNode):Void {
-			final name:Null<String> = node.name;
-			final span:Null<Span> = node.span;
-			if (name != null && span != null && typeRefShape.typeRefKinds.contains(node.kind)
-				&& span.from >= declSpan.from && span.to <= declSpan.to
-				&& name != typeName && !depNames.contains(name))
-				depNames.push(name);
+		final depNames: Array<String> = [];
+		function collectDeps(node: QueryNode): Void {
+			final name: Null<String> = node.name;
+			final span: Null<Span> = node.span;
+			if (
+				name != null && span != null && typeRefShape.typeRefKinds.contains(node.kind) && span.from >= declSpan.from
+				&& span.to <= declSpan.to && name != typeName && !depNames.contains(name)
+			) depNames.push(name);
 			for (c in node.children) collectDeps(c);
 		}
 		collectDeps(typeRefTree);
 
-		final carried:Array<ImportInfo> = [];
+		final carried: Array<ImportInfo> = [];
 		for (dep in depNames) {
 			// The source's explicit import that provides `dep` (path's last
 			// segment is `dep`).
-			final provider:Null<ImportInfo> = cursorInfo.imports.find(imp ->
-				(imp.kind == ImportKind.Import || imp.kind == ImportKind.Using)
-				&& lastSegment(imp.raw) == dep);
+			final provider: Null<ImportInfo> = cursorInfo.imports.find(imp -> (
+				imp.kind == ImportKind.Import || imp.kind == ImportKind.Using
+			) && lastSegment(imp.raw) == dep);
 			if (provider == null) continue;
 			// Already present in the destination → no carry.
-			final already:Bool = destInfo.imports.exists(imp -> imp.kind == provider.kind && imp.raw == provider.raw);
+			final already: Bool = destInfo.imports.exists(imp -> imp.kind == provider.kind && imp.raw == provider.raw);
 			if (already) continue;
 			// De-dup the carry list (a single import line could provide more
 			// than one referenced name only via wildcards, which we skipped).
-			if (!carried.exists(c -> c.kind == provider.kind && c.raw == provider.raw))
-				carried.push(provider);
+			if (!carried.exists(c -> c.kind == provider.kind && c.raw == provider.raw)) carried.push(provider);
 		}
 		return carried;
 	}
@@ -358,25 +358,26 @@ final class MoveSymbol {
 	 * text is appended after the file's existing content, separated by a
 	 * blank line.
 	 */
-	private static function buildDestInsertEdits(destSource:String, destInfo:FileInfo, declText:String,
-			carried:Array<ImportInfo>):Array<{span:Span, text:String}> {
-		final edits:Array<{span:Span, text:String}> = [];
+	private static function buildDestInsertEdits(
+		destSource: String, destInfo: FileInfo, declText: String, carried: Array<ImportInfo>
+	): Array<{ span: Span, text: String }> {
+		final edits: Array<{ span: Span, text: String }> = [];
 
 		if (carried.length > 0) {
-			final importLines:String = carried.map(imp -> importLineFor(imp)).join('\n');
-			final insertAt:Int = importInsertionOffset(destSource, destInfo);
+			final importLines: String = carried.map(imp -> importLineFor(imp)).join('\n');
+			final insertAt: Int = importInsertionOffset(destSource, destInfo);
 			// Insert as its own line(s) after the anchor.
-			edits.push({span: new Span(insertAt, insertAt), text: '$importLines\n'});
+			edits.push({ span: new Span(insertAt, insertAt), text: '$importLines\n' });
 		}
 
 		// Append the decl after the file content. Ensure exactly one blank
 		// line of separation from the prior content.
-		final trimmedEnd:Int = trimTrailingNewlines(destSource);
-		final tail:String = destSource.substring(trimmedEnd);
-		final sep:String = trimmedEnd == 0 ? '' : '\n\n';
+		final trimmedEnd: Int = trimTrailingNewlines(destSource);
+		final tail: String = destSource.substring(trimmedEnd);
+		final sep: String = trimmedEnd == 0 ? '' : '\n\n';
 		// Replace the trailing-newline region with: separator + decl +
 		// the file's original trailing newlines (preserve EOF newline).
-		edits.push({span: new Span(trimmedEnd, destSource.length), text: '$sep$declText$tail'});
+		edits.push({ span: new Span(trimmedEnd, destSource.length), text: '$sep$declText$tail' });
 
 		return edits;
 	}
@@ -387,15 +388,16 @@ final class MoveSymbol {
 	 * cut range. When true, the source needs an import of the moved type's
 	 * new path.
 	 */
-	private static function sourceStillUsesType(source:String, cut:Span, plugin:GrammarPlugin,
-			typeRefShape:TypeRefShape, typeName:String):Bool {
-		final typeRefTree:QueryNode = plugin.parseFileTypeRefs(source);
-		var used:Bool = false;
-		function walk(node:QueryNode):Void {
-			final span:Null<Span> = node.span;
-			if (!used && node.name == typeName && span != null && typeRefShape.typeRefKinds.contains(node.kind)
-				&& (span.from < cut.from || span.from >= cut.to))
-				used = true;
+	private static function sourceStillUsesType(
+		source: String, cut: Span, plugin: GrammarPlugin, typeRefShape: TypeRefShape, typeName: String
+	): Bool {
+		final typeRefTree: QueryNode = plugin.parseFileTypeRefs(source);
+		var used: Bool = false;
+		function walk(node: QueryNode): Void {
+			final span: Null<Span> = node.span;
+			if (!used && node.name == typeName && span != null && typeRefShape.typeRefKinds.contains(node.kind) && (
+				span.from < cut.from || span.from >= cut.to
+			)) used = true;
 			for (c in node.children) walk(c);
 		}
 		walk(typeRefTree);
@@ -408,11 +410,11 @@ final class MoveSymbol {
 	 * existing import (or after the package declaration). Returns null
 	 * when the import is already present.
 	 */
-	private static function addImportEdit(source:String, info:FileInfo, path:String):Null<{span:Span, text:String}> {
-		final already:Bool = info.imports.exists(imp -> imp.kind == ImportKind.Import && imp.raw == path);
+	private static function addImportEdit(source: String, info: FileInfo, path: String): Null<{ span: Span, text: String }> {
+		final already: Bool = info.imports.exists(imp -> imp.kind == ImportKind.Import && imp.raw == path);
 		if (already) return null;
-		final insertAt:Int = importInsertionOffset(source, info);
-		return {span: new Span(insertAt, insertAt), text: 'import $path;\n'};
+		final insertAt: Int = importInsertionOffset(source, info);
+		return { span: new Span(insertAt, insertAt), text: 'import $path;\n' };
 	}
 
 	/**
@@ -421,21 +423,20 @@ final class MoveSymbol {
 	 * package declaration, else the very start of the file. The returned
 	 * offset is always a line start, so the caller appends `text + '\n'`.
 	 */
-	private static function importInsertionOffset(source:String, info:FileInfo):Int {
-		var anchorEnd:Int = -1;
-		for (imp in info.imports)
-			if (imp.span.to > anchorEnd) anchorEnd = imp.span.to;
+	private static function importInsertionOffset(source: String, info: FileInfo): Int {
+		var anchorEnd: Int = -1;
+		for (imp in info.imports) if (imp.span.to > anchorEnd) anchorEnd = imp.span.to;
 		if (anchorEnd < 0) {
 			// No imports — anchor after the package decl's line, if any.
-			final pkgIdx:Int = source.indexOf('package ');
+			final pkgIdx: Int = source.indexOf('package ');
 			if (pkgIdx == 0) {
-				final semi:Int = source.indexOf(';', pkgIdx);
+				final semi: Int = source.indexOf(';', pkgIdx);
 				if (semi >= 0) anchorEnd = semi + 1;
 			}
 		}
 		if (anchorEnd < 0) return 0;
 		// Step to the start of the next line after the anchor.
-		final nl:Int = source.indexOf('\n', anchorEnd);
+		final nl: Int = source.indexOf('\n', anchorEnd);
 		return nl < 0 ? source.length : nl + 1;
 	}
 
@@ -444,12 +445,12 @@ final class MoveSymbol {
 	 * one trailing newline so the whole line disappears (no blank-line
 	 * residue).
 	 */
-	private static function removeImportSpan(source:String, imp:ImportInfo):Span {
-		var to:Int = imp.span.to;
+	private static function removeImportSpan(source: String, imp: ImportInfo): Span {
+		var to: Int = imp.span.to;
 		if (to < source.length && source.charAt(to) == '\n') to++;
 		// Also drop the import's own leading indentation if any.
-		final from:Int = lineStartOf(source, imp.span.from);
-		final actualFrom:Int = isBlank(source, from, imp.span.from) ? from : imp.span.from;
+		final from: Int = lineStartOf(source, imp.span.from);
+		final actualFrom: Int = isBlank(source, from, imp.span.from) ? from : imp.span.from;
 		return new Span(actualFrom, to);
 	}
 
@@ -459,34 +460,34 @@ final class MoveSymbol {
 	 * `using`) and its leading keyword spacing. The whole statement span
 	 * is replaced — the original `raw` path is swapped for the new path.
 	 */
-	private static function importStatementText(imp:ImportInfo, newImportPath:String):String {
-		final keyword:String = imp.kind == ImportKind.Using ? 'using' : 'import';
+	private static function importStatementText(imp: ImportInfo, newImportPath: String): String {
+		final keyword: String = imp.kind == ImportKind.Using ? 'using' : 'import';
 		return '$keyword $newImportPath;';
 	}
 
 	/** `import <path>;` / `using <path>;` text for a carried import. */
-	private static function importLineFor(imp:ImportInfo):String {
-		final keyword:String = imp.kind == ImportKind.Using ? 'using' : 'import';
+	private static function importLineFor(imp: ImportInfo): String {
+		final keyword: String = imp.kind == ImportKind.Using ? 'using' : 'import';
 		return '$keyword ${imp.raw};';
 	}
 
 	/** Last dotted segment of a path (`pkg.sub.Foo` -> `Foo`). */
-	private static inline function lastSegment(path:String):String {
-		final dot:Int = path.lastIndexOf('.');
+	private static inline function lastSegment(path: String): String {
+		final dot: Int = path.lastIndexOf('.');
 		return dot < 0 ? path : path.substr(dot + 1);
 	}
 
 	/** Start offset of the line containing `offset`. */
-	private static function lineStartOf(source:String, offset:Int):Int {
-		var i:Int = offset < source.length ? offset : source.length;
+	private static function lineStartOf(source: String, offset: Int): Int {
+		var i: Int = offset < source.length ? offset : source.length;
 		while (i > 0 && source.charAt(i - 1) != '\n') i--;
 		return i;
 	}
 
 	/** Are `[from, to)` of `source` all whitespace (space / tab)? */
-	private static function isBlank(source:String, from:Int, to:Int):Bool {
+	private static function isBlank(source: String, from: Int, to: Int): Bool {
 		for (i in from...to) {
-			final c:String = source.charAt(i);
+			final c: String = source.charAt(i);
 			if (c != ' ' && c != '\t' && c != '\r') return false;
 		}
 		return true;
@@ -502,23 +503,24 @@ final class MoveSymbol {
 	 * backward scan, so a blank line between the decl and an earlier
 	 * comment severs the comment from the move.
 	 */
-	private static function isContiguousTriviaLine(line:String):Bool {
-		final trimmed:String = StringTools.trim(line);
+	private static function isContiguousTriviaLine(line: String): Bool {
+		final trimmed: String = StringTools.trim(line);
 		if (trimmed.length == 0) return false; // blank line = boundary
-		return StringTools.startsWith(trimmed, '//')
-			|| StringTools.startsWith(trimmed, '/*')
-			|| StringTools.startsWith(trimmed, '*')
+		return StringTools.startsWith(trimmed, '//') || StringTools.startsWith(trimmed, '/*') || StringTools.startsWith(trimmed, '*')
 			|| StringTools.startsWith(trimmed, '@');
 	}
 
 	/** Offset just past the last non-newline character of `source`. */
-	private static function trimTrailingNewlines(source:String):Int {
-		var i:Int = source.length;
+	private static function trimTrailingNewlines(source: String): Int {
+		var i: Int = source.length;
 		while (i > 0) {
-			final c:String = source.charAt(i - 1);
-			if (c == '\n' || c == '\r') i--;
-			else break;
+			final c: String = source.charAt(i - 1);
+			if (c == '\n' || c == '\r')
+				i--;
+			else
+				break;
 		}
 		return i;
 	}
+
 }

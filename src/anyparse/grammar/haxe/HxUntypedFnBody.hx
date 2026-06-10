@@ -45,5 +45,5 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxUntypedFnBody = {
-	@:kw('untyped') @:fmt(leftCurly('blockLeftCurly')) var block:HxFnBlock;
+	@:kw('untyped') @:fmt(leftCurly('blockLeftCurly')) var block: HxFnBlock;
 }

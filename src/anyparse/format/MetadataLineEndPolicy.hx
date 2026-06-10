@@ -40,4 +40,5 @@ enum abstract MetadataLineEndPolicy(Int) from Int to Int {
 	final AfterLast = 2;
 
 	final ForceAfterLast = 3;
+
 }

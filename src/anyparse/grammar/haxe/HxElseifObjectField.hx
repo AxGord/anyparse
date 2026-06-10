@@ -32,6 +32,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxElseifObjectField = {
-	@:kw('#elseif') var cond:HxPpCondLit;
-	@:sep(',') @:tryparse @:fmt(padLeading, padTrailing) var body:Array<HxObjectField>;
+	@:kw('#elseif') var cond: HxPpCondLit;
+	@:sep(',') @:tryparse @:fmt(padLeading, padTrailing) var body: Array<HxObjectField>;
 };

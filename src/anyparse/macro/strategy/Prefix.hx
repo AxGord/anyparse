@@ -54,29 +54,29 @@ import anyparse.core.Strategy;
  */
 class Prefix implements Strategy {
 
-	public var name(default, null):String = 'Prefix';
-	public var runsAfter(default, null):Array<String> = [];
-	public var runsBefore(default, null):Array<String> = [];
-	public var ownedMeta(default, null):Array<String> = [':prefix'];
-	public var runtimeContribution(default, null):RuntimeContrib = {ctxFields: [], helpers: [], cacheKeyContributors: []};
+	public var name(default, null): String = 'Prefix';
+	public var runsAfter(default, null): Array<String> = [];
+	public var runsBefore(default, null): Array<String> = [];
+	public var ownedMeta(default, null): Array<String> = [':prefix'];
+	public var runtimeContribution(default, null): RuntimeContrib = { ctxFields: [], helpers: [], cacheKeyContributors: [] };
 
 	public function new() {}
 
-	public function appliesTo(node:ShapeNode):Bool {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
+	public function appliesTo(node: ShapeNode): Bool {
+		final meta: Null<Metadata> = node.annotations.get('base.meta');
 		if (meta == null) return false;
 		for (entry in meta) if (entry.name == ':prefix') return true;
 		return false;
 	}
 
-	public function annotate(node:ShapeNode, ctx:LoweringCtx):Void {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
+	public function annotate(node: ShapeNode, ctx: LoweringCtx): Void {
+		final meta: Null<Metadata> = node.annotations.get('base.meta');
 		if (meta == null) return;
 		for (entry in meta) if (entry.name == ':prefix') {
 			if (entry.params.length != 1) {
 				Context.fatalError('@:prefix expects exactly one string argument: "op"', entry.pos);
 			}
-			final opText:String = switch entry.params[0].expr {
+			final opText: String = switch entry.params[0].expr {
 				case EConst(CString(s, _)): s;
 				case _:
 					Context.fatalError('@:prefix argument must be a string literal', entry.params[0].pos);
@@ -86,8 +86,9 @@ class Prefix implements Strategy {
 		}
 	}
 
-	public function lower(node:ShapeNode, ctx:LoweringCtx):Null<CoreIR> {
+	public function lower(node: ShapeNode, ctx: LoweringCtx): Null<CoreIR> {
 		return null;
 	}
+
 }
 #end

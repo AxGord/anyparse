@@ -10,5 +10,5 @@ package anyparse.query.format.json;
  */
 @:peg @:schema(anyparse.format.text.JsonFormat) @:ws
 typedef AstSearchMatches = {
-	var matches:Array<AstSearchMatch>;
+	var matches: Array<AstSearchMatch>;
 };

@@ -20,9 +20,11 @@ package anyparse.grammar.haxe;
  */
 @:peg
 enum HxEnumCtor {
-	@:trail(';')
-	ParamCtor(decl:HxEnumCtorDecl);
 
 	@:trail(';')
-	SimpleCtor(name:HxIdentLit);
+	ParamCtor(decl: HxEnumCtorDecl);
+
+	@:trail(';')
+	SimpleCtor(name: HxIdentLit);
+
 }

@@ -26,19 +26,20 @@ import haxe.macro.Expr;
  */
 class GeneratedRule {
 
-	public final fnName:String;
-	public final returnCT:ComplexType;
-	public var body:Expr;
-	public final eregs:Array<EregSpec>;
-	public final hasMinPrec:Bool;
+	public final fnName: String;
+	public final returnCT: ComplexType;
+	public var body: Expr;
+	public final eregs: Array<EregSpec>;
+	public final hasMinPrec: Bool;
 
-	public function new(fnName:String, returnCT:ComplexType, body:Expr, eregs:Array<EregSpec>, hasMinPrec:Bool = false) {
+	public function new(fnName: String, returnCT: ComplexType, body: Expr, eregs: Array<EregSpec>, hasMinPrec: Bool = false) {
 		this.fnName = fnName;
 		this.returnCT = returnCT;
 		this.body = body;
 		this.eregs = eregs;
 		this.hasMinPrec = hasMinPrec;
 	}
+
 }
 
 /**
@@ -47,8 +48,9 @@ class GeneratedRule {
  */
 typedef EregSpec = {
 	/** Private static field name, e.g. `_re_JStringLit`. */
-	varName:String,
+	varName: String,
+
 	/** Regex source without surrounding slashes or `^` anchor. */
-	pattern:String,
+	pattern: String
 };
 #end

@@ -9,29 +9,30 @@ package anyparse.runtime;
 @:nullSafety(Strict)
 final class StringInput implements Input {
 
-	public var length(get, never):Int;
+	public var length(get, never): Int;
 
-	private final _source:String;
+	private final _source: String;
 
-	public function new(source:String) {
+	public function new(source: String) {
 		_source = source;
 	}
 
-	private inline function get_length():Int {
+	private inline function get_length(): Int {
 		return _source.length;
 	}
 
-	public inline function charCodeAt(pos:Int):Int {
+	public inline function charCodeAt(pos: Int): Int {
 		if (pos < 0 || pos >= _source.length) return -1;
-		final c:Null<Int> = _source.charCodeAt(pos);
+		final c: Null<Int> = _source.charCodeAt(pos);
 		return c == null ? -1 : c;
 	}
 
-	public inline function substring(from:Int, to:Int):String {
+	public inline function substring(from: Int, to: Int): String {
 		return _source.substring(from, to);
 	}
 
-	public inline function bytes(from:Int, to:Int):haxe.io.Bytes {
+	public inline function bytes(from: Int, to: Int): haxe.io.Bytes {
 		return haxe.io.Bytes.ofString(_source.substring(from, to));
 	}
+
 }

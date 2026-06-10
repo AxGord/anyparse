@@ -13,7 +13,9 @@ package anyparse.format;
  * unmanageable union. See `docs/formats.md` for the reasoning.
  */
 interface Format {
-	var name(default, null):String;
-	var version(default, null):String;
-	var encoding(default, null):Encoding;
+
+	var name(default, null): String;
+	var version(default, null): String;
+	var encoding(default, null): Encoding;
+
 }

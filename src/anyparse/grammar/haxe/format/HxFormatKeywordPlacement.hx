@@ -32,4 +32,5 @@ enum abstract HxFormatKeywordPlacement(String) to String {
 	final Keep = 'keep';
 
 	final FitLine = 'fitLine';
+
 }

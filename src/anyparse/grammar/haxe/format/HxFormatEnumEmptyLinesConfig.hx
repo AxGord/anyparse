@@ -27,11 +27,11 @@ package anyparse.grammar.haxe.format;
  */
 @:peg typedef HxFormatEnumEmptyLinesConfig = {
 
-	@:optional var existingBetweenFields:HxFormatKeepEmptyLinesPolicy;
+	@:optional var existingBetweenFields: HxFormatKeepEmptyLinesPolicy;
 
-	@:optional var betweenFields:Int;
+	@:optional var betweenFields: Int;
 
-	@:optional var beginType:Int;
+	@:optional var beginType: Int;
 
-	@:optional var endType:Int;
+	@:optional var endType: Int;
 };

@@ -134,41 +134,41 @@ package anyparse.grammar.haxe.format;
  */
 @:peg typedef HxFormatWrappingSection = {
 
-	@:optional var maxLineLength:Int;
+	@:optional var maxLineLength: Int;
 
-	@:optional var arrayMatrixWrap:String;
+	@:optional var arrayMatrixWrap: String;
 
-	@:optional var arrayWrap:HxFormatWrapRules;
+	@:optional var arrayWrap: HxFormatWrapRules;
 
-	@:optional var multiVar:HxFormatWrapRules;
+	@:optional var multiVar: HxFormatWrapRules;
 
-	@:optional var casePattern:HxFormatWrapRules;
+	@:optional var casePattern: HxFormatWrapRules;
 
-	@:optional var anonType:HxFormatWrapRules;
+	@:optional var anonType: HxFormatWrapRules;
 
-	@:optional var methodChain:HxFormatWrapRules;
+	@:optional var methodChain: HxFormatWrapRules;
 
-	@:optional var opBoolChain:HxFormatWrapRules;
+	@:optional var opBoolChain: HxFormatWrapRules;
 
-	@:optional var opAddSubChain:HxFormatWrapRules;
+	@:optional var opAddSubChain: HxFormatWrapRules;
 
-	@:optional var callParameter:HxFormatWrapRules;
+	@:optional var callParameter: HxFormatWrapRules;
 
-	@:optional var objectLiteral:HxFormatWrapRules;
+	@:optional var objectLiteral: HxFormatWrapRules;
 
-	@:optional var conditionWrapping:HxFormatWrapRules;
+	@:optional var conditionWrapping: HxFormatWrapRules;
 
-	@:optional var ternaryExpression:HxFormatWrapRules;
+	@:optional var ternaryExpression: HxFormatWrapRules;
 
-	@:optional var functionSignature:HxFormatWrapRules;
+	@:optional var functionSignature: HxFormatWrapRules;
 
-	@:optional var anonFunctionSignature:HxFormatWrapRules;
+	@:optional var anonFunctionSignature: HxFormatWrapRules;
 
-	@:optional var metadataCallParameter:HxFormatWrapRules;
+	@:optional var metadataCallParameter: HxFormatWrapRules;
 
-	@:optional var typeParameter:HxFormatWrapRules;
+	@:optional var typeParameter: HxFormatWrapRules;
 
-	@:optional var expressionWrapping:HxFormatWrapRules;
+	@:optional var expressionWrapping: HxFormatWrapRules;
 
-	@:optional var implementsExtends:HxFormatWrapRules;
+	@:optional var implementsExtends: HxFormatWrapRules;
 };

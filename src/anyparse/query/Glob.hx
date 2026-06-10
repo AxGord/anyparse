@@ -32,23 +32,22 @@ import sys.FileSystem;
 @:nullSafety(Strict)
 final class Glob {
 
-	public static function expand(spec:String, extension:String):Array<String> {
-		final out:Array<String> = [];
+	public static function expand(spec: String, extension: String): Array<String> {
+		final out: Array<String> = [];
 		#if (sys || nodejs)
-		final norm:String = stripTrailingSlash(spec);
+		final norm: String = stripTrailingSlash(spec);
 		if (isGlob(norm)) {
-			final base:String = globBase(norm);
-			final re:EReg = globToRegex(norm);
-			final fsRoot:String = base == '' ? '.' : base;
-			if (FileSystem.exists(fsRoot) && FileSystem.isDirectory(fsRoot))
-				collectMatching(fsRoot, base, re, out);
+			final base: String = globBase(norm);
+			final re: EReg = globToRegex(norm);
+			final fsRoot: String = base == '' ? '.' : base;
+			if (FileSystem.exists(fsRoot) && FileSystem.isDirectory(fsRoot)) collectMatching(fsRoot, base, re, out);
 		} else if (FileSystem.exists(norm)) {
 			if (FileSystem.isDirectory(norm))
 				collect(norm, extension, out);
 			else
 				out.push(norm);
 		}
-		out.sort((a:String, b:String) -> a < b ? -1 : (a > b ? 1 : 0));
+		out.sort((a: String, b: String) -> a < b ? -1 : (a > b ? 1 : 0));
 		#end
 		return out;
 	}
@@ -58,20 +57,19 @@ final class Glob {
 	 * `dir + '/' + name` concatenations don't produce `foo//bar`. Keeps
 	 * the root `'/'` and a bare `'.'` unchanged.
 	 */
-	private static function stripTrailingSlash(spec:String):String {
-		var end:Int = spec.length;
+	private static function stripTrailingSlash(spec: String): String {
+		var end: Int = spec.length;
 		while (end > 1 && spec.charAt(end - 1) == '/') end--;
 		return end == spec.length ? spec : spec.substr(0, end);
 	}
 
 	#if (sys || nodejs)
-	private static function collect(dir:String, extension:String, into:Array<String>):Void {
+	private static function collect(dir: String, extension: String, into: Array<String>): Void {
 		for (name in FileSystem.readDirectory(dir)) {
-			final path:String = dir + '/' + name;
+			final path: String = dir + '/' + name;
 			if (FileSystem.isDirectory(path))
 				collect(path, extension, into);
-			else if (StringTools.endsWith(name, extension))
-				into.push(path);
+			else if (StringTools.endsWith(name, extension)) into.push(path);
 		}
 	}
 
@@ -80,22 +78,21 @@ final class Glob {
 	 * `prefix` (empty when the walk root is the cwd), and keep files
 	 * whose printable path fully matches `re`.
 	 */
-	private static function collectMatching(fsDir:String, prefix:String, re:EReg, into:Array<String>):Void {
+	private static function collectMatching(fsDir: String, prefix: String, re: EReg, into: Array<String>): Void {
 		for (name in FileSystem.readDirectory(fsDir)) {
-			final fsPath:String = fsDir + '/' + name;
-			final rel:String = prefix == '' ? name : prefix + '/' + name;
+			final fsPath: String = fsDir + '/' + name;
+			final rel: String = prefix == '' ? name : prefix + '/' + name;
 			if (FileSystem.isDirectory(fsPath))
 				collectMatching(fsPath, rel, re, into);
-			else if (re.match(rel))
-				into.push(rel);
+			else if (re.match(rel)) into.push(rel);
 		}
 	}
 
-	private static inline function isGlobChar(c:String):Bool {
+	private static inline function isGlobChar(c: String): Bool {
 		return c == '*' || c == '?' || c == '[';
 	}
 
-	private static function isGlob(spec:String):Bool {
+	private static function isGlob(spec: String): Bool {
 		for (i in 0...spec.length) if (isGlobChar(spec.charAt(i))) return true;
 		return false;
 	}
@@ -105,13 +102,13 @@ final class Glob {
 	 * with no trailing slash. `''` when the pattern starts globbing
 	 * before any `/` (walk root is the cwd).
 	 */
-	private static function globBase(spec:String):String {
-		var firstGlob:Int = spec.length;
+	private static function globBase(spec: String): String {
+		var firstGlob: Int = spec.length;
 		for (i in 0...spec.length) if (isGlobChar(spec.charAt(i))) {
 			firstGlob = i;
 			break;
 		}
-		final lastSlash:Int = spec.substr(0, firstGlob).lastIndexOf('/');
+		final lastSlash: Int = spec.substr(0, firstGlob).lastIndexOf('/');
 		return lastSlash < 0 ? '' : spec.substr(0, lastSlash);
 	}
 
@@ -119,13 +116,13 @@ final class Glob {
 	 * Translate a glob pattern to a fully-anchored regex over the
 	 * printable path string.
 	 */
-	private static function globToRegex(spec:String):EReg {
-		final buf:StringBuf = new StringBuf();
+	private static function globToRegex(spec: String): EReg {
+		final buf: StringBuf = new StringBuf();
 		buf.add('^');
-		var i:Int = 0;
-		final n:Int = spec.length;
+		var i: Int = 0;
+		final n: Int = spec.length;
 		while (i < n) {
-			final c:String = spec.charAt(i);
+			final c: String = spec.charAt(i);
 			if (c == '*') {
 				if (i + 1 < n && spec.charAt(i + 1) == '*') {
 					// `**` — across segments. `**/` also matches zero dirs.
@@ -144,21 +141,20 @@ final class Glob {
 				buf.add('[^/]');
 				i++;
 			} else if (c == '[') {
-				final end:Int = spec.indexOf(']', i + 1);
+				final end: Int = spec.indexOf(']', i + 1);
 				if (end < 0) {
 					// Unterminated class — treat `[` literally.
 					buf.add('\\[');
 					i++;
 				} else {
 					buf.add('[');
-					final body:String = spec.substr(i + 1, end - i - 1);
+					final body: String = spec.substr(i + 1, end - i - 1);
 					buf.add(StringTools.startsWith(body, '!') ? '^' + body.substr(1) : body);
 					buf.add(']');
 					i = end + 1;
 				}
 			} else {
-				if (c != '/' && "\\.+(){}$^|".indexOf(c) >= 0)
-					buf.add('\\');
+				if (c != '/' && "\\.+(){}$^|".indexOf(c) >= 0) buf.add('\\');
 				buf.add(c);
 				i++;
 			}
@@ -167,4 +163,5 @@ final class Glob {
 		return new EReg(buf.toString(), '');
 	}
 	#end
+
 }

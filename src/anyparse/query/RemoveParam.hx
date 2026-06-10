@@ -19,8 +19,10 @@ import haxe.Exception;
  * Mirrors `ChangeSigResult` (methods carry the cross-file advisory).
  */
 enum RemoveParamResult {
-	Ok(text:String, advisory:Null<String>);
-	Err(message:String);
+
+	Ok(text: String, advisory: Null<String>);
+	Err(message: String);
+
 }
 
 /**
@@ -77,44 +79,41 @@ final class RemoveParam {
 	 * describing why the removal could not be applied. The source is never
 	 * mutated — the caller decides whether to write the result.
 	 */
-	public static function removeParam(source:String, line:Int, col:Int, index:Int, plugin:GrammarPlugin, shape:RefShape):RemoveParamResult {
-		final tree:QueryNode = try plugin.parseFile(source)
-			catch (exception:ParseError) return Err('source does not parse: ${exception.toString()}')
-			catch (exception:Exception) return Err('source does not parse: ${exception.message}');
+	public static function removeParam(
+		source: String, line: Int, col: Int, index: Int, plugin: GrammarPlugin, shape: RefShape
+	): RemoveParamResult {
+		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
+			'source does not parse: ${exception.toString()}'
+		)
+		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
 		// `apq refs` prints `Span.lineCol().col - 1`; invert that here so a
 		// position copied from `refs` output maps back to the real offset.
-		final cursor:Int = Span.offsetOf(source, line, col + 1);
+		final cursor: Int = Span.offsetOf(source, line, col + 1);
 
-		final node:Null<QueryNode> = RefactorSupport.resolveCursorNode(tree, cursor, source);
-		if (node == null)
-			return Err('position $line:$col is not on a function or a call');
-		final cursorNode:QueryNode = node;
-		final targetName:Null<String> = cursorNode.name;
-		if (targetName == null)
-			return Err('position $line:$col is not on a function or a call');
-		final name:String = targetName;
+		final node: Null<QueryNode> = RefactorSupport.resolveCursorNode(tree, cursor, source);
+		if (node == null) return Err('position $line:$col is not on a function or a call');
+		final cursorNode: QueryNode = node;
+		final targetName: Null<String> = cursorNode.name;
+		if (targetName == null) return Err('position $line:$col is not on a function or a call');
+		final name: String = targetName;
 
-		final declNode:Null<QueryNode> = CallSites.resolveFnDecl(cursorNode, tree, name, shape);
-		if (declNode == null)
-			return Err('could not resolve a function binding for "$name" at $line:$col');
-		final decl:QueryNode = declNode;
+		final declNode: Null<QueryNode> = CallSites.resolveFnDecl(cursorNode, tree, name, shape);
+		if (declNode == null) return Err('could not resolve a function binding for "$name" at $line:$col');
+		final decl: QueryNode = declNode;
 		if (!RefactorSupport.FN_DECL_KINDS.contains(decl.kind))
 			return Err('"$name" is not a function (remove-param removes a function parameter)');
-		final declSpan:Null<Span> = decl.span;
-		if (declSpan == null)
-			return Err('"$name" declaration has no source span');
-		final binding:Int = declSpan.from;
+		final declSpan: Null<Span> = decl.span;
+		if (declSpan == null) return Err('"$name" declaration has no source span');
+		final binding: Int = declSpan.from;
 
-		final params:Array<QueryNode> = CallSites.leadingParams(decl);
-		final n:Int = params.length;
-		if (index < 0 || index >= n)
-			return Err('parameter index $index is out of range 0..${n - 1} — "$name" has $n parameter(s)');
-		final target:QueryNode = params[index];
-		final paramNameOpt:Null<String> = target.name;
-		if (paramNameOpt == null)
-			return Err('parameter at index $index of "$name" has no name slot — cannot prove it is unused');
-		final paramName:String = paramNameOpt;
+		final params: Array<QueryNode> = CallSites.leadingParams(decl);
+		final n: Int = params.length;
+		if (index < 0 || index >= n) return Err('parameter index $index is out of range 0..${n - 1} — "$name" has $n parameter(s)');
+		final target: QueryNode = params[index];
+		final paramNameOpt: Null<String> = target.name;
+		if (paramNameOpt == null) return Err('parameter at index $index of "$name" has no name slot — cannot prove it is unused');
+		final paramName: String = paramNameOpt;
 
 		// SAFETY GUARD: refuse if the parameter is still referenced inside
 		// the function declaration's subtree (its body, or a later
@@ -127,14 +126,13 @@ final class RemoveParam {
 		// `Ident` nodes (`'$paramName'`) count — the interpolation form is
 		// easy to miss because it is not an `IdentExpr`. Conservative by
 		// design: over-refusing is safe.
-		if (countParamRefs(decl, paramName) > 0)
-			return Err('parameter "$paramName" is still used in the body — remove its uses first');
+		if (countParamRefs(decl, paramName) > 0) return Err('parameter "$paramName" is still used in the body — remove its uses first');
 
 		// Collect the call sites and prove the set is complete — the SAME
 		// completeness proof `change-sig` uses, because removing a
 		// parameter silently breaks any call we fail to update.
-		final isMethod:Bool = decl.kind != 'LocalFnStmt';
-		final callSites:Array<QueryNode> = switch CallSites.collect(decl, tree, source, name, binding, shape) {
+		final isMethod: Bool = decl.kind != 'LocalFnStmt';
+		final callSites: Array<QueryNode> = switch CallSites.collect(decl, tree, source, name, binding, shape) {
 			case CErr(message): return Err(message);
 			case COk(sites): sites;
 		};
@@ -144,31 +142,33 @@ final class RemoveParam {
 		// cannot have its slot removed unambiguously, so it is a hard
 		// refusal rather than a silent mis-deletion.
 		for (call in callSites) {
-			final argc:Int = call.children.length - 1;
+			final argc: Int = call.children.length - 1;
 			if (argc != n) {
-				final at:String = CallSites.posOf(source, call.span);
+				final at: String = CallSites.posOf(source, call.span);
 				return Err('call at $at has $argc args, expected $n — remove-param cannot update calls with omitted optional arguments');
 			}
 		}
 
 		// Build the slot-removal edits: delete parameter `index` from the
 		// decl and argument `index` from every call.
-		final edits:Array<{span:Span, text:String}> = [];
+		final edits: Array<{ span: Span, text: String }> = [];
 		appendSlotRemoval(edits, source, params, index);
 		for (call in callSites) {
-			final args:Array<QueryNode> = call.children.slice(1);
+			final args: Array<QueryNode> = call.children.slice(1);
 			appendSlotRemoval(edits, source, args, index);
 		}
 
-		final rewritten:String = RefactorSupport.applyEdits(source, edits);
-		if (rewritten == source)
-			return Err('removing parameter $index of "$name" is a no-op');
+		final rewritten: String = RefactorSupport.applyEdits(source, edits);
+		if (rewritten == source) return Err('removing parameter $index of "$name" is a no-op');
 
-		try plugin.parseFile(rewritten)
-			catch (exception:ParseError) return Err('rewritten source does not parse: ${exception.toString()}')
-			catch (exception:Exception) return Err('rewritten source does not parse: ${exception.message}');
+		try
+			plugin.parseFile(rewritten)
+		catch (exception: ParseError)
+			return Err('rewritten source does not parse: ${exception.toString()}')
+		catch (exception: Exception)
+			return Err('rewritten source does not parse: ${exception.message}');
 
-		final advisory:Null<String> = isMethod
+		final advisory: Null<String> = isMethod
 			? 'removed the parameter and updated ${callSites.length} in-file call site(s); if "$name" is called from other files, update those call sites too — cross-file resolution is out of scope'
 			: null;
 		return Ok(rewritten, advisory);
@@ -189,23 +189,25 @@ final class RemoveParam {
 	 * A null span on either the target or the adjacency anchor aborts the
 	 * edit (no removal pushed) rather than splicing a wrong range.
 	 */
-	private static function appendSlotRemoval(edits:Array<{span:Span, text:String}>, source:String, slots:Array<QueryNode>, index:Int):Void {
-		final n:Int = slots.length;
-		final targetSpan:Null<Span> = slots[index].span;
+	private static function appendSlotRemoval(
+		edits: Array<{ span: Span, text: String }>, source: String, slots: Array<QueryNode>, index: Int
+	): Void {
+		final n: Int = slots.length;
+		final targetSpan: Null<Span> = slots[index].span;
 		if (targetSpan == null) return;
-		final target:Span = targetSpan;
+		final target: Span = targetSpan;
 
-		final range:Null<Span> = if (n == 1)
+		final range: Null<Span> = if (n == 1)
 			new Span(target.from, target.to);
 		else if (index == 0) {
-			final nextSpan:Null<Span> = slots[1].span;
+			final nextSpan: Null<Span> = slots[1].span;
 			nextSpan == null ? null : new Span(target.from, nextSpan.from);
 		} else {
-			final prevSpan:Null<Span> = slots[index - 1].span;
+			final prevSpan: Null<Span> = slots[index - 1].span;
 			prevSpan == null ? null : new Span(prevSpan.to, target.to);
 		}
 		if (range == null) return;
-		edits.push({span: range, text: ''});
+		edits.push({ span: range, text: '' });
 	}
 
 	/**
@@ -217,13 +219,14 @@ final class RemoveParam {
 	 * `IdentExpr` arm; double-quoted `"$name"` is a literal (no interpolation
 	 * in Haxe) and correctly contributes nothing.
 	 */
-	private static function countParamRefs(node:QueryNode, name:String):Int {
-		var count:Int = 0;
-		function walk(n:QueryNode):Void {
+	private static function countParamRefs(node: QueryNode, name: String): Int {
+		var count: Int = 0;
+		function walk(n: QueryNode): Void {
 			if ((n.kind == 'IdentExpr' || n.kind == 'Ident') && n.name == name) count++;
 			for (c in n.children) walk(c);
 		}
 		walk(node);
 		return count;
 	}
+
 }

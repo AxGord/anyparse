@@ -16,4 +16,5 @@ enum abstract HxFormatSameLinePolicy(String) to String {
 	final Keep = 'keep';
 
 	final FitLine = 'fitLine';
+
 }

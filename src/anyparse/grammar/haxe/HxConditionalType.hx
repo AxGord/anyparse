@@ -48,7 +48,7 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxConditionalType = {
-	var cond:HxPpCondLit;
-	@:trailOpt(';') var type:HxType;
-	@:optional @:kw('#else') var elseClause:Null<HxConditionalTypeElse>;
+	var cond: HxPpCondLit;
+	@:trailOpt(';') var type: HxType;
+	@:optional @:kw('#else') var elseClause: Null<HxConditionalTypeElse>;
 };

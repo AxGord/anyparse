@@ -18,6 +18,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxAnonFieldBody = {
-	var name:HxIdentLit;
-	@:fmt(typeHintColon) @:lead(':') var type:HxType;
+	var name: HxIdentLit;
+	@:fmt(typeHintColon) @:lead(':') var type: HxType;
 }

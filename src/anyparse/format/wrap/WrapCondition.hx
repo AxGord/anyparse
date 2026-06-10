@@ -9,6 +9,6 @@ package anyparse.format.wrap;
  * "would-overflow-flat" signal computed by the writer per-call.
  */
 typedef WrapCondition = {
-	var cond:WrapConditionType;
-	var value:Int;
+	var cond: WrapConditionType;
+	var value: Int;
 };

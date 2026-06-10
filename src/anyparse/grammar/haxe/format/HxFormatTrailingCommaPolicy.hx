@@ -15,4 +15,5 @@ enum abstract HxFormatTrailingCommaPolicy(String) to String {
 	final Keep = 'keep';
 
 	final Ignore = 'ignore';
+
 }

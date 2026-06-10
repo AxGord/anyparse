@@ -18,11 +18,13 @@ package anyparse.runtime;
  *   underlying storage where that is safe.
  */
 interface Input {
-	var length(get, never):Int;
 
-	function charCodeAt(pos:Int):Int;
+	var length(get, never): Int;
 
-	function substring(from:Int, to:Int):String;
+	function charCodeAt(pos: Int): Int;
 
-	function bytes(from:Int, to:Int):haxe.io.Bytes;
+	function substring(from: Int, to: Int): String;
+
+	function bytes(from: Int, to: Int): haxe.io.Bytes;
+
 }

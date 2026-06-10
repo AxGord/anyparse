@@ -110,10 +110,11 @@ package anyparse.grammar.haxe;
 @:peg
 @:fmt(preWrite(HaxeTypeRewrites.arrowFnOldStyleRewrite))
 enum HxType {
-	Named(ref:HxTypeRef);
+
+	Named(ref: HxTypeRef);
 
 	@:lead("$")
-	DollarType(name:HxIdentLit);
+	DollarType(name: HxIdentLit);
 
 	/**
 	 * Optional-argument marker in a curried (Haxe-3) function type:
@@ -140,7 +141,7 @@ enum HxType {
 	 * branch covers only the curried `->`-chained shape.
 	 */
 	@:lead('?')
-	OptionalArg(inner:HxType);
+	OptionalArg(inner: HxType);
 
 	/**
 	 * Constant string literal in a type-parameter slot —
@@ -156,7 +157,7 @@ enum HxType {
 	 * current skip-parse fixture and stay deferred to a follow-up slice
 	 * if they ever land in the corpus.
 	 */
-	ConstStringType(v:HxDoubleStringLit);
+	ConstStringType(v: HxDoubleStringLit);
 
 	/**
 	 * Macro-expression bracket list in a type-parameter slot —
@@ -182,13 +183,13 @@ enum HxType {
 	 * completeness leftover).
 	 */
 	@:trivia @:lead('[') @:trail(']') @:sep(',')
-	BracketExprListType(elems:Array<HxExpr>);
+	BracketExprListType(elems: Array<HxExpr>);
 
 	@:kw('#if') @:trail('#end') @:fmt(spaceBeforeTrail)
-	ConditionalType(c:HxConditionalType);
+	ConditionalType(c: HxConditionalType);
 
 	@:infix('->', 0, 'Right') @:fmt(functionTypeHaxe3)
-	Arrow(left:HxType, right:HxType);
+	Arrow(left: HxType, right: HxType);
 
 	/**
 	 * `@:fmt(typedefBodyBlanks)` (slice ω-typedef-between-fields) opts this
@@ -200,11 +201,14 @@ enum HxType {
 	 * in the `@:sep`-Star force-multi branch — without touching inline
 	 * anon-type uses (`var x:{a:Int}`), which never carry the flag.
 	 */
-	@:trivia @:lead('{') @:trail('}') @:sep(',') @:sepAlt(';') @:fmt(anonTypeBracesOpen, anonTypeBracesClose, wrapRules('anonTypeWrap'), leftCurly('anonTypeLeftCurly'), rightCurly('anonTypeRightCurly'), beforeDocCommentEmptyLines, forceMultiInTypedef, keepCurlyBlanks, typedefBodyBlanks, groupRestProbe)
-	Anon(fields:Array<HxAnonMember>);
+	@:trivia @:lead('{') @:trail('}') @:sep(',') @:sepAlt(';') @:fmt(anonTypeBracesOpen, anonTypeBracesClose, wrapRules('anonTypeWrap'),
+		leftCurly('anonTypeLeftCurly'), rightCurly('anonTypeRightCurly'), beforeDocCommentEmptyLines, forceMultiInTypedef,
+		keepCurlyBlanks, typedefBodyBlanks, groupRestProbe)
+	Anon(fields: Array<HxAnonMember>);
 
-	ArrowFn(fn:HxArrowFnType);
+	ArrowFn(fn: HxArrowFnType);
 
 	@:wrap('(', ')')
-	Parens(inner:HxType);
+	Parens(inner: HxType);
+
 }

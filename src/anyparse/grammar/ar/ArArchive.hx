@@ -11,5 +11,5 @@ package anyparse.grammar.ar;
 @:schema(anyparse.format.binary.ArFormat)
 @:magic("!<arch>\n")
 typedef ArArchive = {
-	var entries:Array<ArEntry>;
+	var entries: Array<ArEntry>;
 };

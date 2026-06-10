@@ -21,28 +21,34 @@ using anyparse.macro.MetaInspect;
  */
 class BinaryWriterLowering {
 
-	private final shape:ShapeBuilder.ShapeResult;
+	private final shape: ShapeBuilder.ShapeResult;
 
-	public function new(shape:ShapeBuilder.ShapeResult) {
+	public function new(shape: ShapeBuilder.ShapeResult) {
 		this.shape = shape;
 	}
 
-	public function generate():Array<WriterLowering.WriterRule> {
+	public function generate(): Array<WriterLowering.WriterRule> {
 		return [for (typePath => node in shape.rules) lowerRule(typePath, node)];
 	}
 
-	private function lowerRule(typePath:String, node:ShapeNode):WriterLowering.WriterRule {
-		final simple:String = simpleName(typePath);
-		final fnName:String = 'write$simple';
-		final valueCT:ComplexType = TPath({pack: packOf(typePath), name: simple, params: []});
+	private function lowerRule(typePath: String, node: ShapeNode): WriterLowering.WriterRule {
+		final simple: String = simpleName(typePath);
+		final fnName: String = 'write$simple';
+		final valueCT: ComplexType = TPath({ pack: packOf(typePath), name: simple, params: [] });
 
-		final body:Expr = switch node.kind {
+		final body: Expr = switch node.kind {
 			case Seq: lowerStruct(node, typePath);
 			case _:
 				Context.fatalError('BinaryWriterLowering: cannot lower ${node.kind} for $typePath', Context.currentPos());
 				throw 'unreachable';
 		};
-		return {fnName: fnName, valueCT: valueCT, body: body, hasCtxPrec: false, isBinary: true};
+		return {
+			fnName: fnName,
+			valueCT: valueCT,
+			body: body,
+			hasCtxPrec: false,
+			isBinary: true
+		};
 	}
 
 	/**
@@ -60,33 +66,29 @@ class BinaryWriterLowering {
 	 * Typedef-level: `@:magic` emits a prefix before the loop; `@:align`
 	 * emits padding after the loop.
 	 */
-	private function lowerStruct(node:ShapeNode, typePath:String):Expr {
-		final steps:Array<Expr> = [];
+	private function lowerStruct(node: ShapeNode, typePath: String): Expr {
+		final steps: Array<Expr> = [];
 
 		// @:magic prefix
-		final magic:Null<String> = node.annotations.get('bin.magic');
-		if (magic != null)
-			steps.push(macro output.writeString($v{magic}));
+		final magic: Null<String> = node.annotations.get('bin.magic');
+		if (magic != null) steps.push(macro output.writeString($v{magic}));
 
 		for (child in node.children) {
-			final fieldName:Null<String> = child.annotations.get('base.fieldName');
-			if (fieldName == null)
-				Context.fatalError('BinaryWriterLowering: struct field missing base.fieldName', Context.currentPos());
+			final fieldName: Null<String> = child.annotations.get('base.fieldName');
+			if (fieldName == null) Context.fatalError('BinaryWriterLowering: struct field missing base.fieldName', Context.currentPos());
 
-			final fieldAccess:Expr = {
+			final fieldAccess: Expr = {
 				expr: EField(macro value, fieldName),
 				pos: Context.currentPos(),
 			};
 
 			// @:length — write length-prefix bytes before the lead/field.
-			final lenPrefix:Null<{width:Int, encoding:String}> = child.annotations.get('bin.lengthPrefix');
-			if (lenPrefix != null)
-				emitLengthPrefix(lenPrefix.width, lenPrefix.encoding, fieldAccess, steps);
+			final lenPrefix: Null<{ width: Int, encoding: String }> = child.annotations.get('bin.lengthPrefix');
+			if (lenPrefix != null) emitLengthPrefix(lenPrefix.width, lenPrefix.encoding, fieldAccess, steps);
 
 			// @:lead — constant prefix literal.
-			final leadText:Null<String> = child.readMetaString(':lead');
-			if (leadText != null)
-				steps.push(macro output.writeString($v{leadText}));
+			final leadText: Null<String> = child.readMetaString(':lead');
+			if (leadText != null) steps.push(macro output.writeString($v{leadText}));
 
 			switch child.kind {
 				case Terminal:
@@ -94,23 +96,19 @@ class BinaryWriterLowering {
 				case Star:
 					emitStarField(child, typePath, fieldAccess, steps);
 				case _:
-					Context.fatalError(
-						'BinaryWriterLowering: struct field kind ${child.kind} not supported',
-						Context.currentPos()
-					);
+					Context.fatalError('BinaryWriterLowering: struct field kind ${child.kind} not supported', Context.currentPos());
 			}
 
 			// @:trail — constant suffix literal.
-			final trailText:Null<String> = child.readMetaString(':trail');
-			if (trailText != null)
-				steps.push(macro output.writeString($v{trailText}));
+			final trailText: Null<String> = child.readMetaString(':trail');
+			if (trailText != null) steps.push(macro output.writeString($v{trailText}));
 		}
 
 		// @:align padding
-		final align:Null<Int> = node.annotations.get('bin.align');
+		final align: Null<Int> = node.annotations.get('bin.align');
 		if (align != null) {
 			steps.push(macro {
-				final _rem:Int = output.length % $v{align};
+				final _rem: Int = output.length % $v{align};
 				if (_rem != 0) output.writeByte(0x0A);
 			});
 		}
@@ -118,38 +116,33 @@ class BinaryWriterLowering {
 		return macro $b{steps};
 	}
 
-	private static function emitTerminalField(child:ShapeNode, fieldName:String, fieldAccess:Expr, steps:Array<Expr>):Void {
-		final binFixedLen:Null<Int> = child.annotations.get('bin.fixedLen');
-		final binEncoding:Null<String> = child.annotations.get('bin.encoding');
-		final binDataRef:Null<String> = child.annotations.get('bin.dataRef');
-		final lenPrefix:Null<{width:Int, encoding:String}> = child.annotations.get('bin.lengthPrefix');
+	private static function emitTerminalField(child: ShapeNode, fieldName: String, fieldAccess: Expr, steps: Array<Expr>): Void {
+		final binFixedLen: Null<Int> = child.annotations.get('bin.fixedLen');
+		final binEncoding: Null<String> = child.annotations.get('bin.encoding');
+		final binDataRef: Null<String> = child.annotations.get('bin.dataRef');
+		final lenPrefix: Null<{ width: Int, encoding: String }> = child.annotations.get('bin.lengthPrefix');
 		if (lenPrefix != null) {
 			steps.push(macro output.write($fieldAccess));
 		} else if (binFixedLen != null && binEncoding != null) {
-			final encodeExpr:Expr = makeIntEncodeExpr(binEncoding);
-			final overflowMsg:String = 'int field "$fieldName" exceeds width ${binFixedLen}';
+			final encodeExpr: Expr = makeIntEncodeExpr(binEncoding);
+			final overflowMsg: String = 'int field "$fieldName" exceeds width ${binFixedLen}';
 			steps.push(macro {
-				final _v:Int = $fieldAccess;
-				final _raw:String = $encodeExpr;
-				if (_raw.length > $v{binFixedLen})
-					throw new haxe.Exception($v{overflowMsg});
+				final _v: Int = $fieldAccess;
+				final _raw: String = $encodeExpr;
+				if (_raw.length > $v{binFixedLen}) throw new haxe.Exception($v{overflowMsg});
 				output.writeString(StringTools.rpad(_raw, ' ', $v{binFixedLen}));
 			});
 		} else if (binFixedLen != null) {
-			final overflowMsg:String = 'string field "$fieldName" exceeds width ${binFixedLen}';
+			final overflowMsg: String = 'string field "$fieldName" exceeds width ${binFixedLen}';
 			steps.push(macro {
-				final _s:String = $fieldAccess;
-				if (_s.length > $v{binFixedLen})
-					throw new haxe.Exception($v{overflowMsg});
+				final _s: String = $fieldAccess;
+				if (_s.length > $v{binFixedLen}) throw new haxe.Exception($v{overflowMsg});
 				output.writeString(StringTools.rpad(_s, ' ', $v{binFixedLen}));
 			});
 		} else if (binDataRef != null) {
 			steps.push(macro output.write($fieldAccess));
 		} else {
-			Context.fatalError(
-				'BinaryWriterLowering: Terminal field "$fieldName" requires @:bin or @:length',
-				Context.currentPos()
-			);
+			Context.fatalError('BinaryWriterLowering: Terminal field "$fieldName" requires @:bin or @:length', Context.currentPos());
 		}
 	}
 
@@ -158,12 +151,12 @@ class BinaryWriterLowering {
 	 * Bytes-field's `length`, encode as ASCII, right-pad with spaces to
 	 * N, write.
 	 */
-	private static function emitLengthPrefix(width:Int, encoding:String, fieldAccess:Expr, steps:Array<Expr>):Void {
-		final encodeExpr:Expr = makeIntEncodeExpr(encoding);
-		final overflowMsg:String = 'length prefix exceeds width $width';
+	private static function emitLengthPrefix(width: Int, encoding: String, fieldAccess: Expr, steps: Array<Expr>): Void {
+		final encodeExpr: Expr = makeIntEncodeExpr(encoding);
+		final overflowMsg: String = 'length prefix exceeds width $width';
 		steps.push(macro {
-			final _v:Int = $fieldAccess.length;
-			final _raw:String = $encodeExpr;
+			final _v: Int = $fieldAccess.length;
+			final _raw: String = $encodeExpr;
 			if (_raw.length > $v{width}) throw new haxe.Exception($v{overflowMsg});
 			output.writeString(StringTools.rpad(_raw, ' ', $v{width}));
 		});
@@ -175,20 +168,21 @@ class BinaryWriterLowering {
 	 * runs an inline conversion loop (Haxe has no built-in octal
 	 * formatter).
 	 */
-	private static function makeIntEncodeExpr(encoding:String):Expr {
+	private static function makeIntEncodeExpr(encoding: String): Expr {
 		return switch encoding {
 			case 'Dec': macro Std.string(_v);
 			case 'Oct':
 				macro {
-					if (_v < 0)
-						throw new haxe.Exception('negative int cannot be encoded as octal');
-					var _rem:Int = _v;
-					var _out:String = '';
-					if (_rem == 0) _out = '0';
-					else while (_rem > 0) {
-						_out = String.fromCharCode('0'.code + (_rem & 7)) + _out;
-						_rem = _rem >>> 3;
-					}
+					if (_v < 0) throw new haxe.Exception('negative int cannot be encoded as octal');
+					var _rem: Int = _v;
+					var _out: String = '';
+					if (_rem == 0)
+						_out = '0';
+					else
+						while (_rem > 0) {
+							_out = String.fromCharCode('0'.code + (_rem & 7)) + _out;
+							_rem = _rem >>> 3;
+						}
 					_out;
 				};
 			case _:
@@ -197,19 +191,18 @@ class BinaryWriterLowering {
 		};
 	}
 
-	private static function emitStarField(child:ShapeNode, typePath:String, fieldAccess:Expr, steps:Array<Expr>):Void {
-		final inner:ShapeNode = child.children[0];
-		if (inner.kind != Ref)
-			Context.fatalError('BinaryWriterLowering: Star field must contain a Ref', Context.currentPos());
-		final elemRefName:String = inner.annotations.get('base.ref');
-		final elemFn:String = 'write${simpleName(elemRefName)}';
-		final elemCall:Expr = {
+	private static function emitStarField(child: ShapeNode, typePath: String, fieldAccess: Expr, steps: Array<Expr>): Void {
+		final inner: ShapeNode = child.children[0];
+		if (inner.kind != Ref) Context.fatalError('BinaryWriterLowering: Star field must contain a Ref', Context.currentPos());
+		final elemRefName: String = inner.annotations.get('base.ref');
+		final elemFn: String = 'write${simpleName(elemRefName)}';
+		final elemCall: Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _arr[_i], macro output]),
 			pos: Context.currentPos(),
 		};
 		steps.push(macro {
 			final _arr = $fieldAccess;
-			var _i:Int = 0;
+			var _i: Int = 0;
 			while (_i < _arr.length) {
 				$elemCall;
 				_i++;
@@ -219,14 +212,15 @@ class BinaryWriterLowering {
 
 	// -------- helpers --------
 
-	private static function simpleName(typePath:String):String {
-		final idx:Int = typePath.lastIndexOf('.');
+	private static function simpleName(typePath: String): String {
+		final idx: Int = typePath.lastIndexOf('.');
 		return idx == -1 ? typePath : typePath.substring(idx + 1);
 	}
 
-	private static function packOf(typePath:String):Array<String> {
-		final idx:Int = typePath.lastIndexOf('.');
+	private static function packOf(typePath: String): Array<String> {
+		final idx: Int = typePath.lastIndexOf('.');
 		return idx == -1 ? [] : typePath.substring(0, idx).split('.');
 	}
+
 }
 #end

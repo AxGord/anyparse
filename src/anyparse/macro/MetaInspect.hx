@@ -29,8 +29,8 @@ final class MetaInspect {
 	 * True when the node carries the named metadata entry. The entry's
 	 * params are not inspected — presence alone is the signal.
 	 */
-	public static function hasMeta(node:ShapeNode, tag:String):Bool {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
+	public static function hasMeta(node: ShapeNode, tag: String): Bool {
+		final meta: Null<Metadata> = node.annotations.get('base.meta');
 		if (meta == null) return false;
 		for (entry in meta) if (entry.name == tag) return true;
 		return false;
@@ -41,8 +41,8 @@ final class MetaInspect {
 	 * entry. Returns null when the entry is absent, has no params, has
 	 * more than one param, or its single param is not a string literal.
 	 */
-	public static function readMetaString(node:ShapeNode, tag:String):Null<String> {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
+	public static function readMetaString(node: ShapeNode, tag: String): Null<String> {
+		final meta: Null<Metadata> = node.annotations.get('base.meta');
 		if (meta == null) return null;
 		for (entry in meta) if (entry.name == tag) {
 			if (entry.params.length != 1) return null;
@@ -60,15 +60,17 @@ final class MetaInspect {
 	 * params, or any param is not a string literal. Multi-arg sibling
 	 * of `readMetaString` for tags like `@:absentOn('a', 'b', ')')`.
 	 */
-	public static function readMetaStringArgs(node:ShapeNode, tag:String):Null<Array<String>> {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
+	public static function readMetaStringArgs(node: ShapeNode, tag: String): Null<Array<String>> {
+		final meta: Null<Metadata> = node.annotations.get('base.meta');
 		if (meta == null) return null;
 		for (entry in meta) if (entry.name == tag) {
 			if (entry.params.length == 0) return null;
-			final out:Array<String> = [];
+			final out: Array<String> = [];
 			for (p in entry.params) switch p.expr {
-				case EConst(CString(s, _)): out.push(s);
-				case _: return null;
+				case EConst(CString(s, _)):
+					out.push(s);
+				case _:
+					return null;
 			}
 			return out;
 		}
@@ -81,13 +83,15 @@ final class MetaInspect {
 	 * or as the callee of an `ECall` (knob form, `@:fmt(bodyPolicy('x'))`).
 	 * Either form counts as flag presence.
 	 */
-	public static function fmtHasFlag(node:ShapeNode, name:String):Bool {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
+	public static function fmtHasFlag(node: ShapeNode, name: String): Bool {
+		final meta: Null<Metadata> = node.annotations.get('base.meta');
 		if (meta == null) return false;
 		for (entry in meta) if (entry.name == ':fmt') {
 			for (param in entry.params) switch param.expr {
-				case EConst(CIdent(id)) if (id == name): return true;
-				case ECall({expr: EConst(CIdent(id))}, _) if (id == name): return true;
+				case EConst(CIdent(id)) if (id == name):
+					return true;
+				case ECall({ expr: EConst(CIdent(id)) }, _) if (id == name):
+					return true;
 				case _:
 			}
 		}
@@ -100,12 +104,12 @@ final class MetaInspect {
 	 * value. Returns null when no matching entry is present or when
 	 * the argument shape is not a single string literal.
 	 */
-	public static function fmtReadString(node:ShapeNode, name:String):Null<String> {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
+	public static function fmtReadString(node: ShapeNode, name: String): Null<String> {
+		final meta: Null<Metadata> = node.annotations.get('base.meta');
 		if (meta == null) return null;
 		for (entry in meta) if (entry.name == ':fmt') {
 			for (param in entry.params) switch param.expr {
-				case ECall({expr: EConst(CIdent(id))}, [{expr: EConst(CString(s, _))}]) if (id == name):
+				case ECall({ expr: EConst(CIdent(id)) }, [{ expr: EConst(CString(s, _)) }]) if (id == name):
 					return s;
 				case _:
 			}
@@ -119,16 +123,18 @@ final class MetaInspect {
 	 * values in source order. Returns null when the entry is absent or
 	 * any arg is not a string literal.
 	 */
-	public static function fmtReadStringArgs(node:ShapeNode, name:String):Null<Array<String>> {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
+	public static function fmtReadStringArgs(node: ShapeNode, name: String): Null<Array<String>> {
+		final meta: Null<Metadata> = node.annotations.get('base.meta');
 		if (meta == null) return null;
 		for (entry in meta) if (entry.name == ':fmt') {
 			for (param in entry.params) switch param.expr {
-				case ECall({expr: EConst(CIdent(id))}, args) if (id == name):
-					final out:Array<String> = [];
+				case ECall({ expr: EConst(CIdent(id)) }, args) if (id == name):
+					final out: Array<String> = [];
 					for (arg in args) switch arg.expr {
-						case EConst(CString(s, _)): out.push(s);
-						case _: return null;
+						case EConst(CString(s, _)):
+							out.push(s);
+						case _:
+							return null;
 					}
 					return out;
 				case _:
@@ -144,24 +150,28 @@ final class MetaInspect {
 	 * tuples. Entries with non-string args are skipped silently — same
 	 * lenient policy as the single-entry helper.
 	 */
-	public static function fmtReadStringArgsAll(node:ShapeNode, name:String):Array<Array<String>> {
-		final out:Array<Array<String>> = [];
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
+	public static function fmtReadStringArgsAll(node: ShapeNode, name: String): Array<Array<String>> {
+		final out: Array<Array<String>> = [];
+		final meta: Null<Metadata> = node.annotations.get('base.meta');
 		if (meta == null) return out;
 		for (entry in meta) if (entry.name == ':fmt') {
 			for (param in entry.params) switch param.expr {
-				case ECall({expr: EConst(CIdent(id))}, args) if (id == name):
-					final group:Array<String> = [];
-					var ok:Bool = true;
+				case ECall({ expr: EConst(CIdent(id)) }, args) if (id == name):
+					final group: Array<String> = [];
+					var ok: Bool = true;
 					for (arg in args) switch arg.expr {
-						case EConst(CString(s, _)): group.push(s);
-						case _: ok = false;
+						case EConst(CString(s, _)):
+							group.push(s);
+						case _:
+							ok = false;
 					}
-					if (ok) out.push(group);
+					if (ok)
+						out.push(group);
 				case _:
 			}
 		}
 		return out;
 	}
+
 }
 #end

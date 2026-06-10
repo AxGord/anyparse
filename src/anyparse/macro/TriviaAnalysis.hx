@@ -37,7 +37,7 @@ import haxe.macro.Expr;
  */
 class TriviaAnalysis {
 
-	public static function run(result:ShapeBuilder.ShapeResult):Void {
+	public static function run(result: ShapeBuilder.ShapeResult): Void {
 		for (name => node in result.rules) markStarsWithTrivia(node);
 		// ω-postfix-starsuffix-trivia: postfix Star-suffix branches
 		// (e.g. `@:postfix('(', ')') @:sep(',') Call(operand, args)`)
@@ -52,11 +52,11 @@ class TriviaAnalysis {
 		// `feedback_trivia_not_freebie.md`). The dedicated
 		// `lowerPostfixStar` writer path is unaffected.
 		for (name => node in result.rules) markPostfixStarSuffix(node);
-		final directlyBearing:Map<String, Bool> = [];
+		final directlyBearing: Map<String, Bool> = [];
 		for (name => node in result.rules) directlyBearing[name] = hasAnyTriviaStar(node);
-		final bearing:Map<String, Bool> = [];
+		final bearing: Map<String, Bool> = [];
 		for (name => flag in directlyBearing) if (flag) bearing[name] = true;
-		var changed:Bool = true;
+		var changed: Bool = true;
 		while (changed) {
 			changed = false;
 			for (name => node in result.rules) {
@@ -71,7 +71,7 @@ class TriviaAnalysis {
 		for (name => node in result.rules) node.annotations.set('trivia.bearing', bearing.exists(name));
 	}
 
-	private static function markStarsWithTrivia(node:ShapeNode):Void {
+	private static function markStarsWithTrivia(node: ShapeNode): Void {
 		// Struct-field case: `@:trivia var decls:Array<HxDecl>`.
 		// `shapeField` attaches the field-level meta directly to the Star
 		// node (the `Array<T>` result of `shapeFieldType`), so detection
@@ -87,55 +87,56 @@ class TriviaAnalysis {
 		// Multiple Stars on the same branch would need a named-arg form
 		// (`@:trivia(stmts)`), which no current grammar requires.
 		if (node.kind == Seq && hasTrivia(node.annotations.get('base.meta'))) {
-			final stars:Array<ShapeNode> = [for (c in node.children) if (c.kind == Star) c];
+			final stars: Array<ShapeNode> = [for (c in node.children) if (c.kind == Star) c];
 			if (stars.length == 1) stars[0].annotations.set('trivia.starCollects', true);
 		}
 		for (child in node.children) markStarsWithTrivia(child);
 	}
 
-	private static function markPostfixStarSuffix(node:ShapeNode):Void {
+	private static function markPostfixStarSuffix(node: ShapeNode): Void {
 		// Postfix branches live as Seq children of the rule's Alt root.
 		// Detect: branch.base.meta has `:postfix` with 2 args (open, close)
 		// AND children = [Ref operand, Star args]. Mark the Star.
-		if (node.kind == Seq && hasPostfixPair(node.annotations.get('base.meta'))
-			&& node.children.length == 2
-			&& node.children[0].kind == Ref
-			&& node.children[1].kind == Star) {
+		if (
+			node.kind == Seq && hasPostfixPair(node.annotations.get('base.meta')) && node.children.length == 2
+			&& node.children[0].kind == Ref && node.children[1].kind == Star
+		) {
 			node.children[1].annotations.set('trivia.starCollects', true);
 		}
 		for (child in node.children) markPostfixStarSuffix(child);
 	}
 
-	private static function hasPostfixPair(meta:Null<Metadata>):Bool {
+	private static function hasPostfixPair(meta: Null<Metadata>): Bool {
 		if (meta == null) return false;
 		for (e in meta) if (e.name == ':postfix' && e.params.length == 2) return true;
 		return false;
 	}
 
-	private static function hasTrivia(meta:Null<Metadata>):Bool {
+	private static function hasTrivia(meta: Null<Metadata>): Bool {
 		if (meta == null) return false;
 		for (e in meta) if (e.name == ':trivia') return true;
 		return false;
 	}
 
-	private static function hasAnyTriviaStar(node:ShapeNode):Bool {
+	private static function hasAnyTriviaStar(node: ShapeNode): Bool {
 		if (node.kind == Star && node.annotations.get('trivia.starCollects') == true) return true;
 		for (child in node.children) if (hasAnyTriviaStar(child)) return true;
 		return false;
 	}
 
-	private static function collectRefs(node:ShapeNode):Array<String> {
-		final out:Array<String> = [];
+	private static function collectRefs(node: ShapeNode): Array<String> {
+		final out: Array<String> = [];
 		collectRefsInto(node, out);
 		return out;
 	}
 
-	private static function collectRefsInto(node:ShapeNode, out:Array<String>):Void {
+	private static function collectRefsInto(node: ShapeNode, out: Array<String>): Void {
 		if (node.kind == Ref) {
-			final r:Null<String> = node.annotations.get('base.ref');
+			final r: Null<String> = node.annotations.get('base.ref');
 			if (r != null && out.indexOf(r) == -1) out.push(r);
 		}
 		for (child in node.children) collectRefsInto(child, out);
 	}
+
 }
 #end

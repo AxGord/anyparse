@@ -133,7 +133,10 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxIfExpr = {
-	@:lead('(') @:trail(')') var cond:HxExpr;
-	@:trailOpt(';') @:fmt(bodyPolicy('ifBody', 'expressionIfBody'), indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'), noSiblingFallback('ifBody'), inlineBlockBodyIfFlag('expressionIfWithBlocks'), propagateValueIfBranch) var thenBranch:HxExpr;
-	@:optional @:kw('else') @:fmt(bodyPolicy('elseBody', 'expressionElseBody'), sameLine('sameLineExpressionElse'), shapeAware, elseIf, inlineBlockBodyIfFlag('expressionIfWithBlocks'), propagateValueIfBranch) var elseBranch:Null<HxExpr>;
+	@:lead('(') @:trail(')') var cond: HxExpr;
+	@:trailOpt(';') @:fmt(bodyPolicy('ifBody', 'expressionIfBody'),
+		indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'), noSiblingFallback('ifBody'),
+		inlineBlockBodyIfFlag('expressionIfWithBlocks'), propagateValueIfBranch) var thenBranch: HxExpr;
+	@:optional @:kw('else') @:fmt(bodyPolicy('elseBody', 'expressionElseBody'), sameLine('sameLineExpressionElse'), shapeAware, elseIf,
+		inlineBlockBodyIfFlag('expressionIfWithBlocks'), propagateValueIfBranch) var elseBranch: Null<HxExpr>;
 };

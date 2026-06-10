@@ -53,9 +53,7 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxDefaultBranch = {
-	@:lead(':') @:trivia @:tryparse @:fmt(
-		nestBody, bodyPolicy('caseBody', 'expressionCase'),
-		flatChildOpt('ifBody=expressionCase', 'elseBody=expressionCase', 'forBody=expressionCase'),
-		propagateExprPosition, clearExprPositionNonTail, refuseFlatOnComplexExpr
-	) var stmts:Array<HxStatement>;
+	@:lead(':') @:trivia @:tryparse @:fmt(nestBody, bodyPolicy('caseBody', 'expressionCase'),
+		flatChildOpt('ifBody=expressionCase', 'elseBody=expressionCase', 'forBody=expressionCase'), propagateExprPosition,
+		clearExprPositionNonTail, refuseFlatOnComplexExpr) var stmts: Array<HxStatement>;
 };

@@ -22,11 +22,11 @@ package anyparse.query.format.json;
  */
 @:peg @:schema(anyparse.format.text.JsonFormat) @:ws
 typedef AstRefHit = {
-	var file:String;
-	var kind:String;
-	var span:AstSearchSpan;
-	var name:String;
-	@:optional var binding:AstSearchSpan;
-	@:optional var doc:String;
-	@:optional var source:String;
+	var file: String;
+	var kind: String;
+	var span: AstSearchSpan;
+	var name: String;
+	@:optional var binding: AstSearchSpan;
+	@:optional var doc: String;
+	@:optional var source: String;
 };

@@ -19,6 +19,6 @@ package anyparse.grammar.json;
  */
 @:peg
 typedef JEntry = {
-	var key:JStringLit;
-	@:lead(':') var value:JValue;
+	var key: JStringLit;
+	@:lead(':') var value: JValue;
 }

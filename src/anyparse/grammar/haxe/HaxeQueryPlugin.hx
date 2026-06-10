@@ -62,16 +62,33 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 	 * `Required` / `Optional` entries above. Reached only once
 	 * `appendNodes` descends the anon `type` (see `isAnonType`).
 	 */
-	private static final DECL_HOST_KINDS:Array<String> = [
-		'VarDecl', 'FnDecl',
-		'ClassDecl', 'InterfaceDecl', 'EnumDecl', 'AbstractDecl', 'TypedefDecl',
-		'VarMember', 'FinalMember', 'FnMember', 'FinalModifiedMember',
-		'VarStmt', 'FinalStmt', 'StaticVarStmt', 'StaticFinalStmt',
-		'VarExpr', 'FinalExpr',
-		'Required', 'Optional', 'Rest',
+	private static final DECL_HOST_KINDS: Array<String> = [
+		'VarDecl',
+		'FnDecl',
+		'ClassDecl',
+		'InterfaceDecl',
+		'EnumDecl',
+		'AbstractDecl',
+		'TypedefDecl',
+		'VarMember',
+		'FinalMember',
+		'FnMember',
+		'FinalModifiedMember',
+		'VarStmt',
+		'FinalStmt',
+		'StaticVarStmt',
+		'StaticFinalStmt',
+		'VarExpr',
+		'FinalExpr',
+		'Required',
+		'Optional',
+		'Rest',
 		'LambdaParam',
-		'SimpleCtor', 'ParamCtor',
-		'VarField', 'FinalField', 'FnField',
+		'SimpleCtor',
+		'ParamCtor',
+		'VarField',
+		'FinalField',
+		'FnField',
 	];
 
 	/**
@@ -91,8 +108,7 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 	 * / `FinalField`) are deliberately a separate family: a different
 	 * keyword with immutability semantics, not in this gap's scope.
 	 */
-	private static final SEARCH_KIND_EQUIVALENCE:KindEquivalence =
-		new KindEquivalence([['VarDecl', 'VarMember', 'VarStmt']]);
+	private static final SEARCH_KIND_EQUIVALENCE: KindEquivalence = new KindEquivalence([['VarDecl', 'VarMember', 'VarStmt']]);
 
 	/**
 	 * `--select` kind-equivalence: folds the `final` modifier-wrapper
@@ -104,18 +120,19 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 	 * kinds; only the final-wrapper folding is shared. NOT the Var/Final
 	 * family (a `final` FIELD is a separate kind by design, not a wrapper).
 	 */
-	private static final SELECT_KIND_EQUIVALENCE:KindEquivalence =
-		new KindEquivalence([['ClassDecl', 'ClassForm'], ['FnMember', 'FinalModifiedMember']]);
+	private static final SELECT_KIND_EQUIVALENCE: KindEquivalence = new KindEquivalence(
+		[['ClassDecl', 'ClassForm'], ['FnMember', 'FinalModifiedMember']]
+	);
 
 	public function new() {}
 
-	public function langName():String return 'haxe';
+	public function langName(): String return 'haxe';
 
-	public function parseFile(source:String):QueryNode {
+	public function parseFile(source: String): QueryNode {
 		return buildTree(source, false);
 	}
 
-	public function parseFileTypeRefs(source:String):QueryNode {
+	public function parseFileTypeRefs(source: String): QueryNode {
 		return buildTree(source, true);
 	}
 
@@ -131,9 +148,9 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 	 * --writer-output` for writer-bug probes without going through the full
 	 * test runner.
 	 */
-	public function writeRoundTrip(source:String, ?optsJson:String):Null<String> {
-		final tree:Dynamic = HaxeModuleTriviaParser.parse(source);
-		final opts:HxModuleWriteOptions = optsJson == null
+	public function writeRoundTrip(source: String, ?optsJson: String): Null<String> {
+		final tree: Dynamic = HaxeModuleTriviaParser.parse(source);
+		final opts: HxModuleWriteOptions = optsJson == null
 			? HaxeFormat.instance.defaultWriteOptions
 			: HaxeFormatConfigLoader.loadHxFormatJson(optsJson);
 		return HaxeModuleTriviaWriter.write(tree, opts);
@@ -155,9 +172,9 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 	 * `HaxeFormatConfigLoader.loadHxFormatJson`; `null` keeps the
 	 * defaults.
 	 */
-	public function writeRoundTripPlain(source:String, ?optsJson:String):Null<String> {
-		final tree:Dynamic = HaxeModuleParser.parse(source);
-		final opts:HxModuleWriteOptions = optsJson == null
+	public function writeRoundTripPlain(source: String, ?optsJson: String): Null<String> {
+		final tree: Dynamic = HaxeModuleParser.parse(source);
+		final opts: HxModuleWriteOptions = optsJson == null
 			? HaxeFormat.instance.defaultWriteOptions
 			: HaxeFormatConfigLoader.loadHxFormatJson(optsJson);
 		return HxModuleWriter.write(tree, opts);
@@ -171,19 +188,19 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 	 * fixture the harness can attempt to format (the byte-comparison
 	 * may still fail downstream, but the parse no longer blocks).
 	 */
-	public function reconParse(source:String):Bool {
+	public function reconParse(source: String): Bool {
 		HaxeModuleTriviaParser.parse(source);
 		return true;
 	}
 
-	private function buildTree(source:String, withTypeRefs:Bool):QueryNode {
-		final root:Dynamic = HaxeModuleSpanParser.parse(source);
-		final children:Array<QueryNode> = [];
+	private function buildTree(source: String, withTypeRefs: Bool): QueryNode {
+		final root: Dynamic = HaxeModuleSpanParser.parse(source);
+		final children: Array<QueryNode> = [];
 		appendNodes(Reflect.field(root, 'decls'), children, withTypeRefs);
 		return new QueryNode('module', null, orderBySpan(children));
 	}
 
-	public function typeRefShape():TypeRefShape {
+	public function typeRefShape(): TypeRefShape {
 		// Type-position references reach the `parseFileTypeRefs` tree via
 		// two complementary kinds, and `uses` must match both for a
 		// complete blast-radius answer:
@@ -202,7 +219,7 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		return { typeRefKinds: ['TypeRef', 'Named', 'NewExpr'] };
 	}
 
-	public function refShape():RefShape {
+	public function refShape(): RefShape {
 		// Identifier references come exclusively through `HxExpr.IdentExpr(v)`
 		// — the bare-identifier branch of the expression enum. Field-access
 		// (`obj.foo`), method names, type references, and string-literal
@@ -259,33 +276,58 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 			// (the clause body) and self-binds the exception name into
 			// that frame (see `selfScopeDeclKinds`).
 			scopeKinds: [
-				'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'TypedefDecl',
-				'FnDecl', 'FnExpr', 'FnMember', 'FinalModifiedMember',
-				'ThinParenLambdaExpr', 'ParenLambdaExpr',
-				'BlockBody', 'BlockExpr', 'BlockStmt',
-				'ForStmt', 'ForExpr',
+				'ClassDecl',
+				'InterfaceDecl',
+				'AbstractDecl',
+				'EnumDecl',
+				'TypedefDecl',
+				'FnDecl',
+				'FnExpr',
+				'FnMember',
+				'FinalModifiedMember',
+				'ThinParenLambdaExpr',
+				'ParenLambdaExpr',
+				'BlockBody',
+				'BlockExpr',
+				'BlockStmt',
+				'ForStmt',
+				'ForExpr',
 				'CatchClause',
 			],
 			writeParentKinds: [
 				'Assign',
-				'AddAssign', 'SubAssign', 'MulAssign', 'DivAssign', 'ModAssign',
-				'ShlAssign', 'ShrAssign', 'UShrAssign',
-				'BitOrAssign', 'BitAndAssign', 'BitXorAssign',
-				'NullCoalAssign', 'BoolAndAssign', 'BoolOrAssign',
-				'PreIncr', 'PreDecr', 'PostIncr', 'PostDecr',
+				'AddAssign',
+				'SubAssign',
+				'MulAssign',
+				'DivAssign',
+				'ModAssign',
+				'ShlAssign',
+				'ShrAssign',
+				'UShrAssign',
+				'BitOrAssign',
+				'BitAndAssign',
+				'BitXorAssign',
+				'NullCoalAssign',
+				'BoolAndAssign',
+				'BoolOrAssign',
+				'PreIncr',
+				'PreDecr',
+				'PostIncr',
+				'PostDecr',
 			],
 			// Self-scoped decl kinds: scope-introducers whose own name binds
 			// into the frame they open (the for-loop iterator pattern). Listed
 			// in scopeKinds, absent from declHostKinds — the binding is visible
 			// only inside the loop, not to enclosing-scope siblings.
 			selfScopeDeclKinds: [
-				'ForStmt', 'ForExpr',
+				'ForStmt',
+				'ForExpr',
 				'CatchClause',
 			],
 		};
 	}
 
-	public function metaShape():MetaShape {
+	public function metaShape(): MetaShape {
 		// Annotation nodes come through the three `HxMetadata` enum
 		// ctors: `MetaCall` for the paren-bearing `@:name(args)` form
 		// (its arg expressions are children), `Meta` for the paren-less
@@ -300,31 +342,30 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		};
 	}
 
-	public function selectKindEquivalence():KindEquivalence {
+	public function selectKindEquivalence(): KindEquivalence {
 		return SELECT_KIND_EQUIVALENCE;
 	}
 
-	public function parsePattern(source:String):Pattern {
+	public function parsePattern(source: String): Pattern {
 		// `$X` / `$_` are not valid Haxe identifier prefixes outside string
 		// interpolation, so we substitute them for reserved-identifier
 		// placeholders before parsing and reclassify the resulting leaves
 		// post-parse. The grammar parser stays unmodified.
-		final substituted:String = Metavar.substituteMetavarsHaxe(source);
-		final attempts:Array<{wrap:String->String, extract:QueryNode->Null<QueryNode>, category:PatternCategory}> = [
-			{wrap: src -> src, extract: extractFirstDecl, category: PatternCategory.Decl},
-			{wrap: wrapAsStmt, extract: extractFirstStmt, category: PatternCategory.Stmt},
-			{wrap: wrapAsExpr, extract: extractFirstExpr, category: PatternCategory.Expr},
-			{wrap: wrapAsMetaArgs, extract: extractFirstMeta, category: PatternCategory.MetaArgs},
+		final substituted: String = Metavar.substituteMetavarsHaxe(source);
+		final attempts: Array<{ wrap: String -> String, extract: QueryNode -> Null<QueryNode>, category: PatternCategory }> = [
+			{ wrap: src -> src, extract: extractFirstDecl, category: PatternCategory.Decl },
+			{ wrap: wrapAsStmt, extract: extractFirstStmt, category: PatternCategory.Stmt },
+			{ wrap: wrapAsExpr, extract: extractFirstExpr, category: PatternCategory.Expr },
+			{ wrap: wrapAsMetaArgs, extract: extractFirstMeta, category: PatternCategory.MetaArgs },
 		];
 		for (attempt in attempts) {
-			final wrapped:String = attempt.wrap(substituted);
-			final tree:Null<QueryNode> = try parseFile(wrapped)
-				catch (e:ParseError) null
-				catch (e:Exception) null;
+			final wrapped: String = attempt.wrap(substituted);
+			final tree: Null<QueryNode> = try parseFile(wrapped) catch (e: ParseError) null
+			catch (e: Exception) null;
 			if (tree == null) continue;
-			final extracted:Null<QueryNode> = attempt.extract(tree);
+			final extracted: Null<QueryNode> = attempt.extract(tree);
 			if (extracted == null) continue;
-			final reclassified:QueryNode = Metavar.reclassify(extracted);
+			final reclassified: QueryNode = Metavar.reclassify(extracted);
 			return new Pattern(reclassified, attempt.category, source, SEARCH_KIND_EQUIVALENCE);
 		}
 		// Every attempt's parser error is offset into a synthetic wrapper
@@ -334,11 +375,11 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		throw 'pattern: not valid as a declaration, statement, expression, or metadata argument';
 	}
 
-	private static function wrapAsStmt(src:String):String {
+	private static function wrapAsStmt(src: String): String {
 		return 'class _ApqPattern { static function _apq() { ${trimTrailingSemicolons(src)}; } }';
 	}
 
-	private static function wrapAsExpr(src:String):String {
+	private static function wrapAsExpr(src: String): String {
 		return 'class _ApqPattern { static function _apq() { var _v = ${trimTrailingSemicolons(src)}; } }';
 	}
 
@@ -353,36 +394,38 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 	 * `typedef X = Y;` decl pattern needs its `;`), so the trim is scoped
 	 * to the wrappers only.
 	 */
-	private static function trimTrailingSemicolons(src:String):String {
-		var end:Int = src.length;
+	private static function trimTrailingSemicolons(src: String): String {
+		var end: Int = src.length;
 		while (end > 0) {
-			final c:Int = StringTools.fastCodeAt(src, end - 1);
-			if (c == ';'.code || c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code) end--;
-			else break;
+			final c: Int = StringTools.fastCodeAt(src, end - 1);
+			if (c == ';'.code || c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code)
+				end--;
+			else
+				break;
 		}
 		return src.substring(0, end);
 	}
 
-	private static function wrapAsMetaArgs(src:String):String {
+	private static function wrapAsMetaArgs(src: String): String {
 		return 'class _ApqPattern { $src var _v:Int = 0; }';
 	}
 
-	private static function extractFirstDecl(module:QueryNode):Null<QueryNode> {
+	private static function extractFirstDecl(module: QueryNode): Null<QueryNode> {
 		if (module.children.length == 0) return null;
 		return module.children[0];
 	}
 
-	private static function extractFirstStmt(module:QueryNode):Null<QueryNode> {
+	private static function extractFirstStmt(module: QueryNode): Null<QueryNode> {
 		// module → ClassDecl wrapper → FunctionField → FnDecl struct →
 		// HxFnBody.BlockBody (enum) → HxFnBlock struct (flattened) →
 		// stmts[0]. We navigate by enum kind names; struct envelopes are
 		// transparent in the QueryNode tree.
-		final cls:Null<QueryNode> = findFirstByKind(module, 'ClassDecl');
+		final cls: Null<QueryNode> = findFirstByKind(module, 'ClassDecl');
 		if (cls == null) return null;
-		final block:Null<QueryNode> = findFirstByKind(cls, 'BlockBody');
+		final block: Null<QueryNode> = findFirstByKind(cls, 'BlockBody');
 		if (block == null) return null;
 		if (block.children.length == 0) return null;
-		final first:QueryNode = block.children[0];
+		final first: QueryNode = block.children[0];
 		// A bare expression-statement pattern (`$a + $b`, `$f($_)`,
 		// `trace($_);`) wraps its expression in a synthetic `ExprStmt`
 		// node. Returning that wrapper as the pattern root constrains
@@ -398,10 +441,10 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		return first;
 	}
 
-	private static function extractFirstExpr(module:QueryNode):Null<QueryNode> {
-		final cls:Null<QueryNode> = findFirstByKind(module, 'ClassDecl');
+	private static function extractFirstExpr(module: QueryNode): Null<QueryNode> {
+		final cls: Null<QueryNode> = findFirstByKind(module, 'ClassDecl');
 		if (cls == null) return null;
-		final varStmt:Null<QueryNode> = findFirstByKind(cls, 'VarStmt');
+		final varStmt: Null<QueryNode> = findFirstByKind(cls, 'VarStmt');
 		if (varStmt == null) return null;
 		// VarStmt → HxVarDecl struct (flattened) → init expr is the last
 		// child after name/type. Heuristic: the init is the last enum
@@ -410,37 +453,35 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		return varStmt.children[varStmt.children.length - 1];
 	}
 
-	private static function extractFirstMeta(module:QueryNode):Null<QueryNode> {
-		final cls:Null<QueryNode> = findFirstByKind(module, 'ClassDecl');
+	private static function extractFirstMeta(module: QueryNode): Null<QueryNode> {
+		final cls: Null<QueryNode> = findFirstByKind(module, 'ClassDecl');
 		if (cls == null) return null;
-		return findFirstByKind(cls, 'HxMeta')
-			?? findFirstByKind(cls, 'Meta')
-			?? findFirstByKindPrefix(cls, 'Meta');
+		return findFirstByKind(cls, 'HxMeta') ?? findFirstByKind(cls, 'Meta') ?? findFirstByKindPrefix(cls, 'Meta');
 	}
 
-	private static function findFirstByKind(node:QueryNode, kind:String):Null<QueryNode> {
+	private static function findFirstByKind(node: QueryNode, kind: String): Null<QueryNode> {
 		if (node.kind == kind) return node;
 		for (c in node.children) {
-			final found:Null<QueryNode> = findFirstByKind(c, kind);
+			final found: Null<QueryNode> = findFirstByKind(c, kind);
 			if (found != null) return found;
 		}
 		return null;
 	}
 
-	private static function findFirstByKindPrefix(node:QueryNode, prefix:String):Null<QueryNode> {
+	private static function findFirstByKindPrefix(node: QueryNode, prefix: String): Null<QueryNode> {
 		if (StringTools.startsWith(node.kind, prefix)) return node;
 		for (c in node.children) {
-			final found:Null<QueryNode> = findFirstByKindPrefix(c, prefix);
+			final found: Null<QueryNode> = findFirstByKindPrefix(c, prefix);
 			if (found != null) return found;
 		}
 		return null;
 	}
 
-	private function appendNodes(value:Dynamic, into:Array<QueryNode>, withTypeRefs:Bool):Void {
+	private function appendNodes(value: Dynamic, into: Array<QueryNode>, withTypeRefs: Bool): Void {
 		if (value == null) return;
 		if (value is String) return;
 		if (Std.isOfType(value, Span)) return;
-		final t:Type.ValueType = Type.typeof(value);
+		final t: Type.ValueType = Type.typeof(value);
 		switch t {
 			case TEnum(_):
 				into.push(makeEnumNode(value, withTypeRefs));
@@ -454,19 +495,18 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 				// them as addressable nodes instead of descending
 				// transparently, so decl-bearing transparent structs (catch
 				// clause, lambda param) resolve in `apq refs`.
-				final kindVal:Dynamic = Reflect.hasField(value, '_kind') ? Reflect.field(value, '_kind') : null;
-				final spanVal:Dynamic = Reflect.hasField(value, '_span') ? Reflect.field(value, '_span') : null;
+				final kindVal: Dynamic = Reflect.hasField(value, '_kind') ? Reflect.field(value, '_kind') : null;
+				final spanVal: Dynamic = Reflect.hasField(value, '_span') ? Reflect.field(value, '_span') : null;
 				if (kindVal is String && Std.isOfType(spanVal, Span)) {
-					final kindStr:String = kindVal;
-					final spanObj:Span = cast spanVal;
-					final children:Array<QueryNode> = [];
+					final kindStr: String = kindVal;
+					final spanObj: Span = cast spanVal;
+					final children: Array<QueryNode> = [];
 					for (field in Reflect.fields(value)) {
 						if (field == 'name' || field == '_span' || field == '_kind') continue;
 						// Mirror the generic branch: descend an anon-struct
 						// `type` (decl-host members), skip name-slot type-refs.
 						if (field == 'type' && !isAnonType(Reflect.field(value, 'type'))) {
-							if (withTypeRefs)
-								appendTypeRefs(Reflect.field(value, 'type'), children, spanObj);
+							if (withTypeRefs) appendTypeRefs(Reflect.field(value, 'type'), children, spanObj);
 							continue;
 						}
 						appendNodes(Reflect.field(value, field), children, withTypeRefs);
@@ -486,27 +526,26 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 					// `apq uses`), where the skipped name-slot type is
 					// surfaced as `TypeRef` node(s) instead.
 					if (field == 'type' && !isAnonType(Reflect.field(value, 'type'))) {
-						if (withTypeRefs)
-							appendTypeRefs(Reflect.field(value, 'type'), into, null);
+						if (withTypeRefs) appendTypeRefs(Reflect.field(value, 'type'), into, null);
 						continue;
 					}
 					appendNodes(Reflect.field(value, field), into, withTypeRefs);
 				}
 			case TClass(_):
 				if (Std.isOfType(value, Array)) {
-					final arr:Array<Dynamic> = cast value;
+					final arr: Array<Dynamic> = cast value;
 					for (e in arr) appendNodes(e, into, withTypeRefs);
 				}
 			case _:
 		}
 	}
 
-	private function makeEnumNode(value:Dynamic, withTypeRefs:Bool):QueryNode {
-		final ctor:String = Type.enumConstructor(value);
-		final params:Array<Dynamic> = Type.enumParameters(value);
-		var name:Null<String> = null;
-		var span:Null<Span> = null;
-		final children:Array<QueryNode> = [];
+	private function makeEnumNode(value: Dynamic, withTypeRefs: Bool): QueryNode {
+		final ctor: String = Type.enumConstructor(value);
+		final params: Array<Dynamic> = Type.enumParameters(value);
+		var name: Null<String> = null;
+		var span: Null<Span> = null;
+		final children: Array<QueryNode> = [];
 		for (p in params) {
 			if (Std.isOfType(p, Span)) {
 				span = cast p;
@@ -530,16 +569,16 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 	 * `Anon` is intentionally not handled here: the anon-struct body is
 	 * surfaced by the existing decl-host descent in `appendNodes`.
 	 */
-	private function appendTypeRefs(value:Dynamic, into:Array<QueryNode>, fallbackSpan:Null<Span>):Void {
+	private function appendTypeRefs(value: Dynamic, into: Array<QueryNode>, fallbackSpan: Null<Span>): Void {
 		if (value == null) return;
 		if (value is String) return;
 		if (Std.isOfType(value, Span)) return;
-		final t:Type.ValueType = Type.typeof(value);
+		final t: Type.ValueType = Type.typeof(value);
 		switch t {
 			case TEnum(_):
-				final ctor:String = Type.enumConstructor(value);
-				final params:Array<Dynamic> = Type.enumParameters(value);
-				var span:Null<Span> = fallbackSpan;
+				final ctor: String = Type.enumConstructor(value);
+				final params: Array<Dynamic> = Type.enumParameters(value);
+				var span: Null<Span> = fallbackSpan;
 				for (p in params) if (Std.isOfType(p, Span)) span = cast p;
 				switch ctor {
 					case 'Anon':
@@ -547,16 +586,16 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 					case 'Named' | 'DollarType':
 						for (p in params) {
 							if (Std.isOfType(p, Span)) continue;
-							final nm:Null<String> = extractName(p);
-							if (nm != null && span != null)
-								into.push(new QueryNode('TypeRef', nm, [], span));
+							final nm: Null<String> = extractName(p);
+							if (nm != null && span != null) into.push(new QueryNode('TypeRef', nm, [], span));
 							// recurse type parameters (`Array<HxVarMore>`)
 							appendTypeRefs(p, into, span);
 							break;
 						}
 					case _:
 						// Arrow / ArrowFn / Parens / … — recurse operands
-						for (p in params) if (!Std.isOfType(p, Span)) appendTypeRefs(p, into, span);
+						for (p in params) if (!Std.isOfType(p, Span))
+							appendTypeRefs(p, into, span);
 				}
 			case TObject:
 				if (Reflect.hasField(value, 'node')) {
@@ -572,17 +611,17 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 				}
 			case TClass(_):
 				if (Std.isOfType(value, Array)) {
-					final arr:Array<Dynamic> = cast value;
+					final arr: Array<Dynamic> = cast value;
 					for (e in arr) appendTypeRefs(e, into, fallbackSpan);
 				}
 			case _:
 		}
 	}
 
-	private function extractName(value:Dynamic):Null<String> {
+	private function extractName(value: Dynamic): Null<String> {
 		if (value == null) return null;
 		if (value is String) return value;
-		final t:Type.ValueType = Type.typeof(value);
+		final t: Type.ValueType = Type.typeof(value);
 		switch t {
 			case TObject:
 				// Try canonical name slots in priority order. `name` is the
@@ -592,7 +631,7 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 				// HxForExpr); `node` unwraps Trivial<T> envelopes for the
 				// future Trivia + span composition.
 				for (field in ['name', 'type', 'varName']) if (Reflect.hasField(value, field)) {
-					final n:Dynamic = Reflect.field(value, field);
+					final n: Dynamic = Reflect.field(value, field);
 					if (n is String) return n;
 				}
 				// `param` unwraps HxCatchClause / HxCatchClauseStmtBare /
@@ -612,7 +651,8 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 				// `HxArrowFnType`) yields null, and those are reached as `fn`
 				// VALUES of an enum ctor, never as a struct CARRYING an `fn`
 				// field — so no other node is affected.
-				if (Reflect.hasField(value, 'fn')) return extractName(Reflect.field(value, 'fn'));
+				if (Reflect.hasField(value, 'fn'))
+					return extractName(Reflect.field(value, 'fn'));
 			case TEnum(_):
 				// Slice 27 — transparent unwrap for the single-Ref wrapper
 				// enum `HxAnonVarBody` (`Optional(decl)` / `Plain(decl)`):
@@ -623,13 +663,14 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 				// general TEnum recurse broke pattern-matcher
 				// `extractFirstExpr` / etc., which rely on name being null
 				// for non-decl enum nodes).
-				final ctor:String = Type.enumConstructor(value);
+				final ctor: String = Type.enumConstructor(value);
 				if (ctor == 'Optional' || ctor == 'Plain') {
-					final params:Array<Dynamic> = Type.enumParameters(value);
+					final params: Array<Dynamic> = Type.enumParameters(value);
 					for (p in params) {
 						if (Std.isOfType(p, Span)) continue;
-						final n:Null<String> = extractName(p);
-						if (n != null) return n;
+						final n: Null<String> = extractName(p);
+						if (n != null)
+							return n;
 					}
 				}
 			case _:
@@ -645,9 +686,9 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 	 * skipped (descending them would emit a phantom child per typed
 	 * binding).
 	 */
-	private static inline function isAnonType(v:Dynamic):Bool {
+	private static inline function isAnonType(v: Dynamic): Bool {
 		if (v == null) return false;
-		final t:Type.ValueType = Type.typeof(v);
+		final t: Type.ValueType = Type.typeof(v);
 		return switch t {
 			case TEnum(_): Type.enumConstructor(v) == 'Anon';
 			case _: false;
@@ -665,14 +706,15 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 	 * child carries a span, since a span-less node has no defined
 	 * source position to order against.
 	 */
-	private static function orderBySpan(children:Array<QueryNode>):Array<QueryNode> {
-		final indexed:Array<{from:Int, idx:Int, node:QueryNode}> = [];
+	private static function orderBySpan(children: Array<QueryNode>): Array<QueryNode> {
+		final indexed: Array<{ from: Int, idx: Int, node: QueryNode }> = [];
 		for (i in 0...children.length) {
-			final s:Null<Span> = children[i].span;
+			final s: Null<Span> = children[i].span;
 			if (s == null) return children;
-			indexed.push({from: s.from, idx: i, node: children[i]});
+			indexed.push({ from: s.from, idx: i, node: children[i] });
 		}
 		indexed.sort((a, b) -> a.from != b.from ? a.from - b.from : a.idx - b.idx);
 		return [for (e in indexed) e.node];
 	}
+
 }

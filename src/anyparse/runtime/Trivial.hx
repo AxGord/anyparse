@@ -111,14 +111,14 @@ package anyparse.runtime;
  * and consumer sites.
  */
 typedef Trivial<T> = {
-	var blankBefore:Bool;
-	var blankAfterLeadingComments:Bool;
-	var newlineBefore:Bool;
-	var leadingComments:Array<String>;
-	var trailingComment:Null<String>;
-	var trailingBeforeSep:Bool;
-	var sepAfter:Bool;
-	@:optional var newlineAfterSep:Bool;
-	@:optional var leadingCommentsGlued:Bool;
-	var node:T;
+	var blankBefore: Bool;
+	var blankAfterLeadingComments: Bool;
+	var newlineBefore: Bool;
+	var leadingComments: Array<String>;
+	var trailingComment: Null<String>;
+	var trailingBeforeSep: Bool;
+	var sepAfter: Bool;
+	@:optional var newlineAfterSep: Bool;
+	@:optional var leadingCommentsGlued: Bool;
+	var node: T;
 }

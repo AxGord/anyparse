@@ -40,5 +40,5 @@ typedef HxFnBlock = {
 	@:fmt(emptyCurlyBreak, keepCurlyBlanks, rightCurlyAnonFnOverride('anonFunctionRightCurly'))
 	@:lead('{') @:trail('}') @:trivia
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
-	var stmts:Array<HxStatement>;
+	var stmts: Array<HxStatement>;
 }

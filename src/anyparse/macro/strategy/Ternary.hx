@@ -41,43 +41,40 @@ import anyparse.core.Strategy;
  */
 class Ternary implements Strategy {
 
-	public var name(default, null):String = 'Ternary';
-	public var runsAfter(default, null):Array<String> = [];
-	public var runsBefore(default, null):Array<String> = [];
-	public var ownedMeta(default, null):Array<String> = [':ternary'];
-	public var runtimeContribution(default, null):RuntimeContrib = {ctxFields: [], helpers: [], cacheKeyContributors: []};
+	public var name(default, null): String = 'Ternary';
+	public var runsAfter(default, null): Array<String> = [];
+	public var runsBefore(default, null): Array<String> = [];
+	public var ownedMeta(default, null): Array<String> = [':ternary'];
+	public var runtimeContribution(default, null): RuntimeContrib = { ctxFields: [], helpers: [], cacheKeyContributors: [] };
 
 	public function new() {}
 
-	public function appliesTo(node:ShapeNode):Bool {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
+	public function appliesTo(node: ShapeNode): Bool {
+		final meta: Null<Metadata> = node.annotations.get('base.meta');
 		if (meta == null) return false;
 		for (entry in meta) if (entry.name == ':ternary') return true;
 		return false;
 	}
 
-	public function annotate(node:ShapeNode, ctx:LoweringCtx):Void {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
+	public function annotate(node: ShapeNode, ctx: LoweringCtx): Void {
+		final meta: Null<Metadata> = node.annotations.get('base.meta');
 		if (meta == null) return;
 		for (entry in meta) if (entry.name == ':ternary') {
 			if (entry.params.length != 3)
-				Context.fatalError(
-					'@:ternary expects exactly three arguments: "op", "sep", precedence:Int',
-					entry.pos
-				);
-			final opText:String = switch entry.params[0].expr {
+				Context.fatalError('@:ternary expects exactly three arguments: "op", "sep", precedence:Int', entry.pos);
+			final opText: String = switch entry.params[0].expr {
 				case EConst(CString(s, _)): s;
 				case _:
 					Context.fatalError('@:ternary first argument must be a string literal', entry.params[0].pos);
 					throw 'unreachable';
 			};
-			final sepText:String = switch entry.params[1].expr {
+			final sepText: String = switch entry.params[1].expr {
 				case EConst(CString(s, _)): s;
 				case _:
 					Context.fatalError('@:ternary second argument must be a string literal', entry.params[1].pos);
 					throw 'unreachable';
 			};
-			final precValue:Int = switch entry.params[2].expr {
+			final precValue: Int = switch entry.params[2].expr {
 				case EConst(CInt(s)): Std.parseInt(s);
 				case _:
 					Context.fatalError('@:ternary third argument must be an integer literal', entry.params[2].pos);
@@ -89,8 +86,9 @@ class Ternary implements Strategy {
 		}
 	}
 
-	public function lower(node:ShapeNode, ctx:LoweringCtx):Null<CoreIR> {
+	public function lower(node: ShapeNode, ctx: LoweringCtx): Null<CoreIR> {
 		return null;
 	}
+
 }
 #end

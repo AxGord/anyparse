@@ -20,10 +20,12 @@ using Lambda;
  *  - `Using`  — `using pkg.Module;`.
  */
 enum abstract ImportKind(Int) {
+
 	final Import = 0;
 	final Alias = 1;
 	final Wild = 2;
 	final Using = 3;
+
 }
 
 /**
@@ -34,10 +36,10 @@ enum abstract ImportKind(Int) {
  * kind is `Alias`, else null; `span` is the statement's source range.
  */
 typedef ImportInfo = {
-	var raw:String;
-	var kind:ImportKind;
-	var alias:Null<String>;
-	var span:Span;
+	var raw: String;
+	var kind: ImportKind;
+	var alias: Null<String>;
+	var span: Span;
 }
 
 /**
@@ -48,10 +50,10 @@ typedef ImportInfo = {
  * importable as `import <package>.<Basename>;`.
  */
 typedef TypeDeclInfo = {
-	var name:String;
-	var kind:String;
-	var span:Span;
-	var isMain:Bool;
+	var name: String;
+	var kind: String;
+	var span: Span;
+	var isMain: Bool;
 }
 
 /**
@@ -61,11 +63,11 @@ typedef TypeDeclInfo = {
  * `package;` declaration (the root package).
  */
 typedef FileInfo = {
-	var file:String;
-	var pkg:String;
-	var module:String;
-	var imports:Array<ImportInfo>;
-	var types:Array<TypeDeclInfo>;
+	var file: String;
+	var pkg: String;
+	var module: String;
+	var imports: Array<ImportInfo>;
+	var types: Array<TypeDeclInfo>;
 }
 
 /**
@@ -118,26 +120,26 @@ typedef FileInfo = {
 @:nullSafety(Strict)
 final class SymbolIndex {
 
-	private final _files:Array<FileInfo>;
-	private final _skipped:Array<String>;
+	private final _files: Array<FileInfo>;
+	private final _skipped: Array<String>;
 
-	private function new(files:Array<FileInfo>, skipped:Array<String>) {
+	private function new(files: Array<FileInfo>, skipped: Array<String>) {
 		_files = files;
 		_skipped = skipped;
 	}
 
 	/** The `FileInfo` for `file`, or null when the file is not indexed. */
-	public function fileInfo(file:String):Null<FileInfo> {
+	public function fileInfo(file: String): Null<FileInfo> {
 		return _files.find(f -> f.file == file);
 	}
 
 	/** Every indexed file's `FileInfo`, in input order. */
-	public function allFiles():Array<FileInfo> {
+	public function allFiles(): Array<FileInfo> {
 		return _files.copy();
 	}
 
 	/** Files that failed to parse and were excluded from the index. */
-	public function skippedFiles():Array<String> {
+	public function skippedFiles(): Array<String> {
 		return _skipped.copy();
 	}
 
@@ -146,7 +148,7 @@ final class SymbolIndex {
 	 * many is the ambiguity signal a move-symbol op tests before
 	 * proceeding.
 	 */
-	public function declaringFiles(typeName:String):Array<FileInfo> {
+	public function declaringFiles(typeName: String): Array<FileInfo> {
 		return _files.filter(f -> f.types.exists(t -> t.name == typeName));
 	}
 
@@ -157,11 +159,11 @@ final class SymbolIndex {
 	 * zero or more than one file declares it — the path is ambiguous and
 	 * a move cannot pick one without more context.
 	 */
-	public function importPathOf(typeName:String):Null<String> {
-		final declarers:Array<FileInfo> = declaringFiles(typeName);
+	public function importPathOf(typeName: String): Null<String> {
+		final declarers: Array<FileInfo> = declaringFiles(typeName);
 		if (declarers.length != 1) return null;
-		final file:FileInfo = declarers[0];
-		final type:Null<TypeDeclInfo> = file.types.find(t -> t.name == typeName);
+		final file: FileInfo = declarers[0];
+		final type: Null<TypeDeclInfo> = file.types.find(t -> t.name == typeName);
 		if (type == null) return null;
 		return type.isMain ? file.module : '${file.module}.$typeName';
 	}
@@ -182,11 +184,11 @@ final class SymbolIndex {
 	 * path; this is the documented alias limitation carried from
 	 * `ImportInfo`.)
 	 */
-	public function filesImportingModule(modulePath:String):Array<FileInfo> {
-		final prefix:String = '$modulePath.';
-		return _files.filter(f -> f.imports.exists(imp ->
-			imp.kind != ImportKind.Wild
-			&& (imp.raw == modulePath || StringTools.startsWith(imp.raw, prefix))));
+	public function filesImportingModule(modulePath: String): Array<FileInfo> {
+		final prefix: String = '$modulePath.';
+		return _files.filter(
+			f -> f.imports.exists(imp -> imp.kind != ImportKind.Wild && (imp.raw == modulePath || StringTools.startsWith(imp.raw, prefix)))
+		);
 	}
 
 	/**
@@ -197,12 +199,11 @@ final class SymbolIndex {
 	 * module path and the `isMain` flag for each type, mirroring
 	 * `CrossRename`'s parse-each-file pattern.
 	 */
-	public static function build(files:Array<{file:String, source:String}>, plugin:GrammarPlugin):SymbolIndex {
-		final infos:Array<FileInfo> = [];
-		final skipped:Array<String> = [];
+	public static function build(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): SymbolIndex {
+		final infos: Array<FileInfo> = [];
+		final skipped: Array<String> = [];
 		for (entry in files) {
-			final tree:Null<QueryNode> = try plugin.parseFile(entry.source)
-				catch (_:Exception) null;
+			final tree: Null<QueryNode> = try plugin.parseFile(entry.source) catch (_: Exception) null;
 			if (tree == null) {
 				skipped.push(entry.file);
 				continue;
@@ -223,9 +224,9 @@ final class SymbolIndex {
 	 * (all lower-case) is returned verbatim — there is no module segment
 	 * to anchor on.
 	 */
-	public static function moduleOf(path:String):String {
-		final segments:Array<String> = path.split('.');
-		final out:Array<String> = [];
+	public static function moduleOf(path: String): String {
+		final segments: Array<String> = path.split('.');
+		final out: Array<String> = [];
 		for (segment in segments) {
 			out.push(segment);
 			if (segment.length > 0 && isUpperInitial(segment)) return out.join('.');
@@ -239,11 +240,11 @@ final class SymbolIndex {
 	 * using statements, and the top-level type declarations. The
 	 * basename drives the module path and the per-type `isMain` flag.
 	 */
-	private static function extractFileInfo(file:String, tree:QueryNode):FileInfo {
-		final basename:String = RefactorSupport.baseNameOf(file);
-		var pkg:String = '';
-		final imports:Array<ImportInfo> = [];
-		final types:Array<TypeDeclInfo> = [];
+	private static function extractFileInfo(file: String, tree: QueryNode): FileInfo {
+		final basename: String = RefactorSupport.baseNameOf(file);
+		var pkg: String = '';
+		final imports: Array<ImportInfo> = [];
+		final types: Array<TypeDeclInfo> = [];
 
 		for (node in tree.children) {
 			// Type declarations resolve through the final-aware helper FIRST
@@ -251,14 +252,19 @@ final class SymbolIndex {
 			// `ClassForm` holds the name, so a plain `node.name` guard would
 			// drop it. `typeDeclOf` normalises both shapes and yields the
 			// FULL span (including the `final ` keyword for a final class).
-			final typeDecl:Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
+			final typeDecl: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
 			if (typeDecl != null) {
-				types.push({name: typeDecl.name, kind: typeDecl.kind, span: typeDecl.fullSpan, isMain: typeDecl.name == basename});
+				types.push({
+					name: typeDecl.name,
+					kind: typeDecl.kind,
+					span: typeDecl.fullSpan,
+					isMain: typeDecl.name == basename
+				});
 				continue;
 			}
 
-			final nullableName:Null<String> = node.name;
-			final nullableSpan:Null<Span> = node.span;
+			final nullableName: Null<String> = node.name;
+			final nullableSpan: Null<Span> = node.span;
 			if (nullableName == null || nullableSpan == null) {
 				if (node.kind == 'PackageDecl' && nullableName != null) pkg = nullableName;
 				continue;
@@ -268,25 +274,57 @@ final class SymbolIndex {
 			// type of an anonymous struct literal is taken from the
 			// DECLARED type — so the literals must read locals whose
 			// declared type is already non-null.
-			final name:String = nullableName;
-			final span:Span = nullableSpan;
+			final name: String = nullableName;
+			final span: Span = nullableSpan;
 			switch node.kind {
-				case 'PackageDecl': pkg = name;
-				case 'ImportDecl': imports.push({raw: name, kind: ImportKind.Import, alias: null, span: span});
-				case 'ImportAliasDecl': imports.push({raw: name, kind: ImportKind.Alias, alias: name, span: span});
-				case 'ImportWildDecl': imports.push({raw: name, kind: ImportKind.Wild, alias: null, span: span});
-				case 'UsingDecl': imports.push({raw: name, kind: ImportKind.Using, alias: null, span: span});
+				case 'PackageDecl':
+					pkg = name;
+				case 'ImportDecl':
+					imports.push({
+						raw: name,
+						kind: ImportKind.Import,
+						alias: null,
+						span: span
+					});
+				case 'ImportAliasDecl':
+					imports.push({
+						raw: name,
+						kind: ImportKind.Alias,
+						alias: name,
+						span: span
+					});
+				case 'ImportWildDecl':
+					imports.push({
+						raw: name,
+						kind: ImportKind.Wild,
+						alias: null,
+						span: span
+					});
+				case 'UsingDecl':
+					imports.push({
+						raw: name,
+						kind: ImportKind.Using,
+						alias: null,
+						span: span
+					});
 				case _:
 			}
 		}
 
-		final module:String = pkg == '' ? basename : '$pkg.$basename';
-		return {file: file, pkg: pkg, module: module, imports: imports, types: types};
+		final module: String = pkg == '' ? basename : '$pkg.$basename';
+		return {
+			file: file,
+			pkg: pkg,
+			module: module,
+			imports: imports,
+			types: types
+		};
 	}
 
 	/** Does `segment` begin with an upper-case ASCII letter? */
-	private static inline function isUpperInitial(segment:String):Bool {
-		final c:Int = StringTools.fastCodeAt(segment, 0);
+	private static inline function isUpperInitial(segment: String): Bool {
+		final c: Int = StringTools.fastCodeAt(segment, 0);
 		return c >= 'A'.code && c <= 'Z'.code;
 	}
+
 }

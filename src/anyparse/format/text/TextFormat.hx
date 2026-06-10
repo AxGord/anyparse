@@ -9,8 +9,8 @@ import anyparse.format.Format;
  * lives in `anyparse.format.comment.BlockComment` and friends).
  */
 typedef BlockCommentDelims = {
-	open:String,
-	close:String,
+	open: String,
+	close: String
 };
 
 /**
@@ -18,8 +18,8 @@ typedef BlockCommentDelims = {
  * `TextFormat.boolLiterals` means the format has no boolean type.
  */
 typedef BoolLiterals = {
-	trueLit:String,
-	falseLit:String,
+	trueLit: String,
+	falseLit: String
 };
 
 /**
@@ -28,8 +28,8 @@ typedef BoolLiterals = {
  * sequence occupied *after* the leading backslash.
  */
 typedef UnescapeResult = {
-	char:Int,
-	consumed:Int,
+	char: Int,
+	consumed: Int
 };
 
 /**
@@ -44,42 +44,44 @@ typedef UnescapeResult = {
  * implementing this interface.
  */
 interface TextFormat extends Format {
-	var mappingOpen(default, null):String;
-	var mappingClose(default, null):String;
-	var sequenceOpen(default, null):Null<String>;
-	var sequenceClose(default, null):Null<String>;
-	var keyValueSep(default, null):String;
-	var entrySep(default, null):String;
 
-	var whitespace(default, null):String;
-	var lineComment(default, null):Null<String>;
-	var blockComment(default, null):Null<BlockCommentDelims>;
+	var mappingOpen(default, null): String;
+	var mappingClose(default, null): String;
+	var sequenceOpen(default, null): Null<String>;
+	var sequenceClose(default, null): Null<String>;
+	var keyValueSep(default, null): String;
+	var entrySep(default, null): String;
 
-	var keySyntax(default, null):KeySyntax;
-	var stringQuote(default, null):Array<String>;
+	var whitespace(default, null): String;
+	var lineComment(default, null): Null<String>;
+	var blockComment(default, null): Null<BlockCommentDelims>;
 
-	var fieldLookup(default, null):FieldLookup;
+	var keySyntax(default, null): KeySyntax;
+	var stringQuote(default, null): Array<String>;
 
-	var trailingSep(default, null):TrailingSepPolicy;
-	var onMissing(default, null):MissingPolicy;
-	var onUnknown(default, null):UnknownPolicy;
+	var fieldLookup(default, null): FieldLookup;
 
-	var intLiteral(default, null):EReg;
-	var floatLiteral(default, null):EReg;
-	var boolLiterals(default, null):Null<BoolLiterals>;
-	var nullLiteral(default, null):Null<String>;
+	var trailingSep(default, null): TrailingSepPolicy;
+	var onMissing(default, null): MissingPolicy;
+	var onUnknown(default, null): UnknownPolicy;
+
+	var intLiteral(default, null): EReg;
+	var floatLiteral(default, null): EReg;
+	var boolLiterals(default, null): Null<BoolLiterals>;
+	var nullLiteral(default, null): Null<String>;
 
 	/**
 	 * Escape a single Unicode code point into the format's string
 	 * literal syntax. Must return a string that can be emitted verbatim
 	 * between the format's string quote characters.
 	 */
-	function escapeChar(c:Int):String;
+	function escapeChar(c: Int): String;
 
 	/**
 	 * Decode one escape sequence starting *after* the leading backslash
 	 * at `pos` in `input`. Returns the decoded code point and how many
 	 * characters of `input` were consumed by the escape body.
 	 */
-	function unescapeChar(input:String, pos:Int):UnescapeResult;
+	function unescapeChar(input: String, pos: Int): UnescapeResult;
+
 }

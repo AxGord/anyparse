@@ -47,6 +47,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxCasePattern = {
-	var expr:HxCasePatternBody;
-	@:optional @:kw('if') var guard:Null<HxExpr>;
+	var expr: HxCasePatternBody;
+	@:optional @:kw('if') var guard: Null<HxExpr>;
 };

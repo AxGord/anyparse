@@ -63,9 +63,7 @@ final class CollapsePass {
 	 * decisions committed. When no collapse-candidate paren is present the
 	 * returned Doc is structurally equivalent to `doc` (render-identical).
 	 */
-	public static function run(
-		doc:Doc, width:Int, indentChar:IndentChar, tabWidth:Int, indentSize:Int = 1
-	):Doc {
+	public static function run(doc: Doc, width: Int, indentChar: IndentChar, tabWidth: Int, indentSize: Int = 1): Doc {
 		// Fast path: skip the measure render entirely when the Doc carries
 		// NONE of a forward collapse-candidate paren (`CollapseProbe`), an
 		// inverse inner-add-chain marker (`CollapseAddProbe`), an opBool
@@ -73,13 +71,13 @@ final class CollapsePass {
 		// dot-break re-eval marker (`CollapseChainProbe`) — the overwhelming
 		// common case. Keeps the pass cost ~one structural walk for non-collapse
 		// outputs.
-		final hasParenProbe:Bool = hasCandidate(doc);
-		final hasAddProbe:Bool = hasAddCandidate(doc);
-		final hasBoolProbe:Bool = hasBoolCandidate(doc);
-		final hasChainProbe:Bool = hasChainCandidate(doc);
+		final hasParenProbe: Bool = hasCandidate(doc);
+		final hasAddProbe: Bool = hasAddCandidate(doc);
+		final hasBoolProbe: Bool = hasBoolCandidate(doc);
+		final hasChainProbe: Bool = hasChainCandidate(doc);
 		if (!hasParenProbe && !hasAddProbe && !hasBoolProbe && !hasChainProbe) return doc;
 
-		final decisions:Array<{node:Doc, crosses:Bool, ?indent:Int}> = [];
+		final decisions: Array<{ node: Doc, crosses: Bool, ?indent: Int }> = [];
 		// Measure-only render: populates `decisions` at every
 		// `IfFullLineExceeds` (forward) AND every reached `CollapseAddProbe`
 		// (inverse — recorded `crosses = reached-in-break-mode`, plus `indent`
@@ -128,7 +126,9 @@ final class CollapsePass {
 	 *  - Everything else → rebuild structurally, recursing into children
 	 *    (threading `insideBroken`).
 	 */
-	private static function rewrite(d:Doc, decisions:Array<{node:Doc, crosses:Bool, ?indent:Int}>, insideBroken:Bool, width:Int):Doc {
+	private static function rewrite(
+		d: Doc, decisions: Array<{ node: Doc, crosses: Bool, ?indent: Int }>, insideBroken: Bool, width: Int
+	): Doc {
 		// FORWARD direction takes precedence: when the chain's flat (glued)
 		// branch contains a candidate paren that WOULD open, commit the chain
 		// to its glued shape (fork `collapseChainBreaksAfter`) via
@@ -139,7 +139,7 @@ final class CollapsePass {
 		// branch, so the `CollapseAddProbe` on the discarded brk is moot here —
 		// taking the inverse intercept first would re-`WrapBoundary` the chain
 		// with the original brk and double-indent the opened paren.
-		final glued:Null<Doc> = chainGluedIfOpens(d, decisions);
+		final glued: Null<Doc> = chainGluedIfOpens(d, decisions);
 		if (glued != null) return WrapBoundary(commitOpens(glued, decisions));
 
 		// COMPARE-OP-GLUE (leg 2): a never-wrap-marked binary operator Group
@@ -149,7 +149,7 @@ final class CollapsePass {
 		// add-chain itself is descended via `commitHeadBreak` inside the
 		// helper). Returns null when the shape / commit does not apply, so the
 		// common path stays byte-inert.
-		final compareGlued:Null<Doc> = compareOpGluedToHeadBreak(d, decisions, width);
+		final compareGlued: Null<Doc> = compareOpGluedToHeadBreak(d, decisions, width);
 		if (compareGlued != null) return compareGlued;
 
 		// INVERSE / HEAD-BREAK direction: a tagged opAddSub chain that is NOT a
@@ -158,7 +158,7 @@ final class CollapsePass {
 		// `insideBroken` + the chain's break decision + the captured continuation
 		// indent, and recurses through `rewrite` so the forward paren-collapse
 		// still applies to inner parens.
-		final tagged:Null<{marker:Doc, brk:Doc, flat:Doc}> = taggedAddChain(d);
+		final tagged: Null<{ marker: Doc, brk: Doc, flat: Doc }> = taggedAddChain(d);
 		if (tagged != null) return rewriteTaggedAddChain(tagged, decisions, insideBroken, width);
 
 		// OPBOOL-REEVAL direction (ω-opbool-reeval-after-callparam): a tagged
@@ -168,7 +168,7 @@ final class CollapsePass {
 		// gate), flip the chain to operator-LEADING; otherwise unwrap to the
 		// bare trailing shape (byte-inert). Returns null when `d` is not the
 		// marker — falls through to the rest of the rewrite.
-		final boolFlip:Null<Doc> = rewriteBoolProbe(d, decisions, insideBroken, width);
+		final boolFlip: Null<Doc> = rewriteBoolProbe(d, decisions, insideBroken, width);
 		if (boolFlip != null) return boolFlip;
 
 		// METHODCHAIN-REEVAL re-glue (ω-methodchain-reeval-after-callparam,
@@ -180,7 +180,7 @@ final class CollapsePass {
 		// `reEvaluateMethodChainAfterCallParam`. Otherwise keep the width-driven
 		// `IfFullLineExceeds`. Returns null when `d` is not the marker (the
 		// common path stays byte-inert).
-		final chainFlip:Null<Doc> = rewriteChainProbe(d, decisions, insideBroken, width);
+		final chainFlip: Null<Doc> = rewriteChainProbe(d, decisions, insideBroken, width);
 		if (chainFlip != null) return chainFlip;
 
 		// Standalone candidate paren that opens (no enclosing chain
@@ -243,20 +243,16 @@ final class CollapsePass {
 	 * `opbool_reeval_strips_opadd_breaks`.
 	 */
 	private static function rewriteTaggedAddChain(
-		tagged:{marker:Doc, brk:Doc, flat:Doc},
-		decisions:Array<{node:Doc, crosses:Bool, ?indent:Int}>, insideBroken:Bool, width:Int
-	):Doc {
-		if (insideBroken)
-			return WrapBoundary(rewrite(tagged.flat, decisions, true, width));
-		final broke:Bool = opens(tagged.marker, decisions);
+		tagged: { marker: Doc, brk: Doc, flat: Doc }, decisions: Array<{ node: Doc, crosses: Bool, ?indent: Int }>, insideBroken: Bool,
+		width: Int
+	): Doc {
+		if (insideBroken) return WrapBoundary(rewrite(tagged.flat, decisions, true, width));
+		final broke: Bool = opens(tagged.marker, decisions);
 		// HEAD-BREAK re-measure: when the chain broke and the glued-flat tail
 		// fits at its captured continuation indent, commit to break-after-head.
-		final headBreak:Null<Doc> = broke ? commitHeadBreak(tagged, decisions, width) : null;
+		final headBreak: Null<Doc> = broke ? commitHeadBreak(tagged, decisions, width) : null;
 		if (headBreak != null) return WrapBoundary(headBreak);
-		return WrapBoundary(Group(IfBreak(
-			rewrite(tagged.brk, decisions, broke, width),
-			rewrite(tagged.flat, decisions, false, width)
-		)));
+		return WrapBoundary(Group(IfBreak(rewrite(tagged.brk, decisions, broke, width), rewrite(tagged.flat, decisions, false, width))));
 	}
 
 	/**
@@ -285,10 +281,9 @@ final class CollapsePass {
 	 * forward `collapseParenCommitsOpen` fit gate).
 	 */
 	private static function commitHeadBreak(
-		tagged:{marker:Doc, brk:Doc, flat:Doc},
-		decisions:Array<{node:Doc, crosses:Bool, ?indent:Int}>, width:Int
-	):Null<Doc> {
-		final fill:Null<{cols:Int, items:Array<Doc>}> = fillLineParts(tagged.brk);
+		tagged: { marker: Doc, brk: Doc, flat: Doc }, decisions: Array<{ node: Doc, crosses: Bool, ?indent: Int }>, width: Int
+	): Null<Doc> {
+		final fill: Null<{ cols: Int, items: Array<Doc> }> = fillLineParts(tagged.brk);
 		if (fill == null || fill.items.length < 2) return null;
 		// ω-opadd-afterlast-cont-indent: the head-break re-measure GLUES the tail
 		// operands assuming each carries a LEADING `op ` (the BeforeLast
@@ -312,17 +307,17 @@ final class CollapsePass {
 		// Non-call-arg add-chains (`cols != 0`, e.g. an `if (… && <opAdd> > …)`
 		// compare operand handled by leg 2) keep the head-break.
 		if (fill.cols == 0) return null;
-		final indent:Null<Int> = capturedIndent(tagged.marker, decisions);
+		final indent: Null<Int> = capturedIndent(tagged.marker, decisions);
 		if (indent == null) return null;
-		final head:Doc = fill.items[0];
+		final head: Doc = fill.items[0];
 		// Glue the tail operands (each already prefixed with `op `) by single
 		// spaces — the NoWrap continuation `+ a + b`.
-		final tailParts:Array<Doc> = [];
+		final tailParts: Array<Doc> = [];
 		for (i in 1...fill.items.length) {
 			if (i > 1) tailParts.push(Text(' '));
 			tailParts.push(fill.items[i]);
 		}
-		final gluedTail:Doc = Concat(tailParts);
+		final gluedTail: Doc = Concat(tailParts);
 		if (indent + DocMeasure.flatTokenWidth(gluedTail) > width) return null;
 		// Head keeps its own inner wrapping (the call may still break its args);
 		// the tail rides one continuation line at the chain's one-tab indent.
@@ -339,9 +334,9 @@ final class CollapsePass {
 	 * shape — so a non-FillLine `brk` (OnePerLine / OnePerLineAfterFirst) is
 	 * not head-broken (those modes are not the over-pack case this targets).
 	 */
-	private static function fillLineParts(d:Doc):Null<{cols:Int, items:Array<Doc>}> {
+	private static function fillLineParts(d: Doc): Null<{ cols: Int, items: Array<Doc> }> {
 		return switch d {
-			case Group(Nest(cols, Fill(items, _, _))): {cols: cols, items: items};
+			case Group(Nest(cols, Fill(items, _, _))): { cols: cols, items: items };
 			case _: null;
 		};
 	}
@@ -358,11 +353,12 @@ final class CollapsePass {
 	 * identifier, call (`…)`), nested sub-chain — never ends in a
 	 * space-prefixed `Text`, so this stays specific to AfterLast.
 	 */
-	private static function fillItemsAreAfterLast(items:Array<Doc>):Bool {
+	private static function fillItemsAreAfterLast(items: Array<Doc>): Bool {
 		return switch items[0] {
 			case Concat(parts) if (parts.length >= 2):
 				switch parts[parts.length - 1] {
-					case Text(t): t.length >= 2 && StringTools.fastCodeAt(t, 0) == ' '.code;
+					case Text(t):
+						t.length >= 2 && StringTools.fastCodeAt(t, 0) == ' '.code;
 					case _: false;
 				}
 			case _: false;
@@ -374,8 +370,8 @@ final class CollapsePass {
 	 * null when the measure pass did not record one (the marker was not reached
 	 * in break mode, or the decision predates the indent capture).
 	 */
-	private static function capturedIndent(marker:Doc, decisions:Array<{node:Doc, crosses:Bool, ?indent:Int}>):Null<Int> {
-		final entry:Null<{node:Doc, crosses:Bool, ?indent:Int}> = decisions.find(e -> e.node == marker && e.crosses);
+	private static function capturedIndent(marker: Doc, decisions: Array<{ node: Doc, crosses: Bool, ?indent: Int }>): Null<Int> {
+		final entry: Null<{ node: Doc, crosses: Bool, ?indent: Int }> = decisions.find(e -> e.node == marker && e.crosses);
 		return entry == null ? null : entry.indent;
 	}
 
@@ -401,10 +397,12 @@ final class CollapsePass {
 	 * structure under the `Flatten` so a multi-line RIGHT operand still wraps
 	 * inside its own brackets; only the leading operator `Line` is collapsed.
 	 */
-	private static function compareOpGluedToHeadBreak(d:Doc, decisions:Array<{node:Doc, crosses:Bool, ?indent:Int}>, width:Int):Null<Doc> {
-		final parts:Null<{group:Doc, left:Doc, cont:Doc}> = switch d {
+	private static function compareOpGluedToHeadBreak(
+		d: Doc, decisions: Array<{ node: Doc, crosses: Bool, ?indent: Int }>, width: Int
+	): Null<Doc> {
+		final parts: Null<{ group: Doc, left: Doc, cont: Doc }> = switch d {
 			case Group(Concat([left, cont])) | GroupWithRestProbe(Concat([left, cont])):
-				{group: d, left: left, cont: cont};
+				{ group: d, left: left, cont: cont };
 			case _: null;
 		};
 		if (parts == null) return null;
@@ -412,7 +410,7 @@ final class CollapsePass {
 		// `Nest(cols, Concat([Line(' '), Text('op '), right]))` — a SOFT space
 		// Line (not a hardline) leads it. A chain / call continuation has a
 		// different shape and is left untouched.
-		final isOpCont:Bool = switch parts.cont {
+		final isOpCont: Bool = switch parts.cont {
 			case Nest(_, Concat(citems)) if (citems.length >= 1):
 				switch citems[0] {
 					case Line(s): s == ' ';
@@ -421,10 +419,10 @@ final class CollapsePass {
 			case _: false;
 		};
 		if (!isOpCont) return null;
-		final tagged:Null<{marker:Doc, brk:Doc, flat:Doc}> = taggedAddChain(parts.left);
+		final tagged: Null<{ marker: Doc, brk: Doc, flat: Doc }> = taggedAddChain(parts.left);
 		if (tagged == null) return null;
 		if (!opens(tagged.marker, decisions)) return null;
-		final headBreak:Null<Doc> = commitHeadBreak(tagged, decisions, width);
+		final headBreak: Null<Doc> = commitHeadBreak(tagged, decisions, width);
 		if (headBreak == null) return null;
 		// Glue: left commits head-break (WrapBoundary preserved to match the
 		// add-chain's own boundary scoping); the operator continuation is
@@ -441,11 +439,11 @@ final class CollapsePass {
 	 * marker node (for the measure-decision lookup), the marked broken shape,
 	 * and the sibling flat shape. Otherwise null.
 	 */
-	private static function taggedAddChain(d:Doc):Null<{marker:Doc, brk:Doc, flat:Doc}> {
+	private static function taggedAddChain(d: Doc): Null<{ marker: Doc, brk: Doc, flat: Doc }> {
 		return switch d {
 			case WrapBoundary(Group(IfBreak(marker, flat))):
 				switch marker {
-					case CollapseAddProbe(brk): {marker: marker, brk: brk, flat: flat};
+					case CollapseAddProbe(brk): { marker: marker, brk: brk, flat: flat };
 					case _: null;
 				}
 			case _: null;
@@ -469,8 +467,10 @@ final class CollapsePass {
 	 * visual start column and `DocMeasure.flatTokenWidth` (O(1) per operand, no
 	 * recursive natural-first-line probe).
 	 */
-	private static function rewriteBoolProbe(d:Doc, decisions:Array<{node:Doc, crosses:Bool, ?indent:Int}>, insideBroken:Bool, width:Int):Null<Doc> {
-		final inner:Null<Doc> = switch d {
+	private static function rewriteBoolProbe(
+		d: Doc, decisions: Array<{ node: Doc, crosses: Bool, ?indent: Int }>, insideBroken: Bool, width: Int
+	): Null<Doc> {
+		final inner: Null<Doc> = switch d {
 			case CollapseBoolProbe(i): i;
 			case _: null;
 		};
@@ -479,14 +479,14 @@ final class CollapsePass {
 		// Absent a recorded decision the marker was never measured (e.g. the
 		// natural-first-line-fits-open-delim branch unwrapped flat) — keep the
 		// trailing shape unchanged (recursed so nested operand parens resolve).
-		final col:Null<Int> = capturedIndent(d, decisions);
+		final col: Null<Int> = capturedIndent(d, decisions);
 		if (col == null) return rewrite(inner, decisions, insideBroken, width);
-		final parts:Null<{cols:Int, items:Array<Doc>, sep:Doc}> = afterLastFillParts(inner);
+		final parts: Null<{ cols: Int, items: Array<Doc>, sep: Doc }> = afterLastFillParts(inner);
 		if (parts == null) return rewrite(inner, decisions, insideBroken, width);
 		// Recover the bare operands + their operators from the AfterLast-enriched
 		// Fill items (item i<last = Concat([operand_i, Text(' op')]); last =
 		// operand_last). Null when any item is not the expected shape.
-		final chain:Null<{operands:Array<Doc>, ops:Array<String>}> = splitAfterLastItems(parts.items);
+		final chain: Null<{ operands: Array<Doc>, ops: Array<String> }> = splitAfterLastItems(parts.items);
 		if (chain == null) return rewrite(inner, decisions, insideBroken, width);
 		if (!callOperandOverflows(chain.operands, chain.ops, col, width)) return rewrite(inner, decisions, insideBroken, width);
 		// Flip: rebuild the FillLine with BeforeLast enrichment (op leads each
@@ -503,12 +503,13 @@ final class CollapsePass {
 		// Each operand is recursed through `rewrite` first (so a nested paren /
 		// add-chain operand still resolves its own collapse), then a fitting call
 		// operand is force-flat.
-		final beforeItems:Array<Doc> = [
+		final beforeItems: Array<Doc> = [
 			flattenIfFittingCall(rewrite(chain.operands[0], decisions, insideBroken, width), col, width),
 		];
-		for (i in 0...chain.ops.length)
-			beforeItems.push(Concat([Text(chain.ops[i] + ' '),
-				flattenIfFittingCall(rewrite(chain.operands[i + 1], decisions, insideBroken, width), col, width)]));
+		for (i in 0...chain.ops.length) beforeItems.push(Concat([
+			Text(chain.ops[i] + ' '),
+			flattenIfFittingCall(rewrite(chain.operands[i + 1], decisions, insideBroken, width), col, width)
+		]));
 		return Group(Nest(parts.cols, Fill(beforeItems, parts.sep)));
 	}
 
@@ -541,30 +542,30 @@ final class CollapsePass {
 	 * NO recursive natural-FL probe across a spine (PERF TRAP). Returns null
 	 * when `d` is not the marker.
 	 */
-	private static function rewriteChainProbe(d:Doc, decisions:Array<{node:Doc, crosses:Bool, ?indent:Int}>, insideBroken:Bool, width:Int):Null<Doc> {
-		final inner:Null<Doc> = switch d {
+	private static function rewriteChainProbe(
+		d: Doc, decisions: Array<{ node: Doc, crosses: Bool, ?indent: Int }>, insideBroken: Bool, width: Int
+	): Null<Doc> {
+		final inner: Null<Doc> = switch d {
 			case CollapseChainProbe(i): i;
 			case _: null;
 		};
 		if (inner == null) return null;
-		final col:Null<Int> = capturedIndent(d, decisions);
+		final col: Null<Int> = capturedIndent(d, decisions);
 		// No recorded column → marker never measured (e.g. a flat-mode parent
 		// short-circuited) → keep the glued/IfFLE shape unchanged.
 		if (col == null) return rewrite(inner, decisions, insideBroken, width);
-		final glueShape:Null<Doc> = switch inner {
+		final glueShape: Null<Doc> = switch inner {
 			case IfFullLineExceeds(_, _, glue): glue;
 			case _: null;
 		};
 		if (glueShape == null) return rewrite(inner, decisions, insideBroken, width);
 		// The chain only needs re-glue if its full glued flat would overflow
 		// (otherwise the IfFullLineExceeds already picks glued — no flip).
-		if (col + DocMeasure.flatTokenWidth(glueShape) <= width)
-			return rewrite(inner, decisions, insideBroken, width);
+		if (col + DocMeasure.flatTokenWidth(glueShape) <= width) return rewrite(inner, decisions, insideBroken, width);
 		// The glued first line ends at the last segment's call open delim (its
 		// args break onto their own lines). It fits iff `col + prefix <= width`.
-		final prefix:Null<Int> = gluedFirstLineWidth(glueShape);
-		if (prefix == null || col + prefix > width)
-			return rewrite(inner, decisions, insideBroken, width);
+		final prefix: Null<Int> = gluedFirstLineWidth(glueShape);
+		if (prefix == null || col + prefix > width) return rewrite(inner, decisions, insideBroken, width);
 		// Re-glue: the call args wrap inside the glued chain (fork strips the
 		// chain break, keeps the callParameter break). Recurse so inner parens /
 		// sub-chains still resolve.
@@ -580,16 +581,16 @@ final class CollapsePass {
 	 * args break after. Null when `glue` is not the expected Concat shape or the
 	 * last segment has no open delim (not a breakable call).
 	 */
-	private static function gluedFirstLineWidth(glue:Doc):Null<Int> {
-		final parts:Null<Array<Doc>> = switch glue {
+	private static function gluedFirstLineWidth(glue: Doc): Null<Int> {
+		final parts: Null<Array<Doc>> = switch glue {
 			case Concat(items) if (items.length >= 2): items;
 			case _: null;
 		};
 		if (parts == null) return null;
-		final last:Doc = parts[parts.length - 1];
-		final lastPrefix:Null<Int> = flatPrefixToOpenDelim(last);
+		final last: Doc = parts[parts.length - 1];
+		final lastPrefix: Null<Int> = flatPrefixToOpenDelim(last);
 		if (lastPrefix == null) return null;
-		var total:Int = lastPrefix;
+		var total: Int = lastPrefix;
 		for (i in 0...parts.length - 1) total += DocMeasure.flatTokenWidth(parts[i]);
 		return total;
 	}
@@ -600,10 +601,10 @@ final class CollapsePass {
 	 * `.field(` prefix of a chain's last call segment — the part that stays on
 	 * the glued first line when the call's args break.
 	 */
-	private static function flatPrefixToOpenDelim(seg:Doc):Null<Int> {
-		final flat:String = DocMeasure.flatText(seg);
+	private static function flatPrefixToOpenDelim(seg: Doc): Null<Int> {
+		final flat: String = DocMeasure.flatText(seg);
 		for (i in 0...flat.length) {
-			final c:Int = StringTools.fastCodeAt(flat, i);
+			final c: Int = StringTools.fastCodeAt(flat, i);
 			if (c == '('.code || c == '['.code || c == '{'.code) return i + 1;
 		}
 		return null;
@@ -614,9 +615,9 @@ final class CollapsePass {
 	 * shape (the `CollapseBoolProbe` payload) into its Nest indent, Fill items,
 	 * and separator. Null when `d` is not that exact shape.
 	 */
-	private static function afterLastFillParts(d:Doc):Null<{cols:Int, items:Array<Doc>, sep:Doc}> {
+	private static function afterLastFillParts(d: Doc): Null<{ cols: Int, items: Array<Doc>, sep: Doc }> {
 		return switch d {
-			case Group(Nest(cols, Fill(items, sep, _))): {cols: cols, items: items, sep: sep};
+			case Group(Nest(cols, Fill(items, sep, _))): { cols: cols, items: items, sep: sep };
 			case _: null;
 		};
 	}
@@ -629,10 +630,10 @@ final class CollapsePass {
 	 * null when any non-last item is not that 2-element Concat shape (so a
 	 * structurally-unexpected payload falls back to the trailing shape).
 	 */
-	private static function splitAfterLastItems(items:Array<Doc>):Null<{operands:Array<Doc>, ops:Array<String>}> {
+	private static function splitAfterLastItems(items: Array<Doc>): Null<{ operands: Array<Doc>, ops: Array<String> }> {
 		if (items.length < 2) return null;
-		final operands:Array<Doc> = [];
-		final ops:Array<String> = [];
+		final operands: Array<Doc> = [];
+		final ops: Array<String> = [];
 		for (i in 0...items.length) {
 			if (i == items.length - 1) {
 				operands.push(items[i]);
@@ -641,13 +642,14 @@ final class CollapsePass {
 			switch items[i] {
 				case Concat([operand, Text(opText)]):
 					operands.push(operand);
-					final trimmed:String = StringTools.ltrim(opText);
+					final trimmed: String = StringTools.ltrim(opText);
 					if (trimmed.length == 0) return null;
 					ops.push(trimmed);
-				case _: return null;
+				case _:
+					return null;
 			}
 		}
-		return {operands: operands, ops: ops};
+		return { operands: operands, ops: ops };
 	}
 
 	/**
@@ -659,10 +661,10 @@ final class CollapsePass {
 	 * Only CALL operands count (mirror fork — a non-call overflowing operand
 	 * just breaks the chain at its operators, no direction flip).
 	 */
-	private static function callOperandOverflows(operands:Array<Doc>, ops:Array<String>, startCol:Int, width:Int):Bool {
-		var pos:Int = startCol;
+	private static function callOperandOverflows(operands: Array<Doc>, ops: Array<String>, startCol: Int, width: Int): Bool {
+		var pos: Int = startCol;
 		for (i in 0...operands.length) {
-			final w:Int = DocMeasure.flatTokenWidth(operands[i]);
+			final w: Int = DocMeasure.flatTokenWidth(operands[i]);
 			if (DocMeasure.operandIsCall(operands[i]) && pos + w > width) return true;
 			pos += w;
 			if (i < ops.length) pos += ops[i].length + 2;
@@ -679,44 +681,53 @@ final class CollapsePass {
 	 * wrapping). `HardFlatten` (not `Flatten`) because the call operand carries
 	 * a `WrapBoundary` whose force-flat a plain `Flatten` would not survive.
 	 */
-	private static function flattenIfFittingCall(operand:Doc, contColUpper:Int, width:Int):Doc {
+	private static function flattenIfFittingCall(operand: Doc, contColUpper: Int, width: Int): Doc {
 		if (!DocMeasure.operandIsCall(operand)) return operand;
 		return contColUpper + DocMeasure.flatTokenWidth(operand) <= width ? HardFlatten(operand) : operand;
 	}
 
 	/** True iff `d`'s subtree contains any `CollapseAddProbe` marker. */
-	private static function hasAddCandidate(d:Doc):Bool {
-		var found:Bool = false;
-		walk(d, node -> {
-			if (!found) switch node {
-				case CollapseAddProbe(_): found = true;
-				case _:
+	private static function hasAddCandidate(d: Doc): Bool {
+		var found: Bool = false;
+		walk(
+			d, node -> {
+				if (!found)
+					switch node {
+						case CollapseAddProbe(_): found = true;
+						case _:
+					}
 			}
-		});
+		);
 		return found;
 	}
 
 	/** True iff `d`'s subtree contains any `CollapseBoolProbe` marker. */
-	private static function hasBoolCandidate(d:Doc):Bool {
-		var found:Bool = false;
-		walk(d, node -> {
-			if (!found) switch node {
-				case CollapseBoolProbe(_): found = true;
-				case _:
+	private static function hasBoolCandidate(d: Doc): Bool {
+		var found: Bool = false;
+		walk(
+			d, node -> {
+				if (!found)
+					switch node {
+						case CollapseBoolProbe(_): found = true;
+						case _:
+					}
 			}
-		});
+		);
 		return found;
 	}
 
 	/** True iff `d`'s subtree contains any `CollapseChainProbe` marker. */
-	private static function hasChainCandidate(d:Doc):Bool {
-		var found:Bool = false;
-		walk(d, node -> {
-			if (!found) switch node {
-				case CollapseChainProbe(_): found = true;
-				case _:
+	private static function hasChainCandidate(d: Doc): Bool {
+		var found: Bool = false;
+		walk(
+			d, node -> {
+				if (!found)
+					switch node {
+						case CollapseChainProbe(_): found = true;
+						case _:
+					}
 			}
-		});
+		);
 		return found;
 	}
 
@@ -726,13 +737,13 @@ final class CollapsePass {
 	 * Used on a chain's committed-glued (`flat`) branch so the inner paren
 	 * opens within the glued tail.
 	 */
-	private static function commitOpens(d:Doc, decisions:Array<{node:Doc, crosses:Bool, ?indent:Int}>):Doc {
+	private static function commitOpens(d: Doc, decisions: Array<{ node: Doc, crosses: Bool, ?indent: Int }>): Doc {
 		switch d {
 			case IfFullLineExceeds(_, open, _) if (isCandidate(d) && opens(d, decisions)):
 				return commitOpens(open, decisions);
 			case _:
 		}
-		final glued:Null<Doc> = chainGluedIfOpens(d, decisions);
+		final glued: Null<Doc> = chainGluedIfOpens(d, decisions);
 		if (glued != null) return WrapBoundary(commitOpens(glued, decisions));
 
 		// A per-binary `Group` cascade on the spine between the committed
@@ -778,8 +789,8 @@ final class CollapsePass {
 	 * anchor's `opAddSubChain` config (`defaultWrap: noWrap`) is the
 	 * NoWrap shape `items[0] op items[1] …`.
 	 */
-	private static function chainGluedIfOpens(d:Doc, decisions:Array<{node:Doc, crosses:Bool, ?indent:Int}>):Null<Doc> {
-		final flat:Null<Doc> = switch d {
+	private static function chainGluedIfOpens(d: Doc, decisions: Array<{ node: Doc, crosses: Bool, ?indent: Int }>): Null<Doc> {
+		final flat: Null<Doc> = switch d {
 			case WrapBoundary(Group(IfBreak(_, fl))): fl;
 			case WrapBoundary(Group(IfWidthExceeds(_, _, fl))): fl;
 			case WrapBoundary(Group(IfFullLineExceeds(_, _, fl))): fl;
@@ -801,7 +812,7 @@ final class CollapsePass {
 	 * cascade) — but the candidate is recognised the same way in both cases,
 	 * so the enclosing chain is committed to glued identically.
 	 */
-	private static function isCandidate(d:Doc):Bool {
+	private static function isCandidate(d: Doc): Bool {
 		return switch d {
 			case IfFullLineExceeds(_, open, _): containsCollapseProbe(open);
 			case _: false;
@@ -814,40 +825,49 @@ final class CollapsePass {
 	 * the inverse `CollapseAddProbe` chain-broke decision — the lookup is the
 	 * same node-identity match for either marker kind.
 	 */
-	private static function opens(d:Doc, decisions:Array<{node:Doc, crosses:Bool, ?indent:Int}>):Bool {
+	private static function opens(d: Doc, decisions: Array<{ node: Doc, crosses: Bool, ?indent: Int }>): Bool {
 		// Node identity match — enum `==` is reference equality on JS, so this
 		// finds the decision recorded for this exact node.
-		final entry:Null<{node:Doc, crosses:Bool, ?indent:Int}> = decisions.find(e -> e.node == d);
+		final entry: Null<{ node: Doc, crosses: Bool, ?indent: Int }> = decisions.find(e -> e.node == d);
 		return entry != null && entry.crosses;
 	}
 
 	/** True iff `d`'s subtree contains a candidate paren that opens. */
-	private static function subtreeOpens(d:Doc, decisions:Array<{node:Doc, crosses:Bool, ?indent:Int}>):Bool {
-		var found:Bool = false;
-		walk(d, node -> {
-			if (!found && isCandidate(node) && opens(node, decisions)) found = true;
-		});
+	private static function subtreeOpens(d: Doc, decisions: Array<{ node: Doc, crosses: Bool, ?indent: Int }>): Bool {
+		var found: Bool = false;
+		walk(
+			d, node -> {
+				if (!found && isCandidate(node) && opens(node, decisions))
+					found = true;
+			}
+		);
 		return found;
 	}
 
 	/** True iff `d`'s subtree contains any collapse-candidate paren. */
-	private static function hasCandidate(d:Doc):Bool {
-		var found:Bool = false;
-		walk(d, node -> {
-			if (!found && isCandidate(node)) found = true;
-		});
+	private static function hasCandidate(d: Doc): Bool {
+		var found: Bool = false;
+		walk(
+			d, node -> {
+				if (!found && isCandidate(node))
+					found = true;
+			}
+		);
 		return found;
 	}
 
 	/** True iff `d`'s subtree contains a `CollapseProbe` region. */
-	private static function containsCollapseProbe(d:Doc):Bool {
-		var found:Bool = false;
-		walk(d, node -> {
-			if (!found) switch node {
-				case CollapseProbe(_): found = true;
-				case _:
+	private static function containsCollapseProbe(d: Doc): Bool {
+		var found: Bool = false;
+		walk(
+			d, node -> {
+				if (!found)
+					switch node {
+						case CollapseProbe(_): found = true;
+						case _:
+					}
 			}
-		});
+		);
 		return found;
 	}
 
@@ -855,30 +875,29 @@ final class CollapsePass {
 	 * Pre-order structural walk applying `visit` to every node. Read-only;
 	 * does not rebuild. Used by the candidate / open / hard-flatten probes.
 	 */
-	private static function walk(d:Doc, visit:Doc -> Void):Void {
-		final stack:Array<Doc> = [d];
+	private static function walk(d: Doc, visit: Doc -> Void): Void {
+		final stack: Array<Doc> = [d];
 		while (stack.length > 0) {
 			// `stack.length > 0` guard proves non-null; Strict won't narrow
 			// `Array.pop()` on the runtime invariant (lang-haxe gotcha).
-			final node:Doc = (cast stack.pop() : Doc);
+			final node: Doc = (cast stack.pop(): Doc);
 			visit(node);
 			switch node {
-				case Empty | Text(_) | Line(_) | OptSpace(_) | OptHardline
-						| OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline
-						| OptSpaceSkipAfterHardline:
-				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner)
-						| BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner)
-						| HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner)
-						| CollapseBoolProbe(inner) | CollapseChainProbe(inner)
-						| ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
+				case Empty | Text(_) | Line(_) | OptSpace(_) | OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline
+					| OptSpaceSkipAfterHardline:
+				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner) | BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(
+					inner
+				) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
+					inner
+				) | ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 				case Concat(items):
 					for (it in items) stack.push(it);
-				case IfBreak(brk, fl) | IfWidthExceeds(_, brk, fl)
-						| IfFirstLineExceeds(_, brk, fl) | IfLineExceeds(_, brk, fl)
-						| IfFullLineExceeds(_, brk, fl) | IfNaturalFirstLineExceeds(_, brk, fl)
-						| IfNaturalFirstLineFitsOpenDelim(_, brk, fl)
-						| IfArrowContinuationFits(_, _, _, brk, fl):
+				case IfBreak(brk, fl) | IfWidthExceeds(_, brk, fl) | IfFirstLineExceeds(_, brk, fl) | IfLineExceeds(_, brk, fl) | IfFullLineExceeds(
+					_, brk, fl
+				) | IfNaturalFirstLineExceeds(_, brk, fl) | IfNaturalFirstLineFitsOpenDelim(_, brk, fl) | IfArrowContinuationFits(
+					_, _, _, brk, fl
+				):
 					stack.push(brk);
 					stack.push(fl);
 				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
@@ -893,11 +912,10 @@ final class CollapsePass {
 	 * `d` unchanged. Preserves every ctor's structure — pure
 	 * structure-preserving map (no decision logic here).
 	 */
-	private static function mapChildren(d:Doc, f:Doc -> Doc):Doc {
+	private static function mapChildren(d: Doc, f: Doc -> Doc): Doc {
 		return switch d {
-			case Empty | Text(_) | Line(_) | OptSpace(_) | OptHardline
-					| OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline
-					| OptSpaceSkipAfterHardline:
+			case Empty | Text(_) | Line(_) | OptSpace(_) | OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline
+				| OptSpaceSkipAfterHardline:
 				d;
 			case Nest(n, inner): Nest(n, f(inner));
 			case Group(inner): Group(f(inner));
@@ -926,4 +944,5 @@ final class CollapsePass {
 			case FillBreakAfterWrap(items, sep, tr): FillBreakAfterWrap([for (it in items) f(it)], f(sep), tr);
 		};
 	}
+
 }

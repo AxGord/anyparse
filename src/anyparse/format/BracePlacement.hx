@@ -38,4 +38,5 @@ enum abstract BracePlacement(Int) from Int to Int {
 	final Same = 0;
 
 	final Next = 1;
+
 }

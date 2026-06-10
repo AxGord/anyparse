@@ -45,15 +45,16 @@ import anyparse.format.Format;
  */
 class LoweringCtx {
 
-	public final skipStack:Array<CoreIR> = [];
-	public final captures:Array<String> = [];
+	public final skipStack: Array<CoreIR> = [];
+	public final captures: Array<String> = [];
 
-	public var indentMode:Null<String> = null;
-	public var activeFormat:Null<Format> = null;
-	public var mode:Mode = Mode.Tolerant;
-	public var trivia:Bool = false;
-	public var spans:Bool = false;
+	public var indentMode: Null<String> = null;
+	public var activeFormat: Null<Format> = null;
+	public var mode: Mode = Mode.Tolerant;
+	public var trivia: Bool = false;
+	public var spans: Bool = false;
 
 	public function new() {}
+
 }
 #end

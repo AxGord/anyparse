@@ -29,4 +29,5 @@ enum abstract HxFormatRightCurlyPolicy(String) to String {
 	final After = 'after';
 
 	final Both = 'both';
+
 }

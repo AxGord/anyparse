@@ -33,14 +33,15 @@ enum JValue {
 	JNull;
 
 	@:lit('true', 'false')
-	JBool(v:Bool);
+	JBool(v: Bool);
 
-	JNumber(v:JNumberLit);
-	JString(v:JStringLit);
+	JNumber(v: JNumberLit);
+	JString(v: JStringLit);
 
 	@:lead('[') @:trail(']') @:sep(',', tailRelax)
-	JArray(items:Array<JValue>);
+	JArray(items: Array<JValue>);
 
 	@:lead('{') @:trail('}') @:sep(',', tailRelax)
-	JObject(entries:Array<JEntry>);
+	JObject(entries: Array<JEntry>);
+
 }

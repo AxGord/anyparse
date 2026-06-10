@@ -24,4 +24,5 @@ enum abstract HxFormatLeftCurlyPolicy(String) to String {
 	final Before = 'before';
 
 	final Both = 'both';
+
 }

@@ -40,4 +40,5 @@ enum abstract WhitespacePolicy(Int) from Int to Int {
 	final After = 2;
 
 	final Both = 3;
+
 }

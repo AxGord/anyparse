@@ -243,12 +243,13 @@ package anyparse.core;
  * See `D` for builder helpers and `Renderer` for the layout algorithm.
  */
 enum Doc {
+
 	Empty;
-	Text(s:String);
-	Line(flat:String);
-	Nest(indent:Int, inner:Doc);
-	Group(inner:Doc);
-	BodyGroup(inner:Doc);
+	Text(s: String);
+	Line(flat: String);
+	Nest(indent: Int, inner: Doc);
+	Group(inner: Doc);
+	BodyGroup(inner: Doc);
 
 	/**
 	 * Rest-of-stack-aware `Group` variant (ω-group-rest-probe). At
@@ -270,14 +271,14 @@ enum Doc {
 	 * identically to `Group(inner)` — semantic difference is rendering-time
 	 * only.
 	 */
-	GroupWithRestProbe(inner:Doc);
-	Concat(items:Array<Doc>);
-	IfBreak(breakDoc:Doc, flatDoc:Doc);
-	IfWidthExceeds(n:Int, breakDoc:Doc, flatDoc:Doc);
-	IfFirstLineExceeds(n:Int, breakDoc:Doc, flatDoc:Doc);
-	IfLineExceeds(n:Int, breakDoc:Doc, flatDoc:Doc);
-	IfFullLineExceeds(n:Int, breakDoc:Doc, flatDoc:Doc);
-	IfNaturalFirstLineExceeds(n:Int, breakDoc:Doc, flatDoc:Doc);
+	GroupWithRestProbe(inner: Doc);
+	Concat(items: Array<Doc>);
+	IfBreak(breakDoc: Doc, flatDoc: Doc);
+	IfWidthExceeds(n: Int, breakDoc: Doc, flatDoc: Doc);
+	IfFirstLineExceeds(n: Int, breakDoc: Doc, flatDoc: Doc);
+	IfLineExceeds(n: Int, breakDoc: Doc, flatDoc: Doc);
+	IfFullLineExceeds(n: Int, breakDoc: Doc, flatDoc: Doc);
+	IfNaturalFirstLineExceeds(n: Int, breakDoc: Doc, flatDoc: Doc);
 
 	/**
 	 * Condition-paren-glue decision (ω-cond-paren-glued, increment-4).
@@ -303,7 +304,7 @@ enum Doc {
 	 * test is what separates leading-break from packed inner constructs. Pure
 	 * render-time decision — all static Doc walkers forward to `flatDoc`.
 	 */
-	IfNaturalFirstLineFitsOpenDelim(n:Int, breakDoc:Doc, flatDoc:Doc);
+	IfNaturalFirstLineFitsOpenDelim(n: Int, breakDoc: Doc, flatDoc: Doc);
 
 	/**
 	 * Sole-arrow call-arg head-glue decision (ω-inc5-cont). Renders `flatDoc`
@@ -327,8 +328,8 @@ enum Doc {
 	 * measurer call is needed; the arm just checks
 	 * `f.indent + extraIndent + flatWidth < n`.
 	 */
-	IfArrowContinuationFits(extraIndent:Int, flatWidth:Int, n:Int, breakDoc:Doc, flatDoc:Doc);
-	Fill(items:Array<Doc>, sep:Doc, ?tailReserve:Int);
+	IfArrowContinuationFits(extraIndent: Int, flatWidth: Int, n: Int, breakDoc: Doc, flatDoc: Doc);
+	Fill(items: Array<Doc>, sep: Doc, ?tailReserve: Int);
 
 	/**
 	 * Rest-of-stack-aware `Fill` variant (ω-fill-rest-probe). At render
@@ -351,7 +352,7 @@ enum Doc {
 	 * identically to `Fill(items, sep, tailReserve)` — semantic
 	 * difference is rendering-time only.
 	 */
-	FillWithRestProbe(items:Array<Doc>, sep:Doc, ?tailReserve:Int);
+	FillWithRestProbe(items: Array<Doc>, sep: Doc, ?tailReserve: Int);
 
 	/**
 	 * Break-after-wrapped-item `Fill` variant (ω-fill-break-after-wrap). At
@@ -379,8 +380,8 @@ enum Doc {
 	 * to `Fill(items, sep, tailReserve)` — the break-after-wrap semantic is a
 	 * render-time decision only.
 	 */
-	FillBreakAfterWrap(items:Array<Doc>, sep:Doc, ?tailReserve:Int);
-	OptSpace(s:String);
+	FillBreakAfterWrap(items: Array<Doc>, sep: Doc, ?tailReserve: Int);
+	OptSpace(s: String);
 	OptHardline;
 	OptHardlineSkipAtOpenDelim;
 
@@ -463,7 +464,7 @@ enum Doc {
 	 * `WrapBoundary` to reset force-flat — each cascade evaluates
 	 * independently inside a force-flat region.
 	 */
-	Flatten(inner:Doc);
+	Flatten(inner: Doc);
 
 	/**
 	 * Force-flat reset marker (ω-force-flat-engine). Inside the subtree,
@@ -485,7 +486,7 @@ enum Doc {
 	 * Like `Flatten`, this is rendering-time state — Doc walkers treat
 	 * it as transparent pass-through.
 	 */
-	WrapBoundary(inner:Doc);
+	WrapBoundary(inner: Doc);
 
 	/**
 	 * Force-flat propagation marker whose region survives an inner
@@ -514,7 +515,7 @@ enum Doc {
 	 * Doc walkers treat it as a transparent pass-through (descend `inner`).
 	 * Only `Renderer` interprets the hard-region semantic.
 	 */
-	HardFlatten(inner:Doc);
+	HardFlatten(inner: Doc);
 
 	/**
 	 * Expression-paren collapse-candidate marker (ω-collapse-probe /
@@ -537,7 +538,7 @@ enum Doc {
 	 * Like `Flatten`/`WrapBoundary`/`HardFlatten`, all Doc walkers treat it
 	 * as a transparent pass-through (descend `inner`).
 	 */
-	CollapseProbe(inner:Doc);
+	CollapseProbe(inner: Doc);
 
 	/**
 	 * Inner-opAddSub-chain collapse-candidate marker (ω-unwrap-add-ops /
@@ -571,7 +572,7 @@ enum Doc {
 	 * Like `Flatten`/`WrapBoundary`/`HardFlatten`/`CollapseProbe`, all Doc
 	 * walkers treat it as a transparent pass-through (descend `inner`).
 	 */
-	CollapseAddProbe(inner:Doc);
+	CollapseAddProbe(inner: Doc);
 
 	/**
 	 * opBool-chain break-DIRECTION re-evaluation marker
@@ -607,7 +608,7 @@ enum Doc {
 	 * `CollapseAddProbe`, all Doc walkers treat it as a transparent
 	 * pass-through (descend `inner`).
 	 */
-	CollapseBoolProbe(inner:Doc);
+	CollapseBoolProbe(inner: Doc);
 
 	/**
 	 * method-chain re-glue (dot-break re-evaluation) marker
@@ -645,7 +646,7 @@ enum Doc {
 	 * `CollapseAddProbe`/`CollapseBoolProbe`, all Doc walkers treat it as a
 	 * transparent pass-through (descend `inner`).
 	 */
-	CollapseChainProbe(inner:Doc);
+	CollapseChainProbe(inner: Doc);
 
 	/**
 	 * Conditional-compilation marker fixed-zero scope (ω-cond-indent-policy
@@ -677,7 +678,7 @@ enum Doc {
 	 * walker descends `inner` exactly like `WrapBoundary`; only
 	 * `Renderer.render` interprets the marker re-indent.
 	 */
-	ConditionalMarkerZero(inner:Doc);
+	ConditionalMarkerZero(inner: Doc);
 
 	/**
 	 * Conditional-compilation marker decrease scope (ω-cond-indent-policy
@@ -717,5 +718,6 @@ enum Doc {
 	 * walker descends `inner` exactly like `ConditionalMarkerZero`; only
 	 * `Renderer.render` interprets the marker re-indent.
 	 */
-	ConditionalMarkerDecrease(inner:Doc);
+	ConditionalMarkerDecrease(inner: Doc);
+
 }

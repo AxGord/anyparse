@@ -82,9 +82,10 @@ package anyparse.grammar.haxe;
 enum HxParam {
 
 	@:kw('#if') @:trail('#end')
-	Conditional(inner:HxConditionalParam);
+	Conditional(inner: HxConditionalParam);
 
-	@:lead('?') Optional(body:HxParamBody);
-	@:lead('...') Rest(body:HxParamBody);
-	Required(body:HxParamBody);
+	@:lead('?') Optional(body: HxParamBody);
+	@:lead('...') Rest(body: HxParamBody);
+	Required(body: HxParamBody);
+
 }

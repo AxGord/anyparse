@@ -86,6 +86,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxTryCatchExpr = {
-	@:trailOpt(';') @:fmt(bodyBreak('expressionTry'), blockBodyKeepsInline) var body:HxExpr;
-	@:trivia @:tryparse @:fmt(sameLine('expressionTry'), blockBodyKeepsInline('sameLineCatch')) var catches:Array<HxCatchClauseExpr>;
+	@:trailOpt(';') @:fmt(bodyBreak('expressionTry'), blockBodyKeepsInline) var body: HxExpr;
+	@:trivia @:tryparse @:fmt(sameLine('expressionTry'), blockBodyKeepsInline('sameLineCatch')) var catches: Array<HxCatchClauseExpr>;
 };

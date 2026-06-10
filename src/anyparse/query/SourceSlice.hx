@@ -28,10 +28,10 @@ using StringTools;
 final class SourceSlice {
 
 	/** Verbatim source between `span.from` and `span.to`, clamped. */
-	public static function slice(source:String, span:Null<Span>):String {
+	public static function slice(source: String, span: Null<Span>): String {
 		if (span == null) return '';
-		final from:Int = span.from < 0 ? 0 : span.from;
-		final to:Int = span.to > source.length ? source.length : span.to;
+		final from: Int = span.from < 0 ? 0 : span.from;
+		final to: Int = span.to > source.length ? source.length : span.to;
 		if (from >= to) return '';
 		return source.substring(from, to);
 	}
@@ -41,19 +41,19 @@ final class SourceSlice {
 	 * `span.from` is given, or `null` when none is adjacent. Indentation
 	 * of the original source is preserved.
 	 */
-	public static function leadingDoc(source:String, span:Null<Span>):Null<String> {
+	public static function leadingDoc(source: String, span: Null<Span>): Null<String> {
 		if (span == null) return null;
-		final lineStart:Array<Int> = [];
-		final lineEnd:Array<Int> = [];
+		final lineStart: Array<Int> = [];
+		final lineEnd: Array<Int> = [];
 		computeLines(source, lineStart, lineEnd);
 		if (lineStart.length == 0) return null;
 
-		final from:Int = span.from < 0 ? 0 : (span.from > source.length ? source.length : span.from);
-		final declLine:Int = lineOfOffset(lineStart, lineEnd, from);
+		final from: Int = span.from < 0 ? 0 : (span.from > source.length ? source.length : span.from);
+		final declLine: Int = lineOfOffset(lineStart, lineEnd, from);
 
-		var i:Int = declLine - 1;
+		var i: Int = declLine - 1;
 		while (i >= 0) {
-			final trimmed:String = source.substring(lineStart[i], lineEnd[i]).trim();
+			final trimmed: String = source.substring(lineStart[i], lineEnd[i]).trim();
 			if (trimmed.length == 0 || trimmed.startsWith('@')) {
 				i--;
 				continue;
@@ -62,15 +62,15 @@ final class SourceSlice {
 		}
 		if (i < 0) return null;
 
-		final endLineTrim:String = source.substring(lineStart[i], lineEnd[i]).trim();
+		final endLineTrim: String = source.substring(lineStart[i], lineEnd[i]).trim();
 		if (endLineTrim.endsWith('*/')) {
-			var j:Int = i;
+			var j: Int = i;
 			while (j >= 0 && source.substring(lineStart[j], lineEnd[j]).indexOf('/*') < 0) j--;
 			if (j < 0) return null;
 			return source.substring(lineStart[j], lineEnd[i]);
 		}
 		if (endLineTrim.startsWith('//')) {
-			var k:Int = i;
+			var k: Int = i;
 			while (k - 1 >= 0 && source.substring(lineStart[k - 1], lineEnd[k - 1]).trim().startsWith('//')) k--;
 			return source.substring(lineStart[k], lineEnd[i]);
 		}
@@ -83,8 +83,8 @@ final class SourceSlice {
 	 * the verbatim slice is byte-faithful while `StringTools.trim`
 	 * comparisons ignore it.
 	 */
-	private static function computeLines(source:String, starts:Array<Int>, ends:Array<Int>):Void {
-		var lineStart:Int = 0;
+	private static function computeLines(source: String, starts: Array<Int>, ends: Array<Int>): Void {
+		var lineStart: Int = 0;
 		for (idx in 0...source.length) if (StringTools.fastCodeAt(source, idx) == '\n'.code) {
 			starts.push(lineStart);
 			ends.push(idx);
@@ -95,8 +95,9 @@ final class SourceSlice {
 	}
 
 	/** Index of the line whose range contains `offset`. */
-	private static function lineOfOffset(starts:Array<Int>, ends:Array<Int>, offset:Int):Int {
+	private static function lineOfOffset(starts: Array<Int>, ends: Array<Int>, offset: Int): Int {
 		for (n in 0...starts.length) if (offset <= ends[n]) return n;
 		return starts.length - 1;
 	}
+
 }

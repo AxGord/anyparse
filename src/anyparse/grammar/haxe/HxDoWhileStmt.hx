@@ -34,8 +34,8 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxDoWhileStmt = {
-	@:trailOpt(';') @:fmt(bodyPolicy('doBody')) var body:HxDoWhileBody;
+	@:trailOpt(';') @:fmt(bodyPolicy('doBody')) var body: HxDoWhileBody;
 	@:kw('while') @:lead('(') @:trail(')')
-		@:fmt(sameLine('sameLineDoWhile'), whilePolicy, whileCondParensInsideOpen, whileCondParensInsideClose)
-		var cond:HxExpr;
+	@:fmt(sameLine('sameLineDoWhile'), whilePolicy, whileCondParensInsideOpen, whileCondParensInsideClose)
+	var cond: HxExpr;
 };

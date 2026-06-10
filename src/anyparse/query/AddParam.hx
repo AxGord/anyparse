@@ -14,8 +14,10 @@ import haxe.Exception;
  * `ExtractResult`.
  */
 enum AddParamResult {
-	Ok(text:String);
-	Err(message:String);
+
+	Ok(text: String);
+	Err(message: String);
+
 }
 
 /**
@@ -63,7 +65,7 @@ enum AddParamResult {
 final class AddParam {
 
 	/** Parameter-node kinds in a function declaration's leading children. */
-	private static final PARAM_KINDS:Array<String> = ['Required', 'Optional'];
+	private static final PARAM_KINDS: Array<String> = ['Required', 'Optional'];
 
 	/**
 	 * Add `paramText` as a new trailing parameter to the function whose
@@ -73,23 +75,22 @@ final class AddParam {
 	 * `Err` describing why the parameter could not be added. The source is
 	 * never mutated — the caller decides whether to write the result.
 	 */
-	public static function addParam(source:String, line:Int, col:Int, paramText:String, plugin:GrammarPlugin):AddParamResult {
-		final tree:QueryNode = try plugin.parseFile(source)
-			catch (exception:ParseError) return Err('source does not parse: ${exception.toString()}')
-			catch (exception:Exception) return Err('source does not parse: ${exception.message}');
+	public static function addParam(source: String, line: Int, col: Int, paramText: String, plugin: GrammarPlugin): AddParamResult {
+		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
+			'source does not parse: ${exception.toString()}'
+		)
+		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
 		// `apq refs` prints `Span.lineCol().col - 1`; invert that here so a
 		// position copied from `refs` output maps back to the real offset.
-		final cursor:Int = Span.offsetOf(source, line, col + 1);
+		final cursor: Int = Span.offsetOf(source, line, col + 1);
 
-		final fn:Null<QueryNode> = RefactorSupport.innermostWhere(tree, cursor, node -> RefactorSupport.FN_DECL_KINDS.contains(node.kind));
-		if (fn == null)
-			return Err('position $line:$col is not on a function');
-		final fnNode:QueryNode = fn;
-		final fnSpan:Null<Span> = fnNode.span;
-		if (fnSpan == null)
-			return Err('position $line:$col is not on a function');
-		final declSpan:Span = fnSpan;
+		final fn: Null<QueryNode> = RefactorSupport.innermostWhere(tree, cursor, node -> RefactorSupport.FN_DECL_KINDS.contains(node.kind));
+		if (fn == null) return Err('position $line:$col is not on a function');
+		final fnNode: QueryNode = fn;
+		final fnSpan: Null<Span> = fnNode.span;
+		if (fnSpan == null) return Err('position $line:$col is not on a function');
+		final declSpan: Span = fnSpan;
 
 		// Backward-compat guard: a required parameter would break existing
 		// call sites. Accept only an optional (`?name:T`) or defaulted
@@ -97,41 +98,42 @@ final class AddParam {
 		// top-level `=`) is intentionally simple — the re-parse-validate is
 		// the backstop. A `=` buried inside the parameter's type is
 		// acceptable; it still satisfies "has a default" textually.
-		final trimmed:String = StringTools.trim(paramText);
-		if (trimmed.length == 0)
-			return Err('add-param requires a non-empty parameter text');
+		final trimmed: String = StringTools.trim(paramText);
+		if (trimmed.length == 0) return Err('add-param requires a non-empty parameter text');
 		if (!StringTools.startsWith(trimmed, '?') && trimmed.indexOf('=') < 0)
-			return Err('add-param requires a default value (`name:T = v`) or optional `?name:T` — a required parameter would break existing call sites');
+			return
+				Err(
+					'add-param requires a default value (`name:T = v`) or optional `?name:T` — a required parameter would break existing call sites'
+				);
 
-		final paramName:Null<String> = parseParamName(trimmed);
-		if (paramName == null)
-			return Err('cannot read a parameter name from "$paramText"');
-		final newName:String = paramName;
+		final paramName: Null<String> = parseParamName(trimmed);
+		if (paramName == null) return Err('cannot read a parameter name from "$paramText"');
+		final newName: String = paramName;
 
-		final params:Array<QueryNode> = [for (c in fnNode.children) if (PARAM_KINDS.contains(c.kind)) c];
-		if (Lambda.exists(params, p -> p.name == newName))
-			return Err('"$newName" is already a parameter');
+		final params: Array<QueryNode> = [for (c in fnNode.children) if (PARAM_KINDS.contains(c.kind)) c];
+		if (Lambda.exists(params, p -> p.name == newName)) return Err('"$newName" is already a parameter');
 
-		final insertOffset:Int = if (params.length > 0)
+		final insertOffset: Int = if (params.length > 0)
 			tailInsertOffset(source, params[params.length - 1])
 		else
 			emptyParenInsertOffset(source, declSpan);
-		if (insertOffset < 0)
-			return Err('could not locate the parameter list of the function at $line:$col');
+		if (insertOffset < 0) return Err('could not locate the parameter list of the function at $line:$col');
 
-		final insertText:String = params.length > 0 ? ', ' + trimmed : trimmed;
-		final edit:{span:Span, text:String} = {
+		final insertText: String = params.length > 0 ? ', ' + trimmed : trimmed;
+		final edit: { span: Span, text: String } = {
 			span: new Span(insertOffset, insertOffset),
 			text: insertText,
 		};
 
-		final rewritten:String = RefactorSupport.applyEdits(source, [edit]);
-		if (rewritten == source)
-			return Err('adding "$newName" is a no-op');
+		final rewritten: String = RefactorSupport.applyEdits(source, [edit]);
+		if (rewritten == source) return Err('adding "$newName" is a no-op');
 
-		try plugin.parseFile(rewritten)
-			catch (exception:ParseError) return Err('rewritten source does not parse: ${exception.toString()}')
-			catch (exception:Exception) return Err('rewritten source does not parse: ${exception.message}');
+		try
+			plugin.parseFile(rewritten)
+		catch (exception: ParseError)
+			return Err('rewritten source does not parse: ${exception.toString()}')
+		catch (exception: Exception)
+			return Err('rewritten source does not parse: ${exception.message}');
 
 		return Ok(rewritten);
 	}
@@ -142,12 +144,12 @@ final class AddParam {
 	 * `flag`, `count:Int = 0` → `count`. Null when no identifier starts
 	 * there.
 	 */
-	private static function parseParamName(paramText:String):Null<String> {
-		var i:Int = 0;
+	private static function parseParamName(paramText: String): Null<String> {
+		var i: Int = 0;
 		while (i < paramText.length && RefactorSupport.isSpace(StringTools.fastCodeAt(paramText, i))) i++;
 		if (i < paramText.length && StringTools.fastCodeAt(paramText, i) == '?'.code) i++;
 		while (i < paramText.length && RefactorSupport.isSpace(StringTools.fastCodeAt(paramText, i))) i++;
-		final start:Int = i;
+		final start: Int = i;
 		if (i >= paramText.length || !RefactorSupport.isIdentStartChar(StringTools.fastCodeAt(paramText, i))) return null;
 		i++;
 		while (i < paramText.length && RefactorSupport.isIdentChar(StringTools.fastCodeAt(paramText, i))) i++;
@@ -163,16 +165,16 @@ final class AddParam {
 	 * last parameter's `span.to` must be `)` or a trailing `,` then `)`.
 	 * Returns -1 when that tail check fails.
 	 */
-	private static function tailInsertOffset(source:String, lastParam:QueryNode):Int {
-		final span:Null<Span> = lastParam.span;
+	private static function tailInsertOffset(source: String, lastParam: QueryNode): Int {
+		final span: Null<Span> = lastParam.span;
 		if (span == null) return -1;
-		final spanTo:Int = span.to;
+		final spanTo: Int = span.to;
 
 		// Tail check: from the last parameter's span end, the next
 		// significant character closes the list (`)`) — optionally after a
 		// trailing comma. Anything else means the resolved node is not the
 		// final parameter and the insertion would be unsafe.
-		var j:Int = spanTo;
+		var j: Int = spanTo;
 		while (j < source.length && RefactorSupport.isSpace(StringTools.fastCodeAt(source, j))) j++;
 		if (j < source.length && StringTools.fastCodeAt(source, j) == ','.code) {
 			j++;
@@ -183,7 +185,7 @@ final class AddParam {
 		// Insert right after the parameter content: trim trailing
 		// whitespace included in the span (multi-line parameter lists carry
 		// the newline / indentation up to the next token in the span).
-		var k:Int = spanTo;
+		var k: Int = spanTo;
 		while (k > span.from && RefactorSupport.isSpace(StringTools.fastCodeAt(source, k - 1))) k--;
 		return k;
 	}
@@ -196,13 +198,14 @@ final class AddParam {
 	 * is bounded by the declaration span so a `(` in a body / return type
 	 * is never reached. Returns -1 when no `(` is found.
 	 */
-	private static function emptyParenInsertOffset(source:String, declSpan:Span):Int {
-		final to:Int = declSpan.to <= source.length ? declSpan.to : source.length;
-		var i:Int = declSpan.from < 0 ? 0 : declSpan.from;
+	private static function emptyParenInsertOffset(source: String, declSpan: Span): Int {
+		final to: Int = declSpan.to <= source.length ? declSpan.to : source.length;
+		var i: Int = declSpan.from < 0 ? 0 : declSpan.from;
 		while (i < to) {
 			if (StringTools.fastCodeAt(source, i) == '('.code) return i + 1;
 			i++;
 		}
 		return -1;
 	}
+
 }

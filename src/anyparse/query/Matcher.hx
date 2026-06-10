@@ -37,17 +37,19 @@ final class Matcher {
 	 * reported in pre-order — outer matches before any nested matches
 	 * that fall within them.
 	 */
-	public static function search(pattern:Pattern, tree:QueryNode, ?kindFilter:String):Array<Match> {
-		final out:Array<Match> = [];
+	public static function search(pattern: Pattern, tree: QueryNode, ?kindFilter: String): Array<Match> {
+		final out: Array<Match> = [];
 		walk(pattern.root, tree, pattern.kindEquivalence, out, kindFilter);
 		return out;
 	}
 
-	private static function walk(pattern:QueryNode, input:QueryNode, eq:Null<KindEquivalence>, out:Array<Match>, kindFilter:Null<String>):Void {
+	private static function walk(
+		pattern: QueryNode, input: QueryNode, eq: Null<KindEquivalence>, out: Array<Match>, kindFilter: Null<String>
+	): Void {
 		if (kindFilter == null || input.kind == kindFilter) {
-			final bindings:Map<String, QueryNode> = new Map();
+			final bindings: Map<String, QueryNode> = new Map();
 			if (unify(pattern, input, eq, bindings)) {
-				final span:Null<Span> = input.span;
+				final span: Null<Span> = input.span;
 				if (span != null) out.push(new Match(span, bindings));
 			}
 		}
@@ -62,13 +64,13 @@ final class Matcher {
 	 * share the same map so cross-position constraints (e.g. `$x = $x +
 	 * 1`) are enforced.
 	 */
-	private static function unify(pattern:QueryNode, input:QueryNode, eq:Null<KindEquivalence>, bindings:Map<String, QueryNode>):Bool {
+	private static function unify(pattern: QueryNode, input: QueryNode, eq: Null<KindEquivalence>, bindings: Map<String, QueryNode>): Bool {
 		// Whole-subtree metavar (e.g. bare `$x` / `$_`).
 		if (pattern.kind == Metavar.KIND) {
-			final n:Null<String> = pattern.name;
+			final n: Null<String> = pattern.name;
 			if (n == null) return false;
 			if (n == Metavar.WILDCARD_NAME) return true;
-			final prior:Null<QueryNode> = bindings.get(n);
+			final prior: Null<QueryNode> = bindings.get(n);
 			if (prior == null) {
 				bindings.set(n, input);
 				return true;
@@ -83,15 +85,15 @@ final class Matcher {
 		if (eq == null ? pattern.kind != input.kind : !eq.equivalent(pattern.kind, input.kind)) return false;
 		// Name-position match: either literal equality OR pattern carries
 		// a `$<name>` metavar binding for the name slot.
-		final pname:Null<String> = pattern.name;
-		final iname:Null<String> = input.name;
+		final pname: Null<String> = pattern.name;
+		final iname: Null<String> = input.name;
 		if (pname == null) {
 			if (iname != null) return false;
 		} else if (StringTools.startsWith(pname, '$')) {
-			final bare:String = pname.substring(1);
+			final bare: String = pname.substring(1);
 			if (bare != Metavar.WILDCARD_NAME) {
 				if (iname == null) return false;
-				final prior:Null<QueryNode> = bindings.get(bare);
+				final prior: Null<QueryNode> = bindings.get(bare);
 				if (prior == null) {
 					bindings.set(bare, new QueryNode('NameOnly', iname, [], input.span));
 				} else if (prior.kind == 'NameOnly') {
@@ -104,8 +106,8 @@ final class Matcher {
 			if (pname != iname) return false;
 		}
 		// Children: ordered + adjacent. Length must match exactly.
-		final pChildren:Array<QueryNode> = pattern.children;
-		final iChildren:Array<QueryNode> = input.children;
+		final pChildren: Array<QueryNode> = pattern.children;
+		final iChildren: Array<QueryNode> = input.children;
 		if (pChildren.length != iChildren.length) return false;
 		for (k in 0...pChildren.length) {
 			if (!unify(pChildren[k], iChildren[k], eq, bindings)) return false;
@@ -113,7 +115,7 @@ final class Matcher {
 		return true;
 	}
 
-	private static function structurallyEqual(a:QueryNode, b:QueryNode):Bool {
+	private static function structurallyEqual(a: QueryNode, b: QueryNode): Bool {
 		if (a.kind != b.kind) return false;
 		if (a.name != b.name) return false;
 		if (a.children.length != b.children.length) return false;
@@ -122,16 +124,18 @@ final class Matcher {
 		}
 		return true;
 	}
+
 }
 
 @:nullSafety(Strict)
 final class Match {
 
-	public final span:Span;
-	public final bindings:Map<String, QueryNode>;
+	public final span: Span;
+	public final bindings: Map<String, QueryNode>;
 
-	public function new(span:Span, bindings:Map<String, QueryNode>) {
+	public function new(span: Span, bindings: Map<String, QueryNode>) {
 		this.span = span;
 		this.bindings = bindings;
 	}
+
 }

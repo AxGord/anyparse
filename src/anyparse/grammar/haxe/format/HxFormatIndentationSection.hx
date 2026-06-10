@@ -38,21 +38,21 @@ package anyparse.grammar.haxe.format;
  */
 @:peg typedef HxFormatIndentationSection = {
 
-	@:optional var character:String;
+	@:optional var character: String;
 
-	@:optional var tabWidth:Int;
+	@:optional var tabWidth: Int;
 
-	@:optional var trailingWhitespace:Bool;
+	@:optional var trailingWhitespace: Bool;
 
-	@:optional var indentCaseLabels:Bool;
+	@:optional var indentCaseLabels: Bool;
 
-	@:optional var indentObjectLiteral:Bool;
+	@:optional var indentObjectLiteral: Bool;
 
-	@:optional var indentComplexValueExpressions:Bool;
+	@:optional var indentComplexValueExpressions: Bool;
 
-	@:optional var indentVarTypeHintAnon:Bool;
+	@:optional var indentVarTypeHintAnon: Bool;
 
-	@:optional var conditionalPolicy:String;
+	@:optional var conditionalPolicy: String;
 
-	@:optional var alignInlineSwitchCaseBody:Bool;
+	@:optional var alignInlineSwitchCaseBody: Bool;
 };

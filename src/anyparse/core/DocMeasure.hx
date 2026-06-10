@@ -11,6 +11,7 @@ package anyparse.core;
  * `Renderer` because they're driven directly by frame iteration.
  */
 final class DocMeasure {
+
 	/**
 	 * Walks a `Doc` tree and returns its visible-token width — the same
 	 * width the renderer would emit in flat layout if forced hardlines
@@ -39,12 +40,12 @@ final class DocMeasure {
 	 * Stack-based walk — items pushed in reverse so pop order matches
 	 * left-to-right traversal.
 	 */
-	public static function flatTokenWidth(d:Doc):Int {
-		final stack:Array<Doc> = [d];
-		var total:Int = 0;
+	public static function flatTokenWidth(d: Doc): Int {
+		final stack: Array<Doc> = [d];
+		var total: Int = 0;
 		while (stack.length > 0) {
-			final node:Doc = stack.pop();
-			switch (node) {
+			final node: Doc = stack.pop();
+			switch  (node) {
 				case Empty | OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
 				case Text(s):
 					total += s.length;
@@ -58,7 +59,7 @@ final class DocMeasure {
 				case Nest(_, inner):
 					stack.push(inner);
 				case Concat(items):
-					var i:Int = items.length;
+					var i: Int = items.length;
 					while (--i >= 0) stack.push(items[i]);
 				case Group(inner) | GroupWithRestProbe(inner):
 					stack.push(inner);
@@ -89,23 +90,28 @@ final class DocMeasure {
 					// primitive's own subtree width uses this same
 					// `flatTokenWidth` (defer BG) — sister forwarding.
 					stack.push(flatDoc);
-				case IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc) | IfArrowContinuationFits(_, _, _, _, flatDoc):
+				case IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc) | IfArrowContinuationFits(
+					_, _, _, _, flatDoc
+				):
 					// Forward to flat side: the natural-first-line probe is a
 					// render-time decision; static token-width walks see only
 					// the flat shape (sister of the IfFirstLineExceeds arm).
 					stack.push(flatDoc);
 				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
-					var k:Int = items.length;
+					var k: Int = items.length;
 					while (k > 0) {
 						k--;
 						stack.push(items[k]);
-						if (k > 0) stack.push(sep);
+						if (k > 0)
+							stack.push(sep);
 					}
 				case OptSpace(s):
 					total += s.length;
 				case OptSpaceSkipAfterHardline:
 					total += 1;
-				case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner):
+				case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(
+					inner
+				) | CollapseChainProbe(inner):
 					// ω-force-flat-engine slice A: pass-through. All four
 					// markers are render-time state; structural token-width
 					// measurement is independent of force-flat propagation.
@@ -131,37 +137,42 @@ final class DocMeasure {
 	 * `flatTokenWidth` but accumulating the characters rather than just the
 	 * width — used by `operandIsCall` to scan an operand for a call `(`.
 	 */
-	public static function flatText(d:Doc):String {
-		final buf:StringBuf = new StringBuf();
-		final stack:Array<Doc> = [d];
+	public static function flatText(d: Doc): String {
+		final buf: StringBuf = new StringBuf();
+		final stack: Array<Doc> = [d];
 		while (stack.length > 0) {
-			final node:Doc = (cast stack.pop() : Doc);
+			final node: Doc = (cast stack.pop(): Doc);
 			switch node {
-				case Empty | OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline
-						| OptSpaceSkipAfterHardline:
-				case Text(s): buf.add(s);
+				case Empty | OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline | OptSpaceSkipAfterHardline:
+				case Text(s):
+					buf.add(s);
 				case Line(flat):
-					if (!(flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code)) buf.add(flat);
-				case OptSpace(s): buf.add(s);
-				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner) | BodyGroup(inner)
-						| Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner)
-						| CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner)
-						| ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
+					if (!(flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code))
+						buf.add(flat);
+				case OptSpace(s):
+					buf.add(s);
+				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner) | BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(
+					inner
+				) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
+					inner
+				) | ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 				case Concat(items):
-					var k:Int = items.length;
+					var k: Int = items.length;
 					while (--k >= 0) stack.push(items[k]);
-				case IfBreak(_, fl) | IfWidthExceeds(_, _, fl) | IfFirstLineExceeds(_, _, fl)
-						| IfLineExceeds(_, _, fl) | IfFullLineExceeds(_, _, fl)
-						| IfNaturalFirstLineExceeds(_, _, fl) | IfNaturalFirstLineFitsOpenDelim(_, _, fl)
-						| IfArrowContinuationFits(_, _, _, _, fl):
+				case IfBreak(_, fl) | IfWidthExceeds(_, _, fl) | IfFirstLineExceeds(_, _, fl) | IfLineExceeds(_, _, fl) | IfFullLineExceeds(
+					_, _, fl
+				) | IfNaturalFirstLineExceeds(_, _, fl) | IfNaturalFirstLineFitsOpenDelim(_, _, fl) | IfArrowContinuationFits(
+					_, _, _, _, fl
+				):
 					stack.push(fl);
 				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
-					var k:Int = items.length;
+					var k: Int = items.length;
 					while (k > 0) {
 						k--;
 						stack.push(items[k]);
-						if (k > 0) stack.push(sep);
+						if (k > 0)
+							stack.push(sep);
 					}
 			}
 		}
@@ -181,11 +192,11 @@ final class DocMeasure {
 	 * ω-opbool-reeval marker gate) and `CollapsePass` (the flip + flatten
 	 * decision).
 	 */
-	public static function operandIsCall(d:Doc):Bool {
-		final s:String = flatText(d);
-		var prevNonWs:Int = -1;
+	public static function operandIsCall(d: Doc): Bool {
+		final s: String = flatText(d);
+		var prevNonWs: Int = -1;
 		for (i in 0...s.length) {
-			final c:Int = StringTools.fastCodeAt(s, i);
+			final c: Int = StringTools.fastCodeAt(s, i);
 			if (c == ' '.code || c == '\t'.code) continue;
 			if (prevNonWs == -1 && !isIdentStart(c)) return false;
 			if (c == '('.code && prevNonWs != -1 && isCallPrefixChar(prevNonWs)) return true;
@@ -195,9 +206,8 @@ final class DocMeasure {
 	}
 
 	/** True iff char code `c` may start an identifier (letter / `_` / `$`). */
-	private static inline function isIdentStart(c:Int):Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code)
-			|| c == '_'.code || c == '$'.code;
+	private static inline function isIdentStart(c: Int): Bool {
+		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || c == '_'.code || c == '$'.code;
 	}
 
 	/**
@@ -205,10 +215,9 @@ final class DocMeasure {
 	 * as a CALL open paren rather than a grouping paren — an identifier char,
 	 * a close `)` (`f()()`), or a type-param close `>` (`f<T>()`).
 	 */
-	private static inline function isCallPrefixChar(c:Int):Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code)
-			|| (c >= '0'.code && c <= '9'.code) || c == '_'.code || c == '$'.code
-			|| c == ')'.code || c == '>'.code;
+	private static inline function isCallPrefixChar(c: Int): Bool {
+		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code
+			|| c == '$'.code || c == ')'.code || c == '>'.code;
 	}
 
 	/**
@@ -226,29 +235,29 @@ final class DocMeasure {
 	 * scans its items right-to-left, ignoring the inter-item separator
 	 * (its text would not appear after the last item).
 	 */
-	public static function endsWithCloseBrace(d:Doc):Bool {
-		final stack:Array<Doc> = [d];
+	public static function endsWithCloseBrace(d: Doc): Bool {
+		final stack: Array<Doc> = [d];
 		while (stack.length > 0) {
-			final node:Doc = stack.pop();
+			final node: Doc = stack.pop();
 			switch node {
-				case Empty | OptHardline | OptHardlineSkipAtOpenDelim
-						| OptHardlineSkipBeforeHardline | OptSpaceSkipAfterHardline:
+				case Empty | OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline | OptSpaceSkipAfterHardline:
 				case Text(s) | OptSpace(s) | Line(s):
-					final t:String = StringTools.rtrim(s);
-					if (t.length > 0) return StringTools.fastCodeAt(t, t.length - 1) == '}'.code;
-				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner)
-						| BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner)
-						| CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner)
-						| ConditionalMarkerZero(inner)
-						| ConditionalMarkerDecrease(inner):
+					final t: String = StringTools.rtrim(s);
+					if (t.length > 0)
+						return StringTools.fastCodeAt(t, t.length - 1) == '}'.code;
+				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner) | BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(
+					inner
+				) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
+					inner
+				) | ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 				case Concat(items):
 					for (it in items) stack.push(it);
-				case IfBreak(_, flatDoc) | IfWidthExceeds(_, _, flatDoc)
-						| IfFirstLineExceeds(_, _, flatDoc) | IfLineExceeds(_, _, flatDoc)
-						| IfFullLineExceeds(_, _, flatDoc) | IfNaturalFirstLineExceeds(_, _, flatDoc)
-						| IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc)
-						| IfArrowContinuationFits(_, _, _, _, flatDoc):
+				case IfBreak(_, flatDoc) | IfWidthExceeds(_, _, flatDoc) | IfFirstLineExceeds(_, _, flatDoc) | IfLineExceeds(_, _, flatDoc) | IfFullLineExceeds(
+					_, _, flatDoc
+				) | IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc) | IfArrowContinuationFits(
+					_, _, _, _, flatDoc
+				):
 					stack.push(flatDoc);
 				case Fill(items, _, _) | FillWithRestProbe(items, _, _) | FillBreakAfterWrap(items, _, _):
 					for (it in items) stack.push(it);
@@ -272,32 +281,31 @@ final class DocMeasure {
 	 * keeps the inter-stmt model correct without requiring the parser
 	 * side to know when an inner construct consumed `;`.
 	 */
-	public static function endsWithStmtTerminator(d:Doc):Bool {
-		final stack:Array<Doc> = [d];
+	public static function endsWithStmtTerminator(d: Doc): Bool {
+		final stack: Array<Doc> = [d];
 		while (stack.length > 0) {
-			final node:Doc = stack.pop();
+			final node: Doc = stack.pop();
 			switch node {
-				case Empty | OptHardline | OptHardlineSkipAtOpenDelim
-						| OptHardlineSkipBeforeHardline | OptSpaceSkipAfterHardline:
+				case Empty | OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline | OptSpaceSkipAfterHardline:
 				case Text(s) | OptSpace(s) | Line(s):
-					final t:String = StringTools.rtrim(s);
+					final t: String = StringTools.rtrim(s);
 					if (t.length > 0) {
-						final c:Int = StringTools.fastCodeAt(t, t.length - 1);
+						final c: Int = StringTools.fastCodeAt(t, t.length - 1);
 						return c == '}'.code || c == ';'.code;
 					}
-				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner)
-						| BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner)
-						| CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner)
-						| ConditionalMarkerZero(inner)
-						| ConditionalMarkerDecrease(inner):
+				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner) | BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(
+					inner
+				) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
+					inner
+				) | ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 				case Concat(items):
 					for (it in items) stack.push(it);
-				case IfBreak(_, flatDoc) | IfWidthExceeds(_, _, flatDoc)
-						| IfFirstLineExceeds(_, _, flatDoc) | IfLineExceeds(_, _, flatDoc)
-						| IfFullLineExceeds(_, _, flatDoc) | IfNaturalFirstLineExceeds(_, _, flatDoc)
-						| IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc)
-						| IfArrowContinuationFits(_, _, _, _, flatDoc):
+				case IfBreak(_, flatDoc) | IfWidthExceeds(_, _, flatDoc) | IfFirstLineExceeds(_, _, flatDoc) | IfLineExceeds(_, _, flatDoc) | IfFullLineExceeds(
+					_, _, flatDoc
+				) | IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc) | IfArrowContinuationFits(
+					_, _, _, _, flatDoc
+				):
 					stack.push(flatDoc);
 				case Fill(items, _, _) | FillWithRestProbe(items, _, _) | FillBreakAfterWrap(items, _, _):
 					for (it in items) stack.push(it);
@@ -319,32 +327,31 @@ final class DocMeasure {
 	 * where every brace-ending stmt was self-contained; after migration,
 	 * the `}` arm conflates value-block-close with stmt-block-close.
 	 */
-	public static function endsWithSemi(d:Doc):Bool {
-		final stack:Array<Doc> = [d];
+	public static function endsWithSemi(d: Doc): Bool {
+		final stack: Array<Doc> = [d];
 		while (stack.length > 0) {
-			final node:Doc = stack.pop();
+			final node: Doc = stack.pop();
 			switch node {
-				case Empty | OptHardline | OptHardlineSkipAtOpenDelim
-						| OptHardlineSkipBeforeHardline | OptSpaceSkipAfterHardline:
+				case Empty | OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline | OptSpaceSkipAfterHardline:
 				case Text(s) | OptSpace(s) | Line(s):
-					final t:String = StringTools.rtrim(s);
+					final t: String = StringTools.rtrim(s);
 					if (t.length > 0) {
-						final c:Int = StringTools.fastCodeAt(t, t.length - 1);
+						final c: Int = StringTools.fastCodeAt(t, t.length - 1);
 						return c == ';'.code;
 					}
-				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner)
-						| BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner)
-						| CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner)
-						| ConditionalMarkerZero(inner)
-						| ConditionalMarkerDecrease(inner):
+				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner) | BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(
+					inner
+				) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
+					inner
+				) | ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 				case Concat(items):
 					for (it in items) stack.push(it);
-				case IfBreak(_, flatDoc) | IfWidthExceeds(_, _, flatDoc)
-						| IfFirstLineExceeds(_, _, flatDoc) | IfLineExceeds(_, _, flatDoc)
-						| IfFullLineExceeds(_, _, flatDoc) | IfNaturalFirstLineExceeds(_, _, flatDoc)
-						| IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc)
-						| IfArrowContinuationFits(_, _, _, _, flatDoc):
+				case IfBreak(_, flatDoc) | IfWidthExceeds(_, _, flatDoc) | IfFirstLineExceeds(_, _, flatDoc) | IfLineExceeds(_, _, flatDoc) | IfFullLineExceeds(
+					_, _, flatDoc
+				) | IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc) | IfArrowContinuationFits(
+					_, _, _, _, flatDoc
+				):
 					stack.push(flatDoc);
 				case Fill(items, _, _) | FillWithRestProbe(items, _, _) | FillBreakAfterWrap(items, _, _):
 					for (it in items) stack.push(it);
@@ -352,4 +359,5 @@ final class DocMeasure {
 		}
 		return false;
 	}
+
 }

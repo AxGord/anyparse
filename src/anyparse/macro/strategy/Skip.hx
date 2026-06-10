@@ -25,23 +25,23 @@ import anyparse.core.Strategy;
  */
 class Skip implements Strategy {
 
-	public var name(default, null):String = 'Skip';
-	public var runsAfter(default, null):Array<String> = ['Lit'];
-	public var runsBefore(default, null):Array<String> = [];
-	public var ownedMeta(default, null):Array<String> = [':ws', ':skip'];
-	public var runtimeContribution(default, null):RuntimeContrib = {ctxFields: [], helpers: [], cacheKeyContributors: []};
+	public var name(default, null): String = 'Skip';
+	public var runsAfter(default, null): Array<String> = ['Lit'];
+	public var runsBefore(default, null): Array<String> = [];
+	public var ownedMeta(default, null): Array<String> = [':ws', ':skip'];
+	public var runtimeContribution(default, null): RuntimeContrib = { ctxFields: [], helpers: [], cacheKeyContributors: [] };
 
 	public function new() {}
 
-	public function appliesTo(node:ShapeNode):Bool {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
+	public function appliesTo(node: ShapeNode): Bool {
+		final meta: Null<Metadata> = node.annotations.get('base.meta');
 		if (meta == null) return false;
 		for (entry in meta) if (entry.name == ':ws' || entry.name == ':skip') return true;
 		return false;
 	}
 
-	public function annotate(node:ShapeNode, ctx:LoweringCtx):Void {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
+	public function annotate(node: ShapeNode, ctx: LoweringCtx): Void {
+		final meta: Null<Metadata> = node.annotations.get('base.meta');
 		if (meta == null) return;
 		for (entry in meta) if (entry.name == ':ws') {
 			// The active format carries the actual whitespace string; the
@@ -50,8 +50,9 @@ class Skip implements Strategy {
 		}
 	}
 
-	public function lower(node:ShapeNode, ctx:LoweringCtx):Null<CoreIR> {
+	public function lower(node: ShapeNode, ctx: LoweringCtx): Null<CoreIR> {
 		return null;
 	}
+
 }
 #end

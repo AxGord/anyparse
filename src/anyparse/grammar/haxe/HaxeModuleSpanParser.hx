@@ -21,6 +21,6 @@ package anyparse.grammar.haxe;
  * Reflect field ordering across targets can no longer desynchronise
  * spans from their carrier nodes.
  */
-@:build(anyparse.macro.Build.buildParser(anyparse.grammar.haxe.HxModule, {spans: true}))
+@:build(anyparse.macro.Build.buildParser(anyparse.grammar.haxe.HxModule, { spans: true }))
 @:nullSafety(Strict)
 class HaxeModuleSpanParser {}

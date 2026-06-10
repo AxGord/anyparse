@@ -9,9 +9,6 @@ package anyparse.format.comment;
  * each line's `ws` field. The `@:sep('\n')` hardline-join then
  * routes each adjusted line through the surrounding writer's nest.
  */
-@:build(anyparse.macro.Build.buildWriter(
-	anyparse.format.comment.BlockComment,
-	anyparse.format.WriteOptions
-))
+@:build(anyparse.macro.Build.buildWriter(anyparse.format.comment.BlockComment, anyparse.format.WriteOptions))
 @:nullSafety(Strict)
 class BlockCommentWriter {}

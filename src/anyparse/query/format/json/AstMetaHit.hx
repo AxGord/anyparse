@@ -15,8 +15,8 @@ package anyparse.query.format.json;
  */
 @:peg @:schema(anyparse.format.text.JsonFormat) @:ws
 typedef AstMetaHit = {
-	var file:String;
-	var annotation:String;
-	var args:Array<String>;
-	var decl:AstMetaDecl;
+	var file: String;
+	var annotation: String;
+	var args: Array<String>;
+	var decl: AstMetaDecl;
 };

@@ -18,7 +18,7 @@ package anyparse.grammar.haxe.format;
  */
 @:peg typedef HxFormatWrapCondition = {
 
-	@:optional var cond:String;
+	@:optional var cond: String;
 
-	@:optional var value:Int;
+	@:optional var value: Int;
 };

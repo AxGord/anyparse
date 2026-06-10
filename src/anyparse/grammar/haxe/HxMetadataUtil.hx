@@ -20,9 +20,9 @@ package anyparse.grammar.haxe;
  */
 class HxMetadataUtil {
 
-	public static inline function source(m:HxMetadata):String {
+	public static inline function source(m: HxMetadata): String {
 		return switch m {
-			case PlainMeta(raw): (raw : String);
+			case PlainMeta(raw): (raw: String);
 			case MetaCall(_): throw 'HxMetadataUtil.source: structural MetaCall cannot be re-emitted as a String — switch on the variant directly';
 			case Meta(name): '$name';
 		}

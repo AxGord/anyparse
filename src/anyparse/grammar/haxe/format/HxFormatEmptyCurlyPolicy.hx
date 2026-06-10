@@ -16,4 +16,5 @@ enum abstract HxFormatEmptyCurlyPolicy(String) to String {
 	final Same = 'same';
 
 	final Break = 'break';
+
 }

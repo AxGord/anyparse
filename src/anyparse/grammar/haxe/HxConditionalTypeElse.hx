@@ -15,5 +15,5 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxConditionalTypeElse = {
-	@:trailOpt(';') var type:HxType;
+	@:trailOpt(';') var type: HxType;
 };

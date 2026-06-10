@@ -32,5 +32,5 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxVarMore = {
-	@:lead(',') @:fmt(spaceAfterLead) var decl:HxVarDecl;
+	@:lead(',') @:fmt(spaceAfterLead) var decl: HxVarDecl;
 };

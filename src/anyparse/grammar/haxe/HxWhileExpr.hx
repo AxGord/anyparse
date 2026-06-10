@@ -21,6 +21,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxWhileExpr = {
-	@:lead('(') @:trail(')') var cond:HxExpr;
-	var body:HxExpr;
+	@:lead('(') @:trail(')') var cond: HxExpr;
+	var body: HxExpr;
 };

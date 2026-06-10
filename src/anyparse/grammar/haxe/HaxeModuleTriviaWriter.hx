@@ -18,10 +18,6 @@ package anyparse.grammar.haxe;
  * `HxModule` — this marker is a sibling, not a replacement.
  */
 @:keep
-@:build(anyparse.macro.Build.buildWriter(
-	anyparse.grammar.haxe.HxModule,
-	anyparse.grammar.haxe.HxModuleWriteOptions,
-	{trivia: true}
-))
+@:build(anyparse.macro.Build.buildWriter(anyparse.grammar.haxe.HxModule, anyparse.grammar.haxe.HxModuleWriteOptions, { trivia: true }))
 @:nullSafety(Strict)
 final class HaxeModuleTriviaWriter {}

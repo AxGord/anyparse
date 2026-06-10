@@ -23,6 +23,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxObjectFieldBody = {
-	var name:HxObjectKeyLit;
-	@:fmt(objectFieldColon, indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'), propagateExprPosition) @:lead(':') var value:HxExpr;
+	var name: HxObjectKeyLit;
+	@:fmt(objectFieldColon, indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'), propagateExprPosition) @:lead(':') var value: HxExpr;
 }

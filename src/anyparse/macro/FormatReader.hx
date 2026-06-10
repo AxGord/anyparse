@@ -18,47 +18,47 @@ import haxe.macro.Type;
  */
 typedef FormatInfo = {
 	/** Characters to consume when `@:ws` is active on the schema. */
-	whitespace:String,
+	whitespace: String,
 
 	/** Fully qualified type path of the `@:schema` class (e.g. `anyparse.format.text.JsonFormat`). */
-	schemaTypePath:String,
+	schemaTypePath: String,
 
 	/** True when the schema class has `encoding = Binary`. */
-	isBinary:Bool,
+	isBinary: Bool,
 
 	/** How parser matches input entries to schema fields. ByName enables the key-dispatch struct codepath. */
-	fieldLookup:FieldLookup,
+	fieldLookup: FieldLookup,
 
 	/** Policy for input entries with no matching schema field — consumed in ByName codepath. */
-	onUnknown:UnknownPolicy,
+	onUnknown: UnknownPolicy,
 
 	/** Policy for schema fields absent from the input — consumed in ByName codepath. */
-	onMissing:MissingPolicy,
+	onMissing: MissingPolicy,
 
 	/** Key-literal syntax (`Quoted` = JSON-style double-quoted). */
-	keySyntax:KeySyntax,
+	keySyntax: KeySyntax,
 
 	/** Literal that opens a mapping block (e.g. `{`). */
-	mappingOpen:String,
+	mappingOpen: String,
 
 	/** Literal that closes a mapping block (e.g. `}`). */
-	mappingClose:String,
+	mappingClose: String,
 
 	/** Separator between a key and its value (e.g. `:`). */
-	keyValueSep:String,
+	keyValueSep: String,
 
 	/** Separator between mapping entries (e.g. `,`). */
-	entrySep:String,
+	entrySep: String,
 
 	/**
 	 * Literal that opens a sequence (array) block (e.g. `[`). `null` when
 	 * the format has no sequence syntax — array-typed schema fields then
 	 * have nowhere to anchor and the macro errors at lowering time.
 	 */
-	sequenceOpen:Null<String>,
+	sequenceOpen: Null<String>,
 
 	/** Literal that closes a sequence block (e.g. `]`). */
-	sequenceClose:Null<String>,
+	sequenceClose: Null<String>,
 
 	/**
 	 * Format-declared grammar types for primitive / universal fields.
@@ -69,11 +69,11 @@ typedef FormatInfo = {
 	 * `null` slots mean the format does not opt into typed parsing
 	 * for that kind — the macro falls back to inline handling.
 	 */
-	intType:Null<String>,
-	floatType:Null<String>,
-	boolType:Null<String>,
-	stringType:Null<String>,
-	anyType:Null<String>,
+	intType: Null<String>,
+	floatType: Null<String>,
+	boolType: Null<String>,
+	stringType: Null<String>,
+	anyType: Null<String>,
 
 	/**
 	 * Star struct field open-delimiters that take a leading space from
@@ -83,7 +83,7 @@ typedef FormatInfo = {
 	 * declaring `['{']`. Empty array (or absent field) means every
 	 * lead is tight, matching JSON-like output.
 	 */
-	spacedLeads:Array<String>,
+	spacedLeads: Array<String>,
 
 	/**
 	 * Optional-field `@:lead(...)` strings that emit *tight* — no leading
@@ -95,7 +95,7 @@ typedef FormatInfo = {
 	 * (or absent field) means no tight leads — full spaced layout for
 	 * every optional `@:lead`.
 	 */
-	tightLeads:Array<String>,
+	tightLeads: Array<String>,
 
 	/**
 	 * Comment delimiter patterns recognized by the format. Built from the
@@ -104,7 +104,7 @@ typedef FormatInfo = {
 	 * Trivia-mode parsers additionally capture the content between
 	 * delimiters. Empty when the format has no comments (e.g. JSON).
 	 */
-	commentPatterns:Array<CommentPattern>,
+	commentPatterns: Array<CommentPattern>
 };
 
 /**
@@ -116,9 +116,9 @@ typedef FormatInfo = {
  * multiple lines.
  */
 typedef CommentPattern = {
-	open:String,
-	close:String,
-	lineTerminated:Bool,
+	open: String,
+	close: String,
+	lineTerminated: Bool
 };
 
 /**
@@ -136,15 +136,15 @@ typedef CommentPattern = {
  */
 class FormatReader {
 
-	public static function resolve(typePath:String):FormatInfo {
-		final t:Type = Context.getType(typePath);
-		final cl:ClassType = switch t {
+	public static function resolve(typePath: String): FormatInfo {
+		final t: Type = Context.getType(typePath);
+		final cl: ClassType = switch t {
 			case TInst(ref, _): ref.get();
 			case _:
 				Context.fatalError('@:schema($typePath) must resolve to a class', Context.currentPos());
 				throw 'unreachable';
 		};
-		final isBinary:Bool = detectBinary(cl);
+		final isBinary: Bool = detectBinary(cl);
 		return {
 			whitespace: isBinary ? '' : readStringField(cl, 'whitespace'),
 			schemaTypePath: typePath,
@@ -176,12 +176,12 @@ class FormatReader {
 	 * fields. Missing or `null` fields contribute nothing — a format with
 	 * neither (e.g. JSON) yields an empty array.
 	 */
-	private static function readCommentPatterns(cl:ClassType):Array<CommentPattern> {
-		final out:Array<CommentPattern> = [];
-		final line:Null<String> = readStringFieldOpt(cl, 'lineComment');
-		if (line != null) out.push({open: line, close: '', lineTerminated: true});
-		final block:Null<{open:String, close:String}> = readBlockCommentFieldOpt(cl, 'blockComment');
-		if (block != null) out.push({open: block.open, close: block.close, lineTerminated: false});
+	private static function readCommentPatterns(cl: ClassType): Array<CommentPattern> {
+		final out: Array<CommentPattern> = [];
+		final line: Null<String> = readStringFieldOpt(cl, 'lineComment');
+		if (line != null) out.push({ open: line, close: '', lineTerminated: true });
+		final block: Null<{ open: String, close: String }> = readBlockCommentFieldOpt(cl, 'blockComment');
+		if (block != null) out.push({ open: block.open, close: block.close, lineTerminated: false });
 		return out;
 	}
 
@@ -190,41 +190,46 @@ class FormatReader {
 	 * initializer. Returns `null` when the field is missing, `null`, or
 	 * its initializer does not have both sub-fields as string literals.
 	 */
-	private static function readBlockCommentFieldOpt(cl:ClassType, fieldName:String):Null<{open:String, close:String}> {
-		final fields:Array<ClassField> = cl.fields.get();
+	private static function readBlockCommentFieldOpt(cl: ClassType, fieldName: String): Null<{ open: String, close: String }> {
+		final fields: Array<ClassField> = cl.fields.get();
 		for (f in fields) if (f.name == fieldName) {
-			final texpr:Null<TypedExpr> = f.expr();
+			final texpr: Null<TypedExpr> = f.expr();
 			if (texpr != null) return extractBlockComment(texpr);
 		}
 		return null;
 	}
 
-	private static function extractBlockComment(texpr:TypedExpr):Null<{open:String, close:String}> {
+	private static function extractBlockComment(texpr: TypedExpr): Null<{ open: String, close: String }> {
 		return switch texpr.expr {
 			case TObjectDecl(fields):
-				var open:Null<String> = null;
-				var close:Null<String> = null;
+				var open: Null<String> = null;
+				var close: Null<String> = null;
 				for (f in fields) switch f.name {
-					case 'open': open = extractString(f.expr);
-					case 'close': close = extractString(f.expr);
+					case 'open':
+						open = extractString(f.expr);
+					case 'close':
+						close = extractString(f.expr);
 				}
-				if (open != null && close != null) {open: open, close: close} else null;
+				if (open != null && close != null)
+					{ open: open, close: close }
+				else
+					null;
 			case TCast(inner, _): extractBlockComment(inner);
 			case TParenthesis(inner): extractBlockComment(inner);
 			case _: null;
 		};
 	}
 
-	private static function detectBinary(cl:ClassType):Bool {
-		final fields:Array<ClassField> = cl.fields.get();
+	private static function detectBinary(cl: ClassType): Bool {
+		final fields: Array<ClassField> = cl.fields.get();
 		for (f in fields) if (f.name == 'encoding') {
-			final texpr:Null<TypedExpr> = f.expr();
+			final texpr: Null<TypedExpr> = f.expr();
 			if (texpr != null) return extractInt(texpr) == 4; // Encoding.Binary = 4
 		}
 		return false;
 	}
 
-	private static function extractInt(texpr:TypedExpr):Int {
+	private static function extractInt(texpr: TypedExpr): Int {
 		return switch texpr.expr {
 			case TConst(TInt(v)): v;
 			case TCast(inner, _): extractInt(inner);
@@ -233,12 +238,12 @@ class FormatReader {
 		};
 	}
 
-	private static function readStringField(cl:ClassType, fieldName:String):String {
-		final fields:Array<ClassField> = cl.fields.get();
+	private static function readStringField(cl: ClassType, fieldName: String): String {
+		final fields: Array<ClassField> = cl.fields.get();
 		for (f in fields) if (f.name == fieldName) {
-			final texpr:Null<TypedExpr> = f.expr();
+			final texpr: Null<TypedExpr> = f.expr();
 			if (texpr != null) {
-				final s:Null<String> = extractString(texpr);
+				final s: Null<String> = extractString(texpr);
 				if (s != null) return s;
 			}
 		}
@@ -246,10 +251,10 @@ class FormatReader {
 		throw 'unreachable';
 	}
 
-	private static function readIntField(cl:ClassType, fieldName:String):Int {
-		final fields:Array<ClassField> = cl.fields.get();
+	private static function readIntField(cl: ClassType, fieldName: String): Int {
+		final fields: Array<ClassField> = cl.fields.get();
 		for (f in fields) if (f.name == fieldName) {
-			final texpr:Null<TypedExpr> = f.expr();
+			final texpr: Null<TypedExpr> = f.expr();
 			if (texpr != null) return extractInt(texpr);
 		}
 		Context.fatalError('format class ${cl.name} has no readable Int field "$fieldName"', Context.currentPos());
@@ -266,7 +271,7 @@ class FormatReader {
 	 * Haxe typed the initializer against `T` at the format class's
 	 * own compilation.
 	 */
-	private static function readEnumAbstractField<T>(cl:ClassType, fieldName:String):T {
+	private static function readEnumAbstractField<T>(cl: ClassType, fieldName: String): T {
 		return cast readIntField(cl, fieldName);
 	}
 
@@ -275,16 +280,16 @@ class FormatReader {
 	 * e.g. optional typed-parsing hooks. Returns `null` when the field
 	 * isn't declared or its initializer isn't a `String` literal.
 	 */
-	private static function readStringFieldOpt(cl:ClassType, fieldName:String):Null<String> {
-		final fields:Array<ClassField> = cl.fields.get();
+	private static function readStringFieldOpt(cl: ClassType, fieldName: String): Null<String> {
+		final fields: Array<ClassField> = cl.fields.get();
 		for (f in fields) if (f.name == fieldName) {
-			final texpr:Null<TypedExpr> = f.expr();
+			final texpr: Null<TypedExpr> = f.expr();
 			if (texpr != null) return extractString(texpr);
 		}
 		return null;
 	}
 
-	private static function extractString(texpr:TypedExpr):Null<String> {
+	private static function extractString(texpr: TypedExpr): Null<String> {
 		return switch texpr.expr {
 			case TConst(TString(s)): s;
 			case TCast(inner, _): extractString(inner);
@@ -300,21 +305,21 @@ class FormatReader {
 	 * reduced to a string-literal list — the consumer then falls back
 	 * to the empty-policy default (everything tight, no leading space).
 	 */
-	private static function readStringArrayField(cl:ClassType, fieldName:String):Array<String> {
-		final fields:Array<ClassField> = cl.fields.get();
+	private static function readStringArrayField(cl: ClassType, fieldName: String): Array<String> {
+		final fields: Array<ClassField> = cl.fields.get();
 		for (f in fields) if (f.name == fieldName) {
-			final texpr:Null<TypedExpr> = f.expr();
+			final texpr: Null<TypedExpr> = f.expr();
 			if (texpr != null) return extractStringArray(texpr);
 		}
 		return [];
 	}
 
-	private static function extractStringArray(texpr:TypedExpr):Array<String> {
+	private static function extractStringArray(texpr: TypedExpr): Array<String> {
 		return switch texpr.expr {
 			case TArrayDecl(values):
-				final out:Array<String> = [];
+				final out: Array<String> = [];
 				for (v in values) {
-					final s:Null<String> = extractString(v);
+					final s: Null<String> = extractString(v);
 					if (s != null) out.push(s);
 				}
 				out;
@@ -323,5 +328,6 @@ class FormatReader {
 			case _: [];
 		};
 	}
+
 }
 #end

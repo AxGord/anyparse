@@ -36,13 +36,13 @@ final class Diff {
 	/**
 	 * Walk `a` and `b` paired and collect divergence hits.
 	 */
-	public static function diff(a:QueryNode, b:QueryNode):Array<DiffHit> {
-		final out:Array<DiffHit> = [];
+	public static function diff(a: QueryNode, b: QueryNode): Array<DiffHit> {
+		final out: Array<DiffHit> = [];
 		walk(a, b, out);
 		return out;
 	}
 
-	private static function walk(a:Null<QueryNode>, b:Null<QueryNode>, out:Array<DiffHit>):Void {
+	private static function walk(a: Null<QueryNode>, b: Null<QueryNode>, out: Array<DiffHit>): Void {
 		if (a == null && b == null) return;
 		if (a == null) {
 			out.push(new DiffHit(DiffKind.Added, null, b));
@@ -61,88 +61,92 @@ final class Diff {
 		}
 		// Same shape — zip children by index. Imbalanced tail surfaces
 		// as Added/Removed on the longer side.
-		final la:Int = a.children.length;
-		final lb:Int = b.children.length;
-		final shared:Int = la < lb ? la : lb;
+		final la: Int = a.children.length;
+		final lb: Int = b.children.length;
+		final shared: Int = la < lb ? la : lb;
 		for (i in 0...shared) walk(a.children[i], b.children[i], out);
 		if (la > lb)
 			for (i in lb...la) walk(a.children[i], null, out);
-		else if (lb > la)
-			for (i in la...lb) walk(null, b.children[i], out);
+		else if (lb > la) for (i in la...lb) walk(null, b.children[i], out);
 	}
 
 	public static function render(
-		fileA:String,
-		sourceA:String,
-		fileB:String,
-		sourceB:String,
-		hits:Array<DiffHit>,
-		flat:Bool = false
-	):String {
-		final buf:StringBuf = new StringBuf();
+		fileA: String, sourceA: String, fileB: String, sourceB: String, hits: Array<DiffHit>, flat: Bool = false
+	): String {
+		final buf: StringBuf = new StringBuf();
 		if (hits.length == 0) {
 			buf.add('apq diff: trees identical ($fileA == $fileB)\n');
 			return buf.toString();
 		}
 		if (!flat) buf.add('$fileA ↔ $fileB:\n');
 		for (h in hits) {
-			final indent:String = flat ? '' : '  ';
+			final indent: String = flat ? '' : '  ';
 			switch h.kind {
 				case Differs:
-					final leftN:Null<QueryNode> = h.left;
-					final rightN:Null<QueryNode> = h.right;
+					final leftN: Null<QueryNode> = h.left;
+					final rightN: Null<QueryNode> = h.right;
 					if (leftN == null || rightN == null) continue;
-					final a:QueryNode = leftN;
-					final b:QueryNode = rightN;
-					final pa:Null<Position> = a.span == null ? null : (a.span : Span).lineCol(sourceA);
-					final pb:Null<Position> = b.span == null ? null : (b.span : Span).lineCol(sourceB);
-					if (flat) buf.add('$fileA:${posOrZero(pa)} ↔ $fileB:${posOrZero(pb)}: differs: ${nodeLabel(a)} ↔ ${nodeLabel(b)}\n');
-					else buf.add('$indent${posOrZero(pa)} ↔ ${posOrZero(pb)}: differs: ${nodeLabel(a)} ↔ ${nodeLabel(b)}\n');
+					final a: QueryNode = leftN;
+					final b: QueryNode = rightN;
+					final pa: Null<Position> = a.span == null ? null : (a.span: Span).lineCol(sourceA);
+					final pb: Null<Position> = b.span == null ? null : (b.span: Span).lineCol(sourceB);
+					if (flat)
+						buf.add('$fileA:${posOrZero(pa)} ↔ $fileB:${posOrZero(pb)}: differs: ${nodeLabel(a)} ↔ ${nodeLabel(b)}\n');
+					else
+						buf.add('$indent${posOrZero(pa)} ↔ ${posOrZero(pb)}: differs: ${nodeLabel(a)} ↔ ${nodeLabel(b)}\n');
 				case Added:
-					final rightN:Null<QueryNode> = h.right;
+					final rightN: Null<QueryNode> = h.right;
 					if (rightN == null) continue;
-					final b:QueryNode = rightN;
-					final pb:Null<Position> = b.span == null ? null : (b.span : Span).lineCol(sourceB);
-					if (flat) buf.add('$fileB:${posOrZero(pb)}: added: ${nodeLabel(b)}\n');
-					else buf.add('$indent       ↔ ${posOrZero(pb)}: added: ${nodeLabel(b)}\n');
+					final b: QueryNode = rightN;
+					final pb: Null<Position> = b.span == null ? null : (b.span: Span).lineCol(sourceB);
+					if (flat)
+						buf.add('$fileB:${posOrZero(pb)}: added: ${nodeLabel(b)}\n');
+					else
+						buf.add('$indent       ↔ ${posOrZero(pb)}: added: ${nodeLabel(b)}\n');
 				case Removed:
-					final leftN:Null<QueryNode> = h.left;
+					final leftN: Null<QueryNode> = h.left;
 					if (leftN == null) continue;
-					final a:QueryNode = leftN;
-					final pa:Null<Position> = a.span == null ? null : (a.span : Span).lineCol(sourceA);
-					if (flat) buf.add('$fileA:${posOrZero(pa)}: removed: ${nodeLabel(a)}\n');
-					else buf.add('$indent${posOrZero(pa)} ↔        : removed: ${nodeLabel(a)}\n');
+					final a: QueryNode = leftN;
+					final pa: Null<Position> = a.span == null ? null : (a.span: Span).lineCol(sourceA);
+					if (flat)
+						buf.add('$fileA:${posOrZero(pa)}: removed: ${nodeLabel(a)}\n');
+					else
+						buf.add('$indent${posOrZero(pa)} ↔        : removed: ${nodeLabel(a)}\n');
 			}
 		}
 		return buf.toString();
 	}
 
-	private static inline function posOrZero(p:Null<Position>):String {
+	private static inline function posOrZero(p: Null<Position>): String {
 		return p == null ? '?:?' : '${p.line}:${p.col}';
 	}
 
-	private static inline function nodeLabel(n:QueryNode):String {
+	private static inline function nodeLabel(n: QueryNode): String {
 		return n.name == null ? n.kind : '${n.kind} \'${n.name}\'';
 	}
+
 }
 
 @:nullSafety(Strict)
 enum DiffKind {
+
 	Differs;
 	Added;
 	Removed;
+
 }
 
 @:nullSafety(Strict)
 final class DiffHit {
 
-	public final kind:DiffKind;
-	public final left:Null<QueryNode>;
-	public final right:Null<QueryNode>;
+	public final kind: DiffKind;
+	public final left: Null<QueryNode>;
+	public final right: Null<QueryNode>;
 
-	public function new(kind:DiffKind, left:Null<QueryNode>, right:Null<QueryNode>) {
+	public function new(kind: DiffKind, left: Null<QueryNode>, right: Null<QueryNode>) {
 		this.kind = kind;
 		this.left = left;
 		this.right = right;
 	}
+
 }

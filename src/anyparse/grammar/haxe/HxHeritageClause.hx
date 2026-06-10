@@ -29,9 +29,11 @@ package anyparse.grammar.haxe;
  */
 @:peg
 enum HxHeritageClause {
+
 	@:kw('extends')
-	ExtendsClause(type:HxType);
+	ExtendsClause(type: HxType);
 
 	@:kw('implements')
-	ImplementsClause(type:HxType);
+	ImplementsClause(type: HxType);
+
 }

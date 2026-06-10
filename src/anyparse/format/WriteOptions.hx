@@ -20,25 +20,25 @@ typedef WriteOptions = {
 	/**
 	 * Character used to render one indent unit: tab or space.
 	 */
-	indentChar:IndentChar,
+	indentChar: IndentChar,
 
 	/**
 	 * Columns per indent level when `indentChar = Space`.
 	 */
-	indentSize:Int,
+	indentSize: Int,
 
 	/**
 	 * Logical width of one tab character in columns. Used when
 	 * `indentChar = Tab` to decide nesting width for line-fit
 	 * calculations.
 	 */
-	tabWidth:Int,
+	tabWidth: Int,
 
 	/**
 	 * Target line width used by the Wadler-style renderer to pick
 	 * between flat and broken layout for groups.
 	 */
-	lineWidth:Int,
+	lineWidth: Int,
 
 	/**
 	 * End-of-line sequence emitted by the writer for every break-mode
@@ -48,13 +48,13 @@ typedef WriteOptions = {
 	 * `"LF"` → `\n`, `"CRLF"` → `\r\n`, `"CR"` → `\r`, `"auto"` falls
 	 * back to `\n` (no source-detection plumbing).
 	 */
-	lineEnd:String,
+	lineEnd: String,
 
 	/**
 	 * Whether the output ends with a newline. Declared in σ;
 	 * honored once the renderer gains final-newline awareness.
 	 */
-	finalNewline:Bool,
+	finalNewline: Bool,
 
 	/**
 	 * When `true`, blank lines between content carry the surrounding
@@ -64,7 +64,7 @@ typedef WriteOptions = {
 	 * `indentation.trailingWhitespace` knob; default `false` keeps every
 	 * other corpus case byte-identical.
 	 */
-	trailingWhitespace:Bool,
+	trailingWhitespace: Bool,
 
 	/**
 	 * Output wrap style for multi-line block comments. `Plain` emits
@@ -74,7 +74,7 @@ typedef WriteOptions = {
 	 * so this knob fully drives the output appearance — source style
 	 * is not echoed.
 	 */
-	commentStyle:CommentStyle,
+	commentStyle: CommentStyle,
 
 	/**
 	 * When `true`, single-line `//` comments are re-emitted with one
@@ -90,7 +90,7 @@ typedef WriteOptions = {
 	 * their captured trivia stream never reaches the line-comment
 	 * branch.
 	 */
-	addLineCommentSpace:Bool,
+	addLineCommentSpace: Bool,
 
 	/**
 	 * When `true` (default), whitespace between two successive opening
@@ -106,7 +106,7 @@ typedef WriteOptions = {
 	 * layout. Format-neutral so any paren-call grammar can reuse it,
 	 * though only the Haxe writer currently emits the space.
 	 */
-	compressSuccessiveParenthesis:Bool,
+	compressSuccessiveParenthesis: Bool,
 
 	/**
 	 * Layout policy for matrix-shaped array literals (an array literal
@@ -120,7 +120,7 @@ typedef WriteOptions = {
 	 * other grammars set it via their format default. Format-neutral so
 	 * any array-of-rows grammar can reuse the policy.
 	 */
-	arrayMatrixWrap:ArrayMatrixWrap,
+	arrayMatrixWrap: ArrayMatrixWrap,
 
 	/**
 	 * Indentation policy for preprocessor conditional-compilation
@@ -131,7 +131,7 @@ typedef WriteOptions = {
 	 * `indentation.conditionalPolicy` knob through `HaxeFormatConfigLoader`;
 	 * format-neutral so any preprocessor-conditional grammar can reuse it.
 	 */
-	conditionalPolicy:ConditionalIndentationPolicy,
+	conditionalPolicy: ConditionalIndentationPolicy,
 
 	/**
 	 * When `true`, an inline case body (`case X: expr` on one line) whose
@@ -146,7 +146,7 @@ typedef WriteOptions = {
 	 * `HaxeFormatConfigLoader`; format-neutral so any colon-delimited
 	 * case-body grammar can reuse it.
 	 */
-	alignInlineSwitchCaseBody:Bool,
+	alignInlineSwitchCaseBody: Bool,
 
 	/**
 	 * Cap on consecutive line-end runs in the rendered output. Read once
@@ -166,7 +166,7 @@ typedef WriteOptions = {
 	 *  - `maxConsecutiveBlanks = N >= 0` — at most `N` blank lines.
 	 *  - `maxConsecutiveBlanks = -1` — unbounded (no post-pass).
 	 */
-	maxConsecutiveBlanks:Int,
+	maxConsecutiveBlanks: Int,
 
 	/**
 	 * Plugin-supplied trivia adapters bound at runtime. The macro-
@@ -190,8 +190,8 @@ typedef WriteOptions = {
 	 *    normalisation of a captured `//` body (decoration-aware
 	 *    `//foo` → `// foo` rewrite when `addSpace == true`).
 	 */
-	?blockCommentAdapter:Null<(String, WriteOptions) -> Doc>,
-	?lineCommentAdapter:Null<(String, Bool) -> String>,
+	?blockCommentAdapter: Null<(String, WriteOptions) -> Doc>,
+	?lineCommentAdapter: Null<(String, Bool) -> String>,
 
 	/**
 	 * Plugin-supplied AST shape predicates bound at runtime. Read by
@@ -276,8 +276,8 @@ typedef WriteOptions = {
 	 * writer helper checks `null` before invoking and falls back to
 	 * the unconditional non-refusal path.
 	 */
-	?endsWithCloseBrace:Null<Dynamic -> Bool>,
-	?caseBodyRefusesFlat:Null<Dynamic -> Bool>,
+	?endsWithCloseBrace: Null<Dynamic -> Bool>,
+	?caseBodyRefusesFlat: Null<Dynamic -> Bool>,
 	// ω-value-yielded-if-tail-barrier (macro-block clear): `operandIsBlockExpr(
 	// operandNode) → Bool` — true iff a `macro <operand>` reification's operand
 	// is a block (`macro { … }`). Drives `@:fmt(clearExprPosition)` on
@@ -287,10 +287,10 @@ typedef WriteOptions = {
 	// A `macro <expr>` (non-block operand, e.g. `macro if (1) 2 else 3`) stays
 	// TRANSPARENT — `macro` does not change expression-vs-statement position.
 	// Null (every non-opt-in format) → the clear never fires, byte-identical.
-	?operandIsBlockExpr:Null<Dynamic -> Bool>,
-	?betweenImportsPathDiffers:Null<(String, String, Int) -> Bool>,
-	?betweenImportsTailLeafClassify:Null<Dynamic -> Null<{ctorName:String, path:String}>>,
-	?betweenImportsHeadLeafClassify:Null<Dynamic -> Null<{ctorName:String, path:String}>>,
+	?operandIsBlockExpr: Null<Dynamic -> Bool>,
+	?betweenImportsPathDiffers: Null<(String, String, Int) -> Bool>,
+	?betweenImportsTailLeafClassify: Null<Dynamic -> Null<{ ctorName: String, path: String }>>,
+	?betweenImportsHeadLeafClassify: Null<Dynamic -> Null<{ ctorName: String, path: String }>>,
 	// ω-after-conditional-block — `tailLeafKeepsBlankAfterConditional(payload)
 	// → Null<{ctorName, path}>`. Non-null iff a module-level `#if … #end`
 	// (`HxDecl.Conditional`) tail leaf is a decl after which fork keeps /
@@ -299,8 +299,9 @@ typedef WriteOptions = {
 	// override on `HxModule.decls`: null (e.g. `#error` tail) → force
 	// `afterConditionalBlock` (=0) blanks; non-null → source-driven count.
 	// Null adapter (every non-opt-in format) → the override never fires.
-	?tailLeafKeepsBlankAfterConditional:Null<Dynamic -> Null<{ctorName:String, path:String}>>,
-	?arrayBracketKind:Null<Dynamic -> Int>,
+	?tailLeafKeepsBlankAfterConditional: Null<Dynamic -> Null<{ ctorName: String, path: String }>>,
+	?arrayBracketKind: Null<Dynamic -> Int>,
+
 	/**
 	 * `elementIsConditional(elementNode) → Bool` — true iff a cond-comp
 	 * body / elseBody Star element is itself a nested preprocessor
@@ -311,5 +312,5 @@ typedef WriteOptions = {
 	 * Null (every non-opt-in format) → the engine never wraps, byte-
 	 * identical to the pre-policy layout.
 	 */
-	?elementIsConditional:Null<Dynamic -> Bool>,
+	?elementIsConditional: Null<Dynamic -> Bool>
 };

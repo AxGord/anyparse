@@ -41,31 +41,33 @@ final class Meta {
 	 * are returned in pre-order traversal. `source` is the parsed
 	 * source string, used to slice argument text by child span.
 	 */
-	public static function find(tree:QueryNode, shape:MetaShape, source:String):Array<MetaHit> {
-		final out:Array<MetaHit> = [];
+	public static function find(tree: QueryNode, shape: MetaShape, source: String): Array<MetaHit> {
+		final out: Array<MetaHit> = [];
 		walk(tree, shape, source, null, out);
 		return out;
 	}
 
-	private static function walk(node:QueryNode, shape:MetaShape, source:String, ancestorDecl:Null<QueryNode>, out:Array<MetaHit>):Void {
-		final children:Array<QueryNode> = node.children;
+	private static function walk(
+		node: QueryNode, shape: MetaShape, source: String, ancestorDecl: Null<QueryNode>, out: Array<MetaHit>
+	): Void {
+		final children: Array<QueryNode> = node.children;
 		for (child in children) if (shape.metaKinds.contains(child.kind)) {
-			final owner:Null<QueryNode> = followingDeclHost(children, child, shape) ?? ancestorDecl;
+			final owner: Null<QueryNode> = followingDeclHost(children, child, shape) ?? ancestorDecl;
 			if (owner != null) out.push(makeHit(child, owner, source));
 		}
-		final nextAncestor:Null<QueryNode> = shape.declHostKinds.contains(node.kind) ? node : ancestorDecl;
+		final nextAncestor: Null<QueryNode> = shape.declHostKinds.contains(node.kind) ? node : ancestorDecl;
 		for (c in children) walk(c, shape, source, nextAncestor, out);
 	}
 
-	private static function followingDeclHost(siblings:Array<QueryNode>, meta:QueryNode, shape:MetaShape):Null<QueryNode> {
-		final metaSpan:Null<Span> = meta.span;
+	private static function followingDeclHost(siblings: Array<QueryNode>, meta: QueryNode, shape: MetaShape): Null<QueryNode> {
+		final metaSpan: Null<Span> = meta.span;
 		if (metaSpan == null) return null;
-		final after:Int = metaSpan.from;
-		var best:Null<QueryNode> = null;
-		var bestFrom:Int = 0;
+		final after: Int = metaSpan.from;
+		var best: Null<QueryNode> = null;
+		var bestFrom: Int = 0;
 		for (s in siblings) {
 			if (!shape.declHostKinds.contains(s.kind)) continue;
-			final ss:Null<Span> = s.span;
+			final ss: Null<Span> = s.span;
 			if (ss == null || ss.from <= after) continue;
 			if (best == null || ss.from < bestFrom) {
 				best = s;
@@ -75,16 +77,16 @@ final class Meta {
 		return best;
 	}
 
-	private static function makeHit(metaNode:QueryNode, owner:QueryNode, source:String):MetaHit {
-		final rawName:String = metaNode.name ?? '';
-		final parenIdx:Int = rawName.indexOf('(');
-		final tag:String = StringTools.trim(parenIdx < 0 ? rawName : rawName.substring(0, parenIdx));
-		final args:Array<String> = if (metaNode.children.length > 0) {
+	private static function makeHit(metaNode: QueryNode, owner: QueryNode, source: String): MetaHit {
+		final rawName: String = metaNode.name ?? '';
+		final parenIdx: Int = rawName.indexOf('(');
+		final tag: String = StringTools.trim(parenIdx < 0 ? rawName : rawName.substring(0, parenIdx));
+		final args: Array<String> = if (metaNode.children.length > 0) {
 			[for (c in metaNode.children) StringTools.trim(sliceSpan(source, c.span))];
 		} else if (parenIdx >= 0) {
-			final closeIdx:Int = rawName.lastIndexOf(')');
-			final raw:String = closeIdx > parenIdx ? rawName.substring(parenIdx + 1, closeIdx) : '';
-			final trimmed:String = StringTools.trim(raw);
+			final closeIdx: Int = rawName.lastIndexOf(')');
+			final raw: String = closeIdx > parenIdx ? rawName.substring(parenIdx + 1, closeIdx) : '';
+			final trimmed: String = StringTools.trim(raw);
 			trimmed.length == 0 ? [] : [trimmed];
 		} else {
 			[];
@@ -99,12 +101,13 @@ final class Meta {
 		};
 	}
 
-	private static function sliceSpan(source:String, span:Null<Span>):String {
+	private static function sliceSpan(source: String, span: Null<Span>): String {
 		if (span == null) return '';
-		final from:Int = span.from < 0 ? 0 : span.from;
-		final to:Int = span.to > source.length ? source.length : span.to;
+		final from: Int = span.from < 0 ? 0 : span.from;
+		final to: Int = span.to > source.length ? source.length : span.to;
 		return from >= to ? '' : source.substring(from, to);
 	}
+
 }
 
 /**
@@ -118,10 +121,10 @@ final class Meta {
  * Haxe annotation and decl-host node carries one.
  */
 typedef MetaHit = {
-	var annotation:String;
-	var args:Array<String>;
-	var declKind:String;
-	var declName:Null<String>;
-	var declSpan:Null<Span>;
-	var metaSpan:Null<Span>;
+	var annotation: String;
+	var args: Array<String>;
+	var declKind: String;
+	var declName: Null<String>;
+	var declSpan: Null<Span>;
+	var metaSpan: Null<Span>;
 }

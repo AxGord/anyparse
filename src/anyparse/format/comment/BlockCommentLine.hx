@@ -8,6 +8,6 @@ package anyparse.format.comment;
 @:raw
 @:schema(anyparse.format.comment.CFamilyCommentFormat)
 typedef BlockCommentLine = {
-	var ws:BlockCommentLineWs;
-	var body:BlockCommentLineBody;
+	var ws: BlockCommentLineWs;
+	var body: BlockCommentLineBody;
 };

@@ -31,5 +31,5 @@ package anyparse.format.comment;
 @:schema(anyparse.format.comment.CFamilyCommentFormat)
 @:fmt(preWrite(anyparse.format.comment.BlockCommentNormalizer.normalize))
 typedef BlockComment = {
-	@:lead('/*') @:trail('*/') @:sep('\n') var lines:Array<BlockCommentLine>;
+	@:lead('/*') @:trail('*/') @:sep('\n') var lines: Array<BlockCommentLine>;
 };

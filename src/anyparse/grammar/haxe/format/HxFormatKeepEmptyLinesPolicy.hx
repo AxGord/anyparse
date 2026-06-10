@@ -18,4 +18,5 @@ enum abstract HxFormatKeepEmptyLinesPolicy(String) to String {
 	final Keep = 'keep';
 
 	final Remove = 'remove';
+
 }

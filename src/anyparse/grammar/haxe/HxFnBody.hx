@@ -67,14 +67,15 @@ package anyparse.grammar.haxe;
 enum HxFnBody {
 
 	@:fmt(multilineCtor)
-	UntypedBlockBody(body:HxUntypedFnBody);
+	UntypedBlockBody(body: HxUntypedFnBody);
 
 	@:fmt(multilineCtor)
-	BlockBody(block:HxFnBlock);
+	BlockBody(block: HxFnBlock);
 
 	@:lit(';')
 	NoBody;
 
 	@:trailOpt(';')
-	ExprBody(expr:HxExpr);
+	ExprBody(expr: HxExpr);
+
 }

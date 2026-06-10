@@ -13,6 +13,6 @@ package anyparse.query.format.json;
  */
 @:peg @:schema(anyparse.format.text.JsonFormat) @:ws
 typedef AstSearchSpan = {
-	var start:Array<Int>;
-	var end:Array<Int>;
+	var start: Array<Int>;
+	var end: Array<Int>;
 };

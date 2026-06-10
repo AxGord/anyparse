@@ -514,10 +514,10 @@ final class HaxeFormatConfigLoader {
 	 * `HxModuleWriteOptions`, starting from the Haxe format defaults
 	 * and overwriting only the fields the config explicitly sets.
 	 */
-	public static function loadHxFormatJson(json:String):HxModuleWriteOptions {
-		final cfg:HxFormatConfig = HxFormatConfigParser.parse(json);
-		final base:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
-		final result:HxModuleWriteOptions = {
+	public static function loadHxFormatJson(json: String): HxModuleWriteOptions {
+		final cfg: HxFormatConfig = HxFormatConfigParser.parse(json);
+		final base: HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
+		final result: HxModuleWriteOptions = {
 			indentChar: base.indentChar,
 			indentSize: base.indentSize,
 			tabWidth: base.tabWidth,
@@ -758,8 +758,8 @@ final class HaxeFormatConfigLoader {
 
 	private function new() {}
 
-	private static function applyIndentation(section:HxFormatIndentationSection, opt:HxModuleWriteOptions):Void {
-		final character:Null<String> = section.character;
+	private static function applyIndentation(section: HxFormatIndentationSection, opt: HxModuleWriteOptions): Void {
+		final character: Null<String> = section.character;
 		if (character != null) {
 			if (character == 'tab') {
 				opt.indentChar = Tab;
@@ -776,17 +776,17 @@ final class HaxeFormatConfigLoader {
 		if (section.indentComplexValueExpressions != null) opt.indentComplexValueExpressions = section.indentComplexValueExpressions;
 		if (section.indentVarTypeHintAnon != null) opt.indentVarTypeHintAnon = section.indentVarTypeHintAnon;
 		if (section.alignInlineSwitchCaseBody != null) opt.alignInlineSwitchCaseBody = section.alignInlineSwitchCaseBody;
-		final policyName:Null<String> = section.conditionalPolicy;
+		final policyName: Null<String> = section.conditionalPolicy;
 		if (policyName != null) {
-			final resolved:Null<ConditionalIndentationPolicy> = policyName;
+			final resolved: Null<ConditionalIndentationPolicy> = policyName;
 			if (resolved != null) opt.conditionalPolicy = resolved;
 		}
 	}
 
-	private static function applyWrapping(section:HxFormatWrappingSection, opt:HxModuleWriteOptions):Void {
+	private static function applyWrapping(section: HxFormatWrappingSection, opt: HxModuleWriteOptions): Void {
 		if (section.maxLineLength != null) opt.lineWidth = section.maxLineLength;
 		if (section.arrayMatrixWrap != null) {
-			final resolved:Null<ArrayMatrixWrap> = ArrayMatrixWrap.resolve(section.arrayMatrixWrap);
+			final resolved: Null<ArrayMatrixWrap> = ArrayMatrixWrap.resolve(section.arrayMatrixWrap);
 			if (resolved != null) opt.arrayMatrixWrap = resolved;
 		}
 		if (section.arrayWrap != null) opt.arrayLiteralWrap = wrapRulesFromConfig(section.arrayWrap, opt.arrayLiteralWrap);
@@ -800,12 +800,17 @@ final class HaxeFormatConfigLoader {
 		if (section.objectLiteral != null) opt.objectLiteralWrap = wrapRulesFromConfig(section.objectLiteral, opt.objectLiteralWrap);
 		if (section.conditionWrapping != null) opt.conditionWrap = wrapRulesFromConfig(section.conditionWrapping, opt.conditionWrap);
 		if (section.ternaryExpression != null) opt.ternaryWrap = wrapRulesFromConfig(section.ternaryExpression, opt.ternaryWrap);
-		if (section.functionSignature != null) opt.functionSignatureWrap = wrapRulesFromConfig(section.functionSignature, opt.functionSignatureWrap);
-		if (section.anonFunctionSignature != null) opt.anonFunctionSignatureWrap = wrapRulesFromConfig(section.anonFunctionSignature, opt.anonFunctionSignatureWrap);
-		if (section.metadataCallParameter != null) opt.metadataCallParameterWrap = wrapRulesFromConfig(section.metadataCallParameter, opt.metadataCallParameterWrap);
+		if (section.functionSignature != null)
+			opt.functionSignatureWrap = wrapRulesFromConfig(section.functionSignature, opt.functionSignatureWrap);
+		if (section.anonFunctionSignature != null)
+			opt.anonFunctionSignatureWrap = wrapRulesFromConfig(section.anonFunctionSignature, opt.anonFunctionSignatureWrap);
+		if (section.metadataCallParameter != null)
+			opt.metadataCallParameterWrap = wrapRulesFromConfig(section.metadataCallParameter, opt.metadataCallParameterWrap);
 		if (section.typeParameter != null) opt.typeParameterWrap = wrapRulesFromConfig(section.typeParameter, opt.typeParameterWrap);
-		if (section.expressionWrapping != null) opt.expressionWrappingWrap = wrapRulesFromConfig(section.expressionWrapping, opt.expressionWrappingWrap);
-		if (section.implementsExtends != null) opt.implementsExtendsWrap = wrapRulesFromConfig(section.implementsExtends, opt.implementsExtendsWrap, true);
+		if (section.expressionWrapping != null)
+			opt.expressionWrappingWrap = wrapRulesFromConfig(section.expressionWrapping, opt.expressionWrappingWrap);
+		if (section.implementsExtends != null)
+			opt.implementsExtendsWrap = wrapRulesFromConfig(section.implementsExtends, opt.implementsExtendsWrap, true);
 	}
 
 	/**
@@ -841,17 +846,17 @@ final class HaxeFormatConfigLoader {
 	 * preserve default. Only triggers when `defaultWrap` resolved (an
 	 * unrecognised string falls through to the preserve path).
 	 */
-	private static function wrapRulesFromConfig(cfg:HxFormatWrapRules, base:WrapRules, clearRulesOnDefaultWrap:Bool = false):WrapRules {
-		final resolvedDefault:Null<WrapMode> = cfg.defaultWrap != null ? wrapModeFromString(cfg.defaultWrap) : null;
-		final defaultMode:WrapMode = resolvedDefault ?? base.defaultMode;
-		final defaultLocation:Null<WrappingLocation> = cfg.defaultLocation != null
+	private static function wrapRulesFromConfig(cfg: HxFormatWrapRules, base: WrapRules, clearRulesOnDefaultWrap: Bool = false): WrapRules {
+		final resolvedDefault: Null<WrapMode> = cfg.defaultWrap != null ? wrapModeFromString(cfg.defaultWrap) : null;
+		final defaultMode: WrapMode = resolvedDefault ?? base.defaultMode;
+		final defaultLocation: Null<WrappingLocation> = cfg.defaultLocation != null
 			? wrappingLocationFromString(cfg.defaultLocation) ?? base.defaultLocation
 			: base.defaultLocation;
-		final defaultAdditionalIndent:Null<Int> = cfg.defaultAdditionalIndent ?? base.defaultAdditionalIndent;
-		final src:Null<Array<HxFormatWrapRule>> = cfg.rules;
+		final defaultAdditionalIndent: Null<Int> = cfg.defaultAdditionalIndent ?? base.defaultAdditionalIndent;
+		final src: Null<Array<HxFormatWrapRule>> = cfg.rules;
 		if (src == null) {
-			final clearing:Bool = clearRulesOnDefaultWrap && resolvedDefault != null;
-			final inheritedRules:Array<WrapRule> = clearing ? [] : base.rules;
+			final clearing: Bool = clearRulesOnDefaultWrap && resolvedDefault != null;
+			final inheritedRules: Array<WrapRule> = clearing ? [] : base.rules;
 			// B4 ω-implements-extends-wrap: when a `defaultWrap`-only block
 			// CLEARS the built-in cascade (chain classes + implementsExtends),
 			// the fork models continuation indent as a PER-RULE
@@ -861,40 +866,57 @@ final class HaxeFormatConfigLoader {
 			// honour an explicit `defaultAdditionalIndent` if present, else 0.
 			// Chain emitters ignore `defaultAdditionalIndent` (WrapRules doc), so
 			// this is a no-op for opBoolChain / opAddSubChain.
-			final clearedIndent:Null<Int> = clearing ? (cfg.defaultAdditionalIndent ?? 0) : defaultAdditionalIndent;
-			return {rules: inheritedRules, defaultMode: defaultMode, defaultLocation: defaultLocation, defaultAdditionalIndent: clearedIndent};
+			final clearedIndent: Null<Int> = clearing ? (cfg.defaultAdditionalIndent ?? 0) : defaultAdditionalIndent;
+			return {
+				rules: inheritedRules,
+				defaultMode: defaultMode,
+				defaultLocation: defaultLocation,
+				defaultAdditionalIndent: clearedIndent
+			};
 		}
-		final rules:Array<WrapRule> = [];
+		final rules: Array<WrapRule> = [];
 		for (raw in src) {
-			final mapped:Null<WrapRule> = wrapRuleFromConfig(raw);
+			final mapped: Null<WrapRule> = wrapRuleFromConfig(raw);
 			if (mapped != null) rules.push(mapped);
 		}
-		return {rules: rules, defaultMode: defaultMode, defaultLocation: defaultLocation, defaultAdditionalIndent: defaultAdditionalIndent};
+		return {
+			rules: rules,
+			defaultMode: defaultMode,
+			defaultLocation: defaultLocation,
+			defaultAdditionalIndent: defaultAdditionalIndent
+		};
 	}
 
-	private static function wrapRuleFromConfig(raw:HxFormatWrapRule):Null<WrapRule> {
-		final typeStr:Null<String> = raw.type;
+	private static function wrapRuleFromConfig(raw: HxFormatWrapRule): Null<WrapRule> {
+		final typeStr: Null<String> = raw.type;
 		if (typeStr == null) return null;
-		final mode:Null<WrapMode> = wrapModeFromString(typeStr);
+		final mode: Null<WrapMode> = wrapModeFromString(typeStr);
 		if (mode == null) return null;
-		final rawConds:Null<Array<HxFormatWrapCondition>> = raw.conditions;
-		final mapped:Array<WrapCondition> = [];
+		final rawConds: Null<Array<HxFormatWrapCondition>> = raw.conditions;
+		final mapped: Array<WrapCondition> = [];
 		if (rawConds != null) for (rc in rawConds) {
-			final condStr:Null<String> = rc.cond;
+			final condStr: Null<String> = rc.cond;
 			if (condStr == null) return null;
-			final ct:Null<WrapConditionType> = wrapCondFromString(condStr);
+			final ct: Null<WrapConditionType> = wrapCondFromString(condStr);
 			if (ct == null) return null;
-			final condNarrow:WrapConditionType = ct;
-			mapped.push({cond: condNarrow, value: rc.value ?? 0});
+			final condNarrow: WrapConditionType = ct;
+			mapped.push({ cond: condNarrow, value: rc.value ?? 0 });
 		}
-		final locStr:Null<String> = raw.location;
-		final location:Null<WrappingLocation> = locStr != null ? wrappingLocationFromString(locStr) : null;
+		final locStr: Null<String> = raw.location;
+		final location: Null<WrappingLocation> = locStr != null ? wrappingLocationFromString(locStr) : null;
 		return location != null
-			? {conditions: mapped, mode: mode, location: location}
-			: {conditions: mapped, mode: mode};
+			? {
+				conditions: mapped,
+				mode: mode,
+				location: location
+			}
+			: {
+				conditions: mapped,
+				mode: mode
+			};
 	}
 
-	private static function wrappingLocationFromString(s:String):Null<WrappingLocation> {
+	private static function wrappingLocationFromString(s: String): Null<WrappingLocation> {
 		return switch s {
 			case 'beforeLast': WrappingLocation.BeforeLast;
 			case 'afterLast': WrappingLocation.AfterLast;
@@ -908,13 +930,14 @@ final class HaxeFormatConfigLoader {
 	// json2object in older fork fixtures). Fixtures in the wild use both
 	// (e.g. `wrapping_method_chain_per_line.hxtest` uses identifier form;
 	// `wrapping_of_function_signature_keep.hxtest` uses symbolic form).
-	private static function wrapModeFromString(s:String):Null<WrapMode> {
+	private static function wrapModeFromString(s: String): Null<WrapMode> {
 		return switch s {
 			case 'noWrap' | 'NoWrap': WrapMode.NoWrap;
 			case 'onePerLine' | 'OnePerLine': WrapMode.OnePerLine;
 			case 'onePerLineAfterFirst' | 'OnePerLineAfterFirst': WrapMode.OnePerLineAfterFirst;
 			case 'fillLine' | 'FillLine': WrapMode.FillLine;
-			case 'fillLineWithLeadingBreak' | 'FillLineWithLeadingBreak': WrapMode.FillLineWithLeadingBreak;
+			case 'fillLineWithLeadingBreak' | 'FillLineWithLeadingBreak':
+				WrapMode.FillLineWithLeadingBreak;
 			// ω-keep-objectlit: fork's `WrappingType.Keep` preserves
 			// source-newline pattern per-element. Loader maps it to
 			// `WrapMode.Keep`; `triviaSepStarExpr` (`WriterLowering.hx`)
@@ -924,7 +947,8 @@ final class HaxeFormatConfigLoader {
 			// — chain Keep semantics is a follow-up slice; the NoWrap
 			// fallback preserves the pre-recognition baseline byte-
 			// identically for chain-config Keep fixtures.
-			case 'keep' | 'Keep': WrapMode.Keep;
+			case 'keep' | 'Keep':
+				WrapMode.Keep;
 			// ω-cascade-emits-comments: fork's `WrappingType.Ignore`
 			// drops source-newline signal and lets the cascade pick a
 			// width-driven layout. Sister to Keep on the same axis.
@@ -941,7 +965,7 @@ final class HaxeFormatConfigLoader {
 	// form (`'ItemCountLargerThan'`, the enum-abstract IDENTIFIERS as
 	// serialized by json2object in older fork fixtures). See sister
 	// `wrapModeFromString` for rationale.
-	private static function wrapCondFromString(s:String):Null<WrapConditionType> {
+	private static function wrapCondFromString(s: String): Null<WrapConditionType> {
 		return switch s {
 			case 'itemCount <= n' | 'ItemCountLessThan': WrapConditionType.ItemCountLessThan;
 			case 'itemCount >= n' | 'ItemCountLargerThan': WrapConditionType.ItemCountLargerThan;
@@ -956,7 +980,7 @@ final class HaxeFormatConfigLoader {
 		};
 	}
 
-	private static function applySameLine(section:HxFormatSameLineSection, opt:HxModuleWriteOptions):Void {
+	private static function applySameLine(section: HxFormatSameLineSection, opt: HxModuleWriteOptions): Void {
 		if (section.ifElse != null) opt.sameLineElse = sameLineToRuntime(section.ifElse);
 		if (section.tryCatch != null) opt.sameLineCatch = sameLineToRuntime(section.tryCatch);
 		if (section.doWhile != null) opt.sameLineDoWhile = sameLineToRuntime(section.doWhile);
@@ -1010,7 +1034,7 @@ final class HaxeFormatConfigLoader {
 		// break the existing arrow-body fixture. The Next/FitLine gate
 		// stays.
 		if (section.expressionIf != null) {
-			final p:BodyPolicy = bodyPolicyToRuntime(section.expressionIf);
+			final p: BodyPolicy = bodyPolicyToRuntime(section.expressionIf);
 			if (p == BodyPolicy.Keep || p == BodyPolicy.Same) {
 				opt.expressionIfBody = p;
 				opt.expressionElseBody = p;
@@ -1068,20 +1092,16 @@ final class HaxeFormatConfigLoader {
 		if (section.expressionIfWithBlocks != null) opt.expressionIfWithBlocks = section.expressionIfWithBlocks;
 	}
 
-	private static function applyTrailingCommas(section:HxFormatTrailingCommasSection, opt:HxModuleWriteOptions):Void {
-		if (section.arrayLiteralDefault != null)
-			opt.trailingCommaArrays = trailingCommaToBool(section.arrayLiteralDefault);
-		if (section.callArgumentDefault != null)
-			opt.trailingCommaArgs = trailingCommaToBool(section.callArgumentDefault);
-		if (section.functionParameterDefault != null)
-			opt.trailingCommaParams = trailingCommaToBool(section.functionParameterDefault);
-		if (section.objectLiteralDefault != null)
-			opt.trailingCommaObjectLits = trailingCommaToBool(section.objectLiteralDefault);
+	private static function applyTrailingCommas(section: HxFormatTrailingCommasSection, opt: HxModuleWriteOptions): Void {
+		if (section.arrayLiteralDefault != null) opt.trailingCommaArrays = trailingCommaToBool(section.arrayLiteralDefault);
+		if (section.callArgumentDefault != null) opt.trailingCommaArgs = trailingCommaToBool(section.callArgumentDefault);
+		if (section.functionParameterDefault != null) opt.trailingCommaParams = trailingCommaToBool(section.functionParameterDefault);
+		if (section.objectLiteralDefault != null) opt.trailingCommaObjectLits = trailingCommaToBool(section.objectLiteralDefault);
 	}
 
-	private static function applyLineEnds(section:HxFormatLineEndsSection, opt:HxModuleWriteOptions):Void {
+	private static function applyLineEnds(section: HxFormatLineEndsSection, opt: HxModuleWriteOptions): Void {
 		if (section.leftCurly != null) {
-			final placement:BracePlacement = leftCurlyToRuntime(section.leftCurly);
+			final placement: BracePlacement = leftCurlyToRuntime(section.leftCurly);
 			opt.leftCurly = placement;
 			// ω-objectlit-leftCurly-cascade: cascade global `lineEnds.leftCurly`
 			// into per-construct `objectLiteralLeftCurly`. Mirrors haxe-formatter's
@@ -1136,7 +1156,7 @@ final class HaxeFormatConfigLoader {
 			opt.blockLeftCurly = placement;
 		}
 		if (section.objectLiteralCurly != null) {
-			final sub:HxFormatCurlyLineEndPolicy = section.objectLiteralCurly;
+			final sub: HxFormatCurlyLineEndPolicy = section.objectLiteralCurly;
 			if (sub.leftCurly != null) opt.objectLiteralLeftCurly = leftCurlyToRuntime(sub.leftCurly);
 			// ω-objectlit-right-curly: per-construct sub-key
 			// `lineEnds.objectLiteralCurly.rightCurly` overrides the cascade
@@ -1146,7 +1166,7 @@ final class HaxeFormatConfigLoader {
 			if (sub.rightCurly != null) opt.objectLiteralRightCurly = rightCurlyToRuntime(sub.rightCurly);
 		}
 		if (section.anonFunctionCurly != null) {
-			final sub:HxFormatCurlyLineEndPolicy = section.anonFunctionCurly;
+			final sub: HxFormatCurlyLineEndPolicy = section.anonFunctionCurly;
 			if (sub.leftCurly != null) opt.anonFunctionLeftCurly = leftCurlyToRuntime(sub.leftCurly);
 			// ω-anonfunction-empty-curly: per-construct sub-key
 			// `lineEnds.anonFunctionCurly.emptyCurly` overrides the cascade
@@ -1169,7 +1189,7 @@ final class HaxeFormatConfigLoader {
 			// for anonymous type body closes (`HxType.Anon`). Mirrors
 			// haxe-formatter's `MarkLineEnds.getCurlyPolicy(AnonType).rightCurly`
 			// precedence.
-			final sub:HxFormatCurlyLineEndPolicy = section.anonTypeCurly;
+			final sub: HxFormatCurlyLineEndPolicy = section.anonTypeCurly;
 			if (sub.rightCurly != null) opt.anonTypeRightCurly = rightCurlyToRuntime(sub.rightCurly);
 		}
 		if (section.blockCurly != null) {
@@ -1178,7 +1198,7 @@ final class HaxeFormatConfigLoader {
 			// plain block body braces (currently `HxFnDecl.body`).
 			// Mirrors haxe-formatter's `MarkLineEnds.getCurlyPolicy(Block)`
 			// precedence.
-			final sub:HxFormatCurlyLineEndPolicy = section.blockCurly;
+			final sub: HxFormatCurlyLineEndPolicy = section.blockCurly;
 			if (sub.leftCurly != null) opt.blockLeftCurly = leftCurlyToRuntime(sub.leftCurly);
 			// ω-blockempty: per-construct sub-key
 			// `lineEnds.blockCurly.emptyCurly` overrides the cascade for
@@ -1194,7 +1214,7 @@ final class HaxeFormatConfigLoader {
 			if (sub.rightCurly != null) opt.blockRightCurly = rightCurlyToRuntime(sub.rightCurly);
 		}
 		if (section.emptyCurly != null) {
-			final empty:EmptyCurly = emptyCurlyToRuntime(section.emptyCurly);
+			final empty: EmptyCurly = emptyCurlyToRuntime(section.emptyCurly);
 			opt.emptyCurly = empty;
 			// ω-anonfunction-empty-curly: cascade global `lineEnds.emptyCurly`
 			// into `opt.anonFunctionEmptyCurly` (same pattern as
@@ -1202,14 +1222,12 @@ final class HaxeFormatConfigLoader {
 			// runs before this block when both are present, so the explicit
 			// `anonFunctionCurly.emptyCurly` override wins regardless of
 			// global ingest order.
-			if (section.anonFunctionCurly == null || section.anonFunctionCurly.emptyCurly == null)
-				opt.anonFunctionEmptyCurly = empty;
+			if (section.anonFunctionCurly == null || section.anonFunctionCurly.emptyCurly == null) opt.anonFunctionEmptyCurly = empty;
 			// ω-blockempty: cascade global `lineEnds.emptyCurly` into
 			// `opt.blockEmptyCurly`. The `lineEnds.blockCurly.emptyCurly`
 			// sub-key handler runs before this block when both are present,
 			// so the explicit override wins regardless of global ingest order.
-			if (section.blockCurly == null || section.blockCurly.emptyCurly == null)
-				opt.blockEmptyCurly = empty;
+			if (section.blockCurly == null || section.blockCurly.emptyCurly == null) opt.blockEmptyCurly = empty;
 		}
 		// ω-blockright-curly + ω-anonfunction-right-curly: cascade global
 		// `lineEnds.rightCurly` into every per-construct
@@ -1224,19 +1242,16 @@ final class HaxeFormatConfigLoader {
 		// `MarkLineEnds.detectCurlyPolicy(...).rightCurly` precedence —
 		// global lineEnd seeds every per-construct knob, sub-keys override.
 		if (section.rightCurly != null) {
-			final placement:RightCurlyPlacement = rightCurlyToRuntime(section.rightCurly);
-			if (section.blockCurly == null || section.blockCurly.rightCurly == null)
-				opt.blockRightCurly = placement;
+			final placement: RightCurlyPlacement = rightCurlyToRuntime(section.rightCurly);
+			if (section.blockCurly == null || section.blockCurly.rightCurly == null) opt.blockRightCurly = placement;
 			// ω-anonfunction-right-curly: cascade global lineEnd into
 			// `anonFunctionRightCurly` unless the
 			// `anonFunctionCurly.rightCurly` sub-key already set it.
-			if (section.anonFunctionCurly == null || section.anonFunctionCurly.rightCurly == null)
-				opt.anonFunctionRightCurly = placement;
+			if (section.anonFunctionCurly == null || section.anonFunctionCurly.rightCurly == null) opt.anonFunctionRightCurly = placement;
 			// ω-anontype-right-curly: cascade global lineEnd into
 			// `anonTypeRightCurly` unless the `anonTypeCurly.rightCurly`
 			// sub-key already set it.
-			if (section.anonTypeCurly == null || section.anonTypeCurly.rightCurly == null)
-				opt.anonTypeRightCurly = placement;
+			if (section.anonTypeCurly == null || section.anonTypeCurly.rightCurly == null) opt.anonTypeRightCurly = placement;
 			// ω-objectlit-right-curly: cascade global lineEnd into
 			// `objectLiteralRightCurly` unless the
 			// `objectLiteralCurly.rightCurly` sub-key already set it.
@@ -1248,58 +1263,38 @@ final class HaxeFormatConfigLoader {
 		// driven inter-meta separator; `After` / `AfterLast` /
 		// `ForceAfterLast` force a hardline after the last function meta
 		// (and override inter-element sep for `After` / `ForceAfterLast`).
-		if (section.metadataFunction != null)
-			opt.metadataFunctionLineEnd = metadataLineEndToRuntime(section.metadataFunction);
+		if (section.metadataFunction != null) opt.metadataFunctionLineEnd = metadataLineEndToRuntime(section.metadataFunction);
 		// ω-lineend-character: `lineEnds.lineEndCharacter` → `opt.lineEnd`
 		// (base WriteOptions String). `"LF"` / `"CRLF"` / `"CR"` map to
 		// `\n` / `\r\n` / `\r`; `"Auto"` falls back to `\n` because the
 		// writer is decoupled from the source byte stream (no
 		// `parsedCode.lineSeparator` equivalent).
-		if (section.lineEndCharacter != null)
-			opt.lineEnd = lineEndCharacterToRuntime(section.lineEndCharacter);
+		if (section.lineEndCharacter != null) opt.lineEnd = lineEndCharacterToRuntime(section.lineEndCharacter);
 	}
 
-	private static function applyWhitespace(section:HxFormatWhitespaceSection, opt:HxModuleWriteOptions):Void {
-		if (section.objectFieldColonPolicy != null)
-			opt.objectFieldColon = whitespaceToRuntime(section.objectFieldColonPolicy);
-		if (section.typeHintColonPolicy != null)
-			opt.typeHintColon = whitespaceToRuntime(section.typeHintColonPolicy);
-		if (section.typeCheckColonPolicy != null)
-			opt.typeCheckColon = whitespaceToRuntime(section.typeCheckColonPolicy);
-		if (section.typeParamOpenPolicy != null)
-			opt.typeParamOpen = whitespaceToRuntime(section.typeParamOpenPolicy);
-		if (section.typeParamClosePolicy != null)
-			opt.typeParamClose = whitespaceToRuntime(section.typeParamClosePolicy);
-		if (section.binopPolicy != null)
-			opt.typeParamDefaultEquals = whitespaceToRuntime(section.binopPolicy);
-		if (section.functionTypeHaxe4Policy != null)
-			opt.functionTypeHaxe4 = whitespaceToRuntime(section.functionTypeHaxe4Policy);
-		if (section.functionTypeHaxe3Policy != null)
-			opt.functionTypeHaxe3 = whitespaceToRuntime(section.functionTypeHaxe3Policy);
-		if (section.arrowFunctionsPolicy != null)
-			opt.arrowFunctions = whitespaceToRuntime(section.arrowFunctionsPolicy);
-		if (section.ifPolicy != null)
-			opt.ifPolicy = whitespaceToRuntime(section.ifPolicy);
-		if (section.forPolicy != null)
-			opt.forPolicy = whitespaceToRuntime(section.forPolicy);
-		if (section.whilePolicy != null)
-			opt.whilePolicy = whitespaceToRuntime(section.whilePolicy);
-		if (section.switchPolicy != null)
-			opt.switchPolicy = whitespaceToRuntime(section.switchPolicy);
-		if (section.tryPolicy != null)
-			opt.tryPolicy = whitespaceToRuntime(section.tryPolicy);
-		if (section.addLineCommentSpace != null)
-			opt.addLineCommentSpace = section.addLineCommentSpace;
-		if (section.compressSuccessiveParenthesis != null)
-			opt.compressSuccessiveParenthesis = section.compressSuccessiveParenthesis;
-		if (section.formatStringInterpolation != null)
-			opt.formatStringInterpolation = section.formatStringInterpolation;
-		final paren:Null<HxFormatParenConfigSection> = section.parenConfig;
+	private static function applyWhitespace(section: HxFormatWhitespaceSection, opt: HxModuleWriteOptions): Void {
+		if (section.objectFieldColonPolicy != null) opt.objectFieldColon = whitespaceToRuntime(section.objectFieldColonPolicy);
+		if (section.typeHintColonPolicy != null) opt.typeHintColon = whitespaceToRuntime(section.typeHintColonPolicy);
+		if (section.typeCheckColonPolicy != null) opt.typeCheckColon = whitespaceToRuntime(section.typeCheckColonPolicy);
+		if (section.typeParamOpenPolicy != null) opt.typeParamOpen = whitespaceToRuntime(section.typeParamOpenPolicy);
+		if (section.typeParamClosePolicy != null) opt.typeParamClose = whitespaceToRuntime(section.typeParamClosePolicy);
+		if (section.binopPolicy != null) opt.typeParamDefaultEquals = whitespaceToRuntime(section.binopPolicy);
+		if (section.functionTypeHaxe4Policy != null) opt.functionTypeHaxe4 = whitespaceToRuntime(section.functionTypeHaxe4Policy);
+		if (section.functionTypeHaxe3Policy != null) opt.functionTypeHaxe3 = whitespaceToRuntime(section.functionTypeHaxe3Policy);
+		if (section.arrowFunctionsPolicy != null) opt.arrowFunctions = whitespaceToRuntime(section.arrowFunctionsPolicy);
+		if (section.ifPolicy != null) opt.ifPolicy = whitespaceToRuntime(section.ifPolicy);
+		if (section.forPolicy != null) opt.forPolicy = whitespaceToRuntime(section.forPolicy);
+		if (section.whilePolicy != null) opt.whilePolicy = whitespaceToRuntime(section.whilePolicy);
+		if (section.switchPolicy != null) opt.switchPolicy = whitespaceToRuntime(section.switchPolicy);
+		if (section.tryPolicy != null) opt.tryPolicy = whitespaceToRuntime(section.tryPolicy);
+		if (section.addLineCommentSpace != null) opt.addLineCommentSpace = section.addLineCommentSpace;
+		if (section.compressSuccessiveParenthesis != null) opt.compressSuccessiveParenthesis = section.compressSuccessiveParenthesis;
+		if (section.formatStringInterpolation != null) opt.formatStringInterpolation = section.formatStringInterpolation;
+		final paren: Null<HxFormatParenConfigSection> = section.parenConfig;
 		if (paren != null) {
-			final funcParam:Null<HxFormatParenPolicySection> = paren.funcParamParens;
-			if (funcParam != null && funcParam.openingPolicy != null)
-				opt.funcParamParens = whitespaceToRuntime(funcParam.openingPolicy);
-			final call:Null<HxFormatParenPolicySection> = paren.callParens;
+			final funcParam: Null<HxFormatParenPolicySection> = paren.funcParamParens;
+			if (funcParam != null && funcParam.openingPolicy != null) opt.funcParamParens = whitespaceToRuntime(funcParam.openingPolicy);
+			final call: Null<HxFormatParenPolicySection> = paren.callParens;
 			if (call != null) {
 				// ω-call-parens-inside (Stage B): `callParens.openingPolicy`
 				// drives TWO axes of the open `(` token, mirroring fork's
@@ -1310,21 +1305,18 @@ final class HaxeFormatConfigLoader {
 				// inner pad before `)` (`opt.callParensInsideClose`). So
 				// `openingPolicy: "onlyAfter"` keeps `bar1(` tight AND pads
 				// `( {…`; `closingPolicy: "before"` pads `…} )`.
-				final callOpening:Null<HxFormatWhitespacePolicy> = call.openingPolicy;
+				final callOpening: Null<HxFormatWhitespacePolicy> = call.openingPolicy;
 				if (callOpening != null) {
 					opt.callParens = whitespaceToRuntime(callOpening);
 					opt.callParensInsideOpen = whitespaceToRuntime(callOpening);
 				}
-				final callClosing:Null<HxFormatWhitespacePolicy> = call.closingPolicy;
-				if (callClosing != null)
-					opt.callParensInsideClose = whitespaceToRuntime(callClosing);
+				final callClosing: Null<HxFormatWhitespacePolicy> = call.closingPolicy;
+				if (callClosing != null) opt.callParensInsideClose = whitespaceToRuntime(callClosing);
 			}
-			final anonFunc:Null<HxFormatParenPolicySection> = paren.anonFuncParamParens;
+			final anonFunc: Null<HxFormatParenPolicySection> = paren.anonFuncParamParens;
 			if (anonFunc != null) {
-				if (anonFunc.openingPolicy != null)
-					opt.anonFuncParens = whitespaceToRuntime(anonFunc.openingPolicy);
-				if (anonFunc.removeInnerWhenEmpty != null)
-					opt.anonFuncParamParensKeepInnerWhenEmpty = !anonFunc.removeInnerWhenEmpty;
+				if (anonFunc.openingPolicy != null) opt.anonFuncParens = whitespaceToRuntime(anonFunc.openingPolicy);
+				if (anonFunc.removeInnerWhenEmpty != null) opt.anonFuncParamParensKeepInnerWhenEmpty = !anonFunc.removeInnerWhenEmpty;
 			}
 			// ω-condition-parens (Stage C): apply the `conditionParens`
 			// catch-all FIRST (haxe-formatter scopes it to if / while / switch
@@ -1339,21 +1331,17 @@ final class HaxeFormatConfigLoader {
 			applyConditionParens(paren.catchParens, opt, false, 'catch');
 			applyConditionParens(paren.sharpConditionParens, opt, false, 'sharp');
 		}
-		final braces:Null<HxFormatBracesConfigSection> = section.bracesConfig;
+		final braces: Null<HxFormatBracesConfigSection> = section.bracesConfig;
 		if (braces != null) {
-			final anonType:Null<HxFormatParenPolicySection> = braces.anonTypeBraces;
+			final anonType: Null<HxFormatParenPolicySection> = braces.anonTypeBraces;
 			if (anonType != null) {
-				if (anonType.openingPolicy != null)
-					opt.anonTypeBracesOpen = whitespaceToRuntime(anonType.openingPolicy);
-				if (anonType.closingPolicy != null)
-					opt.anonTypeBracesClose = whitespaceToRuntime(anonType.closingPolicy);
+				if (anonType.openingPolicy != null) opt.anonTypeBracesOpen = whitespaceToRuntime(anonType.openingPolicy);
+				if (anonType.closingPolicy != null) opt.anonTypeBracesClose = whitespaceToRuntime(anonType.closingPolicy);
 			}
-			final objectLit:Null<HxFormatParenPolicySection> = braces.objectLiteralBraces;
+			final objectLit: Null<HxFormatParenPolicySection> = braces.objectLiteralBraces;
 			if (objectLit != null) {
-				if (objectLit.openingPolicy != null)
-					opt.objectLiteralBracesOpen = whitespaceToRuntime(objectLit.openingPolicy);
-				if (objectLit.closingPolicy != null)
-					opt.objectLiteralBracesClose = whitespaceToRuntime(objectLit.closingPolicy);
+				if (objectLit.openingPolicy != null) opt.objectLiteralBracesOpen = whitespaceToRuntime(objectLit.openingPolicy);
+				if (objectLit.closingPolicy != null) opt.objectLiteralBracesClose = whitespaceToRuntime(objectLit.closingPolicy);
 			}
 		}
 		// ω-bracket-config: `whitespace.bracketConfig.*` → the eight
@@ -1363,45 +1351,37 @@ final class HaxeFormatConfigLoader {
 		// opening / closing policy pair. `HxExpr.IndexAccess` reads the
 		// `accessBrackets` pair; `HxExpr.ArrayExpr` runtime-dispatches
 		// among the other three on its first element's enum constructor.
-		final bracket:Null<HxFormatBracketConfigSection> = section.bracketConfig;
+		final bracket: Null<HxFormatBracketConfigSection> = section.bracketConfig;
 		if (bracket != null) {
-			final access:Null<HxFormatParenPolicySection> = bracket.accessBrackets;
+			final access: Null<HxFormatParenPolicySection> = bracket.accessBrackets;
 			if (access != null) {
-				if (access.openingPolicy != null)
-					opt.accessBracketsOpen = whitespaceToRuntime(access.openingPolicy);
-				if (access.closingPolicy != null)
-					opt.accessBracketsClose = whitespaceToRuntime(access.closingPolicy);
+				if (access.openingPolicy != null) opt.accessBracketsOpen = whitespaceToRuntime(access.openingPolicy);
+				if (access.closingPolicy != null) opt.accessBracketsClose = whitespaceToRuntime(access.closingPolicy);
 			}
-			final arrayLit:Null<HxFormatParenPolicySection> = bracket.arrayLiteralBrackets;
+			final arrayLit: Null<HxFormatParenPolicySection> = bracket.arrayLiteralBrackets;
 			if (arrayLit != null) {
-				if (arrayLit.openingPolicy != null)
-					opt.arrayLiteralBracketsOpen = whitespaceToRuntime(arrayLit.openingPolicy);
-				if (arrayLit.closingPolicy != null)
-					opt.arrayLiteralBracketsClose = whitespaceToRuntime(arrayLit.closingPolicy);
+				if (arrayLit.openingPolicy != null) opt.arrayLiteralBracketsOpen = whitespaceToRuntime(arrayLit.openingPolicy);
+				if (arrayLit.closingPolicy != null) opt.arrayLiteralBracketsClose = whitespaceToRuntime(arrayLit.closingPolicy);
 			}
-			final mapLit:Null<HxFormatParenPolicySection> = bracket.mapLiteralBrackets;
+			final mapLit: Null<HxFormatParenPolicySection> = bracket.mapLiteralBrackets;
 			if (mapLit != null) {
-				if (mapLit.openingPolicy != null)
-					opt.mapLiteralBracketsOpen = whitespaceToRuntime(mapLit.openingPolicy);
-				if (mapLit.closingPolicy != null)
-					opt.mapLiteralBracketsClose = whitespaceToRuntime(mapLit.closingPolicy);
+				if (mapLit.openingPolicy != null) opt.mapLiteralBracketsOpen = whitespaceToRuntime(mapLit.openingPolicy);
+				if (mapLit.closingPolicy != null) opt.mapLiteralBracketsClose = whitespaceToRuntime(mapLit.closingPolicy);
 			}
-			final compr:Null<HxFormatParenPolicySection> = bracket.comprehensionBrackets;
+			final compr: Null<HxFormatParenPolicySection> = bracket.comprehensionBrackets;
 			if (compr != null) {
-				if (compr.openingPolicy != null)
-					opt.comprehensionBracketsOpen = whitespaceToRuntime(compr.openingPolicy);
-				if (compr.closingPolicy != null)
-					opt.comprehensionBracketsClose = whitespaceToRuntime(compr.closingPolicy);
+				if (compr.openingPolicy != null) opt.comprehensionBracketsOpen = whitespaceToRuntime(compr.openingPolicy);
+				if (compr.closingPolicy != null) opt.comprehensionBracketsClose = whitespaceToRuntime(compr.closingPolicy);
 			}
 		}
 	}
 
-	private static function applyEmptyLines(section:HxFormatEmptyLinesSection, opt:HxModuleWriteOptions):Void {
+	private static function applyEmptyLines(section: HxFormatEmptyLinesSection, opt: HxModuleWriteOptions): Void {
 		if (section.afterFieldsWithDocComments != null)
 			opt.afterFieldsWithDocComments = commentEmptyLinesToRuntime(section.afterFieldsWithDocComments);
 		if (section.beforeDocCommentEmptyLines != null)
 			opt.beforeDocCommentEmptyLines = commentEmptyLinesToRuntime(section.beforeDocCommentEmptyLines);
-		final classSection:Null<HxFormatClassEmptyLinesConfig> = section.classEmptyLines;
+		final classSection: Null<HxFormatClassEmptyLinesConfig> = section.classEmptyLines;
 		if (classSection != null) {
 			if (classSection.existingBetweenFields != null)
 				opt.existingBetweenFields = keepEmptyLinesToRuntime(classSection.existingBetweenFields);
@@ -1409,8 +1389,7 @@ final class HaxeFormatConfigLoader {
 			if (classSection.betweenFunctions != null) opt.betweenFunctions = classSection.betweenFunctions;
 			if (classSection.afterVars != null) opt.afterVars = classSection.afterVars;
 			if (classSection.afterStaticVars != null) opt.afterStaticVars = classSection.afterStaticVars;
-			if (classSection.betweenStaticFunctions != null)
-				opt.betweenStaticFunctions = classSection.betweenStaticFunctions;
+			if (classSection.betweenStaticFunctions != null) opt.betweenStaticFunctions = classSection.betweenStaticFunctions;
 			if (classSection.beginType != null) opt.beginType = classSection.beginType;
 			if (classSection.endType != null) opt.endType = classSection.endType;
 		}
@@ -1420,24 +1399,22 @@ final class HaxeFormatConfigLoader {
 		// `betweenStaticFunctions` is consumed today — the rest land with
 		// their abstract-scoped fixtures. Last-write wins against any
 		// `classEmptyLines` block that set the same shared knob.
-		final abstractSection:Null<HxFormatClassEmptyLinesConfig> = section.abstractEmptyLines;
+		final abstractSection: Null<HxFormatClassEmptyLinesConfig> = section.abstractEmptyLines;
 		if (abstractSection != null) {
-			if (abstractSection.betweenStaticFunctions != null)
-				opt.betweenStaticFunctions = abstractSection.betweenStaticFunctions;
+			if (abstractSection.betweenStaticFunctions != null) opt.betweenStaticFunctions = abstractSection.betweenStaticFunctions;
 		}
-		final externClassSection:Null<HxFormatClassEmptyLinesConfig> = section.externClassEmptyLines;
+		final externClassSection: Null<HxFormatClassEmptyLinesConfig> = section.externClassEmptyLines;
 		if (externClassSection != null) {
 			if (externClassSection.existingBetweenFields != null)
 				opt.externExistingBetweenFields = keepEmptyLinesToRuntime(externClassSection.existingBetweenFields);
 		}
-		final interfaceSection:Null<HxFormatInterfaceEmptyLinesConfig> = section.interfaceEmptyLines;
+		final interfaceSection: Null<HxFormatInterfaceEmptyLinesConfig> = section.interfaceEmptyLines;
 		if (interfaceSection != null) {
 			if (interfaceSection.betweenVars != null) opt.interfaceBetweenVars = interfaceSection.betweenVars;
-			if (interfaceSection.betweenFunctions != null)
-				opt.interfaceBetweenFunctions = interfaceSection.betweenFunctions;
+			if (interfaceSection.betweenFunctions != null) opt.interfaceBetweenFunctions = interfaceSection.betweenFunctions;
 			if (interfaceSection.afterVars != null) opt.interfaceAfterVars = interfaceSection.afterVars;
 		}
-		final enumSection:Null<HxFormatEnumEmptyLinesConfig> = section.enumEmptyLines;
+		final enumSection: Null<HxFormatEnumEmptyLinesConfig> = section.enumEmptyLines;
 		if (enumSection != null) {
 			if (enumSection.existingBetweenFields != null)
 				opt.existingBetweenFields = keepEmptyLinesToRuntime(enumSection.existingBetweenFields);
@@ -1450,7 +1427,7 @@ final class HaxeFormatConfigLoader {
 		// last-write-wins, unlike `enumEmptyLines`). Drives the
 		// `HxType.Anon.fields` `@:sep`-Star force-multi blank inserts when
 		// the descendant anon body carries `_inTypedefBody == true`.
-		final typedefSection:Null<HxFormatTypedefEmptyLinesConfig> = section.typedefEmptyLines;
+		final typedefSection: Null<HxFormatTypedefEmptyLinesConfig> = section.typedefEmptyLines;
 		if (typedefSection != null) {
 			if (typedefSection.existingBetweenFields != null)
 				opt.typedefExistingBetweenFields = keepEmptyLinesToRuntime(typedefSection.existingBetweenFields);
@@ -1472,17 +1449,15 @@ final class HaxeFormatConfigLoader {
 		// ω-D5-curly-blanks-fork-default: see `loadHxFormatJson` head — fork
 		// canonical `Remove` is re-applied at JSON-load entry before this
 		// section runs, so here we only honour an explicit JSON override.
-		if (section.afterLeftCurly != null)
-			opt.afterLeftCurly = keepEmptyLinesToRuntime(section.afterLeftCurly);
-		if (section.beforeRightCurly != null)
-			opt.beforeRightCurly = keepEmptyLinesToRuntime(section.beforeRightCurly);
-		final importAndUsing:Null<HxFormatImportAndUsingConfig> = section.importAndUsing;
+		if (section.afterLeftCurly != null) opt.afterLeftCurly = keepEmptyLinesToRuntime(section.afterLeftCurly);
+		if (section.beforeRightCurly != null) opt.beforeRightCurly = keepEmptyLinesToRuntime(section.beforeRightCurly);
+		final importAndUsing: Null<HxFormatImportAndUsingConfig> = section.importAndUsing;
 		if (importAndUsing != null) {
 			if (importAndUsing.beforeUsing != null) opt.beforeUsing = importAndUsing.beforeUsing;
 			if (importAndUsing.betweenImports != null) opt.betweenImports = importAndUsing.betweenImports;
-			final levelRaw:Null<String> = importAndUsing.betweenImportsLevel;
+			final levelRaw: Null<String> = importAndUsing.betweenImportsLevel;
 			if (levelRaw != null) {
-				final mapped:Null<HxBetweenImportsLevel> = betweenImportsLevelFromString(levelRaw);
+				final mapped: Null<HxBetweenImportsLevel> = betweenImportsLevelFromString(levelRaw);
 				if (mapped != null) opt.betweenImportsLevel = mapped;
 			}
 			if (importAndUsing.beforeType != null) opt.beforeType = importAndUsing.beforeType;
@@ -1499,7 +1474,7 @@ final class HaxeFormatConfigLoader {
 	 * `opt.betweenImportsLevel` (defaults `All`) intact — same lenient
 	 * behaviour as the rest of the loader's enum mappings.
 	 */
-	private static function betweenImportsLevelFromString(raw:String):Null<HxBetweenImportsLevel> {
+	private static function betweenImportsLevelFromString(raw: String): Null<HxBetweenImportsLevel> {
 		return switch raw {
 			case 'all': HxBetweenImportsLevel.All;
 			case 'firstLevelPackage': HxBetweenImportsLevel.FirstLevelPackage;
@@ -1512,7 +1487,7 @@ final class HaxeFormatConfigLoader {
 		};
 	}
 
-	private static function sameLineToRuntime(policy:HxFormatSameLinePolicy):SameLinePolicy {
+	private static function sameLineToRuntime(policy: HxFormatSameLinePolicy): SameLinePolicy {
 		return switch policy {
 			case HxFormatSameLinePolicy.Next: SameLinePolicy.Next;
 			case HxFormatSameLinePolicy.Keep: SameLinePolicy.Keep;
@@ -1520,11 +1495,11 @@ final class HaxeFormatConfigLoader {
 		};
 	}
 
-	private static inline function trailingCommaToBool(policy:HxFormatTrailingCommaPolicy):Bool {
+	private static inline function trailingCommaToBool(policy: HxFormatTrailingCommaPolicy): Bool {
 		return policy == HxFormatTrailingCommaPolicy.Yes;
 	}
 
-	private static function bodyPolicyToRuntime(policy:HxFormatBodyPolicy):BodyPolicy {
+	private static function bodyPolicyToRuntime(policy: HxFormatBodyPolicy): BodyPolicy {
 		return switch policy {
 			case HxFormatBodyPolicy.Same: BodyPolicy.Same;
 			case HxFormatBodyPolicy.Next: BodyPolicy.Next;
@@ -1534,21 +1509,21 @@ final class HaxeFormatConfigLoader {
 		};
 	}
 
-	private static function leftCurlyToRuntime(policy:HxFormatLeftCurlyPolicy):BracePlacement {
+	private static function leftCurlyToRuntime(policy: HxFormatLeftCurlyPolicy): BracePlacement {
 		return switch policy {
 			case HxFormatLeftCurlyPolicy.Before | HxFormatLeftCurlyPolicy.Both: BracePlacement.Next;
 			case _: BracePlacement.Same;
 		};
 	}
 
-	private static function emptyCurlyToRuntime(policy:HxFormatEmptyCurlyPolicy):EmptyCurly {
+	private static function emptyCurlyToRuntime(policy: HxFormatEmptyCurlyPolicy): EmptyCurly {
 		return switch policy {
 			case HxFormatEmptyCurlyPolicy.Break: EmptyCurly.Break;
 			case _: EmptyCurly.Same;
 		};
 	}
 
-	private static function rightCurlyToRuntime(policy:HxFormatRightCurlyPolicy):RightCurlyPlacement {
+	private static function rightCurlyToRuntime(policy: HxFormatRightCurlyPolicy): RightCurlyPlacement {
 		// "before" / "both" → Same (hardline before `}`, default — the
 		// trailing newline after `}` is contributed by the outer sibling
 		// sep, not by `blockBody`, so `Before` and `Both` collapse).
@@ -1559,7 +1534,7 @@ final class HaxeFormatConfigLoader {
 		};
 	}
 
-	private static function lineEndCharacterToRuntime(policy:HxFormatLineEndCharacter):String {
+	private static function lineEndCharacterToRuntime(policy: HxFormatLineEndCharacter): String {
 		return switch policy {
 			case HxFormatLineEndCharacter.CRLF: '\r\n';
 			case HxFormatLineEndCharacter.CR: '\r';
@@ -1567,7 +1542,7 @@ final class HaxeFormatConfigLoader {
 		};
 	}
 
-	private static function metadataLineEndToRuntime(policy:HxFormatMetadataLineEndPolicy):MetadataLineEndPolicy {
+	private static function metadataLineEndToRuntime(policy: HxFormatMetadataLineEndPolicy): MetadataLineEndPolicy {
 		return switch policy {
 			case HxFormatMetadataLineEndPolicy.After: MetadataLineEndPolicy.After;
 			case HxFormatMetadataLineEndPolicy.AfterLast: MetadataLineEndPolicy.AfterLast;
@@ -1576,7 +1551,7 @@ final class HaxeFormatConfigLoader {
 		};
 	}
 
-	private static function whitespaceToRuntime(policy:HxFormatWhitespacePolicy):WhitespacePolicy {
+	private static function whitespaceToRuntime(policy: HxFormatWhitespacePolicy): WhitespacePolicy {
 		return switch policy {
 			case HxFormatWhitespacePolicy.Before | HxFormatWhitespacePolicy.OnlyBefore: WhitespacePolicy.Before;
 			case HxFormatWhitespacePolicy.After | HxFormatWhitespacePolicy.OnlyAfter: WhitespacePolicy.After;
@@ -1594,10 +1569,10 @@ final class HaxeFormatConfigLoader {
 	 * `None`) → kw `None` (no space). So `openingPolicy: "onlyAfter"`
 	 * collapses `if (` to `if(` while still padding the inner `( `.
 	 */
-	private static function parenGapToKwAfter(policy:HxFormatWhitespacePolicy):WhitespacePolicy {
+	private static function parenGapToKwAfter(policy: HxFormatWhitespacePolicy): WhitespacePolicy {
 		return switch policy {
-			case HxFormatWhitespacePolicy.Before | HxFormatWhitespacePolicy.OnlyBefore
-				| HxFormatWhitespacePolicy.Around | HxFormatWhitespacePolicy.NoneAfter: WhitespacePolicy.After;
+			case HxFormatWhitespacePolicy.Before | HxFormatWhitespacePolicy.OnlyBefore | HxFormatWhitespacePolicy.Around
+				| HxFormatWhitespacePolicy.NoneAfter: WhitespacePolicy.After;
 			case _: WhitespacePolicy.None;
 		};
 	}
@@ -1613,35 +1588,36 @@ final class HaxeFormatConfigLoader {
 	 * AND the inner `( ` pad (`openingPolicy` → `*InsideOpen`);
 	 * `closingPolicy` drives the inner ` )` pad (`*InsideClose`).
 	 */
-	private static function applyConditionParens(section:Null<HxFormatParenPolicySection>, opt:HxModuleWriteOptions,
-			isCatchAll:Bool, ?category:String):Void {
+	private static function applyConditionParens(
+		section: Null<HxFormatParenPolicySection>, opt: HxModuleWriteOptions, isCatchAll: Bool, ?category: String
+	): Void {
 		if (section == null) return;
-		final opening:Null<HxFormatWhitespacePolicy> = section.openingPolicy;
-		final closing:Null<HxFormatWhitespacePolicy> = section.closingPolicy;
-		final gap:Null<WhitespacePolicy> = opening != null ? parenGapToKwAfter(opening) : null;
-		final insideOpen:Null<WhitespacePolicy> = opening != null ? whitespaceToRuntime(opening) : null;
-		final insideClose:Null<WhitespacePolicy> = closing != null ? whitespaceToRuntime(closing) : null;
-		inline function applyIf():Void {
+		final opening: Null<HxFormatWhitespacePolicy> = section.openingPolicy;
+		final closing: Null<HxFormatWhitespacePolicy> = section.closingPolicy;
+		final gap: Null<WhitespacePolicy> = opening != null ? parenGapToKwAfter(opening) : null;
+		final insideOpen: Null<WhitespacePolicy> = opening != null ? whitespaceToRuntime(opening) : null;
+		final insideClose: Null<WhitespacePolicy> = closing != null ? whitespaceToRuntime(closing) : null;
+		inline function applyIf(): Void {
 			if (gap != null) opt.ifPolicy = gap;
 			if (insideOpen != null) opt.ifCondParensInsideOpen = insideOpen;
 			if (insideClose != null) opt.ifCondParensInsideClose = insideClose;
 		}
-		inline function applyWhile():Void {
+		inline function applyWhile(): Void {
 			if (gap != null) opt.whilePolicy = gap;
 			if (insideOpen != null) opt.whileCondParensInsideOpen = insideOpen;
 			if (insideClose != null) opt.whileCondParensInsideClose = insideClose;
 		}
-		inline function applySwitch():Void {
+		inline function applySwitch(): Void {
 			if (gap != null) opt.switchPolicy = gap;
 			if (insideOpen != null) opt.switchCondParensInsideOpen = insideOpen;
 			if (insideClose != null) opt.switchCondParensInsideClose = insideClose;
 		}
-		inline function applyCatch():Void {
+		inline function applyCatch(): Void {
 			if (gap != null) opt.catchParensGap = gap;
 			if (insideOpen != null) opt.catchParensInsideOpen = insideOpen;
 			if (insideClose != null) opt.catchParensInsideClose = insideClose;
 		}
-		inline function applySharp():Void {
+		inline function applySharp(): Void {
 			if (gap != null) opt.sharpCondParensGap = gap;
 			if (insideOpen != null) opt.sharpCondParensInsideOpen = insideOpen;
 			if (insideClose != null) opt.sharpCondParensInsideClose = insideClose;
@@ -1655,23 +1631,28 @@ final class HaxeFormatConfigLoader {
 			return;
 		}
 		switch category {
-			case 'if': applyIf();
-			case 'while': applyWhile();
-			case 'switch': applySwitch();
-			case 'catch': applyCatch();
-			case 'sharp': applySharp();
+			case 'if':
+				applyIf();
+			case 'while':
+				applyWhile();
+			case 'switch':
+				applySwitch();
+			case 'catch':
+				applyCatch();
+			case 'sharp':
+				applySharp();
 			case _:
 		}
 	}
 
-	private static function keywordPlacementToRuntime(policy:HxFormatKeywordPlacement):KeywordPlacement {
+	private static function keywordPlacementToRuntime(policy: HxFormatKeywordPlacement): KeywordPlacement {
 		return switch policy {
 			case HxFormatKeywordPlacement.Next: KeywordPlacement.Next;
 			case _: KeywordPlacement.Same;
 		};
 	}
 
-	private static function commentEmptyLinesToRuntime(policy:HxFormatCommentEmptyLinesPolicy):CommentEmptyLinesPolicy {
+	private static function commentEmptyLinesToRuntime(policy: HxFormatCommentEmptyLinesPolicy): CommentEmptyLinesPolicy {
 		return switch policy {
 			case HxFormatCommentEmptyLinesPolicy.None: CommentEmptyLinesPolicy.None;
 			case HxFormatCommentEmptyLinesPolicy.One: CommentEmptyLinesPolicy.One;
@@ -1679,15 +1660,16 @@ final class HaxeFormatConfigLoader {
 		};
 	}
 
-	private static function keepEmptyLinesToRuntime(policy:HxFormatKeepEmptyLinesPolicy):KeepEmptyLinesPolicy {
+	private static function keepEmptyLinesToRuntime(policy: HxFormatKeepEmptyLinesPolicy): KeepEmptyLinesPolicy {
 		return switch policy {
 			case HxFormatKeepEmptyLinesPolicy.Remove: KeepEmptyLinesPolicy.Remove;
 			case _: KeepEmptyLinesPolicy.Keep;
 		};
 	}
 
-	private static function isAllSpaces(s:String):Bool {
+	private static function isAllSpaces(s: String): Bool {
 		for (i in 0...s.length) if (s.charCodeAt(i) != ' '.code) return false;
 		return true;
 	}
+
 }

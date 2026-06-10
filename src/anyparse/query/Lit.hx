@@ -45,33 +45,35 @@ final class Lit {
 	 * `kind` — no kind-equivalence consultation (that is search-only;
 	 * `lit` is a leaf-name probe with no pattern semantics).
 	 */
-	public static function find(target:String, tree:QueryNode, exact:Bool, ?kindFilter:Array<String>):Array<LitHit> {
-		final out:Array<LitHit> = [];
-		final filter:Null<Array<String>> = (kindFilter == null || kindFilter.length == 0) ? null : kindFilter;
+	public static function find(target: String, tree: QueryNode, exact: Bool, ?kindFilter: Array<String>): Array<LitHit> {
+		final out: Array<LitHit> = [];
+		final filter: Null<Array<String>> = (kindFilter == null || kindFilter.length == 0) ? null : kindFilter;
 		walk(target, tree, exact, filter, out);
 		return out;
 	}
 
-	private static function walk(target:String, node:QueryNode, exact:Bool, filter:Null<Array<String>>, out:Array<LitHit>):Void {
-		final n:Null<String> = node.name;
+	private static function walk(target: String, node: QueryNode, exact: Bool, filter: Null<Array<String>>, out: Array<LitHit>): Void {
+		final n: Null<String> = node.name;
 		if (n != null) {
-			final kindOk:Bool = filter == null || filter.contains(node.kind);
+			final kindOk: Bool = filter == null || filter.contains(node.kind);
 			if (kindOk) {
-				final hit:Bool = exact ? n == target : n.indexOf(target) >= 0;
-				if (hit && node.span != null) out.push(new LitHit(node.kind, n, (node.span : Span)));
+				final hit: Bool = exact ? n == target : n.indexOf(target) >= 0;
+				if (hit && node.span != null) out.push(new LitHit(node.kind, n, (node.span: Span)));
 			}
 		}
 		for (c in node.children) walk(target, c, exact, filter, out);
 	}
 
-	public static function render(file:String, source:String, hits:Array<LitHit>, flat:Bool = false):String {
-		final buf:StringBuf = new StringBuf();
+	public static function render(file: String, source: String, hits: Array<LitHit>, flat: Bool = false): String {
+		final buf: StringBuf = new StringBuf();
 		if (!flat && hits.length > 0) buf.add('$file:\n');
 		for (h in hits) {
-			final pos:Position = h.span.lineCol(source);
-			final shown:String = displayText(h.name);
-			if (flat) buf.add('$file:${pos.line}:${pos.col}: ${h.kind} \'$shown\'\n');
-			else buf.add('  ${pos.line}:${pos.col}: ${h.kind} \'$shown\'\n');
+			final pos: Position = h.span.lineCol(source);
+			final shown: String = displayText(h.name);
+			if (flat)
+				buf.add('$file:${pos.line}:${pos.col}: ${h.kind} \'$shown\'\n');
+			else
+				buf.add('  ${pos.line}:${pos.col}: ${h.kind} \'$shown\'\n');
 		}
 		return buf.toString();
 	}
@@ -85,35 +87,37 @@ final class Lit {
 	 * thousands of body lines verbatim (~190KB for src/). Now each hit
 	 * occupies one line; the user still sees locus + kind + first line.
 	 */
-	private static inline final DISPLAY_MAX:Int = 120;
+	private static inline final DISPLAY_MAX: Int = 120;
 
-	private static function displayText(name:String):String {
-		final nl:Int = name.indexOf('\n');
-		final firstLine:String = nl < 0 ? name : name.substring(0, nl);
+	private static function displayText(name: String): String {
+		final nl: Int = name.indexOf('\n');
+		final firstLine: String = nl < 0 ? name : name.substring(0, nl);
 		// Count trailing lines so the user sees how much was hidden.
-		var trailingLines:Int = 0;
-		var i:Int = nl;
+		var trailingLines: Int = 0;
+		var i: Int = nl;
 		while (i >= 0 && i < name.length) {
 			trailingLines++;
 			i = name.indexOf('\n', i + 1);
 		}
-		final tail:String = trailingLines > 0 ? ' … +$trailingLines lines' : '';
+		final tail: String = trailingLines > 0 ? ' … +$trailingLines lines' : '';
 		if (firstLine.length <= DISPLAY_MAX) return firstLine + tail;
-		final dropChars:Int = firstLine.length - DISPLAY_MAX;
+		final dropChars: Int = firstLine.length - DISPLAY_MAX;
 		return firstLine.substring(0, DISPLAY_MAX) + ' … +$dropChars chars' + tail;
 	}
+
 }
 
 @:nullSafety(Strict)
 final class LitHit {
 
-	public final kind:String;
-	public final name:String;
-	public final span:Span;
+	public final kind: String;
+	public final name: String;
+	public final span: Span;
 
-	public function new(kind:String, name:String, span:Span) {
+	public function new(kind: String, name: String, span: Span) {
 		this.kind = kind;
 		this.name = name;
 		this.span = span;
 	}
+
 }

@@ -49,11 +49,12 @@ final class HaxeTypeRewrites {
 	 * `(Int, String) -> Bool`, `() -> Void` — those keep their default
 	 * `ArrowFn` writer, around-spaced per `functionTypeHaxe4`).
 	 */
-	public static function arrowFnOldStyleRewrite(value:HxType, opt:WriteOptions):Null<HxType> {
+	public static function arrowFnOldStyleRewrite(value: HxType, opt: WriteOptions): Null<HxType> {
 		return switch value {
-			case ArrowFn({args: [Positional(inner = Arrow(_, _))], ret: ret}):
+			case ArrowFn({ args: [Positional(inner = Arrow(_, _))], ret: ret }):
 				Arrow(Parens(inner), ret);
 			case _: null;
 		}
 	}
+
 }

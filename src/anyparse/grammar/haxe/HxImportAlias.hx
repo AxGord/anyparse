@@ -29,6 +29,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxImportAlias = {
-	var path:HxTypeName;
-	@:kw('as') var name:HxIdentLit;
+	var path: HxTypeName;
+	@:kw('as') var name: HxIdentLit;
 }

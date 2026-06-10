@@ -60,22 +60,40 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxConditionalDecl = {
-	var cond:HxPpCondLit;
+	var cond: HxPpCondLit;
 	@:trivia @:tryparse @:fmt(padLeading, padTrailing, conditionalBodyIndent)
-	@:fmt(blankLinesOnTransitionAcross('decl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', '|', 'UsingDecl', 'UsingWildDecl', 'beforeUsing'))
-	@:fmt(blankLinesOnTransitionAcross('decl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', 'UsingDecl', 'UsingWildDecl', '|', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'TypedefDecl', 'FnDecl', 'beforeType'))
-	@:fmt(blankLinesBetweenSameCtorByLevel('decl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', 'betweenImportsLevel', 'betweenImports', 'betweenImportsPathDiffers'))
-	@:fmt(blankLinesBetweenSameCtorByLevel('decl', 'UsingDecl', 'UsingWildDecl', 'betweenImportsLevel', 'betweenImports', 'betweenImportsPathDiffers'))
+	@:fmt(blankLinesOnTransitionAcross(
+		'decl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', '|', 'UsingDecl', 'UsingWildDecl', 'beforeUsing'
+	))
+	@:fmt(blankLinesOnTransitionAcross(
+		'decl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', 'UsingDecl', 'UsingWildDecl', '|', 'ClassDecl', 'InterfaceDecl',
+		'AbstractDecl', 'EnumDecl', 'TypedefDecl', 'FnDecl', 'beforeType'
+	))
+	@:fmt(blankLinesBetweenSameCtorByLevel(
+		'decl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', 'betweenImportsLevel', 'betweenImports', 'betweenImportsPathDiffers'
+	))
+	@:fmt(blankLinesBetweenSameCtorByLevel(
+		'decl', 'UsingDecl', 'UsingWildDecl', 'betweenImportsLevel', 'betweenImports', 'betweenImportsPathDiffers'
+	))
 	@:fmt(blankLinesBetweenSameCtorTailTransparent('decl', 'Conditional', 'betweenImportsTailLeafClassify'))
 	@:fmt(blankLinesBetweenSameCtorHeadTransparent('decl', 'Conditional', 'betweenImportsHeadLeafClassify'))
-	var body:Array<HxTopLevelDecl>;
-	@:trivia @:tryparse var elseifs:Array<HxElseifDecl>;
+	var body: Array<HxTopLevelDecl>;
+	@:trivia @:tryparse var elseifs: Array<HxElseifDecl>;
 	@:optional @:kw('#else') @:trivia @:tryparse @:fmt(padLeading, padTrailing, conditionalBodyIndent)
-	@:fmt(blankLinesOnTransitionAcross('decl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', '|', 'UsingDecl', 'UsingWildDecl', 'beforeUsing'))
-	@:fmt(blankLinesOnTransitionAcross('decl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', 'UsingDecl', 'UsingWildDecl', '|', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'TypedefDecl', 'FnDecl', 'beforeType'))
-	@:fmt(blankLinesBetweenSameCtorByLevel('decl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', 'betweenImportsLevel', 'betweenImports', 'betweenImportsPathDiffers'))
-	@:fmt(blankLinesBetweenSameCtorByLevel('decl', 'UsingDecl', 'UsingWildDecl', 'betweenImportsLevel', 'betweenImports', 'betweenImportsPathDiffers'))
+	@:fmt(blankLinesOnTransitionAcross(
+		'decl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', '|', 'UsingDecl', 'UsingWildDecl', 'beforeUsing'
+	))
+	@:fmt(blankLinesOnTransitionAcross(
+		'decl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', 'UsingDecl', 'UsingWildDecl', '|', 'ClassDecl', 'InterfaceDecl',
+		'AbstractDecl', 'EnumDecl', 'TypedefDecl', 'FnDecl', 'beforeType'
+	))
+	@:fmt(blankLinesBetweenSameCtorByLevel(
+		'decl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', 'betweenImportsLevel', 'betweenImports', 'betweenImportsPathDiffers'
+	))
+	@:fmt(blankLinesBetweenSameCtorByLevel(
+		'decl', 'UsingDecl', 'UsingWildDecl', 'betweenImportsLevel', 'betweenImports', 'betweenImportsPathDiffers'
+	))
 	@:fmt(blankLinesBetweenSameCtorTailTransparent('decl', 'Conditional', 'betweenImportsTailLeafClassify'))
 	@:fmt(blankLinesBetweenSameCtorHeadTransparent('decl', 'Conditional', 'betweenImportsHeadLeafClassify'))
-	var elseBody:Null<Array<HxTopLevelDecl>>;
+	var elseBody: Null<Array<HxTopLevelDecl>>;
 };

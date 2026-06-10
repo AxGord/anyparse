@@ -38,4 +38,5 @@ enum abstract RightCurlyPlacement(Int) from Int to Int {
 	final Same = 0;
 
 	final Inline = 1;
+
 }

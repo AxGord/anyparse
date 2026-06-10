@@ -33,6 +33,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxElseifMember = {
-	@:kw('#elseif') var cond:HxPpCondLit;
-	@:trivia @:tryparse @:fmt(padLeading, padTrailing, conditionalBodyIndent) var body:Array<HxMemberDecl>;
+	@:kw('#elseif') var cond: HxPpCondLit;
+	@:trivia @:tryparse @:fmt(padLeading, padTrailing, conditionalBodyIndent) var body: Array<HxMemberDecl>;
 };

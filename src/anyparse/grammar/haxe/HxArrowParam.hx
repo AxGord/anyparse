@@ -36,6 +36,8 @@ package anyparse.grammar.haxe;
  */
 @:peg
 enum HxArrowParam {
-	Named(body:HxArrowParamBody);
-	Positional(type:HxType);
+
+	Named(body: HxArrowParamBody);
+	Positional(type: HxType);
+
 }

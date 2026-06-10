@@ -37,6 +37,8 @@ package anyparse.grammar.haxe;
  */
 @:peg
 enum HxCasePatternBody {
-	@:kw('var') Capture(name:HxVarNameLit);
-	Plain(expr:HxExpr);
+
+	@:kw('var') Capture(name: HxVarNameLit);
+	Plain(expr: HxExpr);
+
 }

@@ -17,6 +17,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxArrowParamBody = {
-	var name:HxIdentLit;
-	@:lead(':') var type:HxType;
+	var name: HxIdentLit;
+	@:lead(':') var type: HxType;
 }

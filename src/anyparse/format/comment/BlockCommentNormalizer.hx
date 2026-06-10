@@ -33,9 +33,8 @@ import anyparse.format.WriteOptions;
  */
 class BlockCommentNormalizer {
 
-	public static function processCapturedBlockComment(content:String, opt:WriteOptions):Doc {
-		final parsed:Null<BlockComment> = try BlockCommentParser.parse(content)
-			catch (_:haxe.Exception) null;
+	public static function processCapturedBlockComment(content: String, opt: WriteOptions): Doc {
+		final parsed: Null<BlockComment> = try BlockCommentParser.parse(content) catch (_: haxe.Exception) null;
 		if (parsed == null) return Text(content);
 		if (opt.commentStyle == CommentStyle.Verbatim) {
 			// Parser's `@:sep('\n') @:trail('*/')` Star elides the trailing
@@ -46,10 +45,10 @@ class BlockCommentNormalizer {
 			// empty line so normalize's `body == '' last line` branch routes
 			// to the canonical ` */` close pad.
 			if (StringTools.endsWith(content, '\n*/') && parsed.lines.length > 0) {
-				final lastBody:String = parsed.lines[parsed.lines.length - 1].body;
-				if (lastBody.length > 0) parsed.lines.push({ws: '', body: ''});
+				final lastBody: String = parsed.lines[parsed.lines.length - 1].body;
+				if (lastBody.length > 0) parsed.lines.push({ ws: '', body: '' });
 			}
-			final lines:Array<BlockCommentLine> = parsed.lines;
+			final lines: Array<BlockCommentLine> = parsed.lines;
 			if (lines.length <= 1) return Text(content);
 			if (isJavadocStyle(lines)) return javadocBytePreserveDoc(content, parsed);
 			if (isFirstInlineNested(lines)) return firstInlineRebuildDoc(parsed, opt);
@@ -81,27 +80,25 @@ class BlockCommentNormalizer {
 	 * comment dropped into a tab-indented context emitted at col 0
 	 * instead of following the surrounding nest.
 	 */
-	private static function javadocBytePreserveDoc(content:String, comment:BlockComment):Doc {
-		final segments:Array<String> = content.split('\n');
+	private static function javadocBytePreserveDoc(content: String, comment: BlockComment): Doc {
+		final segments: Array<String> = content.split('\n');
 		if (segments.length <= 1) return Text(content);
-		final lines:Array<BlockCommentLine> = comment.lines;
-		final closeLine:BlockCommentLine = lines[lines.length - 1];
-		final closingWs:String = closeLine.ws;
+		final lines: Array<BlockCommentLine> = comment.lines;
+		final closeLine: BlockCommentLine = lines[lines.length - 1];
+		final closingWs: String = closeLine.ws;
 		// A decoration close (all-stars body, the `**` of `**/`) sits AT the base
 		// column with no pad — its whole ws is structural base indent, so strip it
 		// in full. A bare `*/` close (empty body) carries a single-space pad before
 		// the delimiter that must survive (it mirrors the ` * ` continuation offset);
 		// structuralCloseLen drops that pad space. Treating every close as padded
 		// over-kept one space on each space-indented javadoc continuation (issue_141).
-		final closeIsDecoration:Bool = isAllStars(closeLine.body);
-		final closeStructLen:Int = closeIsDecoration ? closingWs.length : structuralCloseLen(closingWs);
-		final closeStruct:String = closingWs.substr(0, closeStructLen);
-		final docs:Array<Doc> = [Text(segments[0])];
+		final closeIsDecoration: Bool = isAllStars(closeLine.body);
+		final closeStructLen: Int = closeIsDecoration ? closingWs.length : structuralCloseLen(closingWs);
+		final closeStruct: String = closingWs.substr(0, closeStructLen);
+		final docs: Array<Doc> = [Text(segments[0])];
 		for (i in 1...segments.length) {
-			final raw:String = segments[i];
-			final stripped:String = closeStructLen > 0 && StringTools.startsWith(raw, closeStruct)
-				? raw.substr(closeStructLen)
-				: raw;
+			final raw: String = segments[i];
+			final stripped: String = closeStructLen > 0 && StringTools.startsWith(raw, closeStruct) ? raw.substr(closeStructLen) : raw;
 			docs.push(Line('\n'));
 			docs.push(Text(stripped));
 		}
@@ -124,10 +121,10 @@ class BlockCommentNormalizer {
 	 * path that left source-relative tab counts unchanged — issue_208 / issue_139
 	 * style fixtures lost the deepening continuation indent.
 	 */
-	private static function isFirstInlineNested(lines:Array<BlockCommentLine>):Bool {
-		final firstBody:String = lines[0].body;
+	private static function isFirstInlineNested(lines: Array<BlockCommentLine>): Bool {
+		final firstBody: String = lines[0].body;
 		if (firstBody.length == 0 || isAllStars(firstBody)) return false;
-		final lastWs:String = lines[lines.length - 1].ws;
+		final lastWs: String = lines[lines.length - 1].ws;
 		return structuralCloseLen(lastWs) > 0;
 	}
 
@@ -153,45 +150,43 @@ class BlockCommentNormalizer {
 	 *          !endsWith('*') so `*\/` doesn't collide with last char.
 	 *  - Close `*\/` appended as `Text('*\/')`.
 	 */
-	private static function firstInlineRebuildDoc(comment:BlockComment, opt:WriteOptions):Doc {
-		final lines:Array<BlockCommentLine> = comment.lines;
-		final last:Int = lines.length - 1;
-		final lastBody:String = lines[last].body;
-		final lastIsClosingBrace:Bool = lastBody.length > 0 && StringTools.fastCodeAt(lastBody, 0) == '}'.code;
-		final lastIsDecoOrEmpty:Bool = lastBody.length == 0 || isAllStars(lastBody);
-		final includeLastInPrefix:Bool = !lastIsClosingBrace && !lastIsDecoOrEmpty;
+	private static function firstInlineRebuildDoc(comment: BlockComment, opt: WriteOptions): Doc {
+		final lines: Array<BlockCommentLine> = comment.lines;
+		final last: Int = lines.length - 1;
+		final lastBody: String = lines[last].body;
+		final lastIsClosingBrace: Bool = lastBody.length > 0 && StringTools.fastCodeAt(lastBody, 0) == '}'.code;
+		final lastIsDecoOrEmpty: Bool = lastBody.length == 0 || isAllStars(lastBody);
+		final includeLastInPrefix: Bool = !lastIsClosingBrace && !lastIsDecoOrEmpty;
 
-		var commonPrefix:Null<String> = null;
+		var commonPrefix: Null<String> = null;
 		for (i in 1...lines.length) {
 			if (i == last && !includeLastInPrefix) continue;
-			final body:String = lines[i].body;
+			final body: String = lines[i].body;
 			if (body.length == 0) continue;
-			final ws:String = lines[i].ws;
+			final ws: String = lines[i].ws;
 			if (commonPrefix == null) {
 				commonPrefix = ws;
 			} else {
 				commonPrefix = commonPrefixOf(commonPrefix, ws);
 			}
 		}
-		final cp:String = commonPrefix ?? '';
-		final cpLen:Int = cp.length;
+		final cp: String = commonPrefix ?? '';
+		final cpLen: Int = cp.length;
 
-		final indentUnit:String = indentUnitOf(opt);
+		final indentUnit: String = indentUnitOf(opt);
 
-		final docs:Array<Doc> = [Text('/*' + lines[0].ws + lines[0].body)];
+		final docs: Array<Doc> = [Text('/*' + lines[0].ws + lines[0].body)];
 
 		for (i in 1...lines.length) {
-			final ws:String = lines[i].ws;
-			final body:String = lines[i].body;
+			final ws: String = lines[i].ws;
+			final body: String = lines[i].body;
 
 			if (body.length == 0) {
 				docs.push(Line('\n'));
 				continue;
 			}
 
-			final stripWs:String = cpLen > 0 && StringTools.startsWith(ws, cp)
-				? ws.substr(cpLen)
-				: ws;
+			final stripWs: String = cpLen > 0 && StringTools.startsWith(ws, cp) ? ws.substr(cpLen) : ws;
 
 			if (i == last) {
 				if (lastIsClosingBrace) {
@@ -201,7 +196,7 @@ class BlockCommentNormalizer {
 					docs.push(Line('\n'));
 					docs.push(Text(stripWs + body));
 				} else {
-					var line:String = StringTools.rtrim(indentUnit + stripWs + body);
+					var line: String = StringTools.rtrim(indentUnit + stripWs + body);
 					if (!StringTools.endsWith(line, '*')) line += ' ';
 					docs.push(Line('\n'));
 					docs.push(Text(line));
@@ -216,13 +211,13 @@ class BlockCommentNormalizer {
 		return Concat(docs);
 	}
 
-	private static inline function indentUnitOf(opt:WriteOptions):String {
+	private static inline function indentUnitOf(opt: WriteOptions): String {
 		return opt.indentChar == IndentChar.Tab ? '\t' : StringTools.rpad('', ' ', opt.indentSize);
 	}
 
-	private static function commonPrefixOf(a:String, b:String):String {
-		final lim:Int = a.length < b.length ? a.length : b.length;
-		var j:Int = 0;
+	private static function commonPrefixOf(a: String, b: String): String {
+		final lim: Int = a.length < b.length ? a.length : b.length;
+		var j: Int = 0;
 		while (j < lim && StringTools.fastCodeAt(a, j) == StringTools.fastCodeAt(b, j)) j++;
 		return a.substr(0, j);
 	}
@@ -233,8 +228,8 @@ class BlockCommentNormalizer {
 	 * `*\/`). Distinguishes `\t *\/` (1 char structural) from `*\/`
 	 * with single-space pad (0 char structural).
 	 */
-	private static function structuralCloseLen(ws:String):Int {
-		final len:Int = ws.length;
+	private static function structuralCloseLen(ws: String): Int {
+		final len: Int = ws.length;
 		if (len > 0 && StringTools.fastCodeAt(ws, len - 1) == ' '.code) return len - 1;
 		return len;
 	}
@@ -271,17 +266,17 @@ class BlockCommentNormalizer {
 	 *  - Interior content: `(shouldBake ? indentUnit : '') + relWs`.
 	 *  - Interior blank: `''`.
 	 */
-	public static function normalize(comment:BlockComment, opt:WriteOptions):Null<BlockComment> {
-		final lines:Array<BlockCommentLine> = comment.lines;
+	public static function normalize(comment: BlockComment, opt: WriteOptions): Null<BlockComment> {
+		final lines: Array<BlockCommentLine> = comment.lines;
 		if (lines.length <= 1) return null;
 
-		final decoFlags:Array<Bool> = [for (l in lines) isAllStars(l.body)];
-		final last:Int = lines.length - 1;
-		var commonPrefix:String = '';
-		var havePrefix:Bool = false;
+		final decoFlags: Array<Bool> = [for (l in lines) isAllStars(l.body)];
+		final last: Int = lines.length - 1;
+		var commonPrefix: String = '';
+		var havePrefix: Bool = false;
 		for (i in 0...lines.length) {
-			final body:String = lines[i].body;
-			final ws:String = lines[i].ws;
+			final body: String = lines[i].body;
+			final ws: String = lines[i].ws;
 			if (body.length == 0) continue;
 			if (i == 0) continue;
 			// Last line is the structural close (`*\/` or `<content>*\/`),
@@ -292,24 +287,24 @@ class BlockCommentNormalizer {
 				commonPrefix = ws;
 				havePrefix = true;
 			} else {
-				final lim:Int = commonPrefix.length < ws.length ? commonPrefix.length : ws.length;
-				var j:Int = 0;
+				final lim: Int = commonPrefix.length < ws.length ? commonPrefix.length : ws.length;
+				var j: Int = 0;
 				while (j < lim && StringTools.fastCodeAt(commonPrefix, j) == StringTools.fastCodeAt(ws, j)) j++;
 				commonPrefix = commonPrefix.substr(0, j);
 			}
 		}
-		final commonLen:Int = commonPrefix.length;
-		final closingWs:String = lines[last].ws;
-		final closeStructLen:Int = structuralCloseLen(closingWs);
-		final structuralClose:String = closingWs.substr(0, closeStructLen);
-		final shouldBake:Bool = commonLen > closeStructLen;
-		final indentUnit:String = indentUnitOf(opt);
+		final commonLen: Int = commonPrefix.length;
+		final closingWs: String = lines[last].ws;
+		final closeStructLen: Int = structuralCloseLen(closingWs);
+		final structuralClose: String = closingWs.substr(0, closeStructLen);
+		final shouldBake: Bool = commonLen > closeStructLen;
+		final indentUnit: String = indentUnitOf(opt);
 
-		final newLines:Array<BlockCommentLine> = [];
+		final newLines: Array<BlockCommentLine> = [];
 		for (i in 0...lines.length) {
-			final body:String = lines[i].body;
-			final ws:String = lines[i].ws;
-			var newWs:String;
+			final body: String = lines[i].body;
+			final ws: String = lines[i].ws;
+			var newWs: String;
 			if (i == 0) {
 				newWs = body.length > 0 ? ws : '';
 			} else if (i == last) {
@@ -323,12 +318,12 @@ class BlockCommentNormalizer {
 			} else if (body.length == 0) {
 				newWs = '';
 			} else {
-				final relWs:String = ws.length > commonLen ? ws.substr(commonLen) : '';
+				final relWs: String = ws.length > commonLen ? ws.substr(commonLen) : '';
 				newWs = shouldBake ? indentUnit + relWs : relWs;
 			}
-			newLines.push({ws: newWs, body: body});
+			newLines.push({ ws: newWs, body: body });
 		}
-		return {lines: newLines};
+		return { lines: newLines };
 	}
 
 	/**
@@ -337,13 +332,13 @@ class BlockCommentNormalizer {
 	 * prefix-reduce on these would consume the marker space and
 	 * destroy the visual marker column on emit.
 	 */
-	private static function isJavadocStyle(lines:Array<BlockCommentLine>):Bool {
+	private static function isJavadocStyle(lines: Array<BlockCommentLine>): Bool {
 		if (lines.length < 3) return false;
-		final last:Int = lines.length - 1;
-		var contentCount:Int = 0;
-		var starredCount:Int = 0;
+		final last: Int = lines.length - 1;
+		var contentCount: Int = 0;
+		var starredCount: Int = 0;
 		for (i in 1...last) {
-			final body:String = lines[i].body;
+			final body: String = lines[i].body;
 			if (body.length == 0) continue;
 			contentCount++;
 			if (StringTools.fastCodeAt(body, 0) == '*'.code) starredCount++;
@@ -351,7 +346,7 @@ class BlockCommentNormalizer {
 		return contentCount > 0 && starredCount == contentCount;
 	}
 
-	private static function isAllStars(s:String):Bool {
+	private static function isAllStars(s: String): Bool {
 		if (s.length == 0) return false;
 		for (i in 0...s.length) {
 			if (StringTools.fastCodeAt(s, i) != '*'.code) return false;
@@ -367,22 +362,21 @@ class BlockCommentNormalizer {
 	 * line emission. Each interior boundary uses `Line('\n')` so the
 	 * renderer applies the surrounding nest's indent.
 	 */
-	private static function canonicalDoc(comment:BlockComment, opt:WriteOptions):Doc {
-		final wantStars:Bool = opt.commentStyle == CommentStyle.Javadoc;
-		final wrapDoc:Bool = opt.commentStyle == CommentStyle.Javadoc
-			|| opt.commentStyle == CommentStyle.JavadocNoStars;
-		final indentUnit:String = indentUnitOf(opt);
+	private static function canonicalDoc(comment: BlockComment, opt: WriteOptions): Doc {
+		final wantStars: Bool = opt.commentStyle == CommentStyle.Javadoc;
+		final wrapDoc: Bool = opt.commentStyle == CommentStyle.Javadoc || opt.commentStyle == CommentStyle.JavadocNoStars;
+		final indentUnit: String = indentUnitOf(opt);
 
-		final stripped:Array<{ws:String, content:String}> = stripMarkers(comment.lines);
-		final firstInline:Bool = stripped.length > 0 && stripped[0].content.length > 0;
-		final commonLen:Int = commonPrefixLen(stripped, firstInline);
-		final last:Int = stripped.length - 1;
+		final stripped: Array<{ ws: String, content: String }> = stripMarkers(comment.lines);
+		final firstInline: Bool = stripped.length > 0 && stripped[0].content.length > 0;
+		final commonLen: Int = commonPrefixLen(stripped, firstInline);
+		final last: Int = stripped.length - 1;
 
-		final interior:Array<String> = [];
+		final interior: Array<String> = [];
 		for (i in 0...stripped.length) {
 			final p = stripped[i];
 			if ((i == 0 || i == last) && p.content.length == 0) continue;
-			final relWs:String = p.ws.length > commonLen ? p.ws.substr(commonLen) : '';
+			final relWs: String = p.ws.length > commonLen ? p.ws.substr(commonLen) : '';
 			if (wantStars) {
 				interior.push(p.content.length > 0 ? ' * ' + relWs + p.content : ' *');
 			} else {
@@ -390,7 +384,7 @@ class BlockCommentNormalizer {
 			}
 		}
 
-		final docs:Array<Doc> = [Text(wrapDoc ? '/**' : '/*')];
+		final docs: Array<Doc> = [Text(wrapDoc ? '/**' : '/*')];
 		for (s in interior) {
 			docs.push(Line('\n'));
 			docs.push(Text(s));
@@ -400,42 +394,43 @@ class BlockCommentNormalizer {
 		return Concat(docs);
 	}
 
-	private static function stripMarkers(lines:Array<BlockCommentLine>):Array<{ws:String, content:String}> {
-		final out:Array<{ws:String, content:String}> = [];
+	private static function stripMarkers(lines: Array<BlockCommentLine>): Array<{ ws: String, content: String }> {
+		final out: Array<{ ws: String, content: String }> = [];
 		for (ln in lines) {
-			final ws:String = ln.ws;
-			var rest:String = ln.body;
-			var starEnd:Int = 0;
+			final ws: String = ln.ws;
+			var rest: String = ln.body;
+			var starEnd: Int = 0;
 			while (starEnd < rest.length && StringTools.fastCodeAt(rest, starEnd) == '*'.code) starEnd++;
 			if (starEnd > 0) {
 				rest = rest.substr(starEnd);
 				if (rest.length > 0 && StringTools.fastCodeAt(rest, 0) == ' '.code) rest = rest.substr(1);
 			}
-			var trailEnd:Int = rest.length;
+			var trailEnd: Int = rest.length;
 			while (trailEnd > 0 && StringTools.fastCodeAt(rest, trailEnd - 1) == '*'.code) trailEnd--;
 			rest = rest.substring(0, trailEnd);
-			out.push({ws: ws, content: StringTools.rtrim(rest)});
+			out.push({ ws: ws, content: StringTools.rtrim(rest) });
 		}
 		return out;
 	}
 
-	private static function commonPrefixLen(lines:Array<{ws:String, content:String}>, excludeFirstInline:Bool):Int {
-		var commonPrefix:String = '';
-		var havePrefix:Bool = false;
+	private static function commonPrefixLen(lines: Array<{ ws: String, content: String }>, excludeFirstInline: Bool): Int {
+		var commonPrefix: String = '';
+		var havePrefix: Bool = false;
 		for (i in 0...lines.length) {
 			if (i == 0 && excludeFirstInline) continue;
 			if (lines[i].content.length == 0) continue;
-			final ws:String = lines[i].ws;
+			final ws: String = lines[i].ws;
 			if (!havePrefix) {
 				commonPrefix = ws;
 				havePrefix = true;
 			} else {
-				final lim:Int = commonPrefix.length < ws.length ? commonPrefix.length : ws.length;
-				var j:Int = 0;
+				final lim: Int = commonPrefix.length < ws.length ? commonPrefix.length : ws.length;
+				var j: Int = 0;
 				while (j < lim && StringTools.fastCodeAt(commonPrefix, j) == StringTools.fastCodeAt(ws, j)) j++;
 				commonPrefix = commonPrefix.substr(0, j);
 			}
 		}
 		return commonPrefix.length;
 	}
+
 }

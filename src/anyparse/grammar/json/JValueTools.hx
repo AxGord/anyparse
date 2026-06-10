@@ -8,8 +8,9 @@ package anyparse.grammar.json;
 	does not recurse into arrays, so we provide an explicit walker.
 **/
 class JValueTools {
+
 	/** Deep structural equality of two `JValue`s. **/
-	public static function equals(a:JValue, b:JValue):Bool {
+	public static function equals(a: JValue, b: JValue): Bool {
 		return switch [a, b] {
 			case [JNull, JNull]:
 				true;
@@ -22,7 +23,8 @@ class JValueTools {
 			case [JString(x), JString(y)]:
 				x == y;
 			case [JArray(xs), JArray(ys)]:
-				if (xs.length != ys.length) false;
+				if (xs.length != ys.length)
+					false;
 				else {
 					var eq = true;
 					for (i in 0...xs.length) {
@@ -34,7 +36,8 @@ class JValueTools {
 					eq;
 				}
 			case [JObject(xs), JObject(ys)]:
-				if (xs.length != ys.length) false;
+				if (xs.length != ys.length)
+					false;
 				else {
 					var eq = true;
 					for (i in 0...xs.length) {
@@ -49,4 +52,5 @@ class JValueTools {
 				false;
 		}
 	}
+
 }

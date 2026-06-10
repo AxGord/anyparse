@@ -20,6 +20,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxTypedCast = {
-	@:lead('(') var target:HxExpr;
-	@:lead(',') @:fmt(spaceAfterLead) @:trail(')') var type:HxType;
+	@:lead('(') var target: HxExpr;
+	@:lead(',') @:fmt(spaceAfterLead) @:trail(')') var type: HxType;
 };

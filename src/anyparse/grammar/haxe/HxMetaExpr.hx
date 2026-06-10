@@ -41,7 +41,7 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxMetaExpr = {
-	var meta:HxMetadata;
+	var meta: HxMetadata;
 	@:fmt(allmanIndentForCtor('ObjectLit'))
-	var expr:HxExpr;
+	var expr: HxExpr;
 }

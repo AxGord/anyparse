@@ -35,26 +35,26 @@ final class AddMember {
 	 * Returns `Ok(rewritten)` or an `Err` describing why the member could
 	 * not be added.
 	 */
-	public static function addMember(source:String, typeName:String, memberText:String, reformat:Bool, plugin:GrammarPlugin):EditResult {
-		final tree:QueryNode = try plugin.parseFile(source)
-			catch (exception:ParseError) return Err('source does not parse: ${exception.toString()}')
-			catch (exception:Exception) return Err('source does not parse: ${exception.message}');
+	public static function addMember(
+		source: String, typeName: String, memberText: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
+	): EditResult {
+		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
+			'source does not parse: ${exception.toString()}'
+		)
+		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
-		final trimmed:String = StringTools.trim(memberText);
-		if (trimmed.length == 0)
-			return Err('add-member requires a non-empty member text');
+		final trimmed: String = StringTools.trim(memberText);
+		if (trimmed.length == 0) return Err('add-member requires a non-empty member text');
 
-		final matches:Array<TypeDeclMatch> = [];
-		function walk(node:QueryNode):Void {
-			final m:Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
+		final matches: Array<TypeDeclMatch> = [];
+		function walk(node: QueryNode): Void {
+			final m: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
 			if (m != null && m.name == typeName) matches.push(m);
 			for (c in node.children) walk(c);
 		}
 		walk(tree);
-		if (matches.length == 0)
-			return Err('no type named "$typeName"');
-		if (matches.length > 1)
-			return Err('ambiguous: ${matches.length} types named "$typeName"');
+		if (matches.length == 0) return Err('no type named "$typeName"');
+		if (matches.length > 1) return Err('ambiguous: ${matches.length} types named "$typeName"');
 
 		// The body's closing `}` is the last `}` within the decl span,
 		// skipping trailing whitespace: some decl-span shapes swallow
@@ -63,14 +63,15 @@ final class AddMember {
 		// trailing newline at EOF), so `fullSpan.to - 1` is not reliably the
 		// brace. Scanning back over whitespace lands on the `}` for every
 		// shape (class / interface / abstract / enum / typedef-anon / final).
-		final fullSpan:Span = matches[0].fullSpan;
-		var bodyClose:Int = fullSpan.to - 1;
+		final fullSpan: Span = matches[0].fullSpan;
+		var bodyClose: Int = fullSpan.to - 1;
 		if (bodyClose >= source.length) bodyClose = source.length - 1;
 		while (bodyClose >= fullSpan.from && RefactorSupport.isSpace(StringTools.fastCodeAt(source, bodyClose))) bodyClose--;
 		if (bodyClose < fullSpan.from || StringTools.fastCodeAt(source, bodyClose) != '}'.code)
 			return Err('"$typeName" has no brace body to add a member to');
 
-		final edit:{span:Span, text:String} = {span: new Span(bodyClose, bodyClose), text: '\n' + trimmed + '\n'};
-		return RefactorSupport.canonicalize(source, [edit], reformat, plugin);
+		final edit: { span: Span, text: String } = { span: new Span(bodyClose, bodyClose), text: '\n' + trimmed + '\n' };
+		return RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);
 	}
+
 }

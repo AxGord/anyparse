@@ -22,25 +22,25 @@ import anyparse.runtime.Span.Position;
 @:nullSafety(Strict)
 final class Cases {
 
-	public static function find(target:String, tree:QueryNode):Array<CasesHit> {
-		final out:Array<CasesHit> = [];
+	public static function find(target: String, tree: QueryNode): Array<CasesHit> {
+		final out: Array<CasesHit> = [];
 		walk(target, tree, out);
 		return out;
 	}
 
-	private static function walk(target:String, node:QueryNode, out:Array<CasesHit>):Void {
+	private static function walk(target: String, node: QueryNode, out: Array<CasesHit>): Void {
 		if (node.kind == 'CaseBranch') {
-			final kids:Array<QueryNode> = node.children;
+			final kids: Array<QueryNode> = node.children;
 			// Patterns are all children except the LAST (which is the body
 			// statement). Multi-pattern `case A, B:` parses as
 			// `CaseBranch(A, B, body)`; alternation `case A | B:` parses
 			// as `CaseBranch(BitOr(A, B), body)` — both shapes covered
 			// by `matchPattern` recursion.
-			final patternCount:Int = kids.length > 0 ? kids.length - 1 : 0;
+			final patternCount: Int = kids.length > 0 ? kids.length - 1 : 0;
 			for (i in 0...patternCount) {
-				final pat:QueryNode = kids[i];
+				final pat: QueryNode = kids[i];
 				if (matchPattern(target, pat)) {
-					out.push(new CasesHit(node, (pat.span : Null<Span>), pat.kind));
+					out.push(new CasesHit(node, (pat.span: Null<Span>), pat.kind));
 					break;
 				}
 			}
@@ -48,15 +48,15 @@ final class Cases {
 		for (c in node.children) walk(target, c, out);
 	}
 
-	private static function matchPattern(target:String, pat:QueryNode):Bool {
+	private static function matchPattern(target: String, pat: QueryNode): Bool {
 		return switch pat.kind {
 			case 'IdentExpr':
 				pat.name == target;
 			case 'Call':
-				final kids:Array<QueryNode> = pat.children;
+				final kids: Array<QueryNode> = pat.children;
 				kids.length > 0 && kids[0].kind == 'IdentExpr' && kids[0].name == target;
 			case 'BitOr':
-				final kids:Array<QueryNode> = pat.children;
+				final kids: Array<QueryNode> = pat.children;
 				kids.length >= 2 && (matchPattern(target, kids[0]) || matchPattern(target, kids[1]));
 			case 'Plain':
 				// Slice 34: every `case <expr>:` (other than `case var X:`) is
@@ -65,7 +65,7 @@ final class Cases {
 				// deeper. Without this arm, `cases <Ctor>` returned 0 hits on
 				// every post-Slice-34 Haxe source (the killer-use-case for
 				// "added a new enum ctor → audit all exhaustive switches").
-				final kids:Array<QueryNode> = pat.children;
+				final kids: Array<QueryNode> = pat.children;
 				kids.length > 0 && matchPattern(target, kids[0]);
 			case 'Capture':
 				// Slice 34: `case var X:` — `HxCasePatternBody.Capture(name)`
@@ -78,30 +78,34 @@ final class Cases {
 		};
 	}
 
-	public static function render(file:String, source:String, hits:Array<CasesHit>, flat:Bool = false):String {
-		final buf:StringBuf = new StringBuf();
+	public static function render(file: String, source: String, hits: Array<CasesHit>, flat: Bool = false): String {
+		final buf: StringBuf = new StringBuf();
 		if (!flat && hits.length > 0) buf.add('$file:\n');
 		for (h in hits) {
-			final span:Null<Span> = h.span;
+			final span: Null<Span> = h.span;
 			if (span == null) continue;
-			final pos:Position = span.lineCol(source);
-			if (flat) buf.add('$file:${pos.line}:${pos.col}: ${h.patternKind}\n');
-			else buf.add('  ${pos.line}:${pos.col}: ${h.patternKind}\n');
+			final pos: Position = span.lineCol(source);
+			if (flat)
+				buf.add('$file:${pos.line}:${pos.col}: ${h.patternKind}\n');
+			else
+				buf.add('  ${pos.line}:${pos.col}: ${h.patternKind}\n');
 		}
 		return buf.toString();
 	}
+
 }
 
 @:nullSafety(Strict)
 final class CasesHit {
 
-	public final caseBranch:QueryNode;
-	public final span:Null<Span>;
-	public final patternKind:String;
+	public final caseBranch: QueryNode;
+	public final span: Null<Span>;
+	public final patternKind: String;
 
-	public function new(caseBranch:QueryNode, span:Null<Span>, patternKind:String) {
+	public function new(caseBranch: QueryNode, span: Null<Span>, patternKind: String) {
 		this.caseBranch = caseBranch;
 		this.span = span;
 		this.patternKind = patternKind;
 	}
+
 }

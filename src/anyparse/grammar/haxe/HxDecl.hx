@@ -83,31 +83,32 @@ package anyparse.grammar.haxe;
  */
 @:peg
 enum HxDecl {
+
 	@:kw('package') @:trail(';')
-	PackageDecl(path:HxTypeName);
+	PackageDecl(path: HxTypeName);
 
 	@:kw('package') @:trail(';')
 	PackageEmpty;
 
 	@:kw('import') @:trail(';')
-	ImportWildDecl(path:HxWildPath);
+	ImportWildDecl(path: HxWildPath);
 
 	@:kw('using') @:trail(';')
-	UsingWildDecl(path:HxWildPath);
+	UsingWildDecl(path: HxWildPath);
 
 	@:kw('import') @:trail(';')
-	ImportAliasDecl(decl:HxImportAlias);
+	ImportAliasDecl(decl: HxImportAlias);
 
 	@:kw('import') @:trail(';')
-	ImportDecl(path:HxTypeName);
+	ImportDecl(path: HxTypeName);
 
 	@:kw('using') @:trail(';')
-	UsingDecl(path:HxTypeName);
+	UsingDecl(path: HxTypeName);
 
-	ClassDecl(decl:HxClassDecl);
+	ClassDecl(decl: HxClassDecl);
 
 	@:trailOpt(';')
-	TypedefDecl(decl:HxTypedefDecl);
+	TypedefDecl(decl: HxTypedefDecl);
 
 	/**
 	 * `enum abstract Name(Underlying) { Value*; }` — the modern Haxe
@@ -131,11 +132,11 @@ enum HxDecl {
 	 * plain `AbstractDecl` branch.
 	 */
 	@:kw('enum')
-	EnumAbstractDecl(decl:HxAbstractDecl);
+	EnumAbstractDecl(decl: HxAbstractDecl);
 
-	EnumDecl(decl:HxEnumDecl);
+	EnumDecl(decl: HxEnumDecl);
 
-	InterfaceDecl(decl:HxInterfaceDecl);
+	InterfaceDecl(decl: HxInterfaceDecl);
 
 	/**
 	 * `abstract class Name { ... }` — Haxe 4.2+ abstract-class form
@@ -152,12 +153,12 @@ enum HxDecl {
 	 * longer-prefix shape is tried first.
 	 */
 	@:kw('abstract')
-	AbstractClassDecl(decl:HxClassDecl);
+	AbstractClassDecl(decl: HxClassDecl);
 
-	AbstractDecl(decl:HxAbstractDecl);
+	AbstractDecl(decl: HxAbstractDecl);
 
 	@:kw('var') @:trailOpt(';')
-	VarDecl(decl:HxVarDecl);
+	VarDecl(decl: HxVarDecl);
 
 	/**
 	 * Top-level `final …` (slice ω-module-final), covering both
@@ -175,10 +176,10 @@ enum HxDecl {
 	 * `VarMember`/`FinalMember`/`FnMember` ordering.
 	 */
 	@:kw('final') @:trailOpt(';')
-	FinalDecl(decl:HxFinalDecl);
+	FinalDecl(decl: HxFinalDecl);
 
 	@:kw('function')
-	FnDecl(decl:HxFnDecl);
+	FnDecl(decl: HxFnDecl);
 
 	/**
 	 * `#error "msg"` / `#error 'msg'` preprocessor directive (slice
@@ -194,7 +195,7 @@ enum HxDecl {
 	 * `Conditional` ctor so preprocessor directives cluster.
 	 */
 	@:kw('#error')
-	ErrorDecl(message:HxErrorMsg);
+	ErrorDecl(message: HxErrorMsg);
 
 	/**
 	 * `#if <cond> <decls> [#else <decls>] #end` preprocessor-guarded
@@ -213,5 +214,6 @@ enum HxDecl {
 	 * with `#`.
 	 */
 	@:kw('#if') @:trail('#end') @:fmt(conditionalMarkerDedent)
-	Conditional(inner:HxConditionalDecl);
+	Conditional(inner: HxConditionalDecl);
+
 }

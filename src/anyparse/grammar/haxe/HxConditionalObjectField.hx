@@ -57,8 +57,8 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxConditionalObjectField = {
-	var cond:HxPpCondLit;
-	@:sep(',') @:tryparse @:fmt(padLeading, padTrailing) var body:Array<HxObjectField>;
-	@:tryparse var elseifs:Array<HxElseifObjectField>;
-	@:optional @:kw('#else') @:tryparse @:fmt(padLeading, padTrailing) var elseBody:Null<Array<HxObjectField>>;
+	var cond: HxPpCondLit;
+	@:sep(',') @:tryparse @:fmt(padLeading, padTrailing) var body: Array<HxObjectField>;
+	@:tryparse var elseifs: Array<HxElseifObjectField>;
+	@:optional @:kw('#else') @:tryparse @:fmt(padLeading, padTrailing) var elseBody: Null<Array<HxObjectField>>;
 };

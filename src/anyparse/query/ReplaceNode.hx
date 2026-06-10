@@ -17,8 +17,10 @@ import haxe.Exception;
  *    NOT the raw 1-indexed `ast --at` convention.
  */
 enum ReplaceTarget {
-	BySelector(selector:String);
-	ByPosition(line:Int, col:Int);
+
+	BySelector(selector: String);
+	ByPosition(line: Int, col: Int);
+
 }
 
 /**
@@ -46,18 +48,21 @@ final class ReplaceNode {
 	 * plugin. Returns `Ok(rewritten)` or an `Err` describing why the node
 	 * could not be replaced.
 	 */
-	public static function replaceNode(source:String, target:ReplaceTarget, newSource:String, reformat:Bool, plugin:GrammarPlugin):EditResult {
-		final tree:QueryNode = try plugin.parseFile(source)
-			catch (exception:ParseError) return Err('source does not parse: ${exception.toString()}')
-			catch (exception:Exception) return Err('source does not parse: ${exception.message}');
+	public static function replaceNode(
+		source: String, target: ReplaceTarget, newSource: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
+	): EditResult {
+		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
+			'source does not parse: ${exception.toString()}'
+		)
+		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
-		final node:QueryNode = switch target {
+		final node: QueryNode = switch target {
 			case BySelector(selectorExpr):
-				final selector:Selector = try Selector.parse(selectorExpr)
-					catch (exception:Exception) return Err('malformed selector "$selectorExpr": ${exception.message}');
-				final matches:Array<QueryNode> = Engine.select(tree, selector, plugin.selectKindEquivalence());
-				if (matches.length == 0)
-					return Err('--select "$selectorExpr" matched no nodes');
+				final selector: Selector = try Selector.parse(selectorExpr) catch (exception: Exception) return Err(
+					'malformed selector "$selectorExpr": ${exception.message}'
+				);
+				final matches: Array<QueryNode> = Engine.select(tree, selector, plugin.selectKindEquivalence());
+				if (matches.length == 0) return Err('--select "$selectorExpr" matched no nodes');
 				if (matches.length > 1)
 					return Err('--select "$selectorExpr" matched ${matches.length} nodes — ambiguous; narrow with Kind:name or A > B');
 				matches[0];
@@ -67,18 +72,17 @@ final class ReplaceNode {
 				// so a position copied from `refs` / `ast --select` output maps
 				// back to the real offset (same convention as `Rename` /
 				// `AddParam`, NOT the raw 1-indexed `ast --at`).
-				final cursor:Int = Span.offsetOf(source, line, col + 1);
-				final hit:Null<QueryNode> = Engine.at(tree, cursor);
-				if (hit == null)
-					return Err('position $line:$col is not on a node');
+				final cursor: Int = Span.offsetOf(source, line, col + 1);
+				final hit: Null<QueryNode> = Engine.at(tree, cursor);
+				if (hit == null) return Err('position $line:$col is not on a node');
 				hit;
 		};
 
-		final span:Null<Span> = node.span;
-		if (span == null)
-			return Err('the resolved ${node.kind} node has no source span to replace');
+		final span: Null<Span> = node.span;
+		if (span == null) return Err('the resolved ${node.kind} node has no source span to replace');
 
-		final edit:{span:Span, text:String} = {span: span, text: newSource};
-		return RefactorSupport.canonicalize(source, [edit], reformat, plugin);
+		final edit: { span: Span, text: String } = { span: span, text: newSource };
+		return RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);
 	}
+
 }

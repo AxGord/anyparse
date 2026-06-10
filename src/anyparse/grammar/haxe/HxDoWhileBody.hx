@@ -22,13 +22,15 @@ package anyparse.grammar.haxe;
  */
 @:peg
 enum HxDoWhileBody {
+
 	@:fmt(leftCurly('blockLeftCurly'), emptyCurlyBreak('blockEmptyCurly'), rightCurly('blockRightCurly'), keepCurlyBlanks)
 	@:lead('{') @:trail('}') @:trivia
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
-	BlockBody(stmts:Array<HxStatement>);
+	BlockBody(stmts: Array<HxStatement>);
 
-	@:kw('do') InnerDoWhile(inner:HxDoWhileStmt);
+	@:kw('do') InnerDoWhile(inner: HxDoWhileStmt);
 
 	@:trailOpt(';')
-	ExprBody(expr:HxExpr);
+	ExprBody(expr: HxExpr);
+
 }

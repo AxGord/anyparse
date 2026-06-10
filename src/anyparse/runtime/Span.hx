@@ -5,8 +5,8 @@ package anyparse.runtime;
  * Both fields are 1-indexed to match what editors and IDEs expect.
  */
 typedef Position = {
-	line:Int,
-	col:Int,
+	line: Int,
+	col: Int
 };
 
 /**
@@ -23,10 +23,10 @@ typedef Position = {
 @:nullSafety(Strict)
 final class Span {
 
-	public final from:Int;
-	public final to:Int;
+	public final from: Int;
+	public final to: Int;
 
-	public function new(from:Int, to:Int) {
+	public function new(from: Int, to: Int) {
 		this.from = from;
 		this.to = to;
 	}
@@ -39,10 +39,10 @@ final class Span {
 	 * the end and the returned position points at one past the last
 	 * character — the conventional "end of file" cursor behaviour.
 	 */
-	public function lineCol(source:String):Position {
-		final end:Int = from < source.length ? from : source.length;
-		var line:Int = 1;
-		var col:Int = 1;
+	public function lineCol(source: String): Position {
+		final end: Int = from < source.length ? from : source.length;
+		var line: Int = 1;
+		var col: Int = 1;
 		for (i in 0...end) {
 			if (source.charCodeAt(i) == '\n'.code) {
 				line++;
@@ -51,10 +51,10 @@ final class Span {
 				col++;
 			}
 		}
-		return {line: line, col: col};
+		return { line: line, col: col };
 	}
 
-	public function toString():String {
+	public function toString(): String {
 		return from == to ? '$from' : '$from..$to';
 	}
 
@@ -65,10 +65,10 @@ final class Span {
 	 * `lineCol`'s end-of-file behaviour, so a coordinate slightly past
 	 * real content still maps to a sensible offset.
 	 */
-	public static function offsetOf(source:String, line:Int, col:Int):Int {
+	public static function offsetOf(source: String, line: Int, col: Int): Int {
 		if (line < 1 || col < 1) return 0;
-		var curLine:Int = 1;
-		var curCol:Int = 1;
+		var curLine: Int = 1;
+		var curCol: Int = 1;
 		for (i in 0...source.length) {
 			if (curLine == line && curCol == col) return i;
 			if (source.charCodeAt(i) == '\n'.code) {
@@ -81,4 +81,5 @@ final class Span {
 		}
 		return source.length;
 	}
+
 }

@@ -46,9 +46,9 @@ using Lambda;
  */
 class TransformLowering {
 
-	private final shape:ShapeBuilder.ShapeResult;
+	private final shape: ShapeBuilder.ShapeResult;
 
-	public function new(shape:ShapeBuilder.ShapeResult) {
+	public function new(shape: ShapeBuilder.ShapeResult) {
 		this.shape = shape;
 	}
 
@@ -57,20 +57,20 @@ class TransformLowering {
 	 * reachable rule, the per-type hook descriptors for the `visit`
 	 * typedef, and the public `transform` entry rooted on `shape.root`.
 	 */
-	public function generate():TransformResult {
-		final ruleNames:Array<String> = [for (name in shape.rules.keys()) name];
+	public function generate(): TransformResult {
+		final ruleNames: Array<String> = [for (name in shape.rules.keys()) name];
 		// Deterministic order — keep generated field order stable across
 		// compiles regardless of Map iteration order.
-		ruleNames.sort((a:String, b:String) -> a < b ? -1 : (a > b ? 1 : 0));
+		ruleNames.sort((a: String, b: String) -> a < b ? -1 : (a > b ? 1 : 0));
 
-		final fns:Array<TransformFn> = [];
-		final hooks:Array<TransformHook> = [];
+		final fns: Array<TransformFn> = [];
+		final hooks: Array<TransformHook> = [];
 		for (name in ruleNames) {
-			final node:ShapeNode = shape.rules.get(name);
+			final node: ShapeNode = shape.rules.get(name);
 			if (node == null) continue;
-			final ct:ComplexType = pathToComplexType(name);
-			final hookName:String = hookFieldName(name);
-			hooks.push({name: hookName, ct: ct});
+			final ct: ComplexType = pathToComplexType(name);
+			final hookName: String = hookFieldName(name);
+			hooks.push({ name: hookName, ct: ct });
 			fns.push({
 				typePath: name,
 				fnName: transformFnName(name),
@@ -94,14 +94,14 @@ class TransformLowering {
 	 * the rebuilt value as the final step (bottom-up: children first,
 	 * self last).
 	 */
-	private function lowerRule(typePath:String, node:ShapeNode, hookName:String):Expr {
-		final rebuilt:Expr = switch node.kind {
+	private function lowerRule(typePath: String, node: ShapeNode, hookName: String): Expr {
+		final rebuilt: Expr = switch node.kind {
 			case Alt: lowerAlt(node, typePath);
 			case Seq: rebuildStruct(node, macro node);
 			case Star:
 				// A top-level `Array<X>` rule (rare, but the shape model
 				// allows it) — map each element through its rebuild.
-				final perElem:Expr = rebuildExpr(node.children[0], macro _e);
+				final perElem: Expr = rebuildExpr(node.children[0], macro _e);
 				macro [for (_e in node) $perElem];
 			case Ref:
 				// A typedef that is a bare alias to another rule.
@@ -126,8 +126,8 @@ class TransformLowering {
 	 * the local `_h` captures the optional hook so strict null-safety
 	 * narrows it (a field access on `visit` would not narrow).
 	 */
-	private function applyHook(hookName:String, rebuilt:Expr):Expr {
-		final hookAccess:Expr = {expr: EField(macro visit, hookName), pos: Context.currentPos()};
+	private function applyHook(hookName: String, rebuilt: Expr): Expr {
+		final hookAccess: Expr = { expr: EField(macro visit, hookName), pos: Context.currentPos() };
 		return macro {
 			final _r = $rebuilt;
 			final _h = $hookAccess;
@@ -141,36 +141,36 @@ class TransformLowering {
 	 * switch is exhaustive over the enum's constructors, so no default
 	 * case is emitted.
 	 */
-	private function lowerAlt(node:ShapeNode, typePath:String):Expr {
-		final cases:Array<Case> = [for (branch in node.children) lowerBranch(branch, typePath)];
-		return {expr: ESwitch(macro node, cases, null), pos: Context.currentPos()};
+	private function lowerAlt(node: ShapeNode, typePath: String): Expr {
+		final cases: Array<Case> = [for (branch in node.children) lowerBranch(branch, typePath)];
+		return { expr: ESwitch(macro node, cases, null), pos: Context.currentPos() };
 	}
 
 	/**
 	 * Lower one enum constructor to `case Ctor(a0, a1, ...): Ctor(<rebuild a0>, ...)`.
 	 * Nullary constructors map to `case Ctor: Ctor`.
 	 */
-	private function lowerBranch(branch:ShapeNode, typePath:String):Case {
-		final ctor:String = branch.annotations.get('base.ctor');
-		final ctorPath:String = typePath + '.' + ctor;
-		final ctorRef:Expr = MacroStringTools.toFieldExpr(ctorPath.split('.'));
+	private function lowerBranch(branch: ShapeNode, typePath: String): Case {
+		final ctor: String = branch.annotations.get('base.ctor');
+		final ctorPath: String = typePath + '.' + ctor;
+		final ctorRef: Expr = MacroStringTools.toFieldExpr(ctorPath.split('.'));
 
 		if (branch.children.length == 0) {
 			// Nullary constructor — pattern and rebuild are both the bare ctor.
-			return {values: [ctorRef], expr: ctorRef};
+			return { values: [ctorRef], expr: ctorRef };
 		}
 
-		final argNames:Array<String> = [for (i in 0...branch.children.length) '_a$i'];
-		final pattern:Expr = {
+		final argNames: Array<String> = [for (i in 0...branch.children.length) '_a$i'];
+		final pattern: Expr = {
 			expr: ECall(ctorRef, [for (name in argNames) macro $i{name}]),
 			pos: Context.currentPos(),
 		};
-		final rebuiltArgs:Array<Expr> = [
+		final rebuiltArgs: Array<Expr> = [
 			for (i in 0...branch.children.length)
 				rebuildExpr(branch.children[i], macro $i{argNames[i]})
 		];
-		final rebuilt:Expr = {expr: ECall(ctorRef, rebuiltArgs), pos: Context.currentPos()};
-		return {values: [pattern], expr: rebuilt};
+		final rebuilt: Expr = { expr: ECall(ctorRef, rebuiltArgs), pos: Context.currentPos() };
+		return { values: [pattern], expr: rebuilt };
 	}
 
 	/**
@@ -178,8 +178,8 @@ class TransformLowering {
 	 * recursing into every grammar-typed child. Optionality is handled
 	 * once at the top, since `base.optional` may sit on any node kind.
 	 */
-	private function rebuildExpr(node:ShapeNode, valueExpr:Expr):Expr {
-		final optional:Bool = node.annotations.get('base.optional') == true;
+	private function rebuildExpr(node: ShapeNode, valueExpr: Expr): Expr {
+		final optional: Bool = node.annotations.get('base.optional') == true;
 		if (!optional) return rebuildCore(node, valueExpr);
 		// `Null<...>`: recurse only the present value, preserve null. Nodes
 		// that never reach a transformable child fall through to a plain
@@ -190,7 +190,7 @@ class TransformLowering {
 		// narrow). The inner rebuild is built against that local. Optional
 		// wrappers never nest in the grammar (a field is `Null<T>`, never
 		// `Null<Null<T>>`), so a fixed local name is collision-free.
-		final inner:Expr = rebuildCore(node, macro _o);
+		final inner: Expr = rebuildCore(node, macro _o);
 		return macro {
 			final _o = $valueExpr;
 			_o == null ? null : $inner;
@@ -202,17 +202,17 @@ class TransformLowering {
 	 * reach any grammar type is copied unchanged — this both avoids
 	 * needless allocation and stops descent at inline primitive leaves.
 	 */
-	private function rebuildCore(node:ShapeNode, valueExpr:Expr):Expr {
+	private function rebuildCore(node: ShapeNode, valueExpr: Expr): Expr {
 		if (!isTransformable(node)) return valueExpr;
 		return switch node.kind {
 			case Ref:
 				// Dispatch into the referenced rule's own `_transform`,
 				// threading `visit` so its hooks fire deeper in the tree.
-				final ref:String = node.annotations.get('base.ref');
+				final ref: String = node.annotations.get('base.ref');
 				callTransform(ref, valueExpr);
 			case Star:
 				// Array<X>: map each element through the element rebuild.
-				final perElem:Expr = rebuildExpr(node.children[0], macro _e);
+				final perElem: Expr = rebuildExpr(node.children[0], macro _e);
 				macro [for (_e in $valueExpr) $perElem];
 			case Seq:
 				rebuildStruct(node, valueExpr);
@@ -232,10 +232,10 @@ class TransformLowering {
 	 * generated functions live on the same marker class, so a bare
 	 * identifier call resolves at typing time without macro-time checks.
 	 */
-	private function callTransform(ref:String, valueExpr:Expr):Expr {
-		final fn:String = transformFnName(ref);
-		final callee:Expr = {expr: EConst(CIdent(fn)), pos: Context.currentPos()};
-		return {expr: ECall(callee, [valueExpr, macro visit]), pos: Context.currentPos()};
+	private function callTransform(ref: String, valueExpr: Expr): Expr {
+		final fn: String = transformFnName(ref);
+		final callee: Expr = { expr: EConst(CIdent(fn)), pos: Context.currentPos() };
+		return { expr: ECall(callee, [valueExpr, macro visit]), pos: Context.currentPos() };
 	}
 
 	/**
@@ -243,15 +243,15 @@ class TransformLowering {
 	 * field1: <copy>, ...}`. Fields that do not reach a grammar type are
 	 * copied via plain field access; only transformable fields recurse.
 	 */
-	private function rebuildStruct(node:ShapeNode, valueExpr:Expr):Expr {
-		final objFields:Array<ObjectField> = [
+	private function rebuildStruct(node: ShapeNode, valueExpr: Expr): Expr {
+		final objFields: Array<ObjectField> = [
 			for (child in node.children) {
-				final fieldName:String = child.annotations.get('base.fieldName');
-				final access:Expr = {expr: EField(valueExpr, fieldName), pos: Context.currentPos()};
-				{field: fieldName, expr: rebuildExpr(child, access)};
+				final fieldName: String = child.annotations.get('base.fieldName');
+				final access: Expr = { expr: EField(valueExpr, fieldName), pos: Context.currentPos() };
+				{ field: fieldName, expr: rebuildExpr(child, access) };
 			}
 		];
-		return {expr: EObjectDecl(objFields), pos: Context.currentPos()};
+		return { expr: EObjectDecl(objFields), pos: Context.currentPos() };
 	}
 
 	/**
@@ -267,13 +267,13 @@ class TransformLowering {
 	 * field list (`Star` element / `Seq`/`Alt` field nodes), which is
 	 * finite and acyclic.
 	 */
-	private function isTransformable(node:ShapeNode):Bool {
+	private function isTransformable(node: ShapeNode): Bool {
 		return switch node.kind {
 			case Ref:
 				// Every named rule has a `_transform`, so any Ref to a rule
 				// in the shape is a valid recursion target — including
 				// Terminal rules, whose hook is the rename primitive.
-				final ref:String = node.annotations.get('base.ref');
+				final ref: String = node.annotations.get('base.ref');
 				shape.rules.exists(ref);
 			case Star:
 				isTransformable(node.children[0]);
@@ -291,7 +291,7 @@ class TransformLowering {
 	 * simple type name prefixed with `_transform` (e.g.
 	 * `anyparse.grammar.haxe.HxExpr` to `_transformHxExpr`).
 	 */
-	public static function transformFnName(typePath:String):String {
+	public static function transformFnName(typePath: String): String {
 		return '_transform' + simpleName(typePath);
 	}
 
@@ -300,23 +300,24 @@ class TransformLowering {
 	 * name lower-camelCased (e.g. `HxExpr` to `hxExpr`, `HxModule` to
 	 * `hxModule`).
 	 */
-	public static function hookFieldName(typePath:String):String {
-		final simple:String = simpleName(typePath);
+	public static function hookFieldName(typePath: String): String {
+		final simple: String = simpleName(typePath);
 		if (simple.length == 0) return simple;
 		return simple.charAt(0).toLowerCase() + simple.substring(1);
 	}
 
-	private static function simpleName(typePath:String):String {
-		final idx:Int = typePath.lastIndexOf('.');
+	private static function simpleName(typePath: String): String {
+		final idx: Int = typePath.lastIndexOf('.');
 		return idx == -1 ? typePath : typePath.substring(idx + 1);
 	}
 
-	private static function pathToComplexType(typePath:String):ComplexType {
-		final idx:Int = typePath.lastIndexOf('.');
-		final pack:Array<String> = idx == -1 ? [] : typePath.substring(0, idx).split('.');
-		final name:String = idx == -1 ? typePath : typePath.substring(idx + 1);
-		return TPath({pack: pack, name: name, params: []});
+	private static function pathToComplexType(typePath: String): ComplexType {
+		final idx: Int = typePath.lastIndexOf('.');
+		final pack: Array<String> = idx == -1 ? [] : typePath.substring(0, idx).split('.');
+		final name: String = idx == -1 ? typePath : typePath.substring(idx + 1);
+		return TPath({ pack: pack, name: name, params: [] });
 	}
+
 }
 
 /**
@@ -324,16 +325,16 @@ class TransformLowering {
  */
 typedef TransformFn = {
 	/** Full grammar type path this function transforms. */
-	final typePath:String;
+	final typePath: String;
 
 	/** Generated function name (`_transform<SimpleName>`). */
-	final fnName:String;
+	final fnName: String;
 
 	/** The transformed type's ComplexType — both `node` param and return type. */
-	final paramCT:ComplexType;
+	final paramCT: ComplexType;
 
 	/** Body expression (the deep-rebuild + hook application). */
-	final body:Expr;
+	final body: Expr;
 };
 
 /**
@@ -341,10 +342,10 @@ typedef TransformFn = {
  */
 typedef TransformHook = {
 	/** Hook field name on the `visit` struct (`hx<SimpleName>`). */
-	final name:String;
+	final name: String;
 
 	/** The transformed type's ComplexType — the hook is `T -> T`. */
-	final ct:ComplexType;
+	final ct: ComplexType;
 };
 
 /**
@@ -353,18 +354,18 @@ typedef TransformHook = {
  */
 typedef TransformResult = {
 	/** Full grammar root type path (e.g. `anyparse.grammar.haxe.HxModule`). */
-	final rootTypePath:String;
+	final rootTypePath: String;
 
 	/** Root grammar type ComplexType — `transform`'s `root` param + return. */
-	final rootCT:ComplexType;
+	final rootCT: ComplexType;
 
 	/** `_transform` function name for the root type — `transform` delegates to it. */
-	final rootFnName:String;
+	final rootFnName: String;
 
 	/** All generated `_transform<T>` functions, one per reachable rule. */
-	final fns:Array<TransformFn>;
+	final fns: Array<TransformFn>;
 
 	/** Per-type hooks for the generated `visit` typedef. */
-	final hooks:Array<TransformHook>;
+	final hooks: Array<TransformHook>;
 };
 #end

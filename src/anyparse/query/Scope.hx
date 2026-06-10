@@ -19,15 +19,15 @@ import anyparse.runtime.Span;
 @:nullSafety(Strict)
 final class ScopeStack {
 
-	private final _frames:Array<ScopeFrame> = [];
+	private final _frames: Array<ScopeFrame> = [];
 
 	public function new() {}
 
-	public inline function push(frame:ScopeFrame):Void {
+	public inline function push(frame: ScopeFrame): Void {
 		_frames.push(frame);
 	}
 
-	public inline function pop():Void {
+	public inline function pop(): Void {
 		_frames.pop();
 	}
 
@@ -36,15 +36,16 @@ final class ScopeStack {
 	 * binding span for `name`. Null when no enclosing scope declares
 	 * the symbol — typically a cross-file or implicit-`this` reference.
 	 */
-	public function resolveInnermost(name:String):Null<Span> {
-		var i:Int = _frames.length - 1;
+	public function resolveInnermost(name: String): Null<Span> {
+		var i: Int = _frames.length - 1;
 		while (i >= 0) {
-			final hit:Null<Span> = _frames[i].resolve(name);
+			final hit: Null<Span> = _frames[i].resolve(name);
 			if (hit != null) return hit;
 			i--;
 		}
 		return null;
 	}
+
 }
 
 /**
@@ -56,18 +57,19 @@ final class ScopeStack {
 @:nullSafety(Strict)
 final class ScopeFrame {
 
-	public final node:QueryNode;
-	private final _bindings:Map<String, Span> = [];
+	public final node: QueryNode;
+	private final _bindings: Map<String, Span> = [];
 
-	public function new(node:QueryNode) {
+	public function new(node: QueryNode) {
 		this.node = node;
 	}
 
-	public function declare(name:String, span:Span):Void {
+	public function declare(name: String, span: Span): Void {
 		if (!_bindings.exists(name)) _bindings[name] = span;
 	}
 
-	public inline function resolve(name:String):Null<Span> {
+	public inline function resolve(name: String): Null<Span> {
 		return _bindings[name];
 	}
+
 }

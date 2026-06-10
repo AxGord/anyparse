@@ -12,15 +12,16 @@ package anyparse.runtime;
 @:nullSafety(Strict)
 final class ParseResult<T> {
 
-	public final value:T;
-	public final span:Span;
-	public final errors:Array<ParseError>;
-	public final complete:Bool;
+	public final value: T;
+	public final span: Span;
+	public final errors: Array<ParseError>;
+	public final complete: Bool;
 
-	public function new(value:T, span:Span, errors:Array<ParseError>, complete:Bool) {
+	public function new(value: T, span: Span, errors: Array<ParseError>, complete: Bool) {
 		this.value = value;
 		this.span = span;
 		this.errors = errors;
 		this.complete = complete;
 	}
+
 }

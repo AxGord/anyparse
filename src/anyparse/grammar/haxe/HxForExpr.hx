@@ -56,8 +56,8 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxForExpr = {
-	@:lead('(') var varName:HxIdentLit;
-	@:optional @:lead('=>') var valueName:Null<HxIdentLit>;
-	@:kw('in') @:trail(')') var iterable:HxExpr;
-	@:trailOpt(';') @:fmt(bodyPolicy('expressionForBody'), bodyAllmanIndentForCtor('ObjectLit', 'indentObjectLiteral')) var body:HxExpr;
+	@:lead('(') var varName: HxIdentLit;
+	@:optional @:lead('=>') var valueName: Null<HxIdentLit>;
+	@:kw('in') @:trail(')') var iterable: HxExpr;
+	@:trailOpt(';') @:fmt(bodyPolicy('expressionForBody'), bodyAllmanIndentForCtor('ObjectLit', 'indentObjectLiteral')) var body: HxExpr;
 };

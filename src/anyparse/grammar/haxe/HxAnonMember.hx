@@ -34,6 +34,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxAnonMember = {
-	@:trivia @:tryparse var meta:Array<HxMetadata>;
-	var field:HxAnonField;
+	@:trivia @:tryparse var meta: Array<HxMetadata>;
+	var field: HxAnonField;
 }

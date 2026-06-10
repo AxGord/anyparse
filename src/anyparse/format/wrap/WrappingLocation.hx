@@ -24,4 +24,5 @@ enum abstract WrappingLocation(Int) {
 	final BeforeLast = 0;
 
 	final AfterLast = 1;
+
 }

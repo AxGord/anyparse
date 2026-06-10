@@ -10,5 +10,5 @@ package anyparse.query.format.json;
  */
 @:peg @:schema(anyparse.format.text.JsonFormat) @:ws
 typedef AstRefHits = {
-	var hits:Array<AstRefHit>;
+	var hits: Array<AstRefHit>;
 };

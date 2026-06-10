@@ -24,4 +24,5 @@ enum abstract HxFormatLineEndCharacter(String) to String {
 	final CR = 'CR';
 
 	final CRLF = 'CRLF';
+
 }

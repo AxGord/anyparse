@@ -18,7 +18,7 @@ package anyparse.query.format.json;
  */
 @:peg @:schema(anyparse.format.text.JsonFormat) @:ws
 typedef AstMetaDecl = {
-	var kind:String;
-	@:optional var name:String;
-	var span:AstSearchSpan;
+	var kind: String;
+	@:optional var name: String;
+	var span: AstSearchSpan;
 };

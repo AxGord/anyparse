@@ -49,6 +49,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxConditionalMod = {
-	var cond:HxPpCondLit;
-	@:trivia @:tryparse @:fmt(padLeading, padTrailing) var body:Array<HxModifier>;
+	var cond: HxPpCondLit;
+	@:trivia @:tryparse @:fmt(padLeading, padTrailing) var body: Array<HxModifier>;
 };

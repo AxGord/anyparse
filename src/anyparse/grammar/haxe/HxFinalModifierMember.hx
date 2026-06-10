@@ -59,6 +59,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxFinalModifierMember = {
-	@:trivia @:tryparse @:fmt(forceInlineSep) var modifiers:Array<HxMemberModifier>;
-	@:kw('function') var fn:HxFnDecl;
+	@:trivia @:tryparse @:fmt(forceInlineSep) var modifiers: Array<HxMemberModifier>;
+	@:kw('function') var fn: HxFnDecl;
 }

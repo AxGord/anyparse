@@ -30,12 +30,12 @@ using Lambda;
  */
 class TransformCodegen {
 
-	public static function emit(result:TransformLowering.TransformResult):Array<Field> {
-		final visitTypePath:String = visitTypePathOf(result.rootTypePath);
+	public static function emit(result: TransformLowering.TransformResult): Array<Field> {
+		final visitTypePath: String = visitTypePathOf(result.rootTypePath);
 		defineVisitTypedef(visitTypePath, result.hooks);
-		final visitCT:ComplexType = pathToComplexType(visitTypePath);
+		final visitCT: ComplexType = pathToComplexType(visitTypePath);
 
-		final fields:Array<Field> = [for (fn in result.fns) transformField(fn, visitCT)];
+		final fields: Array<Field> = [for (fn in result.fns) transformField(fn, visitCT)];
 		fields.push(publicTransformField(result, visitCT));
 		return fields;
 	}
@@ -45,19 +45,20 @@ class TransformCodegen {
 	 * struct carries one `@:optional` `T -> T` field per grammar type;
 	 * setting one rewrites every node of that type across the tree.
 	 */
-	private static function defineVisitTypedef(visitTypePath:String, hooks:Array<TransformLowering.TransformHook>):Void {
-		final idx:Int = visitTypePath.lastIndexOf('.');
-		final pack:Array<String> = idx == -1 ? [] : visitTypePath.substring(0, idx).split('.');
-		final name:String = idx == -1 ? visitTypePath : visitTypePath.substring(idx + 1);
+	private static function defineVisitTypedef(visitTypePath: String, hooks: Array<TransformLowering.TransformHook>): Void {
+		final idx: Int = visitTypePath.lastIndexOf('.');
+		final pack: Array<String> = idx == -1 ? [] : visitTypePath.substring(0, idx).split('.');
+		final name: String = idx == -1 ? visitTypePath : visitTypePath.substring(idx + 1);
 
-		final structFields:Array<Field> = [
-			for (hook in hooks) {
-				name: hook.name,
-				kind: FVar(TFunction([hook.ct], hook.ct)),
-				access: [],
-				meta: [{name: ':optional', params: [], pos: Context.currentPos()}],
-				pos: Context.currentPos(),
-			}
+		final structFields: Array<Field> = [
+			for (hook in hooks)
+				{
+					name: hook.name,
+					kind: FVar(TFunction([hook.ct], hook.ct)),
+					access: [],
+					meta: [{ name: ':optional', params: [], pos: Context.currentPos() }],
+					pos: Context.currentPos(),
+				}
 		];
 
 		Context.defineType({
@@ -66,11 +67,9 @@ class TransformCodegen {
 			pos: Context.currentPos(),
 			kind: TDStructure,
 			fields: structFields,
-			doc: 'Per-type rewrite hooks for the generated deep transform. '
-				+ 'Each optional field is a `T -> T` rewrite applied to every '
-				+ 'node of that type during the bottom-up walk. An empty `{}` '
-				+ 'is a structural identity; setting one hook is the rewrite '
-				+ 'primitive for that node type.',
+			doc: 'Per-type rewrite hooks for the generated deep transform. ' + 'Each optional field is a `T -> T` rewrite applied to every '
+			+ 'node of that type during the bottom-up walk. An empty `{}` ' + 'is a structural identity; setting one hook is the rewrite '
+			+ 'primitive for that node type.',
 			meta: [],
 		});
 	}
@@ -78,18 +77,17 @@ class TransformCodegen {
 	/**
 	 * One `private static function _transform<T>(node:T, visit):T` field.
 	 */
-	private static function transformField(fn:TransformLowering.TransformFn, visitCT:ComplexType):Field {
-		final args:Array<FunctionArg> = [
-			{name: 'node', type: fn.paramCT},
-			{name: 'visit', type: visitCT},
+	private static function transformField(fn: TransformLowering.TransformFn, visitCT: ComplexType): Field {
+		final args: Array<FunctionArg> = [
+			{ name: 'node', type: fn.paramCT },
+			{ name: 'visit', type: visitCT },
 		];
 		return {
 			name: fn.fnName,
 			access: [APrivate, AStatic],
 			doc: 'Deep transform of `${fn.typePath}`: recurse each grammar-typed '
-				+ 'child via its own `_transform`, rebuild this node, then apply '
-				+ 'the matching `visit` hook if set.',
-			kind: FFun({args: args, ret: fn.paramCT, expr: fn.body}),
+				+ 'child via its own `_transform`, rebuild this node, then apply ' + 'the matching `visit` hook if set.',
+			kind: FFun({ args: args, ret: fn.paramCT, expr: fn.body }),
 			pos: Context.currentPos(),
 		};
 	}
@@ -98,24 +96,23 @@ class TransformCodegen {
 	 * The public `transform(root:Root, visit):Root` entry — delegates to
 	 * the root type's `_transform`.
 	 */
-	private static function publicTransformField(result:TransformLowering.TransformResult, visitCT:ComplexType):Field {
-		final rootCT:ComplexType = result.rootCT;
-		final args:Array<FunctionArg> = [
-			{name: 'root', type: rootCT},
-			{name: 'visit', type: visitCT},
+	private static function publicTransformField(result: TransformLowering.TransformResult, visitCT: ComplexType): Field {
+		final rootCT: ComplexType = result.rootCT;
+		final args: Array<FunctionArg> = [
+			{ name: 'root', type: rootCT },
+			{ name: 'visit', type: visitCT },
 		];
-		final callee:Expr = {expr: EConst(CIdent(result.rootFnName)), pos: Context.currentPos()};
-		final body:Expr = {
-			expr: EReturn({expr: ECall(callee, [macro root, macro visit]), pos: Context.currentPos()}),
+		final callee: Expr = { expr: EConst(CIdent(result.rootFnName)), pos: Context.currentPos() };
+		final body: Expr = {
+			expr: EReturn({ expr: ECall(callee, [macro root, macro visit]), pos: Context.currentPos() }),
 			pos: Context.currentPos(),
 		};
 		return {
 			name: 'transform',
 			access: [APublic, AStatic],
 			doc: 'Deep whole-tree transform: bottom-up walk applying each set '
-				+ '`visit` hook to every node of its type. An empty `visit` '
-				+ '(`{}`) is a structural identity.',
-			kind: FFun({args: args, ret: rootCT, expr: body}),
+				+ '`visit` hook to every node of its type. An empty `visit` ' + '(`{}`) is a structural identity.',
+			kind: FFun({ args: args, ret: rootCT, expr: body }),
 			pos: Context.currentPos(),
 		};
 	}
@@ -126,15 +123,16 @@ class TransformCodegen {
 	 * `anyparse.grammar.haxe.HxModule` to
 	 * `anyparse.grammar.haxe.HxModuleTransform`).
 	 */
-	private static function visitTypePathOf(rootTypePath:String):String {
+	private static function visitTypePathOf(rootTypePath: String): String {
 		return rootTypePath + 'Transform';
 	}
 
-	private static function pathToComplexType(typePath:String):ComplexType {
-		final idx:Int = typePath.lastIndexOf('.');
-		final pack:Array<String> = idx == -1 ? [] : typePath.substring(0, idx).split('.');
-		final name:String = idx == -1 ? typePath : typePath.substring(idx + 1);
-		return TPath({pack: pack, name: name, params: []});
+	private static function pathToComplexType(typePath: String): ComplexType {
+		final idx: Int = typePath.lastIndexOf('.');
+		final pack: Array<String> = idx == -1 ? [] : typePath.substring(0, idx).split('.');
+		final name: String = idx == -1 ? typePath : typePath.substring(idx + 1);
+		return TPath({ pack: pack, name: name, params: [] });
 	}
+
 }
 #end

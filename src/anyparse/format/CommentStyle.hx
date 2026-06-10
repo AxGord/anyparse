@@ -25,8 +25,10 @@ package anyparse.format;
  *    delimiters with plain-indent content).
  */
 enum abstract CommentStyle(Int) from Int to Int {
+
 	var Verbatim = 0;
 	var Plain = 1;
 	var Javadoc = 2;
 	var JavadocNoStars = 3;
+
 }

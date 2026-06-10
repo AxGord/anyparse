@@ -16,9 +16,11 @@ package anyparse.grammar.haxe;
  */
 @:peg
 enum HxAbstractClause {
+
 	@:kw('from')
-	FromClause(type:HxType);
+	FromClause(type: HxType);
 
 	@:kw('to')
-	ToClause(type:HxType);
+	ToClause(type: HxType);
+
 }

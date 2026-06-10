@@ -40,7 +40,7 @@ enum abstract ArrayMatrixWrap(Int) from Int to Int {
 	 * `wrapping.arrayMatrixWrap`) into a policy value. Unknown strings
 	 * return `null` so callers fall back to the runtime default.
 	 */
-	@:from public static function resolve(name:String):Null<ArrayMatrixWrap> {
+	@:from public static function resolve(name: String): Null<ArrayMatrixWrap> {
 		return switch name {
 			case 'noMatrixWrap': NoMatrixWrap;
 			case 'matrixWrapNoAlign': MatrixWrapNoAlign;
@@ -48,4 +48,5 @@ enum abstract ArrayMatrixWrap(Int) from Int to Int {
 			case _: null;
 		};
 	}
+
 }

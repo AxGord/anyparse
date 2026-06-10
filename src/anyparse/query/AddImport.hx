@@ -29,18 +29,20 @@ final class AddImport {
 	 * not already writer-canonical. Returns `Ok(rewritten)` or an `Err`
 	 * describing why the import could not be added.
 	 */
-	public static function addImport(source:String, path:String, isUsing:Bool, reformat:Bool, plugin:GrammarPlugin):EditResult {
-		final tree:QueryNode = try plugin.parseFile(source)
-			catch (exception:ParseError) return Err('source does not parse: ${exception.toString()}')
-			catch (exception:Exception) return Err('source does not parse: ${exception.message}');
+	public static function addImport(
+		source: String, path: String, isUsing: Bool, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
+	): EditResult {
+		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
+			'source does not parse: ${exception.toString()}'
+		)
+		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
-		final trimmed:String = StringTools.trim(path);
-		if (trimmed.length == 0)
-			return Err('add-import requires a non-empty module path');
+		final trimmed: String = StringTools.trim(path);
+		if (trimmed.length == 0) return Err('add-import requires a non-empty module path');
 
-		final targetKind:String = isUsing ? 'UsingDecl' : 'ImportDecl';
-		var lastImport:Null<QueryNode> = null;
-		var packageDecl:Null<QueryNode> = null;
+		final targetKind: String = isUsing ? 'UsingDecl' : 'ImportDecl';
+		var lastImport: Null<QueryNode> = null;
+		var packageDecl: Null<QueryNode> = null;
 		for (c in tree.children) switch c.kind {
 			case 'ImportDecl', 'UsingDecl', 'ImportWildDecl', 'ImportAliasDecl':
 				lastImport = c;
@@ -51,29 +53,30 @@ final class AddImport {
 			case _:
 		}
 
-		final stmt:String = (isUsing ? 'using ' : 'import ') + trimmed + ';';
+		final stmt: String = (isUsing ? 'using ' : 'import ') + trimmed + ';';
 
 		// Insertion site, in priority order: after the last existing
 		// import / using (extend the block), else after the package
 		// declaration, else at the very start of the file. Exact
 		// whitespace is the writer's concern — the canonicalize finalize
 		// re-emits the whole file.
-		final lastImportTo:Int = spanTo(lastImport);
-		final packageTo:Int = spanTo(packageDecl);
-		final edit:{span:Span, text:String} = if (lastImportTo >= 0)
-			{span: new Span(lastImportTo, lastImportTo), text: '\n' + stmt};
+		final lastImportTo: Int = spanTo(lastImport);
+		final packageTo: Int = spanTo(packageDecl);
+		final edit: { span: Span, text: String } = if (lastImportTo >= 0)
+			{ span: new Span(lastImportTo, lastImportTo), text: '\n' + stmt };
 		else if (packageTo >= 0)
-			{span: new Span(packageTo, packageTo), text: '\n' + stmt};
+			{ span: new Span(packageTo, packageTo), text: '\n' + stmt };
 		else
-			{span: new Span(0, 0), text: stmt + '\n'};
+			{ span: new Span(0, 0), text: stmt + '\n' };
 
-		return RefactorSupport.canonicalize(source, [edit], reformat, plugin);
+		return RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);
 	}
 
 	/** `node`'s span end, or -1 when the node or its span is null. */
-	private static inline function spanTo(node:Null<QueryNode>):Int {
+	private static inline function spanTo(node: Null<QueryNode>): Int {
 		if (node == null) return -1;
-		final s:Null<Span> = node.span;
+		final s: Null<Span> = node.span;
 		return s == null ? -1 : s.to;
 	}
+
 }

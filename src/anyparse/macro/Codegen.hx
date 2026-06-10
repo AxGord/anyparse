@@ -29,13 +29,13 @@ import haxe.macro.Expr;
 class Codegen {
 
 	public static function emit(
-		rules:Array<GeneratedRule>, rootTypePath:String, rootReturnCT:ComplexType,
-		formatInfo:FormatReader.FormatInfo, ?trivia:Bool = false, ?rootFnName:Null<String> = null
-	):Array<Field> {
-		final fields:Array<Field> = [];
-		fields.push(formatInfo.isBinary
-			? binaryEntry(rootTypePath, rootReturnCT, rootFnName)
-			: publicEntry(rootTypePath, rootReturnCT, rootFnName));
+		rules: Array<GeneratedRule>, rootTypePath: String, rootReturnCT: ComplexType, formatInfo: FormatReader.FormatInfo,
+		?trivia: Bool = false, ?rootFnName: Null<String> = null
+	): Array<Field> {
+		final fields: Array<Field> = [];
+		fields.push(
+			formatInfo.isBinary ? binaryEntry(rootTypePath, rootReturnCT, rootFnName) : publicEntry(rootTypePath, rootReturnCT, rootFnName)
+		);
 		for (rule in rules) {
 			for (ereg in rule.eregs) fields.push(eregField(ereg));
 			fields.push(ruleField(rule));
@@ -59,9 +59,9 @@ class Codegen {
 
 	// -------- public entry point --------
 
-	private static function publicEntry(rootTypePath:String, rootReturnCT:ComplexType, ?rootFnName:Null<String>):Field {
-		final rootFn:String = rootFnName ?? 'parse${simpleName(rootTypePath)}';
-		final parseCall:Expr = {
+	private static function publicEntry(rootTypePath: String, rootReturnCT: ComplexType, ?rootFnName: Null<String>): Field {
+		final rootFn: String = rootFnName ?? 'parse${simpleName(rootTypePath)}';
+		final parseCall: Expr = {
 			expr: ECall(macro $i{rootFn}, [macro ctx]),
 			pos: Context.currentPos(),
 		};
@@ -76,19 +76,16 @@ class Codegen {
 		// the file head ("expected <root>"); `ctx.maxFailPos` recovers
 		// the real innermost blocker for recon / diagnostics. Success
 		// path is unchanged — only the error path is rewritten.
-		final body:Expr = macro {
-			final ctx:anyparse.runtime.Parser = new anyparse.runtime.Parser(new anyparse.runtime.StringInput(source));
+		final body: Expr = macro {
+			final ctx: anyparse.runtime.Parser = new anyparse.runtime.Parser(new anyparse.runtime.StringInput(source));
 			try {
 				final _v = $parseCall;
 				skipWs(ctx);
 				if (ctx.pos != ctx.input.length) {
-					throw new anyparse.runtime.ParseError(
-						new anyparse.runtime.Span(ctx.pos, ctx.pos),
-						'trailing data after value'
-					);
+					throw new anyparse.runtime.ParseError(new anyparse.runtime.Span(ctx.pos, ctx.pos), 'trailing data after value');
 				}
 				return _v;
-			} catch (e:anyparse.runtime.ParseError) {
+			} catch  (e: anyparse.runtime.ParseError) {
 				// Decorate the error with the source string so
 				// `ParseError.toString` can render `line:col` instead of
 				// the raw byte offset. The entry point is the natural
@@ -96,10 +93,8 @@ class Codegen {
 				// generated code have no `source` reference, and only
 				// the top-level catch is what callers actually see.
 				if (ctx.maxFailPos > e.span.from) {
-					final farthest:anyparse.runtime.ParseError = new anyparse.runtime.ParseError(
-						new anyparse.runtime.Span(ctx.maxFailPos, ctx.maxFailPos),
-						'unexpected input',
-						ctx.maxFailExpected
+					final farthest: anyparse.runtime.ParseError = new anyparse.runtime.ParseError(
+						new anyparse.runtime.Span(ctx.maxFailPos, ctx.maxFailPos), 'unexpected input', ctx.maxFailExpected
 					);
 					farthest.source = source;
 					throw farthest;
@@ -112,7 +107,7 @@ class Codegen {
 			name: 'parse',
 			access: [APublic, AStatic],
 			kind: FFun({
-				args: [{name: 'source', type: macro : String}],
+				args: [{ name: 'source', type: macro :String }],
 				ret: rootReturnCT,
 				expr: body,
 			}),
@@ -120,20 +115,17 @@ class Codegen {
 		};
 	}
 
-	private static function binaryEntry(rootTypePath:String, rootReturnCT:ComplexType, ?rootFnName:Null<String>):Field {
-		final rootFn:String = rootFnName ?? 'parse${simpleName(rootTypePath)}';
-		final parseCall:Expr = {
+	private static function binaryEntry(rootTypePath: String, rootReturnCT: ComplexType, ?rootFnName: Null<String>): Field {
+		final rootFn: String = rootFnName ?? 'parse${simpleName(rootTypePath)}';
+		final parseCall: Expr = {
 			expr: ECall(macro $i{rootFn}, [macro ctx]),
 			pos: Context.currentPos(),
 		};
-		final body:Expr = macro {
-			final ctx:anyparse.runtime.Parser = new anyparse.runtime.Parser(new anyparse.runtime.BytesInput(source));
+		final body: Expr = macro {
+			final ctx: anyparse.runtime.Parser = new anyparse.runtime.Parser(new anyparse.runtime.BytesInput(source));
 			final _v = $parseCall;
 			if (ctx.pos != ctx.input.length) {
-				throw new anyparse.runtime.ParseError(
-					new anyparse.runtime.Span(ctx.pos, ctx.pos),
-					'trailing data after value'
-				);
+				throw new anyparse.runtime.ParseError(new anyparse.runtime.Span(ctx.pos, ctx.pos), 'trailing data after value');
 			}
 			return _v;
 		};
@@ -141,7 +133,7 @@ class Codegen {
 			name: 'parse',
 			access: [APublic, AStatic],
 			kind: FFun({
-				args: [{name: 'source', type: macro : haxe.io.Bytes}],
+				args: [{ name: 'source', type: macro :haxe.io.Bytes }],
 				ret: rootReturnCT,
 				expr: body,
 			}),
@@ -151,7 +143,7 @@ class Codegen {
 
 	// -------- per-rule fields --------
 
-	private static function ruleField(rule:GeneratedRule):Field {
+	private static function ruleField(rule: GeneratedRule): Field {
 		// Pratt-loop rules take an extra `minPrec:Int = 0` parameter so the
 		// loop can know when to stop climbing precedence. Every other rule
 		// takes just the context. The default value keeps external call
@@ -163,11 +155,11 @@ class Codegen {
 		// `Null<Int>` under strict null safety — which would make the
 		// `_savedPos` rollback branch's `precValue < minPrec` comparison
 		// fail the null-safety binop check inside the generated parser.
-		final args:Array<FunctionArg> = [{name: 'ctx', type: macro : anyparse.runtime.Parser}];
+		final args: Array<FunctionArg> = [{ name: 'ctx', type: macro :anyparse.runtime.Parser }];
 		if (rule.hasMinPrec) {
 			args.push({
 				name: 'minPrec',
-				type: macro : Int,
+				type: macro :Int,
 				value: macro 0,
 			});
 		}
@@ -183,12 +175,12 @@ class Codegen {
 		};
 	}
 
-	private static function eregField(spec:GeneratedRule.EregSpec):Field {
-		final anchored:String = '^${spec.pattern}';
+	private static function eregField(spec: GeneratedRule.EregSpec): Field {
+		final anchored: String = '^${spec.pattern}';
 		return {
 			name: spec.varName,
 			access: [APrivate, AStatic, AFinal],
-			kind: FVar(macro : EReg, {expr: EConst(CRegexp(anchored, '')), pos: Context.currentPos()}),
+			kind: FVar(macro :EReg, { expr: EConst(CRegexp(anchored, '')), pos: Context.currentPos() }),
 			pos: Context.currentPos(),
 		};
 	}
@@ -216,27 +208,27 @@ class Codegen {
 	 * Binary formats skip this entirely (empty patterns plus binary
 	 * entries never call `skipWs`).
 	 */
-	private static function skipWsField(formatInfo:FormatReader.FormatInfo):Field {
-		final body:Expr = buildSkipWsBody(formatInfo.commentPatterns);
+	private static function skipWsField(formatInfo: FormatReader.FormatInfo): Field {
+		final body: Expr = buildSkipWsBody(formatInfo.commentPatterns);
 		return {
 			name: 'skipWs',
 			access: [APrivate, AStatic],
 			kind: FFun({
-				args: [{name: 'ctx', type: macro : anyparse.runtime.Parser}],
-				ret: macro : Void,
+				args: [{ name: 'ctx', type: macro :anyparse.runtime.Parser }],
+				ret: macro :Void,
 				expr: body,
 			}),
 			pos: Context.currentPos(),
 		};
 	}
 
-	private static function buildSkipWsBody(patterns:Array<FormatReader.CommentPattern>):Expr {
-		final commentStmts:Array<Expr> = [for (p in patterns) commentSkipBlock(p)];
+	private static function buildSkipWsBody(patterns: Array<FormatReader.CommentPattern>): Expr {
+		final commentStmts: Array<Expr> = [for (p in patterns) commentSkipBlock(p)];
 		// 0xFEFF is the UTF-8 BOM codepoint, treated as invisible
 		// horizontal whitespace anywhere in the input. Real-world editors
 		// emit it at the file head; tolerating it inline costs nothing.
 		return macro while (ctx.pos < ctx.input.length) {
-			final c:Int = ctx.input.charCodeAt(ctx.pos);
+			final c: Int = ctx.input.charCodeAt(ctx.pos);
 			if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code || c == 0xFEFF) {
 				ctx.pos++;
 				continue;
@@ -246,8 +238,8 @@ class Codegen {
 		};
 	}
 
-	private static function commentSkipBlock(p:FormatReader.CommentPattern):Expr {
-		final open:String = p.open;
+	private static function commentSkipBlock(p: FormatReader.CommentPattern): Expr {
+		final open: String = p.open;
 		if (p.lineTerminated) return macro if (matchLit(ctx, $v{open})) {
 			while (ctx.pos < ctx.input.length) {
 				if (ctx.input.charCodeAt(ctx.pos) == '\n'.code) break;
@@ -255,7 +247,7 @@ class Codegen {
 			}
 			continue;
 		}
-		final close:String = p.close;
+		final close: String = p.close;
 		return macro if (matchLit(ctx, $v{open})) {
 			while (ctx.pos < ctx.input.length) {
 				if (matchLit(ctx, $v{close})) break;
@@ -277,10 +269,10 @@ class Codegen {
 	 * leading-of-next-thing — orphan trivia rather than data loss
 	 * (per user permission "вытаскивать в конец выражения").
 	 */
-	private static function skipWsAndStashField(formatInfo:FormatReader.FormatInfo):Field {
-		final commentStmts:Array<Expr> = [for (p in formatInfo.commentPatterns) commentSkipAndStashBlock(p)];
-		final body:Expr = macro while (ctx.pos < ctx.input.length) {
-			final c:Int = ctx.input.charCodeAt(ctx.pos);
+	private static function skipWsAndStashField(formatInfo: FormatReader.FormatInfo): Field {
+		final commentStmts: Array<Expr> = [for (p in formatInfo.commentPatterns) commentSkipAndStashBlock(p)];
+		final body: Expr = macro while (ctx.pos < ctx.input.length) {
+			final c: Int = ctx.input.charCodeAt(ctx.pos);
 			if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code || c == 0xFEFF) {
 				ctx.pos++;
 				continue;
@@ -292,23 +284,23 @@ class Codegen {
 			name: 'skipWsAndStash',
 			access: [APrivate, AStatic],
 			kind: FFun({
-				args: [{name: 'ctx', type: macro : anyparse.runtime.Parser}],
-				ret: macro : Void,
+				args: [{ name: 'ctx', type: macro :anyparse.runtime.Parser }],
+				ret: macro :Void,
 				expr: body,
 			}),
 			pos: Context.currentPos(),
 		};
 	}
 
-	private static function commentSkipAndStashBlock(p:FormatReader.CommentPattern):Expr {
-		final open:String = p.open;
+	private static function commentSkipAndStashBlock(p: FormatReader.CommentPattern): Expr {
+		final open: String = p.open;
 		if (p.lineTerminated) return macro if (matchLit(ctx, $v{open})) {
-			final _start:Int = ctx.pos - $v{open.length};
+			final _start: Int = ctx.pos - $v{open.length};
 			while (ctx.pos < ctx.input.length) {
 				if (ctx.input.charCodeAt(ctx.pos) == '\n'.code) break;
 				ctx.pos++;
 			}
-			final _verbatim:String = ctx.input.substring(_start, ctx.pos);
+			final _verbatim: String = ctx.input.substring(_start, ctx.pos);
 			final _pt = ctx.pendingTrivia;
 			if (_pt == null) {
 				ctx.pendingTrivia = {
@@ -322,10 +314,10 @@ class Codegen {
 			}
 			continue;
 		}
-		final close:String = p.close;
+		final close: String = p.close;
 		return macro if (matchLit(ctx, $v{open})) {
-			final _start:Int = ctx.pos - $v{open.length};
-			var _end:Int = ctx.pos;
+			final _start: Int = ctx.pos - $v{open.length};
+			var _end: Int = ctx.pos;
 			while (ctx.pos < ctx.input.length) {
 				if (matchLit(ctx, $v{close})) {
 					_end = ctx.pos;
@@ -333,7 +325,7 @@ class Codegen {
 				}
 				ctx.pos++;
 			}
-			final _verbatim:String = ctx.input.substring(_start, _end);
+			final _verbatim: String = ctx.input.substring(_start, _end);
 			final _pt = ctx.pendingTrivia;
 			if (_pt == null) {
 				ctx.pendingTrivia = {
@@ -349,18 +341,18 @@ class Codegen {
 		}
 	}
 
-	private static function matchLitField():Field {
+	private static function matchLitField(): Field {
 		return {
 			name: 'matchLit',
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{name: 'ctx', type: macro : anyparse.runtime.Parser},
-					{name: 'lit', type: macro : String},
+					{ name: 'ctx', type: macro :anyparse.runtime.Parser },
+					{ name: 'lit', type: macro :String },
 				],
-				ret: macro : Bool,
+				ret: macro :Bool,
 				expr: macro {
-					final len:Int = lit.length;
+					final len: Int = lit.length;
 					if (ctx.pos + len > ctx.input.length) {
 						ctx.recordFail(ctx.pos, lit);
 						return false;
@@ -387,18 +379,18 @@ class Codegen {
 	 * before cannot disambiguate multi-byte close delimiters from
 	 * element content sharing the same first byte.
 	 */
-	private static function peekLitField():Field {
+	private static function peekLitField(): Field {
 		return {
 			name: 'peekLit',
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{name: 'ctx', type: macro : anyparse.runtime.Parser},
-					{name: 'lit', type: macro : String},
+					{ name: 'ctx', type: macro :anyparse.runtime.Parser },
+					{ name: 'lit', type: macro :String },
 				],
-				ret: macro : Bool,
+				ret: macro :Bool,
 				expr: macro {
-					final len:Int = lit.length;
+					final len: Int = lit.length;
 					if (ctx.pos + len > ctx.input.length) return false;
 					return ctx.input.substring(ctx.pos, ctx.pos + len) == lit;
 				},
@@ -421,26 +413,24 @@ class Codegen {
 	 * statement-arm separator — if-then-body, switch case label, switch
 	 * default label respectively).
 	 */
-	private static function peekKwField():Field {
+	private static function peekKwField(): Field {
 		return {
 			name: 'peekKw',
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{name: 'ctx', type: macro : anyparse.runtime.Parser},
-					{name: 'keyword', type: macro : String},
+					{ name: 'ctx', type: macro :anyparse.runtime.Parser },
+					{ name: 'keyword', type: macro :String },
 				],
-				ret: macro : Bool,
+				ret: macro :Bool,
 				expr: macro {
-					final len:Int = keyword.length;
+					final len: Int = keyword.length;
 					if (ctx.pos + len > ctx.input.length) return false;
 					if (ctx.input.substring(ctx.pos, ctx.pos + len) != keyword) return false;
 					if (ctx.pos + len < ctx.input.length) {
-						final c:Int = ctx.input.charCodeAt(ctx.pos + len);
-						final isWord:Bool = (c >= 'a'.code && c <= 'z'.code)
-							|| (c >= 'A'.code && c <= 'Z'.code)
-							|| (c >= '0'.code && c <= '9'.code)
-							|| c == '_'.code;
+						final c: Int = ctx.input.charCodeAt(ctx.pos + len);
+						final isWord: Bool = (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code)
+						|| (c >= '0'.code && c <= '9'.code) || c == '_'.code;
 						if (isWord) return false;
 					}
 					return true;
@@ -450,22 +440,19 @@ class Codegen {
 		};
 	}
 
-	private static function expectLitField():Field {
+	private static function expectLitField(): Field {
 		return {
 			name: 'expectLit',
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{name: 'ctx', type: macro : anyparse.runtime.Parser},
-					{name: 'lit', type: macro : String},
+					{ name: 'ctx', type: macro :anyparse.runtime.Parser },
+					{ name: 'lit', type: macro :String },
 				],
-				ret: macro : Void,
+				ret: macro :Void,
 				expr: macro {
 					if (!matchLit(ctx, lit)) {
-						throw new anyparse.runtime.ParseError(
-							new anyparse.runtime.Span(ctx.pos, ctx.pos),
-							'expected "' + lit + '"'
-						);
+						throw new anyparse.runtime.ParseError(new anyparse.runtime.Span(ctx.pos, ctx.pos), 'expected "' + lit + '"');
 					}
 				},
 			}),
@@ -485,25 +472,23 @@ class Codegen {
 	 * word-boundary check is emitted only when the literal ends with a
 	 * word character, determined at macro time by `Lowering`.
 	 */
-	private static function matchKwField():Field {
+	private static function matchKwField(): Field {
 		return {
 			name: 'matchKw',
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{name: 'ctx', type: macro : anyparse.runtime.Parser},
-					{name: 'keyword', type: macro : String},
+					{ name: 'ctx', type: macro :anyparse.runtime.Parser },
+					{ name: 'keyword', type: macro :String },
 				],
-				ret: macro : Bool,
+				ret: macro :Bool,
 				expr: macro {
-					final _savedPos:Int = ctx.pos;
+					final _savedPos: Int = ctx.pos;
 					if (!matchLit(ctx, keyword)) return false;
 					if (ctx.pos < ctx.input.length) {
-						final c:Int = ctx.input.charCodeAt(ctx.pos);
-						final isWord:Bool = (c >= 'a'.code && c <= 'z'.code)
-							|| (c >= 'A'.code && c <= 'Z'.code)
-							|| (c >= '0'.code && c <= '9'.code)
-							|| c == '_'.code;
+						final c: Int = ctx.input.charCodeAt(ctx.pos);
+						final isWord: Bool = (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code)
+						|| (c >= '0'.code && c <= '9'.code) || c == '_'.code;
 						if (isWord) {
 							ctx.pos = _savedPos;
 							return false;
@@ -526,33 +511,29 @@ class Codegen {
 	 * captures `ctx.pos` before invoking the branch and resets it on any
 	 * thrown `ParseError`, which covers this case automatically.
 	 */
-	private static function expectKwField():Field {
+	private static function expectKwField(): Field {
 		return {
 			name: 'expectKw',
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{name: 'ctx', type: macro : anyparse.runtime.Parser},
-					{name: 'keyword', type: macro : String},
+					{ name: 'ctx', type: macro :anyparse.runtime.Parser },
+					{ name: 'keyword', type: macro :String },
 				],
-				ret: macro : Void,
+				ret: macro :Void,
 				expr: macro {
 					if (!matchLit(ctx, keyword)) {
 						throw new anyparse.runtime.ParseError(
-							new anyparse.runtime.Span(ctx.pos, ctx.pos),
-							'expected keyword "' + keyword + '"'
+							new anyparse.runtime.Span(ctx.pos, ctx.pos), 'expected keyword "' + keyword + '"'
 						);
 					}
 					if (ctx.pos < ctx.input.length) {
-						final c:Int = ctx.input.charCodeAt(ctx.pos);
-						final isWord:Bool = (c >= 'a'.code && c <= 'z'.code)
-							|| (c >= 'A'.code && c <= 'Z'.code)
-							|| (c >= '0'.code && c <= '9'.code)
-							|| c == '_'.code;
+						final c: Int = ctx.input.charCodeAt(ctx.pos);
+						final isWord: Bool = (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code)
+						|| (c >= '0'.code && c <= '9'.code) || c == '_'.code;
 						if (isWord) {
 							throw new anyparse.runtime.ParseError(
-								new anyparse.runtime.Span(ctx.pos, ctx.pos),
-								'expected keyword "' + keyword + '"'
+								new anyparse.runtime.Span(ctx.pos, ctx.pos), 'expected keyword "' + keyword + '"'
 							);
 						}
 					}
@@ -582,13 +563,13 @@ class Codegen {
 	 * Non-trivia parsers keep `skipWs` as their single whitespace
 	 * handler.
 	 */
-	private static function collectTriviaField(formatInfo:FormatReader.FormatInfo):Field {
-		final commentStmts:Array<Expr> = [for (p in formatInfo.commentPatterns) commentCaptureBlock(p)];
-		final body:Expr = macro {
-			var _blankBefore:Bool = false;
-			var _blankAfterLeadingComments:Bool = false;
-			var _newlineBefore:Bool = false;
-			final _leading:Array<String> = [];
+	private static function collectTriviaField(formatInfo: FormatReader.FormatInfo): Field {
+		final commentStmts: Array<Expr> = [for (p in formatInfo.commentPatterns) commentCaptureBlock(p)];
+		final body: Expr = macro {
+			var _blankBefore: Bool = false;
+			var _blankAfterLeadingComments: Bool = false;
+			var _newlineBefore: Bool = false;
+			final _leading: Array<String> = [];
 			// Drain any trivia that a previous rule captured between an
 			// @:optional @:kw commit and its sub-rule call (slice ω₆b).
 			final _pt = ctx.pendingTrivia;
@@ -599,9 +580,9 @@ class Codegen {
 				for (_c in _pt.leadingComments) _leading.push(_c);
 				ctx.pendingTrivia = null;
 			}
-			var _nl:Int = 0;
+			var _nl: Int = 0;
 			while (ctx.pos < ctx.input.length) {
-				final c:Int = ctx.input.charCodeAt(ctx.pos);
+				final c: Int = ctx.input.charCodeAt(ctx.pos);
 				if (c == '\n'.code) {
 					ctx.pos++;
 					_nl++;
@@ -612,8 +593,10 @@ class Codegen {
 					// lets the writer reproduce `\n\n// c\n\nnode` faithfully
 					// — single-bool flag would conflate both gaps.
 					if (_nl >= 2) {
-						if (_leading.length == 0) _blankBefore = true;
-						else _blankAfterLeadingComments = true;
+						if (_leading.length == 0)
+							_blankBefore = true;
+						else
+							_blankAfterLeadingComments = true;
 					}
 					continue;
 				}
@@ -632,7 +615,7 @@ class Codegen {
 			// (`/* c */ field`). The writer keeps a same-line block comment
 			// on the field's line instead of force-breaking. False whenever
 			// `_leading` is empty (no leading comment to glue).
-			final _newlineAfterLeadingComments:Bool = _nl > 0;
+			final _newlineAfterLeadingComments: Bool = _nl > 0;
 			return {
 				blankBefore: _blankBefore,
 				blankAfterLeadingComments: _blankAfterLeadingComments,
@@ -645,8 +628,14 @@ class Codegen {
 			name: 'collectTrivia',
 			access: [APrivate, AStatic],
 			kind: FFun({
-				args: [{name: 'ctx', type: macro : anyparse.runtime.Parser}],
-				ret: macro : {blankBefore:Bool, blankAfterLeadingComments:Bool, newlineBefore:Bool, newlineAfterLeadingComments:Bool, leadingComments:Array<String>},
+				args: [{ name: 'ctx', type: macro :anyparse.runtime.Parser }],
+				ret: macro :{
+					blankBefore: Bool,
+					blankAfterLeadingComments: Bool,
+					newlineBefore: Bool,
+					newlineAfterLeadingComments: Bool,
+					leadingComments: Array<String>
+				},
 				expr: body,
 			}),
 			pos: Context.currentPos(),
@@ -665,12 +654,12 @@ class Codegen {
 	 * leading capture. Returns the comment body (delimiters stripped)
 	 * or `null`.
 	 */
-	private static function collectTrailingField(formatInfo:FormatReader.FormatInfo):Field {
-		final attempts:Array<Expr> = [for (p in formatInfo.commentPatterns) trailingAttemptBlock(p)];
-		final body:Expr = macro {
-			final _savedPos:Int = ctx.pos;
+	private static function collectTrailingField(formatInfo: FormatReader.FormatInfo): Field {
+		final attempts: Array<Expr> = [for (p in formatInfo.commentPatterns) trailingAttemptBlock(p)];
+		final body: Expr = macro {
+			final _savedPos: Int = ctx.pos;
 			while (ctx.pos < ctx.input.length) {
-				final c:Int = ctx.input.charCodeAt(ctx.pos);
+				final c: Int = ctx.input.charCodeAt(ctx.pos);
 				if (c == ' '.code || c == '\t'.code || c == '\r'.code || c == 0xFEFF) {
 					ctx.pos++;
 					continue;
@@ -679,14 +668,14 @@ class Codegen {
 			}
 			$b{attempts};
 			ctx.pos = _savedPos;
-			return (null : Null<String>);
+			return (null: Null<String>);
 		};
 		return {
 			name: 'collectTrailing',
 			access: [APrivate, AStatic],
 			kind: FFun({
-				args: [{name: 'ctx', type: macro : anyparse.runtime.Parser}],
-				ret: macro : Null<String>,
+				args: [{ name: 'ctx', type: macro :anyparse.runtime.Parser }],
+				ret: macro :Null<String>,
 				expr: body,
 			}),
 			pos: Context.currentPos(),
@@ -700,9 +689,9 @@ class Codegen {
 	 * `<field>BeforeKwNewline` / `<field>BodyOnSameLine` slots that
 	 * drive the writer's `Keep` branches. Trivia-mode only.
 	 */
-	private static function hasNewlineInField():Field {
-		final body:Expr = macro {
-			var i:Int = from;
+	private static function hasNewlineInField(): Field {
+		final body: Expr = macro {
+			var i: Int = from;
 			while (i < to) {
 				if (input.charCodeAt(i) == '\n'.code) return true;
 				i++;
@@ -714,11 +703,11 @@ class Codegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{name: 'input', type: macro : anyparse.runtime.Input},
-					{name: 'from', type: macro : Int},
-					{name: 'to', type: macro : Int},
+					{ name: 'input', type: macro :anyparse.runtime.Input },
+					{ name: 'from', type: macro :Int },
+					{ name: 'to', type: macro :Int },
 				],
-				ret: macro : Bool,
+				ret: macro :Bool,
 				expr: body,
 			}),
 			pos: Context.currentPos(),
@@ -734,10 +723,10 @@ class Codegen {
 	 * `<open><body><close>`. Resets the `_nl` newline counter so a
 	 * subsequent blank line is still recognised.
 	 */
-	private static function commentCaptureBlock(p:FormatReader.CommentPattern):Expr {
-		final open:String = p.open;
+	private static function commentCaptureBlock(p: FormatReader.CommentPattern): Expr {
+		final open: String = p.open;
 		if (p.lineTerminated) return macro if (matchLit(ctx, $v{open})) {
-			final _start:Int = ctx.pos - $v{open.length};
+			final _start: Int = ctx.pos - $v{open.length};
 			while (ctx.pos < ctx.input.length) {
 				if (ctx.input.charCodeAt(ctx.pos) == '\n'.code) break;
 				ctx.pos++;
@@ -754,10 +743,10 @@ class Codegen {
 			_nl = 0;
 			continue;
 		}
-		final close:String = p.close;
+		final close: String = p.close;
 		return macro if (matchLit(ctx, $v{open})) {
-			final _start:Int = ctx.pos - $v{open.length};
-			var _end:Int = ctx.pos;
+			final _start: Int = ctx.pos - $v{open.length};
+			var _end: Int = ctx.pos;
 			while (ctx.pos < ctx.input.length) {
 				if (matchLit(ctx, $v{close})) {
 					_end = ctx.pos;
@@ -779,24 +768,24 @@ class Codegen {
 	 * trailing `\n`). Block-style bails on internal newline — the caller
 	 * treats a newline-bearing block comment as leading-of-next.
 	 */
-	private static function trailingAttemptBlock(p:FormatReader.CommentPattern):Expr {
-		final open:String = p.open;
+	private static function trailingAttemptBlock(p: FormatReader.CommentPattern): Expr {
+		final open: String = p.open;
 		if (p.lineTerminated) return macro if (matchLit(ctx, $v{open})) {
-			final _start:Int = ctx.pos;
+			final _start: Int = ctx.pos;
 			while (ctx.pos < ctx.input.length) {
 				if (ctx.input.charCodeAt(ctx.pos) == '\n'.code) break;
 				ctx.pos++;
 			}
 			return ctx.input.substring(_start, ctx.pos);
 		}
-		final close:String = p.close;
-		final closeLen:Int = close.length;
+		final close: String = p.close;
+		final closeLen: Int = close.length;
 		return macro if (matchLit(ctx, $v{open})) {
-			final _start:Int = ctx.pos;
-			var _found:Bool = false;
-			var _end:Int = ctx.pos;
+			final _start: Int = ctx.pos;
+			var _found: Bool = false;
+			var _end: Int = ctx.pos;
 			while (ctx.pos < ctx.input.length) {
-				final _c:Int = ctx.input.charCodeAt(ctx.pos);
+				final _c: Int = ctx.input.charCodeAt(ctx.pos);
 				if (_c == '\n'.code) break;
 				if (matchLit(ctx, $v{close})) {
 					_end = ctx.pos - $v{closeLen};
@@ -807,7 +796,7 @@ class Codegen {
 			}
 			if (_found) return ctx.input.substring(_start, _end);
 			ctx.pos = _savedPos;
-			return (null : Null<String>);
+			return (null: Null<String>);
 		}
 	}
 
@@ -824,12 +813,12 @@ class Codegen {
 	 * normalise to line style — a stronger contract only applies to the
 	 * close-trailing slot.
 	 */
-	private static function collectTrailingFullField(formatInfo:FormatReader.FormatInfo):Field {
-		final attempts:Array<Expr> = [for (p in formatInfo.commentPatterns) trailingFullAttemptBlock(p)];
-		final body:Expr = macro {
-			final _savedPos:Int = ctx.pos;
+	private static function collectTrailingFullField(formatInfo: FormatReader.FormatInfo): Field {
+		final attempts: Array<Expr> = [for (p in formatInfo.commentPatterns) trailingFullAttemptBlock(p)];
+		final body: Expr = macro {
+			final _savedPos: Int = ctx.pos;
 			while (ctx.pos < ctx.input.length) {
-				final c:Int = ctx.input.charCodeAt(ctx.pos);
+				final c: Int = ctx.input.charCodeAt(ctx.pos);
 				if (c == ' '.code || c == '\t'.code || c == '\r'.code || c == 0xFEFF) {
 					ctx.pos++;
 					continue;
@@ -838,14 +827,14 @@ class Codegen {
 			}
 			$b{attempts};
 			ctx.pos = _savedPos;
-			return (null : Null<String>);
+			return (null: Null<String>);
 		};
 		return {
 			name: 'collectTrailingFull',
 			access: [APrivate, AStatic],
 			kind: FFun({
-				args: [{name: 'ctx', type: macro : anyparse.runtime.Parser}],
-				ret: macro : Null<String>,
+				args: [{ name: 'ctx', type: macro :anyparse.runtime.Parser }],
+				ret: macro :Null<String>,
 				expr: body,
 			}),
 			pos: Context.currentPos(),
@@ -858,23 +847,23 @@ class Codegen {
 	 * (no trailing `\n`); block-style returns `open + body + close` and
 	 * rejects internal newlines identically to the stripped variant.
 	 */
-	private static function trailingFullAttemptBlock(p:FormatReader.CommentPattern):Expr {
-		final open:String = p.open;
+	private static function trailingFullAttemptBlock(p: FormatReader.CommentPattern): Expr {
+		final open: String = p.open;
 		if (p.lineTerminated) return macro if (matchLit(ctx, $v{open})) {
-			final _start:Int = ctx.pos - $v{open.length};
+			final _start: Int = ctx.pos - $v{open.length};
 			while (ctx.pos < ctx.input.length) {
 				if (ctx.input.charCodeAt(ctx.pos) == '\n'.code) break;
 				ctx.pos++;
 			}
 			return ctx.input.substring(_start, ctx.pos);
 		}
-		final close:String = p.close;
+		final close: String = p.close;
 		return macro if (matchLit(ctx, $v{open})) {
-			final _start:Int = ctx.pos - $v{open.length};
-			var _found:Bool = false;
-			var _end:Int = ctx.pos;
+			final _start: Int = ctx.pos - $v{open.length};
+			var _found: Bool = false;
+			var _end: Int = ctx.pos;
 			while (ctx.pos < ctx.input.length) {
-				final _c:Int = ctx.input.charCodeAt(ctx.pos);
+				final _c: Int = ctx.input.charCodeAt(ctx.pos);
 				if (_c == '\n'.code) break;
 				if (matchLit(ctx, $v{close})) {
 					_end = ctx.pos;
@@ -885,13 +874,14 @@ class Codegen {
 			}
 			if (_found) return ctx.input.substring(_start, _end);
 			ctx.pos = _savedPos;
-			return (null : Null<String>);
+			return (null: Null<String>);
 		}
 	}
 
-	private static function simpleName(typePath:String):String {
-		final idx:Int = typePath.lastIndexOf('.');
+	private static function simpleName(typePath: String): String {
+		final idx: Int = typePath.lastIndexOf('.');
 		return idx == -1 ? typePath : typePath.substring(idx + 1);
 	}
+
 }
 #end

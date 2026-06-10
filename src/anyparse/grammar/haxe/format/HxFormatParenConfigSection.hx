@@ -22,13 +22,13 @@ package anyparse.grammar.haxe.format;
  */
 @:peg typedef HxFormatParenConfigSection = {
 
-	@:optional var funcParamParens:HxFormatParenPolicySection;
-	@:optional var callParens:HxFormatParenPolicySection;
-	@:optional var anonFuncParamParens:HxFormatParenPolicySection;
-	@:optional var ifConditionParens:HxFormatParenPolicySection;
-	@:optional var whileConditionParens:HxFormatParenPolicySection;
-	@:optional var switchConditionParens:HxFormatParenPolicySection;
-	@:optional var catchParens:HxFormatParenPolicySection;
-	@:optional var sharpConditionParens:HxFormatParenPolicySection;
-	@:optional var conditionParens:HxFormatParenPolicySection;
+	@:optional var funcParamParens: HxFormatParenPolicySection;
+	@:optional var callParens: HxFormatParenPolicySection;
+	@:optional var anonFuncParamParens: HxFormatParenPolicySection;
+	@:optional var ifConditionParens: HxFormatParenPolicySection;
+	@:optional var whileConditionParens: HxFormatParenPolicySection;
+	@:optional var switchConditionParens: HxFormatParenPolicySection;
+	@:optional var catchParens: HxFormatParenPolicySection;
+	@:optional var sharpConditionParens: HxFormatParenPolicySection;
+	@:optional var conditionParens: HxFormatParenPolicySection;
 };

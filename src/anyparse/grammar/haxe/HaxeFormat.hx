@@ -56,31 +56,31 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
 @:nullSafety(Strict)
 final class HaxeFormat implements TextFormat {
 
-	public static final instance:HaxeFormat = new HaxeFormat();
+	public static final instance: HaxeFormat = new HaxeFormat();
 
-	public var name(default, null):String = 'Haxe';
-	public var version(default, null):String = '4';
-	public var encoding(default, null):Encoding = Encoding.UTF8;
+	public var name(default, null): String = 'Haxe';
+	public var version(default, null): String = '4';
+	public var encoding(default, null): Encoding = Encoding.UTF8;
 
-	public var mappingOpen(default, null):String = '{';
-	public var mappingClose(default, null):String = '}';
-	public var sequenceOpen(default, null):Null<String> = null;
-	public var sequenceClose(default, null):Null<String> = null;
-	public var keyValueSep(default, null):String = ':';
-	public var entrySep(default, null):String = ',';
+	public var mappingOpen(default, null): String = '{';
+	public var mappingClose(default, null): String = '}';
+	public var sequenceOpen(default, null): Null<String> = null;
+	public var sequenceClose(default, null): Null<String> = null;
+	public var keyValueSep(default, null): String = ':';
+	public var entrySep(default, null): String = ',';
 
-	public var whitespace(default, null):String = ' \t\n\r';
-	public var lineComment(default, null):Null<String> = '//';
-	public var blockComment(default, null):Null<BlockCommentDelims> = {open: '/*', close: '*/'};
+	public var whitespace(default, null): String = ' \t\n\r';
+	public var lineComment(default, null): Null<String> = '//';
+	public var blockComment(default, null): Null<BlockCommentDelims> = { open: '/*', close: '*/' };
 
-	public var keySyntax(default, null):KeySyntax = KeySyntax.Unquoted;
-	public var stringQuote(default, null):Array<String> = ['"', "'"];
+	public var keySyntax(default, null): KeySyntax = KeySyntax.Unquoted;
+	public var stringQuote(default, null): Array<String> = ['"', "'"];
 
-	public var fieldLookup(default, null):FieldLookup = FieldLookup.ByName;
+	public var fieldLookup(default, null): FieldLookup = FieldLookup.ByName;
 
-	public var trailingSep(default, null):TrailingSepPolicy = TrailingSepPolicy.Disallowed;
-	public var onMissing(default, null):MissingPolicy = MissingPolicy.Error;
-	public var onUnknown(default, null):UnknownPolicy = UnknownPolicy.Error;
+	public var trailingSep(default, null): TrailingSepPolicy = TrailingSepPolicy.Disallowed;
+	public var onMissing(default, null): MissingPolicy = MissingPolicy.Error;
+	public var onUnknown(default, null): UnknownPolicy = UnknownPolicy.Error;
 
 	/**
 	 * Star struct field open-delimiters that take a leading space from
@@ -89,7 +89,7 @@ final class HaxeFormat implements TextFormat {
 	 * `function main()` / `a[0]` / `new Foo(x)` rather than
 	 * `function main ()` / `a [0]` / `new Foo (x)`.
 	 */
-	public var spacedLeads(default, null):Array<String> = ['{'];
+	public var spacedLeads(default, null): Array<String> = ['{'];
 
 	/**
 	 * Optional `@:lead(...)` strings that emit tight — no leading
@@ -99,12 +99,12 @@ final class HaxeFormat implements TextFormat {
 	 * spaced ` : ` that would be applied to keyword-like leads
 	 * (`else`, `catch`).
 	 */
-	public var tightLeads(default, null):Array<String> = [':'];
+	public var tightLeads(default, null): Array<String> = [':'];
 
-	public var intLiteral(default, null):EReg = ~/^-?(?:0|[1-9][0-9]*)/;
-	public var floatLiteral(default, null):EReg = ~/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][-+]?[0-9]+)?/;
-	public var boolLiterals(default, null):Null<BoolLiterals> = {trueLit: 'true', falseLit: 'false'};
-	public var nullLiteral(default, null):Null<String> = 'null';
+	public var intLiteral(default, null): EReg = ~/^-?(?:0|[1-9][0-9]*)/;
+	public var floatLiteral(default, null): EReg = ~/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][-+]?[0-9]+)?/;
+	public var boolLiterals(default, null): Null<BoolLiterals> = { trueLit: 'true', falseLit: 'false' };
+	public var nullLiteral(default, null): Null<String> = 'null';
 
 	/**
 	 * Default `WriteOptions` for Haxe output: tab indent, 4-column tab
@@ -632,7 +632,7 @@ final class HaxeFormat implements TextFormat {
 	 * reflection — the macro emits direct field access + `length > 0`
 	 * comparison.
 	 */
-	public var defaultWriteOptions(default, null):HxModuleWriteOptions = {
+	public var defaultWriteOptions(default, null): HxModuleWriteOptions = {
 		indentChar: Tab,
 		indentSize: 1,
 		tabWidth: 4,
@@ -831,31 +831,31 @@ final class HaxeFormat implements TextFormat {
 	 * `defaultWriteOptions.objectLiteralWrap` substruct doesn't corrupt
 	 * the singleton.
 	 */
-	public static function defaultObjectLiteralWrap():WrapRules {
+	public static function defaultObjectLiteralWrap(): WrapRules {
 		return {
 			rules: [
 				{
 					mode: WrapMode.NoWrap,
 					conditions: [
-						{cond: WrapConditionType.ItemCountLessThan, value: 3},
-						{cond: WrapConditionType.ExceedsMaxLineLength, value: 0},
+						{ cond: WrapConditionType.ItemCountLessThan, value: 3 },
+						{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 },
 					],
 				},
 				{
 					mode: WrapMode.OnePerLine,
-					conditions: [{cond: WrapConditionType.AnyItemLengthLargerThan, value: 30}],
+					conditions: [{ cond: WrapConditionType.AnyItemLengthLargerThan, value: 30 }],
 				},
 				{
 					mode: WrapMode.OnePerLine,
-					conditions: [{cond: WrapConditionType.TotalItemLengthLargerThan, value: 60}],
+					conditions: [{ cond: WrapConditionType.TotalItemLengthLargerThan, value: 60 }],
 				},
 				{
 					mode: WrapMode.OnePerLine,
-					conditions: [{cond: WrapConditionType.ItemCountLargerThan, value: 4}],
+					conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 4 }],
 				},
 				{
 					mode: WrapMode.OnePerLine,
-					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
+					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }],
 				},
 			],
 			defaultMode: WrapMode.NoWrap,
@@ -879,28 +879,28 @@ final class HaxeFormat implements TextFormat {
 	 * `defaultWriteOptions.callParameterWrap` substruct doesn't corrupt
 	 * the singleton.
 	 */
-	public static function defaultCallParameterWrap():WrapRules {
+	public static function defaultCallParameterWrap(): WrapRules {
 		return {
 			rules: [
 				{
 					mode: WrapMode.FillLine,
-					conditions: [{cond: WrapConditionType.ItemCountLargerThan, value: 7}],
+					conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 7 }],
 				},
 				{
 					mode: WrapMode.FillLine,
-					conditions: [{cond: WrapConditionType.TotalItemLengthLargerThan, value: 140}],
+					conditions: [{ cond: WrapConditionType.TotalItemLengthLargerThan, value: 140 }],
 				},
 				{
 					mode: WrapMode.FillLine,
-					conditions: [{cond: WrapConditionType.AnyItemLengthLargerThan, value: 80}],
+					conditions: [{ cond: WrapConditionType.AnyItemLengthLargerThan, value: 80 }],
 				},
 				{
 					mode: WrapMode.FillLine,
-					conditions: [{cond: WrapConditionType.LineLengthLargerThan, value: 160}],
+					conditions: [{ cond: WrapConditionType.LineLengthLargerThan, value: 160 }],
 				},
 				{
 					mode: WrapMode.FillLine,
-					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
+					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }],
 				},
 			],
 			defaultMode: WrapMode.NoWrap,
@@ -923,35 +923,35 @@ final class HaxeFormat implements TextFormat {
 	 * mutates the `defaultWriteOptions.arrayLiteralWrap` substruct
 	 * doesn't corrupt the singleton.
 	 */
-	public static function defaultArrayLiteralWrap():WrapRules {
+	public static function defaultArrayLiteralWrap(): WrapRules {
 		return {
 			rules: [
 				{
 					mode: WrapMode.OnePerLine,
-					conditions: [{cond: WrapConditionType.HasMultilineItems, value: 1}],
+					conditions: [{ cond: WrapConditionType.HasMultilineItems, value: 1 }],
 				},
 				{
 					mode: WrapMode.NoWrap,
-					conditions: [{cond: WrapConditionType.TotalItemLengthLessThan, value: 80}],
+					conditions: [{ cond: WrapConditionType.TotalItemLengthLessThan, value: 80 }],
 				},
 				{
 					mode: WrapMode.OnePerLine,
-					conditions: [{cond: WrapConditionType.AnyItemLengthLargerThan, value: 30}],
+					conditions: [{ cond: WrapConditionType.AnyItemLengthLargerThan, value: 30 }],
 				},
 				{
 					mode: WrapMode.FillLineWithLeadingBreak,
 					conditions: [
-						{cond: WrapConditionType.AllItemLengthsLessThan, value: 10},
-						{cond: WrapConditionType.ItemCountLargerThan, value: 10},
+						{ cond: WrapConditionType.AllItemLengthsLessThan, value: 10 },
+						{ cond: WrapConditionType.ItemCountLargerThan, value: 10 },
 					],
 				},
 				{
 					mode: WrapMode.OnePerLine,
-					conditions: [{cond: WrapConditionType.ItemCountLargerThan, value: 4}],
+					conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 4 }],
 				},
 				{
 					mode: WrapMode.OnePerLine,
-					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
+					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }],
 				},
 			],
 			defaultMode: WrapMode.NoWrap,
@@ -977,20 +977,20 @@ final class HaxeFormat implements TextFormat {
 	 * `defaultWriteOptions.multiVarWrap` substruct doesn't corrupt the
 	 * singleton.
 	 */
-	public static function defaultMultiVarWrap():WrapRules {
+	public static function defaultMultiVarWrap(): WrapRules {
 		return {
 			rules: [
 				{
 					mode: WrapMode.FillLine,
-					conditions: [{cond: WrapConditionType.AllItemLengthsLessThan, value: 15}],
+					conditions: [{ cond: WrapConditionType.AllItemLengthsLessThan, value: 15 }],
 				},
 				{
 					mode: WrapMode.OnePerLineAfterFirst,
-					conditions: [{cond: WrapConditionType.LineLengthLargerThan, value: 80}],
+					conditions: [{ cond: WrapConditionType.LineLengthLargerThan, value: 80 }],
 				},
 				{
 					mode: WrapMode.OnePerLineAfterFirst,
-					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
+					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }],
 				},
 			],
 			defaultMode: WrapMode.NoWrap,
@@ -1010,16 +1010,16 @@ final class HaxeFormat implements TextFormat {
 	 * `defaultWriteOptions.casePattern` substruct doesn't corrupt the
 	 * singleton.
 	 */
-	public static function defaultCasePatternWrap():WrapRules {
+	public static function defaultCasePatternWrap(): WrapRules {
 		return {
 			rules: [
 				{
 					mode: WrapMode.FillLine,
-					conditions: [{cond: WrapConditionType.ItemCountLargerThan, value: 2}],
+					conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 2 }],
 				},
 				{
 					mode: WrapMode.FillLine,
-					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
+					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }],
 				},
 			],
 			defaultMode: WrapMode.NoWrap,
@@ -1040,31 +1040,31 @@ final class HaxeFormat implements TextFormat {
 	 * `defaultWriteOptions.anonTypeWrap` substruct doesn't corrupt the
 	 * singleton.
 	 */
-	public static function defaultAnonTypeWrap():WrapRules {
+	public static function defaultAnonTypeWrap(): WrapRules {
 		return {
 			rules: [
 				{
 					mode: WrapMode.NoWrap,
 					conditions: [
-						{cond: WrapConditionType.ItemCountLessThan, value: 3},
-						{cond: WrapConditionType.ExceedsMaxLineLength, value: 0},
+						{ cond: WrapConditionType.ItemCountLessThan, value: 3 },
+						{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 },
 					],
 				},
 				{
 					mode: WrapMode.OnePerLine,
-					conditions: [{cond: WrapConditionType.AnyItemLengthLargerThan, value: 30}],
+					conditions: [{ cond: WrapConditionType.AnyItemLengthLargerThan, value: 30 }],
 				},
 				{
 					mode: WrapMode.OnePerLine,
-					conditions: [{cond: WrapConditionType.TotalItemLengthLargerThan, value: 60}],
+					conditions: [{ cond: WrapConditionType.TotalItemLengthLargerThan, value: 60 }],
 				},
 				{
 					mode: WrapMode.OnePerLine,
-					conditions: [{cond: WrapConditionType.ItemCountLargerThan, value: 4}],
+					conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 4 }],
 				},
 				{
 					mode: WrapMode.NoWrap,
-					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
+					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }],
 				},
 			],
 			defaultMode: WrapMode.NoWrap,
@@ -1101,41 +1101,41 @@ final class HaxeFormat implements TextFormat {
 	 * the `defaultWriteOptions.methodChainWrap` substruct doesn't
 	 * corrupt the singleton.
 	 */
-	public static function defaultMethodChainWrap():WrapRules {
+	public static function defaultMethodChainWrap(): WrapRules {
 		return {
 			rules: [
 				{
 					mode: WrapMode.OnePerLineAfterFirst,
-					conditions: [{cond: WrapConditionType.LineLengthLargerThan, value: 160}],
+					conditions: [{ cond: WrapConditionType.LineLengthLargerThan, value: 160 }],
 				},
 				{
 					mode: WrapMode.NoWrap,
 					conditions: [
-						{cond: WrapConditionType.ItemCountLessThan, value: 3},
-						{cond: WrapConditionType.ExceedsMaxLineLength, value: 0},
+						{ cond: WrapConditionType.ItemCountLessThan, value: 3 },
+						{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 },
 					],
 				},
 				{
 					mode: WrapMode.NoWrap,
 					conditions: [
-						{cond: WrapConditionType.TotalItemLengthLessThan, value: 80},
-						{cond: WrapConditionType.ExceedsMaxLineLength, value: 0},
+						{ cond: WrapConditionType.TotalItemLengthLessThan, value: 80 },
+						{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 },
 					],
 				},
 				{
 					mode: WrapMode.OnePerLineAfterFirst,
 					conditions: [
-						{cond: WrapConditionType.AnyItemLengthLargerThan, value: 30},
-						{cond: WrapConditionType.ItemCountLargerThan, value: 4},
+						{ cond: WrapConditionType.AnyItemLengthLargerThan, value: 30 },
+						{ cond: WrapConditionType.ItemCountLargerThan, value: 4 },
 					],
 				},
 				{
 					mode: WrapMode.OnePerLineAfterFirst,
-					conditions: [{cond: WrapConditionType.ItemCountLargerThan, value: 7}],
+					conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 7 }],
 				},
 				{
 					mode: WrapMode.OnePerLineAfterFirst,
-					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
+					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }],
 				},
 			],
 			defaultMode: WrapMode.NoWrap,
@@ -1182,35 +1182,35 @@ final class HaxeFormat implements TextFormat {
 	 * rules were redundant with rules 3 / 4 on the existing corpus and
 	 * carried real per-cascade `IfWidthExceeds(140, …)` probe overhead.
 	 */
-	public static function defaultOpBoolChainWrap():WrapRules {
+	public static function defaultOpBoolChainWrap(): WrapRules {
 		return {
 			rules: [
 				{
 					mode: WrapMode.NoWrap,
 					conditions: [
-						{cond: WrapConditionType.ItemCountLessThan, value: 3},
-						{cond: WrapConditionType.ExceedsMaxLineLength, value: 0},
+						{ cond: WrapConditionType.ItemCountLessThan, value: 3 },
+						{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 },
 					],
 				},
 				{
 					mode: WrapMode.NoWrap,
 					conditions: [
-						{cond: WrapConditionType.TotalItemLengthLessThan, value: 120},
-						{cond: WrapConditionType.ExceedsMaxLineLength, value: 0},
+						{ cond: WrapConditionType.TotalItemLengthLessThan, value: 120 },
+						{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 },
 					],
 				},
 				{
 					mode: WrapMode.OnePerLineAfterFirst,
 					location: WrappingLocation.BeforeLast,
 					conditions: [
-						{cond: WrapConditionType.ItemCountLargerThan, value: 4},
+						{ cond: WrapConditionType.ItemCountLargerThan, value: 4 },
 					],
 				},
 				{
 					mode: WrapMode.FillLine,
 					location: WrappingLocation.BeforeLast,
 					conditions: [
-						{cond: WrapConditionType.ExceedsMaxLineLength, value: 1},
+						{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 },
 					],
 				},
 			],
@@ -1256,35 +1256,35 @@ final class HaxeFormat implements TextFormat {
 	 * existing fail bucket as fork-divergence-by-design with a shifted
 	 * byte-diff signature (see project memory).
 	 */
-	public static function defaultOpAddSubChainWrap():WrapRules {
+	public static function defaultOpAddSubChainWrap(): WrapRules {
 		return {
 			rules: [
 				{
 					mode: WrapMode.NoWrap,
 					conditions: [
-						{cond: WrapConditionType.ItemCountLessThan, value: 3},
-						{cond: WrapConditionType.ExceedsMaxLineLength, value: 0},
+						{ cond: WrapConditionType.ItemCountLessThan, value: 3 },
+						{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 },
 					],
 				},
 				{
 					mode: WrapMode.NoWrap,
 					conditions: [
-						{cond: WrapConditionType.TotalItemLengthLessThan, value: 120},
-						{cond: WrapConditionType.ExceedsMaxLineLength, value: 0},
+						{ cond: WrapConditionType.TotalItemLengthLessThan, value: 120 },
+						{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 },
 					],
 				},
 				{
 					mode: WrapMode.OnePerLineAfterFirst,
 					location: WrappingLocation.BeforeLast,
 					conditions: [
-						{cond: WrapConditionType.ItemCountLargerThan, value: 4},
+						{ cond: WrapConditionType.ItemCountLargerThan, value: 4 },
 					],
 				},
 				{
 					mode: WrapMode.OnePerLineAfterFirst,
 					location: WrappingLocation.BeforeLast,
 					conditions: [
-						{cond: WrapConditionType.ExceedsMaxLineLength, value: 1},
+						{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 },
 					],
 				},
 			],
@@ -1307,7 +1307,7 @@ final class HaxeFormat implements TextFormat {
 	 * the `defaultWriteOptions.conditionWrap` substruct doesn't corrupt
 	 * the singleton.
 	 */
-	public static function defaultConditionWrap():WrapRules {
+	public static function defaultConditionWrap(): WrapRules {
 		return {
 			rules: [],
 			defaultMode: WrapMode.NoWrap,
@@ -1331,14 +1331,14 @@ final class HaxeFormat implements TextFormat {
 	 * the `defaultWriteOptions.ternaryWrap` substruct doesn't corrupt
 	 * the singleton.
 	 */
-	public static function defaultTernaryWrap():WrapRules {
+	public static function defaultTernaryWrap(): WrapRules {
 		return {
 			rules: [
 				{
 					mode: WrapMode.OnePerLineAfterFirst,
 					location: WrappingLocation.BeforeLast,
 					conditions: [
-						{cond: WrapConditionType.ExceedsMaxLineLength, value: 1},
+						{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 },
 					],
 				},
 			],
@@ -1361,7 +1361,7 @@ final class HaxeFormat implements TextFormat {
 	 * the `defaultWriteOptions.expressionWrappingWrap` substruct doesn't
 	 * corrupt the singleton.
 	 */
-	public static function defaultExpressionWrappingWrap():WrapRules {
+	public static function defaultExpressionWrappingWrap(): WrapRules {
 		return {
 			rules: [],
 			defaultMode: WrapMode.NoWrap,
@@ -1390,7 +1390,7 @@ final class HaxeFormat implements TextFormat {
 	 * the `defaultWriteOptions.functionSignatureWrap` substruct doesn't
 	 * corrupt the singleton.
 	 */
-	public static function defaultFunctionSignatureWrap():WrapRules {
+	public static function defaultFunctionSignatureWrap(): WrapRules {
 		return {
 			rules: [],
 			defaultMode: WrapMode.FillLine,
@@ -1418,20 +1418,20 @@ final class HaxeFormat implements TextFormat {
 	 * the `defaultWriteOptions.anonFunctionSignatureWrap` substruct
 	 * doesn't corrupt the singleton.
 	 */
-	public static function defaultAnonFunctionSignatureWrap():WrapRules {
+	public static function defaultAnonFunctionSignatureWrap(): WrapRules {
 		return {
 			rules: [
 				{
 					mode: WrapMode.FillLine,
-					conditions: [{cond: WrapConditionType.ItemCountLargerThan, value: 7}],
+					conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 7 }],
 				},
 				{
 					mode: WrapMode.FillLine,
-					conditions: [{cond: WrapConditionType.TotalItemLengthLargerThan, value: 80}],
+					conditions: [{ cond: WrapConditionType.TotalItemLengthLargerThan, value: 80 }],
 				},
 				{
 					mode: WrapMode.FillLine,
-					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
+					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }],
 				},
 			],
 			defaultMode: WrapMode.NoWrap,
@@ -1459,20 +1459,20 @@ final class HaxeFormat implements TextFormat {
 	 * the `defaultWriteOptions.metadataCallParameterWrap` substruct
 	 * doesn't corrupt the singleton.
 	 */
-	public static function defaultMetadataCallParameterWrap():WrapRules {
+	public static function defaultMetadataCallParameterWrap(): WrapRules {
 		return {
 			rules: [
 				{
 					mode: WrapMode.FillLine,
-					conditions: [{cond: WrapConditionType.TotalItemLengthLargerThan, value: 140}],
+					conditions: [{ cond: WrapConditionType.TotalItemLengthLargerThan, value: 140 }],
 				},
 				{
 					mode: WrapMode.FillLine,
-					conditions: [{cond: WrapConditionType.LineLengthLargerThan, value: 160}],
+					conditions: [{ cond: WrapConditionType.LineLengthLargerThan, value: 160 }],
 				},
 				{
 					mode: WrapMode.FillLine,
-					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
+					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }],
 				},
 			],
 			defaultMode: WrapMode.NoWrap,
@@ -1496,16 +1496,16 @@ final class HaxeFormat implements TextFormat {
 	 * the `defaultWriteOptions.typeParameterWrap` substruct doesn't
 	 * corrupt the singleton.
 	 */
-	public static function defaultTypeParameterWrap():WrapRules {
+	public static function defaultTypeParameterWrap(): WrapRules {
 		return {
 			rules: [
 				{
 					mode: WrapMode.FillLine,
-					conditions: [{cond: WrapConditionType.AnyItemLengthLargerThan, value: 50}],
+					conditions: [{ cond: WrapConditionType.AnyItemLengthLargerThan, value: 50 }],
 				},
 				{
 					mode: WrapMode.FillLine,
-					conditions: [{cond: WrapConditionType.TotalItemLengthLargerThan, value: 70}],
+					conditions: [{ cond: WrapConditionType.TotalItemLengthLargerThan, value: 70 }],
 				},
 			],
 			defaultMode: WrapMode.NoWrap,
@@ -1527,20 +1527,20 @@ final class HaxeFormat implements TextFormat {
 	 * Fresh struct per call (mutation safety) — same convention as the
 	 * other `default*Wrap` helpers.
 	 */
-	public static function defaultImplementsExtendsWrap():WrapRules {
+	public static function defaultImplementsExtendsWrap(): WrapRules {
 		return {
 			rules: [
 				{
 					mode: WrapMode.FillLine,
-					conditions: [{cond: WrapConditionType.LineLengthLargerThan, value: 140}],
+					conditions: [{ cond: WrapConditionType.LineLengthLargerThan, value: 140 }],
 				},
 				{
 					mode: WrapMode.FillLine,
-					conditions: [{cond: WrapConditionType.ItemCountLargerThan, value: 4}],
+					conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 4 }],
 				},
 				{
 					mode: WrapMode.FillLine,
-					conditions: [{cond: WrapConditionType.ExceedsMaxLineLength, value: 1}],
+					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }],
 				},
 			],
 			defaultMode: WrapMode.NoWrap,
@@ -1548,7 +1548,7 @@ final class HaxeFormat implements TextFormat {
 		};
 	}
 
-	public function escapeChar(c:Int):String {
+	public function escapeChar(c: Int): String {
 		return switch c {
 			case '"'.code: '\\"';
 			case '\\'.code: '\\\\';
@@ -1556,8 +1556,10 @@ final class HaxeFormat implements TextFormat {
 			case '\r'.code: '\\r';
 			case '\t'.code: '\\t';
 			case _:
-				if (c < 0x20) '\\x' + StringTools.hex(c, 2);
-				else String.fromCharCode(c);
+				if (c < 0x20)
+					'\\x' + StringTools.hex(c, 2);
+				else
+					String.fromCharCode(c);
 		};
 	}
 
@@ -1580,7 +1582,7 @@ final class HaxeFormat implements TextFormat {
 	 * may contain bare `"` (very common in code that builds SQL / HTML
 	 * snippets in single-quoted strings).
 	 */
-	public function escapeSingleQuoteChar(c:Int):String {
+	public function escapeSingleQuoteChar(c: Int): String {
 		return switch c {
 			case '\''.code: '\\\'';
 			case '\\'.code: '\\\\';
@@ -1589,22 +1591,24 @@ final class HaxeFormat implements TextFormat {
 			case '\r'.code: '\\r';
 			case '\t'.code: '\\t';
 			case _:
-				if (c < 0x20) '\\x' + StringTools.hex(c, 2);
-				else String.fromCharCode(c);
+				if (c < 0x20)
+					'\\x' + StringTools.hex(c, 2);
+				else
+					String.fromCharCode(c);
 		};
 	}
 
-	public function unescapeChar(input:String, pos:Int):UnescapeResult {
-		final esc:Null<Int> = input.charCodeAt(pos);
+	public function unescapeChar(input: String, pos: Int): UnescapeResult {
+		final esc: Null<Int> = input.charCodeAt(pos);
 		if (esc == null) throw new haxe.Exception('unterminated escape at $pos');
 		return switch esc {
-			case '"'.code: {char: '"'.code, consumed: 1};
-			case '\\'.code: {char: '\\'.code, consumed: 1};
-			case 'n'.code: {char: '\n'.code, consumed: 1};
-			case 'r'.code: {char: '\r'.code, consumed: 1};
-			case 't'.code: {char: '\t'.code, consumed: 1};
-			case '\''.code: {char: '\''.code, consumed: 1};
-			case '$'.code: {char: '$'.code, consumed: 1};
+			case '"'.code: { char: '"'.code, consumed: 1 };
+			case '\\'.code: { char: '\\'.code, consumed: 1 };
+			case 'n'.code: { char: '\n'.code, consumed: 1 };
+			case 'r'.code: { char: '\r'.code, consumed: 1 };
+			case 't'.code: { char: '\t'.code, consumed: 1 };
+			case '\''.code: { char: '\''.code, consumed: 1 };
+			case '$'.code: { char: '$'.code, consumed: 1 };
 			case _: throw new haxe.Exception('invalid escape: \\${String.fromCharCode(esc)}');
 		};
 	}
@@ -1617,7 +1621,7 @@ final class HaxeFormat implements TextFormat {
 	 * `unescapeChar`); delegates to the AST predicate in `HxExprUtil`
 	 * so the grammar-AST logic stays beside `endsWithCloseBrace`.
 	 */
-	public inline function stmtExprNoSemi(raw:Null<Dynamic>):Bool return HxExprUtil.stmtExprNoSemi(raw);
+	public inline function stmtExprNoSemi(raw: Null<Dynamic>): Bool return HxExprUtil.stmtExprNoSemi(raw);
 
 	/**
 	 * HxStatement-level sister of `stmtExprNoSemi`. Wired through
@@ -1630,5 +1634,6 @@ final class HaxeFormat implements TextFormat {
 	 * so all the per-ctor logic (including recursive `ExprStmt(expr)` →
 	 * `stmtExprNoSemi(expr)`) stays beside `endsWithCloseBrace`.
 	 */
-	public inline function stmtNoSemi(raw:Null<Dynamic>):Bool return HxExprUtil.stmtNoSemi(raw);
+	public inline function stmtNoSemi(raw: Null<Dynamic>): Bool return HxExprUtil.stmtNoSemi(raw);
+
 }

@@ -24,9 +24,9 @@ package anyparse.grammar.haxe.format;
  */
 @:peg typedef HxFormatParenPolicySection = {
 
-	@:optional var openingPolicy:HxFormatWhitespacePolicy;
+	@:optional var openingPolicy: HxFormatWhitespacePolicy;
 
-	@:optional var closingPolicy:HxFormatWhitespacePolicy;
+	@:optional var closingPolicy: HxFormatWhitespacePolicy;
 
-	@:optional var removeInnerWhenEmpty:Bool;
+	@:optional var removeInnerWhenEmpty: Bool;
 };

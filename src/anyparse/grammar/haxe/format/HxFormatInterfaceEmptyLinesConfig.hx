@@ -17,9 +17,9 @@ package anyparse.grammar.haxe.format;
  */
 @:peg typedef HxFormatInterfaceEmptyLinesConfig = {
 
-	@:optional var betweenVars:Int;
+	@:optional var betweenVars: Int;
 
-	@:optional var betweenFunctions:Int;
+	@:optional var betweenFunctions: Int;
 
-	@:optional var afterVars:Int;
+	@:optional var afterVars: Int;
 };

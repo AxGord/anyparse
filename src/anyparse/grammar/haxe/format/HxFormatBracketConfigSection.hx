@@ -21,8 +21,8 @@ package anyparse.grammar.haxe.format;
  */
 @:peg typedef HxFormatBracketConfigSection = {
 
-	@:optional var accessBrackets:HxFormatParenPolicySection;
-	@:optional var arrayLiteralBrackets:HxFormatParenPolicySection;
-	@:optional var mapLiteralBrackets:HxFormatParenPolicySection;
-	@:optional var comprehensionBrackets:HxFormatParenPolicySection;
+	@:optional var accessBrackets: HxFormatParenPolicySection;
+	@:optional var arrayLiteralBrackets: HxFormatParenPolicySection;
+	@:optional var mapLiteralBrackets: HxFormatParenPolicySection;
+	@:optional var comprehensionBrackets: HxFormatParenPolicySection;
 };

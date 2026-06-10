@@ -218,20 +218,36 @@ typedef HxModule = {
 	@:trivia
 	@:fmt(blankLinesAtHeadIfCtor('decl', 'PackageDecl', 'PackageEmpty', 'beforePackage'))
 	@:fmt(blankLinesAfterCtor('decl', 'PackageDecl', 'PackageEmpty', 'afterPackage'))
-	@:fmt(blankLinesOnTransitionAcross('decl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', '|', 'UsingDecl', 'UsingWildDecl', 'beforeUsing'))
-	@:fmt(blankLinesOnTransitionAcross('decl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', 'UsingDecl', 'UsingWildDecl', '|', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'TypedefDecl', 'FnDecl', 'beforeType'))
-	@:fmt(blankLinesBetweenSameCtorByLevel('decl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', 'betweenImportsLevel', 'betweenImports', 'betweenImportsPathDiffers'))
-	@:fmt(blankLinesBetweenSameCtorByLevel('decl', 'UsingDecl', 'UsingWildDecl', 'betweenImportsLevel', 'betweenImports', 'betweenImportsPathDiffers'))
+	@:fmt(blankLinesOnTransitionAcross(
+		'decl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', '|', 'UsingDecl', 'UsingWildDecl', 'beforeUsing'
+	))
+	@:fmt(blankLinesOnTransitionAcross(
+		'decl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', 'UsingDecl', 'UsingWildDecl', '|', 'ClassDecl', 'InterfaceDecl',
+		'AbstractDecl', 'EnumDecl', 'TypedefDecl', 'FnDecl', 'beforeType'
+	))
+	@:fmt(blankLinesBetweenSameCtorByLevel(
+		'decl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', 'betweenImportsLevel', 'betweenImports', 'betweenImportsPathDiffers'
+	))
+	@:fmt(blankLinesBetweenSameCtorByLevel(
+		'decl', 'UsingDecl', 'UsingWildDecl', 'betweenImportsLevel', 'betweenImports', 'betweenImportsPathDiffers'
+	))
 	@:fmt(blankLinesBetweenSameCtorTailTransparent('decl', 'Conditional', 'betweenImportsTailLeafClassify'))
 	@:fmt(blankLinesBetweenSameCtorHeadTransparent('decl', 'Conditional', 'betweenImportsHeadLeafClassify'))
-	@:fmt(blankLinesAfterCtorIf('decl', 'multiline', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'FnDecl', 'TypedefDecl', 'afterMultilineDecl'))
+	@:fmt(blankLinesAfterCtorIf(
+		'decl', 'multiline', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'FnDecl', 'TypedefDecl', 'afterMultilineDecl'
+	))
 	@:fmt(blankLinesAfterCtorIfTailLeafNull('decl', 'Conditional', 'tailLeafKeepsBlankAfterConditional', 'afterConditionalBlock'))
-	@:fmt(blankLinesBeforeCtorIfPrevNot('decl', 'multiline', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'FnDecl', 'TypedefDecl', '|', 'Conditional', 'beforeMultilineDecl'))
-	@:fmt(blankLinesBetweenSameCtorIfNot('decl', 'multiline', 'TypedefDecl', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'betweenSingleLineTypes'))
+	@:fmt(blankLinesBeforeCtorIfPrevNot(
+		'decl', 'multiline', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'FnDecl', 'TypedefDecl', '|', 'Conditional',
+		'beforeMultilineDecl'
+	))
+	@:fmt(blankLinesBetweenSameCtorIfNot(
+		'decl', 'multiline', 'TypedefDecl', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'betweenSingleLineTypes'
+	))
 	@:fmt(multilineWhenLeadingTriviaSpansLines('meta', 'decl'))
 	@:fmt(blankBeforeOrphanLineCommentTrail)
 	@:fmt(blankBeforeLineCommentLed)
 	@:fmt(afterFileHeaderCommentBlanks)
 	@:fmt(betweenMultilineCommentsBlanks)
-	var decls:Array<HxTopLevelDecl>;
+	var decls: Array<HxTopLevelDecl>;
 }

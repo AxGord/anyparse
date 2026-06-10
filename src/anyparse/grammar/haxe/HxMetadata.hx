@@ -39,7 +39,9 @@ package anyparse.grammar.haxe;
  */
 @:peg
 enum HxMetadata {
-	MetaCall(call:HxMetaCallArgs);
-	Meta(name:HxMetaName);
-	PlainMeta(raw:HxMetaRaw);
+
+	MetaCall(call: HxMetaCallArgs);
+	Meta(name: HxMetaName);
+	PlainMeta(raw: HxMetaRaw);
+
 }

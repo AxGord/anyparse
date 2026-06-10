@@ -128,49 +128,49 @@ package anyparse.grammar.haxe.format;
  */
 @:peg typedef HxFormatSameLineSection = {
 
-	@:optional var ifElse:HxFormatSameLinePolicy;
+	@:optional var ifElse: HxFormatSameLinePolicy;
 
-	@:optional var tryCatch:HxFormatSameLinePolicy;
+	@:optional var tryCatch: HxFormatSameLinePolicy;
 
-	@:optional var doWhile:HxFormatSameLinePolicy;
+	@:optional var doWhile: HxFormatSameLinePolicy;
 
-	@:optional var ifBody:HxFormatBodyPolicy;
+	@:optional var ifBody: HxFormatBodyPolicy;
 
-	@:optional var elseBody:HxFormatBodyPolicy;
+	@:optional var elseBody: HxFormatBodyPolicy;
 
-	@:optional var forBody:HxFormatBodyPolicy;
+	@:optional var forBody: HxFormatBodyPolicy;
 
-	@:optional var whileBody:HxFormatBodyPolicy;
+	@:optional var whileBody: HxFormatBodyPolicy;
 
-	@:optional var doWhileBody:HxFormatBodyPolicy;
+	@:optional var doWhileBody: HxFormatBodyPolicy;
 
-	@:optional var elseIf:HxFormatKeywordPlacement;
+	@:optional var elseIf: HxFormatKeywordPlacement;
 
-	@:optional var fitLineIfWithElse:Bool;
+	@:optional var fitLineIfWithElse: Bool;
 
-	@:optional var ifElseSemicolonNextLine:Bool;
+	@:optional var ifElseSemicolonNextLine: Bool;
 
-	@:optional var expressionTry:HxFormatSameLinePolicy;
+	@:optional var expressionTry: HxFormatSameLinePolicy;
 
-	@:optional var returnBody:HxFormatBodyPolicy;
+	@:optional var returnBody: HxFormatBodyPolicy;
 
-	@:optional var returnBodySingleLine:HxFormatBodyPolicy;
+	@:optional var returnBodySingleLine: HxFormatBodyPolicy;
 
-	@:optional var catchBody:HxFormatBodyPolicy;
+	@:optional var catchBody: HxFormatBodyPolicy;
 
-	@:optional var tryBody:HxFormatBodyPolicy;
+	@:optional var tryBody: HxFormatBodyPolicy;
 
-	@:optional var caseBody:HxFormatBodyPolicy;
+	@:optional var caseBody: HxFormatBodyPolicy;
 
-	@:optional var expressionCase:HxFormatBodyPolicy;
+	@:optional var expressionCase: HxFormatBodyPolicy;
 
-	@:optional var functionBody:HxFormatBodyPolicy;
+	@:optional var functionBody: HxFormatBodyPolicy;
 
-	@:optional var anonFunctionBody:HxFormatBodyPolicy;
+	@:optional var anonFunctionBody: HxFormatBodyPolicy;
 
-	@:optional var untypedBody:HxFormatBodyPolicy;
+	@:optional var untypedBody: HxFormatBodyPolicy;
 
-	@:optional var expressionIf:HxFormatBodyPolicy;
+	@:optional var expressionIf: HxFormatBodyPolicy;
 
-	@:optional var expressionIfWithBlocks:Bool;
+	@:optional var expressionIfWithBlocks: Bool;
 };

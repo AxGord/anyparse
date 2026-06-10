@@ -22,5 +22,5 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxAccessClause = {
-	@:sep(',') @:trail(')') var ids:Array<HxIdentLit>;
+	@:sep(',') @:trail(')') var ids: Array<HxIdentLit>;
 };

@@ -25,9 +25,9 @@ package anyparse.query;
 @:nullSafety(Strict)
 final class Pattern {
 
-	public final root:QueryNode;
-	public final category:PatternCategory;
-	public final source:String;
+	public final root: QueryNode;
+	public final category: PatternCategory;
+	public final source: String;
 
 	/**
 	 * Plugin-supplied kind-equivalence consulted ONLY by the search
@@ -45,9 +45,9 @@ final class Pattern {
 	 * language-agnostic — it consults this opaque relation, never the
 	 * grammar-specific kind names.
 	 */
-	public final kindEquivalence:Null<KindEquivalence>;
+	public final kindEquivalence: Null<KindEquivalence>;
 
-	public function new(root:QueryNode, category:PatternCategory, source:String, ?kindEquivalence:Null<KindEquivalence>) {
+	public function new(root: QueryNode, category: PatternCategory, source: String, ?kindEquivalence: Null<KindEquivalence>) {
 		this.root = root;
 		this.category = category;
 		this.source = source;
@@ -61,7 +61,8 @@ final class Pattern {
 	 * name in expression position, never a declaration or type. The
 	 * CLI uses this to nudge toward `refs --decls` / `uses` / `ast`.
 	 */
-	public inline function isDegenerate():Bool return root.children.length == 0;
+	public inline function isDegenerate(): Bool return root.children.length == 0;
+
 }
 
 /**
@@ -77,41 +78,44 @@ final class Pattern {
 @:nullSafety(Strict)
 final class KindEquivalence {
 
-	final canonOf:Map<String, String>;
+	final canonOf: Map<String, String>;
 
-	public function new(classes:Array<Array<String>>) {
+	public function new(classes: Array<Array<String>>) {
 		canonOf = new Map();
 		for (group in classes) {
 			if (group.length == 0) continue;
-			final rep:String = group[0];
+			final rep: String = group[0];
 			for (k in group) canonOf.set(k, rep);
 		}
 	}
 
-	public inline function canon(kind:String):String {
-		final c:Null<String> = canonOf.get(kind);
+	public inline function canon(kind: String): String {
+		final c: Null<String> = canonOf.get(kind);
 		return c == null ? kind : c;
 	}
 
-	public inline function equivalent(a:String, b:String):Bool {
+	public inline function equivalent(a: String, b: String): Bool {
 		return a == b || canon(a) == canon(b);
 	}
+
 }
 
 enum abstract PatternCategory(Int) {
+
 	final Decl = 0;
 	final Stmt = 1;
 	final Expr = 2;
 	final MetaArgs = 3;
+
 }
 
 @:nullSafety(Strict)
 final class Metavar {
 
-	public static final KIND:String = 'Metavar';
-	public static final WILDCARD_NAME:String = '_';
-	private static final PLACEHOLDER_PREFIX:String = '__APQ_MV_';
-	private static final PLACEHOLDER_SUFFIX:String = '_END__';
+	public static final KIND: String = 'Metavar';
+	public static final WILDCARD_NAME: String = '_';
+	private static final PLACEHOLDER_PREFIX: String = '__APQ_MV_';
+	private static final PLACEHOLDER_SUFFIX: String = '_END__';
 
 	/**
 	 * Substitute `$X` / `$_` tokens with reserved placeholder identifiers
@@ -123,45 +127,45 @@ final class Metavar {
 	 * Returns the rewritten source. The placeholder format is
 	 * `__APQ_MV_<bareName>__` — reversed by `decodePlaceholderName`.
 	 */
-	public static function substituteMetavarsHaxe(source:String):String {
-		final buf:StringBuf = new StringBuf();
-		var i:Int = 0;
-		final len:Int = source.length;
+	public static function substituteMetavarsHaxe(source: String): String {
+		final buf: StringBuf = new StringBuf();
+		var i: Int = 0;
+		final len: Int = source.length;
 		while (i < len) {
-			final c:Int = StringTools.fastCodeAt(source, i);
+			final c: Int = StringTools.fastCodeAt(source, i);
 			if (c == '\''.code) {
-				final end:Int = scanStringEnd(source, i, '\''.code);
+				final end: Int = scanStringEnd(source, i, '\''.code);
 				buf.addSub(source, i, end - i);
 				i = end;
 				continue;
 			}
 			if (c == '"'.code) {
-				final end:Int = scanStringEnd(source, i, '"'.code);
+				final end: Int = scanStringEnd(source, i, '"'.code);
 				buf.addSub(source, i, end - i);
 				i = end;
 				continue;
 			}
 			if (c == '/'.code && i + 1 < len) {
-				final c2:Int = StringTools.fastCodeAt(source, i + 1);
+				final c2: Int = StringTools.fastCodeAt(source, i + 1);
 				if (c2 == '/'.code) {
-					final end:Int = scanLineCommentEnd(source, i);
+					final end: Int = scanLineCommentEnd(source, i);
 					buf.addSub(source, i, end - i);
 					i = end;
 					continue;
 				}
 				if (c2 == '*'.code) {
-					final end:Int = scanBlockCommentEnd(source, i);
+					final end: Int = scanBlockCommentEnd(source, i);
 					buf.addSub(source, i, end - i);
 					i = end;
 					continue;
 				}
 			}
 			if (c == '$'.code && i + 1 < len) {
-				final next:Int = StringTools.fastCodeAt(source, i + 1);
+				final next: Int = StringTools.fastCodeAt(source, i + 1);
 				if (isIdentStart(next)) {
-					var j:Int = i + 1;
+					var j: Int = i + 1;
 					while (j < len && isIdentCont(StringTools.fastCodeAt(source, j))) j++;
-					final bare:String = source.substring(i + 1, j);
+					final bare: String = source.substring(i + 1, j);
 					buf.add(PLACEHOLDER_PREFIX);
 					buf.add(bare);
 					buf.add(PLACEHOLDER_SUFFIX);
@@ -180,7 +184,7 @@ final class Metavar {
 	 * out of a `__APQ_MV_<bareName>__` placeholder. Returns `null` when
 	 * the input is not a placeholder.
 	 */
-	public static function decodePlaceholderName(ident:String):Null<String> {
+	public static function decodePlaceholderName(ident: String): Null<String> {
 		if (!StringTools.startsWith(ident, PLACEHOLDER_PREFIX)) return null;
 		if (!StringTools.endsWith(ident, PLACEHOLDER_SUFFIX)) return null;
 		return ident.substring(PLACEHOLDER_PREFIX.length, ident.length - PLACEHOLDER_SUFFIX.length);
@@ -203,11 +207,11 @@ final class Metavar {
 	 * Returns a new tree (or the same shape if no replacements
 	 * happened).
 	 */
-	public static function reclassify(tree:QueryNode):QueryNode {
-		final n:Null<String> = tree.name;
-		final newChildren:Array<QueryNode> = [for (c in tree.children) reclassify(c)];
+	public static function reclassify(tree: QueryNode): QueryNode {
+		final n: Null<String> = tree.name;
+		final newChildren: Array<QueryNode> = [for (c in tree.children) reclassify(c)];
 		if (n != null) {
-			final bare:Null<String> = decodePlaceholderName(n);
+			final bare: Null<String> = decodePlaceholderName(n);
 			if (bare != null) {
 				if (newChildren.length == 0) return new QueryNode(KIND, bare, [], tree.span);
 				return new QueryNode(tree.kind, '$$' + bare, newChildren, tree.span);
@@ -216,11 +220,11 @@ final class Metavar {
 		return new QueryNode(tree.kind, n, newChildren, tree.span);
 	}
 
-	private static function scanStringEnd(source:String, start:Int, quote:Int):Int {
-		var i:Int = start + 1;
-		final len:Int = source.length;
+	private static function scanStringEnd(source: String, start: Int, quote: Int): Int {
+		var i: Int = start + 1;
+		final len: Int = source.length;
 		while (i < len) {
-			final c:Int = StringTools.fastCodeAt(source, i);
+			final c: Int = StringTools.fastCodeAt(source, i);
 			if (c == '\\'.code) {
 				i += 2;
 				continue;
@@ -231,31 +235,29 @@ final class Metavar {
 		return i;
 	}
 
-	private static function scanLineCommentEnd(source:String, start:Int):Int {
-		var i:Int = start + 2;
-		final len:Int = source.length;
+	private static function scanLineCommentEnd(source: String, start: Int): Int {
+		var i: Int = start + 2;
+		final len: Int = source.length;
 		while (i < len && StringTools.fastCodeAt(source, i) != '\n'.code) i++;
 		return i;
 	}
 
-	private static function scanBlockCommentEnd(source:String, start:Int):Int {
-		var i:Int = start + 2;
-		final len:Int = source.length;
+	private static function scanBlockCommentEnd(source: String, start: Int): Int {
+		var i: Int = start + 2;
+		final len: Int = source.length;
 		while (i + 1 < len) {
-			if (StringTools.fastCodeAt(source, i) == '*'.code && StringTools.fastCodeAt(source, i + 1) == '/'.code)
-				return i + 2;
+			if (StringTools.fastCodeAt(source, i) == '*'.code && StringTools.fastCodeAt(source, i + 1) == '/'.code) return i + 2;
 			i++;
 		}
 		return len;
 	}
 
-	private static inline function isIdentStart(c:Int):Bool {
-		return (c >= 'a'.code && c <= 'z'.code)
-			|| (c >= 'A'.code && c <= 'Z'.code)
-			|| c == '_'.code;
+	private static inline function isIdentStart(c: Int): Bool {
+		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || c == '_'.code;
 	}
 
-	private static inline function isIdentCont(c:Int):Bool {
+	private static inline function isIdentCont(c: Int): Bool {
 		return isIdentStart(c) || (c >= '0'.code && c <= '9'.code);
 	}
+
 }

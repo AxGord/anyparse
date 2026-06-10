@@ -6,6 +6,8 @@ package anyparse.format.binary;
  * x86 native order and the default for CBOR length-encoded ints.
  */
 enum abstract Endianness(Int) {
+
 	final Big = 0;
 	final Little = 1;
+
 }

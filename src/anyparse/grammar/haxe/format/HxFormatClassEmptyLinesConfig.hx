@@ -42,19 +42,19 @@ package anyparse.grammar.haxe.format;
  */
 @:peg typedef HxFormatClassEmptyLinesConfig = {
 
-	@:optional var existingBetweenFields:HxFormatKeepEmptyLinesPolicy;
+	@:optional var existingBetweenFields: HxFormatKeepEmptyLinesPolicy;
 
-	@:optional var betweenVars:Int;
+	@:optional var betweenVars: Int;
 
-	@:optional var betweenFunctions:Int;
+	@:optional var betweenFunctions: Int;
 
-	@:optional var afterVars:Int;
+	@:optional var afterVars: Int;
 
-	@:optional var afterStaticVars:Int;
+	@:optional var afterStaticVars: Int;
 
-	@:optional var betweenStaticFunctions:Int;
+	@:optional var betweenStaticFunctions: Int;
 
-	@:optional var beginType:Int;
+	@:optional var beginType: Int;
 
-	@:optional var endType:Int;
+	@:optional var endType: Int;
 };

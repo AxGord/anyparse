@@ -22,4 +22,5 @@ enum abstract HxFormatCommentEmptyLinesPolicy(String) to String {
 	final None = 'none';
 
 	final One = 'one';
+
 }

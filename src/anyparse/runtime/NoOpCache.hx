@@ -11,15 +11,16 @@ package anyparse.runtime;
 @:nullSafety(Strict)
 final class NoOpCache implements ParseCache {
 
-	public static final instance:NoOpCache = new NoOpCache();
+	public static final instance: NoOpCache = new NoOpCache();
 
 	private function new() {}
 
-	public inline function get(key:String):Null<Dynamic> {
+	public inline function get(key: String): Null<Dynamic> {
 		return null;
 	}
 
-	public inline function set(key:String, value:Dynamic):Void {}
+	public inline function set(key: String, value: Dynamic): Void {}
 
-	public inline function clear():Void {}
+	public inline function clear(): Void {}
+
 }

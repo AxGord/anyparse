@@ -27,15 +27,16 @@ import anyparse.runtime.Span;
 @:nullSafety(Strict)
 final class QueryNode {
 
-	public final kind:String;
-	public final name:Null<String>;
-	public final children:Array<QueryNode>;
-	public final span:Null<Span>;
+	public final kind: String;
+	public final name: Null<String>;
+	public final children: Array<QueryNode>;
+	public final span: Null<Span>;
 
-	public function new(kind:String, name:Null<String>, children:Array<QueryNode>, ?span:Null<Span> = null) {
+	public function new(kind: String, name: Null<String>, children: Array<QueryNode>, ?span: Null<Span> = null) {
 		this.kind = kind;
 		this.name = name;
 		this.children = children;
 		this.span = span;
 	}
+
 }

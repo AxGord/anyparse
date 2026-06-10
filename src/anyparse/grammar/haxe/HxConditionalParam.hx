@@ -76,8 +76,8 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxConditionalParam = {
-	var cond:HxPpCondLit;
-	@:sep(',') @:tryparse @:fmt(padLeading, padTrailing, sepBeforeOpt, softFill) var body:Array<HxParam>;
-	@:tryparse var elseifs:Array<HxElseifParam>;
-	@:optional @:kw('#else') @:tryparse @:fmt(padLeading, padTrailing) var elseBody:Null<Array<HxParam>>;
+	var cond: HxPpCondLit;
+	@:sep(',') @:tryparse @:fmt(padLeading, padTrailing, sepBeforeOpt, softFill) var body: Array<HxParam>;
+	@:tryparse var elseifs: Array<HxElseifParam>;
+	@:optional @:kw('#else') @:tryparse @:fmt(padLeading, padTrailing) var elseBody: Null<Array<HxParam>>;
 };

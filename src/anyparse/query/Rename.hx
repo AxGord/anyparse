@@ -15,8 +15,10 @@ import haxe.Exception;
  * stderr + a non-zero exit without a sentinel-string convention.
  */
 enum RenameResult {
-	Ok(text:String);
-	Err(message:String);
+
+	Ok(text: String);
+	Err(message: String);
+
 }
 
 /**
@@ -65,45 +67,46 @@ final class Rename {
 	 * `Err` describing why the rename could not be applied. The source is
 	 * never mutated — the caller decides whether to write the result.
 	 */
-	public static function rename(source:String, line:Int, col:Int, newName:String, plugin:GrammarPlugin, shape:RefShape):RenameResult {
+	public static function rename(
+		source: String, line: Int, col: Int, newName: String, plugin: GrammarPlugin, shape: RefShape
+	): RenameResult {
 		if (!RefactorSupport.isIdentifier(newName)) return Err('new name "$newName" is not a valid identifier');
 
-		final tree:QueryNode = try plugin.parseFile(source)
-			catch (exception:ParseError) return Err('source does not parse: ${exception.toString()}')
-			catch (exception:Exception) return Err('source does not parse: ${exception.message}');
+		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
+			'source does not parse: ${exception.toString()}'
+		)
+		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
 		// `apq refs` prints `Span.lineCol().col - 1`; invert that here so a
 		// position copied from `refs` output maps back to the real offset.
-		final cursor:Int = Span.offsetOf(source, line, col + 1);
+		final cursor: Int = Span.offsetOf(source, line, col + 1);
 
-		final node:Null<QueryNode> = RefactorSupport.resolveCursorNode(tree, cursor, source);
-		if (node == null)
-			return Err('position $line:$col is not on a renameable identifier');
+		final node: Null<QueryNode> = RefactorSupport.resolveCursorNode(tree, cursor, source);
+		if (node == null) return Err('position $line:$col is not on a renameable identifier');
 		// `resolveCursorNode` only returns nodes whose name is a renameable
 		// identifier (non-null); the guard re-narrows for strict null safety.
-		final targetName:Null<String> = node.name;
-		if (targetName == null)
-			return Err('position $line:$col is not on a renameable identifier');
+		final targetName: Null<String> = node.name;
+		if (targetName == null) return Err('position $line:$col is not on a renameable identifier');
 
-		final hits:Array<RefHit> = Refs.find(targetName, tree, shape);
+		final hits: Array<RefHit> = Refs.find(targetName, tree, shape);
 
-		final bindingFrom:Null<Int> = RefactorSupport.resolveBindingFrom(node, hits);
-		if (bindingFrom == null)
-			return Err('could not resolve a binding for "$targetName" at $line:$col');
-		final binding:Int = bindingFrom;
+		final bindingFrom: Null<Int> = RefactorSupport.resolveBindingFrom(node, hits);
+		if (bindingFrom == null) return Err('could not resolve a binding for "$targetName" at $line:$col');
+		final binding: Int = bindingFrom;
 
-		final isFieldBinding:Bool = nodeAtFromIsFieldMember(tree, binding);
-		final occurrences:Array<Span> = collectOccurrences(source, targetName, hits, binding, isFieldBinding, tree);
-		if (occurrences.length == 0)
-			return Err('no occurrences resolved for "$targetName" at $line:$col');
+		final isFieldBinding: Bool = nodeAtFromIsFieldMember(tree, binding);
+		final occurrences: Array<Span> = collectOccurrences(source, targetName, hits, binding, isFieldBinding, tree);
+		if (occurrences.length == 0) return Err('no occurrences resolved for "$targetName" at $line:$col');
 
-		final rewritten:String = spliceRename(source, occurrences, newName);
-		if (rewritten == source)
-			return Err('rename "$targetName" -> "$newName" is a no-op');
+		final rewritten: String = spliceRename(source, occurrences, newName);
+		if (rewritten == source) return Err('rename "$targetName" -> "$newName" is a no-op');
 
-		try plugin.parseFile(rewritten)
-			catch (exception:ParseError) return Err('rewritten source does not parse: ${exception.toString()}')
-			catch (exception:Exception) return Err('rewritten source does not parse: ${exception.message}');
+		try
+			plugin.parseFile(rewritten)
+		catch (exception: ParseError)
+			return Err('rewritten source does not parse: ${exception.toString()}')
+		catch (exception: Exception)
+			return Err('rewritten source does not parse: ${exception.message}');
 
 		return Ok(rewritten);
 	}
@@ -113,10 +116,10 @@ final class Rename {
 	 * (a field / method)? Drives whether the occurrence set is augmented
 	 * with `this.<name>` field accesses.
 	 */
-	private static function nodeAtFromIsFieldMember(tree:QueryNode, from:Int):Bool {
-		var found:Bool = false;
-		function walk(node:QueryNode):Void {
-			final span:Null<Span> = node.span;
+	private static function nodeAtFromIsFieldMember(tree: QueryNode, from: Int): Bool {
+		var found: Bool = false;
+		function walk(node: QueryNode): Void {
+			final span: Null<Span> = node.span;
 			if (span != null && span.from == from && RefactorSupport.isFieldMemberKind(node.kind)) found = true;
 			for (c in node.children) walk(c);
 		}
@@ -136,25 +139,25 @@ final class Rename {
 	 * Each returned `Span` is the identifier token itself, not the full
 	 * node span, so the splice replaces exactly the name bytes.
 	 */
-	private static function collectOccurrences(source:String, targetName:String, hits:Array<RefHit>, binding:Int, isFieldBinding:Bool, tree:QueryNode):Array<Span> {
-		final out:Array<Span> = [];
-		final seen:Array<Int> = [];
-		inline function add(identFrom:Int):Void
-			RefactorSupport.pushUniqueSpan(out, seen, identFrom, targetName.length);
+	private static function collectOccurrences(
+		source: String, targetName: String, hits: Array<RefHit>, binding: Int, isFieldBinding: Bool, tree: QueryNode
+	): Array<Span> {
+		final out: Array<Span> = [];
+		final seen: Array<Int> = [];
+		inline function add(identFrom: Int): Void RefactorSupport.pushUniqueSpan(out, seen, identFrom, targetName.length);
 
 		for (h in hits) {
-			final boundFrom:Null<Int> = switch h.kind {
+			final boundFrom: Null<Int> = switch h.kind {
 				case RefKind.Decl: h.span.from;
 				case _:
-					final b:Null<Span> = h.bindingSpan;
+					final b: Null<Span> = h.bindingSpan;
 					b == null ? null : b.from;
 			};
 			if (boundFrom == binding) add(RefactorSupport.identTokenOffset(source, h.span, targetName));
 		}
 
 		if (isFieldBinding) {
-			for (access in collectThisFieldAccesses(targetName, tree))
-				add(RefactorSupport.identTokenOffset(source, access, targetName));
+			for (access in collectThisFieldAccesses(targetName, tree)) add(RefactorSupport.identTokenOffset(source, access, targetName));
 		}
 		return out;
 	}
@@ -165,12 +168,12 @@ final class Rename {
 	 * `this` receiver. Returns each node's span (covering `this.<name>`);
 	 * the caller resolves the identifier token within it.
 	 */
-	private static function collectThisFieldAccesses(targetName:String, tree:QueryNode):Array<Span> {
-		final out:Array<Span> = [];
-		function walk(node:QueryNode):Void {
+	private static function collectThisFieldAccesses(targetName: String, tree: QueryNode): Array<Span> {
+		final out: Array<Span> = [];
+		function walk(node: QueryNode): Void {
 			if (node.kind == 'FieldAccess' && node.name == targetName) {
-				final span:Null<Span> = node.span;
-				final recv:Null<QueryNode> = node.children.length > 0 ? node.children[0] : null;
+				final span: Null<Span> = node.span;
+				final recv: Null<QueryNode> = node.children.length > 0 ? node.children[0] : null;
 				if (span != null && recv != null && recv.kind == 'IdentExpr' && recv.name == 'this') out.push(span);
 			}
 			for (c in node.children) walk(c);
@@ -186,8 +189,9 @@ final class Rename {
 	 * splices end-to-start so earlier offsets remain valid as later ones
 	 * change length.
 	 */
-	private static function spliceRename(source:String, occurrences:Array<Span>, newName:String):String {
-		final edits:Array<{span:Span, text:String}> = [for (occ in occurrences) {span: occ, text: newName}];
+	private static function spliceRename(source: String, occurrences: Array<Span>, newName: String): String {
+		final edits: Array<{ span: Span, text: String }> = [for (occ in occurrences) { span: occ, text: newName }];
 		return RefactorSupport.applyEdits(source, edits);
 	}
+
 }

@@ -78,32 +78,31 @@ import anyparse.core.Strategy;
  */
 class Postfix implements Strategy {
 
-	public var name(default, null):String = 'Postfix';
-	public var runsAfter(default, null):Array<String> = [];
-	public var runsBefore(default, null):Array<String> = [];
-	public var ownedMeta(default, null):Array<String> = [':postfix'];
-	public var runtimeContribution(default, null):RuntimeContrib = {ctxFields: [], helpers: [], cacheKeyContributors: []};
+	public var name(default, null): String = 'Postfix';
+	public var runsAfter(default, null): Array<String> = [];
+	public var runsBefore(default, null): Array<String> = [];
+	public var ownedMeta(default, null): Array<String> = [':postfix'];
+	public var runtimeContribution(default, null): RuntimeContrib = { ctxFields: [], helpers: [], cacheKeyContributors: [] };
 
 	public function new() {}
 
-	public function appliesTo(node:ShapeNode):Bool {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
+	public function appliesTo(node: ShapeNode): Bool {
+		final meta: Null<Metadata> = node.annotations.get('base.meta');
 		if (meta == null) return false;
 		for (entry in meta) if (entry.name == ':postfix') return true;
 		return false;
 	}
 
-	public function annotate(node:ShapeNode, ctx:LoweringCtx):Void {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
+	public function annotate(node: ShapeNode, ctx: LoweringCtx): Void {
+		final meta: Null<Metadata> = node.annotations.get('base.meta');
 		if (meta == null) return;
 		for (entry in meta) if (entry.name == ':postfix') {
 			if (entry.params.length < 1 || entry.params.length > 2) {
 				Context.fatalError(
-					'@:postfix expects one string argument (single literal) or two string arguments (open, close)',
-					entry.pos
+					'@:postfix expects one string argument (single literal) or two string arguments (open, close)', entry.pos
 				);
 			}
-			final opText:String = switch entry.params[0].expr {
+			final opText: String = switch entry.params[0].expr {
 				case EConst(CString(s, _)): s;
 				case _:
 					Context.fatalError('@:postfix first argument must be a string literal', entry.params[0].pos);
@@ -111,7 +110,7 @@ class Postfix implements Strategy {
 			};
 			node.annotations.set('postfix.op', opText);
 			if (entry.params.length == 2) {
-				final closeText:String = switch entry.params[1].expr {
+				final closeText: String = switch entry.params[1].expr {
 					case EConst(CString(s, _)): s;
 					case _:
 						Context.fatalError('@:postfix second argument must be a string literal', entry.params[1].pos);
@@ -122,8 +121,9 @@ class Postfix implements Strategy {
 		}
 	}
 
-	public function lower(node:ShapeNode, ctx:LoweringCtx):Null<CoreIR> {
+	public function lower(node: ShapeNode, ctx: LoweringCtx): Null<CoreIR> {
 		return null;
 	}
+
 }
 #end

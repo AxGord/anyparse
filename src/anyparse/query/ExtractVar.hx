@@ -13,8 +13,10 @@ import haxe.Exception;
  * without a sentinel-string convention. Mirrors `InlineResult`.
  */
 enum ExtractResult {
-	Ok(text:String);
-	Err(message:String);
+
+	Ok(text: String);
+	Err(message: String);
+
 }
 
 /**
@@ -69,15 +71,21 @@ final class ExtractVar {
 	 * literals, identifiers, field/index access, collections, `new`,
 	 * ternaries, …) is an expression and eligible.
 	 */
-	private static final STRUCTURAL_KINDS:Array<String> = ['module', 'Module', 'Body', 'ClassDecl'];
+	private static final STRUCTURAL_KINDS: Array<String> = ['module', 'Module', 'Body', 'ClassDecl'];
 
 	/**
 	 * Kind suffixes that mark a node as structural (statements,
 	 * declarations, members, fields, param wrappers). A target whose kind
 	 * ends with any of these is excluded from selection.
 	 */
-	private static final STRUCTURAL_SUFFIXES:Array<String> = [
-		'Stmt', 'Member', 'Field', 'Decl', 'Named', 'Required', 'Optional',
+	private static final STRUCTURAL_SUFFIXES: Array<String> = [
+		'Stmt',
+		'Member',
+		'Field',
+		'Decl',
+		'Named',
+		'Required',
+		'Optional',
 	];
 
 	/**
@@ -87,15 +95,21 @@ final class ExtractVar {
 	 * enclosing statement must be a direct child of one of these for the
 	 * hoist to be safe.
 	 */
-	private static final BLOCK_KINDS:Array<String> = ['BlockBody', 'BlockStmt'];
+	private static final BLOCK_KINDS: Array<String> = ['BlockBody', 'BlockStmt'];
 
 	/**
 	 * Binding-introducing kinds whose name would collide with the hoisted
 	 * `final <name>`: parameters, locals, nested local functions, loop
 	 * iterators, catch variables.
 	 */
-	private static final BINDING_DECL_KINDS:Array<String> = [
-		'Required', 'Optional', 'VarStmt', 'FinalStmt', 'LocalFnStmt', 'ForStmt', 'CatchClause',
+	private static final BINDING_DECL_KINDS: Array<String> = [
+		'Required',
+		'Optional',
+		'VarStmt',
+		'FinalStmt',
+		'LocalFnStmt',
+		'ForStmt',
+		'CatchClause',
 	];
 
 	/**
@@ -108,35 +122,31 @@ final class ExtractVar {
 	 * be applied. The source is never mutated — the caller decides whether
 	 * to write the result.
 	 */
-	public static function extractVar(source:String, line:Int, col:Int, name:String, plugin:GrammarPlugin):ExtractResult {
-		if (!RefactorSupport.isIdentifier(name))
-			return Err('new name "$name" is not a valid identifier');
+	public static function extractVar(source: String, line: Int, col: Int, name: String, plugin: GrammarPlugin): ExtractResult {
+		if (!RefactorSupport.isIdentifier(name)) return Err('new name "$name" is not a valid identifier');
 
-		final tree:QueryNode = try plugin.parseFile(source)
-			catch (exception:ParseError) return Err('source does not parse: ${exception.toString()}')
-			catch (exception:Exception) return Err('source does not parse: ${exception.message}');
+		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
+			'source does not parse: ${exception.toString()}'
+		)
+		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
 		// `apq refs` prints `Span.lineCol().col - 1`; invert that here so a
 		// position copied from `refs` output maps back to the real offset.
-		final cursor:Int = Span.offsetOf(source, line, col + 1);
+		final cursor: Int = Span.offsetOf(source, line, col + 1);
 
-		final target:Null<QueryNode> = selectTargetExpr(tree, cursor);
-		if (target == null)
-			return Err('no expression starts at position $line:$col (point at the first token of an expression)');
-		final expr:QueryNode = target;
-		final exprSpan:Null<Span> = expr.span;
-		if (exprSpan == null)
-			return Err('no expression starts at position $line:$col (point at the first token of an expression)');
-		final targetSpan:Span = exprSpan;
+		final target: Null<QueryNode> = selectTargetExpr(tree, cursor);
+		if (target == null) return Err('no expression starts at position $line:$col (point at the first token of an expression)');
+		final expr: QueryNode = target;
+		final exprSpan: Null<Span> = expr.span;
+		if (exprSpan == null) return Err('no expression starts at position $line:$col (point at the first token of an expression)');
+		final targetSpan: Span = exprSpan;
 
-		final enclosingStmt:Null<QueryNode> = findEnclosingBlockStmt(tree, expr);
-		if (enclosingStmt == null)
-			return Err('"$name": cannot extract — the enclosing statement is not inside a { } block');
-		final stmt:QueryNode = enclosingStmt;
-		final stmtSpan:Null<Span> = stmt.span;
-		if (stmtSpan == null)
-			return Err('"$name": cannot extract — the enclosing statement has no source span');
-		final hoistSpan:Span = stmtSpan;
+		final enclosingStmt: Null<QueryNode> = findEnclosingBlockStmt(tree, expr);
+		if (enclosingStmt == null) return Err('"$name": cannot extract — the enclosing statement is not inside a { } block');
+		final stmt: QueryNode = enclosingStmt;
+		final stmtSpan: Null<Span> = stmt.span;
+		if (stmtSpan == null) return Err('"$name": cannot extract — the enclosing statement has no source span');
+		final hoistSpan: Span = stmtSpan;
 
 		// Refuse a name that already binds a parameter / local in the
 		// enclosing function — the hoisted `final <name>` would shadow or
@@ -146,29 +156,30 @@ final class ExtractVar {
 
 		// The hoisted decl is inserted at the start of the enclosing
 		// statement's line, carrying that statement's leading indentation.
-		final lineStart:Int = lineStartOf(source, hoistSpan.from);
-		final indent:String = source.substring(lineStart, hoistSpan.from);
-		if (!isAllWhitespace(indent))
-			return Err('"$name": enclosing statement shares its line — cannot extract cleanly');
+		final lineStart: Int = lineStartOf(source, hoistSpan.from);
+		final indent: String = source.substring(lineStart, hoistSpan.from);
+		if (!isAllWhitespace(indent)) return Err('"$name": enclosing statement shares its line — cannot extract cleanly');
 
-		final exprText:String = source.substring(targetSpan.from, targetSpan.to);
+		final exprText: String = source.substring(targetSpan.from, targetSpan.to);
 
-		final insertEdit:{span:Span, text:String} = {
+		final insertEdit: { span: Span, text: String } = {
 			span: new Span(lineStart, lineStart),
 			text: indent + 'final ' + name + ' = ' + exprText + ';\n',
 		};
-		final replaceEdit:{span:Span, text:String} = {
+		final replaceEdit: { span: Span, text: String } = {
 			span: new Span(targetSpan.from, targetSpan.to),
 			text: name,
 		};
 
-		final rewritten:String = RefactorSupport.applyEdits(source, [insertEdit, replaceEdit]);
-		if (rewritten == source)
-			return Err('extract of "$name" is a no-op');
+		final rewritten: String = RefactorSupport.applyEdits(source, [insertEdit, replaceEdit]);
+		if (rewritten == source) return Err('extract of "$name" is a no-op');
 
-		try plugin.parseFile(rewritten)
-			catch (exception:ParseError) return Err('rewritten source does not parse: ${exception.toString()}')
-			catch (exception:Exception) return Err('rewritten source does not parse: ${exception.message}');
+		try
+			plugin.parseFile(rewritten)
+		catch (exception: ParseError)
+			return Err('rewritten source does not parse: ${exception.toString()}')
+		catch (exception: Exception)
+			return Err('rewritten source does not parse: ${exception.message}');
 
 		return Ok(rewritten);
 	}
@@ -182,13 +193,13 @@ final class ExtractVar {
 	 * over-refuses (safe). Returns false when `cursor` is not inside a
 	 * function (the block-statement guard already covers that path).
 	 */
-	private static function nameDeclaredInEnclosingFunction(tree:QueryNode, cursor:Int, name:String):Bool {
+	private static function nameDeclaredInEnclosingFunction(tree: QueryNode, cursor: Int, name: String): Bool {
 		// Deepest function declaration whose span contains the cursor (a
 		// function name always passes `innermostWhere`'s renameable filter).
-		final fn:Null<QueryNode> = RefactorSupport.innermostWhere(tree, cursor, node -> RefactorSupport.FN_DECL_KINDS.contains(node.kind));
+		final fn: Null<QueryNode> = RefactorSupport.innermostWhere(tree, cursor, node -> RefactorSupport.FN_DECL_KINDS.contains(node.kind));
 		if (fn == null) return false;
-		var found:Bool = false;
-		function scan(node:QueryNode):Void {
+		var found: Bool = false;
+		function scan(node: QueryNode): Void {
 			if (found) return;
 			if (node.name == name && BINDING_DECL_KINDS.contains(node.kind)) found = true;
 			for (c in node.children) scan(c);
@@ -205,13 +216,13 @@ final class ExtractVar {
 	 * `a + b * 2` selects the whole `Add`, not the bare `IdentExpr a`.
 	 * Null when no expression starts at the cursor.
 	 */
-	private static function selectTargetExpr(tree:QueryNode, cursor:Int):Null<QueryNode> {
-		var best:Null<QueryNode> = null;
-		function walk(node:QueryNode):Void {
-			final span:Null<Span> = node.span;
+	private static function selectTargetExpr(tree: QueryNode, cursor: Int): Null<QueryNode> {
+		var best: Null<QueryNode> = null;
+		function walk(node: QueryNode): Void {
+			final span: Null<Span> = node.span;
 			if (span != null && span.from == cursor && !isStructural(node.kind)) {
-				final current:Null<QueryNode> = best;
-				final bestSpan:Null<Span> = current == null ? null : current.span;
+				final current: Null<QueryNode> = best;
+				final bestSpan: Null<Span> = current == null ? null : current.span;
 				if (bestSpan == null || span.to > bestSpan.to) best = node;
 			}
 			for (c in node.children) walk(c);
@@ -229,21 +240,23 @@ final class ExtractVar {
 	 * When the walk reaches `target` (by identity), the carried statement
 	 * is the hoist anchor — returned only if it is a block child.
 	 */
-	private static function findEnclosingBlockStmt(tree:QueryNode, target:QueryNode):Null<QueryNode> {
-		var result:Null<QueryNode> = null;
-		var found:Bool = false;
-		function walk(node:QueryNode, nearestStmt:Null<QueryNode>, nearestIsBlockChild:Bool):Void {
+	private static function findEnclosingBlockStmt(tree: QueryNode, target: QueryNode): Null<QueryNode> {
+		var result: Null<QueryNode> = null;
+		var found: Bool = false;
+		function walk(node: QueryNode, nearestStmt: Null<QueryNode>, nearestIsBlockChild: Bool): Void {
 			if (found) return;
 			if (node == target) {
 				found = true;
 				if (nearestStmt != null && nearestIsBlockChild) result = nearestStmt;
 				return;
 			}
-			final nodeIsBlock:Bool = BLOCK_KINDS.contains(node.kind);
+			final nodeIsBlock: Bool = BLOCK_KINDS.contains(node.kind);
 			for (c in node.children) {
 				if (found) return;
-				if (isStatement(c.kind)) walk(c, c, nodeIsBlock);
-				else walk(c, nearestStmt, nearestIsBlockChild);
+				if (isStatement(c.kind))
+					walk(c, c, nodeIsBlock);
+				else
+					walk(c, nearestStmt, nearestIsBlockChild);
 			}
 		}
 		walk(tree, null, false);
@@ -251,7 +264,7 @@ final class ExtractVar {
 	}
 
 	/** Is `kind` a statement node (its kind ends with `Stmt`)? */
-	private static inline function isStatement(kind:String):Bool {
+	private static inline function isStatement(kind: String): Bool {
 		return StringTools.endsWith(kind, 'Stmt');
 	}
 
@@ -260,25 +273,26 @@ final class ExtractVar {
 	 * wrapper) rather than an expression? Suffix-based with a short list
 	 * of suffix-less literals.
 	 */
-	private static function isStructural(kind:String):Bool {
+	private static function isStructural(kind: String): Bool {
 		if (STRUCTURAL_KINDS.contains(kind)) return true;
 		for (suffix in STRUCTURAL_SUFFIXES) if (StringTools.endsWith(kind, suffix)) return true;
 		return false;
 	}
 
 	/** Offset of the first byte after the previous `\n` before `at` (or 0). */
-	private static function lineStartOf(source:String, at:Int):Int {
-		var i:Int = at;
+	private static function lineStartOf(source: String, at: Int): Int {
+		var i: Int = at;
 		while (i > 0 && source.charAt(i - 1) != '\n') i--;
 		return i;
 	}
 
 	/** Is every character of `s` an ASCII space / tab / carriage return? */
-	private static function isAllWhitespace(s:String):Bool {
+	private static function isAllWhitespace(s: String): Bool {
 		for (i in 0...s.length) {
-			final c:Int = StringTools.fastCodeAt(s, i);
+			final c: Int = StringTools.fastCodeAt(s, i);
 			if (c != ' '.code && c != '\t'.code && c != '\r'.code) return false;
 		}
 		return true;
 	}
+
 }

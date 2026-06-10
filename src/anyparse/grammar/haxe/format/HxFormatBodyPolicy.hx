@@ -21,4 +21,5 @@ enum abstract HxFormatBodyPolicy(String) to String {
 	final Keep = 'keep';
 
 	final FitLine = 'fitLine';
+
 }

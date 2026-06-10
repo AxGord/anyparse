@@ -29,6 +29,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxElseifParam = {
-	@:kw('#elseif') var cond:HxPpCondLit;
-	@:sep(',') @:tryparse @:fmt(padLeading, padTrailing) var body:Array<HxParam>;
+	@:kw('#elseif') var cond: HxPpCondLit;
+	@:sep(',') @:tryparse @:fmt(padLeading, padTrailing) var body: Array<HxParam>;
 };

@@ -18,8 +18,10 @@ using Lambda;
  * pattern-matches without a sentinel-array convention.
  */
 enum CollectResult {
-	COk(sites:Array<QueryNode>);
-	CErr(message:String);
+
+	COk(sites: Array<QueryNode>);
+	CErr(message: String);
+
 }
 
 /**
@@ -63,7 +65,7 @@ enum CollectResult {
 final class CallSites {
 
 	/** Parameter slot kinds — the leading children of a function decl. */
-	public static final PARAM_KINDS:Array<String> = ['Required', 'Optional'];
+	public static final PARAM_KINDS: Array<String> = ['Required', 'Optional'];
 
 	/**
 	 * Declaration kinds that, if any node of one carries the same name as
@@ -73,11 +75,24 @@ final class CallSites {
 	 * resolve to: other local functions, class members, top-level
 	 * functions, and local var / final / param bindings.
 	 */
-	public static final NAME_CLASH_KINDS:Array<String> = [
-		'LocalFnStmt', 'FnMember', 'FinalModifiedMember', 'VarMember', 'FinalMember', 'FnField', 'VarField', 'FinalField',
-		'FnDecl', 'VarDecl',
-		'VarStmt', 'FinalStmt', 'StaticVarStmt', 'StaticFinalStmt',
-		'Required', 'Optional', 'Rest',
+	public static final NAME_CLASH_KINDS: Array<String> = [
+		'LocalFnStmt',
+		'FnMember',
+		'FinalModifiedMember',
+		'VarMember',
+		'FinalMember',
+		'FnField',
+		'VarField',
+		'FinalField',
+		'FnDecl',
+		'VarDecl',
+		'VarStmt',
+		'FinalStmt',
+		'StaticVarStmt',
+		'StaticFinalStmt',
+		'Required',
+		'Optional',
+		'Rest',
 	];
 
 	/**
@@ -89,11 +104,11 @@ final class CallSites {
 	 * `span.from`, and `nodeAtFrom` looks the decl node up by that offset.
 	 * Returns null when nothing resolves.
 	 */
-	public static function resolveFnDecl(cursorNode:QueryNode, tree:QueryNode, name:String, shape:RefShape):Null<QueryNode> {
+	public static function resolveFnDecl(cursorNode: QueryNode, tree: QueryNode, name: String, shape: RefShape): Null<QueryNode> {
 		if (RefactorSupport.FN_DECL_KINDS.contains(cursorNode.kind)) return cursorNode;
 
-		final hits:Array<RefHit> = Refs.find(name, tree, shape);
-		final bindingFrom:Null<Int> = RefactorSupport.resolveBindingFrom(cursorNode, hits);
+		final hits: Array<RefHit> = Refs.find(name, tree, shape);
+		final bindingFrom: Null<Int> = RefactorSupport.resolveBindingFrom(cursorNode, hits);
 		if (bindingFrom == null) return null;
 		return RefactorSupport.nodeAtFrom(tree, bindingFrom);
 	}
@@ -104,8 +119,8 @@ final class CallSites {
 	 * `Named` return-type child or the function body — so the return type
 	 * is never mistaken for a parameter.
 	 */
-	public static function leadingParams(decl:QueryNode):Array<QueryNode> {
-		final out:Array<QueryNode> = [];
+	public static function leadingParams(decl: QueryNode): Array<QueryNode> {
+		final out: Array<QueryNode> = [];
 		for (child in decl.children) {
 			if (!PARAM_KINDS.contains(child.kind)) break;
 			out.push(child);
@@ -122,11 +137,11 @@ final class CallSites {
 	 * `span.from`. Returns `COk(sites)` with the proven-complete set or
 	 * `CErr(message)` describing why the set could not be proven complete.
 	 */
-	public static function collect(decl:QueryNode, tree:QueryNode, source:String, name:String, binding:Int, shape:RefShape):CollectResult {
-		final isMethod:Bool = decl.kind != 'LocalFnStmt';
-		return isMethod
-			? collectMethodCalls(tree, source, name, binding, shape)
-			: collectLocalFnCalls(tree, source, name, binding);
+	public static function collect(
+		decl: QueryNode, tree: QueryNode, source: String, name: String, binding: Int, shape: RefShape
+	): CollectResult {
+		final isMethod: Bool = decl.kind != 'LocalFnStmt';
+		return isMethod ? collectMethodCalls(tree, source, name, binding, shape) : collectLocalFnCalls(tree, source, name, binding);
 	}
 
 	/**
@@ -144,22 +159,22 @@ final class CallSites {
 	 * refusal — those could be this very function but cannot be proven, so
 	 * silently leaving their argument shape stale is not allowed.
 	 */
-	private static function collectMethodCalls(tree:QueryNode, source:String, name:String, binding:Int, shape:RefShape):CollectResult {
-		final hits:Array<RefHit> = Refs.find(name, tree, shape);
-		final boundReads:Array<RefHit> = [
+	private static function collectMethodCalls(tree: QueryNode, source: String, name: String, binding: Int, shape: RefShape): CollectResult {
+		final hits: Array<RefHit> = Refs.find(name, tree, shape);
+		final boundReads: Array<RefHit> = [
 			for (h in hits)
 				if (h.kind == RefKind.Read && h.bindingSpan != null && bindingFrom(h) == binding) h
 		];
-		final boundReadFroms:Array<Int> = [for (h in boundReads) h.span.from];
+		final boundReadFroms: Array<Int> = [for (h in boundReads) h.span.from];
 
-		final sites:Array<QueryNode> = [];
-		final consumedFroms:Array<Int> = [];
-		var thisSiteCount:Int = 0;
-		var error:Null<String> = null;
-		function walk(node:QueryNode):Void {
+		final sites: Array<QueryNode> = [];
+		final consumedFroms: Array<Int> = [];
+		var thisSiteCount: Int = 0;
+		var error: Null<String> = null;
+		function walk(node: QueryNode): Void {
 			if (error != null) return;
 			if (node.kind == 'Call' && node.children.length > 0) {
-				final callee:QueryNode = node.children[0];
+				final callee: QueryNode = node.children[0];
 				switch calleeShape(callee, name) {
 					case CalleeBare(identSpan):
 						// A bare `name(...)` call. It is OUR call iff its
@@ -191,7 +206,7 @@ final class CallSites {
 		// and a `var f = obj.foo;` (any non-`this` receiver field access —
 		// its call form already errored above).
 		if (error == null) {
-			final dangling:Null<RefHit> = boundReads.find(h -> !consumedFroms.contains(h.span.from));
+			final dangling: Null<RefHit> = boundReads.find(h -> !consumedFroms.contains(h.span.from));
 			if (dangling != null)
 				error = '"$name" is referenced as a value (not called) at ${posOf(source, dangling.span)} — indirect calls through a captured reference cannot be tracked';
 		}
@@ -209,22 +224,25 @@ final class CallSites {
 	 * `this.name` access). Returns the diagnostic or null when no value
 	 * capture is present.
 	 */
-	private static function fieldAccessValueCapture(tree:QueryNode, source:String, name:String, thisSiteCount:Int):Null<String> {
-		var thisAccess:Int = 0;
-		var error:Null<String> = null;
-		function scan(node:QueryNode):Void {
+	private static function fieldAccessValueCapture(tree: QueryNode, source: String, name: String, thisSiteCount: Int): Null<String> {
+		var thisAccess: Int = 0;
+		var error: Null<String> = null;
+		function scan(node: QueryNode): Void {
 			if (error != null) return;
 			if (node.kind == 'FieldAccess' && node.name == name && node.children.length > 0) {
-				final recv:QueryNode = node.children[0];
-				if (recv.kind == 'IdentExpr' && recv.name == 'this') thisAccess++;
-				else error = '"$name" is referenced as a value (not called) at ${posOf(source, node.span)} — indirect calls through a captured reference cannot be tracked';
+				final recv: QueryNode = node.children[0];
+				if (recv.kind == 'IdentExpr' && recv.name == 'this')
+					thisAccess++;
+				else
+					error = '"$name" is referenced as a value (not called) at ${posOf(source, node.span)} — indirect calls through a captured reference cannot be tracked';
 			}
 			for (c in node.children) scan(c);
 		}
 		scan(tree);
 		if (error != null) return error;
 		if (thisAccess > thisSiteCount)
-			return '"$name" is referenced as a value (not called) via `this.$name` — indirect calls through a captured reference cannot be tracked';
+			return
+				'"$name" is referenced as a value (not called) via `this.$name` — indirect calls through a captured reference cannot be tracked';
 		return null;
 	}
 
@@ -237,17 +255,20 @@ final class CallSites {
 	 * receiver-qualified `*.name(...)` call is impossible for that name and
 	 * is refused.
 	 */
-	private static function collectLocalFnCalls(tree:QueryNode, source:String, name:String, binding:Int):CollectResult {
-		final clashes:Int = countNameDecls(tree, name);
+	private static function collectLocalFnCalls(tree: QueryNode, source: String, name: String, binding: Int): CollectResult {
+		final clashes: Int = countNameDecls(tree, name);
 		if (clashes > 1)
-			return CErr('cannot prove all call sites target the local function "$name": another declaration named "$name" exists — refused when a local-function name is ambiguous');
+			return
+				CErr(
+					'cannot prove all call sites target the local function "$name": another declaration named "$name" exists — refused when a local-function name is ambiguous'
+				);
 
-		final sites:Array<QueryNode> = [];
-		var error:Null<String> = null;
-		function walk(node:QueryNode):Void {
+		final sites: Array<QueryNode> = [];
+		var error: Null<String> = null;
+		function walk(node: QueryNode): Void {
 			if (error != null) return;
 			if (node.kind == 'Call' && node.children.length > 0) {
-				final callee:QueryNode = node.children[0];
+				final callee: QueryNode = node.children[0];
 				switch calleeShape(callee, name) {
 					case CalleeBare(_):
 						sites.push(node);
@@ -280,15 +301,15 @@ final class CallSites {
 	 * receiver's display name), or none of these (a call to something
 	 * else).
 	 */
-	private static function calleeShape(callee:QueryNode, name:String):CalleeShape {
+	private static function calleeShape(callee: QueryNode, name: String): CalleeShape {
 		if (callee.kind == 'IdentExpr' && callee.name == name) {
-			final span:Null<Span> = callee.span;
+			final span: Null<Span> = callee.span;
 			return span == null ? CalleeNone : CalleeBare(span);
 		}
 		if (callee.kind == 'FieldAccess' && callee.name == name && callee.children.length > 0) {
-			final recv:QueryNode = callee.children[0];
+			final recv: QueryNode = callee.children[0];
 			if (recv.kind == 'IdentExpr' && recv.name == 'this') return CalleeThis;
-			final recvName:String = recv.name == null ? recv.kind : recv.name;
+			final recvName: String = recv.name == null ? recv.kind : recv.name;
 			return CalleeOtherReceiver(recvName);
 		}
 		return CalleeNone;
@@ -302,15 +323,15 @@ final class CallSites {
 	 * `hits` is the already-computed `Refs.find(name, …)` result for the
 	 * target name — reused so the resolver is not re-run per call site.
 	 */
-	private static function bareBindsElsewhere(identSpan:Span, hits:Array<RefHit>):Bool {
-		final hit:Null<RefHit> = hits.find(h -> h.span.from == identSpan.from);
+	private static function bareBindsElsewhere(identSpan: Span, hits: Array<RefHit>): Bool {
+		final hit: Null<RefHit> = hits.find(h -> h.span.from == identSpan.from);
 		return hit != null && hit.bindingSpan != null;
 	}
 
 	/** Count declarations named `name` anywhere in the tree. */
-	private static function countNameDecls(tree:QueryNode, name:String):Int {
-		var count:Int = 0;
-		function walk(node:QueryNode):Void {
+	private static function countNameDecls(tree: QueryNode, name: String): Int {
+		var count: Int = 0;
+		function walk(node: QueryNode): Void {
 			if (node.name == name && NAME_CLASH_KINDS.contains(node.kind)) count++;
 			for (c in node.children) walk(c);
 		}
@@ -319,9 +340,9 @@ final class CallSites {
 	}
 
 	/** Count `IdentExpr` nodes named `name` anywhere in the tree. */
-	private static function countIdentExprNamed(tree:QueryNode, name:String):Int {
-		var count:Int = 0;
-		function walk(node:QueryNode):Void {
+	private static function countIdentExprNamed(tree: QueryNode, name: String): Int {
+		var count: Int = 0;
+		function walk(node: QueryNode): Void {
 			if (node.kind == 'IdentExpr' && node.name == name) count++;
 			for (c in node.children) walk(c);
 		}
@@ -330,23 +351,26 @@ final class CallSites {
 	}
 
 	/** `from` offset of a Read / Write hit's binding span (caller null-checks). */
-	private static inline function bindingFrom(hit:RefHit):Int {
-		final b:Null<Span> = hit.bindingSpan;
+	private static inline function bindingFrom(hit: RefHit): Int {
+		final b: Null<Span> = hit.bindingSpan;
 		return b == null ? -1 : b.from;
 	}
 
 	/** Human-facing `line:col` for a span, in the `apq refs` print convention. */
-	public static function posOf(source:String, span:Null<Span>):String {
+	public static function posOf(source: String, span: Null<Span>): String {
 		if (span == null) return '?:?';
-		final pos:Position = span.lineCol(source);
+		final pos: Position = span.lineCol(source);
 		return '${pos.line}:${pos.col - 1}';
 	}
+
 }
 
 /** Classification of a `Call`'s callee relative to the target name — internal. */
 private enum CalleeShape {
-	CalleeBare(identSpan:Span);
+
+	CalleeBare(identSpan: Span);
 	CalleeThis;
-	CalleeOtherReceiver(recv:String);
+	CalleeOtherReceiver(recv: String);
 	CalleeNone;
+
 }

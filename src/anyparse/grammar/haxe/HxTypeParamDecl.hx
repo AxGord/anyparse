@@ -46,8 +46,8 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxTypeParamDecl = {
-	var name:HxIdentLit;
-	@:optional @:lead(':') var constraint:Null<HxType>;
-	@:trivia @:tryparse @:fmt(padLeading) var constraintMore:Array<HxIntersectionClause>;
-	@:optional @:fmt(typeParamDefaultEquals) @:lead('=') var defaultValue:Null<HxType>;
+	var name: HxIdentLit;
+	@:optional @:lead(':') var constraint: Null<HxType>;
+	@:trivia @:tryparse @:fmt(padLeading) var constraintMore: Array<HxIntersectionClause>;
+	@:optional @:fmt(typeParamDefaultEquals) @:lead('=') var defaultValue: Null<HxType>;
 }

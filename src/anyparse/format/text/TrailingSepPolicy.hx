@@ -7,7 +7,9 @@ package anyparse.format.text;
  * `Required` but it rounds out the space.
  */
 enum abstract TrailingSepPolicy(Int) {
+
 	final Allowed = 0;
 	final Disallowed = 1;
 	final Required = 2;
+
 }

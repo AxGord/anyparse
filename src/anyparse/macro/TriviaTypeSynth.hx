@@ -66,8 +66,9 @@ class TriviaTypeSynth {
 	 * Exposed so `Lowering` and `WriterLowering` can reference the same
 	 * names without risk of silent divergence.
 	 */
-	public static inline final AFTER_KW_SUFFIX:String = 'AfterKw';
-	public static inline final KW_LEADING_SUFFIX:String = 'KwLeading';
+	public static inline final AFTER_KW_SUFFIX: String = 'AfterKw';
+
+	public static inline final KW_LEADING_SUFFIX: String = 'KwLeading';
 
 	/**
 	 * ω-keep-policy — two additional source-shape slots captured
@@ -79,8 +80,9 @@ class TriviaTypeSynth {
 	 * line (consumed by `bodyPolicyWrap`'s `Keep` branch). Both default
 	 * to `false` on the commit-miss path.
 	 */
-	public static inline final BEFORE_KW_NEWLINE_SUFFIX:String = 'BeforeKwNewline';
-	public static inline final BODY_ON_SAME_LINE_SUFFIX:String = 'BodyOnSameLine';
+	public static inline final BEFORE_KW_NEWLINE_SUFFIX: String = 'BeforeKwNewline';
+
+	public static inline final BODY_ON_SAME_LINE_SUFFIX: String = 'BodyOnSameLine';
 
 	/**
 	 * ω-trivia-before-kw — own-line comments captured BEFORE the optional
@@ -89,7 +91,7 @@ class TriviaTypeSynth {
 	 * collects it and stashes here on commit-success. Empty array on the
 	 * commit-miss path (rewind discards the captured trivia).
 	 */
-	public static inline final BEFORE_KW_LEADING_SUFFIX:String = 'BeforeKwLeading';
+	public static inline final BEFORE_KW_LEADING_SUFFIX: String = 'BeforeKwLeading';
 
 	/**
 	 * ω-trivia-before-kw-trailing — same-line trailing comment captured
@@ -103,7 +105,7 @@ class TriviaTypeSynth {
 	 * pre-kw hardline. `null` on the commit-miss path or when the source
 	 * has no same-line comment between the prior sibling and the keyword.
 	 */
-	public static inline final BEFORE_KW_TRAILING_SUFFIX:String = 'BeforeKwTrailing';
+	public static inline final BEFORE_KW_TRAILING_SUFFIX: String = 'BeforeKwTrailing';
 
 	/**
 	 * ω-trivia-after-trail — same-line trailing comment captured immediately
@@ -115,7 +117,7 @@ class TriviaTypeSynth {
 	 * leading separator so the comment survives round-trip. `null` when the
 	 * source had no same-line comment after the trail literal.
 	 */
-	public static inline final AFTER_TRAIL_SUFFIX:String = 'AfterTrail';
+	public static inline final AFTER_TRAIL_SUFFIX: String = 'AfterTrail';
 
 	/**
 	 * ω-issue-48-v2 — source-shape slot synthesised on paired Seq types
@@ -128,7 +130,7 @@ class TriviaTypeSynth {
 	 * that empty Star cannot carry the `newlineBefore` signal, so the
 	 * parser drains the stashed trivia here instead.
 	 */
-	public static inline final BEFORE_NEWLINE_SUFFIX:String = 'BeforeNewline';
+	public static inline final BEFORE_NEWLINE_SUFFIX: String = 'BeforeNewline';
 
 	/**
 	 * ω-598-member-leading-comment — sibling source-shape slot synthesised on
@@ -146,7 +148,7 @@ class TriviaTypeSynth {
 	 * captured upstream) is byte-inert at write time. Consumed by the
 	 * writer's bare-Ref non-first inter-field separator.
 	 */
-	public static inline final BEFORE_LEADING_SUFFIX:String = 'BeforeLeading';
+	public static inline final BEFORE_LEADING_SUFFIX: String = 'BeforeLeading';
 
 	/**
 	 * ω-cond-comp-expr-multiline — source-shape slot synthesised on
@@ -168,7 +170,7 @@ class TriviaTypeSynth {
 	 * Currently consumed by `HxConditionalExpr.expr`'s `expr → '#end'`
 	 * boundary when both `elseifs` is empty AND `elseExpr` is absent.
 	 */
-	public static inline final NEWLINE_AFTER_SUFFIX:String = 'NewlineAfter';
+	public static inline final NEWLINE_AFTER_SUFFIX: String = 'NewlineAfter';
 
 	/**
 	 * ω-condition-wrap-keep — source-shape slot synthesised on paired Seq
@@ -186,7 +188,7 @@ class TriviaTypeSynth {
 	 * literal. Plain mode keeps the original struct shape (no slot); the
 	 * writer falls back to the width-driven glue.
 	 */
-	public static inline final CONDITION_OPEN_NEWLINE_SUFFIX:String = 'CondOpenNewline';
+	public static inline final CONDITION_OPEN_NEWLINE_SUFFIX: String = 'CondOpenNewline';
 
 	/**
 	 * ω-orphan-trivia — suffixes for trailing-trivia sibling slots
@@ -197,8 +199,9 @@ class TriviaTypeSynth {
 	 * can reproduce the source's vertical separation between the final
 	 * member and the orphan comments.
 	 */
-	public static inline final TRAILING_BLANK_BEFORE_SUFFIX:String = 'TrailingBlankBefore';
-	public static inline final TRAILING_LEADING_SUFFIX:String = 'TrailingLeading';
+	public static inline final TRAILING_BLANK_BEFORE_SUFFIX: String = 'TrailingBlankBefore';
+
+	public static inline final TRAILING_LEADING_SUFFIX: String = 'TrailingLeading';
 
 	/**
 	 * ω-keep-fnsig-newline — suffix for a `Bool` flag recording whether the
@@ -217,7 +220,7 @@ class TriviaTypeSynth {
 	 * Default `false` (no newline before close) for every non-keep / non-
 	 * bearing consumer — byte-inert.
 	 */
-	public static inline final TRAILING_NEWLINE_BEFORE_SUFFIX:String = 'TrailingNewlineBefore';
+	public static inline final TRAILING_NEWLINE_BEFORE_SUFFIX: String = 'TrailingNewlineBefore';
 
 	/**
 	 * ω-close-trailing — suffix for the same-line trailing comment
@@ -227,7 +230,7 @@ class TriviaTypeSynth {
 	 * already rejects `@:trail` at compile time. `Null<String>` — `null`
 	 * when the source had no same-line comment after the close.
 	 */
-	public static inline final TRAILING_CLOSE_SUFFIX:String = 'TrailingClose';
+	public static inline final TRAILING_CLOSE_SUFFIX: String = 'TrailingClose';
 
 	/**
 	 * ω-open-trailing — suffix for the same-line trailing comment
@@ -240,7 +243,7 @@ class TriviaTypeSynth {
 	 * delimiters stripped (line-style only, by construction — internal
 	 * newline disqualifies the match).
 	 */
-	public static inline final TRAILING_OPEN_SUFFIX:String = 'TrailingOpen';
+	public static inline final TRAILING_OPEN_SUFFIX: String = 'TrailingOpen';
 
 	/**
 	 * ω-trail-blank-after — suffix for a `Bool` flag recording whether
@@ -255,7 +258,7 @@ class TriviaTypeSynth {
 	 * shapes either rewind on failure (no trail capture path) or have no
 	 * nestBody wrap (no body-vs-parent indent distinction).
 	 */
-	public static inline final TRAILING_BLANK_AFTER_SUFFIX:String = 'TrailingBlankAfter';
+	public static inline final TRAILING_BLANK_AFTER_SUFFIX: String = 'TrailingBlankAfter';
 
 	/**
 	 * ω-objectlit-source-trail-comma — suffix for a `Bool` slot recording
@@ -277,7 +280,7 @@ class TriviaTypeSynth {
 	 * slot is omitted from struct literals (no `Lowering` touch) and reads
 	 * `null` at runtime.
 	 */
-	public static inline final TRAIL_PRESENT_SUFFIX:String = 'TrailPresent';
+	public static inline final TRAIL_PRESENT_SUFFIX: String = 'TrailPresent';
 
 	/**
 	 * ω-condcomp-body-leading-sep — suffix for a `Bool` slot recording
@@ -299,7 +302,7 @@ class TriviaTypeSynth {
 	 * as well (the body Star's first iter would have to fail on `#end`
 	 * AFTER the leading sep was consumed — rare and harmless).
 	 */
-	public static inline final SEP_BEFORE_SUFFIX:String = 'SepBefore';
+	public static inline final SEP_BEFORE_SUFFIX: String = 'SepBefore';
 
 	/**
 	 * ω-trailopt-source-track — positional arg name appended to paired
@@ -311,7 +314,7 @@ class TriviaTypeSynth {
 	 * and `HxDeclT.VarDecl` (top-level) plus `HxStatementT.VarStmt` /
 	 * `FinalStmt` (function-body locals).
 	 */
-	public static inline final TRAIL_PRESENT_ARG_NAME:String = 'trailPresent';
+	public static inline final TRAIL_PRESENT_ARG_NAME: String = 'trailPresent';
 
 	/**
 	 * ω-string-interp-noformat — positional arg name appended to paired
@@ -321,7 +324,7 @@ class TriviaTypeSynth {
 	 * `opt.formatStringInterpolation == false`. First (and currently only)
 	 * consumer: `HxStringSegmentT.Block` for `${expr}` interpolation.
 	 */
-	public static inline final SOURCE_TEXT_ARG_NAME:String = 'sourceText';
+	public static inline final SOURCE_TEXT_ARG_NAME: String = 'sourceText';
 
 	/**
 	 * ω-issue-257-firstline — positional arg name appended to paired Alt
@@ -334,7 +337,7 @@ class TriviaTypeSynth {
 	 * Plain mode keeps the original ctor arity (no slot, default Same
 	 * layout via `widthAware`). First consumer: `HxStatementT.ReturnStmt`.
 	 */
-	public static inline final BODY_ON_SAME_LINE_ARG_NAME:String = 'bodyOnSameLine';
+	public static inline final BODY_ON_SAME_LINE_ARG_NAME: String = 'bodyOnSameLine';
 
 	/**
 	 * ω-paren-wrap-source-newline — positional arg name appended to paired
@@ -352,7 +355,7 @@ class TriviaTypeSynth {
 	 * and the writer falls back to the always-glue shape from
 	 * `OptHardlineSkipAtOpenDelim`. First consumer: `HxExpr.ParenExpr`.
 	 */
-	public static inline final WRAP_OPEN_NEWLINE_ARG_NAME:String = 'wrapOpenNewline';
+	public static inline final WRAP_OPEN_NEWLINE_ARG_NAME: String = 'wrapOpenNewline';
 
 	/**
 	 * ω-keep-kw-newline (increment 1b) — positional arg name appended to
@@ -370,7 +373,7 @@ class TriviaTypeSynth {
 	 * onto-synth-arg channel, but on the mandatory-kw enum-ctor path rather
 	 * than the optional-kw Ref path.
 	 */
-	public static inline final KW_NEWLINE_ARG_NAME:String = 'kwNewline';
+	public static inline final KW_NEWLINE_ARG_NAME: String = 'kwNewline';
 
 	/**
 	 * ω-keep-chain (increment 2) — positional arg name appended to paired
@@ -386,7 +389,7 @@ class TriviaTypeSynth {
 	 * always glues via `shapeNoWrap`). Sister to `kwNewline` — same parser-
 	 * capture-onto-synth-arg channel, but on the Pratt/infix enum-ctor path.
 	 */
-	public static inline final CHAIN_NEWLINE_ARG_NAME:String = 'chainNewline';
+	public static inline final CHAIN_NEWLINE_ARG_NAME: String = 'chainNewline';
 
 	/**
 	 * ω-keep-chain-receiver-comment — positional arg name appended to the
@@ -405,26 +408,26 @@ class TriviaTypeSynth {
 	 * chain ctors capture operand trivia through the Pratt stash, not here).
 	 * Plain mode keeps the original 2-arg FieldAccess ctor (no slot).
 	 */
-	public static inline final CHAIN_LEAD_COMMENT_ARG_NAME:String = 'chainLeadComment';
+	public static inline final CHAIN_LEAD_COMMENT_ARG_NAME: String = 'chainLeadComment';
 
-	private static inline final PAIRED_SUFFIX:String = 'T';
-	private static inline final SYNTH_SUBPACK:String = 'trivia';
-	private static inline final SYNTH_MODULE_LEAF:String = 'Pairs';
-	private static inline final CONVERTERS_CLASS_NAME:String = 'Converters';
-	private static final shapes:Array<ShapeBuilder.ShapeResult> = [];
-	private static final defined:Map<String, Bool> = new Map();
-	private static var convertersAdded:Bool = false;
+	private static inline final PAIRED_SUFFIX: String = 'T';
+	private static inline final SYNTH_SUBPACK: String = 'trivia';
+	private static inline final SYNTH_MODULE_LEAF: String = 'Pairs';
+	private static inline final CONVERTERS_CLASS_NAME: String = 'Converters';
+	private static final shapes: Array<ShapeBuilder.ShapeResult> = [];
+	private static final defined: Map<String, Bool> = new Map();
+	private static var convertersAdded: Bool = false;
 
-	public static function arm(shape:ShapeBuilder.ShapeResult):Void {
+	public static function arm(shape: ShapeBuilder.ShapeResult): Void {
 		if (shapes.indexOf(shape) == -1) shapes.push(shape);
-		final rootPack:Array<String> = packOf(shape.root);
-		final synthPack:Array<String> = rootPack.concat([SYNTH_SUBPACK]);
-		final modulePath:String = synthPack.concat([SYNTH_MODULE_LEAF]).join('.');
-		final paired:Array<TypeDefinition> = [];
-		final convertedNames:Array<String> = [];
+		final rootPack: Array<String> = packOf(shape.root);
+		final synthPack: Array<String> = rootPack.concat([SYNTH_SUBPACK]);
+		final modulePath: String = synthPack.concat([SYNTH_MODULE_LEAF]).join('.');
+		final paired: Array<TypeDefinition> = [];
+		final convertedNames: Array<String> = [];
 		for (origName => node in shape.rules) {
 			if (node.annotations.get('trivia.bearing') != true) continue;
-			final pairedFqn:String = origName + PAIRED_SUFFIX;
+			final pairedFqn: String = origName + PAIRED_SUFFIX;
 			if (defined.exists(pairedFqn)) continue;
 			defined.set(pairedFqn, true);
 			paired.push(buildTypeDefinition(origName, node, synthPack));
@@ -447,8 +450,7 @@ class TriviaTypeSynth {
 		}
 		Context.defineModule(modulePath, paired);
 		#if anyparse_trivia_dump
-		for (td in paired)
-			Sys.println('// trivia.synth: defined ${td.pack.join('.')}.${td.name} in module $modulePath');
+		for (td in paired) Sys.println('// trivia.synth: defined ${td.pack.join('.')}.${td.name} in module $modulePath');
 		#end
 	}
 
@@ -470,13 +472,13 @@ class TriviaTypeSynth {
 	 * because all helpers land in one `Context.defineModule` batch
 	 * alongside the paired types.
 	 */
-	private static function buildConvertersClass(convertedNames:Array<String>, synthPack:Array<String>):TypeDefinition {
-		final pos:Position = Context.currentPos();
-		convertedNames.sort((a:String, b:String) -> a < b ? -1 : (a > b ? 1 : 0));
-		final shape:ShapeBuilder.ShapeResult = shapes[shapes.length - 1];
-		final fns:Array<Field> = [];
+	private static function buildConvertersClass(convertedNames: Array<String>, synthPack: Array<String>): TypeDefinition {
+		final pos: Position = Context.currentPos();
+		convertedNames.sort((a: String, b: String) -> a < b ? -1 : (a > b ? 1 : 0));
+		final shape: ShapeBuilder.ShapeResult = shapes[shapes.length - 1];
+		final fns: Array<Field> = [];
 		for (origName in convertedNames) {
-			final node:Null<ShapeNode> = shape.rules.get(origName);
+			final node: Null<ShapeNode> = shape.rules.get(origName);
 			if (node == null) continue;
 			fns.push(buildPairedToRawFn(origName, node, synthPack));
 			fns.push(buildRawToPairedFn(origName, node, synthPack));
@@ -487,7 +489,7 @@ class TriviaTypeSynth {
 			name: CONVERTERS_CLASS_NAME,
 			kind: TDClass(null, [], false, true, false),
 			fields: fns,
-			meta: [{name: ':nullSafety', params: [macro Strict], pos: pos}],
+			meta: [{ name: ':nullSafety', params: [macro Strict], pos: pos }],
 		};
 	}
 
@@ -502,13 +504,13 @@ class TriviaTypeSynth {
 	 *  - Alt paired type → `switch value { case Ctor(args, _extras): RawType.Ctor(unwrap(args)); ... }`.
 	 *  - Terminal → unreachable (terminals never gain `trivia.bearing`).
 	 */
-	private static function buildPairedToRawFn(origName:String, origNode:ShapeNode, synthPack:Array<String>):Field {
-		final pairedSimple:String = leafOf(origName) + PAIRED_SUFFIX;
-		final rawSimple:String = leafOf(origName);
-		final rawCT:ComplexType = TPath({pack: packOf(origName), name: rawSimple, params: []});
-		final pairedCT:ComplexType = TPath({pack: synthPack, name: pairedSimple, params: []});
-		final pos:Position = Context.currentPos();
-		final body:Expr = switch origNode.kind {
+	private static function buildPairedToRawFn(origName: String, origNode: ShapeNode, synthPack: Array<String>): Field {
+		final pairedSimple: String = leafOf(origName) + PAIRED_SUFFIX;
+		final rawSimple: String = leafOf(origName);
+		final rawCT: ComplexType = TPath({ pack: packOf(origName), name: rawSimple, params: [] });
+		final pairedCT: ComplexType = TPath({ pack: synthPack, name: pairedSimple, params: [] });
+		final pos: Position = Context.currentPos();
+		final body: Expr = switch origNode.kind {
 			case Seq: buildPairedToRawSeqBody(origNode, pos);
 			case Alt: buildPairedToRawAltBody(origName, origNode, pos);
 			case _:
@@ -519,58 +521,57 @@ class TriviaTypeSynth {
 			name: 'pairedToRaw_' + rawSimple,
 			access: [APublic, AStatic],
 			pos: pos,
-			kind: FFun({args: [{name: 'value', type: pairedCT}], ret: rawCT, expr: body}),
+			kind: FFun({ args: [{ name: 'value', type: pairedCT }], ret: rawCT, expr: body }),
 		};
 	}
 
-	private static function buildPairedToRawSeqBody(origNode:ShapeNode, pos:Position):Expr {
-		final entries:Array<{field:String, expr:Expr}> = [];
+	private static function buildPairedToRawSeqBody(origNode: ShapeNode, pos: Position): Expr {
+		final entries: Array<{ field: String, expr: Expr }> = [];
 		for (child in origNode.children) {
-			final fieldName:String = child.annotations.get('base.fieldName');
-			final access:Expr = {expr: EField(macro value, fieldName), pos: pos};
-			entries.push({field: fieldName, expr: shapePairedToRawUnwrap(access, child, pos)});
+			final fieldName: String = child.annotations.get('base.fieldName');
+			final access: Expr = { expr: EField(macro value, fieldName), pos: pos };
+			entries.push({ field: fieldName, expr: shapePairedToRawUnwrap(access, child, pos) });
 		}
-		final structLit:Expr = {expr: EObjectDecl([for (e in entries) {field: e.field, expr: e.expr}]), pos: pos};
+		final structLit: Expr = { expr: EObjectDecl([for (e in entries) { field: e.field, expr: e.expr }]), pos: pos };
 		return macro return $structLit;
 	}
 
-	private static function buildPairedToRawAltBody(origName:String, origNode:ShapeNode, pos:Position):Expr {
-		final rawSimple:String = leafOf(origName);
-		final rawPack:Array<String> = packOf(origName);
-		final cases:Array<Case> = [];
+	private static function buildPairedToRawAltBody(origName: String, origNode: ShapeNode, pos: Position): Expr {
+		final rawSimple: String = leafOf(origName);
+		final rawPack: Array<String> = packOf(origName);
+		final cases: Array<Case> = [];
 		for (branch in origNode.children) {
-			final ctorName:String = branch.annotations.get('base.ctor');
-			final origArgCount:Int = branch.children.length;
-			final extraCount:Int = countAltExtras(branch);
+			final ctorName: String = branch.annotations.get('base.ctor');
+			final origArgCount: Int = branch.children.length;
+			final extraCount: Int = countAltExtras(branch);
 			if (origArgCount == 0 && extraCount == 0) {
 				// Bare ctor `case CtorName: RawType.CtorName;`
-				final pattern:Expr = {expr: EConst(CIdent(ctorName)), pos: pos};
-				final raw:Expr = MacroStringTools.toFieldExpr(rawPack.concat([rawSimple, ctorName]));
-				cases.push({values: [pattern], guard: null, expr: raw});
+				final pattern: Expr = { expr: EConst(CIdent(ctorName)), pos: pos };
+				final raw: Expr = MacroStringTools.toFieldExpr(rawPack.concat([rawSimple, ctorName]));
+				cases.push({ values: [pattern], guard: null, expr: raw });
 				continue;
 			}
 			// Pattern: CtorName(arg0, arg1, _, _, ...)
-			final binders:Array<Expr> = [];
+			final binders: Array<Expr> = [];
 			for (i in 0...origArgCount) {
-				final argName:String = branch.children[i].annotations.get('base.fieldName');
-				binders.push({expr: EConst(CIdent(argName)), pos: pos});
+				final argName: String = branch.children[i].annotations.get('base.fieldName');
+				binders.push({ expr: EConst(CIdent(argName)), pos: pos });
 			}
-			for (_ in 0...extraCount)
-				binders.push({expr: EConst(CIdent('_')), pos: pos});
-			final pattern:Expr = {expr: ECall({expr: EConst(CIdent(ctorName)), pos: pos}, binders), pos: pos};
+			for (_ in 0...extraCount) binders.push({ expr: EConst(CIdent('_')), pos: pos });
+			final pattern: Expr = { expr: ECall({ expr: EConst(CIdent(ctorName)), pos: pos }, binders), pos: pos };
 			// Body: RawType.CtorName(unwrap(arg0), unwrap(arg1), ...)
-			final unwrapArgs:Array<Expr> = [];
+			final unwrapArgs: Array<Expr> = [];
 			for (i in 0...origArgCount) {
-				final argNode:ShapeNode = branch.children[i];
-				final argName:String = argNode.annotations.get('base.fieldName');
-				final argAccess:Expr = {expr: EConst(CIdent(argName)), pos: pos};
+				final argNode: ShapeNode = branch.children[i];
+				final argName: String = argNode.annotations.get('base.fieldName');
+				final argAccess: Expr = { expr: EConst(CIdent(argName)), pos: pos };
 				unwrapArgs.push(shapePairedToRawUnwrap(argAccess, argNode, pos));
 			}
-			final rawCtorFn:Expr = MacroStringTools.toFieldExpr(rawPack.concat([rawSimple, ctorName]));
-			final body:Expr = {expr: ECall(rawCtorFn, unwrapArgs), pos: pos};
-			cases.push({values: [pattern], guard: null, expr: body});
+			final rawCtorFn: Expr = MacroStringTools.toFieldExpr(rawPack.concat([rawSimple, ctorName]));
+			final body: Expr = { expr: ECall(rawCtorFn, unwrapArgs), pos: pos };
+			cases.push({ values: [pattern], guard: null, expr: body });
 		}
-		final switchExpr:Expr = {expr: ESwitch(macro value, cases, null), pos: pos};
+		final switchExpr: Expr = { expr: ESwitch(macro value, cases, null), pos: pos };
 		return macro return $switchExpr;
 	}
 
@@ -579,41 +580,42 @@ class TriviaTypeSynth {
 	 * the four shape kinds — Ref / Star / Terminal / Null-wrap — and
 	 * recurses into element types via the same helper.
 	 */
-	private static function shapePairedToRawUnwrap(access:Expr, node:ShapeNode, pos:Position):Expr {
+	private static function shapePairedToRawUnwrap(access: Expr, node: ShapeNode, pos: Position): Expr {
 		switch node.kind {
 			case Ref:
-				final refName:String = node.annotations.get('base.ref');
-				final optional:Bool = node.annotations.get('base.optional') == true;
+				final refName: String = node.annotations.get('base.ref');
+				final optional: Bool = node.annotations.get('base.optional') == true;
 				if (!refIsBearing(refName)) return access; // raw type already
-				final fnName:String = 'pairedToRaw_' + leafOf(refName);
-				final call:Expr = {expr: ECall({expr: EConst(CIdent(fnName)), pos: pos}, [access]), pos: pos};
+				final fnName: String = 'pairedToRaw_' + leafOf(refName);
+				final call: Expr = { expr: ECall({ expr: EConst(CIdent(fnName)), pos: pos }, [access]), pos: pos };
 				return optional ? macro ($access == null ? null : $call) : call;
 			case Star:
-				final elem:ShapeNode = node.children[0];
-				final triviaWrap:Bool = node.annotations.get('trivia.starCollects') == true;
-				final optional:Bool = node.annotations.get('base.optional') == true;
-				final innerAccess:Expr = triviaWrap ? (macro t.node) : (macro e);
-				final iterVar:String = triviaWrap ? 't' : 'e';
-				final inner:Expr = shapePairedToRawUnwrap(innerAccess, elem, pos);
-				final loopExpr:Expr = {
-					expr: EArrayDecl([{
-						expr: EFor(
-							macro $i{iterVar} in $access,
-							inner
-						),
-						pos: pos,
-					}]),
+				final elem: ShapeNode = node.children[0];
+				final triviaWrap: Bool = node.annotations.get('trivia.starCollects') == true;
+				final optional: Bool = node.annotations.get('base.optional') == true;
+				final innerAccess: Expr = triviaWrap ? (macro t.node) : (macro e);
+				final iterVar: String = triviaWrap ? 't' : 'e';
+				final inner: Expr = shapePairedToRawUnwrap(innerAccess, elem, pos);
+				final loopExpr: Expr = {
+					expr: EArrayDecl([
+						{
+							expr: EFor(macro $i{iterVar} in $access, inner),
+							pos: pos,
+						}
+					]),
 					pos: pos,
 				};
 				// Wadler trick — `[for (x in arr) expr]` is the comprehension; produce it via EFor inside EArrayDecl
 				// Actually Haxe accepts EMeta? Simpler: build via parser-friendly Expr
-				final compr:Expr = {expr: EArrayDecl([{
-					expr: EFor(
-						{expr: EBinop(OpIn, {expr: EConst(CIdent(iterVar)), pos: pos}, access), pos: pos},
-						inner
-					),
-					pos: pos,
-				}]), pos: pos};
+				final compr: Expr = {
+					expr: EArrayDecl([
+						{
+							expr: EFor({ expr: EBinop(OpIn, { expr: EConst(CIdent(iterVar)), pos: pos }, access), pos: pos }, inner),
+							pos: pos,
+						}
+					]),
+					pos: pos
+				};
 				return optional ? macro ($access == null ? null : $compr) : compr;
 			case Terminal:
 				return access;
@@ -629,8 +631,8 @@ class TriviaTypeSynth {
 	 * applied in `buildEnumCtor`'s second half — every predicate there
 	 * adds a positional arg; this function adds the same arg counts.
 	 */
-	private static function countAltExtras(branch:ShapeNode):Int {
-		var n:Int = 0;
+	private static function countAltExtras(branch: ShapeNode): Int {
+		var n: Int = 0;
 		if (isAltCloseTrailingBranch(branch)) {
 			n++; // closeTrailing
 			if (branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse')) {
@@ -673,13 +675,13 @@ class TriviaTypeSynth {
 	 * ctor shape (e.g. `ArrowFn → Arrow(Parens, ...)`); original trivia
 	 * doesn't fit the new ctor and is correctly lost.
 	 */
-	private static function buildRawToPairedFn(origName:String, origNode:ShapeNode, synthPack:Array<String>):Field {
-		final pairedSimple:String = leafOf(origName) + PAIRED_SUFFIX;
-		final rawSimple:String = leafOf(origName);
-		final rawCT:ComplexType = TPath({pack: packOf(origName), name: rawSimple, params: []});
-		final pairedCT:ComplexType = TPath({pack: synthPack, name: pairedSimple, params: []});
-		final pos:Position = Context.currentPos();
-		final body:Expr = switch origNode.kind {
+	private static function buildRawToPairedFn(origName: String, origNode: ShapeNode, synthPack: Array<String>): Field {
+		final pairedSimple: String = leafOf(origName) + PAIRED_SUFFIX;
+		final rawSimple: String = leafOf(origName);
+		final rawCT: ComplexType = TPath({ pack: packOf(origName), name: rawSimple, params: [] });
+		final pairedCT: ComplexType = TPath({ pack: synthPack, name: pairedSimple, params: [] });
+		final pos: Position = Context.currentPos();
+		final body: Expr = switch origNode.kind {
 			case Seq: buildRawToPairedSeqBody(origNode, pos);
 			case Alt: buildRawToPairedAltBody(origName, origNode, synthPack, pos);
 			case _:
@@ -690,69 +692,65 @@ class TriviaTypeSynth {
 			name: 'rawToPaired_' + rawSimple,
 			access: [APublic, AStatic],
 			pos: pos,
-			kind: FFun({args: [{name: 'value', type: rawCT}], ret: pairedCT, expr: body}),
+			kind: FFun({ args: [{ name: 'value', type: rawCT }], ret: pairedCT, expr: body }),
 		};
 	}
 
-	private static function buildRawToPairedSeqBody(origNode:ShapeNode, pos:Position):Expr {
-		final entries:Array<{field:String, expr:Expr}> = [];
+	private static function buildRawToPairedSeqBody(origNode: ShapeNode, pos: Position): Expr {
+		final entries: Array<{ field: String, expr: Expr }> = [];
 		for (child in origNode.children) {
-			final fieldName:String = child.annotations.get('base.fieldName');
-			final access:Expr = {expr: EField(macro value, fieldName), pos: pos};
-			entries.push({field: fieldName, expr: shapeRawToPairedWrap(access, child, pos)});
+			final fieldName: String = child.annotations.get('base.fieldName');
+			final access: Expr = { expr: EField(macro value, fieldName), pos: pos };
+			entries.push({ field: fieldName, expr: shapeRawToPairedWrap(access, child, pos) });
 			// Append trivia-only sibling fields with default empty values —
 			// mirror the gates applied in `buildTypeDefinition`'s Seq path.
 			if (isOptionalKw(child)) {
-				entries.push({field: fieldName + AFTER_KW_SUFFIX, expr: macro (null : Null<String>)});
-				entries.push({field: fieldName + KW_LEADING_SUFFIX, expr: macro ([] : Array<String>)});
-				entries.push({field: fieldName + BEFORE_KW_NEWLINE_SUFFIX, expr: macro false});
-				entries.push({field: fieldName + BODY_ON_SAME_LINE_SUFFIX, expr: macro false});
-				entries.push({field: fieldName + BEFORE_KW_LEADING_SUFFIX, expr: macro ([] : Array<String>)});
-				entries.push({field: fieldName + BEFORE_KW_TRAILING_SUFFIX, expr: macro (null : Null<String>)});
+				entries.push({ field: fieldName + AFTER_KW_SUFFIX, expr: macro (null: Null<String>) });
+				entries.push({ field: fieldName + KW_LEADING_SUFFIX, expr: macro ([]: Array<String>) });
+				entries.push({ field: fieldName + BEFORE_KW_NEWLINE_SUFFIX, expr: macro false });
+				entries.push({ field: fieldName + BODY_ON_SAME_LINE_SUFFIX, expr: macro false });
+				entries.push({ field: fieldName + BEFORE_KW_LEADING_SUFFIX, expr: macro ([]: Array<String>) });
+				entries.push({ field: fieldName + BEFORE_KW_TRAILING_SUFFIX, expr: macro (null: Null<String>) });
 			}
 			if (isTriviaStarField(child)) {
-				entries.push({field: fieldName + TRAILING_BLANK_BEFORE_SUFFIX, expr: macro false});
+				entries.push({ field: fieldName + TRAILING_BLANK_BEFORE_SUFFIX, expr: macro false });
 				// ω-keep-fnsig-newline: sibling default for the close-newline
 				// slot (raw→paired upcast). Mirrors TRAILING_BLANK_BEFORE_SUFFIX.
-				entries.push({field: fieldName + TRAILING_NEWLINE_BEFORE_SUFFIX, expr: macro false});
-				entries.push({field: fieldName + TRAILING_LEADING_SUFFIX, expr: macro ([] : Array<String>)});
+				entries.push({ field: fieldName + TRAILING_NEWLINE_BEFORE_SUFFIX, expr: macro false });
+				entries.push({ field: fieldName + TRAILING_LEADING_SUFFIX, expr: macro ([]: Array<String>) });
 				if (child.readMetaString(':trail') != null)
-					entries.push({field: fieldName + TRAILING_CLOSE_SUFFIX, expr: macro (null : Null<String>)});
+					entries.push({ field: fieldName + TRAILING_CLOSE_SUFFIX, expr: macro (null: Null<String>) });
 				if (child.readMetaString(':lead') != null && !child.hasMeta(':tryparse'))
-					entries.push({field: fieldName + TRAILING_OPEN_SUFFIX, expr: macro (null : Null<String>)});
+					entries.push({ field: fieldName + TRAILING_OPEN_SUFFIX, expr: macro (null: Null<String>) });
 				if (child.hasMeta(':tryparse') && child.fmtHasFlag('nestBody'))
-					entries.push({field: fieldName + TRAILING_BLANK_AFTER_SUFFIX, expr: macro false});
+					entries.push({ field: fieldName + TRAILING_BLANK_AFTER_SUFFIX, expr: macro false });
 				// ω-blockended-trivia-meta-arity (Session 3): hasMeta over
 				// readMetaString — gate must match `buildStarTrailingSlots`
 				// at L1002. Multi-arg `@:sep('text', tailRelax, blockEnded)`
 				// (3-arg form) lands on the same code path as 1-arg `@:sep(',')`.
 				if (child.hasMeta(':sep') && child.hasMeta(':trail'))
-					entries.push({field: fieldName + TRAIL_PRESENT_SUFFIX, expr: macro false});
+					entries.push({ field: fieldName + TRAIL_PRESENT_SUFFIX, expr: macro false });
 			}
 			// ω-condcomp-body-leading-sep: trivia-independent SepBefore
 			// default for raw→paired upcasts (Slice 18f). Sibling of the
 			// gate in `buildTypeDefinition`.
-			if (isSepBeforeOptStarField(child))
-				entries.push({field: fieldName + SEP_BEFORE_SUFFIX, expr: macro false});
+			if (isSepBeforeOptStarField(child)) entries.push({ field: fieldName + SEP_BEFORE_SUFFIX, expr: macro false });
 			if (isBareNonFirstRef(child, origNode) || isBareFirstStarNlOptIn(child, origNode))
-				entries.push({field: fieldName + BEFORE_NEWLINE_SUFFIX, expr: macro false});
+				entries.push({ field: fieldName + BEFORE_NEWLINE_SUFFIX, expr: macro false });
 			// ω-598-member-leading-comment: raw→paired upcast default — preWrite
 			// plugin rewrites carry no source comments, so the slot defaults to
 			// the empty array (byte-inert emit). Mirrors the BeforeNewline
 			// sibling above, gated on the same bare-Ref host.
 			if (isBareNonFirstRef(child, origNode))
-				entries.push({field: fieldName + BEFORE_LEADING_SUFFIX, expr: macro ([] : Array<String>)});
-			if (isTrailRef(child))
-				entries.push({field: fieldName + AFTER_TRAIL_SUFFIX, expr: macro (null : Null<String>)});
-			if (isPadTrailingTerminalRef(child))
-				entries.push({field: fieldName + NEWLINE_AFTER_SUFFIX, expr: macro false});
+				entries.push({ field: fieldName + BEFORE_LEADING_SUFFIX, expr: macro ([]: Array<String>) });
+			if (isTrailRef(child)) entries.push({ field: fieldName + AFTER_TRAIL_SUFFIX, expr: macro (null: Null<String>) });
+			if (isPadTrailingTerminalRef(child)) entries.push({ field: fieldName + NEWLINE_AFTER_SUFFIX, expr: macro false });
 			// ω-condition-wrap-keep: raw→paired upcast default for the
 			// `<field>CondOpenNewline:Bool` slot. preWrite plugin rewrites
 			// don't preserve the source's post-`(` break, so the upcast
 			// defaults to `false` → the writer falls back to the width-
 			// driven glue. Mirrors the `isPadTrailingTerminalRef` sibling.
-			if (isCondOpenNewlineRef(child))
-				entries.push({field: fieldName + CONDITION_OPEN_NEWLINE_SUFFIX, expr: macro false});
+			if (isCondOpenNewlineRef(child)) entries.push({ field: fieldName + CONDITION_OPEN_NEWLINE_SUFFIX, expr: macro false });
 			// ω-struct-trailopt-source-track (Session 14 Phase 3): struct
 			// typedef fields carrying `@:trailOpt(LIT)` grow a
 			// `<field>TrailPresent:Null<Bool>` slot on the paired-T struct
@@ -763,47 +761,46 @@ class TriviaTypeSynth {
 			// would also compile, but explicit `null` push mirrors the
 			// `isTrailRef` / `isPadTrailingTerminalRef` sibling pattern and
 			// keeps the raw→paired struct literal shape stable.
-			if (isStructFieldTrailOpt(child))
-				entries.push({field: fieldName + TRAIL_PRESENT_SUFFIX, expr: macro (null : Null<Bool>)});
+			if (isStructFieldTrailOpt(child)) entries.push({ field: fieldName + TRAIL_PRESENT_SUFFIX, expr: macro (null: Null<Bool>) });
 		}
-		final structLit:Expr = {expr: EObjectDecl([for (e in entries) {field: e.field, expr: e.expr}]), pos: pos};
+		final structLit: Expr = { expr: EObjectDecl([for (e in entries) { field: e.field, expr: e.expr }]), pos: pos };
 		return macro return $structLit;
 	}
 
-	private static function buildRawToPairedAltBody(origName:String, origNode:ShapeNode, synthPack:Array<String>, pos:Position):Expr {
-		final pairedSimple:String = leafOf(origName) + PAIRED_SUFFIX;
-		final pairedPath:Array<String> = synthPack.concat([SYNTH_MODULE_LEAF, pairedSimple]);
-		final cases:Array<Case> = [];
+	private static function buildRawToPairedAltBody(origName: String, origNode: ShapeNode, synthPack: Array<String>, pos: Position): Expr {
+		final pairedSimple: String = leafOf(origName) + PAIRED_SUFFIX;
+		final pairedPath: Array<String> = synthPack.concat([SYNTH_MODULE_LEAF, pairedSimple]);
+		final cases: Array<Case> = [];
 		for (branch in origNode.children) {
-			final ctorName:String = branch.annotations.get('base.ctor');
-			final origArgCount:Int = branch.children.length;
+			final ctorName: String = branch.annotations.get('base.ctor');
+			final origArgCount: Int = branch.children.length;
 			if (origArgCount == 0) {
-				final pattern:Expr = {expr: EConst(CIdent(ctorName)), pos: pos};
-				final pairedCtor:Expr = MacroStringTools.toFieldExpr(pairedPath.concat([ctorName]));
-				cases.push({values: [pattern], guard: null, expr: pairedCtor});
+				final pattern: Expr = { expr: EConst(CIdent(ctorName)), pos: pos };
+				final pairedCtor: Expr = MacroStringTools.toFieldExpr(pairedPath.concat([ctorName]));
+				cases.push({ values: [pattern], guard: null, expr: pairedCtor });
 				continue;
 			}
 			// Pattern: CtorName(arg0, arg1, ...) — raw ctors have no extras.
-			final binders:Array<Expr> = [
+			final binders: Array<Expr> = [
 				for (i in 0...origArgCount)
-					{expr: EConst(CIdent(branch.children[i].annotations.get('base.fieldName'))), pos: pos}
+					{ expr: EConst(CIdent(branch.children[i].annotations.get('base.fieldName'))), pos: pos }
 			];
-			final pattern:Expr = {expr: ECall({expr: EConst(CIdent(ctorName)), pos: pos}, binders), pos: pos};
+			final pattern: Expr = { expr: ECall({ expr: EConst(CIdent(ctorName)), pos: pos }, binders), pos: pos };
 			// Body: PairedType.CtorName(wrap(arg0), wrap(arg1), ...defaults).
-			final pairedArgs:Array<Expr> = [
+			final pairedArgs: Array<Expr> = [
 				for (i in 0...origArgCount) {
-					final argNode:ShapeNode = branch.children[i];
-					final argName:String = argNode.annotations.get('base.fieldName');
-					final argAccess:Expr = {expr: EConst(CIdent(argName)), pos: pos};
+					final argNode: ShapeNode = branch.children[i];
+					final argName: String = argNode.annotations.get('base.fieldName');
+					final argAccess: Expr = { expr: EConst(CIdent(argName)), pos: pos };
 					shapeRawToPairedWrap(argAccess, argNode, pos);
 				}
 			];
 			for (extra in buildAltExtraDefaults(branch, pos)) pairedArgs.push(extra);
-			final pairedCtorFn:Expr = MacroStringTools.toFieldExpr(pairedPath.concat([ctorName]));
-			final body:Expr = {expr: ECall(pairedCtorFn, pairedArgs), pos: pos};
-			cases.push({values: [pattern], guard: null, expr: body});
+			final pairedCtorFn: Expr = MacroStringTools.toFieldExpr(pairedPath.concat([ctorName]));
+			final body: Expr = { expr: ECall(pairedCtorFn, pairedArgs), pos: pos };
+			cases.push({ values: [pattern], guard: null, expr: body });
 		}
-		final switchExpr:Expr = {expr: ESwitch(macro value, cases, null), pos: pos};
+		final switchExpr: Expr = { expr: ESwitch(macro value, cases, null), pos: pos };
 		return macro return $switchExpr;
 	}
 
@@ -812,14 +809,14 @@ class TriviaTypeSynth {
 	 * extras. Order MUST mirror `buildEnumCtor`'s push order so the
 	 * paired ctor's positional arg list is satisfied position-by-position.
 	 */
-	private static function buildAltExtraDefaults(branch:ShapeNode, pos:Position):Array<Expr> {
-		final defaults:Array<Expr> = [];
+	private static function buildAltExtraDefaults(branch: ShapeNode, pos: Position): Array<Expr> {
+		final defaults: Array<Expr> = [];
 		if (isAltCloseTrailingBranch(branch)) {
-			defaults.push(macro (null : Null<String>)); // closeTrailing
+			defaults.push(macro (null: Null<String>)); // closeTrailing
 			if (branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse')) {
-				defaults.push(macro (null : Null<String>)); // openTrailing
+				defaults.push(macro (null: Null<String>)); // openTrailing
 				defaults.push(macro false); // trailingBlankBefore
-				defaults.push(macro ([] : Array<String>)); // trailingLeading
+				defaults.push(macro ([]: Array<String>)); // trailingLeading
 				// ω-arraylit-source-trail-comma: trailPresent default for
 				// raw-to-paired wraps. `false` matches the parser's initial
 				// state — preWrite plugin rewrites don't preserve source
@@ -837,9 +834,9 @@ class TriviaTypeSynth {
 		if (isAltWrapOpenNewlineBranch(branch)) defaults.push(macro false); // wrapOpenNewline
 		if (isAltKwNewlineBranch(branch)) defaults.push(macro false); // kwNewline (increment 1b)
 		if (isAltChainNewlineBranch(branch)) defaults.push(macro false); // chainNewline (increment 2)
-		if (isPostfixChainCommentBranch(branch)) defaults.push(macro (null : Null<String>)); // chainLeadComment (receiver-comment)
+		if (isPostfixChainCommentBranch(branch)) defaults.push(macro (null: Null<String>)); // chainLeadComment (receiver-comment)
 		if (isPostfixCloseTrailingBranch(branch)) {
-			defaults.push(macro (null : Null<String>)); // closeTrailing
+			defaults.push(macro (null: Null<String>)); // closeTrailing
 			// ω-D9A-keep-callargs-v2: argsOpenNewline default for raw→paired
 			// wraps. `false` matches the parser's initial state for source
 			// without a leading-newline after the postfix open. preWrite
@@ -865,41 +862,43 @@ class TriviaTypeSynth {
 	 * trivia siblings; inner refs that are themselves paired recurse
 	 * through `rawToPaired_<Inner>`.
 	 */
-	private static function shapeRawToPairedWrap(access:Expr, node:ShapeNode, pos:Position):Expr {
+	private static function shapeRawToPairedWrap(access: Expr, node: ShapeNode, pos: Position): Expr {
 		switch node.kind {
 			case Ref:
-				final refName:String = node.annotations.get('base.ref');
-				final optional:Bool = node.annotations.get('base.optional') == true;
+				final refName: String = node.annotations.get('base.ref');
+				final optional: Bool = node.annotations.get('base.optional') == true;
 				if (!refIsBearing(refName)) return access;
-				final fnName:String = 'rawToPaired_' + leafOf(refName);
-				final call:Expr = {expr: ECall({expr: EConst(CIdent(fnName)), pos: pos}, [access]), pos: pos};
+				final fnName: String = 'rawToPaired_' + leafOf(refName);
+				final call: Expr = { expr: ECall({ expr: EConst(CIdent(fnName)), pos: pos }, [access]), pos: pos };
 				return optional ? macro ($access == null ? null : $call) : call;
 			case Star:
-				final elem:ShapeNode = node.children[0];
-				final triviaWrap:Bool = node.annotations.get('trivia.starCollects') == true;
-				final optional:Bool = node.annotations.get('base.optional') == true;
-				final iterVar:String = triviaWrap ? 'e' : 'e';
-				final iterExpr:Expr = {expr: EConst(CIdent(iterVar)), pos: pos};
-				final innerWrap:Expr = shapeRawToPairedWrap(iterExpr, elem, pos);
-				final perElem:Expr = triviaWrap
+				final elem: ShapeNode = node.children[0];
+				final triviaWrap: Bool = node.annotations.get('trivia.starCollects') == true;
+				final optional: Bool = node.annotations.get('base.optional') == true;
+				final iterVar: String = triviaWrap ? 'e' : 'e';
+				final iterExpr: Expr = { expr: EConst(CIdent(iterVar)), pos: pos };
+				final innerWrap: Expr = shapeRawToPairedWrap(iterExpr, elem, pos);
+				final perElem: Expr = triviaWrap
 					? macro ({
 						blankBefore: false,
 						blankAfterLeadingComments: false,
 						newlineBefore: false,
-						leadingComments: ([] : Array<String>),
-						trailingComment: (null : Null<String>),
+						leadingComments: ([]: Array<String>),
+						trailingComment: (null: Null<String>),
 						trailingBeforeSep: false,
 						sepAfter: true,
 						node: $innerWrap,
 					})
 					: innerWrap;
-				final compr:Expr = {expr: EArrayDecl([{
-					expr: EFor(
-						{expr: EBinop(OpIn, {expr: EConst(CIdent(iterVar)), pos: pos}, access), pos: pos},
-						perElem
-					),
-					pos: pos,
-				}]), pos: pos};
+				final compr: Expr = {
+					expr: EArrayDecl([
+						{
+							expr: EFor({ expr: EBinop(OpIn, { expr: EConst(CIdent(iterVar)), pos: pos }, access), pos: pos }, perElem),
+							pos: pos,
+						}
+					]),
+					pos: pos
+				};
 				return optional ? macro ($access == null ? null : $compr) : compr;
 			case Terminal:
 				return access;
@@ -909,12 +908,12 @@ class TriviaTypeSynth {
 		}
 	}
 
-	private static function buildTypeDefinition(origName:String, origNode:ShapeNode, synthPack:Array<String>):TypeDefinition {
-		final pairedSimple:String = leafOf(origName) + PAIRED_SUFFIX;
-		final pos:Position = Context.currentPos();
+	private static function buildTypeDefinition(origName: String, origNode: ShapeNode, synthPack: Array<String>): TypeDefinition {
+		final pairedSimple: String = leafOf(origName) + PAIRED_SUFFIX;
+		final pos: Position = Context.currentPos();
 		return switch origNode.kind {
 			case Seq:
-				final fields:Array<Field> = [];
+				final fields: Array<Field> = [];
 				for (child in origNode.children) {
 					fields.push(buildStructField(child, pos, synthPack));
 					// ω-issue-316: `@:optional @:kw(...)` Ref fields grow two
@@ -923,24 +922,27 @@ class TriviaTypeSynth {
 					// comments captured between kw and body (`KwLeading`).
 					// Writer consumes these to preserve source layout; absent
 					// consumers read `null` / `[]` with no harm.
-					if (isOptionalKw(child))
-						for (extra in buildKwTriviaSlots(child, pos)) fields.push(extra);
+					if (isOptionalKw(child)) for (extra in buildKwTriviaSlots(child, pos)) fields.push(extra);
 					// ω-orphan-trivia: `@:trivia` Star fields grow two
 					// sibling slots capturing trailing trivia (own-line
 					// comments between the last element and the close /
 					// EOF). Without them a class body like `{ /* orphan */ }`
 					// would lose its comment at parse time.
-					if (isTriviaStarField(child))
-						for (extra in buildStarTrailingSlots(child, pos)) fields.push(extra);
+					if (isTriviaStarField(child)) for (extra in buildStarTrailingSlots(child, pos)) fields.push(extra);
 					// ω-condcomp-body-leading-sep: independent of @:trivia.
 					// Add a `<field>SepBefore:Bool` slot for Stars opting into
 					// `@:fmt(sepBeforeOpt)` (Slice 18f). First consumer is
 					// `HxConditionalParam.body`, which is a NON-trivia Star —
 					// the slot synthesis must not be gated on `isTriviaStarField`.
 					if (isSepBeforeOptStarField(child)) {
-						final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
-						final fieldName:String = child.annotations.get('base.fieldName');
-						fields.push({name: fieldName + SEP_BEFORE_SUFFIX, kind: FVar(boolCT), pos: pos, access: []});
+						final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
+						final fieldName: String = child.annotations.get('base.fieldName');
+						fields.push({
+							name: fieldName + SEP_BEFORE_SUFFIX,
+							kind: FVar(boolCT),
+							pos: pos,
+							access: []
+						});
 					}
 					// ω-issue-48-v2: bare non-first Ref fields grow a
 					// `BeforeNewline:Bool` slot capturing whether the source
@@ -954,8 +956,7 @@ class TriviaTypeSynth {
 					// companion — its `BeforeNewline` `collectTrivia` scan owns
 					// the pre-field gap. The Star-opt-in host reads a different
 					// parser local, so it keeps `BeforeNewline` only.
-					if (isBareNonFirstRef(child, origNode))
-						fields.push(buildBeforeLeadingSlot(child, pos));
+					if (isBareNonFirstRef(child, origNode)) fields.push(buildBeforeLeadingSlot(child, pos));
 					// ω-trivia-after-trail: any mandatory Ref field with
 					// `@:trail` grows a `<field>AfterTrail:Null<String>` slot
 					// holding a same-line `// comment` captured right after
@@ -964,8 +965,7 @@ class TriviaTypeSynth {
 					// `thenBody`); other Ref+trail fields without a
 					// bodyPolicy sibling synthesise the slot harmlessly and
 					// can opt in later.
-					if (isTrailRef(child))
-						fields.push(buildAfterTrailSlot(child, pos));
+					if (isTrailRef(child)) fields.push(buildAfterTrailSlot(child, pos));
 					// ω-cond-comp-expr-multiline: bare Ref fields opted in via
 					// `@:fmt(captureSourceNewlineAfter)` grow a `NewlineAfter:Bool`
 					// slot capturing whether the source had a newline AFTER
@@ -974,8 +974,7 @@ class TriviaTypeSynth {
 					// downstream sibling carries a slot (e.g.
 					// `HxConditionalExpr.expr → '#end'` when both `elseifs`
 					// and `elseExpr` are absent).
-					if (isPadTrailingTerminalRef(child))
-						fields.push(buildNewlineAfterSlot(child, pos));
+					if (isPadTrailingTerminalRef(child)) fields.push(buildNewlineAfterSlot(child, pos));
 					// ω-condition-wrap-keep: the mandatory-Ref condition field
 					// of a `@:fmt(condWrap)` struct opted in via
 					// `@:fmt(captureCondOpenNewline)` grows a `CondOpenNewline:Bool`
@@ -983,8 +982,7 @@ class TriviaTypeSynth {
 					// condition's open paren (`if (\n\tcond`). Read by the
 					// single-Ref condWrap emit so a `WrapMode.Keep` condition
 					// reproduces the author's post-`(` break.
-					if (isCondOpenNewlineRef(child))
-						fields.push(buildCondOpenNewlineSlot(child, pos));
+					if (isCondOpenNewlineRef(child)) fields.push(buildCondOpenNewlineSlot(child, pos));
 					// ω-struct-trailopt-source-track (Session 14 Phase 2 scaffold):
 					// struct typedef fields carrying `@:trailOpt(LIT)` grow an
 					// `@:optional` `<field>TrailPresent:Null<Bool>` slot. The
@@ -1005,29 +1003,46 @@ class TriviaTypeSynth {
 					// issue_366_nested_array_comprehension` (nested `;` preserved),
 					// `whitespace/issue_195`/`221` (do-while bare-body — Slice 36
 					// pivot). See [[project-blockbody-star-session14-design]].
-					if (isStructFieldTrailOpt(child))
-						fields.push(buildStructFieldTrailPresentSlot(child, pos));
+					if (isStructFieldTrailOpt(child)) fields.push(buildStructFieldTrailPresentSlot(child, pos));
 				}
-				final anon:ComplexType = TAnonymous(fields);
-				{pos: pos, pack: synthPack, name: pairedSimple, kind: TDAlias(anon), fields: []};
+				final anon: ComplexType = TAnonymous(fields);
+				{
+					pos: pos,
+					pack: synthPack,
+					name: pairedSimple,
+					kind: TDAlias(anon),
+					fields: []
+				};
 			case Alt:
-				final fields:Array<Field> = [for (branch in origNode.children) buildEnumCtor(branch, pos, synthPack)];
-				{pos: pos, pack: synthPack, name: pairedSimple, kind: TDEnum, fields: fields};
+				final fields: Array<Field> = [for (branch in origNode.children) buildEnumCtor(branch, pos, synthPack)];
+				{
+					pos: pos,
+					pack: synthPack,
+					name: pairedSimple,
+					kind: TDEnum,
+					fields: fields
+				};
 			case _:
 				Context.fatalError('TriviaTypeSynth: unsupported bearing kind ${origNode.kind} for $origName', pos);
 				throw 'unreachable';
 		};
 	}
 
-	private static function buildStructField(child:ShapeNode, pos:Position, synthPack:Array<String>):Field {
-		final fieldName:String = child.annotations.get('base.fieldName');
-		final ct:ComplexType = shapeToComplexType(child, synthPack);
-		final optional:Bool = child.annotations.get('base.optional') == true;
-		final meta:Metadata = optional ? [{name: ':optional', params: [], pos: pos}] : [];
-		return {name: fieldName, kind: FVar(ct), pos: pos, access: [], meta: meta};
+	private static function buildStructField(child: ShapeNode, pos: Position, synthPack: Array<String>): Field {
+		final fieldName: String = child.annotations.get('base.fieldName');
+		final ct: ComplexType = shapeToComplexType(child, synthPack);
+		final optional: Bool = child.annotations.get('base.optional') == true;
+		final meta: Metadata = optional ? [{ name: ':optional', params: [], pos: pos }] : [];
+		return {
+			name: fieldName,
+			kind: FVar(ct),
+			pos: pos,
+			access: [],
+			meta: meta
+		};
 	}
 
-	private static function isOptionalKw(child:ShapeNode):Bool {
+	private static function isOptionalKw(child: ShapeNode): Bool {
 		// Generalised over kind=Ref|Star — both shapes need the kw-trivia
 		// sibling slots (`<f>BeforeKwLeading` / `<f>BeforeKwTrailing` /
 		// `<f>AfterKw` / `<f>KwLeading` / `<f>BeforeKwNewline` /
@@ -1045,7 +1060,7 @@ class TriviaTypeSynth {
 		return child.readMetaString(':kw') != null;
 	}
 
-	private static function isBareNonFirstRef(child:ShapeNode, parent:ShapeNode):Bool {
+	private static function isBareNonFirstRef(child: ShapeNode, parent: ShapeNode): Bool {
 		if (child.kind != Ref) return false;
 		if (child.annotations.get('base.optional') == true) return false;
 		if (child.readMetaString(':kw') != null) return false;
@@ -1071,7 +1086,7 @@ class TriviaTypeSynth {
 	 * parent ctor omits via `@:fmt(forwardNewlineForBody)`). Read by the
 	 * writer's struct-Star emit under `opt.leftCurly == Next`.
 	 */
-	private static function isBareFirstStarNlOptIn(child:ShapeNode, parent:ShapeNode):Bool {
+	private static function isBareFirstStarNlOptIn(child: ShapeNode, parent: ShapeNode): Bool {
 		if (child.kind != Star) return false;
 		if (child.annotations.get('base.optional') == true) return false;
 		if (child.readMetaString(':kw') != null) return false;
@@ -1080,10 +1095,15 @@ class TriviaTypeSynth {
 		return child.fmtHasFlag('beforeNewlineSlotFirst');
 	}
 
-	private static function buildBeforeNewlineSlot(child:ShapeNode, pos:Position):Field {
-		final fieldName:String = child.annotations.get('base.fieldName');
-		final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
-		return {name: fieldName + BEFORE_NEWLINE_SUFFIX, kind: FVar(boolCT), pos: pos, access: []};
+	private static function buildBeforeNewlineSlot(child: ShapeNode, pos: Position): Field {
+		final fieldName: String = child.annotations.get('base.fieldName');
+		final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
+		return {
+			name: fieldName + BEFORE_NEWLINE_SUFFIX,
+			kind: FVar(boolCT),
+			pos: pos,
+			access: []
+		};
 	}
 
 	/**
@@ -1092,12 +1112,19 @@ class TriviaTypeSynth {
 	 * `isBareNonFirstRef` host. Holds the verbatim comments the
 	 * `BeforeNewline` `collectTrivia` scan captured in the pre-field gap.
 	 */
-	private static function buildBeforeLeadingSlot(child:ShapeNode, pos:Position):Field {
-		final fieldName:String = child.annotations.get('base.fieldName');
-		final arrayStrCT:ComplexType = TPath({
-			pack: [], name: 'Array', params: [TPType(TPath({pack: [], name: 'String', params: []}))]
+	private static function buildBeforeLeadingSlot(child: ShapeNode, pos: Position): Field {
+		final fieldName: String = child.annotations.get('base.fieldName');
+		final arrayStrCT: ComplexType = TPath({
+			pack: [],
+			name: 'Array',
+			params: [TPType(TPath({ pack: [], name: 'String', params: [] }))]
 		});
-		return {name: fieldName + BEFORE_LEADING_SUFFIX, kind: FVar(arrayStrCT), pos: pos, access: []};
+		return {
+			name: fieldName + BEFORE_LEADING_SUFFIX,
+			kind: FVar(arrayStrCT),
+			pos: pos,
+			access: []
+		};
 	}
 
 	/**
@@ -1110,16 +1137,21 @@ class TriviaTypeSynth {
 	 * captures a same-line `// comment` into `<field>AfterTrail`, same as
 	 * the mandatory path. The absent branch leaves the slot null.
 	 */
-	private static function isTrailRef(child:ShapeNode):Bool {
+	private static function isTrailRef(child: ShapeNode): Bool {
 		if (child.kind != Ref) return false;
 		return child.readMetaString(':trail') != null;
 	}
 
-	private static function buildAfterTrailSlot(child:ShapeNode, pos:Position):Field {
-		final fieldName:String = child.annotations.get('base.fieldName');
-		final strCT:ComplexType = TPath({pack: [], name: 'String', params: []});
-		final nullStrCT:ComplexType = TPath({pack: [], name: 'Null', params: [TPType(strCT)]});
-		return {name: fieldName + AFTER_TRAIL_SUFFIX, kind: FVar(nullStrCT), pos: pos, access: []};
+	private static function buildAfterTrailSlot(child: ShapeNode, pos: Position): Field {
+		final fieldName: String = child.annotations.get('base.fieldName');
+		final strCT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
+		final nullStrCT: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT)] });
+		return {
+			name: fieldName + AFTER_TRAIL_SUFFIX,
+			kind: FVar(nullStrCT),
+			pos: pos,
+			access: []
+		};
 	}
 
 	/**
@@ -1133,12 +1165,18 @@ class TriviaTypeSynth {
 	 * `buildStarTrailingSlots`'s `@:sep+@:trail` Star case (disjoint host
 	 * — Ref vs Star within one Seq cannot collide on field name).
 	 */
-	private static function buildStructFieldTrailPresentSlot(child:ShapeNode, pos:Position):Field {
-		final fieldName:String = child.annotations.get('base.fieldName');
-		final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
-		final nullBoolCT:ComplexType = TPath({pack: [], name: 'Null', params: [TPType(boolCT)]});
-		final meta:Metadata = [{name: ':optional', params: [], pos: pos}];
-		return {name: fieldName + TRAIL_PRESENT_SUFFIX, kind: FVar(nullBoolCT), pos: pos, access: [], meta: meta};
+	private static function buildStructFieldTrailPresentSlot(child: ShapeNode, pos: Position): Field {
+		final fieldName: String = child.annotations.get('base.fieldName');
+		final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
+		final nullBoolCT: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(boolCT)] });
+		final meta: Metadata = [{ name: ':optional', params: [], pos: pos }];
+		return {
+			name: fieldName + TRAIL_PRESENT_SUFFIX,
+			kind: FVar(nullBoolCT),
+			pos: pos,
+			access: [],
+			meta: meta
+		};
 	}
 
 	/**
@@ -1162,14 +1200,19 @@ class TriviaTypeSynth {
 	 *   - `HxConditionalExpr.elseExpr` (optional kw Ref) — captures the
 	 *     `elseExpr → '#end'` boundary newline.
 	 */
-	private static function isPadTrailingTerminalRef(child:ShapeNode):Bool {
+	private static function isPadTrailingTerminalRef(child: ShapeNode): Bool {
 		return child.kind == Ref && child.fmtHasFlag('captureSourceNewlineAfter');
 	}
 
-	private static function buildNewlineAfterSlot(child:ShapeNode, pos:Position):Field {
-		final fieldName:String = child.annotations.get('base.fieldName');
-		final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
-		return {name: fieldName + NEWLINE_AFTER_SUFFIX, kind: FVar(boolCT), pos: pos, access: []};
+	private static function buildNewlineAfterSlot(child: ShapeNode, pos: Position): Field {
+		final fieldName: String = child.annotations.get('base.fieldName');
+		final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
+		return {
+			name: fieldName + NEWLINE_AFTER_SUFFIX,
+			kind: FVar(boolCT),
+			pos: pos,
+			access: []
+		};
 	}
 
 	/**
@@ -1185,25 +1228,30 @@ class TriviaTypeSynth {
 	 * populated by `ShapeBuilder` before `arm()` runs — same path the sister
 	 * predicates rely on).
 	 */
-	private static function isCondOpenNewlineRef(child:ShapeNode):Bool {
+	private static function isCondOpenNewlineRef(child: ShapeNode): Bool {
 		if (child.kind != Ref) return false;
 		if (child.annotations.get('base.optional') == true) return false;
 		if (!child.fmtHasFlag('condWrap')) return false;
 		return child.fmtHasFlag('captureCondOpenNewline');
 	}
 
-	private static function buildCondOpenNewlineSlot(child:ShapeNode, pos:Position):Field {
-		final fieldName:String = child.annotations.get('base.fieldName');
-		final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
-		return {name: fieldName + CONDITION_OPEN_NEWLINE_SUFFIX, kind: FVar(boolCT), pos: pos, access: []};
+	private static function buildCondOpenNewlineSlot(child: ShapeNode, pos: Position): Field {
+		final fieldName: String = child.annotations.get('base.fieldName');
+		final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
+		return {
+			name: fieldName + CONDITION_OPEN_NEWLINE_SUFFIX,
+			kind: FVar(boolCT),
+			pos: pos,
+			access: []
+		};
 	}
 
-	private static function buildKwTriviaSlots(child:ShapeNode, pos:Position):Array<Field> {
-		final fieldName:String = child.annotations.get('base.fieldName');
-		final strCT:ComplexType = TPath({pack: [], name: 'String', params: []});
-		final nullStrCT:ComplexType = TPath({pack: [], name: 'Null', params: [TPType(strCT)]});
-		final arrayStrCT:ComplexType = TPath({pack: [], name: 'Array', params: [TPType(strCT)]});
-		final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
+	private static function buildKwTriviaSlots(child: ShapeNode, pos: Position): Array<Field> {
+		final fieldName: String = child.annotations.get('base.fieldName');
+		final strCT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
+		final nullStrCT: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT)] });
+		final arrayStrCT: ComplexType = TPath({ pack: [], name: 'Array', params: [TPType(strCT)] });
+		final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
 		// Slots are mandatory (no `@:optional`). The parser always
 		// populates them — `AfterKw` gets a captured same-line trailing
 		// or `null`; `KwLeading` gets a list of own-line comments
@@ -1212,16 +1260,46 @@ class TriviaTypeSynth {
 		// Mandatory typing keeps Null-Safety strict happy in the
 		// writer's `kwGapDoc` / `bodyPolicyWrap` call sites.
 		return [
-			{name: fieldName + AFTER_KW_SUFFIX, kind: FVar(nullStrCT), pos: pos, access: []},
-			{name: fieldName + KW_LEADING_SUFFIX, kind: FVar(arrayStrCT), pos: pos, access: []},
-			{name: fieldName + BEFORE_KW_NEWLINE_SUFFIX, kind: FVar(boolCT), pos: pos, access: []},
-			{name: fieldName + BODY_ON_SAME_LINE_SUFFIX, kind: FVar(boolCT), pos: pos, access: []},
-			{name: fieldName + BEFORE_KW_LEADING_SUFFIX, kind: FVar(arrayStrCT), pos: pos, access: []},
-			{name: fieldName + BEFORE_KW_TRAILING_SUFFIX, kind: FVar(nullStrCT), pos: pos, access: []},
+			{
+				name: fieldName + AFTER_KW_SUFFIX,
+				kind: FVar(nullStrCT),
+				pos: pos,
+				access: []
+			},
+			{
+				name: fieldName + KW_LEADING_SUFFIX,
+				kind: FVar(arrayStrCT),
+				pos: pos,
+				access: []
+			},
+			{
+				name: fieldName + BEFORE_KW_NEWLINE_SUFFIX,
+				kind: FVar(boolCT),
+				pos: pos,
+				access: []
+			},
+			{
+				name: fieldName + BODY_ON_SAME_LINE_SUFFIX,
+				kind: FVar(boolCT),
+				pos: pos,
+				access: []
+			},
+			{
+				name: fieldName + BEFORE_KW_LEADING_SUFFIX,
+				kind: FVar(arrayStrCT),
+				pos: pos,
+				access: []
+			},
+			{
+				name: fieldName + BEFORE_KW_TRAILING_SUFFIX,
+				kind: FVar(nullStrCT),
+				pos: pos,
+				access: []
+			},
 		];
 	}
 
-	private static function isTriviaStarField(child:ShapeNode):Bool {
+	private static function isTriviaStarField(child: ShapeNode): Bool {
 		return child.kind == Star && child.annotations.get('trivia.starCollects') == true;
 	}
 
@@ -1240,22 +1318,37 @@ class TriviaTypeSynth {
 	 * `WriterLowering.emitWriterStarField` (fatalError on missing
 	 * `padLeading`).
 	 */
-	private static function isSepBeforeOptStarField(child:ShapeNode):Bool {
+	private static function isSepBeforeOptStarField(child: ShapeNode): Bool {
 		return child.kind == Star && child.fmtHasFlag('sepBeforeOpt');
 	}
 
-	private static function buildStarTrailingSlots(child:ShapeNode, pos:Position):Array<Field> {
-		final fieldName:String = child.annotations.get('base.fieldName');
-		final strCT:ComplexType = TPath({pack: [], name: 'String', params: []});
-		final arrayStrCT:ComplexType = TPath({pack: [], name: 'Array', params: [TPType(strCT)]});
-		final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
-		final fields:Array<Field> = [
-			{name: fieldName + TRAILING_BLANK_BEFORE_SUFFIX, kind: FVar(boolCT), pos: pos, access: []},
+	private static function buildStarTrailingSlots(child: ShapeNode, pos: Position): Array<Field> {
+		final fieldName: String = child.annotations.get('base.fieldName');
+		final strCT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
+		final arrayStrCT: ComplexType = TPath({ pack: [], name: 'Array', params: [TPType(strCT)] });
+		final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
+		final fields: Array<Field> = [
+			{
+				name: fieldName + TRAILING_BLANK_BEFORE_SUFFIX,
+				kind: FVar(boolCT),
+				pos: pos,
+				access: []
+			},
 			// ω-keep-fnsig-newline: sibling slot recording a single newline (not
 			// a blank line) before the close. Defined unconditionally alongside
 			// TrailingBlankBefore so the arity stays locked.
-			{name: fieldName + TRAILING_NEWLINE_BEFORE_SUFFIX, kind: FVar(boolCT), pos: pos, access: []},
-			{name: fieldName + TRAILING_LEADING_SUFFIX, kind: FVar(arrayStrCT), pos: pos, access: []},
+			{
+				name: fieldName + TRAILING_NEWLINE_BEFORE_SUFFIX,
+				kind: FVar(boolCT),
+				pos: pos,
+				access: []
+			},
+			{
+				name: fieldName + TRAILING_LEADING_SUFFIX,
+				kind: FVar(arrayStrCT),
+				pos: pos,
+				access: []
+			},
 		];
 		// ω-close-trailing: close-peek Stars (those with `@:trail`)
 		// additionally carry a same-line trailing comment captured right
@@ -1271,8 +1364,13 @@ class TriviaTypeSynth {
 		// not yet populated `lit.trailText`. Mirrors `isOptionalKw`'s
 		// direct-meta read pattern.
 		if (child.readMetaString(':trail') != null) {
-			final nullStrCT:ComplexType = TPath({pack: [], name: 'Null', params: [TPType(strCT)]});
-			fields.push({name: fieldName + TRAILING_CLOSE_SUFFIX, kind: FVar(nullStrCT), pos: pos, access: []});
+			final nullStrCT: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT)] });
+			fields.push({
+				name: fieldName + TRAILING_CLOSE_SUFFIX,
+				kind: FVar(nullStrCT),
+				pos: pos,
+				access: []
+			});
 		}
 		// ω-open-trailing: same-line `// comment` after the open literal
 		// is captured here for Stars that carry `@:lead`. Read directly
@@ -1285,8 +1383,13 @@ class TriviaTypeSynth {
 		// `HxDefaultBranch.stmts` (`@:lead(':') @:trivia @:tryparse`) is
 		// the lone current consumer of this gate.
 		if (child.readMetaString(':lead') != null && !child.hasMeta(':tryparse')) {
-			final nullStrCT:ComplexType = TPath({pack: [], name: 'Null', params: [TPType(strCT)]});
-			fields.push({name: fieldName + TRAILING_OPEN_SUFFIX, kind: FVar(nullStrCT), pos: pos, access: []});
+			final nullStrCT: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT)] });
+			fields.push({
+				name: fieldName + TRAILING_OPEN_SUFFIX,
+				kind: FVar(nullStrCT),
+				pos: pos,
+				access: []
+			});
 		}
 		// ω-trail-blank-after: tryparse + nestBody Stars need a Bool slot
 		// to carry the source's blank-line-between-trail-and-next-sibling
@@ -1296,7 +1399,12 @@ class TriviaTypeSynth {
 		// `base.meta` for the same TriviaTypeSynth/Lit-pass ordering reason
 		// as `:trail` / `:lead` above.
 		if (child.hasMeta(':tryparse') && child.fmtHasFlag('nestBody')) {
-			fields.push({name: fieldName + TRAILING_BLANK_AFTER_SUFFIX, kind: FVar(boolCT), pos: pos, access: []});
+			fields.push({
+				name: fieldName + TRAILING_BLANK_AFTER_SUFFIX,
+				kind: FVar(boolCT),
+				pos: pos,
+				access: []
+			});
 		}
 		// ω-objectlit-source-trail-comma: sep-Stars with a close literal
 		// grow a `Bool` slot capturing whether the source had a trailing
@@ -1312,18 +1420,31 @@ class TriviaTypeSynth {
 		// `lit.sepText` (set by Lit strategy after both 1- and 3-arg forms)
 		// — synth must match the parser to keep ctor / struct arity in sync.
 		if (child.hasMeta(':sep') && child.hasMeta(':trail')) {
-			fields.push({name: fieldName + TRAIL_PRESENT_SUFFIX, kind: FVar(boolCT), pos: pos, access: []});
+			fields.push({
+				name: fieldName + TRAIL_PRESENT_SUFFIX,
+				kind: FVar(boolCT),
+				pos: pos,
+				access: []
+			});
 		}
 		return fields;
 	}
 
-	private static function buildEnumCtor(branch:ShapeNode, pos:Position, synthPack:Array<String>):Field {
-		final ctorName:String = branch.annotations.get('base.ctor');
-		if (branch.children.length == 0) return {name: ctorName, kind: FVar(null), pos: pos, access: []};
-		final args:Array<FunctionArg> = [for (arg in branch.children) {
-			name: (arg.annotations.get('base.fieldName') : String),
-			type: shapeToComplexType(arg, synthPack),
-		}];
+	private static function buildEnumCtor(branch: ShapeNode, pos: Position, synthPack: Array<String>): Field {
+		final ctorName: String = branch.annotations.get('base.ctor');
+		if (branch.children.length == 0) return {
+			name: ctorName,
+			kind: FVar(null),
+			pos: pos,
+			access: []
+		};
+		final args: Array<FunctionArg> = [
+			for (arg in branch.children)
+				{
+					name: (arg.annotations.get('base.fieldName'): String),
+					type: shapeToComplexType(arg, synthPack),
+				}
+		];
 		// ω-close-trailing-alt: close-peek `@:trivia` Alt-branch Stars
 		// (only `HxStatement.BlockStmt` in the current grammar) grow a
 		// positional `closeTrailing:Null<String>` arg alongside the
@@ -1342,16 +1463,16 @@ class TriviaTypeSynth {
 		// (or, when the Star is empty, between open and close) is lost
 		// at parse — the synth ctor had no slot for it.
 		if (isAltCloseTrailingBranch(branch)) {
-			final strCT:ComplexType = TPath({pack: [], name: 'String', params: []});
-			final nullStrCT:ComplexType = TPath({pack: [], name: 'Null', params: [TPType(strCT)]});
-			args.push({name: 'closeTrailing', type: nullStrCT});
+			final strCT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
+			final nullStrCT: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT)] });
+			args.push({ name: 'closeTrailing', type: nullStrCT });
 			// `:tryparse` excluded for parity with `buildStarTrailingSlots` —
 			// the writer's tryparse helper does not consume an open-trail
 			// slot, so capturing one would silently drop the comment at
 			// write time. Today no Alt branch combines `:trivia + :tryparse`
 			// + `:lead` so the guard is dormant; kept for forward parity.
 			if (branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse')) {
-				args.push({name: 'openTrailing', type: nullStrCT});
+				args.push({ name: 'openTrailing', type: nullStrCT });
 				// ω-orphan-trivia-alt: orphan trivia between the last Star
 				// element and the close literal (e.g. trailing line comment
 				// inside `try { p(); /* dropped */ }`). Mirror of the Seq-
@@ -1363,12 +1484,14 @@ class TriviaTypeSynth {
 				// `argNames[4]`. Gated on `@:lead`-present for predictable arg
 				// position; today's `isAltCloseTrailingBranch` consumers all
 				// carry `@:lead`.
-				final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
-				final arrayStrCT:ComplexType = TPath({
-					pack: [], name: 'Array', params: [TPType(strCT)]
+				final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
+				final arrayStrCT: ComplexType = TPath({
+					pack: [],
+					name: 'Array',
+					params: [TPType(strCT)]
 				});
-				args.push({name: 'trailingBlankBefore', type: boolCT});
-				args.push({name: 'trailingLeading', type: arrayStrCT});
+				args.push({ name: 'trailingBlankBefore', type: boolCT });
+				args.push({ name: 'trailingLeading', type: arrayStrCT });
 				// ω-arraylit-source-trail-comma: enum-Alt sep+trail+lead+@:trivia
 				// branches (HxExpr.ArrayExpr, HxType.Anon) grow an additional
 				// `trailPresent:Bool` arg recording whether the source had a
@@ -1390,7 +1513,7 @@ class TriviaTypeSynth {
 				// (3-arg form) gates the same as 1-arg `@:sep(',')`. Sister
 				// fix in `buildStarTrailingSlots`.
 				if (branch.hasMeta(':sep')) {
-					args.push({name: TRAIL_PRESENT_ARG_NAME, type: boolCT});
+					args.push({ name: TRAIL_PRESENT_ARG_NAME, type: boolCT });
 				}
 			}
 		}
@@ -1402,8 +1525,8 @@ class TriviaTypeSynth {
 		// `base.meta` directly since `arm()` runs BEFORE the Lit pass
 		// populates `lit.trailOptional` on the branch.
 		if (isAltTrailOptBranch(branch)) {
-			final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
-			args.push({name: TRAIL_PRESENT_ARG_NAME, type: boolCT});
+			final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
+			args.push({ name: TRAIL_PRESENT_ARG_NAME, type: boolCT });
 		}
 		// ω-string-interp-noformat: ctors carrying `@:fmt(captureSource)`
 		// grow a positional `sourceText:String` arg holding the parser-
@@ -1415,8 +1538,8 @@ class TriviaTypeSynth {
 		// all three were ever to coexist on a single ctor, the arg order
 		// would be: closeTrailing → trailPresent → sourceText.
 		if (isCaptureSourceBranch(branch)) {
-			final strCT:ComplexType = TPath({pack: [], name: 'String', params: []});
-			args.push({name: SOURCE_TEXT_ARG_NAME, type: strCT});
+			final strCT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
+			args.push({ name: SOURCE_TEXT_ARG_NAME, type: strCT });
 		}
 		// ω-issue-257-firstline: single-Ref kw-led Alt branches carrying
 		// `@:fmt(bodyPolicy(...))` grow a positional `bodyOnSameLine:Bool`
@@ -1428,8 +1551,8 @@ class TriviaTypeSynth {
 		// Disjoint from the close-trailing predicates (single Ref child
 		// shape, no Star child).
 		if (isAltBodyPolicyKwBranch(branch)) {
-			final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
-			args.push({name: BODY_ON_SAME_LINE_ARG_NAME, type: boolCT});
+			final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
+			args.push({ name: BODY_ON_SAME_LINE_ARG_NAME, type: boolCT });
 		}
 		// ω-paren-wrap-source-newline: single-Ref @:wrap(open, close) Alt
 		// branches opting into source-shape capture via
@@ -1443,8 +1566,8 @@ class TriviaTypeSynth {
 		// so indices in WriterLowering stay deterministic. First consumer:
 		// HxExpr.ParenExpr.
 		if (isAltWrapOpenNewlineBranch(branch)) {
-			final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
-			args.push({name: WRAP_OPEN_NEWLINE_ARG_NAME, type: boolCT});
+			final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
+			args.push({ name: WRAP_OPEN_NEWLINE_ARG_NAME, type: boolCT });
 		}
 		// ω-keep-kw-newline (increment 1b): mandatory-`@:kw` VarStmt-family Alt
 		// branches opting into source-shape capture via `@:fmt(captureKwNewline)`
@@ -1457,8 +1580,8 @@ class TriviaTypeSynth {
 		// ordering so indices in WriterLowering stay deterministic. First
 		// consumers: HxStatement.{VarStmt, FinalStmt, StaticVarStmt, StaticFinalStmt}.
 		if (isAltKwNewlineBranch(branch)) {
-			final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
-			args.push({name: KW_NEWLINE_ARG_NAME, type: boolCT});
+			final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
+			args.push({ name: KW_NEWLINE_ARG_NAME, type: boolCT });
 		}
 		// ω-keep-chain (increment 2): Pratt/infix enum ctors opting into
 		// per-operand source-newline capture via `@:fmt(captureChainNewline)`
@@ -1471,8 +1594,8 @@ class TriviaTypeSynth {
 		// reaches it as the terminal `ChainNewline` slot. First consumers:
 		// HxExpr.{Add, Sub, And, Or}.
 		if (isAltChainNewlineBranch(branch)) {
-			final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
-			args.push({name: CHAIN_NEWLINE_ARG_NAME, type: boolCT});
+			final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
+			args.push({ name: CHAIN_NEWLINE_ARG_NAME, type: boolCT });
 		}
 		// ω-keep-chain-receiver-comment: the `@:postfix('.')` FieldAccess ctor
 		// grows a `chainLeadComment:Null<String>` slot immediately after its
@@ -1482,9 +1605,9 @@ class TriviaTypeSynth {
 		// single FieldAccess branch and stays disjoint from the closeTrailing
 		// family below (FieldAccess carries no close delimiter).
 		if (isPostfixChainCommentBranch(branch)) {
-			final strCT:ComplexType = TPath({pack: [], name: 'String', params: []});
-			final nullStrCT:ComplexType = TPath({pack: [], name: 'Null', params: [TPType(strCT)]});
-			args.push({name: CHAIN_LEAD_COMMENT_ARG_NAME, type: nullStrCT});
+			final strCT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
+			final nullStrCT: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT)] });
+			args.push({ name: CHAIN_LEAD_COMMENT_ARG_NAME, type: nullStrCT });
 		}
 		// ω-postfix-call-trailing: Star-suffix `@:postfix(open, close) @:sep(...)`
 		// branches whose Star already auto-collects per-arg trivia
@@ -1498,9 +1621,9 @@ class TriviaTypeSynth {
 		// Disjoint from the four predicates above (different shape predicates),
 		// so at most one of these adds applies to any given branch.
 		if (isPostfixCloseTrailingBranch(branch)) {
-			final strCT:ComplexType = TPath({pack: [], name: 'String', params: []});
-			final nullStrCT:ComplexType = TPath({pack: [], name: 'Null', params: [TPType(strCT)]});
-			args.push({name: 'closeTrailing', type: nullStrCT});
+			final strCT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
+			final nullStrCT: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT)] });
+			args.push({ name: 'closeTrailing', type: nullStrCT });
 			// ω-D9A-keep-callargs-v2: parallel positional `argsOpenNewline:Bool`
 			// slot capturing whether source had `\n` between the postfix open
 			// literal (e.g. `(`) and the first arg's leading non-whitespace.
@@ -1513,8 +1636,8 @@ class TriviaTypeSynth {
 			// `Lowering` BEFORE the per-iter `skipWs(ctx)` / `collectTrivia(ctx)`
 			// can lose it. Co-occurs with `closeTrailing` so the writer
 			// reads via `argNames[3]` (closeTrailing stays at argNames[2]).
-			final boolCT:ComplexType = TPath({pack: [], name: 'Bool', params: []});
-			args.push({name: 'argsOpenNewline', type: boolCT});
+			final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
+			args.push({ name: 'argsOpenNewline', type: boolCT });
 			// ω-keep-callclose-newline: sibling positional `argsCloseNewline:Bool`
 			// recording whether source had `\n` between the last arg (or the open
 			// lit for an empty list) and the postfix close literal (e.g. `arg\n)`
@@ -1526,9 +1649,14 @@ class TriviaTypeSynth {
 			// close `)` stays glued to the chain's last token (`})));`) instead of
 			// the `shapeFillLine` `isChainOPLBreak` own-line break. Reads via
 			// `argNames[4]` (argsOpenNewline stays at argNames[3]).
-			args.push({name: 'argsCloseNewline', type: boolCT});
+			args.push({ name: 'argsCloseNewline', type: boolCT });
 		}
-		return {name: ctorName, kind: FFun({args: args, ret: null, expr: null}), pos: pos, access: []};
+		return {
+			name: ctorName,
+			kind: FFun({ args: args, ret: null, expr: null }),
+			pos: pos,
+			access: []
+		};
 	}
 
 	/**
@@ -1556,10 +1684,10 @@ class TriviaTypeSynth {
 	 * TriviaTypeSynth.arm → registry.runAnnotate); only the marker's
 	 * `trivia.starCollects` flag is reliably present at arm-time.
 	 */
-	public static function isPostfixCloseTrailingBranch(branch:ShapeNode):Bool {
+	public static function isPostfixCloseTrailingBranch(branch: ShapeNode): Bool {
 		if (branch.children.length != 2) return false;
 		if (branch.children[0].kind != Ref) return false;
-		final star:ShapeNode = branch.children[1];
+		final star: ShapeNode = branch.children[1];
 		if (star.kind != Star) return false;
 		if (star.annotations.get('trivia.starCollects') != true) return false;
 		// Tighten: `trivia.starCollects` is also set by `markStarsWithTrivia`
@@ -1568,7 +1696,7 @@ class TriviaTypeSynth {
 		// `lowerPostfixLoop` is the only producer for the slot. Read
 		// `:postfix` from raw `base.meta` (Postfix strategy hasn't run yet)
 		// to ensure the branch is a postfix ctor.
-		final meta:Null<Metadata> = branch.annotations.get('base.meta');
+		final meta: Null<Metadata> = branch.annotations.get('base.meta');
 		if (meta == null) return false;
 		for (entry in meta) if (entry.name == ':postfix' && entry.params.length == 2) return true;
 		return false;
@@ -1581,9 +1709,9 @@ class TriviaTypeSynth {
 	 * Reads `@:trail` from `base.meta` directly since `arm()` runs
 	 * before the Lit strategy populates `lit.trailText`.
 	 */
-	public static function isAltCloseTrailingBranch(branch:ShapeNode):Bool {
+	public static function isAltCloseTrailingBranch(branch: ShapeNode): Bool {
 		if (branch.children.length != 1) return false;
-		final star:ShapeNode = branch.children[0];
+		final star: ShapeNode = branch.children[0];
 		if (star.kind != Star) return false;
 		if (star.annotations.get('trivia.starCollects') != true) return false;
 		return branch.readMetaString(':trail') != null;
@@ -1600,7 +1728,7 @@ class TriviaTypeSynth {
 	 * single Star child with `@:trail`, this requires a single Ref child
 	 * with `@:trailOpt`. The two never coexist on the same branch.
 	 */
-	public static function isAltTrailOptBranch(branch:ShapeNode):Bool {
+	public static function isAltTrailOptBranch(branch: ShapeNode): Bool {
 		if (branch.children.length != 1) return false;
 		if (branch.children[0].kind != Ref) return false;
 		return branch.readMetaString(':trailOpt') != null;
@@ -1628,7 +1756,7 @@ class TriviaTypeSynth {
 	 * enum Alt branch — orthogonal contexts; same `@:trailOpt` meta
 	 * but different host kind).
 	 */
-	public static function isStructFieldTrailOpt(field:ShapeNode):Bool {
+	public static function isStructFieldTrailOpt(field: ShapeNode): Bool {
 		return field.readMetaString(':trailOpt') != null;
 	}
 
@@ -1645,7 +1773,7 @@ class TriviaTypeSynth {
 	 * `isAltTrailOptBranch` since `@:trailOpt` and unconditional
 	 * `@:trail` are mutually exclusive on the same ctor.
 	 */
-	public static function isCaptureSourceBranch(branch:ShapeNode):Bool {
+	public static function isCaptureSourceBranch(branch: ShapeNode): Bool {
 		if (branch.children.length != 1) return false;
 		if (branch.children[0].kind != Ref) return false;
 		if (branch.readMetaString(':lead') == null) return false;
@@ -1673,7 +1801,7 @@ class TriviaTypeSynth {
 	 * close-trailing predicates (single Ref child, no Star child). First
 	 * consumer: `HxStatement.ReturnStmt`.
 	 */
-	public static function isAltBodyPolicyKwBranch(branch:ShapeNode):Bool {
+	public static function isAltBodyPolicyKwBranch(branch: ShapeNode): Bool {
 		if (branch.children.length != 1) return false;
 		if (branch.children[0].kind != Ref) return false;
 		if (branch.readMetaString(':kw') == null) return false;
@@ -1699,7 +1827,7 @@ class TriviaTypeSynth {
 	 * Plain mode keeps the original ctor arity and the writer falls back
 	 * to the unconditional glue shape. First consumer: `HxExpr.ParenExpr`.
 	 */
-	public static function isAltWrapOpenNewlineBranch(branch:ShapeNode):Bool {
+	public static function isAltWrapOpenNewlineBranch(branch: ShapeNode): Bool {
 		if (branch.children.length != 1) return false;
 		if (branch.children[0].kind != Ref) return false;
 		if (branch.hasMeta(':kw')) return false;
@@ -1711,8 +1839,8 @@ class TriviaTypeSynth {
 		// `readMetaString` because `@:wrap` carries TWO params (open + close)
 		// and `readMetaString` requires exactly one. Both authoring forms
 		// grow the same lit pair downstream.
-		final hasWrap:Bool = branch.hasMeta(':wrap');
-		final hasLeadTrail:Bool = branch.hasMeta(':lead') && branch.hasMeta(':trail');
+		final hasWrap: Bool = branch.hasMeta(':wrap');
+		final hasLeadTrail: Bool = branch.hasMeta(':lead') && branch.hasMeta(':trail');
 		if (!(hasWrap || hasLeadTrail)) return false;
 		return branch.fmtHasFlag('captureWrapOpenNewline');
 	}
@@ -1731,7 +1859,7 @@ class TriviaTypeSynth {
 	 * rely on). First consumers: `HxStatement.{VarStmt, FinalStmt,
 	 * StaticVarStmt, StaticFinalStmt}`.
 	 */
-	public static function isAltKwNewlineBranch(branch:ShapeNode):Bool {
+	public static function isAltKwNewlineBranch(branch: ShapeNode): Bool {
 		if (branch.children.length != 1) return false;
 		if (branch.children[0].kind != Ref) return false;
 		if (!branch.hasMeta(':kw')) return false;
@@ -1757,7 +1885,7 @@ class TriviaTypeSynth {
 	 * postfix-close-trailing branch). Consumers: `HxExpr.{Add, Sub, And, Or,
 	 * FieldAccess}`.
 	 */
-	public static function isAltChainNewlineBranch(branch:ShapeNode):Bool {
+	public static function isAltChainNewlineBranch(branch: ShapeNode): Bool {
 		if (branch.children.length != 2) return false;
 		if (!branch.hasMeta(':infix') && !branch.hasMeta(':postfix')) return false;
 		return branch.fmtHasFlag('captureChainNewline');
@@ -1774,59 +1902,58 @@ class TriviaTypeSynth {
 	 * excluded since they capture operand trivia through the Pratt stash, not a
 	 * dedicated slot. Two operand children (`operand,field`).
 	 */
-	public static function isPostfixChainCommentBranch(branch:ShapeNode):Bool {
+	public static function isPostfixChainCommentBranch(branch: ShapeNode): Bool {
 		if (branch.children.length != 2) return false;
 		if (!branch.hasMeta(':postfix')) return false;
 		return branch.fmtHasFlag('captureChainNewline');
 	}
 
-	private static function shapeToComplexType(node:ShapeNode, synthPack:Array<String>):ComplexType {
+	private static function shapeToComplexType(node: ShapeNode, synthPack: Array<String>): ComplexType {
 		return switch node.kind {
 			case Ref:
-				final refName:String = node.annotations.get('base.ref');
-				final base:ComplexType = refIsBearing(refName)
-					? TPath({pack: synthPack, name: leafOf(refName) + PAIRED_SUFFIX, params: []})
-					: TPath({pack: packOf(refName), name: leafOf(refName), params: []});
+				final refName: String = node.annotations.get('base.ref');
+				final base: ComplexType = refIsBearing(refName)
+					? TPath({ pack: synthPack, name: leafOf(refName) + PAIRED_SUFFIX, params: [] })
+					: TPath({ pack: packOf(refName), name: leafOf(refName), params: [] });
 				return wrapOptional(node, base);
 			case Star:
-				final elementCT:ComplexType = shapeToComplexType(node.children[0], synthPack);
-				final wrapped:ComplexType = node.annotations.get('trivia.starCollects') == true
-					? TPath({pack: ['anyparse', 'runtime'], name: 'Trivial', params: [TPType(elementCT)]})
+				final elementCT: ComplexType = shapeToComplexType(node.children[0], synthPack);
+				final wrapped: ComplexType = node.annotations.get('trivia.starCollects') == true
+					? TPath({ pack: ['anyparse', 'runtime'], name: 'Trivial', params: [TPType(elementCT)] })
 					: elementCT;
-				return wrapOptional(node, TPath({pack: [], name: 'Array', params: [TPType(wrapped)]}));
+				return wrapOptional(node, TPath({ pack: [], name: 'Array', params: [TPType(wrapped)] }));
 			case Terminal:
-				final tp:Null<String> = node.annotations.get('base.typePath');
-				if (tp != null) return wrapOptional(node, TPath({pack: packOf(tp), name: leafOf(tp), params: []}));
-				final under:String = node.annotations.get('base.underlying');
-				return wrapOptional(node, TPath({pack: [], name: under, params: []}));
+				final tp: Null<String> = node.annotations.get('base.typePath');
+				if (tp != null) return wrapOptional(node, TPath({ pack: packOf(tp), name: leafOf(tp), params: [] }));
+				final under: String = node.annotations.get('base.underlying');
+				return wrapOptional(node, TPath({ pack: [], name: under, params: [] }));
 			case _:
 				Context.fatalError('TriviaTypeSynth: unexpected node kind ${node.kind} in field-shape', Context.currentPos());
 				throw 'unreachable';
 		};
 	}
 
-	private static inline function wrapOptional(node:ShapeNode, base:ComplexType):ComplexType {
-		return node.annotations.get('base.optional') == true
-			? TPath({pack: [], name: 'Null', params: [TPType(base)]})
-			: base;
+	private static inline function wrapOptional(node: ShapeNode, base: ComplexType): ComplexType {
+		return node.annotations.get('base.optional') == true ? TPath({ pack: [], name: 'Null', params: [TPType(base)] }) : base;
 	}
 
-	private static function refIsBearing(refName:String):Bool {
+	private static function refIsBearing(refName: String): Bool {
 		for (shape in shapes) {
-			final node:Null<ShapeNode> = shape.rules.get(refName);
+			final node: Null<ShapeNode> = shape.rules.get(refName);
 			if (node != null) return node.annotations.get('trivia.bearing') == true;
 		}
 		return false;
 	}
 
-	private static function packOf(qualifiedName:String):Array<String> {
-		final idx:Int = qualifiedName.lastIndexOf('.');
+	private static function packOf(qualifiedName: String): Array<String> {
+		final idx: Int = qualifiedName.lastIndexOf('.');
 		return idx == -1 ? [] : qualifiedName.substring(0, idx).split('.');
 	}
 
-	private static function leafOf(qualifiedName:String):String {
-		final idx:Int = qualifiedName.lastIndexOf('.');
+	private static function leafOf(qualifiedName: String): String {
+		final idx: Int = qualifiedName.lastIndexOf('.');
 		return idx == -1 ? qualifiedName : qualifiedName.substring(idx + 1);
 	}
+
 }
 #end

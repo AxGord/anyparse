@@ -39,17 +39,18 @@ package anyparse.grammar.haxe;
 @:raw
 enum HxStringSegment {
 
-	Literal(s:HxStringLitSegment);
+	Literal(s: HxStringLitSegment);
 
 	@:lit("$$")
 	Dollar;
 
 	@:lead("${") @:trail("}") @:fmt(captureSource('formatStringInterpolation'))
-	Block(expr:HxExpr);
+	Block(expr: HxExpr);
 
 	@:lead("$")
-	Ident(name:HxIdentLit);
+	Ident(name: HxIdentLit);
 
 	@:lit("$")
 	LoneDollar;
+
 }

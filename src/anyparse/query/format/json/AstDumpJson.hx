@@ -11,6 +11,6 @@ package anyparse.query.format.json;
  */
 @:peg @:schema(anyparse.format.text.JsonFormat) @:ws
 typedef AstDumpJson = {
-	var file:String;
-	var tree:AstNodeJson;
+	var file: String;
+	var tree: AstNodeJson;
 };

@@ -25,5 +25,5 @@ package anyparse.grammar.haxe;
 @:raw
 typedef HxInterpString = {
 	@:lead("'") @:trail("'")
-	var parts:Array<HxStringSegment>;
+	var parts: Array<HxStringSegment>;
 };

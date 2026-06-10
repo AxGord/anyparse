@@ -10,7 +10,9 @@ package anyparse.format.text;
  * - `Either`   — both forms are accepted (YAML flow, HJSON).
  */
 enum abstract KeySyntax(Int) {
+
 	final Quoted = 0;
 	final Unquoted = 1;
 	final Either = 2;
+
 }

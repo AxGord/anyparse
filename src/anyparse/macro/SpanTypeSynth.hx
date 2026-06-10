@@ -56,25 +56,25 @@ using anyparse.macro.MetaInspect;
  */
 class SpanTypeSynth {
 
-	private static inline final PAIRED_SUFFIX:String = 'S';
-	private static inline final SYNTH_SUBPACK:String = 'spans';
-	private static inline final SYNTH_MODULE_LEAF:String = 'Pairs';
-	private static inline final SPAN_FIELD_NAME:String = '_span';
-	private static inline final KIND_FIELD_NAME:String = '_kind';
-	private static inline final SPANNED_META:String = ':spanned';
+	private static inline final PAIRED_SUFFIX: String = 'S';
+	private static inline final SYNTH_SUBPACK: String = 'spans';
+	private static inline final SYNTH_MODULE_LEAF: String = 'Pairs';
+	private static inline final SPAN_FIELD_NAME: String = '_span';
+	private static inline final KIND_FIELD_NAME: String = '_kind';
+	private static inline final SPANNED_META: String = ':spanned';
 
-	private static final shapes:Array<ShapeBuilder.ShapeResult> = [];
-	private static final defined:Map<String, Bool> = new Map();
+	private static final shapes: Array<ShapeBuilder.ShapeResult> = [];
+	private static final defined: Map<String, Bool> = new Map();
 
-	public static function arm(shape:ShapeBuilder.ShapeResult):Void {
+	public static function arm(shape: ShapeBuilder.ShapeResult): Void {
 		if (shapes.indexOf(shape) == -1) shapes.push(shape);
-		final rootPack:Array<String> = packOf(shape.root);
-		final synthPack:Array<String> = rootPack.concat([SYNTH_SUBPACK]);
-		final modulePath:String = synthPack.concat([SYNTH_MODULE_LEAF]).join('.');
-		final paired:Array<TypeDefinition> = [];
+		final rootPack: Array<String> = packOf(shape.root);
+		final synthPack: Array<String> = rootPack.concat([SYNTH_SUBPACK]);
+		final modulePath: String = synthPack.concat([SYNTH_MODULE_LEAF]).join('.');
+		final paired: Array<TypeDefinition> = [];
 		for (origName => node in shape.rules) {
 			if (node.kind == Terminal) continue;
-			final pairedFqn:String = origName + PAIRED_SUFFIX;
+			final pairedFqn: String = origName + PAIRED_SUFFIX;
 			if (defined.exists(pairedFqn)) continue;
 			defined.set(pairedFqn, true);
 			paired.push(buildTypeDefinition(origName, node, synthPack));
@@ -83,92 +83,134 @@ class SpanTypeSynth {
 		Context.defineModule(modulePath, paired);
 	}
 
-	private static function buildTypeDefinition(origName:String, origNode:ShapeNode, synthPack:Array<String>):TypeDefinition {
-		final pairedSimple:String = leafOf(origName) + PAIRED_SUFFIX;
-		final pos:Position = Context.currentPos();
+	private static function buildTypeDefinition(origName: String, origNode: ShapeNode, synthPack: Array<String>): TypeDefinition {
+		final pairedSimple: String = leafOf(origName) + PAIRED_SUFFIX;
+		final pos: Position = Context.currentPos();
 		return switch origNode.kind {
 			case Seq:
-				final fields:Array<Field> = [for (child in origNode.children) buildStructField(child, pos, synthPack)];
+				final fields: Array<Field> = [for (child in origNode.children) buildStructField(child, pos, synthPack)];
 				if (origNode.readMetaString(SPANNED_META) != null) {
-					final spanCT:ComplexType = TPath({pack: ['anyparse', 'runtime'], name: 'Span', params: []});
-					final stringCT:ComplexType = TPath({pack: [], name: 'String', params: []});
-					fields.push({name: SPAN_FIELD_NAME, kind: FVar(spanCT), pos: pos, access: [], meta: []});
-					fields.push({name: KIND_FIELD_NAME, kind: FVar(stringCT), pos: pos, access: [], meta: []});
+					final spanCT: ComplexType = TPath({ pack: ['anyparse', 'runtime'], name: 'Span', params: [] });
+					final stringCT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
+					fields.push({
+						name: SPAN_FIELD_NAME,
+						kind: FVar(spanCT),
+						pos: pos,
+						access: [],
+						meta: []
+					});
+					fields.push({
+						name: KIND_FIELD_NAME,
+						kind: FVar(stringCT),
+						pos: pos,
+						access: [],
+						meta: []
+					});
 				}
-				final anon:ComplexType = TAnonymous(fields);
-				{pos: pos, pack: synthPack, name: pairedSimple, kind: TDAlias(anon), fields: []};
+				final anon: ComplexType = TAnonymous(fields);
+				{
+					pos: pos,
+					pack: synthPack,
+					name: pairedSimple,
+					kind: TDAlias(anon),
+					fields: []
+				};
 			case Alt:
-				final fields:Array<Field> = [for (branch in origNode.children) buildEnumCtor(branch, pos, synthPack)];
-				{pos: pos, pack: synthPack, name: pairedSimple, kind: TDEnum, fields: fields};
+				final fields: Array<Field> = [for (branch in origNode.children) buildEnumCtor(branch, pos, synthPack)];
+				{
+					pos: pos,
+					pack: synthPack,
+					name: pairedSimple,
+					kind: TDEnum,
+					fields: fields
+				};
 			case _:
 				Context.fatalError('SpanTypeSynth: unsupported kind ${origNode.kind} for $origName', pos);
 				throw 'unreachable';
 		};
 	}
 
-	private static function buildStructField(child:ShapeNode, pos:Position, synthPack:Array<String>):Field {
-		final fieldName:String = child.annotations.get('base.fieldName');
-		final ct:ComplexType = shapeToComplexType(child, synthPack);
-		final optional:Bool = child.annotations.get('base.optional') == true;
-		final meta:Metadata = optional ? [{name: ':optional', params: [], pos: pos}] : [];
-		return {name: fieldName, kind: FVar(ct), pos: pos, access: [], meta: meta};
+	private static function buildStructField(child: ShapeNode, pos: Position, synthPack: Array<String>): Field {
+		final fieldName: String = child.annotations.get('base.fieldName');
+		final ct: ComplexType = shapeToComplexType(child, synthPack);
+		final optional: Bool = child.annotations.get('base.optional') == true;
+		final meta: Metadata = optional ? [{ name: ':optional', params: [], pos: pos }] : [];
+		return {
+			name: fieldName,
+			kind: FVar(ct),
+			pos: pos,
+			access: [],
+			meta: meta
+		};
 	}
 
-	private static function buildEnumCtor(branch:ShapeNode, pos:Position, synthPack:Array<String>):Field {
-		final ctorName:String = branch.annotations.get('base.ctor');
-		final spanCT:ComplexType = TPath({pack: ['anyparse', 'runtime'], name: 'Span', params: []});
-		final args:Array<FunctionArg> = [for (arg in branch.children) {
-			name: (arg.annotations.get('base.fieldName') : String),
-			type: shapeToComplexType(arg, synthPack),
-		}];
-		args.push({name: SPAN_FIELD_NAME, type: spanCT});
-		return {name: ctorName, kind: FFun({args: args, ret: null, expr: null}), pos: pos, access: []};
+	private static function buildEnumCtor(branch: ShapeNode, pos: Position, synthPack: Array<String>): Field {
+		final ctorName: String = branch.annotations.get('base.ctor');
+		final spanCT: ComplexType = TPath({ pack: ['anyparse', 'runtime'], name: 'Span', params: [] });
+		final args: Array<FunctionArg> = [
+			for (arg in branch.children)
+				{
+					name: (arg.annotations.get('base.fieldName'): String),
+					type: shapeToComplexType(arg, synthPack),
+				}
+		];
+		args.push({ name: SPAN_FIELD_NAME, type: spanCT });
+		return {
+			name: ctorName,
+			kind: FFun({ args: args, ret: null, expr: null }),
+			pos: pos,
+			access: []
+		};
 	}
 
-	private static function shapeToComplexType(node:ShapeNode, synthPack:Array<String>):ComplexType {
+	private static function shapeToComplexType(node: ShapeNode, synthPack: Array<String>): ComplexType {
 		return switch node.kind {
 			case Ref:
-				final refName:String = node.annotations.get('base.ref');
-				final base:ComplexType = refIsBearing(refName)
-					? TPath({pack: synthPack, name: SYNTH_MODULE_LEAF, sub: leafOf(refName) + PAIRED_SUFFIX, params: []})
-					: TPath({pack: packOf(refName), name: leafOf(refName), params: []});
+				final refName: String = node.annotations.get('base.ref');
+				final base: ComplexType = refIsBearing(refName)
+					? TPath({
+						pack: synthPack,
+						name: SYNTH_MODULE_LEAF,
+						sub: leafOf(refName) + PAIRED_SUFFIX,
+						params: []
+					})
+					: TPath({ pack: packOf(refName), name: leafOf(refName), params: [] });
 				wrapOptional(node, base);
 			case Star:
-				final elementCT:ComplexType = shapeToComplexType(node.children[0], synthPack);
-				wrapOptional(node, TPath({pack: [], name: 'Array', params: [TPType(elementCT)]}));
+				final elementCT: ComplexType = shapeToComplexType(node.children[0], synthPack);
+				wrapOptional(node, TPath({ pack: [], name: 'Array', params: [TPType(elementCT)] }));
 			case Terminal:
-				final tp:Null<String> = node.annotations.get('base.typePath');
-				if (tp != null) return wrapOptional(node, TPath({pack: packOf(tp), name: leafOf(tp), params: []}));
-				final under:String = node.annotations.get('base.underlying');
-				wrapOptional(node, TPath({pack: [], name: under, params: []}));
+				final tp: Null<String> = node.annotations.get('base.typePath');
+				if (tp != null) return wrapOptional(node, TPath({ pack: packOf(tp), name: leafOf(tp), params: [] }));
+				final under: String = node.annotations.get('base.underlying');
+				wrapOptional(node, TPath({ pack: [], name: under, params: [] }));
 			case _:
 				Context.fatalError('SpanTypeSynth: unexpected node kind ${node.kind} in field-shape', Context.currentPos());
 				throw 'unreachable';
 		};
 	}
 
-	private static inline function wrapOptional(node:ShapeNode, base:ComplexType):ComplexType {
-		return node.annotations.get('base.optional') == true
-			? TPath({pack: [], name: 'Null', params: [TPType(base)]})
-			: base;
+	private static inline function wrapOptional(node: ShapeNode, base: ComplexType): ComplexType {
+		return node.annotations.get('base.optional') == true ? TPath({ pack: [], name: 'Null', params: [TPType(base)] }) : base;
 	}
 
-	private static function refIsBearing(refName:String):Bool {
+	private static function refIsBearing(refName: String): Bool {
 		for (shape in shapes) {
-			final node:Null<ShapeNode> = shape.rules.get(refName);
+			final node: Null<ShapeNode> = shape.rules.get(refName);
 			if (node != null) return node.kind != Terminal;
 		}
 		return false;
 	}
 
-	private static function packOf(qualifiedName:String):Array<String> {
-		final idx:Int = qualifiedName.lastIndexOf('.');
+	private static function packOf(qualifiedName: String): Array<String> {
+		final idx: Int = qualifiedName.lastIndexOf('.');
 		return idx == -1 ? [] : qualifiedName.substring(0, idx).split('.');
 	}
 
-	private static function leafOf(qualifiedName:String):String {
-		final idx:Int = qualifiedName.lastIndexOf('.');
+	private static function leafOf(qualifiedName: String): String {
+		final idx: Int = qualifiedName.lastIndexOf('.');
 		return idx == -1 ? qualifiedName : qualifiedName.substring(idx + 1);
 	}
+
 }
 #end

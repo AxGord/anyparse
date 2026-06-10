@@ -61,62 +61,60 @@ import anyparse.core.Strategy;
  */
 class Pratt implements Strategy {
 
-	public var name(default, null):String = 'Pratt';
-	public var runsAfter(default, null):Array<String> = [];
-	public var runsBefore(default, null):Array<String> = [];
-	public var ownedMeta(default, null):Array<String> = [':infix'];
-	public var runtimeContribution(default, null):RuntimeContrib = {ctxFields: [], helpers: [], cacheKeyContributors: []};
+	public var name(default, null): String = 'Pratt';
+	public var runsAfter(default, null): Array<String> = [];
+	public var runsBefore(default, null): Array<String> = [];
+	public var ownedMeta(default, null): Array<String> = [':infix'];
+	public var runtimeContribution(default, null): RuntimeContrib = { ctxFields: [], helpers: [], cacheKeyContributors: [] };
 
 	public function new() {}
 
-	public function appliesTo(node:ShapeNode):Bool {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
+	public function appliesTo(node: ShapeNode): Bool {
+		final meta: Null<Metadata> = node.annotations.get('base.meta');
 		if (meta == null) return false;
 		for (entry in meta) if (entry.name == ':infix') return true;
 		return false;
 	}
 
-	public function annotate(node:ShapeNode, ctx:LoweringCtx):Void {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
+	public function annotate(node: ShapeNode, ctx: LoweringCtx): Void {
+		final meta: Null<Metadata> = node.annotations.get('base.meta');
 		if (meta == null) return;
 		for (entry in meta) if (entry.name == ':infix') {
 			if (entry.params.length < 2 || entry.params.length > 3) {
 				Context.fatalError(
-					'@:infix expects two or three arguments: "op", precedence:Int, and optional associativity ("Left"/"Right")',
-					entry.pos
+					'@:infix expects two or three arguments: "op", precedence:Int, and optional associativity ("Left"/"Right")', entry.pos
 				);
 			}
-			final opText:String = switch entry.params[0].expr {
+			final opText: String = switch entry.params[0].expr {
 				case EConst(CString(s, _)): s;
 				case _:
 					Context.fatalError('@:infix first argument must be a string literal', entry.params[0].pos);
 					throw 'unreachable';
 			};
-			final precValue:Int = switch entry.params[1].expr {
+			final precValue: Int = switch entry.params[1].expr {
 				case EConst(CInt(s)): Std.parseInt(s);
 				case _:
 					Context.fatalError('@:infix second argument must be an integer literal', entry.params[1].pos);
 					throw 'unreachable';
 			};
-			final assocValue:String = if (entry.params.length == 3) {
+			final assocValue: String = if (entry.params.length == 3) {
 				switch entry.params[2].expr {
 					case EConst(CString(s, _)) if (s == 'Left' || s == 'Right'): s;
 					case _:
-						Context.fatalError(
-							'@:infix third argument must be the string literal "Left" or "Right"',
-							entry.params[2].pos
-						);
+						Context.fatalError('@:infix third argument must be the string literal "Left" or "Right"', entry.params[2].pos);
 						throw 'unreachable';
 				}
-			} else 'Left';
+			} else
+				'Left';
 			node.annotations.set('pratt.op', opText);
 			node.annotations.set('pratt.prec', precValue);
 			node.annotations.set('pratt.assoc', assocValue);
 		}
 	}
 
-	public function lower(node:ShapeNode, ctx:LoweringCtx):Null<CoreIR> {
+	public function lower(node: ShapeNode, ctx: LoweringCtx): Null<CoreIR> {
 		return null;
 	}
+
 }
 #end

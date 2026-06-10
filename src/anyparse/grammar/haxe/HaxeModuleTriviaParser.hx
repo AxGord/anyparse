@@ -20,6 +20,6 @@ package anyparse.grammar.haxe;
  * compile.
  */
 @:keep
-@:build(anyparse.macro.Build.buildParser(anyparse.grammar.haxe.HxModule, {trivia: true}))
+@:build(anyparse.macro.Build.buildParser(anyparse.grammar.haxe.HxModule, { trivia: true }))
 @:nullSafety(Strict)
 final class HaxeModuleTriviaParser {}

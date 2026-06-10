@@ -28,29 +28,29 @@ import anyparse.core.Strategy;
  */
 class Re implements Strategy {
 
-	public var name(default, null):String = 'Re';
-	public var runsAfter(default, null):Array<String> = [];
-	public var runsBefore(default, null):Array<String> = [];
-	public var ownedMeta(default, null):Array<String> = [':re', ':captureGroup'];
-	public var runtimeContribution(default, null):RuntimeContrib = {ctxFields: [], helpers: [], cacheKeyContributors: []};
+	public var name(default, null): String = 'Re';
+	public var runsAfter(default, null): Array<String> = [];
+	public var runsBefore(default, null): Array<String> = [];
+	public var ownedMeta(default, null): Array<String> = [':re', ':captureGroup'];
+	public var runtimeContribution(default, null): RuntimeContrib = { ctxFields: [], helpers: [], cacheKeyContributors: [] };
 
 	public function new() {}
 
-	public function appliesTo(node:ShapeNode):Bool {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
+	public function appliesTo(node: ShapeNode): Bool {
+		final meta: Null<Metadata> = node.annotations.get('base.meta');
 		if (meta == null) return false;
 		for (entry in meta) if (entry.name == ':re') return true;
 		return false;
 	}
 
-	public function annotate(node:ShapeNode, ctx:LoweringCtx):Void {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
+	public function annotate(node: ShapeNode, ctx: LoweringCtx): Void {
+		final meta: Null<Metadata> = node.annotations.get('base.meta');
 		if (meta == null) return;
 		for (entry in meta) if (entry.name == ':re') {
 			if (entry.params.length != 1) {
 				Context.fatalError('@:re expects exactly one string argument', entry.pos);
 			}
-			final pattern:String = switch entry.params[0].expr {
+			final pattern: String = switch entry.params[0].expr {
 				case EConst(CString(s, _)): s;
 				case _:
 					Context.fatalError('@:re argument must be a string literal', entry.params[0].pos);
@@ -62,7 +62,7 @@ class Re implements Strategy {
 			if (entry.params.length != 1) {
 				Context.fatalError('@:captureGroup expects exactly one integer argument', entry.pos);
 			}
-			final group:Int = switch entry.params[0].expr {
+			final group: Int = switch entry.params[0].expr {
 				case EConst(CInt(s, _)): Std.parseInt(s);
 				case _:
 					Context.fatalError('@:captureGroup argument must be an integer literal', entry.params[0].pos);
@@ -75,8 +75,9 @@ class Re implements Strategy {
 		}
 	}
 
-	public function lower(node:ShapeNode, ctx:LoweringCtx):Null<CoreIR> {
+	public function lower(node: ShapeNode, ctx: LoweringCtx): Null<CoreIR> {
 		return null;
 	}
+
 }
 #end

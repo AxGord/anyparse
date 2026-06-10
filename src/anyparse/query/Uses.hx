@@ -29,19 +29,20 @@ final class Uses {
 	 * Walk `tree` and return every type reference to `name` per
 	 * `shape`. Hits are returned in pre-order traversal.
 	 */
-	public static function find(name:String, tree:QueryNode, shape:TypeRefShape):Array<UsesHit> {
-		final out:Array<UsesHit> = [];
+	public static function find(name: String, tree: QueryNode, shape: TypeRefShape): Array<UsesHit> {
+		final out: Array<UsesHit> = [];
 		walk(name, tree, shape, out);
 		return out;
 	}
 
-	private static function walk(target:String, node:QueryNode, shape:TypeRefShape, out:Array<UsesHit>):Void {
+	private static function walk(target: String, node: QueryNode, shape: TypeRefShape, out: Array<UsesHit>): Void {
 		if (node.name == target && shape.typeRefKinds.contains(node.kind)) {
-			final span:Null<Span> = node.span;
+			final span: Null<Span> = node.span;
 			if (span != null) out.push(new UsesHit(target, span));
 		}
 		for (c in node.children) walk(target, c, shape, out);
 	}
+
 }
 
 /**
@@ -53,11 +54,12 @@ final class Uses {
 @:nullSafety(Strict)
 final class UsesHit {
 
-	public final name:String;
-	public final span:Span;
+	public final name: String;
+	public final span: Span;
 
-	public function new(name:String, span:Span) {
+	public function new(name: String, span: Span) {
 		this.name = name;
 		this.span = span;
 	}
+
 }

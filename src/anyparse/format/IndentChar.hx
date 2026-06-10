@@ -14,4 +14,5 @@ enum abstract IndentChar(String) to String {
 	 * A space character.
 	 */
 	var Space = ' ';
+
 }

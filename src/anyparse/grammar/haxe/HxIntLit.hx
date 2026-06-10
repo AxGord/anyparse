@@ -33,15 +33,17 @@ package anyparse.grammar.haxe;
 @:rawString
 @:writeNormalize('stripSuffixUnderscore')
 abstract HxIntLit(String) from String to String {
-	@:to public function toInt():Int {
-		var s:String = StringTools.replace(this, '_', '');
-		var i:Int = s.length;
+
+	@:to public function toInt(): Int {
+		var s: String = StringTools.replace(this, '_', '');
+		var i: Int = s.length;
 		while (i > 0) {
-			final c:Int = s.charCodeAt(i - 1);
+			final c: Int = s.charCodeAt(i - 1);
 			if (c >= '0'.code && c <= '9'.code) break;
 			i--;
 		}
-		final parsed:Null<Int> = Std.parseInt(s.substr(0, i));
+		final parsed: Null<Int> = Std.parseInt(s.substr(0, i));
 		return parsed == null ? 0 : parsed;
 	}
+
 }

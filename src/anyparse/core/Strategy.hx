@@ -21,16 +21,18 @@ import anyparse.core.ShapeTree;
  * planned strategies, and the registration rules the framework enforces.
  */
 interface Strategy {
-	var name(default, null):String;
-	var runsAfter(default, null):Array<String>;
-	var runsBefore(default, null):Array<String>;
-	var ownedMeta(default, null):Array<String>;
-	var runtimeContribution(default, null):RuntimeContrib;
 
-	function appliesTo(node:ShapeNode):Bool;
+	var name(default, null): String;
+	var runsAfter(default, null): Array<String>;
+	var runsBefore(default, null): Array<String>;
+	var ownedMeta(default, null): Array<String>;
+	var runtimeContribution(default, null): RuntimeContrib;
 
-	function annotate(node:ShapeNode, ctx:LoweringCtx):Void;
+	function appliesTo(node: ShapeNode): Bool;
 
-	function lower(node:ShapeNode, ctx:LoweringCtx):Null<CoreIR>;
+	function annotate(node: ShapeNode, ctx: LoweringCtx): Void;
+
+	function lower(node: ShapeNode, ctx: LoweringCtx): Null<CoreIR>;
+
 }
 #end

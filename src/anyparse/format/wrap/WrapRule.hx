@@ -18,7 +18,7 @@ package anyparse.format.wrap;
  * per-rule `location` field in `WrapConfig.hx`.
  */
 typedef WrapRule = {
-	var conditions:Array<WrapCondition>;
-	var mode:WrapMode;
-	@:optional var location:WrappingLocation;
+	var conditions: Array<WrapCondition>;
+	var mode: WrapMode;
+	@:optional var location: WrappingLocation;
 };

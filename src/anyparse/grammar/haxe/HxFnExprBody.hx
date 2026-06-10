@@ -30,7 +30,8 @@ package anyparse.grammar.haxe;
 @:peg
 enum HxFnExprBody {
 
-	BlockBody(block:HxFnBlock);
+	BlockBody(block: HxFnBlock);
 
-	ExprBody(expr:HxExpr);
+	ExprBody(expr: HxExpr);
+
 }

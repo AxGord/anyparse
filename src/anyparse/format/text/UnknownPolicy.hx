@@ -9,7 +9,9 @@ package anyparse.format.text;
  *             the schema provides one.
  */
 enum abstract UnknownPolicy(Int) {
+
 	final Skip = 0;
 	final Error = 1;
 	final Store = 2;
+
 }

@@ -37,4 +37,5 @@ enum abstract HxFormatWhitespacePolicy(String) to String {
 	final NoneAfter = 'noneAfter';
 
 	final Around = 'around';
+
 }

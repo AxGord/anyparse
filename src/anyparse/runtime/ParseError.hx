@@ -25,9 +25,9 @@ import haxe.Exception;
 @:nullSafety(Strict)
 class ParseError extends Exception {
 
-	public final span:Span;
-	public final expected:Null<String>;
-	public final severity:Severity;
+	public final span: Span;
+	public final expected: Null<String>;
+	public final severity: Severity;
 
 	/**
 	 * Source string the parser was running over when the error was
@@ -42,9 +42,9 @@ class ParseError extends Exception {
 	 * constructor) runs first — Haxe forbids touching `this` before
 	 * `super()` in subclasses of an extern with a constructor.
 	 */
-	public var source:Null<String>;
+	public var source: Null<String>;
 
-	public function new(span:Span, message:String, ?expected:String, severity:Severity = Severity.Error) {
+	public function new(span: Span, message: String, ?expected: String, severity: Severity = Severity.Error) {
 		super(message);
 		this.span = span;
 		this.expected = expected;
@@ -52,16 +52,17 @@ class ParseError extends Exception {
 		this.source = null;
 	}
 
-	override public function toString():String {
-		final label:String = severity == Severity.Warning ? 'warning' : 'error';
-		final src:Null<String> = source;
-		final locus:String = if (src != null) {
-			final pos:Position = span.lineCol(src);
+	override public function toString(): String {
+		final label: String = severity == Severity.Warning ? 'warning' : 'error';
+		final src: Null<String> = source;
+		final locus: String = if (src != null) {
+			final pos: Position = span.lineCol(src);
 			'${pos.line}:${pos.col}';
 		} else {
 			'$span';
 		};
-		final base:String = '$label at $locus: $message';
+		final base: String = '$label at $locus: $message';
 		return expected == null ? base : '$base (expected $expected)';
 	}
+
 }

@@ -28,6 +28,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxThinParenLambda = {
-	@:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams'), wrapRules('anonFunctionSignatureWrap')) var params:Array<HxLambdaParam>;
-	@:fmt(arrowFunctions, propagateExprPosition, propagateAnonFnContext, arrowBodyLineWrap) @:lead('->') var body:HxExpr;
+	@:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams'), wrapRules('anonFunctionSignatureWrap')) var params: Array<HxLambdaParam>;
+	@:fmt(arrowFunctions, propagateExprPosition, propagateAnonFnContext, arrowBodyLineWrap) @:lead('->') var body: HxExpr;
 }

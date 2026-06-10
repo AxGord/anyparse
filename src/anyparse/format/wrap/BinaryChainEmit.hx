@@ -75,11 +75,9 @@ import anyparse.format.WriteOptions;
 final class BinaryChainEmit {
 
 	public static function emit(
-		items:Array<Doc>, ops:Array<String>,
-		opt:WriteOptions, rules:WrapRules,
-		nestSuppress:Bool = false, condWrapForced:Bool = false,
-		?sourceBreakBefore:Array<Bool>, headBreak:Bool = false
-	):Doc {
+		items: Array<Doc>, ops: Array<String>, opt: WriteOptions, rules: WrapRules, nestSuppress: Bool = false,
+		condWrapForced: Bool = false, ?sourceBreakBefore: Array<Bool>, headBreak: Bool = false
+	): Doc {
 		if (items.length == 0) return WrapBoundary(Empty);
 		if (items.length == 1) return WrapBoundary(items[0]);
 
@@ -96,13 +94,13 @@ final class BinaryChainEmit {
 		//     would lay out flat. Replaces the old `HARDLINE_LEN` (~1M)
 		//     inflation that conflated "has hardline anywhere" with
 		//     "rule-bound widths".
-		var total:Int = 0;
-		var maxLen:Int = 0;
-		var anyHardline:Bool = false;
+		var total: Int = 0;
+		var maxLen: Int = 0;
+		var anyHardline: Bool = false;
 		for (i in 0...items.length) {
-			final item:Doc = items[i];
+			final item: Doc = items[i];
 			if (WrapList.flatLength(item) < 0) anyHardline = true;
-			final w:Int = DocMeasure.flatTokenWidth(item);
+			final w: Int = DocMeasure.flatTokenWidth(item);
 			total += w;
 			// `anyItemLength` mirrors upstream haxe-formatter's
 			// per-item width semantic: each operand beyond the first
@@ -115,7 +113,7 @@ final class BinaryChainEmit {
 			// would measure `maxLen=39` and miss rule 1's
 			// `anyItemLength >= 40` predicate, while upstream
 			// measures `maxLen=42` (`|| ` + 39) and the rule fires.
-			final renderedW:Int = (i == 0) ? w : (ops[i - 1].length + 1 + w);
+			final renderedW: Int = (i == 0) ? w : (ops[i - 1].length + 1 + w);
 			if (renderedW > maxLen) maxLen = renderedW;
 		}
 		// Add ` op ` width per gap so the cascade's `totalLength` /
@@ -134,8 +132,8 @@ final class BinaryChainEmit {
 		// inside the same cond keep their own Nest because their
 		// continuation legitimately wants the +2cols (paren+1 +
 		// callArg+1) layout.
-		final indentUnit:Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
-		final cols:Int = nestSuppress ? 0 : indentUnit;
+		final indentUnit: Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
+		final cols: Int = nestSuppress ? 0 : indentUnit;
 
 		// Column-aware `LineLengthLargerThan` thresholds — mirror
 		// `WrapList.emit`'s threshold-aware enumeration pattern (slice
@@ -148,7 +146,7 @@ final class BinaryChainEmit {
 		// emit one `IfWidthExceeds(t, …)` wrapper per distinct
 		// threshold so the renderer probes `column + flatWidth(flat)`
 		// against `t` at layout time.
-		final extraThresholds:Array<Int> = WrapList.collectExtraLineLengthThresholds(rules, opt.lineWidth);
+		final extraThresholds: Array<Int> = WrapList.collectExtraLineLengthThresholds(rules, opt.lineWidth);
 
 		// Cascade-eval helper: caller specifies the (exceeds,
 		// firingThresholds) state and gets the cascade's resolved
@@ -158,13 +156,13 @@ final class BinaryChainEmit {
 		// All other cond kinds preserve their original evaluators.
 		// Non-`inline` so it can be passed as a closure into
 		// `buildBinaryThresholdTree` (Haxe forbids closure-on-inline-closure).
-		function evalAt(exceeds:Bool, firing:Array<Int>):{mode:WrapMode, location:WrappingLocation} {
-			return WrapList.decideRuleWithLineLengthState(rules, items.length, maxLen, total,
-				exceeds, anyHardline,
-				t -> t == opt.lineWidth ? exceeds : firing.contains(t));
+		function evalAt(exceeds: Bool, firing: Array<Int>): { mode: WrapMode, location: WrappingLocation } {
+			return WrapList.decideRuleWithLineLengthState(
+				rules, items.length, maxLen, total, exceeds, anyHardline, t -> t == opt.lineWidth ? exceeds : firing.contains(t)
+			);
 		}
 
-		function shapeAt(r:{mode:WrapMode, location:WrappingLocation}):Doc {
+		function shapeAt(r: { mode: WrapMode, location: WrappingLocation }): Doc {
 			return shape(r.mode, r.location, items, ops, cols, indentUnit, sourceBreakBefore, headBreak);
 		}
 
@@ -175,8 +173,7 @@ final class BinaryChainEmit {
 		// a `LineLengthLargerThan` rule answer can flip with column.
 		// `buildBinaryThresholdTree` handles 0/1/N thresholds via
 		// recursion (no IfBreak split — single shape per leaf).
-		if (anyHardline)
-			return WrapBoundary(buildBinaryThresholdTree(extraThresholds, [], true, evalAt, shapeAt));
+		if (anyHardline) return WrapBoundary(buildBinaryThresholdTree(extraThresholds, [], true, evalAt, shapeAt));
 
 		// Normal path: cascade evaluated against (exceeds=false /
 		// exceeds=true) AND each non-lineWidth threshold's firing
@@ -195,8 +192,8 @@ final class BinaryChainEmit {
 		//     inert. None of the current default cascades use N≥2 —
 		//     this branch is correctness insurance for future cascades.
 		if (extraThresholds.length == 0) {
-			final flat:{mode:WrapMode, location:WrappingLocation} = evalAt(false, []);
-			final brk:{mode:WrapMode, location:WrappingLocation} = evalAt(true, []);
+			final flat: { mode: WrapMode, location: WrappingLocation } = evalAt(false, []);
+			final brk: { mode: WrapMode, location: WrappingLocation } = evalAt(true, []);
 			// ω-chain-keep-flat (increment-6 — CONSTRAINED probe): UNWRAP the
 			// chain to a single flat NoWrap line ONLY in the cond-wrap context
 			// (`condWrapForced` — the chain was collapsed to a forced mode
@@ -215,14 +212,14 @@ final class BinaryChainEmit {
 			//    paren-expr/array that itself leads with an open delim (excludes
 			//    condition_first_operand_paren_no_merge, where the fork breaks
 			//    the chain instead of gluing to operand-1's `(`).
-			final unwrapCandidate:Bool = condWrapForced && isChainOps(ops)
-				&& !leadingOperandOpensDelim(items[0]);
+			final unwrapCandidate: Bool = condWrapForced && isChainOps(ops) && !leadingOperandOpensDelim(items[0]);
 			// `condWrapForced` forces the chain rules to {rules:[], defaultMode:FLWLB}
 			// (WriterCodegen._setChainModeOverride), so flat == brk == that one break
 			// mode here — pivot the NoWrap UNWRAP shape against the forced break shape.
 			if (unwrapCandidate && isBreakMode(flat.mode))
-				return WrapBoundary(IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, shapeAt(flat),
-					shape(NoWrap, flat.location, items, ops, cols, indentUnit, sourceBreakBefore, headBreak)));
+				return WrapBoundary(IfNaturalFirstLineFitsOpenDelim(
+					opt.lineWidth, shapeAt(flat), shape(NoWrap, flat.location, items, ops, cols, indentUnit, sourceBreakBefore, headBreak)
+				));
 			if (sameRule(flat, brk)) return WrapBoundary(shapeAt(flat));
 			// ω-unwrap-add-ops (inverse CollapsePass): for a pure opAddSub
 			// chain (`+`/`-` only) whose broken shape differs from its flat
@@ -237,8 +234,7 @@ final class BinaryChainEmit {
 			// strips `+`/`-` line-ends inside a wrapped region without touching
 			// inner ternary/call breaks. opBool / ternary chains are NOT tagged
 			// (fork never `unwrapAddOps` them).
-			if (isAddSubOps(ops))
-				return WrapBoundary(Group(IfBreak(CollapseAddProbe(shapeAt(brk)), shapeAt(flat))));
+			if (isAddSubOps(ops)) return WrapBoundary(Group(IfBreak(CollapseAddProbe(shapeAt(brk)), shapeAt(flat))));
 			// ω-opbool-reeval-after-callparam (CollapsePass increment 2): an opBool
 			// chain (`&&`/`||`) whose BROKEN shape is FillLine operator-TRAILING
 			// (`AfterLast`) and that contains a function-call operand. TAG the broken
@@ -256,43 +252,42 @@ final class BinaryChainEmit {
 			// its trailing layout). At this final-IfBreak path `condWrapForced` is
 			// already false (the cond-wrap collapse takes the inc6 path above), so
 			// `nestSuppress` here means call-arg / keep-in-paren.
-			final boolReevalTag:Bool = isOpBoolOps(ops) && brk.location == AfterLast
-				&& (brk.mode == FillLine || brk.mode == FillLineWithLeadingBreak)
-				&& !nestSuppress && containsCallOperand(items);
-			final brkShape:Doc = boolReevalTag ? CollapseBoolProbe(shapeAt(brk)) : shapeAt(brk);
+			final boolReevalTag: Bool = isOpBoolOps(ops) && brk.location == AfterLast
+				&& (brk.mode == FillLine || brk.mode == FillLineWithLeadingBreak) && !nestSuppress && containsCallOperand(items);
+			final brkShape: Doc = boolReevalTag ? CollapseBoolProbe(shapeAt(brk)) : shapeAt(brk);
 			return WrapBoundary(Group(IfBreak(brkShape, shapeAt(flat))));
 		}
 
 		if (extraThresholds.length == 1) {
-			final t:Int = extraThresholds[0];
+			final t: Int = extraThresholds[0];
 			if (t < opt.lineWidth) {
 				// 3 valid states (col+w<t implies col+w<lineWidth implies !exceeds):
 				//   (firing=∅,    exceeds=no)  → rNN
 				//   (firing={t},  exceeds=no)  → rYN
 				//   (firing={t},  exceeds=yes) → rYY
-				final rNN:{mode:WrapMode, location:WrappingLocation} = evalAt(false, []);
-				final rYN:{mode:WrapMode, location:WrappingLocation} = evalAt(false, [t]);
-				final rYY:{mode:WrapMode, location:WrappingLocation} = evalAt(true, [t]);
+				final rNN: { mode: WrapMode, location: WrappingLocation } = evalAt(false, []);
+				final rYN: { mode: WrapMode, location: WrappingLocation } = evalAt(false, [t]);
+				final rYY: { mode: WrapMode, location: WrappingLocation } = evalAt(true, [t]);
 				if (sameRule(rNN, rYN) && sameRule(rYN, rYY)) return WrapBoundary(shapeAt(rNN));
 				// Inner IfBreak picks between exceeds-yes and exceeds-no
 				// when the column has already crossed `t`. Outer
 				// IfWidthExceeds picks the column-vs-t answer first; the
 				// flat side bypasses the IfBreak entirely (only one
 				// valid state below `t`).
-				final brk:Doc = sameRule(rYY, rYN) ? shapeAt(rYY) : Group(IfBreak(shapeAt(rYY), shapeAt(rYN)));
+				final brk: Doc = sameRule(rYY, rYN) ? shapeAt(rYY) : Group(IfBreak(shapeAt(rYY), shapeAt(rYN)));
 				return WrapBoundary(Group(IfWidthExceeds(t, brk, shapeAt(rNN))));
 			}
 			// t > lineWidth: 3 valid states (col+w>=t implies col+w>=lineWidth):
 			//   (firing=∅,    exceeds=no)  → rNN
 			//   (firing=∅,    exceeds=yes) → rNY
 			//   (firing={t},  exceeds=yes) → rYY
-			final rNN:{mode:WrapMode, location:WrappingLocation} = evalAt(false, []);
-			final rNY:{mode:WrapMode, location:WrappingLocation} = evalAt(true, []);
-			final rYY:{mode:WrapMode, location:WrappingLocation} = evalAt(true, [t]);
+			final rNN: { mode: WrapMode, location: WrappingLocation } = evalAt(false, []);
+			final rNY: { mode: WrapMode, location: WrappingLocation } = evalAt(true, []);
+			final rYY: { mode: WrapMode, location: WrappingLocation } = evalAt(true, [t]);
 			if (sameRule(rNN, rNY) && sameRule(rNY, rYY)) return WrapBoundary(shapeAt(rNN));
 			// Outer IfBreak picks exceeds=no/yes; inner IfWidthExceeds
 			// further partitions the exceeds=yes side around `t`.
-			final brk:Doc = sameRule(rNY, rYY) ? shapeAt(rYY) : Group(IfWidthExceeds(t, shapeAt(rYY), shapeAt(rNY)));
+			final brk: Doc = sameRule(rNY, rYY) ? shapeAt(rYY) : Group(IfWidthExceeds(t, shapeAt(rYY), shapeAt(rNY)));
 			return WrapBoundary(Group(IfBreak(brk, shapeAt(rNN))));
 		}
 
@@ -322,28 +317,29 @@ final class BinaryChainEmit {
 	 * impossible-state leaves are unreachable at runtime regardless.
 	 */
 	private static function buildBinaryThresholdTree(
-		thresholds:Array<Int>, firing:Array<Int>,
-		forcedExceeds:Null<Bool>,
-		evalAt:(Bool, Array<Int>) -> {mode:WrapMode, location:WrappingLocation},
-		shapeAt:{mode:WrapMode, location:WrappingLocation} -> Doc
-	):Doc {
+		thresholds: Array<Int>, firing: Array<Int>, forcedExceeds: Null<Bool>,
+		evalAt: (Bool, Array<Int>) -> { mode: WrapMode, location: WrappingLocation },
+		shapeAt: { mode: WrapMode, location: WrappingLocation } -> Doc
+	): Doc {
 		if (thresholds.length == 0) {
 			if (forcedExceeds != null) return shapeAt(evalAt(forcedExceeds, firing));
-			final rFlat:{mode:WrapMode, location:WrappingLocation} = evalAt(false, firing);
-			final rBrk:{mode:WrapMode, location:WrappingLocation} = evalAt(true, firing);
+			final rFlat: { mode: WrapMode, location: WrappingLocation } = evalAt(false, firing);
+			final rBrk: { mode: WrapMode, location: WrappingLocation } = evalAt(true, firing);
 			if (sameRule(rFlat, rBrk)) return shapeAt(rFlat);
 			return Group(IfBreak(shapeAt(rBrk), shapeAt(rFlat)));
 		}
-		final t:Int = thresholds[0];
-		final rest:Array<Int> = thresholds.slice(1);
-		final firingPlus:Array<Int> = firing.copy();
+		final t: Int = thresholds[0];
+		final rest: Array<Int> = thresholds.slice(1);
+		final firingPlus: Array<Int> = firing.copy();
 		firingPlus.push(t);
-		final brk:Doc = buildBinaryThresholdTree(rest, firingPlus, forcedExceeds, evalAt, shapeAt);
-		final flat:Doc = buildBinaryThresholdTree(rest, firing, forcedExceeds, evalAt, shapeAt);
+		final brk: Doc = buildBinaryThresholdTree(rest, firingPlus, forcedExceeds, evalAt, shapeAt);
+		final flat: Doc = buildBinaryThresholdTree(rest, firing, forcedExceeds, evalAt, shapeAt);
 		return IfWidthExceeds(t, brk, flat);
 	}
 
-	private static inline function sameRule(a:{mode:WrapMode, location:WrappingLocation}, b:{mode:WrapMode, location:WrappingLocation}):Bool {
+	private static inline function sameRule(
+		a: { mode: WrapMode, location: WrappingLocation }, b: { mode: WrapMode, location: WrappingLocation }
+	): Bool {
 		return a.mode == b.mode && a.location == b.location;
 	}
 
@@ -353,9 +349,8 @@ final class BinaryChainEmit {
 	 * `FillLineWithLeadingBreak`). `NoWrap` / `Keep` / `Ignore` keep the
 	 * chain inline. Used by the ω-chain-keep-flat unwrap pivot.
 	 */
-	private static inline function isBreakMode(m:WrapMode):Bool {
-		return m == OnePerLine || m == OnePerLineAfterFirst
-			|| m == FillLine || m == FillLineWithLeadingBreak;
+	private static inline function isBreakMode(m: WrapMode): Bool {
+		return m == OnePerLine || m == OnePerLineAfterFirst || m == FillLine || m == FillLineWithLeadingBreak;
 	}
 
 	/**
@@ -364,10 +359,11 @@ final class BinaryChainEmit {
 	 * reuses this engine with a degenerate 3-item chain; the keep-flat
 	 * unwrap must not fire there.
 	 */
-	private static function isChainOps(ops:Array<String>):Bool {
+	private static function isChainOps(ops: Array<String>): Bool {
 		for (o in ops) switch o {
 			case '&&' | '||' | '+' | '-':
-			case _: return false;
+			case _:
+				return false;
 		}
 		return ops.length > 0;
 	}
@@ -380,10 +376,11 @@ final class BinaryChainEmit {
 	 * flip (mirror fork `reEvaluateOpBoolAfterCallParam`, which fires only on
 	 * `OpBoolChainWrapping` places).
 	 */
-	private static function isOpBoolOps(ops:Array<String>):Bool {
+	private static function isOpBoolOps(ops: Array<String>): Bool {
 		for (o in ops) switch o {
 			case '&&' | '||':
-			case _: return false;
+			case _:
+				return false;
 		}
 		return ops.length > 0;
 	}
@@ -395,7 +392,7 @@ final class BinaryChainEmit {
 	 * with NO call operand can never have a callParameter wrap to re-evaluate
 	 * after, so the marker is skipped (byte-inert).
 	 */
-	private static function containsCallOperand(items:Array<Doc>):Bool {
+	private static function containsCallOperand(items: Array<Doc>): Bool {
 		for (it in items) if (DocMeasure.operandIsCall(it)) return true;
 		return false;
 	}
@@ -408,10 +405,11 @@ final class BinaryChainEmit {
 	 * inner `+`/`-` chains (mirror fork `unwrapAddOps`, which strips ONLY
 	 * `Binop(OpAdd)` / `Binop(OpSub)` line-ends, never `&&`/`||`).
 	 */
-	private static function isAddSubOps(ops:Array<String>):Bool {
+	private static function isAddSubOps(ops: Array<String>): Bool {
 		for (o in ops) switch o {
 			case '+' | '-':
-			case _: return false;
+			case _:
+				return false;
 		}
 		return ops.length > 0;
 	}
@@ -426,40 +424,45 @@ final class BinaryChainEmit {
 	 * own operator instead (`condition_first_operand_paren_no_merge`).
 	 * Only a LATER operand-call absorbing the overflow is a valid unwrap.
 	 */
-	private static function leadingOperandOpensDelim(item0:Doc):Bool {
+	private static function leadingOperandOpensDelim(item0: Doc): Bool {
 		return switch item0 {
-			case Text(s): s.length > 0 && (StringTools.fastCodeAt(s, 0) == '('.code
-				|| StringTools.fastCodeAt(s, 0) == '['.code
-				|| StringTools.fastCodeAt(s, 0) == '{'.code);
+			case Text(s):
+				s.length > 0
+					&& (StringTools.fastCodeAt(s, 0) == '('.code || StringTools.fastCodeAt(s, 0) == '['.code
+						|| StringTools.fastCodeAt(s, 0) == '{'.code);
 			case Concat(arr):
-				var hit:Bool = false;
-				var done:Bool = false;
+				var hit: Bool = false;
+				var done: Bool = false;
 				for (it in arr) if (!done) switch it {
-					case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline
-							| OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
+					case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
+						| OptHardlineSkipBeforeHardline:
 					case _:
 						done = true;
 						hit = leadingOperandOpensDelim(it);
 				}
 				hit;
-			case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i)
-					| Flatten(i) | HardFlatten(i) | CollapseProbe(i) | CollapseAddProbe(i) | CollapseBoolProbe(i) | CollapseChainProbe(i) | WrapBoundary(i)
-					| ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
+			case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i) | Flatten(i) | HardFlatten(i) | CollapseProbe(i) | CollapseAddProbe(
+				i
+			) | CollapseBoolProbe(i) | CollapseChainProbe(i) | WrapBoundary(i) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
 				leadingOperandOpensDelim(i);
-			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat)
-					| IfLineExceeds(_, _, flat) | IfFullLineExceeds(_, _, flat)
-					| IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat):
+			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfFullLineExceeds(
+				_, _, flat
+			) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat):
 				leadingOperandOpensDelim(flat);
 			case _: false;
 		};
 	}
 
-	private static function shape(mode:WrapMode, location:WrappingLocation, items:Array<Doc>, ops:Array<String>, cols:Int, indentUnit:Int, ?sourceBreakBefore:Array<Bool>, headBreak:Bool = false):Doc {
+	private static function shape(
+		mode: WrapMode, location: WrappingLocation, items: Array<Doc>, ops: Array<String>, cols: Int, indentUnit: Int,
+		?sourceBreakBefore: Array<Bool>, headBreak: Bool = false
+	): Doc {
 		return switch mode {
 			case NoWrap: shapeNoWrap(items, ops);
 			case OnePerLine: shapeOnePerLine(items, ops, cols, location);
 			case OnePerLineAfterFirst: shapeOnePerLineAfterFirst(items, ops, cols, location);
-			case FillLine | FillLineWithLeadingBreak: shapeFillLine(items, ops, cols, indentUnit, location);
+			case FillLine | FillLineWithLeadingBreak:
+				shapeFillLine(items, ops, cols, indentUnit, location);
 			// ω-keep-chain (increment 2): JSON `"defaultWrap": "keep"` on chain
 			// configs (opAddSubChain, opBoolChain) preserves the source's
 			// per-operator line breaks verbatim — break before operand `i`
@@ -470,7 +473,8 @@ final class BinaryChainEmit {
 			// `keepLineEnds`/`markKeepLineEnds` per-token `isOriginalNewlineBefore`.
 			// When the signal is absent (null — plain mode / non-capturing
 			// ctor) shapeKeep degrades to shapeNoWrap → byte-inert.
-			case Keep: shapeKeep(items, ops, cols, location, sourceBreakBefore, headBreak);
+			case Keep:
+				shapeKeep(items, ops, cols, location, sourceBreakBefore, headBreak);
 			// ω-cascade-emits-comments: Ignore sister to Keep — the writer
 			// pre-empts at the trivia branch. Defensive fallback to
 			// shapeNoWrap on engine leakage.
@@ -479,8 +483,8 @@ final class BinaryChainEmit {
 		};
 	}
 
-	private static function shapeNoWrap(items:Array<Doc>, ops:Array<String>):Doc {
-		final inner:Array<Doc> = [items[0]];
+	private static function shapeNoWrap(items: Array<Doc>, ops: Array<String>): Doc {
+		final inner: Array<Doc> = [items[0]];
 		for (i in 0...ops.length) {
 			inner.push(Text(' ' + ops[i] + ' '));
 			inner.push(items[i + 1]);
@@ -512,13 +516,16 @@ final class BinaryChainEmit {
 	 * or every entry is false AND `headBreak` is false, the output is
 	 * byte-identical to `shapeNoWrap` — inert for the non-keep hot path.
 	 */
-	private static function shapeKeep(items:Array<Doc>, ops:Array<String>, cols:Int, location:WrappingLocation, ?sourceBreakBefore:Array<Bool>, headBreak:Bool = false):Doc {
-		final breaks:Array<Bool> = sourceBreakBefore ?? [];
+	private static function shapeKeep(
+		items: Array<Doc>, ops: Array<String>, cols: Int, location: WrappingLocation, ?sourceBreakBefore: Array<Bool>,
+		headBreak: Bool = false
+	): Doc {
+		final breaks: Array<Bool> = sourceBreakBefore ?? [];
 		// First operand stays at the call-site column (unless `headBreak`);
 		// only the continuation tail is nested at the chain's one-tab indent,
 		// so a broken gap lands its line at `base + cols` while a glued gap
 		// keeps the operands inline (mirror `shapeOnePerLineAfterFirst`).
-		final tail:Array<Doc> = [];
+		final tail: Array<Doc> = [];
 		switch location {
 			case BeforeLast:
 				for (i in 0...ops.length) {
@@ -543,12 +550,11 @@ final class BinaryChainEmit {
 		}
 		// `headBreak` puts the head operand on its own continuation line:
 		// the whole chain (head + tail) is nested and led by a `Line('\n')`.
-		if (headBreak)
-			return Nest(cols, Concat([Line('\n'), items[0]].concat(tail)));
+		if (headBreak) return Nest(cols, Concat([Line('\n'), items[0]].concat(tail)));
 		return Concat([items[0], Nest(cols, Concat(tail))]);
 	}
 
-	private static function shapeOnePerLineAfterFirst(items:Array<Doc>, ops:Array<String>, cols:Int, location:WrappingLocation):Doc {
+	private static function shapeOnePerLineAfterFirst(items: Array<Doc>, ops: Array<String>, cols: Int, location: WrappingLocation): Doc {
 		// First operand stays at the call-site column; remaining operands
 		// each on their own indented continuation line.
 		//
@@ -558,7 +564,7 @@ final class BinaryChainEmit {
 		//  - `AfterLast`: the op suffixes the previous line, the next
 		//    operand starts the continuation line
 		//    (`items[0] op_0\n+indent items[1] op_1\n+indent items[2]…`).
-		final tail:Array<Doc> = [];
+		final tail: Array<Doc> = [];
 		switch location {
 			case BeforeLast:
 				for (i in 0...ops.length) {
@@ -571,7 +577,7 @@ final class BinaryChainEmit {
 				// op_0 suffixes items[0] (still on the first line); each
 				// continuation line carries items[i] and, when there is
 				// a next op, a trailing ` op_i`.
-				final head:Array<Doc> = [items[0]];
+				final head: Array<Doc> = [items[0]];
 				if (ops.length > 0) head.push(Text(' ' + ops[0]));
 				for (i in 1...items.length) {
 					tail.push(Line('\n'));
@@ -582,7 +588,7 @@ final class BinaryChainEmit {
 		}
 	}
 
-	private static function shapeOnePerLine(items:Array<Doc>, ops:Array<String>, cols:Int, location:WrappingLocation):Doc {
+	private static function shapeOnePerLine(items: Array<Doc>, ops: Array<String>, cols: Int, location: WrappingLocation): Doc {
 		// Every operand on its own indented line.
 		//
 		//  - `AfterLast` (haxe-formatter's `defaultWrap: onePerLine`
@@ -600,7 +606,7 @@ final class BinaryChainEmit {
 		// issue_187_oneline. Outer-context cases (`dirty = chain`,
 		// `return chain`) keep the leading `\n+indent` because their
 		// previous emitted byte is `=` / `n` / etc., not an open delim.
-		final inner:Array<Doc> = [OptHardlineSkipAtOpenDelim, items[0]];
+		final inner: Array<Doc> = [OptHardlineSkipAtOpenDelim, items[0]];
 		switch location {
 			case AfterLast:
 				for (i in 0...ops.length) {
@@ -618,7 +624,9 @@ final class BinaryChainEmit {
 		return Nest(cols, Concat(inner));
 	}
 
-	private static function shapeFillLine(items:Array<Doc>, ops:Array<String>, cols:Int, indentUnit:Int, location:WrappingLocation):Doc {
+	private static function shapeFillLine(
+		items: Array<Doc>, ops: Array<String>, cols: Int, indentUnit: Int, location: WrappingLocation
+	): Doc {
 		// Soft-line packing through `Fill`. Per-item-fit decision packs
 		// operands inline until the next one would overflow, then the
 		// soft-line between two operands breaks at the chain's standard
@@ -648,13 +656,13 @@ final class BinaryChainEmit {
 		// statement — mirror fork `wrapFillLine2AfterLast`'s
 		// `indent + 1 + addIndent`. For a non-suppressed chain
 		// (`cols == indentUnit`) both branches are byte-identical.
-		final enriched:Array<Doc> = switch location {
+		final enriched: Array<Doc> = switch location {
 			case BeforeLast:
-				final acc:Array<Doc> = [items[0]];
+				final acc: Array<Doc> = [items[0]];
 				for (i in 0...ops.length) acc.push(Concat([Text(ops[i] + ' '), items[i + 1]]));
 				acc;
 			case AfterLast:
-				final acc:Array<Doc> = [];
+				final acc: Array<Doc> = [];
 				for (i in 0...ops.length) acc.push(Concat([items[i], Text(' ' + ops[i])]));
 				acc.push(items[items.length - 1]);
 				acc;
@@ -669,7 +677,8 @@ final class BinaryChainEmit {
 		// of `opbool_in_call_leading_break_preserved` /
 		// `condition_wrapping_priority_over_opbool`. For a non-suppressed chain
 		// (`cols == indentUnit`) both arms are byte-identical.
-		final nestCols:Int = location == AfterLast && isAddSubOps(ops) ? indentUnit : cols;
+		final nestCols: Int = location == AfterLast && isAddSubOps(ops) ? indentUnit : cols;
 		return Group(Nest(nestCols, Fill(enriched, Line(' '))));
 	}
+
 }

@@ -29,19 +29,19 @@ package anyparse.format.comment;
  */
 class LineCommentNormalizer {
 
-	public static function normalizeLineComment(verbatim:String, addSpace:Bool):String {
+	public static function normalizeLineComment(verbatim: String, addSpace: Bool): String {
 		if (!StringTools.startsWith(verbatim, '//')) return verbatim;
-		final body:String = verbatim.substr(2);
+		final body: String = verbatim.substr(2);
 		if (body.length == 0) return '//';
 		if (isDecorationPrefix(body)) return '//' + StringTools.rtrim(body);
-		final trimmed:String = StringTools.trim(body);
+		final trimmed: String = StringTools.trim(body);
 		return addSpace ? '// ' + trimmed : '//' + trimmed;
 	}
 
-	private static function isDecorationPrefix(body:String):Bool {
+	private static function isDecorationPrefix(body: String): Bool {
 		if (body.length == 0) return false;
-		final c:Int = StringTools.fastCodeAt(body, 0);
-		return c == '/'.code || c == '*'.code || c == '-'.code
-			|| c == ' '.code || c == '\t'.code || c == '\r'.code;
+		final c: Int = StringTools.fastCodeAt(body, 0);
+		return c == '/'.code || c == '*'.code || c == '-'.code || c == ' '.code || c == '\t'.code || c == '\r'.code;
 	}
+
 }

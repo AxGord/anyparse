@@ -6,9 +6,11 @@ package anyparse.format;
  * interpretation as text.
  */
 enum abstract Encoding(Int) {
+
 	final UTF8 = 0;
 	final UTF16LE = 1;
 	final UTF16BE = 2;
 	final ASCII = 3;
 	final Binary = 4;
+
 }

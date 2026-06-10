@@ -107,8 +107,8 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxConditionalExpr = {
-	var cond:HxPpCondLit;
-	@:fmt(padTrailing, captureSourceNewlineAfter, nestBodyOnSourceNewline) var expr:HxExpr;
-	@:trivia @:tryparse @:fmt(padTrailing) var elseifs:Array<HxElseifExpr>;
-	@:optional @:kw('#else') @:fmt(padTrailing, captureSourceNewlineAfter, nestBodyOnSourceNewline) var elseExpr:Null<HxExpr>;
+	var cond: HxPpCondLit;
+	@:fmt(padTrailing, captureSourceNewlineAfter, nestBodyOnSourceNewline) var expr: HxExpr;
+	@:trivia @:tryparse @:fmt(padTrailing) var elseifs: Array<HxElseifExpr>;
+	@:optional @:kw('#else') @:fmt(padTrailing, captureSourceNewlineAfter, nestBodyOnSourceNewline) var elseExpr: Null<HxExpr>;
 };

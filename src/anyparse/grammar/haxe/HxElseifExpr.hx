@@ -49,6 +49,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxElseifExpr = {
-	@:kw('#elseif') var cond:HxPpCondLit;
-	@:fmt(nestBodyOnSourceNewline) var expr:HxExpr;
+	@:kw('#elseif') var cond: HxPpCondLit;
+	@:fmt(nestBodyOnSourceNewline) var expr: HxExpr;
 };

@@ -8,9 +8,11 @@ package anyparse.format.binary;
  *   format's declared endianness.
  */
 enum abstract LengthEncoding(Int) {
+
 	final Varint = 0;
 	final U8 = 1;
 	final U16 = 2;
 	final U32 = 3;
 	final U64 = 4;
+
 }

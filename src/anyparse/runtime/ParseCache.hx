@@ -12,9 +12,11 @@ package anyparse.runtime;
  * concrete type it stores and cast is cheap in Haxe.
  */
 interface ParseCache {
-	function get(key:String):Null<Dynamic>;
 
-	function set(key:String, value:Dynamic):Void;
+	function get(key: String): Null<Dynamic>;
 
-	function clear():Void;
+	function set(key: String, value: Dynamic): Void;
+
+	function clear(): Void;
+
 }

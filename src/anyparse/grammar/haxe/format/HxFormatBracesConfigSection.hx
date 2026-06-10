@@ -15,6 +15,6 @@ package anyparse.grammar.haxe.format;
  */
 @:peg typedef HxFormatBracesConfigSection = {
 
-	@:optional var anonTypeBraces:HxFormatParenPolicySection;
-	@:optional var objectLiteralBraces:HxFormatParenPolicySection;
+	@:optional var anonTypeBraces: HxFormatParenPolicySection;
+	@:optional var objectLiteralBraces: HxFormatParenPolicySection;
 };

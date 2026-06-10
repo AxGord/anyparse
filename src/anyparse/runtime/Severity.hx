@@ -6,6 +6,8 @@ package anyparse.runtime;
  * and ignores warnings entirely.
  */
 enum abstract Severity(Int) {
+
 	final Error = 0;
 	final Warning = 1;
+
 }

@@ -19,14 +19,14 @@ package anyparse.runtime;
 @:nullSafety(Strict)
 final class Parser {
 
-	public final input:Input;
-	public final errors:Array<ParseError> = [];
-	public final indentStack:Array<Int> = [];
-	public final captures:Map<String, String> = [];
+	public final input: Input;
+	public final errors: Array<ParseError> = [];
+	public final indentStack: Array<Int> = [];
+	public final captures: Map<String, String> = [];
 
-	public var pos:Int = 0;
-	public var cache:ParseCache = NoOpCache.instance;
-	public var cancelled:() -> Bool = alwaysFalse;
+	public var pos: Int = 0;
+	public var cache: ParseCache = NoOpCache.instance;
+	public var cancelled: () -> Bool = alwaysFalse;
 
 	/**
 	 * Farthest-failure tracker (PEG "max position" heuristic). Every
@@ -39,8 +39,9 @@ final class Parser {
 	 *
 	 * `-1` means no terminal was ever attempted (degenerate input).
 	 */
-	public var maxFailPos:Int = -1;
-	public var maxFailExpected:Null<String> = null;
+	public var maxFailPos: Int = -1;
+
+	public var maxFailExpected: Null<String> = null;
 
 	/**
 	 * Trivia carry-over slot (slice ω₆b). Generated Trivia-mode parsers
@@ -48,9 +49,14 @@ final class Parser {
 	 * point and its sub-rule call here; the next `collectTrivia` drains
 	 * it as a prefix. Null outside Trivia-mode builds and between drains.
 	 */
-	public var pendingTrivia:Null<{blankBefore:Bool, blankAfterLeadingComments:Bool, newlineBefore:Bool, leadingComments:Array<String>}> = null;
+	public var pendingTrivia: Null<{
+		blankBefore: Bool,
+		blankAfterLeadingComments: Bool,
+		newlineBefore: Bool,
+		leadingComments: Array<String>
+	}> = null;
 
-	public function new(input:Input) {
+	public function new(input: Input) {
 		this.input = input;
 	}
 
@@ -60,14 +66,15 @@ final class Parser {
 	 * `matchLit` failure paths; cheap (one compare on the failure path,
 	 * success path untouched).
 	 */
-	public function recordFail(failPos:Int, expected:String):Void {
+	public function recordFail(failPos: Int, expected: String): Void {
 		if (failPos > maxFailPos) {
 			maxFailPos = failPos;
 			maxFailExpected = expected;
 		}
 	}
 
-	private static function alwaysFalse():Bool {
+	private static function alwaysFalse(): Bool {
 		return false;
 	}
+
 }

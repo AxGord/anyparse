@@ -17,12 +17,14 @@ import haxe.macro.Type;
  *                annotation (e.g. `@:re` or `@:lit`).
  */
 enum ShapeKind {
+
 	Seq;
 	Alt;
 	Star;
 	Opt;
 	Ref;
 	Terminal;
+
 }
 
 /**
@@ -39,14 +41,15 @@ enum ShapeKind {
  */
 class ShapeNode {
 
-	public final kind:ShapeKind;
-	public final type:Null<Type>;
-	public final children:Array<ShapeNode> = [];
-	public final annotations:Map<String, Dynamic> = [];
+	public final kind: ShapeKind;
+	public final type: Null<Type>;
+	public final children: Array<ShapeNode> = [];
+	public final annotations: Map<String, Dynamic> = [];
 
-	public function new(kind:ShapeKind, ?type:Type) {
+	public function new(kind: ShapeKind, ?type: Type) {
 		this.kind = kind;
 		this.type = type;
 	}
+
 }
 #end

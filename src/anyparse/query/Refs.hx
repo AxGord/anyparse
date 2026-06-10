@@ -59,43 +59,43 @@ final class Refs {
 	 * Walk `tree` and return every reference / declaration of `name`
 	 * per `shape`. Hits are returned in pre-order traversal.
 	 */
-	public static function find(name:String, tree:QueryNode, shape:RefShape):Array<RefHit> {
-		final out:Array<RefHit> = [];
-		final scopes:ScopeStack = new ScopeStack();
+	public static function find(name: String, tree: QueryNode, shape: RefShape): Array<RefHit> {
+		final out: Array<RefHit> = [];
+		final scopes: ScopeStack = new ScopeStack();
 		walk(name, tree, shape, scopes, out);
 		return out;
 	}
 
-	private static function walk(target:String, node:QueryNode, shape:RefShape, scopes:ScopeStack, out:Array<RefHit>, isWriteTarget:Bool = false):Void {
-		final isScope:Bool = shape.scopeKinds.contains(node.kind);
+	private static function walk(
+		target: String, node: QueryNode, shape: RefShape, scopes: ScopeStack, out: Array<RefHit>, isWriteTarget: Bool = false
+	): Void {
+		final isScope: Bool = shape.scopeKinds.contains(node.kind);
 		if (isScope) {
-			final frame:ScopeFrame = new ScopeFrame(node);
+			final frame: ScopeFrame = new ScopeFrame(node);
 			collectDecls(target, node, shape, frame);
 			// Self-scoped decl (e.g. for-loop iterator): the scope node's
 			// own name binds INTO the frame it opens, visible only to
 			// reads inside the construct — opposite of a declHost name,
 			// which binds into the enclosing frame for siblings.
-			final selfSpan:Null<Span> = node.span;
+			final selfSpan: Null<Span> = node.span;
 			if (selfSpan != null && node.name == target && shape.selfScopeDeclKinds.contains(node.kind)) frame.declare(target, selfSpan);
 			scopes.push(frame);
 		}
-		final nname:Null<String> = node.name;
+		final nname: Null<String> = node.name;
 		if (nname == target) {
-			final span:Null<Span> = node.span;
+			final span: Null<Span> = node.span;
 			if (span != null) {
-				final kind:Null<RefKind> = classify(node.kind, shape, isWriteTarget);
+				final kind: Null<RefKind> = classify(node.kind, shape, isWriteTarget);
 				if (kind != null) {
-					final bindingSpan:Null<Span> = (kind == RefKind.Decl)
-						? span
-						: scopes.resolveInnermost(target);
+					final bindingSpan: Null<Span> = (kind == RefKind.Decl) ? span : scopes.resolveInnermost(target);
 					out.push(new RefHit(kind, target, span, bindingSpan));
 				}
 			}
 		}
-		final isWriteParent:Bool = shape.writeParentKinds.contains(node.kind);
-		final children:Array<QueryNode> = node.children;
+		final isWriteParent: Bool = shape.writeParentKinds.contains(node.kind);
+		final children: Array<QueryNode> = node.children;
 		for (i in 0...children.length) {
-			final childIsWriteTarget:Bool = isWriteParent && i == 0;
+			final childIsWriteTarget: Bool = isWriteParent && i == 0;
 			walk(target, children[i], shape, scopes, out, childIsWriteTarget);
 		}
 		if (isScope) scopes.pop();
@@ -109,29 +109,29 @@ final class Refs {
 	 * itself is the binder of its own name (e.g. `FnMember.name`),
 	 * which belongs in the ENCLOSING scope, not in its own frame.
 	 */
-	private static function collectDecls(target:String, scopeNode:QueryNode, shape:RefShape, frame:ScopeFrame):Void {
+	private static function collectDecls(target: String, scopeNode: QueryNode, shape: RefShape, frame: ScopeFrame): Void {
 		for (c in scopeNode.children) collectInto(target, c, shape, frame);
 	}
 
-	private static function collectInto(target:String, node:QueryNode, shape:RefShape, frame:ScopeFrame):Void {
+	private static function collectInto(target: String, node: QueryNode, shape: RefShape, frame: ScopeFrame): Void {
 		if (shape.scopeKinds.contains(node.kind)) {
 			// Decl on the inner scope-introducer itself (its own name slot)
 			// still belongs to THIS frame — the scope-node names itself in
 			// the enclosing scope, then opens a fresh scope for its body.
 			if (node.name == target && shape.declHostKinds.contains(node.kind)) {
-				final span:Null<Span> = node.span;
+				final span: Null<Span> = node.span;
 				if (span != null) frame.declare(target, span);
 			}
 			return;
 		}
 		if (node.name == target && shape.declHostKinds.contains(node.kind)) {
-			final span:Null<Span> = node.span;
+			final span: Null<Span> = node.span;
 			if (span != null) frame.declare(target, span);
 		}
 		for (c in node.children) collectInto(target, c, shape, frame);
 	}
 
-	private static inline function classify(kind:String, shape:RefShape, isWriteTarget:Bool):Null<RefKind> {
+	private static inline function classify(kind: String, shape: RefShape, isWriteTarget: Bool): Null<RefKind> {
 		// Decl-host takes precedence over identKind: a single grammar
 		// would normally place the decl name on a different ctor than
 		// the reference ctor, but the contract leaves the option open.
@@ -140,6 +140,7 @@ final class Refs {
 		if (kind == shape.identKind) return isWriteTarget ? RefKind.Write : RefKind.Read;
 		return null;
 	}
+
 }
 
 /**
@@ -158,17 +159,18 @@ final class Refs {
 @:nullSafety(Strict)
 final class RefHit {
 
-	public final kind:RefKind;
-	public final name:String;
-	public final span:Span;
-	public final bindingSpan:Null<Span>;
+	public final kind: RefKind;
+	public final name: String;
+	public final span: Span;
+	public final bindingSpan: Null<Span>;
 
-	public function new(kind:RefKind, name:String, span:Span, ?bindingSpan:Span) {
+	public function new(kind: RefKind, name: String, span: Span, ?bindingSpan: Span) {
 		this.kind = kind;
 		this.name = name;
 		this.span = span;
 		this.bindingSpan = bindingSpan;
 	}
+
 }
 
 /**
@@ -179,15 +181,17 @@ final class RefHit {
  * see the walker docstring for the propagation rule.
  */
 enum abstract RefKind(Int) {
+
 	final Decl = 0;
 	final Read = 1;
 	final Write = 2;
 
-	public function toString():String {
-		return switch (cast this:RefKind) {
+	public function toString(): String {
+		return switch (cast this: RefKind) {
 			case Decl: 'decl';
 			case Read: 'read';
 			case Write: 'write';
 		}
 	}
+
 }

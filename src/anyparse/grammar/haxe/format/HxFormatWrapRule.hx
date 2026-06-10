@@ -34,9 +34,9 @@ package anyparse.grammar.haxe.format;
  */
 @:peg typedef HxFormatWrapRule = {
 
-	@:optional var type:String;
+	@:optional var type: String;
 
-	@:optional var location:String;
+	@:optional var location: String;
 
-	@:optional var conditions:Array<HxFormatWrapCondition>;
+	@:optional var conditions: Array<HxFormatWrapCondition>;
 };

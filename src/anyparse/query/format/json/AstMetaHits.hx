@@ -11,5 +11,5 @@ package anyparse.query.format.json;
  */
 @:peg @:schema(anyparse.format.text.JsonFormat) @:ws
 typedef AstMetaHits = {
-	var hits:Array<AstMetaHit>;
+	var hits: Array<AstMetaHit>;
 };

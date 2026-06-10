@@ -22,8 +22,8 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxElseifStmt = {
-	@:kw('#elseif') var cond:HxPpCondLit;
+	@:kw('#elseif') var cond: HxPpCondLit;
 	@:trivia @:tryparse @:fmt(padLeading, padTrailing, conditionalBodyIndent)
-		@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
-		var body:Array<HxStatement>;
+	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
+	var body: Array<HxStatement>;
 };

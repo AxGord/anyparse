@@ -47,8 +47,8 @@ package anyparse.format.wrap;
  * ω-wraplist-additional-indent.
  */
 typedef WrapRules = {
-	var rules:Array<WrapRule>;
-	var defaultMode:WrapMode;
-	@:optional var defaultLocation:WrappingLocation;
-	@:optional var defaultAdditionalIndent:Int;
+	var rules: Array<WrapRule>;
+	var defaultMode: WrapMode;
+	@:optional var defaultLocation: WrappingLocation;
+	@:optional var defaultAdditionalIndent: Int;
 };

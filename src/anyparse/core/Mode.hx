@@ -15,7 +15,9 @@ package anyparse.core;
  * to it — the macro that consumes it lands in Phase 2.
  */
 enum abstract Mode(Int) {
+
 	final Fast = 0;
 	final Tolerant = 1;
+
 }
 #end

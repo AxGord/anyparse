@@ -26,22 +26,18 @@ import haxe.macro.Expr;
 class WriterCodegen {
 
 	public static function emit(
-		rules:Array<WriterLowering.WriterRule>,
-		rootTypePath:String,
-		rootReturnCT:ComplexType,
-		formatInfo:FormatReader.FormatInfo,
-		optionsTypePath:Null<String>,
-		?rootFnName:Null<String>
-	):Array<Field> {
-		final fields:Array<Field> = [];
+		rules: Array<WriterLowering.WriterRule>, rootTypePath: String, rootReturnCT: ComplexType, formatInfo: FormatReader.FormatInfo,
+		optionsTypePath: Null<String>, ?rootFnName: Null<String>
+	): Array<Field> {
+		final fields: Array<Field> = [];
 		if (formatInfo.isBinary) {
 			fields.push(binaryEntry(rootTypePath, rootReturnCT));
 			for (rule in rules) fields.push(binaryRuleField(rule));
 		} else {
 			if (optionsTypePath == null)
 				Context.fatalError('WriterCodegen.emit: text writer requires optionsTypePath', Context.currentPos());
-			final optionsCT:ComplexType = optionsComplexType(optionsTypePath);
-			final resolvedRootFn:String = rootFnName ?? ('write' + simpleName(rootTypePath));
+			final optionsCT: ComplexType = optionsComplexType(optionsTypePath);
+			final resolvedRootFn: String = rootFnName ?? ('write' + simpleName(rootTypePath));
 			fields.push(publicEntry(resolvedRootFn, rootReturnCT, formatInfo, optionsCT));
 			fields.push(publicDocEntry(resolvedRootFn, rootReturnCT, formatInfo, optionsCT));
 			for (rule in rules) fields.push(ruleField(rule, optionsCT));
@@ -72,7 +68,7 @@ class WriterCodegen {
 			// same field presence. `_clearValueIfBranch` is consumed by the
 			// block-Star barrier (an object literal inside a `{ … }`-shaped
 			// branch is the block's value, not the branch's immediate value).
-			final hasValueIfBranch:Bool = optionsHasField(optionsTypePath, '_inValueIfBranch');
+			final hasValueIfBranch: Bool = optionsHasField(optionsTypePath, '_inValueIfBranch');
 			if (optionsHasInExprPosition(optionsTypePath)) {
 				fields.push(setExprPositionField(optionsCT, hasValueIfBranch));
 				fields.push(clearExprPositionField(optionsCT));
@@ -104,8 +100,7 @@ class WriterCodegen {
 			// per-element `& Type`-clause break in `HxTypedefDecl.intersections`.
 			// Idempotent sister to `_setTypedefBody`. Gated on
 			// `_intersectionOperandBreak:Bool` field presence on the opt typedef.
-			if (optionsHasField(optionsTypePath, '_intersectionOperandBreak'))
-				fields.push(setIntersectionBreakField(optionsCT));
+			if (optionsHasField(optionsTypePath, '_intersectionOperandBreak')) fields.push(setIntersectionBreakField(optionsCT));
 			// ω-fieldlevel-var-value-expr-indent: opt-fanout helper pair for
 			// `@:fmt(propagateFieldLevelVar)` (class-member `var`/`final` ctor
 			// init dispatch) and the function-body clear. `_setFieldLevelVar`
@@ -129,9 +124,10 @@ class WriterCodegen {
 			// the default path. Emitted only when the opt typedef
 			// declares `_chainModeOverride:Null<WrapMode>` AND carries
 			// both `opBoolChainWrap` and `opAddSubChainWrap`.
-			if (optionsHasField(optionsTypePath, '_chainModeOverride')
-				&& optionsHasField(optionsTypePath, 'opBoolChainWrap')
-				&& optionsHasField(optionsTypePath, 'opAddSubChainWrap')) {
+			if (
+				optionsHasField(optionsTypePath, '_chainModeOverride') && optionsHasField(optionsTypePath, 'opBoolChainWrap')
+				&& optionsHasField(optionsTypePath, 'opAddSubChainWrap')
+			) {
 				fields.push(setChainModeOverrideField(optionsCT));
 				fields.push(resolveChainLocField());
 			}
@@ -256,32 +252,22 @@ class WriterCodegen {
 	// -------- public entry point --------
 
 	private static function publicEntry(
-		rootFn:String, rootReturnCT:ComplexType,
-		formatInfo:FormatReader.FormatInfo,
-		optionsCT:ComplexType
-	):Field {
-		final fmtParts:Array<String> = formatInfo.schemaTypePath.split('.');
-		final defaultOptsExpr:Expr = {
+		rootFn: String, rootReturnCT: ComplexType, formatInfo: FormatReader.FormatInfo, optionsCT: ComplexType
+	): Field {
+		final fmtParts: Array<String> = formatInfo.schemaTypePath.split('.');
+		final defaultOptsExpr: Expr = {
 			expr: EField(macro $p{fmtParts}.instance, 'defaultWriteOptions'),
 			pos: Context.currentPos(),
 		};
-		final writeCall:Expr = {
+		final writeCall: Expr = {
 			expr: ECall(macro $i{rootFn}, [macro value, macro _opt]),
 			pos: Context.currentPos(),
 		};
-		final body:Expr = macro {
-			final _opt:$optionsCT = options ?? $defaultOptsExpr;
+		final body: Expr = macro {
+			final _opt: $optionsCT = options ?? $defaultOptsExpr;
 			return anyparse.core.Renderer.render(
-				anyparse.core.CollapsePass.run(
-					$writeCall, _opt.lineWidth, _opt.indentChar, _opt.tabWidth, _opt.indentSize
-				),
-				_opt.lineWidth,
-				_opt.indentChar,
-				_opt.tabWidth,
-				_opt.indentSize,
-				_opt.lineEnd,
-				_opt.finalNewline,
-				_opt.trailingWhitespace,
+				anyparse.core.CollapsePass.run($writeCall, _opt.lineWidth, _opt.indentChar, _opt.tabWidth, _opt.indentSize),
+				_opt.lineWidth, _opt.indentChar, _opt.tabWidth, _opt.indentSize, _opt.lineEnd, _opt.finalNewline, _opt.trailingWhitespace,
 				_opt.maxConsecutiveBlanks
 			);
 		};
@@ -290,10 +276,10 @@ class WriterCodegen {
 			access: [APublic, AStatic],
 			kind: FFun({
 				args: [
-					{name: 'value', type: rootReturnCT},
-					{name: 'options', type: macro : Null<$optionsCT>, value: macro null},
+					{ name: 'value', type: rootReturnCT },
+					{ name: 'options', type: macro :Null<$optionsCT>, value: macro null },
 				],
-				ret: macro : String,
+				ret: macro :String,
 				expr: body,
 			}),
 			pos: Context.currentPos(),
@@ -310,21 +296,19 @@ class WriterCodegen {
 	 * rendering embedded inside a class-member writer's output.
 	 */
 	private static function publicDocEntry(
-		rootFn:String, rootReturnCT:ComplexType,
-		formatInfo:FormatReader.FormatInfo,
-		optionsCT:ComplexType
-	):Field {
-		final fmtParts:Array<String> = formatInfo.schemaTypePath.split('.');
-		final defaultOptsExpr:Expr = {
+		rootFn: String, rootReturnCT: ComplexType, formatInfo: FormatReader.FormatInfo, optionsCT: ComplexType
+	): Field {
+		final fmtParts: Array<String> = formatInfo.schemaTypePath.split('.');
+		final defaultOptsExpr: Expr = {
 			expr: EField(macro $p{fmtParts}.instance, 'defaultWriteOptions'),
 			pos: Context.currentPos(),
 		};
-		final writeCall:Expr = {
+		final writeCall: Expr = {
 			expr: ECall(macro $i{rootFn}, [macro value, macro _opt]),
 			pos: Context.currentPos(),
 		};
-		final body:Expr = macro {
-			final _opt:$optionsCT = options ?? $defaultOptsExpr;
+		final body: Expr = macro {
+			final _opt: $optionsCT = options ?? $defaultOptsExpr;
 			return $writeCall;
 		};
 		return {
@@ -332,20 +316,20 @@ class WriterCodegen {
 			access: [APublic, AStatic],
 			kind: FFun({
 				args: [
-					{name: 'value', type: rootReturnCT},
-					{name: 'options', type: macro : Null<$optionsCT>, value: macro null},
+					{ name: 'value', type: rootReturnCT },
+					{ name: 'options', type: macro :Null<$optionsCT>, value: macro null },
 				],
-				ret: macro : anyparse.core.Doc,
+				ret: macro :anyparse.core.Doc,
 				expr: body,
 			}),
 			pos: Context.currentPos(),
 		};
 	}
 
-	private static function optionsComplexType(optionsTypePath:String):ComplexType {
-		final simple:String = simpleName(optionsTypePath);
-		final pack:Array<String> = packOf(optionsTypePath);
-		return TPath({pack: pack, name: simple, params: []});
+	private static function optionsComplexType(optionsTypePath: String): ComplexType {
+		final simple: String = simpleName(optionsTypePath);
+		final pack: Array<String> = packOf(optionsTypePath);
+		return TPath({ pack: pack, name: simple, params: [] });
 	}
 
 	/**
@@ -360,7 +344,7 @@ class WriterCodegen {
 	 * resolves to the alias before unification. `TLazy` is followed
 	 * eagerly to handle forward-referenced typedefs.
 	 */
-	private static function optionsHasInExprPosition(optionsTypePath:String):Bool {
+	private static function optionsHasInExprPosition(optionsTypePath: String): Bool {
 		return optionsHasField(optionsTypePath, '_inExprPosition');
 	}
 
@@ -373,37 +357,40 @@ class WriterCodegen {
 	 * grammars whose options struct doesn't declare the matching
 	 * internal flag skip the helper.
 	 */
-	private static function optionsHasField(optionsTypePath:String, fieldName:String):Bool {
-		final t:Null<haxe.macro.Type> = try Context.getType(optionsTypePath) catch (e:haxe.Exception) null;
+	private static function optionsHasField(optionsTypePath: String, fieldName: String): Bool {
+		final t: Null<haxe.macro.Type> = try Context.getType(optionsTypePath) catch (e: haxe.Exception) null;
 		if (t == null) return false;
 		return anonHasField(t, fieldName);
 	}
 
-	private static function anonHasField(t:haxe.macro.Type, name:String):Bool {
-		switch (t) {
-			case TLazy(f): return anonHasField(f(), name);
-			case TType(_, _): return anonHasField(Context.follow(t), name);
+	private static function anonHasField(t: haxe.macro.Type, name: String): Bool {
+		switch  (t) {
+			case TLazy(f):
+				return anonHasField(f(), name);
+			case TType(_, _):
+				return anonHasField(Context.follow(t), name);
 			case TAnonymous(aRef):
-				final fields:Array<haxe.macro.Type.ClassField> = aRef.get().fields;
+				final fields: Array<haxe.macro.Type.ClassField> = aRef.get().fields;
 				for (cf in fields) if (cf.name == name) return true;
 				return false;
-			case _: return false;
+			case _:
+				return false;
 		}
 	}
 
-	private static function packOf(typePath:String):Array<String> {
-		final idx:Int = typePath.lastIndexOf('.');
+	private static function packOf(typePath: String): Array<String> {
+		final idx: Int = typePath.lastIndexOf('.');
 		return idx == -1 ? [] : typePath.substring(0, idx).split('.');
 	}
 
-	private static function binaryEntry(rootTypePath:String, rootReturnCT:ComplexType):Field {
-		final rootFn:String = 'write${simpleName(rootTypePath)}';
-		final writeCall:Expr = {
+	private static function binaryEntry(rootTypePath: String, rootReturnCT: ComplexType): Field {
+		final rootFn: String = 'write${simpleName(rootTypePath)}';
+		final writeCall: Expr = {
 			expr: ECall(macro $i{rootFn}, [macro value, macro output]),
 			pos: Context.currentPos(),
 		};
-		final body:Expr = macro {
-			final output:haxe.io.BytesOutput = new haxe.io.BytesOutput();
+		final body: Expr = macro {
+			final output: haxe.io.BytesOutput = new haxe.io.BytesOutput();
 			$writeCall;
 			return output.getBytes();
 		};
@@ -411,24 +398,24 @@ class WriterCodegen {
 			name: 'write',
 			access: [APublic, AStatic],
 			kind: FFun({
-				args: [{name: 'value', type: rootReturnCT}],
-				ret: macro : haxe.io.Bytes,
+				args: [{ name: 'value', type: rootReturnCT }],
+				ret: macro :haxe.io.Bytes,
 				expr: body,
 			}),
 			pos: Context.currentPos(),
 		};
 	}
 
-	private static function binaryRuleField(rule:WriterLowering.WriterRule):Field {
+	private static function binaryRuleField(rule: WriterLowering.WriterRule): Field {
 		return {
 			name: rule.fnName,
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{name: 'value', type: rule.valueCT},
-					{name: 'output', type: macro : haxe.io.BytesOutput},
+					{ name: 'value', type: rule.valueCT },
+					{ name: 'output', type: macro :haxe.io.BytesOutput },
 				],
-				ret: macro : Void,
+				ret: macro :Void,
 				expr: rule.body,
 			}),
 			pos: Context.currentPos(),
@@ -437,19 +424,18 @@ class WriterCodegen {
 
 	// -------- per-rule fields --------
 
-	private static function ruleField(rule:WriterLowering.WriterRule, optionsCT:ComplexType):Field {
-		final args:Array<FunctionArg> = [
-			{name: 'value', type: rule.valueCT},
-			{name: 'opt', type: optionsCT},
+	private static function ruleField(rule: WriterLowering.WriterRule, optionsCT: ComplexType): Field {
+		final args: Array<FunctionArg> = [
+			{ name: 'value', type: rule.valueCT },
+			{ name: 'opt', type: optionsCT },
 		];
-		if (rule.hasCtxPrec)
-			args.push({name: 'ctxPrec', type: macro : Int, value: macro -1});
+		if (rule.hasCtxPrec) args.push({ name: 'ctxPrec', type: macro :Int, value: macro -1 });
 		return {
 			name: rule.fnName,
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: args,
-				ret: macro : anyparse.core.Doc,
+				ret: macro :anyparse.core.Doc,
 				expr: rule.body,
 			}),
 			pos: Context.currentPos(),
@@ -462,19 +448,22 @@ class WriterCodegen {
 	// Generated code calls `_dt(s)` instead — resolved at compile time
 	// of the generated class, not at macro expansion time.
 
-	private static function docHelperFields():Array<Field> {
+	private static function docHelperFields(): Array<Field> {
 		return [
-			docHelper('_dt', [{name: 's', type: macro : String}], macro anyparse.core.Doc.Text(s)),
-			docHelper('_dop', [{name: 's', type: macro : String}], macro anyparse.core.Doc.OptSpace(s)),
-			docHelper('_dc', [{name: 'items', type: macro : Array<anyparse.core.Doc>}], macro anyparse.core.Doc.Concat(items)),
-			docHelper('_dn', [{name: 'n', type: macro : Int}, {name: 'inner', type: macro : anyparse.core.Doc}], macro anyparse.core.Doc.Nest(n, inner)),
-			docHelper('_dg', [{name: 'inner', type: macro : anyparse.core.Doc}], macro anyparse.core.Doc.Group(inner)),
-			docHelper('_dbg', [{name: 'inner', type: macro : anyparse.core.Doc}], macro anyparse.core.Doc.BodyGroup(inner)),
+			docHelper('_dt', [{ name: 's', type: macro :String }], macro anyparse.core.Doc.Text(s)),
+			docHelper('_dop', [{ name: 's', type: macro :String }], macro anyparse.core.Doc.OptSpace(s)),
+			docHelper('_dc', [{ name: 'items', type: macro :Array<anyparse.core.Doc> }], macro anyparse.core.Doc.Concat(items)),
+			docHelper('_dn', [
+				{ name: 'n', type: macro :Int },
+				{ name: 'inner', type: macro :anyparse.core.Doc }
+			], macro anyparse.core.Doc.Nest(n, inner)),
+			docHelper('_dg', [{ name: 'inner', type: macro :anyparse.core.Doc }], macro anyparse.core.Doc.Group(inner)),
+			docHelper('_dbg', [{ name: 'inner', type: macro :anyparse.core.Doc }], macro anyparse.core.Doc.BodyGroup(inner)),
 			// ω-group-rest-probe: opt-in Group variant whose render-time fit
 			// decision subtracts rest-of-stack flat width from the budget.
 			// Emit via `_dgrp(...)` instead of `_dg(...)` at sites where
 			// trailing same-line content should bias toward MBreak.
-			docHelper('_dgrp', [{name: 'inner', type: macro : anyparse.core.Doc}], macro anyparse.core.Doc.GroupWithRestProbe(inner)),
+			docHelper('_dgrp', [{ name: 'inner', type: macro :anyparse.core.Doc }], macro anyparse.core.Doc.GroupWithRestProbe(inner)),
 			docHelper('_dhl', [], macro anyparse.core.Doc.Line('\n')),
 			docHelper('_doh', [], macro anyparse.core.Doc.OptHardline),
 			// ω-opthardlineskipbeforehardline: forward-looking opt-hardline.
@@ -491,29 +480,20 @@ class WriterCodegen {
 			docHelper('_dsl', [], macro anyparse.core.Doc.Line('')),
 			docHelper('_dl', [], macro anyparse.core.Doc.Line(' ')),
 			docHelper('_de', [], macro anyparse.core.Doc.Empty),
-			docHelper(
-				'_dib',
-				[{name: 'br', type: macro : anyparse.core.Doc}, {name: 'fl', type: macro : anyparse.core.Doc}],
-				macro anyparse.core.Doc.IfBreak(br, fl)
-			),
-			docHelper(
-				'_diwe',
-				[
-					{name: 'n', type: macro : Int},
-					{name: 'br', type: macro : anyparse.core.Doc},
-					{name: 'fl', type: macro : anyparse.core.Doc}
-				],
-				macro anyparse.core.Doc.IfWidthExceeds(n, br, fl)
-			),
-			docHelper(
-				'_difle',
-				[
-					{name: 'n', type: macro : Int},
-					{name: 'br', type: macro : anyparse.core.Doc},
-					{name: 'fl', type: macro : anyparse.core.Doc}
-				],
-				macro anyparse.core.Doc.IfFirstLineExceeds(n, br, fl)
-			),
+			docHelper('_dib', [
+				{ name: 'br', type: macro :anyparse.core.Doc },
+				{ name: 'fl', type: macro :anyparse.core.Doc }
+			], macro anyparse.core.Doc.IfBreak(br, fl)),
+			docHelper('_diwe', [
+				{ name: 'n', type: macro :Int },
+				{ name: 'br', type: macro :anyparse.core.Doc },
+				{ name: 'fl', type: macro :anyparse.core.Doc }
+			], macro anyparse.core.Doc.IfWidthExceeds(n, br, fl)),
+			docHelper('_difle', [
+				{ name: 'n', type: macro :Int },
+				{ name: 'br', type: macro :anyparse.core.Doc },
+				{ name: 'fl', type: macro :anyparse.core.Doc }
+			], macro anyparse.core.Doc.IfFirstLineExceeds(n, br, fl)),
 			// ω-ifnaturalfirstlineexceeds-infra: natural-shape first-line
 			// probe. Fires `br` when the NATURAL first line of `fl` (rendered
 			// speculatively at the current column, resolving each inner Group
@@ -522,68 +502,54 @@ class WriterCodegen {
 			// wraps its own call-args (short natural first line → stay inline).
 			// Enum ctors can't be called in macro{}, so consumers (macro-
 			// generated WriterLowering) call this generated wrapper.
-			docHelper(
-				'_dinfle',
-				[
-					{name: 'n', type: macro : Int},
-					{name: 'br', type: macro : anyparse.core.Doc},
-					{name: 'fl', type: macro : anyparse.core.Doc}
-				],
-				macro anyparse.core.Doc.IfNaturalFirstLineExceeds(n, br, fl)
-			),
+			docHelper('_dinfle', [
+				{ name: 'n', type: macro :Int },
+				{ name: 'br', type: macro :anyparse.core.Doc },
+				{ name: 'fl', type: macro :anyparse.core.Doc }
+			], macro anyparse.core.Doc.IfNaturalFirstLineExceeds(n, br, fl)),
 			// ω-abstract-clauses-linewrap: column-threshold probe consuming
 			// rest-of-stack flat width. Fires `br` when
 			// `col + flatTokenWidth(fl) + flatTokenWidthOfRestStack(stack) >= n`.
 			// Used by the bare-Star `padLeading + lineLengthAwareSeps` emit
 			// branch to break before `from`/`to` clauses on abstract decls
 			// when the full decl line exceeds `opt.lineWidth`.
-			docHelper(
-				'_dile',
-				[
-					{name: 'n', type: macro : Int},
-					{name: 'br', type: macro : anyparse.core.Doc},
-					{name: 'fl', type: macro : anyparse.core.Doc}
-				],
-				macro anyparse.core.Doc.IfLineExceeds(n, br, fl)
-			),
-			docHelper(
-				'_dfill',
-				[{name: 'items', type: macro : Array<anyparse.core.Doc>}, {name: 'sep', type: macro : anyparse.core.Doc}],
-				macro anyparse.core.Doc.Fill(items, sep)
-			),
+			docHelper('_dile', [
+				{ name: 'n', type: macro :Int },
+				{ name: 'br', type: macro :anyparse.core.Doc },
+				{ name: 'fl', type: macro :anyparse.core.Doc }
+			], macro anyparse.core.Doc.IfLineExceeds(n, br, fl)),
+			docHelper('_dfill', [
+				{ name: 'items', type: macro :Array<anyparse.core.Doc> },
+				{ name: 'sep', type: macro :anyparse.core.Doc }
+			], macro anyparse.core.Doc.Fill(items, sep)),
 			// ω-fill-rest-probe: opt-in Fill variant whose per-item-fit probe
 			// in FillCont resumption subtracts rest-of-stack flat width from
 			// the budget. Sister to `_dgrp` at the Fill primitive layer.
-			docHelper(
-				'_dfwrp',
-				[{name: 'items', type: macro : Array<anyparse.core.Doc>}, {name: 'sep', type: macro : anyparse.core.Doc}],
-				macro anyparse.core.Doc.FillWithRestProbe(items, sep)
-			),
+			docHelper('_dfwrp', [
+				{ name: 'items', type: macro :Array<anyparse.core.Doc> },
+				{ name: 'sep', type: macro :anyparse.core.Doc }
+			], macro anyparse.core.Doc.FillWithRestProbe(items, sep)),
 			// ω-force-flat-engine slice D follow-up: WrapBoundary helper so the
 			// hand-rolled trivia-branch dispatchers (triviaSepStarExpr et al.)
 			// can reset force-flat for their inner content the same way the
 			// 4 cascade-emit functions do via Slice C's wraps.
-			docHelper('_dwb', [{name: 'inner', type: macro : anyparse.core.Doc}], macro anyparse.core.Doc.WrapBoundary(inner)),
+			docHelper('_dwb', [{ name: 'inner', type: macro :anyparse.core.Doc }], macro anyparse.core.Doc.WrapBoundary(inner)),
 			// ω-iffulllineexceeds-primitive: full-line probe consuming the
 			// primitive's own flat width PLUS the BG-descending rest-of-stack
 			// lookahead. Fires `br` when `col + flatTokenWidth(fl) +
 			// flatTokenWidthOfRestStackFull(stack) >= n`. Used by the
 			// expression-paren collapse consumer (C2a/B) to decide paren-open.
-			docHelper(
-				'_dfle',
-				[
-					{name: 'n', type: macro : Int},
-					{name: 'br', type: macro : anyparse.core.Doc},
-					{name: 'fl', type: macro : anyparse.core.Doc}
-				],
-				macro anyparse.core.Doc.IfFullLineExceeds(n, br, fl)
-			),
+			docHelper('_dfle', [
+				{ name: 'n', type: macro :Int },
+				{ name: 'br', type: macro :anyparse.core.Doc },
+				{ name: 'fl', type: macro :anyparse.core.Doc }
+			], macro anyparse.core.Doc.IfFullLineExceeds(n, br, fl)),
 			// ω-hardflatten (increment-2): HardFlatten helper. Pins the
 			// subtree force-flat through every inner WrapBoundary — the
 			// inner-collapse half of the chain-collapse family (fork's
 			// `collapseInnerChainBreaks`). Consumed by the ParenExpr
 			// `@:fmt(expressionParenHardFlatten)` open-branch emit.
-			docHelper('_dhf', [{name: 'inner', type: macro : anyparse.core.Doc}], macro anyparse.core.Doc.HardFlatten(inner)),
+			docHelper('_dhf', [{ name: 'inner', type: macro :anyparse.core.Doc }], macro anyparse.core.Doc.HardFlatten(inner)),
 			// ω-collapse-probe (increment-2): CollapseProbe helper. Render-
 			// transparent marker on an expression-paren collapse-candidate
 			// open branch so `CollapsePass` recognises the paren and commits
@@ -591,29 +557,31 @@ class WriterCodegen {
 			// operator class (opAddSub wraps a HardFlatten inside; opBool /
 			// ternary wraps the plain inner). Consumed by the ParenExpr
 			// `@:fmt(expressionParenHardFlatten)` open-branch emit.
-			docHelper('_dcp', [{name: 'inner', type: macro : anyparse.core.Doc}], macro anyparse.core.Doc.CollapseProbe(inner)),
+			docHelper('_dcp', [{ name: 'inner', type: macro :anyparse.core.Doc }], macro anyparse.core.Doc.CollapseProbe(inner)),
 			// ω-cond-indent-policy FixedZero: ConditionalMarkerZero helper.
 			// Wraps a whole `#if … #end` construct Doc; at render time every
 			// fresh `#`-leading line (a `#if`/`#elseif`/`#else`/`#end` marker)
 			// is flushed at column 0 while body lines keep their frame indent.
 			// Emitted by the generated writer only under
 			// `opt.conditionalPolicy == FixedZero`. Structurally transparent.
-			docHelper('_dcmz', [{name: 'inner', type: macro : anyparse.core.Doc}], macro anyparse.core.Doc.ConditionalMarkerZero(inner)),
+			docHelper('_dcmz', [{ name: 'inner', type: macro :anyparse.core.Doc }], macro anyparse.core.Doc.ConditionalMarkerZero(inner)),
 			// ω-cond-indent-policy AlignedDecrease: ConditionalMarkerDecrease
 			// helper. Wraps a whole `#if … #end` construct Doc; at render time
 			// EVERY fresh line (markers AND body) is shifted one indent level
 			// shallower, moving the increase-style layout `-1` uniformly. Emitted
 			// by the generated writer only under
 			// `opt.conditionalPolicy == AlignedDecrease`. Structurally transparent.
-			docHelper('_dcmd', [{name: 'inner', type: macro : anyparse.core.Doc}], macro anyparse.core.Doc.ConditionalMarkerDecrease(inner)),
+			docHelper(
+				'_dcmd', [{ name: 'inner', type: macro :anyparse.core.Doc }], macro anyparse.core.Doc.ConditionalMarkerDecrease(inner)
+			),
 		];
 	}
 
-	private static function docHelper(name:String, args:Array<FunctionArg>, body:Expr):Field {
+	private static function docHelper(name: String, args: Array<FunctionArg>, body: Expr): Field {
 		return {
 			name: name,
 			access: [APrivate, AStatic, AInline],
-			kind: FFun({args: args, ret: macro : anyparse.core.Doc, expr: macro return $body}),
+			kind: FFun({ args: args, ret: macro :anyparse.core.Doc, expr: macro return $body }),
 			pos: Context.currentPos(),
 		};
 	}
@@ -629,16 +597,16 @@ class WriterCodegen {
 	 * branch needs a per-call mutable copy to override knob fields without
 	 * touching the shared `opt` singleton.
 	 */
-	private static function copyOptField(optionsCT:ComplexType):Field {
+	private static function copyOptField(optionsCT: ComplexType): Field {
 		return {
 			name: '_copyOpt',
 			access: [APrivate, AStatic, AInline],
-			meta: [{name: ':nullSafety', params: [macro Off], pos: Context.currentPos()}],
+			meta: [{ name: ':nullSafety', params: [macro Off], pos: Context.currentPos() }],
 			kind: FFun({
-				args: [{name: 'o', type: optionsCT}],
+				args: [{ name: 'o', type: optionsCT }],
 				ret: optionsCT,
 				expr: macro {
-					final _c:$optionsCT = cast Reflect.copy(o);
+					final _c: $optionsCT = cast Reflect.copy(o);
 					if (_c == null) throw 'WriterCodegen._copyOpt: Reflect.copy returned null';
 					return _c;
 				},
@@ -672,18 +640,18 @@ class WriterCodegen {
 	 * call this helper), and is dropped the moment a propagating ctor
 	 * re-establishes expression position one level deeper.
 	 */
-	private static function setExprPositionField(optionsCT:ComplexType, clearsValueIfBranch:Bool):Field {
-		final body:Expr = clearsValueIfBranch
+	private static function setExprPositionField(optionsCT: ComplexType, clearsValueIfBranch: Bool): Field {
+		final body: Expr = clearsValueIfBranch
 			? macro {
 				if (o._inExprPosition && !o._inValueIfBranch) return o;
-				final _c:$optionsCT = _copyOpt(o);
+				final _c: $optionsCT = _copyOpt(o);
 				_c._inExprPosition = true;
 				_c._inValueIfBranch = false;
 				return _c;
 			}
 			: macro {
 				if (o._inExprPosition) return o;
-				final _c:$optionsCT = _copyOpt(o);
+				final _c: $optionsCT = _copyOpt(o);
 				_c._inExprPosition = true;
 				return _c;
 			};
@@ -691,7 +659,7 @@ class WriterCodegen {
 			name: '_setExprPosition',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{name: 'o', type: optionsCT}],
+				args: [{ name: 'o', type: optionsCT }],
 				ret: optionsCT,
 				expr: body,
 			}),
@@ -711,16 +679,16 @@ class WriterCodegen {
 	 * literal that is the direct branch value. Emitted only when the opt
 	 * typedef carries `_inValueIfBranch:Bool`.
 	 */
-	private static function setValueIfBranchField(optionsCT:ComplexType):Field {
+	private static function setValueIfBranchField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setValueIfBranch',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{name: 'o', type: optionsCT}],
+				args: [{ name: 'o', type: optionsCT }],
 				ret: optionsCT,
 				expr: macro {
 					if (!o._inExprPosition || o._inValueIfBranch) return o;
-					final _c:$optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _copyOpt(o);
 					_c._inValueIfBranch = true;
 					return _c;
 				},
@@ -742,16 +710,16 @@ class WriterCodegen {
 	 * keeps the broad `_inExprPosition` frame. Emitted alongside
 	 * `_setValueIfBranch`.
 	 */
-	private static function clearValueIfBranchField(optionsCT:ComplexType):Field {
+	private static function clearValueIfBranchField(optionsCT: ComplexType): Field {
 		return {
 			name: '_clearValueIfBranch',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{name: 'o', type: optionsCT}],
+				args: [{ name: 'o', type: optionsCT }],
 				ret: optionsCT,
 				expr: macro {
 					if (!o._inValueIfBranch) return o;
-					final _c:$optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _copyOpt(o);
 					_c._inValueIfBranch = false;
 					return _c;
 				},
@@ -773,16 +741,16 @@ class WriterCodegen {
 	 * typedef carries `_inExprPosition:Bool` — paired with `_setExprPosition`
 	 * emission.
 	 */
-	private static function clearExprPositionField(optionsCT:ComplexType):Field {
+	private static function clearExprPositionField(optionsCT: ComplexType): Field {
 		return {
 			name: '_clearExprPosition',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{name: 'o', type: optionsCT}],
+				args: [{ name: 'o', type: optionsCT }],
 				ret: optionsCT,
 				expr: macro {
 					if (!o._inExprPosition) return o;
-					final _c:$optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _copyOpt(o);
 					_c._inExprPosition = false;
 					return _c;
 				},
@@ -802,16 +770,16 @@ class WriterCodegen {
 	 * instead of `opt.emptyCurly`. Emitted only when the opt typedef
 	 * declares `_inAnonFnBody:Bool` (currently `HxModuleWriteOptions`).
 	 */
-	private static function setAnonFnBodyField(optionsCT:ComplexType):Field {
+	private static function setAnonFnBodyField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setAnonFnBody',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{name: 'o', type: optionsCT}],
+				args: [{ name: 'o', type: optionsCT }],
 				ret: optionsCT,
 				expr: macro {
 					if (o._inAnonFnBody) return o;
-					final _c:$optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _copyOpt(o);
 					_c._inAnonFnBody = true;
 					return _c;
 				},
@@ -833,16 +801,16 @@ class WriterCodegen {
 	 * Emitted only when the opt typedef carries `_inAnonFnBody:Bool` —
 	 * paired with `_setAnonFnBody` emission.
 	 */
-	private static function clearAnonFnBodyField(optionsCT:ComplexType):Field {
+	private static function clearAnonFnBodyField(optionsCT: ComplexType): Field {
 		return {
 			name: '_clearAnonFnBody',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{name: 'o', type: optionsCT}],
+				args: [{ name: 'o', type: optionsCT }],
 				ret: optionsCT,
 				expr: macro {
 					if (!o._inAnonFnBody) return o;
-					final _c:$optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _copyOpt(o);
 					_c._inAnonFnBody = false;
 					return _c;
 				},
@@ -863,16 +831,16 @@ class WriterCodegen {
 	 * layout even when fields fit flat. Emitted only when the opt
 	 * typedef declares `_inTypedefBody:Bool`.
 	 */
-	private static function setTypedefBodyField(optionsCT:ComplexType):Field {
+	private static function setTypedefBodyField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setTypedefBody',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{name: 'o', type: optionsCT}],
+				args: [{ name: 'o', type: optionsCT }],
 				ret: optionsCT,
 				expr: macro {
 					if (o._inTypedefBody) return o;
-					final _c:$optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _copyOpt(o);
 					_c._inTypedefBody = true;
 					return _c;
 				},
@@ -894,16 +862,16 @@ class WriterCodegen {
 	 * typedef carries `_inTypedefBody:Bool` — paired with
 	 * `_setTypedefBody` emission.
 	 */
-	private static function clearTypedefBodyField(optionsCT:ComplexType):Field {
+	private static function clearTypedefBodyField(optionsCT: ComplexType): Field {
 		return {
 			name: '_clearTypedefBody',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{name: 'o', type: optionsCT}],
+				args: [{ name: 'o', type: optionsCT }],
 				ret: optionsCT,
 				expr: macro {
 					if (!o._inTypedefBody) return o;
-					final _c:$optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _copyOpt(o);
 					_c._inTypedefBody = false;
 					return _c;
 				},
@@ -923,16 +891,16 @@ class WriterCodegen {
 	 * lead breaks `&\n\t` before the operand. Emitted only when the opt
 	 * typedef declares `_intersectionOperandBreak:Bool`.
 	 */
-	private static function setIntersectionBreakField(optionsCT:ComplexType):Field {
+	private static function setIntersectionBreakField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setIntersectionBreak',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{name: 'o', type: optionsCT}],
+				args: [{ name: 'o', type: optionsCT }],
 				ret: optionsCT,
 				expr: macro {
 					if (o._intersectionOperandBreak) return o;
-					final _c:$optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _copyOpt(o);
 					_c._intersectionOperandBreak = true;
 					return _c;
 				},
@@ -952,16 +920,16 @@ class WriterCodegen {
 	 * `Indenter.isFieldLevelVar`). Emitted only when the opt typedef declares
 	 * `_inFieldLevelVar:Bool` (currently `HxModuleWriteOptions`).
 	 */
-	private static function setFieldLevelVarField(optionsCT:ComplexType):Field {
+	private static function setFieldLevelVarField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setFieldLevelVar',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{name: 'o', type: optionsCT}],
+				args: [{ name: 'o', type: optionsCT }],
 				ret: optionsCT,
 				expr: macro {
 					if (o._inFieldLevelVar) return o;
-					final _c:$optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _copyOpt(o);
 					_c._inFieldLevelVar = true;
 					return _c;
 				},
@@ -981,16 +949,16 @@ class WriterCodegen {
 	 * typedef carries `_inFieldLevelVar:Bool` — paired with `_setFieldLevelVar`
 	 * emission.
 	 */
-	private static function clearFieldLevelVarField(optionsCT:ComplexType):Field {
+	private static function clearFieldLevelVarField(optionsCT: ComplexType): Field {
 		return {
 			name: '_clearFieldLevelVar',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{name: 'o', type: optionsCT}],
+				args: [{ name: 'o', type: optionsCT }],
 				ret: optionsCT,
 				expr: macro {
 					if (!o._inFieldLevelVar) return o;
-					final _c:$optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _copyOpt(o);
 					_c._inFieldLevelVar = false;
 					return _c;
 				},
@@ -1011,16 +979,16 @@ class WriterCodegen {
 	 * only when the opt typedef declares `_callArgChainNest:Bool` (currently
 	 * `HxModuleWriteOptions`).
 	 */
-	private static function setCallArgChainNestField(optionsCT:ComplexType):Field {
+	private static function setCallArgChainNestField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setCallArgChainNest',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{name: 'o', type: optionsCT}],
+				args: [{ name: 'o', type: optionsCT }],
 				ret: optionsCT,
 				expr: macro {
 					if (o._callArgChainNest) return o;
-					final _c:$optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _copyOpt(o);
 					_c._callArgChainNest = true;
 					return _c;
 				},
@@ -1038,16 +1006,16 @@ class WriterCodegen {
 	 * operands / nested chains fall back to their own continuation Nest. Paired
 	 * with `_setCallArgChainNest` emission.
 	 */
-	private static function clearCallArgChainNestField(optionsCT:ComplexType):Field {
+	private static function clearCallArgChainNestField(optionsCT: ComplexType): Field {
 		return {
 			name: '_clearCallArgChainNest',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{name: 'o', type: optionsCT}],
+				args: [{ name: 'o', type: optionsCT }],
 				ret: optionsCT,
 				expr: macro {
 					if (!o._callArgChainNest) return o;
-					final _c:$optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _copyOpt(o);
 					_c._callArgChainNest = false;
 					return _c;
 				},
@@ -1065,19 +1033,19 @@ class WriterCodegen {
 	 * `_chainModeOverride` into the paren's own inner chain when set. Sister
 	 * to `_setCallArgChainNest`. Gated on `_parenInCondition:Bool`.
 	 */
-	private static function setParenInConditionField(optionsCT:ComplexType):Field {
+	private static function setParenInConditionField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setParenInCondition',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
 				args: [
-					{name: 'o', type: optionsCT},
-					{name: 'v', type: macro : Bool},
+					{ name: 'o', type: optionsCT },
+					{ name: 'v', type: macro :Bool },
 				],
 				ret: optionsCT,
 				expr: macro {
 					if (o._parenInCondition == v) return o;
-					final _c:$optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _copyOpt(o);
 					_c._parenInCondition = v;
 					return _c;
 				},
@@ -1094,16 +1062,16 @@ class WriterCodegen {
 	 * paren inside the in-condition paren does not re-trigger the fillLine
 	 * override. Paired with `_setParenInCondition`.
 	 */
-	private static function clearParenInConditionField(optionsCT:ComplexType):Field {
+	private static function clearParenInConditionField(optionsCT: ComplexType): Field {
 		return {
 			name: '_clearParenInCondition',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{name: 'o', type: optionsCT}],
+				args: [{ name: 'o', type: optionsCT }],
 				ret: optionsCT,
 				expr: macro {
 					if (!o._parenInCondition) return o;
-					final _c:$optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _copyOpt(o);
 					_c._parenInCondition = false;
 					return _c;
 				},
@@ -1121,19 +1089,19 @@ class WriterCodegen {
 	 * (`_breaks[0]`) under `WrapMode.Keep`. Sister to `_setParenInCondition`.
 	 * Gated on `_varKwNewline:Bool`.
 	 */
-	private static function setVarKwNewlineField(optionsCT:ComplexType):Field {
+	private static function setVarKwNewlineField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setVarKwNewline',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
 				args: [
-					{name: 'o', type: optionsCT},
-					{name: 'v', type: macro : Bool},
+					{ name: 'o', type: optionsCT },
+					{ name: 'v', type: macro :Bool },
 				],
 				ret: optionsCT,
 				expr: macro {
 					if (o._varKwNewline == v) return o;
-					final _c:$optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _copyOpt(o);
 					_c._varKwNewline = v;
 					return _c;
 				},
@@ -1150,16 +1118,16 @@ class WriterCodegen {
 	 * self-calls do not re-trigger the head break. Paired with
 	 * `_setVarKwNewline`.
 	 */
-	private static function clearVarKwNewlineField(optionsCT:ComplexType):Field {
+	private static function clearVarKwNewlineField(optionsCT: ComplexType): Field {
 		return {
 			name: '_clearVarKwNewline',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{name: 'o', type: optionsCT}],
+				args: [{ name: 'o', type: optionsCT }],
 				ret: optionsCT,
 				expr: macro {
 					if (!o._varKwNewline) return o;
-					final _c:$optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _copyOpt(o);
 					_c._varKwNewline = false;
 					return _c;
 				},
@@ -1177,19 +1145,19 @@ class WriterCodegen {
 	 * unconditionally so a kept chain's inner parens stay flat regardless of
 	 * line width. Sister to `_setVarKwNewline`. Gated on `_keepFlatInner:Bool`.
 	 */
-	private static function setKeepFlatInnerField(optionsCT:ComplexType):Field {
+	private static function setKeepFlatInnerField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setKeepFlatInner',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
 				args: [
-					{name: 'o', type: optionsCT},
-					{name: 'v', type: macro : Bool},
+					{ name: 'o', type: optionsCT },
+					{ name: 'v', type: macro :Bool },
 				],
 				ret: optionsCT,
 				expr: macro {
 					if (o._keepFlatInner == v) return o;
-					final _c:$optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _copyOpt(o);
 					_c._keepFlatInner = v;
 					return _c;
 				},
@@ -1204,16 +1172,16 @@ class WriterCodegen {
 	 * `false`; otherwise returns a `_copyOpt(o)` with the flag cleared. Paired
 	 * with `_setKeepFlatInner`.
 	 */
-	private static function clearKeepFlatInnerField(optionsCT:ComplexType):Field {
+	private static function clearKeepFlatInnerField(optionsCT: ComplexType): Field {
 		return {
 			name: '_clearKeepFlatInner',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{name: 'o', type: optionsCT}],
+				args: [{ name: 'o', type: optionsCT }],
 				ret: optionsCT,
 				expr: macro {
 					if (!o._keepFlatInner) return o;
-					final _c:$optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _copyOpt(o);
 					_c._keepFlatInner = false;
 					return _c;
 				},
@@ -1228,19 +1196,19 @@ class WriterCodegen {
 	 * Nest (the return-head newline + continuation indent are supplied at the
 	 * value level). Idempotent. Gated on `_keepChainInParen:Bool`.
 	 */
-	private static function setKeepChainInParenField(optionsCT:ComplexType):Field {
+	private static function setKeepChainInParenField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setKeepChainInParen',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
 				args: [
-					{name: 'o', type: optionsCT},
-					{name: 'v', type: macro : Bool},
+					{ name: 'o', type: optionsCT },
+					{ name: 'v', type: macro :Bool },
 				],
 				ret: optionsCT,
 				expr: macro {
 					if (o._keepChainInParen == v) return o;
-					final _c:$optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _copyOpt(o);
 					_c._keepChainInParen = v;
 					return _c;
 				},
@@ -1254,16 +1222,16 @@ class WriterCodegen {
 	 * `_setKeepChainInParen`. Cleared at the chain emit so nested chains / leaf
 	 * operands inside the kept chain do not re-trigger the suppression.
 	 */
-	private static function clearKeepChainInParenField(optionsCT:ComplexType):Field {
+	private static function clearKeepChainInParenField(optionsCT: ComplexType): Field {
 		return {
 			name: '_clearKeepChainInParen',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{name: 'o', type: optionsCT}],
+				args: [{ name: 'o', type: optionsCT }],
 				ret: optionsCT,
 				expr: macro {
 					if (!o._keepChainInParen) return o;
-					final _c:$optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _copyOpt(o);
 					_c._keepChainInParen = false;
 					return _c;
 				},
@@ -1281,16 +1249,16 @@ class WriterCodegen {
 	 * `more` Star field degrades to `_de()`. Emitted only when the opt
 	 * typedef declares `_suppressMore:Bool` (currently `HxModuleWriteOptions`).
 	 */
-	private static function setSuppressMoreField(optionsCT:ComplexType):Field {
+	private static function setSuppressMoreField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setSuppressMore',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{name: 'o', type: optionsCT}],
+				args: [{ name: 'o', type: optionsCT }],
 				ret: optionsCT,
 				expr: macro {
 					if (o._suppressMore) return o;
-					final _c:$optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _copyOpt(o);
 					_c._suppressMore = true;
 					return _c;
 				},
@@ -1307,16 +1275,16 @@ class WriterCodegen {
 	 * writes so a var decl nested inside an initializer keeps its own
 	 * `more`. Paired with `_setSuppressMore` emission.
 	 */
-	private static function clearSuppressMoreField(optionsCT:ComplexType):Field {
+	private static function clearSuppressMoreField(optionsCT: ComplexType): Field {
 		return {
 			name: '_clearSuppressMore',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
-				args: [{name: 'o', type: optionsCT}],
+				args: [{ name: 'o', type: optionsCT }],
 				ret: optionsCT,
 				expr: macro {
 					if (!o._suppressMore) return o;
-					final _c:$optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _copyOpt(o);
 					_c._suppressMore = false;
 					return _c;
 				},
@@ -1342,21 +1310,21 @@ class WriterCodegen {
 	 * `opBoolChainWrap` and `opAddSubChainWrap` (currently
 	 * `HxModuleWriteOptions` only).
 	 */
-	private static function setChainModeOverrideField(optionsCT:ComplexType):Field {
+	private static function setChainModeOverrideField(optionsCT: ComplexType): Field {
 		return {
 			name: '_setChainModeOverride',
 			access: [APrivate, AStatic, AInline],
 			kind: FFun({
 				args: [
-					{name: 'o', type: optionsCT},
-					{name: 'mode', type: macro : Null<anyparse.format.wrap.WrapMode>},
+					{ name: 'o', type: optionsCT },
+					{ name: 'mode', type: macro :Null<anyparse.format.wrap.WrapMode> },
 				],
 				ret: optionsCT,
 				expr: macro {
 					if (mode == null) return o;
-					final _mode:anyparse.format.wrap.WrapMode = mode;
+					final _mode: anyparse.format.wrap.WrapMode = mode;
 					if (o._chainModeOverride == _mode) return o;
-					final _c:$optionsCT = _copyOpt(o);
+					final _c: $optionsCT = _copyOpt(o);
 					_c._chainModeOverride = _mode;
 					// Mode override forces chain layout to the cond-wrap
 					// mode (mirrors fork's `collapseChainWraps` post-pass),
@@ -1394,19 +1362,19 @@ class WriterCodegen {
 	 * is emitted so the override path can preserve user-configured
 	 * operator placement instead of the prior hardcoded `BeforeLast`.
 	 */
-	private static function resolveChainLocField():Field {
+	private static function resolveChainLocField(): Field {
 		return {
 			name: '_resolveChainLoc',
 			access: [APrivate, AStatic],
 			kind: FFun({
-				args: [{name: 'r', type: macro : anyparse.format.wrap.WrapRules}],
-				ret: macro : anyparse.format.wrap.WrappingLocation,
+				args: [{ name: 'r', type: macro :anyparse.format.wrap.WrapRules }],
+				ret: macro :anyparse.format.wrap.WrappingLocation,
 				expr: macro {
-					final _dl:Null<anyparse.format.wrap.WrappingLocation> = r.defaultLocation;
+					final _dl: Null<anyparse.format.wrap.WrappingLocation> = r.defaultLocation;
 					if (_dl != null) return _dl;
-					var _i:Int = r.rules.length;
+					var _i: Int = r.rules.length;
 					while (--_i >= 0) {
-						final _loc:Null<anyparse.format.wrap.WrappingLocation> = r.rules[_i].location;
+						final _loc: Null<anyparse.format.wrap.WrappingLocation> = r.rules[_i].location;
 						if (_loc != null) return _loc;
 					}
 					return anyparse.format.wrap.WrappingLocation.BeforeLast;
@@ -1419,17 +1387,17 @@ class WriterCodegen {
 	// -------- layout helpers --------
 
 	/** Block layout: `open + nest(indent, [hardline+item]*) + hardline + close`. */
-	private static function blockBodyField():Field {
-		final body:Expr = macro {
+	private static function blockBodyField(): Field {
+		final body: Expr = macro {
 			if (docs.length == 0) return _dt(open + close);
-			final _items:Array<anyparse.core.Doc> = [];
-			var _i:Int = 0;
+			final _items: Array<anyparse.core.Doc> = [];
+			var _i: Int = 0;
 			while (_i < docs.length) {
 				_items.push(_dhl());
 				_items.push(docs[_i]);
 				_i++;
 			}
-			final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 			return _dc([_dt(open), _dn(_cols, _dc(_items)), _dhl(), _dt(close)]);
 		};
 		return {
@@ -1437,12 +1405,12 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{name: 'open', type: macro : String},
-					{name: 'close', type: macro : String},
-					{name: 'docs', type: macro : Array<anyparse.core.Doc>},
-					{name: 'opt', type: macro : anyparse.format.WriteOptions},
+					{ name: 'open', type: macro :String },
+					{ name: 'close', type: macro :String },
+					{ name: 'docs', type: macro :Array<anyparse.core.Doc> },
+					{ name: 'opt', type: macro :anyparse.format.WriteOptions },
 				],
-				ret: macro : anyparse.core.Doc,
+				ret: macro :anyparse.core.Doc,
 				expr: body,
 			}),
 			pos: Context.currentPos(),
@@ -1474,11 +1442,11 @@ class WriterCodegen {
 	 * `false` preserves the pre-slice tight emission for every other
 	 * sepList caller that does not opt in.
 	 */
-	private static function sepListField():Field {
-		final body:Expr = macro {
+	private static function sepListField(): Field {
+		final body: Expr = macro {
 			if (items.length == 0) return _dt(open + (keepInnerWhenEmpty ? ' ' : '') + close);
-			final _inner:Array<anyparse.core.Doc> = [];
-			var _i:Int = 0;
+			final _inner: Array<anyparse.core.Doc> = [];
+			var _i: Int = 0;
 			while (_i < items.length) {
 				if (_i > 0) {
 					_inner.push(_dt(sep));
@@ -1488,19 +1456,22 @@ class WriterCodegen {
 				_i++;
 			}
 			if (trailingComma) _inner.push(_dib(_dt(sep), _de()));
-			final _cols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 			// `cuddleHead` collapses the leading/trailing softlines into
 			// empty docs so the first item cuddles to `open` and the last
 			// to `close` — Lisp-style `(head\n  …rest)` instead of the
 			// default JSON-style `(\n  …items\n)`. The break-mode indent
 			// continues to flow from the surrounding `Nest`, so multi-line
 			// layout still indents inner items.
-			final _lead:anyparse.core.Doc = cuddleHead ? _de() : _dsl();
-			final _trail:anyparse.core.Doc = cuddleHead ? _de() : _dsl();
+			final _lead: anyparse.core.Doc = cuddleHead ? _de() : _dsl();
+			final _trail: anyparse.core.Doc = cuddleHead ? _de() : _dsl();
 			return _dg(_dc([
-				_dt(open), openInside,
+				_dt(open),
+				openInside,
 				_dn(_cols, _dc([_lead, _dc(_inner)])),
-				_trail, closeInside, _dt(close),
+				_trail,
+				closeInside,
+				_dt(close),
 			]));
 		};
 		return {
@@ -1508,18 +1479,18 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{name: 'open', type: macro : String},
-					{name: 'close', type: macro : String},
-					{name: 'sep', type: macro : String},
-					{name: 'items', type: macro : Array<anyparse.core.Doc>},
-					{name: 'opt', type: macro : anyparse.format.WriteOptions},
-					{name: 'trailingComma', type: macro : Bool},
-					{name: 'openInside', type: macro : anyparse.core.Doc},
-					{name: 'closeInside', type: macro : anyparse.core.Doc},
-					{name: 'keepInnerWhenEmpty', type: macro : Bool},
-					{name: 'cuddleHead', type: macro : Bool},
+					{ name: 'open', type: macro :String },
+					{ name: 'close', type: macro :String },
+					{ name: 'sep', type: macro :String },
+					{ name: 'items', type: macro :Array<anyparse.core.Doc> },
+					{ name: 'opt', type: macro :anyparse.format.WriteOptions },
+					{ name: 'trailingComma', type: macro :Bool },
+					{ name: 'openInside', type: macro :anyparse.core.Doc },
+					{ name: 'closeInside', type: macro :anyparse.core.Doc },
+					{ name: 'keepInnerWhenEmpty', type: macro :Bool },
+					{ name: 'cuddleHead', type: macro :Bool },
 				],
-				ret: macro : anyparse.core.Doc,
+				ret: macro :anyparse.core.Doc,
 				expr: body,
 			}),
 			pos: Context.currentPos(),
@@ -1540,18 +1511,14 @@ class WriterCodegen {
 	 * fit decision matters. Trailing-comma / inside-pad / keep-inner-when-
 	 * empty knobs are honoured the same way as in `sepList`.
 	 */
-	private static function fillListField():Field {
-		final body:Expr = macro {
+	private static function fillListField(): Field {
+		final body: Expr = macro {
 			if (items.length == 0) return _dt(open + (keepInnerWhenEmpty ? ' ' : '') + close);
-			final _sepDoc:anyparse.core.Doc = _dc([_dt(sep), _dl()]);
-			final _baseCols:Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-			final _cols:Int = doubleIndent ? _baseCols * 2 : _baseCols;
-			final _fill:anyparse.core.Doc = items.length == 1
-				? items[0]
-				: _dfill(items, _sepDoc);
-			final _trail:anyparse.core.Doc = trailingComma
-				? _dib(_dt(sep), _de())
-				: _de();
+			final _sepDoc: anyparse.core.Doc = _dc([_dt(sep), _dl()]);
+			final _baseCols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+			final _cols: Int = doubleIndent ? _baseCols * 2 : _baseCols;
+			final _fill: anyparse.core.Doc = items.length == 1 ? items[0] : _dfill(items, _sepDoc);
+			final _trail: anyparse.core.Doc = trailingComma ? _dib(_dt(sep), _de()) : _de();
 			// No leading / trailing softline around items: in Fill mode the
 			// first item follows `open` inline and the closing delim sits
 			// directly after the last item. Hardlines between items get
@@ -1560,9 +1527,11 @@ class WriterCodegen {
 			// of indenting wrapped function parameters one level deeper than
 			// the body so they remain visually distinct.
 			return _dg(_dc([
-				_dt(open), openInside,
+				_dt(open),
+				openInside,
 				_dn(_cols, _dc([_fill, _trail])),
-				closeInside, _dt(close),
+				closeInside,
+				_dt(close),
 			]));
 		};
 		return {
@@ -1570,18 +1539,18 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{name: 'open', type: macro : String},
-					{name: 'close', type: macro : String},
-					{name: 'sep', type: macro : String},
-					{name: 'items', type: macro : Array<anyparse.core.Doc>},
-					{name: 'opt', type: macro : anyparse.format.WriteOptions},
-					{name: 'trailingComma', type: macro : Bool},
-					{name: 'openInside', type: macro : anyparse.core.Doc},
-					{name: 'closeInside', type: macro : anyparse.core.Doc},
-					{name: 'keepInnerWhenEmpty', type: macro : Bool},
-					{name: 'doubleIndent', type: macro : Bool},
+					{ name: 'open', type: macro :String },
+					{ name: 'close', type: macro :String },
+					{ name: 'sep', type: macro :String },
+					{ name: 'items', type: macro :Array<anyparse.core.Doc> },
+					{ name: 'opt', type: macro :anyparse.format.WriteOptions },
+					{ name: 'trailingComma', type: macro :Bool },
+					{ name: 'openInside', type: macro :anyparse.core.Doc },
+					{ name: 'closeInside', type: macro :anyparse.core.Doc },
+					{ name: 'keepInnerWhenEmpty', type: macro :Bool },
+					{ name: 'doubleIndent', type: macro :Bool },
 				],
-				ret: macro : anyparse.core.Doc,
+				ret: macro :anyparse.core.Doc,
 				expr: body,
 			}),
 			pos: Context.currentPos(),
@@ -1591,9 +1560,9 @@ class WriterCodegen {
 	// -------- encoding helpers --------
 
 	/** Format a float ensuring a decimal point is always present. */
-	private static function formatFloatField():Field {
-		final body:Expr = macro {
-			final _s:String = Std.string(value);
+	private static function formatFloatField(): Field {
+		final body: Expr = macro {
+			final _s: String = Std.string(value);
 			if (_s.indexOf('.') >= 0) return _s;
 			return _s + '.0';
 		};
@@ -1601,8 +1570,8 @@ class WriterCodegen {
 			name: 'formatFloat',
 			access: [APrivate, AStatic],
 			kind: FFun({
-				args: [{name: 'value', type: macro : Float}],
-				ret: macro : String,
+				args: [{ name: 'value', type: macro :Float }],
+				ret: macro :String,
 				expr: body,
 			}),
 			pos: Context.currentPos(),
@@ -1631,8 +1600,8 @@ class WriterCodegen {
 	 * adapter functions just sets these fields and reuses this
 	 * helper unchanged.
 	 */
-	private static function leadingCommentDocField():Field {
-		final body:Expr = macro {
+	private static function leadingCommentDocField(): Field {
+		final body: Expr = macro {
 			if (StringTools.startsWith(content, '//')) {
 				final _line = opt.lineCommentAdapter;
 				return _dt(_line == null ? content : _line(content, opt.addLineCommentSpace));
@@ -1647,10 +1616,10 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{name: 'content', type: macro : String},
-					{name: 'opt', type: macro : anyparse.format.WriteOptions},
+					{ name: 'content', type: macro :String },
+					{ name: 'opt', type: macro :anyparse.format.WriteOptions },
 				],
-				ret: macro : anyparse.core.Doc,
+				ret: macro :anyparse.core.Doc,
 				expr: body,
 			}),
 			pos: Context.currentPos(),
@@ -1669,8 +1638,8 @@ class WriterCodegen {
 	 * `addLineCommentSpace` knob gates the same `//foo` → `// foo`
 	 * rewrite the leading and verbatim variants apply.
 	 */
-	private static function trailingCommentDocField():Field {
-		final body:Expr = macro {
+	private static function trailingCommentDocField(): Field {
+		final body: Expr = macro {
 			final _line = opt.lineCommentAdapter;
 			return _dt(' ' + (_line == null ? '//' + content : _line('//' + content, opt.addLineCommentSpace)));
 		};
@@ -1679,10 +1648,10 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{name: 'content', type: macro : String},
-					{name: 'opt', type: macro : anyparse.format.WriteOptions},
+					{ name: 'content', type: macro :String },
+					{ name: 'opt', type: macro :anyparse.format.WriteOptions },
 				],
-				ret: macro : anyparse.core.Doc,
+				ret: macro :anyparse.core.Doc,
 				expr: body,
 			}),
 			pos: Context.currentPos(),
@@ -1706,8 +1675,8 @@ class WriterCodegen {
 	 * normalizer short-circuits non-`//` input, so a verbatim block-
 	 * style trailing (`/* foo *\/`) passes through unchanged.
 	 */
-	private static function trailingCommentDocVerbatimField():Field {
-		final body:Expr = macro {
+	private static function trailingCommentDocVerbatimField(): Field {
+		final body: Expr = macro {
 			final _line = opt.lineCommentAdapter;
 			return _dt(' ' + (_line == null ? content : _line(content, opt.addLineCommentSpace)));
 		};
@@ -1716,10 +1685,10 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{name: 'content', type: macro : String},
-					{name: 'opt', type: macro : anyparse.format.WriteOptions},
+					{ name: 'content', type: macro :String },
+					{ name: 'opt', type: macro :anyparse.format.WriteOptions },
 				],
-				ret: macro : anyparse.core.Doc,
+				ret: macro :anyparse.core.Doc,
 				expr: body,
 			}),
 			pos: Context.currentPos(),
@@ -1747,9 +1716,9 @@ class WriterCodegen {
 	 * had before this helper was introduced (byte-identical for block
 	 * bodies and simple statements like `VarStmt`/`ReturnStmt`).
 	 */
-	private static function foldTrailingIntoBodyGroupField():Field {
-		final body:Expr = macro {
-			final _folded:Null<anyparse.core.Doc> = _foldTrailingIntoBodyGroup(doc, trailing);
+	private static function foldTrailingIntoBodyGroupField(): Field {
+		final body: Expr = macro {
+			final _folded: Null<anyparse.core.Doc> = _foldTrailingIntoBodyGroup(doc, trailing);
 			return _folded != null ? _folded : _dc([doc, trailing]);
 		};
 		return {
@@ -1757,25 +1726,25 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{name: 'doc', type: macro : anyparse.core.Doc},
-					{name: 'trailing', type: macro : anyparse.core.Doc},
+					{ name: 'doc', type: macro :anyparse.core.Doc },
+					{ name: 'trailing', type: macro :anyparse.core.Doc },
 				],
-				ret: macro : anyparse.core.Doc,
+				ret: macro :anyparse.core.Doc,
 				expr: body,
 			}),
 			pos: Context.currentPos(),
 		};
 	}
 
-	private static function foldTrailingRecursiveField():Field {
-		final body:Expr = macro {
-			switch (doc) {
+	private static function foldTrailingRecursiveField(): Field {
+		final body: Expr = macro {
+			switch  (doc) {
 				case anyparse.core.Doc.BodyGroup(inner):
 					return _dbg(_appendInsideBodyGroup(inner, trailing));
 				case anyparse.core.Doc.Concat(items):
-					var _i:Int = items.length - 1;
+					var _i: Int = items.length - 1;
 					while (_i >= 0) {
-						final _item:anyparse.core.Doc = items[_i];
+						final _item: anyparse.core.Doc = items[_i];
 						// ω-fold-trailing-stop-at-text: abort the backward walk at
 						// a concrete `Text(s)` literal (non-empty `s`). Folding past
 						// a trail keyword like `#end` or `}` would splice the
@@ -1783,14 +1752,14 @@ class WriterCodegen {
 						// BodyGroup), placing it BEFORE the literal in output.
 						// Empty Text, Empty, Line, IfBreak etc. keep walking so
 						// trailing whitespace/separator items don't block fold.
-						switch (_item) {
+						switch  (_item) {
 							case anyparse.core.Doc.Text(s) if (s.length > 0):
 								return null;
 							case _:
 						}
-						final _folded:Null<anyparse.core.Doc> = _foldTrailingIntoBodyGroup(_item, trailing);
+						final _folded: Null<anyparse.core.Doc> = _foldTrailingIntoBodyGroup(_item, trailing);
 						if (_folded != null) {
-							final _newItems:Array<anyparse.core.Doc> = items.copy();
+							final _newItems: Array<anyparse.core.Doc> = items.copy();
 							_newItems[_i] = _folded;
 							return _dc(_newItems);
 						}
@@ -1798,7 +1767,7 @@ class WriterCodegen {
 					}
 					return null;
 				case anyparse.core.Doc.Nest(n, inner):
-					final _folded:Null<anyparse.core.Doc> = _foldTrailingIntoBodyGroup(inner, trailing);
+					final _folded: Null<anyparse.core.Doc> = _foldTrailingIntoBodyGroup(inner, trailing);
 					return _folded != null ? _dn(n, _folded) : null;
 				case _:
 					return null;
@@ -1809,19 +1778,19 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{name: 'doc', type: macro : anyparse.core.Doc},
-					{name: 'trailing', type: macro : anyparse.core.Doc},
+					{ name: 'doc', type: macro :anyparse.core.Doc },
+					{ name: 'trailing', type: macro :anyparse.core.Doc },
 				],
-				ret: macro : Null<anyparse.core.Doc>,
+				ret: macro :Null<anyparse.core.Doc>,
 				expr: body,
 			}),
 			pos: Context.currentPos(),
 		};
 	}
 
-	private static function appendInsideBodyGroupField():Field {
-		final body:Expr = macro {
-			switch (inner) {
+	private static function appendInsideBodyGroupField(): Field {
+		final body: Expr = macro {
+			switch  (inner) {
 				case anyparse.core.Doc.Nest(n, innerInner):
 					return _dn(n, _appendInsideBodyGroup(innerInner, trailing));
 				case anyparse.core.Doc.Concat(items):
@@ -1835,10 +1804,10 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{name: 'inner', type: macro : anyparse.core.Doc},
-					{name: 'trailing', type: macro : anyparse.core.Doc},
+					{ name: 'inner', type: macro :anyparse.core.Doc },
+					{ name: 'trailing', type: macro :anyparse.core.Doc },
 				],
-				ret: macro : anyparse.core.Doc,
+				ret: macro :anyparse.core.Doc,
 				expr: body,
 			}),
 			pos: Context.currentPos(),
@@ -1868,14 +1837,14 @@ class WriterCodegen {
 	 * closing hardline hands control to the Renderer at the parent's
 	 * indent level so the body's lead brace lands there.
 	 */
-	private static function kwBeforeDocField():Field {
-		final body:Expr = macro {
+	private static function kwBeforeDocField(): Field {
+		final body: Expr = macro {
 			if (beforeKwLeading.length == 0) return sepDoc;
 			// Emit at the parent's indent (no `_dn` wrap) — the comment block
 			// occupies the same indent column as `}` and `else`. Hardline
 			// before each comment, plus a final hardline so the kw lands on
 			// its own line at the parent indent.
-			final _parts:Array<anyparse.core.Doc> = [];
+			final _parts: Array<anyparse.core.Doc> = [];
 			for (_c in beforeKwLeading) {
 				_parts.push(_dhl());
 				_parts.push(leadingCommentDoc(_c, opt));
@@ -1888,11 +1857,11 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{name: 'beforeKwLeading', type: macro : Array<String>},
-					{name: 'sepDoc', type: macro : anyparse.core.Doc},
-					{name: 'opt', type: macro : anyparse.format.WriteOptions},
+					{ name: 'beforeKwLeading', type: macro :Array<String> },
+					{ name: 'sepDoc', type: macro :anyparse.core.Doc },
+					{ name: 'opt', type: macro :anyparse.format.WriteOptions },
 				],
-				ret: macro : anyparse.core.Doc,
+				ret: macro :anyparse.core.Doc,
 				expr: body,
 			}),
 			pos: Context.currentPos(),
@@ -1909,8 +1878,8 @@ class WriterCodegen {
 	 * (hardline or `kwBeforeDoc` output) follows and breaks back to the
 	 * parent indent before the kw.
 	 */
-	private static function kwBeforeTrailingDocField():Field {
-		final body:Expr = macro {
+	private static function kwBeforeTrailingDocField(): Field {
+		final body: Expr = macro {
 			if (trailing == null) return sepDoc;
 			return _dc([trailingCommentDoc(trailing, opt), sepDoc]);
 		};
@@ -1919,27 +1888,27 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{name: 'trailing', type: macro : Null<String>},
-					{name: 'sepDoc', type: macro : anyparse.core.Doc},
-					{name: 'opt', type: macro : anyparse.format.WriteOptions},
+					{ name: 'trailing', type: macro :Null<String> },
+					{ name: 'sepDoc', type: macro :anyparse.core.Doc },
+					{ name: 'opt', type: macro :anyparse.format.WriteOptions },
 				],
-				ret: macro : anyparse.core.Doc,
+				ret: macro :anyparse.core.Doc,
 				expr: body,
 			}),
 			pos: Context.currentPos(),
 		};
 	}
 
-	private static function kwGapDocField():Field {
-		final body:Expr = macro {
+	private static function kwGapDocField(): Field {
+		final body: Expr = macro {
 			if (afterKw == null && kwLeading.length == 0) return nextCurly ? _dhl() : _dt(' ');
-			final _parts:Array<anyparse.core.Doc> = [];
+			final _parts: Array<anyparse.core.Doc> = [];
 			if (afterKw != null) {
 				_parts.push(_dt(' '));
 				_parts.push(_dt('//' + afterKw));
 			}
 			if (kwLeading.length > 0) {
-				final _nested:Array<anyparse.core.Doc> = [];
+				final _nested: Array<anyparse.core.Doc> = [];
 				for (_c in kwLeading) {
 					_nested.push(_dhl());
 					_nested.push(leadingCommentDoc(_c, opt));
@@ -1954,13 +1923,13 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{name: 'afterKw', type: macro : Null<String>},
-					{name: 'kwLeading', type: macro : Array<String>},
-					{name: 'cols', type: macro : Int},
-					{name: 'nextCurly', type: macro : Bool},
-					{name: 'opt', type: macro : anyparse.format.WriteOptions},
+					{ name: 'afterKw', type: macro :Null<String> },
+					{ name: 'kwLeading', type: macro :Array<String> },
+					{ name: 'cols', type: macro :Int },
+					{ name: 'nextCurly', type: macro :Bool },
+					{ name: 'opt', type: macro :anyparse.format.WriteOptions },
 				],
-				ret: macro : anyparse.core.Doc,
+				ret: macro :anyparse.core.Doc,
 				expr: body,
 			}),
 			pos: Context.currentPos(),
@@ -1986,15 +1955,15 @@ class WriterCodegen {
 	 *  - Both populated → afterKw first (sameline cuddle), then the
 	 *    nested leadings + body block.
 	 */
-	private static function nextLayoutKwGapDocField():Field {
-		final body:Expr = macro {
-			final _innerParts:Array<anyparse.core.Doc> = [_dhl()];
+	private static function nextLayoutKwGapDocField(): Field {
+		final body: Expr = macro {
+			final _innerParts: Array<anyparse.core.Doc> = [_dhl()];
 			for (_c in kwLeading) {
 				_innerParts.push(leadingCommentDoc(_c, opt));
 				_innerParts.push(_dhl());
 			}
 			_innerParts.push(bodyDoc);
-			final _nested:anyparse.core.Doc = _dn(cols, _dc(_innerParts));
+			final _nested: anyparse.core.Doc = _dn(cols, _dc(_innerParts));
 			return afterKw == null ? _nested : _dc([trailingCommentDoc(afterKw, opt), _nested]);
 		};
 		return {
@@ -2002,13 +1971,13 @@ class WriterCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{name: 'afterKw', type: macro : Null<String>},
-					{name: 'kwLeading', type: macro : Array<String>},
-					{name: 'cols', type: macro : Int},
-					{name: 'bodyDoc', type: macro : anyparse.core.Doc},
-					{name: 'opt', type: macro : anyparse.format.WriteOptions},
+					{ name: 'afterKw', type: macro :Null<String> },
+					{ name: 'kwLeading', type: macro :Array<String> },
+					{ name: 'cols', type: macro :Int },
+					{ name: 'bodyDoc', type: macro :anyparse.core.Doc },
+					{ name: 'opt', type: macro :anyparse.format.WriteOptions },
 				],
-				ret: macro : anyparse.core.Doc,
+				ret: macro :anyparse.core.Doc,
 				expr: body,
 			}),
 			pos: Context.currentPos(),
@@ -2016,14 +1985,14 @@ class WriterCodegen {
 	}
 
 	/** Escape a string for double-quoted output using the format's escapeChar. */
-	private static function escapeStringField(formatInfo:FormatReader.FormatInfo):Field {
-		final fmtParts:Array<String> = formatInfo.schemaTypePath.split('.');
-		final body:Expr = macro {
-			final _buf:StringBuf = new StringBuf();
+	private static function escapeStringField(formatInfo: FormatReader.FormatInfo): Field {
+		final fmtParts: Array<String> = formatInfo.schemaTypePath.split('.');
+		final body: Expr = macro {
+			final _buf: StringBuf = new StringBuf();
 			_buf.add('"');
-			var _i:Int = 0;
+			var _i: Int = 0;
 			while (_i < value.length) {
-				final _c:Null<Int> = value.charCodeAt(_i);
+				final _c: Null<Int> = value.charCodeAt(_i);
 				if (_c != null) _buf.add($p{fmtParts}.instance.escapeChar(_c));
 				_i++;
 			}
@@ -2034,17 +2003,18 @@ class WriterCodegen {
 			name: 'escapeString',
 			access: [APrivate, AStatic],
 			kind: FFun({
-				args: [{name: 'value', type: macro : String}],
-				ret: macro : String,
+				args: [{ name: 'value', type: macro :String }],
+				ret: macro :String,
 				expr: body,
 			}),
 			pos: Context.currentPos(),
 		};
 	}
 
-	private static function simpleName(typePath:String):String {
-		final idx:Int = typePath.lastIndexOf('.');
+	private static function simpleName(typePath: String): String {
+		final idx: Int = typePath.lastIndexOf('.');
 		return idx == -1 ? typePath : typePath.substring(idx + 1);
 	}
+
 }
 #end

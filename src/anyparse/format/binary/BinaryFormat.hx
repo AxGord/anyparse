@@ -10,9 +10,11 @@ import anyparse.format.Format;
  * primitives.
  */
 interface BinaryFormat extends Format {
-	var endianness(default, null):Endianness;
-	var tagSize(default, null):Int;
-	var magicBytes(default, null):Null<haxe.io.Bytes>;
-	var lengthEncoding(default, null):LengthEncoding;
-	var countEncoding(default, null):LengthEncoding;
+
+	var endianness(default, null): Endianness;
+	var tagSize(default, null): Int;
+	var magicBytes(default, null): Null<haxe.io.Bytes>;
+	var lengthEncoding(default, null): LengthEncoding;
+	var countEncoding(default, null): LengthEncoding;
+
 }

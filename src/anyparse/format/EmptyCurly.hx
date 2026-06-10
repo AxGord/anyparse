@@ -25,4 +25,5 @@ enum abstract EmptyCurly(Int) from Int to Int {
 	final Same = 0;
 
 	final Break = 1;
+
 }

@@ -89,30 +89,31 @@ import anyparse.core.Strategy;
  */
 class Lit implements Strategy {
 
-	public var name(default, null):String = 'Lit';
-	public var runsAfter(default, null):Array<String> = [];
-	public var runsBefore(default, null):Array<String> = [];
-	public var ownedMeta(default, null):Array<String> = [':lit', ':lead', ':trail', ':trailOpt', ':wrap', ':sep', ':sepAlt'];
-	public var runtimeContribution(default, null):RuntimeContrib = {ctxFields: [], helpers: [], cacheKeyContributors: []};
+	public var name(default, null): String = 'Lit';
+	public var runsAfter(default, null): Array<String> = [];
+	public var runsBefore(default, null): Array<String> = [];
+	public var ownedMeta(default, null): Array<String> = [':lit', ':lead', ':trail', ':trailOpt', ':wrap', ':sep', ':sepAlt'];
+	public var runtimeContribution(default, null): RuntimeContrib = { ctxFields: [], helpers: [], cacheKeyContributors: [] };
 
 	public function new() {}
 
-	public function appliesTo(node:ShapeNode):Bool {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
+	public function appliesTo(node: ShapeNode): Bool {
+		final meta: Null<Metadata> = node.annotations.get('base.meta');
 		if (meta == null) return false;
 		for (entry in meta) switch entry.name {
-			case ':lit' | ':lead' | ':trail' | ':trailOpt' | ':wrap' | ':sep' | ':sepAlt': return true;
+			case ':lit' | ':lead' | ':trail' | ':trailOpt' | ':wrap' | ':sep' | ':sepAlt':
+				return true;
 			case _:
 		}
 		return false;
 	}
 
-	public function annotate(node:ShapeNode, ctx:LoweringCtx):Void {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
+	public function annotate(node: ShapeNode, ctx: LoweringCtx): Void {
+		final meta: Null<Metadata> = node.annotations.get('base.meta');
 		if (meta == null) return;
 		for (entry in meta) switch entry.name {
 			case ':lit':
-				final list:Array<String> = collectStrings(entry.params);
+				final list: Array<String> = collectStrings(entry.params);
 				node.annotations.set('lit.litList', list);
 			case ':lead':
 				node.annotations.set('lit.leadText', singleString(entry.params, ':lead'));
@@ -129,7 +130,10 @@ class Lit implements Strategy {
 				node.annotations.set('lit.trailText', stringOrFail(entry.params[1], ':wrap'));
 			case ':sep':
 				if (entry.params.length == 0 || entry.params.length > 3)
-					Context.fatalError('@:sep expects 1-3 arguments: @:sep("text"), @:sep("text", tailRelax), or @:sep("text", tailRelax, blockEnded[(\'<predicate>\'[, sepStartsElement])])', entry.pos);
+					Context.fatalError(
+						'@:sep expects 1-3 arguments: @:sep("text"), @:sep("text", tailRelax), or @:sep("text", tailRelax, blockEnded[(\'<predicate>\'[, sepStartsElement])])',
+						entry.pos
+					);
 				node.annotations.set('lit.sepText', stringOrFail(entry.params[0], ':sep'));
 				if (entry.params.length >= 2) switch entry.params[1].expr {
 					case EConst(CIdent('tailRelax')):
@@ -137,44 +141,55 @@ class Lit implements Strategy {
 					case _:
 						Context.fatalError('@:sep second argument must be the ident `tailRelax`', entry.params[1].pos);
 				}
-				if (entry.params.length == 3) switch entry.params[2].expr {
-					case EConst(CIdent('blockEnded')):
-						node.annotations.set('lit.sepBlockEnded', true);
-					// `blockEnded('predicateName')` — option (b2) AST-shape
-					// adapter: instead of (or in addition to) the byte-check
-					// `_prevEndPos - 1 == '}'`, the Star primitive calls
-					// `schema.instance.<predicateName>(_arr[_arr.length - 1])`
-					// to decide whether sep is elidable. The predicate is a
-					// schema-method on the plugin's HaxeFormat-shaped class,
-					// reached through the same channel as `trailOptParseGate`
-					// (see Lowering.hx L1552 for the sister mechanism).
-					case ECall({expr: EConst(CIdent('blockEnded'))}, callArgs):
-						if (callArgs.length < 1 || callArgs.length > 2)
-							Context.fatalError('@:sep `blockEnded(...)` expects 1-2 arguments: predicate name [, sepStartsElement]', entry.params[2].pos);
-						node.annotations.set('lit.sepBlockEnded', true);
-						node.annotations.set('lit.sepBlockEndedPredicate', stringOrFail(callArgs[0], ':sep'));
-						// Optional 2nd arg `sepStartsElement` (Session 9 BlockBody Star) —
-						// flips byte-ambiguity policy: when block-ended is TRUE, the sep
-						// byte at pos belongs to the NEXT element, never a separator.
-						// Required for grammars where the sep char can ALSO be a valid
-						// element body (Haxe `EmptyStmt` whose body IS `;`). Without this
-						// flag the default permissive-sep semantics applies.
-						if (callArgs.length == 2) switch callArgs[1].expr {
-							case EConst(CIdent('sepStartsElement')):
-								node.annotations.set('lit.sepStartsElement', true);
-							case _:
-								Context.fatalError('@:sep `blockEnded(...)` second argument must be the ident `sepStartsElement`', callArgs[1].pos);
-						}
-					case _:
-						Context.fatalError('@:sep third argument must be `blockEnded` or `blockEnded(\'<predicate>\'[, sepStartsElement])`', entry.params[2].pos);
-				}
+				if (entry.params.length == 3)
+					switch entry.params[2].expr {
+						case EConst(CIdent('blockEnded')):
+							node.annotations.set('lit.sepBlockEnded', true);
+						// `blockEnded('predicateName')` — option (b2) AST-shape
+						// adapter: instead of (or in addition to) the byte-check
+						// `_prevEndPos - 1 == '}'`, the Star primitive calls
+						// `schema.instance.<predicateName>(_arr[_arr.length - 1])`
+						// to decide whether sep is elidable. The predicate is a
+						// schema-method on the plugin's HaxeFormat-shaped class,
+						// reached through the same channel as `trailOptParseGate`
+						// (see Lowering.hx L1552 for the sister mechanism).
+						case ECall({ expr: EConst(CIdent('blockEnded')) }, callArgs):
+							if (callArgs.length < 1 || callArgs.length > 2)
+								Context.fatalError(
+									'@:sep `blockEnded(...)` expects 1-2 arguments: predicate name [, sepStartsElement]',
+									entry.params[2].pos
+								);
+							node.annotations.set('lit.sepBlockEnded', true);
+							node.annotations.set('lit.sepBlockEndedPredicate', stringOrFail(callArgs[0], ':sep'));
+							// Optional 2nd arg `sepStartsElement` (Session 9 BlockBody Star) —
+							// flips byte-ambiguity policy: when block-ended is TRUE, the sep
+							// byte at pos belongs to the NEXT element, never a separator.
+							// Required for grammars where the sep char can ALSO be a valid
+							// element body (Haxe `EmptyStmt` whose body IS `;`). Without this
+							// flag the default permissive-sep semantics applies.
+							if (callArgs.length == 2)
+								switch callArgs[1].expr {
+									case EConst(CIdent('sepStartsElement')):
+										node.annotations.set('lit.sepStartsElement', true);
+									case _:
+										Context.fatalError(
+											'@:sep `blockEnded(...)` second argument must be the ident `sepStartsElement`',
+											callArgs[1].pos
+										);
+								}
+						case _:
+							Context.fatalError(
+								'@:sep third argument must be `blockEnded` or `blockEnded(\'<predicate>\'[, sepStartsElement])`',
+								entry.params[2].pos
+							);
+					}
 			case ':sepAlt':
 				node.annotations.set('lit.sepAltText', singleString(entry.params, ':sepAlt'));
 			case _:
 		}
 	}
 
-	public function lower(node:ShapeNode, ctx:LoweringCtx):Null<CoreIR> {
+	public function lower(node: ShapeNode, ctx: LoweringCtx): Null<CoreIR> {
 		// Phase 2 keeps tree construction centralized in Lowering; strategies
 		// only annotate. Returning null defers to base structural lowering.
 		return null;
@@ -182,16 +197,16 @@ class Lit implements Strategy {
 
 	// -------- helpers --------
 
-	private static function collectStrings(params:Array<Expr>):Array<String> {
+	private static function collectStrings(params: Array<Expr>): Array<String> {
 		return [for (p in params) stringOrFail(p, ':lit')];
 	}
 
-	private static function singleString(params:Array<Expr>, tag:String):String {
+	private static function singleString(params: Array<Expr>, tag: String): String {
 		if (params.length != 1) Context.fatalError('$tag expects exactly one string argument', Context.currentPos());
 		return stringOrFail(params[0], tag);
 	}
 
-	private static function stringOrFail(e:Expr, tag:String):String {
+	private static function stringOrFail(e: Expr, tag: String): String {
 		return switch e.expr {
 			case EConst(CString(s, _)): s;
 			case _:
@@ -199,5 +214,6 @@ class Lit implements Strategy {
 				throw 'unreachable';
 		};
 	}
+
 }
 #end

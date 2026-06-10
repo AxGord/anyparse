@@ -31,7 +31,7 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxParamBody = {
-	var name:HxIdentLit;
-	@:optional @:fmt(typeHintColon) @:lead(':') var type:Null<HxType>;
-	@:optional @:lead('=') var defaultValue:Null<HxExpr>;
+	var name: HxIdentLit;
+	@:optional @:fmt(typeHintColon) @:lead(':') var type: Null<HxType>;
+	@:optional @:lead('=') var defaultValue: Null<HxExpr>;
 }

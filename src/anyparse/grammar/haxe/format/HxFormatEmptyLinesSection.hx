@@ -123,37 +123,37 @@ package anyparse.grammar.haxe.format;
  */
 @:peg typedef HxFormatEmptyLinesSection = {
 
-	@:optional var afterFieldsWithDocComments:HxFormatCommentEmptyLinesPolicy;
+	@:optional var afterFieldsWithDocComments: HxFormatCommentEmptyLinesPolicy;
 
-	@:optional var beforeDocCommentEmptyLines:HxFormatCommentEmptyLinesPolicy;
+	@:optional var beforeDocCommentEmptyLines: HxFormatCommentEmptyLinesPolicy;
 
-	@:optional var classEmptyLines:HxFormatClassEmptyLinesConfig;
+	@:optional var classEmptyLines: HxFormatClassEmptyLinesConfig;
 
-	@:optional var externClassEmptyLines:HxFormatClassEmptyLinesConfig;
+	@:optional var externClassEmptyLines: HxFormatClassEmptyLinesConfig;
 
-	@:optional var abstractEmptyLines:HxFormatClassEmptyLinesConfig;
+	@:optional var abstractEmptyLines: HxFormatClassEmptyLinesConfig;
 
-	@:optional var interfaceEmptyLines:HxFormatInterfaceEmptyLinesConfig;
+	@:optional var interfaceEmptyLines: HxFormatInterfaceEmptyLinesConfig;
 
-	@:optional var enumEmptyLines:HxFormatEnumEmptyLinesConfig;
+	@:optional var enumEmptyLines: HxFormatEnumEmptyLinesConfig;
 
-	@:optional var typedefEmptyLines:HxFormatTypedefEmptyLinesConfig;
+	@:optional var typedefEmptyLines: HxFormatTypedefEmptyLinesConfig;
 
-	@:optional var afterPackage:Int;
+	@:optional var afterPackage: Int;
 
-	@:optional var beforePackage:Int;
+	@:optional var beforePackage: Int;
 
-	@:optional var afterLeftCurly:HxFormatKeepEmptyLinesPolicy;
+	@:optional var afterLeftCurly: HxFormatKeepEmptyLinesPolicy;
 
-	@:optional var beforeRightCurly:HxFormatKeepEmptyLinesPolicy;
+	@:optional var beforeRightCurly: HxFormatKeepEmptyLinesPolicy;
 
-	@:optional var importAndUsing:HxFormatImportAndUsingConfig;
+	@:optional var importAndUsing: HxFormatImportAndUsingConfig;
 
-	@:optional var afterFileHeaderComment:Int;
+	@:optional var afterFileHeaderComment: Int;
 
-	@:optional var betweenMultilineComments:Int;
+	@:optional var betweenMultilineComments: Int;
 
-	@:optional var betweenSingleLineTypes:Int;
+	@:optional var betweenSingleLineTypes: Int;
 
-	@:optional var maxAnywhereInFile:Int;
+	@:optional var maxAnywhereInFile: Int;
 };

@@ -18,8 +18,10 @@ import haxe.Exception;
  * sentinel-string convention. Mirrors `ExtractResult` / `InlineResult`.
  */
 enum ChangeSigResult {
-	Ok(text:String, advisory:Null<String>);
-	Err(message:String);
+
+	Ok(text: String, advisory: Null<String>);
+	Err(message: String);
+
 }
 
 /**
@@ -77,57 +79,55 @@ final class ChangeSig {
 	 * describing why the reorder could not be applied. The source is never
 	 * mutated — the caller decides whether to write the result.
 	 */
-	public static function changeSig(source:String, line:Int, col:Int, perm:String, plugin:GrammarPlugin, shape:RefShape):ChangeSigResult {
-		final tree:QueryNode = try plugin.parseFile(source)
-			catch (exception:ParseError) return Err('source does not parse: ${exception.toString()}')
-			catch (exception:Exception) return Err('source does not parse: ${exception.message}');
+	public static function changeSig(
+		source: String, line: Int, col: Int, perm: String, plugin: GrammarPlugin, shape: RefShape
+	): ChangeSigResult {
+		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
+			'source does not parse: ${exception.toString()}'
+		)
+		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
 		// `apq refs` prints `Span.lineCol().col - 1`; invert that here so a
 		// position copied from `refs` output maps back to the real offset.
-		final cursor:Int = Span.offsetOf(source, line, col + 1);
+		final cursor: Int = Span.offsetOf(source, line, col + 1);
 
-		final node:Null<QueryNode> = RefactorSupport.resolveCursorNode(tree, cursor, source);
-		if (node == null)
-			return Err('position $line:$col is not on a function or a call');
-		final cursorNode:QueryNode = node;
-		final targetName:Null<String> = cursorNode.name;
-		if (targetName == null)
-			return Err('position $line:$col is not on a function or a call');
-		final name:String = targetName;
+		final node: Null<QueryNode> = RefactorSupport.resolveCursorNode(tree, cursor, source);
+		if (node == null) return Err('position $line:$col is not on a function or a call');
+		final cursorNode: QueryNode = node;
+		final targetName: Null<String> = cursorNode.name;
+		if (targetName == null) return Err('position $line:$col is not on a function or a call');
+		final name: String = targetName;
 
 		// Resolve the function declaration node. A cursor already on a
 		// function decl IS that decl; otherwise (a bare call) resolve the
 		// binding back to the decl through the shared resolver — this works
 		// for methods (indexed by `Refs`) but not for local functions
 		// reached via a call.
-		final declNode:Null<QueryNode> = CallSites.resolveFnDecl(cursorNode, tree, name, shape);
-		if (declNode == null)
-			return Err('could not resolve a function binding for "$name" at $line:$col');
-		final decl:QueryNode = declNode;
+		final declNode: Null<QueryNode> = CallSites.resolveFnDecl(cursorNode, tree, name, shape);
+		if (declNode == null) return Err('could not resolve a function binding for "$name" at $line:$col');
+		final decl: QueryNode = declNode;
 		if (!RefactorSupport.FN_DECL_KINDS.contains(decl.kind))
 			return Err('"$name" is not a function (change-sig reorders function parameters)');
-		final declSpan:Null<Span> = decl.span;
-		if (declSpan == null)
-			return Err('"$name" declaration has no source span');
-		final binding:Int = declSpan.from;
+		final declSpan: Null<Span> = decl.span;
+		if (declSpan == null) return Err('"$name" declaration has no source span');
+		final binding: Int = declSpan.from;
 
 		// Parameters: the leading Required / Optional children, in source
 		// order. The scan stops at the first child that is neither (the
 		// `Named` return type or the body).
-		final params:Array<QueryNode> = CallSites.leadingParams(decl);
-		final n:Int = params.length;
-		if (n < 2)
-			return Err('"$name" has fewer than 2 parameters — nothing to reorder');
+		final params: Array<QueryNode> = CallSites.leadingParams(decl);
+		final n: Int = params.length;
+		if (n < 2) return Err('"$name" has fewer than 2 parameters — nothing to reorder');
 
-		final order:Array<Int> = switch parsePerm(perm, n) {
+		final order: Array<Int> = switch parsePerm(perm, n) {
 			case POk(o): o;
 			case PErr(message): return Err(message);
 		};
 
 		// Collect the call sites and prove the set is complete. The two
 		// strategies (method vs. local function) live in `CallSites`.
-		final isMethod:Bool = decl.kind != 'LocalFnStmt';
-		final callSites:Array<QueryNode> = switch CallSites.collect(decl, tree, source, name, binding, shape) {
+		final isMethod: Bool = decl.kind != 'LocalFnStmt';
+		final callSites: Array<QueryNode> = switch CallSites.collect(decl, tree, source, name, binding, shape) {
 			case CErr(message): return Err(message);
 			case COk(sites): sites;
 		};
@@ -137,9 +137,9 @@ final class ChangeSig {
 		// cannot be slot-swapped, so it is a hard refusal rather than a
 		// silent misorder.
 		for (call in callSites) {
-			final argc:Int = call.children.length - 1;
+			final argc: Int = call.children.length - 1;
 			if (argc != n) {
-				final at:String = CallSites.posOf(source, call.span);
+				final at: String = CallSites.posOf(source, call.span);
 				return Err('call at $at has $argc args, expected $n — change-sig cannot reorder calls with omitted optional arguments');
 			}
 		}
@@ -147,22 +147,24 @@ final class ChangeSig {
 		// Build the slot-swap edits. Each new slot `i` is overwritten with
 		// the source text of the item that the permutation moves into it
 		// (`order[i]`). All spans are disjoint, so the splice is order-free.
-		final edits:Array<{span:Span, text:String}> = [];
+		final edits: Array<{ span: Span, text: String }> = [];
 		appendSlotSwap(edits, source, params, order);
 		for (call in callSites) {
-			final args:Array<QueryNode> = call.children.slice(1);
+			final args: Array<QueryNode> = call.children.slice(1);
 			appendSlotSwap(edits, source, args, order);
 		}
 
-		final rewritten:String = RefactorSupport.applyEdits(source, edits);
-		if (rewritten == source)
-			return Err('reorder of "$name" is a no-op');
+		final rewritten: String = RefactorSupport.applyEdits(source, edits);
+		if (rewritten == source) return Err('reorder of "$name" is a no-op');
 
-		try plugin.parseFile(rewritten)
-			catch (exception:ParseError) return Err('rewritten source does not parse: ${exception.toString()}')
-			catch (exception:Exception) return Err('rewritten source does not parse: ${exception.message}');
+		try
+			plugin.parseFile(rewritten)
+		catch (exception: ParseError)
+			return Err('rewritten source does not parse: ${exception.toString()}')
+		catch (exception: Exception)
+			return Err('rewritten source does not parse: ${exception.message}');
 
-		final advisory:Null<String> = isMethod
+		final advisory: Null<String> = isMethod
 			? 'updated the declaration and ${callSites.length} in-file call site(s); if "$name" is called from other files, update those call sites too — cross-file resolution is out of scope'
 			: null;
 		return Ok(rewritten, advisory);
@@ -176,12 +178,14 @@ final class ChangeSig {
 	 * (`order[i] == i`) is still emitted; it is a harmless identity splice
 	 * and the call-level no-op guard catches a fully-identity reorder.
 	 */
-	private static function appendSlotSwap(edits:Array<{span:Span, text:String}>, source:String, slots:Array<QueryNode>, order:Array<Int>):Void {
+	private static function appendSlotSwap(
+		edits: Array<{ span: Span, text: String }>, source: String, slots: Array<QueryNode>, order: Array<Int>
+	): Void {
 		for (i in 0...slots.length) {
-			final destSpan:Null<Span> = slots[i].span;
-			final srcSpan:Null<Span> = slots[order[i]].span;
+			final destSpan: Null<Span> = slots[i].span;
+			final srcSpan: Null<Span> = slots[order[i]].span;
 			if (destSpan == null || srcSpan == null) continue;
-			edits.push({span: new Span(destSpan.from, destSpan.to), text: source.substring(srcSpan.from, srcSpan.to)});
+			edits.push({ span: new Span(destSpan.from, destSpan.to), text: source.substring(srcSpan.from, srcSpan.to) });
 		}
 	}
 
@@ -191,38 +195,36 @@ final class ChangeSig {
 	 * Rejects the identity permutation as a no-op. Returns the parsed order
 	 * or a diagnostic.
 	 */
-	private static function parsePerm(perm:String, n:Int):PermResult {
-		final parts:Array<String> = perm.split(',');
-		if (parts.length != n)
-			return PErr('permutation "$perm" lists ${parts.length} indices but the function has $n parameters');
+	private static function parsePerm(perm: String, n: Int): PermResult {
+		final parts: Array<String> = perm.split(',');
+		if (parts.length != n) return PErr('permutation "$perm" lists ${parts.length} indices but the function has $n parameters');
 
-		final order:Array<Int> = [];
-		final seen:Array<Int> = [];
+		final order: Array<Int> = [];
+		final seen: Array<Int> = [];
 		for (part in parts) {
-			final trimmed:String = StringTools.trim(part);
-			final idx:Null<Int> = RefactorSupport.parseStrictInt(trimmed);
-			if (idx == null)
-				return PErr('permutation "$perm" contains a non-integer index "$trimmed"');
-			final value:Int = idx;
-			if (value < 0 || value >= n)
-				return PErr('permutation "$perm" index $value is out of range 0..${n - 1}');
-			if (seen.contains(value))
-				return PErr('permutation "$perm" repeats index $value — must be a true permutation');
+			final trimmed: String = StringTools.trim(part);
+			final idx: Null<Int> = RefactorSupport.parseStrictInt(trimmed);
+			if (idx == null) return PErr('permutation "$perm" contains a non-integer index "$trimmed"');
+			final value: Int = idx;
+			if (value < 0 || value >= n) return PErr('permutation "$perm" index $value is out of range 0..${n - 1}');
+			if (seen.contains(value)) return PErr('permutation "$perm" repeats index $value — must be a true permutation');
 			seen.push(value);
 			order.push(value);
 		}
 
-		var identity:Bool = true;
+		var identity: Bool = true;
 		for (i in 0...n) if (order[i] != i) identity = false;
-		if (identity)
-			return PErr('permutation "$perm" is the identity — nothing to reorder');
+		if (identity) return PErr('permutation "$perm" is the identity — nothing to reorder');
 
 		return POk(order);
 	}
+
 }
 
 /** Parsed permutation or a diagnostic — internal to `ChangeSig`. */
 private enum PermResult {
-	POk(order:Array<Int>);
-	PErr(message:String);
+
+	POk(order: Array<Int>);
+	PErr(message: String);
+
 }

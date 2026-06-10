@@ -20,4 +20,5 @@ enum abstract HxFormatMetadataLineEndPolicy(String) to String {
 	final AfterLast = 'afterLast';
 
 	final ForceAfterLast = 'forceAfterLast';
+
 }

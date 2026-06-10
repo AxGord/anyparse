@@ -72,4 +72,5 @@ enum abstract WrapConditionType(Int) from Int to Int {
 	final LineLengthLargerThan = 7;
 
 	final HasMultilineItems = 8;
+
 }

@@ -41,6 +41,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxTryCatchStmtBare = {
-	@:fmt(bareBodyBreaks) var body:HxExpr;
-	@:trivia @:tryparse @:fmt(sameLine('sameLineCatch'), bareBodyBreaks) var catches:Array<HxCatchClauseStmtBare>;
+	@:fmt(bareBodyBreaks) var body: HxExpr;
+	@:trivia @:tryparse @:fmt(sameLine('sameLineCatch'), bareBodyBreaks) var catches: Array<HxCatchClauseStmtBare>;
 };

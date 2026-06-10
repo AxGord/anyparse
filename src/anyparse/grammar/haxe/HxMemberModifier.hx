@@ -42,6 +42,7 @@ package anyparse.grammar.haxe;
  */
 @:peg
 enum HxMemberModifier {
+
 	@:kw('public') Public;
 	@:kw('private') Private;
 	@:kw('static') Static;
@@ -54,5 +55,6 @@ enum HxMemberModifier {
 	@:kw('overload') Overload;
 
 	@:kw('#if') @:trail('#end')
-	Conditional(inner:HxConditionalMod);
+	Conditional(inner: HxConditionalMod);
+
 }

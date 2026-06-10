@@ -15,7 +15,7 @@ import anyparse.query.Pattern.KindEquivalence;
 interface GrammarPlugin {
 
 	/** Short name used by `--lang`. */
-	public function langName():String;
+	public function langName(): String;
 
 	/**
 	 * Parse `source` and return a generic node tree. The plugin is
@@ -25,7 +25,7 @@ interface GrammarPlugin {
 	 * Plugins may throw on parse failure; callers handle the
 	 * exception. The engine itself never catches.
 	 */
-	public function parseFile(source:String):QueryNode;
+	public function parseFile(source: String): QueryNode;
 
 	/**
 	 * Parse a `apq search` pattern — language source extended with
@@ -41,7 +41,7 @@ interface GrammarPlugin {
 	 * Plugins throw on parse failure across every try-fallback attempt;
 	 * the CLI catches and surfaces the most-informative error.
 	 */
-	public function parsePattern(source:String):Pattern;
+	public function parsePattern(source: String): Pattern;
 
 	/**
 	 * Declare which `QueryNode.kind` values the `Refs` walker should
@@ -51,7 +51,7 @@ interface GrammarPlugin {
 	 * See `docs/cli-query-tool.md` (`apq refs`) for the user-facing
 	 * contract and `RefShape` for field semantics.
 	 */
-	public function refShape():RefShape;
+	public function refShape(): RefShape;
 
 	/**
 	 * Declare which `QueryNode.kind` values the `Meta` walker should
@@ -62,7 +62,7 @@ interface GrammarPlugin {
 	 * See `docs/cli-query-tool.md` (`apq meta`) for the user-facing
 	 * contract and `MetaShape` for field semantics.
 	 */
-	public function metaShape():MetaShape;
+	public function metaShape(): MetaShape;
 
 	/**
 	 * Kind-equivalence relation for `apq ast --select`: groups
@@ -77,7 +77,7 @@ interface GrammarPlugin {
 	 * the final-wrapper folding is added. A plugin with no wrapper shapes
 	 * returns an empty relation (every kind equivalent only to itself).
 	 */
-	public function selectKindEquivalence():KindEquivalence;
+	public function selectKindEquivalence(): KindEquivalence;
 
 	/**
 	 * Parse `source` like `parseFile`, but additionally surface
@@ -89,7 +89,7 @@ interface GrammarPlugin {
 	 *
 	 * See `docs/cli-query-tool.md` (`apq uses`) and `TypeRefShape`.
 	 */
-	public function parseFileTypeRefs(source:String):QueryNode;
+	public function parseFileTypeRefs(source: String): QueryNode;
 
 	/**
 	 * Declare which `QueryNode.kind` values the `Uses` walker should
@@ -97,7 +97,7 @@ interface GrammarPlugin {
 	 * language-agnostic. Only meaningful on a tree produced by
 	 * `parseFileTypeRefs`.
 	 */
-	public function typeRefShape():TypeRefShape;
+	public function typeRefShape(): TypeRefShape;
 
 	/**
 	 * Optional: parse `source` with the grammar's pretty-printer-aware
@@ -119,7 +119,7 @@ interface GrammarPlugin {
 	 *
 	 * Plugins may throw on parse failure; callers handle the exception.
 	 */
-	public function writeRoundTrip(source:String, ?optsJson:String):Null<String>;
+	public function writeRoundTrip(source: String, ?optsJson: String): Null<String>;
 
 	/**
 	 * Optional: parse `source` with the plain (non-trivia) parser and
@@ -140,7 +140,7 @@ interface GrammarPlugin {
 	 *
 	 * Plugins may throw on parse failure; callers handle the exception.
 	 */
-	public function writeRoundTripPlain(source:String, ?optsJson:String):Null<String>;
+	public function writeRoundTripPlain(source: String, ?optsJson: String): Null<String>;
 
 	/**
 	 * Optional: strict trivia-mode parse used by `apq recon` for corpus
@@ -154,7 +154,8 @@ interface GrammarPlugin {
 	 * the surface accepted by the writer's round-trip path, so a recon
 	 * run mirrors what the corpus harness sees on each fixture.
 	 */
-	public function reconParse(source:String):Bool;
+	public function reconParse(source: String): Bool;
+
 }
 
 /**
@@ -215,11 +216,11 @@ interface GrammarPlugin {
  */
 @:nullSafety(Strict)
 typedef RefShape = {
-	var identKind:String;
-	var declHostKinds:Array<String>;
-	var scopeKinds:Array<String>;
-	var writeParentKinds:Array<String>;
-	var selfScopeDeclKinds:Array<String>;
+	var identKind: String;
+	var declHostKinds: Array<String>;
+	var scopeKinds: Array<String>;
+	var writeParentKinds: Array<String>;
+	var selfScopeDeclKinds: Array<String>;
 }
 
 /**
@@ -249,8 +250,8 @@ typedef RefShape = {
  */
 @:nullSafety(Strict)
 typedef MetaShape = {
-	var metaKinds:Array<String>;
-	var declHostKinds:Array<String>;
+	var metaKinds: Array<String>;
+	var declHostKinds: Array<String>;
 }
 
 /**
@@ -268,5 +269,5 @@ typedef MetaShape = {
  */
 @:nullSafety(Strict)
 typedef TypeRefShape = {
-	var typeRefKinds:Array<String>;
+	var typeRefKinds: Array<String>;
 }

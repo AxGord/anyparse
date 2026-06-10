@@ -20,8 +20,10 @@ import haxe.Exception;
  * Mirrors `RenameResult` / `ChangeSigResult`.
  */
 enum CrossRenameResult {
-	Ok(changes:Array<FileChange>, advisory:Null<String>);
-	Err(message:String);
+
+	Ok(changes: Array<FileChange>, advisory: Null<String>);
+	Err(message: String);
+
 }
 
 /**
@@ -30,9 +32,9 @@ enum CrossRenameResult {
  * unchanged scope file is never returned.
  */
 typedef FileChange = {
-	var file:String;
-	var newSource:String;
-	var count:Int;
+	var file: String;
+	var newSource: String;
+	var count: Int;
 }
 
 /**
@@ -102,10 +104,8 @@ typedef FileChange = {
 final class CrossRename {
 
 	/** The advisory appended to every successful rename. */
-	private static final ADVISORY:String =
-		'type-namespace rename only — verify bare `Class<T>` value uses '
-		+ '(`var c = T;`), aliased imports (`import pkg.T as U;`), and any '
-		+ 'cross-package declarations by hand.';
+	private static final ADVISORY: String = 'type-namespace rename only — verify bare `Class<T>` value uses '
+		+ '(`var c = T;`), aliased imports (`import pkg.T as U;`), and any ' + 'cross-package declarations by hand.';
 
 	/**
 	 * Rename the type declaration at `line:col` (in `cursorFile` /
@@ -123,75 +123,73 @@ final class CrossRename {
 	 * Returns `Ok(changes, advisory)` with only the files that changed,
 	 * or an `Err` describing why the rename could not be applied.
 	 */
-	public static function crossRenameType(cursorFile:String, cursorSource:String, line:Int, col:Int, newName:String,
-			scopeFiles:Array<{file:String, source:String}>, plugin:GrammarPlugin, typeRefShape:TypeRefShape,
-			refShape:RefShape):CrossRenameResult {
+	public static function crossRenameType(
+		cursorFile: String, cursorSource: String, line: Int, col: Int, newName: String,
+		scopeFiles: Array<{ file: String, source: String }>, plugin: GrammarPlugin, typeRefShape: TypeRefShape, refShape: RefShape
+	): CrossRenameResult {
 		if (!RefactorSupport.isIdentifier(newName)) return Err('new name "$newName" is not a valid identifier');
 
 		// 1. Resolve the type declaration the cursor sits on.
-		final cursorTree:QueryNode = try plugin.parseFile(cursorSource)
-			catch (exception:ParseError) return Err('$cursorFile does not parse: ${exception.toString()}')
-			catch (exception:Exception) return Err('$cursorFile does not parse: ${exception.message}');
+		final cursorTree: QueryNode = try plugin.parseFile(cursorSource) catch (exception: ParseError) return Err(
+			'$cursorFile does not parse: ${exception.toString()}'
+		)
+		catch (exception: Exception) return Err('$cursorFile does not parse: ${exception.message}');
 
 		// `apq refs` prints `Span.lineCol().col - 1`; invert that here so a
 		// position copied from `refs` / `uses` output maps to the offset.
-		final cursor:Int = Span.offsetOf(cursorSource, line, col + 1);
-		final declNode:Null<QueryNode> = resolveTypeDeclAtCursor(cursorTree, cursor, cursorSource);
-		if (declNode == null)
-			return Err('position $line:$col is not on a type declaration (cross-file --scope renames types only)');
-		final typeName:Null<String> = declNode.name;
-		if (typeName == null)
-			return Err('position $line:$col is not on a type declaration (cross-file --scope renames types only)');
-		if (typeName == newName)
-			return Err('rename "$typeName" -> "$newName" is a no-op');
+		final cursor: Int = Span.offsetOf(cursorSource, line, col + 1);
+		final declNode: Null<QueryNode> = resolveTypeDeclAtCursor(cursorTree, cursor, cursorSource);
+		if (declNode == null) return Err('position $line:$col is not on a type declaration (cross-file --scope renames types only)');
+		final typeName: Null<String> = declNode.name;
+		if (typeName == null) return Err('position $line:$col is not on a type declaration (cross-file --scope renames types only)');
+		if (typeName == newName) return Err('rename "$typeName" -> "$newName" is a no-op');
 
 		// 2. Parse every scope file once; refuse on any skip-parse (a file
 		//    we cannot read cannot be proven free of references to the type).
-		final parsed:Array<{file:String, source:String, tree:QueryNode}> = [];
-		final skipped:Array<String> = [];
+		final parsed: Array<{ file: String, source: String, tree: QueryNode }> = [];
+		final skipped: Array<String> = [];
 		for (entry in scopeFiles) {
-			final tree:Null<QueryNode> = try plugin.parseFile(entry.source)
-				catch (exception:ParseError) null
-				catch (exception:Exception) null;
-			if (tree == null) skipped.push(entry.file);
-			else parsed.push({file: entry.file, source: entry.source, tree: tree});
+			final tree: Null<QueryNode> = try plugin.parseFile(entry.source) catch (exception: ParseError) null
+			catch (exception: Exception) null;
+			if (tree == null)
+				skipped.push(entry.file);
+			else
+				parsed.push({ file: entry.file, source: entry.source, tree: tree });
 		}
-		if (skipped.length > 0)
-			return Err('cannot rename across scope: ${skipped.length} file(s) do not parse: ${skipped.join(", ")}');
+		if (skipped.length > 0) return Err('cannot rename across scope: ${skipped.length} file(s) do not parse: ${skipped.join(", ")}');
 
 		// 3. Uniqueness: exactly one declaration of `typeName` under scope.
-		var declCount:Int = 0;
-		var declInCursorFile:Bool = false;
+		var declCount: Int = 0;
+		var declInCursorFile: Bool = false;
 		for (entry in parsed) {
-			final n:Int = countTypeDecls(entry.tree, typeName);
+			final n: Int = countTypeDecls(entry.tree, typeName);
 			declCount += n;
 			if (n > 0 && entry.file == cursorFile) declInCursorFile = true;
 		}
-		if (declCount == 0)
-			return Err('no type "$typeName" declared under scope');
-		if (declCount > 1)
-			return Err('type "$typeName" is declared in $declCount files under scope — ambiguous, refusing');
-		if (!declInCursorFile)
-			return Err('the type "$typeName" at the cursor is not the one declared under scope — refusing');
+		if (declCount == 0) return Err('no type "$typeName" declared under scope');
+		if (declCount > 1) return Err('type "$typeName" is declared in $declCount files under scope — ambiguous, refusing');
+		if (!declInCursorFile) return Err('the type "$typeName" at the cursor is not the one declared under scope — refusing');
 
 		// 4. Collect occurrence spans + apply edits per file.
-		final changes:Array<FileChange> = [];
+		final changes: Array<FileChange> = [];
 		for (entry in parsed) {
-			final occurrences:Array<Span> = collectOccurrences(entry.source, typeName, entry.tree, plugin, typeRefShape, refShape);
+			final occurrences: Array<Span> = collectOccurrences(entry.source, typeName, entry.tree, plugin, typeRefShape, refShape);
 			if (occurrences.length == 0) continue;
-			final edits:Array<{span:Span, text:String}> = [for (occ in occurrences) {span: occ, text: newName}];
-			final newSource:String = RefactorSupport.applyEdits(entry.source, edits);
+			final edits: Array<{ span: Span, text: String }> = [for (occ in occurrences) { span: occ, text: newName }];
+			final newSource: String = RefactorSupport.applyEdits(entry.source, edits);
 
 			// 6. Atomic validation: every rewritten file must re-parse.
-			try plugin.parseFile(newSource)
-				catch (exception:ParseError) return Err('rewritten ${entry.file} does not parse: ${exception.toString()}')
-				catch (exception:Exception) return Err('rewritten ${entry.file} does not parse: ${exception.message}');
+			try
+				plugin.parseFile(newSource)
+			catch (exception: ParseError)
+				return Err('rewritten ${entry.file} does not parse: ${exception.toString()}')
+			catch (exception: Exception)
+				return Err('rewritten ${entry.file} does not parse: ${exception.message}');
 
-			changes.push({file: entry.file, newSource: newSource, count: occurrences.length});
+			changes.push({ file: entry.file, newSource: newSource, count: occurrences.length });
 		}
 
-		if (changes.length == 0)
-			return Err('rename "$typeName" -> "$newName" changed nothing');
+		if (changes.length == 0) return Err('rename "$typeName" -> "$newName" changed nothing');
 
 		return Ok(changes, ADVISORY);
 	}
@@ -204,8 +202,8 @@ final class CrossRename {
 	 * `RefactorSupport.resolveTypeDeclAtCursor`. Returns null when the
 	 * cursor is not on a type declaration.
 	 */
-	private static function resolveTypeDeclAtCursor(tree:QueryNode, cursor:Int, source:String):Null<QueryNode> {
-		final m:Null<TypeDeclMatch> = RefactorSupport.resolveTypeDeclAtCursor(tree, cursor, source);
+	private static function resolveTypeDeclAtCursor(tree: QueryNode, cursor: Int, source: String): Null<QueryNode> {
+		final m: Null<TypeDeclMatch> = RefactorSupport.resolveTypeDeclAtCursor(tree, cursor, source);
 		return m == null ? null : m.nameNode;
 	}
 
@@ -215,10 +213,10 @@ final class CrossRename {
 	 * Final-aware: a `final class` is recognised through its `FinalDecl`
 	 * wrapper so it counts toward uniqueness exactly like a plain class.
 	 */
-	private static function countTypeDecls(tree:QueryNode, typeName:String):Int {
-		var count:Int = 0;
-		function walk(node:QueryNode):Void {
-			final m:Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
+	private static function countTypeDecls(tree: QueryNode, typeName: String): Int {
+		var count: Int = 0;
+		function walk(node: QueryNode): Void {
+			final m: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
 			if (m != null && m.name == typeName) count++;
 			for (c in node.children) walk(c);
 		}
@@ -248,23 +246,22 @@ final class CrossRename {
 	 * Spans are deduped by `from` offset (a node can be matched by more
 	 * than one collector).
 	 */
-	private static function collectOccurrences(source:String, typeName:String, tree:QueryNode, plugin:GrammarPlugin,
-			typeRefShape:TypeRefShape, refShape:RefShape):Array<Span> {
-		final out:Array<Span> = [];
-		final seen:Array<Int> = [];
-		inline function add(identFrom:Int):Void
-			RefactorSupport.pushUniqueSpan(out, seen, identFrom, typeName.length);
+	private static function collectOccurrences(
+		source: String, typeName: String, tree: QueryNode, plugin: GrammarPlugin, typeRefShape: TypeRefShape, refShape: RefShape
+	): Array<Span> {
+		final out: Array<Span> = [];
+		final seen: Array<Int> = [];
+		inline function add(identFrom: Int): Void RefactorSupport.pushUniqueSpan(out, seen, identFrom, typeName.length);
 
 		// a. Type positions.
-		final typeRefTree:QueryNode = plugin.parseFileTypeRefs(source);
-		for (hit in Uses.find(typeName, typeRefTree, typeRefShape))
-			add(RefactorSupport.identTokenOffset(source, hit.span, typeName));
+		final typeRefTree: QueryNode = plugin.parseFileTypeRefs(source);
+		for (hit in Uses.find(typeName, typeRefTree, typeRefShape)) add(RefactorSupport.identTokenOffset(source, hit.span, typeName));
 
 		// d-prep. Receiver offsets that resolve to a value binding — an
 		// in-file var / param / field named `typeName`. A static-receiver
 		// occurrence is renamed only when its receiver is NOT in this set
 		// (an unresolved receiver is the type used as a namespace).
-		final valueResolved:Array<Int> = [
+		final valueResolved: Array<Int> = [
 			for (h in Refs.find(typeName, tree, refShape))
 				if ((h.kind == RefKind.Read || h.kind == RefKind.Write) && h.bindingSpan != null) h.span.from
 		];
@@ -272,22 +269,23 @@ final class CrossRename {
 		// b. Declaration names + c. imports / using + d. static-receiver
 		//    accesses (one walk of the parseFile tree — every arm reads
 		//    node kinds from it).
-		function walk(node:QueryNode):Void {
-			final span:Null<Span> = node.span;
+		function walk(node: QueryNode): Void {
+			final span: Null<Span> = node.span;
 			// b. Declaration name — final-aware: for a `final class` the
 			//    named node is the inner `ClassForm`, so anchor the splice on
 			//    `typeDeclOf(...).nameNode` (its span holds the name token),
 			//    NOT on the `FinalDecl` wrapper, which carries no name.
-			final decl:Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
+			final decl: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
 			if (decl != null && decl.name == typeName) {
-				final nameSpan:Null<Span> = decl.nameNode.span;
+				final nameSpan: Null<Span> = decl.nameNode.span;
 				if (nameSpan != null) add(RefactorSupport.identTokenOffset(source, nameSpan, typeName));
-			} else if (span != null && (node.kind == 'ImportDecl' || node.kind == 'UsingDecl'))
-				add(importSegmentOffset(source, span, node.name, typeName));
-			final children:Array<QueryNode> = node.children;
+			} else if (span != null && (
+				node.kind == 'ImportDecl' || node.kind == 'UsingDecl'
+			)) add(importSegmentOffset(source, span, node.name, typeName));
+			final children: Array<QueryNode> = node.children;
 			if (node.kind == 'FieldAccess' && children.length > 0) {
-				final recv:QueryNode = children[0];
-				final recvSpan:Null<Span> = recv.span;
+				final recv: QueryNode = children[0];
+				final recvSpan: Null<Span> = recv.span;
 				if (recv.kind == 'IdentExpr' && recv.name == typeName && recvSpan != null && !valueResolved.contains(recvSpan.from))
 					add(RefactorSupport.identTokenOffset(source, recvSpan, typeName));
 			}
@@ -307,13 +305,14 @@ final class CrossRename {
 	 * package segment that happens to match `typeName` (e.g.
 	 * `import Foo.sub.Foo;`) is never mistaken for the type segment.
 	 */
-	private static function importSegmentOffset(source:String, span:Span, pathName:Null<String>, typeName:String):Int {
+	private static function importSegmentOffset(source: String, span: Span, pathName: Null<String>, typeName: String): Int {
 		if (pathName == null) return -1;
-		final lastDot:Int = pathName.lastIndexOf('.');
-		final lastSegment:String = lastDot < 0 ? pathName : pathName.substr(lastDot + 1);
+		final lastDot: Int = pathName.lastIndexOf('.');
+		final lastSegment: String = lastDot < 0 ? pathName : pathName.substr(lastDot + 1);
 		if (lastSegment != typeName) return -1;
-		final pathStart:Int = source.indexOf(pathName, span.from);
+		final pathStart: Int = source.indexOf(pathName, span.from);
 		if (pathStart < 0 || pathStart >= span.to) return -1;
 		return pathStart + lastDot + 1;
 	}
+
 }

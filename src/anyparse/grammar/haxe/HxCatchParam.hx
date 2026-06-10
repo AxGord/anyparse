@@ -26,6 +26,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxCatchParam = {
-	var name:HxIdentLit;
-	@:optional @:fmt(typeHintColon) @:lead(':') var type:Null<HxType>;
+	var name: HxIdentLit;
+	@:optional @:fmt(typeHintColon) @:lead(':') var type: Null<HxType>;
 }

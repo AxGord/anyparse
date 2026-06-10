@@ -15,24 +15,24 @@ package anyparse.grammar.ar;
 typedef ArEntry = {
 
 	/** File name (16 bytes). `/`-terminated for short names, space-padded. */
-	@:bin(16) var name:String;
+	@:bin(16) var name: String;
 
 	/** Modification time as unix seconds (12 bytes decimal). */
-	@:bin(12, Dec) var mtime:Int;
+	@:bin(12, Dec) var mtime: Int;
 
 	/** Owner UID (6 bytes decimal). */
-	@:bin(6, Dec) var ownerId:Int;
+	@:bin(6, Dec) var ownerId: Int;
 
 	/** Group GID (6 bytes decimal). */
-	@:bin(6, Dec) var groupId:Int;
+	@:bin(6, Dec) var groupId: Int;
 
 	/** File mode in octal (8 bytes). e.g. `0o100644` for a regular file. */
-	@:bin(8, Oct) var mode:Int;
+	@:bin(8, Oct) var mode: Int;
 
 	/**
 	 * Raw file data. Preceded by a 10-byte decimal size prefix and the
 	 * 2-byte `` `\n `` header terminator; both are handled by the
 	 * macro-generated parser/writer and do not appear in the AST.
 	 */
-	@:length(10, Dec) @:lead("`\n") var data:haxe.io.Bytes;
+	@:length(10, Dec) @:lead("`\n") var data: haxe.io.Bytes;
 };

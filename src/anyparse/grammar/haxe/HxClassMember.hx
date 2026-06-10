@@ -92,7 +92,7 @@ package anyparse.grammar.haxe;
 enum HxClassMember {
 
 	@:kw('var') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'), propagateFieldLevelVar)
-	VarMember(decl:HxVarDecl);
+	VarMember(decl: HxVarDecl);
 
 	/**
 	 * `final` as a non-overridable METHOD MODIFIER (`final static function
@@ -110,13 +110,13 @@ enum HxClassMember {
 	 * rationale (issue_5_final_lineend).
 	 */
 	@:kw('final')
-	FinalModifiedMember(rest:HxFinalModifierMember);
+	FinalModifiedMember(rest: HxFinalModifierMember);
 
 	@:kw('final') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'), propagateFieldLevelVar)
-	FinalMember(decl:HxVarDecl);
+	FinalMember(decl: HxVarDecl);
 
 	@:kw('function')
-	FnMember(decl:HxFnDecl);
+	FnMember(decl: HxFnDecl);
 
 	/**
 	 * `#error "msg"` / `#error 'msg'` preprocessor directive at member
@@ -127,7 +127,7 @@ enum HxClassMember {
 	 * no `@:trail`. See `HxDecl.ErrorDecl` for the shared rationale.
 	 */
 	@:kw('#error')
-	ErrorMember(message:HxErrorMsg);
+	ErrorMember(message: HxErrorMsg);
 
 	/**
 	 * `...` placeholder member (slice 33).
@@ -146,5 +146,6 @@ enum HxClassMember {
 	EllipsisMember;
 
 	@:kw('#if') @:trail('#end') @:fmt(conditionalMarkerDedent)
-	Conditional(inner:HxConditionalMember);
+	Conditional(inner: HxConditionalMember);
+
 }

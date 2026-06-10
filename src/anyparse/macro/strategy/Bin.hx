@@ -35,26 +35,27 @@ import anyparse.core.Strategy;
  */
 class Bin implements Strategy {
 
-	public var name(default, null):String = 'Bin';
-	public var runsAfter(default, null):Array<String> = [];
-	public var runsBefore(default, null):Array<String> = [];
-	public var ownedMeta(default, null):Array<String> = [':bin', ':magic', ':align', ':length'];
-	public var runtimeContribution(default, null):RuntimeContrib = {ctxFields: [], helpers: [], cacheKeyContributors: []};
+	public var name(default, null): String = 'Bin';
+	public var runsAfter(default, null): Array<String> = [];
+	public var runsBefore(default, null): Array<String> = [];
+	public var ownedMeta(default, null): Array<String> = [':bin', ':magic', ':align', ':length'];
+	public var runtimeContribution(default, null): RuntimeContrib = { ctxFields: [], helpers: [], cacheKeyContributors: [] };
 
 	public function new() {}
 
-	public function appliesTo(node:ShapeNode):Bool {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
+	public function appliesTo(node: ShapeNode): Bool {
+		final meta: Null<Metadata> = node.annotations.get('base.meta');
 		if (meta == null) return false;
 		for (entry in meta) switch entry.name {
-			case ':bin' | ':magic' | ':align' | ':length': return true;
+			case ':bin' | ':magic' | ':align' | ':length':
+				return true;
 			case _:
 		}
 		return false;
 	}
 
-	public function annotate(node:ShapeNode, ctx:LoweringCtx):Void {
-		final meta:Null<Metadata> = node.annotations.get('base.meta');
+	public function annotate(node: ShapeNode, ctx: LoweringCtx): Void {
+		final meta: Null<Metadata> = node.annotations.get('base.meta');
 		if (meta == null) return;
 		for (entry in meta) switch entry.name {
 			case ':bin':
@@ -73,29 +74,26 @@ class Bin implements Strategy {
 						Context.fatalError('@:bin expects 1 argument (Int or String) or 2 arguments (Int, Dec|Oct)', entry.pos);
 				}
 			case ':length':
-				if (entry.params.length != 2)
-					Context.fatalError('@:length expects two arguments (Int, Dec|Oct)', entry.pos);
+				if (entry.params.length != 2) Context.fatalError('@:length expects two arguments (Int, Dec|Oct)', entry.pos);
 				node.annotations.set('bin.lengthPrefix', {
 					width: intOrFail(entry.params[0], ':length'),
 					encoding: readEncodingIdent(entry.params[1], 'length'),
 				});
 			case ':magic':
-				if (entry.params.length != 1)
-					Context.fatalError('@:magic expects exactly one string argument', entry.pos);
+				if (entry.params.length != 1) Context.fatalError('@:magic expects exactly one string argument', entry.pos);
 				node.annotations.set('bin.magic', stringOrFail(entry.params[0], ':magic'));
 			case ':align':
-				if (entry.params.length != 1)
-					Context.fatalError('@:align expects exactly one int argument', entry.pos);
+				if (entry.params.length != 1) Context.fatalError('@:align expects exactly one int argument', entry.pos);
 				node.annotations.set('bin.align', intOrFail(entry.params[0], ':align'));
 			case _:
 		}
 	}
 
-	public function lower(node:ShapeNode, ctx:LoweringCtx):Null<CoreIR> {
+	public function lower(node: ShapeNode, ctx: LoweringCtx): Null<CoreIR> {
 		return null;
 	}
 
-	private static function intOrFail(e:Expr, tag:String):Int {
+	private static function intOrFail(e: Expr, tag: String): Int {
 		return switch e.expr {
 			case EConst(CInt(v)): Std.parseInt(v);
 			case _:
@@ -104,7 +102,7 @@ class Bin implements Strategy {
 		};
 	}
 
-	private static function stringOrFail(e:Expr, tag:String):String {
+	private static function stringOrFail(e: Expr, tag: String): String {
 		return switch e.expr {
 			case EConst(CString(s, _)): s;
 			case _:
@@ -113,7 +111,7 @@ class Bin implements Strategy {
 		};
 	}
 
-	private static function readEncodingIdent(param:Expr, tag:String):String {
+	private static function readEncodingIdent(param: Expr, tag: String): String {
 		return switch param.expr {
 			case EConst(CIdent('Dec')): 'Dec';
 			case EConst(CIdent('Oct')): 'Oct';
@@ -122,5 +120,6 @@ class Bin implements Strategy {
 				throw 'unreachable';
 		};
 	}
+
 }
 #end

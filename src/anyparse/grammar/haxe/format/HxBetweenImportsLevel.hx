@@ -60,8 +60,8 @@ enum abstract HxBetweenImportsLevel(Int) from Int to Int {
 	 * cast lifts the Int back into the typed enum so the switch reads
 	 * named cases.
 	 */
-	public static function pathDiffers(prev:String, curr:String, level:Int):Bool {
-		final lvl:HxBetweenImportsLevel = level;
+	public static function pathDiffers(prev: String, curr: String, level: Int): Bool {
+		final lvl: HxBetweenImportsLevel = level;
 		if (lvl == All) return true;
 		// Drop the last segment from both paths before computing the
 		// level prefix — fork's `MarkEmptyLines.getImportInfo:201` does
@@ -71,24 +71,25 @@ enum abstract HxBetweenImportsLevel(Int) from Int to Int {
 		// `haxe.Json` as differing at second level (segment[1] = `Int64`
 		// vs `Json`) where fork sees both as package `haxe` and emits
 		// no blank.
-		final prevPkg:String = dropModuleName(prev);
-		final currPkg:String = dropModuleName(curr);
+		final prevPkg: String = dropModuleName(prev);
+		final currPkg: String = dropModuleName(curr);
 		if (lvl == FullPackage) return prevPkg != currPkg;
-		final prevSegs:Array<String> = prevPkg == '' ? [] : prevPkg.split('.');
-		final currSegs:Array<String> = currPkg == '' ? [] : currPkg.split('.');
+		final prevSegs: Array<String> = prevPkg == '' ? [] : prevPkg.split('.');
+		final currSegs: Array<String> = currPkg == '' ? [] : currPkg.split('.');
 		// fork's ImportPackageInfo zero-fills missing levels (default-empty
 		// String fields). When prev/curr have fewer than `level` segments,
 		// the missing slots compare as '' — same shape as fork's behaviour.
 		for (i in 0...level) {
-			final p:String = i < prevSegs.length ? prevSegs[i] : '';
-			final c:String = i < currSegs.length ? currSegs[i] : '';
+			final p: String = i < prevSegs.length ? prevSegs[i] : '';
+			final c: String = i < currSegs.length ? currSegs[i] : '';
 			if (p != c) return true;
 		}
 		return false;
 	}
 
-	private static inline function dropModuleName(path:String):String {
-		final lastDot:Int = path.lastIndexOf('.');
+	private static inline function dropModuleName(path: String): String {
+		final lastDot: Int = path.lastIndexOf('.');
 		return lastDot >= 0 ? path.substr(0, lastDot) : '';
 	}
+
 }

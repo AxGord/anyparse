@@ -46,11 +46,11 @@ import anyparse.macro.strategy.Ternary;
  */
 class Build {
 
-	public static macro function buildParser(target:Expr, ?options:Expr):Array<Field> {
-		final targetTypePath:String = ExprTools.toString(target);
-		final rootType:Type = Context.getType(targetTypePath);
+	public static macro function buildParser(target: Expr, ?options: Expr): Array<Field> {
+		final targetTypePath: String = ExprTools.toString(target);
+		final rootType: Type = Context.getType(targetTypePath);
 
-		final rootMeta:Metadata = switch rootType {
+		final rootMeta: Metadata = switch rootType {
 			case TEnum(ref, _): ref.get().meta.get();
 			case TType(ref, _): ref.get().meta.get();
 			case TAbstract(ref, _): ref.get().meta.get();
@@ -60,29 +60,29 @@ class Build {
 				throw 'unreachable';
 		};
 
-		final schemaTypePath:String = readSchemaMeta(rootMeta, targetTypePath);
-		final formatInfo:FormatReader.FormatInfo = FormatReader.resolve(schemaTypePath);
+		final schemaTypePath: String = readSchemaMeta(rootMeta, targetTypePath);
+		final formatInfo: FormatReader.FormatInfo = FormatReader.resolve(schemaTypePath);
 
-		final ctx:LoweringCtx = new LoweringCtx();
+		final ctx: LoweringCtx = new LoweringCtx();
 		ctx.mode = Mode.Fast;
 		ctx.trivia = readBoolOption(options, 'trivia', false);
 		ctx.spans = readBoolOption(options, 'spans', false);
 		if (ctx.spans) ctx.mode = Mode.Tolerant;
 
-		final shapeBuilder:ShapeBuilder = new ShapeBuilder(formatInfo);
-		final shape:ShapeBuilder.ShapeResult = shapeBuilder.build(rootType);
+		final shapeBuilder: ShapeBuilder = new ShapeBuilder(formatInfo);
+		final shape: ShapeBuilder.ShapeResult = shapeBuilder.build(rootType);
 		TriviaAnalysis.run(shape);
 		if (ctx.trivia) TriviaTypeSynth.arm(shape);
 		if (ctx.spans) SpanTypeSynth.arm(shape);
 
 		#if anyparse_trivia_dump
 		for (name => node in shape.rules) {
-			final bearing:Bool = node.annotations.get('trivia.bearing') == true;
+			final bearing: Bool = node.annotations.get('trivia.bearing') == true;
 			Sys.println('// trivia.bearing: $name = $bearing');
 		}
 		#end
 
-		final registry:StrategyRegistry = new StrategyRegistry();
+		final registry: StrategyRegistry = new StrategyRegistry();
 		registry.register(new Bin());
 		registry.register(new Kw());
 		registry.register(new Lit());
@@ -95,26 +95,39 @@ class Build {
 		registry.prepare();
 		registry.runAnnotate(shape, ctx);
 
-		final lowering:Lowering = new Lowering(shape, formatInfo, ctx);
-		final rules:Array<GeneratedRule> = lowering.generate();
+		final lowering: Lowering = new Lowering(shape, formatInfo, ctx);
+		final rules: Array<GeneratedRule> = lowering.generate();
 
-		final rootSimple:String = simpleName(shape.root);
-		final rootNode:anyparse.core.ShapeTree.ShapeNode = shape.rules.get(shape.root);
-		final rootTriviaBearing:Bool = ctx.trivia && rootNode != null && rootNode.annotations.get('trivia.bearing') == true;
-		final rootSpansBearing:Bool = ctx.spans && rootNode != null && rootNode.kind != Terminal;
-		final rootReturnCT:ComplexType = if (rootSpansBearing)
-			TPath({pack: packOf(shape.root).concat(['spans']), name: 'Pairs', sub: rootSimple + 'S', params: []});
+		final rootSimple: String = simpleName(shape.root);
+		final rootNode: anyparse.core.ShapeTree.ShapeNode = shape.rules.get(shape.root);
+		final rootTriviaBearing: Bool = ctx.trivia && rootNode != null && rootNode.annotations.get('trivia.bearing') == true;
+		final rootSpansBearing: Bool = ctx.spans && rootNode != null && rootNode.kind != Terminal;
+		final rootReturnCT: ComplexType = if (rootSpansBearing)
+			TPath({
+				pack: packOf(shape.root).concat(['spans']),
+				name: 'Pairs',
+				sub: rootSimple + 'S',
+				params: []
+			});
 		else if (rootTriviaBearing)
-			TPath({pack: packOf(shape.root).concat(['trivia']), name: 'Pairs', sub: rootSimple + 'T', params: []});
+			TPath({
+				pack: packOf(shape.root).concat(['trivia']),
+				name: 'Pairs',
+				sub: rootSimple + 'T',
+				params: []
+			});
 		else
-			TPath({pack: packOf(shape.root), name: rootSimple, params: []});
-		final rootFnName:String = if (rootSpansBearing) 'parse${rootSimple}S';
-		else if (rootTriviaBearing) 'parse${rootSimple}T';
-		else 'parse$rootSimple';
-		final fields:Array<Field> = Codegen.emit(rules, shape.root, rootReturnCT, formatInfo, ctx.trivia, rootFnName);
+			TPath({ pack: packOf(shape.root), name: rootSimple, params: [] });
+		final rootFnName: String = if (rootSpansBearing)
+			'parse${rootSimple}S';
+		else if (rootTriviaBearing)
+			'parse${rootSimple}T';
+		else
+			'parse$rootSimple';
+		final fields: Array<Field> = Codegen.emit(rules, shape.root, rootReturnCT, formatInfo, ctx.trivia, rootFnName);
 
 		#if anyparse_dump
-		final printer:haxe.macro.Printer = new haxe.macro.Printer();
+		final printer: haxe.macro.Printer = new haxe.macro.Printer();
 		for (f in fields) Sys.println('// field: ${printer.printField(f)}');
 		#end
 
@@ -152,11 +165,11 @@ class Build {
 	 * Plain types only: the `*T` trivia/span paired types are not
 	 * generated over (format-preserving transform is a later slice).
 	 */
-	public static macro function buildTransform(target:Expr):Array<Field> {
-		final targetTypePath:String = ExprTools.toString(target);
-		final rootType:Type = Context.getType(targetTypePath);
+	public static macro function buildTransform(target: Expr): Array<Field> {
+		final targetTypePath: String = ExprTools.toString(target);
+		final rootType: Type = Context.getType(targetTypePath);
 
-		final rootMeta:Metadata = switch rootType {
+		final rootMeta: Metadata = switch rootType {
 			case TEnum(ref, _): ref.get().meta.get();
 			case TType(ref, _): ref.get().meta.get();
 			case TAbstract(ref, _): ref.get().meta.get();
@@ -166,28 +179,28 @@ class Build {
 				throw 'unreachable';
 		};
 
-		final schemaTypePath:String = readSchemaMeta(rootMeta, targetTypePath);
-		final formatInfo:FormatReader.FormatInfo = FormatReader.resolve(schemaTypePath);
+		final schemaTypePath: String = readSchemaMeta(rootMeta, targetTypePath);
+		final formatInfo: FormatReader.FormatInfo = FormatReader.resolve(schemaTypePath);
 
-		final shapeBuilder:ShapeBuilder = new ShapeBuilder(formatInfo);
-		final shape:ShapeBuilder.ShapeResult = shapeBuilder.build(rootType);
+		final shapeBuilder: ShapeBuilder = new ShapeBuilder(formatInfo);
+		final shape: ShapeBuilder.ShapeResult = shapeBuilder.build(rootType);
 
-		final result:TransformLowering.TransformResult = new TransformLowering(shape).generate();
-		final fields:Array<Field> = TransformCodegen.emit(result);
+		final result: TransformLowering.TransformResult = new TransformLowering(shape).generate();
+		final fields: Array<Field> = TransformCodegen.emit(result);
 
 		#if anyparse_dump
-		final printer:haxe.macro.Printer = new haxe.macro.Printer();
+		final printer: haxe.macro.Printer = new haxe.macro.Printer();
 		for (f in fields) Sys.println('// transform field: ${printer.printField(f)}');
 		#end
 
 		return fields;
 	}
 
-	public static macro function buildWriter(target:Expr, ?options:Expr, ?buildOptions:Expr):Array<Field> {
-		final targetTypePath:String = ExprTools.toString(target);
-		final rootType:Type = Context.getType(targetTypePath);
+	public static macro function buildWriter(target: Expr, ?options: Expr, ?buildOptions: Expr): Array<Field> {
+		final targetTypePath: String = ExprTools.toString(target);
+		final rootType: Type = Context.getType(targetTypePath);
 
-		final rootMeta:Metadata = switch rootType {
+		final rootMeta: Metadata = switch rootType {
 			case TEnum(ref, _): ref.get().meta.get();
 			case TType(ref, _): ref.get().meta.get();
 			case TAbstract(ref, _): ref.get().meta.get();
@@ -197,29 +210,34 @@ class Build {
 				throw 'unreachable';
 		};
 
-		final schemaTypePath:String = readSchemaMeta(rootMeta, targetTypePath);
-		final formatInfo:FormatReader.FormatInfo = FormatReader.resolve(schemaTypePath);
+		final schemaTypePath: String = readSchemaMeta(rootMeta, targetTypePath);
+		final formatInfo: FormatReader.FormatInfo = FormatReader.resolve(schemaTypePath);
 
-		final optionsTypePath:Null<String> = extractTypePath(options);
+		final optionsTypePath: Null<String> = extractTypePath(options);
 		if (optionsTypePath == null && !formatInfo.isBinary)
-			Context.fatalError('Build.buildWriter: text writer requires an options typedef — '
-				+ 'use @:build(Build.buildWriter($targetTypePath, <OptionsT>))', Context.currentPos());
+			Context.fatalError(
+				'Build.buildWriter: text writer requires an options typedef — '
+				+ 'use @:build(Build.buildWriter($targetTypePath, <OptionsT>))',
+				Context.currentPos()
+			);
 		if (optionsTypePath != null && formatInfo.isBinary)
-			Context.fatalError('Build.buildWriter: binary writer does not accept an options typedef '
-				+ '— drop the second argument', Context.currentPos());
+			Context.fatalError(
+				'Build.buildWriter: binary writer does not accept an options typedef ' + '— drop the second argument',
+				Context.currentPos()
+			);
 
-		final ctx:LoweringCtx = new LoweringCtx();
+		final ctx: LoweringCtx = new LoweringCtx();
 		ctx.mode = Mode.Fast;
 		ctx.trivia = readBoolOption(buildOptions, 'trivia', false);
 		if (ctx.trivia && formatInfo.isBinary)
 			Context.fatalError('Build.buildWriter: {trivia: true} is not supported for binary writers', Context.currentPos());
 
-		final shapeBuilder:ShapeBuilder = new ShapeBuilder(formatInfo);
-		final shape:ShapeBuilder.ShapeResult = shapeBuilder.build(rootType);
+		final shapeBuilder: ShapeBuilder = new ShapeBuilder(formatInfo);
+		final shape: ShapeBuilder.ShapeResult = shapeBuilder.build(rootType);
 		TriviaAnalysis.run(shape);
 		if (ctx.trivia) TriviaTypeSynth.arm(shape);
 
-		final registry:StrategyRegistry = new StrategyRegistry();
+		final registry: StrategyRegistry = new StrategyRegistry();
 		registry.register(new Bin());
 		registry.register(new Kw());
 		registry.register(new Lit());
@@ -232,29 +250,34 @@ class Build {
 		registry.prepare();
 		registry.runAnnotate(shape, ctx);
 
-		final rules:Array<WriterLowering.WriterRule> = if (formatInfo.isBinary)
+		final rules: Array<WriterLowering.WriterRule> = if (formatInfo.isBinary)
 			new BinaryWriterLowering(shape).generate()
 		else
 			new WriterLowering(shape, formatInfo, ctx).generate();
 
-		final rootSimple:String = simpleName(shape.root);
-		final rootNode:anyparse.core.ShapeTree.ShapeNode = shape.rules.get(shape.root);
-		final rootBearing:Bool = ctx.trivia && rootNode != null && rootNode.annotations.get('trivia.bearing') == true;
-		final rootReturnCT:ComplexType = rootBearing
-			? TPath({pack: packOf(shape.root).concat(['trivia']), name: 'Pairs', sub: rootSimple + 'T', params: []})
-			: TPath({pack: packOf(shape.root), name: rootSimple, params: []});
-		final rootFnName:String = rootBearing ? 'write${rootSimple}T' : 'write$rootSimple';
-		final fields:Array<Field> = WriterCodegen.emit(rules, shape.root, rootReturnCT, formatInfo, optionsTypePath, rootFnName);
+		final rootSimple: String = simpleName(shape.root);
+		final rootNode: anyparse.core.ShapeTree.ShapeNode = shape.rules.get(shape.root);
+		final rootBearing: Bool = ctx.trivia && rootNode != null && rootNode.annotations.get('trivia.bearing') == true;
+		final rootReturnCT: ComplexType = rootBearing
+			? TPath({
+				pack: packOf(shape.root).concat(['trivia']),
+				name: 'Pairs',
+				sub: rootSimple + 'T',
+				params: []
+			})
+			: TPath({ pack: packOf(shape.root), name: rootSimple, params: [] });
+		final rootFnName: String = rootBearing ? 'write${rootSimple}T' : 'write$rootSimple';
+		final fields: Array<Field> = WriterCodegen.emit(rules, shape.root, rootReturnCT, formatInfo, optionsTypePath, rootFnName);
 
 		#if anyparse_dump
-		final printer:haxe.macro.Printer = new haxe.macro.Printer();
+		final printer: haxe.macro.Printer = new haxe.macro.Printer();
 		for (f in fields) Sys.println('// writer field: ${printer.printField(f)}');
 		#end
 
 		return fields;
 	}
 
-	private static function extractTypePath(e:Null<Expr>):Null<String> {
+	private static function extractTypePath(e: Null<Expr>): Null<String> {
 		if (e == null) return null;
 		// Haxe passes a null-literal Expr (`EConst(CIdent("null"))`) when the
 		// caller omits an optional macro arg at a `@:build(...)` meta call,
@@ -273,33 +296,29 @@ class Build {
 	 * fields are expected to be compile-time constants at the
 	 * meta-call site.
 	 */
-	private static function readBoolOption(options:Null<Expr>, fieldName:String, defaultValue:Bool):Bool {
+	private static function readBoolOption(options: Null<Expr>, fieldName: String, defaultValue: Bool): Bool {
 		if (options == null) return defaultValue;
 		return switch options.expr {
 			case EConst(CIdent('null')): defaultValue;
 			case EObjectDecl(fields):
 				for (f in fields) if (f.field == fieldName) {
 					switch f.expr.expr {
-						case EConst(CIdent('true')): return true;
-						case EConst(CIdent('false')): return false;
+						case EConst(CIdent('true')):
+							return true;
+						case EConst(CIdent('false')):
+							return false;
 						case _:
-							Context.fatalError(
-								'Build: option "$fieldName" must be a literal `true` or `false`',
-								f.expr.pos
-							);
+							Context.fatalError('Build: option "$fieldName" must be a literal `true` or `false`', f.expr.pos);
 					}
 				}
 				defaultValue;
 			case _:
-				Context.fatalError(
-					'Build: options argument must be an anonymous-struct literal (e.g. `{trivia: true}`)',
-					options.pos
-				);
+				Context.fatalError('Build: options argument must be an anonymous-struct literal (e.g. `{trivia: true}`)', options.pos);
 				throw 'unreachable';
 		};
 	}
 
-	private static function readSchemaMeta(meta:Metadata, targetTypePath:String):String {
+	private static function readSchemaMeta(meta: Metadata, targetTypePath: String): String {
 		for (entry in meta) if (entry.name == ':schema') {
 			if (entry.params.length != 1) {
 				Context.fatalError('@:schema expects exactly one argument', entry.pos);
@@ -310,14 +329,15 @@ class Build {
 		throw 'unreachable';
 	}
 
-	private static function simpleName(typePath:String):String {
-		final idx:Int = typePath.lastIndexOf('.');
+	private static function simpleName(typePath: String): String {
+		final idx: Int = typePath.lastIndexOf('.');
 		return idx == -1 ? typePath : typePath.substring(idx + 1);
 	}
 
-	private static function packOf(typePath:String):Array<String> {
-		final idx:Int = typePath.lastIndexOf('.');
+	private static function packOf(typePath: String): Array<String> {
+		final idx: Int = typePath.lastIndexOf('.');
 		return idx == -1 ? [] : typePath.substring(0, idx).split('.');
 	}
+
 }
 #end

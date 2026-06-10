@@ -43,9 +43,11 @@ package anyparse.grammar.haxe;
  */
 @:peg
 enum HxSwitchCase {
+
 	@:kw('case') @:fmt(forwardNewlineForBody, deferKwSpace)
-	CaseBranch(branch:HxCaseBranch);
+	CaseBranch(branch: HxCaseBranch);
 
 	@:kw('default')
-	DefaultBranch(branch:HxDefaultBranch);
+	DefaultBranch(branch: HxDefaultBranch);
+
 }

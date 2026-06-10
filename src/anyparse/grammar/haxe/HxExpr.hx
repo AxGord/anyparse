@@ -334,281 +334,285 @@ package anyparse.grammar.haxe;
 @:peg
 enum HxExpr {
 
-	HexLit(v:HxHexLit);
+	HexLit(v: HxHexLit);
 
-	FloatLit(v:HxFloatLit);
+	FloatLit(v: HxFloatLit);
 
-	IntLit(v:HxIntLit);
+	IntLit(v: HxIntLit);
 
 	@:lit('true', 'false')
-	BoolLit(v:Bool);
+	BoolLit(v: Bool);
 
 	@:lit('null')
 	NullLit;
 
-	DoubleStringExpr(v:HxDoubleStringLit);
+	DoubleStringExpr(v: HxDoubleStringLit);
 
-	SingleStringExpr(v:HxInterpString);
+	SingleStringExpr(v: HxInterpString);
 
-	RegexLit(v:HxRegexLit);
+	RegexLit(v: HxRegexLit);
 
 	@:lead("${") @:trail("}")
-	DollarBlockExpr(expr:HxExpr);
+	DollarBlockExpr(expr: HxExpr);
 
 	@:lead("$") @:trail("}")
-	DollarReifExpr(v:HxDollarReif);
+	DollarReifExpr(v: HxDollarReif);
 
 	@:lead("$")
-	DollarIdentExpr(name:HxIdentLit);
+	DollarIdentExpr(name: HxIdentLit);
 
-	@:trivia @:lead('[') @:trail(']') @:sep(',') @:fmt(trailingComma('trailingCommaArrays'), wrapRules('arrayLiteralWrap'), reflowSourceMultiline, bracketKindPad, arrayMatrixWrap, propagateExprPosition)
-	ArrayExpr(elems:Array<HxExpr>);
+	@:trivia @:lead('[') @:trail(']') @:sep(',') @:fmt(trailingComma('trailingCommaArrays'), wrapRules('arrayLiteralWrap'),
+		reflowSourceMultiline, bracketKindPad, arrayMatrixWrap, propagateExprPosition)
+	ArrayExpr(elems: Array<HxExpr>);
 
-	ObjectLit(lit:HxObjectLit);
+	ObjectLit(lit: HxObjectLit);
 
-	@:fmt(leftCurly('blockLeftCurly'), leftCurlyAnonFnOverride('anonFunctionLeftCurly'), emptyCurlyBreak('blockEmptyCurly'), rightCurly('blockRightCurly'), keepCurlyBlanks, clearExprPositionNonTail)
+	@:fmt(leftCurly('blockLeftCurly'), leftCurlyAnonFnOverride('anonFunctionLeftCurly'), emptyCurlyBreak('blockEmptyCurly'),
+		rightCurly('blockRightCurly'), keepCurlyBlanks, clearExprPositionNonTail)
 	@:lead('{') @:trail('}') @:trivia
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
-	BlockExpr(stmts:Array<HxStatement>);
+	BlockExpr(stmts: Array<HxStatement>);
 
-	ThinParenLambdaExpr(lambda:HxThinParenLambda);
+	ThinParenLambdaExpr(lambda: HxThinParenLambda);
 
-	ParenLambdaExpr(lambda:HxParenLambda);
+	ParenLambdaExpr(lambda: HxParenLambda);
 
-	ECheckTypeExpr(info:HxECheckType);
+	ECheckTypeExpr(info: HxECheckType);
 
 	@:wrap('(', ')') @:fmt(captureWrapOpenNewline, propagateExprPosition, expressionParenHardFlatten)
-	ParenExpr(inner:HxExpr);
+	ParenExpr(inner: HxExpr);
 
 	@:kw('new')
-	NewExpr(expr:HxNewExpr);
+	NewExpr(expr: HxNewExpr);
 
 	@:kw('if') @:fmt(ifPolicy)
-	IfExpr(stmt:HxIfExpr);
+	IfExpr(stmt: HxIfExpr);
 
 	@:kw('for') @:fmt(forPolicy)
-	ForExpr(stmt:HxForExpr);
+	ForExpr(stmt: HxForExpr);
 
 	@:kw('while') @:fmt(whilePolicy)
-	WhileExpr(stmt:HxWhileExpr);
+	WhileExpr(stmt: HxWhileExpr);
 
 	@:kw('switch') @:fmt(switchPolicy, propagateExprPosition)
-	SwitchExpr(stmt:HxSwitchStmt);
+	SwitchExpr(stmt: HxSwitchStmt);
 
 	@:kw('switch') @:fmt(switchPolicy, propagateExprPosition)
-	SwitchExprBare(stmt:HxSwitchStmtBare);
+	SwitchExprBare(stmt: HxSwitchStmtBare);
 
 	@:kw('try')
-	TryExpr(stmt:HxTryCatchExpr);
+	TryExpr(stmt: HxTryCatchExpr);
 
 	@:kw('untyped')
-	UntypedExpr(operand:HxExpr);
+	UntypedExpr(operand: HxExpr);
 
 	@:kw('untyped')
 	UntypedAtom;
 
 	@:kw('macro') @:lead(':') @:fmt(spaceBeforeLead)
-	MacroTypeExpr(t:HxType);
+	MacroTypeExpr(t: HxType);
 
 	@:kw('macro')
-	MacroClassExpr(v:HxMacroClass);
+	MacroClassExpr(v: HxMacroClass);
 
 	@:kw('macro') @:fmt(clearExprPosition)
-	MacroExpr(operand:HxExpr);
+	MacroExpr(operand: HxExpr);
 
 	@:kw('var')
-	VarExpr(decl:HxVarDecl);
+	VarExpr(decl: HxVarDecl);
 
 	@:kw('final')
-	FinalExpr(decl:HxVarDecl);
+	FinalExpr(decl: HxVarDecl);
 
 	@:kw('cast') @:fmt(tightKw)
-	TypedCastExpr(info:HxTypedCast);
+	TypedCastExpr(info: HxTypedCast);
 
 	@:kw('cast') @:fmt(atomOperand, tightOnParenOperand('ParenExpr', 'ECheckTypeExpr'))
-	CastExpr(operand:HxExpr);
+	CastExpr(operand: HxExpr);
 
 	@:kw('return') @:fmt(propagateExprPosition)
-	ReturnExpr(value:HxExpr);
+	ReturnExpr(value: HxExpr);
 
 	@:kw('throw')
-	ThrowExpr(value:HxExpr);
+	ThrowExpr(value: HxExpr);
 
 	@:kw('inline')
-	InlineExpr(operand:HxExpr);
+	InlineExpr(operand: HxExpr);
 
 	@:kw('function')
-	NamedFnExpr(decl:HxFnDecl);
+	NamedFnExpr(decl: HxFnDecl);
 
 	@:kw('function') @:fmt(anonFuncParens)
-	FnExpr(fn:HxFnExpr);
+	FnExpr(fn: HxFnExpr);
 
 	@:kw('#if') @:trail('#end')
-	ConditionalExpr(inner:HxConditionalExpr);
+	ConditionalExpr(inner: HxConditionalExpr);
 
-	MetaExpr(v:HxMetaExpr);
+	MetaExpr(v: HxMetaExpr);
 
-	IdentExpr(v:HxIdentLit);
+	IdentExpr(v: HxIdentLit);
 
 	@:prefix('++')
-	PreIncr(operand:HxExpr);
+	PreIncr(operand: HxExpr);
 
 	@:prefix('--')
-	PreDecr(operand:HxExpr);
+	PreDecr(operand: HxExpr);
 
 	@:prefix('-')
-	Neg(operand:HxExpr);
+	Neg(operand: HxExpr);
 
 	@:prefix('!')
-	Not(operand:HxExpr);
+	Not(operand: HxExpr);
 
 	@:prefix('~')
-	BitNot(operand:HxExpr);
+	BitNot(operand: HxExpr);
 
 	@:prefix('...') @:fmt(tight)
-	Spread(operand:HxExpr);
+	Spread(operand: HxExpr);
 
 	@:postfix('.') @:fmt(methodChain('methodChainWrap'), captureChainNewline)
-	FieldAccess(operand:HxExpr, field:HxFieldNameLit);
+	FieldAccess(operand: HxExpr, field: HxFieldNameLit);
 
 	@:postfix('?.')
-	SafeFieldAccess(operand:HxExpr, field:HxFieldNameLit);
+	SafeFieldAccess(operand: HxExpr, field: HxFieldNameLit);
 
 	@:postfix('!.')
-	ForceFieldAccess(operand:HxExpr, field:HxFieldNameLit);
+	ForceFieldAccess(operand: HxExpr, field: HxFieldNameLit);
 
 	@:postfix('[', ']') @:fmt(accessBrackets)
-	IndexAccess(operand:HxExpr, index:HxExpr);
+	IndexAccess(operand: HxExpr, index: HxExpr);
 
-	@:postfix('(', ')') @:sep(',') @:fmt(trailingComma('trailingCommaArgs'), callParens, callParensInside, wrapRules('callParameterWrap'), methodChain('methodChainWrap'), propagateExprPosition, callArgChainNest)
-	Call(operand:HxExpr, args:Array<HxExpr>);
+	@:postfix('(', ')') @:sep(',') @:fmt(trailingComma('trailingCommaArgs'), callParens, callParensInside, wrapRules('callParameterWrap'),
+		methodChain('methodChainWrap'), propagateExprPosition, callArgChainNest)
+	Call(operand: HxExpr, args: Array<HxExpr>);
 
 	@:postfix('++')
-	PostIncr(operand:HxExpr);
+	PostIncr(operand: HxExpr);
 
 	@:postfix('--')
-	PostDecr(operand:HxExpr);
+	PostDecr(operand: HxExpr);
 
 	@:infix('*', 9)
-	Mul(left:HxExpr, right:HxExpr);
+	Mul(left: HxExpr, right: HxExpr);
 
 	@:infix('/', 9)
-	Div(left:HxExpr, right:HxExpr);
+	Div(left: HxExpr, right: HxExpr);
 
 	@:infix('%', 9)
-	Mod(left:HxExpr, right:HxExpr);
+	Mod(left: HxExpr, right: HxExpr);
 
 	@:infix('+', 8) @:fmt(captureChainNewline)
-	Add(left:HxExpr, right:HxExpr);
+	Add(left: HxExpr, right: HxExpr);
 
 	@:infix('-', 8) @:fmt(captureChainNewline)
-	Sub(left:HxExpr, right:HxExpr);
+	Sub(left: HxExpr, right: HxExpr);
 
 	@:infix('<<', 7)
-	Shl(left:HxExpr, right:HxExpr);
+	Shl(left: HxExpr, right: HxExpr);
 
 	@:infix('>>>', 7)
-	UShr(left:HxExpr, right:HxExpr);
+	UShr(left: HxExpr, right: HxExpr);
 
 	@:infix('>>', 7)
-	Shr(left:HxExpr, right:HxExpr);
+	Shr(left: HxExpr, right: HxExpr);
 
 	@:infix('|', 6)
-	BitOr(left:HxExpr, right:HxExpr);
+	BitOr(left: HxExpr, right: HxExpr);
 
 	@:infix('&', 6)
-	BitAnd(left:HxExpr, right:HxExpr);
+	BitAnd(left: HxExpr, right: HxExpr);
 
 	@:infix('^', 6)
-	BitXor(left:HxExpr, right:HxExpr);
+	BitXor(left: HxExpr, right: HxExpr);
 
 	@:infix('==', 5)
-	Eq(left:HxExpr, right:HxExpr);
+	Eq(left: HxExpr, right: HxExpr);
 
 	@:infix('!=', 5)
-	NotEq(left:HxExpr, right:HxExpr);
+	NotEq(left: HxExpr, right: HxExpr);
 
 	@:infix('<=', 5)
-	LtEq(left:HxExpr, right:HxExpr);
+	LtEq(left: HxExpr, right: HxExpr);
 
 	@:infix('>=', 5)
-	GtEq(left:HxExpr, right:HxExpr);
+	GtEq(left: HxExpr, right: HxExpr);
 
 	@:infix('<', 5)
-	Lt(left:HxExpr, right:HxExpr);
+	Lt(left: HxExpr, right: HxExpr);
 
 	@:infix('>', 5)
-	Gt(left:HxExpr, right:HxExpr);
+	Gt(left: HxExpr, right: HxExpr);
 
 	@:infix('...', 5) @:fmt(tight)
-	Interval(left:HxExpr, right:HxExpr);
+	Interval(left: HxExpr, right: HxExpr);
 
 	@:infix('is', 5)
-	Is(left:HxExpr, right:HxType);
+	Is(left: HxExpr, right: HxType);
 
 	@:infix('&&', 4) @:fmt(captureChainNewline)
-	And(left:HxExpr, right:HxExpr);
+	And(left: HxExpr, right: HxExpr);
 
 	@:infix('||', 3) @:fmt(captureChainNewline)
-	Or(left:HxExpr, right:HxExpr);
+	Or(left: HxExpr, right: HxExpr);
 
 	@:infix('??', 2, 'Right')
-	NullCoal(left:HxExpr, right:HxExpr);
+	NullCoal(left: HxExpr, right: HxExpr);
 
 	@:ternary('?', ':', 1)
-	Ternary(cond:HxExpr, thenExpr:HxExpr, elseExpr:HxExpr);
+	Ternary(cond: HxExpr, thenExpr: HxExpr, elseExpr: HxExpr);
 
 	@:infix('in', 0)
-	In(left:HxExpr, right:HxExpr);
+	In(left: HxExpr, right: HxExpr);
 
 	@:infix('=', 0, 'Right') @:fmt(propagateExprPosition)
-	Assign(left:HxExpr, right:HxExpr);
+	Assign(left: HxExpr, right: HxExpr);
 
 	@:infix('+=', 0, 'Right') @:fmt(propagateExprPosition)
-	AddAssign(left:HxExpr, right:HxExpr);
+	AddAssign(left: HxExpr, right: HxExpr);
 
 	@:infix('-=', 0, 'Right') @:fmt(propagateExprPosition)
-	SubAssign(left:HxExpr, right:HxExpr);
+	SubAssign(left: HxExpr, right: HxExpr);
 
 	@:infix('*=', 0, 'Right') @:fmt(propagateExprPosition)
-	MulAssign(left:HxExpr, right:HxExpr);
+	MulAssign(left: HxExpr, right: HxExpr);
 
 	@:infix('/=', 0, 'Right') @:fmt(propagateExprPosition)
-	DivAssign(left:HxExpr, right:HxExpr);
+	DivAssign(left: HxExpr, right: HxExpr);
 
 	@:infix('%=', 0, 'Right') @:fmt(propagateExprPosition)
-	ModAssign(left:HxExpr, right:HxExpr);
+	ModAssign(left: HxExpr, right: HxExpr);
 
 	@:infix('<<=', 0, 'Right') @:fmt(propagateExprPosition)
-	ShlAssign(left:HxExpr, right:HxExpr);
+	ShlAssign(left: HxExpr, right: HxExpr);
 
 	@:infix('>>>=', 0, 'Right') @:fmt(propagateExprPosition)
-	UShrAssign(left:HxExpr, right:HxExpr);
+	UShrAssign(left: HxExpr, right: HxExpr);
 
 	@:infix('>>=', 0, 'Right') @:fmt(propagateExprPosition)
-	ShrAssign(left:HxExpr, right:HxExpr);
+	ShrAssign(left: HxExpr, right: HxExpr);
 
 	@:infix('|=', 0, 'Right') @:fmt(propagateExprPosition)
-	BitOrAssign(left:HxExpr, right:HxExpr);
+	BitOrAssign(left: HxExpr, right: HxExpr);
 
 	@:infix('&=', 0, 'Right') @:fmt(propagateExprPosition)
-	BitAndAssign(left:HxExpr, right:HxExpr);
+	BitAndAssign(left: HxExpr, right: HxExpr);
 
 	@:infix('^=', 0, 'Right') @:fmt(propagateExprPosition)
-	BitXorAssign(left:HxExpr, right:HxExpr);
+	BitXorAssign(left: HxExpr, right: HxExpr);
 
 	@:infix('??=', 0, 'Right') @:fmt(propagateExprPosition)
-	NullCoalAssign(left:HxExpr, right:HxExpr);
+	NullCoalAssign(left: HxExpr, right: HxExpr);
 
 	@:infix('&&=', 0, 'Right') @:fmt(propagateExprPosition)
-	BoolAndAssign(left:HxExpr, right:HxExpr);
+	BoolAndAssign(left: HxExpr, right: HxExpr);
 
 	@:infix('||=', 0, 'Right') @:fmt(propagateExprPosition)
-	BoolOrAssign(left:HxExpr, right:HxExpr);
+	BoolOrAssign(left: HxExpr, right: HxExpr);
 
 	@:infix('->', 0, 'Right') @:fmt(propagateExprPosition)
-	ThinArrow(left:HxExpr, right:HxExpr);
+	ThinArrow(left: HxExpr, right: HxExpr);
 
 	@:infix('=>', 0, 'Right') @:fmt(propagateExprPosition)
-	Arrow(left:HxExpr, right:HxExpr);
+	Arrow(left: HxExpr, right: HxExpr);
+
 }

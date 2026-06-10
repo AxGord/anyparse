@@ -351,60 +351,59 @@ package anyparse.grammar.haxe;
  */
 @:peg
 enum HxStatement {
+
 	@:kw('static') @:lead('var') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'), captureKwNewline)
-	StaticVarStmt(decl:HxVarDecl);
+	StaticVarStmt(decl: HxVarDecl);
 
 	@:kw('static') @:lead('final') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'), captureKwNewline)
-	StaticFinalStmt(decl:HxVarDecl);
+	StaticFinalStmt(decl: HxVarDecl);
 
 	@:kw('var') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'), deferKwSpace, captureKwNewline)
-	VarStmt(decl:HxVarDecl);
+	VarStmt(decl: HxVarDecl);
 
 	@:kw('final') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'), deferKwSpace, captureKwNewline)
-	FinalStmt(decl:HxVarDecl);
+	FinalStmt(decl: HxVarDecl);
 
 	@:kw('return') @:trailOpt(';')
 	@:fmt(bodyPolicy('returnBody'),
-		bodyPolicySingleLine('returnBodySingleLine', 'IfExpr', 'ForExpr', 'WhileExpr', 'SwitchExpr', 'SwitchExprBare', 'TryExpr', 'BlockExpr'),
-		indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'),
-		indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'),
-		widthAware,
-		captureKwNewline,
-		propagateExprPosition)
-	ReturnStmt(value:HxExpr);
+		bodyPolicySingleLine(
+			'returnBodySingleLine', 'IfExpr', 'ForExpr', 'WhileExpr', 'SwitchExpr', 'SwitchExprBare', 'TryExpr', 'BlockExpr'
+		), indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'),
+		indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'), widthAware, captureKwNewline, propagateExprPosition)
+	ReturnStmt(value: HxExpr);
 
 	@:kw('return') @:trail(';')
 	VoidReturnStmt;
 
 	@:kw('if') @:fmt(ifPolicy)
-	IfStmt(stmt:HxIfStmt);
+	IfStmt(stmt: HxIfStmt);
 
 	@:kw('while') @:fmt(whilePolicy)
-	WhileStmt(stmt:HxWhileStmt);
+	WhileStmt(stmt: HxWhileStmt);
 
 	@:kw('for') @:fmt(forPolicy)
-	ForStmt(stmt:HxForStmt);
+	ForStmt(stmt: HxForStmt);
 
 	@:kw('switch') @:fmt(switchPolicy)
-	SwitchStmt(stmt:HxSwitchStmt);
+	SwitchStmt(stmt: HxSwitchStmt);
 
 	@:kw('switch') @:fmt(switchPolicy)
-	SwitchStmtBare(stmt:HxSwitchStmtBare);
+	SwitchStmtBare(stmt: HxSwitchStmtBare);
 
 	@:kw('throw') @:trail(';') @:fmt(bodyPolicy('throwBody'))
-	ThrowStmt(expr:HxExpr);
+	ThrowStmt(expr: HxExpr);
 
 	@:kw('do') @:trail(';')
-	DoWhileStmt(stmt:HxDoWhileStmt);
+	DoWhileStmt(stmt: HxDoWhileStmt);
 
 	@:kw('try') @:fmt(tryPolicy, forwardNewlineForBody)
-	TryCatchStmt(stmt:HxTryCatchStmt);
+	TryCatchStmt(stmt: HxTryCatchStmt);
 
 	@:kw('try') @:trail(';')
-	TryCatchStmtBare(stmt:HxTryCatchStmtBare);
+	TryCatchStmtBare(stmt: HxTryCatchStmtBare);
 
 	@:fmt(blockShape)
-	UntypedBlockStmt(body:HxUntypedFnBody);
+	UntypedBlockStmt(body: HxUntypedFnBody);
 
 	/**
 	 * `#error "msg"` / `#error 'msg'` preprocessor directive at
@@ -416,21 +415,22 @@ enum HxStatement {
 	 * `HxDecl.ErrorDecl` for the shared rationale.
 	 */
 	@:kw('#error')
-	ErrorStmt(message:HxErrorMsg);
+	ErrorStmt(message: HxErrorMsg);
 
 	@:kw('#if') @:trail('#end') @:fmt(sharpCondParensGap, conditionalMarkerDedent)
-	Conditional(inner:HxConditionalStmt);
+	Conditional(inner: HxConditionalStmt);
 
 	@:kw('function')
-	LocalFnStmt(decl:HxFnDecl);
+	LocalFnStmt(decl: HxFnDecl);
 
 	@:kw('inline') @:lead('function')
-	LocalInlineFnStmt(decl:HxFnDecl);
+	LocalInlineFnStmt(decl: HxFnDecl);
 
-	@:fmt(leftCurly('blockLeftCurly'), emptyCurlyBreak('blockEmptyCurly'), rightCurly('blockRightCurly'), keepCurlyBlanks, clearExprPositionNonTail)
+	@:fmt(leftCurly('blockLeftCurly'), emptyCurlyBreak('blockEmptyCurly'), rightCurly('blockRightCurly'), keepCurlyBlanks,
+		clearExprPositionNonTail)
 	@:lead('{') @:trail('}') @:trivia
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
-	BlockStmt(stmts:Array<HxStatement>);
+	BlockStmt(stmts: Array<HxStatement>);
 
 	@:lit(';')
 	EmptyStmt;
@@ -463,5 +463,6 @@ enum HxStatement {
 	EllipsisStmt;
 
 	@:trailOpt(';') @:fmt(trailOptParseGate('stmtExprNoSemi'))
-	ExprStmt(expr:HxExpr);
+	ExprStmt(expr: HxExpr);
+
 }

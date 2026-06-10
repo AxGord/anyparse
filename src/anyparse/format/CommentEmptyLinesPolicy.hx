@@ -32,4 +32,5 @@ enum abstract CommentEmptyLinesPolicy(Int) from Int to Int {
 	final None = 1;
 
 	final One = 2;
+
 }

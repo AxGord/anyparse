@@ -46,4 +46,5 @@ enum abstract BodyPolicy(Int) from Int to Int {
 	final FitLine = 2;
 
 	final Keep = 3;
+
 }

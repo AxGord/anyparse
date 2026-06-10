@@ -26,4 +26,5 @@ enum abstract SameLinePolicy(Int) from Int to Int {
 	final Next = 1;
 
 	final Keep = 2;
+
 }

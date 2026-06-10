@@ -54,7 +54,8 @@ package anyparse.grammar.haxe;
 enum HxObjectField {
 
 	@:kw('#if') @:trail('#end')
-	Conditional(inner:HxConditionalObjectField);
+	Conditional(inner: HxConditionalObjectField);
 
-	Field(body:HxObjectFieldBody);
+	Field(body: HxObjectFieldBody);
+
 }

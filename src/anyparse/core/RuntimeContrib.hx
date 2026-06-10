@@ -14,8 +14,8 @@ import haxe.macro.Expr;
  * into the final generated parser class.
  */
 typedef RuntimeContrib = {
-	ctxFields:Array<Field>,
-	helpers:Array<Field>,
-	cacheKeyContributors:Array<Expr>,
+	ctxFields: Array<Field>,
+	helpers: Array<Field>,
+	cacheKeyContributors: Array<Expr>
 };
 #end
