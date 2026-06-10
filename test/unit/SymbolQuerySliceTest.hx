@@ -104,6 +104,43 @@ class SymbolQuerySliceTest extends Test {
 		Assert.equals('pkg.Good', rows[0].qualified);
 	}
 
+	/**
+	 * `declares` returns the declaration site(s) of one named type by its
+	 * simple name OR its fully qualified import path, and an empty result
+	 * when the type is not declared in the scope.
+	 */
+	public function testDeclares():Void {
+		final files = [
+			{file: 'src/pkg/A.hx', source: 'package pkg;\nclass A {}\ntypedef Helper = {};'},
+			{file: 'src/pkg/B.hx', source: 'package pkg;\nclass B {}'},
+		];
+		// Simple-name match resolves the unique decl.
+		final byName:Array<SymbolRow> = SymbolQuery.declares(files, plugin(), 'A');
+		Assert.equals(1, byName.length);
+		Assert.equals('pkg.A', byName[0].qualified);
+		Assert.equals(2, byName[0].line);
+
+		// Fully qualified path matches the same sub-type the symbols listing uses.
+		final byQualified:Array<SymbolRow> = SymbolQuery.declares(files, plugin(), 'pkg.A.Helper');
+		Assert.equals(1, byQualified.length);
+		Assert.equals('TypedefDecl', byQualified[0].kind);
+
+		// A name not declared in the scope yields no rows (caller reports it).
+		Assert.equals(0, SymbolQuery.declares(files, plugin(), 'Missing').length);
+	}
+
+	/** Two decls of the same simple name across files are an ambiguity — both rows returned. */
+	public function testDeclaresAmbiguous():Void {
+		final files = [
+			{file: 'src/one/Dup.hx', source: 'package one;\nclass Dup {}'},
+			{file: 'src/two/Dup.hx', source: 'package two;\nclass Dup {}'},
+		];
+		final rows:Array<SymbolRow> = SymbolQuery.declares(files, plugin(), 'Dup');
+		Assert.equals(2, rows.length);
+		Assert.equals('one.Dup', rows[0].qualified);
+		Assert.equals('two.Dup', rows[1].qualified);
+	}
+
 	private static function plugin():HaxeQueryPlugin {
 		return new HaxeQueryPlugin();
 	}

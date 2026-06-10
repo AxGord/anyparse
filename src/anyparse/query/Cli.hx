@@ -365,6 +365,8 @@ final class Cli {
 				return runSymbols(rest);
 			case 'importers':
 				return runImporters(rest);
+			case 'declares':
+				return runDeclares(rest);
 			case 'inline':
 				return runInline(rest);
 			case 'inline-method':
@@ -964,6 +966,75 @@ final class Cli {
 
 		final hits: Array<String> = SymbolQuery.importers(files, plugin, modulePath);
 		for (path in hits) sysPrint('$path\n');
+		return EXIT_OK;
+	}
+
+	/**
+	 * `apq declares <type> <scope> [--lang <name>]` — the declaration
+	 * site(s) of the type named `<type>` across `<scope>` (one or more
+	 * file/dir/glob specs), matching either the simple name or the fully
+	 * qualified import path. Each site prints as
+	 * `qualified<TAB>kind<TAB>file:line:col` on stdout. More than one is an
+	 * ambiguity (two decls of the same name) and zero means the type is not
+	 * declared in the scope — both are reported on stderr so stdout stays a
+	 * clean row list. The focused, single-type counterpart of `symbols`.
+	 */
+	private static function runDeclares(args: Array<String>): Int {
+		var lang: String = 'haxe';
+		var typeName: Null<String> = null;
+		final inputSpecs: Array<String> = [];
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '-h', '--help':
+					printDeclaresUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq declares: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (typeName == null)
+						typeName = a;
+					else
+						inputSpecs.push(a);
+			}
+			i++;
+		}
+		if (typeName == null || inputSpecs.length == 0) {
+			stderr('apq declares: expected <type> <scope> (one or more file/dir/glob specs)\n');
+			printDeclaresUsage();
+			return EXIT_USAGE;
+		}
+
+		final name: String = typeName;
+		final plugin: GrammarPlugin = pickPlugin(lang);
+		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
+		final paths: Array<String> = expanded.paths;
+		if (paths.length == 0) {
+			stderr('apq declares: ${inputSpecs.join(", ")} matched no .hx files\n');
+			return EXIT_RUNTIME;
+		}
+
+		final files: Array<{ file: String, source: String }> = [];
+		for (path in paths) {
+			final fileSource: String = try readSourceForParse(path) catch (exception: Exception) {
+				stderr('apq declares: $path: ${exception.message}\n');
+				return EXIT_RUNTIME;
+			};
+			files.push({ file: path, source: fileSource });
+		}
+
+		final rows: Array<SymbolQuery.SymbolRow> = SymbolQuery.declares(files, plugin, name);
+		if (rows.length == 0)
+			stderr('apq declares: no type named "$name" in ${inputSpecs.join(", ")}\n');
+		else if (rows.length > 1)
+			stderr('apq declares: ambiguous — ${rows.length} declarations of "$name"\n');
+		for (row in rows) sysPrint('${SymbolQuery.formatSymbolRow(row)}\n');
 		return EXIT_OK;
 	}
 
@@ -7957,6 +8028,7 @@ final class Cli {
 		sysPrint('  move          Move a type declaration to another file (same package)\n');
 		sysPrint('  symbols       List top-level type declarations across a scope (cross-file)\n');
 		sysPrint('  importers     List files importing a given module (cross-file)\n');
+		sysPrint('  declares      Declaration site(s) of one named type (ambiguity check)\n');
 		sysPrint('  inline        Inline a local variable into its uses\n');
 		sysPrint('  inline-method Inline a single-return function into its call sites + delete it\n');
 		sysPrint('  extract-var   Hoist an expression into a new local final\n');
@@ -8009,6 +8081,20 @@ final class Cli {
 		sysPrint('List the files in the scope (file/dir/glob specs after the module) that\n');
 		sysPrint('import <module> — the module itself or one of its sub-types. A wildcard\n');
 		sysPrint('import pkg.*; is not counted.\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
+		sysPrint('  -h, --help      Show this help\n');
+	}
+
+	private static function printDeclaresUsage(): Void {
+		sysPrint('Usage: apq declares <type> <scope...> [options]\n');
+		sysPrint('\n');
+		sysPrint('Print the declaration site(s) of the type named <type> across the scope\n');
+		sysPrint('(file/dir/glob specs after the type), matching the simple name or the fully\n');
+		sysPrint('qualified import path. Each row is qualified<TAB>kind<TAB>file:line:col. More\n');
+		sysPrint('than one row is an ambiguity; zero means the type is not declared in the\n');
+		sysPrint('scope. The focused, single-type counterpart of symbols.\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');

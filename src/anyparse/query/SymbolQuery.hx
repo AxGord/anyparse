@@ -88,6 +88,20 @@ final class SymbolQuery {
 		return [for (info in index.filesImportingModule(modulePath)) info.file];
 	}
 
+	/**
+	 * The declaration site(s) of the type named `typeName` across `files`,
+	 * matching either the simple name or the fully qualified import path —
+	 * the focused, single-type counterpart of `symbols`. More than one row
+	 * means the name is ambiguous in this scope (two decls of the same type
+	 * name); an empty result means it is not declared here. Built on
+	 * `symbols`, so the same coordinate and skip-parse rules apply.
+	 */
+	public static function declares(
+		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, typeName: String
+	): Array<SymbolRow> {
+		return symbols(files, plugin).filter(row -> row.name == typeName || row.qualified == typeName);
+	}
+
 	/** Render a `SymbolRow` as `qualified<TAB>kind<TAB>file:line:col`. */
 	public static function formatSymbolRow(row: SymbolRow): String {
 		return '${row.qualified}\t${row.kind}\t${row.file}:${row.line}:${row.col}';
