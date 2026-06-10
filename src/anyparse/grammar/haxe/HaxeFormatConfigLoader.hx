@@ -1578,6 +1578,26 @@ final class HaxeFormatConfigLoader {
 	}
 
 	/**
+	 * ω-condition-parens (Stage C): map a condition-paren `openingPolicy`'s
+	 * `after` sub-policy (gap AFTER the `(` = inner `( ` pad) onto the
+	 * `WhitespacePolicy` consumed by the `*InsideOpen` knobs through
+	 * `whitespacePolicyLead`. Only the after-`(` component belongs to the
+	 * inner pad — the before-`(` component is the kw→`(` gap, already owned by
+	 * `parenGapToKwAfter`. `After`/`OnlyAfter`/`Around`/`NoneBefore` carry an
+	 * inner space → `After`; everything else (incl. `Before`/`OnlyBefore`) →
+	 * `None`. Without this split a `before`/`around` policy would also emit a
+	 * space BEFORE the `(` via the inner-pad knob, stacking with the gap into a
+	 * double `catch  (` / `switch  (` / `} while  (`.
+	 */
+	private static function parenOpeningToInnerPad(policy: HxFormatWhitespacePolicy): WhitespacePolicy {
+		return switch policy {
+			case HxFormatWhitespacePolicy.After | HxFormatWhitespacePolicy.OnlyAfter | HxFormatWhitespacePolicy.Around
+				| HxFormatWhitespacePolicy.NoneBefore: WhitespacePolicy.After;
+			case _: WhitespacePolicy.None;
+		};
+	}
+
+	/**
 	 * ω-condition-parens (Stage C): apply one `parenConfig` condition-paren
 	 * section to `opt`. `category` is null for the `conditionParens`
 	 * catch-all (fans out to if / while / switch / sharp simultaneously),
@@ -1595,7 +1615,7 @@ final class HaxeFormatConfigLoader {
 		final opening: Null<HxFormatWhitespacePolicy> = section.openingPolicy;
 		final closing: Null<HxFormatWhitespacePolicy> = section.closingPolicy;
 		final gap: Null<WhitespacePolicy> = opening != null ? parenGapToKwAfter(opening) : null;
-		final insideOpen: Null<WhitespacePolicy> = opening != null ? whitespaceToRuntime(opening) : null;
+		final insideOpen: Null<WhitespacePolicy> = opening != null ? parenOpeningToInnerPad(opening) : null;
 		final insideClose: Null<WhitespacePolicy> = closing != null ? whitespaceToRuntime(closing) : null;
 		inline function applyIf(): Void {
 			if (gap != null) opt.ifPolicy = gap;

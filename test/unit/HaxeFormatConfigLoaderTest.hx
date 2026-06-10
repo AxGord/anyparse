@@ -716,4 +716,42 @@ class HaxeFormatConfigLoaderTest extends Test {
 		Assert.isTrue(out.indexOf('c():Void {}\n\n\t/** */\n\tpublic function b') != -1,
 			'expected `One`-inserted blank before doc-commented b() in: <$out>');
 	}
+
+	public function testConditionParensBeforeKeepsInnerPadOffForKwLedParens():Void {
+		// `openingPolicy: "before"` = a space between the keyword and `(`
+		// (the gap), NOT an inner `( ` pad. The gap is owned by the
+		// `*Policy`/`*Gap` knob; the matching `*InsideOpen` knob must stay
+		// `None` so the lead `(` does not ALSO emit a space before itself —
+		// otherwise the two stack into a double `catch  (` / `switch  (` /
+		// `} while  (` for the kw-led parens whose lead routes through
+		// `whitespacePolicyLead` (catch / switch / do-while).
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"whitespace": {"parenConfig": {"conditionParens": {"openingPolicy": "before"}}}}'
+		);
+		Assert.equals(WhitespacePolicy.After, opts.catchParensGap);
+		Assert.equals(WhitespacePolicy.None, opts.catchParensInsideOpen);
+		Assert.equals(WhitespacePolicy.After, opts.switchPolicy);
+		Assert.equals(WhitespacePolicy.None, opts.switchCondParensInsideOpen);
+		Assert.equals(WhitespacePolicy.After, opts.whilePolicy);
+		Assert.equals(WhitespacePolicy.None, opts.whileCondParensInsideOpen);
+	}
+
+	public function testConditionParensBeforeEmitsSingleSpaceKwLedParens():Void {
+		// Regression: under `conditionParens.openingPolicy: "before"` the
+		// catch / switch / do-while keyword→`(` gap previously stacked the
+		// gap space with the inner-pad knob's before-`(` space, emitting a
+		// double `catch  (` / `switch  (` / `} while  (`. Expect single.
+		final src:String = 'class M {\n\tfunction f(x:Int):Void {\n\t\tswitch (x) {\n\t\t\tcase _:\n\t\t}\n\t\tdo {\n\t\t\tg(x);\n\t\t} while (x > 0);\n\t\ttry {\n\t\t\tg(x);\n\t\t} catch (e:E) {\n\t\t\th(x);\n\t\t}\n\t}\n}';
+		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"whitespace": {"parenConfig": {"conditionParens": {"openingPolicy": "before"}}}}'
+		);
+		opts.finalNewline = false;
+		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		Assert.equals(-1, out.indexOf('catch  ('));
+		Assert.isTrue(out.indexOf('catch (') != -1, 'expected single-space catch in: <$out>');
+		Assert.equals(-1, out.indexOf('switch  ('));
+		Assert.isTrue(out.indexOf('switch (') != -1, 'expected single-space switch in: <$out>');
+		Assert.equals(-1, out.indexOf('while  ('));
+		Assert.isTrue(out.indexOf('while (') != -1, 'expected single-space do-while in: <$out>');
+	}
 }
