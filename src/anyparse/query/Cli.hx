@@ -1597,6 +1597,7 @@ final class Cli {
 		var reformat: Bool = false;
 		var afterSpec: Null<String> = null;
 		var beforeSpec: Null<String> = null;
+		var appendSpec: Null<String> = null;
 		var file: Null<String> = null;
 		var code: Null<String> = null;
 
@@ -1610,6 +1611,8 @@ final class Cli {
 					afterSpec = expectValue(args, ++i, '--after');
 				case '--before':
 					beforeSpec = expectValue(args, ++i, '--before');
+				case '--append':
+					appendSpec = expectValue(args, ++i, '--append');
 				case '--write':
 					write = true;
 				case '--reformat':
@@ -1634,18 +1637,18 @@ final class Cli {
 			i++;
 		}
 		if (file == null || code == null) {
-			stderr('apq add-element: expected <file> (--after <line>:<col> | --before <line>:<col>) <code>\n');
+			stderr('apq add-element: expected <file> (--after <line>:<col> | --before <line>:<col> | --append <line>:<col>) <code>\n');
 			printAddElementUsage();
 			return EXIT_USAGE;
 		}
-		// Exactly one of --after / --before must be given.
-		if ((afterSpec == null) == (beforeSpec == null)) {
-			stderr('apq add-element: provide exactly one of --after <line>:<col> or --before <line>:<col>\n');
+		// Exactly one of --after / --before / --append must be given.
+		final targetCount: Int = (afterSpec != null ? 1 : 0) + (beforeSpec != null ? 1 : 0) + (appendSpec != null ? 1 : 0);
+		if (targetCount != 1) {
+			stderr('apq add-element: provide exactly one of --after <line>:<col>, --before <line>:<col>, or --append <line>:<col>\n');
 			return EXIT_USAGE;
 		}
 
-		final posSpec: String = afterSpec != null ? afterSpec : (beforeSpec : String);
-		final side: InsertSide = afterSpec != null ? After : Before;
+		final posSpec: String = if (afterSpec != null) afterSpec; else if (beforeSpec != null) beforeSpec; else (appendSpec : String);
 		final pos: Null<Position> = parseLineCol(posSpec);
 		if (pos == null) {
 			stderr('apq add-element: malformed position "$posSpec" — expected <line>:<col>\n');
@@ -1661,7 +1664,10 @@ final class Cli {
 
 		final plugin: GrammarPlugin = pickPlugin(lang);
 		final optsJson: Null<String> = discoverFormatConfig(filePath);
-		final result: EditResult = AddElement.addElement(source, pos.line, pos.col, side, codeStr, reformat, plugin, optsJson);
+		final result: EditResult = if (appendSpec != null)
+			AddElement.appendElement(source, pos.line, pos.col, codeStr, reformat, plugin, optsJson);
+		else
+			AddElement.addElement(source, pos.line, pos.col, afterSpec != null ? After : Before, codeStr, reformat, plugin, optsJson);
 		switch result {
 			case Ok(text):
 				if (write) {
@@ -8024,17 +8030,20 @@ final class Cli {
 	}
 
 	private static function printAddElementUsage(): Void {
-		sysPrint('Usage: apq add-element <file> (--after <line>:<col> | --before <line>:<col>) <code> [options]\n');
+		sysPrint('Usage: apq add-element <file> (--after <l>:<c> | --before <l>:<c> | --append <l>:<c>) <code> [options]\n');
 		sysPrint('\n');
-		sysPrint('Insert <code> as a new sibling element next to the element whose first token\n');
-		sysPrint('is at <line>:<col> (a statement in a block, a case in a switch, an array /\n');
-		sysPrint('object / call-argument element). The slot separator (comma or newline) is\n');
-		sysPrint('added automatically; the element is writer-formatted + re-parse-validated.\n');
-		sysPrint('Append by pointing at the last sibling with --after; prepend with --before.\n');
+		sysPrint('Insert <code> as a new element into a list-shaped slot. With --after / --before,\n');
+		sysPrint('<l>:<c> points at an existing SIBLING element (a statement in a block, a case in\n');
+		sysPrint('a switch, an array / object / call-argument element). With --append, it points at\n');
+		sysPrint('the CONTAINER itself (block / array / object / call / new / class / switch); the\n');
+		sysPrint('element is added as the last child — which also works on an empty container that\n');
+		sysPrint('has no sibling to point at. The slot separator (comma or newline) is added\n');
+		sysPrint('automatically; the element is writer-formatted + re-parse-validated.\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
-		sysPrint('  --after <l>:<c>   Insert after the element at this position\n');
-		sysPrint('  --before <l>:<c>  Insert before the element at this position\n');
+		sysPrint('  --after <l>:<c>   Insert after the sibling element at this position\n');
+		sysPrint('  --before <l>:<c>  Insert before the sibling element at this position\n');
+		sysPrint('  --append <l>:<c>  Append as the last child of the container at this position\n');
 		sysPrint('  --write           Overwrite the file in place (default: print to stdout)\n');
 		sysPrint('  --reformat        Canonicalise the whole file if it is not already canonical\n');
 		sysPrint('  --lang <name>     Grammar plugin (default: haxe)\n');
