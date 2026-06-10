@@ -87,7 +87,14 @@ final class AddElement {
 	 * so container-append cannot target them.
 	 */
 	private static final EXPR_CONTAINER_KINDS: Array<String> = [
-		'ArrayExpr', 'ObjectLit', 'Call', 'NewExpr', 'BlockBody', 'BlockStmt', 'SwitchStmtBare', 'SwitchExprBare'
+		'ArrayExpr',
+		'ObjectLit',
+		'Call',
+		'NewExpr',
+		'BlockBody',
+		'BlockStmt',
+		'SwitchStmtBare',
+		'SwitchExprBare'
 	];
 
 	/**
@@ -101,7 +108,15 @@ final class AddElement {
 	 * instead of projecting to a separate sibling.
 	 */
 	private static final MODIFIER_META_KINDS: Array<String> = [
-		'Meta', 'Public', 'Private', 'Static', 'Inline', 'Override', 'Macro', 'Extern', 'Dynamic'
+		'Meta',
+		'Public',
+		'Private',
+		'Static',
+		'Inline',
+		'Override',
+		'Macro',
+		'Extern',
+		'Dynamic'
 	];
 
 	/**
