@@ -176,8 +176,13 @@ class ExtractMethodSliceTest extends Test {
 		assertRefused(source, 4, 2, 4, 2, 'helper', true);
 	}
 
-	/** Two locals defined in the range and used after it exceed the single-return limit. */
-	public function testRefuseTwoReturnValues():Void {
+	/**
+	 * Two locals defined in the range and used after it are returned as an
+	 * anonymous struct `{a: a, b: b}`, destructured back into the original
+	 * names at the call site so the later `return a + b` stays valid. The
+	 * struct temporary takes a fresh `_<name>Result` name.
+	 */
+	public function testExtractTwoValueStructReturn():Void {
 		final source:String =
 			'class C {\n'
 			+ '\tfunction f():Int {\n'
@@ -186,7 +191,56 @@ class ExtractMethodSliceTest extends Test {
 			+ '\t\treturn a + b;\n'
 			+ '\t}\n'
 			+ '}\n';
-		assertRefused(source, 3, 2, 4, 2, 'helper', true);
+		final expected:String =
+			'class C {\n'
+			+ '\tfunction f():Int {\n'
+			+ '\t\tfunction helper() {\n'
+			+ '\t\t\tvar a = 1;\n'
+			+ '\t\t\tvar b = 2;\n'
+			+ '\t\t\treturn {a: a, b: b};\n'
+			+ '\t\t}\n'
+			+ '\t\tfinal _helperResult = helper();\n'
+			+ '\t\tfinal a = _helperResult.a;\n'
+			+ '\t\tfinal b = _helperResult.b;\n'
+			+ '\t\treturn a + b;\n'
+			+ '\t}\n'
+			+ '}\n';
+		assertExtract(source, 3, 2, 4, 2, 'helper', true, expected);
+	}
+
+	/**
+	 * In a multi-value extraction, a returned local that is REASSIGNED after
+	 * the range is rebound with `var` at the call site while a read-only one
+	 * stays `final` — the per-variable binding choice.
+	 */
+	public function testExtractStructReturnWrittenAfter():Void {
+		final source:String =
+			'class C {\n'
+			+ '\tfunction f():Void {\n'
+			+ '\t\tvar a = 1;\n'
+			+ '\t\tvar b = 2;\n'
+			+ '\t\ta = 5;\n'
+			+ '\t\ttrace(a);\n'
+			+ '\t\ttrace(b);\n'
+			+ '\t}\n'
+			+ '}\n';
+		final expected:String =
+			'class C {\n'
+			+ '\tfunction f():Void {\n'
+			+ '\t\tfunction helper() {\n'
+			+ '\t\t\tvar a = 1;\n'
+			+ '\t\t\tvar b = 2;\n'
+			+ '\t\t\treturn {a: a, b: b};\n'
+			+ '\t\t}\n'
+			+ '\t\tfinal _helperResult = helper();\n'
+			+ '\t\tvar a = _helperResult.a;\n'
+			+ '\t\tfinal b = _helperResult.b;\n'
+			+ '\t\ta = 5;\n'
+			+ '\t\ttrace(a);\n'
+			+ '\t\ttrace(b);\n'
+			+ '\t}\n'
+			+ '}\n';
+		assertExtract(source, 3, 2, 4, 2, 'helper', true, expected);
 	}
 
 	/** A range whose ends are not children of one block is refused. */

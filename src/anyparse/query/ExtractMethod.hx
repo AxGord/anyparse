@@ -28,6 +28,16 @@ private typedef LocalDecl = {
 }
 
 /**
+ * A range-local returned from the extracted function: its name and whether
+ * it is reassigned after the range (so its call-site binding must be `var`,
+ * not `final`).
+ */
+private typedef ReturnVar = {
+	var name: String;
+	var writtenAfter: Bool;
+}
+
+/**
  * Extract a run of statements into a local function (closure) — the
  * method analog of `ExtractVar`, and the inverse-ish of `InlineMethod`.
  *
@@ -59,9 +69,9 @@ private typedef LocalDecl = {
  *    local is target-dependent, out of scope here. (Read-only captures are
  *    always fine; field / `this` writes persist via capture and are fine.)
  *  - The range may DEFINE locals used after it: zero (the call returns
- *    nothing) or exactly one (the call returns it, bound at the call site).
- *    Two or more locals used after the range is refused — a single return
- *    only.
+ *    nothing), one (the call returns it, bound at the call site), or
+ *    two-plus (the call returns an anonymous struct of them, destructured
+ *    back into the original names at the call site).
  *
  * Coordinate convention: `startLine` / `startCol` / `endLine` / `endCol`
  * are interpreted exactly as `apq refs` PRINTS them
@@ -140,27 +150,20 @@ final class ExtractMethod {
 			return Err('"$name" already names a parameter or local in this function — choose a different name');
 
 		// Data-flow. Locals DECLARED in the range that are READ after it
-		// become the (single) return value; an outer local MUTATED in the
-		// range and read after it is out of scope. All after-the-range
-		// checks bind to the SPECIFIC declaration (its `span.from`), so a
-		// same-named local in a LATER function is never mistaken for a use.
+		// become the return value(s) — one returned bare, two-plus as an
+		// anonymous struct; an outer local MUTATED in the range and read
+		// after it is out of scope. All after-the-range checks bind to the
+		// SPECIFIC declaration (its `span.from`), so a same-named local in a
+		// LATER function is never mistaken for a use.
 		final decls: Array<LocalDecl> = collectLocalDecls(sel.stmts);
 		final declNames: Array<String> = [for (d in decls) d.name];
 
-		final returnVars: Array<String> = [];
-		var returnWrittenAfter: Bool = false;
+		final returnVars: Array<ReturnVar> = [];
 		for (d in decls) {
 			final hits: Array<RefHit> = Refs.find(d.name, tree, shape);
-			if (readAfterBinding(hits, d.from, sel.toOffset)) {
-				if (!returnVars.contains(d.name)) returnVars.push(d.name);
-				if (writtenAfterBinding(hits, d.from, sel.toOffset)) returnWrittenAfter = true;
-			}
+			if (readAfterBinding(hits, d.from, sel.toOffset) && !returnVars.exists(r -> r.name == d.name))
+				returnVars.push({ name: d.name, writtenAfter: writtenAfterBinding(hits, d.from, sel.toOffset) });
 		}
-		if (returnVars.length > 1)
-			return
-				Err(
-					'the selected range defines ${returnVars.length} locals used after it (${returnVars.join(", ")}) — extract-method returns at most one value'
-				);
 
 		final outerWrite: Null<String> = outerLocalMutatedAndUsedAfter(sel, declNames, tree, shape);
 		if (outerWrite != null)
@@ -172,11 +175,10 @@ final class ExtractMethod {
 		// Build the local-function scaffold + the replacing call. The
 		// writer re-formats both, so this text need only PARSE.
 		final rangeSource: String = source.substring(sel.fromOffset, sel.toOffset);
-		final retVar: Null<String> = returnVars.length == 1 ? returnVars[0] : null;
-		final retLine: String = retVar != null ? '\nreturn $retVar;' : '';
+		final returnExpr: String = returnExprText(returnVars);
+		final retLine: String = returnExpr != '' ? '\nreturn $returnExpr;' : '';
 		final fnText: String = 'function $name() {\n$rangeSource$retLine\n}';
-		final keyword: String = returnWrittenAfter ? 'var' : 'final';
-		final callText: String = retVar != null ? '$keyword $retVar = $name();' : '$name();';
+		final callText: String = callSiteText(name, returnVars, tree, startOffset);
 		final newText: String = '$fnText\n$callText';
 
 		final edit: { span: Span, text: String } = { span: new Span(sel.fromOffset, sel.toOffset), text: newText };
@@ -369,6 +371,55 @@ final class ExtractMethod {
 	/** Is `kind` a statement node (its kind ends with `Stmt`)? */
 	private static inline function isStatement(kind: String): Bool {
 		return StringTools.endsWith(kind, 'Stmt');
+	}
+
+	/**
+	 * The closure's return expression for `returnVars`: empty when nothing is
+	 * returned, the bare name for a single value, or an anonymous struct
+	 * `{a: a, b: b}` of the names for two-plus.
+	 */
+	private static function returnExprText(returnVars: Array<ReturnVar>): String {
+		return switch returnVars.length {
+			case 0: '';
+			case 1: returnVars[0].name;
+			case _: '{' + returnVars.map(r -> '${r.name}: ${r.name}').join(', ') + '}';
+		};
+	}
+
+	/**
+	 * The statement(s) replacing the extracted range: a bare call when nothing
+	 * is returned, one `final`/`var <name> = call()` for a single value, or
+	 * `final <tmp> = call();` plus one rebind per returned local for the struct
+	 * case — rebinding each into its original name so uses after the range stay
+	 * valid.
+	 */
+	private static function callSiteText(name: String, returnVars: Array<ReturnVar>, tree: QueryNode, cursor: Int): String {
+		return switch returnVars.length {
+			case 0: '$name();';
+			case 1:
+				final single: ReturnVar = returnVars[0];
+				'${bindKeyword(single)} ${single.name} = $name();';
+			case _:
+				final tmp: String = freshReturnName(tree, cursor, returnVars, name);
+				final binds: Array<String> = returnVars.map(r -> '${bindKeyword(r)} ${r.name} = $tmp.${r.name};');
+				'final $tmp = $name();\n' + binds.join('\n');
+		};
+	}
+
+	/** `var` when the returned local is reassigned after the range, else `final`. */
+	private static inline function bindKeyword(returnVar: ReturnVar): String {
+		return returnVar.writtenAfter ? 'var' : 'final';
+	}
+
+	/**
+	 * A fresh local name for the struct-return temporary that collides with
+	 * neither an existing binding in the enclosing function nor a returned
+	 * local — `_<name>Result`, suffixed with `_` until free.
+	 */
+	private static function freshReturnName(tree: QueryNode, cursor: Int, returnVars: Array<ReturnVar>, base: String): String {
+		var candidate: String = '_${base}Result';
+		while (nameDeclaredInEnclosingFunction(tree, cursor, candidate) || returnVars.exists(r -> r.name == candidate)) candidate += '_';
+		return candidate;
 	}
 
 }
