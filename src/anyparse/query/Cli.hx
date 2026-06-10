@@ -24,6 +24,8 @@ import anyparse.query.RemoveParam;
 import anyparse.query.RemoveParam.RemoveParamResult;
 import anyparse.query.AddMember;
 import anyparse.query.AddImport;
+import anyparse.query.AddElement;
+import anyparse.query.AddElement.InsertSide;
 import anyparse.query.ReplaceNode;
 import anyparse.query.ReplaceNode.ReplaceTarget;
 import anyparse.query.RefactorSupport.EditResult;
@@ -381,6 +383,8 @@ final class Cli {
 				return runAddMember(rest);
 			case 'add-import':
 				return runAddImport(rest);
+			case 'add-element':
+				return runAddElement(rest);
 			case 'replace-node':
 				return runReplaceNode(rest);
 			case 'uses':
@@ -1568,6 +1572,107 @@ final class Cli {
 				return EXIT_OK;
 			case Err(message):
 				stderr('apq add-import: $message\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
+	/**
+	 * `apq add-element <file> (--after <line>:<col> | --before <line>:<col>)
+	 * <code> [--reformat] [--write]` — insert `<code>` as a new sibling
+	 * element next to the existing element whose first token is at
+	 * `<line>:<col>` (a statement in a block, a `case` in a `switch`, an
+	 * array / object / call-argument element). The separator the slot needs
+	 * (a `,` for comma lists, a newline for statement / case lists) is added
+	 * automatically; the inserted element is WRITER-FORMATTED and the whole
+	 * file is re-parse-validated (a malformed element is rejected). To
+	 * append, point at the last sibling with `--after`; to prepend, the
+	 * first with `--before`. `<line>:<col>` use the `apq refs` print
+	 * convention. The source must already be canonical unless `--reformat`.
+	 * Without `--write` the result goes to stdout; with `--write` it
+	 * overwrites in place.
+	 */
+	private static function runAddElement(args: Array<String>): Int {
+		var lang: String = 'haxe';
+		var write: Bool = false;
+		var reformat: Bool = false;
+		var afterSpec: Null<String> = null;
+		var beforeSpec: Null<String> = null;
+		var file: Null<String> = null;
+		var code: Null<String> = null;
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--after':
+					afterSpec = expectValue(args, ++i, '--after');
+				case '--before':
+					beforeSpec = expectValue(args, ++i, '--before');
+				case '--write':
+					write = true;
+				case '--reformat':
+					reformat = true;
+				case '-h', '--help':
+					printAddElementUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq add-element: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (file == null)
+						file = a;
+					else if (code == null)
+						code = a;
+					else {
+						stderr('apq add-element: unexpected extra argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (file == null || code == null) {
+			stderr('apq add-element: expected <file> (--after <line>:<col> | --before <line>:<col>) <code>\n');
+			printAddElementUsage();
+			return EXIT_USAGE;
+		}
+		// Exactly one of --after / --before must be given.
+		if ((afterSpec == null) == (beforeSpec == null)) {
+			stderr('apq add-element: provide exactly one of --after <line>:<col> or --before <line>:<col>\n');
+			return EXIT_USAGE;
+		}
+
+		final posSpec: String = afterSpec != null ? afterSpec : (beforeSpec : String);
+		final side: InsertSide = afterSpec != null ? After : Before;
+		final pos: Null<Position> = parseLineCol(posSpec);
+		if (pos == null) {
+			stderr('apq add-element: malformed position "$posSpec" — expected <line>:<col>\n');
+			return EXIT_USAGE;
+		}
+
+		final filePath: String = file;
+		final codeStr: String = code;
+		final source: String = try readFile(filePath) catch (exception: Exception) {
+			stderr('apq add-element: $filePath: ${exception.message}\n');
+			return EXIT_RUNTIME;
+		};
+
+		final plugin: GrammarPlugin = pickPlugin(lang);
+		final optsJson: Null<String> = discoverFormatConfig(filePath);
+		final result: EditResult = AddElement.addElement(source, pos.line, pos.col, side, codeStr, reformat, plugin, optsJson);
+		switch result {
+			case Ok(text):
+				if (write) {
+					writeFile(filePath, text);
+					stderr('apq add-element: wrote $filePath\n');
+				} else {
+					sysPrint(text);
+				}
+				return EXIT_OK;
+			case Err(message):
+				stderr('apq add-element: $message\n');
 				return EXIT_RUNTIME;
 		}
 	}
@@ -7855,6 +7960,7 @@ final class Cli {
 		sysPrint('  remove-param  Remove a function parameter + call-site args\n');
 		sysPrint('  add-member    Append a member to a type body (writer-formatted, canonical-gated)\n');
 		sysPrint('  add-import    Add an import / using to a module (writer-formatted, canonical-gated)\n');
+		sysPrint('  add-element   Insert a sibling element — statement/case/list elem (--after/--before)\n');
 		sysPrint('  replace-node  Replace a node\'s source span (--select / --at; writer-formatted)\n');
 		sysPrint('  uses          Type references (field/param/type-param positions)\n');
 		sysPrint('  meta          Annotation-on-decl shortcut\n');
@@ -7915,6 +8021,24 @@ final class Cli {
 		sysPrint('  --reformat      Canonicalise the whole file if it is not already canonical\n');
 		sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
 		sysPrint('  -h, --help      Show this help\n');
+	}
+
+	private static function printAddElementUsage(): Void {
+		sysPrint('Usage: apq add-element <file> (--after <line>:<col> | --before <line>:<col>) <code> [options]\n');
+		sysPrint('\n');
+		sysPrint('Insert <code> as a new sibling element next to the element whose first token\n');
+		sysPrint('is at <line>:<col> (a statement in a block, a case in a switch, an array /\n');
+		sysPrint('object / call-argument element). The slot separator (comma or newline) is\n');
+		sysPrint('added automatically; the element is writer-formatted + re-parse-validated.\n');
+		sysPrint('Append by pointing at the last sibling with --after; prepend with --before.\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --after <l>:<c>   Insert after the element at this position\n');
+		sysPrint('  --before <l>:<c>  Insert before the element at this position\n');
+		sysPrint('  --write           Overwrite the file in place (default: print to stdout)\n');
+		sysPrint('  --reformat        Canonicalise the whole file if it is not already canonical\n');
+		sysPrint('  --lang <name>     Grammar plugin (default: haxe)\n');
+		sysPrint('  -h, --help        Show this help\n');
 	}
 
 	private static function printInlineMethodUsage(): Void {
