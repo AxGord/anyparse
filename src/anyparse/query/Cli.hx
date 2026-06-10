@@ -1032,8 +1032,7 @@ final class Cli {
 		final rows: Array<SymbolQuery.SymbolRow> = SymbolQuery.declares(files, plugin, name);
 		if (rows.length == 0)
 			stderr('apq declares: no type named "$name" in ${inputSpecs.join(", ")}\n');
-		else if (rows.length > 1)
-			stderr('apq declares: ambiguous — ${rows.length} declarations of "$name"\n');
+		else if (rows.length > 1) stderr('apq declares: ambiguous — ${rows.length} declarations of "$name"\n');
 		for (row in rows) sysPrint('${SymbolQuery.formatSymbolRow(row)}\n');
 		return EXIT_OK;
 	}
@@ -1724,7 +1723,9 @@ final class Cli {
 			code = resolved;
 		}
 		if (file == null || code == null) {
-			stderr('apq add-element: expected <file> (--after <line>:<col> | --before <line>:<col> | --append <line>:<col>) (<code> | --from-file <path> | -)\n');
+			stderr(
+				'apq add-element: expected <file> (--after <line>:<col> | --before <line>:<col> | --append <line>:<col>) (<code> | --from-file <path> | -)\n'
+			);
 			printAddElementUsage();
 			return EXIT_USAGE;
 		}
@@ -1735,7 +1736,12 @@ final class Cli {
 			return EXIT_USAGE;
 		}
 
-		final posSpec: String = if (afterSpec != null) afterSpec; else if (beforeSpec != null) beforeSpec; else (appendSpec : String);
+		final posSpec: String = if (afterSpec != null)
+			afterSpec;
+		else if (beforeSpec != null)
+			beforeSpec;
+		else
+			(appendSpec: String);
 		final pos: Null<Position> = parseLineCol(posSpec);
 		if (pos == null) {
 			stderr('apq add-element: malformed position "$posSpec" — expected <line>:<col>\n');
@@ -2623,11 +2629,11 @@ final class Cli {
 				plugin.parseFile(stripped);
 				sysPrint('${prefix}PARSE OK\n');
 				passCount++;
-			} catch  (e: ParseError) {
+			} catch (e: ParseError) {
 				sysPrint('${prefix}PARSE FAIL: ${e.toString()}\n');
 				failCount++;
 				anyFailed = true;
-			} catch  (e: Exception) {
+			} catch (e: Exception) {
 				sysPrint('${prefix}PARSE FAIL: ${e.message}\n');
 				failCount++;
 				anyFailed = true;
@@ -2839,7 +2845,7 @@ final class Cli {
 			final pat: String = patterns[idx];
 			try {
 				out.push(new EReg(pat, 'g'));
-			} catch  (e: Exception) {
+			} catch (e: Exception) {
 				stderr('apq $tool: --regex: pattern[$idx] "$pat" is not a valid EReg: ${e.message}\n');
 				return null;
 			}
@@ -5008,7 +5014,7 @@ final class Cli {
 			stderr(
 				'apq probe: staged source -> $STAGE_PROBE_PATH (use it with `apq strip $STAGE_PROBE_PATH …` or `apq recon --probe $STAGE_PROBE_PATH`).\n'
 			);
-		} catch  (_: Exception) {
+		} catch (_: Exception) {
 			// Write failed (read-only /tmp, disk full, permission). Skip
 			// the nudge but STILL return the read bytes so the caller can
 			// use `--code` instead of `--stdin` — a second stdin read on
@@ -5692,7 +5698,7 @@ final class Cli {
 				newCol: 0,
 				message: 'source already parses (no relaxation needed)'
 			};
-		} catch  (pe: ParseError) {
+		} catch (pe: ParseError) {
 			final pos: Position = pe.span.lineCol(source);
 			origLine = pos.line;
 			origCol = pos.col;
@@ -5712,7 +5718,7 @@ final class Cli {
 			}
 			injected = stripExpectedHint((expected: String));
 			insertAt = pe.span.from;
-		} catch  (e: Exception) {
+		} catch (e: Exception) {
 			return {
 				kind: NoTarget,
 				original: source,
@@ -5753,7 +5759,7 @@ final class Cli {
 				newCol: 0,
 				message: ''
 			};
-		} catch  (pe2: ParseError) {
+		} catch (pe2: ParseError) {
 			final pos2: Position = pe2.span.lineCol(patched);
 			return {
 				kind: StillFail,
@@ -5766,7 +5772,7 @@ final class Cli {
 				newCol: pos2.col,
 				message: pe2.message
 			};
-		} catch  (e: Exception) {
+		} catch (e: Exception) {
 			return {
 				kind: StillFail,
 				original: source,
@@ -6273,12 +6279,12 @@ final class Cli {
 						return EXIT_RUNTIME;
 					}
 					currentParseOk = true;
-				} catch  (exception: ParseError) {
+				} catch (exception: ParseError) {
 					final pos: Position = exception.span.lineCol(source);
 					currentLine = pos.line;
 					currentCol = pos.col;
 					currentMsg = reconNormalize(exception.expected);
-				} catch  (exception: Exception) {
+				} catch (exception: Exception) {
 					currentMsg = reconNormalize(exception.message);
 				}
 				final priorParsed: Bool = priorStatus == 'PASS' || priorStatus == 'FAIL' || priorStatus == 'SKIP_WRITE';
@@ -6333,7 +6339,7 @@ final class Cli {
 					out[normalised] = (entryStatus: String);
 				}
 			}
-		} catch  (_: Exception) {}
+		} catch (_: Exception) {}
 		return out;
 	}
 
@@ -6366,13 +6372,13 @@ final class Cli {
 			sysPrint('PARSE OK\n');
 			if (writerEqualsAfter) return runProbeWriterCheck(plugin, path, original, writerEqualsPlain, expectedPathOpt, lang);
 			return EXIT_OK;
-		} catch  (exception: ParseError) {
+		} catch (exception: ParseError) {
 			final pos: Position = exception.span.lineCol(original);
 			final exp: String = reconNormalize(exception.expected);
 			final snip: String = reconNormalize(reconSnippet(original, exception.span.from));
 			sysPrint('PARSE FAIL :: ${pos.line}:${pos.col} expected="$exp" :: src="$snip"\n');
 			return EXIT_RUNTIME;
-		} catch  (exception: Exception) {
+		} catch (exception: Exception) {
 			sysPrint('PARSE FAIL :: <non-ParseError> ${reconNormalize(exception.message)}\n');
 			return EXIT_RUNTIME;
 		}
@@ -6450,11 +6456,11 @@ final class Cli {
 		var origCol: Int = 0;
 		try {
 			plugin.reconParse(original);
-		} catch  (pe: ParseError) {
+		} catch (pe: ParseError) {
 			final pos: Position = pe.span.lineCol(original);
 			origLine = pos.line;
 			origCol = pos.col;
-		} catch  (_: Exception) {}
+		} catch (_: Exception) {}
 		final regexMode: Bool = compiledRegex != null;
 		final regexes: Array<EReg> = compiledRegex ?? [];
 		final patternHits: Array<Int> = [for (_ in 0...patterns.length) 0];
@@ -6478,13 +6484,13 @@ final class Cli {
 					return EXIT_RUNTIME;
 				}
 				sysPrint('PREDICT UNBLOCK   $path\n');
-			} catch  (pe: ParseError) {
+			} catch (pe: ParseError) {
 				final pos: Position = pe.span.lineCol(stripped);
 				final movedHint: String = movedLocusHint(origLine, origCol, pos.line, pos.col);
 				sysPrint('PREDICT STILL FAIL $path :: ${pos.line}:${pos.col}${movedHint} ${pe.message}\n');
 				if (showSource) printReconSourceWindow(stripped, pos.line);
 				exitCode = EXIT_RUNTIME;
-			} catch  (e: Exception) {
+			} catch (e: Exception) {
 				sysPrint('PREDICT STILL FAIL $path :: <no locus> ${e.message}\n');
 				exitCode = EXIT_RUNTIME;
 			}
@@ -6589,7 +6595,7 @@ final class Cli {
 						wired = false;
 						break;
 					}
-				} catch  (exception: ParseError) {
+				} catch (exception: ParseError) {
 					final pos: Position = exception.span.lineCol(source);
 					final relPath: String = stripRootPrefix(path, root);
 					final exp: String = reconNormalize(exception.expected);
@@ -6605,7 +6611,7 @@ final class Cli {
 						line: pos.line,
 						col: pos.col,
 					});
-				} catch  (exception: Exception) {
+				} catch (exception: Exception) {
 					final relPath: String = stripRootPrefix(path, root);
 					final key: String = '<non-ParseError> ' + reconNormalize(exception.message);
 					addReconCluster(clusters, key, relPath, '<exception>');
@@ -6814,7 +6820,7 @@ final class Cli {
 				}
 				sysPrint('PREDICT UNBLOCK   ${r.path}\n');
 				unblockCount++;
-			} catch  (pe: ParseError) {
+			} catch (pe: ParseError) {
 				// New locus after substitution. When it differs from the
 				// pre-strip locus the strip likely moved the problem (e.g.
 				// pattern matched a decl AND a use position), which is the
@@ -6830,7 +6836,7 @@ final class Cli {
 				sysPrint('PREDICT STILL FAIL ${r.path} :: ${pos.line}:${pos.col}${movedHint} ${pe.message}\n');
 				if (showSource) printReconSourceWindow(stripped, pos.line);
 				stillFailCount++;
-			} catch  (e: Exception) {
+			} catch (e: Exception) {
 				sysPrint('PREDICT STILL FAIL ${r.path} :: <no locus> ${e.message}\n');
 				stillFailCount++;
 			}
@@ -6921,7 +6927,7 @@ final class Cli {
 					'apq $cmd: WARNING: src/ or test/ is newer than bin/test.js — re-run `haxe test-js.hxml && node bin/test.js` before trusting these totals\n'
 				);
 			}
-		} catch  (_: Exception) {}
+		} catch (_: Exception) {}
 		#end
 	}
 
@@ -6942,7 +6948,7 @@ final class Cli {
 					if (!StringTools.endsWith(name, '.hx')) continue;
 					if (FileSystem.stat(path).mtime.getTime() > threshold) return true;
 				}
-			} catch  (_: Exception) {}
+			} catch (_: Exception) {}
 		}
 		return false;
 	}
@@ -6960,7 +6966,7 @@ final class Cli {
 			final raw: String = sys.io.File.getContent(path);
 			final trimmed: String = StringTools.trim(raw);
 			return trimmed.length > 0 ? trimmed : null;
-		} catch  (_: Exception) {
+		} catch (_: Exception) {
 			return null;
 		}
 	}
@@ -6975,12 +6981,12 @@ final class Cli {
 				final existing: String = StringTools.trim(sys.io.File.getContent(path));
 				if (existing == value) return;
 			}
-		} catch  (_: Exception) {}
+		} catch (_: Exception) {}
 		try {
 			final dir: String = haxe.io.Path.directory(path);
 			if (dir.length > 0 && !FileSystem.exists(dir)) FileSystem.createDirectory(dir);
 			sys.io.File.saveContent(path, value);
-		} catch  (_: Exception) {
+		} catch (_: Exception) {
 			// Best-effort cache write — never block recon on a write
 			// failure (read-only HOME, disk full, permission). The env
 			// path stays valid for the current run.
@@ -7161,7 +7167,7 @@ final class Cli {
 				final raw: String = sys.io.File.getContent(filePath);
 				sys.io.File.saveContent((savePath: String), raw);
 				sysPrint('apq sweep: saved snapshot $filePath -> $savePath\n');
-			} catch  (e: Exception) {
+			} catch (e: Exception) {
 				stderr('apq sweep: --save failed: ${e.message}\n');
 				return EXIT_RUNTIME;
 			}
@@ -7417,13 +7423,13 @@ final class Cli {
 				try {
 					plugin.parseFile(source);
 					parseable++;
-				} catch  (exception: ParseError) {
+				} catch (exception: ParseError) {
 					skipParse++;
 					final pos: Position = exception.span.lineCol(source);
 					final exp: String = reconNormalize(exception.expected);
 					final src: String = showSource ? ' :: src="' + reconNormalize(reconSnippet(source, exception.span.from)) + '"' : '';
 					skipLines.push('SKIP $path :: ${pos.line}:${pos.col} expected="$exp"$src');
-				} catch  (exception: Exception) {
+				} catch (exception: Exception) {
 					skipParse++;
 					skipLines.push('SKIP $path :: <non-ParseError> ${reconNormalize(exception.message)}');
 				}
@@ -8173,7 +8179,9 @@ final class Cli {
 	}
 
 	private static function printAddElementUsage(): Void {
-		sysPrint('Usage: apq add-element <file> (--after <l>:<c> | --before <l>:<c> | --append <l>:<c>) (<code> | --from-file <path> | -) [options]\n');
+		sysPrint(
+			'Usage: apq add-element <file> (--after <l>:<c> | --before <l>:<c> | --append <l>:<c>) (<code> | --from-file <path> | -) [options]\n'
+		);
 		sysPrint('\n');
 		sysPrint('Insert <code> as a new element into a list-shaped slot. With --after / --before,\n');
 		sysPrint('<l>:<c> points at an existing SIBLING element (a statement in a block, a case in\n');
@@ -8487,7 +8495,9 @@ final class Cli {
 	}
 
 	private static function printReplaceNodeUsage(): Void {
-		sysPrint('Usage: apq replace-node <file> (--select <sel> | --at <line>:<col>) (<newSource> | --from-file <path> | -) [--reformat] [--write]\n');
+		sysPrint(
+			'Usage: apq replace-node <file> (--select <sel> | --at <line>:<col>) (<newSource> | --from-file <path> | -) [--reformat] [--write]\n'
+		);
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --select <sel>      Address the node by an ast-style selector\n');
@@ -9143,7 +9153,7 @@ final class Cli {
 				return
 					' If "$name" is a macro-emitted parser runtime helper, the emit site lives in src/anyparse/macro/$entry — try apq lit \'$name\' src/anyparse/macro/ --any-kind to see the FFun name slot.';
 			}
-		} catch  (_: Exception) {}
+		} catch (_: Exception) {}
 		return '';
 		#else
 		return '';
