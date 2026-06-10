@@ -7479,6 +7479,7 @@ final class Cli {
 	private static function runSource(args: Array<String>): Int {
 		var range: Null<String> = null;
 		var number: Bool = false;
+		var raw: Bool = false;
 		var file: Null<String> = null;
 
 		var i: Int = 0;
@@ -7489,6 +7490,8 @@ final class Cli {
 					range = expectValue(args, ++i, '--range');
 				case '--number', '-n':
 					number = true;
+				case '--raw':
+					raw = true;
 				// The hxq shim auto-injects `--lang haxe`; `source` does no
 				// parsing, so accept and ignore it (1 value consumed).
 				case '--lang':
@@ -7538,11 +7541,18 @@ final class Cli {
 			return EXIT_USAGE;
 		}
 
+		// Strip the common leading-whitespace prefix shared by every non-blank
+		// line in the range (textwrap.dedent) so a deeply-nested slice reads
+		// without its indentation tax. `--raw` keeps bytes verbatim — required
+		// when the output anchors an Edit or feeds column coordinates, since
+		// dedent shifts both.
+		final strip: Int = raw ? 0 : commonIndentWidth(lines, bounds.from, bounds.to);
+
 		final buf: StringBuf = new StringBuf();
 		for (n in bounds.from...bounds.to + 1) {
 			final line: String = lines[n - 1];
 			if (number) buf.add('$n\t');
-			buf.add(line);
+			buf.add(strip > 0 ? dedentLine(line, strip) : line);
 			buf.add('\n');
 		}
 		sysPrint(buf.toString());
@@ -7588,14 +7598,17 @@ final class Cli {
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --range <spec>  1-based inclusive lines: L | L:L2 | L: | :L2 (default: whole file)\n');
-		sysPrint('  --number, -n    Prefix each line with `<lineno>\\t` (cat -n style; default: raw)\n');
+		sysPrint('  --number, -n    Prefix each line with `<lineno>\\t` (cat -n style)\n');
+		sysPrint('  --raw           Keep bytes verbatim — no dedent (for Edit-anchoring / real columns)\n');
 		sysPrint('  -h, --help      Show this help\n');
 		sysPrint('\n');
-		sysPrint('Emits RAW verbatim lines of <file> with NO AST parse — works on any\n');
-		sysPrint('file (parseable or skip-parse). Default (raw, no prefix) output is\n');
-		sysPrint('directly usable for Edit-anchoring; out-of-range bounds clamp to the\n');
-		sysPrint('file. The gate-blessed replacement for `git show`/`readFileSync` to\n');
-		sysPrint('view verbatim `.hx` bytes.\n');
+		sysPrint('Emits RAW lines of <file> with NO AST parse — works on any file\n');
+		sysPrint('(parseable or skip-parse). By default the common leading indentation\n');
+		sysPrint('shared by the shown lines is stripped (dedent) so nested slices read\n');
+		sysPrint('cleanly; pass `--raw` to keep exact bytes — needed when the output\n');
+		sysPrint('anchors an Edit or you need true column positions. Out-of-range bounds\n');
+		sysPrint('clamp to the file. The gate-blessed replacement for `git show` /\n');
+		sysPrint('`readFileSync` to view `.hx` bytes.\n');
 	}
 	#end
 
@@ -9279,6 +9292,54 @@ final class Cli {
 		#if (sys || nodejs)
 		Sys.print(s);
 		#end
+	}
+
+	/**
+	 * Common leading-whitespace prefix length (chars) shared by every
+	 * non-blank line of `lines` in the 1-based inclusive `[from, to]` range
+	 * (textwrap.dedent semantics). Blank / whitespace-only lines are ignored.
+	 * Returns 0 when the lines share no leading whitespace or the range holds
+	 * only blanks.
+	 */
+	private static function commonIndentWidth(lines: Array<String>, from: Int, to: Int): Int {
+		var common: Null<String> = null;
+		for (n in from...to + 1) {
+			final line: String = lines[n - 1];
+			if (StringTools.trim(line).length != 0) {
+				final lead: String = leadingWhitespace(line);
+				common = common == null ? lead : sharedPrefix(common, lead);
+				if (common.length == 0) return 0;
+			}
+		}
+		return common == null ? 0 : common.length;
+	}
+
+	/** The leading run of spaces / tabs at the start of `s`. */
+	private static function leadingWhitespace(s: String): String {
+		var i: Int = 0;
+		while (i < s.length) {
+			final c: Int = StringTools.fastCodeAt(s, i);
+			if (c != ' '.code && c != '\t'.code) break;
+			i++;
+		}
+		return s.substr(0, i);
+	}
+
+	/** The longest common prefix of `a` and `b`. */
+	private static function sharedPrefix(a: String, b: String): String {
+		final limit: Int = a.length < b.length ? a.length : b.length;
+		var i: Int = 0;
+		while (i < limit && StringTools.fastCodeAt(a, i) == StringTools.fastCodeAt(b, i)) i++;
+		return a.substr(0, i);
+	}
+
+	/**
+	 * Drop the first `strip` chars (the verified common indent) of `line`; a
+	 * blank / whitespace-only line collapses to empty instead of keeping stray
+	 * trailing indent.
+	 */
+	private static function dedentLine(line: String, strip: Int): String {
+		return StringTools.trim(line).length == 0 ? '' : line.substr(strip);
 	}
 
 }
