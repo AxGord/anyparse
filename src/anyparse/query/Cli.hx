@@ -12,8 +12,10 @@ import anyparse.query.Matcher.Match;
 import anyparse.query.Meta.MetaHit;
 import anyparse.query.Inline;
 import anyparse.query.Inline.InlineResult;
+import anyparse.query.InlineMethod;
 import anyparse.query.ExtractVar;
 import anyparse.query.ExtractVar.ExtractResult;
+import anyparse.query.ExtractMethod;
 import anyparse.query.AddParam;
 import anyparse.query.AddParam.AddParamResult;
 import anyparse.query.ChangeSig;
@@ -30,6 +32,7 @@ import anyparse.query.CrossRename.CrossRenameResult;
 import anyparse.query.MoveSymbol;
 import anyparse.query.MoveSymbol.MoveResult;
 import anyparse.query.MoveSymbol.MoveChange;
+import anyparse.query.SymbolQuery;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
 import anyparse.query.Rename;
@@ -356,10 +359,18 @@ final class Cli {
 				return runRename(rest);
 			case 'move':
 				return runMove(rest);
+			case 'symbols':
+				return runSymbols(rest);
+			case 'importers':
+				return runImporters(rest);
 			case 'inline':
 				return runInline(rest);
+			case 'inline-method':
+				return runInlineMethod(rest);
 			case 'extract-var':
 				return runExtractVar(rest);
+			case 'extract-method':
+				return runExtractMethod(rest);
 			case 'add-param':
 				return runAddParam(rest);
 			case 'change-sig':
@@ -826,6 +837,133 @@ final class Cli {
 	}
 
 	/**
+	 * `apq symbols <scope> [--lang <name>] [--kind <Kind>]` — list every
+	 * top-level type declaration across the `<scope>` (one or more
+	 * file/dir/glob specs) as `<import-path>\t<Kind>\t<file>:<line>:<col>`,
+	 * in input-file order then source order. `<import-path>` is what a
+	 * consumer would `import` — the module path for the module's main
+	 * type, else `module.SubType`. `--kind` filters to one decl kind
+	 * (`ClassDecl` / `InterfaceDecl` / `EnumDecl` / `TypedefDecl` /
+	 * `AbstractDecl`). Unparseable files are skipped silently. This is the
+	 * CLI surface of the cross-file `SymbolIndex` type browser.
+	 */
+	private static function runSymbols(args: Array<String>): Int {
+		var lang: String = 'haxe';
+		var kindFilter: Null<String> = null;
+		final inputSpecs: Array<String> = [];
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--kind':
+					kindFilter = expectValue(args, ++i, '--kind');
+				case '-h', '--help':
+					printSymbolsUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq symbols: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					inputSpecs.push(a);
+			}
+			i++;
+		}
+		if (inputSpecs.length == 0) {
+			stderr('apq symbols: expected <scope> (one or more file/dir/glob specs)\n');
+			printSymbolsUsage();
+			return EXIT_USAGE;
+		}
+
+		final plugin: GrammarPlugin = pickPlugin(lang);
+		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
+		final paths: Array<String> = expanded.paths;
+		if (paths.length == 0) {
+			stderr('apq symbols: ${inputSpecs.join(", ")} matched no .hx files\n');
+			return EXIT_RUNTIME;
+		}
+
+		final files: Array<{ file: String, source: String }> = [];
+		for (path in paths) {
+			final fileSource: String = try readSourceForParse(path) catch (exception: Exception) {
+				stderr('apq symbols: $path: ${exception.message}\n');
+				return EXIT_RUNTIME;
+			};
+			files.push({ file: path, source: fileSource });
+		}
+
+		final rows: Array<SymbolQuery.SymbolRow> = SymbolQuery.symbols(files, plugin, kindFilter);
+		for (row in rows) sysPrint('${SymbolQuery.formatSymbolRow(row)}\n');
+		return EXIT_OK;
+	}
+
+	/**
+	 * `apq importers <module> <scope> [--lang <name>]` — list the files in
+	 * `<scope>` (one or more file/dir/glob specs after the module) that
+	 * import `<module>` — a direct `import` / `using` of the module itself
+	 * or of one of its sub-types. A wildcard `import pkg.*;` is NOT
+	 * counted (see `SymbolIndex.filesImportingModule`). The reverse-
+	 * dependency / impact-analysis surface of the cross-file `SymbolIndex`.
+	 */
+	private static function runImporters(args: Array<String>): Int {
+		var lang: String = 'haxe';
+		var module: Null<String> = null;
+		final inputSpecs: Array<String> = [];
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '-h', '--help':
+					printImportersUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq importers: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (module == null)
+						module = a;
+					else
+						inputSpecs.push(a);
+			}
+			i++;
+		}
+		if (module == null || inputSpecs.length == 0) {
+			stderr('apq importers: expected <module> <scope> (one or more file/dir/glob specs)\n');
+			printImportersUsage();
+			return EXIT_USAGE;
+		}
+
+		final modulePath: String = module;
+		final plugin: GrammarPlugin = pickPlugin(lang);
+		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
+		final paths: Array<String> = expanded.paths;
+		if (paths.length == 0) {
+			stderr('apq importers: ${inputSpecs.join(", ")} matched no .hx files\n');
+			return EXIT_RUNTIME;
+		}
+
+		final files: Array<{ file: String, source: String }> = [];
+		for (path in paths) {
+			final fileSource: String = try readSourceForParse(path) catch (exception: Exception) {
+				stderr('apq importers: $path: ${exception.message}\n');
+				return EXIT_RUNTIME;
+			};
+			files.push({ file: path, source: fileSource });
+		}
+
+		final hits: Array<String> = SymbolQuery.importers(files, plugin, modulePath);
+		for (path in hits) sysPrint('$path\n');
+		return EXIT_OK;
+	}
+
+	/**
 	 * `apq inline <file> <line>:<col> [--write]` — scope-correct,
 	 * format-preserving inline of the local `var` / `final` binding
 	 * identified by the symbol at `<line>:<col>`. Every read of the
@@ -914,6 +1052,91 @@ final class Cli {
 	}
 
 	/**
+	 * `apq inline-method <file> <line>:<col> [--write]` — inline the
+	 * function whose declaration is at `<line>:<col>` into EVERY in-file
+	 * call site and delete the now-dead declaration. The body must reduce
+	 * to a single return expression; each call's positional arguments are
+	 * substituted for the parameters (parenthesised to preserve
+	 * precedence), and the call-site set is proven complete before any
+	 * rewrite. Like `inline` it is format-preserving (raw span splices, not
+	 * the writer). `<line>:<col>` uses the same column convention
+	 * `apq refs` prints. Without `--write` the rewritten source is emitted
+	 * to stdout; with `--write` it overwrites the file in place. A cursor
+	 * not on a function, a non-single-return body, an unprovable call set,
+	 * an impure dropped / duplicated argument, an arity mismatch, or an
+	 * unparseable result exits non-zero with the file untouched. NOTE: a
+	 * method may have callers in OTHER files that this in-file op cannot
+	 * see or update — inlining deletes the declaration regardless.
+	 */
+	private static function runInlineMethod(args: Array<String>): Int {
+		var lang: String = 'haxe';
+		var write: Bool = false;
+		var file: Null<String> = null;
+		var posSpec: Null<String> = null;
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--write':
+					write = true;
+				case '-h', '--help':
+					printInlineMethodUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq inline-method: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (file == null)
+						file = a;
+					else if (posSpec == null)
+						posSpec = a;
+					else {
+						stderr('apq inline-method: unexpected extra argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (file == null || posSpec == null) {
+			stderr('apq inline-method: expected <file> <line>:<col>\n');
+			printInlineMethodUsage();
+			return EXIT_USAGE;
+		}
+		final pos: Null<Position> = parseLineCol(posSpec);
+		if (pos == null) {
+			stderr('apq inline-method: malformed position "$posSpec" — expected <line>:<col>\n');
+			return EXIT_USAGE;
+		}
+
+		final filePath: String = file;
+		final source: String = try readFile(filePath) catch (exception: Exception) {
+			stderr('apq inline-method: $filePath: ${exception.message}\n');
+			return EXIT_RUNTIME;
+		};
+
+		final plugin: GrammarPlugin = pickPlugin(lang);
+		final shape: RefShape = plugin.refShape();
+		final result: EditResult = InlineMethod.inlineMethod(source, pos.line, pos.col, plugin, shape);
+		switch result {
+			case Ok(text):
+				if (write) {
+					writeFile(filePath, text);
+					stderr('apq inline-method: wrote $filePath\n');
+				} else {
+					sysPrint(text);
+				}
+				return EXIT_OK;
+			case Err(message):
+				stderr('apq inline-method: $message\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
+	/**
 	 * `apq extract-var <file> <line>:<col> <name> [--write]` — hoist the
 	 * expression starting at `<line>:<col>` into a fresh local
 	 * `final <name> = <expr>;` inserted on its own line immediately before
@@ -994,6 +1217,106 @@ final class Cli {
 				return EXIT_OK;
 			case Err(message):
 				stderr('apq extract-var: $message\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
+	/**
+	 * `apq extract-method <file> <startL>:<startC> <endL>:<endC> <name>
+	 * [--write] [--reformat]` — extract the contiguous run of statements
+	 * bounded by the two positions into a fresh local function `<name>`
+	 * (a closure capturing the enclosing scope), replacing the run with a
+	 * call. A local declared in the run and used after it becomes the
+	 * call's return value (at most one). The run must be sibling statements
+	 * of one `{ }` block with no return / break / continue. Because the op
+	 * synthesises a new function, the result is WRITER-FORMATTED — the
+	 * source must already be canonical unless `--reformat` is passed.
+	 * `<line>:<col>` use the `apq refs` print convention. Without `--write`
+	 * the rewritten source is emitted to stdout; with `--write` it
+	 * overwrites in place.
+	 */
+	private static function runExtractMethod(args: Array<String>): Int {
+		var lang: String = 'haxe';
+		var write: Bool = false;
+		var reformat: Bool = false;
+		var file: Null<String> = null;
+		var startSpec: Null<String> = null;
+		var endSpec: Null<String> = null;
+		var name: Null<String> = null;
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--write':
+					write = true;
+				case '--reformat':
+					reformat = true;
+				case '-h', '--help':
+					printExtractMethodUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq extract-method: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (file == null)
+						file = a;
+					else if (startSpec == null)
+						startSpec = a;
+					else if (endSpec == null)
+						endSpec = a;
+					else if (name == null)
+						name = a;
+					else {
+						stderr('apq extract-method: unexpected extra argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (file == null || startSpec == null || endSpec == null || name == null) {
+			stderr('apq extract-method: expected <file> <startLine>:<col> <endLine>:<col> <name>\n');
+			printExtractMethodUsage();
+			return EXIT_USAGE;
+		}
+		final startPos: Null<Position> = parseLineCol(startSpec);
+		if (startPos == null) {
+			stderr('apq extract-method: malformed start position "$startSpec" — expected <line>:<col>\n');
+			return EXIT_USAGE;
+		}
+		final endPos: Null<Position> = parseLineCol(endSpec);
+		if (endPos == null) {
+			stderr('apq extract-method: malformed end position "$endSpec" — expected <line>:<col>\n');
+			return EXIT_USAGE;
+		}
+
+		final filePath: String = file;
+		final nameStr: String = name;
+		final source: String = try readFile(filePath) catch (exception: Exception) {
+			stderr('apq extract-method: $filePath: ${exception.message}\n');
+			return EXIT_RUNTIME;
+		};
+
+		final plugin: GrammarPlugin = pickPlugin(lang);
+		final shape: RefShape = plugin.refShape();
+		final optsJson: Null<String> = discoverFormatConfig(filePath);
+		final result: EditResult = ExtractMethod.extractMethod(
+			source, startPos.line, startPos.col, endPos.line, endPos.col, nameStr, reformat, plugin, shape, optsJson
+		);
+		switch result {
+			case Ok(text):
+				if (write) {
+					writeFile(filePath, text);
+					stderr('apq extract-method: wrote $filePath\n');
+				} else {
+					sysPrint(text);
+				}
+				return EXIT_OK;
+			case Err(message):
+				stderr('apq extract-method: $message\n');
 				return EXIT_RUNTIME;
 		}
 	}
@@ -7521,8 +7844,12 @@ final class Cli {
 		sysPrint('  refs          Symbol references (value bindings; scope-aware)\n');
 		sysPrint('  rename        Scope-correct, format-preserving symbol rename\n');
 		sysPrint('  move          Move a type declaration to another file (same package)\n');
+		sysPrint('  symbols       List top-level type declarations across a scope (cross-file)\n');
+		sysPrint('  importers     List files importing a given module (cross-file)\n');
 		sysPrint('  inline        Inline a local variable into its uses\n');
+		sysPrint('  inline-method Inline a single-return function into its call sites + delete it\n');
 		sysPrint('  extract-var   Hoist an expression into a new local final\n');
+		sysPrint('  extract-method Extract a statement run into a local function (closure)\n');
 		sysPrint('  add-param     Add a backward-compatible parameter to a function\n');
 		sysPrint('  change-sig    Reorder a function\'s parameters + call-site args\n');
 		sysPrint('  remove-param  Remove a function parameter + call-site args\n');
@@ -7549,6 +7876,58 @@ final class Cli {
 		sysPrint('Global options:\n');
 		sysPrint('  --lang <name>   Pick grammar plugin (default: haxe)\n');
 		sysPrint('  -h, --help      Show help\n');
+	}
+
+	private static function printSymbolsUsage(): Void {
+		sysPrint('Usage: apq symbols <scope...> [options]\n');
+		sysPrint('\n');
+		sysPrint('List every top-level type declaration across the scope (one or more\n');
+		sysPrint('file/dir/glob specs) as <import-path>\\t<Kind>\\t<file>:<line>:<col>.\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --kind <Kind>   Only list this decl kind (ClassDecl/InterfaceDecl/\n');
+		sysPrint('                  EnumDecl/TypedefDecl/AbstractDecl)\n');
+		sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
+		sysPrint('  -h, --help      Show this help\n');
+	}
+
+	private static function printImportersUsage(): Void {
+		sysPrint('Usage: apq importers <module> <scope...> [options]\n');
+		sysPrint('\n');
+		sysPrint('List the files in the scope (file/dir/glob specs after the module) that\n');
+		sysPrint('import <module> — the module itself or one of its sub-types. A wildcard\n');
+		sysPrint('import pkg.*; is not counted.\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
+		sysPrint('  -h, --help      Show this help\n');
+	}
+
+	private static function printExtractMethodUsage(): Void {
+		sysPrint('Usage: apq extract-method <file> <startLine>:<col> <endLine>:<col> <name> [options]\n');
+		sysPrint('\n');
+		sysPrint('Extract the contiguous run of statements bounded by the two positions into\n');
+		sysPrint('a fresh local function <name> (a closure), replacing the run with a call.\n');
+		sysPrint('A local defined in the run and used after it becomes the return value.\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --write         Overwrite the file in place (default: print to stdout)\n');
+		sysPrint('  --reformat      Canonicalise the whole file if it is not already canonical\n');
+		sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
+		sysPrint('  -h, --help      Show this help\n');
+	}
+
+	private static function printInlineMethodUsage(): Void {
+		sysPrint('Usage: apq inline-method <file> <line>:<col> [options]\n');
+		sysPrint('\n');
+		sysPrint('Inline the single-return function declared at <line>:<col> into every\n');
+		sysPrint('in-file call site (arguments substituted for parameters) and delete the\n');
+		sysPrint('declaration. The call-site set is proven complete before any rewrite.\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --write         Overwrite the file in place (default: print to stdout)\n');
+		sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
+		sysPrint('  -h, --help      Show this help\n');
 	}
 
 	private static function printSearchUsage(): Void {
