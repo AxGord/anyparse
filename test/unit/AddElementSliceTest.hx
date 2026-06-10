@@ -154,6 +154,39 @@ class AddElementSliceTest extends Test {
 		assertAppendRefused(source, 2, 13, 'y', true);
 	}
 
+	/**
+	 * --before a MODIFIED module decl inserts before the WHOLE decl, not
+	 * between its `private` modifier and the `typedef` keyword: the new decl
+	 * lands ahead of `private typedef B`, leaving the modifier with B.
+	 */
+	public function testInsertBeforeModifiedDecl():Void {
+		final source:String = 'typedef A = Int;\nprivate typedef B = Int;\n';
+		final expected:String = 'typedef A = Int;\ntypedef D = Int;\nprivate typedef B = Int;\n';
+		assertAdd(source, 2, 8, Before, 'typedef D = Int;', true, expected);
+	}
+
+	/**
+	 * Pointing at a MODIFIER sibling (`private`) targets the decl it
+	 * precedes — --after lands past the decl's body, not just past the
+	 * modifier.
+	 */
+	public function testInsertAfterByPointingAtModifier():Void {
+		final source:String = 'typedef A = Int;\nprivate typedef B = Int;\n';
+		final expected:String = 'typedef A = Int;\nprivate typedef B = Int;\ntypedef D = Int;\n';
+		assertAdd(source, 2, 0, After, 'typedef D = Int;', true, expected);
+	}
+
+	/**
+	 * --before a class member with modifiers inserts before the modifier
+	 * run (`public function f` keeps its `public`), not between `public` and
+	 * `function`.
+	 */
+	public function testInsertBeforeModifiedMember():Void {
+		final source:String = 'class C {\n\tvar a:Int;\n\tpublic function f():Void {}\n}\n';
+		final expected:String = 'class C {\n\tvar a:Int;\n\tvar b:Int;\n\n\tpublic function f():Void {}\n}\n';
+		assertAdd(source, 3, 1, Before, 'var b:Int;', true, expected);
+	}
+
 	private function assertAppend(source:String, line:Int, col:Int, code:String, reformat:Bool, expected:String):Void {
 		final result:EditResult = appendOf(source, line, col, code, reformat);
 		switch result {
