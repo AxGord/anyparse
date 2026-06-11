@@ -2,57 +2,45 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.runtime.Span;
-import haxe.Exception;
-
-using Lambda;
 
 /**
- * Flags `import` statements whose bound name is never referenced
- * elsewhere in the same file. Built on the cross-file `SymbolIndex` for
- * import extraction (kind / alias / span, skip-parse handling) and on a
- * union of the plugin's two parse projections for the occurrence set:
- * `parseFile` surfaces value references (`Foo.bar()`, `new Foo()`, `case
- * Foo:`) and `parseFileTypeRefs` adds type-position references (`var
- * x:Foo`, `extends Foo`, `cast(_, Foo)`, parameter / generic types). A
- * type-only-used import is invisible in `parseFile` alone, so both trees
- * are required.
+ * Flags `import` statements whose bound name is never referenced elsewhere
+ * in the same file. Import extraction (kind / alias / span, skip-parse
+ * handling) rides on the cross-file `SymbolIndex`; the "is it referenced"
+ * test is a raw word-boundary scan of the source, OUTSIDE the import
+ * statements themselves.
+ *
+ * ## Why a raw scan, not the AST
+ *
+ * An earlier version collected occurrences from the plugin's `parseFile` +
+ * `parseFileTypeRefs` trees. That MISSED references the type projection does
+ * not surface — a type nested in `Array<{ f: Array<Name> }>`, for one — and
+ * `lint --fix` then deleted a needed import, breaking the build. A raw
+ * word-boundary scan catches every reference the compiler can see, at the
+ * cost of also counting the name inside comments / strings. That trade is
+ * the right one for an autofix: err toward a false NEGATIVE (a missed unused
+ * import) over a false POSITIVE (deleting a needed one).
  *
  * ## Conservative by design
  *
- * The check only warns when it is confident. The bound name of an
- * `import pkg.Mod;` / `import pkg.Mod.Sub;` is the leaf segment (`Mod` /
- * `Sub`); for `import pkg.Mod as Alias;` it is the alias. If that name
- * does not appear as any node's name slot in either tree, the import is
- * unused → `Warning`. Two forms cannot be verified and are reported as
- * `Info` rather than warned on:
+ * The bound name of an `import pkg.Mod;` / `import pkg.Mod.Sub;` is the leaf
+ * segment (`Mod` / `Sub`); for `import pkg.Mod as Alias;` it is the alias. If
+ * that name occurs as no word-boundary token anywhere outside the import
+ * statements, the import is unused → `Warning`. Two forms cannot be verified
+ * and are reported as `Info` rather than warned on:
  *
- *  - `import pkg.*;` (wildcard) — brings in an unknown set of symbols; a
- *    bare reference can come from it without naming the package.
- *  - `using pkg.Mod;` — its methods are applied implicitly as extension
- *    calls (`s.trim()`), so the module name need never appear.
+ *  - `import pkg.*;` (wildcard) — brings in an unknown set of symbols; a bare
+ *    reference can come from it without naming the package.
+ *  - `using pkg.Mod;` — its methods are applied implicitly as extension calls
+ *    (`s.trim()`), so the module name need never appear.
  */
 @:nullSafety(Strict)
 final class UnusedImport implements Check {
-
-	/**
-	 * Top-level node kinds excluded from the occurrence set: the import /
-	 * package statements themselves. Excluding them matters for the alias
-	 * form — an `ImportAliasDecl`'s own name slot IS the alias, so without
-	 * this exclusion an alias would always "reference itself" and never be
-	 * flagged. Mirrors the kind strings `SymbolIndex` keys on.
-	 */
-	private static final SKIP_KINDS: Array<String> = [
-		'ImportDecl',
-		'ImportAliasDecl',
-		'ImportWildDecl',
-		'UsingDecl',
-		'PackageDecl'
-	];
 
 	public function new() {}
 
@@ -72,8 +60,8 @@ final class UnusedImport implements Check {
 		final violations: Array<Violation> = [];
 		for (info in index.allFiles()) {
 			final source: String = sourceOf[info.file] ?? '';
-			final occurrences: Array<String> = collectOccurrences(plugin, source);
-			for (imp in info.imports) addViolation(violations, info.file, imp, occurrences);
+			final importSpans: Array<Span> = [for (imp in info.imports) imp.span];
+			for (imp in info.imports) addViolation(violations, info.file, imp, source, importSpans);
 		}
 		return violations;
 	}
@@ -97,10 +85,12 @@ final class UnusedImport implements Check {
 
 	/**
 	 * Append the verdict for one import. Wildcard / `using` forms are
-	 * unverifiable advisories (`Info`); every other form is a `Warning`
-	 * when its bound name is absent from `occurrences`.
+	 * unverifiable advisories (`Info`); every other form is a `Warning` when
+	 * its bound name is not referenced outside the import statements.
 	 */
-	private static function addViolation(out: Array<Violation>, file: String, imp: ImportInfo, occurrences: Array<String>): Void {
+	private static function addViolation(
+		out: Array<Violation>, file: String, imp: ImportInfo, source: String, importSpans: Array<Span>
+	): Void {
 		switch imp.kind {
 			case ImportKind.Wild:
 				out.push(make(file, imp, Severity.Info, 'wildcard import \'${imp.raw}\': usage not tracked'));
@@ -108,7 +98,7 @@ final class UnusedImport implements Check {
 				out.push(make(file, imp, Severity.Info, 'using import \'${imp.raw}\': extension use not tracked'));
 			case _:
 				final bound: String = imp.alias ?? lastSegment(imp.raw);
-				if (!occurrences.contains(bound))
+				if (!referencedOutsideImports(source, bound, importSpans))
 					out.push(make(file, imp, Severity.Warning, 'unused import \'${imp.raw}\''));
 		}
 	}
@@ -124,27 +114,33 @@ final class UnusedImport implements Check {
 	}
 
 	/**
-	 * Every name-slot value across the file's `parseFile` and
-	 * `parseFileTypeRefs` trees, excluding the import / package statements
-	 * (`SKIP_KINDS`). Either parse may throw — a thrown projection simply
-	 * contributes nothing, so a file that parses one way but not the other
-	 * still yields the names it can.
+	 * Does `name` occur as a word-boundary identifier token anywhere in
+	 * `source` OUTSIDE every import statement (`importSpans`)? Excluding the
+	 * import ranges is what stops an import — and an alias, whose own
+	 * statement contains the bound name verbatim — from "referencing itself".
+	 * Word-boundary (non-identifier char on both sides) so `Foo` does not
+	 * match inside `FooBar`.
 	 */
-	private static function collectOccurrences(plugin: GrammarPlugin, source: String): Array<String> {
-		final names: Array<String> = [];
-		final valueTree: Null<QueryNode> = try plugin.parseFile(source) catch (_: Exception) null;
-		if (valueTree != null) collectNames(valueTree, names);
-		final typeTree: Null<QueryNode> = try plugin.parseFileTypeRefs(source) catch (_: Exception) null;
-		if (typeTree != null) collectNames(typeTree, names);
-		return names;
+	private static function referencedOutsideImports(source: String, name: String, importSpans: Array<Span>): Bool {
+		final len: Int = name.length;
+		if (len == 0) return false;
+		var i: Int = 0;
+		while (i + len <= source.length) {
+			final at: Int = source.indexOf(name, i);
+			if (at < 0) return false;
+			final beforeOk: Bool = at == 0 || !RefactorSupport.isIdentChar(StringTools.fastCodeAt(source, at - 1));
+			final afterIdx: Int = at + len;
+			final afterOk: Bool = afterIdx >= source.length || !RefactorSupport.isIdentChar(StringTools.fastCodeAt(source, afterIdx));
+			if (beforeOk && afterOk && !withinAny(at, importSpans)) return true;
+			i = at + 1;
+		}
+		return false;
 	}
 
-	/** Recursively gather non-null `name` slots, skipping import subtrees. */
-	private static function collectNames(node: QueryNode, out: Array<String>): Void {
-		if (SKIP_KINDS.contains(node.kind)) return;
-		final name: Null<String> = node.name;
-		if (name != null) out.push(name);
-		for (child in node.children) collectNames(child, out);
+	/** Is `offset` inside any of `spans` (`from`-inclusive, `to`-exclusive)? */
+	private static function withinAny(offset: Int, spans: Array<Span>): Bool {
+		for (s in spans) if (offset >= s.from && offset < s.to) return true;
+		return false;
 	}
 
 	/** Last dot-segment of a path (`pkg.Mod.Sub` -> `Sub`); the whole string when undotted. */

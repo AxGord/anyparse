@@ -115,6 +115,25 @@ class LintSliceTest extends Test {
 		Assert.equals(1, viaSubset.length);
 	}
 
+	/**
+	 * A type referenced only deep inside a nested generic / anonymous-struct
+	 * type (`Array<{ h: Array<Foo> }>`) must NOT be flagged — the raw scan
+	 * sees it where the AST type-projection did not. Regression for a
+	 * `lint --fix` that deleted a needed import and broke the build.
+	 */
+	public function testDeepNestedTypeUsageNotFlagged(): Void {
+		final src: String = 'package pkg;\nimport a.b.Foo;\nclass C {\n\tfunction f(xs:Array<{h:Array<Foo>}>):Void {}\n}';
+		final vs: Array<Violation> = new UnusedImport().run([{ file: 'f.hx', source: src }], plugin());
+		Assert.equals(0, vs.length);
+	}
+
+	/** A name appearing only in a comment counts as used — the conservative bias (no false positive). */
+	public function testCommentMentionIsConservativelyUsed(): Void {
+		final src: String = 'package pkg;\nimport a.b.Foo;\n// Foo is referenced here only\nclass C {}';
+		final vs: Array<Violation> = new UnusedImport().run([{ file: 'f.hx', source: src }], plugin());
+		Assert.equals(0, vs.length);
+	}
+
 	/** An unparseable file is excluded; the check does not throw (skip-parse tolerance). */
 	public function testSkipParseExcluded(): Void {
 		final files = [
