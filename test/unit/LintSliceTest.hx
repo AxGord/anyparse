@@ -7,6 +7,8 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.UnusedImport;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.RefactorSupport;
+import anyparse.query.RefactorSupport.EditResult;
 import anyparse.query.format.Text;
 import anyparse.runtime.Span;
 import anyparse.runtime.Span.Position;
@@ -133,6 +135,36 @@ class LintSliceTest extends Test {
 		Assert.isTrue(out.contains('pkg/C.hx:'));
 		Assert.isTrue(out.contains('[warning]'));
 		Assert.isTrue(out.contains('(unused-import)'));
+	}
+
+	/**
+	 * The autofix yields one delete-edit per `Warning` and none for the
+	 * unverifiable `Info` advisories (wildcard / `using`) — `lint --fix`
+	 * only removes imports it is confident about.
+	 */
+	public function testFixYieldsDeleteEditsForWarningsOnly(): Void {
+		final src: String = 'package pkg;\nimport a.b.Unused;\nimport a.b.*;\nclass C {}';
+		final check: UnusedImport = new UnusedImport();
+		final vs: Array<Violation> = check.run([{ file: 'pkg/C.hx', source: src }], plugin());
+		// One Warning (Unused) + one Info (wildcard); only the Warning is fixable.
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin());
+		Assert.equals(1, edits.length);
+		Assert.equals('', edits[0].text);
+	}
+
+	/** Applying the fix edits removes the unused import and keeps the used one. */
+	public function testFixRemovesUnusedImport(): Void {
+		final src: String = 'package pkg;\nimport a.b.Used;\nimport a.b.Gone;\nclass C {\n\tvar x:Used;\n}';
+		final check: UnusedImport = new UnusedImport();
+		final vs: Array<Violation> = check.run([{ file: 'f.hx', source: src }], plugin());
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin());
+		switch RefactorSupport.canonicalize(src, edits, true, plugin()) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf('Gone') == -1);
+				Assert.isTrue(text.indexOf('a.b.Used') >= 0);
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+		}
 	}
 
 	private static function plugin(): HaxeQueryPlugin {

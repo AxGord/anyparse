@@ -66,17 +66,6 @@ enum InsertSide {
 final class AddElement {
 
 	/**
-	 * Expression-list container kinds whose direct children are
-	 * comma-separated. When the cursor element's parent is one of these,
-	 * the new element is joined with a `,` even for a single-element list
-	 * (where the source-adjacency check alone could not tell a one-element
-	 * list from a block). `Call` / `NewExpr` carry a leading non-element
-	 * child (the callee / the constructed type) — harmless here because the
-	 * cursor element is an actual argument, never the callee.
-	 */
-	private static final COMMA_CONTAINER_KINDS: Array<String> = ['ArrayExpr', 'ObjectLit', 'Call', 'NewExpr'];
-
-	/**
 	 * Expression / block / switch container kinds whose source ENDS at their
 	 * own closing delimiter, so back-scanning whitespace from `span.to`
 	 * reliably lands on that delimiter. Type-decl bodies (class / interface /
@@ -135,8 +124,8 @@ final class AddElement {
 		// between a modifier and its decl (and a cursor on a modifier targets
 		// the decl it precedes). A non-decl element keeps its own span.
 		final span: Span = RefactorSupport.declGroupSpan(element, parent, elemSpan);
-		var isComma: Bool = adjacentToComma(source, span);
-		if (!isComma && parent != null) isComma = COMMA_CONTAINER_KINDS.contains(parent.kind);
+		var isComma: Bool = RefactorSupport.adjacentToComma(source, span);
+		if (!isComma && parent != null) isComma = RefactorSupport.COMMA_CONTAINER_KINDS.contains(parent.kind);
 
 		final edit: { span: Span, text: String } = switch side {
 			case After:
@@ -218,7 +207,7 @@ final class AddElement {
 		final lastCode: Int = lastContent >= containerSpan.from ? StringTools.fastCodeAt(source, lastContent) : -1;
 		final empty: Bool = lastCode == '{'.code || lastCode == '['.code || lastCode == '('.code || lastContent < containerSpan.from;
 
-		final isComma: Bool = COMMA_CONTAINER_KINDS.contains(container.kind);
+		final isComma: Bool = RefactorSupport.COMMA_CONTAINER_KINDS.contains(container.kind);
 		final at: Int = lastContent + 1;
 		final text: String = empty ? trimmed : (isComma ? ', ' + trimmed : '\n' + trimmed);
 
@@ -279,25 +268,6 @@ final class AddElement {
 		}
 		walk(tree, null);
 		return result;
-	}
-
-	/**
-	 * Is the element at `span` immediately adjacent to a `,` — the next
-	 * non-whitespace byte after `span.to`, or the previous non-whitespace
-	 * byte before `span.from`, is a comma? True ⇒ the element sits in a
-	 * comma-separated list (covers a comma container not in
-	 * `COMMA_CONTAINER_KINDS`, for any list with at least two elements).
-	 */
-	private static function adjacentToComma(source: String, span: Span): Bool {
-		var i: Int = span.to;
-		while (i < source.length && isSpace(StringTools.fastCodeAt(source, i))) i++;
-		if (i < source.length && StringTools.fastCodeAt(source, i) == ','.code) return true;
-
-		var j: Int = span.from - 1;
-		while (j >= 0 && isSpace(StringTools.fastCodeAt(source, j))) j--;
-		if (j >= 0 && StringTools.fastCodeAt(source, j) == ','.code) return true;
-
-		return false;
 	}
 
 	private static inline function isSpace(c: Int): Bool {

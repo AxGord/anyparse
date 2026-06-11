@@ -395,6 +395,12 @@ final class Cli {
 				return runAddElement(rest);
 			case 'replace-node':
 				return runReplaceNode(rest);
+			case 'remove-element':
+				return runRemoveElement(rest);
+			case 'remove-import':
+				return runRemoveImport(rest);
+			case 'remove-member':
+				return runRemoveMember(rest);
 			case 'uses':
 				return runUses(rest);
 			case 'meta':
@@ -1060,6 +1066,7 @@ final class Cli {
 		var lang: String = 'haxe';
 		var flat: Bool = false;
 		var includeInfo: Bool = false;
+		var fix: Bool = false;
 		final ruleFilters: Array<String> = [];
 		final inputSpecs: Array<String> = [];
 
@@ -1075,6 +1082,8 @@ final class Cli {
 					includeInfo = true;
 				case '--flat':
 					flat = true;
+				case '--fix':
+					fix = true;
 				case '-h', '--help':
 					printLintUsage();
 					return EXIT_OK;
@@ -1127,6 +1136,9 @@ final class Cli {
 		}
 
 		final all: Array<Violation> = Linter.run(files, plugin, checks);
+
+		if (fix) return applyLintFixes(files, all, checks, plugin);
+
 		final shown: Array<Violation> = includeInfo ? all : all.filter(v -> v.severity != Severity.Info);
 
 		// Group the shown violations by file, in input-file order, each group
@@ -1161,6 +1173,49 @@ final class Cli {
 	/** Source-offset sort key for a violation span; null spans sort last. */
 	private static inline function spanStart(span: Null<Span>): Int {
 		return span != null ? span.from : 0x7FFFFFFF;
+	}
+
+	/**
+	 * Apply each check's autofix for every file in `--fix` mode. Per file, the
+	 * fixable edits from all active checks are batched into ONE
+	 * `RefactorSupport.canonicalize` (so several deletions apply end-to-start
+	 * without span-shift) and written in place. A non-canonical file is
+	 * refused by the canonical gate and skipped with a note — `--fix` never
+	 * reflows unrelated hand-wrapping. A summary goes to stderr; the exit code
+	 * is success.
+	 */
+	private static function applyLintFixes(
+		files: Array<{ file: String, source: String }>, all: Array<Violation>, checks: Array<Check>, plugin: GrammarPlugin
+	): Int {
+		var fixedCount: Int = 0;
+		var fixedFiles: Int = 0;
+		var skipped: Int = 0;
+		for (entry in files) {
+			final fileViolations: Array<Violation> = all.filter(v -> v.file == entry.file);
+			if (fileViolations.length == 0) continue;
+
+			final edits: Array<{ span: Span, text: String }> = [];
+			for (check in checks) {
+				final own: Array<Violation> = fileViolations.filter(v -> v.rule == check.id());
+				if (own.length == 0) continue;
+				for (edit in check.fix(entry.source, own, plugin)) edits.push(edit);
+			}
+			if (edits.length == 0) continue;
+
+			final optsJson: Null<String> = discoverFormatConfig(entry.file);
+			switch RefactorSupport.canonicalize(entry.source, edits, false, plugin, optsJson) {
+				case Ok(text):
+					writeFile(entry.file, text);
+					fixedFiles++;
+					fixedCount += edits.length;
+				case Err(message):
+					stderr('apq lint --fix: ${entry.file}: $message\n');
+					skipped++;
+			}
+		}
+		final tail: String = skipped > 0 ? ', $skipped file(s) skipped' : '';
+		stderr('apq lint --fix: fixed $fixedCount issue(s) in $fixedFiles file(s)$tail\n');
+		return EXIT_OK;
 	}
 
 	/**
@@ -1900,6 +1955,212 @@ final class Cli {
 				stderr('apq add-element: $message\n');
 				return EXIT_RUNTIME;
 		}
+	}
+
+	/** Shared Ok/Err + write/print tail for the single-result remove ops. */
+	private static function finishEdit(opName: String, filePath: String, write: Bool, result: EditResult): Int {
+		switch result {
+			case Ok(text):
+				if (write) {
+					writeFile(filePath, text);
+					stderr('apq $opName: wrote $filePath\n');
+				} else {
+					sysPrint(text);
+				}
+				return EXIT_OK;
+			case Err(message):
+				stderr('apq $opName: $message\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
+	/**
+	 * `apq remove-element <file> <line>:<col> [--reformat] [--write]` — remove
+	 * the sibling element whose first token is at `line:col` (a statement /
+	 * case / array / object / call-arg element / member), with its modifier /
+	 * meta group, writer-formatted + re-parse-validated. The structural
+	 * inverse of `add-element`; same column convention `apq refs` prints.
+	 */
+	private static function runRemoveElement(args: Array<String>): Int {
+		var lang: String = 'haxe';
+		var write: Bool = false;
+		var reformat: Bool = false;
+		var file: Null<String> = null;
+		var posSpec: Null<String> = null;
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--write':
+					write = true;
+				case '--reformat':
+					reformat = true;
+				case '-h', '--help':
+					printRemoveElementUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq remove-element: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (file == null)
+						file = a;
+					else if (posSpec == null)
+						posSpec = a;
+					else {
+						stderr('apq remove-element: unexpected extra argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (file == null || posSpec == null) {
+			stderr('apq remove-element: expected <file> <line>:<col>\n');
+			printRemoveElementUsage();
+			return EXIT_USAGE;
+		}
+		final pos: Null<Position> = parseLineCol(posSpec);
+		if (pos == null) {
+			stderr('apq remove-element: malformed position "$posSpec" — expected <line>:<col>\n');
+			return EXIT_USAGE;
+		}
+
+		final filePath: String = file;
+		final source: String = try readFile(filePath) catch (exception: Exception) {
+			stderr('apq remove-element: $filePath: ${exception.message}\n');
+			return EXIT_RUNTIME;
+		};
+		final plugin: GrammarPlugin = pickPlugin(lang);
+		final optsJson: Null<String> = discoverFormatConfig(filePath);
+		return finishEdit(
+			'remove-element', filePath, write, RemoveElement.removeElement(source, pos.line, pos.col, reformat, plugin, optsJson)
+		);
+	}
+
+	/**
+	 * `apq remove-import <file> <module.path> [--reformat] [--write]` — remove
+	 * the `import` / `using` whose exposed path equals `<module.path>` (the
+	 * alias for an aliased import). The path must name exactly one statement.
+	 * The by-name counterpart of `remove-element`; backend of `lint --fix`.
+	 */
+	private static function runRemoveImport(args: Array<String>): Int {
+		var lang: String = 'haxe';
+		var write: Bool = false;
+		var reformat: Bool = false;
+		var file: Null<String> = null;
+		var modulePath: Null<String> = null;
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--write':
+					write = true;
+				case '--reformat':
+					reformat = true;
+				case '-h', '--help':
+					printRemoveImportUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq remove-import: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (file == null)
+						file = a;
+					else if (modulePath == null)
+						modulePath = a;
+					else {
+						stderr('apq remove-import: unexpected extra argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (file == null || modulePath == null) {
+			stderr('apq remove-import: expected <file> <module.path>\n');
+			printRemoveImportUsage();
+			return EXIT_USAGE;
+		}
+
+		final filePath: String = file;
+		final path: String = modulePath;
+		final source: String = try readFile(filePath) catch (exception: Exception) {
+			stderr('apq remove-import: $filePath: ${exception.message}\n');
+			return EXIT_RUNTIME;
+		};
+		final plugin: GrammarPlugin = pickPlugin(lang);
+		final optsJson: Null<String> = discoverFormatConfig(filePath);
+		return finishEdit('remove-import', filePath, write, RemoveImport.removeImport(source, path, reformat, plugin, optsJson));
+	}
+
+	/**
+	 * `apq remove-member <file> --type <T> <memberName> [--reformat] [--write]`
+	 * — remove the member named `<memberName>` of type `<T>` (a field or
+	 * method), with its modifier / meta group. Both `<T>` and `<memberName>`
+	 * must resolve to exactly one node. The by-name counterpart of
+	 * `add-member`.
+	 */
+	private static function runRemoveMember(args: Array<String>): Int {
+		var lang: String = 'haxe';
+		var write: Bool = false;
+		var reformat: Bool = false;
+		var typeName: Null<String> = null;
+		var file: Null<String> = null;
+		var memberName: Null<String> = null;
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--type':
+					typeName = expectValue(args, ++i, '--type');
+				case '--write':
+					write = true;
+				case '--reformat':
+					reformat = true;
+				case '-h', '--help':
+					printRemoveMemberUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq remove-member: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (file == null)
+						file = a;
+					else if (memberName == null)
+						memberName = a;
+					else {
+						stderr('apq remove-member: unexpected extra argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (file == null || typeName == null || memberName == null) {
+			stderr('apq remove-member: expected <file> --type <T> <memberName>\n');
+			printRemoveMemberUsage();
+			return EXIT_USAGE;
+		}
+
+		final filePath: String = file;
+		final type: String = typeName;
+		final member: String = memberName;
+		final source: String = try readFile(filePath) catch (exception: Exception) {
+			stderr('apq remove-member: $filePath: ${exception.message}\n');
+			return EXIT_RUNTIME;
+		};
+		final plugin: GrammarPlugin = pickPlugin(lang);
+		final optsJson: Null<String> = discoverFormatConfig(filePath);
+		return finishEdit('remove-member', filePath, write, RemoveMember.removeMember(source, type, member, reformat, plugin, optsJson));
 	}
 
 	/**
@@ -8243,6 +8504,9 @@ final class Cli {
 		sysPrint('  add-import    Add an import / using to a module (writer-formatted, canonical-gated)\n');
 		sysPrint('  add-element   Insert a sibling element — statement/case/list elem (--after/--before)\n');
 		sysPrint('  replace-node  Replace a node\'s source span (--select / --at; writer-formatted)\n');
+		sysPrint('  remove-element Remove a sibling element by cursor (inverse of add-element)\n');
+		sysPrint('  remove-import Remove an import / using by module path (backend of lint --fix)\n');
+		sysPrint('  remove-member Remove a member by --type + name (inverse of add-member)\n');
 		sysPrint('  uses          Type references (field/param/type-param positions)\n');
 		sysPrint('  meta          Annotation-on-decl shortcut\n');
 		sysPrint('  blast         Change-impact checklist (uses + refs + member-access)\n');
@@ -8314,6 +8578,7 @@ final class Cli {
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --rule <id>     Run only this check (repeatable; default: all)\n');
+		sysPrint('  --fix           Apply autofixes in place (e.g. delete unused imports)\n');
 		sysPrint('  --all, -a       Include Info-severity advisories in the report\n');
 		sysPrint('  --flat          One <file>:<line>:<col> per line (no per-file grouping)\n');
 		sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
@@ -8357,6 +8622,51 @@ final class Cli {
 		sysPrint('  --reformat        Canonicalise the whole file if it is not already canonical\n');
 		sysPrint('  --lang <name>     Grammar plugin (default: haxe)\n');
 		sysPrint('  -h, --help        Show this help\n');
+	}
+
+	private static function printRemoveElementUsage(): Void {
+		sysPrint('Usage: apq remove-element <file> <line>:<col> [options]\n');
+		sysPrint('\n');
+		sysPrint('Remove the sibling element whose first token is at <line>:<col> — a statement\n');
+		sysPrint('in a block, a case in a switch, an array / object / call-argument element, or a\n');
+		sysPrint('class member (with its modifier / meta group). The structural inverse of\n');
+		sysPrint('add-element; one separating comma is removed for comma lists. The result is\n');
+		sysPrint('writer-formatted + re-parse-validated.\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --write         Overwrite the file in place (default: print to stdout)\n');
+		sysPrint('  --reformat      Canonicalise the whole file if it is not already canonical\n');
+		sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
+		sysPrint('  -h, --help      Show this help\n');
+	}
+
+	private static function printRemoveImportUsage(): Void {
+		sysPrint('Usage: apq remove-import <file> <module.path> [options]\n');
+		sysPrint('\n');
+		sysPrint('Remove the import / using statement whose exposed path equals <module.path>\n');
+		sysPrint('(the alias for an aliased import). The path must name exactly one statement.\n');
+		sysPrint('The by-name counterpart of remove-element; backend of lint --fix.\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --write         Overwrite the file in place (default: print to stdout)\n');
+		sysPrint('  --reformat      Canonicalise the whole file if it is not already canonical\n');
+		sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
+		sysPrint('  -h, --help      Show this help\n');
+	}
+
+	private static function printRemoveMemberUsage(): Void {
+		sysPrint('Usage: apq remove-member <file> --type <T> <memberName> [options]\n');
+		sysPrint('\n');
+		sysPrint('Remove the member named <memberName> of type <T> (a field or method), with\n');
+		sysPrint('its modifier / meta group. Both <T> and <memberName> must resolve to exactly\n');
+		sysPrint('one node. The by-name counterpart of add-member.\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --type <T>      The enclosing type (required)\n');
+		sysPrint('  --write         Overwrite the file in place (default: print to stdout)\n');
+		sysPrint('  --reformat      Canonicalise the whole file if it is not already canonical\n');
+		sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
+		sysPrint('  -h, --help      Show this help\n');
 	}
 
 	private static function printInlineMethodUsage(): Void {

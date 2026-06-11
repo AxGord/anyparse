@@ -6,6 +6,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
+import anyparse.runtime.Span;
 import haxe.Exception;
 
 using Lambda;
@@ -75,6 +76,23 @@ final class UnusedImport implements Check {
 			for (imp in info.imports) addViolation(violations, info.file, imp, occurrences);
 		}
 		return violations;
+	}
+
+	/**
+	 * Fix the unused-import `Warning`s by deleting the import statement (its
+	 * span — which is the whole `import …;` line). The wildcard / `using`
+	 * `Info` advisories are deliberately NOT fixed: they cannot be verified,
+	 * so removing one could break the file. The caller batches these edits
+	 * into one whole-file `canonicalize`, which drops the now-blank line.
+	 */
+	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin): Array<{ span: Span, text: String }> {
+		final edits: Array<{ span: Span, text: String }> = [];
+		for (v in violations) {
+			if (v.severity != Severity.Warning) continue;
+			final span: Null<Span> = v.span;
+			if (span != null) edits.push({ span: span, text: '' });
+		}
+		return edits;
 	}
 
 	/**

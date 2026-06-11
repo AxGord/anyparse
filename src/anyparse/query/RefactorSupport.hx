@@ -482,6 +482,17 @@ final class RefactorSupport {
 	];
 
 	/**
+	 * Expression-list container kinds whose direct children are
+	 * comma-separated. When an element's parent is one of these, an insert
+	 * joins with a `,` and a remove swallows one. `Call` / `NewExpr` carry a
+	 * leading non-element child (callee / constructed type), harmless here
+	 * because the targeted element is an actual argument, never the callee.
+	 * Shared by `add-element` (insert) and `deleteNode` (remove) so the two
+	 * agree on which slots are comma lists.
+	 */
+	public static final COMMA_CONTAINER_KINDS: Array<String> = ['ArrayExpr', 'ObjectLit', 'Call', 'NewExpr'];
+
+	/**
 	 * The source span of the LOGICAL declaration at `node` — a decl together
 	 * with the modifier / metadata sibling nodes that precede it. Modifiers
 	 * (`public` / `private` / `static` / `inline` / `override` / `macro` /
@@ -535,6 +546,107 @@ final class RefactorSupport {
 			if (found != null) return found;
 		}
 		return null;
+	}
+
+	/**
+	 * Remove `node` (with its modifier / meta group, via `declGroupSpan`)
+	 * from `source` — the shared DELETE core, the structural inverse of
+	 * `AddElement`. `parent` gives the sibling context `declGroupSpan` and
+	 * the comma check need. The deletion span is the decl group, extended to
+	 * swallow ONE separating comma when the slot is a comma list (a comma
+	 * adjacent in source, or `parent` is a `COMMA_CONTAINER_KINDS`) — else
+	 * (statement / case / member / import lists) just the group, since each
+	 * element is self-terminated and the whole-file re-emit fixes residual
+	 * whitespace. Funnels through `canonicalize` with an empty replacement,
+	 * so the result is writer-formatted and re-parse-validated exactly like
+	 * the insert ops; the source is canonical-gated unless `reformat`.
+	 */
+	public static function deleteNode(
+		source: String, node: QueryNode, parent: Null<QueryNode>, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
+	): EditResult {
+		final nodeSpan: Null<Span> = node.span;
+		if (nodeSpan == null) return Err('the node to remove has no source span');
+		final span: Span = declGroupSpan(node, parent, nodeSpan);
+
+		var isComma: Bool = adjacentToComma(source, span);
+		if (!isComma && parent != null) isComma = COMMA_CONTAINER_KINDS.contains(parent.kind);
+
+		final delSpan: Span = isComma ? commaExtendedSpan(source, span) : lineExtendedSpan(source, span);
+		return canonicalize(source, [{ span: delSpan, text: '' }], reformat, plugin, optsJson);
+	}
+
+	/**
+	 * Extend `span` to the whole physical line when the element is ALONE on
+	 * it — swallow the leading indentation (same-line whitespace back to the
+	 * line start) and the trailing newline. Without this, deleting a
+	 * statement / member / import leaves its line as blank whitespace, which
+	 * the trivia-preserving writer keeps as an empty line. When the element
+	 * shares its line with other content (it does not start AND end the line)
+	 * the span is returned unchanged, so a sibling on the same line is not
+	 * touched — the writer re-emit then tidies the residual spacing.
+	 */
+	private static function lineExtendedSpan(source: String, span: Span): Span {
+		var from: Int = span.from;
+		while (from > 0) {
+			final c: Int = StringTools.fastCodeAt(source, from - 1);
+			if (c == ' '.code || c == '\t'.code)
+				from--
+			else
+				break;
+		}
+		final startsLine: Bool = from == 0 || StringTools.fastCodeAt(source, from - 1) == '\n'.code;
+
+		var to: Int = span.to;
+		while (to < source.length) {
+			final c: Int = StringTools.fastCodeAt(source, to);
+			if (c == ' '.code || c == '\t'.code || c == '\r'.code)
+				to++
+			else
+				break;
+		}
+		final endsLine: Bool = to >= source.length || StringTools.fastCodeAt(source, to) == '\n'.code;
+		if (endsLine && to < source.length) to++;
+
+		return startsLine && endsLine ? new Span(from, to) : span;
+	}
+
+	/**
+	 * Extend `span` to also remove ONE separating comma so a comma list stays
+	 * well-formed after the element is cut: the trailing comma (preferred) —
+	 * the next non-whitespace byte after `span.to` — else the leading comma
+	 * before `span.from` (the element was last). A single-element list has
+	 * neither and the span is returned unchanged (`[a]` → `[]`). Surrounding
+	 * whitespace is left to the writer re-emit.
+	 */
+	private static function commaExtendedSpan(source: String, span: Span): Span {
+		var i: Int = span.to;
+		while (i < source.length && isSpace(StringTools.fastCodeAt(source, i))) i++;
+		if (i < source.length && StringTools.fastCodeAt(source, i) == ','.code) return new Span(span.from, i + 1);
+
+		var j: Int = span.from - 1;
+		while (j >= 0 && isSpace(StringTools.fastCodeAt(source, j))) j--;
+		if (j >= 0 && StringTools.fastCodeAt(source, j) == ','.code) return new Span(j, span.to);
+
+		return span;
+	}
+
+	/**
+	 * Is the element at `span` immediately adjacent to a `,` — the next
+	 * non-whitespace byte after `span.to`, or the previous before `span.from`,
+	 * is a comma? True ⇒ the element sits in a comma-separated list (catches a
+	 * comma container not in `COMMA_CONTAINER_KINDS`, for any list with at
+	 * least two elements). Shared by `add-element` and `deleteNode`.
+	 */
+	public static function adjacentToComma(source: String, span: Span): Bool {
+		var i: Int = span.to;
+		while (i < source.length && isSpace(StringTools.fastCodeAt(source, i))) i++;
+		if (i < source.length && StringTools.fastCodeAt(source, i) == ','.code) return true;
+
+		var j: Int = span.from - 1;
+		while (j >= 0 && isSpace(StringTools.fastCodeAt(source, j))) j--;
+		if (j >= 0 && StringTools.fastCodeAt(source, j) == ','.code) return true;
+
+		return false;
 	}
 
 }

@@ -49,4 +49,16 @@ interface Check {
 	 */
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation>;
 
+	/**
+	 * The source edits that fix the auto-fixable subset of `violations` —
+	 * the caller passes this check's OWN violations for ONE file (same
+	 * `source`). Each edit is a raw `{span, text}` the caller batches into a
+	 * single `RefactorSupport.canonicalize` per file, so several fixes apply
+	 * without the span-shift a re-emit-per-fix would cause (`text` replaces
+	 * `[span.from, span.to)`; empty = a deletion). A check with no autofix,
+	 * or none applicable to these violations, returns an empty array — that
+	 * is the default for any non-fixable check.
+	 */
+	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin): Array<{ span: Span, text: String }>;
+
 }
