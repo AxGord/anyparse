@@ -17,12 +17,13 @@ import anyparse.runtime.Span;
  * filters on this slot.
  *
  * `span` is the source range this node occupies (UTF-16-code-unit
- * offsets from the start of the source string). Null when the plugin
- * built the node without span tracking — most current callers populate
- * spans for top-level grammar-node visits, with inner sub-expression
- * children carrying null. The `apq search` matcher reports
- * `file:line:col` for each match by resolving the outermost match
- * node's span via `Span.lineCol(source)`.
+ * offsets from the start of the source string). The Haxe plugin now
+ * populates spans comprehensively — deep sub-expressions, operators and
+ * literals all carry tight spans, so a `--at` / `--at --kind` cursor can
+ * address any node. A null span is the exception (a synthetic / transparent
+ * node the plugin built without span tracking), not the rule. The `apq
+ * search` matcher reports `file:line:col` for each match by resolving the
+ * outermost match node's span via `Span.lineCol(source)`.
  */
 @:nullSafety(Strict)
 final class QueryNode {
