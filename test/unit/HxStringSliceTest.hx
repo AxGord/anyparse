@@ -32,20 +32,20 @@ class HxStringSliceTest extends HxTestHelpers {
 	// ======== double-quoted (unchanged from v1 — flat String) ========
 
 	/** Empty double-quoted string `""` -> decoded to `""`. */
-	public function testDoubleEmpty():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:String = ""; }');
+	public function testDoubleEmpty(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:String = ""; }');
 		assertDoubleString(decl.init, '');
 	}
 
 	/** Simple double-quoted string `"hello"`. */
-	public function testDoubleSimple():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:String = "hello"; }');
+	public function testDoubleSimple(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:String = "hello"; }');
 		assertDoubleString(decl.init, 'hello');
 	}
 
 	/** Double-quoted string with spaces. */
-	public function testDoubleWithSpaces():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:String = "hello world"; }');
+	public function testDoubleWithSpaces(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:String = "hello world"; }');
 		assertDoubleString(decl.init, 'hello world');
 	}
 
@@ -55,23 +55,23 @@ class HxStringSliceTest extends HxTestHelpers {
 	 * source slice — escape sequences are NOT decoded. Asserts the
 	 * verbatim form: `a\nb\tc\\d\"e` (each `\X` is two chars in storage).
 	 */
-	public function testDoubleEscapes():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:String = "a\\nb\\tc\\\\d\\"e"; }');
-		final s:String = expectDoubleString(decl.init);
+	public function testDoubleEscapes(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:String = "a\\nb\\tc\\\\d\\"e"; }');
+		final s: String = expectDoubleString(decl.init);
 		Assert.equals('a\\nb\\tc\\\\d\\"e', s);
 	}
 
 	// ======== single-quoted — structured Array<HxStringSegment> ========
 
 	/** Empty single-quoted string `''` -> empty parts array. */
-	public function testSingleEmpty():Void {
-		final parts:Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = ''; }").init);
+	public function testSingleEmpty(): Void {
+		final parts: Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = ''; }").init);
 		Assert.equals(0, parts.length);
 	}
 
 	/** Simple single-quoted string `'hello'` -> one Literal part. */
-	public function testSingleSimple():Void {
-		final parts:Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = 'hello'; }").init);
+	public function testSingleSimple(): Void {
+		final parts: Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = 'hello'; }").init);
 		Assert.equals(1, parts.length);
 		assertLiteral(parts[0], 'hello');
 	}
@@ -82,15 +82,15 @@ class HxStringSliceTest extends HxTestHelpers {
 	 * source slice — escape sequences are NOT decoded. Asserts the
 	 * verbatim form: `a\nb\'c\\d` (each `\X` is two chars in storage).
 	 */
-	public function testSingleEscapes():Void {
-		final parts:Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = 'a\\nb\\'c\\\\d'; }").init);
+	public function testSingleEscapes(): Void {
+		final parts: Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = 'a\\nb\\'c\\\\d'; }").init);
 		Assert.equals(1, parts.length);
 		assertLiteral(parts[0], "a\\nb\\'c\\\\d");
 	}
 
 	/** `$$` in single-quoted string -> Dollar segment. */
-	public function testSingleEscapedDollar():Void {
-		final parts:Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = 'cost: $$5'; }").init);
+	public function testSingleEscapedDollar(): Void {
+		final parts: Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = 'cost: $$5'; }").init);
 		Assert.equals(3, parts.length);
 		assertLiteral(parts[0], 'cost: ');
 		assertDollar(parts[1]);
@@ -100,38 +100,38 @@ class HxStringSliceTest extends HxTestHelpers {
 	// ======== interpolation — $ident ========
 
 	/** `'hello $name'` -> [Literal("hello "), Ident("name")]. */
-	public function testInterpIdent():Void {
-		final parts:Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = 'hello $name'; }").init);
+	public function testInterpIdent(): Void {
+		final parts: Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = 'hello $name'; }").init);
 		Assert.equals(2, parts.length);
 		assertLiteral(parts[0], 'hello ');
 		assertIdent(parts[1], 'name');
 	}
 
 	/** `'$x world'` -> [Ident("x"), Literal(" world")]. */
-	public function testInterpIdentAtStart():Void {
-		final parts:Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '$x world'; }").init);
+	public function testInterpIdentAtStart(): Void {
+		final parts: Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '$x world'; }").init);
 		Assert.equals(2, parts.length);
 		assertIdent(parts[0], 'x');
 		assertLiteral(parts[1], ' world');
 	}
 
 	/** `'$name'` -> [Ident("name")]. */
-	public function testInterpIdentAlone():Void {
-		final parts:Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '$name'; }").init);
+	public function testInterpIdentAlone(): Void {
+		final parts: Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '$name'; }").init);
 		Assert.equals(1, parts.length);
 		assertIdent(parts[0], 'name');
 	}
 
 	/** `'$_foo'` -> [Ident("_foo")] — underscore-prefixed identifier. */
-	public function testInterpIdentUnderscore():Void {
-		final parts:Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '$_foo'; }").init);
+	public function testInterpIdentUnderscore(): Void {
+		final parts: Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '$_foo'; }").init);
 		Assert.equals(1, parts.length);
 		assertIdent(parts[0], '_foo');
 	}
 
 	/** `'$a and $b'` -> [Ident("a"), Literal(" and "), Ident("b")]. */
-	public function testInterpMultipleIdents():Void {
-		final parts:Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '$a and $b'; }").init);
+	public function testInterpMultipleIdents(): Void {
+		final parts: Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '$a and $b'; }").init);
 		Assert.equals(3, parts.length);
 		assertIdent(parts[0], 'a');
 		assertLiteral(parts[1], ' and ');
@@ -141,8 +141,8 @@ class HxStringSliceTest extends HxTestHelpers {
 	// ======== interpolation — ${expr} ========
 
 	/** `'${x + 1}'` -> [Block(Add(IdentExpr, IntLit))]. */
-	public function testInterpBlock():Void {
-		final parts:Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '${x + 1}'; }").init);
+	public function testInterpBlock(): Void {
+		final parts: Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '${x + 1}'; }").init);
 		Assert.equals(1, parts.length);
 		switch parts[0] {
 			case Block(expr):
@@ -159,8 +159,8 @@ class HxStringSliceTest extends HxTestHelpers {
 	}
 
 	/** `'${}'` -> empty block: expression parse inside `${}`. */
-	public function testInterpBlockIdent():Void {
-		final parts:Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '${name}'; }").init);
+	public function testInterpBlockIdent(): Void {
+		final parts: Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '${name}'; }").init);
 		Assert.equals(1, parts.length);
 		switch parts[0] {
 			case Block(expr):
@@ -173,10 +173,9 @@ class HxStringSliceTest extends HxTestHelpers {
 	// ======== interpolation — mixed ========
 
 	/** `'hello $name, age ${x + 1}!'` -> 5 parts. */
-	public function testInterpMixed():Void {
-		final parts:Array<HxStringSegment> = expectSingleParts(
-			parseSingleVarDecl("class Foo { var x:String = 'hello $name, age ${x + 1}!'; }").init
-		);
+	public function testInterpMixed(): Void {
+		final parts: Array<HxStringSegment> =
+			expectSingleParts(parseSingleVarDecl("class Foo { var x:String = 'hello $name, age ${x + 1}!'; }").init);
 		Assert.equals(5, parts.length);
 		assertLiteral(parts[0], 'hello ');
 		assertIdent(parts[1], 'name');
@@ -186,8 +185,8 @@ class HxStringSliceTest extends HxTestHelpers {
 	}
 
 	/** `'$$$name'` -> [Dollar, Ident("name")] — escaped dollar then ident. */
-	public function testInterpDollarBeforeIdent():Void {
-		final parts:Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '$$$name'; }").init);
+	public function testInterpDollarBeforeIdent(): Void {
+		final parts: Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '$$$name'; }").init);
 		Assert.equals(2, parts.length);
 		assertDollar(parts[0]);
 		assertIdent(parts[1], 'name');
@@ -196,31 +195,31 @@ class HxStringSliceTest extends HxTestHelpers {
 	// ======== lone `$` — literal dollar (not $$, ${, $ident) ========
 
 	/** `'$'` -> [LoneDollar] — bare dollar, the close quote follows. */
-	public function testSingleLoneDollarAlone():Void {
-		final parts:Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '$'; }").init);
+	public function testSingleLoneDollarAlone(): Void {
+		final parts: Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '$'; }").init);
 		Assert.equals(1, parts.length);
 		assertLoneDollar(parts[0]);
 	}
 
 	/** `'$ '` -> [LoneDollar, Literal(" ")] — dollar then space (not ident-start). */
-	public function testSingleLoneDollarThenSpace():Void {
-		final parts:Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '$ '; }").init);
+	public function testSingleLoneDollarThenSpace(): Void {
+		final parts: Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '$ '; }").init);
 		Assert.equals(2, parts.length);
 		assertLoneDollar(parts[0]);
 		assertLiteral(parts[1], ' ');
 	}
 
 	/** `'$5'` -> [LoneDollar, Literal("5")] — digit is not an identifier start. */
-	public function testSingleLoneDollarThenDigit():Void {
-		final parts:Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '$5'; }").init);
+	public function testSingleLoneDollarThenDigit(): Void {
+		final parts: Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '$5'; }").init);
 		Assert.equals(2, parts.length);
 		assertLoneDollar(parts[0]);
 		assertLiteral(parts[1], '5');
 	}
 
 	/** `'a $ b'` -> [Literal("a "), LoneDollar, Literal(" b")]. */
-	public function testSingleLoneDollarMixed():Void {
-		final parts:Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = 'a $ b'; }").init);
+	public function testSingleLoneDollarMixed(): Void {
+		final parts: Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = 'a $ b'; }").init);
 		Assert.equals(3, parts.length);
 		assertLiteral(parts[0], 'a ');
 		assertLoneDollar(parts[1]);
@@ -228,15 +227,15 @@ class HxStringSliceTest extends HxTestHelpers {
 	}
 
 	/** Regression: `'$name'` still binds to Ident (LoneDollar ordered after). */
-	public function testSingleLoneDollarIdentRegression():Void {
-		final parts:Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '$name'; }").init);
+	public function testSingleLoneDollarIdentRegression(): Void {
+		final parts: Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '$name'; }").init);
 		Assert.equals(1, parts.length);
 		assertIdent(parts[0], 'name');
 	}
 
 	/** Regression: `'$$'` still binds to Dollar, not two LoneDollar. */
-	public function testSingleLoneDollarEscapeRegression():Void {
-		final parts:Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '$$'; }").init);
+	public function testSingleLoneDollarEscapeRegression(): Void {
+		final parts: Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '$$'; }").init);
 		Assert.equals(1, parts.length);
 		assertDollar(parts[0]);
 	}
@@ -245,13 +244,13 @@ class HxStringSliceTest extends HxTestHelpers {
 	 * Round-trip the real-world shape that blocked self-parse:
 	 * `'$'` alone and `'$'.code` (Pattern.hx:97 / Matcher.hx:83).
 	 */
-	public function testSingleLoneDollarRoundTrip():Void {
+	public function testSingleLoneDollarRoundTrip(): Void {
 		roundTrip("class C { var x:String = '$'; var y:Int = '$'.code; }");
 	}
 
 	/** Whitespace preserved inside string — spaces are literal. */
-	public function testPreservesInternalWhitespace():Void {
-		final parts:Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '  hello  '; }").init);
+	public function testPreservesInternalWhitespace(): Void {
+		final parts: Array<HxStringSegment> = expectSingleParts(parseSingleVarDecl("class Foo { var x:String = '  hello  '; }").init);
 		Assert.equals(1, parts.length);
 		assertLiteral(parts[0], '  hello  ');
 	}
@@ -259,12 +258,12 @@ class HxStringSliceTest extends HxTestHelpers {
 	// ======== cross-cutting ========
 
 	/** String concatenation: `"a" + 'b'` -> `Add(DoubleStringExpr, SingleStringExpr)`. */
-	public function testStringConcat():Void {
-		final decl:HxVarDecl = parseSingleVarDecl("class Foo { var x:String = \"hello\" + 'world'; }");
+	public function testStringConcat(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl("class Foo { var x:String = \"hello\" + 'world'; }");
 		switch decl.init {
 			case Add(left, right):
 				assertDoubleString(left, 'hello');
-				final parts:Array<HxStringSegment> = expectSingleParts(right);
+				final parts: Array<HxStringSegment> = expectSingleParts(right);
 				Assert.equals(1, parts.length);
 				assertLiteral(parts[0], 'world');
 			case null, _:
@@ -273,8 +272,8 @@ class HxStringSliceTest extends HxTestHelpers {
 	}
 
 	/** Double-quoted string as function argument. */
-	public function testStringInFunctionArg():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = f("hello"); }');
+	public function testStringInFunctionArg(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = f("hello"); }');
 		switch decl.init {
 			case Call(operand, args):
 				Assert.equals(1, args.length);
@@ -285,10 +284,10 @@ class HxStringSliceTest extends HxTestHelpers {
 	}
 
 	/** String in return statement. */
-	public function testStringInReturn():Void {
-		final ast:HxClassDecl = HaxeParser.parse('class Foo { function bar():String { return "ok"; } }');
-		final fn:HxFnDecl = expectFnMember(ast.members[0].member);
-		final stmts:Array<HxStatement> = fnBodyStmts(fn);
+	public function testStringInReturn(): Void {
+		final ast: HxClassDecl = HaxeParser.parse('class Foo { function bar():String { return "ok"; } }');
+		final fn: HxFnDecl = expectFnMember(ast.members[0].member);
+		final stmts: Array<HxStatement> = fnBodyStmts(fn);
 		Assert.equals(1, stmts.length);
 		switch stmts[0] {
 			case ReturnStmt(value):
@@ -299,44 +298,44 @@ class HxStringSliceTest extends HxTestHelpers {
 	}
 
 	/** Whitespace around string literal (outside the string). */
-	public function testWhitespace():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:String =   "hi"  ; }');
+	public function testWhitespace(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:String =   "hi"  ; }');
 		assertDoubleString(decl.init, 'hi');
 	}
 
 	/** Module-root integration with interpolated single-quoted string. */
-	public function testModuleIntegration():Void {
-		final source:String = "class A { var s:String = \"hello\"; } class B { var t:String = '$name'; }";
-		final mod:HxModule = HaxeModuleParser.parse(source);
+	public function testModuleIntegration(): Void {
+		final source: String = "class A { var s:String = \"hello\"; } class B { var t:String = '$name'; }";
+		final mod: HxModule = HaxeModuleParser.parse(source);
 		Assert.equals(2, mod.decls.length);
-		final a:HxClassDecl = expectClassDecl(mod.decls[0]);
-		final b:HxClassDecl = expectClassDecl(mod.decls[1]);
-		final va:HxVarDecl = expectVarMember(a.members[0].member);
-		final vb:HxVarDecl = expectVarMember(b.members[0].member);
+		final a: HxClassDecl = expectClassDecl(mod.decls[0]);
+		final b: HxClassDecl = expectClassDecl(mod.decls[1]);
+		final va: HxVarDecl = expectVarMember(a.members[0].member);
+		final vb: HxVarDecl = expectVarMember(b.members[0].member);
 		assertDoubleString(va.init, 'hello');
-		final parts:Array<HxStringSegment> = expectSingleParts(vb.init);
+		final parts: Array<HxStringSegment> = expectSingleParts(vb.init);
 		Assert.equals(1, parts.length);
 		assertIdent(parts[0], 'name');
 	}
 
 	/** Unterminated double-quoted string -> rejection. */
-	public function testRejectsUnterminatedDouble():Void {
+	public function testRejectsUnterminatedDouble(): Void {
 		Assert.raises(() -> HaxeParser.parse('class Foo { var x:String = "hello; }'), ParseError);
 	}
 
 	/** Unterminated single-quoted string -> rejection. */
-	public function testRejectsUnterminatedSingle():Void {
+	public function testRejectsUnterminatedSingle(): Void {
 		Assert.raises(() -> HaxeParser.parse("class Foo { var x:String = 'hello; }"), ParseError);
 	}
 
 	// -------- assertion helpers --------
 
-	private function assertDoubleString(expr:Null<HxExpr>, expected:String):Void {
-		final s:String = expectDoubleString(expr);
+	private function assertDoubleString(expr: Null<HxExpr>, expected: String): Void {
+		final s: String = expectDoubleString(expr);
 		Assert.equals(expected, s);
 	}
 
-	private function expectDoubleString(expr:Null<HxExpr>):String {
+	private function expectDoubleString(expr: Null<HxExpr>): String {
 		return switch expr {
 			// ω-doublestring-rawstring: HxDoubleStringLit now stores the raw
 			// source slice (outer `"..."` included) for byte-perfect round-
@@ -345,44 +344,51 @@ class HxStringSliceTest extends HxTestHelpers {
 			// NOT decoded — assertions involving escapes would need a real
 			// decoder (deferred until a corpus consumer demands it).
 			case DoubleStringExpr(v):
-				final raw:String = (v : String);
+				final raw: String = (v: String);
 				raw.substring(1, raw.length - 1);
 			case null, _: throw 'expected DoubleStringExpr, got $expr';
 		};
 	}
 
-	private function expectSingleParts(expr:Null<HxExpr>):Array<HxStringSegment> {
+	private function expectSingleParts(expr: Null<HxExpr>): Array<HxStringSegment> {
 		return switch expr {
 			case SingleStringExpr(v): v.parts;
 			case null, _: throw 'expected SingleStringExpr, got $expr';
 		};
 	}
 
-	private function assertLiteral(part:HxStringSegment, expected:String):Void {
+	private function assertLiteral(part: HxStringSegment, expected: String): Void {
 		switch part {
-			case Literal(s): Assert.equals(expected, (s : String));
-			case _: Assert.fail('expected Literal, got $part');
+			case Literal(s):
+				Assert.equals(expected, (s: String));
+			case _:
+				Assert.fail('expected Literal, got $part');
 		}
 	}
 
-	private function assertIdent(part:HxStringSegment, expected:String):Void {
+	private function assertIdent(part: HxStringSegment, expected: String): Void {
 		switch part {
-			case Ident(name): Assert.equals(expected, (name : String));
-			case _: Assert.fail('expected Ident, got $part');
+			case Ident(name):
+				Assert.equals(expected, (name: String));
+			case _:
+				Assert.fail('expected Ident, got $part');
 		}
 	}
 
-	private function assertDollar(part:HxStringSegment):Void {
+	private function assertDollar(part: HxStringSegment): Void {
 		switch part {
 			case Dollar:
-			case _: Assert.fail('expected Dollar, got $part');
+			case _:
+				Assert.fail('expected Dollar, got $part');
 		}
 	}
 
-	private function assertLoneDollar(part:HxStringSegment):Void {
+	private function assertLoneDollar(part: HxStringSegment): Void {
 		switch part {
 			case LoneDollar:
-			case _: Assert.fail('expected LoneDollar, got $part');
+			case _:
+				Assert.fail('expected LoneDollar, got $part');
 		}
 	}
+
 }

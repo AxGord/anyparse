@@ -24,66 +24,67 @@ import anyparse.grammar.haxe.HxModuleWriter;
 @:nullSafety(Strict)
 final class HxTypedefSemiSliceTest extends Test {
 
-	public function new():Void {
+	public function new(): Void {
 		super();
 	}
 
 	// ---- Parser accepts typedefs without trailing `;` ----
 
-	public function testTypedefIntNoSemiParses():Void {
+	public function testTypedefIntNoSemiParses(): Void {
 		assertParses('typedef Foo = Int');
 	}
 
-	public function testTypedefAnonNoSemiParses():Void {
+	public function testTypedefAnonNoSemiParses(): Void {
 		assertParses('typedef Foo = { x:Int }');
 	}
 
-	public function testTypedefArrowNoSemiParses():Void {
+	public function testTypedefArrowNoSemiParses(): Void {
 		assertParses('typedef Cb = Int->Void');
 	}
 
-	public function testTwoTypedefsNoSemi():Void {
+	public function testTwoTypedefsNoSemi(): Void {
 		assertParses('typedef A = Int\ntypedef B = String');
 	}
 
-	public function testTypedefAnonFollowedByClass():Void {
+	public function testTypedefAnonFollowedByClass(): Void {
 		assertParses('typedef Bar = { x:Int }\nclass C {}');
 	}
 
 	// ---- Regression — `;` form still parses ----
 
-	public function testTypedefIntWithSemiStillParses():Void {
+	public function testTypedefIntWithSemiStillParses(): Void {
 		assertParses('typedef Foo = Int;');
 	}
 
-	public function testTypedefAnonWithSemiStillParses():Void {
+	public function testTypedefAnonWithSemiStillParses(): Void {
 		assertParses('typedef Foo = { x:Int };');
 	}
 
-	public function testMixedSemiAndNoSemiParse():Void {
+	public function testMixedSemiAndNoSemiParse(): Void {
 		assertParses('typedef A = Int;\ntypedef B = String\ntypedef C = Float;');
 	}
 
 	// ---- Writer canonicalises `;` (current behavior; preserve-presence is a future slice) ----
 
-	public function testWriterEmitsSemiAfterNoSemiInput():Void {
-		final out:String = HxModuleWriter.write(HaxeModuleParser.parse('typedef Foo = Int'));
+	public function testWriterEmitsSemiAfterNoSemiInput(): Void {
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse('typedef Foo = Int'));
 		Assert.isTrue(out.indexOf('typedef Foo = Int;') != -1, 'expected canonical `;` in: <$out>');
 	}
 
-	public function testWriterEmitsSemiAfterAnonNoSemiInput():Void {
-		final out:String = HxModuleWriter.write(HaxeModuleParser.parse('typedef Bar = { x:Int }'));
+	public function testWriterEmitsSemiAfterAnonNoSemiInput(): Void {
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse('typedef Bar = { x:Int }'));
 		Assert.isTrue(out.indexOf('typedef Bar = {x:Int};') != -1, 'expected canonical `;` in: <$out>');
 	}
 
 	// ---- Helpers ----
 
-	private inline function assertParses(src:String):Void {
+	private inline function assertParses(src: String): Void {
 		try {
-			final ast:HxModule = HaxeModuleParser.parse(src);
+			final ast: HxModule = HaxeModuleParser.parse(src);
 			Assert.notNull(ast);
-		} catch (exception:Exception) {
+		} catch (exception: Exception) {
 			Assert.fail('parse failed for <$src>: ${exception.message}');
 		}
 	}
+
 }

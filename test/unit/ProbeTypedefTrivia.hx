@@ -24,32 +24,23 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
  */
 class ProbeTypedefTrivia extends Test {
 
-	private static final _forceBuild:Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
+	private static final _forceBuild: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 
-	public function testIssue216PreservesDocCommentAfterUnsemicolonedTypedef():Void {
-		final src:String =
-			'typedef Foo = Int\n' +
-			'\n' +
-			'/** Docs for Bar **/\n' +
-			'typedef Bar = Float\n';
-		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(src);
+	public function testIssue216PreservesDocCommentAfterUnsemicolonedTypedef(): Void {
+		final src: String = 'typedef Foo = Int\n' + '\n' + '/** Docs for Bar **/\n' + 'typedef Bar = Float\n';
+		final m: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(src);
 		Assert.equals(2, m.decls.length);
 		final next = m.decls[1];
 		Assert.equals(1, next.leadingComments.length);
 		Assert.isTrue(next.leadingComments[0].indexOf('Docs for Bar') >= 0);
 	}
 
-	public function testIssue321PreservesDocCommentAfterUnsemicolonedTypedefBeforeClass():Void {
-		final src:String =
-			'typedef Bar = String\n' +
-			'\n' +
-			'/**\n' +
-			'\tdocs\n' +
-			'**/\n' +
-			'class Foo {}\n';
-		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(src);
+	public function testIssue321PreservesDocCommentAfterUnsemicolonedTypedefBeforeClass(): Void {
+		final src: String = 'typedef Bar = String\n' + '\n' + '/**\n' + '\tdocs\n' + '**/\n' + 'class Foo {}\n';
+		final m: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(src);
 		Assert.equals(2, m.decls.length);
 		final next = m.decls[1];
 		Assert.equals(1, next.leadingComments.length);
 	}
+
 }

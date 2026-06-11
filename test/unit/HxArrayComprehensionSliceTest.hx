@@ -30,133 +30,142 @@ import anyparse.grammar.haxe.HxWhileExpr;
  */
 class HxArrayComprehensionSliceTest extends HxTestHelpers {
 
-	public function new():Void {
+	public function new(): Void {
 		super();
 	}
 
 	// ======== Basic for-comprehension ========
 
-	public function testArrayCompForBasic():Void {
+	public function testArrayCompForBasic(): Void {
 		// `[for (i in 0...10) i]` — the canonical Haxe array comprehension.
-		final init:HxExpr = parseVarInit('class M { static function f() { var a = [for (i in 0...10) i]; } }');
-		final elems:Array<HxExpr> = expectArrayExpr(init);
+		final init: HxExpr = parseVarInit('class M { static function f() { var a = [for (i in 0...10) i]; } }');
+		final elems: Array<HxExpr> = expectArrayExpr(init);
 		Assert.equals(1, elems.length);
-		final fe:HxForExpr = expectForExpr(elems[0]);
-		Assert.equals('i', (fe.varName : String));
+		final fe: HxForExpr = expectForExpr(elems[0]);
+		Assert.equals('i', (fe.varName: String));
 	}
 
-	public function testArrayCompForBodyMul():Void {
+	public function testArrayCompForBodyMul(): Void {
 		// `[for (i in 0...10) i * i]` — body is a binary expression, must
 		// reach Pratt loop within the for-expr body parse.
-		final init:HxExpr = parseVarInit('class M { static function f() { var a = [for (i in 0...10) i * i]; } }');
-		final elems:Array<HxExpr> = expectArrayExpr(init);
+		final init: HxExpr = parseVarInit('class M { static function f() { var a = [for (i in 0...10) i * i]; } }');
+		final elems: Array<HxExpr> = expectArrayExpr(init);
 		Assert.equals(1, elems.length);
-		final fe:HxForExpr = expectForExpr(elems[0]);
+		final fe: HxForExpr = expectForExpr(elems[0]);
 		switch fe.body {
 			case Mul(_, _):
-			case _: Assert.fail('expected Mul body in for-comp, got ${fe.body}');
+			case _:
+				Assert.fail('expected Mul body in for-comp, got ${fe.body}');
 		}
 	}
 
-	public function testArrayCompForWithIfBody():Void {
+	public function testArrayCompForWithIfBody(): Void {
 		// `[for (x in xs) if (x > 0) x else 0]` — body is a value-position
 		// if-expression. Reaches `HxExpr.IfExpr` through standard Pratt
 		// dispatch on the for-comp body.
-		final init:HxExpr = parseVarInit('class M { static function f() { var a = [for (x in xs) if (x > 0) x else 0]; } }');
-		final elems:Array<HxExpr> = expectArrayExpr(init);
-		final fe:HxForExpr = expectForExpr(elems[0]);
+		final init: HxExpr = parseVarInit('class M { static function f() { var a = [for (x in xs) if (x > 0) x else 0]; } }');
+		final elems: Array<HxExpr> = expectArrayExpr(init);
+		final fe: HxForExpr = expectForExpr(elems[0]);
 		switch fe.body {
 			case IfExpr(_):
-			case _: Assert.fail('expected IfExpr body, got ${fe.body}');
+			case _:
+				Assert.fail('expected IfExpr body, got ${fe.body}');
 		}
 	}
 
-	public function testArrayCompForBlockBody():Void {
+	public function testArrayCompForBlockBody(): Void {
 		// Block-body comprehension — `[for (x in xs) { trace(x); x; }]` —
 		// the body is `HxExpr.BlockExpr` not a bare expression.
-		final init:HxExpr = parseVarInit('class M { static function f() { var a = [for (x in xs) { trace(x); x; }]; } }');
-		final elems:Array<HxExpr> = expectArrayExpr(init);
-		final fe:HxForExpr = expectForExpr(elems[0]);
+		final init: HxExpr = parseVarInit('class M { static function f() { var a = [for (x in xs) { trace(x); x; }]; } }');
+		final elems: Array<HxExpr> = expectArrayExpr(init);
+		final fe: HxForExpr = expectForExpr(elems[0]);
 		switch fe.body {
 			case BlockExpr(_):
-			case _: Assert.fail('expected BlockExpr body, got ${fe.body}');
+			case _:
+				Assert.fail('expected BlockExpr body, got ${fe.body}');
 		}
 	}
 
-	public function testArrayCompForNested():Void {
+	public function testArrayCompForNested(): Void {
 		// `[for (a in xs) for (b in ys) a * b]` — issue_498 fork-fixture
 		// shape. The outer ForExpr's body is itself a ForExpr, parsed via
 		// the same kw atom because `body:HxExpr` accepts any expression.
-		final init:HxExpr = parseVarInit('class M { static function f() { var a = [for (a in xs) for (b in ys) a * b]; } }');
-		final elems:Array<HxExpr> = expectArrayExpr(init);
-		final outer:HxForExpr = expectForExpr(elems[0]);
-		final inner:HxForExpr = expectForExpr(outer.body);
-		Assert.equals('b', (inner.varName : String));
+		final init: HxExpr = parseVarInit('class M { static function f() { var a = [for (a in xs) for (b in ys) a * b]; } }');
+		final elems: Array<HxExpr> = expectArrayExpr(init);
+		final outer: HxForExpr = expectForExpr(elems[0]);
+		final inner: HxForExpr = expectForExpr(outer.body);
+		Assert.equals('b', (inner.varName: String));
 	}
 
 	// ======== Basic while-comprehension ========
 
-	public function testArrayCompWhileBasic():Void {
+	public function testArrayCompWhileBasic(): Void {
 		// `[while (cond) v]` — issue_81 fork-fixture shape (sans the i++
 		// postfix which is a separate slice).
-		final init:HxExpr = parseVarInit('class M { static function f() { var b = [while (cond) v]; } }');
-		final elems:Array<HxExpr> = expectArrayExpr(init);
+		final init: HxExpr = parseVarInit('class M { static function f() { var b = [while (cond) v]; } }');
+		final elems: Array<HxExpr> = expectArrayExpr(init);
 		Assert.equals(1, elems.length);
-		final we:HxWhileExpr = expectWhileExpr(elems[0]);
+		final we: HxWhileExpr = expectWhileExpr(elems[0]);
 		switch we.body {
-			case IdentExpr(name): Assert.equals('v', (name : String));
-			case _: Assert.fail('expected IdentExpr body, got ${we.body}');
+			case IdentExpr(name):
+				Assert.equals('v', (name: String));
+			case _:
+				Assert.fail('expected IdentExpr body, got ${we.body}');
 		}
 	}
 
 	// ======== Standalone (non-array) for/while as expression ========
 
-	public function testForExprAsVarInit():Void {
+	public function testForExprAsVarInit(): Void {
 		// `var x = for (i in 0...10) i;` — for-expr in var initialiser
 		// position (RHS of `=`). Less common than array comprehension but
 		// the same dispatch path.
-		final init:HxExpr = parseVarInit('class M { static function f() { var x = for (i in 0...10) i; } }');
-		final fe:HxForExpr = expectForExpr(init);
-		Assert.equals('i', (fe.varName : String));
+		final init: HxExpr = parseVarInit('class M { static function f() { var x = for (i in 0...10) i; } }');
+		final fe: HxForExpr = expectForExpr(init);
+		Assert.equals('i', (fe.varName: String));
 	}
 
-	public function testWhileExprAsVarInit():Void {
-		final init:HxExpr = parseVarInit('class M { static function f() { var y = while (cond) v; } }');
-		final we:HxWhileExpr = expectWhileExpr(init);
+	public function testWhileExprAsVarInit(): Void {
+		final init: HxExpr = parseVarInit('class M { static function f() { var y = while (cond) v; } }');
+		final we: HxWhileExpr = expectWhileExpr(init);
 		switch we.body {
-			case IdentExpr(name): Assert.equals('v', (name : String));
-			case _: Assert.fail('expected IdentExpr body');
+			case IdentExpr(name):
+				Assert.equals('v', (name: String));
+			case _:
+				Assert.fail('expected IdentExpr body');
 		}
 	}
 
 	// ======== Statement-position regression ========
 
-	public function testStatementForStillParsesAsForStmt():Void {
+	public function testStatementForStillParsesAsForStmt(): Void {
 		// `for (i in 0...10) trace(i);` at statement position must keep
 		// dispatching through HxStatement.ForStmt — NOT ExprStmt(ForExpr).
 		// HxForStmt's body is HxStatement (with bodyPolicy wrapping);
 		// HxForExpr's body is HxExpr (no bodyPolicy). The two paths produce
 		// different AST shapes and different writer output.
-		final stmts:Array<HxStatement> = fnBodyStmts(parseSingleFnDecl('class M { static function f() { for (i in 0...10) trace(i); } }'));
+		final stmts: Array<HxStatement> = fnBodyStmts(parseSingleFnDecl('class M { static function f() { for (i in 0...10) trace(i); } }'));
 		Assert.equals(1, stmts.length);
 		switch stmts[0] {
 			case ForStmt(_):
-			case _: Assert.fail('expected ForStmt at statement position, got ${stmts[0]}');
+			case _:
+				Assert.fail('expected ForStmt at statement position, got ${stmts[0]}');
 		}
 	}
 
-	public function testStatementWhileStillParsesAsWhileStmt():Void {
-		final stmts:Array<HxStatement> = fnBodyStmts(parseSingleFnDecl('class M { static function f() { while (cond) trace(); } }'));
+	public function testStatementWhileStillParsesAsWhileStmt(): Void {
+		final stmts: Array<HxStatement> = fnBodyStmts(parseSingleFnDecl('class M { static function f() { while (cond) trace(); } }'));
 		Assert.equals(1, stmts.length);
 		switch stmts[0] {
 			case WhileStmt(_):
-			case _: Assert.fail('expected WhileStmt at statement position, got ${stmts[0]}');
+			case _:
+				Assert.fail('expected WhileStmt at statement position, got ${stmts[0]}');
 		}
 	}
 
 	// ======== Round-trip ========
 
-	public function testArrayCompRoundTrip():Void {
+	public function testArrayCompRoundTrip(): Void {
 		roundTrip('class M {\n\tstatic function f() {\n\t\tvar a = [for (i in 0...10) i];\n\t}\n}');
 		roundTrip('class M {\n\tstatic function f() {\n\t\tvar a = [for (i in 0...10) i * i];\n\t}\n}');
 		roundTrip('class M {\n\tstatic function f() {\n\t\tvar b = [while (cond) v];\n\t}\n}');
@@ -171,69 +180,71 @@ class HxArrayComprehensionSliceTest extends HxTestHelpers {
 	// stays on ForStmt — the `;` belongs to the outer ExprStmt / ForStmt
 	// trail, not to ForExpr's optional trail.
 
-	public function testArrayCompForBodyWithTrailingSemicolon():Void {
+	public function testArrayCompForBodyWithTrailingSemicolon(): Void {
 		// issue_366 shape: bare for-body followed by `;` before `]`.
-		final init:HxExpr = parseVarInit('class M { static function f() { var a = [for (y in 0...10) new Point(y);]; } }');
-		final elems:Array<HxExpr> = expectArrayExpr(init);
+		final init: HxExpr = parseVarInit('class M { static function f() { var a = [for (y in 0...10) new Point(y);]; } }');
+		final elems: Array<HxExpr> = expectArrayExpr(init);
 		Assert.equals(1, elems.length);
-		final fe:HxForExpr = expectForExpr(elems[0]);
-		Assert.equals('y', (fe.varName : String));
+		final fe: HxForExpr = expectForExpr(elems[0]);
+		Assert.equals('y', (fe.varName: String));
 	}
 
-	public function testNestedArrayCompWithInnerTrailingSemicolon():Void {
+	public function testNestedArrayCompWithInnerTrailingSemicolon(): Void {
 		// issue_366 verbatim shape: outer for-comp whose body is an inner
 		// array-comp with a `;`-terminated for-body element.
-		final init:HxExpr = parseVarInit(
+		final init: HxExpr = parseVarInit(
 			'class M { static function f() { var grid = [for (x in 0...10) [for (y in 0...10) new Point(x, y);]]; } }'
 		);
-		final outerElems:Array<HxExpr> = expectArrayExpr(init);
-		final outer:HxForExpr = expectForExpr(outerElems[0]);
-		final innerArr:Array<HxExpr> = expectArrayExpr(outer.body);
-		final inner:HxForExpr = expectForExpr(innerArr[0]);
-		Assert.equals('y', (inner.varName : String));
+		final outerElems: Array<HxExpr> = expectArrayExpr(init);
+		final outer: HxForExpr = expectForExpr(outerElems[0]);
+		final innerArr: Array<HxExpr> = expectArrayExpr(outer.body);
+		final inner: HxForExpr = expectForExpr(innerArr[0]);
+		Assert.equals('y', (inner.varName: String));
 	}
 
-	public function testStatementForUnaffectedByForExprTrailOpt():Void {
+	public function testStatementForUnaffectedByForExprTrailOpt(): Void {
 		// Regression: stmt-position `for (i in xs) trace(i);` must keep
 		// dispatching through HxStatement.ForStmt. The `;` belongs to ForStmt's
 		// body trail, NOT to ForExpr's new @:trailOpt — verifies the two
 		// dispatch paths stay disjoint.
-		final stmts:Array<HxStatement> = fnBodyStmts(parseSingleFnDecl('class M { static function f() { for (i in 0...10) trace(i); } }'));
+		final stmts: Array<HxStatement> = fnBodyStmts(parseSingleFnDecl('class M { static function f() { for (i in 0...10) trace(i); } }'));
 		Assert.equals(1, stmts.length);
 		switch stmts[0] {
 			case ForStmt(_):
-			case _: Assert.fail('expected ForStmt at statement position, got ${stmts[0]}');
+			case _:
+				Assert.fail('expected ForStmt at statement position, got ${stmts[0]}');
 		}
 	}
 
 	// ======== helpers ========
 
-	private function parseVarInit(source:String):HxExpr {
-		final stmt:HxStatement = fnBodyStmts(parseSingleFnDecl(source))[0];
+	private function parseVarInit(source: String): HxExpr {
+		final stmt: HxStatement = fnBodyStmts(parseSingleFnDecl(source))[0];
 		return switch stmt {
 			case VarStmt(decl): decl.init ?? throw 'var has no init';
 			case _: throw 'expected VarStmt, got $stmt';
 		};
 	}
 
-	private function expectArrayExpr(e:HxExpr):Array<HxExpr> {
+	private function expectArrayExpr(e: HxExpr): Array<HxExpr> {
 		return switch e {
 			case ArrayExpr(elems): elems;
 			case _: throw 'expected ArrayExpr, got $e';
 		};
 	}
 
-	private function expectForExpr(e:HxExpr):HxForExpr {
+	private function expectForExpr(e: HxExpr): HxForExpr {
 		return switch e {
 			case ForExpr(stmt): stmt;
 			case _: throw 'expected ForExpr, got $e';
 		};
 	}
 
-	private function expectWhileExpr(e:HxExpr):HxWhileExpr {
+	private function expectWhileExpr(e: HxExpr): HxWhileExpr {
 		return switch e {
 			case WhileExpr(stmt): stmt;
 			case _: throw 'expected WhileExpr, got $e';
 		};
 	}
+
 }

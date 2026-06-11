@@ -39,72 +39,70 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
  */
 class HxStructFieldTrailPresentSliceTest extends Test {
 
-	private static final _forceBuild:Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
+	private static final _forceBuild: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 
-	public function new():Void {
+	public function new(): Void {
 		super();
 	}
 
-	public function testThenBranchTrailPresentTrue():Void {
+	public function testThenBranchTrailPresentTrue(): Void {
 		// Source has `;` after `b` -> HxIfExpr.thenBranch's @:trailOpt(';')
 		// captures it, slot must be true.
-		final source:String = 'class M { static function f() { final x = if (a) b; else c; } }';
-		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node.decl {
+		final source: String = 'class M { static function f() { final x = if (a) b; else c; } }';
+		final m: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final cls: anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node.decl {
 			case ClassDecl(decl): decl;
 			case _: throw 'expected ClassDecl';
 		};
-		final fn:anyparse.grammar.haxe.trivia.Pairs.HxFnDeclT = switch cls.members[0].node.member {
+		final fn: anyparse.grammar.haxe.trivia.Pairs.HxFnDeclT = switch cls.members[0].node.member {
 			case FnMember(decl): decl;
 			case _: throw 'expected FnMember';
 		};
-		final stmts:Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>>
-			= switch fn.body {
-				case BlockBody(b): b.stmts;
-				case _: throw 'expected BlockBody';
-			};
-		final varDecl:anyparse.grammar.haxe.trivia.Pairs.HxVarDeclT = switch stmts[0].node {
+		final stmts: Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch fn.body {
+			case BlockBody(b): b.stmts;
+			case _: throw 'expected BlockBody';
+		};
+		final varDecl: anyparse.grammar.haxe.trivia.Pairs.HxVarDeclT = switch stmts[0].node {
 			case FinalStmt(decl, _): decl;
 			case _: throw 'expected FinalStmt';
 		};
-		final init:anyparse.grammar.haxe.trivia.Pairs.HxExprT = switch varDecl.init {
+		final init: anyparse.grammar.haxe.trivia.Pairs.HxExprT = switch varDecl.init {
 			case null: throw 'expected init expr';
 			case e: e;
 		};
-		final ifExpr:anyparse.grammar.haxe.trivia.Pairs.HxIfExprT = switch init {
+		final ifExpr: anyparse.grammar.haxe.trivia.Pairs.HxIfExprT = switch init {
 			case IfExpr(decl): decl;
 			case _: throw 'expected IfExpr';
 		};
 		Assert.equals(true, ifExpr.thenBranchTrailPresent);
 	}
 
-	public function testThenBranchTrailPresentFalse():Void {
+	public function testThenBranchTrailPresentFalse(): Void {
 		// Source omits the `;` between `b` and `else`. The @:trailOpt
 		// matchLit fails (no `;`), `ctx.pos` rewinds, slot stays false.
-		final source:String = 'class M { static function f() { final x = if (a) b else c; } }';
-		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final cls:anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node.decl {
+		final source: String = 'class M { static function f() { final x = if (a) b else c; } }';
+		final m: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final cls: anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node.decl {
 			case ClassDecl(decl): decl;
 			case _: throw 'expected ClassDecl';
 		};
-		final fn:anyparse.grammar.haxe.trivia.Pairs.HxFnDeclT = switch cls.members[0].node.member {
+		final fn: anyparse.grammar.haxe.trivia.Pairs.HxFnDeclT = switch cls.members[0].node.member {
 			case FnMember(decl): decl;
 			case _: throw 'expected FnMember';
 		};
-		final stmts:Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>>
-			= switch fn.body {
-				case BlockBody(b): b.stmts;
-				case _: throw 'expected BlockBody';
-			};
-		final varDecl:anyparse.grammar.haxe.trivia.Pairs.HxVarDeclT = switch stmts[0].node {
+		final stmts: Array<anyparse.runtime.Trivial<anyparse.grammar.haxe.trivia.Pairs.HxStatementT>> = switch fn.body {
+			case BlockBody(b): b.stmts;
+			case _: throw 'expected BlockBody';
+		};
+		final varDecl: anyparse.grammar.haxe.trivia.Pairs.HxVarDeclT = switch stmts[0].node {
 			case FinalStmt(decl, _): decl;
 			case _: throw 'expected FinalStmt';
 		};
-		final init:anyparse.grammar.haxe.trivia.Pairs.HxExprT = switch varDecl.init {
+		final init: anyparse.grammar.haxe.trivia.Pairs.HxExprT = switch varDecl.init {
 			case null: throw 'expected init expr';
 			case e: e;
 		};
-		final ifExpr:anyparse.grammar.haxe.trivia.Pairs.HxIfExprT = switch init {
+		final ifExpr: anyparse.grammar.haxe.trivia.Pairs.HxIfExprT = switch init {
 			case IfExpr(decl): decl;
 			case _: throw 'expected IfExpr';
 		};
@@ -127,19 +125,20 @@ class HxStructFieldTrailPresentSliceTest extends Test {
 	 * single-line input would not round-trip with `Assert.equals(src, out)`
 	 * even with Phase 4 working.
 	 */
-	public function testThenBranchRoundTripPreservesTrail():Void {
-		final src:String = 'class M {\n\tstatic function f() {\n\t\tfinal x = if (a) b; else c;\n\t}\n}\n';
-		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), defaultOpts());
+	public function testThenBranchRoundTripPreservesTrail(): Void {
+		final src: String = 'class M {\n\tstatic function f() {\n\t\tfinal x = if (a) b; else c;\n\t}\n}\n';
+		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), defaultOpts());
 		Assert.equals(src, out);
 	}
 
-	public function testThenBranchRoundTripSuppressesAbsentTrail():Void {
-		final src:String = 'class M {\n\tstatic function f() {\n\t\tfinal x = if (a) b else c;\n\t}\n}\n';
-		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), defaultOpts());
+	public function testThenBranchRoundTripSuppressesAbsentTrail(): Void {
+		final src: String = 'class M {\n\tstatic function f() {\n\t\tfinal x = if (a) b else c;\n\t}\n}\n';
+		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), defaultOpts());
 		Assert.equals(src, out);
 	}
 
-	private inline function defaultOpts():HxModuleWriteOptions {
+	private inline function defaultOpts(): HxModuleWriteOptions {
 		return HaxeFormat.instance.defaultWriteOptions;
 	}
+
 }

@@ -28,27 +28,27 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 @:nullSafety(Strict)
 class HxMethodChainWrapCapabilityTest extends Test {
 
-	public function new():Void {
+	public function new(): Void {
 		super();
 	}
 
-	public function testDefaultCascadeShape():Void {
-		final defaults:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
-		final wrap:WrapRules = defaults.methodChainWrap;
+	public function testDefaultCascadeShape(): Void {
+		final defaults: HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
+		final wrap: WrapRules = defaults.methodChainWrap;
 		Assert.equals(WrapMode.NoWrap, wrap.defaultMode);
 		Assert.equals(6, wrap.rules.length);
 	}
 
-	public function testJsonDefaultWrapOverridesDefaultMode():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+	public function testJsonDefaultWrapOverridesDefaultMode(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"wrapping":{"methodChain":{"defaultWrap":"onePerLine","rules":[]}}}'
 		);
 		Assert.equals(WrapMode.OnePerLine, opts.methodChainWrap.defaultMode);
 		Assert.equals(0, opts.methodChainWrap.rules.length);
 	}
 
-	public function testEmptyJsonKeepsSeededDefaults():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	public function testEmptyJsonKeepsSeededDefaults(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		Assert.equals(WrapMode.NoWrap, opts.methodChainWrap.defaultMode);
 		Assert.equals(6, opts.methodChainWrap.rules.length);
 	}

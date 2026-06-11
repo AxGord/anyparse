@@ -31,40 +31,41 @@ import anyparse.grammar.haxe.HxModuleWriter;
 @:nullSafety(Strict)
 final class HxAbstractClauseSpacingTest extends Test {
 
-	public function new():Void {
+	public function new(): Void {
 		super();
 	}
 
-	public function testFromClauseHasLeadingSpace():Void {
-		final out:String = write('abstract Foo(Bar) from Int {}');
+	public function testFromClauseHasLeadingSpace(): Void {
+		final out: String = write('abstract Foo(Bar) from Int {}');
 		Assert.isTrue(out.indexOf('(Bar) from Int') != -1, 'expected `(Bar) from Int` in: <$out>');
 	}
 
-	public function testToClauseHasLeadingSpace():Void {
-		final out:String = write('abstract Foo(Bar) to Int {}');
+	public function testToClauseHasLeadingSpace(): Void {
+		final out: String = write('abstract Foo(Bar) to Int {}');
 		Assert.isTrue(out.indexOf('(Bar) to Int') != -1, 'expected `(Bar) to Int` in: <$out>');
 	}
 
-	public function testMultipleClausesPreserveSpacing():Void {
-		final out:String = write('abstract Foo(Bar) from Int from Float to String to Bool {}');
+	public function testMultipleClausesPreserveSpacing(): Void {
+		final out: String = write('abstract Foo(Bar) from Int from Float to String to Bool {}');
 		Assert.isTrue(
 			out.indexOf('(Bar) from Int from Float to String to Bool') != -1,
 			'expected `(Bar) from Int from Float to String to Bool` in: <$out>'
 		);
 	}
 
-	public function testNoClausesDoesNotAddStraySpace():Void {
-		final out:String = write('abstract Foo(Bar) {}');
+	public function testNoClausesDoesNotAddStraySpace(): Void {
+		final out: String = write('abstract Foo(Bar) {}');
 		Assert.isTrue(out.indexOf('(Bar) {') != -1, 'expected `(Bar) {` (single space) in: <$out>');
 		Assert.equals(-1, out.indexOf('(Bar)  '), 'unexpected double space after `(Bar)` in: <$out>');
 	}
 
-	public function testFromClauseWithAnonTypeArg():Void {
-		final out:String = write('abstract Foo(Bar) from {a:String} {}');
+	public function testFromClauseWithAnonTypeArg(): Void {
+		final out: String = write('abstract Foo(Bar) from {a:String} {}');
 		Assert.isTrue(out.indexOf('(Bar) from {a:String}') != -1, 'expected `(Bar) from {a:String}` in: <$out>');
 	}
 
-	private inline function write(src:String):String {
+	private inline function write(src: String): String {
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), HaxeFormat.instance.defaultWriteOptions);
 	}
+
 }

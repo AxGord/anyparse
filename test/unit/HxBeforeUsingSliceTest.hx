@@ -29,52 +29,48 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 @:nullSafety(Strict)
 class HxBeforeUsingSliceTest extends Test {
 
-	public function new():Void {
+	public function new(): Void {
 		super();
 	}
 
-	public function testDefaultMatchesUpstream():Void {
-		final defaults:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
+	public function testDefaultMatchesUpstream(): Void {
+		final defaults: HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
 		Assert.equals(1, defaults.beforeUsing);
 	}
 
-	public function testDefaultInsertsBlankBetweenImportAndUsing():Void {
-		final out:String = writeWith('import haxe.*;\nusing haxe.*;', 1);
+	public function testDefaultInsertsBlankBetweenImportAndUsing(): Void {
+		final out: String = writeWith('import haxe.*;\nusing haxe.*;', 1);
 		Assert.equals('import haxe.*;\n\nusing haxe.*;\n', out);
 	}
 
-	public function testDefaultInsertsBlankBeforeUsingWild():Void {
-		final out:String = writeWith('import haxe.*;\nusing haxe.macro.Tools.*;', 1);
+	public function testDefaultInsertsBlankBeforeUsingWild(): Void {
+		final out: String = writeWith('import haxe.*;\nusing haxe.macro.Tools.*;', 1);
 		Assert.equals('import haxe.*;\n\nusing haxe.macro.Tools.*;\n', out);
 	}
 
-	public function testZeroStripsBlankBeforeUsing():Void {
-		final out:String = writeWith('import haxe.*;\n\nusing haxe.*;', 0);
+	public function testZeroStripsBlankBeforeUsing(): Void {
+		final out: String = writeWith('import haxe.*;\n\nusing haxe.*;', 0);
 		Assert.equals('import haxe.*;\nusing haxe.*;\n', out);
 	}
 
-	public function testTwoEmitsTwoBlanks():Void {
-		final out:String = writeWith('import haxe.*;\nusing haxe.*;', 2);
+	public function testTwoEmitsTwoBlanks(): Void {
+		final out: String = writeWith('import haxe.*;\nusing haxe.*;', 2);
 		Assert.equals('import haxe.*;\n\n\nusing haxe.*;\n', out);
 	}
 
-	public function testOverridesSourceBlankCount():Void {
-		final out:String = writeWith('import haxe.*;\n\n\nusing haxe.*;', 1);
+	public function testOverridesSourceBlankCount(): Void {
+		final out: String = writeWith('import haxe.*;\n\n\nusing haxe.*;', 1);
+		Assert.equals('import haxe.*;\n\nusing haxe.*;\n', out, 'opt.beforeUsing=1 overrides source blank-line count to exactly 1');
+	}
+
+	public function testConsecutiveUsingsStaySourceDriven(): Void {
+		final out: String = writeWith('using A;\nusing B;', 1);
 		Assert.equals(
-			'import haxe.*;\n\nusing haxe.*;\n', out,
-			'opt.beforeUsing=1 overrides source blank-line count to exactly 1'
+			'using A;\nusing B;\n', out, 'using → using transition is not a "before-ctor" event; source `blankBefore=false` flows through'
 		);
 	}
 
-	public function testConsecutiveUsingsStaySourceDriven():Void {
-		final out:String = writeWith('using A;\nusing B;', 1);
-		Assert.equals(
-			'using A;\nusing B;\n', out,
-			'using → using transition is not a "before-ctor" event; source `blankBefore=false` flows through'
-		);
-	}
-
-	public function testConsecutiveUsingsCollapseUnderDefaultBetween():Void {
+	public function testConsecutiveUsingsCollapseUnderDefaultBetween(): Void {
 		// ω-imports-using-between superseded the pre-slice "source-driven
 		// blankBefore for consecutive usings" assertion. Defaults
 		// `betweenImports: 0` + `betweenImportsLevel: All` force 0 blanks
@@ -84,20 +80,19 @@ class HxBeforeUsingSliceTest extends Test {
 		// callers must override the defaults via `hxformat.json` (e.g.
 		// `betweenImports: 1` or `betweenImportsLevel: FullPackage` for
 		// per-path-prefix grouping).
-		final out:String = writeWith('using A;\n\nusing B;', 1);
+		final out: String = writeWith('using A;\n\nusing B;', 1);
 		Assert.equals(
-			'using A;\nusing B;\n', out,
-			'default betweenImports: 0 + level: All overrides consecutive same-kind pairs to 0 blanks'
+			'using A;\nusing B;\n', out, 'default betweenImports: 0 + level: All overrides consecutive same-kind pairs to 0 blanks'
 		);
 	}
 
-	public function testNoUsingNoChange():Void {
-		final out:String = writeWith('import foo.Bar;\nclass Main {}', 1);
+	public function testNoUsingNoChange(): Void {
+		final out: String = writeWith('import foo.Bar;\nclass Main {}', 1);
 		Assert.equals('import foo.Bar;\nclass Main {}\n', out);
 	}
 
-	public function testPackageThenUsingTriggersOverride():Void {
-		final out:String = writeWith('package;\nusing haxe.*;', 1);
+	public function testPackageThenUsingTriggersOverride(): Void {
+		final out: String = writeWith('package;\nusing haxe.*;', 1);
 		// package → using: prev is PackageDecl (not Using*), curr matches
 		// → beforeUsing override fires. afterPackage also matches at the
 		// same slot (prev is package); the cascade picks afterPackage
@@ -106,38 +101,36 @@ class HxBeforeUsingSliceTest extends Test {
 		Assert.equals('package;\n\nusing haxe.*;\n', out);
 	}
 
-	public function testConfigLoaderMapsBeforeUsing():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+	public function testConfigLoaderMapsBeforeUsing(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"emptyLines": {"importAndUsing": {"beforeUsing": 2}}}'
 		);
 		Assert.equals(2, opts.beforeUsing);
 	}
 
-	public function testConfigLoaderMapsBeforeUsingZero():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+	public function testConfigLoaderMapsBeforeUsingZero(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"emptyLines": {"importAndUsing": {"beforeUsing": 0}}}'
 		);
 		Assert.equals(0, opts.beforeUsing);
 	}
 
-	public function testConfigLoaderMissingKeyKeepsDefault():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	public function testConfigLoaderMissingKeyKeepsDefault(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		Assert.equals(1, opts.beforeUsing);
 	}
 
-	public function testConfigLoaderMissingNestedKeyKeepsDefault():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"emptyLines": {"afterPackage": 2}}'
-		);
+	public function testConfigLoaderMissingNestedKeyKeepsDefault(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"emptyLines": {"afterPackage": 2}}');
 		Assert.equals(1, opts.beforeUsing);
 	}
 
-	private inline function writeWith(src:String, beforeUsing:Int):String {
+	private inline function writeWith(src: String, beforeUsing: Int): String {
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), makeOpts(beforeUsing));
 	}
 
-	private inline function makeOpts(beforeUsing:Int):HxModuleWriteOptions {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	private inline function makeOpts(beforeUsing: Int): HxModuleWriteOptions {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.beforeUsing = beforeUsing;
 		opts.beforeType = 0;
 		// Disable the final-pass blank-line cap so this slice's `beforeUsing:2`
@@ -145,4 +138,5 @@ class HxBeforeUsingSliceTest extends Test {
 		opts.maxConsecutiveBlanks = -1;
 		return opts;
 	}
+
 }

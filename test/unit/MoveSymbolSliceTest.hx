@@ -38,35 +38,22 @@ class MoveSymbolSliceTest extends Test {
 	 * Foo's decl appears in B, is gone from A, and User's import is
 	 * repointed `pkg.A.Foo` -> `pkg.B.Foo`. Every changed file re-parses.
 	 */
-	public function testMoveAcrossSamePackage():Void {
-		final a:String =
-			'package pkg;\n'
-			+ '\n'
-			+ 'class Foo {\n'
-			+ '\tpublic var x:Int = 1;\n'
-			+ '}';
-		final b:String =
-			'package pkg;\n'
-			+ '\n'
-			+ 'class B {}';
-		final user:String =
-			'package pkg;\n'
-			+ '\n'
-			+ 'import pkg.A.Foo;\n'
-			+ '\n'
-			+ 'class User {\n'
-			+ '\tvar f:Foo;\n'
-			+ '}';
+	public function testMoveAcrossSamePackage(): Void {
+		final a: String = 'package pkg;\n' + '\n' + 'class Foo {\n' + '\tpublic var x:Int = 1;\n' + '}';
+		final b: String = 'package pkg;\n' + '\n' + 'class B {}';
+		final user: String = 'package pkg;\n' + '\n' + 'import pkg.A.Foo;\n' + '\n' + 'class User {\n' + '\tvar f:Foo;\n' + '}';
 		// `class Foo` on line 3; `Foo` at display col 6.
-		final changes:Array<MoveChange> = okChanges('pkg/A.hx', 3, 6, 'pkg/B.hx', [
-			{file: 'pkg/A.hx', source: a}, {file: 'pkg/B.hx', source: b}, {file: 'pkg/User.hx', source: user},
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 6, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/User.hx', source: user },
 		]);
 		// All three files change.
 		Assert.equals(3, changes.length);
 
-		final newA:String = changeFor(changes, 'pkg/A.hx').newSource;
-		final newB:String = changeFor(changes, 'pkg/B.hx').newSource;
-		final newUser:String = changeFor(changes, 'pkg/User.hx').newSource;
+		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
+		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
+		final newUser: String = changeFor(changes, 'pkg/User.hx').newSource;
 
 		// Foo gone from A, present in B.
 		Assert.isFalse(StringTools.contains(newA, 'class Foo'), 'Foo should be gone from A');
@@ -87,34 +74,21 @@ class MoveSymbolSliceTest extends Test {
 	 * with no orphaned `final`, and B gains `final class Foo`. The importer
 	 * is repointed exactly as for a plain class.
 	 */
-	public function testMoveFinalClass():Void {
-		final a:String =
-			'package pkg;\n'
-			+ '\n'
-			+ 'final class Foo {\n'
-			+ '\tpublic var x:Int = 1;\n'
-			+ '}';
-		final b:String =
-			'package pkg;\n'
-			+ '\n'
-			+ 'class B {}';
-		final user:String =
-			'package pkg;\n'
-			+ '\n'
-			+ 'import pkg.A.Foo;\n'
-			+ '\n'
-			+ 'class User {\n'
-			+ '\tvar f:Foo;\n'
-			+ '}';
+	public function testMoveFinalClass(): Void {
+		final a: String = 'package pkg;\n' + '\n' + 'final class Foo {\n' + '\tpublic var x:Int = 1;\n' + '}';
+		final b: String = 'package pkg;\n' + '\n' + 'class B {}';
+		final user: String = 'package pkg;\n' + '\n' + 'import pkg.A.Foo;\n' + '\n' + 'class User {\n' + '\tvar f:Foo;\n' + '}';
 		// `final class Foo` on line 3; `Foo` at display col 12.
-		final changes:Array<MoveChange> = okChanges('pkg/A.hx', 3, 12, 'pkg/B.hx', [
-			{file: 'pkg/A.hx', source: a}, {file: 'pkg/B.hx', source: b}, {file: 'pkg/User.hx', source: user},
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 12, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/User.hx', source: user },
 		]);
 		Assert.equals(3, changes.length);
 
-		final newA:String = changeFor(changes, 'pkg/A.hx').newSource;
-		final newB:String = changeFor(changes, 'pkg/B.hx').newSource;
-		final newUser:String = changeFor(changes, 'pkg/User.hx').newSource;
+		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
+		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
+		final newUser: String = changeFor(changes, 'pkg/User.hx').newSource;
 
 		// The whole final class — keyword included — left A and landed in B.
 		Assert.isFalse(StringTools.contains(newA, 'final class Foo'), 'final class gone from A');
@@ -132,23 +106,14 @@ class MoveSymbolSliceTest extends Test {
 	 * type `Ext` that A imports (`import ext.Ext;`). Moving Foo to B
 	 * carries that import into B so the relocated body still resolves.
 	 */
-	public function testDependencyImportCarried():Void {
-		final a:String =
-			'package pkg;\n'
-			+ '\n'
-			+ 'import ext.Ext;\n'
-			+ '\n'
-			+ 'class Foo {\n'
-			+ '\tvar e:Ext;\n'
-			+ '}';
-		final b:String =
-			'package pkg;\n'
-			+ '\n'
-			+ 'class B {}';
-		final changes:Array<MoveChange> = okChanges('pkg/A.hx', 5, 6, 'pkg/B.hx', [
-			{file: 'pkg/A.hx', source: a}, {file: 'pkg/B.hx', source: b},
+	public function testDependencyImportCarried(): Void {
+		final a: String = 'package pkg;\n' + '\n' + 'import ext.Ext;\n' + '\n' + 'class Foo {\n' + '\tvar e:Ext;\n' + '}';
+		final b: String = 'package pkg;\n' + '\n' + 'class B {}';
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 5, 6, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: b },
 		]);
-		final newB:String = changeFor(changes, 'pkg/B.hx').newSource;
+		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
 		Assert.isTrue(StringTools.contains(newB, 'import ext.Ext;'), 'B should gain the carried dependency import');
 		Assert.isTrue(StringTools.contains(newB, 'class Foo'), 'Foo should land in B');
 		Assert.isTrue(StringTools.contains(newB, 'var e:Ext;'), 'Foo body should land in B');
@@ -160,21 +125,15 @@ class MoveSymbolSliceTest extends Test {
 	 * it; the destination should carry the doc-comment line immediately
 	 * above the relocated decl.
 	 */
-	public function testDocCommentMovesWithType():Void {
-		final a:String =
-			'package pkg;\n'
-			+ '\n'
-			+ '/** the foo */\n'
-			+ 'class Foo {}';
-		final b:String =
-			'package pkg;\n'
-			+ '\n'
-			+ 'class B {}';
-		final changes:Array<MoveChange> = okChanges('pkg/A.hx', 4, 6, 'pkg/B.hx', [
-			{file: 'pkg/A.hx', source: a}, {file: 'pkg/B.hx', source: b},
+	public function testDocCommentMovesWithType(): Void {
+		final a: String = 'package pkg;\n' + '\n' + '/** the foo */\n' + 'class Foo {}';
+		final b: String = 'package pkg;\n' + '\n' + 'class B {}';
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 4, 6, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: b },
 		]);
-		final newA:String = changeFor(changes, 'pkg/A.hx').newSource;
-		final newB:String = changeFor(changes, 'pkg/B.hx').newSource;
+		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
+		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
 		Assert.isTrue(StringTools.contains(newB, '/** the foo */'), 'doc-comment should move to B');
 		Assert.isTrue(StringTools.contains(newB, 'class Foo'), 'Foo should land in B');
 		// The doc-comment is gone from A too.
@@ -186,37 +145,27 @@ class MoveSymbolSliceTest extends Test {
 	 * preceding sibling node in the `parseFile` tree; the backward cut
 	 * scan picks it up from the raw source).
 	 */
-	public function testMetaMovesWithType():Void {
-		final a:String =
-			'package pkg;\n'
-			+ '\n'
-			+ '@:keep\n'
-			+ 'class Foo {}';
-		final b:String =
-			'package pkg;\n'
-			+ '\n'
-			+ 'class B {}';
-		final changes:Array<MoveChange> = okChanges('pkg/A.hx', 4, 6, 'pkg/B.hx', [
-			{file: 'pkg/A.hx', source: a}, {file: 'pkg/B.hx', source: b},
+	public function testMetaMovesWithType(): Void {
+		final a: String = 'package pkg;\n' + '\n' + '@:keep\n' + 'class Foo {}';
+		final b: String = 'package pkg;\n' + '\n' + 'class B {}';
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 4, 6, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: b },
 		]);
-		final newA:String = changeFor(changes, 'pkg/A.hx').newSource;
-		final newB:String = changeFor(changes, 'pkg/B.hx').newSource;
+		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
+		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
 		Assert.isTrue(StringTools.contains(newB, '@:keep'), 'meta should move to B');
 		Assert.isFalse(StringTools.contains(newA, '@:keep'), 'meta should be gone from A');
 	}
 
 	/** Refusal: the cursor is not on a type declaration (a field). */
-	public function testCursorNotOnTypeDeclRefused():Void {
-		final a:String =
-			'package pkg;\n'
-			+ '\n'
-			+ 'class Foo {\n'
-			+ '\tvar field:Int;\n'
-			+ '}';
-		final b:String = 'package pkg;\n\nclass B {}';
+	public function testCursorNotOnTypeDeclRefused(): Void {
+		final a: String = 'package pkg;\n' + '\n' + 'class Foo {\n' + '\tvar field:Int;\n' + '}';
+		final b: String = 'package pkg;\n\nclass B {}';
 		// Line 4: the field name `field` at col 5 — a value decl, not a type.
-		final result:MoveResult = MoveSymbol.moveType('pkg/A.hx', 4, 5, 'pkg/B.hx', [
-			{file: 'pkg/A.hx', source: a}, {file: 'pkg/B.hx', source: b},
+		final result: MoveResult = MoveSymbol.moveType('pkg/A.hx', 4, 5, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: b },
 		], plugin(), typeRefShape());
 		assertErr(result);
 	}
@@ -226,17 +175,12 @@ class MoveSymbolSliceTest extends Test {
 	 * different package would break its same-package auto-visible
 	 * dependencies, so the op refuses.
 	 */
-	public function testCrossPackageRefused():Void {
-		final a:String =
-			'package pkg;\n'
-			+ '\n'
-			+ 'class Foo {}';
-		final b:String =
-			'package other;\n'
-			+ '\n'
-			+ 'class B {}';
-		final result:MoveResult = MoveSymbol.moveType('pkg/A.hx', 3, 6, 'other/B.hx', [
-			{file: 'pkg/A.hx', source: a}, {file: 'other/B.hx', source: b},
+	public function testCrossPackageRefused(): Void {
+		final a: String = 'package pkg;\n' + '\n' + 'class Foo {}';
+		final b: String = 'package other;\n' + '\n' + 'class B {}';
+		final result: MoveResult = MoveSymbol.moveType('pkg/A.hx', 3, 6, 'other/B.hx', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'other/B.hx', source: b },
 		], plugin(), typeRefShape());
 		assertErr(result);
 	}
@@ -245,12 +189,14 @@ class MoveSymbolSliceTest extends Test {
 	 * Refusal: a scope file that does not parse — completeness cannot be
 	 * proven over an unparseable file, so the whole move is refused.
 	 */
-	public function testSkipParseScopeFileRefused():Void {
-		final a:String = 'package pkg;\n\nclass Foo {}';
-		final b:String = 'package pkg;\n\nclass B {}';
-		final broken:String = 'class @@@ not valid haxe @@@';
-		final result:MoveResult = MoveSymbol.moveType('pkg/A.hx', 3, 6, 'pkg/B.hx', [
-			{file: 'pkg/A.hx', source: a}, {file: 'pkg/B.hx', source: b}, {file: 'pkg/Broken.hx', source: broken},
+	public function testSkipParseScopeFileRefused(): Void {
+		final a: String = 'package pkg;\n\nclass Foo {}';
+		final b: String = 'package pkg;\n\nclass B {}';
+		final broken: String = 'class @@@ not valid haxe @@@';
+		final result: MoveResult = MoveSymbol.moveType('pkg/A.hx', 3, 6, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/Broken.hx', source: broken },
 		], plugin(), typeRefShape());
 		assertErr(result);
 	}
@@ -259,30 +205,32 @@ class MoveSymbolSliceTest extends Test {
 	 * Refusal: `Foo` is declared in TWO scope files — the move refuses
 	 * rather than guess which declaration the user meant.
 	 */
-	public function testAmbiguousDeclRefused():Void {
-		final a:String = 'package pkg;\n\nclass Foo {}';
-		final dup:String = 'package pkg;\n\nclass Foo {}';
-		final b:String = 'package pkg;\n\nclass B {}';
-		final result:MoveResult = MoveSymbol.moveType('pkg/A.hx', 3, 6, 'pkg/B.hx', [
-			{file: 'pkg/A.hx', source: a}, {file: 'pkg/Dup.hx', source: dup}, {file: 'pkg/B.hx', source: b},
+	public function testAmbiguousDeclRefused(): Void {
+		final a: String = 'package pkg;\n\nclass Foo {}';
+		final dup: String = 'package pkg;\n\nclass Foo {}';
+		final b: String = 'package pkg;\n\nclass B {}';
+		final result: MoveResult = MoveSymbol.moveType('pkg/A.hx', 3, 6, 'pkg/B.hx', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/Dup.hx', source: dup },
+			{ file: 'pkg/B.hx', source: b },
 		], plugin(), typeRefShape());
 		assertErr(result);
 	}
 
 	/** Refusal: source and destination are the same file. */
-	public function testSameFileRefused():Void {
-		final a:String = 'package pkg;\n\nclass Foo {}';
-		final result:MoveResult = MoveSymbol.moveType('pkg/A.hx', 3, 6, 'pkg/A.hx', [
-			{file: 'pkg/A.hx', source: a},
+	public function testSameFileRefused(): Void {
+		final a: String = 'package pkg;\n\nclass Foo {}';
+		final result: MoveResult = MoveSymbol.moveType('pkg/A.hx', 3, 6, 'pkg/A.hx', [
+			{ file: 'pkg/A.hx', source: a },
 		], plugin(), typeRefShape());
 		assertErr(result);
 	}
 
 	/** Refusal: the destination file is not in the scope set. */
-	public function testDestNotInScopeRefused():Void {
-		final a:String = 'package pkg;\n\nclass Foo {}';
-		final result:MoveResult = MoveSymbol.moveType('pkg/A.hx', 3, 6, 'pkg/Missing.hx', [
-			{file: 'pkg/A.hx', source: a},
+	public function testDestNotInScopeRefused(): Void {
+		final a: String = 'package pkg;\n\nclass Foo {}';
+		final result: MoveResult = MoveSymbol.moveType('pkg/A.hx', 3, 6, 'pkg/Missing.hx', [
+			{ file: 'pkg/A.hx', source: a },
 		], plugin(), typeRefShape());
 		assertErr(result);
 	}
@@ -293,15 +241,19 @@ class MoveSymbolSliceTest extends Test {
 	 * op already validates this; the test makes it explicit by re-parsing
 	 * each `newSource`).
 	 */
-	private function okChanges(cursorFile:String, line:Int, col:Int, destFile:String,
-			scopeFiles:Array<{file:String, source:String}>):Array<MoveChange> {
-		final result:MoveResult = MoveSymbol.moveType(cursorFile, line, col, destFile, scopeFiles, plugin(), typeRefShape());
+	private function okChanges(
+		cursorFile: String, line: Int, col: Int, destFile: String, scopeFiles: Array<{ file: String, source: String }>
+	): Array<MoveChange> {
+		final result: MoveResult = MoveSymbol.moveType(cursorFile, line, col, destFile, scopeFiles, plugin(), typeRefShape());
 		switch result {
 			case Ok(changes, advisory):
 				Assert.notNull(advisory);
 				for (c in changes) {
-					var parsed:Bool = true;
-					try plugin().parseFile(c.newSource) catch (_:haxe.Exception) parsed = false;
+					var parsed: Bool = true;
+					try
+						plugin().parseFile(c.newSource)
+					catch (_: haxe.Exception)
+						parsed = false;
 					Assert.isTrue(parsed, 'rewritten ${c.file} should re-parse');
 				}
 				return changes;
@@ -311,24 +263,27 @@ class MoveSymbolSliceTest extends Test {
 		}
 	}
 
-	private function assertErr(result:MoveResult):Void {
+	private function assertErr(result: MoveResult): Void {
 		switch result {
-			case Ok(changes, _): Assert.fail('expected Err, got Ok with ${changes.length} change(s)');
-			case Err(_): Assert.pass();
+			case Ok(changes, _):
+				Assert.fail('expected Err, got Ok with ${changes.length} change(s)');
+			case Err(_):
+				Assert.pass();
 		}
 	}
 
-	private function changeFor(changes:Array<MoveChange>, file:String):MoveChange {
+	private function changeFor(changes: Array<MoveChange>, file: String): MoveChange {
 		for (c in changes) if (c.file == file) return c;
 		Assert.fail('no change for file $file');
-		return {file: file, newSource: ''};
+		return { file: file, newSource: '' };
 	}
 
-	private static function plugin():HaxeQueryPlugin {
+	private static function plugin(): HaxeQueryPlugin {
 		return new HaxeQueryPlugin();
 	}
 
-	private static function typeRefShape():TypeRefShape {
+	private static function typeRefShape(): TypeRefShape {
 		return new HaxeQueryPlugin().typeRefShape();
 	}
+
 }

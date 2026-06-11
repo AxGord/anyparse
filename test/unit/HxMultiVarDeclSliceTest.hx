@@ -35,45 +35,47 @@ class HxMultiVarDeclSliceTest extends HxTestHelpers {
 
 	// ======== Multi-binding parses into the right-recursive chain ====
 
-	public function testTwoBindingsWithInit():Void {
+	public function testTwoBindingsWithInit(): Void {
 		Assert.same(['a', 'b'], parseBindingNames('var a = 1, b = 2;'));
 	}
 
-	public function testThreeBindingsBareThenInit():Void {
+	public function testThreeBindingsBareThenInit(): Void {
 		Assert.same(['v', 'a', 'b'], parseBindingNames('var v, a = 1, b = 2;'));
 	}
 
-	public function testTypedMultiBinding():Void {
+	public function testTypedMultiBinding(): Void {
 		// The wrapping/issue_355 motivator shape.
-		Assert.same(['rawRead', 'rawWrite'],
-			parseBindingNames('var rawRead:Int = getRaw(read), rawWrite:Int = getRaw(write);'));
+		Assert.same(['rawRead', 'rawWrite'], parseBindingNames('var rawRead:Int = getRaw(read), rawWrite:Int = getRaw(write);'));
 	}
 
-	public function testFinalMultiBinding():Void {
-		final stmts:Array<HxStatement> = parseFunctionBody('final a = 1, b = 2;');
+	public function testFinalMultiBinding(): Void {
+		final stmts: Array<HxStatement> = parseFunctionBody('final a = 1, b = 2;');
 		Assert.equals(1, stmts.length);
 		switch stmts[0] {
-			case FinalStmt(decl): Assert.same(['a', 'b'], bindingNames(decl));
-			case _: Assert.fail('expected FinalStmt, got ${stmts[0]}');
+			case FinalStmt(decl):
+				Assert.same(['a', 'b'], bindingNames(decl));
+			case _:
+				Assert.fail('expected FinalStmt, got ${stmts[0]}');
 		}
 	}
 
 	// ======== Single binding still parses, more is empty ========
 
-	public function testSingleBindingMoreIsEmpty():Void {
-		final stmts:Array<HxStatement> = parseFunctionBody('var foo = 5;');
+	public function testSingleBindingMoreIsEmpty(): Void {
+		final stmts: Array<HxStatement> = parseFunctionBody('var foo = 5;');
 		Assert.equals(1, stmts.length);
 		switch stmts[0] {
 			case VarStmt(decl):
-				Assert.equals('foo', (decl.name : String));
+				Assert.equals('foo', (decl.name: String));
 				Assert.equals(0, decl.more.length);
-			case _: Assert.fail('expected VarStmt');
+			case _:
+				Assert.fail('expected VarStmt');
 		}
 	}
 
 	// ======== Round-trip — writer re-emits the comma list ========
 
-	public function testRoundTripMultiBinding():Void {
+	public function testRoundTripMultiBinding(): Void {
 		roundTrip('class C { static function m() { var a = 1, b = 2; } }');
 		roundTrip('class C { static function m() { var v, a = 1, b = 2; } }');
 		roundTrip('class C { static function m() { final a = 1, b = 2; } }');
@@ -88,7 +90,7 @@ class HxMultiVarDeclSliceTest extends HxTestHelpers {
 	 * one continuation indent. Drives the `wrapping/issue_355_var_wrapping`
 	 * default cascade through the `multiVarWrap` `WrapRules`.
 	 */
-	public function testWideMultiVarBreaksOnePerLineAfterFirst():Void {
+	public function testWideMultiVarBreaksOnePerLineAfterFirst(): Void {
 		writerEquals(
 			'class Main {\n\tstatic function main() {\n\t\tvar rawRead:ArrayList = getRaw(read), rawWrite:ArrayList = getRaw(write), rawOthers:ArrayList = getRaw(others);\n\t}\n}',
 			'class Main {\n\tstatic function main() {\n\t\tvar rawRead:ArrayList = getRaw(read),\n\t\t\trawWrite:ArrayList = getRaw(write),\n\t\t\trawOthers:ArrayList = getRaw(others);\n\t}\n}\n'
@@ -101,7 +103,7 @@ class HxMultiVarDeclSliceTest extends HxTestHelpers {
 	 * so the cascade leaves it untouched — the override must not break
 	 * narrow lists.
 	 */
-	public function testShortMultiVarStaysOneLine():Void {
+	public function testShortMultiVarStaysOneLine(): Void {
 		writerEquals(
 			'class Main {\n\tstatic function main() {\n\t\tvar a = 1, b = 2;\n\t}\n}',
 			'class Main {\n\tstatic function main() {\n\t\tvar a = 1, b = 2;\n\t}\n}\n'
@@ -115,7 +117,7 @@ class HxMultiVarDeclSliceTest extends HxTestHelpers {
 	 * nested-init writes, so the inner `var inX = 1, inY = 2;` stays a
 	 * single (short, FillLine) line and the outer breaks one-per-line.
 	 */
-	public function testNestedInitKeepsOwnList():Void {
+	public function testNestedInitKeepsOwnList(): Void {
 		writerEquals(
 			'class Main {\n\tstatic function main() {\n\t\tvar longNameAAAAAAAAAAAAAAAA = function() { var inX = 1, inY = 2; return inX; }, longNameBBBBBBBBBBBBBBBB = 3;\n\t}\n}',
 			'class Main {\n\tstatic function main() {\n\t\tvar longNameAAAAAAAAAAAAAAAA = function() {\n\t\t\tvar inX = 1, inY = 2;\n\t\t\treturn inX;\n\t\t},\n\t\t\tlongNameBBBBBBBBBBBBBBBB = 3\n\t}\n}\n'
@@ -124,8 +126,8 @@ class HxMultiVarDeclSliceTest extends HxTestHelpers {
 
 	// ======== Helpers ========
 
-	private function parseBindingNames(src:String):Array<String> {
-		final stmts:Array<HxStatement> = parseFunctionBody(src);
+	private function parseBindingNames(src: String): Array<String> {
+		final stmts: Array<HxStatement> = parseFunctionBody(src);
 		Assert.equals(1, stmts.length);
 		return switch stmts[0] {
 			case VarStmt(decl): bindingNames(decl);
@@ -136,19 +138,19 @@ class HxMultiVarDeclSliceTest extends HxTestHelpers {
 	}
 
 	/** Walk the right-recursive `more` chain, collecting every binding name. */
-	private function bindingNames(decl:HxVarDecl):Array<String> {
-		final names:Array<String> = [(decl.name : String)];
-		var rest:Array<HxVarMore> = decl.more;
+	private function bindingNames(decl: HxVarDecl): Array<String> {
+		final names: Array<String> = [(decl.name: String)];
+		var rest: Array<HxVarMore> = decl.more;
 		while (rest.length > 0) {
-			final next:HxVarDecl = rest[0].decl;
-			names.push((next.name : String));
+			final next: HxVarDecl = rest[0].decl;
+			names.push((next.name: String));
 			rest = next.more;
 		}
 		return names;
 	}
 
-	private function parseFunctionBody(src:String):Array<HxStatement> {
-		final wrapped:String = 'class C { static function m() { ${src} } }';
+	private function parseFunctionBody(src: String): Array<HxStatement> {
+		final wrapped: String = 'class C { static function m() { ${src} } }';
 		return fnBodyStmts(parseSingleFnDecl(wrapped));
 	}
 

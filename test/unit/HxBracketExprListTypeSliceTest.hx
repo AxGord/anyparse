@@ -22,7 +22,7 @@ import anyparse.grammar.haxe.HxTypedefDecl;
  */
 class HxBracketExprListTypeSliceTest extends HxTestHelpers {
 
-	private function expectBracketExprList(t:Null<HxType>):Array<HxExpr> {
+	private function expectBracketExprList(t: Null<HxType>): Array<HxExpr> {
 		return switch t {
 			case null: throw 'expected HxType.BracketExprListType, got null';
 			case BracketExprListType(elems): elems;
@@ -30,50 +30,51 @@ class HxBracketExprListTypeSliceTest extends HxTestHelpers {
 		};
 	}
 
-	public function testBracketTypeParamSingle():Void {
-		final module:HxModule = HaxeModuleParser.parse('private typedef Init = haxe.macro.MacroType<[cdb.Module.build("data.cdb")]>;');
+	public function testBracketTypeParamSingle(): Void {
+		final module: HxModule = HaxeModuleParser.parse('private typedef Init = haxe.macro.MacroType<[cdb.Module.build("data.cdb")]>;');
 		Assert.equals(1, module.decls.length);
-		final td:HxTypedefDecl = expectTypedefDecl(module.decls[0]);
-		final ref:HxTypeRef = expectNamedType(td.type);
-		Assert.equals('haxe.macro.MacroType', (ref.name : String));
+		final td: HxTypedefDecl = expectTypedefDecl(module.decls[0]);
+		final ref: HxTypeRef = expectNamedType(td.type);
+		Assert.equals('haxe.macro.MacroType', (ref.name: String));
 		Assert.notNull(ref.params);
 		Assert.equals(1, ref.params.length);
-		final elems:Array<HxExpr> = expectBracketExprList(ref.params[0].type);
+		final elems: Array<HxExpr> = expectBracketExprList(ref.params[0].type);
 		Assert.equals(1, elems.length);
 	}
 
-	public function testBracketTypeParamEmpty():Void {
+	public function testBracketTypeParamEmpty(): Void {
 		// Empty `<[]>` — structural completeness, no corpus fixture exercises it.
-		final module:HxModule = HaxeModuleParser.parse('typedef Init = haxe.macro.MacroType<[]>;');
+		final module: HxModule = HaxeModuleParser.parse('typedef Init = haxe.macro.MacroType<[]>;');
 		Assert.equals(1, module.decls.length);
-		final td:HxTypedefDecl = expectTypedefDecl(module.decls[0]);
-		final ref:HxTypeRef = expectNamedType(td.type);
-		final elems:Array<HxExpr> = expectBracketExprList(ref.params[0].type);
+		final td: HxTypedefDecl = expectTypedefDecl(module.decls[0]);
+		final ref: HxTypeRef = expectNamedType(td.type);
+		final elems: Array<HxExpr> = expectBracketExprList(ref.params[0].type);
 		Assert.equals(0, elems.length);
 	}
 
-	public function testBracketTypeParamMulti():Void {
+	public function testBracketTypeParamMulti(): Void {
 		// Multi-element body — parses; byte-emit fmt deferred (no multi corpus fixture).
-		final module:HxModule = HaxeModuleParser.parse('typedef Init = haxe.macro.MacroType<[a, b]>;');
+		final module: HxModule = HaxeModuleParser.parse('typedef Init = haxe.macro.MacroType<[a, b]>;');
 		Assert.equals(1, module.decls.length);
-		final td:HxTypedefDecl = expectTypedefDecl(module.decls[0]);
-		final ref:HxTypeRef = expectNamedType(td.type);
-		final elems:Array<HxExpr> = expectBracketExprList(ref.params[0].type);
+		final td: HxTypedefDecl = expectTypedefDecl(module.decls[0]);
+		final ref: HxTypeRef = expectNamedType(td.type);
+		final elems: Array<HxExpr> = expectBracketExprList(ref.params[0].type);
 		Assert.equals(2, elems.length);
 	}
 
-	public function testNonBracketTypeParamRegression():Void {
+	public function testNonBracketTypeParamRegression(): Void {
 		// Non-bracket type-params still parse as before.
-		final module:HxModule = HaxeModuleParser.parse('typedef T = Array<Int>;');
-		final td:HxTypedefDecl = expectTypedefDecl(module.decls[0]);
-		final ref:HxTypeRef = expectNamedType(td.type);
-		Assert.equals('Array', (ref.name : String));
+		final module: HxModule = HaxeModuleParser.parse('typedef T = Array<Int>;');
+		final td: HxTypedefDecl = expectTypedefDecl(module.decls[0]);
+		final ref: HxTypeRef = expectNamedType(td.type);
+		Assert.equals('Array', (ref.name: String));
 		Assert.equals(1, ref.params.length);
-		Assert.equals('Int', (expectNamedType(ref.params[0].type).name : String));
+		Assert.equals('Int', (expectNamedType(ref.params[0].type).name: String));
 	}
 
-	public function testRoundTripIssue622():Void {
+	public function testRoundTripIssue622(): Void {
 		// Exact issue_622_bracket fixture body — full corpus driver.
 		roundTrip('private typedef Init = haxe.macro.MacroType<[cdb.Module.build("data.cdb")]>;', 'issue_622-bracket-typeparam');
 	}
+
 }

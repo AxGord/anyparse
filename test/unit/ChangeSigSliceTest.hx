@@ -34,27 +34,11 @@ class ChangeSigSliceTest extends Test {
 	 * be permuted to match, with commas / spacing intact. A method reorder
 	 * carries a non-null cross-file advisory.
 	 */
-	public function testReorderMethodWithBareAndThisCalls():Void {
-		final source:String =
-			'class C {\n'
-			+ '\tpublic function g(a:Int, ?b:String, c:Int = 5):Void {\n'
-			+ '\t\ttrace(a);\n'
-			+ '\t}\n'
-			+ '\tpublic function caller():Void {\n'
-			+ '\t\tg(1, "x", 3);\n'
-			+ '\t\tthis.g(7, "y", 9);\n'
-			+ '\t}\n'
-			+ '}';
-		final expected:String =
-			'class C {\n'
-			+ '\tpublic function g(c:Int = 5, a:Int, ?b:String):Void {\n'
-			+ '\t\ttrace(a);\n'
-			+ '\t}\n'
-			+ '\tpublic function caller():Void {\n'
-			+ '\t\tg(3, 1, "x");\n'
-			+ '\t\tthis.g(9, 7, "y");\n'
-			+ '\t}\n'
-			+ '}';
+	public function testReorderMethodWithBareAndThisCalls(): Void {
+		final source: String = 'class C {\n' + '\tpublic function g(a:Int, ?b:String, c:Int = 5):Void {\n' + '\t\ttrace(a);\n' + '\t}\n'
+			+ '\tpublic function caller():Void {\n' + '\t\tg(1, "x", 3);\n' + '\t\tthis.g(7, "y", 9);\n' + '\t}\n' + '}';
+		final expected: String = 'class C {\n' + '\tpublic function g(c:Int = 5, a:Int, ?b:String):Void {\n' + '\t\ttrace(a);\n' + '\t}\n'
+			+ '\tpublic function caller():Void {\n' + '\t\tg(3, 1, "x");\n' + '\t\tthis.g(9, 7, "y");\n' + '\t}\n' + '}';
 		// Line 2 col 8 — the method `g` decl, as `apq refs --decls` prints.
 		assertChangeSig(source, 2, 8, '2,0,1', expected, true);
 	}
@@ -64,25 +48,11 @@ class ChangeSigSliceTest extends Test {
 	 * fixture has one bare call; the decl and the call are swapped. A local
 	 * function cannot escape its file, so the advisory is null.
 	 */
-	public function testReorderLocalFunction():Void {
-		final source:String =
-			'class C {\n'
-			+ '\tpublic function run():Void {\n'
-			+ '\t\tfunction add(x:Int, y:Int):Int {\n'
-			+ '\t\t\treturn x + y;\n'
-			+ '\t\t}\n'
-			+ '\t\tvar r = add(1, 2);\n'
-			+ '\t}\n'
-			+ '}';
-		final expected:String =
-			'class C {\n'
-			+ '\tpublic function run():Void {\n'
-			+ '\t\tfunction add(y:Int, x:Int):Int {\n'
-			+ '\t\t\treturn x + y;\n'
-			+ '\t\t}\n'
-			+ '\t\tvar r = add(2, 1);\n'
-			+ '\t}\n'
-			+ '}';
+	public function testReorderLocalFunction(): Void {
+		final source: String = 'class C {\n' + '\tpublic function run():Void {\n' + '\t\tfunction add(x:Int, y:Int):Int {\n'
+			+ '\t\t\treturn x + y;\n' + '\t\t}\n' + '\t\tvar r = add(1, 2);\n' + '\t}\n' + '}';
+		final expected: String = 'class C {\n' + '\tpublic function run():Void {\n' + '\t\tfunction add(y:Int, x:Int):Int {\n'
+			+ '\t\t\treturn x + y;\n' + '\t\t}\n' + '\t\tvar r = add(2, 1);\n' + '\t}\n' + '}';
 		// Line 3 col 11 — the local function `add` name token.
 		assertChangeSig(source, 3, 11, '1,0', expected, false);
 	}
@@ -93,21 +63,11 @@ class ChangeSigSliceTest extends Test {
 	 * between them stay byte-for-byte. The call site's spacing is likewise
 	 * preserved.
 	 */
-	public function testFormatPreservationOddSpacing():Void {
-		final source:String =
-			'class C {\n'
-			+ '\tpublic function g(a:Int,   b:String,   c:Float):Void {}\n'
-			+ '\tpublic function caller():Void {\n'
-			+ '\t\tg(1,   "x",   2.5);\n'
-			+ '\t}\n'
-			+ '}';
-		final expected:String =
-			'class C {\n'
-			+ '\tpublic function g(c:Float,   a:Int,   b:String):Void {}\n'
-			+ '\tpublic function caller():Void {\n'
-			+ '\t\tg(2.5,   1,   "x");\n'
-			+ '\t}\n'
-			+ '}';
+	public function testFormatPreservationOddSpacing(): Void {
+		final source: String = 'class C {\n' + '\tpublic function g(a:Int,   b:String,   c:Float):Void {}\n'
+			+ '\tpublic function caller():Void {\n' + '\t\tg(1,   "x",   2.5);\n' + '\t}\n' + '}';
+		final expected: String = 'class C {\n' + '\tpublic function g(c:Float,   a:Int,   b:String):Void {}\n'
+			+ '\tpublic function caller():Void {\n' + '\t\tg(2.5,   1,   "x");\n' + '\t}\n' + '}';
 		assertChangeSig(source, 2, 8, '2,0,1', expected, true);
 	}
 
@@ -116,15 +76,9 @@ class ChangeSigSliceTest extends Test {
 	 * the call cannot be proven to target this method, so the whole reorder
 	 * is refused rather than silently leaving its argument order stale.
 	 */
-	public function testRefuseNonThisReceiverCall():Void {
-		final source:String =
-			'class C {\n'
-			+ '\tpublic function g(a:Int, b:Int):Void {}\n'
-			+ '\tpublic function caller(o:C):Void {\n'
-			+ '\t\tg(1, 2);\n'
-			+ '\t\to.g(3, 4);\n'
-			+ '\t}\n'
-			+ '}';
+	public function testRefuseNonThisReceiverCall(): Void {
+		final source: String = 'class C {\n' + '\tpublic function g(a:Int, b:Int):Void {}\n' + '\tpublic function caller(o:C):Void {\n'
+			+ '\t\tg(1, 2);\n' + '\t\to.g(3, 4);\n' + '\t}\n' + '}';
 		assertRefused(source, 2, 8, '1,0');
 	}
 
@@ -132,69 +86,45 @@ class ChangeSigSliceTest extends Test {
 	 * Refuse an arity-mismatched call — a call that omits an optional /
 	 * defaulted argument cannot be slot-swapped, so the reorder is refused.
 	 */
-	public function testRefuseArityMismatchCall():Void {
-		final source:String =
-			'class C {\n'
-			+ '\tpublic function g(a:Int, ?b:Int):Void {}\n'
-			+ '\tpublic function caller():Void {\n'
-			+ '\t\tg(1, 2);\n'
-			+ '\t\tg(7);\n'
-			+ '\t}\n'
-			+ '}';
+	public function testRefuseArityMismatchCall(): Void {
+		final source: String = 'class C {\n' + '\tpublic function g(a:Int, ?b:Int):Void {}\n' + '\tpublic function caller():Void {\n'
+			+ '\t\tg(1, 2);\n' + '\t\tg(7);\n' + '\t}\n' + '}';
 		assertRefused(source, 2, 8, '1,0');
 	}
 
 	/** Refuse the identity permutation — a no-op. */
-	public function testRefuseIdentityPerm():Void {
-		final source:String =
-			'class C {\n'
-			+ '\tpublic function g(a:Int, b:Int, c:Int):Void {}\n'
-			+ '}';
+	public function testRefuseIdentityPerm(): Void {
+		final source: String = 'class C {\n' + '\tpublic function g(a:Int, b:Int, c:Int):Void {}\n' + '}';
 		assertRefused(source, 2, 8, '0,1,2');
 	}
 
 	/** Refuse a malformed (non-integer) permutation. */
-	public function testRefuseMalformedPerm():Void {
-		final source:String =
-			'class C {\n'
-			+ '\tpublic function g(a:Int, b:Int):Void {}\n'
-			+ '}';
+	public function testRefuseMalformedPerm(): Void {
+		final source: String = 'class C {\n' + '\tpublic function g(a:Int, b:Int):Void {}\n' + '}';
 		assertRefused(source, 2, 8, 'a,b');
 	}
 
 	/** Refuse a permutation whose arity does not match the parameter count. */
-	public function testRefuseWrongArityPerm():Void {
-		final source:String =
-			'class C {\n'
-			+ '\tpublic function g(a:Int, b:Int, c:Int):Void {}\n'
-			+ '}';
+	public function testRefuseWrongArityPerm(): Void {
+		final source: String = 'class C {\n' + '\tpublic function g(a:Int, b:Int, c:Int):Void {}\n' + '}';
 		assertRefused(source, 2, 8, '1,0');
 	}
 
 	/** Refuse a permutation that repeats an index (not a true permutation). */
-	public function testRefuseRepeatedPermIndex():Void {
-		final source:String =
-			'class C {\n'
-			+ '\tpublic function g(a:Int, b:Int, c:Int):Void {}\n'
-			+ '}';
+	public function testRefuseRepeatedPermIndex(): Void {
+		final source: String = 'class C {\n' + '\tpublic function g(a:Int, b:Int, c:Int):Void {}\n' + '}';
 		assertRefused(source, 2, 8, '0,0,1');
 	}
 
 	/** Refuse a cursor that is not on a function (a plain field). */
-	public function testRefuseCursorOnNonFunction():Void {
-		final source:String =
-			'class C {\n'
-			+ '\tvar field:Int = 0;\n'
-			+ '}';
+	public function testRefuseCursorOnNonFunction(): Void {
+		final source: String = 'class C {\n' + '\tvar field:Int = 0;\n' + '}';
 		assertRefused(source, 2, 5, '1,0');
 	}
 
 	/** Refuse a function with fewer than two parameters — nothing to reorder. */
-	public function testRefuseFewerThanTwoParams():Void {
-		final source:String =
-			'class C {\n'
-			+ '\tpublic function g(a:Int):Void {}\n'
-			+ '}';
+	public function testRefuseFewerThanTwoParams(): Void {
+		final source: String = 'class C {\n' + '\tpublic function g(a:Int):Void {}\n' + '}';
 		assertRefused(source, 2, 8, '1,0');
 	}
 
@@ -205,18 +135,10 @@ class ChangeSigSliceTest extends Test {
 	 * is the only safe outcome — permuting the shadowing call's arguments
 	 * would be a silent miscompile.
 	 */
-	public function testRefuseAmbiguousLocalFunctionName():Void {
-		final source:String =
-			'class C {\n'
-			+ '\tpublic function run():Void {\n'
-			+ '\t\tfunction add(x:Int, y:Int):Int return x + y;\n'
-			+ '\t\tvar r = add(1, 2);\n'
-			+ '\t\t{\n'
-			+ '\t\t\tfunction add(p:Int, q:Int):Int return p - q;\n'
-			+ '\t\t\tvar z = add(3, 4);\n'
-			+ '\t\t}\n'
-			+ '\t}\n'
-			+ '}';
+	public function testRefuseAmbiguousLocalFunctionName(): Void {
+		final source: String = 'class C {\n' + '\tpublic function run():Void {\n' + '\t\tfunction add(x:Int, y:Int):Int return x + y;\n'
+			+ '\t\tvar r = add(1, 2);\n' + '\t\t{\n' + '\t\t\tfunction add(p:Int, q:Int):Int return p - q;\n' + '\t\t\tvar z = add(3, 4);\n'
+			+ '\t\t}\n' + '\t}\n' + '}';
 		assertRefused(source, 3, 11, '1,0');
 	}
 
@@ -226,15 +148,9 @@ class ChangeSigSliceTest extends Test {
 	 * keeps the old argument order — change-sig cannot track it, so the
 	 * reorder is refused rather than silently misordering the captured call.
 	 */
-	public function testRefuseMethodReferencedAsValue():Void {
-		final source:String =
-			'class C {\n'
-			+ '\tpublic function g(a:Int, b:Int):Void {}\n'
-			+ '\tpublic function caller():Void {\n'
-			+ '\t\tg(1, 2);\n'
-			+ '\t\tvar fn = g;\n'
-			+ '\t}\n'
-			+ '}';
+	public function testRefuseMethodReferencedAsValue(): Void {
+		final source: String = 'class C {\n' + '\tpublic function g(a:Int, b:Int):Void {}\n' + '\tpublic function caller():Void {\n'
+			+ '\t\tg(1, 2);\n' + '\t\tvar fn = g;\n' + '\t}\n' + '}';
 		assertRefused(source, 2, 8, '1,0');
 	}
 
@@ -243,15 +159,9 @@ class ChangeSigSliceTest extends Test {
 	 * first-class value: `var fn = add;` captures it, so an indirect call
 	 * cannot be tracked and the reorder is refused.
 	 */
-	public function testRefuseLocalFunctionReferencedAsValue():Void {
-		final source:String =
-			'class C {\n'
-			+ '\tpublic function run():Void {\n'
-			+ '\t\tfunction add(x:Int, y:Int):Int return x + y;\n'
-			+ '\t\tvar r = add(1, 2);\n'
-			+ '\t\tvar fn = add;\n'
-			+ '\t}\n'
-			+ '}';
+	public function testRefuseLocalFunctionReferencedAsValue(): Void {
+		final source: String = 'class C {\n' + '\tpublic function run():Void {\n' + '\t\tfunction add(x:Int, y:Int):Int return x + y;\n'
+			+ '\t\tvar r = add(1, 2);\n' + '\t\tvar fn = add;\n' + '\t}\n' + '}';
 		assertRefused(source, 3, 11, '1,0');
 	}
 
@@ -261,15 +171,9 @@ class ChangeSigSliceTest extends Test {
 	 * indirect call, so the reorder is refused. (Bare `var f = g;` is
 	 * caught by the binding-read guard; this exercises the `this.g` form.)
 	 */
-	public function testRefuseMethodCapturedViaThis():Void {
-		final source:String =
-			'class C {\n'
-			+ '\tpublic function g(a:Int, b:Int):Void {}\n'
-			+ '\tpublic function caller():Void {\n'
-			+ '\t\tthis.g(1, 2);\n'
-			+ '\t\tvar f = this.g;\n'
-			+ '\t}\n'
-			+ '}';
+	public function testRefuseMethodCapturedViaThis(): Void {
+		final source: String = 'class C {\n' + '\tpublic function g(a:Int, b:Int):Void {}\n' + '\tpublic function caller():Void {\n'
+			+ '\t\tthis.g(1, 2);\n' + '\t\tvar f = this.g;\n' + '\t}\n' + '}';
 		assertRefused(source, 2, 8, '1,0');
 	}
 
@@ -281,65 +185,55 @@ class ChangeSigSliceTest extends Test {
 	 * `this.d(...)` call matches structurally. A method reorder carries a
 	 * non-null cross-file advisory.
 	 */
-	public function testReorderFinalMethod():Void {
-		final source:String =
-			'class C {\n'
-			+ '\tfinal function d(a:Int, b:String, c:Int):Void {\n'
-			+ '\t\ttrace(a);\n'
-			+ '\t}\n'
-			+ '\tpublic function caller():Void {\n'
-			+ '\t\td(1, "x", 3);\n'
-			+ '\t\tthis.d(7, "y", 9);\n'
-			+ '\t}\n'
-			+ '}';
-		final expected:String =
-			'class C {\n'
-			+ '\tfinal function d(c:Int, a:Int, b:String):Void {\n'
-			+ '\t\ttrace(a);\n'
-			+ '\t}\n'
-			+ '\tpublic function caller():Void {\n'
-			+ '\t\td(3, 1, "x");\n'
-			+ '\t\tthis.d(9, 7, "y");\n'
-			+ '\t}\n'
-			+ '}';
+	public function testReorderFinalMethod(): Void {
+		final source: String = 'class C {\n' + '\tfinal function d(a:Int, b:String, c:Int):Void {\n' + '\t\ttrace(a);\n' + '\t}\n'
+			+ '\tpublic function caller():Void {\n' + '\t\td(1, "x", 3);\n' + '\t\tthis.d(7, "y", 9);\n' + '\t}\n' + '}';
+		final expected: String = 'class C {\n' + '\tfinal function d(c:Int, a:Int, b:String):Void {\n' + '\t\ttrace(a);\n' + '\t}\n'
+			+ '\tpublic function caller():Void {\n' + '\t\td(3, 1, "x");\n' + '\t\tthis.d(9, 7, "y");\n' + '\t}\n' + '}';
 		// Line 2 col 1 — the `final` method decl, as `apq refs --decls` prints.
 		assertChangeSig(source, 2, 1, '2,0,1', expected, true);
 	}
 
-	private function assertChangeSig(source:String, line:Int, col:Int, perm:String, expected:String, advisoryNonNull:Bool):Void {
-		final result:ChangeSigResult = changeSigOf(source, line, col, perm);
+	private function assertChangeSig(source: String, line: Int, col: Int, perm: String, expected: String, advisoryNonNull: Bool): Void {
+		final result: ChangeSigResult = changeSigOf(source, line, col, perm);
 		switch result {
 			case Ok(text, advisory):
 				Assert.equals(expected, text);
-				if (advisoryNonNull) Assert.notNull(advisory);
-				else Assert.isNull(advisory);
+				if (advisoryNonNull)
+					Assert.notNull(advisory);
+				else
+					Assert.isNull(advisory);
 				// Every accepted rewrite must itself re-parse.
 				assertReparses(text);
-			case Err(message): Assert.fail('expected Ok, got Err: $message');
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
 		}
 	}
 
-	private function assertRefused(source:String, line:Int, col:Int, perm:String):Void {
-		final result:ChangeSigResult = changeSigOf(source, line, col, perm);
+	private function assertRefused(source: String, line: Int, col: Int, perm: String): Void {
+		final result: ChangeSigResult = changeSigOf(source, line, col, perm);
 		switch result {
-			case Ok(text, _): Assert.fail('expected Err (refusal), got Ok:\n$text');
-			case Err(_): Assert.pass();
+			case Ok(text, _):
+				Assert.fail('expected Err (refusal), got Ok:\n$text');
+			case Err(_):
+				Assert.pass();
 		}
 	}
 
-	private function assertReparses(text:String):Void {
-		final plugin:HaxeQueryPlugin = new HaxeQueryPlugin();
+	private function assertReparses(text: String): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		try {
 			plugin.parseFile(text);
 			Assert.pass();
-		} catch (exception:Exception) {
+		} catch (exception: Exception) {
 			Assert.fail('reordered output failed to re-parse: ${exception.message}\n$text');
 		}
 	}
 
-	private static function changeSigOf(source:String, line:Int, col:Int, perm:String):ChangeSigResult {
-		final plugin:HaxeQueryPlugin = new HaxeQueryPlugin();
-		final shape:RefShape = plugin.refShape();
+	private static function changeSigOf(source: String, line: Int, col: Int, perm: String): ChangeSigResult {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final shape: RefShape = plugin.refShape();
 		return ChangeSig.changeSig(source, line, col, perm, plugin, shape);
 	}
+
 }

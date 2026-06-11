@@ -38,54 +38,44 @@ class HxStmtBlockEndNoSemiSliceTest extends HxTestHelpers {
 
 	// -- Bare Call as last stmt of fn body, no `;` --
 
-	public function testBareCallLastStmtNoSemi():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
-			'class C {\n\tfunction f() {\n\t\tfoo()\n\t}\n}'
-		);
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testBareCallLastStmtNoSemi(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tfoo()\n\t}\n}');
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(1, stmts.length);
-		final e:HxExpr = expectExprStmt(stmts[0]);
+		final e: HxExpr = expectExprStmt(stmts[0]);
 		Assert.isTrue(e.match(Call(_, _)));
 	}
 
 	// -- Bare IdentExpr as last stmt of fn body, no `;` --
 
-	public function testBareIdentLastStmtNoSemi():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
-			'class C {\n\tfunction f() {\n\t\tx\n\t}\n}'
-		);
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testBareIdentLastStmtNoSemi(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx\n\t}\n}');
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(1, stmts.length);
-		final e:HxExpr = expectExprStmt(stmts[0]);
+		final e: HxExpr = expectExprStmt(stmts[0]);
 		Assert.isTrue(e.match(IdentExpr(_)));
 	}
 
 	// -- Multi-stmt: `;`-separated leading stmts + bare final --
 
-	public function testSemiSeparatedThenBareFinal():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
-			'class C {\n\tfunction f() {\n\t\tx;\n\t\ty\n\t}\n}'
-		);
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testSemiSeparatedThenBareFinal(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx;\n\t\ty\n\t}\n}');
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(2, stmts.length);
 	}
 
 	// -- Two consecutive fn decls, each with a bare last stmt --
 
-	public function testTwoFnsEachWithBareLastStmt():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
-			'class C {\n\tfunction f() {\n\t\tfoo()\n\t}\n\n\tfunction g() {\n\t\tbar()\n\t}\n}'
-		);
+	public function testTwoFnsEachWithBareLastStmt(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tfoo()\n\t}\n\n\tfunction g() {\n\t\tbar()\n\t}\n}');
 		Assert.equals(2, cls.members.length);
 	}
 
 	// -- Non-assign binop as last stmt — pre-Slice-44 this required `;`. --
 
-	public function testBinopLastStmtNoSemi():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
-			'class C {\n\tfunction f() {\n\t\ta + b\n\t}\n}'
-		);
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testBinopLastStmtNoSemi(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\ta + b\n\t}\n}');
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(1, stmts.length);
 	}
 
@@ -93,8 +83,8 @@ class HxStmtBlockEndNoSemiSliceTest extends HxTestHelpers {
 	// with block-bodied for whose only stmt is a bare call). The first
 	// class parses pre-slice; the second class was the sole blocker.
 
-	public function testCorpusIssue357BlockBodyBareCall():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
+	public function testCorpusIssue357BlockBodyBareCall(): Void {
+		final cls: HxClassDecl = HaxeParser.parse(
 			'class Main {\n\tfunction foo() {\n\t\tcmd = [\n\t\t\tfor (a in xs) {\n\t\t\t\tbar(a)\n\t\t\t}\n\t\t].join(" ");\n\t}\n}'
 		);
 		Assert.equals(1, cls.members.length);
@@ -103,9 +93,8 @@ class HxStmtBlockEndNoSemiSliceTest extends HxTestHelpers {
 	// -- Regression: peek-`}` is SPECIFIC to `}`. A bare expr followed
 	// by an ident (next stmt) still throws on the missing `;`.
 
-	public function testBareCallFollowedByIdentRegression():Void {
-		Assert.raises(() -> HaxeParser.parse(
-			'class C {\n\tfunction f() {\n\t\tfoo()\n\t\tbar()\n\t}\n}'
-		));
+	public function testBareCallFollowedByIdentRegression(): Void {
+		Assert.raises(() -> HaxeParser.parse('class C {\n\tfunction f() {\n\t\tfoo()\n\t\tbar()\n\t}\n}'));
 	}
+
 }

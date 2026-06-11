@@ -41,112 +41,101 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 @:nullSafety(Strict)
 final class HxStringInterpNoFormatSliceTest extends Test {
 
-	private static final _forceBuildParser:Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
-	private static final _forceBuildWriter:Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
+	private static final _forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
+	private static final _forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
-	public function new():Void {
+	public function new(): Void {
 		super();
 	}
 
 	// ---- Default (formatStringInterpolation = true) ----
 
-	public function testDefaultIsTrue():Void {
-		final defaults:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
-		Assert.isTrue(defaults.formatStringInterpolation,
-			'expected formatStringInterpolation default `true`');
+	public function testDefaultIsTrue(): Void {
+		final defaults: HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
+		Assert.isTrue(defaults.formatStringInterpolation, 'expected formatStringInterpolation default `true`');
 	}
 
-	public function testDefaultReformatsInteriorSpaces():Void {
+	public function testDefaultReformatsInteriorSpaces(): Void {
 		// Source `${i+1}` -> expected `${i + 1}` (canonical Pratt spacing).
-		final src:String = "class M { function f():Void { var s = '${i+1}'; } }";
-		final out:String = formatDefault(src);
-		Assert.isTrue(out.indexOf("'${i + 1}'") != -1,
-			'expected reformatted single-quoted block under default knob, got: <$out>');
+		final src: String = "class M { function f():Void { var s = '${i+1}'; } }";
+		final out: String = formatDefault(src);
+		Assert.isTrue(out.indexOf("'${i + 1}'") != -1, 'expected reformatted single-quoted block under default knob, got: <$out>');
 	}
 
 	// ---- Knob = false (verbatim emission) ----
 
-	public function testKnobFalseKeepsTightInterior():Void {
-		final src:String = "class M { function f():Void { var s = '${i+1}'; } }";
-		final out:String = formatNoFormat(src);
-		Assert.isTrue(out.indexOf("'${i+1}'") != -1,
-			'expected verbatim tight block under noformat knob, got: <$out>');
-		Assert.equals(-1, out.indexOf("'${i + 1}'"),
-			'unexpected reformatted block under noformat knob, got: <$out>');
+	public function testKnobFalseKeepsTightInterior(): Void {
+		final src: String = "class M { function f():Void { var s = '${i+1}'; } }";
+		final out: String = formatNoFormat(src);
+		Assert.isTrue(out.indexOf("'${i+1}'") != -1, 'expected verbatim tight block under noformat knob, got: <$out>');
+		Assert.equals(-1, out.indexOf("'${i + 1}'"), 'unexpected reformatted block under noformat knob, got: <$out>');
 	}
 
-	public function testKnobFalseKeepsAuthoredSpaces():Void {
+	public function testKnobFalseKeepsAuthoredSpaces(): Void {
 		// Source `${ i + 1 }` (leading + trailing spaces inside braces).
 		// Verbatim must include both interior spaces.
-		final src:String = "class M { function f():Void { var s = '${ i + 1 }'; } }";
-		final out:String = formatNoFormat(src);
-		Assert.isTrue(out.indexOf("'${ i + 1 }'") != -1,
-			'expected verbatim spaced block under noformat knob, got: <$out>');
+		final src: String = "class M { function f():Void { var s = '${ i + 1 }'; } }";
+		final out: String = formatNoFormat(src);
+		Assert.isTrue(out.indexOf("'${ i + 1 }'") != -1, 'expected verbatim spaced block under noformat knob, got: <$out>');
 	}
 
-	public function testKnobFalseKeepsBraceLiteralInside():Void {
+	public function testKnobFalseKeepsBraceLiteralInside(): Void {
 		// issue_72 motivator: source `${foo ("{") }` with `{` inside string
 		// literal AND trailing space before `}`. Verbatim emission preserves
 		// both — the parsed HxExpr would render as `foo("{")` (tight call).
-		final src:String = "class M { function f():Void { var s = '${foo (\"{\") }'; } }";
-		final out:String = formatNoFormat(src);
-		Assert.isTrue(out.indexOf("'${foo (\"{\") }'") != -1,
-			'expected verbatim block with brace literal inside under noformat knob, got: <$out>');
+		final src: String = "class M { function f():Void { var s = '${foo (\"{\") }'; } }";
+		final out: String = formatNoFormat(src);
+		Assert.isTrue(
+			out.indexOf("'${foo (\"{\") }'") != -1, 'expected verbatim block with brace literal inside under noformat knob, got: <$out>'
+		);
 	}
 
-	public function testKnobFalseEscapedDollarPassesThrough():Void {
+	public function testKnobFalseEscapedDollarPassesThrough(): Void {
 		// `$$` is the Dollar segment, not Block — captureSource is inert
 		// for Dollar. `$${i+1}` parses as `$$` (escape) followed by literal
 		// `{i+1}` (no interp because `$` was already consumed). Output
 		// must be byte-identical to source regardless of knob.
-		final src:String = "class M { function f():Void { var s = '$${i+1}'; } }";
-		final out:String = formatNoFormat(src);
-		Assert.isTrue(out.indexOf("'$${i+1}'") != -1,
-			'expected escaped-dollar block byte-identical under noformat knob, got: <$out>');
+		final src: String = "class M { function f():Void { var s = '$${i+1}'; } }";
+		final out: String = formatNoFormat(src);
+		Assert.isTrue(out.indexOf("'$${i+1}'") != -1, 'expected escaped-dollar block byte-identical under noformat knob, got: <$out>');
 	}
 
-	public function testKnobFalseTripleDollarVerbatim():Void {
+	public function testKnobFalseTripleDollarVerbatim(): Void {
 		// `$$${i+1}` parses as `$$` (Dollar) + `${i+1}` (Block). The Block
 		// segment captures `i+1` verbatim under noformat; the Dollar is
 		// untouched. Combined output must be `$${i+1}` (no spaces added).
-		final src:String = "class M { function f():Void { var s = '$$${i+1}'; } }";
-		final out:String = formatNoFormat(src);
-		Assert.isTrue(out.indexOf("'$$${i+1}'") != -1,
-			'expected triple-dollar block verbatim under noformat knob, got: <$out>');
+		final src: String = "class M { function f():Void { var s = '$$${i+1}'; } }";
+		final out: String = formatNoFormat(src);
+		Assert.isTrue(out.indexOf("'$$${i+1}'") != -1, 'expected triple-dollar block verbatim under noformat knob, got: <$out>');
 	}
 
 	// ---- JSON config ----
 
-	public function testJsonFalseMapsToFalse():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"whitespace": {"formatStringInterpolation": false}}');
-		Assert.isFalse(opts.formatStringInterpolation,
-			'expected `false` from JSON config');
+	public function testJsonFalseMapsToFalse(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"formatStringInterpolation": false}}');
+		Assert.isFalse(opts.formatStringInterpolation, 'expected `false` from JSON config');
 	}
 
-	public function testJsonTrueMapsToTrue():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"whitespace": {"formatStringInterpolation": true}}');
-		Assert.isTrue(opts.formatStringInterpolation,
-			'expected `true` from JSON config');
+	public function testJsonTrueMapsToTrue(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"formatStringInterpolation": true}}');
+		Assert.isTrue(opts.formatStringInterpolation, 'expected `true` from JSON config');
 	}
 
-	public function testJsonAbsentKeepsDefault():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
-		Assert.isTrue(opts.formatStringInterpolation,
-			'expected default `true` when key absent');
+	public function testJsonAbsentKeepsDefault(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		Assert.isTrue(opts.formatStringInterpolation, 'expected default `true` when key absent');
 	}
 
-	private inline function formatDefault(src:String):String {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	private inline function formatDefault(src: String): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.finalNewline = false;
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
 
-	private inline function formatNoFormat(src:String):String {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"whitespace": {"formatStringInterpolation": false}}');
+	private inline function formatNoFormat(src: String): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"formatStringInterpolation": false}}');
 		opts.finalNewline = false;
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
+
 }

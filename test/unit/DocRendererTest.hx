@@ -14,6 +14,7 @@ import anyparse.format.IndentChar;
 	layer lays out correctly.
 **/
 class DocRendererTest extends Test {
+
 	function testEmpty() {
 		Assert.equals("", Renderer.render(D.empty(), 80));
 	}
@@ -32,7 +33,9 @@ class DocRendererTest extends Test {
 		var doc = D.group(D.concat([
 			D.text("["),
 			D.softline(),
-			D.text("1"), D.text(","), D.line(),
+			D.text("1"),
+			D.text(","),
+			D.line(),
 			D.text("2"),
 			D.softline(),
 			D.text("]"),
@@ -44,12 +47,18 @@ class DocRendererTest extends Test {
 		// Same shape, but width too small → breaks all lines.
 		var doc = D.group(D.concat([
 			D.text("["),
-			D.nest(2, D.concat([
-				D.softline(),
-				D.text("a"), D.text(","), D.line(),
-				D.text("b"), D.text(","), D.line(),
-				D.text("c"),
-			])),
+			D.nest(
+				2, D.concat([
+					D.softline(),
+					D.text("a"),
+					D.text(","),
+					D.line(),
+					D.text("b"),
+					D.text(","),
+					D.line(),
+					D.text("c"),
+				])
+			),
 			D.softline(),
 			D.text("]"),
 		]));
@@ -66,23 +75,31 @@ class DocRendererTest extends Test {
 		// Outer array of two inner arrays. Outer doesn't fit, inners do.
 		var inner1 = D.group(D.concat([
 			D.text("["),
-			D.text("1"), D.text(","), D.line(),
+			D.text("1"),
+			D.text(","),
+			D.line(),
 			D.text("2"),
 			D.text("]"),
 		]));
 		var inner2 = D.group(D.concat([
 			D.text("["),
-			D.text("3"), D.text(","), D.line(),
+			D.text("3"),
+			D.text(","),
+			D.line(),
 			D.text("4"),
 			D.text("]"),
 		]));
 		var outer = D.group(D.concat([
 			D.text("["),
-			D.nest(2, D.concat([
-				D.softline(),
-				inner1, D.text(","), D.line(),
-				inner2,
-			])),
+			D.nest(
+				2, D.concat([
+					D.softline(),
+					inner1,
+					D.text(","),
+					D.line(),
+					inner2,
+				])
+			),
 			D.softline(),
 			D.text("]"),
 		]));
@@ -99,9 +116,9 @@ class DocRendererTest extends Test {
 		// ω-group-rest-probe: with nothing trailing, the rest-probe variant
 		// must behave identically to plain Group — restW returns 0 from
 		// an empty stack, so the fit decision sees the same budget.
-		final inner:Doc = Concat([Text('['), Text('a'), Text(','), Line(' '), Text('b'), Text(']')]);
-		final groupDoc:Doc = Group(inner);
-		final probeDoc:Doc = GroupWithRestProbe(inner);
+		final inner: Doc = Concat([Text('['), Text('a'), Text(','), Line(' '), Text('b'), Text(']')]);
+		final groupDoc: Doc = Group(inner);
+		final probeDoc: Doc = GroupWithRestProbe(inner);
 
 		// Width 80: both fit flat.
 		Assert.equals('[a, b]', Renderer.render(groupDoc, 80));
@@ -116,22 +133,22 @@ class DocRendererTest extends Test {
 		// ω-group-rest-probe: when significant content trails on the same
 		// line, the probe variant prefers MBreak over MFlat — even though
 		// the Group's own content fits flat in the remaining budget.
-		final groupContent:Doc = Concat([Text('['), Text('a'), Text(','), Line(' '), Text('b'), Text(']')]);
-		final trailing:Doc = Text(' = LongTrailingContentThatPushesPastWidth');
+		final groupContent: Doc = Concat([Text('['), Text('a'), Text(','), Line(' '), Text('b'), Text(']')]);
+		final trailing: Doc = Text(' = LongTrailingContentThatPushesPastWidth');
 
-		final plainGroup:Doc = Concat([Group(groupContent), trailing]);
-		final probeGroup:Doc = Concat([GroupWithRestProbe(groupContent), trailing]);
+		final plainGroup: Doc = Concat([Group(groupContent), trailing]);
+		final probeGroup: Doc = Concat([GroupWithRestProbe(groupContent), trailing]);
 
 		// Width 40: plain Group fits its own 6 chars and stays flat; the
 		// trailing content overflows the line WITHOUT triggering a break
 		// inside the Group (probe-blind behavior).
-		final plainOut:String = Renderer.render(plainGroup, 40);
+		final plainOut: String = Renderer.render(plainGroup, 40);
 		Assert.equals('[a, b] = LongTrailingContentThatPushesPastWidth', plainOut);
 
 		// Same width, probe variant: the rest-of-stack walker sees the
 		// trailing text width, subtracts from the budget — Group's 6 chars
 		// no longer fit, the Group breaks.
-		final probeOut:String = Renderer.render(probeGroup, 40);
+		final probeOut: String = Renderer.render(probeGroup, 40);
 		Assert.equals('[a,\nb] = LongTrailingContentThatPushesPastWidth', probeOut);
 	}
 
@@ -139,9 +156,9 @@ class DocRendererTest extends Test {
 		// ω-group-rest-probe: inside a Flatten region, the rest-probe is
 		// bypassed (same as plain Group's force-flat short-circuit). The
 		// inner content renders flat regardless of trailing content.
-		final inner:Doc = Concat([Text('['), Text('a'), Text(','), Line(' '), Text('b'), Text(']')]);
-		final trailing:Doc = Text(' = LongTrailingContentThatPushesPastWidth');
-		final flatRegion:Doc = Flatten(Concat([GroupWithRestProbe(inner), trailing]));
+		final inner: Doc = Concat([Text('['), Text('a'), Text(','), Line(' '), Text('b'), Text(']')]);
+		final trailing: Doc = Text(' = LongTrailingContentThatPushesPastWidth');
+		final flatRegion: Doc = Flatten(Concat([GroupWithRestProbe(inner), trailing]));
 
 		// Width 40: probe would normally break (per previous test), but
 		// Flatten forces MFlat throughout.
@@ -155,10 +172,10 @@ class DocRendererTest extends Test {
 		// Bare Fill at top of stack — outer frame mode is MBreak, so Fill
 		// enters its per-item FillCont path (the probe consumer) directly,
 		// without an outer Group flipping it to all-flat.
-		final items:Array<Doc> = [Text('aa'), Text('bb'), Text('cc')];
-		final sep:Doc = Concat([Text(','), Line(' ')]);
-		final fillDoc:Doc = Fill(items, sep);
-		final probeDoc:Doc = FillWithRestProbe(items, sep);
+		final items: Array<Doc> = [Text('aa'), Text('bb'), Text('cc')];
+		final sep: Doc = Concat([Text(','), Line(' ')]);
+		final fillDoc: Doc = Fill(items, sep);
+		final probeDoc: Doc = FillWithRestProbe(items, sep);
 
 		// Width 80: per-item probes all fit; both pack inline.
 		Assert.equals('aa, bb, cc', Renderer.render(fillDoc, 80));
@@ -183,24 +200,24 @@ class DocRendererTest extends Test {
 		// real-world consumer (typedef LHS+RHS), `GroupWithRestProbe` (slice
 		// 1) flips the outer Group to MBreak via its own rest-of-stack probe
 		// — this test exercises the Fill-layer probe in isolation.
-		final items:Array<Doc> = [Text('aa'), Text('bb'), Text('cc')];
-		final sep:Doc = Concat([Text(','), Line(' ')]);
-		final trailing:Doc = Text(' = LongTrailingContentThatPushesPastWidth');
+		final items: Array<Doc> = [Text('aa'), Text('bb'), Text('cc')];
+		final sep: Doc = Concat([Text(','), Line(' ')]);
+		final trailing: Doc = Text(' = LongTrailingContentThatPushesPastWidth');
 
-		final plainFill:Doc = Concat([Fill(items, sep), trailing]);
-		final probeFill:Doc = Concat([FillWithRestProbe(items, sep), trailing]);
+		final plainFill: Doc = Concat([Fill(items, sep), trailing]);
+		final probeFill: Doc = Concat([FillWithRestProbe(items, sep), trailing]);
 
 		// Width 30: plain Fill packs all items inline (per-item probe sees
 		// only `width - col - tailReserve`); rest-of-line trailing tail
 		// overflows the line WITHOUT triggering a per-item break.
-		final plainOut:String = Renderer.render(plainFill, 30);
+		final plainOut: String = Renderer.render(plainFill, 30);
 		Assert.equals('aa, bb, cc = LongTrailingContentThatPushesPastWidth', plainOut);
 
 		// Same width, probe variant: only the LAST item's probe subtracts
 		// `restW` (= 41, the trailing text width). Item 1 (`bb`, middle)
 		// fits without restW pressure → packs. Item 2 (`cc`, last) probes
 		// `width - col - 0 - 41 = -17 < 4` → BREAK before `cc`.
-		final probeOut:String = Renderer.render(probeFill, 30);
+		final probeOut: String = Renderer.render(probeFill, 30);
 		Assert.equals('aa, bb,\ncc = LongTrailingContentThatPushesPastWidth', probeOut);
 	}
 
@@ -208,10 +225,10 @@ class DocRendererTest extends Test {
 		// ω-fill-rest-probe: inside a Flatten region, the rest-probe is
 		// bypassed (same as plain Fill's force-flat short-circuit). All
 		// items render flat regardless of trailing content.
-		final items:Array<Doc> = [Text('aa'), Text('bb'), Text('cc')];
-		final sep:Doc = Concat([Text(','), Line(' ')]);
-		final trailing:Doc = Text(' = LongTrailingContentThatPushesPastWidth');
-		final flatRegion:Doc = Flatten(Concat([FillWithRestProbe(items, sep), trailing]));
+		final items: Array<Doc> = [Text('aa'), Text('bb'), Text('cc')];
+		final sep: Doc = Concat([Text(','), Line(' ')]);
+		final trailing: Doc = Text(' = LongTrailingContentThatPushesPastWidth');
+		final flatRegion: Doc = Flatten(Concat([FillWithRestProbe(items, sep), trailing]));
 
 		// Width 30: probe would normally break per-item (per previous
 		// test), but Flatten forces MFlat throughout.
@@ -241,92 +258,104 @@ class DocRendererTest extends Test {
 
 	function testRenderWithTabIndent() {
 		// Nest columns align to tabWidth → pure tabs, no trailing spaces.
-		final doc:Doc = D.group(D.concat([
+		final doc: Doc = D.group(D.concat([
 			D.text("{"),
-			D.nest(4, D.concat([
-				D.softline(),
-				D.text("a"), D.text(","), D.line(),
-				D.text("b"),
-			])),
+			D.nest(
+				4, D.concat([
+					D.softline(),
+					D.text("a"),
+					D.text(","),
+					D.line(),
+					D.text("b"),
+				])
+			),
 			D.softline(),
 			D.text("}"),
 		]));
 		// Force break by narrowing the width.
-		final expected:String = "{\n\ta,\n\tb\n}";
+		final expected: String = "{\n\ta,\n\tb\n}";
 		Assert.equals(expected, Renderer.render(doc, 5, Tab, 4));
 	}
 
 	function testRenderWithTabIndentNested() {
 		// Two-level Nest(4) + Nest(4) → 8 columns → 2 tabs at the deep level.
-		final inner:Doc = D.nest(4, D.concat([
-			D.softline(),
-			D.text("x"),
-		]));
-		final doc:Doc = D.group(D.concat([
+		final inner: Doc = D.nest(
+			4, D.concat([
+				D.softline(),
+				D.text("x"),
+			])
+		);
+		final doc: Doc = D.group(D.concat([
 			D.text("{"),
-			D.nest(4, D.concat([
-				D.softline(),
-				D.text("{"),
-				inner,
-				D.softline(),
-				D.text("}"),
-			])),
+			D.nest(
+				4, D.concat([
+					D.softline(),
+					D.text("{"),
+					inner,
+					D.softline(),
+					D.text("}"),
+				])
+			),
 			D.softline(),
 			D.text("}"),
 		]));
-		final expected:String = "{\n\t{\n\t\tx\n\t}\n}";
+		final expected: String = "{\n\t{\n\t\tx\n\t}\n}";
 		Assert.equals(expected, Renderer.render(doc, 1, Tab, 4));
 	}
 
 	function testRenderWithTabIndentRemainderSpaces() {
 		// Nest column not aligned to tabWidth → floor(n/tw) tabs + remainder spaces.
-		final doc:Doc = D.group(D.concat([
+		final doc: Doc = D.group(D.concat([
 			D.text("["),
-			D.nest(3, D.concat([
-				D.softline(),
-				D.text("a"),
-			])),
+			D.nest(
+				3, D.concat([
+					D.softline(),
+					D.text("a"),
+				])
+			),
 			D.softline(),
 			D.text("]"),
 		]));
 		// tabWidth=2 → 3 cols → 1 tab + 1 space.
-		final expected:String = "[\n\t a\n]";
+		final expected: String = "[\n\t a\n]";
 		Assert.equals(expected, Renderer.render(doc, 2, Tab, 2));
 	}
 
 	function testRenderWithCustomLineEnd() {
-		final doc:Doc = D.group(D.concat([
+		final doc: Doc = D.group(D.concat([
 			D.text("["),
-			D.nest(2, D.concat([
-				D.softline(),
-				D.text("a"),
-			])),
+			D.nest(
+				2, D.concat([
+					D.softline(),
+					D.text("a"),
+				])
+			),
 			D.softline(),
 			D.text("]"),
 		]));
-		final expected:String = "[\r\n  a\r\n]";
+		final expected: String = "[\r\n  a\r\n]";
 		Assert.equals(expected, Renderer.render(doc, 1, Space, 1, '\r\n'));
 	}
 
 	function testRenderFinalNewlineAppendedWhenMissing() {
-		final doc:Doc = D.text("hello");
+		final doc: Doc = D.text("hello");
 		Assert.equals("hello\n", Renderer.render(doc, 80, Space, 1, '\n', true));
 	}
 
 	function testRenderFinalNewlineNotDuplicated() {
 		// Output already ends in lineEnd from a forced break → no double newline.
-		final doc:Doc = D.group(D.concat([
+		final doc: Doc = D.group(D.concat([
 			D.text("a"),
 			D.line(),
 			D.text(""),
 		]));
-		final out:String = Renderer.render(doc, 1, Space, 1, '\n', true);
+		final out: String = Renderer.render(doc, 1, Space, 1, '\n', true);
 		Assert.equals("a\n", out);
 	}
 
 	function testRenderFinalNewlineDisabledByDefault() {
 		// Default render(doc, width) must not append a trailing newline.
-		final doc:Doc = D.text("hello");
+		final doc: Doc = D.text("hello");
 		Assert.equals("hello", Renderer.render(doc, 80));
 	}
 
@@ -335,13 +364,15 @@ class DocRendererTest extends Test {
 		// blank line: the first hardline's pending indent is silently
 		// overwritten by the second, and flushed only when the next text
 		// arrives. This is the pre-ω-trailing-whitespace default.
-		final doc:Doc = D.nest(2, D.concat([
-			D.hardline(),
-			D.text("a"),
-			D.hardline(),
-			D.hardline(),
-			D.text("b"),
-		]));
+		final doc: Doc = D.nest(
+			2, D.concat([
+				D.hardline(),
+				D.text("a"),
+				D.hardline(),
+				D.hardline(),
+				D.text("b"),
+			])
+		);
 		Assert.equals("\n  a\n\n  b", Renderer.render(doc, 80));
 	}
 
@@ -349,14 +380,16 @@ class DocRendererTest extends Test {
 		// With trailingWhitespace=true the first hardline's pending indent
 		// is flushed before the second hardline's lineEnd, so the blank
 		// row carries the enclosing block's indent.
-		final doc:Doc = D.nest(2, D.concat([
-			D.hardline(),
-			D.text("a"),
-			D.hardline(),
-			D.hardline(),
-			D.text("b"),
-		]));
-		final out:String = Renderer.render(doc, 80, Space, 1, '\n', false, true);
+		final doc: Doc = D.nest(
+			2, D.concat([
+				D.hardline(),
+				D.text("a"),
+				D.hardline(),
+				D.hardline(),
+				D.text("b"),
+			])
+		);
+		final out: String = Renderer.render(doc, 80, Space, 1, '\n', false, true);
 		Assert.equals("\n  a\n  \n  b", out);
 	}
 
@@ -367,12 +400,14 @@ class DocRendererTest extends Test {
 	// would fit by length alone and the renderer would emit raw `\n`
 	// without indent.
 	function testGroupForcesBreakOnDirectHardlineEvenWhenContentFits() {
-		final inner:Doc = D.nest(1, D.concat([
-			D.text("a"),
-			D.hardline(),
-			D.text("b"),
-		]));
-		final actual:String = Renderer.render(D.group(inner), 80, Tab, 1);
+		final inner: Doc = D.nest(
+			1, D.concat([
+				D.text("a"),
+				D.hardline(),
+				D.text("b"),
+			])
+		);
+		final actual: String = Renderer.render(D.group(inner), 80, Tab, 1);
 		Assert.equals("a\n\tb", actual);
 	}
 
@@ -390,8 +425,8 @@ class DocRendererTest extends Test {
 	// as each fits in the remaining budget; on overflow the renderer breaks
 	// the offending separator at the Fill's indent and resumes packing.
 	function testFillAllFlat() {
-		final sep:Doc = D.concat([D.text(","), D.line()]);
-		final items:Array<Doc> = [D.text("a"), D.text("b"), D.text("c")];
+		final sep: Doc = D.concat([D.text(","), D.line()]);
+		final items: Array<Doc> = [D.text("a"), D.text("b"), D.text("c")];
 		Assert.equals("a, b, c", Renderer.render(D.fill(items, sep), 80));
 	}
 
@@ -399,9 +434,9 @@ class DocRendererTest extends Test {
 		// Width 1: every successive item overflows so every sep breaks.
 		// Indent comes from the surrounding Nest — Fill itself does not
 		// add depth.
-		final sep:Doc = D.concat([D.text(","), D.line()]);
-		final items:Array<Doc> = [D.text("aa"), D.text("bb"), D.text("cc")];
-		final doc:Doc = D.nest(2, D.fill(items, sep));
+		final sep: Doc = D.concat([D.text(","), D.line()]);
+		final items: Array<Doc> = [D.text("aa"), D.text("bb"), D.text("cc")];
+		final doc: Doc = D.nest(2, D.fill(items, sep));
 		Assert.equals("aa,\n  bb,\n  cc", Renderer.render(doc, 1));
 	}
 
@@ -409,19 +444,23 @@ class DocRendererTest extends Test {
 		// Width 8 fits "aa, bb" (6 cols) but ", cc" overflows (need 4, have
 		// 2). After breaking to col 2, "cc, dd" fits exactly (8 cols), then
 		// ", ee" overflows again so the last item starts a new line.
-		final sep:Doc = D.concat([D.text(","), D.line()]);
-		final items:Array<Doc> = [
-			D.text("aa"), D.text("bb"), D.text("cc"), D.text("dd"), D.text("ee"),
+		final sep: Doc = D.concat([D.text(","), D.line()]);
+		final items: Array<Doc> = [
+			D.text("aa"),
+			D.text("bb"),
+			D.text("cc"),
+			D.text("dd"),
+			D.text("ee"),
 		];
-		final doc:Doc = D.nest(2, D.fill(items, sep));
+		final doc: Doc = D.nest(2, D.fill(items, sep));
 		Assert.equals("aa, bb,\n  cc, dd,\n  ee", Renderer.render(doc, 8));
 	}
 
 	function testFillFirstItemAlwaysInline() {
 		// items[0] is always emitted at entry column, even when it alone
 		// already overflows. The fill decision starts at items[1].
-		final sep:Doc = D.concat([D.text(","), D.line()]);
-		final items:Array<Doc> = [D.text("longlonglong"), D.text("x")];
+		final sep: Doc = D.concat([D.text(","), D.line()]);
+		final items: Array<Doc> = [D.text("longlonglong"), D.text("x")];
 		Assert.equals("longlonglong,\n  x", Renderer.render(D.nest(2, D.fill(items, sep)), 5));
 	}
 
@@ -430,7 +469,7 @@ class DocRendererTest extends Test {
 		// hardlines. Per-item flat measurement defers BodyGroups, so the
 		// item's "header" width drives packing — three lambdas with short
 		// headers pack on the same line, body breaks aside.
-		function lambda(name:String):Doc {
+		function lambda(name: String): Doc {
 			return D.concat([
 				D.text(name + " -> "),
 				BodyGroup(D.concat([
@@ -441,35 +480,32 @@ class DocRendererTest extends Test {
 				])),
 			]);
 		}
-		final sep:Doc = D.concat([D.text(","), D.line()]);
-		final items:Array<Doc> = [lambda("x"), lambda("y")];
+		final sep: Doc = D.concat([D.text(","), D.line()]);
+		final items: Array<Doc> = [lambda("x"), lambda("y")];
 		// Outer width 80: both lambda headers (`x -> {` and `y -> {`)
 		// fit on the same line; bodies break inside their BG. The lambdas'
 		// internal `Nest(1)` drives body indent without a Fill-level Nest.
-		Assert.equals(
-			"x -> {\n\tbody;\n}, y -> {\n\tbody;\n}",
-			Renderer.render(D.fill(items, sep), 80, Tab, 1)
-		);
+		Assert.equals("x -> {\n\tbody;\n}, y -> {\n\tbody;\n}", Renderer.render(D.fill(items, sep), 80, Tab, 1));
 	}
 
 	function testFillWrappedInGroupFlatWhenAllFits() {
 		// Outer Group's flat measurement of Fill = items joined by sep flat.
 		// If everything fits, Group commits to flat → Fill in MFlat → all
 		// items packed with sep flat.
-		final sep:Doc = D.concat([D.text(","), D.line()]);
-		final items:Array<Doc> = [D.text("a"), D.text("b"), D.text("c")];
-		final doc:Doc = D.group(D.fill(items, sep));
+		final sep: Doc = D.concat([D.text(","), D.line()]);
+		final items: Array<Doc> = [D.text("a"), D.text("b"), D.text("c")];
+		final doc: Doc = D.group(D.fill(items, sep));
 		Assert.equals("a, b, c", Renderer.render(doc, 80));
 	}
 
 	function testCallArgOuterStaysFlatWhileBodyGroupBreaksCorrectly() {
-		final blockBody:Doc = BodyGroup(D.concat([
+		final blockBody: Doc = BodyGroup(D.concat([
 			D.text("{"),
 			D.nest(1, D.concat([D.hardline(), D.text("case A: x;")])),
 			D.hardline(),
 			D.text("}"),
 		]));
-		final doc:Doc = D.group(D.concat([
+		final doc: Doc = D.group(D.concat([
 			D.text("trace("),
 			D.nest(1, blockBody),
 			D.text(")"),
@@ -488,7 +524,7 @@ class DocRendererTest extends Test {
 	function testIfWidthExceedsAtColumnZeroBelowThreshold() {
 		// At col 0 with 5-char content and threshold 10, col + flat = 5
 		// — under threshold → flat side fires.
-		final doc:Doc = IfWidthExceeds(10, D.text("BREAK"), D.text("FLATX"));
+		final doc: Doc = IfWidthExceeds(10, D.text("BREAK"), D.text("FLATX"));
 		Assert.equals("FLATX", Renderer.render(doc, 80));
 	}
 
@@ -496,7 +532,7 @@ class DocRendererTest extends Test {
 		// At col 0 with 10-char content and threshold 10, col + flat = 10
 		// — reaches threshold (`>= n`) → brk fires. Renderer probe is
 		// `col + flatTokenWidth(flatDoc) >= n` (boundary inclusive).
-		final doc:Doc = IfWidthExceeds(10, D.text("BREAKBREAK"), D.text("FLATXFLATX"));
+		final doc: Doc = IfWidthExceeds(10, D.text("BREAKBREAK"), D.text("FLATXFLATX"));
 		Assert.equals("BREAKBREAK", Renderer.render(doc, 80));
 	}
 
@@ -505,7 +541,7 @@ class DocRendererTest extends Test {
 		// 10, even short 3-char content (col + flat = 11) crosses — brk
 		// fires. Both shapes have same width so the test is purely
 		// about the column-aware probe.
-		final doc:Doc = D.concat([
+		final doc: Doc = D.concat([
 			D.text("abcdefgh"),
 			IfWidthExceeds(10, D.text("BRK"), D.text("FLT")),
 		]);
@@ -515,7 +551,7 @@ class DocRendererTest extends Test {
 	function testIfWidthExceedsShiftedShortPrefix() {
 		// Same shape, prefix only 2 cols → col + flat = 5, under
 		// threshold 10 → flat fires.
-		final doc:Doc = D.concat([
+		final doc: Doc = D.concat([
 			D.text("ab"),
 			IfWidthExceeds(10, D.text("BRK"), D.text("FLT")),
 		]);
@@ -529,9 +565,9 @@ class DocRendererTest extends Test {
 		// side is 50 cols. Outer Group with budget 80 fits the flat
 		// shape — Group commits to MFlat, IfWidthExceeds probes col 0
 		// vs threshold 10 → 5 < 10 → flat fires.
-		final brk:Doc = D.text("BREAKBREAKBREAKBREAKBREAKBREAKBREAKBREAKBREAKBREAK");
-		final flat:Doc = D.text("FLATX");
-		final doc:Doc = D.group(IfWidthExceeds(10, brk, flat));
+		final brk: Doc = D.text("BREAKBREAKBREAKBREAKBREAKBREAKBREAKBREAKBREAKBREAK");
+		final flat: Doc = D.text("FLATX");
+		final doc: Doc = D.group(IfWidthExceeds(10, brk, flat));
 		Assert.equals("FLATX", Renderer.render(doc, 80));
 	}
 
@@ -540,7 +576,7 @@ class DocRendererTest extends Test {
 		// of flat content width — the column has already crossed the
 		// threshold. Threshold 5 with 10-col prefix puts col past the
 		// threshold before any flat content is measured.
-		final doc:Doc = D.concat([
+		final doc: Doc = D.concat([
 			D.text("0123456789"),
 			IfWidthExceeds(5, D.text("BRK"), D.text("FLT")),
 		]);
@@ -556,11 +592,15 @@ class DocRendererTest extends Test {
 		// always refuse-to-flatten and pick brk regardless of column).
 		// At col 0, flat side's token width is 6 ("aabbcc"), threshold
 		// 10 — 0 + 6 < 10, so flat fires.
-		final flatShape:Doc = D.concat([
-			D.text("aa"), D.hardline(), D.text("bb"), D.hardline(), D.text("cc"),
+		final flatShape: Doc = D.concat([
+			D.text("aa"),
+			D.hardline(),
+			D.text("bb"),
+			D.hardline(),
+			D.text("cc"),
 		]);
-		final brkShape:Doc = D.text("BRK");
-		final doc:Doc = IfWidthExceeds(10, brkShape, flatShape);
+		final brkShape: Doc = D.text("BRK");
+		final doc: Doc = IfWidthExceeds(10, brkShape, flatShape);
 		Assert.equals("aa\nbb\ncc", Renderer.render(doc, 80));
 	}
 
@@ -578,14 +618,14 @@ class DocRendererTest extends Test {
 		// At col 0 with 5-char single-line flat and threshold 10, col +
 		// firstLine = 5 — under threshold → flat fires. Same arithmetic
 		// as the `IfWidthExceeds` sibling for hardline-free shapes.
-		final doc:Doc = IfFirstLineExceeds(10, D.text("BREAK"), D.text("FLATX"));
+		final doc: Doc = IfFirstLineExceeds(10, D.text("BREAK"), D.text("FLATX"));
 		Assert.equals("FLATX", Renderer.render(doc, 80));
 	}
 
 	function testIfFirstLineExceedsAtColumnZeroReachesThreshold() {
 		// At col 0 with 10-char single-line flat and threshold 10, col +
 		// firstLine = 10 — reaches threshold (`>= n`) → brk fires.
-		final doc:Doc = IfFirstLineExceeds(10, D.text("BREAKBREAK"), D.text("FLATXFLATX"));
+		final doc: Doc = IfFirstLineExceeds(10, D.text("BREAKBREAK"), D.text("FLATXFLATX"));
 		Assert.equals("BREAKBREAK", Renderer.render(doc, 80));
 	}
 
@@ -599,11 +639,15 @@ class DocRendererTest extends Test {
 		// `IfWidthExceeds` sibling on the same input would also pick
 		// flat at col 0, but for different reasons; the diverging
 		// behaviour shows up under prefix shift (next test).
-		final flatShape:Doc = D.concat([
-			D.text("aa"), D.hardline(), D.text("bbbbbbbbbb"), D.hardline(), D.text("cc"),
+		final flatShape: Doc = D.concat([
+			D.text("aa"),
+			D.hardline(),
+			D.text("bbbbbbbbbb"),
+			D.hardline(),
+			D.text("cc"),
 		]);
-		final brkShape:Doc = D.text("BRK");
-		final doc:Doc = IfFirstLineExceeds(10, brkShape, flatShape);
+		final brkShape: Doc = D.text("BRK");
+		final doc: Doc = IfFirstLineExceeds(10, brkShape, flatShape);
 		Assert.equals("aa\nbbbbbbbbbb\ncc", Renderer.render(doc, 80));
 	}
 
@@ -615,11 +659,13 @@ class DocRendererTest extends Test {
 		// line is measured. This is the sameLine.returnBody=same shape
 		// in microcosm: `return ` head + multi-line if-expr body whose
 		// first line fits.
-		final flatShape:Doc = D.concat([
-			D.text("aaa"), D.hardline(), D.text("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"),
+		final flatShape: Doc = D.concat([
+			D.text("aaa"),
+			D.hardline(),
+			D.text("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"),
 		]);
-		final brkShape:Doc = D.text("BRK");
-		final doc:Doc = D.concat([
+		final brkShape: Doc = D.text("BRK");
+		final doc: Doc = D.concat([
 			D.text("prefix"),
 			IfFirstLineExceeds(10, brkShape, flatShape),
 		]);
@@ -632,11 +678,13 @@ class DocRendererTest extends Test {
 		// itself is short, combined with the prefix it crosses the
 		// threshold. Demonstrates the column-aware nature of the probe
 		// is preserved (same as `IfWidthExceeds`).
-		final flatShape:Doc = D.concat([
-			D.text("aaaa"), D.hardline(), D.text("bb"),
+		final flatShape: Doc = D.concat([
+			D.text("aaaa"),
+			D.hardline(),
+			D.text("bb"),
 		]);
-		final brkShape:Doc = D.text("BRK");
-		final doc:Doc = D.concat([
+		final brkShape: Doc = D.text("BRK");
+		final doc: Doc = D.concat([
 			D.text("12345678"),
 			IfFirstLineExceeds(10, brkShape, flatShape),
 		]);
@@ -651,9 +699,9 @@ class DocRendererTest extends Test {
 		// Outer Group with budget 80 fits the flat shape — Group commits
 		// to MFlat, the probe at col 0 vs threshold 10 evaluates 5 < 10
 		// → flat fires.
-		final brk:Doc = D.text("BREAKBREAKBREAKBREAKBREAKBREAKBREAKBREAKBREAKBREAK");
-		final flat:Doc = D.text("FLATX");
-		final doc:Doc = D.group(IfFirstLineExceeds(10, brk, flat));
+		final brk: Doc = D.text("BREAKBREAKBREAKBREAKBREAKBREAKBREAKBREAKBREAKBREAK");
+		final flat: Doc = D.text("FLATX");
+		final doc: Doc = D.group(IfFirstLineExceeds(10, brk, flat));
 		Assert.equals("FLATX", Renderer.render(doc, 80));
 	}
 
@@ -670,14 +718,14 @@ class DocRendererTest extends Test {
 		// At col 0 with 5-char flat content and no rest-of-stack,
 		// 0 + 5 + 0 = 5 < 10 → flat fires. Same arithmetic as the
 		// `IfWidthExceeds` sibling when stack is empty after the probe.
-		final doc:Doc = IfLineExceeds(10, D.text("BREAK"), D.text("FLATX"));
+		final doc: Doc = IfLineExceeds(10, D.text("BREAK"), D.text("FLATX"));
 		Assert.equals("FLATX", Renderer.render(doc, 80));
 	}
 
 	function testIfLineExceedsSelfAloneCrossesThreshold() {
 		// At col 0 with 10-char flat content and no rest-of-stack,
 		// 0 + 10 + 0 = 10 >= 10 → brk fires. Self-only width is enough.
-		final doc:Doc = IfLineExceeds(10, D.text("BREAKBREAK"), D.text("FLATXFLATX"));
+		final doc: Doc = IfLineExceeds(10, D.text("BREAKBREAK"), D.text("FLATXFLATX"));
 		Assert.equals("BREAKBREAK", Renderer.render(doc, 80));
 	}
 
@@ -687,7 +735,7 @@ class DocRendererTest extends Test {
 		// rest-of-stack contains another 8 cols of content. At col 0,
 		// 0 + 5 + 8 = 13 >= 10 → brk fires. The lookahead captures the
 		// trailing content that will land on the same line.
-		final doc:Doc = D.concat([
+		final doc: Doc = D.concat([
 			IfLineExceeds(10, D.text("BRKBR"), D.text("FLATX")),
 			D.text("trailing"),
 		]);
@@ -700,13 +748,16 @@ class DocRendererTest extends Test {
 		// Self width 5 + rest "ab" before hardline = 7 < threshold 10
 		// → flat fires. The 102-col text after the hardline is on a
 		// different line, irrelevant to the probe.
-		final doc:Doc = D.concat([
+		final doc: Doc = D.concat([
 			IfLineExceeds(10, D.text("BRKBR"), D.text("FLATX")),
 			D.text("ab"),
 			D.hardline(),
 			D.text("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"),
 		]);
-		Assert.equals("FLATXab\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", Renderer.render(doc, 200));
+		Assert.equals(
+			"FLATXab\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+			Renderer.render(doc, 200)
+		);
 	}
 
 	function testIfLineExceedsBodyGroupInRestDeferred() {
@@ -716,13 +767,13 @@ class DocRendererTest extends Test {
 		// triggered brk regardless of the body's actual layout.
 		// Here self width 5 + BG (zero) + 2 trailing chars = 7 < 10 →
 		// flat fires. The BG renders as its own subtree separately.
-		final body:Doc = BodyGroup(D.concat([
+		final body: Doc = BodyGroup(D.concat([
 			D.text("{"),
 			D.nest(1, D.concat([D.hardline(), D.text("verylongbody")])),
 			D.hardline(),
 			D.text("}"),
 		]));
-		final doc:Doc = D.concat([
+		final doc: Doc = D.concat([
 			IfLineExceeds(10, D.text("BRKBR"), D.text("FLATX")),
 			body,
 			D.text("ab"),
@@ -740,16 +791,16 @@ class DocRendererTest extends Test {
 		// the flat shape — commits to MFlat. The line-length probe at
 		// col 0 with rest-empty evaluates 5 < 10 → flat fires
 		// independently of the Group's decision.
-		final brk:Doc = D.text("BREAKBREAKBREAKBREAKBREAKBREAKBREAKBREAKBREAKBREAK");
-		final flat:Doc = D.text("FLATX");
-		final doc:Doc = D.group(IfLineExceeds(10, brk, flat));
+		final brk: Doc = D.text("BREAKBREAKBREAKBREAKBREAKBREAKBREAKBREAKBREAKBREAK");
+		final flat: Doc = D.text("FLATX");
+		final doc: Doc = D.group(IfLineExceeds(10, brk, flat));
 		Assert.equals("FLATX", Renderer.render(doc, 80));
 	}
 
 	function testFlattenCollapsesBlockShape() {
 		// `{ <hardline>nest(stmt;)<hardline> }` flattens to `{stmt;}` —
 		// the canonical use case (slice ω-expression-if-with-blocks).
-		final body:Doc = D.concat([
+		final body: Doc = D.concat([
 			D.text('{'),
 			D.nest(1, D.concat([D.hardline(), D.text('"";')])),
 			D.hardline(),
@@ -761,7 +812,7 @@ class DocRendererTest extends Test {
 	function testFlattenPicksFlatSideOfIfBreak() {
 		// IfBreak / IfWidthExceeds / IfFirstLineExceeds / IfLineExceeds
 		// all collapse to their flat side regardless of width.
-		final doc:Doc = D.concat([
+		final doc: Doc = D.concat([
 			IfBreak(D.text('BRK1'), D.text('flatA')),
 			IfWidthExceeds(0, D.text('BRK2'), D.text('flatB')),
 			IfFirstLineExceeds(0, D.text('BRK3'), D.text('flatC')),
@@ -774,10 +825,14 @@ class DocRendererTest extends Test {
 		// A Group with break-mode hardlines and break-mode-only width
 		// would normally pick brk shape under tight budget. After
 		// flatten, the inner content collapses to its flat-mode shape.
-		final inner:Doc = D.concat([
-			D.text('a'), D.line(), D.text('b'), D.line(), D.text('c'),
+		final inner: Doc = D.concat([
+			D.text('a'),
+			D.line(),
+			D.text('b'),
+			D.line(),
+			D.text('c'),
 		]);
-		final doc:Doc = D.group(inner);
+		final doc: Doc = D.group(inner);
 		// Width 3 forces brk in normal render: "a\nb\nc".
 		Assert.equals('a\nb\nc', Renderer.render(doc, 3));
 		// flatten pulls the flat shape regardless: "a b c".
@@ -787,14 +842,14 @@ class DocRendererTest extends Test {
 	function testFlattenDropsNestIndent() {
 		// `Nest(1, hardline + text)` after flatten loses the indent
 		// (irrelevant in flat mode) AND drops the hardline.
-		final doc:Doc = D.nest(1, D.concat([D.hardline(), D.text('inner')]));
+		final doc: Doc = D.nest(1, D.concat([D.hardline(), D.text('inner')]));
 		Assert.equals('inner', Renderer.render(D.flatten(doc), 80));
 	}
 
 	function testFlattenFillIntersperseSep() {
 		// `Fill(items, sep)` flattens into Concat with flatten(sep)
 		// interspersed between flatten(items).
-		final doc:Doc = D.fill([D.text('x'), D.text('y'), D.text('z')], D.line());
+		final doc: Doc = D.fill([D.text('x'), D.text('y'), D.text('z')], D.line());
 		// flatten(D.line()) → Text(' ') (Line(' ') with non-`\n` flat).
 		Assert.equals('x y z', Renderer.render(D.flatten(doc), 80));
 	}
@@ -802,7 +857,7 @@ class DocRendererTest extends Test {
 	function testFlattenOptHardlineDrops() {
 		// OptHardline / OptHardlineSkipAtOpenDelim drop entirely;
 		// OptSpace becomes Text(s).
-		final doc:Doc = D.concat([
+		final doc: Doc = D.concat([
 			D.text('a'),
 			OptHardline,
 			D.optSpace(' '),
@@ -826,10 +881,14 @@ class DocRendererTest extends Test {
 		// the same Group, `fitsFlat` is skipped and the Group renders
 		// as MFlat regardless of width — softlines emit their flat
 		// substring (' ' for `D.line()`).
-		final inner:Doc = D.concat([
-			D.text('a'), D.line(), D.text('b'), D.line(), D.text('c'),
+		final inner: Doc = D.concat([
+			D.text('a'),
+			D.line(),
+			D.text('b'),
+			D.line(),
+			D.text('c'),
 		]);
-		final group:Doc = D.group(inner);
+		final group: Doc = D.group(inner);
 		Assert.equals('a\nb\nc', Renderer.render(group, 3));
 		Assert.equals('a b c', Renderer.render(Flatten(group), 3));
 	}
@@ -839,7 +898,7 @@ class DocRendererTest extends Test {
 		// `IfFirstLineExceeds`, `IfLineExceeds`, `IfFullLineExceeds`)
 		// pick `flatDoc` inside a `Flatten` region — the probes are
 		// skipped entirely. Thresholds of `0` would normally fire `brk`.
-		final inside:Doc = D.concat([
+		final inside: Doc = D.concat([
 			IfBreak(D.text('BRK1'), D.text('a')),
 			IfWidthExceeds(0, D.text('BRK2'), D.text('b')),
 			IfFirstLineExceeds(0, D.text('BRK3'), D.text('c')),
@@ -854,7 +913,7 @@ class DocRendererTest extends Test {
 		// are dropped entirely; `OptSpace(' ')` still emits its space;
 		// `OptSpaceSkipAfterHardline` emits a space (no preceding
 		// hardline can exist inside the force-flat region).
-		final inside:Doc = D.concat([
+		final inside: Doc = D.concat([
 			D.text('a'),
 			OptHardline,
 			D.optSpace(' '),
@@ -870,7 +929,7 @@ class DocRendererTest extends Test {
 		// Inside Flatten, `Fill(items, sep)` skips per-item-fit dispatch
 		// and emits items interspersed with `sep` in MFlat. The `sep`
 		// (`D.line()`) renders as its flat substring ' '.
-		final fill:Doc = D.fill([D.text('x'), D.text('y'), D.text('z')], D.line());
+		final fill: Doc = D.fill([D.text('x'), D.text('y'), D.text('z')], D.line());
 		Assert.equals('x y z', Renderer.render(Flatten(fill), 3));
 	}
 
@@ -879,10 +938,14 @@ class DocRendererTest extends Test {
 		// nested inside `Flatten(WrapBoundary(...))` decides flat/break
 		// normally — at width=3, the boundary-wrapped Group reverts to
 		// MBreak because `fitsFlat` runs again.
-		final inner:Doc = D.concat([
-			D.text('a'), D.line(), D.text('b'), D.line(), D.text('c'),
+		final inner: Doc = D.concat([
+			D.text('a'),
+			D.line(),
+			D.text('b'),
+			D.line(),
+			D.text('c'),
 		]);
-		final wrapped:Doc = WrapBoundary(D.group(inner));
+		final wrapped: Doc = WrapBoundary(D.group(inner));
 		// Outside Flatten, WrapBoundary is a no-op pass-through.
 		Assert.equals('a\nb\nc', Renderer.render(wrapped, 3));
 		// Inside Flatten, the boundary resets force-flat so the inner
@@ -893,13 +956,12 @@ class DocRendererTest extends Test {
 	function testRenderNestedFlattenIsIdempotent() {
 		// `Flatten(Flatten(x))` is the same as `Flatten(x)` — pushing
 		// `forceFlat=true` over an already-`true` frame is a no-op.
-		final inner:Doc = D.group(D.concat([
-			D.text('a'), D.line(), D.text('b'),
+		final inner: Doc = D.group(D.concat([
+			D.text('a'),
+			D.line(),
+			D.text('b'),
 		]));
-		Assert.equals(
-			Renderer.render(Flatten(inner), 3),
-			Renderer.render(Flatten(Flatten(inner)), 3)
-		);
+		Assert.equals(Renderer.render(Flatten(inner), 3), Renderer.render(Flatten(Flatten(inner)), 3));
 	}
 
 	// ω-opthardlineskipbeforehardline: forward-looking opt-hardline.
@@ -911,7 +973,7 @@ class DocRendererTest extends Test {
 	function testOHSBHFiresWhenFollowedByContent() {
 		// Pending OHSBH + Text → flush pending first, then write Text.
 		// No follower hardline, so the deferred `\n` lands.
-		final doc:Doc = D.concat([
+		final doc: Doc = D.concat([
 			D.text('a'),
 			OptHardlineSkipBeforeHardline,
 			D.text('b'),
@@ -923,7 +985,7 @@ class DocRendererTest extends Test {
 		// Pending OHSBH + MBreak `Line('\n')` → drop pending, emit only
 		// the incoming hardline. Single `\n` between `a` and `b` —
 		// without OHSBH's collision drop the result would be `a\n\nb`.
-		final doc:Doc = D.concat([
+		final doc: Doc = D.concat([
 			D.text('a'),
 			OptHardlineSkipBeforeHardline,
 			D.hardline(),
@@ -937,7 +999,7 @@ class DocRendererTest extends Test {
 		// then sees lastEmit=Other (no prior hardline) and emits its
 		// own `\n`. Single newline total — the collision suppression
 		// generalises across hardline ctors.
-		final doc:Doc = D.concat([
+		final doc: Doc = D.concat([
 			D.text('a'),
 			OptHardlineSkipBeforeHardline,
 			OptHardline,
@@ -953,7 +1015,7 @@ class DocRendererTest extends Test {
 		// single `\n+indent` flushes for the inner ctor. The semantic
 		// mirrors `OptHardline`'s collision-drop "more-specific inner
 		// wins" pattern.
-		final doc:Doc = D.concat([
+		final doc: Doc = D.concat([
 			D.text('a'),
 			OptHardlineSkipBeforeHardline,
 			OptHardlineSkipBeforeHardline,
@@ -967,7 +1029,7 @@ class DocRendererTest extends Test {
 		// drops pendingOptSpace as part of break-mode-Line semantic.
 		// Result `a\nb` — the optional trailing space vanishes before
 		// the deferred newline lands.
-		final doc:Doc = D.concat([
+		final doc: Doc = D.concat([
 			D.text('a'),
 			D.optSpace(' '),
 			OptHardlineSkipBeforeHardline,
@@ -981,7 +1043,7 @@ class DocRendererTest extends Test {
 		// flatten — any enclosing Group commits MBreak even with ample
 		// budget. Pins the parity with `OptHardline` / `Line('\n')` in
 		// `fitsFlat`'s walker arm.
-		final doc:Doc = D.group(D.concat([
+		final doc: Doc = D.group(D.concat([
 			D.text('a'),
 			OptHardlineSkipBeforeHardline,
 			D.text('b'),
@@ -994,7 +1056,7 @@ class DocRendererTest extends Test {
 		// entirely — mirror of `OptHardline`'s force-flat arm. No
 		// pending slot is set, so the follower Text writes immediately
 		// at the current column without an interleaved hardline.
-		final doc:Doc = D.concat([
+		final doc: Doc = D.concat([
 			D.text('a'),
 			OptHardlineSkipBeforeHardline,
 			D.text('b'),
@@ -1008,11 +1070,12 @@ class DocRendererTest extends Test {
 		// — mirror of `OptHardline`'s "more-specific inner wins"
 		// indent propagation. Renderer's pendingHardline carries the
 		// frame indent through to flushPendingHardline.
-		final doc:Doc = D.concat([
+		final doc: Doc = D.concat([
 			D.text('a'),
 			D.nest(2, OptHardlineSkipBeforeHardline),
 			D.text('b'),
 		]);
 		Assert.equals('a\n  b', Renderer.render(doc, 80));
 	}
+
 }

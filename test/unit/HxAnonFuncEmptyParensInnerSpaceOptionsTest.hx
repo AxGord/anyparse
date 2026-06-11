@@ -25,101 +25,104 @@ import anyparse.grammar.haxe.HxModuleWriter;
 @:nullSafety(Strict)
 class HxAnonFuncEmptyParensInnerSpaceOptionsTest extends Test {
 
-	public function new():Void {
+	public function new(): Void {
 		super();
 	}
 
-	public function testDefaultIsCollapsed():Void {
-		final defaults:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
+	public function testDefaultIsCollapsed(): Void {
+		final defaults: HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
 		Assert.isFalse(defaults.anonFuncParamParensKeepInnerWhenEmpty);
 	}
 
-	public function testDefaultEmitsTightEmptyParens():Void {
-		final out:String = writeWith('class C { static function m() { call(function() trace(0)); } }', false);
+	public function testDefaultEmitsTightEmptyParens(): Void {
+		final out: String = writeWith('class C { static function m() { call(function() trace(0)); } }', false);
 		Assert.isTrue(out.indexOf('function()') != -1, 'expected `function()` in: <$out>');
 		Assert.isTrue(out.indexOf('function ( )') == -1, 'did not expect `function ( )` in: <$out>');
 	}
 
-	public function testKeepInnerEmitsSpace():Void {
+	public function testKeepInnerEmitsSpace(): Void {
 		// `anonFuncParens` defaults to `None`, so the space between
 		// `function` and `(` stays absent — the knob under test only
 		// gates the inside-of-parens slot. Combined with
 		// `anonFuncParens = Before` callers reproduce the full
 		// `issue_251` shape `function ( )`; here we assert just the
 		// inside-empty slot.
-		final out:String = writeWith('class C { static function m() { call(function() trace(0)); } }', true);
+		final out: String = writeWith('class C { static function m() { call(function() trace(0)); } }', true);
 		Assert.isTrue(out.indexOf('function( )') != -1, 'expected `function( )` in: <$out>');
 	}
 
-	public function testKeepInnerCombinedWithBeforeProducesIssue251Shape():Void {
+	public function testKeepInnerCombinedWithBeforeProducesIssue251Shape(): Void {
 		// Full `issue_251` shape requires both knobs: outside-before-`(`
 		// space (anonFuncParens = Before) AND inside-of-empty-`(` space
 		// (anonFuncParamParensKeepInnerWhenEmpty = true).
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.anonFuncParens = anyparse.format.WhitespacePolicy.Before;
 		opts.anonFuncParamParensKeepInnerWhenEmpty = true;
-		final out:String = HxModuleWriter.write(
-			HaxeModuleParser.parse('class C { static function m() { call(function() trace(0)); } }'), opts);
+		final out: String = HxModuleWriter.write(
+			HaxeModuleParser.parse('class C { static function m() { call(function() trace(0)); } }'), opts
+		);
 		Assert.isTrue(out.indexOf('function ( )') != -1, 'expected `function ( )` in: <$out>');
 	}
 
-	public function testNonEmptyParamsUnaffected():Void {
+	public function testNonEmptyParamsUnaffected(): Void {
 		// Knob targets the empty-list short-circuit only; a non-empty
 		// param list keeps the regular `(p)` shape under either setting.
 		for (keep in [false, true]) {
-			final out:String = writeWith('class C { static function m() { call(function(p) trace(p)); } }', keep);
-			Assert.isTrue(out.indexOf('function(p)') != -1,
-				'expected tight `function(p)` under keepInnerWhenEmpty=$keep in: <$out>');
+			final out: String = writeWith('class C { static function m() { call(function(p) trace(p)); } }', keep);
+			Assert.isTrue(out.indexOf('function(p)') != -1, 'expected tight `function(p)` under keepInnerWhenEmpty=$keep in: <$out>');
 		}
 	}
 
-	public function testFnDeclUnaffected():Void {
+	public function testFnDeclUnaffected(): Void {
 		// Knob is bound to `HxFnExpr.params` only; declaration-form
 		// `HxFnDecl.params` keeps the tight `m()` regardless.
 		for (keep in [false, true]) {
-			final out:String = writeWith('class C { static function m() { trace(0); } }', keep);
-			Assert.isTrue(out.indexOf('function m()') != -1,
-				'fn-decl `function m()` should stay tight under keep=$keep in: <$out>');
-			Assert.isTrue(out.indexOf('function m( )') == -1,
-				'fn-decl must not pick up the anon-fn knob under keep=$keep in: <$out>');
+			final out: String = writeWith('class C { static function m() { trace(0); } }', keep);
+			Assert.isTrue(out.indexOf('function m()') != -1, 'fn-decl `function m()` should stay tight under keep=$keep in: <$out>');
+			Assert.isTrue(out.indexOf('function m( )') == -1, 'fn-decl must not pick up the anon-fn knob under keep=$keep in: <$out>');
 		}
 	}
 
-	public function testJsonRemoveInnerFalseKeepsSpace():Void {
+	public function testJsonRemoveInnerFalseKeepsSpace(): Void {
 		// haxe-formatter `removeInnerWhenEmpty: false` inverts to opt = true.
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"whitespace": {"parenConfig": {"anonFuncParamParens": {"removeInnerWhenEmpty": false}}}}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"whitespace": {"parenConfig": {"anonFuncParamParens": {"removeInnerWhenEmpty": false}}}}'
+		);
 		Assert.isTrue(opts.anonFuncParamParensKeepInnerWhenEmpty);
 	}
 
-	public function testJsonRemoveInnerTrueCollapses():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"whitespace": {"parenConfig": {"anonFuncParamParens": {"removeInnerWhenEmpty": true}}}}');
+	public function testJsonRemoveInnerTrueCollapses(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"whitespace": {"parenConfig": {"anonFuncParamParens": {"removeInnerWhenEmpty": true}}}}'
+		);
 		Assert.isFalse(opts.anonFuncParamParensKeepInnerWhenEmpty);
 	}
 
-	public function testJsonAbsentLeavesDefault():Void {
+	public function testJsonAbsentLeavesDefault(): Void {
 		// Sibling keys (openingPolicy) must not flip the knob.
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"whitespace": {"parenConfig": {"anonFuncParamParens": {"openingPolicy": "before"}}}}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"whitespace": {"parenConfig": {"anonFuncParamParens": {"openingPolicy": "before"}}}}'
+		);
 		Assert.isFalse(opts.anonFuncParamParensKeepInnerWhenEmpty);
 	}
 
-	public function testJsonOpeningAndKeepInnerIndependent():Void {
+	public function testJsonOpeningAndKeepInnerIndependent(): Void {
 		// Setting both keys propagates both runtime fields independently.
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"whitespace": {"parenConfig": {"anonFuncParamParens": {"openingPolicy": "before", "removeInnerWhenEmpty": false}}}}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"whitespace": {"parenConfig": {"anonFuncParamParens": {"openingPolicy": "before", "removeInnerWhenEmpty": false}}}}'
+		);
 		Assert.isTrue(opts.anonFuncParamParensKeepInnerWhenEmpty);
 		Assert.equals(anyparse.format.WhitespacePolicy.Before, opts.anonFuncParens);
 	}
 
-	private inline function writeWith(src:String, keepInner:Bool):String {
+	private inline function writeWith(src: String, keepInner: Bool): String {
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), makeOpts(keepInner));
 	}
 
-	private inline function makeOpts(keepInner:Bool):HxModuleWriteOptions {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	private inline function makeOpts(keepInner: Bool): HxModuleWriteOptions {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.anonFuncParamParensKeepInnerWhenEmpty = keepInner;
 		return opts;
 	}
+
 }

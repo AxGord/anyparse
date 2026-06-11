@@ -31,25 +31,21 @@ class HxObjectLitStmtNoSemiSliceTest extends HxTestHelpers {
 
 	// -- Isolated: bare object literal as sole statement, no `;` --
 
-	public function testBareObjectLitNoSemi():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
-			'class C {\n\tfunction f() {\n\t\t{foo: 1}\n\t}\n}'
-		);
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testBareObjectLitNoSemi(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\t{foo: 1}\n\t}\n}');
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(1, stmts.length);
-		final e:HxExpr = expectExprStmt(stmts[0]);
+		final e: HxExpr = expectExprStmt(stmts[0]);
 		Assert.isTrue(e.match(ObjectLit(_)));
 	}
 
 	// -- Trailing-comma single-field object literal, no `;` --
 
-	public function testObjectLitTrailingCommaNoSemi():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
-			'class C {\n\tfunction f() {\n\t\t{foo: 1,}\n\t}\n}'
-		);
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testObjectLitTrailingCommaNoSemi(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\t{foo: 1,}\n\t}\n}');
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(1, stmts.length);
-		final e:HxExpr = expectExprStmt(stmts[0]);
+		final e: HxExpr = expectExprStmt(stmts[0]);
 		Assert.isTrue(e.match(ObjectLit(_)));
 	}
 
@@ -57,13 +53,11 @@ class HxObjectLitStmtNoSemiSliceTest extends HxTestHelpers {
 	// The gate must terminate the first statement at the brace so the
 	// next one parses cleanly.
 
-	public function testObjectLitFollowedByStmt():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
-			'class C {\n\tfunction f() {\n\t\t{foo: 1}\n\t\ty = 5;\n\t}\n}'
-		);
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testObjectLitFollowedByStmt(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\t{foo: 1}\n\t\ty = 5;\n\t}\n}');
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(2, stmts.length);
-		final e0:HxExpr = expectExprStmt(stmts[0]);
+		final e0: HxExpr = expectExprStmt(stmts[0]);
 		Assert.isTrue(e0.match(ObjectLit(_)));
 	}
 
@@ -72,11 +66,9 @@ class HxObjectLitStmtNoSemiSliceTest extends HxTestHelpers {
 	// `HxStatement` order and there is no `IDENT:` field shape to
 	// trigger backtracking, so the empty-brace stays a block.
 
-	public function testEmptyBraceStillBlockStmt():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
-			'class C {\n\tfunction f() {\n\t\t{}\n\t}\n}'
-		);
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testEmptyBraceStillBlockStmt(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\t{}\n\t}\n}');
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(1, stmts.length);
 		Assert.isTrue(stmts[0].match(BlockStmt(_)));
 	}
@@ -85,24 +77,20 @@ class HxObjectLitStmtNoSemiSliceTest extends HxTestHelpers {
 	// `VarStmt`. The first inner token is `var`, not `IDENT:`, so
 	// BlockStmt succeeds without backtracking.
 
-	public function testBlockWithVarStmtStillBlockStmt():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
-			'class C {\n\tfunction f() {\n\t\t{var x = 1;}\n\t}\n}'
-		);
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testBlockWithVarStmtStillBlockStmt(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\t{var x = 1;}\n\t}\n}');
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(1, stmts.length);
 		Assert.isTrue(stmts[0].match(BlockStmt(_)));
 	}
 
 	// -- Regression: pre-slice path with `;` still parses --
 
-	public function testObjectLitWithSemiUnchanged():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
-			'class C {\n\tfunction f() {\n\t\t{foo: 1};\n\t}\n}'
-		);
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testObjectLitWithSemiUnchanged(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\t{foo: 1};\n\t}\n}');
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(1, stmts.length);
-		final e:HxExpr = expectExprStmt(stmts[0]);
+		final e: HxExpr = expectExprStmt(stmts[0]);
 		Assert.isTrue(e.match(ObjectLit(_)));
 	}
 
@@ -114,11 +102,9 @@ class HxObjectLitStmtNoSemiSliceTest extends HxTestHelpers {
 	// next non-trivia byte. Multi-stmt boundary detection still works
 	// (see the `testCallFollowedByIdentRegression` below).
 
-	public function testCallExprBeforeCloseBraceNoSemi():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
-			'class C {\n\tfunction f() {\n\t\tfoo()\n\t}\n}'
-		);
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testCallExprBeforeCloseBraceNoSemi(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tfoo()\n\t}\n}');
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(1, stmts.length);
 	}
 
@@ -127,17 +113,15 @@ class HxObjectLitStmtNoSemiSliceTest extends HxTestHelpers {
 	// detection — peek-`}` is the ONLY new disjunct; ident lookahead
 	// stays strict.
 
-	public function testCallFollowedByIdentRegression():Void {
-		Assert.raises(() -> HaxeParser.parse(
-			'class C {\n\tfunction f() {\n\t\tfoo()\n\t\tbar()\n\t}\n}'
-		));
+	public function testCallFollowedByIdentRegression(): Void {
+		Assert.raises(() -> HaxeParser.parse('class C {\n\tfunction f() {\n\t\tfoo()\n\t\tbar()\n\t}\n}'));
 	}
 
 	// -- Corpus driver: whitespace_after_object_literal input verbatim,
 	// trimmed to the failing tail (full file parses too).
 
-	public function testCorpusObjectLitAfterSwitch():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
+	public function testCorpusObjectLitAfterSwitch(): Void {
+		final cls: HxClassDecl = HaxeParser.parse(
 			"class Main {\n\tstatic function main() {\n\t\tswitch (foo) {\n\t\t\tcase {kind: TkIdent, text: \"error\"}:\n\t\t\t\tdoSomething();\n\t\t}\n\t\t{f: macro ${a},}\n\t}\n}"
 		);
 		Assert.equals(1, cls.members.length);
@@ -146,8 +130,8 @@ class HxObjectLitStmtNoSemiSliceTest extends HxTestHelpers {
 	// -- Corpus driver: issue_161 input verbatim. Outer object literal
 	// at stmt position whose field value is itself a block.
 
-	public function testCorpusIssue161IfBodyInObjectLiteral():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
+	public function testCorpusIssue161IfBodyInObjectLiteral(): Void {
+		final cls: HxClassDecl = HaxeParser.parse(
 			'class Main {\n\tpublic static function main() {\n\t\t{\n\t\t\tfoo: {\n\t\t\t\tif (foo)\n\t\t\t\t\tbar;\n\t\t\t\t"";\n\t\t\t}\n\t\t}\n\t}\n}'
 		);
 		Assert.equals(1, cls.members.length);
@@ -156,17 +140,18 @@ class HxObjectLitStmtNoSemiSliceTest extends HxTestHelpers {
 	// -- Idempotency: corpus issue_161 round-trip via the module
 	// pipeline (parse + write + parse + write must converge).
 
-	public function testCorpusIssue161RoundTrip():Void {
+	public function testCorpusIssue161RoundTrip(): Void {
 		roundTrip(
 			'class Main {\n\tpublic static function main() {\n\t\t{\n\t\t\tfoo: {\n\t\t\t\tif (foo)\n\t\t\t\t\tbar;\n\t\t\t\t"";\n\t\t\t}\n\t\t}\n\t}\n}',
 			'issue_161_if_body_in_object_literal'
 		);
 	}
 
-	public function testCorpusWhitespaceAfterObjectLiteralRoundTrip():Void {
+	public function testCorpusWhitespaceAfterObjectLiteralRoundTrip(): Void {
 		roundTrip(
 			"class Main {\n\tstatic function main() {\n\t\tswitch (foo) {\n\t\t\tcase {kind: TkIdent, text: \"error\"}:\n\t\t\t\tdoSomething();\n\t\t}\n\t\t{f: macro ${a},}\n\t}\n}",
 			'whitespace_after_object_literal'
 		);
 	}
+
 }

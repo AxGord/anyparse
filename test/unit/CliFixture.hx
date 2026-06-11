@@ -16,10 +16,10 @@ import sys.io.File;
 @:nullSafety(Strict)
 final class CliFixture {
 
-	private static var counter:Int = 0;
+	private static var counter: Int = 0;
 
 	/** Write `source` to a unique temp `.hx` file and return its path. */
-	public static function write(prefix:String, source:String):String {
+	public static function write(prefix: String, source: String): String {
 		return writeAs(prefix, 'hx', source);
 	}
 
@@ -29,9 +29,9 @@ final class CliFixture {
 	 * fixture is a Haxe source file; use this entry for expected-output
 	 * comparison files (`.txt`) or other extensions.
 	 */
-	public static function writeAs(prefix:String, extension:String, content:String):String {
+	public static function writeAs(prefix: String, extension: String, content: String): String {
 		counter++;
-		final path:String = '${tempDir()}/tmp_${prefix}_fixture_${Sys.time()}_$counter.$extension';
+		final path: String = '${tempDir()}/tmp_${prefix}_fixture_${Sys.time()}_$counter.$extension';
 		File.saveContent(path, content);
 		return path;
 	}
@@ -41,24 +41,25 @@ final class CliFixture {
 	 * return the directory path — for exercising the CLI's directory-walk
 	 * (scan) mode with a mix of parseable and unparseable files.
 	 */
-	public static function writeDir(prefix:String, files:Array<{name:String, source:String}>):String {
+	public static function writeDir(prefix: String, files: Array<{ name: String, source: String }>): String {
 		counter++;
-		final dir:String = '${tempDir()}/tmp_${prefix}_dir_${Sys.time()}_$counter';
+		final dir: String = '${tempDir()}/tmp_${prefix}_dir_${Sys.time()}_$counter';
 		FileSystem.createDirectory(dir);
 		for (f in files) File.saveContent('$dir/${f.name}', f.source);
 		return dir;
 	}
 
-	private static function tempDir():String {
-		final tmpdir:Null<String> = Sys.getEnv('TMPDIR');
+	private static function tempDir(): String {
+		final tmpdir: Null<String> = Sys.getEnv('TMPDIR');
 		if (tmpdir != null && tmpdir.length > 0) return stripTrailingSlash(tmpdir);
-		final temp:Null<String> = Sys.getEnv('TEMP');
+		final temp: Null<String> = Sys.getEnv('TEMP');
 		if (temp != null && temp.length > 0) return stripTrailingSlash(temp);
 		return '/tmp';
 	}
 
-	private static inline function stripTrailingSlash(p:String):String {
+	private static inline function stripTrailingSlash(p: String): String {
 		return StringTools.endsWith(p, '/') ? p.substring(0, p.length - 1) : p;
 	}
+
 }
 #end

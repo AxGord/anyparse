@@ -10,7 +10,6 @@ import anyparse.query.Selector;
 import anyparse.query.format.Json;
 import anyparse.query.format.Text;
 import anyparse.runtime.ParseError;
-
 #if sys
 import sys.FileSystem;
 import sys.io.File;
@@ -30,30 +29,30 @@ import sys.io.File;
  */
 class ApqAstIntegrationTest extends Test {
 
-	private static final SRC_ROOT:String = 'src/anyparse';
+	private static final SRC_ROOT: String = 'src/anyparse';
 
-	public function testParseEveryAnyparseFileWithoutCrash():Void {
+	public function testParseEveryAnyparseFileWithoutCrash(): Void {
 		#if sys
 		if (!FileSystem.exists(SRC_ROOT) || !FileSystem.isDirectory(SRC_ROOT)) {
 			Assert.pass('integration: $SRC_ROOT not present (different cwd?) — skipped');
 			return;
 		}
-		final paths:Array<String> = [];
+		final paths: Array<String> = [];
 		collectHxFiles(SRC_ROOT, paths);
-		paths.sort((a:String, b:String) -> a < b ? -1 : (a > b ? 1 : 0));
+		paths.sort((a: String, b: String) -> a < b ? -1 : (a > b ? 1 : 0));
 
-		final plugin:HaxeQueryPlugin = new HaxeQueryPlugin();
-		final probeSelector:Selector = Selector.parse('ClassDecl');
-		var parsedOk:Int = 0;
-		var parseFailed:Int = 0;
-		final engineCrashes:Array<String> = [];
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final probeSelector: Selector = Selector.parse('ClassDecl');
+		var parsedOk: Int = 0;
+		var parseFailed: Int = 0;
+		final engineCrashes: Array<String> = [];
 
 		for (path in paths) {
-			final source:String = File.getContent(path);
-			final tree:Null<QueryNode> = try plugin.parseFile(source) catch (e:ParseError) {
+			final source: String = File.getContent(path);
+			final tree: Null<QueryNode> = try plugin.parseFile(source) catch (e: ParseError) {
 				parseFailed++;
 				null;
-			} catch (e:Exception) {
+			} catch (e: Exception) {
 				engineCrashes.push('$path: ${e.message}');
 				continue;
 			}
@@ -61,12 +60,12 @@ class ApqAstIntegrationTest extends Test {
 			try {
 				Text.render(tree);
 				Json.renderTree(path, source, tree);
-				final truncated:QueryNode = Engine.truncate(tree, 2);
+				final truncated: QueryNode = Engine.truncate(tree, 2);
 				Text.render(truncated);
-				final matches:Array<QueryNode> = Engine.select(tree, probeSelector, plugin.selectKindEquivalence());
+				final matches: Array<QueryNode> = Engine.select(tree, probeSelector, plugin.selectKindEquivalence());
 				if (matches.length > 0) Json.renderMatches(path, source, matches, false, false);
 				parsedOk++;
-			} catch (e:Exception) {
+			} catch (e: Exception) {
 				engineCrashes.push('$path (post-parse): ${e.message}');
 			}
 		}
@@ -83,9 +82,9 @@ class ApqAstIntegrationTest extends Test {
 	}
 
 	#if sys
-	private static function collectHxFiles(dir:String, into:Array<String>):Void {
+	private static function collectHxFiles(dir: String, into: Array<String>): Void {
 		for (name in FileSystem.readDirectory(dir)) {
-			final path:String = dir + '/' + name;
+			final path: String = dir + '/' + name;
 			if (FileSystem.isDirectory(path)) {
 				collectHxFiles(path, into);
 			} else if (StringTools.endsWith(name, '.hx')) {
@@ -94,4 +93,5 @@ class ApqAstIntegrationTest extends Test {
 		}
 	}
 	#end
+
 }

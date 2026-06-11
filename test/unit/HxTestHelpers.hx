@@ -58,11 +58,11 @@ class HxTestHelpers extends Test {
 	 * must equal `write(parse(s))`. The first write normalises formatting;
 	 * the second must produce identical output.
 	 */
-	private function roundTrip(source:String, ?label:String):Void {
-		final written1:String = HxModuleWriter.write(HaxeModuleParser.parse(source));
-		final written2:String = try {
+	private function roundTrip(source: String, ?label: String): Void {
+		final written1: String = HxModuleWriter.write(HaxeModuleParser.parse(source));
+		final written2: String = try {
 			HxModuleWriter.write(HaxeModuleParser.parse(written1));
-		} catch (exception:Exception) {
+		} catch (exception: Exception) {
 			Assert.fail('reparse failed for ${label ?? source}: written1=<$written1>, err=${exception.message}');
 			return;
 		}
@@ -75,136 +75,136 @@ class HxTestHelpers extends Test {
 	 * space/newline. Idempotency alone (`roundTrip`) is not enough
 	 * because a buggy output can round-trip to itself.
 	 */
-	private function writerEquals(source:String, expected:String, ?label:String):Void {
-		final written:String = HxModuleWriter.write(HaxeModuleParser.parse(source));
+	private function writerEquals(source: String, expected: String, ?label: String): Void {
+		final written: String = HxModuleWriter.write(HaxeModuleParser.parse(source));
 		Assert.equals(expected, written, 'writer-equals failed for ${label ?? source}');
 	}
 
-	private function parseSingleVarDecl(source:String):HxVarDecl {
-		final ast:HxClassDecl = HaxeParser.parse(source);
+	private function parseSingleVarDecl(source: String): HxVarDecl {
+		final ast: HxClassDecl = HaxeParser.parse(source);
 		Assert.equals(1, ast.members.length);
 		return expectVarMember(ast.members[0].member);
 	}
 
-	private function parseSingleFnDecl(source:String):HxFnDecl {
-		final ast:HxClassDecl = HaxeParser.parse(source);
+	private function parseSingleFnDecl(source: String): HxFnDecl {
+		final ast: HxClassDecl = HaxeParser.parse(source);
 		Assert.equals(1, ast.members.length);
 		return expectFnMember(ast.members[0].member);
 	}
 
-	private function expectVarMember(member:HxClassMember):HxVarDecl {
+	private function expectVarMember(member: HxClassMember): HxVarDecl {
 		return switch member {
 			case VarMember(decl): decl;
 			case _: throw 'expected VarMember, got $member';
 		};
 	}
 
-	private function expectFnMember(member:HxClassMember):HxFnDecl {
+	private function expectFnMember(member: HxClassMember): HxFnDecl {
 		return switch member {
 			case FnMember(decl): decl;
 			case _: throw 'expected FnMember, got $member';
 		};
 	}
 
-	private function expectConditionalMember(member:HxClassMember):HxConditionalMember {
+	private function expectConditionalMember(member: HxClassMember): HxConditionalMember {
 		return switch member {
 			case Conditional(inner): inner;
 			case _: throw 'expected Conditional, got $member';
 		};
 	}
 
-	private function expectConditionalDecl(decl:HxDecl):HxConditionalDecl {
+	private function expectConditionalDecl(decl: HxDecl): HxConditionalDecl {
 		return switch decl {
 			case Conditional(inner): inner;
 			case _: throw 'expected Conditional, got $decl';
 		};
 	}
 
-	private function expectConditionalStmt(stmt:HxStatement):HxConditionalStmt {
+	private function expectConditionalStmt(stmt: HxStatement): HxConditionalStmt {
 		return switch stmt {
 			case Conditional(inner): inner;
 			case _: throw 'expected Conditional, got $stmt';
 		};
 	}
 
-	private function expectObjectFieldBody(field:HxObjectField):HxObjectFieldBody {
+	private function expectObjectFieldBody(field: HxObjectField): HxObjectFieldBody {
 		return switch field {
 			case Field(body): body;
 			case _: throw 'expected Field, got $field';
 		};
 	}
 
-	private function expectConditionalObjectField(field:HxObjectField):HxConditionalObjectField {
+	private function expectConditionalObjectField(field: HxObjectField): HxConditionalObjectField {
 		return switch field {
 			case Conditional(inner): inner;
 			case _: throw 'expected Conditional, got $field';
 		};
 	}
 
-	private function expectErrorDecl(decl:HxDecl):HxErrorMsg {
+	private function expectErrorDecl(decl: HxDecl): HxErrorMsg {
 		return switch decl {
 			case ErrorDecl(message): message;
 			case _: throw 'expected ErrorDecl, got $decl';
 		};
 	}
 
-	private function expectErrorMember(member:HxClassMember):HxErrorMsg {
+	private function expectErrorMember(member: HxClassMember): HxErrorMsg {
 		return switch member {
 			case ErrorMember(message): message;
 			case _: throw 'expected ErrorMember, got $member';
 		};
 	}
 
-	private function expectErrorStmt(stmt:HxStatement):HxErrorMsg {
+	private function expectErrorStmt(stmt: HxStatement): HxErrorMsg {
 		return switch stmt {
 			case ErrorStmt(message): message;
 			case _: throw 'expected ErrorStmt, got $stmt';
 		};
 	}
 
-	private function expectClassDecl(wrapper:HxTopLevelDecl):HxClassDecl {
+	private function expectClassDecl(wrapper: HxTopLevelDecl): HxClassDecl {
 		return switch wrapper.decl {
 			case ClassDecl(c): c;
 			case _: throw 'expected ClassDecl, got ${wrapper.decl}';
 		};
 	}
 
-	private function expectTypedefDecl(wrapper:HxTopLevelDecl):HxTypedefDecl {
+	private function expectTypedefDecl(wrapper: HxTopLevelDecl): HxTypedefDecl {
 		return switch wrapper.decl {
 			case TypedefDecl(td): td;
 			case _: throw 'expected TypedefDecl, got ${wrapper.decl}';
 		};
 	}
 
-	private function expectEnumDecl(wrapper:HxTopLevelDecl):HxEnumDecl {
+	private function expectEnumDecl(wrapper: HxTopLevelDecl): HxEnumDecl {
 		return switch wrapper.decl {
 			case EnumDecl(ed): ed;
 			case _: throw 'expected EnumDecl, got ${wrapper.decl}';
 		};
 	}
 
-	private function expectInterfaceDecl(wrapper:HxTopLevelDecl):HxInterfaceDecl {
+	private function expectInterfaceDecl(wrapper: HxTopLevelDecl): HxInterfaceDecl {
 		return switch wrapper.decl {
 			case InterfaceDecl(id): id;
 			case _: throw 'expected InterfaceDecl, got ${wrapper.decl}';
 		};
 	}
 
-	private function expectAbstractDecl(wrapper:HxTopLevelDecl):HxAbstractDecl {
+	private function expectAbstractDecl(wrapper: HxTopLevelDecl): HxAbstractDecl {
 		return switch wrapper.decl {
 			case AbstractDecl(ad): ad;
 			case _: throw 'expected AbstractDecl, got ${wrapper.decl}';
 		};
 	}
 
-	private function expectEnumAbstractDecl(wrapper:HxTopLevelDecl):HxAbstractDecl {
+	private function expectEnumAbstractDecl(wrapper: HxTopLevelDecl): HxAbstractDecl {
 		return switch wrapper.decl {
 			case EnumAbstractDecl(ad): ad;
 			case _: throw 'expected EnumAbstractDecl, got ${wrapper.decl}';
 		};
 	}
 
-	private function fnBodyStmts(fn:HxFnDecl):Array<HxStatement> {
+	private function fnBodyStmts(fn: HxFnDecl): Array<HxStatement> {
 		return switch fn.body {
 			case BlockBody(block): block.stmts;
 			case UntypedBlockBody(body): body.block.stmts;
@@ -213,14 +213,14 @@ class HxTestHelpers extends Test {
 		};
 	}
 
-	private function expectSimpleCtor(ctor:HxEnumCtor):HxIdentLit {
+	private function expectSimpleCtor(ctor: HxEnumCtor): HxIdentLit {
 		return switch ctor {
 			case SimpleCtor(name): name;
 			case _: throw 'expected SimpleCtor, got $ctor';
 		};
 	}
 
-	private function expectParamCtor(ctor:HxEnumCtor):HxEnumCtorDecl {
+	private function expectParamCtor(ctor: HxEnumCtor): HxEnumCtorDecl {
 		return switch ctor {
 			case ParamCtor(decl): decl;
 			case _: throw 'expected ParamCtor, got $ctor';
@@ -232,7 +232,7 @@ class HxTestHelpers extends Test {
 	 * don't care about leading metadata stay unchanged — the enum-body
 	 * analog of `expectAnon`.
 	 */
-	private function enumCtors(ed:HxEnumDecl):Array<HxEnumCtor> {
+	private function enumCtors(ed: HxEnumDecl): Array<HxEnumCtor> {
 		return [for (m in ed.ctors) m.ctor];
 	}
 
@@ -241,7 +241,7 @@ class HxTestHelpers extends Test {
 	 * leading metadata Star alongside the constructor. Use this when a
 	 * test inspects `@:meta` prefixes — analog of `expectAnonMembers`.
 	 */
-	private function enumMembers(ed:HxEnumDecl):Array<HxEnumMember> {
+	private function enumMembers(ed: HxEnumDecl): Array<HxEnumMember> {
 		return ed.ctors;
 	}
 
@@ -255,7 +255,7 @@ class HxTestHelpers extends Test {
 	 * already know which variant they expect; this helper keeps those
 	 * sites readable without an inline switch.
 	 */
-	private function expectRequiredParam(param:HxParam):HxParamBody {
+	private function expectRequiredParam(param: HxParam): HxParamBody {
 		return switch param {
 			case Required(body): body;
 			case Optional(_): throw 'expected HxParam.Required, got Optional';
@@ -268,7 +268,7 @@ class HxTestHelpers extends Test {
 	 * Unwrap an `HxParam` enum to the shared body when the variant
 	 * is `Optional`. Throws on `Required`. See `expectRequiredParam`.
 	 */
-	private function expectOptionalParam(param:HxParam):HxParamBody {
+	private function expectOptionalParam(param: HxParam): HxParamBody {
 		return switch param {
 			case Optional(body): body;
 			case Required(_): throw 'expected HxParam.Optional, got Required';
@@ -282,7 +282,7 @@ class HxTestHelpers extends Test {
 	 * `Rest` (`...name:Type` spread / varargs). Throws on `Required` /
 	 * `Optional`. See `expectRequiredParam`.
 	 */
-	private function expectRestParam(param:HxParam):HxParamBody {
+	private function expectRestParam(param: HxParam): HxParamBody {
 		return switch param {
 			case Rest(body): body;
 			case Required(_): throw 'expected HxParam.Rest, got Required';
@@ -297,7 +297,7 @@ class HxTestHelpers extends Test {
 	 * `expectConditionalObjectField` (Slice 18); the fn-param-scope twin
 	 * of the cond-comp arc.
 	 */
-	private function expectConditionalParam(param:HxParam):HxConditionalParam {
+	private function expectConditionalParam(param: HxParam): HxConditionalParam {
 		return switch param {
 			case Conditional(inner): inner;
 			case Required(_): throw 'expected HxParam.Conditional, got Required';
@@ -316,7 +316,7 @@ class HxTestHelpers extends Test {
 	 * blocks carry no inline body and callers asserting param shape
 	 * must switch on `HxParam` directly.
 	 */
-	private function paramBody(param:HxParam):HxParamBody {
+	private function paramBody(param: HxParam): HxParamBody {
 		return switch param {
 			case Required(body) | Optional(body) | Rest(body): body;
 			case Conditional(_): throw 'expected HxParam.Required/Optional/Rest, got Conditional';
@@ -333,7 +333,7 @@ class HxTestHelpers extends Test {
 	 * type), and on any future non-`Named` variant — callers asserting
 	 * arrow shape should switch on `HxType` directly.
 	 */
-	private function expectNamedType(t:Null<HxType>):HxTypeRef {
+	private function expectNamedType(t: Null<HxType>): HxTypeRef {
 		return switch t {
 			case null: throw 'expected HxType.Named, got null';
 			case Named(ref): ref;
@@ -345,7 +345,7 @@ class HxTestHelpers extends Test {
 	 * Asserts `t` is `HxType.ConditionalType` and returns the inner
 	 * `HxConditionalType` body. Throws on null and on any other variant.
 	 */
-	private function expectConditionalType(t:Null<HxType>):HxConditionalType {
+	private function expectConditionalType(t: Null<HxType>): HxConditionalType {
 		return switch t {
 			case null: throw 'expected HxType.ConditionalType, got null';
 			case ConditionalType(c): c;
@@ -360,7 +360,7 @@ class HxTestHelpers extends Test {
 	 * `Null<HxType>` so callers can pass optional type slots (e.g.
 	 * `HxVarDecl.type`) directly; throws on any non-Anon input.
 	 */
-	private function expectAnon(t:Null<HxType>):Array<HxAnonField> {
+	private function expectAnon(t: Null<HxType>): Array<HxAnonField> {
 		return [for (m in expectAnonMembers(t)) m.field];
 	}
 
@@ -369,7 +369,7 @@ class HxTestHelpers extends Test {
 	 * each member exposing the leading metadata Star alongside the
 	 * field kind. Use this when a test inspects `@:meta` prefixes.
 	 */
-	private function expectAnonMembers(t:Null<HxType>):Array<HxAnonMember> {
+	private function expectAnonMembers(t: Null<HxType>): Array<HxAnonMember> {
 		return switch t {
 			case null: throw 'expected HxType.Anon, got null';
 			case Anon(fields): fields;
@@ -385,7 +385,7 @@ class HxTestHelpers extends Test {
 	 * to the bare decl. Use `expectVarFieldOptional` when the test
 	 * needs to discriminate the `?` flag.
 	 */
-	private function expectVarField(field:HxAnonField):HxVarDecl {
+	private function expectVarField(field: HxAnonField): HxVarDecl {
 		return switch field {
 			case VarField(Optional(decl)): decl;
 			case VarField(Plain(decl)): decl;
@@ -399,7 +399,7 @@ class HxTestHelpers extends Test {
 	 * `HxAnonVarBody` wrapper is unwrapped transparently — see
 	 * `expectVarField`.
 	 */
-	private function expectFinalField(field:HxAnonField):HxVarDecl {
+	private function expectFinalField(field: HxAnonField): HxVarDecl {
 		return switch field {
 			case FinalField(Optional(decl)): decl;
 			case FinalField(Plain(decl)): decl;
@@ -411,7 +411,7 @@ class HxTestHelpers extends Test {
 	 * Asserts `field` is the `function` class-notation anon field kind
 	 * and returns its `HxFnDecl`; throws on any other kind.
 	 */
-	private function expectFnField(field:HxAnonField):HxFnDecl {
+	private function expectFnField(field: HxAnonField): HxFnDecl {
 		return switch field {
 			case FnField(decl): decl;
 			case _: throw 'expected HxAnonField.FnField, got $field';
@@ -422,7 +422,7 @@ class HxTestHelpers extends Test {
 	 * Asserts `field` is the `> Type` structure-extension anon clause
 	 * and returns its `HxTypeRef`; throws on any other kind.
 	 */
-	private function expectExtendsField(field:HxAnonField):HxTypeRef {
+	private function expectExtendsField(field: HxAnonField): HxTypeRef {
 		return switch field {
 			case ExtendsField(type): type;
 			case _: throw 'expected HxAnonField.ExtendsField, got $field';
@@ -434,7 +434,7 @@ class HxTestHelpers extends Test {
 	 * `?name:Type`) and returns its `HxAnonFieldBody`; throws on any
 	 * class-notation kind.
 	 */
-	private function expectShortFieldBody(field:HxAnonField):HxAnonFieldBody {
+	private function expectShortFieldBody(field: HxAnonField): HxAnonFieldBody {
 		return switch field {
 			case Required(body): body;
 			case Optional(body): body;
@@ -449,24 +449,25 @@ class HxTestHelpers extends Test {
 	 * the pre-split call shape for tests that don't discriminate the
 	 * `?` flag.
 	 */
-	private function lambdaParamBody(param:HxLambdaParam):HxLambdaParamBody {
+	private function lambdaParamBody(param: HxLambdaParam): HxLambdaParamBody {
 		return switch param {
 			case Optional(body): body;
 			case Required(body): body;
 		};
 	}
 
-	private function expectExprStmt(stmt:HxStatement):HxExpr {
+	private function expectExprStmt(stmt: HxStatement): HxExpr {
 		return switch stmt {
 			case ExprStmt(expr): expr;
 			case _: throw 'expected ExprStmt, got $stmt';
 		};
 	}
 
-	private function expectMacroClassExpr(e:HxExpr):HxMacroClass {
+	private function expectMacroClassExpr(e: HxExpr): HxMacroClass {
 		return switch e {
 			case MacroClassExpr(v): v;
 			case _: throw 'expected MacroClassExpr, got $e';
 		};
 	}
+
 }

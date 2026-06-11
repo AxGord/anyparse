@@ -38,25 +38,25 @@ import anyparse.format.text.UnknownPolicy;
 @:nullSafety(Strict)
 final class MiniBlockFormat {
 
-	public static final instance:MiniBlockFormat = new MiniBlockFormat();
+	public static final instance: MiniBlockFormat = new MiniBlockFormat();
 
-	public var name(default, null):String = 'MiniBlock';
-	public var version(default, null):String = '1.0';
-	public var encoding(default, null):Encoding = Encoding.UTF8;
+	public var name(default, null): String = 'MiniBlock';
+	public var version(default, null): String = '1.0';
+	public var encoding(default, null): Encoding = Encoding.UTF8;
 
-	public var whitespace(default, null):String = ' \t\n\r';
+	public var whitespace(default, null): String = ' \t\n\r';
 
-	public var mappingOpen(default, null):String = '{';
-	public var mappingClose(default, null):String = '}';
-	public var sequenceOpen(default, null):Null<String> = '[';
-	public var sequenceClose(default, null):Null<String> = ']';
-	public var keyValueSep(default, null):String = ':';
-	public var entrySep(default, null):String = ';';
+	public var mappingOpen(default, null): String = '{';
+	public var mappingClose(default, null): String = '}';
+	public var sequenceOpen(default, null): Null<String> = '[';
+	public var sequenceClose(default, null): Null<String> = ']';
+	public var keyValueSep(default, null): String = ':';
+	public var entrySep(default, null): String = ';';
 
-	public var keySyntax(default, null):KeySyntax = KeySyntax.Quoted;
-	public var fieldLookup(default, null):FieldLookup = FieldLookup.ByName;
-	public var onMissing(default, null):MissingPolicy = MissingPolicy.Error;
-	public var onUnknown(default, null):UnknownPolicy = UnknownPolicy.Skip;
+	public var keySyntax(default, null): KeySyntax = KeySyntax.Quoted;
+	public var fieldLookup(default, null): FieldLookup = FieldLookup.ByName;
+	public var onMissing(default, null): MissingPolicy = MissingPolicy.Error;
+	public var onUnknown(default, null): UnknownPolicy = UnknownPolicy.Skip;
 
 	/**
 	 * Default `WriteOptions` consumed by the generated writer's
@@ -66,7 +66,7 @@ final class MiniBlockFormat {
 	 * `MiniBlockWriter` tests pass options-less calls, so these
 	 * defaults gate `Block` round-trip shape.
 	 */
-	public var defaultWriteOptions(default, null):WriteOptions = {
+	public var defaultWriteOptions(default, null): WriteOptions = {
 		indentChar: Tab,
 		indentSize: 1,
 		tabWidth: 4,
@@ -94,16 +94,17 @@ final class MiniBlockFormat {
 	 * which forces this method to exist. Plain `String.fromCharCode`
 	 * is sufficient.
 	 */
-	public function escapeChar(c:Int):String {
+	public function escapeChar(c: Int): String {
 		return String.fromCharCode(c);
 	}
 
-	public function endsImplicitly(item:Null<MiniBlock>):Bool {
+	public function endsImplicitly(item: Null<MiniBlock>): Bool {
 		return switch item {
 			case null: false;
 			case Block(_): true;
-			case Atom(s) if ((s : String) == 'end'): true;
+			case Atom(s) if ((s: String) == 'end'): true;
 			case _: false;
 		};
 	}
+
 }

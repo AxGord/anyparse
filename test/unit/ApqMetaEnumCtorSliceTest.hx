@@ -28,9 +28,9 @@ using Lambda;
  */
 class ApqMetaEnumCtorSliceTest extends Test {
 
-	public function testZeroArgCtorAnnotationAttributesToSimpleCtor():Void {
-		final hits:Array<MetaHit> = findIn('enum E { @:kw("var") A; B(x:Int); }');
-		final kw:Null<MetaHit> = hits.find(h -> h.annotation == '@:kw');
+	public function testZeroArgCtorAnnotationAttributesToSimpleCtor(): Void {
+		final hits: Array<MetaHit> = findIn('enum E { @:kw("var") A; B(x:Int); }');
+		final kw: Null<MetaHit> = hits.find(h -> h.annotation == '@:kw');
 		Assert.notNull(kw, '@:kw on enum ctor must surface — got ${describe(hits)}');
 		if (kw != null) {
 			Assert.equals('SimpleCtor', kw.declKind, 'attributes to the zero-arg ctor — got ${describe(hits)}');
@@ -40,9 +40,9 @@ class ApqMetaEnumCtorSliceTest extends Test {
 		}
 	}
 
-	public function testParamCtorAnnotationAttributesToParamCtor():Void {
-		final hits:Array<MetaHit> = findIn('enum E { @:foo B(x:Int); }');
-		final foo:Null<MetaHit> = hits.find(h -> h.annotation == '@:foo');
+	public function testParamCtorAnnotationAttributesToParamCtor(): Void {
+		final hits: Array<MetaHit> = findIn('enum E { @:foo B(x:Int); }');
+		final foo: Null<MetaHit> = hits.find(h -> h.annotation == '@:foo');
 		Assert.notNull(foo, '@:foo on a param-bearing ctor must surface — got ${describe(hits)}');
 		if (foo != null) {
 			Assert.equals('ParamCtor', foo.declKind, 'attributes to the param ctor — got ${describe(hits)}');
@@ -50,27 +50,28 @@ class ApqMetaEnumCtorSliceTest extends Test {
 		}
 	}
 
-	public function testMultipleEnumCtorAnnotationsEachResolve():Void {
-		final hits:Array<MetaHit> = findIn('enum E { @:kw("if") If; @:kw("for") For; Plain; }');
-		final kws:Array<MetaHit> = hits.filter(h -> h.annotation == '@:kw');
+	public function testMultipleEnumCtorAnnotationsEachResolve(): Void {
+		final hits: Array<MetaHit> = findIn('enum E { @:kw("if") If; @:kw("for") For; Plain; }');
+		final kws: Array<MetaHit> = hits.filter(h -> h.annotation == '@:kw');
 		Assert.equals(2, kws.length, 'each enum-ctor @:kw resolves — got ${describe(hits)}');
 		Assert.isTrue(kws.exists(h -> h.declName == 'If'), 'If ctor annotation — got ${describe(hits)}');
 		Assert.isTrue(kws.exists(h -> h.declName == 'For'), 'For ctor annotation — got ${describe(hits)}');
 	}
 
-	public function testUnannotatedEnumCtorNoHit():Void {
-		final hits:Array<MetaHit> = findIn('enum E { A; B(x:Int); }');
+	public function testUnannotatedEnumCtorNoHit(): Void {
+		final hits: Array<MetaHit> = findIn('enum E { A; B(x:Int); }');
 		Assert.equals(0, hits.length, 'no annotations means no hits — got ${describe(hits)}');
 	}
 
-	private static function findIn(source:String):Array<MetaHit> {
-		final plugin:HaxeQueryPlugin = new HaxeQueryPlugin();
-		final tree:QueryNode = plugin.parseFile(source);
-		final shape:MetaShape = plugin.metaShape();
+	private static function findIn(source: String): Array<MetaHit> {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(source);
+		final shape: MetaShape = plugin.metaShape();
 		return Meta.find(tree, shape, source);
 	}
 
-	private static function describe(hits:Array<MetaHit>):String {
+	private static function describe(hits: Array<MetaHit>): String {
 		return '[' + hits.map(h -> '${h.annotation}(${h.args.join("|")})@${h.declKind}:${h.declName ?? "?"}').join(', ') + ']';
 	}
+
 }

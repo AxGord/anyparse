@@ -33,59 +33,54 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 @:nullSafety(Strict)
 final class HxMetaAllmanObjectLitSliceTest extends Test {
 
-	public function new():Void {
+	public function new(): Void {
 		super();
 	}
 
-	public function testMetaObjectLitGetsAllmanIndent():Void {
+	public function testMetaObjectLitGetsAllmanIndent(): Void {
 		// `@patch { ... }` precedes an ObjectLit → the wrap forces `{`
 		// onto its own line at indent +1 (`return @patch\n\t\t\t{`).
-		final src:String = 'class Main {\n\tstatic function main() {\n\t\treturn @patch {\n\t\t\tstatus: InProgress(v),\n\t\t}\n\t}\n}';
-		final out:String = format(src);
-		Assert.isTrue(out.indexOf('return @patch\n\t\t\t{\n') != -1,
-			'expected `return @patch\\n\\t\\t\\t{` Allman placement, got: <$out>');
-		Assert.isTrue(out.indexOf('\n\t\t\t\tstatus: InProgress(v)') != -1,
-			'expected body indented +2 (4 tabs), got: <$out>');
-		Assert.isTrue(out.indexOf('\n\t\t\t}\n') != -1,
-			'expected close brace at indent +1 (3 tabs), got: <$out>');
+		final src: String = 'class Main {\n\tstatic function main() {\n\t\treturn @patch {\n\t\t\tstatus: InProgress(v),\n\t\t}\n\t}\n}';
+		final out: String = format(src);
+		Assert.isTrue(out.indexOf('return @patch\n\t\t\t{\n') != -1, 'expected `return @patch\\n\\t\\t\\t{` Allman placement, got: <$out>');
+		Assert.isTrue(out.indexOf('\n\t\t\t\tstatus: InProgress(v)') != -1, 'expected body indented +2 (4 tabs), got: <$out>');
+		Assert.isTrue(out.indexOf('\n\t\t\t}\n') != -1, 'expected close brace at indent +1 (3 tabs), got: <$out>');
 	}
 
-	public function testMetaObjectLitPreservesSourceTrailingComma():Void {
+	public function testMetaObjectLitPreservesSourceTrailingComma(): Void {
 		// Source has `InProgress(v),` (trailing `,`); default knob
 		// `trailingCommaObjectLits = false`. The disjunction in
 		// `appendTrailingCommaExpr` keeps the `,` because the meta-
 		// Allman wrap forces multi-line via the leading hardline.
-		final src:String = 'class Main {\n\tstatic function main() {\n\t\treturn @patch {\n\t\t\tstatus: InProgress(v),\n\t\t}\n\t}\n}';
-		final out:String = format(src);
-		Assert.isTrue(out.indexOf('InProgress(v),\n\t\t\t}') != -1,
-			'expected source `,` retained before close brace, got: <$out>');
+		final src: String = 'class Main {\n\tstatic function main() {\n\t\treturn @patch {\n\t\t\tstatus: InProgress(v),\n\t\t}\n\t}\n}';
+		final out: String = format(src);
+		Assert.isTrue(out.indexOf('InProgress(v),\n\t\t\t}') != -1, 'expected source `,` retained before close brace, got: <$out>');
 	}
 
-	public function testMetaIdentifierFallsThroughToInlineSpace():Void {
+	public function testMetaIdentifierFallsThroughToInlineSpace(): Void {
 		// `@patch foo` — meta-prefixed non-ObjectLit value falls
 		// through to the default `_dt(' ')` separator. The wrap fires
 		// only for the named ctor (`ObjectLit`); other expression
 		// shapes round-trip with the inline space layout.
-		final src:String = 'class M { function f():Void { var x:Dynamic = @patch foo; } }';
-		final out:String = format(src);
-		Assert.isTrue(out.indexOf('@patch foo') != -1,
-			'expected inline `@patch foo` for non-ObjectLit value, got: <$out>');
+		final src: String = 'class M { function f():Void { var x:Dynamic = @patch foo; } }';
+		final out: String = format(src);
+		Assert.isTrue(out.indexOf('@patch foo') != -1, 'expected inline `@patch foo` for non-ObjectLit value, got: <$out>');
 	}
 
-	public function testMetaParenExprFallsThrough():Void {
+	public function testMetaParenExprFallsThrough(): Void {
 		// `@:privateAccess (X).object` — the parenthesised expression
 		// is `ParenExpr`, not `ObjectLit`, so the wrap stays inert and
 		// the meta + paren value emits inline. Mirrors the original
 		// `HxMetaExpr` doc's reference fixture from the fork corpus.
-		final src:String = 'class M { function f():Void { trace(@:privateAccess (X).object); } }';
-		final out:String = format(src);
-		Assert.isTrue(out.indexOf('@:privateAccess (X).object') != -1,
-			'expected inline `@:privateAccess (X).object`, got: <$out>');
+		final src: String = 'class M { function f():Void { trace(@:privateAccess (X).object); } }';
+		final out: String = format(src);
+		Assert.isTrue(out.indexOf('@:privateAccess (X).object') != -1, 'expected inline `@:privateAccess (X).object`, got: <$out>');
 	}
 
-	private inline function format(src:String):String {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	private inline function format(src: String): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.finalNewline = false;
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
+
 }

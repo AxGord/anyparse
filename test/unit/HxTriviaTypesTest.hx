@@ -48,60 +48,61 @@ class HxTriviaTypesTest extends Test {
 	// any `*T` reference. Without this forced reference the typing
 	// order between the marker class and the synth module is
 	// implementation-defined.
-	private static final _forceBuild:Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
+	private static final _forceBuild: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 
-	public function testMarkerClassBuilds():Void {
+	public function testMarkerClassBuilds(): Void {
 		// Calling parse() proves the @:build pipeline completed without
 		// error — if any stage (TriviaAnalysis, TriviaTypeSynth, Lowering,
 		// Codegen) blew up, this test file would not compile. After ω₄d
 		// the return type is the paired `HxModuleT` synth type instead
 		// of Plain-mode `HxModule` because trivia-aware Lowering now
 		// emits `Trivial<T>`-wrapped Star elements.
-		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse('class Foo {}');
+		final m: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse('class Foo {}');
 		Assert.equals(1, m.decls.length);
 	}
 
-	public function testHxModuleTSynthesised():Void {
+	public function testHxModuleTSynthesised(): Void {
 		// Direct bearing rule (`@:trivia` on `decls` field).
-		final t:Null<anyparse.grammar.haxe.trivia.Pairs.HxModuleT> = null;
+		final t: Null<anyparse.grammar.haxe.trivia.Pairs.HxModuleT> = null;
 		Assert.isNull(t);
 	}
 
-	public function testHxDeclTSynthesised():Void {
+	public function testHxDeclTSynthesised(): Void {
 		// Transitive bearing via enum refs to HxClassDecl / HxInterfaceDecl /
 		// HxAbstractDecl (all direct bearings).
-		final t:Null<anyparse.grammar.haxe.trivia.Pairs.HxDeclT> = null;
+		final t: Null<anyparse.grammar.haxe.trivia.Pairs.HxDeclT> = null;
 		Assert.isNull(t);
 	}
 
-	public function testHxFnDeclTSynthesised():Void {
+	public function testHxFnDeclTSynthesised(): Void {
 		// Direct bearing rule (`@:trivia` on `body` field) with a
 		// Null<HxType> optional field exercising the wrapOptional path.
-		final t:Null<anyparse.grammar.haxe.trivia.Pairs.HxFnDeclT> = null;
+		final t: Null<anyparse.grammar.haxe.trivia.Pairs.HxFnDeclT> = null;
 		Assert.isNull(t);
 	}
 
-	public function testHxStatementTSynthesised():Void {
+	public function testHxStatementTSynthesised(): Void {
 		// Bearing enum with a @:trivia Star in its BlockStmt constructor.
 		// Exercises the enum-Alt synthesis path + per-branch Star wrap.
-		final t:Null<anyparse.grammar.haxe.trivia.Pairs.HxStatementT> = null;
+		final t: Null<anyparse.grammar.haxe.trivia.Pairs.HxStatementT> = null;
 		Assert.isNull(t);
 	}
 
-	public function testHxIfStmtTSynthesised():Void {
+	public function testHxIfStmtTSynthesised(): Void {
 		// Transitive-bearing Seq with both a required Ref (thenBody) and
 		// an optional Null<HxStatement> (elseBody) — verifies the
 		// `@:optional` meta re-attach and `Null<T>` wrap both survive
 		// synthesis so future ω₄d Lowering can build struct literals.
-		final t:Null<anyparse.grammar.haxe.trivia.Pairs.HxIfStmtT> = null;
+		final t: Null<anyparse.grammar.haxe.trivia.Pairs.HxIfStmtT> = null;
 		Assert.isNull(t);
 	}
 
-	public function testHxExprTIsNotSynthesised():Void {
+	public function testHxExprTIsNotSynthesised(): Void {
 		// Negative: HxExpr is non-bearing (expressions have no @:trivia
 		// Star in their transitive closure). Synth path skips non-bearing
 		// rules — the `*T` name must not resolve to any registered enum
 		// in the trivia.Pairs synth module.
 		Assert.isNull(Type.resolveEnum('anyparse.grammar.haxe.trivia.Pairs.HxExprT'));
 	}
+
 }

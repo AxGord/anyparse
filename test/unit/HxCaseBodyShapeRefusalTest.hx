@@ -31,91 +31,92 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 @:nullSafety(Strict)
 final class HxCaseBodyShapeRefusalTest extends Test {
 
-	public function new():Void {
+	public function new(): Void {
 		super();
 	}
 
-	public function testSimpleCallFlattensAtExpressionPosition():Void {
+	public function testSimpleCallFlattensAtExpressionPosition(): Void {
 		// Outer `case 1:` body is the inner switch (expression-position
 		// for descendants). Inner case body = single Call — single-rooted,
 		// not refused. expressionCase=Keep + same-line source → flatten.
-		final src:String = 'class M { function f():Void { switch (x) { case 1: switch (y) { case 2: foo(); } } } }';
-		final out:String = writeWithDefaults(src);
+		final src: String = 'class M { function f():Void { switch (x) { case 1: switch (y) { case 2: foo(); } } } }';
+		final out: String = writeWithDefaults(src);
 		Assert.isTrue(out.indexOf('case 2: foo();') != -1, 'simple call body must flatten at expression-position: <$out>');
 	}
 
-	public function testFieldAccessFlattensAtExpressionPosition():Void {
+	public function testFieldAccessFlattensAtExpressionPosition(): Void {
 		// Field access `A.B.C` is single-rooted (chained FieldAccess),
 		// not refused.
-		final src:String = 'class M { function f():Void { switch (x) { case 1: switch (y) { case 2: A.B.C; } } } }';
-		final out:String = writeWithDefaults(src);
+		final src: String = 'class M { function f():Void { switch (x) { case 1: switch (y) { case 2: A.B.C; } } } }';
+		final out: String = writeWithDefaults(src);
 		Assert.isTrue(out.indexOf('case 2: A.B.C;') != -1, 'field-access chain must flatten at expression-position: <$out>');
 	}
 
-	public function testLogicalOrRefusesInlineAtExpressionPosition():Void {
+	public function testLogicalOrRefusesInlineAtExpressionPosition(): Void {
 		// `A || B` is `Or(...)` → refused. Even with expressionCase=Keep
 		// + same-line source, body must break.
-		final src:String = 'class M { function f():Void { switch (x) { case 1: switch (y) { case 2: A || B; } } } }';
-		final out:String = writeWithDefaults(src);
+		final src: String = 'class M { function f():Void { switch (x) { case 1: switch (y) { case 2: A || B; } } } }';
+		final out: String = writeWithDefaults(src);
 		Assert.isTrue(out.indexOf('case 2: A || B;') == -1, '|| must NOT flatten at expression-position: <$out>');
 		Assert.isTrue(out.indexOf('case 2:\n') != -1, 'expected inner case 2 to break under shape refusal: <$out>');
 	}
 
-	public function testLogicalAndRefusesInlineAtExpressionPosition():Void {
+	public function testLogicalAndRefusesInlineAtExpressionPosition(): Void {
 		// `A && B` is `And(...)` → refused — sibling check that refusal
 		// covers both logical ops (`OpBoolAnd` / `OpBoolOr`).
-		final src:String = 'class M { function f():Void { switch (x) { case 1: switch (y) { case 2: A && B; } } } }';
-		final out:String = writeWithDefaults(src);
+		final src: String = 'class M { function f():Void { switch (x) { case 1: switch (y) { case 2: A && B; } } } }';
+		final out: String = writeWithDefaults(src);
 		Assert.isTrue(out.indexOf('case 2: A && B;') == -1, '&& must NOT flatten at expression-position: <$out>');
 	}
 
-	public function testArithmeticAddFlattensAtExpressionPosition():Void {
+	public function testArithmeticAddFlattensAtExpressionPosition(): Void {
 		// `a + b` is `Add(...)` — NOT in refusal list (fork's token tree
 		// nests arithmetic binops hierarchically — `dblDot` has one
 		// child). Stays inline.
-		final src:String = 'class M { function f():Void { switch (x) { case 1: switch (y) { case 2: a + b; } } } }';
-		final out:String = writeWithDefaults(src);
+		final src: String = 'class M { function f():Void { switch (x) { case 1: switch (y) { case 2: a + b; } } } }';
+		final out: String = writeWithDefaults(src);
 		Assert.isTrue(out.indexOf('case 2: a + b;') != -1, 'arithmetic chain must flatten at expression-position: <$out>');
 	}
 
-	public function testTernaryFlattensAtExpressionPosition():Void {
+	public function testTernaryFlattensAtExpressionPosition(): Void {
 		// Ternary nests under a single root child — fork allows inline.
-		final src:String = 'class M { function f():Void { switch (x) { case 1: switch (y) { case 2: a ? b : c; } } } }';
-		final out:String = writeWithDefaults(src);
+		final src: String = 'class M { function f():Void { switch (x) { case 1: switch (y) { case 2: a ? b : c; } } } }';
+		final out: String = writeWithDefaults(src);
 		Assert.isTrue(out.indexOf('case 2: a ? b : c;') != -1, 'ternary must flatten at expression-position: <$out>');
 	}
 
-	public function testAssignFlattensAtExpressionPosition():Void {
+	public function testAssignFlattensAtExpressionPosition(): Void {
 		// `a = b` (`Assign`) — fork allows inline. Confirms the slice
 		// does NOT regress `issue_452_braceless_function_with_switch`'s
 		// `case null: handlers[name] = [];` inline shape.
-		final src:String = 'class M { function f():Void { switch (x) { case 1: switch (y) { case 2: a = b; } } } }';
-		final out:String = writeWithDefaults(src);
+		final src: String = 'class M { function f():Void { switch (x) { case 1: switch (y) { case 2: a = b; } } } }';
+		final out: String = writeWithDefaults(src);
 		Assert.isTrue(out.indexOf('case 2: a = b;') != -1, 'assignment must flatten at expression-position: <$out>');
 	}
 
-	public function testPrefixUnaryFlattensAtExpressionPosition():Void {
+	public function testPrefixUnaryFlattensAtExpressionPosition(): Void {
 		// `!A` is `Not(...)` — prefix unop, NOT in refusal list. Stays
 		// inline.
-		final src:String = 'class M { function f():Void { switch (x) { case 1: switch (y) { case 2: !A; } } } }';
-		final out:String = writeWithDefaults(src);
+		final src: String = 'class M { function f():Void { switch (x) { case 1: switch (y) { case 2: !A; } } } }';
+		final out: String = writeWithDefaults(src);
 		Assert.isTrue(out.indexOf('case 2: !A;') != -1, 'prefix unop must flatten at expression-position: <$out>');
 	}
 
-	public function testRefusalSurvivesCaseBodySameOverride():Void {
+	public function testRefusalSurvivesCaseBodySameOverride(): Void {
 		// At STATEMENT-position with caseBody=Same, refusal still wins —
 		// `Same` would unconditionally flatten, but the AND-clause aborts
 		// inline for logical chains. Confirms the refusal AND-s with the
 		// dispatched gate, not OR-s past it.
-		final src:String = 'class M { function f():Void { switch (x) { case 1: A || B; } } }';
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final src: String = 'class M { function f():Void { switch (x) { case 1: A || B; } } }';
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.caseBody = BodyPolicy.Same;
-		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('case 1: A || B;') == -1, 'refusal must override caseBody=Same: <$out>');
 	}
 
-	private inline function writeWithDefaults(src:String):String {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	private inline function writeWithDefaults(src: String): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
+
 }

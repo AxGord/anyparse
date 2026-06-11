@@ -23,49 +23,51 @@ import anyparse.grammar.haxe.HxStatement;
  */
 class HxEllipsisStmtSliceTest extends HxTestHelpers {
 
-	public function testEllipsisStmtSingleBody():Void {
-		final module:HxModule = HaxeModuleParser.parse('class A {\n\tfunction f():Void {\n\t\t....\n\t}\n}');
+	public function testEllipsisStmtSingleBody(): Void {
+		final module: HxModule = HaxeModuleParser.parse('class A {\n\tfunction f():Void {\n\t\t....\n\t}\n}');
 		Assert.equals(1, module.decls.length);
-		final fn:HxFnDecl = expectFnMemberFromTopLevelClass(module, 0);
-		final body:Array<HxStatement> = expectFnBodyBlock(fn.body);
+		final fn: HxFnDecl = expectFnMemberFromTopLevelClass(module, 0);
+		final body: Array<HxStatement> = expectFnBodyBlock(fn.body);
 		Assert.equals(1, body.length);
 		switch body[0] {
-			case EllipsisStmt: Assert.pass();
-			case _: Assert.fail('expected EllipsisStmt, got ${body[0]}');
+			case EllipsisStmt:
+				Assert.pass();
+			case _:
+				Assert.fail('expected EllipsisStmt, got ${body[0]}');
 		}
 	}
 
-	public function testEllipsisStmtWriterEquals():Void {
-		writerEquals(
-			'class A {\n\tfunction f():Void {\n\t\t....\n\t}\n}',
-			'class A {\n\tfunction f():Void {\n\t\t....\n\t}\n}\n'
-		);
+	public function testEllipsisStmtWriterEquals(): Void {
+		writerEquals('class A {\n\tfunction f():Void {\n\t\t....\n\t}\n}', 'class A {\n\tfunction f():Void {\n\t\t....\n\t}\n}\n');
 	}
 
-	public function testEllipsisStmtRoundTrip():Void {
+	public function testEllipsisStmtRoundTrip(): Void {
 		roundTrip('class A {\n\tfunction f():Void {\n\t\t....\n\t}\n}');
 	}
 
-	public function testNoEllipsisStmtRegression():Void {
-		final module:HxModule = HaxeModuleParser.parse('class A {\n\tfunction f():Void {\n\t\tx;\n\t}\n}');
-		final fn:HxFnDecl = expectFnMemberFromTopLevelClass(module, 0);
-		final body:Array<HxStatement> = expectFnBodyBlock(fn.body);
+	public function testNoEllipsisStmtRegression(): Void {
+		final module: HxModule = HaxeModuleParser.parse('class A {\n\tfunction f():Void {\n\t\tx;\n\t}\n}');
+		final fn: HxFnDecl = expectFnMemberFromTopLevelClass(module, 0);
+		final body: Array<HxStatement> = expectFnBodyBlock(fn.body);
 		Assert.equals(1, body.length);
 		switch body[0] {
-			case ExprStmt(_): Assert.pass();
-			case _: Assert.fail('expected ExprStmt, got ${body[0]}');
+			case ExprStmt(_):
+				Assert.pass();
+			case _:
+				Assert.fail('expected ExprStmt, got ${body[0]}');
 		}
 	}
 
-	private function expectFnMemberFromTopLevelClass(module:HxModule, idx:Int):HxFnDecl {
+	private function expectFnMemberFromTopLevelClass(module: HxModule, idx: Int): HxFnDecl {
 		final cls = expectClassDecl(module.decls[idx]);
 		return expectFnMember(cls.members[0].member);
 	}
 
-	private function expectFnBodyBlock(body:HxFnBody):Array<HxStatement> {
+	private function expectFnBodyBlock(body: HxFnBody): Array<HxStatement> {
 		return switch body {
 			case BlockBody(block): block.stmts;
 			case _: throw 'expected BlockBody, got $body';
 		};
 	}
+
 }

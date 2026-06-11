@@ -29,19 +29,19 @@ import anyparse.grammar.haxe.HxStatement;
 class HxLocalFnStmtSliceTest extends HxTestHelpers {
 
 	/** Parse function body statements from a single-function class. */
-	private function parseBody(source:String):Array<HxStatement> {
-		final fn:HxFnDecl = parseSingleFnDecl(source);
+	private function parseBody(source: String): Array<HxStatement> {
+		final fn: HxFnDecl = parseSingleFnDecl(source);
 		return fnBodyStmts(fn);
 	}
 
-	private function expectLocalFn(stmt:HxStatement):HxFnDecl {
+	private function expectLocalFn(stmt: HxStatement): HxFnDecl {
 		return switch stmt {
 			case LocalFnStmt(decl): decl;
 			case _: throw 'expected LocalFnStmt, got $stmt';
 		};
 	}
 
-	private function expectInlineLocalFn(stmt:HxStatement):HxFnDecl {
+	private function expectInlineLocalFn(stmt: HxStatement): HxFnDecl {
 		return switch stmt {
 			case LocalInlineFnStmt(decl): decl;
 			case _: throw 'expected LocalInlineFnStmt, got $stmt';
@@ -50,101 +50,114 @@ class HxLocalFnStmtSliceTest extends HxTestHelpers {
 
 	// --- plain local function ---
 
-	public function testLocalFnBasic():Void {
-		final body:Array<HxStatement> = parseBody('class C { function f():Void { function g() {} g(); } }');
+	public function testLocalFnBasic(): Void {
+		final body: Array<HxStatement> = parseBody('class C { function f():Void { function g() {} g(); } }');
 		Assert.equals(2, body.length);
-		final decl:HxFnDecl = expectLocalFn(body[0]);
-		Assert.equals('g', (decl.name : String));
+		final decl: HxFnDecl = expectLocalFn(body[0]);
+		Assert.equals('g', (decl.name: String));
 		switch body[1] {
-			case ExprStmt(_): Assert.pass();
-			case null, _: Assert.fail('expected ExprStmt after local fn, got ${body[1]}');
+			case ExprStmt(_):
+				Assert.pass();
+			case null, _:
+				Assert.fail('expected ExprStmt after local fn, got ${body[1]}');
 		}
 	}
 
-	public function testLocalFnParamsAndReturn():Void {
-		final body:Array<HxStatement> = parseBody('class C { function f():Void { function g(x:Int):Void { return; } } }');
+	public function testLocalFnParamsAndReturn(): Void {
+		final body: Array<HxStatement> = parseBody('class C { function f():Void { function g(x:Int):Void { return; } } }');
 		Assert.equals(1, body.length);
-		final decl:HxFnDecl = expectLocalFn(body[0]);
-		Assert.equals('g', (decl.name : String));
+		final decl: HxFnDecl = expectLocalFn(body[0]);
+		Assert.equals('g', (decl.name: String));
 		Assert.equals(1, decl.params.length);
 	}
 
 	// --- mirror precedent: type params + bare-expression body ---
 
-	public function testLocalFnTypeParamsExprBody():Void {
-		final body:Array<HxStatement> = parseBody('class C { function f():Void { function g<T>(x:T):T return x; } }');
+	public function testLocalFnTypeParamsExprBody(): Void {
+		final body: Array<HxStatement> = parseBody('class C { function f():Void { function g<T>(x:T):T return x; } }');
 		Assert.equals(1, body.length);
-		final decl:HxFnDecl = expectLocalFn(body[0]);
-		Assert.equals('g', (decl.name : String));
+		final decl: HxFnDecl = expectLocalFn(body[0]);
+		Assert.equals('g', (decl.name: String));
 		switch decl.body {
-			case ExprBody(_): Assert.pass();
-			case null, _: Assert.fail('expected ExprBody (bare-expr body), got ${decl.body}');
+			case ExprBody(_):
+				Assert.pass();
+			case null, _:
+				Assert.fail('expected ExprBody (bare-expr body), got ${decl.body}');
 		}
 	}
 
 	// --- inline local function ---
 
-	public function testInlineLocalFn():Void {
-		final body:Array<HxStatement> = parseBody('class C { function f():Void { inline function g():Void {} g(); } }');
+	public function testInlineLocalFn(): Void {
+		final body: Array<HxStatement> = parseBody('class C { function f():Void { inline function g():Void {} g(); } }');
 		Assert.equals(2, body.length);
-		final decl:HxFnDecl = expectInlineLocalFn(body[0]);
-		Assert.equals('g', (decl.name : String));
+		final decl: HxFnDecl = expectInlineLocalFn(body[0]);
+		Assert.equals('g', (decl.name: String));
 	}
 
 	// --- dogfood shape: typed inline helper between statements ---
 
-	public function testDogfoodInlineHelperPattern():Void {
-		final body:Array<HxStatement> = parseBody(
-			'class C { function f():Void { inline function addEdge(from:String, to:String):Void { trace(from); } addEdge("a", "b"); } }'
-		);
+	public function testDogfoodInlineHelperPattern(): Void {
+		final body: Array<HxStatement> =
+			parseBody(
+				'class C { function f():Void { inline function addEdge(from:String, to:String):Void { trace(from); } addEdge("a", "b"); } }'
+			);
 		Assert.equals(2, body.length);
-		final decl:HxFnDecl = expectInlineLocalFn(body[0]);
-		Assert.equals('addEdge', (decl.name : String));
+		final decl: HxFnDecl = expectInlineLocalFn(body[0]);
+		Assert.equals('addEdge', (decl.name: String));
 		Assert.equals(2, decl.params.length);
 	}
 
 	// --- nested local function ---
 
-	public function testNestedLocalFn():Void {
-		final body:Array<HxStatement> = parseBody('class C { function f():Void { function outer():Void { function inner() {} inner(); } } }');
+	public function testNestedLocalFn(): Void {
+		final body: Array<HxStatement> =
+			parseBody('class C { function f():Void { function outer():Void { function inner() {} inner(); } } }');
 		Assert.equals(1, body.length);
-		final outer:HxFnDecl = expectLocalFn(body[0]);
-		final inner:Array<HxStatement> = fnBodyStmts(outer);
+		final outer: HxFnDecl = expectLocalFn(body[0]);
+		final inner: Array<HxStatement> = fnBodyStmts(outer);
 		Assert.equals(2, inner.length);
-		Assert.equals('inner', (expectLocalFn(inner[0]).name : String));
+		Assert.equals('inner', (expectLocalFn(inner[0]).name: String));
 	}
 
 	// --- rollback: anonymous function expression is NOT a local-fn stmt ---
 
-	public function testAnonFnExprAssignedStaysVarStmt():Void {
-		final body:Array<HxStatement> = parseBody('class C { function f():Void { var h = function() { return 1; }; h(); } }');
+	public function testAnonFnExprAssignedStaysVarStmt(): Void {
+		final body: Array<HxStatement> = parseBody('class C { function f():Void { var h = function() { return 1; }; h(); } }');
 		switch body[0] {
 			case LocalFnStmt(_) | LocalInlineFnStmt(_):
 				Assert.fail('anonymous fn assigned to var must not parse as a local-fn statement');
-			case VarStmt(_): Assert.pass();
-			case null, _: Assert.fail('expected VarStmt, got ${body[0]}');
+			case VarStmt(_):
+				Assert.pass();
+			case null, _:
+				Assert.fail('expected VarStmt, got ${body[0]}');
 		}
 	}
 
-	public function testAnonFnExprAsCallArgStaysExprStmt():Void {
-		final body:Array<HxStatement> = parseBody('class C { function f(xs:Array<Int>):Void { xs.map(function(x) return x); } }');
+	public function testAnonFnExprAsCallArgStaysExprStmt(): Void {
+		final body: Array<HxStatement> = parseBody('class C { function f(xs:Array<Int>):Void { xs.map(function(x) return x); } }');
 		Assert.equals(1, body.length);
 		switch body[0] {
 			case LocalFnStmt(_) | LocalInlineFnStmt(_):
 				Assert.fail('anonymous fn call arg must not parse as a local-fn statement');
-			case ExprStmt(_): Assert.pass();
-			case null, _: Assert.fail('expected ExprStmt, got ${body[0]}');
+			case ExprStmt(_):
+				Assert.pass();
+			case null, _:
+				Assert.fail('expected ExprStmt, got ${body[0]}');
 		}
 	}
 
 	// --- regression: a body with no local fn parses unchanged ---
 
-	public function testNoLocalFnRegression():Void {
-		final body:Array<HxStatement> = parseBody('class C { function f():Void { if (a) b = 1; while (c) d(); return; } }');
+	public function testNoLocalFnRegression(): Void {
+		final body: Array<HxStatement> = parseBody('class C { function f():Void { if (a) b = 1; while (c) d(); return; } }');
 		Assert.equals(3, body.length);
 		switch body[0] {
-			case IfStmt(_): Assert.pass();
-			case null, _: Assert.fail('expected IfStmt, got ${body[0]}');
+			case IfStmt(_):
+				Assert.pass();
+			case null, _:
+				Assert.fail('expected IfStmt, got ${body[0]}');
 		}
 	}
+
 }

@@ -36,9 +36,9 @@ using Lambda;
  */
 class ApqMetaAnonFieldSliceTest extends Test {
 
-	public function testTypedefAnonVarFieldMetaSurfaces():Void {
-		final hits:Array<MetaHit> = metaIn('typedef T = { @:m1 var f:Int; };');
-		final m:Null<MetaHit> = hits.find(h -> h.annotation == '@:m1');
+	public function testTypedefAnonVarFieldMetaSurfaces(): Void {
+		final hits: Array<MetaHit> = metaIn('typedef T = { @:m1 var f:Int; };');
+		final m: Null<MetaHit> = hits.find(h -> h.annotation == '@:m1');
 		Assert.notNull(m, '@:m1 on anon var field must surface — got ${describe(hits)}');
 		if (m != null) {
 			Assert.equals('VarField', m.declKind, 'attributes to the anon var field — got ${describe(hits)}');
@@ -46,9 +46,9 @@ class ApqMetaAnonFieldSliceTest extends Test {
 		}
 	}
 
-	public function testTypedefAnonFnFieldMetaSurfaces():Void {
-		final hits:Array<MetaHit> = metaIn('typedef T = { @:fn function g():Void; };');
-		final m:Null<MetaHit> = hits.find(h -> h.annotation == '@:fn');
+	public function testTypedefAnonFnFieldMetaSurfaces(): Void {
+		final hits: Array<MetaHit> = metaIn('typedef T = { @:fn function g():Void; };');
+		final m: Null<MetaHit> = hits.find(h -> h.annotation == '@:fn');
 		Assert.notNull(m, '@:fn on anon function field must surface — got ${describe(hits)}');
 		if (m != null) {
 			Assert.equals('FnField', m.declKind, 'attributes to the anon fn field — got ${describe(hits)}');
@@ -56,56 +56,57 @@ class ApqMetaAnonFieldSliceTest extends Test {
 		}
 	}
 
-	public function testBareAnonFieldMetaReusesRequiredHost():Void {
+	public function testBareAnonFieldMetaReusesRequiredHost(): Void {
 		// `name:Type` (no var/final/function kw) → HxAnonField.Required,
 		// already a decl-host via the HxParam entry. Only the `type`
 		// descent was blocking it.
-		final hits:Array<MetaHit> = metaIn('typedef T = { @:b x:Int; };');
-		final m:Null<MetaHit> = hits.find(h -> h.annotation == '@:b');
+		final hits: Array<MetaHit> = metaIn('typedef T = { @:b x:Int; };');
+		final m: Null<MetaHit> = hits.find(h -> h.annotation == '@:b');
 		Assert.notNull(m, '@:b on bare anon field must surface — got ${describe(hits)}');
 		if (m != null) Assert.equals('x', m.declName, 'attributes to the bare field x — got ${describe(hits)}');
 	}
 
-	public function testAnonFieldIsRefsDeclHost():Void {
-		final hits:Array<RefHit> = refsIn('typedef T = { var f:Int; };', 'f');
+	public function testAnonFieldIsRefsDeclHost(): Void {
+		final hits: Array<RefHit> = refsIn('typedef T = { var f:Int; };', 'f');
 		Assert.isTrue(hits.exists(h -> h.kind == RefKind.Decl), 'anon field `f` is a decl — got ${hits.length} hits');
 	}
 
-	public function testAnonInVarTypeHintMetaSurfaces():Void {
+	public function testAnonInVarTypeHintMetaSurfaces(): Void {
 		// Bonus from the generic Anon gate: anon body in a var type
 		// hint also surfaces (not only typedef RHS).
-		final hits:Array<MetaHit> = metaIn('class C { var h:{ @:m2 var k:Int; }; }');
+		final hits: Array<MetaHit> = metaIn('class C { var h:{ @:m2 var k:Int; }; }');
 		Assert.isTrue(hits.exists(h -> h.annotation == '@:m2'), '@:m2 in anon type-hint surfaces — got ${describe(hits)}');
 	}
 
-	public function testNamedTypeRefProducesNoPhantomChild():Void {
+	public function testNamedTypeRefProducesNoPhantomChild(): Void {
 		// Blast-radius guard: `var x:Foo` — `type` is HxType.Named, NOT
 		// Anon, so it stays skipped. `Foo` must NOT surface as a decl
 		// (no phantom child per typed binding).
-		final hits:Array<RefHit> = refsIn('class C { var x:Foo; }', 'Foo');
+		final hits: Array<RefHit> = refsIn('class C { var x:Foo; }', 'Foo');
 		Assert.equals(0, hits.length, 'Named type-ref `Foo` must not surface as a node — got ${hits.length}');
 	}
 
-	public function testTypedefAliasNotAnonNoHit():Void {
-		final hits:Array<MetaHit> = metaIn('typedef T = Int;');
+	public function testTypedefAliasNotAnonNoHit(): Void {
+		final hits: Array<MetaHit> = metaIn('typedef T = Int;');
 		Assert.equals(0, hits.length, 'plain alias typedef has no anon members — got ${describe(hits)}');
 	}
 
-	private static function metaIn(source:String):Array<MetaHit> {
-		final plugin:HaxeQueryPlugin = new HaxeQueryPlugin();
-		final tree:QueryNode = plugin.parseFile(source);
-		final shape:MetaShape = plugin.metaShape();
+	private static function metaIn(source: String): Array<MetaHit> {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(source);
+		final shape: MetaShape = plugin.metaShape();
 		return Meta.find(tree, shape, source);
 	}
 
-	private static function refsIn(source:String, name:String):Array<RefHit> {
-		final plugin:HaxeQueryPlugin = new HaxeQueryPlugin();
-		final tree:QueryNode = plugin.parseFile(source);
-		final shape:RefShape = plugin.refShape();
+	private static function refsIn(source: String, name: String): Array<RefHit> {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(source);
+		final shape: RefShape = plugin.refShape();
 		return Refs.find(name, tree, shape);
 	}
 
-	private static function describe(hits:Array<MetaHit>):String {
+	private static function describe(hits: Array<MetaHit>): String {
 		return '[' + hits.map(h -> '${h.annotation}@${h.declKind}:${h.declName ?? "?"}').join(', ') + ']';
 	}
+
 }

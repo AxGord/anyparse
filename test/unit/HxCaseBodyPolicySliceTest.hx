@@ -39,142 +39,141 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 @:nullSafety(Strict)
 final class HxCaseBodyPolicySliceTest extends Test {
 
-	public function new():Void {
+	public function new(): Void {
 		super();
 	}
 
-	public function testDefaultsCaseBodyKeepExpressionCaseKeep():Void {
+	public function testDefaultsCaseBodyKeepExpressionCaseKeep(): Void {
 		// Slice D6 (dogfood) — `caseBody` default flipped from `Next` to
 		// `Keep` so the no-config (dogfood) writer-equals path preserves
 		// user-written `case X(v): body;` shape. The fork-canonical `Next`
 		// is preserved by re-baselining in `HaxeFormatConfigLoader.
 		// loadHxFormatJson` before `applySameLine` merges JSON overrides.
-		final defaults:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
+		final defaults: HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
 		Assert.equals(BodyPolicy.Keep, defaults.caseBody);
 		Assert.equals(BodyPolicy.Keep, defaults.expressionCase);
 	}
 
-	public function testNextKeepsSingleStmtMultiline():Void {
-		final src:String = 'class M { function f():Void { switch (x) { case 1: foo(); } } }';
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	public function testNextKeepsSingleStmtMultiline(): Void {
+		final src: String = 'class M { function f():Void { switch (x) { case 1: foo(); } } }';
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.caseBody = BodyPolicy.Next;
 		opts.expressionCase = BodyPolicy.Next;
-		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('case 1:\n') != -1, 'expected multiline `case 1:\\n` in: <$out>');
 		Assert.isTrue(out.indexOf('case 1: foo();') == -1, 'did not expect inline `case 1: foo();` in: <$out>');
 	}
 
-	public function testCaseBodySameFlattensSingleStmt():Void {
-		final src:String = 'class M { function f():Void { switch (x) { case 1: foo(); } } }';
-		final out:String = writeWithCaseBody(src, BodyPolicy.Same);
+	public function testCaseBodySameFlattensSingleStmt(): Void {
+		final src: String = 'class M { function f():Void { switch (x) { case 1: foo(); } } }';
+		final out: String = writeWithCaseBody(src, BodyPolicy.Same);
 		Assert.isTrue(out.indexOf('case 1: foo();') != -1, 'expected inline `case 1: foo();` in: <$out>');
 	}
 
-	public function testExpressionCaseSameAtStatementPositionDoesNotFlatten():Void {
+	public function testExpressionCaseSameAtStatementPositionDoesNotFlatten(): Void {
 		// ω-issue-423-mech-a: at statement-position (top-level switch in
 		// fn body) the dispatched gate consults `caseBody` only. Setting
 		// `expressionCase=Same` no longer forces flatten — only `caseBody`
 		// can. Regression coverage for the OR→dispatch semantic flip.
-		final src:String = 'class M { function f():Void { switch (x) { case 1: foo(); } } }';
-		final out:String = writeWithExpressionCase(src, BodyPolicy.Same);
+		final src: String = 'class M { function f():Void { switch (x) { case 1: foo(); } } }';
+		final out: String = writeWithExpressionCase(src, BodyPolicy.Same);
 		Assert.isTrue(out.indexOf('case 1: foo();') == -1, 'expressionCase=Same must NOT flatten at statement-position: <$out>');
 		Assert.isTrue(out.indexOf('case 1:\n') != -1, 'expected multiline `case 1:\\n` at statement-position: <$out>');
 	}
 
-	public function testSameKeepsMultiStmtMultiline():Void {
-		final src:String = 'class M { function f():Void { switch (x) { case 1: foo(); bar(); } } }';
-		final out:String = writeWithCaseBody(src, BodyPolicy.Same);
+	public function testSameKeepsMultiStmtMultiline(): Void {
+		final src: String = 'class M { function f():Void { switch (x) { case 1: foo(); bar(); } } }';
+		final out: String = writeWithCaseBody(src, BodyPolicy.Same);
 		Assert.isTrue(out.indexOf('case 1: foo();') == -1, 'multi-stmt body must not flatten in: <$out>');
 		Assert.isTrue(out.indexOf('case 1:\n') != -1, 'expected multiline `case 1:\\n` for multi-stmt in: <$out>');
 	}
 
-	public function testDefaultBranchSameFlattensSingleStmt():Void {
-		final src:String = 'class M { function f():Void { switch (x) { default: foo(); } } }';
-		final out:String = writeWithCaseBody(src, BodyPolicy.Same);
+	public function testDefaultBranchSameFlattensSingleStmt(): Void {
+		final src: String = 'class M { function f():Void { switch (x) { default: foo(); } } }';
+		final out: String = writeWithCaseBody(src, BodyPolicy.Same);
 		Assert.isTrue(out.indexOf('default: foo();') != -1, 'expected inline `default: foo();` in: <$out>');
 	}
 
-	public function testConfigLoaderMapsCaseBodySame():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"sameLine": {"caseBody": "same"}}'
-		);
+	public function testConfigLoaderMapsCaseBodySame(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"caseBody": "same"}}');
 		Assert.equals(BodyPolicy.Same, opts.caseBody);
 		Assert.equals(BodyPolicy.Keep, opts.expressionCase);
 	}
 
-	public function testConfigLoaderMapsExpressionCaseSame():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"sameLine": {"expressionCase": "same"}}'
-		);
+	public function testConfigLoaderMapsExpressionCaseSame(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"expressionCase": "same"}}');
 		Assert.equals(BodyPolicy.Same, opts.expressionCase);
 		Assert.equals(BodyPolicy.Next, opts.caseBody);
 	}
 
-	public function testConfigLoaderEmptyKeepsDefaults():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	public function testConfigLoaderEmptyKeepsDefaults(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		Assert.equals(BodyPolicy.Next, opts.caseBody);
 		Assert.equals(BodyPolicy.Keep, opts.expressionCase);
 	}
 
-	public function testBothKnobsSameStillFlattens():Void {
-		final src:String = 'class M { function f():Void { switch (x) { case 1: foo(); } } }';
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	public function testBothKnobsSameStillFlattens(): Void {
+		final src: String = 'class M { function f():Void { switch (x) { case 1: foo(); } } }';
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.caseBody = BodyPolicy.Same;
 		opts.expressionCase = BodyPolicy.Same;
-		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('case 1: foo();') != -1, 'expected inline `case 1: foo();` (both knobs Same) in: <$out>');
 	}
 
-	public function testFitLineDegradesToNext():Void {
-		final src:String = 'class M { function f():Void { switch (x) { case 1: foo(); } } }';
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	public function testFitLineDegradesToNext(): Void {
+		final src: String = 'class M { function f():Void { switch (x) { case 1: foo(); } } }';
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.caseBody = BodyPolicy.FitLine;
 		opts.expressionCase = BodyPolicy.Next;
-		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('case 1:\n') != -1, 'FitLine must not flatten today (degrades to Next): <$out>');
 	}
 
-	public function testKeepFlattensSameLineSource():Void {
-		final src:String = 'class M { function f():Void { switch (x) { case 1: foo(); } } }';
-		final out:String = writeWithCaseBody(src, BodyPolicy.Keep);
+	public function testKeepFlattensSameLineSource(): Void {
+		final src: String = 'class M { function f():Void { switch (x) { case 1: foo(); } } }';
+		final out: String = writeWithCaseBody(src, BodyPolicy.Keep);
 		Assert.isTrue(out.indexOf('case 1: foo();') != -1, 'Keep should flatten same-line source: <$out>');
 	}
 
-	public function testKeepPreservesNextLineSource():Void {
-		final src:String = 'class M { function f():Void { switch (x) {\n\t\t\tcase 1:\n\t\t\t\tfoo();\n\t\t} } }';
-		final out:String = writeWithCaseBody(src, BodyPolicy.Keep);
+	public function testKeepPreservesNextLineSource(): Void {
+		final src: String = 'class M { function f():Void { switch (x) {\n\t\t\tcase 1:\n\t\t\t\tfoo();\n\t\t} } }';
+		final out: String = writeWithCaseBody(src, BodyPolicy.Keep);
 		Assert.isTrue(out.indexOf('case 1: foo();') == -1, 'Keep should not flatten next-line source: <$out>');
 		Assert.isTrue(out.indexOf('case 1:\n') != -1, 'expected multiline `case 1:\\n` for next-line source: <$out>');
 	}
 
-	public function testKeepMultiStmtForcedMultiline():Void {
-		final src:String = 'class M { function f():Void { switch (x) { case 1: foo(); bar(); } } }';
-		final out:String = writeWithCaseBody(src, BodyPolicy.Keep);
+	public function testKeepMultiStmtForcedMultiline(): Void {
+		final src: String = 'class M { function f():Void { switch (x) { case 1: foo(); bar(); } } }';
+		final out: String = writeWithCaseBody(src, BodyPolicy.Keep);
 		Assert.isTrue(out.indexOf('case 1: foo();') == -1, 'multi-stmt body must stay multiline under Keep: <$out>');
 		Assert.isTrue(out.indexOf('case 1:\n') != -1, 'expected multiline `case 1:\\n` for multi-stmt under Keep: <$out>');
 	}
 
-	public function testExpressionCaseKeepAtVarInitFlattensSameLine():Void {
+	public function testExpressionCaseKeepAtVarInitFlattensSameLine(): Void {
 		// ω-issue-423-mech-a: `HxVarDecl.init` is wired with
 		// `@:fmt(propagateExprPosition)`, so a var-init switch puts its
 		// cases in expression-position. Default `expressionCase=Keep`
 		// + same-line source flattens the case body. Mirrors fork's
 		// `isReturnExpression` walk-up that hits `=` (Binop) and routes
 		// to `markExpressionCase`.
-		final src:String = 'class M { function f():Void { var v = switch (x) { case 1: 10; }; } }';
-		final out:String = writeWithExpressionCase(src, BodyPolicy.Keep);
-		Assert.isTrue(out.indexOf('case 1: 10;') != -1, 'var-init switch case should flatten under expressionCase=Keep + sameLine source: <$out>');
+		final src: String = 'class M { function f():Void { var v = switch (x) { case 1: 10; }; } }';
+		final out: String = writeWithExpressionCase(src, BodyPolicy.Keep);
+		Assert.isTrue(
+			out.indexOf('case 1: 10;') != -1, 'var-init switch case should flatten under expressionCase=Keep + sameLine source: <$out>'
+		);
 	}
 
-	private inline function writeWithCaseBody(src:String, policy:BodyPolicy):String {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	private inline function writeWithCaseBody(src: String, policy: BodyPolicy): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.caseBody = policy;
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
 
-	private inline function writeWithExpressionCase(src:String, policy:BodyPolicy):String {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	private inline function writeWithExpressionCase(src: String, policy: BodyPolicy): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.expressionCase = policy;
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
+
 }

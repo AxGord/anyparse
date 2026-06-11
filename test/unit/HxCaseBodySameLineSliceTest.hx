@@ -30,68 +30,65 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 @:nullSafety(Strict)
 class HxCaseBodySameLineSliceTest extends Test {
 
-	private static final _forceBuildParser:Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
-	private static final _forceBuildWriter:Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
+	private static final _forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
+	private static final _forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
-	public function testDefaultOptionsKeepCaseBody():Void {
+	public function testDefaultOptionsKeepCaseBody(): Void {
 		Assert.equals(BodyPolicy.Keep, HaxeFormat.instance.defaultWriteOptions.caseBody);
 	}
 
-	public function testDefaultOptionsKeepExpressionCase():Void {
+	public function testDefaultOptionsKeepExpressionCase(): Void {
 		Assert.equals(BodyPolicy.Keep, HaxeFormat.instance.defaultWriteOptions.expressionCase);
 	}
 
-	public function testSingleStmtCaseBodyStaysInline():Void {
+	public function testSingleStmtCaseBodyStaysInline(): Void {
 		roundTrip('class F {\n\tfunction f() {\n\t\tswitch x {\n\t\t\tcase A: doA();\n\t\t\tcase B: doB();\n\t\t}\n\t}\n}');
 	}
 
-	public function testCtorPatternCaseBodyStaysInline():Void {
-		roundTrip(
-			'class F {\n\tfunction f() {\n\t\tswitch x {\n\t\t\tcase Foo(v): use(v);\n\t\t\tcase _: fail();\n\t\t}\n\t}\n}'
-		);
+	public function testCtorPatternCaseBodyStaysInline(): Void {
+		roundTrip('class F {\n\tfunction f() {\n\t\tswitch x {\n\t\t\tcase Foo(v): use(v);\n\t\t\tcase _: fail();\n\t\t}\n\t}\n}');
 	}
 
-	public function testEmptyArmStaysEmpty():Void {
+	public function testEmptyArmStaysEmpty(): Void {
 		roundTrip('class F {\n\tfunction f() {\n\t\tswitch x {\n\t\t\tcase A:\n\t\t\tcase _: fail();\n\t\t}\n\t}\n}');
 	}
 
-	public function testMultiStmtCaseBodyStillBreaks():Void {
-		roundTrip(
-			'class F {\n\tfunction f() {\n\t\tswitch x {\n\t\t\tcase A:\n\t\t\t\tfirst();\n\t\t\t\tsecond();\n\t\t}\n\t}\n}'
-		);
+	public function testMultiStmtCaseBodyStillBreaks(): Void {
+		roundTrip('class F {\n\tfunction f() {\n\t\tswitch x {\n\t\t\tcase A:\n\t\t\t\tfirst();\n\t\t\t\tsecond();\n\t\t}\n\t}\n}');
 	}
 
-	public function testSourceBrokenStaysBroken():Void {
+	public function testSourceBrokenStaysBroken(): Void {
 		// Keep policy preserves source shape: if the source has the body
 		// on the next line, the writer keeps it there.
 		roundTrip('class F {\n\tfunction f() {\n\t\tswitch x {\n\t\t\tcase A:\n\t\t\t\tdoA();\n\t\t}\n\t}\n}');
 	}
 
-	public function testJsonOmittedAppliesForkNextDefault():Void {
+	public function testJsonOmittedAppliesForkNextDefault(): Void {
 		// Fork's SameLineConfig declares `caseBody: Next`. A fixture that
 		// omits `sameLine` (or the `caseBody` key inside it) must still
 		// receive `Next` so corpus parity holds at Δ 0/0/0.
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		Assert.equals(BodyPolicy.Next, opts.caseBody);
 	}
 
-	public function testJsonSameLinePresentButCaseBodyOmittedAppliesForkNextDefault():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{ "sameLine": { "ifBody": "next" } }');
+	public function testJsonSameLinePresentButCaseBodyOmittedAppliesForkNextDefault(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{ "sameLine": { "ifBody": "next" } }');
 		Assert.equals(BodyPolicy.Next, opts.caseBody);
 	}
 
-	public function testJsonExplicitKeepStillKeeps():Void {
-		final source:String = 'class F {\n\tfunction f() {\n\t\tswitch x {\n\t\t\tcase A: doA();\n\t\t}\n\t}\n}';
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{ "sameLine": { "caseBody": "keep" } }');
+	public function testJsonExplicitKeepStillKeeps(): Void {
+		final source: String = 'class F {\n\tfunction f() {\n\t\tswitch x {\n\t\t\tcase A: doA();\n\t\t}\n\t}\n}';
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{ "sameLine": { "caseBody": "keep" } }');
 		Assert.equals(BodyPolicy.Keep, opts.caseBody);
-		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final out:String = HaxeModuleTriviaWriter.write(ast, opts);
+		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out: String = HaxeModuleTriviaWriter.write(ast, opts);
 		Assert.equals(source + '\n', out);
 	}
 
-	private static function roundTrip(source:String):Void {
-		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final out:String = HaxeModuleTriviaWriter.write(ast);
+	private static function roundTrip(source: String): Void {
+		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out: String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals(source + '\n', out);
 	}
+
 }

@@ -36,32 +36,16 @@ class CrossRenameSliceTest extends Test {
 	 * expression. Renaming `Foo` -> `Bar` rewrites BOTH files — the decl
 	 * name in A and every type position + `new` in B — and nothing else.
 	 */
-	public function testTwoFileRename():Void {
-		final a:String =
-			'class Foo {\n'
-			+ '\tpublic function new() {}\n'
-			+ '}';
-		final b:String =
-			'class Use {\n'
-			+ '\tvar f:Foo;\n'
-			+ '\tfunction g(a:Foo):Foo {\n'
-			+ '\t\treturn new Foo();\n'
-			+ '\t}\n'
-			+ '}';
-		final expectedA:String =
-			'class Bar {\n'
-			+ '\tpublic function new() {}\n'
-			+ '}';
-		final expectedB:String =
-			'class Use {\n'
-			+ '\tvar f:Bar;\n'
-			+ '\tfunction g(a:Bar):Bar {\n'
-			+ '\t\treturn new Bar();\n'
-			+ '\t}\n'
-			+ '}';
+	public function testTwoFileRename(): Void {
+		final a: String = 'class Foo {\n' + '\tpublic function new() {}\n' + '}';
+		final b: String = 'class Use {\n' + '\tvar f:Foo;\n' + '\tfunction g(a:Foo):Foo {\n' + '\t\treturn new Foo();\n' + '\t}\n' + '}';
+		final expectedA: String = 'class Bar {\n' + '\tpublic function new() {}\n' + '}';
+		final expectedB: String = 'class Use {\n'
+			+ '\tvar f:Bar;\n' + '\tfunction g(a:Bar):Bar {\n' + '\t\treturn new Bar();\n' + '\t}\n' + '}';
 		// `class Foo` — `Foo` starts at col 6 (display).
-		final changes:Array<FileChange> = okChanges('a.hx', a, 1, 6, 'Bar', [
-			{file: 'a.hx', source: a}, {file: 'b.hx', source: b},
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 6, 'Bar', [
+			{ file: 'a.hx', source: a },
+			{ file: 'b.hx', source: b },
 		]);
 		Assert.equals(2, changes.length);
 		Assert.equals(expectedA, changeFor(changes, 'a.hx').newSource);
@@ -78,38 +62,21 @@ class CrossRenameSliceTest extends Test {
 	 * PRESERVED and the decl token becomes `Bar`; file B's type positions
 	 * (field, arg, return, `new`) all rename, and an import segment too.
 	 */
-	public function testFinalClassRename():Void {
-		final a:String =
-			'final class Foo {\n'
-			+ '\tpublic function new() {}\n'
-			+ '}';
-		final b:String =
-			'import pkg.Foo;\n'
-			+ 'class Use {\n'
-			+ '\tvar f:Foo;\n'
-			+ '\tfunction g(a:Foo):Foo {\n'
-			+ '\t\treturn new Foo();\n'
-			+ '\t}\n'
-			+ '}';
-		final expectedA:String =
-			'final class Bar {\n'
-			+ '\tpublic function new() {}\n'
-			+ '}';
-		final expectedB:String =
-			'import pkg.Bar;\n'
-			+ 'class Use {\n'
-			+ '\tvar f:Bar;\n'
-			+ '\tfunction g(a:Bar):Bar {\n'
-			+ '\t\treturn new Bar();\n'
-			+ '\t}\n'
-			+ '}';
+	public function testFinalClassRename(): Void {
+		final a: String = 'final class Foo {\n' + '\tpublic function new() {}\n' + '}';
+		final b: String = 'import pkg.Foo;\n'
+			+ 'class Use {\n' + '\tvar f:Foo;\n' + '\tfunction g(a:Foo):Foo {\n' + '\t\treturn new Foo();\n' + '\t}\n' + '}';
+		final expectedA: String = 'final class Bar {\n' + '\tpublic function new() {}\n' + '}';
+		final expectedB: String = 'import pkg.Bar;\n'
+			+ 'class Use {\n' + '\tvar f:Bar;\n' + '\tfunction g(a:Bar):Bar {\n' + '\t\treturn new Bar();\n' + '\t}\n' + '}';
 		// `final class Foo` — `Foo` starts at display col 12 (after
 		// `final class `).
-		final changes:Array<FileChange> = okChanges('a.hx', a, 1, 12, 'Bar', [
-			{file: 'a.hx', source: a}, {file: 'b.hx', source: b},
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 12, 'Bar', [
+			{ file: 'a.hx', source: a },
+			{ file: 'b.hx', source: b },
 		]);
 		Assert.equals(2, changes.length);
-		final newA:String = changeFor(changes, 'a.hx').newSource;
+		final newA: String = changeFor(changes, 'a.hx').newSource;
 		Assert.equals(expectedA, newA);
 		// The `final ` keyword survives and the decl token is renamed.
 		Assert.isTrue(StringTools.startsWith(newA, 'final class Bar'), 'final keyword preserved, decl renamed');
@@ -124,20 +91,13 @@ class CrossRenameSliceTest extends Test {
 	 * type position. Both the import's LAST dotted segment and the type
 	 * position are renamed; the lower-case package segment is untouched.
 	 */
-	public function testImportSegmentRename():Void {
-		final a:String = 'class Foo {}';
-		final b:String =
-			'import pkg.Foo;\n'
-			+ 'class Use {\n'
-			+ '\tvar f:Foo;\n'
-			+ '}';
-		final expectedB:String =
-			'import pkg.Bar;\n'
-			+ 'class Use {\n'
-			+ '\tvar f:Bar;\n'
-			+ '}';
-		final changes:Array<FileChange> = okChanges('a.hx', a, 1, 6, 'Bar', [
-			{file: 'a.hx', source: a}, {file: 'b.hx', source: b},
+	public function testImportSegmentRename(): Void {
+		final a: String = 'class Foo {}';
+		final b: String = 'import pkg.Foo;\n' + 'class Use {\n' + '\tvar f:Foo;\n' + '}';
+		final expectedB: String = 'import pkg.Bar;\n' + 'class Use {\n' + '\tvar f:Bar;\n' + '}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 6, 'Bar', [
+			{ file: 'a.hx', source: a },
+			{ file: 'b.hx', source: b },
 		]);
 		Assert.equals('class Bar {}', changeFor(changes, 'a.hx').newSource);
 		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
@@ -148,13 +108,12 @@ class CrossRenameSliceTest extends Test {
 	/**
 	 * `using pkg.Foo;` LAST segment is renamed exactly like `import`.
 	 */
-	public function testUsingSegmentRename():Void {
-		final a:String = 'class Foo {}';
-		final b:String =
-			'using pkg.Foo;\n'
-			+ 'class Use {}';
-		final changes:Array<FileChange> = okChanges('a.hx', a, 1, 6, 'Bar', [
-			{file: 'a.hx', source: a}, {file: 'b.hx', source: b},
+	public function testUsingSegmentRename(): Void {
+		final a: String = 'class Foo {}';
+		final b: String = 'using pkg.Foo;\n' + 'class Use {}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 6, 'Bar', [
+			{ file: 'a.hx', source: a },
+			{ file: 'b.hx', source: b },
 		]);
 		Assert.equals('using pkg.Bar;\nclass Use {}', changeFor(changes, 'b.hx').newSource);
 		Assert.equals(1, changeFor(changes, 'b.hx').count);
@@ -164,18 +123,13 @@ class CrossRenameSliceTest extends Test {
 	 * `extends` / `implements` and the type-param `Array<Foo>` position
 	 * are all covered (they ride on `Uses.find`).
 	 */
-	public function testExtendsImplementsAndTypeParam():Void {
-		final a:String = 'class Foo {}';
-		final b:String =
-			'class Use extends Foo {\n'
-			+ '\tvar xs:Array<Foo>;\n'
-			+ '}';
-		final expectedB:String =
-			'class Use extends Bar {\n'
-			+ '\tvar xs:Array<Bar>;\n'
-			+ '}';
-		final changes:Array<FileChange> = okChanges('a.hx', a, 1, 6, 'Bar', [
-			{file: 'a.hx', source: a}, {file: 'b.hx', source: b},
+	public function testExtendsImplementsAndTypeParam(): Void {
+		final a: String = 'class Foo {}';
+		final b: String = 'class Use extends Foo {\n' + '\tvar xs:Array<Foo>;\n' + '}';
+		final expectedB: String = 'class Use extends Bar {\n' + '\tvar xs:Array<Bar>;\n' + '}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 6, 'Bar', [
+			{ file: 'a.hx', source: a },
+			{ file: 'b.hx', source: b },
 		]);
 		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
 		Assert.equals(2, changeFor(changes, 'b.hx').count);
@@ -185,11 +139,12 @@ class CrossRenameSliceTest extends Test {
 	 * Uniqueness refusal: `Foo` is declared in TWO scope files — the
 	 * rename refuses rather than guess which declaration the user meant.
 	 */
-	public function testAmbiguousDeclRefused():Void {
-		final a:String = 'class Foo {}';
-		final dup:String = 'class Foo {}';
-		final result:CrossRenameResult = CrossRename.crossRenameType('a.hx', a, 1, 6, 'Bar', [
-			{file: 'a.hx', source: a}, {file: 'dup.hx', source: dup},
+	public function testAmbiguousDeclRefused(): Void {
+		final a: String = 'class Foo {}';
+		final dup: String = 'class Foo {}';
+		final result: CrossRenameResult = CrossRename.crossRenameType('a.hx', a, 1, 6, 'Bar', [
+			{ file: 'a.hx', source: a },
+			{ file: 'dup.hx', source: dup },
 		], plugin(), typeRefShape(), refShape());
 		assertErr(result);
 	}
@@ -198,14 +153,11 @@ class CrossRenameSliceTest extends Test {
 	 * Refusal: the cursor is not on a type declaration (it lands on a
 	 * field, a value position).
 	 */
-	public function testCursorNotOnTypeDeclRefused():Void {
-		final a:String =
-			'class Foo {\n'
-			+ '\tvar field:Int;\n'
-			+ '}';
+	public function testCursorNotOnTypeDeclRefused(): Void {
+		final a: String = 'class Foo {\n' + '\tvar field:Int;\n' + '}';
 		// Line 2: the field name `field` at col 5 — a value decl, not a type.
-		final result:CrossRenameResult = CrossRename.crossRenameType('a.hx', a, 2, 5, 'renamed', [
-			{file: 'a.hx', source: a},
+		final result: CrossRenameResult = CrossRename.crossRenameType('a.hx', a, 2, 5, 'renamed', [
+			{ file: 'a.hx', source: a },
 		], plugin(), typeRefShape(), refShape());
 		assertErr(result);
 	}
@@ -214,75 +166,77 @@ class CrossRenameSliceTest extends Test {
 	 * Refusal: a scope file that does not parse — completeness cannot be
 	 * proven over an unparseable file, so the whole rename is refused.
 	 */
-	public function testSkipParseScopeFileRefused():Void {
-		final a:String = 'class Foo {}';
-		final broken:String = 'class @@@ not valid haxe @@@';
-		final result:CrossRenameResult = CrossRename.crossRenameType('a.hx', a, 1, 6, 'Bar', [
-			{file: 'a.hx', source: a}, {file: 'broken.hx', source: broken},
+	public function testSkipParseScopeFileRefused(): Void {
+		final a: String = 'class Foo {}';
+		final broken: String = 'class @@@ not valid haxe @@@';
+		final result: CrossRenameResult = CrossRename.crossRenameType('a.hx', a, 1, 6, 'Bar', [
+			{ file: 'a.hx', source: a },
+			{ file: 'broken.hx', source: broken },
 		], plugin(), typeRefShape(), refShape());
 		assertErr(result);
 	}
 
 	/** No-op `Foo` -> `Foo` is refused. */
-	public function testNoOpRefused():Void {
-		final a:String = 'class Foo {}';
-		final result:CrossRenameResult = CrossRename.crossRenameType('a.hx', a, 1, 6, 'Foo', [
-			{file: 'a.hx', source: a},
+	public function testNoOpRefused(): Void {
+		final a: String = 'class Foo {}';
+		final result: CrossRenameResult = CrossRename.crossRenameType('a.hx', a, 1, 6, 'Foo', [
+			{ file: 'a.hx', source: a },
 		], plugin(), typeRefShape(), refShape());
 		assertErr(result);
 	}
 
 	/** An invalid new name is rejected without touching any source. */
-	public function testInvalidNewNameRefused():Void {
-		final a:String = 'class Foo {}';
-		final result:CrossRenameResult = CrossRename.crossRenameType('a.hx', a, 1, 6, '1bad', [
-			{file: 'a.hx', source: a},
+	public function testInvalidNewNameRefused(): Void {
+		final a: String = 'class Foo {}';
+		final result: CrossRenameResult = CrossRename.crossRenameType('a.hx', a, 1, 6, '1bad', [
+			{ file: 'a.hx', source: a },
 		], plugin(), typeRefShape(), refShape());
 		assertErr(result);
 	}
 
 	/** An enum declaration renames just like a class. */
-	public function testEnumDeclKind():Void {
-		final a:String = 'enum Color {\n\tRed;\n}';
-		final b:String =
-			'class Use {\n'
-			+ '\tvar c:Color;\n'
-			+ '}';
-		final changes:Array<FileChange> = okChanges('a.hx', a, 1, 5, 'Hue', [
-			{file: 'a.hx', source: a}, {file: 'b.hx', source: b},
+	public function testEnumDeclKind(): Void {
+		final a: String = 'enum Color {\n\tRed;\n}';
+		final b: String = 'class Use {\n' + '\tvar c:Color;\n' + '}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 5, 'Hue', [
+			{ file: 'a.hx', source: a },
+			{ file: 'b.hx', source: b },
 		]);
 		Assert.equals('enum Hue {\n\tRed;\n}', changeFor(changes, 'a.hx').newSource);
 		Assert.equals('class Use {\n\tvar c:Hue;\n}', changeFor(changes, 'b.hx').newSource);
 	}
 
 	/** An interface declaration renames across its `implements` use. */
-	public function testInterfaceDeclKind():Void {
-		final a:String = 'interface Drawable {}';
-		final b:String = 'class Use implements Drawable {}';
-		final changes:Array<FileChange> = okChanges('a.hx', a, 1, 10, 'Paintable', [
-			{file: 'a.hx', source: a}, {file: 'b.hx', source: b},
+	public function testInterfaceDeclKind(): Void {
+		final a: String = 'interface Drawable {}';
+		final b: String = 'class Use implements Drawable {}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 10, 'Paintable', [
+			{ file: 'a.hx', source: a },
+			{ file: 'b.hx', source: b },
 		]);
 		Assert.equals('interface Paintable {}', changeFor(changes, 'a.hx').newSource);
 		Assert.equals('class Use implements Paintable {}', changeFor(changes, 'b.hx').newSource);
 	}
 
 	/** A typedef declaration renames across a field-type use. */
-	public function testTypedefDeclKind():Void {
-		final a:String = 'typedef Id = Int;';
-		final b:String = 'class Use {\n\tvar id:Id;\n}';
-		final changes:Array<FileChange> = okChanges('a.hx', a, 1, 8, 'Key', [
-			{file: 'a.hx', source: a}, {file: 'b.hx', source: b},
+	public function testTypedefDeclKind(): Void {
+		final a: String = 'typedef Id = Int;';
+		final b: String = 'class Use {\n\tvar id:Id;\n}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 8, 'Key', [
+			{ file: 'a.hx', source: a },
+			{ file: 'b.hx', source: b },
 		]);
 		Assert.equals('typedef Key = Int;', changeFor(changes, 'a.hx').newSource);
 		Assert.equals('class Use {\n\tvar id:Key;\n}', changeFor(changes, 'b.hx').newSource);
 	}
 
 	/** An abstract declaration renames across a `new`-style use. */
-	public function testAbstractDeclKind():Void {
-		final a:String = 'abstract Meters(Int) {}';
-		final b:String = 'class Use {\n\tvar m:Meters;\n}';
-		final changes:Array<FileChange> = okChanges('a.hx', a, 1, 9, 'Feet', [
-			{file: 'a.hx', source: a}, {file: 'b.hx', source: b},
+	public function testAbstractDeclKind(): Void {
+		final a: String = 'abstract Meters(Int) {}';
+		final b: String = 'class Use {\n\tvar m:Meters;\n}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 9, 'Feet', [
+			{ file: 'a.hx', source: a },
+			{ file: 'b.hx', source: b },
 		]);
 		Assert.equals('abstract Feet(Int) {}', changeFor(changes, 'a.hx').newSource);
 		Assert.equals('class Use {\n\tvar m:Feet;\n}', changeFor(changes, 'b.hx').newSource);
@@ -296,35 +250,17 @@ class CrossRenameSliceTest extends Test {
 	 * so it is the type used as a static namespace and IS renamed —
 	 * alongside the import segment and the `:Foo` return-type position.
 	 */
-	public function testStaticReceiverRenamed():Void {
-		final a:String =
-			'class Foo {\n'
-			+ '\tpublic static function create():Foo return null;\n'
-			+ '\tpublic static var CONST = 1;\n'
-			+ '}';
-		final b:String =
-			'import pkg.Foo;\n'
-			+ 'class C {\n'
-			+ '\tfunction m() {\n'
-			+ '\t\tFoo.create();\n'
-			+ '\t\tvar v = Foo.CONST;\n'
-			+ '\t}\n'
-			+ '}';
-		final expectedA:String =
-			'class Bar {\n'
-			+ '\tpublic static function create():Bar return null;\n'
-			+ '\tpublic static var CONST = 1;\n'
-			+ '}';
-		final expectedB:String =
-			'import pkg.Bar;\n'
-			+ 'class C {\n'
-			+ '\tfunction m() {\n'
-			+ '\t\tBar.create();\n'
-			+ '\t\tvar v = Bar.CONST;\n'
-			+ '\t}\n'
-			+ '}';
-		final changes:Array<FileChange> = okChanges('a.hx', a, 1, 6, 'Bar', [
-			{file: 'a.hx', source: a}, {file: 'b.hx', source: b},
+	public function testStaticReceiverRenamed(): Void {
+		final a: String = 'class Foo {\n' + '\tpublic static function create():Foo return null;\n' + '\tpublic static var CONST = 1;\n' + '}';
+		final b: String = 'import pkg.Foo;\n'
+			+ 'class C {\n' + '\tfunction m() {\n' + '\t\tFoo.create();\n' + '\t\tvar v = Foo.CONST;\n' + '\t}\n' + '}';
+		final expectedA: String = 'class Bar {\n'
+			+ '\tpublic static function create():Bar return null;\n' + '\tpublic static var CONST = 1;\n' + '}';
+		final expectedB: String = 'import pkg.Bar;\n'
+			+ 'class C {\n' + '\tfunction m() {\n' + '\t\tBar.create();\n' + '\t\tvar v = Bar.CONST;\n' + '\t}\n' + '}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 6, 'Bar', [
+			{ file: 'a.hx', source: a },
+			{ file: 'b.hx', source: b },
 		]);
 		Assert.equals(2, changes.length);
 		Assert.equals(expectedA, changeFor(changes, 'a.hx').newSource);
@@ -343,20 +279,12 @@ class CrossRenameSliceTest extends Test {
 	 * though file A declares a type `Foo`. Only file A's decl name
 	 * changes; file B is left byte-for-byte untouched (no `FileChange`).
 	 */
-	public function testShadowingLocalValueNotRenamed():Void {
-		final a:String =
-			'class Foo {\n'
-			+ '\tpublic static function create():Void {}\n'
-			+ '}';
-		final b:String =
-			'class C {\n'
-			+ '\tfunction m() {\n'
-			+ '\t\tvar Foo = makeThing();\n'
-			+ '\t\tFoo.run();\n'
-			+ '\t}\n'
-			+ '}';
-		final changes:Array<FileChange> = okChanges('a.hx', a, 1, 6, 'Widget', [
-			{file: 'a.hx', source: a}, {file: 'b.hx', source: b},
+	public function testShadowingLocalValueNotRenamed(): Void {
+		final a: String = 'class Foo {\n' + '\tpublic static function create():Void {}\n' + '}';
+		final b: String = 'class C {\n' + '\tfunction m() {\n' + '\t\tvar Foo = makeThing();\n' + '\t\tFoo.run();\n' + '\t}\n' + '}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 6, 'Widget', [
+			{ file: 'a.hx', source: a },
+			{ file: 'b.hx', source: b },
 		]);
 		// Only the type declaration in a.hx is renamed.
 		Assert.equals(1, changes.length);
@@ -371,23 +299,13 @@ class CrossRenameSliceTest extends Test {
 	 * untouched — the documented residual. Only file A's decl name is
 	 * renamed; file B's `var c = Foo;` and `case Foo:` survive verbatim.
 	 */
-	public function testBareValuePositionNotRenamed():Void {
-		final a:String =
-			'class Foo {\n'
-			+ '\tpublic static function create():Void {}\n'
-			+ '}';
-		final b:String =
-			'class C {\n'
-			+ '\tfunction m(e) {\n'
-			+ '\t\tvar c = Foo;\n'
-			+ '\t\tvar r = switch e {\n'
-			+ '\t\t\tcase Foo: 1;\n'
-			+ '\t\t\tcase _: 0;\n'
-			+ '\t\t};\n'
-			+ '\t}\n'
-			+ '}';
-		final changes:Array<FileChange> = okChanges('a.hx', a, 1, 6, 'Widget', [
-			{file: 'a.hx', source: a}, {file: 'b.hx', source: b},
+	public function testBareValuePositionNotRenamed(): Void {
+		final a: String = 'class Foo {\n' + '\tpublic static function create():Void {}\n' + '}';
+		final b: String = 'class C {\n' + '\tfunction m(e) {\n' + '\t\tvar c = Foo;\n' + '\t\tvar r = switch e {\n' + '\t\t\tcase Foo: 1;\n'
+			+ '\t\t\tcase _: 0;\n' + '\t\t};\n' + '\t}\n' + '}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 6, 'Widget', [
+			{ file: 'a.hx', source: a },
+			{ file: 'b.hx', source: b },
 		]);
 		// Only the type declaration in a.hx is renamed.
 		Assert.equals(1, changes.length);
@@ -402,15 +320,22 @@ class CrossRenameSliceTest extends Test {
 	 * re-parses (the op already validates this; the test makes it
 	 * explicit by re-parsing each `newSource`).
 	 */
-	private function okChanges(cursorFile:String, cursorSource:String, line:Int, col:Int, newName:String,
-			scopeFiles:Array<{file:String, source:String}>):Array<FileChange> {
-		final result:CrossRenameResult = CrossRename.crossRenameType(cursorFile, cursorSource, line, col, newName, scopeFiles, plugin(), typeRefShape(), refShape());
+	private function okChanges(
+		cursorFile: String, cursorSource: String, line: Int, col: Int, newName: String,
+		scopeFiles: Array<{ file: String, source: String }>
+	): Array<FileChange> {
+		final result: CrossRenameResult = CrossRename.crossRenameType(
+			cursorFile, cursorSource, line, col, newName, scopeFiles, plugin(), typeRefShape(), refShape()
+		);
 		switch result {
 			case Ok(changes, advisory):
 				Assert.notNull(advisory);
 				for (c in changes) {
-					var parsed:Bool = true;
-					try plugin().parseFile(c.newSource) catch (_:haxe.Exception) parsed = false;
+					var parsed: Bool = true;
+					try
+						plugin().parseFile(c.newSource)
+					catch (_: haxe.Exception)
+						parsed = false;
 					Assert.isTrue(parsed, 'rewritten ${c.file} should re-parse');
 				}
 				return changes;
@@ -420,33 +345,36 @@ class CrossRenameSliceTest extends Test {
 		}
 	}
 
-	private function assertErr(result:CrossRenameResult):Void {
+	private function assertErr(result: CrossRenameResult): Void {
 		switch result {
-			case Ok(changes, _): Assert.fail('expected Err, got Ok with ${changes.length} change(s)');
-			case Err(_): Assert.pass();
+			case Ok(changes, _):
+				Assert.fail('expected Err, got Ok with ${changes.length} change(s)');
+			case Err(_):
+				Assert.pass();
 		}
 	}
 
-	private function changeFor(changes:Array<FileChange>, file:String):FileChange {
+	private function changeFor(changes: Array<FileChange>, file: String): FileChange {
 		for (c in changes) if (c.file == file) return c;
 		Assert.fail('no change for file $file');
-		return {file: file, newSource: '', count: 0};
+		return { file: file, newSource: '', count: 0 };
 	}
 
-	private function changeOrNull(changes:Array<FileChange>, file:String):Null<FileChange> {
+	private function changeOrNull(changes: Array<FileChange>, file: String): Null<FileChange> {
 		for (c in changes) if (c.file == file) return c;
 		return null;
 	}
 
-	private static function plugin():HaxeQueryPlugin {
+	private static function plugin(): HaxeQueryPlugin {
 		return new HaxeQueryPlugin();
 	}
 
-	private static function typeRefShape():TypeRefShape {
+	private static function typeRefShape(): TypeRefShape {
 		return new HaxeQueryPlugin().typeRefShape();
 	}
 
-	private static function refShape():RefShape {
+	private static function refShape(): RefShape {
 		return new HaxeQueryPlugin().refShape();
 	}
+
 }

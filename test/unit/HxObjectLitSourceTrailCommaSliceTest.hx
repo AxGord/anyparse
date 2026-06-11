@@ -32,75 +32,73 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 @:nullSafety(Strict)
 final class HxObjectLitSourceTrailCommaSliceTest extends Test {
 
-	public function new():Void {
+	public function new(): Void {
 		super();
 	}
 
-	public function testSourceTrailingCommaForcesBreakWhenKnobOn():Void {
+	public function testSourceTrailingCommaForcesBreakWhenKnobOn(): Void {
 		// `{i: 0,}` — single-field object literal whose source has a
 		// trailing `,`. With `trailingCommaObjectLits = true`, the wrap
 		// engine's `forceExceeds` flag fires and the cascade's
 		// `count <= 3` NoWrap rule is bypassed → OnePerLine layout.
-		final src:String = 'class M {\n\tfunction f():Void {\n\t\tvar x:Dynamic = {i: 0,}\n\t}\n}';
-		final out:String = formatWithKnob(src, true);
+		final src: String = 'class M {\n\tfunction f():Void {\n\t\tvar x:Dynamic = {i: 0,}\n\t}\n}';
+		final out: String = formatWithKnob(src, true);
 		// OnePerLine for `{i: 0,}` produces `{\n\t\t\ti: 0,\n\t\t}` —
 		// at minimum verify the close brace lands on its own line.
-		Assert.isTrue(out.indexOf('0,\n') != -1,
-			'expected source `,` retained in OnePerLine layout, got: <$out>');
-		Assert.isTrue(out.indexOf('{i: 0') == -1,
-			'expected break-mode layout (no flat `{i: 0`), got: <$out>');
+		Assert.isTrue(out.indexOf('0,\n') != -1, 'expected source `,` retained in OnePerLine layout, got: <$out>');
+		Assert.isTrue(out.indexOf('{i: 0') == -1, 'expected break-mode layout (no flat `{i: 0`), got: <$out>');
 	}
 
-	public function testSourceNoTrailingCommaStaysFlatWhenKnobOn():Void {
+	public function testSourceNoTrailingCommaStaysFlatWhenKnobOn(): Void {
 		// `{i: 0}` — same shape but no source trailing `,`. The cascade
 		// stays in `NoWrap` mode regardless of the knob — `forceExceeds`
 		// is gated on source presence, not the knob alone.
-		final src:String = 'class M {\n\tfunction f():Void {\n\t\tvar x:Dynamic = {i: 0}\n\t}\n}';
-		final out:String = formatWithKnob(src, true);
-		Assert.isTrue(out.indexOf('{i: 0}') != -1,
-			'expected flat `{i: 0}` when source had no trailing `,`, got: <$out>');
+		final src: String = 'class M {\n\tfunction f():Void {\n\t\tvar x:Dynamic = {i: 0}\n\t}\n}';
+		final out: String = formatWithKnob(src, true);
+		Assert.isTrue(out.indexOf('{i: 0}') != -1, 'expected flat `{i: 0}` when source had no trailing `,`, got: <$out>');
 	}
 
-	public function testSourceTrailingCommaPreservedFlatWhenKnobOff():Void {
+	public function testSourceTrailingCommaPreservedFlatWhenKnobOff(): Void {
 		// Default knob (`false`) — `forceExceeds` conjunction stays false,
 		// so the cascade picks NoWrap (flat). The trailing `,` is now
 		// preserved source-faithfully (`flatTrailingComma = trailPresent`):
 		// the fork keeps a single-line `{i: 0,}` flat with its comma. The
 		// knob only forces break-mode, never adds/removes the flat comma.
-		final src:String = 'class M {\n\tfunction f():Void {\n\t\tvar x:Dynamic = {i: 0,}\n\t}\n}';
-		final out:String = formatWithKnob(src, false);
-		Assert.isTrue(out.indexOf('{i: 0,}') != -1,
-			'expected flat `{i: 0,}` (source `,` preserved) when knob is off, got: <$out>');
+		final src: String = 'class M {\n\tfunction f():Void {\n\t\tvar x:Dynamic = {i: 0,}\n\t}\n}';
+		final out: String = formatWithKnob(src, false);
+		Assert.isTrue(out.indexOf('{i: 0,}') != -1, 'expected flat `{i: 0,}` (source `,` preserved) when knob is off, got: <$out>');
 	}
 
-	public function testSourceTrailingCommaMultiFieldKnobOn():Void {
+	public function testSourceTrailingCommaMultiFieldKnobOn(): Void {
 		// Three-field literal — short enough to flatten by default
 		// (count <= 3, total < 60, no item >= 30). Source trailing `,`
 		// + knob on → forceExceeds → OnePerLine, with appendTrailingComma
 		// emitting the closing `,` after the last field.
-		final src:String = 'class M {\n\tfunction f():Void {\n\t\tvar x:Dynamic = {a: 1, b: 2, c: 3,}\n\t}\n}';
-		final out:String = formatWithKnob(src, true);
+		final src: String = 'class M {\n\tfunction f():Void {\n\t\tvar x:Dynamic = {a: 1, b: 2, c: 3,}\n\t}\n}';
+		final out: String = formatWithKnob(src, true);
 		// `,\n` (sep + hardline) anchors on break-mode layout — flat
 		// output emits `, ` (sep + space) between siblings, never `,\n`,
 		// so the assertion catches a cascade-collapse regression that
 		// looser per-field substring matches would miss.
-		Assert.isTrue(out.indexOf('a: 1,\n') != -1 && out.indexOf('b: 2,\n') != -1 && out.indexOf('c: 3,\n') != -1,
-			'expected each field followed by `,\\n` in OnePerLine layout, got: <$out>');
+		Assert.isTrue(
+			out.indexOf('a: 1,\n') != -1 && out.indexOf('b: 2,\n') != -1 && out.indexOf('c: 3,\n') != -1,
+			'expected each field followed by `,\\n` in OnePerLine layout, got: <$out>'
+		);
 	}
 
-	public function testEmptyObjectLitSafeWhenKnobOn():Void {
+	public function testEmptyObjectLitSafeWhenKnobOn(): Void {
 		// Empty `{}` — no elements, no source `,`. Engine returns the
 		// keepInnerWhenEmpty short-circuit; forceExceeds is not consulted.
-		final src:String = 'class M {\n\tfunction f():Void {\n\t\tvar x:Dynamic = {}\n\t}\n}';
-		final out:String = formatWithKnob(src, true);
-		Assert.isTrue(out.indexOf('{}') != -1,
-			'expected empty `{}` to round-trip, got: <$out>');
+		final src: String = 'class M {\n\tfunction f():Void {\n\t\tvar x:Dynamic = {}\n\t}\n}';
+		final out: String = formatWithKnob(src, true);
+		Assert.isTrue(out.indexOf('{}') != -1, 'expected empty `{}` to round-trip, got: <$out>');
 	}
 
-	private inline function formatWithKnob(src:String, trailingCommaObjectLits:Bool):String {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	private inline function formatWithKnob(src: String, trailingCommaObjectLits: Bool): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.finalNewline = false;
 		opts.trailingCommaObjectLits = trailingCommaObjectLits;
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
+
 }

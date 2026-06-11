@@ -3,7 +3,6 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.query.Cli;
-
 #if sys
 import sys.FileSystem;
 #end
@@ -20,18 +19,17 @@ import sys.FileSystem;
 @:nullSafety(Strict)
 class ApqAstSelectFuzzyTest extends Test {
 
-	public function testUnknownKindIsCleanExit():Void {
+	public function testUnknownKindIsCleanExit(): Void {
 		#if sys
-		final fixture:String = writeFixture('class X { var y:Int; }');
-		Assert.equals(0, Cli.run(['ast', '--select', 'NotAKind', fixture]),
-			'unknown --select kind is an empty result, not an error');
+		final fixture: String = writeFixture('class X { var y:Int; }');
+		Assert.equals(0, Cli.run(['ast', '--select', 'NotAKind', fixture]), 'unknown --select kind is an empty result, not an error');
 		FileSystem.deleteFile(fixture);
 		#else
 		Assert.pass('non-sys target');
 		#end
 	}
 
-	public function testTypoNearKindStillCleanExit():Void {
+	public function testTypoNearKindStillCleanExit(): Void {
 		#if sys
 		// `ClassDeclX` is one edit away from `ClassDecl` (Levenshtein
 		// tier 1: dist=1, well inside FUZZY_MAX_DIST). The substring
@@ -39,23 +37,25 @@ class ApqAstSelectFuzzyTest extends Test {
 		// inverse, so it does not apply here — Levenshtein is what
 		// surfaces the suggestion. Either way the CLI still exits 0
 		// (empty selector result is not an error).
-		final fixture:String = writeFixture('class X {}');
-		Assert.equals(0, Cli.run(['ast', '--select', 'ClassDeclX', fixture]),
-			'a typo near a real kind name is still an empty result, not an error');
+		final fixture: String = writeFixture('class X {}');
+		Assert.equals(
+			0, Cli.run(['ast', '--select', 'ClassDeclX', fixture]), 'a typo near a real kind name is still an empty result, not an error'
+		);
 		FileSystem.deleteFile(fixture);
 		#else
 		Assert.pass('non-sys target');
 		#end
 	}
 
-	public function testChainStillSurfaceFuzzy():Void {
+	public function testChainStillSurfaceFuzzy(): Void {
 		#if sys
 		// First kind segment `ClassDeclX` is the fuzzy-source; the
 		// chain syntax must not break extraction. (The selector itself
 		// still matches no nodes, exit 0.)
-		final fixture:String = writeFixture('class X { var y:Int; }');
-		Assert.equals(0, Cli.run(['ast', '--select', 'ClassDeclX > VarField', fixture]),
-			'fuzzy extraction must use only the first kind segment');
+		final fixture: String = writeFixture('class X { var y:Int; }');
+		Assert.equals(
+			0, Cli.run(['ast', '--select', 'ClassDeclX > VarField', fixture]), 'fuzzy extraction must use only the first kind segment'
+		);
 		FileSystem.deleteFile(fixture);
 		#else
 		Assert.pass('non-sys target');
@@ -63,8 +63,9 @@ class ApqAstSelectFuzzyTest extends Test {
 	}
 
 	#if sys
-	private static function writeFixture(source:String):String {
+	private static function writeFixture(source: String): String {
 		return CliFixture.write('apq_ast_select_fuzzy', source);
 	}
 	#end
+
 }

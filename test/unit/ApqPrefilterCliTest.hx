@@ -47,18 +47,18 @@ import sys.FileSystem;
 class ApqPrefilterCliTest extends Test {
 
 	#if (sys || nodejs)
-	private static var counter:Int = 0;
+	private static var counter: Int = 0;
 	#end
 
-	public function testScanFindsKeyInOnlyOneFile():Void {
+	public function testScanFindsKeyInOnlyOneFile(): Void {
 		#if (sys || nodejs)
 		// `HxVarDecl` appears textually in just one of the three files;
 		// the other two are valid Haxe that the pre-filter skips. The walk
 		// must still parse the key-bearing file and exit 0.
-		final dir:String = writeDir([
-			{name: 'A.hx', source: 'class A { var unrelated:Int = 0; }'},
-			{name: 'B.hx', source: 'class HxVarDecl { var n:Int = 0; }'},
-			{name: 'C.hx', source: 'class C { function f():Void {} }'},
+		final dir: String = writeDir([
+			{ name: 'A.hx', source: 'class A { var unrelated:Int = 0; }' },
+			{ name: 'B.hx', source: 'class HxVarDecl { var n:Int = 0; }' },
+			{ name: 'C.hx', source: 'class C { function f():Void {} }' },
 		]);
 		Assert.equals(0, Cli.run(['refs', 'HxVarDecl', dir]));
 		Assert.equals(0, Cli.run(['uses', 'HxVarDecl', dir]));
@@ -71,14 +71,14 @@ class ApqPrefilterCliTest extends Test {
 		#end
 	}
 
-	public function testScanKeyAbsentEverywhereExitsOk():Void {
+	public function testScanKeyAbsentEverywhereExitsOk(): Void {
 		#if (sys || nodejs)
 		// No file contains the key — every file is pre-filtered (skipped
 		// without parsing). The walk must still exit 0 (0 hits), NOT error,
 		// and must not treat a pre-filter skip as a parse failure.
-		final dir:String = writeDir([
-			{name: 'A.hx', source: 'class A { var n:Int = 0; }'},
-			{name: 'B.hx', source: 'class B { var m:Int = 0; }'},
+		final dir: String = writeDir([
+			{ name: 'A.hx', source: 'class A { var n:Int = 0; }' },
+			{ name: 'B.hx', source: 'class B { var m:Int = 0; }' },
 		]);
 		Assert.equals(0, Cli.run(['refs', 'TotallyAbsentName', dir]));
 		Assert.equals(0, Cli.run(['cases', 'TotallyAbsentName', dir]));
@@ -89,13 +89,13 @@ class ApqPrefilterCliTest extends Test {
 		#end
 	}
 
-	public function testSingleFileKeyAbsentIsOkNotParseError():Void {
+	public function testSingleFileKeyAbsentIsOkNotParseError(): Void {
 		#if (sys || nodejs)
 		// Single named, parseable file whose content lacks the key. The
 		// pre-filter is suppressed in single-file mode, so this is a clean
 		// "0 hits, exit 0" — NOT the single-file parse-failure hard error
 		// (exit 1). This is the edge case the suppression guard protects.
-		final fixture:String = writeFile('class Lonely { var n:Int = 0; }');
+		final fixture: String = writeFile('class Lonely { var n:Int = 0; }');
 		Assert.equals(0, Cli.run(['refs', 'AbsentKey', fixture]));
 		Assert.equals(0, Cli.run(['uses', 'AbsentKey', fixture]));
 		Assert.equals(0, Cli.run(['lit', 'AbsentKey', fixture]));
@@ -106,12 +106,12 @@ class ApqPrefilterCliTest extends Test {
 		#end
 	}
 
-	public function testSingleUnparseableFileStillHardError():Void {
+	public function testSingleUnparseableFileStillHardError(): Void {
 		#if (sys || nodejs)
 		// The pre-filter must not mask a genuine parse failure in
 		// single-file mode: a named file that does not parse is still the
 		// query's answer (EXIT_RUNTIME = 1), unchanged by the pre-filter.
-		final bad:String = writeFile('class {');
+		final bad: String = writeFile('class {');
 		Assert.equals(1, Cli.run(['refs', 'AnyKey', bad]));
 		FileSystem.deleteFile(bad);
 		#else
@@ -120,31 +120,31 @@ class ApqPrefilterCliTest extends Test {
 	}
 
 	#if (sys || nodejs)
-	private static function tempDir():String {
-		final tmp:Null<String> = Sys.getEnv('TMPDIR');
-		if (tmp != null && tmp.length > 0)
-			return StringTools.endsWith(tmp, '/') ? tmp.substring(0, tmp.length - 1) : tmp;
+	private static function tempDir(): String {
+		final tmp: Null<String> = Sys.getEnv('TMPDIR');
+		if (tmp != null && tmp.length > 0) return StringTools.endsWith(tmp, '/') ? tmp.substring(0, tmp.length - 1) : tmp;
 		return '/tmp';
 	}
 
-	private static function writeFile(source:String):String {
+	private static function writeFile(source: String): String {
 		counter++;
-		final path:String = '${tempDir()}/tmp_apq_prefilter_${Sys.time()}_$counter.hx';
+		final path: String = '${tempDir()}/tmp_apq_prefilter_${Sys.time()}_$counter.hx';
 		File.saveContent(path, source);
 		return path;
 	}
 
-	private static function writeDir(files:Array<{name:String, source:String}>):String {
+	private static function writeDir(files: Array<{ name: String, source: String }>): String {
 		counter++;
-		final dir:String = '${tempDir()}/tmp_apq_prefilter_dir_${Sys.time()}_$counter';
+		final dir: String = '${tempDir()}/tmp_apq_prefilter_dir_${Sys.time()}_$counter';
 		FileSystem.createDirectory(dir);
 		for (f in files) File.saveContent('$dir/${f.name}', f.source);
 		return dir;
 	}
 
-	private static function cleanupDir(dir:String, names:Array<String>):Void {
+	private static function cleanupDir(dir: String, names: Array<String>): Void {
 		for (name in names) FileSystem.deleteFile('$dir/$name');
 		FileSystem.deleteDirectory(dir);
 	}
 	#end
+
 }

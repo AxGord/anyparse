@@ -18,19 +18,19 @@ import anyparse.runtime.ParseError;
  */
 class FarthestFailTest extends Test {
 
-	public function testDeepErrorLocusNotFileHead():Void {
-		final src:String = 'class Foo {\n\tfunction bar():Void {\n\t\tvar x:Int = ;\n\t}\n}';
-		final badAt:Int = src.indexOf('= ;') + 2;
+	public function testDeepErrorLocusNotFileHead(): Void {
+		final src: String = 'class Foo {\n\tfunction bar():Void {\n\t\tvar x:Int = ;\n\t}\n}';
+		final badAt: Int = src.indexOf('= ;') + 2;
 		try {
 			HaxeParser.parse(src);
 			Assert.fail('expected a ParseError on broken init expression');
-		} catch (exception:ParseError) {
+		} catch (exception: ParseError) {
 			// Locus must be deep in the method body, far past offset 0.
-			Assert.isTrue(exception.span.from > 20,
-				'span.from ${exception.span.from} should be deep, not file head');
+			Assert.isTrue(exception.span.from > 20, 'span.from ${exception.span.from} should be deep, not file head');
 			// And within a few chars of the offending `;`.
-			Assert.isTrue(Math.abs(exception.span.from - badAt) <= 3,
-				'span.from ${exception.span.from} should be near the bad token at $badAt');
+			Assert.isTrue(
+				Math.abs(exception.span.from - badAt) <= 3, 'span.from ${exception.span.from} should be near the bad token at $badAt'
+			);
 		}
 	}
 
@@ -40,21 +40,23 @@ class FarthestFailTest extends Test {
 	 * "trailing data" locus at the garbage, not be swallowed or
 	 * shifted by the farthest-failure rewrite.
 	 */
-	public function testTrailingDataLocus():Void {
-		final src:String = 'class Foo { } @@@bogus';
-		final badAt:Int = src.indexOf('@@@');
+	public function testTrailingDataLocus(): Void {
+		final src: String = 'class Foo { } @@@bogus';
+		final badAt: Int = src.indexOf('@@@');
 		try {
 			HaxeParser.parse(src);
 			Assert.fail('expected a ParseError on trailing garbage');
-		} catch (exception:ParseError) {
-			Assert.isTrue(Math.abs(exception.span.from - badAt) <= 3,
-				'span.from ${exception.span.from} should pin the trailing garbage at $badAt');
+		} catch (exception: ParseError) {
+			Assert.isTrue(
+				Math.abs(exception.span.from - badAt) <= 3, 'span.from ${exception.span.from} should pin the trailing garbage at $badAt'
+			);
 		}
 	}
 
-	public function testValidSourceStillParses():Void {
-		final src:String = 'class Foo { var x:Int; }';
-		final decl:HxClassDecl = HaxeParser.parse(src);
+	public function testValidSourceStillParses(): Void {
+		final src: String = 'class Foo { var x:Int; }';
+		final decl: HxClassDecl = HaxeParser.parse(src);
 		Assert.notNull(decl);
 	}
+
 }

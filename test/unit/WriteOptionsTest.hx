@@ -26,13 +26,13 @@ import anyparse.grammar.json.JValueWriter;
 @:nullSafety(Strict)
 class WriteOptionsTest extends Test {
 
-	public function new():Void {
+	public function new(): Void {
 		super();
 	}
 
-	public function testJsonWriterAcceptsOptions():Void {
-		final ast:JValue = JValueParser.parse('{"x":1}');
-		final opts:JValueWriteOptions = {
+	public function testJsonWriterAcceptsOptions(): Void {
+		final ast: JValue = JValueParser.parse('{"x":1}');
+		final opts: JValueWriteOptions = {
 			indentChar: Space,
 			indentSize: 4,
 			tabWidth: 4,
@@ -48,30 +48,31 @@ class WriteOptionsTest extends Test {
 			addLineCommentSpace: true,
 			compressSuccessiveParenthesis: true,
 		};
-		final out:String = JValueWriter.write(ast, opts);
+		final out: String = JValueWriter.write(ast, opts);
 		Assert.equals(JValueWriter.write(ast), out);
 	}
 
-	public function testJsonFormatExposesDefaults():Void {
-		final defaults:WriteOptions = JsonFormat.instance.defaultWriteOptions;
+	public function testJsonFormatExposesDefaults(): Void {
+		final defaults: WriteOptions = JsonFormat.instance.defaultWriteOptions;
 		Assert.equals(Space, defaults.indentChar);
 		Assert.equals(4, defaults.indentSize);
 		Assert.equals(120, defaults.lineWidth);
 	}
 
-	public function testHaxeWriterAcceptsOptions():Void {
-		final ast:HxModule = HaxeModuleParser.parse('class Foo {}');
-		final opts:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
-		final out:String = HxModuleWriter.write(ast, opts);
+	public function testHaxeWriterAcceptsOptions(): Void {
+		final ast: HxModule = HaxeModuleParser.parse('class Foo {}');
+		final opts: HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
+		final out: String = HxModuleWriter.write(ast, opts);
 		Assert.equals(HxModuleWriter.write(ast), out);
 	}
 
-	public function testHaxeFormatExposesDefaults():Void {
-		final defaults:WriteOptions = HaxeFormat.instance.defaultWriteOptions;
+	public function testHaxeFormatExposesDefaults(): Void {
+		final defaults: WriteOptions = HaxeFormat.instance.defaultWriteOptions;
 		Assert.equals(Tab, defaults.indentChar);
 		Assert.equals(1, defaults.indentSize);
 		Assert.equals(4, defaults.tabWidth);
 		Assert.equals(160, defaults.lineWidth);
 		Assert.isTrue(defaults.finalNewline);
 	}
+
 }

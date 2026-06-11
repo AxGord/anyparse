@@ -46,146 +46,160 @@ class HxFnExprBodySliceTest extends HxTestHelpers {
 
 	// ======== Class-member position ========
 
-	public function testClassMemberExprBodyTrace():Void {
-		final ast:HxModule = HaxeModuleParser.parse('class Main {\n\tstatic function main() trace("foo");\n}');
-		final fn:HxFnDecl = parseSingleFnFromOnlyClass(ast);
-		Assert.equals('main', (fn.name : String));
+	public function testClassMemberExprBodyTrace(): Void {
+		final ast: HxModule = HaxeModuleParser.parse('class Main {\n\tstatic function main() trace("foo");\n}');
+		final fn: HxFnDecl = parseSingleFnFromOnlyClass(ast);
+		Assert.equals('main', (fn.name: String));
 		assertExprBody(fn.body);
 	}
 
-	public function testClassMemberExprBodyCall():Void {
-		final ast:HxModule = HaxeModuleParser.parse('class C {\n\tfunction f() doStuff(1, 2);\n}');
+	public function testClassMemberExprBodyCall(): Void {
+		final ast: HxModule = HaxeModuleParser.parse('class C {\n\tfunction f() doStuff(1, 2);\n}');
 		assertExprBody(parseSingleFnFromOnlyClass(ast).body);
 	}
 
-	public function testClassMemberExprBodyAssign():Void {
-		final ast:HxModule = HaxeModuleParser.parse('class C {\n\tfunction set() x = 1;\n}');
+	public function testClassMemberExprBodyAssign(): Void {
+		final ast: HxModule = HaxeModuleParser.parse('class C {\n\tfunction set() x = 1;\n}');
 		assertExprBody(parseSingleFnFromOnlyClass(ast).body);
 	}
 
 	// ======== Top-level position ========
 
-	public function testToplevelFnExprBody():Void {
-		final ast:HxModule = HaxeModuleParser.parse('function main() trace("hi");');
+	public function testToplevelFnExprBody(): Void {
+		final ast: HxModule = HaxeModuleParser.parse('function main() trace("hi");');
 		Assert.equals(1, ast.decls.length);
 		switch ast.decls[0].decl {
-			case FnDecl(decl): assertExprBody(decl.body);
-			case _: Assert.fail('expected FnDecl, got ${ast.decls[0].decl}');
+			case FnDecl(decl):
+				assertExprBody(decl.body);
+			case _:
+				Assert.fail('expected FnDecl, got ${ast.decls[0].decl}');
 		}
 	}
 
 	// ======== Source-order regressions ========
 
-	public function testBlockBodyStillWins():Void {
+	public function testBlockBodyStillWins(): Void {
 		// `{`-led input must still route to BlockBody — ExprBody must NOT
 		// be tried first. (BlockExpr could otherwise shadow it.)
-		final ast:HxModule = HaxeModuleParser.parse('class C {\n\tfunction f() { trace("x"); }\n}');
-		final fn:HxFnDecl = parseSingleFnFromOnlyClass(ast);
+		final ast: HxModule = HaxeModuleParser.parse('class C {\n\tfunction f() { trace("x"); }\n}');
+		final fn: HxFnDecl = parseSingleFnFromOnlyClass(ast);
 		switch fn.body {
-			case BlockBody(_): Assert.pass();
-			case _: Assert.fail('expected BlockBody, got ${fn.body}');
+			case BlockBody(_):
+				Assert.pass();
+			case _:
+				Assert.fail('expected BlockBody, got ${fn.body}');
 		}
 	}
 
-	public function testNoBodyStillWins():Void {
+	public function testNoBodyStillWins(): Void {
 		// `;`-led input must still route to NoBody — ExprBody would
 		// otherwise try to parse an empty expression, which fails.
-		final ast:HxModule = HaxeModuleParser.parse('interface I {\n\tfunction f():Void;\n}');
+		final ast: HxModule = HaxeModuleParser.parse('interface I {\n\tfunction f():Void;\n}');
 		switch ast.decls[0].decl {
 			case InterfaceDecl(iface):
 				switch iface.members[0].member {
 					case FnMember(fn): Assert.isTrue(fn.body.match(NoBody));
 					case _: Assert.fail('expected FnMember');
 				}
-			case _: Assert.fail('expected InterfaceDecl');
+			case _:
+				Assert.fail('expected InterfaceDecl');
 		}
 	}
 
 	// ======== Round-trip ========
 
-	public function testRoundTripExprBodyClass():Void {
+	public function testRoundTripExprBodyClass(): Void {
 		roundTrip('class Main {\n\tstatic function main() trace("foo");\n}');
 	}
 
-	public function testRoundTripExprBodyToplevel():Void {
+	public function testRoundTripExprBodyToplevel(): Void {
 		roundTrip('function f() trace("hi");');
 	}
 
-	public function testRoundTripBlockBodyUnaffected():Void {
+	public function testRoundTripBlockBodyUnaffected(): Void {
 		// Sanity: BlockBody round-trip is preserved by the writer's gate
 		// extension — `lcSep` still emitted for the brace-bearing ctor.
 		roundTrip('class C {\n\tfunction f() {\n\t\ttrace("x");\n\t}\n}');
 	}
 
-	public function testRoundTripNoBodyUnaffected():Void {
+	public function testRoundTripNoBodyUnaffected(): Void {
 		// NoBody must still emit `;` directly with no preceding ` `.
-		final src:String = 'interface I {\n\tfunction f():Void;\n}';
+		final src: String = 'interface I {\n\tfunction f():Void;\n}';
 		roundTrip(src);
 		// Negative byte-shape: ensure no `function f():Void ;` (extra space)
 		// — the gate's `_de()` default branch must beat `ExprBody`'s `_dt(' ')`
 		// for `;`-led NoBody.
-		final once:String = HxModuleWriter.write(HaxeModuleParser.parse(src));
+		final once: String = HxModuleWriter.write(HaxeModuleParser.parse(src));
 		Assert.isTrue(once.indexOf(':Void ;') < 0, 'NoBody must not gain a space before `;` (got: $once)');
 	}
 
 	// ======== Slice 5 — elided trailing `;` (issue_83 cluster) ========
 
-	public function testClassMemberExprBodyNoSemi():Void {
+	public function testClassMemberExprBodyNoSemi(): Void {
 		// Last member before `}`, no trailing `;` — the issue_83 gap.
-		final ast:HxModule = HaxeModuleParser.parse('class Main {\n\tpublic static function main2() [1, 2, 3].map(function() trace(i))\n}');
-		final fn:HxFnDecl = parseSingleFnFromOnlyClass(ast);
-		Assert.equals('main2', (fn.name : String));
+		final ast: HxModule = HaxeModuleParser.parse(
+			'class Main {\n\tpublic static function main2() [1, 2, 3].map(function() trace(i))\n}'
+		);
+		final fn: HxFnDecl = parseSingleFnFromOnlyClass(ast);
+		Assert.equals('main2', (fn.name: String));
 		assertExprBody(fn.body);
 	}
 
-	public function testClassMemberExprBodyNoSemiMixed():Void {
+	public function testClassMemberExprBodyNoSemiMixed(): Void {
 		// The exact issue_83 input: a `{}`-bodied member followed by a
 		// no-`;` expr-bodied member as the last member before `}`.
-		final src:String = 'class Main {\n\tpublic static function main() {\n\t\t[1, 2, 3].map(function() trace(i));\n\t}\n\tpublic static function main2() [1, 2, 3].map(function() trace(i))\n}';
-		final ast:HxModule = HaxeModuleParser.parse(src);
+		final src: String = 'class Main {\n\tpublic static function main() {\n\t\t[1, 2, 3].map(function() trace(i));\n\t}\n\tpublic static function main2() [1, 2, 3].map(function() trace(i))\n}';
+		final ast: HxModule = HaxeModuleParser.parse(src);
 		Assert.equals(1, ast.decls.length);
-		final cls:HxClassDecl = expectClassDecl(ast.decls[0]);
+		final cls: HxClassDecl = expectClassDecl(ast.decls[0]);
 		Assert.equals(2, cls.members.length);
 		switch expectFnMember(cls.members[0].member).body {
-			case BlockBody(_): Assert.pass();
-			case _: Assert.fail('member 0 expected BlockBody');
+			case BlockBody(_):
+				Assert.pass();
+			case _:
+				Assert.fail('member 0 expected BlockBody');
 		}
 		assertExprBody(expectFnMember(cls.members[1].member).body);
 	}
 
-	public function testToplevelFnExprBodyNoSemi():Void {
-		final ast:HxModule = HaxeModuleParser.parse('function f() trace("hi")');
+	public function testToplevelFnExprBodyNoSemi(): Void {
+		final ast: HxModule = HaxeModuleParser.parse('function f() trace("hi")');
 		Assert.equals(1, ast.decls.length);
 		switch ast.decls[0].decl {
-			case FnDecl(decl): assertExprBody(decl.body);
-			case _: Assert.fail('expected FnDecl, got ${ast.decls[0].decl}');
+			case FnDecl(decl):
+				assertExprBody(decl.body);
+			case _:
+				Assert.fail('expected FnDecl, got ${ast.decls[0].decl}');
 		}
 	}
 
-	public function testRoundTripExprBodyNoSemi():Void {
+	public function testRoundTripExprBodyNoSemi(): Void {
 		roundTrip('class Main {\n\tpublic static function main2() [1, 2, 3].map(function() trace(i))\n}');
 		roundTrip('function f() trace("hi")');
 	}
 
-	public function testSemiFormStillParses():Void {
+	public function testSemiFormStillParses(): Void {
 		// Regression: the `;`-terminated form is unaffected by @:trailOpt.
-		final ast:HxModule = HaxeModuleParser.parse('class C {\n\tfunction f() doStuff(1, 2);\n}');
+		final ast: HxModule = HaxeModuleParser.parse('class C {\n\tfunction f() doStuff(1, 2);\n}');
 		assertExprBody(parseSingleFnFromOnlyClass(ast).body);
 	}
 
 	// ======== Helpers ========
 
-	private function parseSingleFnFromOnlyClass(ast:HxModule):HxFnDecl {
+	private function parseSingleFnFromOnlyClass(ast: HxModule): HxFnDecl {
 		Assert.equals(1, ast.decls.length);
-		final cls:HxClassDecl = expectClassDecl(ast.decls[0]);
+		final cls: HxClassDecl = expectClassDecl(ast.decls[0]);
 		Assert.equals(1, cls.members.length);
 		return expectFnMember(cls.members[0].member);
 	}
 
-	private function assertExprBody(body:HxFnBody):Void {
+	private function assertExprBody(body: HxFnBody): Void {
 		switch body {
-			case ExprBody(_): Assert.pass();
-			case _: Assert.fail('expected ExprBody, got $body');
+			case ExprBody(_):
+				Assert.pass();
+			case _:
+				Assert.fail('expected ExprBody, got $body');
 		}
 	}
+
 }

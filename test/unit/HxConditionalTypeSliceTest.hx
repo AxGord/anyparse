@@ -30,59 +30,57 @@ class HxConditionalTypeSliceTest extends HxTestHelpers {
 
 	// -- Isolated ctor: bare-ident cond, both branches present --
 
-	public function testConditionalTypedefIfElse():Void {
-		final module:HxModule = HaxeModuleParser.parse('typedef X = #if js String; #else Int; #end');
+	public function testConditionalTypedefIfElse(): Void {
+		final module: HxModule = HaxeModuleParser.parse('typedef X = #if js String; #else Int; #end');
 		Assert.equals(1, module.decls.length);
-		final td:HxTypedefDecl = expectTypedefDecl(module.decls[0]);
-		Assert.equals('X', (td.name : String));
-		final cond:HxConditionalType = expectConditionalType(td.type);
-		Assert.equals('js', (cond.cond : String));
-		Assert.equals('String', (expectNamedType(cond.type).name : String));
-		final elseClause:Null<HxConditionalTypeElse> = cond.elseClause;
+		final td: HxTypedefDecl = expectTypedefDecl(module.decls[0]);
+		Assert.equals('X', (td.name: String));
+		final cond: HxConditionalType = expectConditionalType(td.type);
+		Assert.equals('js', (cond.cond: String));
+		Assert.equals('String', (expectNamedType(cond.type).name: String));
+		final elseClause: Null<HxConditionalTypeElse> = cond.elseClause;
 		Assert.notNull(elseClause);
-		if (elseClause != null)
-			Assert.equals('Int', (expectNamedType(elseClause.type).name : String));
+		if (elseClause != null) Assert.equals('Int', (expectNamedType(elseClause.type).name: String));
 	}
 
 	// -- Isolated ctor: no `#else` clause (elseClause stays null) --
 
-	public function testConditionalTypedefNoElse():Void {
-		final module:HxModule = HaxeModuleParser.parse('typedef X = #if js String; #end');
-		final td:HxTypedefDecl = expectTypedefDecl(module.decls[0]);
-		final cond:HxConditionalType = expectConditionalType(td.type);
-		Assert.equals('js', (cond.cond : String));
-		Assert.equals('String', (expectNamedType(cond.type).name : String));
+	public function testConditionalTypedefNoElse(): Void {
+		final module: HxModule = HaxeModuleParser.parse('typedef X = #if js String; #end');
+		final td: HxTypedefDecl = expectTypedefDecl(module.decls[0]);
+		final cond: HxConditionalType = expectConditionalType(td.type);
+		Assert.equals('js', (cond.cond: String));
+		Assert.equals('String', (expectNamedType(cond.type).name: String));
 		Assert.isNull(cond.elseClause);
 	}
 
 	// -- Parenthesised condition (the corpus `(haxe_ver >= 4)` shape) --
 
-	public function testConditionalTypedefParenCond():Void {
-		final module:HxModule = HaxeModuleParser.parse('typedef X = #if (haxe_ver >= 4) String; #else Int; #end');
-		final td:HxTypedefDecl = expectTypedefDecl(module.decls[0]);
-		final cond:HxConditionalType = expectConditionalType(td.type);
-		final elseClause:Null<HxConditionalTypeElse> = cond.elseClause;
+	public function testConditionalTypedefParenCond(): Void {
+		final module: HxModule = HaxeModuleParser.parse('typedef X = #if (haxe_ver >= 4) String; #else Int; #end');
+		final td: HxTypedefDecl = expectTypedefDecl(module.decls[0]);
+		final cond: HxConditionalType = expectConditionalType(td.type);
+		final elseClause: Null<HxConditionalTypeElse> = cond.elseClause;
 		Assert.notNull(elseClause);
-		if (elseClause != null)
-			Assert.equals('Int', (expectNamedType(elseClause.type).name : String));
+		if (elseClause != null) Assert.equals('Int', (expectNamedType(elseClause.type).name: String));
 	}
 
 	// -- Verbatim corpus form: whitespace/issue_531_conditional_typedef --
 
-	public function testConditionalTypedefCorpusForm():Void {
-		final module:HxModule = HaxeModuleParser.parse(
+	public function testConditionalTypedefCorpusForm(): Void {
+		final module: HxModule = HaxeModuleParser.parse(
 			'typedef ChildProcessExecCallback = #if (haxe_ver >= 4) (error : Null<ChildProcessExecError>, stdout : EitherType<Buffer, String>, \nstderr : EitherType<Buffer, String>) -> Void; #else Null<ChildProcessExecError>->EitherType<Buffer, String>->EitherType<Buffer, String>->Void; #end'
 		);
 		Assert.equals(1, module.decls.length);
-		final td:HxTypedefDecl = expectTypedefDecl(module.decls[0]);
-		Assert.equals('ChildProcessExecCallback', (td.name : String));
-		final cond:HxConditionalType = expectConditionalType(td.type);
+		final td: HxTypedefDecl = expectTypedefDecl(module.decls[0]);
+		Assert.equals('ChildProcessExecCallback', (td.name: String));
+		final cond: HxConditionalType = expectConditionalType(td.type);
 		Assert.notNull(cond.elseClause);
 	}
 
 	// -- Idempotency on the corpus form --
 
-	public function testConditionalTypedefRoundTrip():Void {
+	public function testConditionalTypedefRoundTrip(): Void {
 		roundTrip(
 			'typedef ChildProcessExecCallback = #if (haxe_ver >= 4) (error : Null<ChildProcessExecError>, stdout : EitherType<Buffer, String>, \nstderr : EitherType<Buffer, String>) -> Void; #else Null<ChildProcessExecError>->EitherType<Buffer, String>->EitherType<Buffer, String>->Void; #end'
 		);
@@ -90,9 +88,10 @@ class HxConditionalTypeSliceTest extends HxTestHelpers {
 
 	// -- Regression: a plain typedef is unaffected by the new ctor --
 
-	public function testNoConditionalTypeRegression():Void {
-		final module:HxModule = HaxeModuleParser.parse('typedef Y = Array<Int>;');
-		final td:HxTypedefDecl = expectTypedefDecl(module.decls[0]);
-		Assert.equals('Array', (expectNamedType(td.type).name : String));
+	public function testNoConditionalTypeRegression(): Void {
+		final module: HxModule = HaxeModuleParser.parse('typedef Y = Array<Int>;');
+		final td: HxTypedefDecl = expectTypedefDecl(module.decls[0]);
+		Assert.equals('Array', (expectNamedType(td.type).name: String));
 	}
+
 }

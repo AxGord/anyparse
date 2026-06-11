@@ -23,11 +23,11 @@ import anyparse.runtime.Span;
  */
 class SpanModeProbe extends Test {
 
-	public function testParseReturnsPairedRootWithSpans():Void {
-		final source:String = 'class Foo { var x:Int; }';
-		final root:Dynamic = HaxeModuleSpanParser.parse(source);
+	public function testParseReturnsPairedRootWithSpans(): Void {
+		final source: String = 'class Foo { var x:Int; }';
+		final root: Dynamic = HaxeModuleSpanParser.parse(source);
 		Assert.notNull(root);
-		final spans:Array<Span> = collectSpans(root);
+		final spans: Array<Span> = collectSpans(root);
 		Assert.isTrue(spans.length > 0, 'AST must carry at least one span');
 		for (s in spans) {
 			Assert.isTrue(s.from <= s.to, 'span from=${s.from} to=${s.to} must satisfy from<=to');
@@ -36,39 +36,39 @@ class SpanModeProbe extends Test {
 		}
 	}
 
-	public function testTopLevelSpansAreOrderedByStart():Void {
-		final source:String = 'class A {}\nclass B {}\nclass C {}';
-		final root:Dynamic = HaxeModuleSpanParser.parse(source);
-		final spans:Array<Span> = collectSpans(root);
-		var maxFrom:Int = -1;
+	public function testTopLevelSpansAreOrderedByStart(): Void {
+		final source: String = 'class A {}\nclass B {}\nclass C {}';
+		final root: Dynamic = HaxeModuleSpanParser.parse(source);
+		final spans: Array<Span> = collectSpans(root);
+		var maxFrom: Int = -1;
 		for (s in spans) if (s.from > maxFrom) maxFrom = s.from;
 		Assert.isTrue(maxFrom >= 0, 'at least one span must be present');
 	}
 
-	public function testSpansCoverSourceUpToEnd():Void {
-		final source:String = 'class A { var x:Int = 1; }';
-		final root:Dynamic = HaxeModuleSpanParser.parse(source);
-		final spans:Array<Span> = collectSpans(root);
-		var maxTo:Int = 0;
+	public function testSpansCoverSourceUpToEnd(): Void {
+		final source: String = 'class A { var x:Int = 1; }';
+		final root: Dynamic = HaxeModuleSpanParser.parse(source);
+		final spans: Array<Span> = collectSpans(root);
+		var maxTo: Int = 0;
 		for (s in spans) if (s.to > maxTo) maxTo = s.to;
 		Assert.isTrue(maxTo > 0, 'must have positive end position');
 		Assert.isTrue(maxTo <= source.length, 'must not exceed source length');
 	}
 
-	private static function collectSpans(value:Dynamic):Array<Span> {
-		final out:Array<Span> = [];
+	private static function collectSpans(value: Dynamic): Array<Span> {
+		final out: Array<Span> = [];
 		walk(value, out);
 		return out;
 	}
 
-	private static function walk(value:Dynamic, out:Array<Span>):Void {
+	private static function walk(value: Dynamic, out: Array<Span>): Void {
 		if (value == null) return;
 		if (value is String) return;
 		if (Std.isOfType(value, Span)) {
 			out.push(cast value);
 			return;
 		}
-		final t:Type.ValueType = Type.typeof(value);
+		final t: Type.ValueType = Type.typeof(value);
 		switch t {
 			case TEnum(_):
 				for (p in Type.enumParameters(value)) walk(p, out);
@@ -76,10 +76,11 @@ class SpanModeProbe extends Test {
 				for (f in Reflect.fields(value)) walk(Reflect.field(value, f), out);
 			case TClass(_):
 				if (Std.isOfType(value, Array)) {
-					final arr:Array<Dynamic> = cast value;
+					final arr: Array<Dynamic> = cast value;
 					for (e in arr) walk(e, out);
 				}
 			case _:
 		}
 	}
+
 }

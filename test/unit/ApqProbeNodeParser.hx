@@ -5,4 +5,5 @@ package unit;
 class ApqProbeNodeParser {
 
 	private function new() {}
+
 }

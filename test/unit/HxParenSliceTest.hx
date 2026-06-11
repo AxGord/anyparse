@@ -27,70 +27,70 @@ import anyparse.runtime.ParseError;
  */
 class HxParenSliceTest extends HxTestHelpers {
 
-	public function testBareIntInParens():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = (1); }');
+	public function testBareIntInParens(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = (1); }');
 		switch decl.init {
 			case ParenExpr(IntLit(v)):
-				Assert.equals(1, (v : Int));
+				Assert.equals(1, (v: Int));
 			case null, _:
 				Assert.fail('expected ParenExpr(IntLit(1)), got ${decl.init}');
 		}
 	}
 
-	public function testSumInParens():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = (1 + 2); }');
+	public function testSumInParens(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = (1 + 2); }');
 		switch decl.init {
 			case ParenExpr(Add(IntLit(l), IntLit(r))):
-				Assert.equals(1, (l : Int));
-				Assert.equals(2, (r : Int));
+				Assert.equals(1, (l: Int));
+				Assert.equals(2, (r: Int));
 			case null, _:
 				Assert.fail('expected ParenExpr(Add(1, 2)), got ${decl.init}');
 		}
 	}
 
-	public function testParensOverridePrecedence():Void {
+	public function testParensOverridePrecedence(): Void {
 		// 1 * (2 + 3) → Mul(1, ParenExpr(Add(2, 3))). Without parens
 		// the same tokens parse as Add(Mul(1, 2), 3) because `*` has
 		// higher precedence than `+`. The paren group is an atom from
 		// the outer loop's point of view, so `*` binds the whole group.
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = 1 * (2 + 3); }');
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = 1 * (2 + 3); }');
 		switch decl.init {
 			case Mul(IntLit(a), ParenExpr(Add(IntLit(b), IntLit(c)))):
-				Assert.equals(1, (a : Int));
-				Assert.equals(2, (b : Int));
-				Assert.equals(3, (c : Int));
+				Assert.equals(1, (a: Int));
+				Assert.equals(2, (b: Int));
+				Assert.equals(3, (c: Int));
 			case null, _:
 				Assert.fail('expected Mul(1, ParenExpr(Add(2, 3))), got ${decl.init}');
 		}
 	}
 
-	public function testNestedParens():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = ((1)); }');
+	public function testNestedParens(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = ((1)); }');
 		switch decl.init {
 			case ParenExpr(ParenExpr(IntLit(v))):
-				Assert.equals(1, (v : Int));
+				Assert.equals(1, (v: Int));
 			case null, _:
 				Assert.fail('expected ParenExpr(ParenExpr(IntLit(1))), got ${decl.init}');
 		}
 	}
 
-	public function testWhitespaceInsideParens():Void {
+	public function testWhitespaceInsideParens(): Void {
 		// `(  1  +  2  )` — the Lowering Case 3 body emits skipWs
 		// before the inner call and before the closing `)`. The
 		// outer whitespace policy (`@:ws` on `HxClassDecl`) carries
 		// into the sub-rule via the same `skipWs` calls Lowering
 		// inlines between operator literals.
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = (  1  +  2  ); }');
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = (  1  +  2  ); }');
 		switch decl.init {
 			case ParenExpr(Add(IntLit(l), IntLit(r))):
-				Assert.equals(1, (l : Int));
-				Assert.equals(2, (r : Int));
+				Assert.equals(1, (l: Int));
+				Assert.equals(2, (r: Int));
 			case null, _:
 				Assert.fail('expected ParenExpr(Add(1, 2)), got ${decl.init}');
 		}
 	}
 
-	public function testRejectsUnmatchedParen():Void {
+	public function testRejectsUnmatchedParen(): Void {
 		// `(1 +;` — open paren, int, operator without right operand,
 		// no matching close. `parseHxExprAtom` on the right side of
 		// `+` fails to find any atom and throws, which propagates

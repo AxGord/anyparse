@@ -3,7 +3,6 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.query.Cli;
-
 #if sys
 import sys.FileSystem;
 import sys.io.File;
@@ -24,14 +23,16 @@ import sys.io.File;
  */
 class ApqFromFileCliTest extends Test {
 
-	public function testAddMemberFromFile():Void {
+	public function testAddMemberFromFile(): Void {
 		#if sys
-		final fixture:String = CliFixture.write('apq_fromfile', 'class C {\n\tvar x:Int;\n}\n');
+		final fixture: String = CliFixture.write('apq_fromfile', 'class C {\n\tvar x:Int;\n}\n');
 		// Member text carries both `$` (interpolation) and single quotes —
 		// the exact shape the shell would mangle as a positional argument.
-		final member:String = CliFixture.write('apq_member', "public function greet():String {\n\tfinal w:String = 'hi';\n\treturn 'a $w';\n}");
+		final member: String = CliFixture.write(
+			'apq_member', "public function greet():String {\n\tfinal w:String = 'hi';\n\treturn 'a $w';\n}"
+		);
 		Assert.equals(0, Cli.run(['add-member', fixture, '--type', 'C', '--from-file', member, '--write']));
-		final result:String = File.getContent(fixture);
+		final result: String = File.getContent(fixture);
 		Assert.isTrue(result.indexOf('function greet') >= 0, 'member from file must be inserted');
 		Assert.isTrue(result.indexOf("'a $w'") >= 0, 'the $-and-quote content must survive verbatim');
 		FileSystem.deleteFile(fixture);
@@ -41,13 +42,13 @@ class ApqFromFileCliTest extends Test {
 		#end
 	}
 
-	public function testAddElementFromFile():Void {
+	public function testAddElementFromFile(): Void {
 		#if sys
-		final fixture:String = CliFixture.write('apq_fromfile', 'class C {\n\tvar x:Int;\n}\n');
-		final element:String = CliFixture.write('apq_element', "function f():Void { trace('$x'); }");
+		final fixture: String = CliFixture.write('apq_fromfile', 'class C {\n\tvar x:Int;\n}\n');
+		final element: String = CliFixture.write('apq_element', "function f():Void { trace('$x'); }");
 		// Append into the class body (point at the `class` keyword).
 		Assert.equals(0, Cli.run(['add-element', fixture, '--append', '1:0', '--from-file', element, '--write']));
-		final result:String = File.getContent(fixture);
+		final result: String = File.getContent(fixture);
 		Assert.isTrue(result.indexOf('function f') >= 0, 'element from file must be appended');
 		FileSystem.deleteFile(fixture);
 		FileSystem.deleteFile(element);
@@ -56,12 +57,12 @@ class ApqFromFileCliTest extends Test {
 		#end
 	}
 
-	public function testReplaceNodeFromFile():Void {
+	public function testReplaceNodeFromFile(): Void {
 		#if sys
-		final fixture:String = CliFixture.write('apq_fromfile', 'class C {\n\tfunction f():Void {\n\t\tvar y = 0;\n\t}\n}\n');
-		final repl:String = CliFixture.write('apq_repl', 'var y = 42');
+		final fixture: String = CliFixture.write('apq_fromfile', 'class C {\n\tfunction f():Void {\n\t\tvar y = 0;\n\t}\n}\n');
+		final repl: String = CliFixture.write('apq_repl', 'var y = 42');
 		Assert.equals(0, Cli.run(['replace-node', fixture, '--at', '3:2', '--from-file', repl, '--write']));
-		final result:String = File.getContent(fixture);
+		final result: String = File.getContent(fixture);
 		Assert.isTrue(result.indexOf('var y = 42') >= 0, 'node source must come from the file');
 		FileSystem.deleteFile(fixture);
 		FileSystem.deleteFile(repl);
@@ -70,10 +71,10 @@ class ApqFromFileCliTest extends Test {
 		#end
 	}
 
-	public function testInlineAndFromFileConflict():Void {
+	public function testInlineAndFromFileConflict(): Void {
 		#if sys
-		final fixture:String = CliFixture.write('apq_fromfile', 'class C {\n\tvar x:Int;\n}\n');
-		final member:String = CliFixture.write('apq_member', 'var z:Int;');
+		final fixture: String = CliFixture.write('apq_fromfile', 'class C {\n\tvar x:Int;\n}\n');
+		final member: String = CliFixture.write('apq_member', 'var z:Int;');
 		// Both an inline member and --from-file → runtime error, file untouched.
 		Assert.equals(1, Cli.run(['add-member', fixture, '--type', 'C', 'var q:Int;', '--from-file', member]));
 		FileSystem.deleteFile(fixture);
@@ -83,13 +84,14 @@ class ApqFromFileCliTest extends Test {
 		#end
 	}
 
-	public function testFromFileMissingPath():Void {
+	public function testFromFileMissingPath(): Void {
 		#if sys
-		final fixture:String = CliFixture.write('apq_fromfile', 'class C {\n\tvar x:Int;\n}\n');
+		final fixture: String = CliFixture.write('apq_fromfile', 'class C {\n\tvar x:Int;\n}\n');
 		Assert.equals(1, Cli.run(['add-member', fixture, '--type', 'C', '--from-file', '/no/such/file.hx']));
 		FileSystem.deleteFile(fixture);
 		#else
 		Assert.pass('non-sys target');
 		#end
 	}
+
 }

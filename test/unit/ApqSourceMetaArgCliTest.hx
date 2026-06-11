@@ -32,14 +32,14 @@ import sys.FileSystem;
 class ApqSourceMetaArgCliTest extends Test {
 
 	#if (sys || nodejs)
-	private static var counter:Int = 0;
+	private static var counter: Int = 0;
 	#end
 
 	// ===== apq source =====
 
-	public function testSourceWholeFileExitsOk():Void {
+	public function testSourceWholeFileExitsOk(): Void {
 		#if (sys || nodejs)
-		final f:String = writeFile('a\nb\nc\nd\ne\n');
+		final f: String = writeFile('a\nb\nc\nd\ne\n');
 		Assert.equals(0, Cli.run(['source', f]));
 		FileSystem.deleteFile(f);
 		#else
@@ -47,9 +47,9 @@ class ApqSourceMetaArgCliTest extends Test {
 		#end
 	}
 
-	public function testSourceRangeFormsExitOk():Void {
+	public function testSourceRangeFormsExitOk(): Void {
 		#if (sys || nodejs)
-		final f:String = writeFile('a\nb\nc\nd\ne\n');
+		final f: String = writeFile('a\nb\nc\nd\ne\n');
 		Assert.equals(0, Cli.run(['source', f, '--range', '2:4']), 'L:L2 range');
 		Assert.equals(0, Cli.run(['source', f, '--range', '3:']), 'L: to EOF');
 		Assert.equals(0, Cli.run(['source', f, '--range', ':2']), ':L2 start');
@@ -60,9 +60,9 @@ class ApqSourceMetaArgCliTest extends Test {
 		#end
 	}
 
-	public function testSourceNumberFlagExitsOk():Void {
+	public function testSourceNumberFlagExitsOk(): Void {
 		#if (sys || nodejs)
-		final f:String = writeFile('a\nb\nc\n');
+		final f: String = writeFile('a\nb\nc\n');
 		Assert.equals(0, Cli.run(['source', f, '--number']), '--number whole file');
 		Assert.equals(0, Cli.run(['source', f, '--range', '2:3', '-n']), '-n alias with range');
 		FileSystem.deleteFile(f);
@@ -71,10 +71,10 @@ class ApqSourceMetaArgCliTest extends Test {
 		#end
 	}
 
-	public function testSourceOutOfRangeClampsCleanly():Void {
+	public function testSourceOutOfRangeClampsCleanly(): Void {
 		#if (sys || nodejs)
 		// Both bounds past EOF clamp to the last line — no crash, exit 0.
-		final f:String = writeFile('a\nb\nc\n');
+		final f: String = writeFile('a\nb\nc\n');
 		Assert.equals(0, Cli.run(['source', f, '--range', '99:200']), 'past-EOF clamps');
 		Assert.equals(0, Cli.run(['source', f, '--range', ':999']), 'past-EOF hi clamps');
 		Assert.equals(0, Cli.run(['source', f, '--range', '0:1']), 'below-1 lo clamps');
@@ -84,7 +84,7 @@ class ApqSourceMetaArgCliTest extends Test {
 		#end
 	}
 
-	public function testSourceMissingFileIsRuntimeError():Void {
+	public function testSourceMissingFileIsRuntimeError(): Void {
 		#if (sys || nodejs)
 		Assert.equals(1, Cli.run(['source', '${tempDir()}/tmp_apq_src_definitely_absent_$counter.txt']));
 		#else
@@ -92,9 +92,9 @@ class ApqSourceMetaArgCliTest extends Test {
 		#end
 	}
 
-	public function testSourceMalformedRangeIsUsageError():Void {
+	public function testSourceMalformedRangeIsUsageError(): Void {
 		#if (sys || nodejs)
-		final f:String = writeFile('a\nb\n');
+		final f: String = writeFile('a\nb\n');
 		Assert.equals(2, Cli.run(['source', f, '--range', 'foo']), 'non-int range');
 		FileSystem.deleteFile(f);
 		#else
@@ -102,20 +102,20 @@ class ApqSourceMetaArgCliTest extends Test {
 		#end
 	}
 
-	public function testSourceMissingFileArgIsUsageError():Void {
+	public function testSourceMissingFileArgIsUsageError(): Void {
 		Assert.equals(2, Cli.run(['source']));
 	}
 
-	public function testSourceHelpExitsOk():Void {
+	public function testSourceHelpExitsOk(): Void {
 		Assert.equals(0, Cli.run(['source', '--help']));
 	}
 
-	public function testSourceLangFlagAcceptedAndIgnored():Void {
+	public function testSourceLangFlagAcceptedAndIgnored(): Void {
 		#if (sys || nodejs)
 		// The hxq shim auto-injects `--lang haxe`; `source` does no parsing
 		// so it must accept and ignore the flag rather than treat it (or its
 		// value) as the file argument.
-		final f:String = writeFile('only line\n');
+		final f: String = writeFile('only line\n');
 		Assert.equals(0, Cli.run(['source', '--lang', 'haxe', f]));
 		FileSystem.deleteFile(f);
 		#else
@@ -125,17 +125,15 @@ class ApqSourceMetaArgCliTest extends Test {
 
 	// ===== apq meta '@:tag(arg)' inline arg filter =====
 
-	public function testMetaArgFilterFindsPropagateExprPosition():Void {
+	public function testMetaArgFilterFindsPropagateExprPosition(): Void {
 		#if (sys || nodejs)
 		// A field carrying `@:fmt(propagateExprPosition)` matches; sibling
 		// `@:fmt` fields without that arg do not. Both forms parse and the
 		// walk exits 0 (a match) — proving the inline `(arg)` split does not
 		// break the annotation tag itself.
-		final f:String = writeFile(
-			'class X {\n'
-			+ '  @:fmt(propagateExprPosition) var a:Int = 0;\n'
-			+ '  @:fmt(somethingElse) var b:Int = 0;\n'
-			+ '}\n');
+		final f: String = writeFile(
+			'class X {\n' + '  @:fmt(propagateExprPosition) var a:Int = 0;\n' + '  @:fmt(somethingElse) var b:Int = 0;\n' + '}\n'
+		);
 		Assert.equals(0, Cli.run(['meta', '@:fmt(propagateExprPosition)', f]));
 		FileSystem.deleteFile(f);
 		#else
@@ -143,14 +141,11 @@ class ApqSourceMetaArgCliTest extends Test {
 		#end
 	}
 
-	public function testMetaArgFilterCalleeFormMatches():Void {
+	public function testMetaArgFilterCalleeFormMatches(): Void {
 		#if (sys || nodejs)
 		// `@:tag(arg)` also matches a call-form top-level arg `arg(...)`
 		// (callee match), not just the bare ident.
-		final f:String = writeFile(
-			'class X {\n'
-			+ '  @:fmt(trailingComma(\'trailingCommaArrays\')) var a:Int = 0;\n'
-			+ '}\n');
+		final f: String = writeFile('class X {\n' + '  @:fmt(trailingComma(\'trailingCommaArrays\')) var a:Int = 0;\n' + '}\n');
 		Assert.equals(0, Cli.run(['meta', '@:fmt(trailingComma)', f]));
 		FileSystem.deleteFile(f);
 		#else
@@ -158,15 +153,13 @@ class ApqSourceMetaArgCliTest extends Test {
 		#end
 	}
 
-	public function testMetaNoArgFormUnchanged():Void {
+	public function testMetaNoArgFormUnchanged(): Void {
 		#if (sys || nodejs)
 		// Bare `@:fmt` (no inline arg) behaves exactly as before — every
 		// `@:fmt` field is in scope, exit 0.
-		final f:String = writeFile(
-			'class X {\n'
-			+ '  @:fmt(propagateExprPosition) var a:Int = 0;\n'
-			+ '  @:fmt(somethingElse) var b:Int = 0;\n'
-			+ '}\n');
+		final f: String = writeFile(
+			'class X {\n' + '  @:fmt(propagateExprPosition) var a:Int = 0;\n' + '  @:fmt(somethingElse) var b:Int = 0;\n' + '}\n'
+		);
 		Assert.equals(0, Cli.run(['meta', '@:fmt', f]));
 		FileSystem.deleteFile(f);
 		#else
@@ -174,16 +167,13 @@ class ApqSourceMetaArgCliTest extends Test {
 		#end
 	}
 
-	public function testMetaArgFilterNoMatchIsCleanEmpty():Void {
+	public function testMetaArgFilterNoMatchIsCleanEmpty(): Void {
 		#if (sys || nodejs)
 		// An inline arg that matches no top-level argument anywhere is a
 		// clean "0 hits, exit 0" (nudge to stderr) — NOT a parse-failure
 		// hard error. The substring `propagate` (a prefix of the real flag)
 		// must NOT match: the filter is exact per arg, not a substring scan.
-		final f:String = writeFile(
-			'class X {\n'
-			+ '  @:fmt(propagateExprPosition) var a:Int = 0;\n'
-			+ '}\n');
+		final f: String = writeFile('class X {\n' + '  @:fmt(propagateExprPosition) var a:Int = 0;\n' + '}\n');
 		Assert.equals(0, Cli.run(['meta', '@:fmt(zzzNoSuchFlag)', f]), 'unknown arg → empty');
 		Assert.equals(0, Cli.run(['meta', '@:fmt(propagate)', f]), 'prefix is not a match');
 		FileSystem.deleteFile(f);
@@ -192,13 +182,10 @@ class ApqSourceMetaArgCliTest extends Test {
 		#end
 	}
 
-	public function testMetaArgFilterComposesWithOnKind():Void {
+	public function testMetaArgFilterComposesWithOnKind(): Void {
 		#if (sys || nodejs)
 		// Inline arg filter composes with `--on` (decl-kind scope).
-		final f:String = writeFile(
-			'class X {\n'
-			+ '  @:fmt(propagateExprPosition) var a:Int = 0;\n'
-			+ '}\n');
+		final f: String = writeFile('class X {\n' + '  @:fmt(propagateExprPosition) var a:Int = 0;\n' + '}\n');
 		Assert.equals(0, Cli.run(['meta', '@:fmt(propagateExprPosition)', '--on', 'VarMember', f]));
 		FileSystem.deleteFile(f);
 		#else
@@ -207,18 +194,18 @@ class ApqSourceMetaArgCliTest extends Test {
 	}
 
 	#if (sys || nodejs)
-	private static function tempDir():String {
-		final tmp:Null<String> = Sys.getEnv('TMPDIR');
-		if (tmp != null && tmp.length > 0)
-			return StringTools.endsWith(tmp, '/') ? tmp.substring(0, tmp.length - 1) : tmp;
+	private static function tempDir(): String {
+		final tmp: Null<String> = Sys.getEnv('TMPDIR');
+		if (tmp != null && tmp.length > 0) return StringTools.endsWith(tmp, '/') ? tmp.substring(0, tmp.length - 1) : tmp;
 		return '/tmp';
 	}
 
-	private static function writeFile(source:String):String {
+	private static function writeFile(source: String): String {
 		counter++;
-		final path:String = '${tempDir()}/tmp_apq_srcmeta_${Sys.time()}_$counter.hx';
+		final path: String = '${tempDir()}/tmp_apq_srcmeta_${Sys.time()}_$counter.hx';
 		File.saveContent(path, source);
 		return path;
 	}
 	#end
+
 }

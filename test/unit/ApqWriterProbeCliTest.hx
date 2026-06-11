@@ -3,7 +3,6 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.query.Cli;
-
 #if sys
 import sys.FileSystem;
 #end
@@ -24,13 +23,13 @@ import sys.FileSystem;
 @:nullSafety(Strict)
 class ApqWriterProbeCliTest extends Test {
 
-	public function testHelpReturnsOk():Void {
+	public function testHelpReturnsOk(): Void {
 		Assert.equals(0, Cli.run(['writer-probe', '--help']));
 	}
 
-	public function testSimpleClassSucceeds():Void {
+	public function testSimpleClassSucceeds(): Void {
 		#if sys
-		final input:String = CliFixture.write('apq_writer_probe', 'class C {}');
+		final input: String = CliFixture.write('apq_writer_probe', 'class C {}');
 		Assert.equals(0, Cli.run(['writer-probe', input]));
 		FileSystem.deleteFile(input);
 		#else
@@ -38,11 +37,11 @@ class ApqWriterProbeCliTest extends Test {
 		#end
 	}
 
-	public function testTypedefAnonStructSucceeds():Void {
+	public function testTypedefAnonStructSucceeds(): Void {
 		// The pipeline divergence target: trivia keeps layout, plain
 		// flattens — both must succeed independently.
 		#if sys
-		final input:String = CliFixture.write('apq_writer_probe', 'typedef T = {\n\tvar x:Int;\n}');
+		final input: String = CliFixture.write('apq_writer_probe', 'typedef T = {\n\tvar x:Int;\n}');
 		Assert.equals(0, Cli.run(['writer-probe', input]));
 		FileSystem.deleteFile(input);
 		#else
@@ -50,9 +49,9 @@ class ApqWriterProbeCliTest extends Test {
 		#end
 	}
 
-	public function testUnparseableInputExitsRuntime():Void {
+	public function testUnparseableInputExitsRuntime(): Void {
 		#if sys
-		final input:String = CliFixture.write('apq_writer_probe', 'class C {');
+		final input: String = CliFixture.write('apq_writer_probe', 'class C {');
 		Assert.equals(1, Cli.run(['writer-probe', input]));
 		FileSystem.deleteFile(input);
 		#else
@@ -60,29 +59,30 @@ class ApqWriterProbeCliTest extends Test {
 		#end
 	}
 
-	public function testMissingFileExitsUsage():Void {
+	public function testMissingFileExitsUsage(): Void {
 		Assert.equals(2, Cli.run(['writer-probe']));
 	}
 
-	public function testUnknownFlagExitsUsage():Void {
+	public function testUnknownFlagExitsUsage(): Void {
 		Assert.equals(2, Cli.run(['writer-probe', '--bogus', 'foo.hx']));
 	}
 
-	public function testTwoFilesExitsUsage():Void {
+	public function testTwoFilesExitsUsage(): Void {
 		Assert.equals(2, Cli.run(['writer-probe', 'a.hx', 'b.hx']));
 	}
 
 	// -- `probe --writer-probe` inline-source variant --
 
-	public function testProbeWriterProbeFlagSucceedsOnInlineCode():Void {
+	public function testProbeWriterProbeFlagSucceedsOnInlineCode(): Void {
 		// `probe '<code>' --writer-probe` mirrors `writer-probe <file>`
 		// for inline source — no scratch file needed. Same exit
 		// semantics: 0 iff both trivia + plain pipelines succeed.
 		Assert.equals(0, Cli.run(['probe', 'class C {}', '--writer-probe']));
 	}
 
-	public function testProbeWriterProbeUnparseableInputExitsRuntime():Void {
+	public function testProbeWriterProbeUnparseableInputExitsRuntime(): Void {
 		// Mirrors `writer-probe`'s unparseable-input contract.
 		Assert.equals(1, Cli.run(['probe', 'class C {', '--writer-probe']));
 	}
+
 }

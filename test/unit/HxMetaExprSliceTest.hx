@@ -32,81 +32,85 @@ import anyparse.grammar.haxe.HxStatement;
  */
 class HxMetaExprSliceTest extends HxTestHelpers {
 
-	public function testParsesPrivateAccessOnParenField():Void {
-		final src:String = 'class Main { static function main() { trace(@:privateAccess (X).object); } }';
-		final fn:HxFnDecl = parseSingleFnDecl(src);
-		final stmts:Array<HxStatement> = fnBodyStmts(fn);
+	public function testParsesPrivateAccessOnParenField(): Void {
+		final src: String = 'class Main { static function main() { trace(@:privateAccess (X).object); } }';
+		final fn: HxFnDecl = parseSingleFnDecl(src);
+		final stmts: Array<HxStatement> = fnBodyStmts(fn);
 		Assert.equals(1, stmts.length);
-		final callExpr:HxExpr = expectExprStmt(stmts[0]);
-		final args:Array<HxExpr> = expectCallArgs(callExpr);
+		final callExpr: HxExpr = expectExprStmt(stmts[0]);
+		final args: Array<HxExpr> = expectCallArgs(callExpr);
 		Assert.equals(1, args.length);
-		final wrapper:HxMetaExpr = expectMetaExpr(args[0]);
+		final wrapper: HxMetaExpr = expectMetaExpr(args[0]);
 		Assert.equals('@:privateAccess', HxMetadataUtil.source(wrapper.meta));
 	}
 
-	public function testParsesMetaWithArgs():Void {
+	public function testParsesMetaWithArgs(): Void {
 		// Post ω-generic-meta: `@:foo(1, 2)` parses through the structural
 		// `MetaCall` branch — name in `call.name`, args list parses through
 		// the standard HxExpr pipeline. PlainMeta-source verbatim no longer
 		// applies to this shape; assert the structural payload directly.
-		final src:String = 'class Main { static function main() { trace(@:foo(1, 2) X); } }';
-		final fn:HxFnDecl = parseSingleFnDecl(src);
-		final args:Array<HxExpr> = expectCallArgs(expectExprStmt(fnBodyStmts(fn)[0]));
-		final wrapper:HxMetaExpr = expectMetaExpr(args[0]);
+		final src: String = 'class Main { static function main() { trace(@:foo(1, 2) X); } }';
+		final fn: HxFnDecl = parseSingleFnDecl(src);
+		final args: Array<HxExpr> = expectCallArgs(expectExprStmt(fnBodyStmts(fn)[0]));
+		final wrapper: HxMetaExpr = expectMetaExpr(args[0]);
 		switch wrapper.meta {
 			case MetaCall(call):
-				Assert.equals('@:foo', (call.name : String));
+				Assert.equals('@:foo', (call.name: String));
 				Assert.equals(2, call.args.length);
-			case _: Assert.fail('expected MetaCall, got ' + wrapper.meta);
+			case _:
+				Assert.fail('expected MetaCall, got ' + wrapper.meta);
 		}
 		assertIdentExpr(wrapper.expr, 'X');
 	}
 
-	public function testChainedMetadataNestsRightward():Void {
-		final src:String = 'class Main { static function main() { trace(@:a @:b X); } }';
-		final fn:HxFnDecl = parseSingleFnDecl(src);
-		final args:Array<HxExpr> = expectCallArgs(expectExprStmt(fnBodyStmts(fn)[0]));
-		final outer:HxMetaExpr = expectMetaExpr(args[0]);
+	public function testChainedMetadataNestsRightward(): Void {
+		final src: String = 'class Main { static function main() { trace(@:a @:b X); } }';
+		final fn: HxFnDecl = parseSingleFnDecl(src);
+		final args: Array<HxExpr> = expectCallArgs(expectExprStmt(fnBodyStmts(fn)[0]));
+		final outer: HxMetaExpr = expectMetaExpr(args[0]);
 		Assert.equals('@:a', HxMetadataUtil.source(outer.meta));
-		final inner:HxMetaExpr = expectMetaExpr(outer.expr);
+		final inner: HxMetaExpr = expectMetaExpr(outer.expr);
 		Assert.equals('@:b', HxMetadataUtil.source(inner.meta));
 		assertIdentExpr(inner.expr, 'X');
 	}
 
-	public function testPlainRoundTrip():Void {
-		final src:String = 'class Main {\n\tstatic function main() {\n\t\ttrace(@:privateAccess (X).object);\n\t}\n}';
-		final mod:HxModule = HaxeModuleParser.parse(src);
-		final out:String = HxModuleWriter.write(mod);
+	public function testPlainRoundTrip(): Void {
+		final src: String = 'class Main {\n\tstatic function main() {\n\t\ttrace(@:privateAccess (X).object);\n\t}\n}';
+		final mod: HxModule = HaxeModuleParser.parse(src);
+		final out: String = HxModuleWriter.write(mod);
 		Assert.equals(src + '\n', out);
 	}
 
-	public function testTriviaRoundTripByteExact():Void {
-		final src:String = 'class Main {\n\t@:overload(function())\n\tstatic function main() {\n\t\ttrace(@:privateAccess (X).object);\n\t}\n}';
-		final mod:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(src);
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	public function testTriviaRoundTripByteExact(): Void {
+		final src: String = 'class Main {\n\t@:overload(function())\n\tstatic function main() {\n\t\ttrace(@:privateAccess (X).object);\n\t}\n}';
+		final mod: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(src);
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.finalNewline = false;
-		final out:String = HaxeModuleTriviaWriter.write(mod, opts);
+		final out: String = HaxeModuleTriviaWriter.write(mod, opts);
 		Assert.equals(src, out);
 	}
 
-	private function expectCallArgs(expr:HxExpr):Array<HxExpr> {
+	private function expectCallArgs(expr: HxExpr): Array<HxExpr> {
 		return switch expr {
 			case Call(_, args): args;
 			case _: throw 'expected Call, got $expr';
 		};
 	}
 
-	private function expectMetaExpr(expr:HxExpr):HxMetaExpr {
+	private function expectMetaExpr(expr: HxExpr): HxMetaExpr {
 		return switch expr {
 			case MetaExpr(v): v;
 			case _: throw 'expected MetaExpr, got $expr';
 		};
 	}
 
-	private function assertIdentExpr(expr:HxExpr, expected:String):Void {
+	private function assertIdentExpr(expr: HxExpr, expected: String): Void {
 		switch expr {
-			case IdentExpr(v): Assert.equals(expected, (v : String));
-			case _: Assert.fail('expected IdentExpr($expected), got $expr');
+			case IdentExpr(v):
+				Assert.equals(expected, (v: String));
+			case _:
+				Assert.fail('expected IdentExpr($expected), got $expr');
 		}
 	}
+
 }

@@ -28,34 +28,41 @@ import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
  */
 class HxCondCompStmtTrailOptSliceTest extends Test {
 
-	private static final _forceBuildParser:Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
-	private static final _forceBuildWriter:Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
+	private static final _forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
+	private static final _forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
-	public function testVarStmtCallRhsInsideIfEndKeepsSemiTight():Void {
-		roundTrip('class T {\n\tstatic function f():Void {\n\t\t#if sys\n\t\tfinal fixture:String = writeFixture(\'class X\');\n\t\t#end\n\t}\n}');
+	public function testVarStmtCallRhsInsideIfEndKeepsSemiTight(): Void {
+		roundTrip(
+			'class T {\n\tstatic function f():Void {\n\t\t#if sys\n\t\tfinal fixture:String = writeFixture(\'class X\');\n\t\t#end\n\t}\n}'
+		);
 	}
 
-	public function testTwoVarStmtsInsideIfEndKeepSemiTight():Void {
+	public function testTwoVarStmtsInsideIfEndKeepSemiTight(): Void {
 		roundTrip('class T {\n\tstatic function f():Void {\n\t\t#if sys\n\t\tfinal a = 1;\n\t\tfinal b = 2;\n\t\t#end\n\t}\n}');
 	}
 
-	public function testElseifBodyKeepsSemiTight():Void {
-		roundTrip('class T {\n\tstatic function f():Void {\n\t\t#if sys\n\t\tfinal a = 1;\n\t\t#elseif js\n\t\tfinal b = 2;\n\t\t#end\n\t}\n}');
+	public function testElseifBodyKeepsSemiTight(): Void {
+		roundTrip(
+			'class T {\n\tstatic function f():Void {\n\t\t#if sys\n\t\tfinal a = 1;\n\t\t#elseif js\n\t\tfinal b = 2;\n\t\t#end\n\t}\n}'
+		);
 	}
 
 	// Slice D4 — single-stmt elseBody.
-	public function testElseBodyKeepsSemiTight():Void {
+	public function testElseBodyKeepsSemiTight(): Void {
 		roundTrip('class T {\n\tstatic function f():Void {\n\t\t#if sys\n\t\tfinal a = 1;\n\t\t#else\n\t\tfinal b = 2;\n\t\t#end\n\t}\n}');
 	}
 
 	// Slice D4 — multi-stmt elseBody, both inter-element and trailing sep.
-	public function testElseBodyMultiStmtKeepsSemiTight():Void {
-		roundTrip('class T {\n\tstatic function f():Void {\n\t\t#if sys\n\t\tfinal a = 1;\n\t\t#else\n\t\tfinal b = 2;\n\t\tfinal c = 3;\n\t\t#end\n\t}\n}');
+	public function testElseBodyMultiStmtKeepsSemiTight(): Void {
+		roundTrip(
+			'class T {\n\tstatic function f():Void {\n\t\t#if sys\n\t\tfinal a = 1;\n\t\t#else\n\t\tfinal b = 2;\n\t\tfinal c = 3;\n\t\t#end\n\t}\n}'
+		);
 	}
 
-	private static function roundTrip(source:String):Void {
-		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final out:String = HaxeModuleTriviaWriter.write(ast);
+	private static function roundTrip(source: String): Void {
+		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out: String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals(source + '\n', out);
 	}
+
 }

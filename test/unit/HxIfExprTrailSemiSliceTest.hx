@@ -24,27 +24,27 @@ import anyparse.grammar.haxe.HxVarDecl;
  */
 class HxIfExprTrailSemiSliceTest extends HxTestHelpers {
 
-	private function initOf(source:String):HxExpr {
-		final decl:HxVarDecl = parseSingleVarDecl(source);
+	private function initOf(source: String): HxExpr {
+		final decl: HxVarDecl = parseSingleVarDecl(source);
 		return switch decl.init {
 			case null: throw 'expected init expr, got null';
 			case e: e;
 		}
 	}
 
-	private function parseBody(source:String):Array<HxStatement> {
-		final fn:HxFnDecl = parseSingleFnDecl(source);
+	private function parseBody(source: String): Array<HxStatement> {
+		final fn: HxFnDecl = parseSingleFnDecl(source);
 		return fnBodyStmts(fn);
 	}
 
-	private function identName(e:HxExpr):String {
+	private function identName(e: HxExpr): String {
 		return switch e {
-			case IdentExpr(v): (v : String);
+			case IdentExpr(v): (v: String);
 			case other: throw 'expected IdentExpr, got $other';
 		}
 	}
 
-	public function testThenSemiBeforeElse():Void {
+	public function testThenSemiBeforeElse(): Void {
 		switch initOf('class C { var x = if (a) b; else c; }') {
 			case IfExpr(ie):
 				Assert.equals('b', identName(ie.thenBranch));
@@ -52,11 +52,12 @@ class HxIfExprTrailSemiSliceTest extends HxTestHelpers {
 					case null: Assert.fail('expected elseBranch');
 					case eb: Assert.equals('c', identName(eb));
 				}
-			case other: Assert.fail('expected IfExpr, got $other');
+			case other:
+				Assert.fail('expected IfExpr, got $other');
 		}
 	}
 
-	public function testNoSemiRegression():Void {
+	public function testNoSemiRegression(): Void {
 		// The previously-working form must be unaffected (@:trailOpt is
 		// optional → no-op when no `;` is present).
 		switch initOf('class C { var x = if (a) b else c; }') {
@@ -66,11 +67,12 @@ class HxIfExprTrailSemiSliceTest extends HxTestHelpers {
 					case null: Assert.fail('expected elseBranch');
 					case eb: Assert.equals('c', identName(eb));
 				}
-			case other: Assert.fail('expected IfExpr, got $other');
+			case other:
+				Assert.fail('expected IfExpr, got $other');
 		}
 	}
 
-	public function testThenSemiNoElse():Void {
+	public function testThenSemiNoElse(): Void {
 		// Two semicolons: the first is consumed by @:trailOpt(';') on
 		// thenBranch; the second terminates the VarMember @:trail(';').
 		switch initOf('class C { var x = if (a) b;; }') {
@@ -80,11 +82,12 @@ class HxIfExprTrailSemiSliceTest extends HxTestHelpers {
 					case null: Assert.pass();
 					case _: Assert.fail('expected null elseBranch');
 				}
-			case other: Assert.fail('expected IfExpr, got $other');
+			case other:
+				Assert.fail('expected IfExpr, got $other');
 		}
 	}
 
-	public function testElseIfChainWithSemis():Void {
+	public function testElseIfChainWithSemis(): Void {
 		// The Build.hx shape: nested if-expr in each else, `;` per branch.
 		// Each branch is a Call (e.g. `k()`), so match Call and check callee.
 		switch initOf('class C { var x = if (a) g(); else if (b) h(); else k(); }') {
@@ -99,12 +102,13 @@ class HxIfExprTrailSemiSliceTest extends HxTestHelpers {
 						}
 					case other: Assert.fail('expected nested IfExpr in else, got $other');
 				}
-			case other: Assert.fail('expected IfExpr, got $other');
+			case other:
+				Assert.fail('expected IfExpr, got $other');
 		}
 	}
 
-	public function testCallArgSemiBeforeElse():Void {
-		final body:Array<HxStatement> = parseBody('class C { function f():Void { g(if (a) b; else c); } }');
+	public function testCallArgSemiBeforeElse(): Void {
+		final body: Array<HxStatement> = parseBody('class C { function f():Void { g(if (a) b; else c); } }');
 		Assert.equals(1, body.length);
 		switch body[0] {
 			case ExprStmt(expr):
@@ -117,17 +121,16 @@ class HxIfExprTrailSemiSliceTest extends HxTestHelpers {
 						}
 					case other: Assert.fail('expected Call, got $other');
 				}
-			case null, _: Assert.fail('expected ExprStmt');
+			case null, _:
+				Assert.fail('expected ExprStmt');
 		}
 	}
 
-	public function testTrailSemiRoundTrip():Void {
+	public function testTrailSemiRoundTrip(): Void {
 		roundTrip('class C { function f() { final x = if (a) b; else c; } }', 'if-expr-semi-before-else');
-		roundTrip(
-			'class C { function f() { final x = if (a) g(); else if (b) h(); else k(); } }',
-			'if-expr-else-if-chain-semis'
-		);
+		roundTrip('class C { function f() { final x = if (a) g(); else if (b) h(); else k(); } }', 'if-expr-else-if-chain-semis');
 		// No-`;` regression form must also stay idempotent.
 		roundTrip('class C { function f() { final x = if (a) b else c; } }', 'if-expr-no-semi');
 	}
+
 }

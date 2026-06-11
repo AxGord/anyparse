@@ -39,11 +39,11 @@ class HxAssignStmtNoSemiSliceTest extends HxTestHelpers {
 
 	// -- Isolated: Assign + IfExpr (block then + block else) no `;` --
 
-	public function testAssignIfBlockBothNoSemi():Void {
-		final cls:HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = if (a) { 1; } else { 2; }\n\t}\n}');
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testAssignIfBlockBothNoSemi(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = if (a) { 1; } else { 2; }\n\t}\n}');
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(1, stmts.length);
-		final e:HxExpr = expectExprStmt(stmts[0]);
+		final e: HxExpr = expectExprStmt(stmts[0]);
 		Assert.isTrue(e.match(Assign(_, IfExpr(_))));
 	}
 
@@ -54,52 +54,52 @@ class HxAssignStmtNoSemiSliceTest extends HxTestHelpers {
 	// Pre-Slice-44 this raised on the missing `;`; the new behaviour
 	// matches Haxe's last-stmt-in-block elision rule.
 
-	public function testAssignIfBlockThenBareElseBeforeCloseBrace():Void {
-		final cls:HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = if (a) { 1; } else 2\n\t}\n}');
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testAssignIfBlockThenBareElseBeforeCloseBrace(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = if (a) { 1; } else 2\n\t}\n}');
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(1, stmts.length);
 	}
 
 	// -- Isolated: Assign + IfExpr no else — body is block --
 
-	public function testAssignIfNoElseBlockNoSemi():Void {
-		final cls:HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = if (a) { 1; }\n\t}\n}');
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testAssignIfNoElseBlockNoSemi(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = if (a) { 1; }\n\t}\n}');
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(1, stmts.length);
 	}
 
 	// -- Isolated: Assign + SwitchExpr no `;` (exercises endsWithCloseBrace fallback through Assign) --
 
-	public function testAssignSwitchNoSemi():Void {
-		final cls:HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = switch (a) { case 1: 2; case _: 3; }\n\t}\n}');
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testAssignSwitchNoSemi(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = switch (a) { case 1: 2; case _: 3; }\n\t}\n}');
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(1, stmts.length);
-		final e:HxExpr = expectExprStmt(stmts[0]);
+		final e: HxExpr = expectExprStmt(stmts[0]);
 		Assert.isTrue(e.match(Assign(_, SwitchExpr(_))));
 	}
 
 	// -- Isolated: compound-assign `+=` with if-RHS no `;` --
 
-	public function testCompoundAssignIfBlockNoSemi():Void {
-		final cls:HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx += if (a) { 1; } else { 2; }\n\t}\n}');
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testCompoundAssignIfBlockNoSemi(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx += if (a) { 1; } else { 2; }\n\t}\n}');
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(1, stmts.length);
-		final e:HxExpr = expectExprStmt(stmts[0]);
+		final e: HxExpr = expectExprStmt(stmts[0]);
 		Assert.isTrue(e.match(AddAssign(_, IfExpr(_))));
 	}
 
 	// -- Isolated: multi-statement — Assign+IfExpr-no-semi followed by next stmt --
 
-	public function testAssignIfFollowedByNextStmt():Void {
-		final cls:HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = if (a) { 1; } else { 2; }\n\t\ty = 5;\n\t}\n}');
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testAssignIfFollowedByNextStmt(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = if (a) { 1; } else { 2; }\n\t\ty = 5;\n\t}\n}');
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(2, stmts.length);
 	}
 
 	// -- Isolated: corpus `lineends/expression_if` body (Allman braces, real source) --
 
-	public function testCorpusExpressionIfBody():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
+	public function testCorpusExpressionIfBody(): Void {
+		final cls: HxClassDecl = HaxeParser.parse(
 			'class Main\n{\n\tpublic function new()\n\t{\n\t\tfun.expr = if (fun.ret == null || switch (fun.ret)\n\t\t{\n\t\t\tcase TPath (p): true;\n\t\t\tdefault: false;\n\t\t})\n\t\t{\n\t\t\tmacro throw "abstract method, must override";\n\t\t}\n\t\telse\n\t\t{\n\t\t\tmacro return throw "abstract method, must override";\n\t\t}\n\t}\n}'
 		);
 		Assert.equals(1, cls.members.length);
@@ -107,7 +107,7 @@ class HxAssignStmtNoSemiSliceTest extends HxTestHelpers {
 
 	// -- Idempotency: verbatim corpus source --
 
-	public function testCorpusExpressionIfRoundTrip():Void {
+	public function testCorpusExpressionIfRoundTrip(): Void {
 		roundTrip(
 			'class Main\n{\n\tpublic function new()\n\t{\n\t\tfun.expr = if (fun.ret == null || switch (fun.ret)\n\t\t{\n\t\t\tcase TPath (p): true;\n\t\t\tdefault: false;\n\t\t})\n\t\t{\n\t\t\tmacro throw "abstract method, must override";\n\t\t}\n\t\telse\n\t\t{\n\t\t\tmacro return throw "abstract method, must override";\n\t\t}\n\t}\n}'
 		);
@@ -123,21 +123,21 @@ class HxAssignStmtNoSemiSliceTest extends HxTestHelpers {
 	// load-bearing for the boundary-detection case below where the
 	// next byte is NOT `}`).
 
-	public function testPlainAssignBeforeCloseBraceNoSemi():Void {
-		final cls:HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = a + b\n\t}\n}');
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testPlainAssignBeforeCloseBraceNoSemi(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = a + b\n\t}\n}');
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(1, stmts.length);
 	}
 
-	public function testObjectLitAssignBeforeCloseBraceNoSemi():Void {
-		final cls:HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = {a: 1}\n\t}\n}');
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testObjectLitAssignBeforeCloseBraceNoSemi(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = {a: 1}\n\t}\n}');
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(1, stmts.length);
 	}
 
-	public function testArrayExprAssignBeforeCloseBraceNoSemi():Void {
-		final cls:HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = [1, 2, 3]\n\t}\n}');
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testArrayExprAssignBeforeCloseBraceNoSemi(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = [1, 2, 3]\n\t}\n}');
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(1, stmts.length);
 	}
 
@@ -147,15 +147,16 @@ class HxAssignStmtNoSemiSliceTest extends HxTestHelpers {
 	// remains required. Pins the multi-stmt boundary that the carve-out
 	// originally guarded.
 
-	public function testAssignFollowedByIdentRegression():Void {
+	public function testAssignFollowedByIdentRegression(): Void {
 		Assert.raises(() -> HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = a + b\n\t\ty = c\n\t}\n}'));
 	}
 
 	// -- Regression: pre-slice path — Assign+IfExpr WITH `;` still parses --
 
-	public function testAssignIfWithSemiUnchanged():Void {
-		final cls:HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = if (a) { 1; } else { 2; };\n\t}\n}');
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testAssignIfWithSemiUnchanged(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = if (a) { 1; } else { 2; };\n\t}\n}');
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(1, stmts.length);
 	}
+
 }

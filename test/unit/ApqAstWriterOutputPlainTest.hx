@@ -3,7 +3,6 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.query.Cli;
-
 #if sys
 import sys.FileSystem;
 import sys.io.File;
@@ -25,18 +24,17 @@ import sys.io.File;
 @:nullSafety(Strict)
 class ApqAstWriterOutputPlainTest extends Test {
 
-	public function testPlainFlagIsAccepted():Void {
+	public function testPlainFlagIsAccepted(): Void {
 		#if sys
-		final fixture:String = writeFixture('class C {}');
-		Assert.equals(0, Cli.run(['ast', '--writer-output-plain', fixture]),
-			'--writer-output-plain must exit 0 on a valid file');
+		final fixture: String = writeFixture('class C {}');
+		Assert.equals(0, Cli.run(['ast', '--writer-output-plain', fixture]), '--writer-output-plain must exit 0 on a valid file');
 		FileSystem.deleteFile(fixture);
 		#else
 		Assert.pass('non-sys target');
 		#end
 	}
 
-	public function testBothPipelinesExitCleanOnAnonStruct():Void {
+	public function testBothPipelinesExitCleanOnAnonStruct(): Void {
 		#if sys
 		// Smoke-level: both dispatch paths exit cleanly on the same
 		// anon-struct input. Byte-level divergence between the two
@@ -44,11 +42,9 @@ class ApqAstWriterOutputPlainTest extends Test {
 		// `ApqWriterEqualsCliTest` — there each pipeline is anchored
 		// against its OWN concrete expected bytes, so silent
 		// convergence would force one assertion to fail.
-		final fixture:String = writeFixture('typedef T = {\n\tvar x:Int;\n}');
-		Assert.equals(0, Cli.run(['ast', '--writer-output', fixture]),
-			'--writer-output (trivia) must exit 0');
-		Assert.equals(0, Cli.run(['ast', '--writer-output-plain', fixture]),
-			'--writer-output-plain must exit 0');
+		final fixture: String = writeFixture('typedef T = {\n\tvar x:Int;\n}');
+		Assert.equals(0, Cli.run(['ast', '--writer-output', fixture]), '--writer-output (trivia) must exit 0');
+		Assert.equals(0, Cli.run(['ast', '--writer-output-plain', fixture]), '--writer-output-plain must exit 0');
 		FileSystem.deleteFile(fixture);
 		#else
 		Assert.pass('non-sys target');
@@ -56,8 +52,9 @@ class ApqAstWriterOutputPlainTest extends Test {
 	}
 
 	#if sys
-	private static function writeFixture(source:String):String {
+	private static function writeFixture(source: String): String {
 		return CliFixture.write('apq_ast_plain', source);
 	}
 	#end
+
 }

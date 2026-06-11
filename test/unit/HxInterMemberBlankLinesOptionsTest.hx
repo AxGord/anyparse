@@ -31,126 +31,115 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 @:nullSafety(Strict)
 class HxInterMemberBlankLinesOptionsTest extends Test {
 
-	public function new():Void {
+	public function new(): Void {
 		super();
 	}
 
-	public function testDefaultsMatchUpstream():Void {
-		final defaults:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
+	public function testDefaultsMatchUpstream(): Void {
+		final defaults: HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
 		Assert.equals(0, defaults.betweenVars);
 		Assert.equals(1, defaults.betweenFunctions);
 		Assert.equals(1, defaults.afterVars);
 	}
 
-	public function testBetweenFunctionsZeroKeepsTight():Void {
-		final out:String = writeWith(
-			'class M { public function a():Void {} public function b():Void {} }',
-			0, 0, 0
+	public function testBetweenFunctionsZeroKeepsTight(): Void {
+		final out: String = writeWith('class M { public function a():Void {} public function b():Void {} }', 0, 0, 0);
+		Assert.isTrue(
+			out.indexOf('a():Void {}\n\tpublic function b') != -1,
+			'expected no blank line between two plain functions with defaults in: <$out>'
 		);
-		Assert.isTrue(out.indexOf('a():Void {}\n\tpublic function b') != -1,
-			'expected no blank line between two plain functions with defaults in: <$out>');
 	}
 
-	public function testBetweenFunctionsOneInsertsBlank():Void {
-		final out:String = writeWith(
-			'class M { public function a():Void {} public function b():Void {} }',
-			0, 1, 0
+	public function testBetweenFunctionsOneInsertsBlank(): Void {
+		final out: String = writeWith('class M { public function a():Void {} public function b():Void {} }', 0, 1, 0);
+		Assert.isTrue(
+			out.indexOf('a():Void {}\n\n\tpublic function b') != -1,
+			'expected blank line between two functions with betweenFunctions=1 in: <$out>'
 		);
-		Assert.isTrue(out.indexOf('a():Void {}\n\n\tpublic function b') != -1,
-			'expected blank line between two functions with betweenFunctions=1 in: <$out>');
 	}
 
-	public function testBetweenVarsOneInsertsBlank():Void {
-		final out:String = writeWith(
-			'class M { public var a:Int; public var b:Int; }',
-			1, 0, 0
+	public function testBetweenVarsOneInsertsBlank(): Void {
+		final out: String = writeWith('class M { public var a:Int; public var b:Int; }', 1, 0, 0);
+		Assert.isTrue(
+			out.indexOf('var a:Int;\n\n\tpublic var b') != -1, 'expected blank line between two vars with betweenVars=1 in: <$out>'
 		);
-		Assert.isTrue(out.indexOf('var a:Int;\n\n\tpublic var b') != -1,
-			'expected blank line between two vars with betweenVars=1 in: <$out>');
 	}
 
-	public function testAfterVarsOneInsertsBlankOnVarToFunction():Void {
-		final out:String = writeWith(
-			'class M { public var a:Int; public function b():Void {} }',
-			0, 0, 1
+	public function testAfterVarsOneInsertsBlankOnVarToFunction(): Void {
+		final out: String = writeWith('class M { public var a:Int; public function b():Void {} }', 0, 0, 1);
+		Assert.isTrue(
+			out.indexOf('var a:Int;\n\n\tpublic function b') != -1,
+			'expected blank line at var→function transition with afterVars=1 in: <$out>'
 		);
-		Assert.isTrue(out.indexOf('var a:Int;\n\n\tpublic function b') != -1,
-			'expected blank line at var→function transition with afterVars=1 in: <$out>');
 	}
 
-	public function testAfterVarsOneInsertsBlankOnFunctionToVar():Void {
-		final out:String = writeWith(
-			'class M { public function a():Void {} public var b:Int; }',
-			0, 0, 1
+	public function testAfterVarsOneInsertsBlankOnFunctionToVar(): Void {
+		final out: String = writeWith('class M { public function a():Void {} public var b:Int; }', 0, 0, 1);
+		Assert.isTrue(
+			out.indexOf('a():Void {}\n\n\tpublic var b') != -1,
+			'expected blank line at function→var transition with afterVars=1 in: <$out>'
 		);
-		Assert.isTrue(out.indexOf('a():Void {}\n\n\tpublic var b') != -1,
-			'expected blank line at function→var transition with afterVars=1 in: <$out>');
 	}
 
-	public function testBetweenVarsZeroKeepsVarsTight():Void {
-		final out:String = writeWith(
-			'class M { public var a:Int; public var b:Int; }',
-			0, 0, 0
+	public function testBetweenVarsZeroKeepsVarsTight(): Void {
+		final out: String = writeWith('class M { public var a:Int; public var b:Int; }', 0, 0, 0);
+		Assert.isTrue(
+			out.indexOf('var a:Int;\n\tpublic var b') != -1, 'expected no blank line between two vars with betweenVars=0 in: <$out>'
 		);
-		Assert.isTrue(out.indexOf('var a:Int;\n\tpublic var b') != -1,
-			'expected no blank line between two vars with betweenVars=0 in: <$out>');
 	}
 
-	public function testAbstractBetweenFunctionsOneInsertsBlank():Void {
-		final out:String = writeWith(
-			'abstract M(Int) { public function a():Void {} public function b():Void {} }',
-			0, 1, 0
+	public function testAbstractBetweenFunctionsOneInsertsBlank(): Void {
+		final out: String = writeWith('abstract M(Int) { public function a():Void {} public function b():Void {} }', 0, 1, 0);
+		Assert.isTrue(
+			out.indexOf('a():Void {}\n\n\tpublic function b') != -1,
+			'expected blank line between two abstract functions with betweenFunctions=1 in: <$out>'
 		);
-		Assert.isTrue(out.indexOf('a():Void {}\n\n\tpublic function b') != -1,
-			'expected blank line between two abstract functions with betweenFunctions=1 in: <$out>');
 	}
 
-	public function testAbstractAfterVarsOneInsertsBlankOnVarToFunction():Void {
-		final out:String = writeWith(
-			'abstract M(Int) { public var a:Int; public function b():Void {} }',
-			0, 0, 1
+	public function testAbstractAfterVarsOneInsertsBlankOnVarToFunction(): Void {
+		final out: String = writeWith('abstract M(Int) { public var a:Int; public function b():Void {} }', 0, 0, 1);
+		Assert.isTrue(
+			out.indexOf('var a:Int;\n\n\tpublic function b') != -1,
+			'expected blank line at abstract var→function transition with afterVars=1 in: <$out>'
 		);
-		Assert.isTrue(out.indexOf('var a:Int;\n\n\tpublic function b') != -1,
-			'expected blank line at abstract var→function transition with afterVars=1 in: <$out>');
 	}
 
-	public function testConfigLoaderMapsBetweenFunctionsInt():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+	public function testConfigLoaderMapsBetweenFunctionsInt(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"emptyLines": {"classEmptyLines": {"betweenFunctions": 2}}}'
 		);
 		Assert.equals(2, opts.betweenFunctions);
 	}
 
-	public function testConfigLoaderMapsBetweenVarsInt():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+	public function testConfigLoaderMapsBetweenVarsInt(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"emptyLines": {"classEmptyLines": {"betweenVars": 3}}}'
 		);
 		Assert.equals(3, opts.betweenVars);
 	}
 
-	public function testConfigLoaderMapsAfterVarsInt():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"emptyLines": {"classEmptyLines": {"afterVars": 1}}}'
-		);
+	public function testConfigLoaderMapsAfterVarsInt(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"emptyLines": {"classEmptyLines": {"afterVars": 1}}}');
 		Assert.equals(1, opts.afterVars);
 	}
 
-	public function testConfigLoaderMissingSectionKeepsDefaults():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	public function testConfigLoaderMissingSectionKeepsDefaults(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		Assert.equals(0, opts.betweenVars);
 		Assert.equals(1, opts.betweenFunctions);
 		Assert.equals(1, opts.afterVars);
 	}
 
-	private inline function writeWith(src:String, betweenVars:Int, betweenFunctions:Int, afterVars:Int):String {
+	private inline function writeWith(src: String, betweenVars: Int, betweenFunctions: Int, afterVars: Int): String {
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), makeOpts(betweenVars, betweenFunctions, afterVars));
 	}
 
-	private inline function makeOpts(betweenVars:Int, betweenFunctions:Int, afterVars:Int):HxModuleWriteOptions {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	private inline function makeOpts(betweenVars: Int, betweenFunctions: Int, afterVars: Int): HxModuleWriteOptions {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.betweenVars = betweenVars;
 		opts.betweenFunctions = betweenFunctions;
 		opts.afterVars = afterVars;
 		return opts;
 	}
+
 }

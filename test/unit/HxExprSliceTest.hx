@@ -28,136 +28,145 @@ import anyparse.runtime.ParseError;
  */
 class HxExprSliceTest extends HxTestHelpers {
 
-	public function testVarWithoutInit():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int; }');
-		Assert.equals('x', (decl.name : String));
-		Assert.equals('Int', (expectNamedType(decl.type).name : String));
+	public function testVarWithoutInit(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Int; }');
+		Assert.equals('x', (decl.name: String));
+		Assert.equals('Int', (expectNamedType(decl.type).name: String));
 		Assert.isNull(decl.init);
 	}
 
-	public function testVarWithIntInit():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = 42; }');
-		Assert.equals('x', (decl.name : String));
-		Assert.equals('Int', (expectNamedType(decl.type).name : String));
+	public function testVarWithIntInit(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = 42; }');
+		Assert.equals('x', (decl.name: String));
+		Assert.equals('Int', (expectNamedType(decl.type).name: String));
 		assertIntLit(decl.init, 42);
 	}
 
-	public function testVarWithBoolTrueInit():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = true; }');
+	public function testVarWithBoolTrueInit(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = true; }');
 		assertBoolLit(decl.init, true);
 	}
 
-	public function testVarWithBoolFalseInit():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = false; }');
+	public function testVarWithBoolFalseInit(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = false; }');
 		assertBoolLit(decl.init, false);
 	}
 
-	public function testVarWithNullInit():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Ty = null; }');
+	public function testVarWithNullInit(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Ty = null; }');
 		assertNullLit(decl.init);
 	}
 
-	public function testVarWithIdentInit():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Ty = other; }');
+	public function testVarWithIdentInit(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Ty = other; }');
 		assertIdentExpr(decl.init, 'other');
 	}
 
-	public function testVarWithSpacedEquals():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = 42 ; }');
+	public function testVarWithSpacedEquals(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = 42 ; }');
 		assertIntLit(decl.init, 42);
 	}
 
-	public function testVarWithoutSpaceAroundEquals():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int=42; }');
+	public function testVarWithoutSpaceAroundEquals(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Int=42; }');
 		assertIntLit(decl.init, 42);
 	}
 
-	public function testRejectsEmptyInit():Void {
+	public function testRejectsEmptyInit(): Void {
 		// `var x:Int = ;` — the `=` is consumed, the sub-rule
 		// parseHxExpr(ctx) then sees `;` and every branch fails.
 		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Int = ; }'), ParseError);
 	}
 
-	public function testAcceptsMissingSemicolonAfterInit():Void {
+	public function testAcceptsMissingSemicolonAfterInit(): Void {
 		// `var x:Int = 42` — Phase 3 Slice 13 relaxed `HxClassMember`
 		// `VarMember` to `@:trailOpt(';')` (byte-twin of statement-level
 		// `HxStatement.VarStmt`). Parser-side `:trailOpt` is
 		// position-agnostic, so the missing `;` is accepted even though
 		// Haxe rejects it; the writer still re-emits canonical `;`, so
 		// round-trip is unaffected. See `HxMemberVarTrailOptSliceTest`.
-		final ast:HxClassDecl = HaxeParser.parse('class Foo { var x:Int = 42 }');
+		final ast: HxClassDecl = HaxeParser.parse('class Foo { var x:Int = 42 }');
 		Assert.equals(1, ast.members.length);
 		assertIntLit(expectVarMember(ast.members[0].member).init, 42);
 	}
 
-	public function testMixedInitInClass():Void {
-		final source:String = 'class Foo { var a:Int; var b:Bool = true; var c:Ty = null; var d:Int = 7; }';
-		final ast:HxClassDecl = HaxeParser.parse(source);
-		Assert.equals('Foo', (ast.name : String));
+	public function testMixedInitInClass(): Void {
+		final source: String = 'class Foo { var a:Int; var b:Bool = true; var c:Ty = null; var d:Int = 7; }';
+		final ast: HxClassDecl = HaxeParser.parse(source);
+		Assert.equals('Foo', (ast.name: String));
 		Assert.equals(4, ast.members.length);
 
-		final a:HxVarDecl = expectVarMember(ast.members[0].member);
-		Assert.equals('a', (a.name : String));
+		final a: HxVarDecl = expectVarMember(ast.members[0].member);
+		Assert.equals('a', (a.name: String));
 		Assert.isNull(a.init);
 
-		final b:HxVarDecl = expectVarMember(ast.members[1].member);
-		Assert.equals('b', (b.name : String));
+		final b: HxVarDecl = expectVarMember(ast.members[1].member);
+		Assert.equals('b', (b.name: String));
 		assertBoolLit(b.init, true);
 
-		final c:HxVarDecl = expectVarMember(ast.members[2].member);
-		Assert.equals('c', (c.name : String));
+		final c: HxVarDecl = expectVarMember(ast.members[2].member);
+		Assert.equals('c', (c.name: String));
 		assertNullLit(c.init);
 
-		final d:HxVarDecl = expectVarMember(ast.members[3].member);
-		Assert.equals('d', (d.name : String));
+		final d: HxVarDecl = expectVarMember(ast.members[3].member);
+		Assert.equals('d', (d.name: String));
 		assertIntLit(d.init, 7);
 	}
 
-	public function testInitAcrossModuleRoot():Void {
-		final source:String = 'class A { var x:Int = 1; } class B { var y:Bool = false; }';
-		final module:HxModule = HaxeModuleParser.parse(source);
+	public function testInitAcrossModuleRoot(): Void {
+		final source: String = 'class A { var x:Int = 1; } class B { var y:Bool = false; }';
+		final module: HxModule = HaxeModuleParser.parse(source);
 		Assert.equals(2, module.decls.length);
 
-		final a:HxClassDecl = expectClassDecl(module.decls[0]);
-		Assert.equals('A', (a.name : String));
+		final a: HxClassDecl = expectClassDecl(module.decls[0]);
+		Assert.equals('A', (a.name: String));
 		Assert.equals(1, a.members.length);
-		final aVar:HxVarDecl = expectVarMember(a.members[0].member);
-		Assert.equals('x', (aVar.name : String));
+		final aVar: HxVarDecl = expectVarMember(a.members[0].member);
+		Assert.equals('x', (aVar.name: String));
 		assertIntLit(aVar.init, 1);
 
-		final b:HxClassDecl = expectClassDecl(module.decls[1]);
-		Assert.equals('B', (b.name : String));
+		final b: HxClassDecl = expectClassDecl(module.decls[1]);
+		Assert.equals('B', (b.name: String));
 		Assert.equals(1, b.members.length);
-		final bVar:HxVarDecl = expectVarMember(b.members[0].member);
-		Assert.equals('y', (bVar.name : String));
+		final bVar: HxVarDecl = expectVarMember(b.members[0].member);
+		Assert.equals('y', (bVar.name: String));
 		assertBoolLit(bVar.init, false);
 	}
 
-	private function assertIntLit(expr:Null<HxExpr>, expected:Int):Void {
+	private function assertIntLit(expr: Null<HxExpr>, expected: Int): Void {
 		switch expr {
-			case IntLit(v): Assert.equals(expected, (v : Int));
-			case null, _: Assert.fail('expected IntLit($expected), got $expr');
+			case IntLit(v):
+				Assert.equals(expected, (v: Int));
+			case null, _:
+				Assert.fail('expected IntLit($expected), got $expr');
 		}
 	}
 
-	private function assertBoolLit(expr:Null<HxExpr>, expected:Bool):Void {
+	private function assertBoolLit(expr: Null<HxExpr>, expected: Bool): Void {
 		switch expr {
-			case BoolLit(v): Assert.equals(expected, v);
-			case null, _: Assert.fail('expected BoolLit($expected), got $expr');
+			case BoolLit(v):
+				Assert.equals(expected, v);
+			case null, _:
+				Assert.fail('expected BoolLit($expected), got $expr');
 		}
 	}
 
-	private function assertNullLit(expr:Null<HxExpr>):Void {
+	private function assertNullLit(expr: Null<HxExpr>): Void {
 		switch expr {
-			case NullLit: Assert.pass();
-			case null, _: Assert.fail('expected NullLit, got $expr');
+			case NullLit:
+				Assert.pass();
+			case null, _:
+				Assert.fail('expected NullLit, got $expr');
 		}
 	}
 
-	private function assertIdentExpr(expr:Null<HxExpr>, expected:String):Void {
+	private function assertIdentExpr(expr: Null<HxExpr>, expected: String): Void {
 		switch expr {
-			case IdentExpr(v): Assert.equals(expected, (v : String));
-			case null, _: Assert.fail('expected IdentExpr($expected), got $expr');
+			case IdentExpr(v):
+				Assert.equals(expected, (v: String));
+			case null, _:
+				Assert.fail('expected IdentExpr($expected), got $expr');
 		}
 	}
+
 }

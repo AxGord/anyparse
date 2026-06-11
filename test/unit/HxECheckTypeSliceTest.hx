@@ -25,113 +25,130 @@ import anyparse.grammar.haxe.HxExpr;
  */
 class HxECheckTypeSliceTest extends HxTestHelpers {
 
-	public function testECheckTypeStringLit():Void {
+	public function testECheckTypeStringLit(): Void {
 		final decl = parseSingleVarDecl('class C { var f:Int = ("" : String); }');
 		switch decl.init {
 			case ECheckTypeExpr(info):
 				switch info.expr {
-					case DoubleStringExpr(_): Assert.pass();
-					case _: Assert.fail('expected DoubleStringExpr inner');
+					case DoubleStringExpr(_):
+						Assert.pass();
+					case _:
+						Assert.fail('expected DoubleStringExpr inner');
 				}
-				Assert.equals('String', (expectNamedType(info.type).name : String));
-			case null, _: Assert.fail('expected ECheckTypeExpr, got ${decl.init}');
+				Assert.equals('String', (expectNamedType(info.type).name: String));
+			case null, _:
+				Assert.fail('expected ECheckTypeExpr, got ${decl.init}');
 		}
 	}
 
-	public function testECheckTypeIdent():Void {
+	public function testECheckTypeIdent(): Void {
 		final decl = parseSingleVarDecl('class C { var f:Int = (x : Int); }');
 		switch decl.init {
 			case ECheckTypeExpr(info):
 				switch info.expr {
-					case IdentExpr(name): Assert.equals('x', (name : String));
-					case _: Assert.fail('expected IdentExpr inner');
+					case IdentExpr(name):
+						Assert.equals('x', (name: String));
+					case _:
+						Assert.fail('expected IdentExpr inner');
 				}
-				Assert.equals('Int', (expectNamedType(info.type).name : String));
-			case null, _: Assert.fail('expected ECheckTypeExpr');
+				Assert.equals('Int', (expectNamedType(info.type).name: String));
+			case null, _:
+				Assert.fail('expected ECheckTypeExpr');
 		}
 	}
 
-	public function testECheckTypeComplexExpr():Void {
+	public function testECheckTypeComplexExpr(): Void {
 		final decl = parseSingleVarDecl('class C { var f:Int = (a + b : Float); }');
 		switch decl.init {
 			case ECheckTypeExpr(info):
 				switch info.expr {
 					case Add(IdentExpr(a), IdentExpr(b)):
-						Assert.equals('a', (a : String));
-						Assert.equals('b', (b : String));
-					case _: Assert.fail('expected Add(a, b) inner');
+						Assert.equals('a', (a: String));
+						Assert.equals('b', (b: String));
+					case _:
+						Assert.fail('expected Add(a, b) inner');
 				}
-				Assert.equals('Float', (expectNamedType(info.type).name : String));
-			case null, _: Assert.fail('expected ECheckTypeExpr');
+				Assert.equals('Float', (expectNamedType(info.type).name: String));
+			case null, _:
+				Assert.fail('expected ECheckTypeExpr');
 		}
 	}
 
-	public function testECheckTypeGenericType():Void {
+	public function testECheckTypeGenericType(): Void {
 		final decl = parseSingleVarDecl('class C { var f:Int = (x : Map<String, Int>); }');
 		switch decl.init {
 			case ECheckTypeExpr(info):
 				final ref = expectNamedType(info.type);
-				Assert.equals('Map', (ref.name : String));
+				Assert.equals('Map', (ref.name: String));
 				Assert.notNull(ref.params);
 				Assert.equals(2, ref.params.length);
-			case null, _: Assert.fail('expected ECheckTypeExpr(Map<...>)');
+			case null, _:
+				Assert.fail('expected ECheckTypeExpr(Map<...>)');
 		}
 	}
 
-	public function testECheckTypeEmptyArrayLiteral():Void {
+	public function testECheckTypeEmptyArrayLiteral(): Void {
 		// Common idiom: `([] : Array<Int>)` — type-check around an empty
 		// array literal so the type-checker resolves the element type.
 		final decl = parseSingleVarDecl('class C { var f:Int = ([] : Array<Int>); }');
 		switch decl.init {
 			case ECheckTypeExpr(info):
 				switch info.expr {
-					case ArrayExpr(elems): Assert.equals(0, elems.length);
-					case _: Assert.fail('expected ArrayExpr inner');
+					case ArrayExpr(elems):
+						Assert.equals(0, elems.length);
+					case _:
+						Assert.fail('expected ArrayExpr inner');
 				}
-				Assert.equals('Array', (expectNamedType(info.type).name : String));
-			case null, _: Assert.fail('expected ECheckTypeExpr');
+				Assert.equals('Array', (expectNamedType(info.type).name: String));
+			case null, _:
+				Assert.fail('expected ECheckTypeExpr');
 		}
 	}
 
-	public function testECheckTypeFollowedByPostfix():Void {
+	public function testECheckTypeFollowedByPostfix(): Void {
 		// The postfix loop runs after the atom — ECheckType wraps the
 		// inner; `.length` lands on the wrapper as `FieldAccess`.
 		final decl = parseSingleVarDecl('class C { var f:Int = ("" : String).length; }');
 		switch decl.init {
 			case FieldAccess(ECheckTypeExpr(info), field):
-				Assert.equals('length', (field : String));
-				Assert.equals('String', (expectNamedType(info.type).name : String));
-			case null, _: Assert.fail('expected FieldAccess(ECheckTypeExpr, length)');
+				Assert.equals('length', (field: String));
+				Assert.equals('String', (expectNamedType(info.type).name: String));
+			case null, _:
+				Assert.fail('expected FieldAccess(ECheckTypeExpr, length)');
 		}
 	}
 
 	// ======== Negative / disambiguation ========
 
-	public function testParenExprStillParses():Void {
+	public function testParenExprStillParses(): Void {
 		// Bare `(x)` must keep parsing as ParenExpr — ECheckType requires
 		// the inner `:`, so without it `tryBranch` rolls back and the
 		// next atom (ParenExpr) commits.
 		final decl = parseSingleVarDecl('class C { var f:Int = (x); }');
 		switch decl.init {
-			case ParenExpr(IdentExpr(name)): Assert.equals('x', (name : String));
-			case null, _: Assert.fail('expected ParenExpr(IdentExpr), got ${decl.init}');
+			case ParenExpr(IdentExpr(name)):
+				Assert.equals('x', (name: String));
+			case null, _:
+				Assert.fail('expected ParenExpr(IdentExpr), got ${decl.init}');
 		}
 	}
 
-	public function testParenLambdaStillParses():Void {
+	public function testParenLambdaStillParses(): Void {
 		// `(x : Int) => x + 1` must keep parsing as ParenLambdaExpr —
 		// the lambda branch is BEFORE ECheckType in source order, so it
 		// gets first try and consumes the typed param + `=>` body.
 		final decl = parseSingleVarDecl('class C { var f:Int = (x : Int) => x + 1; }');
 		switch decl.init {
-			case ParenLambdaExpr(_): Assert.pass();
-			case null, _: Assert.fail('expected ParenLambdaExpr, got ${decl.init}');
+			case ParenLambdaExpr(_):
+				Assert.pass();
+			case null, _:
+				Assert.fail('expected ParenLambdaExpr, got ${decl.init}');
 		}
 	}
 
 	// ======== Round-trip ========
 
-	public function testECheckTypeRoundTrip():Void {
+	public function testECheckTypeRoundTrip(): Void {
 		roundTrip('class C { var f:Int = ("" : String); }', '("" : String)');
 		roundTrip('class C { var f:Int = (x : Int); }', '(x : Int)');
 		roundTrip('class C { var f:Int = (a + b : Float); }', '(a + b : Float)');

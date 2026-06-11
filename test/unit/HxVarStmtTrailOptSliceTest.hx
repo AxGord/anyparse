@@ -27,40 +27,45 @@ class HxVarStmtTrailOptSliceTest extends HxTestHelpers {
 
 	// ======== Block-terminated rhs (the corpus motivator) ========
 
-	public function testVarSwitchRhsNoSemi():Void {
+	public function testVarSwitchRhsNoSemi(): Void {
 		// `var foo = switch a { case _: 1; }` — no `;` after the closing
 		// `}` of the switch initializer. Pre-slice: parse failure.
-		final stmts:Array<HxStatement> = parseFunctionBody('var foo = switch a { case _: 1; }');
+		final stmts: Array<HxStatement> = parseFunctionBody('var foo = switch a { case _: 1; }');
 		Assert.equals(1, stmts.length);
 		switch stmts[0] {
 			case VarStmt(decl):
-				Assert.equals('foo', (decl.name : String));
+				Assert.equals('foo', (decl.name: String));
 				Assert.notNull(decl.init);
-			case _: Assert.fail('expected VarStmt, got ${stmts[0]}');
+			case _:
+				Assert.fail('expected VarStmt, got ${stmts[0]}');
 		}
 	}
 
-	public function testVarBlockRhsNoSemi():Void {
+	public function testVarBlockRhsNoSemi(): Void {
 		// `var foo = { 1; 2; }` — block-expression initializer, no `;`.
-		final stmts:Array<HxStatement> = parseFunctionBody('var foo = { 1; 2; }');
+		final stmts: Array<HxStatement> = parseFunctionBody('var foo = { 1; 2; }');
 		Assert.equals(1, stmts.length);
 		switch stmts[0] {
-			case VarStmt(decl): Assert.equals('foo', (decl.name : String));
-			case _: Assert.fail('expected VarStmt, got ${stmts[0]}');
+			case VarStmt(decl):
+				Assert.equals('foo', (decl.name: String));
+			case _:
+				Assert.fail('expected VarStmt, got ${stmts[0]}');
 		}
 	}
 
-	public function testFinalSwitchRhsNoSemi():Void {
+	public function testFinalSwitchRhsNoSemi(): Void {
 		// `final` variant — same shape, parallel meta change.
-		final stmts:Array<HxStatement> = parseFunctionBody('final foo = switch a { case _: 1; }');
+		final stmts: Array<HxStatement> = parseFunctionBody('final foo = switch a { case _: 1; }');
 		Assert.equals(1, stmts.length);
 		switch stmts[0] {
-			case FinalStmt(decl): Assert.equals('foo', (decl.name : String));
-			case _: Assert.fail('expected FinalStmt, got ${stmts[0]}');
+			case FinalStmt(decl):
+				Assert.equals('foo', (decl.name: String));
+			case _:
+				Assert.fail('expected FinalStmt, got ${stmts[0]}');
 		}
 	}
 
-	public function testVarFollowedBySecondVarNoSemi():Void {
+	public function testVarFollowedBySecondVarNoSemi(): Void {
 		// Pre-S10.4: `var x = 5` (no `;`) followed by another statement was
 		// accepted because the per-stmt `@:trailOpt(';')` was position-
 		// agnostic. After S10.4 the BlockBody Star owns sep emission and
@@ -69,7 +74,7 @@ class HxVarStmtTrailOptSliceTest extends HxTestHelpers {
 		Assert.raises(() -> parseFunctionBody('var x = 5\nvar y = 6;'));
 	}
 
-	public function testFinalFollowedBySecondFinalNoSemi():Void {
+	public function testFinalFollowedBySecondFinalNoSemi(): Void {
 		// Sister contract of `testVarFollowedBySecondVarNoSemi` — S10.5
 		// migrated `FinalStmt` to BlockBody Star sep-ownership, so the
 		// same strict-rejection contract applies to `final` declarations.
@@ -78,28 +83,30 @@ class HxVarStmtTrailOptSliceTest extends HxTestHelpers {
 
 	// ======== Trailing `;` still accepted (canonical input) ========
 
-	public function testVarWithSemiStillParses():Void {
-		final stmts:Array<HxStatement> = parseFunctionBody('var foo = 5;');
+	public function testVarWithSemiStillParses(): Void {
+		final stmts: Array<HxStatement> = parseFunctionBody('var foo = 5;');
 		Assert.equals(1, stmts.length);
 		switch stmts[0] {
-			case VarStmt(decl): Assert.equals('foo', (decl.name : String));
-			case _: Assert.fail('expected VarStmt');
+			case VarStmt(decl):
+				Assert.equals('foo', (decl.name: String));
+			case _:
+				Assert.fail('expected VarStmt');
 		}
 	}
 
-	public function testVarSwitchRhsWithSemi():Void {
-		final stmts:Array<HxStatement> = parseFunctionBody('var foo = switch a { case _: 1; };');
+	public function testVarSwitchRhsWithSemi(): Void {
+		final stmts: Array<HxStatement> = parseFunctionBody('var foo = switch a { case _: 1; };');
 		Assert.equals(1, stmts.length);
 	}
 
-	public function testFinalWithSemiStillParses():Void {
-		final stmts:Array<HxStatement> = parseFunctionBody('final foo = 5;');
+	public function testFinalWithSemiStillParses(): Void {
+		final stmts: Array<HxStatement> = parseFunctionBody('final foo = 5;');
 		Assert.equals(1, stmts.length);
 	}
 
 	// ======== Round-trip — writer emits canonical `;` ========
 
-	public function testRoundTripCanonicalisesMissingSemi():Void {
+	public function testRoundTripCanonicalisesMissingSemi(): Void {
 		// Source has no `;` after the switch close; the writer always
 		// emits `;`, so the second pass produces `;`-terminated form
 		// and the third pass agrees. Idempotency holds.
@@ -110,8 +117,8 @@ class HxVarStmtTrailOptSliceTest extends HxTestHelpers {
 
 	// ======== Helpers ========
 
-	private function parseFunctionBody(src:String):Array<HxStatement> {
-		final wrapped:String = 'class C { static function m() { ${src} } }';
+	private function parseFunctionBody(src: String): Array<HxStatement> {
+		final wrapped: String = 'class C { static function m() { ${src} } }';
 		return fnBodyStmts(parseSingleFnDecl(wrapped));
 	}
 

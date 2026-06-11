@@ -34,91 +34,92 @@ class HxSharpErrorSliceTest extends HxTestHelpers {
 
 	// -- Isolated ctor: module-decl scope, double-quoted, verbatim --
 
-	public function testErrorDeclModuleScope():Void {
-		final module:HxModule = HaxeModuleParser.parse('#error "please implement"');
+	public function testErrorDeclModuleScope(): Void {
+		final module: HxModule = HaxeModuleParser.parse('#error "please implement"');
 		Assert.equals(1, module.decls.length);
-		Assert.equals('"please implement"', (expectErrorDecl(module.decls[0].decl) : String));
+		Assert.equals('"please implement"', (expectErrorDecl(module.decls[0].decl): String));
 	}
 
 	// -- Isolated ctor: single-quoted message captured WITH quotes --
 
-	public function testErrorDeclSingleQuoted():Void {
-		final module:HxModule = HaxeModuleParser.parse("#error 'just a message'");
+	public function testErrorDeclSingleQuoted(): Void {
+		final module: HxModule = HaxeModuleParser.parse("#error 'just a message'");
 		Assert.equals(1, module.decls.length);
-		Assert.equals("'just a message'", (expectErrorDecl(module.decls[0].decl) : String));
+		Assert.equals("'just a message'", (expectErrorDecl(module.decls[0].decl): String));
 	}
 
 	// -- Isolated ctor: class-member scope --
 
-	public function testErrorMemberScope():Void {
-		final cls:HxClassDecl = HaxeParser.parse('class C {\n\t#error "todo"\n}');
+	public function testErrorMemberScope(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\t#error "todo"\n}');
 		Assert.equals(1, cls.members.length);
-		Assert.equals('"todo"', (expectErrorMember(cls.members[0].member) : String));
+		Assert.equals('"todo"', (expectErrorMember(cls.members[0].member): String));
 	}
 
 	// -- Isolated ctor: statement scope --
 
-	public function testErrorStmtScope():Void {
-		final cls:HxClassDecl = HaxeParser.parse('class C {\n\tfunction f():Void {\n\t\t#error "todo"\n\t}\n}');
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testErrorStmtScope(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f():Void {\n\t\t#error "todo"\n\t}\n}');
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(1, stmts.length);
-		Assert.equals('"todo"', (expectErrorStmt(stmts[0]) : String));
+		Assert.equals('"todo"', (expectErrorStmt(stmts[0]): String));
 	}
 
 	// -- Corpus `other/sharp_error`: `#if java #error #end` then a class --
 
-	public function testSharpErrorCorpusModuleForm():Void {
-		final module:HxModule = HaxeModuleParser.parse(
+	public function testSharpErrorCorpusModuleForm(): Void {
+		final module: HxModule = HaxeModuleParser.parse(
 			'#if java\n#error "please implement"\n#end\nclass Main {\n\tpublic function new() {}\n}'
 		);
 		Assert.equals(2, module.decls.length);
-		final cond:HxConditionalDecl = expectConditionalDecl(module.decls[0].decl);
-		Assert.equals('java', (cond.cond : String));
+		final cond: HxConditionalDecl = expectConditionalDecl(module.decls[0].decl);
+		Assert.equals('java', (cond.cond: String));
 		Assert.equals(1, cond.body.length);
-		Assert.equals('"please implement"', (expectErrorDecl(cond.body[0].decl) : String));
-		Assert.equals('Main', (expectClassDecl(module.decls[1]).name : String));
+		Assert.equals('"please implement"', (expectErrorDecl(cond.body[0].decl): String));
+		Assert.equals('Main', (expectClassDecl(module.decls[1]).name: String));
 	}
 
 	// -- Corpus `issue_298` shape: `#error` guarded at member + stmt scope --
 
-	public function testSharpErrorCorpusMultiScope():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
+	public function testSharpErrorCorpusMultiScope(): Void {
+		final cls: HxClassDecl = HaxeParser.parse(
 			'class Main {\n#if cs\n#error \'msg\'\n#end\n\tpublic function new() {\n\t\t#if cs\n#error \'msg\'\n#end\n\t}\n}'
 		);
 		Assert.equals(2, cls.members.length);
-		final memberCond:HxConditionalMember = expectConditionalMember(cls.members[0].member);
-		Assert.equals('cs', (memberCond.cond : String));
-		Assert.equals("'msg'", (expectErrorMember(memberCond.body[0].member) : String));
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[1].member));
-		final stmtCond:HxConditionalStmt = expectConditionalStmt(stmts[0]);
-		Assert.equals('cs', (stmtCond.cond : String));
-		Assert.equals("'msg'", (expectErrorStmt(stmtCond.body[0]) : String));
+		final memberCond: HxConditionalMember = expectConditionalMember(cls.members[0].member);
+		Assert.equals('cs', (memberCond.cond: String));
+		Assert.equals("'msg'", (expectErrorMember(memberCond.body[0].member): String));
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[1].member));
+		final stmtCond: HxConditionalStmt = expectConditionalStmt(stmts[0]);
+		Assert.equals('cs', (stmtCond.cond: String));
+		Assert.equals("'msg'", (expectErrorStmt(stmtCond.body[0]): String));
 	}
 
 	// -- Single-line: the quote-delimited regex must NOT eat `#elseif` --
 
-	public function testSharpErrorSingleLineNoOverEat():Void {
-		final module:HxModule = HaxeModuleParser.parse('#if js #error "js is defined" #elseif php #else #end');
+	public function testSharpErrorSingleLineNoOverEat(): Void {
+		final module: HxModule = HaxeModuleParser.parse('#if js #error "js is defined" #elseif php #else #end');
 		Assert.equals(1, module.decls.length);
-		final cond:HxConditionalDecl = expectConditionalDecl(module.decls[0].decl);
-		Assert.equals('js', (cond.cond : String));
-		Assert.equals('"js is defined"', (expectErrorDecl(cond.body[0].decl) : String));
+		final cond: HxConditionalDecl = expectConditionalDecl(module.decls[0].decl);
+		Assert.equals('js', (cond.cond: String));
+		Assert.equals('"js is defined"', (expectErrorDecl(cond.body[0].decl): String));
 		Assert.equals(1, cond.elseifs.length);
-		Assert.equals('php', (cond.elseifs[0].cond : String));
+		Assert.equals('php', (cond.elseifs[0].cond: String));
 	}
 
 	// -- Idempotency on the corpus module form --
 
-	public function testSharpErrorRoundTrip():Void {
+	public function testSharpErrorRoundTrip(): Void {
 		roundTrip('#if java\n#error "please implement"\n#end\nclass Main {\n\tpublic function new() {}\n}');
 	}
 
 	// -- Regression: a module with no `#error` is unaffected --
 
-	public function testNoSharpErrorRegression():Void {
-		final module:HxModule = HaxeModuleParser.parse('class C {\n\tvar x:Int;\n}');
+	public function testNoSharpErrorRegression(): Void {
+		final module: HxModule = HaxeModuleParser.parse('class C {\n\tvar x:Int;\n}');
 		Assert.equals(1, module.decls.length);
-		final cls:HxClassDecl = expectClassDecl(module.decls[0]);
-		Assert.equals('x', (expectVarMember(cls.members[0].member).name : String));
+		final cls: HxClassDecl = expectClassDecl(module.decls[0]);
+		Assert.equals('x', (expectVarMember(cls.members[0].member).name: String));
 	}
+
 }

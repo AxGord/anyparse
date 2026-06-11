@@ -24,81 +24,74 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 @:nullSafety(Strict)
 class HxMaxAnywhereInFileSliceTest extends Test {
 
-	public function new():Void {
+	public function new(): Void {
 		super();
 	}
 
-	public function testDefaultMatchesUpstream():Void {
-		final defaults:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
+	public function testDefaultMatchesUpstream(): Void {
+		final defaults: HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
 		Assert.equals(1, defaults.maxConsecutiveBlanks);
 	}
 
-	public function testZeroStripsAllBlanks():Void {
-		final src:String = 'package;\n\n\nclass Main {\n\tpublic function new() {}\n}';
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"emptyLines": {"maxAnywhereInFile": 0}}'
-		);
-		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+	public function testZeroStripsAllBlanks(): Void {
+		final src: String = 'package;\n\n\nclass Main {\n\tpublic function new() {}\n}';
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"emptyLines": {"maxAnywhereInFile": 0}}');
+		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.equals('package;\nclass Main {\n\tpublic function new() {}\n}\n', out);
 	}
 
-	public function testOneCapsToOneBlank():Void {
-		final src:String = 'package;\n\n\n\nclass Main {}';
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
-		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+	public function testOneCapsToOneBlank(): Void {
+		final src: String = 'package;\n\n\n\nclass Main {}';
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.equals('package;\n\nclass Main {}\n', out);
 	}
 
-	public function testTwoAllowsTwoBlanks():Void {
+	public function testTwoAllowsTwoBlanks(): Void {
 		// `afterPackage:3` requests 3 blanks; cap:2 trims to 2.
-		final src:String = 'package;\nclass Main {}';
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final src: String = 'package;\nclass Main {}';
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"emptyLines": {"afterPackage": 3, "maxAnywhereInFile": 2}}'
 		);
-		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.equals('package;\n\n\nclass Main {}\n', out);
 	}
 
-	public function testNegativeOneDisablesCap():Void {
+	public function testNegativeOneDisablesCap(): Void {
 		// `afterPackage:4` requests 4 blanks; cap:-1 (off) lets them through.
-		final src:String = 'package;\nclass Main {}';
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"emptyLines": {"afterPackage": 4}}'
-		);
+		final src: String = 'package;\nclass Main {}';
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"emptyLines": {"afterPackage": 4}}');
 		opts.maxConsecutiveBlanks = -1;
-		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.equals('package;\n\n\n\n\nclass Main {}\n', out);
 	}
 
-	public function testCapsAcrossClassClassPair():Void {
+	public function testCapsAcrossClassClassPair(): Void {
 		// Source carries 4 blanks between two single-line classes; the
 		// default cap:1 trims the inter-class gap down to 1 blank.
-		final src:String = 'class A {}\n\n\n\n\nclass B {}';
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
-		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		final src: String = 'class A {}\n\n\n\n\nclass B {}';
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.equals('class A {}\n\nclass B {}\n', out);
 	}
 
-	public function testConfigLoaderMapsZero():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"emptyLines": {"maxAnywhereInFile": 0}}'
-		);
+	public function testConfigLoaderMapsZero(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"emptyLines": {"maxAnywhereInFile": 0}}');
 		Assert.equals(0, opts.maxConsecutiveBlanks);
 	}
 
-	public function testConfigLoaderMissingKeyKeepsDefault():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	public function testConfigLoaderMissingKeyKeepsDefault(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		Assert.equals(1, opts.maxConsecutiveBlanks);
 	}
 
-	public function testCapOverridesAfterPackage():Void {
+	public function testCapOverridesAfterPackage(): Void {
 		// `afterPackage:2` would emit 2 blanks; default `maxConsecutiveBlanks:1`
 		// caps that back to 1 blank — fork's mark-then-cap ordering.
-		final src:String = 'package;\nclass Main {}';
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"emptyLines": {"afterPackage": 2}}'
-		);
-		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		final src: String = 'package;\nclass Main {}';
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"emptyLines": {"afterPackage": 2}}');
+		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.equals('package;\n\nclass Main {}\n', out);
 	}
+
 }

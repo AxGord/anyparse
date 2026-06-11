@@ -27,22 +27,22 @@ import anyparse.format.wrap.WrapMode;
 @:nullSafety(Strict)
 class HxMethodChainCloseTrailingTest extends Test {
 
-	private static final _forceBuildParser:Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
-	private static final _forceBuildWriter:Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
+	private static final _forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
+	private static final _forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
-	public function new():Void {
+	public function new(): Void {
 		super();
 	}
 
-	public function testTrailingLineCommentBetweenChainSegmentsRoundTrips():Void {
-		final source:String = 'class Foo {\n\tstatic function f() {\n\t\ta.b().c() // mid\n\t\t\t.d();\n\t}\n}';
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
-		opts.methodChainWrap = {rules: [], defaultMode: WrapMode.OnePerLineAfterFirst};
+	public function testTrailingLineCommentBetweenChainSegmentsRoundTrips(): Void {
+		final source: String = 'class Foo {\n\tstatic function f() {\n\t\ta.b().c() // mid\n\t\t\t.d();\n\t}\n}';
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		opts.methodChainWrap = { rules: [], defaultMode: WrapMode.OnePerLineAfterFirst };
 		opts.finalNewline = false;
 		final ast = HaxeModuleTriviaParser.parse(source);
-		final out:String = HaxeModuleTriviaWriter.write(ast, opts);
-		Assert.isTrue(out.indexOf('.c() // mid') != -1,
-			'expected `.c() // mid` preserved on the chain segment line: <$out>');
+		final out: String = HaxeModuleTriviaWriter.write(ast, opts);
+		Assert.isTrue(out.indexOf('.c() // mid') != -1, 'expected `.c() // mid` preserved on the chain segment line: <$out>');
 		Assert.isTrue(out.indexOf('.d();') != -1, 'expected `.d();` follows: <$out>');
 	}
+
 }

@@ -36,93 +36,96 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 @:nullSafety(Strict)
 class HxMultilineDeclSliceTest extends Test {
 
-	public function new():Void {
+	public function new(): Void {
 		super();
 	}
 
-	public function testDefaultsMatchUpstream():Void {
-		final defaults:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
+	public function testDefaultsMatchUpstream(): Void {
+		final defaults: HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
 		Assert.equals(1, defaults.afterMultilineDecl);
 		Assert.equals(1, defaults.beforeMultilineDecl);
 	}
 
-	public function testBlankAfterMultilineClass():Void {
-		final out:String = write('class Foo {\n\tvar x:Int;\n}\nfunction bar() {}');
+	public function testBlankAfterMultilineClass(): Void {
+		final out: String = write('class Foo {\n\tvar x:Int;\n}\nfunction bar() {}');
 		Assert.equals('class Foo {\n\tvar x:Int;\n}\n\nfunction bar() {}\n', out);
 	}
 
-	public function testBlankBeforeMultilineFn():Void {
-		final out:String = write('function a() {}\nfunction b() {\n\ttrace(1);\n}');
+	public function testBlankBeforeMultilineFn(): Void {
+		final out: String = write('function a() {}\nfunction b() {\n\ttrace(1);\n}');
 		Assert.equals('function a() {}\n\nfunction b() {\n\ttrace(1);\n}\n', out);
 	}
 
-	public function testEmptyClassesStayFlat():Void {
-		final out:String = write('class A {}\nclass B {}\nclass C {}');
+	public function testEmptyClassesStayFlat(): Void {
+		final out: String = write('class A {}\nclass B {}\nclass C {}');
 		Assert.equals('class A {}\nclass B {}\nclass C {}\n', out, 'empty-body classes are single-line — predicate gate kept inert');
 	}
 
-	public function testEmptyFnsStayFlat():Void {
-		final out:String = write('function a() {}\nfunction b() {}\nfunction c() {}');
+	public function testEmptyFnsStayFlat(): Void {
+		final out: String = write('function a() {}\nfunction b() {}\nfunction c() {}');
 		Assert.equals('function a() {}\nfunction b() {}\nfunction c() {}\n', out);
 	}
 
-	public function testMultiToMultiSingleBlank():Void {
-		final out:String = write('class A {\n\tvar x:Int;\n}\nclass B {\n\tvar y:Int;\n}');
-		Assert.equals('class A {\n\tvar x:Int;\n}\n\nclass B {\n\tvar y:Int;\n}\n', out, 'multi→multi takes afterMultilineDecl, before* does not double up');
+	public function testMultiToMultiSingleBlank(): Void {
+		final out: String = write('class A {\n\tvar x:Int;\n}\nclass B {\n\tvar y:Int;\n}');
+		Assert.equals(
+			'class A {\n\tvar x:Int;\n}\n\nclass B {\n\tvar y:Int;\n}\n', out,
+			'multi→multi takes afterMultilineDecl, before* does not double up'
+		);
 	}
 
-	public function testZeroStripsBlankAfterMultiline():Void {
-		final out:String = writeWithCounts('class Foo {\n\tvar x:Int;\n}\n\nfunction bar() {}', 0, 1);
+	public function testZeroStripsBlankAfterMultiline(): Void {
+		final out: String = writeWithCounts('class Foo {\n\tvar x:Int;\n}\n\nfunction bar() {}', 0, 1);
 		Assert.equals('class Foo {\n\tvar x:Int;\n}\nfunction bar() {}\n', out);
 	}
 
-	public function testZeroStripsBlankBeforeMultiline():Void {
-		final out:String = writeWithCounts('function a() {}\n\nfunction b() {\n\ttrace(1);\n}', 1, 0);
+	public function testZeroStripsBlankBeforeMultiline(): Void {
+		final out: String = writeWithCounts('function a() {}\n\nfunction b() {\n\ttrace(1);\n}', 1, 0);
 		Assert.equals('function a() {}\nfunction b() {\n\ttrace(1);\n}\n', out);
 	}
 
-	public function testTwoEmitsTwoBlanksAfterMultiline():Void {
-		final out:String = writeWithCounts('class Foo {\n\tvar x:Int;\n}\nfunction bar() {}', 2, 1);
+	public function testTwoEmitsTwoBlanksAfterMultiline(): Void {
+		final out: String = writeWithCounts('class Foo {\n\tvar x:Int;\n}\nfunction bar() {}', 2, 1);
 		Assert.equals('class Foo {\n\tvar x:Int;\n}\n\n\nfunction bar() {}\n', out);
 	}
 
-	public function testEnumWithCtorsTreatedMultiline():Void {
-		final out:String = write('enum E {\n\tA;\n\tB;\n}\nclass C {}');
+	public function testEnumWithCtorsTreatedMultiline(): Void {
+		final out: String = write('enum E {\n\tA;\n\tB;\n}\nclass C {}');
 		Assert.equals('enum E {\n\tA;\n\tB;\n}\n\nclass C {}\n', out);
 	}
 
-	public function testEmptyEnumStaysFlat():Void {
-		final out:String = write('enum E {}\nclass C {}');
+	public function testEmptyEnumStaysFlat(): Void {
+		final out: String = write('enum E {}\nclass C {}');
 		Assert.equals('enum E {}\nclass C {}\n', out);
 	}
 
-	public function testFnExprBodyTreatedSingleLine():Void {
+	public function testFnExprBodyTreatedSingleLine(): Void {
 		// Force functionBody=Same so ExprBody renders flat; the predicate
 		// classifies ExprBody as kind=0 regardless, so the gap stays
 		// source-driven (no blank inserted).
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.functionBody = anyparse.format.BodyPolicy.Same;
-		final src:String = 'function a() trace(1);\nfunction b() trace(2);';
-		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		final src: String = 'function a() trace(1);\nfunction b() trace(2);';
+		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.equals('function a() trace(1);\nfunction b() trace(2);\n', out, 'ExprBody is kind=0 (single-line)');
 	}
 
-	public function testFnNoBodyTreatedSingleLine():Void {
-		final out:String = write('function a() {}\nfunction b() {}');
+	public function testFnNoBodyTreatedSingleLine(): Void {
+		final out: String = write('function a() {}\nfunction b() {}');
 		Assert.equals('function a() {}\nfunction b() {}\n', out);
 	}
 
-	public function testInteractionWithAfterPackage():Void {
-		final out:String = write('package;\nclass Foo {\n\tvar x:Int;\n}\nfunction bar() {}');
+	public function testInteractionWithAfterPackage(): Void {
+		final out: String = write('package;\nclass Foo {\n\tvar x:Int;\n}\nfunction bar() {}');
 		Assert.equals('package;\n\nclass Foo {\n\tvar x:Int;\n}\n\nfunction bar() {}\n', out);
 	}
 
-	private inline function write(src:String):String {
+	private inline function write(src: String): String {
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), HaxeFormatConfigLoader.loadHxFormatJson('{}'));
 	}
 
-	private inline function writeWithCounts(src:String, after:Int, before:Int):String {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	private inline function writeWithCounts(src: String, after: Int, before: Int): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.afterMultilineDecl = after;
 		opts.beforeMultilineDecl = before;
 		// Disable the final-pass blank-line cap so this slice's `after:2` /
@@ -131,4 +134,5 @@ class HxMultilineDeclSliceTest extends Test {
 		opts.maxConsecutiveBlanks = -1;
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
+
 }

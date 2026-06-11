@@ -13,9 +13,9 @@ import sys.io.File;
  * formatter's byte-exact output.
  */
 typedef HxTestCase = {
-	final config:String;
-	final input:String;
-	final expected:String;
+	final config: String;
+	final input: String;
+	final expected: String;
 }
 
 /**
@@ -29,9 +29,9 @@ typedef HxTestCase = {
 @:nullSafety(Strict)
 final class HxFormatterCorpusHelpers {
 
-	private static inline final ENV_KEY:String = 'ANYPARSE_HXFORMAT_FORK';
-	private static inline final SECTION_SEP:String = '\n---\n';
-	private static inline final EXPECTED_SECTIONS:Int = 3;
+	private static inline final ENV_KEY: String = 'ANYPARSE_HXFORMAT_FORK';
+	private static inline final SECTION_SEP: String = '\n---\n';
+	private static inline final EXPECTED_SECTIONS: Int = 3;
 
 	/**
 	 * Returns the absolute path to the haxe-formatter fork root, or
@@ -39,9 +39,9 @@ final class HxFormatterCorpusHelpers {
 	 * missing directory, or the target has no `sys` package (e.g.
 	 * browser-style js builds).
 	 */
-	public static function forkRoot():Null<String> {
+	public static function forkRoot(): Null<String> {
 		#if (sys || nodejs)
-		final root:Null<String> = Sys.getEnv(ENV_KEY);
+		final root: Null<String> = Sys.getEnv(ENV_KEY);
 		if (root == null || root == '') return null;
 		if (!FileSystem.exists(root) || !FileSystem.isDirectory(root)) return null;
 		return root;
@@ -59,10 +59,10 @@ final class HxFormatterCorpusHelpers {
 	 * `forkRoot()` already returns `null` there and the consuming
 	 * harness skips before calling this helper.
 	 */
-	public static function readHxTest(path:String):Null<HxTestCase> {
+	public static function readHxTest(path: String): Null<HxTestCase> {
 		#if (sys || nodejs)
-		final content:String = File.getContent(path);
-		final parts:Array<String> = content.split(SECTION_SEP);
+		final content: String = File.getContent(path);
+		final parts: Array<String> = content.split(SECTION_SEP);
 		if (parts.length != EXPECTED_SECTIONS) return null;
 		return {
 			config: StringTools.trim(parts[0]),
@@ -79,13 +79,13 @@ final class HxFormatterCorpusHelpers {
 	 * convention around each section in the `.hxtest` format.
 	 * Preserves any further newlines that are meaningful content.
 	 */
-	private static function stripPadNewlines(s:String):String {
-		var r:String = s;
+	private static function stripPadNewlines(s: String): String {
+		var r: String = s;
 		if (r.length > 0 && r.charAt(0) == '\n') r = r.substr(1);
 		if (r.length > 0 && r.charAt(r.length - 1) == '\n') r = r.substr(0, r.length - 1);
 		return r;
 	}
 
-	private function new():Void {}
+	private function new(): Void {}
 
 }

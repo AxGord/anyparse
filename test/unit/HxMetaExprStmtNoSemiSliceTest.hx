@@ -35,25 +35,23 @@ class HxMetaExprStmtNoSemiSliceTest extends HxTestHelpers {
 
 	// -- Isolated: @:meta return switch — single statement, no `;` --
 
-	public function testMetaReturnSwitchNoSemi():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
+	public function testMetaReturnSwitchNoSemi(): Void {
+		final cls: HxClassDecl = HaxeParser.parse(
 			'class C {\n\tfunction f() {\n\t\t@:nullSafety(Off) return switch x { case _: 0; }\n\t}\n}'
 		);
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(1, stmts.length);
-		final e:HxExpr = expectExprStmt(stmts[0]);
+		final e: HxExpr = expectExprStmt(stmts[0]);
 		Assert.isTrue(e.match(MetaExpr(_)));
 	}
 
 	// -- Isolated: @:meta if — single statement, no `;` --
 
-	public function testMetaIfBlockNoSemi():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
-			'class C {\n\tfunction f() {\n\t\t@:nullSafety(Off) if (foo) { 1; }\n\t}\n}'
-		);
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testMetaIfBlockNoSemi(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\t@:nullSafety(Off) if (foo) { 1; }\n\t}\n}');
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(1, stmts.length);
-		final e:HxExpr = expectExprStmt(stmts[0]);
+		final e: HxExpr = expectExprStmt(stmts[0]);
 		Assert.isTrue(e.match(MetaExpr(_)));
 	}
 
@@ -61,11 +59,9 @@ class HxMetaExprStmtNoSemiSliceTest extends HxTestHelpers {
 	// must unwind through both layers to reach the brace-terminated
 	// inner expression.
 
-	public function testNestedMetaIfBlockNoSemi():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
-			'class C {\n\tfunction f() {\n\t\t@:a @:b if (foo) { 1; }\n\t}\n}'
-		);
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testNestedMetaIfBlockNoSemi(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\t@:a @:b if (foo) { 1; }\n\t}\n}');
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(1, stmts.length);
 	}
 
@@ -73,11 +69,11 @@ class HxMetaExprStmtNoSemiSliceTest extends HxTestHelpers {
 	// next statement; the gate must terminate the first statement at
 	// the brace so the next one parses cleanly.
 
-	public function testMetaReturnSwitchFollowedByStmt():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
+	public function testMetaReturnSwitchFollowedByStmt(): Void {
+		final cls: HxClassDecl = HaxeParser.parse(
 			'class C {\n\tfunction f() {\n\t\t@:nullSafety(Off) return switch x { case _: 0; }\n\t\ty = 5;\n\t}\n}'
 		);
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(2, stmts.length);
 	}
 
@@ -89,34 +85,30 @@ class HxMetaExprStmtNoSemiSliceTest extends HxTestHelpers {
 	// next byte is NOT `}` (multi-stmt `@:m x + 1\n\tnext-stmt`
 	// remains required to throw).
 
-	public function testMetaPlainExprBeforeCloseBraceNoSemi():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
-			'class C {\n\tfunction f() {\n\t\t@:nullSafety(Off) x + 1\n\t}\n}'
-		);
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testMetaPlainExprBeforeCloseBraceNoSemi(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\t@:nullSafety(Off) x + 1\n\t}\n}');
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(1, stmts.length);
 	}
 
-	public function testMetaPlainExprFollowedByIdentRegression():Void {
-		Assert.raises(() -> HaxeParser.parse(
-			'class C {\n\tfunction f() {\n\t\t@:nullSafety(Off) x + 1\n\t\ty = 5\n\t}\n}'
-		));
+	public function testMetaPlainExprFollowedByIdentRegression(): Void {
+		Assert.raises(() -> HaxeParser.parse('class C {\n\tfunction f() {\n\t\t@:nullSafety(Off) x + 1\n\t\ty = 5\n\t}\n}'));
 	}
 
 	// -- Regression: pre-slice path with `;` still parses --
 
-	public function testMetaReturnSwitchWithSemiUnchanged():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
+	public function testMetaReturnSwitchWithSemiUnchanged(): Void {
+		final cls: HxClassDecl = HaxeParser.parse(
 			'class C {\n\tfunction f() {\n\t\t@:nullSafety(Off) return switch x { case _: 0; };\n\t}\n}'
 		);
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(1, stmts.length);
 	}
 
 	// -- Corpus driver: issue_602 input section verbatim --
 
-	public function testCorpusIssue602ReturnMetadata():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
+	public function testCorpusIssue602ReturnMetadata(): Void {
+		final cls: HxClassDecl = HaxeParser.parse(
 			'class Main {\n\tstatic function foobar() {\n\t\tfunction foo() {\n\t\t\treturn bar;\n\t\t}\n\t\t@:nullSafety(Off) return switch thing {\n\t\t\tcase something: null;\n\t\t};\n\t\t@:nullSafety(Off) return switch thing {\n\t\t\tcase something: null;\n\t\t}\n\t}\n}'
 		);
 		Assert.equals(1, cls.members.length);
@@ -126,8 +118,8 @@ class HxMetaExprStmtNoSemiSliceTest extends HxTestHelpers {
 	// (the file's 4th case `@:m @:m if (…) {…}` is the nested-meta
 	// shape already covered by testNestedMetaIfBlockNoSemi).
 
-	public function testCorpusIssue567MetadataIfExpression():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
+	public function testCorpusIssue567MetadataIfExpression(): Void {
+		final cls: HxClassDecl = HaxeParser.parse(
 			'class Main {\n\tstatic function main() {\n\t\t@:nullSafety(Off) if (foo) {\n\t\t\treturn;\n\t}\n\t\t@:nullSafety(Off)\n\t\tif (foo) {\n\t\t\treturn;\n\t\t}\n\t}\n}'
 		);
 		Assert.equals(1, cls.members.length);
@@ -138,17 +130,18 @@ class HxMetaExprStmtNoSemiSliceTest extends HxTestHelpers {
 	// mode emits `;` after the brace; the second write must agree
 	// with the first.
 
-	public function testCorpusIssue602RoundTrip():Void {
+	public function testCorpusIssue602RoundTrip(): Void {
 		roundTrip(
 			'class Main {\n\tstatic function foobar() {\n\t\tfunction foo() {\n\t\t\treturn bar;\n\t\t}\n\t\t@:nullSafety(Off) return switch thing {\n\t\t\tcase something: null;\n\t\t};\n\t\t@:nullSafety(Off) return switch thing {\n\t\t\tcase something: null;\n\t\t}\n\t}\n}',
 			'issue_602_return_metadata'
 		);
 	}
 
-	public function testCorpusIssue567RoundTrip():Void {
+	public function testCorpusIssue567RoundTrip(): Void {
 		roundTrip(
 			'class Main {\n\tstatic function main() {\n\t\t@:nullSafety(Off) if (foo) {\n\t\t\treturn;\n\t}\n\t\t@:nullSafety(Off)\n\t\tif (foo) {\n\t\t\treturn;\n\t\t}\n\t}\n}',
 			'issue_567_metadata_if_expression'
 		);
 	}
+
 }

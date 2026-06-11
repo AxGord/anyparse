@@ -19,81 +19,89 @@ import anyparse.query.Cli;
 @:nullSafety(Strict)
 class ApqProbeCliTest extends Test {
 
-	public function testHelpReturnsOk():Void {
+	public function testHelpReturnsOk(): Void {
 		Assert.equals(0, Cli.run(['probe', '--help']));
 	}
 
-	public function testInlineCodeParses():Void {
+	public function testInlineCodeParses(): Void {
 		Assert.equals(0, Cli.run(['probe', 'class C {}']));
 	}
 
-	public function testInlineCodeWithDepth():Void {
+	public function testInlineCodeWithDepth(): Void {
 		Assert.equals(0, Cli.run(['probe', 'class C { function f() { return 1; } }', '--depth', '5']));
 	}
 
-	public function testInlineCodeWithSelect():Void {
+	public function testInlineCodeWithSelect(): Void {
 		Assert.equals(0, Cli.run(['probe', 'class C { var x:Int = 1; }', '--select', 'VarMember']));
 	}
 
-	public function testInlineCodeWithWriterOutput():Void {
+	public function testInlineCodeWithWriterOutput(): Void {
 		Assert.equals(0, Cli.run(['probe', 'class C {}', '--writer-output']));
 	}
 
-	public function testInlineCodeWithWriterOutputDiff():Void {
-		Assert.equals(0, Cli.run(['probe', 'class C { static function f() { return 1; } }', '--writer-output', '--diff']));
+	public function testInlineCodeWithWriterOutputDiff(): Void {
+		Assert.equals(
+			0,
+			Cli.run([
+				'probe',
+				'class C { static function f() { return 1; } }',
+				'--writer-output',
+				'--diff'
+			])
+		);
 	}
 
-	public function testInlineCodeWithWriterOutputPlain():Void {
+	public function testInlineCodeWithWriterOutputPlain(): Void {
 		Assert.equals(0, Cli.run(['probe', 'class C {}', '--writer-output-plain']));
 	}
 
-	public function testParseErrorExitsRuntime():Void {
+	public function testParseErrorExitsRuntime(): Void {
 		// Unparseable: closing brace missing. Must EXIT_RUNTIME (1),
 		// not EXIT_USAGE (2) — the source IS provided, the engine
 		// just couldn't accept it.
 		Assert.equals(1, Cli.run(['probe', 'class C {']));
 	}
 
-	public function testMissingCodeArgExitsUsage():Void {
+	public function testMissingCodeArgExitsUsage(): Void {
 		// Only flags, no positional code.
 		Assert.equals(2, Cli.run(['probe', '--depth', '5']));
 	}
 
-	public function testNoArgsExitsOkOnHelp():Void {
+	public function testNoArgsExitsOkOnHelp(): Void {
 		// Pre-existing convention: no args prints usage and exits 0.
 		// (printProbeUsage path; bare `apq probe` shouldn't crash.)
 		Assert.equals(0, Cli.run(['probe']));
 	}
 
-	public function testTwoPositionalsExitsUsage():Void {
+	public function testTwoPositionalsExitsUsage(): Void {
 		Assert.equals(2, Cli.run(['probe', 'class A {}', 'class B {}']));
 	}
 
-	public function testLangFlagBeforeCodeIsForwarded():Void {
+	public function testLangFlagBeforeCodeIsForwarded(): Void {
 		// Exactly what the `hxq` shim emits: `apq probe --lang haxe <code>`.
 		// The argv walker MUST forward `--lang haxe` to runAst without
 		// consuming `<code>` as the value of `--lang`.
 		Assert.equals(0, Cli.run(['probe', '--lang', 'haxe', 'class C {}']));
 	}
 
-	public function testFlagsAfterCode():Void {
+	public function testFlagsAfterCode(): Void {
 		Assert.equals(0, Cli.run(['probe', 'class C {}', '--depth', '3', '--json']));
 	}
 
-	public function testFlagsAroundCode():Void {
+	public function testFlagsAroundCode(): Void {
 		Assert.equals(0, Cli.run(['probe', '--lang', 'haxe', 'class C {}', '--depth', '3']));
 	}
 
-	public function testAstFileAndCodeMutexErrors():Void {
+	public function testAstFileAndCodeMutexErrors(): Void {
 		// Direct call to ast surface — both file and --code is invalid.
 		Assert.equals(2, Cli.run(['ast', '--code', 'class A {}', 'someFile.hx']));
 	}
 
-	public function testAstMissingAllThreeSourcesErrors():Void {
+	public function testAstMissingAllThreeSourcesErrors(): Void {
 		Assert.equals(2, Cli.run(['ast']));
 	}
 
-	public function testAstCodeFlagDirect():Void {
+	public function testAstCodeFlagDirect(): Void {
 		// The underlying --code flag works as a direct ast option, not
 		// only through the probe subcommand.
 		Assert.equals(0, Cli.run(['ast', '--code', 'class C {}']));
@@ -105,15 +113,16 @@ class ApqProbeCliTest extends Test {
 	 * flag is recognized end-to-end (exit 0); content is checked
 	 * elsewhere.
 	 */
-	public function testInlineCodeWithSpans():Void {
+	public function testInlineCodeWithSpans(): Void {
 		Assert.equals(0, Cli.run(['probe', 'class C { var x = a ? 1. : 2.; }', '--spans']));
 	}
 
-	public function testAstSpansFlagDirect():Void {
+	public function testAstSpansFlagDirect(): Void {
 		Assert.equals(0, Cli.run(['ast', '--code', 'class C {}', '--spans']));
 	}
 
-	public function testAstSpansComposesWithDepth():Void {
+	public function testAstSpansComposesWithDepth(): Void {
 		Assert.equals(0, Cli.run(['ast', '--code', 'class C { var x:Int = 1; }', '--spans', '--depth', '4']));
 	}
+
 }

@@ -28,83 +28,84 @@ import anyparse.grammar.haxe.HxTypedefDecl;
 @:nullSafety(Strict)
 class HxTypeIntersectionSliceTest extends HxTestHelpers {
 
-	private function expectAnonFieldCount(t:HxType):Int {
+	private function expectAnonFieldCount(t: HxType): Int {
 		return switch t {
 			case Anon(fields): fields.length;
 			case _: throw 'expected HxType.Anon, got ${t}';
 		};
 	}
 
-	public function testTwoNamedOperands():Void {
-		final module:HxModule = HaxeModuleParser.parse('typedef X = A & B;');
+	public function testTwoNamedOperands(): Void {
+		final module: HxModule = HaxeModuleParser.parse('typedef X = A & B;');
 		Assert.equals(1, module.decls.length);
-		final td:HxTypedefDecl = expectTypedefDecl(module.decls[0]);
-		Assert.equals('X', (td.name : String));
-		Assert.equals('A', (expectNamedType(td.type).name : String));
+		final td: HxTypedefDecl = expectTypedefDecl(module.decls[0]);
+		Assert.equals('X', (td.name: String));
+		Assert.equals('A', (expectNamedType(td.type).name: String));
 		Assert.equals(1, td.intersections.length);
-		Assert.equals('B', (expectNamedType(td.intersections[0].type).name : String));
+		Assert.equals('B', (expectNamedType(td.intersections[0].type).name: String));
 	}
 
-	public function testNamedAndEmptyAnon():Void {
+	public function testNamedAndEmptyAnon(): Void {
 		// The dominant corpus shape: `typedef X = WriteOptions & {};`.
-		final module:HxModule = HaxeModuleParser.parse('typedef X = WriteOptions & {};');
-		final td:HxTypedefDecl = expectTypedefDecl(module.decls[0]);
-		Assert.equals('WriteOptions', (expectNamedType(td.type).name : String));
+		final module: HxModule = HaxeModuleParser.parse('typedef X = WriteOptions & {};');
+		final td: HxTypedefDecl = expectTypedefDecl(module.decls[0]);
+		Assert.equals('WriteOptions', (expectNamedType(td.type).name: String));
 		Assert.equals(1, td.intersections.length);
 		Assert.equals(0, expectAnonFieldCount(td.intersections[0].type));
 	}
 
-	public function testNamedAndNonEmptyAnon():Void {
-		final module:HxModule = HaxeModuleParser.parse('typedef X = A & { a:Int };');
-		final td:HxTypedefDecl = expectTypedefDecl(module.decls[0]);
-		Assert.equals('A', (expectNamedType(td.type).name : String));
+	public function testNamedAndNonEmptyAnon(): Void {
+		final module: HxModule = HaxeModuleParser.parse('typedef X = A & { a:Int };');
+		final td: HxTypedefDecl = expectTypedefDecl(module.decls[0]);
+		Assert.equals('A', (expectNamedType(td.type).name: String));
 		Assert.equals(1, td.intersections.length);
 		Assert.equals(1, expectAnonFieldCount(td.intersections[0].type));
 	}
 
-	public function testFlatChain():Void {
+	public function testFlatChain(): Void {
 		// `A & B & C` is a flat tail: type=A, intersections=[B, C].
-		final module:HxModule = HaxeModuleParser.parse('typedef X = A & B & C;');
-		final td:HxTypedefDecl = expectTypedefDecl(module.decls[0]);
-		Assert.equals('A', (expectNamedType(td.type).name : String));
+		final module: HxModule = HaxeModuleParser.parse('typedef X = A & B & C;');
+		final td: HxTypedefDecl = expectTypedefDecl(module.decls[0]);
+		Assert.equals('A', (expectNamedType(td.type).name: String));
 		Assert.equals(2, td.intersections.length);
-		Assert.equals('B', (expectNamedType(td.intersections[0].type).name : String));
-		Assert.equals('C', (expectNamedType(td.intersections[1].type).name : String));
+		Assert.equals('B', (expectNamedType(td.intersections[0].type).name: String));
+		Assert.equals('C', (expectNamedType(td.intersections[1].type).name: String));
 	}
 
-	public function testBareTypedefNotAffected():Void {
+	public function testBareTypedefNotAffected(): Void {
 		// A non-intersection typedef RHS still resolves to `Named` with
 		// an empty intersection tail.
-		final module:HxModule = HaxeModuleParser.parse('typedef X = Int;');
-		final td:HxTypedefDecl = expectTypedefDecl(module.decls[0]);
-		Assert.equals('Int', (expectNamedType(td.type).name : String));
+		final module: HxModule = HaxeModuleParser.parse('typedef X = Int;');
+		final td: HxTypedefDecl = expectTypedefDecl(module.decls[0]);
+		Assert.equals('Int', (expectNamedType(td.type).name: String));
 		Assert.equals(0, td.intersections.length);
 	}
 
-	public function testWriterEmitsAroundSpacedAmpersand():Void {
-		final out:String = HxModuleWriter.write(HaxeModuleParser.parse('typedef X = A&B;'));
+	public function testWriterEmitsAroundSpacedAmpersand(): Void {
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse('typedef X = A&B;'));
 		Assert.isTrue(out.indexOf('A & B') != -1, 'expected `A & B` in: <$out>');
 	}
 
-	public function testWriterEmitsAroundSpacedWithAnon():Void {
-		final out:String = HxModuleWriter.write(HaxeModuleParser.parse('typedef X = WriteOptions&{};'));
+	public function testWriterEmitsAroundSpacedWithAnon(): Void {
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse('typedef X = WriteOptions&{};'));
 		Assert.isTrue(out.indexOf('WriteOptions & {') != -1, 'expected `WriteOptions & {` in: <$out>');
 	}
 
-	public function testIsOperatorNotBrokenByAmpersand():Void {
+	public function testIsOperatorNotBrokenByAmpersand(): Void {
 		// Regression guard: `is` right operand is HxType (no `&`), so a
 		// following expression-level `&&` is NOT consumed as intersection.
-		final src:String = 'class C { static function m():Void { if (xxxx is SomeType && yyyy is OtherType) trace(0); } }';
-		final out:String = HxModuleWriter.write(HaxeModuleParser.parse(src));
+		final src: String = 'class C { static function m():Void { if (xxxx is SomeType && yyyy is OtherType) trace(0); } }';
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src));
 		Assert.isTrue(out.indexOf('xxxx is SomeType') != -1, '`is` operand pair stayed glued in: <$out>');
 		Assert.isTrue(out.indexOf('&&') != -1, 'logical `&&` preserved in: <$out>');
 	}
 
-	public function testRoundTrip():Void {
+	public function testRoundTrip(): Void {
 		roundTrip('typedef X = A & B;', 'two-named');
 		roundTrip('typedef X = WriteOptions & {};', 'named-empty-anon');
 		roundTrip('typedef X = A & { a:Int };', 'named-nonempty-anon');
 		roundTrip('typedef X = A & B & C;', 'chain');
 		roundTrip('typedef X = Int;', 'bare-unaffected');
 	}
+
 }

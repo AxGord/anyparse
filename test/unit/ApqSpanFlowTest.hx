@@ -24,14 +24,14 @@ import anyparse.query.QueryNode;
  */
 class ApqSpanFlowTest extends Test {
 
-	public function testTopLevelClassDeclCarriesSpan():Void {
-		final source:String = 'class Foo { var x:Int; }';
-		final plugin:HaxeQueryPlugin = new HaxeQueryPlugin();
-		final tree:QueryNode = plugin.parseFile(source);
+	public function testTopLevelClassDeclCarriesSpan(): Void {
+		final source: String = 'class Foo { var x:Int; }';
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(source);
 		Assert.equals('module', tree.kind);
 		Assert.isNull(tree.span, 'module root has no span (HxModule is Seq)');
 		Assert.isTrue(tree.children.length > 0, 'must have at least one decl child');
-		final firstDecl:QueryNode = tree.children[0];
+		final firstDecl: QueryNode = tree.children[0];
 		Assert.notNull(firstDecl.span, 'top-level decl must carry a span');
 		final span = firstDecl.span;
 		if (span != null) {
@@ -41,12 +41,12 @@ class ApqSpanFlowTest extends Test {
 		}
 	}
 
-	public function testMultipleTopLevelDeclsHaveOrderedSpans():Void {
-		final source:String = 'class A {}\nclass B {}\nclass C {}';
-		final plugin:HaxeQueryPlugin = new HaxeQueryPlugin();
-		final tree:QueryNode = plugin.parseFile(source);
+	public function testMultipleTopLevelDeclsHaveOrderedSpans(): Void {
+		final source: String = 'class A {}\nclass B {}\nclass C {}';
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(source);
 		Assert.equals(3, tree.children.length);
-		var prevFrom:Int = -1;
+		var prevFrom: Int = -1;
 		for (decl in tree.children) {
 			final span = decl.span;
 			Assert.notNull(span, 'every top-level decl needs a span');
@@ -57,17 +57,17 @@ class ApqSpanFlowTest extends Test {
 		}
 	}
 
-	public function testSpanMonotonicityAcrossNestedDecls():Void {
-		final source:String = 'class X { function foo():Void { var n:Int = 0; } }';
-		final plugin:HaxeQueryPlugin = new HaxeQueryPlugin();
-		final tree:QueryNode = plugin.parseFile(source);
+	public function testSpanMonotonicityAcrossNestedDecls(): Void {
+		final source: String = 'class X { function foo():Void { var n:Int = 0; } }';
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(source);
 		// Walk the tree pre-order, collecting spans. We don't enforce
 		// strict monotonicity across nested nodes (parent's span starts
 		// before children's), only that nothing is out of source range.
 		walkAssertSpans(tree, source.length);
 	}
 
-	private function walkAssertSpans(node:QueryNode, sourceLen:Int):Void {
+	private function walkAssertSpans(node: QueryNode, sourceLen: Int): Void {
 		final span = node.span;
 		if (span != null) {
 			Assert.isTrue(span.from >= 0, '${node.kind}: from=${span.from} negative');
@@ -76,4 +76,5 @@ class ApqSpanFlowTest extends Test {
 		}
 		for (c in node.children) walkAssertSpans(c, sourceLen);
 	}
+
 }

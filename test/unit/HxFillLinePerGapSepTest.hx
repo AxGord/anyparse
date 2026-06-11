@@ -36,47 +36,44 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 @:nullSafety(Strict)
 final class HxFillLinePerGapSepTest extends Test {
 
-	private static final _forceBuildParser:Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
-	private static final _forceBuildWriter:Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
+	private static final _forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
+	private static final _forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
-	public function new():Void {
+	public function new(): Void {
 		super();
 	}
 
-	public function testSoftArgsStayInlineBeforeHardlineLedArg():Void {
+	public function testSoftArgsStayInlineBeforeHardlineLedArg(): Void {
 		// `f(id, false, {…})` with `leftCurly=Next` (objLit gets a leading
 		// hardline). Soft args `id`, `false` pack inline; only the gap
 		// before the objLit breaks.
-		final src:String = 'class Foo { static function go() { f(id, false, {longFieldA: 1, longFieldB: 2, longFieldC: 3, longFieldD: 4, longFieldE: 5}); } }';
-		final out:String = writeWith(src, '{"lineEnds": {"leftCurly": "both"}}');
-		Assert.isTrue(out.indexOf('f(id, false,\n') != -1,
-			'expected `id, false,` to stay inline before the objLit break in: <$out>');
-		Assert.isTrue(out.indexOf('id,\n') == -1,
-			'pre-fix `forceBreak` smeared `id,\\n` between args — must NOT appear: <$out>');
+		final src: String = 'class Foo { static function go() { f(id, false, {longFieldA: 1, longFieldB: 2, longFieldC: 3, longFieldD: 4, longFieldE: 5}); } }';
+		final out: String = writeWith(src, '{"lineEnds": {"leftCurly": "both"}}');
+		Assert.isTrue(out.indexOf('f(id, false,\n') != -1, 'expected `id, false,` to stay inline before the objLit break in: <$out>');
+		Assert.isTrue(out.indexOf('id,\n') == -1, 'pre-fix `forceBreak` smeared `id,\\n` between args — must NOT appear: <$out>');
 	}
 
-	public function testMultipleHardlineLedArgsAllBreak():Void {
+	public function testMultipleHardlineLedArgsAllBreak(): Void {
 		// `f({…}, {…})` with both args hardline-led: every chunk
 		// boundary forces the `Text(sep) + Line('\n')` break, so both
 		// objLits land on their own indented lines — same observable
 		// shape as the pre-slice `forceBreak` mechanism for the
 		// `issue_138` regression base.
-		final src:String = 'class Foo { static function go() { f({longFieldA: 1, longFieldB: 2, longFieldC: 3, longFieldD: 4}, {anotherFieldA: 1, anotherFieldB: 2, anotherFieldC: 3, anotherFieldD: 4}); } }';
-		final out:String = writeWith(src, '{"lineEnds": {"leftCurly": "both"}}');
+		final src: String = 'class Foo { static function go() { f({longFieldA: 1, longFieldB: 2, longFieldC: 3, longFieldD: 4}, {anotherFieldA: 1, anotherFieldB: 2, anotherFieldC: 3, anotherFieldD: 4}); } }';
+		final out: String = writeWith(src, '{"lineEnds": {"leftCurly": "both"}}');
 		// Both objLits should be on their own lines, with the comma
 		// after the first one's `}` followed by a hardline before the
 		// second `{`.
-		Assert.isTrue(out.indexOf('},\n') != -1,
-			'expected `},\\n` between the two hardline-led args in: <$out>');
+		Assert.isTrue(out.indexOf('},\n') != -1, 'expected `},\\n` between the two hardline-led args in: <$out>');
 		// And neither objLit should be glued inline to the call's open
 		// paren (both should land at the call's continuation indent
 		// after their leading hardline).
-		Assert.isTrue(out.indexOf('f({') == -1,
-			'expected break before first objLit (hardline-led) — must not glue inline in: <$out>');
+		Assert.isTrue(out.indexOf('f({') == -1, 'expected break before first objLit (hardline-led) — must not glue inline in: <$out>');
 	}
 
-	private inline function writeWith(src:String, configJson:String):String {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(configJson);
+	private inline function writeWith(src: String, configJson: String): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(configJson);
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
+
 }

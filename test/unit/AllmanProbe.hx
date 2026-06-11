@@ -12,40 +12,45 @@ import anyparse.grammar.haxe.HaxeModuleTriviaParser;
  */
 class AllmanProbe extends Test {
 
-	private static final _forceBuild:Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
+	private static final _forceBuild: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 
-	public function testAllmanEmptyClass():Void {
-		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse('class Main\n{\n}');
+	public function testAllmanEmptyClass(): Void {
+		final m: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse('class Main\n{\n}');
 		Assert.equals(1, m.decls.length);
 	}
 
-	public function testAllmanClassWithMember():Void {
-		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse('class Main\n{\n\tstatic function main() {}\n}');
+	public function testAllmanClassWithMember(): Void {
+		final m: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(
+			'class Main\n{\n\tstatic function main() {}\n}'
+		);
 		Assert.equals(1, m.decls.length);
 	}
 
-	public function testAllmanFunctionBody():Void {
-		final m:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse('class C {\n\tstatic function m()\n\t{\n\t}\n}');
+	public function testAllmanFunctionBody(): Void {
+		final m: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(
+			'class C {\n\tstatic function m()\n\t{\n\t}\n}'
+		);
 		Assert.equals(1, m.decls.length);
 	}
 
-	public function testAllmanIfBody():Void {
+	public function testAllmanIfBody(): Void {
 		HaxeModuleTriviaParser.parse('class C{static function m(){if(x)\n{a();}}}');
 		Assert.pass();
 	}
 
-	public function testAllmanWhileBody():Void {
+	public function testAllmanWhileBody(): Void {
 		HaxeModuleTriviaParser.parse('class C{static function m(){while(x)\n{a();}}}');
 		Assert.pass();
 	}
 
-	public function testAllmanForBody():Void {
+	public function testAllmanForBody(): Void {
 		HaxeModuleTriviaParser.parse('class C{static function m(){for(i in x)\n{a();}}}');
 		Assert.pass();
 	}
 
-	public function testAllmanSwitchBody():Void {
+	public function testAllmanSwitchBody(): Void {
 		HaxeModuleTriviaParser.parse('class C{static function m(){switch(x)\n{case 1:a();}}}');
 		Assert.pass();
 	}
+
 }

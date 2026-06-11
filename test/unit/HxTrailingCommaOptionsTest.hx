@@ -37,117 +37,115 @@ import anyparse.grammar.haxe.HxModuleWriter;
 @:nullSafety(Strict)
 class HxTrailingCommaOptionsTest extends Test {
 
-	public function new():Void {
+	public function new(): Void {
 		super();
 	}
 
-	public function testDefaultsAreAllFalse():Void {
-		final defaults:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
+	public function testDefaultsAreAllFalse(): Void {
+		final defaults: HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
 		Assert.isFalse(defaults.trailingCommaArrays);
 		Assert.isFalse(defaults.trailingCommaArgs);
 		Assert.isFalse(defaults.trailingCommaParams);
 		Assert.isFalse(defaults.trailingCommaObjectLits);
 	}
 
-	public function testArrayTrailingCommaOnBreak():Void {
-		final src:String = 'class F { function f():Void { var xs:Dynamic = [1, 2, 3]; } }';
-		final out:String = writeWithBreak(src, true, false, false);
+	public function testArrayTrailingCommaOnBreak(): Void {
+		final src: String = 'class F { function f():Void { var xs:Dynamic = [1, 2, 3]; } }';
+		final out: String = writeWithBreak(src, true, false, false);
 		assertTrailingComma(out, '3', ']');
 	}
 
-	public function testArrayNoTrailingCommaWhenFlagOff():Void {
-		final src:String = 'class F { function f():Void { var xs:Dynamic = [1, 2, 3]; } }';
-		final out:String = writeWithBreak(src, false, false, false);
+	public function testArrayNoTrailingCommaWhenFlagOff(): Void {
+		final src: String = 'class F { function f():Void { var xs:Dynamic = [1, 2, 3]; } }';
+		final out: String = writeWithBreak(src, false, false, false);
 		assertNoTrailingComma(out, '3', ']');
 	}
 
-	public function testArrayFlatNeverHasTrailingComma():Void {
+	public function testArrayFlatNeverHasTrailingComma(): Void {
 		// Default lineWidth=120 — short array stays flat, so the IfBreak
 		// trailer collapses to Empty even with the flag set.
-		final src:String = 'class F { function f():Void { var xs:Dynamic = [1, 2, 3]; } }';
-		final out:String = writeWith(src, 120, true, false, false);
+		final src: String = 'class F { function f():Void { var xs:Dynamic = [1, 2, 3]; } }';
+		final out: String = writeWith(src, 120, true, false, false);
 		Assert.isTrue(out.indexOf('[1, 2, 3]') != -1, 'expected flat `[1, 2, 3]` in: <$out>');
 		assertNoTrailingComma(out, '3', ']');
 	}
 
-	public function testCallArgsTrailingCommaOnBreak():Void {
-		final src:String = 'class F { function f():Void { foo(a, b, c); } }';
-		final out:String = writeWithBreak(src, false, true, false);
+	public function testCallArgsTrailingCommaOnBreak(): Void {
+		final src: String = 'class F { function f():Void { foo(a, b, c); } }';
+		final out: String = writeWithBreak(src, false, true, false);
 		assertTrailingComma(out, 'c', ')');
 	}
 
-	public function testCallArgsNoTrailingCommaWhenFlagOff():Void {
-		final src:String = 'class F { function f():Void { foo(a, b, c); } }';
-		final out:String = writeWithBreak(src, false, false, false);
+	public function testCallArgsNoTrailingCommaWhenFlagOff(): Void {
+		final src: String = 'class F { function f():Void { foo(a, b, c); } }';
+		final out: String = writeWithBreak(src, false, false, false);
 		assertNoTrailingComma(out, 'c', ')');
 	}
 
-	public function testNewArgsShareCallArgsFlag():Void {
+	public function testNewArgsShareCallArgsFlag(): Void {
 		// `new T(args)` uses the same trailingCommaArgs knob via HxNewExpr.
-		final src:String = 'class F { function f():Void { var x:Dynamic = new Foo(a, b, c); } }';
-		final out:String = writeWithBreak(src, false, true, false);
+		final src: String = 'class F { function f():Void { var x:Dynamic = new Foo(a, b, c); } }';
+		final out: String = writeWithBreak(src, false, true, false);
 		assertTrailingComma(out, 'c', ')');
 	}
 
-	public function testFnParamsTrailingCommaOnBreak():Void {
-		final src:String = 'class F { function f(a:Int, b:Int, c:Int):Void {} }';
-		final out:String = writeWithBreak(src, false, false, true);
+	public function testFnParamsTrailingCommaOnBreak(): Void {
+		final src: String = 'class F { function f(a:Int, b:Int, c:Int):Void {} }';
+		final out: String = writeWithBreak(src, false, false, true);
 		assertTrailingComma(out, 'c:Int', ')');
 	}
 
-	public function testFnParamsNoTrailingCommaWhenFlagOff():Void {
-		final src:String = 'class F { function f(a:Int, b:Int, c:Int):Void {} }';
-		final out:String = writeWithBreak(src, false, false, false);
+	public function testFnParamsNoTrailingCommaWhenFlagOff(): Void {
+		final src: String = 'class F { function f(a:Int, b:Int, c:Int):Void {} }';
+		final out: String = writeWithBreak(src, false, false, false);
 		assertNoTrailingComma(out, 'c:Int', ')');
 	}
 
-	public function testFlagsAreIndependent():Void {
+	public function testFlagsAreIndependent(): Void {
 		// Flip only trailingCommaArgs → arrays and params must not emit `,`.
-		final src:String = 'class F { function f(a:Int, b:Int):Void { var xs:Dynamic = [1, 2]; foo(x, y); } }';
-		final out:String = writeWithBreak(src, false, true, false);
+		final src: String = 'class F { function f(a:Int, b:Int):Void { var xs:Dynamic = [1, 2]; foo(x, y); } }';
+		final out: String = writeWithBreak(src, false, true, false);
 		assertTrailingComma(out, 'y', ')');
 		assertNoTrailingComma(out, '2', ']');
 		assertNoTrailingComma(out, 'b:Int', ')');
 	}
 
-	public function testObjectLitTrailingCommaOnBreak():Void {
-		final src:String = 'class F { function f():Void { var o:Dynamic = {a: 1, b: 2, c: 3}; } }';
-		final out:String = writeWithObjectLits(src, true);
+	public function testObjectLitTrailingCommaOnBreak(): Void {
+		final src: String = 'class F { function f():Void { var o:Dynamic = {a: 1, b: 2, c: 3}; } }';
+		final out: String = writeWithObjectLits(src, true);
 		assertTrailingComma(out, '3', '}');
 	}
 
-	public function testObjectLitNoTrailingCommaWhenFlagOff():Void {
-		final src:String = 'class F { function f():Void { var o:Dynamic = {a: 1, b: 2, c: 3}; } }';
-		final out:String = writeWithObjectLits(src, false);
+	public function testObjectLitNoTrailingCommaWhenFlagOff(): Void {
+		final src: String = 'class F { function f():Void { var o:Dynamic = {a: 1, b: 2, c: 3}; } }';
+		final out: String = writeWithObjectLits(src, false);
 		assertNoTrailingComma(out, '3', '}');
 	}
 
-	public function testObjectLitFlagIndependent():Void {
+	public function testObjectLitFlagIndependent(): Void {
 		// Flip only trailingCommaObjectLits → arrays / args / params must not emit `,`.
-		final src:String = 'class F { function f(a:Int, b:Int):Void { var o:Dynamic = {x: 1, y: 2}; var xs:Dynamic = [3, 4]; foo(p, q); } }';
-		final opts:HxModuleWriteOptions = makeOpts(10, false, false, false);
+		final src: String = 'class F { function f(a:Int, b:Int):Void { var o:Dynamic = {x: 1, y: 2}; var xs:Dynamic = [3, 4]; foo(p, q); } }';
+		final opts: HxModuleWriteOptions = makeOpts(10, false, false, false);
 		opts.trailingCommaObjectLits = true;
-		final out:String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 		assertTrailingComma(out, 'y: 2', '}');
 		assertNoTrailingComma(out, '4', ']');
 		assertNoTrailingComma(out, 'q', ')');
 		assertNoTrailingComma(out, 'b:Int', ')');
 	}
 
-	private function writeWithObjectLits(src:String, objectLits:Bool):String {
-		final opts:HxModuleWriteOptions = makeOpts(10, false, false, false);
+	private function writeWithObjectLits(src: String, objectLits: Bool): String {
+		final opts: HxModuleWriteOptions = makeOpts(10, false, false, false);
 		opts.trailingCommaObjectLits = objectLits;
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}
 
-	private function assertTrailingComma(out:String, lastItem:String, close:String):Void {
-		Assert.equals(',', firstNonWsAfter(out, lastItem),
-			'expected `$lastItem,` before `$close` (break mode + flag on) in: <$out>');
+	private function assertTrailingComma(out: String, lastItem: String, close: String): Void {
+		Assert.equals(',', firstNonWsAfter(out, lastItem), 'expected `$lastItem,` before `$close` (break mode + flag on) in: <$out>');
 	}
 
-	private function assertNoTrailingComma(out:String, lastItem:String, close:String):Void {
-		Assert.equals(close, firstNonWsAfter(out, lastItem),
-			'expected `$close` right after `$lastItem` (no trailing comma) in: <$out>');
+	private function assertNoTrailingComma(out: String, lastItem: String, close: String): Void {
+		Assert.equals(close, firstNonWsAfter(out, lastItem), 'expected `$close` right after `$lastItem` (no trailing comma) in: <$out>');
 	}
 
 	/**
@@ -156,32 +154,33 @@ class HxTrailingCommaOptionsTest extends Test {
 	 * the probe targets the intended list element even when `needle`
 	 * appears earlier in surrounding source (e.g. `c` inside `class`).
 	 */
-	private function firstNonWsAfter(s:String, needle:String):String {
-		final at:Int = s.lastIndexOf(needle);
+	private function firstNonWsAfter(s: String, needle: String): String {
+		final at: Int = s.lastIndexOf(needle);
 		if (at < 0) return '';
-		var i:Int = at + needle.length;
+		var i: Int = at + needle.length;
 		while (i < s.length) {
-			final c:String = s.charAt(i);
+			final c: String = s.charAt(i);
 			if (c != ' ' && c != '\t' && c != '\n' && c != '\r') return c;
 			i++;
 		}
 		return '';
 	}
 
-	private function writeWithBreak(src:String, arrays:Bool, args:Bool, params:Bool):String {
+	private function writeWithBreak(src: String, arrays: Bool, args: Bool, params: Bool): String {
 		return writeWith(src, 10, arrays, args, params);
 	}
 
-	private function writeWith(src:String, lineWidth:Int, arrays:Bool, args:Bool, params:Bool):String {
+	private function writeWith(src: String, lineWidth: Int, arrays: Bool, args: Bool, params: Bool): String {
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), makeOpts(lineWidth, arrays, args, params));
 	}
 
-	private function makeOpts(lineWidth:Int, arrays:Bool, args:Bool, params:Bool):HxModuleWriteOptions {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	private function makeOpts(lineWidth: Int, arrays: Bool, args: Bool, params: Bool): HxModuleWriteOptions {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.lineWidth = lineWidth;
 		opts.trailingCommaArrays = arrays;
 		opts.trailingCommaArgs = args;
 		opts.trailingCommaParams = params;
 		return opts;
 	}
+
 }

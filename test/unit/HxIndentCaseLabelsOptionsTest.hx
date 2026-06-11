@@ -30,102 +30,76 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 @:nullSafety(Strict)
 class HxIndentCaseLabelsOptionsTest extends Test {
 
-	public function new():Void {
+	public function new(): Void {
 		super();
 	}
 
-	public function testIndentCaseLabelsDefaultIsTrue():Void {
-		final defaults:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
+	public function testIndentCaseLabelsDefaultIsTrue(): Void {
+		final defaults: HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
 		Assert.isTrue(defaults.indentCaseLabels);
 	}
 
-	public function testIndentCaseLabelsTrueKeepsLabelsIndented():Void {
-		final out:String = writeWith(
-			'class M { static function f() { switch (e) { case A: 1; default: 2; } } }',
-			true
-		);
+	public function testIndentCaseLabelsTrueKeepsLabelsIndented(): Void {
+		final out: String = writeWith('class M { static function f() { switch (e) { case A: 1; default: 2; } } }', true);
 		// Inside `{ ... }` of switch, case label sits at 3 tabs (one inside
 		// the switch's outer 2 tabs).
-		Assert.isTrue(out.indexOf('\n\t\t\tcase A:') != -1,
-			'expected `case A:` at 3-tab indent in: <$out>');
-		Assert.isTrue(out.indexOf('\n\t\t\tdefault:') != -1,
-			'expected `default:` at 3-tab indent in: <$out>');
+		Assert.isTrue(out.indexOf('\n\t\t\tcase A:') != -1, 'expected `case A:` at 3-tab indent in: <$out>');
+		Assert.isTrue(out.indexOf('\n\t\t\tdefault:') != -1, 'expected `default:` at 3-tab indent in: <$out>');
 	}
 
-	public function testIndentCaseLabelsFalseFlushesLabelsWithSwitch():Void {
-		final out:String = writeWith(
-			'class M { static function f() { switch (e) { case A: 1; default: 2; } } }',
-			false
-		);
+	public function testIndentCaseLabelsFalseFlushesLabelsWithSwitch(): Void {
+		final out: String = writeWith('class M { static function f() { switch (e) { case A: 1; default: 2; } } }', false);
 		// switch keyword sits at 2 tabs (inside class + function body); flushed
 		// labels sit at the same 2-tab indent.
-		Assert.isTrue(out.indexOf('\n\t\tcase A:') != -1,
-			'expected `case A:` flushed at 2-tab indent in: <$out>');
-		Assert.isTrue(out.indexOf('\n\t\tdefault:') != -1,
-			'expected `default:` flushed at 2-tab indent in: <$out>');
-		Assert.isTrue(out.indexOf('\n\t\t\tcase A:') == -1,
-			'did not expect `case A:` at 3-tab indent in: <$out>');
+		Assert.isTrue(out.indexOf('\n\t\tcase A:') != -1, 'expected `case A:` flushed at 2-tab indent in: <$out>');
+		Assert.isTrue(out.indexOf('\n\t\tdefault:') != -1, 'expected `default:` flushed at 2-tab indent in: <$out>');
+		Assert.isTrue(out.indexOf('\n\t\t\tcase A:') == -1, 'did not expect `case A:` at 3-tab indent in: <$out>');
 	}
 
-	public function testIndentCaseLabelsFalseKeepsBodyOneLevelDeeperThanLabel():Void {
-		final out:String = writeWith(
-			'class M { static function f() { switch (e) { case A: 1; default: 2; } } }',
-			false
-		);
+	public function testIndentCaseLabelsFalseKeepsBodyOneLevelDeeperThanLabel(): Void {
+		final out: String = writeWith('class M { static function f() { switch (e) { case A: 1; default: 2; } } }', false);
 		// Body still receives nestBody — one indent level relative to the
 		// label, so `1;` sits at 3 tabs while the label is at 2.
-		Assert.isTrue(out.indexOf('\n\t\t\t1;') != -1,
-			'expected case body `1;` at 3-tab indent in: <$out>');
-		Assert.isTrue(out.indexOf('\n\t\t\t2;') != -1,
-			'expected default body `2;` at 3-tab indent in: <$out>');
+		Assert.isTrue(out.indexOf('\n\t\t\t1;') != -1, 'expected case body `1;` at 3-tab indent in: <$out>');
+		Assert.isTrue(out.indexOf('\n\t\t\t2;') != -1, 'expected default body `2;` at 3-tab indent in: <$out>');
 	}
 
-	public function testIndentCaseLabelsTrueKeepsBodyTwoLevelsDeeperThanSwitch():Void {
-		final out:String = writeWith(
-			'class M { static function f() { switch (e) { case A: 1; default: 2; } } }',
-			true
-		);
+	public function testIndentCaseLabelsTrueKeepsBodyTwoLevelsDeeperThanSwitch(): Void {
+		final out: String = writeWith('class M { static function f() { switch (e) { case A: 1; default: 2; } } }', true);
 		// switch at 2 tabs, label at 3, body at 4.
-		Assert.isTrue(out.indexOf('\n\t\t\t\t1;') != -1,
-			'expected case body `1;` at 4-tab indent in: <$out>');
+		Assert.isTrue(out.indexOf('\n\t\t\t\t1;') != -1, 'expected case body `1;` at 4-tab indent in: <$out>');
 	}
 
-	public function testIndentCaseLabelsFlagAffectsBareSwitch():Void {
+	public function testIndentCaseLabelsFlagAffectsBareSwitch(): Void {
 		// Bare-form `switch e { ... }` (no parens around subject) routes
 		// through `HxSwitchStmtBare`. The flag lives on its `cases` field
 		// too, so flushing applies symmetrically.
-		final out:String = writeWith(
-			'class M { static function f() { switch e { case A: 1; default: 2; } } }',
-			false
-		);
+		final out: String = writeWith('class M { static function f() { switch e { case A: 1; default: 2; } } }', false);
 		Assert.isTrue(out.indexOf('switch e {') != -1, 'expected bare-form switch in: <$out>');
-		Assert.isTrue(out.indexOf('\n\t\tcase A:') != -1,
-			'expected bare-switch `case A:` flushed at 2-tab indent in: <$out>');
+		Assert.isTrue(out.indexOf('\n\t\tcase A:') != -1, 'expected bare-switch `case A:` flushed at 2-tab indent in: <$out>');
 	}
 
-	public function testEmptySwitchBodyEmitsTightBraces():Void {
+	public function testEmptySwitchBodyEmitsTightBraces(): Void {
 		// Defensive — empty cases array must not emit extra hardlines under
 		// either flag value.
-		final outTrue:String = writeWith('class M { static function f() { switch (e) {} } }', true);
-		final outFalse:String = writeWith('class M { static function f() { switch (e) {} } }', false);
+		final outTrue: String = writeWith('class M { static function f() { switch (e) {} } }', true);
+		final outFalse: String = writeWith('class M { static function f() { switch (e) {} } }', false);
 		Assert.isTrue(outTrue.indexOf('switch (e) {}') != -1, 'expected empty switch braces tight in true case: <$outTrue>');
 		Assert.isTrue(outFalse.indexOf('switch (e) {}') != -1, 'expected empty switch braces tight in false case: <$outFalse>');
 	}
 
-	public function testConfigLoaderFlipsIndentCaseLabelsToFalse():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"indentation": {"indentCaseLabels": false}}'
-		);
+	public function testConfigLoaderFlipsIndentCaseLabelsToFalse(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"indentation": {"indentCaseLabels": false}}');
 		Assert.isFalse(opts.indentCaseLabels);
 	}
 
-	public function testConfigLoaderEmptyKeepsDefaultTrue():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	public function testConfigLoaderEmptyKeepsDefaultTrue(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		Assert.isTrue(opts.indentCaseLabels);
 	}
 
-	private inline function writeWith(src:String, indentCaseLabels:Bool):String {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	private inline function writeWith(src: String, indentCaseLabels: Bool): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.indentCaseLabels = indentCaseLabels;
 		// Pin expressionCase=Next so case-body inline-source samples
 		// keep the multiline body shape these indentCaseLabels assertions
@@ -135,4 +109,5 @@ class HxIndentCaseLabelsOptionsTest extends Test {
 		opts.expressionCase = BodyPolicy.Next;
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
+
 }

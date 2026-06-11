@@ -19,57 +19,57 @@ class SpanTest extends Test {
 	}
 
 	function testLineColAtStart() {
-		final s:Span = new Span(0, 0);
-		final p:{line:Int, col:Int} = s.lineCol('hello\nworld');
+		final s: Span = new Span(0, 0);
+		final p: { line: Int, col: Int } = s.lineCol('hello\nworld');
 		Assert.equals(1, p.line);
 		Assert.equals(1, p.col);
 	}
 
 	function testLineColMidFirstLine() {
-		final s:Span = new Span(3, 3);
-		final p:{line:Int, col:Int} = s.lineCol('hello\nworld');
+		final s: Span = new Span(3, 3);
+		final p: { line: Int, col: Int } = s.lineCol('hello\nworld');
 		Assert.equals(1, p.line);
 		Assert.equals(4, p.col);
 	}
 
 	function testLineColAtNewline() {
-		final s:Span = new Span(5, 5);
-		final p:{line:Int, col:Int} = s.lineCol('hello\nworld');
+		final s: Span = new Span(5, 5);
+		final p: { line: Int, col: Int } = s.lineCol('hello\nworld');
 		Assert.equals(1, p.line);
 		Assert.equals(6, p.col);
 	}
 
 	function testLineColAfterNewline() {
-		final s:Span = new Span(6, 6);
-		final p:{line:Int, col:Int} = s.lineCol('hello\nworld');
+		final s: Span = new Span(6, 6);
+		final p: { line: Int, col: Int } = s.lineCol('hello\nworld');
 		Assert.equals(2, p.line);
 		Assert.equals(1, p.col);
 	}
 
 	function testLineColMidSecondLine() {
-		final s:Span = new Span(8, 8);
-		final p:{line:Int, col:Int} = s.lineCol('hello\nworld');
+		final s: Span = new Span(8, 8);
+		final p: { line: Int, col: Int } = s.lineCol('hello\nworld');
 		Assert.equals(2, p.line);
 		Assert.equals(3, p.col);
 	}
 
 	function testLineColMultipleNewlines() {
-		final s:Span = new Span(4, 4);
-		final p:{line:Int, col:Int} = s.lineCol('a\nb\nc\nd');
+		final s: Span = new Span(4, 4);
+		final p: { line: Int, col: Int } = s.lineCol('a\nb\nc\nd');
 		Assert.equals(3, p.line);
 		Assert.equals(1, p.col);
 	}
 
 	function testLineColPastEnd() {
-		final s:Span = new Span(100, 100);
-		final p:{line:Int, col:Int} = s.lineCol('hello\nworld');
+		final s: Span = new Span(100, 100);
+		final p: { line: Int, col: Int } = s.lineCol('hello\nworld');
 		Assert.equals(2, p.line);
 		Assert.equals(6, p.col);
 	}
 
 	function testLineColEmptySource() {
-		final s:Span = new Span(0, 0);
-		final p:{line:Int, col:Int} = s.lineCol('');
+		final s: Span = new Span(0, 0);
+		final p: { line: Int, col: Int } = s.lineCol('');
 		Assert.equals(1, p.line);
 		Assert.equals(1, p.col);
 	}
@@ -114,16 +114,17 @@ class SpanTest extends Test {
 
 	function testOffsetOfRoundTripsLineCol() {
 		// offsetOf is the inverse of lineCol for in-range offsets.
-		final source:String = 'abc\nde\nfghi';
+		final source: String = 'abc\nde\nfghi';
 		for (off in [0, 1, 3, 4, 6, 7, 10]) {
-			final p:{line:Int, col:Int} = new Span(off, off).lineCol(source);
+			final p: { line: Int, col: Int } = new Span(off, off).lineCol(source);
 			Assert.equals(off, Span.offsetOf(source, p.line, p.col), 'round-trip failed at offset $off');
 		}
 	}
 
 	function testFieldsImmutable() {
-		final s:Span = new Span(2, 5);
+		final s: Span = new Span(2, 5);
 		Assert.equals(2, s.from);
 		Assert.equals(5, s.to);
 	}
+
 }

@@ -5,4 +5,5 @@ package unit;
 class ApqProbeNodeWriter {
 
 	private function new() {}
+
 }

@@ -29,50 +29,57 @@ class HxTrailingSepSliceTest extends HxTestHelpers {
 
 	// array literal (Case-4 enum-Alt ArrayExpr)
 
-	public function testArrayTrailingComma():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class C { var x = [1, 2, 3,]; }');
+	public function testArrayTrailingComma(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var x = [1, 2, 3,]; }');
 		switch decl.init {
-			case ArrayExpr(elems): Assert.equals(3, elems.length);
-			case null, _: Assert.fail('expected ArrayExpr(3), got ${decl.init}');
+			case ArrayExpr(elems):
+				Assert.equals(3, elems.length);
+			case null, _:
+				Assert.fail('expected ArrayExpr(3), got ${decl.init}');
 		}
 	}
 
-	public function testArraySingleTrailingComma():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class C { var x = [1,]; }');
+	public function testArraySingleTrailingComma(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var x = [1,]; }');
 		switch decl.init {
-			case ArrayExpr(elems): Assert.equals(1, elems.length);
-			case null, _: Assert.fail('expected ArrayExpr(1), got ${decl.init}');
+			case ArrayExpr(elems):
+				Assert.equals(1, elems.length);
+			case null, _:
+				Assert.fail('expected ArrayExpr(1), got ${decl.init}');
 		}
 	}
 
 	// object literal (struct-field Star HxObjectLit.fields)
 
-	public function testObjectTrailingComma():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class C { var x:Dynamic = {a: 1, b: 2,}; }');
+	public function testObjectTrailingComma(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var x:Dynamic = {a: 1, b: 2,}; }');
 		switch decl.init {
 			case ObjectLit(lit):
 				Assert.equals(2, lit.fields.length);
-				Assert.equals('a', (expectObjectFieldBody(lit.fields[0]).name : String));
-				Assert.equals('b', (expectObjectFieldBody(lit.fields[1]).name : String));
-			case null, _: Assert.fail('expected ObjectLit(2), got ${decl.init}');
+				Assert.equals('a', (expectObjectFieldBody(lit.fields[0]).name: String));
+				Assert.equals('b', (expectObjectFieldBody(lit.fields[1]).name: String));
+			case null, _:
+				Assert.fail('expected ObjectLit(2), got ${decl.init}');
 		}
 	}
 
 	// call args (postfix-call args loop)
 
-	public function testCallArgsTrailingComma():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class C { var x = g(1, 2,); }');
+	public function testCallArgsTrailingComma(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var x = g(1, 2,); }');
 		switch decl.init {
-			case Call(_, args): Assert.equals(2, args.length);
-			case null, _: Assert.fail('expected Call(_, 2), got ${decl.init}');
+			case Call(_, args):
+				Assert.equals(2, args.length);
+			case null, _:
+				Assert.fail('expected Call(_, 2), got ${decl.init}');
 		}
 	}
 
 	// type parameters (optional Star HxTypeRef.params)
 
-	public function testTypeParamsTrailingComma():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class C { var x:Map<Int, String,>; }');
-		final ref:HxTypeRef = switch decl.type {
+	public function testTypeParamsTrailingComma(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var x:Map<Int, String,>; }');
+		final ref: HxTypeRef = switch decl.type {
 			case Named(r): r;
 			case null, _: throw 'expected Named type, got ${decl.type}';
 		}
@@ -81,24 +88,31 @@ class HxTrailingSepSliceTest extends HxTestHelpers {
 
 	// regression: no-trailing-comma forms unaffected
 
-	public function testNoTrailingCommaStillParses():Void {
+	public function testNoTrailingCommaStillParses(): Void {
 		switch parseSingleVarDecl('class C { var x = [1, 2, 3]; }').init {
-			case ArrayExpr(elems): Assert.equals(3, elems.length);
-			case null, _: Assert.fail('array no-trail');
+			case ArrayExpr(elems):
+				Assert.equals(3, elems.length);
+			case null, _:
+				Assert.fail('array no-trail');
 		}
 		switch parseSingleVarDecl('class C { var x:Dynamic = {a: 1, b: 2}; }').init {
-			case ObjectLit(lit): Assert.equals(2, lit.fields.length);
-			case null, _: Assert.fail('object no-trail');
+			case ObjectLit(lit):
+				Assert.equals(2, lit.fields.length);
+			case null, _:
+				Assert.fail('object no-trail');
 		}
 		switch parseSingleVarDecl('class C { var x = g(1, 2); }').init {
-			case Call(_, args): Assert.equals(2, args.length);
-			case null, _: Assert.fail('call no-trail');
+			case Call(_, args):
+				Assert.equals(2, args.length);
+			case null, _:
+				Assert.fail('call no-trail');
 		}
 	}
 
 	// idempotency round-trip
 
-	public function testTrailingCommaRoundTrip():Void {
+	public function testTrailingCommaRoundTrip(): Void {
 		roundTrip('class C { var a = [1, 2, 3,]; var o:Dynamic = {p: 1, q: 2,}; function f() { g(1, 2,); } }', 'L1-trailing-sep');
 	}
+
 }

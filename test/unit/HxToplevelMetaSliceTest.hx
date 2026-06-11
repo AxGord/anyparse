@@ -28,126 +28,138 @@ import anyparse.grammar.haxe.HxModuleWriter;
  */
 class HxToplevelMetaSliceTest extends HxTestHelpers {
 
-	public function testSingleMetaOnClass():Void {
-		final ast:HxModule = HaxeModuleParser.parse('@:enum class M {}');
+	public function testSingleMetaOnClass(): Void {
+		final ast: HxModule = HaxeModuleParser.parse('@:enum class M {}');
 		Assert.equals(1, ast.decls.length);
 		Assert.equals(1, ast.decls[0].meta.length);
 		Assert.equals('@:enum', HxMetadataUtil.source(ast.decls[0].meta[0]));
 		switch ast.decls[0].decl {
-			case ClassDecl(_): Assert.pass();
-			case _: Assert.fail('expected ClassDecl, got ${ast.decls[0].decl}');
+			case ClassDecl(_):
+				Assert.pass();
+			case _:
+				Assert.fail('expected ClassDecl, got ${ast.decls[0].decl}');
 		}
 	}
 
-	public function testMultipleMetasOnClass():Void {
+	public function testMultipleMetasOnClass(): Void {
 		// Post ω-generic-meta: paren-bearing metas parse through the
 		// structural `MetaCall` branch — assert names + arg counts directly
 		// since `source()` doesn't reconstruct structural payloads.
-		final ast:HxModule = HaxeModuleParser.parse('@:allow(pack.Base) @test("foo") class Main {}');
+		final ast: HxModule = HaxeModuleParser.parse('@:allow(pack.Base) @test("foo") class Main {}');
 		Assert.equals(1, ast.decls.length);
 		Assert.equals(2, ast.decls[0].meta.length);
 		switch ast.decls[0].meta[0] {
 			case MetaCall(call):
-				Assert.equals('@:allow', (call.name : String));
+				Assert.equals('@:allow', (call.name: String));
 				Assert.equals(1, call.args.length);
-			case _: Assert.fail('expected MetaCall for @:allow, got ' + ast.decls[0].meta[0]);
+			case _:
+				Assert.fail('expected MetaCall for @:allow, got ' + ast.decls[0].meta[0]);
 		}
 		switch ast.decls[0].meta[1] {
 			case MetaCall(call):
-				Assert.equals('@test', (call.name : String));
+				Assert.equals('@test', (call.name: String));
 				Assert.equals(1, call.args.length);
-			case _: Assert.fail('expected MetaCall for @test, got ' + ast.decls[0].meta[1]);
+			case _:
+				Assert.fail('expected MetaCall for @test, got ' + ast.decls[0].meta[1]);
 		}
 	}
 
-	public function testMetaThenModifierOnClass():Void {
-		final ast:HxModule = HaxeModuleParser.parse('@:keep private class M {}');
+	public function testMetaThenModifierOnClass(): Void {
+		final ast: HxModule = HaxeModuleParser.parse('@:keep private class M {}');
 		Assert.equals(1, ast.decls[0].meta.length);
 		Assert.equals('@:keep', HxMetadataUtil.source(ast.decls[0].meta[0]));
 		Assert.equals(1, ast.decls[0].modifiers.length);
 	}
 
-	public function testMetaOnTypedef():Void {
-		final ast:HxModule = HaxeModuleParser.parse('@:keep typedef T = Int;');
+	public function testMetaOnTypedef(): Void {
+		final ast: HxModule = HaxeModuleParser.parse('@:keep typedef T = Int;');
 		Assert.equals(1, ast.decls[0].meta.length);
 		switch ast.decls[0].decl {
-			case TypedefDecl(_): Assert.pass();
-			case _: Assert.fail('expected TypedefDecl');
+			case TypedefDecl(_):
+				Assert.pass();
+			case _:
+				Assert.fail('expected TypedefDecl');
 		}
 	}
 
-	public function testMetaOnEnum():Void {
-		final ast:HxModule = HaxeModuleParser.parse('@:enum enum E {A;B;}');
+	public function testMetaOnEnum(): Void {
+		final ast: HxModule = HaxeModuleParser.parse('@:enum enum E {A;B;}');
 		Assert.equals(1, ast.decls[0].meta.length);
 		switch ast.decls[0].decl {
-			case EnumDecl(_): Assert.pass();
-			case _: Assert.fail('expected EnumDecl');
+			case EnumDecl(_):
+				Assert.pass();
+			case _:
+				Assert.fail('expected EnumDecl');
 		}
 	}
 
-	public function testMetaOnAbstract():Void {
-		final ast:HxModule = HaxeModuleParser.parse('@:keep abstract A(Int) {}');
+	public function testMetaOnAbstract(): Void {
+		final ast: HxModule = HaxeModuleParser.parse('@:keep abstract A(Int) {}');
 		Assert.equals(1, ast.decls[0].meta.length);
 		switch ast.decls[0].decl {
-			case AbstractDecl(_): Assert.pass();
-			case _: Assert.fail('expected AbstractDecl');
+			case AbstractDecl(_):
+				Assert.pass();
+			case _:
+				Assert.fail('expected AbstractDecl');
 		}
 	}
 
-	public function testMetaOnInterface():Void {
-		final ast:HxModule = HaxeModuleParser.parse('@:keep interface I {}');
+	public function testMetaOnInterface(): Void {
+		final ast: HxModule = HaxeModuleParser.parse('@:keep interface I {}');
 		Assert.equals(1, ast.decls[0].meta.length);
 		switch ast.decls[0].decl {
-			case InterfaceDecl(_): Assert.pass();
-			case _: Assert.fail('expected InterfaceDecl');
+			case InterfaceDecl(_):
+				Assert.pass();
+			case _:
+				Assert.fail('expected InterfaceDecl');
 		}
 	}
 
-	public function testNoMetaRegression():Void {
-		final ast:HxModule = HaxeModuleParser.parse('class M {}');
+	public function testNoMetaRegression(): Void {
+		final ast: HxModule = HaxeModuleParser.parse('class M {}');
 		Assert.equals(0, ast.decls[0].meta.length);
 		Assert.equals(0, ast.decls[0].modifiers.length);
 	}
 
-	public function testPackageImportThenMetaClass():Void {
-		final ast:HxModule = HaxeModuleParser.parse('package foo;\nimport bar.Baz;\n@:enum class M {}');
+	public function testPackageImportThenMetaClass(): Void {
+		final ast: HxModule = HaxeModuleParser.parse('package foo;\nimport bar.Baz;\n@:enum class M {}');
 		Assert.equals(3, ast.decls.length);
 		Assert.equals(1, ast.decls[2].meta.length);
 		Assert.equals('@:enum', HxMetadataUtil.source(ast.decls[2].meta[0]));
 	}
 
-	public function testWriterEmitsSingleMeta():Void {
-		final out:String = HxModuleWriter.write(HaxeModuleParser.parse('@:enum class M {}'));
+	public function testWriterEmitsSingleMeta(): Void {
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse('@:enum class M {}'));
 		Assert.equals('@:enum class M {}\n', out);
 	}
 
-	public function testWriterEmitsTwoMetas():Void {
-		final out:String = HxModuleWriter.write(HaxeModuleParser.parse('@:allow(pack.Base) @test("foo") class Main {}'));
+	public function testWriterEmitsTwoMetas(): Void {
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse('@:allow(pack.Base) @test("foo") class Main {}'));
 		Assert.equals('@:allow(pack.Base) @test("foo") class Main {}\n', out);
 	}
 
-	public function testWriterEmitsMetaWithModifier():Void {
-		final out:String = HxModuleWriter.write(HaxeModuleParser.parse('@:keep private class M {}'));
+	public function testWriterEmitsMetaWithModifier(): Void {
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse('@:keep private class M {}'));
 		Assert.equals('@:keep private class M {}\n', out);
 	}
 
-	public function testRoundTripMetaClass():Void {
+	public function testRoundTripMetaClass(): Void {
 		roundTrip('@:enum class M {}');
 	}
 
-	public function testRoundTripMetaTypedef():Void {
+	public function testRoundTripMetaTypedef(): Void {
 		roundTrip('@:keep typedef T = Int;');
 	}
 
-	public function testRoundTripMetasOnClass():Void {
+	public function testRoundTripMetasOnClass(): Void {
 		roundTrip('@:allow(pack.Base) @test("foo") class Main {}');
 	}
 
-	public function testRoundTripMetaWithModifier():Void {
+	public function testRoundTripMetaWithModifier(): Void {
 		roundTrip('@:keep private class M {}');
 	}
 
-	public function testRoundTripPackageImportMetaClass():Void {
+	public function testRoundTripPackageImportMetaClass(): Void {
 		roundTrip('package foo;\nimport bar.Baz;\n@:enum class M {}');
 	}
 

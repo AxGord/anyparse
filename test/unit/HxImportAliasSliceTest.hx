@@ -28,38 +28,42 @@ import anyparse.grammar.haxe.HxModuleWriter;
  */
 class HxImportAliasSliceTest extends HxTestHelpers {
 
-	public function testImportAliasSimple():Void {
-		final ast:HxModule = HaxeModuleParser.parse('import Std.is as isOfType;');
+	public function testImportAliasSimple(): Void {
+		final ast: HxModule = HaxeModuleParser.parse('import Std.is as isOfType;');
 		Assert.equals(1, ast.decls.length);
 		switch ast.decls[0].decl {
 			case ImportAliasDecl(decl):
-				Assert.equals('Std.is', (decl.path : String));
-				Assert.equals('isOfType', (decl.name : String));
-			case _: Assert.fail('expected ImportAliasDecl, got ${ast.decls[0].decl}');
+				Assert.equals('Std.is', (decl.path: String));
+				Assert.equals('isOfType', (decl.name: String));
+			case _:
+				Assert.fail('expected ImportAliasDecl, got ${ast.decls[0].decl}');
 		}
 	}
 
-	public function testImportAliasDottedPath():Void {
-		final ast:HxModule = HaxeModuleParser.parse('import haxe.io.Bytes as B;');
+	public function testImportAliasDottedPath(): Void {
+		final ast: HxModule = HaxeModuleParser.parse('import haxe.io.Bytes as B;');
 		switch ast.decls[0].decl {
 			case ImportAliasDecl(decl):
-				Assert.equals('haxe.io.Bytes', (decl.path : String));
-				Assert.equals('B', (decl.name : String));
-			case _: Assert.fail('expected ImportAliasDecl');
+				Assert.equals('haxe.io.Bytes', (decl.path: String));
+				Assert.equals('B', (decl.name: String));
+			case _:
+				Assert.fail('expected ImportAliasDecl');
 		}
 	}
 
-	public function testPlainImportStillFallsThrough():Void {
+	public function testPlainImportStillFallsThrough(): Void {
 		// Regression: without `as <ident>`, dispatcher must roll back from
 		// ImportAliasDecl to plain ImportDecl.
-		final ast:HxModule = HaxeModuleParser.parse('import Std.is;');
+		final ast: HxModule = HaxeModuleParser.parse('import Std.is;');
 		switch ast.decls[0].decl {
-			case ImportDecl(path): Assert.equals('Std.is', (path : String));
-			case _: Assert.fail('expected ImportDecl, got ${ast.decls[0].decl}');
+			case ImportDecl(path):
+				Assert.equals('Std.is', (path: String));
+			case _:
+				Assert.fail('expected ImportDecl, got ${ast.decls[0].decl}');
 		}
 	}
 
-	public function testImportAliasRequiresAliasName():Void {
+	public function testImportAliasRequiresAliasName(): Void {
 		// `import Foo as ;` — `as` is consumed by ImportAliasDecl but the
 		// alias ident regex fails; rollback to plain ImportDecl is also
 		// rejected because the path-only branch can't terminate on the
@@ -67,24 +71,24 @@ class HxImportAliasSliceTest extends HxTestHelpers {
 		Assert.raises(() -> HaxeModuleParser.parse('import Foo as ;'));
 	}
 
-	public function testImportAliasRequiresSemi():Void {
+	public function testImportAliasRequiresSemi(): Void {
 		Assert.raises(() -> HaxeModuleParser.parse('import Foo as Bar'));
 	}
 
-	public function testWriterEmitsImportAlias():Void {
-		final out:String = HxModuleWriter.write(HaxeModuleParser.parse('import Std.is as isOfType;'));
+	public function testWriterEmitsImportAlias(): Void {
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse('import Std.is as isOfType;'));
 		Assert.equals('import Std.is as isOfType;\n', out);
 	}
 
-	public function testRoundTripImportAliasSimple():Void {
+	public function testRoundTripImportAliasSimple(): Void {
 		roundTrip('import Std.is as isOfType;');
 	}
 
-	public function testRoundTripImportAliasMixedWithPlain():Void {
+	public function testRoundTripImportAliasMixedWithPlain(): Void {
 		roundTrip('import Std.is as isOfType;\nimport haxe.io.Bytes;\n');
 	}
 
-	public function testRoundTripImportAliasInCondComp():Void {
+	public function testRoundTripImportAliasInCondComp(): Void {
 		// Matches issue_634 — the alias form inside a `#if … #else … #end`
 		// guard. The cond-comp body re-enters `HxDecl` so the new
 		// ImportAliasDecl ctor is reachable here too.

@@ -18,7 +18,8 @@ import sys.FileSystem;
  * across targets is its own slice.
  */
 class ApqSearchCliTest extends Test {
-	public function testHelpReturnsOk():Void {
+
+	public function testHelpReturnsOk(): Void {
 		#if sys
 		Assert.equals(0, Cli.run(['search', '--help']));
 		#else
@@ -26,7 +27,7 @@ class ApqSearchCliTest extends Test {
 		#end
 	}
 
-	public function testMissingArgsReturnsUsageError():Void {
+	public function testMissingArgsReturnsUsageError(): Void {
 		#if sys
 		Assert.equals(2, Cli.run(['search']));
 		Assert.equals(2, Cli.run(['search', 'just-pattern']));
@@ -35,9 +36,9 @@ class ApqSearchCliTest extends Test {
 		#end
 	}
 
-	public function testUnknownLangFailsCleanly():Void {
+	public function testUnknownLangFailsCleanly(): Void {
 		#if sys
-		final fixture:String = writeFixture('class X {}');
+		final fixture: String = writeFixture('class X {}');
 		// pickPlugin throws — Cli.run does not wrap pattern parse errors
 		// from pickPlugin yet, so we accept either a usage exit or a
 		// runtime exit. Just verify it does not crash the test process.
@@ -47,17 +48,16 @@ class ApqSearchCliTest extends Test {
 		} catch (_) {
 			Assert.pass('cli surfaced unknown-lang failure');
 		}
-		if (FileSystem.exists(fixture))
-			FileSystem.deleteFile(fixture);
+		if (FileSystem.exists(fixture)) FileSystem.deleteFile(fixture);
 		#else
 		Assert.pass('non-sys target');
 		#end
 	}
 
-	public function testEndToEndSearchOnFixture():Void {
+	public function testEndToEndSearchOnFixture(): Void {
 		#if sys
-		final fixture:String = writeFixture('class X {\n\t\t\tstatic function a() { throw new IoError("oops"); }\n\t\t}');
-		final rc:Int = Cli.run(['search', "throw new $E($_)", fixture]);
+		final fixture: String = writeFixture('class X {\n\t\t\tstatic function a() { throw new IoError("oops"); }\n\t\t}');
+		final rc: Int = Cli.run(['search', "throw new $E($_)", fixture]);
 		Assert.equals(0, rc, 'cli must exit 0 on successful search');
 		FileSystem.deleteFile(fixture);
 		#else
@@ -65,14 +65,13 @@ class ApqSearchCliTest extends Test {
 		#end
 	}
 
-	public function testDegeneratePatternStillExitsOk():Void {
+	public function testDegeneratePatternStillExitsOk(): Void {
 		#if sys
-
 		// `Anon` is a bare identifier — degenerate. The CLI emits a
 		// non-fatal stderr nudge and still runs the search (exit 0),
 		// not a usage/runtime error.
-		final fixture:String = writeFixture('class X {\n\t\t\tstatic function a() { var Anon = 1; return Anon; }\n\t\t}');
-		final rc:Int = Cli.run(['search', 'Anon', fixture]);
+		final fixture: String = writeFixture('class X {\n\t\t\tstatic function a() { var Anon = 1; return Anon; }\n\t\t}');
+		final rc: Int = Cli.run(['search', 'Anon', fixture]);
 		Assert.equals(0, rc, 'degenerate pattern must still exit 0 (non-fatal nudge)');
 		FileSystem.deleteFile(fixture);
 		#else
@@ -80,10 +79,10 @@ class ApqSearchCliTest extends Test {
 		#end
 	}
 
-	public function testKindFlagAcceptedAndExitsOk():Void {
+	public function testKindFlagAcceptedAndExitsOk(): Void {
 		#if sys
-		final fixture:String = writeFixture('class X {\n\t\t\tvar field = 0;\n\t\t\tstatic function f() { var local = 0; }\n\t\t}');
-		final rc:Int = Cli.run(['search', '--kind', 'VarStmt', "var $v = 0", fixture]);
+		final fixture: String = writeFixture('class X {\n\t\t\tvar field = 0;\n\t\t\tstatic function f() { var local = 0; }\n\t\t}');
+		final rc: Int = Cli.run(['search', '--kind', 'VarStmt', "var $v = 0", fixture]);
 		Assert.equals(0, rc, '--kind flag must be accepted and exit 0');
 		FileSystem.deleteFile(fixture);
 		#else
@@ -91,15 +90,17 @@ class ApqSearchCliTest extends Test {
 		#end
 	}
 
-	public function testDashDashSentinelAllowsOptionLikePattern():Void {
+	public function testDashDashSentinelAllowsOptionLikePattern(): Void {
 		#if sys
-		final fixture:String = writeFixture('class X {\n\t\t\tstatic function a() { var i = 0; --i; }\n\t\t}');
+		final fixture: String = writeFixture('class X {\n\t\t\tstatic function a() { var i = 0; --i; }\n\t\t}');
 		// Without `--`, a pattern starting with `--` is mistaken for an
 		// option and rejected (EXIT_USAGE). The `--` end-of-options
 		// sentinel makes every following token positional (standard
 		// getopt convention) so `--$x` (prefix-decrement) is searchable.
-		Assert.equals(2, Cli.run(['search', "--$x", fixture]), 'pattern starting with -- must be rejected as an option without the sentinel');
-		final rc:Int = Cli.run(['search', '--', "--$x", fixture]);
+		Assert.equals(
+			2, Cli.run(['search', "--$x", fixture]), 'pattern starting with -- must be rejected as an option without the sentinel'
+		);
+		final rc: Int = Cli.run(['search', '--', "--$x", fixture]);
 		Assert.equals(0, rc, "after `--` the `--$x` pattern is positional and matches `--i`");
 		FileSystem.deleteFile(fixture);
 		#else
@@ -107,15 +108,17 @@ class ApqSearchCliTest extends Test {
 		#end
 	}
 
-	public function testDashDashSentinelStillValidatesPriorOptions():Void {
+	public function testDashDashSentinelStillValidatesPriorOptions(): Void {
 		#if sys
-		final fixture:String = writeFixture('class X {}');
+		final fixture: String = writeFixture('class X {}');
 		// Regression guard: the sentinel must NOT disable option
 		// validation for tokens BEFORE it.
 		Assert.equals(2, Cli.run(['search', '--bogus', '--', "$x", fixture]), 'unknown option before `--` must still be rejected');
 		// Options before `--` are still honoured (no arg-parse error).
-		Assert.notEquals(2, Cli.run(['search', '--lang', 'haxe', '--', "$x + $x", fixture]),
-			'--lang before -- still parsed; pattern after -- runs without arg error');
+		Assert.notEquals(
+			2, Cli.run(['search', '--lang', 'haxe', '--', "$x + $x", fixture]),
+			'--lang before -- still parsed; pattern after -- runs without arg error'
+		);
 		FileSystem.deleteFile(fixture);
 		#else
 		Assert.pass('non-sys target');
@@ -123,8 +126,9 @@ class ApqSearchCliTest extends Test {
 	}
 
 	#if sys
-	private static function writeFixture(source:String):String {
+	private static function writeFixture(source: String): String {
 		return CliFixture.write('apq_search', source);
 	}
 	#end
+
 }

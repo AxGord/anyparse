@@ -28,40 +28,37 @@ import anyparse.grammar.haxe.HxModuleWriter;
  */
 class HxModifierFlattenSliceTest extends Test {
 
-	private static final _forceBuildParser:Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
-	private static final _forceBuildWriter:Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
+	private static final _forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
+	private static final _forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
 	// -- Trivia pipeline: multi-line modifier list FLATTENS to single line --
 
-	public function testTriviaMemberStaticOverloadFlatten():Void {
+	public function testTriviaMemberStaticOverloadFlatten(): Void {
 		flattenTrivia(
 			'abstract class Foo {\n\tstatic\n\toverload extern inline function foo() {}\n}',
 			'abstract class Foo {\n\tstatic overload extern inline function foo() {}\n}\n'
 		);
 	}
 
-	public function testTriviaMemberOverloadStaticFlatten():Void {
+	public function testTriviaMemberOverloadStaticFlatten(): Void {
 		flattenTrivia(
 			'abstract class Foo {\n\toverload\n\tstatic extern inline function foo(i:Int) {}\n}',
 			'abstract class Foo {\n\toverload static extern inline function foo(i:Int) {}\n}\n'
 		);
 	}
 
-	public function testTriviaTopLevelOverloadStaticFlatten():Void {
-		flattenTrivia(
-			'overload\n\tstatic inline function foo(i:Int) {}',
-			'overload static inline function foo(i:Int) {}\n'
-		);
+	public function testTriviaTopLevelOverloadStaticFlatten(): Void {
+		flattenTrivia('overload\n\tstatic inline function foo(i:Int) {}', 'overload static inline function foo(i:Int) {}\n');
 	}
 
 	// -- Trivia pipeline: single modifier untouched (smoke-test empty-Star and
 	// -- single-element paths — the new branch only fires at _si > 0). --
 
-	public function testTriviaSingleModifierUntouched():Void {
+	public function testTriviaSingleModifierUntouched(): Void {
 		roundTripTrivia('class C {\n\tstatic function foo() {}\n}');
 	}
 
-	public function testTriviaInlineModifierListUntouched():Void {
+	public function testTriviaInlineModifierListUntouched(): Void {
 		roundTripTrivia('class C {\n\tstatic overload extern inline function foo() {}\n}');
 	}
 
@@ -69,29 +66,28 @@ class HxModifierFlattenSliceTest extends Test {
 	// -- Mirrors CondModProbe.testIssue332V1 — the `forceInlineSep` flag must
 	// -- NOT collapse the `#end\n\tpublic` boundary (ParamCtor gate). --
 
-	public function testTriviaConditionalBoundaryNewlinePreserved():Void {
-		roundTripTrivia(
-			'class Main {\n\t#if (neko_v21 || (cpp && !cppia) || flash) inline #end\n\tpublic static function main() {}\n}'
-		);
+	public function testTriviaConditionalBoundaryNewlinePreserved(): Void {
+		roundTripTrivia('class Main {\n\t#if (neko_v21 || (cpp && !cppia) || flash) inline #end\n\tpublic static function main() {}\n}');
 	}
 
 	// -- Plain pipeline: already flattens, byte-identity guard. --
 
-	public function testPlainMemberFlattenStillByteIdentical():Void {
-		final source:String = 'abstract class Foo {\n\tstatic\n\toverload extern inline function foo() {}\n}';
-		final expected:String = 'abstract class Foo {\n\tstatic overload extern inline function foo() {}\n}\n';
+	public function testPlainMemberFlattenStillByteIdentical(): Void {
+		final source: String = 'abstract class Foo {\n\tstatic\n\toverload extern inline function foo() {}\n}';
+		final expected: String = 'abstract class Foo {\n\tstatic overload extern inline function foo() {}\n}\n';
 		Assert.equals(expected, HxModuleWriter.write(HaxeModuleParser.parse(source)));
 	}
 
-	private static function flattenTrivia(source:String, expected:String):Void {
-		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final out:String = HaxeModuleTriviaWriter.write(ast);
+	private static function flattenTrivia(source: String, expected: String): Void {
+		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out: String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals(expected, out, 'trivia flatten failed for <$source>');
 	}
 
-	private static function roundTripTrivia(source:String):Void {
-		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final out:String = HaxeModuleTriviaWriter.write(ast);
+	private static function roundTripTrivia(source: String): Void {
+		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out: String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals(source + '\n', out, 'trivia byte-identity failed for <$source>');
 	}
+
 }

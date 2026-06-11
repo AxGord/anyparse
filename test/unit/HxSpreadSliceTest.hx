@@ -29,51 +29,51 @@ class HxSpreadSliceTest extends HxTestHelpers {
 
 	// ---------- Rest parameter ----------
 
-	public function testRestParamSingle():Void {
-		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function f(...r:Int):Void {} }');
+	public function testRestParamSingle(): Void {
+		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function f(...r:Int):Void {} }');
 		Assert.equals(1, decl.params.length);
 		final body = expectRestParam(decl.params[0]);
-		Assert.equals('r', (body.name : String));
-		Assert.equals('Int', (expectNamedType(body.type).name : String));
+		Assert.equals('r', (body.name: String));
+		Assert.equals('Int', (expectNamedType(body.type).name: String));
 		Assert.isNull(body.defaultValue);
 	}
 
-	public function testRestParamWithRequiredHead():Void {
-		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function f(a:Int, ...r:Int):Void {} }');
+	public function testRestParamWithRequiredHead(): Void {
+		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function f(a:Int, ...r:Int):Void {} }');
 		Assert.equals(2, decl.params.length);
-		Assert.equals('a', (expectRequiredParam(decl.params[0]).name : String));
+		Assert.equals('a', (expectRequiredParam(decl.params[0]).name: String));
 		final tail = expectRestParam(decl.params[1]);
-		Assert.equals('r', (tail.name : String));
-		Assert.equals('Int', (expectNamedType(tail.type).name : String));
+		Assert.equals('r', (tail.name: String));
+		Assert.equals('Int', (expectNamedType(tail.type).name: String));
 	}
 
-	public function testRestParamMixedWithOptional():Void {
-		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function f(a:Int, ?b:Int, ...r:Int):Void {} }');
+	public function testRestParamMixedWithOptional(): Void {
+		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function f(a:Int, ?b:Int, ...r:Int):Void {} }');
 		Assert.equals(3, decl.params.length);
-		Assert.equals('a', (expectRequiredParam(decl.params[0]).name : String));
-		Assert.equals('b', (expectOptionalParam(decl.params[1]).name : String));
-		Assert.equals('r', (expectRestParam(decl.params[2]).name : String));
+		Assert.equals('a', (expectRequiredParam(decl.params[0]).name: String));
+		Assert.equals('b', (expectOptionalParam(decl.params[1]).name: String));
+		Assert.equals('r', (expectRestParam(decl.params[2]).name: String));
 	}
 
-	public function testRestParamWithGenericType():Void {
-		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function f(...r:Array<Int>):Void {} }');
+	public function testRestParamWithGenericType(): Void {
+		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function f(...r:Array<Int>):Void {} }');
 		Assert.equals(1, decl.params.length);
 		final body = expectRestParam(decl.params[0]);
-		Assert.equals('r', (body.name : String));
+		Assert.equals('r', (body.name: String));
 		final ref = expectNamedType(body.type);
-		Assert.equals('Array', (ref.name : String));
+		Assert.equals('Array', (ref.name: String));
 	}
 
-	public function testRestParamWhitespaceTolerant():Void {
-		final decl:HxFnDecl = parseSingleFnDecl('class Foo { function f( ... r : Int ):Void {} }');
+	public function testRestParamWhitespaceTolerant(): Void {
+		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function f( ... r : Int ):Void {} }');
 		Assert.equals(1, decl.params.length);
-		Assert.equals('r', (expectRestParam(decl.params[0]).name : String));
+		Assert.equals('r', (expectRestParam(decl.params[0]).name: String));
 	}
 
 	// ---------- Spread expression ----------
 
-	public function testSpreadInCallArg():Void {
-		final decl:HxFnDecl = parseSingleFnDecl('class M { static function m() { f(...args); } }');
+	public function testSpreadInCallArg(): Void {
+		final decl: HxFnDecl = parseSingleFnDecl('class M { static function m() { f(...args); } }');
 		final stmts = fnBodyStmts(decl);
 		Assert.equals(1, stmts.length);
 		switch stmts[0] {
@@ -81,7 +81,7 @@ class HxSpreadSliceTest extends HxTestHelpers {
 				Assert.equals(1, args.length);
 				switch args[0] {
 					case Spread(IdentExpr(name)):
-						Assert.equals('args', (name : String));
+						Assert.equals('args', (name: String));
 					case _:
 						Assert.fail('expected Spread(IdentExpr), got ${args[0]}');
 				}
@@ -90,11 +90,11 @@ class HxSpreadSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public function testSpreadOfPostfixChain():Void {
+	public function testSpreadOfPostfixChain(): Void {
 		// Operand is a postfix-extended atom (FieldAccess + Call). The
 		// `@:prefix` recurses into `parseHxExprAtom`, which captures the
 		// full postfix chain in one step.
-		final decl:HxFnDecl = parseSingleFnDecl('class M { static function m() { f(...rest.append(999)); } }');
+		final decl: HxFnDecl = parseSingleFnDecl('class M { static function m() { f(...rest.append(999)); } }');
 		final stmts = fnBodyStmts(decl);
 		switch stmts[0] {
 			case ExprStmt(Call(_, [Spread(Call(FieldAccess(IdentExpr(_), _), _))])):
@@ -104,12 +104,12 @@ class HxSpreadSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public function testIntervalStillBindsAsInfix():Void {
+	public function testIntervalStillBindsAsInfix(): Void {
 		// Sanity: `0...10` must remain `Interval(IntLit(0), IntLit(10))`,
 		// NOT `Spread` followed by `IntLit(10)`. Prefix `...` only fires
 		// from the atom parser; the Pratt loop sees `...` as the
 		// `Interval` infix when an atom (`0`) is already on the stack.
-		final decl:HxFnDecl = parseSingleFnDecl('class M { static function m() { for (i in 0...10) {} } }');
+		final decl: HxFnDecl = parseSingleFnDecl('class M { static function m() { for (i in 0...10) {} } }');
 		final stmts = fnBodyStmts(decl);
 		switch stmts[0] {
 			case ForStmt(stmt):
@@ -124,7 +124,7 @@ class HxSpreadSliceTest extends HxTestHelpers {
 
 	// ---------- Round-trip ----------
 
-	public function testRestAndSpreadRoundTrip():Void {
+	public function testRestAndSpreadRoundTrip(): Void {
 		roundTrip('class Foo { function f(...r:Int):Void {} }', 'rest-single');
 		roundTrip('class Foo { function f(a:Int, ...r:Int):Void {} }', 'rest-after-required');
 		roundTrip('class Foo { function f(a:Int, ?b:Int, ...r:Int):Void {} }', 'rest-after-mixed');
@@ -133,4 +133,5 @@ class HxSpreadSliceTest extends HxTestHelpers {
 		roundTrip('class M { static function m() { f(...rest.append(999)); } }', 'spread-call-chain');
 		roundTrip('class M { static function m() { for (i in 0...10) trace(i); } }', 'interval-non-regression');
 	}
+
 }

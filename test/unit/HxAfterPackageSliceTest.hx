@@ -33,85 +33,81 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 @:nullSafety(Strict)
 class HxAfterPackageSliceTest extends Test {
 
-	public function new():Void {
+	public function new(): Void {
 		super();
 	}
 
-	public function testDefaultMatchesUpstream():Void {
-		final defaults:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
+	public function testDefaultMatchesUpstream(): Void {
+		final defaults: HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
 		Assert.equals(1, defaults.afterPackage);
 	}
 
-	public function testDefaultInsertsBlankAfterPackage():Void {
-		final out:String = writeWith('package;\nclass Main {}', 1);
+	public function testDefaultInsertsBlankAfterPackage(): Void {
+		final out: String = writeWith('package;\nclass Main {}', 1);
 		Assert.equals('package;\n\nclass Main {}\n', out);
 	}
 
-	public function testDefaultInsertsBlankAfterDottedPackage():Void {
-		final out:String = writeWith('package foo.bar;\nclass Main {}', 1);
+	public function testDefaultInsertsBlankAfterDottedPackage(): Void {
+		final out: String = writeWith('package foo.bar;\nclass Main {}', 1);
 		Assert.equals('package foo.bar;\n\nclass Main {}\n', out);
 	}
 
-	public function testZeroStripsBlankAfterPackage():Void {
-		final out:String = writeWith('package;\n\nclass Main {}', 0);
+	public function testZeroStripsBlankAfterPackage(): Void {
+		final out: String = writeWith('package;\n\nclass Main {}', 0);
 		Assert.equals('package;\nclass Main {}\n', out);
 	}
 
-	public function testZeroStripsBlankAfterDottedPackage():Void {
-		final out:String = writeWith('package foo;\n\n\nclass Main {}', 0);
+	public function testZeroStripsBlankAfterDottedPackage(): Void {
+		final out: String = writeWith('package foo;\n\n\nclass Main {}', 0);
 		Assert.equals('package foo;\nclass Main {}\n', out);
 	}
 
-	public function testTwoEmitsTwoBlanks():Void {
-		final out:String = writeWith('package;\nclass Main {}', 2);
+	public function testTwoEmitsTwoBlanks(): Void {
+		final out: String = writeWith('package;\nclass Main {}', 2);
 		Assert.equals('package;\n\n\nclass Main {}\n', out);
 	}
 
-	public function testOverridesSourceBlankCount():Void {
-		final out:String = writeWith('package;\n\n\nclass Main {}', 1);
+	public function testOverridesSourceBlankCount(): Void {
+		final out: String = writeWith('package;\n\n\nclass Main {}', 1);
 		Assert.equals('package;\n\nclass Main {}\n', out, 'opt.afterPackage=1 overrides source blank-line count to exactly 1');
 	}
 
-	public function testNoPackageNoChange():Void {
-		final out:String = writeWith('import foo.Bar;\nclass Main {}', 1);
+	public function testNoPackageNoChange(): Void {
+		final out: String = writeWith('import foo.Bar;\nclass Main {}', 1);
 		Assert.equals('import foo.Bar;\nclass Main {}\n', out);
 	}
 
-	public function testPackageEmptyAtEOFNoTrailingBlank():Void {
-		final out:String = writeWith('package;', 1);
+	public function testPackageEmptyAtEOFNoTrailingBlank(): Void {
+		final out: String = writeWith('package;', 1);
 		Assert.equals('package;\n', out);
 	}
 
-	public function testPackageDoesNotAffectClassClassSeparator():Void {
-		final out:String = writeWith('package;\nclass A {}\nclass B {}', 1);
+	public function testPackageDoesNotAffectClassClassSeparator(): Void {
+		final out: String = writeWith('package;\nclass A {}\nclass B {}', 1);
 		Assert.equals('package;\n\nclass A {}\nclass B {}\n', out, 'only package→next pair gains blank, class→class stays source-driven');
 	}
 
-	public function testConfigLoaderMapsAfterPackage():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"emptyLines": {"afterPackage": 2}}'
-		);
+	public function testConfigLoaderMapsAfterPackage(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"emptyLines": {"afterPackage": 2}}');
 		Assert.equals(2, opts.afterPackage);
 	}
 
-	public function testConfigLoaderMapsAfterPackageZero():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"emptyLines": {"afterPackage": 0}}'
-		);
+	public function testConfigLoaderMapsAfterPackageZero(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"emptyLines": {"afterPackage": 0}}');
 		Assert.equals(0, opts.afterPackage);
 	}
 
-	public function testConfigLoaderMissingKeyKeepsDefault():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	public function testConfigLoaderMissingKeyKeepsDefault(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		Assert.equals(1, opts.afterPackage);
 	}
 
-	private inline function writeWith(src:String, afterPackage:Int):String {
+	private inline function writeWith(src: String, afterPackage: Int): String {
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), makeOpts(afterPackage));
 	}
 
-	private inline function makeOpts(afterPackage:Int):HxModuleWriteOptions {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	private inline function makeOpts(afterPackage: Int): HxModuleWriteOptions {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.afterPackage = afterPackage;
 		opts.beforeType = 0;
 		// Disable the final-pass blank-line cap so this slice's `afterPackage:2`
@@ -119,4 +115,5 @@ class HxAfterPackageSliceTest extends Test {
 		opts.maxConsecutiveBlanks = -1;
 		return opts;
 	}
+
 }

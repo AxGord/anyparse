@@ -6,9 +6,6 @@ package unit.miniblock;
  * Empty body — the `@:build` macro contributes the `write(value)`
  * entry point that round-trips a `MiniBlock` AST back to source.
  */
-@:build(anyparse.macro.Build.buildWriter(
-	unit.miniblock.MiniBlock,
-	unit.miniblock.MiniBlockWriteOptions
-))
+@:build(anyparse.macro.Build.buildWriter(unit.miniblock.MiniBlock, unit.miniblock.MiniBlockWriteOptions))
 @:nullSafety(Strict)
 class MiniBlockWriter {}

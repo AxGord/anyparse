@@ -34,37 +34,31 @@ class HxIsStmtNoSemiSliceTest extends HxTestHelpers {
 
 	// -- Isolated: bare `x is Type` as sole statement, no `;` --
 
-	public function testBareIsStmtNoSemi():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
-			'class C {\n\tfunction f() {\n\t\tx is String\n\t}\n}'
-		);
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testBareIsStmtNoSemi(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx is String\n\t}\n}');
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(1, stmts.length);
-		final e:HxExpr = expectExprStmt(stmts[0]);
+		final e: HxExpr = expectExprStmt(stmts[0]);
 		Assert.isTrue(e.match(Is(_, _)));
 	}
 
 	// -- Multi-statement: Is no `;` followed by next stmt --
 
-	public function testIsFollowedByStmt():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
-			'class C {\n\tfunction f() {\n\t\tx is String\n\t\ty = 5;\n\t}\n}'
-		);
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testIsFollowedByStmt(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx is String\n\t\ty = 5;\n\t}\n}');
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(2, stmts.length);
-		final e0:HxExpr = expectExprStmt(stmts[0]);
+		final e0: HxExpr = expectExprStmt(stmts[0]);
 		Assert.isTrue(e0.match(Is(_, _)));
 	}
 
 	// -- Regression: pre-slice path with `;` still parses --
 
-	public function testIsStmtWithSemiUnchanged():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
-			'class C {\n\tfunction f() {\n\t\tx is String;\n\t}\n}'
-		);
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testIsStmtWithSemiUnchanged(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx is String;\n\t}\n}');
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(1, stmts.length);
-		final e:HxExpr = expectExprStmt(stmts[0]);
+		final e: HxExpr = expectExprStmt(stmts[0]);
 		Assert.isTrue(e.match(Is(_, _)));
 	}
 
@@ -73,19 +67,17 @@ class HxIsStmtNoSemiSliceTest extends HxTestHelpers {
 	// carve-out in `stmtExprNoSemi` (`rhsCtor == 'Is'`) remains
 	// load-bearing for the case where the next byte is NOT `}`.
 
-	public function testIsAssignBeforeCloseBraceNoSemi():Void {
-		final cls:HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = a is Int\n\t}\n}');
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testIsAssignBeforeCloseBraceNoSemi(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = a is Int\n\t}\n}');
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(1, stmts.length);
 	}
 
 	// -- Regression: Assign+Is RHS with `;` parses --
 
-	public function testIsAssignWithSemiUnchanged():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
-			'class C {\n\tfunction f() {\n\t\tx = a is Int;\n\t}\n}'
-		);
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testIsAssignWithSemiUnchanged(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = a is Int;\n\t}\n}');
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(1, stmts.length);
 	}
 
@@ -94,20 +86,16 @@ class HxIsStmtNoSemiSliceTest extends HxTestHelpers {
 	// BlockStmt (greedy `{` at stmt position), inner Is-stmt is
 	// ExprStmt inside the block body.
 
-	public function testCorpusIssue605BraceBlockSingleIs():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
-			'class C {\n\tfunction f() {\n\t\t{x is String}\n\t}\n}'
-		);
+	public function testCorpusIssue605BraceBlockSingleIs(): Void {
+		final cls: HxClassDecl = HaxeParser.parse('class C {\n\tfunction f() {\n\t\t{x is String}\n\t}\n}');
 		Assert.equals(1, cls.members.length);
 	}
 
 	// -- Idempotency: issue_605 brace-block round-trip via the module
 	// pipeline --
 
-	public function testCorpusIssue605RoundTrip():Void {
-		roundTrip(
-			'class C {\n\tfunction f() {\n\t\t{x is String}\n\t}\n}',
-			'issue_605_operator_is'
-		);
+	public function testCorpusIssue605RoundTrip(): Void {
+		roundTrip('class C {\n\tfunction f() {\n\t\t{x is String}\n\t}\n}', 'issue_605_operator_is');
 	}
+
 }

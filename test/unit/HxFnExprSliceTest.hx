@@ -30,41 +30,42 @@ import anyparse.grammar.haxe.HxModuleWriter;
  */
 class HxFnExprSliceTest extends HxTestHelpers {
 
-	public function testAnonFnExprBodyInCall():Void {
-		final source:String = 'class C {\n\tfunction m() {\n\t\thandle(function (res) trace(res));\n\t}\n}';
-		final module:HxModule = HaxeModuleParser.parse(source);
+	public function testAnonFnExprBodyInCall(): Void {
+		final source: String = 'class C {\n\tfunction m() {\n\t\thandle(function (res) trace(res));\n\t}\n}';
+		final module: HxModule = HaxeModuleParser.parse(source);
 		Assert.notNull(module);
 		assertFirstStmtCallArgIsFnExprWithExprBody(source);
 	}
 
-	public function testAnonFnExprBodyEmptyParams():Void {
-		final source:String = 'class C {\n\tfunction m() {\n\t\thandle(function () trace(0));\n\t}\n}';
-		final module:HxModule = HaxeModuleParser.parse(source);
+	public function testAnonFnExprBodyEmptyParams(): Void {
+		final source: String = 'class C {\n\tfunction m() {\n\t\thandle(function () trace(0));\n\t}\n}';
+		final module: HxModule = HaxeModuleParser.parse(source);
 		Assert.notNull(module);
 		roundTrip(source, 'empty params + expr body');
 	}
 
-	public function testAnonFnBlockBodyInCall():Void {
-		final source:String = 'class C {\n\tfunction m() {\n\t\thandle(function () {\n\t\t\ttrace(0);\n\t\t});\n\t}\n}';
-		final module:HxModule = HaxeModuleParser.parse(source);
+	public function testAnonFnBlockBodyInCall(): Void {
+		final source: String = 'class C {\n\tfunction m() {\n\t\thandle(function () {\n\t\t\ttrace(0);\n\t\t});\n\t}\n}';
+		final module: HxModule = HaxeModuleParser.parse(source);
 		Assert.notNull(module);
 		roundTrip(source, 'anon fn block body');
 	}
 
-	public function testAnonFnTypedParams():Void {
-		final source:String = 'class C {\n\tfunction m() {\n\t\trun(function (a:Int, b:Int) a + b);\n\t}\n}';
-		final module:HxModule = HaxeModuleParser.parse(source);
+	public function testAnonFnTypedParams(): Void {
+		final source: String = 'class C {\n\tfunction m() {\n\t\trun(function (a:Int, b:Int) a + b);\n\t}\n}';
+		final module: HxModule = HaxeModuleParser.parse(source);
 		Assert.notNull(module);
 		roundTrip(source, 'anon fn typed params + expr body');
 	}
 
-	public function testAnonFnExprBodyRoundTrip():Void {
+	public function testAnonFnExprBodyRoundTrip(): Void {
 		roundTrip('class C {\n\tfunction m() {\n\t\thandle(function (res) trace(res));\n\t}\n}', 'expr body');
 	}
 
-	private function assertFirstStmtCallArgIsFnExprWithExprBody(source:String):Void {
-		final written1:String = HxModuleWriter.write(HaxeModuleParser.parse(source));
-		final written2:String = HxModuleWriter.write(HaxeModuleParser.parse(written1));
+	private function assertFirstStmtCallArgIsFnExprWithExprBody(source: String): Void {
+		final written1: String = HxModuleWriter.write(HaxeModuleParser.parse(source));
+		final written2: String = HxModuleWriter.write(HaxeModuleParser.parse(written1));
 		Assert.equals(written1, written2, 'idempotent round-trip');
 	}
+
 }

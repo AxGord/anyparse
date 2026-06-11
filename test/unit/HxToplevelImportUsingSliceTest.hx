@@ -31,118 +31,138 @@ import anyparse.grammar.haxe.HxModuleWriter;
  */
 class HxToplevelImportUsingSliceTest extends HxTestHelpers {
 
-	public function testImportSingleSegment():Void {
-		final ast:HxModule = HaxeModuleParser.parse('import L;');
+	public function testImportSingleSegment(): Void {
+		final ast: HxModule = HaxeModuleParser.parse('import L;');
 		Assert.equals(1, ast.decls.length);
 		switch ast.decls[0].decl {
-			case ImportDecl(path): Assert.equals('L', (path : String));
-			case _: Assert.fail('expected ImportDecl, got ${ast.decls[0].decl}');
+			case ImportDecl(path):
+				Assert.equals('L', (path: String));
+			case _:
+				Assert.fail('expected ImportDecl, got ${ast.decls[0].decl}');
 		}
 	}
 
-	public function testImportDottedPath():Void {
-		final ast:HxModule = HaxeModuleParser.parse('import haxe.io.Bytes;');
+	public function testImportDottedPath(): Void {
+		final ast: HxModule = HaxeModuleParser.parse('import haxe.io.Bytes;');
 		switch ast.decls[0].decl {
-			case ImportDecl(path): Assert.equals('haxe.io.Bytes', (path : String));
-			case _: Assert.fail('expected ImportDecl');
+			case ImportDecl(path):
+				Assert.equals('haxe.io.Bytes', (path: String));
+			case _:
+				Assert.fail('expected ImportDecl');
 		}
 	}
 
-	public function testImportSubModule():Void {
-		final ast:HxModule = HaxeModuleParser.parse('import languageprovider.LanguageTranslations.L;');
+	public function testImportSubModule(): Void {
+		final ast: HxModule = HaxeModuleParser.parse('import languageprovider.LanguageTranslations.L;');
 		switch ast.decls[0].decl {
-			case ImportDecl(path): Assert.equals('languageprovider.LanguageTranslations.L', (path : String));
-			case _: Assert.fail('expected ImportDecl');
+			case ImportDecl(path):
+				Assert.equals('languageprovider.LanguageTranslations.L', (path: String));
+			case _:
+				Assert.fail('expected ImportDecl');
 		}
 	}
 
-	public function testUsingSingleSegment():Void {
-		final ast:HxModule = HaxeModuleParser.parse('using StringTools;');
+	public function testUsingSingleSegment(): Void {
+		final ast: HxModule = HaxeModuleParser.parse('using StringTools;');
 		Assert.equals(1, ast.decls.length);
 		switch ast.decls[0].decl {
-			case UsingDecl(path): Assert.equals('StringTools', (path : String));
-			case _: Assert.fail('expected UsingDecl, got ${ast.decls[0].decl}');
+			case UsingDecl(path):
+				Assert.equals('StringTools', (path: String));
+			case _:
+				Assert.fail('expected UsingDecl, got ${ast.decls[0].decl}');
 		}
 	}
 
-	public function testUsingDottedPath():Void {
-		final ast:HxModule = HaxeModuleParser.parse('using tink.CoreApi;');
+	public function testUsingDottedPath(): Void {
+		final ast: HxModule = HaxeModuleParser.parse('using tink.CoreApi;');
 		switch ast.decls[0].decl {
-			case UsingDecl(path): Assert.equals('tink.CoreApi', (path : String));
-			case _: Assert.fail('expected UsingDecl');
+			case UsingDecl(path):
+				Assert.equals('tink.CoreApi', (path: String));
+			case _:
+				Assert.fail('expected UsingDecl');
 		}
 	}
 
-	public function testPackageImportClass():Void {
-		final ast:HxModule = HaxeModuleParser.parse('package foo;\nimport bar.Baz;\nclass C {}');
+	public function testPackageImportClass(): Void {
+		final ast: HxModule = HaxeModuleParser.parse('package foo;\nimport bar.Baz;\nclass C {}');
 		Assert.equals(3, ast.decls.length);
 		switch ast.decls[0].decl {
-			case PackageDecl(_): Assert.pass();
-			case _: Assert.fail('expected PackageDecl first');
+			case PackageDecl(_):
+				Assert.pass();
+			case _:
+				Assert.fail('expected PackageDecl first');
 		}
 		switch ast.decls[1].decl {
-			case ImportDecl(path): Assert.equals('bar.Baz', (path : String));
-			case _: Assert.fail('expected ImportDecl second');
+			case ImportDecl(path):
+				Assert.equals('bar.Baz', (path: String));
+			case _:
+				Assert.fail('expected ImportDecl second');
 		}
 		switch ast.decls[2].decl {
-			case ClassDecl(_): Assert.pass();
-			case _: Assert.fail('expected ClassDecl third');
+			case ClassDecl(_):
+				Assert.pass();
+			case _:
+				Assert.fail('expected ClassDecl third');
 		}
 	}
 
-	public function testImportThenUsingSequence():Void {
-		final ast:HxModule = HaxeModuleParser.parse('import tink.state.Observable;\nusing tink.CoreApi;');
+	public function testImportThenUsingSequence(): Void {
+		final ast: HxModule = HaxeModuleParser.parse('import tink.state.Observable;\nusing tink.CoreApi;');
 		Assert.equals(2, ast.decls.length);
 		switch ast.decls[0].decl {
-			case ImportDecl(path): Assert.equals('tink.state.Observable', (path : String));
-			case _: Assert.fail('expected ImportDecl first');
+			case ImportDecl(path):
+				Assert.equals('tink.state.Observable', (path: String));
+			case _:
+				Assert.fail('expected ImportDecl first');
 		}
 		switch ast.decls[1].decl {
-			case UsingDecl(path): Assert.equals('tink.CoreApi', (path : String));
-			case _: Assert.fail('expected UsingDecl second');
+			case UsingDecl(path):
+				Assert.equals('tink.CoreApi', (path: String));
+			case _:
+				Assert.fail('expected UsingDecl second');
 		}
 	}
 
-	public function testImportRequiresSemi():Void {
+	public function testImportRequiresSemi(): Void {
 		Assert.raises(() -> HaxeModuleParser.parse('import foo'));
 	}
 
-	public function testUsingRequiresSemi():Void {
+	public function testUsingRequiresSemi(): Void {
 		Assert.raises(() -> HaxeModuleParser.parse('using foo'));
 	}
 
-	public function testImportRequiresPath():Void {
+	public function testImportRequiresPath(): Void {
 		// No `ImportEmpty` ctor — bare `import;` is rejected.
 		Assert.raises(() -> HaxeModuleParser.parse('import;'));
 	}
 
-	public function testUsingRequiresPath():Void {
+	public function testUsingRequiresPath(): Void {
 		Assert.raises(() -> HaxeModuleParser.parse('using;'));
 	}
 
-	public function testWriterEmitsImport():Void {
-		final out:String = HxModuleWriter.write(HaxeModuleParser.parse('import foo.bar.Baz;'));
+	public function testWriterEmitsImport(): Void {
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse('import foo.bar.Baz;'));
 		Assert.equals('import foo.bar.Baz;\n', out);
 	}
 
-	public function testWriterEmitsUsing():Void {
-		final out:String = HxModuleWriter.write(HaxeModuleParser.parse('using StringTools;'));
+	public function testWriterEmitsUsing(): Void {
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse('using StringTools;'));
 		Assert.equals('using StringTools;\n', out);
 	}
 
-	public function testRoundTripImport():Void {
+	public function testRoundTripImport(): Void {
 		roundTrip('import haxe.io.Bytes;');
 	}
 
-	public function testRoundTripUsing():Void {
+	public function testRoundTripUsing(): Void {
 		roundTrip('using tink.CoreApi;');
 	}
 
-	public function testRoundTripPackageImportClass():Void {
+	public function testRoundTripPackageImportClass(): Void {
 		roundTrip('package foo.bar;\nimport baz.Qux;\nclass C {}');
 	}
 
-	public function testRoundTripImportUsingSequence():Void {
+	public function testRoundTripImportUsingSequence(): Void {
 		roundTrip('import tink.state.Observable;\nusing tink.CoreApi;');
 	}
 

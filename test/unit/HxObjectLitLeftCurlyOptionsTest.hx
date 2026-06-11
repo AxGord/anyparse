@@ -27,72 +27,70 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 @:nullSafety(Strict)
 final class HxObjectLitLeftCurlyOptionsTest extends Test {
 
-	private static final _forceParser:Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
-	private static final _forceWriter:Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
+	private static final _forceParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
+	private static final _forceWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
-	public function new():Void {
+	public function new(): Void {
 		super();
 	}
 
-	public function testShortLiteralStaysCuddledUnderNext():Void {
-		final src:String = 'class Foo { static var x = {a: 1, b: 2}; }';
-		final out:String = writeWith(src, BracePlacement.Next);
+	public function testShortLiteralStaysCuddledUnderNext(): Void {
+		final src: String = 'class Foo { static var x = {a: 1, b: 2}; }';
+		final out: String = writeWith(src, BracePlacement.Next);
 		Assert.isTrue(out.indexOf('= {a: 1, b: 2};') != -1, 'expected cuddled `= {a: 1, b: 2};` in: <$out>');
 		Assert.isTrue(out.indexOf('=\n') == -1, 'did not expect Allman before `{` for short literal: <$out>');
 	}
 
-	public function testEmptyLiteralStaysCuddledUnderNext():Void {
-		final src:String = 'class Foo { static var x = {}; }';
-		final out:String = writeWith(src, BracePlacement.Next);
+	public function testEmptyLiteralStaysCuddledUnderNext(): Void {
+		final src: String = 'class Foo { static var x = {}; }';
+		final out: String = writeWith(src, BracePlacement.Next);
 		Assert.isTrue(out.indexOf('= {};') != -1, 'expected cuddled `= {};` in: <$out>');
 	}
 
-	public function testMultilineSourceLiteralGoesAllmanUnderNext():Void {
-		final src:String = 'class Foo {\n\tstatic var x = {\n\t\tone: 1,\n\t\ttwo: 2\n\t};\n}';
-		final out:String = writeWith(src, BracePlacement.Next);
+	public function testMultilineSourceLiteralGoesAllmanUnderNext(): Void {
+		final src: String = 'class Foo {\n\tstatic var x = {\n\t\tone: 1,\n\t\ttwo: 2\n\t};\n}';
+		final out: String = writeWith(src, BracePlacement.Next);
 		// `{` lands at the same indent as `static var x =` (one tab inside
 		// `class Foo`); inner fields get +1. Continuation-indent of var-rhs
 		// is a separate concern (not in this slice).
 		Assert.isTrue(out.indexOf('=\n\t{\n\t\tone:') != -1, 'expected Allman + indented brace in: <$out>');
 	}
 
-	public function testFourFieldLiteralWrapsAndGoesAllmanUnderNext():Void {
-		final src:String = 'class Foo { static var x = {one: 1, two: 2, three: 3, four: 4}; }';
-		final out:String = writeWith(src, BracePlacement.Next);
+	public function testFourFieldLiteralWrapsAndGoesAllmanUnderNext(): Void {
+		final src: String = 'class Foo { static var x = {one: 1, two: 2, three: 3, four: 4}; }';
+		final out: String = writeWith(src, BracePlacement.Next);
 		Assert.isTrue(out.indexOf('=\n\t{') != -1, 'expected Allman before wrapped brace: <$out>');
 	}
 
-	public function testShortLiteralStillCuddledUnderSame():Void {
-		final src:String = 'class Foo { static var x = {a: 1, b: 2}; }';
-		final out:String = writeWith(src, BracePlacement.Same);
+	public function testShortLiteralStillCuddledUnderSame(): Void {
+		final src: String = 'class Foo { static var x = {a: 1, b: 2}; }';
+		final out: String = writeWith(src, BracePlacement.Same);
 		Assert.isTrue(out.indexOf('= {a: 1, b: 2};') != -1, 'expected cuddled `= {a: 1, b: 2};` in: <$out>');
 	}
 
-	public function testTwoMultilineArgsHaveNoBlankLineBetween():Void {
+	public function testTwoMultilineArgsHaveNoBlankLineBetween(): Void {
 		// Slice ω-opthardline regression: when two multi-line object
 		// literals appear as call args under a wrap-engine break, the
 		// outer wrap engine emits `,\n` between args; without
 		// OptHardline the inner literal's leftCurly Next would also
 		// emit `\n`, producing `,\n\n{`. With OptHardline the inner `\n`
 		// is dropped — result is `,\n\t\t\t{`.
-		final src:String = 'class Main {\n\tpublic static function main() {\n\t\tvar result = formatter.formatFile({\n\t\t\tname: doc.uri.toFsPath().toString(),\n\t\t\tcontent: doc.tokens.bytes\n\t\t}, {\n\t\t\ttokens: doc.tokens.list,\n\t\t\ttokenTree: doc.tokens.tree\n\t\t});\n\t}\n}\n';
-		final out:String = writeWith(src, BracePlacement.Next);
+		final src: String = 'class Main {\n\tpublic static function main() {\n\t\tvar result = formatter.formatFile({\n\t\t\tname: doc.uri.toFsPath().toString(),\n\t\t\tcontent: doc.tokens.bytes\n\t\t}, {\n\t\t\ttokens: doc.tokens.list,\n\t\t\ttokenTree: doc.tokens.tree\n\t\t});\n\t}\n}\n';
+		final out: String = writeWith(src, BracePlacement.Next);
 		Assert.isTrue(out.indexOf(',\n\n') == -1, 'no spurious blank line between args expected in: <$out>');
 	}
 
-	public function testCascadeSetsBothKnobsViaJson():Void {
-		final src:String = 'class Foo { static var x = {a: 1}; }';
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"lineEnds": {"leftCurly": "before"}}'
-		);
+	public function testCascadeSetsBothKnobsViaJson(): Void {
+		final src: String = 'class Foo { static var x = {a: 1}; }';
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"lineEnds": {"leftCurly": "before"}}');
 		Assert.equals(BracePlacement.Next, opts.objectLiteralLeftCurly);
-		final out:String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		// Short literal still cuddled despite cascade
 		Assert.isTrue(out.indexOf('= {a: 1};') != -1, 'expected cuddled short literal under cascaded Next: <$out>');
 	}
 
-	private inline function writeWith(src:String, placement:BracePlacement):String {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	private inline function writeWith(src: String, placement: BracePlacement): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.objectLiteralLeftCurly = placement;
 		// Disable indentObjectLiteral so this suite stays focused on the
 		// leftCurly axis — slice ω-indent-objectliteral default-true would
@@ -102,4 +100,5 @@ final class HxObjectLitLeftCurlyOptionsTest extends Test {
 		opts.indentObjectLiteral = false;
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
+
 }

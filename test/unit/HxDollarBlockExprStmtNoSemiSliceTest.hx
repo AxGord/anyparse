@@ -27,37 +27,31 @@ class HxDollarBlockExprStmtNoSemiSliceTest extends HxTestHelpers {
 
 	// -- Isolated: bare ${expr} as sole statement, no `;` --
 
-	public function testBareDollarBlockNoSemi():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
-			"class C {\n\tfunction f() {\n\t\t${expr}\n\t}\n}"
-		);
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testBareDollarBlockNoSemi(): Void {
+		final cls: HxClassDecl = HaxeParser.parse("class C {\n\tfunction f() {\n\t\t${expr}\n\t}\n}");
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(1, stmts.length);
-		final e:HxExpr = expectExprStmt(stmts[0]);
+		final e: HxExpr = expectExprStmt(stmts[0]);
 		Assert.isTrue(e.match(DollarBlockExpr(_)));
 	}
 
 	// -- Multi-statement: ${expr} no `;` followed by next stmt --
 
-	public function testDollarBlockFollowedByStmt():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
-			"class C {\n\tfunction f() {\n\t\t${expr}\n\t\ty = 5;\n\t}\n}"
-		);
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testDollarBlockFollowedByStmt(): Void {
+		final cls: HxClassDecl = HaxeParser.parse("class C {\n\tfunction f() {\n\t\t${expr}\n\t\ty = 5;\n\t}\n}");
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(2, stmts.length);
-		final e0:HxExpr = expectExprStmt(stmts[0]);
+		final e0: HxExpr = expectExprStmt(stmts[0]);
 		Assert.isTrue(e0.match(DollarBlockExpr(_)));
 	}
 
 	// -- Regression: pre-slice path with `;` still parses --
 
-	public function testDollarBlockWithSemiUnchanged():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
-			"class C {\n\tfunction f() {\n\t\t${expr};\n\t}\n}"
-		);
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testDollarBlockWithSemiUnchanged(): Void {
+		final cls: HxClassDecl = HaxeParser.parse("class C {\n\tfunction f() {\n\t\t${expr};\n\t}\n}");
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(1, stmts.length);
-		final e:HxExpr = expectExprStmt(stmts[0]);
+		final e: HxExpr = expectExprStmt(stmts[0]);
 		Assert.isTrue(e.match(DollarBlockExpr(_)));
 	}
 
@@ -67,16 +61,16 @@ class HxDollarBlockExprStmtNoSemiSliceTest extends HxTestHelpers {
 	// 'DollarBlockExpr'`) remains load-bearing for the case where the
 	// next byte is NOT `}` (see `HxAssignStmtNoSemiSliceTest.testAssignFollowedByIdentRegression`).
 
-	public function testDollarBlockAssignBeforeCloseBraceNoSemi():Void {
-		final cls:HxClassDecl = HaxeParser.parse("class C {\n\tfunction f() {\n\t\tx = ${expr}\n\t}\n}");
-		final stmts:Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
+	public function testDollarBlockAssignBeforeCloseBraceNoSemi(): Void {
+		final cls: HxClassDecl = HaxeParser.parse("class C {\n\tfunction f() {\n\t\tx = ${expr}\n\t}\n}");
+		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[0].member));
 		Assert.equals(1, stmts.length);
 	}
 
 	// -- Corpus driver: issue_215 input verbatim --
 
-	public function testCorpusIssue215MacroDollarBlock():Void {
-		final cls:HxClassDecl = HaxeParser.parse(
+	public function testCorpusIssue215MacroDollarBlock(): Void {
+		final cls: HxClassDecl = HaxeParser.parse(
 			"class Main {\n\tpublic static function main() {\n\t\tmacro { $e0; ${loop(el)}};\n\t\tmacro {\n\t\t\t$e0;\n\t\t\t${loop(el)}};\n\t}\n}"
 		);
 		Assert.equals(1, cls.members.length);
@@ -84,10 +78,11 @@ class HxDollarBlockExprStmtNoSemiSliceTest extends HxTestHelpers {
 
 	// -- Idempotency: issue_215 round-trip via the module pipeline --
 
-	public function testCorpusIssue215RoundTrip():Void {
+	public function testCorpusIssue215RoundTrip(): Void {
 		roundTrip(
 			"class Main {\n\tpublic static function main() {\n\t\tmacro { $e0; ${loop(el)}};\n\t\tmacro {\n\t\t\t$e0;\n\t\t\t${loop(el)}};\n\t}\n}",
 			"issue_215_macro_with_dollar_block"
 		);
 	}
+
 }

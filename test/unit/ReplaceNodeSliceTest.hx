@@ -24,16 +24,9 @@ class ReplaceNodeSliceTest extends Test {
 	 * `function g():Int return 0;` is re-laid-out to its canonical
 	 * expression-body form.
 	 */
-	public function testReplaceBySelector():Void {
-		final source:String =
-			'class C {\n'
-			+ '\tfunction f():Void {}\n'
-			+ '}\n';
-		final expected:String =
-			'class C {\n'
-			+ '\tfunction g():Int\n'
-			+ '\t\treturn 0;\n'
-			+ '}\n';
+	public function testReplaceBySelector(): Void {
+		final source: String = 'class C {\n' + '\tfunction f():Void {}\n' + '}\n';
+		final expected: String = 'class C {\n' + '\tfunction g():Int\n' + '\t\treturn 0;\n' + '}\n';
 		assertReplace(source, BySelector('FnMember:f'), 'function g():Int return 0;', expected);
 	}
 
@@ -42,52 +35,33 @@ class ReplaceNodeSliceTest extends Test {
 	 * (the op inverts it). Line 2 col 10 is the `f` method name token; the
 	 * innermost spanned node there is the whole `FnMember`.
 	 */
-	public function testReplaceByPosition():Void {
-		final source:String =
-			'class C {\n'
-			+ '\tfunction f():Void {}\n'
-			+ '}\n';
-		final expected:String =
-			'class C {\n'
-			+ '\tfunction h():Void {}\n'
-			+ '}\n';
+	public function testReplaceByPosition(): Void {
+		final source: String = 'class C {\n' + '\tfunction f():Void {}\n' + '}\n';
+		final expected: String = 'class C {\n' + '\tfunction h():Void {}\n' + '}\n';
 		assertReplace(source, ByPosition(2, 10), 'function h():Void {}', expected);
 	}
 
 	/** Refuse a selector that matches no node. */
-	public function testRefuseSelectorNoMatch():Void {
-		final source:String =
-			'class C {\n'
-			+ '\tfunction f():Void {}\n'
-			+ '}\n';
+	public function testRefuseSelectorNoMatch(): Void {
+		final source: String = 'class C {\n' + '\tfunction f():Void {}\n' + '}\n';
 		assertRefused(source, BySelector('FnMember:nope'), 'x');
 	}
 
 	/** Refuse an ambiguous selector — `VarMember` matches both fields. */
-	public function testRefuseSelectorAmbiguous():Void {
-		final source:String =
-			'class C {\n'
-			+ '\tvar a:Int;\n'
-			+ '\tvar b:Int;\n'
-			+ '}\n';
+	public function testRefuseSelectorAmbiguous(): Void {
+		final source: String = 'class C {\n' + '\tvar a:Int;\n' + '\tvar b:Int;\n' + '}\n';
 		assertRefused(source, BySelector('VarMember'), 'var c:Int;');
 	}
 
 	/** Refuse a malformed replacement — the whole-file re-emit fails. */
-	public function testRefuseMalformedReplacement():Void {
-		final source:String =
-			'class C {\n'
-			+ '\tfunction f():Void {}\n'
-			+ '}\n';
+	public function testRefuseMalformedReplacement(): Void {
+		final source: String = 'class C {\n' + '\tfunction f():Void {}\n' + '}\n';
 		assertRefused(source, BySelector('FnMember:f'), '@@@ not haxe');
 	}
 
 	/** Refuse a non-canonical file (4-space indent) without `--reformat`. */
-	public function testRefuseNonCanonicalWithoutReformat():Void {
-		final source:String =
-			'class C {\n'
-			+ '    function f():Void {}\n'
-			+ '}\n';
+	public function testRefuseNonCanonicalWithoutReformat(): Void {
+		final source: String = 'class C {\n' + '    function f():Void {}\n' + '}\n';
 		assertRefused(source, BySelector('FnMember:f'), 'function h():Void {}');
 	}
 
@@ -99,49 +73,48 @@ class ReplaceNodeSliceTest extends Test {
 	 * replacement is the FULL declaration as written — `private static` is
 	 * REPLACED, not duplicated ahead of a second `private static`.
 	 */
-	public function testReplaceFoldsModifierGroup():Void {
-		final source:String =
-			'class C {\n'
-			+ '\tprivate static function f():Void {}\n'
-			+ '}\n';
-		final expected:String =
-			'class C {\n'
-			+ '\tprivate static function g():Int\n'
-			+ '\t\treturn 0;\n'
-			+ '}\n';
+	public function testReplaceFoldsModifierGroup(): Void {
+		final source: String = 'class C {\n' + '\tprivate static function f():Void {}\n' + '}\n';
+		final expected: String = 'class C {\n' + '\tprivate static function g():Int\n' + '\t\treturn 0;\n' + '}\n';
 		assertReplace(source, BySelector('FnMember:f'), 'private static function g():Int return 0;', expected);
 	}
 
-	private function assertReplace(source:String, target:ReplaceTarget, newSource:String, expected:String, reformat:Bool = false):Void {
-		final result:EditResult = replaceOf(source, target, newSource, reformat);
+	private function assertReplace(
+		source: String, target: ReplaceTarget, newSource: String, expected: String, reformat: Bool = false
+	): Void {
+		final result: EditResult = replaceOf(source, target, newSource, reformat);
 		switch result {
 			case Ok(text):
 				Assert.equals(expected, text);
 				assertReparses(text);
-			case Err(message): Assert.fail('expected Ok, got Err: $message');
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
 		}
 	}
 
-	private function assertRefused(source:String, target:ReplaceTarget, newSource:String, reformat:Bool = false):Void {
-		final result:EditResult = replaceOf(source, target, newSource, reformat);
+	private function assertRefused(source: String, target: ReplaceTarget, newSource: String, reformat: Bool = false): Void {
+		final result: EditResult = replaceOf(source, target, newSource, reformat);
 		switch result {
-			case Ok(text): Assert.fail('expected Err (refusal), got Ok:\n$text');
-			case Err(_): Assert.pass();
+			case Ok(text):
+				Assert.fail('expected Err (refusal), got Ok:\n$text');
+			case Err(_):
+				Assert.pass();
 		}
 	}
 
-	private function assertReparses(text:String):Void {
-		final plugin:HaxeQueryPlugin = new HaxeQueryPlugin();
+	private function assertReparses(text: String): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		try {
 			plugin.parseFile(text);
 			Assert.pass();
-		} catch (exception:Exception) {
+		} catch (exception: Exception) {
 			Assert.fail('replace-node output failed to re-parse: ${exception.message}\n$text');
 		}
 	}
 
-	private static function replaceOf(source:String, target:ReplaceTarget, newSource:String, reformat:Bool):EditResult {
-		final plugin:HaxeQueryPlugin = new HaxeQueryPlugin();
+	private static function replaceOf(source: String, target: ReplaceTarget, newSource: String, reformat: Bool): EditResult {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		return ReplaceNode.replaceNode(source, target, newSource, reformat, plugin);
 	}
+
 }

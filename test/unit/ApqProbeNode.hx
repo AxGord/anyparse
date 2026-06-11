@@ -8,7 +8,7 @@ package unit;
  */
 @:peg @:schema(anyparse.format.text.JsonFormat) @:ws
 typedef ApqProbeNode = {
-	var kind:String;
-	@:optional var name:String;
-	var children:Array<ApqProbeNode>;
+	var kind: String;
+	@:optional var name: String;
+	var children: Array<ApqProbeNode>;
 };

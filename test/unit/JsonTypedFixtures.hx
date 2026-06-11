@@ -10,18 +10,19 @@ package unit;
  * leak out to the test body, which reaches the generated parser
  * through `TestConfigParser.parse`.
  */
-
 /** Closed set of policy strings for `TestConfig.policy`. */
 enum abstract TestPolicy(String) from String to String {
+
 	final First = 'first';
 	final Second = 'second';
 	final Third = 'third';
+
 }
 
 /** Nested section to test recursive ByName parsing. */
 @:peg typedef TestNested = {
-	var kind:String;
-	@:optional var count:Int;
+	var kind: String;
+	@:optional var count: Int;
 };
 
 /**
@@ -32,13 +33,13 @@ enum abstract TestPolicy(String) from String to String {
  */
 @:peg @:schema(anyparse.format.text.JsonFormat) @:ws
 typedef TestConfig = {
-	var name:String;
-	var count:Int;
-	var policy:TestPolicy;
-	var nested:TestNested;
-	@:optional var tag:String;
-	@:optional var ratio:Float;
-	@:optional var enabled:Bool;
+	var name: String;
+	var count: Int;
+	var policy: TestPolicy;
+	var nested: TestNested;
+	@:optional var tag: String;
+	@:optional var ratio: Float;
+	@:optional var enabled: Bool;
 };
 
 @:build(anyparse.macro.Build.buildParser(unit.JsonTypedFixtures.TestConfig))
@@ -46,4 +47,5 @@ typedef TestConfig = {
 class TestConfigParser {
 
 	private function new() {}
+
 }

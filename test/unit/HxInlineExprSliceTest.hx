@@ -22,49 +22,56 @@ import anyparse.grammar.haxe.HxVarDecl;
  */
 class HxInlineExprSliceTest extends HxTestHelpers {
 
-	private function initOf(source:String):HxExpr {
-		final decl:HxVarDecl = parseSingleVarDecl(source);
+	private function initOf(source: String): HxExpr {
+		final decl: HxVarDecl = parseSingleVarDecl(source);
 		return switch decl.init {
 			case null: throw 'expected init expr, got null';
 			case e: e;
 		}
 	}
 
-	public function testInlineCallExpr():Void {
+	public function testInlineCallExpr(): Void {
 		switch initOf('class C { var x = inline foo(); }') {
-			case InlineExpr(Call(IdentExpr(v), _)): Assert.equals('foo', (v : String));
-			case e: Assert.fail('expected InlineExpr(Call(IdentExpr(foo))), got $e');
+			case InlineExpr(Call(IdentExpr(v), _)):
+				Assert.equals('foo', (v: String));
+			case e:
+				Assert.fail('expected InlineExpr(Call(IdentExpr(foo))), got $e');
 		}
 	}
 
-	public function testInlineNewExpr():Void {
+	public function testInlineNewExpr(): Void {
 		switch initOf('class C { var x = inline new E(); }') {
-			case InlineExpr(NewExpr(_)): Assert.pass();
-			case e: Assert.fail('expected InlineExpr(NewExpr), got $e');
+			case InlineExpr(NewExpr(_)):
+				Assert.pass();
+			case e:
+				Assert.fail('expected InlineExpr(NewExpr), got $e');
 		}
 	}
 
-	public function testInlineFnExpr():Void {
+	public function testInlineFnExpr(): Void {
 		// `var x = inline function (i:Int) { return i + 1; }` —
 		// previously parsed as `var x = (IdentExpr inline)` with the
 		// FnExpr leaking out as a sibling statement (misparse). The new
 		// ctor recombines them.
 		switch initOf('class C { var x = inline function (i:Int) { return i + 1; }; }') {
-			case InlineExpr(FnExpr(_)): Assert.pass();
-			case e: Assert.fail('expected InlineExpr(FnExpr), got $e');
+			case InlineExpr(FnExpr(_)):
+				Assert.pass();
+			case e:
+				Assert.fail('expected InlineExpr(FnExpr), got $e');
 		}
 	}
 
-	public function testInlineAsCallArg():Void {
+	public function testInlineAsCallArg(): Void {
 		switch initOf('class C { var x = use(inline g(3)); }') {
 			case Call(IdentExpr(name), [InlineExpr(Call(IdentExpr(inner), _))]):
-				Assert.equals('use', (name : String));
-				Assert.equals('g', (inner : String));
-			case e: Assert.fail('expected Call(use, [InlineExpr(Call(g, _))]), got $e');
+				Assert.equals('use', (name: String));
+				Assert.equals('g', (inner: String));
+			case e:
+				Assert.fail('expected Call(use, [InlineExpr(Call(g, _))]), got $e');
 		}
 	}
 
-	public function testInlineExprStmtAtFunctionLevel():Void {
+	public function testInlineExprStmtAtFunctionLevel(): Void {
 		// `inline g();` as a body statement — the parser dispatches to
 		// `LocalInlineFnStmt` first (requires `inline function`), rolls
 		// back, then `ExprStmt → InlineExpr(Call)` matches.
@@ -75,7 +82,7 @@ class HxInlineExprSliceTest extends HxTestHelpers {
 		Assert.pass();
 	}
 
-	public function testLocalInlineFnStmtStillWins():Void {
+	public function testLocalInlineFnStmtStillWins(): Void {
 		// Regression: `inline function name(...) {}` must remain a
 		// `LocalInlineFnStmt`, not collapse into `InlineExpr(FnExpr)`.
 		final ast = HaxeParser.parse('class C { function f():Void { inline function g():Void {} } }');
@@ -83,12 +90,14 @@ class HxInlineExprSliceTest extends HxTestHelpers {
 		final body = fnBodyStmts(fn);
 		Assert.equals(1, body.length);
 		switch body[0] {
-			case LocalInlineFnStmt(decl): Assert.equals('g', (decl.name : String));
-			case _: Assert.fail('expected LocalInlineFnStmt, got ${body[0]}');
+			case LocalInlineFnStmt(decl):
+				Assert.equals('g', (decl.name: String));
+			case _:
+				Assert.fail('expected LocalInlineFnStmt, got ${body[0]}');
 		}
 	}
 
-	public function testInlineCallRoundTrip():Void {
+	public function testInlineCallRoundTrip(): Void {
 		// Writer ripple: InlineExpr emits via the generic single-Ref
 		// value:HxExpr path (ThrowExpr/CastExpr/ReturnExpr precedent).
 		roundTrip(
@@ -96,4 +105,5 @@ class HxInlineExprSliceTest extends HxTestHelpers {
 			'inline-expr'
 		);
 	}
+
 }

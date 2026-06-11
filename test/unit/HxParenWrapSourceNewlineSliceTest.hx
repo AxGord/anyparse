@@ -41,14 +41,14 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 @:nullSafety(Strict)
 final class HxParenWrapSourceNewlineSliceTest extends Test {
 
-	private static final _forceBuildParser:Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
-	private static final _forceBuildWriter:Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
+	private static final _forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
+	private static final _forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
-	public function new():Void {
+	public function new(): Void {
 		super();
 	}
 
-	public function testParenSourceNewlinePreservedOnBrokenChain():Void {
+	public function testParenSourceNewlinePreservedOnBrokenChain(): Void {
 		// Source `return !(\n\t\tchain);` -- author opened the paren with a
 		// newline. Under `opBoolChain.defaultWrap=onePerLine` the chain
 		// emits as OnePerLine (every operand on its own line including
@@ -56,61 +56,55 @@ final class HxParenWrapSourceNewlineSliceTest extends Test {
 		//   return !(\n\t\titem0\n\t\titem1\n\t);
 		// Without the source-newline capture the writer would always glue
 		// items[0] to `(` and emit `return !(item0\n...)`.
-		final src:String = 'class M {\n\tfunction f():Void {\n\t\treturn !(\n\t\t\ta || b\n\t\t);\n\t}\n}';
-		final out:String = formatOnePerLine(src);
-		Assert.isTrue(out.indexOf('!(\n') != -1,
-			'expected `!(\\n` (newline preserved after open paren) in: <$out>');
-		Assert.isTrue(out.indexOf('!(a') == -1,
-			'unexpected glued items[0] after `(` -- source newline should be preserved in: <$out>');
+		final src: String = 'class M {\n\tfunction f():Void {\n\t\treturn !(\n\t\t\ta || b\n\t\t);\n\t}\n}';
+		final out: String = formatOnePerLine(src);
+		Assert.isTrue(out.indexOf('!(\n') != -1, 'expected `!(\\n` (newline preserved after open paren) in: <$out>');
+		Assert.isTrue(out.indexOf('!(a') == -1, 'unexpected glued items[0] after `(` -- source newline should be preserved in: <$out>');
 	}
 
-	public function testParenSourceTightKeepsGlue():Void {
+	public function testParenSourceTightKeepsGlue(): Void {
 		// Source `var v:Bool = (a || b || c);` -- author put `(` and inner
 		// chain on the same line. Under `onePerLine` the chain still emits
 		// as OnePerLine; items[0] glued to `(` (pre-slice behavior).
-		final src:String = 'class M { function f():Void { var v:Bool = (a || b || c); } }';
-		final out:String = formatOnePerLine(src);
-		Assert.isTrue(out.indexOf('(a ||') != -1,
-			'expected items[0] glued to `(` when source had no leading newline: <$out>');
-		Assert.isTrue(out.indexOf('(\n') == -1,
-			'unexpected `(\\n` -- source had no newline so glue should stay: <$out>');
+		final src: String = 'class M { function f():Void { var v:Bool = (a || b || c); } }';
+		final out: String = formatOnePerLine(src);
+		Assert.isTrue(out.indexOf('(a ||') != -1, 'expected items[0] glued to `(` when source had no leading newline: <$out>');
+		Assert.isTrue(out.indexOf('(\n') == -1, 'unexpected `(\\n` -- source had no newline so glue should stay: <$out>');
 	}
 
-	public function testParenWithFlatChainStaysFlat():Void {
+	public function testParenWithFlatChainStaysFlat(): Void {
 		// Source `var v:Bool = (a || b);` -- short chain that fits flat.
 		// The wrap shape's flat side picks `(<inner>)` regardless of
 		// `wrapOpenNewline`, so output stays tight `(a || b)`. Verifies
 		// flat-mode emission is not regressed by the new break-shape arm.
-		final src:String = 'class M { function f():Void { var v:Bool = (a || b); } }';
-		final out:String = formatDefault(src);
-		Assert.isTrue(out.indexOf('(a || b)') != -1,
-			'expected flat `(a || b)` round-trip: <$out>');
+		final src: String = 'class M { function f():Void { var v:Bool = (a || b); } }';
+		final out: String = formatDefault(src);
+		Assert.isTrue(out.indexOf('(a || b)') != -1, 'expected flat `(a || b)` round-trip: <$out>');
 	}
 
-	public function testRoundTripIssue187OnelineCaseOne():Void {
+	public function testRoundTripIssue187OnelineCaseOne(): Void {
 		// Mini reproduction of issue_187_multi_line_wrapped_assignment_oneline
 		// case 1 -- `return !(\n\t\t\tchain\n\t\t);` with a longer chain.
 		// Under onePerLine the chain spans multiple lines; the leading
 		// `\n` after `(` must be preserved AND the close `)` lands on its
 		// own line at the outer indent.
-		final src:String = 'class M {\n\tfunction f():Bool {\n\t\treturn !(\n\t\t\ta.y + b.h <= c.y || d.y >= e.y + f.h ||\n\t\t\tg.x + h.w <= i.x || j.x >= k.x + l.w\n\t\t);\n\t}\n}';
-		final out:String = formatOnePerLine(src);
-		Assert.isTrue(out.indexOf('!(\n') != -1,
-			'expected open paren followed by newline (case 1 shape): <$out>');
-		Assert.isTrue(out.indexOf('\n\t\t);') != -1,
-			'expected close paren on its own line at outer indent: <$out>');
+		final src: String = 'class M {\n\tfunction f():Bool {\n\t\treturn !(\n\t\t\ta.y + b.h <= c.y || d.y >= e.y + f.h ||\n\t\t\tg.x + h.w <= i.x || j.x >= k.x + l.w\n\t\t);\n\t}\n}';
+		final out: String = formatOnePerLine(src);
+		Assert.isTrue(out.indexOf('!(\n') != -1, 'expected open paren followed by newline (case 1 shape): <$out>');
+		Assert.isTrue(out.indexOf('\n\t\t);') != -1, 'expected close paren on its own line at outer indent: <$out>');
 	}
 
-	private inline function formatDefault(src:String):String {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	private inline function formatDefault(src: String): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.finalNewline = false;
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
 
-	private inline function formatOnePerLine(src:String):String {
-		final cfg:String = '{ "wrapping": { "opBoolChain": { "defaultWrap": "onePerLine", "rules": [] } } }';
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
+	private inline function formatOnePerLine(src: String): String {
+		final cfg: String = '{ "wrapping": { "opBoolChain": { "defaultWrap": "onePerLine", "rules": [] } } }';
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
 		opts.finalNewline = false;
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
+
 }

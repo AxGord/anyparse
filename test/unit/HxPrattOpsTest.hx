@@ -35,100 +35,100 @@ class HxPrattOpsTest extends HxTestHelpers {
 
 	// -------- per-operator smoke --------
 
-	public function testMod():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = 10 % 3; }');
+	public function testMod(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = 10 % 3; }');
 		switch decl.init {
 			case Mod(IntLit(l), IntLit(r)):
-				Assert.equals(10, (l : Int));
-				Assert.equals(3, (r : Int));
+				Assert.equals(10, (l: Int));
+				Assert.equals(3, (r: Int));
 			case null, _:
 				Assert.fail('expected Mod(10, 3), got ${decl.init}');
 		}
 	}
 
-	public function testEq():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = 1 == 2; }');
+	public function testEq(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = 1 == 2; }');
 		switch decl.init {
 			case Eq(IntLit(l), IntLit(r)):
-				Assert.equals(1, (l : Int));
-				Assert.equals(2, (r : Int));
+				Assert.equals(1, (l: Int));
+				Assert.equals(2, (r: Int));
 			case null, _:
 				Assert.fail('expected Eq(1, 2), got ${decl.init}');
 		}
 	}
 
-	public function testNotEq():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = 1 != 2; }');
+	public function testNotEq(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = 1 != 2; }');
 		switch decl.init {
 			case NotEq(IntLit(l), IntLit(r)):
-				Assert.equals(1, (l : Int));
-				Assert.equals(2, (r : Int));
+				Assert.equals(1, (l: Int));
+				Assert.equals(2, (r: Int));
 			case null, _:
 				Assert.fail('expected NotEq(1, 2), got ${decl.init}');
 		}
 	}
 
-	public function testLt():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = 1 < 2; }');
+	public function testLt(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = 1 < 2; }');
 		switch decl.init {
 			case Lt(IntLit(l), IntLit(r)):
-				Assert.equals(1, (l : Int));
-				Assert.equals(2, (r : Int));
+				Assert.equals(1, (l: Int));
+				Assert.equals(2, (r: Int));
 			case null, _:
 				Assert.fail('expected Lt(1, 2), got ${decl.init}');
 		}
 	}
 
-	public function testLtEq():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = 1 <= 2; }');
+	public function testLtEq(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = 1 <= 2; }');
 		switch decl.init {
 			case LtEq(IntLit(l), IntLit(r)):
-				Assert.equals(1, (l : Int));
-				Assert.equals(2, (r : Int));
+				Assert.equals(1, (l: Int));
+				Assert.equals(2, (r: Int));
 			case null, _:
 				Assert.fail('expected LtEq(1, 2), got ${decl.init}');
 		}
 	}
 
-	public function testGt():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = 2 > 1; }');
+	public function testGt(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = 2 > 1; }');
 		switch decl.init {
 			case Gt(IntLit(l), IntLit(r)):
-				Assert.equals(2, (l : Int));
-				Assert.equals(1, (r : Int));
+				Assert.equals(2, (l: Int));
+				Assert.equals(1, (r: Int));
 			case null, _:
 				Assert.fail('expected Gt(2, 1), got ${decl.init}');
 		}
 	}
 
-	public function testGtEq():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = 2 >= 1; }');
+	public function testGtEq(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = 2 >= 1; }');
 		switch decl.init {
 			case GtEq(IntLit(l), IntLit(r)):
-				Assert.equals(2, (l : Int));
-				Assert.equals(1, (r : Int));
+				Assert.equals(2, (l: Int));
+				Assert.equals(1, (r: Int));
 			case null, _:
 				Assert.fail('expected GtEq(2, 1), got ${decl.init}');
 		}
 	}
 
-	public function testAnd():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = true && false; }');
+	public function testAnd(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = true && false; }');
 		switch decl.init {
 			case And(BoolLit(l), BoolLit(r)):
-				Assert.isTrue((l : Bool));
-				Assert.isFalse((r : Bool));
+				Assert.isTrue((l: Bool));
+				Assert.isFalse((r: Bool));
 			case null, _:
 				Assert.fail('expected And(true, false), got ${decl.init}');
 		}
 	}
 
-	public function testOr():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = true || false; }');
+	public function testOr(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = true || false; }');
 		switch decl.init {
 			case Or(BoolLit(l), BoolLit(r)):
-				Assert.isTrue((l : Bool));
-				Assert.isFalse((r : Bool));
+				Assert.isTrue((l: Bool));
+				Assert.isFalse((r: Bool));
 			case null, _:
 				Assert.fail('expected Or(true, false), got ${decl.init}');
 		}
@@ -136,15 +136,16 @@ class HxPrattOpsTest extends HxTestHelpers {
 
 	// -------- longest-match disambiguation --------
 
-	public function testLtEqNotLtFollowedByEq():Void {
+	public function testLtEqNotLtFollowedByEq(): Void {
 		// Core regression guard for the longest-match sort in
 		// `lowerPrattLoop`. Without the sort, `matchLit(ctx, "<")`
 		// succeeds on `<=` first, consumes one char, and leaves `=`
 		// stranded for the right operand parser. With the sort,
 		// `<=` is attempted before `<` in the dispatch chain.
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = 1 <= 2; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = 1 <= 2; }');
 		switch decl.init {
-			case LtEq(IntLit(_), IntLit(_)): Assert.pass();
+			case LtEq(IntLit(_), IntLit(_)):
+				Assert.pass();
 			case Lt(_, _):
 				Assert.fail('longest-match regression: `<=` dispatched as `<`, got ${decl.init}');
 			case null, _:
@@ -152,10 +153,11 @@ class HxPrattOpsTest extends HxTestHelpers {
 		}
 	}
 
-	public function testGtEqNotGtFollowedByEq():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = 2 >= 1; }');
+	public function testGtEqNotGtFollowedByEq(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = 2 >= 1; }');
 		switch decl.init {
-			case GtEq(IntLit(_), IntLit(_)): Assert.pass();
+			case GtEq(IntLit(_), IntLit(_)):
+				Assert.pass();
 			case Gt(_, _):
 				Assert.fail('longest-match regression: `>=` dispatched as `>`, got ${decl.init}');
 			case null, _:
@@ -163,81 +165,85 @@ class HxPrattOpsTest extends HxTestHelpers {
 		}
 	}
 
-	public function testShortLtStillWorks():Void {
+	public function testShortLtStillWorks(): Void {
 		// Guard: the longest-match sort must not break the short
 		// form. `1 < 2` has no trailing `=`, so the dispatch chain
 		// skips `<=` and falls through to `<` cleanly.
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = 1 < 2; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = 1 < 2; }');
 		switch decl.init {
-			case Lt(IntLit(_), IntLit(_)): Assert.pass();
-			case null, _: Assert.fail('expected Lt, got ${decl.init}');
+			case Lt(IntLit(_), IntLit(_)):
+				Assert.pass();
+			case null, _:
+				Assert.fail('expected Lt, got ${decl.init}');
 		}
 	}
 
-	public function testShortGtStillWorks():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = 2 > 1; }');
+	public function testShortGtStillWorks(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = 2 > 1; }');
 		switch decl.init {
-			case Gt(IntLit(_), IntLit(_)): Assert.pass();
-			case null, _: Assert.fail('expected Gt, got ${decl.init}');
+			case Gt(IntLit(_), IntLit(_)):
+				Assert.pass();
+			case null, _:
+				Assert.fail('expected Gt, got ${decl.init}');
 		}
 	}
 
 	// -------- cross-level precedence --------
 
-	public function testAddTighterThanEq():Void {
+	public function testAddTighterThanEq(): Void {
 		// 1 + 2 == 3 → Eq(Add(1, 2), 3). Additive (prec 8) binds
 		// tighter than comparison (prec 5).
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = 1 + 2 == 3; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = 1 + 2 == 3; }');
 		switch decl.init {
 			case Eq(Add(IntLit(a), IntLit(b)), IntLit(c)):
-				Assert.equals(1, (a : Int));
-				Assert.equals(2, (b : Int));
-				Assert.equals(3, (c : Int));
+				Assert.equals(1, (a: Int));
+				Assert.equals(2, (b: Int));
+				Assert.equals(3, (c: Int));
 			case null, _:
 				Assert.fail('expected Eq(Add(1, 2), 3), got ${decl.init}');
 		}
 	}
 
-	public function testMulAddEqThreeLevels():Void {
+	public function testMulAddEqThreeLevels(): Void {
 		// 1 * 2 + 3 == 4 → Eq(Add(Mul(1, 2), 3), 4). Exercises three
 		// precedence levels in a single expression.
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = 1 * 2 + 3 == 4; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = 1 * 2 + 3 == 4; }');
 		switch decl.init {
 			case Eq(Add(Mul(IntLit(a), IntLit(b)), IntLit(c)), IntLit(d)):
-				Assert.equals(1, (a : Int));
-				Assert.equals(2, (b : Int));
-				Assert.equals(3, (c : Int));
-				Assert.equals(4, (d : Int));
+				Assert.equals(1, (a: Int));
+				Assert.equals(2, (b: Int));
+				Assert.equals(3, (c: Int));
+				Assert.equals(4, (d: Int));
 			case null, _:
 				Assert.fail('expected Eq(Add(Mul(1, 2), 3), 4), got ${decl.init}');
 		}
 	}
 
-	public function testEqTighterThanAnd():Void {
+	public function testEqTighterThanAnd(): Void {
 		// a == b && c == d → And(Eq(a, b), Eq(c, d)). Comparison
 		// (prec 5) binds tighter than logical-and (prec 4), so the
 		// outer `&&` gets two equality sub-expressions.
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = a == b && c == d; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = a == b && c == d; }');
 		switch decl.init {
 			case And(Eq(IdentExpr(a), IdentExpr(b)), Eq(IdentExpr(c), IdentExpr(d))):
-				Assert.equals('a', (a : String));
-				Assert.equals('b', (b : String));
-				Assert.equals('c', (c : String));
-				Assert.equals('d', (d : String));
+				Assert.equals('a', (a: String));
+				Assert.equals('b', (b: String));
+				Assert.equals('c', (c: String));
+				Assert.equals('d', (d: String));
 			case null, _:
 				Assert.fail('expected And(Eq(a, b), Eq(c, d)), got ${decl.init}');
 		}
 	}
 
-	public function testAndTighterThanOr():Void {
+	public function testAndTighterThanOr(): Void {
 		// a || b && c → Or(a, And(b, c)). Logical-and (prec 4) binds
 		// tighter than logical-or (prec 3).
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = a || b && c; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = a || b && c; }');
 		switch decl.init {
 			case Or(IdentExpr(a), And(IdentExpr(b), IdentExpr(c))):
-				Assert.equals('a', (a : String));
-				Assert.equals('b', (b : String));
-				Assert.equals('c', (c : String));
+				Assert.equals('a', (a: String));
+				Assert.equals('b', (b: String));
+				Assert.equals('c', (c: String));
 			case null, _:
 				Assert.fail('expected Or(a, And(b, c)), got ${decl.init}');
 		}
@@ -245,40 +251,40 @@ class HxPrattOpsTest extends HxTestHelpers {
 
 	// -------- left-associative chains --------
 
-	public function testLeftAssocEq():Void {
+	public function testLeftAssocEq(): Void {
 		// 1 == 2 == 3 → Eq(Eq(1, 2), 3). Syntactically valid, semantically
 		// weird, but guards left-assoc correctness at the new comparison
 		// precedence level.
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = 1 == 2 == 3; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = 1 == 2 == 3; }');
 		switch decl.init {
 			case Eq(Eq(IntLit(a), IntLit(b)), IntLit(c)):
-				Assert.equals(1, (a : Int));
-				Assert.equals(2, (b : Int));
-				Assert.equals(3, (c : Int));
+				Assert.equals(1, (a: Int));
+				Assert.equals(2, (b: Int));
+				Assert.equals(3, (c: Int));
 			case null, _:
 				Assert.fail('expected Eq(Eq(1, 2), 3), got ${decl.init}');
 		}
 	}
 
-	public function testLeftAssocOr():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = a || b || c; }');
+	public function testLeftAssocOr(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = a || b || c; }');
 		switch decl.init {
 			case Or(Or(IdentExpr(a), IdentExpr(b)), IdentExpr(c)):
-				Assert.equals('a', (a : String));
-				Assert.equals('b', (b : String));
-				Assert.equals('c', (c : String));
+				Assert.equals('a', (a: String));
+				Assert.equals('b', (b: String));
+				Assert.equals('c', (c: String));
 			case null, _:
 				Assert.fail('expected Or(Or(a, b), c), got ${decl.init}');
 		}
 	}
 
-	public function testLeftAssocAnd():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = a && b && c; }');
+	public function testLeftAssocAnd(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = a && b && c; }');
 		switch decl.init {
 			case And(And(IdentExpr(a), IdentExpr(b)), IdentExpr(c)):
-				Assert.equals('a', (a : String));
-				Assert.equals('b', (b : String));
-				Assert.equals('c', (c : String));
+				Assert.equals('a', (a: String));
+				Assert.equals('b', (b: String));
+				Assert.equals('c', (c: String));
 			case null, _:
 				Assert.fail('expected And(And(a, b), c), got ${decl.init}');
 		}
@@ -286,29 +292,29 @@ class HxPrattOpsTest extends HxTestHelpers {
 
 	// -------- `%` parity with `*` / `/` --------
 
-	public function testModTighterThanAdd():Void {
+	public function testModTighterThanAdd(): Void {
 		// 10 % 3 + 1 → Add(Mod(10, 3), 1). `%` sits at prec 9 along
 		// with `*` and `/`, so it binds tighter than `+`.
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = 10 % 3 + 1; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = 10 % 3 + 1; }');
 		switch decl.init {
 			case Add(Mod(IntLit(a), IntLit(b)), IntLit(c)):
-				Assert.equals(10, (a : Int));
-				Assert.equals(3, (b : Int));
-				Assert.equals(1, (c : Int));
+				Assert.equals(10, (a: Int));
+				Assert.equals(3, (b: Int));
+				Assert.equals(1, (c: Int));
 			case null, _:
 				Assert.fail('expected Add(Mod(10, 3), 1), got ${decl.init}');
 		}
 	}
 
-	public function testAddThenMod():Void {
+	public function testAddThenMod(): Void {
 		// 10 + 3 % 2 → Add(10, Mod(3, 2)). The same precedence rule
 		// applied on the right side of the additive operator.
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = 10 + 3 % 2; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = 10 + 3 % 2; }');
 		switch decl.init {
 			case Add(IntLit(a), Mod(IntLit(b), IntLit(c))):
-				Assert.equals(10, (a : Int));
-				Assert.equals(3, (b : Int));
-				Assert.equals(2, (c : Int));
+				Assert.equals(10, (a: Int));
+				Assert.equals(3, (b: Int));
+				Assert.equals(2, (c: Int));
 			case null, _:
 				Assert.fail('expected Add(10, Mod(3, 2)), got ${decl.init}');
 		}
@@ -316,46 +322,46 @@ class HxPrattOpsTest extends HxTestHelpers {
 
 	// -------- interval `...` --------
 
-	public function testInterval():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = 0...3; }');
+	public function testInterval(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = 0...3; }');
 		switch decl.init {
 			case Interval(IntLit(l), IntLit(r)):
-				Assert.equals(0, (l : Int));
-				Assert.equals(3, (r : Int));
+				Assert.equals(0, (l: Int));
+				Assert.equals(3, (r: Int));
 			case null, _:
 				Assert.fail('expected Interval(0, 3), got ${decl.init}');
 		}
 	}
 
-	public function testIntervalAddTighter():Void {
+	public function testIntervalAddTighter(): Void {
 		// 0...n + 1 → Interval(0, Add(n, 1)). Prec 5 (interval) sits
 		// below prec 8 (additive), so `+` binds tighter.
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = 0...n + 1; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = 0...n + 1; }');
 		switch decl.init {
 			case Interval(IntLit(a), Add(IdentExpr(b), IntLit(c))):
-				Assert.equals(0, (a : Int));
-				Assert.equals('n', (b : String));
-				Assert.equals(1, (c : Int));
+				Assert.equals(0, (a: Int));
+				Assert.equals('n', (b: String));
+				Assert.equals(1, (c: Int));
 			case null, _:
 				Assert.fail('expected Interval(0, Add(n, 1)), got ${decl.init}');
 		}
 	}
 
-	public function testIntervalPostfixTighter():Void {
+	public function testIntervalPostfixTighter(): Void {
 		// 0...arr.length → Interval(0, FieldAccess(arr, length)). Postfix
 		// always binds tighter than any Pratt infix.
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = 0...arr.length; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = 0...arr.length; }');
 		switch decl.init {
 			case Interval(IntLit(a), FieldAccess(IdentExpr(b), c)):
-				Assert.equals(0, (a : Int));
-				Assert.equals('arr', (b : String));
-				Assert.equals('length', (c : String));
+				Assert.equals(0, (a: Int));
+				Assert.equals('arr', (b: String));
+				Assert.equals('length', (c: String));
 			case null, _:
 				Assert.fail('expected Interval(0, FieldAccess(arr, length)), got ${decl.init}');
 		}
 	}
 
-	public function testIntervalInForLoop():Void {
+	public function testIntervalInForLoop(): Void {
 		// `for (i in 0...n) a();` — parser-side regression for the
 		// range-literal gap that empirically blocked a handful of corpus
 		// fixtures. Iterable is `HxExpr`; Interval at prec 5 fits
@@ -364,55 +370,55 @@ class HxPrattOpsTest extends HxTestHelpers {
 		Assert.pass();
 	}
 
-	public function testIntervalWriterTight():Void {
+	public function testIntervalWriterTight(): Void {
 		// Byte-exact: writer emits `0...n` without spaces around `...`.
 		// Routed via `FormatInfo.tightInfixOps` = `['...']` on HaxeFormat
 		// (contrast with `a + b` where `+` gets the default spaced layout).
 		// Use var-init position (no body-policy wrapping) to isolate the
 		// tight-infix output from downstream layout defaults.
-		final src:String = 'class Foo {\n\tvar x:Int = 0...n;\n}\n';
-		final module:anyparse.grammar.haxe.HxModule = anyparse.grammar.haxe.HaxeModuleParser.parse(src);
-		final out:String = anyparse.grammar.haxe.HxModuleWriter.write(module);
+		final src: String = 'class Foo {\n\tvar x:Int = 0...n;\n}\n';
+		final module: anyparse.grammar.haxe.HxModule = anyparse.grammar.haxe.HaxeModuleParser.parse(src);
+		final out: String = anyparse.grammar.haxe.HxModuleWriter.write(module);
 		Assert.equals(src, out);
 	}
 
 	// -------- in operator --------
 
-	public function testIn():Void {
+	public function testIn(): Void {
 		// `a in b` — binary `in` infix (Haxe `OpIn`). Symmetric ctor
 		// `In(left:HxExpr, right:HxExpr)`, prec 0 left-assoc.
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = a in b; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = a in b; }');
 		switch decl.init {
 			case In(IdentExpr(l), IdentExpr(r)):
-				Assert.equals('a', (l : String));
-				Assert.equals('b', (r : String));
+				Assert.equals('a', (l: String));
+				Assert.equals('b', (r: String));
 			case null, _:
 				Assert.fail('expected In(a, b), got ${decl.init}');
 		}
 	}
 
-	public function testInWordBoundary():Void {
+	public function testInWordBoundary(): Void {
 		// `in` is dispatched via `matchKw` (word-boundary), so an
 		// identifier whose prefix is `in` (`internal`) is never split
 		// into the `in` operator + a stray `ternal` token.
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x = internal; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x = internal; }');
 		switch decl.init {
 			case IdentExpr(n):
-				Assert.equals('internal', (n : String));
+				Assert.equals('internal', (n: String));
 			case null, _:
 				Assert.fail('expected IdentExpr(internal), got ${decl.init}');
 		}
-		final decl2:HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = a in internal; }');
+		final decl2: HxVarDecl = parseSingleVarDecl('class Foo { var x:Bool = a in internal; }');
 		switch decl2.init {
 			case In(IdentExpr(l), IdentExpr(r)):
-				Assert.equals('a', (l : String));
-				Assert.equals('internal', (r : String));
+				Assert.equals('a', (l: String));
+				Assert.equals('internal', (r: String));
 			case null, _:
 				Assert.fail('expected In(a, internal), got ${decl2.init}');
 		}
 	}
 
-	public function testInForLoopRegression():Void {
+	public function testInForLoopRegression(): Void {
 		// `for (i in 0...10) a();` — the real `for (a in b)` loop is the
 		// dedicated `@:kw('for')` HxForStmt production, NOT the infix
 		// `in` branch. Adding the infix ctor must not perturb it.
@@ -420,21 +426,21 @@ class HxPrattOpsTest extends HxTestHelpers {
 		Assert.pass();
 	}
 
-	public function testInMacroReif():Void {
+	public function testInMacroReif(): Void {
 		// The blocker contract: `macro $x in $y` builds an `EBinop(OpIn)`
 		// (TriviaTypeSynth.hx:463 constructs an `EFor` head this way).
 		// `macro a in b` → `MacroExpr(In(a, b))`.
-		final decl:HxVarDecl = parseSingleVarDecl('class Foo { var x = macro a in b; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x = macro a in b; }');
 		switch decl.init {
 			case MacroExpr(In(IdentExpr(l), IdentExpr(r))):
-				Assert.equals('a', (l : String));
-				Assert.equals('b', (r : String));
+				Assert.equals('a', (l: String));
+				Assert.equals('b', (r: String));
 			case null, _:
 				Assert.fail('expected MacroExpr(In(a, b)), got ${decl.init}');
 		}
 	}
 
-	public function testInRoundTrip():Void {
+	public function testInRoundTrip(): Void {
 		// Writer ripple net: `in` flows the generic symmetric-infix
 		// writer path (no `@:fmt` knob), idempotency must hold.
 		roundTrip('class Foo {\n\tvar x:Bool = a in b;\n}\n', 'in operator');
@@ -442,12 +448,12 @@ class HxPrattOpsTest extends HxTestHelpers {
 
 	// -------- rejections --------
 
-	public function testRejectsTrailingLt():Void {
+	public function testRejectsTrailingLt(): Void {
 		// `1 <;` — `<` matches, right operand parser fails on `;`.
 		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Bool = 1 <; }'), ParseError);
 	}
 
-	public function testRejectsLeadingLtEq():Void {
+	public function testRejectsLeadingLtEq(): Void {
 		// `<= 1;` — atom parser tries every branch, all fail on `<`
 		// because the identifier regex rejects it and no literal
 		// matches it as an atom.

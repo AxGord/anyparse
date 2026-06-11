@@ -38,36 +38,39 @@ import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
  */
 class CondModProbe extends Test {
 
-	private static final _forceBuildParser:Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
-	private static final _forceBuildWriter:Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
+	private static final _forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
+	private static final _forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
-	public function testIssue107():Void {
+	public function testIssue107(): Void {
 		roundTrip('class Main {\n\t#if !cppia inline #end function addChar(c:Int):Void {}\n}');
 	}
 
-	public function testIssue291():Void {
-		roundTrip('class Xml {\n\tvar nodeName:String = "";\n\n\t#if !cppia inline #end function get_nodeName() {\n\t\treturn nodeName;\n\t}\n}');
+	public function testIssue291(): Void {
+		roundTrip(
+			'class Xml {\n\tvar nodeName:String = "";\n\n\t#if !cppia inline #end function get_nodeName() {\n\t\treturn nodeName;\n\t}\n}'
+		);
 	}
 
-	public function testIssue332V1():Void {
+	public function testIssue332V1(): Void {
 		roundTrip('class Main {\n\t#if (neko_v21 || (cpp && !cppia) || flash) inline #end\n\tpublic static function main() {}\n}');
 	}
 
-	public function testIssue332V2():Void {
+	public function testIssue332V2(): Void {
 		roundTrip('class Main {\n\t#if (neko_v21 || (cpp && !cppia) || flash) inline #end public static function main() {}\n}');
 	}
 
-	public function testIssue332V3():Void {
+	public function testIssue332V3(): Void {
 		roundTrip('class Main {\n\tpublic static #if (neko_v21 || (cpp && !cppia) || flash) inline #end function main() {}\n}');
 	}
 
-	public function testIssue332V4():Void {
+	public function testIssue332V4(): Void {
 		roundTrip('class Main {\n\t#if (neko_v21 || (cpp && !cppia) || flash)\n\tinline\n\t#end\n\tpublic static function main() {}\n}');
 	}
 
-	private static function roundTrip(source:String):Void {
-		final ast:anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final out:String = HaxeModuleTriviaWriter.write(ast);
+	private static function roundTrip(source: String): Void {
+		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out: String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals(source + '\n', out);
 	}
+
 }

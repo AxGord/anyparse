@@ -23,8 +23,9 @@ package unit.miniblock;
 @:ws
 enum MiniBlock {
 
-	Atom(s:MiniAtomLit);
+	Atom(s: MiniAtomLit);
 
 	@:lead('{') @:trail('}') @:sep(';', tailRelax, blockEnded('endsImplicitly'))
-	Block(items:Array<MiniBlock>);
+	Block(items: Array<MiniBlock>);
+
 }

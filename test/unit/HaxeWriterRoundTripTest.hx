@@ -16,419 +16,423 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
  */
 class HaxeWriterRoundTripTest extends HxTestHelpers {
 
-	function testEmptyModule():Void {
+	function testEmptyModule(): Void {
 		roundTrip('', 'empty');
 	}
 
-	function testEmptyClass():Void {
+	function testEmptyClass(): Void {
 		roundTrip('class Foo {}');
 	}
 
-	function testClassWithVar():Void {
+	function testClassWithVar(): Void {
 		roundTrip('class Foo { var x:Int; }');
 	}
 
-	function testClassWithVarInit():Void {
+	function testClassWithVarInit(): Void {
 		roundTrip('class Foo { var x:Int = 42; }');
 	}
 
-	function testClassWithFunction():Void {
+	function testClassWithFunction(): Void {
 		roundTrip('class Foo { function bar():Void {} }');
 	}
 
-	function testFunctionWithParams():Void {
+	function testFunctionWithParams(): Void {
 		roundTrip('class Foo { function bar(x:Int, y:Float):Void {} }');
 	}
 
-	function testFunctionWithBody():Void {
+	function testFunctionWithBody(): Void {
 		roundTrip('class Foo { function f():Void { var x:Int = 1; return x; } }');
 	}
 
-	function testModifiers():Void {
+	function testModifiers(): Void {
 		roundTrip('class Foo { public static var x:Int; }');
 	}
 
-	function testMultiDecl():Void {
+	function testMultiDecl(): Void {
 		roundTrip('class A {} class B {}');
 	}
 
-	function testExprAtoms():Void {
+	function testExprAtoms(): Void {
 		roundTrip('class F { var x:Int = 42; var y:Float = 3.14; var b:Bool = true; }');
 	}
 
-	function testExprArithmetic():Void {
+	function testExprArithmetic(): Void {
 		roundTrip('class F { var x:Int = 1 + 2 * 3; }');
 	}
 
-	function testExprPrefix():Void {
+	function testExprPrefix(): Void {
 		roundTrip('class F { var x:Int = -1; var y:Bool = !true; }');
 	}
 
-	function testExprPostfix():Void {
+	function testExprPostfix(): Void {
 		roundTrip('class F { function f():Void { var x:Int = a.b; var y:Int = a[0]; var z:Int = f(1, 2); } }');
 	}
 
-	function testExprAssignment():Void {
+	function testExprAssignment(): Void {
 		roundTrip('class F { function f():Void { var x:Int = a = b = 1; } }');
 	}
 
-	function testExprComparison():Void {
+	function testExprComparison(): Void {
 		roundTrip('class F { var x:Bool = a == b; }');
 	}
 
-	function testExprLogical():Void {
+	function testExprLogical(): Void {
 		roundTrip('class F { var x:Bool = a && b || c; }');
 	}
 
-	function testExprBitwise():Void {
+	function testExprBitwise(): Void {
 		roundTrip('class F { var x:Int = a | b & c; }');
 	}
 
-	function testExprShift():Void {
+	function testExprShift(): Void {
 		roundTrip('class F { var x:Int = a << 2; }');
 	}
 
-	function testExprTernary():Void {
+	function testExprTernary(): Void {
 		roundTrip('class F { var x:Int = a ? b : c; }');
 	}
 
-	function testExprNullCoal():Void {
+	function testExprNullCoal(): Void {
 		roundTrip('class F { var x:Int = a ?? b; }');
 	}
 
-	function testExprParens():Void {
+	function testExprParens(): Void {
 		roundTrip('class F { var x:Int = (a + b) * c; }');
 	}
 
-	function testExprNew():Void {
+	function testExprNew(): Void {
 		roundTrip('class F { function f():Void { var x:Int = new Foo(1, 2); } }');
 	}
 
-	function testExprArray():Void {
+	function testExprArray(): Void {
 		roundTrip('class F { function f():Void { var x:Int = [1, 2, 3]; } }');
 	}
 
-	function testExprArrow():Void {
+	function testExprArrow(): Void {
 		roundTrip('class F { var x:Int = a => b; }');
 	}
 
-	function testFnDeclNoReturnType():Void {
+	function testFnDeclNoReturnType(): Void {
 		roundTrip('class F { function main() {} }');
 	}
 
-	function testFnDeclNoReturnTypeWithBody():Void {
+	function testFnDeclNoReturnTypeWithBody(): Void {
 		roundTrip('class F { function main() { return 1; } }');
 	}
 
-	function testObjectLitEmpty():Void {
+	function testObjectLitEmpty(): Void {
 		roundTrip('class F { var x:Dynamic = {}; }');
 	}
 
-	function testObjectLitSingle():Void {
+	function testObjectLitSingle(): Void {
 		roundTrip('class F { var x:Dynamic = {a: 1}; }');
 	}
 
-	function testObjectLitMultiple():Void {
+	function testObjectLitMultiple(): Void {
 		roundTrip('class F { var x:Dynamic = {a: 1, b: 2}; }');
 	}
 
-	function testObjectLitNested():Void {
+	function testObjectLitNested(): Void {
 		roundTrip('class F { var x:Dynamic = {outer: {inner: 1}}; }');
 	}
 
-	function testExprParenLambda():Void {
+	function testExprParenLambda(): Void {
 		roundTrip('class F { function f():Void { var x:Int = (a:Int) => a + 1; } }');
 	}
 
-	function testIfStmt():Void {
+	function testIfStmt(): Void {
 		roundTrip('class F { function f():Void { if (x) return 1; } }');
 	}
 
-	function testIfElseStmt():Void {
+	function testIfElseStmt(): Void {
 		roundTrip('class F { function f():Void { if (x) return 1; else return 2; } }');
 	}
 
-	function testIfExprInInit():Void {
+	function testIfExprInInit(): Void {
 		roundTrip('class F { function f():Void { var y:Int = if (c) 1 else 2; } }', 'if-expr as var init');
 	}
 
-	function testIfExprInCall():Void {
+	function testIfExprInCall(): Void {
 		roundTrip('class F { function f():Void { trace(if (c) 1 else 2); } }', 'if-expr as call arg');
 	}
 
-	function testIfExprInObjectField():Void {
+	function testIfExprInObjectField(): Void {
 		roundTrip('class F { function f():Void { var o:Dynamic = {label: if (c) 1 else 2}; } }', 'if-expr as object-literal value');
 	}
 
-	function testIfExprNoElse():Void {
+	function testIfExprNoElse(): Void {
 		roundTrip('class F { function f():Void { var y:Int = if (c) 1; } }', 'if-expr without else');
 	}
 
-	function testIfExprElseIfChain():Void {
+	function testIfExprElseIfChain(): Void {
 		roundTrip('class F { function f():Void { var y:Int = if (a) 1 else if (b) 2 else 3; } }', 'if-expr else-if chain');
 	}
 
-	function testIfExprInReturn():Void {
+	function testIfExprInReturn(): Void {
 		roundTrip('class F { function f():Int { return if (c) 1 else 2; } }', 'if-expr as return value');
 	}
 
-	function testSwitchExprInReturn():Void {
+	function testSwitchExprInReturn(): Void {
 		roundTrip('class F { function f():String { return switch (x) { case 1: "a"; case _: "b"; }; } }', 'switch-expr as return value');
 	}
 
-	function testSwitchExprInInit():Void {
+	function testSwitchExprInInit(): Void {
 		roundTrip('class F { function f():Void { var y:String = switch (x) { case 1: "a"; case _: "b"; }; } }', 'switch-expr as var init');
 	}
 
-	function testSwitchExprInCall():Void {
+	function testSwitchExprInCall(): Void {
 		roundTrip('class F { function f():Void { trace(switch (x) { case 1: "a"; case _: "b"; }); } }', 'switch-expr as call arg');
 	}
 
-	function testSwitchExprInObjectField():Void {
-		roundTrip('class F { function f():Void { var o:Dynamic = {label: switch (x) { case 1: "a"; case _: "b"; }}; } }', 'switch-expr as object-literal value');
+	function testSwitchExprInObjectField(): Void {
+		roundTrip(
+			'class F { function f():Void { var o:Dynamic = {label: switch (x) { case 1: "a"; case _: "b"; }}; } }',
+			'switch-expr as object-literal value'
+		);
 	}
 
-	function testWhileStmt():Void {
+	function testWhileStmt(): Void {
 		roundTrip('class F { function f():Void { while (x) return 1; } }');
 	}
 
-	function testForStmt():Void {
+	function testForStmt(): Void {
 		roundTrip('class F { function f():Void { for (i in items) return i; } }');
 	}
 
-	function testBlockStmt():Void {
+	function testBlockStmt(): Void {
 		roundTrip('class F { function f():Void { { var x:Int = 1; } } }');
 	}
 
-	function testVoidReturn():Void {
+	function testVoidReturn(): Void {
 		roundTrip('class F { function f():Void { return; } }');
 	}
 
-	function testThrowStmt():Void {
+	function testThrowStmt(): Void {
 		roundTrip('class F { function f():Void { throw x; } }');
 	}
 
-	function testDoWhileStmt():Void {
+	function testDoWhileStmt(): Void {
 		roundTrip('class F { function f():Void { do return 1; while (x); } }');
 	}
 
-	function testTryCatch():Void {
+	function testTryCatch(): Void {
 		roundTrip('class F { function f():Void { try return 1; catch (e:Error) return 2; } }');
 	}
 
-	function testSwitchStmt():Void {
+	function testSwitchStmt(): Void {
 		roundTrip('class F { function f():Void { switch (x) { case 1: return 1; default: return 2; } } }');
 	}
 
-	function testTypedef():Void {
+	function testTypedef(): Void {
 		roundTrip('typedef Foo = Bar;');
 	}
 
-	function testEnum():Void {
+	function testEnum(): Void {
 		roundTrip('enum Foo { A; B; }');
 	}
 
-	function testEnumParamCtor():Void {
+	function testEnumParamCtor(): Void {
 		roundTrip('enum Foo { A(x:Int, y:Float); B; }');
 	}
 
-	function testInterface():Void {
+	function testInterface(): Void {
 		roundTrip('interface Foo { function bar():Void {} }');
 	}
 
-	function testAbstract():Void {
+	function testAbstract(): Void {
 		roundTrip('abstract Foo(Int) from Int to Int { function bar():Void {} }');
 	}
 
-	function testDoubleString():Void {
+	function testDoubleString(): Void {
 		roundTrip('class F { var x:String = "hello"; }');
 	}
 
-	function testDoubleStringMultilineLiteralPreserved():Void {
+	function testDoubleStringMultilineLiteralPreserved(): Void {
 		// ω-doublestring-rawstring: literal embedded newlines inside a
 		// double-quoted string must survive round-trip verbatim (Haxe
 		// allows multiline strings). Previously decoded + re-escaped
 		// via `escapeChar` which converted literal `\n` → `\n` escape,
 		// collapsing the multiline source to inline-escaped form.
 		// Source has actual newlines between the quotes — no `\n` escape.
-		final src:String = 'class F { var x:String = "a\n\nb"; }';
-		final out:String = HxModuleWriter.write(HaxeModuleParser.parse(src));
+		final src: String = 'class F { var x:String = "a\n\nb"; }';
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src));
 		Assert.isTrue(out.indexOf('"a\n\nb"') != -1, 'expected literal multiline string preserved in: <' + out + '>');
 		Assert.isTrue(out.indexOf('\\n') == -1, 'did not expect re-escaped \\n in: <' + out + '>');
 	}
 
-	function testSingleString():Void {
+	function testSingleString(): Void {
 		roundTrip("class F { var x:String = 'hello'; }");
 	}
 
-	function testSingleStringInterp():Void {
+	function testSingleStringInterp(): Void {
 		roundTrip("class F { var x:String = 'hello $name'; }");
 	}
 
-	function testSingleStringBlock():Void {
+	function testSingleStringBlock(): Void {
 		roundTrip("class F { var x:String = 'val=${a + b}'; }");
 	}
 
-	function testSingleStringDollar():Void {
+	function testSingleStringDollar(): Void {
 		roundTrip("class F { var x:String = 'costs " + "$$" + "5'; }");
 	}
 
-	function testSingleStringEscapedDollarRoundTrip():Void {
+	function testSingleStringEscapedDollarRoundTrip(): Void {
 		// `\$` inside `'...'` is a valid Haxe escape preventing interpolation;
 		// previously `unescapeChar` threw on the escape with no current
 		// fixture exercising it. Defensive completeness — paired with
 		// `escapeSingleQuoteChar`'s `'$' → '\\$'` emission.
-		final src:String = "class F { var x:String = 'val=\\$name'; }";
-		final out:String = HxModuleWriter.write(HaxeModuleParser.parse(src));
+		final src: String = "class F { var x:String = 'val=\\$name'; }";
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src));
 		Assert.isTrue(out.indexOf("'val=\\$name'") != -1, "expected backslash-dollar-name preserved in: " + out);
 	}
 
-	function testSingleStringWithDoubleQuotePreservedBare():Void {
+	function testSingleStringWithDoubleQuotePreservedBare(): Void {
 		// ω-singlequote-escape: bare `"` inside `'...'` must NOT be escaped
 		// on output. Haxe single-quoted strings don't escape `"`.
-		final out:String = HxModuleWriter.write(
-			HaxeModuleParser.parse("class F { var x:String = 'a \"b\" c'; }")
-		);
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse("class F { var x:String = 'a \"b\" c'; }"));
 		Assert.isTrue(out.indexOf("'a \"b\" c'") != -1, 'expected bare `"b"` inside single-quoted string in: <$out>');
 		Assert.isTrue(out.indexOf("\\\"") == -1, 'did not expect backslash-escaped `\\"` in: <$out>');
 	}
 
-	function testDoubleStringWithDoubleQuoteEscaped():Void {
+	function testDoubleStringWithDoubleQuoteEscaped(): Void {
 		// Sister: inside `"..."`, embedded `"` MUST be escaped as `\"`.
-		final out:String = HxModuleWriter.write(
-			HaxeModuleParser.parse('class F { var x:String = "a \\"b\\" c"; }')
-		);
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse('class F { var x:String = "a \\"b\\" c"; }'));
 		Assert.isTrue(out.indexOf('"a \\"b\\" c"') != -1, 'expected `\\"` inside double-quoted string in: <$out>');
 	}
 
-	function testMixedDecls():Void {
+	function testMixedDecls(): Void {
 		roundTrip('class A {} typedef B = C; enum D { X; } interface E {} abstract F(Int) {}');
 	}
 
-	function testParamDefault():Void {
+	function testParamDefault(): Void {
 		roundTrip('class F { function f(x:Int = 0):Void {} }');
 	}
 
-	function testNestedExpr():Void {
+	function testNestedExpr(): Void {
 		roundTrip('class F { var x:Int = (a + b) * (c - d); }');
 	}
 
-	function testCompoundAssign():Void {
+	function testCompoundAssign(): Void {
 		roundTrip('class F { function f():Void { var x:Int = a += b *= 2; } }');
 	}
 
-	function testIfBlock():Void {
+	function testIfBlock(): Void {
 		roundTrip('class F { function f():Void { if (x) { return 1; } } }');
 	}
 
-	function testFunctionNameAdjacentToParen():Void {
-		final out:String = HxModuleWriter.write(HaxeModuleParser.parse('class F { function main():Void {} }'));
+	function testFunctionNameAdjacentToParen(): Void {
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse('class F { function main():Void {} }'));
 		Assert.isTrue(out.indexOf('main()') != -1, 'expected `main()` (no space) in: <$out>');
 		Assert.isTrue(out.indexOf('main ()') == -1, 'did not expect space before `()` in: <$out>');
 	}
 
-	function testFunctionWithParamsAdjacentToParen():Void {
-		final out:String = HxModuleWriter.write(HaxeModuleParser.parse('class F { function bar(x:Int):Void {} }'));
+	function testFunctionWithParamsAdjacentToParen(): Void {
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse('class F { function bar(x:Int):Void {} }'));
 		Assert.isTrue(out.indexOf('bar(x') != -1, 'expected `bar(x` (no space) in: <$out>');
 		Assert.isTrue(out.indexOf('bar (') == -1, 'did not expect space before `(` in: <$out>');
 	}
 
-	function testFunctionReturnTypeTightColon():Void {
-		final out:String = HxModuleWriter.write(HaxeModuleParser.parse('class F { function f():Int { return 1; } }'));
+	function testFunctionReturnTypeTightColon(): Void {
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse('class F { function f():Int { return 1; } }'));
 		Assert.isTrue(out.indexOf('f():Int') != -1, 'expected `f():Int` (tight colon) in: <$out>');
 		Assert.isTrue(out.indexOf(' : Int') == -1, 'did not expect spaced ` : Int` in: <$out>');
 	}
 
-	function testLambdaParamTypeTightColon():Void {
-		final out:String = HxModuleWriter.write(HaxeModuleParser.parse('class F { function f():Void { var x:Int = (a:Int) => a + 1; } }'));
+	function testLambdaParamTypeTightColon(): Void {
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse('class F { function f():Void { var x:Int = (a:Int) => a + 1; } }'));
 		Assert.isTrue(out.indexOf('(a:Int)') != -1, 'expected `(a:Int)` (tight colon) in: <$out>');
 		Assert.isTrue(out.indexOf('(a : Int)') == -1, 'did not expect spaced `(a : Int)` in: <$out>');
 	}
 
-	function testNoLeadingSpaceBeforeMemberWithoutModifiers():Void {
-		final out:String = HxModuleWriter.write(HaxeModuleParser.parse('class F { function test() {} }'));
+	function testNoLeadingSpaceBeforeMemberWithoutModifiers(): Void {
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse('class F { function test() {} }'));
 		Assert.isTrue(out.indexOf('\tfunction') != -1, 'expected `\\tfunction` (no leading space after indent) in: <$out>');
 		Assert.isTrue(out.indexOf('\t function') == -1, 'did not expect `\\t function` (extra space) in: <$out>');
 	}
 
-	function testNoLeadingSpaceBeforeVarWithoutModifiers():Void {
-		final out:String = HxModuleWriter.write(HaxeModuleParser.parse('class F { var x:Int; }'));
+	function testNoLeadingSpaceBeforeVarWithoutModifiers(): Void {
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse('class F { var x:Int; }'));
 		Assert.isTrue(out.indexOf('\tvar') != -1, 'expected `\\tvar` (no leading space after indent) in: <$out>');
 		Assert.isTrue(out.indexOf('\t var') == -1, 'did not expect `\\t var` (extra space) in: <$out>');
 	}
 
-	function testIfBodyPolicySame():Void {
-		final out:String = writeWithIfBody('class F { function f() { if (x) doA(); } }', BodyPolicy.Same, 120);
+	function testIfBodyPolicySame(): Void {
+		final out: String = writeWithIfBody('class F { function f() { if (x) doA(); } }', BodyPolicy.Same, 120);
 		Assert.isTrue(out.indexOf('if (x) doA();') != -1, 'expected `if (x) doA();` (same line) in: <$out>');
 	}
 
-	function testIfBodyPolicyNextAlwaysBreaks():Void {
-		final out:String = writeWithIfBody('class F { function f() { if (x) doA(); } }', BodyPolicy.Next, 120);
+	function testIfBodyPolicyNextAlwaysBreaks(): Void {
+		final out: String = writeWithIfBody('class F { function f() { if (x) doA(); } }', BodyPolicy.Next, 120);
 		Assert.isTrue(out.indexOf('if (x)\n\t\t\tdoA();') != -1, 'expected `if (x)\\n\\t\\t\\tdoA();` (next line + indent) in: <$out>');
 	}
 
-	function testIfBodyPolicyFitLineStaysFlatWhenFits():Void {
-		final out:String = writeWithIfBody('class F { function f() { if (x) doA(); } }', BodyPolicy.FitLine, 120);
+	function testIfBodyPolicyFitLineStaysFlatWhenFits(): Void {
+		final out: String = writeWithIfBody('class F { function f() { if (x) doA(); } }', BodyPolicy.FitLine, 120);
 		Assert.isTrue(out.indexOf('if (x) doA();') != -1, 'expected `if (x) doA();` (fits flat) in: <$out>');
 	}
 
-	function testIfBodyPolicyFitLineBreaksWhenTooLong():Void {
-		final out:String = writeWithIfBody('class F { function f() { if (x) doSomethingVeryLong(); } }', BodyPolicy.FitLine, 20);
+	function testIfBodyPolicyFitLineBreaksWhenTooLong(): Void {
+		final out: String = writeWithIfBody('class F { function f() { if (x) doSomethingVeryLong(); } }', BodyPolicy.FitLine, 20);
 		Assert.isTrue(out.indexOf('if (x)\n\t\t\tdoSomethingVeryLong();') != -1, 'expected broken body in: <$out>');
 	}
 
-	function testForBodyPolicyNextAlwaysBreaks():Void {
-		final out:String = writeWithForBody('class F { function f() { for (i in xs) doA(); } }', BodyPolicy.Next, 120);
+	function testForBodyPolicyNextAlwaysBreaks(): Void {
+		final out: String = writeWithForBody('class F { function f() { for (i in xs) doA(); } }', BodyPolicy.Next, 120);
 		Assert.isTrue(out.indexOf('for (i in xs)\n\t\t\tdoA();') != -1, 'expected for-body next line in: <$out>');
 	}
 
-	function testWhileBodyPolicyFitLineBreaksWhenTooLong():Void {
-		final out:String = writeWithWhileBody('class F { function f() { while (x) doSomethingVeryLong(); } }', BodyPolicy.FitLine, 20);
+	function testWhileBodyPolicyFitLineBreaksWhenTooLong(): Void {
+		final out: String = writeWithWhileBody('class F { function f() { while (x) doSomethingVeryLong(); } }', BodyPolicy.FitLine, 20);
 		Assert.isTrue(out.indexOf('while (x)\n\t\t\tdoSomethingVeryLong();') != -1, 'expected while-body break in: <$out>');
 	}
 
-	function testElseBodyPolicyNextBreaksOnlyElseBody():Void {
-		final out:String = writeWithOpts('class F { function f() { if (x) doA(); else doB(); } }', BodyPolicy.Same, BodyPolicy.Next, BodyPolicy.Same, BodyPolicy.Same, BodyPolicy.Same, 120);
+	function testElseBodyPolicyNextBreaksOnlyElseBody(): Void {
+		final out: String = writeWithOpts(
+			'class F { function f() { if (x) doA(); else doB(); } }', BodyPolicy.Same, BodyPolicy.Next, BodyPolicy.Same, BodyPolicy.Same,
+			BodyPolicy.Same, 120
+		);
 		Assert.isTrue(out.indexOf('if (x) doA();') != -1, 'expected then-body flat in: <$out>');
 		Assert.isTrue(out.indexOf('else\n\t\t\tdoB();') != -1, 'expected else-body next line in: <$out>');
 	}
 
-	function testDoBodyPolicySame():Void {
-		final out:String = writeWithDoBody('class F { function f() { do doA(); while (x); } }', BodyPolicy.Same, 120);
+	function testDoBodyPolicySame(): Void {
+		final out: String = writeWithDoBody('class F { function f() { do doA(); while (x); } }', BodyPolicy.Same, 120);
 		Assert.isTrue(out.indexOf('do doA(); while (x);') != -1, 'expected `do doA(); while (x);` (same line) in: <$out>');
 	}
 
-	function testDoBodyPolicyNextAlwaysBreaks():Void {
-		final out:String = writeWithDoBody('class F { function f() { do doA(); while (x); } }', BodyPolicy.Next, 120);
-		Assert.isTrue(out.indexOf('do\n\t\t\tdoA(); while (x);') != -1, 'expected `do\\n\\t\\t\\tdoA(); while (x);` (next line + indent) in: <$out>');
+	function testDoBodyPolicyNextAlwaysBreaks(): Void {
+		final out: String = writeWithDoBody('class F { function f() { do doA(); while (x); } }', BodyPolicy.Next, 120);
+		Assert.isTrue(
+			out.indexOf('do\n\t\t\tdoA(); while (x);') != -1, 'expected `do\\n\\t\\t\\tdoA(); while (x);` (next line + indent) in: <$out>'
+		);
 	}
 
-	function testDoBodyPolicyFitLineBreaksWhenTooLong():Void {
-		final out:String = writeWithDoBody('class F { function f() { do doSomethingVeryLong(); while (x); } }', BodyPolicy.FitLine, 20);
+	function testDoBodyPolicyFitLineBreaksWhenTooLong(): Void {
+		final out: String = writeWithDoBody('class F { function f() { do doSomethingVeryLong(); while (x); } }', BodyPolicy.FitLine, 20);
 		Assert.isTrue(out.indexOf('do\n\t\t\tdoSomethingVeryLong(); while (x);') != -1, 'expected broken do-body in: <$out>');
 	}
 
-	private inline function writeWithIfBody(src:String, policy:BodyPolicy, lineWidth:Int):String {
+	private inline function writeWithIfBody(src: String, policy: BodyPolicy, lineWidth: Int): String {
 		return writeWithOpts(src, policy, BodyPolicy.Same, BodyPolicy.Same, BodyPolicy.Same, BodyPolicy.Same, lineWidth);
 	}
 
-	private inline function writeWithForBody(src:String, policy:BodyPolicy, lineWidth:Int):String {
+	private inline function writeWithForBody(src: String, policy: BodyPolicy, lineWidth: Int): String {
 		return writeWithOpts(src, BodyPolicy.Same, BodyPolicy.Same, policy, BodyPolicy.Same, BodyPolicy.Same, lineWidth);
 	}
 
-	private inline function writeWithWhileBody(src:String, policy:BodyPolicy, lineWidth:Int):String {
+	private inline function writeWithWhileBody(src: String, policy: BodyPolicy, lineWidth: Int): String {
 		return writeWithOpts(src, BodyPolicy.Same, BodyPolicy.Same, BodyPolicy.Same, policy, BodyPolicy.Same, lineWidth);
 	}
 
-	private inline function writeWithDoBody(src:String, policy:BodyPolicy, lineWidth:Int):String {
+	private inline function writeWithDoBody(src: String, policy: BodyPolicy, lineWidth: Int): String {
 		return writeWithOpts(src, BodyPolicy.Same, BodyPolicy.Same, BodyPolicy.Same, BodyPolicy.Same, policy, lineWidth);
 	}
 
 	private function writeWithOpts(
-		src:String, ifBody:BodyPolicy, elseBody:BodyPolicy, forBody:BodyPolicy, whileBody:BodyPolicy, doBody:BodyPolicy,
-		lineWidth:Int
-	):String {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		src: String, ifBody: BodyPolicy, elseBody: BodyPolicy, forBody: BodyPolicy, whileBody: BodyPolicy, doBody: BodyPolicy,
+		lineWidth: Int
+	): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.lineWidth = lineWidth;
 		opts.ifBody = ifBody;
 		opts.elseBody = elseBody;
@@ -437,4 +441,5 @@ class HaxeWriterRoundTripTest extends HxTestHelpers {
 		opts.doBody = doBody;
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}
+
 }

@@ -28,8 +28,8 @@ using Lambda;
  */
 class ApqMetaTest extends Test {
 
-	public function testMemberAnnotationAttributesToMember():Void {
-		final hits:Array<MetaHit> = findIn('class X { @:foo var n:Int; }');
+	public function testMemberAnnotationAttributesToMember(): Void {
+		final hits: Array<MetaHit> = findIn('class X { @:foo var n:Int; }');
 		Assert.equals(1, hits.length, 'one annotation hit expected — got ${describe(hits)}');
 		Assert.equals('@:foo', hits[0].annotation);
 		Assert.equals('VarMember', hits[0].declKind, 'must attach to the member, not the class — got ${describe(hits)}');
@@ -37,16 +37,16 @@ class ApqMetaTest extends Test {
 		Assert.equals(0, hits[0].args.length, 'paren-less annotation has no args');
 	}
 
-	public function testTopLevelAnnotationAttributesToTypeDecl():Void {
-		final hits:Array<MetaHit> = findIn('@:foo class X {}');
+	public function testTopLevelAnnotationAttributesToTypeDecl(): Void {
+		final hits: Array<MetaHit> = findIn('@:foo class X {}');
 		Assert.equals(1, hits.length, 'one annotation hit expected — got ${describe(hits)}');
 		Assert.equals('@:foo', hits[0].annotation);
 		Assert.equals('ClassDecl', hits[0].declKind);
 		Assert.equals('X', hits[0].declName);
 	}
 
-	public function testParenBearingArgsSliceToSource():Void {
-		final hits:Array<MetaHit> = findIn('class X { @:foo(a, b) var n:Int; }');
+	public function testParenBearingArgsSliceToSource(): Void {
+		final hits: Array<MetaHit> = findIn('class X { @:foo(a, b) var n:Int; }');
 		Assert.equals(1, hits.length, 'one annotation hit expected — got ${describe(hits)}');
 		Assert.equals('@:foo', hits[0].annotation, 'tag truncated before `(`');
 		Assert.equals(2, hits[0].args.length, 'two args expected — got ${describe(hits)}');
@@ -54,8 +54,8 @@ class ApqMetaTest extends Test {
 		Assert.equals('b', hits[0].args[1]);
 	}
 
-	public function testMultipleAnnotationsOnOneDecl():Void {
-		final hits:Array<MetaHit> = findIn('class X { @:a @:b var n:Int; }');
+	public function testMultipleAnnotationsOnOneDecl(): Void {
+		final hits: Array<MetaHit> = findIn('class X { @:a @:b var n:Int; }');
 		Assert.equals(2, hits.length, 'two annotation hits expected — got ${describe(hits)}');
 		Assert.equals('@:a', hits[0].annotation);
 		Assert.equals('@:b', hits[1].annotation);
@@ -65,11 +65,11 @@ class ApqMetaTest extends Test {
 		}
 	}
 
-	public function testAdjacentMembersResolveToOwnDecls():Void {
-		final hits:Array<MetaHit> = findIn('class X { @:a var n:Int; @:b function y():Void {} }');
+	public function testAdjacentMembersResolveToOwnDecls(): Void {
+		final hits: Array<MetaHit> = findIn('class X { @:a var n:Int; @:b function y():Void {} }');
 		Assert.equals(2, hits.length, 'one hit per member — got ${describe(hits)}');
-		final a:Null<MetaHit> = hits.find(h -> h.annotation == '@:a');
-		final b:Null<MetaHit> = hits.find(h -> h.annotation == '@:b');
+		final a: Null<MetaHit> = hits.find(h -> h.annotation == '@:a');
+		final b: Null<MetaHit> = hits.find(h -> h.annotation == '@:b');
 		Assert.notNull(a);
 		Assert.notNull(b);
 		if (a != null) {
@@ -82,16 +82,16 @@ class ApqMetaTest extends Test {
 		}
 	}
 
-	public function testNonAnnotatedDeclProducesNoHits():Void {
-		final hits:Array<MetaHit> = findIn('class X { var n:Int; }');
+	public function testNonAnnotatedDeclProducesNoHits(): Void {
+		final hits: Array<MetaHit> = findIn('class X { var n:Int; }');
 		Assert.equals(0, hits.length, 'no annotations — got ${describe(hits)}');
 	}
 
-	public function testHitsCarryPositiveSpans():Void {
-		final hits:Array<MetaHit> = findIn('class X { @:foo var n:Int; }');
+	public function testHitsCarryPositiveSpans(): Void {
+		final hits: Array<MetaHit> = findIn('class X { @:foo var n:Int; }');
 		for (h in hits) {
-			final ms:Null<anyparse.runtime.Span> = h.metaSpan;
-			final ds:Null<anyparse.runtime.Span> = h.declSpan;
+			final ms: Null<anyparse.runtime.Span> = h.metaSpan;
+			final ds: Null<anyparse.runtime.Span> = h.declSpan;
 			Assert.notNull(ms, 'annotation span expected');
 			Assert.notNull(ds, 'decl span expected');
 			if (ms != null) Assert.isTrue(ms.from >= 0 && ms.to >= ms.from, 'meta span well-formed');
@@ -99,23 +99,25 @@ class ApqMetaTest extends Test {
 		}
 	}
 
-	public function testExpressionMetaFallsBackToEnclosingDecl():Void {
+	public function testExpressionMetaFallsBackToEnclosingDecl(): Void {
 		// v1 documented behaviour: expression-level `@:foo expr` has no
 		// following decl-host sibling, so it attributes to the nearest
 		// enclosing decl-host (the function), not a finer expr target.
-		final hits:Array<MetaHit> = findIn('class X { static function f():Void { @:foo g(); } }');
+		final hits: Array<MetaHit> = findIn('class X { static function f():Void { @:foo g(); } }');
 		Assert.isTrue(hits.length >= 1, 'expression metadata still surfaces — got ${describe(hits)}');
-		final h:MetaHit = hits[0];
+		final h: MetaHit = hits[0];
 		Assert.equals('@:foo', h.annotation);
-		final plugin:HaxeQueryPlugin = new HaxeQueryPlugin();
-		Assert.isTrue(plugin.metaShape().declHostKinds.contains(h.declKind),
-			'expression meta attributes to an enclosing decl-host — got ${h.declKind}');
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		Assert.isTrue(
+			plugin.metaShape().declHostKinds.contains(h.declKind),
+			'expression meta attributes to an enclosing decl-host — got ${h.declKind}'
+		);
 	}
 
-	public function testJsonRenderShapeMatchesSpec():Void {
-		final source:String = 'class X { @:foo(a, b) var n:Int; }';
-		final hits:Array<MetaHit> = findIn(source);
-		final out:String = Json.renderMeta([{file: 'x.hx', source: source, hits: hits}]);
+	public function testJsonRenderShapeMatchesSpec(): Void {
+		final source: String = 'class X { @:foo(a, b) var n:Int; }';
+		final hits: Array<MetaHit> = findIn(source);
+		final out: String = Json.renderMeta([{ file: 'x.hx', source: source, hits: hits }]);
 		Assert.isTrue(out.indexOf('"hits"') >= 0, 'envelope key present — got $out');
 		Assert.isTrue(out.indexOf('"annotation":"@:foo"') >= 0, 'annotation key/value — got $out');
 		Assert.isTrue(out.indexOf('"args"') >= 0, 'args array key — got $out');
@@ -126,14 +128,15 @@ class ApqMetaTest extends Test {
 		Assert.isTrue(out.indexOf('"span"') >= 0, 'decl span present — got $out');
 	}
 
-	private static function findIn(source:String):Array<MetaHit> {
-		final plugin:HaxeQueryPlugin = new HaxeQueryPlugin();
-		final tree:QueryNode = plugin.parseFile(source);
-		final shape:MetaShape = plugin.metaShape();
+	private static function findIn(source: String): Array<MetaHit> {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(source);
+		final shape: MetaShape = plugin.metaShape();
 		return Meta.find(tree, shape, source);
 	}
 
-	private static function describe(hits:Array<MetaHit>):String {
+	private static function describe(hits: Array<MetaHit>): String {
 		return '[' + hits.map(h -> '${h.annotation}(${h.args.join("|")})@${h.declKind}:${h.declName ?? "?"}').join(', ') + ']';
 	}
+
 }

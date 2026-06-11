@@ -33,58 +33,72 @@ import anyparse.grammar.haxe.HxModuleWriter;
  */
 class HxToplevelPackageSliceTest extends HxTestHelpers {
 
-	public function testPackageEmpty():Void {
-		final ast:HxModule = HaxeModuleParser.parse('package;');
+	public function testPackageEmpty(): Void {
+		final ast: HxModule = HaxeModuleParser.parse('package;');
 		Assert.equals(1, ast.decls.length);
 		switch ast.decls[0].decl {
-			case PackageEmpty: Assert.pass();
-			case _: Assert.fail('expected PackageEmpty, got ${ast.decls[0].decl}');
+			case PackageEmpty:
+				Assert.pass();
+			case _:
+				Assert.fail('expected PackageEmpty, got ${ast.decls[0].decl}');
 		}
 	}
 
-	public function testPackageSingleSegment():Void {
-		final ast:HxModule = HaxeModuleParser.parse('package foo;');
+	public function testPackageSingleSegment(): Void {
+		final ast: HxModule = HaxeModuleParser.parse('package foo;');
 		switch ast.decls[0].decl {
-			case PackageDecl(path): Assert.equals('foo', (path : String));
-			case _: Assert.fail('expected PackageDecl, got ${ast.decls[0].decl}');
+			case PackageDecl(path):
+				Assert.equals('foo', (path: String));
+			case _:
+				Assert.fail('expected PackageDecl, got ${ast.decls[0].decl}');
 		}
 	}
 
-	public function testPackageDottedPath():Void {
-		final ast:HxModule = HaxeModuleParser.parse('package foo.bar.baz;');
+	public function testPackageDottedPath(): Void {
+		final ast: HxModule = HaxeModuleParser.parse('package foo.bar.baz;');
 		switch ast.decls[0].decl {
-			case PackageDecl(path): Assert.equals('foo.bar.baz', (path : String));
-			case _: Assert.fail('expected PackageDecl');
+			case PackageDecl(path):
+				Assert.equals('foo.bar.baz', (path: String));
+			case _:
+				Assert.fail('expected PackageDecl');
 		}
 	}
 
-	public function testPackageThenClass():Void {
-		final ast:HxModule = HaxeModuleParser.parse('package foo.bar;\nclass C {}');
+	public function testPackageThenClass(): Void {
+		final ast: HxModule = HaxeModuleParser.parse('package foo.bar;\nclass C {}');
 		Assert.equals(2, ast.decls.length);
 		switch ast.decls[0].decl {
-			case PackageDecl(path): Assert.equals('foo.bar', (path : String));
-			case _: Assert.fail('expected PackageDecl first');
+			case PackageDecl(path):
+				Assert.equals('foo.bar', (path: String));
+			case _:
+				Assert.fail('expected PackageDecl first');
 		}
 		switch ast.decls[1].decl {
-			case ClassDecl(_): Assert.pass();
-			case _: Assert.fail('expected ClassDecl second');
+			case ClassDecl(_):
+				Assert.pass();
+			case _:
+				Assert.fail('expected ClassDecl second');
 		}
 	}
 
-	public function testPackageEmptyThenClass():Void {
-		final ast:HxModule = HaxeModuleParser.parse('package;\nclass C {}');
+	public function testPackageEmptyThenClass(): Void {
+		final ast: HxModule = HaxeModuleParser.parse('package;\nclass C {}');
 		Assert.equals(2, ast.decls.length);
 		switch ast.decls[0].decl {
-			case PackageEmpty: Assert.pass();
-			case _: Assert.fail('expected PackageEmpty first');
+			case PackageEmpty:
+				Assert.pass();
+			case _:
+				Assert.fail('expected PackageEmpty first');
 		}
 		switch ast.decls[1].decl {
-			case ClassDecl(_): Assert.pass();
-			case _: Assert.fail('expected ClassDecl second');
+			case ClassDecl(_):
+				Assert.pass();
+			case _:
+				Assert.fail('expected ClassDecl second');
 		}
 	}
 
-	public function testPackageRequiresSemi():Void {
+	public function testPackageRequiresSemi(): Void {
 		// `@:trail(';')` is mandatory — both branches reject the bare
 		// keyword. The outer-loop `expected HxDecl` fan still surfaces
 		// the failure even though the branch-internal trail expectation
@@ -92,31 +106,31 @@ class HxToplevelPackageSliceTest extends HxTestHelpers {
 		Assert.raises(() -> HaxeModuleParser.parse('package foo'));
 	}
 
-	public function testWriterEmitsPackageEmpty():Void {
-		final out:String = HxModuleWriter.write(HaxeModuleParser.parse('package;'));
+	public function testWriterEmitsPackageEmpty(): Void {
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse('package;'));
 		// Plain writer trims module-level newlines; the trail `;` plus
 		// the trailing module newline is the canonical shape.
 		Assert.equals('package;\n', out);
 	}
 
-	public function testWriterEmitsPackageDecl():Void {
-		final out:String = HxModuleWriter.write(HaxeModuleParser.parse('package foo.bar;'));
+	public function testWriterEmitsPackageDecl(): Void {
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse('package foo.bar;'));
 		Assert.equals('package foo.bar;\n', out);
 	}
 
-	public function testRoundTripPackageEmpty():Void {
+	public function testRoundTripPackageEmpty(): Void {
 		roundTrip('package;');
 	}
 
-	public function testRoundTripPackageSingleSegment():Void {
+	public function testRoundTripPackageSingleSegment(): Void {
 		roundTrip('package foo;');
 	}
 
-	public function testRoundTripPackageDottedPath():Void {
+	public function testRoundTripPackageDottedPath(): Void {
 		roundTrip('package haxe.io.bytes;');
 	}
 
-	public function testRoundTripPackageThenClass():Void {
+	public function testRoundTripPackageThenClass(): Void {
 		roundTrip('package foo.bar;\nclass C {}');
 	}
 

@@ -35,113 +35,121 @@ import anyparse.grammar.haxe.HxVarDecl;
  */
 class HxLambdaParamOptionalSliceTest extends HxTestHelpers {
 
-	public function testOptionalThinLambdaParam():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class C { var f:Int = (?x:Int) -> x; }');
+	public function testOptionalThinLambdaParam(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = (?x:Int) -> x; }');
 		switch decl.init {
 			case ThinParenLambdaExpr(lambda):
 				Assert.equals(1, lambda.params.length);
 				switch lambda.params[0] {
 					case Optional(body):
-						Assert.equals('x', (body.name : String));
+						Assert.equals('x', (body.name: String));
 						Assert.notNull(body.type);
 					case _: Assert.fail('expected Optional, got ${lambda.params[0]}');
 				}
-			case null, _: Assert.fail('expected ThinParenLambdaExpr, got ${decl.init}');
+			case null, _:
+				Assert.fail('expected ThinParenLambdaExpr, got ${decl.init}');
 		}
 	}
 
-	public function testOptionalThinLambdaParamUntyped():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class C { var f:Int = (?x) -> x; }');
+	public function testOptionalThinLambdaParamUntyped(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = (?x) -> x; }');
 		switch decl.init {
 			case ThinParenLambdaExpr(lambda):
 				Assert.equals(1, lambda.params.length);
 				switch lambda.params[0] {
 					case Optional(body):
-						Assert.equals('x', (body.name : String));
+						Assert.equals('x', (body.name: String));
 						Assert.isNull(body.type);
 					case _: Assert.fail('expected Optional, got ${lambda.params[0]}');
 				}
-			case null, _: Assert.fail('expected ThinParenLambdaExpr, got ${decl.init}');
+			case null, _:
+				Assert.fail('expected ThinParenLambdaExpr, got ${decl.init}');
 		}
 	}
 
-	public function testOptionalFatLambdaParam():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class C { var f:Int = (?x:Int) => x; }');
+	public function testOptionalFatLambdaParam(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = (?x:Int) => x; }');
 		switch decl.init {
 			case ParenLambdaExpr(lambda):
 				Assert.equals(1, lambda.params.length);
 				switch lambda.params[0] {
 					case Optional(body):
-						Assert.equals('x', (body.name : String));
+						Assert.equals('x', (body.name: String));
 						Assert.notNull(body.type);
 					case _: Assert.fail('expected Optional, got ${lambda.params[0]}');
 				}
-			case null, _: Assert.fail('expected ParenLambdaExpr, got ${decl.init}');
+			case null, _:
+				Assert.fail('expected ParenLambdaExpr, got ${decl.init}');
 		}
 	}
 
-	public function testMixedRequiredOptionalThinLambda():Void {
-		final decl:HxVarDecl = parseSingleVarDecl('class C { var f:Int = (a:Int, ?b:String) -> a; }');
+	public function testMixedRequiredOptionalThinLambda(): Void {
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = (a:Int, ?b:String) -> a; }');
 		switch decl.init {
 			case ThinParenLambdaExpr(lambda):
 				Assert.equals(2, lambda.params.length);
 				switch lambda.params[0] {
-					case Required(body): Assert.equals('a', (body.name : String));
-					case _: Assert.fail('expected Required at 0, got ${lambda.params[0]}');
+					case Required(body):
+						Assert.equals('a', (body.name: String));
+					case _:
+						Assert.fail('expected Required at 0, got ${lambda.params[0]}');
 				}
 				switch lambda.params[1] {
 					case Optional(body):
-						Assert.equals('b', (body.name : String));
+						Assert.equals('b', (body.name: String));
 						Assert.notNull(body.type);
 					case _: Assert.fail('expected Optional at 1, got ${lambda.params[1]}');
 				}
-			case null, _: Assert.fail('expected ThinParenLambdaExpr, got ${decl.init}');
+			case null, _:
+				Assert.fail('expected ThinParenLambdaExpr, got ${decl.init}');
 		}
 	}
 
-	public function testOptionalLambdaParamAnonStructType():Void {
+	public function testOptionalLambdaParamAnonStructType(): Void {
 		// corpus issue_642 motivator shape: `(?options:{?foo:Bool, ?bar:Int}) -> {}`
-		final source:String = 'class Main { static function main() { final f = (?options:{?foo:Bool, ?bar:Int}) -> {}; } }';
-		final module:HxModule = HaxeModuleParser.parse(source);
+		final source: String = 'class Main { static function main() { final f = (?options:{?foo:Bool, ?bar:Int}) -> {}; } }';
+		final module: HxModule = HaxeModuleParser.parse(source);
 		Assert.notNull(module);
 	}
 
-	public function testOptionalAnonFnExprParam():Void {
+	public function testOptionalAnonFnExprParam(): Void {
 		// `function (?x:Int) return x` — same Alt-enum split applies to
 		// `HxFnExpr.params` since it reuses `HxLambdaParam`.
-		final source:String = 'class C { function m() { var g = function(?x:Int) return x; } }';
-		final module:HxModule = HaxeModuleParser.parse(source);
+		final source: String = 'class C { function m() { var g = function(?x:Int) return x; } }';
+		final module: HxModule = HaxeModuleParser.parse(source);
 		Assert.notNull(module);
 	}
 
-	public function testPlainLambdaParamUnchanged():Void {
+	public function testPlainLambdaParamUnchanged(): Void {
 		// Regression guard: the canonical `Required` path keeps working
 		// after the enum split (Slice 27's HaxeQueryPlugin Optional/Plain
 		// recurse covers Optional; Required falls through extractName's
 		// TObject .name lookup via enum-param descent in makeEnumNode).
-		final decl:HxVarDecl = parseSingleVarDecl('class C { var f:Int = (x:Int) -> x; }');
+		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = (x:Int) -> x; }');
 		switch decl.init {
 			case ThinParenLambdaExpr(lambda):
 				Assert.equals(1, lambda.params.length);
 				switch lambda.params[0] {
 					case Required(body):
-						Assert.equals('x', (body.name : String));
+						Assert.equals('x', (body.name: String));
 						Assert.notNull(body.type);
 					case _: Assert.fail('expected Required, got ${lambda.params[0]}');
 				}
-			case null, _: Assert.fail('expected ThinParenLambdaExpr, got ${decl.init}');
+			case null, _:
+				Assert.fail('expected ThinParenLambdaExpr, got ${decl.init}');
 		}
 	}
 
-	public function testOptionalLambdaParamRoundTrip():Void {
+	public function testOptionalLambdaParamRoundTrip(): Void {
 		roundTrip('class C { var f:Int = (?x:Int) -> x; }', 'thin opt typed');
 		roundTrip('class C { var f:Int = (a:Int, ?b:String) -> a; }', 'thin mixed');
 		roundTrip('class C { var f:Int = (?x) => x; }', 'fat opt untyped');
 	}
 
-	public function testCorpusIssue642RoundTrip():Void {
-		final source:String = 'class Main {\n\tstatic function main() {\n\t\tfinal f = (?options:{?foo:Bool, ?bar:Int}) -> {}\n\t}\n}';
-		final module:HxModule = HaxeModuleParser.parse(source);
+	public function testCorpusIssue642RoundTrip(): Void {
+		final source: String = 'class Main {\n\tstatic function main() {\n\t\tfinal f = (?options:{?foo:Bool, ?bar:Int}) -> {}\n\t}\n}';
+		final module: HxModule = HaxeModuleParser.parse(source);
 		Assert.notNull(module);
 	}
+
 }

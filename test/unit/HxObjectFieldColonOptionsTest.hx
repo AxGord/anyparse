@@ -32,75 +32,96 @@ import anyparse.grammar.haxe.HxModuleWriter;
 @:nullSafety(Strict)
 class HxObjectFieldColonOptionsTest extends Test {
 
-	public function new():Void {
+	public function new(): Void {
 		super();
 	}
 
-	public function testObjectFieldColonDefaultIsAfter():Void {
-		final defaults:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
+	public function testObjectFieldColonDefaultIsAfter(): Void {
+		final defaults: HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
 		Assert.equals(WhitespacePolicy.After, defaults.objectFieldColon);
 	}
 
-	public function testObjectFieldColonAfterEmitsSpaceAfter():Void {
-		final out:String = writeWith('class C { var x:Dynamic = {a: 0, b: 1}; }', WhitespacePolicy.After);
+	public function testObjectFieldColonAfterEmitsSpaceAfter(): Void {
+		final out: String = writeWith('class C { var x:Dynamic = {a: 0, b: 1}; }', WhitespacePolicy.After);
 		Assert.isTrue(out.indexOf('{a: 0, b: 1}') != -1, 'expected `{a: 0, b: 1}` in: <$out>');
 	}
 
-	public function testObjectFieldColonNoneKeepsTightLayout():Void {
-		final out:String = writeWith('class C { var x:Dynamic = {a: 0, b: 1}; }', WhitespacePolicy.None);
+	public function testObjectFieldColonNoneKeepsTightLayout(): Void {
+		final out: String = writeWith('class C { var x:Dynamic = {a: 0, b: 1}; }', WhitespacePolicy.None);
 		Assert.isTrue(out.indexOf('{a:0, b:1}') != -1, 'expected `{a:0, b:1}` in: <$out>');
 		Assert.isTrue(out.indexOf('{a: 0') == -1, 'did not expect space after colon in: <$out>');
 	}
 
-	public function testObjectFieldColonBeforeEmitsSpaceBefore():Void {
-		final out:String = writeWith('class C { var x:Dynamic = {a: 0}; }', WhitespacePolicy.Before);
+	public function testObjectFieldColonBeforeEmitsSpaceBefore(): Void {
+		final out: String = writeWith('class C { var x:Dynamic = {a: 0}; }', WhitespacePolicy.Before);
 		Assert.isTrue(out.indexOf('{a :0}') != -1, 'expected `{a :0}` in: <$out>');
 	}
 
-	public function testObjectFieldColonBothEmitsSpaceOnBothSides():Void {
-		final out:String = writeWith('class C { var x:Dynamic = {a: 0}; }', WhitespacePolicy.Both);
+	public function testObjectFieldColonBothEmitsSpaceOnBothSides(): Void {
+		final out: String = writeWith('class C { var x:Dynamic = {a: 0}; }', WhitespacePolicy.Both);
 		Assert.isTrue(out.indexOf('{a : 0}') != -1, 'expected `{a : 0}` in: <$out>');
 	}
 
-	public function testVarTypeAnnotationStaysTightRegardlessOfPolicy():Void {
-		final src:String = 'class C { var x:Int = 0; }';
-		for (policy in [WhitespacePolicy.None, WhitespacePolicy.Before, WhitespacePolicy.After, WhitespacePolicy.Both]) {
-			final out:String = writeWith(src, policy);
-			Assert.isTrue(out.indexOf('var x:Int') != -1,
-				'var type annotation should stay tight under policy $policy in: <$out>');
+	public function testVarTypeAnnotationStaysTightRegardlessOfPolicy(): Void {
+		final src: String = 'class C { var x:Int = 0; }';
+		for (
+			policy in [
+				WhitespacePolicy.None,
+				WhitespacePolicy.Before,
+				WhitespacePolicy.After,
+				WhitespacePolicy.Both
+			]
+		) {
+			final out: String = writeWith(src, policy);
+			Assert.isTrue(out.indexOf('var x:Int') != -1, 'var type annotation should stay tight under policy $policy in: <$out>');
 		}
 	}
 
-	public function testFunctionReturnTypeStaysTightRegardlessOfPolicy():Void {
-		final src:String = 'class C { function f():Void {} }';
-		for (policy in [WhitespacePolicy.None, WhitespacePolicy.Before, WhitespacePolicy.After, WhitespacePolicy.Both]) {
-			final out:String = writeWith(src, policy);
-			Assert.isTrue(out.indexOf('function f():Void') != -1,
-				'return type annotation should stay tight under policy $policy in: <$out>');
+	public function testFunctionReturnTypeStaysTightRegardlessOfPolicy(): Void {
+		final src: String = 'class C { function f():Void {} }';
+		for (
+			policy in [
+				WhitespacePolicy.None,
+				WhitespacePolicy.Before,
+				WhitespacePolicy.After,
+				WhitespacePolicy.Both
+			]
+		) {
+			final out: String = writeWith(src, policy);
+			Assert.isTrue(
+				out.indexOf('function f():Void') != -1, 'return type annotation should stay tight under policy $policy in: <$out>'
+			);
 		}
 	}
 
-	public function testFunctionParamTypeStaysTightRegardlessOfPolicy():Void {
-		final src:String = 'class C { function f(p:Int):Void {} }';
-		for (policy in [WhitespacePolicy.None, WhitespacePolicy.Before, WhitespacePolicy.After, WhitespacePolicy.Both]) {
-			final out:String = writeWith(src, policy);
-			Assert.isTrue(out.indexOf('p:Int') != -1,
-				'param type annotation should stay tight under policy $policy in: <$out>');
+	public function testFunctionParamTypeStaysTightRegardlessOfPolicy(): Void {
+		final src: String = 'class C { function f(p:Int):Void {} }';
+		for (
+			policy in [
+				WhitespacePolicy.None,
+				WhitespacePolicy.Before,
+				WhitespacePolicy.After,
+				WhitespacePolicy.Both
+			]
+		) {
+			final out: String = writeWith(src, policy);
+			Assert.isTrue(out.indexOf('p:Int') != -1, 'param type annotation should stay tight under policy $policy in: <$out>');
 		}
 	}
 
-	public function testNestedObjectLiteralsFollowPolicy():Void {
-		final out:String = writeWith('class C { var x:Dynamic = {a: {b: 1}}; }', WhitespacePolicy.After);
+	public function testNestedObjectLiteralsFollowPolicy(): Void {
+		final out: String = writeWith('class C { var x:Dynamic = {a: {b: 1}}; }', WhitespacePolicy.After);
 		Assert.isTrue(out.indexOf('{a: {b: 1}}') != -1, 'expected nested `{a: {b: 1}}` in: <$out>');
 	}
 
-	private inline function writeWith(src:String, objectFieldColon:WhitespacePolicy):String {
+	private inline function writeWith(src: String, objectFieldColon: WhitespacePolicy): String {
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), makeOpts(objectFieldColon));
 	}
 
-	private inline function makeOpts(objectFieldColon:WhitespacePolicy):HxModuleWriteOptions {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	private inline function makeOpts(objectFieldColon: WhitespacePolicy): HxModuleWriteOptions {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.objectFieldColon = objectFieldColon;
 		return opts;
 	}
+
 }

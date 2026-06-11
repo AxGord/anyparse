@@ -3,7 +3,6 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.query.Glob;
-
 #if sys
 import sys.io.File;
 import sys.FileSystem;
@@ -21,21 +20,21 @@ import sys.FileSystem;
 class GlobExpandTest extends Test {
 
 	#if sys
-	private static var counter:Int = 0;
+	private static var counter: Int = 0;
 
-	private var _root:Null<String> = null;
+	private var _root: Null<String> = null;
 
-	public function teardown():Void {
-		final root:Null<String> = _root;
+	public function teardown(): Void {
+		final root: Null<String> = _root;
 		if (root != null && FileSystem.exists(root)) deleteTree(root);
 		_root = null;
 	}
 	#end
 
-	public function testSingleStarWithinSegment():Void {
+	public function testSingleStarWithinSegment(): Void {
 		#if sys
-		final root:String = makeTree();
-		final got:Array<String> = Glob.expand('$root/sub/*.hx', '.hx');
+		final root: String = makeTree();
+		final got: Array<String> = Glob.expand('$root/sub/*.hx', '.hx');
 		Assert.equals(3, got.length);
 		Assert.isTrue(got.contains('$root/sub/HxFoo.hx'));
 		Assert.isTrue(got.contains('$root/sub/HxBar.hx'));
@@ -46,10 +45,10 @@ class GlobExpandTest extends Test {
 		#end
 	}
 
-	public function testDoubleStarAcrossSegments():Void {
+	public function testDoubleStarAcrossSegments(): Void {
 		#if sys
-		final root:String = makeTree();
-		final got:Array<String> = Glob.expand('$root/**/Hx*.hx', '.hx');
+		final root: String = makeTree();
+		final got: Array<String> = Glob.expand('$root/**/Hx*.hx', '.hx');
 		Assert.equals(3, got.length);
 		Assert.isTrue(got.contains('$root/sub/HxFoo.hx'));
 		Assert.isTrue(got.contains('$root/sub/HxBar.hx'));
@@ -60,10 +59,10 @@ class GlobExpandTest extends Test {
 		#end
 	}
 
-	public function testQuestionMarkSingleChar():Void {
+	public function testQuestionMarkSingleChar(): Void {
 		#if sys
-		final root:String = makeTree();
-		final got:Array<String> = Glob.expand('$root/?.hx', '.hx');
+		final root: String = makeTree();
+		final got: Array<String> = Glob.expand('$root/?.hx', '.hx');
 		Assert.equals(1, got.length);
 		Assert.isTrue(got.contains('$root/a.hx'));
 		#else
@@ -71,10 +70,10 @@ class GlobExpandTest extends Test {
 		#end
 	}
 
-	public function testCharClass():Void {
+	public function testCharClass(): Void {
 		#if sys
-		final root:String = makeTree();
-		final got:Array<String> = Glob.expand('$root/sub/Hx[FB]*.hx', '.hx');
+		final root: String = makeTree();
+		final got: Array<String> = Glob.expand('$root/sub/Hx[FB]*.hx', '.hx');
 		Assert.equals(2, got.length);
 		Assert.isTrue(got.contains('$root/sub/HxFoo.hx'));
 		Assert.isTrue(got.contains('$root/sub/HxBar.hx'));
@@ -83,10 +82,10 @@ class GlobExpandTest extends Test {
 		#end
 	}
 
-	public function testDirectoryRecursesUnchanged():Void {
+	public function testDirectoryRecursesUnchanged(): Void {
 		#if sys
-		final root:String = makeTree();
-		final got:Array<String> = Glob.expand(root, '.hx');
+		final root: String = makeTree();
+		final got: Array<String> = Glob.expand(root, '.hx');
 		Assert.equals(5, got.length);
 		Assert.isFalse(got.contains('$root/b.txt'));
 		#else
@@ -94,10 +93,10 @@ class GlobExpandTest extends Test {
 		#end
 	}
 
-	public function testSingleFileUnchanged():Void {
+	public function testSingleFileUnchanged(): Void {
 		#if sys
-		final root:String = makeTree();
-		final got:Array<String> = Glob.expand('$root/a.hx', '.hx');
+		final root: String = makeTree();
+		final got: Array<String> = Glob.expand('$root/a.hx', '.hx');
 		Assert.equals(1, got.length);
 		Assert.equals('$root/a.hx', got[0]);
 		#else
@@ -105,9 +104,9 @@ class GlobExpandTest extends Test {
 		#end
 	}
 
-	public function testNoMatchReturnsEmpty():Void {
+	public function testNoMatchReturnsEmpty(): Void {
 		#if sys
-		final root:String = makeTree();
+		final root: String = makeTree();
 		Assert.equals(0, Glob.expand('$root/sub/*.cpp', '.hx').length);
 		#else
 		Assert.pass('non-sys target');
@@ -115,9 +114,9 @@ class GlobExpandTest extends Test {
 	}
 
 	#if sys
-	private function makeTree():String {
+	private function makeTree(): String {
 		counter++;
-		final root:String = '${haxe.io.Path.normalize(Sys.getCwd())}/tmp_glob_${Sys.time()}_$counter';
+		final root: String = '${haxe.io.Path.normalize(Sys.getCwd())}/tmp_glob_${Sys.time()}_$counter';
 		_root = root;
 		FileSystem.createDirectory('$root/sub/deep');
 		File.saveContent('$root/a.hx', '');
@@ -129,9 +128,9 @@ class GlobExpandTest extends Test {
 		return root;
 	}
 
-	private static function deleteTree(dir:String):Void {
+	private static function deleteTree(dir: String): Void {
 		for (name in FileSystem.readDirectory(dir)) {
-			final path:String = '$dir/$name';
+			final path: String = '$dir/$name';
 			if (FileSystem.isDirectory(path))
 				deleteTree(path);
 			else
@@ -140,4 +139,5 @@ class GlobExpandTest extends Test {
 		FileSystem.deleteDirectory(dir);
 	}
 	#end
+
 }

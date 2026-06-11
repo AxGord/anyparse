@@ -49,16 +49,16 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
  */
 class HxBinopGroupWrapSliceTest extends HxTestHelpers {
 
-	public function testShortChainStaysFlat():Void {
-		final src:String = 'class C { var x:Bool = a || b || c; }';
-		final out:String = writeWithLineWidth(src, 80);
+	public function testShortChainStaysFlat(): Void {
+		final src: String = 'class C { var x:Bool = a || b || c; }';
+		final out: String = writeWithLineWidth(src, 80);
 		Assert.isTrue(out.indexOf('a || b || c') != -1, 'short chain stayed flat in: <$out>');
 		Assert.isTrue(out.indexOf('a ||\n') == -1, 'short chain unexpectedly broke in: <$out>');
 	}
 
-	public function testLongChainBreaks():Void {
-		final src:String = 'class C { static function m():Void { dirty = aaaaaaaaaaaa || bbbbbbbbbbbb || cccccccccccc || dddddddddddd || eeeeeeeeeeee; } }';
-		final out:String = writeWithLineWidth(src, 80);
+	public function testLongChainBreaks(): Void {
+		final src: String = 'class C { static function m():Void { dirty = aaaaaaaaaaaa || bbbbbbbbbbbb || cccccccccccc || dddddddddddd || eeeeeeeeeeee; } }';
+		final out: String = writeWithLineWidth(src, 80);
 		Assert.isTrue(out.indexOf('|| bbbbbbbbbbbb') != -1, 'expected `|| bbb` segment in: <$out>');
 		Assert.isTrue(out.indexOf('||\n') == -1, 'op should stay attached to next operand, not lead the next line in: <$out>');
 		// Continuation indent at the inner `||` site: class body (1 tab)
@@ -66,68 +66,68 @@ class HxBinopGroupWrapSliceTest extends HxTestHelpers {
 		Assert.isTrue(out.indexOf('\n\t\t\t|| ') != -1, 'expected continuation `\\n\\t\\t\\t|| ` in: <$out>');
 	}
 
-	public function testNestedChainBreaksOuter():Void {
+	public function testNestedChainBreaksOuter(): Void {
 		// Outer && chain wide enough to break; inner subchains are short
 		// enough that each parenthesised sub-Group stays flat — the
 		// nested-Group invariant.
-		final src:String = 'class C { static function m():Void { dirty = (aaaaaaaa || bbbbbbbb) && (cccccccc || dddddddd) && (eeeeeeee || ffffffff); } }';
-		final out:String = writeWithLineWidth(src, 80);
+		final src: String = 'class C { static function m():Void { dirty = (aaaaaaaa || bbbbbbbb) && (cccccccc || dddddddd) && (eeeeeeee || ffffffff); } }';
+		final out: String = writeWithLineWidth(src, 80);
 		Assert.isTrue(out.indexOf('(aaaaaaaa || bbbbbbbb)') != -1, 'inner Or chain stayed flat in: <$out>');
 		Assert.isTrue(out.indexOf('\n\t\t\t&& ') != -1, 'expected outer `\\n\\t\\t\\t&& ` continuation in: <$out>');
 	}
 
-	public function testTightIntervalStaysFlat():Void {
+	public function testTightIntervalStaysFlat(): Void {
 		// `Interval` carries `@:fmt(tight)` → no Group wrap, no Line.
 		// The pair `0...1000000000` MUST stay glued even at narrow line
 		// widths.
-		final src:String = 'class C { static function m():Void { for (i in 0...1000000000) trace(i); } }';
-		final out:String = writeWithLineWidth(src, 40);
+		final src: String = 'class C { static function m():Void { for (i in 0...1000000000) trace(i); } }';
+		final out: String = writeWithLineWidth(src, 40);
 		Assert.isTrue(out.indexOf('0...1000000000') != -1, 'tight interval stayed flat in: <$out>');
 	}
 
-	public function testAssignmentBreakLandsInsideRhs():Void {
+	public function testAssignmentBreakLandsInsideRhs(): Void {
 		// Assignment `=` is prec=0 → flat emission preserved. The RHS
 		// `||` chain is non-assign and DOES wrap, so the break lands at
 		// each `||`, not at `=`. Expected shape (or close): `dirty = aaaa
 		// \n\t|| bbbb\n\t|| cccc...`.
-		final src:String = 'class C { static function m():Void { dirty = aaaaaaaaaaaa || bbbbbbbbbbbb || cccccccccccc || dddddddddddd || eeeeeeeeeeee; } }';
-		final out:String = writeWithLineWidth(src, 80);
+		final src: String = 'class C { static function m():Void { dirty = aaaaaaaaaaaa || bbbbbbbbbbbb || cccccccccccc || dddddddddddd || eeeeeeeeeeee; } }';
+		final out: String = writeWithLineWidth(src, 80);
 		Assert.isTrue(out.indexOf('=\n') == -1, '`=` should stay on the lead line, not be followed by hardline in: <$out>');
 		Assert.isTrue(out.indexOf('dirty = aaaaaaaaaaaa') != -1, '`dirty = aaaa…` lead-line shape preserved in: <$out>');
 	}
 
-	public function testRightAssocNullCoalChainBreaks():Void {
+	public function testRightAssocNullCoalChainBreaks(): Void {
 		// `??` is prec=2 right-assoc, NOT prec=0 → Group wrap applies.
-		final src:String = 'class C { static function m():Void { var v:Int = aaaaaaaaaaaa ?? bbbbbbbbbbbb ?? cccccccccccc ?? dddddddddddd ?? eeeeeeeeeeee; } }';
-		final out:String = writeWithLineWidth(src, 80);
+		final src: String = 'class C { static function m():Void { var v:Int = aaaaaaaaaaaa ?? bbbbbbbbbbbb ?? cccccccccccc ?? dddddddddddd ?? eeeeeeeeeeee; } }';
+		final out: String = writeWithLineWidth(src, 80);
 		Assert.isTrue(out.indexOf('?? bbbbbbbbbbbb') != -1, 'expected `?? bbb` in: <$out>');
 		Assert.isTrue(out.indexOf('\n\t\t\t?? ') != -1, 'expected continuation `\\n\\t\\t\\t?? ` in: <$out>');
 	}
 
-	public function testIsAsymmetricStaysGlued():Void {
+	public function testIsAsymmetricStaysGlued(): Void {
 		// `Is(left:HxExpr, right:HxType)` uses the asymmetric writer
 		// path — the right operand goes through the HxType writer. The
 		// new Group wrap must compose with the asymmetric path without
 		// breaking the `expr is Type` operand pair (the chain breaks
 		// happen at outer `&&`, not between `is` and its right type).
-		final src:String = 'class C { static function m():Void { if (xxxxxxxxxxxx is SomeReallyLongType && yyyyyyyyyyyy is OtherLongType) trace(0); } }';
-		final out:String = writeWithLineWidth(src, 80);
-		Assert.isTrue(out.indexOf('xxxxxxxxxxxx is SomeReallyLongType') != -1,
-			'`is` operand pair stayed glued in: <$out>');
+		final src: String = 'class C { static function m():Void { if (xxxxxxxxxxxx is SomeReallyLongType && yyyyyyyyyyyy is OtherLongType) trace(0); } }';
+		final out: String = writeWithLineWidth(src, 80);
+		Assert.isTrue(out.indexOf('xxxxxxxxxxxx is SomeReallyLongType') != -1, '`is` operand pair stayed glued in: <$out>');
 	}
 
-	public function testIdempotencyRoundTripLongChain():Void {
-		final src:String = 'class C { static function m():Void { dirty = aaaaaaaaaaaa || bbbbbbbbbbbb || cccccccccccc || dddddddddddd || eeeeeeeeeeee; } }';
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	public function testIdempotencyRoundTripLongChain(): Void {
+		final src: String = 'class C { static function m():Void { dirty = aaaaaaaaaaaa || bbbbbbbbbbbb || cccccccccccc || dddddddddddd || eeeeeeeeeeee; } }';
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.lineWidth = 80;
-		final w1:String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
-		final w2:String = HxModuleWriter.write(HaxeModuleParser.parse(w1), opts);
+		final w1: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+		final w2: String = HxModuleWriter.write(HaxeModuleParser.parse(w1), opts);
 		Assert.equals(w1, w2, 'idempotency failed for long-chain assignment: <$w1>');
 	}
 
-	private inline function writeWithLineWidth(src:String, width:Int):String {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	private inline function writeWithLineWidth(src: String, width: Int): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.lineWidth = width;
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}
+
 }

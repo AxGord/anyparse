@@ -31,65 +31,50 @@ import anyparse.grammar.haxe.HxModuleWriter;
 @:nullSafety(Strict)
 class HxSameLineOptionsTest extends Test {
 
-	public function new():Void {
+	public function new(): Void {
 		super();
 	}
 
-	public function testSameLineElseTrue():Void {
-		final out:String = writeWith(
-			'class F { function f():Void { if (x) {} else {} } }',
-			true, true, true
-		);
+	public function testSameLineElseTrue(): Void {
+		final out: String = writeWith('class F { function f():Void { if (x) {} else {} } }', true, true, true);
 		Assert.isTrue(out.indexOf('} else ') != -1, 'expected `} else ` in: <$out>');
 		Assert.isTrue(out.indexOf('}\nelse') == -1 && out.indexOf('}\n\telse') == -1, 'did not expect next-line `else` in: <$out>');
 	}
 
-	public function testSameLineElseFalse():Void {
-		final out:String = writeWith(
-			'class F { function f():Void { if (x) {} else {} } }',
-			false, true, true
-		);
+	public function testSameLineElseFalse(): Void {
+		final out: String = writeWith('class F { function f():Void { if (x) {} else {} } }', false, true, true);
 		Assert.isTrue(out.indexOf('} else ') == -1, 'did not expect `} else ` in: <$out>');
 		Assert.isTrue(out.indexOf('else') != -1, 'expected `else` keyword in: <$out>');
 	}
 
-	public function testSameLineCatchTrue():Void {
-		final out:String = writeWith(
-			'class F { function f():Void { try {} catch (e:E) {} } }',
-			true, true, true
-		);
+	public function testSameLineCatchTrue(): Void {
+		final out: String = writeWith('class F { function f():Void { try {} catch (e:E) {} } }', true, true, true);
 		Assert.isTrue(out.indexOf('} catch ') != -1, 'expected `} catch ` in: <$out>');
 	}
 
-	public function testSameLineCatchFalse():Void {
-		final out:String = writeWith(
-			'class F { function f():Void { try {} catch (e:E) {} } }',
-			true, false, true
-		);
+	public function testSameLineCatchFalse(): Void {
+		final out: String = writeWith('class F { function f():Void { try {} catch (e:E) {} } }', true, false, true);
 		Assert.isTrue(out.indexOf('} catch ') == -1, 'did not expect `} catch ` in: <$out>');
 		Assert.isTrue(out.indexOf('catch ') != -1, 'expected `catch ` keyword in: <$out>');
 	}
 
-	public function testSameLineCatchAppliesToEveryCatch():Void {
-		final out:String = writeWith(
-			'class F { function f():Void { try {} catch (a:E) {} catch (b:E) {} } }',
-			true, false, true
-		);
+	public function testSameLineCatchAppliesToEveryCatch(): Void {
+		final out: String = writeWith('class F { function f():Void { try {} catch (a:E) {} catch (b:E) {} } }', true, false, true);
 		// Both catches must break — neither sits on the same line as the preceding `}`.
 		Assert.isTrue(out.indexOf('} catch ') == -1, 'no `} catch ` expected in: <$out>');
-		final firstAt:Int = out.indexOf('catch (a');
-		final secondAt:Int = out.indexOf('catch (b');
+		final firstAt: Int = out.indexOf('catch (a');
+		final secondAt: Int = out.indexOf('catch (b');
 		Assert.isTrue(firstAt >= 0 && secondAt > firstAt, 'both catches expected in: <$out>');
 	}
 
-	public function testStatementBareTryBreaksByDefault():Void {
+	public function testStatementBareTryBreaksByDefault(): Void {
 		// ω-statement-bare-break: under default config (sameLineCatch=Same)
 		// a bare-body statement-form try-catch must still break to multi-line —
 		// `try\n\tBARE\ncatch (e:Any)\n\tBARE;` — matching haxe-formatter's
 		// auto-break for non-block statement-form try-catches (issue_21).
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
-		final src:String = 'class F { function f():Void { try trace("") catch (e:Any) trace(""); } }';
-		final out:String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final src: String = 'class F { function f():Void { try trace("") catch (e:Any) trace(""); } }';
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('try trace') == -1, 'bare body must break onto own line in: <$out>');
 		Assert.isTrue(out.indexOf('trace("") catch') == -1, 'catch must break onto own line in: <$out>');
 		Assert.isTrue(out.indexOf('catch (e:Any) trace') == -1, 'catch body must break onto own line in: <$out>');
@@ -97,91 +82,82 @@ class HxSameLineOptionsTest extends Test {
 		Assert.isTrue(out.indexOf('catch (e:Any)\n') != -1, 'expected hardline after catch parens in: <$out>');
 	}
 
-	public function testStatementBareTryBlockFormStillInline():Void {
+	public function testStatementBareTryBlockFormStillInline(): Void {
 		// ω-statement-bare-break: the bareBodyBreaks shape switch must keep
 		// the block-form (`try { … } catch (e:E) { … }`) inline at default
 		// `sameLineCatch=Same`. Block bodies route through `HxTryCatchStmt`
 		// (not `HxTryCatchStmtBare`) — verifies disambiguation via
 		// `tryBranch` source-order in `HxStatement` works as designed.
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
-		final src:String = 'class F { function f():Void { try {} catch (e:E) {} } }';
-		final out:String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final src: String = 'class F { function f():Void { try {} catch (e:E) {} } }';
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('} catch ') != -1, 'block-form `} catch ` must stay inline in: <$out>');
 	}
 
-	public function testStatementBareTryUnaffectedByExpressionTry():Void {
+	public function testStatementBareTryUnaffectedByExpressionTry(): Void {
 		// ω-statement-bare-break: statement-form bare-body try-catch is on
 		// a different grammar path than expression-form (`HxTryCatchStmtBare`
 		// vs `HxExpr.TryExpr`). `expressionTry=Same` (the inline default for
 		// expression-form one-liners) must NOT propagate to the statement-
 		// form bare layout — bare bodies still break here.
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.expressionTry = SameLinePolicy.Same;
-		final src:String = 'class F { function f():Void { try trace("") catch (e:Any) trace(""); } }';
-		final out:String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+		final src: String = 'class F { function f():Void { try trace("") catch (e:Any) trace(""); } }';
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('try trace') == -1, 'statement-form bare body must break regardless of expressionTry in: <$out>');
 		Assert.isTrue(out.indexOf('try\n') != -1, 'expected hardline after `try` in: <$out>');
 	}
 
-	public function testSameLineDoWhileTrue():Void {
-		final out:String = writeWith(
-			'class F { function f():Void { do {} while (x); } }',
-			true, true, true
-		);
+	public function testSameLineDoWhileTrue(): Void {
+		final out: String = writeWith('class F { function f():Void { do {} while (x); } }', true, true, true);
 		Assert.isTrue(out.indexOf('} while ') != -1, 'expected `} while ` in: <$out>');
 	}
 
-	public function testSameLineDoWhileFalse():Void {
-		final out:String = writeWith(
-			'class F { function f():Void { do {} while (x); } }',
-			true, true, false
-		);
+	public function testSameLineDoWhileFalse(): Void {
+		final out: String = writeWith('class F { function f():Void { do {} while (x); } }', true, true, false);
 		Assert.isTrue(out.indexOf('} while ') == -1, 'did not expect `} while ` in: <$out>');
 		Assert.isTrue(out.indexOf('while (x)') != -1, 'expected `while (x)` in: <$out>');
 	}
 
-	public function testAllFlagsFalseStillRoundTrips():Void {
-		final src:String = 'class F { function f():Void { if (x) {} else {} try {} catch (e:E) {} do {} while (x); } }';
-		final opts:HxModuleWriteOptions = makeOpts(false, false, false);
-		final ast1:HxModule = HaxeModuleParser.parse(src);
-		final out1:String = HxModuleWriter.write(ast1, opts);
-		final out2:String = HxModuleWriter.write(HaxeModuleParser.parse(out1), opts);
+	public function testAllFlagsFalseStillRoundTrips(): Void {
+		final src: String = 'class F { function f():Void { if (x) {} else {} try {} catch (e:E) {} do {} while (x); } }';
+		final opts: HxModuleWriteOptions = makeOpts(false, false, false);
+		final ast1: HxModule = HaxeModuleParser.parse(src);
+		final out1: String = HxModuleWriter.write(ast1, opts);
+		final out2: String = HxModuleWriter.write(HaxeModuleParser.parse(out1), opts);
 		Assert.equals(out1, out2);
 	}
 
-	public function testFlagsAreIndependent():Void {
+	public function testFlagsAreIndependent(): Void {
 		// Flip only sameLineCatch → else and while still same-line.
-		final out:String = writeWith(
-			'class F { function f():Void { if (x) {} else {} try {} catch (e:E) {} do {} while (x); } }',
-			true, false, true
+		final out: String = writeWith(
+			'class F { function f():Void { if (x) {} else {} try {} catch (e:E) {} do {} while (x); } }', true, false, true
 		);
 		Assert.isTrue(out.indexOf('} else ') != -1, 'else should stay same-line in: <$out>');
 		Assert.isTrue(out.indexOf('} while ') != -1, 'while should stay same-line in: <$out>');
 		Assert.isTrue(out.indexOf('} catch ') == -1, 'catch should break in: <$out>');
 	}
 
-	public function testDefaultsMatchHaxeFormatter():Void {
-		final defaults:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
+	public function testDefaultsMatchHaxeFormatter(): Void {
+		final defaults: HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
 		Assert.equals(SameLinePolicy.Same, defaults.sameLineElse);
 		Assert.equals(SameLinePolicy.Same, defaults.sameLineCatch);
 		Assert.equals(SameLinePolicy.Same, defaults.sameLineDoWhile);
 		Assert.equals(SameLinePolicy.Same, defaults.expressionTry);
 	}
 
-	public function testExpressionTrySameKeepsOneLiner():Void {
+	public function testExpressionTrySameKeepsOneLiner(): Void {
 		// expressionTry=Same → `try foo() catch (_:Any) null` stays inline.
-		final out:String = writeWithExpressionTry(
-			'class F { function f():Void { var x = try foo() catch (_:Any) null; } }',
-			SameLinePolicy.Same
+		final out: String = writeWithExpressionTry(
+			'class F { function f():Void { var x = try foo() catch (_:Any) null; } }', SameLinePolicy.Same
 		);
 		Assert.isTrue(out.indexOf('try foo() catch (_:Any) null;') != -1, 'expected one-liner expression try in: <$out>');
 	}
 
-	public function testExpressionTryNextSplits():Void {
+	public function testExpressionTryNextSplits(): Void {
 		// expressionTry=Next → body and each catch break onto own lines.
-		final out:String = writeWithExpressionTry(
-			'class F { function f():Void { var x = try foo() catch (_:Any) null; } }',
-			SameLinePolicy.Next
+		final out: String = writeWithExpressionTry(
+			'class F { function f():Void { var x = try foo() catch (_:Any) null; } }', SameLinePolicy.Next
 		);
 		Assert.isTrue(out.indexOf('try foo() catch (_:Any) null;') == -1, 'did not expect inline expression try in: <$out>');
 		Assert.isTrue(out.indexOf('catch (_:Any)') != -1, 'expected catch clause in: <$out>');
@@ -189,106 +165,101 @@ class HxSameLineOptionsTest extends Test {
 		Assert.isTrue(out.indexOf('foo() catch') == -1, 'catch should break onto own line in: <$out>');
 	}
 
-	public function testExpressionTryNextBreaksTryBody():Void {
+	public function testExpressionTryNextBreaksTryBody(): Void {
 		// ω-expression-try-body-break: expressionTry=Next must also break
 		// the body away from the `try` keyword — `try\n\t...\n\t\tfoo()`,
 		// not `try foo()`.
-		final out:String = writeWithExpressionTry(
-			'class F { function f():Void { var x = try foo() catch (_:Any) null; } }',
-			SameLinePolicy.Next
+		final out: String = writeWithExpressionTry(
+			'class F { function f():Void { var x = try foo() catch (_:Any) null; } }', SameLinePolicy.Next
 		);
 		Assert.isTrue(out.indexOf('try foo()') == -1, 'try body should break onto own line in: <$out>');
 		Assert.isTrue(out.indexOf('try\n') != -1, 'expected hardline immediately after try keyword in: <$out>');
 	}
 
-	public function testExpressionTryNextBreaksCatchBody():Void {
+	public function testExpressionTryNextBreaksCatchBody(): Void {
 		// ω-expression-try-body-break: expressionTry=Next must also break
 		// the catch body away from the catch parens — `catch (_:Any)\n\t...\n\t\tnull`,
 		// not `catch (_:Any) null`.
-		final out:String = writeWithExpressionTry(
-			'class F { function f():Void { var x = try foo() catch (_:Any) null; } }',
-			SameLinePolicy.Next
+		final out: String = writeWithExpressionTry(
+			'class F { function f():Void { var x = try foo() catch (_:Any) null; } }', SameLinePolicy.Next
 		);
 		Assert.isTrue(out.indexOf('catch (_:Any) null') == -1, 'catch body should break onto own line in: <$out>');
 		Assert.isTrue(out.indexOf('catch (_:Any)\n') != -1, 'expected hardline immediately after catch close paren in: <$out>');
 	}
 
-	public function testExpressionTrySameKeepsTryBodyInline():Void {
+	public function testExpressionTrySameKeepsTryBodyInline(): Void {
 		// expressionTry=Same → body and catch body stay inline with their
 		// preceding tokens. Asserts the bodyBreak `Same` branch keeps the
 		// pre-slice spacing byte-identical.
-		final out:String = writeWithExpressionTry(
-			'class F { function f():Void { var x = try foo() catch (_:Any) null; } }',
-			SameLinePolicy.Same
+		final out: String = writeWithExpressionTry(
+			'class F { function f():Void { var x = try foo() catch (_:Any) null; } }', SameLinePolicy.Same
 		);
 		Assert.isTrue(out.indexOf('try foo()') != -1, 'expected inline `try foo()` in: <$out>');
 		Assert.isTrue(out.indexOf('catch (_:Any) null') != -1, 'expected inline `catch (_:Any) null` in: <$out>');
 	}
 
-	public function testExpressionTryIndependentFromSameLineCatch():Void {
+	public function testExpressionTryIndependentFromSameLineCatch(): Void {
 		// sameLineCatch=Next must not affect expression-form when expressionTry=Same.
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.sameLineCatch = SameLinePolicy.Next;
 		opts.expressionTry = SameLinePolicy.Same;
-		final src:String = 'class F { function f():Void { var x = try foo() catch (_:Any) null; try {} catch (e:E) {} } }';
-		final out:String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+		final src: String = 'class F { function f():Void { var x = try foo() catch (_:Any) null; try {} catch (e:E) {} } }';
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('try foo() catch (_:Any) null;') != -1, 'expression form should stay inline in: <$out>');
 		Assert.isTrue(out.indexOf('} catch ') == -1, 'statement form catch should break in: <$out>');
 	}
 
-	public function testExpressionTryJsonNext():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"expressionTry": "next"}}');
+	public function testExpressionTryJsonNext(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"expressionTry": "next"}}');
 		Assert.equals(SameLinePolicy.Next, opts.expressionTry);
 		Assert.equals(SameLinePolicy.Same, opts.sameLineCatch);
 	}
 
-	public function testExpressionTryNextKeepsBlockBodyInline():Void {
+	public function testExpressionTryNextKeepsBlockBodyInline(): Void {
 		// ω-block-shape-aware: with expressionTry=Next, a block try body
 		// and block catch body still emit inline `try { … } catch (…) { … }`
 		// instead of breaking around the braces. Block bodies have their
 		// own visual structure — a hardline before `{` would split a
 		// brace pair.
-		final out:String = writeWithExpressionTry(
-			'class F { function f():Void { var x = try { foo(); } catch (_:Any) { null; }; } }',
-			SameLinePolicy.Next
+		final out: String = writeWithExpressionTry(
+			'class F { function f():Void { var x = try { foo(); } catch (_:Any) { null; }; } }', SameLinePolicy.Next
 		);
 		Assert.isTrue(out.indexOf('try {') != -1, 'expected inline `try {` (block body) in: <$out>');
 		Assert.isTrue(out.indexOf('} catch (_:Any) {') != -1, 'expected inline `} catch (_:Any) {` in: <$out>');
 		Assert.isTrue(out.indexOf('try\n') == -1, 'block-body try must not break onto own line in: <$out>');
 	}
 
-	public function testExpressionTryNextMixedBodiesShapeAware():Void {
+	public function testExpressionTryNextMixedBodiesShapeAware(): Void {
 		// ω-block-shape-aware: bare body breaks (existing behaviour),
 		// block body stays inline (new behaviour) — same `expressionTry=Next`,
 		// runtime ctor switch picks the layout per try-catch instance.
-		final src:String = 'class F { function f():Void { '
-			+ 'var a = try foo() catch (_:Any) null; '
-			+ 'var b = try { foo(); } catch (_:Any) { null; }; } }';
-		final out:String = writeWithExpressionTry(src, SameLinePolicy.Next);
+		final src: String = 'class F { function f():Void { '
+			+ 'var a = try foo() catch (_:Any) null; ' + 'var b = try { foo(); } catch (_:Any) { null; }; } }';
+		final out: String = writeWithExpressionTry(src, SameLinePolicy.Next);
 		Assert.isTrue(out.indexOf('try foo()') == -1, 'bare body should still break in: <$out>');
 		Assert.isTrue(out.indexOf('try {') != -1, 'block body should stay inline in: <$out>');
 		Assert.isTrue(out.indexOf('} catch (_:Any) {') != -1, 'block-body `} catch ... {` should stay inline in: <$out>');
 	}
 
-	public function testExpressionTryNextStatementFormUnaffectedByBlockShape():Void {
+	public function testExpressionTryNextStatementFormUnaffectedByBlockShape(): Void {
 		// Statement-form `HxTryCatchStmt` does NOT carry
 		// `@:fmt(blockBodyKeepsInline)` — `sameLineCatch=Next` must keep
 		// breaking `} catch` to `}\ncatch` regardless of body shape, mirroring
 		// haxe-formatter's `sameLine.tryCatch=next` contract.
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.sameLineCatch = SameLinePolicy.Next;
-		final src:String = 'class F { function f():Void { try {} catch (e:E) {} } }';
-		final out:String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+		final src: String = 'class F { function f():Void { try {} catch (e:E) {} } }';
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('} catch ') == -1, 'statement-form `} catch` must break in: <$out>');
 	}
 
-	private function writeWithExpressionTry(src:String, policy:SameLinePolicy):String {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	private function writeWithExpressionTry(src: String, policy: SameLinePolicy): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.expressionTry = policy;
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}
 
-	public function testSameLineElseInlineWhenBothBodiesSame():Void {
+	public function testSameLineElseInlineWhenBothBodiesSame(): Void {
 		// ω-expression-case-flat-fanout: when both `ifBody` and `elseBody`
 		// are runtime-`Same`, the entire if-else collapses inline — the
 		// ψ₉ shape-awareness suppression for non-block prevBody is itself
@@ -300,47 +271,45 @@ class HxSameLineOptionsTest extends Test {
 		// a programmatic caller sets `elseBody=Same` directly. Block-bodied
 		// then-branches still use the `sameLineElse` flag (see the sibling
 		// test below).
-		final out:String = writeWithBodyPolicy(
-			'class F { function f():Void { if (x) doA(); else doB(); } }',
-			anyparse.format.BodyPolicy.Same, anyparse.format.BodyPolicy.Same, true
+		final out: String = writeWithBodyPolicy(
+			'class F { function f():Void { if (x) doA(); else doB(); } }', anyparse.format.BodyPolicy.Same,
+			anyparse.format.BodyPolicy.Same, true
 		);
 		Assert.isTrue(out.indexOf('doA(); else doB();') != -1, 'expected `doA(); else doB();` inline in: <$out>');
 	}
 
-	public function testSameLineElseTrueHonoredByBlockThenBody():Void {
+	public function testSameLineElseTrueHonoredByBlockThenBody(): Void {
 		// ψ₉: when thenBody is a block, sameLineElse=true continues to
 		// emit `} else ` inline. This asserts the flag is still live
 		// for block-terminated branches.
-		final out:String = writeWith(
-			'class F { function f():Void { if (x) {} else {} } }',
-			true, true, true
-		);
+		final out: String = writeWith('class F { function f():Void { if (x) {} else {} } }', true, true, true);
 		Assert.isTrue(out.indexOf('} else ') != -1, 'expected `} else ` inline (block then) in: <$out>');
 	}
 
 	private function writeWithBodyPolicy(
-		src:String, ifBody:anyparse.format.BodyPolicy, elseBody:anyparse.format.BodyPolicy, sameLineElse:Bool
-	):String {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		src: String, ifBody: anyparse.format.BodyPolicy, elseBody: anyparse.format.BodyPolicy, sameLineElse: Bool
+	): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.sameLineElse = boolToSameLine(sameLineElse);
 		opts.ifBody = ifBody;
 		opts.elseBody = elseBody;
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}
 
-	private function writeWith(src:String, sameLineElse:Bool, sameLineCatch:Bool, sameLineDoWhile:Bool):String {
+	private function writeWith(src: String, sameLineElse: Bool, sameLineCatch: Bool, sameLineDoWhile: Bool): String {
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), makeOpts(sameLineElse, sameLineCatch, sameLineDoWhile));
 	}
 
-	private static inline function boolToSameLine(v:Bool):SameLinePolicy {
+	private static inline function boolToSameLine(v: Bool): SameLinePolicy {
 		return v ? SameLinePolicy.Same : SameLinePolicy.Next;
 	}
 
-	private function makeOpts(sameLineElse:Bool, sameLineCatch:Bool, sameLineDoWhile:Bool):HxModuleWriteOptions {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	private function makeOpts(sameLineElse: Bool, sameLineCatch: Bool, sameLineDoWhile: Bool): HxModuleWriteOptions {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.sameLineElse = boolToSameLine(sameLineElse);
 		opts.sameLineCatch = boolToSameLine(sameLineCatch);
 		opts.sameLineDoWhile = boolToSameLine(sameLineDoWhile);
 		return opts;
 	}
+
 }

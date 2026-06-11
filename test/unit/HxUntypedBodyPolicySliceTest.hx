@@ -35,93 +35,78 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 @:nullSafety(Strict)
 class HxUntypedBodyPolicySliceTest extends Test {
 
-	public function new():Void {
+	public function new(): Void {
 		super();
 	}
 
-	public function testDefaultIsSame():Void {
-		final defaults:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
+	public function testDefaultIsSame(): Void {
+		final defaults: HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
 		Assert.equals(BodyPolicy.Same, defaults.untypedBody);
 	}
 
-	public function testSameKeepsUntypedInline():Void {
-		final out:String = writeWith(
-			'class M { function f():Int untyped { return 1; } }',
-			BodyPolicy.Same
-		);
+	public function testSameKeepsUntypedInline(): Void {
+		final out: String = writeWith('class M { function f():Int untyped { return 1; } }', BodyPolicy.Same);
 		Assert.isTrue(out.indexOf(':Int untyped {') != -1, 'expected `:Int untyped {` cuddled in: <$out>');
 	}
 
-	public function testNextPushesUntypedToOwnLine():Void {
-		final out:String = writeWith(
-			'class M { function f():Int untyped { return 1; } }',
-			BodyPolicy.Next
-		);
+	public function testNextPushesUntypedToOwnLine(): Void {
+		final out: String = writeWith('class M { function f():Int untyped { return 1; } }', BodyPolicy.Next);
 		Assert.isTrue(out.indexOf(':Int untyped') == -1, 'did not expect inline `:Int untyped` in: <$out>');
 		Assert.isTrue(out.indexOf(':Int\n') != -1, 'expected hardline after `:Int` in: <$out>');
 		Assert.isTrue(out.indexOf('untyped {') != -1, 'expected `untyped {` after the break in: <$out>');
 	}
 
-	public function testTryBodyDefaultSameKeepsUntypedInline():Void {
+	public function testTryBodyDefaultSameKeepsUntypedInline(): Void {
 		// `try untyped { … }` with default `untypedBody=Same` cuddles
 		// the kw to `try` (`try untyped {…}`). The override fires
 		// (body is `UntypedBlockStmt`) but the chosen knob's `Same`
 		// layout still emits the inline space.
-		final out:String = writeWith(
-			'class M { function f():Void { try untyped { foo(); } catch (e:Dynamic) {} } }',
-			BodyPolicy.Same
-		);
+		final out: String = writeWith('class M { function f():Void { try untyped { foo(); } catch (e:Dynamic) {} } }', BodyPolicy.Same);
 		Assert.isTrue(out.indexOf('try untyped {') != -1, 'expected `try untyped {` inline with default Same in: <$out>');
 	}
 
-	public function testTryBodyNextPushesUntypedToOwnLine():Void {
+	public function testTryBodyNextPushesUntypedToOwnLine(): Void {
 		// `try untyped { … }` with `untypedBody=Next` overrides the
 		// parent's `tryBody` knob (default Same) and pushes `untyped`
 		// onto its own line at one indent step deeper.
-		final out:String = writeWith(
-			'class M { function f():Void { try untyped { foo(); } catch (e:Dynamic) {} } }',
-			BodyPolicy.Next
-		);
+		final out: String = writeWith('class M { function f():Void { try untyped { foo(); } catch (e:Dynamic) {} } }', BodyPolicy.Next);
 		Assert.isTrue(out.indexOf('try untyped') == -1, 'did not expect inline `try untyped` in: <$out>');
 		Assert.isTrue(out.indexOf('try\n') != -1, 'expected hardline after `try` in: <$out>');
 		Assert.isTrue(out.indexOf('untyped {') != -1, 'expected `untyped {` after the break in: <$out>');
 	}
 
-	public function testBlockStmtContextUnaffectedByUntypedBodyKnob():Void {
+	public function testBlockStmtContextUnaffectedByUntypedBodyKnob(): Void {
 		// `{ untyped { … } }` (UntypedBlockStmt under BlockStmt's Star)
 		// has no parent-side override — the Star's `\n<indent>`
 		// separator drives layout regardless of `untypedBody`. Both
 		// Same and Next produce the same output (cuddled to its own
 		// indented line).
-		final src:String = 'class M { function f():Void { untyped { foo(); } } }';
-		final outSame:String = writeWith(src, BodyPolicy.Same);
-		final outNext:String = writeWith(src, BodyPolicy.Next);
+		final src: String = 'class M { function f():Void { untyped { foo(); } } }';
+		final outSame: String = writeWith(src, BodyPolicy.Same);
+		final outNext: String = writeWith(src, BodyPolicy.Next);
 		Assert.equals(outSame, outNext);
 		Assert.isTrue(outSame.indexOf('\n\t\tuntyped {') != -1, 'expected block-stmt `untyped {` at +2 indent in: <$outSame>');
 	}
 
-	public function testConfigLoaderMapsUntypedBodySame():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"sameLine": {"untypedBody": "same"}}'
-		);
+	public function testConfigLoaderMapsUntypedBodySame(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"untypedBody": "same"}}');
 		Assert.equals(BodyPolicy.Same, opts.untypedBody);
 	}
 
-	public function testConfigLoaderMapsUntypedBodyNext():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"sameLine": {"untypedBody": "next"}}'
-		);
+	public function testConfigLoaderMapsUntypedBodyNext(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"untypedBody": "next"}}');
 		Assert.equals(BodyPolicy.Next, opts.untypedBody);
 	}
 
-	public function testConfigLoaderMissingKeyKeepsDefault():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	public function testConfigLoaderMissingKeyKeepsDefault(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		Assert.equals(BodyPolicy.Same, opts.untypedBody);
 	}
 
-	private inline function writeWith(src:String, policy:BodyPolicy):String {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	private inline function writeWith(src: String, policy: BodyPolicy): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.untypedBody = policy;
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}
+
 }

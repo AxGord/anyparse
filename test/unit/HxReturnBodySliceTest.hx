@@ -38,47 +38,47 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 @:nullSafety(Strict)
 class HxReturnBodySliceTest extends Test {
 
-	public function new():Void {
+	public function new(): Void {
 		super();
 	}
 
-	public function testDefaultIsFitLine():Void {
-		final defaults:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
+	public function testDefaultIsFitLine(): Void {
+		final defaults: HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
 		Assert.equals(BodyPolicy.FitLine, defaults.returnBody);
 	}
 
-	public function testSameKeepsValueFlat():Void {
-		final out:String = writeWith('class M { function f():Int { return 1; } }', BodyPolicy.Same);
+	public function testSameKeepsValueFlat(): Void {
+		final out: String = writeWith('class M { function f():Int { return 1; } }', BodyPolicy.Same);
 		Assert.isTrue(out.indexOf('return 1;') != -1, 'expected `return 1;` flat in: <$out>');
 	}
 
-	public function testNextBreaksShortValue():Void {
-		final out:String = writeWith('class M { function f():Int { return 1; } }', BodyPolicy.Next);
+	public function testNextBreaksShortValue(): Void {
+		final out: String = writeWith('class M { function f():Int { return 1; } }', BodyPolicy.Next);
 		Assert.isTrue(out.indexOf('return\n') != -1, 'expected hardline after `return` in: <$out>');
 		Assert.isTrue(out.indexOf('return 1;') == -1, 'did not expect `return 1;` flat in: <$out>');
 	}
 
-	public function testFitLineFitsShortValueFlat():Void {
-		final out:String = writeWith('class M { function f():Int { return 1; } }', BodyPolicy.FitLine);
+	public function testFitLineFitsShortValueFlat(): Void {
+		final out: String = writeWith('class M { function f():Int { return 1; } }', BodyPolicy.FitLine);
 		Assert.isTrue(out.indexOf('return 1;') != -1, 'expected `return 1;` flat (fits lineWidth) in: <$out>');
 	}
 
-	public function testFitLineBreaksLongValue():Void {
-		final buf:StringBuf = new StringBuf();
+	public function testFitLineBreaksLongValue(): Void {
+		final buf: StringBuf = new StringBuf();
 		for (i in 0...200) buf.add('-');
-		final longLit:String = '"' + buf.toString() + '"';
-		final src:String = 'class M { function f():String { return $longLit; } }';
-		final out:String = writeWith(src, BodyPolicy.FitLine);
+		final longLit: String = '"' + buf.toString() + '"';
+		final src: String = 'class M { function f():String { return $longLit; } }';
+		final out: String = writeWith(src, BodyPolicy.FitLine);
 		Assert.isTrue(out.indexOf('return\n') != -1, 'expected break before long value (>lineWidth) in: <$out>');
 	}
 
-	public function testKeepDoesNotForceLayout():Void {
-		final out:String = writeWith('class M { function f():Int { return 1; } }', BodyPolicy.Keep);
+	public function testKeepDoesNotForceLayout(): Void {
+		final out: String = writeWith('class M { function f():Int { return 1; } }', BodyPolicy.Keep);
 		Assert.isTrue(out.indexOf('return') != -1, 'sanity: `return` present in: <$out>');
 	}
 
-	public function testVoidReturnUnaffected():Void {
-		final out:String = writeWith('class M { function f():Void { return; } }', BodyPolicy.Next);
+	public function testVoidReturnUnaffected(): Void {
+		final out: String = writeWith('class M { function f():Void { return; } }', BodyPolicy.Next);
 		Assert.isTrue(out.indexOf('return;') != -1, 'void `return;` must stay flat regardless of policy in: <$out>');
 		Assert.isTrue(out.indexOf('return\n') == -1, 'void `return;` must not break in: <$out>');
 	}
@@ -93,61 +93,53 @@ class HxReturnBodySliceTest extends Test {
 	 *
 	 * Real-world fixture: `issue_546_wrapping_and_arrow_function.hxtest`.
 	 */
-	public function testFitLineMultilineValueStaysInline():Void {
-		final src:String = 'class M { static function f():Int { return foo(function() { var x = 1; return x; }); } }';
-		final out:String = writeWith(src, BodyPolicy.FitLine);
+	public function testFitLineMultilineValueStaysInline(): Void {
+		final src: String = 'class M { static function f():Int { return foo(function() { var x = 1; return x; }); } }';
+		final out: String = writeWith(src, BodyPolicy.FitLine);
 		Assert.isTrue(out.indexOf('return foo(') != -1, 'expected `return foo(` inline (multiline body) in: <$out>');
 		Assert.isTrue(out.indexOf('return\n') == -1, 'multiline value must NOT trigger kw-side break in: <$out>');
 	}
 
-	public function testConfigLoaderMapsReturnBodySame():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"sameLine": {"returnBody": "same"}}'
-		);
+	public function testConfigLoaderMapsReturnBodySame(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"returnBody": "same"}}');
 		Assert.equals(BodyPolicy.Same, opts.returnBody);
 	}
 
-	public function testConfigLoaderMapsReturnBodyNext():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"sameLine": {"returnBody": "next"}}'
-		);
+	public function testConfigLoaderMapsReturnBodyNext(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"returnBody": "next"}}');
 		Assert.equals(BodyPolicy.Next, opts.returnBody);
 	}
 
-	public function testConfigLoaderMapsReturnBodyKeep():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"sameLine": {"returnBody": "keep"}}'
-		);
+	public function testConfigLoaderMapsReturnBodyKeep(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"returnBody": "keep"}}');
 		Assert.equals(BodyPolicy.Keep, opts.returnBody);
 	}
 
-	public function testConfigLoaderMapsReturnBodyFitLine():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"sameLine": {"returnBody": "fitLine"}}'
-		);
+	public function testConfigLoaderMapsReturnBodyFitLine(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"returnBody": "fitLine"}}');
 		Assert.equals(BodyPolicy.FitLine, opts.returnBody);
 	}
 
-	public function testConfigLoaderMissingKeyKeepsDefault():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	public function testConfigLoaderMissingKeyKeepsDefault(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		Assert.equals(BodyPolicy.FitLine, opts.returnBody);
 	}
 
-	public function testConfigLoaderMapsReturnBodySingleLine():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+	public function testConfigLoaderMapsReturnBodySingleLine(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"sameLine": {"returnBody": "next", "returnBodySingleLine": "same"}}'
 		);
 		Assert.equals(BodyPolicy.Next, opts.returnBody);
 		Assert.equals(BodyPolicy.Same, opts.returnBodySingleLine);
 	}
 
-	public function testConfigLoaderReturnBodySingleLineDefault():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	public function testConfigLoaderReturnBodySingleLineDefault(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		Assert.equals(BodyPolicy.FitLine, opts.returnBodySingleLine);
 	}
 
-	private inline function writeWith(src:String, policy:BodyPolicy):String {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	private inline function writeWith(src: String, policy: BodyPolicy): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		// ω-return-body-single-line: set both axes so these mechanism tests
 		// observe `policy` regardless of whether the return value renders as a
 		// single line (driven by `returnBodySingleLine`) or multi-line / control-
@@ -158,4 +150,5 @@ class HxReturnBodySliceTest extends Test {
 		opts.returnBodySingleLine = policy;
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}
+
 }

@@ -33,96 +33,110 @@ import anyparse.grammar.haxe.HxModuleWriter;
 @:nullSafety(Strict)
 class HxAnonFuncParensOptionsTest extends Test {
 
-	public function new():Void {
+	public function new(): Void {
 		super();
 	}
 
-	public function testAnonFuncParensDefaultIsNone():Void {
-		final defaults:HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
+	public function testAnonFuncParensDefaultIsNone(): Void {
+		final defaults: HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
 		Assert.equals(WhitespacePolicy.None, defaults.anonFuncParens);
 	}
 
-	public function testAnonNoneCollapsesGap():Void {
-		final out:String = writeWith('class C { static function m() { handle(function() trace(0)); } }', WhitespacePolicy.None);
+	public function testAnonNoneCollapsesGap(): Void {
+		final out: String = writeWith('class C { static function m() { handle(function() trace(0)); } }', WhitespacePolicy.None);
 		Assert.isTrue(out.indexOf('function()') != -1, 'expected `function()` in: <$out>');
 		Assert.isTrue(out.indexOf('function ()') == -1, 'did not expect `function ()` in: <$out>');
 	}
 
-	public function testAnonBeforeEmitsSpace():Void {
-		final out:String = writeWith('class C { static function m() { handle(function() trace(0)); } }', WhitespacePolicy.Before);
+	public function testAnonBeforeEmitsSpace(): Void {
+		final out: String = writeWith('class C { static function m() { handle(function() trace(0)); } }', WhitespacePolicy.Before);
 		Assert.isTrue(out.indexOf('function ()') != -1, 'expected `function ()` in: <$out>');
 	}
 
-	public function testAnonBothEmitsSpace():Void {
-		final out:String = writeWith('class C { static function m() { handle(function() trace(0)); } }', WhitespacePolicy.Both);
+	public function testAnonBothEmitsSpace(): Void {
+		final out: String = writeWith('class C { static function m() { handle(function() trace(0)); } }', WhitespacePolicy.Both);
 		Assert.isTrue(out.indexOf('function ()') != -1, 'expected `function ()` in: <$out>');
 	}
 
-	public function testAnonAfterCollapsesGap():Void {
-		final out:String = writeWith('class C { static function m() { handle(function() trace(0)); } }', WhitespacePolicy.After);
+	public function testAnonAfterCollapsesGap(): Void {
+		final out: String = writeWith('class C { static function m() { handle(function() trace(0)); } }', WhitespacePolicy.After);
 		Assert.isTrue(out.indexOf('function()') != -1, 'expected `function()` in: <$out>');
 	}
 
-	public function testAnonWithParamsNone():Void {
-		final out:String = writeWith('class C { static function m() { call(function(r) trace(r)); } }', WhitespacePolicy.None);
+	public function testAnonWithParamsNone(): Void {
+		final out: String = writeWith('class C { static function m() { call(function(r) trace(r)); } }', WhitespacePolicy.None);
 		Assert.isTrue(out.indexOf('function(r)') != -1, 'expected `function(r)` in: <$out>');
 	}
 
-	public function testAnonWithParamsBefore():Void {
-		final out:String = writeWith('class C { static function m() { call(function(r) trace(r)); } }', WhitespacePolicy.Before);
+	public function testAnonWithParamsBefore(): Void {
+		final out: String = writeWith('class C { static function m() { call(function(r) trace(r)); } }', WhitespacePolicy.Before);
 		Assert.isTrue(out.indexOf('function (r)') != -1, 'expected `function (r)` in: <$out>');
 	}
 
-	public function testFnDeclUnaffectedByAnonFuncParens():Void {
+	public function testFnDeclUnaffectedByAnonFuncParens(): Void {
 		// Declaration-form `function m()` follows `funcParamParens` (None
 		// by default), independent of `anonFuncParens`. Flipping the anon
 		// knob to Before must NOT add a space inside the declaration.
-		for (policy in [WhitespacePolicy.None, WhitespacePolicy.Before, WhitespacePolicy.After, WhitespacePolicy.Both]) {
-			final out:String = writeWith('class C { static function m() { trace(0); } }', policy);
-			Assert.isTrue(out.indexOf('function m()') != -1,
-				'fn-decl `function m()` should stay tight under anonFuncParens=$policy in: <$out>');
+		for (
+			policy in [
+				WhitespacePolicy.None,
+				WhitespacePolicy.Before,
+				WhitespacePolicy.After,
+				WhitespacePolicy.Both
+			]
+		) {
+			final out: String = writeWith('class C { static function m() { trace(0); } }', policy);
+			Assert.isTrue(
+				out.indexOf('function m()') != -1, 'fn-decl `function m()` should stay tight under anonFuncParens=$policy in: <$out>'
+			);
 		}
 	}
 
-	public function testJsonBeforeMapsToBefore():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"whitespace": {"parenConfig": {"anonFuncParamParens": {"openingPolicy": "before"}}}}');
+	public function testJsonBeforeMapsToBefore(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"whitespace": {"parenConfig": {"anonFuncParamParens": {"openingPolicy": "before"}}}}'
+		);
 		Assert.equals(WhitespacePolicy.Before, opts.anonFuncParens);
 	}
 
-	public function testJsonAroundMapsToBoth():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"whitespace": {"parenConfig": {"anonFuncParamParens": {"openingPolicy": "around"}}}}');
+	public function testJsonAroundMapsToBoth(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"whitespace": {"parenConfig": {"anonFuncParamParens": {"openingPolicy": "around"}}}}'
+		);
 		Assert.equals(WhitespacePolicy.Both, opts.anonFuncParens);
 	}
 
-	public function testJsonNoneMapsToNone():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"whitespace": {"parenConfig": {"anonFuncParamParens": {"openingPolicy": "none"}}}}');
+	public function testJsonNoneMapsToNone(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"whitespace": {"parenConfig": {"anonFuncParamParens": {"openingPolicy": "none"}}}}'
+		);
 		Assert.equals(WhitespacePolicy.None, opts.anonFuncParens);
 	}
 
-	public function testJsonOnlyBeforeMapsToBefore():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"whitespace": {"parenConfig": {"anonFuncParamParens": {"openingPolicy": "onlyBefore"}}}}');
+	public function testJsonOnlyBeforeMapsToBefore(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"whitespace": {"parenConfig": {"anonFuncParamParens": {"openingPolicy": "onlyBefore"}}}}'
+		);
 		Assert.equals(WhitespacePolicy.Before, opts.anonFuncParens);
 	}
 
-	public function testJsonAnonAndFuncParamIndependent():Void {
+	public function testJsonAnonAndFuncParamIndependent(): Void {
 		// Setting only anonFuncParens via JSON must not alter funcParamParens.
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"whitespace": {"parenConfig": {"anonFuncParamParens": {"openingPolicy": "before"}}}}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"whitespace": {"parenConfig": {"anonFuncParamParens": {"openingPolicy": "before"}}}}'
+		);
 		Assert.equals(WhitespacePolicy.Before, opts.anonFuncParens);
 		Assert.equals(WhitespacePolicy.None, opts.funcParamParens);
 	}
 
-	private inline function writeWith(src:String, anonPolicy:WhitespacePolicy):String {
+	private inline function writeWith(src: String, anonPolicy: WhitespacePolicy): String {
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), makeOpts(anonPolicy));
 	}
 
-	private inline function makeOpts(anonPolicy:WhitespacePolicy):HxModuleWriteOptions {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	private inline function makeOpts(anonPolicy: WhitespacePolicy): HxModuleWriteOptions {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.anonFuncParens = anonPolicy;
 		return opts;
 	}
+
 }

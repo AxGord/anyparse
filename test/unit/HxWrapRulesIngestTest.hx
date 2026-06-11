@@ -26,57 +26,47 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 @:nullSafety(Strict)
 class HxWrapRulesIngestTest extends Test {
 
-	public function new():Void {
+	public function new(): Void {
 		super();
 	}
 
-	public function testSingleRuleWithSingleConditionIngested():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+	public function testSingleRuleWithSingleConditionIngested(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"wrapping":{"methodChain":{"defaultWrap":"noWrap","rules":['
-				+ '{"type":"onePerLine","conditions":[{"cond":"itemCount >= n","value":4}]}'
-				+ ']}}}'
+			+ '{"type":"onePerLine","conditions":[{"cond":"itemCount >= n","value":4}]}' + ']}}}'
 		);
 		Assert.equals(WrapMode.NoWrap, opts.methodChainWrap.defaultMode);
 		Assert.equals(1, opts.methodChainWrap.rules.length);
-		final rule:WrapRule = opts.methodChainWrap.rules[0];
+		final rule: WrapRule = opts.methodChainWrap.rules[0];
 		Assert.equals(WrapMode.OnePerLine, rule.mode);
 		Assert.equals(1, rule.conditions.length);
 		Assert.equals(WrapConditionType.ItemCountLargerThan, rule.conditions[0].cond);
 		Assert.equals(4, rule.conditions[0].value);
 	}
 
-	public function testMultipleConditionsAndAllPredicates():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"wrapping":{"methodChain":{"rules":['
-				+ '{"type":"noWrap","conditions":['
-				+ '{"cond":"itemCount <= n","value":3},'
-				+ '{"cond":"exceedsMaxLineLength","value":0}'
-				+ ']},'
-				+ '{"type":"onePerLineAfterFirst","conditions":['
-				+ '{"cond":"anyItemLength >= n","value":30},'
-				+ '{"cond":"allItemLengths < n","value":50}'
-				+ ']},'
-				+ '{"type":"fillLine","conditions":['
-				+ '{"cond":"totalItemLength <= n","value":80},'
-				+ '{"cond":"totalItemLength >= n","value":20}'
-				+ ']}'
-				+ ']}}}'
+	public function testMultipleConditionsAndAllPredicates(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"wrapping":{"methodChain":{"rules":[' + '{"type":"noWrap","conditions":[' + '{"cond":"itemCount <= n","value":3},'
+			+ '{"cond":"exceedsMaxLineLength","value":0}' + ']},' + '{"type":"onePerLineAfterFirst","conditions":['
+			+ '{"cond":"anyItemLength >= n","value":30},' + '{"cond":"allItemLengths < n","value":50}' + ']},'
+			+ '{"type":"fillLine","conditions":[' + '{"cond":"totalItemLength <= n","value":80},'
+			+ '{"cond":"totalItemLength >= n","value":20}' + ']}' + ']}}}'
 		);
 		Assert.equals(3, opts.methodChainWrap.rules.length);
-		final r0:WrapRule = opts.methodChainWrap.rules[0];
+		final r0: WrapRule = opts.methodChainWrap.rules[0];
 		Assert.equals(WrapMode.NoWrap, r0.mode);
 		Assert.equals(2, r0.conditions.length);
 		Assert.equals(WrapConditionType.ItemCountLessThan, r0.conditions[0].cond);
 		Assert.equals(3, r0.conditions[0].value);
 		Assert.equals(WrapConditionType.ExceedsMaxLineLength, r0.conditions[1].cond);
-		final r1:WrapRule = opts.methodChainWrap.rules[1];
+		final r1: WrapRule = opts.methodChainWrap.rules[1];
 		Assert.equals(WrapMode.OnePerLineAfterFirst, r1.mode);
 		Assert.equals(2, r1.conditions.length);
 		Assert.equals(WrapConditionType.AnyItemLengthLargerThan, r1.conditions[0].cond);
 		Assert.equals(30, r1.conditions[0].value);
 		Assert.equals(WrapConditionType.AllItemLengthsLessThan, r1.conditions[1].cond);
 		Assert.equals(50, r1.conditions[1].value);
-		final r2:WrapRule = opts.methodChainWrap.rules[2];
+		final r2: WrapRule = opts.methodChainWrap.rules[2];
 		Assert.equals(WrapMode.FillLine, r2.mode);
 		Assert.equals(2, r2.conditions.length);
 		Assert.equals(WrapConditionType.TotalItemLengthLessThan, r2.conditions[0].cond);
@@ -85,16 +75,11 @@ class HxWrapRulesIngestTest extends Test {
 		Assert.equals(20, r2.conditions[1].value);
 	}
 
-	public function testLineLengthCondIngested():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"wrapping":{"methodChain":{"rules":['
-				+ '{"type":"onePerLineAfterFirst","conditions":['
-				+ '{"cond":"lineLength >= n","value":160}'
-				+ ']},'
-				+ '{"type":"noWrap","conditions":['
-				+ '{"cond":"itemCount <= n","value":3}'
-				+ ']}'
-				+ ']}}}'
+	public function testLineLengthCondIngested(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"wrapping":{"methodChain":{"rules":[' + '{"type":"onePerLineAfterFirst","conditions":['
+			+ '{"cond":"lineLength >= n","value":160}' + ']},' + '{"type":"noWrap","conditions":[' + '{"cond":"itemCount <= n","value":3}'
+			+ ']}' + ']}}}'
 		);
 		Assert.equals(2, opts.methodChainWrap.rules.length);
 		Assert.equals(WrapMode.OnePerLineAfterFirst, opts.methodChainWrap.rules[0].mode);
@@ -103,55 +88,44 @@ class HxWrapRulesIngestTest extends Test {
 		Assert.equals(160, opts.methodChainWrap.rules[0].conditions[0].value);
 	}
 
-	public function testUnknownCondDropsRule():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"wrapping":{"methodChain":{"rules":['
-				+ '{"type":"onePerLineAfterFirst","conditions":['
-				+ '{"cond":"thisCondIsBogus >= n","value":42}'
-				+ ']},'
-				+ '{"type":"noWrap","conditions":['
-				+ '{"cond":"itemCount <= n","value":3}'
-				+ ']}'
-				+ ']}}}'
+	public function testUnknownCondDropsRule(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"wrapping":{"methodChain":{"rules":[' + '{"type":"onePerLineAfterFirst","conditions":['
+			+ '{"cond":"thisCondIsBogus >= n","value":42}' + ']},' + '{"type":"noWrap","conditions":['
+			+ '{"cond":"itemCount <= n","value":3}' + ']}' + ']}}}'
 		);
 		Assert.equals(1, opts.methodChainWrap.rules.length);
 		Assert.equals(WrapMode.NoWrap, opts.methodChainWrap.rules[0].mode);
 	}
 
-	public function testUnknownTypeDropsRule():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"wrapping":{"methodChain":{"rules":['
-				+ '{"type":"customMode","conditions":[{"cond":"itemCount >= n","value":7}]},'
-				+ '{"type":"onePerLine","conditions":[{"cond":"itemCount >= n","value":7}]}'
-				+ ']}}}'
+	public function testUnknownTypeDropsRule(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"wrapping":{"methodChain":{"rules":[' + '{"type":"customMode","conditions":[{"cond":"itemCount >= n","value":7}]},'
+			+ '{"type":"onePerLine","conditions":[{"cond":"itemCount >= n","value":7}]}' + ']}}}'
 		);
 		Assert.equals(1, opts.methodChainWrap.rules.length);
 		Assert.equals(WrapMode.OnePerLine, opts.methodChainWrap.rules[0].mode);
 	}
 
-	public function testEmptyRulesArrayResetsCascade():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+	public function testEmptyRulesArrayResetsCascade(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"wrapping":{"methodChain":{"defaultWrap":"onePerLine","rules":[]}}}'
 		);
 		Assert.equals(WrapMode.OnePerLine, opts.methodChainWrap.defaultMode);
 		Assert.equals(0, opts.methodChainWrap.rules.length);
 	}
 
-	public function testAbsentRulesPreservesBaselineCascade():Void {
-		final base:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"wrapping":{"methodChain":{"defaultWrap":"noWrap"}}}'
-		);
+	public function testAbsentRulesPreservesBaselineCascade(): Void {
+		final base: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"wrapping":{"methodChain":{"defaultWrap":"noWrap"}}}');
 		Assert.equals(base.methodChainWrap.rules.length, opts.methodChainWrap.rules.length);
 		Assert.equals(WrapMode.NoWrap, opts.methodChainWrap.defaultMode);
 	}
 
-	public function testArrayWrapAndAnonTypeShareTheSameIngest():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"wrapping":{'
-				+ '"arrayWrap":{"rules":[{"type":"onePerLine","conditions":[]}]},'
-				+ '"anonType":{"rules":[{"type":"fillLine","conditions":[]}]}'
-				+ '}}'
+	public function testArrayWrapAndAnonTypeShareTheSameIngest(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"wrapping":{' + '"arrayWrap":{"rules":[{"type":"onePerLine","conditions":[]}]},'
+			+ '"anonType":{"rules":[{"type":"fillLine","conditions":[]}]}' + '}}'
 		);
 		Assert.equals(1, opts.arrayLiteralWrap.rules.length);
 		Assert.equals(WrapMode.OnePerLine, opts.arrayLiteralWrap.rules[0].mode);
@@ -159,11 +133,9 @@ class HxWrapRulesIngestTest extends Test {
 		Assert.equals(WrapMode.FillLine, opts.anonTypeWrap.rules[0].mode);
 	}
 
-	public function testEmptyConditionsArrayProducesAlwaysFiringRule():Void {
-		final opts:HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"wrapping":{"methodChain":{"rules":['
-				+ '{"type":"onePerLine","conditions":[]}'
-				+ ']}}}'
+	public function testEmptyConditionsArrayProducesAlwaysFiringRule(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			'{"wrapping":{"methodChain":{"rules":[' + '{"type":"onePerLine","conditions":[]}' + ']}}}'
 		);
 		Assert.equals(1, opts.methodChainWrap.rules.length);
 		Assert.equals(0, opts.methodChainWrap.rules[0].conditions.length);
