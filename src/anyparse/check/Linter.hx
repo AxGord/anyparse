@@ -24,7 +24,7 @@ final class Linter {
 	 * receives the plugin).
 	 */
 	public static function builtins(): Array<Check> {
-		return [new UnusedImport()];
+		return [new UnusedImport(), new UnusedLocal()];
 	}
 
 	/** The built-in check whose `id()` equals `id`, or null. */

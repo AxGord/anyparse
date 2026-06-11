@@ -611,7 +611,7 @@ final class RefactorSupport {
 	 * the span is returned unchanged, so a sibling on the same line is not
 	 * touched — the writer re-emit then tidies the residual spacing.
 	 */
-	private static function lineExtendedSpan(source: String, span: Span): Span {
+	public static function lineExtendedSpan(source: String, span: Span): Span {
 		var from: Int = span.from;
 		while (from > 0) {
 			final c: Int = StringTools.fastCodeAt(source, from - 1);
@@ -672,6 +672,126 @@ final class RefactorSupport {
 		while (j >= 0 && isSpace(StringTools.fastCodeAt(source, j))) j--;
 		if (j >= 0 && StringTools.fastCodeAt(source, j) == ','.code) return true;
 
+		return false;
+	}
+
+	/**
+	 * Node kinds an expression subtree may contain and still be
+	 * SIDE-EFFECT-FREE: literals, bare identifiers, parenthesised groups, and
+	 * the pure binary / unary / ternary operators. The string-payload leaf
+	 * `Literal` is included so a plain (non-interpolated) string passes — an
+	 * INTERPOLATED string instead nests `Ident` / `Block` children (the
+	 * spliced expression / variable), neither of which is whitelisted, so it
+	 * is correctly excluded. The increment / decrement ctors are deliberately
+	 * absent — they mutate their operand. Shared by `Inline` (inline-var
+	 * substitution safety) and the `unused-local` check (delete-fix safety).
+	 */
+	private static final SAFE_KINDS: Array<String> = [
+		// Literals + the plain-string content leaf.
+		'IntLit',
+		'FloatLit',
+		'BoolLit',
+		'NullLit',
+		'DoubleStringExpr',
+		'SingleStringExpr',
+		'Literal',
+		// Bare identifier + paren group.
+		'IdentExpr',
+		'ParenExpr',
+		// Binary operators (HxExpr Pratt set, mutating assigns excluded).
+		'Add',
+		'Sub',
+		'Mul',
+		'Div',
+		'Mod',
+		'And',
+		'Or',
+		'Eq',
+		'NotEq',
+		'Lt',
+		'Gt',
+		'LtEq',
+		'GtEq',
+		'BitAnd',
+		'BitOr',
+		'BitXor',
+		'Shl',
+		'Shr',
+		'UShr',
+		'NullCoal',
+		// Unary operators + ternary.
+		'Neg',
+		'Not',
+		'BitNot',
+		'Ternary',
+	];
+
+	/**
+	 * Is every node kind in `node`'s subtree side-effect-free per `SAFE_KINDS`?
+	 * A strict WHITELIST: an unknown kind fails the walk, so the verdict is
+	 * conservative — a missed-but-safe kind costs a spurious `false`, never an
+	 * unsafe `true`. Calls, field / index access, object / array / map literals,
+	 * lambdas, `new`, assignments, increment / decrement, and interpolated
+	 * strings embedding any of these all fall outside the whitelist and yield
+	 * `false`.
+	 */
+	public static function isSideEffectFree(node: QueryNode): Bool {
+		var safe: Bool = true;
+		function walk(n: QueryNode): Void {
+			if (!safe) return;
+			if (!isSafeKind(n.kind)) {
+				safe = false;
+				return;
+			}
+			for (c in n.children) walk(c);
+		}
+		walk(node);
+		return safe;
+	}
+
+	/**
+	 * A node kind that contributes no side effect on its own: an enumerated
+	 * `SAFE_KINDS` member, or any leaf whose kind ends with `Lit` / `StringExpr`
+	 * (a literal payload not separately enumerated).
+	 */
+	private static inline function isSafeKind(kind: String): Bool {
+		return SAFE_KINDS.contains(kind) || StringTools.endsWith(kind, 'Lit') || StringTools.endsWith(kind, 'StringExpr');
+	}
+
+	/**
+	 * Does `name` occur as a word-boundary identifier token within
+	 * `source[from, end)` at an offset that lies inside none of `excluded`?
+	 * The conservative "is this name referenced" primitive shared by the
+	 * dead-code checks: `unused-import` scans the whole file excluding the
+	 * import statements; `unused-local` scans a declaration's enclosing scope
+	 * excluding the declaration itself. Word-boundary = a non-identifier char on
+	 * both sides, so `name` does not match inside `nameSuffix`. A textual scan
+	 * (not an AST projection) is deliberate: it catches reference forms the
+	 * grammar hides under non-obvious ctors (`'$name'` simple interpolation,
+	 * macro reification) at the cost of also counting the name in comments /
+	 * strings — which only ever keeps a binding, never wrongly deletes one.
+	 * `end` is clamped to the source length.
+	 */
+	public static function referencedInRange(source: String, name: String, from: Int, end: Int, excluded: Array<Span>): Bool {
+		final len: Int = name.length;
+		if (len == 0) return false;
+		final stop: Int = end <= source.length ? end : source.length;
+		var i: Int = from;
+		while (i + len <= stop) {
+			final at: Int = source.indexOf(name, i);
+			if (at < 0 || at + len > stop) return false;
+			final beforeOk: Bool = at == 0 || !isIdentChar(StringTools.fastCodeAt(source, at - 1));
+			final afterIdx: Int = at + len;
+			final afterOk: Bool = afterIdx >= source.length || !isIdentChar(StringTools.fastCodeAt(source, afterIdx));
+			if (beforeOk && afterOk && !offsetWithinAny(at, excluded)) return true;
+			i = at + 1;
+		}
+		return false;
+	}
+
+	/** Is `offset` inside any of `spans` (`from`-inclusive, `to`-exclusive)? */
+	private static function offsetWithinAny(offset: Int, spans: Array<Span>): Bool {
+		for (s in spans) if (offset >= s.from && offset < s.to) return true;
 		return false;
 	}
 

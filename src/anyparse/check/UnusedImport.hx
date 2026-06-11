@@ -98,7 +98,7 @@ final class UnusedImport implements Check {
 				out.push(make(file, imp, Severity.Info, 'using import \'${imp.raw}\': extension use not tracked'));
 			case _:
 				final bound: String = imp.alias ?? lastSegment(imp.raw);
-				if (!referencedOutsideImports(source, bound, importSpans))
+				if (!RefactorSupport.referencedInRange(source, bound, 0, source.length, importSpans))
 					out.push(make(file, imp, Severity.Warning, 'unused import \'${imp.raw}\''));
 		}
 	}
@@ -111,36 +111,6 @@ final class UnusedImport implements Check {
 			severity: severity,
 			message: message
 		};
-	}
-
-	/**
-	 * Does `name` occur as a word-boundary identifier token anywhere in
-	 * `source` OUTSIDE every import statement (`importSpans`)? Excluding the
-	 * import ranges is what stops an import — and an alias, whose own
-	 * statement contains the bound name verbatim — from "referencing itself".
-	 * Word-boundary (non-identifier char on both sides) so `Foo` does not
-	 * match inside `FooBar`.
-	 */
-	private static function referencedOutsideImports(source: String, name: String, importSpans: Array<Span>): Bool {
-		final len: Int = name.length;
-		if (len == 0) return false;
-		var i: Int = 0;
-		while (i + len <= source.length) {
-			final at: Int = source.indexOf(name, i);
-			if (at < 0) return false;
-			final beforeOk: Bool = at == 0 || !RefactorSupport.isIdentChar(StringTools.fastCodeAt(source, at - 1));
-			final afterIdx: Int = at + len;
-			final afterOk: Bool = afterIdx >= source.length || !RefactorSupport.isIdentChar(StringTools.fastCodeAt(source, afterIdx));
-			if (beforeOk && afterOk && !withinAny(at, importSpans)) return true;
-			i = at + 1;
-		}
-		return false;
-	}
-
-	/** Is `offset` inside any of `spans` (`from`-inclusive, `to`-exclusive)? */
-	private static function withinAny(offset: Int, spans: Array<Span>): Bool {
-		for (s in spans) if (offset >= s.from && offset < s.to) return true;
-		return false;
 	}
 
 	/** Last dot-segment of a path (`pkg.Mod.Sub` -> `Sub`); the whole string when undotted. */

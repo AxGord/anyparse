@@ -324,6 +324,7 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 				'ForExpr',
 				'CatchClause',
 			],
+			opaqueKinds: ['MacroExpr'],
 		};
 	}
 

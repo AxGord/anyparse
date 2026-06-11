@@ -221,33 +221,18 @@ typedef RefShape = {
 	var scopeKinds: Array<String>;
 	var writeParentKinds: Array<String>;
 	var selfScopeDeclKinds: Array<String>;
-}
 
-/**
- * Plugin-declared contract for `apq meta`. The walker reads these
- * slots and never inspects grammar-specific node types.
- *
- * `metaKinds` is the set of `QueryNode.kind` values the plugin
- * produces for a leading metadata annotation on a declaration (for
- * Haxe: the `HxMetadata` enum ctors — `MetaCall` for `@:name(args)`,
- * `Meta` for the paren-less `@:name`, `PlainMeta` for the verbatim
- * raw catch-all). Each such node carries the verbatim annotation tag
- * in its `name` slot; for the `MetaCall` form its argument
- * expressions are its children. For the raw catch-all form the
- * `name` slot is the entire raw slice (tag plus parenthesised args
- * inline) — the walker splits it on the first `(`.
- *
- * `declHostKinds` is the set of node kinds an annotation attaches to
- * — the same binding-declaration kinds declared in `RefShape`. The
- * walker attributes an annotation node to the nearest following
- * sibling whose kind is in this set (annotations precede their
- * declaration in source, and the plugin emits children in source
- * order). When no following decl-host sibling exists the annotation
- * falls back to the nearest enclosing decl-host ancestor — this is
- * the documented v1 behaviour for expression-level metadata, which
- * attributes to its enclosing declaration rather than a finer
- * expression target.
- */
+	/**
+	 * Node kinds whose SUBTREE is opaque to textual reference analysis —
+	 * metaprogramming reification where an identifier's uses are injected by
+	 * splicing rather than written literally (Haxe's `macro { … }`, surfaced as
+	 * `MacroExpr`). A reference-analysis check (e.g. `unused-local`) must not
+	 * flag a binding declared inside such a subtree: its uses may be spliced in
+	 * from elsewhere and are invisible to a source scan. Optional — a grammar
+	 * with no reification leaves it unset (treated as empty).
+	 */
+	@:optional var opaqueKinds: Array<String>;
+}
 @:nullSafety(Strict)
 typedef MetaShape = {
 	var metaKinds: Array<String>;

@@ -59,57 +59,6 @@ enum InlineResult {
 final class Inline {
 
 	/**
-	 * Kinds the initializer subtree may contain and still be inline-safe:
-	 * literals, bare identifiers, parenthesised groups, and the
-	 * side-effect-free binary / unary / ternary operators. The string
-	 * payload leaf `Literal` is included so a plain (non-interpolated)
-	 * string passes — an INTERPOLATED string instead carries `Ident` /
-	 * `Block` children (the spliced expression / variable), neither of
-	 * which is whitelisted, so it is correctly refused. The increment /
-	 * decrement ctors (`PreIncr` / `PostIncr` / `PreDecr` / `PostDecr`)
-	 * are deliberately absent — they mutate their operand.
-	 */
-	private static final SAFE_KINDS: Array<String> = [
-		// Literals + the plain-string content leaf.
-		'IntLit',
-		'FloatLit',
-		'BoolLit',
-		'NullLit',
-		'DoubleStringExpr',
-		'SingleStringExpr',
-		'Literal',
-		// Bare identifier + paren group.
-		'IdentExpr',
-		'ParenExpr',
-		// Binary operators (HxExpr Pratt set, mutating assigns excluded).
-		'Add',
-		'Sub',
-		'Mul',
-		'Div',
-		'Mod',
-		'And',
-		'Or',
-		'Eq',
-		'NotEq',
-		'Lt',
-		'Gt',
-		'LtEq',
-		'GtEq',
-		'BitAnd',
-		'BitOr',
-		'BitXor',
-		'Shl',
-		'Shr',
-		'UShr',
-		'NullCoal',
-		// Unary operators + ternary.
-		'Neg',
-		'Not',
-		'BitNot',
-		'Ternary',
-	];
-
-	/**
 	 * Initializer root kinds that are atomic primaries — they never need
 	 * parentheses when substituted into an arbitrary expression context.
 	 * An operator root (binary / unary / ternary) is wrapped in `(...)`
@@ -190,7 +139,7 @@ final class Inline {
 		if (reads.length == 0) return Err('"$name" has no reads to inline');
 
 		// The initializer subtree must be entirely inline-safe.
-		if (!isInlineSafe(initializer))
+		if (!RefactorSupport.isSideEffectFree(initializer))
 			return Err('"$name" initializer is not inline-safe (contains calls/field-access/collection/lambda)');
 
 		// Every free identifier the initializer reads must be a stable
@@ -230,30 +179,6 @@ final class Inline {
 			return Err('rewritten source does not parse: ${exception.message}');
 
 		return Ok(rewritten);
-	}
-
-	/**
-	 * Is every node kind in `init`'s subtree in the inline-safe whitelist?
-	 * A leaf whose kind ends with `Lit` or `StringExpr` is treated as a
-	 * literal even if not enumerated, but interpolation children (`Ident`
-	 * / `Block` / `Call`) are not whitelisted and therefore fail the walk.
-	 */
-	private static function isInlineSafe(init: QueryNode): Bool {
-		var safe: Bool = true;
-		function walk(node: QueryNode): Void {
-			if (!safe) return;
-			if (!isSafeKind(node.kind)) {
-				safe = false;
-				return;
-			}
-			for (c in node.children) walk(c);
-		}
-		walk(init);
-		return safe;
-	}
-
-	private static inline function isSafeKind(kind: String): Bool {
-		return SAFE_KINDS.contains(kind) || StringTools.endsWith(kind, 'Lit') || StringTools.endsWith(kind, 'StringExpr');
 	}
 
 	/**

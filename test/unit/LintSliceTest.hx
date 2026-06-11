@@ -15,6 +15,8 @@ import anyparse.runtime.Span.Position;
 
 using StringTools;
 
+import anyparse.check.UnusedLocal;
+
 /**
  * The analysis/check layer — the generic `Linter` framework and its first
  * check `unused-import`. Each test drives an IN-MEMORY `(file, source)`
@@ -104,7 +106,7 @@ class LintSliceTest extends Test {
 	public function testLinterFrameworkAndRegistry(): Void {
 		Assert.notNull(Linter.byId('unused-import'));
 		Assert.isNull(Linter.byId('does-not-exist'));
-		Assert.equals(1, Linter.builtins().length);
+		Assert.equals(2, Linter.builtins().length);
 
 		final files = [{ file: 'pkg/C.hx', source: 'package pkg;\nimport a.b.Unused;\nclass C {}' }];
 		final viaDefault: Array<Violation> = Linter.run(files, plugin());
@@ -188,6 +190,105 @@ class LintSliceTest extends Test {
 
 	private static function plugin(): HaxeQueryPlugin {
 		return new HaxeQueryPlugin();
+	}
+
+	/**
+	 * A local `final` / `var` declared and never read is flagged `Warning` at
+	 * its own declaration; a sibling statement that does not mention it is no
+	 * use.
+	 */
+	public function testUnusedLocalFlagged(): Void {
+		final src: String = 'class C {\n\tfunction f() {\n\t\tfinal x:Int = 1;\n\t\ttrace(1);\n\t}\n}';
+		final vs: Array<Violation> = new UnusedLocal().run([{ file: 'C.hx', source: src }], plugin());
+
+		Assert.equals(1, vs.length);
+		final v: Violation = vs[0];
+		Assert.equals('unused-local', v.rule);
+		Assert.equals(Severity.Warning, v.severity);
+		Assert.isTrue(v.message.contains("'x'"));
+
+		final span: Null<Span> = v.span;
+		Assert.notNull(span);
+		if (span != null) {
+			final pos: Position = span.lineCol(src);
+			Assert.equals(3, pos.line);
+		}
+	}
+
+	/** A local that is read by a later statement is not flagged. */
+	public function testUsedLocalNotFlagged(): Void {
+		final src: String = 'class C {\n\tfunction f() {\n\t\tfinal x:Int = 1;\n\t\ttrace(x);\n\t}\n}';
+		final vs: Array<Violation> = new UnusedLocal().run([{ file: 'C.hx', source: src }], plugin());
+		Assert.equals(0, vs.length);
+	}
+
+	/**
+	 * A local used only through simple string interpolation (`'$name'`, an
+	 * `Ident` the reference walker does not surface) is kept — the raw scan
+	 * sees the name and refuses to flag it.
+	 */
+	public function testInterpolationCountsAsUse(): Void {
+		final src: String = "class C {\n\tfunction f() {\n\t\tfinal name:String = \"a\";\n\t\ttrace('$name');\n\t}\n}";
+		final vs: Array<Violation> = new UnusedLocal().run([{ file: 'C.hx', source: src }], plugin());
+		Assert.equals(0, vs.length);
+	}
+
+	/**
+	 * The scan is bounded to the declaration's enclosing scope: an unused `v`
+	 * in one function is flagged even though another function has a used `v` of
+	 * the same name.
+	 */
+	public function testScopeBoundedScan(): Void {
+		final src: String = 'class C {\n\tfunction a() {\n\t\tfinal v:Int = 1;\n\t}\n\tfunction b() {\n\t\tfinal v:Int = 2;\n\t\ttrace(v);\n\t}\n}';
+		final vs: Array<Violation> = new UnusedLocal().run([{ file: 'C.hx', source: src }], plugin());
+		Assert.equals(1, vs.length);
+	}
+
+	/** An unused function parameter is not a local — it is left alone. */
+	public function testParameterNotFlagged(): Void {
+		final src: String = 'class C {\n\tfunction f(p:Int) {\n\t\ttrace(1);\n\t}\n}';
+		final vs: Array<Violation> = new UnusedLocal().run([{ file: 'C.hx', source: src }], plugin());
+		Assert.equals(0, vs.length);
+	}
+
+	/**
+	 * The autofix deletes an unused local whose initializer is side-effect-free,
+	 * leaving the rest of the body intact.
+	 */
+	public function testFixDeletesSideEffectFreeLocal(): Void {
+		final src: String = 'class C {\n\tfunction f() {\n\t\tfinal x:Int = 1;\n\t\ttrace(1);\n\t}\n}';
+		final check: UnusedLocal = new UnusedLocal();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin());
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin());
+		switch RefactorSupport.canonicalize(src, edits, true, plugin()) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf('final x') == -1);
+				Assert.isTrue(text.indexOf('trace(1)') >= 0);
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+		}
+	}
+
+	/**
+	 * The autofix refuses to delete an unused local with a side-effecting
+	 * initializer (a call) — the binding is reported but the side effect is
+	 * preserved.
+	 */
+	public function testFixSkipsSideEffectingInit(): Void {
+		final src: String = 'class C {\n\tfunction f() {\n\t\tfinal x:Int = compute();\n\t\ttrace(1);\n\t}\n}';
+		final check: UnusedLocal = new UnusedLocal();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin());
+		Assert.equals(1, vs.length);
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin());
+		Assert.equals(0, edits.length);
+	}
+
+	/** `unused-local` is registered in the default check set alongside `unused-import`. */
+	public function testUnusedLocalRegisteredInBuiltins(): Void {
+		Assert.notNull(Linter.byId('unused-local'));
+		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
+		Assert.isTrue(ids.contains('unused-local'));
+		Assert.isTrue(ids.contains('unused-import'));
 	}
 
 }
