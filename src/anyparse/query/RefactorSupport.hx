@@ -459,4 +459,82 @@ final class RefactorSupport {
 		}
 	}
 
+	/**
+	 * Sibling node kinds a declaration's modifiers and metadata project to —
+	 * emitted BEFORE the decl they modify (`public static function` is
+	 * `(Public)(Static)(FnMember)`; `@:meta` is `(Meta)`). `declGroupSpan`
+	 * folds a run of these plus the decl into one logical element so a
+	 * structural edit treats the whole `[@:meta modifiers… decl]` as a unit,
+	 * not the decl keyword alone. `final` is NOT here — it WRAPS its decl
+	 * (`FinalDecl` / `FinalModifiedMember` / `FinalMember`) instead of
+	 * projecting to a separate sibling.
+	 */
+	private static final MODIFIER_META_KINDS: Array<String> = [
+		'Meta',
+		'Public',
+		'Private',
+		'Static',
+		'Inline',
+		'Override',
+		'Macro',
+		'Extern',
+		'Dynamic'
+	];
+
+	/**
+	 * The source span of the LOGICAL declaration at `node` — a decl together
+	 * with the modifier / metadata sibling nodes that precede it. Modifiers
+	 * (`public` / `private` / `static` / `inline` / `override` / `macro` /
+	 * `extern` / `dynamic`) and `@:meta` project to separate siblings BEFORE
+	 * the decl they modify, so an edit on the whole declaration must span from
+	 * the FIRST of them, and a cursor that resolves to a modifier sibling
+	 * targets the decl that follows it. Any element that is not part of a
+	 * modifier-decl group (a statement, an array / call element, a package
+	 * decl) keeps its own span.
+	 *
+	 * Shared by `add-element` (insert OUTSIDE the group) and `replace-node`
+	 * (replace the WHOLE declaration, modifiers included).
+	 */
+	public static function declGroupSpan(node: QueryNode, parent: Null<QueryNode>, nodeSpan: Span): Span {
+		if (parent == null) return nodeSpan;
+		final siblings: Array<QueryNode> = parent.children;
+		final i: Int = siblings.indexOf(node);
+		if (i < 0) return nodeSpan;
+
+		// The decl is the cursor node, or — when the cursor is on a modifier /
+		// meta sibling — the first following sibling that is not one.
+		var declIndex: Int = i;
+		while (declIndex < siblings.length && MODIFIER_META_KINDS.contains(siblings[declIndex].kind)) declIndex++;
+		if (declIndex >= siblings.length) return nodeSpan;
+
+		// Walk back over the modifier / meta run that precedes the decl.
+		var startIndex: Int = declIndex;
+		while (startIndex > 0 && MODIFIER_META_KINDS.contains(siblings[startIndex - 1].kind)) startIndex--;
+
+		// No modifier / meta run AND the cursor is the decl itself → not a
+		// group; leave the span untouched (statements, list elements).
+		if (startIndex == declIndex && declIndex == i) return nodeSpan;
+
+		final startSpan: Null<Span> = siblings[startIndex].span;
+		final declSpan: Null<Span> = siblings[declIndex].span;
+		if (startSpan == null || declSpan == null) return nodeSpan;
+		return new Span(startSpan.from, declSpan.to);
+	}
+
+	/**
+	 * The parent of `target` within `root`'s subtree (by reference identity),
+	 * or null when `target` is `root` itself or is absent. A depth-first walk
+	 * — the query trees the ops resolve against are shallow, so this is cheap;
+	 * it gives `declGroupSpan` the sibling context a `--select` / `--at`
+	 * resolved node does not carry on its own.
+	 */
+	public static function parentOf(root: QueryNode, target: QueryNode): Null<QueryNode> {
+		for (child in root.children) {
+			if (child == target) return root;
+			final found: Null<QueryNode> = parentOf(child, target);
+			if (found != null) return found;
+		}
+		return null;
+	}
+
 }

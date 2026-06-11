@@ -81,7 +81,16 @@ final class ReplaceNode {
 		final span: Null<Span> = node.span;
 		if (span == null) return Err('the resolved ${node.kind} node has no source span to replace');
 
-		final edit: { span: Span, text: String } = { span: span, text: newSource };
+		// Fold a modifier-decorated declaration into one unit: `private static
+		// function f` projects to `(Private)(Static)(FnMember)`, and a
+		// `--select FnMember` / `--at` cursor resolves only the `function …`
+		// node. Expand the replaced range to the whole `[@:meta modifiers…
+		// decl]` group so the replacement is the full declaration as written
+		// (modifiers included), not a fragment that would duplicate the
+		// surviving modifier siblings. A non-decl node (expression, statement,
+		// package) has no modifier run, so `declGroupSpan` returns it intact.
+		final groupSpan: Span = RefactorSupport.declGroupSpan(node, RefactorSupport.parentOf(tree, node), span);
+		final edit: { span: Span, text: String } = { span: groupSpan, text: newSource };
 		return RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);
 	}
 

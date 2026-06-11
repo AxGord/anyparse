@@ -91,6 +91,27 @@ class ReplaceNodeSliceTest extends Test {
 		assertRefused(source, BySelector('FnMember:f'), 'function h():Void {}');
 	}
 
+	/**
+	 * Replace a MODIFIER-decorated method. `private static function f`
+	 * projects to `(Private)(Static)(FnMember)`, so `--select FnMember`
+	 * resolves only the `function …` node; the replaced range folds in the
+	 * preceding modifier siblings (`RefactorSupport.declGroupSpan`) so the
+	 * replacement is the FULL declaration as written — `private static` is
+	 * REPLACED, not duplicated ahead of a second `private static`.
+	 */
+	public function testReplaceFoldsModifierGroup():Void {
+		final source:String =
+			'class C {\n'
+			+ '\tprivate static function f():Void {}\n'
+			+ '}\n';
+		final expected:String =
+			'class C {\n'
+			+ '\tprivate static function g():Int\n'
+			+ '\t\treturn 0;\n'
+			+ '}\n';
+		assertReplace(source, BySelector('FnMember:f'), 'private static function g():Int return 0;', expected);
+	}
+
 	private function assertReplace(source:String, target:ReplaceTarget, newSource:String, expected:String, reformat:Bool = false):Void {
 		final result:EditResult = replaceOf(source, target, newSource, reformat);
 		switch result {

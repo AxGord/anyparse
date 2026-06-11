@@ -98,28 +98,6 @@ final class AddElement {
 	];
 
 	/**
-	 * Sibling node kinds a declaration's modifiers and metadata project to —
-	 * emitted BEFORE the decl they modify (`public static function` is
-	 * `(Public)(Static)(FnMember)`; `@:meta` is `(Meta)`). `declGroupSpan`
-	 * folds a run of these plus the decl into one logical element so a
-	 * sibling insert lands OUTSIDE the whole `[@:meta modifiers… decl]`
-	 * group, not between a modifier and its decl. `final` is NOT here — it
-	 * WRAPS its decl (`FinalDecl` / `FinalModifiedMember` / `FinalMember`)
-	 * instead of projecting to a separate sibling.
-	 */
-	private static final MODIFIER_META_KINDS: Array<String> = [
-		'Meta',
-		'Public',
-		'Private',
-		'Static',
-		'Inline',
-		'Override',
-		'Macro',
-		'Extern',
-		'Dynamic'
-	];
-
-	/**
 	 * Insert `code` as a new sibling element on `side` of the element whose
 	 * first token is at `line:col` in `source`. `reformat` opts into a
 	 * whole-file canonicalisation when the source is not already
@@ -156,7 +134,7 @@ final class AddElement {
 		// insert lands outside the whole `[@:meta modifiers… decl]` group, not
 		// between a modifier and its decl (and a cursor on a modifier targets
 		// the decl it precedes). A non-decl element keeps its own span.
-		final span: Span = declGroupSpan(element, parent, elemSpan);
+		final span: Span = RefactorSupport.declGroupSpan(element, parent, elemSpan);
 		var isComma: Bool = adjacentToComma(source, span);
 		if (!isComma && parent != null) isComma = COMMA_CONTAINER_KINDS.contains(parent.kind);
 
@@ -301,45 +279,6 @@ final class AddElement {
 		}
 		walk(tree, null);
 		return result;
-	}
-
-	/**
-	 * The source span of the LOGICAL declaration at the cursor element — a
-	 * decl together with the modifier / metadata sibling nodes that precede
-	 * it. Modifiers (`public` / `private` / `static` / `inline` / `override`
-	 * / `macro` / `extern` / `dynamic`) and `@:meta` project to separate
-	 * siblings BEFORE the decl they modify, so inserting BEFORE such a decl
-	 * must land before the FIRST of them (not between the modifiers and the
-	 * decl keyword), and a cursor that resolves to a modifier sibling targets
-	 * the decl that follows it. Inserting AFTER lands at the decl's end — the
-	 * modifiers precede it, so they do not move the end. Any element that is
-	 * not part of a modifier-decl group (a statement, an array / call element)
-	 * keeps its own span.
-	 */
-	private static function declGroupSpan(node: QueryNode, parent: Null<QueryNode>, nodeSpan: Span): Span {
-		if (parent == null) return nodeSpan;
-		final siblings: Array<QueryNode> = parent.children;
-		final i: Int = siblings.indexOf(node);
-		if (i < 0) return nodeSpan;
-
-		// The decl is the cursor node, or — when the cursor is on a modifier /
-		// meta sibling — the first following sibling that is not one.
-		var declIndex: Int = i;
-		while (declIndex < siblings.length && MODIFIER_META_KINDS.contains(siblings[declIndex].kind)) declIndex++;
-		if (declIndex >= siblings.length) return nodeSpan;
-
-		// Walk back over the modifier / meta run that precedes the decl.
-		var startIndex: Int = declIndex;
-		while (startIndex > 0 && MODIFIER_META_KINDS.contains(siblings[startIndex - 1].kind)) startIndex--;
-
-		// No modifier / meta run AND the cursor is the decl itself → not a
-		// group; leave the span untouched (statements, list elements).
-		if (startIndex == declIndex && declIndex == i) return nodeSpan;
-
-		final startSpan: Null<Span> = siblings[startIndex].span;
-		final declSpan: Null<Span> = siblings[declIndex].span;
-		if (startSpan == null || declSpan == null) return nodeSpan;
-		return new Span(startSpan.from, declSpan.to);
 	}
 
 	/**
