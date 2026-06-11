@@ -6,7 +6,6 @@ import anyparse.format.BracePlacement;
 import anyparse.format.CommentEmptyLinesPolicy;
 import anyparse.format.ConditionalIndentationPolicy;
 import anyparse.format.EmptyCurly;
-import anyparse.format.IndentChar;
 import anyparse.format.KeepEmptyLinesPolicy;
 import anyparse.format.KeywordPlacement;
 import anyparse.format.MetadataLineEndPolicy;

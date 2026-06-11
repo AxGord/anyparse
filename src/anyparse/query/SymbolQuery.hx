@@ -1,9 +1,5 @@
 package anyparse.query;
 
-import anyparse.query.SymbolIndex.FileInfo;
-import anyparse.query.SymbolIndex.TypeDeclInfo;
-import anyparse.runtime.Span;
-
 /**
  * One row of the `apq symbols` listing: a top-level type declaration
  * resolved to its canonical import path plus its source coordinate.

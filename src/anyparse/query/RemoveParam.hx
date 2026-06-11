@@ -1,6 +1,5 @@
 package anyparse.query;
 
-import anyparse.query.CallSites.CollectResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;

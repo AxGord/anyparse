@@ -5,7 +5,6 @@ import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
-import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;

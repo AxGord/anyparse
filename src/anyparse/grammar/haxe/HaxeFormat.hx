@@ -8,7 +8,6 @@ import anyparse.format.CommentStyle;
 import anyparse.format.ConditionalIndentationPolicy;
 import anyparse.format.EmptyCurly;
 import anyparse.format.Encoding;
-import anyparse.format.IndentChar;
 import anyparse.format.KeepEmptyLinesPolicy;
 import anyparse.format.KeywordPlacement;
 import anyparse.format.MetadataLineEndPolicy;

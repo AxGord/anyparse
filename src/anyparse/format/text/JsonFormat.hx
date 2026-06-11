@@ -1,9 +1,7 @@
 package anyparse.format.text;
 
 import anyparse.format.ArrayMatrixWrap;
-import anyparse.format.CommentStyle;
 import anyparse.format.Encoding;
-import anyparse.format.IndentChar;
 import anyparse.format.WriteOptions;
 import anyparse.format.text.TextFormat.BlockCommentDelims;
 import anyparse.format.text.TextFormat.BoolLiterals;
