@@ -1,5 +1,9 @@
 package anyparse.query;
 
+import anyparse.check.Check;
+import anyparse.check.Check.Violation;
+import anyparse.check.Linter;
+import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.MetaShape;
 import anyparse.query.GrammarPlugin.RefShape;
@@ -367,6 +371,8 @@ final class Cli {
 				return runImporters(rest);
 			case 'declares':
 				return runDeclares(rest);
+			case 'lint':
+				return runLint(rest);
 			case 'inline':
 				return runInline(rest);
 			case 'inline-method':
@@ -1035,6 +1041,126 @@ final class Cli {
 		else if (rows.length > 1) stderr('apq declares: ambiguous — ${rows.length} declarations of "$name"\n');
 		for (row in rows) sysPrint('${SymbolQuery.formatSymbolRow(row)}\n');
 		return EXIT_OK;
+	}
+
+	/**
+	 * `apq lint <scope> [--rule <id>]... [--all] [--flat] [--lang <name>]`
+	 * — run the analysis checks over `<scope>` (one or more file/dir/glob
+	 * specs) and report violations grouped by file, reusing the walker
+	 * reporter (`Text.renderViolations`). `--rule` selects a subset of the
+	 * built-in checks by id (repeatable); the default runs all of them.
+	 *
+	 * Findings go to stdout grouped per file; a severity breakdown goes to
+	 * stderr so stdout stays a clean list. `Info` advisories (e.g.
+	 * unverifiable wildcard / `using` imports) are hidden unless `--all` is
+	 * given, but always counted in the summary. The exit code is success
+	 * regardless of findings — `lint` is a report, like `symbols`.
+	 */
+	private static function runLint(args: Array<String>): Int {
+		var lang: String = 'haxe';
+		var flat: Bool = false;
+		var includeInfo: Bool = false;
+		final ruleFilters: Array<String> = [];
+		final inputSpecs: Array<String> = [];
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--rule':
+					ruleFilters.push(expectValue(args, ++i, '--rule'));
+				case '--all', '-a':
+					includeInfo = true;
+				case '--flat':
+					flat = true;
+				case '-h', '--help':
+					printLintUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq lint: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					inputSpecs.push(a);
+			}
+			i++;
+		}
+		if (inputSpecs.length == 0) {
+			stderr('apq lint: expected <scope> (one or more file/dir/glob specs)\n');
+			printLintUsage();
+			return EXIT_USAGE;
+		}
+
+		final checks: Array<Check> = [];
+		if (ruleFilters.length == 0) {
+			for (check in Linter.builtins()) checks.push(check);
+		} else {
+			for (id in ruleFilters) {
+				final check: Null<Check> = Linter.byId(id);
+				if (check == null) {
+					stderr('apq lint: unknown rule "$id"\n');
+					return EXIT_USAGE;
+				}
+				checks.push(check);
+			}
+		}
+
+		final plugin: GrammarPlugin = pickPlugin(lang);
+		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
+		final paths: Array<String> = expanded.paths;
+		if (paths.length == 0) {
+			stderr('apq lint: ${inputSpecs.join(", ")} matched no .hx files\n');
+			return EXIT_RUNTIME;
+		}
+
+		final files: Array<{ file: String, source: String }> = [];
+		final sourceOf: Map<String, String> = new Map();
+		for (path in paths) {
+			final fileSource: String = try readSourceForParse(path) catch (exception: Exception) {
+				stderr('apq lint: $path: ${exception.message}\n');
+				return EXIT_RUNTIME;
+			};
+			files.push({ file: path, source: fileSource });
+			sourceOf[path] = fileSource;
+		}
+
+		final all: Array<Violation> = Linter.run(files, plugin, checks);
+		final shown: Array<Violation> = includeInfo ? all : all.filter(v -> v.severity != Severity.Info);
+
+		// Group the shown violations by file, in input-file order, each group
+		// sorted by source position so the report reads top-to-bottom.
+		for (path in paths) {
+			final group: Array<Violation> = shown.filter(v -> v.file == path);
+			if (group.length == 0) continue;
+			group.sort((a, b) -> spanStart(a.span) - spanStart(b.span));
+			sysPrint(Text.renderViolations(path, sourceOf[path] ?? '', group, flat));
+		}
+
+		var errors: Int = 0;
+		var warnings: Int = 0;
+		var infos: Int = 0;
+		for (v in all) switch v.severity {
+			case Severity.Error:
+				errors++;
+			case Severity.Warning:
+				warnings++;
+			case Severity.Info:
+				infos++;
+		}
+		if (all.length == 0) {
+			stderr('apq lint: no issues in ${paths.length} file(s)\n');
+		} else {
+			stderr('apq lint: $errors error(s), $warnings warning(s), $infos info(s) in ${paths.length} file(s)\n');
+			if (!includeInfo && infos > 0) stderr('apq lint: $infos info advisory(ies) hidden — pass --all to show\n');
+		}
+		return EXIT_OK;
+	}
+
+	/** Source-offset sort key for a violation span; null spans sort last. */
+	private static inline function spanStart(span: Null<Span>): Int {
+		return span != null ? span.from : 0x7FFFFFFF;
 	}
 
 	/**
@@ -8105,6 +8231,7 @@ final class Cli {
 		sysPrint('  symbols       List top-level type declarations across a scope (cross-file)\n');
 		sysPrint('  importers     List files importing a given module (cross-file)\n');
 		sysPrint('  declares      Declaration site(s) of one named type (ambiguity check)\n');
+		sysPrint('  lint          Run analysis checks and report violations (e.g. unused-import)\n');
 		sysPrint('  inline        Inline a local variable into its uses\n');
 		sysPrint('  inline-method Inline a single-return function into its call sites + delete it\n');
 		sysPrint('  extract-var   Hoist an expression into a new local final\n');
@@ -8173,6 +8300,22 @@ final class Cli {
 		sysPrint('scope. The focused, single-type counterpart of symbols.\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
+		sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
+		sysPrint('  -h, --help      Show this help\n');
+	}
+
+	private static function printLintUsage(): Void {
+		sysPrint('Usage: apq lint <scope...> [options]\n');
+		sysPrint('\n');
+		sysPrint('Run the analysis checks over the scope (one or more file/dir/glob specs) and\n');
+		sysPrint('report violations grouped by file as <line>:<col>: [severity] message (rule).\n');
+		sysPrint('Info advisories are hidden unless --all; the exit code is success regardless\n');
+		sysPrint('of findings. Built-in checks: unused-import.\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --rule <id>     Run only this check (repeatable; default: all)\n');
+		sysPrint('  --all, -a       Include Info-severity advisories in the report\n');
+		sysPrint('  --flat          One <file>:<line>:<col> per line (no per-file grouping)\n');
 		sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
 		sysPrint('  -h, --help      Show this help\n');
 	}

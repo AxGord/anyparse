@@ -1,5 +1,7 @@
 package anyparse.query.format;
 
+import anyparse.check.Check.Violation;
+import anyparse.check.Severity;
 import anyparse.format.text.SExprFormat;
 import anyparse.grammar.sexpr.SValue;
 import anyparse.grammar.sexpr.SValueWriter;
@@ -141,6 +143,38 @@ final class Text {
 			final dn: Null<String> = h.declName;
 			if (dn != null) buf.add(' $dn');
 			buf.add('\n');
+		}
+		return buf.toString();
+	}
+
+	/**
+	 * Grouped-by-file rendering of check violations, sister to
+	 * `renderRefs` / `renderUses` / `renderMeta`. Each line is
+	 * `  <line>:<col>: [<severity>] <message> (<rule>)`; a violation with
+	 * no span (the check could not resolve one) renders `(no-span)` in the
+	 * coordinate slot, matching `renderMeta`. The caller groups violations
+	 * per file and passes the matching source for coordinate resolution.
+	 */
+	public static function renderViolations(file: String, source: String, violations: Array<Violation>, flat: Bool = false): String {
+		if (violations.length == 0) return '$file: no violations\n';
+		final buf: StringBuf = new StringBuf();
+		if (!flat) buf.add('$file:\n');
+		for (v in violations) {
+			final span: Null<Span> = v.span;
+			if (span != null) {
+				final pos: Position = span.lineCol(source);
+				if (flat)
+					buf.add('$file:${pos.line}:${pos.col - 1}: ');
+				else
+					buf.add('  ${pos.line}:${pos.col - 1}: ');
+			} else {
+				if (flat)
+					buf.add('$file: ');
+				else
+					buf.add('  (no-span): ');
+			}
+			final severity: Severity = v.severity;
+			buf.add('[${severity.label()}] ${v.message} (${v.rule})\n');
 		}
 		return buf.toString();
 	}
