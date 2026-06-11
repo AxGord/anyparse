@@ -79,6 +79,49 @@ class ReplaceNodeSliceTest extends Test {
 		assertReplace(source, BySelector('FnMember:f'), 'private static function g():Int return 0;', expected);
 	}
 
+	/**
+	 * `--at <l>:<c> --kind <Kind>` (`ByKindPosition`) reaches a co-starting
+	 * node plain `--at` skips past: the cursor sits on `b` inside `a + b * c`,
+	 * `--kind Mul` selects the whole `b * c` subtree (innermost overall would
+	 * be `IdentExpr b`).
+	 */
+	public function testReplaceByKindMul(): Void {
+		final source: String = 'class C {\n' + '\tfunction f():Void {\n' + '\t\tvar x = a + b * c;\n' + '\t}\n' + '}\n';
+		final expected: String = 'class C {\n' + '\tfunction f():Void {\n' + '\t\tvar x = a + q;\n' + '\t}\n' + '}\n';
+		assertReplace(source, ByKindPosition(3, 14, 'Mul'), 'q', expected, true);
+	}
+
+	/** `--kind Add` at the left operand selects the whole `a + b * c` Add. */
+	public function testReplaceByKindAdd(): Void {
+		final source: String = 'class C {\n' + '\tfunction f():Void {\n' + '\t\tvar x = a + b * c;\n' + '\t}\n' + '}\n';
+		final expected: String = 'class C {\n' + '\tfunction f():Void {\n' + '\t\tvar x = z;\n' + '\t}\n' + '}\n';
+		assertReplace(source, ByKindPosition(3, 10, 'Add'), 'z', expected, true);
+	}
+
+	/** A cursor with no node of the requested kind is refused. */
+	public function testRefuseKindNoMatch(): Void {
+		final source: String = 'class C {\n' + '\tfunction f():Void {\n' + '\t\tvar x = a + b;\n' + '\t}\n' + '}\n';
+		assertRefused(source, ByKindPosition(3, 10, 'Mul'), 'q', true);
+	}
+
+	/**
+	 * `--with-doc` extends the replaced range over the leading doc comment, so
+	 * the new source rewrites the declaration AND its documentation block.
+	 */
+	public function testReplaceWithDoc(): Void {
+		final source: String = 'class C {\n' + '\t/** old */\n' + '\tpublic function f():Void {}\n' + '}\n';
+		final expected: String = 'class C {\n' + '\t/** new */\n' + '\tpublic function g():Void {}\n' + '}\n';
+		final result: EditResult = ReplaceNode.replaceNode(
+			source, ByKindPosition(3, 8, 'FnMember'), '/** new */\npublic function g():Void {}', true, new HaxeQueryPlugin(), true
+		);
+		switch result {
+			case Ok(text):
+				Assert.equals(expected, text);
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
 	private function assertReplace(
 		source: String, target: ReplaceTarget, newSource: String, expected: String, reformat: Bool = false
 	): Void {

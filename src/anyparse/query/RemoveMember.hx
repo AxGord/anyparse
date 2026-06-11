@@ -23,7 +23,8 @@ final class RemoveMember {
 	 * not already writer-canonical. Returns `Ok(rewritten)` or an `Err`.
 	 */
 	public static function removeMember(
-		source: String, typeName: String, memberName: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
+		source: String, typeName: String, memberName: String, reformat: Bool, plugin: GrammarPlugin, withDoc: Bool = false,
+		?optsJson: String
 	): EditResult {
 		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
 			'source does not parse: ${exception.toString()}'
@@ -39,7 +40,7 @@ final class RemoveMember {
 		if (members.length > 1) return Err('ambiguous — "$memberName" matches ${members.length} members in "$typeName"');
 
 		final hit: { node: QueryNode, parent: QueryNode } = members[0];
-		return RefactorSupport.deleteNode(source, hit.node, hit.parent, reformat, plugin, optsJson);
+		return RefactorSupport.deleteNode(source, hit.node, hit.parent, reformat, plugin, withDoc, optsJson);
 	}
 
 	/** The node whose `typeDeclOf().name == typeName`, first in pre-order. */

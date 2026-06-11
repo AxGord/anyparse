@@ -33,7 +33,7 @@ final class RemoveElement {
 	 * source is never mutated.
 	 */
 	public static function removeElement(
-		source: String, line: Int, col: Int, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
+		source: String, line: Int, col: Int, reformat: Bool, plugin: GrammarPlugin, withDoc: Bool = false, ?optsJson: String
 	): EditResult {
 		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
 			'source does not parse: ${exception.toString()}'
@@ -51,7 +51,7 @@ final class RemoveElement {
 				);
 
 		final parent: Null<QueryNode> = RefactorSupport.parentOf(tree, node);
-		return RefactorSupport.deleteNode(source, node, parent, reformat, plugin, optsJson);
+		return RefactorSupport.deleteNode(source, node, parent, reformat, plugin, withDoc, optsJson);
 	}
 
 }

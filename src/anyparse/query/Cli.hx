@@ -1985,6 +1985,7 @@ final class Cli {
 		var lang: String = 'haxe';
 		var write: Bool = false;
 		var reformat: Bool = false;
+		var withDoc: Bool = false;
 		var file: Null<String> = null;
 		var posSpec: Null<String> = null;
 
@@ -1998,6 +1999,8 @@ final class Cli {
 					write = true;
 				case '--reformat':
 					reformat = true;
+				case '--with-doc':
+					withDoc = true;
 				case '-h', '--help':
 					printRemoveElementUsage();
 					return EXIT_OK;
@@ -2036,7 +2039,7 @@ final class Cli {
 		final plugin: GrammarPlugin = pickPlugin(lang);
 		final optsJson: Null<String> = discoverFormatConfig(filePath);
 		return finishEdit(
-			'remove-element', filePath, write, RemoveElement.removeElement(source, pos.line, pos.col, reformat, plugin, optsJson)
+			'remove-element', filePath, write, RemoveElement.removeElement(source, pos.line, pos.col, reformat, plugin, withDoc, optsJson)
 		);
 	}
 
@@ -2110,6 +2113,7 @@ final class Cli {
 		var lang: String = 'haxe';
 		var write: Bool = false;
 		var reformat: Bool = false;
+		var withDoc: Bool = false;
 		var typeName: Null<String> = null;
 		var file: Null<String> = null;
 		var memberName: Null<String> = null;
@@ -2126,6 +2130,8 @@ final class Cli {
 					write = true;
 				case '--reformat':
 					reformat = true;
+				case '--with-doc':
+					withDoc = true;
 				case '-h', '--help':
 					printRemoveMemberUsage();
 					return EXIT_OK;
@@ -2160,7 +2166,9 @@ final class Cli {
 		};
 		final plugin: GrammarPlugin = pickPlugin(lang);
 		final optsJson: Null<String> = discoverFormatConfig(filePath);
-		return finishEdit('remove-member', filePath, write, RemoveMember.removeMember(source, type, member, reformat, plugin, optsJson));
+		return finishEdit(
+			'remove-member', filePath, write, RemoveMember.removeMember(source, type, member, reformat, plugin, withDoc, optsJson)
+		);
 	}
 
 	/**
@@ -2183,6 +2191,8 @@ final class Cli {
 		var reformat: Bool = false;
 		var selectExpr: Null<String> = null;
 		var atSpec: Null<String> = null;
+		var kind: Null<String> = null;
+		var withDoc: Bool = false;
 		var file: Null<String> = null;
 		var newSource: Null<String> = null;
 		var fromFile: Null<String> = null;
@@ -2197,6 +2207,10 @@ final class Cli {
 					selectExpr = expectValue(args, ++i, '--select');
 				case '--at':
 					atSpec = expectValue(args, ++i, '--at');
+				case '--kind':
+					kind = expectValue(args, ++i, '--kind');
+				case '--with-doc':
+					withDoc = true;
 				case '--from-file':
 					fromFile = expectValue(args, ++i, '--from-file');
 				case '--write':
@@ -2237,6 +2251,11 @@ final class Cli {
 			stderr('apq replace-node: provide exactly one of --select <sel> or --at <line>:<col>\n');
 			return EXIT_USAGE;
 		}
+		// --kind narrows --at to a node of that kind; it has no meaning with --select.
+		if (kind != null && atSpec == null) {
+			stderr('apq replace-node: --kind requires --at <line>:<col>\n');
+			return EXIT_USAGE;
+		}
 
 		final target: ReplaceTarget = if (selectExpr != null)
 			BySelector(selectExpr);
@@ -2246,7 +2265,7 @@ final class Cli {
 				stderr('apq replace-node: malformed position "$atSpec" — expected <line>:<col>\n');
 				return EXIT_USAGE;
 			}
-			ByPosition(pos.line, pos.col);
+			kind != null ? ByKindPosition(pos.line, pos.col, kind) : ByPosition(pos.line, pos.col);
 		} else {
 			// Unreachable given the exactly-one guard above; keeps the
 			// if-expression exhaustive and null-safe.
@@ -2263,20 +2282,9 @@ final class Cli {
 
 		final plugin: GrammarPlugin = pickPlugin(lang);
 		final optsJson: Null<String> = discoverFormatConfig(filePath);
-		final result: EditResult = ReplaceNode.replaceNode(source, target, newSrc, reformat, plugin, optsJson);
-		switch result {
-			case Ok(text):
-				if (write) {
-					writeFile(filePath, text);
-					stderr('apq replace-node: wrote $filePath\n');
-				} else {
-					sysPrint(text);
-				}
-				return EXIT_OK;
-			case Err(message):
-				stderr('apq replace-node: $message\n');
-				return EXIT_RUNTIME;
-		}
+		return finishEdit(
+			'replace-node', filePath, write, ReplaceNode.replaceNode(source, target, newSrc, reformat, plugin, withDoc, optsJson)
+		);
 	}
 
 	/**
@@ -8634,6 +8642,7 @@ final class Cli {
 		sysPrint('writer-formatted + re-parse-validated.\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
+		sysPrint('  --with-doc      Also remove the element\'s leading doc comment\n');
 		sysPrint('  --write         Overwrite the file in place (default: print to stdout)\n');
 		sysPrint('  --reformat      Canonicalise the whole file if it is not already canonical\n');
 		sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
@@ -8663,6 +8672,7 @@ final class Cli {
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --type <T>      The enclosing type (required)\n');
+		sysPrint('  --with-doc      Also remove the member\'s leading doc comment\n');
 		sysPrint('  --write         Overwrite the file in place (default: print to stdout)\n');
 		sysPrint('  --reformat      Canonicalise the whole file if it is not already canonical\n');
 		sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
@@ -8969,6 +8979,9 @@ final class Cli {
 		sysPrint('  --select <sel>      Address the node by an ast-style selector\n');
 		sysPrint('                      (Kind / Kind:name / A > B); must match exactly one\n');
 		sysPrint('  --at <line>:<col>   Address the innermost node at the cursor\n');
+		sysPrint('  --kind <Kind>      With --at: the innermost node of <Kind> at the cursor\n');
+		sysPrint('                      (reaches a co-starting operator / wrapper node)\n');
+		sysPrint('  --with-doc          Also replace the leading doc comment (rewrite its docs)\n');
 		sysPrint('  --from-file <path>  Read <newSource> from a file instead of the argument\n');
 		sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
 		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');

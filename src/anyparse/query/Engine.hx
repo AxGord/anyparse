@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.Pattern.KindEquivalence;
+import anyparse.query.Selector.SelectorSegment;
 import anyparse.runtime.Span;
 
 /**
@@ -70,6 +71,26 @@ final class Engine {
 		return atWalk(tree, offset, null, -1).node;
 	}
 
+	/**
+	 * Innermost node of kind `kind` whose span contains `offset` — `at`
+	 * narrowed by a kind filter. This disambiguates co-starting nodes that
+	 * plain `at` cannot reach: an operator / wrapper node shares its
+	 * `span.from` with its first child, so `at` (innermost overall) always
+	 * picks the child; `atKind(_, _, 'Add')` instead picks the `Add` itself.
+	 * Among nested same-kind nodes the smallest containing one wins, so
+	 * cursor placement selects the level (point inside the inner node to get
+	 * it, point where only the outer node reaches to get the outer).
+	 *
+	 * `equiv` (when supplied) widens the kind test through the grammar's
+	 * kind-equivalence relation, exactly like `select` — so `atKind(_, _,
+	 * 'FnMember', equiv)` also matches a `final` method's
+	 * `FinalModifiedMember`. Returns null when no node of that kind covers
+	 * the offset.
+	 */
+	public static function atKind(tree: QueryNode, offset: Int, kind: String, ?equiv: KindEquivalence): Null<QueryNode> {
+		return atKindWalk(tree, offset, new SelectorSegment(kind, null), equiv, null, -1).node;
+	}
+
 	private static function truncateAt(node: QueryNode, depth: Int, maxDepth: Int): QueryNode {
 		// Spans are preserved across `truncate` / `truncateChildren` —
 		// `--spans` rendering needs them on every visible node, and
@@ -132,6 +153,28 @@ final class Engine {
 		}
 		for (c in node.children) {
 			final r: { node: Null<QueryNode>, width: Int } = atWalk(c, offset, curBest, curWidth);
+			curBest = r.node;
+			curWidth = r.width;
+		}
+		return { node: curBest, width: curWidth };
+	}
+
+	/** `atWalk` with a kind filter (via `SelectorSegment.matches`) on the candidate test. */
+	private static function atKindWalk(
+		node: QueryNode, offset: Int, seg: SelectorSegment, equiv: Null<KindEquivalence>, best: Null<QueryNode>, bestWidth: Int
+	): { node: Null<QueryNode>, width: Int } {
+		var curBest: Null<QueryNode> = best;
+		var curWidth: Int = bestWidth;
+		final span: Null<Span> = node.span;
+		if (span != null && offset >= span.from && offset < span.to && seg.matches(node, equiv)) {
+			final width: Int = span.to - span.from;
+			if (curBest == null || width <= curWidth) {
+				curBest = node;
+				curWidth = width;
+			}
+		}
+		for (c in node.children) {
+			final r: { node: Null<QueryNode>, width: Int } = atKindWalk(c, offset, seg, equiv, curBest, curWidth);
 			curBest = r.node;
 			curWidth = r.width;
 		}

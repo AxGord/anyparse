@@ -20,6 +20,7 @@ enum ReplaceTarget {
 
 	BySelector(selector: String);
 	ByPosition(line: Int, col: Int);
+	ByKindPosition(line: Int, col: Int, kind: String);
 
 }
 
@@ -49,7 +50,8 @@ final class ReplaceNode {
 	 * could not be replaced.
 	 */
 	public static function replaceNode(
-		source: String, target: ReplaceTarget, newSource: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
+		source: String, target: ReplaceTarget, newSource: String, reformat: Bool, plugin: GrammarPlugin, withDoc: Bool = false,
+		?optsJson: String
 	): EditResult {
 		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
 			'source does not parse: ${exception.toString()}'
@@ -76,6 +78,15 @@ final class ReplaceNode {
 				final hit: Null<QueryNode> = Engine.at(tree, cursor);
 				if (hit == null) return Err('position $line:$col is not on a node');
 				hit;
+
+			case ByKindPosition(line, col, kind):
+				// `--at <l>:<c> --kind <Kind>`: the innermost node of `kind`
+				// containing the cursor — reaches a co-starting wrapper / operator
+				// node that plain `--at` (innermost overall) skips past to a child.
+				final cursor: Int = Span.offsetOf(source, line, col + 1);
+				final hit: Null<QueryNode> = Engine.atKind(tree, cursor, kind, plugin.selectKindEquivalence());
+				if (hit == null) return Err('position $line:$col is not on a "$kind" node');
+				hit;
 		};
 
 		final span: Null<Span> = node.span;
@@ -90,7 +101,11 @@ final class ReplaceNode {
 		// surviving modifier siblings. A non-decl node (expression, statement,
 		// package) has no modifier run, so `declGroupSpan` returns it intact.
 		final groupSpan: Span = RefactorSupport.declGroupSpan(node, RefactorSupport.parentOf(tree, node), span);
-		final edit: { span: Span, text: String } = { span: groupSpan, text: newSource };
+		// `--with-doc` extends the replaced range back over a leading doc / block
+		// comment (trivia the grammar keeps outside the node span), so the new
+		// source can carry the declaration's documentation.
+		final finalSpan: Span = withDoc ? RefactorSupport.docExtendedSpan(source, groupSpan) : groupSpan;
+		final edit: { span: Span, text: String } = { span: finalSpan, text: newSource };
 		return RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);
 	}
 

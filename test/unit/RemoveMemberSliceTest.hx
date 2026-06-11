@@ -39,6 +39,19 @@ class RemoveMemberSliceTest extends Test {
 		Assert.isTrue(text.indexOf('keep') >= 0);
 	}
 
+	/** `--with-doc` removes the member's leading doc comment with it (no orphan). */
+	public function testRemoveMemberWithDoc(): Void {
+		final source: String = 'class C {\n\t/** doc */\n\tpublic function drop():Void {}\n\tvar keep:Int;\n}\n';
+		switch RemoveMember.removeMember(source, 'C', 'drop', true, new HaxeQueryPlugin(), true) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf('doc') == -1);
+				Assert.isTrue(text.indexOf('drop') == -1);
+				Assert.isTrue(text.indexOf('keep') >= 0);
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
 	/** An unknown type is refused. */
 	public function testTypeNotFound(): Void {
 		assertErr('class C {\n\tvar x:Int;\n}\n', 'Nope', 'x');

@@ -562,17 +562,43 @@ final class RefactorSupport {
 	 * the insert ops; the source is canonical-gated unless `reformat`.
 	 */
 	public static function deleteNode(
-		source: String, node: QueryNode, parent: Null<QueryNode>, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
+		source: String, node: QueryNode, parent: Null<QueryNode>, reformat: Bool, plugin: GrammarPlugin, withDoc: Bool = false,
+		?optsJson: String
 	): EditResult {
 		final nodeSpan: Null<Span> = node.span;
 		if (nodeSpan == null) return Err('the node to remove has no source span');
-		final span: Span = declGroupSpan(node, parent, nodeSpan);
+		final group: Span = declGroupSpan(node, parent, nodeSpan);
+		// `--with-doc` extends the removed range back over a leading doc / block
+		// comment so a documented member's `/** */` is removed with it (else the
+		// comment is orphaned). The line/comma extension then runs on top.
+		final span: Span = withDoc ? docExtendedSpan(source, group) : group;
 
 		var isComma: Bool = adjacentToComma(source, span);
 		if (!isComma && parent != null) isComma = COMMA_CONTAINER_KINDS.contains(parent.kind);
 
 		final delSpan: Span = isComma ? commaExtendedSpan(source, span) : lineExtendedSpan(source, span);
 		return canonicalize(source, [{ span: delSpan, text: '' }], reformat, plugin, optsJson);
+	}
+
+	/**
+	 * Extend `span` backward to include an immediately-preceding block / doc
+	 * comment (a `/*`-opened comment, including the `/**` doc form) — the
+	 * leading trivia the grammar attaches to a declaration but keeps OUTSIDE
+	 * its node span, so a replace / remove can carry (or rewrite) the
+	 * declaration's documentation. Scans back over whitespace from `span.from`;
+	 * if the preceding token closes a block comment, extends to that comment's
+	 * `/*` open. Returns the span unchanged when only whitespace or a
+	 * non-comment token precedes. Line-comment (double-slash) doc runs are not
+	 * handled (v1); the re-parse gate validates the result either way.
+	 */
+	public static function docExtendedSpan(source: String, span: Span): Span {
+		var i: Int = span.from - 1;
+		while (i >= 0 && isSpace(StringTools.fastCodeAt(source, i))) i--;
+		// The last non-space byte before the node must be the `/` of a `*/` close.
+		if (i < 1 || StringTools.fastCodeAt(source, i) != '/'.code || StringTools.fastCodeAt(source, i - 1) != '*'.code) return span;
+		final open: Int = source.lastIndexOf('/*', i - 1);
+		if (open < 0) return span;
+		return new Span(open, span.to);
 	}
 
 	/**
