@@ -189,6 +189,14 @@ metavariables) is rewritten from a template in one pass: `$x` / `${x}` expand to
 captured node's source, and `${x+N}` / `${x-N}` shift an integer-literal metavariable by
 N (`gofmt -r` / comby for the grammar's own AST).
 
+`comment-rewrite '<find>' '<replace>' <path>…` is the write-twin of `lit`: a text
+find/replace scoped to comment **bodies** — the gap `rewrite` (AST nodes only) and
+`set-comment` (one block at a time) leave open. `--regex` makes `<find>` a regex and
+`<replace>` a template where `${1}` expands a capture group and `${1+N}` shifts an
+integer group by N. Code and the comment delimiters are never touched; strings are
+skipped. A mechanical convention change cited across many doc-comments (e.g. bumping a
+coordinate) becomes one command instead of a hand-rolled script.
+
 ### File creation & formatting
 
 The create-side and whole-file counterparts of the insert ops — a new file gets the same

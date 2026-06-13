@@ -260,6 +260,7 @@ import unit.SetDocSliceTest;
 import unit.SetModifierSliceTest;
 import unit.SetCommentSliceTest;
 import unit.RewriteSliceTest;
+import unit.CommentRewriteSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -521,6 +522,7 @@ class RunTests {
 		addCase(new SetDocSliceTest());
 		addCase(new SetCommentSliceTest());
 		addCase(new RewriteSliceTest());
+		addCase(new CommentRewriteSliceTest());
 		addCase(new SetModifierSliceTest());
 		addCase(new MoveSymbolSliceTest());
 		addCase(new ApqMetaTest());

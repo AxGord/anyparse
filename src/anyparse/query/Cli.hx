@@ -411,6 +411,8 @@ final class Cli {
 				return runSetComment(rest);
 			case 'rewrite':
 				return runRewrite(rest);
+			case 'comment-rewrite':
+				return runCommentRewrite(rest);
 			case 'set-modifier':
 				return runSetModifier(rest);
 			case 'uses':
@@ -3680,10 +3682,8 @@ final class Cli {
 	 */
 	private static function appendCommentHits(target: String, source: String, exact: Bool, out: Array<LitHit>): Void {
 		for (tok in RefactorSupport.collectCommentTokens(source)) {
-			final closed: Bool = !tok.isLine && tok.to >= tok.from + 4 && StringTools.fastCodeAt(source, tok.to - 2) == '*'.code
-				&& StringTools.fastCodeAt(source, tok.to - 1) == '/'.code;
-			final bodyEnd: Int = closed ? tok.to - 2 : tok.to;
-			final body: String = source.substring(tok.from + 2, bodyEnd);
+			final bodySpan: Span = RefactorSupport.commentBody(source, tok);
+			final body: String = source.substring(bodySpan.from, bodySpan.to);
 			final match: Bool = exact ? body == target : body.indexOf(target) >= 0;
 			if (match) out.push(new LitHit('Comment', body, new Span(tok.from, tok.to)));
 		}
@@ -8499,6 +8499,7 @@ final class Cli {
 		sysPrint("  rewrite       Structural search-and-replace (search-pattern metavars)\n");
 		sysPrint('  set-doc       Add/replace a declaration\'s doc-comment at a cursor\n');
 		sysPrint('  set-comment   Replace the comment at a cursor (line run or block)\n');
+		sysPrint('  comment-rewrite  Text find/replace inside comments (write-twin of lit; --regex)\n');
 		sysPrint('  self-status   List .hx files the grammar plugin cannot parse (dogfood gap)\n');
 		sysPrint('  new           Create a new module — final class / implements <iface> (canonical)\n');
 		sysPrint('  source        Emit RAW verbatim file lines (no parse; --range L:L2)\n');
@@ -10596,6 +10597,118 @@ final class Cli {
 		sysPrint('Options:\n');
 		sysPrint('  --reformat  Canonicalise the whole file (allow a non-canonical input)\n');
 		sysPrint('  --write     Overwrite <file> in place (default: emit to stdout)\n');
+	}
+
+	private static function runCommentRewrite(args: Array<String>): Int {
+		var lang: String = 'haxe';
+		var write: Bool = false;
+		var list: Bool = false;
+		var reformat: Bool = false;
+		var regex: Bool = false;
+		var find: Null<String> = null;
+		var replace: Null<String> = null;
+		final inputSpecs: Array<String> = [];
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--write', '-w':
+					write = true;
+				case '--list', '-l':
+					list = true;
+				case '--reformat':
+					reformat = true;
+				case '--regex':
+					regex = true;
+				case '-h', '--help':
+					printCommentRewriteUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq comment-rewrite: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (find == null)
+						find = a;
+					else if (replace == null)
+						replace = a;
+					else
+						inputSpecs.push(a);
+			}
+			i++;
+		}
+		if (find == null || replace == null || inputSpecs.length == 0) {
+			stderr('apq comment-rewrite: expected <find> <replace> <file/dir/glob>...\n');
+			printCommentRewriteUsage();
+			return EXIT_USAGE;
+		}
+
+		final findStr: String = find;
+		final replaceStr: String = replace;
+		final plugin: GrammarPlugin = pickPlugin(lang);
+		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
+		final paths: Array<String> = expanded.paths;
+		if (paths.length == 0) {
+			stderr('apq comment-rewrite: ${inputSpecs.join(", ")} matched no .hx files\n');
+			return EXIT_RUNTIME;
+		}
+
+		final listMode: Bool = list || (!write && !expanded.singleFile);
+
+		var changed: Int = 0;
+		var failed: Int = 0;
+		for (path in paths) {
+			final source: String = try readFile(path) catch (exception: Exception) {
+				stderr('apq comment-rewrite: $path: ${exception.message}\n');
+				failed++;
+				continue;
+			};
+			final optsJson: Null<String> = discoverFormatConfig(path);
+			switch CommentRewrite.rewrite(source, findStr, replaceStr, regex, reformat, plugin, optsJson) {
+				case Ok(text):
+					final isChanged: Bool = text != source;
+					if (write) {
+						if (isChanged) {
+							writeFile(path, text);
+							changed++;
+						}
+					} else if (listMode) {
+						if (isChanged) {
+							sysPrint('$path\n');
+							changed++;
+						}
+					} else
+						sysPrint(text);
+				case Err(message):
+					stderr('apq comment-rewrite: $path: $message\n');
+					failed++;
+			}
+		}
+
+		if (write)
+			stderr('apq comment-rewrite: rewrote $changed file(s)' + (failed > 0 ? ', $failed failed' : '') + '\n');
+		else if (listMode && failed > 0) stderr('apq comment-rewrite: $failed file(s) failed\n');
+		return failed > 0 ? EXIT_RUNTIME : EXIT_OK;
+	}
+
+	private static function printCommentRewriteUsage(): Void {
+		sysPrint('Usage: apq comment-rewrite <find> <replace> <file/dir/glob>... [--regex] [--write] [--list]\n');
+		sysPrint('\n');
+		sysPrint('Text search-and-replace scoped to COMMENT bodies (the write-twin of\n');
+		sysPrint('apq lit). Code and comment delimiters are never touched; strings are\n');
+		sysPrint('skipped. The result is canonical + re-parse-validated.\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint("  --regex        <find> is a regex; <replace> a template where ${0}/${N}\n");
+		sysPrint("                 expand to group N and ${N+K}/${N-K} shift group N by K\n");
+		sysPrint('  --write, -w    Rewrite each file in place (default: stdout for one file,\n');
+		sysPrint('                 list of changed paths for a dir / multiple files)\n');
+		sysPrint('  --list, -l     Print paths whose comments would change; no rewrite\n');
+		sysPrint('  --reformat     Canonicalise the whole file (allow a non-canonical input)\n');
+		sysPrint('  --lang <name>  Grammar plugin (default: haxe)\n');
 	}
 
 }
