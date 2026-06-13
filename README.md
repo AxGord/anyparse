@@ -155,7 +155,7 @@ For the full flag set on any command: `hxq <cmd> --help`.
 | `mentions` / `lit` / `cases` | every named occurrence / string-or-ident leaves / switch case-patterns |
 | `meta` | declarations carrying a given `@:metadata` |
 | `diff` | structural AST diff between two files |
-| `source` | raw verbatim lines (no parse) — for files the grammar can't yet read |
+| `source` | raw verbatim lines — `--range`, or one node's source by name/position (`--select` / `--at`); no-parse mode reads files the grammar can't yet read |
 
 ### Scope-correct refactoring (rewrites)
 

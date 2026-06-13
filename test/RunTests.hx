@@ -261,6 +261,7 @@ import unit.SetModifierSliceTest;
 import unit.SetCommentSliceTest;
 import unit.RewriteSliceTest;
 import unit.CommentRewriteSliceTest;
+import unit.ApqSourceSelectTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -497,6 +498,7 @@ class RunTests {
 		addCase(new ApqUsesTest());
 		addCase(new ApqDocSourceTest());
 		addCase(new ApqSourceDedentTest());
+		addCase(new ApqSourceSelectTest());
 		addCase(new ApqRefsIncrDecrSliceTest());
 		addCase(new RenameSliceTest());
 		addCase(new InlineSliceTest());

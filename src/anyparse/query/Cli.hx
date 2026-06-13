@@ -7838,7 +7838,10 @@ final class Cli {
 	 * `cat -n`-style `<lineno>\t<line>` output for navigation.
 	 */
 	private static function runSource(args: Array<String>): Int {
+		var lang: String = 'haxe';
 		var range: Null<String> = null;
+		var selectExpr: Null<String> = null;
+		var atSpec: Null<String> = null;
 		var number: Bool = false;
 		var raw: Bool = false;
 		var file: Null<String> = null;
@@ -7849,14 +7852,16 @@ final class Cli {
 			switch a {
 				case '--range':
 					range = expectValue(args, ++i, '--range');
+				case '--select':
+					selectExpr = expectValue(args, ++i, '--select');
+				case '--at':
+					atSpec = expectValue(args, ++i, '--at');
 				case '--number', '-n':
 					number = true;
 				case '--raw':
 					raw = true;
-				// The hxq shim auto-injects `--lang haxe`; `source` does no
-				// parsing, so accept and ignore it (1 value consumed).
 				case '--lang':
-					expectValue(args, ++i, '--lang');
+					lang = expectValue(args, ++i, '--lang');
 				case '-h', '--help':
 					printSourceUsage();
 					return EXIT_OK;
@@ -7879,6 +7884,11 @@ final class Cli {
 			printSourceUsage();
 			return EXIT_USAGE;
 		}
+		final modes: Int = (range != null ? 1 : 0) + (selectExpr != null ? 1 : 0) + (atSpec != null ? 1 : 0);
+		if (modes > 1) {
+			stderr('apq source: --range, --select and --at are mutually exclusive — pick one\n');
+			return EXIT_USAGE;
+		}
 		final path: String = file;
 		if (!FileSystem.exists(path)) {
 			stderr('apq source: no such file "$path"\n');
@@ -7896,8 +7906,15 @@ final class Cli {
 		final lines: Array<String> = content.split('\n');
 		if (lines.length > 0 && lines[lines.length - 1] == '') lines.pop();
 
-		final bounds: Null<{ from: Int, to: Int }> = parseRangeSpec(range, lines.length);
+		// `--select` / `--at` resolve a NODE's span to its line range (these
+		// parse the file — unlike the raw, parse-free `--range` / whole-file
+		// path, which still works on a skip-parse file).
+		final bounds: Null<{ from: Int, to: Int }> = if (selectExpr != null || atSpec != null)
+			resolveNodeLineBounds(path, content, lang, selectExpr, atSpec);
+		else
+			parseRangeSpec(range, lines.length);
 		if (bounds == null) {
+			if (selectExpr != null || atSpec != null) return EXIT_RUNTIME;
 			stderr('apq source: bad --range "$range" (use L, L:L2, L:, or :L2 — 1-based)\n');
 			return EXIT_USAGE;
 		}
@@ -7958,18 +7975,24 @@ final class Cli {
 		sysPrint('Usage: apq source [options] <file>\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
-		sysPrint('  --range <spec>  1-based inclusive lines: L | L:L2 | L: | :L2 (default: whole file)\n');
-		sysPrint('  --number, -n    Prefix each line with `<lineno>\\t` (cat -n style)\n');
-		sysPrint('  --raw           Keep bytes verbatim — no dedent (for Edit-anchoring / real columns)\n');
-		sysPrint('  -h, --help      Show this help\n');
+		sysPrint('  --range <spec>     1-based inclusive lines: L | L:L2 | L: | :L2 (default: whole file)\n');
+		sysPrint("  --select <sel>     Source of the node matching <sel> (apq ast selector,\n");
+		sysPrint("                     e.g. 'FnMember:foo' / 'ClassDecl:Bar') — must match exactly one\n");
+		sysPrint('  --at <line>:<col>  Source of the innermost node at the 1-based position\n');
+		sysPrint('  --number, -n       Prefix each line with `<lineno>\\t` (cat -n style)\n');
+		sysPrint('  --raw              Keep bytes verbatim — no dedent (for Edit-anchoring / real columns)\n');
+		sysPrint('  --lang <name>      Grammar plugin for --select / --at (default: haxe)\n');
+		sysPrint('  -h, --help         Show this help\n');
 		sysPrint('\n');
-		sysPrint('Emits RAW lines of <file> with NO AST parse — works on any file\n');
-		sysPrint('(parseable or skip-parse). By default the common leading indentation\n');
-		sysPrint('shared by the shown lines is stripped (dedent) so nested slices read\n');
-		sysPrint('cleanly; pass `--raw` to keep exact bytes — needed when the output\n');
-		sysPrint('anchors an Edit or you need true column positions. Out-of-range bounds\n');
-		sysPrint('clamp to the file. The gate-blessed replacement for `git show` /\n');
-		sysPrint('`readFileSync` to view `.hx` bytes.\n');
+		sysPrint('Emits RAW lines of <file>. The default / `--range` path does NO parse and\n');
+		sysPrint('works on any file (parseable or skip-parse). `--select` / `--at` parse the\n');
+		sysPrint('file and print the full lines spanning the matched node — the clean way to\n');
+		sysPrint("read ONE function by name (no line numbers, no S-expr): apq source f.hx --select 'FnMember:foo'.\n");
+		sysPrint('\n');
+		sysPrint('By default the common leading indentation shared by the shown lines is\n');
+		sysPrint('stripped (dedent) so nested slices read cleanly; pass `--raw` to keep exact\n');
+		sysPrint('bytes — needed when the output anchors an Edit or you need true column\n');
+		sysPrint('positions. The gate-blessed replacement for `git show` / `readFileSync`.\n');
 	}
 	#end
 
@@ -10709,6 +10732,69 @@ final class Cli {
 		sysPrint('  --list, -l     Print paths whose comments would change; no rewrite\n');
 		sysPrint('  --reformat     Canonicalise the whole file (allow a non-canonical input)\n');
 		sysPrint('  --lang <name>  Grammar plugin (default: haxe)\n');
+	}
+
+	/**
+	 * Resolve a `source --select <sel>` / `--at <line>:<col>` address to the
+	 * 1-based inclusive line range spanning the matched node. Parses `content`
+	 * with the `lang` plugin (so it works only on a parseable file, unlike the
+	 * raw `--range` reader). Returns `null` after printing a specific
+	 * `apq source: …` diagnostic (no match / ambiguous selector / position not on
+	 * a node / parse failure).
+	 */
+	private static function resolveNodeLineBounds(
+		path: String, content: String, lang: String, selectExpr: Null<String>, atSpec: Null<String>
+	): Null<{ from: Int, to: Int }> {
+		final plugin: GrammarPlugin = pickPlugin(lang);
+		final tree: QueryNode = try plugin.parseFile(content) catch (exception: Exception) {
+			stderr('apq source: $path does not parse: ${exception.message}\n');
+			return null;
+		};
+
+		var node: Null<QueryNode> = null;
+		if (selectExpr != null) {
+			final selector: Selector = try Selector.parse(selectExpr) catch (exception: Exception) {
+				stderr('apq source: malformed selector "$selectExpr": ${exception.message}\n');
+				return null;
+			};
+			final matches: Array<QueryNode> = Engine.select(tree, selector, plugin.selectKindEquivalence());
+			if (matches.length == 0) {
+				stderr('apq source: no node matched --select "$selectExpr"\n');
+				return null;
+			}
+			if (matches.length > 1) {
+				stderr('apq source: --select "$selectExpr" matched ${matches.length} nodes — narrow it (e.g. Kind:name)\n');
+				return null;
+			}
+			node = matches[0];
+		} else if (atSpec != null) {
+			final pos: Null<Position> = parseLineCol(atSpec);
+			if (pos == null) {
+				stderr('apq source: malformed position "$atSpec" — expected <line>:<col>\n');
+				return null;
+			}
+			node = Engine.at(tree, Span.offsetOf(content, pos.line, pos.col));
+			if (node == null) {
+				stderr('apq source: no node at $atSpec\n');
+				return null;
+			}
+		} else {
+			stderr('apq source: provide --select <sel> or --at <line>:<col>\n');
+			return null;
+		}
+
+		final resolved: Null<QueryNode> = node;
+		if (resolved == null) {
+			stderr('apq source: could not resolve a node from the address\n');
+			return null;
+		}
+		final span: Null<Span> = resolved.span;
+		if (span == null) {
+			stderr('apq source: the matched node has no source span\n');
+			return null;
+		}
+		final endOffset: Int = span.to > span.from ? span.to - 1 : span.from;
+		return { from: span.lineCol(content).line, to: new Span(endOffset, endOffset).lineCol(content).line };
 	}
 
 }
