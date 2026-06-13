@@ -407,6 +407,8 @@ final class Cli {
 				return runNew(rest);
 			case 'set-doc':
 				return runSetDoc(rest);
+			case 'set-comment':
+				return runSetComment(rest);
 			case 'set-modifier':
 				return runSetModifier(rest);
 			case 'uses':
@@ -8539,6 +8541,7 @@ final class Cli {
 		sysPrint('  set-modifier  Flip visibility / add-remove modifiers at a cursor (no retype)\n');
 		sysPrint('  test-summary  Parse utest stdout transcript into tests/assertions/failures\n');
 		sysPrint('  set-doc       Add/replace a declaration\'s doc-comment at a cursor\n');
+		sysPrint('  set-comment   Replace the comment at a cursor (line run or block)\n');
 		sysPrint('  self-status   List .hx files the grammar plugin cannot parse (dogfood gap)\n');
 		sysPrint('  new           Create a new module — final class / implements <iface> (canonical)\n');
 		sysPrint('  source        Emit RAW verbatim file lines (no parse; --range L:L2)\n');
@@ -10451,6 +10454,103 @@ final class Cli {
 		sysPrint('fails, byte-canonical, atomic). The path must not already exist — modify\n');
 		sysPrint('an existing file with the structural ops / apq fmt. An unparseable result\n');
 		sysPrint('(e.g. a malformed @@ body) exits non-zero with nothing written.\n');
+	}
+
+	/**
+	 * `apq set-comment <file> <line>:<col> (<text> | --from-file | -) [--reformat]
+	 * [--write]` — replace the comment at the cursor (see `SetComment`). Line
+	 * comments are trivia no other op reaches; a block comment is replaced whole, a
+	 * full-line line-comment run as one unit. The replacement must itself be a
+	 * comment; the result is writer-formatted and re-parse-validated (canonical-
+	 * gated unless `--reformat`).
+	 */
+	private static function runSetComment(args: Array<String>): Int {
+		var lang: String = 'haxe';
+		var write: Bool = false;
+		var reformat: Bool = false;
+		var fromFile: Null<String> = null;
+		var file: Null<String> = null;
+		var pos: Null<String> = null;
+		var commentText: Null<String> = null;
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--from-file':
+					fromFile = expectValue(args, ++i, '--from-file');
+				case '--reformat':
+					reformat = true;
+				case '--write':
+					write = true;
+				case '-h', '--help':
+					printSetCommentUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq set-comment: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (file == null)
+						file = a;
+					else if (pos == null)
+						pos = a;
+					else if (commentText == null)
+						commentText = a;
+					else {
+						stderr('apq set-comment: unexpected extra argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (fromFile != null || commentText == '-') {
+			final resolved: Null<String> = resolveCodeArg('set-comment', commentText == '-' ? '-' : null, fromFile);
+			if (resolved == null) return EXIT_RUNTIME;
+			commentText = resolved;
+		}
+		if (file == null || pos == null || commentText == null) {
+			stderr('apq set-comment: expected <file> <line>:<col> (<text> | --from-file <path> | -)\n');
+			printSetCommentUsage();
+			return EXIT_USAGE;
+		}
+		final loc: Null<Position> = parseLineCol(pos);
+		if (loc == null) {
+			stderr('apq set-comment: bad position "$pos" (expected <line>:<col>)\n');
+			return EXIT_USAGE;
+		}
+
+		final filePath: String = file;
+		final commentStr: String = commentText;
+		final source: String = try readFile(filePath) catch (exception: Exception) {
+			stderr('apq set-comment: $filePath: ${exception.message}\n');
+			return EXIT_RUNTIME;
+		};
+		final plugin: GrammarPlugin = pickPlugin(lang);
+		final optsJson: Null<String> = discoverFormatConfig(filePath);
+		switch SetComment.setComment(source, loc.line, loc.col, commentStr, reformat, plugin, optsJson) {
+			case Ok(text):
+				if (write) {
+					writeFile(filePath, text);
+					stderr('apq set-comment: wrote $filePath\n');
+				} else
+					sysPrint(text);
+				return EXIT_OK;
+			case Err(message):
+				stderr('apq set-comment: $message\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
+	private static function printSetCommentUsage(): Void {
+		sysPrint('Usage: apq set-comment <file> <line>:<col> (<text> | --from-file <path> | -) [--reformat] [--write]\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --from-file <path>  Read the comment text from a file instead of the argument\n');
+		sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
+		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
 	}
 
 }

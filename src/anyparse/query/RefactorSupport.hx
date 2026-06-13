@@ -810,4 +810,119 @@ final class RefactorSupport {
 		return buf.toString();
 	}
 
+	/**
+	 * The span of the comment at `cursor`, or null if the cursor is not on a
+	 * comment. A block comment is returned whole; a full-line line comment is
+	 * merged with the contiguous run of full-line line comments directly above
+	 * and below it (no blank line, no code between), so a line-comment block is
+	 * addressed as one unit; a trailing line comment after code is returned
+	 * alone. String literals are skipped, so an opener inside a string is not
+	 * mistaken for a comment.
+	 */
+	public static function commentBlockAt(source: String, cursor: Int): Null<Span> {
+		final toks: Array<{ from: Int, to: Int, isLine: Bool }> = collectCommentTokens(source);
+		var hitIdx: Int = -1;
+		for (k in 0...toks.length) if (cursor >= toks[k].from && cursor < toks[k].to) {
+			hitIdx = k;
+			break;
+		}
+		if (hitIdx < 0) return null;
+		final hit: { from: Int, to: Int, isLine: Bool } = toks[hitIdx];
+		if (!hit.isLine || !isFullLineComment(source, hit.from)) return new Span(hit.from, hit.to);
+		var lo: Int = hitIdx;
+		while (lo > 0 && contiguousLineComments(source, toks[lo - 1], toks[lo])) lo--;
+		var hi: Int = hitIdx;
+		while (hi < toks.length - 1 && contiguousLineComments(source, toks[hi], toks[hi + 1])) hi++;
+		return new Span(toks[lo].from, toks[hi].to);
+	}
+
+	/**
+	 * Scan `source` for every comment token (line and block), skipping string
+	 * literals so an opener inside a string is not a comment. Mirrors the `apq
+	 * lit` comment walker. Each token is `{ from, to, isLine }`.
+	 */
+	private static function collectCommentTokens(source: String): Array<{ from: Int, to: Int, isLine: Bool }> {
+		final out: Array<{ from: Int, to: Int, isLine: Bool }> = [];
+		final n: Int = source.length;
+		var i: Int = 0;
+		while (i < n) {
+			final c: Int = StringTools.fastCodeAt(source, i);
+			if (c == '"'.code || c == "'".code) {
+				final quote: Int = c;
+				i++;
+				while (i < n) {
+					final ch: Int = StringTools.fastCodeAt(source, i);
+					if (ch == '\\'.code) {
+						i += 2;
+						continue;
+					}
+					if (ch == quote) {
+						i++;
+						break;
+					}
+					i++;
+				}
+				continue;
+			}
+			if (c == '/'.code && i + 1 < n) {
+				final next: Int = StringTools.fastCodeAt(source, i + 1);
+				if (next == '/'.code) {
+					final start: Int = i;
+					i += 2;
+					while (i < n && StringTools.fastCodeAt(source, i) != '\n'.code) i++;
+					out.push({ from: start, to: i, isLine: true });
+					continue;
+				}
+				if (next == '*'.code) {
+					final start: Int = i;
+					i += 2;
+					var closed: Bool = false;
+					while (i + 1 < n) {
+						if (StringTools.fastCodeAt(source, i) == '*'.code && StringTools.fastCodeAt(source, i + 1) == '/'.code) {
+							i += 2;
+							closed = true;
+							break;
+						}
+						i++;
+					}
+					if (!closed) i = n;
+					out.push({ from: start, to: i, isLine: false });
+					continue;
+				}
+			}
+			i++;
+		}
+		return out;
+	}
+
+	/** True if only whitespace precedes the byte at `from` on its line. */
+	private static function isFullLineComment(source: String, from: Int): Bool {
+		var i: Int = from - 1;
+		while (i >= 0 && StringTools.fastCodeAt(source, i) != '\n'.code) {
+			if (!isSpace(StringTools.fastCodeAt(source, i))) return false;
+			i--;
+		}
+		return true;
+	}
+
+	/**
+	 * True if two comment tokens are full-line line comments separated by a
+	 * single line break (no blank line, no code) — members of one contiguous
+	 * line-comment block.
+	 */
+	private static function contiguousLineComments(
+		source: String, a: { from: Int, to: Int, isLine: Bool }, b: { from: Int, to: Int, isLine: Bool }
+	): Bool {
+		if (!a.isLine || !b.isLine) return false;
+		if (!isFullLineComment(source, a.from) || !isFullLineComment(source, b.from)) return false;
+		var newlines: Int = 0;
+		for (k in a.to...b.from) {
+			final c: Int = StringTools.fastCodeAt(source, k);
+			if (c == '\n'.code)
+				newlines++;
+			else if (!isSpace(c)) return false;
+		}
+		return newlines == 1;
+	}
+
 }
