@@ -75,7 +75,7 @@ private typedef ReturnVar = {
  *
  * Coordinate convention: `startLine` / `startCol` / `endLine` / `endCol`
  * are interpreted exactly as `apq refs` PRINTS them
- * (`Span.lineCol().col - 1`). START points at the first token of the first
+ * (1-based). START points at the first token of the first
  * statement; END points within the last statement of the run.
  */
 @:nullSafety(Strict)

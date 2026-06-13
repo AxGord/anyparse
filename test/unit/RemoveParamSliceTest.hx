@@ -28,7 +28,7 @@ import haxe.Exception;
  * the body.
  *
  * Coordinates are the positions `apq refs` prints (remove-param
- * interprets the column in the same `Span.lineCol().col - 1` convention
+ * interprets the column in the same 1-based convention
  * as `rename` / `inline` / `extract-var` / `change-sig`).
  */
 class RemoveParamSliceTest extends Test {
@@ -44,7 +44,7 @@ class RemoveParamSliceTest extends Test {
 			+ '\tpublic function caller():Void {\n' + '\t\tf(1, "x", 3);\n' + '\t\tthis.f(7, "y", 9);\n' + '\t}\n' + '}';
 		final expected: String = 'class C {\n' + '\tpublic function f(a:Int, c:Int):Void {\n' + '\t\ttrace(a);\n' + '\t}\n'
 			+ '\tpublic function caller():Void {\n' + '\t\tf(1, 3);\n' + '\t\tthis.f(7, 9);\n' + '\t}\n' + '}';
-		// Line 2 col 8 — the method `f` decl, as `apq refs --decls` prints.
+		// Line 2 col 9 — the method `f` decl, as `apq refs --decls` prints.
 		assertRemove(source, 2, 9, 1, expected, true);
 	}
 
@@ -83,7 +83,7 @@ class RemoveParamSliceTest extends Test {
 			+ '\t\t\treturn x;\n' + '\t\t}\n' + '\t\tvar r = add(1, 2);\n' + '\t}\n' + '}';
 		final expected: String = 'class C {\n' + '\tpublic function run():Void {\n' + '\t\tfunction add(x:Int):Int {\n'
 			+ '\t\t\treturn x;\n' + '\t\t}\n' + '\t\tvar r = add(1);\n' + '\t}\n' + '}';
-		// Line 3 col 11 — the local function `add` name token; remove `y`.
+		// Line 3 col 12 — the local function `add` name token; remove `y`.
 		assertRemove(source, 3, 12, 1, expected, false);
 	}
 
@@ -99,7 +99,7 @@ class RemoveParamSliceTest extends Test {
 			+ '\tpublic function caller():Void {\n' + '\t\td(1, "x", 3);\n' + '\t\tthis.d(7, "y", 9);\n' + '\t}\n' + '}';
 		final expected: String = 'class C {\n' + '\tfinal function d(a:Int, c:Int):Void {\n' + '\t\ttrace(a);\n' + '\t}\n'
 			+ '\tpublic function caller():Void {\n' + '\t\td(1, 3);\n' + '\t\tthis.d(7, 9);\n' + '\t}\n' + '}';
-		// Line 2 col 1 — the `final` method decl, as `apq refs --decls` prints.
+		// Line 2 col 2 — the `final` method decl, as `apq refs --decls` prints.
 		assertRemove(source, 2, 2, 1, expected, true);
 	}
 
@@ -123,7 +123,7 @@ class RemoveParamSliceTest extends Test {
 	public function testRemoveMiddleParamMultilinePreservesLayout(): Void {
 		final source: String = 'class C {\n' + '\tfunction f(\n' + '\t\ta:Int,\n' + '\t\tb:Int,\n' + '\t\tc:Int\n' + '\t):Void {}\n' + '}';
 		final expected: String = 'class C {\n' + '\tfunction f(\n' + '\t\ta:Int,\n' + '\t\tc:Int\n' + '\t):Void {}\n' + '}';
-		// Line 2 col 10 — the `f` method name token; remove `b` (index 1).
+		// Line 2 col 11 — the `f` method name token; remove `b` (index 1).
 		assertRemove(source, 2, 11, 1, expected, true);
 	}
 

@@ -22,7 +22,7 @@ import anyparse.query.Rename.RenameResult;
  * loop iterator — plus the single-binding local `total`. Renaming one
  * must touch exactly that binding's occurrences. Coordinates are the
  * positions `apq refs --decls` prints (the rename interprets the column
- * in the same `Span.lineCol().col - 1` convention).
+ * in the same 1-based convention).
  */
 class RenameSliceTest extends Test {
 
@@ -30,7 +30,7 @@ class RenameSliceTest extends Test {
 		+ '\t\tvar total = count;\n' + '\t\tfor (count in 0...10) total += count;\n' + '\t\treturn total + this.count;\n' + '\t}\n' + '}';
 
 	/**
-	 * Param `count` (decl `3:12`) → `n`: only the param decl and its sole
+	 * Param `count` (decl `3:13`) → `n`: only the param decl and its sole
 	 * read (`var total = count`) change. The field (`var count` /
 	 * `this.count`) and the loop var (`for (count …) … += count`) keep
 	 * `count` — they are separate bindings that shadow / are shadowed.
@@ -42,7 +42,7 @@ class RenameSliceTest extends Test {
 	}
 
 	/**
-	 * Loop var `count` (decl `5:2`) → `j`: only the loop iterator decl and
+	 * Loop var `count` (decl `5:3`) → `j`: only the loop iterator decl and
 	 * its body read (`total += count`) change. The field and the param
 	 * keep `count`.
 	 */
@@ -53,7 +53,7 @@ class RenameSliceTest extends Test {
 	}
 
 	/**
-	 * Local `total` (decl `4:2`) → `sum`: all three occurrences change —
+	 * Local `total` (decl `4:3`) → `sum`: all three occurrences change —
 	 * the decl, the compound-assign write (`total += count`), and the
 	 * read (`return total + …`).
 	 */
@@ -64,7 +64,7 @@ class RenameSliceTest extends Test {
 	}
 
 	/**
-	 * Field `count` (decl `2:1`) → `n`: the field decl and the explicit
+	 * Field `count` (decl `2:2`) → `n`: the field decl and the explicit
 	 * `this.count` read change. The shadowing param `count` and loop var
 	 * `count` stay — they are separate bindings, and the bare `count`
 	 * reads inside `f` resolve to those locals, not the field.
@@ -81,7 +81,7 @@ class RenameSliceTest extends Test {
 	 * never produced as output.
 	 */
 	public function testPositionOnWhitespaceIsError(): Void {
-		// Line 2 column 0 (display convention) maps to the leading tab.
+		// Line 2 column 1 maps to the leading tab.
 		final result: RenameResult = renameOf(FIXTURE, 2, 1, 'n');
 		switch result {
 			case Ok(text):
@@ -130,7 +130,7 @@ class RenameSliceTest extends Test {
 			+ '\tfinal function d(a:Int):Void {}\n' + '\tfunction caller():Void {\n' + '\t\td(1);\n' + '\t\tthis.d(2);\n' + '\t}\n' + '}';
 		final expected: String = 'class C {\n'
 			+ '\tfinal function ren(a:Int):Void {}\n' + '\tfunction caller():Void {\n' + '\t\tren(1);\n' + '\t\tthis.ren(2);\n' + '\t}\n' + '}';
-		// Line 2 col 1 — the `final` method decl, as `apq refs --decls` prints.
+		// Line 2 col 2 — the `final` method decl, as `apq refs --decls` prints.
 		assertRename(source, 2, 2, 'ren', expected);
 	}
 

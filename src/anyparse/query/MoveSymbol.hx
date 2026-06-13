@@ -84,8 +84,7 @@ typedef MoveChange = {
  * non-parsing multi-file state.
  *
  * Coordinate convention: `line` / `col` are interpreted exactly as
- * `apq refs` PRINTS them (`Span.lineCol().col - 1`), inverted via
- * `Span.offsetOf(source, line, col + 1)` — identical to `CrossRename`.
+ * `apq refs` PRINTS them (1-based) — identical to `CrossRename`.
  *
  * The op is PURE: it never reads or writes the filesystem. The CLI reads
  * every scope file (including the cursor file and the destination file)

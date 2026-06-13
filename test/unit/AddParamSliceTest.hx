@@ -25,7 +25,7 @@ import haxe.Exception;
  * alike.
  *
  * Coordinates are the positions `apq refs` prints (the add interprets
- * the column in the same `Span.lineCol().col - 1` convention as
+ * the column in the same 1-based convention as
  * `rename` / `inline` / `extract-var`).
  */
 class AddParamSliceTest extends Test {
@@ -38,7 +38,7 @@ class AddParamSliceTest extends Test {
 	public function testAddDefaultedToTwoParamMethod(): Void {
 		final source: String = 'class C {\n' + '\tfunction f(a:Int, b:Int):Void {}\n' + '}';
 		final expected: String = 'class C {\n' + '\tfunction f(a:Int, b:Int, c:Int = 0):Void {}\n' + '}';
-		// Line 2 col 10 — the `f` method name token.
+		// Line 2 col 11 — the `f` method name token.
 		assertAdd(source, 2, 11, 'c:Int = 0', expected);
 	}
 
@@ -50,7 +50,7 @@ class AddParamSliceTest extends Test {
 	public function testAddOptionalToZeroParamFunction(): Void {
 		final source: String = 'class C {\n' + '\tfunction g():Void {}\n' + '}';
 		final expected: String = 'class C {\n' + '\tfunction g(?flag:Bool):Void {}\n' + '}';
-		// Line 2 col 10 — the `g` method name token.
+		// Line 2 col 11 — the `g` method name token.
 		assertAdd(source, 2, 11, '?flag:Bool', expected);
 	}
 
@@ -61,7 +61,7 @@ class AddParamSliceTest extends Test {
 	public function testAddOptionalToOneParamMethod(): Void {
 		final source: String = 'class C {\n' + '\tfunction h(a:Int):Void {}\n' + '}';
 		final expected: String = 'class C {\n' + '\tfunction h(a:Int, ?b:String):Void {}\n' + '}';
-		// Line 2 col 10 — the `h` method name token.
+		// Line 2 col 11 — the `h` method name token.
 		assertAdd(source, 2, 11, '?b:String', expected);
 	}
 
@@ -74,7 +74,7 @@ class AddParamSliceTest extends Test {
 		final source: String = 'class C {\n' + '\tfunction m():Void {\n' + '\t\tfunction loc(x:Int):Int return x;\n' + '\t}\n' + '}';
 		final expected: String = 'class C {\n'
 			+ '\tfunction m():Void {\n' + '\t\tfunction loc(x:Int, y:Int = 1):Int return x;\n' + '\t}\n' + '}';
-		// Line 3 col 11 — the `loc` local-function name token.
+		// Line 3 col 12 — the `loc` local-function name token.
 		assertAdd(source, 3, 12, 'y:Int = 1', expected);
 	}
 
@@ -87,7 +87,7 @@ class AddParamSliceTest extends Test {
 	public function testAddToFinalMethod(): Void {
 		final source: String = 'class C {\n' + '\tfinal function d(a:Int):Void {}\n' + '}';
 		final expected: String = 'class C {\n' + '\tfinal function d(a:Int, ?b:String):Void {}\n' + '}';
-		// Line 2 col 16 — the `d` final-method name token.
+		// Line 2 col 17 — the `d` final-method name token.
 		assertAdd(source, 2, 17, '?b:String', expected);
 	}
 
@@ -98,7 +98,7 @@ class AddParamSliceTest extends Test {
 	public function testAddFunctionTypedOptionalParam(): Void {
 		final source: String = 'class C {\n' + '\tfunction k(a:Int):Void {}\n' + '}';
 		final expected: String = 'class C {\n' + '\tfunction k(a:Int, ?cb:Void->Void):Void {}\n' + '}';
-		// Line 2 col 10 — the `k` method name token.
+		// Line 2 col 11 — the `k` method name token.
 		assertAdd(source, 2, 11, '?cb:Void->Void', expected);
 	}
 
@@ -110,7 +110,7 @@ class AddParamSliceTest extends Test {
 	public function testMultilineParamListFormattingPreserved(): Void {
 		final source: String = 'class C {\n' + '\tfunction f(\n' + '\t\ta:Int,\n' + '\t\tb:Int\n' + '\t):Void {}\n' + '}';
 		final expected: String = 'class C {\n' + '\tfunction f(\n' + '\t\ta:Int,\n' + '\t\tb:Int, c:Int = 0\n' + '\t):Void {}\n' + '}';
-		// Line 2 col 10 — the `f` method name token.
+		// Line 2 col 11 — the `f` method name token.
 		assertAdd(source, 2, 11, 'c:Int = 0', expected);
 	}
 
@@ -120,7 +120,7 @@ class AddParamSliceTest extends Test {
 	 */
 	public function testRefuseRequiredParam(): Void {
 		final source: String = 'class C {\n' + '\tfunction f(a:Int):Void {}\n' + '}';
-		// Line 2 col 10 — the `f`; `b:Int` is required (no default, not optional).
+		// Line 2 col 11 — the `f`; `b:Int` is required (no default, not optional).
 		assertRefused(source, 2, 11, 'b:Int');
 	}
 
@@ -130,7 +130,7 @@ class AddParamSliceTest extends Test {
 	 */
 	public function testRefuseNameCollidesWithExistingParam(): Void {
 		final source: String = 'class C {\n' + '\tfunction f(a:Int, b:Int):Void {}\n' + '}';
-		// Line 2 col 10 — the `f`; `a` already names a parameter.
+		// Line 2 col 11 — the `f`; `a` already names a parameter.
 		assertRefused(source, 2, 11, 'a:Int = 0');
 	}
 
@@ -140,7 +140,7 @@ class AddParamSliceTest extends Test {
 	 */
 	public function testRefuseCursorOffFunction(): Void {
 		final source: String = 'class C {\n' + '\tvar x:Int = 0;\n' + '}';
-		// Line 2 col 5 — the `x` field, not a function.
+		// Line 2 col 6 — the `x` field, not a function.
 		assertRefused(source, 2, 6, '?flag:Bool');
 	}
 

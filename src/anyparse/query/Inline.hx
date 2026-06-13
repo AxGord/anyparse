@@ -52,7 +52,7 @@ enum InlineResult {
  * outside the whitelist and therefore refused.
  *
  * Coordinate convention: `line` / `col` are interpreted exactly as
- * `apq refs` PRINTS them (`Span.lineCol().col - 1`), identical to
+ * `apq refs` PRINTS them (1-based), identical to
  * `Rename`.
  */
 @:nullSafety(Strict)

@@ -7,7 +7,7 @@ package anyparse.query.format.json;
  *
  *   Span = { start: [line, col], end: [line, col] }
  *
- * `line` is 1-based, `col` is 0-based. The two-element array form is
+ * `line` and `col` are both 1-based. The two-element array form is
  * tighter than `{ line:Int, col:Int }` and produces compact JSON the
  * spec lays out verbatim.
  */

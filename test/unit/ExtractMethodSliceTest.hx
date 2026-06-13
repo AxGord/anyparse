@@ -20,7 +20,7 @@ import haxe.Exception;
  * additionally re-parsed.
  *
  * Coordinates are the positions `apq refs` prints (the op reads each
- * column in the same `Span.lineCol().col - 1` convention as `extract-var`).
+ * column in the same 1-based convention as `extract-var`).
  * START points at the first token of the first statement; END points
  * within the last statement of the run.
  */

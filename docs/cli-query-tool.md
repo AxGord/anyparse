@@ -182,7 +182,7 @@ is what diagnostics and recon tooling need.
 
 ## Mutation commands (source rewriting)
 
-Distinct from the read-only query commands above: these **rewrite** source. Without `--write` the rewrite goes to stdout; with `--write` it overwrites the file in place. Cursor positions use the same column convention `apq refs` prints. Two sub-families differ in how they format the result:
+Distinct from the read-only query commands above: these **rewrite** source. Without `--write` the rewrite goes to stdout; with `--write` it overwrites the file in place. Cursor positions are 1-based `line:col` — the same convention `apq refs` prints (and `ast --at` / `source`). Two sub-families differ in how they format the result:
 
 - **Refactoring ops** — scope-correct edits driven by the `refs` / `Scope` binding resolver, **format-preserving** (span-splice — everything outside the edit is byte-verbatim) and re-parse-validated: `rename` (`--scope <dir>` for cross-file type rename), `inline`, `extract-var`, `change-sig`, `move`, `add-param`, `remove-param`. These move EXISTING tokens, so no new code is formatted.
 
@@ -280,7 +280,7 @@ All schemas share one span type:
 Span = { start: [line, col], end: [line, col] }
 ```
 
-`line` is 1-based, `col` is 0-based.
+`line` and `col` are both 1-based — the single coordinate convention shared by every `apq` / `hxq` surface (`refs`, `ast --at`, `source`, the refactoring ops, and this JSON output).
 
 **Kind vocabulary.** The string values of `kind` (in `ast.Node.kind`, `meta.decl.kind`, and the `ast --select` selector input) come from one **plugin-defined vocabulary** shared across all three surfaces. For a typical curly-brace language the kinds are short lowercase names like `class`, `function`, `field`, `case`. The vocabulary is published by each grammar plugin as part of its public contract. See [Kind vocabulary](#kind-vocabulary) for the Haxe plugin's published list and how to discover any kind via `apq ast`.
 

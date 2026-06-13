@@ -58,7 +58,7 @@ enum AddParamResult {
  * backstop for a syntactically invalid parameter text.
  *
  * Coordinate convention: `line` / `col` are interpreted exactly as
- * `apq refs` PRINTS them (`Span.lineCol().col - 1`), identical to
+ * `apq refs` PRINTS them (1-based), identical to
  * `Rename` / `Inline` / `ExtractVar`.
  */
 @:nullSafety(Strict)

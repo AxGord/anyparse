@@ -160,8 +160,8 @@ final class Json {
 	private static function spanToJson(span: Span, source: String): AstSearchSpan {
 		final from: Position = span.lineCol(source);
 		final to: Position = new Span(span.to, span.to).lineCol(source);
-		// Spec: line 1-based, col 0-based. Span.lineCol returns col
-		// 1-based — subtract one for spec compliance.
+		// Both line and col are 1-based — the unified apq
+		// coordinate convention (refs / ast --at / source agree).
 		return {
 			start: [from.line, from.col],
 			end: [to.line, to.col],

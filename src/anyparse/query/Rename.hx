@@ -43,7 +43,7 @@ enum RenameResult {
  *     rather than emitted.
  *
  * Coordinate convention: `line` / `col` are interpreted exactly as
- * `apq refs` PRINTS them (`Span.lineCol().col - 1`), so a position
+ * `apq refs` PRINTS them (1-based), so a position
  * copied from `apq refs --decls` output lands on the intended binding.
  *
  * Field bindings (`this.field`): the resolver classifies a bare

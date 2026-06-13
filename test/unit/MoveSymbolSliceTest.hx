@@ -27,7 +27,7 @@ import anyparse.query.MoveSymbol.MoveChange;
  * and that no rewrite is emitted.
  *
  * Coordinates are the positions `apq refs` prints (the op interprets the
- * column in the same `Span.lineCol().col - 1` convention as `rename`);
+ * column in the same 1-based convention as `rename`);
  * cursors point at the type NAME so the identifier-token tier applies.
  */
 class MoveSymbolSliceTest extends Test {
@@ -42,7 +42,7 @@ class MoveSymbolSliceTest extends Test {
 		final a: String = 'package pkg;\n' + '\n' + 'class Foo {\n' + '\tpublic var x:Int = 1;\n' + '}';
 		final b: String = 'package pkg;\n' + '\n' + 'class B {}';
 		final user: String = 'package pkg;\n' + '\n' + 'import pkg.A.Foo;\n' + '\n' + 'class User {\n' + '\tvar f:Foo;\n' + '}';
-		// `class Foo` on line 3; `Foo` at display col 6.
+		// `class Foo` on line 3; `Foo` at col 7.
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 7, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b },
@@ -78,7 +78,7 @@ class MoveSymbolSliceTest extends Test {
 		final a: String = 'package pkg;\n' + '\n' + 'final class Foo {\n' + '\tpublic var x:Int = 1;\n' + '}';
 		final b: String = 'package pkg;\n' + '\n' + 'class B {}';
 		final user: String = 'package pkg;\n' + '\n' + 'import pkg.A.Foo;\n' + '\n' + 'class User {\n' + '\tvar f:Foo;\n' + '}';
-		// `final class Foo` on line 3; `Foo` at display col 12.
+		// `final class Foo` on line 3; `Foo` at col 13.
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 13, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b },
@@ -162,7 +162,7 @@ class MoveSymbolSliceTest extends Test {
 	public function testCursorNotOnTypeDeclRefused(): Void {
 		final a: String = 'package pkg;\n' + '\n' + 'class Foo {\n' + '\tvar field:Int;\n' + '}';
 		final b: String = 'package pkg;\n\nclass B {}';
-		// Line 4: the field name `field` at col 5 — a value decl, not a type.
+		// Line 4: the field name `field` at col 6 — a value decl, not a type.
 		final result: MoveResult = MoveSymbol.moveType('pkg/A.hx', 4, 6, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b },

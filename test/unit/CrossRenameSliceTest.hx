@@ -24,7 +24,7 @@ import anyparse.query.CrossRename.FileChange;
  * `Err` and that no rewrite is emitted.
  *
  * Coordinates are the positions `apq refs` / `apq uses` print (the op
- * interprets the column in the same `Span.lineCol().col - 1`
+ * interprets the column in the same 1-based
  * convention as `rename`). Cursors point at the type NAME so the
  * identifier-token tier of the resolver applies.
  */
@@ -42,7 +42,7 @@ class CrossRenameSliceTest extends Test {
 		final expectedA: String = 'class Bar {\n' + '\tpublic function new() {}\n' + '}';
 		final expectedB: String = 'class Use {\n'
 			+ '\tvar f:Bar;\n' + '\tfunction g(a:Bar):Bar {\n' + '\t\treturn new Bar();\n' + '\t}\n' + '}';
-		// `class Foo` — `Foo` starts at col 6 (display).
+		// `class Foo` — `Foo` starts at col 7.
 		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Bar', [
 			{ file: 'a.hx', source: a },
 			{ file: 'b.hx', source: b },
@@ -69,7 +69,7 @@ class CrossRenameSliceTest extends Test {
 		final expectedA: String = 'final class Bar {\n' + '\tpublic function new() {}\n' + '}';
 		final expectedB: String = 'import pkg.Bar;\n'
 			+ 'class Use {\n' + '\tvar f:Bar;\n' + '\tfunction g(a:Bar):Bar {\n' + '\t\treturn new Bar();\n' + '\t}\n' + '}';
-		// `final class Foo` — `Foo` starts at display col 12 (after
+		// `final class Foo` — `Foo` starts at col 13 (after
 		// `final class `).
 		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 13, 'Bar', [
 			{ file: 'a.hx', source: a },
@@ -155,7 +155,7 @@ class CrossRenameSliceTest extends Test {
 	 */
 	public function testCursorNotOnTypeDeclRefused(): Void {
 		final a: String = 'class Foo {\n' + '\tvar field:Int;\n' + '}';
-		// Line 2: the field name `field` at col 5 — a value decl, not a type.
+		// Line 2: the field name `field` at col 6 — a value decl, not a type.
 		final result: CrossRenameResult = CrossRename.crossRenameType('a.hx', a, 2, 6, 'renamed', [
 			{ file: 'a.hx', source: a },
 		], plugin(), typeRefShape(), refShape());

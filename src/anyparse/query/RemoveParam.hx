@@ -62,7 +62,7 @@ enum RemoveParamResult {
  *  8. Re-parses the result; an unparseable rewrite is rejected.
  *
  * Coordinate convention: `line` / `col` are interpreted exactly as
- * `apq refs` PRINTS them (`Span.lineCol().col - 1`), identical to the
+ * `apq refs` PRINTS them (1-based), identical to the
  * sibling operations.
  */
 @:nullSafety(Strict)

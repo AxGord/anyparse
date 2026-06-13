@@ -20,7 +20,7 @@ import haxe.Exception;
  * additionally re-parsed, so an accepted rewrite is guaranteed valid Haxe.
  *
  * Coordinates are the positions `apq refs --decls` prints (the op reads
- * the column in the same `Span.lineCol().col - 1` convention as `inline`).
+ * the column in the same 1-based convention as `inline`).
  */
 class InlineMethodSliceTest extends Test {
 

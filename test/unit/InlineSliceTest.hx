@@ -20,7 +20,7 @@ import haxe.Exception;
  * inline itself, so an accepted rewrite is guaranteed valid Haxe.
  *
  * Coordinates are the positions `apq refs --decls` prints (the inline
- * interprets the column in the same `Span.lineCol().col - 1` convention
+ * interprets the column in the same 1-based convention
  * as `rename`).
  */
 class InlineSliceTest extends Test {
@@ -65,7 +65,7 @@ class InlineSliceTest extends Test {
 	public function testCursorOnReadStillInlines(): Void {
 		final source: String = 'class C {\n' + '\tfunction f(a:Int):Int {\n' + '\t\tvar x = a + 1;\n' + '\t\treturn x;\n' + '\t}\n' + '}';
 		final expected: String = 'class C {\n' + '\tfunction f(a:Int):Int {\n' + '\t\treturn (a + 1);\n' + '\t}\n' + '}';
-		// Line 4 col 9 — the `x` in `return x;`.
+		// Line 4 col 10 — the `x` in `return x;`.
 		assertInline(source, 4, 10, expected);
 	}
 
@@ -117,7 +117,7 @@ class InlineSliceTest extends Test {
 	 */
 	public function testRefuseCursorOnParameter(): Void {
 		final source: String = 'class C {\n' + '\tfunction f(a:Int):Int {\n' + '\t\treturn a + a;\n' + '\t}\n' + '}';
-		// Line 2 col 12 — the param `a` decl.
+		// Line 2 col 13 — the param `a` decl.
 		assertRefused(source, 2, 13);
 	}
 
@@ -128,7 +128,7 @@ class InlineSliceTest extends Test {
 	public function testRefuseCursorOnForIterator(): Void {
 		final source: String = 'class C {\n'
 			+ '\tfunction f():Int {\n' + '\t\tvar t = 0;\n' + '\t\tfor (i in 0...10) t += i;\n' + '\t\treturn t;\n' + '\t}\n' + '}';
-		// Line 4 col 2 — the `for` decl (iterator `i`).
+		// Line 4 col 3 — the `for` decl (iterator `i`).
 		assertRefused(source, 4, 3);
 	}
 

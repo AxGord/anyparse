@@ -23,7 +23,7 @@ import haxe.Exception;
  * so an accepted rewrite is guaranteed valid Haxe.
  *
  * Coordinates are the positions `apq refs` prints (change-sig interprets
- * the column in the same `Span.lineCol().col - 1` convention as
+ * the column in the same 1-based convention as
  * `rename` / `inline` / `extract-var`).
  */
 class ChangeSigSliceTest extends Test {
@@ -39,7 +39,7 @@ class ChangeSigSliceTest extends Test {
 			+ '\tpublic function caller():Void {\n' + '\t\tg(1, "x", 3);\n' + '\t\tthis.g(7, "y", 9);\n' + '\t}\n' + '}';
 		final expected: String = 'class C {\n' + '\tpublic function g(c:Int = 5, a:Int, ?b:String):Void {\n' + '\t\ttrace(a);\n' + '\t}\n'
 			+ '\tpublic function caller():Void {\n' + '\t\tg(3, 1, "x");\n' + '\t\tthis.g(9, 7, "y");\n' + '\t}\n' + '}';
-		// Line 2 col 8 — the method `g` decl, as `apq refs --decls` prints.
+		// Line 2 col 9 — the method `g` decl, as `apq refs --decls` prints.
 		assertChangeSig(source, 2, 9, '2,0,1', expected, true);
 	}
 
@@ -53,7 +53,7 @@ class ChangeSigSliceTest extends Test {
 			+ '\t\t\treturn x + y;\n' + '\t\t}\n' + '\t\tvar r = add(1, 2);\n' + '\t}\n' + '}';
 		final expected: String = 'class C {\n' + '\tpublic function run():Void {\n' + '\t\tfunction add(y:Int, x:Int):Int {\n'
 			+ '\t\t\treturn x + y;\n' + '\t\t}\n' + '\t\tvar r = add(2, 1);\n' + '\t}\n' + '}';
-		// Line 3 col 11 — the local function `add` name token.
+		// Line 3 col 12 — the local function `add` name token.
 		assertChangeSig(source, 3, 12, '1,0', expected, false);
 	}
 
@@ -190,7 +190,7 @@ class ChangeSigSliceTest extends Test {
 			+ '\tpublic function caller():Void {\n' + '\t\td(1, "x", 3);\n' + '\t\tthis.d(7, "y", 9);\n' + '\t}\n' + '}';
 		final expected: String = 'class C {\n' + '\tfinal function d(c:Int, a:Int, b:String):Void {\n' + '\t\ttrace(a);\n' + '\t}\n'
 			+ '\tpublic function caller():Void {\n' + '\t\td(3, 1, "x");\n' + '\t\tthis.d(9, 7, "y");\n' + '\t}\n' + '}';
-		// Line 2 col 1 — the `final` method decl, as `apq refs --decls` prints.
+		// Line 2 col 2 — the `final` method decl, as `apq refs --decls` prints.
 		assertChangeSig(source, 2, 2, '2,0,1', expected, true);
 	}
 

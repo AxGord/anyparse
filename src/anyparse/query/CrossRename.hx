@@ -97,8 +97,7 @@ typedef FileChange = {
  * never as a corrupted file.
  *
  * Coordinate convention: `line` / `col` are interpreted exactly as
- * `apq refs` PRINTS them (`Span.lineCol().col - 1`), inverted via
- * `Span.offsetOf(source, line, col + 1)` — identical to `Rename`.
+ * `apq refs` PRINTS them (1-based) — identical to `Rename`.
  */
 @:nullSafety(Strict)
 final class CrossRename {
