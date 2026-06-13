@@ -56,6 +56,9 @@ final class NewFile {
 	/** Reserved `@@` section name carrying the type doc-comment. */
 	private static inline final DOC_SECTION: String = 'doc';
 
+	/** Reserved `@@` section name carrying a raw block of free-form members. */
+	private static inline final MEMBERS_SECTION: String = 'members';
+
 	/** Type kinds that carry a `@:nullSafety(Strict)` meta (class / interface). */
 	private static final NULL_SAFE_KINDS: Array<String> = ['class', 'interface'];
 
@@ -97,6 +100,8 @@ final class NewFile {
 		if (bodiesRaw != null) parseSections(bodiesRaw, bodies, imports);
 		final classDoc: Null<String> = bodies[DOC_SECTION];
 		if (classDoc != null) bodies.remove(DOC_SECTION);
+		final freeMembers: Null<String> = bodies[MEMBERS_SECTION];
+		if (freeMembers != null) bodies.remove(MEMBERS_SECTION);
 
 		final extendsSimple: Array<String> = [for (e in extendsList) simpleNameWithImport(e, spec.pkg, imports)];
 		final abstractClause: String = kind == 'abstract' ? abstractHeader(spec, imports) : '';
@@ -130,6 +135,7 @@ final class NewFile {
 				return err('@@ $key names no method on $ifaceSimple (have: ${methodNames.join(", ")})');
 		}
 		for (field in spec.fields) members.push(field);
+		if (freeMembers != null) members.push(freeMembers);
 
 		// A class with no superclass and no constructor cannot be `new`'d (Haxe
 		// has no implicit constructor); auto-emit one. A subclass inherits its
@@ -333,6 +339,21 @@ final class NewFile {
 		final out: Array<String> = [];
 		for (line in lines) if (!out.contains(line)) out.push(line);
 		return out;
+	}
+
+	/**
+	 * Validate + canonicalise an arbitrary whole-file `content` — the validated,
+	 * atomic equivalent of a raw write (`apq new --raw`): parse-or-`Err`,
+	 * canonicalise, `Ok`. For files no `--kind` spec shape covers (multi-type
+	 * modules, free-form layouts) so creation can still go through the tooling.
+	 */
+	public static function createRaw(content: String, plugin: GrammarPlugin, ?optsJson: String): EditResult {
+		final canonical: Null<String> = try plugin.writeRoundTrip(content, optsJson) catch (exception: ParseError) {
+			return EditResult.Err('source does not parse: ${exception.message}');
+		} catch (exception: Exception) {
+			return EditResult.Err('source does not parse: ${exception.message}');
+		};
+		return canonical == null ? EditResult.Err('no writer for this grammar') : EditResult.Ok(canonical);
 	}
 
 }

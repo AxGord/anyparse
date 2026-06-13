@@ -373,4 +373,52 @@ class NewFileSliceTest extends Test {
 		Assert.isTrue(text.contains('import a.b.U;'));
 	}
 
+	/** `@@ members` appends a free-form member block to any kind. */
+	public function testFreeFormMembers(): Void {
+		final text: String = okText(create({
+			className: 'C',
+			pkg: 'p',
+			kind: 'class',
+			fields: [],
+			bodiesRaw: '@@ members\npublic function helper(): Int return 1;'
+		}));
+		Assert.isTrue(text.contains('function helper'));
+	}
+
+	/** `@@ members` adds helpers ALONGSIDE --implements stubs (no "names no method" error). */
+	public function testMembersAlongsideImplements(): Void {
+		final text: String = okText(create({
+			className: 'Impl',
+			pkg: 'p',
+			fields: [],
+			ifaceSimple: 'I',
+			ifaceModule: 'p.I',
+			ifaceSource: IFACE,
+			bodiesRaw: '@@ members\nfunction helper(): Int return 0;'
+		}));
+		Assert.isTrue(text.contains('function helper'));
+		Assert.isTrue(text.contains('function f'));
+	}
+
+	/** `createRaw` canonicalises an arbitrary parseable whole file. */
+	public function testCreateRawOk(): Void {
+		switch NewFile.createRaw('package p;\nenum E { A; B; }\nclass C { public function new() {} }', new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.isTrue(text.contains('enum E'));
+				Assert.isTrue(text.contains('class C'));
+			case Err(message):
+				Assert.fail('expected Ok, got: $message');
+		}
+	}
+
+	/** `createRaw` rejects an unparseable whole file. */
+	public function testCreateRawUnparseable(): Void {
+		switch NewFile.createRaw('package p;\nclass C {', new HaxeQueryPlugin()) {
+			case Ok(_):
+				Assert.fail('expected Err');
+			case Err(_):
+				Assert.pass();
+		}
+	}
+
 }

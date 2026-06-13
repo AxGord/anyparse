@@ -10054,175 +10054,6 @@ final class Cli {
 	 * section is left as a NotImplementedException stub (reported on stderr).
 	 * Without `--write` the source goes to stdout.
 	 */
-	private static function runNew(args: Array<String>): Int {
-		var lang: String = 'haxe';
-		var write: Bool = false;
-		var asClass: Bool = false;
-		var open: Bool = false;
-		var kind: String = 'class';
-		var iface: Null<String> = null;
-		var underlying: Null<String> = null;
-		var bodiesArg: Null<String> = null;
-		var bodiesFromFile: Null<String> = null;
-		final extendsList: Array<String> = [];
-		final fromList: Array<String> = [];
-		final toList: Array<String> = [];
-		final fields: Array<String> = [];
-		var path: Null<String> = null;
-
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
-				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
-				case '--class':
-					asClass = true;
-				case '--kind':
-					kind = expectValue(args, ++i, '--kind');
-				case '--extends':
-					extendsList.push(expectValue(args, ++i, '--extends'));
-				case '--underlying':
-					underlying = expectValue(args, ++i, '--underlying');
-				case '--from':
-					fromList.push(expectValue(args, ++i, '--from'));
-				case '--to':
-					toList.push(expectValue(args, ++i, '--to'));
-				case '--open':
-					open = true;
-				case '--implements':
-					iface = expectValue(args, ++i, '--implements');
-				case '--field':
-					fields.push(expectValue(args, ++i, '--field'));
-				case '--bodies':
-					bodiesArg = expectValue(args, ++i, '--bodies');
-				case '--from-file':
-					bodiesFromFile = expectValue(args, ++i, '--from-file');
-				case '--write':
-					write = true;
-				case '-h', '--help':
-					printNewUsage();
-					return EXIT_OK;
-				case _:
-					if (StringTools.startsWith(a, '--')) {
-						stderr('apq new: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
-					if (path == null)
-						path = a;
-					else {
-						stderr('apq new: unexpected extra argument "$a"\n');
-						return EXIT_USAGE;
-					}
-			}
-			i++;
-		}
-		if (path == null) {
-			stderr('apq new: expected <path>\n');
-			printNewUsage();
-			return EXIT_USAGE;
-		}
-		if (['class', 'interface', 'enum', 'typedef', 'abstract'].indexOf(kind) < 0) {
-			stderr('apq new: --kind must be class|interface|enum|typedef|abstract (got "$kind")\n');
-			return EXIT_USAGE;
-		}
-		final hasIntent: Bool = asClass || iface != null || kind != 'class' || extendsList.length > 0 || fields.length > 0;
-		if (!hasIntent) {
-			stderr('apq new: specify --class / --implements <iface> / --kind <k>\n');
-			return EXIT_USAGE;
-		}
-		final filePath: String = path;
-		if (FileSystem.exists(filePath)) {
-			stderr('apq new: $filePath already exists (create-only; use the ops / fmt to modify)\n');
-			return EXIT_RUNTIME;
-		}
-
-		var bodiesRaw: Null<String> = null;
-		if (bodiesArg == '-' || bodiesFromFile != null) {
-			final resolved: Null<String> = resolveCodeArg('new', bodiesArg == '-' ? '-' : null, bodiesFromFile);
-			if (resolved == null) return EXIT_RUNTIME;
-			bodiesRaw = resolved;
-		} else if (bodiesArg != null) bodiesRaw = bodiesArg;
-
-		final className: String = newFileClassName(filePath);
-		final pkg: String = derivePackage(filePath);
-
-		var ifaceSimple: Null<String> = null;
-		var ifaceModule: Null<String> = null;
-		var ifaceSource: Null<String> = null;
-		if (iface != null) {
-			final resolved: Null<{ source: String, ifaceModule: String, simple: String }> = resolveInterface(iface, filePath);
-			if (resolved == null) {
-				stderr('apq new: could not locate interface "$iface" (expected a .hx beside the new file or at its package path)\n');
-				return EXIT_RUNTIME;
-			}
-			ifaceSimple = resolved.simple;
-			ifaceModule = resolved.ifaceModule;
-			ifaceSource = resolved.source;
-		}
-
-		final plugin: GrammarPlugin = pickPlugin(lang);
-		final optsJson: Null<String> = discoverFormatConfig(filePath);
-		final spec: NewFileSpec = {
-			className: className,
-			pkg: pkg,
-			fields: fields,
-			kind: kind,
-			isFinal: !open,
-			extendsList: extendsList,
-			underlying: underlying,
-			fromList: fromList,
-			toList: toList,
-			ifaceSimple: ifaceSimple,
-			ifaceModule: ifaceModule,
-			ifaceSource: ifaceSource,
-			bodiesRaw: bodiesRaw,
-		};
-		final res: NewFileResult = NewFile.create(spec, plugin, optsJson);
-		switch res.result {
-			case Ok(text):
-				for (m in res.stubbed) stderr('apq new: $m() left as a NotImplementedException stub\n');
-				if (write) {
-					writeFile(filePath, text);
-					stderr('apq new: wrote $filePath\n');
-				} else
-					sysPrint(text);
-				return EXIT_OK;
-			case Err(message):
-				stderr('apq new: $message\n');
-				return EXIT_RUNTIME;
-		}
-	}
-
-	private static function printNewUsage(): Void {
-		sysPrint(
-			'Usage: apq new <path> (--class | --implements <iface> | --kind <k>) [--extends <T>]... [--open] [--underlying <T>] [--from <T>]... [--to <T>]... [--field <m>]... [--bodies -] [--write]\n'
-		);
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --kind <k>          class (default) | interface | enum | typedef | abstract\n');
-		sysPrint('  --class             Shorthand for --kind class\n');
-		sysPrint('  --implements <i>    (class) implement interface <i> — stub every method\n');
-		sysPrint('                      with its real signature (simple name = same package,\n');
-		sysPrint('                      or a qualified pkg.Name)\n');
-		sysPrint('  --extends <T>       (class) superclass / (interface, typedef) extension;\n');
-		sysPrint('                      repeatable for interface/typedef; a qualified pkg.T is imported\n');
-		sysPrint('  --underlying <T>    (abstract) the underlying type — required for --kind abstract\n');
-		sysPrint('  --from <T> / --to <T>  (abstract) implicit-cast clauses (repeatable)\n');
-		sysPrint('  --open              Emit a non-final class (default: final)\n');
-		sysPrint('  --field <member>    Add a verbatim member (repeatable)\n');
-		sysPrint('  --bodies -          Read @@ <method> body sections from stdin\n');
-		sysPrint('                      (@@ imports = extra imports, @@ doc = doc-comment); a\n');
-		sysPrint('                      method without a section gets a NotImplementedException stub\n');
-		sysPrint('  --write             Write the new file (default: emit to stdout)\n');
-		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
-		sysPrint('\n');
-		sysPrint('Assemble a NEW module and canonicalise it through the writer (parses-or-\n');
-		sysPrint('fails, byte-canonical, atomic). The path must not already exist — modify\n');
-		sysPrint('an existing file with the structural ops / apq fmt. An unparseable result\n');
-		sysPrint('(e.g. a malformed @@ body) exits non-zero with nothing written.\n');
-	}
-
 	/**
 	 * `apq set-doc <file> <line>:<col> (<text> | --from-file | -) [--reformat]
 	 * [--write]` — add or replace the doc-comment of the declaration at the
@@ -10419,6 +10250,207 @@ final class Cli {
 		sysPrint('cursor without retyping it — the safe replacement for replace-node on a\n');
 		sysPrint('modifier. `final` is not handled (it wraps the declaration; use replace-node).\n');
 		sysPrint('The result is WRITER-FORMATTED + re-parse-validated.\n');
+	}
+
+	/**
+	 * `apq new <path> (--class | --implements <iface> | --kind <k> | --raw -)
+	 * [--extends <T>]... [--open] [--underlying <T>] [--from <T>]... [--to <T>]...
+	 * [--field <m>]... [--bodies -] [--write]` — create a new module
+	 * deterministically. The structured path derives the package + class name from
+	 * <path> and assembles the scaffold (interface stubs / `--field` / `@@`
+	 * sections incl. `@@ members`); `--raw -` instead takes the COMPLETE file from
+	 * stdin (the validated atomic equivalent of a raw write, for shapes no spec
+	 * covers). Either way the writer round-trip canonicalises + re-parse-validates,
+	 * and the file is never written on a parse failure. Create-only: an existing
+	 * path is refused. Without `--write` the source goes to stdout.
+	 */
+	private static function runNew(args: Array<String>): Int {
+		var lang: String = 'haxe';
+		var write: Bool = false;
+		var asClass: Bool = false;
+		var open: Bool = false;
+		var raw: Bool = false;
+		var kind: String = 'class';
+		var iface: Null<String> = null;
+		var underlying: Null<String> = null;
+		var bodiesArg: Null<String> = null;
+		var bodiesFromFile: Null<String> = null;
+		final extendsList: Array<String> = [];
+		final fromList: Array<String> = [];
+		final toList: Array<String> = [];
+		final fields: Array<String> = [];
+		var path: Null<String> = null;
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--class':
+					asClass = true;
+				case '--kind':
+					kind = expectValue(args, ++i, '--kind');
+				case '--extends':
+					extendsList.push(expectValue(args, ++i, '--extends'));
+				case '--underlying':
+					underlying = expectValue(args, ++i, '--underlying');
+				case '--from':
+					fromList.push(expectValue(args, ++i, '--from'));
+				case '--to':
+					toList.push(expectValue(args, ++i, '--to'));
+				case '--open':
+					open = true;
+				case '--raw':
+					raw = true;
+					if (i + 1 < args.length && args[i + 1] == '-')
+						i++;
+
+				case '--implements':
+					iface = expectValue(args, ++i, '--implements');
+				case '--field':
+					fields.push(expectValue(args, ++i, '--field'));
+				case '--bodies':
+					bodiesArg = expectValue(args, ++i, '--bodies');
+				case '--from-file':
+					bodiesFromFile = expectValue(args, ++i, '--from-file');
+				case '--write':
+					write = true;
+				case '-h', '--help':
+					printNewUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq new: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (path == null)
+						path = a;
+					else {
+						stderr('apq new: unexpected extra argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (path == null) {
+			stderr('apq new: expected <path>\n');
+			printNewUsage();
+			return EXIT_USAGE;
+		}
+		if (!raw && ['class', 'interface', 'enum', 'typedef', 'abstract'].indexOf(kind) < 0) {
+			stderr('apq new: --kind must be class|interface|enum|typedef|abstract (got "$kind")\n');
+			return EXIT_USAGE;
+		}
+		final hasIntent: Bool = raw || asClass || iface != null || kind != 'class' || extendsList.length > 0 || fields.length > 0;
+		if (!hasIntent) {
+			stderr('apq new: specify --class / --implements <iface> / --kind <k> / --raw -\n');
+			return EXIT_USAGE;
+		}
+		final filePath: String = path;
+		if (FileSystem.exists(filePath)) {
+			stderr('apq new: $filePath already exists (create-only; use the ops / fmt to modify)\n');
+			return EXIT_RUNTIME;
+		}
+
+		final plugin: GrammarPlugin = pickPlugin(lang);
+		final optsJson: Null<String> = discoverFormatConfig(filePath);
+
+		if (raw) {
+			final content: Null<String> = resolveCodeArg('new', '-', null);
+			if (content == null) return EXIT_RUNTIME;
+			return emitNew(filePath, NewFile.createRaw(content, plugin, optsJson), [], write);
+		}
+
+		var bodiesRaw: Null<String> = null;
+		if (bodiesArg == '-' || bodiesFromFile != null) {
+			final resolved: Null<String> = resolveCodeArg('new', bodiesArg == '-' ? '-' : null, bodiesFromFile);
+			if (resolved == null) return EXIT_RUNTIME;
+			bodiesRaw = resolved;
+		} else if (bodiesArg != null) bodiesRaw = bodiesArg;
+
+		final className: String = newFileClassName(filePath);
+		final pkg: String = derivePackage(filePath);
+
+		var ifaceSimple: Null<String> = null;
+		var ifaceModule: Null<String> = null;
+		var ifaceSource: Null<String> = null;
+		if (iface != null) {
+			final resolved: Null<{ source: String, ifaceModule: String, simple: String }> = resolveInterface(iface, filePath);
+			if (resolved == null) {
+				stderr('apq new: could not locate interface "$iface" (expected a .hx beside the new file or at its package path)\n');
+				return EXIT_RUNTIME;
+			}
+			ifaceSimple = resolved.simple;
+			ifaceModule = resolved.ifaceModule;
+			ifaceSource = resolved.source;
+		}
+
+		final spec: NewFileSpec = {
+			className: className,
+			pkg: pkg,
+			fields: fields,
+			kind: kind,
+			isFinal: !open,
+			extendsList: extendsList,
+			underlying: underlying,
+			fromList: fromList,
+			toList: toList,
+			ifaceSimple: ifaceSimple,
+			ifaceModule: ifaceModule,
+			ifaceSource: ifaceSource,
+			bodiesRaw: bodiesRaw,
+		};
+		final res: NewFileResult = NewFile.create(spec, plugin, optsJson);
+		return emitNew(filePath, res.result, res.stubbed, write);
+	}
+
+	/** Shared tail for `apq new`: report stub warnings, then write the file or emit to stdout. */
+	private static function emitNew(filePath: String, result: EditResult, stubbed: Array<String>, write: Bool): Int {
+		switch result {
+			case Ok(text):
+				for (m in stubbed) stderr('apq new: $m() left as a NotImplementedException stub\n');
+				if (write) {
+					writeFile(filePath, text);
+					stderr('apq new: wrote $filePath\n');
+				} else
+					sysPrint(text);
+				return EXIT_OK;
+			case Err(message):
+				stderr('apq new: $message\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
+	private static function printNewUsage(): Void {
+		sysPrint(
+			'Usage: apq new <path> (--class | --implements <iface> | --kind <k> | --raw -) [--extends <T>]... [--open] [--underlying <T>] [--from <T>]... [--to <T>]... [--field <m>]... [--bodies -] [--write]\n'
+		);
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --kind <k>          class (default) | interface | enum | typedef | abstract\n');
+		sysPrint('  --class             Shorthand for --kind class\n');
+		sysPrint('  --raw -            Read the COMPLETE file from stdin (validated atomic\n');
+		sysPrint('                      write; for shapes no spec covers, e.g. multi-type files)\n');
+		sysPrint('  --implements <i>    (class) implement interface <i> — stub every method\n');
+		sysPrint('                      with its real signature (simple name = same package,\n');
+		sysPrint('                      or a qualified pkg.Name)\n');
+		sysPrint('  --extends <T>       (class) superclass / (interface, typedef) extension;\n');
+		sysPrint('                      repeatable for interface/typedef; a qualified pkg.T is imported\n');
+		sysPrint('  --underlying <T>    (abstract) the underlying type — required for --kind abstract\n');
+		sysPrint('  --from <T> / --to <T>  (abstract) implicit-cast clauses (repeatable)\n');
+		sysPrint('  --open              Emit a non-final class (default: final)\n');
+		sysPrint('  --field <member>    Add a verbatim member (repeatable)\n');
+		sysPrint('  --bodies -          Read @@ sections from stdin: @@ <method> bodies,\n');
+		sysPrint('                      @@ members (a free-form member block), @@ imports, @@ doc;\n');
+		sysPrint('                      an unfilled interface method gets a NotImplementedException stub\n');
+		sysPrint('  --write             Write the new file (default: emit to stdout)\n');
+		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('\n');
+		sysPrint('Assemble a NEW module and canonicalise it through the writer (parses-or-\n');
+		sysPrint('fails, byte-canonical, atomic). The path must not already exist — modify\n');
+		sysPrint('an existing file with the structural ops / apq fmt. An unparseable result\n');
+		sysPrint('(e.g. a malformed @@ body) exits non-zero with nothing written.\n');
 	}
 
 }
