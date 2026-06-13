@@ -32,7 +32,7 @@ class InlineSliceTest extends Test {
 	public function testInlineLiteralIntoAllReads(): Void {
 		final source: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\tvar x = 5;\n' + '\t\treturn x + x;\n' + '\t}\n' + '}';
 		final expected: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\treturn 5 + 5;\n' + '\t}\n' + '}';
-		assertInline(source, 3, 2, expected);
+		assertInline(source, 3, 3, expected);
 	}
 
 	/**
@@ -44,7 +44,7 @@ class InlineSliceTest extends Test {
 		final source: String = 'class C {\n'
 			+ '\tfunction f(a:Int, b:Int):Int {\n' + '\t\tvar x = a + b;\n' + '\t\treturn x * 2;\n' + '\t}\n' + '}';
 		final expected: String = 'class C {\n' + '\tfunction f(a:Int, b:Int):Int {\n' + '\t\treturn (a + b) * 2;\n' + '\t}\n' + '}';
-		assertInline(source, 3, 2, expected);
+		assertInline(source, 3, 3, expected);
 	}
 
 	/**
@@ -55,7 +55,7 @@ class InlineSliceTest extends Test {
 	public function testInlineAtomicIdentStaysUnparenthesised(): Void {
 		final source: String = 'class C {\n' + '\tfunction f(a:Int):Int {\n' + '\t\tvar x = a;\n' + '\t\treturn x + 1;\n' + '\t}\n' + '}';
 		final expected: String = 'class C {\n' + '\tfunction f(a:Int):Int {\n' + '\t\treturn a + 1;\n' + '\t}\n' + '}';
-		assertInline(source, 3, 2, expected);
+		assertInline(source, 3, 3, expected);
 	}
 
 	/**
@@ -66,7 +66,7 @@ class InlineSliceTest extends Test {
 		final source: String = 'class C {\n' + '\tfunction f(a:Int):Int {\n' + '\t\tvar x = a + 1;\n' + '\t\treturn x;\n' + '\t}\n' + '}';
 		final expected: String = 'class C {\n' + '\tfunction f(a:Int):Int {\n' + '\t\treturn (a + 1);\n' + '\t}\n' + '}';
 		// Line 4 col 9 — the `x` in `return x;`.
-		assertInline(source, 4, 9, expected);
+		assertInline(source, 4, 10, expected);
 	}
 
 	/**
@@ -78,7 +78,7 @@ class InlineSliceTest extends Test {
 			+ '\tfunction f(a:Int):Int {\n' + '\t\tvar x = a + 2;\n' + '\t\tvar y = x;\n' + '\t\treturn y + x;\n' + '\t}\n' + '}';
 		final expected: String = 'class C {\n'
 			+ '\tfunction f(a:Int):Int {\n' + '\t\tvar y = (a + 2);\n' + '\t\treturn y + (a + 2);\n' + '\t}\n' + '}';
-		assertInline(source, 3, 2, expected);
+		assertInline(source, 3, 3, expected);
 	}
 
 	/**
@@ -88,7 +88,7 @@ class InlineSliceTest extends Test {
 	public function testRefuseReassignedVariable(): Void {
 		final source: String = 'class C {\n'
 			+ '\tfunction f(a:Int):Int {\n' + '\t\tvar x = 1;\n' + '\t\tx = 2;\n' + '\t\treturn x;\n' + '\t}\n' + '}';
-		assertRefused(source, 3, 2);
+		assertRefused(source, 3, 3);
 	}
 
 	/**
@@ -98,7 +98,7 @@ class InlineSliceTest extends Test {
 	public function testRefuseInitializerWithCall(): Void {
 		final source: String = 'class C {\n'
 			+ '\tfunction g():Int return 1;\n' + '\tfunction f():Int {\n' + '\t\tvar x = g();\n' + '\t\treturn x + x;\n' + '\t}\n' + '}';
-		assertRefused(source, 4, 2);
+		assertRefused(source, 4, 3);
 	}
 
 	/**
@@ -108,7 +108,7 @@ class InlineSliceTest extends Test {
 	public function testRefuseInitializerReadsReassignedFreeVar(): Void {
 		final source: String = 'class C {\n'
 			+ '\tfunction f(a:Int):Int {\n' + '\t\tvar x = a + 1;\n' + '\t\ta = 9;\n' + '\t\treturn x;\n' + '\t}\n' + '}';
-		assertRefused(source, 3, 2);
+		assertRefused(source, 3, 3);
 	}
 
 	/**
@@ -118,7 +118,7 @@ class InlineSliceTest extends Test {
 	public function testRefuseCursorOnParameter(): Void {
 		final source: String = 'class C {\n' + '\tfunction f(a:Int):Int {\n' + '\t\treturn a + a;\n' + '\t}\n' + '}';
 		// Line 2 col 12 — the param `a` decl.
-		assertRefused(source, 2, 12);
+		assertRefused(source, 2, 13);
 	}
 
 	/**
@@ -129,7 +129,7 @@ class InlineSliceTest extends Test {
 		final source: String = 'class C {\n'
 			+ '\tfunction f():Int {\n' + '\t\tvar t = 0;\n' + '\t\tfor (i in 0...10) t += i;\n' + '\t\treturn t;\n' + '\t}\n' + '}';
 		// Line 4 col 2 — the `for` decl (iterator `i`).
-		assertRefused(source, 4, 2);
+		assertRefused(source, 4, 3);
 	}
 
 	/**
@@ -138,7 +138,7 @@ class InlineSliceTest extends Test {
 	 */
 	public function testRefuseNoReads(): Void {
 		final source: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\tvar x = 5;\n' + '\t\treturn 0;\n' + '\t}\n' + '}';
-		assertRefused(source, 3, 2);
+		assertRefused(source, 3, 3);
 	}
 
 	private function assertInline(source: String, line: Int, col: Int, expected: String): Void {

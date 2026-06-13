@@ -77,7 +77,7 @@ final class SetModifier {
 		)
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
-		final cursor: Int = Span.offsetOf(source, line, col + 1);
+		final cursor: Int = Span.offsetOf(source, line, col);
 		final node: Null<QueryNode> = Engine.at(tree, cursor);
 		if (node == null) return Err('position $line:$col is not on a node');
 		final parent: Null<QueryNode> = RefactorSupport.parentOf(tree, node);

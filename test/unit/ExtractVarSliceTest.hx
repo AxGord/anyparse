@@ -38,7 +38,7 @@ class ExtractVarSliceTest extends Test {
 		final expected: String = 'class C {\n'
 			+ '\tfunction f(a:Int, b:Int):Int {\n' + '\t\tfinal t = a + b * 2;\n' + '\t\tvar y = t;\n' + '\t\treturn y;\n' + '\t}\n' + '}';
 		// Line 3 col 10 — the `a` in `a + b * 2`.
-		assertExtract(source, 3, 10, 't', expected);
+		assertExtract(source, 3, 11, 't', expected);
 	}
 
 	/**
@@ -50,7 +50,7 @@ class ExtractVarSliceTest extends Test {
 		final expected: String = 'class C {\n'
 			+ '\tfunction f(a:Int, b:Int):Void {\n' + '\t\tfinal t = a + b;\n' + '\t\tg(t);\n' + '\t}\n' + '}';
 		// Line 3 col 4 — the `a` inside `g(a + b)`.
-		assertExtract(source, 3, 4, 't', expected);
+		assertExtract(source, 3, 5, 't', expected);
 	}
 
 	/**
@@ -64,7 +64,7 @@ class ExtractVarSliceTest extends Test {
 		final expected: String = 'class C {\n'
 			+ '\tfunction f(a:Int, b:Int):Void {\n' + '\t\tfinal t = g(a + b);\n' + '\t\tvar r = t;\n' + '\t\ttrace(r);\n' + '\t}\n' + '}';
 		// Line 3 col 10 — the `g` callee of `g(a + b)`.
-		assertExtract(source, 3, 10, 't', expected);
+		assertExtract(source, 3, 11, 't', expected);
 	}
 
 	/**
@@ -78,7 +78,7 @@ class ExtractVarSliceTest extends Test {
 		final expected: String = 'class C {\n' + '\tfunction f(a:Int):Int {\n' + '\t\tfinal c = a > 0;\n' + '\t\tif (c) {\n'
 			+ '\t\t\treturn 1;\n' + '\t\t}\n' + '\t\treturn 0;\n' + '\t}\n' + '}';
 		// Line 3 col 6 — the `a` in `if (a > 0)`.
-		assertExtract(source, 3, 6, 'c', expected);
+		assertExtract(source, 3, 7, 'c', expected);
 	}
 
 	/**
@@ -91,7 +91,7 @@ class ExtractVarSliceTest extends Test {
 		final expected: String = 'class C {\n' + '\tfunction f(a:Int, b:Int):Void {\n' + '\t\twhile (a > 0) {\n'
 			+ '\t\t\tfinal t = a + b;\n' + '\t\t\tg(t);\n' + '\t\t}\n' + '\t}\n' + '}';
 		// Line 4 col 5 — the `a` inside the braced while body's `g(a + b)`.
-		assertExtract(source, 4, 5, 't', expected);
+		assertExtract(source, 4, 6, 't', expected);
 	}
 
 	/**
@@ -103,7 +103,7 @@ class ExtractVarSliceTest extends Test {
 		final source: String = 'class C {\n'
 			+ '\tfunction f(a:Int, b:Int):Int {\n' + '\t\tif (a > 0) return a + b;\n' + '\t\treturn 0;\n' + '\t}\n' + '}';
 		// Line 3 col 20 — the `a` in the braceless then-branch `a + b`.
-		assertRefused(source, 3, 20, 't');
+		assertRefused(source, 3, 21, 't');
 	}
 
 	/**
@@ -114,7 +114,7 @@ class ExtractVarSliceTest extends Test {
 		final source: String = 'class C {\n'
 			+ '\tfunction f(a:Int, b:Int):Int {\n' + '\t\tvar y = a + b;\n' + '\t\treturn y;\n' + '\t}\n' + '}';
 		// Line 3 col 11 — the space between `a` and `+`.
-		assertRefused(source, 3, 11, 't');
+		assertRefused(source, 3, 12, 't');
 	}
 
 	/**
@@ -125,7 +125,7 @@ class ExtractVarSliceTest extends Test {
 		final source: String = 'class C {\n'
 			+ '\tfunction f(a:Int, b:Int):Int {\n' + '\t\tvar y = a + b;\n' + '\t\treturn y;\n' + '\t}\n' + '}';
 		// Line 3 col 10 — the `a`; name `1bad` is not a valid identifier.
-		assertRefused(source, 3, 10, '1bad');
+		assertRefused(source, 3, 11, '1bad');
 	}
 
 	/**
@@ -136,7 +136,7 @@ class ExtractVarSliceTest extends Test {
 	public function testRefuseNameCollidesWithParam(): Void {
 		final source: String = 'class C {\n' + '\tfunction f(a:Int, b:Int, x:Int):Int {\n' + '\t\treturn a + b;\n' + '\t}\n' + '}';
 		// Line 3 col 9 — the `a`; name `x` already names a parameter.
-		assertRefused(source, 3, 9, 'x');
+		assertRefused(source, 3, 10, 'x');
 	}
 
 	/**
@@ -151,7 +151,7 @@ class ExtractVarSliceTest extends Test {
 		final expected: String = 'class C {\n'
 			+ '\tfinal function d(a:Int, b:Int):Int {\n' + '\t\tfinal t = a + b * 2;\n' + '\t\tvar y = t;\n' + '\t\treturn y;\n' + '\t}\n' + '}';
 		// Line 3 col 10 — the `a` in `a + b * 2`.
-		assertExtract(source, 3, 10, 't', expected);
+		assertExtract(source, 3, 11, 't', expected);
 	}
 
 	/**
@@ -165,7 +165,7 @@ class ExtractVarSliceTest extends Test {
 	public function testRefuseCollidesFinalMethodParam(): Void {
 		final source: String = 'class C {\n' + '\tfinal function d(a:Int, b:Int, x:Int):Int {\n' + '\t\treturn a + b;\n' + '\t}\n' + '}';
 		// Line 3 col 9 — the `a`; name `x` already names a param of the final method.
-		assertRefused(source, 3, 9, 'x');
+		assertRefused(source, 3, 10, 'x');
 	}
 
 	private function assertExtract(source: String, line: Int, col: Int, name: String, expected: String): Void {

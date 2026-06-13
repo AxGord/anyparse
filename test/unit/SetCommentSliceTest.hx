@@ -22,7 +22,7 @@ class SetCommentSliceTest extends Test {
 	/** A full-line `//` run is replaced as ONE unit (all lines swapped). */
 	public function testReplacesLineRun(): Void {
 		final src: String = 'class C {\n\t// old one\n\t// old two\n\tvar x: Int = 1;\n}';
-		final text: String = okText(SetComment.setComment(src, 2, 1, '// new A\n// new B', true, new HaxeQueryPlugin()));
+		final text: String = okText(SetComment.setComment(src, 2, 2, '// new A\n// new B', true, new HaxeQueryPlugin()));
 		Assert.isTrue(text.contains('new A'));
 		Assert.isTrue(text.contains('new B'));
 		Assert.isFalse(text.contains('old one'));
@@ -32,7 +32,7 @@ class SetCommentSliceTest extends Test {
 	/** A block comment is replaced whole. */
 	public function testReplacesBlock(): Void {
 		final src: String = 'class C {\n\t/* old block */\n\tvar x: Int = 1;\n}';
-		final text: String = okText(SetComment.setComment(src, 2, 1, '/* new block */', true, new HaxeQueryPlugin()));
+		final text: String = okText(SetComment.setComment(src, 2, 2, '/* new block */', true, new HaxeQueryPlugin()));
 		Assert.isTrue(text.contains('new block'));
 		Assert.isFalse(text.contains('old block'));
 	}
@@ -40,7 +40,7 @@ class SetCommentSliceTest extends Test {
 	/** A doc comment is replaced (it is a block comment to the scanner). */
 	public function testReplacesDoc(): Void {
 		final src: String = 'class C {\n\t/**\n\t * old doc\n\t */\n\tpublic function f(): Void {}\n}';
-		final text: String = okText(SetComment.setComment(src, 2, 1, '/**\n * new doc\n */', true, new HaxeQueryPlugin()));
+		final text: String = okText(SetComment.setComment(src, 2, 2, '/**\n * new doc\n */', true, new HaxeQueryPlugin()));
 		Assert.isTrue(text.contains('new doc'));
 		Assert.isFalse(text.contains('old doc'));
 	}
@@ -48,7 +48,7 @@ class SetCommentSliceTest extends Test {
 	/** A trailing `//` after code is replaced alone, not merged. */
 	public function testReplacesTrailing(): Void {
 		final src: String = 'class C {\n\tvar x: Int = 1; // tail old\n}';
-		final text: String = okText(SetComment.setComment(src, 2, 17, '// tail new', true, new HaxeQueryPlugin()));
+		final text: String = okText(SetComment.setComment(src, 2, 18, '// tail new', true, new HaxeQueryPlugin()));
 		Assert.isTrue(text.contains('tail new'));
 		Assert.isFalse(text.contains('tail old'));
 	}
@@ -56,19 +56,19 @@ class SetCommentSliceTest extends Test {
 	/** A cursor not on a comment is an error. */
 	public function testBadPositionIsError(): Void {
 		final src: String = 'class C {\n\t// c\n\tvar x: Int = 1;\n}';
-		Assert.isTrue(isErr(SetComment.setComment(src, 99, 1, '// x', true, new HaxeQueryPlugin())));
+		Assert.isTrue(isErr(SetComment.setComment(src, 99, 2, '// x', true, new HaxeQueryPlugin())));
 	}
 
 	/** A replacement that is not a comment is refused. */
 	public function testNonCommentReplacementIsError(): Void {
 		final src: String = 'class C {\n\t// c\n\tvar x: Int = 1;\n}';
-		Assert.isTrue(isErr(SetComment.setComment(src, 2, 1, 'var z = 1;', true, new HaxeQueryPlugin())));
+		Assert.isTrue(isErr(SetComment.setComment(src, 2, 2, 'var z = 1;', true, new HaxeQueryPlugin())));
 	}
 
 	/** An empty replacement is refused. */
 	public function testEmptyReplacementIsError(): Void {
 		final src: String = 'class C {\n\t// c\n\tvar x: Int = 1;\n}';
-		Assert.isTrue(isErr(SetComment.setComment(src, 2, 1, '   ', true, new HaxeQueryPlugin())));
+		Assert.isTrue(isErr(SetComment.setComment(src, 2, 2, '   ', true, new HaxeQueryPlugin())));
 	}
 
 	private function okText(res: EditResult): String {

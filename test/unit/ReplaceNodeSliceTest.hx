@@ -38,7 +38,7 @@ class ReplaceNodeSliceTest extends Test {
 	public function testReplaceByPosition(): Void {
 		final source: String = 'class C {\n' + '\tfunction f():Void {}\n' + '}\n';
 		final expected: String = 'class C {\n' + '\tfunction h():Void {}\n' + '}\n';
-		assertReplace(source, ByPosition(2, 10), 'function h():Void {}', expected);
+		assertReplace(source, ByPosition(2, 11), 'function h():Void {}', expected);
 	}
 
 	/** Refuse a selector that matches no node. */
@@ -88,20 +88,20 @@ class ReplaceNodeSliceTest extends Test {
 	public function testReplaceByKindMul(): Void {
 		final source: String = 'class C {\n' + '\tfunction f():Void {\n' + '\t\tvar x = a + b * c;\n' + '\t}\n' + '}\n';
 		final expected: String = 'class C {\n' + '\tfunction f():Void {\n' + '\t\tvar x = a + q;\n' + '\t}\n' + '}\n';
-		assertReplace(source, ByKindPosition(3, 14, 'Mul'), 'q', expected, true);
+		assertReplace(source, ByKindPosition(3, 15, 'Mul'), 'q', expected, true);
 	}
 
 	/** `--kind Add` at the left operand selects the whole `a + b * c` Add. */
 	public function testReplaceByKindAdd(): Void {
 		final source: String = 'class C {\n' + '\tfunction f():Void {\n' + '\t\tvar x = a + b * c;\n' + '\t}\n' + '}\n';
 		final expected: String = 'class C {\n' + '\tfunction f():Void {\n' + '\t\tvar x = z;\n' + '\t}\n' + '}\n';
-		assertReplace(source, ByKindPosition(3, 10, 'Add'), 'z', expected, true);
+		assertReplace(source, ByKindPosition(3, 11, 'Add'), 'z', expected, true);
 	}
 
 	/** A cursor with no node of the requested kind is refused. */
 	public function testRefuseKindNoMatch(): Void {
 		final source: String = 'class C {\n' + '\tfunction f():Void {\n' + '\t\tvar x = a + b;\n' + '\t}\n' + '}\n';
-		assertRefused(source, ByKindPosition(3, 10, 'Mul'), 'q', true);
+		assertRefused(source, ByKindPosition(3, 11, 'Mul'), 'q', true);
 	}
 
 	/**
@@ -112,7 +112,7 @@ class ReplaceNodeSliceTest extends Test {
 		final source: String = 'class C {\n' + '\t/** old */\n' + '\tpublic function f():Void {}\n' + '}\n';
 		final expected: String = 'class C {\n' + '\t/** new */\n' + '\tpublic function g():Void {}\n' + '}\n';
 		final result: EditResult = ReplaceNode.replaceNode(
-			source, ByKindPosition(3, 8, 'FnMember'), '/** new */\npublic function g():Void {}', true, new HaxeQueryPlugin(), true
+			source, ByKindPosition(3, 9, 'FnMember'), '/** new */\npublic function g():Void {}', true, new HaxeQueryPlugin(), true
 		);
 		switch result {
 			case Ok(text):

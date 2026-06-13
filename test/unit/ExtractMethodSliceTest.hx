@@ -37,7 +37,7 @@ class ExtractMethodSliceTest extends Test {
 		final expected: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\tvar a = 1;\n' + '\t\tfunction helper() {\n'
 			+ '\t\t\tvar b = a + 2;\n' + '\t\t\ttrace(b);\n' + '\t\t\treturn b;\n' + '\t\t}\n' + '\t\tfinal b = helper();\n'
 			+ '\t\treturn b;\n' + '\t}\n' + '}\n';
-		assertExtract(source, 4, 2, 5, 2, 'helper', true, expected);
+		assertExtract(source, 4, 3, 5, 3, 'helper', true, expected);
 	}
 
 	/**
@@ -49,7 +49,7 @@ class ExtractMethodSliceTest extends Test {
 			+ '\tfunction f():Void {\n' + '\t\tvar a = 1;\n' + '\t\tvar b = 2;\n' + '\t\ttrace(a);\n' + '\t\ttrace(b);\n' + '\t}\n' + '}\n';
 		final expected: String = 'class C {\n' + '\tfunction f():Void {\n' + '\t\tvar a = 1;\n' + '\t\tvar b = 2;\n'
 			+ '\t\tfunction helper() {\n' + '\t\t\ttrace(a);\n' + '\t\t\ttrace(b);\n' + '\t\t}\n' + '\t\thelper();\n' + '\t}\n' + '}\n';
-		assertExtract(source, 5, 2, 6, 2, 'helper', true, expected);
+		assertExtract(source, 5, 3, 6, 3, 'helper', true, expected);
 	}
 
 	/**
@@ -62,7 +62,7 @@ class ExtractMethodSliceTest extends Test {
 		final expected: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\tvar a = 1;\n' + '\t\tfunction helper() {\n'
 			+ '\t\t\tvar b = a + 2;\n' + '\t\t\ttrace(b);\n' + '\t\t\treturn b;\n' + '\t\t}\n' + '\t\tfinal b = helper();\n'
 			+ '\t\treturn b;\n' + '\t}\n' + '}\n';
-		assertExtract(source, 4, 2, 5, 2, 'helper', false, expected);
+		assertExtract(source, 4, 3, 5, 3, 'helper', false, expected);
 	}
 
 	/** `reformat` canonicalises a non-canonical (4-space) source as it extracts. */
@@ -71,28 +71,28 @@ class ExtractMethodSliceTest extends Test {
 			+ '    function f():Void {\n' + '        var a = 1;\n' + '        trace(a);\n' + '    }\n' + '}\n';
 		final expected: String = 'class C {\n' + '\tfunction f():Void {\n' + '\t\tvar a = 1;\n' + '\t\tfunction helper() {\n'
 			+ '\t\t\ttrace(a);\n' + '\t\t}\n' + '\t\thelper();\n' + '\t}\n' + '}\n';
-		assertExtract(source, 4, 8, 4, 8, 'helper', true, expected);
+		assertExtract(source, 4, 9, 4, 9, 'helper', true, expected);
 	}
 
 	/** A non-canonical source without `reformat` is refused by the gate. */
 	public function testRefuseNonCanonicalWithoutReformat(): Void {
 		final source: String = 'class C {\n'
 			+ '    function f():Void {\n' + '        var a = 1;\n' + '        trace(a);\n' + '    }\n' + '}\n';
-		assertRefused(source, 4, 8, 4, 8, 'helper', false);
+		assertRefused(source, 4, 9, 4, 9, 'helper', false);
 	}
 
 	/** A range containing a `return` cannot be wrapped in a closure. */
 	public function testRefuseReturnInRange(): Void {
 		final source: String = 'class C {\n'
 			+ '\tfunction f():Int {\n' + '\t\tvar a = 1;\n' + '\t\tif (a > 0) return a;\n' + '\t\treturn 0;\n' + '\t}\n' + '}\n';
-		assertRefused(source, 4, 2, 4, 2, 'helper', true);
+		assertRefused(source, 4, 3, 4, 3, 'helper', true);
 	}
 
 	/** An outer local mutated in the range and read after it is refused. */
 	public function testRefuseOuterLocalMutated(): Void {
 		final source: String = 'class C {\n'
 			+ '\tfunction f():Int {\n' + '\t\tvar sum = 0;\n' + '\t\tsum += 5;\n' + '\t\treturn sum;\n' + '\t}\n' + '}\n';
-		assertRefused(source, 4, 2, 4, 2, 'helper', true);
+		assertRefused(source, 4, 3, 4, 3, 'helper', true);
 	}
 
 	/**
@@ -107,7 +107,7 @@ class ExtractMethodSliceTest extends Test {
 		final expected: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\tfunction helper() {\n' + '\t\t\tvar a = 1;\n'
 			+ '\t\t\tvar b = 2;\n' + '\t\t\treturn {a: a, b: b};\n' + '\t\t}\n' + '\t\tfinal _helperResult = helper();\n'
 			+ '\t\tfinal a = _helperResult.a;\n' + '\t\tfinal b = _helperResult.b;\n' + '\t\treturn a + b;\n' + '\t}\n' + '}\n';
-		assertExtract(source, 3, 2, 4, 2, 'helper', true, expected);
+		assertExtract(source, 3, 3, 4, 3, 'helper', true, expected);
 	}
 
 	/**
@@ -122,14 +122,14 @@ class ExtractMethodSliceTest extends Test {
 			+ '\t\t\tvar b = 2;\n' + '\t\t\treturn {a: a, b: b};\n' + '\t\t}\n' + '\t\tfinal _helperResult = helper();\n'
 			+ '\t\tvar a = _helperResult.a;\n' + '\t\tfinal b = _helperResult.b;\n' + '\t\ta = 5;\n' + '\t\ttrace(a);\n' + '\t\ttrace(b);\n'
 			+ '\t}\n' + '}\n';
-		assertExtract(source, 3, 2, 4, 2, 'helper', true, expected);
+		assertExtract(source, 3, 3, 4, 3, 'helper', true, expected);
 	}
 
 	/** A range whose ends are not children of one block is refused. */
 	public function testRefuseCrossBlockRange(): Void {
 		final source: String = 'class C {\n'
 			+ '\tfunction f():Void {\n' + '\t\tif (true) {\n' + '\t\t\ttrace(1);\n' + '\t\t}\n' + '\t\ttrace(2);\n' + '\t}\n' + '}\n';
-		assertRefused(source, 4, 3, 6, 2, 'helper', true);
+		assertRefused(source, 4, 4, 6, 3, 'helper', true);
 	}
 
 	/**
@@ -144,13 +144,13 @@ class ExtractMethodSliceTest extends Test {
 		final expected: String = 'class C {\n' + '\tfunction f():Void {\n' + '\t\tfunction helper() {\n' + '\t\t\tvar b = 1;\n'
 			+ '\t\t\ttrace(b);\n' + '\t\t}\n' + '\t\thelper();\n' + '\t}\n' + '\n' + '\tfunction g():Void {\n' + '\t\tvar b = 2;\n'
 			+ '\t\ttrace(b);\n' + '\t}\n' + '}\n';
-		assertExtract(source, 3, 2, 4, 2, 'helper', true, expected);
+		assertExtract(source, 3, 3, 4, 3, 'helper', true, expected);
 	}
 
 	/** A START not on a statement's first token is refused. */
 	public function testRefuseCursorNotOnStatement(): Void {
 		final source: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\tvar a = 1;\n' + '\t\treturn a;\n' + '\t}\n' + '}\n';
-		assertRefused(source, 3, 5, 3, 5, 'helper', true);
+		assertRefused(source, 3, 6, 3, 6, 'helper', true);
 	}
 
 	private function assertExtract(

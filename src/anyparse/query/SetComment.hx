@@ -46,7 +46,7 @@ final class SetComment {
 		if (!StringTools.startsWith(trimmed, '//') && !StringTools.startsWith(trimmed, '/*'))
 			return Err('set-comment replacement must be a comment (start with // or /*)');
 
-		final cursor: Int = Span.offsetOf(source, line, col + 1);
+		final cursor: Int = Span.offsetOf(source, line, col);
 		final span: Null<Span> = RefactorSupport.commentBlockAt(source, cursor);
 		if (span == null) return Err('position $line:$col is not on a comment');
 

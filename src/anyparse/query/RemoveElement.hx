@@ -40,8 +40,8 @@ final class RemoveElement {
 		)
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
-		// `apq refs` prints `Span.lineCol().col - 1`; invert that here.
-		final cursor: Int = Span.offsetOf(source, line, col + 1);
+		// line:col is 1-based, as apq refs / ast --at / source print.
+		final cursor: Int = Span.offsetOf(source, line, col);
 
 		final node: Null<QueryNode> = RefactorSupport.nodeAtFrom(tree, cursor);
 		if (node == null)

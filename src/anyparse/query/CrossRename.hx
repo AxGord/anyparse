@@ -135,9 +135,8 @@ final class CrossRename {
 		)
 		catch (exception: Exception) return Err('$cursorFile does not parse: ${exception.message}');
 
-		// `apq refs` prints `Span.lineCol().col - 1`; invert that here so a
-		// position copied from `refs` / `uses` output maps to the offset.
-		final cursor: Int = Span.offsetOf(cursorSource, line, col + 1);
+		// line:col is 1-based, as apq refs / ast --at / source print.
+		final cursor: Int = Span.offsetOf(cursorSource, line, col);
 		final declNode: Null<QueryNode> = resolveTypeDeclAtCursor(cursorTree, cursor, cursorSource);
 		if (declNode == null) return Err('position $line:$col is not on a type declaration (cross-file --scope renames types only)');
 		final typeName: Null<String> = declNode.name;

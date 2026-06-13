@@ -78,11 +78,11 @@ class ApqTextRenderTest extends Test {
 		final buf: StringBuf = new StringBuf();
 		for (h in hits) {
 			final pos: Position = h.span.lineCol(source);
-			buf.add('$file:${pos.line}:${pos.col - 1}: [${h.kind.toString()}] ${h.name}');
+			buf.add('$file:${pos.line}:${pos.col}: [${h.kind.toString()}] ${h.name}');
 			final bs: Null<Span> = h.bindingSpan;
 			if (bs != null && bs.from != h.span.from) {
 				final bp: Position = bs.lineCol(source);
-				buf.add(' -> ${bp.line}:${bp.col - 1}');
+				buf.add(' -> ${bp.line}:${bp.col}');
 			}
 			buf.add('\n');
 		}
@@ -93,7 +93,7 @@ class ApqTextRenderTest extends Test {
 		final buf: StringBuf = new StringBuf();
 		for (m in matches) {
 			final pos: Position = m.span.lineCol(source);
-			buf.add('$file:${pos.line}:${pos.col - 1}: match');
+			buf.add('$file:${pos.line}:${pos.col}: match');
 			var n: Int = 0;
 			for (_ in m.bindings) n++;
 			if (n > 0) {
@@ -119,7 +119,7 @@ class ApqTextRenderTest extends Test {
 			final span: Null<Span> = h.metaSpan;
 			if (span != null) {
 				final pos: Position = span.lineCol(source);
-				buf.add('$file:${pos.line}:${pos.col - 1}: ');
+				buf.add('$file:${pos.line}:${pos.col}: ');
 			} else {
 				buf.add('$file: ');
 			}

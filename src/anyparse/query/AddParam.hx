@@ -81,9 +81,8 @@ final class AddParam {
 		)
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
-		// `apq refs` prints `Span.lineCol().col - 1`; invert that here so a
-		// position copied from `refs` output maps back to the real offset.
-		final cursor: Int = Span.offsetOf(source, line, col + 1);
+		// line:col is 1-based, as apq refs / ast --at / source print.
+		final cursor: Int = Span.offsetOf(source, line, col);
 
 		final fn: Null<QueryNode> = RefactorSupport.innermostWhere(tree, cursor, node -> RefactorSupport.FN_DECL_KINDS.contains(node.kind));
 		if (fn == null) return Err('position $line:$col is not on a function');

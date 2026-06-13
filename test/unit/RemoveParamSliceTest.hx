@@ -45,7 +45,7 @@ class RemoveParamSliceTest extends Test {
 		final expected: String = 'class C {\n' + '\tpublic function f(a:Int, c:Int):Void {\n' + '\t\ttrace(a);\n' + '\t}\n'
 			+ '\tpublic function caller():Void {\n' + '\t\tf(1, 3);\n' + '\t\tthis.f(7, 9);\n' + '\t}\n' + '}';
 		// Line 2 col 8 — the method `f` decl, as `apq refs --decls` prints.
-		assertRemove(source, 2, 8, 1, expected, true);
+		assertRemove(source, 2, 9, 1, expected, true);
 	}
 
 	/**
@@ -58,7 +58,7 @@ class RemoveParamSliceTest extends Test {
 			+ '\tpublic function caller():Void {\n' + '\t\tf(1, "x", 3);\n' + '\t}\n' + '}';
 		final expected: String = 'class C {\n'
 			+ '\tpublic function f(b:String, c:Int):Void {}\n' + '\tpublic function caller():Void {\n' + '\t\tf("x", 3);\n' + '\t}\n' + '}';
-		assertRemove(source, 2, 8, 0, expected, true);
+		assertRemove(source, 2, 9, 0, expected, true);
 	}
 
 	/**
@@ -71,7 +71,7 @@ class RemoveParamSliceTest extends Test {
 			+ '\tpublic function caller():Void {\n' + '\t\tf(1, "x", 3);\n' + '\t}\n' + '}';
 		final expected: String = 'class C {\n'
 			+ '\tpublic function f(a:Int, b:String):Void {}\n' + '\tpublic function caller():Void {\n' + '\t\tf(1, "x");\n' + '\t}\n' + '}';
-		assertRemove(source, 2, 8, 2, expected, true);
+		assertRemove(source, 2, 9, 2, expected, true);
 	}
 
 	/**
@@ -84,7 +84,7 @@ class RemoveParamSliceTest extends Test {
 		final expected: String = 'class C {\n' + '\tpublic function run():Void {\n' + '\t\tfunction add(x:Int):Int {\n'
 			+ '\t\t\treturn x;\n' + '\t\t}\n' + '\t\tvar r = add(1);\n' + '\t}\n' + '}';
 		// Line 3 col 11 — the local function `add` name token; remove `y`.
-		assertRemove(source, 3, 11, 1, expected, false);
+		assertRemove(source, 3, 12, 1, expected, false);
 	}
 
 	/**
@@ -100,7 +100,7 @@ class RemoveParamSliceTest extends Test {
 		final expected: String = 'class C {\n' + '\tfinal function d(a:Int, c:Int):Void {\n' + '\t\ttrace(a);\n' + '\t}\n'
 			+ '\tpublic function caller():Void {\n' + '\t\td(1, 3);\n' + '\t\tthis.d(7, 9);\n' + '\t}\n' + '}';
 		// Line 2 col 1 — the `final` method decl, as `apq refs --decls` prints.
-		assertRemove(source, 2, 1, 1, expected, true);
+		assertRemove(source, 2, 2, 1, expected, true);
 	}
 
 	/**
@@ -112,7 +112,7 @@ class RemoveParamSliceTest extends Test {
 			+ '\tpublic function f(a:Int):Void {}\n' + '\tpublic function caller():Void {\n' + '\t\tf(1);\n' + '\t}\n' + '}';
 		final expected: String = 'class C {\n'
 			+ '\tpublic function f():Void {}\n' + '\tpublic function caller():Void {\n' + '\t\tf();\n' + '\t}\n' + '}';
-		assertRemove(source, 2, 8, 0, expected, true);
+		assertRemove(source, 2, 9, 0, expected, true);
 	}
 
 	/**
@@ -124,19 +124,19 @@ class RemoveParamSliceTest extends Test {
 		final source: String = 'class C {\n' + '\tfunction f(\n' + '\t\ta:Int,\n' + '\t\tb:Int,\n' + '\t\tc:Int\n' + '\t):Void {}\n' + '}';
 		final expected: String = 'class C {\n' + '\tfunction f(\n' + '\t\ta:Int,\n' + '\t\tc:Int\n' + '\t):Void {}\n' + '}';
 		// Line 2 col 10 — the `f` method name token; remove `b` (index 1).
-		assertRemove(source, 2, 10, 1, expected, true);
+		assertRemove(source, 2, 11, 1, expected, true);
 	}
 
 	/** Refuse an index past the last parameter (out of range). */
 	public function testRefuseIndexOutOfRange(): Void {
 		final source: String = 'class C {\n' + '\tpublic function f(a:Int, b:Int):Void {}\n' + '}';
-		assertRefused(source, 2, 8, 5);
+		assertRefused(source, 2, 9, 5);
 	}
 
 	/** Refuse a negative index (out of range). */
 	public function testRefuseNegativeIndex(): Void {
 		final source: String = 'class C {\n' + '\tpublic function f(a:Int, b:Int):Void {}\n' + '}';
-		assertRefused(source, 2, 8, -1);
+		assertRefused(source, 2, 9, -1);
 	}
 
 	/**
@@ -147,7 +147,7 @@ class RemoveParamSliceTest extends Test {
 	public function testRefuseParamStillUsedInBody(): Void {
 		final source: String = 'class C {\n' + '\tpublic function f(a:Int, b:Int):Void {\n' + '\t\ttrace(b);\n' + '\t}\n' + '}';
 		// Remove `b` (index 1), but `b` is read in the body.
-		assertRefused(source, 2, 8, 1);
+		assertRefused(source, 2, 9, 1);
 	}
 
 	/**
@@ -158,7 +158,7 @@ class RemoveParamSliceTest extends Test {
 	public function testRefuseParamUsedInLaterDefault(): Void {
 		final source: String = 'class C {\n' + '\tpublic function f(a:Int, b:Int = a):Void {}\n' + '}';
 		// Remove `a` (index 0), but `b`'s default references `a`.
-		assertRefused(source, 2, 8, 0);
+		assertRefused(source, 2, 9, 0);
 	}
 
 	/**
@@ -169,7 +169,7 @@ class RemoveParamSliceTest extends Test {
 	public function testRefuseNonThisReceiverCall(): Void {
 		final source: String = 'class C {\n' + '\tpublic function f(a:Int, b:Int):Void {}\n' + '\tpublic function caller(o:C):Void {\n'
 			+ '\t\tf(1, 2);\n' + '\t\to.f(3, 4);\n' + '\t}\n' + '}';
-		assertRefused(source, 2, 8, 1);
+		assertRefused(source, 2, 9, 1);
 	}
 
 	/**
@@ -183,7 +183,7 @@ class RemoveParamSliceTest extends Test {
 		final source: String = 'class C {\n' + '\tpublic function run():Void {\n' + '\t\tfunction add(x:Int, y:Int):Int return x;\n'
 			+ '\t\tvar r = add(1, 2);\n' + '\t\t{\n' + '\t\t\tfunction add(p:Int, q:Int):Int return p;\n' + '\t\t\tvar z = add(3, 4);\n'
 			+ '\t\t}\n' + '\t}\n' + '}';
-		assertRefused(source, 3, 11, 1);
+		assertRefused(source, 3, 12, 1);
 	}
 
 	/**
@@ -194,13 +194,13 @@ class RemoveParamSliceTest extends Test {
 	public function testRefuseArityMismatchCall(): Void {
 		final source: String = 'class C {\n' + '\tpublic function f(a:Int, ?b:Int):Void {}\n' + '\tpublic function caller():Void {\n'
 			+ '\t\tf(1, 2);\n' + '\t\tf(7);\n' + '\t}\n' + '}';
-		assertRefused(source, 2, 8, 0);
+		assertRefused(source, 2, 9, 0);
 	}
 
 	/** Refuse a cursor that is not on a function (a plain field). */
 	public function testRefuseCursorOnNonFunction(): Void {
 		final source: String = 'class C {\n' + '\tvar field:Int = 0;\n' + '}';
-		assertRefused(source, 2, 5, 0);
+		assertRefused(source, 2, 6, 0);
 	}
 
 	/**
@@ -212,7 +212,7 @@ class RemoveParamSliceTest extends Test {
 	public function testRefuseMethodReferencedAsValue(): Void {
 		final source: String = 'class C {\n' + '\tpublic function f(a:Int, b:Int):Void {}\n' + '\tpublic function caller():Void {\n'
 			+ '\t\tf(1, 2);\n' + '\t\tvar fn = f;\n' + '\t}\n' + '}';
-		assertRefused(source, 2, 8, 1);
+		assertRefused(source, 2, 9, 1);
 	}
 
 	/**
@@ -226,7 +226,7 @@ class RemoveParamSliceTest extends Test {
 	 */
 	public function testRefuseParamUsedOnlyInInterpolation(): Void {
 		final source: String = 'class C {\n' + '\tpublic function f(a:Int):Void {\n' + "\t\ttrace('value: $a');\n" + '\t}\n' + '}';
-		assertRefused(source, 2, 8, 0);
+		assertRefused(source, 2, 9, 0);
 	}
 
 	private function assertRemove(source: String, line: Int, col: Int, index: Int, expected: String, advisoryNonNull: Bool): Void {

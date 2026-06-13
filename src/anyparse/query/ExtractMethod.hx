@@ -126,9 +126,9 @@ final class ExtractMethod {
 		)
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
-		// `apq refs` prints `Span.lineCol().col - 1`; invert that here.
-		final startOffset: Int = Span.offsetOf(source, startLine, startCol + 1);
-		final endOffset: Int = Span.offsetOf(source, endLine, endCol + 1);
+		// line:col is 1-based, as apq refs / ast --at / source print.
+		final startOffset: Int = Span.offsetOf(source, startLine, startCol);
+		final endOffset: Int = Span.offsetOf(source, endLine, endCol);
 		if (endOffset < startOffset) return Err('end position is before start position');
 
 		final range: Null<StmtRange> = selectStmtRange(tree, startOffset, endOffset);

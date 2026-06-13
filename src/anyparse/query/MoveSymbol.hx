@@ -137,7 +137,7 @@ final class MoveSymbol {
 			'$cursorFile does not parse: ${exception.toString()}'
 		)
 		catch (exception: Exception) return Err('$cursorFile does not parse: ${exception.message}');
-		final cursor: Int = Span.offsetOf(cursorSource, line, col + 1);
+		final cursor: Int = Span.offsetOf(cursorSource, line, col);
 		final declMatch: Null<TypeDeclMatch> = RefactorSupport.resolveTypeDeclAtCursor(cursorTree, cursor, cursorSource);
 		if (declMatch == null) return Err('position $line:$col is not on a type declaration');
 		final typeName: String = declMatch.name;

@@ -38,7 +38,7 @@ class RenameSliceTest extends Test {
 	public function testRenameParamTouchesOnlyParamBinding(): Void {
 		final expected: String = 'class C {\n' + '\tvar count:Int = 0;\n' + '\tfunction f(n:Int):Int {\n' + '\t\tvar total = n;\n'
 			+ '\t\tfor (count in 0...10) total += count;\n' + '\t\treturn total + this.count;\n' + '\t}\n' + '}';
-		assertRename(FIXTURE, 3, 12, 'n', expected);
+		assertRename(FIXTURE, 3, 13, 'n', expected);
 	}
 
 	/**
@@ -49,7 +49,7 @@ class RenameSliceTest extends Test {
 	public function testRenameLoopVarTouchesOnlyLoopBinding(): Void {
 		final expected: String = 'class C {\n' + '\tvar count:Int = 0;\n' + '\tfunction f(count:Int):Int {\n' + '\t\tvar total = count;\n'
 			+ '\t\tfor (j in 0...10) total += j;\n' + '\t\treturn total + this.count;\n' + '\t}\n' + '}';
-		assertRename(FIXTURE, 5, 2, 'j', expected);
+		assertRename(FIXTURE, 5, 3, 'j', expected);
 	}
 
 	/**
@@ -60,7 +60,7 @@ class RenameSliceTest extends Test {
 	public function testRenameSingleBindingTouchesAllOccurrences(): Void {
 		final expected: String = 'class C {\n' + '\tvar count:Int = 0;\n' + '\tfunction f(count:Int):Int {\n' + '\t\tvar sum = count;\n'
 			+ '\t\tfor (count in 0...10) sum += count;\n' + '\t\treturn sum + this.count;\n' + '\t}\n' + '}';
-		assertRename(FIXTURE, 4, 2, 'sum', expected);
+		assertRename(FIXTURE, 4, 3, 'sum', expected);
 	}
 
 	/**
@@ -72,7 +72,7 @@ class RenameSliceTest extends Test {
 	public function testRenameFieldTouchesDeclAndThisAccess(): Void {
 		final expected: String = 'class C {\n' + '\tvar n:Int = 0;\n' + '\tfunction f(count:Int):Int {\n' + '\t\tvar total = count;\n'
 			+ '\t\tfor (count in 0...10) total += count;\n' + '\t\treturn total + this.n;\n' + '\t}\n' + '}';
-		assertRename(FIXTURE, 2, 1, 'n', expected);
+		assertRename(FIXTURE, 2, 2, 'n', expected);
 	}
 
 	/**
@@ -82,7 +82,7 @@ class RenameSliceTest extends Test {
 	 */
 	public function testPositionOnWhitespaceIsError(): Void {
 		// Line 2 column 0 (display convention) maps to the leading tab.
-		final result: RenameResult = renameOf(FIXTURE, 2, 0, 'n');
+		final result: RenameResult = renameOf(FIXTURE, 2, 1, 'n');
 		switch result {
 			case Ok(text):
 				Assert.fail('expected Err on whitespace position, got Ok:\n$text');
@@ -97,7 +97,7 @@ class RenameSliceTest extends Test {
 	 */
 	public function testPositionOnDelimiterIsError(): Void {
 		// Line 1: `class C {` — the `{` sits past the class name.
-		final result: RenameResult = renameOf(FIXTURE, 1, 8, 'n');
+		final result: RenameResult = renameOf(FIXTURE, 1, 9, 'n');
 		switch result {
 			case Ok(text):
 				Assert.fail('expected Err on delimiter position, got Ok:\n$text');
@@ -108,7 +108,7 @@ class RenameSliceTest extends Test {
 
 	/** An invalid new name is rejected without touching the source. */
 	public function testInvalidNewNameIsError(): Void {
-		final result: RenameResult = renameOf(FIXTURE, 3, 12, '1bad');
+		final result: RenameResult = renameOf(FIXTURE, 3, 13, '1bad');
 		switch result {
 			case Ok(text):
 				Assert.fail('expected Err on invalid new name, got Ok:\n$text');
@@ -131,7 +131,7 @@ class RenameSliceTest extends Test {
 		final expected: String = 'class C {\n'
 			+ '\tfinal function ren(a:Int):Void {}\n' + '\tfunction caller():Void {\n' + '\t\tren(1);\n' + '\t\tthis.ren(2);\n' + '\t}\n' + '}';
 		// Line 2 col 1 — the `final` method decl, as `apq refs --decls` prints.
-		assertRename(source, 2, 1, 'ren', expected);
+		assertRename(source, 2, 2, 'ren', expected);
 	}
 
 	private function assertRename(source: String, line: Int, col: Int, newName: String, expected: String): Void {

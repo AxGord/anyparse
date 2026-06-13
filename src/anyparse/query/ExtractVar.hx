@@ -130,9 +130,8 @@ final class ExtractVar {
 		)
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
-		// `apq refs` prints `Span.lineCol().col - 1`; invert that here so a
-		// position copied from `refs` output maps back to the real offset.
-		final cursor: Int = Span.offsetOf(source, line, col + 1);
+		// line:col is 1-based, as apq refs / ast --at / source print.
+		final cursor: Int = Span.offsetOf(source, line, col);
 
 		final target: Null<QueryNode> = selectTargetExpr(tree, cursor);
 		if (target == null) return Err('no expression starts at position $line:$col (point at the first token of an expression)');

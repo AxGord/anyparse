@@ -59,13 +59,13 @@ final class Text {
 		for (h in hits) {
 			final pos: Position = h.span.lineCol(source);
 			if (flat)
-				buf.add('$file:${pos.line}:${pos.col - 1}: [${h.kind.toString()}] ${h.name}');
+				buf.add('$file:${pos.line}:${pos.col}: [${h.kind.toString()}] ${h.name}');
 			else
-				buf.add('  ${pos.line}:${pos.col - 1}: [${h.kind.toString()}] ${h.name}');
+				buf.add('  ${pos.line}:${pos.col}: [${h.kind.toString()}] ${h.name}');
 			final bindingSpan: Null<Span> = h.bindingSpan;
 			if (bindingSpan != null && bindingSpan.from != h.span.from) {
 				final bp: Position = bindingSpan.lineCol(source);
-				buf.add(' -> ${bp.line}:${bp.col - 1}');
+				buf.add(' -> ${bp.line}:${bp.col}');
 			}
 			buf.add('\n');
 			appendDocSource(buf, source, h.span, doc, src);
@@ -80,9 +80,9 @@ final class Text {
 		for (h in hits) {
 			final pos: Position = h.span.lineCol(source);
 			if (flat)
-				buf.add('$file:${pos.line}:${pos.col - 1}: ${h.name}\n');
+				buf.add('$file:${pos.line}:${pos.col}: ${h.name}\n');
 			else
-				buf.add('  ${pos.line}:${pos.col - 1}: ${h.name}\n');
+				buf.add('  ${pos.line}:${pos.col}: ${h.name}\n');
 			appendDocSource(buf, source, h.span, doc, src);
 		}
 		return buf.toString();
@@ -124,9 +124,9 @@ final class Text {
 			if (span != null) {
 				final pos: Position = span.lineCol(source);
 				if (flat)
-					buf.add('$file:${pos.line}:${pos.col - 1}: ');
+					buf.add('$file:${pos.line}:${pos.col}: ');
 				else
-					buf.add('  ${pos.line}:${pos.col - 1}: ');
+					buf.add('  ${pos.line}:${pos.col}: ');
 			} else {
 				if (flat)
 					buf.add('$file: ');
@@ -164,9 +164,9 @@ final class Text {
 			if (span != null) {
 				final pos: Position = span.lineCol(source);
 				if (flat)
-					buf.add('$file:${pos.line}:${pos.col - 1}: ');
+					buf.add('$file:${pos.line}:${pos.col}: ');
 				else
-					buf.add('  ${pos.line}:${pos.col - 1}: ');
+					buf.add('  ${pos.line}:${pos.col}: ');
 			} else {
 				if (flat)
 					buf.add('$file: ');
@@ -186,9 +186,9 @@ final class Text {
 		for (m in matches) {
 			final pos: Position = m.span.lineCol(source);
 			if (flat)
-				buf.add('$file:${pos.line}:${pos.col - 1}: match');
+				buf.add('$file:${pos.line}:${pos.col}: match');
 			else
-				buf.add('  ${pos.line}:${pos.col - 1}: match');
+				buf.add('  ${pos.line}:${pos.col}: match');
 			final bindingsCount: Int = countBindings(m);
 			if (bindingsCount > 0) {
 				buf.add(' (');

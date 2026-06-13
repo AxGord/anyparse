@@ -360,7 +360,7 @@ final class CallSites {
 	public static function posOf(source: String, span: Null<Span>): String {
 		if (span == null) return '?:?';
 		final pos: Position = span.lineCol(source);
-		return '${pos.line}:${pos.col - 1}';
+		return '${pos.line}:${pos.col}';
 	}
 
 }

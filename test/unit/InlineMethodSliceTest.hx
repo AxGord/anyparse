@@ -35,7 +35,7 @@ class InlineMethodSliceTest extends Test {
 			+ '\t\tvar x = add(1, 2) * add(3, 4);\n' + '\t\treturn x;\n' + '\t}\n' + '}';
 		final expected: String = 'class C {\n'
 			+ '\tfunction use():Int {\n' + '\t\tvar x = (1 + 2) * (3 + 4);\n' + '\t\treturn x;\n' + '\t}\n' + '}';
-		assertInline(source, 2, 10, expected);
+		assertInline(source, 2, 11, expected);
 	}
 
 	/**
@@ -45,7 +45,7 @@ class InlineMethodSliceTest extends Test {
 	public function testInlineAtomicBodyNoParens(): Void {
 		final source: String = 'class C {\n' + '\tfunction id(a:Int):Int return a;\n' + '\tfunction u():Int { return id(7) + 1; }\n' + '}';
 		final expected: String = 'class C {\n' + '\tfunction u():Int { return 7 + 1; }\n' + '}';
-		assertInline(source, 2, 10, expected);
+		assertInline(source, 2, 11, expected);
 	}
 
 	/**
@@ -56,7 +56,7 @@ class InlineMethodSliceTest extends Test {
 		final source: String = 'class C {\n'
 			+ '\tfinal function dbl(a:Int):Int return a * 2;\n' + '\tfunction use():Int { return this.dbl(5) + dbl(6); }\n' + '}';
 		final expected: String = 'class C {\n' + '\tfunction use():Int { return (5 * 2) + (6 * 2); }\n' + '}';
-		assertInline(source, 2, 16, expected);
+		assertInline(source, 2, 17, expected);
 	}
 
 	/**
@@ -68,7 +68,7 @@ class InlineMethodSliceTest extends Test {
 		final source: String = 'class C {\n' + '\tfunction run():Void {\n' + '\t\tfunction greet(n:String) return trace(n);\n'
 			+ '\t\tgreet("a");\n' + '\t\tgreet("b");\n' + '\t}\n' + '}';
 		final expected: String = 'class C {\n' + '\tfunction run():Void {\n' + '\t\ttrace("a");\n' + '\t\ttrace("b");\n' + '\t}\n' + '}';
-		assertInline(source, 3, 12, expected);
+		assertInline(source, 3, 13, expected);
 	}
 
 	/**
@@ -80,19 +80,19 @@ class InlineMethodSliceTest extends Test {
 		final source: String = 'class C {\n'
 			+ '\tfunction cpx(a:Int):String return \'x=$${a + 1}\';\n' + '\tfunction u() { cpx(7); }\n' + '}';
 		final expected: String = 'class C {\n' + '\tfunction u() { \'x=$${7 + 1}\'; }\n' + '}';
-		assertInline(source, 2, 10, expected);
+		assertInline(source, 2, 11, expected);
 	}
 
 	/** A multi-statement body cannot be reduced to one expression — refused. */
 	public function testRefuseMultiStatementBody(): Void {
 		final source: String = 'class C {\n' + '\tfunction f(a:Int):Int { var t = a; return t + 1; }\n' + '\tfunction u() { f(1); }\n' + '}';
-		assertRefused(source, 2, 10);
+		assertRefused(source, 2, 11);
 	}
 
 	/** A recursive body would outlive the deleted declaration — refused. */
 	public function testRefuseRecursion(): Void {
 		final source: String = 'class C {\n' + '\tfunction rec(a:Int):Int return rec(a - 1);\n' + '\tfunction u() { rec(3); }\n' + '}';
-		assertRefused(source, 2, 10);
+		assertRefused(source, 2, 11);
 	}
 
 	/**
@@ -102,13 +102,13 @@ class InlineMethodSliceTest extends Test {
 	public function testRefuseDroppedImpureArgument(): Void {
 		final source: String = 'class C {\n'
 			+ '\tfunction ignore(a:Int):Int return 0;\n' + '\tfunction side():Int return 9;\n' + '\tfunction u() { ignore(side()); }\n' + '}';
-		assertRefused(source, 2, 10);
+		assertRefused(source, 2, 11);
 	}
 
 	/** A call omitting an optional argument has the wrong arity — refused. */
 	public function testRefuseArityMismatch(): Void {
 		final source: String = 'class C {\n' + '\tfunction f(a:Int, ?b:Int):Int return a;\n' + '\tfunction u() { f(1); }\n' + '}';
-		assertRefused(source, 2, 10);
+		assertRefused(source, 2, 11);
 	}
 
 	/**
@@ -118,13 +118,13 @@ class InlineMethodSliceTest extends Test {
 	public function testRefuseSimpleInterpolation(): Void {
 		final source: String = 'class C {\n'
 			+ '\tfunction interp(a:Int):String return \'x=$$a\';\n' + '\tfunction u() { interp(7); }\n' + '}';
-		assertRefused(source, 2, 10);
+		assertRefused(source, 2, 11);
 	}
 
 	/** A cursor not on a function declaration / call is refused. */
 	public function testRefuseCursorNotOnFunction(): Void {
 		final source: String = 'class C {\n' + '\tvar n:Int = 0;\n' + '}';
-		assertRefused(source, 2, 5);
+		assertRefused(source, 2, 6);
 	}
 
 	private function assertInline(source: String, line: Int, col: Int, expected: String): Void {

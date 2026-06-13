@@ -40,7 +40,7 @@ class ChangeSigSliceTest extends Test {
 		final expected: String = 'class C {\n' + '\tpublic function g(c:Int = 5, a:Int, ?b:String):Void {\n' + '\t\ttrace(a);\n' + '\t}\n'
 			+ '\tpublic function caller():Void {\n' + '\t\tg(3, 1, "x");\n' + '\t\tthis.g(9, 7, "y");\n' + '\t}\n' + '}';
 		// Line 2 col 8 — the method `g` decl, as `apq refs --decls` prints.
-		assertChangeSig(source, 2, 8, '2,0,1', expected, true);
+		assertChangeSig(source, 2, 9, '2,0,1', expected, true);
 	}
 
 	/**
@@ -54,7 +54,7 @@ class ChangeSigSliceTest extends Test {
 		final expected: String = 'class C {\n' + '\tpublic function run():Void {\n' + '\t\tfunction add(y:Int, x:Int):Int {\n'
 			+ '\t\t\treturn x + y;\n' + '\t\t}\n' + '\t\tvar r = add(2, 1);\n' + '\t}\n' + '}';
 		// Line 3 col 11 — the local function `add` name token.
-		assertChangeSig(source, 3, 11, '1,0', expected, false);
+		assertChangeSig(source, 3, 12, '1,0', expected, false);
 	}
 
 	/**
@@ -68,7 +68,7 @@ class ChangeSigSliceTest extends Test {
 			+ '\tpublic function caller():Void {\n' + '\t\tg(1,   "x",   2.5);\n' + '\t}\n' + '}';
 		final expected: String = 'class C {\n' + '\tpublic function g(c:Float,   a:Int,   b:String):Void {}\n'
 			+ '\tpublic function caller():Void {\n' + '\t\tg(2.5,   1,   "x");\n' + '\t}\n' + '}';
-		assertChangeSig(source, 2, 8, '2,0,1', expected, true);
+		assertChangeSig(source, 2, 9, '2,0,1', expected, true);
 	}
 
 	/**
@@ -79,7 +79,7 @@ class ChangeSigSliceTest extends Test {
 	public function testRefuseNonThisReceiverCall(): Void {
 		final source: String = 'class C {\n' + '\tpublic function g(a:Int, b:Int):Void {}\n' + '\tpublic function caller(o:C):Void {\n'
 			+ '\t\tg(1, 2);\n' + '\t\to.g(3, 4);\n' + '\t}\n' + '}';
-		assertRefused(source, 2, 8, '1,0');
+		assertRefused(source, 2, 9, '1,0');
 	}
 
 	/**
@@ -89,43 +89,43 @@ class ChangeSigSliceTest extends Test {
 	public function testRefuseArityMismatchCall(): Void {
 		final source: String = 'class C {\n' + '\tpublic function g(a:Int, ?b:Int):Void {}\n' + '\tpublic function caller():Void {\n'
 			+ '\t\tg(1, 2);\n' + '\t\tg(7);\n' + '\t}\n' + '}';
-		assertRefused(source, 2, 8, '1,0');
+		assertRefused(source, 2, 9, '1,0');
 	}
 
 	/** Refuse the identity permutation — a no-op. */
 	public function testRefuseIdentityPerm(): Void {
 		final source: String = 'class C {\n' + '\tpublic function g(a:Int, b:Int, c:Int):Void {}\n' + '}';
-		assertRefused(source, 2, 8, '0,1,2');
+		assertRefused(source, 2, 9, '0,1,2');
 	}
 
 	/** Refuse a malformed (non-integer) permutation. */
 	public function testRefuseMalformedPerm(): Void {
 		final source: String = 'class C {\n' + '\tpublic function g(a:Int, b:Int):Void {}\n' + '}';
-		assertRefused(source, 2, 8, 'a,b');
+		assertRefused(source, 2, 9, 'a,b');
 	}
 
 	/** Refuse a permutation whose arity does not match the parameter count. */
 	public function testRefuseWrongArityPerm(): Void {
 		final source: String = 'class C {\n' + '\tpublic function g(a:Int, b:Int, c:Int):Void {}\n' + '}';
-		assertRefused(source, 2, 8, '1,0');
+		assertRefused(source, 2, 9, '1,0');
 	}
 
 	/** Refuse a permutation that repeats an index (not a true permutation). */
 	public function testRefuseRepeatedPermIndex(): Void {
 		final source: String = 'class C {\n' + '\tpublic function g(a:Int, b:Int, c:Int):Void {}\n' + '}';
-		assertRefused(source, 2, 8, '0,0,1');
+		assertRefused(source, 2, 9, '0,0,1');
 	}
 
 	/** Refuse a cursor that is not on a function (a plain field). */
 	public function testRefuseCursorOnNonFunction(): Void {
 		final source: String = 'class C {\n' + '\tvar field:Int = 0;\n' + '}';
-		assertRefused(source, 2, 5, '1,0');
+		assertRefused(source, 2, 6, '1,0');
 	}
 
 	/** Refuse a function with fewer than two parameters — nothing to reorder. */
 	public function testRefuseFewerThanTwoParams(): Void {
 		final source: String = 'class C {\n' + '\tpublic function g(a:Int):Void {}\n' + '}';
-		assertRefused(source, 2, 8, '1,0');
+		assertRefused(source, 2, 9, '1,0');
 	}
 
 	/**
@@ -139,7 +139,7 @@ class ChangeSigSliceTest extends Test {
 		final source: String = 'class C {\n' + '\tpublic function run():Void {\n' + '\t\tfunction add(x:Int, y:Int):Int return x + y;\n'
 			+ '\t\tvar r = add(1, 2);\n' + '\t\t{\n' + '\t\t\tfunction add(p:Int, q:Int):Int return p - q;\n' + '\t\t\tvar z = add(3, 4);\n'
 			+ '\t\t}\n' + '\t}\n' + '}';
-		assertRefused(source, 3, 11, '1,0');
+		assertRefused(source, 3, 12, '1,0');
 	}
 
 	/**
@@ -151,7 +151,7 @@ class ChangeSigSliceTest extends Test {
 	public function testRefuseMethodReferencedAsValue(): Void {
 		final source: String = 'class C {\n' + '\tpublic function g(a:Int, b:Int):Void {}\n' + '\tpublic function caller():Void {\n'
 			+ '\t\tg(1, 2);\n' + '\t\tvar fn = g;\n' + '\t}\n' + '}';
-		assertRefused(source, 2, 8, '1,0');
+		assertRefused(source, 2, 9, '1,0');
 	}
 
 	/**
@@ -162,7 +162,7 @@ class ChangeSigSliceTest extends Test {
 	public function testRefuseLocalFunctionReferencedAsValue(): Void {
 		final source: String = 'class C {\n' + '\tpublic function run():Void {\n' + '\t\tfunction add(x:Int, y:Int):Int return x + y;\n'
 			+ '\t\tvar r = add(1, 2);\n' + '\t\tvar fn = add;\n' + '\t}\n' + '}';
-		assertRefused(source, 3, 11, '1,0');
+		assertRefused(source, 3, 12, '1,0');
 	}
 
 	/**
@@ -174,7 +174,7 @@ class ChangeSigSliceTest extends Test {
 	public function testRefuseMethodCapturedViaThis(): Void {
 		final source: String = 'class C {\n' + '\tpublic function g(a:Int, b:Int):Void {}\n' + '\tpublic function caller():Void {\n'
 			+ '\t\tthis.g(1, 2);\n' + '\t\tvar f = this.g;\n' + '\t}\n' + '}';
-		assertRefused(source, 2, 8, '1,0');
+		assertRefused(source, 2, 9, '1,0');
 	}
 
 	/**
@@ -191,7 +191,7 @@ class ChangeSigSliceTest extends Test {
 		final expected: String = 'class C {\n' + '\tfinal function d(c:Int, a:Int, b:String):Void {\n' + '\t\ttrace(a);\n' + '\t}\n'
 			+ '\tpublic function caller():Void {\n' + '\t\td(3, 1, "x");\n' + '\t\tthis.d(9, 7, "y");\n' + '\t}\n' + '}';
 		// Line 2 col 1 — the `final` method decl, as `apq refs --decls` prints.
-		assertChangeSig(source, 2, 1, '2,0,1', expected, true);
+		assertChangeSig(source, 2, 2, '2,0,1', expected, true);
 	}
 
 	private function assertChangeSig(source: String, line: Int, col: Int, perm: String, expected: String, advisoryNonNull: Bool): Void {

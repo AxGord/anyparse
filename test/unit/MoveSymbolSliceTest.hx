@@ -43,7 +43,7 @@ class MoveSymbolSliceTest extends Test {
 		final b: String = 'package pkg;\n' + '\n' + 'class B {}';
 		final user: String = 'package pkg;\n' + '\n' + 'import pkg.A.Foo;\n' + '\n' + 'class User {\n' + '\tvar f:Foo;\n' + '}';
 		// `class Foo` on line 3; `Foo` at display col 6.
-		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 6, 'pkg/B.hx', [
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 7, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b },
 			{ file: 'pkg/User.hx', source: user },
@@ -79,7 +79,7 @@ class MoveSymbolSliceTest extends Test {
 		final b: String = 'package pkg;\n' + '\n' + 'class B {}';
 		final user: String = 'package pkg;\n' + '\n' + 'import pkg.A.Foo;\n' + '\n' + 'class User {\n' + '\tvar f:Foo;\n' + '}';
 		// `final class Foo` on line 3; `Foo` at display col 12.
-		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 12, 'pkg/B.hx', [
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 13, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b },
 			{ file: 'pkg/User.hx', source: user },
@@ -109,7 +109,7 @@ class MoveSymbolSliceTest extends Test {
 	public function testDependencyImportCarried(): Void {
 		final a: String = 'package pkg;\n' + '\n' + 'import ext.Ext;\n' + '\n' + 'class Foo {\n' + '\tvar e:Ext;\n' + '}';
 		final b: String = 'package pkg;\n' + '\n' + 'class B {}';
-		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 5, 6, 'pkg/B.hx', [
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 5, 7, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b },
 		]);
@@ -128,7 +128,7 @@ class MoveSymbolSliceTest extends Test {
 	public function testDocCommentMovesWithType(): Void {
 		final a: String = 'package pkg;\n' + '\n' + '/** the foo */\n' + 'class Foo {}';
 		final b: String = 'package pkg;\n' + '\n' + 'class B {}';
-		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 4, 6, 'pkg/B.hx', [
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 4, 7, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b },
 		]);
@@ -148,7 +148,7 @@ class MoveSymbolSliceTest extends Test {
 	public function testMetaMovesWithType(): Void {
 		final a: String = 'package pkg;\n' + '\n' + '@:keep\n' + 'class Foo {}';
 		final b: String = 'package pkg;\n' + '\n' + 'class B {}';
-		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 4, 6, 'pkg/B.hx', [
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 4, 7, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b },
 		]);
@@ -163,7 +163,7 @@ class MoveSymbolSliceTest extends Test {
 		final a: String = 'package pkg;\n' + '\n' + 'class Foo {\n' + '\tvar field:Int;\n' + '}';
 		final b: String = 'package pkg;\n\nclass B {}';
 		// Line 4: the field name `field` at col 5 — a value decl, not a type.
-		final result: MoveResult = MoveSymbol.moveType('pkg/A.hx', 4, 5, 'pkg/B.hx', [
+		final result: MoveResult = MoveSymbol.moveType('pkg/A.hx', 4, 6, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b },
 		], plugin(), typeRefShape());
@@ -178,7 +178,7 @@ class MoveSymbolSliceTest extends Test {
 	public function testCrossPackageRefused(): Void {
 		final a: String = 'package pkg;\n' + '\n' + 'class Foo {}';
 		final b: String = 'package other;\n' + '\n' + 'class B {}';
-		final result: MoveResult = MoveSymbol.moveType('pkg/A.hx', 3, 6, 'other/B.hx', [
+		final result: MoveResult = MoveSymbol.moveType('pkg/A.hx', 3, 7, 'other/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'other/B.hx', source: b },
 		], plugin(), typeRefShape());
@@ -193,7 +193,7 @@ class MoveSymbolSliceTest extends Test {
 		final a: String = 'package pkg;\n\nclass Foo {}';
 		final b: String = 'package pkg;\n\nclass B {}';
 		final broken: String = 'class @@@ not valid haxe @@@';
-		final result: MoveResult = MoveSymbol.moveType('pkg/A.hx', 3, 6, 'pkg/B.hx', [
+		final result: MoveResult = MoveSymbol.moveType('pkg/A.hx', 3, 7, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b },
 			{ file: 'pkg/Broken.hx', source: broken },
@@ -209,7 +209,7 @@ class MoveSymbolSliceTest extends Test {
 		final a: String = 'package pkg;\n\nclass Foo {}';
 		final dup: String = 'package pkg;\n\nclass Foo {}';
 		final b: String = 'package pkg;\n\nclass B {}';
-		final result: MoveResult = MoveSymbol.moveType('pkg/A.hx', 3, 6, 'pkg/B.hx', [
+		final result: MoveResult = MoveSymbol.moveType('pkg/A.hx', 3, 7, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/Dup.hx', source: dup },
 			{ file: 'pkg/B.hx', source: b },
@@ -220,7 +220,7 @@ class MoveSymbolSliceTest extends Test {
 	/** Refusal: source and destination are the same file. */
 	public function testSameFileRefused(): Void {
 		final a: String = 'package pkg;\n\nclass Foo {}';
-		final result: MoveResult = MoveSymbol.moveType('pkg/A.hx', 3, 6, 'pkg/A.hx', [
+		final result: MoveResult = MoveSymbol.moveType('pkg/A.hx', 3, 7, 'pkg/A.hx', [
 			{ file: 'pkg/A.hx', source: a },
 		], plugin(), typeRefShape());
 		assertErr(result);
@@ -229,7 +229,7 @@ class MoveSymbolSliceTest extends Test {
 	/** Refusal: the destination file is not in the scope set. */
 	public function testDestNotInScopeRefused(): Void {
 		final a: String = 'package pkg;\n\nclass Foo {}';
-		final result: MoveResult = MoveSymbol.moveType('pkg/A.hx', 3, 6, 'pkg/Missing.hx', [
+		final result: MoveResult = MoveSymbol.moveType('pkg/A.hx', 3, 7, 'pkg/Missing.hx', [
 			{ file: 'pkg/A.hx', source: a },
 		], plugin(), typeRefShape());
 		assertErr(result);

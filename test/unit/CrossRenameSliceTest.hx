@@ -43,7 +43,7 @@ class CrossRenameSliceTest extends Test {
 		final expectedB: String = 'class Use {\n'
 			+ '\tvar f:Bar;\n' + '\tfunction g(a:Bar):Bar {\n' + '\t\treturn new Bar();\n' + '\t}\n' + '}';
 		// `class Foo` — `Foo` starts at col 6 (display).
-		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 6, 'Bar', [
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Bar', [
 			{ file: 'a.hx', source: a },
 			{ file: 'b.hx', source: b },
 		]);
@@ -71,7 +71,7 @@ class CrossRenameSliceTest extends Test {
 			+ 'class Use {\n' + '\tvar f:Bar;\n' + '\tfunction g(a:Bar):Bar {\n' + '\t\treturn new Bar();\n' + '\t}\n' + '}';
 		// `final class Foo` — `Foo` starts at display col 12 (after
 		// `final class `).
-		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 12, 'Bar', [
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 13, 'Bar', [
 			{ file: 'a.hx', source: a },
 			{ file: 'b.hx', source: b },
 		]);
@@ -95,7 +95,7 @@ class CrossRenameSliceTest extends Test {
 		final a: String = 'class Foo {}';
 		final b: String = 'import pkg.Foo;\n' + 'class Use {\n' + '\tvar f:Foo;\n' + '}';
 		final expectedB: String = 'import pkg.Bar;\n' + 'class Use {\n' + '\tvar f:Bar;\n' + '}';
-		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 6, 'Bar', [
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Bar', [
 			{ file: 'a.hx', source: a },
 			{ file: 'b.hx', source: b },
 		]);
@@ -111,7 +111,7 @@ class CrossRenameSliceTest extends Test {
 	public function testUsingSegmentRename(): Void {
 		final a: String = 'class Foo {}';
 		final b: String = 'using pkg.Foo;\n' + 'class Use {}';
-		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 6, 'Bar', [
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Bar', [
 			{ file: 'a.hx', source: a },
 			{ file: 'b.hx', source: b },
 		]);
@@ -127,7 +127,7 @@ class CrossRenameSliceTest extends Test {
 		final a: String = 'class Foo {}';
 		final b: String = 'class Use extends Foo {\n' + '\tvar xs:Array<Foo>;\n' + '}';
 		final expectedB: String = 'class Use extends Bar {\n' + '\tvar xs:Array<Bar>;\n' + '}';
-		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 6, 'Bar', [
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Bar', [
 			{ file: 'a.hx', source: a },
 			{ file: 'b.hx', source: b },
 		]);
@@ -142,7 +142,7 @@ class CrossRenameSliceTest extends Test {
 	public function testAmbiguousDeclRefused(): Void {
 		final a: String = 'class Foo {}';
 		final dup: String = 'class Foo {}';
-		final result: CrossRenameResult = CrossRename.crossRenameType('a.hx', a, 1, 6, 'Bar', [
+		final result: CrossRenameResult = CrossRename.crossRenameType('a.hx', a, 1, 7, 'Bar', [
 			{ file: 'a.hx', source: a },
 			{ file: 'dup.hx', source: dup },
 		], plugin(), typeRefShape(), refShape());
@@ -156,7 +156,7 @@ class CrossRenameSliceTest extends Test {
 	public function testCursorNotOnTypeDeclRefused(): Void {
 		final a: String = 'class Foo {\n' + '\tvar field:Int;\n' + '}';
 		// Line 2: the field name `field` at col 5 — a value decl, not a type.
-		final result: CrossRenameResult = CrossRename.crossRenameType('a.hx', a, 2, 5, 'renamed', [
+		final result: CrossRenameResult = CrossRename.crossRenameType('a.hx', a, 2, 6, 'renamed', [
 			{ file: 'a.hx', source: a },
 		], plugin(), typeRefShape(), refShape());
 		assertErr(result);
@@ -169,7 +169,7 @@ class CrossRenameSliceTest extends Test {
 	public function testSkipParseScopeFileRefused(): Void {
 		final a: String = 'class Foo {}';
 		final broken: String = 'class @@@ not valid haxe @@@';
-		final result: CrossRenameResult = CrossRename.crossRenameType('a.hx', a, 1, 6, 'Bar', [
+		final result: CrossRenameResult = CrossRename.crossRenameType('a.hx', a, 1, 7, 'Bar', [
 			{ file: 'a.hx', source: a },
 			{ file: 'broken.hx', source: broken },
 		], plugin(), typeRefShape(), refShape());
@@ -179,7 +179,7 @@ class CrossRenameSliceTest extends Test {
 	/** No-op `Foo` -> `Foo` is refused. */
 	public function testNoOpRefused(): Void {
 		final a: String = 'class Foo {}';
-		final result: CrossRenameResult = CrossRename.crossRenameType('a.hx', a, 1, 6, 'Foo', [
+		final result: CrossRenameResult = CrossRename.crossRenameType('a.hx', a, 1, 7, 'Foo', [
 			{ file: 'a.hx', source: a },
 		], plugin(), typeRefShape(), refShape());
 		assertErr(result);
@@ -188,7 +188,7 @@ class CrossRenameSliceTest extends Test {
 	/** An invalid new name is rejected without touching any source. */
 	public function testInvalidNewNameRefused(): Void {
 		final a: String = 'class Foo {}';
-		final result: CrossRenameResult = CrossRename.crossRenameType('a.hx', a, 1, 6, '1bad', [
+		final result: CrossRenameResult = CrossRename.crossRenameType('a.hx', a, 1, 7, '1bad', [
 			{ file: 'a.hx', source: a },
 		], plugin(), typeRefShape(), refShape());
 		assertErr(result);
@@ -198,7 +198,7 @@ class CrossRenameSliceTest extends Test {
 	public function testEnumDeclKind(): Void {
 		final a: String = 'enum Color {\n\tRed;\n}';
 		final b: String = 'class Use {\n' + '\tvar c:Color;\n' + '}';
-		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 5, 'Hue', [
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 6, 'Hue', [
 			{ file: 'a.hx', source: a },
 			{ file: 'b.hx', source: b },
 		]);
@@ -210,7 +210,7 @@ class CrossRenameSliceTest extends Test {
 	public function testInterfaceDeclKind(): Void {
 		final a: String = 'interface Drawable {}';
 		final b: String = 'class Use implements Drawable {}';
-		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 10, 'Paintable', [
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 11, 'Paintable', [
 			{ file: 'a.hx', source: a },
 			{ file: 'b.hx', source: b },
 		]);
@@ -222,7 +222,7 @@ class CrossRenameSliceTest extends Test {
 	public function testTypedefDeclKind(): Void {
 		final a: String = 'typedef Id = Int;';
 		final b: String = 'class Use {\n\tvar id:Id;\n}';
-		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 8, 'Key', [
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 9, 'Key', [
 			{ file: 'a.hx', source: a },
 			{ file: 'b.hx', source: b },
 		]);
@@ -234,7 +234,7 @@ class CrossRenameSliceTest extends Test {
 	public function testAbstractDeclKind(): Void {
 		final a: String = 'abstract Meters(Int) {}';
 		final b: String = 'class Use {\n\tvar m:Meters;\n}';
-		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 9, 'Feet', [
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 10, 'Feet', [
 			{ file: 'a.hx', source: a },
 			{ file: 'b.hx', source: b },
 		]);
@@ -258,7 +258,7 @@ class CrossRenameSliceTest extends Test {
 			+ '\tpublic static function create():Bar return null;\n' + '\tpublic static var CONST = 1;\n' + '}';
 		final expectedB: String = 'import pkg.Bar;\n'
 			+ 'class C {\n' + '\tfunction m() {\n' + '\t\tBar.create();\n' + '\t\tvar v = Bar.CONST;\n' + '\t}\n' + '}';
-		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 6, 'Bar', [
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Bar', [
 			{ file: 'a.hx', source: a },
 			{ file: 'b.hx', source: b },
 		]);
@@ -282,7 +282,7 @@ class CrossRenameSliceTest extends Test {
 	public function testShadowingLocalValueNotRenamed(): Void {
 		final a: String = 'class Foo {\n' + '\tpublic static function create():Void {}\n' + '}';
 		final b: String = 'class C {\n' + '\tfunction m() {\n' + '\t\tvar Foo = makeThing();\n' + '\t\tFoo.run();\n' + '\t}\n' + '}';
-		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 6, 'Widget', [
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Widget', [
 			{ file: 'a.hx', source: a },
 			{ file: 'b.hx', source: b },
 		]);
@@ -303,7 +303,7 @@ class CrossRenameSliceTest extends Test {
 		final a: String = 'class Foo {\n' + '\tpublic static function create():Void {}\n' + '}';
 		final b: String = 'class C {\n' + '\tfunction m(e) {\n' + '\t\tvar c = Foo;\n' + '\t\tvar r = switch e {\n' + '\t\t\tcase Foo: 1;\n'
 			+ '\t\t\tcase _: 0;\n' + '\t\t};\n' + '\t}\n' + '}';
-		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 6, 'Widget', [
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Widget', [
 			{ file: 'a.hx', source: a },
 			{ file: 'b.hx', source: b },
 		]);

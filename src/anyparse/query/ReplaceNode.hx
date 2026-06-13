@@ -70,11 +70,8 @@ final class ReplaceNode {
 				matches[0];
 
 			case ByPosition(line, col):
-				// `apq refs` prints `Span.lineCol().col - 1`; invert that here
-				// so a position copied from `refs` / `ast --select` output maps
-				// back to the real offset (same convention as `Rename` /
-				// `AddParam`, NOT the raw 1-indexed `ast --at`).
-				final cursor: Int = Span.offsetOf(source, line, col + 1);
+				// line:col is 1-based, as apq refs / ast --at / source print.
+				final cursor: Int = Span.offsetOf(source, line, col);
 				final hit: Null<QueryNode> = Engine.at(tree, cursor);
 				if (hit == null) return Err('position $line:$col is not on a node');
 				hit;
@@ -83,7 +80,7 @@ final class ReplaceNode {
 				// `--at <l>:<c> --kind <Kind>`: the innermost node of `kind`
 				// containing the cursor — reaches a co-starting wrapper / operator
 				// node that plain `--at` (innermost overall) skips past to a child.
-				final cursor: Int = Span.offsetOf(source, line, col + 1);
+				final cursor: Int = Span.offsetOf(source, line, col);
 				final hit: Null<QueryNode> = Engine.atKind(tree, cursor, kind, plugin.selectKindEquivalence());
 				if (hit == null) return Err('position $line:$col is not on a "$kind" node');
 				hit;
