@@ -169,12 +169,38 @@ All resolve against real scopes (never by-name text replace), preserve formattin
 | `extract-var` / `extract-method` | hoist an expression into a `final`, or a statement run into a local function |
 | `change-sig` / `add-param` / `remove-param` | reorder params + call-site args / append a backward-compatible param / drop a param + its arguments |
 | `move` | move a type declaration to another file in the same package, carrying deps and repointing importers |
-| `symbols` / `importers` | list top-level type declarations across a scope / files importing a module |
+| `symbols` / `importers` / `declares` | list top-level type declarations across a scope / files importing a module / the declaration site(s) of one named type |
 
 A second family — `add-member`, `add-import`, `add-element`, `replace-node` — *inserts*
 new code: the snippet is placed at an AST-resolved position, then the file is re-emitted
 through the writer so the new code is formatted by the grammar's own rules and
-re-parse-validated in one step.
+re-parse-validated in one step. Their inverses `remove-element` / `remove-import` /
+`remove-member` delete a node (with its doc-comment) the same way.
+
+### File creation & formatting
+
+The create-side and whole-file counterparts of the insert ops — a new file gets the same
+guarantees: it parses or is rejected, comes out byte-canonical, and is written atomically.
+
+| Command | Operation |
+|---|---|
+| `new` | create a new module deterministically — `--class`, or `--implements <iface>` which stubs every interface method with its real (sliced) signature, fills bodies from `@@` stdin sections, and carries the imports the signatures need so the result type-checks |
+| `fmt` | canonicalise files / dirs through the writer round-trip — gofmt-style `--write` (rewrite in place) / `--list` (report drift) |
+
+Because raw text editing has no such guarantee, `new` is the way to create a file and
+`fmt` the way to bring one back to canonical form.
+
+### Analysis (lint)
+
+`lint <scope> [--rule <id>] [--fix]` runs grammar-agnostic checks and reports violations
+grouped by file; `--fix` applies the auto-fixable subset (re-parse-validated like every
+rewrite). A check is a plugin — a new one is a new class, not a core change.
+
+| Check | Flags |
+|---|---|
+| `unused-import` | an import whose bound name is never referenced in the file |
+| `unused-local` | a local `var` / `final` never read in its enclosing scope |
+| `duplicate-import` | an import / using declared more than once in the same file |
 
 ### Grammar platform
 
