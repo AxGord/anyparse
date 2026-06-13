@@ -403,7 +403,7 @@ class Renderer {
 				}
 				continue;
 			}
-			switch  (f.doc) {
+			switch (f.doc) {
 				case Empty:
 					// nothing
 				case Text(s):
@@ -1399,7 +1399,7 @@ class Renderer {
 
 		while (local.length > 0 && budget >= 0) {
 			final f: Frame = local.pop();
-			switch  (f.doc) {
+			switch (f.doc) {
 				case Empty:
 					// nothing
 				case Text(s):
@@ -1558,7 +1558,7 @@ class Renderer {
 		var aborted: Bool = false;
 		while (stack.length > 0 && !aborted) {
 			final node: Doc = stack.pop();
-			switch  (node) {
+			switch (node) {
 				case Empty:
 				case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
 					aborted = true;

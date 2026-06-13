@@ -3301,7 +3301,7 @@ expectLit(ctx, $v{trailText}));
 						try {
 							skipWs(ctx);
 							$accumRef.push($elemCall);
-						} catch  (_e: anyparse.runtime.ParseError) {
+						} catch (_e: anyparse.runtime.ParseError) {
 							ctx.pos = _savedPos;
 							break;
 						}
@@ -3332,7 +3332,7 @@ expectLit(ctx, $v{trailText}));
 					try {
 						skipWs(ctx);
 						$accumRef.push($elemCall);
-					} catch  (_e: anyparse.runtime.ParseError) {
+					} catch (_e: anyparse.runtime.ParseError) {
 						ctx.pos = _savedPos;
 						break;
 					}
@@ -3356,7 +3356,7 @@ expectLit(ctx, $v{trailText}));
 					try {
 						skipWs(ctx);
 						$accumRef.push($elemCall);
-					} catch  (_e: anyparse.runtime.ParseError) {
+					} catch (_e: anyparse.runtime.ParseError) {
 						ctx.pos = _savedPos;
 						break;
 					}
@@ -3789,7 +3789,7 @@ expectLit(ctx, $v{trailText}));
 							sepAfter: _sepAfter,
 							node: _node,
 						});
-					} catch  (_e: anyparse.runtime.ParseError) {
+					} catch (_e: anyparse.runtime.ParseError) {
 						ctx.pos = _savedPos;
 						break;
 					}
@@ -3813,7 +3813,7 @@ expectLit(ctx, $v{trailText}));
 							sepAfter: true,
 							node: _node,
 						});
-					} catch  (_e: anyparse.runtime.ParseError) {
+					} catch (_e: anyparse.runtime.ParseError) {
 						ctx.pos = _savedPos;
 						break;
 					}
@@ -3834,7 +3834,7 @@ expectLit(ctx, $v{trailText}));
 								break;
 						}
 						matchLit(ctx, $v{sepText});
-					} catch  (_e: anyparse.runtime.ParseError) {
+					} catch (_e: anyparse.runtime.ParseError) {
 						ctx.pos = _savedPos;
 						break;
 					}
@@ -3847,7 +3847,7 @@ expectLit(ctx, $v{trailText}));
 					try {
 						skipWs(ctx);
 						_items.push($elemCall);
-					} catch  (_e: anyparse.runtime.ParseError) {
+					} catch (_e: anyparse.runtime.ParseError) {
 						ctx.pos = _savedPos;
 						break;
 					}
@@ -4210,7 +4210,7 @@ expectLit(ctx, $v{trailText}));
 									sepAfter: _sepAfter,
 									node: _node,
 								});
-							} catch  (_e: anyparse.runtime.ParseError) {
+							} catch (_e: anyparse.runtime.ParseError) {
 								if (!_lead.blankBefore && _lead.leadingComments.length > 0) {
 									$i{trailBBLocal} = _lead.blankBefore;
 									$i{trailLCLocal} = _lead.leadingComments;
@@ -4253,7 +4253,7 @@ expectLit(ctx, $v{trailText}));
 								sepAfter: _sepAfter,
 								node: _node,
 							});
-						} catch  (_e: anyparse.runtime.ParseError) {
+						} catch (_e: anyparse.runtime.ParseError) {
 							ctx.pos = _savedPos;
 							break;
 						}
@@ -4296,7 +4296,7 @@ expectLit(ctx, $v{trailText}));
 								sepAfter: true,
 								node: _node,
 							});
-						} catch  (_e: anyparse.runtime.ParseError) {
+						} catch (_e: anyparse.runtime.ParseError) {
 							if (!_lead.blankBefore && _lead.leadingComments.length > 0) {
 								$i{trailBBLocal} = _lead.blankBefore;
 								$i{trailLCLocal} = _lead.leadingComments;
@@ -4378,7 +4378,7 @@ expectLit(ctx, $v{trailText}));
 							newlineAfterSep: _nlAfterSep,
 							node: _node,
 						});
-					} catch  (_e: anyparse.runtime.ParseError) {
+					} catch (_e: anyparse.runtime.ParseError) {
 						ctx.pos = _savedPos;
 						// ω-keep-pratt-blank: restore the pre-iteration stash only
 						// when the just-parsed value ended with `}` — scan back from

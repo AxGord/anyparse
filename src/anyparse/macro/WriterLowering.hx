@@ -3230,14 +3230,12 @@ class WriterLowering {
 				// identical to the pre-slice layout.
 				if (child.fmtHasFlag('typedefIntersectionBreak')) {
 					final gluedLead: Expr = whitespacePolicyLead(child, leadText, ['typedefIntersection']);
-					parts.push(
-						macro opt._intersectionOperandBreak
-							? _dc([
-								_dt($v{leadText}),
-								_dn(opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth, _dhl())
-							])
-							: $gluedLead
-					);
+					parts.push(macro opt._intersectionOperandBreak
+						? _dc([
+							_dt($v{leadText}),
+							_dn(opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth, _dhl())
+						])
+						: $gluedLead);
 				} else
 					parts.push(whitespacePolicyLead(child, leadText, [
 						'objectFieldColon',
@@ -10657,7 +10655,7 @@ class WriterLowering {
 					for (c in info.classifyCases) {
 						// The builder marks the single matched (`_v0`-binding) case
 						// with `expr: macro 1`; every non-matched case is `macro 0`.
-						final isMatchCase: Bool = switch  (c.expr != null ? c.expr.expr : null) {
+						final isMatchCase: Bool = switch (c.expr != null ? c.expr.expr : null) {
 							case EConst(CInt('1', _)): true;
 							case _: false;
 						};
@@ -11864,7 +11862,7 @@ class WriterLowering {
 							while (_ci2 < _rule.conditions.length) {
 								final _cond = _rule.conditions[_ci2];
 								_ci2++;
-								switch  (_cond.cond) {
+								switch (_cond.cond) {
 									case anyparse.format.wrap.WrapConditionType.ItemCountLargerThan:
 										if (_arr.length < _cond.value)
 											_ok = false;
@@ -11896,7 +11894,7 @@ class WriterLowering {
 							_gj++;
 						}
 						final _gluedDoc: anyparse.core.Doc = _dc(_glued);
-						final _broken: anyparse.core.Doc = switch  (_mode) {
+						final _broken: anyparse.core.Doc = switch (_mode) {
 							case anyparse.format.wrap.WrapMode.OnePerLine:
 								final _ds: Array<anyparse.core.Doc> = [];
 								var _k: Int = 0;

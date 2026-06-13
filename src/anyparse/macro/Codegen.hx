@@ -85,7 +85,7 @@ class Codegen {
 					throw new anyparse.runtime.ParseError(new anyparse.runtime.Span(ctx.pos, ctx.pos), 'trailing data after value');
 				}
 				return _v;
-			} catch  (e: anyparse.runtime.ParseError) {
+			} catch (e: anyparse.runtime.ParseError) {
 				// Decorate the error with the source string so
 				// `ParseError.toString` can render `line:col` instead of
 				// the raw byte offset. The entry point is the natural

@@ -873,7 +873,7 @@ class WrapList {
 		var total: Int = 0;
 		while (stack.length > 0) {
 			final node: Doc = stack.pop();
-			switch  (node) {
+			switch (node) {
 				case Empty:
 				case Text(s):
 					total += s.length;

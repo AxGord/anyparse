@@ -364,7 +364,7 @@ class WriterCodegen {
 	}
 
 	private static function anonHasField(t: haxe.macro.Type, name: String): Bool {
-		switch  (t) {
+		switch (t) {
 			case TLazy(f):
 				return anonHasField(f(), name);
 			case TType(_, _):
@@ -1738,7 +1738,7 @@ class WriterCodegen {
 
 	private static function foldTrailingRecursiveField(): Field {
 		final body: Expr = macro {
-			switch  (doc) {
+			switch (doc) {
 				case anyparse.core.Doc.BodyGroup(inner):
 					return _dbg(_appendInsideBodyGroup(inner, trailing));
 				case anyparse.core.Doc.Concat(items):
@@ -1752,7 +1752,7 @@ class WriterCodegen {
 						// BodyGroup), placing it BEFORE the literal in output.
 						// Empty Text, Empty, Line, IfBreak etc. keep walking so
 						// trailing whitespace/separator items don't block fold.
-						switch  (_item) {
+						switch (_item) {
 							case anyparse.core.Doc.Text(s) if (s.length > 0):
 								return null;
 							case _:
@@ -1790,7 +1790,7 @@ class WriterCodegen {
 
 	private static function appendInsideBodyGroupField(): Field {
 		final body: Expr = macro {
-			switch  (inner) {
+			switch (inner) {
 				case anyparse.core.Doc.Nest(n, innerInner):
 					return _dn(n, _appendInsideBodyGroup(innerInner, trailing));
 				case anyparse.core.Doc.Concat(items):

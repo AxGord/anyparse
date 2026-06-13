@@ -79,7 +79,8 @@ final class UnusedLocal implements Check {
 		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> = try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> =
+				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
 			if (tree != null) walk(violations, entry.file, entry.source, tree, null, scopeKinds, opaqueKinds);
 		}
 		return violations;
