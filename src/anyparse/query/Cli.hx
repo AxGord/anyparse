@@ -3679,59 +3679,13 @@ final class Cli {
 	 * call without any conversion.
 	 */
 	private static function appendCommentHits(target: String, source: String, exact: Bool, out: Array<LitHit>): Void {
-		final n: Int = source.length;
-		var i: Int = 0;
-		while (i < n) {
-			final c: Int = StringTools.fastCodeAt(source, i);
-			if (c == '"'.code || c == "'".code) {
-				final quote: Int = c;
-				i++;
-				while (i < n) {
-					final ch: Int = StringTools.fastCodeAt(source, i);
-					if (ch == '\\'.code) {
-						i += 2;
-						continue;
-					}
-					if (ch == quote) {
-						i++;
-						break;
-					}
-					i++;
-				}
-				continue;
-			}
-			if (c == '/'.code && i + 1 < n) {
-				final next: Int = StringTools.fastCodeAt(source, i + 1);
-				if (next == '/'.code) {
-					final start: Int = i;
-					i += 2;
-					while (i < n && StringTools.fastCodeAt(source, i) != '\n'.code) i++;
-					final body: String = source.substring(start + 2, i);
-					final match: Bool = exact ? body == target : body.indexOf(target) >= 0;
-					if (match) out.push(new LitHit('Comment', body, new Span(start, i)));
-					continue;
-				}
-				if (next == '*'.code) {
-					final start: Int = i;
-					i += 2;
-					var closed: Bool = false;
-					while (i + 1 < n) {
-						if (StringTools.fastCodeAt(source, i) == '*'.code && StringTools.fastCodeAt(source, i + 1) == '/'.code) {
-							i += 2;
-							closed = true;
-							break;
-						}
-						i++;
-					}
-					if (!closed) i = n;
-					final bodyEnd: Int = closed ? i - 2 : n;
-					final body: String = source.substring(start + 2, bodyEnd);
-					final match: Bool = exact ? body == target : body.indexOf(target) >= 0;
-					if (match) out.push(new LitHit('Comment', body, new Span(start, i)));
-					continue;
-				}
-			}
-			i++;
+		for (tok in RefactorSupport.collectCommentTokens(source)) {
+			final closed: Bool = !tok.isLine && tok.to >= tok.from + 4 && StringTools.fastCodeAt(source, tok.to - 2) == '*'.code
+				&& StringTools.fastCodeAt(source, tok.to - 1) == '/'.code;
+			final bodyEnd: Int = closed ? tok.to - 2 : tok.to;
+			final body: String = source.substring(tok.from + 2, bodyEnd);
+			final match: Bool = exact ? body == target : body.indexOf(target) >= 0;
+			if (match) out.push(new LitHit('Comment', body, new Span(tok.from, tok.to)));
 		}
 	}
 

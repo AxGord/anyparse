@@ -841,7 +841,7 @@ final class RefactorSupport {
 	 * literals so an opener inside a string is not a comment. Mirrors the `apq
 	 * lit` comment walker. Each token is `{ from, to, isLine }`.
 	 */
-	private static function collectCommentTokens(source: String): Array<{ from: Int, to: Int, isLine: Bool }> {
+	public static function collectCommentTokens(source: String): Array<{ from: Int, to: Int, isLine: Bool }> {
 		final out: Array<{ from: Int, to: Int, isLine: Bool }> = [];
 		final n: Int = source.length;
 		var i: Int = 0;
