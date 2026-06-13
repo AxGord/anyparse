@@ -254,12 +254,14 @@ import unit.ApqDxTier3CliTest;
 import unit.ApqDxTier4CliTest;
 import unit.ApqDxTier5CliTest;
 import unit.HxCondCompStmtTrailOptSliceTest;
+import unit.FmtSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
 	runner and reports results.
 **/
 class RunTests {
+
 	public static function main() {
 		var runner = new utest.Runner();
 
@@ -269,16 +271,18 @@ class RunTests {
 		// every case (the full suite, e.g. before a commit). Substring match,
 		// so `APQ_TEST=RemoveParam` runs RemoveParamSliceTest and `APQ_TEST=Apq`
 		// runs all `Apq*` tests; comma-separated to run a slice + its siblings.
-		final filterEnv:Null<String> = Sys.getEnv('APQ_TEST');
-		final filters:Array<String> = filterEnv == null
+		final filterEnv: Null<String> = Sys.getEnv('APQ_TEST');
+		final filters: Array<String> = filterEnv == null
 			? []
-			: [for (f in filterEnv.split(',')) if (StringTools.trim(f) != '') StringTools.trim(f)];
-		function addCase(testCase:utest.Test):Void {
+			: [
+				for (f in filterEnv.split(',')) if (StringTools.trim(f) != '') StringTools.trim(f)
+			];
+		function addCase(testCase: utest.Test): Void {
 			if (filters.length == 0) {
 				runner.addCase(testCase);
 				return;
 			}
-			final className:String = Type.getClassName(Type.getClass(testCase));
+			final className: String = Type.getClassName(Type.getClass(testCase));
 			for (filter in filters) if (className.indexOf(filter) >= 0) {
 				runner.addCase(testCase);
 				return;
@@ -359,7 +363,7 @@ class RunTests {
 		addCase(new HxSwitchBareSliceTest());
 		addCase(new HxDoWhileThrowTryCatchSliceTest());
 		addCase(new HxAbstractSliceTest());
-addCase(new HxEnumAbstractSliceTest());
+		addCase(new HxEnumAbstractSliceTest());
 		addCase(new HxHeritageSliceTest());
 		addCase(new HxHeritageLineWrapSliceTest());
 		addCase(new HxAccessorSliceTest());
@@ -507,6 +511,7 @@ addCase(new HxEnumAbstractSliceTest());
 		addCase(new SymbolIndexSliceTest());
 		addCase(new SymbolQuerySliceTest());
 		addCase(new LintSliceTest());
+		addCase(new FmtSliceTest());
 		addCase(new MoveSymbolSliceTest());
 		addCase(new ApqMetaTest());
 		addCase(new ApqMetaEnumCtorSliceTest());
@@ -543,4 +548,5 @@ addCase(new HxEnumAbstractSliceTest());
 		utest.ui.Report.create(runner);
 		runner.run();
 	}
+
 }

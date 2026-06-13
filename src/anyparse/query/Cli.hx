@@ -399,6 +399,8 @@ final class Cli {
 				return runRemoveImport(rest);
 			case 'remove-member':
 				return runRemoveMember(rest);
+			case 'fmt':
+				return runFmt(rest);
 			case 'uses':
 				return runUses(rest);
 			case 'meta':
@@ -8529,6 +8531,7 @@ final class Cli {
 		sysPrint('  test-summary  Parse utest stdout transcript into tests/assertions/failures\n');
 		sysPrint('  self-status   List .hx files the grammar plugin cannot parse (dogfood gap)\n');
 		sysPrint('  source        Emit RAW verbatim file lines (no parse; --range L:L2)\n');
+		sysPrint('  fmt           Canonicalise Haxe source (writer round-trip; --write / --list)\n');
 		sysPrint('\n');
 		sysPrint('Global options:\n');
 		sysPrint('  --lang <name>   Pick grammar plugin (default: haxe)\n');
@@ -9804,6 +9807,121 @@ final class Cli {
 	 */
 	private static function dedentLine(line: String, strip: Int): String {
 		return StringTools.trim(line).length == 0 ? '' : line.substr(strip);
+	}
+
+	/**
+	 * `apq fmt <file/dir/glob>... [--write] [--list]` — canonicalise Haxe
+	 * source by re-emitting it through the writer (the same whole-file pipeline
+	 * the writer-emit ops use), formatted by the project `hxformat.json`
+	 * discovered from each file's directory. This is the deterministic
+	 * file-level counterpart of the node-level writer-emit ops: it is what
+	 * makes a freshly written file byte-canonical (the create recipe's
+	 * finisher) and is the measuring stick for the canonical gate
+	 * (`writeRoundTrip(s) == s`). With no flags on a single concrete file the
+	 * formatted source goes to stdout; on multiple files / a directory `--list`
+	 * mode is implied (gofmt `-l`: print the paths whose output differs). A
+	 * file that fails to parse is reported and skipped; the exit code is
+	 * non-zero if any file failed.
+	 */
+	private static function runFmt(args: Array<String>): Int {
+		var lang: String = 'haxe';
+		var write: Bool = false;
+		var list: Bool = false;
+		final inputSpecs: Array<String> = [];
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--write', '-w':
+					write = true;
+				case '--list', '-l':
+					list = true;
+				case '-h', '--help':
+					printFmtUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq fmt: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					inputSpecs.push(a);
+			}
+			i++;
+		}
+		if (inputSpecs.length == 0) {
+			stderr('apq fmt: expected <file/dir/glob>...\n');
+			printFmtUsage();
+			return EXIT_USAGE;
+		}
+
+		final plugin: GrammarPlugin = pickPlugin(lang);
+		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
+		final paths: Array<String> = expanded.paths;
+		if (paths.length == 0) {
+			stderr('apq fmt: ${inputSpecs.join(", ")} matched no .hx files\n');
+			return EXIT_RUNTIME;
+		}
+
+		// No --write and no -l on a single concrete file → emit the formatted
+		// source to stdout (gofmt's one-file default). Multiple files / a dir
+		// without --write → list mode (names of files that would change).
+		final listMode: Bool = list || (!write && !expanded.singleFile);
+
+		var changed: Int = 0;
+		var failed: Int = 0;
+		for (path in paths) {
+			final source: String = try readFile(path) catch (exception: Exception) {
+				stderr('apq fmt: $path: ${exception.message}\n');
+				failed++;
+				continue;
+			};
+			final optsJson: Null<String> = discoverFormatConfig(path);
+			final formatted: Null<String> = try plugin.writeRoundTrip(source, optsJson) catch (exception: Exception) {
+				stderr('apq fmt: $path: ${exception.message}\n');
+				failed++;
+				continue;
+			};
+			if (formatted == null) {
+				stderr('apq fmt: no writer for lang "$lang"\n');
+				return EXIT_RUNTIME;
+			}
+			final isCanonical: Bool = formatted == source;
+			if (write) {
+				if (!isCanonical) {
+					writeFile(path, formatted);
+					changed++;
+				}
+			} else if (listMode) {
+				if (!isCanonical) {
+					sysPrint('$path\n');
+					changed++;
+				}
+			} else
+				sysPrint(formatted);
+		}
+
+		if (write)
+			stderr('apq fmt: formatted $changed file(s)' + (failed > 0 ? ', $failed failed' : '') + '\n');
+		else if (listMode && failed > 0) stderr('apq fmt: $failed file(s) failed to parse\n');
+		return failed > 0 ? EXIT_RUNTIME : EXIT_OK;
+	}
+
+	private static function printFmtUsage(): Void {
+		sysPrint('Usage: apq fmt <file/dir/glob>... [--write] [--list]\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --write, -w     Rewrite each file in place with its canonical form\n');
+		sysPrint('  --list, -l      Print paths whose output differs (gofmt -l); no rewrite\n');
+		sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
+		sysPrint('\n');
+		sysPrint('Canonicalise Haxe source by re-emitting it through the writer, formatted\n');
+		sysPrint('by the project hxformat.json discovered from each file\'s directory. With\n');
+		sysPrint('no flags on a single file the formatted source goes to stdout; on multiple\n');
+		sysPrint('files or a directory, --list mode is implied. A file that fails to parse is\n');
+		sysPrint('reported and skipped; the exit code is non-zero if any file failed.\n');
 	}
 
 }
