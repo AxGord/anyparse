@@ -9940,28 +9940,6 @@ final class Cli {
 	 * `NewFile`); a method without a section is left as a NotImplementedException
 	 * stub (reported on stderr). Without `--write` the source goes to stdout.
 	 */
-
-	private static function printNewUsage(): Void {
-		sysPrint('Usage: apq new <path> (--class | --implements <iface>) [--field <m>]... [--bodies -] [--write]\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --class             Create a bare final class (members from --field)\n');
-		sysPrint('  --implements <i>    Implement interface <i> — stub every method with\n');
-		sysPrint('                      its real signature (simple name = same package,\n');
-		sysPrint('                      or a qualified pkg.Name)\n');
-		sysPrint('  --field <member>    Add a verbatim member (repeatable)\n');
-		sysPrint('  --bodies -          Read @@ <method> body sections from stdin\n');
-		sysPrint('                      (@@ imports = extra imports); a method without a\n');
-		sysPrint('                      section gets a NotImplementedException stub\n');
-		sysPrint('  --write             Write the new file (default: emit to stdout)\n');
-		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
-		sysPrint('\n');
-		sysPrint('Assemble a NEW module and canonicalise it through the writer (parses-or-\n');
-		sysPrint('fails, byte-canonical, atomic). The path must not already exist — modify\n');
-		sysPrint('an existing file with the structural ops / apq fmt. An unparseable result\n');
-		sysPrint('(e.g. a malformed @@ body) exits non-zero with nothing written.\n');
-	}
-
 	/** The class name for a new file: its basename without the `.hx` extension. */
 	private static function newFileClassName(path: String): String {
 		final base: String = haxe.io.Path.withoutDirectory(path);
@@ -10040,13 +10018,30 @@ final class Cli {
 	 * a NotImplementedException stub (reported on stderr). Without `--write` the
 	 * source goes to stdout.
 	 */
+	/**
+	 * `apq new <path> (--class | --implements <iface> | --kind <k>) [--extends <T>]...
+	 * [--open] [--field <m>]... [--bodies -] [--write]` — create a new module
+	 * deterministically: derive the package + class name from <path>, assemble the
+	 * scaffold (interface method stubs with sliced signatures + carried imports, or
+	 * verbatim `--field` members), and run it through the writer so the result is
+	 * canonical-or-rejected and the file is never written on a parse failure.
+	 * `--kind` (default class) picks class / interface / enum / typedef; `--extends`
+	 * adds a superclass (class) or super-interfaces (interface); `--open` drops the
+	 * `final` on a class. Create-only: an existing path is refused. `--bodies -`
+	 * reads `@@ <method>` sections from stdin (see `NewFile`); a method without a
+	 * section is left as a NotImplementedException stub (reported on stderr).
+	 * Without `--write` the source goes to stdout.
+	 */
 	private static function runNew(args: Array<String>): Int {
 		var lang: String = 'haxe';
 		var write: Bool = false;
 		var asClass: Bool = false;
+		var open: Bool = false;
+		var kind: String = 'class';
 		var iface: Null<String> = null;
 		var bodiesArg: Null<String> = null;
 		var bodiesFromFile: Null<String> = null;
+		final extendsList: Array<String> = [];
 		final fields: Array<String> = [];
 		var path: Null<String> = null;
 
@@ -10058,6 +10053,12 @@ final class Cli {
 					lang = expectValue(args, ++i, '--lang');
 				case '--class':
 					asClass = true;
+				case '--kind':
+					kind = expectValue(args, ++i, '--kind');
+				case '--extends':
+					extendsList.push(expectValue(args, ++i, '--extends'));
+				case '--open':
+					open = true;
 				case '--implements':
 					iface = expectValue(args, ++i, '--implements');
 				case '--field':
@@ -10090,8 +10091,13 @@ final class Cli {
 			printNewUsage();
 			return EXIT_USAGE;
 		}
-		if (!asClass && iface == null) {
-			stderr('apq new: specify --class or --implements <iface>\n');
+		if (['class', 'interface', 'enum', 'typedef'].indexOf(kind) < 0) {
+			stderr('apq new: --kind must be class|interface|enum|typedef (got "$kind")\n');
+			return EXIT_USAGE;
+		}
+		final hasIntent: Bool = asClass || iface != null || kind != 'class' || extendsList.length > 0 || fields.length > 0;
+		if (!hasIntent) {
+			stderr('apq new: specify --class / --implements <iface> / --kind <k>\n');
 			return EXIT_USAGE;
 		}
 		final filePath: String = path;
@@ -10130,6 +10136,9 @@ final class Cli {
 			className: className,
 			pkg: pkg,
 			fields: fields,
+			kind: kind,
+			isFinal: !open,
+			extendsList: extendsList,
 			ifaceSimple: ifaceSimple,
 			ifaceModule: ifaceModule,
 			ifaceSource: ifaceSource,
@@ -10149,6 +10158,33 @@ final class Cli {
 				stderr('apq new: $message\n');
 				return EXIT_RUNTIME;
 		}
+	}
+
+	private static function printNewUsage(): Void {
+		sysPrint(
+			'Usage: apq new <path> (--class | --implements <iface> | --kind <k>) [--extends <T>]... [--open] [--field <m>]... [--bodies -] [--write]\n'
+		);
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --kind <k>          class (default) | interface | enum | typedef\n');
+		sysPrint('  --class             Shorthand for --kind class\n');
+		sysPrint('  --implements <i>    (class) implement interface <i> — stub every method\n');
+		sysPrint('                      with its real signature (simple name = same package,\n');
+		sysPrint('                      or a qualified pkg.Name)\n');
+		sysPrint('  --extends <T>       (class) superclass / (interface) super-interface;\n');
+		sysPrint('                      repeatable for interfaces; a qualified pkg.T is imported\n');
+		sysPrint('  --open              Emit a non-final class (default: final)\n');
+		sysPrint('  --field <member>    Add a verbatim member (repeatable)\n');
+		sysPrint('  --bodies -          Read @@ <method> body sections from stdin\n');
+		sysPrint('                      (@@ imports = extra imports, @@ doc = doc-comment); a\n');
+		sysPrint('                      method without a section gets a NotImplementedException stub\n');
+		sysPrint('  --write             Write the new file (default: emit to stdout)\n');
+		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('\n');
+		sysPrint('Assemble a NEW module and canonicalise it through the writer (parses-or-\n');
+		sysPrint('fails, byte-canonical, atomic). The path must not already exist — modify\n');
+		sysPrint('an existing file with the structural ops / apq fmt. An unparseable result\n');
+		sysPrint('(e.g. a malformed @@ body) exits non-zero with nothing written.\n');
 	}
 
 }

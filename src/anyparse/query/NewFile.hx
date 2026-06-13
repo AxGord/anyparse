@@ -19,18 +19,25 @@ using StringTools;
  * validation is the tool's job. No LLM in the loop — the writer is the
  * validator.
  *
- * Two shapes:
- * - `--class`: a bare `final class` carrying the verbatim `--field` members.
- * - `--implements <iface>`: every interface method stubbed with the right
- *   signature (sliced from the interface source), each body filled from a
- *   `@@ <method>` section or left as a `NotImplementedException` stub. The
- *   imports the signatures need are carried over deterministically — the
- *   interface file's own imports plus an import per sibling sub-module type
- *   it declares (e.g. a `Violation` typedef next to a `Check` interface) —
- *   so the result type-checks, not just parses.
+ * Type shapes (`spec.kind`, default `class`):
+ * - `class`: `[final ]class N [extends E] [implements I]` — `final` unless
+ *   `spec.isFinal == false`; `--implements` additionally stubs every interface
+ *   method with the right signature (sliced from the interface source) and
+ *   carries the imports the signatures need (the interface file's own imports
+ *   + an import per sibling sub-module type, e.g. `Violation` next to `Check`)
+ *   so the result type-checks. Bodies fill from `@@ <method>` sections; an
+ *   unfilled method → a `NotImplementedException` stub.
+ * - `interface`: `interface N [extends I, …]` — members from `--field`.
+ * - `enum`: `enum N` — members (constructors) from `--field`.
+ * - `typedef`: `typedef N = { … }` — anon-struct fields from `--field`.
+ *
+ * A no-arg `public function new() {}` is auto-emitted ONLY for a `class` with
+ * no `extends` and no caller-supplied constructor — a subclass inherits its
+ * super's constructor (auto-emitting one would skip a parameterised
+ * `super(...)`), and interfaces / enums / typedefs have none.
  *
  * The `@@` payload also recognises two reserved sections: `@@ imports`
- * (extra imports, one per line) and `@@ doc` (the class doc-comment).
+ * (extra imports, one per line) and `@@ doc` (the type's doc-comment).
  *
  * Assembly is intentionally loose (the writer canonicalises spacing / blank
  * lines / wrapping); the only hard requirement is that the assembled text
@@ -43,8 +50,11 @@ final class NewFile {
 	/** Body emitted for an interface method the caller left unfilled. */
 	private static inline final STUB: String = 'throw new haxe.exceptions.NotImplementedException();';
 
-	/** Reserved `@@` section name carrying the class doc-comment. */
+	/** Reserved `@@` section name carrying the type doc-comment. */
 	private static inline final DOC_SECTION: String = 'doc';
+
+	/** Type kinds that carry a `@:nullSafety(Strict)` meta (class / interface). */
+	private static final NULL_SAFE_KINDS: Array<String> = ['class', 'interface'];
 
 	/** Import-declaration kinds carried verbatim from the interface file. */
 	private static final IMPORT_KINDS: Array<String> = ['ImportDecl', 'UsingDecl', 'ImportWildDecl', 'ImportAliasDecl'];
@@ -63,20 +73,28 @@ final class NewFile {
 	 * Assemble + canonicalise a new module from `spec`. Returns the canonical
 	 * source in `result` (`Ok`) plus the method names that received the
 	 * default stub (`stubbed`, for the caller to warn about), or an `Err`
-	 * describing a parse failure / a `@@` section naming an unknown method,
-	 * with `stubbed` empty.
+	 * describing a parse failure / a `@@` section naming an unknown method /
+	 * an option that does not apply to the chosen kind, with `stubbed` empty.
 	 */
 	public static function create(spec: NewFileSpec, plugin: GrammarPlugin, ?optsJson: String): NewFileResult {
-		final bodies: Map<String, String> = new Map();
+		final kind: String = spec.kind ?? 'class';
+		final extendsList: Array<String> = spec.extendsList ?? [];
+		final ifaceSimple: Null<String> = spec.ifaceSimple;
+		if (ifaceSimple != null && kind != 'class') return err('--implements requires --kind class');
+		if (extendsList.length > 0 && kind != 'class' && kind != 'interface') return err('--extends does not apply to a $kind');
+		if (kind == 'class' && extendsList.length > 1) return err('a class extends at most one type (got ${extendsList.length})');
+
+		final bodies: Map<String, String> = [];
 		final imports: Array<String> = [];
 		final bodiesRaw: Null<String> = spec.bodiesRaw;
 		if (bodiesRaw != null) parseSections(bodiesRaw, bodies, imports);
 		final classDoc: Null<String> = bodies[DOC_SECTION];
 		if (classDoc != null) bodies.remove(DOC_SECTION);
 
+		final extendsSimple: Array<String> = [for (e in extendsList) simpleNameWithImport(e, spec.pkg, imports)];
+
 		final members: Array<String> = [];
 		final stubbed: Array<String> = [];
-		final ifaceSimple: Null<String> = spec.ifaceSimple;
 		final ifaceSource: Null<String> = spec.ifaceSource;
 		final ifaceModule: Null<String> = spec.ifaceModule;
 		if (ifaceSimple != null && ifaceSource != null && ifaceModule != null) {
@@ -104,9 +122,14 @@ final class NewFile {
 				return err('@@ $key names no method on $ifaceSimple (have: ${methodNames.join(", ")})');
 		}
 		for (field in spec.fields) members.push(field);
-		if (!members.exists(m -> m.indexOf('function new') >= 0)) members.unshift('public function new() {}');
 
-		final source: String = assemble(spec, members, dedup(imports), classDoc);
+		// A class with no superclass and no constructor cannot be `new`'d (Haxe
+		// has no implicit constructor); auto-emit one. A subclass inherits its
+		// super's constructor, so do NOT auto-emit when `extends` is present.
+		if (kind == 'class' && extendsList.length == 0 && !members.exists(m -> m.indexOf('function new(') >= 0))
+			members.unshift('public function new() {}');
+
+		final source: String = assemble(spec, kind, extendsSimple, members, dedup(imports), classDoc);
 		final canonical: Null<String> = try plugin.writeRoundTrip(source, optsJson) catch (exception: ParseError) {
 			return err('assembled source does not parse: ${exception.message}');
 		} catch (exception: Exception) {
@@ -119,6 +142,57 @@ final class NewFile {
 	/** Wrap an error message as a stub-free `NewFileResult`. */
 	private static inline function err(message: String): NewFileResult {
 		return { result: EditResult.Err(message), stubbed: [] };
+	}
+
+	/**
+	 * Resolve a possibly-qualified type reference to the simple name to write
+	 * in the source, pushing `import <ref>;` when `ref` is qualified and lives
+	 * in a different package than `newPkg`. A simple name is returned as-is
+	 * (assumed same-package, or the caller adds an `@@ imports` line).
+	 */
+	private static function simpleNameWithImport(ref: String, newPkg: String, imports: Array<String>): String {
+		final dot: Int = ref.lastIndexOf('.');
+		if (dot < 0) return ref;
+		final simple: String = ref.substr(dot + 1);
+		final pkg: String = ref.substr(0, dot);
+		if (pkg != newPkg) imports.push('import $ref;');
+		return simple;
+	}
+
+	/**
+	 * Glue the doc-comment, package line, imports, the type header (varying by
+	 * `kind` — `@:nullSafety(Strict)` for class/interface; `extends` /
+	 * `implements` clauses), and the members into a parseable module. Spacing
+	 * is deliberately rough — `writeRoundTrip` canonicalises it.
+	 */
+	private static function assemble(
+		spec: NewFileSpec, kind: String, extendsSimple: Array<String>, members: Array<String>, imports: Array<String>,
+		classDoc: Null<String>
+	): String {
+		final buf: StringBuf = new StringBuf();
+		if (spec.pkg != '') buf.add('package ${spec.pkg};\n');
+		buf.add('\n');
+		for (imp in imports) buf.add('$imp\n');
+		if (imports.length > 0) buf.add('\n');
+		if (classDoc != null) buf.add('${docComment(classDoc)}\n');
+		if (NULL_SAFE_KINDS.contains(kind)) buf.add('@:nullSafety(Strict)\n');
+
+		final ext: String = extendsSimple.length > 0 ? ' extends ${extendsSimple.join(", ")}' : '';
+		final body: String = members.join('\n\n');
+		switch kind {
+			case 'interface':
+				buf.add('interface ${spec.className}$ext {\n\n$body\n}\n');
+			case 'enum':
+				buf.add('enum ${spec.className} {\n\n$body\n}\n');
+			case 'typedef':
+				buf.add('typedef ${spec.className} = {\n\n$body\n}\n');
+			case _:
+				final finalKw: String = spec.isFinal == false ? '' : 'final ';
+				final ifaceSimple: Null<String> = spec.ifaceSimple;
+				final impl: String = ifaceSimple != null ? ' implements $ifaceSimple' : '';
+				buf.add('${finalKw}class ${spec.className}$ext$impl {\n\n$body\n}\n');
+		}
+		return buf.toString();
 	}
 
 	/**
@@ -187,31 +261,7 @@ final class NewFile {
 		return sig;
 	}
 
-	/**
-	 * Glue the optional class doc-comment, the package line, imports, the
-	 * `@:nullSafety(Strict) final class` header with its `implements` clause,
-	 * and the members into a parseable module. Spacing is deliberately rough —
-	 * `writeRoundTrip` canonicalises it.
-	 */
-	private static function assemble(spec: NewFileSpec, members: Array<String>, imports: Array<String>, classDoc: Null<String>): String {
-		final ifaceSimple: Null<String> = spec.ifaceSimple;
-		final implClause: String = ifaceSimple != null ? ' implements $ifaceSimple' : '';
-
-		final buf: StringBuf = new StringBuf();
-		if (spec.pkg != '') buf.add('package ${spec.pkg};\n');
-		buf.add('\n');
-		for (imp in imports) buf.add('$imp\n');
-		if (imports.length > 0) buf.add('\n');
-		if (classDoc != null) buf.add('${docComment(classDoc)}\n');
-		buf.add('@:nullSafety(Strict)\n');
-		buf.add('final class ${spec.className}$implClause {\n');
-		buf.add('\n');
-		buf.add(members.join('\n\n'));
-		buf.add('\n}\n');
-		return buf.toString();
-	}
-
-	/** Wrap `text` as a `/** ... *\/` doc-comment, one ` * ` per line. */
+	/** Wrap `text` as a `/** … *\/` doc-comment, one ` * ` per line. */
 	private static function docComment(text: String): String {
 		final buf: StringBuf = new StringBuf();
 		buf.add('/**\n');
@@ -224,7 +274,7 @@ final class NewFile {
 	 * Parse the `--bodies` payload into method bodies and extra imports. A
 	 * line `@@ <name>` opens a section; lines until the next `@@` (or EOF) are
 	 * its content. The reserved section `@@ imports` contributes one
-	 * `import <line>;` per non-blank line; `@@ doc` is the class doc-comment;
+	 * `import <line>;` per non-blank line; `@@ doc` is the type doc-comment;
 	 * every other section is a method body (leading / trailing blank lines
 	 * trimmed). Content before the first `@@` is ignored.
 	 */
@@ -269,17 +319,20 @@ final class NewFile {
 
 /**
  * Compact creation spec. `className` / `pkg` are derived by the caller from
- * the target path (`pkg == ''` for a package-less root file). `ifaceSimple`
- * / `ifaceModule` / `ifaceSource` are set together for `--implements`
- * (`ifaceModule` is the interface's fully-qualified module path, used both to
- * decide the interface import and to address its sibling sub-types).
- * `fields` are verbatim `--field` member texts; `bodiesRaw` is the raw
- * `--bodies` stdin payload (method bodies + the reserved `@@ imports` / `@@ doc`).
+ * the target path (`pkg == ''` for a package-less root file). `kind`
+ * (default `class`), `isFinal` (class only, default true) and `extendsList`
+ * (qualified or simple type refs) shape the declaration. `ifaceSimple` /
+ * `ifaceModule` / `ifaceSource` are set together for `--implements` on a
+ * class. `fields` are verbatim `--field` member texts; `bodiesRaw` is the raw
+ * `--bodies` payload (method bodies + the reserved `@@ imports` / `@@ doc`).
  */
 typedef NewFileSpec = {
 	var className: String;
 	var pkg: String;
 	var fields: Array<String>;
+	@:optional var kind: String;
+	@:optional var isFinal: Bool;
+	@:optional var extendsList: Array<String>;
 	@:optional var ifaceSimple: String;
 	@:optional var ifaceModule: String;
 	@:optional var ifaceSource: String;

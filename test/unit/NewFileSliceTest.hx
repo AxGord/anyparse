@@ -237,4 +237,85 @@ class NewFileSliceTest extends Test {
 		Assert.isFalse(text.contains('new() {}'));
 	}
 
+	/** `--kind interface` emits an interface with super-interfaces, no constructor, no `final`. */
+	public function testInterfaceKind(): Void {
+		final text: String = okText(create({
+			className: 'I',
+			pkg: 'p',
+			kind: 'interface',
+			extendsList: ['Base'],
+			fields: ['public function f(): Void;']
+		}));
+		Assert.isTrue(text.contains('interface I extends Base'));
+		Assert.isTrue(text.contains('function f'));
+		Assert.isFalse(text.contains('function new'));
+		Assert.isFalse(text.contains('final class'));
+	}
+
+	/** `--kind enum` emits an enum carrying the given constructors. */
+	public function testEnumKind(): Void {
+		final text: String = okText(create({
+			className: 'Color',
+			pkg: 'p',
+			kind: 'enum',
+			fields: ['Red;', 'Rgb(r: Int, g: Int, b: Int);']
+		}));
+		Assert.isTrue(text.contains('enum Color {'));
+		Assert.isTrue(text.contains('Red;'));
+		Assert.isTrue(text.contains('Rgb('));
+		Assert.isFalse(text.contains('function new'));
+	}
+
+	/** `--kind typedef` emits an anon-struct typedef from the fields. */
+	public function testTypedefKind(): Void {
+		final text: String = okText(create({
+			className: 'Point',
+			pkg: 'p',
+			kind: 'typedef',
+			fields: ['var x: Int;', 'var y: Int;']
+		}));
+		Assert.isTrue(text.contains('typedef Point = {'));
+		Assert.isTrue(text.contains('var x'));
+	}
+
+	/** A class with `--extends` inherits its super's constructor (no auto `new()`), and a qualified base is imported. */
+	public function testClassExtendsNoAutoConstructor(): Void {
+		final text: String = okText(create({
+			className: 'T',
+			pkg: 'p',
+			kind: 'class',
+			extendsList: ['a.b.Base'],
+			fields: []
+		}));
+		Assert.isTrue(text.contains('class T extends Base'));
+		Assert.isTrue(text.contains('import a.b.Base;'));
+		Assert.isFalse(text.contains('function new'));
+	}
+
+	/** `--open` (isFinal false) emits a non-final class. */
+	public function testOpenClass(): Void {
+		final text: String = okText(create({
+			className: 'Box',
+			pkg: 'p',
+			isFinal: false,
+			fields: ['public final n: Int = 0;']
+		}));
+		Assert.isTrue(text.contains('class Box {'));
+		Assert.isFalse(text.contains('final class'));
+	}
+
+	/** `--implements` on a non-class kind is rejected. */
+	public function testImplementsRequiresClass(): Void {
+		final res: NewFileResult = create({
+			className: 'I',
+			pkg: 'p',
+			kind: 'interface',
+			fields: [],
+			ifaceSimple: 'X',
+			ifaceModule: 'p.X',
+			ifaceSource: 'package p;\ninterface X {}'
+		});
+		Assert.isTrue(isErr(res));
+	}
+
 }

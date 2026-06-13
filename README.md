@@ -184,7 +184,7 @@ guarantees: it parses or is rejected, comes out byte-canonical, and is written a
 
 | Command | Operation |
 |---|---|
-| `new` | create a new module deterministically — `--class`, or `--implements <iface>` which stubs every interface method with its real (sliced) signature, fills bodies from `@@` stdin sections, and carries the imports the signatures need so the result type-checks |
+| `new` | create a new module deterministically — `--kind class` (default; `--implements <iface>` stubs every method with its real sliced signature and carries the imports so it type-checks) / `interface` / `enum` / `typedef`, plus `--extends <T>` (superclass / super-interfaces, qualified names imported), `--open` (non-final class), `--field` verbatim members, and `@@` stdin sections for method bodies / `@@ imports` / `@@ doc` |
 | `fmt` | canonicalise files / dirs through the writer round-trip — gofmt-style `--write` (rewrite in place) / `--list` (report drift) |
 
 Because raw text editing has no such guarantee, `new` is the way to create a file and
