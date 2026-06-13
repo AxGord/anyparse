@@ -81,7 +81,7 @@ final class NewFile {
 		final extendsList: Array<String> = spec.extendsList ?? [];
 		final ifaceSimple: Null<String> = spec.ifaceSimple;
 		if (ifaceSimple != null && kind != 'class') return err('--implements requires --kind class');
-		if (extendsList.length > 0 && kind != 'class' && kind != 'interface') return err('--extends does not apply to a $kind');
+		if (extendsList.length > 0 && kind == 'enum') return err('--extends does not apply to an enum');
 		if (kind == 'class' && extendsList.length > 1) return err('a class extends at most one type (got ${extendsList.length})');
 
 		final bodies: Map<String, String> = [];
@@ -185,7 +185,9 @@ final class NewFile {
 			case 'enum':
 				buf.add('enum ${spec.className} {\n\n$body\n}\n');
 			case 'typedef':
-				buf.add('typedef ${spec.className} = {\n\n$body\n}\n');
+				final structLines: Array<String> = [for (e in extendsSimple) '> $e,'].concat(members);
+				buf.add('typedef ${spec.className} = {\n\n${structLines.join("\n")}\n}\n');
+
 			case _:
 				final finalKw: String = spec.isFinal == false ? '' : 'final ';
 				final ifaceSimple: Null<String> = spec.ifaceSimple;

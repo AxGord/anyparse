@@ -318,4 +318,19 @@ class NewFileSliceTest extends Test {
 		Assert.isTrue(isErr(res));
 	}
 
+	/** `--kind typedef --extends` emits a struct typedef extension (`{ > Base, … }`), one `>` per base. */
+	public function testTypedefExtends(): Void {
+		final text: String = okText(create({
+			className: 'E',
+			pkg: 'p',
+			kind: 'typedef',
+			extendsList: ['Base', 'Other'],
+			fields: ['var x: Int;']
+		}));
+		Assert.isTrue(text.contains('typedef E = {'));
+		Assert.isTrue(text.contains('> Base,'));
+		Assert.isTrue(text.contains('> Other,'));
+		Assert.isTrue(text.contains('var x'));
+	}
+
 }
