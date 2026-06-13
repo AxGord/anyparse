@@ -256,6 +256,7 @@ import unit.ApqDxTier5CliTest;
 import unit.HxCondCompStmtTrailOptSliceTest;
 import unit.FmtSliceTest;
 import unit.NewFileSliceTest;
+import unit.SetDocSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -514,6 +515,7 @@ class RunTests {
 		addCase(new LintSliceTest());
 		addCase(new FmtSliceTest());
 		addCase(new NewFileSliceTest());
+		addCase(new SetDocSliceTest());
 		addCase(new MoveSymbolSliceTest());
 		addCase(new ApqMetaTest());
 		addCase(new ApqMetaEnumCtorSliceTest());

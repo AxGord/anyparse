@@ -197,7 +197,8 @@ final class NewFile {
 		buf.add('\n');
 		for (imp in imports) buf.add('$imp\n');
 		if (imports.length > 0) buf.add('\n');
-		if (classDoc != null) buf.add('${docComment(classDoc)}\n');
+		if (classDoc != null) buf.add('${RefactorSupport.docComment(classDoc)}\n');
+
 		if (NULL_SAFE_KINDS.contains(kind)) buf.add('@:nullSafety(Strict)\n');
 
 		final ext: String = extendsSimple.length > 0 ? ' extends ${extendsSimple.join(", ")}' : '';
@@ -289,14 +290,6 @@ final class NewFile {
 	}
 
 	/** Wrap `text` as a `/** … *\/` doc-comment, one ` * ` per line. */
-	private static function docComment(text: String): String {
-		final buf: StringBuf = new StringBuf();
-		buf.add('/**\n');
-		for (line in text.split('\n')) buf.add(line == '' ? ' *\n' : ' * $line\n');
-		buf.add(' */');
-		return buf.toString();
-	}
-
 	/**
 	 * Parse the `--bodies` payload into method bodies and extra imports. A
 	 * line `@@ <name>` opens a section; lines until the next `@@` (or EOF) are

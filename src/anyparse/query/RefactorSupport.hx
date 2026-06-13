@@ -795,4 +795,19 @@ final class RefactorSupport {
 		return false;
 	}
 
+	/**
+	 * Format `text` as a Haxe doc-comment block: the open delimiter, then one
+	 * ` * <line>` per line (blank lines as ` *`), then the close delimiter. No
+	 * trailing newline. Shared by `NewFile` (a created module's class doc) and
+	 * `SetDoc` (a member's doc), so both produce the identical shape the writer
+	 * then canonicalises.
+	 */
+	public static function docComment(text: String): String {
+		final buf: StringBuf = new StringBuf();
+		buf.add('/**\n');
+		for (line in text.split('\n')) buf.add(line == '' ? ' *\n' : ' * $line\n');
+		buf.add(' */');
+		return buf.toString();
+	}
+
 }

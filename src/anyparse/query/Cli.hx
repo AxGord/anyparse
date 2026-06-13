@@ -405,6 +405,8 @@ final class Cli {
 				return runFmt(rest);
 			case 'new':
 				return runNew(rest);
+			case 'set-doc':
+				return runSetDoc(rest);
 			case 'uses':
 				return runUses(rest);
 			case 'meta':
@@ -8533,6 +8535,7 @@ final class Cli {
 		sysPrint('  recon         Skip-parse drill — corpus sweep + locus-cluster histogram\n');
 		sysPrint('  sweep         Read corpus sweep snapshot totals + Δ vs prior\n');
 		sysPrint('  test-summary  Parse utest stdout transcript into tests/assertions/failures\n');
+		sysPrint('  set-doc       Add/replace a declaration\'s doc-comment at a cursor\n');
 		sysPrint('  self-status   List .hx files the grammar plugin cannot parse (dogfood gap)\n');
 		sysPrint('  new           Create a new module — final class / implements <iface> (canonical)\n');
 		sysPrint('  source        Emit RAW verbatim file lines (no parse; --range L:L2)\n');
@@ -10215,6 +10218,110 @@ final class Cli {
 		sysPrint('fails, byte-canonical, atomic). The path must not already exist — modify\n');
 		sysPrint('an existing file with the structural ops / apq fmt. An unparseable result\n');
 		sysPrint('(e.g. a malformed @@ body) exits non-zero with nothing written.\n');
+	}
+
+	/**
+	 * `apq set-doc <file> <line>:<col> (<text> | --from-file | -) [--reformat]
+	 * [--write]` — add or replace the doc-comment of the declaration at the
+	 * cursor (see `SetDoc`). The text (inline / file / stdin via `resolveCodeArg`)
+	 * is formatted into a doc-comment block and spliced before the decl, leaving
+	 * the declaration itself untouched; the result is writer-formatted and
+	 * re-parse-validated (canonical-gated unless `--reformat`).
+	 */
+	private static function runSetDoc(args: Array<String>): Int {
+		var lang: String = 'haxe';
+		var write: Bool = false;
+		var reformat: Bool = false;
+		var fromFile: Null<String> = null;
+		var file: Null<String> = null;
+		var pos: Null<String> = null;
+		var docText: Null<String> = null;
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--from-file':
+					fromFile = expectValue(args, ++i, '--from-file');
+				case '--reformat':
+					reformat = true;
+				case '--write':
+					write = true;
+				case '-h', '--help':
+					printSetDocUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq set-doc: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (file == null)
+						file = a;
+					else if (pos == null)
+						pos = a;
+					else if (docText == null)
+						docText = a;
+					else {
+						stderr('apq set-doc: unexpected extra argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (fromFile != null || docText == '-') {
+			final resolved: Null<String> = resolveCodeArg('set-doc', docText == '-' ? '-' : null, fromFile);
+			if (resolved == null) return EXIT_RUNTIME;
+			docText = resolved;
+		}
+		if (file == null || pos == null || docText == null) {
+			stderr('apq set-doc: expected <file> <line>:<col> (<text> | --from-file <path> | -)\n');
+			printSetDocUsage();
+			return EXIT_USAGE;
+		}
+		final loc: Null<Position> = parseLineCol(pos);
+		if (loc == null) {
+			stderr('apq set-doc: bad position "$pos" (expected <line>:<col>)\n');
+			return EXIT_USAGE;
+		}
+
+		final filePath: String = file;
+		final docStr: String = docText;
+		final source: String = try readFile(filePath) catch (exception: Exception) {
+			stderr('apq set-doc: $filePath: ${exception.message}\n');
+			return EXIT_RUNTIME;
+		};
+		final plugin: GrammarPlugin = pickPlugin(lang);
+		final optsJson: Null<String> = discoverFormatConfig(filePath);
+		switch SetDoc.setDoc(source, loc.line, loc.col, docStr, reformat, plugin, optsJson) {
+			case Ok(text):
+				if (write) {
+					writeFile(filePath, text);
+					stderr('apq set-doc: wrote $filePath\n');
+				} else
+					sysPrint(text);
+				return EXIT_OK;
+			case Err(message):
+				stderr('apq set-doc: $message\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
+	private static function printSetDocUsage(): Void {
+		sysPrint('Usage: apq set-doc <file> <line>:<col> (<text> | --from-file <path> | -) [--reformat] [--write]\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --from-file <path>  Read the doc text from a file instead of the argument\n');
+		sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
+		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
+		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('\n');
+		sysPrint('Add or replace the doc-comment of the declaration at <line>:<col> (the apq\n');
+		sysPrint('refs column convention). The text is formatted into a doc-comment block and\n');
+		sysPrint('spliced before the declaration; an existing leading doc comment is replaced,\n');
+		sysPrint('the declaration itself is left untouched. The text may be inline, --from-file,\n');
+		sysPrint('or - for stdin (heredoc-friendly, multi-line). Writer-formatted + validated.\n');
 	}
 
 }
