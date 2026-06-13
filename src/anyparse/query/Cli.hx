@@ -409,6 +409,8 @@ final class Cli {
 				return runSetDoc(rest);
 			case 'set-comment':
 				return runSetComment(rest);
+			case 'rewrite':
+				return runRewrite(rest);
 			case 'set-modifier':
 				return runSetModifier(rest);
 			case 'uses':
@@ -8540,6 +8542,7 @@ final class Cli {
 		sysPrint('  sweep         Read corpus sweep snapshot totals + Δ vs prior\n');
 		sysPrint('  set-modifier  Flip visibility / add-remove modifiers at a cursor (no retype)\n');
 		sysPrint('  test-summary  Parse utest stdout transcript into tests/assertions/failures\n');
+		sysPrint("  rewrite       Structural search-and-replace (search-pattern metavars)\n");
 		sysPrint('  set-doc       Add/replace a declaration\'s doc-comment at a cursor\n');
 		sysPrint('  set-comment   Replace the comment at a cursor (line run or block)\n');
 		sysPrint('  self-status   List .hx files the grammar plugin cannot parse (dogfood gap)\n');
@@ -10551,6 +10554,94 @@ final class Cli {
 		sysPrint('  --from-file <path>  Read the comment text from a file instead of the argument\n');
 		sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
 		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
+	}
+
+	/**
+	 * `apq rewrite <file> <pattern> <replacement> [--reformat] [--write]` —
+	 * structural search-and-replace (see `Rewrite`). Every node matching the
+	 * `apq search`-syntax `<pattern>` is rewritten from `<replacement>`, where
+	 * `$x` / `${x}` expand to the captured metavar's source and `${x+N}` /
+	 * `${x-N}` shift an integer-literal metavar. All matches in one pass,
+	 * writer-formatted + re-parse-validated (canonical-gated unless `--reformat`).
+	 */
+	private static function runRewrite(args: Array<String>): Int {
+		var lang: String = 'haxe';
+		var write: Bool = false;
+		var reformat: Bool = false;
+		var file: Null<String> = null;
+		var pattern: Null<String> = null;
+		var replacement: Null<String> = null;
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--reformat':
+					reformat = true;
+				case '--write':
+					write = true;
+				case '-h', '--help':
+					printRewriteUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq rewrite: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (file == null)
+						file = a;
+					else if (pattern == null)
+						pattern = a;
+					else if (replacement == null)
+						replacement = a;
+					else {
+						stderr('apq rewrite: unexpected extra argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (file == null || pattern == null || replacement == null) {
+			stderr('apq rewrite: expected <file> <pattern> <replacement>\n');
+			printRewriteUsage();
+			return EXIT_USAGE;
+		}
+
+		final filePath: String = file;
+		final pat: String = pattern;
+		final repl: String = replacement;
+		final source: String = try readFile(filePath) catch (exception: Exception) {
+			stderr('apq rewrite: $filePath: ${exception.message}\n');
+			return EXIT_RUNTIME;
+		};
+		final plugin: GrammarPlugin = pickPlugin(lang);
+		final optsJson: Null<String> = discoverFormatConfig(filePath);
+		switch Rewrite.rewrite(source, pat, repl, reformat, plugin, optsJson) {
+			case Ok(text):
+				if (write) {
+					writeFile(filePath, text);
+					stderr('apq rewrite: wrote $filePath\n');
+				} else
+					sysPrint(text);
+				return EXIT_OK;
+			case Err(message):
+				stderr('apq rewrite: $message\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
+	private static function printRewriteUsage(): Void {
+		sysPrint('Usage: apq rewrite <file> <pattern> <replacement> [--reformat] [--write]\n');
+		sysPrint('\n');
+		sysPrint("Structural search-and-replace. <pattern> uses apq search syntax with $x\n");
+		sysPrint("metavariables; <replacement> is a template where $x / ${x} expand to the\n");
+		sysPrint("captured source and ${x+N} / ${x-N} shift an integer-literal metavar by N.\n");
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --reformat  Canonicalise the whole file (allow a non-canonical input)\n');
+		sysPrint('  --write     Overwrite <file> in place (default: emit to stdout)\n');
 	}
 
 }
