@@ -16,6 +16,7 @@ import anyparse.runtime.Span.Position;
 using StringTools;
 
 import anyparse.check.UnusedLocal;
+import anyparse.check.DuplicateImport;
 
 /**
  * The analysis/check layer — the generic `Linter` framework and its first
@@ -105,8 +106,9 @@ class LintSliceTest extends Test {
 	 */
 	public function testLinterFrameworkAndRegistry(): Void {
 		Assert.notNull(Linter.byId('unused-import'));
+		Assert.notNull(Linter.byId('duplicate-import'));
 		Assert.isNull(Linter.byId('does-not-exist'));
-		Assert.equals(2, Linter.builtins().length);
+		Assert.equals(3, Linter.builtins().length);
 
 		final files = [{ file: 'pkg/C.hx', source: 'package pkg;\nimport a.b.Unused;\nclass C {}' }];
 		final viaDefault: Array<Violation> = Linter.run(files, plugin());
@@ -289,6 +291,36 @@ class LintSliceTest extends Test {
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
 		Assert.isTrue(ids.contains('unused-local'));
 		Assert.isTrue(ids.contains('unused-import'));
+	}
+
+	/** Two identical imports: the second is flagged; distinct aliases of one module are not. */
+	public function testDuplicateImportFlagged(): Void {
+		final src: String = 'package pkg;\nimport a.b.Dup;\nimport a.b.Dup;\nimport c.D as X;\nimport c.D as Y;\nclass C {}';
+		final vs: Array<Violation> = new DuplicateImport().run([{ file: 'pkg/C.hx', source: src }], plugin());
+		Assert.equals(1, vs.length);
+		Assert.equals('duplicate-import', vs[0].rule);
+		Assert.equals(Severity.Warning, vs[0].severity);
+		Assert.isTrue(vs[0].message.contains('a.b.Dup'));
+		final span: Null<Span> = vs[0].span;
+		Assert.notNull(span);
+		if (span != null) Assert.equals(3, span.lineCol(src).line);
+	}
+
+	/** Same path under different kinds (import vs using) bind distinctly — not a duplicate. */
+	public function testDistinctKindNotDuplicate(): Void {
+		final src: String = 'package pkg;\nimport a.b.Mod;\nusing a.b.Mod;\nclass C {}';
+		final vs: Array<Violation> = new DuplicateImport().run([{ file: 'pkg/C.hx', source: src }], plugin());
+		Assert.equals(0, vs.length);
+	}
+
+	/** The autofix deletes the duplicate (one edit, an empty replacement). */
+	public function testDuplicateImportFix(): Void {
+		final src: String = 'package pkg;\nimport a.b.Dup;\nimport a.b.Dup;\nclass C {}';
+		final check: DuplicateImport = new DuplicateImport();
+		final vs: Array<Violation> = check.run([{ file: 'pkg/C.hx', source: src }], plugin());
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin());
+		Assert.equals(1, edits.length);
+		Assert.equals('', edits[0].text);
 	}
 
 }

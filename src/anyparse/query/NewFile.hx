@@ -15,8 +15,9 @@ using StringTools;
  * spec and runs it through the SAME writer round-trip, so the result is
  * parses-or-fails + byte-canonical + atomic by construction: the model
  * supplies only the irreducible parts (which interface, the method bodies,
- * the fields) and the deterministic scaffold / formatting / validation is
- * the tool's job. No LLM in the loop — the writer is the validator.
+ * the fields, the doc) and the deterministic scaffold / formatting /
+ * validation is the tool's job. No LLM in the loop — the writer is the
+ * validator.
  *
  * Two shapes:
  * - `--class`: a bare `final class` carrying the verbatim `--field` members.
@@ -27,6 +28,9 @@ using StringTools;
  *   interface file's own imports plus an import per sibling sub-module type
  *   it declares (e.g. a `Violation` typedef next to a `Check` interface) —
  *   so the result type-checks, not just parses.
+ *
+ * The `@@` payload also recognises two reserved sections: `@@ imports`
+ * (extra imports, one per line) and `@@ doc` (the class doc-comment).
  *
  * Assembly is intentionally loose (the writer canonicalises spacing / blank
  * lines / wrapping); the only hard requirement is that the assembled text
@@ -39,11 +43,21 @@ final class NewFile {
 	/** Body emitted for an interface method the caller left unfilled. */
 	private static inline final STUB: String = 'throw new haxe.exceptions.NotImplementedException();';
 
+	/** Reserved `@@` section name carrying the class doc-comment. */
+	private static inline final DOC_SECTION: String = 'doc';
+
 	/** Import-declaration kinds carried verbatim from the interface file. */
 	private static final IMPORT_KINDS: Array<String> = ['ImportDecl', 'UsingDecl', 'ImportWildDecl', 'ImportAliasDecl'];
 
 	/** Top-level type-declaration kinds (for the interface module's sibling sub-types). */
-	private static final DECL_KINDS: Array<String> = ['ClassDecl', 'InterfaceDecl', 'EnumDecl', 'TypedefDecl', 'AbstractDecl', 'FinalDecl'];
+	private static final DECL_KINDS: Array<String> = [
+		'ClassDecl',
+		'InterfaceDecl',
+		'EnumDecl',
+		'TypedefDecl',
+		'AbstractDecl',
+		'FinalDecl'
+	];
 
 	/**
 	 * Assemble + canonicalise a new module from `spec`. Returns the canonical
@@ -57,6 +71,8 @@ final class NewFile {
 		final imports: Array<String> = [];
 		final bodiesRaw: Null<String> = spec.bodiesRaw;
 		if (bodiesRaw != null) parseSections(bodiesRaw, bodies, imports);
+		final classDoc: Null<String> = bodies[DOC_SECTION];
+		if (classDoc != null) bodies.remove(DOC_SECTION);
 
 		final members: Array<String> = [];
 		final stubbed: Array<String> = [];
@@ -88,8 +104,9 @@ final class NewFile {
 				return err('@@ $key names no method on $ifaceSimple (have: ${methodNames.join(", ")})');
 		}
 		for (field in spec.fields) members.push(field);
+		if (!members.exists(m -> m.indexOf('function new') >= 0)) members.unshift('public function new() {}');
 
-		final source: String = assemble(spec, members, dedup(imports));
+		final source: String = assemble(spec, members, dedup(imports), classDoc);
 		final canonical: Null<String> = try plugin.writeRoundTrip(source, optsJson) catch (exception: ParseError) {
 			return err('assembled source does not parse: ${exception.message}');
 		} catch (exception: Exception) {
@@ -171,11 +188,12 @@ final class NewFile {
 	}
 
 	/**
-	 * Glue the package line, imports, the `@:nullSafety(Strict) final class`
-	 * header with its `implements` clause, and the members into a parseable
-	 * module. Spacing is deliberately rough — `writeRoundTrip` canonicalises it.
+	 * Glue the optional class doc-comment, the package line, imports, the
+	 * `@:nullSafety(Strict) final class` header with its `implements` clause,
+	 * and the members into a parseable module. Spacing is deliberately rough —
+	 * `writeRoundTrip` canonicalises it.
 	 */
-	private static function assemble(spec: NewFileSpec, members: Array<String>, imports: Array<String>): String {
+	private static function assemble(spec: NewFileSpec, members: Array<String>, imports: Array<String>, classDoc: Null<String>): String {
 		final ifaceSimple: Null<String> = spec.ifaceSimple;
 		final implClause: String = ifaceSimple != null ? ' implements $ifaceSimple' : '';
 
@@ -184,6 +202,7 @@ final class NewFile {
 		buf.add('\n');
 		for (imp in imports) buf.add('$imp\n');
 		if (imports.length > 0) buf.add('\n');
+		if (classDoc != null) buf.add('${docComment(classDoc)}\n');
 		buf.add('@:nullSafety(Strict)\n');
 		buf.add('final class ${spec.className}$implClause {\n');
 		buf.add('\n');
@@ -192,13 +211,22 @@ final class NewFile {
 		return buf.toString();
 	}
 
+	/** Wrap `text` as a `/** ... *\/` doc-comment, one ` * ` per line. */
+	private static function docComment(text: String): String {
+		final buf: StringBuf = new StringBuf();
+		buf.add('/**\n');
+		for (line in text.split('\n')) buf.add(line == '' ? ' *\n' : ' * $line\n');
+		buf.add(' */');
+		return buf.toString();
+	}
+
 	/**
 	 * Parse the `--bodies` payload into method bodies and extra imports. A
 	 * line `@@ <name>` opens a section; lines until the next `@@` (or EOF) are
 	 * its content. The reserved section `@@ imports` contributes one
-	 * `import <line>;` per non-blank line; every other section is a method
-	 * body (leading / trailing blank lines trimmed). Content before the first
-	 * `@@` is ignored.
+	 * `import <line>;` per non-blank line; `@@ doc` is the class doc-comment;
+	 * every other section is a method body (leading / trailing blank lines
+	 * trimmed). Content before the first `@@` is ignored.
 	 */
 	private static function parseSections(raw: String, bodies: Map<String, String>, imports: Array<String>): Void {
 		final lines: Array<String> = raw.split('\n');
@@ -216,8 +244,7 @@ final class NewFile {
 				flush();
 				section = line.substr(3).trim();
 				buf.resize(0);
-			} else if (section != null)
-				buf.push(line);
+			} else if (section != null) buf.push(line);
 		}
 		flush();
 	}
@@ -247,7 +274,7 @@ final class NewFile {
  * (`ifaceModule` is the interface's fully-qualified module path, used both to
  * decide the interface import and to address its sibling sub-types).
  * `fields` are verbatim `--field` member texts; `bodiesRaw` is the raw
- * `--bodies` stdin payload.
+ * `--bodies` stdin payload (method bodies + the reserved `@@ imports` / `@@ doc`).
  */
 typedef NewFileSpec = {
 	var className: String;

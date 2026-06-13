@@ -212,4 +212,29 @@ class NewFileSliceTest extends Test {
 		};
 	}
 
+	/** A created class is instantiable — a no-arg constructor is auto-emitted. */
+	public function testEmitsConstructor(): Void {
+		final text: String = okText(create({ className: 'Box', pkg: 'p', fields: [] }));
+		Assert.isTrue(text.contains('public function new() {}'));
+	}
+
+	/** A `@@ doc` section becomes the class doc-comment. */
+	public function testDocSection(): Void {
+		final text: String = okText(create({
+			className: 'Box',
+			pkg: 'p',
+			fields: [],
+			bodiesRaw: '@@ doc\nA documented box.'
+		}));
+		Assert.isTrue(text.contains('/**'));
+		Assert.isTrue(text.contains('A documented box.'));
+	}
+
+	/** A user-supplied constructor is not shadowed by the auto-emitted one. */
+	public function testUserConstructorNotDuplicated(): Void {
+		final text: String = okText(create({ className: 'Box', pkg: 'p', fields: ['public function new() { trace(1); }'] }));
+		Assert.isTrue(text.contains('trace(1)'));
+		Assert.isFalse(text.contains('new() {}'));
+	}
+
 }
