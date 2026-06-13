@@ -179,6 +179,15 @@ re-parse-validated in one step. Their inverses `remove-element` / `remove-import
 replaces a declaration's doc-comment, and `set-modifier` flips its visibility / adds or
 removes modifiers (`public`, `+static`, `-inline`, …) — both at a cursor, without
 retyping the declaration (the safe replacement for editing a modifier via `replace-node`).
+`set-comment` is the comment counterpart of `set-doc`: it replaces the comment at a
+cursor — a block comment whole, a contiguous run of full-line `//` comments as one unit,
+or a trailing `//` — reaching inline comments that aren't declaration doc-blocks.
+
+`rewrite '<pattern>' '<replacement>'` is structural search-and-replace — the fusion of
+the structural `search` with a span-replace. Every node matching the pattern (with `$x`
+metavariables) is rewritten from a template in one pass: `$x` / `${x}` expand to the
+captured node's source, and `${x+N}` / `${x-N}` shift an integer-literal metavariable by
+N (`gofmt -r` / comby for the grammar's own AST).
 
 ### File creation & formatting
 
