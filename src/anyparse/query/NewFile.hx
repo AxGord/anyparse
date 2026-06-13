@@ -29,12 +29,15 @@ using StringTools;
  *   unfilled method → a `NotImplementedException` stub.
  * - `interface`: `interface N [extends I, …]` — members from `--field`.
  * - `enum`: `enum N` — members (constructors) from `--field`.
- * - `typedef`: `typedef N = { … }` — anon-struct fields from `--field`.
+ * - `typedef`: `typedef N = { [> Base, …] … }` — anon-struct fields from
+ *   `--field`, `--extends` emitting struct extensions (`> Base`).
+ * - `abstract`: `abstract N(Underlying) [from T] [to T]` — `--underlying`
+ *   required; members from `--field`.
  *
  * A no-arg `public function new() {}` is auto-emitted ONLY for a `class` with
  * no `extends` and no caller-supplied constructor — a subclass inherits its
  * super's constructor (auto-emitting one would skip a parameterised
- * `super(...)`), and interfaces / enums / typedefs have none.
+ * `super(...)`), and interfaces / enums / typedefs / abstracts have none.
  *
  * The `@@` payload also recognises two reserved sections: `@@ imports`
  * (extra imports, one per line) and `@@ doc` (the type's doc-comment).
@@ -55,6 +58,9 @@ final class NewFile {
 
 	/** Type kinds that carry a `@:nullSafety(Strict)` meta (class / interface). */
 	private static final NULL_SAFE_KINDS: Array<String> = ['class', 'interface'];
+
+	/** Type kinds for which `--extends` is meaningful (class superclass / interface + typedef structural extension). */
+	private static final EXTENDABLE_KINDS: Array<String> = ['class', 'interface', 'typedef'];
 
 	/** Import-declaration kinds carried verbatim from the interface file. */
 	private static final IMPORT_KINDS: Array<String> = ['ImportDecl', 'UsingDecl', 'ImportWildDecl', 'ImportAliasDecl'];
@@ -81,8 +87,9 @@ final class NewFile {
 		final extendsList: Array<String> = spec.extendsList ?? [];
 		final ifaceSimple: Null<String> = spec.ifaceSimple;
 		if (ifaceSimple != null && kind != 'class') return err('--implements requires --kind class');
-		if (extendsList.length > 0 && kind == 'enum') return err('--extends does not apply to an enum');
+		if (extendsList.length > 0 && !EXTENDABLE_KINDS.contains(kind)) return err('--extends does not apply to a $kind');
 		if (kind == 'class' && extendsList.length > 1) return err('a class extends at most one type (got ${extendsList.length})');
+		if (kind == 'abstract' && spec.underlying == null) return err('--kind abstract requires --underlying <T>');
 
 		final bodies: Map<String, String> = [];
 		final imports: Array<String> = [];
@@ -92,6 +99,7 @@ final class NewFile {
 		if (classDoc != null) bodies.remove(DOC_SECTION);
 
 		final extendsSimple: Array<String> = [for (e in extendsList) simpleNameWithImport(e, spec.pkg, imports)];
+		final abstractClause: String = kind == 'abstract' ? abstractHeader(spec, imports) : '';
 
 		final members: Array<String> = [];
 		final stubbed: Array<String> = [];
@@ -129,7 +137,7 @@ final class NewFile {
 		if (kind == 'class' && extendsList.length == 0 && !members.exists(m -> m.indexOf('function new(') >= 0))
 			members.unshift('public function new() {}');
 
-		final source: String = assemble(spec, kind, extendsSimple, members, dedup(imports), classDoc);
+		final source: String = assemble(spec, kind, extendsSimple, abstractClause, members, dedup(imports), classDoc);
 		final canonical: Null<String> = try plugin.writeRoundTrip(source, optsJson) catch (exception: ParseError) {
 			return err('assembled source does not parse: ${exception.message}');
 		} catch (exception: Exception) {
@@ -142,6 +150,20 @@ final class NewFile {
 	/** Wrap an error message as a stub-free `NewFileResult`. */
 	private static inline function err(message: String): NewFileResult {
 		return { result: EditResult.Err(message), stubbed: [] };
+	}
+
+	/**
+	 * The `(Underlying) [from T]… [to T]…` header of an abstract — each type
+	 * reference resolved to its simple name with a carried import when
+	 * qualified. `underlying` is guaranteed non-null by the caller's guard; the
+	 * `?? 'Dynamic'` only satisfies null-safety.
+	 */
+	private static function abstractHeader(spec: NewFileSpec, imports: Array<String>): String {
+		final buf: StringBuf = new StringBuf();
+		buf.add('(${simpleNameWithImport(spec.underlying ?? 'Dynamic', spec.pkg, imports)})');
+		for (from in spec.fromList ?? []) buf.add(' from ${simpleNameWithImport(from, spec.pkg, imports)}');
+		for (to in spec.toList ?? []) buf.add(' to ${simpleNameWithImport(to, spec.pkg, imports)}');
+		return buf.toString();
 	}
 
 	/**
@@ -162,12 +184,13 @@ final class NewFile {
 	/**
 	 * Glue the doc-comment, package line, imports, the type header (varying by
 	 * `kind` — `@:nullSafety(Strict)` for class/interface; `extends` /
-	 * `implements` clauses), and the members into a parseable module. Spacing
-	 * is deliberately rough — `writeRoundTrip` canonicalises it.
+	 * `implements` clauses; the abstract `(Underlying) from/to` header), and the
+	 * members into a parseable module. Spacing is deliberately rough —
+	 * `writeRoundTrip` canonicalises it.
 	 */
 	private static function assemble(
-		spec: NewFileSpec, kind: String, extendsSimple: Array<String>, members: Array<String>, imports: Array<String>,
-		classDoc: Null<String>
+		spec: NewFileSpec, kind: String, extendsSimple: Array<String>, abstractClause: String, members: Array<String>,
+		imports: Array<String>, classDoc: Null<String>
 	): String {
 		final buf: StringBuf = new StringBuf();
 		if (spec.pkg != '') buf.add('package ${spec.pkg};\n');
@@ -184,6 +207,8 @@ final class NewFile {
 				buf.add('interface ${spec.className}$ext {\n\n$body\n}\n');
 			case 'enum':
 				buf.add('enum ${spec.className} {\n\n$body\n}\n');
+			case 'abstract':
+				buf.add('abstract ${spec.className}$abstractClause {\n\n$body\n}\n');
 			case 'typedef':
 				final structLines: Array<String> = [for (e in extendsSimple) '> $e,'].concat(members);
 				buf.add('typedef ${spec.className} = {\n\n${structLines.join("\n")}\n}\n');
@@ -323,10 +348,11 @@ final class NewFile {
  * Compact creation spec. `className` / `pkg` are derived by the caller from
  * the target path (`pkg == ''` for a package-less root file). `kind`
  * (default `class`), `isFinal` (class only, default true) and `extendsList`
- * (qualified or simple type refs) shape the declaration. `ifaceSimple` /
- * `ifaceModule` / `ifaceSource` are set together for `--implements` on a
- * class. `fields` are verbatim `--field` member texts; `bodiesRaw` is the raw
- * `--bodies` payload (method bodies + the reserved `@@ imports` / `@@ doc`).
+ * (qualified or simple type refs) shape the declaration; `underlying` /
+ * `fromList` / `toList` shape an `abstract`. `ifaceSimple` / `ifaceModule` /
+ * `ifaceSource` are set together for `--implements` on a class. `fields` are
+ * verbatim `--field` member texts; `bodiesRaw` is the raw `--bodies` payload
+ * (method bodies + the reserved `@@ imports` / `@@ doc`).
  */
 typedef NewFileSpec = {
 	var className: String;
@@ -335,6 +361,9 @@ typedef NewFileSpec = {
 	@:optional var kind: String;
 	@:optional var isFinal: Bool;
 	@:optional var extendsList: Array<String>;
+	@:optional var underlying: String;
+	@:optional var fromList: Array<String>;
+	@:optional var toList: Array<String>;
 	@:optional var ifaceSimple: String;
 	@:optional var ifaceModule: String;
 	@:optional var ifaceSource: String;

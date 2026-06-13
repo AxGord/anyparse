@@ -333,4 +333,44 @@ class NewFileSliceTest extends Test {
 		Assert.isTrue(text.contains('var x'));
 	}
 
+	/** `--kind abstract` emits `abstract N(U) from .. to ..` with members and no auto-constructor. */
+	public function testAbstractKind(): Void {
+		final text: String = okText(create({
+			className: 'Money',
+			pkg: 'p',
+			kind: 'abstract',
+			underlying: 'Int',
+			fromList: ['Int'],
+			toList: ['Int'],
+			fields: ['public function double(): Int return 0;']
+		}));
+		Assert.isTrue(text.contains('abstract Money(Int) from Int to Int'));
+		Assert.isTrue(text.contains('function double'));
+		Assert.isFalse(text.contains('function new'));
+	}
+
+	/** `--kind abstract` without `--underlying` is an error. */
+	public function testAbstractRequiresUnderlying(): Void {
+		final res: NewFileResult = create({
+			className: 'X',
+			pkg: 'p',
+			kind: 'abstract',
+			fields: []
+		});
+		Assert.isTrue(isErr(res));
+	}
+
+	/** A qualified abstract underlying is imported. */
+	public function testAbstractQualifiedUnderlyingImports(): Void {
+		final text: String = okText(create({
+			className: 'W',
+			pkg: 'p',
+			kind: 'abstract',
+			underlying: 'a.b.U',
+			fields: []
+		}));
+		Assert.isTrue(text.contains('abstract W(U)'));
+		Assert.isTrue(text.contains('import a.b.U;'));
+	}
+
 }

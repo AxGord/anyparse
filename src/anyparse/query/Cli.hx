@@ -10032,6 +10032,22 @@ final class Cli {
 	 * section is left as a NotImplementedException stub (reported on stderr).
 	 * Without `--write` the source goes to stdout.
 	 */
+	/**
+	 * `apq new <path> (--class | --implements <iface> | --kind <k>) [--extends <T>]...
+	 * [--open] [--underlying <T>] [--from <T>]... [--to <T>]... [--field <m>]...
+	 * [--bodies -] [--write]` — create a new module deterministically: derive the
+	 * package + class name from <path>, assemble the scaffold (interface method
+	 * stubs with sliced signatures + carried imports, or verbatim `--field`
+	 * members), and run it through the writer so the result is canonical-or-
+	 * rejected and the file is never written on a parse failure. `--kind` (default
+	 * class) picks class / interface / enum / typedef / abstract; `--extends` adds
+	 * a superclass (class) / super-interfaces (interface) / struct extension
+	 * (typedef); `--underlying`/`--from`/`--to` shape an abstract; `--open` drops
+	 * the `final` on a class. Create-only: an existing path is refused. `--bodies -`
+	 * reads `@@ <method>` sections from stdin (see `NewFile`); a method without a
+	 * section is left as a NotImplementedException stub (reported on stderr).
+	 * Without `--write` the source goes to stdout.
+	 */
 	private static function runNew(args: Array<String>): Int {
 		var lang: String = 'haxe';
 		var write: Bool = false;
@@ -10039,9 +10055,12 @@ final class Cli {
 		var open: Bool = false;
 		var kind: String = 'class';
 		var iface: Null<String> = null;
+		var underlying: Null<String> = null;
 		var bodiesArg: Null<String> = null;
 		var bodiesFromFile: Null<String> = null;
 		final extendsList: Array<String> = [];
+		final fromList: Array<String> = [];
+		final toList: Array<String> = [];
 		final fields: Array<String> = [];
 		var path: Null<String> = null;
 
@@ -10057,6 +10076,12 @@ final class Cli {
 					kind = expectValue(args, ++i, '--kind');
 				case '--extends':
 					extendsList.push(expectValue(args, ++i, '--extends'));
+				case '--underlying':
+					underlying = expectValue(args, ++i, '--underlying');
+				case '--from':
+					fromList.push(expectValue(args, ++i, '--from'));
+				case '--to':
+					toList.push(expectValue(args, ++i, '--to'));
 				case '--open':
 					open = true;
 				case '--implements':
@@ -10091,8 +10116,8 @@ final class Cli {
 			printNewUsage();
 			return EXIT_USAGE;
 		}
-		if (['class', 'interface', 'enum', 'typedef'].indexOf(kind) < 0) {
-			stderr('apq new: --kind must be class|interface|enum|typedef (got "$kind")\n');
+		if (['class', 'interface', 'enum', 'typedef', 'abstract'].indexOf(kind) < 0) {
+			stderr('apq new: --kind must be class|interface|enum|typedef|abstract (got "$kind")\n');
 			return EXIT_USAGE;
 		}
 		final hasIntent: Bool = asClass || iface != null || kind != 'class' || extendsList.length > 0 || fields.length > 0;
@@ -10139,6 +10164,9 @@ final class Cli {
 			kind: kind,
 			isFinal: !open,
 			extendsList: extendsList,
+			underlying: underlying,
+			fromList: fromList,
+			toList: toList,
 			ifaceSimple: ifaceSimple,
 			ifaceModule: ifaceModule,
 			ifaceSource: ifaceSource,
@@ -10162,17 +10190,19 @@ final class Cli {
 
 	private static function printNewUsage(): Void {
 		sysPrint(
-			'Usage: apq new <path> (--class | --implements <iface> | --kind <k>) [--extends <T>]... [--open] [--field <m>]... [--bodies -] [--write]\n'
+			'Usage: apq new <path> (--class | --implements <iface> | --kind <k>) [--extends <T>]... [--open] [--underlying <T>] [--from <T>]... [--to <T>]... [--field <m>]... [--bodies -] [--write]\n'
 		);
 		sysPrint('\n');
 		sysPrint('Options:\n');
-		sysPrint('  --kind <k>          class (default) | interface | enum | typedef\n');
+		sysPrint('  --kind <k>          class (default) | interface | enum | typedef | abstract\n');
 		sysPrint('  --class             Shorthand for --kind class\n');
 		sysPrint('  --implements <i>    (class) implement interface <i> — stub every method\n');
 		sysPrint('                      with its real signature (simple name = same package,\n');
 		sysPrint('                      or a qualified pkg.Name)\n');
-		sysPrint('  --extends <T>       (class) superclass / (interface) super-interface;\n');
-		sysPrint('                      repeatable for interfaces; a qualified pkg.T is imported\n');
+		sysPrint('  --extends <T>       (class) superclass / (interface, typedef) extension;\n');
+		sysPrint('                      repeatable for interface/typedef; a qualified pkg.T is imported\n');
+		sysPrint('  --underlying <T>    (abstract) the underlying type — required for --kind abstract\n');
+		sysPrint('  --from <T> / --to <T>  (abstract) implicit-cast clauses (repeatable)\n');
 		sysPrint('  --open              Emit a non-final class (default: final)\n');
 		sysPrint('  --field <member>    Add a verbatim member (repeatable)\n');
 		sysPrint('  --bodies -          Read @@ <method> body sections from stdin\n');
