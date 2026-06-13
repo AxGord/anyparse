@@ -39,8 +39,9 @@ using StringTools;
  * super's constructor (auto-emitting one would skip a parameterised
  * `super(...)`), and interfaces / enums / typedefs / abstracts have none.
  *
- * The `@@` payload also recognises two reserved sections: `@@ imports`
- * (extra imports, one per line) and `@@ doc` (the type's doc-comment).
+ * The `@@` payload also recognises three reserved sections: `@@ imports`
+ * (extra imports, one per line), `@@ doc` (the type's doc-comment), and
+ * `@@ members` (a free-form member block).
  *
  * Assembly is intentionally loose (the writer canonicalises spacing / blank
  * lines / wrapping); the only hard requirement is that the assembled text
