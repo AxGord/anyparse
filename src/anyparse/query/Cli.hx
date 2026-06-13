@@ -407,6 +407,8 @@ final class Cli {
 				return runNew(rest);
 			case 'set-doc':
 				return runSetDoc(rest);
+			case 'set-modifier':
+				return runSetModifier(rest);
 			case 'uses':
 				return runUses(rest);
 			case 'meta':
@@ -8534,6 +8536,7 @@ final class Cli {
 		sysPrint('  writer-probe  Emit trivia + plain writer outputs side-by-side\n');
 		sysPrint('  recon         Skip-parse drill — corpus sweep + locus-cluster histogram\n');
 		sysPrint('  sweep         Read corpus sweep snapshot totals + Δ vs prior\n');
+		sysPrint('  set-modifier  Flip visibility / add-remove modifiers at a cursor (no retype)\n');
 		sysPrint('  test-summary  Parse utest stdout transcript into tests/assertions/failures\n');
 		sysPrint('  set-doc       Add/replace a declaration\'s doc-comment at a cursor\n');
 		sysPrint('  self-status   List .hx files the grammar plugin cannot parse (dogfood gap)\n');
@@ -10322,6 +10325,100 @@ final class Cli {
 		sysPrint('spliced before the declaration; an existing leading doc comment is replaced,\n');
 		sysPrint('the declaration itself is left untouched. The text may be inline, --from-file,\n');
 		sysPrint('or - for stdin (heredoc-friendly, multi-line). Writer-formatted + validated.\n');
+	}
+
+	/**
+	 * `apq set-modifier <file> <line>:<col> <change>... [--reformat] [--write]` —
+	 * flip the visibility / add or remove boolean modifiers of the declaration at
+	 * the cursor without retyping it (see `SetModifier`). Each change is
+	 * `public` / `private` or `+<mod>` / `-<mod>`. Change tokens may begin with a
+	 * single `-` (e.g. `-inline`); only a leading `--` is treated as an option.
+	 * Writer-formatted + re-parse-validated (canonical-gated unless `--reformat`).
+	 */
+	private static function runSetModifier(args: Array<String>): Int {
+		var lang: String = 'haxe';
+		var write: Bool = false;
+		var reformat: Bool = false;
+		var file: Null<String> = null;
+		var pos: Null<String> = null;
+		final changes: Array<String> = [];
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--reformat':
+					reformat = true;
+				case '--write':
+					write = true;
+				case '-h', '--help':
+					printSetModifierUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq set-modifier: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (file == null)
+						file = a;
+					else if (pos == null)
+						pos = a;
+					else
+						changes.push(a);
+			}
+			i++;
+		}
+		if (file == null || pos == null || changes.length == 0) {
+			stderr('apq set-modifier: expected <file> <line>:<col> <change>... (e.g. public, +static, -inline)\n');
+			printSetModifierUsage();
+			return EXIT_USAGE;
+		}
+		final loc: Null<Position> = parseLineCol(pos);
+		if (loc == null) {
+			stderr('apq set-modifier: bad position "$pos" (expected <line>:<col>)\n');
+			return EXIT_USAGE;
+		}
+
+		final filePath: String = file;
+		final source: String = try readFile(filePath) catch (exception: Exception) {
+			stderr('apq set-modifier: $filePath: ${exception.message}\n');
+			return EXIT_RUNTIME;
+		};
+		final plugin: GrammarPlugin = pickPlugin(lang);
+		final optsJson: Null<String> = discoverFormatConfig(filePath);
+		switch SetModifier.setModifier(source, loc.line, loc.col, changes, reformat, plugin, optsJson) {
+			case Ok(text):
+				if (write) {
+					writeFile(filePath, text);
+					stderr('apq set-modifier: wrote $filePath\n');
+				} else
+					sysPrint(text);
+				return EXIT_OK;
+			case Err(message):
+				stderr('apq set-modifier: $message\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
+	private static function printSetModifierUsage(): Void {
+		sysPrint('Usage: apq set-modifier <file> <line>:<col> <change>... [--reformat] [--write]\n');
+		sysPrint('\n');
+		sysPrint('Changes:\n');
+		sysPrint('  public | private    Set the visibility\n');
+		sysPrint('  +<mod> | -<mod>     Add / remove a boolean modifier\n');
+		sysPrint('                      (static, inline, override, macro, extern, dynamic)\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
+		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
+		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('\n');
+		sysPrint('Flip the visibility / add or remove modifiers of the declaration at the\n');
+		sysPrint('cursor without retyping it — the safe replacement for replace-node on a\n');
+		sysPrint('modifier. `final` is not handled (it wraps the declaration; use replace-node).\n');
+		sysPrint('The result is WRITER-FORMATTED + re-parse-validated.\n');
 	}
 
 }
