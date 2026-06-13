@@ -48,6 +48,8 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import anyparse.runtime.Span.Position;
 import haxe.Exception;
+import anyparse.query.NewFile.NewFileSpec;
+import anyparse.query.NewFile.NewFileResult;
 #if (sys || nodejs)
 import sys.io.File;
 import sys.FileSystem;
@@ -401,6 +403,8 @@ final class Cli {
 				return runRemoveMember(rest);
 			case 'fmt':
 				return runFmt(rest);
+			case 'new':
+				return runNew(rest);
 			case 'uses':
 				return runUses(rest);
 			case 'meta':
@@ -8530,6 +8534,7 @@ final class Cli {
 		sysPrint('  sweep         Read corpus sweep snapshot totals + Δ vs prior\n');
 		sysPrint('  test-summary  Parse utest stdout transcript into tests/assertions/failures\n');
 		sysPrint('  self-status   List .hx files the grammar plugin cannot parse (dogfood gap)\n');
+		sysPrint('  new           Create a new module — final class / implements <iface> (canonical)\n');
 		sysPrint('  source        Emit RAW verbatim file lines (no parse; --range L:L2)\n');
 		sysPrint('  fmt           Canonicalise Haxe source (writer round-trip; --write / --list)\n');
 		sysPrint('\n');
@@ -9922,6 +9927,228 @@ final class Cli {
 		sysPrint('no flags on a single file the formatted source goes to stdout; on multiple\n');
 		sysPrint('files or a directory, --list mode is implied. A file that fails to parse is\n');
 		sysPrint('reported and skipped; the exit code is non-zero if any file failed.\n');
+	}
+
+	/**
+	 * `apq new <path> (--class | --implements <iface>) [--field <m>]...
+	 * [--bodies -] [--write]` — create a new module deterministically: derive
+	 * the package + class name from <path>, assemble the scaffold (interface
+	 * method stubs with sliced signatures, or verbatim `--field` members), and
+	 * run it through the writer so the result is canonical-or-rejected and the
+	 * file is never written on a parse failure. Create-only: an existing path
+	 * is refused. `--bodies -` reads `@@ <method>` sections from stdin (see
+	 * `NewFile`); a method without a section is left as a NotImplementedException
+	 * stub (reported on stderr). Without `--write` the source goes to stdout.
+	 */
+
+	private static function printNewUsage(): Void {
+		sysPrint('Usage: apq new <path> (--class | --implements <iface>) [--field <m>]... [--bodies -] [--write]\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --class             Create a bare final class (members from --field)\n');
+		sysPrint('  --implements <i>    Implement interface <i> — stub every method with\n');
+		sysPrint('                      its real signature (simple name = same package,\n');
+		sysPrint('                      or a qualified pkg.Name)\n');
+		sysPrint('  --field <member>    Add a verbatim member (repeatable)\n');
+		sysPrint('  --bodies -          Read @@ <method> body sections from stdin\n');
+		sysPrint('                      (@@ imports = extra imports); a method without a\n');
+		sysPrint('                      section gets a NotImplementedException stub\n');
+		sysPrint('  --write             Write the new file (default: emit to stdout)\n');
+		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('\n');
+		sysPrint('Assemble a NEW module and canonicalise it through the writer (parses-or-\n');
+		sysPrint('fails, byte-canonical, atomic). The path must not already exist — modify\n');
+		sysPrint('an existing file with the structural ops / apq fmt. An unparseable result\n');
+		sysPrint('(e.g. a malformed @@ body) exits non-zero with nothing written.\n');
+	}
+
+	/** The class name for a new file: its basename without the `.hx` extension. */
+	private static function newFileClassName(path: String): String {
+		final base: String = haxe.io.Path.withoutDirectory(path);
+		return StringTools.endsWith(base, '.hx') ? base.substr(0, base.length - 3) : base;
+	}
+
+	/**
+	 * Derive the Haxe package for `path` from its location under a `src/` or
+	 * `test/` source root: the directory segments below that root, dot-joined
+	 * (`.../src/anyparse/check/Foo.hx` → `anyparse.check`). A file directly in
+	 * a root, or outside any root, is package-less (`''`).
+	 */
+	private static function derivePackage(path: String): String {
+		final dir: String = haxe.io.Path.directory(FileSystem.absolutePath(path)) + '/';
+		for (root in ['/src/', '/test/']) {
+			final at: Int = dir.lastIndexOf(root);
+			if (at >= 0) {
+				var tail: String = dir.substr(at + root.length);
+				if (StringTools.endsWith(tail, '/')) tail = tail.substr(0, tail.length - 1);
+				return tail == '' ? '' : tail.split('/').join('.');
+			}
+		}
+		return '';
+	}
+
+	/**
+	 * Resolve an `--implements` argument to the interface's source plus the
+	 * import the new file needs. A qualified `pkg.Name` maps to
+	 * `<srcRoot>/pkg/Name.hx` (import emitted only when its package differs from
+	 * the new file's); a simple `Name` is taken as a sibling in the new file's
+	 * own directory (same package, no import). Returns null when the file does
+	 * not exist.
+	 */
+	/**
+	 * Resolve an `--implements` argument to the interface's source, its
+	 * fully-qualified module path, and its simple name. A qualified `pkg.Name`
+	 * maps to `<srcRoot>/pkg/Name.hx`; a simple `Name` is taken as a sibling in
+	 * the new file's own directory (its module path is then the new file's
+	 * package + `.Name`). Returns null when the file does not exist. The module
+	 * path lets the caller carry the interface's sibling sub-types and decide the
+	 * interface import.
+	 */
+	private static function resolveInterface(iface: String, newPath: String): Null<{ source: String, ifaceModule: String, simple: String }> {
+		final dot: Int = iface.lastIndexOf('.');
+		if (dot >= 0) {
+			final simple: String = iface.substr(dot + 1);
+			final dir: String = haxe.io.Path.directory(FileSystem.absolutePath(newPath)) + '/';
+			var srcRoot: Null<String> = null;
+			for (root in ['/src/', '/test/']) {
+				final at: Int = dir.lastIndexOf(root);
+				if (at >= 0) {
+					srcRoot = dir.substr(0, at + root.length);
+					break;
+				}
+			}
+			if (srcRoot == null) return null;
+			final file: String = srcRoot + iface.split('.').join('/') + '.hx';
+			if (!FileSystem.exists(file)) return null;
+			return { source: readFile(file), ifaceModule: iface, simple: simple };
+		}
+		final file: String = haxe.io.Path.directory(FileSystem.absolutePath(newPath)) + '/' + iface + '.hx';
+		if (!FileSystem.exists(file)) return null;
+		final newPkg: String = derivePackage(newPath);
+		return { source: readFile(file), ifaceModule: newPkg == '' ? iface : '$newPkg.$iface', simple: iface };
+	}
+
+	/**
+	 * `apq new <path> (--class | --implements <iface>) [--field <m>]...
+	 * [--bodies -] [--write]` — create a new module deterministically: derive
+	 * the package + class name from <path>, assemble the scaffold (interface
+	 * method stubs with sliced signatures + carried imports, or verbatim
+	 * `--field` members), and run it through the writer so the result is
+	 * canonical-or-rejected and the file is never written on a parse failure.
+	 * Create-only: an existing path is refused. `--bodies -` reads `@@ <method>`
+	 * sections from stdin (see `NewFile`); a method without a section is left as
+	 * a NotImplementedException stub (reported on stderr). Without `--write` the
+	 * source goes to stdout.
+	 */
+	private static function runNew(args: Array<String>): Int {
+		var lang: String = 'haxe';
+		var write: Bool = false;
+		var asClass: Bool = false;
+		var iface: Null<String> = null;
+		var bodiesArg: Null<String> = null;
+		var bodiesFromFile: Null<String> = null;
+		final fields: Array<String> = [];
+		var path: Null<String> = null;
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--class':
+					asClass = true;
+				case '--implements':
+					iface = expectValue(args, ++i, '--implements');
+				case '--field':
+					fields.push(expectValue(args, ++i, '--field'));
+				case '--bodies':
+					bodiesArg = expectValue(args, ++i, '--bodies');
+				case '--from-file':
+					bodiesFromFile = expectValue(args, ++i, '--from-file');
+				case '--write':
+					write = true;
+				case '-h', '--help':
+					printNewUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq new: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (path == null)
+						path = a;
+					else {
+						stderr('apq new: unexpected extra argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (path == null) {
+			stderr('apq new: expected <path>\n');
+			printNewUsage();
+			return EXIT_USAGE;
+		}
+		if (!asClass && iface == null) {
+			stderr('apq new: specify --class or --implements <iface>\n');
+			return EXIT_USAGE;
+		}
+		final filePath: String = path;
+		if (FileSystem.exists(filePath)) {
+			stderr('apq new: $filePath already exists (create-only; use the ops / fmt to modify)\n');
+			return EXIT_RUNTIME;
+		}
+
+		var bodiesRaw: Null<String> = null;
+		if (bodiesArg == '-' || bodiesFromFile != null) {
+			final resolved: Null<String> = resolveCodeArg('new', bodiesArg == '-' ? '-' : null, bodiesFromFile);
+			if (resolved == null) return EXIT_RUNTIME;
+			bodiesRaw = resolved;
+		} else if (bodiesArg != null) bodiesRaw = bodiesArg;
+
+		final className: String = newFileClassName(filePath);
+		final pkg: String = derivePackage(filePath);
+
+		var ifaceSimple: Null<String> = null;
+		var ifaceModule: Null<String> = null;
+		var ifaceSource: Null<String> = null;
+		if (iface != null) {
+			final resolved: Null<{ source: String, ifaceModule: String, simple: String }> = resolveInterface(iface, filePath);
+			if (resolved == null) {
+				stderr('apq new: could not locate interface "$iface" (expected a .hx beside the new file or at its package path)\n');
+				return EXIT_RUNTIME;
+			}
+			ifaceSimple = resolved.simple;
+			ifaceModule = resolved.ifaceModule;
+			ifaceSource = resolved.source;
+		}
+
+		final plugin: GrammarPlugin = pickPlugin(lang);
+		final optsJson: Null<String> = discoverFormatConfig(filePath);
+		final spec: NewFileSpec = {
+			className: className,
+			pkg: pkg,
+			fields: fields,
+			ifaceSimple: ifaceSimple,
+			ifaceModule: ifaceModule,
+			ifaceSource: ifaceSource,
+			bodiesRaw: bodiesRaw,
+		};
+		final res: NewFileResult = NewFile.create(spec, plugin, optsJson);
+		switch res.result {
+			case Ok(text):
+				for (m in res.stubbed) stderr('apq new: $m() left as a NotImplementedException stub\n');
+				if (write) {
+					writeFile(filePath, text);
+					stderr('apq new: wrote $filePath\n');
+				} else
+					sysPrint(text);
+				return EXIT_OK;
+			case Err(message):
+				stderr('apq new: $message\n');
+				return EXIT_RUNTIME;
+		}
 	}
 
 }
