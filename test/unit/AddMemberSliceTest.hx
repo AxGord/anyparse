@@ -144,4 +144,19 @@ class AddMemberSliceTest extends Test {
 		return AddMember.addMember(source, typeName, memberText, reformat, plugin);
 	}
 
+	/**
+	 * Append to a `final class` that is NOT the last decl: a following
+	 * doc-commented `typedef` is swallowed into the outer `FinalDecl` span,
+	 * so the closing brace comes from the inner `ClassForm` (`nameNode`),
+	 * not `fullSpan` — `testAppendToFinalClass` passes only because its
+	 * final class is the last decl.
+	 */
+	public function testAppendToNonLastFinalClass(): Void {
+		final source: String = 'final class C {\n'
+			+ '\tvar x:Int;\n' + '}\n' + '\n' + '/**\n' + ' * Doc.\n' + ' */\n' + 'typedef T = {\n' + '\tvar y:Int;\n' + '}\n';
+		final expected: String = 'final class C {\n' + '\tvar x:Int;\n' + '\n' + '\tpublic function g():Void {}\n' + '}\n' + '\n' + '/**\n'
+			+ ' * Doc.\n' + ' */\n' + 'typedef T = {\n' + '\tvar y:Int;\n' + '}\n';
+		assertAdd(source, 'C', 'public function g():Void {}', expected);
+	}
+
 }

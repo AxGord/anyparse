@@ -56,18 +56,20 @@ final class AddMember {
 		if (matches.length == 0) return Err('no type named "$typeName"');
 		if (matches.length > 1) return Err('ambiguous: ${matches.length} types named "$typeName"');
 
-		// The body's closing `}` is the last `}` within the decl span,
-		// skipping trailing whitespace: some decl-span shapes swallow
-		// trailing trivia past the `}` (the outer `FinalDecl` of a `final
-		// class`, and a `TypedefDecl` with an anon body — both can include a
-		// trailing newline at EOF), so `fullSpan.to - 1` is not reliably the
-		// brace. Scanning back over whitespace lands on the `}` for every
-		// shape (class / interface / abstract / enum / typedef-anon / final).
-		final fullSpan: Span = matches[0].fullSpan;
-		var bodyClose: Int = fullSpan.to - 1;
+		// The body's closing `}` is found by scanning back over trailing
+		// whitespace from the end of the body-bearing node — `nameNode`: the
+		// inner `ClassForm` for a `final class`, the decl itself otherwise.
+		// NOT the matched `fullSpan`: the outer `FinalDecl` span of a final
+		// class swallows trailing trivia past the `}` (a following decl's
+		// doc-comment, when the final class is not the last decl), so
+		// `fullSpan` would land in that trivia and miss the brace.
+		// `nameNode.span` ends right at the `}`, and equals `fullSpan` for
+		// every non-final shape.
+		final bodySpan: Span = matches[0].nameNode.span ?? matches[0].fullSpan;
+		var bodyClose: Int = bodySpan.to - 1;
 		if (bodyClose >= source.length) bodyClose = source.length - 1;
-		while (bodyClose >= fullSpan.from && RefactorSupport.isSpace(StringTools.fastCodeAt(source, bodyClose))) bodyClose--;
-		if (bodyClose < fullSpan.from || StringTools.fastCodeAt(source, bodyClose) != '}'.code)
+		while (bodyClose >= bodySpan.from && RefactorSupport.isSpace(StringTools.fastCodeAt(source, bodyClose))) bodyClose--;
+		if (bodyClose < bodySpan.from || StringTools.fastCodeAt(source, bodyClose) != '}'.code)
 			return Err('"$typeName" has no brace body to add a member to');
 
 		final edit: { span: Span, text: String } = { span: new Span(bodyClose, bodyClose), text: '\n' + trimmed + '\n' };
