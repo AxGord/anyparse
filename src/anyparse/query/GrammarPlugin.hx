@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.Pattern.KindEquivalence;
+import anyparse.query.NamingPolicy.NamingSupport;
 
 /**
  * Plugin contract for a grammar that the query engine can operate on.
@@ -155,6 +156,14 @@ interface GrammarPlugin {
 	 * run mirrors what the corpus harness sees on each fixture.
 	 */
 	public function reconParse(source: String): Bool;
+
+	/**
+	 * Optional: the grammar's naming-convention capability, consumed by the
+	 * `naming` analysis check. Return null when the grammar has no naming
+	 * concept (binary formats) — the check then no-ops for it, mirroring the
+	 * optional writer methods above.
+	 */
+	public function namingSupport(): Null<NamingSupport>;
 
 }
 

@@ -221,6 +221,7 @@ rewrite). A check is a plugin — a new one is a new class, not a core change.
 | `unused-import` | an import whose bound name is never referenced in the file |
 | `unused-local` | a local `var` / `final` never read in its enclosing scope |
 | `duplicate-import` | an import / using declared more than once in the same file |
+| `naming` | a declaration name violating the convention — the built-in default, or one adapted from a project's `checkstyle.json` |
 
 ### Grammar platform
 

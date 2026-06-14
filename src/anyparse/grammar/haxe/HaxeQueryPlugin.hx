@@ -7,6 +7,7 @@ import anyparse.query.QueryNode;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
+import anyparse.query.NamingPolicy.NamingSupport;
 
 /**
  * Haxe grammar binding for the `apq` query engine.
@@ -716,6 +717,11 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		}
 		indexed.sort((a, b) -> a.from != b.from ? a.from - b.from : a.idx - b.idx);
 		return [for (e in indexed) e.node];
+	}
+
+	/** The Haxe naming-convention capability — projects declarations and resolves a file's policy. */
+	public function namingSupport(): Null<NamingSupport> {
+		return new HaxeNamingSupport();
 	}
 
 }
