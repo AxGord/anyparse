@@ -150,4 +150,20 @@ class RenameSliceTest extends Test {
 		return Rename.rename(source, line, col, newName, plugin, shape);
 	}
 
+	/**
+	 * Field in a FINAL class, referenced BARE (no `this.`): renaming the field
+	 * must touch the decl AND every bare write/read. Regression for `final class`
+	 * projecting as `ClassForm`, which was absent from `scopeKinds` so bare field
+	 * references stayed unbound and the rename silently dropped them (the real
+	 * `KindEquivalence.canonOf` build break the field-rename autofix surfaced).
+	 */
+	public function testRenameFieldInFinalClassTouchesBareRefs(): Void {
+		final source: String = 'final class C {\n' + '\tfinal v:Int;\n' + '\tpublic function new() {\n' + '\t\tv = 1;\n' + '\t}\n'
+			+ '\tpublic function g():Int {\n' + '\t\treturn v;\n' + '\t}\n' + '}';
+		final expected: String = 'final class C {\n' + '\tfinal _v:Int;\n' + '\tpublic function new() {\n' + '\t\t_v = 1;\n' + '\t}\n'
+			+ '\tpublic function g():Int {\n' + '\t\treturn _v;\n' + '\t}\n' + '}';
+		// Line 2 col 2 — the `final v` field decl, as `apq refs --decls` prints.
+		assertRename(source, 2, 2, '_v', expected);
+	}
+
 }

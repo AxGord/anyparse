@@ -278,6 +278,11 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 			// that frame (see `selfScopeDeclKinds`).
 			scopeKinds: [
 				'ClassDecl',
+				// `final class` projects as `FinalDecl(ClassForm …)` and `abstract class`
+				// as `AbstractClassDecl`; both hold instance fields whose bare (non-`this`)
+				// references resolve only if the class body opens a scope frame here.
+				'ClassForm',
+				'AbstractClassDecl',
 				'InterfaceDecl',
 				'AbstractDecl',
 				'EnumDecl',
