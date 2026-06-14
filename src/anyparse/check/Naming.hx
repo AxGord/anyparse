@@ -16,6 +16,8 @@ using Lambda;
 import anyparse.query.Rename;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.NamingPolicy.NamingCategory;
+import anyparse.query.SymbolIndex;
+import anyparse.query.RefactorSupport;
 
 /**
  * Flags declarations whose identifier violates a naming convention. The check
@@ -67,23 +69,18 @@ final class Naming implements Check {
 	}
 
 	/**
-	 * Autofix: rename each flagged binding to a mechanically-corrected name, for
-	 * the rename-safe categories only (function-body-scoped — Local / Param /
-	 * CatchVar). The new name comes from the applicable rule's `normalize`; the
-	 * occurrences come from `Rename.renameOccurrences` (the same scope resolver
-	 * `apq rename` uses), emitted as replace-edits the caller batches and
-	 * re-parse-validates. A private field / method or a type is left report-only:
-	 * this single-source fix cannot prove the binding has no cross-file
-	 * (subclass / `@:access`) reference.
+	 * Autofix: rename each flagged binding to a mechanically-corrected name when the rename is provably complete in this one file. Always safe for function-body-scoped bindings (Local / Param / CatchVar); for a private FIELD only when the cross-file `index` proves it confined (no subtype, no `@:access`, no `@:allow`, no skip-parse file that could hide one) AND every textual occurrence of the name is covered by the resolved rename spans — the scope resolver can miss a bare field reference, so an uncovered occurrence means an incomplete rename and the field is left report-only. The new name comes from the rule's `normalize`; the occurrences from `Rename.renameOccurrences`, emitted as edits the caller batches and re-parse-validates.
+	 *
 	 */
-	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin): Array<{ span: Span, text: String }> {
+	public function fix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
 		if (violations.length == 0) return [];
 		final support: Null<NamingSupport> = plugin.namingSupport();
 		if (support == null) return [];
 		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
 		if (tree == null) return [];
 
-		final renameSafe: Array<NamingCategory> = [NamingCategory.Local, NamingCategory.Param, NamingCategory.CatchVar];
 		final policy: NamingPolicy = support.policyFor(violations[0].file);
 		final shape: RefShape = plugin.refShape();
 
@@ -96,15 +93,24 @@ final class Naming implements Check {
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (decl in support.project(tree)) {
 			final span: Null<Span> = decl.span;
-			if (span == null || !flaggedFroms.contains(span.from) || !renameSafe.contains(decl.category)) continue;
+			if (span == null || !flaggedFroms.contains(span.from) || !isRenameSafe(decl, source, index)) continue;
 			final rule: Null<NamingRule> = applicableRule(decl, policy);
 			if (rule == null) continue;
 			final normalize: Null<String -> Null<String>> = rule.normalize;
 			if (normalize == null) continue;
 			final newName: Null<String> = normalize(decl.name);
 			if (newName == null || newName == decl.name || !rule.format.match(newName)) continue;
+			final occurrences: Array<Span> = Rename.renameOccurrences(source, tree, span.from, shape);
+			if (occurrences.length == 0) continue;
+			// Completeness: the scope resolver can miss a bare field reference (a
+			// field's decl-node span and its reference binding can disagree), so a
+			// rename not covering every textual occurrence of the name would leave a
+			// dangling reference — bail rather than emit a broken rename.
+			if (
+				decl.category == NamingCategory.Field && RefactorSupport.referencedInRange(source, decl.name, 0, source.length, occurrences)
+			) continue;
 			final finalName: String = newName;
-			for (occ in Rename.renameOccurrences(source, tree, span.from, shape)) edits.push({ span: occ, text: finalName });
+			for (occ in occurrences) edits.push({ span: occ, text: finalName });
 		}
 		return edits;
 	}
@@ -142,4 +148,37 @@ final class Naming implements Check {
 		);
 	}
 
+	/**
+	 * Is the rename of `decl`'s binding provably complete within `source`?
+	 * Function-body-scoped bindings always are; a private field is only when the
+	 * cross-file `index` plus in-file checks prove it cannot be referenced from
+	 * outside its file. Every other category (types, public members) is not.
+	 */
+	private static function isRenameSafe(decl: NamedDecl, source: String, index: Null<SymbolIndex>): Bool {
+		final category: NamingCategory = decl.category;
+		if (category == NamingCategory.Local || category == NamingCategory.Param || category == NamingCategory.CatchVar) return true;
+		if (category == NamingCategory.Field && !decl.mods.contains('public') && index != null) {
+			final owner: Null<String> = decl.enclosingType;
+			if (owner == null) return false;
+			// A file anyparse cannot parse is excluded from the index, so it could
+			// hide a subtype / @:access we never see — bail if any file skip-parsed.
+			if (index.skippedFiles().length > 0) return false;
+			return !index.hasSubtype(owner) && !index.hasAccessGrant(owner) && !fileHasAllow(source);
+		}
+		return false;
+	}
+
+	/**
+	 * Conservative whole-source presence of an `@:allow` grant — it lets another
+	 * type read this type's privates, so the field may have an out-of-file reader.
+	 */
+	private static function fileHasAllow(source: String): Bool {
+		return source.indexOf('@:allow') >= 0;
+	}
+
+	/**
+	 * Does `node` contain a field access of `name` through a receiver other than
+	 * `this`? Such an `other.<name>` is the one in-file access the scope resolver
+	 * (hence `Rename.renameOccurrences`) misses, making a single-file rename incomplete.
+	 */
 }

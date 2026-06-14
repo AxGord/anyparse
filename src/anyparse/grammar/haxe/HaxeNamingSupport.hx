@@ -30,7 +30,7 @@ final class HaxeNamingSupport implements NamingSupport {
 
 	public function project(tree: QueryNode): Array<NamedDecl> {
 		final out: Array<NamedDecl> = [];
-		walk(tree, null, out);
+		walk(tree, null, null, out);
 		return out;
 	}
 
@@ -85,7 +85,8 @@ final class HaxeNamingSupport implements NamingSupport {
 				requireMods: [],
 				forbidMods: ['public', 'static'],
 				format: new EReg("^_[a-z][a-zA-Z0-9]*$", ""),
-				label: 'private field _ prefix'
+				label: 'private field _ prefix',
+				normalize: underscoreCamel
 			},
 			{
 				category: NamingCategory.Field,
@@ -135,7 +136,7 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * `(Public)(Static)(FnMember)`), so a `final` field is a Constant when
 	 * static and a Field otherwise.
 	 */
-	private static function walk(node: QueryNode, parent: Null<QueryNode>, out: Array<NamedDecl>): Void {
+	private static function walk(node: QueryNode, parent: Null<QueryNode>, enclosingType: Null<String>, out: Array<NamedDecl>): Void {
 		// Macro reification (`macro { … }`) is opaque: its identifiers are splice
 		// templates (`$name`), not real declarations — skip the whole subtree, as
 		// `unused-local` does with the plugin's `opaqueKinds`.
@@ -158,10 +159,14 @@ final class HaxeNamingSupport implements NamingSupport {
 				span: node.span,
 				name: declName,
 				category: categoryValue,
-				mods: declMods
+				mods: declMods,
+				enclosingType: enclosingType
 			});
 		}
-		for (child in node.children) walk(child, node, out);
+		// A type decl becomes the enclosing type of its descendants — its name is
+		// on the node carrying category Type (the inner ClassForm for a final class).
+		final childEnclosing: Null<String> = category == NamingCategory.Type && name != null ? name : enclosingType;
+		for (child in node.children) walk(child, node, childEnclosing, out);
 	}
 
 	/**
@@ -207,6 +212,16 @@ final class HaxeNamingSupport implements NamingSupport {
 	private static function lowercaseFirst(name: String): Null<String> {
 		if (name.length == 0) return null;
 		return name.charAt(0).toLowerCase() + name.substr(1);
+	}
+
+	/**
+	 * The mechanical fix for a private field missing its `_` prefix: prepend `_`
+	 * and lowercase the first letter (`shape`→`_shape`, `Shape`→`_shape`). Not
+	 * `inline` — passed as a `NamingRule.normalize` function value.
+	 */
+	private static function underscoreCamel(name: String): Null<String> {
+		if (name.length == 0) return null;
+		return '_' + name.charAt(0).toLowerCase() + name.substr(1);
 	}
 
 }

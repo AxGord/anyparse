@@ -1201,6 +1201,9 @@ final class Cli {
 	private static function applyLintFixes(
 		files: Array<{ file: String, source: String }>, all: Array<Violation>, checks: Array<Check>, plugin: GrammarPlugin
 	): Int {
+		// One cross-file index for the whole set — a check that hardens a fix across
+		// files (naming's private-field rename) consults it; the rest ignore it.
+		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		var fixedCount: Int = 0;
 		var fixedFiles: Int = 0;
 		var skipped: Int = 0;
@@ -1212,7 +1215,7 @@ final class Cli {
 			for (check in checks) {
 				final own: Array<Violation> = fileViolations.filter(v -> v.rule == check.id());
 				if (own.length == 0) continue;
-				for (edit in check.fix(entry.source, own, plugin)) edits.push(edit);
+				for (edit in check.fix(entry.source, own, plugin, index)) edits.push(edit);
 			}
 			if (edits.length == 0) continue;
 

@@ -222,4 +222,22 @@ class SymbolIndexSliceTest extends Test {
 		return new HaxeQueryPlugin();
 	}
 
+	/**
+	 * `hasSubtype` / `hasAccessGrant` — the inheritance and access-grant gates
+	 * of a cross-file-safe private-member rename, matched by simple type name.
+	 */
+	public function testInheritanceAndAccessGrantQueries(): Void {
+		final files = [
+			{ file: 'pkg/Base.hx', source: 'package pkg;\nclass Base {}' },
+			{ file: 'pkg/Sub.hx', source: 'package pkg;\nclass Sub extends Base implements IFace {}' },
+			{ file: 'pkg/Peer.hx', source: 'package pkg;\n@:access(pkg.Base)\nclass Peer {}' }
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		Assert.isTrue(index.hasSubtype('Base'));
+		Assert.isTrue(index.hasSubtype('IFace'));
+		Assert.isFalse(index.hasSubtype('Peer'));
+		Assert.isTrue(index.hasAccessGrant('Base'));
+		Assert.isFalse(index.hasAccessGrant('Sub'));
+	}
+
 }

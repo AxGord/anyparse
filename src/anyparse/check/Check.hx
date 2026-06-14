@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.query.GrammarPlugin;
 import anyparse.runtime.Span;
+import anyparse.query.SymbolIndex;
 
 /**
  * One finding produced by a `Check`. `file` is the path the finding
@@ -59,6 +60,8 @@ interface Check {
 	 * or none applicable to these violations, returns an empty array — that
 	 * is the default for any non-fixable check.
 	 */
-	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin): Array<{ span: Span, text: String }>;
+	public function fix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }>;
 
 }

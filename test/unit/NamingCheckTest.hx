@@ -17,6 +17,7 @@ using StringTools;
 import anyparse.query.RefactorSupport;
 import anyparse.query.RefactorSupport.EditResult;
 import anyparse.runtime.Span;
+import anyparse.query.SymbolIndex;
 
 /**
  * The `naming` check: declarations are tested against the first applicable
@@ -175,6 +176,92 @@ class NamingCheckTest extends Test {
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 		Assert.equals(1, vs.length);
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+	}
+
+	public function testFixRenamesConfinedPrivateField(): Void {
+		// A private field confined to its file (no subtype / @:access / @:allow), all references resolved → renamed.
+		final src: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}';
+		final files = [{ file: 'pkg/C.hx', source: src }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin(), index);
+		switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf('_shape') >= 0);
+				Assert.isTrue(text.indexOf('var shape') == -1);
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+		}
+	}
+
+	public function testFixSkipsPrivateFieldWithSubclass(): Void {
+		// A subclass (any file) could read the inherited field → report-only.
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n}';
+		final files = [
+			{ file: 'pkg/C.hx', source: cSrc },
+			{ file: 'pkg/D.hx', source: 'package pkg;\nclass D extends C {\n\tpublic function g() { return shape; }\n}' }
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final cVs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
+		Assert.equals(1, cVs.length);
+		Assert.equals(0, check.fix(cSrc, cVs, new HaxeQueryPlugin(), index).length);
+	}
+
+	public function testFixSkipsPrivateFieldWithAccessGrant(): Void {
+		// Another file with @:access(C) can read C's privates → report-only.
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n}';
+		final files = [
+			{ file: 'pkg/C.hx', source: cSrc },
+			{ file: 'pkg/E.hx', source: 'package pkg;\n@:access(pkg.C)\nclass E {}' }
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final cVs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
+		Assert.equals(0, check.fix(cSrc, cVs, new HaxeQueryPlugin(), index).length);
+	}
+
+	public function testFixSkipsPrivateFieldWithAllow(): Void {
+		// @:allow on the class grants another type access → report-only.
+		final src: String = 'package pkg;\n@:allow(pkg.X)\nclass C {\n\tprivate var shape:Int;\n}';
+		final files = [{ file: 'pkg/C.hx', source: src }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin(), index).length);
+	}
+
+	public function testFixSkipsPrivateFieldWithNonThisAccess(): Void {
+		// A non-`this` access (`o.shape`) is the in-file form the resolver misses → report-only.
+		final src: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n\tpublic function eq(o:C) { return o.shape == shape; }\n}';
+		final files = [{ file: 'pkg/C.hx', source: src }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin(), index).length);
+	}
+
+	public function testFixWithoutIndexLeavesPrivateFieldReportOnly(): Void {
+		// No index passed → a private field cannot be proven confined → report-only.
+		final src: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n}';
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run([{ file: 'pkg/C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+	}
+
+	public function testFixSkipsPrivateFieldWhenAnyFileSkipParses(): Void {
+		// A skip-parse file could hide a subtype / @:access we never see → conservatively report-only.
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n}';
+		final files = [
+			{ file: 'pkg/C.hx', source: cSrc },
+			{ file: 'pkg/Bad.hx', source: 'package pkg;\nclass Bad { function f() { ' }
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final cVs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
+		Assert.equals(0, check.fix(cSrc, cVs, new HaxeQueryPlugin(), index).length);
 	}
 
 }

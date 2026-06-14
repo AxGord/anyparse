@@ -8,6 +8,7 @@ import anyparse.query.RefactorSupport;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
+import anyparse.query.SymbolIndex;
 
 /**
  * Flags local `var` / `final` declarations whose bound name is never
@@ -93,7 +94,7 @@ final class UnusedLocal implements Check {
 	 * removed (`lineExtendedSpan`) so the batched `canonicalize` leaves no
 	 * blank residue; a side-effecting initializer is skipped (no edit).
 	 */
-	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin): Array<{ span: Span, text: String }> {
+	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<{ span: Span, text: String }> {
 		final edits: Array<{ span: Span, text: String }> = [];
 		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
 		if (tree == null) return edits;

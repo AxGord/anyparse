@@ -54,69 +54,28 @@ typedef TypeDeclInfo = {
 	var kind: String;
 	var span: Span;
 	var isMain: Bool;
-}
 
-/**
- * The package / imports / type-declarations of one parseable file.
- * `module` is the canonical module path (`<pkg>.<basename>` — see the
- * class docstring); `pkg` is the empty string for a file with no
- * `package;` declaration (the root package).
- */
+	/**
+	 * Simple names (last `.` segment) of this type's `extends` / `implements`
+	 * targets — its direct supertypes. Drives `hasSubtype`, the first gate of a
+	 * cross-file-safe private-member rename (a subtype could access the member).
+	 */
+	var supertypes: Array<String>;
+}
 typedef FileInfo = {
 	var file: String;
 	var pkg: String;
 	var module: String;
 	var imports: Array<ImportInfo>;
 	var types: Array<TypeDeclInfo>;
-}
 
-/**
- * Pure, I/O-free cross-file symbol resolver — the foundation for a
- * move-symbol op and for hardening cross-file rename. `build` parses a
- * set of in-memory `(file, source)` entries through a `GrammarPlugin`
- * and records, per parseable file, its package, its import / using
- * statements, and its top-level type declarations. A file that throws
- * / skip-parses is recorded in `skippedFiles()` and EXCLUDED from the
- * index (never throws). The index then answers the cross-file
- * questions a move needs: who declares a type, what import path names
- * it, and which files import a given module.
- *
- * ## Haxe module / visibility semantics this index bakes in
- *
- * These rules are verified against the Haxe language and against
- * anyparse's own `src/` import patterns; a move-symbol op relies on
- * them being exact.
- *
- *  - A `.hx` FILE is a MODULE. Its module path is the package plus the
- *    file basename: `src/anyparse/query/Cli.hx` with `package
- *    anyparse.query;` → module `anyparse.query.Cli`. With no `package;`
- *    the module path is just the basename (root package).
- *
- *  - The module's MAIN type is the type whose name equals the file
- *    basename. It is imported as `import <package>.<Basename>;` (the
- *    `Module` path itself, no trailing segment). Every OTHER type in
- *    the file (a sub-type) is imported as `import
- *    <package>.<Basename>.<SubType>;`. Evidence in anyparse `src/`:
- *    `Cli.hx` carries both `import anyparse.query.Rename;` (main type
- *    `Rename`, the module path) and `import anyparse.query.Rename.RenameResult;`
- *    (the sub-type `RenameResult`, the module path plus the type).
- *
- *  - Same-PACKAGE types are auto-visible WITHOUT an import in Haxe.
- *    anyparse nonetheless imports them explicitly and redundantly —
- *    `Cli.hx` (package `anyparse.query`) imports `anyparse.query.Rename`,
- *    `anyparse.query.Inline`, `anyparse.query.CrossRename`, all of which
- *    live in the same package. Consequence for a move: a move WITHIN a
- *    package may leave a stale explicit import that was never strictly
- *    required — `filesImportingModule` surfaces those so the caller can
- *    fix or drop them.
- *
- * ## Scope — what is and is NOT indexed
- *
- * Index covers ONLY the module's package, its imports / usings, and its
- * top-level type declarations. Type MEMBERS and module-level functions
- * are deliberately out of scope — they extend the index later when a
- * move-static op needs them.
- */
+	/**
+	 * Simple names of every type referenced in an `@:access(...)` metadata in
+	 * this file — types this file grants itself private access to. Drives
+	 * `hasAccessGrant`, the second gate of a cross-file-safe private-member rename.
+	 */
+	var accessGrants: Array<String>;
+}
 @:nullSafety(Strict)
 final class SymbolIndex {
 
@@ -192,6 +151,23 @@ final class SymbolIndex {
 	}
 
 	/**
+	 * Does any indexed type extend / implement `typeName` (matched by simple
+	 * name)? The first gate of a cross-file-safe private-member rename — a
+	 * subtype could reference the member.
+	 */
+	public function hasSubtype(typeName: String): Bool {
+		return _files.exists(f -> f.types.exists(t -> t.supertypes.contains(typeName)));
+	}
+
+	/**
+	 * Does any indexed file grant itself `@:access(typeName)` (matched by simple
+	 * name)? The second gate — such a file can read the type's private members.
+	 */
+	public function hasAccessGrant(typeName: String): Bool {
+		return _files.exists(f -> f.accessGrants.contains(typeName));
+	}
+
+	/**
 	 * Parse every `(file, source)` entry through `plugin.parseFile` and
 	 * build the index. A file whose parse throws is recorded in
 	 * `skippedFiles()` and EXCLUDED from the index — `build` never
@@ -258,7 +234,8 @@ final class SymbolIndex {
 					name: typeDecl.name,
 					kind: typeDecl.kind,
 					span: typeDecl.fullSpan,
-					isMain: typeDecl.name == basename
+					isMain: typeDecl.name == basename,
+					supertypes: collectSupertypes(node)
 				});
 				continue;
 			}
@@ -317,7 +294,8 @@ final class SymbolIndex {
 			pkg: pkg,
 			module: module,
 			imports: imports,
-			types: types
+			types: types,
+			accessGrants: collectAccessGrants(tree)
 		};
 	}
 
@@ -325,6 +303,55 @@ final class SymbolIndex {
 	private static inline function isUpperInitial(segment: String): Bool {
 		final c: Int = StringTools.fastCodeAt(segment, 0);
 		return c >= 'A'.code && c <= 'Z'.code;
+	}
+
+	/**
+	 * Simple names (last `.` segment) of the `extends` / `implements` targets
+	 * under `node` — its supertypes — by reading each `Named` child of an
+	 * `ExtendsClause` / `ImplementsClause`.
+	 */
+	private static function collectSupertypes(node: QueryNode): Array<String> {
+		final out: Array<String> = [];
+		collectInto(
+			node, n -> {
+				if (n.kind == 'ExtendsClause' || n.kind == 'ImplementsClause')
+					for (c in n.children) {
+						final nm: Null<String> = c.name;
+						if (nm != null)
+							out.push(simpleName(nm));
+					}
+			}
+		);
+		return out;
+	}
+
+	/** Simple names of every type referenced in an `@:access(...)` metadata in `tree`. */
+	private static function collectAccessGrants(tree: QueryNode): Array<String> {
+		final out: Array<String> = [];
+		collectInto(
+			tree, n -> {
+				if (n.kind == 'MetaCall' && n.name == '@:access')
+					for (c in n.children) {
+						final nm: Null<String> = c.name;
+						if (nm != null)
+							out.push(simpleName(nm));
+					}
+			}
+		);
+		return out;
+	}
+
+	/** Visit `node` and every descendant, applying `visit` to each. */
+	private static function collectInto(node: QueryNode, visit: QueryNode -> Void): Void {
+		visit(node);
+		for (child in node.children) collectInto(child, visit);
+	}
+
+	/** The last `.`-separated segment of `path` (its simple name). */
+	private static function simpleName(path: String): String {
+		final segments: Array<String> = path.split('.');
+		final last: Null<String> = segments[segments.length - 1];
+		return last == null ? path : last;
 	}
 
 }

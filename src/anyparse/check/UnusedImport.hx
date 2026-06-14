@@ -73,7 +73,7 @@ final class UnusedImport implements Check {
 	 * so removing one could break the file. The caller batches these edits
 	 * into one whole-file `canonicalize`, which drops the now-blank line.
 	 */
-	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin): Array<{ span: Span, text: String }> {
+	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<{ span: Span, text: String }> {
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
 			if (v.severity != Severity.Warning) continue;

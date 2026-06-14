@@ -71,13 +71,14 @@ typedef NamedDecl = {
 	var name: String;
 	var category: NamingCategory;
 	var mods: Array<String>;
-}
 
-/**
- * The per-grammar naming capability. A plugin that has a naming convention
- * returns an instance from `GrammarPlugin.namingSupport`; one without (a
- * binary format) returns null and the `naming` check no-ops for it.
- */
+	/**
+	 * Simple name of the type declaration enclosing this declaration (the class
+	 * a field / method belongs to), or null at top level. Lets the autofix ask
+	 * the cross-file index whether a private member is confined to its file.
+	 */
+	var enclosingType: Null<String>;
+}
 @:nullSafety(Strict)
 interface NamingSupport {
 
