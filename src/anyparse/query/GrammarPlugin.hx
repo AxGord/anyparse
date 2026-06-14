@@ -241,6 +241,15 @@ typedef RefShape = {
 	 * with no reification leaves it unset (treated as empty).
 	 */
 	@:optional var opaqueKinds: Array<String>;
+
+	/** Kinds that each add one decision point to a function's cyclomatic complexity. */
+	@:optional var branchKinds: Array<String>;
+
+	/**
+	 * Function-declaration kinds — each is a measured cyclomatic-complexity unit;
+	 * branch counting stops at a nested one (it is measured on its own).
+	 */
+	@:optional var functionKinds: Array<String>;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {

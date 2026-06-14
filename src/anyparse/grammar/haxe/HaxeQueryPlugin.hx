@@ -331,6 +331,21 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 				'CatchClause',
 			],
 			opaqueKinds: ['MacroExpr'],
+			branchKinds: [
+				'IfStmt',
+				'IfExpr',
+				'WhileStmt',
+				'DoWhileStmt',
+				'ForStmt',
+				'ForExpr',
+				'CaseBranch',
+				'CatchClause',
+				'And',
+				'Or',
+				'Ternary',
+				'NullCoal'
+			],
+			functionKinds: ['FnMember', 'FinalModifiedMember', 'FnDecl', 'LocalFnStmt'],
 		};
 	}
 

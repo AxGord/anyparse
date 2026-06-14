@@ -29,7 +29,8 @@ final class Linter {
 			new UnusedLocal(),
 			new DuplicateImport(),
 			new Naming(),
-			new UnusedPrivate()
+			new UnusedPrivate(),
+			new Complexity()
 		];
 	}
 
