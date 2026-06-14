@@ -13,6 +13,10 @@ import haxe.Exception;
 
 using Lambda;
 
+import anyparse.query.Rename;
+import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.NamingPolicy.NamingCategory;
+
 /**
  * Flags declarations whose identifier violates a naming convention. The check
  * is grammar-agnostic: it asks the plugin's `NamingSupport` to project the
@@ -62,9 +66,47 @@ final class Naming implements Check {
 		return violations;
 	}
 
-	/** Naming is report-only for now; the rename-based autofix is a later slice. */
+	/**
+	 * Autofix: rename each flagged binding to a mechanically-corrected name, for
+	 * the rename-safe categories only (function-body-scoped — Local / Param /
+	 * CatchVar). The new name comes from the applicable rule's `normalize`; the
+	 * occurrences come from `Rename.renameOccurrences` (the same scope resolver
+	 * `apq rename` uses), emitted as replace-edits the caller batches and
+	 * re-parse-validates. A private field / method or a type is left report-only:
+	 * this single-source fix cannot prove the binding has no cross-file
+	 * (subclass / `@:access`) reference.
+	 */
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin): Array<{ span: Span, text: String }> {
-		return [];
+		if (violations.length == 0) return [];
+		final support: Null<NamingSupport> = plugin.namingSupport();
+		if (support == null) return [];
+		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+		if (tree == null) return [];
+
+		final renameSafe: Array<NamingCategory> = [NamingCategory.Local, NamingCategory.Param, NamingCategory.CatchVar];
+		final policy: NamingPolicy = support.policyFor(violations[0].file);
+		final shape: RefShape = plugin.refShape();
+
+		final flaggedFroms: Array<Int> = [];
+		for (v in violations) {
+			final s: Null<Span> = v.span;
+			if (s != null) flaggedFroms.push(s.from);
+		}
+
+		final edits: Array<{ span: Span, text: String }> = [];
+		for (decl in support.project(tree)) {
+			final span: Null<Span> = decl.span;
+			if (span == null || !flaggedFroms.contains(span.from) || !renameSafe.contains(decl.category)) continue;
+			final rule: Null<NamingRule> = applicableRule(decl, policy);
+			if (rule == null) continue;
+			final normalize: Null<String -> Null<String>> = rule.normalize;
+			if (normalize == null) continue;
+			final newName: Null<String> = normalize(decl.name);
+			if (newName == null || newName == decl.name || !rule.format.match(newName)) continue;
+			final finalName: String = newName;
+			for (occ in Rename.renameOccurrences(source, tree, span.from, shape)) edits.push({ span: occ, text: finalName });
+		}
+		return edits;
 	}
 
 	/**

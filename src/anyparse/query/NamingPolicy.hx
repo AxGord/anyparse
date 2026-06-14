@@ -47,9 +47,16 @@ typedef NamingRule = {
 	var forbidMods: Array<String>;
 	var format: EReg;
 	var label: String;
-}
 
-/** An ordered set of naming rules; the first applicable rule per declaration wins. */
+	/**
+	 * Optional mechanical name normalizer for the autofix: maps a violating
+	 * name to a corrected one that should conform to `format`, or null when it
+	 * cannot be fixed mechanically. Rules loaded from a `checkstyle.json` carry
+	 * none (report-only); the built-in default attaches one to the rename-safe
+	 * categories.
+	 */
+	@:optional var normalize: String -> Null<String>;
+}
 typedef NamingPolicy = Array<NamingRule>;
 
 /**

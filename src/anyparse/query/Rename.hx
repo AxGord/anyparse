@@ -80,25 +80,11 @@ final class Rename {
 		// line:col is 1-based, as apq refs / ast --at / source print.
 		final cursor: Int = Span.offsetOf(source, line, col);
 
-		final node: Null<QueryNode> = RefactorSupport.resolveCursorNode(tree, cursor, source);
-		if (node == null) return Err('position $line:$col is not on a renameable identifier');
-		// `resolveCursorNode` only returns nodes whose name is a renameable
-		// identifier (non-null); the guard re-narrows for strict null safety.
-		final targetName: Null<String> = node.name;
-		if (targetName == null) return Err('position $line:$col is not on a renameable identifier');
-
-		final hits: Array<RefHit> = Refs.find(targetName, tree, shape);
-
-		final bindingFrom: Null<Int> = RefactorSupport.resolveBindingFrom(node, hits);
-		if (bindingFrom == null) return Err('could not resolve a binding for "$targetName" at $line:$col');
-		final binding: Int = bindingFrom;
-
-		final isFieldBinding: Bool = nodeAtFromIsFieldMember(tree, binding);
-		final occurrences: Array<Span> = collectOccurrences(source, targetName, hits, binding, isFieldBinding, tree);
-		if (occurrences.length == 0) return Err('no occurrences resolved for "$targetName" at $line:$col');
+		final occurrences: Array<Span> = renameOccurrences(source, tree, cursor, shape);
+		if (occurrences.length == 0) return Err('position $line:$col is not on a renameable identifier');
 
 		final rewritten: String = spliceRename(source, occurrences, newName);
-		if (rewritten == source) return Err('rename "$targetName" -> "$newName" is a no-op');
+		if (rewritten == source) return Err('rename to "$newName" is a no-op');
 
 		try
 			plugin.parseFile(rewritten)
@@ -108,6 +94,29 @@ final class Rename {
 			return Err('rewritten source does not parse: ${exception.message}');
 
 		return Ok(rewritten);
+	}
+
+	/**
+	 * The identifier-token spans of every occurrence of the binding at `cursor`
+	 * in the already-parsed `tree` — the decl plus every read / write (and each
+	 * `this.<name>` field access for a field binding) the scope resolver binds to
+	 * it. Empty when the cursor is not on a renameable binding or nothing
+	 * resolves. This is the occurrence set `rename` splices; a caller wanting the
+	 * rename as edits (e.g. the `naming` autofix) maps each span to a
+	 * `{span, newName}` replacement and batches them.
+	 */
+	public static function renameOccurrences(source: String, tree: QueryNode, cursor: Int, shape: RefShape): Array<Span> {
+		final node: Null<QueryNode> = RefactorSupport.resolveCursorNode(tree, cursor, source);
+		if (node == null) return [];
+		final targetName: Null<String> = node.name;
+		if (targetName == null) return [];
+
+		final hits: Array<RefHit> = Refs.find(targetName, tree, shape);
+		final bindingFrom: Null<Int> = RefactorSupport.resolveBindingFrom(node, hits);
+		if (bindingFrom == null) return [];
+
+		final isFieldBinding: Bool = nodeAtFromIsFieldMember(tree, bindingFrom);
+		return collectOccurrences(source, targetName, hits, bindingFrom, isFieldBinding, tree);
 	}
 
 	/**

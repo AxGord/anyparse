@@ -14,6 +14,10 @@ import anyparse.query.QueryNode;
 
 using StringTools;
 
+import anyparse.query.RefactorSupport;
+import anyparse.query.RefactorSupport.EditResult;
+import anyparse.runtime.Span;
+
 /**
  * The `naming` check: declarations are tested against the first applicable
  * rule of a `NamingPolicy` (the built-in Haxe default, or one adapted from a
@@ -123,6 +127,54 @@ class NamingCheckTest extends Test {
 		// Identifiers inside a macro reification block are splice templates, not real decls — not name-checked.
 		final src: String = "class C {\n\tpublic function f() {\n\t\tfinal e = macro {\n\t\t\tfinal $localName = 1;\n\t\t};\n\t}\n}";
 		Assert.equals(0, violations(src).length);
+	}
+
+	public function testFixRenamesLocal(): Void {
+		final src: String = 'class C {\n\tpublic function f() {\n\t\tvar MyLocal = 1;\n\t\ttrace(MyLocal);\n\t}\n}';
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
+		switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf('myLocal') >= 0);
+				Assert.isTrue(text.indexOf('MyLocal') == -1);
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+		}
+	}
+
+	public function testFixRenamesParam(): Void {
+		final src: String = 'class C {\n\tpublic function f(BadParam:Int) {\n\t\treturn BadParam;\n\t}\n}';
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
+		switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf('badParam') >= 0);
+				Assert.isTrue(text.indexOf('BadParam') == -1);
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+		}
+	}
+
+	public function testFixSkipsPrivateField(): Void {
+		// A private field is cross-file-reachable (subclass / @:access) — report-only, no rename edit.
+		final src: String = 'class C {\n\tprivate var BadField:Int;\n}';
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+	}
+
+	public function testFixSkipsType(): Void {
+		// A type is cross-file-reachable — report-only, no rename edit.
+		final src: String = 'class foo {}';
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
 	}
 
 }

@@ -106,21 +106,24 @@ final class HaxeNamingSupport implements NamingSupport {
 				requireMods: [],
 				forbidMods: [],
 				format: new EReg("^[a-z_][a-zA-Z0-9]*$", ""),
-				label: 'camelCase local'
+				label: 'camelCase local',
+				normalize: lowercaseFirst
 			},
 			{
 				category: NamingCategory.Param,
 				requireMods: [],
 				forbidMods: [],
 				format: new EReg("^[a-z_][a-zA-Z0-9]*$", ""),
-				label: 'camelCase parameter'
+				label: 'camelCase parameter',
+				normalize: lowercaseFirst
 			},
 			{
 				category: NamingCategory.CatchVar,
 				requireMods: [],
 				forbidMods: [],
 				format: new EReg("^[a-z_][a-zA-Z0-9]*$", ""),
-				label: 'camelCase catch variable'
+				label: 'camelCase catch variable',
+				normalize: lowercaseFirst
 			}
 		];
 	}
@@ -194,6 +197,16 @@ final class HaxeNamingSupport implements NamingSupport {
 			case 'CatchClause': NamingCategory.CatchVar;
 			case _: null;
 		}
+	}
+
+	/**
+	 * The mechanical fix for a PascalCase local / param / catch name: lowercase
+	 * the first character. Returns null only for the empty string. Not `inline`
+	 * — it is passed as a `NamingRule.normalize` function value.
+	 */
+	private static function lowercaseFirst(name: String): Null<String> {
+		if (name.length == 0) return null;
+		return name.charAt(0).toLowerCase() + name.substr(1);
 	}
 
 }
