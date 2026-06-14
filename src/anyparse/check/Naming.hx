@@ -160,20 +160,9 @@ final class Naming implements Check {
 		if (category == NamingCategory.Field && !decl.mods.contains('public') && index != null) {
 			final owner: Null<String> = decl.enclosingType;
 			if (owner == null) return false;
-			// A file anyparse cannot parse is excluded from the index, so it could
-			// hide a subtype / @:access we never see — bail if any file skip-parsed.
-			if (index.skippedFiles().length > 0) return false;
-			return !index.hasSubtype(owner) && !index.hasAccessGrant(owner) && !fileHasAllow(source);
+			return RefactorSupport.isPrivateMemberConfined(owner, source, index);
 		}
 		return false;
-	}
-
-	/**
-	 * Conservative whole-source presence of an `@:allow` grant — it lets another
-	 * type read this type's privates, so the field may have an out-of-file reader.
-	 */
-	private static function fileHasAllow(source: String): Bool {
-		return source.indexOf('@:allow') >= 0;
 	}
 
 	/**

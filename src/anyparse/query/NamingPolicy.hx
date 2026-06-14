@@ -78,6 +78,15 @@ typedef NamedDecl = {
 	 * the cross-file index whether a private member is confined to its file.
 	 */
 	var enclosingType: Null<String>;
+
+	/**
+	 * True when the member can be reached without an in-source identifier
+	 * reference — a constructor, a property accessor invoked via (get, set), or an
+	 * annotation-bearing member a framework / macro / @:keep may reference. The
+	 * unused checks must not flag such a member; absent for non-members. Set by the
+	 * grammar's projection, as the reachability rules are language-specific.
+	 */
+	@:optional var implicitlyReachable: Bool;
 }
 @:nullSafety(Strict)
 interface NamingSupport {

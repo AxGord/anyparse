@@ -938,4 +938,17 @@ final class RefactorSupport {
 		return new Span(tok.from + 2, bodyEnd);
 	}
 
+	/**
+	 * Whether a private member of the type named `owner` is confined to its file —
+	 * i.e. unreachable from outside it, so an in-file analysis (rename, unused
+	 * detection) sees every possible reference. False when any file skip-parsed (it
+	 * could hide a subtype or `@:access` the index never saw), when a subtype or
+	 * `@:access` grant names the type, or when the file carries an `@:allow` (which
+	 * can expose its privates to another type). Conservative: any doubt is false.
+	 */
+	public static function isPrivateMemberConfined(owner: String, source: String, index: SymbolIndex): Bool {
+		if (index.skippedFiles().length > 0) return false;
+		return !index.hasSubtype(owner) && !index.hasAccessGrant(owner) && source.indexOf('@:allow') < 0;
+	}
+
 }

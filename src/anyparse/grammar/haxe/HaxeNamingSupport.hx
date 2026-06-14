@@ -160,7 +160,8 @@ final class HaxeNamingSupport implements NamingSupport {
 				name: declName,
 				category: categoryValue,
 				mods: declMods,
-				enclosingType: enclosingType
+				enclosingType: enclosingType,
+				implicitlyReachable: isImplicitlyReachable(categoryValue, declName, node, parent)
 			});
 		}
 		// A type decl becomes the enclosing type of its descendants — its name is
@@ -222,6 +223,37 @@ final class HaxeNamingSupport implements NamingSupport {
 	private static function underscoreCamel(name: String): Null<String> {
 		if (name.length == 0) return null;
 		return '_' + name.charAt(0).toLowerCase() + name.substr(1);
+	}
+
+	/**
+	 * Whether a member can be reached without an in-source identifier reference: a
+	 * constructor (`new`), a property accessor (`get_` / `set_`, invoked through a
+	 * `(get, set)` property), or an annotation-bearing member a framework / macro
+	 * may reach. Non-members are never implicitly reachable.
+	 */
+	private static function isImplicitlyReachable(category: NamingCategory, name: String, node: QueryNode, parent: Null<QueryNode>): Bool {
+		if (category != NamingCategory.Field && category != NamingCategory.Method && category != NamingCategory.Constant) return false;
+		if (name == 'new') return true;
+		if (StringTools.startsWith(name, 'get_') || StringTools.startsWith(name, 'set_')) return true;
+		return metaPrecedes(node, parent);
+	}
+
+	/**
+	 * Does a `Meta` (`@:tag`) sibling precede `node` in its modifier / meta run?
+	 * Scans the preceding siblings, skipping modifier kinds; a `Meta` reached
+	 * before any non-modifier sibling means the declaration carries an annotation.
+	 */
+	private static function metaPrecedes(node: QueryNode, parent: Null<QueryNode>): Bool {
+		if (parent == null) return false;
+		final siblings: Array<QueryNode> = parent.children;
+		var i: Int = siblings.indexOf(node) - 1;
+		while (i >= 0) {
+			final kind: String = siblings[i].kind;
+			if (kind == 'Meta') return true;
+			if (!MOD_KIND_TO_NAME.exists(kind)) break;
+			i--;
+		}
+		return false;
 	}
 
 }
