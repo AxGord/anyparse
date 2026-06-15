@@ -753,4 +753,16 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		return new HaxeStringFoldSupport();
 	}
 
+	/**
+	 * The maximum cyclomatic complexity the `complexity` check should allow for a
+	 * function in the file at `path`: read from a discovered `checkstyle.json`'s
+	 * `CyclomaticComplexity` config, or null when none applies (the check then
+	 * uses its built-in default).
+	 */
+	public function maxComplexity(path: String): Null<Int> {
+		final content: Null<String> = CheckstyleConfigFinder.findConfigContent(path);
+		if (content == null) return null;
+		return try CheckstyleConfigLoader.loadComplexityMax(content) catch (exception: Exception) null;
+	}
+
 }

@@ -10,6 +10,8 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 
 using StringTools;
 
+import anyparse.grammar.haxe.CheckstyleConfigLoader;
+
 /**
  * The `complexity` check: a function whose cyclomatic complexity (1 + decision
  * points) exceeds the default threshold (10) is flagged `Warning`; a simpler
@@ -93,6 +95,66 @@ class ComplexityCheckTest extends Test {
 
 	private function violations(src: String): Array<Violation> {
 		return new Complexity().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	public function testCheckstyleMaxFromThresholds(): Void {
+		// Lowest configured onset (20) minus one — checkstyle flags `>=`, this check `>`.
+		Assert.equals(
+			19,
+			CheckstyleConfigLoader.loadComplexityMax(
+				'{"checks":[{"type":"CyclomaticComplexity","props":{"thresholds":[{"severity":"WARNING","complexity":20},{"severity":"ERROR","complexity":25}]}}]}'
+			)
+		);
+	}
+
+	public function testCheckstyleMaxLowThreshold(): Void {
+		Assert.equals(
+			5,
+			CheckstyleConfigLoader.loadComplexityMax(
+				'{"checks":[{"type":"CyclomaticComplexity","props":{"thresholds":[{"severity":"WARNING","complexity":6}]}}]}'
+			)
+		);
+	}
+
+	public function testCheckstyleMaxDefaultWhenNoThresholds(): Void {
+		// A configured check with no explicit thresholds uses checkstyle's default onset 20.
+		Assert.equals(19, CheckstyleConfigLoader.loadComplexityMax('{"checks":[{"type":"CyclomaticComplexity","props":{}}]}'));
+	}
+
+	public function testCheckstyleMaxNullWhenCheckAbsent(): Void {
+		Assert.isNull(CheckstyleConfigLoader.loadComplexityMax('{"checks":[{"type":"Indentation","props":{}}]}'));
+	}
+
+	public function testCheckstyleMaxIgnoresIgnoreSeverity(): Void {
+		// An IGNORE-severity threshold never flags, so the WARNING onset (8) wins -> 7.
+		Assert.equals(
+			7,
+			CheckstyleConfigLoader.loadComplexityMax(
+				'{"checks":[{"type":"CyclomaticComplexity","props":{"thresholds":[{"severity":"IGNORE","complexity":3},{"severity":"WARNING","complexity":8}]}}]}'
+			)
+		);
+	}
+
+	public function testRespectsCheckstyleThresholdFromDisk(): Void {
+		// End-to-end: a checkstyle.json discovered by walking up from the file lowers
+		// the threshold so a function the default (10) ignores is flagged.
+		final tmp: Null<String> = Sys.getEnv('TMPDIR');
+		final base: String = (tmp != null && tmp.length > 0) ? tmp : '/tmp';
+		final dir: String = '$base/anyparse_cx_cfg_${Sys.time()}';
+		sys.FileSystem.createDirectory(dir);
+		sys.io.File.saveContent(
+			'$dir/checkstyle.json',
+			'{"checks":[{"type":"CyclomaticComplexity","props":{"thresholds":[{"severity":"WARNING","complexity":3}]}}]}'
+		);
+		final path: String = '$dir/Foo.hx';
+		final src: String = 'class Foo {\n\tfunction f(a:Bool):Bool { return a && a && a; }\n}';
+		sys.io.File.saveContent(path, src);
+		final vs: Array<Violation> = new Complexity().run([{ file: path, source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains('max 2'));
+		sys.FileSystem.deleteFile(path);
+		sys.FileSystem.deleteFile('$dir/checkstyle.json');
+		sys.FileSystem.deleteDirectory(dir);
 	}
 
 }

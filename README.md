@@ -223,7 +223,7 @@ rewrite). A check is a plugin — a new one is a new class, not a core change.
 | `duplicate-import` | an import / using declared more than once in the same file |
 | `naming` | a declaration name violating the convention — the built-in default, or one adapted from a project's `checkstyle.json` |
 | `unused-private` | a `private` field / method never referenced — flagged only when the type is provably confined to its file (no subtype, `@:access`, `@:allow`, or skip-parse) |
-| `complexity` | a function whose cyclomatic complexity exceeds the threshold (decision points: `if`/`while`/`for`/`case`/`catch`/`&&`/`\|\|`/`?:`/`??`) — report-only |
+| `complexity` | a function whose cyclomatic complexity exceeds the threshold — the built-in default (10), or a `CyclomaticComplexity` max adapted from a project's `checkstyle.json` (decision points: `if`/`while`/`for`/`case`/`catch`/`&&`/`\|\|`/`?:`/`??`) — report-only |
 | `fold-adjacent-string-literals` | a `+` chain of adjacent same-quote plain string literals that can be merged into one (`"a" + "b"` → `"ab"`); `--fix` folds it (interpolated / mixed-quote / non-literal operands left alone) |
 
 ### Grammar platform

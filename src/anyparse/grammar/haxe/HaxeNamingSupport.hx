@@ -35,20 +35,9 @@ final class HaxeNamingSupport implements NamingSupport {
 	}
 
 	public function policyFor(path: String): NamingPolicy {
-		#if (sys || nodejs)
-		var dir: String = haxe.io.Path.directory(sys.FileSystem.absolutePath(path));
-		while (dir != '') {
-			final candidate: String = dir + '/checkstyle.json';
-			if (sys.FileSystem.exists(candidate) && !sys.FileSystem.isDirectory(candidate))
-				return try CheckstyleConfigLoader.load(sys.io.File.getContent(candidate)) catch (exception: Exception) defaults();
-			final parent: String = haxe.io.Path.directory(dir);
-			if (parent == dir) break;
-			dir = parent;
-		}
-		return defaults();
-		#else
-		return defaults();
-		#end
+		final content: Null<String> = CheckstyleConfigFinder.findConfigContent(path);
+		if (content == null) return defaults();
+		return try CheckstyleConfigLoader.load(content) catch (exception: Exception) defaults();
 	}
 
 	/**

@@ -33,17 +33,18 @@ import haxe.Exception;
  * ## Grammar-agnostic
  *
  * Both kind-sets come from the plugin; a grammar that declares neither
- * (`functionKinds` empty) makes the check a no-op. The threshold is a built-in
- * default for now — reading a project `checkstyle.json`'s `CyclomaticComplexity`
- * max is a later slice.
+ * (`functionKinds` empty) makes the check a no-op.
+ * The threshold is the built-in default unless a discovered
+ * `checkstyle.json` configures `CyclomaticComplexity`, read via the
+ * grammar plugin maxComplexity seam.
  */
 @:nullSafety(Strict)
 final class Complexity implements Check {
 
 	/**
 	 * The complexity above which a function is flagged — the McCabe / checkstyle
-	 * canonical threshold. A function scoring `> DEFAULT_MAX_COMPLEXITY` is a
-	 * `Warning`.
+	 * canonical threshold, used unless a `checkstyle.json` configures a different
+	 * `CyclomaticComplexity` max.
 	 */
 	private static inline final DEFAULT_MAX_COMPLEXITY: Int = 10;
 
@@ -66,7 +67,10 @@ final class Complexity implements Check {
 		for (entry in files) {
 			final tree: Null<QueryNode> =
 				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
-			if (tree != null) walk(violations, entry.file, tree, functionKinds, branchKinds);
+			if (tree != null) {
+				final max: Int = plugin.maxComplexity(entry.file) ?? DEFAULT_MAX_COMPLEXITY;
+				walk(violations, entry.file, tree, functionKinds, branchKinds, max);
+			}
 		}
 		return violations;
 	}
@@ -84,10 +88,10 @@ final class Complexity implements Check {
 	 * functions are each reached and measured on their own.
 	 */
 	private static function walk(
-		out: Array<Violation>, file: String, node: QueryNode, functionKinds: Array<String>, branchKinds: Array<String>
+		out: Array<Violation>, file: String, node: QueryNode, functionKinds: Array<String>, branchKinds: Array<String>, max: Int
 	): Void {
-		if (functionKinds.contains(node.kind)) checkFunction(out, file, node, functionKinds, branchKinds);
-		for (c in node.children) walk(out, file, c, functionKinds, branchKinds);
+		if (functionKinds.contains(node.kind)) checkFunction(out, file, node, functionKinds, branchKinds, max);
+		for (c in node.children) walk(out, file, c, functionKinds, branchKinds, max);
 	}
 
 	/**
@@ -95,19 +99,19 @@ final class Complexity implements Check {
 	 * (no finding) when the function node has no span to report.
 	 */
 	private static function checkFunction(
-		out: Array<Violation>, file: String, fn: QueryNode, functionKinds: Array<String>, branchKinds: Array<String>
+		out: Array<Violation>, file: String, fn: QueryNode, functionKinds: Array<String>, branchKinds: Array<String>, max: Int
 	): Void {
 		final span: Null<Span> = fn.span;
 		if (span == null) return;
 		final score: Int = 1 + countBranches(fn, functionKinds, branchKinds);
-		if (score <= DEFAULT_MAX_COMPLEXITY) return;
+		if (score <= max) return;
 		final name: String = fn.name ?? '<anonymous>';
 		out.push({
 			file: file,
 			span: span,
 			rule: 'complexity',
 			severity: Severity.Warning,
-			message: 'function \'$name\' has cyclomatic complexity $score (max ${DEFAULT_MAX_COMPLEXITY})'
+			message: 'function \'$name\' has cyclomatic complexity $score (max $max)'
 		});
 	}
 

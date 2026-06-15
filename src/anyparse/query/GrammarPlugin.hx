@@ -173,6 +173,14 @@ interface GrammarPlugin {
 	 */
 	public function stringFoldSupport(): Null<StringFoldSupport>;
 
+	/**
+	 * The maximum cyclomatic complexity a function may have before the
+	 * `complexity` check flags it, for the file at `path` — sourced from a
+	 * project config (e.g. a `checkstyle.json`) when present, else null so the
+	 * check keeps its built-in default. Grammars without such a config return null.
+	 */
+	public function maxComplexity(path: String): Null<Int>;
+
 }
 
 /**

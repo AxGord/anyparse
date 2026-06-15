@@ -4,6 +4,8 @@ import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingPolicy;
 import haxe.Json;
 
+using Lambda;
+
 /**
  * Adapts an existing haxe-checkstyle `checkstyle.json` onto the neutral
  * `NamingPolicy`, exactly as `HaxeFormatConfigLoader` adapts an `hxformat.json`
@@ -53,6 +55,40 @@ final class CheckstyleConfigLoader {
 			});
 		}
 		return policy;
+	}
+
+	/**
+	 * Parse `jsonContent` and return the maximum cyclomatic complexity a
+	 * function may have before the `complexity` check flags it — mapped from the
+	 * config's `CyclomaticComplexity` thresholds — or null when the config does
+	 * not configure that check (the check then keeps its built-in default).
+	 *
+	 * checkstyle flags a function whose complexity is `>=` the lowest configured
+	 * threshold; this check flags `>` its max, so the returned max is that onset
+	 * minus one. A configured check with no explicit thresholds uses checkstyle's
+	 * own default warning onset. Throws whatever `Json.parse` throws on malformed
+	 * input — the caller catches and falls back.
+	 */
+	public static function loadComplexityMax(jsonContent: String): Null<Int> {
+		final root: Dynamic = Json.parse(jsonContent);
+		final checks: Null<Array<Dynamic>> = root.checks;
+		if (checks == null) return null;
+		final check: Null<Dynamic> = checks.find(c -> c.type == 'CyclomaticComplexity');
+		if (check == null) return null;
+		// checkstyle's own default warning onset when the check lists no thresholds.
+		final defaultWarningOnset: Int = 20;
+		var onset: Int = defaultWarningOnset;
+		final props: Dynamic = check.props;
+		final thresholds: Null<Array<Dynamic>> = props != null ? props.thresholds : null;
+		if (thresholds != null && thresholds.length > 0) {
+			var lowest: Int = -1;
+			for (threshold in thresholds) if (threshold.severity != 'IGNORE') {
+				final complexity: Int = Std.int(threshold.complexity);
+				if (lowest < 0 || complexity < lowest) lowest = complexity;
+			}
+			if (lowest > 0) onset = lowest;
+		}
+		return onset - 1;
 	}
 
 	/** Map a checkstyle naming-check `type` to a neutral category, or null if not naming-family. */
