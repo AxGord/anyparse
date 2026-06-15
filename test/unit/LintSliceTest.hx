@@ -17,6 +17,7 @@ using StringTools;
 
 import anyparse.check.UnusedLocal;
 import anyparse.check.DuplicateImport;
+import anyparse.query.format.LintFormat;
 
 /**
  * The analysis/check layer — the generic `Linter` framework and its first
@@ -321,6 +322,105 @@ class LintSliceTest extends Test {
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin());
 		Assert.equals(1, edits.length);
 		Assert.equals('', edits[0].text);
+	}
+
+	/**
+	 * A trailing `// noqa` on an unused-import line silences the finding;
+	 * `Linter.run` (which applies suppression) returns it cleared.
+	 */
+	public function testNoqaSuppressesSameLine(): Void {
+		final src: String = 'package pkg;\nimport a.b.Used;\nimport a.b.Unused; // noqa\nclass C {\n\tvar x:Used;\n}';
+		final vs: Array<Violation> = Linter.run([{ file: 'pkg/C.hx', source: src }], plugin(), [new UnusedImport()]);
+		Assert.equals(0, vs.length);
+	}
+
+	/**
+	 * `// noqa: <rule>` silences only the named rule on its line: it clears
+	 * `unused-import`, but the same directive naming a different rule leaves
+	 * the import flagged.
+	 */
+	public function testNoqaNamedRule(): Void {
+		final cleared: String = 'package pkg;\nimport a.b.Unused; // noqa: unused-import\nclass C {}';
+		final a: Array<Violation> = Linter.run([{ file: 'pkg/A.hx', source: cleared }], plugin(), [new UnusedImport()]);
+		Assert.equals(0, a.length);
+
+		final wrong: String = 'package pkg;\nimport a.b.Unused; // noqa: duplicate-import\nclass C {}';
+		final b: Array<Violation> = Linter.run([{ file: 'pkg/B.hx', source: wrong }], plugin(), [new UnusedImport()]);
+		Assert.equals(1, b.length);
+		Assert.equals('unused-import', b[0].rule);
+	}
+
+	/**
+	 * A `CHECKSTYLE:OFF` / `CHECKSTYLE:ON` pair silences every finding in the
+	 * enclosed region; a finding past `ON` survives.
+	 */
+	public function testCheckstyleRegion(): Void {
+		final src: String = 'package pkg;\n// CHECKSTYLE:OFF\nimport a.b.Unused1;\n// CHECKSTYLE:ON\nimport a.b.Unused2;\nclass C {}';
+		final vs: Array<Violation> = Linter.run([{ file: 'pkg/C.hx', source: src }], plugin(), [new UnusedImport()]);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains('a.b.Unused2'));
+	}
+
+	/**
+	 * A `noqa` occurring inside a string literal is not a comment and does not
+	 * suppress — the string-aware comment scan ignores it.
+	 */
+	public function testNoqaInStringNotSuppressed(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tfunction f() {\n\t\tvar u = "noqa";\n\t}\n}';
+		final vs: Array<Violation> = Linter.run([{ file: 'pkg/C.hx', source: src }], plugin(), [new UnusedLocal()]);
+		Assert.equals(1, vs.length);
+		Assert.equals('unused-local', vs[0].rule);
+	}
+
+	/**
+	 * `LintFormat.json` emits one record per violation that round-trips
+	 * through `haxe.Json.parse` with resolved line/severity/rule.
+	 */
+	public function testJsonFormat(): Void {
+		final src: String = 'package pkg;\nimport a.b.Unused;\nclass C {}';
+		final file: String = 'pkg/C.hx';
+		final vs: Array<Violation> = new UnusedImport().run([{ file: file, source: src }], plugin());
+		Assert.equals(1, vs.length);
+		final sourceOf: Map<String, String> = [file => src];
+		final parsed: Array<Dynamic> = haxe.Json.parse(LintFormat.json(vs, sourceOf));
+		Assert.equals(1, parsed.length);
+		final rec: Dynamic = parsed[0];
+		Assert.equals(file, rec.file);
+		Assert.equals(2, Std.int(rec.line));
+		Assert.equals('warning', rec.severity);
+		Assert.equals('unused-import', rec.rule);
+	}
+
+	/**
+	 * `LintFormat.checkstyle` groups findings under a `<file>` element with a
+	 * `source="apq.<rule>"` error carrying the resolved line and severity.
+	 */
+	public function testCheckstyleFormat(): Void {
+		final src: String = 'package pkg;\nimport a.b.Unused;\nclass C {}';
+		final file: String = 'pkg/C.hx';
+		final vs: Array<Violation> = new UnusedImport().run([{ file: file, source: src }], plugin());
+		final xml: String = LintFormat.checkstyle(vs, [file => src]);
+		Assert.isTrue(xml.contains('<checkstyle'));
+		Assert.isTrue(xml.contains('source="apq.unused-import"'));
+		Assert.isTrue(xml.contains('severity="warning"'));
+		Assert.isTrue(xml.contains('line="2"'));
+	}
+
+	/**
+	 * XML-special characters in a message are escaped in checkstyle output,
+	 * and a null-span violation renders line/column zero.
+	 */
+	public function testCheckstyleEscapesMessage(): Void {
+		final v: Violation = {
+			file: 'F.hx',
+			span: null,
+			rule: 'demo',
+			severity: Severity.Warning,
+			message: 'a < b & "c"'
+		};
+		final xml: String = LintFormat.checkstyle([v], ['F.hx' => '']);
+		Assert.isTrue(xml.contains('message="a &lt; b &amp; &quot;c&quot;"'));
+		Assert.isTrue(xml.contains('line="0"'));
 	}
 
 }

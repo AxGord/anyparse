@@ -1,6 +1,6 @@
 package unit;
 
-#if sys
+#if (sys || nodejs)
 import sys.FileSystem;
 import sys.io.File;
 

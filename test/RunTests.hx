@@ -220,6 +220,7 @@ import unit.CrossRenameSliceTest;
 import unit.SymbolIndexSliceTest;
 import unit.SymbolQuerySliceTest;
 import unit.LintSliceTest;
+import unit.LintFailOnCliTest;
 import unit.MoveSymbolSliceTest;
 import unit.ApqMetaTest;
 import unit.ApqMetaEnumCtorSliceTest;
@@ -523,6 +524,7 @@ class RunTests {
 		addCase(new SymbolIndexSliceTest());
 		addCase(new SymbolQuerySliceTest());
 		addCase(new LintSliceTest());
+		addCase(new LintFailOnCliTest());
 		addCase(new UnusedPrivateCheckTest());
 		addCase(new ComplexityCheckTest());
 		addCase(new FoldStringLiteralsCheckTest());

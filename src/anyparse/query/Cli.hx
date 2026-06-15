@@ -50,6 +50,7 @@ import anyparse.runtime.Span.Position;
 import haxe.Exception;
 import anyparse.query.NewFile.NewFileSpec;
 import anyparse.query.NewFile.NewFileResult;
+import anyparse.query.format.LintFormat;
 #if (sys || nodejs)
 import sys.io.File;
 import sys.FileSystem;
@@ -1081,6 +1082,8 @@ final class Cli {
 		var flat: Bool = false;
 		var includeInfo: Bool = false;
 		var fix: Bool = false;
+		var failOn: Null<Severity> = null;
+		var format: String = 'text';
 		final ruleFilters: Array<String> = [];
 		final inputSpecs: Array<String> = [];
 
@@ -1098,6 +1101,19 @@ final class Cli {
 					flat = true;
 				case '--fix':
 					fix = true;
+				case '--fail-on':
+					final level: String = expectValue(args, ++i, '--fail-on');
+					failOn = severityFromName(level);
+					if (failOn == null) {
+						stderr('apq lint: unknown --fail-on value "$level" (expected error|warning|info)\n');
+						return EXIT_USAGE;
+					}
+				case '--format':
+					format = expectValue(args, ++i, '--format');
+					if (format != 'text' && format != 'json' && format != 'checkstyle') {
+						stderr('apq lint: unknown --format value "$format" (expected text|json|checkstyle)\n');
+						return EXIT_USAGE;
+					}
 				case '-h', '--help':
 					printLintUsage();
 					return EXIT_OK;
@@ -1155,13 +1171,26 @@ final class Cli {
 
 		final shown: Array<Violation> = includeInfo ? all : all.filter(v -> v.severity != Severity.Info);
 
-		// Group the shown violations by file, in input-file order, each group
-		// sorted by source position so the report reads top-to-bottom.
+		// Order findings by input-file order, each file sorted by source
+		// position so the report reads top-to-bottom; shared by every format.
+		final ordered: Array<Violation> = [];
 		for (path in paths) {
 			final group: Array<Violation> = shown.filter(v -> v.file == path);
-			if (group.length == 0) continue;
 			group.sort((a, b) -> spanStart(a.span) - spanStart(b.span));
-			sysPrint(Text.renderViolations(path, sourceOf[path] ?? '', group, flat));
+			for (v in group) ordered.push(v);
+		}
+
+		switch format {
+			case 'json':
+				sysPrint(LintFormat.json(ordered, sourceOf));
+			case 'checkstyle':
+				sysPrint(LintFormat.checkstyle(ordered, sourceOf));
+			case _:
+				for (path in paths) {
+					final group: Array<Violation> = ordered.filter(v -> v.file == path);
+					if (group.length == 0) continue;
+					sysPrint(Text.renderViolations(path, sourceOf[path] ?? '', group, flat));
+				}
 		}
 
 		var errors: Int = 0;
@@ -1180,6 +1209,11 @@ final class Cli {
 		} else {
 			stderr('apq lint: $errors error(s), $warnings warning(s), $infos info(s) in ${paths.length} file(s)\n');
 			if (!includeInfo && infos > 0) stderr('apq lint: $infos info advisory(ies) hidden — pass --all to show\n');
+		}
+
+		if (failOn != null) {
+			final threshold: Int = (cast failOn: Int);
+			for (v in all) if ((cast v.severity: Int) <= threshold) return EXIT_RUNTIME;
 		}
 		return EXIT_OK;
 	}
@@ -8580,17 +8614,24 @@ final class Cli {
 		sysPrint('\n');
 		sysPrint('Run the analysis checks over the scope (one or more file/dir/glob specs) and\n');
 		sysPrint('report violations grouped by file as <line>:<col>: [severity] message (rule).\n');
-		sysPrint('Info advisories are hidden unless --all; the exit code is success regardless\n');
-		sysPrint('of findings. Built-in checks: unused-import, unused-local, duplicate-import,\n');
-		sysPrint('naming, unused-private, complexity, fold-adjacent-string-literals.\n');
+		sysPrint('Info advisories are hidden unless --all. The exit code is success unless\n');
+		sysPrint('--fail-on selects a severity present in the findings. Built-in checks:\n');
+		sysPrint('unused-import, unused-local, duplicate-import, naming, unused-private,\n');
+		sysPrint('complexity, fold-adjacent-string-literals.\n');
+		sysPrint('\n');
+		sysPrint('Inline suppression: a trailing "// noqa" (or "// noqa: <rule>,<rule>") clears\n');
+		sysPrint('findings on its line; "// CHECKSTYLE:OFF" ... "// CHECKSTYLE:ON" clears a region.\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
-		sysPrint('  --rule <id>     Run only this check (repeatable; default: all)\n');
-		sysPrint('  --fix           Apply autofixes in place (e.g. delete unused imports)\n');
-		sysPrint('  --all, -a       Include Info-severity advisories in the report\n');
-		sysPrint('  --flat          One <file>:<line>:<col> per line (no per-file grouping)\n');
-		sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
-		sysPrint('  -h, --help      Show this help\n');
+		sysPrint('  --rule <id>       Run only this check (repeatable; default: all)\n');
+		sysPrint('  --fix            Apply autofixes in place (e.g. delete unused imports)\n');
+		sysPrint('  --fail-on <sev>   Exit non-zero if a finding at-or-above <sev> exists\n');
+		sysPrint('                    (error|warning|info)\n');
+		sysPrint('  --format <fmt>    Output format: text (default), json, checkstyle\n');
+		sysPrint('  --all, -a        Include Info-severity advisories in the report\n');
+		sysPrint('  --flat           One <file>:<line>:<col> per line (text format only)\n');
+		sysPrint('  --lang <name>    Grammar plugin (default: haxe)\n');
+		sysPrint('  -h, --help       Show this help\n');
 	}
 
 	private static function printExtractMethodUsage(): Void {
@@ -10799,6 +10840,16 @@ final class Cli {
 		}
 		final endOffset: Int = span.to > span.from ? span.to - 1 : span.from;
 		return { from: span.lineCol(content).line, to: new Span(endOffset, endOffset).lineCol(content).line };
+	}
+
+	/** Map a `--fail-on` level name to its `Severity`, or null if unknown. */
+	private static function severityFromName(name: String): Null<Severity> {
+		return switch name {
+			case 'error': Severity.Error;
+			case 'warning': Severity.Warning;
+			case 'info': Severity.Info;
+			case _: null;
+		};
 	}
 
 }

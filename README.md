@@ -216,6 +216,13 @@ Because raw text editing has no such guarantee, `new` is the way to create a fil
 grouped by file; `--fix` applies the auto-fixable subset (re-parse-validated like every
 rewrite). A check is a plugin — a new one is a new class, not a core change.
 
+Findings are suppressible inline: a trailing `// noqa` (or `// noqa: <rule>,<rule>` for
+named rules) clears findings on its line, and `// CHECKSTYLE:OFF` … `// CHECKSTYLE:ON`
+clears a region — so one stubborn false positive never makes a rule unusable. `--fail-on
+<error|warning|info>` exits non-zero when a finding at or above that severity survives
+(default: report-only, exit 0), and `--format <text|json|checkstyle>` switches the
+output — checkstyle XML the same CI tooling that reads `checkstyle.json` can ingest.
+
 | Check | Flags |
 |---|---|
 | `unused-import` | an import whose bound name is never referenced in the file |

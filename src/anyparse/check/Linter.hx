@@ -52,7 +52,7 @@ final class Linter {
 		final active: Array<Check> = checks ?? builtins();
 		final out: Array<Violation> = [];
 		for (check in active) for (violation in check.run(files, plugin)) out.push(violation);
-		return out;
+		return Suppression.apply(out, files);
 	}
 
 }
