@@ -9,6 +9,7 @@ import anyparse.runtime.Span;
 import haxe.Exception;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.StringFold.StringFoldSupport;
+import anyparse.query.ControlFlow.ControlFlowSupport;
 
 /**
  * Haxe grammar binding for the `apq` query engine.
@@ -763,6 +764,10 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		final content: Null<String> = CheckstyleConfigFinder.findConfigContent(path);
 		if (content == null) return null;
 		return try CheckstyleConfigLoader.loadComplexityMax(content) catch (exception: Exception) null;
+	}
+
+	public function controlFlowSupport(): Null<ControlFlowSupport> {
+		return new HaxeControlFlowSupport();
 	}
 
 }

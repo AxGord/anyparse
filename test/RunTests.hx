@@ -269,6 +269,7 @@ import unit.ComplexityCheckTest;
 import unit.FoldStringLiteralsCheckTest;
 import unit.LintConfigTest;
 import unit.LintConfigCliTest;
+import unit.DeadCodeCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -531,6 +532,7 @@ class RunTests {
 		addCase(new LintFailOnCliTest());
 		addCase(new UnusedPrivateCheckTest());
 		addCase(new ComplexityCheckTest());
+		addCase(new DeadCodeCheckTest());
 		addCase(new FoldStringLiteralsCheckTest());
 		addCase(new NamingCheckTest());
 		addCase(new FmtSliceTest());

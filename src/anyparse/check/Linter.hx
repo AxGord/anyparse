@@ -31,7 +31,8 @@ final class Linter {
 			new Naming(),
 			new UnusedPrivate(),
 			new Complexity(),
-			new FoldStringLiterals()
+			new FoldStringLiterals(),
+			new DeadCode()
 		];
 	}
 

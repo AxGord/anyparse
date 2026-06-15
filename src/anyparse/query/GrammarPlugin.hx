@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.query.Pattern.KindEquivalence;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.StringFold.StringFoldSupport;
+import anyparse.query.ControlFlow.ControlFlowSupport;
 
 /**
  * Plugin contract for a grammar that the query engine can operate on.
@@ -180,6 +181,13 @@ interface GrammarPlugin {
 	 * check keeps its built-in default. Grammars without such a config return null.
 	 */
 	public function maxComplexity(path: String): Null<Int>;
+
+	/**
+	 * Optional: the grammar's control-flow capability, consumed by the
+	 * `dead-code` check. Null when the grammar has no statement / block concept
+	 * (binary formats) — the check then no-ops, like `stringFoldSupport`.
+	 */
+	public function controlFlowSupport(): Null<ControlFlowSupport>;
 
 }
 

@@ -247,6 +247,7 @@ rule-specific option (e.g. complexity's `"max"`, which takes precedence over a
 | `unused-private` | a `private` field / method never referenced — flagged only when the type is provably confined to its file (no subtype, `@:access`, `@:allow`, or skip-parse) |
 | `complexity` | a function whose cyclomatic complexity exceeds the threshold — the built-in default (10), or a `CyclomaticComplexity` max adapted from a project's `checkstyle.json` (decision points: `if`/`while`/`for`/`case`/`catch`/`&&`/`\|\|`/`?:`/`??`) — report-only |
 | `fold-adjacent-string-literals` | a `+` chain of adjacent same-quote plain string literals that can be merged into one (`"a" + "b"` → `"ab"`); `--fix` folds it (interpolated / mixed-quote / non-literal operands left alone) |
+| `dead-code` | a statement made unreachable by a preceding unconditional `return` / `throw` / `break` / `continue` in the same block — purely structural (no type information), report-only |
 
 ### Grammar platform
 
