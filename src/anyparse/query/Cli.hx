@@ -51,6 +51,7 @@ import haxe.Exception;
 import anyparse.query.NewFile.NewFileSpec;
 import anyparse.query.NewFile.NewFileResult;
 import anyparse.query.format.LintFormat;
+import anyparse.check.LintConfig;
 #if (sys || nodejs)
 import sys.io.File;
 import sys.FileSystem;
@@ -1103,7 +1104,7 @@ final class Cli {
 					fix = true;
 				case '--fail-on':
 					final level: String = expectValue(args, ++i, '--fail-on');
-					failOn = severityFromName(level);
+					failOn = Severity.fromName(level);
 					if (failOn == null) {
 						stderr('apq lint: unknown --fail-on value "$level" (expected error|warning|info)\n');
 						return EXIT_USAGE;
@@ -1165,9 +1166,15 @@ final class Cli {
 			sourceOf[path] = fileSource;
 		}
 
-		final all: Array<Violation> = Linter.run(files, plugin, checks);
+		final lintConfig: LintConfig = LintConfig.discover(paths[0] ?? '.');
+		final activeChecks: Array<Check> = ruleFilters.length == 0
+			? [
+				for (c in checks) if (lintConfig.enabledFor(c.id())) c
+			]
+			: checks;
+		final all: Array<Violation> = Linter.run(files, plugin, activeChecks, lintConfig);
 
-		if (fix) return applyLintFixes(files, all, checks, plugin);
+		if (fix) return applyLintFixes(files, all, activeChecks, plugin);
 
 		final shown: Array<Violation> = includeInfo ? all : all.filter(v -> v.severity != Severity.Info);
 
@@ -8622,6 +8629,11 @@ final class Cli {
 		sysPrint('Inline suppression: a trailing "// noqa" (or "// noqa: <rule>,<rule>") clears\n');
 		sysPrint('findings on its line; "// CHECKSTYLE:OFF" ... "// CHECKSTYLE:ON" clears a region.\n');
 		sysPrint('\n');
+		sysPrint('Project config: an "apqlint.json" discovered by walking up from a linted file\n');
+		sysPrint('enables/disables rules and overrides their severity or options, e.g.\n');
+		sysPrint('{ "rules": { "naming": { "severity": "error" }, "complexity": { "max": 15 },\n');
+		sysPrint('"fold-adjacent-string-literals": { "enabled": false } } }.\n');
+		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --rule <id>       Run only this check (repeatable; default: all)\n');
 		sysPrint('  --fix            Apply autofixes in place (e.g. delete unused imports)\n');
@@ -10843,13 +10855,4 @@ final class Cli {
 	}
 
 	/** Map a `--fail-on` level name to its `Severity`, or null if unknown. */
-	private static function severityFromName(name: String): Null<Severity> {
-		return switch name {
-			case 'error': Severity.Error;
-			case 'warning': Severity.Warning;
-			case 'info': Severity.Info;
-			case _: null;
-		};
-	}
-
 }

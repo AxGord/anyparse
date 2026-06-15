@@ -223,6 +223,21 @@ clears a region — so one stubborn false positive never makes a rule unusable. 
 (default: report-only, exit 0), and `--format <text|json|checkstyle>` switches the
 output — checkstyle XML the same CI tooling that reads `checkstyle.json` can ingest.
 
+An `apqlint.json` discovered by walking up from a linted file configures the run: per
+rule it can disable the rule (`"enabled": false`, dropped from the default set — an
+explicit `--rule` still runs it), override its reported severity (`"severity":
+"error|warning|info"`, applied before `--fail-on` and the report), or set a
+rule-specific option (e.g. complexity's `"max"`, which takes precedence over a
+`checkstyle.json` threshold). A missing or malformed file is a no-op.
+
+```json
+{ "rules": {
+  "naming":                        { "severity": "error" },
+  "complexity":                    { "max": 15 },
+  "fold-adjacent-string-literals": { "enabled": false }
+} }
+```
+
 | Check | Flags |
 |---|---|
 | `unused-import` | an import whose bound name is never referenced in the file |

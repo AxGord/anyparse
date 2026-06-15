@@ -26,4 +26,18 @@ enum abstract Severity(Int) {
 		}
 	}
 
+	/**
+	 * Resolves a lower-case severity label (`error` / `warning` / `info`) to
+	 * its `Severity`, or null when the name is unrecognised. The inverse of
+	 * `label()`; shared by the `lint` CLI (`--fail-on`) and `LintConfig`.
+	 */
+	public static function fromName(name: String): Null<Severity> {
+		return switch name {
+			case 'error': Error;
+			case 'warning': Warning;
+			case 'info': Info;
+			case _: null;
+		};
+	}
+
 }

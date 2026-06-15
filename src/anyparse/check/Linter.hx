@@ -47,11 +47,15 @@ final class Linter {
 	 * per-check exceptions.
 	 */
 	public static function run(
-		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?checks: Array<Check>
+		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?checks: Array<Check>, ?config: LintConfig
 	): Array<Violation> {
 		final active: Array<Check> = checks ?? builtins();
 		final out: Array<Violation> = [];
 		for (check in active) for (violation in check.run(files, plugin)) out.push(violation);
+		if (config != null) for (violation in out) {
+			final sev: Null<Severity> = config.severityFor(violation.rule);
+			if (sev != null) violation.severity = sev;
+		}
 		return Suppression.apply(out, files);
 	}
 

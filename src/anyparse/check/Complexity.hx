@@ -68,7 +68,8 @@ final class Complexity implements Check {
 			final tree: Null<QueryNode> =
 				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
 			if (tree != null) {
-				final max: Int = plugin.maxComplexity(entry.file) ?? DEFAULT_MAX_COMPLEXITY;
+				final max: Int = LintConfig.discover(entry.file)
+					.intOption('complexity', 'max') ?? plugin.maxComplexity(entry.file) ?? DEFAULT_MAX_COMPLEXITY;
 				walk(violations, entry.file, tree, functionKinds, branchKinds, max);
 			}
 		}
