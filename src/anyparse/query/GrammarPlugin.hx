@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.Pattern.KindEquivalence;
 import anyparse.query.NamingPolicy.NamingSupport;
+import anyparse.query.StringFold.StringFoldSupport;
 
 /**
  * Plugin contract for a grammar that the query engine can operate on.
@@ -164,6 +165,13 @@ interface GrammarPlugin {
 	 * optional writer methods above.
 	 */
 	public function namingSupport(): Null<NamingSupport>;
+
+	/**
+	 * Optional: the grammar's adjacent-string-literal folding capability, consumed
+	 * by the `fold-adjacent-string-literals` check. Null when the grammar has no
+	 * string-concatenation concept — the check then no-ops, like `namingSupport`.
+	 */
+	public function stringFoldSupport(): Null<StringFoldSupport>;
 
 }
 

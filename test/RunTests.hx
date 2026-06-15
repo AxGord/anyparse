@@ -265,6 +265,7 @@ import unit.ApqSourceSelectTest;
 import unit.NamingCheckTest;
 import unit.UnusedPrivateCheckTest;
 import unit.ComplexityCheckTest;
+import unit.FoldStringLiteralsCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -524,6 +525,7 @@ class RunTests {
 		addCase(new LintSliceTest());
 		addCase(new UnusedPrivateCheckTest());
 		addCase(new ComplexityCheckTest());
+		addCase(new FoldStringLiteralsCheckTest());
 		addCase(new NamingCheckTest());
 		addCase(new FmtSliceTest());
 		addCase(new NewFileSliceTest());

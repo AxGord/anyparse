@@ -30,7 +30,8 @@ final class Linter {
 			new DuplicateImport(),
 			new Naming(),
 			new UnusedPrivate(),
-			new Complexity()
+			new Complexity(),
+			new FoldStringLiterals()
 		];
 	}
 

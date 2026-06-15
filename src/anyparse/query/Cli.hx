@@ -8581,7 +8581,8 @@ final class Cli {
 		sysPrint('Run the analysis checks over the scope (one or more file/dir/glob specs) and\n');
 		sysPrint('report violations grouped by file as <line>:<col>: [severity] message (rule).\n');
 		sysPrint('Info advisories are hidden unless --all; the exit code is success regardless\n');
-		sysPrint('of findings. Built-in checks: unused-import, unused-local, duplicate-import, naming, unused-private, complexity.\n');
+		sysPrint('of findings. Built-in checks: unused-import, unused-local, duplicate-import,\n');
+		sysPrint('naming, unused-private, complexity, fold-adjacent-string-literals.\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --rule <id>     Run only this check (repeatable; default: all)\n');

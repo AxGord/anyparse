@@ -8,6 +8,7 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 import anyparse.query.NamingPolicy.NamingSupport;
+import anyparse.query.StringFold.StringFoldSupport;
 
 /**
  * Haxe grammar binding for the `apq` query engine.
@@ -742,6 +743,14 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 	/** The Haxe naming-convention capability — projects declarations and resolves a file's policy. */
 	public function namingSupport(): Null<NamingSupport> {
 		return new HaxeNamingSupport();
+	}
+
+	/**
+	 * The Haxe adjacent-string-literal folding capability, consumed by the
+	 * `fold-adjacent-string-literals` check.
+	 */
+	public function stringFoldSupport(): Null<StringFoldSupport> {
+		return new HaxeStringFoldSupport();
 	}
 
 }
