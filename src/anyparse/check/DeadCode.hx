@@ -4,6 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
@@ -13,8 +14,7 @@ import haxe.Exception;
  * Flags statements made unreachable by a preceding unconditional exit — a
  * `return` / `throw` / `break` / `continue` followed by more statements in the
  * same block. Purely structural (no type information needed), so it holds even
- * without a type-checker. Report-only: the dead code is provably removable, but
- * this slice surfaces it as a `Warning` without an autofix.
+ * without a type-checker. `Warning`.
  *
  * ## Grammar-agnostic
  *
@@ -31,6 +31,13 @@ import haxe.Exception;
  * terminal nested inside a child statement (a `return` inside an `if` body) is
  * not a direct sibling, so it does not make the outer block's following
  * statements unreachable — only a terminal that IS a direct sibling does.
+ *
+ * ## Autofix
+ *
+ * Unreachable code never executes, so `fix` deletes the whole dead run — every
+ * statement from the first unreachable one to the block's end — as one
+ * whole-line deletion (`lineExtendedSpan`), so the batched `canonicalize` leaves
+ * no blank residue.
  */
 @:nullSafety(Strict)
 final class DeadCode implements Check {
@@ -57,11 +64,29 @@ final class DeadCode implements Check {
 		return violations;
 	}
 
-	/** Dead-code has no autofix in this slice — report-only. */
+	/**
+	 * Delete each flagged dead run. Unreachable code never executes, so removing
+	 * every statement from the first unreachable one to the end of its block is
+	 * always safe. One whole-line deletion per run; needs `ControlFlowSupport`
+	 * (unset makes the check report-only).
+	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return [];
+		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
+		if (support == null) return [];
+		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+		if (tree == null) return [];
+
+		final flagged: Array<String> = [];
+		for (v in violations) {
+			final span: Null<Span> = v.span;
+			if (span != null) flagged.push('${span.from}:${span.to}');
+		}
+		final edits: Array<{ span: Span, text: String }> = [];
+		collectDeletions(tree, source, support, flagged, edits);
+		// A nested dead run sits inside an outer one; keep only the outer deletion.
+		return RefactorSupport.dropContainedEdits(edits);
 	}
 
 	/**
@@ -89,6 +114,38 @@ final class DeadCode implements Check {
 					severity: Severity.Warning,
 					message: 'unreachable code'
 				});
+			}
+			return;
+		}
+	}
+
+	/**
+	 * Walk `node`; in each block whose first dead statement is flagged, emit one
+	 * whole-line deletion spanning the entire dead run (the first unreachable
+	 * statement through the block's last child).
+	 */
+	private static function collectDeletions(
+		node: QueryNode, source: String, support: ControlFlowSupport, flagged: Array<String>, edits: Array<{ span: Span, text: String }>
+	): Void {
+		if (support.blockKinds().contains(node.kind)) deleteRun(node, source, support, flagged, edits);
+		for (c in node.children) collectDeletions(c, source, support, flagged, edits);
+	}
+
+	/**
+	 * Mirror `flagBlock`: find the first terminal direct child; if a statement
+	 * follows and its span is the flagged one, delete from it to the block's last
+	 * child as a single whole-line edit.
+	 */
+	private static function deleteRun(
+		block: QueryNode, source: String, support: ControlFlowSupport, flagged: Array<String>, edits: Array<{ span: Span, text: String }>
+	): Void {
+		final kids: Array<QueryNode> = block.children;
+		for (i in 0...kids.length) if (support.isTerminal(kids[i])) {
+			if (i + 1 < kids.length) {
+				final firstDead: Null<Span> = kids[i + 1].span;
+				final lastDead: Null<Span> = kids[kids.length - 1].span;
+				if (firstDead != null && lastDead != null && flagged.contains('${firstDead.from}:${firstDead.to}'))
+					edits.push({ span: RefactorSupport.lineExtendedSpan(source, new Span(firstDead.from, lastDead.to)), text: '' });
 			}
 			return;
 		}

@@ -1258,14 +1258,18 @@ final class Cli {
 				if (own.length == 0) continue;
 				for (edit in check.fix(entry.source, own, plugin, index)) edits.push(edit);
 			}
-			if (edits.length == 0) continue;
+			// Different checks (or one check's nested findings) can emit deletions whose
+			// spans nest — e.g. a dead run that contains a self-assignment line. Applying
+			// nested edits blindly corrupts the splice, so keep only the outer deletion.
+			final disjoint: Array<{ span: Span, text: String }> = RefactorSupport.dropContainedEdits(edits);
+			if (disjoint.length == 0) continue;
 
 			final optsJson: Null<String> = discoverFormatConfig(entry.file);
-			switch RefactorSupport.canonicalize(entry.source, edits, false, plugin, optsJson) {
+			switch RefactorSupport.canonicalize(entry.source, disjoint, false, plugin, optsJson) {
 				case Ok(text):
 					writeFile(entry.file, text);
 					fixedFiles++;
-					fixedCount += edits.length;
+					fixedCount += disjoint.length;
 				case Err(message):
 					stderr('apq lint --fix: ${entry.file}: $message\n');
 					skipped++;

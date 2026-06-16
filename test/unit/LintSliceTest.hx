@@ -18,6 +18,8 @@ using StringTools;
 import anyparse.check.UnusedLocal;
 import anyparse.check.DuplicateImport;
 import anyparse.query.format.LintFormat;
+import anyparse.check.DeadCode;
+import anyparse.check.SelfAssignment;
 
 /**
  * The analysis/check layer — the generic `Linter` framework and its first
@@ -421,6 +423,39 @@ class LintSliceTest extends Test {
 		final xml: String = LintFormat.checkstyle([v], ['F.hx' => '']);
 		Assert.isTrue(xml.contains('message="a &lt; b &amp; &quot;c&quot;"'));
 		Assert.isTrue(xml.contains('line="0"'));
+	}
+
+	public function testDropContainedEdits(): Void {
+		// `inner` is contained in `outer`; `disjoint` overlaps neither. The
+		// container survives, the contained edit is dropped.
+		final inner: { span: Span, text: String } = { span: new Span(20, 30), text: '' };
+		final outer: { span: Span, text: String } = { span: new Span(10, 50), text: '' };
+		final disjoint: { span: Span, text: String } = { span: new Span(60, 70), text: '' };
+		final kept: Array<{ span: Span, text: String }> = RefactorSupport.dropContainedEdits([inner, outer, disjoint]);
+		final froms: Array<Int> = [for (e in kept) e.span.from];
+		Assert.equals(2, kept.length);
+		Assert.isTrue(froms.contains(10));
+		Assert.isTrue(froms.contains(60));
+		Assert.isFalse(froms.contains(20));
+	}
+
+	public function testCrossCheckOverlapKeepsOuterDeletion(): Void {
+		// A dead run that contains a self-assignment line: `dead-code` and
+		// `self-assignment` emit nested deletions. Batching them blindly would corrupt
+		// the splice; dropping the contained edit keeps only the outer dead-run delete.
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\treturn;\n\t\tvar x = 0;\n\t\tx = x;\n\t}\n}';
+		final files = [{ file: 'C.hx', source: src }];
+		final edits: Array<{ span: Span, text: String }> = [];
+		for (e in new DeadCode().fix(src, new DeadCode().run(files, plugin()), plugin())) edits.push(e);
+		for (e in new SelfAssignment().fix(src, new SelfAssignment().run(files, plugin()), plugin())) edits.push(e);
+		switch RefactorSupport.canonicalize(src, RefactorSupport.dropContainedEdits(edits), true, plugin()) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf('x = x') == -1);
+				Assert.isTrue(text.indexOf('var x') == -1);
+				Assert.isTrue(text.indexOf('return') >= 0);
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+		}
 	}
 
 }

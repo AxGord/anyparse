@@ -330,6 +330,16 @@ typedef RefShape = {
 	 * a no-op.
 	 */
 	@:optional var emptyStmtKind: String;
+
+	/**
+	 * Statement-position local declaration kinds — a plain local `var` / `final`
+	 * (not params, `for` iterators, `catch` vars, or class fields). Used by
+	 * reference-analysis checks to tell a local binding from a field: `unused-local`
+	 * indexes these as deletable declarations, and `self-assignment` flags `x = x`
+	 * only when `x` resolves to one (a field's `x = x` may invoke a property setter,
+	 * so it is left alone). Optional — unset makes both treat it as empty.
+	 */
+	@:optional var localDeclKinds: Array<String>;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {

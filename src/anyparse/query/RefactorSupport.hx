@@ -970,4 +970,28 @@ final class RefactorSupport {
 		return false;
 	}
 
+	/**
+	 * Drop every edit whose span is fully contained in another edit's span,
+	 * keeping the outer (larger) one. Span-deletion edits from independent sources
+	 * — several checks batched by `apq lint --fix`, or one check's nested findings
+	 * (a dead run inside a dead run) — can nest; applying nested deletions blindly
+	 * corrupts the source. Removing the contained edit is correct for deletions:
+	 * the outer deletion already subsumes it. Equal spans keep the earliest index.
+	 */
+	public static function dropContainedEdits(edits: Array<{ span: Span, text: String }>): Array<{ span: Span, text: String }> {
+		return [for (i in 0...edits.length) if (!isContainedEdit(edits, i)) edits[i]];
+	}
+
+	/** True when `edits[i]` is contained in another edit (the outer one is kept). */
+	private static function isContainedEdit(edits: Array<{ span: Span, text: String }>, i: Int): Bool {
+		final e: Span = edits[i].span;
+		for (j in 0...edits.length) if (j != i) {
+			final o: Span = edits[j].span;
+			final contains: Bool = o.from <= e.from && e.to <= o.to;
+			final strictlyBigger: Bool = o.from < e.from || e.to < o.to;
+			if (contains && (strictlyBigger || j < i)) return true;
+		}
+		return false;
+	}
+
 }

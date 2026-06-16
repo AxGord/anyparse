@@ -7,12 +7,13 @@ import anyparse.check.DeadCode;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.runtime.Span;
 
 /**
  * The `dead-code` check: a statement after an unconditional `return` / `throw`
  * / `break` / `continue` in the same block is flagged `Warning`; reachable code
  * is not. A terminal nested inside an `if` body does not make its following
- * siblings unreachable. Report-only — `fix` yields no edits.
+ * siblings unreachable. `fix` deletes the whole dead run.
  */
 class DeadCodeCheckTest extends Test {
 
@@ -61,10 +62,9 @@ class DeadCodeCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { ').length);
 	}
 
-	public function testFixReturnsEmpty(): Void {
-		final src: String = 'class C {\n\tfunction f():Int {\n\t\treturn 1;\n\t\ttrace("x");\n\t}\n}';
-		final check: DeadCode = new DeadCode();
-		Assert.equals(0, check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()).length);
+	public function testFixDeletesDeadRun(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\treturn;\n\t\ta();\n\t\tb();\n\t}\n}';
+		Assert.equals('class C {\n\tfunction f():Void {\n\t\treturn;\n\t}\n}', applyFix(src));
 	}
 
 	public function testRegisteredInBuiltins(): Void {
@@ -75,6 +75,25 @@ class DeadCodeCheckTest extends Test {
 
 	private function violations(src: String): Array<Violation> {
 		return new DeadCode().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	private function applyFix(src: String): String {
+		final check: DeadCode = new DeadCode();
+		final edits: Array<{ span: Span, text: String }> = check.fix(
+			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
+		);
+		edits.sort((a, b) -> b.span.from - a.span.from);
+		var out: String = src;
+		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
+		return out;
+	}
+
+	public function testFixNestedDeadRunDeletesOuter(): Void {
+		// An outer dead run contains a nested block with its own dead run; the outer
+		// deletion subsumes the inner one — `fix` returns a single non-overlapping
+		// edit and the whole outer run (incl. the nested block) is removed.
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\treturn;\n\t\twhile (true) {\n\t\t\tbreak;\n\t\t\tinner();\n\t\t}\n\t\touter();\n\t}\n}';
+		Assert.equals('class C {\n\tfunction f():Void {\n\t\treturn;\n\t}\n}', applyFix(src));
 	}
 
 }

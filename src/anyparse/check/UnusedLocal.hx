@@ -56,14 +56,6 @@ import anyparse.query.SymbolIndex;
 @:nullSafety(Strict)
 final class UnusedLocal implements Check {
 
-	/**
-	 * Statement-position local declaration kinds — a plain local `var` /
-	 * `final`. Excludes params, `for` iterators, `catch` vars, class fields,
-	 * and the expression-position `VarExpr` / `FinalExpr` twins (not a
-	 * standalone deletable statement).
-	 */
-	private static final LOCAL_DECL_KINDS: Array<String> = ['VarStmt', 'FinalStmt'];
-
 	public function new() {}
 
 	public function id(): String {
@@ -78,11 +70,12 @@ final class UnusedLocal implements Check {
 		final shape: RefShape = plugin.refShape();
 		final scopeKinds: Array<String> = shape.scopeKinds;
 		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
+		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> =
 				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
-			if (tree != null) walk(violations, entry.file, entry.source, tree, null, scopeKinds, opaqueKinds);
+			if (tree != null) walk(violations, entry.file, entry.source, tree, null, scopeKinds, opaqueKinds, localDeclKinds);
 		}
 		return violations;
 	}
@@ -94,14 +87,18 @@ final class UnusedLocal implements Check {
 	 * removed (`lineExtendedSpan`) so the batched `canonicalize` leaves no
 	 * blank residue; a side-effecting initializer is skipped (no edit).
 	 */
-	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<{ span: Span, text: String }> {
+	public function fix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
 		final edits: Array<{ span: Span, text: String }> = [];
 		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
 		if (tree == null) return edits;
 
-		final opaqueKinds: Array<String> = plugin.refShape().opaqueKinds ?? [];
+		final shape: RefShape = plugin.refShape();
+		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
+		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
 		final declByFrom: Map<Int, QueryNode> = [];
-		collectLocalDecls(tree, declByFrom, opaqueKinds);
+		collectLocalDecls(tree, declByFrom, opaqueKinds, localDeclKinds);
 
 		for (v in violations) {
 			if (v.severity != Severity.Warning) continue;
@@ -127,12 +124,12 @@ final class UnusedLocal implements Check {
 	 */
 	private static function walk(
 		out: Array<Violation>, file: String, source: String, node: QueryNode, enclosingScope: Null<QueryNode>, scopeKinds: Array<String>,
-		opaqueKinds: Array<String>
+		opaqueKinds: Array<String>, localDeclKinds: Array<String>
 	): Void {
 		if (opaqueKinds.contains(node.kind)) return;
-		if (LOCAL_DECL_KINDS.contains(node.kind)) checkDecl(out, file, source, node, enclosingScope);
+		if (localDeclKinds.contains(node.kind)) checkDecl(out, file, source, node, enclosingScope);
 		final childScope: Null<QueryNode> = scopeKinds.contains(node.kind) ? node : enclosingScope;
-		for (c in node.children) walk(out, file, source, c, childScope, scopeKinds, opaqueKinds);
+		for (c in node.children) walk(out, file, source, c, childScope, scopeKinds, opaqueKinds, localDeclKinds);
 	}
 
 	/**
@@ -164,13 +161,15 @@ final class UnusedLocal implements Check {
 	 * offset, skipping reification (`opaqueKinds`) subtrees so the autofix
 	 * never resolves to a binding inside one.
 	 */
-	private static function collectLocalDecls(node: QueryNode, out: Map<Int, QueryNode>, opaqueKinds: Array<String>): Void {
+	private static function collectLocalDecls(
+		node: QueryNode, out: Map<Int, QueryNode>, opaqueKinds: Array<String>, localDeclKinds: Array<String>
+	): Void {
 		if (opaqueKinds.contains(node.kind)) return;
-		if (LOCAL_DECL_KINDS.contains(node.kind)) {
+		if (localDeclKinds.contains(node.kind)) {
 			final span: Null<Span> = node.span;
 			if (span != null) out[span.from] = node;
 		}
-		for (c in node.children) collectLocalDecls(c, out, opaqueKinds);
+		for (c in node.children) collectLocalDecls(c, out, opaqueKinds, localDeclKinds);
 	}
 
 }
