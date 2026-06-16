@@ -348,6 +348,11 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 				'NullCoal'
 			],
 			functionKinds: ['FnMember', 'FinalModifiedMember', 'FnDecl', 'LocalFnStmt'],
+			comparisonKinds: ['Eq', 'NotEq', 'Lt', 'LtEq', 'Gt', 'GtEq', 'And', 'Or'],
+			assignKind: 'Assign',
+			callKind: 'Call',
+			caseBranchKind: 'CaseBranch',
+			parenKind: 'ParenExpr',
 		};
 	}
 

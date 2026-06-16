@@ -49,7 +49,7 @@ class LintConfigCliTest extends Test {
 
 	public function testComplexityMaxOverride(): Void {
 		#if (sys || nodejs)
-		final foo: String = 'package p;\nclass C {\n\tpublic function f(a:Bool):Bool { return a && a; }\n}';
+		final foo: String = 'package p;\nclass C {\n\tpublic function f(a:Bool, b:Bool):Bool { return a && b; }\n}';
 		final tight: String = dirWith('{"rules":{"complexity":{"max":1}}}', foo);
 		Assert.equals(1, Cli.run(['lint', '--fail-on', 'warning', '$tight/Foo.hx']), 'max 1 flags the score-2 function');
 		cleanup(tight);

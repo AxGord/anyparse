@@ -32,7 +32,12 @@ final class Linter {
 			new UnusedPrivate(),
 			new Complexity(),
 			new FoldStringLiterals(),
-			new DeadCode()
+			new DeadCode(),
+			new EmptyBlock(),
+			new IdenticalOperands(),
+			new SelfAssignment(),
+			new DuplicateCase(),
+			new RedundantParens()
 		];
 	}
 

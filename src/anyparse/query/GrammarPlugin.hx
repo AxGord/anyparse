@@ -274,6 +274,39 @@ typedef RefShape = {
 	 * branch counting stops at a nested one (it is measured on its own).
 	 */
 	@:optional var functionKinds: Array<String>;
+
+	/**
+	 * Binary-operator kinds for which identical operands are suspicious — the
+	 * `identical-operands` check flags `a == a` / `a != a` / `a < a` / `a && a` and
+	 * the like. Optional; a grammar that leaves it unset makes the check a no-op.
+	 */
+	@:optional var comparisonKinds: Array<String>;
+
+	/**
+	 * The assignment node kind — the `self-assignment` check flags a bare-identifier
+	 * assignment to itself (`x = x`). Optional; unset makes the check a no-op.
+	 */
+	@:optional var assignKind: String;
+
+	/**
+	 * The function-call node kind — lets the `identical-operands` check EXCLUDE an
+	 * operand that contains a call (so `g() == g()`, whose two calls may differ, is
+	 * not flagged). Optional.
+	 */
+	@:optional var callKind: String;
+
+	/**
+	 * The switch case-branch node kind — the `duplicate-case` check flags a second
+	 * unguarded branch whose pattern source repeats an earlier one. Optional; unset
+	 * makes the check a no-op.
+	 */
+	@:optional var caseBranchKind: String;
+
+	/**
+	 * The parenthesized-expression node kind — the `redundant-parens` check flags a
+	 * redundant double wrap (`((e))`). Optional; unset makes the check a no-op.
+	 */
+	@:optional var parenKind: String;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {

@@ -951,4 +951,23 @@ final class RefactorSupport {
 		return !index.hasSubtype(owner) && !index.hasAccessGrant(owner) && source.indexOf('@:allow') < 0;
 	}
 
+	/**
+	 * Whether spanned nodes `a` and `b` cover the same (trimmed) source text. Both
+	 * must carry a span — a null span yields `false`, since the texts cannot be
+	 * compared.
+	 */
+	public static function sameSource(a: QueryNode, b: QueryNode, source: String): Bool {
+		final sa: Null<Span> = a.span;
+		final sb: Null<Span> = b.span;
+		if (sa == null || sb == null) return false;
+		return StringTools.trim(source.substring(sa.from, sa.to)) == StringTools.trim(source.substring(sb.from, sb.to));
+	}
+
+	/** Whether the subtree rooted at `node` contains any node of kind `kind`. */
+	public static function subtreeContainsKind(node: QueryNode, kind: String): Bool {
+		if (node.kind == kind) return true;
+		for (c in node.children) if (subtreeContainsKind(c, kind)) return true;
+		return false;
+	}
+
 }

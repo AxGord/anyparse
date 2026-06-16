@@ -248,6 +248,11 @@ rule-specific option (e.g. complexity's `"max"`, which takes precedence over a
 | `complexity` | a function whose cyclomatic complexity exceeds the threshold — the built-in default (10), or a `CyclomaticComplexity` max adapted from a project's `checkstyle.json` (decision points: `if`/`while`/`for`/`case`/`catch`/`&&`/`\|\|`/`?:`/`??`) — report-only |
 | `fold-adjacent-string-literals` | a `+` chain of adjacent same-quote plain string literals that can be merged into one (`"a" + "b"` → `"ab"`); `--fix` folds it (interpolated / mixed-quote / non-literal operands left alone) |
 | `dead-code` | a statement made unreachable by a preceding unconditional `return` / `throw` / `break` / `continue` in the same block — purely structural (no type information), report-only |
+| `empty-block` | an empty control-flow block — an `if` / `else` / loop / `try` / `catch` body written as `{}` with no statements (a comment-only block is left alone, an empty function body is not flagged) — purely structural, report-only |
+| `identical-operands` | a binary operator whose two operands are textually identical (`a == a`, `a != a`, `a && a`, `a.x == a.x`) — almost always a bug; an operand containing a call (`g() == g()`) is left alone — report-only |
+| `self-assignment` | a bare identifier assigned to itself (`x = x`); a field self-assignment (`this.x = this.x`, which may invoke a setter) is left alone — report-only |
+| `duplicate-case` | a switch branch whose pattern repeats an earlier branch in the same switch (dead code); guarded branches with the same pattern but different guards are left alone — report-only |
+| `redundant-parens` | a parenthesized expression redundantly wrapped in another (`((e))` / `(((e)))`); `Info`, `--fix` unwraps to a single pair (`(e)`) |
 
 ### Grammar platform
 
