@@ -2194,7 +2194,6 @@ class WrapList {
 					case _:
 						false;
 				}
-				;
 			case IfFullLineExceeds(_, brk, _): isOPLShape(brk);
 			case _: false;
 		};
@@ -2247,7 +2246,6 @@ class WrapList {
 					case _:
 						false;
 				}
-				;
 			case _: false;
 		};
 	}
