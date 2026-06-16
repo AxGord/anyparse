@@ -307,6 +307,29 @@ typedef RefShape = {
 	 * redundant double wrap (`((e))`). Optional; unset makes the check a no-op.
 	 */
 	@:optional var parenKind: String;
+
+	/**
+	 * The boolean-literal node kind — lets the `constant-condition` check
+	 * recognise a literal `true` / `false` used as a condition. Optional; unset
+	 * makes the check a no-op.
+	 */
+	@:optional var boolLitKind: String;
+
+	/**
+	 * Conditional node kinds whose `children[0]` is the condition — the
+	 * `constant-condition` check flags a `boolLitKind` condition here (`if (true)`
+	 * / `if (false)`: a branch always or never taken). Loops are intentionally
+	 * excluded (`while (true)` is an idiomatic infinite loop). Optional; unset
+	 * makes the check a no-op.
+	 */
+	@:optional var branchConditionKinds: Array<String>;
+
+	/**
+	 * The empty-statement node kind — a stray `;`. The `empty-statement` check
+	 * flags every one and its `--fix` deletes it. Optional; unset makes the check
+	 * a no-op.
+	 */
+	@:optional var emptyStmtKind: String;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {

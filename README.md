@@ -253,6 +253,8 @@ rule-specific option (e.g. complexity's `"max"`, which takes precedence over a
 | `self-assignment` | a bare identifier assigned to itself (`x = x`); a field self-assignment (`this.x = this.x`, which may invoke a setter) is left alone — report-only |
 | `duplicate-case` | a switch branch whose pattern repeats an earlier branch in the same switch (dead code); guarded branches with the same pattern but different guards are left alone — report-only |
 | `redundant-parens` | a parenthesized expression redundantly wrapped in another (`((e))` / `(((e)))`); `Info`, `--fix` unwraps to a single pair (`(e)`) |
+| `constant-condition` | a boolean literal as an `if` condition (`if (true)` / `if (false)`) — a branch always or never taken; loops are left alone (`while (true)` is an idiomatic infinite loop) — purely structural, report-only |
+| `empty-statement` | a stray empty statement (a lone `;`); `--fix` deletes it (the whole line when the `;` sits alone, otherwise just the `;`) — purely structural |
 
 ### Grammar platform
 

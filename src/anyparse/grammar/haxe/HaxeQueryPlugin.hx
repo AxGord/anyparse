@@ -353,6 +353,9 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 			callKind: 'Call',
 			caseBranchKind: 'CaseBranch',
 			parenKind: 'ParenExpr',
+			boolLitKind: 'BoolLit',
+			branchConditionKinds: ['IfStmt', 'IfExpr'],
+			emptyStmtKind: 'EmptyStmt',
 		};
 	}
 

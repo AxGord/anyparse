@@ -275,6 +275,8 @@ import unit.IdenticalOperandsCheckTest;
 import unit.SelfAssignmentCheckTest;
 import unit.DuplicateCaseCheckTest;
 import unit.RedundantParensCheckTest;
+import unit.ConstantConditionCheckTest;
+import unit.EmptyStatementCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -543,6 +545,8 @@ class RunTests {
 		addCase(new SelfAssignmentCheckTest());
 		addCase(new DuplicateCaseCheckTest());
 		addCase(new RedundantParensCheckTest());
+		addCase(new ConstantConditionCheckTest());
+		addCase(new EmptyStatementCheckTest());
 		addCase(new FoldStringLiteralsCheckTest());
 		addCase(new NamingCheckTest());
 		addCase(new FmtSliceTest());
