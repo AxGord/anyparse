@@ -4,6 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
@@ -14,7 +15,10 @@ import haxe.Exception;
  * `try` / `catch` body written as `{}` with no statements: a forgotten
  * implementation, or an empty `catch` that silently swallows an error. Purely
  * structural (no type information needed), so it holds even without a
- * type-checker. Report-only: a `Warning` without an autofix in this slice.
+ * type-checker. Autofixable in part — `--fix` removes the provably-safe subset
+ * (an empty `else {}`, and an empty no-else `if (cond) {}` with a
+ * side-effect-free condition); an empty loop, `try`, or `catch` body stays a
+ * report-only `Warning`.
  *
  * ## Grammar-agnostic
  *
@@ -55,11 +59,34 @@ final class EmptyBlock implements Check {
 		return violations;
 	}
 
-	/** Empty-block has no autofix in this slice — report-only. */
+	/**
+	 * Delete the provably-safe subset of empty blocks: an empty `else {}` (the
+	 * ` else {}` is cut, keeping the `if` and its non-empty then-branch) and an
+	 * empty no-else `if (cond) {}` whose condition is side-effect-free (the whole
+	 * `if` is dropped). The rest stays report-only — an empty loop body or an
+	 * empty `if` with a side-effecting condition would lose that evaluation, and
+	 * an empty `catch {}` cannot be removed (a `try` needs its catch).
+	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return [];
+		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+		if (tree == null) return [];
+
+		// Statement-list kinds: a no-else `if (cond) {}` is safe to DELETE only
+		// when it sits in one of these; as a single-statement branch body its
+		// removal would strand the enclosing branch. Absent seam -> never delete.
+		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
+		final blockKinds: Array<String> = support != null ? support.blockKinds() : [];
+
+		final flagged: Array<String> = [];
+		for (v in violations) {
+			final span: Null<Span> = v.span;
+			if (span != null) flagged.push('${span.from}:${span.to}');
+		}
+		final edits: Array<{ span: Span, text: String }> = [];
+		collectEmptyFixes(tree, null, null, source, blockKinds, flagged, edits);
+		return RefactorSupport.dropContainedEdits(edits);
 	}
 
 	/** Walk `node`, flagging every empty control-flow block reached. */
@@ -83,6 +110,55 @@ final class EmptyBlock implements Check {
 	private static function isBlank(span: Span, source: String): Bool {
 		final inner: String = source.substring(span.from + 1, span.to - 1);
 		return StringTools.trim(inner) == '';
+	}
+
+	/** Walk `node` with its `parent` and `grandparent`, collecting safe deletions for flagged empty blocks. */
+	private static function collectEmptyFixes(
+		node: QueryNode, parent: Null<QueryNode>, grandparent: Null<QueryNode>, source: String, blockKinds: Array<String>,
+		flagged: Array<String>, edits: Array<{ span: Span, text: String }>
+	): Void {
+		final span: Null<Span> = node.span;
+		if (span != null && parent != null && flagged.contains('${span.from}:${span.to}')) {
+			final edit: Null<{ span: Span, text: String }> = emptyBlockEdit(node, parent, grandparent, source, blockKinds);
+			if (edit != null) edits.push(edit);
+		}
+		for (c in node.children) collectEmptyFixes(c, node, parent, source, blockKinds, flagged, edits);
+	}
+
+	/**
+	 * The deletion edit for a flagged empty `BlockStmt` whose `parent` makes it
+	 * safe to remove, or null when no safe edit applies. An empty `else` branch
+	 * (the parent `if` has a then AND this else) cuts ` else {}`; an empty
+	 * no-else then-branch with a side-effect-free condition drops the whole `if`
+	 * — but only when that `if` is itself a statement-list member (`grandparent`
+	 * is in `blockKinds`). As a single-statement branch body, dropping it would
+	 * strand the enclosing branch (a dangling `if` / `else`), so it stays
+	 * report-only.
+	 */
+	private static function emptyBlockEdit(
+		node: QueryNode, parent: QueryNode, grandparent: Null<QueryNode>, source: String, blockKinds: Array<String>
+	): Null<{ span: Span, text: String }> {
+		if (parent.kind != 'IfStmt') return null;
+		final nspan: Null<Span> = node.span;
+		if (nspan == null) return null;
+		final kids: Array<QueryNode> = parent.children;
+		// Empty `else {}` — this node is the else branch (then + else both present).
+		if (kids.length >= 3 && kids[2] == node) {
+			final thenSpan: Null<Span> = kids[1].span;
+			if (thenSpan == null) return null;
+			return { span: RefactorSupport.lineExtendedSpan(source, new Span(thenSpan.to, nspan.to)), text: '' };
+		}
+		// Empty no-else `if (cond) {}` with a side-effect-free condition — safe to
+		// drop only when the `if` is a statement-list member, not a branch body.
+		if (
+			kids.length == 2 && kids[1] == node && RefactorSupport.isSideEffectFree(kids[0]) && grandparent != null
+			&& blockKinds.contains(grandparent.kind)
+		) {
+			final pspan: Null<Span> = parent.span;
+			if (pspan == null) return null;
+			return { span: RefactorSupport.lineExtendedSpan(source, pspan), text: '' };
+		}
+		return null;
 	}
 
 }
