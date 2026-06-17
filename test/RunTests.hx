@@ -278,6 +278,9 @@ import unit.RedundantParensCheckTest;
 import unit.ConstantConditionCheckTest;
 import unit.EmptyStatementCheckTest;
 import unit.RedundantElseCheckTest;
+import unit.ComparisonToBooleanCheckTest;
+import unit.CollapsibleIfCheckTest;
+import unit.DoubleNegationCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -549,6 +552,9 @@ class RunTests {
 		addCase(new ConstantConditionCheckTest());
 		addCase(new EmptyStatementCheckTest());
 		addCase(new RedundantElseCheckTest());
+		addCase(new ComparisonToBooleanCheckTest());
+		addCase(new CollapsibleIfCheckTest());
+		addCase(new DoubleNegationCheckTest());
 		addCase(new FoldStringLiteralsCheckTest());
 		addCase(new NamingCheckTest());
 		addCase(new FmtSliceTest());

@@ -348,6 +348,47 @@ typedef RefShape = {
 	 * unset makes the check a no-op.
 	 */
 	@:optional var ifStatementKinds: Array<String>;
+
+	/**
+	 * Equality-operator kinds — the `comparison-to-boolean` check flags a comparison
+	 * against a boolean literal (`x == true` / `x != false`). Optional; unset makes the
+	 * check a no-op.
+	 */
+	@:optional var equalityKinds: Array<String>;
+
+	/**
+	 * The null-safe field-access node kind (`a?.b`) — lets `comparison-to-boolean` SKIP an
+	 * operand reached through `?.`, whose value may be `Null<Bool>`, so the `== true` is
+	 * load-bearing under strict null-safety rather than redundant. Optional.
+	 */
+	@:optional var nullSafeAccessKind: String;
+
+	/**
+	 * The logical-not node kind — the `double-negation` check flags `!!x` (a `notKind`
+	 * node directly wrapping another). Optional; unset makes the check a no-op.
+	 */
+	@:optional var notKind: String;
+
+	/**
+	 * The statement-block node kind — lets `collapsible-if` unwrap a single-statement
+	 * `{ … }` then-branch to reach a nested `if`. Optional; unset means only a brace-free
+	 * nested `if` is collapsed.
+	 */
+	@:optional var blockStmtKind: String;
+
+	/**
+	 * Condition node kinds that bind no tighter than `&&`, so they need parentheses when
+	 * merged — `collapsible-if` wraps an outer/inner condition of one of these (`||`,
+	 * ternary, `??`, assignment) so `if (a || c) if (b)` collapses to `if ((a || c) && b)`, not the
+	 * mis-precedenced `if (a || c && b)`. Optional.
+	 */
+	@:optional var andLowerPrecedenceKinds: Array<String>;
+
+	/**
+	 * The logical-and operator text — the joiner `collapsible-if` emits between the two
+	 * merged conditions. Optional; unset disables the `collapsible-if` autofix.
+	 */
+	@:optional var andOperatorText: String;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {

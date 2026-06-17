@@ -358,6 +358,31 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 			emptyStmtKind: 'EmptyStmt',
 			localDeclKinds: ['VarStmt', 'FinalStmt'],
 			ifStatementKinds: ['IfStmt'],
+			equalityKinds: ['Eq', 'NotEq'],
+			nullSafeAccessKind: 'SafeFieldAccess',
+			notKind: 'Not',
+			blockStmtKind: 'BlockStmt',
+			andLowerPrecedenceKinds: [
+				'Or',
+				'Ternary',
+				'NullCoal',
+				'Assign',
+				'AddAssign',
+				'SubAssign',
+				'MulAssign',
+				'DivAssign',
+				'ModAssign',
+				'ShlAssign',
+				'ShrAssign',
+				'UShrAssign',
+				'BitOrAssign',
+				'BitAndAssign',
+				'BitXorAssign',
+				'NullCoalAssign',
+				'BoolAndAssign',
+				'BoolOrAssign'
+			],
+			andOperatorText: '&&',
 		};
 	}
 
