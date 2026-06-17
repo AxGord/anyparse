@@ -387,6 +387,8 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 			nullLiteralKind: 'NullLit',
 			eqKind: 'Eq',
 			notEqKind: 'NotEq',
+			newExprKind: 'NewExpr',
+			fieldAccessKind: 'FieldAccess',
 		};
 	}
 

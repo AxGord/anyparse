@@ -44,7 +44,10 @@ final class Linter {
 			new ComparisonToBoolean(),
 			new CollapsibleIf(),
 			new DoubleNegation(),
-			new PreferNullCoalescing()
+			new PreferNullCoalescing(),
+			new PreferArrayLiteral(),
+			new PreferMapLiteral(),
+			new PreferInterpolation()
 		];
 	}
 

@@ -283,6 +283,9 @@ import unit.CollapsibleIfCheckTest;
 import unit.DoubleNegationCheckTest;
 import unit.LintFixFixedPointCliTest;
 import unit.PreferNullCoalescingCheckTest;
+import unit.PreferArrayLiteralCheckTest;
+import unit.PreferMapLiteralCheckTest;
+import unit.PreferInterpolationCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -559,6 +562,9 @@ class RunTests {
 		addCase(new CollapsibleIfCheckTest());
 		addCase(new DoubleNegationCheckTest());
 		addCase(new PreferNullCoalescingCheckTest());
+		addCase(new PreferArrayLiteralCheckTest());
+		addCase(new PreferMapLiteralCheckTest());
+		addCase(new PreferInterpolationCheckTest());
 		addCase(new FoldStringLiteralsCheckTest());
 		addCase(new NamingCheckTest());
 		addCase(new FmtSliceTest());

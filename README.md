@@ -262,6 +262,9 @@ rule-specific option (e.g. complexity's `"max"`, which takes precedence over a
 | `collapsible-if` | an `if` whose sole then-branch is another `if`, neither carrying an `else` (`if (a) { if (b) … }`) — the two conditions merge with `&&`; `Warning`, `--fix` rewrites to `if (a && b) …` (behaviour-preserving via short-circuit), parenthesizing a lower-precedence operand (`if (a || c) if (b)` → `if ((a || c) && b)`) |
 | `double-negation` | a redundant double logical negation (`!!x`); `Info`, report-only — removing it could change behaviour if the operand drives a property getter, so the cleanup is left to a human |
 | `prefer-null-coalescing` | a null-guard ternary that `??` replaces — `x != null ? x : y` / `null != x ? x : y` / `x == null ? y : x` / `null == x ? y : x` all collapse to `x ?? y`; `Info`, `--fix` rewrites it (a guarded value containing a call is left alone — `??` evaluates it once, the ternary twice; a bare-ternary fallback is parenthesized since `??` binds tighter than `?:`) |
+| `prefer-array-literal` | an empty-argument `new Array()` / `new Array<T>()` replaceable with the array literal `[]`; `Info`, `--fix` rewrites it (the element type carries through the assignment target's annotation; an unannotated `var x = new Array<Int>()`, whose only type source is the constructor's own parameter, is left alone) |
+| `prefer-map-literal` | an empty-argument `new Map()` / `new Map<K, V>()` replaceable with the map literal `[]`; `Info`, `--fix` rewrites it (same annotation caveat as `prefer-array-literal`) |
+| `prefer-interpolation` | a single-argument `Std.string(x)` replaceable with string interpolation (`'$x'` for a simple identifier, `'${expr}'` for any other interpolation-safe expression); `Info`, `--fix` rewrites it (an argument whose source carries a quote or `$` is left alone; surrounding string concatenation is not merged) |
 
 ### Grammar platform
 

@@ -414,6 +414,21 @@ typedef RefShape = {
 	 * for `prefer-null-coalescing`. Optional.
 	 */
 	@:optional var notEqKind: String;
+
+	/**
+	 * The `new T(...)` node kind — `prefer-array-literal` / `prefer-map-literal`
+	 * recognise a `new Array()` / `new Map()` replaceable by the `[]` literal. The
+	 * node's `name` is the constructed type; its children are type parameters, not
+	 * constructor arguments. Optional; unset makes both checks a no-op.
+	 */
+	@:optional var newExprKind: String;
+
+	/**
+	 * The field-access node kind (`a.b`) — lets `prefer-interpolation` recognise the
+	 * `Std.string(...)` call it rewrites to string interpolation. Optional; unset makes
+	 * the check a no-op.
+	 */
+	@:optional var fieldAccessKind: String;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {
