@@ -281,6 +281,7 @@ import unit.RedundantElseCheckTest;
 import unit.ComparisonToBooleanCheckTest;
 import unit.CollapsibleIfCheckTest;
 import unit.DoubleNegationCheckTest;
+import unit.LintFixFixedPointCliTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -538,6 +539,7 @@ class RunTests {
 		addCase(new SymbolIndexSliceTest());
 		addCase(new SymbolQuerySliceTest());
 		addCase(new LintConfigCliTest());
+		addCase(new LintFixFixedPointCliTest());
 		addCase(new LintConfigTest());
 		addCase(new LintSliceTest());
 		addCase(new LintFailOnCliTest());

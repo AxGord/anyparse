@@ -214,7 +214,9 @@ Because raw text editing has no such guarantee, `new` is the way to create a fil
 
 `lint <scope> [--rule <id>] [--fix]` runs grammar-agnostic checks and reports violations
 grouped by file; `--fix` applies the auto-fixable subset (re-parse-validated like every
-rewrite). A check is a plugin — a new one is a new class, not a core change.
+rewrite), iterating to a fixed point so a fix that exposes another finding — a deleted
+dead-code run leaving a local unused, a de-nested `else` revealing the next — is resolved
+in the same run. A check is a plugin — a new one is a new class, not a core change.
 
 Findings are suppressible inline: a trailing `// noqa` (or `// noqa: <rule>,<rule>` for
 named rules) clears findings on its line, and `// CHECKSTYLE:OFF` … `// CHECKSTYLE:ON`

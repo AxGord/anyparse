@@ -1174,7 +1174,7 @@ final class Cli {
 			: checks;
 		final all: Array<Violation> = Linter.run(files, plugin, activeChecks, lintConfig);
 
-		if (fix) return applyLintFixes(files, all, activeChecks, plugin);
+		if (fix) return applyLintFixes(files, activeChecks, plugin, lintConfig);
 
 		final shown: Array<Violation> = includeInfo ? all : all.filter(v -> v.severity != Severity.Info);
 
@@ -1231,52 +1231,83 @@ final class Cli {
 	}
 
 	/**
-	 * Apply each check's autofix for every file in `--fix` mode. Per file, the
-	 * fixable edits from all active checks are batched into ONE
-	 * `RefactorSupport.canonicalize` (so several deletions apply end-to-start
-	 * without span-shift) and written in place. A non-canonical file is
-	 * refused by the canonical gate and skipped with a note — `--fix` never
-	 * reflows unrelated hand-wrapping. A summary goes to stderr; the exit code
-	 * is success.
+	 * Apply each active check's autofix across the file set in `--fix` mode,
+	 * iterating to a FIXED POINT. A fix can expose a new finding — deleting a
+	 * dead-code run leaves a local unused; de-nesting a `redundant-else`
+	 * `else if` chain surfaces the inner `else` — so a single pass is not
+	 * enough. Each pass re-lints the in-memory (already-fixed) sources and
+	 * re-applies; only files a prior pass changed are revisited (a fix exposes
+	 * new findings only in a file it edited). Per file, a pass batches the
+	 * fixable edits from every check into ONE `RefactorSupport.canonicalize`
+	 * (so several deletions apply end-to-start without span-shift). Sources are
+	 * mutated in memory and flushed to disk once at the end. A non-canonical
+	 * first-pass file is refused by the canonical gate and skipped with a note;
+	 * a later-pass refusal (a writer-idempotency wrinkle on our own output)
+	 * just stops that file quietly. The pass count is capped as a runaway guard.
+	 * Exit is always success — `--fix` is best-effort.
 	 */
 	private static function applyLintFixes(
-		files: Array<{ file: String, source: String }>, all: Array<Violation>, checks: Array<Check>, plugin: GrammarPlugin
+		files: Array<{ file: String, source: String }>, checks: Array<Check>, plugin: GrammarPlugin, lintConfig: LintConfig
 	): Int {
-		// One cross-file index for the whole set — a check that hardens a fix across
-		// files (naming's private-field rename) consults it; the rest ignore it.
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final maxPasses: Int = 10;
+		// hxformat.json is on disk and source-independent — discover once per file.
+		final optsByFile: Map<String, Null<String>> = [];
+		for (entry in files) optsByFile[entry.file] = discoverFormatConfig(entry.file);
+
+		// Files eligible next pass: pass 1 = all; later passes = only the ones a
+		// prior pass changed (a same-file fix exposes findings only where it edited; a cross-file fix would need a re-run).
+		var active: Array<{ file: String, source: String }> = files.copy();
+		final noted: Array<String> = [];
+		final changedFiles: Array<String> = [];
 		var fixedCount: Int = 0;
-		var fixedFiles: Int = 0;
-		var skipped: Int = 0;
-		for (entry in files) {
-			final fileViolations: Array<Violation> = all.filter(v -> v.file == entry.file);
-			if (fileViolations.length == 0) continue;
+		var passes: Int = 0;
+		var hitCap: Bool = false;
 
-			final edits: Array<{ span: Span, text: String }> = [];
-			for (check in checks) {
-				final own: Array<Violation> = fileViolations.filter(v -> v.rule == check.id());
-				if (own.length == 0) continue;
-				for (edit in check.fix(entry.source, own, plugin, index)) edits.push(edit);
+		while (active.length > 0) {
+			if (passes >= maxPasses) {
+				hitCap = true;
+				break;
 			}
-			// Different checks (or one check's nested findings) can emit deletions whose
-			// spans nest — e.g. a dead run that contains a self-assignment line. Applying
-			// nested edits blindly corrupts the splice, so keep only the outer deletion.
-			final disjoint: Array<{ span: Span, text: String }> = RefactorSupport.dropContainedEdits(edits);
-			if (disjoint.length == 0) continue;
-
-			final optsJson: Null<String> = discoverFormatConfig(entry.file);
-			switch RefactorSupport.canonicalize(entry.source, disjoint, false, plugin, optsJson) {
-				case Ok(text):
-					writeFile(entry.file, text);
-					fixedFiles++;
-					fixedCount += disjoint.length;
-				case Err(message):
-					stderr('apq lint --fix: ${entry.file}: $message\n');
-					skipped++;
+			passes++;
+			// Rebuild over the CURRENT (mutated) sources — naming's cross-file
+			// rename consults the index, so it must reflect this pass's input.
+			final index: SymbolIndex = SymbolIndex.build(files, plugin);
+			final violations: Array<Violation> = Linter.run(files, plugin, checks, lintConfig);
+			final nextActive: Array<{ file: String, source: String }> = [];
+			for (entry in active) {
+				final fileViolations: Array<Violation> = violations.filter(v -> v.file == entry.file);
+				if (fileViolations.length == 0) continue;
+				final edits: Array<{ span: Span, text: String }> = [];
+				for (check in checks) {
+					final own: Array<Violation> = fileViolations.filter(v -> v.rule == check.id());
+					if (own.length == 0) continue;
+					for (edit in check.fix(entry.source, own, plugin, index)) edits.push(edit);
+				}
+				final disjoint: Array<{ span: Span, text: String }> = RefactorSupport.dropContainedEdits(edits);
+				if (disjoint.length == 0) continue;
+				switch RefactorSupport.canonicalize(entry.source, disjoint, false, plugin, optsByFile[entry.file]) {
+					case Ok(text):
+						if (text != entry.source) {
+							entry.source = text;
+							if (!changedFiles.contains(entry.file)) changedFiles.push(entry.file);
+							fixedCount += disjoint.length;
+							nextActive.push(entry);
+						}
+					case Err(message):
+						if (passes == 1 && !noted.contains(entry.file)) {
+							stderr('apq lint --fix: ${entry.file}: $message\n');
+							noted.push(entry.file);
+						}
+				}
 			}
+			active = nextActive;
 		}
-		final tail: String = skipped > 0 ? ', $skipped file(s) skipped' : '';
-		stderr('apq lint --fix: fixed $fixedCount issue(s) in $fixedFiles file(s)$tail\n');
+
+		for (entry in files) if (changedFiles.contains(entry.file)) writeFile(entry.file, entry.source);
+
+		final skipTail: String = noted.length > 0 ? ', ${noted.length} file(s) skipped' : '';
+		final capTail: String = hitCap ? ' (stopped at $maxPasses passes — re-run if more remain)' : '';
+		stderr('apq lint --fix: fixed $fixedCount issue(s) in ${changedFiles.length} file(s) over $passes pass(es)$skipTail$capTail\n');
 		return EXIT_OK;
 	}
 
