@@ -261,6 +261,7 @@ rule-specific option (e.g. complexity's `"max"`, which takes precedence over a
 | `comparison-to-boolean` | a comparison against a boolean literal (`x == true` / `x != false`) where the literal adds nothing; `Info`, report-only — an operand reached through a null-safe access (`obj?.flag == true`) is skipped, since that `== true` may be load-bearing on a `Null<Bool>` under strict null-safety, and removing it cannot be proven safe without type information |
 | `collapsible-if` | an `if` whose sole then-branch is another `if`, neither carrying an `else` (`if (a) { if (b) … }`) — the two conditions merge with `&&`; `Warning`, `--fix` rewrites to `if (a && b) …` (behaviour-preserving via short-circuit), parenthesizing a lower-precedence operand (`if (a || c) if (b)` → `if ((a || c) && b)`) |
 | `double-negation` | a redundant double logical negation (`!!x`); `Info`, report-only — removing it could change behaviour if the operand drives a property getter, so the cleanup is left to a human |
+| `prefer-null-coalescing` | a null-guard ternary that `??` replaces — `x != null ? x : y` / `null != x ? x : y` / `x == null ? y : x` / `null == x ? y : x` all collapse to `x ?? y`; `Info`, `--fix` rewrites it (a guarded value containing a call is left alone — `??` evaluates it once, the ternary twice; a bare-ternary fallback is parenthesized since `??` binds tighter than `?:`) |
 
 ### Grammar platform
 

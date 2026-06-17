@@ -383,6 +383,10 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 				'BoolOrAssign'
 			],
 			andOperatorText: '&&',
+			ternaryKind: 'Ternary',
+			nullLiteralKind: 'NullLit',
+			eqKind: 'Eq',
+			notEqKind: 'NotEq',
 		};
 	}
 

@@ -389,6 +389,31 @@ typedef RefShape = {
 	 * merged conditions. Optional; unset disables the `collapsible-if` autofix.
 	 */
 	@:optional var andOperatorText: String;
+
+	/**
+	 * The ternary / conditional-expression node kind (`cond ? a : b`) — the
+	 * `prefer-null-coalescing` check rewrites a null-guarding ternary to `??`.
+	 * Optional; unset makes the check a no-op.
+	 */
+	@:optional var ternaryKind: String;
+
+	/**
+	 * The null-literal node kind (`null`) — lets `prefer-null-coalescing`
+	 * recognise the `… != null` / `… == null` guard. Optional.
+	 */
+	@:optional var nullLiteralKind: String;
+
+	/**
+	 * The equality (`==`) operator kind — `prefer-null-coalescing` needs to tell
+	 * `==` from `!=` to know which branch holds the guarded value. Optional.
+	 */
+	@:optional var eqKind: String;
+
+	/**
+	 * The inequality (`!=`) operator kind — the `!=`-form counterpart of `eqKind`
+	 * for `prefer-null-coalescing`. Optional.
+	 */
+	@:optional var notEqKind: String;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {
