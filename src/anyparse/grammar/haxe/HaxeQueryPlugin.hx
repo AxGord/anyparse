@@ -357,6 +357,7 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 			branchConditionKinds: ['IfStmt', 'IfExpr'],
 			emptyStmtKind: 'EmptyStmt',
 			localDeclKinds: ['VarStmt', 'FinalStmt'],
+			ifStatementKinds: ['IfStmt'],
 		};
 	}
 

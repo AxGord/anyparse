@@ -255,6 +255,7 @@ rule-specific option (e.g. complexity's `"max"`, which takes precedence over a
 | `redundant-parens` | a parenthesized expression redundantly wrapped in another (`((e))` / `(((e)))`); `Info`, `--fix` unwraps to a single pair (`(e)`) |
 | `constant-condition` | a boolean literal as an `if` condition (`if (true)` / `if (false)`) — a branch always or never taken; loops are left alone (`while (true)` is an idiomatic infinite loop) — purely structural; `--fix` replaces the `if` with the always-taken branch (`if (true) A [else B]` → `A`, `if (false) A else B` → `B`, a no-else `if (false) A` statement is deleted), leaving only a no-else `if (false)` in expression position report-only |
 | `empty-statement` | a stray empty statement (a lone `;`); `--fix` deletes it (the whole line when the `;` sits alone, otherwise just the `;`) — purely structural |
+| `redundant-else-after-return` | an `else` whose `if` then-branch always exits (`return` / `throw` / `break` / `continue`), so the `else` is needless nesting — flagged only for a block-statement `if` (an expression `if` keeps its required `else`); `Info`, `--fix` de-nests the else body, skipping a body that declares a local (its scope would widen) |
 
 ### Grammar platform
 

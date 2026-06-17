@@ -39,7 +39,8 @@ final class Linter {
 			new DuplicateCase(),
 			new RedundantParens(),
 			new ConstantCondition(),
-			new EmptyStatement()
+			new EmptyStatement(),
+			new RedundantElse()
 		];
 	}
 

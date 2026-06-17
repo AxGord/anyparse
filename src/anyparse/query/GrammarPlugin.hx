@@ -340,6 +340,14 @@ typedef RefShape = {
 	 * so it is left alone). Optional — unset makes both treat it as empty.
 	 */
 	@:optional var localDeclKinds: Array<String>;
+
+	/**
+	 * Statement-position `if` kinds — the `redundant-else-after-return` check flags
+	 * an `else` on one of these whose then-branch always exits. Expression-position
+	 * `if` (`var x = if (c) a else b`) is excluded: its `else` is required. Optional;
+	 * unset makes the check a no-op.
+	 */
+	@:optional var ifStatementKinds: Array<String>;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {
