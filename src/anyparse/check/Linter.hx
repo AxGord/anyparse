@@ -5,6 +5,8 @@ import anyparse.query.GrammarPlugin;
 
 using Lambda;
 
+import anyparse.query.CachingGrammarPlugin;
+
 /**
  * Runs a set of `Check`s over a file set and concatenates their
  * violations. Doubles as the built-in check registry: `builtins()` is the
@@ -69,8 +71,11 @@ final class Linter {
 		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?checks: Array<Check>, ?config: LintConfig
 	): Array<Violation> {
 		final active: Array<Check> = checks ?? builtins();
+		// Parse each file once and share the trees across all checks — each check
+		// parses independently otherwise, so N checks over M files is N*M parses.
+		final cached: GrammarPlugin = plugin is CachingGrammarPlugin ? plugin : new CachingGrammarPlugin(plugin);
 		final out: Array<Violation> = [];
-		for (check in active) for (violation in check.run(files, plugin)) out.push(violation);
+		for (check in active) for (violation in check.run(files, cached)) out.push(violation);
 		if (config != null) for (violation in out) {
 			final sev: Null<Severity> = config.severityFor(violation.rule);
 			if (sev != null) violation.severity = sev;

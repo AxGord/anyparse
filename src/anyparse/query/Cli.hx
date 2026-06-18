@@ -1250,6 +1250,10 @@ final class Cli {
 		files: Array<{ file: String, source: String }>, checks: Array<Check>, plugin: GrammarPlugin, lintConfig: LintConfig
 	): Int {
 		final maxPasses: Int = 10;
+		// Parse each file once and reuse the tree across the SymbolIndex build, every
+		// check, and every fix — keyed by source content, so an unchanged file is
+		// reused across passes and only a rewritten one re-parses on its new content.
+		final cached: GrammarPlugin = new CachingGrammarPlugin(plugin);
 		// hxformat.json is on disk and source-independent — discover once per file.
 		final optsByFile: Map<String, Null<String>> = [];
 		for (entry in files) optsByFile[entry.file] = discoverFormatConfig(entry.file);
@@ -1271,8 +1275,8 @@ final class Cli {
 			passes++;
 			// Rebuild over the CURRENT (mutated) sources — naming's cross-file
 			// rename consults the index, so it must reflect this pass's input.
-			final index: SymbolIndex = SymbolIndex.build(files, plugin);
-			final violations: Array<Violation> = Linter.run(files, plugin, checks, lintConfig);
+			final index: SymbolIndex = SymbolIndex.build(files, cached);
+			final violations: Array<Violation> = Linter.run(files, cached, checks, lintConfig);
 			final nextActive: Array<{ file: String, source: String }> = [];
 			for (entry in active) {
 				final fileViolations: Array<Violation> = violations.filter(v -> v.file == entry.file);
@@ -1281,11 +1285,11 @@ final class Cli {
 				for (check in checks) {
 					final own: Array<Violation> = fileViolations.filter(v -> v.rule == check.id());
 					if (own.length == 0) continue;
-					for (edit in check.fix(entry.source, own, plugin, index)) edits.push(edit);
+					for (edit in check.fix(entry.source, own, cached, index)) edits.push(edit);
 				}
 				final disjoint: Array<{ span: Span, text: String }> = RefactorSupport.dropContainedEdits(edits);
 				if (disjoint.length == 0) continue;
-				switch RefactorSupport.canonicalize(entry.source, disjoint, false, plugin, optsByFile[entry.file]) {
+				switch RefactorSupport.canonicalize(entry.source, disjoint, false, cached, optsByFile[entry.file]) {
 					case Ok(text):
 						if (text != entry.source) {
 							entry.source = text;
@@ -5869,13 +5873,11 @@ final class Cli {
 				return EXIT_USAGE;
 			}
 		}
-		if (candidatesRegex != null) {
-			if (probePath != null || predictStrip || clusterFilter != null || regressionProbe || predictRelax) {
-				stderr(
-					'apq recon: --candidates is mutually exclusive with --probe / --predict-strip / --cluster / --regression-probe / --predict-relax\n'
-				);
-				return EXIT_USAGE;
-			}
+		if (candidatesRegex != null && (probePath != null || predictStrip || clusterFilter != null || regressionProbe || predictRelax)) {
+			stderr(
+				'apq recon: --candidates is mutually exclusive with --probe / --predict-strip / --cluster / --regression-probe / --predict-relax\n'
+			);
+			return EXIT_USAGE;
 		}
 		if (predictRelax) {
 			if (predictStrip) {
@@ -5915,16 +5917,12 @@ final class Cli {
 				return EXIT_USAGE;
 			}
 		}
-		if (permissiveConstruct) {
-			if (
-				probePath != null || predictStrip || predictRelax || regressionProbe || clusterFilter != null || candidatesRegex != null
-				|| patterns.length > 0
-			) {
-				stderr(
-					'apq recon: --permissive-construct is its own mode — mutually exclusive with --probe / --predict-strip / --predict-relax / --regression-probe / --cluster / --candidates / --replace/--with/--delete\n'
-				);
-				return EXIT_USAGE;
-			}
+		if (permissiveConstruct && (probePath != null || predictStrip || predictRelax || regressionProbe || clusterFilter != null
+		|| candidatesRegex != null || patterns.length > 0)) {
+			stderr(
+				'apq recon: --permissive-construct is its own mode — mutually exclusive with --probe / --predict-strip / --predict-relax / --regression-probe / --cluster / --candidates / --replace/--with/--delete\n'
+			);
+			return EXIT_USAGE;
 		}
 		if (writerEqualsAfter) {
 			if (probePath == null) {

@@ -289,6 +289,7 @@ import unit.PreferInterpolationCheckTest;
 import unit.PreferFinalCheckTest;
 import unit.PreferTernaryReturnCheckTest;
 import unit.PreferSingleQuotesCheckTest;
+import unit.CachingGrammarPluginTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -571,6 +572,7 @@ class RunTests {
 		addCase(new PreferFinalCheckTest());
 		addCase(new PreferTernaryReturnCheckTest());
 		addCase(new PreferSingleQuotesCheckTest());
+		addCase(new CachingGrammarPluginTest());
 		addCase(new FoldStringLiteralsCheckTest());
 		addCase(new NamingCheckTest());
 		addCase(new FmtSliceTest());
