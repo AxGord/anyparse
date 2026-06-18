@@ -35,7 +35,7 @@ package anyparse.grammar.haxe;
 abstract HxIntLit(String) from String to String {
 
 	@:to public function toInt(): Int {
-		var s: String = StringTools.replace(this, '_', '');
+		final s: String = StringTools.replace(this, '_', '');
 		var i: Int = s.length;
 		while (i > 0) {
 			final c: Int = s.charCodeAt(i - 1);

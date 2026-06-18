@@ -59,7 +59,7 @@ class D {
 	/** Places `sep` between each item of `items`. Returns a fresh array. */
 	public static function intersperse(items: Array<Doc>, sep: Doc): Array<Doc> {
 		if (items.length <= 1) return items.copy();
-		var result = [];
+		final result = [];
 		for (i in 0...items.length) {
 			if (i > 0) result.push(sep);
 			result.push(items[i]);
