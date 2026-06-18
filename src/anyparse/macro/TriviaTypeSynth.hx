@@ -415,7 +415,7 @@ class TriviaTypeSynth {
 	private static inline final SYNTH_MODULE_LEAF: String = 'Pairs';
 	private static inline final CONVERTERS_CLASS_NAME: String = 'Converters';
 	private static final shapes: Array<ShapeBuilder.ShapeResult> = [];
-	private static final defined: Map<String, Bool> = new Map();
+	private static final defined: Map<String, Bool> = [];
 	private static var convertersAdded: Bool = false;
 
 	public static function arm(shape: ShapeBuilder.ShapeResult): Void {
@@ -1055,23 +1055,16 @@ class TriviaTypeSynth {
 		// (`@:optional @:kw('#else')` Star of HxTopLevelDecl, slice
 		// ω-cond-comp-engine). Lowering's `isOptionalKwStar` mirrors this
 		// predicate's Star branch on the parser side.
-		if (child.kind != Ref && child.kind != Star) return false;
-		if (child.annotations.get('base.optional') != true) return false;
-		return child.readMetaString(':kw') != null;
+		return (child.kind == Ref || child.kind == Star)
+			&& (child.annotations.get('base.optional') == true && child.readMetaString(':kw') != null);
 	}
 
 	private static function isBareNonFirstRef(child: ShapeNode, parent: ShapeNode): Bool {
-		if (child.kind != Ref) return false;
-		if (child.annotations.get('base.optional') == true) return false;
-		if (child.readMetaString(':kw') != null) return false;
-		if (child.readMetaString(':lead') != null) return false;
-		// ω-untyped-keep-trybody: `@:fmt(beforeNewlineSlotFirst)` opt-in
-		// extends BeforeNewline-slot synthesis to FIRST Ref fields. Pairs
-		// with parent Alt-branch `@:fmt(forwardNewlineForBody)` so the
-		// inner first-field `collectTrivia` scans the post-kw gap. See
-		// `Lowering.hasBeforeNewlineSlot` / Case 3 post-kw skipWs gate.
-		if (child == parent.children[0]) return child.fmtHasFlag('beforeNewlineSlotFirst');
-		return true;
+		return child.kind == Ref && (child.annotations.get('base.optional') != true && (child.readMetaString(':kw') == null && (
+			child.readMetaString(':lead') == null && (
+				child != parent.children[0] || child.fmtHasFlag('beforeNewlineSlotFirst')
+			)
+		)));
 	}
 
 	/**
@@ -1087,12 +1080,11 @@ class TriviaTypeSynth {
 	 * writer's struct-Star emit under `opt.leftCurly == Next`.
 	 */
 	private static function isBareFirstStarNlOptIn(child: ShapeNode, parent: ShapeNode): Bool {
-		if (child.kind != Star) return false;
-		if (child.annotations.get('base.optional') == true) return false;
-		if (child.readMetaString(':kw') != null) return false;
-		if (child.readMetaString(':lead') != null) return false;
-		if (child != parent.children[0]) return false;
-		return child.fmtHasFlag('beforeNewlineSlotFirst');
+		return child.kind == Star && (child.annotations.get('base.optional') != true && (child.readMetaString(':kw') == null && (
+			child.readMetaString(':lead') == null && (
+				child == parent.children[0] && child.fmtHasFlag('beforeNewlineSlotFirst')
+			)
+		)));
 	}
 
 	private static function buildBeforeNewlineSlot(child: ShapeNode, pos: Position): Field {
@@ -1138,8 +1130,7 @@ class TriviaTypeSynth {
 	 * the mandatory path. The absent branch leaves the slot null.
 	 */
 	private static function isTrailRef(child: ShapeNode): Bool {
-		if (child.kind != Ref) return false;
-		return child.readMetaString(':trail') != null;
+		return child.kind == Ref && child.readMetaString(':trail') != null;
 	}
 
 	private static function buildAfterTrailSlot(child: ShapeNode, pos: Position): Field {
@@ -1229,10 +1220,9 @@ class TriviaTypeSynth {
 	 * predicates rely on).
 	 */
 	private static function isCondOpenNewlineRef(child: ShapeNode): Bool {
-		if (child.kind != Ref) return false;
-		if (child.annotations.get('base.optional') == true) return false;
-		if (!child.fmtHasFlag('condWrap')) return false;
-		return child.fmtHasFlag('captureCondOpenNewline');
+		return child.kind == Ref && (
+			child.annotations.get('base.optional') != true && (child.fmtHasFlag('condWrap') && child.fmtHasFlag('captureCondOpenNewline'))
+		);
 	}
 
 	private static function buildCondOpenNewlineSlot(child: ShapeNode, pos: Position): Field {
@@ -1712,9 +1702,7 @@ class TriviaTypeSynth {
 	public static function isAltCloseTrailingBranch(branch: ShapeNode): Bool {
 		if (branch.children.length != 1) return false;
 		final star: ShapeNode = branch.children[0];
-		if (star.kind != Star) return false;
-		if (star.annotations.get('trivia.starCollects') != true) return false;
-		return branch.readMetaString(':trail') != null;
+		return star.kind == Star && (star.annotations.get('trivia.starCollects') == true && branch.readMetaString(':trail') != null);
 	}
 
 	/**
@@ -1729,9 +1717,7 @@ class TriviaTypeSynth {
 	 * with `@:trailOpt`. The two never coexist on the same branch.
 	 */
 	public static function isAltTrailOptBranch(branch: ShapeNode): Bool {
-		if (branch.children.length != 1) return false;
-		if (branch.children[0].kind != Ref) return false;
-		return branch.readMetaString(':trailOpt') != null;
+		return branch.children.length == 1 && (branch.children[0].kind == Ref && branch.readMetaString(':trailOpt') != null);
 	}
 
 	/**
@@ -1774,11 +1760,10 @@ class TriviaTypeSynth {
 	 * `@:trail` are mutually exclusive on the same ctor.
 	 */
 	public static function isCaptureSourceBranch(branch: ShapeNode): Bool {
-		if (branch.children.length != 1) return false;
-		if (branch.children[0].kind != Ref) return false;
-		if (branch.readMetaString(':lead') == null) return false;
-		if (branch.readMetaString(':trail') == null) return false;
-		return branch.fmtReadString('captureSource') != null;
+		return branch.children.length == 1
+			&& (branch.children[0].kind == Ref
+				&& (branch.readMetaString(':lead') != null
+					&& (branch.readMetaString(':trail') != null && branch.fmtReadString('captureSource') != null)));
 	}
 
 	/**
@@ -1802,10 +1787,8 @@ class TriviaTypeSynth {
 	 * consumer: `HxStatement.ReturnStmt`.
 	 */
 	public static function isAltBodyPolicyKwBranch(branch: ShapeNode): Bool {
-		if (branch.children.length != 1) return false;
-		if (branch.children[0].kind != Ref) return false;
-		if (branch.readMetaString(':kw') == null) return false;
-		return branch.fmtReadString('bodyPolicy') != null;
+		return branch.children.length == 1
+			&& (branch.children[0].kind == Ref && (branch.readMetaString(':kw') != null && branch.fmtReadString('bodyPolicy') != null));
 	}
 
 	/**
@@ -1841,8 +1824,7 @@ class TriviaTypeSynth {
 		// grow the same lit pair downstream.
 		final hasWrap: Bool = branch.hasMeta(':wrap');
 		final hasLeadTrail: Bool = branch.hasMeta(':lead') && branch.hasMeta(':trail');
-		if (!(hasWrap || hasLeadTrail)) return false;
-		return branch.fmtHasFlag('captureWrapOpenNewline');
+		return (hasWrap || hasLeadTrail) && branch.fmtHasFlag('captureWrapOpenNewline');
 	}
 
 	/**
@@ -1860,10 +1842,8 @@ class TriviaTypeSynth {
 	 * StaticVarStmt, StaticFinalStmt}`.
 	 */
 	public static function isAltKwNewlineBranch(branch: ShapeNode): Bool {
-		if (branch.children.length != 1) return false;
-		if (branch.children[0].kind != Ref) return false;
-		if (!branch.hasMeta(':kw')) return false;
-		return branch.fmtHasFlag('captureKwNewline');
+		return branch.children.length == 1
+			&& (branch.children[0].kind == Ref && (branch.hasMeta(':kw') && branch.fmtHasFlag('captureKwNewline')));
 	}
 
 	/**
@@ -1886,9 +1866,8 @@ class TriviaTypeSynth {
 	 * FieldAccess}`.
 	 */
 	public static function isAltChainNewlineBranch(branch: ShapeNode): Bool {
-		if (branch.children.length != 2) return false;
-		if (!branch.hasMeta(':infix') && !branch.hasMeta(':postfix')) return false;
-		return branch.fmtHasFlag('captureChainNewline');
+		return branch.children.length == 2
+			&& ((branch.hasMeta(':infix') || branch.hasMeta(':postfix')) && branch.fmtHasFlag('captureChainNewline'));
 	}
 
 	/**
@@ -1903,9 +1882,7 @@ class TriviaTypeSynth {
 	 * dedicated slot. Two operand children (`operand,field`).
 	 */
 	public static function isPostfixChainCommentBranch(branch: ShapeNode): Bool {
-		if (branch.children.length != 2) return false;
-		if (!branch.hasMeta(':postfix')) return false;
-		return branch.fmtHasFlag('captureChainNewline');
+		return branch.children.length == 2 && (branch.hasMeta(':postfix') && branch.fmtHasFlag('captureChainNewline'));
 	}
 
 	private static function shapeToComplexType(node: ShapeNode, synthPack: Array<String>): ComplexType {

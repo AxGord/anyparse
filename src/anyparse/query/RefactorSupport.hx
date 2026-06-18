@@ -140,13 +140,13 @@ final class RefactorSupport {
 	 */
 	public static function resolveCursorNode(tree: QueryNode, cursor: Int, source: String): Null<QueryNode> {
 		final tokenHit: Null<QueryNode> = innermostWhere(tree, cursor, node -> identTokenContains(node, cursor, source));
-		if (tokenHit != null) return tokenHit;
-		return innermostWhere(
-			tree, cursor, node -> {
-				final span: Null<Span> = node.span;
-				return span != null && span.from == cursor && isRenameableName(node.name);
-			}
-		);
+		return tokenHit
+			?? innermostWhere(
+				tree, cursor, node -> {
+					final span: Null<Span> = node.span;
+					return span != null && span.from == cursor && isRenameableName(node.name);
+				}
+			);
 	}
 
 	/**
@@ -176,8 +176,7 @@ final class RefactorSupport {
 		final name: Null<String> = node.name;
 		if (span == null || name == null) return false;
 		final identFrom: Int = identTokenOffset(source, span, name);
-		if (identFrom < 0) return false;
-		return cursor >= identFrom && cursor < identFrom + name.length;
+		return identFrom >= 0 && cursor >= identFrom && cursor < identFrom + name.length;
 	}
 
 	/**
@@ -398,8 +397,7 @@ final class RefactorSupport {
 				'result does not parse: ${exception.toString()}'
 			)
 			catch (exception: Exception) return Err('result does not parse: ${exception.message}');
-		if (result == null) return Err('the "${plugin.langName()}" grammar has no writer — cannot writer-format the result');
-		return Ok(result);
+		return result == null ? Err('the "${plugin.langName()}" grammar has no writer — cannot writer-format the result') : Ok(result);
 	}
 
 	/** A name is renameable when it is a valid identifier and not `this`. */
@@ -528,8 +526,7 @@ final class RefactorSupport {
 
 		final startSpan: Null<Span> = siblings[startIndex].span;
 		final declSpan: Null<Span> = siblings[declIndex].span;
-		if (startSpan == null || declSpan == null) return nodeSpan;
-		return new Span(startSpan.from, declSpan.to);
+		return startSpan == null || declSpan == null ? nodeSpan : new Span(startSpan.from, declSpan.to);
 	}
 
 	/**
@@ -597,8 +594,7 @@ final class RefactorSupport {
 		// The last non-space byte before the node must be the `/` of a `*/` close.
 		if (i < 1 || StringTools.fastCodeAt(source, i) != '/'.code || StringTools.fastCodeAt(source, i - 1) != '*'.code) return span;
 		final open: Int = source.lastIndexOf('/*', i - 1);
-		if (open < 0) return span;
-		return new Span(open, span.to);
+		return open < 0 ? span : new Span(open, span.to);
 	}
 
 	/**
@@ -651,9 +647,7 @@ final class RefactorSupport {
 
 		var j: Int = span.from - 1;
 		while (j >= 0 && isSpace(StringTools.fastCodeAt(source, j))) j--;
-		if (j >= 0 && StringTools.fastCodeAt(source, j) == ','.code) return new Span(j, span.to);
-
-		return span;
+		return j >= 0 && StringTools.fastCodeAt(source, j) == ','.code ? new Span(j, span.to) : span;
 	}
 
 	/**
@@ -670,9 +664,7 @@ final class RefactorSupport {
 
 		var j: Int = span.from - 1;
 		while (j >= 0 && isSpace(StringTools.fastCodeAt(source, j))) j--;
-		if (j >= 0 && StringTools.fastCodeAt(source, j) == ','.code) return true;
-
-		return false;
+		return j >= 0 && StringTools.fastCodeAt(source, j) == ','.code;
 	}
 
 	/**
@@ -947,8 +939,8 @@ final class RefactorSupport {
 	 * can expose its privates to another type). Conservative: any doubt is false.
 	 */
 	public static function isPrivateMemberConfined(owner: String, source: String, index: SymbolIndex): Bool {
-		if (index.skippedFiles().length > 0) return false;
-		return !index.hasSubtype(owner) && !index.hasAccessGrant(owner) && source.indexOf('@:allow') < 0;
+		return index.skippedFiles()
+			.length <= 0 && !index.hasSubtype(owner) && !index.hasAccessGrant(owner) && source.indexOf('@:allow') < 0;
 	}
 
 	/**
@@ -959,8 +951,8 @@ final class RefactorSupport {
 	public static function sameSource(a: QueryNode, b: QueryNode, source: String): Bool {
 		final sa: Null<Span> = a.span;
 		final sb: Null<Span> = b.span;
-		if (sa == null || sb == null) return false;
-		return StringTools.trim(source.substring(sa.from, sa.to)) == StringTools.trim(source.substring(sb.from, sb.to));
+		return sa != null && sb != null
+			&& StringTools.trim(source.substring(sa.from, sa.to)) == StringTools.trim(source.substring(sb.from, sb.to));
 	}
 
 	/** Whether the subtree rooted at `node` contains any node of kind `kind`. */

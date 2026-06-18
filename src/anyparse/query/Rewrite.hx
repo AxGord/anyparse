@@ -127,8 +127,7 @@ final class Rewrite {
 		final raw: Null<String> = metavarSource(spec.substring(0, opAt), source, bindings);
 		if (raw == null) return null;
 		final value: Null<Int> = Std.parseInt(StringTools.trim(raw));
-		if (value == null) return null;
-		return '${value + shift}';
+		return value == null ? null : '${value + shift}';
 	}
 
 	// Verbatim source for a bound metavar: the captured name for a
@@ -138,8 +137,7 @@ final class Rewrite {
 		if (node == null) return null;
 		if (node.kind == 'NameOnly') return node.name;
 		final span: Null<Span> = node.span;
-		if (span == null) return node.name;
-		return SourceSlice.slice(source, span);
+		return span == null ? node.name : SourceSlice.slice(source, span);
 	}
 
 	private static inline function isIdentChar(c: Int): Bool {

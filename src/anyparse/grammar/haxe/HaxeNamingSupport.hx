@@ -36,8 +36,7 @@ final class HaxeNamingSupport implements NamingSupport {
 
 	public function policyFor(path: String): NamingPolicy {
 		final content: Null<String> = CheckstyleConfigFinder.findConfigContent(path);
-		if (content == null) return defaults();
-		return try CheckstyleConfigLoader.load(content) catch (exception: Exception) defaults();
+		return content == null ? defaults() : try CheckstyleConfigLoader.load(content) catch (exception: Exception) defaults();
 	}
 
 	/**
@@ -200,8 +199,7 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * — it is passed as a `NamingRule.normalize` function value.
 	 */
 	private static function lowercaseFirst(name: String): Null<String> {
-		if (name.length == 0) return null;
-		return name.charAt(0).toLowerCase() + name.substr(1);
+		return name.length == 0 ? null : name.charAt(0).toLowerCase() + name.substr(1);
 	}
 
 	/**
@@ -210,8 +208,7 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * `inline` — passed as a `NamingRule.normalize` function value.
 	 */
 	private static function underscoreCamel(name: String): Null<String> {
-		if (name.length == 0) return null;
-		return '_' + name.charAt(0).toLowerCase() + name.substr(1);
+		return name.length == 0 ? null : '_' + name.charAt(0).toLowerCase() + name.substr(1);
 	}
 
 	/**
@@ -221,10 +218,9 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * may reach. Non-members are never implicitly reachable.
 	 */
 	private static function isImplicitlyReachable(category: NamingCategory, name: String, node: QueryNode, parent: Null<QueryNode>): Bool {
-		if (category != NamingCategory.Field && category != NamingCategory.Method && category != NamingCategory.Constant) return false;
-		if (name == 'new') return true;
-		if (StringTools.startsWith(name, 'get_') || StringTools.startsWith(name, 'set_')) return true;
-		return metaPrecedes(node, parent);
+		return (category == NamingCategory.Field || category == NamingCategory.Method || category == NamingCategory.Constant) && (
+			name == 'new' || (StringTools.startsWith(name, 'get_') || StringTools.startsWith(name, 'set_') || metaPrecedes(node, parent))
+		);
 	}
 
 	/**

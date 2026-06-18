@@ -47,7 +47,7 @@ final class Matcher {
 		pattern: QueryNode, input: QueryNode, eq: Null<KindEquivalence>, out: Array<Match>, kindFilter: Null<String>
 	): Void {
 		if (kindFilter == null || input.kind == kindFilter) {
-			final bindings: Map<String, QueryNode> = new Map();
+			final bindings: Map<String, QueryNode> = [];
 			if (unify(pattern, input, eq, bindings)) {
 				final span: Null<Span> = input.span;
 				if (span != null) out.push(new Match(span, bindings));

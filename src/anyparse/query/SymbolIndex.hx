@@ -123,8 +123,7 @@ final class SymbolIndex {
 		if (declarers.length != 1) return null;
 		final file: FileInfo = declarers[0];
 		final type: Null<TypeDeclInfo> = file.types.find(t -> t.name == typeName);
-		if (type == null) return null;
-		return type.isMain ? file.module : '${file.module}.$typeName';
+		return type == null ? null : type.isMain ? file.module : '${file.module}.$typeName';
 	}
 
 	/**
@@ -351,7 +350,7 @@ final class SymbolIndex {
 	private static function simpleName(path: String): String {
 		final segments: Array<String> = path.split('.');
 		final last: Null<String> = segments[segments.length - 1];
-		return last == null ? path : last;
+		return last ?? path;
 	}
 
 }

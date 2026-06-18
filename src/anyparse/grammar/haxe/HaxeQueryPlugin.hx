@@ -479,8 +479,7 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 	}
 
 	private static function extractFirstDecl(module: QueryNode): Null<QueryNode> {
-		if (module.children.length == 0) return null;
-		return module.children[0];
+		return module.children.length == 0 ? null : module.children[0];
 	}
 
 	private static function extractFirstStmt(module: QueryNode): Null<QueryNode> {
@@ -505,26 +504,19 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		// Non-expression statements (if/for/while/return/var/switch/try/
 		// throw) are not `ExprStmt` and pass through unchanged. Node-level
 		// analog of the `trimTrailingSemicolons` wrapper-artifact fix (#3).
-		if (first.kind == 'ExprStmt') return null;
-		return first;
+		return first.kind == 'ExprStmt' ? null : first;
 	}
 
 	private static function extractFirstExpr(module: QueryNode): Null<QueryNode> {
 		final cls: Null<QueryNode> = findFirstByKind(module, 'ClassDecl');
 		if (cls == null) return null;
 		final varStmt: Null<QueryNode> = findFirstByKind(cls, 'VarStmt');
-		if (varStmt == null) return null;
-		// VarStmt → HxVarDecl struct (flattened) → init expr is the last
-		// child after name/type. Heuristic: the init is the last enum
-		// child that isn't a name/type placeholder.
-		if (varStmt.children.length == 0) return null;
-		return varStmt.children[varStmt.children.length - 1];
+		return varStmt == null ? null : varStmt.children.length == 0 ? null : varStmt.children[varStmt.children.length - 1];
 	}
 
 	private static function extractFirstMeta(module: QueryNode): Null<QueryNode> {
 		final cls: Null<QueryNode> = findFirstByKind(module, 'ClassDecl');
-		if (cls == null) return null;
-		return findFirstByKind(cls, 'HxMeta') ?? findFirstByKind(cls, 'Meta') ?? findFirstByKindPrefix(cls, 'Meta');
+		return cls == null ? null : findFirstByKind(cls, 'HxMeta') ?? findFirstByKind(cls, 'Meta') ?? findFirstByKindPrefix(cls, 'Meta');
 	}
 
 	private static function findFirstByKind(node: QueryNode, kind: String): Null<QueryNode> {
@@ -806,8 +798,7 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 	 */
 	public function maxComplexity(path: String): Null<Int> {
 		final content: Null<String> = CheckstyleConfigFinder.findConfigContent(path);
-		if (content == null) return null;
-		return try CheckstyleConfigLoader.loadComplexityMax(content) catch (exception: Exception) null;
+		return content == null ? null : try CheckstyleConfigLoader.loadComplexityMax(content) catch (exception: Exception) null;
 	}
 
 	public function controlFlowSupport(): Null<ControlFlowSupport> {

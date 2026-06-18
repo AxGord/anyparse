@@ -165,9 +165,8 @@ final class PreferNullCoalescing implements Check {
 		if (subtreeMutates(guarded, unsafeKinds)) return null;
 		if (cond.kind == notEqKind) {
 			if (RefactorSupport.sameSource(guarded, thenBranch, source)) return { guarded: guarded, fallback: elseBranch };
-		} else if (cond.kind == eqKind) {
-			if (RefactorSupport.sameSource(guarded, elseBranch, source)) return { guarded: guarded, fallback: thenBranch };
-		}
+		} else if (cond.kind == eqKind && RefactorSupport.sameSource(guarded, elseBranch, source))
+			return { guarded: guarded, fallback: thenBranch };
 		return null;
 	}
 

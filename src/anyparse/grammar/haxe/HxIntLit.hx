@@ -43,7 +43,7 @@ abstract HxIntLit(String) from String to String {
 			i--;
 		}
 		final parsed: Null<Int> = Std.parseInt(s.substr(0, i));
-		return parsed == null ? 0 : parsed;
+		return parsed ?? 0;
 	}
 
 }

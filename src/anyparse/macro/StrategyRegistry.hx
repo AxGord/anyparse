@@ -21,7 +21,7 @@ import anyparse.core.Strategy;
 class StrategyRegistry {
 
 	private final strategies: Array<Strategy> = [];
-	private var ordered: Array<Strategy> = [];
+	private var _ordered: Array<Strategy> = [];
 
 	public function new() {}
 
@@ -35,14 +35,14 @@ class StrategyRegistry {
 	 */
 	public function prepare(): Void {
 		// Conflict check — each owned meta tag can have only one owner.
-		final owners: Map<String, String> = new Map();
+		final owners: Map<String, String> = [];
 		for (s in strategies) for (tag in s.ownedMeta) {
 			if (owners.exists(tag)) {
 				Context.fatalError('metadata $tag is claimed by both ${owners.get(tag)} and ${s.name}', Context.currentPos());
 			}
 			owners.set(tag, s.name);
 		}
-		ordered = topoSort(strategies);
+		_ordered = topoSort(strategies);
 	}
 
 	/**
@@ -51,7 +51,7 @@ class StrategyRegistry {
 	 * sort computed in `prepare`.
 	 */
 	public function runAnnotate(shape: ShapeBuilder.ShapeResult, ctx: LoweringCtx): Void {
-		for (s in ordered) for (name => root in shape.rules) walkAnnotate(root, s, ctx);
+		for (s in _ordered) for (name => root in shape.rules) walkAnnotate(root, s, ctx);
 	}
 
 	private function walkAnnotate(node: ShapeNode, s: Strategy, ctx: LoweringCtx): Void {
@@ -65,10 +65,10 @@ class StrategyRegistry {
 	 * become edges from A to B. Any cycle is a registration error.
 	 */
 	private static function topoSort(list: Array<Strategy>): Array<Strategy> {
-		final byName: Map<String, Strategy> = new Map();
+		final byName: Map<String, Strategy> = [];
 		for (s in list) byName.set(s.name, s);
 
-		final incoming: Map<String, Array<String>> = new Map();
+		final incoming: Map<String, Array<String>> = [];
 		for (s in list) incoming.set(s.name, []);
 
 		inline function addEdge(from: String, to: String): Void {

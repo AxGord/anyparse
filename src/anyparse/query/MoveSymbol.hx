@@ -95,9 +95,7 @@ typedef MoveChange = {
 final class MoveSymbol {
 
 	/** The advisory appended to every successful move. */
-	private static final ADVISORY: String = 'verify imports in the destination — dependencies reached via a '
-		+ 'static receiver (T.staticMethod()) or a value position are not '
-		+ 'auto-detected and may need a manual import; same-package moves only.';
+	private static final ADVISORY: String = 'verify imports in the destination — dependencies reached via a static receiver (T.staticMethod()) or a value position are not auto-detected and may need a manual import; same-package moves only.';
 
 	/**
 	 * Move the type declaration at `line:col` (in `cursorFile`) into
@@ -249,9 +247,7 @@ final class MoveSymbol {
 			changes.push({ file: file, newSource: newSource });
 		}
 
-		if (changes.length == 0) return Err('move of "$typeName" changed nothing');
-
-		return Ok(changes, ADVISORY);
+		return changes.length == 0 ? Err('move of "$typeName" changed nothing') : Ok(changes, ADVISORY);
 	}
 
 	/**
@@ -503,9 +499,9 @@ final class MoveSymbol {
 	 */
 	private static function isContiguousTriviaLine(line: String): Bool {
 		final trimmed: String = StringTools.trim(line);
-		if (trimmed.length == 0) return false; // blank line = boundary
-		return StringTools.startsWith(trimmed, '//') || StringTools.startsWith(trimmed, '/*') || StringTools.startsWith(trimmed, '*')
-			|| StringTools.startsWith(trimmed, '@');
+		return trimmed.length != 0
+			&& (StringTools.startsWith(trimmed, '//') || StringTools.startsWith(trimmed, '/*') || StringTools.startsWith(trimmed, '*')
+				|| StringTools.startsWith(trimmed, '@'));
 	}
 
 	/** Offset just past the last non-newline character of `source`. */

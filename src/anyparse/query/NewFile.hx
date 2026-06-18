@@ -150,8 +150,7 @@ final class NewFile {
 		} catch (exception: Exception) {
 			return err('assembled source does not parse: ${exception.message}');
 		};
-		if (canonical == null) return err('no writer for this grammar');
-		return { result: EditResult.Ok(canonical), stubbed: stubbed };
+		return canonical == null ? err('no writer for this grammar') : { result: EditResult.Ok(canonical), stubbed: stubbed };
 	}
 
 	/** Wrap an error message as a stub-free `NewFileResult`. */

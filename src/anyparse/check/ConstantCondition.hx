@@ -164,8 +164,7 @@ final class ConstantCondition implements Check {
 				};
 		}
 		final tspan: Null<Span> = taken.span;
-		if (tspan == null) return null;
-		return { span: nspan, text: source.substring(tspan.from, tspan.to) };
+		return tspan == null ? null : { span: nspan, text: source.substring(tspan.from, tspan.to) };
 	}
 
 }

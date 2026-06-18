@@ -78,20 +78,20 @@ final class Pattern {
 @:nullSafety(Strict)
 final class KindEquivalence {
 
-	final canonOf: Map<String, String>;
+	final _canonOf: Map<String, String>;
 
 	public function new(classes: Array<Array<String>>) {
-		canonOf = new Map();
+		_canonOf = [];
 		for (group in classes) {
 			if (group.length == 0) continue;
 			final rep: String = group[0];
-			for (k in group) canonOf.set(k, rep);
+			for (k in group) _canonOf.set(k, rep);
 		}
 	}
 
 	public inline function canon(kind: String): String {
-		final c: Null<String> = canonOf.get(kind);
-		return c == null ? kind : c;
+		final c: Null<String> = _canonOf.get(kind);
+		return c ?? kind;
 	}
 
 	public inline function equivalent(a: String, b: String): Bool {
@@ -185,9 +185,11 @@ final class Metavar {
 	 * the input is not a placeholder.
 	 */
 	public static function decodePlaceholderName(ident: String): Null<String> {
-		if (!StringTools.startsWith(ident, PLACEHOLDER_PREFIX)) return null;
-		if (!StringTools.endsWith(ident, PLACEHOLDER_SUFFIX)) return null;
-		return ident.substring(PLACEHOLDER_PREFIX.length, ident.length - PLACEHOLDER_SUFFIX.length);
+		return !StringTools.startsWith(ident, PLACEHOLDER_PREFIX)
+			? null
+			: !StringTools.endsWith(ident, PLACEHOLDER_SUFFIX)
+				? null
+				: ident.substring(PLACEHOLDER_PREFIX.length, ident.length - PLACEHOLDER_SUFFIX.length);
 	}
 
 	/**
@@ -213,8 +215,9 @@ final class Metavar {
 		if (n != null) {
 			final bare: Null<String> = decodePlaceholderName(n);
 			if (bare != null) {
-				if (newChildren.length == 0) return new QueryNode(KIND, bare, [], tree.span);
-				return new QueryNode(tree.kind, '$$' + bare, newChildren, tree.span);
+				return newChildren.length == 0
+					? new QueryNode(KIND, bare, [], tree.span)
+					: new QueryNode(tree.kind, '$$' + bare, newChildren, tree.span);
 			}
 		}
 		return new QueryNode(tree.kind, n, newChildren, tree.span);

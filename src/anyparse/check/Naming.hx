@@ -159,8 +159,7 @@ final class Naming implements Check {
 		if (category == NamingCategory.Local || category == NamingCategory.Param || category == NamingCategory.CatchVar) return true;
 		if (category == NamingCategory.Field && !decl.mods.contains('public') && index != null) {
 			final owner: Null<String> = decl.enclosingType;
-			if (owner == null) return false;
-			return RefactorSupport.isPrivateMemberConfined(owner, source, index);
+			return owner != null && RefactorSupport.isPrivateMemberConfined(owner, source, index);
 		}
 		return false;
 	}

@@ -239,13 +239,13 @@ class WrapList {
 		// on typedef-RHS anon types via the runtime gate
 		// `opt._inTypedefBody ? WrapMode.OnePerLine : null`.
 		function evalAt(exceeds: Bool, firing: Array<Int>): WrapMode {
-			if (forceMode != null) return forceMode;
-			return floorSourceMultiline(
-				decideWithLineLengthState(
-					rules, items.length, maxLen, total, exceeds, anyHardline, t -> t == opt.lineWidth ? exceeds : firing.contains(t)
-				),
-				sourceMultilineKeep
-			);
+			return forceMode
+				?? floorSourceMultiline(
+					decideWithLineLengthState(
+						rules, items.length, maxLen, total, exceeds, anyHardline, t -> t == opt.lineWidth ? exceeds : firing.contains(t)
+					),
+					sourceMultilineKeep
+				);
 		}
 
 		// Per-state shape builder: picks the right lead based on the
@@ -500,7 +500,7 @@ class WrapList {
 		if (sourceOpenNewline && rules.defaultMode == WrapMode.Keep) return WrapBoundary(brkShape);
 
 		inline function decideAt(exceeds: Bool): WrapMode {
-			return decideWithLineLengthState(rules, 1, condW, condW, exceeds, hasHardline, t -> t == opt.lineWidth ? exceeds : false);
+			return decideWithLineLengthState(rules, 1, condW, condW, exceeds, hasHardline, t -> t == opt.lineWidth && exceeds);
 		}
 
 		// Only `FillLineWithLeadingBreak` materialises the leading +
@@ -522,56 +522,11 @@ class WrapList {
 		final modeBreak: WrapMode = decideAt(true);
 		final flatBrk: Bool = modeFlat == FillLineWithLeadingBreak;
 		final breakBrk: Bool = modeBreak == FillLineWithLeadingBreak;
-		if (flatBrk == breakBrk) return WrapBoundary(shapeFor(modeFlat));
-		// `IfLineExceeds` over `Group(IfBreak(…))`: `Group` only measures
-		// the cond's own flat width; trailing tokens on the same rendered
-		// line (e.g. ` {` after the close paren on `if`-stmt sites)
-		// vanish from the fit decision — a 129-col `(cond)` fits exactly
-		// at the 11-col `\t\tif ` start but the trailing ` {` pushes the
-		// rendered line to 142 > 140 lineWidth. `IfLineExceeds` adds the
-		// `flatTokenWidthOfRestStack` lookahead so the probe accounts for
-		// what lands on the same line if the flat branch fires. Closes
-		// the Wadler-style local-Group blindspot for cond-wrap sites.
-		//
-		// ω-cond-paren-glued (increment-4 sub-mechanism a1): `IfLineExceeds`
-		// measures the cond's FLAT width — it over-fires when the cond is a
-		// DELIMITER-BOUNDED construct (`!list.exists(args)`) whose inner call
-		// args can wrap their OWN paren. The fork keeps `if (` / `while (`
-		// GLUED whenever such a cond's NATURAL first line (`if (!list.exists(`,
-		// inner call allowed to break) fits, and lets only that inner construct
-		// break (`if (!list.exists(\n\t…\n))`). `flatShape` omits the
-		// leading/trailing hardline around the cond, so a glued `flatShape`
-		// over a cond whose inner call wraps IS that fork shape. The
-		// natural-first-line probe (inc1 `IfNaturalFirstLineExceeds`: each
-		// inner Group resolved by its own `fitsFlat`, first physical line
-		// measured, plus the same rest-of-stack ` {` lookahead) picks
-		// `brkShape` only when even the glued first line overflows.
-		//
-		// The glued shape is correct ONLY when the inner construct LEADING-
-		// breaks (its first line ends right at the open delimiter). The
-		// `IfNaturalFirstLineFitsOpenDelim` primitive renders the glued
-		// `flatShape` iff the cond's natural first line both FITS and ENDS at
-		// an open delimiter (`(`/`[`); otherwise it opens the cond paren. This
-		// distinguishes:
-		//  - inner call leading-breaks → glue (`condition_wrapping_nested`,
-		//    `arrow_wrapping_collapse_after_condition`);
-		//  - inner call fillLine-PACKS its first arg onto the open line
-		//    (`condition_wrapping_for`), OR the cond is a bare chain whose own
-		//    operator breaks (`condition_wrapping_if`, `condition_wrapping_for`)
-		//    → open the cond paren (the natural first line ends mid-args / at an
-		//    operand, not at an open delim).
-		// The legacy `IfLineExceeds` (open iff flat cond + rest-stack exceeds)
-		// is kept ONLY when the cond is a top-level binary chain — there the
-		// chain's own Group-break would give a deceptively short natural first
-		// line, so the width-based probe (which sees the full flat chain) is
-		// the right open trigger. Discriminator `isTopLevelChain`: a top-level
-		// operator (`+`/`-`/`||`/`&&`) at the cond's own outermost `WrapBoundary`
-		// depth (chains wrap their output once → ops at depth 1; a call/array
-		// wraps its args one level deeper → ops at depth ≥ 2). Verified against
-		// fork EXPECTED on every affected fixture.
-		if (isTopLevelChain(condDoc) && !chainKeepFlatCandidate(condDoc))
-			return WrapBoundary(IfLineExceeds(opt.lineWidth, shapeFor(modeBreak), shapeFor(modeFlat)));
-		return WrapBoundary(IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, shapeFor(modeBreak), shapeFor(modeFlat)));
+		return flatBrk == breakBrk
+			? WrapBoundary(shapeFor(modeFlat))
+			: isTopLevelChain(condDoc) && !chainKeepFlatCandidate(condDoc)
+				? WrapBoundary(IfLineExceeds(opt.lineWidth, shapeFor(modeBreak), shapeFor(modeFlat)))
+				: WrapBoundary(IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, shapeFor(modeBreak), shapeFor(modeFlat)));
 	}
 
 	/**
@@ -1915,8 +1870,9 @@ class WrapList {
 		// every other Keep consumer) the head stays glued to the open delim.
 		final headBreak: Bool = sourceBreakBefore.length > 0 && sourceBreakBefore[0];
 		if (items.length == 1) {
-			if (!headBreak) return Concat([Text(open), items[0], Text(close)]);
-			return Concat([Text(open), Nest(cols, Concat([Line('\n'), items[0]])), Text(close)]);
+			return !headBreak
+				? Concat([Text(open), items[0], Text(close)])
+				: Concat([Text(open), Nest(cols, Concat([Line('\n'), items[0]])), Text(close)]);
 		}
 		// `nested` holds everything inside the continuation Nest: the optional
 		// leading head break, the head itself (when broken), then each link's
@@ -2422,8 +2378,7 @@ class WrapList {
 		// Pure opAddSub iff an add/sub separator exists and no other-class
 		// separator appears at the SAME-OR-SHALLOWER depth (the chain's top
 		// level is opAddSub; any `||`/`&&`/`?`/`:` at that level disqualifies).
-		if (addSubDepth < 0) return false;
-		return otherDepth < 0 || otherDepth > addSubDepth;
+		return addSubDepth >= 0 && (otherDepth < 0 || otherDepth > addSubDepth);
 	}
 
 }

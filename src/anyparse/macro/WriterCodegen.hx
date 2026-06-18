@@ -359,8 +359,7 @@ class WriterCodegen {
 	 */
 	private static function optionsHasField(optionsTypePath: String, fieldName: String): Bool {
 		final t: Null<haxe.macro.Type> = try Context.getType(optionsTypePath) catch (e: haxe.Exception) null;
-		if (t == null) return false;
-		return anonHasField(t, fieldName);
+		return t != null && anonHasField(t, fieldName);
 	}
 
 	private static function anonHasField(t: haxe.macro.Type, name: String): Bool {
@@ -1562,9 +1561,8 @@ class WriterCodegen {
 	/** Format a float ensuring a decimal point is always present. */
 	private static function formatFloatField(): Field {
 		final body: Expr = macro {
-			final _s: String = Std.string(value);
-			if (_s.indexOf('.') >= 0) return _s;
-			return _s + '.0';
+			final _s: String = '$value';
+			return _s.indexOf('.') >= 0 ? _s : _s + '.0';
 		};
 		return {
 			name: 'formatFloat',
@@ -1719,7 +1717,7 @@ class WriterCodegen {
 	private static function foldTrailingIntoBodyGroupField(): Field {
 		final body: Expr = macro {
 			final _folded: Null<anyparse.core.Doc> = _foldTrailingIntoBodyGroup(doc, trailing);
-			return _folded != null ? _folded : _dc([doc, trailing]);
+			return _folded ?? _dc([doc, trailing]);
 		};
 		return {
 			name: 'foldTrailingIntoBodyGroup',
@@ -1880,8 +1878,7 @@ class WriterCodegen {
 	 */
 	private static function kwBeforeTrailingDocField(): Field {
 		final body: Expr = macro {
-			if (trailing == null) return sepDoc;
-			return _dc([trailingCommentDoc(trailing, opt), sepDoc]);
+			return trailing == null ? sepDoc : _dc([trailingCommentDoc(trailing, opt), sepDoc]);
 		};
 		return {
 			name: 'kwBeforeTrailingDoc',

@@ -49,10 +49,11 @@ class BlockCommentNormalizer {
 				if (lastBody.length > 0) parsed.lines.push({ ws: '', body: '' });
 			}
 			final lines: Array<BlockCommentLine> = parsed.lines;
-			if (lines.length <= 1) return Text(content);
-			if (isJavadocStyle(lines)) return javadocBytePreserveDoc(content, parsed);
-			if (isFirstInlineNested(lines)) return firstInlineRebuildDoc(parsed, opt);
-			return BlockCommentWriter.writeDoc(parsed, opt);
+			return lines.length <= 1
+				? Text(content)
+				: isJavadocStyle(lines)
+					? javadocBytePreserveDoc(content, parsed)
+					: isFirstInlineNested(lines) ? firstInlineRebuildDoc(parsed, opt) : BlockCommentWriter.writeDoc(parsed, opt);
 		}
 		return canonicalDoc(parsed, opt);
 	}
@@ -230,8 +231,7 @@ class BlockCommentNormalizer {
 	 */
 	private static function structuralCloseLen(ws: String): Int {
 		final len: Int = ws.length;
-		if (len > 0 && StringTools.fastCodeAt(ws, len - 1) == ' '.code) return len - 1;
-		return len;
+		return len > 0 && StringTools.fastCodeAt(ws, len - 1) == ' '.code ? len - 1 : len;
 	}
 
 	/**

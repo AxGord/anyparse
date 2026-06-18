@@ -36,7 +36,7 @@ class Lowering {
 	private final shape: ShapeBuilder.ShapeResult;
 	private final formatInfo: FormatReader.FormatInfo;
 	private final ctx: LoweringCtx;
-	private final eregByRule: Map<String, GeneratedRule.EregSpec> = new Map();
+	private final eregByRule: Map<String, GeneratedRule.EregSpec> = [];
 
 	public function new(shape: ShapeBuilder.ShapeResult, formatInfo: FormatReader.FormatInfo, ctx: LoweringCtx) {
 		this.shape = shape;
@@ -54,7 +54,7 @@ class Lowering {
 		// the convention) compile uniformly. Terminal rules return raw
 		// primitives and have no ctor builds — skip them so their bodies
 		// stay untouched.
-		final spanRuleNames: Map<String, Bool> = new Map();
+		final spanRuleNames: Map<String, Bool> = [];
 		for (typePath => node in shape.rules) {
 			for (rule in lowerRule(typePath, node)) {
 				rules.push(rule);
@@ -590,93 +590,94 @@ class Lowering {
 		// captured comments must also be popped from the stash — otherwise
 		// the caller's collectTrivia sees them AND re-captures from input,
 		// duplicating. `_stashCount0` snapshot lets us truncate.
-		if (ctx.trivia) return macro {
-			var left: $returnCT = $atomCall;
-			while (true) {
-				final _preWsPos: Int = ctx.pos;
-				final _stashCount0: Int = ctx.pendingTrivia == null ? 0 : ctx.pendingTrivia.leadingComments.length;
-				skipWsAndStash(ctx);
-				final _savedPos: Int = ctx.pos;
-				var _matched: Bool = true;
-				$opChain;
-				if (!_matched) {
-					var _scanI: Int = _preWsPos;
-					var _hadComment: Bool = false;
-					var _hadNewline: Bool = false;
-					// ω-keep-pratt-blank: track a blank line (≥2 newlines with
-					// only horizontal whitespace between them) inside the
-					// Pratt-consumed run, mirroring `collectTrivia`'s `_nl >= 2`
-					// semantics so the source-blank signal survives the no-op
-					// tail loop the same way the single-newline signal does.
-					var _nlRun: Int = 0;
-					var _hadBlank: Bool = false;
-					while (_scanI < ctx.pos) {
-						final _ch: Int = ctx.input.charCodeAt(_scanI);
-						if (_ch == '\n'.code) {
-							_hadNewline = true;
-							_nlRun++;
-							if (_nlRun >= 2) _hadBlank = true;
-						} else if (_ch != ' '.code && _ch != '\t'.code && _ch != '\r'.code) {
-							_nlRun = 0;
+		return ctx.trivia
+			? macro {
+				var left: $returnCT = $atomCall;
+				while (true) {
+					final _preWsPos: Int = ctx.pos;
+					final _stashCount0: Int = ctx.pendingTrivia == null ? 0 : ctx.pendingTrivia.leadingComments.length;
+					skipWsAndStash(ctx);
+					final _savedPos: Int = ctx.pos;
+					var _matched: Bool = true;
+					$opChain;
+					if (!_matched) {
+						var _scanI: Int = _preWsPos;
+						var _hadComment: Bool = false;
+						var _hadNewline: Bool = false;
+						// ω-keep-pratt-blank: track a blank line (≥2 newlines with
+						// only horizontal whitespace between them) inside the
+						// Pratt-consumed run, mirroring `collectTrivia`'s `_nl >= 2`
+						// semantics so the source-blank signal survives the no-op
+						// tail loop the same way the single-newline signal does.
+						var _nlRun: Int = 0;
+						var _hadBlank: Bool = false;
+						while (_scanI < ctx.pos) {
+							final _ch: Int = ctx.input.charCodeAt(_scanI);
+							if (_ch == '\n'.code) {
+								_hadNewline = true;
+								_nlRun++;
+								if (_nlRun >= 2) _hadBlank = true;
+							} else if (_ch != ' '.code && _ch != '\t'.code && _ch != '\r'.code) {
+								_nlRun = 0;
+							}
+							if (_ch == '/'.code && _scanI + 1 < ctx.pos) {
+								final _c2: Int = ctx.input.charCodeAt(_scanI + 1);
+								if (_c2 == '/'.code || _c2 == '*'.code) {
+									_hadComment = true;
+									break;
+								}
+							}
+							_scanI++;
 						}
-						if (_ch == '/'.code && _scanI + 1 < ctx.pos) {
-							final _c2: Int = ctx.input.charCodeAt(_scanI + 1);
-							if (_c2 == '/'.code || _c2 == '*'.code) {
-								_hadComment = true;
-								break;
+						if (_hadComment) {
+							ctx.pos = _preWsPos;
+							final _pt = ctx.pendingTrivia;
+							if (_pt != null) {
+								while (_pt.leadingComments.length > _stashCount0) _pt.leadingComments.pop();
+							}
+						} else if (_hadNewline) {
+							// ω-untyped-keep: when no operator matches AND the consumed
+							// WS contained a newline (no comment, no rewind), stash the
+							// newline signal into `pendingTrivia` so the next sibling's
+							// `collectTrivia` drain captures `newlineBefore=true`. Without
+							// this, Pratt silently consumes the newline and downstream
+							// `bodyBeforeNewline` slots never fire (e.g. function-body
+							// `untyped` after `:Type\n\tuntyped {…}` — the body field's
+							// pre-field collectTrivia sees pos already past the `\n`).
+							// ω-keep-pratt-blank: also carry `blankBefore` when the run
+							// held a blank line, so a `var b = function(){…}\n\nfinal a`
+							// brace-terminated `@:trailOpt(';')`-absent decl preserves
+							// its source blank line (issue_644). Without this the bit was
+							// hardcoded `false` and the blank collapsed to a single `\n`.
+							final _pt = ctx.pendingTrivia;
+							if (_pt == null) {
+								ctx.pendingTrivia = {
+									blankBefore: _hadBlank,
+									blankAfterLeadingComments: false,
+									newlineBefore: true,
+									leadingComments: [],
+								};
+							} else {
+								_pt.newlineBefore = true;
+								if (_hadBlank) _pt.blankBefore = true;
 							}
 						}
-						_scanI++;
+						break;
 					}
-					if (_hadComment) {
-						ctx.pos = _preWsPos;
-						final _pt = ctx.pendingTrivia;
-						if (_pt != null) {
-							while (_pt.leadingComments.length > _stashCount0) _pt.leadingComments.pop();
-						}
-					} else if (_hadNewline) {
-						// ω-untyped-keep: when no operator matches AND the consumed
-						// WS contained a newline (no comment, no rewind), stash the
-						// newline signal into `pendingTrivia` so the next sibling's
-						// `collectTrivia` drain captures `newlineBefore=true`. Without
-						// this, Pratt silently consumes the newline and downstream
-						// `bodyBeforeNewline` slots never fire (e.g. function-body
-						// `untyped` after `:Type\n\tuntyped {…}` — the body field's
-						// pre-field collectTrivia sees pos already past the `\n`).
-						// ω-keep-pratt-blank: also carry `blankBefore` when the run
-						// held a blank line, so a `var b = function(){…}\n\nfinal a`
-						// brace-terminated `@:trailOpt(';')`-absent decl preserves
-						// its source blank line (issue_644). Without this the bit was
-						// hardcoded `false` and the blank collapsed to a single `\n`.
-						final _pt = ctx.pendingTrivia;
-						if (_pt == null) {
-							ctx.pendingTrivia = {
-								blankBefore: _hadBlank,
-								blankAfterLeadingComments: false,
-								newlineBefore: true,
-								leadingComments: [],
-							};
-						} else {
-							_pt.newlineBefore = true;
-							if (_hadBlank) _pt.blankBefore = true;
-						}
-					}
-					break;
 				}
+				return left;
 			}
-			return left;
-		};
-		return macro {
-			var left: $returnCT = $atomCall;
-			while (true) {
-				skipWs(ctx);
-				final _savedPos: Int = ctx.pos;
-				var _matched: Bool = true;
-				$opChain;
-				if (!_matched) break;
-			}
-			return left;
-		};
+			: macro {
+				var left: $returnCT = $atomCall;
+				while (true) {
+					skipWs(ctx);
+					final _savedPos: Int = ctx.pos;
+					var _matched: Bool = true;
+					$opChain;
+					if (!_matched) break;
+				}
+				return left;
+			};
 	}
 
 	private function tryBranch(branch: ShapeNode, typePath: String, recurseFnName: String): Expr {
@@ -1186,75 +1187,76 @@ class Lowering {
 		final opTrailCapture: Expr = wantOpTrail
 			? macro final _opTrailComment: Null<String> = collectTrailingFull(ctx)
 			: macro final _opTrailComment: Null<String> = null;
-		if (ctx.trivia) return macro {
-			var left: $returnCT = $coreCall;
-			while (true) {
-				final _preWsPos: Int = ctx.pos;
-				$opTrailCapture;
-				skipWs(ctx);
-				var _matched: Bool = true;
-				$opChain;
-				if (!_matched) {
-					var _scanI: Int = _preWsPos;
-					var _hadComment: Bool = false;
-					var _hadNewline: Bool = false;
-					// ω-keep-pratt-blank: mirror the Pratt-loop blank tracking —
-					// a blank line (≥2 newlines separated only by horizontal
-					// whitespace) inside the postfix-consumed run must survive
-					// the no-op tail so a brace-terminated value followed by a
-					// blank line (`var b = function(){…}\n\nfinal a`, issue_644)
-					// carries `blankBefore` to the next decl's `collectTrivia`.
-					var _nlRun: Int = 0;
-					var _hadBlank: Bool = false;
-					while (_scanI < ctx.pos) {
-						final _ch: Int = ctx.input.charCodeAt(_scanI);
-						if (_ch == '\n'.code) {
-							_hadNewline = true;
-							_nlRun++;
-							if (_nlRun >= 2) _hadBlank = true;
-						} else if (_ch != ' '.code && _ch != '\t'.code && _ch != '\r'.code) {
-							_nlRun = 0;
+		return ctx.trivia
+			? macro {
+				var left: $returnCT = $coreCall;
+				while (true) {
+					final _preWsPos: Int = ctx.pos;
+					$opTrailCapture;
+					skipWs(ctx);
+					var _matched: Bool = true;
+					$opChain;
+					if (!_matched) {
+						var _scanI: Int = _preWsPos;
+						var _hadComment: Bool = false;
+						var _hadNewline: Bool = false;
+						// ω-keep-pratt-blank: mirror the Pratt-loop blank tracking —
+						// a blank line (≥2 newlines separated only by horizontal
+						// whitespace) inside the postfix-consumed run must survive
+						// the no-op tail so a brace-terminated value followed by a
+						// blank line (`var b = function(){…}\n\nfinal a`, issue_644)
+						// carries `blankBefore` to the next decl's `collectTrivia`.
+						var _nlRun: Int = 0;
+						var _hadBlank: Bool = false;
+						while (_scanI < ctx.pos) {
+							final _ch: Int = ctx.input.charCodeAt(_scanI);
+							if (_ch == '\n'.code) {
+								_hadNewline = true;
+								_nlRun++;
+								if (_nlRun >= 2) _hadBlank = true;
+							} else if (_ch != ' '.code && _ch != '\t'.code && _ch != '\r'.code) {
+								_nlRun = 0;
+							}
+							if (_ch == '/'.code && _scanI + 1 < ctx.pos) {
+								final _c2: Int = ctx.input.charCodeAt(_scanI + 1);
+								if (_c2 == '/'.code || _c2 == '*'.code) {
+									_hadComment = true;
+									break;
+								}
+							}
+							_scanI++;
 						}
-						if (_ch == '/'.code && _scanI + 1 < ctx.pos) {
-							final _c2: Int = ctx.input.charCodeAt(_scanI + 1);
-							if (_c2 == '/'.code || _c2 == '*'.code) {
-								_hadComment = true;
-								break;
+						if (_hadComment) {
+							ctx.pos = _preWsPos;
+						} else if (_hadNewline) {
+							final _pt = ctx.pendingTrivia;
+							if (_pt == null) {
+								ctx.pendingTrivia = {
+									blankBefore: _hadBlank,
+									blankAfterLeadingComments: false,
+									newlineBefore: true,
+									leadingComments: [],
+								};
+							} else {
+								_pt.newlineBefore = true;
+								if (_hadBlank) _pt.blankBefore = true;
 							}
 						}
-						_scanI++;
+						break;
 					}
-					if (_hadComment) {
-						ctx.pos = _preWsPos;
-					} else if (_hadNewline) {
-						final _pt = ctx.pendingTrivia;
-						if (_pt == null) {
-							ctx.pendingTrivia = {
-								blankBefore: _hadBlank,
-								blankAfterLeadingComments: false,
-								newlineBefore: true,
-								leadingComments: [],
-							};
-						} else {
-							_pt.newlineBefore = true;
-							if (_hadBlank) _pt.blankBefore = true;
-						}
-					}
-					break;
 				}
+				return left;
 			}
-			return left;
-		};
-		return macro {
-			var left: $returnCT = $coreCall;
-			while (true) {
-				skipWs(ctx);
-				var _matched: Bool = true;
-				$opChain;
-				if (!_matched) break;
-			}
-			return left;
-		};
+			: macro {
+				var left: $returnCT = $coreCall;
+				while (true) {
+					skipWs(ctx);
+					var _matched: Bool = true;
+					$opChain;
+					if (!_matched) break;
+				}
+				return left;
+			};
 	}
 
 	private function lowerEnumBranch(branch: ShapeNode, typePath: String, recurseFnName: String): Expr {
@@ -1328,20 +1330,19 @@ class Lowering {
 		final kwLeadBranch: Null<String> = branch.annotations.get('kw.leadText');
 		if (kwLeadBranch != null && branch.children.length == 0 && branch.annotations.get('lit.litList') == null) {
 			final trailBranch: Null<String> = branch.annotations.get('lit.trailText');
-			if (trailBranch != null) {
-				return macro {
+			return trailBranch != null
+				? macro {
 					skipWs(ctx);
 					expectKw(ctx, $v{kwLeadBranch});
 					skipWs(ctx);
 					expectLit(ctx, $v{trailBranch});
 					return $ctorRef;
+				}
+				: macro {
+					skipWs(ctx);
+					expectKw(ctx, $v{kwLeadBranch});
+					return $ctorRef;
 				};
-			}
-			return macro {
-				skipWs(ctx);
-				expectKw(ctx, $v{kwLeadBranch});
-				return $ctorRef;
-			};
 		}
 
 		// Classify branch shape.
@@ -1640,8 +1641,8 @@ class Lowering {
 					// default permissive-sep semantics applies (sep-first branch in the
 					// loop).
 					final sepStartsElement: Bool = branch.annotations.get('lit.sepStartsElement') == true;
-					if (sepStartsElement) {
-						return macro {
+					return sepStartsElement
+						? macro {
 							skipWs(ctx);
 							expectLit(ctx, $v{leadText});
 							final _items: Array<$elemCT> = [];
@@ -1684,52 +1685,51 @@ class Lowering {
 							skipWs(ctx);
 							expectLit(ctx, $v{trailText});
 							return $ctorCall;
-						};
-					}
-					return macro {
-						skipWs(ctx);
-						expectLit(ctx, $v{leadText});
-						final _items: Array<$elemCT> = [];
-						skipWs(ctx);
-						if ($closeNotNextExpr) {
-							var _prevEndPos: Int = ctx.pos;
-							_items.push($elemCall);
-							_prevEndPos = ctx.pos;
+						}
+						: macro {
 							skipWs(ctx);
-							while ($closeNotNextExpr) {
-								if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
-									ctx.pos++;
-									skipWs(ctx);
-									if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
-									_items.push($elemCall);
-									_prevEndPos = ctx.pos;
-									skipWs(ctx);
-								} else if (
-									_prevEndPos > 0 && {
-										var _pebRew: Int = _prevEndPos - 1;
-										while (_pebRew > 0) {
-											final _bc: Int = ctx.input.charCodeAt(_pebRew);
-											if (_bc == ' '.code || _bc == '\t'.code || _bc == '\n'.code || _bc == '\r'.code)
-												_pebRew--;
-											else
-												break;
+							expectLit(ctx, $v{leadText});
+							final _items: Array<$elemCT> = [];
+							skipWs(ctx);
+							if ($closeNotNextExpr) {
+								var _prevEndPos: Int = ctx.pos;
+								_items.push($elemCall);
+								_prevEndPos = ctx.pos;
+								skipWs(ctx);
+								while ($closeNotNextExpr) {
+									if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
+										ctx.pos++;
+										skipWs(ctx);
+										if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
+										_items.push($elemCall);
+										_prevEndPos = ctx.pos;
+										skipWs(ctx);
+									} else if (
+										_prevEndPos > 0 && {
+											var _pebRew: Int = _prevEndPos - 1;
+											while (_pebRew > 0) {
+												final _bc: Int = ctx.input.charCodeAt(_pebRew);
+												if (_bc == ' '.code || _bc == '\t'.code || _bc == '\n'.code || _bc == '\r'.code)
+													_pebRew--;
+												else
+													break;
+											}
+											final _b: Int = ctx.input.charCodeAt(_pebRew);
+											_b == ';'.code || $predicateCall;
 										}
-										final _b: Int = ctx.input.charCodeAt(_pebRew);
-										_b == ';'.code || $predicateCall;
+									) {
+										_items.push($elemCall);
+										_prevEndPos = ctx.pos;
+										skipWs(ctx);
+									} else {
+										expectLit(ctx, $v{sepText});
 									}
-								) {
-									_items.push($elemCall);
-									_prevEndPos = ctx.pos;
-									skipWs(ctx);
-								} else {
-									expectLit(ctx, $v{sepText});
 								}
 							}
-						}
-						skipWs(ctx);
-						expectLit(ctx, $v{trailText});
-						return $ctorCall;
-					};
+							skipWs(ctx);
+							expectLit(ctx, $v{trailText});
+							return $ctorCall;
+						};
 				}
 				return macro {
 					skipWs(ctx);
@@ -2196,30 +2196,11 @@ expectLit(ctx, $v{trailText}));
 					);
 				}
 			}
-			if (isStar && isOptional) {
-				// Two supported shapes:
-				//
-				// 1. Angle-bracketed type-parameter pattern (`@:optional
-				//    @:lead('<') @:trail('>') @:sep(',')`, first consumer:
-				//    `HxTypeRef.params`). The combination requires a close
-				//    delimiter — the matchLit peek on the open commits to
-				//    consuming up to and including the close, so EOF /
-				//    try-parse termination modes are inapplicable.
-				//
-				// 2. Kw-led tryparse Star (`@:optional @:kw('#else')
-				//    @:tryparse var elseBody:Null<Array<T>>`, first consumer:
-				//    `HxConditionalDecl.elseBody`). Splices the kw-Ref commit
-				//    machinery with the tryparse Star loop body — `matchKw`
-				//    commits, on hit the loop runs until element parse fails,
-				//    on miss `ctx.pos` rewinds to pre-ws so trivia stays
-				//    visible to the next outer Star. Lowered by
-				//    `emitOptionalKwStarFieldSteps` (case branch below).
-				if (kwLead == null && (leadText == null || trailText == null)) {
-					Context.fatalError(
-						'Lowering: @:optional Star field "$fieldName" requires either @:kw (tryparse mode) or both @:lead and @:trail (angle-bracket mode)',
-						Context.currentPos()
-					);
-				}
+			if (isStar && isOptional && kwLead == null && (leadText == null || trailText == null)) {
+				Context.fatalError(
+					'Lowering: @:optional Star field "$fieldName" requires either @:kw (tryparse mode) or both @:lead and @:trail (angle-bracket mode)',
+					Context.currentPos()
+				);
 			}
 			// Binary @:length prefix — read an N-byte ASCII-encoded length
 			// BEFORE any field-level lead literal. The parsed integer is
@@ -3676,8 +3657,7 @@ expectLit(ctx, $v{trailText}));
 		final blockEndedFlag: Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
 		if (sepText != null && !blockEndedFlag) {
 			Context.fatalError(
-				'Lowering: @:optional @:kw Star + @:sep requires the blockEnded flag '
-				+ '(@:sep(text, tailRelax, blockEnded)) — termination semantic undefined otherwise',
+				'Lowering: @:optional @:kw Star + @:sep requires the blockEnded flag (@:sep(text, tailRelax, blockEnded)) — termination semantic undefined otherwise',
 				Context.currentPos()
 			);
 		}
@@ -3997,8 +3977,7 @@ expectLit(ctx, $v{trailText}));
 		}
 		if (sepText != null && starNode.hasMeta(':tryparse') && !blockEndedFlag) {
 			Context.fatalError(
-				'Lowering: @:trivia + @:sep + @:tryparse requires the blockEnded flag '
-				+ '(@:sep(text, tailRelax, blockEnded)) — termination semantic undefined otherwise',
+				'Lowering: @:trivia + @:sep + @:tryparse requires the blockEnded flag (@:sep(text, tailRelax, blockEnded)) — termination semantic undefined otherwise',
 				Context.currentPos()
 			);
 		}
@@ -5030,12 +5009,13 @@ expectLit(ctx, $v{trailText}));
 	 * caller falls back to `ruleReturnCT(refName)`.
 	 */
 	private static function extractArrayElementCT(ct: Null<ComplexType>): Null<ComplexType> {
-		if (ct == null) return null;
-		return switch ct {
-			case TPath({ pack: [], name: 'Array', params: [TPType(inner)] }): inner;
-			case TPath({ pack: [], name: 'Null', params: [TPType(inner)] }): extractArrayElementCT(inner);
-			case _: null;
-		};
+		return ct == null
+			? null
+			: switch ct {
+				case TPath({ pack: [], name: 'Array', params: [TPType(inner)] }): inner;
+				case TPath({ pack: [], name: 'Null', params: [TPType(inner)] }): extractArrayElementCT(inner);
+				case _: null;
+			};
 	}
 
 	// -------- binary field helpers --------
@@ -5246,8 +5226,7 @@ expectLit(ctx, $v{trailText}));
 	private function isTriviaBearing(refName: String): Bool {
 		if (!ctx.trivia) return false;
 		final node: Null<ShapeNode> = shape.rules.get(refName);
-		if (node == null) return false;
-		return node.annotations.get('trivia.bearing') == true;
+		return node != null && node.annotations.get('trivia.bearing') == true;
 	}
 
 	/**
@@ -5258,8 +5237,7 @@ expectLit(ctx, $v{trailText}));
 	private function isSpanBearing(refName: String): Bool {
 		if (!ctx.spans) return false;
 		final node: Null<ShapeNode> = shape.rules.get(refName);
-		if (node == null) return false;
-		return node.kind != Terminal;
+		return node != null && node.kind != Terminal;
 	}
 
 	/**
@@ -5271,35 +5249,37 @@ expectLit(ctx, $v{trailText}));
 	 */
 	private function parseFnName(refName: String): String {
 		final simple: String = simpleName(refName);
-		if (isSpanBearing(refName)) return 'parse${simple}S';
-		if (isTriviaBearing(refName)) return 'parse${simple}T';
-		return 'parse$simple';
+		return isSpanBearing(refName) ? 'parse${simple}S' : isTriviaBearing(refName) ? 'parse${simple}T' : 'parse$simple';
 	}
 
 	/** Paired `*S` / `*T` ComplexType in the synth module for bearing rules; plain TPath otherwise. */
 	private function ruleReturnCT(refName: String): ComplexType {
 		final simple: String = simpleName(refName);
-		if (isSpanBearing(refName)) return TPath({
-			pack: packOf(refName).concat(['spans']),
-			name: 'Pairs',
-			sub: simple + 'S',
-			params: []
-		});
-		if (isTriviaBearing(refName)) return TPath({
-			pack: packOf(refName).concat(['trivia']),
-			name: 'Pairs',
-			sub: simple + 'T',
-			params: []
-		});
-		return TPath({ pack: packOf(refName), name: simple, params: [] });
+		return isSpanBearing(refName)
+			? TPath({
+				pack: packOf(refName).concat(['spans']),
+				name: 'Pairs',
+				sub: simple + 'S',
+				params: []
+			})
+			: isTriviaBearing(refName)
+				? TPath({
+					pack: packOf(refName).concat(['trivia']),
+					name: 'Pairs',
+					sub: simple + 'T',
+					params: []
+				})
+				: TPath({ pack: packOf(refName), name: simple, params: [] });
 	}
 
 	/** Enum-constructor field-path segments for `toFieldExpr` — routes through the synth module for bearing enums. */
 	private function ruleCtorPath(typePath: String, ctor: String): Array<String> {
 		final simple: String = simpleName(typePath);
-		if (isSpanBearing(typePath)) return packOf(typePath).concat(['spans', 'Pairs', simple + 'S', ctor]);
-		if (isTriviaBearing(typePath)) return packOf(typePath).concat(['trivia', 'Pairs', simple + 'T', ctor]);
-		return packOf(typePath).concat([simple, ctor]);
+		return isSpanBearing(typePath)
+			? packOf(typePath).concat(['spans', 'Pairs', simple + 'S', ctor])
+			: isTriviaBearing(typePath)
+				? packOf(typePath).concat(['trivia', 'Pairs', simple + 'T', ctor])
+				: packOf(typePath).concat([simple, ctor]);
 	}
 
 	private static function simpleName(typePath: String): String {

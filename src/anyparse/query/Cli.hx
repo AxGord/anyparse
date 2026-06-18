@@ -565,7 +565,7 @@ final class Cli {
 		final singleFile: Bool = expanded.singleFile;
 		final allEntries: Array<{ file: String, source: String, hits: Array<RefHit> }> = [];
 		final skipEntries: Array<SkipEntry> = [];
-		final candidateNames: Map<String, Bool> = new Map();
+		final candidateNames: Map<String, Bool> = [];
 		var scanned: Int = 0;
 		for (path in paths) {
 			final source: String = readSourceForParse(path);
@@ -1156,7 +1156,7 @@ final class Cli {
 		}
 
 		final files: Array<{ file: String, source: String }> = [];
-		final sourceOf: Map<String, String> = new Map();
+		final sourceOf: Map<String, String> = [];
 		for (path in paths) {
 			final fileSource: String = try readSourceForParse(path) catch (exception: Exception) {
 				stderr('apq lint: $path: ${exception.message}\n');
@@ -2580,8 +2580,7 @@ final class Cli {
 		if (colon <= 0 || colon >= spec.length - 1) return null;
 		final line: Null<Int> = RefactorSupport.parseStrictInt(spec.substring(0, colon));
 		final col: Null<Int> = RefactorSupport.parseStrictInt(spec.substring(colon + 1));
-		if (line == null || col == null) return null;
-		return { line: line, col: col };
+		return line == null || col == null ? null : { line: line, col: col };
 	}
 
 	private static function runUses(args: Array<String>): Int {
@@ -2650,7 +2649,7 @@ final class Cli {
 		final singleFile: Bool = expanded.singleFile;
 		final allEntries: Array<{ file: String, source: String, hits: Array<UsesHit> }> = [];
 		final skipEntries: Array<SkipEntry> = [];
-		final candidateNames: Map<String, Bool> = new Map();
+		final candidateNames: Map<String, Bool> = [];
 		var scanned: Int = 0;
 		for (path in paths) {
 			final source: String = readSourceForParse(path);
@@ -3467,7 +3466,7 @@ final class Cli {
 		// opt-in for plain `.hx` files — dogfood `.hxformat.json` etc.),
 		// then plugin defaults.
 		final sectionOpts: Null<String> = readWriteOptionsJsonOrNull(inputPathFinal);
-		final optsJson: Null<String> = sectionOpts != null ? sectionOpts : (configPath != null ? readFile(configPath) : null);
+		final optsJson: Null<String> = sectionOpts ?? (configPath != null ? readFile(configPath) : null);
 
 		final emitted: Null<String> =
 			try (plain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson)) catch (e: ParseError) {
@@ -3639,9 +3638,9 @@ final class Cli {
 		// words stay `Literal`-only — they ambiguously match string content
 		// and an `IdentExpr` widening would add noise (e.g. `hxq lit 'foo'`
 		// inside a corpus of strings).
-		final effectiveKindFilter: Array<String> = kindFilter != null
-			? kindFilter
-			: (looksLikeMixedIdentifier(targetStr) ? ['Literal', 'IdentExpr'] : ['Literal']);
+		final effectiveKindFilter: Array<String> = kindFilter ?? (looksLikeMixedIdentifier(targetStr)
+			? ['Literal', 'IdentExpr']
+			: ['Literal']);
 		// Comment scan fires when the user explicitly opted in (`--include-comments`),
 		// when the kind filter is the catch-all (`--any-kind` ⇒ empty array),
 		// or when `Comment` appears in an explicit `--kind` list. The
@@ -4254,8 +4253,7 @@ final class Cli {
 		if (t.length < 2) return t;
 		final first: String = t.charAt(0);
 		final last: String = t.charAt(t.length - 1);
-		if ((first == "'" && last == "'") || (first == '"' && last == '"')) return t.substring(1, t.length - 1);
-		return t;
+		return (first == "'" && last == "'") || (first == '"' && last == '"') ? t.substring(1, t.length - 1) : t;
 	}
 
 	private static function printGatesUsage(): Void {
@@ -4865,7 +4863,7 @@ final class Cli {
 
 		final singleFile: Bool = expanded.singleFile;
 		final allEntries: Array<{ file: String, source: String, matches: Array<Match> }> = [];
-		final kindCounts: Map<String, Int> = new Map();
+		final kindCounts: Map<String, Int> = [];
 		for (path in paths) {
 			final source: String = readSourceForParse(path);
 			final tree: Null<QueryNode> = parseWalked('search', plugin.parseFile, path, source, singleFile);
@@ -4940,8 +4938,7 @@ final class Cli {
 		final inner: String = StringTools.trim(rendered);
 		final openIdx: Int = inner.indexOf('[');
 		final closeIdx: Int = inner.lastIndexOf(']');
-		if (openIdx < 0 || closeIdx <= openIdx) return rendered;
-		return inner.substring(openIdx + 1, closeIdx);
+		return openIdx < 0 || closeIdx <= openIdx ? rendered : inner.substring(openIdx + 1, closeIdx);
 	}
 
 	private static function runAst(args: Array<String>): Int {
@@ -5972,8 +5969,9 @@ final class Cli {
 		if (regressionProbe) return runReconRegressionProbe(plugin, rootFinal);
 		if (candidatesRegex != null) return runReconCandidates(plugin, rootFinal, (candidatesRegex: String));
 		if (permissiveConstruct) return runReconPermissive(plugin, rootFinal, lang);
-		if (predictRelax) return runReconSweepRelax(plugin, rootFinal, clusterFilter, noTargetClusterFilter, showSource);
-		return runReconSweep(plugin, rootFinal, topN, clusterFilter, predictStrip, patterns, replacements, compiledRegex, showSource);
+		return predictRelax
+			? runReconSweepRelax(plugin, rootFinal, clusterFilter, noTargetClusterFilter, showSource)
+			: runReconSweep(plugin, rootFinal, topN, clusterFilter, predictStrip, patterns, replacements, compiledRegex, showSource);
 	}
 
 	/**
@@ -6291,8 +6289,7 @@ final class Cli {
 		// emits when it ran out of brace-/Star-terminating options. No
 		// token to inject — return empty so the caller routes to
 		// NO TARGET.
-		if (t == '//' || t == '<no message>') return '';
-		return t;
+		return t == '//' || t == '<no message>' ? '' : t;
 	}
 
 	/**
@@ -6808,8 +6805,7 @@ final class Cli {
 				return EXIT_RUNTIME;
 			}
 			sysPrint('PARSE OK\n');
-			if (writerEqualsAfter) return runProbeWriterCheck(plugin, path, original, writerEqualsPlain, expectedPathOpt, lang);
-			return EXIT_OK;
+			return writerEqualsAfter ? runProbeWriterCheck(plugin, path, original, writerEqualsPlain, expectedPathOpt, lang) : EXIT_OK;
 		} catch (exception: ParseError) {
 			final pos: Position = exception.span.lineCol(original);
 			final exp: String = reconNormalize(exception.expected);
@@ -6995,9 +6991,9 @@ final class Cli {
 				filteredRecords, filteredClusters, plugin, patterns, replacements, compiledRegex, clusterFilter, showSource
 			);
 		for (r in filteredRecords) sysPrint('${r.skipLine}\n');
-		if (clusterFilter != null)
-			return printReconClusterDrill(filteredClusters, records.length, (clusterFilter: String), filteredRecords, showSource);
-		return printReconHistogram(clusters, records.length, topN);
+		return clusterFilter != null
+			? printReconClusterDrill(filteredClusters, records.length, (clusterFilter: String), filteredRecords, showSource)
+			: printReconHistogram(clusters, records.length, topN);
 	}
 
 	/**
@@ -7199,10 +7195,9 @@ final class Cli {
 		final forward: Bool = newLine > origLine || (newLine == origLine && newCol > origCol);
 		final backward: Bool = newLine < origLine || (newLine == origLine && newCol < origCol);
 		if (forward && newLine != origLine) return ' (was $origLine:$origCol, advanced)';
-		if (backward)
-			return
-				' (was $origLine:$origCol, moved BACKWARD — strip may have damaged earlier syntax or modelled the wrong mechanism; verify with `apq probe`)';
-		return ' (was $origLine:$origCol)';
+		return backward
+			? ' (was $origLine:$origCol, moved BACKWARD — strip may have damaged earlier syntax or modelled the wrong mechanism; verify with `apq probe`)'
+			: ' (was $origLine:$origCol)';
 	}
 
 	/**
@@ -7393,8 +7388,7 @@ final class Cli {
 
 	private static function forkPathCacheFile(): Null<String> {
 		final home: Null<String> = Sys.getEnv('HOME');
-		if (home == null || home.length == 0) return null;
-		return '$home/.config/anyparse/fork_path';
+		return home == null || home.length == 0 ? null : '$home/.config/anyparse/fork_path';
 	}
 
 	private static function readForkPathCache(): Null<String> {
@@ -7434,8 +7428,7 @@ final class Cli {
 
 	private static function stripRootPrefix(path: String, root: String): String {
 		if (StringTools.startsWith(path, root + '/')) return path.substr(root.length + 1);
-		if (path == root) return '.';
-		return path;
+		return path == root ? '.' : path;
 	}
 
 	private static function addReconCluster(map: Map<String, ReconCluster>, key: String, file: String, rawLocus: String): Void {
@@ -7516,8 +7509,9 @@ final class Cli {
 	}
 
 	private static function reconNormalize(message: Null<String>): String {
-		if (message == null || message == '') return '<no message>';
-		return StringTools.replace(StringTools.replace(message, '\n', '\\n'), '\t', '\\t');
+		return message == null || message == ''
+			? '<no message>'
+			: StringTools.replace(StringTools.replace(message, '\n', '\\n'), '\t', '\\t');
 	}
 
 	/**
@@ -7610,8 +7604,7 @@ final class Cli {
 				return EXIT_RUNTIME;
 			}
 		}
-		if (diffPath != null) return runSweepDiff(filePath, diffPath);
-		return EXIT_OK;
+		return diffPath != null ? runSweepDiff(filePath, diffPath) : EXIT_OK;
 	}
 
 	/**
@@ -7673,26 +7666,27 @@ final class Cli {
 	}
 
 	private static function loadSweepJson(path: String): Null<SweepTotals> {
-		if (!sys.FileSystem.exists(path)) return null;
-		return try {
-			final raw: String = sys.io.File.getContent(path);
-			final obj: Dynamic = haxe.Json.parse(raw);
-			final pass: Null<Int> = Reflect.hasField(obj, 'pass') ? Reflect.field(obj, 'pass') : null;
-			final fail: Null<Int> = Reflect.hasField(obj, 'fail') ? Reflect.field(obj, 'fail') : null;
-			final skipParse: Null<Int> = Reflect.hasField(obj, 'skipParse') ? Reflect.field(obj, 'skipParse') : null;
-			final skipWrite: Null<Int> = Reflect.hasField(obj, 'skipWrite') ? Reflect.field(obj, 'skipWrite') : null;
-			final skipConfig: Null<Int> = Reflect.hasField(obj, 'skipConfig') ? Reflect.field(obj, 'skipConfig') : null;
-			final skipMalformed: Null<Int> = Reflect.hasField(obj, 'skipMalformed') ? Reflect.field(obj, 'skipMalformed') : null;
-			if (pass == null || fail == null || skipParse == null) return null;
-			{
-				pass: pass,
-				fail: fail,
-				skipParse: skipParse,
-				skipWrite: skipWrite ?? 0,
-				skipConfig: skipConfig ?? 0,
-				skipMalformed: skipMalformed ?? 0,
-			};
-		} catch (_: Exception) null;
+		return !sys.FileSystem.exists(path)
+			? null
+			: try {
+				final raw: String = sys.io.File.getContent(path);
+				final obj: Dynamic = haxe.Json.parse(raw);
+				final pass: Null<Int> = Reflect.hasField(obj, 'pass') ? Reflect.field(obj, 'pass') : null;
+				final fail: Null<Int> = Reflect.hasField(obj, 'fail') ? Reflect.field(obj, 'fail') : null;
+				final skipParse: Null<Int> = Reflect.hasField(obj, 'skipParse') ? Reflect.field(obj, 'skipParse') : null;
+				final skipWrite: Null<Int> = Reflect.hasField(obj, 'skipWrite') ? Reflect.field(obj, 'skipWrite') : null;
+				final skipConfig: Null<Int> = Reflect.hasField(obj, 'skipConfig') ? Reflect.field(obj, 'skipConfig') : null;
+				final skipMalformed: Null<Int> = Reflect.hasField(obj, 'skipMalformed') ? Reflect.field(obj, 'skipMalformed') : null;
+				if (pass == null || fail == null || skipParse == null) return null;
+				{
+					pass: pass,
+					fail: fail,
+					skipParse: skipParse,
+					skipWrite: skipWrite ?? 0,
+					skipConfig: skipConfig ?? 0,
+					skipMalformed: skipMalformed ?? 0,
+				};
+			} catch (_: Exception) null;
 	}
 
 	private static inline function sweepSigned(n: Int): String return n > 0 ? '+$n' : '$n';
@@ -8039,8 +8033,7 @@ final class Cli {
 		if (lo == null || hi == null) return null;
 		final from: Int = clampLine(lo, lineCount);
 		final to: Int = clampLine(hi, lineCount);
-		if (from > to) return null;
-		return { from: from, to: to };
+		return from > to ? null : { from: from, to: to };
 	}
 
 	/** Clamp a 1-based line number into `[1, lineCount]`. */
@@ -9326,17 +9319,18 @@ final class Cli {
 		cmd: String, parse: String -> QueryNode, path: String, source: String, singleFile: Bool, ?skipOut: Array<SkipEntry>,
 		?searchKey: String
 	): Null<QueryNode> {
-		if (!singleFile && searchKey != null && source.indexOf(searchKey) < 0) return null;
-		return try parse(source) catch (exception: ParseError) {
-			if (singleFile) stderr('apq $cmd: $path: ${exception.toString()}\n');
-			if (skipOut != null) skipOut.push({ path: path, locus: formatParseErrorLocus(exception, source) });
-			null;
-		}
-		catch (exception: Exception) {
-			if (singleFile) stderr('apq $cmd: $path: ${exception.message}\n');
-			if (skipOut != null) skipOut.push({ path: path, locus: exception.message });
-			null;
-		};
+		return !singleFile && searchKey != null && source.indexOf(searchKey) < 0
+			? null
+			: try parse(source) catch (exception: ParseError) {
+				if (singleFile) stderr('apq $cmd: $path: ${exception.toString()}\n');
+				if (skipOut != null) skipOut.push({ path: path, locus: formatParseErrorLocus(exception, source) });
+				null;
+			}
+			catch (exception: Exception) {
+				if (singleFile) stderr('apq $cmd: $path: ${exception.message}\n');
+				if (skipOut != null) skipOut.push({ path: path, locus: exception.message });
+				null;
+			};
 	}
 
 	/**
@@ -9379,8 +9373,7 @@ final class Cli {
 	private static function looksLikeTypeName(s: String): Bool {
 		if (s.length == 0) return false;
 		final c: Int = StringTools.fastCodeAt(s, 0);
-		if (c < 'A'.code || c > 'Z'.code) return false;
-		return s.indexOf('/') < 0 && s.indexOf('.') < 0;
+		return c < 'A'.code || c > 'Z'.code ? false : s.indexOf('/') < 0 && s.indexOf('.') < 0;
 	}
 
 	/**
@@ -9429,8 +9422,7 @@ final class Cli {
 		// camelCase / PascalCase-with-internal-lower: lower→upper transition
 		if (mixedTransition) return true;
 		// snake_case: `_` between identifier chars
-		if (hasUnderscore && (hasLower || hasUpper)) return true;
-		return false;
+		return hasUnderscore && (hasLower || hasUpper) ? true : false;
 	}
 
 	/**
@@ -9496,8 +9488,7 @@ final class Cli {
 		if (s.indexOf('[^') >= 0) return '`[^...]` (negated character class)';
 		if (s.indexOf('(?:') >= 0) return '`(?:...)` (non-capturing group)';
 		if (s.indexOf('(?=') >= 0) return '`(?=...)` (lookahead)';
-		if (s.indexOf('(?!') >= 0) return '`(?!...)` (negative lookahead)';
-		return null;
+		return s.indexOf('(?!') >= 0 ? '`(?!...)` (negative lookahead)' : null;
 	}
 
 	/**
@@ -10077,8 +10068,7 @@ final class Cli {
 			}
 			if (srcRoot == null) return null;
 			final file: String = srcRoot + iface.split('.').join('/') + '.hx';
-			if (!FileSystem.exists(file)) return null;
-			return { source: readFile(file), ifaceModule: iface, simple: simple };
+			return !FileSystem.exists(file) ? null : { source: readFile(file), ifaceModule: iface, simple: simple };
 		}
 		final file: String = haxe.io.Path.directory(FileSystem.absolutePath(newPath)) + '/' + iface + '.hx';
 		if (!FileSystem.exists(file)) return null;
@@ -10432,8 +10422,7 @@ final class Cli {
 
 		if (raw) {
 			final content: Null<String> = resolveCodeArg('new', '-', null);
-			if (content == null) return EXIT_RUNTIME;
-			return emitNew(filePath, NewFile.createRaw(content, plugin, optsJson), [], write);
+			return content == null ? EXIT_RUNTIME : emitNew(filePath, NewFile.createRaw(content, plugin, optsJson), [], write);
 		}
 
 		var bodiesRaw: Null<String> = null;

@@ -103,9 +103,7 @@ final class SelectorSegment {
 	 */
 	public function matches(node: QueryNode, ?equiv: KindEquivalence): Bool {
 		final kindMatch: Bool = equiv == null ? node.kind == kind : equiv.equivalent(node.kind, kind);
-		if (!kindMatch) return false;
-		if (name == null) return true;
-		return node.name == name;
+		return kindMatch && (name == null || node.name == name);
 	}
 
 }

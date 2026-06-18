@@ -123,9 +123,9 @@ final class FoldStringLiterals implements Check {
 		if (node.kind != support.concatKind() || node.children.length != 2) return null;
 		final left: Null<StringLiteral> = folded(node.children[0], source, support);
 		final right: Null<StringLiteral> = folded(node.children[1], source, support);
-		if (left == null || right == null) return null;
-		if (left.quote != right.quote) return null;
-		return { quote: left.quote, content: left.content + right.content };
+		return left == null || right == null
+			? null
+			: left.quote != right.quote ? null : { quote: left.quote, content: left.content + right.content };
 	}
 
 	/** Index every concat node by its full `from:to` span key (a left-assoc chain shares `from`). */

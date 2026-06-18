@@ -125,9 +125,9 @@ class MethodChainEmit {
 			// so leave it untouched — the comment-forced mask is only needed
 			// for the NON-keep cascade modes that would otherwise glue a
 			// `.field` onto a line comment.
-			if (hasCommentBreak && mode != Keep)
-				return shapeKeep(receiver, segments, cols, commentBreakMask(mode, segments.length, commentForcedBreak));
-			return shape(mode, receiver, segments, cols, sourceBreakBefore);
+			return hasCommentBreak && mode != Keep
+				? shapeKeep(receiver, segments, cols, commentBreakMask(mode, segments.length, commentForcedBreak))
+				: shape(mode, receiver, segments, cols, sourceBreakBefore);
 		}
 
 		// Normal path: cascade evaluated against (exceeds=false /
@@ -218,8 +218,7 @@ class MethodChainEmit {
 		if (thresholds.length == 0) {
 			final modeFlat: WrapMode = evalAt(false, firing);
 			final modeBreak: WrapMode = evalAt(true, firing);
-			if (modeFlat == modeBreak) return shapeAt(modeFlat);
-			return IfFullLineExceeds(lineWidth, shapeAt(modeBreak), shapeAt(modeFlat));
+			return modeFlat == modeBreak ? shapeAt(modeFlat) : IfFullLineExceeds(lineWidth, shapeAt(modeBreak), shapeAt(modeFlat));
 		}
 		final t: Int = thresholds[0];
 		final rest: Array<Int> = thresholds.slice(1);
@@ -405,8 +404,7 @@ class MethodChainEmit {
 	 * is mid-chain keeps its dot-break (out of scope, byte-inert).
 	 */
 	private static function reGluableChain(segments: Array<Doc>): Bool {
-		if (segments.length == 0) return false;
-		return segmentOpensCall(segments[segments.length - 1]);
+		return segments.length != 0 && segmentOpensCall(segments[segments.length - 1]);
 	}
 
 	/**

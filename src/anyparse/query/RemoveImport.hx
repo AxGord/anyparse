@@ -37,11 +37,11 @@ final class RemoveImport {
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
 		final matches: Array<QueryNode> = tree.children.filter(n -> IMPORT_KINDS.contains(n.kind) && n.name == modulePath);
-		if (matches.length == 0) return Err('no import of "$modulePath" found');
-		if (matches.length > 1) return Err('ambiguous — "$modulePath" matches ${matches.length} import statements');
-
-		// Imports are top-level statements; the module root is their parent.
-		return RefactorSupport.deleteNode(source, matches[0], tree, reformat, plugin, optsJson);
+		return matches.length == 0
+			? Err('no import of "$modulePath" found')
+			: matches.length > 1
+				? Err('ambiguous — "$modulePath" matches ${matches.length} import statements')
+				: RefactorSupport.deleteNode(source, matches[0], tree, reformat, plugin, optsJson);
 	}
 
 }

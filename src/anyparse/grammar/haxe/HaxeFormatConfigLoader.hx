@@ -1399,14 +1399,11 @@ final class HaxeFormatConfigLoader {
 		// their abstract-scoped fixtures. Last-write wins against any
 		// `classEmptyLines` block that set the same shared knob.
 		final abstractSection: Null<HxFormatClassEmptyLinesConfig> = section.abstractEmptyLines;
-		if (abstractSection != null) {
-			if (abstractSection.betweenStaticFunctions != null) opt.betweenStaticFunctions = abstractSection.betweenStaticFunctions;
-		}
+		if (abstractSection != null && abstractSection.betweenStaticFunctions != null)
+			opt.betweenStaticFunctions = abstractSection.betweenStaticFunctions;
 		final externClassSection: Null<HxFormatClassEmptyLinesConfig> = section.externClassEmptyLines;
-		if (externClassSection != null) {
-			if (externClassSection.existingBetweenFields != null)
-				opt.externExistingBetweenFields = keepEmptyLinesToRuntime(externClassSection.existingBetweenFields);
-		}
+		if (externClassSection != null && externClassSection.existingBetweenFields != null)
+			opt.externExistingBetweenFields = keepEmptyLinesToRuntime(externClassSection.existingBetweenFields);
 		final interfaceSection: Null<HxFormatInterfaceEmptyLinesConfig> = section.interfaceEmptyLines;
 		if (interfaceSection != null) {
 			if (interfaceSection.betweenVars != null) opt.interfaceBetweenVars = interfaceSection.betweenVars;

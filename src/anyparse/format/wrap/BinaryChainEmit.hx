@@ -325,8 +325,7 @@ final class BinaryChainEmit {
 			if (forcedExceeds != null) return shapeAt(evalAt(forcedExceeds, firing));
 			final rFlat: { mode: WrapMode, location: WrappingLocation } = evalAt(false, firing);
 			final rBrk: { mode: WrapMode, location: WrappingLocation } = evalAt(true, firing);
-			if (sameRule(rFlat, rBrk)) return shapeAt(rFlat);
-			return Group(IfBreak(shapeAt(rBrk), shapeAt(rFlat)));
+			return sameRule(rFlat, rBrk) ? shapeAt(rFlat) : Group(IfBreak(shapeAt(rBrk), shapeAt(rFlat)));
 		}
 		final t: Int = thresholds[0];
 		final rest: Array<Int> = thresholds.slice(1);
@@ -550,8 +549,7 @@ final class BinaryChainEmit {
 		}
 		// `headBreak` puts the head operand on its own continuation line:
 		// the whole chain (head + tail) is nested and led by a `Line('\n')`.
-		if (headBreak) return Nest(cols, Concat([Line('\n'), items[0]].concat(tail)));
-		return Concat([items[0], Nest(cols, Concat(tail))]);
+		return headBreak ? Nest(cols, Concat([Line('\n'), items[0]].concat(tail))) : Concat([items[0], Nest(cols, Concat(tail))]);
 	}
 
 	private static function shapeOnePerLineAfterFirst(items: Array<Doc>, ops: Array<String>, cols: Int, location: WrappingLocation): Doc {

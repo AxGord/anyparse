@@ -203,27 +203,28 @@ class TransformLowering {
 	 * needless allocation and stops descent at inline primitive leaves.
 	 */
 	private function rebuildCore(node: ShapeNode, valueExpr: Expr): Expr {
-		if (!isTransformable(node)) return valueExpr;
-		return switch node.kind {
-			case Ref:
-				// Dispatch into the referenced rule's own `_transform`,
-				// threading `visit` so its hooks fire deeper in the tree.
-				final ref: String = node.annotations.get('base.ref');
-				callTransform(ref, valueExpr);
-			case Star:
-				// Array<X>: map each element through the element rebuild.
-				final perElem: Expr = rebuildExpr(node.children[0], macro _e);
-				macro [for (_e in $valueExpr) $perElem];
-			case Seq:
-				rebuildStruct(node, valueExpr);
-			case Alt, Opt, Terminal:
-				// A direct anonymous Alt/Opt/Terminal child reaching a
-				// grammar type is never produced by the shape builder —
-				// named types always arrive as `Ref`. Guard so a future
-				// grammar surfaces the gap instead of silently copying.
-				Context.fatalError('TransformLowering: cannot rebuild ${node.kind} child reaching a grammar type', Context.currentPos());
-				throw 'unreachable';
-		};
+		return !isTransformable(node)
+			? valueExpr
+			: switch node.kind {
+				case Ref:
+					// Dispatch into the referenced rule's own `_transform`,
+					// threading `visit` so its hooks fire deeper in the tree.
+					final ref: String = node.annotations.get('base.ref');
+					callTransform(ref, valueExpr);
+				case Star:
+					// Array<X>: map each element through the element rebuild.
+					final perElem: Expr = rebuildExpr(node.children[0], macro _e);
+					macro [for (_e in $valueExpr) $perElem];
+				case Seq:
+					rebuildStruct(node, valueExpr);
+				case Alt, Opt, Terminal:
+					// A direct anonymous Alt/Opt/Terminal child reaching a
+					// grammar type is never produced by the shape builder —
+					// named types always arrive as `Ref`. Guard so a future
+					// grammar surfaces the gap instead of silently copying.
+					Context.fatalError('TransformLowering: cannot rebuild ${node.kind} child reaching a grammar type', Context.currentPos());
+					throw 'unreachable';
+			};
 	}
 
 	/**
@@ -302,8 +303,7 @@ class TransformLowering {
 	 */
 	public static function hookFieldName(typePath: String): String {
 		final simple: String = simpleName(typePath);
-		if (simple.length == 0) return simple;
-		return simple.charAt(0).toLowerCase() + simple.substring(1);
+		return simple.length == 0 ? simple : simple.charAt(0).toLowerCase() + simple.substring(1);
 	}
 
 	private static function simpleName(typePath: String): String {

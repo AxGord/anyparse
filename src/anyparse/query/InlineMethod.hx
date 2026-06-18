@@ -283,14 +283,12 @@ final class InlineMethod {
 		if (body.kind == 'BlockBody') {
 			if (body.children.length != 1) return null;
 			final stmt: QueryNode = body.children[0];
-			if (stmt.kind != 'ReturnStmt') return null;
-			return stmt.children.length > 0 ? stmt.children[0] : null;
+			return stmt.kind != 'ReturnStmt' ? null : stmt.children.length > 0 ? stmt.children[0] : null;
 		}
 
 		// ExprBody: a single expression, possibly a `ReturnExpr` wrapper.
 		final inner: QueryNode = body.children[0];
-		if (inner.kind == 'ReturnExpr') return inner.children.length > 0 ? inner.children[0] : null;
-		return inner;
+		return inner.kind == 'ReturnExpr' ? inner.children.length > 0 ? inner.children[0] : null : inner;
 	}
 
 	/**

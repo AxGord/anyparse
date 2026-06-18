@@ -45,11 +45,12 @@ final class MetaInspect {
 		final meta: Null<Metadata> = node.annotations.get('base.meta');
 		if (meta == null) return null;
 		for (entry in meta) if (entry.name == tag) {
-			if (entry.params.length != 1) return null;
-			return switch entry.params[0].expr {
-				case EConst(CString(s, _)): s;
-				case _: null;
-			};
+			return entry.params.length != 1
+				? null
+				: switch entry.params[0].expr {
+					case EConst(CString(s, _)): s;
+					case _: null;
+				};
 		}
 		return null;
 	}

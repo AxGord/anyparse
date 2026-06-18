@@ -212,9 +212,7 @@ final class ChangeSig {
 
 		var identity: Bool = true;
 		for (i in 0...n) if (order[i] != i) identity = false;
-		if (identity) return PErr('permutation "$perm" is the identity — nothing to reorder');
-
-		return POk(order);
+		return identity ? PErr('permutation "$perm" is the identity — nothing to reorder') : POk(order);
 	}
 
 }

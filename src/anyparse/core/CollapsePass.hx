@@ -251,8 +251,9 @@ final class CollapsePass {
 		// HEAD-BREAK re-measure: when the chain broke and the glued-flat tail
 		// fits at its captured continuation indent, commit to break-after-head.
 		final headBreak: Null<Doc> = broke ? commitHeadBreak(tagged, decisions, width) : null;
-		if (headBreak != null) return WrapBoundary(headBreak);
-		return WrapBoundary(Group(IfBreak(rewrite(tagged.brk, decisions, broke, width), rewrite(tagged.flat, decisions, false, width))));
+		return headBreak != null
+			? WrapBoundary(headBreak)
+			: WrapBoundary(Group(IfBreak(rewrite(tagged.brk, decisions, broke, width), rewrite(tagged.flat, decisions, false, width))));
 	}
 
 	/**
@@ -318,13 +319,12 @@ final class CollapsePass {
 			tailParts.push(fill.items[i]);
 		}
 		final gluedTail: Doc = Concat(tailParts);
-		if (indent + DocMeasure.flatTokenWidth(gluedTail) > width) return null;
-		// Head keeps its own inner wrapping (the call may still break its args);
-		// the tail rides one continuation line at the chain's one-tab indent.
-		return Concat([
-			rewrite(head, decisions, false, width),
-			Nest(fill.cols, Concat([Line('\n'), gluedTail])),
-		]);
+		return indent + DocMeasure.flatTokenWidth(gluedTail) > width
+			? null
+			: Concat([
+				rewrite(head, decisions, false, width),
+				Nest(fill.cols, Concat([Line('\n'), gluedTail])),
+			]);
 	}
 
 	/**
@@ -423,14 +423,12 @@ final class CollapsePass {
 		if (tagged == null) return null;
 		if (!opens(tagged.marker, decisions)) return null;
 		final headBreak: Null<Doc> = commitHeadBreak(tagged, decisions, width);
-		if (headBreak == null) return null;
-		// Glue: left commits head-break (WrapBoundary preserved to match the
-		// add-chain's own boundary scoping); the operator continuation is
-		// flattened so its leading space-`Line` stays a space.
-		return Group(Concat([
-			WrapBoundary(headBreak),
-			Flatten(rewrite(parts.cont, decisions, false, width)),
-		]));
+		return headBreak == null
+			? null
+			: Group(Concat([
+				WrapBoundary(headBreak),
+				Flatten(rewrite(parts.cont, decisions, false, width)),
+			]));
 	}
 
 	/**
@@ -565,11 +563,9 @@ final class CollapsePass {
 		// The glued first line ends at the last segment's call open delim (its
 		// args break onto their own lines). It fits iff `col + prefix <= width`.
 		final prefix: Null<Int> = gluedFirstLineWidth(glueShape);
-		if (prefix == null || col + prefix > width) return rewrite(inner, decisions, insideBroken, width);
-		// Re-glue: the call args wrap inside the glued chain (fork strips the
-		// chain break, keeps the callParameter break). Recurse so inner parens /
-		// sub-chains still resolve.
-		return rewrite(glueShape, decisions, insideBroken, width);
+		return prefix == null || col + prefix > width
+			? rewrite(inner, decisions, insideBroken, width)
+			: rewrite(glueShape, decisions, insideBroken, width);
 	}
 
 	/**
@@ -682,8 +678,9 @@ final class CollapsePass {
 	 * a `WrapBoundary` whose force-flat a plain `Flatten` would not survive.
 	 */
 	private static function flattenIfFittingCall(operand: Doc, contColUpper: Int, width: Int): Doc {
-		if (!DocMeasure.operandIsCall(operand)) return operand;
-		return contColUpper + DocMeasure.flatTokenWidth(operand) <= width ? HardFlatten(operand) : operand;
+		return !DocMeasure.operandIsCall(operand)
+			? operand
+			: contColUpper + DocMeasure.flatTokenWidth(operand) <= width ? HardFlatten(operand) : operand;
 	}
 
 	/** True iff `d`'s subtree contains any `CollapseAddProbe` marker. */
@@ -796,8 +793,7 @@ final class CollapsePass {
 			case WrapBoundary(Group(IfFullLineExceeds(_, _, fl))): fl;
 			case _: null;
 		};
-		if (flat == null) return null;
-		return subtreeOpens(flat, decisions) ? flat : null;
+		return flat == null ? null : subtreeOpens(flat, decisions) ? flat : null;
 	}
 
 	/**

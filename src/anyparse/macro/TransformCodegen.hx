@@ -67,9 +67,7 @@ class TransformCodegen {
 			pos: Context.currentPos(),
 			kind: TDStructure,
 			fields: structFields,
-			doc: 'Per-type rewrite hooks for the generated deep transform. ' + 'Each optional field is a `T -> T` rewrite applied to every '
-			+ 'node of that type during the bottom-up walk. An empty `{}` ' + 'is a structural identity; setting one hook is the rewrite '
-			+ 'primitive for that node type.',
+			doc: 'Per-type rewrite hooks for the generated deep transform. Each optional field is a `T -> T` rewrite applied to every node of that type during the bottom-up walk. An empty `{}` is a structural identity; setting one hook is the rewrite primitive for that node type.',
 			meta: [],
 		});
 	}
@@ -110,8 +108,7 @@ class TransformCodegen {
 		return {
 			name: 'transform',
 			access: [APublic, AStatic],
-			doc: 'Deep whole-tree transform: bottom-up walk applying each set '
-				+ '`visit` hook to every node of its type. An empty `visit` ' + '(`{}`) is a structural identity.',
+			doc: 'Deep whole-tree transform: bottom-up walk applying each set `visit` hook to every node of its type. An empty `visit` (`{}`) is a structural identity.',
 			kind: FFun({ args: args, ret: rootCT, expr: body }),
 			pos: Context.currentPos(),
 		};

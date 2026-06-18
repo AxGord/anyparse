@@ -78,7 +78,7 @@ final class LintConfig {
 	/** Whether `id` runs in the default set (absent, or no `enabled` key → true). */
 	public function enabledFor(id: String): Bool {
 		final rc: Null<RuleConfig> = _rules[id];
-		return rc == null ? true : (rc.enabled ?? true);
+		return rc == null || (rc.enabled ?? true);
 	}
 
 	/** The configured severity override for `id`, or null when unset. */
@@ -92,8 +92,7 @@ final class LintConfig {
 		final rc: Null<RuleConfig> = _rules[id];
 		if (rc == null) return null;
 		final v: Null<Dynamic> = rc.props.get(key);
-		if (v == null || !(v is Int || v is Float)) return null;
-		return Std.int(v);
+		return v == null || !(v is Int || v is Float) ? null : Std.int(v);
 	}
 
 }

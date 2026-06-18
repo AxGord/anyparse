@@ -96,8 +96,7 @@ final class NewLiteral {
 	private static function matches(node: QueryNode, source: String, newExprKind: String, typeName: String): Bool {
 		if (node.kind != newExprKind || node.name != typeName) return false;
 		final span: Null<Span> = node.span;
-		if (span == null) return false;
-		return StringTools.endsWith(StringTools.rtrim(source.substring(span.from, span.to)), '()');
+		return span != null && StringTools.endsWith(StringTools.rtrim(source.substring(span.from, span.to)), '()');
 	}
 
 	/** Index every `new` node by its `from:to` span key (for `fix` to re-find a flagged node). */

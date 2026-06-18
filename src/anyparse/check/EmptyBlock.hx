@@ -145,8 +145,7 @@ final class EmptyBlock implements Check {
 		// Empty `else {}` — this node is the else branch (then + else both present).
 		if (kids.length >= 3 && kids[2] == node) {
 			final thenSpan: Null<Span> = kids[1].span;
-			if (thenSpan == null) return null;
-			return { span: RefactorSupport.lineExtendedSpan(source, new Span(thenSpan.to, nspan.to)), text: '' };
+			return thenSpan == null ? null : { span: RefactorSupport.lineExtendedSpan(source, new Span(thenSpan.to, nspan.to)), text: '' };
 		}
 		// Empty no-else `if (cond) {}` with a side-effect-free condition — safe to
 		// drop only when the `if` is a statement-list member, not a branch body.
@@ -155,8 +154,7 @@ final class EmptyBlock implements Check {
 			&& blockKinds.contains(grandparent.kind)
 		) {
 			final pspan: Null<Span> = parent.span;
-			if (pspan == null) return null;
-			return { span: RefactorSupport.lineExtendedSpan(source, pspan), text: '' };
+			return pspan == null ? null : { span: RefactorSupport.lineExtendedSpan(source, pspan), text: '' };
 		}
 		return null;
 	}

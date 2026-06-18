@@ -24,7 +24,7 @@ final class StringInput implements Input {
 	public inline function charCodeAt(pos: Int): Int {
 		if (pos < 0 || pos >= _source.length) return -1;
 		final c: Null<Int> = _source.charCodeAt(pos);
-		return c == null ? -1 : c;
+		return c ?? -1;
 	}
 
 	public inline function substring(from: Int, to: Int): String {

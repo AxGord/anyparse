@@ -222,8 +222,7 @@ class Build {
 			);
 		if (optionsTypePath != null && formatInfo.isBinary)
 			Context.fatalError(
-				'Build.buildWriter: binary writer does not accept an options typedef ' + '— drop the second argument',
-				Context.currentPos()
+				'Build.buildWriter: binary writer does not accept an options typedef — drop the second argument', Context.currentPos()
 			);
 
 		final ctx: LoweringCtx = new LoweringCtx();
@@ -278,14 +277,12 @@ class Build {
 	}
 
 	private static function extractTypePath(e: Null<Expr>): Null<String> {
-		if (e == null) return null;
-		// Haxe passes a null-literal Expr (`EConst(CIdent("null"))`) when the
-		// caller omits an optional macro arg at a `@:build(...)` meta call,
-		// rather than letting the macro see a plain `null` reference.
-		return switch e.expr {
-			case EConst(CIdent('null')): null;
-			case _: ExprTools.toString(e);
-		};
+		return e == null
+			? null
+			: switch e.expr {
+				case EConst(CIdent('null')): null;
+				case _: ExprTools.toString(e);
+			};
 	}
 
 	/**
@@ -297,25 +294,26 @@ class Build {
 	 * meta-call site.
 	 */
 	private static function readBoolOption(options: Null<Expr>, fieldName: String, defaultValue: Bool): Bool {
-		if (options == null) return defaultValue;
-		return switch options.expr {
-			case EConst(CIdent('null')): defaultValue;
-			case EObjectDecl(fields):
-				for (f in fields) if (f.field == fieldName) {
-					switch f.expr.expr {
-						case EConst(CIdent('true')):
-							return true;
-						case EConst(CIdent('false')):
-							return false;
-						case _:
-							Context.fatalError('Build: option "$fieldName" must be a literal `true` or `false`', f.expr.pos);
+		return options == null
+			? defaultValue
+			: switch options.expr {
+				case EConst(CIdent('null')): defaultValue;
+				case EObjectDecl(fields):
+					for (f in fields) if (f.field == fieldName) {
+						switch f.expr.expr {
+							case EConst(CIdent('true')):
+								return true;
+							case EConst(CIdent('false')):
+								return false;
+							case _:
+								Context.fatalError('Build: option "$fieldName" must be a literal `true` or `false`', f.expr.pos);
+						}
 					}
-				}
-				defaultValue;
-			case _:
-				Context.fatalError('Build: options argument must be an anonymous-struct literal (e.g. `{trivia: true}`)', options.pos);
-				throw 'unreachable';
-		};
+					defaultValue;
+				case _:
+					Context.fatalError('Build: options argument must be an anonymous-struct literal (e.g. `{trivia: true}`)', options.pos);
+					throw 'unreachable';
+			};
 	}
 
 	private static function readSchemaMeta(meta: Metadata, targetTypePath: String): String {

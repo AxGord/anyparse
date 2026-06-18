@@ -170,7 +170,7 @@ class BinaryWriterLowering {
 	 */
 	private static function makeIntEncodeExpr(encoding: String): Expr {
 		return switch encoding {
-			case 'Dec': macro Std.string(_v);
+			case 'Dec': macro '$_v';
 			case 'Oct':
 				macro {
 					if (_v < 0) throw new haxe.Exception('negative int cannot be encoded as octal');

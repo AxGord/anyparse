@@ -32,8 +32,7 @@ final class SourceSlice {
 		if (span == null) return '';
 		final from: Int = span.from < 0 ? 0 : span.from;
 		final to: Int = span.to > source.length ? source.length : span.to;
-		if (from >= to) return '';
-		return source.substring(from, to);
+		return from >= to ? '' : source.substring(from, to);
 	}
 
 	/**
@@ -66,8 +65,7 @@ final class SourceSlice {
 		if (endLineTrim.endsWith('*/')) {
 			var j: Int = i;
 			while (j >= 0 && source.substring(lineStart[j], lineEnd[j]).indexOf('/*') < 0) j--;
-			if (j < 0) return null;
-			return source.substring(lineStart[j], lineEnd[i]);
+			return j < 0 ? null : source.substring(lineStart[j], lineEnd[i]);
 		}
 		if (endLineTrim.startsWith('//')) {
 			var k: Int = i;

@@ -64,7 +64,7 @@ class SpanTypeSynth {
 	private static inline final SPANNED_META: String = ':spanned';
 
 	private static final shapes: Array<ShapeBuilder.ShapeResult> = [];
-	private static final defined: Map<String, Bool> = new Map();
+	private static final defined: Map<String, Bool> = [];
 
 	public static function arm(shape: ShapeBuilder.ShapeResult): Void {
 		if (shapes.indexOf(shape) == -1) shapes.push(shape);

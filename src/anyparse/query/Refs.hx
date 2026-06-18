@@ -135,10 +135,11 @@ final class Refs {
 		// Decl-host takes precedence over identKind: a single grammar
 		// would normally place the decl name on a different ctor than
 		// the reference ctor, but the contract leaves the option open.
-		if (shape.declHostKinds.contains(kind)) return RefKind.Decl;
-		if (shape.selfScopeDeclKinds.contains(kind)) return RefKind.Decl;
-		if (kind == shape.identKind) return isWriteTarget ? RefKind.Write : RefKind.Read;
-		return null;
+		return shape.declHostKinds.contains(kind)
+			? RefKind.Decl
+			: shape.selfScopeDeclKinds.contains(kind)
+				? RefKind.Decl
+				: kind == shape.identKind ? isWriteTarget ? RefKind.Write : RefKind.Read : null;
 	}
 
 }

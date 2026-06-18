@@ -109,8 +109,7 @@ final class CallSites {
 
 		final hits: Array<RefHit> = Refs.find(name, tree, shape);
 		final bindingFrom: Null<Int> = RefactorSupport.resolveBindingFrom(cursorNode, hits);
-		if (bindingFrom == null) return null;
-		return RefactorSupport.nodeAtFrom(tree, bindingFrom);
+		return bindingFrom == null ? null : RefactorSupport.nodeAtFrom(tree, bindingFrom);
 	}
 
 	/**
@@ -239,11 +238,9 @@ final class CallSites {
 			for (c in node.children) scan(c);
 		}
 		scan(tree);
-		if (error != null) return error;
-		if (thisAccess > thisSiteCount)
-			return
-				'"$name" is referenced as a value (not called) via `this.$name` — indirect calls through a captured reference cannot be tracked';
-		return null;
+		return error ?? (thisAccess > thisSiteCount
+			? '"$name" is referenced as a value (not called) via `this.$name` — indirect calls through a captured reference cannot be tracked'
+			: null);
 	}
 
 	/**
@@ -309,7 +306,7 @@ final class CallSites {
 		if (callee.kind == 'FieldAccess' && callee.name == name && callee.children.length > 0) {
 			final recv: QueryNode = callee.children[0];
 			if (recv.kind == 'IdentExpr' && recv.name == 'this') return CalleeThis;
-			final recvName: String = recv.name == null ? recv.kind : recv.name;
+			final recvName: String = recv.name ?? recv.kind;
 			return CalleeOtherReceiver(recvName);
 		}
 		return CalleeNone;

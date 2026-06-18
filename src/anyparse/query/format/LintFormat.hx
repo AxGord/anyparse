@@ -36,7 +36,7 @@ final class LintFormat {
 	 */
 	public static function checkstyle(violations: Array<Violation>, sourceOf: Map<String, String>): String {
 		final order: Array<String> = [];
-		final byFile: Map<String, Array<Violation>> = new Map();
+		final byFile: Map<String, Array<Violation>> = [];
 		for (v in violations) {
 			var list: Null<Array<Violation>> = byFile[v.file];
 			if (list == null) {

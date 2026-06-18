@@ -391,8 +391,7 @@ class Codegen {
 				ret: macro :Bool,
 				expr: macro {
 					final len: Int = lit.length;
-					if (ctx.pos + len > ctx.input.length) return false;
-					return ctx.input.substring(ctx.pos, ctx.pos + len) == lit;
+					return ctx.pos + len <= ctx.input.length && ctx.input.substring(ctx.pos, ctx.pos + len) == lit;
 				},
 			}),
 			pos: Context.currentPos(),

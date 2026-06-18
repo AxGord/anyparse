@@ -41,31 +41,24 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 		final elseNode: QueryNode = ternary.children[2];
 		final thenBool: Null<Bool> = boolValue(thenNode, source);
 		final elseBool: Null<Bool> = boolValue(elseNode, source);
-		if (thenBool == null && elseBool == null) return null;
-
-		if (thenBool != null && elseBool != null) {
-			// cond ? true : false -> cond ; cond ? false : true -> !cond.
-			// Same literal both sides drops cond's evaluation — left alone.
-			if (thenBool && !elseBool) return plain(cond, source).src;
-			if (!thenBool && elseBool) return negate(cond, source).src;
-			return null;
-		}
-
-		if (thenBool != null) {
-			// cond ? true : x -> cond || x   ;   cond ? false : x -> !cond && x
-			return thenBool ? joinOr(plain(cond, source), plain(elseNode, source)) : joinAnd(negate(cond, source), plain(elseNode, source));
-		}
-		// cond ? x : true -> !cond || x   ;   cond ? x : false -> cond && x  (elseBool is non-null here)
-		return elseBool == true
-			? joinOr(negate(cond, source), plain(thenNode, source))
-			: joinAnd(plain(cond, source), plain(thenNode, source));
+		return thenBool == null && elseBool == null
+			? null
+			: thenBool != null && elseBool != null
+				? thenBool && !elseBool ? plain(cond, source).src : !thenBool && elseBool ? negate(cond, source).src : null
+				: thenBool != null
+					? thenBool
+						? joinOr(plain(cond, source), plain(elseNode, source))
+						: joinAnd(negate(cond, source), plain(elseNode, source))
+					: elseBool == true
+						? joinOr(negate(cond, source), plain(thenNode, source))
+						: joinAnd(plain(cond, source), plain(thenNode, source));
 	}
 
 	/** `node`'s boolean-literal value, or null when it is not a `true` / `false` literal. */
 	private static function boolValue(node: QueryNode, source: String): Null<Bool> {
 		if (node.kind != 'BoolLit') return null;
 		final s: String = src(node, source);
-		return s == 'true' ? true : (s == 'false' ? false : null);
+		return s == 'true' || (s != 'false' && null);
 	}
 
 	/** `a && b`, each operand parenthesised iff it binds strictly looser than `&&`. */

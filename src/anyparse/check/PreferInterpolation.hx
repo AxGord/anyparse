@@ -128,8 +128,7 @@ final class PreferInterpolation implements Check {
 		final span: Null<Span> = arg.span;
 		if (span == null) return null;
 		final src: String = source.substring(span.from, span.to);
-		if (!interpolationSafe(src)) return null;
-		return "'${" + src + "}'";
+		return !interpolationSafe(src) ? null : "'${" + src + "}'";
 	}
 
 	/** Whether `src` can sit inside a single-quoted `'${ … }'` without breaking the string. */

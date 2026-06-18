@@ -87,8 +87,7 @@ final class HxExprUtil {
 		final inner: Null<Dynamic> = unwrap(params[0]);
 		if (inner == null) return false;
 		final ctor: Null<String> = Type.enumConstructor(inner);
-		if (ctor == null) return false;
-		return REFUSED_CASE_BODY_CTORS.contains(ctor);
+		return ctor != null && REFUSED_CASE_BODY_CTORS.contains(ctor);
 	}
 
 	/**
@@ -122,8 +121,7 @@ final class HxExprUtil {
 		// Decl element: `HxTopLevelDeclT` struct — the `Conditional` ctor
 		// lives on the wrapped `.decl` enum.
 		final decl: Null<Dynamic> = Reflect.field(raw, 'decl');
-		if (decl == null || Type.getEnum(decl) == null) return false;
-		return Type.enumConstructor(decl) == 'Conditional';
+		return decl != null && Type.getEnum(decl) != null && Type.enumConstructor(decl) == 'Conditional';
 	}
 
 	/**
@@ -141,8 +139,7 @@ final class HxExprUtil {
 	 */
 	public static function operandIsBlockExpr(raw: Null<Dynamic>): Bool {
 		final e: Null<Dynamic> = unwrap(raw);
-		if (e == null || Type.getEnum(e) == null) return false;
-		return Type.enumConstructor(e) == 'BlockExpr';
+		return e != null && Type.getEnum(e) != null && Type.enumConstructor(e) == 'BlockExpr';
 	}
 
 	/**
@@ -168,20 +165,20 @@ final class HxExprUtil {
 		final e: Null<Dynamic> = unwrap(raw);
 		if (e == null) return HxArrayBracketKind.ArrayLiteral;
 		final ctor: Null<String> = Type.enumConstructor(e);
-		if (ctor == null) return HxArrayBracketKind.ArrayLiteral;
-		return switch ctor {
-			case 'Arrow': HxArrayBracketKind.MapLiteral;
-			case 'ForExpr', 'WhileExpr': HxArrayBracketKind.Comprehension;
-			case _: HxArrayBracketKind.ArrayLiteral;
-		};
+		return ctor == null
+			? HxArrayBracketKind.ArrayLiteral
+			: switch ctor {
+				case 'Arrow': HxArrayBracketKind.MapLiteral;
+				case 'ForExpr', 'WhileExpr': HxArrayBracketKind.Comprehension;
+				case _: HxArrayBracketKind.ArrayLiteral;
+			};
 	}
 
 	public static function endsWithCloseBrace(raw: Null<Dynamic>): Bool {
 		final e: Null<Dynamic> = unwrap(raw);
 		if (e == null) return false;
 		final ctor: Null<String> = Type.enumConstructor(e);
-		if (ctor == null) return false;
-		return switch ctor {
+		return ctor != null && switch ctor {
 			case 'SwitchExpr', 'SwitchExprBare':
 				true;
 			// `{ … }` block expression — `}` is the literal last token.
@@ -460,8 +457,7 @@ final class HxExprUtil {
 		// through `MetaExpr`).
 		if (ctor == 'ReturnExpr') {
 			final params: Null<Array<Dynamic>> = Type.enumParameters(e);
-			if (params == null || params.length == 0) return false;
-			return stmtExprNoSemi(params[0]);
+			return params != null && params.length != 0 && stmtExprNoSemi(params[0]);
 		}
 		// Slice 19: walk through `*Assign` into its right operand —
 		// `x = if (…) {…} else {…}` ends with the else block's `}`.
@@ -478,8 +474,9 @@ final class HxExprUtil {
 			final rhs: Null<Dynamic> = unwrap(params[1]);
 			if (rhs == null) return false;
 			final rhsCtor: Null<String> = Type.enumConstructor(rhs);
-			if (rhsCtor == 'ObjectLit' || rhsCtor == 'ArrayExpr' || rhsCtor == 'DollarBlockExpr' || rhsCtor == 'Is') return false;
-			return stmtExprNoSemi(rhs);
+			return rhsCtor != 'ObjectLit' && rhsCtor != 'ArrayExpr' && rhsCtor != 'DollarBlockExpr' && rhsCtor != 'Is' && stmtExprNoSemi(
+				rhs
+			);
 		}
 		// Slice 19: an `IfExpr` carries `thenBranch`/`elseBranch`; the
 		// statement's last token is the else branch's last token, or
@@ -502,44 +499,8 @@ final class HxExprUtil {
 		// Slice 19: recursion target. Standalone `{ … }` at statement
 		// position is `HxStatement.BlockStmt`, so this branch only
 		// fires when reached through Assign / IfExpr above.
-		if (ctor == 'BlockExpr') return true;
-		// Slice 30: object literal at statement position is brace-
-		// terminated. `{ foo: 1 }` reaches `ExprStmt(ObjectLit)` after
-		// `BlockStmt`'s greedy `{` attempt fails on the `IDENT:` field
-		// shape, so the gate must allow `;` elision matching Haxe's
-		// rule that a `}`-closed statement needs no `;`. Twin of the
-		// `BlockExpr` arm above — direct ctor-name match, no recursion.
-		if (ctor == 'ObjectLit') return true;
-		// Slice 39: array literal at statement position is `]`-terminated
-		// (the closing bracket is the statement's last token, same role
-		// as `}` for ObjectLit / BlockExpr). Drives `sameline/issue_365`
-		// (`[if (foo) bar else foo, …]` as sole stmt of fn body) — Haxe
-		// elides the `;` after a `]`-closed statement just like after a
-		// `}`-closed one. Byte-twin of the `ObjectLit` direct-return; the
-		// `*Assign` arm above carves `x = [1, 2, 3]` out so RHS arrays
-		// keep `;` strict.
-		if (ctor == 'ArrayExpr') return true;
-		// Slice 42: macro block-reification `${expr}` at statement position
-		// is `}`-terminated (`@:lead("${") @:trail("}")` on the ctor —
-		// the closing `}` is the statement's last token). Drives
-		// `lineends/issue_215_macro_with_dollar_block` (`macro { $e0;
-		// ${loop(el)} };` — `${…}` as last stmt of macro block). Byte-
-		// twin of `ObjectLit` / `ArrayExpr` direct-returns; the `*Assign`
-		// arm above carves `x = ${expr}` out so RHS keeps `;` strict.
-		if (ctor == 'DollarBlockExpr') return true;
-		// Slice 43: `Is` operator at statement position. Departs from
-		// the brace-terminated rule of the other direct-returns above —
-		// `Is`'s last token is a type-ref leaf (`String` ident in
-		// `x is String`), not `}` / `]`. Corpus driver:
-		// `whitespace/issue_605_operator_is` (`{x is String}` as the
-		// sole stmt of an outer brace-block — the inner ExprStmt has no
-		// `;` before the closing `}`). Permissive extension of
-		// "last-stmt-in-block" semantics consistent with the existing
-		// `{a:1} {b:2}` (two ObjectLit stmts no `;`) acceptance. The
-		// `*Assign` arm above carves `x = a is Int` out so RHS keeps
-		// `;` strict.
-		if (ctor == 'Is') return true;
-		return endsWithCloseBrace(e);
+		return ctor == 'BlockExpr'
+			|| (ctor == 'ObjectLit' || (ctor == 'ArrayExpr' || (ctor == 'DollarBlockExpr' || (ctor == 'Is' || endsWithCloseBrace(e)))));
 	}
 
 	/**
@@ -635,8 +596,7 @@ final class HxExprUtil {
 	 *  - `Trivial<T>` struct wrapper (Trivia-mode AST node) → `raw.node`
 	 */
 	private static inline function unwrap(raw: Null<Dynamic>): Null<Dynamic> {
-		if (raw == null) return null;
-		return Type.getEnum(raw) != null ? raw : Reflect.field(raw, 'node');
+		return raw == null ? null : Type.getEnum(raw) != null ? raw : Reflect.field(raw, 'node');
 	}
 
 	/**
@@ -705,8 +665,7 @@ final class HxExprUtil {
 			}
 		}
 		final body: Null<Array<Dynamic>> = Reflect.field(payload, 'body');
-		if (body != null && body.length > 0) return classifyTopLevelDeclElement(body[body.length - 1], Tail);
-		return null;
+		return body != null && body.length > 0 ? classifyTopLevelDeclElement(body[body.length - 1], Tail) : null;
 	}
 
 	/**
@@ -755,8 +714,7 @@ final class HxExprUtil {
 			}
 		}
 		final elseBody: Null<Array<Dynamic>> = Reflect.field(payload, 'elseBody');
-		if (elseBody != null && elseBody.length > 0) return classifyTopLevelDeclElement(elseBody[0], Head);
-		return null;
+		return elseBody != null && elseBody.length > 0 ? classifyTopLevelDeclElement(elseBody[0], Head) : null;
 	}
 
 	/**
@@ -782,23 +740,24 @@ final class HxExprUtil {
 		final ctor: Null<String> = Type.enumConstructor(decl);
 		if (ctor == null) return null;
 		final params: Null<Array<Dynamic>> = Type.enumParameters(decl);
-		if (params == null || params.length == 0) return null;
-		return switch ctor {
-			case 'Conditional': direction == Tail ? tailLeafClassifyImports(params[0]) : headLeafClassifyImports(params[0]);
-			case 'ImportDecl' | 'ImportWildDecl' | 'UsingDecl' | 'UsingWildDecl':
-				final path: Null<String> = params[0];
-				path == null ? null : { ctorName: ctor, path: path };
-			case 'ImportAliasDecl':
-				// First ctor arg is `HxImportAlias` struct, not a String —
-				// the lowering rejects multi-arg enum branches so the path
-				// lives in the wrapped struct's `path` field instead of
-				// being a positional sibling.
-				final aliasDecl: Null<Dynamic> = unwrapTrivialStruct(params[0]);
-				if (aliasDecl == null) return null;
-				final path: Null<String> = Reflect.field(aliasDecl, 'path');
-				path == null ? null : { ctorName: ctor, path: path };
-			case _: null;
-		};
+		return params == null || params.length == 0
+			? null
+			: switch ctor {
+				case 'Conditional': direction == Tail ? tailLeafClassifyImports(params[0]) : headLeafClassifyImports(params[0]);
+				case 'ImportDecl' | 'ImportWildDecl' | 'UsingDecl' | 'UsingWildDecl':
+					final path: Null<String> = params[0];
+					path == null ? null : { ctorName: ctor, path: path };
+				case 'ImportAliasDecl':
+					// First ctor arg is `HxImportAlias` struct, not a String —
+					// the lowering rejects multi-arg enum branches so the path
+					// lives in the wrapped struct's `path` field instead of
+					// being a positional sibling.
+					final aliasDecl: Null<Dynamic> = unwrapTrivialStruct(params[0]);
+					if (aliasDecl == null) return null;
+					final path: Null<String> = Reflect.field(aliasDecl, 'path');
+					path == null ? null : { ctorName: ctor, path: path };
+				case _: null;
+			};
 	}
 
 	/**
@@ -845,8 +804,7 @@ final class HxExprUtil {
 			}
 		}
 		final body: Null<Array<Dynamic>> = Reflect.field(payload, 'body');
-		if (body != null && body.length > 0) return classifyKeepsBlankElement(body[body.length - 1]);
-		return null;
+		return body != null && body.length > 0 ? classifyKeepsBlankElement(body[body.length - 1]) : null;
 	}
 
 	/**
@@ -865,21 +823,22 @@ final class HxExprUtil {
 		final ctor: Null<String> = Type.enumConstructor(decl);
 		if (ctor == null) return null;
 		final params: Null<Array<Dynamic>> = Type.enumParameters(decl);
-		if (params == null || params.length == 0) return null;
-		return switch ctor {
-			case 'Conditional':
-				tailLeafKeepsBlankAfterConditional(params[0]);
-			// Import / using family — fork's `markImports` re-adds a blank.
-			case 'ImportDecl' | 'ImportWildDecl' | 'UsingDecl' | 'UsingWildDecl' | 'ImportAliasDecl':
-				{ ctorName: ctor, path: '' };
-			// Type-level decls — fork's `betweenTypes` (default 1) adds a blank.
-			case 'ClassDecl' | 'InterfaceDecl' | 'AbstractClassDecl' | 'AbstractDecl' | 'EnumDecl' | 'EnumAbstractDecl' | 'TypedefDecl'
-				| 'FnDecl'
-				| 'VarDecl'
-				| 'FinalDecl':
-				{ ctorName: ctor, path: '' };
-			case _: null;
-		};
+		return params == null || params.length == 0
+			? null
+			: switch ctor {
+				case 'Conditional':
+					tailLeafKeepsBlankAfterConditional(params[0]);
+				// Import / using family — fork's `markImports` re-adds a blank.
+				case 'ImportDecl' | 'ImportWildDecl' | 'UsingDecl' | 'UsingWildDecl' | 'ImportAliasDecl':
+					{ ctorName: ctor, path: '' };
+				// Type-level decls — fork's `betweenTypes` (default 1) adds a blank.
+				case 'ClassDecl' | 'InterfaceDecl' | 'AbstractClassDecl' | 'AbstractDecl' | 'EnumDecl' | 'EnumAbstractDecl' | 'TypedefDecl'
+					| 'FnDecl'
+					| 'VarDecl'
+					| 'FinalDecl':
+					{ ctorName: ctor, path: '' };
+				case _: null;
+			};
 	}
 
 	/**
@@ -892,8 +851,7 @@ final class HxExprUtil {
 	 * field and pass through unchanged.
 	 */
 	private static inline function unwrapTrivialStruct(raw: Null<Dynamic>): Null<Dynamic> {
-		if (raw == null) return null;
-		return Reflect.hasField(raw, 'node') ? Reflect.field(raw, 'node') : raw;
+		return raw == null ? null : Reflect.hasField(raw, 'node') ? Reflect.field(raw, 'node') : raw;
 	}
 
 }

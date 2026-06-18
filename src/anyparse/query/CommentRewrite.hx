@@ -67,8 +67,7 @@ final class CommentRewrite {
 		} catch (exception: Exception)
 			return Err(exception.message);
 
-		if (edits.length == 0) return Ok(source);
-		return RefactorSupport.canonicalize(source, edits, reformat, plugin, optsJson);
+		return edits.length == 0 ? Ok(source) : RefactorSupport.canonicalize(source, edits, reformat, plugin, optsJson);
 	}
 
 	/**

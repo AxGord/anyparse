@@ -103,8 +103,7 @@ typedef FileChange = {
 final class CrossRename {
 
 	/** The advisory appended to every successful rename. */
-	private static final ADVISORY: String = 'type-namespace rename only — verify bare `Class<T>` value uses '
-		+ '(`var c = T;`), aliased imports (`import pkg.T as U;`), and any ' + 'cross-package declarations by hand.';
+	private static final ADVISORY: String = 'type-namespace rename only — verify bare `Class<T>` value uses (`var c = T;`), aliased imports (`import pkg.T as U;`), and any cross-package declarations by hand.';
 
 	/**
 	 * Rename the type declaration at `line:col` (in `cursorFile` /
@@ -187,9 +186,7 @@ final class CrossRename {
 			changes.push({ file: entry.file, newSource: newSource, count: occurrences.length });
 		}
 
-		if (changes.length == 0) return Err('rename "$typeName" -> "$newName" changed nothing');
-
-		return Ok(changes, ADVISORY);
+		return changes.length == 0 ? Err('rename "$typeName" -> "$newName" changed nothing') : Ok(changes, ADVISORY);
 	}
 
 	/**
@@ -309,8 +306,7 @@ final class CrossRename {
 		final lastSegment: String = lastDot < 0 ? pathName : pathName.substr(lastDot + 1);
 		if (lastSegment != typeName) return -1;
 		final pathStart: Int = source.indexOf(pathName, span.from);
-		if (pathStart < 0 || pathStart >= span.to) return -1;
-		return pathStart + lastDot + 1;
+		return pathStart < 0 || pathStart >= span.to ? -1 : pathStart + lastDot + 1;
 	}
 
 }

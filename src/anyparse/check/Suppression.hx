@@ -54,8 +54,8 @@ final class Suppression {
 	public static function apply(violations: Array<Violation>, files: Array<{ file: String, source: String }>): Array<Violation> {
 		if (violations.length == 0) return violations;
 
-		final sourceByFile: Map<String, String> = new Map();
-		final entriesByFile: Map<String, Array<Entry>> = new Map();
+		final sourceByFile: Map<String, String> = [];
+		final entriesByFile: Map<String, Array<Entry>> = [];
 		for (f in files) {
 			sourceByFile[f.file] = f.source;
 			entriesByFile[f.file] = collectEntries(f.source);

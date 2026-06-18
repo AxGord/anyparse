@@ -46,14 +46,14 @@ final class SymbolQuery {
 	public static function symbols(
 		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?kindFilter: String
 	): Array<SymbolRow> {
-		final sourceOf: Map<String, String> = new Map();
+		final sourceOf: Map<String, String> = [];
 		for (entry in files) sourceOf.set(entry.file, entry.source);
 
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		final rows: Array<SymbolRow> = [];
 		for (info in index.allFiles()) {
 			final maybeSrc: Null<String> = sourceOf.get(info.file);
-			final src: String = maybeSrc != null ? maybeSrc : '';
+			final src: String = maybeSrc ?? '';
 			for (type in info.types) {
 				if (kindFilter != null && type.kind != kindFilter) continue;
 				final pos = type.span.lineCol(src);

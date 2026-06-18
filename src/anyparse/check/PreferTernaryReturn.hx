@@ -156,14 +156,15 @@ final class PreferTernaryReturn implements Check {
 		if (thenValue == null) return null;
 		if (i + 1 >= kids.length) return null;
 		final next: QueryNode = kids[i + 1];
-		if (next.kind != returnKind || next.children.length < 1) return null;
-		return {
-			ifNode: ifNode,
-			condition: ifNode.children[0],
-			thenValue: thenValue,
-			elseValue: next.children[0],
-			nextReturn: next
-		};
+		return next.kind != returnKind || next.children.length < 1
+			? null
+			: {
+				ifNode: ifNode,
+				condition: ifNode.children[0],
+				thenValue: thenValue,
+				elseValue: next.children[0],
+				nextReturn: next
+			};
 	}
 
 	/**

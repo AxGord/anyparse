@@ -1133,8 +1133,7 @@ class Renderer {
 
 		final raw: String = buf.toString();
 		final capped: String = maxConsecutiveBlanks >= 0 ? capConsecutiveBlanks(raw, lineEnd, maxConsecutiveBlanks) : raw;
-		if (finalNewline && !StringTools.endsWith(capped, lineEnd)) return capped + lineEnd;
-		return capped;
+		return finalNewline && !StringTools.endsWith(capped, lineEnd) ? capped + lineEnd : capped;
 	}
 
 	/**
@@ -1164,27 +1163,11 @@ class Renderer {
 		breakDoc: Doc, fullLineCrosses: Bool, indent: Int, n: Int, restStack: Array<Frame>
 	): Bool {
 		final probe: Null<{ inner: Doc, hard: Bool }> = findCollapseProbe(breakDoc);
-		if (probe == null) return fullLineCrosses;
-		if (probe.hard) {
-			// ω-opadd-paren-tail-glue (opadd_chain* B1-remainder): an opAddSub
-			// inner paren OPENS + collapses (fork `collapseInnerChainBreaks` +
-			// `collapseChainBreaksAfter`) ONLY when there is real same-line
-			// content AFTER the close `)` — the trailing chain (`) / 2 - X`)
-			// rides the close line, so the inner must collapse to one line for
-			// it to fit (`expression_paren_wrapping`). When the paren sits at
-			// the TAIL of its expression (close followed only by close-delims /
-			// `;` / `,`, e.g. `return 1 * ((chain));`), the fork keeps the paren
-			// GLUED and lets the inner chain wrap one-per-line at `+1` indent
-			// (`opadd_chain`). The discriminator is purely "does real content
-			// trail the close paren on the same line" — a render-time rest-of-
-			// stack scan, mirroring the fork's late `collapseChainBreaksAfter`
-			// reading committed tokens after the close. No trailing content →
-			// stay glued (return false); the chain self-breaks inside.
-			if (!fullLineCrosses) return false;
-			return restStackHasTrailingContent(restStack);
-		}
-		if (!fullLineCrosses) return false;
-		return indent + DocMeasure.flatTokenWidth(probe.inner) < n;
+		return probe == null
+			? fullLineCrosses
+			: probe.hard
+				? fullLineCrosses && restStackHasTrailingContent(restStack)
+				: fullLineCrosses && indent + DocMeasure.flatTokenWidth(probe.inner) < n;
 	}
 
 	/**

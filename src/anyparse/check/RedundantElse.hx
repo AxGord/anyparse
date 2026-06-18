@@ -184,8 +184,7 @@ final class RedundantElse implements Check {
 			for (k in kids) if (localDeclKinds.contains(k.kind)) return null;
 			final first: Null<Span> = kids[0].span;
 			final last: Null<Span> = kids[kids.length - 1].span;
-			if (first == null || last == null) return null;
-			return source.substring(first.from, last.to);
+			return first == null || last == null ? null : source.substring(first.from, last.to);
 		}
 		if (localDeclKinds.contains(elseNode.kind)) return null;
 		final s: Null<Span> = elseNode.span;

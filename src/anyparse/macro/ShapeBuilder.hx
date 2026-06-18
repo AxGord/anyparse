@@ -46,20 +46,20 @@ using Lambda;
  */
 class ShapeBuilder {
 
-	private final pending: Array<{ name: String, type: Type }> = [];
-	private final shaped: Map<String, ShapeNode> = new Map();
-	private final inFlight: Array<String> = [];
+	private final _pending: Array<{ name: String, type: Type }> = [];
+	private final shaped: Map<String, ShapeNode> = [];
+	private final _inFlight: Array<String> = [];
 	private final formatInfo: Null<FormatReader.FormatInfo>;
 
-	private var rootName: String = '';
+	private var _rootName: String = '';
 
 	public function new(?formatInfo: FormatReader.FormatInfo) {
 		this.formatInfo = formatInfo;
 	}
 
 	public function build(root: Type): ShapeResult {
-		rootName = qualifiedName(root);
-		enqueue(rootName, root);
+		_rootName = qualifiedName(root);
+		enqueue(_rootName, root);
 		// Format-declared utility types that Lowering emits calls to
 		// from generated code — enqueue eagerly so the rules exist
 		// even when no user field references them directly:
@@ -80,22 +80,22 @@ class ShapeBuilder {
 				enqueue(stringType, Context.getType(stringType));
 			}
 		}
-		while (pending.length > 0) {
-			final job: { name: String, type: Type } = pending.shift();
+		while (_pending.length > 0) {
+			final job: { name: String, type: Type } = _pending.shift();
 			if (shaped.exists(job.name)) continue;
-			inFlight.push(job.name);
+			_inFlight.push(job.name);
 			final node: ShapeNode = shapeTop(job.type);
 			shaped.set(job.name, node);
-			inFlight.pop();
+			_inFlight.pop();
 		}
-		return { root: rootName, rules: shaped };
+		return { root: _rootName, rules: shaped };
 	}
 
 	private function enqueue(name: String, t: Type): Void {
 		if (shaped.exists(name)) return;
-		if (inFlight.indexOf(name) != -1) return;
-		for (p in pending) if (p.name == name) return;
-		pending.push({ name: name, type: t });
+		if (_inFlight.indexOf(name) != -1) return;
+		for (p in _pending) if (p.name == name) return;
+		_pending.push({ name: name, type: t });
 	}
 
 	private function shapeTop(t: Type): ShapeNode {
@@ -208,14 +208,15 @@ class ShapeBuilder {
 	}
 
 	private function primitiveRef(primName: String): Null<String> {
-		if (formatInfo == null) return null;
-		return switch primName {
-			case 'Int': formatInfo.intType;
-			case 'Float': formatInfo.floatType;
-			case 'Bool': formatInfo.boolType;
-			case 'String': formatInfo.stringType;
-			case _: null;
-		};
+		return formatInfo == null
+			? null
+			: switch primName {
+				case 'Int': formatInfo.intType;
+				case 'Float': formatInfo.floatType;
+				case 'Bool': formatInfo.boolType;
+				case 'String': formatInfo.stringType;
+				case _: null;
+			};
 	}
 
 	private static function extractStringConst(texpr: TypedExpr): Null<String> {
@@ -362,7 +363,7 @@ class ShapeBuilder {
 
 	private static function primitiveName(t: Type): String {
 		final n: Null<String> = primitiveNameOrNull(t);
-		return n == null ? 'unknown' : n;
+		return n ?? 'unknown';
 	}
 
 	private static function primitiveNameOrNull(t: Type): Null<String> {

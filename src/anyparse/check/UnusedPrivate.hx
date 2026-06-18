@@ -121,16 +121,19 @@ final class UnusedPrivate implements Check {
 		if (decl.mods.contains('public') || decl.implicitlyReachable == true) return null;
 		final owner: Null<String> = decl.enclosingType;
 		final span: Null<Span> = decl.span;
-		if (owner == null || span == null) return null;
-		if (!RefactorSupport.isPrivateMemberConfined(owner, source, index)) return null;
-		if (RefactorSupport.referencedInRange(source, decl.name, 0, source.length, [span])) return null;
-		return {
-			file: file,
-			span: span,
-			rule: 'unused-private',
-			severity: Severity.Warning,
-			message: 'unused private \'${decl.name}\''
-		};
+		return owner == null || span == null
+			? null
+			: !RefactorSupport.isPrivateMemberConfined(owner, source, index)
+				? null
+				: RefactorSupport.referencedInRange(source, decl.name, 0, source.length, [span])
+					? null
+					: {
+						file: file,
+						span: span,
+						rule: 'unused-private',
+						severity: Severity.Warning,
+						message: 'unused private \'${decl.name}\''
+					};
 	}
 
 	/**
