@@ -401,6 +401,7 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 			noBodyKind: 'NoBody',
 			catchClauseKind: 'CatchClause',
 			controlExitKinds: ['ThrowStmt', 'ThrowExpr', 'ReturnStmt', 'VoidReturnStmt'],
+			caseLiteralKinds: ['IntLit', 'FloatLit', 'BoolLit', 'NullLit'],
 		};
 	}
 

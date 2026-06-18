@@ -524,6 +524,14 @@ typedef RefShape = {
 	 * the exemption.
 	 */
 	@:optional var controlExitKinds: Array<String>;
+
+	/**
+	 * Literal-expression node kinds usable verbatim as a switch `case` pattern
+	 * (int / float / bool / null; interpolation-free strings are matched via `stringFoldSupport` instead) — the `prefer-switch` check needs to tell
+	 * a comparison against a constant (convertible to `case <lit>:`) from one against
+	 * an arbitrary expression. Optional; unset makes the check a no-op.
+	 */
+	@:optional var caseLiteralKinds: Array<String>;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {

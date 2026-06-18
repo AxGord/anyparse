@@ -60,7 +60,8 @@ final class Linter {
 			new PreferBind(),
 			new RedundantMapIterKey(),
 			new UnusedParameter(),
-			new SwallowedException()
+			new SwallowedException(),
+			new PreferSwitch()
 		];
 	}
 
