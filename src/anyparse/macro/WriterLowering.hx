@@ -10331,7 +10331,19 @@ class WriterLowering {
 						else
 							_requiresHardline = true;
 					}
-					if (_t.newlineBefore && !_ignoreEmit && !_matrixOff) _hasSourceNewlines = true;
+					// ω-array-reflow idempotence: the FIRST element's `newlineBefore` also fires for
+					// a newline BEFORE the open `[` (the array on a fresh line of an enclosing broken
+					// construct — e.g. a wrapped ternary branch), not only an internal one. Counting
+					// it marks a single-line `['a', 'b']` as source-multiline → forces it OnePerLine,
+					// which the writer's own broken-branch output then re-triggers every pass (non-
+					// idempotent). So for a `reflowSourceMultiline` array Star ignore the first
+					// element's flag — EXCEPT in Keep mode (preserves source breaks verbatim) and for
+					// a comprehension (`for`/`while` sole element), whose element genuinely starts on
+					// its own line after `[`. Other elements (index > 0) carry only genuine INTERNAL
+					// newlines, so they are always counted.
+					if (_t.newlineBefore && !_ignoreEmit && !_matrixOff && !($v{reflowSourceMultiline} && _ti == 0 && !_keepEmit
+					&& Type.enumConstructor(cast _t.node) != 'ForExpr' && Type.enumConstructor(cast _t.node) != 'WhileExpr'))
+						_hasSourceNewlines = true;
 					if (_noWrapFlat) {
 						// `Type.enumConstructor` returns null for a non-enum
 						// payload (e.g. an object-literal field struct) — the
