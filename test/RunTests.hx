@@ -286,6 +286,7 @@ import unit.PreferNullCoalescingCheckTest;
 import unit.PreferArrayLiteralCheckTest;
 import unit.PreferMapLiteralCheckTest;
 import unit.PreferInterpolationCheckTest;
+import unit.PreferFinalCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -565,6 +566,7 @@ class RunTests {
 		addCase(new PreferArrayLiteralCheckTest());
 		addCase(new PreferMapLiteralCheckTest());
 		addCase(new PreferInterpolationCheckTest());
+		addCase(new PreferFinalCheckTest());
 		addCase(new FoldStringLiteralsCheckTest());
 		addCase(new NamingCheckTest());
 		addCase(new FmtSliceTest());

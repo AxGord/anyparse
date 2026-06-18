@@ -429,6 +429,15 @@ typedef RefShape = {
 	 * the check a no-op.
 	 */
 	@:optional var fieldAccessKind: String;
+
+	/**
+	 * Mutable statement-position local declaration kinds — a plain local `var`
+	 * (NOT `final`, params, `for` iterators, `catch` vars, or class fields). The
+	 * `prefer-final` check flags one never reassigned in its scope and rewrites it
+	 * to `final`. A subset of `localDeclKinds`, which also lists the already-`final`
+	 * form. Optional — unset makes the check a no-op.
+	 */
+	@:optional var mutableLocalDeclKinds: Array<String>;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {
