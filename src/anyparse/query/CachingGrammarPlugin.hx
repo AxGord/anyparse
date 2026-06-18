@@ -7,6 +7,7 @@ import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.Pattern.KindEquivalence;
 import anyparse.query.StringFold.StringFoldSupport;
+import anyparse.query.BooleanLogic.BooleanLogicSupport;
 
 /**
  * A run-scoped `GrammarPlugin` decorator that memoizes `parseFile` /
@@ -79,5 +80,7 @@ final class CachingGrammarPlugin implements GrammarPlugin {
 	public function maxComplexity(path: String): Null<Int> return _inner.maxComplexity(path);
 
 	public function controlFlowSupport(): Null<ControlFlowSupport> return _inner.controlFlowSupport();
+
+	public function booleanLogicSupport(): Null<BooleanLogicSupport> return _inner.booleanLogicSupport();
 
 }

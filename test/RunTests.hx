@@ -290,6 +290,7 @@ import unit.PreferFinalCheckTest;
 import unit.PreferTernaryReturnCheckTest;
 import unit.PreferSingleQuotesCheckTest;
 import unit.CachingGrammarPluginTest;
+import unit.SimplifyBooleanTernaryCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -573,6 +574,7 @@ class RunTests {
 		addCase(new PreferTernaryReturnCheckTest());
 		addCase(new PreferSingleQuotesCheckTest());
 		addCase(new CachingGrammarPluginTest());
+		addCase(new SimplifyBooleanTernaryCheckTest());
 		addCase(new FoldStringLiteralsCheckTest());
 		addCase(new NamingCheckTest());
 		addCase(new FmtSliceTest());

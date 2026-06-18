@@ -10,6 +10,7 @@ import haxe.Exception;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.BooleanLogic.BooleanLogicSupport;
 
 /**
  * Haxe grammar binding for the `apq` query engine.
@@ -811,6 +812,10 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 
 	public function controlFlowSupport(): Null<ControlFlowSupport> {
 		return new HaxeControlFlowSupport();
+	}
+
+	public function booleanLogicSupport(): Null<BooleanLogicSupport> {
+		return new HaxeBooleanLogicSupport();
 	}
 
 }

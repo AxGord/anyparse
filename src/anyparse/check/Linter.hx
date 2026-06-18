@@ -6,6 +6,7 @@ import anyparse.query.GrammarPlugin;
 using Lambda;
 
 import anyparse.query.CachingGrammarPlugin;
+import anyparse.check.SimplifyBooleanTernary;
 
 /**
  * Runs a set of `Check`s over a file set and concatenates their
@@ -52,7 +53,8 @@ final class Linter {
 			new PreferInterpolation(),
 			new PreferFinal(),
 			new PreferTernaryReturn(),
-			new PreferSingleQuotes()
+			new PreferSingleQuotes(),
+			new SimplifyBooleanTernary()
 		];
 	}
 

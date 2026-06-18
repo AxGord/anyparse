@@ -4,6 +4,7 @@ import anyparse.query.Pattern.KindEquivalence;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.BooleanLogic.BooleanLogicSupport;
 
 /**
  * Plugin contract for a grammar that the query engine can operate on.
@@ -188,6 +189,14 @@ interface GrammarPlugin {
 	 * (binary formats) — the check then no-ops, like `stringFoldSupport`.
 	 */
 	public function controlFlowSupport(): Null<ControlFlowSupport>;
+
+	/**
+	 * Optional: the grammar's boolean-expression simplification capability,
+	 * consumed by the `simplify-boolean-ternary` check. Null when the grammar has
+	 * no boolean-ternary concept — the check then no-ops, like the other optional
+	 * support methods above.
+	 */
+	public function booleanLogicSupport(): Null<BooleanLogicSupport>;
 
 }
 
