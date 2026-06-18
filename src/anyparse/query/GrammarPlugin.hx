@@ -485,6 +485,45 @@ typedef RefShape = {
 	 * from the node name. Optional; unset makes the check a no-op.
 	 */
 	@:optional var forStmtKind: String;
+
+	/**
+	 * Function-parameter node kinds (Haxe `Required` / `Optional` / `Rest`) — the
+	 * `unused-parameter` check inspects a function's direct children of these kinds.
+	 * Optional; unset makes the check a no-op.
+	 */
+	@:optional var paramKinds: Array<String>;
+
+	/**
+	 * Supertype-clause node kinds (`extends` / `implements`) — the
+	 * `unused-parameter` check treats a function whose PARENT carries one of these
+	 * as a contract candidate (an override / interface implementation, whose
+	 * signature is fixed elsewhere) and skips its parameters. Optional.
+	 */
+	@:optional var supertypeClauseKinds: Array<String>;
+
+	/**
+	 * The body-less function marker kind (Haxe `NoBody`, for an interface / abstract
+	 * method declaration) — the `unused-parameter` check skips a function carrying
+	 * one, having no body to reference its parameters in. Optional.
+	 */
+	@:optional var noBodyKind: String;
+
+	/**
+	 * The catch-clause node kind (Haxe `CatchClause`, carrying the exception
+	 * variable as its `name` and the handler block as its last child) — the
+	 * `swallowed-exception` check inspects each one. Optional; unset makes the check
+	 * a no-op.
+	 */
+	@:optional var catchClauseKind: String;
+
+	/**
+	 * Deliberate control-exit node kinds (Haxe `ThrowStmt` / `ThrowExpr` /
+	 * `ReturnStmt` / `VoidReturnStmt`) — the `swallowed-exception` check treats a
+	 * catch body containing one as deliberate escalation / recovery (a rethrow or a
+	 * fallback return), not a silent swallow, and skips it. Optional; unset disables
+	 * the exemption.
+	 */
+	@:optional var controlExitKinds: Array<String>;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {

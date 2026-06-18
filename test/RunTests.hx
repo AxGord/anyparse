@@ -295,6 +295,8 @@ import unit.AssignmentInConditionCheckTest;
 import unit.DuplicateTernaryBranchesCheckTest;
 import unit.PreferBindCheckTest;
 import unit.RedundantMapIterKeyCheckTest;
+import unit.UnusedParameterCheckTest;
+import unit.SwallowedExceptionCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -560,6 +562,8 @@ class RunTests {
 		addCase(new ComplexityCheckTest());
 		addCase(new DeadCodeCheckTest());
 		addCase(new EmptyBlockCheckTest());
+		addCase(new UnusedParameterCheckTest());
+		addCase(new SwallowedExceptionCheckTest());
 		addCase(new IdenticalOperandsCheckTest());
 		addCase(new SelfAssignmentCheckTest());
 		addCase(new DuplicateCaseCheckTest());

@@ -396,6 +396,11 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 			conditionLastChildKinds: ['DoWhileStmt'],
 			parenLambdaKind: 'ThinParenLambdaExpr',
 			forStmtKind: 'ForStmt',
+			paramKinds: ['Required', 'Optional', 'Rest'],
+			supertypeClauseKinds: ['ExtendsClause', 'ImplementsClause'],
+			noBodyKind: 'NoBody',
+			catchClauseKind: 'CatchClause',
+			controlExitKinds: ['ThrowStmt', 'ThrowExpr', 'ReturnStmt', 'VoidReturnStmt'],
 		};
 	}
 
