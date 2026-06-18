@@ -875,7 +875,7 @@ class TriviaTypeSynth {
 				final elem: ShapeNode = node.children[0];
 				final triviaWrap: Bool = node.annotations.get('trivia.starCollects') == true;
 				final optional: Bool = node.annotations.get('base.optional') == true;
-				final iterVar: String = triviaWrap ? 'e' : 'e';
+				final iterVar: String = 'e';
 				final iterExpr: Expr = { expr: EConst(CIdent(iterVar)), pos: pos };
 				final innerWrap: Expr = shapeRawToPairedWrap(iterExpr, elem, pos);
 				final perElem: Expr = triviaWrap
