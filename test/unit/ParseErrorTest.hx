@@ -5,6 +5,7 @@ import utest.Test;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import anyparse.runtime.Severity;
+import anyparse.grammar.haxe.HaxeQueryPlugin;
 
 /**
  * Tests for `ParseError` — construction, defaults, throwability, and
@@ -90,6 +91,26 @@ class ParseErrorTest extends Test {
 		Assert.isNull(e.source);
 		e.source = 'class X {}';
 		Assert.equals('class X {}', e.source);
+	}
+
+	// Finding A regression: the shared `ParseError.backtrack` sentinel must never
+	// be mutated by a parse — it is reused across every parse. Its (-2, -2) span,
+	// strictly below `Parser.maxFailPos`'s -1 floor, makes the public entry's
+	// `maxFailPos > e.span.from` rebuild ALWAYS win over it, so its mutable
+	// `source` is never written (even on a failing parse). Reverting the span to
+	// (-1, -1) reintroduces a cross-parse data race the rest of the suite misses.
+	function testBacktrackSentinelStaysImmutable() {
+		Assert.equals(-2, ParseError.backtrack.span.from);
+		Assert.equals(-2, ParseError.backtrack.span.to);
+		Assert.isNull(ParseError.backtrack.source);
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		Assert.raises(
+			() -> {
+				plugin.reconParse('class C { var x = ) ; }');
+			},
+			ParseError
+		);
+		Assert.isNull(ParseError.backtrack.source);
 	}
 
 }

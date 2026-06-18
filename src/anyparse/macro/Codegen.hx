@@ -452,7 +452,7 @@ class Codegen {
 				ret: macro :Void,
 				expr: macro {
 					if (!matchLit(ctx, lit)) {
-						throw new anyparse.runtime.ParseError(new anyparse.runtime.Span(ctx.pos, ctx.pos), 'expected "' + lit + '"');
+						throw anyparse.runtime.ParseError.backtrack;
 					}
 				},
 			}),
@@ -523,18 +523,14 @@ class Codegen {
 				ret: macro :Void,
 				expr: macro {
 					if (!matchLit(ctx, keyword)) {
-						throw new anyparse.runtime.ParseError(
-							new anyparse.runtime.Span(ctx.pos, ctx.pos), 'expected keyword "' + keyword + '"'
-						);
+						throw anyparse.runtime.ParseError.backtrack;
 					}
 					if (ctx.pos < ctx.input.length) {
 						final c: Int = ctx.input.charCodeAt(ctx.pos);
 						final isWord: Bool = (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code)
 						|| (c >= '0'.code && c <= '9'.code) || c == '_'.code;
 						if (isWord) {
-							throw new anyparse.runtime.ParseError(
-								new anyparse.runtime.Span(ctx.pos, ctx.pos), 'expected keyword "' + keyword + '"'
-							);
+							throw anyparse.runtime.ParseError.backtrack;
 						}
 					}
 				},

@@ -347,9 +347,7 @@ class Lowering {
 			]
 			: node.children;
 		final branchExprs: Array<Expr> = [for (branch in branches) tryBranch(branch, typePath, recurseFnName)];
-		final failExpr: Expr = macro throw new anyparse.runtime.ParseError(
-			new anyparse.runtime.Span(ctx.pos, ctx.pos), $v{'expected ${simpleName(typePath)}'}
-		);
+		final failExpr: Expr = macro throw anyparse.runtime.ParseError.backtrack;
 		final statements: Array<Expr> = branchExprs.concat([failExpr]);
 		return macro $b{statements};
 	}
@@ -1398,9 +1396,7 @@ class Lowering {
 				};
 				attempts.push(macro if ($matchCall) return $call);
 			}
-			final failExpr: Expr = macro throw new anyparse.runtime.ParseError(
-				new anyparse.runtime.Span(ctx.pos, ctx.pos), $v{'expected one of ${litList.join(', ')}'}
-			);
+			final failExpr: Expr = macro throw anyparse.runtime.ParseError.backtrack;
 			final body: Array<Expr> = [macro skipWs(ctx)].concat(attempts).concat([failExpr]);
 			return macro $b{body};
 		}
@@ -4721,7 +4717,8 @@ expectLit(ctx, $v{trailText}));
 		return macro {
 			final _rest: String = ctx.input.substring(ctx.pos, ctx.input.length);
 			if (!$i{eregVar}.match(_rest) || $i{eregVar}.matchedPos().pos != 0) {
-				throw new anyparse.runtime.ParseError(new anyparse.runtime.Span(ctx.pos, ctx.pos), $v{'expected $simple'});
+				ctx.recordFail(ctx.pos, $v{simple});
+				throw anyparse.runtime.ParseError.backtrack;
 			}
 			final _matched: String = $matchedValueExpr;
 			ctx.pos += $advanceLenExpr;

@@ -65,4 +65,21 @@ class ParseError extends Exception {
 		return expected == null ? base : '$base (expected $expected)';
 	}
 
+	/**
+	 * Shared backtracking signal thrown by generated PEG parsers when an
+	 * ordered-choice alternative fails. One pre-allocated instance makes a
+	 * backtracking throw free — no allocation and, crucially, no V8 stack-trace
+	 * capture (which every `new ParseError` incurs via `extends Exception`).
+	 * Recursive-descent parsers throw tens of these per source line, so eager
+	 * stack capture was the dominant parse cost; reusing this token removes it.
+	 *
+	 * The payload is never read: the public entry rebuilds the surfaced error
+	 * from `Parser.maxFailPos`. The `(-2, -2)` span — strictly below the `-1` `maxFailPos` floor — guarantees the entry's
+	 * `maxFailPos > e.span.from` check always selects the farthest-failure
+	 * rebuild over this token, so it never reaches a `source`-mutating path. MUST
+	 * stay immutable — it is shared across every parse, so `source` must remain
+	 * null.
+	 */
+	public static final backtrack: ParseError = new ParseError(new Span(-2, -2), 'backtrack');
+
 }
