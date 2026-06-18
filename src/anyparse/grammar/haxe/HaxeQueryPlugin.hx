@@ -392,6 +392,10 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 			newExprKind: 'NewExpr',
 			fieldAccessKind: 'FieldAccess',
 			returnStatementKind: 'ReturnStmt',
+			conditionFirstChildKinds: ['IfStmt', 'IfExpr', 'WhileStmt', 'WhileExpr'],
+			conditionLastChildKinds: ['DoWhileStmt'],
+			parenLambdaKind: 'ThinParenLambdaExpr',
+			forStmtKind: 'ForStmt',
 		};
 	}
 

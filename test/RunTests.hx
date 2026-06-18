@@ -291,6 +291,10 @@ import unit.PreferTernaryReturnCheckTest;
 import unit.PreferSingleQuotesCheckTest;
 import unit.CachingGrammarPluginTest;
 import unit.SimplifyBooleanTernaryCheckTest;
+import unit.AssignmentInConditionCheckTest;
+import unit.DuplicateTernaryBranchesCheckTest;
+import unit.PreferBindCheckTest;
+import unit.RedundantMapIterKeyCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -575,6 +579,10 @@ class RunTests {
 		addCase(new PreferSingleQuotesCheckTest());
 		addCase(new CachingGrammarPluginTest());
 		addCase(new SimplifyBooleanTernaryCheckTest());
+		addCase(new AssignmentInConditionCheckTest());
+		addCase(new DuplicateTernaryBranchesCheckTest());
+		addCase(new PreferBindCheckTest());
+		addCase(new RedundantMapIterKeyCheckTest());
 		addCase(new FoldStringLiteralsCheckTest());
 		addCase(new NamingCheckTest());
 		addCase(new FmtSliceTest());

@@ -54,7 +54,11 @@ final class Linter {
 			new PreferFinal(),
 			new PreferTernaryReturn(),
 			new PreferSingleQuotes(),
-			new SimplifyBooleanTernary()
+			new SimplifyBooleanTernary(),
+			new AssignmentInCondition(),
+			new DuplicateTernaryBranches(),
+			new PreferBind(),
+			new RedundantMapIterKey()
 		];
 	}
 

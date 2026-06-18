@@ -456,6 +456,35 @@ typedef RefShape = {
 	 * unset makes the check a no-op.
 	 */
 	@:optional var returnStatementKind: String;
+
+	/**
+	 * Conditional kinds whose condition is `children[0]` (`if` / `while`) — the
+	 * `assignment-in-condition` check looks at that child for an `assignKind` node
+	 * (`if (a = b)`). Optional; unset (with `conditionLastChildKinds`) → no-op.
+	 */
+	@:optional var conditionFirstChildKinds: Array<String>;
+
+	/**
+	 * Conditional kinds whose condition is the LAST child (`do … while`) — the
+	 * `assignment-in-condition` check looks at that child for an `assignKind` node.
+	 * Separate from `conditionFirstChildKinds` because the condition position differs
+	 * per construct. Optional.
+	 */
+	@:optional var conditionLastChildKinds: Array<String>;
+
+	/**
+	 * The parenthesized arrow-lambda kind (`() -> body`) — the `prefer-bind` check
+	 * rewrites a `() -> f(a, b)` (a single wrapped `callKind`, no parameters) to
+	 * `f.bind(a, b)`. Optional; unset makes the check a no-op.
+	 */
+	@:optional var parenLambdaKind: String;
+
+	/**
+	 * The `for` statement kind — the `redundant-map-iter-key` check flags a key-value
+	 * loop that discards its key (`for (_ => v in m)`), reading the iterator variable
+	 * from the node name. Optional; unset makes the check a no-op.
+	 */
+	@:optional var forStmtKind: String;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {
