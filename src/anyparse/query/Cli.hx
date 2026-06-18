@@ -1266,6 +1266,13 @@ final class Cli {
 		var fixedCount: Int = 0;
 		var passes: Int = 0;
 		var hitCap: Bool = false;
+		// Per-file checks decide a file's findings from that file alone, so later passes
+		// re-lint only the files a prior pass changed. A cross-file check (confinement)
+		// must see every file or it mis-resolves on the active subset — run those over
+		// the full set each pass.
+		final fullScopeIds: Array<String> = ['unused-private'];
+		final activeScopeChecks: Array<Check> = [for (c in checks) if (!fullScopeIds.contains(c.id())) c];
+		final fullScopeChecks: Array<Check> = [for (c in checks) if (fullScopeIds.contains(c.id())) c];
 
 		while (active.length > 0) {
 			if (passes >= maxPasses) {
@@ -1276,7 +1283,8 @@ final class Cli {
 			// Rebuild over the CURRENT (mutated) sources — naming's cross-file
 			// rename consults the index, so it must reflect this pass's input.
 			final index: SymbolIndex = SymbolIndex.build(files, cached);
-			final violations: Array<Violation> = Linter.run(files, cached, checks, lintConfig);
+			final violations: Array<Violation> = Linter.run(active, cached, activeScopeChecks, lintConfig);
+			for (v in Linter.run(files, cached, fullScopeChecks, lintConfig)) violations.push(v);
 			final nextActive: Array<{ file: String, source: String }> = [];
 			for (entry in active) {
 				final fileViolations: Array<Violation> = violations.filter(v -> v.file == entry.file);
@@ -3960,11 +3968,7 @@ final class Cli {
 			return EXIT_USAGE;
 		}
 		// Default scope: the grammar tree for the selected lang.
-		final effectiveSpecs: Array<String> = inputSpecs.length > 0
-			? inputSpecs
-			: [
-				'src/anyparse/grammar/$lang/'
-			];
+		final effectiveSpecs: Array<String> = inputSpecs.length > 0 ? inputSpecs : ['src/anyparse/grammar/$lang/'];
 
 		final plugin: GrammarPlugin = pickPlugin(lang);
 		final shape: MetaShape = plugin.metaShape();
