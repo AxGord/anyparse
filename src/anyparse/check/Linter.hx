@@ -48,7 +48,8 @@ final class Linter {
 			new PreferArrayLiteral(),
 			new PreferMapLiteral(),
 			new PreferInterpolation(),
-			new PreferFinal()
+			new PreferFinal(),
+			new PreferTernaryReturn()
 		];
 	}
 

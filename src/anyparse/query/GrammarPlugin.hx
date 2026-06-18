@@ -438,6 +438,15 @@ typedef RefShape = {
 	 * form. Optional — unset makes the check a no-op.
 	 */
 	@:optional var mutableLocalDeclKinds: Array<String>;
+
+	/**
+	 * The value-returning `return` statement kind (`return e;`) — the
+	 * `prefer-ternary-return` check collapses an `if (c) return a;` immediately
+	 * followed by a `return b;` into `return c ? a : b;`. A value-less `return;`
+	 * is a distinct kind and is excluded (it has no ternary value). Optional;
+	 * unset makes the check a no-op.
+	 */
+	@:optional var returnStatementKind: String;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {

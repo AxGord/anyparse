@@ -390,6 +390,7 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 			notEqKind: 'NotEq',
 			newExprKind: 'NewExpr',
 			fieldAccessKind: 'FieldAccess',
+			returnStatementKind: 'ReturnStmt',
 		};
 	}
 
