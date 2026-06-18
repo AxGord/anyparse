@@ -129,7 +129,7 @@ final class SetModifier {
 			final name: String = prefixed ? change.substr(1) : change;
 			if (name == 'final') return 'cannot set-modifier `final` — it wraps the declaration; use replace-node';
 			final known: Bool = name == 'public' || name == 'private' || BOOLEAN_MODS.contains(name);
-			if (!known) return 'unknown modifier "$name" (use public/private, or +/- on ${BOOLEAN_MODS.join("/")})';
+			if (!known) return 'unknown modifier "$name" (use public/private, or +/- on ${BOOLEAN_MODS.join('/')})';
 			if (!prefixed && name != 'public' && name != 'private') return 'a bare change must be public/private; use +$name / -$name';
 		}
 		return null;
@@ -154,7 +154,7 @@ final class SetModifier {
 			else if (!mods.contains(name)) mods.push(name);
 		}
 		final ordered: Array<String> = ORDER.filter(m -> mods.contains(m));
-		return ordered.length > 0 ? '${ordered.join(" ")} ' : '';
+		return ordered.length > 0 ? '${ordered.join(' ')} ' : '';
 	}
 
 }

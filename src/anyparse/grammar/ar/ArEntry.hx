@@ -34,5 +34,5 @@ typedef ArEntry = {
 	 * 2-byte `` `\n `` header terminator; both are handled by the
 	 * macro-generated parser/writer and do not appear in the AST.
 	 */
-	@:length(10, Dec) @:lead("`\n") var data: haxe.io.Bytes;
+	@:length(10, Dec) @:lead('`\n') var data: haxe.io.Bytes;
 };

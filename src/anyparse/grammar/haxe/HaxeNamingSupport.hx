@@ -52,28 +52,28 @@ final class HaxeNamingSupport implements NamingSupport {
 				category: NamingCategory.Type,
 				requireMods: [],
 				forbidMods: [],
-				format: new EReg("^[A-Z][a-zA-Z0-9]*$", ""),
+				format: new EReg("^[A-Z][a-zA-Z0-9]*$", ''),
 				label: 'PascalCase type'
 			},
 			{
 				category: NamingCategory.EnumValue,
 				requireMods: [],
 				forbidMods: [],
-				format: new EReg("^[A-Z][a-zA-Z0-9_]*$", ""),
+				format: new EReg("^[A-Z][a-zA-Z0-9_]*$", ''),
 				label: 'PascalCase or UPPER_SNAKE enum value'
 			},
 			{
 				category: NamingCategory.Constant,
 				requireMods: [],
 				forbidMods: [],
-				format: new EReg("^([A-Z][A-Z0-9_]*|[a-z][a-zA-Z0-9]*)$", ""),
+				format: new EReg("^([A-Z][A-Z0-9_]*|[a-z][a-zA-Z0-9]*)$", ''),
 				label: 'UPPER_SNAKE or camelCase static final'
 			},
 			{
 				category: NamingCategory.Field,
 				requireMods: [],
 				forbidMods: ['public', 'static'],
-				format: new EReg("^_[a-z][a-zA-Z0-9]*$", ""),
+				format: new EReg("^_[a-z][a-zA-Z0-9]*$", ''),
 				label: 'private field _ prefix',
 				normalize: underscoreCamel
 			},
@@ -81,21 +81,21 @@ final class HaxeNamingSupport implements NamingSupport {
 				category: NamingCategory.Field,
 				requireMods: ['public'],
 				forbidMods: [],
-				format: new EReg("^[a-z][a-zA-Z0-9]*$", ""),
+				format: new EReg("^[a-z][a-zA-Z0-9]*$", ''),
 				label: 'camelCase public field'
 			},
 			{
 				category: NamingCategory.Method,
 				requireMods: [],
 				forbidMods: [],
-				format: new EReg("^[a-z][a-zA-Z0-9_]*$", ""),
+				format: new EReg("^[a-z][a-zA-Z0-9_]*$", ''),
 				label: 'camelCase method'
 			},
 			{
 				category: NamingCategory.Local,
 				requireMods: [],
 				forbidMods: [],
-				format: new EReg("^[a-z_][a-zA-Z0-9]*$", ""),
+				format: new EReg("^[a-z_][a-zA-Z0-9]*$", ''),
 				label: 'camelCase local',
 				normalize: lowercaseFirst
 			},
@@ -103,7 +103,7 @@ final class HaxeNamingSupport implements NamingSupport {
 				category: NamingCategory.Param,
 				requireMods: [],
 				forbidMods: [],
-				format: new EReg("^[a-z_][a-zA-Z0-9]*$", ""),
+				format: new EReg("^[a-z_][a-zA-Z0-9]*$", ''),
 				label: 'camelCase parameter',
 				normalize: lowercaseFirst
 			},
@@ -111,7 +111,7 @@ final class HaxeNamingSupport implements NamingSupport {
 				category: NamingCategory.CatchVar,
 				requireMods: [],
 				forbidMods: [],
-				format: new EReg("^[a-z_][a-zA-Z0-9]*$", ""),
+				format: new EReg("^[a-z_][a-zA-Z0-9]*$", ''),
 				label: 'camelCase catch variable',
 				normalize: lowercaseFirst
 			}

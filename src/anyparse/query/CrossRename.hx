@@ -154,7 +154,7 @@ final class CrossRename {
 			else
 				parsed.push({ file: entry.file, source: entry.source, tree: tree });
 		}
-		if (skipped.length > 0) return Err('cannot rename across scope: ${skipped.length} file(s) do not parse: ${skipped.join(", ")}');
+		if (skipped.length > 0) return Err('cannot rename across scope: ${skipped.length} file(s) do not parse: ${skipped.join(', ')}');
 
 		// 3. Uniqueness: exactly one declaration of `typeName` under scope.
 		var declCount: Int = 0;

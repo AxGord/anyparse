@@ -558,7 +558,7 @@ final class Cli {
 		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq refs: no input files matched ${inputSpecs.join(" ")}\n');
+			stderr('apq refs: no input files matched ${inputSpecs.join(' ')}\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -916,7 +916,7 @@ final class Cli {
 		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq symbols: ${inputSpecs.join(", ")} matched no .hx files\n');
+			stderr('apq symbols: ${inputSpecs.join(', ')} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -979,7 +979,7 @@ final class Cli {
 		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq importers: ${inputSpecs.join(", ")} matched no .hx files\n');
+			stderr('apq importers: ${inputSpecs.join(', ')} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -1044,7 +1044,7 @@ final class Cli {
 		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq declares: ${inputSpecs.join(", ")} matched no .hx files\n');
+			stderr('apq declares: ${inputSpecs.join(', ')} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -1059,7 +1059,7 @@ final class Cli {
 
 		final rows: Array<SymbolQuery.SymbolRow> = SymbolQuery.declares(files, plugin, name);
 		if (rows.length == 0)
-			stderr('apq declares: no type named "$name" in ${inputSpecs.join(", ")}\n');
+			stderr('apq declares: no type named "$name" in ${inputSpecs.join(', ')}\n');
 		else if (rows.length > 1) stderr('apq declares: ambiguous — ${rows.length} declarations of "$name"\n');
 		for (row in rows) sysPrint('${SymbolQuery.formatSymbolRow(row)}\n');
 		return EXIT_OK;
@@ -1151,7 +1151,7 @@ final class Cli {
 		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq lint: ${inputSpecs.join(", ")} matched no .hx files\n');
+			stderr('apq lint: ${inputSpecs.join(', ')} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -2639,7 +2639,7 @@ final class Cli {
 		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq uses: no input files matched ${inputSpecs.join(" ")}\n');
+			stderr('apq uses: no input files matched ${inputSpecs.join(' ')}\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -2757,7 +2757,7 @@ final class Cli {
 		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq meta: no input files matched ${inputSpecs.join(" ")}\n');
+			stderr('apq meta: no input files matched ${inputSpecs.join(' ')}\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -2885,10 +2885,10 @@ final class Cli {
 		sysPrint('  --limit <n>         Stop after n hits (default: no limit)\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 		sysPrint('\n');
-		sysPrint("Structural AST diff: walks both trees pairwise and reports nodes\n");
-		sysPrint("where kind / name slot / child count diverges. No LCS realignment\n");
-		sysPrint("— mid-list inserts cascade the tail as `differs`. Useful for strip-\n");
-		sysPrint("test reconciliation when a byte diff is whitespace-noisy.\n");
+		sysPrint('Structural AST diff: walks both trees pairwise and reports nodes\n');
+		sysPrint('where kind / name slot / child count diverges. No LCS realignment\n');
+		sysPrint('— mid-list inserts cascade the tail as `differs`. Useful for strip-\n');
+		sysPrint('test reconciliation when a byte diff is whitespace-noisy.\n');
 	}
 
 	/**
@@ -3042,7 +3042,7 @@ final class Cli {
 		// any FS I/O or plugin call.
 		if (fromCluster != null) {
 			if (files.length > 1) {
-				stderr('apq strip: --from-cluster takes at most one positional (corpus root); got ${files.length} (${files.join(", ")})\n');
+				stderr('apq strip: --from-cluster takes at most one positional (corpus root); got ${files.length} (${files.join(', ')})\n');
 				return EXIT_USAGE;
 			}
 			final discovered: Null<Array<String>> = resolveStripFromCluster(
@@ -3197,7 +3197,7 @@ final class Cli {
 			}
 		}
 		final baseline: { ok: Bool, msg: String } = tryParse(source);
-		sysPrint('baseline (no patterns): ${baseline.ok ? "PARSE OK" : "PARSE FAIL: " + baseline.msg}\n');
+		sysPrint('baseline (no patterns): ${baseline.ok ? 'PARSE OK' : 'PARSE FAIL: ' + baseline.msg}\n');
 		final isolatedResults: Array<{ ok: Bool, hits: Int }> = [];
 		for (idx in 0...patterns.length) {
 			final hits: Int = regexMode ? countRegexHits(regexes[idx], source) : countOccurrences(source, patterns[idx]);
@@ -3207,7 +3207,7 @@ final class Cli {
 			final r: { ok: Bool, msg: String } = tryParse(isolated);
 			isolatedResults.push({ ok: r.ok, hits: hits });
 			final pat: String = patterns[idx];
-			sysPrint('pattern[$idx] "$pat" ($hits match${hits == 1 ? '' : 'es'}): ${r.ok ? "PARSE OK" : "PARSE FAIL: " + r.msg}\n');
+			sysPrint('pattern[$idx] "$pat" ($hits match${hits == 1 ? '' : 'es'}): ${r.ok ? 'PARSE OK' : 'PARSE FAIL: ' + r.msg}\n');
 		}
 		var combinedStripped: String = source;
 		for (idx in 0...patterns.length)
@@ -3215,7 +3215,7 @@ final class Cli {
 				? regexes[idx].replace(combinedStripped, replacements[idx])
 				: StringTools.replace(combinedStripped, patterns[idx], replacements[idx]);
 		final combined: { ok: Bool, msg: String } = tryParse(combinedStripped);
-		sysPrint('combined (all patterns): ${combined.ok ? "PARSE OK" : "PARSE FAIL: " + combined.msg}\n');
+		sysPrint('combined (all patterns): ${combined.ok ? 'PARSE OK' : 'PARSE FAIL: ' + combined.msg}\n');
 		// Verdict — interlocking-blockers signature: combined OK + every
 		// isolated row FAIL. This is the slice-scope warning: each
 		// pattern targets a separate parse blocker, so the slice needs
@@ -3382,16 +3382,16 @@ final class Cli {
 		sysPrint('                      /test/testcases). Apply complement of `recon --predict-strip`.\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 		sysPrint('\n');
-		sysPrint("Apply literal substitutions in order, then parse the result via the\n");
-		sysPrint("grammar plugin. Emits PARSE OK / PARSE FAIL: <err> and exits 0/2 —\n");
-		sysPrint("scriptable sole-blocker confirmation for the skip-parse campaign.\n");
-		sysPrint("StringTools.replace semantics: every occurrence is replaced.\n");
+		sysPrint('Apply literal substitutions in order, then parse the result via the\n');
+		sysPrint('grammar plugin. Emits PARSE OK / PARSE FAIL: <err> and exits 0/2 —\n');
+		sysPrint('scriptable sole-blocker confirmation for the skip-parse campaign.\n');
+		sysPrint('StringTools.replace semantics: every occurrence is replaced.\n');
 		sysPrint('\n');
-		sysPrint("Pass multiple file paths to run the SAME substitutions against each\n");
-		sysPrint("(batch mode); per-file output is prefixed with the path, and a final\n");
-		sysPrint("summary line totals pass/fail counts. Exit 0 only when ALL files\n");
-		sysPrint("PARSE OK; exit 2 when any file PARSE FAIL — useful for sole-blocker\n");
-		sysPrint("sweeps across a list of candidate fixtures.\n");
+		sysPrint('Pass multiple file paths to run the SAME substitutions against each\n');
+		sysPrint('(batch mode); per-file output is prefixed with the path, and a final\n');
+		sysPrint('summary line totals pass/fail counts. Exit 0 only when ALL files\n');
+		sysPrint('PARSE OK; exit 2 when any file PARSE FAIL — useful for sole-blocker\n');
+		sysPrint('sweeps across a list of candidate fixtures.\n');
 	}
 
 	/**
@@ -3653,7 +3653,7 @@ final class Cli {
 		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq lit: no input files matched ${inputSpecs.join(" ")}\n');
+			stderr('apq lit: no input files matched ${inputSpecs.join(' ')}\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -3829,7 +3829,7 @@ final class Cli {
 		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq cases: no input files matched ${inputSpecs.join(" ")}\n');
+			stderr('apq cases: no input files matched ${inputSpecs.join(' ')}\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -3953,7 +3953,7 @@ final class Cli {
 			'kw-lead'
 		];
 		if (!validMechanisms.contains(mechanism)) {
-			stderr('apq gates: unknown --mechanism "$mechanism" (valid: ${validMechanisms.join(", ")})\n');
+			stderr('apq gates: unknown --mechanism "$mechanism" (valid: ${validMechanisms.join(', ')})\n');
 			return EXIT_USAGE;
 		}
 		// Default scope: the grammar tree for the selected lang.
@@ -3968,7 +3968,7 @@ final class Cli {
 		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(effectiveSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq gates: no input files matched ${effectiveSpecs.join(" ")}\n');
+			stderr('apq gates: no input files matched ${effectiveSpecs.join(' ')}\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -4363,7 +4363,7 @@ final class Cli {
 		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq blast: no input files matched ${inputSpecs.join(" ")}\n');
+			stderr('apq blast: no input files matched ${inputSpecs.join(' ')}\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -4540,7 +4540,7 @@ final class Cli {
 		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq mentions: no input files matched ${inputSpecs.join(" ")}\n');
+			stderr('apq mentions: no input files matched ${inputSpecs.join(' ')}\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -4855,7 +4855,7 @@ final class Cli {
 		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq search: no input files matched ${inputSpecs.join(" ")}\n');
+			stderr('apq search: no input files matched ${inputSpecs.join(' ')}\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -5249,7 +5249,7 @@ final class Cli {
 				if (minChildren >= 0) filterParts.push('--min-children=$minChildren');
 				if (maxChildren >= 0) filterParts.push('--max-children=$maxChildren');
 				if (preFilter.length > 0) filterParts.push('${preFilter.length} pre-filter match(es) dropped by child-count');
-				final filterNote: String = filterParts.length == 0 ? '' : ' (with ${filterParts.join(", ")})';
+				final filterNote: String = filterParts.length == 0 ? '' : ' (with ${filterParts.join(', ')})';
 				// Kind-fuzzy "did you mean" — surface the closest match in
 				// `present` for the first kind segment of `selectExpr`
 				// (split on `>`, `:`, whitespace). Same `findFuzzy`
@@ -5260,7 +5260,7 @@ final class Cli {
 				final firstKind: String = extractFirstKindToken(selectExpr);
 				final presentMap: Map<String, Bool> = [for (k in present) k => true];
 				final suggestions: Array<String> = firstKind.length > 0 ? findFuzzy(firstKind, presentMap) : [];
-				final fuzzyLine: String = suggestions.length > 0 ? ' Did you mean: ${suggestions.join(", ")}?' : '';
+				final fuzzyLine: String = suggestions.length > 0 ? ' Did you mean: ${suggestions.join(', ')}?' : '';
 				// Cross-project hint: when the first kind token starts uppercase
 				// (TypeName-shaped — e.g. `HxCatchClause`, `HxModule`), the user
 				// is likely hunting a decl that lives in OTHER files. `ast` is
@@ -5273,7 +5273,7 @@ final class Cli {
 					: '';
 				stderr(
 					'apq ast: --select "$selectExpr"$filterNote matched no nodes in $fileLabel. '
-					+ 'Kinds present here: ${present.join(", ")}.$fuzzyLine$crossProjectHint '
+					+ 'Kinds present here: ${present.join(', ')}.$fuzzyLine$crossProjectHint '
 					+ 'Kinds are exact node-constructor names — run `apq ast $fileLabel` to see the tree.\n'
 				);
 			}
@@ -7670,7 +7670,7 @@ final class Cli {
 		if (changed == 0)
 			sysPrint('--- sweep --diff: 0 fixtures changed (snapshots identical) ---\n');
 		else
-			sysPrint('--- sweep --diff: $changed fixtures changed (${breakdown.join(", ")}) ---\n');
+			sysPrint('--- sweep --diff: $changed fixtures changed (${breakdown.join(', ')}) ---\n');
 		return EXIT_OK;
 	}
 
@@ -8055,7 +8055,7 @@ final class Cli {
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --range <spec>     1-based inclusive lines: L | L:L2 | L: | :L2 (default: whole file)\n');
-		sysPrint("  --select <sel>     Source of the node matching <sel> (apq ast selector,\n");
+		sysPrint('  --select <sel>     Source of the node matching <sel> (apq ast selector,\n');
 		sysPrint("                     e.g. 'FnMember:foo' / 'ClassDecl:Bar') — must match exactly one\n");
 		sysPrint('  --at <line>:<col>  Source of the innermost node at the 1-based position\n');
 		sysPrint('  --number, -n       Prefix each line with `<lineno>\\t` (cat -n style)\n');
@@ -8598,7 +8598,7 @@ final class Cli {
 		sysPrint('  sweep         Read corpus sweep snapshot totals + Δ vs prior\n');
 		sysPrint('  set-modifier  Flip visibility / add-remove modifiers at a cursor (no retype)\n');
 		sysPrint('  test-summary  Parse utest stdout transcript into tests/assertions/failures\n');
-		sysPrint("  rewrite       Structural search-and-replace (search-pattern metavars)\n");
+		sysPrint('  rewrite       Structural search-and-replace (search-pattern metavars)\n');
 		sysPrint('  set-doc       Add/replace a declaration\'s doc-comment at a cursor\n');
 		sysPrint('  set-comment   Replace the comment at a cursor (line run or block)\n');
 		sysPrint('  comment-rewrite  Text find/replace inside comments (write-twin of lit; --regex)\n');
@@ -8794,8 +8794,8 @@ final class Cli {
 		sysPrint("Pattern syntax: language source with `$X` / `$_` metavars.\n");
 		sysPrint("  $X      — bind a subtree; reuses must match structurally.\n");
 		sysPrint("  $_      — wildcard, no binding.\n");
-		sysPrint("\n");
-		sysPrint("Use `--` before a pattern that starts with `--` (e.g. the\n");
+		sysPrint('\n');
+		sysPrint('Use `--` before a pattern that starts with `--` (e.g. the\n');
 		sysPrint("prefix-decrement pattern `--$x`): apq search -- '--\\$x' <file>\n");
 	}
 
@@ -8822,16 +8822,16 @@ final class Cli {
 		sysPrint('  --limit <n>          Stop after n hits total (default: no limit)\n');
 		sysPrint('  --lang <name>        Grammar plugin (default: haxe)\n');
 		sysPrint('\n');
-		sysPrint("Walks parsed AST for leaf nodes whose `name` slot matches <text>.\n");
-		sysPrint("Smart-default --kind: when <text> is camelCase / snake_case the\n");
-		sysPrint("default widens to `Literal,IdentExpr` (clearly an identifier query —\n");
-		sysPrint("`hxq lit trailOptShapeGate src/` finds both literals and identifier\n");
-		sysPrint("references without a re-run). Pure-lowercase / all-uppercase single\n");
-		sysPrint("words stay `Literal`-only — they ambiguously match string content and\n");
-		sysPrint("identifier widening would flood prose hits. Override with --kind /\n");
-		sysPrint("--any-kind. AST kinds skip comments and string interpolation by routing\n");
-		sysPrint("through the parser; `--include-comments` / `--kind Comment` re-enables\n");
-		sysPrint("them via a separate string-literal-aware scan over the raw source.\n");
+		sysPrint('Walks parsed AST for leaf nodes whose `name` slot matches <text>.\n');
+		sysPrint('Smart-default --kind: when <text> is camelCase / snake_case the\n');
+		sysPrint('default widens to `Literal,IdentExpr` (clearly an identifier query —\n');
+		sysPrint('`hxq lit trailOptShapeGate src/` finds both literals and identifier\n');
+		sysPrint('references without a re-run). Pure-lowercase / all-uppercase single\n');
+		sysPrint('words stay `Literal`-only — they ambiguously match string content and\n');
+		sysPrint('identifier widening would flood prose hits. Override with --kind /\n');
+		sysPrint('--any-kind. AST kinds skip comments and string interpolation by routing\n');
+		sysPrint('through the parser; `--include-comments` / `--kind Comment` re-enables\n');
+		sysPrint('them via a separate string-literal-aware scan over the raw source.\n');
 	}
 
 	private static function printBlastUsage(): Void {
@@ -9237,18 +9237,18 @@ final class Cli {
 		sysPrint('Options:\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 		sysPrint('\n');
-		sysPrint("Parse <file>, run BOTH the trivia and plain writer pipelines, and\n");
-		sysPrint("emit each output between labelled fences:\n");
+		sysPrint('Parse <file>, run BOTH the trivia and plain writer pipelines, and\n');
+		sysPrint('emit each output between labelled fences:\n');
 		sysPrint('  === trivia ===\n');
 		sysPrint('  <bytes>\n');
 		sysPrint('  === plain ===\n');
 		sysPrint('  <bytes>\n');
 		sysPrint('\n');
-		sysPrint("Replaces the two-command dance (`hxq ast … --writer-output` then\n");
-		sysPrint("`hxq ast … --writer-output-plain`) when constructing a unit-test\n");
-		sysPrint("`writerEquals` expected literal: side-by-side output makes the\n");
-		sysPrint("pipeline divergence (anon flatten, terminators, comments) visible.\n");
-		sysPrint("Exit 0 only when both pipelines succeed.\n");
+		sysPrint('Replaces the two-command dance (`hxq ast … --writer-output` then\n');
+		sysPrint('`hxq ast … --writer-output-plain`) when constructing a unit-test\n');
+		sysPrint('`writerEquals` expected literal: side-by-side output makes the\n');
+		sysPrint('pipeline divergence (anon flatten, terminators, comments) visible.\n');
+		sysPrint('Exit 0 only when both pipelines succeed.\n');
 	}
 
 	private static function stderr(s: String): Void {
@@ -9514,8 +9514,8 @@ final class Cli {
 	private static function detectMacroReification(s: String): Null<String> {
 		final tags: Array<String> = ['v', 'i', 'a', 'b', 'p', 'e', 'es'];
 		for (tag in tags) {
-			final probe: String = "$" + tag + "{";
-			if (s.indexOf(probe) >= 0) return "`$" + tag + "{...}`";
+			final probe: String = "$" + tag + '{';
+			if (s.indexOf(probe) >= 0) return "`$" + tag + '{...}`';
 		}
 		return null;
 	}
@@ -9682,7 +9682,7 @@ final class Cli {
 		// silent when no candidate qualifies — don't fabricate hints.
 		if (name != null && candidates != null && (cmd == 'refs' || cmd == 'uses')) {
 			final suggestions: Array<String> = findFuzzy(name, candidates);
-			if (suggestions.length > 0) tail.add('\napq $cmd: Did you mean: ${suggestions.join(", ")}?');
+			if (suggestions.length > 0) tail.add('\napq $cmd: Did you mean: ${suggestions.join(', ')}?');
 		}
 
 		return summary + tail.toString();
@@ -9948,7 +9948,7 @@ final class Cli {
 		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq fmt: ${inputSpecs.join(", ")} matched no .hx files\n');
+			stderr('apq fmt: ${inputSpecs.join(', ')} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -10767,7 +10767,7 @@ final class Cli {
 		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq comment-rewrite: ${inputSpecs.join(", ")} matched no .hx files\n');
+			stderr('apq comment-rewrite: ${inputSpecs.join(', ')} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
 

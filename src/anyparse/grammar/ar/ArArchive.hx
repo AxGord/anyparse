@@ -9,7 +9,7 @@ package anyparse.grammar.ar;
  */
 @:peg
 @:schema(anyparse.format.binary.ArFormat)
-@:magic("!<arch>\n")
+@:magic('!<arch>\n')
 typedef ArArchive = {
 	var entries: Array<ArEntry>;
 };

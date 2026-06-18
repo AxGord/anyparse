@@ -1383,7 +1383,7 @@ class Lowering {
 			for (lit in litList) {
 				if (endsWithWordChar(lit) != wordLike) {
 					Context.fatalError(
-						'Lowering: multi-@:lit set mixes word-like and symbolic literals: ${litList.join(", ")}', Context.currentPos()
+						'Lowering: multi-@:lit set mixes word-like and symbolic literals: ${litList.join(', ')}', Context.currentPos()
 					);
 				}
 			}
@@ -1399,7 +1399,7 @@ class Lowering {
 				attempts.push(macro if ($matchCall) return $call);
 			}
 			final failExpr: Expr = macro throw new anyparse.runtime.ParseError(
-				new anyparse.runtime.Span(ctx.pos, ctx.pos), $v{'expected one of ${litList.join(", ")}'}
+				new anyparse.runtime.Span(ctx.pos, ctx.pos), $v{'expected one of ${litList.join(', ')}'}
 			);
 			final body: Array<Expr> = [macro skipWs(ctx)].concat(attempts).concat([failExpr]);
 			return macro $b{body};
@@ -2084,7 +2084,7 @@ class Lowering {
 				// inside a switch arm still throws (`g` is neither `case`
 				// nor `default`).
 				final gateCond: Null<Expr> = parseGateCall != null
-					? (macro ($parseGateCall || peekKw(ctx, "else") || peekLit(ctx, "}") || peekKw(ctx, "case") || peekKw(ctx, "default")))
+					? (macro ($parseGateCall || peekKw(ctx, 'else') || peekLit(ctx, '}') || peekKw(ctx, 'case') || peekKw(ctx, 'default')))
 					: null;
 				if (parseGateCall != null && triviaTrailOpt)
 					steps.push(macro final _trailPresent: Bool = $gateCond

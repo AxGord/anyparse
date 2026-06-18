@@ -17,13 +17,13 @@ class D {
 	public static inline function text(s: String): Doc return Text(s);
 
 	/** A potential break. In flat mode becomes a single space. */
-	public static inline function line(): Doc return Line(" ");
+	public static inline function line(): Doc return Line(' ');
 
 	/** A potential break. In flat mode collapses to nothing. */
-	public static inline function softline(): Doc return Line("");
+	public static inline function softline(): Doc return Line('');
 
 	/** A mandatory break. Always forces a newline, even in flat mode. */
-	public static inline function hardline(): Doc return Line("\n");
+	public static inline function hardline(): Doc return Line('\n');
 
 	/** Adds `n` columns of indentation to breaks inside `inner`. */
 	public static inline function nest(n: Int, inner: Doc): Doc return Nest(n, inner);

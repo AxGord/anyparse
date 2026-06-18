@@ -120,7 +120,7 @@ final class MoveSymbol {
 		//    we cannot read cannot be proven free of references to the type.
 		final index: SymbolIndex = SymbolIndex.build(scopeFiles, plugin);
 		final skipped: Array<String> = index.skippedFiles();
-		if (skipped.length > 0) return Err('cannot move across scope: ${skipped.length} file(s) do not parse: ${skipped.join(", ")}');
+		if (skipped.length > 0) return Err('cannot move across scope: ${skipped.length} file(s) do not parse: ${skipped.join(', ')}');
 
 		// Source text lookup for every scope file (the index keeps only
 		// structural info, not the raw bytes).

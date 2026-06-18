@@ -23,5 +23,5 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxDollarReif = {
 	var name: HxIdentLit;
-	@:lead("{") var expr: HxExpr;
+	@:lead('{') var expr: HxExpr;
 };

@@ -352,10 +352,10 @@ enum HxExpr {
 
 	RegexLit(v: HxRegexLit);
 
-	@:lead("${") @:trail("}")
+	@:lead("${") @:trail('}')
 	DollarBlockExpr(expr: HxExpr);
 
-	@:lead("$") @:trail("}")
+	@:lead("$") @:trail('}')
 	DollarReifExpr(v: HxDollarReif);
 
 	@:lead("$")

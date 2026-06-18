@@ -133,7 +133,7 @@ final class NewFile {
 					members.push('public $sig {\n$body\n}');
 			}
 			for (key in bodies.keys()) if (!methodNames.contains(key))
-				return err('@@ $key names no method on $ifaceSimple (have: ${methodNames.join(", ")})');
+				return err('@@ $key names no method on $ifaceSimple (have: ${methodNames.join(', ')})');
 		}
 		for (field in spec.fields) members.push(field);
 		if (freeMembers != null) members.push(freeMembers);
@@ -208,7 +208,7 @@ final class NewFile {
 
 		if (NULL_SAFE_KINDS.contains(kind)) buf.add('@:nullSafety(Strict)\n');
 
-		final ext: String = extendsSimple.length > 0 ? ' extends ${extendsSimple.join(", ")}' : '';
+		final ext: String = extendsSimple.length > 0 ? ' extends ${extendsSimple.join(', ')}' : '';
 		final body: String = members.join('\n\n');
 		switch kind {
 			case 'interface':
@@ -219,7 +219,7 @@ final class NewFile {
 				buf.add('abstract ${spec.className}$abstractClause {\n\n$body\n}\n');
 			case 'typedef':
 				final structLines: Array<String> = [for (e in extendsSimple) '> $e,'].concat(members);
-				buf.add('typedef ${spec.className} = {\n\n${structLines.join("\n")}\n}\n');
+				buf.add('typedef ${spec.className} = {\n\n${structLines.join('\n')}\n}\n');
 
 			case _:
 				final finalKw: String = spec.isFinal == false ? '' : 'final ';

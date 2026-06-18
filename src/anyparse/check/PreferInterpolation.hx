@@ -138,7 +138,7 @@ final class PreferInterpolation implements Check {
 			final c: Int = StringTools.fastCodeAt(src, i);
 			// A single-quote, double-quote, dollar, or newline in the argument source would
 			// close or re-interpolate the wrapping '${ … }', making the rewrite unsafe.
-			if (c == "'".code || c == '"'.code || c == "$".code || c == "\n".code || c == "\r".code) return false;
+			if (c == "'".code || c == '"'.code || c == "$".code || c == '\n'.code || c == '\r'.code) return false;
 		}
 		return true;
 	}

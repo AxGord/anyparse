@@ -44,7 +44,7 @@ enum HxStringSegment {
 	@:lit("$$")
 	Dollar;
 
-	@:lead("${") @:trail("}") @:fmt(captureSource('formatStringInterpolation'))
+	@:lead("${") @:trail('}') @:fmt(captureSource('formatStringInterpolation'))
 	Block(expr: HxExpr);
 
 	@:lead("$")
