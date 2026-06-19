@@ -304,6 +304,7 @@ import unit.PreferSwitchCheckTest;
 import unit.RedundantVoidReturnCheckTest;
 import unit.UnnecessaryBlockCheckTest;
 import unit.PreferFinalFieldCheckTest;
+import unit.SuppressionSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -643,6 +644,7 @@ class RunTests {
 		addCase(new ApqDxTier5CliTest());
 		addCase(new ApqDepthSemanticsTest());
 		addCase(new ApqDxTier2CliTest());
+		addCase(new SuppressionSliceTest());
 		utest.ui.Report.create(runner);
 		runner.run();
 	}

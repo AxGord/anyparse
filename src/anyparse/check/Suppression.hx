@@ -8,40 +8,21 @@ using StringTools;
 
 /**
  * One suppression directive resolved to a line range and an optional rule
- * filter. `lineFrom`/`lineTo` are 1-indexed inclusive (a `noqa` is a single
- * line, a `CHECKSTYLE:OFF`/`ON` pair is the span between them); `rules` is
- * the set of rule-ids the directive silences, or `null` for "all rules".
+ * filter. `lineFrom`/`lineTo` are 1-indexed inclusive; `rules` is the set of
+ * rule-ids the directive silences, or `null` for "all rules". `region`
+ * distinguishes the two directive families, which match a finding differently:
+ * a `noqa` (`region == false`, a single line) silences a finding whose source
+ * span COVERS that line — so a directive on a continuation line of a reflowed
+ * statement still lands — while a `CHECKSTYLE:OFF`/`ON` region
+ * (`region == true`) silences a finding REPORTED inside it (its start line
+ * within the region), the conventional region containment rule.
  */
 private typedef Entry = {
 	var lineFrom: Int;
 	var lineTo: Int;
 	var rules: Null<Array<String>>;
+	var region: Bool;
 }
-
-/**
- * Inline finding-suppression for the analysis layer — grammar-agnostic, no
- * parse. Scans a file's comments (string-literal-aware, via
- * `RefactorSupport.collectCommentTokens`) for two directive families and
- * drops any `Violation` a directive silences. Applied once in `Linter.run`,
- * so every consumer (the `lint` report AND `--fix`) inherits it: a
- * suppressed finding is neither reported nor auto-fixed.
- *
- * Two directive families are recognised:
- *
- *  - **flake8-style `noqa`** (same-line): a comment whose trimmed body is
- *    `noqa` silences every rule on the comment's own physical line;
- *    `noqa: <rule>[,<rule>]` silences only the named apq rule-ids on that
- *    line. It is meant as a trailing comment on the offending line.
- *  - **checkstyle region toggle**: `CHECKSTYLE:OFF` ... `CHECKSTYLE:ON`
- *    silences every rule on every line of the enclosed region — the default
- *    `SuppressionCommentFilter` form, consistent with the project already
- *    consuming `checkstyle.json`. A named-check region
- *    (`CHECKSTYLE:OFF: <CheckName>`) is intentionally not supported: it would
- *    need a checkstyle-name-to-apq-id table; the all-rules form covers the ask.
- *
- * A violation with no span cannot be located on a line and is therefore
- * never suppressed.
- */
 @:nullSafety(Strict)
 final class Suppression {
 
@@ -68,16 +49,29 @@ final class Suppression {
 			if (source == null) return true;
 			final entries: Null<Array<Entry>> = entriesByFile[v.file];
 			if (entries == null || entries.length == 0) return true;
-			final line: Int = span.lineCol(source).line;
-			return !suppressed(entries, line, v.rule);
+			final fromLine: Int = span.lineCol(source).line;
+			final toLine: Int = new Span(span.to, span.to).lineCol(source).line;
+			return !suppressedInRange(entries, fromLine, toLine, v.rule);
 		});
 	}
 
-	/** True if any entry covers `line` and silences `rule` (or all rules). */
-	private static function suppressed(entries: Array<Entry>, line: Int, rule: String): Bool {
-		for (e in entries) if (line >= e.lineFrom && line <= e.lineTo) {
-			final rules: Null<Array<String>> = e.rules;
-			if (rules == null || rules.contains(rule)) return true;
+	/**
+	 * True if any entry silences `rule` (or all rules) for a finding spanning lines
+	 * `[fromLine, toLine]`. A `noqa` (single line, `region == false`) hits when its
+	 * line falls anywhere in the finding's span — so it lands even when the writer
+	 * reflowed the offending statement and the comment ended up on a continuation
+	 * line, not the line the finding is reported at. A `CHECKSTYLE` region
+	 * (`region == true`) hits when the finding's REPORT line (`fromLine`) is inside
+	 * the region — the conventional containment rule; matching the finding's whole
+	 * span would let a region silence a wide decl-level finding reported outside it.
+	 */
+	private static function suppressedInRange(entries: Array<Entry>, fromLine: Int, toLine: Int, rule: String): Bool {
+		for (e in entries) {
+			final hit: Bool = e.region ? fromLine >= e.lineFrom && fromLine <= e.lineTo : e.lineFrom <= toLine && fromLine <= e.lineTo;
+			if (hit) {
+				final rules: Null<Array<String>> = e.rules;
+				if (rules == null || rules.contains(rule)) return true;
+			}
 		}
 		return false;
 	}
@@ -99,7 +93,12 @@ final class Suppression {
 				if (openLine < 0) openLine = line;
 			} else if (text.startsWith('CHECKSTYLE:ON')) {
 				if (openLine >= 0) {
-					entries.push({ lineFrom: openLine, lineTo: line, rules: null });
+					entries.push({
+						lineFrom: openLine,
+						lineTo: line,
+						rules: null,
+						region: true
+					});
 					openLine = -1;
 				}
 			} else {
@@ -109,7 +108,12 @@ final class Suppression {
 		}
 		if (openLine >= 0) {
 			final lastLine: Int = new Span(source.length, source.length).lineCol(source).line;
-			entries.push({ lineFrom: openLine, lineTo: lastLine, rules: null });
+			entries.push({
+				lineFrom: openLine,
+				lineTo: lastLine,
+				rules: null,
+				region: true
+			});
 		}
 		return entries;
 	}
@@ -122,7 +126,12 @@ final class Suppression {
 	 */
 	private static function parseNoqa(text: String, line: Int): Null<Entry> {
 		final lower: String = text.toLowerCase();
-		if (lower == 'noqa') return { lineFrom: line, lineTo: line, rules: null };
+		if (lower == 'noqa') return {
+			lineFrom: line,
+			lineTo: line,
+			rules: null,
+			region: false
+		};
 		if (!lower.startsWith('noqa:')) return null;
 		final rules: Array<String> = [
 			for (part in text.substr('noqa:'.length).split(',')) {
@@ -131,7 +140,12 @@ final class Suppression {
 					id;
 			}
 		];
-		return { lineFrom: line, lineTo: line, rules: rules.length > 0 ? rules : null };
+		return {
+			lineFrom: line,
+			lineTo: line,
+			rules: rules.length > 0 ? rules : null,
+			region: false
+		};
 	}
 
 }
