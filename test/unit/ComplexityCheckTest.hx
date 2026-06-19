@@ -14,7 +14,7 @@ import anyparse.grammar.haxe.CheckstyleConfigLoader;
 
 /**
  * The `complexity` check: a function whose cyclomatic complexity (1 + decision
- * points) exceeds the default threshold (10) is flagged `Warning`; a simpler
+ * points) exceeds the default threshold (20) is flagged `Warning`; a simpler
  * one is not. Boundary is pinned with `&&` chains (each `&&` is one point); the
  * mixed-construct, nested-function, and lambda-folding behaviors are covered
  * too. Report-only — `fix` yields no edits.
@@ -26,59 +26,64 @@ class ComplexityCheckTest extends Test {
 	}
 
 	public function testOverThresholdFlagged(): Void {
-		// 10 `&&` -> 10 decision points -> score 11 > 10.
+		// 20 `&&` -> 20 decision points -> score 21 > 20.
 		final vs: Array<Violation> =
-			violations('class C {\n\tfunction big(a:Bool):Bool {\n\t\treturn a && a && a && a && a && a && a && a && a && a && a;\n\t}\n}');
+			violations(
+				'class C {\n\tfunction big(a:Bool):Bool {\n\t\treturn a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a;\n\t}\n}'
+			);
 		Assert.equals(1, vs.length);
 		Assert.equals('complexity', vs[0].rule);
 		Assert.equals(Severity.Warning, vs[0].severity);
 		Assert.isTrue(vs[0].message.contains("'big'"));
-		Assert.isTrue(vs[0].message.contains('11'));
+		Assert.isTrue(vs[0].message.contains('21'));
 	}
 
 	public function testThresholdBoundaryNotFlagged(): Void {
-		// 9 `&&` -> score 10, which is NOT > 10.
+		// 19 `&&` -> score 20, which is NOT > 20.
 		Assert.equals(
 			0,
-			violations('class C {\n\tfunction edge(a:Bool):Bool {\n\t\treturn a && a && a && a && a && a && a && a && a && a;\n\t}\n}').length
+			violations(
+				'class C {\n\tfunction edge(a:Bool):Bool {\n\t\treturn a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a;\n\t}\n}'
+			).length
 		);
 	}
 
 	public function testMixedConstructsCounted(): Void {
-		// if/while/for/case/catch/ternary/?? all contribute — well over the threshold.
+		// if/while/for/case/catch/ternary/?? plus a long && chain — well over the threshold (score 24).
 		final src: String = 'class C {\n' + '\tfunction mixed(a:Int):Int {\n' + '\t\tif (a > 0) return 1;\n' + '\t\tif (a > 1) return 2;\n'
 			+ '\t\twhile (a > 2) a--;\n' + '\t\tfor (i in 0...a) trace(i);\n'
 			+ '\t\tswitch a { case 1: trace(1); case 2: trace(2); case 3: trace(3); case _: trace(0); }\n'
 			+ '\t\ttry { throw "x"; } catch (e:String) {} catch (e:Int) {}\n' + '\t\tfinal t = a > 0 ? 1 : 2;\n'
-			+ '\t\tfinal n = (null : Null<Int>) ?? 0;\n' + '\t\tfinal b = a > 0 && a < 10;\n' + '\t\treturn b ? t + n : 0;\n' + '\t}\n'
-			+ '}';
+			+ '\t\tfinal n = (null : Null<Int>) ?? 0;\n'
+			+ '\t\tfinal b = a < 0 && a < 1 && a < 2 && a < 3 && a < 4 && a < 5 && a < 6 && a < 7 && a < 8 && a < 9 && a < 10;\n'
+			+ '\t\treturn b ? t + n : 0;\n' + '\t}\n' + '}';
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains("'mixed'"));
 	}
 
 	public function testNestedFunctionMeasuredSeparately(): Void {
-		// `inner` (10 &&) is flagged on its own; `outer`'s branches exclude it.
+		// `inner` (20 &&) is flagged on its own; `outer`'s branches exclude it.
 		final vs: Array<Violation> =
 			violations(
-				'class C {\n\tfunction outer():Void {\n\t\tfunction inner(a:Bool):Bool {\n\t\t\treturn a && a && a && a && a && a && a && a && a && a && a;\n\t\t}\n\t\tinner(true);\n\t}\n}'
+				'class C {\n\tfunction outer():Void {\n\t\tfunction inner(a:Bool):Bool {\n\t\t\treturn a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a;\n\t\t}\n\t\tinner(true);\n\t}\n}'
 			);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains("'inner'"));
 	}
 
 	public function testLambdaFoldsIntoEnclosing(): Void {
-		// The lambda's 10 `&&` count toward `withLambda` (lambdas are not function units).
+		// The lambda's 20 `&&` count toward `withLambda` (lambdas are not function units).
 		final vs: Array<Violation> =
 			violations(
-				'class C {\n\tfunction withLambda():Bool {\n\t\tfinal g = (a:Bool) -> a && a && a && a && a && a && a && a && a && a && a;\n\t\treturn g(true);\n\t}\n}'
+				'class C {\n\tfunction withLambda():Bool {\n\t\tfinal g = (a:Bool) -> a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a;\n\t\treturn g(true);\n\t}\n}'
 			);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains("'withLambda'"));
 	}
 
 	public function testFixReturnsEmpty(): Void {
-		final src: String = 'class C {\n\tfunction big(a:Bool):Bool {\n\t\treturn a && a && a && a && a && a && a && a && a && a && a;\n\t}\n}';
+		final src: String = 'class C {\n\tfunction big(a:Bool):Bool {\n\t\treturn a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a;\n\t}\n}';
 		final check: Complexity = new Complexity();
 		Assert.equals(0, check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()).length);
 	}
@@ -137,7 +142,7 @@ class ComplexityCheckTest extends Test {
 
 	public function testRespectsCheckstyleThresholdFromDisk(): Void {
 		// End-to-end: a checkstyle.json discovered by walking up from the file lowers
-		// the threshold so a function the default (10) ignores is flagged.
+		// the threshold so a function the default (20) ignores is flagged.
 		final tmp: Null<String> = Sys.getEnv('TMPDIR');
 		final base: String = (tmp != null && tmp.length > 0) ? tmp : '/tmp';
 		final dir: String = '$base/anyparse_cx_cfg_${Sys.time()}';

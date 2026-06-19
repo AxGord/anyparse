@@ -55,7 +55,7 @@ class LintConfigCliTest extends Test {
 		cleanup(tight);
 
 		final loose: String = dirWith(null, foo);
-		Assert.equals(0, Cli.run(['lint', '--fail-on', 'warning', '$loose/Foo.hx']), 'default max 10 leaves score 2 alone');
+		Assert.equals(0, Cli.run(['lint', '--fail-on', 'warning', '$loose/Foo.hx']), 'default max 20 leaves score 2 alone');
 		cleanup(loose);
 		#else
 		Assert.pass('non-sys target');
