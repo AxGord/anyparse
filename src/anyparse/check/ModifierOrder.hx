@@ -38,11 +38,14 @@ final class ModifierOrder implements Check {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final shape: RefShape = plugin.refShape();
-		final order: Array<String> = shape.modifierOrderKinds ?? [];
+		final defaultOrder: Array<String> = shape.modifierOrderKinds ?? [];
 		final members: Array<String> = shape.memberDeclKinds ?? [];
-		if (order.length == 0 || members.length == 0) return [];
+		if (members.length == 0) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
+			// A project checkstyle `ModifierOrder.modifiers` overrides the grammar's default ranking.
+			final order: Array<String> = plugin.checkOverrides(entry.file)?.modifierOrder ?? defaultOrder;
+			if (order.length == 0) continue;
 			final tree: Null<QueryNode> =
 				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
 			if (tree != null) walk(violations, entry.file, tree, order, members);

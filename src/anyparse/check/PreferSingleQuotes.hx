@@ -57,6 +57,8 @@ final class PreferSingleQuotes implements Check {
 		if (support == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
+			// A project checkstyle `StringLiteral.policy` that prefers double quotes disables this check.
+			if (plugin.checkOverrides(entry.file)?.preferSingleQuotesEnabled == false) continue;
 			final tree: Null<QueryNode> =
 				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
 			if (tree != null) walk(violations, entry.file, entry.source, tree, support);

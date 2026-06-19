@@ -306,6 +306,8 @@ import unit.UnnecessaryBlockCheckTest;
 import unit.PreferFinalFieldCheckTest;
 import unit.SuppressionSliceTest;
 import unit.ApqExitOnEmptyCliTest;
+import unit.MagicNumberCheckTest;
+import unit.CheckstyleConfigLoaderTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -569,6 +571,8 @@ class RunTests {
 		addCase(new LintFailOnCliTest());
 		addCase(new UnusedPrivateCheckTest());
 		addCase(new ComplexityCheckTest());
+		addCase(new MagicNumberCheckTest());
+		addCase(new CheckstyleConfigLoaderTest());
 		addCase(new DeadCodeCheckTest());
 		addCase(new EmptyBlockCheckTest());
 		addCase(new UnusedParameterCheckTest());

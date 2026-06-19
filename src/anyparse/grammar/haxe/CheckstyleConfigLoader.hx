@@ -6,6 +6,8 @@ import haxe.Json;
 
 using Lambda;
 
+import anyparse.query.GrammarPlugin.CheckOverrides;
+
 /**
  * Adapts an existing haxe-checkstyle `checkstyle.json` onto the neutral
  * `NamingPolicy`, exactly as `HaxeFormatConfigLoader` adapts an `hxformat.json`
@@ -104,6 +106,113 @@ final class CheckstyleConfigLoader {
 			case 'CatchParameterName': NamingCategory.CatchVar;
 			case _: null;
 		}
+	}
+
+	/**
+	 * Map a `checkstyle.json` onto the neutral `CheckOverrides` the checks read.
+	 * One pass over `checks`; each recognised `type` fills its field, applying
+	 * checkstyle's own default when the check is present but omits the option.
+	 * Throws whatever `Json.parse` throws on malformed input — the caller catches
+	 * and falls back to no overrides.
+	 */
+	public static function loadOverrides(jsonContent: String): CheckOverrides {
+		final root: Dynamic = Json.parse(jsonContent);
+		final overrides: CheckOverrides = {};
+		final checksRaw: Dynamic = Reflect.field(root, 'checks');
+		if (!(checksRaw is Array)) return overrides;
+		final checks: Array<Dynamic> = checksRaw;
+		for (check in checks) {
+			final type: Dynamic = Reflect.field(check, 'type');
+			if (!(type is String)) continue;
+			final props: Dynamic = Reflect.field(check, 'props');
+			switch (type: String) {
+				case 'MagicNumber':
+					overrides.magicNumberIgnore = readFloatList(props, 'ignoreNumbers', [-1, 0, 1, 2]);
+				case 'UnusedImport':
+					overrides.unusedImportIgnoreModules = readStringList(props, 'ignoreModules');
+				case 'ModifierOrder':
+					overrides.modifierOrder = readModifierOrder(props);
+				case 'StringLiteral':
+					overrides.preferSingleQuotesEnabled = readSingleQuotesEnabled(props);
+				case 'Type':
+					overrides.explicitTypeIgnoreEnumAbstract = readBool(props, 'ignoreEnumAbstractValues', true);
+				case 'EmptyBlock':
+					overrides.emptyBlockEnabled = readEmptyBlockEnabled(props);
+				case _:
+			}
+		}
+		return overrides;
+	}
+
+	/** A numeric-array prop, or `fallback` when the prop is absent or not an array. */
+	private static function readFloatList(props: Dynamic, key: String, fallback: Array<Float>): Array<Float> {
+		final raw: Dynamic = props != null ? Reflect.field(props, key) : null;
+		if (!(raw is Array)) return fallback;
+		final arr: Array<Dynamic> = raw;
+		return [for (n in arr) if (n is Int || n is Float) (n: Float)];
+	}
+
+	/** A string-array prop, or `[]` when absent or not an array. */
+	private static function readStringList(props: Dynamic, key: String): Array<String> {
+		final raw: Dynamic = props != null ? Reflect.field(props, key) : null;
+		if (!(raw is Array)) return [];
+		final arr: Array<Dynamic> = raw;
+		return [for (s in arr) if (s is String) (s: String)];
+	}
+
+	/** A bool prop, or `fallback` when absent or not a bool. */
+	private static function readBool(props: Dynamic, key: String, fallback: Bool): Bool {
+		final v: Dynamic = props != null ? Reflect.field(props, key) : null;
+		return v is Bool ? (v: Bool) : fallback;
+	}
+
+	/**
+	 * checkstyle `ModifierOrder.modifiers` (UPPER_SNAKE) mapped to our RefShape
+	 * modifier kinds; the modifiers our `modifier-order` check does not rank
+	 * (MACRO / DYNAMIC / FINAL / EXTERN / …) are dropped. Absent → checkstyle's
+	 * own default order.
+	 */
+	private static function readModifierOrder(props: Dynamic): Array<String> {
+		final raw: Dynamic = props != null ? Reflect.field(props, 'modifiers') : null;
+		final tokens: Array<Dynamic> = raw is Array ? raw : ['MACRO', 'OVERRIDE', 'PUBLIC_PRIVATE', 'STATIC', 'INLINE', 'DYNAMIC', 'FINAL'];
+		final order: Array<String> = [];
+		for (t in tokens) if (t is String) switch (t: String) {
+			case 'OVERRIDE':
+				order.push('Override');
+			case 'PUBLIC_PRIVATE':
+				order.push('Public');
+				order.push('Private');
+			case 'STATIC':
+				order.push('Static');
+			case 'INLINE':
+				order.push('Inline');
+			case _:
+		}
+		return order;
+	}
+
+	/**
+	 * `prefer-single-quotes` is active only when checkstyle `StringLiteral.policy`
+	 * enforces single quotes; the default and any double-preferring policy turn it
+	 * off. Matched leniently by substring so the exact enum casing does not matter.
+	 */
+	private static function readSingleQuotesEnabled(props: Dynamic): Bool {
+		final v: Dynamic = props != null ? Reflect.field(props, 'policy') : null;
+		if (!(v is String)) return false;
+		final p: String = (v: String).toLowerCase();
+		return p.indexOf('single') >= 0 && p.indexOf('double') < 0;
+	}
+
+	/**
+	 * `empty-block` is active only when checkstyle `EmptyBlock.option` demands
+	 * content (`text` / `stmt`); the default `empty` (allow empty blocks) turns it
+	 * off. Lenient substring match.
+	 */
+	private static function readEmptyBlockEnabled(props: Dynamic): Bool {
+		final v: Dynamic = props != null ? Reflect.field(props, 'option') : null;
+		if (!(v is String)) return false;
+		final o: String = (v: String).toLowerCase();
+		return o.indexOf('text') >= 0 || o.indexOf('stmt') >= 0;
 	}
 
 }

@@ -8,6 +8,7 @@ import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.Pattern.KindEquivalence;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
+import anyparse.query.GrammarPlugin.CheckOverrides;
 
 /**
  * A run-scoped `GrammarPlugin` decorator that memoizes `parseFile` /
@@ -84,5 +85,7 @@ final class CachingGrammarPlugin implements GrammarPlugin {
 	public function booleanLogicSupport(): Null<BooleanLogicSupport> return _inner.booleanLogicSupport();
 
 	public function knownExtensionMethods(modulePath: String): Null<Array<String>> return _inner.knownExtensionMethods(modulePath);
+
+	public function checkOverrides(path: String): Null<CheckOverrides> return _inner.checkOverrides(path);
 
 }

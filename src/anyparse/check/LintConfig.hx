@@ -95,4 +95,17 @@ final class LintConfig {
 		return v == null || !(v is Int || v is Float) ? null : Std.int(v);
 	}
 
+	/**
+	 * A rule-specific list-of-numbers option (e.g. `magic-number` `ignore`),
+	 * or null when unset; a non-array value or non-numeric elements are dropped.
+	 */
+	public function numberListOption(id: String, key: String): Null<Array<Float>> {
+		final rc: Null<RuleConfig> = _rules[id];
+		if (rc == null) return null;
+		final v: Null<Dynamic> = rc.props.get(key);
+		if (v == null || !(v is Array)) return null;
+		final raw: Array<Dynamic> = v;
+		return [for (e in raw) if (e is Int || e is Float) (e: Float)];
+	}
+
 }

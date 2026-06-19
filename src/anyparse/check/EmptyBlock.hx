@@ -52,6 +52,8 @@ final class EmptyBlock implements Check {
 		if (support == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
+			// A project checkstyle `EmptyBlock.option` of `empty` (allow empty blocks) disables this check.
+			if (plugin.checkOverrides(entry.file)?.emptyBlockEnabled == false) continue;
 			final tree: Null<QueryNode> =
 				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
 			if (tree != null) walk(violations, entry.file, entry.source, tree, support);

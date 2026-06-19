@@ -67,7 +67,8 @@ final class Linter {
 			new ExplicitType(),
 			new PreferFinalField(),
 			new UnnecessaryBlock(),
-			new RedundantVoidReturn()
+			new RedundantVoidReturn(),
+			new MagicNumber()
 		];
 	}
 

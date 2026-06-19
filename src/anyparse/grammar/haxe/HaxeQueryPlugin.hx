@@ -11,6 +11,7 @@ import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
+import anyparse.query.GrammarPlugin.CheckOverrides;
 
 /**
  * Haxe grammar binding for the `apq` query engine.
@@ -414,6 +415,7 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 			defaultVisibilityModifierText: 'private',
 			mutableFieldDeclKinds: ['VarMember'],
 			voidReturnKind: 'VoidReturnStmt',
+			numericLiteralKinds: ['IntLit', 'FloatLit', 'HexLit'],
 		};
 	}
 
@@ -892,6 +894,11 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 
 	public function knownExtensionMethods(modulePath: String): Null<Array<String>> {
 		return EXTENSION_METHODS[modulePath];
+	}
+
+	public function checkOverrides(path: String): Null<CheckOverrides> {
+		final content: Null<String> = CheckstyleConfigFinder.findConfigContent(path);
+		return content == null ? null : try CheckstyleConfigLoader.loadOverrides(content) catch (exception: Exception) null;
 	}
 
 }

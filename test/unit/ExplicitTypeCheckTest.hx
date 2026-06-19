@@ -91,4 +91,21 @@ class ExplicitTypeCheckTest extends Test {
 		Assert.equals(1, violations('class C { public function k<T:Iterator<Int>>(x:T) {} }').length);
 	}
 
+	public function testCheckstyleIgnoreEnumAbstractFalseFlags(): Void {
+		// checkstyle Type.ignoreEnumAbstractValues=false turns off the exemption,
+		// so an untyped enum-abstract value is flagged.
+		final tmp: Null<String> = Sys.getEnv('TMPDIR');
+		final base: String = (tmp != null && tmp.length > 0) ? tmp : '/tmp';
+		final dir: String = '$base/anyparse_et_cs_${Sys.time()}';
+		sys.FileSystem.createDirectory(dir);
+		sys.io.File.saveContent('$dir/checkstyle.json', '{"checks":[{"type":"Type","props":{"ignoreEnumAbstractValues":false}}]}');
+		final path: String = '$dir/EA.hx';
+		final src: String = 'enum abstract E(Int) {\n\tvar A = 1;\n}';
+		sys.io.File.saveContent(path, src);
+		Assert.isTrue(new ExplicitType().run([{ file: path, source: src }], new HaxeQueryPlugin()).length >= 1);
+		sys.FileSystem.deleteFile(path);
+		sys.FileSystem.deleteFile('$dir/checkstyle.json');
+		sys.FileSystem.deleteDirectory(dir);
+	}
+
 }

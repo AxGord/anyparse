@@ -208,6 +208,14 @@ interface GrammarPlugin {
 	 */
 	public function knownExtensionMethods(modulePath: String): Null<Array<String>>;
 
+	/**
+	 * Lint-check option overrides discovered from the grammar's native config
+	 * near `path` (Haxe: `checkstyle.json`), or null when the grammar has no such
+	 * config or none is found. The neutral counterpart of `maxComplexity` for the
+	 * checks wired to honour a project's existing checkstyle config.
+	 */
+	public function checkOverrides(path: String): Null<CheckOverrides>;
+
 }
 
 /**
@@ -641,6 +649,14 @@ typedef RefShape = {
 	 * back to the legacy `nullSafeAccessKind`-only skip.
 	 */
 	@:optional var nullableOperandKinds: Array<String>;
+
+	/**
+	 * Numeric-literal node kinds (`IntLit` / `FloatLit` / `HexLit`) — the
+	 * `magic-number` check flags one used in executable code (inside a
+	 * `functionKinds` unit) whose value is not in the small exempt set.
+	 * Optional; a grammar that leaves it unset makes the check a no-op.
+	 */
+	@:optional var numericLiteralKinds: Array<String>;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {
@@ -665,3 +681,29 @@ typedef MetaShape = {
 typedef TypeRefShape = {
 	var typeRefKinds: Array<String>;
 }
+
+/**
+ * Lint-check option overrides a grammar discovered from its native config — for
+ * Haxe, mapped from a project `checkstyle.json` (see `CheckstyleConfigLoader`).
+ * Each field is the neutral form of one checkstyle option; an unset field means
+ * the project did not configure that check, so the check keeps its own default.
+ */
+typedef CheckOverrides = {
+	/** `magic-number` exempt values (checkstyle `MagicNumber.ignoreNumbers`). */
+	@:optional var magicNumberIgnore: Array<Float>;
+
+	/** `unused-import` never-flag module list (checkstyle `UnusedImport.ignoreModules`). */
+	@:optional var unusedImportIgnoreModules: Array<String>;
+
+	/** `modifier-order` canonical order, as RefShape modifier kinds (checkstyle `ModifierOrder.modifiers`). */
+	@:optional var modifierOrder: Array<String>;
+
+	/** `prefer-single-quotes` active — false when checkstyle `StringLiteral.policy` prefers double quotes. */
+	@:optional var preferSingleQuotesEnabled: Bool;
+
+	/** `explicit-type` exempts enum-abstract values (checkstyle `Type.ignoreEnumAbstractValues`). */
+	@:optional var explicitTypeIgnoreEnumAbstract: Bool;
+
+	/** `empty-block` active — false when checkstyle `EmptyBlock.option` allows empty blocks. */
+	@:optional var emptyBlockEnabled: Bool;
+};

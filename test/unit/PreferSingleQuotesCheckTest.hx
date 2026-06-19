@@ -97,4 +97,20 @@ class PreferSingleQuotesCheckTest extends Test {
 		return edits.length > 0 ? edits[0].text : '';
 	}
 
+	public function testCheckstyleDoublePolicyDisables(): Void {
+		// A checkstyle.json StringLiteral policy of double quotes disables "prefer single".
+		final tmp: Null<String> = Sys.getEnv('TMPDIR');
+		final base: String = (tmp != null && tmp.length > 0) ? tmp : '/tmp';
+		final dir: String = '$base/anyparse_psq_cs_${Sys.time()}';
+		sys.FileSystem.createDirectory(dir);
+		sys.io.File.saveContent('$dir/checkstyle.json', '{"checks":[{"type":"StringLiteral","props":{"policy":"onlyDouble"}}]}');
+		final path: String = '$dir/Foo.hx';
+		final src: String = 'class Foo {\n\tfunction f() { var s = "hi"; return s; }\n}';
+		sys.io.File.saveContent(path, src);
+		Assert.equals(0, new PreferSingleQuotes().run([{ file: path, source: src }], new HaxeQueryPlugin()).length);
+		sys.FileSystem.deleteFile(path);
+		sys.FileSystem.deleteFile('$dir/checkstyle.json');
+		sys.FileSystem.deleteDirectory(dir);
+	}
+
 }

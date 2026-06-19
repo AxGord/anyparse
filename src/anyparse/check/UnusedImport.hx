@@ -66,7 +66,9 @@ final class UnusedImport implements Check {
 		for (info in index.allFiles()) {
 			final source: String = sourceOf[info.file] ?? '';
 			final importSpans: Array<Span> = [for (imp in info.imports) imp.span];
-			for (imp in info.imports) addViolation(violations, info.file, imp, source, importSpans, plugin);
+			final ignoreModules: Array<String> = plugin.checkOverrides(info.file)?.unusedImportIgnoreModules ?? [];
+			for (imp in info.imports) if (!moduleIgnored(imp, ignoreModules))
+				addViolation(violations, info.file, imp, source, importSpans, plugin);
 		}
 		return violations;
 	}
@@ -151,6 +153,11 @@ final class UnusedImport implements Check {
 		}
 		if (methods.exists(m -> RefactorSupport.methodCalledInSource(source, m))) return;
 		out.push(make(file, imp, Severity.Warning, 'unused using \'${imp.raw}\''));
+	}
+
+	/** Whether `imp`'s full module path is in a checkstyle `ignoreModules` list. */
+	private static function moduleIgnored(imp: ImportInfo, ignore: Array<String>): Bool {
+		return ignore.contains(imp.raw);
 	}
 
 }
