@@ -1275,7 +1275,7 @@ final class Cli {
 		// re-lint only the files a prior pass changed. A cross-file check (confinement)
 		// must see every file or it mis-resolves on the active subset — run those over
 		// the full set each pass.
-		final fullScopeIds: Array<String> = ['unused-private', 'prefer-final-field'];
+		final fullScopeIds: Array<String> = ['unused-private', 'prefer-final-field', 'unused-parameter'];
 		final activeScopeChecks: Array<Check> = [for (c in checks) if (!fullScopeIds.contains(c.id())) c];
 		final fullScopeChecks: Array<Check> = [for (c in checks) if (fullScopeIds.contains(c.id())) c];
 

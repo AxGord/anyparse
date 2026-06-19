@@ -57,4 +57,28 @@ class LintFixFixedPointCliTest extends Test {
 	}
 	#end
 
+	public function testCrossFileConfinementSafeAcrossPasses(): Void {
+		#if (sys || nodejs)
+		// A.hx holds a private method `m` with an unused parameter PLUS a
+		// redundant-else fixed on pass 1 — which makes A active for pass 2. B.hx
+		// overrides `m`, so A is NOT confined (it has a subtype). `unused-parameter`
+		// is registered in the --fix loop's `fullScopeIds`, so even on the pass-2
+		// subset {A} the cross-file index still includes B and `m`'s parameter stays
+		// `Info`. Were the check active-scope, pass 2 would re-lint {A} alone,
+		// wrongly conclude `m` confined, and silently break B's override.
+		final a: String = 'package p;\n\nclass A {\n\tprivate function m(a:Int, unused:Int):Int {\n\t\treturn a;\n\t}\n\n\tpublic function u():Int {\n\t\tif (c) return 1;\n\t\telse return m(1, 2);\n\t}\n}\n';
+		final b: String = 'package p;\n\nclass B extends A {\n\toverride private function m(a:Int, unused:Int):Int {\n\t\treturn a;\n\t}\n}\n';
+		final dir: String = CliFixture.writeDir('fixconfine', [{ name: 'A.hx', source: a }, { name: 'B.hx', source: b }]);
+		Assert.equals(0, Cli.run(['lint', '--fix', dir]), 'lint --fix exits ok');
+		final outA: String = File.getContent('$dir/A.hx');
+		Assert.isTrue(outA.indexOf('else') == -1, 'redundant else de-nested (pass 1 ran): $outA');
+		Assert.isTrue(outA.indexOf('unused:Int') != -1, 'm parameter kept — A is unconfined via subtype B: $outA');
+		if (FileSystem.exists('$dir/A.hx')) FileSystem.deleteFile('$dir/A.hx');
+		if (FileSystem.exists('$dir/B.hx')) FileSystem.deleteFile('$dir/B.hx');
+		if (FileSystem.exists(dir)) FileSystem.deleteDirectory(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 }

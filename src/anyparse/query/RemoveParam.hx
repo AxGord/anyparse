@@ -105,58 +105,17 @@ final class RemoveParam {
 		if (declSpan == null) return Err('"$name" declaration has no source span');
 		final binding: Int = declSpan.from;
 
-		final params: Array<QueryNode> = CallSites.leadingParams(decl);
-		final n: Int = params.length;
-		if (index < 0 || index >= n) return Err('parameter index $index is out of range 0..${n - 1} — "$name" has $n parameter(s)');
-		final target: QueryNode = params[index];
-		final paramNameOpt: Null<String> = target.name;
-		if (paramNameOpt == null) return Err('parameter at index $index of "$name" has no name slot — cannot prove it is unused');
-		final paramName: String = paramNameOpt;
+		// The completeness proof and slot-removal edits are the shared core
+		// `paramSlotEdits`, reused by the `unused-parameter` lint autofix.
+		final result: {
+			edits: Array<{ span: Span, text: String }>,
+			error: Null<String>,
+			callSites: Int
+		} = paramSlotEdits(source, tree, decl, index, name, binding, shape);
+		final error: Null<String> = result.error;
+		if (error != null) return Err(error);
 
-		// SAFETY GUARD: refuse if the parameter is still referenced inside
-		// the function declaration's subtree (its body, or a later
-		// parameter's default value). The parameter declaration node is a
-		// `Required` / `Optional`, NOT an identifier-reference node, so it
-		// contributes no reference of its own name — any reference named
-		// `paramName` in the decl subtree is a genuine use whose binding
-		// would become undefined after removal (a typing error the re-parse
-		// cannot catch). Both bare `IdentExpr` reads AND string-interpolation
-		// `Ident` nodes (`'$paramName'`) count — the interpolation form is
-		// easy to miss because it is not an `IdentExpr`. Conservative by
-		// design: over-refusing is safe.
-		if (countParamRefs(decl, paramName) > 0) return Err('parameter "$paramName" is still used in the body — remove its uses first');
-
-		// Collect the call sites and prove the set is complete — the SAME
-		// completeness proof `change-sig` uses, because removing a
-		// parameter silently breaks any call we fail to update.
-		final isMethod: Bool = decl.kind != 'LocalFnStmt';
-		final callSites: Array<QueryNode> = switch CallSites.collect(decl, tree, source, name, binding, shape) {
-			case CErr(message): return Err(message);
-			case COk(sites): sites;
-		};
-
-		// Arity: every collected call must have exactly `n` positional
-		// arguments. A call with omitted optional / defaulted arguments
-		// cannot have its slot removed unambiguously, so it is a hard
-		// refusal rather than a silent mis-deletion.
-		for (call in callSites) {
-			final argc: Int = call.children.length - 1;
-			if (argc != n) {
-				final at: String = CallSites.posOf(source, call.span);
-				return Err('call at $at has $argc args, expected $n — remove-param cannot update calls with omitted optional arguments');
-			}
-		}
-
-		// Build the slot-removal edits: delete parameter `index` from the
-		// decl and argument `index` from every call.
-		final edits: Array<{ span: Span, text: String }> = [];
-		appendSlotRemoval(edits, source, params, index);
-		for (call in callSites) {
-			final args: Array<QueryNode> = call.children.slice(1);
-			appendSlotRemoval(edits, source, args, index);
-		}
-
-		final rewritten: String = RefactorSupport.applyEdits(source, edits);
+		final rewritten: String = RefactorSupport.applyEdits(source, result.edits);
 		if (rewritten == source) return Err('removing parameter $index of "$name" is a no-op');
 
 		try
@@ -166,10 +125,70 @@ final class RemoveParam {
 		catch (exception: Exception)
 			return Err('rewritten source does not parse: ${exception.message}');
 
+		final isMethod: Bool = decl.kind != 'LocalFnStmt';
 		final advisory: Null<String> = isMethod
-			? 'removed the parameter and updated ${callSites.length} in-file call site(s); if "$name" is called from other files, update those call sites too — cross-file resolution is out of scope'
+			? 'removed the parameter and updated ${result.callSites} in-file call site(s); if "$name" is called from other files, update those call sites too — cross-file resolution is out of scope'
 			: null;
 		return Ok(rewritten, advisory);
+	}
+
+	/**
+	 * The reusable core of a single-parameter removal: prove parameter
+	 * `index` of `decl` can be dropped and build the slot-removal edits, or
+	 * return the diagnostic that blocks it. Shared by `removeParam` (which
+	 * applies the edits, re-parses, and reports the cross-file advisory) and
+	 * the `unused-parameter` lint autofix (which collects edits across the
+	 * provably-safe subset — local functions and confined private methods).
+	 *
+	 * `name` / `binding` identify the function for `CallSites.collect` (the
+	 * same completeness proof `change-sig` uses): the returned `edits` delete
+	 * parameter `index` from `decl` AND the positional argument from every
+	 * in-file call site. `error` is non-null exactly when no edits are
+	 * produced — an out-of-range index, a parameter still referenced in the
+	 * body, an unresolvable / receiver-qualified call site, or a call whose
+	 * arity does not match (an omitted optional argument). `callSites` is the
+	 * number of updated in-file calls (0 on error), for the caller's advisory.
+	 */
+	public static function paramSlotEdits(
+		source: String, tree: QueryNode, decl: QueryNode, index: Int, name: String, binding: Int, shape: RefShape
+	): { edits: Array<{ span: Span, text: String }>, error: Null<String>, callSites: Int } {
+		final params: Array<QueryNode> = CallSites.leadingParams(decl);
+		final n: Int = params.length;
+		if (index < 0 || index >= n)
+			return { edits: [], error: 'parameter index $index is out of range 0..${n - 1} — "$name" has $n parameter(s)', callSites: 0 };
+		final target: QueryNode = params[index];
+		final paramNameOpt: Null<String> = target.name;
+		if (paramNameOpt == null)
+			return { edits: [], error: 'parameter at index $index of "$name" has no name slot — cannot prove it is unused', callSites: 0 };
+		final paramName: String = paramNameOpt;
+
+		if (countParamRefs(decl, paramName) > 0)
+			return { edits: [], error: 'parameter "$paramName" is still used in the body — remove its uses first', callSites: 0 };
+
+		final callSites: Array<QueryNode> = switch CallSites.collect(decl, tree, source, name, binding, shape) {
+			case CErr(message): return { edits: [], error: message, callSites: 0 };
+			case COk(sites): sites;
+		};
+
+		for (call in callSites) {
+			final argc: Int = call.children.length - 1;
+			if (argc != n) {
+				final at: String = CallSites.posOf(source, call.span);
+				return {
+					edits: [],
+					error: 'call at $at has $argc args, expected $n — remove-param cannot update calls with omitted optional arguments',
+					callSites: 0
+				};
+			}
+		}
+
+		final edits: Array<{ span: Span, text: String }> = [];
+		appendSlotRemoval(edits, source, params, index);
+		for (call in callSites) {
+			final args: Array<QueryNode> = call.children.slice(1);
+			appendSlotRemoval(edits, source, args, index);
+		}
+		return { edits: edits, error: null, callSites: callSites.length };
 	}
 
 	/**
