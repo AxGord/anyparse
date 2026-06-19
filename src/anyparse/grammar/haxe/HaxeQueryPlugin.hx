@@ -402,6 +402,13 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 			catchClauseKind: 'CatchClause',
 			controlExitKinds: ['ThrowStmt', 'ThrowExpr', 'ReturnStmt', 'VoidReturnStmt'],
 			caseLiteralKinds: ['IntLit', 'FloatLit', 'BoolLit', 'NullLit'],
+			visibilityContainerKinds: ['ClassDecl', 'ClassForm', 'AbstractClassDecl', 'AbstractDecl'],
+			memberDeclKinds: ['VarMember', 'FinalMember', 'FnMember', 'FinalModifiedMember'],
+			visibilityModifierKinds: ['Public', 'Private'],
+			modifierOrderKinds: ['Override', 'Public', 'Private', 'Static', 'Inline'],
+			fieldDeclKinds: ['VarMember', 'FinalMember'],
+			functionBodyKinds: ['BlockBody', 'ExprBody', 'NoBody'],
+			enumAbstractDeclKind: 'EnumAbstractDecl',
 		};
 	}
 

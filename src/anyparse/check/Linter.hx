@@ -61,7 +61,10 @@ final class Linter {
 			new RedundantMapIterKey(),
 			new UnusedParameter(),
 			new SwallowedException(),
-			new PreferSwitch()
+			new PreferSwitch(),
+			new MissingVisibility(),
+			new ModifierOrder(),
+			new ExplicitType()
 		];
 	}
 

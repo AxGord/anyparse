@@ -532,6 +532,62 @@ typedef RefShape = {
 	 * an arbitrary expression. Optional; unset makes the check a no-op.
 	 */
 	@:optional var caseLiteralKinds: Array<String>;
+
+	/**
+	 * Declaration kinds whose members require an explicit visibility modifier — a
+	 * class / abstract (NOT an interface, whose members are implicitly public, nor
+	 * an enum abstract, whose values are). The `missing-visibility` check scans each
+	 * one's members. Optional; unset makes the check a no-op.
+	 */
+	@:optional var visibilityContainerKinds: Array<String>;
+
+	/**
+	 * Class / abstract member-host kinds (Haxe `VarMember` / `FinalMember` /
+	 * `FnMember` / `FinalModifiedMember`) — a modifier run attaches to one of these.
+	 * The `missing-visibility` and `modifier-order` checks tell a member from the
+	 * modifier siblings that precede it; `explicit-type` splits them into fields
+	 * (`fieldDeclKinds`) and the rest (functions). Optional.
+	 */
+	@:optional var memberDeclKinds: Array<String>;
+
+	/**
+	 * The visibility-modifier sibling kinds (Haxe `Public` / `Private`) — the
+	 * `missing-visibility` check treats a member-host preceded by none of these in
+	 * its modifier run as lacking explicit visibility. Optional; unset → no-op.
+	 */
+	@:optional var visibilityModifierKinds: Array<String>;
+
+	/**
+	 * The canonical modifier order — a modifier's rank is its index here. The
+	 * `modifier-order` check flags a member's run of these whose ranks are not
+	 * non-decreasing (`override` → `public` / `private` → `static` → `inline`).
+	 * Modifiers absent from the list carry no documented order and are ignored.
+	 * Optional; unset makes the check a no-op.
+	 */
+	@:optional var modifierOrderKinds: Array<String>;
+
+	/**
+	 * The field member-host kinds (Haxe `VarMember` / `FinalMember`) — the subset of
+	 * `memberDeclKinds` that declare a value, checked by `explicit-type` for a type
+	 * annotation. The remaining `memberDeclKinds` are the function hosts whose
+	 * parameters and return type it checks. Optional; unset → no-op.
+	 */
+	@:optional var fieldDeclKinds: Array<String>;
+
+	/**
+	 * The function-body marker kinds (Haxe `BlockBody` / `ExprBody` / `NoBody`) —
+	 * `explicit-type` treats a function child that is neither a parameter
+	 * (`paramKinds`) nor one of these as the return type, so a function with no such
+	 * child has no explicit return type. Optional.
+	 */
+	@:optional var functionBodyKinds: Array<String>;
+
+	/**
+	 * The enum-abstract declaration kind (Haxe `EnumAbstractDecl`) — `explicit-type`
+	 * exempts its value members from the field type-annotation rule, their type being
+	 * the abstract's underlying type. Optional.
+	 */
+	@:optional var enumAbstractDeclKind: String;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {
