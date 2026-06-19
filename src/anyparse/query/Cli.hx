@@ -355,7 +355,12 @@ final class Cli {
 			return EXIT_OK;
 		}
 		final cmd: String = args[0];
-		final rest: Array<String> = args.slice(1);
+		_requireMatch = false;
+		final rest: Array<String> = [];
+		for (a in args.slice(1)) if (a == "--exit-on-empty" || a == "--require-match")
+			_requireMatch = true;
+		else
+			rest.push(a);
 		switch cmd {
 			case 'ast':
 				return runAst(rest);
@@ -599,7 +604,7 @@ final class Cli {
 		} else {
 			for (entry in shown) sysPrint(Text.renderRefs(entry.file, entry.source, entry.hits, wantDoc, wantSource, flat));
 		}
-		return EXIT_OK;
+		return emptyExit(allEntries.length == 0);
 	}
 
 	/**
@@ -2686,7 +2691,7 @@ final class Cli {
 				allEntries, cappedLimit, e -> e.hits.length, (e, k) -> { file: e.file, source: e.source, hits: e.hits.slice(0, k) }
 			);
 		for (entry in shown) sysPrint(Text.renderUses(entry.file, entry.source, entry.hits, wantDoc, wantSource, flat));
-		return EXIT_OK;
+		return emptyExit(allEntries.length == 0);
 	}
 
 	private static function runMeta(args: Array<String>): Int {
@@ -2806,7 +2811,7 @@ final class Cli {
 		} else {
 			for (entry in shown) sysPrint(Text.renderMeta(entry.file, entry.source, entry.hits, flat));
 		}
-		return EXIT_OK;
+		return emptyExit(allEntries.length == 0);
 	}
 
 	/**
@@ -3745,7 +3750,7 @@ final class Cli {
 				allEntries, cappedLimit, e -> e.hits.length, (e, k) -> { file: e.file, source: e.source, hits: e.hits.slice(0, k) }
 			);
 		for (entry in shown) sysPrint(Lit.render(entry.file, entry.source, entry.hits, flat));
-		return EXIT_OK;
+		return emptyExit(allEntries.length == 0);
 	}
 
 	/**
@@ -3872,7 +3877,7 @@ final class Cli {
 				allEntries, cappedLimit, e -> e.hits.length, (e, k) -> { file: e.file, source: e.source, hits: e.hits.slice(0, k) }
 			);
 		for (entry in shown) sysPrint(Cases.render(entry.file, entry.source, entry.hits, flat));
-		return EXIT_OK;
+		return emptyExit(allEntries.length == 0);
 	}
 
 	/**
@@ -4441,7 +4446,7 @@ final class Cli {
 				+ 'heuristic field-access section skipped (uses/refs above are complete).\n'
 			);
 			if (!any) stderr('apq blast: no uses / refs of "$typeName" found\n');
-			return EXIT_OK;
+			return emptyExit(!any);
 		}
 		final heur: Array<{ loc: String, line: String }> = [];
 		for (entry in valueTrees) collectMemberAccess(entry.tree, memberNames, declSpans, entry.path, entry.source, heur);
@@ -4471,7 +4476,7 @@ final class Cli {
 		}
 
 		if (!any) stderr('apq blast: no uses / refs / member-access of "$typeName" found\n');
-		return EXIT_OK;
+		return emptyExit(!any);
 	}
 
 	/**
@@ -4631,7 +4636,7 @@ final class Cli {
 		}
 
 		if (!any) stderr('apq mentions: no uses / refs / lit-leaf of "$target" found\n');
-		return EXIT_OK;
+		return emptyExit(!any);
 	}
 
 	/**
@@ -4928,7 +4933,7 @@ final class Cli {
 		} else {
 			for (entry in shown) sysPrint(Text.renderSearchMatches(entry.file, entry.source, entry.matches, flat));
 		}
-		return EXIT_OK;
+		return emptyExit(allEntries.length == 0);
 	}
 
 	private static function perMatchJson(file: String, source: String, m: Match): String {
@@ -10888,4 +10893,21 @@ final class Cli {
 	}
 
 	/** Map a `--fail-on` level name to its `Severity`, or null if unknown. */
+	/**
+	 * `--exit-on-empty` / `--require-match`, stripped from the argv in `run` and
+	 * reset there on every invocation (single CLI call chain, never concurrent).
+	 * When set, a find-walker that produced no hits exits non-zero instead of 0, so
+	 * a script can reliably detect "no match" (e.g. confirm a symbol was removed).
+	 */
+	private static var _requireMatch: Bool = false;
+
+	/**
+	 * Walker exit code honouring `--exit-on-empty`: `EXIT_RUNTIME` when the walk
+	 * found nothing and the flag was set, else `EXIT_OK`. Default (flag unset)
+	 * keeps every walk exiting 0 — backward compatible.
+	 */
+	private static inline function emptyExit(empty: Bool): Int {
+		return empty && _requireMatch ? EXIT_RUNTIME : EXIT_OK;
+	}
+
 }

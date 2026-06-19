@@ -305,6 +305,7 @@ import unit.RedundantVoidReturnCheckTest;
 import unit.UnnecessaryBlockCheckTest;
 import unit.PreferFinalFieldCheckTest;
 import unit.SuppressionSliceTest;
+import unit.ApqExitOnEmptyCliTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -645,6 +646,7 @@ class RunTests {
 		addCase(new ApqDepthSemanticsTest());
 		addCase(new ApqDxTier2CliTest());
 		addCase(new SuppressionSliceTest());
+		addCase(new ApqExitOnEmptyCliTest());
 		utest.ui.Report.create(runner);
 		runner.run();
 	}
