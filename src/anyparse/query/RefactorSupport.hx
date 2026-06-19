@@ -1040,4 +1040,61 @@ final class RefactorSupport {
 		}
 	}
 
+	/**
+	 * Normalize a comment BODY for cross-line literal matching: fold each line
+	 * continuation — a `\n` or `\r\n`, the following whitespace, blank lines, and
+	 * one ` * ` doc-marker per line — into a single space, so a phrase wrapped
+	 * across two ` * ` lines reads as one run. Returns the normalized text plus a
+	 * `map` from each normalized index to the original body offset it came from,
+	 * with `map[text.length] == body.length`, so a match found in the normalized
+	 * text projects back to a span in the original body.
+	 */
+	public static function normalizeCommentBody(body: String): { text: String, map: Array<Int> } {
+		final buf: StringBuf = new StringBuf();
+		final map: Array<Int> = [];
+		final n: Int = body.length;
+		var i: Int = 0;
+		while (i < n) {
+			final c: Int = StringTools.fastCodeAt(body, i);
+			final crlf: Bool = c == '\r'.code && i + 1 < n && StringTools.fastCodeAt(body, i + 1) == '\n'.code;
+			if (c == '\n'.code || crlf) {
+				final runStart: Int = i;
+				i = skipContinuation(body, (crlf ? i + 1 : i) + 1, n);
+				buf.addChar(' '.code);
+				map.push(runStart);
+			} else {
+				buf.addChar(c);
+				map.push(i);
+				i++;
+			}
+		}
+		map.push(n);
+		return { text: buf.toString(), map: map };
+	}
+
+	/**
+	 * Skip a comment line-continuation starting at `from` (just past a `\n`): any
+	 * further whitespace and blank lines, plus ONE ` * ` doc-marker per line.
+	 * Returns the index of the first content character (or `n`).
+	 */
+	private static function skipContinuation(body: String, from: Int, n: Int): Int {
+		var i: Int = from;
+		var markerSeen: Bool = false;
+		while (i < n) {
+			final c: Int = StringTools.fastCodeAt(body, i);
+			if (c == ' '.code || c == '\t'.code || c == '\r'.code) {
+				i++;
+			} else if (c == '\n'.code) {
+				i++;
+				markerSeen = false;
+			} else if (c == '*'.code && !markerSeen) {
+				i++;
+				markerSeen = true;
+			} else {
+				break;
+			}
+		}
+		return i;
+	}
+
 }

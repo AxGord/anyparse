@@ -61,7 +61,7 @@ final class CommentRewrite {
 				final body: String = source.substring(bodySpan.from, bodySpan.to);
 				final next: String = compiled != null
 					? compiled.map(body, m -> expandGroups(replace, m))
-					: StringTools.replace(body, find, replace);
+					: literalReplace(body, find, replace);
 				if (next != body) edits.push({ span: bodySpan, text: next });
 			}
 		} catch (exception: Exception)
@@ -146,6 +146,31 @@ final class CommentRewrite {
 
 	private static inline function isDigit(c: Int): Bool {
 		return c >= '0'.code && c <= '9'.code;
+	}
+
+	/**
+	 * Literal find/replace inside a comment body, matching ACROSS the body's line
+	 * continuations: the body is normalized (each `\n` + ` * ` doc prefix folded to
+	 * one space) for the search, and every non-overlapping match is projected back
+	 * to its span in the original body via the index map — so a phrase wrapped over
+	 * two ` * ` lines is found and replaced. Consuming the continuation between the
+	 * two lines is harmless: the spliced replacement is re-wrapped by the writer.
+	 */
+	private static function literalReplace(body: String, find: String, replace: String): String {
+		final normalized: { text: String, map: Array<Int> } = RefactorSupport.normalizeCommentBody(body);
+		final norm: String = normalized.text;
+		final map: Array<Int> = normalized.map;
+		final buf: StringBuf = new StringBuf();
+		var cursor: Int = 0;
+		var hit: Int = norm.indexOf(find, 0);
+		while (hit >= 0) {
+			buf.add(body.substring(cursor, map[hit]));
+			buf.add(replace);
+			cursor = map[hit + find.length];
+			hit = norm.indexOf(find, hit + find.length);
+		}
+		buf.add(body.substring(cursor));
+		return buf.toString();
 	}
 
 }
