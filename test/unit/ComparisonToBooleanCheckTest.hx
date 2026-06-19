@@ -11,8 +11,9 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 /**
  * The `comparison-to-boolean` check: a comparison against a boolean literal
  * (`x == true`, `x != false`, `true == x`) is flagged `Info`, report-only. An operand
- * reached through a null-safe access (`obj?.flag == true`) is SKIPPED — that `== true`
- * may be load-bearing on a `Null<Bool>` under strict null-safety.
+ * whose nullness the check cannot rule out — a `?.` access, a call / `Map.get` result, a
+ * possibly-`@:optional` field — is SKIPPED, since `== true` is load-bearing on a `Null<Bool>`
+ * under strict null-safety. Comparisons inside macro reification are skipped too.
  */
 class ComparisonToBooleanCheckTest extends Test {
 
@@ -66,6 +67,18 @@ class ComparisonToBooleanCheckTest extends Test {
 
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(0, violations('class Bad { function f() { ').length);
+	}
+
+	public function testCallOperandSkipped(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tvar b = map.get(k) == true;\n\t}\n}').length);
+	}
+
+	public function testFieldAccessOperandSkipped(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tvar b = obj.flag == true;\n\t}\n}').length);
+	}
+
+	public function testMacroReificationSkipped(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tvar e = macro x == true;\n\t}\n}').length);
 	}
 
 	private function violations(src: String): Array<Violation> {

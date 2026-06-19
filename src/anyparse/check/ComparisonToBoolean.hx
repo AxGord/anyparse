@@ -17,17 +17,22 @@ import haxe.Exception;
  *
  * ## Null-safety caveat
  *
- * Under strict null-safety `a?.b() == true` on a `Null<Bool>` is REQUIRED — `if (x)` on a
+ * Under strict null-safety `expr == true` on a `Null<Bool>` is REQUIRED — `if (x)` on a
  * nullable Bool does not compile — so that `== true` is load-bearing, not redundant. With
- * no type information the check cannot prove non-nullability, so it conservatively SKIPS
- * any operand whose subtree reaches a null-safe access (`RefShape.nullSafeAccessKind`,
- * `a?.b`). The remaining hits are reported (never auto-fixed) for a human to judge.
+ * no type information the check cannot prove non-nullability, so it conservatively SKIPS any
+ * operand whose subtree reaches a kind whose nullness it cannot rule out
+ * (`RefShape.nullableOperandKinds` — Haxe `Call` / `FieldAccess` / `SafeFieldAccess`: a
+ * method or `Map.get` result, a possibly-`@:optional` field, a `?.` access). It also does
+ * not descend into macro-reification subtrees (`RefShape.opaqueKinds`), whose comparisons
+ * are generated code rather than authored style. What remains — a bare identifier or a
+ * boolean-operator expression operand — is reported (never auto-fixed) for a human to judge.
  *
  * ## Grammar-agnostic
  *
  * Equality kinds come from `RefShape.equalityKinds`, the literal from `RefShape.boolLitKind`,
- * the null-safe skip from `RefShape.nullSafeAccessKind`. Unset equality kinds or literal kind
- * makes the check a no-op; unset null-safe kind only disables the skip.
+ * the nullable-operand skip from `RefShape.nullableOperandKinds` (falling back to the single
+ * `RefShape.nullSafeAccessKind` when unset), the macro skip from `RefShape.opaqueKinds`.
+ * Unset equality kinds or literal kind makes the check a no-op.
  */
 @:nullSafety(Strict)
 final class ComparisonToBoolean implements Check {
@@ -48,11 +53,13 @@ final class ComparisonToBoolean implements Check {
 		final boolLitKind: Null<String> = shape.boolLitKind;
 		if (equalityKinds.length == 0 || boolLitKind == null) return [];
 		final nullSafeKind: Null<String> = shape.nullSafeAccessKind;
+		final nullableKinds: Array<String> = shape.nullableOperandKinds ?? (nullSafeKind != null ? [nullSafeKind] : []);
+		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> =
 				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
-			if (tree != null) walk(violations, entry.file, tree, equalityKinds, boolLitKind, nullSafeKind);
+			if (tree != null) walk(violations, entry.file, tree, equalityKinds, boolLitKind, nullableKinds, opaqueKinds);
 		}
 		return violations;
 	}
@@ -66,19 +73,21 @@ final class ComparisonToBoolean implements Check {
 
 	/**
 	 * Walk `node`, flagging an equality whose exactly one operand is a boolean literal and
-	 * whose other operand does not reach a null-safe access.
+	 * whose other operand is provably non-null Bool (does not reach `nullableKinds`). Macro
+	 * reification subtrees (`opaqueKinds`) are not descended into.
 	 */
 	private static function walk(
 		out: Array<Violation>, file: String, node: QueryNode, equalityKinds: Array<String>, boolLitKind: String,
-		nullSafeKind: Null<String>
+		nullableKinds: Array<String>, opaqueKinds: Array<String>
 	): Void {
+		if (opaqueKinds.contains(node.kind)) return;
 		final span: Null<Span> = node.span;
 		if (span != null && node.children.length == 2 && equalityKinds.contains(node.kind)) {
 			final leftIsBool: Bool = node.children[0].kind == boolLitKind;
 			final rightIsBool: Bool = node.children[1].kind == boolLitKind;
 			if (leftIsBool != rightIsBool) {
 				final other: QueryNode = leftIsBool ? node.children[1] : node.children[0];
-				if (!(nullSafeKind != null && RefactorSupport.subtreeContainsKind(other, nullSafeKind))) out.push({
+				if (!operandIsNullable(other, nullableKinds)) out.push({
 					file: file,
 					span: span,
 					rule: 'comparison-to-boolean',
@@ -87,7 +96,13 @@ final class ComparisonToBoolean implements Check {
 				});
 			}
 		}
-		for (c in node.children) walk(out, file, c, equalityKinds, boolLitKind, nullSafeKind);
+		for (c in node.children) walk(out, file, c, equalityKinds, boolLitKind, nullableKinds, opaqueKinds);
+	}
+
+	/** Whether `operand`'s subtree reaches any kind whose nullness the check cannot rule out. */
+	private static function operandIsNullable(operand: QueryNode, nullableKinds: Array<String>): Bool {
+		for (k in nullableKinds) if (RefactorSupport.subtreeContainsKind(operand, k)) return true;
+		return false;
 	}
 
 }

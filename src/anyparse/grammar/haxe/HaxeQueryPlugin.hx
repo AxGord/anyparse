@@ -362,6 +362,7 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 			ifStatementKinds: ['IfStmt'],
 			equalityKinds: ['Eq', 'NotEq'],
 			nullSafeAccessKind: 'SafeFieldAccess',
+			nullableOperandKinds: ['Call', 'FieldAccess', 'SafeFieldAccess'],
 			notKind: 'Not',
 			blockStmtKind: 'BlockStmt',
 			andLowerPrecedenceKinds: [

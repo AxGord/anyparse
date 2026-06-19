@@ -631,6 +631,16 @@ typedef RefShape = {
 	 * compile error). Optional; unset disables that exemption.
 	 */
 	@:optional var overrideModifierKind: String;
+
+	/**
+	 * Operand kinds whose value may be null or whose non-nullness the analyzer
+	 * cannot prove without a typechecker — `comparison-to-boolean` skips a
+	 * comparison whose non-literal operand subtree reaches any of these, since
+	 * `expr == true` on a `Null<Bool>` is load-bearing under strict null-safety.
+	 * (Haxe: `Call`, `FieldAccess`, `SafeFieldAccess`.) Optional; unset falls
+	 * back to the legacy `nullSafeAccessKind`-only skip.
+	 */
+	@:optional var nullableOperandKinds: Array<String>;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {
