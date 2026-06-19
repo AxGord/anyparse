@@ -986,4 +986,30 @@ final class RefactorSupport {
 		return false;
 	}
 
+	/**
+	 * Does `source` reference `name` as a member access — a `.name` with a `.`
+	 * immediately before and a word boundary after? This is the form a `using`'s
+	 * extension method takes whether it is called (`s.trim()`) or captured as a
+	 * value (`var f = s.trim`), so the `unused-import` check uses it to decide a
+	 * `using` is live. Deliberately does NOT require a trailing `(`: a captured
+	 * function reference is just as much a use, and skipping the check also avoids
+	 * missing a call separated from its name by a comment. Like `referencedInRange`
+	 * it is a textual scan that also counts the form inside a comment / string —
+	 * which only ever keeps a `using`, never wrongly deletes one (the safe
+	 * direction for an autofix).
+	 */
+	public static function methodCalledInSource(source: String, name: String): Bool {
+		final len: Int = name.length;
+		if (len == 0) return false;
+		var i: Int = 0;
+		while (true) {
+			final at: Int = source.indexOf(name, i);
+			if (at < 0) return false;
+			i = at + 1;
+			if (at == 0 || StringTools.fastCodeAt(source, at - 1) != '.'.code) continue;
+			final afterIdx: Int = at + len;
+			if (afterIdx >= source.length || !isIdentChar(StringTools.fastCodeAt(source, afterIdx))) return true;
+		}
+	}
+
 }

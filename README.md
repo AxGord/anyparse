@@ -242,7 +242,7 @@ rule-specific option (e.g. complexity's `"max"`, which takes precedence over a
 
 | Check | Flags |
 |---|---|
-| `unused-import` | an import whose bound name is never referenced in the file |
+| `unused-import` | an import whose bound name is never referenced in the file; a `using` counts as referenced when one of its extension methods is called (`.method`) — known stdlib modules (`StringTools` / `Lambda`) are resolved and a verified-unused `using` is a deletable `Warning`, while an unknown `using` stays an unverifiable `Info` |
 | `unused-local` | a local `var` / `final` never read in its enclosing scope |
 | `duplicate-import` | an import / using declared more than once in the same file |
 | `naming` | a declaration name violating the convention — the built-in default, or one adapted from a project's `checkstyle.json` |

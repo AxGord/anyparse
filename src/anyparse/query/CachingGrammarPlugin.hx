@@ -83,4 +83,6 @@ final class CachingGrammarPlugin implements GrammarPlugin {
 
 	public function booleanLogicSupport(): Null<BooleanLogicSupport> return _inner.booleanLogicSupport();
 
+	public function knownExtensionMethods(modulePath: String): Null<Array<String>> return _inner.knownExtensionMethods(modulePath);
+
 }

@@ -458,4 +458,53 @@ class LintSliceTest extends Test {
 		}
 	}
 
+	/**
+	 * A `using` whose extension method is actually called (`s.trim()` for
+	 * `StringTools`) is in use — no finding, where the old check always reported
+	 * an `Info`.
+	 */
+	public function testUsingStringToolsExtensionUsed(): Void {
+		final src: String = 'package pkg;\nusing StringTools;\nclass C {\n\tfunction f(s:String):String return s.trim();\n}';
+		final vs: Array<Violation> = new UnusedImport().run([{ file: 'pkg/C.hx', source: src }], plugin());
+		Assert.equals(0, vs.length);
+	}
+
+	/**
+	 * A `using` referenced via its bound name (`StringTools.fastCodeAt`, a static
+	 * call) is in use — the same word-boundary test as a plain import.
+	 */
+	public function testUsingUsedViaTypeName(): Void {
+		final src: String = 'package pkg;\nusing StringTools;\nclass C {\n\tfunction f(s:String):Int return StringTools.fastCodeAt(s, 0);\n}';
+		final vs: Array<Violation> = new UnusedImport().run([{ file: 'pkg/C.hx', source: src }], plugin());
+		Assert.equals(0, vs.length);
+	}
+
+	/**
+	 * A `using` of a known stdlib module whose bound name is absent and none of
+	 * whose extension methods are called is verified-unused → `Warning` (not the
+	 * old unverifiable `Info`). `s.toUpperCase()` is a `String` method, not a
+	 * `Lambda` one, so it does not keep the `using` alive.
+	 */
+	public function testUsingLambdaUnusedIsWarning(): Void {
+		final src: String = 'package pkg;\nusing Lambda;\nclass C {\n\tfunction f(s:String):String return s.toUpperCase();\n}';
+		final vs: Array<Violation> = new UnusedImport().run([{ file: 'pkg/C.hx', source: src }], plugin());
+		Assert.equals(1, vs.length);
+		Assert.equals('unused-import', vs[0].rule);
+		Assert.equals(Severity.Warning, vs[0].severity);
+		Assert.isTrue(vs[0].message.contains('Lambda'));
+	}
+
+	/**
+	 * The verified-unused `using` `Warning` is auto-fixable — `fix` yields a
+	 * single delete edit, like any other unused import.
+	 */
+	public function testUnusedUsingFixDeletes(): Void {
+		final src: String = 'package pkg;\nusing Lambda;\nclass C {\n\tfunction f(s:String):String return s.toUpperCase();\n}';
+		final check: UnusedImport = new UnusedImport();
+		final vs: Array<Violation> = check.run([{ file: 'pkg/C.hx', source: src }], plugin());
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin());
+		Assert.equals(1, edits.length);
+		Assert.equals('', edits[0].text);
+	}
+
 }

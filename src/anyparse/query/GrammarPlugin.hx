@@ -198,6 +198,16 @@ interface GrammarPlugin {
 	 */
 	public function booleanLogicSupport(): Null<BooleanLogicSupport>;
 
+	/**
+	 * Optional: the extension-method names a `using <modulePath>` brings into
+	 * scope, for module paths the grammar knows from its standard library. The
+	 * `unused-import` check uses this to verify that a `using` whose bound name is
+	 * never referenced directly is still live via an extension call. Return null
+	 * for an unknown module path (the check then leaves that `using` an
+	 * unverifiable advisory) and for a grammar with no `using` concept.
+	 */
+	public function knownExtensionMethods(modulePath: String): Null<Array<String>>;
+
 }
 
 /**

@@ -8,6 +8,8 @@ import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.runtime.Span;
 
+using Lambda;
+
 /**
  * Flags `import` statements whose bound name is never referenced elsewhere
  * in the same file. Import extraction (kind / alias / span, skip-parse
@@ -31,13 +33,16 @@ import anyparse.runtime.Span;
  * The bound name of an `import pkg.Mod;` / `import pkg.Mod.Sub;` is the leaf
  * segment (`Mod` / `Sub`); for `import pkg.Mod as Alias;` it is the alias. If
  * that name occurs as no word-boundary token anywhere outside the import
- * statements, the import is unused → `Warning`. Two forms cannot be verified
- * and are reported as `Info` rather than warned on:
+ * statements, the import is unused → `Warning`. The remaining forms:
  *
  *  - `import pkg.*;` (wildcard) — brings in an unknown set of symbols; a bare
- *    reference can come from it without naming the package.
- *  - `using pkg.Mod;` — its methods are applied implicitly as extension calls
- *    (`s.trim()`), so the module name need never appear.
+ *    reference can come from it without naming the package, so it stays an
+ *    unverifiable `Info`.
+ *  - `using pkg.Mod;` — in use when its bound name is referenced (a static /
+ *    type use such as `StringTools.fastCodeAt`) OR one of the extension methods
+ *    it provides is called as `.method(`. Verified-unused when the module's
+ *    methods are known (`knownExtensionMethods`, a `Warning` that `--fix`
+ *    deletes); an unknown module stays an `Info`. See `addUsingViolation`.
  */
 @:nullSafety(Strict)
 final class UnusedImport implements Check {
@@ -61,7 +66,7 @@ final class UnusedImport implements Check {
 		for (info in index.allFiles()) {
 			final source: String = sourceOf[info.file] ?? '';
 			final importSpans: Array<Span> = [for (imp in info.imports) imp.span];
-			for (imp in info.imports) addViolation(violations, info.file, imp, source, importSpans);
+			for (imp in info.imports) addViolation(violations, info.file, imp, source, importSpans, plugin);
 		}
 		return violations;
 	}
@@ -73,7 +78,9 @@ final class UnusedImport implements Check {
 	 * so removing one could break the file. The caller batches these edits
 	 * into one whole-file `canonicalize`, which drops the now-blank line.
 	 */
-	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<{ span: Span, text: String }> {
+	public function fix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
 			if (v.severity != Severity.Warning) continue;
@@ -84,18 +91,19 @@ final class UnusedImport implements Check {
 	}
 
 	/**
-	 * Append the verdict for one import. Wildcard / `using` forms are
-	 * unverifiable advisories (`Info`); every other form is a `Warning` when
-	 * its bound name is not referenced outside the import statements.
+	 * Append the verdict for one import. A wildcard (`import pkg.*;`) is an
+	 * unverifiable `Info`; a `using` is delegated to `addUsingViolation`; every
+	 * other form is a `Warning` when its bound name is not referenced outside the
+	 * import statements.
 	 */
 	private static function addViolation(
-		out: Array<Violation>, file: String, imp: ImportInfo, source: String, importSpans: Array<Span>
+		out: Array<Violation>, file: String, imp: ImportInfo, source: String, importSpans: Array<Span>, plugin: GrammarPlugin
 	): Void {
 		switch imp.kind {
 			case ImportKind.Wild:
 				out.push(make(file, imp, Severity.Info, 'wildcard import \'${imp.raw}\': usage not tracked'));
 			case ImportKind.Using:
-				out.push(make(file, imp, Severity.Info, 'using import \'${imp.raw}\': extension use not tracked'));
+				addUsingViolation(out, file, imp, source, importSpans, plugin);
 			case _:
 				final bound: String = imp.alias ?? lastSegment(imp.raw);
 				if (!RefactorSupport.referencedInRange(source, bound, 0, source.length, importSpans))
@@ -118,6 +126,31 @@ final class UnusedImport implements Check {
 		final segments: Array<String> = path.split('.');
 		final last: Null<String> = segments.length > 0 ? segments[segments.length - 1] : path;
 		return last ?? path;
+	}
+
+	/**
+	 * Append the verdict for a `using` import. It is in use when its bound name is
+	 * referenced outside the imports — a static / type reference such as
+	 * `MetaInspect.foo()` or `StringTools.fastCodeAt()` — OR when one of its
+	 * extension methods is invoked as a `.method(` call. When neither holds:
+	 *
+	 *  - the module's extension methods are KNOWN (a stdlib `using`) → a verified
+	 *    `unused using` `Warning`, deletable like any other unused import;
+	 *  - the module is UNKNOWN (`knownExtensionMethods` returns null) → it stays an
+	 *    `Info` advisory, since an extension call cannot be ruled out.
+	 */
+	private static function addUsingViolation(
+		out: Array<Violation>, file: String, imp: ImportInfo, source: String, importSpans: Array<Span>, plugin: GrammarPlugin
+	): Void {
+		final bound: String = lastSegment(imp.raw);
+		if (RefactorSupport.referencedInRange(source, bound, 0, source.length, importSpans)) return;
+		final methods: Null<Array<String>> = plugin.knownExtensionMethods(imp.raw);
+		if (methods == null) {
+			out.push(make(file, imp, Severity.Info, 'using import \'${imp.raw}\': extension use not tracked'));
+			return;
+		}
+		if (methods.exists(m -> RefactorSupport.methodCalledInSource(source, m))) return;
+		out.push(make(file, imp, Severity.Warning, 'unused using \'${imp.raw}\''));
 	}
 
 }

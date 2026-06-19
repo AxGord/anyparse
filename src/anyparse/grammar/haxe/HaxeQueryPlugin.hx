@@ -826,4 +826,67 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		return new HaxeBooleanLogicSupport();
 	}
 
+	/**
+	 * Extension-method names that `using <module>` brings into scope, for the
+	 * Haxe standard-library modules used with `using` in practice. Sourced from
+	 * the installed Haxe std (every `FnMember` of each module), so the set is
+	 * complete: `unused-import` deletes a `using` only when NONE of these is
+	 * called, and a missing name would risk deleting a live `using`. A superset
+	 * name is harmless — it only makes the "used" test more generous.
+	 */
+	private static final EXTENSION_METHODS: Map<String, Array<String>> = [
+		'StringTools' => [
+			'_charAt',
+			'contains',
+			'endsWith',
+			'fastCodeAt',
+			'hex',
+			'htmlEscape',
+			'htmlUnescape',
+			'isEof',
+			'isSpace',
+			'iterator',
+			'keyValueIterator',
+			'lpad',
+			'ltrim',
+			'postProcessUrlEncode',
+			'quoteUnixArg',
+			'quoteWinArg',
+			'replace',
+			'rpad',
+			'rtrim',
+			'startsWith',
+			'trim',
+			'unsafeCodeAt',
+			'urlDecode',
+			'urlEncode',
+			'utf16CodePointAt'
+		],
+		'Lambda' => [
+			'array',
+			'concat',
+			'count',
+			'empty',
+			'exists',
+			'filter',
+			'find',
+			'findIndex',
+			'flatMap',
+			'flatten',
+			'fold',
+			'foldi',
+			'foreach',
+			'has',
+			'indexOf',
+			'iter',
+			'list',
+			'map',
+			'mapi'
+		]
+	];
+
+	public function knownExtensionMethods(modulePath: String): Null<Array<String>> {
+		return EXTENSION_METHODS[modulePath];
+	}
+
 }
