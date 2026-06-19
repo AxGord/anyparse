@@ -9,6 +9,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
+import anyparse.query.RefactorSupport;
 
 /**
  * Flags a ternary whose then- or else-branch is a boolean literal — a
@@ -44,14 +45,15 @@ final class SimplifyBooleanTernary implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final ternaryKind: Null<String> = plugin.refShape().ternaryKind;
+		final shape: RefShape = plugin.refShape();
+		final ternaryKind: Null<String> = shape.ternaryKind;
 		final support: Null<BooleanLogicSupport> = plugin.booleanLogicSupport();
 		if (ternaryKind == null || support == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> =
 				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
-			if (tree != null) walk(violations, entry.file, entry.source, tree, ternaryKind, support);
+			if (tree != null) walk(violations, entry.file, entry.source, tree, ternaryKind, support, shape);
 		}
 		return violations;
 	}
@@ -81,11 +83,12 @@ final class SimplifyBooleanTernary implements Check {
 		return edits;
 	}
 
-	/** Walk `node`, flagging each ternary the seam can reduce to a boolean expression. */
+	/** Walk `node`, flagging each ternary the seam can reduce, except a null-narrowing-guarded one. */
 	private static function walk(
-		out: Array<Violation>, file: String, source: String, node: QueryNode, ternaryKind: String, support: BooleanLogicSupport
+		out: Array<Violation>, file: String, source: String, node: QueryNode, ternaryKind: String, support: BooleanLogicSupport,
+		shape: RefShape
 	): Void {
-		if (node.kind == ternaryKind && support.simplifyBooleanTernary(node, source) != null) {
+		if (node.kind == ternaryKind && !condGuarded(node, shape) && support.simplifyBooleanTernary(node, source) != null) {
 			final span: Null<Span> = node.span;
 			if (span != null) out.push({
 				file: file,
@@ -95,7 +98,16 @@ final class SimplifyBooleanTernary implements Check {
 				message: 'this ternary can be a boolean expression'
 			});
 		}
-		for (c in node.children) walk(out, file, source, c, ternaryKind, support);
+		for (c in node.children) walk(out, file, source, c, ternaryKind, support, shape);
+	}
+
+	/**
+	 * True when the ternary's condition carries a null-narrowing guard
+	 * (`x != null && x.f`): reducing it to flat boolean logic would drop the
+	 * narrowing and fail to compile under `@:nullSafety(Strict)`, so it is skipped.
+	 */
+	private static function condGuarded(node: QueryNode, shape: RefShape): Bool {
+		return node.children.length > 0 && RefactorSupport.hasNullNarrowingGuard(node.children[0], shape);
 	}
 
 	/** Index every ternary node by its `from:to` span key (for `fix` to re-find a flagged node). */

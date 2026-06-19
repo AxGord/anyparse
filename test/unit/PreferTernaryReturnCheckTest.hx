@@ -119,4 +119,41 @@ class PreferTernaryReturnCheckTest extends Test {
 		return check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
 	}
 
+	/**
+	 * A null-narrowing guard in the condition (`s != null && s.g()`) is NOT flagged:
+	 * flattening it into a ternary return would lose the narrowing and fail to
+	 * compile under @:nullSafety(Strict).
+	 */
+	public function testNullNarrowingGuardNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations("class C {\n\tfunction f(s:Null<S>):Bool {\n\t\tif (s != null && s.g() != null) return true;\n\t\treturn c;\n\t}\n}").length
+		);
+	}
+
+	/** A null-check WITHOUT accessing the same ident still flags (no narrowing to lose). */
+	public function testNullCheckWithoutAccessFlagged(): Void {
+		Assert.equals(
+			1, violations("class C {\n\tfunction f(s:Null<S>):Bool {\n\t\tif (s != null) return true;\n\t\treturn c;\n\t}\n}").length
+		);
+	}
+
+	/** A null-checked ident reused via INDEX access (`x[0]`) is guarded too (not just field/call). */
+	public function testIndexAccessGuardNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				"class C {\n\tfunction f(x:Null<Array<Int>>):Bool {\n\t\tif (x != null && x[0] > 0) return true;\n\t\treturn c;\n\t}\n}"
+			).length
+		);
+	}
+
+	/** A null-checked ident reused as a function ARGUMENT (`g(x)`) is guarded too. */
+	public function testArgPositionGuardNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations("class C {\n\tfunction f(x:Null<S>):Bool {\n\t\tif (x != null && g(x)) return true;\n\t\treturn c;\n\t}\n}").length
+		);
+	}
+
 }

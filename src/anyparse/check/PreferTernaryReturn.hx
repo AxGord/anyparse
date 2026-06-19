@@ -152,6 +152,7 @@ final class PreferTernaryReturn implements Check {
 	): Null<TernaryMatch> {
 		final ifNode: QueryNode = kids[i];
 		if (!ifKinds.contains(ifNode.kind) || ifNode.children.length != 2) return null;
+		if (RefactorSupport.hasNullNarrowingGuard(ifNode.children[0], shape)) return null;
 		final thenValue: Null<QueryNode> = thenReturnValue(ifNode.children[1], shape, returnKind);
 		if (thenValue == null) return null;
 		if (i + 1 >= kids.length) return null;

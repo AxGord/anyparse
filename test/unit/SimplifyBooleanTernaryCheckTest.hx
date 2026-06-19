@@ -105,4 +105,19 @@ class SimplifyBooleanTernaryCheckTest extends Test {
 		return edits.length > 0 ? edits[0].text : '';
 	}
 
+	/** A null-narrowing-guarded condition is left alone — flattening would break the narrowing. */
+	public function testNullNarrowingGuardNotSimplified(): Void {
+		Assert.equals("", simplifyOf("return c != null && c.foo() != null ? true : x > 0;"));
+	}
+
+	/** A bare null-check (no access of the same ident) is still simplified. */
+	public function testBareNullCheckStillSimplified(): Void {
+		Assert.equals("c != null || x > 0", simplifyOf("return c != null ? true : x > 0;"));
+	}
+
+	/** Index-access reuse guards the ternary form too. */
+	public function testIndexAccessGuardNotSimplified(): Void {
+		Assert.equals("", simplifyOf("return c != null && c[0] > 0 ? true : x > 0;"));
+	}
+
 }

@@ -8,6 +8,8 @@ import haxe.Exception;
 
 using Lambda;
 
+import anyparse.query.GrammarPlugin.RefShape;
+
 /**
  * Outcome of a source-mutation operation: `Ok` carries the rewritten
  * source, `Err` a human-readable diagnostic. Shared by the structural
@@ -1095,6 +1097,65 @@ final class RefactorSupport {
 			}
 		}
 		return i;
+	}
+
+	/**
+	 * Whether the condition subtree `cond` contains a null-narrowing guard: an
+	 * identifier compared against null (`x == null` / `x != null`) that is then
+	 * REUSED elsewhere in the same condition (`x.f`, `x[i]`, `x()`, `g(x)`, a bare
+	 * `x`, …). Haxe narrows such an `x` only inside the `if`-condition, so a check
+	 * that flattens the condition into a `||` / ternary `return` loses the
+	 * narrowing and the result fails to compile under `@:nullSafety(Strict)` — the
+	 * finding must be skipped. Conservative: a reuse in ANY position counts (it
+	 * over-skips a comparison-only reuse like `x != null && x == y`, which is
+	 * actually safe to flatten — never a compile break), and a grammar without the
+	 * null/equality kinds yields false.
+	 */
+	public static function hasNullNarrowingGuard(cond: QueryNode, shape: RefShape): Bool {
+		final nullKind: Null<String> = shape.nullLiteralKind;
+		if (nullKind == null) return false;
+		final identCount: Map<String, Int> = [];
+		final checkCount: Map<String, Int> = [];
+		tallyGuardIdents(cond, shape.identKind, nullKind, shape.eqKind, shape.notEqKind, identCount, checkCount);
+		for (name => total in identCount) {
+			// Null-checked (`checks != null`) AND reused beyond its own null-comparison
+			// operand(s) (`total > checks`): the reuse relies on the in-condition narrowing.
+			final checks: Null<Int> = checkCount[name];
+			if (checks != null && total > checks) return true;
+		}
+		return false;
+	}
+
+	/** Tally, over `node`, every IdentExpr occurrence and every null-comparison ident operand. */
+	private static function tallyGuardIdents(
+		node: QueryNode, identKind: String, nullKind: String, eqKind: Null<String>, notEqKind: Null<String>, identCount: Map<String, Int>,
+		checkCount: Map<String, Int>
+	): Void {
+		if (node.kind == identKind) {
+			final name: Null<String> = node.name;
+			if (name != null) bumpCount(identCount, name);
+		}
+		if ((eqKind != null && node.kind == eqKind) || (notEqKind != null && node.kind == notEqKind)) {
+			final ident: Null<String> = nullComparedIdent(node, identKind, nullKind);
+			if (ident != null) bumpCount(checkCount, ident);
+		}
+		for (c in node.children) tallyGuardIdents(c, identKind, nullKind, eqKind, notEqKind, identCount, checkCount);
+	}
+
+	/** Increment the integer counter for `key`. */
+	private static inline function bumpCount(map: Map<String, Int>, key: String): Void {
+		final cur: Null<Int> = map[key];
+		map[key] = (cur == null ? 0 : cur) + 1;
+	}
+
+	/** The identifier compared against null in `node` (one operand an ident, the other null), or null. */
+	private static function nullComparedIdent(node: QueryNode, identKind: String, nullKind: String): Null<String> {
+		if (node.children.length != 2) return null;
+		final a: QueryNode = node.children[0];
+		final b: QueryNode = node.children[1];
+		if (a.kind == identKind && b.kind == nullKind) return a.name;
+		if (b.kind == identKind && a.kind == nullKind) return b.name;
+		return null;
 	}
 
 }
