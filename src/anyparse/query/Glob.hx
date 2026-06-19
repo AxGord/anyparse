@@ -123,40 +123,41 @@ final class Glob {
 		final n: Int = spec.length;
 		while (i < n) {
 			final c: String = spec.charAt(i);
-			if (c == '*') {
-				if (i + 1 < n && spec.charAt(i + 1) == '*') {
-					// `**` — across segments. `**/` also matches zero dirs.
-					if (i + 2 < n && spec.charAt(i + 2) == '/') {
-						buf.add('(?:.*/)?');
-						i += 3;
+			switch c {
+				case '*':
+					if (i + 1 < n && spec.charAt(i + 1) == '*') {
+						// `**` — across segments. `**/` also matches zero dirs.
+						if (i + 2 < n && spec.charAt(i + 2) == '/') {
+							buf.add('(?:.*/)?');
+							i += 3;
+						} else {
+							buf.add('.*');
+							i += 2;
+						}
 					} else {
-						buf.add('.*');
-						i += 2;
+						buf.add('[^/]*');
+						i++;
 					}
-				} else {
-					buf.add('[^/]*');
+				case '?':
+					buf.add('[^/]');
 					i++;
-				}
-			} else if (c == '?') {
-				buf.add('[^/]');
-				i++;
-			} else if (c == '[') {
-				final end: Int = spec.indexOf(']', i + 1);
-				if (end < 0) {
-					// Unterminated class — treat `[` literally.
-					buf.add('\\[');
+				case '[':
+					final end: Int = spec.indexOf(']', i + 1);
+					if (end < 0) {
+						// Unterminated class — treat `[` literally.
+						buf.add('\\[');
+						i++;
+					} else {
+						buf.add('[');
+						final body: String = spec.substr(i + 1, end - i - 1);
+						buf.add(StringTools.startsWith(body, '!') ? '^' + body.substr(1) : body);
+						buf.add(']');
+						i = end + 1;
+					}
+				case _:
+					if (c != '/' && "\\.+(){}$^|".indexOf(c) >= 0) buf.add('\\');
+					buf.add(c);
 					i++;
-				} else {
-					buf.add('[');
-					final body: String = spec.substr(i + 1, end - i - 1);
-					buf.add(StringTools.startsWith(body, '!') ? '^' + body.substr(1) : body);
-					buf.add(']');
-					i = end + 1;
-				}
-			} else {
-				if (c != '/' && "\\.+(){}$^|".indexOf(c) >= 0) buf.add('\\');
-				buf.add(c);
-				i++;
 			}
 		}
 		buf.add('$');

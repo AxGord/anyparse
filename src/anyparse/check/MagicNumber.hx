@@ -127,7 +127,7 @@ final class MagicNumber implements Check {
 		final clean: String = StringTools.replace(text, '_', '');
 		if (StringTools.startsWith(clean, '0x') || StringTools.startsWith(clean, '0X')) {
 			final i: Null<Int> = Std.parseInt(clean);
-			return i == null ? null : i;
+			return i ?? null;
 		}
 		final f: Float = Std.parseFloat(clean);
 		return Math.isNaN(f) ? null : f;

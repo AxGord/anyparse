@@ -140,7 +140,7 @@ final class CallSites {
 		decl: QueryNode, tree: QueryNode, source: String, name: String, binding: Int, shape: RefShape
 	): CollectResult {
 		final isMethod: Bool = decl.kind != 'LocalFnStmt';
-		return isMethod ? collectMethodCalls(tree, source, name, binding, shape) : collectLocalFnCalls(tree, source, name, binding);
+		return isMethod ? collectMethodCalls(tree, source, name, binding, shape) : collectLocalFnCalls(tree, source, name);
 	}
 
 	/**
@@ -252,7 +252,7 @@ final class CallSites {
 	 * receiver-qualified `*.name(...)` call is impossible for that name and
 	 * is refused.
 	 */
-	private static function collectLocalFnCalls(tree: QueryNode, source: String, name: String, binding: Int): CollectResult {
+	private static function collectLocalFnCalls(tree: QueryNode, source: String, name: String): CollectResult {
 		final clashes: Int = countNameDecls(tree, name);
 		if (clashes > 1)
 			return

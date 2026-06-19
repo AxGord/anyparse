@@ -37,7 +37,7 @@ final class DuplicateImport implements Check {
 		for (info in index.allFiles()) {
 			final seen: Array<String> = [];
 			for (imp in info.imports) {
-				final key: String = '${imp.kind}|${imp.raw}|${imp.alias ?? ""}';
+				final key: String = '${imp.kind}|${imp.raw}|${imp.alias ?? ''}';
 				if (seen.contains(key))
 					violations.push({
 						file: info.file,
@@ -53,7 +53,9 @@ final class DuplicateImport implements Check {
 		return violations;
 	}
 
-	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<{ span: Span, text: String }> {
+	public function fix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) if (v.severity == Severity.Warning) {
 			final span: Null<Span> = v.span;

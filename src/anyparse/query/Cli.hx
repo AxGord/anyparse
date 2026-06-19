@@ -8398,9 +8398,9 @@ final class Cli {
 	 * leave it: there the writer already normalises the trailing newline away.
 	 */
 	private static function withoutTrailingNewline(s: String): String {
-		if (StringTools.endsWith(s, '\r\n')) return s.substring(0, s.length - 2);
-		if (StringTools.endsWith(s, '\n')) return s.substring(0, s.length - 1);
-		return s;
+		return StringTools.endsWith(s, '\r\n')
+			? s.substring(0, s.length - 2)
+			: StringTools.endsWith(s, '\n') ? s.substring(0, s.length - 1) : s;
 	}
 
 	/**

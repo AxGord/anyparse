@@ -596,15 +596,6 @@ class TriviaTypeSynth {
 				final innerAccess: Expr = triviaWrap ? (macro t.node) : (macro e);
 				final iterVar: String = triviaWrap ? 't' : 'e';
 				final inner: Expr = shapePairedToRawUnwrap(innerAccess, elem, pos);
-				final loopExpr: Expr = {
-					expr: EArrayDecl([
-						{
-							expr: EFor(macro $i{iterVar} in $access, inner),
-							pos: pos,
-						}
-					]),
-					pos: pos,
-				};
 				// Wadler trick — `[for (x in arr) expr]` is the comprehension; produce it via EFor inside EArrayDecl
 				// Actually Haxe accepts EMeta? Simpler: build via parser-friendly Expr
 				final compr: Expr = {

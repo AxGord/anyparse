@@ -37,7 +37,7 @@ class BinaryWriterLowering {
 		final valueCT: ComplexType = TPath({ pack: packOf(typePath), name: simple, params: [] });
 
 		final body: Expr = switch node.kind {
-			case Seq: lowerStruct(node, typePath);
+			case Seq: lowerStruct(node);
 			case _:
 				Context.fatalError('BinaryWriterLowering: cannot lower ${node.kind} for $typePath', Context.currentPos());
 				throw 'unreachable';
@@ -66,7 +66,7 @@ class BinaryWriterLowering {
 	 * Typedef-level: `@:magic` emits a prefix before the loop; `@:align`
 	 * emits padding after the loop.
 	 */
-	private function lowerStruct(node: ShapeNode, typePath: String): Expr {
+	private function lowerStruct(node: ShapeNode): Expr {
 		final steps: Array<Expr> = [];
 
 		// @:magic prefix
@@ -94,7 +94,7 @@ class BinaryWriterLowering {
 				case Terminal:
 					emitTerminalField(child, fieldName, fieldAccess, steps);
 				case Star:
-					emitStarField(child, typePath, fieldAccess, steps);
+					emitStarField(child, fieldAccess, steps);
 				case _:
 					Context.fatalError('BinaryWriterLowering: struct field kind ${child.kind} not supported', Context.currentPos());
 			}
@@ -191,7 +191,7 @@ class BinaryWriterLowering {
 		};
 	}
 
-	private static function emitStarField(child: ShapeNode, typePath: String, fieldAccess: Expr, steps: Array<Expr>): Void {
+	private static function emitStarField(child: ShapeNode, fieldAccess: Expr, steps: Array<Expr>): Void {
 		final inner: ShapeNode = child.children[0];
 		if (inner.kind != Ref) Context.fatalError('BinaryWriterLowering: Star field must contain a Ref', Context.currentPos());
 		final elemRefName: String = inner.annotations.get('base.ref');

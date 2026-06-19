@@ -1145,7 +1145,7 @@ final class RefactorSupport {
 	/** Increment the integer counter for `key`. */
 	private static inline function bumpCount(map: Map<String, Int>, key: String): Void {
 		final cur: Null<Int> = map[key];
-		map[key] = (cur == null ? 0 : cur) + 1;
+		map[key] = (cur ?? 0) + 1;
 	}
 
 	/** The identifier compared against null in `node` (one operand an ident, the other null), or null. */
@@ -1153,9 +1153,7 @@ final class RefactorSupport {
 		if (node.children.length != 2) return null;
 		final a: QueryNode = node.children[0];
 		final b: QueryNode = node.children[1];
-		if (a.kind == identKind && b.kind == nullKind) return a.name;
-		if (b.kind == identKind && a.kind == nullKind) return b.name;
-		return null;
+		return a.kind == identKind && b.kind == nullKind ? a.name : b.kind == identKind && a.kind == nullKind ? b.name : null;
 	}
 
 }

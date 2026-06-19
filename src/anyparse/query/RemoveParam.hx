@@ -183,10 +183,10 @@ final class RemoveParam {
 		}
 
 		final edits: Array<{ span: Span, text: String }> = [];
-		appendSlotRemoval(edits, source, params, index);
+		appendSlotRemoval(edits, params, index);
 		for (call in callSites) {
 			final args: Array<QueryNode> = call.children.slice(1);
-			appendSlotRemoval(edits, source, args, index);
+			appendSlotRemoval(edits, args, index);
 		}
 		return { edits: edits, error: null, callSites: callSites.length };
 	}
@@ -206,9 +206,7 @@ final class RemoveParam {
 	 * A null span on either the target or the adjacency anchor aborts the
 	 * edit (no removal pushed) rather than splicing a wrong range.
 	 */
-	private static function appendSlotRemoval(
-		edits: Array<{ span: Span, text: String }>, source: String, slots: Array<QueryNode>, index: Int
-	): Void {
+	private static function appendSlotRemoval(edits: Array<{ span: Span, text: String }>, slots: Array<QueryNode>, index: Int): Void {
 		final n: Int = slots.length;
 		final targetSpan: Null<Span> = slots[index].span;
 		if (targetSpan == null) return;
