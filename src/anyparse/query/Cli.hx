@@ -2009,7 +2009,7 @@ final class Cli {
 			i++;
 		}
 		if (fromFile != null || code == '-') {
-			final resolved: Null<String> = resolveCodeArg('add-element', code, fromFile);
+			final resolved: Null<String> = resolveCodeArg('add-element', code, fromFile, true);
 			if (resolved == null) return EXIT_RUNTIME;
 			code = resolved;
 		}
@@ -2347,7 +2347,7 @@ final class Cli {
 			i++;
 		}
 		if (fromFile != null || newSource == '-') {
-			final resolved: Null<String> = resolveCodeArg('replace-node', newSource, fromFile);
+			final resolved: Null<String> = resolveCodeArg('replace-node', newSource, fromFile, true);
 			if (resolved == null) return EXIT_RUNTIME;
 			newSource = resolved;
 		}
@@ -8366,14 +8366,16 @@ final class Cli {
 	 * or null after printing the reason to stderr (the caller then exits
 	 * non-zero). `opName` names the op in those messages.
 	 */
-	private static function resolveCodeArg(opName: String, code: Null<String>, fromFile: Null<String>): Null<String> {
+	private static function resolveCodeArg(
+		opName: String, code: Null<String>, fromFile: Null<String>, stripTrailing: Bool = false
+	): Null<String> {
 		if (fromFile != null && code != null) {
 			stderr('apq $opName: provide the code inline, via --from-file, or as - for stdin — not more than one\n');
 			return null;
 		}
 		if (fromFile != null) {
 			try {
-				return readFile(fromFile);
+				return stripTrailing ? withoutTrailingNewline(readFile(fromFile)) : readFile(fromFile);
 			} catch (exception: Exception) {
 				stderr('apq $opName: $fromFile: ${exception.message}\n');
 				return null;
@@ -8381,11 +8383,24 @@ final class Cli {
 		}
 		// code == '-' → read the new code from stdin.
 		try {
-			return readStdin();
+			return stripTrailing ? withoutTrailingNewline(readStdin()) : readStdin();
 		} catch (exception: Exception) {
 			stderr('apq $opName: reading stdin: ${exception.message}\n');
 			return null;
 		}
+	}
+
+	/**
+	 * Drop a single trailing newline (`\r\n` or `\n`) from `s`. The span-splice ops
+	 * (`replace-node` / `add-element`) pass `stripTrailing = true` so a heredoc's mandatory
+	 * trailing newline does not land inside the replaced span as a stray blank line — the
+	 * writer regenerates the trivia after the span. Append ops (`add-member` / `new --raw`)
+	 * leave it: there the writer already normalises the trailing newline away.
+	 */
+	private static function withoutTrailingNewline(s: String): String {
+		if (StringTools.endsWith(s, '\r\n')) return s.substring(0, s.length - 2);
+		if (StringTools.endsWith(s, '\n')) return s.substring(0, s.length - 1);
+		return s;
 	}
 
 	/**

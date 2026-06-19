@@ -3,7 +3,7 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.query.Cli;
-#if sys
+#if (sys || nodejs)
 import sys.FileSystem;
 import sys.io.File;
 #end
@@ -64,6 +64,34 @@ class ApqFromFileCliTest extends Test {
 		Assert.equals(0, Cli.run(['replace-node', fixture, '--at', '3:2', '--from-file', repl, '--write']));
 		final result: String = File.getContent(fixture);
 		Assert.isTrue(result.indexOf('var y = 42') >= 0, 'node source must come from the file');
+		FileSystem.deleteFile(fixture);
+		FileSystem.deleteFile(repl);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testReplaceNodeFromFileStripsTrailingNewline(): Void {
+		#if (sys || nodejs)
+		final fixture: String = CliFixture.write('apq_trail', 'class C {\n\tfunction f():Int {\n\t\treturn 1;\n\t}\n}\n');
+		// A --from-file / stdin source carries a trailing newline (a heredoc always appends one);
+		// the splice op must strip it so it does not surface as a stray blank line before `}`.
+		final repl: String = CliFixture.write('apq_trailrepl', 'function f():Int {\n\t\treturn 99;\n\t}\n');
+		Assert.equals(
+			0,
+			Cli.run([
+				'replace-node',
+				fixture,
+				'--select',
+				'FnMember:f',
+				'--from-file',
+				repl,
+				'--write'
+			])
+		);
+		final result: String = File.getContent(fixture);
+		Assert.isTrue(result.indexOf('return 99') >= 0, 'replacement applied');
+		Assert.isTrue(result.indexOf('}\n\n}') < 0, 'no stray blank line before the closing brace');
 		FileSystem.deleteFile(fixture);
 		FileSystem.deleteFile(repl);
 		#else
