@@ -23,14 +23,14 @@ import anyparse.runtime.Span;
 @:nullSafety(Strict)
 final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 
-	static inline final PREC_ATOM: Int = 100;
-	static inline final PREC_NOT: Int = 90;
-	static inline final PREC_CMP: Int = 50;
-	static inline final PREC_AND: Int = 40;
-	static inline final PREC_OR: Int = 30;
-	static inline final PREC_COALESCE: Int = 20;
-	static inline final PREC_TERNARY: Int = 10;
-	static inline final PREC_ASSIGN: Int = 5;
+	private static inline final PREC_ATOM: Int = 100;
+	private static inline final PREC_NOT: Int = 90;
+	private static inline final PREC_CMP: Int = 50;
+	private static inline final PREC_AND: Int = 40;
+	private static inline final PREC_OR: Int = 30;
+	private static inline final PREC_COALESCE: Int = 20;
+	private static inline final PREC_TERNARY: Int = 10;
+	private static inline final PREC_ASSIGN: Int = 5;
 
 	public function new() {}
 

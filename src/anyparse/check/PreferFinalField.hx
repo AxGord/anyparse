@@ -235,9 +235,9 @@ final class PreferFinalField implements Check {
 		final start: Int = i;
 		while (i < n && isOperatorChar(StringTools.fastCodeAt(source, i))) i++;
 		final token: String = source.substring(start, i);
-		if (token == '++' || token == '--') return true;
-		if (token.length == 0 || StringTools.fastCodeAt(token, token.length - 1) != '='.code) return false;
-		return token != '==' && token != '<=' && token != '>=' && token != '!=' && token != '=>';
+		return token == '++' || token == '--'
+			|| (token.length != 0 && StringTools.fastCodeAt(token, token.length - 1) == '='.code && token != '==' && token != '<='
+				&& token != '>=' && token != '!=' && token != '=>');
 	}
 
 	/** Index of the first byte at or after `pos` that is neither whitespace nor inside a line or block comment. */

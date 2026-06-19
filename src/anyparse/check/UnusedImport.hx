@@ -58,7 +58,7 @@ final class UnusedImport implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final sourceOf: Map<String, String> = new Map();
+		final sourceOf: Map<String, String> = [];
 		for (entry in files) sourceOf[entry.file] = entry.source;
 
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);

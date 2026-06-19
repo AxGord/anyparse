@@ -1375,7 +1375,7 @@ class Renderer {
 		consumes at most `remaining` columns. Used to choose between flat and
 		broken layout for a `Group`/`BodyGroup`.
 	**/
-	static function fitsFlat(remaining: Int, indent: Int, d: Doc): Bool {
+	private static function fitsFlat(remaining: Int, indent: Int, d: Doc): Bool {
 		if (remaining < 0) return false;
 		final local: Array<Frame> = [new Frame(indent, MFlat, d)];
 		var budget: Int = remaining;
@@ -1535,7 +1535,7 @@ class Renderer {
 	 * left-to-right traversal. The `aborted` flag short-circuits
 	 * remaining work once a hardline is seen.
 	 */
-	static function flatTokenWidthFirstLine(d: Doc): Int {
+	private static function flatTokenWidthFirstLine(d: Doc): Int {
 		final stack: Array<Doc> = [d];
 		var total: Int = 0;
 		var aborted: Bool = false;

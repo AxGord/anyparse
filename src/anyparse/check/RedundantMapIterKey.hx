@@ -112,8 +112,9 @@ final class RedundantMapIterKey implements Check {
 		// the discarded key `_`. If the located `(` was a decoy (e.g. one inside a comment
 		// between `for` and the real header), this slice is not `_`, so bail — no bogus
 		// finding, no corrupt fix.
-		if (StringTools.trim(source.substring(keyStart, arrow)) != '_') return null;
-		return keyStart < valueStart ? new Span(keyStart, valueStart) : null;
+		return StringTools.trim(source.substring(keyStart, arrow)) != '_'
+			? null
+			: keyStart < valueStart ? new Span(keyStart, valueStart) : null;
 	}
 
 	/** First index at or after `from` (bounded by `stop`) that is not ASCII whitespace. */

@@ -253,8 +253,7 @@ final class PreferSwitch implements Check {
 		final b: QueryNode = cond.children[1];
 		final aLit: Bool = isConstLiteral(a, litKinds, stringFold, source);
 		final bLit: Bool = isConstLiteral(b, litKinds, stringFold, source);
-		if (aLit == bLit) return null;
-		return aLit ? b : a;
+		return aLit == bLit ? null : aLit ? b : a;
 	}
 
 	/**
@@ -265,7 +264,7 @@ final class PreferSwitch implements Check {
 	private static function isConstLiteral(
 		node: QueryNode, litKinds: Array<String>, stringFold: Null<StringFoldSupport>, source: String
 	): Bool {
-		if (stringFold != null && stringFold.literalOf(node, source) != null) return true;
+		if (stringFold != null && stringFold.literalOf(node, source) != null) return true; // noqa: prefer-ternary-return
 		return litKinds.contains(node.kind);
 	}
 

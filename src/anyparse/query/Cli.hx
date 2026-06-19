@@ -5970,12 +5970,17 @@ final class Cli {
 			stderr('apq recon: "$rootFinal" is not a directory.\n');
 			return EXIT_RUNTIME;
 		}
-		if (regressionProbe) return runReconRegressionProbe(plugin, rootFinal);
-		if (candidatesRegex != null) return runReconCandidates(plugin, rootFinal, (candidatesRegex: String));
-		if (permissiveConstruct) return runReconPermissive(plugin, rootFinal, lang);
-		return predictRelax
-			? runReconSweepRelax(plugin, rootFinal, clusterFilter, noTargetClusterFilter, showSource)
-			: runReconSweep(plugin, rootFinal, topN, clusterFilter, predictStrip, patterns, replacements, compiledRegex, showSource);
+		return regressionProbe
+			? runReconRegressionProbe(plugin, rootFinal)
+			: candidatesRegex != null
+				? runReconCandidates(plugin, rootFinal, (candidatesRegex: String))
+				: permissiveConstruct
+					? runReconPermissive(plugin, rootFinal, lang)
+					: predictRelax
+						? runReconSweepRelax(plugin, rootFinal, clusterFilter, noTargetClusterFilter, showSource)
+						: runReconSweep(
+							plugin, rootFinal, topN, clusterFilter, predictStrip, patterns, replacements, compiledRegex, showSource
+						);
 	}
 
 	/**
@@ -7198,10 +7203,11 @@ final class Cli {
 		if (newLine == origLine && newCol == origCol) return '';
 		final forward: Bool = newLine > origLine || (newLine == origLine && newCol > origCol);
 		final backward: Bool = newLine < origLine || (newLine == origLine && newCol < origCol);
-		if (forward && newLine != origLine) return ' (was $origLine:$origCol, advanced)';
-		return backward
-			? ' (was $origLine:$origCol, moved BACKWARD — strip may have damaged earlier syntax or modelled the wrong mechanism; verify with `apq probe`)'
-			: ' (was $origLine:$origCol)';
+		return forward && newLine != origLine
+			? ' (was $origLine:$origCol, advanced)'
+			: backward
+				? ' (was $origLine:$origCol, moved BACKWARD — strip may have damaged earlier syntax or modelled the wrong mechanism; verify with `apq probe`)'
+				: ' (was $origLine:$origCol)';
 	}
 
 	/**
@@ -7431,8 +7437,7 @@ final class Cli {
 	#end
 
 	private static function stripRootPrefix(path: String, root: String): String {
-		if (StringTools.startsWith(path, root + '/')) return path.substr(root.length + 1);
-		return path == root ? '.' : path;
+		return StringTools.startsWith(path, root + '/') ? path.substr(root.length + 1) : path == root ? '.' : path;
 	}
 
 	private static function addReconCluster(map: Map<String, ReconCluster>, key: String, file: String, rawLocus: String): Void {
@@ -7754,17 +7759,21 @@ final class Cli {
 			i++;
 		}
 		final raw: String = try {
-			if (sourcePath == null) {
-				if (sys.FileSystem.exists('/tmp/test.out'))
-					sys.io.File.getContent('/tmp/test.out');
-				else {
-					stderr('apq test-summary: no source given and /tmp/test.out missing — pass <path> or `-` for stdin\n');
-					return EXIT_USAGE;
+			switch (sourcePath) {
+				case null: {
+					if (sys.FileSystem.exists('/tmp/test.out'))
+						sys.io.File.getContent('/tmp/test.out');
+					else {
+						stderr('apq test-summary: no source given and /tmp/test.out missing — pass <path> or `-` for stdin\n');
+						return EXIT_USAGE;
+					}
 				}
-			} else if (sourcePath == '-') {
-				readStdin();
-			} else {
-				sys.io.File.getContent((sourcePath: String));
+				case '-': {
+					readStdin();
+				}
+				case _: {
+					sys.io.File.getContent((sourcePath: String));
+				}
 			}
 		} catch (e: Exception) {
 			stderr('apq test-summary: read failed: ${e.message}\n');
@@ -9377,7 +9386,7 @@ final class Cli {
 	private static function looksLikeTypeName(s: String): Bool {
 		if (s.length == 0) return false;
 		final c: Int = StringTools.fastCodeAt(s, 0);
-		return c < 'A'.code || c > 'Z'.code ? false : s.indexOf('/') < 0 && s.indexOf('.') < 0;
+		return c >= 'A'.code && c <= 'Z'.code && s.indexOf('/') < 0 && s.indexOf('.') < 0;
 	}
 
 	/**
@@ -9422,11 +9431,7 @@ final class Cli {
 			if (isUnderscore) hasUnderscore = true;
 			prevLower = isLower;
 		}
-		if (!hasLetter) return false;
-		// camelCase / PascalCase-with-internal-lower: lower→upper transition
-		if (mixedTransition) return true;
-		// snake_case: `_` between identifier chars
-		return hasUnderscore && (hasLower || hasUpper) ? true : false;
+		return hasLetter && (mixedTransition || (hasUnderscore && (hasLower || hasUpper)));
 	}
 
 	/**
@@ -9488,11 +9493,13 @@ final class Cli {
 	 * alone — only the genuinely regex-only forms.
 	 */
 	private static function looksLikeRegex(s: String): Null<String> {
-		if (s.indexOf('\\|') >= 0) return '`\\|` (regex alternation)';
-		if (s.indexOf('[^') >= 0) return '`[^...]` (negated character class)';
-		if (s.indexOf('(?:') >= 0) return '`(?:...)` (non-capturing group)';
-		if (s.indexOf('(?=') >= 0) return '`(?=...)` (lookahead)';
-		return s.indexOf('(?!') >= 0 ? '`(?!...)` (negative lookahead)' : null;
+		return s.indexOf('\\|') >= 0
+			? '`\\|` (regex alternation)'
+			: s.indexOf('[^') >= 0
+				? '`[^...]` (negated character class)'
+				: s.indexOf('(?:') >= 0
+					? '`(?:...)` (non-capturing group)'
+					: s.indexOf('(?=') >= 0 ? '`(?=...)` (lookahead)' : s.indexOf('(?!') >= 0 ? '`(?!...)` (negative lookahead)' : null;
 	}
 
 	/**

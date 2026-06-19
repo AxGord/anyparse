@@ -87,10 +87,11 @@ final class AssignmentInCondition implements Check {
 
 	/** The condition child of `node`, or null when `node` is not a condition holder. */
 	private static function conditionOf(node: QueryNode, firstKinds: Array<String>, lastKinds: Array<String>): Null<QueryNode> {
-		if (node.children.length == 0) return null;
-		if (firstKinds.contains(node.kind)) return node.children[0];
-		if (lastKinds.contains(node.kind)) return node.children[node.children.length - 1];
-		return null;
+		return node.children.length == 0
+			? null
+			: firstKinds.contains(node.kind)
+				? node.children[0]
+				: lastKinds.contains(node.kind) ? node.children[node.children.length - 1] : null;
 	}
 
 	/** `cond` itself (or its single parenthesized inner) when it is an assignment; else null. */
