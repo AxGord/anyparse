@@ -301,6 +301,9 @@ import unit.RedundantMapIterKeyCheckTest;
 import unit.UnusedParameterCheckTest;
 import unit.SwallowedExceptionCheckTest;
 import unit.PreferSwitchCheckTest;
+import unit.RedundantVoidReturnCheckTest;
+import unit.UnnecessaryBlockCheckTest;
+import unit.PreferFinalFieldCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -572,6 +575,9 @@ class RunTests {
 		addCase(new MissingVisibilityCheckTest());
 		addCase(new ModifierOrderCheckTest());
 		addCase(new ExplicitTypeCheckTest());
+		addCase(new RedundantVoidReturnCheckTest());
+		addCase(new UnnecessaryBlockCheckTest());
+		addCase(new PreferFinalFieldCheckTest());
 		addCase(new IdenticalOperandsCheckTest());
 		addCase(new SelfAssignmentCheckTest());
 		addCase(new DuplicateCaseCheckTest());

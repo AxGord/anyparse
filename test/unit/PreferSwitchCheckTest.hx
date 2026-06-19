@@ -7,13 +7,14 @@ import anyparse.check.Linter;
 import anyparse.check.PreferSwitch;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.runtime.Span;
 
 /**
  * The `prefer-switch` check: an `if` / `else if` chain testing one expression
- * against literal values is flagged `Info`. A chain over different
- * discriminants, a non-equality or `!=` condition, a non-literal or interpolated
- * operand, a call-bearing discriminant, or a lone `if` is not. Report-only —
- * `fix` yields no edits.
+ * against literal values is flagged `Info` and rewritten to a `switch` by `--fix`.
+ * A chain over different discriminants, a non-equality or `!=` condition, a
+ * non-literal or interpolated operand, a call-bearing discriminant, or a lone `if`
+ * is not flagged.
  */
 class PreferSwitchCheckTest extends Test {
 
@@ -72,10 +73,19 @@ class PreferSwitchCheckTest extends Test {
 		Assert.equals(0, violations(wrap('if (x != 1) a(); else if (x != 2) b();')).length);
 	}
 
-	public function testFixReturnsEmpty(): Void {
-		final src: String = wrap("if (x == 'a') a(); else if (x == 'b') b();");
-		final check: PreferSwitch = new PreferSwitch();
-		Assert.equals(0, check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()).length);
+	public function testFixToSwitch(): Void {
+		final fixed: String = fixedSource(wrap("if (x == 'a') a(); else if (x == 'b') b(); else c();"));
+		Assert.isTrue(fixed.indexOf('switch (x)') >= 0);
+		Assert.isTrue(fixed.indexOf("case 'a':") >= 0);
+		Assert.isTrue(fixed.indexOf("case 'b':") >= 0);
+		Assert.isTrue(fixed.indexOf('case _:') >= 0);
+	}
+
+	/** A chain with no trailing `else` yields a switch with no `case _`. */
+	public function testFixNoElseNoDefault(): Void {
+		final fixed: String = fixedSource(wrap('if (n == 1) a(); else if (n == 2) b();'));
+		Assert.isTrue(fixed.indexOf('switch (n)') >= 0);
+		Assert.equals(-1, fixed.indexOf('case _:'));
 	}
 
 	public function testRegisteredInBuiltins(): Void {
@@ -94,6 +104,24 @@ class PreferSwitchCheckTest extends Test {
 
 	private function violations(src: String): Array<Violation> {
 		return new PreferSwitch().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	private function fixedSource(src: String): String {
+		final check: PreferSwitch = new PreferSwitch();
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
+		final sorted: Array<{ span: Span, text: String }> = edits.copy();
+		sorted.sort((a, b) -> b.span.from - a.span.from);
+		var out: String = src;
+		for (e in sorted) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
+		return out;
+	}
+
+	/** A chain carrying a comment is still flagged but not auto-converted (the comment would be lost). */
+	public function testCommentChainReportedNotFixed(): Void {
+		final src: String = wrap('if (x == 1) a(); // one\n\t\telse if (x == 2) b();');
+		Assert.equals(1, violations(src).length);
+		Assert.equals(-1, fixedSource(src).indexOf('switch'));
 	}
 
 }

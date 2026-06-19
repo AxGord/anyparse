@@ -598,6 +598,39 @@ typedef RefShape = {
 	 * the abstract's underlying type. Optional.
 	 */
 	@:optional var enumAbstractDeclKind: String;
+
+	/**
+	 * The value-less `return` statement kind (Haxe `VoidReturnStmt`) — the
+	 * `redundant-void-return` check flags one that is the last statement of a
+	 * function body, where falling off the end is equivalent. Distinct from the
+	 * value-returning `returnStatementKind`. Optional; unset makes the check a no-op.
+	 */
+	@:optional var voidReturnKind: String;
+
+	/**
+	 * Mutable field member-host kinds (Haxe `VarMember`) — a class `var` field, the
+	 * subset of `fieldDeclKinds` excluding the already-`final` `FinalMember`. The
+	 * `prefer-final-field` check flags one whose initializer is never reassigned and
+	 * rewrites `var` to `final`. Optional; unset makes the check a no-op.
+	 */
+	@:optional var mutableFieldDeclKinds: Array<String>;
+
+	/**
+	 * The visibility keyword whose insertion preserves behaviour — the language's
+	 * default member visibility (Haxe `private`). The `missing-visibility` check
+	 * inserts it to fix a member lacking explicit visibility; a grammar whose default
+	 * cannot be safely auto-inserted leaves it unset (report-only). Optional.
+	 */
+	@:optional var defaultVisibilityModifierText: String;
+
+	/**
+	 * The `override` modifier kind (Haxe `Override`) — the `missing-visibility`
+	 * autofix skips inserting a default visibility on an overriding member, whose
+	 * effective visibility is inherited from the supertype (forcing `private` on an
+	 * override of a public method would lower visibility below the superclass — a
+	 * compile error). Optional; unset disables that exemption.
+	 */
+	@:optional var overrideModifierKind: String;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {

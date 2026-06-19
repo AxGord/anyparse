@@ -409,6 +409,10 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 			fieldDeclKinds: ['VarMember', 'FinalMember'],
 			functionBodyKinds: ['BlockBody', 'ExprBody', 'NoBody'],
 			enumAbstractDeclKind: 'EnumAbstractDecl',
+			overrideModifierKind: 'Override',
+			defaultVisibilityModifierText: 'private',
+			mutableFieldDeclKinds: ['VarMember'],
+			voidReturnKind: 'VoidReturnStmt',
 		};
 	}
 
