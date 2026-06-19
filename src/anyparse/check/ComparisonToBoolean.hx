@@ -12,8 +12,10 @@ import haxe.Exception;
 
 /**
  * Flags a comparison against a boolean literal — `x == true`, `x != false` and the like —
- * where the literal adds nothing (SonarLint S1125). Purely structural; `Severity.Info`,
- * report-only (`fix` yields no edits).
+ * where the literal adds nothing (SonarLint S1125). Purely structural; `Severity.Info`.
+ * `fix` rewrites the comparison to its operand — `x == true` / `x != false` → `x`,
+ * `x == false` / `x != true` → `!x` — but ONLY when the operand is a boolean-operator
+ * result (provably non-null Bool); see the null-safety caveat below.
  *
  * ## Null-safety caveat
  *
@@ -25,13 +27,21 @@ import haxe.Exception;
  * method or `Map.get` result, a possibly-`@:optional` field, a `?.` access). It also does
  * not descend into macro-reification subtrees (`RefShape.opaqueKinds`), whose comparisons
  * are generated code rather than authored style. What remains — a bare identifier or a
- * boolean-operator expression operand — is reported (never auto-fixed) for a human to judge.
+ * boolean-operator expression operand — is reported for a human to judge.
+ *
+ * The same uncertainty bounds the autofix, but tighter: a bare identifier may resolve to a
+ * `Null<Bool>` local (`final elseBool:Null<Bool>`) whose `== true` is load-bearing and
+ * whose source the kind-based skip cannot classify, so `fix` rewrites ONLY a boolean-operator
+ * operand (`RefShape.comparisonKinds` ∪ `RefShape.notKind`, parentheses unwrapped) — an
+ * `&&` / `||` / `!` / comparison result is non-null `Bool` by construction. A bare-identifier
+ * operand is reported but never auto-stripped.
  *
  * ## Grammar-agnostic
  *
  * Equality kinds come from `RefShape.equalityKinds`, the literal from `RefShape.boolLitKind`,
  * the nullable-operand skip from `RefShape.nullableOperandKinds` (falling back to the single
- * `RefShape.nullSafeAccessKind` when unset), the macro skip from `RefShape.opaqueKinds`.
+ * `RefShape.nullSafeAccessKind` when unset), the macro skip from `RefShape.opaqueKinds`, and
+ * the autofix's provably-Bool gate from `RefShape.comparisonKinds` + `RefShape.notKind`.
  * Unset equality kinds or literal kind makes the check a no-op.
  */
 @:nullSafety(Strict)
@@ -64,11 +74,54 @@ final class ComparisonToBoolean implements Check {
 		return violations;
 	}
 
-	/** Comparison-to-boolean has no autofix — removing `== true` may change semantics on a nullable. */
+	/**
+	 * Rewrite each flagged comparison to its operand. `x == true` / `x != false` collapse
+	 * to the operand verbatim; `x == false` / `x != true` collapse to its negation
+	 * (`!operand`, parenthesized unless the operand is a bare identifier or already
+	 * parenthesized, so the unary `!` binds correctly). Emitted ONLY for a boolean-operator
+	 * operand (`provablyBool`) — a non-null `Bool` by construction; a bare identifier may be
+	 * a `Null<Bool>` local whose `== true` is load-bearing, so it is left to the report.
+	 * `eqKind` tells `==` from `!=`; unset (or no `boolLitKind`) → no-op.
+	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return [];
+		final shape: RefShape = plugin.refShape();
+		final equalityKinds: Array<String> = shape.equalityKinds ?? [];
+		final boolLitKind: Null<String> = shape.boolLitKind;
+		final eqKind: Null<String> = shape.eqKind;
+		if (equalityKinds.length == 0 || boolLitKind == null || eqKind == null) return [];
+		final identKind: String = shape.identKind;
+		final parenKind: Null<String> = shape.parenKind;
+		final notKind: Null<String> = shape.notKind;
+		final boolOpKinds: Array<String> = (shape.comparisonKinds ?? []).concat(notKind != null ? [notKind] : []);
+		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+		if (tree == null) return [];
+
+		final nodeByKey: Map<String, QueryNode> = [];
+		indexEqualities(tree, equalityKinds, nodeByKey);
+
+		final edits: Array<{ span: Span, text: String }> = [];
+		for (v in violations) {
+			final span: Null<Span> = v.span;
+			if (span == null) continue;
+			final node: Null<QueryNode> = nodeByKey['${span.from}:${span.to}'];
+			if (node == null || node.children.length != 2) continue;
+			final leftIsBool: Bool = node.children[0].kind == boolLitKind;
+			final rightIsBool: Bool = node.children[1].kind == boolLitKind;
+			if (leftIsBool == rightIsBool) continue;
+			final lit: QueryNode = leftIsBool ? node.children[0] : node.children[1];
+			final other: QueryNode = leftIsBool ? node.children[1] : node.children[0];
+			if (!provablyBool(other, boolOpKinds, parenKind)) continue;
+			final litSpan: Null<Span> = lit.span;
+			final otherSpan: Null<Span> = other.span;
+			if (litSpan == null || otherSpan == null) continue;
+			final litIsTrue: Bool = StringTools.trim(source.substring(litSpan.from, litSpan.to)) == 'true';
+			final isEq: Bool = node.kind == eqKind;
+			final otherSrc: String = StringTools.trim(source.substring(otherSpan.from, otherSpan.to));
+			edits.push({ span: span, text: isEq == litIsTrue ? otherSrc : negate(other, otherSrc, identKind, parenKind) });
+		}
+		return edits;
 	}
 
 	/**
@@ -103,6 +156,32 @@ final class ComparisonToBoolean implements Check {
 	private static function operandIsNullable(operand: QueryNode, nullableKinds: Array<String>): Bool {
 		for (k in nullableKinds) if (RefactorSupport.subtreeContainsKind(operand, k)) return true;
 		return false;
+	}
+
+	/**
+	 * Whether `operand` is a provably non-null Bool: a boolean-operator result
+	 * (`&&` / `||` / `!` / a comparison), parentheses unwrapped. Such an operand can never be
+	 * `Null<Bool>`, so stripping its `== true` is sound under strict null-safety. A bare
+	 * identifier, field access or call is NOT provable without types and is left to the report.
+	 */
+	private static function provablyBool(operand: QueryNode, boolOpKinds: Array<String>, parenKind: Null<String>): Bool {
+		var n: QueryNode = operand;
+		while (parenKind != null && n.kind == parenKind && n.children.length == 1) n = n.children[0];
+		return boolOpKinds.contains(n.kind);
+	}
+
+	/** `!operand`, parenthesizing a non-atomic operand so the unary `!` binds correctly. */
+	private static function negate(operand: QueryNode, src: String, identKind: String, parenKind: Null<String>): String {
+		return operand.kind == identKind || operand.kind == parenKind ? '!' + src : '!(' + src + ')';
+	}
+
+	/** Index every equality node by its `from:to` span key, for span-keyed violation lookup. */
+	private static function indexEqualities(node: QueryNode, equalityKinds: Array<String>, out: Map<String, QueryNode>): Void {
+		if (equalityKinds.contains(node.kind)) {
+			final span: Null<Span> = node.span;
+			if (span != null) out['${span.from}:${span.to}'] = node;
+		}
+		for (c in node.children) indexEqualities(c, equalityKinds, out);
 	}
 
 }

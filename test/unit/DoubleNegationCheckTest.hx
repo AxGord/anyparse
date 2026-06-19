@@ -7,10 +7,12 @@ import anyparse.check.DoubleNegation;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.runtime.Span;
 
 /**
- * The `double-negation` check: a not-node directly wrapping another (`!!x`) is flagged
- * `Info`, report-only. A single `!`, or a `!` wrapping a non-`!` expression, is not.
+ * The `double-negation` check: a not-node directly wrapping another (`!!x`) is flagged `Info`; `fix` strips it when the
+ * operand is provably non-null. A single `!`, or a `!` wrapping a non-`!`
+ * expression, is not.
  */
 class DoubleNegationCheckTest extends Test {
 
@@ -34,10 +36,28 @@ class DoubleNegationCheckTest extends Test {
 		Assert.equals(1, violations('class C {\n\tfunction f():Void {\n\t\tvar b = !!!x;\n\t}\n}').length);
 	}
 
-	public function testFixReturnsEmpty(): Void {
-		final src: String = 'class C {\n\tfunction f():Void {\n\t\tvar b = !!x;\n\t}\n}';
-		final check: DoubleNegation = new DoubleNegation();
-		Assert.equals(0, check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()).length);
+	public function testFixStripsDoubleNegation(): Void {
+		Assert.equals(wrap('var b = x;'), applyFix(wrap('var b = !!x;')));
+	}
+
+	public function testFixStripsParenOperand(): Void {
+		Assert.equals(wrap('var b = (a && c);'), applyFix(wrap('var b = !!(a && c);')));
+	}
+
+	public function testFixTripleNegationToSingle(): Void {
+		// An odd-length chain keeps a leading `!`, so the result is always a definite Bool.
+		Assert.equals(wrap('var b = !x;'), applyFix(wrap('var b = !!!x;')));
+	}
+
+	public function testFixLeavesNullableCallOperand(): Void {
+		// `!!foo()` coerces a possibly-null call result; bare `foo()` would not — left alone.
+		final src: String = wrap('var b = !!foo();');
+		Assert.equals(src, applyFix(src));
+	}
+
+	public function testFixLeavesNullableFieldOperand(): Void {
+		final src: String = wrap('var b = !!obj.flag;');
+		Assert.equals(src, applyFix(src));
 	}
 
 	public function testRegisteredInBuiltins(): Void {
@@ -52,6 +72,26 @@ class DoubleNegationCheckTest extends Test {
 
 	private function violations(src: String): Array<Violation> {
 		return new DoubleNegation().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	/** Wrap a single statement body in a minimal class+function so it parses. */
+	private function wrap(body: String): String {
+		return 'class C {\n\tfunction f():Void {\n\t\t' + body + '\n\t}\n}';
+	}
+
+	private function applyFix(src: String): String {
+		final check: DoubleNegation = new DoubleNegation();
+		final edits: Array<{ span: Span, text: String }> = check.fix(
+			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
+		);
+		edits.sort((a, b) -> b.span.from - a.span.from);
+		var out: String = src;
+		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
+		return out;
+	}
+
+	public function testMacroReificationSkipped(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tvar e = macro !!x;\n\t}\n}').length);
 	}
 
 }

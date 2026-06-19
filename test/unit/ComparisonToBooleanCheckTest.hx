@@ -7,10 +7,12 @@ import anyparse.check.ComparisonToBoolean;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.runtime.Span;
 
 /**
  * The `comparison-to-boolean` check: a comparison against a boolean literal
- * (`x == true`, `x != false`, `true == x`) is flagged `Info`, report-only. An operand
+ * (`x == true`, `x != false`, `true == x`) is flagged `Info`;
+ * `fix` rewrites only a boolean-operator operand (a bare identifier may be a nullable Bool). An operand
  * whose nullness the check cannot rule out — a `?.` access, a call / `Map.get` result, a
  * possibly-`@:optional` field — is SKIPPED, since `== true` is load-bearing on a `Null<Bool>`
  * under strict null-safety. Comparisons inside macro reification are skipped too.
@@ -53,10 +55,41 @@ class ComparisonToBooleanCheckTest extends Test {
 		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tvar b = true == true;\n\t}\n}').length);
 	}
 
-	public function testFixReturnsEmpty(): Void {
-		final src: String = 'class C {\n\tfunction f():Void {\n\t\tvar b = x == true;\n\t}\n}';
-		final check: ComparisonToBoolean = new ComparisonToBoolean();
-		Assert.equals(0, check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()).length);
+	public function testFixRewritesComparisonOperand(): Void {
+		Assert.equals(wrap('var b = x < y;'), applyFix(wrap('var b = x < y == true;')));
+	}
+
+	public function testFixRewritesParenAndOperand(): Void {
+		Assert.equals(wrap('var b = (a && c);'), applyFix(wrap('var b = (a && c) != false;')));
+	}
+
+	public function testFixRewritesNotOperand(): Void {
+		Assert.equals(wrap('var b = !flag;'), applyFix(wrap('var b = !flag == true;')));
+	}
+
+	public function testFixLiteralOnLeftBoolOp(): Void {
+		Assert.equals(wrap('var b = (a && c);'), applyFix(wrap('var b = true == (a && c);')));
+	}
+
+	public function testFixLeavesBareIdentifier(): Void {
+		// A bare identifier may be a Null<Bool> local whose `== true` is load-bearing under
+		// strict null-safety, so it is reported but never auto-stripped.
+		final src: String = wrap('var b = x == true;');
+		Assert.equals(src, applyFix(src));
+	}
+
+	public function testFixParenthesizedNegation(): Void {
+		Assert.equals(wrap('var b = !(a > c);'), applyFix(wrap('var b = (a > c) == false;')));
+	}
+
+	public function testFixWrapsBareComparisonNegation(): Void {
+		// `a < c` is neither a bare identifier nor parenthesized, so `!` must wrap it.
+		Assert.equals(wrap('var b = !(a < c);'), applyFix(wrap('var b = a < c == false;')));
+	}
+
+	public function testFixLeavesNullableOperand(): Void {
+		final src: String = wrap('var b = obj.flag == true;');
+		Assert.equals(src, applyFix(src));
 	}
 
 	public function testRegisteredInBuiltins(): Void {
@@ -83,6 +116,22 @@ class ComparisonToBooleanCheckTest extends Test {
 
 	private function violations(src: String): Array<Violation> {
 		return new ComparisonToBoolean().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	/** Wrap a single statement body in a minimal class+function so it parses. */
+	private function wrap(body: String): String {
+		return 'class C {\n\tfunction f():Void {\n\t\t' + body + '\n\t}\n}';
+	}
+
+	private function applyFix(src: String): String {
+		final check: ComparisonToBoolean = new ComparisonToBoolean();
+		final edits: Array<{ span: Span, text: String }> = check.fix(
+			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
+		);
+		edits.sort((a, b) -> b.span.from - a.span.from);
+		var out: String = src;
+		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
+		return out;
 	}
 
 }
