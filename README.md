@@ -193,8 +193,9 @@ N (`gofmt -r` / comby for the grammar's own AST).
 find/replace scoped to comment **bodies** — the gap `rewrite` (AST nodes only) and
 `set-comment` (one block at a time) leave open. `--regex` makes `<find>` a regex and
 `<replace>` a template where `${1}` expands a capture group and `${1+N}` shifts an
-integer group by N. Code and the comment delimiters are never touched; strings are
-skipped. A mechanical convention change cited across many doc-comments (e.g. bumping a
+integer group by N. A literal `<find>` matches even across a comment's line breaks (a
+phrase wrapped over two ` * ` doc lines). Code and the comment delimiters are never
+touched; strings are skipped. A mechanical convention change cited across many doc-comments (e.g. bumping a
 coordinate) becomes one command instead of a hand-rolled script.
 
 ### File creation & formatting
@@ -219,8 +220,9 @@ dead-code run leaving a local unused, a de-nested `else` revealing the next — 
 in the same run. A check is a plugin — a new one is a new class, not a core change.
 
 Findings are suppressible inline: a trailing `// noqa` (or `// noqa: <rule>,<rule>` for
-named rules) clears findings on its line, and `// CHECKSTYLE:OFF` … `// CHECKSTYLE:ON`
-clears a region — so one stubborn false positive never makes a rule unusable. `--fail-on
+named rules) clears any finding whose source span covers its line — so a directive the
+writer reflowed onto a continuation line still lands — and `// CHECKSTYLE:OFF` …
+`// CHECKSTYLE:ON` clears a region (matching the finding's reported line) — so one stubborn false positive never makes a rule unusable. `--fail-on
 <error|warning|info>` exits non-zero when a finding at or above that severity survives
 (default: report-only, exit 0), and `--format <text|json|checkstyle>` switches the
 output — checkstyle XML the same CI tooling that reads `checkstyle.json` can ingest.
