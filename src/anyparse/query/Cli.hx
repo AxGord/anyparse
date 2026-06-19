@@ -357,7 +357,7 @@ final class Cli {
 		final cmd: String = args[0];
 		_requireMatch = false;
 		final rest: Array<String> = [];
-		for (a in args.slice(1)) if (a == "--exit-on-empty" || a == "--require-match")
+		for (a in args.slice(1)) if (a == '--exit-on-empty' || a == '--require-match')
 			_requireMatch = true;
 		else
 			rest.push(a);

@@ -112,7 +112,7 @@ final class ReplaceNode {
 
 	/** Whether `source`, ignoring leading whitespace, opens with a block comment (`/*`, including the `/**` doc form). */
 	private static function startsWithBlockComment(source: String): Bool {
-		return StringTools.startsWith(StringTools.ltrim(source), "/*");
+		return StringTools.startsWith(StringTools.ltrim(source), '/*');
 	}
 
 }
