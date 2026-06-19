@@ -65,4 +65,30 @@ class SetDocSliceTest extends Test {
 		};
 	}
 
+	/**
+	 * Two stacked leading doc blocks (e.g. a duplicate left by an earlier edit) are
+	 * BOTH replaced by the single new doc — `docExtendedSpan` spans the whole run, so
+	 * neither stale block nor an orphan ` * ` line survives (exactly one `/**` remains).
+	 */
+	public function testReplacesStackedDocRun(): Void {
+		final src: String = "package p;\nclass C {\n\t/** first */\n\t/** second */\n\tpublic function f(): Int return 1;\n}";
+		final text: String = okText(SetDoc.setDoc(src, 5, 2, "fresh", true, new HaxeQueryPlugin()));
+		Assert.isTrue(text.contains("fresh"));
+		Assert.isFalse(text.contains("first"));
+		Assert.isFalse(text.contains("second"));
+		Assert.equals(text.indexOf("/**"), text.lastIndexOf("/**"));
+	}
+
+	/**
+	 * A DISTINCT block comment above the doc (a license / section banner) is NOT
+	 * swallowed — only the immediately-preceding doc is replaced.
+	 */
+	public function testPreservesBlockCommentAboveDoc(): Void {
+		final src: String = "package p;\nclass C {\n\t/* license */\n\t/** old doc */\n\tpublic function f(): Int return 1;\n}";
+		final text: String = okText(SetDoc.setDoc(src, 5, 2, "fresh", true, new HaxeQueryPlugin()));
+		Assert.isTrue(text.contains("license"));
+		Assert.isTrue(text.contains("fresh"));
+		Assert.isFalse(text.contains("old doc"));
+	}
+
 }

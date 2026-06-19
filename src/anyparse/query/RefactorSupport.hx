@@ -578,23 +578,51 @@ final class RefactorSupport {
 	}
 
 	/**
-	 * Extend `span` backward to include an immediately-preceding block / doc
-	 * comment (a `/*`-opened comment, including the `/**` doc form) — the
-	 * leading trivia the grammar attaches to a declaration but keeps OUTSIDE
-	 * its node span, so a replace / remove can carry (or rewrite) the
-	 * declaration's documentation. Scans back over whitespace from `span.from`;
-	 * if the preceding token closes a block comment, extends to that comment's
-	 * `/*` open. Returns the span unchanged when only whitespace or a
-	 * non-comment token precedes. Line-comment (double-slash) doc runs are not
-	 * handled (v1); the re-parse gate validates the result either way.
+			 * Extend `span` backward to include an immediately-preceding block / doc
+			 * comment (a `/*`-opened comment, including the `/**` doc form) — the
+			 * leading trivia the grammar attaches to a declaration but keeps OUTSIDE
+			 * its node span, so a replace / remove can carry (or rewrite) the
+			 * declaration's documentation. Scans back over whitespace from `span.from`;
+			 * if the preceding token closes a block comment, extends to that comment's
+			 * `/**
+		 * Extend `span` backward to include the whole run of immediately-preceding
+		 * block / doc comments (each a `/*`-opened comment, including the `/**` doc
+		 * form) — the leading trivia the grammar attaches to a declaration but keeps
+		 * OUTSIDE its node span, so a replace / remove can carry (or rewrite) the
+		 * declaration's documentation. Scans back over whitespace from `span.from`;
+		 * while the preceding token closes a block comment it extends to that
+		 * comment's `/**
+	 * Extend `span` backward over the declaration's leading doc / block comment —
+	 * the trivia the grammar attaches to a declaration but keeps OUTSIDE its node
+	 * span, so a replace / remove can carry (or rewrite) the documentation. Scans
+	 * back over whitespace from `span.from`; the comment immediately above the node
+	 * (a `/*`-opened comment, doc or plain block) is absorbed as before, then the
+	 * walk keeps going back ONLY across further `/**` DOC comments — a stray
+	 * duplicate doc left by an earlier edit — so a stacked duplicate is cleaned up
+	 * as one unit while a DISTINCT preceding block comment (a license header or
+	 * section banner above the doc) is left intact. Returns the span unchanged when
+	 * only whitespace or a non-comment token precedes. Line-comment (double-slash)
+	 * doc runs are not handled (v1); the re-parse gate validates the result either
+	 * way.
 	 */
 	public static function docExtendedSpan(source: String, span: Span): Span {
-		var i: Int = span.from - 1;
-		while (i >= 0 && isSpace(StringTools.fastCodeAt(source, i))) i--;
-		// The last non-space byte before the node must be the `/` of a `*/` close.
-		if (i < 1 || StringTools.fastCodeAt(source, i) != '/'.code || StringTools.fastCodeAt(source, i - 1) != '*'.code) return span;
-		final open: Int = source.lastIndexOf('/*', i - 1);
-		return open < 0 ? span : new Span(open, span.to);
+		var from: Int = span.from;
+		var first: Bool = true;
+		while (true) {
+			var i: Int = from - 1;
+			while (i >= 0 && isSpace(StringTools.fastCodeAt(source, i))) i--;
+			// The last non-space byte before this point must be the `/` of a `*/` close.
+			if (i < 1 || StringTools.fastCodeAt(source, i) != '/'.code || StringTools.fastCodeAt(source, i - 1) != '*'.code) break;
+			final open: Int = source.lastIndexOf('/*', i - 1);
+			if (open < 0) break;
+			// First comment (the decl's own doc) is absorbed unconditionally; any
+			// further comment back is absorbed only if it too is a `/**` doc, so a
+			// plain `/*` license / section block above the doc survives.
+			if (!first && !(open + 2 < source.length && StringTools.fastCodeAt(source, open + 2) == '*'.code)) break;
+			from = open;
+			first = false;
+		}
+		return from == span.from ? span : new Span(from, span.to);
 	}
 
 	/**

@@ -98,12 +98,21 @@ final class ReplaceNode {
 		// surviving modifier siblings. A non-decl node (expression, statement,
 		// package) has no modifier run, so `declGroupSpan` returns it intact.
 		final groupSpan: Span = RefactorSupport.declGroupSpan(node, RefactorSupport.parentOf(tree, node), span);
-		// `--with-doc` extends the replaced range back over a leading doc / block
-		// comment (trivia the grammar keeps outside the node span), so the new
-		// source can carry the declaration's documentation.
-		final finalSpan: Span = withDoc ? RefactorSupport.docExtendedSpan(source, groupSpan) : groupSpan;
+		// `--with-doc` extends the replaced range back over the leading doc / block
+		// comment run (trivia the grammar keeps outside the node span) so the new
+		// source carries the declaration documentation. The same extension applies
+		// when `newSource` itself opens with a block comment — replacing only the
+		// declaration would otherwise stack the new doc above the surviving old one,
+		// so the existing leading doc is absorbed rather than duplicated.
+		final carriesDoc: Bool = withDoc || startsWithBlockComment(newSource);
+		final finalSpan: Span = carriesDoc ? RefactorSupport.docExtendedSpan(source, groupSpan) : groupSpan;
 		final edit: { span: Span, text: String } = { span: finalSpan, text: newSource };
 		return RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);
+	}
+
+	/** Whether `source`, ignoring leading whitespace, opens with a block comment (`/*`, including the `/**` doc form). */
+	private static function startsWithBlockComment(source: String): Bool {
+		return StringTools.startsWith(StringTools.ltrim(source), "/*");
 	}
 
 }

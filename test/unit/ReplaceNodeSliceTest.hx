@@ -160,4 +160,26 @@ class ReplaceNodeSliceTest extends Test {
 		return ReplaceNode.replaceNode(source, target, newSource, reformat, plugin);
 	}
 
+	/**
+	 * When `newSource` itself opens with a doc comment, the existing leading doc is
+	 * absorbed automatically — WITHOUT `--with-doc` — so the result carries ONE doc
+	 * block, not the new one stacked above the surviving old one.
+	 */
+	public function testNewSourceDocFoldsLeadingDoc(): Void {
+		final source: String = "class C {\n" + "\t/** old */\n" + "\tpublic function f():Void {}\n" + "}\n";
+		final expected: String = "class C {\n" + "\t/** new */\n" + "\tpublic function g():Void {}\n" + "}\n";
+		assertReplace(source, ByKindPosition(3, 9, "FnMember"), "/** new */\npublic function g():Void {}", expected, true);
+	}
+
+	/**
+	 * The auto-fold absorbs only the leading DOC run, not a distinct block comment
+	 * above it: a leading block-comment banner survives when the new source opens
+	 * with a doc.
+	 */
+	public function testNewSourceDocPreservesBannerAboveDoc(): Void {
+		final source: String = "class C {\n" + "\t/* banner */\n" + "\t/** old */\n" + "\tpublic function f():Void {}\n" + "}\n";
+		final expected: String = "class C {\n" + "\t/* banner */\n" + "\t/** new */\n" + "\tpublic function g():Void {}\n" + "}\n";
+		assertReplace(source, ByKindPosition(4, 9, "FnMember"), "/** new */\npublic function g():Void {}", expected, true);
+	}
+
 }
