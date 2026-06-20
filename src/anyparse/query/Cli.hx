@@ -10820,8 +10820,7 @@ final class Cli {
 		final mB: Null<Int> = validateReconModesB(o);
 		if (mB != null) return reconParseExit(mB);
 		final we: Null<Int> = validateReconWriterEquals(o);
-		if (we != null) return reconParseExit(we);
-		return o;
+		return we != null ? reconParseExit(we) : o;
 	}
 
 	/**
