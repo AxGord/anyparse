@@ -3126,7 +3126,7 @@ final class Cli {
 			final prefix: String = multi ? '$filePath: ' : '';
 			if (dryRun) {
 				final tag: String = fileHits > 0 ? 'WOULD CHANGE' : 'NO MATCH';
-				sysPrint('${prefix}$tag ($fileHits substitution${fileHits == 1 ? '' : 's'})\n');
+				sysPrint('${prefix}$tag ($fileHits substitution${plural(fileHits)})\n');
 				continue;
 			}
 			try {
@@ -3247,7 +3247,7 @@ final class Cli {
 				var soleCount: Int = 0;
 				for (r in isolatedResults) if (r.ok) soleCount++;
 				sysPrint(
-					'VERDICT $soleCount of ${patterns.length} pattern${patterns.length == 1 ? '' : 's'} unblock alone — the rest are redundant (or compose into a tighter slice).\n'
+					'VERDICT $soleCount of ${patterns.length} pattern${plural(patterns.length)} unblock alone — the rest are redundant (or compose into a tighter slice).\n'
 				);
 			}
 		} else if (!combined.ok && baseline.ok) {
@@ -6345,7 +6345,7 @@ final class Cli {
 		hits.sort((a, b) -> b.count - a.count);
 		for (h in hits) sysPrint('${h.path} :: ${h.count} match${h.count == 1 ? '' : 'es'}\n');
 		sysPrint(
-			'--- candidates: ${hits.length} file${hits.length == 1 ? '' : 's'} matched ($totalHits total hit${totalHits == 1 ? '' : 's'} across ${walk.records.length} skip-parse file${walk.records.length == 1 ? '' : 's'}) ---\n'
+			'--- candidates: ${hits.length} file${plural(hits.length)} matched ($totalHits total hit${plural(totalHits)} across ${walk.records.length} skip-parse file${plural(walk.records.length)}) ---\n'
 		);
 		return hits.length == 0 ? EXIT_RUNTIME : EXIT_OK;
 	}
@@ -6393,7 +6393,7 @@ final class Cli {
 			return EXIT_RUNTIME;
 		}
 		sysPrint(
-			'=== permissive-construct: ${candidates.length} candidate${candidates.length == 1 ? '' : 's'} from gates --mechanism mandatory-ref-lead-trail, ${records.length} skip-parse fixture${records.length == 1 ? '' : 's'} ===\n'
+			'=== permissive-construct: ${candidates.length} candidate${plural(candidates.length)} from gates --mechanism mandatory-ref-lead-trail, ${records.length} skip-parse fixture${plural(records.length)} ===\n'
 		);
 		var totalUnblocks: Int = 0;
 		var candidatesWithSignal: Int = 0;
@@ -6428,12 +6428,10 @@ final class Cli {
 			for (p in stillFails) sysPrint('    STILL FAIL: $p\n');
 		}
 		sysPrint(
-			'\n--- permissive-construct summary: $candidatesWithSignal of ${candidates.length} candidate${candidates.length == 1 ? '' : 's'} have ≥1 UNBLOCK or STILL FAIL ($totalUnblocks UNBLOCK${totalUnblocks == 1 ? '' : 's'} total) across ${records.length} skip-parse files ---\n'
+			'\n--- permissive-construct summary: $candidatesWithSignal of ${candidates.length} candidate${plural(candidates.length)} have ≥1 UNBLOCK or STILL FAIL ($totalUnblocks UNBLOCK${plural(totalUnblocks)} total) across ${records.length} skip-parse files ---\n'
 		);
 		if (noSignalLabels.length > 0) {
-			sysPrint(
-				'--- NO MATCH only (${noSignalLabels.length} candidate${noSignalLabels.length == 1 ? '' : 's'} with no fixture match) ---\n'
-			);
+			sysPrint('--- NO MATCH only (${noSignalLabels.length} candidate${plural(noSignalLabels.length)} with no fixture match) ---\n');
 			for (l in noSignalLabels) sysPrint('  $l\n');
 		}
 		return totalUnblocks == 0 ? EXIT_RUNTIME : EXIT_OK;
@@ -7129,11 +7127,11 @@ final class Cli {
 		final byPath: Map<String, ReconRecord> = [for (r in records) r.path => r];
 		sysPrint('\n');
 		sysPrint(
-			'--- cluster drill for "$needle" (${entries.length} cluster${entries.length == 1 ? '' : 's'}, $matched of $totalAcrossSweep skip-parse paths) ---\n'
+			'--- cluster drill for "$needle" (${entries.length} cluster${plural(entries.length)}, $matched of $totalAcrossSweep skip-parse paths) ---\n'
 		);
 		for (entry in entries) {
 			final c: ReconCluster = entry.cluster;
-			sysPrint('  cluster "${entry.key}" — ${c.count} path${c.count == 1 ? '' : 's'}:\n');
+			sysPrint('  cluster "${entry.key}" — ${c.count} path${plural(c.count)}:\n');
 			final sorted: Array<String> = c.paths.copy();
 			sorted.sort((a, b) -> a < b ? -1 : (a > b ? 1 : 0));
 			for (p in sorted) {
@@ -7295,7 +7293,7 @@ final class Cli {
 		}
 		sysPrint('\n');
 		final scope: String = clusterFilter == null ? 'whole sweep' : 'cluster "$clusterFilter"';
-		sysPrint('--- predict-strip ($scope): ${records.length} skip-parse file${records.length == 1 ? '' : 's'}; ');
+		sysPrint('--- predict-strip ($scope): ${records.length} skip-parse file${plural(records.length)}; ');
 		sysPrint('$unblockCount would unblock, $stillFailCount still fail, $noMatchCount unchanged ---\n');
 		for (idx in 0...patterns.length) {
 			final pat: String = patterns[idx];
@@ -10936,5 +10934,8 @@ final class Cli {
 	private static inline function emptyExit(empty: Bool): Int {
 		return empty && _requireMatch ? EXIT_RUNTIME : EXIT_OK;
 	}
+
+	/** The plural suffix for a count: `''` for 1, `'s'` otherwise. */
+	private static inline function plural(n: Int): String return plural(n);
 
 }
