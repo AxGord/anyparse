@@ -2933,121 +2933,26 @@ final class Cli {
 	 * that the config bytes will pass through unchanged.
 	 */
 	private static function runStrip(args: Array<String>): Int {
-		var lang: String = 'haxe';
-		var showSource: Bool = false;
-		// --dry-run: skip the parse step, only verify that every supplied
-		// --replace/--delete pattern actually matched at least once in
-		// at least one file. Typo guard for batch strip-sweeps — when
-		// the pattern silently doesn't match, the corpus delta misleads;
-		// a single dry-run pass surfaces the typo before any apply.
-		var dryRun: Bool = false;
-		// --per-pattern: isolation diagnostic for multi-pattern strip on a
-		// single file. Runs the parse N+2 times — baseline (no patterns),
-		// each pattern in isolation, and the combined apply — surfacing
-		// whether each pattern is a sole-blocker, a partial contributor,
-		// or a no-op. Catches the interlocking-blockers trap where a
-		// combined-strip PARSE OK can mask that NO individual pattern
-		// unblocks alone (i.e. the slice requires N separate code
-		// mechanisms, not one). Single-file only — for multi-file sweeps
-		// the matrix would be NxM and the signal is in --dry-run +
-		// per-file PARSE OK/FAIL combinations.
-		var perPattern: Bool = false;
-		// `--from-cluster <key>` switches positional mode: the (single)
-		// positional becomes the corpus root (recon-style, env fallback
-		// to ANYPARSE_HXFORMAT_FORK/test/testcases); the file list is
-		// derived from a recon walk of that root, filtered to the named
-		// cluster. Direct complement to `recon --predict-strip`'s
-		// upper-bound prediction — this is the actual sweep apply.
-		var fromCluster: Null<String> = null;
-		// --regex: treat every --replace / --delete pattern as an EReg
-		// pattern (PCRE-ish, Haxe EReg dialect) instead of a literal
-		// substring. Application path switches to EReg.replace (global)
-		// for substitution and EReg.map for hit counting. The replacement
-		// string keeps its literal semantics — to use a backref, write
-		// e.g. `$1` per EReg.replace docs. Malformed regex is reported at
-		// arg-validation time with EXIT_USAGE before any FS I/O.
-		var regexMode: Bool = false;
-		final files: Array<String> = [];
-		final patterns: Array<String> = [];
-		final replacements: Array<String> = [];
-		var pendingReplace: Null<String> = null;
-
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
-				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
-				case '--replace':
-					if (pendingReplace != null) {
-						stderr('apq strip: --replace "$pendingReplace" needs a --with before the next --replace\n');
-						return EXIT_USAGE;
-					}
-					pendingReplace = expectValue(args, ++i, '--replace');
-				case '--with':
-					if (pendingReplace == null) {
-						stderr('apq strip: --with requires a preceding --replace\n');
-						return EXIT_USAGE;
-					}
-					patterns.push(pendingReplace);
-					replacements.push(expectValue(args, ++i, '--with'));
-					pendingReplace = null;
-				case '--delete':
-					if (pendingReplace != null) {
-						stderr('apq strip: --replace "$pendingReplace" needs a --with before --delete\n');
-						return EXIT_USAGE;
-					}
-					patterns.push(expectValue(args, ++i, '--delete'));
-					replacements.push('');
-				case '--regex':
-					regexMode = true;
-				case '--show':
-					showSource = true;
-				case '--dry-run':
-					dryRun = true;
-				case '--per-pattern':
-					perPattern = true;
-				case '--from-cluster':
-					fromCluster = expectValue(args, ++i, '--from-cluster');
-				case '-h', '--help':
-					printStripUsage();
-					return EXIT_OK;
-				case _:
-					if (StringTools.startsWith(a, '--')) {
-						stderr('apq strip: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
-					files.push(a);
-			}
-			i++;
-		}
-		if (pendingReplace != null) {
-			stderr('apq strip: --replace "$pendingReplace" needs a --with\n');
-			return EXIT_USAGE;
-		}
-		if (patterns.length == 0) {
-			stderr('apq strip: missing at least one --replace/--with or --delete\n');
-			printStripUsage();
-			return EXIT_USAGE;
-		}
+		final o: StripOpts = parseStripArgs(args);
+		if (o.errExit != null) return o.errExit;
 		// Compile every pattern AHEAD of any FS I/O so a regex typo
 		// surfaces as a single usage error instead of an N-file partial
 		// apply. Indices stay aligned with `patterns` / `replacements`.
 		// Plain (literal) mode leaves `compiledRegex` null and falls
 		// through to the StringTools.replace path further down.
-		final compiledRegex: Null<Array<EReg>> = regexMode ? compileStripRegexes('strip', patterns) : null;
-		if (regexMode && compiledRegex == null) return EXIT_USAGE;
+		final compiledRegex: Null<Array<EReg>> = o.regexMode ? compileStripRegexes('strip', o.patterns) : null;
+		if (o.regexMode && compiledRegex == null) return EXIT_USAGE;
 		// `--per-pattern` constraints: single-file only (the matrix
 		// would be NxM otherwise), incompatible with `--dry-run` (the
 		// dry-run path skips parse entirely so isolation diagnostics
 		// have no PARSE OK/FAIL signal) and `--from-cluster` (the
 		// cluster-mode discovers N files from a recon walk, never one).
-		if (perPattern) {
-			if (dryRun) {
+		if (o.perPattern) {
+			if (o.dryRun) {
 				stderr('apq strip: --per-pattern is incompatible with --dry-run (dry-run skips the parse step)\n');
 				return EXIT_USAGE;
 			}
-			if (fromCluster != null) {
+			if (o.fromCluster != null) {
 				stderr('apq strip: --per-pattern is incompatible with --from-cluster (single-file isolation only)\n');
 				return EXIT_USAGE;
 			}
@@ -3056,127 +2961,43 @@ final class Cli {
 		// fall through into the existing per-file substitution loop.
 		// Conflict guards live here so a bad mix is surfaced before
 		// any FS I/O or plugin call.
+		final fromCluster: Null<String> = o.fromCluster;
 		if (fromCluster != null) {
-			if (files.length > 1) {
-				stderr('apq strip: --from-cluster takes at most one positional (corpus root); got ${files.length} (${files.join(', ')})\n');
+			if (o.files.length > 1) {
+				stderr(
+					'apq strip: --from-cluster takes at most one positional (corpus root); got ${o.files.length} (${o.files.join(', ')})\n'
+				);
 				return EXIT_USAGE;
 			}
-			final discovered: Null<Array<String>> = resolveStripFromCluster(
-				lang, files.length == 1 ? files[0] : null, (fromCluster: String)
-			);
+			final discovered: Null<Array<String>> = resolveStripFromCluster(o.lang, o.files.length == 1 ? o.files[0] : null, fromCluster);
 			if (discovered == null) return EXIT_RUNTIME;
 			// Replace the positional list with the cluster's path list so
 			// the rest of runStrip is mode-agnostic. A non-null `discovered`
 			// is non-empty by construction (any cluster keyed in the map
 			// has at least one path; the no-match path returned null
 			// above), so no zero-length branch needed here.
-			files.resize(0);
-			for (p in (discovered: Array<String>)) files.push(p);
-		} else if (files.length == 0) {
+			o.files.resize(0);
+			for (p in (discovered: Array<String>)) o.files.push(p);
+		} else if (o.files.length == 0) {
 			stderr('apq strip: missing <file> argument (one or more, applies same substitutions to each)\n');
 			printStripUsage();
 			return EXIT_USAGE;
 		}
-		final plugin: GrammarPlugin = pickPlugin(lang);
-		if (perPattern) {
-			if (files.length != 1) {
-				stderr('apq strip: --per-pattern takes exactly one file (got ${files.length})\n');
+		final plugin: GrammarPlugin = pickPlugin(o.lang);
+		if (o.perPattern) {
+			if (o.files.length != 1) {
+				stderr('apq strip: --per-pattern takes exactly one file (got ${o.files.length})\n');
 				return EXIT_USAGE;
 			}
-			if (patterns.length < 2) {
+			if (o.patterns.length < 2) {
 				stderr(
-					'apq strip: --per-pattern requires ≥2 patterns (got ${patterns.length}) — isolation diagnostic only useful when patterns can be tested independently\n'
+					'apq strip: --per-pattern requires ≥2 patterns (got ${o.patterns.length}) — isolation diagnostic only useful when patterns can be tested independently\n'
 				);
 				return EXIT_USAGE;
 			}
-			return runStripPerPattern(plugin, files[0], patterns, replacements, compiledRegex);
+			return runStripPerPattern(plugin, o.files[0], o.patterns, o.replacements, compiledRegex);
 		}
-		final multi: Bool = files.length > 1;
-		var anyFailed: Bool = false;
-		var anyChanged: Bool = false;
-		var passCount: Int = 0;
-		var failCount: Int = 0;
-		// --dry-run: track per-pattern match totals across all files so a
-		// pattern that matched 0 occurrences ANYWHERE surfaces as a typo,
-		// even when other patterns in the same call did match.
-		final patternHits: Array<Int> = dryRun ? [for (_ in 0...patterns.length) 0] : [];
-		// Narrow `Null<Array<EReg>>` to `Array<EReg>` in one place — the
-		// inline `(compiledRegex : Array<EReg>)` cast does not satisfy
-		// strict null safety. Empty fallback keeps the regex-mode-off
-		// branch from indexing it.
-		final regexes: Array<EReg> = compiledRegex ?? [];
-		for (filePath in files) {
-			final source: String = readSourceForParse(filePath);
-			var stripped: String = source;
-			var fileHits: Int = 0;
-			for (idx in 0...patterns.length) {
-				if (dryRun) {
-					final hits: Int = regexMode ? countRegexHits(regexes[idx], stripped) : countOccurrences(stripped, patterns[idx]);
-					patternHits[idx] += hits;
-					fileHits += hits;
-				}
-				stripped = regexMode
-					? regexes[idx].replace(stripped, replacements[idx])
-					: StringTools.replace(stripped, patterns[idx], replacements[idx]);
-			}
-			if (stripped != source) anyChanged = true;
-			if (showSource) {
-				stderr('--- stripped source (${filePath}) ---\n$stripped\n--- end ---\n');
-			}
-			final prefix: String = multi ? '$filePath: ' : '';
-			if (dryRun) {
-				final tag: String = fileHits > 0 ? 'WOULD CHANGE' : 'NO MATCH';
-				sysPrint('${prefix}$tag ($fileHits substitution${plural(fileHits)})\n');
-				continue;
-			}
-			try {
-				plugin.parseFile(stripped);
-				sysPrint('${prefix}PARSE OK\n');
-				passCount++;
-			} catch (e: ParseError) {
-				sysPrint('${prefix}PARSE FAIL: ${e.toString()}\n');
-				failCount++;
-				anyFailed = true;
-			} catch (e: Exception) {
-				sysPrint('${prefix}PARSE FAIL: ${e.message}\n');
-				failCount++;
-				anyFailed = true;
-			}
-		}
-		if (dryRun) {
-			// Per-pattern summary first so a sweep over N files exposes
-			// each pattern's match count individually. Exit non-zero
-			// when ANY supplied pattern matched 0 occurrences — the
-			// guard's whole purpose is to catch a typo even when a
-			// sibling pattern in the same call did match. Use the
-			// global zero case for a stronger error message.
-			var anyZero: Bool = false;
-			for (idx in 0...patterns.length) {
-				final pat: String = patterns[idx];
-				final total: Int = patternHits[idx];
-				if (total == 0) anyZero = true;
-				sysPrint('  pattern[$idx] "$pat" — $total match${total == 1 ? '' : 'es'}\n');
-			}
-			if (!anyChanged) {
-				stderr('apq strip: --dry-run: WARNING: no pattern matched in any file (typo? pattern bytes vs. file bytes mismatch?)\n');
-				return EXIT_RUNTIME;
-			}
-			if (anyZero) {
-				stderr('apq strip: --dry-run: WARNING: one or more patterns matched 0 occurrences — see per-pattern totals above\n');
-				return EXIT_RUNTIME;
-			}
-			return EXIT_OK;
-		}
-		if (!anyChanged) {
-			final scope: String = multi ? 'across all ${files.length} files' : '';
-			stderr(
-				'apq strip: WARNING: no substitution changed the source (patterns matched 0 occurrences${scope == '' ? '' : ' $scope'})\n'
-			);
-		}
-		if (multi) {
-			sysPrint('--- $passCount PARSE OK, $failCount PARSE FAIL (total ${files.length}) ---\n');
-		}
-		return anyFailed ? EXIT_RUNTIME : EXIT_OK;
+		return executeStrip(plugin, o, compiledRegex);
 	}
 
 	/**
@@ -10936,6 +10757,279 @@ final class Cli {
 	}
 
 	/** The plural suffix for a count: `''` for 1, `'s'` otherwise. */
-	private static inline function plural(n: Int): String return plural(n);
+	private static inline function plural(n: Int): String return n == 1 ? '' : 's';
+
+	/** Terminal-case StripOpts: a flag/usage path that the caller returns immediately, ignoring every other field. */
+	private static inline function stripParseExit(code: Int): StripOpts {
+		return {
+			lang: '',
+			showSource: false,
+			dryRun: false,
+			perPattern: false,
+			fromCluster: null,
+			regexMode: false,
+			files: [],
+			patterns: [],
+			replacements: [],
+			errExit: code
+		};
+	}
+
+	/**
+	 * Parse `strip` argv into a StripOpts. A terminal case (`-h`/`--help`
+	 * or any usage error) prints its message and returns with `errExit`
+	 * set; the caller returns that code immediately. The natural end
+	 * returns the full struct with `errExit: null`.
+	 */
+	private static function parseStripArgs(args: Array<String>): StripOpts {
+		var lang: String = 'haxe';
+		var showSource: Bool = false;
+		// --dry-run: skip the parse step, only verify that every supplied
+		// --replace/--delete pattern actually matched at least once in
+		// at least one file. Typo guard for batch strip-sweeps — when
+		// the pattern silently doesn't match, the corpus delta misleads;
+		// a single dry-run pass surfaces the typo before any apply.
+		var dryRun: Bool = false;
+		// --per-pattern: isolation diagnostic for multi-pattern strip on a
+		// single file. Runs the parse N+2 times — baseline (no patterns),
+		// each pattern in isolation, and the combined apply — surfacing
+		// whether each pattern is a sole-blocker, a partial contributor,
+		// or a no-op. Catches the interlocking-blockers trap where a
+		// combined-strip PARSE OK can mask that NO individual pattern
+		// unblocks alone (i.e. the slice requires N separate code
+		// mechanisms, not one). Single-file only — for multi-file sweeps
+		// the matrix would be NxM and the signal is in --dry-run +
+		// per-file PARSE OK/FAIL combinations.
+		var perPattern: Bool = false;
+		// `--from-cluster <key>` switches positional mode: the (single)
+		// positional becomes the corpus root (recon-style, env fallback
+		// to ANYPARSE_HXFORMAT_FORK/test/testcases); the file list is
+		// derived from a recon walk of that root, filtered to the named
+		// cluster. Direct complement to `recon --predict-strip`'s
+		// upper-bound prediction — this is the actual sweep apply.
+		var fromCluster: Null<String> = null;
+		// --regex: treat every --replace / --delete pattern as an EReg
+		// pattern (PCRE-ish, Haxe EReg dialect) instead of a literal
+		// substring. Application path switches to EReg.replace (global)
+		// for substitution and EReg.map for hit counting. The replacement
+		// string keeps its literal semantics — to use a backref, write
+		// e.g. `$1` per EReg.replace docs. Malformed regex is reported at
+		// arg-validation time with EXIT_USAGE before any FS I/O.
+		var regexMode: Bool = false;
+		final files: Array<String> = [];
+		final patterns: Array<String> = [];
+		final replacements: Array<String> = [];
+		var pendingReplace: Null<String> = null;
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--replace':
+					if (pendingReplace != null) {
+						stderr('apq strip: --replace "$pendingReplace" needs a --with before the next --replace\n');
+						return stripParseExit(EXIT_USAGE);
+					}
+					pendingReplace = expectValue(args, ++i, '--replace');
+				case '--with':
+					if (pendingReplace == null) {
+						stderr('apq strip: --with requires a preceding --replace\n');
+						return stripParseExit(EXIT_USAGE);
+					}
+					patterns.push(pendingReplace);
+					replacements.push(expectValue(args, ++i, '--with'));
+					pendingReplace = null;
+				case '--delete':
+					if (pendingReplace != null) {
+						stderr('apq strip: --replace "$pendingReplace" needs a --with before --delete\n');
+						return stripParseExit(EXIT_USAGE);
+					}
+					patterns.push(expectValue(args, ++i, '--delete'));
+					replacements.push('');
+				case '--regex':
+					regexMode = true;
+				case '--show':
+					showSource = true;
+				case '--dry-run':
+					dryRun = true;
+				case '--per-pattern':
+					perPattern = true;
+				case '--from-cluster':
+					fromCluster = expectValue(args, ++i, '--from-cluster');
+				case '-h', '--help':
+					printStripUsage();
+					return stripParseExit(EXIT_OK);
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq strip: unknown option "$a"\n');
+						return stripParseExit(EXIT_USAGE);
+					}
+					files.push(a);
+			}
+			i++;
+		}
+		if (pendingReplace != null) {
+			stderr('apq strip: --replace "$pendingReplace" needs a --with\n');
+			return stripParseExit(EXIT_USAGE);
+		}
+		if (patterns.length == 0) {
+			stderr('apq strip: missing at least one --replace/--with or --delete\n');
+			printStripUsage();
+			return stripParseExit(EXIT_USAGE);
+		}
+		return {
+			lang: lang,
+			showSource: showSource,
+			dryRun: dryRun,
+			perPattern: perPattern,
+			fromCluster: fromCluster,
+			regexMode: regexMode,
+			files: files,
+			patterns: patterns,
+			replacements: replacements,
+			errExit: null
+		};
+	}
+
+	/**
+	 * --dry-run summary: print each pattern's total match count, then
+	 * warn (and return EXIT_RUNTIME) when nothing changed anywhere or
+	 * when any single pattern matched 0 occurrences. EXIT_OK otherwise.
+	 */
+	private static function reportStripDryRun(patterns: Array<String>, patternHits: Array<Int>, anyChanged: Bool): Int {
+		// Per-pattern summary first so a sweep over N files exposes
+		// each pattern's match count individually. Exit non-zero
+		// when ANY supplied pattern matched 0 occurrences — the
+		// guard's whole purpose is to catch a typo even when a
+		// sibling pattern in the same call did match. Use the
+		// global zero case for a stronger error message.
+		var anyZero: Bool = false;
+		for (idx in 0...patterns.length) {
+			final pat: String = patterns[idx];
+			final total: Int = patternHits[idx];
+			if (total == 0) anyZero = true;
+			sysPrint('  pattern[$idx] "$pat" — $total match${total == 1 ? '' : 'es'}\n');
+		}
+		if (!anyChanged) {
+			stderr('apq strip: --dry-run: WARNING: no pattern matched in any file (typo? pattern bytes vs. file bytes mismatch?)\n');
+			return EXIT_RUNTIME;
+		}
+		if (anyZero) {
+			stderr('apq strip: --dry-run: WARNING: one or more patterns matched 0 occurrences — see per-pattern totals above\n');
+			return EXIT_RUNTIME;
+		}
+		return EXIT_OK;
+	}
+
+	/**
+	 * Apply the strip substitutions to every file in `o.files` via
+	 * stripOneFile: dry-run defers to reportStripDryRun; otherwise each
+	 * stripped file is re-parsed and PARSE OK/FAIL reported, with a
+	 * no-change warning and a multi-file summary. EXIT_RUNTIME if any
+	 * file failed to parse, EXIT_OK otherwise.
+	 */
+	private static function executeStrip(plugin: GrammarPlugin, o: StripOpts, compiledRegex: Null<Array<EReg>>): Int {
+		final multi: Bool = o.files.length > 1;
+		var anyFailed: Bool = false;
+		var anyChanged: Bool = false;
+		var passCount: Int = 0;
+		var failCount: Int = 0;
+		// --dry-run: track per-pattern match totals across all files so a
+		// pattern that matched 0 occurrences ANYWHERE surfaces as a typo,
+		// even when other patterns in the same call did match.
+		final patternHits: Array<Int> = o.dryRun ? [for (_ in 0...o.patterns.length) 0] : [];
+		// Narrow `Null<Array<EReg>>` to `Array<EReg>` in one place — the
+		// inline `(compiledRegex : Array<EReg>)` cast does not satisfy
+		// strict null safety. Empty fallback keeps the regex-mode-off
+		// branch from indexing it.
+		final regexes: Array<EReg> = compiledRegex ?? [];
+		for (filePath in o.files) {
+			final result: { changed: Bool, status: Int } = stripOneFile(plugin, o, regexes, filePath, multi, patternHits);
+			if (result.changed) anyChanged = true;
+			switch result.status {
+				case 0:
+					passCount++;
+				case 1:
+					failCount++;
+					anyFailed = true;
+				case _:
+			}
+		}
+		if (o.dryRun) return reportStripDryRun(o.patterns, patternHits, anyChanged);
+		if (!anyChanged) {
+			final scope: String = multi ? 'across all ${o.files.length} files' : '';
+			stderr(
+				'apq strip: WARNING: no substitution changed the source (patterns matched 0 occurrences${scope == '' ? '' : ' $scope'})\n'
+			);
+		}
+		if (multi) {
+			sysPrint('--- $passCount PARSE OK, $failCount PARSE FAIL (total ${o.files.length}) ---\n');
+		}
+		return anyFailed ? EXIT_RUNTIME : EXIT_OK;
+	}
+
+	/**
+	 * Apply every substitution to one file and report it: in dry-run,
+	 * accumulate per-pattern hits into `patternHits` and print the
+	 * WOULD CHANGE / NO MATCH line; otherwise re-parse the stripped
+	 * source and print PARSE OK / PARSE FAIL. Returns whether the file
+	 * changed and a status (-1 dry-run, 0 parse ok, 1 parse fail).
+	 */
+	private static function stripOneFile(
+		plugin: GrammarPlugin, o: StripOpts, regexes: Array<EReg>, filePath: String, multi: Bool, patternHits: Array<Int>
+	): { changed: Bool, status: Int } {
+		final source: String = readSourceForParse(filePath);
+		var stripped: String = source;
+		var fileHits: Int = 0;
+		for (idx in 0...o.patterns.length) {
+			if (o.dryRun) {
+				final hits: Int = o.regexMode ? countRegexHits(regexes[idx], stripped) : countOccurrences(stripped, o.patterns[idx]);
+				patternHits[idx] += hits;
+				fileHits += hits;
+			}
+			stripped = o.regexMode
+				? regexes[idx].replace(stripped, o.replacements[idx])
+				: StringTools.replace(stripped, o.patterns[idx], o.replacements[idx]);
+		}
+		final changed: Bool = stripped != source;
+		if (o.showSource) {
+			stderr('--- stripped source (${filePath}) ---\n$stripped\n--- end ---\n');
+		}
+		final prefix: String = multi ? '$filePath: ' : '';
+		if (o.dryRun) {
+			final tag: String = fileHits > 0 ? 'WOULD CHANGE' : 'NO MATCH';
+			sysPrint('${prefix}$tag ($fileHits substitution${plural(fileHits)})\n');
+			return { changed: changed, status: -1 };
+		}
+		try {
+			plugin.parseFile(stripped);
+			sysPrint('${prefix}PARSE OK\n');
+			return { changed: changed, status: 0 };
+		} catch (e: ParseError) {
+			sysPrint('${prefix}PARSE FAIL: ${e.toString()}\n');
+			return { changed: changed, status: 1 };
+		} catch (e: Exception) {
+			sysPrint('${prefix}PARSE FAIL: ${e.message}\n');
+			return { changed: changed, status: 1 };
+		}
+	}
 
 }
+
+@:nullSafety(Strict)
+typedef StripOpts = {
+	var lang: String;
+	var showSource: Bool;
+	var dryRun: Bool;
+	var perPattern: Bool;
+	var fromCluster: Null<String>;
+	var regexMode: Bool;
+	var files: Array<String>;
+	var patterns: Array<String>;
+	var replacements: Array<String>;
+	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
+	// the caller returns this immediately and ignores the rest of the struct.
+	var errExit: Null<Int>;
+};
