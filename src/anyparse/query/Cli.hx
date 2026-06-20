@@ -4772,160 +4772,12 @@ final class Cli {
 	}
 
 	private static function runAst(args: Array<String>): Int {
-		var lang: String = 'haxe';
-		var json: Bool = false;
-		var depth: Int = -1;
-		var selectExpr: Null<String> = null;
-		var atExpr: Null<String> = null;
-		var wantDoc: Bool = false;
-		var wantSource: Bool = false;
-		var writerOutput: Bool = false;
-		var writerOutputPlain: Bool = false;
-		var writerDiff: Bool = false;
-		var minChildren: Int = -1;
-		var maxChildren: Int = -1;
-		var childrenLimit: Int = -1;
-		var spans: Bool = false;
-		var countOnly: Bool = false;
-		var file: Null<String> = null;
-		// Inline source (`apq probe '<code>'` → `--code <s>`) or stdin
-		// (`apq ast --stdin`) bypass the file read for micro-probes
-		// without a /tmp scratch file. Mutually exclusive with each
-		// other and with a file argument; checked after arg parsing.
-		var codeArg: Null<String> = null;
-		var stdinFlag: Bool = false;
-
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
-				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
-				case '--json':
-					json = true;
-				case '--depth':
-					// Depth is counted from the DISPLAYED ROOT, not from the
-					// module: with `--select` / `--at`, the root is the
-					// matched node (or each matched node, when --select
-					// returns several); without either, the root is the
-					// full module. So `--depth 0` always means "print just
-					// the root, no children" regardless of mode. The three
-					// `Engine.truncate` callsites below pass the right
-					// subtree-root in each branch.
-					final v: String = expectValue(args, ++i, '--depth');
-					final parsed: Null<Int> = Std.parseInt(v);
-					if (parsed == null) {
-						stderr('apq ast: --depth expects an integer, got "$v"\n');
-						return EXIT_USAGE;
-					}
-					depth = parsed;
-				case '--select':
-					selectExpr = expectValue(args, ++i, '--select');
-				case '--at':
-					atExpr = expectValue(args, ++i, '--at');
-				case '--doc':
-					wantDoc = true;
-				case '--source':
-					wantSource = true;
-				case '--writer-output':
-					writerOutput = true;
-				case '--writer-output-plain':
-					writerOutput = true;
-					writerOutputPlain = true;
-				case '--diff':
-					writerDiff = true;
-				case '--min-children':
-					final v: String = expectValue(args, ++i, '--min-children');
-					final parsed: Null<Int> = Std.parseInt(v);
-					if (parsed == null || parsed < 0) {
-						stderr('apq ast: --min-children expects a non-negative integer, got "$v"\n');
-						return EXIT_USAGE;
-					}
-					minChildren = parsed;
-				case '--max-children':
-					final v: String = expectValue(args, ++i, '--max-children');
-					final parsed: Null<Int> = Std.parseInt(v);
-					if (parsed == null || parsed < 0) {
-						stderr('apq ast: --max-children expects a non-negative integer, got "$v"\n');
-						return EXIT_USAGE;
-					}
-					maxChildren = parsed;
-				case '--children-limit':
-					// Cap direct-child count per node in the rendered output
-					// (different beast from --max-children: that one FILTERS
-					// matches by arity, this one TRUNCATES the printed tree
-					// horizontally with an `(... N more)` sentinel). Composes
-					// with --depth N for "first N children up to depth M".
-					final v: String = expectValue(args, ++i, '--children-limit');
-					final parsed: Null<Int> = Std.parseInt(v);
-					if (parsed == null || parsed < 0) {
-						stderr('apq ast: --children-limit expects a non-negative integer, got "$v"\n');
-						return EXIT_USAGE;
-					}
-					childrenLimit = parsed;
-				case '--code':
-					codeArg = expectValue(args, ++i, '--code');
-				case '--stdin':
-					stdinFlag = true;
-				case '--spans':
-					// Append `@from-to` byte-range annotation to every
-					// rendered node — same-span duplicates (e.g. parser bug
-					// emitting two nodes at the same source position) become
-					// a trivial visual signal in the S-expr output. Slice 36's
-					// `^A|B` regex bug produced `(Ternary (FloatLit 1. @4-6)
-					// (FloatLit 1. @4-6) (FloatLit 2. @11-13))` — two
-					// FloatLits at the same span ⇒ mid-buffer match
-					// overwrote an earlier ident. Plain `(no-spans)` form
-					// stays default to keep transcripts compact.
-					spans = true;
-				case '--count':
-					// ω-ast-count: print just the integer direct-child count
-					// at the displayed root (the module by default; each
-					// matched node when paired with `--select`). Composes
-					// with `--select` — one line per match. Skips writer-
-					// output / json / spans / doc / source rendering; only
-					// the count is emitted. Replaces hand-counting members
-					// when sanity-checking a corpus-driver test assertion.
-					countOnly = true;
-				case '-h', '--help':
-					printAstUsage();
-					return EXIT_OK;
-				case _:
-					if (StringTools.startsWith(a, '--')) {
-						stderr('apq ast: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
-					if (file != null) {
-						// `apq ast <TypeName> <dir>` is a common miss — `ast` is single-
-						// file, while `<TypeName> <dir>` is the refs/uses/meta surface.
-						// Detect the shape (first arg looks like a TypeName, second arg
-						// is an existing directory or .hx file) and route the user.
-						final maybeTypeArg: String = file;
-						final maybeDirArg: String = a;
-						if (looksLikeTypeName(maybeTypeArg) && looksLikePath(maybeDirArg))
-							stderr(
-								'apq ast: only one file argument supported (got "$maybeTypeArg" and "$maybeDirArg").\n'
-								+ '         "$maybeTypeArg" looks like a TypeName and "$maybeDirArg" like a path — `ast` is single-file.\n'
-								+ '         For type lookup across a directory:\n'
-								+ '           apq refs $maybeTypeArg $maybeDirArg --decls    # value bindings + decl site\n'
-								+ '           apq uses $maybeTypeArg $maybeDirArg            # type-position consumers\n'
-								+ '           apq blast $maybeTypeArg $maybeDirArg           # full change-impact (uses + refs + field-access)\n'
-								+ '           apq meta @:peg $maybeDirArg                    # all PEG decls in scope\n'
-								+ '         For a subtree of one file:\n'
-								+ '           apq ast <path-to-file.hx> --select Kind:$maybeTypeArg\n'
-							);
-						else
-							stderr('apq ast: only one file argument supported (got "$file" and "$a")\n');
-						return EXIT_USAGE;
-					}
-					file = a;
-			}
-			i++;
-		}
+		final o: AstOpts = parseAstArgs(args);
+		if (o.errExit != null) return o.errExit;
 
 		// Source resolution: --code wins, then --stdin, then the file arg.
 		// Exactly one of the three must be set.
-		final sourceProvidersSet: Int = (codeArg != null ? 1 : 0) + (stdinFlag ? 1 : 0) + (file != null ? 1 : 0);
+		final sourceProvidersSet: Int = (o.codeArg != null ? 1 : 0) + (o.stdinFlag ? 1 : 0) + (o.file != null ? 1 : 0);
 		if (sourceProvidersSet == 0) {
 			stderr('apq ast: missing <file>, --code <s>, or --stdin\n');
 			printAstUsage();
@@ -4935,13 +4787,29 @@ final class Cli {
 			stderr('apq ast: <file>, --code, and --stdin are mutually exclusive\n');
 			return EXIT_USAGE;
 		}
-		final plugin: GrammarPlugin = pickPlugin(lang);
-		final source: String = codeArg != null ? (codeArg: String) : stdinFlag ? readStdin() : readSourceForParse((file: String));
-		// File label drives error / hit-location prefixes — keep it
-		// non-null for downstream renderers; <probe> / <stdin> are
-		// distinct so a `probe` call still looks like a probe in
-		// emitted diff headers and errors.
-		final fileLabel: String = codeArg != null ? '<probe>' : stdinFlag ? '<stdin>' : (file: String);
+		final plugin: GrammarPlugin = pickPlugin(o.lang);
+		// Capture nullable struct fields into locals so Strict narrows them;
+		// the source/label resolution then branches once and narrows `file`
+		// in its own arm. File label drives error / hit-location prefixes —
+		// <probe> / <stdin> are distinct so a `probe` call still looks like a
+		// probe in emitted diff headers and errors. The trailing throw is the
+		// provably-unreachable arm (the mutex above proved exactly one set);
+		// `var` is required because the value is assigned per-branch.
+		final codeArg: Null<String> = o.codeArg;
+		final file: Null<String> = o.file;
+		var source: String;
+		var fileLabel: String;
+		if (codeArg != null) {
+			source = codeArg;
+			fileLabel = '<probe>';
+		} else if (o.stdinFlag) {
+			source = readStdin();
+			fileLabel = '<stdin>';
+		} else if (file != null) {
+			source = readSourceForParse(file);
+			fileLabel = file;
+		} else
+			throw new Exception('apq ast: no source provider after mutex check (unreachable)');
 
 		// `--writer-output`: parse + format-write through the plugin's
 		// round-trip pipeline. Independent of --select / --at / --json /
@@ -4955,53 +4823,8 @@ final class Cli {
 		// added / removed / reshaped in one shot, without a second `hxq diff`
 		// call. Exit non-zero when the writer output fails to re-parse
 		// (writer produced syntactically broken Haxe).
-		if (writerOutput) {
-			// `.hxtest` section-1 (writer config JSON) auto-applies for
-			// the file-path mode — drives `HxModuleWriteOptions` via
-			// `HaxeFormatConfigLoader` so a fixture reproduces the corpus
-			// harness's writer settings in a single command. `--code` /
-			// `--stdin` modes have no path → defaults stay.
-			final optsJson: Null<String> = file != null ? readWriteOptionsJsonOrNull((file: String)) : null;
-			final emitted: Null<String> = try (writerOutputPlain
-				? plugin.writeRoundTripPlain(source, optsJson)
-				: plugin.writeRoundTrip(source, optsJson)) catch (e: ParseError) {
-				stderr('apq ast: $fileLabel: ${e.toString()}\n');
-				return EXIT_RUNTIME;
-			} catch (e: Exception) {
-				stderr('apq ast: $fileLabel: ${e.message}\n');
-				return EXIT_RUNTIME;
-			}
-			if (emitted == null) {
-				final flagName: String = writerOutputPlain ? '--writer-output-plain' : '--writer-output';
-				stderr('apq ast: $flagName: no writer wired up for lang "$lang"\n');
-				return EXIT_USAGE;
-			}
-			if (!writerDiff) {
-				sysPrint(emitted);
-				return EXIT_OK;
-			}
-			final emittedSrc: String = emitted;
-			final treeIn: QueryNode = try plugin.parseFile(source) catch (e: ParseError) {
-				stderr('apq ast: --writer-output --diff: input $fileLabel: ${e.toString()}\n');
-				return EXIT_RUNTIME;
-			} catch (e: Exception) {
-				stderr('apq ast: --writer-output --diff: input $fileLabel: ${e.message}\n');
-				return EXIT_RUNTIME;
-			}
-			final treeOut: QueryNode = try plugin.parseFile(emittedSrc) catch (e: ParseError) {
-				stderr('apq ast: --writer-output --diff: writer output failed to re-parse: ${e.toString()}\n');
-				stderr('--- writer output ---\n$emittedSrc\n--- end ---\n');
-				return EXIT_RUNTIME;
-			} catch (e: Exception) {
-				stderr('apq ast: --writer-output --diff: writer output failed to re-parse: ${e.message}\n');
-				stderr('--- writer output ---\n$emittedSrc\n--- end ---\n');
-				return EXIT_RUNTIME;
-			}
-			final hits: Array<DiffHit> = Diff.diff(treeIn, treeOut);
-			sysPrint(Diff.render(fileLabel, source, '<writer-output>', emittedSrc, hits, false));
-			return EXIT_OK;
-		}
-		if (writerDiff) {
+		if (o.writerOutput) return runAstWriterOutput(plugin, source, file, fileLabel, o.lang, o.writerOutputPlain, o.writerDiff);
+		if (o.writerDiff) {
 			stderr('apq ast: --diff requires --writer-output (it diffs input vs writer-emitted output)\n');
 			return EXIT_USAGE;
 		}
@@ -5014,119 +4837,18 @@ final class Cli {
 			return EXIT_RUNTIME;
 		}
 
-		if (atExpr != null) {
-			final colonIdx: Int = atExpr.indexOf(':');
-			if (colonIdx < 0) {
-				stderr('apq ast: --at expects LINE:COL, got "$atExpr"\n');
-				return EXIT_USAGE;
-			}
-			final atLine: Null<Int> = Std.parseInt(atExpr.substring(0, colonIdx));
-			final atCol: Null<Int> = Std.parseInt(atExpr.substring(colonIdx + 1));
-			if (atLine == null || atCol == null) {
-				stderr('apq ast: --at expects integer LINE:COL, got "$atExpr"\n');
-				return EXIT_USAGE;
-			}
-			// Capture into non-null locals immediately after the null
-			// check — Strict narrows locals, not the Null<Int> bindings,
-			// and `Span.offsetOf` takes plain Int.
-			final atLineN: Int = atLine;
-			final atColN: Int = atCol;
-			if (atLineN < 1 || atColN < 1) {
-				stderr('apq ast: --at expects 1-indexed LINE:COL, got "$atExpr"\n');
-				return EXIT_USAGE;
-			}
-			final offset: Int = Span.offsetOf(source, atLineN, atColN);
-			final node: Null<QueryNode> = Engine.at(tree, offset);
-			if (countOnly) {
-				if (node != null) sysPrint('${node.children.length}\n');
-				return EXIT_OK;
-			}
-			final matches: Array<QueryNode> = node == null ? [] : [shapeAstOutput(node, depth, childrenLimit)];
-			sysPrint(
-				json
-					? Json.renderMatches(fileLabel, source, matches, wantDoc, wantSource)
-					: Text.renderMatches(matches, source, wantDoc, wantSource, spans)
-			);
-			return EXIT_OK;
-		}
+		final atExpr: Null<String> = o.atExpr;
+		if (atExpr != null) return runAstAt(o, atExpr, tree, source, fileLabel);
 
-		if (selectExpr != null) {
-			final selector: Selector = Selector.parse(selectExpr);
-			// Pass the grammar's kind-equivalence so `--select ClassDecl` /
-			// `--select FnMember` also match `final class` / `final function`
-			// (the `final`-wrapper shapes ClassForm / FinalModifiedMember).
-			final preFilter: Array<QueryNode> = Engine.select(tree, selector, plugin.selectKindEquivalence());
-			// ω-ast-child-count-filter: post-filter on direct-child count so
-			// "find all multi-arg ParamCtor ctors" is one query. The selector
-			// grammar (`Kind` / `Kind:name` / `Kind > Child`) is deliberately
-			// minimal and stays that way — arity is a numeric predicate, not
-			// a structural one, and lives on the CLI instead of the path.
-			final raw: Array<QueryNode> = (minChildren < 0 && maxChildren < 0)
-				? preFilter
-				: [
-					for (m in preFilter)
-						if ((
-							minChildren < 0 || m.children.length >= minChildren
-						) && (maxChildren < 0 || m.children.length <= maxChildren)) m
-				];
-			if (raw.length == 0) {
-				// Empty `--select` is indistinguishable from "wrong kind
-				// name". Kinds are the exact node-constructor names and the
-				// engine never enumerates them — so list the kinds actually
-				// present in this file, turning a silent miss into a
-				// self-correcting hint (no global kind table needed).
-				final present: Array<String> = collectKinds(tree);
-				final filterParts: Array<String> = [];
-				if (minChildren >= 0) filterParts.push('--min-children=$minChildren');
-				if (maxChildren >= 0) filterParts.push('--max-children=$maxChildren');
-				if (preFilter.length > 0) filterParts.push('${preFilter.length} pre-filter match(es) dropped by child-count');
-				final filterNote: String = filterParts.length == 0 ? '' : ' (with ${filterParts.join(', ')})';
-				// Kind-fuzzy "did you mean" — surface the closest match in
-				// `present` for the first kind segment of `selectExpr`
-				// (split on `>`, `:`, whitespace). Same `findFuzzy`
-				// substring+Levenshtein two-tier shape as refs/uses on a
-				// 0-hit name, so a typo like `--select ParamCtorr` →
-				// `Did you mean: ParamCtor?` without re-reading the long
-				// `Kinds present here:` list. Silent when nothing close.
-				final firstKind: String = extractFirstKindToken(selectExpr);
-				final presentMap: Map<String, Bool> = [for (k in present) k => true];
-				final suggestions: Array<String> = firstKind.length > 0 ? findFuzzy(firstKind, presentMap) : [];
-				final fuzzyLine: String = suggestions.length > 0 ? ' Did you mean: ${suggestions.join(', ')}?' : '';
-				// Cross-project hint: when the first kind token starts uppercase
-				// (TypeName-shaped — e.g. `HxCatchClause`, `HxModule`), the user
-				// is likely hunting a decl that lives in OTHER files. `ast` is
-				// single-file by design; point them at the multi-file walkers
-				// (`refs --decls` / `uses` / `blast`) that DO recurse a dir.
-				// Silent when the token is lowercase (field-shaped) or empty.
-				final crossProjectHint: String = firstKind.length > 0 && StringTools.fastCodeAt(firstKind, 0) >= 'A'.code
-					&& StringTools.fastCodeAt(firstKind, 0) <= 'Z'.code
-					? ' If "$firstKind" is a TypeName declared elsewhere, ast is single-file; try apq refs $firstKind src/ --decls (declaration sites), apq uses $firstKind src/ (type positions), or apq blast $firstKind src/ (full change-impact).'
-					: '';
-				stderr(
-					'apq ast: --select "$selectExpr"$filterNote matched no nodes in $fileLabel. '
-					+ 'Kinds present here: ${present.join(', ')}.$fuzzyLine$crossProjectHint '
-					+ 'Kinds are exact node-constructor names — run `apq ast $fileLabel` to see the tree.\n'
-				);
-			}
-			if (countOnly) {
-				for (m in raw) sysPrint('${m.children.length}\n');
-				return EXIT_OK;
-			}
-			final matches: Array<QueryNode> = [for (m in raw) shapeAstOutput(m, depth, childrenLimit)];
-			sysPrint(
-				json
-					? Json.renderMatches(fileLabel, source, matches, wantDoc, wantSource)
-					: Text.renderMatches(matches, source, wantDoc, wantSource, spans)
-			);
-			return EXIT_OK;
-		}
+		final selectExpr: Null<String> = o.selectExpr;
+		if (selectExpr != null) return runAstSelect(o, selectExpr, tree, source, fileLabel, plugin);
 
-		if (countOnly) {
+		if (o.countOnly) {
 			sysPrint('${tree.children.length}\n');
 			return EXIT_OK;
 		}
-		final shaped: QueryNode = shapeAstOutput(tree, depth, childrenLimit);
-		sysPrint(json ? Json.renderTree(fileLabel, source, shaped) : Text.render(shaped, spans));
+		final shaped: QueryNode = shapeAstOutput(tree, o.depth, o.childrenLimit);
+		sysPrint(o.json ? Json.renderTree(fileLabel, source, shaped) : Text.render(shaped, o.spans));
 		return EXIT_OK;
 	}
 
@@ -11131,6 +10853,407 @@ final class Cli {
 		return null;
 	}
 
+	/** Terminal-case AstOpts: a flag/usage path that the caller returns immediately, ignoring every other field. */
+	private static inline function astParseExit(code: Int): AstOpts {
+		return {
+			lang: '',
+			json: false,
+			depth: -1,
+			selectExpr: null,
+			atExpr: null,
+			wantDoc: false,
+			wantSource: false,
+			writerOutput: false,
+			writerOutputPlain: false,
+			writerDiff: false,
+			minChildren: -1,
+			maxChildren: -1,
+			childrenLimit: -1,
+			spans: false,
+			countOnly: false,
+			file: null,
+			codeArg: null,
+			stdinFlag: false,
+			errExit: code
+		};
+	}
+
+	/**
+	 * Report the `apq ast` "two positional arguments" usage error. Detects
+	 * the `apq ast <TypeName> <dir>` miss — `ast` is single-file, while
+	 * `<TypeName> <dir>` is the refs/uses/meta surface — and routes the user
+	 * to the right multi-file walker; otherwise prints the plain message.
+	 */
+	private static function reportAstTwoFilesError(file: String, a: String): Void {
+		// `apq ast <TypeName> <dir>` is a common miss — `ast` is single-
+		// file, while `<TypeName> <dir>` is the refs/uses/meta surface.
+		// Detect the shape (first arg looks like a TypeName, second arg
+		// is an existing directory or .hx file) and route the user.
+		final maybeTypeArg: String = file;
+		final maybeDirArg: String = a;
+		if (looksLikeTypeName(maybeTypeArg) && looksLikePath(maybeDirArg))
+			stderr(
+				'apq ast: only one file argument supported (got "$maybeTypeArg" and "$maybeDirArg").\n'
+				+ '         "$maybeTypeArg" looks like a TypeName and "$maybeDirArg" like a path — `ast` is single-file.\n'
+				+ '         For type lookup across a directory:\n'
+				+ '           apq refs $maybeTypeArg $maybeDirArg --decls    # value bindings + decl site\n'
+				+ '           apq uses $maybeTypeArg $maybeDirArg            # type-position consumers\n'
+				+ '           apq blast $maybeTypeArg $maybeDirArg           # full change-impact (uses + refs + field-access)\n'
+				+ '           apq meta @:peg $maybeDirArg                    # all PEG decls in scope\n'
+				+ '         For a subtree of one file:\n' + '           apq ast <path-to-file.hx> --select Kind:$maybeTypeArg\n'
+			);
+		else
+			stderr('apq ast: only one file argument supported (got "$file" and "$a")\n');
+	}
+
+	/**
+	 * Parse `ast` argv into an AstOpts. A terminal case (`-h`/`--help` or any
+	 * usage error) prints its message and returns with `errExit` set; the
+	 * caller returns that code immediately. The natural end returns the full
+	 * struct with `errExit: null`. The source-provider mutex and source
+	 * resolution stay in the caller (they depend on FS/stdin I/O).
+	 */
+	private static function parseAstArgs(args: Array<String>): AstOpts {
+		var lang: String = 'haxe';
+		var json: Bool = false;
+		var depth: Int = -1;
+		var selectExpr: Null<String> = null;
+		var atExpr: Null<String> = null;
+		var wantDoc: Bool = false;
+		var wantSource: Bool = false;
+		var writerOutput: Bool = false;
+		var writerOutputPlain: Bool = false;
+		var writerDiff: Bool = false;
+		var minChildren: Int = -1;
+		var maxChildren: Int = -1;
+		var childrenLimit: Int = -1;
+		var spans: Bool = false;
+		var countOnly: Bool = false;
+		var file: Null<String> = null;
+		// Inline source (`apq probe '<code>'` -> `--code <s>`) or stdin
+		// (`apq ast --stdin`) bypass the file read for micro-probes
+		// without a /tmp scratch file. Mutually exclusive with each
+		// other and with a file argument; checked after arg parsing.
+		var codeArg: Null<String> = null;
+		var stdinFlag: Bool = false;
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--json':
+					json = true;
+				case '--depth':
+					// Depth is counted from the DISPLAYED ROOT, not from the
+					// module: with `--select` / `--at`, the root is the
+					// matched node (or each matched node, when --select
+					// returns several); without either, the root is the
+					// full module. So `--depth 0` always means "print just
+					// the root, no children" regardless of mode. The three
+					// `Engine.truncate` callsites below pass the right
+					// subtree-root in each branch.
+					final v: String = expectValue(args, ++i, '--depth');
+					final parsed: Null<Int> = Std.parseInt(v);
+					if (parsed == null) {
+						stderr('apq ast: --depth expects an integer, got "$v"\n');
+						return astParseExit(EXIT_USAGE);
+					}
+					depth = parsed;
+				case '--select':
+					selectExpr = expectValue(args, ++i, '--select');
+				case '--at':
+					atExpr = expectValue(args, ++i, '--at');
+				case '--doc':
+					wantDoc = true;
+				case '--source':
+					wantSource = true;
+				case '--writer-output':
+					writerOutput = true;
+				case '--writer-output-plain':
+					writerOutput = true;
+					writerOutputPlain = true;
+				case '--diff':
+					writerDiff = true;
+				case '--min-children':
+					final v: String = expectValue(args, ++i, '--min-children');
+					final parsed: Null<Int> = Std.parseInt(v);
+					if (parsed == null || parsed < 0) {
+						stderr('apq ast: --min-children expects a non-negative integer, got "$v"\n');
+						return astParseExit(EXIT_USAGE);
+					}
+					minChildren = parsed;
+				case '--max-children':
+					final v: String = expectValue(args, ++i, '--max-children');
+					final parsed: Null<Int> = Std.parseInt(v);
+					if (parsed == null || parsed < 0) {
+						stderr('apq ast: --max-children expects a non-negative integer, got "$v"\n');
+						return astParseExit(EXIT_USAGE);
+					}
+					maxChildren = parsed;
+				case '--children-limit':
+					// Cap direct-child count per node in the rendered output
+					// (different beast from --max-children: that one FILTERS
+					// matches by arity, this one TRUNCATES the printed tree
+					// horizontally with an `(... N more)` sentinel). Composes
+					// with --depth N for "first N children up to depth M".
+					final v: String = expectValue(args, ++i, '--children-limit');
+					final parsed: Null<Int> = Std.parseInt(v);
+					if (parsed == null || parsed < 0) {
+						stderr('apq ast: --children-limit expects a non-negative integer, got "$v"\n');
+						return astParseExit(EXIT_USAGE);
+					}
+					childrenLimit = parsed;
+				case '--code':
+					codeArg = expectValue(args, ++i, '--code');
+				case '--stdin':
+					stdinFlag = true;
+				case '--spans':
+					// Append `@from-to` byte-range annotation to every
+					// rendered node — same-span duplicates (e.g. parser bug
+					// emitting two nodes at the same source position) become
+					// a trivial visual signal in the S-expr output. Slice 36's
+					// `^A|B` regex bug produced `(Ternary (FloatLit 1. @4-6)
+					// (FloatLit 1. @4-6) (FloatLit 2. @11-13))` — two
+					// FloatLits at the same span ⇒ mid-buffer match
+					// overwrote an earlier ident. Plain `(no-spans)` form
+					// stays default to keep transcripts compact.
+					spans = true;
+				case '--count':
+					// ω-ast-count: print just the integer direct-child count
+					// at the displayed root (the module by default; each
+					// matched node when paired with `--select`). Composes
+					// with `--select` — one line per match. Skips writer-
+					// output / json / spans / doc / source rendering; only
+					// the count is emitted. Replaces hand-counting members
+					// when sanity-checking a corpus-driver test assertion.
+					countOnly = true;
+				case '-h', '--help':
+					printAstUsage();
+					return astParseExit(EXIT_OK);
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq ast: unknown option "$a"\n');
+						return astParseExit(EXIT_USAGE);
+					}
+					if (file != null) {
+						reportAstTwoFilesError(file, a);
+						return astParseExit(EXIT_USAGE);
+					}
+					file = a;
+			}
+			i++;
+		}
+
+		return {
+			lang: lang,
+			json: json,
+			depth: depth,
+			selectExpr: selectExpr,
+			atExpr: atExpr,
+			wantDoc: wantDoc,
+			wantSource: wantSource,
+			writerOutput: writerOutput,
+			writerOutputPlain: writerOutputPlain,
+			writerDiff: writerDiff,
+			minChildren: minChildren,
+			maxChildren: maxChildren,
+			childrenLimit: childrenLimit,
+			spans: spans,
+			countOnly: countOnly,
+			file: file,
+			codeArg: codeArg,
+			stdinFlag: stdinFlag,
+			errExit: null
+		};
+	}
+
+	/**
+	 * `--writer-output`: parse + format-write through the plugin's round-trip
+	 * pipeline, then either print the emitted source or (with `--diff`)
+	 * structurally AST-diff the parsed input against the re-parsed output.
+	 * Independent of --select / --at / --json / --depth / --doc / --source.
+	 * Returns the process exit code.
+	 */
+	private static function runAstWriterOutput(
+		plugin: GrammarPlugin, source: String, file: Null<String>, fileLabel: String, lang: String, writerOutputPlain: Bool,
+		writerDiff: Bool
+	): Int {
+		// `.hxtest` section-1 (writer config JSON) auto-applies for
+		// the file-path mode — drives `HxModuleWriteOptions` via
+		// `HaxeFormatConfigLoader` so a fixture reproduces the corpus
+		// harness's writer settings in a single command. `--code` /
+		// `--stdin` modes have no path → defaults stay.
+		final optsJson: Null<String> = file != null ? readWriteOptionsJsonOrNull((file: String)) : null;
+		final emitted: Null<String> = try (writerOutputPlain
+			? plugin.writeRoundTripPlain(source, optsJson)
+			: plugin.writeRoundTrip(source, optsJson)) catch (e: ParseError) {
+			stderr('apq ast: $fileLabel: ${e.toString()}\n');
+			return EXIT_RUNTIME;
+		} catch (e: Exception) {
+			stderr('apq ast: $fileLabel: ${e.message}\n');
+			return EXIT_RUNTIME;
+		}
+		if (emitted == null) {
+			final flagName: String = writerOutputPlain ? '--writer-output-plain' : '--writer-output';
+			stderr('apq ast: $flagName: no writer wired up for lang "$lang"\n');
+			return EXIT_USAGE;
+		}
+		if (!writerDiff) {
+			sysPrint(emitted);
+			return EXIT_OK;
+		}
+		final emittedSrc: String = emitted;
+		final treeIn: QueryNode = try plugin.parseFile(source) catch (e: ParseError) {
+			stderr('apq ast: --writer-output --diff: input $fileLabel: ${e.toString()}\n');
+			return EXIT_RUNTIME;
+		} catch (e: Exception) {
+			stderr('apq ast: --writer-output --diff: input $fileLabel: ${e.message}\n');
+			return EXIT_RUNTIME;
+		}
+		final treeOut: QueryNode = try plugin.parseFile(emittedSrc) catch (e: ParseError) {
+			stderr('apq ast: --writer-output --diff: writer output failed to re-parse: ${e.toString()}\n');
+			stderr('--- writer output ---\n$emittedSrc\n--- end ---\n');
+			return EXIT_RUNTIME;
+		} catch (e: Exception) {
+			stderr('apq ast: --writer-output --diff: writer output failed to re-parse: ${e.message}\n');
+			stderr('--- writer output ---\n$emittedSrc\n--- end ---\n');
+			return EXIT_RUNTIME;
+		}
+		final hits: Array<DiffHit> = Diff.diff(treeIn, treeOut);
+		sysPrint(Diff.render(fileLabel, source, '<writer-output>', emittedSrc, hits, false));
+		return EXIT_OK;
+	}
+
+	/**
+	 * `--at LINE:COL`: locate the innermost spanned node at the cursor and
+	 * render it (or, with `--count`, print its direct-child count). Returns
+	 * the process exit code.
+	 */
+	private static function runAstAt(o: AstOpts, atExpr: String, tree: QueryNode, source: String, fileLabel: String): Int {
+		final colonIdx: Int = atExpr.indexOf(':');
+		if (colonIdx < 0) {
+			stderr('apq ast: --at expects LINE:COL, got "$atExpr"\n');
+			return EXIT_USAGE;
+		}
+		final atLine: Null<Int> = Std.parseInt(atExpr.substring(0, colonIdx));
+		final atCol: Null<Int> = Std.parseInt(atExpr.substring(colonIdx + 1));
+		if (atLine == null || atCol == null) {
+			stderr('apq ast: --at expects integer LINE:COL, got "$atExpr"\n');
+			return EXIT_USAGE;
+		}
+		// Capture into non-null locals immediately after the null
+		// check — Strict narrows locals, not the Null<Int> bindings,
+		// and `Span.offsetOf` takes plain Int.
+		final atLineN: Int = atLine;
+		final atColN: Int = atCol;
+		if (atLineN < 1 || atColN < 1) {
+			stderr('apq ast: --at expects 1-indexed LINE:COL, got "$atExpr"\n');
+			return EXIT_USAGE;
+		}
+		final offset: Int = Span.offsetOf(source, atLineN, atColN);
+		final node: Null<QueryNode> = Engine.at(tree, offset);
+		if (o.countOnly) {
+			if (node != null) sysPrint('${node.children.length}\n');
+			return EXIT_OK;
+		}
+		final matches: Array<QueryNode> = node == null ? [] : [shapeAstOutput(node, o.depth, o.childrenLimit)];
+		sysPrint(
+			o.json
+				? Json.renderMatches(fileLabel, source, matches, o.wantDoc, o.wantSource)
+				: Text.renderMatches(matches, source, o.wantDoc, o.wantSource, o.spans)
+		);
+		return EXIT_OK;
+	}
+
+	/**
+	 * `--select` matched nothing: emit a self-correcting hint listing the
+	 * kinds actually present, a fuzzy "did you mean", and (for a TypeName-
+	 * shaped first kind) a cross-project pointer to the multi-file walkers.
+	 */
+	private static function reportAstSelectEmpty(
+		tree: QueryNode, selectExpr: String, fileLabel: String, minChildren: Int, maxChildren: Int, preFilterLen: Int
+	): Void {
+		// Empty `--select` is indistinguishable from "wrong kind
+		// name". Kinds are the exact node-constructor names and the
+		// engine never enumerates them — so list the kinds actually
+		// present in this file, turning a silent miss into a
+		// self-correcting hint (no global kind table needed).
+		final present: Array<String> = collectKinds(tree);
+		final filterParts: Array<String> = [];
+		if (minChildren >= 0) filterParts.push('--min-children=$minChildren');
+		if (maxChildren >= 0) filterParts.push('--max-children=$maxChildren');
+		if (preFilterLen > 0) filterParts.push('$preFilterLen pre-filter match(es) dropped by child-count');
+		final filterNote: String = filterParts.length == 0 ? '' : ' (with ${filterParts.join(', ')})';
+		// Kind-fuzzy "did you mean" — surface the closest match in
+		// `present` for the first kind segment of `selectExpr`
+		// (split on `>`, `:`, whitespace). Same `findFuzzy`
+		// substring+Levenshtein two-tier shape as refs/uses on a
+		// 0-hit name, so a typo like `--select ParamCtorr` →
+		// `Did you mean: ParamCtor?` without re-reading the long
+		// `Kinds present here:` list. Silent when nothing close.
+		final firstKind: String = extractFirstKindToken(selectExpr);
+		final presentMap: Map<String, Bool> = [for (k in present) k => true];
+		final suggestions: Array<String> = firstKind.length > 0 ? findFuzzy(firstKind, presentMap) : [];
+		final fuzzyLine: String = suggestions.length > 0 ? ' Did you mean: ${suggestions.join(', ')}?' : '';
+		// Cross-project hint: when the first kind token starts uppercase
+		// (TypeName-shaped — e.g. `HxCatchClause`, `HxModule`), the user
+		// is likely hunting a decl that lives in OTHER files. `ast` is
+		// single-file by design; point them at the multi-file walkers
+		// (`refs --decls` / `uses` / `blast`) that DO recurse a dir.
+		// Silent when the token is lowercase (field-shaped) or empty.
+		final crossProjectHint: String = firstKind.length > 0 && StringTools.fastCodeAt(firstKind, 0) >= 'A'.code
+			&& StringTools.fastCodeAt(firstKind, 0) <= 'Z'.code
+			? ' If "$firstKind" is a TypeName declared elsewhere, ast is single-file; try apq refs $firstKind src/ --decls (declaration sites), apq uses $firstKind src/ (type positions), or apq blast $firstKind src/ (full change-impact).'
+			: '';
+		stderr(
+			'apq ast: --select "$selectExpr"$filterNote matched no nodes in $fileLabel. '
+			+ 'Kinds present here: ${present.join(', ')}.$fuzzyLine$crossProjectHint '
+			+ 'Kinds are exact node-constructor names — run `apq ast $fileLabel` to see the tree.\n'
+		);
+	}
+
+	/**
+	 * `--select <sel>`: resolve the selector against the tree (kind-equivalence
+	 * aware), apply the optional child-count arity filter, then render the
+	 * matches (or print each match's child count with `--count`). Returns the
+	 * process exit code.
+	 */
+	private static function runAstSelect(
+		o: AstOpts, selectExpr: String, tree: QueryNode, source: String, fileLabel: String, plugin: GrammarPlugin
+	): Int {
+		final selector: Selector = Selector.parse(selectExpr);
+		// Pass the grammar's kind-equivalence so `--select ClassDecl` /
+		// `--select FnMember` also match `final class` / `final function`
+		// (the `final`-wrapper shapes ClassForm / FinalModifiedMember).
+		final preFilter: Array<QueryNode> = Engine.select(tree, selector, plugin.selectKindEquivalence());
+		// ω-ast-child-count-filter: post-filter on direct-child count so
+		// "find all multi-arg ParamCtor ctors" is one query. The selector
+		// grammar (`Kind` / `Kind:name` / `Kind > Child`) is deliberately
+		// minimal and stays that way — arity is a numeric predicate, not
+		// a structural one, and lives on the CLI instead of the path.
+		final raw: Array<QueryNode> = (o.minChildren < 0 && o.maxChildren < 0)
+			? preFilter
+			: [
+				for (m in preFilter)
+					if ((o.minChildren < 0 || m.children.length >= o.minChildren)
+						&& (o.maxChildren < 0 || m.children.length <= o.maxChildren)) m
+			];
+		if (raw.length == 0) reportAstSelectEmpty(tree, selectExpr, fileLabel, o.minChildren, o.maxChildren, preFilter.length);
+		if (o.countOnly) {
+			for (m in raw) sysPrint('${m.children.length}\n');
+			return EXIT_OK;
+		}
+		final matches: Array<QueryNode> = [for (m in raw) shapeAstOutput(m, o.depth, o.childrenLimit)];
+		sysPrint(
+			o.json
+				? Json.renderMatches(fileLabel, source, matches, o.wantDoc, o.wantSource)
+				: Text.renderMatches(matches, source, o.wantDoc, o.wantSource, o.spans)
+		);
+		return EXIT_OK;
+	}
+
 }
 
 @:nullSafety(Strict)
@@ -11169,6 +11292,34 @@ typedef ReconOpts = {
 	var writerEqualsAfter: Bool;
 	var writerEqualsPlain: Bool;
 	var expectedPath: Null<String>;
+	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag / validation
+	// failure -> EXIT_USAGE); the caller returns this immediately and ignores the rest.
+	var errExit: Null<Int>;
+};
+@:nullSafety(Strict)
+typedef AstOpts = {
+	var lang: String;
+	var json: Bool;
+	var depth: Int;
+	var selectExpr: Null<String>;
+	var atExpr: Null<String>;
+	var wantDoc: Bool;
+	var wantSource: Bool;
+	var writerOutput: Bool;
+	var writerOutputPlain: Bool;
+	var writerDiff: Bool;
+	var minChildren: Int;
+	var maxChildren: Int;
+	var childrenLimit: Int;
+	var spans: Bool;
+	var countOnly: Bool;
+	var file: Null<String>;
+	// Inline source (`apq probe '<code>'` -> `--code <s>`) or stdin
+	// (`apq ast --stdin`) bypass the file read for micro-probes
+	// without a /tmp scratch file. Mutually exclusive with each
+	// other and with a file argument; checked after arg parsing.
+	var codeArg: Null<String>;
+	var stdinFlag: Bool;
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag / validation
 	// failure -> EXIT_USAGE); the caller returns this immediately and ignores the rest.
 	var errExit: Null<Int>;
