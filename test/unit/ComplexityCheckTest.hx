@@ -62,14 +62,16 @@ class ComplexityCheckTest extends Test {
 		Assert.isTrue(vs[0].message.contains("'mixed'"));
 	}
 
-	public function testNestedFunctionMeasuredSeparately(): Void {
-		// `inner` (20 &&) is flagged on its own; `outer`'s branches exclude it.
+	public function testNestedFunctionFoldsIntoEnclosing(): Void {
+		// A local function is NOT a separate unit: `inner`'s 20 `&&` count toward
+		// `outer` (score 21), so a block cannot be hidden from the metric by being
+		// wrapped in a local function. `inner` is not reported on its own.
 		final vs: Array<Violation> =
 			violations(
 				'class C {\n\tfunction outer():Void {\n\t\tfunction inner(a:Bool):Bool {\n\t\t\treturn a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a;\n\t\t}\n\t\tinner(true);\n\t}\n}'
 			);
 		Assert.equals(1, vs.length);
-		Assert.isTrue(vs[0].message.contains("'inner'"));
+		Assert.isTrue(vs[0].message.contains("'outer'"));
 	}
 
 	public function testLambdaFoldsIntoEnclosing(): Void {

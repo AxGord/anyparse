@@ -350,6 +350,7 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 				'NullCoal'
 			],
 			functionKinds: ['FnMember', 'FinalModifiedMember', 'FnDecl', 'LocalFnStmt'],
+			localFunctionKinds: ['LocalFnStmt'],
 			comparisonKinds: ['Eq', 'NotEq', 'Lt', 'LtEq', 'Gt', 'GtEq', 'And', 'Or'],
 			assignKind: 'Assign',
 			callKind: 'Call',

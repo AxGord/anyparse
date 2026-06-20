@@ -26,9 +26,10 @@ import haxe.Exception;
  * consistent +1 per switch, kept for grammar-neutrality.)
  *
  * Each function unit (`RefShape.functionKinds`) is measured independently: when
- * counting a function's branches the walk stops at a nested function unit, which
- * is measured on its own. Anonymous lambdas are not function units, so their
- * branches count toward the enclosing named function.
+ * counting a function's branches the walk descends through nested local functions and
+ * lambdas, counting their branches toward the enclosing function. Only
+ * top-level and member functions are measured on their own, so a block
+ * cannot evade the metric by being wrapped in a local function.
  *
  * ## Grammar-agnostic
  *
@@ -61,8 +62,14 @@ final class Complexity implements Check {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final shape: RefShape = plugin.refShape();
 		final functionKinds: Array<String> = shape.functionKinds ?? [];
+		final localFunctionKinds: Array<String> = shape.localFunctionKinds ?? [];
+		// A nested local function is NOT an independent complexity unit: its branches
+		// count toward the enclosing measured function. Otherwise a block could be
+		// hidden from the metric by wrapping it in a local function. Only top-level /
+		// member functions are measured (and reported) on their own.
+		final measured: Array<String> = [for (k in functionKinds) if (!localFunctionKinds.contains(k)) k];
 		final branchKinds: Array<String> = shape.branchKinds ?? [];
-		if (functionKinds.length == 0) return [];
+		if (measured.length == 0) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> =
@@ -70,7 +77,7 @@ final class Complexity implements Check {
 			if (tree != null) {
 				final max: Int = LintConfig.discover(entry.file)
 					.intOption('complexity', 'max') ?? plugin.maxComplexity(entry.file) ?? DEFAULT_MAX_COMPLEXITY;
-				walk(violations, entry.file, tree, functionKinds, branchKinds, max);
+				walk(violations, entry.file, tree, measured, branchKinds, max);
 			}
 		}
 		return violations;

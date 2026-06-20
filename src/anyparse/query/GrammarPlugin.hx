@@ -657,6 +657,15 @@ typedef RefShape = {
 	 * Optional; a grammar that leaves it unset makes the check a no-op.
 	 */
 	@:optional var numericLiteralKinds: Array<String>;
+
+	/**
+	 * Nested-function kinds (local `function` declarations) that fold into their
+	 * enclosing measured function for the `complexity` check instead of being
+	 * measured as separate units. Prevents a block from evading the metric by
+	 * being wrapped in a local function. Unset -> every `functionKinds` entry is an
+	 * independent unit. NOT subtracted by the other checks that read `functionKinds`.
+	 */
+	@:optional var localFunctionKinds: Array<String>;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {
