@@ -5483,306 +5483,17 @@ final class Cli {
 	 */
 	#if (sys || nodejs)
 	private static function runRecon(args: Array<String>): Int {
-		var lang: String = 'haxe';
-		var topN: Int = RECON_TOP_N_DEFAULT;
-		var probePath: Null<String> = null;
-		var rootDir: Null<String> = null;
-		var clusterFilter: Null<String> = null;
-		var predictStrip: Bool = false;
-		// `--regression-probe`: read the prior sweep snapshot's per-fixture
-		// status map (`bin/.last-sweep.json` `fixtures` array) and diff
-		// against the current corpus's parse-OK/FAIL state. Surfaces every
-		// fixture whose parse status FLIPPED since the snapshot was
-		// written. Catches "I edited the grammar, am I breaking anything
-		// that was working?" pre-sweep — cheaper than a full corpus rerun
-		// because it only does the trivia parse step (no writer / no
-		// expected-bytes comparison). Mutually exclusive with --probe /
-		// --predict-strip / --cluster (separate diagnostic mode).
-		var regressionProbe: Bool = false;
-		// `--candidates <regex>`: cross-cluster construct enumeration.
-		// Walks the same skip-parse record set as the sweep, applies
-		// the EReg against each fixture's source, and prints
-		// `<path> :: N matches` for every file with ≥1 hit (sorted by
-		// count desc). Closes the gap where the histogram clusters by
-		// exact forward-locus, so a construct that lives in different
-		// multi-blocker fixtures (Slice 38's `new T<...>(` → 5 surfaced,
-		// 6 actually present) is undercounted. Mutually exclusive with
-		// --predict-strip / --cluster / --probe / --regression-probe.
-		var candidatesRegex: Null<String> = null;
-		// `--predict-relax`: terminator-insertion predictor. For each
-		// skip-parse fixture, take the ParseError's `expected` hint as
-		// the missing token and INSERT it at the fail-locus. If the
-		// patched source parses, the slice candidate is gate-relaxation
-		// (make the terminator optional via `@:trailOpt` / `@:fmt(trailOptParseGate(…))`).
-		// If STILL FAIL, the gap is deeper than the immediate terminator.
-		// Complement to `--predict-strip` (which models the OPPOSITE —
-		// remove tokens to advance past a syntax mismatch): predict-relax
-		// models "the parser would accept missing X at this position".
-		// Mutex with --predict-strip / --regression-probe / --candidates.
-		var predictRelax: Bool = false;
-		// `--permissive-construct`: field-optionalization predictor.
-		// Walks every `mandatory-ref-lead-trail` candidate from
-		// `gates --mechanism mandatory-ref-lead-trail` (Slice 40's relax-
-		// candidate inventory), strips the bracket-pair `<lead>...<trail>`
-		// from each skip-parse fixture, and re-parses. Aggregates
-		// UNBLOCK / STILL FAIL / NO MATCH per candidate so the user sees
-		// which field-optionalization would unblock which fixtures
-		// BEFORE committing to a Slice 40-style edit. Mutex with every
-		// other recon mode — it's its own pipeline.
-		var permissiveConstruct: Bool = false;
-		// `--source`: drill-mode-only flag. When set in combination with
-		// `--cluster <key>`, the per-path output gains a windowed source
-		// snippet centred on the fail-locus. Outside drill it would
-		// flood every SKIP line; usage error guards that.
-		var showSource: Bool = false;
-		// `--no-target-cluster <expected-msg>`: drill into ONE bucket of the
-		// `--predict-relax` footer NO TARGET breakdown — the histogram that
-		// aggregates per-file `NoTarget` outcomes by `res.message`
-		// (`70× expected hint is empty after quote-strip` / `12× expected
-		// HxDecl` / …). Footer keys live in a different namespace than
-		// `--cluster <key>` (which drills by normalised forward-locus on
-		// `r.clusterKey`); there was previously no path from the footer
-		// aggregate to the file list. Active only in sweep predict-relax
-		// mode; mutex with `--cluster` (one drill at a time) and `--probe`
-		// (single-file, no aggregation).
-		var noTargetClusterFilter: Null<String> = null;
-		// Twin of `runStrip`'s arg-parsing: --replace X --with Y pairs
-		// plus --delete X shortcut. Patterns and replacements arrays
-		// stay aligned by construction. Active only with --predict-strip.
-		final patterns: Array<String> = [];
-		final replacements: Array<String> = [];
-		var pendingReplace: Null<String> = null;
-		// --regex: same semantics as `apq strip --regex` — treat every
-		// --replace / --delete pattern as an EReg pattern. Lets one
-		// predict-strip call cover every site of a construct in the
-		// corpus (e.g. `new [A-Z]\w*<[^>]+>\(` matches every templated
-		// constructor call, not just one literal pair) — closes the
-		// pain where Slice 38's recon under-counted because the
-		// histogram clusters by exact forward-locus shape.
-		var regexMode: Bool = false;
-		// `--writer-equals [--writer-equals-plain] [--expected <path>]`:
-		// chain a writer round-trip + byte-equality check onto a probe-mode
-		// PARSE OK. Closes the "predicted +1 via predict-strip, got skip→fail
-		// because the writer round-trip diverges" gap that bit Slice 50 —
-		// running predict-strip alone tells you ONLY about parse, not byte-
-		// PASS. The combo flag is probe-only (single-file) because the
-		// expected comparison needs a paired source/expected (sections 2/3
-		// of an `.hxtest`, or `--expected <path>` for plain `.hx`). Sweep
-		// mode already has the corpus harness doing this comparison.
-		var writerEqualsAfter: Bool = false;
-		var writerEqualsPlain: Bool = false;
-		var expectedPath: Null<String> = null;
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
-				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
-				case '--top':
-					final v: Null<Int> = Std.parseInt(expectValue(args, ++i, '--top'));
-					if (v == null || v <= 0) {
-						stderr('apq recon: --top requires a positive integer\n');
-						return EXIT_USAGE;
-					}
-					topN = v;
-				case '--all':
-					topN = 0x7fffffff;
-				case '--probe':
-					probePath = expectValue(args, ++i, '--probe');
-				case '--cluster':
-					clusterFilter = expectValue(args, ++i, '--cluster');
-				case '--no-target-cluster':
-					noTargetClusterFilter = expectValue(args, ++i, '--no-target-cluster');
-				case '--source':
-					showSource = true;
-				case '--predict-strip':
-					predictStrip = true;
-				case '--predict-relax':
-					predictRelax = true;
-				case '--regression-probe':
-					regressionProbe = true;
-				case '--permissive-construct':
-					permissiveConstruct = true;
-				case '--candidates':
-					candidatesRegex = expectValue(args, ++i, '--candidates');
-				case '--replace':
-					if (pendingReplace != null) {
-						stderr('apq recon: --replace "$pendingReplace" needs a --with before the next --replace\n');
-						return EXIT_USAGE;
-					}
-					pendingReplace = expectValue(args, ++i, '--replace');
-				case '--with':
-					if (pendingReplace == null) {
-						stderr('apq recon: --with requires a preceding --replace\n');
-						return EXIT_USAGE;
-					}
-					patterns.push(pendingReplace);
-					replacements.push(expectValue(args, ++i, '--with'));
-					pendingReplace = null;
-				case '--delete':
-					if (pendingReplace != null) {
-						stderr('apq recon: --replace "$pendingReplace" needs a --with before --delete\n');
-						return EXIT_USAGE;
-					}
-					patterns.push(expectValue(args, ++i, '--delete'));
-					replacements.push('');
-				case '--regex':
-					regexMode = true;
-				case '--writer-equals':
-					writerEqualsAfter = true;
-				case '--writer-equals-plain':
-					writerEqualsAfter = true;
-					writerEqualsPlain = true;
-				case '--expected':
-					expectedPath = expectValue(args, ++i, '--expected');
-				case '-h', '--help':
-					printReconUsage();
-					return EXIT_OK;
-				case _:
-					if (StringTools.startsWith(a, '--')) {
-						stderr('apq recon: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
-					if (rootDir != null) {
-						stderr('apq recon: only one positional <dir> argument supported (got "$rootDir" and "$a")\n');
-						return EXIT_USAGE;
-					}
-					rootDir = a;
-			}
-			i++;
-		}
-		if (pendingReplace != null) {
-			stderr('apq recon: --replace "$pendingReplace" needs a --with\n');
-			return EXIT_USAGE;
-		}
-		if (predictStrip && patterns.length == 0) {
-			stderr('apq recon: --predict-strip requires at least one --replace/--with or --delete\n');
-			return EXIT_USAGE;
-		}
-		if (!predictStrip && patterns.length > 0) {
-			stderr('apq recon: --replace/--with/--delete require --predict-strip\n');
-			return EXIT_USAGE;
-		}
-		if (regexMode && !predictStrip) {
-			stderr('apq recon: --regex requires --predict-strip (regex applies to --replace patterns)\n');
-			return EXIT_USAGE;
-		}
-		final compiledRegex: Null<Array<EReg>> = regexMode ? compileStripRegexes('recon', patterns) : null;
-		if (regexMode && compiledRegex == null) return EXIT_USAGE;
-		// `--source` is meaningful only in modes where the per-path window
-		// adds signal — `--cluster <key>` drill, `--no-target-cluster
-		// <key>` drill, `--predict-strip` STILL FAIL entries, or
-		// `--predict-relax` (STILL FAIL in sweep mode, both STILL FAIL +
-		// NO TARGET in probe / drill modes). In plain sweep mode without
-		// any of those it would flood every SKIP line with a per-fixture
-		// window, so make the misuse a hard usage error rather than a
-		// silent no-op.
-		if (showSource && clusterFilter == null && noTargetClusterFilter == null && !predictStrip && !predictRelax) {
-			stderr(
-				'apq recon: --source requires --cluster <key> / --no-target-cluster <key> / --predict-strip / --predict-relax (drill / STILL-FAIL modes only; would flood the sweep otherwise)\n'
-			);
-			return EXIT_USAGE;
-		}
-		// `--regression-probe` is its own mode — separate from probe /
-		// predict / cluster / source. Reject the combinations with a clear
-		// usage error instead of silently picking one path.
-		if (regressionProbe) {
-			if (probePath != null) {
-				stderr('apq recon: --regression-probe and --probe are mutually exclusive\n');
-				return EXIT_USAGE;
-			}
-			if (predictStrip) {
-				stderr('apq recon: --regression-probe and --predict-strip are mutually exclusive\n');
-				return EXIT_USAGE;
-			}
-			if (clusterFilter != null) {
-				stderr('apq recon: --regression-probe and --cluster are mutually exclusive\n');
-				return EXIT_USAGE;
-			}
-		}
-		if (candidatesRegex != null && (probePath != null || predictStrip || clusterFilter != null || regressionProbe || predictRelax)) {
-			stderr(
-				'apq recon: --candidates is mutually exclusive with --probe / --predict-strip / --cluster / --regression-probe / --predict-relax\n'
-			);
-			return EXIT_USAGE;
-		}
-		if (predictRelax) {
-			if (predictStrip) {
-				stderr(
-					'apq recon: --predict-relax and --predict-strip are mutually exclusive (opposite models — strip removes tokens, relax inserts the expected one)\n'
-				);
-				return EXIT_USAGE;
-			}
-			if (regressionProbe) {
-				stderr('apq recon: --predict-relax and --regression-probe are mutually exclusive\n');
-				return EXIT_USAGE;
-			}
-			if (patterns.length > 0) {
-				stderr(
-					'apq recon: --predict-relax does not take --replace/--with/--delete (the injected token comes from the parser`s `expected` hint)\n'
-				);
-				return EXIT_USAGE;
-			}
-		}
-		if (noTargetClusterFilter != null) {
-			if (!predictRelax) {
-				stderr(
-					'apq recon: --no-target-cluster requires --predict-relax (the footer NO TARGET breakdown is only produced in predict-relax sweep mode)\n'
-				);
-				return EXIT_USAGE;
-			}
-			if (clusterFilter != null) {
-				stderr(
-					'apq recon: --cluster and --no-target-cluster are mutually exclusive (one drill at a time — --cluster drills by forward-locus, --no-target-cluster drills by expected-message)\n'
-				);
-				return EXIT_USAGE;
-			}
-			if (probePath != null) {
-				stderr(
-					'apq recon: --no-target-cluster requires sweep mode (no NO TARGET aggregation in --probe mode — pass a corpus directory instead)\n'
-				);
-				return EXIT_USAGE;
-			}
-		}
-		if (permissiveConstruct && (probePath != null || predictStrip || predictRelax || regressionProbe || clusterFilter != null
-		|| candidatesRegex != null || patterns.length > 0)) {
-			stderr(
-				'apq recon: --permissive-construct is its own mode — mutually exclusive with --probe / --predict-strip / --predict-relax / --regression-probe / --cluster / --candidates / --replace/--with/--delete\n'
-			);
-			return EXIT_USAGE;
-		}
-		if (writerEqualsAfter) {
-			if (probePath == null) {
-				stderr(
-					'apq recon: --writer-equals requires --probe <file> (single-file mode; sweep mode already does byte-comparison via the corpus harness)\n'
-				);
-				return EXIT_USAGE;
-			}
-			if (predictStrip) {
-				stderr(
-					'apq recon: --writer-equals is incompatible with --predict-strip (the stripped source diverges from expected by construction — apply the slice first, then probe + writer-equals on the unstripped source)\n'
-				);
-				return EXIT_USAGE;
-			}
-			if (predictRelax) {
-				stderr(
-					'apq recon: --writer-equals is incompatible with --predict-relax (relax synthesises a missing token; expected bytes won`t match the patched source)\n'
-				);
-				return EXIT_USAGE;
-			}
-		}
-		if (expectedPath != null && !writerEqualsAfter) {
-			stderr('apq recon: --expected requires --writer-equals\n');
-			return EXIT_USAGE;
-		}
-		final plugin: GrammarPlugin = pickPlugin(lang);
-		if (predictRelax && probePath != null) return runReconProbeRelax(plugin, (probePath: String), showSource);
+		final o: ReconOpts = parseReconArgs(args);
+		if (o.errExit != null) return o.errExit;
+		final plugin: GrammarPlugin = pickPlugin(o.lang);
+		final probePath: Null<String> = o.probePath;
+		if (o.predictRelax && probePath != null) return runReconProbeRelax(plugin, probePath, o.showSource);
 		if (probePath != null)
 			return runReconProbe(
-				plugin, (probePath: String), predictStrip, patterns, replacements, compiledRegex, showSource, writerEqualsAfter,
-				writerEqualsPlain, expectedPath, lang
+				plugin, probePath, o.predictStrip, o.patterns, o.replacements, o.compiledRegex, o.showSource, o.writerEqualsAfter,
+				o.writerEqualsPlain, o.expectedPath, o.lang
 			);
-		final rootFinal: String = rootDir ?? defaultReconRoot();
+		final rootFinal: String = o.rootDir ?? defaultReconRoot();
 		if (rootFinal == '') {
 			stderr(
 				"apq recon: no <dir> given and $ANYPARSE_HXFORMAT_FORK env var is unset (no cached path at ~/.config/anyparse/fork_path either).\n"
@@ -5796,16 +5507,18 @@ final class Cli {
 			stderr('apq recon: "$rootFinal" is not a directory.\n');
 			return EXIT_RUNTIME;
 		}
-		return regressionProbe
+		final candidatesRegex: Null<String> = o.candidatesRegex;
+		return o.regressionProbe
 			? runReconRegressionProbe(plugin, rootFinal)
 			: candidatesRegex != null
-				? runReconCandidates(plugin, rootFinal, (candidatesRegex: String))
-				: permissiveConstruct
-					? runReconPermissive(plugin, rootFinal, lang)
-					: predictRelax
-						? runReconSweepRelax(plugin, rootFinal, clusterFilter, noTargetClusterFilter, showSource)
+				? runReconCandidates(plugin, rootFinal, candidatesRegex)
+				: o.permissiveConstruct
+					? runReconPermissive(plugin, rootFinal, o.lang)
+					: o.predictRelax
+						? runReconSweepRelax(plugin, rootFinal, o.clusterFilter, o.noTargetClusterFilter, o.showSource)
 						: runReconSweep(
-							plugin, rootFinal, topN, clusterFilter, predictStrip, patterns, replacements, compiledRegex, showSource
+							plugin, rootFinal, o.topN, o.clusterFilter, o.predictStrip, o.patterns, o.replacements, o.compiledRegex,
+							o.showSource
 						);
 	}
 
@@ -11016,6 +10729,408 @@ final class Cli {
 		}
 	}
 
+	/** Terminal-case ReconOpts: a flag/usage path the caller returns immediately, ignoring every other field. */
+	private static inline function reconParseExit(code: Int): ReconOpts {
+		return {
+			lang: '',
+			topN: 0,
+			probePath: null,
+			rootDir: null,
+			clusterFilter: null,
+			predictStrip: false,
+			regressionProbe: false,
+			candidatesRegex: null,
+			predictRelax: false,
+			permissiveConstruct: false,
+			showSource: false,
+			noTargetClusterFilter: null,
+			patterns: [],
+			replacements: [],
+			regexMode: false,
+			compiledRegex: null,
+			writerEqualsAfter: false,
+			writerEqualsPlain: false,
+			expectedPath: null,
+			errExit: code
+		};
+	}
+
+	/**
+	 * First validation group: `--source` drill-mode requirement, the
+	 * `--regression-probe` mutex set, and the `--candidates` mutex set.
+	 * Returns a non-null exit code (EXIT_USAGE) on the first violation,
+	 * after printing the diagnostic; null when this group passes.
+	 */
+	private static function validateReconModesA(o: ReconOpts): Null<Int> {
+		// `--source` is meaningful only in modes where the per-path window
+		// adds signal — `--cluster <key>` drill, `--no-target-cluster
+		// <key>` drill, `--predict-strip` STILL FAIL entries, or
+		// `--predict-relax` (STILL FAIL in sweep mode, both STILL FAIL +
+		// NO TARGET in probe / drill modes). In plain sweep mode without
+		// any of those it would flood every SKIP line with a per-fixture
+		// window, so make the misuse a hard usage error rather than a
+		// silent no-op.
+		if (o.showSource && o.clusterFilter == null && o.noTargetClusterFilter == null && !o.predictStrip && !o.predictRelax) {
+			stderr(
+				'apq recon: --source requires --cluster <key> / --no-target-cluster <key> / --predict-strip / --predict-relax (drill / STILL-FAIL modes only; would flood the sweep otherwise)\n'
+			);
+			return EXIT_USAGE;
+		}
+		// `--regression-probe` is its own mode — separate from probe /
+		// predict / cluster / source. Reject the combinations with a clear
+		// usage error instead of silently picking one path.
+		if (o.regressionProbe) {
+			if (o.probePath != null) {
+				stderr('apq recon: --regression-probe and --probe are mutually exclusive\n');
+				return EXIT_USAGE;
+			}
+			if (o.predictStrip) {
+				stderr('apq recon: --regression-probe and --predict-strip are mutually exclusive\n');
+				return EXIT_USAGE;
+			}
+			if (o.clusterFilter != null) {
+				stderr('apq recon: --regression-probe and --cluster are mutually exclusive\n');
+				return EXIT_USAGE;
+			}
+		}
+		if (o.candidatesRegex != null && (
+			o.probePath != null || o.predictStrip || o.clusterFilter != null || o.regressionProbe || o.predictRelax
+		)) {
+			stderr(
+				'apq recon: --candidates is mutually exclusive with --probe / --predict-strip / --cluster / --regression-probe / --predict-relax\n'
+			);
+			return EXIT_USAGE;
+		}
+		return null;
+	}
+
+	/**
+	 * Second validation group: the `--predict-relax` mutex set, the
+	 * `--no-target-cluster` requirement/mutex set, and the
+	 * `--permissive-construct` mutex check. Returns a non-null exit code
+	 * (EXIT_USAGE) on the first violation; null when this group passes.
+	 */
+	private static function validateReconModesB(o: ReconOpts): Null<Int> {
+		if (o.predictRelax) {
+			if (o.predictStrip) {
+				stderr(
+					'apq recon: --predict-relax and --predict-strip are mutually exclusive (opposite models — strip removes tokens, relax inserts the expected one)\n'
+				);
+				return EXIT_USAGE;
+			}
+			if (o.regressionProbe) {
+				stderr('apq recon: --predict-relax and --regression-probe are mutually exclusive\n');
+				return EXIT_USAGE;
+			}
+			if (o.patterns.length > 0) {
+				stderr(
+					'apq recon: --predict-relax does not take --replace/--with/--delete (the injected token comes from the parser`s `expected` hint)\n'
+				);
+				return EXIT_USAGE;
+			}
+		}
+		if (o.noTargetClusterFilter != null) {
+			if (!o.predictRelax) {
+				stderr(
+					'apq recon: --no-target-cluster requires --predict-relax (the footer NO TARGET breakdown is only produced in predict-relax sweep mode)\n'
+				);
+				return EXIT_USAGE;
+			}
+			if (o.clusterFilter != null) {
+				stderr(
+					'apq recon: --cluster and --no-target-cluster are mutually exclusive (one drill at a time — --cluster drills by forward-locus, --no-target-cluster drills by expected-message)\n'
+				);
+				return EXIT_USAGE;
+			}
+			if (o.probePath != null) {
+				stderr(
+					'apq recon: --no-target-cluster requires sweep mode (no NO TARGET aggregation in --probe mode — pass a corpus directory instead)\n'
+				);
+				return EXIT_USAGE;
+			}
+		}
+		if (o.permissiveConstruct && (o.probePath != null || o.predictStrip || o.predictRelax || o.regressionProbe
+		|| o.clusterFilter != null || o.candidatesRegex != null || o.patterns.length > 0)) {
+			stderr(
+				'apq recon: --permissive-construct is its own mode — mutually exclusive with --probe / --predict-strip / --predict-relax / --regression-probe / --cluster / --candidates / --replace/--with/--delete\n'
+			);
+			return EXIT_USAGE;
+		}
+		return null;
+	}
+
+	/**
+	 * Third validation group: `--writer-equals` requires `--probe` and is
+	 * incompatible with `--predict-strip` / `--predict-relax`, and
+	 * `--expected` requires `--writer-equals`. Returns a non-null exit
+	 * code (EXIT_USAGE) on the first violation; null when it passes.
+	 */
+	private static function validateReconWriterEquals(o: ReconOpts): Null<Int> {
+		if (o.writerEqualsAfter) {
+			if (o.probePath == null) {
+				stderr(
+					'apq recon: --writer-equals requires --probe <file> (single-file mode; sweep mode already does byte-comparison via the corpus harness)\n'
+				);
+				return EXIT_USAGE;
+			}
+			if (o.predictStrip) {
+				stderr(
+					'apq recon: --writer-equals is incompatible with --predict-strip (the stripped source diverges from expected by construction — apply the slice first, then probe + writer-equals on the unstripped source)\n'
+				);
+				return EXIT_USAGE;
+			}
+			if (o.predictRelax) {
+				stderr(
+					'apq recon: --writer-equals is incompatible with --predict-relax (relax synthesises a missing token; expected bytes won`t match the patched source)\n'
+				);
+				return EXIT_USAGE;
+			}
+		}
+		if (o.expectedPath != null && !o.writerEqualsAfter) {
+			stderr('apq recon: --expected requires --writer-equals\n');
+			return EXIT_USAGE;
+		}
+		return null;
+	}
+
+	/**
+	 * Parse `recon` argv into a ReconOpts. A terminal case (`-h`/`--help`
+	 * or any usage error) prints its message and returns with `errExit`
+	 * set; the caller returns that code immediately. The natural end runs
+	 * the post-loop validations and returns the full struct with
+	 * `errExit: null`.
+	 */
+	private static function parseReconArgs(args: Array<String>): ReconOpts {
+		var lang: String = 'haxe';
+		var topN: Int = RECON_TOP_N_DEFAULT;
+		var probePath: Null<String> = null;
+		var rootDir: Null<String> = null;
+		var clusterFilter: Null<String> = null;
+		var predictStrip: Bool = false;
+		// `--regression-probe`: read the prior sweep snapshot's per-fixture
+		// status map (`bin/.last-sweep.json` `fixtures` array) and diff
+		// against the current corpus's parse-OK/FAIL state. Surfaces every
+		// fixture whose parse status FLIPPED since the snapshot was
+		// written. Catches "I edited the grammar, am I breaking anything
+		// that was working?" pre-sweep — cheaper than a full corpus rerun
+		// because it only does the trivia parse step (no writer / no
+		// expected-bytes comparison). Mutually exclusive with --probe /
+		// --predict-strip / --cluster (separate diagnostic mode).
+		var regressionProbe: Bool = false;
+		// `--candidates <regex>`: cross-cluster construct enumeration.
+		// Walks the same skip-parse record set as the sweep, applies
+		// the EReg against each fixture's source, and prints
+		// `<path> :: N matches` for every file with ≥1 hit (sorted by
+		// count desc). Closes the gap where the histogram clusters by
+		// exact forward-locus, so a construct that lives in different
+		// multi-blocker fixtures (Slice 38's `new T<...>(` → 5 surfaced,
+		// 6 actually present) is undercounted. Mutually exclusive with
+		// --predict-strip / --cluster / --probe / --regression-probe.
+		var candidatesRegex: Null<String> = null;
+		// `--predict-relax`: terminator-insertion predictor. For each
+		// skip-parse fixture, take the ParseError's `expected` hint as
+		// the missing token and INSERT it at the fail-locus. If the
+		// patched source parses, the slice candidate is gate-relaxation
+		// (make the terminator optional via `@:trailOpt` / `@:fmt(trailOptParseGate(…))`).
+		// If STILL FAIL, the gap is deeper than the immediate terminator.
+		// Complement to `--predict-strip` (which models the OPPOSITE —
+		// remove tokens to advance past a syntax mismatch): predict-relax
+		// models "the parser would accept missing X at this position".
+		// Mutex with --predict-strip / --regression-probe / --candidates.
+		var predictRelax: Bool = false;
+		// `--permissive-construct`: field-optionalization predictor.
+		// Walks every `mandatory-ref-lead-trail` candidate from
+		// `gates --mechanism mandatory-ref-lead-trail` (Slice 40's relax-
+		// candidate inventory), strips the bracket-pair `<lead>...<trail>`
+		// from each skip-parse fixture, and re-parses. Aggregates
+		// UNBLOCK / STILL FAIL / NO MATCH per candidate so the user sees
+		// which field-optionalization would unblock which fixtures
+		// BEFORE committing to a Slice 40-style edit. Mutex with every
+		// other recon mode — it's its own pipeline.
+		var permissiveConstruct: Bool = false;
+		// `--source`: drill-mode-only flag. When set in combination with
+		// `--cluster <key>`, the per-path output gains a windowed source
+		// snippet centred on the fail-locus. Outside drill it would
+		// flood every SKIP line; usage error guards that.
+		var showSource: Bool = false;
+		// `--no-target-cluster <expected-msg>`: drill into ONE bucket of the
+		// `--predict-relax` footer NO TARGET breakdown — the histogram that
+		// aggregates per-file `NoTarget` outcomes by `res.message`
+		// (`70× expected hint is empty after quote-strip` / `12× expected
+		// HxDecl` / …). Footer keys live in a different namespace than
+		// `--cluster <key>` (which drills by normalised forward-locus on
+		// `r.clusterKey`); there was previously no path from the footer
+		// aggregate to the file list. Active only in sweep predict-relax
+		// mode; mutex with `--cluster` (one drill at a time) and `--probe`
+		// (single-file, no aggregation).
+		var noTargetClusterFilter: Null<String> = null;
+		// Twin of `runStrip`'s arg-parsing: --replace X --with Y pairs
+		// plus --delete X shortcut. Patterns and replacements arrays
+		// stay aligned by construction. Active only with --predict-strip.
+		final patterns: Array<String> = [];
+		final replacements: Array<String> = [];
+		var pendingReplace: Null<String> = null;
+		// --regex: same semantics as `apq strip --regex` — treat every
+		// --replace / --delete pattern as an EReg pattern. Lets one
+		// predict-strip call cover every site of a construct in the
+		// corpus (e.g. `new [A-Z]\w*<[^>]+>\(` matches every templated
+		// constructor call, not just one literal pair) — closes the
+		// pain where Slice 38's recon under-counted because the
+		// histogram clusters by exact forward-locus shape.
+		var regexMode: Bool = false;
+		// `--writer-equals [--writer-equals-plain] [--expected <path>]`:
+		// chain a writer round-trip + byte-equality check onto a probe-mode
+		// PARSE OK. Closes the "predicted +1 via predict-strip, got skip→fail
+		// because the writer round-trip diverges" gap that bit Slice 50 —
+		// running predict-strip alone tells you ONLY about parse, not byte-
+		// PASS. The combo flag is probe-only (single-file) because the
+		// expected comparison needs a paired source/expected (sections 2/3
+		// of an `.hxtest`, or `--expected <path>` for plain `.hx`). Sweep
+		// mode already has the corpus harness doing this comparison.
+		var writerEqualsAfter: Bool = false;
+		var writerEqualsPlain: Bool = false;
+		var expectedPath: Null<String> = null;
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--top':
+					final v: Null<Int> = Std.parseInt(expectValue(args, ++i, '--top'));
+					if (v == null || v <= 0) {
+						stderr('apq recon: --top requires a positive integer\n');
+						return reconParseExit(EXIT_USAGE);
+					}
+					topN = v;
+				case '--all':
+					topN = 0x7fffffff;
+				case '--probe':
+					probePath = expectValue(args, ++i, '--probe');
+				case '--cluster':
+					clusterFilter = expectValue(args, ++i, '--cluster');
+				case '--no-target-cluster':
+					noTargetClusterFilter = expectValue(args, ++i, '--no-target-cluster');
+				case '--source':
+					showSource = true;
+				case '--predict-strip':
+					predictStrip = true;
+				case '--predict-relax':
+					predictRelax = true;
+				case '--regression-probe':
+					regressionProbe = true;
+				case '--permissive-construct':
+					permissiveConstruct = true;
+				case '--candidates':
+					candidatesRegex = expectValue(args, ++i, '--candidates');
+				case '--replace':
+					if (pendingReplace != null) {
+						stderr('apq recon: --replace "$pendingReplace" needs a --with before the next --replace\n');
+						return reconParseExit(EXIT_USAGE);
+					}
+					pendingReplace = expectValue(args, ++i, '--replace');
+				case '--with':
+					if (pendingReplace == null) {
+						stderr('apq recon: --with requires a preceding --replace\n');
+						return reconParseExit(EXIT_USAGE);
+					}
+					patterns.push(pendingReplace);
+					replacements.push(expectValue(args, ++i, '--with'));
+					pendingReplace = null;
+				case '--delete':
+					if (pendingReplace != null) {
+						stderr('apq recon: --replace "$pendingReplace" needs a --with before --delete\n');
+						return reconParseExit(EXIT_USAGE);
+					}
+					patterns.push(expectValue(args, ++i, '--delete'));
+					replacements.push('');
+				case '--regex':
+					regexMode = true;
+				case '--writer-equals':
+					writerEqualsAfter = true;
+				case '--writer-equals-plain':
+					writerEqualsAfter = true;
+					writerEqualsPlain = true;
+				case '--expected':
+					expectedPath = expectValue(args, ++i, '--expected');
+				case '-h', '--help':
+					printReconUsage();
+					return reconParseExit(EXIT_OK);
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq recon: unknown option "$a"\n');
+						return reconParseExit(EXIT_USAGE);
+					}
+					if (rootDir != null) {
+						stderr('apq recon: only one positional <dir> argument supported (got "$rootDir" and "$a")\n');
+						return reconParseExit(EXIT_USAGE);
+					}
+					rootDir = a;
+			}
+			i++;
+		}
+		final o: ReconOpts = {
+			lang: lang,
+			topN: topN,
+			probePath: probePath,
+			rootDir: rootDir,
+			clusterFilter: clusterFilter,
+			predictStrip: predictStrip,
+			regressionProbe: regressionProbe,
+			candidatesRegex: candidatesRegex,
+			predictRelax: predictRelax,
+			permissiveConstruct: permissiveConstruct,
+			showSource: showSource,
+			noTargetClusterFilter: noTargetClusterFilter,
+			patterns: patterns,
+			replacements: replacements,
+			regexMode: regexMode,
+			compiledRegex: null,
+			writerEqualsAfter: writerEqualsAfter,
+			writerEqualsPlain: writerEqualsPlain,
+			expectedPath: expectedPath,
+			errExit: null
+		};
+		final sa: Null<Int> = validateReconStripArgs(o, pendingReplace);
+		if (sa != null) return reconParseExit(sa);
+		final mA: Null<Int> = validateReconModesA(o);
+		if (mA != null) return reconParseExit(mA);
+		final mB: Null<Int> = validateReconModesB(o);
+		if (mB != null) return reconParseExit(mB);
+		final we: Null<Int> = validateReconWriterEquals(o);
+		if (we != null) return reconParseExit(we);
+		return o;
+	}
+
+	/**
+	 * Post-loop validation of the `--replace`/`--with`/`--delete`/`--regex`
+	 * predict-strip argument group, plus regex compilation. Mutates `o`
+	 * with the compiled regex array on success. Returns a non-null exit
+	 * code (EXIT_USAGE) on the first violation; null when the group passes.
+	 */
+	private static function validateReconStripArgs(o: ReconOpts, pendingReplace: Null<String>): Null<Int> {
+		if (pendingReplace != null) {
+			stderr('apq recon: --replace "$pendingReplace" needs a --with\n');
+			return EXIT_USAGE;
+		}
+		if (o.predictStrip && o.patterns.length == 0) {
+			stderr('apq recon: --predict-strip requires at least one --replace/--with or --delete\n');
+			return EXIT_USAGE;
+		}
+		if (!o.predictStrip && o.patterns.length > 0) {
+			stderr('apq recon: --replace/--with/--delete require --predict-strip\n');
+			return EXIT_USAGE;
+		}
+		if (o.regexMode && !o.predictStrip) {
+			stderr('apq recon: --regex requires --predict-strip (regex applies to --replace patterns)\n');
+			return EXIT_USAGE;
+		}
+		final compiled: Null<Array<EReg>> = o.regexMode ? compileStripRegexes('recon', o.patterns) : null;
+		if (o.regexMode && compiled == null) return EXIT_USAGE;
+		o.compiledRegex = compiled;
+		return null;
+	}
+
 }
 
 @:nullSafety(Strict)
@@ -11031,5 +11146,30 @@ typedef StripOpts = {
 	var replacements: Array<String>;
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
 	// the caller returns this immediately and ignores the rest of the struct.
+	var errExit: Null<Int>;
+};
+@:nullSafety(Strict)
+typedef ReconOpts = {
+	var lang: String;
+	var topN: Int;
+	var probePath: Null<String>;
+	var rootDir: Null<String>;
+	var clusterFilter: Null<String>;
+	var predictStrip: Bool;
+	var regressionProbe: Bool;
+	var candidatesRegex: Null<String>;
+	var predictRelax: Bool;
+	var permissiveConstruct: Bool;
+	var showSource: Bool;
+	var noTargetClusterFilter: Null<String>;
+	var patterns: Array<String>;
+	var replacements: Array<String>;
+	var regexMode: Bool;
+	var compiledRegex: Null<Array<EReg>>;
+	var writerEqualsAfter: Bool;
+	var writerEqualsPlain: Bool;
+	var expectedPath: Null<String>;
+	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag / validation
+	// failure -> EXIT_USAGE); the caller returns this immediately and ignores the rest.
 	var errExit: Null<Int>;
 };
