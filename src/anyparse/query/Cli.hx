@@ -6788,7 +6788,9 @@ final class Cli {
 					out[normalised] = (entryStatus: String);
 				}
 			}
-		} catch (_: Exception) {}
+		} catch (_: Exception) {
+			// best-effort: a scan failure leaves the partial status map
+		}
 		return out;
 	}
 
@@ -6908,7 +6910,9 @@ final class Cli {
 			final pos: Position = pe.span.lineCol(original);
 			origLine = pos.line;
 			origCol = pos.col;
-		} catch (_: Exception) {}
+		} catch (_: Exception) {
+			// best-effort: keep default origLine/origCol if the span lookup fails
+		}
 		final regexMode: Bool = compiledRegex != null;
 		final regexes: Array<EReg> = compiledRegex ?? [];
 		final patternHits: Array<Int> = [for (_ in 0...patterns.length) 0];
@@ -7375,7 +7379,9 @@ final class Cli {
 					'apq $cmd: WARNING: src/ or test/ is newer than bin/test.js — re-run `haxe test-js.hxml && node bin/test.js` before trusting these totals\n'
 				);
 			}
-		} catch (_: Exception) {}
+		} catch (_: Exception) {
+			// best-effort: skip the staleness advisory on any FS error
+		}
 		#end
 	}
 
@@ -7396,7 +7402,9 @@ final class Cli {
 					if (!StringTools.endsWith(name, '.hx')) continue;
 					if (FileSystem.stat(path).mtime.getTime() > threshold) return true;
 				}
-			} catch (_: Exception) {}
+			} catch (_: Exception) {
+				// best-effort: a stat failure falls through to return false
+			}
 		}
 		return false;
 	}
@@ -7428,7 +7436,9 @@ final class Cli {
 				final existing: String = StringTools.trim(sys.io.File.getContent(path));
 				if (existing == value) return;
 			}
-		} catch (_: Exception) {}
+		} catch (_: Exception) {
+			// best-effort: an unreadable existing file just proceeds to (over)write
+		}
 		try {
 			final dir: String = haxe.io.Path.directory(path);
 			if (dir.length > 0 && !FileSystem.exists(dir)) FileSystem.createDirectory(dir);
@@ -9740,7 +9750,9 @@ final class Cli {
 				return
 					' If "$name" is a macro-emitted parser runtime helper, the emit site lives in src/anyparse/macro/$entry — try apq lit \'$name\' src/anyparse/macro/ --any-kind to see the FFun name slot.';
 			}
-		} catch (_: Exception) {}
+		} catch (_: Exception) {
+			// best-effort: return '' if building the hint text fails
+		}
 		return '';
 		#else
 		return '';
