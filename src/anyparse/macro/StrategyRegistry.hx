@@ -20,13 +20,13 @@ import anyparse.core.Strategy;
  */
 class StrategyRegistry {
 
-	private final strategies: Array<Strategy> = [];
+	private final _strategies: Array<Strategy> = [];
 	private var _ordered: Array<Strategy> = [];
 
 	public function new() {}
 
 	public function register(s: Strategy): Void {
-		strategies.push(s);
+		_strategies.push(s);
 	}
 
 	/**
@@ -36,13 +36,13 @@ class StrategyRegistry {
 	public function prepare(): Void {
 		// Conflict check — each owned meta tag can have only one owner.
 		final owners: Map<String, String> = [];
-		for (s in strategies) for (tag in s.ownedMeta) {
+		for (s in _strategies) for (tag in s.ownedMeta) {
 			if (owners.exists(tag)) {
 				Context.fatalError('metadata $tag is claimed by both ${owners.get(tag)} and ${s.name}', Context.currentPos());
 			}
 			owners.set(tag, s.name);
 		}
-		_ordered = topoSort(strategies);
+		_ordered = topoSort(_strategies);
 	}
 
 	/**

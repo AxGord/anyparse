@@ -36,7 +36,7 @@ class Lowering {
 	private final shape: ShapeBuilder.ShapeResult;
 	private final formatInfo: FormatReader.FormatInfo;
 	private final ctx: LoweringCtx;
-	private final eregByRule: Map<String, GeneratedRule.EregSpec> = [];
+	private final _eregByRule: Map<String, GeneratedRule.EregSpec> = [];
 
 	public function new(shape: ShapeBuilder.ShapeResult, formatInfo: FormatReader.FormatInfo, ctx: LoweringCtx) {
 		this.shape = shape;
@@ -264,7 +264,7 @@ class Lowering {
 
 	private function collectEregs(typePath: String): Array<GeneratedRule.EregSpec> {
 		final eregs: Array<GeneratedRule.EregSpec> = [];
-		if (eregByRule.exists(typePath)) eregs.push(eregByRule.get(typePath));
+		if (_eregByRule.exists(typePath)) eregs.push(_eregByRule.get(typePath));
 		return eregs;
 	}
 
@@ -4593,7 +4593,7 @@ expectLit(ctx, $v{trailText}));
 		}
 		final underlying: String = node.annotations.get('base.underlying');
 		final eregVar: String = '_re_$simple';
-		eregByRule.set(typePath, { varName: eregVar, pattern: pattern });
+		_eregByRule.set(typePath, { varName: eregVar, pattern: pattern });
 
 		// `@:unescape` on a Terminal abstract generates an inline
 		// walk-and-unescape loop using the `@:schema` format's

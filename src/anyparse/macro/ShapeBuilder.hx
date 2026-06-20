@@ -47,7 +47,7 @@ using Lambda;
 class ShapeBuilder {
 
 	private final _pending: Array<{ name: String, type: Type }> = [];
-	private final shaped: Map<String, ShapeNode> = [];
+	private final _shaped: Map<String, ShapeNode> = [];
 	private final _inFlight: Array<String> = [];
 	private final formatInfo: Null<FormatReader.FormatInfo>;
 
@@ -82,17 +82,17 @@ class ShapeBuilder {
 		}
 		while (_pending.length > 0) {
 			final job: { name: String, type: Type } = _pending.shift();
-			if (shaped.exists(job.name)) continue;
+			if (_shaped.exists(job.name)) continue;
 			_inFlight.push(job.name);
 			final node: ShapeNode = shapeTop(job.type);
-			shaped.set(job.name, node);
+			_shaped.set(job.name, node);
 			_inFlight.pop();
 		}
-		return { root: _rootName, rules: shaped };
+		return { root: _rootName, rules: _shaped };
 	}
 
 	private function enqueue(name: String, t: Type): Void {
-		if (shaped.exists(name)) return;
+		if (_shaped.exists(name)) return;
 		if (_inFlight.indexOf(name) != -1) return;
 		for (p in _pending) if (p.name == name) return;
 		_pending.push({ name: name, type: t });
