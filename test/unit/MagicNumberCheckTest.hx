@@ -182,4 +182,11 @@ class MagicNumberCheckTest extends Test {
 		sys.FileSystem.deleteDirectory(dir);
 	}
 
+	public function testObjectFieldValueExempt(): Void {
+		// A numeric literal that is the direct value of an object-literal field is
+		// declarative data, not logic — exempt. A computed field value still flags.
+		Assert.equals(0, violations('class C {\n\tfunction f() { return { value: 30, nested: { w: 140 } }; }\n}').length);
+		Assert.equals(1, violations('class C {\n\tfunction f(k:Int) { return { value: 30 * k }; }\n}').length);
+	}
+
 }

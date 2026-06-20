@@ -30,7 +30,7 @@ import haxe.Exception;
  *     not in `RefShape.localDeclKinds`): `var x = 5000;` / `final x = 5000;`
  *     already give the literal a name, which is exactly the extraction the rule
  *     asks for. A literal nested in an initializer expression (`var x = 5000 *
- *     k`) is still in logic and is flagged.
+ *     k`) is still in logic and is flagged. A literal that is the direct value of an object-literal field (`RefShape.objectFieldKind`, e.g. `{ value: 30 }`) is likewise declarative data and exempt; a computed field value keeps the literal under the operator and stays flagged.
  *  3. its numeric value is not in the exempt set `{0, 1, 2}` plus any number
  *     listed in the `magic-number` `ignore` option of a discovered
  *     `apqlint.json`. A negative literal parses as a negation wrapping a
@@ -64,6 +64,7 @@ final class MagicNumber implements Check {
 		final numericKinds: Array<String> = shape.numericLiteralKinds ?? [];
 		final functionKinds: Array<String> = shape.functionKinds ?? [];
 		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
+		final objectFieldKind: String = shape.objectFieldKind ?? '';
 		if (numericKinds.length == 0 || functionKinds.length == 0) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
@@ -75,7 +76,7 @@ final class MagicNumber implements Check {
 				final base: Array<Float> = plugin.checkOverrides(entry.file)?.magicNumberIgnore ?? EXEMPT;
 				final ignore: Array<Float> = LintConfig.discover(entry.file).numberListOption('magic-number', 'ignore') ?? [];
 				final exempt: Array<Float> = base.concat(ignore);
-				walk(violations, entry.file, tree, '', false, numericKinds, functionKinds, localDeclKinds, exempt);
+				walk(violations, entry.file, tree, '', false, numericKinds, functionKinds, localDeclKinds, objectFieldKind, exempt);
 			}
 		}
 		return violations;
@@ -95,11 +96,13 @@ final class MagicNumber implements Check {
 	 */
 	private static function walk(
 		out: Array<Violation>, file: String, node: QueryNode, parentKind: String, inFunction: Bool, numericKinds: Array<String>,
-		functionKinds: Array<String>, localDeclKinds: Array<String>, exempt: Array<Float>
+		functionKinds: Array<String>, localDeclKinds: Array<String>, objectFieldKind: String, exempt: Array<Float>
 	): Void {
 		final here: Bool = inFunction || functionKinds.contains(node.kind);
-		if (here && numericKinds.contains(node.kind) && !localDeclKinds.contains(parentKind)) flag(out, file, node, exempt);
-		for (child in node.children) walk(out, file, child, node.kind, here, numericKinds, functionKinds, localDeclKinds, exempt);
+		if (here && numericKinds.contains(node.kind) && !localDeclKinds.contains(parentKind) && parentKind != objectFieldKind)
+			flag(out, file, node, exempt);
+		for (child in node.children)
+			walk(out, file, child, node.kind, here, numericKinds, functionKinds, localDeclKinds, objectFieldKind, exempt);
 	}
 
 	/** Append a `Warning` unless the literal's value is exempt or unparseable. */

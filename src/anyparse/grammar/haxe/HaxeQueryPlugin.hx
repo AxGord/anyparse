@@ -417,6 +417,7 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 			mutableFieldDeclKinds: ['VarMember'],
 			voidReturnKind: 'VoidReturnStmt',
 			numericLiteralKinds: ['IntLit', 'FloatLit', 'HexLit'],
+			objectFieldKind: 'Field',
 		};
 	}
 

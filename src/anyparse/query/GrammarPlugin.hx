@@ -666,6 +666,15 @@ typedef RefShape = {
 	 * independent unit. NOT subtracted by the other checks that read `functionKinds`.
 	 */
 	@:optional var localFunctionKinds: Array<String>;
+
+	/**
+	 * Object-literal field kind — a numeric literal that is the DIRECT value of such
+	 * a field (`{ value: 30 }`) is declarative DATA, not logic, so `magic-number`
+	 * exempts it. A computed field value (`{ value: 30 * k }`) keeps the literal
+	 * under the operator node (not the field), so it stays flagged. Unset → no
+	 * object-field exemption.
+	 */
+	@:optional var objectFieldKind: String;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {
