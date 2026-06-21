@@ -345,6 +345,52 @@ final class HxExprUtil {
 	];
 
 	/**
+	 * Statement constructors whose surface form ends with `}` — the `}`
+	 * is the last token, so no trailing `;` is needed. Byte-check `'}'`
+	 * would also match; the explicit set makes the intent clear.
+	 */
+	private static final BRACE_TERMINAL_STMT_CTORS: Array<String> = [
+		'BlockStmt',
+		'IfStmt',
+		'WhileStmt',
+		'ForStmt',
+		'SwitchStmt',
+		'SwitchStmtBare',
+		'TryCatchStmt',
+		'LocalFnStmt',
+		'LocalInlineFnStmt',
+		'UntypedBlockStmt',
+	];
+
+	/**
+	 * Statement constructors whose own `@:trail(';')` / `@:lit(';')`
+	 * consumed the separator; the byte at `_prevEndPos - 1` is `;` so a
+	 * byte-check also passes, but the explicit set keeps the intent clear.
+	 */
+	private static final SEP_TERMINAL_STMT_CTORS: Array<String> = [
+		'VoidReturnStmt',
+		'ThrowStmt',
+		'DoWhileStmt',
+		'ErrorStmt',
+		'EmptyStmt',
+		'TryCatchStmtBare',
+	];
+
+	/**
+	 * Statement constructors the byte-check misses: `#if … #end`
+	 * (`Conditional`) ends with `d`, and the `....` placeholder
+	 * (`EllipsisStmt`) ends with `.`. The AST predicate is required here.
+	 */
+	private static final NON_BYTE_TERMINAL_STMT_CTORS: Array<String> = ['Conditional', 'EllipsisStmt'];
+
+	/**
+	 * `var` / `final` (and static variants) statement constructors whose
+	 * brace-termination depends on the init expression — routed through
+	 * `varInitEndsWithBrace`.
+	 */
+	private static final VAR_INIT_STMT_CTORS: Array<String> = ['VarStmt', 'FinalStmt', 'StaticVarStmt', 'StaticFinalStmt'];
+
+	/**
 	 * True iff `raw`, standing as a statement (`HxStatement.ExprStmt`),
 	 * is `}`-terminated so Haxe needs no trailing `;`. Drives the
 	 * parser-side `@:fmt(trailOptParseGate('stmtExprNoSemi'))` gate on
@@ -600,39 +646,29 @@ final class HxExprUtil {
 			final params: Null<Array<Dynamic>> = Type.enumParameters(s);
 			return params != null && params.length > 0 && stmtExprNoSemi(params[0]);
 		}
-		// Brace-terminated stmts — `}` is the last token. Byte-check
-		// `'}'` would also match; AST branch makes the intent explicit.
-		if (
-			ctor == 'BlockStmt' || ctor == 'IfStmt' || ctor == 'WhileStmt' || ctor == 'ForStmt' || ctor == 'SwitchStmt'
-			|| ctor == 'SwitchStmtBare' || ctor == 'TryCatchStmt' || ctor == 'LocalFnStmt' || ctor == 'LocalInlineFnStmt'
-			|| ctor == 'UntypedBlockStmt'
-		) return true;
-		// Sep-terminated stmts — their own `@:trail(';')` / `@:lit(';')`
-		// consumed the sep; byte at `_prevEndPos - 1` is `;` so byte-check
-		// also passes. AST branch is explicit.
-		if (
-			ctor == 'VoidReturnStmt' || ctor == 'ThrowStmt' || ctor == 'DoWhileStmt' || ctor == 'ErrorStmt' || ctor == 'EmptyStmt'
-			|| ctor == 'TryCatchStmtBare'
-		) return true;
-		// `#if … #end` ends with `d`; byte-check misses, AST predicate
-		// is required. `....` placeholder ends with `.`; same reasoning.
-		if (ctor == 'Conditional' || ctor == 'EllipsisStmt') return true;
-		// `var x = expr` / `final x = expr` / static-variant stmts whose
-		// init expression ends with `}` (Switch / TryCatch / FnExpr with
-		// BlockBody). Byte-check on `_prevEndPos - 1` misses these because
-		// the stmt's own trailing `skipWs` (before `@:trailOpt(';')`'s
-		// `matchLit`) advances past the brace + newline + tabs when no
-		// trailing `;` is present, leaving `_prevEndPos` past the `}`.
-		// Delegate to `endsWithCloseBrace` on the `HxVarDecl.init` field.
-		if (ctor == 'VarStmt' || ctor == 'FinalStmt' || ctor == 'StaticVarStmt' || ctor == 'StaticFinalStmt') {
-			final params: Null<Array<Dynamic>> = Type.enumParameters(s);
-			if (params == null || params.length == 0) return false;
-			final decl: Null<Dynamic> = params[0];
-			if (decl == null) return false;
-			final init: Null<Dynamic> = Reflect.field(decl, 'init');
-			return init != null && endsWithCloseBrace(init);
-		}
+		if (BRACE_TERMINAL_STMT_CTORS.contains(ctor)) return true;
+		if (SEP_TERMINAL_STMT_CTORS.contains(ctor)) return true;
+		if (NON_BYTE_TERMINAL_STMT_CTORS.contains(ctor)) return true;
+		if (VAR_INIT_STMT_CTORS.contains(ctor)) return varInitEndsWithBrace(s);
 		return false;
+	}
+
+	/**
+	 * `var x = expr` / `final x = expr` / static-variant stmts whose init
+	 * expression ends with `}` (Switch / TryCatch / FnExpr with
+	 * BlockBody). Byte-check on `_prevEndPos - 1` misses these because the
+	 * stmt's own trailing `skipWs` (before `@:trailOpt(';')`'s `matchLit`)
+	 * advances past the brace + newline + tabs when no trailing `;` is
+	 * present, leaving `_prevEndPos` past the `}`. Delegate to
+	 * `endsWithCloseBrace` on the `HxVarDecl.init` field.
+	 */
+	private static function varInitEndsWithBrace(s: Dynamic): Bool {
+		final params: Null<Array<Dynamic>> = Type.enumParameters(s);
+		if (params == null || params.length == 0) return false;
+		final decl: Null<Dynamic> = params[0];
+		if (decl == null) return false;
+		final init: Null<Dynamic> = Reflect.field(decl, 'init');
+		return init != null && endsWithCloseBrace(init);
 	}
 
 	/**
