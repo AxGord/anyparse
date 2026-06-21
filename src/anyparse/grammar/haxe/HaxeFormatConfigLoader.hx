@@ -1048,107 +1048,10 @@ final class HaxeFormatConfigLoader {
 	}
 
 	private static function applyWhitespace(section: HxFormatWhitespaceSection, opt: HxModuleWriteOptions): Void {
-		if (section.objectFieldColonPolicy != null) opt.objectFieldColon = whitespaceToRuntime(section.objectFieldColonPolicy);
-		if (section.typeHintColonPolicy != null) opt.typeHintColon = whitespaceToRuntime(section.typeHintColonPolicy);
-		if (section.typeCheckColonPolicy != null) opt.typeCheckColon = whitespaceToRuntime(section.typeCheckColonPolicy);
-		if (section.typeParamOpenPolicy != null) opt.typeParamOpen = whitespaceToRuntime(section.typeParamOpenPolicy);
-		if (section.typeParamClosePolicy != null) opt.typeParamClose = whitespaceToRuntime(section.typeParamClosePolicy);
-		if (section.binopPolicy != null) opt.typeParamDefaultEquals = whitespaceToRuntime(section.binopPolicy);
-		if (section.functionTypeHaxe4Policy != null) opt.functionTypeHaxe4 = whitespaceToRuntime(section.functionTypeHaxe4Policy);
-		if (section.functionTypeHaxe3Policy != null) opt.functionTypeHaxe3 = whitespaceToRuntime(section.functionTypeHaxe3Policy);
-		if (section.arrowFunctionsPolicy != null) opt.arrowFunctions = whitespaceToRuntime(section.arrowFunctionsPolicy);
-		if (section.ifPolicy != null) opt.ifPolicy = whitespaceToRuntime(section.ifPolicy);
-		if (section.forPolicy != null) opt.forPolicy = whitespaceToRuntime(section.forPolicy);
-		if (section.whilePolicy != null) opt.whilePolicy = whitespaceToRuntime(section.whilePolicy);
-		if (section.switchPolicy != null) opt.switchPolicy = whitespaceToRuntime(section.switchPolicy);
-		if (section.tryPolicy != null) opt.tryPolicy = whitespaceToRuntime(section.tryPolicy);
-		if (section.addLineCommentSpace != null) opt.addLineCommentSpace = section.addLineCommentSpace;
-		if (section.compressSuccessiveParenthesis != null) opt.compressSuccessiveParenthesis = section.compressSuccessiveParenthesis;
-		if (section.formatStringInterpolation != null) opt.formatStringInterpolation = section.formatStringInterpolation;
-		final paren: Null<HxFormatParenConfigSection> = section.parenConfig;
-		if (paren != null) {
-			final funcParam: Null<HxFormatParenPolicySection> = paren.funcParamParens;
-			if (funcParam != null && funcParam.openingPolicy != null) opt.funcParamParens = whitespaceToRuntime(funcParam.openingPolicy);
-			final call: Null<HxFormatParenPolicySection> = paren.callParens;
-			if (call != null) {
-				// ω-call-parens-inside (Stage B): `callParens.openingPolicy`
-				// drives TWO axes of the open `(` token, mirroring fork's
-				// per-token whitespace policy. The `before` sub-policy is the
-				// gap BEFORE `(` (existing `opt.callParens`); the `after`
-				// sub-policy is the INNER pad right after `(` (new
-				// `opt.callParensInsideOpen`). `closingPolicy.before` is the
-				// inner pad before `)` (`opt.callParensInsideClose`). So
-				// `openingPolicy: "onlyAfter"` keeps `bar1(` tight AND pads
-				// `( {…`; `closingPolicy: "before"` pads `…} )`.
-				final callOpening: Null<HxFormatWhitespacePolicy> = call.openingPolicy;
-				if (callOpening != null) {
-					opt.callParens = whitespaceToRuntime(callOpening);
-					opt.callParensInsideOpen = whitespaceToRuntime(callOpening);
-				}
-				final callClosing: Null<HxFormatWhitespacePolicy> = call.closingPolicy;
-				if (callClosing != null) opt.callParensInsideClose = whitespaceToRuntime(callClosing);
-			}
-			final anonFunc: Null<HxFormatParenPolicySection> = paren.anonFuncParamParens;
-			if (anonFunc != null) {
-				if (anonFunc.openingPolicy != null) opt.anonFuncParens = whitespaceToRuntime(anonFunc.openingPolicy);
-				if (anonFunc.removeInnerWhenEmpty != null) opt.anonFuncParamParensKeepInnerWhenEmpty = !anonFunc.removeInnerWhenEmpty;
-			}
-			// ω-condition-parens (Stage C): apply the `conditionParens`
-			// catch-all FIRST (haxe-formatter scopes it to if / while / switch
-			// / `#if`), then the per-category sections override. Each section's
-			// `openingPolicy` drives the kw→`(` gap (paren-side `before`,
-			// flipped to the kw-after knob) AND the inner `( ` pad
-			// (`after`); `closingPolicy.before` drives the inner ` )` pad.
-			applyConditionParens(paren.conditionParens, opt, true);
-			applyConditionParens(paren.ifConditionParens, opt, false, 'if');
-			applyConditionParens(paren.whileConditionParens, opt, false, 'while');
-			applyConditionParens(paren.switchConditionParens, opt, false, 'switch');
-			applyConditionParens(paren.catchParens, opt, false, 'catch');
-			applyConditionParens(paren.sharpConditionParens, opt, false, 'sharp');
-		}
-		final braces: Null<HxFormatBracesConfigSection> = section.bracesConfig;
-		if (braces != null) {
-			final anonType: Null<HxFormatParenPolicySection> = braces.anonTypeBraces;
-			if (anonType != null) {
-				if (anonType.openingPolicy != null) opt.anonTypeBracesOpen = whitespaceToRuntime(anonType.openingPolicy);
-				if (anonType.closingPolicy != null) opt.anonTypeBracesClose = whitespaceToRuntime(anonType.closingPolicy);
-			}
-			final objectLit: Null<HxFormatParenPolicySection> = braces.objectLiteralBraces;
-			if (objectLit != null) {
-				if (objectLit.openingPolicy != null) opt.objectLiteralBracesOpen = whitespaceToRuntime(objectLit.openingPolicy);
-				if (objectLit.closingPolicy != null) opt.objectLiteralBracesClose = whitespaceToRuntime(objectLit.closingPolicy);
-			}
-		}
-		// ω-bracket-config: `whitespace.bracketConfig.*` → the eight
-		// `{access|arrayLiteral|mapLiteral|comprehension}Brackets{Open|
-		// Close}` knobs. Mirrors the `bracesConfig` block above; each of
-		// the four bracket kinds reuses the `HxFormatParenPolicySection`
-		// opening / closing policy pair. `HxExpr.IndexAccess` reads the
-		// `accessBrackets` pair; `HxExpr.ArrayExpr` runtime-dispatches
-		// among the other three on its first element's enum constructor.
-		final bracket: Null<HxFormatBracketConfigSection> = section.bracketConfig;
-		if (bracket != null) {
-			final access: Null<HxFormatParenPolicySection> = bracket.accessBrackets;
-			if (access != null) {
-				if (access.openingPolicy != null) opt.accessBracketsOpen = whitespaceToRuntime(access.openingPolicy);
-				if (access.closingPolicy != null) opt.accessBracketsClose = whitespaceToRuntime(access.closingPolicy);
-			}
-			final arrayLit: Null<HxFormatParenPolicySection> = bracket.arrayLiteralBrackets;
-			if (arrayLit != null) {
-				if (arrayLit.openingPolicy != null) opt.arrayLiteralBracketsOpen = whitespaceToRuntime(arrayLit.openingPolicy);
-				if (arrayLit.closingPolicy != null) opt.arrayLiteralBracketsClose = whitespaceToRuntime(arrayLit.closingPolicy);
-			}
-			final mapLit: Null<HxFormatParenPolicySection> = bracket.mapLiteralBrackets;
-			if (mapLit != null) {
-				if (mapLit.openingPolicy != null) opt.mapLiteralBracketsOpen = whitespaceToRuntime(mapLit.openingPolicy);
-				if (mapLit.closingPolicy != null) opt.mapLiteralBracketsClose = whitespaceToRuntime(mapLit.closingPolicy);
-			}
-			final compr: Null<HxFormatParenPolicySection> = bracket.comprehensionBrackets;
-			if (compr != null) {
-				if (compr.openingPolicy != null) opt.comprehensionBracketsOpen = whitespaceToRuntime(compr.openingPolicy);
-				if (compr.closingPolicy != null) opt.comprehensionBracketsClose = whitespaceToRuntime(compr.closingPolicy);
-			}
-		}
+		applyWhitespaceScalars(section, opt);
+		applyParenConfig(section, opt);
+		applyBracesConfig(section, opt);
+		applyBracketConfig(section, opt);
 	}
 
 	private static function applyEmptyLines(section: HxFormatEmptyLinesSection, opt: HxModuleWriteOptions): Void {
@@ -1728,6 +1631,119 @@ final class HaxeFormatConfigLoader {
 			if (importAndUsing.beforeType != null) opt.beforeType = importAndUsing.beforeType;
 			if (importAndUsing.keepSourceBlankAcrossConditional != null)
 				opt.keepSourceBlankAcrossConditional = importAndUsing.keepSourceBlankAcrossConditional;
+		}
+	}
+
+	private static function applyWhitespaceScalars(section: HxFormatWhitespaceSection, opt: HxModuleWriteOptions): Void {
+		if (section.objectFieldColonPolicy != null) opt.objectFieldColon = whitespaceToRuntime(section.objectFieldColonPolicy);
+		if (section.typeHintColonPolicy != null) opt.typeHintColon = whitespaceToRuntime(section.typeHintColonPolicy);
+		if (section.typeCheckColonPolicy != null) opt.typeCheckColon = whitespaceToRuntime(section.typeCheckColonPolicy);
+		if (section.typeParamOpenPolicy != null) opt.typeParamOpen = whitespaceToRuntime(section.typeParamOpenPolicy);
+		if (section.typeParamClosePolicy != null) opt.typeParamClose = whitespaceToRuntime(section.typeParamClosePolicy);
+		if (section.binopPolicy != null) opt.typeParamDefaultEquals = whitespaceToRuntime(section.binopPolicy);
+		if (section.functionTypeHaxe4Policy != null) opt.functionTypeHaxe4 = whitespaceToRuntime(section.functionTypeHaxe4Policy);
+		if (section.functionTypeHaxe3Policy != null) opt.functionTypeHaxe3 = whitespaceToRuntime(section.functionTypeHaxe3Policy);
+		if (section.arrowFunctionsPolicy != null) opt.arrowFunctions = whitespaceToRuntime(section.arrowFunctionsPolicy);
+		if (section.ifPolicy != null) opt.ifPolicy = whitespaceToRuntime(section.ifPolicy);
+		if (section.forPolicy != null) opt.forPolicy = whitespaceToRuntime(section.forPolicy);
+		if (section.whilePolicy != null) opt.whilePolicy = whitespaceToRuntime(section.whilePolicy);
+		if (section.switchPolicy != null) opt.switchPolicy = whitespaceToRuntime(section.switchPolicy);
+		if (section.tryPolicy != null) opt.tryPolicy = whitespaceToRuntime(section.tryPolicy);
+		if (section.addLineCommentSpace != null) opt.addLineCommentSpace = section.addLineCommentSpace;
+		if (section.compressSuccessiveParenthesis != null) opt.compressSuccessiveParenthesis = section.compressSuccessiveParenthesis;
+		if (section.formatStringInterpolation != null) opt.formatStringInterpolation = section.formatStringInterpolation;
+	}
+
+	private static function applyParenConfig(section: HxFormatWhitespaceSection, opt: HxModuleWriteOptions): Void {
+		final paren: Null<HxFormatParenConfigSection> = section.parenConfig;
+		if (paren != null) {
+			final funcParam: Null<HxFormatParenPolicySection> = paren.funcParamParens;
+			if (funcParam != null && funcParam.openingPolicy != null) opt.funcParamParens = whitespaceToRuntime(funcParam.openingPolicy);
+			final call: Null<HxFormatParenPolicySection> = paren.callParens;
+			if (call != null) {
+				// ω-call-parens-inside (Stage B): `callParens.openingPolicy`
+				// drives TWO axes of the open `(` token, mirroring fork's
+				// per-token whitespace policy. The `before` sub-policy is the
+				// gap BEFORE `(` (existing `opt.callParens`); the `after`
+				// sub-policy is the INNER pad right after `(` (new
+				// `opt.callParensInsideOpen`). `closingPolicy.before` is the
+				// inner pad before `)` (`opt.callParensInsideClose`). So
+				// `openingPolicy: "onlyAfter"` keeps `bar1(` tight AND pads
+				// `( {…`; `closingPolicy: "before"` pads `…} )`.
+				final callOpening: Null<HxFormatWhitespacePolicy> = call.openingPolicy;
+				if (callOpening != null) {
+					opt.callParens = whitespaceToRuntime(callOpening);
+					opt.callParensInsideOpen = whitespaceToRuntime(callOpening);
+				}
+				final callClosing: Null<HxFormatWhitespacePolicy> = call.closingPolicy;
+				if (callClosing != null) opt.callParensInsideClose = whitespaceToRuntime(callClosing);
+			}
+			final anonFunc: Null<HxFormatParenPolicySection> = paren.anonFuncParamParens;
+			if (anonFunc != null) {
+				if (anonFunc.openingPolicy != null) opt.anonFuncParens = whitespaceToRuntime(anonFunc.openingPolicy);
+				if (anonFunc.removeInnerWhenEmpty != null) opt.anonFuncParamParensKeepInnerWhenEmpty = !anonFunc.removeInnerWhenEmpty;
+			}
+			// ω-condition-parens (Stage C): apply the `conditionParens`
+			// catch-all FIRST (haxe-formatter scopes it to if / while / switch
+			// / `#if`), then the per-category sections override. Each section's
+			// `openingPolicy` drives the kw→`(` gap (paren-side `before`,
+			// flipped to the kw-after knob) AND the inner `( ` pad
+			// (`after`); `closingPolicy.before` drives the inner ` )` pad.
+			applyConditionParens(paren.conditionParens, opt, true);
+			applyConditionParens(paren.ifConditionParens, opt, false, 'if');
+			applyConditionParens(paren.whileConditionParens, opt, false, 'while');
+			applyConditionParens(paren.switchConditionParens, opt, false, 'switch');
+			applyConditionParens(paren.catchParens, opt, false, 'catch');
+			applyConditionParens(paren.sharpConditionParens, opt, false, 'sharp');
+		}
+	}
+
+	private static function applyBracesConfig(section: HxFormatWhitespaceSection, opt: HxModuleWriteOptions): Void {
+		final braces: Null<HxFormatBracesConfigSection> = section.bracesConfig;
+		if (braces != null) {
+			final anonType: Null<HxFormatParenPolicySection> = braces.anonTypeBraces;
+			if (anonType != null) {
+				if (anonType.openingPolicy != null) opt.anonTypeBracesOpen = whitespaceToRuntime(anonType.openingPolicy);
+				if (anonType.closingPolicy != null) opt.anonTypeBracesClose = whitespaceToRuntime(anonType.closingPolicy);
+			}
+			final objectLit: Null<HxFormatParenPolicySection> = braces.objectLiteralBraces;
+			if (objectLit != null) {
+				if (objectLit.openingPolicy != null) opt.objectLiteralBracesOpen = whitespaceToRuntime(objectLit.openingPolicy);
+				if (objectLit.closingPolicy != null) opt.objectLiteralBracesClose = whitespaceToRuntime(objectLit.closingPolicy);
+			}
+		}
+	}
+
+	private static function applyBracketConfig(section: HxFormatWhitespaceSection, opt: HxModuleWriteOptions): Void {
+		// ω-bracket-config: `whitespace.bracketConfig.*` → the eight
+		// `{access|arrayLiteral|mapLiteral|comprehension}Brackets{Open|
+		// Close}` knobs. Mirrors the `bracesConfig` block above; each of
+		// the four bracket kinds reuses the `HxFormatParenPolicySection`
+		// opening / closing policy pair. `HxExpr.IndexAccess` reads the
+		// `accessBrackets` pair; `HxExpr.ArrayExpr` runtime-dispatches
+		// among the other three on its first element's enum constructor.
+		final bracket: Null<HxFormatBracketConfigSection> = section.bracketConfig;
+		if (bracket != null) {
+			final access: Null<HxFormatParenPolicySection> = bracket.accessBrackets;
+			if (access != null) {
+				if (access.openingPolicy != null) opt.accessBracketsOpen = whitespaceToRuntime(access.openingPolicy);
+				if (access.closingPolicy != null) opt.accessBracketsClose = whitespaceToRuntime(access.closingPolicy);
+			}
+			final arrayLit: Null<HxFormatParenPolicySection> = bracket.arrayLiteralBrackets;
+			if (arrayLit != null) {
+				if (arrayLit.openingPolicy != null) opt.arrayLiteralBracketsOpen = whitespaceToRuntime(arrayLit.openingPolicy);
+				if (arrayLit.closingPolicy != null) opt.arrayLiteralBracketsClose = whitespaceToRuntime(arrayLit.closingPolicy);
+			}
+			final mapLit: Null<HxFormatParenPolicySection> = bracket.mapLiteralBrackets;
+			if (mapLit != null) {
+				if (mapLit.openingPolicy != null) opt.mapLiteralBracketsOpen = whitespaceToRuntime(mapLit.openingPolicy);
+				if (mapLit.closingPolicy != null) opt.mapLiteralBracketsClose = whitespaceToRuntime(mapLit.closingPolicy);
+			}
+			final compr: Null<HxFormatParenPolicySection> = bracket.comprehensionBrackets;
+			if (compr != null) {
+				if (compr.openingPolicy != null) opt.comprehensionBracketsOpen = whitespaceToRuntime(compr.openingPolicy);
+				if (compr.closingPolicy != null) opt.comprehensionBracketsClose = whitespaceToRuntime(compr.closingPolicy);
+			}
 		}
 	}
 
