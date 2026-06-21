@@ -1031,109 +1031,8 @@ final class HaxeFormatConfigLoader {
 			// override.
 			opt.blockLeftCurly = placement;
 		}
-		if (section.objectLiteralCurly != null) {
-			final sub: HxFormatCurlyLineEndPolicy = section.objectLiteralCurly;
-			if (sub.leftCurly != null) opt.objectLiteralLeftCurly = leftCurlyToRuntime(sub.leftCurly);
-			// ω-objectlit-right-curly: per-construct sub-key
-			// `lineEnds.objectLiteralCurly.rightCurly` overrides the cascade
-			// for object-literal body closes (`HxObjectLit.fields`). Mirrors
-			// haxe-formatter's `MarkLineEnds.getCurlyPolicy(ObjectDecl).rightCurly`
-			// precedence.
-			if (sub.rightCurly != null) opt.objectLiteralRightCurly = rightCurlyToRuntime(sub.rightCurly);
-		}
-		if (section.anonFunctionCurly != null) {
-			final sub: HxFormatCurlyLineEndPolicy = section.anonFunctionCurly;
-			if (sub.leftCurly != null) opt.anonFunctionLeftCurly = leftCurlyToRuntime(sub.leftCurly);
-			// ω-anonfunction-empty-curly: per-construct sub-key
-			// `lineEnds.anonFunctionCurly.emptyCurly` overrides the cascade
-			// for empty anonymous function bodies (`function(){}` →
-			// `function()\n{\n}`). Mirrors haxe-formatter's
-			// `MarkLineEnds.getCurlyPolicy(AnonymousFunction).emptyCurly`
-			// precedence — global lineEnd seeds the knob, the sub-key
-			// wins when present.
-			if (sub.emptyCurly != null) opt.anonFunctionEmptyCurly = emptyCurlyToRuntime(sub.emptyCurly);
-			// ω-anonfunction-right-curly: per-construct sub-key
-			// `lineEnds.anonFunctionCurly.rightCurly` overrides the cascade
-			// for anonymous function body closes. Mirrors haxe-formatter's
-			// `MarkLineEnds.getCurlyPolicy(AnonymousFunction).rightCurly`
-			// precedence.
-			if (sub.rightCurly != null) opt.anonFunctionRightCurly = rightCurlyToRuntime(sub.rightCurly);
-		}
-		if (section.anonTypeCurly != null) {
-			// ω-anontype-right-curly: per-construct sub-key
-			// `lineEnds.anonTypeCurly.rightCurly` overrides the cascade
-			// for anonymous type body closes (`HxType.Anon`). Mirrors
-			// haxe-formatter's `MarkLineEnds.getCurlyPolicy(AnonType).rightCurly`
-			// precedence.
-			final sub: HxFormatCurlyLineEndPolicy = section.anonTypeCurly;
-			if (sub.rightCurly != null) opt.anonTypeRightCurly = rightCurlyToRuntime(sub.rightCurly);
-		}
-		if (section.blockCurly != null) {
-			// ω-blockcurly: per-construct sub-key
-			// `lineEnds.blockCurly.leftCurly` overrides the cascade for
-			// plain block body braces (currently `HxFnDecl.body`).
-			// Mirrors haxe-formatter's `MarkLineEnds.getCurlyPolicy(Block)`
-			// precedence.
-			final sub: HxFormatCurlyLineEndPolicy = section.blockCurly;
-			if (sub.leftCurly != null) opt.blockLeftCurly = leftCurlyToRuntime(sub.leftCurly);
-			// ω-blockempty: per-construct sub-key
-			// `lineEnds.blockCurly.emptyCurly` overrides the cascade for
-			// empty plain block bodies (`HxStatement.BlockStmt`,
-			// `HxExpr.BlockExpr`, `HxSwitchStmt.cases`,
-			// `HxSwitchStmtBare.cases`). Mirrors haxe-formatter's
-			// `MarkLineEnds.getCurlyPolicy(Block).emptyCurly` precedence.
-			if (sub.emptyCurly != null) opt.blockEmptyCurly = emptyCurlyToRuntime(sub.emptyCurly);
-			// ω-blockright-curly: per-construct sub-key
-			// `lineEnds.blockCurly.rightCurly` overrides the cascade for
-			// plain block body closes. Mirrors haxe-formatter's
-			// `MarkLineEnds.getCurlyPolicy(Block).rightCurly` precedence.
-			if (sub.rightCurly != null) opt.blockRightCurly = rightCurlyToRuntime(sub.rightCurly);
-		}
-		if (section.emptyCurly != null) {
-			final empty: EmptyCurly = emptyCurlyToRuntime(section.emptyCurly);
-			opt.emptyCurly = empty;
-			// ω-anonfunction-empty-curly: cascade global `lineEnds.emptyCurly`
-			// into `opt.anonFunctionEmptyCurly` (same pattern as
-			// `anonFunctionLeftCurly` cascade above). The sub-key handler
-			// runs before this block when both are present, so the explicit
-			// `anonFunctionCurly.emptyCurly` override wins regardless of
-			// global ingest order.
-			if (section.anonFunctionCurly == null || section.anonFunctionCurly.emptyCurly == null) opt.anonFunctionEmptyCurly = empty;
-			// ω-blockempty: cascade global `lineEnds.emptyCurly` into
-			// `opt.blockEmptyCurly`. The `lineEnds.blockCurly.emptyCurly`
-			// sub-key handler runs before this block when both are present,
-			// so the explicit override wins regardless of global ingest order.
-			if (section.blockCurly == null || section.blockCurly.emptyCurly == null) opt.blockEmptyCurly = empty;
-		}
-		// ω-blockright-curly + ω-anonfunction-right-curly: cascade global
-		// `lineEnds.rightCurly` into every per-construct
-		// `RightCurlyPlacement` knob. With `Inline` (mapped from `"after"`
-		// / `"none"`), block bodies emit `{ body }` without a hardline
-		// before `}`; `Same` (mapped from `"before"` / `"both"`, default)
-		// keeps the standard close-on-own-line layout. The per-construct
-		// sub-key handlers (`lineEnds.blockCurly.rightCurly`,
-		// `lineEnds.anonFunctionCurly.rightCurly`) run before this block
-		// when present, so explicit overrides win regardless of global
-		// ingest order. Mirrors haxe-formatter's
-		// `MarkLineEnds.detectCurlyPolicy(...).rightCurly` precedence —
-		// global lineEnd seeds every per-construct knob, sub-keys override.
-		if (section.rightCurly != null) {
-			final placement: RightCurlyPlacement = rightCurlyToRuntime(section.rightCurly);
-			if (section.blockCurly == null || section.blockCurly.rightCurly == null) opt.blockRightCurly = placement;
-			// ω-anonfunction-right-curly: cascade global lineEnd into
-			// `anonFunctionRightCurly` unless the
-			// `anonFunctionCurly.rightCurly` sub-key already set it.
-			if (section.anonFunctionCurly == null || section.anonFunctionCurly.rightCurly == null) opt.anonFunctionRightCurly = placement;
-			// ω-anontype-right-curly: cascade global lineEnd into
-			// `anonTypeRightCurly` unless the `anonTypeCurly.rightCurly`
-			// sub-key already set it.
-			if (section.anonTypeCurly == null || section.anonTypeCurly.rightCurly == null) opt.anonTypeRightCurly = placement;
-			// ω-objectlit-right-curly: cascade global lineEnd into
-			// `objectLiteralRightCurly` unless the
-			// `objectLiteralCurly.rightCurly` sub-key already set it.
-			if (section.objectLiteralCurly == null || section.objectLiteralCurly.rightCurly == null)
-				opt.objectLiteralRightCurly = placement;
-		}
+		applyLineEndsCurlySubKeys(section, opt);
+		applyLineEndsCascades(section, opt);
 		// ω-metadata-line-end-function: `lineEnds.metadataFunction` →
 		// `opt.metadataFunctionLineEnd`. Default `None` preserves source-
 		// driven inter-meta separator; `After` / `AfterLast` /
@@ -1708,6 +1607,115 @@ final class HaxeFormatConfigLoader {
 				case BodyPolicy.Keep, BodyPolicy.Next: SameLinePolicy.Keep;
 				case _: SameLinePolicy.Same;
 			};
+		}
+	}
+
+	private static function applyLineEndsCurlySubKeys(section: HxFormatLineEndsSection, opt: HxModuleWriteOptions): Void {
+		if (section.objectLiteralCurly != null) {
+			final sub: HxFormatCurlyLineEndPolicy = section.objectLiteralCurly;
+			if (sub.leftCurly != null) opt.objectLiteralLeftCurly = leftCurlyToRuntime(sub.leftCurly);
+			// ω-objectlit-right-curly: per-construct sub-key
+			// `lineEnds.objectLiteralCurly.rightCurly` overrides the cascade
+			// for object-literal body closes (`HxObjectLit.fields`). Mirrors
+			// haxe-formatter's `MarkLineEnds.getCurlyPolicy(ObjectDecl).rightCurly`
+			// precedence.
+			if (sub.rightCurly != null) opt.objectLiteralRightCurly = rightCurlyToRuntime(sub.rightCurly);
+		}
+		if (section.anonFunctionCurly != null) {
+			final sub: HxFormatCurlyLineEndPolicy = section.anonFunctionCurly;
+			if (sub.leftCurly != null) opt.anonFunctionLeftCurly = leftCurlyToRuntime(sub.leftCurly);
+			// ω-anonfunction-empty-curly: per-construct sub-key
+			// `lineEnds.anonFunctionCurly.emptyCurly` overrides the cascade
+			// for empty anonymous function bodies (`function(){}` →
+			// `function()\n{\n}`). Mirrors haxe-formatter's
+			// `MarkLineEnds.getCurlyPolicy(AnonymousFunction).emptyCurly`
+			// precedence — global lineEnd seeds the knob, the sub-key
+			// wins when present.
+			if (sub.emptyCurly != null) opt.anonFunctionEmptyCurly = emptyCurlyToRuntime(sub.emptyCurly);
+			// ω-anonfunction-right-curly: per-construct sub-key
+			// `lineEnds.anonFunctionCurly.rightCurly` overrides the cascade
+			// for anonymous function body closes. Mirrors haxe-formatter's
+			// `MarkLineEnds.getCurlyPolicy(AnonymousFunction).rightCurly`
+			// precedence.
+			if (sub.rightCurly != null) opt.anonFunctionRightCurly = rightCurlyToRuntime(sub.rightCurly);
+		}
+		if (section.anonTypeCurly != null) {
+			// ω-anontype-right-curly: per-construct sub-key
+			// `lineEnds.anonTypeCurly.rightCurly` overrides the cascade
+			// for anonymous type body closes (`HxType.Anon`). Mirrors
+			// haxe-formatter's `MarkLineEnds.getCurlyPolicy(AnonType).rightCurly`
+			// precedence.
+			final sub: HxFormatCurlyLineEndPolicy = section.anonTypeCurly;
+			if (sub.rightCurly != null) opt.anonTypeRightCurly = rightCurlyToRuntime(sub.rightCurly);
+		}
+		if (section.blockCurly != null) {
+			// ω-blockcurly: per-construct sub-key
+			// `lineEnds.blockCurly.leftCurly` overrides the cascade for
+			// plain block body braces (currently `HxFnDecl.body`).
+			// Mirrors haxe-formatter's `MarkLineEnds.getCurlyPolicy(Block)`
+			// precedence.
+			final sub: HxFormatCurlyLineEndPolicy = section.blockCurly;
+			if (sub.leftCurly != null) opt.blockLeftCurly = leftCurlyToRuntime(sub.leftCurly);
+			// ω-blockempty: per-construct sub-key
+			// `lineEnds.blockCurly.emptyCurly` overrides the cascade for
+			// empty plain block bodies (`HxStatement.BlockStmt`,
+			// `HxExpr.BlockExpr`, `HxSwitchStmt.cases`,
+			// `HxSwitchStmtBare.cases`). Mirrors haxe-formatter's
+			// `MarkLineEnds.getCurlyPolicy(Block).emptyCurly` precedence.
+			if (sub.emptyCurly != null) opt.blockEmptyCurly = emptyCurlyToRuntime(sub.emptyCurly);
+			// ω-blockright-curly: per-construct sub-key
+			// `lineEnds.blockCurly.rightCurly` overrides the cascade for
+			// plain block body closes. Mirrors haxe-formatter's
+			// `MarkLineEnds.getCurlyPolicy(Block).rightCurly` precedence.
+			if (sub.rightCurly != null) opt.blockRightCurly = rightCurlyToRuntime(sub.rightCurly);
+		}
+	}
+
+	private static function applyLineEndsCascades(section: HxFormatLineEndsSection, opt: HxModuleWriteOptions): Void {
+		if (section.emptyCurly != null) {
+			final empty: EmptyCurly = emptyCurlyToRuntime(section.emptyCurly);
+			opt.emptyCurly = empty;
+			// ω-anonfunction-empty-curly: cascade global `lineEnds.emptyCurly`
+			// into `opt.anonFunctionEmptyCurly` (same pattern as
+			// `anonFunctionLeftCurly` cascade above). The sub-key handler
+			// runs before this block when both are present, so the explicit
+			// `anonFunctionCurly.emptyCurly` override wins regardless of
+			// global ingest order.
+			if (section.anonFunctionCurly == null || section.anonFunctionCurly.emptyCurly == null) opt.anonFunctionEmptyCurly = empty;
+			// ω-blockempty: cascade global `lineEnds.emptyCurly` into
+			// `opt.blockEmptyCurly`. The `lineEnds.blockCurly.emptyCurly`
+			// sub-key handler runs before this block when both are present,
+			// so the explicit override wins regardless of global ingest order.
+			if (section.blockCurly == null || section.blockCurly.emptyCurly == null) opt.blockEmptyCurly = empty;
+		}
+		// ω-blockright-curly + ω-anonfunction-right-curly: cascade global
+		// `lineEnds.rightCurly` into every per-construct
+		// `RightCurlyPlacement` knob. With `Inline` (mapped from `"after"`
+		// / `"none"`), block bodies emit `{ body }` without a hardline
+		// before `}`; `Same` (mapped from `"before"` / `"both"`, default)
+		// keeps the standard close-on-own-line layout. The per-construct
+		// sub-key handlers (`lineEnds.blockCurly.rightCurly`,
+		// `lineEnds.anonFunctionCurly.rightCurly`) run before this block
+		// when present, so explicit overrides win regardless of global
+		// ingest order. Mirrors haxe-formatter's
+		// `MarkLineEnds.detectCurlyPolicy(...).rightCurly` precedence —
+		// global lineEnd seeds every per-construct knob, sub-keys override.
+		if (section.rightCurly != null) {
+			final placement: RightCurlyPlacement = rightCurlyToRuntime(section.rightCurly);
+			if (section.blockCurly == null || section.blockCurly.rightCurly == null) opt.blockRightCurly = placement;
+			// ω-anonfunction-right-curly: cascade global lineEnd into
+			// `anonFunctionRightCurly` unless the
+			// `anonFunctionCurly.rightCurly` sub-key already set it.
+			if (section.anonFunctionCurly == null || section.anonFunctionCurly.rightCurly == null) opt.anonFunctionRightCurly = placement;
+			// ω-anontype-right-curly: cascade global lineEnd into
+			// `anonTypeRightCurly` unless the `anonTypeCurly.rightCurly`
+			// sub-key already set it.
+			if (section.anonTypeCurly == null || section.anonTypeCurly.rightCurly == null) opt.anonTypeRightCurly = placement;
+			// ω-objectlit-right-curly: cascade global lineEnd into
+			// `objectLiteralRightCurly` unless the
+			// `objectLiteralCurly.rightCurly` sub-key already set it.
+			if (section.objectLiteralCurly == null || section.objectLiteralCurly.rightCurly == null)
+				opt.objectLiteralRightCurly = placement;
 		}
 	}
 
