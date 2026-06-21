@@ -7398,21 +7398,7 @@ class WriterLowering {
 				_matrixDoc != null ? _dbg(_matrixDoc) : (_smlKeep ? _dbg(_wlResult) : _wlResult);
 			};
 		} else {
-			macro {
-				final _flat: Array<anyparse.core.Doc> = [_dt($v{openText})];
-				var _si2: Int = 0;
-				while (_si2 < _arr.length) {
-					if (_si2 > 0) {
-						_flat.push(_dt($v{sepText}));
-						_flat.push(_dt(' '));
-					}
-					final _t = _arr[_si2];
-					_flat.push($triviaElemCall);
-					_si2++;
-				}
-				_flat.push(_dt($v{closeText}));
-				_dc(_flat);
-			};
+			triviaSepFlatBranch(openText, closeText, sepText, triviaElemCall);
 		};
 		return macro {
 			final _arr = $fieldAccess;
@@ -7434,16 +7420,7 @@ class WriterLowering {
 			// has no element to attach to and currently degrades; if/when
 			// we synth a "newlineBeforeClose" slot, this gate tightens.
 			if (_arr.length == 0 && _trailLC.length == 0 && _trailOpen != null && StringTools.startsWith(_trailOpen, '/*')) {
-				final _openDoc: anyparse.core.Doc = _dt(_trailOpen);
-				if (_trailClose != null)
-					_dc([
-						_dt($v{openText}),
-						_openDoc,
-						_dt($v{closeText}),
-						trailingCommentDocVerbatim(_trailClose, opt)
-					]);
-				else
-					_dc([_dt($v{openText}), _openDoc, _dt($v{closeText})]);
+				${triviaSepEmptyOpenTrailExpr(openText, closeText)};
 			} else if (_arr.length == 0 && _trailLC.length == 0 && _trailOpen == null) {
 				if (_trailClose != null)
 					$emptyTrailExpr
@@ -14393,6 +14370,52 @@ class WriterLowering {
 				? _dcmz($case3Doc)
 				: (opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedDecrease ? _dcmd($case3Doc) : $case3Doc))
 			: case3Doc;
+	}
+
+	/**
+	 * Sep-Star no-wrap-rules flat fallback (the `wrapRulesField == null` arm
+	 * of the no-trivia branch): space-joined single-line layout. References
+	 * the runtime `_arr` local declared in the emitted scope. Extracted from
+	 * `triviaSepStarExpr` so the orchestrator stays under the complexity gate.
+	 */
+	private static function triviaSepFlatBranch(openText: String, closeText: String, sepText: String, triviaElemCall: Expr): Expr {
+		return macro {
+			final _flat: Array<anyparse.core.Doc> = [_dt($v{openText})];
+			var _si2: Int = 0;
+			while (_si2 < _arr.length) {
+				if (_si2 > 0) {
+					_flat.push(_dt($v{sepText}));
+					_flat.push(_dt(' '));
+				}
+				final _t = _arr[_si2];
+				_flat.push($triviaElemCall);
+				_si2++;
+			}
+			_flat.push(_dt($v{closeText}));
+			_dc(_flat);
+		};
+	}
+
+	/**
+	 * Sep-Star empty-list-with-open-trail emit: an empty Star whose only
+	 * content is a same-line block-style trailing comment after the open lit
+	 * (e.g. `[ /+ foo +/ ]` with block delimiters). References the runtime
+	 * `_trailOpen`/`_trailClose` locals declared in the emitted scope.
+	 * Extracted from `triviaSepStarExpr`.
+	 */
+	private static function triviaSepEmptyOpenTrailExpr(openText: String, closeText: String): Expr {
+		return macro {
+			final _openDoc: anyparse.core.Doc = _dt(_trailOpen);
+			if (_trailClose != null)
+				_dc([
+					_dt($v{openText}),
+					_openDoc,
+					_dt($v{closeText}),
+					trailingCommentDocVerbatim(_trailClose, opt)
+				]);
+			else
+				_dc([_dt($v{openText}), _openDoc, _dt($v{closeText})]);
+		};
 	}
 
 }
