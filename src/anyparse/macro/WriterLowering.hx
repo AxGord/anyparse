@@ -4042,6 +4042,142 @@ class WriterLowering {
 		}
 	}
 
+	/**
+	 * `@:trivia` Star dispatch (the whole `if (isTriviaStar)` block of
+	 * `emitWriterStarField`). Validates the trivia sep/raw/tryparse combinations,
+	 * builds the trailing-slot accessors + `TriviaStarCtx`, then routes to the
+	 * tryparse / close / EOF trivia emit helper. Extracted to keep the orchestrator
+	 * under the complexity gate.
+	 */
+	private function emitTriviaStar(args: StarFieldArgs, parts: Array<Expr>): Void {
+		final starNode: ShapeNode = args.starNode;
+		final fieldAccess: Expr = args.fieldAccess;
+		final elemFn: String = args.elemFn;
+		final elemRefName: String = args.elemRefName;
+		final isFirstField: Bool = args.isFirstField;
+		final isLastField: Bool = args.isLastField;
+		final isRaw: Bool = args.isRaw;
+		final typePath: String = args.typePath;
+		final openText: Null<String> = args.openText;
+		final closeText: Null<String> = args.closeText;
+		final sepText: Null<String> = args.sepText;
+		final prevBareRefBody: Null<PrevBodyInfo> = args.prevBareRefBody;
+		final prevTrailFieldName: Null<String> = args.prevTrailFieldName;
+		if (isRaw) Context.fatalError('WriterLowering: @:trivia Star does not support @:raw', Context.currentPos());
+		// ω-blockended-trivia-tryparse (Session 3): @:trivia + @:sep +
+		// @:tryparse is now allowed when the `blockEnded` flag is
+		// present (sole consumer: HxCaseBranch.body / HxDefaultBranch.stmts).
+		// EOF mode (closeText == null, no @:tryparse) still rejects.
+		final writerBlockEnded: Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
+		if (sepText != null && closeText == null && !starNode.hasMeta(':tryparse'))
+			Context.fatalError('WriterLowering: @:trivia + @:sep requires close-peek (@:trail) or @:tryparse', Context.currentPos());
+		if (sepText != null && starNode.hasMeta(':tryparse') && !writerBlockEnded)
+			Context.fatalError(
+				'WriterLowering: @:trivia + @:sep + @:tryparse requires blockEnded flag (@:sep(text, tailRelax, blockEnded))',
+				Context.currentPos()
+			);
+		// ω-orphan-trivia / ω-close-trailing: Seq-struct call sites
+		// drive the trailing slots synthesised on the paired type.
+		// Alt-branch Star call sites (`HxStatement.BlockStmt`) have
+		// no synth slots and pass null — writer falls back to pre-
+		// slice behaviour. `TrailingClose` is only synthesised for
+		// close-peek Stars (those with `lit.trailText`); EOF-mode
+		// Stars forward null to preserve the post-loop emission
+		// shape without a dangling slot access.
+		final fieldName: Null<String> = starNode.annotations.get('base.fieldName');
+		final trailBBAccess: Null<Expr> = fieldName == null
+			? null
+			: {
+				expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_BLANK_BEFORE_SUFFIX),
+				pos: Context.currentPos()
+			};
+		// ω-keep-fnsig-newline: accessor for the close-newline slot, threaded
+		// into `triviaSepStarExpr` for the `_keepEmit` close placement.
+		final trailNLAccess: Null<Expr> = fieldName == null
+			? null
+			: {
+				expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_NEWLINE_BEFORE_SUFFIX),
+				pos: Context.currentPos()
+			};
+		final trailLCAccess: Null<Expr> = fieldName == null
+			? null
+			: {
+				expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_LEADING_SUFFIX),
+				pos: Context.currentPos()
+			};
+		final trailCloseAccess: Null<Expr> = fieldName == null || closeText == null
+			? null
+			: {
+				expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_CLOSE_SUFFIX),
+				pos: Context.currentPos()
+			};
+		// ω-open-trailing: same-line `// comment` captured right after
+		// the open literal. Synthesised only when the Star carries
+		// `@:lead` AND not `@:tryparse` (parallel to TrailingClose's
+		// `@:trail` gate; tryparse writer helper does not consume the
+		// slot, and the synth gate omits it for tryparse Stars — see
+		// `TriviaTypeSynth.buildStarTrailingSlots`).
+		final trailOpenAccess: Null<Expr> = fieldName == null || openText == null || starNode.hasMeta(':tryparse')
+			? null
+			: {
+				expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_OPEN_SUFFIX),
+				pos: Context.currentPos()
+			};
+		// ω-trail-blank-after: synth slot is only present on tryparse +
+		// nestBody Stars. Forward null elsewhere so the slot access
+		// doesn't reference a non-existent field.
+		final trailBAAccess: Null<Expr> = fieldName == null || !starNode.hasMeta(':tryparse') || !starNode.fmtHasFlag('nestBody')
+			? null
+			: {
+				expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_BLANK_AFTER_SUFFIX),
+				pos: Context.currentPos()
+			};
+		// ω-objectlit-source-trail-comma: synth slot is only present on
+		// sep-Stars with a close literal. Forward null elsewhere so the
+		// slot access doesn't reference a non-existent field. Mirrors
+		// the `@:trail` / `@:sep` parser-side gate in TriviaTypeSynth.
+		final trailPresentAccess: Null<Expr> = fieldName == null || sepText == null || closeText == null
+			? null
+			: {
+				expr: EField(macro value, fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX),
+				pos: Context.currentPos()
+			};
+		final triviaCtx: TriviaStarCtx = {
+			starNode: starNode,
+			fieldAccess: fieldAccess,
+			elemFn: elemFn,
+			elemRefName: elemRefName,
+			isFirstField: isFirstField,
+			isLastField: isLastField,
+			typePath: typePath,
+			openText: openText,
+			closeText: closeText,
+			sepText: sepText,
+			prevBareRefBody: prevBareRefBody,
+			prevTrailFieldName: prevTrailFieldName,
+			fieldName: fieldName,
+			trailBBAccess: trailBBAccess,
+			trailNLAccess: trailNLAccess,
+			trailLCAccess: trailLCAccess,
+			trailCloseAccess: trailCloseAccess,
+			trailOpenAccess: trailOpenAccess,
+			trailBAAccess: trailBAAccess,
+			trailPresentAccess: trailPresentAccess,
+		};
+		if (starNode.hasMeta(':tryparse')) {
+			emitTriviaTryparseStar(triviaCtx, parts);
+			return;
+		}
+		if (closeText != null) {
+			emitTriviaCloseStar(triviaCtx, parts);
+		} else if (isLastField) {
+			emitTriviaEofStar(triviaCtx, parts);
+		} else {
+			Context.fatalError('WriterLowering: @:trivia Star without @:trail must be the last field', Context.currentPos());
+		}
+		return;
+	}
+
 	private function emitWriterStarField(
 		starNode: ShapeNode, fieldAccess: Expr, parts: Array<Expr>, isLastField: Bool, typePath: String, isFirstField: Bool, isRaw: Bool,
 		prevBareRefBody: Null<PrevBodyInfo> = null, prevTrailFieldName: Null<String> = null
@@ -4055,6 +4191,21 @@ class WriterLowering {
 		final closeText: Null<String> = starNode.annotations.get('lit.trailText');
 		final sepText: Null<String> = starNode.annotations.get('lit.sepText');
 		final isTriviaStar: Bool = ctx.trivia && starNode.annotations.get('trivia.starCollects') == true;
+		final args: StarFieldArgs = {
+			starNode: starNode,
+			fieldAccess: fieldAccess,
+			elemFn: elemFn,
+			elemRefName: elemRefName,
+			isFirstField: isFirstField,
+			isLastField: isLastField,
+			isRaw: isRaw,
+			typePath: typePath,
+			openText: openText,
+			closeText: closeText,
+			sepText: sepText,
+			prevBareRefBody: prevBareRefBody,
+			prevTrailFieldName: prevTrailFieldName,
+		};
 
 		// Trivia Star: the Array element type is Trivial<elemT>, and the
 		// write call targets `_t.node` instead of the raw array element.
@@ -4065,118 +4216,7 @@ class WriterLowering {
 		// close, last field), and try-parse (no close, last field,
 		// `@:tryparse`).
 		if (isTriviaStar) {
-			if (isRaw) Context.fatalError('WriterLowering: @:trivia Star does not support @:raw', Context.currentPos());
-			// ω-blockended-trivia-tryparse (Session 3): @:trivia + @:sep +
-			// @:tryparse is now allowed when the `blockEnded` flag is
-			// present (sole consumer: HxCaseBranch.body / HxDefaultBranch.stmts).
-			// EOF mode (closeText == null, no @:tryparse) still rejects.
-			final writerBlockEnded: Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
-			if (sepText != null && closeText == null && !starNode.hasMeta(':tryparse'))
-				Context.fatalError('WriterLowering: @:trivia + @:sep requires close-peek (@:trail) or @:tryparse', Context.currentPos());
-			if (sepText != null && starNode.hasMeta(':tryparse') && !writerBlockEnded)
-				Context.fatalError(
-					'WriterLowering: @:trivia + @:sep + @:tryparse requires blockEnded flag (@:sep(text, tailRelax, blockEnded))',
-					Context.currentPos()
-				);
-			// ω-orphan-trivia / ω-close-trailing: Seq-struct call sites
-			// drive the trailing slots synthesised on the paired type.
-			// Alt-branch Star call sites (`HxStatement.BlockStmt`) have
-			// no synth slots and pass null — writer falls back to pre-
-			// slice behaviour. `TrailingClose` is only synthesised for
-			// close-peek Stars (those with `lit.trailText`); EOF-mode
-			// Stars forward null to preserve the post-loop emission
-			// shape without a dangling slot access.
-			final fieldName: Null<String> = starNode.annotations.get('base.fieldName');
-			final trailBBAccess: Null<Expr> = fieldName == null
-				? null
-				: {
-					expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_BLANK_BEFORE_SUFFIX),
-					pos: Context.currentPos()
-				};
-			// ω-keep-fnsig-newline: accessor for the close-newline slot, threaded
-			// into `triviaSepStarExpr` for the `_keepEmit` close placement.
-			final trailNLAccess: Null<Expr> = fieldName == null
-				? null
-				: {
-					expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_NEWLINE_BEFORE_SUFFIX),
-					pos: Context.currentPos()
-				};
-			final trailLCAccess: Null<Expr> = fieldName == null
-				? null
-				: {
-					expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_LEADING_SUFFIX),
-					pos: Context.currentPos()
-				};
-			final trailCloseAccess: Null<Expr> = fieldName == null || closeText == null
-				? null
-				: {
-					expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_CLOSE_SUFFIX),
-					pos: Context.currentPos()
-				};
-			// ω-open-trailing: same-line `// comment` captured right after
-			// the open literal. Synthesised only when the Star carries
-			// `@:lead` AND not `@:tryparse` (parallel to TrailingClose's
-			// `@:trail` gate; tryparse writer helper does not consume the
-			// slot, and the synth gate omits it for tryparse Stars — see
-			// `TriviaTypeSynth.buildStarTrailingSlots`).
-			final trailOpenAccess: Null<Expr> = fieldName == null || openText == null || starNode.hasMeta(':tryparse')
-				? null
-				: {
-					expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_OPEN_SUFFIX),
-					pos: Context.currentPos()
-				};
-			// ω-trail-blank-after: synth slot is only present on tryparse +
-			// nestBody Stars. Forward null elsewhere so the slot access
-			// doesn't reference a non-existent field.
-			final trailBAAccess: Null<Expr> = fieldName == null || !starNode.hasMeta(':tryparse') || !starNode.fmtHasFlag('nestBody')
-				? null
-				: {
-					expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_BLANK_AFTER_SUFFIX),
-					pos: Context.currentPos()
-				};
-			// ω-objectlit-source-trail-comma: synth slot is only present on
-			// sep-Stars with a close literal. Forward null elsewhere so the
-			// slot access doesn't reference a non-existent field. Mirrors
-			// the `@:trail` / `@:sep` parser-side gate in TriviaTypeSynth.
-			final trailPresentAccess: Null<Expr> = fieldName == null || sepText == null || closeText == null
-				? null
-				: {
-					expr: EField(macro value, fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX),
-					pos: Context.currentPos()
-				};
-			final triviaCtx: TriviaStarCtx = {
-				starNode: starNode,
-				fieldAccess: fieldAccess,
-				elemFn: elemFn,
-				elemRefName: elemRefName,
-				isFirstField: isFirstField,
-				isLastField: isLastField,
-				typePath: typePath,
-				openText: openText,
-				closeText: closeText,
-				sepText: sepText,
-				prevBareRefBody: prevBareRefBody,
-				prevTrailFieldName: prevTrailFieldName,
-				fieldName: fieldName,
-				trailBBAccess: trailBBAccess,
-				trailNLAccess: trailNLAccess,
-				trailLCAccess: trailLCAccess,
-				trailCloseAccess: trailCloseAccess,
-				trailOpenAccess: trailOpenAccess,
-				trailBAAccess: trailBAAccess,
-				trailPresentAccess: trailPresentAccess,
-			};
-			if (starNode.hasMeta(':tryparse')) {
-				emitTriviaTryparseStar(triviaCtx, parts);
-				return;
-			}
-			if (closeText != null) {
-				emitTriviaCloseStar(triviaCtx, parts);
-			} else if (isLastField) {
-				emitTriviaEofStar(triviaCtx, parts);
-			} else {
-				Context.fatalError('WriterLowering: @:trivia Star without @:trail must be the last field', Context.currentPos());
-			}
+			emitTriviaStar(args, parts);
 			return;
 		}
 
@@ -16163,6 +16203,26 @@ typedef PlainStarCtx = {
 	final closeText: Null<String>;
 	final sepText: Null<String>;
 	final prevBareRefBody: Null<PrevBodyInfo>;
+};
+/**
+ * The resolved per-call Star locals of `emitWriterStarField` bundled into one
+ * struct so the `emitTriviaStar` dispatch (and the plain-mode ctx build) take a
+ * single param instead of the full 13-scalar set.
+ */
+typedef StarFieldArgs = {
+	final starNode: ShapeNode;
+	final fieldAccess: Expr;
+	final elemFn: String;
+	final elemRefName: String;
+	final isFirstField: Bool;
+	final isLastField: Bool;
+	final isRaw: Bool;
+	final typePath: String;
+	final openText: Null<String>;
+	final closeText: Null<String>;
+	final sepText: Null<String>;
+	final prevBareRefBody: Null<PrevBodyInfo>;
+	final prevTrailFieldName: Null<String>;
 };
 
 /**
