@@ -6934,112 +6934,14 @@ class WriterLowering {
 		// gets its `,`. When the knob is off the conjunction stays false
 		// and `appendTrailingComma` is false — behaviour is byte-
 		// identical to the pre-slice path.
-		final knobAccessOrFalse: Expr = trailingCommaField == null ? macro false : optFieldAccess(trailingCommaField);
-		final forceExceedsExpr: Expr = trailPresentAccess != null && trailingCommaField != null
-			? macro $trailPresentAccess && $knobAccessOrFalse
-			: macro false;
-		// ω-meta-allman-objectlit: when source had a trailing `,`, preserve
-		// it in any multi-line shape regardless of the knob. The change
-		// matters when the layout is forced multi-line by some other signal
-		// — surrounding hardlines (e.g. the meta-Allman wrap from
-		// `HxMetaExpr.expr`'s `@:fmt(allmanIndentForCtor)`), natural
-		// cascade fit, or `forceExceeds` — at which point the source's
-		// `,` round-trips like the rest of the multi-line shape.
-		// Mirrors haxe-formatter's "Keep" trailing-comma policy for the
-		// meta-prefixed object-literal pattern (`return @patch { ..., }`
-		// → multi-line with closing `,`).
-		final appendTrailingCommaExpr: Expr = trailPresentAccess != null && trailingCommaField != null
-			? macro $trailPresentAccess || $knobAccessOrFalse
-			: knobAccessOrFalse;
-		// ω-nowrap-source-trail-comma: the FLAT (`NoWrap`) trailing-comma signal
-		// is source-presence ONLY (`<field>TrailPresent`), NOT the knob-inclusive
-		// `appendTrailingComma`. The fork is source-faithful for single-line
-		// lists: `{a: 1,}` / `[1, 2,]` / `f(x,)` keep their trailing `,` flat,
-		// while a list whose source had none stays comma-free even with the knob
-		// on (the knob only forces the break-mode layout via `forceExceeds`).
-		// Null `trailPresentAccess` (Stars without a source-trail slot) → `false`,
-		// byte-identical to the pre-slice flat shape.
-		final flatTrailingCommaExpr: Expr = trailPresentAccess ?? macro false;
-		// ω-arraymatrix-keep: matrix-align takes precedence over the Keep
-		// cascade. The non-Keep matrix attempt (`matrixComputeExpr`, in the
-		// no-trivia/cascade branch) is gated `!_keepEmit` and so never fires
-		// under a `"defaultWrap": "keep"` array — a kept matrix lands in the
-		// force-multi path, which preserves the source rows but emits no
-		// column padding. The fork runs `tryMatrixWrap` BEFORE
-		// `applyWrappingPlace` inside `arrayLiteralWrapping`, so matrix grid
-		// layout wins over the array's keep/noWrap rules; this expr mirrors
-		// that for the Keep case. Computed at the outer Star scope (the
-		// no-trivia branch's `_matrixDoc` is unreachable under Keep) and
-		// gated on `_keepEmit` + the same source-multiline-without-hardline
-		// condition the non-Keep path uses (`!_requiresHardline`,
-		// `_hasSourceNewlines`). The matrix detector reads per-element
-		// `newlineBefore` (row boundaries) and the bare rendered cell Docs;
-		// on a uniform grid it returns the aligned/unaligned Doc, else null
-		// → fall through to force-multi. Cells under `!_requiresHardline`
-		// carry no comments (any leading/trailing comment forces a hardline
-		// under Keep, see the predicate split below), so the bare
-		// `$triviaElemCall` render matches the no-trivia branch's `_docs`
-		// exactly. Only meaningful when the Star opted into
-		// `@:fmt(arrayMatrixWrap)` (`matrixWrap` compile-time flag); every
-		// other sep-Star consumer leaves it `macro null` and stays byte-
-		// identical.
-		final keepMatrixComputeExpr: Expr = matrixWrap
-			? macro {
-				if (
-					_keepEmit && !_requiresHardline && _hasSourceNewlines
-					&& opt.arrayMatrixWrap != anyparse.format.ArrayMatrixWrap.NoMatrixWrap
-				) {
-					final _kdocs: Array<anyparse.core.Doc> = [];
-					final _krow: Array<Bool> = [];
-					var _kmi: Int = 0;
-					while (_kmi < _arr.length) {
-						final _t = _arr[_kmi];
-						_kdocs.push($triviaElemCall);
-						_krow.push(_kmi == 0 || _t.newlineBefore);
-						_kmi++;
-					}
-					final _kmcols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-					anyparse.format.wrap.MatrixWrap.tryLayout(
-						_kdocs, _krow, opt.arrayMatrixWrap, $v{openText}, $v{closeText}, $v{sepText}, $appendTrailingCommaExpr, _kmcols
-					);
-				} else {
-					(null: Null<anyparse.core.Doc>);
-				}
-			}
-			: macro (null: Null<anyparse.core.Doc>);
-		// ω-typedef-anon-force-multi: 15th positional arg to
-		// `WrapList.emit` — a runtime `Null<WrapMode>` predicate. When
-		// the Star opted into `@:fmt(forceMultiInTypedef)` AND the
-		// parent typedef-RHS Ref flipped `opt._inTypedefBody=true` via
-		// `propagateTypedefContext` AND `opt.anonTypeLeftCurly == Next`,
-		// the engine bypasses the cascade and lays out the body
-		// `OnePerLine` unconditionally — closes the issue_301 typedef-
-		// anon source-flat → fork-multi-line shape gap deferred in
-		// ω-anontype-left-curly. The leftCurly==Next gate mirrors fork's
-		// `MarkLineEnds.detectCurlyPolicy(TypedefDecl)` rule: the
-		// curly-break-driven multi-line layout fires only when the
-		// global `lineEnds.leftCurly` ↔ our `anonTypeLeftCurly` cascade
-		// hits `before`/`both` (= Next). For the default `after` (= Same)
-		// flat typedef-RHS anons stay cuddled, matching issue_586 /
-		// issue_206 / issue_588 (which leave `typedef T = {a:Int}` /
-		// `typedef T = {…}->Void` / `typedef T = Array<{k:Int}>` flat).
-		// Null fall-through preserves pre-slice cascade-driven layout
-		// for non-typedef anon consumers (var-type-hint, fn-return-type).
-		// ω-typedef-anon-force-multi: 15th positional arg to
-		// `WrapList.emit` — a runtime `Null<WrapMode>` predicate. When
-		// the Star opted into `@:fmt(forceMultiInTypedef)` AND the
-		// parent typedef-RHS Ref flipped `opt._inTypedefBody=true` via
-		// `propagateTypedefContext` AND `opt.anonTypeLeftCurly == Next`,
-		// the engine bypasses the cascade and lays out the body
-		// `OnePerLine` unconditionally — closes the issue_301 typedef-
-		// anon source-flat → fork-multi-line shape gap deferred in
-		// ω-anontype-left-curly. The leftCurly==Next gate mirrors fork's
-		// `MarkLineEnds.detectCurlyPolicy(TypedefDecl)` rule.
-		final forceModeExpr: Expr = forceMultiInTypedef
-			? macro (opt._inTypedefBody && opt.anonTypeLeftCurly == anyparse.format.BracePlacement.Next
-				? anyparse.format.wrap.WrapMode.OnePerLine
-				: (null: Null<anyparse.format.wrap.WrapMode>))
-			: macro (null: Null<anyparse.format.wrap.WrapMode>);
+		final _trail: SepStarTrailExprs = triviaSepTrailExprs(
+			trailingCommaField, trailPresentAccess, matrixWrap, forceMultiInTypedef, openText, closeText, sepText, triviaElemCall
+		);
+		final forceExceedsExpr: Expr = _trail.forceExceedsExpr;
+		final appendTrailingCommaExpr: Expr = _trail.appendTrailingCommaExpr;
+		final flatTrailingCommaExpr: Expr = _trail.flatTrailingCommaExpr;
+		final keepMatrixComputeExpr: Expr = _trail.keepMatrixComputeExpr;
+		final forceModeExpr: Expr = _trail.forceModeExpr;
 		final noTriviaBranch: Expr = if (wrapRulesField != null) {
 			final rulesExpr: Expr = optFieldAccess(wrapRulesField);
 			// ω-functionsignature-body-aware-indent: thread the field-level
@@ -14536,6 +14438,122 @@ class WriterLowering {
 		};
 	}
 
+	/**
+	 * Sep-Star source-trailing-comma / force-exceeds / force-mode / keep-matrix
+	 * Expr builders. Bundles the five spliced Expr fragments the sep-Star tail
+	 * consumes, keeping the `knobAccessOrFalse` intermediate local. Extracted
+	 * from `triviaSepStarExpr` so the orchestrator stays under the complexity
+	 * gate; behaviour byte-identical.
+	 */
+	private static function triviaSepTrailExprs(
+		trailingCommaField: Null<String>, trailPresentAccess: Null<Expr>, matrixWrap: Bool, forceMultiInTypedef: Bool, openText: String,
+		closeText: String, sepText: String, triviaElemCall: Expr
+	): SepStarTrailExprs {
+		final knobAccessOrFalse: Expr = trailingCommaField == null ? macro false : optFieldAccess(trailingCommaField);
+		final forceExceedsExpr: Expr = trailPresentAccess != null && trailingCommaField != null
+			? macro $trailPresentAccess && $knobAccessOrFalse
+			: macro false;
+		// ω-meta-allman-objectlit: when source had a trailing `,`, preserve
+		// it in any multi-line shape regardless of the knob. The change
+		// matters when the layout is forced multi-line by some other signal
+		// — surrounding hardlines (e.g. the meta-Allman wrap from
+		// `HxMetaExpr.expr`'s `@:fmt(allmanIndentForCtor)`), natural
+		// cascade fit, or `forceExceeds` — at which point the source's
+		// `,` round-trips like the rest of the multi-line shape.
+		// Mirrors haxe-formatter's "Keep" trailing-comma policy for the
+		// meta-prefixed object-literal pattern (`return @patch { ..., }`
+		// → multi-line with closing `,`).
+		final appendTrailingCommaExpr: Expr = trailPresentAccess != null && trailingCommaField != null
+			? macro $trailPresentAccess || $knobAccessOrFalse
+			: knobAccessOrFalse;
+		// ω-nowrap-source-trail-comma: the FLAT (`NoWrap`) trailing-comma signal
+		// is source-presence ONLY (`<field>TrailPresent`), NOT the knob-inclusive
+		// `appendTrailingComma`. The fork is source-faithful for single-line
+		// lists: `{a: 1,}` / `[1, 2,]` / `f(x,)` keep their trailing `,` flat,
+		// while a list whose source had none stays comma-free even with the knob
+		// on (the knob only forces the break-mode layout via `forceExceeds`).
+		// Null `trailPresentAccess` (Stars without a source-trail slot) → `false`,
+		// byte-identical to the pre-slice flat shape.
+		final flatTrailingCommaExpr: Expr = trailPresentAccess ?? macro false;
+		// ω-arraymatrix-keep: matrix-align takes precedence over the Keep
+		// cascade. The non-Keep matrix attempt (`matrixComputeExpr`, in the
+		// no-trivia/cascade branch) is gated `!_keepEmit` and so never fires
+		// under a `"defaultWrap": "keep"` array — a kept matrix lands in the
+		// force-multi path, which preserves the source rows but emits no
+		// column padding. The fork runs `tryMatrixWrap` BEFORE
+		// `applyWrappingPlace` inside `arrayLiteralWrapping`, so matrix grid
+		// layout wins over the array's keep/noWrap rules; this expr mirrors
+		// that for the Keep case. Computed at the outer Star scope (the
+		// no-trivia branch's `_matrixDoc` is unreachable under Keep) and
+		// gated on `_keepEmit` + the same source-multiline-without-hardline
+		// condition the non-Keep path uses (`!_requiresHardline`,
+		// `_hasSourceNewlines`). The matrix detector reads per-element
+		// `newlineBefore` (row boundaries) and the bare rendered cell Docs;
+		// on a uniform grid it returns the aligned/unaligned Doc, else null
+		// → fall through to force-multi. Cells under `!_requiresHardline`
+		// carry no comments (any leading/trailing comment forces a hardline
+		// under Keep, see the predicate split below), so the bare
+		// `$triviaElemCall` render matches the no-trivia branch's `_docs`
+		// exactly. Only meaningful when the Star opted into
+		// `@:fmt(arrayMatrixWrap)` (`matrixWrap` compile-time flag); every
+		// other sep-Star consumer leaves it `macro null` and stays byte-
+		// identical.
+		final keepMatrixComputeExpr: Expr = matrixWrap
+			? macro {
+				if (
+					_keepEmit && !_requiresHardline && _hasSourceNewlines
+					&& opt.arrayMatrixWrap != anyparse.format.ArrayMatrixWrap.NoMatrixWrap
+				) {
+					final _kdocs: Array<anyparse.core.Doc> = [];
+					final _krow: Array<Bool> = [];
+					var _kmi: Int = 0;
+					while (_kmi < _arr.length) {
+						final _t = _arr[_kmi];
+						_kdocs.push($triviaElemCall);
+						_krow.push(_kmi == 0 || _t.newlineBefore);
+						_kmi++;
+					}
+					final _kmcols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+					anyparse.format.wrap.MatrixWrap.tryLayout(
+						_kdocs, _krow, opt.arrayMatrixWrap, $v{openText}, $v{closeText}, $v{sepText}, $appendTrailingCommaExpr, _kmcols
+					);
+				} else {
+					(null: Null<anyparse.core.Doc>);
+				}
+			}
+			: macro (null: Null<anyparse.core.Doc>);
+		// ω-typedef-anon-force-multi: 15th positional arg to
+		// `WrapList.emit` — a runtime `Null<WrapMode>` predicate. When
+		// the Star opted into `@:fmt(forceMultiInTypedef)` AND the
+		// parent typedef-RHS Ref flipped `opt._inTypedefBody=true` via
+		// `propagateTypedefContext` AND `opt.anonTypeLeftCurly == Next`,
+		// the engine bypasses the cascade and lays out the body
+		// `OnePerLine` unconditionally — closes the issue_301 typedef-
+		// anon source-flat → fork-multi-line shape gap deferred in
+		// ω-anontype-left-curly. The leftCurly==Next gate mirrors fork's
+		// `MarkLineEnds.detectCurlyPolicy(TypedefDecl)` rule: the
+		// curly-break-driven multi-line layout fires only when the
+		// global `lineEnds.leftCurly` ↔ our `anonTypeLeftCurly` cascade
+		// hits `before`/`both` (= Next). For the default `after` (= Same)
+		// flat typedef-RHS anons stay cuddled, matching issue_586 /
+		// issue_206 / issue_588 (which leave `typedef T = {a:Int}` /
+		// `typedef T = {…}->Void` / `typedef T = Array<{k:Int}>` flat).
+		// Null fall-through preserves pre-slice cascade-driven layout
+		// for non-typedef anon consumers (var-type-hint, fn-return-type).
+		final forceModeExpr: Expr = forceMultiInTypedef
+			? macro (opt._inTypedefBody && opt.anonTypeLeftCurly == anyparse.format.BracePlacement.Next
+				? anyparse.format.wrap.WrapMode.OnePerLine
+				: (null: Null<anyparse.format.wrap.WrapMode>))
+			: macro (null: Null<anyparse.format.wrap.WrapMode>);
+		return {
+			forceExceedsExpr: forceExceedsExpr,
+			appendTrailingCommaExpr: appendTrailingCommaExpr,
+			flatTrailingCommaExpr: flatTrailingCommaExpr,
+			keepMatrixComputeExpr: keepMatrixComputeExpr,
+			forceModeExpr: forceModeExpr,
+		};
+	}
+
 }
 
 /** Output of WriterLowering for one rule. */
@@ -15016,6 +15034,19 @@ typedef SepStarBlanks = {
 	final typedefBetweenExpr: Expr;
 	final blankBeforeExpr: Expr;
 	final initCurrDocCommentExpr: Expr;
+};
+/**
+ * Output bundle of `triviaSepTrailExprs` — the source-trailing-comma /
+ * force-exceeds / force-mode / keep-matrix Expr fragments the sep-Star tail
+ * consumes (`_sepCtx`'s appendTrailingComma + keepMatrix, and
+ * `WrapList.emit`'s forceExceeds/forceMode/flatTrailingComma args).
+ */
+typedef SepStarTrailExprs = {
+	final forceExceedsExpr: Expr;
+	final appendTrailingCommaExpr: Expr;
+	final flatTrailingCommaExpr: Expr;
+	final keepMatrixComputeExpr: Expr;
+	final forceModeExpr: Expr;
 };
 /**
  * Output bundle of `triviaSepCheckExprs` — the keep/ignore/noWrap runtime
