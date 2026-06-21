@@ -959,107 +959,8 @@ final class HaxeFormatConfigLoader {
 		if (section.ifElse != null) opt.sameLineElse = sameLineToRuntime(section.ifElse);
 		if (section.tryCatch != null) opt.sameLineCatch = sameLineToRuntime(section.tryCatch);
 		if (section.doWhile != null) opt.sameLineDoWhile = sameLineToRuntime(section.doWhile);
-		if (section.ifBody != null) opt.ifBody = bodyPolicyToRuntime(section.ifBody);
-		if (section.elseBody != null) opt.elseBody = bodyPolicyToRuntime(section.elseBody);
-		if (section.forBody != null) opt.forBody = bodyPolicyToRuntime(section.forBody);
-		if (section.whileBody != null) opt.whileBody = bodyPolicyToRuntime(section.whileBody);
-		if (section.doWhileBody != null) opt.doBody = bodyPolicyToRuntime(section.doWhileBody);
-		if (section.returnBody != null) opt.returnBody = bodyPolicyToRuntime(section.returnBody);
-		// ω-return-body-single-line: `sameLine.returnBodySingleLine` refines
-		// the kw→value separator for returns whose value is NOT a control-flow
-		// or block construct (literals, idents, ternaries, array / object /
-		// comprehension literals, calls). Control-flow / block values
-		// (`if` / `switch` / `for` / `while` / `try` / `{ … }`) keep using
-		// `returnBody`. The runtime dual-dispatch lives in `bodyPolicyWrap`
-		// via the `bodyPolicySingleLine('returnBodySingleLine', '<ctor>'...)`
-		// knob on `HxStatement.ReturnStmt`; the discriminator matches the
-		// value's `Type.enumConstructor` against the listed control-flow ctors,
-		// mirroring the fork's `shouldReturnBeSameLine` AST classification.
-		if (section.returnBodySingleLine != null) opt.returnBodySingleLine = bodyPolicyToRuntime(section.returnBodySingleLine);
-		if (section.catchBody != null) opt.catchBody = bodyPolicyToRuntime(section.catchBody);
-		if (section.tryBody != null) opt.tryBody = bodyPolicyToRuntime(section.tryBody);
-		if (section.caseBody != null) opt.caseBody = bodyPolicyToRuntime(section.caseBody);
-		if (section.expressionCase != null) opt.expressionCase = bodyPolicyToRuntime(section.expressionCase);
-		if (section.functionBody != null) opt.functionBody = bodyPolicyToRuntime(section.functionBody);
-		// Slice ω-anonfnbody-keep: `sameLine.anonFunctionBody` drives the
-		// signature→body separator on `HxFnExpr.body`'s `ExprBody` branch
-		// (the bare-expr anon-fn body, e.g. `function() trace(i)`), the
-		// expression-position sibling of `functionBody`. Wired through
-		// `@:fmt(bodyPolicyForCtor('ExprBody', 'anonFunctionBody'))` on the
-		// `HxFnExpr.body` optional Ref. Default `Same` reproduces the
-		// pre-slice cuddle, so the knob is byte-inert until set.
-		if (section.anonFunctionBody != null) opt.anonFunctionBody = bodyPolicyToRuntime(section.anonFunctionBody);
-		if (section.untypedBody != null) opt.untypedBody = bodyPolicyToRuntime(section.untypedBody);
-		// Slice ω-expr-body-keep: the JSON key `sameLine.expressionIf`
-		// is parsed via the schema (so unknown-key validation passes)
-		// and `Keep` / `Same` are honoured at runtime. `Same` force-
-		// flattens expression-position `if/else/for` bodies, which is
-		// unconditionally safe because the bodyPolicyWrap `Same` branch
-		// emits `_dop(' ')` regardless of surrounding context — no arrow-
-		// context ambiguity. `Next` / `FitLine` still need surrounding-
-		// context propagation that the bodyPolicyWrap engine cannot
-		// derive in isolation (a `Next` on the inner body force-breaks
-		// legitimate inline arrow bodies — see `fitline_arrow_body_if.hxtest`).
-		// Programmatic users can still set the three knobs independently
-		// for finer control.
-		// ω-expression-case-flat-fanout: HxCaseBranch.body uses
-		// `expressionCase` (NOT `expressionIfBody`) as the swap source,
-		// so propagating `expressionIf: next/fitLine` here would leak
-		// into HxIfExpr.thenBranch's `bodyPolicy('expressionIfBody')` and
-		// break the existing arrow-body fixture. The Next/FitLine gate
-		// stays.
-		if (section.expressionIf != null) {
-			final p: BodyPolicy = bodyPolicyToRuntime(section.expressionIf);
-			if (p == BodyPolicy.Keep || p == BodyPolicy.Same) {
-				opt.expressionIfBody = p;
-				opt.expressionElseBody = p;
-				opt.expressionForBody = p;
-			}
-			// ω-expression-if-next-with-fitline-body: fanout `Next` / `FitLine`
-			// into `expressionIfBody` / `expressionElseBody` only.
-			// `expressionForBody` is intentionally excluded — `for` has no
-			// `else` sibling, so the noSiblingFallback gate cannot kick in,
-			// and arrow-body / comprehension `for` would regress. The arrow-
-			// body if-without-else and comprehension filter-if cases are
-			// caught by `HxIfExpr.thenBranch`'s `@:fmt(noSiblingFallback(
-			// 'ifBody'))`: when `elseBranch` is `null` at runtime, the body
-			// policy falls back to `opt.ifBody` (FitLine) instead of
-			// `opt.expressionIfBody` (Next), preserving inline shape for
-			// `item -> if (cond) body` and `[for (x in xs) if (cond) x]`.
-			// Mirrors fork's `MarkSameLine.markIf` `parent.tok==Arrow` and
-			// `isComprehensionFilterIf` short-circuits onto `ifBody`.
-			else if (p == BodyPolicy.Next || p == BodyPolicy.FitLine) {
-				opt.expressionIfBody = p;
-				opt.expressionElseBody = p;
-			}
-			// ω-expr-else-sameline: fanout `sameLine.expressionIf` into
-			// `sameLineExpressionElse:SameLinePolicy`, the per-`else` gap
-			// for HxIfExpr.elseBranch. Independent of body-placement
-			// fanout (which has the arrow-body regression gate above).
-			//
-			// Mapping rationale: `Next` maps to `Keep` (NOT `Next`) so
-			// the writer reads the synth `BeforeKwNewline` slot and
-			// preserves whatever the source had. Fork's actual semantic
-			// for `expressionIf=next` is block-shape-aware (`} else {`
-			// stays cuddled even with `next`, only non-block prev breaks).
-			// Mapping to `Keep` reproduces this correctly across the
-			// corpus because:
-			//  - block-shape branches in source are typically inline →
-			//    Keep slot=false → space → matches fork's cuddle.
-			//  - non-block (e.g. object-lit) branches in source typically
-			//    have the `\n` already → Keep slot=true → hardline →
-			//    matches fork's break.
-			// True shape-aware Next dispatch (force-break for non-block,
-			// cuddle for block, regardless of source) would need a
-			// dedicated `@:fmt(shapeAware)` variant — deferred until a
-			// fixture surfaces that the source-preserving mapping mishits.
-			// `Same` and `Keep` map directly. `FitLine` falls through to
-			// `Same` (no SameLinePolicy counterpart).
-			opt.sameLineExpressionElse = switch p {
-				case BodyPolicy.Keep, BodyPolicy.Next: SameLinePolicy.Keep;
-				case _: SameLinePolicy.Same;
-			};
-		}
+		applySameLineBodies(section, opt);
+		applyExpressionIfFanout(section, opt);
 		if (section.elseIf != null) opt.elseIf = keywordPlacementToRuntime(section.elseIf);
 		if (section.fitLineIfWithElse != null) opt.fitLineIfWithElse = section.fitLineIfWithElse;
 		if (section.ifElseSemicolonNextLine != null) opt.ifElseSemicolonNextLine = section.ifElseSemicolonNextLine;
@@ -1700,6 +1601,113 @@ final class HaxeFormatConfigLoader {
 				if (insideClose != null)
 					opt.sharpCondParensInsideClose = insideClose;
 			case _:
+		}
+	}
+
+	private static function applySameLineBodies(section: HxFormatSameLineSection, opt: HxModuleWriteOptions): Void {
+		if (section.ifBody != null) opt.ifBody = bodyPolicyToRuntime(section.ifBody);
+		if (section.elseBody != null) opt.elseBody = bodyPolicyToRuntime(section.elseBody);
+		if (section.forBody != null) opt.forBody = bodyPolicyToRuntime(section.forBody);
+		if (section.whileBody != null) opt.whileBody = bodyPolicyToRuntime(section.whileBody);
+		if (section.doWhileBody != null) opt.doBody = bodyPolicyToRuntime(section.doWhileBody);
+		if (section.returnBody != null) opt.returnBody = bodyPolicyToRuntime(section.returnBody);
+		// ω-return-body-single-line: `sameLine.returnBodySingleLine` refines
+		// the kw→value separator for returns whose value is NOT a control-flow
+		// or block construct (literals, idents, ternaries, array / object /
+		// comprehension literals, calls). Control-flow / block values
+		// (`if` / `switch` / `for` / `while` / `try` / `{ … }`) keep using
+		// `returnBody`. The runtime dual-dispatch lives in `bodyPolicyWrap`
+		// via the `bodyPolicySingleLine('returnBodySingleLine', '<ctor>'...)`
+		// knob on `HxStatement.ReturnStmt`; the discriminator matches the
+		// value's `Type.enumConstructor` against the listed control-flow ctors,
+		// mirroring the fork's `shouldReturnBeSameLine` AST classification.
+		if (section.returnBodySingleLine != null) opt.returnBodySingleLine = bodyPolicyToRuntime(section.returnBodySingleLine);
+		if (section.catchBody != null) opt.catchBody = bodyPolicyToRuntime(section.catchBody);
+		if (section.tryBody != null) opt.tryBody = bodyPolicyToRuntime(section.tryBody);
+		if (section.caseBody != null) opt.caseBody = bodyPolicyToRuntime(section.caseBody);
+		if (section.expressionCase != null) opt.expressionCase = bodyPolicyToRuntime(section.expressionCase);
+		if (section.functionBody != null) opt.functionBody = bodyPolicyToRuntime(section.functionBody);
+		// Slice ω-anonfnbody-keep: `sameLine.anonFunctionBody` drives the
+		// signature→body separator on `HxFnExpr.body`'s `ExprBody` branch
+		// (the bare-expr anon-fn body, e.g. `function() trace(i)`), the
+		// expression-position sibling of `functionBody`. Wired through
+		// `@:fmt(bodyPolicyForCtor('ExprBody', 'anonFunctionBody'))` on the
+		// `HxFnExpr.body` optional Ref. Default `Same` reproduces the
+		// pre-slice cuddle, so the knob is byte-inert until set.
+		if (section.anonFunctionBody != null) opt.anonFunctionBody = bodyPolicyToRuntime(section.anonFunctionBody);
+		if (section.untypedBody != null) opt.untypedBody = bodyPolicyToRuntime(section.untypedBody);
+	}
+
+	private static function applyExpressionIfFanout(section: HxFormatSameLineSection, opt: HxModuleWriteOptions): Void {
+		// Slice ω-expr-body-keep: the JSON key `sameLine.expressionIf`
+		// is parsed via the schema (so unknown-key validation passes)
+		// and `Keep` / `Same` are honoured at runtime. `Same` force-
+		// flattens expression-position `if/else/for` bodies, which is
+		// unconditionally safe because the bodyPolicyWrap `Same` branch
+		// emits `_dop(' ')` regardless of surrounding context — no arrow-
+		// context ambiguity. `Next` / `FitLine` still need surrounding-
+		// context propagation that the bodyPolicyWrap engine cannot
+		// derive in isolation (a `Next` on the inner body force-breaks
+		// legitimate inline arrow bodies — see `fitline_arrow_body_if.hxtest`).
+		// Programmatic users can still set the three knobs independently
+		// for finer control.
+		// ω-expression-case-flat-fanout: HxCaseBranch.body uses
+		// `expressionCase` (NOT `expressionIfBody`) as the swap source,
+		// so propagating `expressionIf: next/fitLine` here would leak
+		// into HxIfExpr.thenBranch's `bodyPolicy('expressionIfBody')` and
+		// break the existing arrow-body fixture. The Next/FitLine gate
+		// stays.
+		if (section.expressionIf != null) {
+			final p: BodyPolicy = bodyPolicyToRuntime(section.expressionIf);
+			if (p == BodyPolicy.Keep || p == BodyPolicy.Same) {
+				opt.expressionIfBody = p;
+				opt.expressionElseBody = p;
+				opt.expressionForBody = p;
+			}
+			// ω-expression-if-next-with-fitline-body: fanout `Next` / `FitLine`
+			// into `expressionIfBody` / `expressionElseBody` only.
+			// `expressionForBody` is intentionally excluded — `for` has no
+			// `else` sibling, so the noSiblingFallback gate cannot kick in,
+			// and arrow-body / comprehension `for` would regress. The arrow-
+			// body if-without-else and comprehension filter-if cases are
+			// caught by `HxIfExpr.thenBranch`'s `@:fmt(noSiblingFallback(
+			// 'ifBody'))`: when `elseBranch` is `null` at runtime, the body
+			// policy falls back to `opt.ifBody` (FitLine) instead of
+			// `opt.expressionIfBody` (Next), preserving inline shape for
+			// `item -> if (cond) body` and `[for (x in xs) if (cond) x]`.
+			// Mirrors fork's `MarkSameLine.markIf` `parent.tok==Arrow` and
+			// `isComprehensionFilterIf` short-circuits onto `ifBody`.
+			else if (p == BodyPolicy.Next || p == BodyPolicy.FitLine) {
+				opt.expressionIfBody = p;
+				opt.expressionElseBody = p;
+			}
+			// ω-expr-else-sameline: fanout `sameLine.expressionIf` into
+			// `sameLineExpressionElse:SameLinePolicy`, the per-`else` gap
+			// for HxIfExpr.elseBranch. Independent of body-placement
+			// fanout (which has the arrow-body regression gate above).
+			//
+			// Mapping rationale: `Next` maps to `Keep` (NOT `Next`) so
+			// the writer reads the synth `BeforeKwNewline` slot and
+			// preserves whatever the source had. Fork's actual semantic
+			// for `expressionIf=next` is block-shape-aware (`} else {`
+			// stays cuddled even with `next`, only non-block prev breaks).
+			// Mapping to `Keep` reproduces this correctly across the
+			// corpus because:
+			//  - block-shape branches in source are typically inline →
+			//    Keep slot=false → space → matches fork's cuddle.
+			//  - non-block (e.g. object-lit) branches in source typically
+			//    have the `\n` already → Keep slot=true → hardline →
+			//    matches fork's break.
+			// True shape-aware Next dispatch (force-break for non-block,
+			// cuddle for block, regardless of source) would need a
+			// dedicated `@:fmt(shapeAware)` variant — deferred until a
+			// fixture surfaces that the source-preserving mapping mishits.
+			// `Same` and `Keep` map directly. `FitLine` falls through to
+			// `Same` (no SameLinePolicy counterpart).
+			opt.sameLineExpressionElse = switch p {
+				case BodyPolicy.Keep, BodyPolicy.Next: SameLinePolicy.Keep;
+				case _: SameLinePolicy.Same;
+			};
 		}
 	}
 
