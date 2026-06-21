@@ -14546,75 +14546,47 @@ class WriterLowering {
 		interMember: Bool, interMemberInfo: Null<InterMemberClassifyInfo>, staticVarSubdiv: Bool,
 		staticVarSubdivInfo: Null<StaticVarSubdivisionInfo>
 	): Expr {
-		return interMember
-			? {
-				final pos: Position = Context.currentPos();
-				final betweenVarsAccess: Expr = {
-					expr: EField(macro opt, interMemberInfo.betweenVarsField),
-					pos: pos,
-				};
-				final betweenFnAccess: Expr = {
-					expr: EField(macro opt, interMemberInfo.betweenFunctionsField),
-					pos: pos,
-				};
-				final afterVarsAccess: Expr = {
-					expr: EField(macro opt, interMemberInfo.afterVarsField),
-					pos: pos,
-				};
-				// ω-extern-class-no-blanks: `_classExtern` is propagated from
-				// `HxTopLevelDecl.decl` via `@:fmt(setBoolFlagFromStarCtor(...))`
-				// when the sibling `modifiers` Star contains `Extern`. AND-out
-				// the entire interMember add-rule when the flag is set so an
-				// `extern class { var; var; function; function; }` round-trips
-				// with zero blanks regardless of `betweenVars` /
-				// `betweenFunctions` / `afterVars` defaults — mirrors fork's
-				// `externClassEmptyLines` config-section override at the
-				// minimal interMember subset.
-				//
-				// ω-class-static-var-cascade: when subdivision is active, kind
-				// `3` represents static-var. Same-kind cascade arms treat
-				// kinds `1` and `3` as both "var" for the var↔function `afterVars`
-				// arm (so static-var → fn fires `afterVars` like instance-var → fn).
-				// Within the var family, instance↔static transitions fire the
-				// new `afterStaticVars` knob; same-static and same-instance use
-				// `betweenVars` (fork's `betweenStaticVars` defaults to `0` —
-				// equivalent — and is not modeled separately until a fixture
-				// requires it). When subdivision is off, kind `3` is unreachable
-				// and the cascade collapses to the pre-slice three arms.
-				//
-				// ω-abstract-static-fn-cascade: kind `4` represents static-fn.
-				// The function family is {2, 4}. A (4,4) pair fires the new
-				// `betweenStaticFunctions` knob; every other fn-fn pair
-				// ((2,2)/(2,4)/(4,2)) keeps reading `betweenFunctions` (fork's
-				// `afterStaticFunctions` default equals `betweenFunctions` —
-				// `1` — so the static-difference pairs need no separate knob).
-				// var↔fn transitions treat {1,3} as var and {2,4} as fn.
-				if (staticVarSubdiv) {
-					final afterStaticVarsAccess: Expr = {
-						expr: EField(macro opt, staticVarSubdivInfo.afterStaticVarsField),
-						pos: pos,
-					};
-					final betweenStaticFnAccess: Expr = {
-						expr: EField(macro opt, staticVarSubdivInfo.betweenStaticFunctionsField),
-						pos: pos,
-					};
-					macro (!opt._classExtern
-						&& ((_prevKind == 1 && _currKind == 1 && $betweenVarsAccess > 0)
-							|| (_prevKind == 3 && _currKind == 3 && $betweenVarsAccess > 0)
-							|| (((_prevKind == 1 && _currKind == 3) || (_prevKind == 3 && _currKind == 1)) && $afterStaticVarsAccess > 0)
-							|| (_prevKind == 4 && _currKind == 4 && $betweenStaticFnAccess > 0)
-							|| (((_prevKind == 2 && _currKind == 2) || (_prevKind == 2 && _currKind == 4)
-									|| (_prevKind == 4 && _currKind == 2)) && $betweenFnAccess > 0)
-							|| ((((_prevKind == 1 || _prevKind == 3) && (_currKind == 2 || _currKind == 4))
-									|| ((_prevKind == 2 || _prevKind == 4) && (_currKind == 1 || _currKind == 3))) && $afterVarsAccess > 0)));
-				} else {
-					macro (!opt._classExtern
-						&& ((_prevKind == 1 && _currKind == 1 && $betweenVarsAccess > 0)
-							|| (_prevKind == 2 && _currKind == 2 && $betweenFnAccess > 0)
-							|| (_prevKind != 0 && _currKind != 0 && _prevKind != _currKind && $afterVarsAccess > 0)));
-				}
-			}
-			: macro false;
+		if (!interMember) return macro false;
+		final pos: Position = Context.currentPos();
+		final betweenVarsAccess: Expr = {
+			expr: EField(macro opt, interMemberInfo.betweenVarsField),
+			pos: pos,
+		};
+		final betweenFnAccess: Expr = {
+			expr: EField(macro opt, interMemberInfo.betweenFunctionsField),
+			pos: pos,
+		};
+		final afterVarsAccess: Expr = {
+			expr: EField(macro opt, interMemberInfo.afterVarsField),
+			pos: pos,
+		};
+		// ω-extern-class-no-blanks: `_classExtern` is propagated from
+		// `HxTopLevelDecl.decl` via `@:fmt(setBoolFlagFromStarCtor(...))` when the
+		// sibling `modifiers` Star contains `Extern`. AND-out the entire interMember
+		// add-rule when the flag is set so an `extern class { var; var; function;
+		// function; }` round-trips with zero blanks regardless of `betweenVars` /
+		// `betweenFunctions` / `afterVars` defaults — mirrors fork's
+		// `externClassEmptyLines` config-section override.
+		//
+		// ω-class-static-var-cascade / ω-abstract-static-fn-cascade: when
+		// subdivision is active, kinds `3` / `4` represent static-var / static-fn;
+		// the var/fn cascade arms split accordingly (see the subdiv arm helpers).
+		// When subdivision is off, kinds `3` / `4` are unreachable and the cascade
+		// collapses to the pre-slice three arms.
+		if (staticVarSubdiv) {
+			final afterStaticVarsAccess: Expr = {
+				expr: EField(macro opt, staticVarSubdivInfo.afterStaticVarsField),
+				pos: pos,
+			};
+			final betweenStaticFnAccess: Expr = {
+				expr: EField(macro opt, staticVarSubdivInfo.betweenStaticFunctionsField),
+				pos: pos,
+			};
+			return triviaBlockInterMemberSubdivExpr(
+				betweenVarsAccess, betweenFnAccess, afterVarsAccess, afterStaticVarsAccess, betweenStaticFnAccess
+			);
+		}
+		return triviaBlockInterMemberPlainExpr(betweenVarsAccess, betweenFnAccess, afterVarsAccess);
 	}
 
 	/**
@@ -14632,6 +14604,9 @@ class WriterLowering {
 		staticVarSubdiv: Bool, staticVarSubdivInfo: Null<StaticVarSubdivisionInfo>, uniformBetween: Bool,
 		uniformBetweenOptField: Null<String>, anyEmptyLinesFlag: Bool
 	): Expr {
+		if (!anyEmptyLinesFlag) return macro {
+			if (_t.blankBefore && _si > 0) _inner.push(_dhl());
+		};
 		final stripByDocExpr: Expr = afterFieldsWithDocComments
 			? macro (_prevHadDocComment && opt.afterFieldsWithDocComments == anyparse.format.CommentEmptyLinesPolicy.None)
 			: macro false;
@@ -14658,10 +14633,140 @@ class WriterLowering {
 			? macro (_currHasDocComment && opt.beforeDocCommentEmptyLines == anyparse.format.CommentEmptyLinesPolicy.One)
 			: macro false;
 		final currHasDocComputeExpr: Expr = triviaBlockCurrHasDocComputeExpr(beforeDocCommentEmptyLines, condLeadingDocInfo);
-		// ω-extern-existing-between-split-leading: per-element scan that flips
-		// `_currHasSplitLeading` true when the element's leading cluster ends in a
-		// `/**` doc comment whose immediate predecessor is a `//` line comment.
-		final currHasSplitLeadingComputeExpr: Expr = existingBetweenFields
+		final currHasSplitLeadingComputeExpr: Expr = triviaBlockCurrHasSplitLeadingComputeExpr(existingBetweenFields);
+		final currKindComputeExpr: Expr = triviaBlockCurrKindComputeExpr(interMember, interMemberInfo, staticVarSubdiv, staticVarSubdivInfo);
+		final addByInterMemberExpr: Expr = triviaBlockInterMemberAddExpr(interMember, interMemberInfo, staticVarSubdiv, staticVarSubdivInfo);
+		final addByUniformBetweenExpr: Expr = triviaBlockUniformBetweenAddExpr(uniformBetween, uniformBetweenOptField);
+		return triviaBlockBlankBeforeAssemblyExpr({
+			currHasDocComputeExpr: currHasDocComputeExpr,
+			currKindComputeExpr: currKindComputeExpr,
+			currHasSplitLeadingComputeExpr: currHasSplitLeadingComputeExpr,
+			stripByDocExpr: stripByDocExpr,
+			stripByExistingExpr: stripByExistingExpr,
+			stripByCurrDocExpr: stripByCurrDocExpr,
+			stripBySplitLeadingExpr: stripBySplitLeadingExpr,
+			addSuppressOnSplitLeadingExpr: addSuppressOnSplitLeadingExpr,
+			addByDocExpr: addByDocExpr,
+			addByCurrDocExpr: addByCurrDocExpr,
+			addByInterMemberExpr: addByInterMemberExpr,
+			addByUniformBetweenExpr: addByUniformBetweenExpr,
+		});
+	}
+
+	/**
+	 * Block-Star interMember subdivision var-family add arms (kinds 1/3, the
+	 * instance-var / static-var rows): same-kind `betweenVars` + instance↔static
+	 * `afterStaticVars`. Returns the OR of the three var-family arms. Extracted
+	 * from `triviaBlockInterMemberAddExpr` so each helper stays under the
+	 * complexity gate.
+	 */
+	private static function triviaBlockSubdivVarArmsExpr(betweenVarsAccess: Expr, afterStaticVarsAccess: Expr): Expr {
+		return macro ((_prevKind == 1 && _currKind == 1 && $betweenVarsAccess > 0)
+			|| (_prevKind == 3 && _currKind == 3 && $betweenVarsAccess > 0)
+			|| (((_prevKind == 1 && _currKind == 3) || (_prevKind == 3 && _currKind == 1)) && $afterStaticVarsAccess > 0));
+	}
+
+	/**
+	 * Block-Star interMember subdivision fn-family add arms (kinds 2/4, the
+	 * function / static-function rows): (4,4) `betweenStaticFunctions` + every
+	 * other fn-fn pair `betweenFunctions`. Returns the OR of the two fn-family
+	 * arms. Extracted from `triviaBlockInterMemberAddExpr`.
+	 */
+	private static function triviaBlockSubdivFnArmsExpr(betweenFnAccess: Expr, betweenStaticFnAccess: Expr): Expr {
+		return macro ((_prevKind == 4 && _currKind == 4 && $betweenStaticFnAccess > 0)
+			|| (((_prevKind == 2 && _currKind == 2) || (_prevKind == 2 && _currKind == 4) || (_prevKind == 4 && _currKind == 2))
+				&& $betweenFnAccess > 0));
+	}
+
+	/**
+	 * Block-Star interMember subdivision var↔fn transition arm: a {1,3}↔{2,4}
+	 * boundary fires `afterVars`. Returns the single transition arm. Extracted
+	 * from `triviaBlockInterMemberAddExpr`.
+	 */
+	private static function triviaBlockSubdivVarFnArmExpr(afterVarsAccess: Expr): Expr {
+		return macro (((((_prevKind == 1 || _prevKind == 3) && (_currKind == 2 || _currKind == 4))
+				|| ((_prevKind == 2 || _prevKind == 4) && (_currKind == 1 || _currKind == 3))) && $afterVarsAccess > 0));
+	}
+
+	/**
+	 * Block-Star interMember subdivision-active add rule (ω-class-static-var-
+	 * cascade / ω-abstract-static-fn-cascade). Composes the var-family / fn-family
+	 * / var↔fn arms, AND-ed out under extern context. Extracted from
+	 * `triviaBlockInterMemberAddExpr`.
+	 */
+	private static function triviaBlockInterMemberSubdivExpr(
+		betweenVarsAccess: Expr, betweenFnAccess: Expr, afterVarsAccess: Expr, afterStaticVarsAccess: Expr, betweenStaticFnAccess: Expr
+	): Expr {
+		final varArms: Expr = triviaBlockSubdivVarArmsExpr(betweenVarsAccess, afterStaticVarsAccess);
+		final fnArms: Expr = triviaBlockSubdivFnArmsExpr(betweenFnAccess, betweenStaticFnAccess);
+		final varFnArm: Expr = triviaBlockSubdivVarFnArmExpr(afterVarsAccess);
+		return macro (!opt._classExtern && ($varArms || $fnArms || $varFnArm));
+	}
+
+	/**
+	 * Block-Star interMember subdivision-off add rule (the pre-slice three arms):
+	 * same-var `betweenVars`, same-fn `betweenFunctions`, var↔fn `afterVars`,
+	 * AND-ed out under extern context. Extracted from
+	 * `triviaBlockInterMemberAddExpr`.
+	 */
+	private static function triviaBlockInterMemberPlainExpr(betweenVarsAccess: Expr, betweenFnAccess: Expr, afterVarsAccess: Expr): Expr {
+		return macro (!opt._classExtern
+			&& ((_prevKind == 1 && _currKind == 1 && $betweenVarsAccess > 0) || (_prevKind == 2 && _currKind == 2 && $betweenFnAccess > 0)
+				|| (_prevKind != 0 && _currKind != 0 && _prevKind != _currKind && $afterVarsAccess > 0)));
+	}
+
+	/**
+	 * Block-Star blank-before final assembly (ω-beforedoc-none-precedence). Builds
+	 * the `macro {}` consumed when any empty-lines flag is active: runs the
+	 * per-element computes, derives `_stripBlank` / `_addBlank` / `_sourceBlank`
+	 * from the strip / add gate Exprs, and emits the inter-element `_dhl()`.
+	 * Extracted from `triviaBlockBlankBeforeExpr` so it stays under the complexity
+	 * gate.
+	 */
+	private static function triviaBlockBlankBeforeAssemblyExpr(g: BlankGateExprs): Expr {
+		final currHasDocComputeExpr: Expr = g.currHasDocComputeExpr;
+		final currKindComputeExpr: Expr = g.currKindComputeExpr;
+		final currHasSplitLeadingComputeExpr: Expr = g.currHasSplitLeadingComputeExpr;
+		final stripByDocExpr: Expr = g.stripByDocExpr;
+		final stripByExistingExpr: Expr = g.stripByExistingExpr;
+		final stripByCurrDocExpr: Expr = g.stripByCurrDocExpr;
+		final stripBySplitLeadingExpr: Expr = g.stripBySplitLeadingExpr;
+		final addSuppressOnSplitLeadingExpr: Expr = g.addSuppressOnSplitLeadingExpr;
+		final addByDocExpr: Expr = g.addByDocExpr;
+		final addByCurrDocExpr: Expr = g.addByCurrDocExpr;
+		final addByInterMemberExpr: Expr = g.addByInterMemberExpr;
+		final addByUniformBetweenExpr: Expr = g.addByUniformBetweenExpr;
+		return macro {
+			$currHasDocComputeExpr;
+			$currKindComputeExpr;
+			$currHasSplitLeadingComputeExpr;
+			final _stripBlank: Bool = $stripByDocExpr || $stripByExistingExpr || $stripByCurrDocExpr || $stripBySplitLeadingExpr;
+			// ω-beforedoc-none-precedence: fork's `markDocCommentEmptyLines` applies
+			// `beforeDocCommentEmptyLines` to the before-doc slot AFTER
+			// `afterFieldsWithDocComments` (the prior field's after-slot is the same
+			// physical gap), so the before-policy is the last write and wins. When
+			// the current element opens with a doc comment and the before-policy is
+			// `None`, the slot is forced to zero blanks — `$stripByCurrDocExpr`
+			// already zeroes `_sourceBlank`, so AND-out every add
+			// (`afterFieldsWithDocComments.One`, the interMember / uniform adds) too.
+			// Byte-inert when the Star carries no `beforeDocCommentEmptyLines` flag
+			// (`$stripByCurrDocExpr` is the compile-time literal `false`) or the
+			// runtime policy is not `None`.
+			final _addBlank: Bool = !$stripByCurrDocExpr && !$addSuppressOnSplitLeadingExpr
+				&& ($addByDocExpr || $addByCurrDocExpr || $addByInterMemberExpr || $addByUniformBetweenExpr);
+			final _sourceBlank: Bool = _t.blankBefore && !_stripBlank;
+			if (_si > 0 && (_sourceBlank || _addBlank)) _inner.push(_dhl());
+		};
+	}
+
+	/**
+	 * Block-Star current-element split-leading scan (ω-extern-existing-between-
+	 * split-leading). Per-element scan that flips `_currHasSplitLeading` true when
+	 * the element's leading cluster ends in a `/**` doc comment whose immediate
+	 * predecessor is a `//` line comment. Extracted from `triviaBlockBlankBeforeExpr`.
+	 */
+	private static function triviaBlockCurrHasSplitLeadingComputeExpr(existingBetweenFields: Bool): Expr {
+		return existingBetweenFields
 			? macro {
 				_currHasSplitLeading = false;
 				var _slLast: Int = -1;
@@ -14673,45 +14778,21 @@ class WriterLowering {
 				if (_slLast > 0 && StringTools.startsWith(_t.leadingComments[_slLast - 1], '//')) _currHasSplitLeading = true;
 			}
 			: macro {};
-		final currKindComputeExpr: Expr = triviaBlockCurrKindComputeExpr(interMember, interMemberInfo, staticVarSubdiv, staticVarSubdivInfo);
-		final addByInterMemberExpr: Expr = triviaBlockInterMemberAddExpr(interMember, interMemberInfo, staticVarSubdiv, staticVarSubdivInfo);
-		// ω-enum-empty-lines: opt-in via `@:fmt(uniformBetween('<optField>'))`. The
-		// named non-negative-Int knob is consulted at the inter-element slot.
-		final addByUniformBetweenExpr: Expr = uniformBetween
-			? {
-				final pos: Position = Context.currentPos();
-				final optAccess: Expr = {
-					expr: EField(macro opt, uniformBetweenOptField),
-					pos: pos,
-				};
-				macro $optAccess > 0;
-			}
-			: macro false;
-		return anyEmptyLinesFlag
-			? macro {
-				$currHasDocComputeExpr;
-				$currKindComputeExpr;
-				$currHasSplitLeadingComputeExpr;
-				final _stripBlank: Bool = $stripByDocExpr || $stripByExistingExpr || $stripByCurrDocExpr || $stripBySplitLeadingExpr;
-				// ω-beforedoc-none-precedence: fork's `markDocCommentEmptyLines`
-				// applies `beforeDocCommentEmptyLines` to the before-doc slot AFTER
-				// `afterFieldsWithDocComments` (the prior field's after-slot is the
-				// same physical gap), so the before-policy is the last write and
-				// wins. When the current element opens with a doc comment and the
-				// before-policy is `None`, the slot is forced to zero blanks —
-				// `$stripByCurrDocExpr` already zeroes `_sourceBlank`, so AND-out
-				// every add (`afterFieldsWithDocComments.One`, the interMember /
-				// uniform adds) too. Byte-inert when the Star carries no
-				// `beforeDocCommentEmptyLines` flag (`$stripByCurrDocExpr` is the
-				// compile-time literal `false`) or the runtime policy is not `None`.
-				final _addBlank: Bool = !$stripByCurrDocExpr && !$addSuppressOnSplitLeadingExpr
-					&& ($addByDocExpr || $addByCurrDocExpr || $addByInterMemberExpr || $addByUniformBetweenExpr);
-				final _sourceBlank: Bool = _t.blankBefore && !_stripBlank;
-				if (_si > 0 && (_sourceBlank || _addBlank)) _inner.push(_dhl());
-			}
-			: macro {
-				if (_t.blankBefore && _si > 0) _inner.push(_dhl());
-			};
+	}
+
+	/**
+	 * Block-Star uniform-between add-blank gate (ω-enum-empty-lines). Opt-in via
+	 * `@:fmt(uniformBetween('<optField>'))` — the named non-negative-Int knob is
+	 * consulted at the inter-element slot (`> 0` contributes a blank). Extracted
+	 * from `triviaBlockBlankBeforeExpr`.
+	 */
+	private static function triviaBlockUniformBetweenAddExpr(uniformBetween: Bool, uniformBetweenOptField: Null<String>): Expr {
+		if (!uniformBetween) return macro false;
+		final optAccess: Expr = {
+			expr: EField(macro opt, uniformBetweenOptField),
+			pos: Context.currentPos(),
+		};
+		return macro $optAccess > 0;
 	}
 
 }
@@ -15150,6 +15231,25 @@ typedef CascadeInfos = {
  * builders + the main orchestrator). Replaces a >5-param helper signature
  * with one context struct (mirrors EofStarCtx / SepStarCtx).
  */
+/**
+ * The strip / add gate Exprs + per-element compute Exprs bundled for the
+ * `triviaBlockBlankBeforeAssemblyExpr` final-assembly helper. Replaces a
+ * >5-param helper signature with one struct.
+ */
+typedef BlankGateExprs = {
+	final currHasDocComputeExpr: Expr;
+	final currKindComputeExpr: Expr;
+	final currHasSplitLeadingComputeExpr: Expr;
+	final stripByDocExpr: Expr;
+	final stripByExistingExpr: Expr;
+	final stripByCurrDocExpr: Expr;
+	final stripBySplitLeadingExpr: Expr;
+	final addSuppressOnSplitLeadingExpr: Expr;
+	final addByDocExpr: Expr;
+	final addByCurrDocExpr: Expr;
+	final addByInterMemberExpr: Expr;
+	final addByUniformBetweenExpr: Expr;
+};
 typedef BlockStarCtx = {
 	final fieldAccess: Expr;
 	final openText: String;
