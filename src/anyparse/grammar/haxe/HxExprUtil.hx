@@ -178,18 +178,14 @@ final class HxExprUtil {
 		final e: Null<Dynamic> = unwrap(raw);
 		if (e == null) return false;
 		final ctor: Null<String> = Type.enumConstructor(e);
-		return ctor != null && switch ctor {
-			case 'SwitchExpr', 'SwitchExprBare':
-				true;
-			// `{ … }` block expression — `}` is the literal last token.
-			case 'BlockExpr':
-				true;
-			// `{ k: v, … }` object literal — `}` last token.
-			case 'ObjectLit':
-				true;
-			// `macro class … { members }` — `}` of the members block.
-			case 'MacroClassExpr':
-				true;
+		if (ctor == null) return false;
+		// Always brace-terminated:
+		//  - `SwitchExpr` / `SwitchExprBare` — `switch … { … }`
+		//  - `BlockExpr` — `{ … }` block expression
+		//  - `ObjectLit` — `{ k: v, … }` object literal
+		//  - `MacroClassExpr` — `macro class … { members }`
+		if (BRACE_TERMINAL_CTORS.contains(ctor)) return true;
+		return switch ctor {
 			// `macro <operand>` / `@:meta <operand>` — pure wrappers,
 			// recurse on the wrapped expression. Required for the
 			// `final x = macro for/if/…` idiom in macro-heavy code where
@@ -200,18 +196,7 @@ final class HxExprUtil {
 				final params: Null<Array<Dynamic>> = Type.enumParameters(e);
 				params != null && params.length > 0 && endsWithCloseBrace(params[0]);
 			case 'MetaExpr':
-				final params: Null<Array<Dynamic>> = Type.enumParameters(e);
-				if (params == null || params.length == 0)
-					false;
-				else {
-					final metaExpr: Null<Dynamic> = params[0];
-					if (metaExpr == null)
-						false;
-					else {
-						final inner: Null<Dynamic> = Reflect.field(metaExpr, 'expr');
-						inner != null && endsWithCloseBrace(inner);
-					}
-				}
+				metaExprEndsWithBrace(e);
 			// `a ? b : c` — last evaluated branch is `c` (elseExpr).
 			case 'Ternary':
 				final params: Null<Array<Dynamic>> = Type.enumParameters(e);
@@ -220,22 +205,8 @@ final class HxExprUtil {
 			// either consumed `;` (block-ended via `;`-byte) OR body itself
 			// ends with `}` (recurse). Either way, no further sep is required
 			// before the next stmt.
-			case 'ForExpr':
-				final stmt: Null<Dynamic> = Type.enumParameters(e)[0];
-				if (stmt == null)
-					false;
-				else {
-					final body: Null<Dynamic> = Reflect.field(stmt, 'body');
-					body != null && endsWithCloseBrace(body);
-				}
-			case 'WhileExpr':
-				final stmt: Null<Dynamic> = Type.enumParameters(e)[0];
-				if (stmt == null)
-					false;
-				else {
-					final body: Null<Dynamic> = Reflect.field(stmt, 'body');
-					body != null && endsWithCloseBrace(body);
-				}
+			case 'ForExpr', 'WhileExpr':
+				loopBodyEndsWithBrace(e);
 			// `if (c) then else else'` — recurse on the last evaluated
 			// branch (else if present, otherwise then). Pre-fix Pattern B
 			// `final v = if (a) {…} else {…}` left the outer stmt visible
@@ -243,48 +214,78 @@ final class HxExprUtil {
 			// outer `FinalStmt` handler delegates to `endsWithCloseBrace`,
 			// so the recursive case here closes the loop.
 			case 'IfExpr':
-				final stmt: Null<Dynamic> = Type.enumParameters(e)[0];
-				if (stmt == null)
-					false;
-				else {
-					final elseBranch: Null<Dynamic> = Reflect.field(stmt, 'elseBranch');
-					if (elseBranch != null)
-						endsWithCloseBrace(elseBranch);
-					else {
-						final thenBranch: Null<Dynamic> = Reflect.field(stmt, 'thenBranch');
-						thenBranch != null && endsWithCloseBrace(thenBranch);
-					}
-				}
+				ifExprEndsWithBrace(e);
 			case 'FnExpr':
-				final fn: Null<Dynamic> = Type.enumParameters(e)[0];
-				if (fn == null)
-					false;
-				else {
-					final body: Null<Dynamic> = unwrap(Reflect.field(fn, 'body'));
-					body != null && Type.enumConstructor(body) == 'BlockBody';
-				}
+				fnExprEndsWithBrace(e);
 			case 'TryExpr':
-				final stmt: Null<Dynamic> = Type.enumParameters(e)[0];
-				if (stmt == null)
-					false;
-				else {
-					final catches: Null<Array<Dynamic>> = Reflect.field(stmt, 'catches');
-					if (catches == null || catches.length == 0) {
-						final body: Null<Dynamic> = Reflect.field(stmt, 'body');
-						body != null && endsWithCloseBrace(body);
-					} else {
-						final last: Null<Dynamic> = catches[catches.length - 1];
-						if (last == null)
-							false;
-						else {
-							final lastInner: Dynamic = Reflect.hasField(last, 'node') ? last.node : last;
-							final body: Null<Dynamic> = Reflect.field(lastInner, 'body');
-							body != null && endsWithCloseBrace(body);
-						}
-					}
-				}
+				tryExprEndsWithBrace(e);
 			case _: false;
 		};
+	}
+
+	/**
+	 * `@:meta <operand>` wrapper — recurse on the wrapped expression
+	 * (`params[0].expr`).
+	 */
+	private static function metaExprEndsWithBrace(e: Dynamic): Bool {
+		final params: Null<Array<Dynamic>> = Type.enumParameters(e);
+		if (params == null || params.length == 0) return false;
+		final metaExpr: Null<Dynamic> = params[0];
+		if (metaExpr == null) return false;
+		final inner: Null<Dynamic> = Reflect.field(metaExpr, 'expr');
+		return inner != null && endsWithCloseBrace(inner);
+	}
+
+	/**
+	 * `for (…) body` / `while (…) body` — recurse on the loop body.
+	 */
+	private static function loopBodyEndsWithBrace(e: Dynamic): Bool {
+		final stmt: Null<Dynamic> = Type.enumParameters(e)[0];
+		if (stmt == null) return false;
+		final body: Null<Dynamic> = Reflect.field(stmt, 'body');
+		return body != null && endsWithCloseBrace(body);
+	}
+
+	/**
+	 * `if (c) then else else'` — recurse on the last evaluated branch
+	 * (the else branch if present, otherwise the then branch).
+	 */
+	private static function ifExprEndsWithBrace(e: Dynamic): Bool {
+		final stmt: Null<Dynamic> = Type.enumParameters(e)[0];
+		if (stmt == null) return false;
+		final elseBranch: Null<Dynamic> = Reflect.field(stmt, 'elseBranch');
+		if (elseBranch != null) return endsWithCloseBrace(elseBranch);
+		final thenBranch: Null<Dynamic> = Reflect.field(stmt, 'thenBranch');
+		return thenBranch != null && endsWithCloseBrace(thenBranch);
+	}
+
+	/**
+	 * `function(…) body` — brace-terminated iff the body is a `BlockBody`.
+	 */
+	private static function fnExprEndsWithBrace(e: Dynamic): Bool {
+		final fn: Null<Dynamic> = Type.enumParameters(e)[0];
+		if (fn == null) return false;
+		final body: Null<Dynamic> = unwrap(Reflect.field(fn, 'body'));
+		return body != null && Type.enumConstructor(body) == 'BlockBody';
+	}
+
+	/**
+	 * `try body catch (…) …` — recurse on the last catch clause's body,
+	 * or the try body itself when there are no catches.
+	 */
+	private static function tryExprEndsWithBrace(e: Dynamic): Bool {
+		final stmt: Null<Dynamic> = Type.enumParameters(e)[0];
+		if (stmt == null) return false;
+		final catches: Null<Array<Dynamic>> = Reflect.field(stmt, 'catches');
+		if (catches == null || catches.length == 0) {
+			final body: Null<Dynamic> = Reflect.field(stmt, 'body');
+			return body != null && endsWithCloseBrace(body);
+		}
+		final last: Null<Dynamic> = catches[catches.length - 1];
+		if (last == null) return false;
+		final lastInner: Dynamic = Reflect.hasField(last, 'node') ? last.node : last;
+		final body: Null<Dynamic> = Reflect.field(lastInner, 'body');
+		return body != null && endsWithCloseBrace(body);
 	}
 
 	/**
@@ -313,6 +314,19 @@ final class HxExprUtil {
 		'NullCoalAssign',
 		'BoolAndAssign',
 		'BoolOrAssign',
+	];
+
+	/**
+	 * `HxExpr` constructors whose surface form always ends with `}`:
+	 * `switch … { … }`, a `{ … }` block, a `{ k: v }` object literal,
+	 * and `macro class … { members }`. No recursion needed.
+	 */
+	private static final BRACE_TERMINAL_CTORS: Array<String> = [
+		'SwitchExpr',
+		'SwitchExprBare',
+		'BlockExpr',
+		'ObjectLit',
+		'MacroClassExpr',
 	];
 
 	/**
