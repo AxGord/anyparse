@@ -1242,48 +1242,11 @@ class WriterLowering {
 			// a mandatory-Ref `@:trail(')')` field routes the close literal
 			// through `opt.catchParensInsideClose` (`Before`/`Both` → inner
 			// ` )` pad). No flag → tight `_dt(trailText)` byte-identical.
-			if (!isOptional && trailText != null && !hasCondWrap && !hasCondWrapEnd) parts.push(whitespacePolicyTrail(child, trailText, [
-				'catchParensInsideClose',
-				'switchCondParensInsideClose',
-				'whileCondParensInsideClose'
-			]));
-			// ω-struct-trailopt-source-track (Session 14 Phase 4): mandatory-
-			// Ref `@:trailOpt(LIT)` field gates the trail emission on the
-			// synth slot `<field>TrailPresent:Null<Bool>` so the writer
-			// preserves source presence (true -> `;`, false -> ``) rather
-			// than always re-emitting the canonical trail. Gate on
-			// `hasStructFieldTrailOptSlot` (trivia mode + bearing) so plain
-			// mode and non-bearing rules preserve pre-Phase-4 silent-drop
-			// behaviour for now — pre-Phase-4 the writer never reached the
-			// trail emit for mandatory-Ref `@:trailOpt` (it read trail from
-			// `:trail` only, not `:trailOpt`), so no fixture in the corpus
-			// exercised source-preservation for these fields. `null` on
-			// `<field>TrailPresent` is reserved for raw->paired upcasts
-			// from `Converters.rawToPaired_*` and falls through to
-			// canonical emit via the `==false` test.
-			if (hasStructFieldTrailOptSlot && !isOptional && !hasCondWrap && !hasCondWrapEnd && trailOptText != null)
-				parts.push(macro $structTrailOptAccess == false ? _de() : _dt($v{trailOptText}));
-
-			// ω-pad-trailing-ref: bare-Ref `@:fmt(padTrailing)` — mandatory
-			// Ref always fires, so push a trailing space unconditionally and
-			// set tracker to a constant `true`. Optional-Ref padTrailing was
-			// pushed inside `optParts` above (gated on `_optVal != null`),
-			// so this branch covers ONLY the mandatory-Ref kind. Star-kind
-			// fields were already handled by the early-continue paths above.
-			// Position: AFTER `@:trail` push so the pad lands BETWEEN the
-			// field's writeCall (+ any trail literal) and the next sibling's
-			// leading sep — that's the boundary where `sameLineSeparator`
-			// reads `prevPadTrailing` and drops to `_de()`.
-			//
-			// First consumer: `HxConditionalExpr.expr` (mandatory bare Ref)
-			// so `expr` → either `#elseif` / `#else` / outer `#end` lands
-			// with one inter-token space instead of either glued (no engine)
-			// or doubled (naive padTrailing without engine drop).
-			//
-			// `thisTransparent` is `null` for mandatory bare Ref (always
-			// emits visible content), `$fieldAccess == null` for optional
-			// Ref (transparent when absent). The latter lets a prev pad
-			// signal propagate across an absent optional Ref middle field.
+			emitMandatoryRefTrail(
+				child, parts, isOptional, trailText, trailOptText, hasCondWrap, hasCondWrapEnd, hasStructFieldTrailOptSlot,
+				structTrailOptAccess
+			);
+			// (the @:trailOpt source-presence gate lives in emitMandatoryRefTrail.)
 			if (!isStar && !isOptional && child.fmtHasFlag('padTrailing')) {
 				parts.push(padTrailingDoc(node, child, typePath));
 				thisPadTrailing = macro true;
@@ -1326,27 +1289,8 @@ class WriterLowering {
 			// `WrapList.emitCondition` call, mirroring the single-Ref
 			// engine's emit at line ~2480 but with a runtime-built
 			// composite condDoc (`_dc([...])`) instead of one writeCall.
-			if (hasCondWrapEnd && spanInfo != null) {
-				final spanLen: Int = parts.length - spanStartPartsIdx;
-				final spanBuf: Array<Expr> = parts.slice(spanStartPartsIdx, parts.length);
-				parts.splice(spanStartPartsIdx, spanLen);
-				final innerDoc: Expr = if (spanBuf.length == 1)
-					spanBuf[0]
-				else
-					dcCall(spanBuf);
-				final condKnobAccess: Expr = optFieldAccess(spanInfo.knob);
-				final leadStr: String = spanInfo.leadText;
-				final trailStr: String = spanInfo.trailText;
-				parts.push(macro {
-					final _condRules: anyparse.format.wrap.WrapRules = $condKnobAccess;
-					final _condMode: anyparse.format.wrap.WrapMode = _condRules.defaultMode;
-					final _chainOvr: Null<anyparse.format.wrap.WrapMode> = _condMode == anyparse.format.wrap.WrapMode.NoWrap
-						? null
-						: _condMode;
-					final opt = _setChainModeOverride(opt, _chainOvr);
-					anyparse.format.wrap.WrapList.emitCondition($v{leadStr}, $v{trailStr}, $innerDoc, opt, $condKnobAccess);
-				});
-			}
+			if (hasCondWrapEnd && spanInfo != null)
+				spliceCondWrapEnd(parts, spanStartPartsIdx, spanInfo.knob, spanInfo.leadText, spanInfo.trailText);
 		}
 
 		// ω-multivar-wrap: when the struct opted into
@@ -15436,6 +15380,67 @@ class WriterLowering {
 		return bodyPolicyFlag != null && indentObjArgs != null
 			? effRawWriteCall
 			: maybeIndentValueIfCtor(effRawWriteCall, fieldAccess, child);
+	}
+
+	/**
+	 * Emit a mandatory-Ref field's trail. Pushes the `@:trail` literal (routed
+	 * through `whitespacePolicyTrail` for the catch / switch / while
+	 * cond-parens-inside-close knobs) and, in trivia-bearing mode, the
+	 * `@:trailOpt(LIT)` source-presence gate (`<field>TrailPresent` slot: `false`
+	 * -> `_de()`, else emit). Both are skipped inside a condWrap span. Pushes into
+	 * `parts`. Extracted from `lowerStruct`'s mandatory-Ref trail block.
+	 */
+	private function emitMandatoryRefTrail(
+		child: ShapeNode, parts: Array<Expr>, isOptional: Bool, trailText: Null<String>, trailOptText: Null<String>, hasCondWrap: Bool,
+		hasCondWrapEnd: Bool, hasStructFieldTrailOptSlot: Bool, structTrailOptAccess: Null<Expr>
+	): Void {
+		// ω-condition-parens (Stage C): `@:fmt(catchParensInsideClose)` on
+		// a mandatory-Ref `@:trail(')')` field routes the close literal
+		// through `opt.catchParensInsideClose` (`Before`/`Both` → inner
+		// ` )` pad). No flag → tight `_dt(trailText)` byte-identical.
+		if (!isOptional && trailText != null && !hasCondWrap && !hasCondWrapEnd) parts.push(whitespacePolicyTrail(child, trailText, [
+			'catchParensInsideClose',
+			'switchCondParensInsideClose',
+			'whileCondParensInsideClose'
+		]));
+		// ω-struct-trailopt-source-track (Session 14 Phase 4): mandatory-
+		// Ref `@:trailOpt(LIT)` field gates the trail emission on the
+		// synth slot `<field>TrailPresent:Null<Bool>` so the writer
+		// preserves source presence (true -> `;`, false -> ``) rather
+		// than always re-emitting the canonical trail. Gate on
+		// `hasStructFieldTrailOptSlot` (trivia mode + bearing) so plain
+		// mode and non-bearing rules preserve pre-Phase-4 silent-drop
+		// behaviour for now. `null` on `<field>TrailPresent` is reserved
+		// for raw->paired upcasts from `Converters.rawToPaired_*` and
+		// falls through to canonical emit via the `==false` test.
+		if (hasStructFieldTrailOptSlot && !isOptional && !hasCondWrap && !hasCondWrapEnd && trailOptText != null)
+			parts.push(macro $structTrailOptAccess == false ? _de() : _dt($v{trailOptText}));
+	}
+
+	/**
+	 * ω-condwrap-forstmt: at the end of a span-mode condWrap iteration, splice
+	 * the accumulated cond-span Doc parts (from `spanStartPartsIdx` to the end of
+	 * `parts`) out and replace them with a single `WrapList.emitCondition` call —
+	 * the `(` / `)` literals and knob come from `spanInfo`, the inner condDoc is a
+	 * runtime `_dc([...])` composite. Rewrites `parts` in place. Extracted from
+	 * `lowerStruct`.
+	 */
+	private function spliceCondWrapEnd(parts: Array<Expr>, spanStartPartsIdx: Int, knob: String, leadStr: String, trailStr: String): Void {
+		final spanLen: Int = parts.length - spanStartPartsIdx;
+		final spanBuf: Array<Expr> = parts.slice(spanStartPartsIdx, parts.length);
+		parts.splice(spanStartPartsIdx, spanLen);
+		final innerDoc: Expr = if (spanBuf.length == 1)
+			spanBuf[0]
+		else
+			dcCall(spanBuf);
+		final condKnobAccess: Expr = optFieldAccess(knob);
+		parts.push(macro {
+			final _condRules: anyparse.format.wrap.WrapRules = $condKnobAccess;
+			final _condMode: anyparse.format.wrap.WrapMode = _condRules.defaultMode;
+			final _chainOvr: Null<anyparse.format.wrap.WrapMode> = _condMode == anyparse.format.wrap.WrapMode.NoWrap ? null : _condMode;
+			final opt = _setChainModeOverride(opt, _chainOvr);
+			anyparse.format.wrap.WrapList.emitCondition($v{leadStr}, $v{trailStr}, $innerDoc, opt, $condKnobAccess);
+		});
 	}
 
 }
