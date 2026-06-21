@@ -3757,186 +3757,266 @@ class WriterLowering {
 	 * `padLeading` / `padTrailing` / `softFill` / `lineLengthAwareSeps` pad paths.
 	 * Extracted to keep the orchestrator under the complexity gate.
 	 */
-	private function emitTryparseOrPadStar(c: PlainStarCtx, parts: Array<Expr>): Void {
+	/**
+	 * Plain-mode try-parse `@:fmt(sameLine)` block-shape separator path (the
+	 * `sameLineName != null` branch of `emitTryparseOrPadStar`). Emits the
+	 * per-element runtime-conditional separator with the block-ctor / bare-body
+	 * shape switch. Extracted to keep the helper under the complexity gate.
+	 */
+	private function emitTryparseSameLineStar(c: PlainStarCtx, sameLineName: String, parts: Array<Expr>): Void {
 		final starNode: ShapeNode = c.starNode;
 		final fieldAccess: Expr = c.fieldAccess;
 		final elemCall: Expr = c.elemCall;
-		final elemFn: String = c.elemFn;
 		final elemRefName: String = c.elemRefName;
-		final isLastField: Bool = c.isLastField;
-		final openText: Null<String> = c.openText;
 		final prevBareRefBody: Null<PrevBodyInfo> = c.prevBareRefBody;
-		// Try-parse mode. Emit lead if present (e.g. ':' in default:).
-		if (openText != null) parts.push(macro _dt($v{openText}));
-		final sameLineName: Null<String> = starNode.fmtReadString('sameLine');
-		if (sameLineName != null) {
-			// @:fmt(sameLine(...)) on a try-parse Star: each element is preceded by
-			// a runtime-conditional separator (space or hardline), so the
-			// first element's leading separator acts as the boundary with
-			// the preceding struct field (τ₁ — catches against try body).
-			// Per-element shape is not captured today, so `Keep` degrades
-			// to `Same` at this site (ω-keep-policy).
-			final optFlag: Expr = optFieldAccess(sameLineName);
-			final sepExpr: Expr = sameLinePolicySwitch(optFlag, macro _dt(' '));
-			// ω-block-shape-aware: when the Star carries
-			// `@:fmt(blockBodyKeepsInline)` AND the prev struct field's
-			// body has block ctors AND the element type carries a same-
-			// typed body field, force `_dt(' ')` for any iteration whose
-			// preceding body was a block ctor. Mirrors the trivia path;
-			// the plain path's element access drops the `.node`
-			// indirection.
-			//
-			// ω-statement-bare-break: dual flag `@:fmt(bareBodyBreaks)`
-			// inverts the cases — block bodies fall through to `sepExpr`
-			// (policy-driven), bare bodies force `_dhl()`. See trivia-
-			// path comment for rationale.
-			final blockShapeAware: Bool = starNode.fmtHasFlag('blockBodyKeepsInline');
-			final bareShapeAware: Bool = starNode.fmtHasFlag('bareBodyBreaks');
-			final shapeAware: Bool = blockShapeAware || bareShapeAware;
-			final blockPatterns: Array<Expr> = prevBareRefBody != null && shapeAware
-				? (bareShapeAware
-					? collectBlockShapeEquivalentPatterns(prevBareRefBody.typePath)
-					: collectBlockCtorPatterns(prevBareRefBody.typePath))
-				: [];
-			final elemBodyField: Null<String> = blockPatterns.length > 0 ? findElementBodyField(elemRefName, prevBareRefBody.typePath) : null;
-			if (blockPatterns.length == 0) {
-				parts.push(macro {
-					final _arr = $fieldAccess;
-					final _docs: Array<anyparse.core.Doc> = [];
-					var _si: Int = 0;
-					while (_si < _arr.length) {
-						_docs.push($sepExpr);
-						_docs.push($elemCall);
-						_si++;
-					}
-					_dc(_docs);
-				});
-			} else {
-				final blockKeepsInlineBranch: Expr = blockBodyKeepsInlineBranch(starNode);
-				final firstBlockBranch: Expr = blockShapeAware ? blockKeepsInlineBranch : sepExpr;
-				final firstBareBranch: Expr = blockShapeAware ? sepExpr : (macro _dhl());
-				final firstShapeCases: Array<Case> = [
-					{ values: blockPatterns, expr: firstBlockBranch, guard: null },
-					{ values: [macro _], expr: firstBareBranch, guard: null },
-				];
-				final firstSepShape: Expr = {
-					expr: ESwitch(prevBareRefBody.access, firstShapeCases, null),
+		// @:fmt(sameLine(...)) on a try-parse Star: each element is preceded by
+		// a runtime-conditional separator (space or hardline), so the
+		// first element's leading separator acts as the boundary with
+		// the preceding struct field (τ₁ — catches against try body).
+		// Per-element shape is not captured today, so `Keep` degrades
+		// to `Same` at this site (ω-keep-policy).
+		final optFlag: Expr = optFieldAccess(sameLineName);
+		final sepExpr: Expr = sameLinePolicySwitch(optFlag, macro _dt(' '));
+		// ω-block-shape-aware: when the Star carries
+		// `@:fmt(blockBodyKeepsInline)` AND the prev struct field's
+		// body has block ctors AND the element type carries a same-
+		// typed body field, force `_dt(' ')` for any iteration whose
+		// preceding body was a block ctor. Mirrors the trivia path;
+		// the plain path's element access drops the `.node`
+		// indirection.
+		//
+		// ω-statement-bare-break: dual flag `@:fmt(bareBodyBreaks)`
+		// inverts the cases — block bodies fall through to `sepExpr`
+		// (policy-driven), bare bodies force `_dhl()`. See trivia-
+		// path comment for rationale.
+		final blockShapeAware: Bool = starNode.fmtHasFlag('blockBodyKeepsInline');
+		final bareShapeAware: Bool = starNode.fmtHasFlag('bareBodyBreaks');
+		final shapeAware: Bool = blockShapeAware || bareShapeAware;
+		final blockPatterns: Array<Expr> = prevBareRefBody != null && shapeAware
+			? (bareShapeAware
+				? collectBlockShapeEquivalentPatterns(prevBareRefBody.typePath)
+				: collectBlockCtorPatterns(prevBareRefBody.typePath))
+			: [];
+		final elemBodyField: Null<String> = blockPatterns.length > 0 ? findElementBodyField(elemRefName, prevBareRefBody.typePath) : null;
+		if (blockPatterns.length == 0) {
+			parts.push(macro {
+				final _arr = $fieldAccess;
+				final _docs: Array<anyparse.core.Doc> = [];
+				var _si: Int = 0;
+				while (_si < _arr.length) {
+					_docs.push($sepExpr);
+					_docs.push($elemCall);
+					_si++;
+				}
+				_dc(_docs);
+			});
+		} else {
+			final blockKeepsInlineBranch: Expr = blockBodyKeepsInlineBranch(starNode);
+			final firstBlockBranch: Expr = blockShapeAware ? blockKeepsInlineBranch : sepExpr;
+			final firstBareBranch: Expr = blockShapeAware ? sepExpr : (macro _dhl());
+			final firstShapeCases: Array<Case> = [
+				{ values: blockPatterns, expr: firstBlockBranch, guard: null },
+				{ values: [macro _], expr: firstBareBranch, guard: null },
+			];
+			final firstSepShape: Expr = {
+				expr: ESwitch(prevBareRefBody.access, firstShapeCases, null),
+				pos: Context.currentPos(),
+			};
+			final subsequentSepExpr: Expr = if (elemBodyField == null)
+				sepExpr;
+			else {
+				final prevElemBodyAccess: Expr = {
+					expr: EField(macro _arr[_si - 1], elemBodyField),
 					pos: Context.currentPos(),
 				};
-				final subsequentSepExpr: Expr = if (elemBodyField == null)
-					sepExpr;
-				else {
-					final prevElemBodyAccess: Expr = {
-						expr: EField(macro _arr[_si - 1], elemBodyField),
+				final subBlockBranch: Expr = blockShapeAware ? blockKeepsInlineBranch : sepExpr;
+				final subBareBranch: Expr = blockShapeAware ? sepExpr : (macro _dhl());
+				final cases: Array<Case> = [
+					{ values: blockPatterns, expr: subBlockBranch, guard: null },
+					{ values: [macro _], expr: subBareBranch, guard: null },
+				];
+				{ expr: ESwitch(prevElemBodyAccess, cases, null), pos: Context.currentPos() };
+			};
+			parts.push(macro {
+				final _arr = $fieldAccess;
+				final _docs: Array<anyparse.core.Doc> = [];
+				var _si: Int = 0;
+				while (_si < _arr.length) {
+					_docs.push(_si == 0 ? $firstSepShape : $subsequentSepExpr);
+					_docs.push($elemCall);
+					_si++;
+				}
+				_dc(_docs);
+			});
+		}
+	}
+
+	/**
+	 * Plain-mode try-parse pad path (the `else` branch of
+	 * `emitTryparseOrPadStar`). Handles `@:fmt(padLeading)` / `padTrailing` /
+	 * `softFill` / `lineLengthAwareSeps` / `sepBeforeOpt` inter-element + edge
+	 * spacing. Extracted to keep the helper under the complexity gate.
+	 */
+	private function emitTryparsePadStar(c: PlainStarCtx, parts: Array<Expr>): Void {
+		final starNode: ShapeNode = c.starNode;
+		final fieldAccess: Expr = c.fieldAccess;
+		final elemCall: Expr = c.elemCall;
+		// `@:fmt(padLeading)` / `@:fmt(padTrailing)` — when the Star
+		// is bracketed by surrounding tokens emitted OUTSIDE this
+		// struct (an outer enum ctor's kwLead / trailText, or a
+		// sibling Ref before it) AND has no own `@:lead`/`@:trail`
+		// to carry the space, the internal-only sep leaves
+		// `prevTok<elem1 elem2>nextTok` glued together. Opting into
+		// `padLeading` emits a leading space when the array is non-
+		// empty (`prevTok elem1 elem2>nextTok`); `padTrailing` does
+		// the same on the trailing side; combine for the symmetric
+		// `prevTok elem1 elem2 nextTok` shape (used by
+		// `HxConditionalMod.body` to fence between `#if cond`/`#end`).
+		// Empty arrays still degrade to `_de()` (no padding, no
+		// stray space). Format-neutral — any grammar nesting a
+		// padded Star inside a surrounding-token sandwich can adopt
+		// either flag without touching the macro.
+		final padLeading: Bool = starNode.fmtHasFlag('padLeading');
+		final padTrailing: Bool = starNode.fmtHasFlag('padTrailing');
+		// ω-abstract-clauses-linewrap: when a bare-Star with padLeading
+		// (and/or padTrailing) opts in via `@:fmt(lineLengthAwareSeps)`,
+		// replace each hard padding/inter-element space with an
+		// `IfLineExceeds(opt.lineWidth, _dhl(), _dt(' '))` probe and
+		// wrap the body in `Nest(_cols, ...)` so break-mode hardlines
+		// indent +1 from the enclosing decl. Mirrors fork's
+		// `wrapAfter` + `CodeLine.applyWrapping` mechanism for
+		// `abstract <T>(...) [from X]*` clauses (MarkWhitespace.hx:79
+		// + codedata/CodeLine.hx:47). Single-clause and short-multi-
+		// clause cases decide correctly without a multi-pass marker
+		// because `IfLineExceeds`'s rest-of-stack walker sees the
+		// trailing same-line content (members `{}` + close-trailing
+		// comment). First consumer is `HxAbstractDecl.clauses`.
+		final lineLengthAwareSeps: Bool = starNode.fmtHasFlag('lineLengthAwareSeps');
+		// ω-condcomp-body-leading-sep (Slice 18f): read the runtime
+		// `<field>SepBefore:Bool` slot synthesised by
+		// `TriviaTypeSynth.isSepBeforeOptStarField`. When true at
+		// write time, prepend the sep literal to the leading pad
+		// (`_dt(', ')` in place of `_dt(' ')`). Requires `padLeading`
+		// — the leading pad is the only Doc slot in this branch that
+		// fires adjacent to the enclosing kw (`#if cond`). Combining
+		// with `lineLengthAwareSeps` is rejected at macro time (no
+		// current consumer; the line-wrap probe would have to
+		// swallow the comma into the breakable probe, which the
+		// fork semantics for `#if cond, body` does NOT do).
+		//
+		// The slot lives on the trivia-paired typedef only (sister
+		// gate in `Lowering.lowerStruct` skips the plain-mode
+		// struct literal). Plain writer keeps the pre-slice
+		// `_dt(' ')` pad — no slot to read, byte-roundtrip parity
+		// with the no-slot pre-Slice-18f shape preserved.
+		final sepBeforeOpt: Bool = starNode.fmtHasFlag('sepBeforeOpt');
+		if (sepBeforeOpt && !padLeading)
+			Context.fatalError('WriterLowering: @:fmt(sepBeforeOpt) requires @:fmt(padLeading)', Context.currentPos());
+		if (sepBeforeOpt && lineLengthAwareSeps)
+			Context.fatalError(
+				'WriterLowering: @:fmt(sepBeforeOpt) is not compatible with @:fmt(lineLengthAwareSeps)', Context.currentPos()
+			);
+		final sepBeforeOptActive: Bool = sepBeforeOpt && ctx.trivia;
+		// ω-condcomp-body-softfill (Slice 18h): plain-mode
+		// `@:sep + @:tryparse` Star with `@:fmt(padLeading[, padTrailing])`
+		// can opt into Wadler `Fill(items, sep)` inter-element layout via
+		// `@:fmt(softFill)`. Items pack inline up to the current line
+		// budget and break the sep before any overflow item at the
+		// surrounding Nest's indent. Closes `whitespace/issue_582…`:
+		// `#if air, p1, p2, …, pN #end` inside an outer function-
+		// signature Star whose source wraps the body across multiple
+		// lines. The flat sep is `Concat([Text(sepText), Line(' ')])` —
+		// flat=`,` + ` `, break=`,` + newline+indent. The current
+		// outer-Group Nest from `wrapRules('functionSignatureWrap')`
+		// supplies the break-mode indent (matches `#if`'s column in
+		// every fork-corpus shape observed for cond-comp params).
+		// Mutually exclusive with `lineLengthAwareSeps` — the latter
+		// owns its own break primitive and the two would double-decide
+		// the wrap.
+		final softFill: Bool = starNode.fmtHasFlag('softFill');
+		if (softFill && lineLengthAwareSeps)
+			Context.fatalError('WriterLowering: @:fmt(softFill) is not compatible with @:fmt(lineLengthAwareSeps)', Context.currentPos());
+		if (softFill && !(
+			padLeading || padTrailing
+		)) Context.fatalError('WriterLowering: @:fmt(softFill) requires @:fmt(padLeading) or @:fmt(padTrailing)', Context.currentPos());
+		if (padLeading || padTrailing) {
+			if (lineLengthAwareSeps) {
+				final leadingPush: Expr = padLeading ? macro _docs.push(_dile(opt.lineWidth, _dhl(), _dt(' '))) : macro {};
+				final trailingPush: Expr = padTrailing ? macro _docs.push(_dile(opt.lineWidth, _dhl(), _dt(' '))) : macro {};
+				parts.push(macro {
+					final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+					final _arr = $fieldAccess;
+					if (_arr.length == 0)
+						_de()
+					else {
+						final _docs: Array<anyparse.core.Doc> = [];
+						$leadingPush;
+						var _si: Int = 0;
+						while (_si < _arr.length) {
+							_docs.push($elemCall);
+							if (_si < _arr.length - 1) _docs.push(_dile(opt.lineWidth, _dhl(), _dt(' ')));
+							_si++;
+						}
+						$trailingPush;
+						_dn(_cols, _dc(_docs));
+					}
+				});
+			} else {
+				final leadingPush: Expr = if (sepBeforeOptActive) {
+					final fieldName: String = starNode.annotations.get('base.fieldName');
+					final sepBeforeAccess: Expr = {
+						expr: EField(macro value, fieldName + TriviaTypeSynth.SEP_BEFORE_SUFFIX),
 						pos: Context.currentPos(),
 					};
-					final subBlockBranch: Expr = blockShapeAware ? blockKeepsInlineBranch : sepExpr;
-					final subBareBranch: Expr = blockShapeAware ? sepExpr : (macro _dhl());
-					final cases: Array<Case> = [
-						{ values: blockPatterns, expr: subBlockBranch, guard: null },
-						{ values: [macro _], expr: subBareBranch, guard: null },
-					];
-					{ expr: ESwitch(prevElemBodyAccess, cases, null), pos: Context.currentPos() };
-				};
-				parts.push(macro {
-					final _arr = $fieldAccess;
-					final _docs: Array<anyparse.core.Doc> = [];
-					var _si: Int = 0;
-					while (_si < _arr.length) {
-						_docs.push(_si == 0 ? $firstSepShape : $subsequentSepExpr);
-						_docs.push($elemCall);
-						_si++;
-					}
-					_dc(_docs);
-				});
-			}
-		} else {
-			// `@:fmt(padLeading)` / `@:fmt(padTrailing)` — when the Star
-			// is bracketed by surrounding tokens emitted OUTSIDE this
-			// struct (an outer enum ctor's kwLead / trailText, or a
-			// sibling Ref before it) AND has no own `@:lead`/`@:trail`
-			// to carry the space, the internal-only sep leaves
-			// `prevTok<elem1 elem2>nextTok` glued together. Opting into
-			// `padLeading` emits a leading space when the array is non-
-			// empty (`prevTok elem1 elem2>nextTok`); `padTrailing` does
-			// the same on the trailing side; combine for the symmetric
-			// `prevTok elem1 elem2 nextTok` shape (used by
-			// `HxConditionalMod.body` to fence between `#if cond`/`#end`).
-			// Empty arrays still degrade to `_de()` (no padding, no
-			// stray space). Format-neutral — any grammar nesting a
-			// padded Star inside a surrounding-token sandwich can adopt
-			// either flag without touching the macro.
-			final padLeading: Bool = starNode.fmtHasFlag('padLeading');
-			final padTrailing: Bool = starNode.fmtHasFlag('padTrailing');
-			// ω-abstract-clauses-linewrap: when a bare-Star with padLeading
-			// (and/or padTrailing) opts in via `@:fmt(lineLengthAwareSeps)`,
-			// replace each hard padding/inter-element space with an
-			// `IfLineExceeds(opt.lineWidth, _dhl(), _dt(' '))` probe and
-			// wrap the body in `Nest(_cols, ...)` so break-mode hardlines
-			// indent +1 from the enclosing decl. Mirrors fork's
-			// `wrapAfter` + `CodeLine.applyWrapping` mechanism for
-			// `abstract <T>(...) [from X]*` clauses (MarkWhitespace.hx:79
-			// + codedata/CodeLine.hx:47). Single-clause and short-multi-
-			// clause cases decide correctly without a multi-pass marker
-			// because `IfLineExceeds`'s rest-of-stack walker sees the
-			// trailing same-line content (members `{}` + close-trailing
-			// comment). First consumer is `HxAbstractDecl.clauses`.
-			final lineLengthAwareSeps: Bool = starNode.fmtHasFlag('lineLengthAwareSeps');
-			// ω-condcomp-body-leading-sep (Slice 18f): read the runtime
-			// `<field>SepBefore:Bool` slot synthesised by
-			// `TriviaTypeSynth.isSepBeforeOptStarField`. When true at
-			// write time, prepend the sep literal to the leading pad
-			// (`_dt(', ')` in place of `_dt(' ')`). Requires `padLeading`
-			// — the leading pad is the only Doc slot in this branch that
-			// fires adjacent to the enclosing kw (`#if cond`). Combining
-			// with `lineLengthAwareSeps` is rejected at macro time (no
-			// current consumer; the line-wrap probe would have to
-			// swallow the comma into the breakable probe, which the
-			// fork semantics for `#if cond, body` does NOT do).
-			//
-			// The slot lives on the trivia-paired typedef only (sister
-			// gate in `Lowering.lowerStruct` skips the plain-mode
-			// struct literal). Plain writer keeps the pre-slice
-			// `_dt(' ')` pad — no slot to read, byte-roundtrip parity
-			// with the no-slot pre-Slice-18f shape preserved.
-			final sepBeforeOpt: Bool = starNode.fmtHasFlag('sepBeforeOpt');
-			if (sepBeforeOpt && !padLeading)
-				Context.fatalError('WriterLowering: @:fmt(sepBeforeOpt) requires @:fmt(padLeading)', Context.currentPos());
-			if (sepBeforeOpt && lineLengthAwareSeps)
-				Context.fatalError(
-					'WriterLowering: @:fmt(sepBeforeOpt) is not compatible with @:fmt(lineLengthAwareSeps)', Context.currentPos()
-				);
-			final sepBeforeOptActive: Bool = sepBeforeOpt && ctx.trivia;
-			// ω-condcomp-body-softfill (Slice 18h): plain-mode
-			// `@:sep + @:tryparse` Star with `@:fmt(padLeading[, padTrailing])`
-			// can opt into Wadler `Fill(items, sep)` inter-element layout via
-			// `@:fmt(softFill)`. Items pack inline up to the current line
-			// budget and break the sep before any overflow item at the
-			// surrounding Nest's indent. Closes `whitespace/issue_582…`:
-			// `#if air, p1, p2, …, pN #end` inside an outer function-
-			// signature Star whose source wraps the body across multiple
-			// lines. The flat sep is `Concat([Text(sepText), Line(' ')])` —
-			// flat=`,` + ` `, break=`,` + newline+indent. The current
-			// outer-Group Nest from `wrapRules('functionSignatureWrap')`
-			// supplies the break-mode indent (matches `#if`'s column in
-			// every fork-corpus shape observed for cond-comp params).
-			// Mutually exclusive with `lineLengthAwareSeps` — the latter
-			// owns its own break primitive and the two would double-decide
-			// the wrap.
-			final softFill: Bool = starNode.fmtHasFlag('softFill');
-			if (softFill && lineLengthAwareSeps)
-				Context.fatalError(
-					'WriterLowering: @:fmt(softFill) is not compatible with @:fmt(lineLengthAwareSeps)', Context.currentPos()
-				);
-			if (softFill && !(
-				padLeading || padTrailing
-			)) Context.fatalError('WriterLowering: @:fmt(softFill) requires @:fmt(padLeading) or @:fmt(padTrailing)', Context.currentPos());
-			if (padLeading || padTrailing) {
-				if (lineLengthAwareSeps) {
-					final leadingPush: Expr = padLeading ? macro _docs.push(_dile(opt.lineWidth, _dhl(), _dt(' '))) : macro {};
-					final trailingPush: Expr = padTrailing ? macro _docs.push(_dile(opt.lineWidth, _dhl(), _dt(' '))) : macro {};
+					final sepText: Null<String> = starNode.annotations.get('lit.sepText');
+					final sepLeadText: String = (sepText ?? ',') + ' ';
+					macro _docs.push($sepBeforeAccess ? _dt($v{sepLeadText}) : _dt(' '));
+				} else if (padLeading)
+					macro _docs.push(_dt(' '));
+				else
+					macro {};
+				final trailingPush: Expr = padTrailing ? macro _docs.push(_dt(' ')) : macro {};
+				// ω-condcomp-body-inter-sep (Slice 18f): the inter-element
+				// separator for this branch was historically `_dt(' ')` —
+				// designed for sep-less Stars where elements pack with one
+				// space (e.g. modifier runs). Sep-bearing Stars (e.g.
+				// `HxConditionalParam.body` / `HxConditionalObjectField.body`
+				// with `@:sep(',')`) emit their actual sep + space so multi-
+				// element bodies round-trip the source comma. Falls back to
+				// `' '` when sepText is absent — sep-less Stars stay byte-
+				// identical to pre-slice behaviour.
+				final sepTextForInter: Null<String> = starNode.annotations.get('lit.sepText');
+				final interSepText: String = sepTextForInter != null ? sepTextForInter + ' ' : ' ';
+				if (softFill) {
+					// ω-condcomp-body-softfill: route inter-element sep
+					// through `Fill(items, Concat([Text(sep), Line(' ')]))`.
+					// Flat mode renders the sep identically to the
+					// pre-softFill `Text(interSepText)` path (`, ` for
+					// sep-bearing Stars, ` ` for sep-less). Break mode
+					// emits `sep` + newline+indent before each overflow
+					// item — Fill picks per-item flat/break against the
+					// current Renderer budget.
+					final interSepLit: String = sepTextForInter ?? '';
 					parts.push(macro {
-						final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+						final _arr = $fieldAccess;
+						if (_arr.length == 0)
+							_de()
+						else {
+							final _docs: Array<anyparse.core.Doc> = [];
+							$leadingPush;
+							final _items: Array<anyparse.core.Doc> = [];
+							var _si: Int = 0;
+							while (_si < _arr.length) {
+								_items.push($elemCall);
+								_si++;
+							}
+							_docs.push(_dfill(_items, _dc([_dt($v{interSepLit}), _dl()])));
+							$trailingPush;
+							_dc(_docs);
+						}
+					});
+				} else
+					parts.push(macro {
 						final _arr = $fieldAccess;
 						if (_arr.length == 0)
 							_de()
@@ -3946,99 +4026,45 @@ class WriterLowering {
 							var _si: Int = 0;
 							while (_si < _arr.length) {
 								_docs.push($elemCall);
-								if (_si < _arr.length - 1) _docs.push(_dile(opt.lineWidth, _dhl(), _dt(' ')));
+								if (_si < _arr.length - 1) _docs.push(_dt($v{interSepText}));
 								_si++;
 							}
 							$trailingPush;
-							_dn(_cols, _dc(_docs));
+							_dc(_docs);
 						}
 					});
-				} else {
-					final leadingPush: Expr = if (sepBeforeOptActive) {
-						final fieldName: String = starNode.annotations.get('base.fieldName');
-						final sepBeforeAccess: Expr = {
-							expr: EField(macro value, fieldName + TriviaTypeSynth.SEP_BEFORE_SUFFIX),
-							pos: Context.currentPos(),
-						};
-						final sepText: Null<String> = starNode.annotations.get('lit.sepText');
-						final sepLeadText: String = (sepText ?? ',') + ' ';
-						macro _docs.push($sepBeforeAccess ? _dt($v{sepLeadText}) : _dt(' '));
-					} else if (padLeading)
-						macro _docs.push(_dt(' '));
-					else
-						macro {};
-					final trailingPush: Expr = padTrailing ? macro _docs.push(_dt(' ')) : macro {};
-					// ω-condcomp-body-inter-sep (Slice 18f): the inter-element
-					// separator for this branch was historically `_dt(' ')` —
-					// designed for sep-less Stars where elements pack with one
-					// space (e.g. modifier runs). Sep-bearing Stars (e.g.
-					// `HxConditionalParam.body` / `HxConditionalObjectField.body`
-					// with `@:sep(',')`) emit their actual sep + space so multi-
-					// element bodies round-trip the source comma. Falls back to
-					// `' '` when sepText is absent — sep-less Stars stay byte-
-					// identical to pre-slice behaviour.
-					final sepTextForInter: Null<String> = starNode.annotations.get('lit.sepText');
-					final interSepText: String = sepTextForInter != null ? sepTextForInter + ' ' : ' ';
-					if (softFill) {
-						// ω-condcomp-body-softfill: route inter-element sep
-						// through `Fill(items, Concat([Text(sep), Line(' ')]))`.
-						// Flat mode renders the sep identically to the
-						// pre-softFill `Text(interSepText)` path (`, ` for
-						// sep-bearing Stars, ` ` for sep-less). Break mode
-						// emits `sep` + newline+indent before each overflow
-						// item — Fill picks per-item flat/break against the
-						// current Renderer budget.
-						final interSepLit: String = sepTextForInter ?? '';
-						parts.push(macro {
-							final _arr = $fieldAccess;
-							if (_arr.length == 0)
-								_de()
-							else {
-								final _docs: Array<anyparse.core.Doc> = [];
-								$leadingPush;
-								final _items: Array<anyparse.core.Doc> = [];
-								var _si: Int = 0;
-								while (_si < _arr.length) {
-									_items.push($elemCall);
-									_si++;
-								}
-								_docs.push(_dfill(_items, _dc([_dt($v{interSepLit}), _dl()])));
-								$trailingPush;
-								_dc(_docs);
-							}
-						});
-					} else
-						parts.push(macro {
-							final _arr = $fieldAccess;
-							if (_arr.length == 0)
-								_de()
-							else {
-								final _docs: Array<anyparse.core.Doc> = [];
-								$leadingPush;
-								var _si: Int = 0;
-								while (_si < _arr.length) {
-									_docs.push($elemCall);
-									if (_si < _arr.length - 1) _docs.push(_dt($v{interSepText}));
-									_si++;
-								}
-								$trailingPush;
-								_dc(_docs);
-							}
-						});
-				}
-			} else {
-				parts.push(macro {
-					final _arr = $fieldAccess;
-					final _docs: Array<anyparse.core.Doc> = [];
-					var _si: Int = 0;
-					while (_si < _arr.length) {
-						_docs.push($elemCall);
-						if (_si < _arr.length - 1) _docs.push(_dt(' '));
-						_si++;
-					}
-					_dc(_docs);
-				});
 			}
+		} else {
+			parts.push(macro {
+				final _arr = $fieldAccess;
+				final _docs: Array<anyparse.core.Doc> = [];
+				var _si: Int = 0;
+				while (_si < _arr.length) {
+					_docs.push($elemCall);
+					if (_si < _arr.length - 1) _docs.push(_dt(' '));
+					_si++;
+				}
+				_dc(_docs);
+			});
+		}
+	}
+
+	/**
+	 * Plain-mode try-parse / pad Star dispatch (the
+	 * `else if (!isLastField || @:tryparse)` branch of `emitWriterStarField`).
+	 * Emits the lead, then routes to the `@:fmt(sameLine)` block-shape path or the
+	 * pad path. Extracted to keep the orchestrator under the complexity gate.
+	 */
+	private function emitTryparseOrPadStar(c: PlainStarCtx, parts: Array<Expr>): Void {
+		final starNode: ShapeNode = c.starNode;
+		final openText: Null<String> = c.openText;
+		// Try-parse mode. Emit lead if present (e.g. ':' in default:).
+		if (openText != null) parts.push(macro _dt($v{openText}));
+		final sameLineName: Null<String> = starNode.fmtReadString('sameLine');
+		if (sameLineName != null) {
+			emitTryparseSameLineStar(c, sameLineName, parts);
+		} else {
+			emitTryparsePadStar(c, parts);
 		}
 	}
 
