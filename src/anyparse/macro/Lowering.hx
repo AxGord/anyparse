@@ -2609,280 +2609,14 @@ expectLit(ctx, $v{trailText}));
 			// (`whitespace/issue_582_type_hints_conditionals`).
 			final sepCharCode: Int = sepText.charCodeAt(0);
 			final hasSepBeforeOpt: Bool = starNode.fmtHasFlag('sepBeforeOpt');
-			if (hasSepBeforeOpt) {
-				final sepBeforeLocal: String = localName + 'SepBefore';
-				parseSteps.push({
-					expr: EVars([
-						{
-							name: sepBeforeLocal,
-							type: macro :Bool,
-							expr: macro false,
-							isFinal: false,
-						}
-					]),
-					pos: Context.currentPos(),
-				});
-				parseSteps.push(macro {
-					final _savedPos: Int = ctx.pos;
-					skipWs(ctx);
-					if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
-						ctx.pos++;
-						$i{sepBeforeLocal} = true;
-					} else {
-						ctx.pos = _savedPos;
-					}
-				});
-			}
+			if (hasSepBeforeOpt) emitSepBeforeOptStep(localName, parseSteps, sepCharCode);
 			final sepBlockEnded: Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
-			if (sepBlockEnded) {
-				// Block-ended exemption (mirror of the closeText+sep branch at
-				// line ~2977): after a successful element, sep may be omitted
-				// if the element ended with `;` / `}` (byte-level check on
-				// `_prevEndPos - 1`) — or, when `blockEnded('<predicate>')`
-				// supplies a schema-instance predicate, when that predicate
-				// returns `true` for the just-pushed element. On block-ended,
-				// the next iteration's `elemCall` parses the next stmt
-				// directly; on no-match it rewinds and breaks, letting the
-				// enclosing `@:trail` close consume the trailing token.
-				// Consumers: `HxConditionalStmt.body` / `elseBody`,
-				// `HxElseifStmt.body` (2+ stmts inside `#if … #end` without
-				// inter-stmt `;` between brace-terminated stmts).
-				final predicateName: Null<String> = starNode.annotations.get('lit.sepBlockEndedPredicate');
-				final predicateCall: Expr = predicateName != null ? buildBlockEndedPredicateCall(predicateName, accumRef) : macro false;
-				parseSteps.push(macro {
-					while (true) {
-						final _savedPos: Int = ctx.pos;
-						try {
-							skipWs(ctx);
-							$accumRef.push($elemCall);
-						} catch (_e: anyparse.runtime.ParseError) {
-							ctx.pos = _savedPos;
-							break;
-						}
-						final _prevEndPos: Int = ctx.pos;
-						skipWs(ctx);
-						final _isBE: Bool = _prevEndPos > 0 && {
-							var _pebRew: Int = _prevEndPos - 1;
-							while (_pebRew > 0) {
-								final _bc: Int = ctx.input.charCodeAt(_pebRew);
-								if (_bc == ' '.code || _bc == '\t'.code || _bc == '\n'.code || _bc == '\r'.code)
-									_pebRew--;
-								else
-									break;
-							}
-							final _b: Int = ctx.input.charCodeAt(_pebRew);
-							_b == ';'.code || $predicateCall;
-						};
-						if (_isBE) continue;
-						if (ctx.pos >= ctx.input.length || ctx.input.charCodeAt(ctx.pos) != $v{sepCharCode}) break;
-						ctx.pos++;
-					}
-				});
-				return;
-			}
-			parseSteps.push(macro {
-				while (true) {
-					final _savedPos: Int = ctx.pos;
-					try {
-						skipWs(ctx);
-						$accumRef.push($elemCall);
-					} catch (_e: anyparse.runtime.ParseError) {
-						ctx.pos = _savedPos;
-						break;
-					}
-					skipWs(ctx);
-					if (ctx.pos >= ctx.input.length || ctx.input.charCodeAt(ctx.pos) != $v{sepCharCode}) break;
-					ctx.pos++;
-				}
-			});
-			return;
-		}
-		if (closeText == null && (!isLastField || starNode.hasMeta(':tryparse'))) {
-			// Try-parse mode: loop until element parse fails. Used by
-			// Star fields that are NOT the last field in a struct, OR
-			// by fields annotated with `@:tryparse` (D49) — the loop
-			// terminates when the next token cannot be parsed as an
-			// element (e.g. a modifier loop stopping at `var`/`function`,
-			// or a switch-case body stopping at the next `case`/`default`).
-			parseSteps.push(macro {
-				while (true) {
-					final _savedPos: Int = ctx.pos;
-					try {
-						skipWs(ctx);
-						$accumRef.push($elemCall);
-					} catch (_e: anyparse.runtime.ParseError) {
-						ctx.pos = _savedPos;
-						break;
-					}
-				}
-			});
-			return;
-		}
-		if (closeText == null) {
-			// EOF mode: last field, no trail — loop until end of input.
-			parseSteps.push(macro {
-				skipWs(ctx);
-				while (ctx.pos < ctx.input.length) {
-					$accumRef.push($elemCall);
-					skipWs(ctx);
-				}
-			});
-			return;
-		}
-		// Close-peek entry guard for the Star loop.
-		//
-		// When `closeText` is a single byte, a `charCodeAt` peek is the
-		// fastest way to decide "are we at the close or at an element?".
-		// When `closeText` is longer, the single-byte peek false-positives
-		// on elements whose first byte happens to equal `closeText[0]` —
-		// concretely, `@:trail('*\/')` on a block-comment body lets `*`
-		// appear inside line content, and a `charCodeAt != '*'` guard
-		// skips the Star entirely the moment body begins with `*` (e.g.
-		// `/**` javadoc). The full-string `peekLit` call eats a substring
-		// comparison instead of a byte compare, which is negligible
-		// outside of very hot inner loops.
-		final closeCharCode: Int = closeText.charCodeAt(0);
-		final closeNotNextExpr: Expr = closeText.length == 1
-			? macro ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}
-			: macro ctx.pos < ctx.input.length && !peekLit(ctx, $v{closeText});
-		final blockEnded: Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
-		if (sepText != null && blockEnded) {
-			// Block-ended exemption (Session 2 pilot). After a successful
-			// element, sep may be omitted if the element ended with `}`
-			// (byte-level check on `_prevEndPos - 1`) — or, when the
-			// `@:sep('text', tailRelax, blockEnded('<predicate>'))` form
-			// supplies a schema-instance predicate, when that predicate
-			// returns `true` for the just-pushed element (Session 6 option
-			// b2 — AST-shape adapter). Byte-check also accepts `;` so the
-			// migration is additive with per-stmt `@:trailOpt(';')` /
-			// `@:trail(';')` ctors whose terminator was already consumed.
-			// Tail-relax (trailing sep tolerated before close) is folded in
-			// too: after consuming a sep, if the next char is the close,
-			// we break.
-			//
-			// sepStartsElement (Session 9 BlockBody Star) flips byte-ambiguity
-			// policy: when block-ended is TRUE, the sep byte at pos belongs
-			// to the NEXT element, never a separator. Required for grammars
-			// where the sep char can ALSO be a valid element body (Haxe
-			// `EmptyStmt` whose body IS `;`). When absent the default
-			// permissive-sep semantics applies (sep-first branch).
-			final sepCharCode: Int = sepText.charCodeAt(0);
 			final predicateName: Null<String> = starNode.annotations.get('lit.sepBlockEndedPredicate');
 			final predicateCall: Expr = predicateName != null ? buildBlockEndedPredicateCall(predicateName, accumRef) : macro false;
-			final sepStartsElement: Bool = starNode.annotations.get('lit.sepStartsElement') == true;
-			if (sepStartsElement) {
-				parseSteps.push(macro {
-					skipWs(ctx);
-					if ($closeNotNextExpr) {
-						var _prevEndPos: Int = ctx.pos;
-						$accumRef.push($elemCall);
-						_prevEndPos = ctx.pos;
-						skipWs(ctx);
-						while ($closeNotNextExpr) {
-							final _isBE: Bool = _prevEndPos > 0 && {
-								var _pebRew: Int = _prevEndPos - 1;
-								while (_pebRew > 0) {
-									final _bc: Int = ctx.input.charCodeAt(_pebRew);
-									if (_bc == ' '.code || _bc == '\t'.code || _bc == '\n'.code || _bc == '\r'.code)
-										_pebRew--;
-									else
-										break;
-								}
-								final _b: Int = ctx.input.charCodeAt(_pebRew);
-								_b == ';'.code || $predicateCall;
-							};
-							if (_isBE) {
-								// block-ended: sep byte at pos belongs to next element
-								$accumRef.push($elemCall);
-								_prevEndPos = ctx.pos;
-								skipWs(ctx);
-							} else if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
-								ctx.pos++;
-								skipWs(ctx);
-								if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
-								$accumRef.push($elemCall);
-								_prevEndPos = ctx.pos;
-								skipWs(ctx);
-							} else {
-								expectLit(ctx, $v{sepText}); // throws expected-sep
-							}
-						}
-					}
-				});
-			} else {
-				parseSteps.push(macro {
-					skipWs(ctx);
-					if ($closeNotNextExpr) {
-						var _prevEndPos: Int = ctx.pos;
-						$accumRef.push($elemCall);
-						_prevEndPos = ctx.pos;
-						skipWs(ctx);
-						while ($closeNotNextExpr) {
-							if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
-								ctx.pos++;
-								skipWs(ctx);
-								if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
-								$accumRef.push($elemCall);
-								_prevEndPos = ctx.pos;
-								skipWs(ctx);
-							} else if (
-								_prevEndPos > 0 && {
-									var _pebRew: Int = _prevEndPos - 1;
-									while (_pebRew > 0) {
-										final _bc: Int = ctx.input.charCodeAt(_pebRew);
-										if (_bc == ' '.code || _bc == '\t'.code || _bc == '\n'.code || _bc == '\r'.code)
-											_pebRew--;
-										else
-											break;
-									}
-									final _b: Int = ctx.input.charCodeAt(_pebRew);
-									_b == ';'.code || $predicateCall;
-								}
-							) {
-								// Block-ended: prior element ended with `;`
-								// (byte-check after walking back over
-								// whitespace — covers stmts whose own
-								// `@:trailOpt(';')` consumed `;` and then
-								// the trailing `skipWs` advanced past it)
-								// or the AST-shape predicate returned true.
-								// No sep needed; parse next.
-								$accumRef.push($elemCall);
-								_prevEndPos = ctx.pos;
-								skipWs(ctx);
-							} else {
-								expectLit(ctx, $v{sepText}); // throws expected-sep
-							}
-						}
-					}
-				});
-			}
-		} else if (sepText != null) {
-			final sepCharCode: Int = sepText.charCodeAt(0);
-			parseSteps.push(macro {
-				skipWs(ctx);
-				if ($closeNotNextExpr) {
-					$accumRef.push($elemCall);
-					skipWs(ctx);
-					while (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
-						ctx.pos++;
-						skipWs(ctx);
-						if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
-						$accumRef.push($elemCall);
-						skipWs(ctx);
-					}
-				}
-			});
-		} else {
-			parseSteps.push(macro {
-				skipWs(ctx);
-				while ($closeNotNextExpr) {
-					$accumRef.push($elemCall);
-					skipWs(ctx);
-				}
-			});
+			parseSteps.push(buildTryparseSepLoop(elemCall, accumRef, sepText, sepCharCode, sepBlockEnded, predicateCall));
+			return;
 		}
-		parseSteps.push(macro skipWs(ctx));
-		parseSteps.push(macro expectLit(ctx, $v{closeText}));
+		emitNonTriviaCloseSteps(starNode, parseSteps, isLastField, elemCall, accumRef, closeText, sepText);
 	}
 
 	/**
@@ -5424,6 +5158,292 @@ expectLit(ctx, $v{trailText}));
 			expectLit(ctx, $v{close});
 			left = $ctorCall;
 		};
+	}
+
+	private function buildTryparseSepLoop(
+		elemCall: Expr, accumRef: Expr, sepText: String, sepCharCode: Int, sepBlockEnded: Bool, predicateCall: Expr
+	): Expr {
+		// Try-parse with sep peek (Slice 18). After each successful element,
+		// peeks the next non-whitespace char: if it equals the sep, consumes
+		// it and continues; otherwise breaks. On element-parse fail, rewinds
+		// to `_savedPos` (taken BEFORE `skipWs`) so the enclosing close sees
+		// the pre-whitespace position. The block-ended variant additionally
+		// tolerates an omitted sep when the prior element ended with `;` (or
+		// the schema predicate matches).
+		if (sepBlockEnded) {
+			// Block-ended exemption: after a successful element, sep may be
+			// omitted if the element ended with `;` / `}` (byte-level check on
+			// `_prevEndPos - 1`) — or, when `blockEnded('<predicate>')` supplies
+			// a schema-instance predicate, when that predicate returns `true`
+			// for the just-pushed element. Consumers: `HxConditionalStmt.body`
+			// / `elseBody`, `HxElseifStmt.body`.
+			return macro {
+				while (true) {
+					final _savedPos: Int = ctx.pos;
+					try {
+						skipWs(ctx);
+						$accumRef.push($elemCall);
+					} catch (_e: anyparse.runtime.ParseError) {
+						ctx.pos = _savedPos;
+						break;
+					}
+					final _prevEndPos: Int = ctx.pos;
+					skipWs(ctx);
+					final _isBE: Bool = _prevEndPos > 0 && {
+						var _pebRew: Int = _prevEndPos - 1;
+						while (_pebRew > 0) {
+							final _bc: Int = ctx.input.charCodeAt(_pebRew);
+							if (_bc == ' '.code || _bc == '\t'.code || _bc == '\n'.code || _bc == '\r'.code)
+								_pebRew--;
+							else
+								break;
+						}
+						final _b: Int = ctx.input.charCodeAt(_pebRew);
+						_b == ';'.code || $predicateCall;
+					};
+					if (_isBE) continue;
+					if (ctx.pos >= ctx.input.length || ctx.input.charCodeAt(ctx.pos) != $v{sepCharCode}) break;
+					ctx.pos++;
+				}
+			};
+		}
+		return macro {
+			while (true) {
+				final _savedPos: Int = ctx.pos;
+				try {
+					skipWs(ctx);
+					$accumRef.push($elemCall);
+				} catch (_e: anyparse.runtime.ParseError) {
+					ctx.pos = _savedPos;
+					break;
+				}
+				skipWs(ctx);
+				if (ctx.pos >= ctx.input.length || ctx.input.charCodeAt(ctx.pos) != $v{sepCharCode}) break;
+				ctx.pos++;
+			}
+		};
+	}
+
+	private function buildCloseBlockEndedBody(
+		elemCall: Expr, accumRef: Expr, closeNotNextExpr: Expr, sepCharCode: Int, sepText: String, predicateCall: Expr,
+		sepStartsElement: Bool
+	): Expr {
+		// Block-ended exemption: after a successful element, sep may be
+		// omitted if the element ended with `}` / `;` (byte-level check on
+		// `_prevEndPos - 1`) — or, when the predicate matches. Tail-relax
+		// (trailing sep tolerated before close) is folded in. `sepStartsElement`
+		// flips byte-ambiguity policy: when block-ended is TRUE, the sep byte
+		// at pos belongs to the NEXT element, never a separator (needed where
+		// the sep char can ALSO be a valid element body — Haxe `EmptyStmt`).
+		final beCheck: Expr = buildBlockEndedByteCheck(predicateCall);
+		if (sepStartsElement) {
+			return macro {
+				skipWs(ctx);
+				if ($closeNotNextExpr) {
+					var _prevEndPos: Int = ctx.pos;
+					$accumRef.push($elemCall);
+					_prevEndPos = ctx.pos;
+					skipWs(ctx);
+					while ($closeNotNextExpr) {
+						final _isBE: Bool = $beCheck;
+						if (_isBE) {
+							// block-ended: sep byte at pos belongs to next element
+							$accumRef.push($elemCall);
+							_prevEndPos = ctx.pos;
+							skipWs(ctx);
+						} else if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
+							ctx.pos++;
+							skipWs(ctx);
+							if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
+							$accumRef.push($elemCall);
+							_prevEndPos = ctx.pos;
+							skipWs(ctx);
+						} else {
+							expectLit(ctx, $v{sepText}); // throws expected-sep
+						}
+					}
+				}
+			};
+		}
+		return macro {
+			skipWs(ctx);
+			if ($closeNotNextExpr) {
+				var _prevEndPos: Int = ctx.pos;
+				$accumRef.push($elemCall);
+				_prevEndPos = ctx.pos;
+				skipWs(ctx);
+				while ($closeNotNextExpr) {
+					if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
+						ctx.pos++;
+						skipWs(ctx);
+						if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
+						$accumRef.push($elemCall);
+						_prevEndPos = ctx.pos;
+						skipWs(ctx);
+					} else if ($beCheck) {
+						// Block-ended: prior element ended with `;`
+						// (byte-check after walking back over
+						// whitespace — covers stmts whose own
+						// `@:trailOpt(';')` consumed `;` and then
+						// the trailing `skipWs` advanced past it)
+						// or the AST-shape predicate returned true.
+						// No sep needed; parse next.
+						$accumRef.push($elemCall);
+						_prevEndPos = ctx.pos;
+						skipWs(ctx);
+					} else {
+						expectLit(ctx, $v{sepText}); // throws expected-sep
+					}
+				}
+			}
+		};
+	}
+
+	private function buildBlockEndedByteCheck(predicateCall: Expr): Expr {
+		// `true` iff the just-parsed element is block-ended: scan back from
+		// `_prevEndPos` over trailing whitespace to the last content byte and
+		// accept `;` (covers stmts whose own `@:trailOpt(';')` consumed the
+		// terminator), or the schema predicate matches.
+		return macro _prevEndPos > 0 && {
+			var _pebRew: Int = _prevEndPos - 1;
+			while (_pebRew > 0) {
+				final _bc: Int = ctx.input.charCodeAt(_pebRew);
+				if (_bc == ' '.code || _bc == '\t'.code || _bc == '\n'.code || _bc == '\r'.code)
+					_pebRew--;
+				else
+					break;
+			}
+			final _b: Int = ctx.input.charCodeAt(_pebRew);
+			_b == ';'.code || $predicateCall;
+		};
+	}
+
+	private function buildClosePeekBody(elemCall: Expr, accumRef: Expr, closeNotNextExpr: Expr, sepText: Null<String>): Expr {
+		// Close-peek loop: parse elements until the close literal is the next
+		// non-whitespace token. With `@:sep`, consume one separator between
+		// elements and tolerate a trailing sep before the close.
+		if (sepText != null) {
+			final sepCharCode: Int = sepText.charCodeAt(0);
+			return macro {
+				skipWs(ctx);
+				if ($closeNotNextExpr) {
+					$accumRef.push($elemCall);
+					skipWs(ctx);
+					while (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
+						ctx.pos++;
+						skipWs(ctx);
+						if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
+						$accumRef.push($elemCall);
+						skipWs(ctx);
+					}
+				}
+			};
+		}
+		return macro {
+			skipWs(ctx);
+			while ($closeNotNextExpr) {
+				$accumRef.push($elemCall);
+				skipWs(ctx);
+			}
+		};
+	}
+
+	private function emitSepBeforeOptStep(localName: String, parseSteps: Array<Expr>, sepCharCode: Int): Void {
+		// Slice 18f opt-in (`@:fmt(sepBeforeOpt)`): BEFORE entering the
+		// element loop, peek-and-consume a single leading sep INSIDE the body
+		// (between enclosing kw and first element). Captures true/false into
+		// `<localName>SepBefore` for the writer's padLeading runtime gate to
+		// re-emit the leading sep.
+		final sepBeforeLocal: String = localName + 'SepBefore';
+		parseSteps.push({
+			expr: EVars([
+				{
+					name: sepBeforeLocal,
+					type: macro :Bool,
+					expr: macro false,
+					isFinal: false,
+				}
+			]),
+			pos: Context.currentPos(),
+		});
+		parseSteps.push(macro {
+			final _savedPos: Int = ctx.pos;
+			skipWs(ctx);
+			if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
+				ctx.pos++;
+				$i{sepBeforeLocal} = true;
+			} else {
+				ctx.pos = _savedPos;
+			}
+		});
+	}
+
+	private function emitNonTriviaCloseSteps(
+		starNode: ShapeNode, parseSteps: Array<Expr>, isLastField: Bool, elemCall: Expr, accumRef: Expr, closeText: Null<String>,
+		sepText: Null<String>
+	): Void {
+		if (closeText == null && (!isLastField || starNode.hasMeta(':tryparse'))) {
+			// Try-parse mode: loop until element parse fails. Used by Star
+			// fields that are NOT the last field in a struct, OR by fields
+			// annotated with `@:tryparse` (D49) — the loop terminates when the
+			// next token cannot be parsed as an element (e.g. a modifier loop
+			// stopping at `var`/`function`, or a switch-case body stopping at
+			// the next `case`/`default`).
+			parseSteps.push(macro {
+				while (true) {
+					final _savedPos: Int = ctx.pos;
+					try {
+						skipWs(ctx);
+						$accumRef.push($elemCall);
+					} catch (_e: anyparse.runtime.ParseError) {
+						ctx.pos = _savedPos;
+						break;
+					}
+				}
+			});
+			return;
+		}
+		if (closeText == null) {
+			// EOF mode: last field, no trail — loop until end of input.
+			parseSteps.push(macro {
+				skipWs(ctx);
+				while (ctx.pos < ctx.input.length) {
+					$accumRef.push($elemCall);
+					skipWs(ctx);
+				}
+			});
+			return;
+		}
+		// Close-peek entry guard for the Star loop.
+		//
+		// When `closeText` is a single byte, a `charCodeAt` peek is the
+		// fastest way to decide "are we at the close or at an element?".
+		// When `closeText` is longer, the single-byte peek false-positives
+		// on elements whose first byte happens to equal `closeText[0]` —
+		// concretely, `@:trail('*\/')` on a block-comment body lets `*`
+		// appear inside line content, and a `charCodeAt != '*'` guard
+		// skips the Star entirely the moment body begins with `*` (e.g.
+		// `/**` javadoc). The full-string `peekLit` call eats a substring
+		// comparison instead of a byte compare, which is negligible
+		// outside of very hot inner loops.
+		final closeCharCode: Int = closeText.charCodeAt(0);
+		final closeNotNextExpr: Expr = closeText.length == 1
+			? macro ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}
+			: macro ctx.pos < ctx.input.length && !peekLit(ctx, $v{closeText});
+		final blockEnded: Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
+		if (sepText != null && blockEnded) {
+			final sepCharCode: Int = sepText.charCodeAt(0);
+			final predicateName: Null<String> = starNode.annotations.get('lit.sepBlockEndedPredicate');
+			final predicateCall: Expr = predicateName != null ? buildBlockEndedPredicateCall(predicateName, accumRef) : macro false;
+			final sepStartsElement: Bool = starNode.annotations.get('lit.sepStartsElement') == true;
+			parseSteps.push(buildCloseBlockEndedBody(
+				elemCall, accumRef, closeNotNextExpr, sepCharCode, sepText, predicateCall, sepStartsElement
+			));
+		} else {
+			parseSteps.push(buildClosePeekBody(elemCall, accumRef, closeNotNextExpr, sepText));
+		}
+		parseSteps.push(macro skipWs(ctx));
+		parseSteps.push(macro expectLit(ctx, $v{closeText}));
 	}
 
 }
