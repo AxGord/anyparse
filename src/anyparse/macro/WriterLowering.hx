@@ -3607,60 +3607,21 @@ class WriterLowering {
 	 * / WrapList per the wrap `@:fmt` flags and emits the first-field pattern-list
 	 * keep. Extracted to keep the orchestrator under the complexity gate.
 	 */
-	private function emitSepStar(c: PlainStarCtx, parts: Array<Expr>): Void {
+	/**
+	 * Plain-mode sep Star list emission — the tail of `emitSepStar` after the
+	 * `\n`-join and leading-space handling. Builds the sepList / fillList /
+	 * WrapList call and the first-field pattern-list keep, then pushes onto
+	 * `parts`. Extracted to keep the helper under the complexity gate.
+	 */
+	private function emitSepStarList(c: PlainStarCtx, parts: Array<Expr>): Void {
 		final starNode: ShapeNode = c.starNode;
 		final fieldAccess: Expr = c.fieldAccess;
 		final elemCall: Expr = c.elemCall;
 		final isFirstField: Bool = c.isFirstField;
-		final isRaw: Bool = c.isRaw;
 		final typePath: String = c.typePath;
 		final openText: Null<String> = c.openText;
 		final closeText: Null<String> = c.closeText;
 		final sepText: Null<String> = c.sepText;
-		// Newline as separator — semantically a hardline between
-		// elements, not a soft-fit-or-break token. `sepList` uses a
-		// soft-line (space-in-flat / newline-in-break) which doesn't
-		// match "newlines are structure." Route `@:sep('\n')` to a
-		// flat hardline-join emission: `open + \n + item + \n + … + \n + close`.
-		// No Nest — enclosing scope's indent reaches interior lines
-		// unchanged. Format-neutral — any grammar using `@:sep('\n')`
-		// gets this layout.
-		if (sepText == '\n') {
-			parts.push(macro {
-				final _arr = $fieldAccess;
-				final _docs: Array<anyparse.core.Doc> = [_dt($v{openText ?? ''})];
-				var _si: Int = 0;
-				while (_si < _arr.length) {
-					if (_si > 0) _docs.push(_dhl());
-					_docs.push($elemCall);
-					_si++;
-				}
-				_docs.push(_dt($v{closeText}));
-				_dc(_docs);
-			});
-			return;
-		}
-		// ω-E-whitespace: spaced leads (`{`) get a plain leading space;
-		// a Star with `@:fmt(funcParamParens)` opts into a runtime-
-		// switched space before its open delim. The two branches are
-		// structurally exclusive so a grammar site that ever combined
-		// them (spaced-lead `{` with a funcParamParens-style flag)
-		// cannot produce a double space.
-		//
-		// ω-typeparam-spacing: `@:fmt(typeParamOpen)` extends the same
-		// outside-before-open path — `Before`/`Both` on `<` emit a
-		// space before the delim (`Foo <Int>`). `After`/`Both` on
-		// `<` and `Before`/`Both` on `>` route through `delimInsidePolicySpace`
-		// below to splice padding INSIDE the delimiters via `sepList`'s
-		// `openInside` / `closeInside` Doc args.
-		if (!isFirstField && !isRaw) {
-			if (isSpacedLead(openText)) {
-				parts.push(macro _dt(' '));
-			} else {
-				final paramSpace: Null<Expr> = openDelimPolicySpace(starNode, ['funcParamParens', 'typeParamOpen']);
-				if (paramSpace != null) parts.push(paramSpace);
-			}
-		}
 		final tcExpr: Expr = trailingCommaExpr(starNode);
 		final openInsideExpr: Expr = delimInsidePolicySpace(starNode, ['typeParamOpen', 'objectLiteralBracesOpen'], false) ?? macro _de();
 		final closeInsideExpr: Expr = delimInsidePolicySpace(starNode, ['typeParamClose', 'objectLiteralBracesClose'], true) ?? macro _de();
@@ -3770,6 +3731,69 @@ class WriterLowering {
 			}
 			$patternListExpr;
 		});
+	}
+
+	/**
+	 * Plain-mode sep Star dispatch (the `closeText != null && sepText != null`
+	 * branch of `emitWriterStarField`). Handles the `\n`-join shortcut and the
+	 * leading-space placement, then delegates the list emission to
+	 * `emitSepStarList`. Extracted to keep the orchestrator under the complexity
+	 * gate.
+	 */
+	private function emitSepStar(c: PlainStarCtx, parts: Array<Expr>): Void {
+		final starNode: ShapeNode = c.starNode;
+		final fieldAccess: Expr = c.fieldAccess;
+		final elemCall: Expr = c.elemCall;
+		final isFirstField: Bool = c.isFirstField;
+		final isRaw: Bool = c.isRaw;
+		final openText: Null<String> = c.openText;
+		final closeText: Null<String> = c.closeText;
+		final sepText: Null<String> = c.sepText;
+		// Newline as separator — semantically a hardline between
+		// elements, not a soft-fit-or-break token. `sepList` uses a
+		// soft-line (space-in-flat / newline-in-break) which doesn't
+		// match "newlines are structure." Route `@:sep('\n')` to a
+		// flat hardline-join emission: `open + \n + item + \n + … + \n + close`.
+		// No Nest — enclosing scope's indent reaches interior lines
+		// unchanged. Format-neutral — any grammar using `@:sep('\n')`
+		// gets this layout.
+		if (sepText == '\n') {
+			parts.push(macro {
+				final _arr = $fieldAccess;
+				final _docs: Array<anyparse.core.Doc> = [_dt($v{openText ?? ''})];
+				var _si: Int = 0;
+				while (_si < _arr.length) {
+					if (_si > 0) _docs.push(_dhl());
+					_docs.push($elemCall);
+					_si++;
+				}
+				_docs.push(_dt($v{closeText}));
+				_dc(_docs);
+			});
+			return;
+		}
+		// ω-E-whitespace: spaced leads (`{`) get a plain leading space;
+		// a Star with `@:fmt(funcParamParens)` opts into a runtime-
+		// switched space before its open delim. The two branches are
+		// structurally exclusive so a grammar site that ever combined
+		// them (spaced-lead `{` with a funcParamParens-style flag)
+		// cannot produce a double space.
+		//
+		// ω-typeparam-spacing: `@:fmt(typeParamOpen)` extends the same
+		// outside-before-open path — `Before`/`Both` on `<` emit a
+		// space before the delim (`Foo <Int>`). `After`/`Both` on
+		// `<` and `Before`/`Both` on `>` route through `delimInsidePolicySpace`
+		// below to splice padding INSIDE the delimiters via `sepList`'s
+		// `openInside` / `closeInside` Doc args.
+		if (!isFirstField && !isRaw) {
+			if (isSpacedLead(openText)) {
+				parts.push(macro _dt(' '));
+			} else {
+				final paramSpace: Null<Expr> = openDelimPolicySpace(starNode, ['funcParamParens', 'typeParamOpen']);
+				if (paramSpace != null) parts.push(paramSpace);
+			}
+		}
+		emitSepStarList(c, parts);
 	}
 
 	/**
