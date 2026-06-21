@@ -1293,100 +1293,12 @@ class WriterLowering {
 				spliceCondWrapEnd(parts, spanStartPartsIdx, spanInfo.knob, spanInfo.leadText, spanInfo.trailText);
 		}
 
-		// ω-multivar-wrap: when the struct opted into
-		// `@:fmt(multiVarWrap('<knob>', '<moreField>'))`, bracket the whole
-		// emitted body so the `<moreField>` Star gate (`_suppressMoreEntry ?
-		// _de() : …`) and the head-only recursive self-calls resolve. The
-		// generated body:
-		//   final _suppressMoreEntry = opt._suppressMore;  // entry snapshot
-		//   final opt = _clearSuppressMore(opt);           // head fields never
-		//                                                  // see the flag, so a
-		//                                                  // var decl nested in
-		//                                                  // an initializer keeps
-		//                                                  // its own `more`
-		//   final _headPlusMore = _dc([parts]);            // head + (gated) more
-		//   if (!_suppressMoreEntry && value.<more>.length > 0) {
-		//     final _items = [ writeHxVarDeclT(value, _setSuppressMore(opt)) ];
-		//     var _ml = value.<more>;        // Array<Trivial<HxVarMoreT>>
-		//     while (_ml.length > 0) {
-		//       final _link = _ml[0].node;   // HxVarMoreT
-		//       _items.push(writeHxVarDeclT(_link.decl, _setSuppressMore(opt)));
-		//       _ml = _link.decl.<more>;     // walk the right-recursion
-		//     }
-		//     return WrapList.emit('', '', ',', _items, opt, Empty, Empty,
-		//       false, opt.<knob>);
-		//   }
-		//   return _headPlusMore;
-		// `WrapList.shapeOnePerLineAfterFirst('', '', ',', …)` byte-reproduces
-		// `head,\n\ttail,\n\ttail` (head inline, tail at +cols); the cascade's
-		// column-aware `LineLengthLargerThan(80)` fires on the wide ~108-col
-		// decl while `AllItemLengthsLessThan(15)` packs short lists FillLine.
-		// Each item is head-only, so the continuation Nest is single-level —
-		// the right-recursion never stacks Nests.
-		final dcExpr: Expr = if (multiVarKnob == null || multiVarMoreField == null)
-			dcCall(parts);
-		else {
-			final knobName: String = multiVarKnob;
-			final moreFieldName: String = multiVarMoreField;
-			final headPlusMore: Expr = dcCall(parts);
-			final knobAccess: Expr = optFieldAccess(knobName);
-			final selfFn: String = writeFnFor(typePath);
-			final selfIdent: Expr = { expr: EConst(CIdent(selfFn)), pos: Context.currentPos() };
-			final moreAccess: Expr = { expr: EField(macro value, moreFieldName), pos: Context.currentPos() };
-			final linkMoreAccess: Expr = { expr: EField(macro _link.decl, moreFieldName), pos: Context.currentPos() };
-			// In trivia mode the Star collects `Trivial<HxVarMoreT>` so the
-			// element is reached via `.node`; in plain mode the Star holds the
-			// raw `HxVarMore` directly. Both yield a value whose `.decl` is the
-			// next `HxVarDecl(T)` link, so the rest of the walk is identical.
-			final linkBind: Expr = ctx.trivia ? (macro final _link = _ml[0].node) : (macro final _link = _ml[0]);
-			// ω-keep-newline-after-sep (increment 1): when this fold's
-			// `WrapList.emit` resolves to `WrapMode.Keep`, the engine
-			// reproduces each comma-link's source break iff the source
-			// placed a newline AFTER the comma (`,\n  next`). That signal
-			// lives on the trivia Star element's `Trivial.newlineAfterSep`
-			// slot, so it is only available in trivia mode.
-			// ω-keep-kw-newline (increment 1b): the HEAD break (`_breaks[0]`)
-			// reproduces the source `var`→head newline (`var\n\trawRead`). The
-			// `HxStatement.VarStmt` writer threads it onto `opt._varKwNewline`
-			// (set only when the parser captured a newline after the `var` /
-			// `final` keyword); this fold reads it for `_breaks[0]` and clears
-			// the flag so the recursive head/link self-calls do not re-trigger.
-			// Each loop step appends the link's `newlineAfterSep` flag, keeping
-			// `_breaks` index-aligned with `_items`. In plain mode the Star
-			// holds raw `HxVarMore` (no trivia) — `_breaks` stays empty and
-			// `sourceBreakBefore` is passed `null`, so Keep falls back to
-			// the legacy `shapeNoWrap` glue (byte-inert vs pre-slice).
-			final breakDecl: Expr = ctx.trivia
-				? (macro final _breaks: Array<Bool> = [_varKwNewlineHead])
-				: (macro final _breaks: Null<Array<Bool>> = null);
-			final breakStepPush: Expr = ctx.trivia ? (macro _breaks.push(_ml[0].newlineAfterSep == true)) : (macro {});
-			macro {
-				final _suppressMoreEntry: Bool = opt._suppressMore;
-				final _varKwNewlineHead: Bool = opt._varKwNewline;
-				final opt = _clearSuppressMore(_clearVarKwNewline(opt));
-				final _headPlusMore: anyparse.core.Doc = $headPlusMore;
-				if (!_suppressMoreEntry && $moreAccess.length > 0) {
-					final _items: Array<anyparse.core.Doc> = [$selfIdent(value, _setSuppressMore(opt))];
-					$breakDecl;
-					var _ml = $moreAccess;
-					while (_ml.length > 0) {
-						$linkBind;
-						$breakStepPush;
-						_items.push($selfIdent(_link.decl, _setSuppressMore(opt)));
-						_ml = $linkMoreAccess;
-					}
-					anyparse.format.wrap.WrapList.emit(
-						'', '', ',', _items, opt, anyparse.core.Doc.Empty, anyparse.core.Doc.Empty, false, $knobAccess, false,
-						anyparse.core.Doc.Empty, anyparse.core.Doc.Empty, false, anyparse.core.Doc.Empty, null, false, false, null, false,
-						_breaks
-					);
-				} else
-					_headPlusMore;
-			};
-		}
-
-		// ω-functionsignature-body-aware-indent: bracket the assembled body in the
-		// `@:fmt(propagateFnBodyEmpty)` save-mutate-eval-restore (see finalizeStructReturn).
+		// ω-multivar-wrap: `@:fmt(multiVarWrap('<knob>', '<moreField>'))` (sole
+		// consumer: HxVarDecl) folds the head binding + right-recursion links into
+		// one WrapList.emit under the `<knob>` cascade — see buildMultiVarWrapFold.
+		final dcExpr: Expr = multiVarKnob == null || multiVarMoreField == null
+			? dcCall(parts)
+			: buildMultiVarWrapFold(parts, typePath, multiVarKnob, multiVarMoreField);
 		return finalizeStructReturn(node, dcExpr);
 		// (empty-body detection + ctor-set dispatch live in finalizeStructReturn)
 	}
@@ -15441,6 +15353,66 @@ class WriterLowering {
 			final opt = _setChainModeOverride(opt, _chainOvr);
 			anyparse.format.wrap.WrapList.emitCondition($v{leadStr}, $v{trailStr}, $innerDoc, opt, $condKnobAccess);
 		});
+	}
+
+	/**
+	 * ω-multivar-wrap: build the `@:fmt(multiVarWrap('<knob>', '<moreField>'))`
+	 * fold Expr (sole consumer: `HxVarDecl`). Brackets the assembled `parts` so
+	 * the `<moreField>` Star gate and head-only recursive self-calls resolve: a
+	 * `_suppressMoreEntry` snapshot drops the more-field to `_de()`, the head
+	 * binding plus each right-recursion link become head-only item Docs spliced
+	 * into one `WrapList.emit('', '', ',', …)` under the `<knob>` cascade; absent
+	 * the more-field it falls back to the plain `_dc([parts])`. Extracted from
+	 * `lowerStruct`'s dcExpr fold.
+	 */
+	private function buildMultiVarWrapFold(parts: Array<Expr>, typePath: String, knobName: String, moreFieldName: String): Expr {
+		final headPlusMore: Expr = dcCall(parts);
+		final knobAccess: Expr = optFieldAccess(knobName);
+		final selfFn: String = writeFnFor(typePath);
+		final selfIdent: Expr = { expr: EConst(CIdent(selfFn)), pos: Context.currentPos() };
+		final moreAccess: Expr = { expr: EField(macro value, moreFieldName), pos: Context.currentPos() };
+		final linkMoreAccess: Expr = { expr: EField(macro _link.decl, moreFieldName), pos: Context.currentPos() };
+		// In trivia mode the Star collects `Trivial<HxVarMoreT>` so the
+		// element is reached via `.node`; in plain mode the Star holds the
+		// raw `HxVarMore` directly. Both yield a value whose `.decl` is the
+		// next `HxVarDecl(T)` link, so the rest of the walk is identical.
+		final linkBind: Expr = ctx.trivia ? (macro final _link = _ml[0].node) : (macro final _link = _ml[0]);
+		// ω-keep-newline-after-sep (increment 1): when this fold's
+		// `WrapList.emit` resolves to `WrapMode.Keep`, the engine reproduces
+		// each comma-link's source break iff the source placed a newline AFTER
+		// the comma (`,\n  next`). That signal lives on the trivia Star
+		// element's `Trivial.newlineAfterSep` slot, only available in trivia
+		// mode. ω-keep-kw-newline (increment 1b): the HEAD break (`_breaks[0]`)
+		// reproduces the source `var`→head newline, threaded onto
+		// `opt._varKwNewline` by the `HxStatement.VarStmt` writer. In plain
+		// mode `_breaks` stays null and Keep falls back to `shapeNoWrap` glue.
+		final breakDecl: Expr = ctx.trivia
+			? (macro final _breaks: Array<Bool> = [_varKwNewlineHead])
+			: (macro final _breaks: Null<Array<Bool>> = null);
+		final breakStepPush: Expr = ctx.trivia ? (macro _breaks.push(_ml[0].newlineAfterSep == true)) : (macro {});
+		return macro {
+			final _suppressMoreEntry: Bool = opt._suppressMore;
+			final _varKwNewlineHead: Bool = opt._varKwNewline;
+			final opt = _clearSuppressMore(_clearVarKwNewline(opt));
+			final _headPlusMore: anyparse.core.Doc = $headPlusMore;
+			if (!_suppressMoreEntry && $moreAccess.length > 0) {
+				final _items: Array<anyparse.core.Doc> = [$selfIdent(value, _setSuppressMore(opt))];
+				$breakDecl;
+				var _ml = $moreAccess;
+				while (_ml.length > 0) {
+					$linkBind;
+					$breakStepPush;
+					_items.push($selfIdent(_link.decl, _setSuppressMore(opt)));
+					_ml = $linkMoreAccess;
+				}
+				anyparse.format.wrap.WrapList.emit(
+					'', '', ',', _items, opt, anyparse.core.Doc.Empty, anyparse.core.Doc.Empty, false, $knobAccess, false,
+					anyparse.core.Doc.Empty, anyparse.core.Doc.Empty, false, anyparse.core.Doc.Empty, null, false, false, null, false,
+					_breaks
+				);
+			} else
+				_headPlusMore;
+		};
 	}
 
 }
