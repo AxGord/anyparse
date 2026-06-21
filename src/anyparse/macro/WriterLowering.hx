@@ -898,30 +898,8 @@ class WriterLowering {
 			final condWrapArgs: Null<Array<String>> = child.fmtReadStringArgs('condWrap');
 			final isSpanStart: Bool = spanInfo != null && fieldIdx == spanInfo.startIdx;
 			final hasCondWrapEnd: Bool = spanInfo != null && fieldIdx == spanInfo.endIdx;
-			if (condWrapArgs != null) {
-				if (condWrapArgs.length != 1)
-					Context.fatalError(
-						'WriterLowering: @:fmt(condWrap(\'<knob>\')) requires 1 string arg, got ${condWrapArgs.length}',
-						Context.currentPos()
-					);
-				if (leadText == null)
-					Context.fatalError('WriterLowering: @:fmt(condWrap) requires @:lead on the field', Context.currentPos());
-				// Span mode: trail literal lives on the matched `@:fmt(condWrapEnd)`
-				// sibling; single-Ref mode: trail required on the same field.
-				if (spanInfo == null && trailText == null)
-					Context.fatalError(
-						'WriterLowering: @:fmt(condWrap) requires @:trail on the field (or a sibling @:fmt(condWrapEnd) for span mode)',
-						Context.currentPos()
-					);
-				if (isOptional || isStar || child.kind != Ref)
-					Context.fatalError(
-						'WriterLowering: @:fmt(condWrap) is supported only on bare mandatory Ref fields', Context.currentPos()
-					);
-				if (spanInfo == null && kwLead != null)
-					Context.fatalError(
-						'WriterLowering: @:fmt(condWrap) (single-Ref mode) does not support @:kw on the same field', Context.currentPos()
-					);
-			}
+			if (condWrapArgs != null)
+				validateCondWrap(condWrapArgs, leadText, trailText, kwLead, spanInfo != null, isOptional, isStar, child.kind);
 			final hasCondWrap: Bool = condWrapArgs != null;
 			if (isSpanStart) spanStartPartsIdx = parts.length;
 
@@ -15449,6 +15427,37 @@ class WriterLowering {
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * ω-condition-wrap-wiring: validate a field carrying `@:fmt(condWrap('<knob>'))`.
+	 * Enforces a single string arg, a mandatory `@:lead`, a `@:trail` in single-Ref
+	 * mode (or a sibling `@:fmt(condWrapEnd)` for span mode, signalled by `hasSpan`),
+	 * a bare mandatory Ref kind, and no same-field `@:kw` in single-Ref mode. Throws
+	 * via `Context.fatalError` on any violation. Extracted from `lowerStruct`.
+	 */
+	private function validateCondWrap(
+		condWrapArgs: Array<String>, leadText: Null<String>, trailText: Null<String>, kwLead: Null<String>, hasSpan: Bool,
+		isOptional: Bool, isStar: Bool, childKind: ShapeKind
+	): Void {
+		if (condWrapArgs.length != 1)
+			Context.fatalError(
+				'WriterLowering: @:fmt(condWrap(\'<knob>\')) requires 1 string arg, got ${condWrapArgs.length}', Context.currentPos()
+			);
+		if (leadText == null) Context.fatalError('WriterLowering: @:fmt(condWrap) requires @:lead on the field', Context.currentPos());
+		// Span mode: trail literal lives on the matched `@:fmt(condWrapEnd)`
+		// sibling; single-Ref mode: trail required on the same field.
+		if (!hasSpan && trailText == null)
+			Context.fatalError(
+				'WriterLowering: @:fmt(condWrap) requires @:trail on the field (or a sibling @:fmt(condWrapEnd) for span mode)',
+				Context.currentPos()
+			);
+		if (isOptional || isStar || childKind != Ref)
+			Context.fatalError('WriterLowering: @:fmt(condWrap) is supported only on bare mandatory Ref fields', Context.currentPos());
+		if (!hasSpan && kwLead != null)
+			Context.fatalError(
+				'WriterLowering: @:fmt(condWrap) (single-Ref mode) does not support @:kw on the same field', Context.currentPos()
+			);
 	}
 
 }
