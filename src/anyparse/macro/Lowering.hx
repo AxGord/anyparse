@@ -890,60 +890,11 @@ class Lowering {
 					parseSteps
 				);
 			}
-			switch child.kind {
-				case Ref if (isOptional):
-					emitOptionalRefField(
-						child, fieldName, localName, parseSteps, kwLead, leadText, trailText, absentOnLits, hasOptionalRefAfterTrailSlot,
-						captureTrailPresentExpr, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal, beforeKwNlLocal, bodyOnSameLineLocal,
-						beforeKwLeadingLocal, beforeKwTrailingLocal
-					);
-				case Ref:
-					final refName: String = child.annotations.get('base.ref');
-					final callExpr: Expr = {
-						expr: ECall(macro $i{parseFnName(refName)}, [macro ctx]),
-						pos: Context.currentPos(),
-					};
-					parseSteps.push({
-						expr: EVars([
-							{
-								name: localName,
-								type: null,
-								expr: callExpr,
-								isFinal: true,
-							}
-						]),
-						pos: Context.currentPos(),
-					});
-				case Star if (isOptional && kwLead != null):
-					emitOptionalKwStarFieldSteps(
-						child, localName, parseSteps, kwLead, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal, beforeKwNlLocal,
-						bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal
-					);
-				case Star if (isOptional):
-					emitOptionalStarFieldSteps(child, localName, parseSteps);
-				case Star:
-					final isLastField: Bool = child == node.children[node.children.length - 1];
-					emitStarFieldSteps(child, localName, parseSteps, isLastField);
-				case Terminal:
-					final binFixedLen: Null<Int> = child.annotations.get('bin.fixedLen');
-					final binEncoding: Null<String> = child.annotations.get('bin.encoding');
-					final binDataRef: Null<String> = child.annotations.get('bin.dataRef');
-					if (lenPrefix != null)
-						emitBinLengthBytesField(localName, fieldName, parseSteps);
-					else if (binFixedLen != null && binEncoding != null)
-						emitBinFixedIntField(localName, binFixedLen, binEncoding, fieldName, parseSteps);
-					else if (binFixedLen != null)
-						emitBinFixedStringField(localName, binFixedLen, parseSteps);
-					else if (binDataRef != null)
-						emitBinDataField(localName, binDataRef, parseSteps);
-					else
-						Context.fatalError(
-							'Lowering: Terminal struct field "$fieldName" requires @:bin or @:length in binary format',
-							Context.currentPos()
-						);
-				case _:
-					Context.fatalError('Lowering: struct field kind ${child.kind} not supported', Context.currentPos());
-			}
+			emitFieldValueByKind(
+				child, node, fieldName, localName, parseSteps, isOptional, kwLead, leadText, trailText, absentOnLits,
+				hasOptionalRefAfterTrailSlot, captureTrailPresentExpr, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal, beforeKwNlLocal,
+				bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal, lenPrefix
+			);
 			// Per-field trail. Skipped for Star fields — `emitStarFieldSteps`
 			// already emitted the close literal as part of the loop wrappers.
 			// Mandatory Ref path: the close + same-line `// comment`
@@ -5832,6 +5783,76 @@ expectLit(ctx, $v{trailText}));
 			hasStructFieldTrailOptSlot: hasStructFieldTrailOptSlot,
 			captureTrailPresentExpr: captureTrailPresentExpr,
 		};
+	}
+
+	/**
+	 * Emit the field-value parse steps for one struct field, dispatched by its
+	 * shape kind: optional-Ref (peek-commit), bare Ref (direct sub-rule call),
+	 * optional-kw Star / optional Star / plain Star (loop wrappers), or Terminal
+	 * (binary fixed-len / int / data / length-prefixed). Each arm delegates to
+	 * the corresponding emit*FieldSteps / emitBin* helper. Lifted from
+	 * `lowerStruct`'s per-field loop.
+	 */
+	private function emitFieldValueByKind(
+		child: ShapeNode, node: ShapeNode, fieldName: Null<String>, localName: String, parseSteps: Array<Expr>, isOptional: Bool,
+		kwLead: Null<String>, leadText: Null<String>, trailText: Null<String>, absentOnLits: Null<Array<String>>,
+		hasOptionalRefAfterTrailSlot: Bool, captureTrailPresentExpr: Expr, hasKwTriviaSlots: Bool, afterKwLocal: String,
+		kwLeadingLocal: String, beforeKwNlLocal: String, bodyOnSameLineLocal: String, beforeKwLeadingLocal: String,
+		beforeKwTrailingLocal: String, lenPrefix: Null<{ width: Int, encoding: String }>
+	): Void {
+		switch child.kind {
+			case Ref if (isOptional):
+				emitOptionalRefField(
+					child, fieldName, localName, parseSteps, kwLead, leadText, trailText, absentOnLits, hasOptionalRefAfterTrailSlot,
+					captureTrailPresentExpr, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal, beforeKwNlLocal, bodyOnSameLineLocal,
+					beforeKwLeadingLocal, beforeKwTrailingLocal
+				);
+			case Ref:
+				final refName: String = child.annotations.get('base.ref');
+				final callExpr: Expr = {
+					expr: ECall(macro $i{parseFnName(refName)}, [macro ctx]),
+					pos: Context.currentPos(),
+				};
+				parseSteps.push({
+					expr: EVars([
+						{
+							name: localName,
+							type: null,
+							expr: callExpr,
+							isFinal: true,
+						}
+					]),
+					pos: Context.currentPos(),
+				});
+			case Star if (isOptional && kwLead != null):
+				emitOptionalKwStarFieldSteps(
+					child, localName, parseSteps, kwLead, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal, beforeKwNlLocal,
+					bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal
+				);
+			case Star if (isOptional):
+				emitOptionalStarFieldSteps(child, localName, parseSteps);
+			case Star:
+				final isLastField: Bool = child == node.children[node.children.length - 1];
+				emitStarFieldSteps(child, localName, parseSteps, isLastField);
+			case Terminal:
+				final binFixedLen: Null<Int> = child.annotations.get('bin.fixedLen');
+				final binEncoding: Null<String> = child.annotations.get('bin.encoding');
+				final binDataRef: Null<String> = child.annotations.get('bin.dataRef');
+				if (lenPrefix != null)
+					emitBinLengthBytesField(localName, fieldName, parseSteps);
+				else if (binFixedLen != null && binEncoding != null)
+					emitBinFixedIntField(localName, binFixedLen, binEncoding, fieldName, parseSteps);
+				else if (binFixedLen != null)
+					emitBinFixedStringField(localName, binFixedLen, parseSteps);
+				else if (binDataRef != null)
+					emitBinDataField(localName, binDataRef, parseSteps);
+				else
+					Context.fatalError(
+						'Lowering: Terminal struct field "$fieldName" requires @:bin or @:length in binary format', Context.currentPos()
+					);
+			case _:
+				Context.fatalError('Lowering: struct field kind ${child.kind} not supported', Context.currentPos());
+		}
 	}
 
 }
