@@ -828,95 +828,90 @@ class WrapList {
 		var total: Int = 0;
 		while (stack.length > 0) {
 			final node: Doc = stack.pop();
-			switch (node) {
-				case Empty:
-				case Text(s):
-					total += s.length;
-				case Line(flat):
-					if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) return -1;
-					total += flat.length;
-				case Nest(_, inner):
-					stack.push(inner);
-				case Concat(items):
-					var i: Int = items.length;
-					while (--i >= 0) stack.push(items[i]);
-				case Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner):
-					stack.push(inner);
-				case IfBreak(_, flatDoc):
-					stack.push(flatDoc);
-				case IfWidthExceeds(_, _, flatDoc):
-					// Forward to flat side: width measurement reflects
-					// what the flat shape would consume. Mirrors `IfBreak`
-					// arm — the column-aware decision happens at render
-					// time, not in static walks.
-					stack.push(flatDoc);
-				case IfFirstLineExceeds(_, _, flatDoc):
-					// Mirror `IfWidthExceeds` arm: forward to flat side.
-					// First-line cap is renderer-side; static walks see
-					// the full flat shape.
-					stack.push(flatDoc);
-				case IfLineExceeds(_, _, flatDoc):
-					// Mirror `IfWidthExceeds` arm: forward to flat side.
-					// Rest-of-stack lookahead is renderer-side (slice
-					// ω-iflineexceeds-infra).
-					stack.push(flatDoc);
-				case IfFullLineExceeds(_, _, flatDoc):
-					// Mirror `IfLineExceeds` arm: forward to flat side.
-					// Asymmetric BG semantic only applies to renderer-
-					// side rest-of-stack probe.
-					stack.push(flatDoc);
-				case IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc) | IfArrowContinuationFits(
-					_, _, _, _, flatDoc
-				):
-					// Mirror the flat siblings: forward to flat side. The
-					// natural-first-line decision is renderer-side; this
-					// static length walk sees the flat shape.
-					stack.push(flatDoc);
-				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
-					var k: Int = items.length;
-					while (k > 0) {
-						k--;
-						stack.push(items[k]);
-						if (k > 0)
-							stack.push(sep);
-					}
-				case OptSpace(s):
-					// OptSpace contributes its length to flat measurement
-					// (mirrors `Renderer.fitsFlat`): in a flat layout the
-					// optional trailing space always renders, only break
-					// mode discards it. Wrap-rules-cascade measurements
-					// must therefore include it.
-					total += s.length;
-				case OptSpaceSkipAfterHardline:
-					// Mirror `OptSpace`: width-1 byte for flat measurement.
-					// Runtime-time drop only fires when `lastEmit==Hardline`
-					// which can never hold inside a flat-shape probe.
-					total += 1;
-				case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
-					// All three opt-hardline variants can never flatten —
-					// mirrors `Line('\n')` returning -1 (and
-					// `Renderer.fitsFlat`'s OptHardline arm). Any item
-					// containing one forces the wrap engine into break
-					// mode unconditionally.
-					return -1;
-				case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(
-					inner
-				) | CollapseChainProbe(inner):
-					// ω-force-flat-engine slice A: pass-through. All four
-					// markers are render-time state; cascade-evaluator
-					// width measurements stay structural.
-					stack.push(inner);
-				case ConditionalMarkerZero(inner):
-					// ω-cond-indent-policy FixedZero: render-time marker,
-					// transparent to static length measurement — descend `inner`.
-					stack.push(inner);
-				case ConditionalMarkerDecrease(inner):
-					// ω-cond-indent-policy AlignedDecrease: render-time marker,
-					// transparent to static length measurement — descend `inner`.
-					stack.push(inner);
-			}
+			if (flatPushChildren(node, stack)) continue;
+			final contribution: Int = flatLeafLen(node);
+			if (contribution < 0) return -1;
+			total += contribution;
 		}
 		return total;
+	}
+
+	/**
+	 * Container arms of the `flatLength` walk: push each descendant
+	 * Doc onto `stack` and return `true`. Returns `false` for the
+	 * length-contributing leaves, which `flatLength` routes to
+	 * `flatLeafLen`. The `If*Exceeds` arms forward to the FLAT side —
+	 * the column-aware decision happens at render time, not in static
+	 * walks (mirrors the `IfBreak` arm). The `Flatten` / collapse /
+	 * conditional-marker wrappers are render-time state, transparent
+	 * to static length measurement, so descend `inner`.
+	 */
+	private static function flatPushChildren(node: Doc, stack: Array<Doc>): Bool {
+		switch (node) {
+			case Nest(_, inner):
+				stack.push(inner);
+			case Concat(items):
+				var i: Int = items.length;
+				while (--i >= 0) stack.push(items[i]);
+			case Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner):
+				stack.push(inner);
+			case IfBreak(_, flatDoc):
+				stack.push(flatDoc);
+			case IfWidthExceeds(_, _, flatDoc):
+				stack.push(flatDoc);
+			case IfFirstLineExceeds(_, _, flatDoc):
+				stack.push(flatDoc);
+			case IfLineExceeds(_, _, flatDoc):
+				stack.push(flatDoc);
+			case IfFullLineExceeds(_, _, flatDoc):
+				stack.push(flatDoc);
+			case IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc) | IfArrowContinuationFits(
+				_, _, _, _, flatDoc
+			):
+				stack.push(flatDoc);
+			case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
+				var k: Int = items.length;
+				while (k > 0) {
+					k--;
+					stack.push(items[k]);
+					if (k > 0)
+						stack.push(sep);
+				}
+			case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(
+				inner
+			) | CollapseChainProbe(inner):
+				stack.push(inner);
+			case ConditionalMarkerZero(inner):
+				stack.push(inner);
+			case ConditionalMarkerDecrease(inner):
+				stack.push(inner);
+			case _:
+				return false;
+		}
+		return true;
+	}
+
+	/**
+	 * Leaf arms of the `flatLength` walk: the flat-mode byte width a
+	 * node contributes, or `-1` to signal an un-flattenable node
+	 * (a hardline `Line('\n')` or any opt-hardline variant) so the
+	 * caller commits the wrap engine to break mode. `OptSpace` /
+	 * `OptSpaceSkipAfterHardline` count their width-1 byte because a
+	 * flat layout always renders them (mirrors `Renderer.fitsFlat`);
+	 * the runtime drop only fires after a hardline, which can never
+	 * hold inside a flat-shape probe. `Empty` and any non-leaf node
+	 * fall to the `0` default.
+	 */
+	private static function flatLeafLen(node: Doc): Int {
+		return switch (node) {
+			case Text(s): s.length;
+			case Line(flat):
+				flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code ? -1 : flat.length;
+			case OptSpace(s): s.length;
+			case OptSpaceSkipAfterHardline: 1;
+			case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline: -1;
+			case _: 0;
+		};
 	}
 
 	/**
