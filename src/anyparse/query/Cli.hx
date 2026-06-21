@@ -4354,70 +4354,15 @@ final class Cli {
 	}
 
 	private static function runSearch(args: Array<String>): Int {
-		var lang: String = 'haxe';
-		var json: Bool = false;
-		var kind: Null<String> = null;
-		var limit: Int = -1;
-		var explain: Bool = false;
-		var flat: Bool = false;
-		var pattern: Null<String> = null;
-		final inputSpecs: Array<String> = [];
-
-		// `--` is the standard end-of-options sentinel: every token after
-		// it is positional, never an option. A search pattern can legally
-		// start with `--` (`--$x` = prefix-decrement), which would
-		// otherwise be rejected as an unknown option — the sentinel is the
-		// only way to reach those patterns.
-		var optsEnded: Bool = false;
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			var isOption: Bool = false;
-			if (!optsEnded) {
-				isOption = true;
-				switch a {
-					case '--lang':
-						lang = expectValue(args, ++i, '--lang');
-					case '--json':
-						json = true;
-					case '--kind':
-						kind = expectValue(args, ++i, '--kind');
-					case '--explain':
-						explain = true;
-					case '--flat':
-						flat = true;
-					case '--limit':
-						try limit = parseLimit(args, ++i) catch (e: Exception) {
-							stderr('${e.message}\n');
-							return EXIT_USAGE;
-						}
-					case '-h', '--help':
-						printSearchUsage();
-						return EXIT_OK;
-					case '--':
-						optsEnded = true;
-					case _:
-						if (StringTools.startsWith(a, '--')) {
-							stderr('apq search: unknown option "$a"\n');
-							return EXIT_USAGE;
-						}
-						isOption = false;
-				}
-			}
-			if (!isOption) {
-				if (pattern == null)
-					pattern = a;
-				else
-					inputSpecs.push(a);
-			}
-			i++;
-		}
+		final o: SearchOpts = parseSearchArgs(args);
+		if (o.errExit != null) return o.errExit;
+		final pattern: Null<String> = o.pattern;
 		if (pattern == null) {
 			stderr('apq search: missing <pattern> argument\n');
 			printSearchUsage();
 			return EXIT_USAGE;
 		}
-		if (inputSpecs.length == 0) {
+		if (o.inputSpecs.length == 0) {
 			stderr('apq search: missing <file-or-dir-or-glob> argument\n');
 			printSearchUsage();
 			return EXIT_USAGE;
@@ -4439,7 +4384,7 @@ final class Cli {
 			return EXIT_USAGE;
 		}
 
-		final plugin: GrammarPlugin = pickPlugin(lang);
+		final plugin: GrammarPlugin = pickPlugin(o.lang);
 		final parsed: Pattern = try plugin.parsePattern(patternStr) catch (e: Exception) {
 			stderr('apq search: pattern: ${e.message}\n');
 			return EXIT_RUNTIME;
@@ -4465,81 +4410,39 @@ final class Cli {
 		// — the most common reason a structurally-valid pattern misses
 		// is a kind mismatch (e.g. searching `switch $x { … }` against
 		// a tree whose actual kind is `SwitchExpr`, not `Switch`).
-		if (explain) {
+		if (o.explain) {
 			stderr('apq search: pattern parses as:\n');
 			stderr(Text.render(parsed.root));
 		}
 
-		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
+		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(o.inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq search: no input files matched ${inputSpecs.join(' ')}\n');
+			stderr('apq search: no input files matched ${o.inputSpecs.join(' ')}\n');
 			return EXIT_RUNTIME;
 		}
 
-		final singleFile: Bool = expanded.singleFile;
-		final allEntries: Array<{ file: String, source: String, matches: Array<Match> }> = [];
-		final kindCounts: Map<String, Int> = [];
-		for (path in paths) {
-			final source: String = readSourceForParse(path);
-			final tree: Null<QueryNode> = parseWalked('search', plugin.parseFile, path, source, singleFile);
-			if (tree == null) {
-				if (singleFile) return EXIT_RUNTIME;
-				continue;
-			}
-			if (explain) tallyKinds(tree, kindCounts);
-			final matches: Array<Match> = Matcher.search(parsed, tree, kind);
-			if (matches.length == 0) continue;
-			allEntries.push({ file: path, source: source, matches: matches });
-		}
+		final collected: Null<{
+			entries: Array<{ file: String, source: String, matches: Array<Match> }>,
+			kindCounts: Map<String, Int>
+		}> = collectSearchEntries(paths, plugin, expanded.singleFile, parsed, o.kind, o.explain);
+		if (collected == null) return EXIT_RUNTIME;
+		final allEntries: Array<{ file: String, source: String, matches: Array<Match> }> = collected.entries;
 
 		// `--explain` closing diagnostic on 0 hits: print the kind
 		// histogram so the user can see whether the pattern's root
-		// kind even appears in the scanned input. The most common
-		// mismatch is "pattern parses as Kind X but inputs only
-		// expose Kind Y for the same construct" — visible at a
-		// glance once both lists are on screen.
-		if (explain && allEntries.length == 0) {
-			final patternKind: String = parsed.root.kind;
-			final entries: Array<{ k: String, n: Int }> = [for (k => n in kindCounts) { k: k, n: n }];
-			entries.sort((a, b) -> a.n == b.n ? (a.k < b.k ? -1 : 1) : b.n - a.n);
-			final topN: Int = entries.length < 12 ? entries.length : 12;
-			stderr('apq search: 0 matches; pattern root kind is "$patternKind". Top kinds seen in input (${entries.length} distinct):\n');
-			for (k in 0...topN) {
-				final e = entries[k];
-				final marker: String = e.k == patternKind ? ' ← matches pattern root' : '';
-				stderr('  ${e.k} (${e.n})$marker\n');
-			}
-			if (!Lambda.exists(entries, e -> e.k == patternKind))
-				stderr(
-					'  (pattern root kind "$patternKind" NOT present in any scanned file — likely the wrong kind for this construct; check `apq ast <file>` to see the actual node shape)\n'
-				);
-		}
+		// kind even appears in the scanned input.
+		if (o.explain && allEntries.length == 0) searchExplainHistogram(parsed.root.kind, collected.kindCounts);
 
 		var totalHits: Int = 0;
 		for (e in allEntries) totalHits += e.matches.length;
-		final cappedLimit: Int = effectiveAutoLimit('search', limit, totalHits);
+		final cappedLimit: Int = effectiveAutoLimit('search', o.limit, totalHits);
 		final shown: Array<{ file: String, source: String, matches: Array<Match> }> =
 			limitEntries(
 				allEntries, cappedLimit, e -> e.matches.length,
 				(e, k) -> { file: e.file, source: e.source, matches: e.matches.slice(0, k) }
 			);
-		if (json) {
-			final combined: StringBuf = new StringBuf();
-			combined.add('{"matches":[');
-			var first: Bool = true;
-			for (entry in shown) {
-				for (m in entry.matches) {
-					if (!first) combined.add(',');
-					first = false;
-					combined.add(perMatchJson(entry.file, entry.source, m));
-				}
-			}
-			combined.add(']}\n');
-			sysPrint(combined.toString());
-		} else {
-			for (entry in shown) sysPrint(Text.renderSearchMatches(entry.file, entry.source, entry.matches, flat));
-		}
+		renderSearchResults(shown, o.json, o.flat);
 		return emptyExit(allEntries.length == 0);
 	}
 
@@ -11440,6 +11343,149 @@ final class Cli {
 		return emitNew(filePath, res.result, res.stubbed, o.write);
 	}
 
+	private static inline function searchParseExit(code: Int): SearchOpts {
+		return {
+			lang: '',
+			json: false,
+			kind: null,
+			limit: -1,
+			explain: false,
+			flat: false,
+			pattern: null,
+			inputSpecs: [],
+			errExit: code
+		};
+	}
+
+	private static function parseSearchArgs(args: Array<String>): SearchOpts {
+		var lang: String = 'haxe';
+		var json: Bool = false;
+		var kind: Null<String> = null;
+		var limit: Int = -1;
+		var explain: Bool = false;
+		var flat: Bool = false;
+		var pattern: Null<String> = null;
+		final inputSpecs: Array<String> = [];
+
+		// `--` is the standard end-of-options sentinel: every token after
+		// it is positional, never an option. A search pattern can legally
+		// start with `--` (`--$x` = prefix-decrement), which would
+		// otherwise be rejected as an unknown option — the sentinel is the
+		// only way to reach those patterns.
+		var optsEnded: Bool = false;
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			var isOption: Bool = false;
+			if (!optsEnded) {
+				isOption = true;
+				switch a {
+					case '--lang':
+						lang = expectValue(args, ++i, '--lang');
+					case '--json':
+						json = true;
+					case '--kind':
+						kind = expectValue(args, ++i, '--kind');
+					case '--explain':
+						explain = true;
+					case '--flat':
+						flat = true;
+					case '--limit':
+						try limit = parseLimit(args, ++i) catch (e: Exception) {
+							stderr('${e.message}\n');
+							return searchParseExit(EXIT_USAGE);
+						}
+					case '-h', '--help':
+						printSearchUsage();
+						return searchParseExit(EXIT_OK);
+					case '--':
+						optsEnded = true;
+					case _:
+						if (StringTools.startsWith(a, '--')) {
+							stderr('apq search: unknown option "$a"\n');
+							return searchParseExit(EXIT_USAGE);
+						}
+						isOption = false;
+				}
+			}
+			if (!isOption) {
+				if (pattern == null)
+					pattern = a;
+				else
+					inputSpecs.push(a);
+			}
+			i++;
+		}
+		return {
+			lang: lang,
+			json: json,
+			kind: kind,
+			limit: limit,
+			explain: explain,
+			flat: flat,
+			pattern: pattern,
+			inputSpecs: inputSpecs,
+			errExit: null
+		};
+	}
+
+	private static function collectSearchEntries(
+		paths: Array<String>, plugin: GrammarPlugin, singleFile: Bool, parsed: Pattern, kind: Null<String>, explain: Bool
+	): Null<{ entries: Array<{ file: String, source: String, matches: Array<Match> }>, kindCounts: Map<String, Int> }> {
+		final allEntries: Array<{ file: String, source: String, matches: Array<Match> }> = [];
+		final kindCounts: Map<String, Int> = [];
+		for (path in paths) {
+			final source: String = readSourceForParse(path);
+			final tree: Null<QueryNode> = parseWalked('search', plugin.parseFile, path, source, singleFile);
+			if (tree == null) {
+				if (singleFile) return null;
+				continue;
+			}
+			if (explain) tallyKinds(tree, kindCounts);
+			final matches: Array<Match> = Matcher.search(parsed, tree, kind);
+			if (matches.length == 0) continue;
+			allEntries.push({ file: path, source: source, matches: matches });
+		}
+		return { entries: allEntries, kindCounts: kindCounts };
+	}
+
+	private static function searchExplainHistogram(patternKind: String, kindCounts: Map<String, Int>): Void {
+		final entries: Array<{ k: String, n: Int }> = [for (k => n in kindCounts) { k: k, n: n }];
+		entries.sort((a, b) -> a.n == b.n ? (a.k < b.k ? -1 : 1) : b.n - a.n);
+		final topN: Int = entries.length < 12 ? entries.length : 12;
+		stderr('apq search: 0 matches; pattern root kind is "$patternKind". Top kinds seen in input (${entries.length} distinct):\n');
+		for (k in 0...topN) {
+			final e = entries[k];
+			final marker: String = e.k == patternKind ? ' ← matches pattern root' : '';
+			stderr('  ${e.k} (${e.n})$marker\n');
+		}
+		if (!Lambda.exists(entries, e -> e.k == patternKind))
+			stderr(
+				'  (pattern root kind "$patternKind" NOT present in any scanned file — likely the wrong kind for this construct; check `apq ast <file>` to see the actual node shape)\n'
+			);
+	}
+
+	private static function renderSearchResults(
+		shown: Array<{ file: String, source: String, matches: Array<Match> }>, json: Bool, flat: Bool
+	): Void {
+		if (json) {
+			final combined: StringBuf = new StringBuf();
+			combined.add('{"matches":[');
+			var first: Bool = true;
+			for (entry in shown) {
+				for (m in entry.matches) {
+					if (!first) combined.add(',');
+					first = false;
+					combined.add(perMatchJson(entry.file, entry.source, m));
+				}
+			}
+			combined.add(']}\n');
+			sysPrint(combined.toString());
+		} else {
+			for (entry in shown) sysPrint(Text.renderSearchMatches(entry.file, entry.source, entry.matches, flat));
+		}
+	}
+
 }
 
 @:nullSafety(Strict)
@@ -11566,6 +11612,20 @@ typedef NewOpts = {
 	var toList: Array<String>;
 	var fields: Array<String>;
 	var path: Null<String>;
+	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
+	// the caller returns this immediately and ignores the rest of the struct.
+	var errExit: Null<Int>;
+};
+@:nullSafety(Strict)
+typedef SearchOpts = {
+	var lang: String;
+	var json: Bool;
+	var kind: Null<String>;
+	var limit: Int;
+	var explain: Bool;
+	var flat: Bool;
+	var pattern: Null<String>;
+	var inputSpecs: Array<String>;
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
 	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
