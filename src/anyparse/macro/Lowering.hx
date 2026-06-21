@@ -3796,85 +3796,9 @@ expectLit(ctx, $v{trailText}));
 			// emit; nestBody keeps the orphan-trail capture on parse
 			// failure.
 			if (sepText != null) {
-				if (nestBody) {
-					parseSteps.push(macro {
-						while (true) {
-							final _savedPos: Int = ctx.pos;
-							final _lead = collectTrivia(ctx);
-							final _afterTriviaPos: Int = ctx.pos;
-							try {
-								final _node: $elemCT = $elemCall;
-								final _trailingBeforeSep: Null<String> = collectTrailingFull(ctx);
-								var _sepAfter: Bool = false;
-								while (ctx.pos < ctx.input.length) {
-									final _hwc: Int = ctx.input.charCodeAt(ctx.pos);
-									if (_hwc == ' '.code || _hwc == '\t'.code || _hwc == '\r'.code)
-										ctx.pos++;
-									else
-										break;
-								}
-								_sepAfter = matchLit(ctx, $v{sepText});
-								final _trailing: Null<String> = _trailingBeforeSep ?? (_sepAfter ? collectTrailingFull(ctx) : null);
-								$i{trailPresentLocal} = _sepAfter;
-								$accumRef.push({
-									blankBefore: _lead.blankBefore,
-									blankAfterLeadingComments: _lead.blankAfterLeadingComments,
-									newlineBefore: _lead.newlineBefore,
-									leadingComments: _lead.leadingComments,
-									trailingComment: _trailing,
-									trailingBeforeSep: _trailingBeforeSep != null,
-									sepAfter: _sepAfter,
-									node: _node,
-								});
-							} catch (_e: anyparse.runtime.ParseError) {
-								if (!_lead.blankBefore && _lead.leadingComments.length > 0) {
-									$i{trailBBLocal} = _lead.blankBefore;
-									$i{trailLCLocal} = _lead.leadingComments;
-									$i{trailBALocal} = _lead.blankAfterLeadingComments;
-									ctx.pos = _afterTriviaPos;
-								} else {
-									ctx.pos = _savedPos;
-								}
-								break;
-							}
-						}
-					});
-					return;
-				}
-				parseSteps.push(macro {
-					while (true) {
-						final _savedPos: Int = ctx.pos;
-						final _lead = collectTrivia(ctx);
-						try {
-							final _node: $elemCT = $elemCall;
-							final _trailingBeforeSep: Null<String> = collectTrailingFull(ctx);
-							var _sepAfter: Bool = false;
-							while (ctx.pos < ctx.input.length) {
-								final _hwc: Int = ctx.input.charCodeAt(ctx.pos);
-								if (_hwc == ' '.code || _hwc == '\t'.code || _hwc == '\r'.code)
-									ctx.pos++;
-								else
-									break;
-							}
-							_sepAfter = matchLit(ctx, $v{sepText});
-							final _trailing: Null<String> = _trailingBeforeSep ?? (_sepAfter ? collectTrailingFull(ctx) : null);
-							$i{trailPresentLocal} = _sepAfter;
-							$accumRef.push({
-								blankBefore: _lead.blankBefore,
-								blankAfterLeadingComments: _lead.blankAfterLeadingComments,
-								newlineBefore: _lead.newlineBefore,
-								leadingComments: _lead.leadingComments,
-								trailingComment: _trailing,
-								trailingBeforeSep: _trailingBeforeSep != null,
-								sepAfter: _sepAfter,
-								node: _node,
-							});
-						} catch (_e: anyparse.runtime.ParseError) {
-							ctx.pos = _savedPos;
-							break;
-						}
-					}
-				});
+				parseSteps.push(buildTriviaTryparseSepBody(
+					elemCT, elemCall, accumRef, sepText, trailPresentLocal, trailBBLocal, trailLCLocal, trailBALocal, nestBody
+				));
 				return;
 			}
 			// Try-parse termination: each iteration saves `ctx.pos` before
@@ -3893,143 +3817,10 @@ expectLit(ctx, $v{trailText}));
 			// not re-capture. Comments separated by a blank line still
 			// flow outward via rewind — preserving "blank line = belongs
 			// to next entity" convention.
-			if (nestBody) {
-				parseSteps.push(macro {
-					while (true) {
-						final _savedPos: Int = ctx.pos;
-						final _lead = collectTrivia(ctx);
-						final _afterTriviaPos: Int = ctx.pos;
-						try {
-							final _node: $elemCT = $elemCall;
-							final _trailing: Null<String> = collectTrailingFull(ctx);
-							$accumRef.push({
-								blankBefore: _lead.blankBefore,
-								blankAfterLeadingComments: _lead.blankAfterLeadingComments,
-								newlineBefore: _lead.newlineBefore,
-								leadingComments: _lead.leadingComments,
-								trailingComment: _trailing,
-								trailingBeforeSep: false,
-								sepAfter: true,
-								node: _node,
-							});
-						} catch (_e: anyparse.runtime.ParseError) {
-							if (!_lead.blankBefore && _lead.leadingComments.length > 0) {
-								$i{trailBBLocal} = _lead.blankBefore;
-								$i{trailLCLocal} = _lead.leadingComments;
-								$i{trailBALocal} = _lead.blankAfterLeadingComments;
-								ctx.pos = _afterTriviaPos;
-							} else {
-								ctx.pos = _savedPos;
-							}
-							break;
-						}
-					}
-				});
-				return;
-			}
-			parseSteps.push(macro {
-				while (true) {
-					final _savedPos: Int = ctx.pos;
-					// ω-keep-pratt-blank: snapshot the incoming `pendingTrivia`
-					// BEFORE `collectTrivia` drains it. On element-parse failure
-					// the cursor rewinds to `_savedPos`, but `collectTrivia`
-					// already nulled `pendingTrivia` — a stash-only blank-line
-					// signal (left by a brace-terminated value's Pratt / postfix
-					// no-op tail, living in bytes BEFORE `_savedPos` and NOT
-					// re-scannable) would otherwise be lost. Restored on rollback
-					// ONLY when the just-parsed value ended with `}` (scan back
-					// past trailing whitespace to the last non-ws byte): the fork
-					// preserves a source blank after a brace-terminated value
-					// (`var b = function(){…}` / `typedef T = {…}`, issue_644 /
-					// typedef_fields) but collapses it after a non-brace value
-					// (`typedef Bar = Float`, issue_216). Re-scannable trivia
-					// AFTER `_savedPos` stays in the input — restoring `_lead`
-					// instead would double-count re-scannable comments
-					// (issue_216 / issue_321). Byte-inert when the snapshot is
-					// null or the value is not brace-terminated.
-					final _savedPending = ctx.pendingTrivia;
-					final _lead = collectTrivia(ctx);
-					// ω-keep-newline-after-sep (increment 1): `collectTrivia`
-					// leaves the cursor at the element's first token — for a
-					// `@:lead(LIT)`-prefixed link (e.g. `HxVarMore`'s
-					// `@:lead(',')`) that token IS the separator literal.
-					// Record it so we can probe the newline AFTER the
-					// separator (before the link payload): `_lead.newlineBefore`
-					// only sees the gap BEFORE the comma (usually empty —
-					// `getRaw(read),`), while the source break the writer's
-					// `Keep` wrap must reproduce lands `,\n  next`. Additive
-					// (an `@:optional Trivial.newlineAfterSep` slot, read only
-					// under `WrapMode.Keep`) → byte-inert for non-keep.
-					final _leadStart: Int = ctx.pos;
-					try {
-						final _node: $elemCT = $elemCall;
-						final _trailing: Null<String> = collectTrailingFull(ctx);
-						// Skip the contiguous non-whitespace separator
-						// punctuation, then OR-in any newline in the
-						// immediately-following whitespace run.
-						var _nlAfterSep: Bool = false;
-						var _nlScan: Int = _leadStart;
-						while (_nlScan < ctx.input.length) {
-							final _sc: Int = ctx.input.charCodeAt(_nlScan);
-							if (_sc == ' '.code || _sc == '\t'.code || _sc == '\r'.code || _sc == '\n'.code) break;
-							_nlScan++;
-						}
-						while (_nlScan < ctx.input.length) {
-							final _wc: Int = ctx.input.charCodeAt(_nlScan);
-							if (_wc == '\n'.code) {
-								_nlAfterSep = true;
-								break;
-							}
-							if (_wc != ' '.code && _wc != '\t'.code && _wc != '\r'.code) break;
-							_nlScan++;
-						}
-						$accumRef.push({
-							blankBefore: _lead.blankBefore,
-							blankAfterLeadingComments: _lead.blankAfterLeadingComments,
-							newlineBefore: _lead.newlineBefore,
-							leadingComments: _lead.leadingComments,
-							trailingComment: _trailing,
-							trailingBeforeSep: false,
-							sepAfter: true,
-							newlineAfterSep: _nlAfterSep,
-							node: _node,
-						});
-					} catch (_e: anyparse.runtime.ParseError) {
-						ctx.pos = _savedPos;
-						// ω-keep-pratt-blank: restore the pre-iteration stash only
-						// when the just-parsed value ended with `}` — scan back from
-						// `_savedPos` past trailing whitespace to the last content
-						// byte. Brace-terminated → preserve the source blank to the
-						// next sibling (issue_644 / typedef_fields); otherwise keep
-						// the baseline drop (issue_216).
-						if (_savedPending != null) {
-							var _bpRew: Int = _savedPos - 1;
-							while (_bpRew > 0) {
-								final _bpc: Int = ctx.input.charCodeAt(_bpRew);
-								if (_bpc == ' '.code || _bpc == '\t'.code || _bpc == '\n'.code || _bpc == '\r'.code)
-									_bpRew--;
-								else
-									break;
-							}
-							if (_bpRew >= 0 && ctx.input.charCodeAt(_bpRew) == '}'.code) ctx.pendingTrivia = _savedPending;
-						}
-						break;
-					}
-				}
-			});
+			parseSteps.push(buildTriviaTryparseNoSepBody(elemCT, elemCall, accumRef, trailBBLocal, trailLCLocal, trailBALocal, nestBody));
 			return;
 		}
-		final terminationCheck: Expr = if (closeText != null) {
-			// See emitStarFieldSteps for why we flip to full-string `peekLit` when
-			// close is multi-byte (single-byte peek false-positives when close's
-			// first byte can legitimately appear inside element content).
-			final closeCharCode: Int = closeText.charCodeAt(0);
-			closeText.length == 1
-				? macro ctx.pos >= ctx.input.length || ctx.input.charCodeAt(ctx.pos) == $v{closeCharCode}
-				: macro ctx.pos >= ctx.input.length || peekLit(ctx, $v{closeText});
-		} else {
-			macro ctx.pos >= ctx.input.length;
-		};
+		final terminationCheck: Expr = buildTriviaCloseTerminationCheck(closeText);
 		// ω-trivia-sep: when the trivia Star carries `@:sep`, an
 		// optional separator (e.g. `,`) is matched after each element
 		// before the trailing-comment capture. Trailing same-line
@@ -4069,21 +3860,7 @@ expectLit(ctx, $v{trailText}));
 		// `;` not `}`. Permissive parser keeps backwards-compatibility
 		// with the old per-stmt-@:trailOpt model byte-for-byte.
 		final blockEnded: Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
-		final sepMatchExpr: Expr = if (sepText != null) {
-			macro {
-				while (ctx.pos < ctx.input.length) {
-					final _hwc: Int = ctx.input.charCodeAt(ctx.pos);
-					if (_hwc == ' '.code || _hwc == '\t'.code || _hwc == '\r'.code)
-						ctx.pos++;
-					else
-						break;
-				}
-				_sepAfter = matchLit(ctx, $v{sepText});
-				$i{trailPresentLocal} = _sepAfter;
-			}
-		} else {
-			macro {};
-		};
+		final sepMatchExpr: Expr = buildTriviaCloseSepMatchExpr(sepText, trailPresentLocal);
 		// ω-trivia-trailing-before-sep: capture trailing same-line comment
 		// BEFORE the optional sep-match. Source shape `elem /*c*/, next`
 		// previously broke sep-match (`,` not found after h-ws skip stops
@@ -4095,35 +3872,9 @@ expectLit(ctx, $v{trailText}));
 		// the trailing after the sep (`elem, // c\n`) — covered by the
 		// `_trailingBeforeSep == null && _sepAfter` gate so we don't
 		// double-capture.
-		parseSteps.push(macro {
-			while (true) {
-				final _lead = collectTrivia(ctx);
-				if ($terminationCheck) {
-					$i{trailBBLocal} = _lead.blankBefore;
-					// ω-keep-fnsig-newline: capture the close-newline alongside
-					// the close-blank so a kept signature reproduces a glued vs
-					// own-line close.
-					$i{trailNLLocal} = _lead.newlineBefore;
-					$i{trailLCLocal} = _lead.leadingComments;
-					break;
-				}
-				final _node: $elemCT = $elemCall;
-				final _trailingBeforeSep: Null<String> = collectTrailingFull(ctx);
-				var _sepAfter: Bool = true;
-				$sepMatchExpr;
-				final _trailing: Null<String> = _trailingBeforeSep ?? (_sepAfter ? collectTrailingFull(ctx) : null);
-				$accumRef.push({
-					blankBefore: _lead.blankBefore,
-					blankAfterLeadingComments: _lead.blankAfterLeadingComments,
-					newlineBefore: _lead.newlineBefore,
-					leadingComments: _lead.leadingComments,
-					trailingComment: _trailing,
-					trailingBeforeSep: _trailingBeforeSep != null,
-					sepAfter: _sepAfter,
-					node: _node,
-				});
-			}
-		});
+		parseSteps.push(buildTriviaCloseLoopBody(
+			elemCT, elemCall, accumRef, terminationCheck, sepMatchExpr, trailBBLocal, trailNLLocal, trailLCLocal
+		));
 		if (closeText != null) {
 			parseSteps.push(macro skipWs(ctx));
 			parseSteps.push(macro expectLit(ctx, $v{closeText}));
@@ -5320,6 +5071,313 @@ expectLit(ctx, $v{trailText}));
 				ctx.pos++;
 			else
 				break;
+		};
+	}
+
+	private function buildTriviaTryparseSepBody(
+		elemCT: ComplexType, elemCall: Expr, accumRef: Expr, sepText: String, trailPresentLocal: String, trailBBLocal: String,
+		trailLCLocal: String, trailBALocal: String, nestBody: Bool
+	): Expr {
+		// ω-blockended-trivia-tryparse (Session 3): `@:tryparse +
+		// @:sep(text, tailRelax, blockEnded)` fork — permissive matchLit
+		// on sep. Element-parse failure rewinds + breaks via the try/catch.
+		// nestBody keeps the orphan-trail capture on parse failure.
+		if (nestBody) {
+			return macro {
+				while (true) {
+					final _savedPos: Int = ctx.pos;
+					final _lead = collectTrivia(ctx);
+					final _afterTriviaPos: Int = ctx.pos;
+					try {
+						final _node: $elemCT = $elemCall;
+						final _trailingBeforeSep: Null<String> = collectTrailingFull(ctx);
+						var _sepAfter: Bool = false;
+						while (ctx.pos < ctx.input.length) {
+							final _hwc: Int = ctx.input.charCodeAt(ctx.pos);
+							if (_hwc == ' '.code || _hwc == '\t'.code || _hwc == '\r'.code)
+								ctx.pos++;
+							else
+								break;
+						}
+						_sepAfter = matchLit(ctx, $v{sepText});
+						final _trailing: Null<String> = _trailingBeforeSep ?? (_sepAfter ? collectTrailingFull(ctx) : null);
+						$i{trailPresentLocal} = _sepAfter;
+						$accumRef.push({
+							blankBefore: _lead.blankBefore,
+							blankAfterLeadingComments: _lead.blankAfterLeadingComments,
+							newlineBefore: _lead.newlineBefore,
+							leadingComments: _lead.leadingComments,
+							trailingComment: _trailing,
+							trailingBeforeSep: _trailingBeforeSep != null,
+							sepAfter: _sepAfter,
+							node: _node,
+						});
+					} catch (_e: anyparse.runtime.ParseError) {
+						if (!_lead.blankBefore && _lead.leadingComments.length > 0) {
+							$i{trailBBLocal} = _lead.blankBefore;
+							$i{trailLCLocal} = _lead.leadingComments;
+							$i{trailBALocal} = _lead.blankAfterLeadingComments;
+							ctx.pos = _afterTriviaPos;
+						} else {
+							ctx.pos = _savedPos;
+						}
+						break;
+					}
+				}
+			};
+		}
+		return macro {
+			while (true) {
+				final _savedPos: Int = ctx.pos;
+				final _lead = collectTrivia(ctx);
+				try {
+					final _node: $elemCT = $elemCall;
+					final _trailingBeforeSep: Null<String> = collectTrailingFull(ctx);
+					var _sepAfter: Bool = false;
+					while (ctx.pos < ctx.input.length) {
+						final _hwc: Int = ctx.input.charCodeAt(ctx.pos);
+						if (_hwc == ' '.code || _hwc == '\t'.code || _hwc == '\r'.code)
+							ctx.pos++;
+						else
+							break;
+					}
+					_sepAfter = matchLit(ctx, $v{sepText});
+					final _trailing: Null<String> = _trailingBeforeSep ?? (_sepAfter ? collectTrailingFull(ctx) : null);
+					$i{trailPresentLocal} = _sepAfter;
+					$accumRef.push({
+						blankBefore: _lead.blankBefore,
+						blankAfterLeadingComments: _lead.blankAfterLeadingComments,
+						newlineBefore: _lead.newlineBefore,
+						leadingComments: _lead.leadingComments,
+						trailingComment: _trailing,
+						trailingBeforeSep: _trailingBeforeSep != null,
+						sepAfter: _sepAfter,
+						node: _node,
+					});
+				} catch (_e: anyparse.runtime.ParseError) {
+					ctx.pos = _savedPos;
+					break;
+				}
+			}
+		};
+	}
+
+	private function buildTriviaTryparseNoSepBody(
+		elemCT: ComplexType, elemCall: Expr, accumRef: Expr, trailBBLocal: String, trailLCLocal: String, trailBALocal: String,
+		nestBody: Bool
+	): Expr {
+		// Try-parse termination: each iteration saves `ctx.pos` before
+		// `collectTrivia`, attempts the element parse, and rewinds to the
+		// saved pos on failure so the captured trivia is fully uncaptured.
+		// `@:fmt(nestBody)` Stars (case/default bodies) add a trailing-orphan
+		// capture; the non-nestBody path carries the ω-keep-pratt-blank stash.
+		if (nestBody) {
+			return macro {
+				while (true) {
+					final _savedPos: Int = ctx.pos;
+					final _lead = collectTrivia(ctx);
+					final _afterTriviaPos: Int = ctx.pos;
+					try {
+						final _node: $elemCT = $elemCall;
+						final _trailing: Null<String> = collectTrailingFull(ctx);
+						$accumRef.push({
+							blankBefore: _lead.blankBefore,
+							blankAfterLeadingComments: _lead.blankAfterLeadingComments,
+							newlineBefore: _lead.newlineBefore,
+							leadingComments: _lead.leadingComments,
+							trailingComment: _trailing,
+							trailingBeforeSep: false,
+							sepAfter: true,
+							node: _node,
+						});
+					} catch (_e: anyparse.runtime.ParseError) {
+						if (!_lead.blankBefore && _lead.leadingComments.length > 0) {
+							$i{trailBBLocal} = _lead.blankBefore;
+							$i{trailLCLocal} = _lead.leadingComments;
+							$i{trailBALocal} = _lead.blankAfterLeadingComments;
+							ctx.pos = _afterTriviaPos;
+						} else {
+							ctx.pos = _savedPos;
+						}
+						break;
+					}
+				}
+			};
+		}
+		final nlAfterSepScan: Expr = buildPrattBlankNlAfterSepScan();
+		final restoreStash: Expr = buildPrattBlankRestoreStash();
+		return macro {
+			while (true) {
+				final _savedPos: Int = ctx.pos;
+				// ω-keep-pratt-blank: snapshot the incoming `pendingTrivia`
+				// BEFORE `collectTrivia` drains it. On element-parse failure
+				// the cursor rewinds to `_savedPos`, but `collectTrivia`
+				// already nulled `pendingTrivia` — a stash-only blank-line
+				// signal (left by a brace-terminated value's Pratt / postfix
+				// no-op tail, living in bytes BEFORE `_savedPos` and NOT
+				// re-scannable) would otherwise be lost. Restored on rollback
+				// ONLY when the just-parsed value ended with `}`. See
+				// `buildPrattBlankRestoreStash` for the brace-terminated rule.
+				final _savedPending = ctx.pendingTrivia;
+				final _lead = collectTrivia(ctx);
+				// ω-keep-newline-after-sep (increment 1): `collectTrivia`
+				// leaves the cursor at the element's first token — for a
+				// `@:lead(LIT)`-prefixed link (e.g. `HxVarMore`'s
+				// `@:lead(',')`) that token IS the separator literal.
+				// Record it so we can probe the newline AFTER the
+				// separator (before the link payload): `_lead.newlineBefore`
+				// only sees the gap BEFORE the comma (usually empty —
+				// `getRaw(read),`), while the source break the writer's
+				// `Keep` wrap must reproduce lands `,\n  next`. Additive
+				// (an `@:optional Trivial.newlineAfterSep` slot, read only
+				// under `WrapMode.Keep`) → byte-inert for non-keep.
+				final _leadStart: Int = ctx.pos;
+				try {
+					final _node: $elemCT = $elemCall;
+					final _trailing: Null<String> = collectTrailingFull(ctx);
+					var _nlAfterSep: Bool = false;
+					$nlAfterSepScan;
+					$accumRef.push({
+						blankBefore: _lead.blankBefore,
+						blankAfterLeadingComments: _lead.blankAfterLeadingComments,
+						newlineBefore: _lead.newlineBefore,
+						leadingComments: _lead.leadingComments,
+						trailingComment: _trailing,
+						trailingBeforeSep: false,
+						sepAfter: true,
+						newlineAfterSep: _nlAfterSep,
+						node: _node,
+					});
+				} catch (_e: anyparse.runtime.ParseError) {
+					ctx.pos = _savedPos;
+					$restoreStash;
+					break;
+				}
+			}
+		};
+	}
+
+	private function buildTriviaCloseTerminationCheck(closeText: Null<String>): Expr {
+		if (closeText != null) {
+			// See emitStarFieldSteps for why we flip to full-string `peekLit` when
+			// close is multi-byte (single-byte peek false-positives when close's
+			// first byte can legitimately appear inside element content).
+			final closeCharCode: Int = closeText.charCodeAt(0);
+			return closeText.length == 1
+				? macro ctx.pos >= ctx.input.length || ctx.input.charCodeAt(ctx.pos) == $v{closeCharCode}
+				: macro ctx.pos >= ctx.input.length || peekLit(ctx, $v{closeText});
+		}
+		return macro ctx.pos >= ctx.input.length;
+	}
+
+	private function buildTriviaCloseSepMatchExpr(sepText: Null<String>, trailPresentLocal: String): Expr {
+		// ω-trivia-sep: when the trivia Star carries `@:sep`, an optional
+		// separator is matched after each element. The pre-sep horizontal-
+		// whitespace skip avoids consuming newlines / comments (`skipWs` would
+		// swallow the trailing `// comment` before `collectTrailing` could see
+		// it). Sep-less Stars get a no-op.
+		if (sepText != null) {
+			return macro {
+				while (ctx.pos < ctx.input.length) {
+					final _hwc: Int = ctx.input.charCodeAt(ctx.pos);
+					if (_hwc == ' '.code || _hwc == '\t'.code || _hwc == '\r'.code)
+						ctx.pos++;
+					else
+						break;
+				}
+				_sepAfter = matchLit(ctx, $v{sepText});
+				$i{trailPresentLocal} = _sepAfter;
+			};
+		}
+		return macro {};
+	}
+
+	private function buildTriviaCloseLoopBody(
+		elemCT: ComplexType, elemCall: Expr, accumRef: Expr, terminationCheck: Expr, sepMatchExpr: Expr, trailBBLocal: String,
+		trailNLLocal: String, trailLCLocal: String
+	): Expr {
+		// ω-trivia-trailing-before-sep: capture trailing same-line comment
+		// BEFORE the optional sep-match. Source shape `elem /*c*/, next`
+		// previously broke sep-match (`,` not found after h-ws skip stops
+		// at `/`) and then `collectTrailing` consumed `/*c*/` AFTER the
+		// failed sep-match — the `,` was never matched and the next
+		// iteration's element parse failed on `,`. Reorder: first probe
+		// `collectTrailing` (rewinds on miss), then run sep-match. The
+		// post-sep `collectTrailing` still fires when the source carried
+		// the trailing after the sep (`elem, // c\n`) — covered by the
+		// `_trailingBeforeSep == null && _sepAfter` gate so we don't
+		// double-capture.
+		return macro {
+			while (true) {
+				final _lead = collectTrivia(ctx);
+				if ($terminationCheck) {
+					$i{trailBBLocal} = _lead.blankBefore;
+					// ω-keep-fnsig-newline: capture the close-newline alongside
+					// the close-blank so a kept signature reproduces a glued vs
+					// own-line close.
+					$i{trailNLLocal} = _lead.newlineBefore;
+					$i{trailLCLocal} = _lead.leadingComments;
+					break;
+				}
+				final _node: $elemCT = $elemCall;
+				final _trailingBeforeSep: Null<String> = collectTrailingFull(ctx);
+				var _sepAfter: Bool = true;
+				$sepMatchExpr;
+				final _trailing: Null<String> = _trailingBeforeSep ?? (_sepAfter ? collectTrailingFull(ctx) : null);
+				$accumRef.push({
+					blankBefore: _lead.blankBefore,
+					blankAfterLeadingComments: _lead.blankAfterLeadingComments,
+					newlineBefore: _lead.newlineBefore,
+					leadingComments: _lead.leadingComments,
+					trailingComment: _trailing,
+					trailingBeforeSep: _trailingBeforeSep != null,
+					sepAfter: _sepAfter,
+					node: _node,
+				});
+			}
+		};
+	}
+
+	private function buildPrattBlankNlAfterSepScan(): Expr {
+		// Skip the contiguous non-whitespace separator punctuation, then
+		// OR-in any newline in the immediately-following whitespace run.
+		return macro {
+			var _nlScan: Int = _leadStart;
+			while (_nlScan < ctx.input.length) {
+				final _sc: Int = ctx.input.charCodeAt(_nlScan);
+				if (_sc == ' '.code || _sc == '\t'.code || _sc == '\r'.code || _sc == '\n'.code) break;
+				_nlScan++;
+			}
+			while (_nlScan < ctx.input.length) {
+				final _wc: Int = ctx.input.charCodeAt(_nlScan);
+				if (_wc == '\n'.code) {
+					_nlAfterSep = true;
+					break;
+				}
+				if (_wc != ' '.code && _wc != '\t'.code && _wc != '\r'.code) break;
+				_nlScan++;
+			}
+		};
+	}
+
+	private function buildPrattBlankRestoreStash(): Expr {
+		// ω-keep-pratt-blank: restore the pre-iteration stash only when the
+		// just-parsed value ended with `}` — scan back from `_savedPos` past
+		// trailing whitespace to the last content byte. Brace-terminated →
+		// preserve the source blank to the next sibling (issue_644 /
+		// typedef_fields); otherwise keep the baseline drop (issue_216).
+		return macro {
+			if (_savedPending != null) {
+				var _bpRew: Int = _savedPos - 1;
+				while (_bpRew > 0) {
+					final _bpc: Int = ctx.input.charCodeAt(_bpRew);
+					if (_bpc == ' '.code || _bpc == '\t'.code || _bpc == '\n'.code || _bpc == '\r'.code)
+						_bpRew--;
+					else
+						break;
+				}
+				if (_bpRew >= 0 && ctx.input.charCodeAt(_bpRew) == '}'.code) ctx.pendingTrivia = _savedPending;
+			}
 		};
 	}
 
