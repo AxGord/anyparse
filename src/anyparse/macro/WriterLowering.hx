@@ -12069,56 +12069,7 @@ class WriterLowering {
 		final staticCtor: String = args.length >= 3 ? args[1] : 'Static';
 		final afterStaticVarsField: String = args.length >= 3 ? args[2] : 'afterStaticVars';
 		final betweenStaticFunctionsField: String = args.length == 4 ? args[3] : 'betweenStaticFunctions';
-		final elemRule: Null<ShapeNode> = shape.rules.get(elemRefName);
-		if (elemRule == null || elemRule.kind != Seq)
-			Context.fatalError(
-				'WriterLowering: @:fmt(staticVarSubdivision) requires element rule $elemRefName to be a Seq struct', Context.currentPos()
-			);
-		var modifierNode: Null<ShapeNode> = null;
-		for (child in elemRule.children) if (child.annotations.get('base.fieldName') == modifierField) {
-			modifierNode = child;
-			break;
-		}
-		if (modifierNode == null)
-			Context.fatalError(
-				'WriterLowering: @:fmt(staticVarSubdivision) modifier field "$modifierField" not found on element rule $elemRefName',
-				Context.currentPos()
-			);
-		if (modifierNode.kind != Star)
-			Context.fatalError(
-				'WriterLowering: @:fmt(staticVarSubdivision) modifier field "$modifierField" must be a Star', Context.currentPos()
-			);
-		// `base.ref` lives on the Star's element child (the Ref node), not the
-		// Star itself — `ShapeBuilder.shapeFieldType` builds `Array<T>` as a
-		// Star with `children = [shapeFieldType(T)]` and only the inner Ref
-		// carries `base.ref`.
-		if (modifierNode.children.length != 1)
-			Context.fatalError(
-				'WriterLowering: @:fmt(staticVarSubdivision) modifier field "$modifierField" must have exactly one Star child',
-				Context.currentPos()
-			);
-		final modifierEnumName: Null<String> = modifierNode.children[0].annotations.get('base.ref');
-		if (modifierEnumName == null)
-			Context.fatalError(
-				'WriterLowering: @:fmt(staticVarSubdivision) modifier field "$modifierField" has no base.ref annotation',
-				Context.currentPos()
-			);
-		final modifierEnum: Null<ShapeNode> = shape.rules.get(modifierEnumName);
-		if (modifierEnum == null || modifierEnum.kind != Alt)
-			Context.fatalError(
-				'WriterLowering: @:fmt(staticVarSubdivision) modifier target $modifierEnumName must be an Alt (enum)',
-				Context.currentPos()
-			);
-		var staticBranchFound: Bool = false;
-		for (branch in modifierEnum.children) if (branch.annotations.get('base.ctor') == staticCtor) {
-			staticBranchFound = true;
-			break;
-		}
-		if (!staticBranchFound)
-			Context.fatalError(
-				'WriterLowering: @:fmt(staticVarSubdivision) static ctor "$staticCtor" not found on enum $modifierEnumName',
-				Context.currentPos()
-			);
+		validateStaticVarSubdivision(elemRefName, modifierField, staticCtor);
 		return {
 			modifierFieldName: modifierField,
 			staticCtorName: staticCtor,
@@ -14036,6 +13987,66 @@ class WriterLowering {
 				}
 			}
 			: macro {};
+	}
+
+	/**
+	 * Validate the modifier Star → enum → static-ctor chain that
+	 * `@:fmt(staticVarSubdivision)` relies on. Fatal-errors on any
+	 * misconfiguration; returns normally when the shape is sound.
+	 * Extracted from `buildStaticVarSubdivisionInfo` to keep that builder
+	 * below the complexity gate.
+	 */
+	private function validateStaticVarSubdivision(elemRefName: String, modifierField: String, staticCtor: String): Void {
+		final elemRule: Null<ShapeNode> = shape.rules.get(elemRefName);
+		if (elemRule == null || elemRule.kind != Seq)
+			Context.fatalError(
+				'WriterLowering: @:fmt(staticVarSubdivision) requires element rule $elemRefName to be a Seq struct', Context.currentPos()
+			);
+		var modifierNode: Null<ShapeNode> = null;
+		for (child in elemRule.children) if (child.annotations.get('base.fieldName') == modifierField) {
+			modifierNode = child;
+			break;
+		}
+		if (modifierNode == null)
+			Context.fatalError(
+				'WriterLowering: @:fmt(staticVarSubdivision) modifier field "$modifierField" not found on element rule $elemRefName',
+				Context.currentPos()
+			);
+		if (modifierNode.kind != Star)
+			Context.fatalError(
+				'WriterLowering: @:fmt(staticVarSubdivision) modifier field "$modifierField" must be a Star', Context.currentPos()
+			);
+		// `base.ref` lives on the Star's element child (the Ref node), not the
+		// Star itself — `ShapeBuilder.shapeFieldType` builds `Array<T>` as a
+		// Star with `children = [shapeFieldType(T)]` and only the inner Ref
+		// carries `base.ref`.
+		if (modifierNode.children.length != 1)
+			Context.fatalError(
+				'WriterLowering: @:fmt(staticVarSubdivision) modifier field "$modifierField" must have exactly one Star child',
+				Context.currentPos()
+			);
+		final modifierEnumName: Null<String> = modifierNode.children[0].annotations.get('base.ref');
+		if (modifierEnumName == null)
+			Context.fatalError(
+				'WriterLowering: @:fmt(staticVarSubdivision) modifier field "$modifierField" has no base.ref annotation',
+				Context.currentPos()
+			);
+		final modifierEnum: Null<ShapeNode> = shape.rules.get(modifierEnumName);
+		if (modifierEnum == null || modifierEnum.kind != Alt)
+			Context.fatalError(
+				'WriterLowering: @:fmt(staticVarSubdivision) modifier target $modifierEnumName must be an Alt (enum)',
+				Context.currentPos()
+			);
+		var staticBranchFound: Bool = false;
+		for (branch in modifierEnum.children) if (branch.annotations.get('base.ctor') == staticCtor) {
+			staticBranchFound = true;
+			break;
+		}
+		if (!staticBranchFound)
+			Context.fatalError(
+				'WriterLowering: @:fmt(staticVarSubdivision) static ctor "$staticCtor" not found on enum $modifierEnumName',
+				Context.currentPos()
+			);
 	}
 
 }
