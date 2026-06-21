@@ -3175,11 +3175,149 @@ class WriterLowering {
 	 * (block) and pushes onto `parts`. Extracted to keep the orchestrator under
 	 * the complexity gate.
 	 */
-	private function emitTriviaCloseStar(c: TriviaStarCtx, parts: Array<Expr>): Void {
+	/**
+	 * Trivia block-mode (`@:trail`, no flat sep) Star dispatch — the fall-through
+	 * tail of `emitTriviaCloseStar` after the sep dispatch returns. Reads the
+	 * block-layout `@:fmt` flags and pushes the `triviaBlockStarExpr` emit onto
+	 * `parts`. Extracted to keep the helper under the complexity gate.
+	 */
+	/**
+	 * Resolves the three classify-info builders (`interMemberInfo` /
+	 * `staticVarSubdivInfo` / `condLeadingDocInfo`) read off a block-mode trivia
+	 * Star, bundled for `emitTriviaBlockStarDispatch`. Extracted to keep that
+	 * helper under the complexity gate.
+	 */
+	private function buildTriviaBlockInfos(starNode: ShapeNode, elemRefName: String, beforeDocComments: Bool): TriviaBlockInfos {
+		final interMemberArgs: Null<Array<String>> = starNode.fmtReadStringArgs('interMemberBlankLines');
+		// ω-interblank-cond-lookthrough: opt-in `@:fmt(interMember
+		// CondLookThrough('<classifierField>', '<condCtor>',
+		// '<bodyField>'))` makes `buildInterMemberClassifyInfo` classify
+		// a `#if … #end` member by its FIRST inner member's kind instead
+		// of the flat `0` ("other"). Mirrors `beforeDocCondLookThrough`'s
+		// doc-comment look-through so two consecutive function-bearing
+		// conditional members get a `betweenFunctions` blank. Inert unless
+		// `interMemberBlankLines` is also present (the policy it widens).
+		final interMemberCondArgs: Null<Array<String>> = starNode.fmtReadStringArgs('interMemberCondLookThrough');
+		final interMemberInfo: Null<InterMemberClassifyInfo> = interMemberArgs == null
+			? null
+			: buildInterMemberClassifyInfo(elemRefName, interMemberArgs, interMemberCondArgs);
+		// `fmtHasFlag` accepts both bare-identifier (`staticVarSubdivision`)
+		// and call form (`staticVarSubdivision('modifiers', 'Static',
+		// 'afterStaticVars')`) — `fmtReadStringArgs` is null in the
+		// bare form and only carries args when the call form is used.
+		final staticVarSubdiv: Bool = starNode.fmtHasFlag('staticVarSubdivision');
+		final staticVarSubdivArgs: Null<Array<String>> = staticVarSubdiv ? starNode.fmtReadStringArgs('staticVarSubdivision') : null;
+		final staticVarSubdivInfo: Null<StaticVarSubdivisionInfo> = (staticVarSubdiv && interMemberInfo != null)
+			? buildStaticVarSubdivisionInfo(elemRefName, staticVarSubdivArgs ?? [])
+			: null;
+		// ω-cond-leading-doc-lookthrough: only meaningful alongside
+		// `beforeDocCommentEmptyLines` (the policy whose doc-comment scan
+		// it widens). Inert otherwise — the resolved info is dropped.
+		final condLeadingDocArgs: Null<Array<String>> = starNode.fmtReadStringArgs('beforeDocCondLookThrough');
+		final condLeadingDocInfo: Null<CondLeadingDocLookThroughInfo> = (condLeadingDocArgs != null && beforeDocComments)
+			? buildCondLeadingDocLookThroughInfo(elemRefName, condLeadingDocArgs)
+			: null;
+		return {
+			interMemberInfo: interMemberInfo,
+			staticVarSubdivInfo: staticVarSubdivInfo,
+			condLeadingDocInfo: condLeadingDocInfo,
+		};
+	}
+
+	/**
+	 * Trivia block-mode (`@:trail`, no flat sep) Star dispatch — the fall-through
+	 * tail of `emitTriviaCloseStar` after the sep dispatch returns. Reads the
+	 * block-layout `@:fmt` flags and pushes the `triviaBlockStarExpr` emit onto
+	 * `parts`. Extracted to keep the helper under the complexity gate.
+	 */
+	private function emitTriviaBlockStarDispatch(c: TriviaStarCtx, parts: Array<Expr>): Void {
 		final starNode: ShapeNode = c.starNode;
 		final fieldAccess: Expr = c.fieldAccess;
 		final elemFn: String = c.elemFn;
 		final elemRefName: String = c.elemRefName;
+		final openText: Null<String> = c.openText;
+		final closeText: Null<String> = c.closeText;
+		final sepText: Null<String> = c.sepText;
+		final trailBBAccess: Null<Expr> = c.trailBBAccess;
+		final trailLCAccess: Null<Expr> = c.trailLCAccess;
+		final trailCloseAccess: Null<Expr> = c.trailCloseAccess;
+		final trailOpenAccess: Null<Expr> = c.trailOpenAccess;
+		final blockEndedFlag: Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
+		// `openText ?? ''` (was `?? '{'` through ω₅) — when a
+		// close-peek Star has no `@:lead`, the surrounding Seq
+		// emits the open delimiter before this field, so the Star
+		// itself contributes nothing at the open position. Empty
+		// string → `_dt('')` is a no-op, and `emptyText = '' +
+		// closeText` stays format-neutral (invariant #5).
+		final afterDocComments: Bool = starNode.fmtHasFlag('afterFieldsWithDocComments');
+		final keepBetweenFields: Bool = starNode.fmtHasFlag('existingBetweenFields');
+		final beforeDocComments: Bool = starNode.fmtHasFlag('beforeDocCommentEmptyLines');
+		final indentCaseLabelsGate: Bool = starNode.fmtHasFlag('indentCaseLabels');
+		final emptyCurlyBreak: Bool = starNode.fmtHasFlag('emptyCurlyBreak');
+		// ω-blockempty: call-form `@:fmt(emptyCurlyBreak('<knob>'))`
+		// names a per-construct EmptyCurly opt field. The bare form
+		// returns null and falls back to `_inAnonFnBody` dispatch
+		// inside `triviaBlockStarExpr`.
+		final emptyCurlyKnobArgs: Null<Array<String>> = starNode.fmtReadStringArgs('emptyCurlyBreak');
+		final emptyCurlyKnob: Null<String> = (emptyCurlyKnobArgs != null && emptyCurlyKnobArgs.length >= 1) ? emptyCurlyKnobArgs[0] : null;
+		final beginEndType: Bool = starNode.fmtHasFlag('beginEndType');
+		final keepCurlyBlanks: Bool = starNode.fmtHasFlag('keepCurlyBlanks');
+		final lineCommentTrailBlank: Bool = starNode.fmtHasFlag('blankBeforeOrphanLineCommentTrail');
+		final blankBeforeFinalDocInLeading: Bool = starNode.fmtHasFlag('blankBeforeFinalDocCommentInLeading');
+		// ω-* classify-info builders resolved in buildTriviaBlockInfos.
+		final infos: TriviaBlockInfos = buildTriviaBlockInfos(starNode, elemRefName, beforeDocComments);
+		final interMemberInfo: Null<InterMemberClassifyInfo> = infos.interMemberInfo;
+		final staticVarSubdivInfo: Null<StaticVarSubdivisionInfo> = infos.staticVarSubdivInfo;
+		final condLeadingDocInfo: Null<CondLeadingDocLookThroughInfo> = infos.condLeadingDocInfo;
+		final betweenMultilineCommentsBlanks: Bool = starNode.fmtHasFlag('betweenMultilineCommentsBlanks');
+		final uniformBetweenArgs: Null<Array<String>> = starNode.fmtReadStringArgs('uniformBetween');
+		if (uniformBetweenArgs != null && uniformBetweenArgs.length != 1)
+			Context.fatalError(
+				'WriterLowering: @:fmt(uniformBetween) expects exactly 1 string arg (optField), got ${uniformBetweenArgs.length}',
+				Context.currentPos()
+			);
+		final uniformBetweenOptField: Null<String> = uniformBetweenArgs != null ? uniformBetweenArgs[0] : null;
+		final anonFnClear: Bool = starNode.fmtHasFlag('leftCurlyAnonFnOverride');
+		// ω-blockright-curly: call-form `@:fmt(rightCurly('<knob>'))`
+		// on a Seq-struct Star names a per-construct
+		// RightCurlyPlacement opt field. Sister to `emptyCurlyKnob`
+		// — when null, dispatch falls back to unconditional
+		// `_dhl()` before close inside `triviaBlockStarExpr`.
+		final rightCurlyKnobArgs: Null<Array<String>> = starNode.fmtReadStringArgs('rightCurly');
+		final rightCurlyKnob: Null<String> = (rightCurlyKnobArgs != null && rightCurlyKnobArgs.length >= 1) ? rightCurlyKnobArgs[0] : null;
+		// ω-anonfunction-right-curly: call-form
+		// `@:fmt(rightCurlyAnonFnOverride('<knob>'))` on a Seq-struct
+		// Star names a RightCurlyPlacement opt field read only when
+		// `_inAnonFnBody=true`. Used by `HxFnBlock.stmts` to route
+		// anon-fn body closes through `opt.anonFunctionRightCurly`
+		// while keeping `HxFnDecl.body` / `HxUntypedFnBody.block`
+		// (same `HxFnBlock` Star, `_inAnonFnBody=false`) on the
+		// pre-slice `_dhl()` path.
+		final rightCurlyAnonFnArgs: Null<Array<String>> = starNode.fmtReadStringArgs('rightCurlyAnonFnOverride');
+		final rightCurlyAnonFnKnob: Null<String> = (rightCurlyAnonFnArgs != null && rightCurlyAnonFnArgs.length >= 1)
+			? rightCurlyAnonFnArgs[0]
+			: null;
+		parts.push(triviaBlockStarExpr(
+			fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, openText ?? '', closeText, false,
+			afterDocComments, keepBetweenFields, beforeDocComments, interMemberInfo, indentCaseLabelsGate, emptyCurlyBreak, beginEndType,
+			keepCurlyBlanks, lineCommentTrailBlank, blankBeforeFinalDocInLeading, staticVarSubdivInfo, betweenMultilineCommentsBlanks,
+			uniformBetweenOptField, anonFnClear, emptyCurlyKnob, rightCurlyKnob, rightCurlyAnonFnKnob, blockEndedFlag ? sepText : null,
+			blockEndedFlag, blockEndedFlag ? (starNode.annotations.get('lit.sepBlockEndedPredicate'): Null<String>) : null,
+			blockEndedFlag ? formatInfo.schemaTypePath : null, condLeadingDocInfo, false
+		));
+	}
+
+	/**
+	 * Trivia close-peek (`@:trail`) Star dispatch (the `if (closeText != null)`
+	 * branch of the `isTriviaStar` block in `emitWriterStarField`). Emits the
+	 * leftCurly separator, routes a flat-sep Star through `triviaSepStarExpr`, else
+	 * falls through to `emitTriviaBlockStarDispatch`. Extracted to keep the
+	 * orchestrator under the complexity gate.
+	 */
+	private function emitTriviaCloseStar(c: TriviaStarCtx, parts: Array<Expr>): Void {
+		final starNode: ShapeNode = c.starNode;
+		final fieldAccess: Expr = c.fieldAccess;
+		final elemFn: String = c.elemFn;
 		final isFirstField: Bool = c.isFirstField;
 		final openText: Null<String> = c.openText;
 		final closeText: Null<String> = c.closeText;
@@ -3332,92 +3470,7 @@ class WriterLowering {
 			));
 			return;
 		}
-		// `openText ?? ''` (was `?? '{'` through ω₅) — when a
-		// close-peek Star has no `@:lead`, the surrounding Seq
-		// emits the open delimiter before this field, so the Star
-		// itself contributes nothing at the open position. Empty
-		// string → `_dt('')` is a no-op, and `emptyText = '' +
-		// closeText` stays format-neutral (invariant #5).
-		final afterDocComments: Bool = starNode.fmtHasFlag('afterFieldsWithDocComments');
-		final keepBetweenFields: Bool = starNode.fmtHasFlag('existingBetweenFields');
-		final beforeDocComments: Bool = starNode.fmtHasFlag('beforeDocCommentEmptyLines');
-		final indentCaseLabelsGate: Bool = starNode.fmtHasFlag('indentCaseLabels');
-		final emptyCurlyBreak: Bool = starNode.fmtHasFlag('emptyCurlyBreak');
-		// ω-blockempty: call-form `@:fmt(emptyCurlyBreak('<knob>'))`
-		// names a per-construct EmptyCurly opt field. The bare form
-		// returns null and falls back to `_inAnonFnBody` dispatch
-		// inside `triviaBlockStarExpr`.
-		final emptyCurlyKnobArgs: Null<Array<String>> = starNode.fmtReadStringArgs('emptyCurlyBreak');
-		final emptyCurlyKnob: Null<String> = (emptyCurlyKnobArgs != null && emptyCurlyKnobArgs.length >= 1) ? emptyCurlyKnobArgs[0] : null;
-		final beginEndType: Bool = starNode.fmtHasFlag('beginEndType');
-		final keepCurlyBlanks: Bool = starNode.fmtHasFlag('keepCurlyBlanks');
-		final lineCommentTrailBlank: Bool = starNode.fmtHasFlag('blankBeforeOrphanLineCommentTrail');
-		final blankBeforeFinalDocInLeading: Bool = starNode.fmtHasFlag('blankBeforeFinalDocCommentInLeading');
-		final interMemberArgs: Null<Array<String>> = starNode.fmtReadStringArgs('interMemberBlankLines');
-		// ω-interblank-cond-lookthrough: opt-in `@:fmt(interMember
-		// CondLookThrough('<classifierField>', '<condCtor>',
-		// '<bodyField>'))` makes `buildInterMemberClassifyInfo` classify
-		// a `#if … #end` member by its FIRST inner member's kind instead
-		// of the flat `0` ("other"). Mirrors `beforeDocCondLookThrough`'s
-		// doc-comment look-through so two consecutive function-bearing
-		// conditional members get a `betweenFunctions` blank. Inert unless
-		// `interMemberBlankLines` is also present (the policy it widens).
-		final interMemberCondArgs: Null<Array<String>> = starNode.fmtReadStringArgs('interMemberCondLookThrough');
-		final interMemberInfo: Null<InterMemberClassifyInfo> = interMemberArgs == null
-			? null
-			: buildInterMemberClassifyInfo(elemRefName, interMemberArgs, interMemberCondArgs);
-		// `fmtHasFlag` accepts both bare-identifier (`staticVarSubdivision`)
-		// and call form (`staticVarSubdivision('modifiers', 'Static',
-		// 'afterStaticVars')`) — `fmtReadStringArgs` is null in the
-		// bare form and only carries args when the call form is used.
-		final staticVarSubdiv: Bool = starNode.fmtHasFlag('staticVarSubdivision');
-		final staticVarSubdivArgs: Null<Array<String>> = staticVarSubdiv ? starNode.fmtReadStringArgs('staticVarSubdivision') : null;
-		final staticVarSubdivInfo: Null<StaticVarSubdivisionInfo> = (staticVarSubdiv && interMemberInfo != null)
-			? buildStaticVarSubdivisionInfo(elemRefName, staticVarSubdivArgs ?? [])
-			: null;
-		// ω-cond-leading-doc-lookthrough: only meaningful alongside
-		// `beforeDocCommentEmptyLines` (the policy whose doc-comment scan
-		// it widens). Inert otherwise — the resolved info is dropped.
-		final condLeadingDocArgs: Null<Array<String>> = starNode.fmtReadStringArgs('beforeDocCondLookThrough');
-		final condLeadingDocInfo: Null<CondLeadingDocLookThroughInfo> = (condLeadingDocArgs != null && beforeDocComments)
-			? buildCondLeadingDocLookThroughInfo(elemRefName, condLeadingDocArgs)
-			: null;
-		final betweenMultilineCommentsBlanks: Bool = starNode.fmtHasFlag('betweenMultilineCommentsBlanks');
-		final uniformBetweenArgs: Null<Array<String>> = starNode.fmtReadStringArgs('uniformBetween');
-		if (uniformBetweenArgs != null && uniformBetweenArgs.length != 1)
-			Context.fatalError(
-				'WriterLowering: @:fmt(uniformBetween) expects exactly 1 string arg (optField), got ${uniformBetweenArgs.length}',
-				Context.currentPos()
-			);
-		final uniformBetweenOptField: Null<String> = uniformBetweenArgs != null ? uniformBetweenArgs[0] : null;
-		final anonFnClear: Bool = starNode.fmtHasFlag('leftCurlyAnonFnOverride');
-		// ω-blockright-curly: call-form `@:fmt(rightCurly('<knob>'))`
-		// on a Seq-struct Star names a per-construct
-		// RightCurlyPlacement opt field. Sister to `emptyCurlyKnob`
-		// — when null, dispatch falls back to unconditional
-		// `_dhl()` before close inside `triviaBlockStarExpr`.
-		final rightCurlyKnobArgs: Null<Array<String>> = starNode.fmtReadStringArgs('rightCurly');
-		final rightCurlyKnob: Null<String> = (rightCurlyKnobArgs != null && rightCurlyKnobArgs.length >= 1) ? rightCurlyKnobArgs[0] : null;
-		// ω-anonfunction-right-curly: call-form
-		// `@:fmt(rightCurlyAnonFnOverride('<knob>'))` on a Seq-struct
-		// Star names a RightCurlyPlacement opt field read only when
-		// `_inAnonFnBody=true`. Used by `HxFnBlock.stmts` to route
-		// anon-fn body closes through `opt.anonFunctionRightCurly`
-		// while keeping `HxFnDecl.body` / `HxUntypedFnBody.block`
-		// (same `HxFnBlock` Star, `_inAnonFnBody=false`) on the
-		// pre-slice `_dhl()` path.
-		final rightCurlyAnonFnArgs: Null<Array<String>> = starNode.fmtReadStringArgs('rightCurlyAnonFnOverride');
-		final rightCurlyAnonFnKnob: Null<String> = (rightCurlyAnonFnArgs != null && rightCurlyAnonFnArgs.length >= 1)
-			? rightCurlyAnonFnArgs[0]
-			: null;
-		parts.push(triviaBlockStarExpr(
-			fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, openText ?? '', closeText, false,
-			afterDocComments, keepBetweenFields, beforeDocComments, interMemberInfo, indentCaseLabelsGate, emptyCurlyBreak, beginEndType,
-			keepCurlyBlanks, lineCommentTrailBlank, blankBeforeFinalDocInLeading, staticVarSubdivInfo, betweenMultilineCommentsBlanks,
-			uniformBetweenOptField, anonFnClear, emptyCurlyKnob, rightCurlyKnob, rightCurlyAnonFnKnob, blockEndedFlag ? sepText : null,
-			blockEndedFlag, blockEndedFlag ? (starNode.annotations.get('lit.sepBlockEndedPredicate'): Null<String>) : null,
-			blockEndedFlag ? formatInfo.schemaTypePath : null, condLeadingDocInfo, false
-		));
+		emitTriviaBlockStarDispatch(c, parts);
 	}
 
 	/**
@@ -16298,6 +16351,16 @@ typedef PadFlags = {
 	final lineLengthAwareSeps: Bool;
 	final sepBeforeOptActive: Bool;
 	final softFill: Bool;
+};
+/**
+ * The three classify-info results resolved by
+ * `WriterLowering.buildTriviaBlockInfos`, bundled so the block-mode trivia
+ * dispatch takes one value instead of three separate locals.
+ */
+typedef TriviaBlockInfos = {
+	final interMemberInfo: Null<InterMemberClassifyInfo>;
+	final staticVarSubdivInfo: Null<StaticVarSubdivisionInfo>;
+	final condLeadingDocInfo: Null<CondLeadingDocLookThroughInfo>;
 };
 
 /**
