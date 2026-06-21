@@ -2869,66 +2869,15 @@ class WriterLowering {
 	 * sep-override switches, then pushes the `triviaTryparseStarExpr` emit onto
 	 * `parts`. Extracted so the orchestrator stays under the complexity gate.
 	 */
-	private function emitTriviaTryparseStar(c: TriviaStarCtx, parts: Array<Expr>): Void {
-		final starNode: ShapeNode = c.starNode;
-		final fieldAccess: Expr = c.fieldAccess;
-		final elemFn: String = c.elemFn;
-		final elemRefName: String = c.elemRefName;
-		final isLastField: Bool = c.isLastField;
-		final openText: Null<String> = c.openText;
-		final closeText: Null<String> = c.closeText;
-		final prevBareRefBody: Null<PrevBodyInfo> = c.prevBareRefBody;
-		final prevTrailFieldName: Null<String> = c.prevTrailFieldName;
-		final trailBBAccess: Null<Expr> = c.trailBBAccess;
-		final trailLCAccess: Null<Expr> = c.trailLCAccess;
-		final trailBAAccess: Null<Expr> = c.trailBAAccess;
-		if (closeText != null) Context.fatalError('WriterLowering: @:trivia + @:tryparse must not have @:trail', Context.currentPos());
-		// Non-last-field @:trivia @:tryparse is supported only when
-		// the Star is bare (no `@:lead`). The emitted Doc then
-		// stands alone (empty array → `_de()`), and the next
-		// sibling's leading separator in `lowerStruct` already gates
-		// on `prevAnyStarNonEmpty` via the bare-tryparse-Star
-		// tracker, so the space between Star output and next
-		// field never leaks when the Star was empty. Required by
-		// `HxMemberDecl.modifiers` (not last — `member` follows).
-		//
-		// `@:lead` on a non-last bare-tryparse Star would emit the
-		// lead text unconditionally even on empty input, leaking
-		// the literal across an otherwise-empty member position.
-		// Reject loudly until a grammar needs it AND the empty-
-		// input case is gated.
-		if (!isLastField && openText != null)
-			Context.fatalError('WriterLowering: non-last @:trivia @:tryparse Star must be bare (no @:lead)', Context.currentPos());
-		if (openText != null) parts.push(macro _dt($v{openText}));
-		// sameLine-annotated Stars (catches against try body) emit
-		// the separator before EVERY element — it's the boundary
-		// with the preceding struct field. Non-sameLine Stars
-		// (case / default bodies) emit it only between elements,
-		// matching the plain-mode tryparse writer.
-		final sameLineName: Null<String> = starNode.fmtReadString('sameLine');
-		final sepExpr: Expr = if (sameLineName != null) {
-			final optFlag: Expr = optFieldAccess(sameLineName);
-			sameLinePolicySwitch(optFlag, macro _dt(' '));
-		} else {
-			macro _dt(' ');
-		};
-		final nestBody: Bool = starNode.fmtHasFlag('nestBody');
-		// Trailing slots only carry orphan trivia when nestBody is
-		// on (parser gates capture on the same flag). For catches
-		// the slots remain zero — forward null to keep the writer
-		// path byte-identical to the pre-nestBody shape.
-		final tryparseTrailBB: Null<Expr> = nestBody ? trailBBAccess : null;
-		final tryparseTrailLC: Null<Expr> = nestBody ? trailLCAccess : null;
-		final tryparseTrailBA: Null<Expr> = nestBody ? trailBAAccess : null;
-		// ω-close-trailing-alt: when prev field was a bare-Ref to a
-		// trivia-bearing type whose Alt has close-trailing branches
-		// (currently `HxStatement.BlockStmt`), build a runtime
-		// override on the FIRST element's separator. `BlockStmt(_, ct)`
-		// with `ct != null` means the body's writer already
-		// terminated its output with `\n` after the trailing line
-		// comment — the normal space sep would leak ` ` between the
-		// indent and the next sibling (e.g. `catch`). The override
-		// emits `_de()` instead; non-matching ctors fall through.
+	/**
+	 * Builds the first / subsequent element separator overrides for a
+	 * `@:trivia @:tryparse` Star (the close-trailing + block-shape-aware switches).
+	 * Bundled for `emitTriviaTryparseStar`. Extracted to keep that helper under the
+	 * complexity gate.
+	 */
+	private function buildTryparseSepOverrides(
+		starNode: ShapeNode, sameLineName: Null<String>, prevBareRefBody: Null<PrevBodyInfo>, elemRefName: String, sepExpr: Expr
+	): TryparseSepOverrides {
 		final closeTrailingFirstOverride: Null<Expr> = sameLineName != null
 			? buildCloseTrailingFirstSepOverride(prevBareRefBody, sepExpr)
 			: null;
@@ -3000,6 +2949,78 @@ class WriterLowering {
 			];
 			{ expr: ESwitch(prevElemBodyAccess, cases, null), pos: Context.currentPos() };
 		};
+		return { firstSepOverride: firstSepOverride, subsequentSepOverride: subsequentSepOverride };
+	}
+
+	/**
+	 * Trivia `@:tryparse` Star dispatch (the `if (starNode.hasMeta(':tryparse'))`
+	 * branch of `emitWriterStarField`). Reads the per-construct `@:fmt` flags and
+	 * sep-override switches, then pushes the `triviaTryparseStarExpr` emit onto
+	 * `parts`. Extracted so the orchestrator stays under the complexity gate.
+	 */
+	private function emitTriviaTryparseStar(c: TriviaStarCtx, parts: Array<Expr>): Void {
+		final starNode: ShapeNode = c.starNode;
+		final fieldAccess: Expr = c.fieldAccess;
+		final elemFn: String = c.elemFn;
+		final elemRefName: String = c.elemRefName;
+		final isLastField: Bool = c.isLastField;
+		final openText: Null<String> = c.openText;
+		final closeText: Null<String> = c.closeText;
+		final prevBareRefBody: Null<PrevBodyInfo> = c.prevBareRefBody;
+		final prevTrailFieldName: Null<String> = c.prevTrailFieldName;
+		final trailBBAccess: Null<Expr> = c.trailBBAccess;
+		final trailLCAccess: Null<Expr> = c.trailLCAccess;
+		final trailBAAccess: Null<Expr> = c.trailBAAccess;
+		if (closeText != null) Context.fatalError('WriterLowering: @:trivia + @:tryparse must not have @:trail', Context.currentPos());
+		// Non-last-field @:trivia @:tryparse is supported only when
+		// the Star is bare (no `@:lead`). The emitted Doc then
+		// stands alone (empty array → `_de()`), and the next
+		// sibling's leading separator in `lowerStruct` already gates
+		// on `prevAnyStarNonEmpty` via the bare-tryparse-Star
+		// tracker, so the space between Star output and next
+		// field never leaks when the Star was empty. Required by
+		// `HxMemberDecl.modifiers` (not last — `member` follows).
+		//
+		// `@:lead` on a non-last bare-tryparse Star would emit the
+		// lead text unconditionally even on empty input, leaking
+		// the literal across an otherwise-empty member position.
+		// Reject loudly until a grammar needs it AND the empty-
+		// input case is gated.
+		if (!isLastField && openText != null)
+			Context.fatalError('WriterLowering: non-last @:trivia @:tryparse Star must be bare (no @:lead)', Context.currentPos());
+		if (openText != null) parts.push(macro _dt($v{openText}));
+		// sameLine-annotated Stars (catches against try body) emit
+		// the separator before EVERY element — it's the boundary
+		// with the preceding struct field. Non-sameLine Stars
+		// (case / default bodies) emit it only between elements,
+		// matching the plain-mode tryparse writer.
+		final sameLineName: Null<String> = starNode.fmtReadString('sameLine');
+		final sepExpr: Expr = if (sameLineName != null) {
+			final optFlag: Expr = optFieldAccess(sameLineName);
+			sameLinePolicySwitch(optFlag, macro _dt(' '));
+		} else {
+			macro _dt(' ');
+		};
+		final nestBody: Bool = starNode.fmtHasFlag('nestBody');
+		// Trailing slots only carry orphan trivia when nestBody is
+		// on (parser gates capture on the same flag). For catches
+		// the slots remain zero — forward null to keep the writer
+		// path byte-identical to the pre-nestBody shape.
+		final tryparseTrailBB: Null<Expr> = nestBody ? trailBBAccess : null;
+		final tryparseTrailLC: Null<Expr> = nestBody ? trailLCAccess : null;
+		final tryparseTrailBA: Null<Expr> = nestBody ? trailBAAccess : null;
+		// ω-close-trailing-alt: when prev field was a bare-Ref to a
+		// trivia-bearing type whose Alt has close-trailing branches
+		// (currently `HxStatement.BlockStmt`), build a runtime
+		// override on the FIRST element's separator. `BlockStmt(_, ct)`
+		// with `ct != null` means the body's writer already
+		// terminated its output with `\n` after the trailing line
+		// comment — the normal space sep would leak ` ` between the
+		// indent and the next sibling (e.g. `catch`). The override
+		// emits `_de()` instead; non-matching ctors fall through.
+		final sepOverrides: TryparseSepOverrides = buildTryparseSepOverrides(starNode, sameLineName, prevBareRefBody, elemRefName, sepExpr);
+		final firstSepOverride: Null<Expr> = sepOverrides.firstSepOverride;
+		final subsequentSepOverride: Null<Expr> = sepOverrides.subsequentSepOverride;
 		// ω-case-body-policy / ω-case-body-keep:
 		// `@:fmt(bodyPolicy('flag1', 'flag2', ...))` on a
 		// `nestBody` Star opts the body field into runtime
@@ -16406,6 +16427,15 @@ typedef TriviaBlockInfos = {
 	final interMemberInfo: Null<InterMemberClassifyInfo>;
 	final staticVarSubdivInfo: Null<StaticVarSubdivisionInfo>;
 	final condLeadingDocInfo: Null<CondLeadingDocLookThroughInfo>;
+};
+/**
+ * The first / subsequent element separator overrides resolved by
+ * `WriterLowering.buildTryparseSepOverrides`, bundled so the tryparse dispatch
+ * takes one value instead of two separate locals.
+ */
+typedef TryparseSepOverrides = {
+	final firstSepOverride: Null<Expr>;
+	final subsequentSepOverride: Null<Expr>;
 };
 
 /**
