@@ -5996,39 +5996,11 @@ class WriterLowering {
 				pos: Context.currentPos(),
 			};
 		};
-		// ω-arrow-lambda-body-context: when the call site opts in via
-		// `@:fmt(leftCurlyAnonFnOverride(...))` on the parent Star, the per-
-		// element write call passes `_clearAnonFnBody(opt)` so the flag is
-		// consumed at this Star's `{` placement and descendants (nested
-		// statements / nested BlockExpr inside the body) fall back to the
-		// default `blockLeftCurly` knob rather than re-triggering the
-		// anon-fn override.
-		final elemOptExpr: Expr = clearAnonFnBodyOnElems ? macro _clearAnonFnBody(opt) : macro opt;
-		// ω-value-yielded-if-tail-barrier (SI-2): the per-element opt arg. When
-		// `clearExprPositionNonTail` is set (BlockExpr / BlockStmt), every block
-		// statement EXCEPT the tail gets `_clearExprPosition` so a discarded
-		// statement-if reverts to the statement-position `ifBody` policy; only
-		// the block's last statement (its yielded value) keeps the inherited
-		// expression-position frame. `_si` / `_arr` are in scope at the single
-		// splice site (`while (_si < _arr.length)` over `final _arr = …`). The
-		// non-flag path emits the IDENTICAL `elemOptExpr` Doc as before.
-		// ω-expressionif-collapse: a BLOCK-shaped branch (`if (c) { …; {obj} }`)
-		// is an opaque barrier for the value-if-branch collapse — an object
-		// literal that is the block's value is NOT the immediate value of the
-		// value-if branch, so `_clearValueIfBranch` drops the narrow flag for
-		// every block element (tail included). The broad `_inExprPosition`
-		// frame still threads through (only non-tail clears it, per SI-2), so
-		// this composes with the existing tail-keeps-expr-position rule.
-		// `clearExprPositionNonTail` is carried only by Haxe BlockExpr /
-		// BlockStmt, whose opt typedef always declares `_inValueIfBranch` —
-		// so the helper reference is safe inside this branch.
-		final elemCallOptArg: Expr = clearExprPositionNonTail
-			? macro (_si == _arr.length - 1 ? _clearValueIfBranch($elemOptExpr) : _clearValueIfBranch(_clearExprPosition($elemOptExpr)))
-			: elemOptExpr;
-		final triviaElemCall: Expr = {
-			expr: ECall(macro $i{elemFn}, [macro _t.node, elemCallOptArg]),
-			pos: Context.currentPos(),
-		};
+		// ω-arrow-lambda-body-context / ω-value-yielded-if-tail-barrier (SI-2) /
+		// ω-expressionif-collapse: per-element write-call build moved to
+		// `triviaBlockElemCallExpr` (the `_clearAnonFnBody` opt arg + the
+		// `clearExprPositionNonTail` tail-barrier wrap).
+		final triviaElemCall: Expr = triviaBlockElemCallExpr(elemFn, clearAnonFnBodyOnElems, clearExprPositionNonTail);
 		final emptyText: String = openText + closeText;
 		// ω-empty-curly-break: when the call site opts in via
 		// `@:fmt(emptyCurlyBreak)`, the empty-body branch dispatches at
@@ -14694,6 +14666,49 @@ class WriterLowering {
 			typedefBeginExpr: typedefBeginExpr,
 			typedefEndExpr: typedefEndExpr,
 			typedefBetweenExpr: typedefBetweenExpr,
+		};
+	}
+
+	/**
+	 * Block-Star per-element write-call build. Mirrors the inline element-call
+	 * setup formerly at the top of `triviaBlockStarExpr`: the
+	 * `clearAnonFnBodyOnElems` opt arg, the `clearExprPositionNonTail` tail
+	 * barrier wrap, and the final `elemFn(_t.node, opt)` call. Extracted so the
+	 * orchestrator stays under the complexity gate.
+	 */
+	private static function triviaBlockElemCallExpr(elemFn: String, clearAnonFnBodyOnElems: Bool, clearExprPositionNonTail: Bool): Expr {
+		// ω-arrow-lambda-body-context: when the call site opts in via
+		// `@:fmt(leftCurlyAnonFnOverride(...))` on the parent Star, the per-
+		// element write call passes `_clearAnonFnBody(opt)` so the flag is
+		// consumed at this Star's `{` placement and descendants (nested
+		// statements / nested BlockExpr inside the body) fall back to the
+		// default `blockLeftCurly` knob rather than re-triggering the
+		// anon-fn override.
+		final elemOptExpr: Expr = clearAnonFnBodyOnElems ? macro _clearAnonFnBody(opt) : macro opt;
+		// ω-value-yielded-if-tail-barrier (SI-2): the per-element opt arg. When
+		// `clearExprPositionNonTail` is set (BlockExpr / BlockStmt), every block
+		// statement EXCEPT the tail gets `_clearExprPosition` so a discarded
+		// statement-if reverts to the statement-position `ifBody` policy; only
+		// the block's last statement (its yielded value) keeps the inherited
+		// expression-position frame. `_si` / `_arr` are in scope at the single
+		// splice site (`while (_si < _arr.length)` over `final _arr = …`). The
+		// non-flag path emits the IDENTICAL `elemOptExpr` Doc as before.
+		// ω-expressionif-collapse: a BLOCK-shaped branch (`if (c) { …; {obj} }`)
+		// is an opaque barrier for the value-if-branch collapse — an object
+		// literal that is the block's value is NOT the immediate value of the
+		// value-if branch, so `_clearValueIfBranch` drops the narrow flag for
+		// every block element (tail included). The broad `_inExprPosition`
+		// frame still threads through (only non-tail clears it, per SI-2), so
+		// this composes with the existing tail-keeps-expr-position rule.
+		// `clearExprPositionNonTail` is carried only by Haxe BlockExpr /
+		// BlockStmt, whose opt typedef always declares `_inValueIfBranch` —
+		// so the helper reference is safe inside this branch.
+		final elemCallOptArg: Expr = clearExprPositionNonTail
+			? macro (_si == _arr.length - 1 ? _clearValueIfBranch($elemOptExpr) : _clearValueIfBranch(_clearExprPosition($elemOptExpr)))
+			: elemOptExpr;
+		return {
+			expr: ECall(macro $i{elemFn}, [macro _t.node, elemCallOptArg]),
+			pos: Context.currentPos(),
 		};
 	}
 
