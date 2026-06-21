@@ -7400,6 +7400,26 @@ class WriterLowering {
 		} else {
 			triviaSepFlatBranch(openText, closeText, sepText, triviaElemCall);
 		};
+		final _sepCtx: SepStarCtx = {
+			openText: openText,
+			closeText: closeText,
+			sepText: sepText,
+			triviaElemCall: triviaElemCall,
+			initCurrDocCommentExpr: initCurrDocCommentExpr,
+			keepCurlyBeginExpr: keepCurlyBeginExpr,
+			keepCurlyEndExpr: keepCurlyEndExpr,
+			typedefBeginExpr: typedefBeginExpr,
+			typedefEndExpr: typedefEndExpr,
+			typedefBetweenExpr: typedefBetweenExpr,
+			blankBeforeExpr: blankBeforeExpr,
+			appendTrailingCommaExpr: appendTrailingCommaExpr,
+			triviaLeadDoc: triviaLeadDoc,
+			triviaTrailDocKeepAware: triviaTrailDocKeepAware,
+			keepMatrixComputeExpr: keepMatrixComputeExpr,
+			noTriviaBranch: noTriviaBranch,
+			reflowSourceMultiline: reflowSourceMultiline,
+			matrixWrap: matrixWrap,
+		}
 		return macro {
 			final _arr = $fieldAccess;
 			final _trailLC: Array<String> = $trailLC;
@@ -7647,130 +7667,7 @@ class WriterLowering {
 				if (_keepMatrixDoc != null) {
 					_dwb(_dbg(_keepMatrixDoc));
 				} else if (_forceMulti) {
-					final _inner: Array<anyparse.core.Doc> = [];
-					$initCurrDocCommentExpr;
-					$keepCurlyBeginExpr;
-					$typedefBeginExpr;
-					var _si: Int = 0;
-					while (_si < _arr.length) {
-						final _t = _arr[_si];
-						// ω-keep-objectlit: per-element source-aware leading break.
-						// Keep mode: first element gets hardline only if source
-						// had `\n` before it (`newlineBefore=true`) — otherwise
-						// glue to open lit. Subsequent elements: hardline on
-						// source-newline, space otherwise. Legacy non-Keep path
-						// always pushes hardline (force-multi byte-identical).
-						if (_keepEmit) {
-							if (_si > 0) {
-								if (_t.newlineBefore)
-									_inner.push(_dhl());
-								else
-									_inner.push(_dt(' '));
-							} else if (_t.newlineBefore) {
-								_inner.push(_dhl());
-							}
-						} else if (_noWrapFlatten) {
-							// ω-nowrap-flat: cuddle every element flat (space sep),
-							// mirroring the fork's `noWrap()` line-end suppression.
-							// The ONLY break is the unsuppressible newline a `//`
-							// line-comment forces — emit it on the element that
-							// FOLLOWS a line-comment-bearing element (the comment
-							// ends its own source line). First element glues to the
-							// open delimiter (no leading break). A list with a
-							// multi-line item falls through to the legacy `_dhl()`
-							// one-per-line shape (its items cannot be cuddled).
-							if (_si > 0) {
-								final _prevTc: Null<String> = _arr[_si - 1].trailingComment;
-								if (_prevTc != null && !StringTools.startsWith(_prevTc, '/*'))
-									_inner.push(_dhl());
-								else
-									_inner.push(_dt(' '));
-							}
-						} else {
-							_inner.push(_dhl());
-						}
-						$blankBeforeExpr;
-						$typedefBetweenExpr;
-						var _ci: Int = 0;
-						while (_ci < _t.leadingComments.length) {
-							_inner.push(leadingCommentDoc(_t.leadingComments[_ci], opt));
-							// ω-643-leading-block-glue: the LAST leading comment
-							// keeps the element on its line (single space, no
-							// break) when the source glued a block-style comment
-							// to it (`/* c */ field` — `leadingCommentsGlued`).
-							// Line-style `//` always ends its line → never glued.
-							// Intermediate comments and the non-glued case keep
-							// the legacy hardline. Default-false (every non-trivia
-							// -sep-Star producer) preserves the pre-slice break.
-							final _isLastLead: Bool = _ci == _t.leadingComments.length - 1;
-							final _glueLead: Bool = _isLastLead && _t.leadingCommentsGlued == true
-								&& StringTools.startsWith(_t.leadingComments[_ci], '/*');
-							_inner.push(_glueLead ? _dt(' ') : _dhl());
-							_ci++;
-						}
-						if (_t.blankAfterLeadingComments && _t.leadingComments.length > 0) _inner.push(_dhl());
-						final _elem: anyparse.core.Doc = $triviaElemCall;
-						var _line: anyparse.core.Doc = _elem;
-						// ω-objectlit-source-inter-sep: inter-element comma
-						// honours source presence via `_t.sepAfter` (default
-						// `true` for non-tracking sites — see Trivial.hx).
-						// Trailing-position comma keeps the existing
-						// `appendTrailingComma` decision (source-present OR
-						// knob, computed by `appendTrailingCommaExpr`).
-						// Closes lineends/issue_111 where source had two
-						// `field:` slots with no separator between them; we
-						// previously emitted the comma unconditionally.
-						final _isLast: Bool = _si == _arr.length - 1;
-						final _emitSep: Bool = _isLast ? $appendTrailingCommaExpr : _t.sepAfter;
-						final _tc: Null<String> = _t.trailingComment;
-						// ω-trivia-trailing-before-sep: emit `elem /*c*/, next`
-						// instead of `elem, /*c*/ next` when the source captured
-						// the trailing comment between the element and the sep.
-						// Falls through to the legacy after-sep position for
-						// every existing capture site (`trailingBeforeSep:false`
-						// default in producer pushes, see Lowering.hx).
-						if (_tc != null && _t.trailingBeforeSep) _line = _dc([_line, trailingCommentDocVerbatim(_tc, opt)]);
-						if (_emitSep) _line = _dc([_line, _dt($v{sepText})]);
-						if (_tc != null && !_t.trailingBeforeSep) _line = _dc([_line, trailingCommentDocVerbatim(_tc, opt)]);
-						_inner.push(_line);
-						_si++;
-					}
-					$keepCurlyEndExpr;
-					$typedefEndExpr;
-					if (_trailLC.length > 0) {
-						_inner.push(_dhl());
-						if (_trailBB && _arr.length > 0) _inner.push(_dhl());
-						var _tii: Int = 0;
-						while (_tii < _trailLC.length) {
-							_inner.push(leadingCommentDoc(_trailLC[_tii], opt));
-							if (_tii < _trailLC.length - 1) _inner.push(_dhl());
-							_tii++;
-						}
-					}
-					final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-					final _innerWrap: anyparse.core.Doc = _dn(_cols, _dc(_inner));
-					final _parts: Array<anyparse.core.Doc> = [];
-					_parts.push($triviaLeadDoc);
-					_parts.push(_dt($v{openText}));
-					if (_trailOpen != null) _parts.push(trailingCommentDocVerbatim(_trailOpen, opt));
-					_parts.push(_innerWrap);
-					// ω-nowrap-flat: glue the close delimiter to the last
-					// element (`0]`) — the fork's `noWrap()` calls
-					// `noLineEndBefore(close)`. Only when the list actually
-					// cuddled flat (`_noWrapFlatten`); otherwise keep the legacy
-					// own-line close (`triviaTrailDocKeepAware`).
-					_parts.push(_noWrapFlatten ? _de() : $triviaTrailDocKeepAware);
-					_parts.push(_dt($v{closeText}));
-					if (_trailClose != null) _parts.push(trailingCommentDocVerbatim(_trailClose, opt));
-					// ω-force-flat-engine slice D follow-up: trivia branch builds
-					// hardlined Doc by hand instead of going through one of the 4
-					// cascade-emit functions Slice C wraps. Without `_dwb` here a
-					// trivia-bearing inner construct nested inside a NoWrap-cascade
-					// `Flatten` region loses its source-preserved indent (the
-					// hardlines fire but `Nest`'s columns are dropped by force-flat).
-					// WrapBoundary is no-op when the parent frame is not in force-flat
-					// mode, so this wrap is safe on the non-nested common path.
-					_dwb(_dbg(_dc(_parts)));
+					${triviaSepForceMultiExpr(_sepCtx)};
 				} else {
 					$noTriviaBranch;
 				}
@@ -14418,6 +14315,183 @@ class WriterLowering {
 		};
 	}
 
+	/**
+	 * Sep-Star force-multi per-element leading break dispatch: Keep-mode
+	 * source-aware break, noWrap-flat cuddle, or the legacy unconditional
+	 * hardline. References the runtime `_keepEmit`/`_noWrapFlatten`/`_si`/
+	 * `_t`/`_arr`/`_inner` locals declared in the force-multi loop. Extracted
+	 * from `triviaSepStarExpr` so the force-multi builder stays under the
+	 * complexity gate.
+	 */
+	private static function triviaSepForceMultiLeadExpr(): Expr {
+		return macro {
+			// ω-keep-objectlit: per-element source-aware leading break.
+			// Keep mode: first element gets hardline only if source
+			// had `\n` before it (`newlineBefore=true`) — otherwise
+			// glue to open lit. Subsequent elements: hardline on
+			// source-newline, space otherwise. Legacy non-Keep path
+			// always pushes hardline (force-multi byte-identical).
+			if (_keepEmit) {
+				if (_si > 0) {
+					if (_t.newlineBefore)
+						_inner.push(_dhl());
+					else
+						_inner.push(_dt(' '));
+				} else if (_t.newlineBefore) {
+					_inner.push(_dhl());
+				}
+			} else if (_noWrapFlatten) {
+				// ω-nowrap-flat: cuddle every element flat (space sep),
+				// mirroring the fork's `noWrap()` line-end suppression.
+				// The ONLY break is the unsuppressible newline a `//`
+				// line-comment forces — emit it on the element that
+				// FOLLOWS a line-comment-bearing element (the comment
+				// ends its own source line). First element glues to the
+				// open delimiter (no leading break). A list with a
+				// multi-line item falls through to the legacy `_dhl()`
+				// one-per-line shape (its items cannot be cuddled).
+				if (_si > 0) {
+					final _prevTc: Null<String> = _arr[_si - 1].trailingComment;
+					if (_prevTc != null && !StringTools.startsWith(_prevTc, '/*'))
+						_inner.push(_dhl());
+					else
+						_inner.push(_dt(' '));
+				}
+			} else {
+				_inner.push(_dhl());
+			}
+		};
+	}
+
+	/**
+	 * Sep-Star force-multi per-element separator + trailing-comment assembly:
+	 * builds `_line` from `_elem` with the inter/trailing comma honouring
+	 * source `sepAfter` / `appendTrailingComma`, and the trailing comment
+	 * before-or-after the sep. References the runtime `_elem`/`_line`/`_si`/
+	 * `_t`/`_arr`/`_inner` locals declared in the force-multi loop. Extracted
+	 * from `triviaSepStarExpr`.
+	 */
+	private static function triviaSepForceMultiLineExpr(appendTrailingCommaExpr: Expr, sepText: String): Expr {
+		return macro {
+			var _line: anyparse.core.Doc = _elem;
+			// ω-objectlit-source-inter-sep: inter-element comma
+			// honours source presence via `_t.sepAfter` (default
+			// `true` for non-tracking sites — see Trivial.hx).
+			// Trailing-position comma keeps the existing
+			// `appendTrailingComma` decision (source-present OR
+			// knob, computed by `appendTrailingCommaExpr`).
+			// Closes lineends/issue_111 where source had two
+			// `field:` slots with no separator between them; we
+			// previously emitted the comma unconditionally.
+			final _isLast: Bool = _si == _arr.length - 1;
+			final _emitSep: Bool = _isLast ? $appendTrailingCommaExpr : _t.sepAfter;
+			final _tc: Null<String> = _t.trailingComment;
+			// ω-trivia-trailing-before-sep: emit `elem /*c*/, next`
+			// instead of `elem, /*c*/ next` when the source captured
+			// the trailing comment between the element and the sep.
+			// Falls through to the legacy after-sep position for
+			// every existing capture site (`trailingBeforeSep:false`
+			// default in producer pushes, see Lowering.hx).
+			if (_tc != null && _t.trailingBeforeSep) _line = _dc([_line, trailingCommentDocVerbatim(_tc, opt)]);
+			if (_emitSep) _line = _dc([_line, _dt($v{sepText})]);
+			if (_tc != null && !_t.trailingBeforeSep) _line = _dc([_line, trailingCommentDocVerbatim(_tc, opt)]);
+			_inner.push(_line);
+		};
+	}
+
+	/**
+	 * Sep-Star force-multi emit (the `_forceMulti` dispatch arm): per-element
+	 * leading break + blank + leading comments + element + separator/trailing
+	 * assembly, the orphan-trail-comment tail, and the open/inner/close parts
+	 * wrap. Splices the per-element leaf builders + the ctx Expr fragments.
+	 * References the runtime locals declared in `triviaSepStarExpr`'s emitted
+	 * scope. Extracted so the orchestrator stays under the complexity gate.
+	 */
+	private static function triviaSepForceMultiExpr(c: SepStarCtx): Expr {
+		final initCurrDocCommentExpr: Expr = c.initCurrDocCommentExpr;
+		final keepCurlyBeginExpr: Expr = c.keepCurlyBeginExpr;
+		final typedefBeginExpr: Expr = c.typedefBeginExpr;
+		final blankBeforeExpr: Expr = c.blankBeforeExpr;
+		final typedefBetweenExpr: Expr = c.typedefBetweenExpr;
+		final keepCurlyEndExpr: Expr = c.keepCurlyEndExpr;
+		final typedefEndExpr: Expr = c.typedefEndExpr;
+		final triviaLeadDoc: Expr = c.triviaLeadDoc;
+		final triviaTrailDocKeepAware: Expr = c.triviaTrailDocKeepAware;
+		final triviaElemCall: Expr = c.triviaElemCall;
+		final leadBreakExpr: Expr = triviaSepForceMultiLeadExpr();
+		final lineExpr: Expr = triviaSepForceMultiLineExpr(c.appendTrailingCommaExpr, c.sepText);
+		return macro {
+			final _inner: Array<anyparse.core.Doc> = [];
+			$initCurrDocCommentExpr;
+			$keepCurlyBeginExpr;
+			$typedefBeginExpr;
+			var _si: Int = 0;
+			while (_si < _arr.length) {
+				final _t = _arr[_si];
+				$leadBreakExpr;
+				$blankBeforeExpr;
+				$typedefBetweenExpr;
+				var _ci: Int = 0;
+				while (_ci < _t.leadingComments.length) {
+					_inner.push(leadingCommentDoc(_t.leadingComments[_ci], opt));
+					// ω-643-leading-block-glue: the LAST leading comment
+					// keeps the element on its line (single space, no
+					// break) when the source glued a block-style comment
+					// to it (`/* c */ field` — `leadingCommentsGlued`).
+					// Line-style `//` always ends its line → never glued.
+					// Intermediate comments and the non-glued case keep
+					// the legacy hardline. Default-false (every non-trivia
+					// -sep-Star producer) preserves the pre-slice break.
+					final _isLastLead: Bool = _ci == _t.leadingComments.length - 1;
+					final _glueLead: Bool = _isLastLead && _t.leadingCommentsGlued == true
+						&& StringTools.startsWith(_t.leadingComments[_ci], '/*');
+					_inner.push(_glueLead ? _dt(' ') : _dhl());
+					_ci++;
+				}
+				if (_t.blankAfterLeadingComments && _t.leadingComments.length > 0) _inner.push(_dhl());
+				final _elem: anyparse.core.Doc = $triviaElemCall;
+				$lineExpr;
+				_si++;
+			}
+			$keepCurlyEndExpr;
+			$typedefEndExpr;
+			if (_trailLC.length > 0) {
+				_inner.push(_dhl());
+				if (_trailBB && _arr.length > 0) _inner.push(_dhl());
+				var _tii: Int = 0;
+				while (_tii < _trailLC.length) {
+					_inner.push(leadingCommentDoc(_trailLC[_tii], opt));
+					if (_tii < _trailLC.length - 1) _inner.push(_dhl());
+					_tii++;
+				}
+			}
+			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+			final _innerWrap: anyparse.core.Doc = _dn(_cols, _dc(_inner));
+			final _parts: Array<anyparse.core.Doc> = [];
+			_parts.push($triviaLeadDoc);
+			_parts.push(_dt($v{c.openText}));
+			if (_trailOpen != null) _parts.push(trailingCommentDocVerbatim(_trailOpen, opt));
+			_parts.push(_innerWrap);
+			// ω-nowrap-flat: glue the close delimiter to the last
+			// element (`0]`) — the fork's `noWrap()` calls
+			// `noLineEndBefore(close)`. Only when the list actually
+			// cuddled flat (`_noWrapFlatten`); otherwise keep the legacy
+			// own-line close (`triviaTrailDocKeepAware`).
+			_parts.push(_noWrapFlatten ? _de() : $triviaTrailDocKeepAware);
+			_parts.push(_dt($v{c.closeText}));
+			if (_trailClose != null) _parts.push(trailingCommentDocVerbatim(_trailClose, opt));
+			// ω-force-flat-engine slice D follow-up: trivia branch builds
+			// hardlined Doc by hand instead of going through one of the 4
+			// cascade-emit functions Slice C wraps. Without `_dwb` here a
+			// trivia-bearing inner construct nested inside a NoWrap-cascade
+			// `Flatten` region loses its source-preserved indent (the
+			// hardlines fire but `Nest`'s columns are dropped by force-flat).
+			// WrapBoundary is no-op when the parent frame is not in force-flat
+			// mode, so this wrap is safe on the non-nested common path.
+			_dwb(_dbg(_dc(_parts)));
+		};
+	}
+
 }
 
 /** Output of WriterLowering for one rule. */
@@ -14859,6 +14933,32 @@ typedef EofStarCtx = {
 	final lineCommentLedAddBlank: Bool;
 	final afterFileHeaderCommentBlanks: Bool;
 	final betweenMultilineCommentsBlanks: Bool;
+};
+/**
+ * Shared spliced-Expr fragments + compile-time text/flags bundled for the
+ * `triviaSepStarExpr` tail emission helpers (force-multi loop, predicate
+ * scan, branch dispatch). Replaces a >5-param helper signature with one
+ * context struct (mirrors EofStarCtx).
+ */
+typedef SepStarCtx = {
+	final openText: String;
+	final closeText: String;
+	final sepText: String;
+	final triviaElemCall: Expr;
+	final initCurrDocCommentExpr: Expr;
+	final keepCurlyBeginExpr: Expr;
+	final keepCurlyEndExpr: Expr;
+	final typedefBeginExpr: Expr;
+	final typedefEndExpr: Expr;
+	final typedefBetweenExpr: Expr;
+	final blankBeforeExpr: Expr;
+	final appendTrailingCommaExpr: Expr;
+	final triviaLeadDoc: Expr;
+	final triviaTrailDocKeepAware: Expr;
+	final keepMatrixComputeExpr: Expr;
+	final noTriviaBranch: Expr;
+	final reflowSourceMultiline: Bool;
+	final matrixWrap: Bool;
 };
 /**
  * Shared setup locals bundled for the `triviaTryparseStarExpr` emission
