@@ -996,110 +996,11 @@ class WriterLowering {
 			var justWrappedBody: Null<PrevBodyInfo> = null;
 			switch child.kind {
 				case Ref if (isOptional):
-					final refName: String = child.annotations.get('base.ref');
-					final writeFn: String = writeFnFor(refName);
-					// ω-issue-423-mech-a: same opt-fanout as mandatory Ref —
-					// when the optional Ref carries `@:fmt(propagateExprPosition)`,
-					// wrap opt in `_setExprPosition` so the descendant writer
-					// sees `_inExprPosition=true`. Used by `HxVarDecl.init`
-					// to flag var-rhs as expression-position.
-					final propagateExpr: Bool = child.fmtHasFlag('propagateExprPosition');
-					// ω-anonfunction-empty-curly: sister opt-fanout — when the
-					// optional Ref carries `@:fmt(propagateAnonFnContext)`,
-					// wrap opt in `_setAnonFnBody` so the descendant writer
-					// sees `_inAnonFnBody=true`. Used by `HxFnExpr.body` to
-					// flag the anon-fn body so the inner `HxFnBlock.stmts`
-					// emptyCurlyBreak emit dispatches on
-					// `opt.anonFunctionEmptyCurly` instead of the global
-					// `opt.emptyCurly`. Idempotent — composes safely with
-					// `propagateExprPosition` should a future field combine
-					// both metas.
-					final propagateAnonFn: Bool = child.fmtHasFlag('propagateAnonFnContext');
-					// ω-expressionif-collapse (mechanism B set-site): optional-kw
-					// body sister of the mandatory-Ref set-site — HxIfExpr.
-					// elseBranch carries `@:fmt(propagateValueIfBranch)` so the
-					// `else`-branch object-literal value collapses identically to
-					// the then-branch. The helper gates on `opt._inExprPosition`.
-					final propagateValueIfBranch: Bool = child.fmtHasFlag('propagateValueIfBranch');
-					final optArgExpr: Expr = {
-						var e: Expr = macro opt;
-						if (propagateExpr) e = macro _setExprPosition($e);
-						if (propagateAnonFn) e = macro _setAnonFnBody($e);
-						if (propagateValueIfBranch) e = macro _setValueIfBranch($e);
-						e;
-					};
-					final rawWriteCall: Expr = {
-						expr: ECall(macro $i{writeFn}, [macro _optVal, optArgExpr]),
-						pos: Context.currentPos(),
-					};
-					// ω-indent-objectliteral: `@:fmt(indentValueIfCtor('<ctor>', '<optField>'))`
-					// wraps the writer call in a runtime gate (see
-					// `maybeIndentValueIfCtor` / `indentValueIfCtorWrap`).
-					// Currently used by `HxVarDecl.init` to indent a multi-
-					// line `ObjectLit` value one extra step.
-					//
-					// ω-expr-body-indent-objectliteral: same-field combination
-					// with `@:fmt(bodyPolicy(...))` (e.g. `HxIfExpr.elseBranch`)
-					// switches the meta into the SUBTRACTIVE channel through
-					// `bodyPolicyWrap`'s `indentObjArgs` argument; see the
-					// mandatory-Ref path below for the rationale.
-					final indentObjArgs: Null<Array<String>> = child.fmtReadStringArgs('indentValueIfCtor');
-					final writeCall: Expr = bodyPolicyFlag != null && indentObjArgs != null
-						? rawWriteCall
-						: maybeIndentValueIfCtor(rawWriteCall, macro _optVal, child);
-					// Leading separator is runtime-conditional when @:fmt(sameLine(...))
-					// is present — see sameLineSeparator. Split into (sep, kw+' ')
-					// so the sep part can become a hardline (τ₁).
-					// @:fmt(bodyPolicy(...)) replaces the final ' ' before the body with
-					// a runtime-switched separator (Same/Next/FitLine, ψ₄).
-					// ω-issue-316 / ω-keep-policy / ω-trivia-before-kw[-trailing]: the
-					// per-parent kw-trivia slots (<field>AfterKw / KwLeading /
-					// BodyOnSameLine / BeforeKwLeading / BeforeKwTrailing) are read off
-					// `value` and threaded into the kw→body separator inside
-					// emitOptionalKwBody.
-					final optParts: Array<Expr> = [];
-					// ω-N-break-after-eq: lead+RHS bundle handled in emitOptionalRefLead.
-					if (kwLead != null)
-						emitOptionalKwBody(
-							child, optParts, kwLead, fieldName, bodyPolicyFlag, bodyPolicyExprFlag, writeCall, refName, hasElseIf,
-							elseFieldName, prevBodyField, typePath, prevPadTrailing, indentObjArgs
-						);
-					else if (leadText != null)
-						emitOptionalRefLead(
-							child, optParts, leadText, writeCall, prevBodyField, typePath, prevPadTrailing, trailText, trailOptText,
-							hasStructFieldTrailOptSlot, structTrailOptAccess
-						);
-					else if (bodyPolicyFlag != null)
-						emitOptionalBodyPolicyOnly(
-							child, optParts, bodyPolicyFlag, bodyPolicyExprFlag, writeCall, refName, hasElseIf, elseFieldName,
-							indentObjArgs
-						);
-					else
-						emitOptionalAbsentOnBody(child, optParts, refName, writeCall);
-					// ω-pad-trailing-ref: optional-Ref `@:fmt(padTrailing)`
-					// pushes a trailing space INSIDE optParts so the pad is
-					// emitted only when `_optVal != null` (the surrounding
-					// wrap drops the entire optBody to `_de()` for the
-					// absent case). Tracker expr is `$fieldAccess != null`,
-					// matching the runtime presence guard one-to-one.
-					// First consumer: `HxConditionalExpr.elseExpr` so the
-					// `... e2 #end` boundary lands as ` #end` instead of
-					// `e2#end`.
-					if (child.fmtHasFlag('padTrailing')) {
-						optParts.push(padTrailingDoc(node, child, typePath));
-						thisPadTrailing = macro $fieldAccess != null;
-					}
-					final optBody: Expr = if (optParts.length == 1)
-						optParts[0]
-					else
-						dcCall(optParts);
-					parts.push(macro {
-						final _optVal = $fieldAccess;
-						if (_optVal != null)
-							$optBody
-						else
-							_de();
-					});
+					thisPadTrailing = emitOptionalRefField(
+						child, parts, node, typePath, fieldName, fieldAccess, kwLead, leadText, trailText, trailOptText, bodyPolicyFlag,
+						bodyPolicyExprFlag, hasElseIf, elseFieldName, prevBodyField, prevPadTrailing, hasStructFieldTrailOptSlot,
+						structTrailOptAccess
+					);
 
 				case Ref:
 					final refName: String = child.annotations.get('base.ref');
@@ -15390,6 +15291,96 @@ class WriterLowering {
 			prevAnyStarNonEmpty: isBareTryparseStar(child) ? orStarNonEmpty(prevAnyStarNonEmpty, fieldAccess) : null,
 			prevPadTrailing: composePadTrailing(prevPadTrailing, thisPadTrailing, thisTransparent),
 		};
+	}
+
+	/**
+	 * Emit an optional Ref struct field (the `case Ref if (isOptional)` arm of
+	 * `lowerStruct`). Builds the descendant writeCall (opt-fanout flags +
+	 * indentValueIfCtor), dispatches the optional body emission across the kw-led
+	 * / lead-led / bodyPolicy-only / absent-on arms into `optParts`, appends the
+	 * optional-Ref `@:fmt(padTrailing)` pad, and pushes the `_optVal != null ?
+	 * optBody : _de()` guard onto `parts`. Returns this field's `thisPadTrailing`
+	 * runtime expr (or null). Extracted from `lowerStruct`.
+	 */
+	private function emitOptionalRefField(
+		child: ShapeNode, parts: Array<Expr>, node: ShapeNode, typePath: String, fieldName: String, fieldAccess: Expr,
+		kwLead: Null<String>, leadText: Null<String>, trailText: Null<String>, trailOptText: Null<String>, bodyPolicyFlag: Null<String>,
+		bodyPolicyExprFlag: Null<String>, hasElseIf: Bool, elseFieldName: Null<String>, prevBodyField: Null<PrevBodyInfo>,
+		prevPadTrailing: Null<Expr>, hasStructFieldTrailOptSlot: Bool, structTrailOptAccess: Null<Expr>
+	): Null<Expr> {
+		final refName: String = child.annotations.get('base.ref');
+		final writeFn: String = writeFnFor(refName);
+		// ω-issue-423-mech-a / ω-anonfunction-empty-curly /
+		// ω-expressionif-collapse: opt-fanout flags wrapping the descendant
+		// writer's `opt` arg in `_setExprPosition` / `_setAnonFnBody` /
+		// `_setValueIfBranch`.
+		final propagateExpr: Bool = child.fmtHasFlag('propagateExprPosition');
+		final propagateAnonFn: Bool = child.fmtHasFlag('propagateAnonFnContext');
+		final propagateValueIfBranch: Bool = child.fmtHasFlag('propagateValueIfBranch');
+		final optArgExpr: Expr = {
+			var e: Expr = macro opt;
+			if (propagateExpr) e = macro _setExprPosition($e);
+			if (propagateAnonFn) e = macro _setAnonFnBody($e);
+			if (propagateValueIfBranch) e = macro _setValueIfBranch($e);
+			e;
+		};
+		final rawWriteCall: Expr = {
+			expr: ECall(macro $i{writeFn}, [macro _optVal, optArgExpr]),
+			pos: Context.currentPos(),
+		};
+		// ω-indent-objectliteral / ω-expr-body-indent-objectliteral: the additive
+		// `maybeIndentValueIfCtor` Nest is SKIPPED when a same-field
+		// `@:fmt(bodyPolicy)` routes `indentValueIfCtor` through the subtractive
+		// `bodyPolicyWrap.indentObjArgs` channel instead.
+		final indentObjArgs: Null<Array<String>> = child.fmtReadStringArgs('indentValueIfCtor');
+		final writeCall: Expr = bodyPolicyFlag != null && indentObjArgs != null
+			? rawWriteCall
+			: maybeIndentValueIfCtor(rawWriteCall, macro _optVal, child);
+		// Leading separator is runtime-conditional when @:fmt(sameLine(...)) is
+		// present; @:fmt(bodyPolicy(...)) replaces the final ' ' before the body
+		// with a runtime-switched separator. The per-parent kw-trivia slots are
+		// read off `value` and threaded into the kw→body separator inside
+		// emitOptionalKwBody.
+		final optParts: Array<Expr> = [];
+		// ω-N-break-after-eq: lead+RHS bundle handled in emitOptionalRefLead.
+		if (kwLead != null)
+			emitOptionalKwBody(
+				child, optParts, kwLead, fieldName, bodyPolicyFlag, bodyPolicyExprFlag, writeCall, refName, hasElseIf, elseFieldName,
+				prevBodyField, typePath, prevPadTrailing, indentObjArgs
+			);
+		else if (leadText != null)
+			emitOptionalRefLead(
+				child, optParts, leadText, writeCall, prevBodyField, typePath, prevPadTrailing, trailText, trailOptText,
+				hasStructFieldTrailOptSlot, structTrailOptAccess
+			);
+		else if (bodyPolicyFlag != null)
+			emitOptionalBodyPolicyOnly(
+				child, optParts, bodyPolicyFlag, bodyPolicyExprFlag, writeCall, refName, hasElseIf, elseFieldName, indentObjArgs
+			);
+		else
+			emitOptionalAbsentOnBody(child, optParts, refName, writeCall);
+		// ω-pad-trailing-ref: optional-Ref `@:fmt(padTrailing)` pushes a trailing
+		// space INSIDE optParts so the pad is emitted only when `_optVal != null`;
+		// the tracker expr `$fieldAccess != null` matches that runtime presence
+		// guard one-to-one. First consumer: `HxConditionalExpr.elseExpr`.
+		final thisPadTrailing: Null<Expr> = child.fmtHasFlag('padTrailing')
+			? {
+				optParts.push(padTrailingDoc(node, child, typePath));
+				macro $fieldAccess != null;
+			}
+			: null;
+		final optBody: Expr = if (optParts.length == 1)
+			optParts[0]
+		else
+			dcCall(optParts);
+		parts.push(macro {
+			final _optVal = $fieldAccess;
+			if (_optVal != null)
+				$optBody
+			else
+				_de();
+		});
+		return thisPadTrailing;
 	}
 
 }
