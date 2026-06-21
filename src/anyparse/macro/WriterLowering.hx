@@ -9715,337 +9715,18 @@ class WriterLowering {
 		final betweenIfNotInfos: Array<BetweenSameCtorIfNotInfo> = betweenSameIfNotInfos ?? [];
 		final pos: Position = Context.currentPos();
 
-		final prevVars: Array<Var> = [];
-		final currVars: Array<Var> = [];
-		final currCompute: Array<Expr> = [];
-		final trackPrev: Array<Expr> = [];
+		final acc: CascadeAccum = {
+			prevVars: [],
+			currVars: [],
+			currCompute: [],
+			trackPrev: [],
+		};
 
-		// After-ctor cascade — single-axis kind tracker per info.
-		for (i in 0...afterInfos.length) {
-			final info: AfterCtorBlankInfo = afterInfos[i];
-			prevVars.push({ name: '_prevKindAfter' + i, type: macro :Int, expr: macro 0 });
-			currVars.push({ name: '_currKindAfter' + i, type: macro :Int, expr: macro 0 });
-			final classifierAccess: Expr = { expr: EField(macro _t.node, info.classifierFieldName), pos: pos };
-			final kindIdent: Expr = { expr: EConst(CIdent('_currKindAfter' + i)), pos: pos };
-			if (info.tailAdapterOptField == null) {
-				final switchExpr: Expr = { expr: ESwitch(classifierAccess, info.classifyCases, null), pos: pos };
-				currCompute.push(macro $kindIdent = $switchExpr);
-			} else {
-				// ω-after-conditional-block — additionally track whether the
-				// matched element's tail-leaf classify returns null (tail is NOT
-				// import / using). The matched classify case binds `_v0` (the
-				// wrapper payload); run the adapter on it inside that case body so
-				// both trackers are set from one switch. `info.classifyCases` has
-				// `expr: 1` on the matched (`_v0`-binding) case and `expr: 0`
-				// elsewhere — rewrite each into a `{kind = …; tailNull = …}` block.
-				currVars.push({ name: '_currTailNullAfter' + i, type: macro :Int, expr: macro 0 });
-				prevVars.push({ name: '_prevTailNullAfter' + i, type: macro :Int, expr: macro 0 });
-				final tailNullIdent: Expr = { expr: EConst(CIdent('_currTailNullAfter' + i)), pos: pos };
-				final adapterAccess: Expr = { expr: EField(macro opt, info.tailAdapterOptField), pos: pos };
-				final dualCases: Array<Case> = [
-					for (c in info.classifyCases) {
-						// The builder marks the single matched (`_v0`-binding) case
-						// with `expr: macro 1`; every non-matched case is `macro 0`.
-						final isMatchCase: Bool = switch (c.expr != null ? c.expr.expr : null) {
-							case EConst(CInt('1', _)): true;
-							case _: false;
-						};
-						{
-							values: c.values,
-							guard: c.guard,
-							expr: isMatchCase
-								? macro {
-									$kindIdent = 1;
-									$tailNullIdent = ($adapterAccess == null || $adapterAccess(_v0) == null) ? 1 : 0;
-								}
-								: macro {
-									$kindIdent = 0;
-									$tailNullIdent = 0;
-								},
-						}
-					}
-				];
-				currCompute.push({ expr: ESwitch(classifierAccess, dualCases, null), pos: pos });
-				final tnLhs: Expr = { expr: EConst(CIdent('_prevTailNullAfter' + i)), pos: pos };
-				final tnRhs: Expr = { expr: EConst(CIdent('_currTailNullAfter' + i)), pos: pos };
-				trackPrev.push(macro $tnLhs = $tnRhs);
-			}
-			final tlhs: Expr = { expr: EConst(CIdent('_prevKindAfter' + i)), pos: pos };
-			final trhs: Expr = { expr: EConst(CIdent('_currKindAfter' + i)), pos: pos };
-			trackPrev.push(macro $tlhs = $trhs);
-		}
-
-		// Before-ctor cascade — same shape as after-ctor, separate idents.
-		for (i in 0...beforeInfos.length) {
-			final info: BeforeCtorBlankInfo = beforeInfos[i];
-			prevVars.push({ name: '_prevKindBefore' + i, type: macro :Int, expr: macro 0 });
-			currVars.push({ name: '_currKindBefore' + i, type: macro :Int, expr: macro 0 });
-			final classifierAccess: Expr = { expr: EField(macro _t.node, info.classifierFieldName), pos: pos };
-			final switchExpr: Expr = { expr: ESwitch(classifierAccess, info.classifyCases, null), pos: pos };
-			final lhs: Expr = { expr: EConst(CIdent('_currKindBefore' + i)), pos: pos };
-			currCompute.push(macro $lhs = $switchExpr);
-			final tlhs: Expr = { expr: EConst(CIdent('_prevKindBefore' + i)), pos: pos };
-			final trhs: Expr = { expr: EConst(CIdent('_currKindBefore' + i)), pos: pos };
-			trackPrev.push(macro $tlhs = $trhs);
-			// ω-before-multiline-prev-not — second binary classify-switch on
-			// the same classifier field, tracking whether the element matched
-			// an excluded-prev ctor (e.g. `Conditional`). Only built when the
-			// info carries `prevExcludeCases`; the ternary below adds a
-			// `_prevKindPrevExcl != 1` guard so the override is suppressed when
-			// the previous sibling was excluded (falls through to source).
-			final prevExcludeCases: Null<Array<Case>> = info.prevExcludeCases;
-			if (prevExcludeCases != null) {
-				prevVars.push({ name: '_prevKindPrevExcl' + i, type: macro :Int, expr: macro 0 });
-				currVars.push({ name: '_currKindPrevExcl' + i, type: macro :Int, expr: macro 0 });
-				final exclSwitch: Expr = { expr: ESwitch(classifierAccess, prevExcludeCases, null), pos: pos };
-				final exclLhs: Expr = { expr: EConst(CIdent('_currKindPrevExcl' + i)), pos: pos };
-				currCompute.push(macro $exclLhs = $exclSwitch);
-				final exclTlhs: Expr = { expr: EConst(CIdent('_prevKindPrevExcl' + i)), pos: pos };
-				final exclTrhs: Expr = { expr: EConst(CIdent('_currKindPrevExcl' + i)), pos: pos };
-				trackPrev.push(macro $exclTlhs = $exclTrhs);
-			}
-		}
-
-		// Between-ctor cascade — kind+path trackers, head AND tail axes,
-		// transparent-wrapper support via the shared head/tail adapter pair.
-		for (i in 0...betweenInfos.length) {
-			final info: BetweenCtorBlankInfo = betweenInfos[i];
-			prevVars.push({ name: '_prevTailKindBetween' + i, type: macro :Int, expr: macro 0 });
-			prevVars.push({ name: '_prevTailPathBetween' + i, type: macro :String, expr: macro '' });
-			currVars.push({ name: '_currTailKindBetween' + i, type: macro :Int, expr: macro 0 });
-			currVars.push({ name: '_currTailPathBetween' + i, type: macro :String, expr: macro '' });
-			currVars.push({ name: '_currHeadKindBetween' + i, type: macro :Int, expr: macro 0 });
-			currVars.push({ name: '_currHeadPathBetween' + i, type: macro :String, expr: macro '' });
-
-			final classifierAccess: Expr = { expr: EField(macro _t.node, info.classifierFieldName), pos: pos };
-			final tailKindIdent: Expr = { expr: EConst(CIdent('_currTailKindBetween' + i)), pos: pos };
-			final tailPathIdent: Expr = { expr: EConst(CIdent('_currTailPathBetween' + i)), pos: pos };
-			final headKindIdent: Expr = { expr: EConst(CIdent('_currHeadKindBetween' + i)), pos: pos };
-			final headPathIdent: Expr = { expr: EConst(CIdent('_currHeadPathBetween' + i)), pos: pos };
-
-			final ctorNameMatch: Expr = {
-				var acc: Expr = macro false;
-				for (cn in info.matchedCtorNames) {
-					final lit: Expr = { expr: EConst(CString(cn)), pos: pos };
-					acc = macro $acc || _r.ctorName == $lit;
-				}
-				acc;
-			};
-			final tailBody: Expr = if (info.tailAdapterOptField == null)
-				macro {
-					$tailKindIdent = 0;
-					$tailPathIdent = '';
-				}
-			else {
-				final adapterAccess: Expr = { expr: EField(macro opt, info.tailAdapterOptField), pos: pos };
-				macro {
-					final _r = $adapterAccess != null ? $adapterAccess(_v0) : null;
-					if (_r != null && $ctorNameMatch) {
-						$tailKindIdent = 1;
-						$tailPathIdent = _r.path;
-					} else {
-						$tailKindIdent = 0;
-						$tailPathIdent = '';
-					}
-				};
-			}
-			final headBody: Expr = if (info.headAdapterOptField == null)
-				macro {
-					$headKindIdent = 0;
-					$headPathIdent = '';
-				}
-			else {
-				final adapterAccess: Expr = { expr: EField(macro opt, info.headAdapterOptField), pos: pos };
-				macro {
-					final _r = $adapterAccess != null ? $adapterAccess(_v0) : null;
-					if (_r != null && $ctorNameMatch) {
-						$headKindIdent = 1;
-						$headPathIdent = _r.path;
-					} else {
-						$headKindIdent = 0;
-						$headPathIdent = '';
-					}
-				};
-			}
-			final transparentBody: Expr = macro {
-				$tailBody;
-				$headBody;
-			};
-			final cases: Array<Case> = [
-				for (cp in info.ctorPatterns)
-					{
-						values: [cp.pattern],
-						guard: null,
-						expr: cp.isMatch
-							? macro {
-								// `_v0` is the matched ctor's first positional
-								// arg. For ctors whose first arg is a leaf path
-								// terminal (`HxTypeName` / `HxWildPath` abstracts
-								// over `String`), `_v0` IS the path string and
-								// `Reflect.hasField` returns false. For ctors
-								// whose first arg is a struct sub-rule carrying
-								// a `.path` field (`HxImportAlias`), the lookup
-								// extracts the dotted-ident path. Multi-arg
-								// enum branches are unsupported by the PEG
-								// lowering so this is the only struct-payload
-								// shape the cascade has to recognise.
-								final _v0Path: String = Reflect.hasField(_v0, 'path') ? Std.string(Reflect.field(_v0, 'path')) : '$_v0';
-								$tailKindIdent = 1;
-								$tailPathIdent = _v0Path;
-								$headKindIdent = 1;
-								$headPathIdent = _v0Path;
-							}
-							: cp.isTransparent
-								? transparentBody
-								: macro {
-									$tailKindIdent = 0;
-									$tailPathIdent = '';
-									$headKindIdent = 0;
-									$headPathIdent = '';
-								},
-					}
-			];
-			currCompute.push({ expr: ESwitch(classifierAccess, cases, null), pos: pos });
-
-			final pkLhs: Expr = { expr: EConst(CIdent('_prevTailKindBetween' + i)), pos: pos };
-			final pkRhs: Expr = { expr: EConst(CIdent('_currTailKindBetween' + i)), pos: pos };
-			final ppLhs: Expr = { expr: EConst(CIdent('_prevTailPathBetween' + i)), pos: pos };
-			final ppRhs: Expr = { expr: EConst(CIdent('_currTailPathBetween' + i)), pos: pos };
-			trackPrev.push(macro $pkLhs = $pkRhs);
-			trackPrev.push(macro $ppLhs = $ppRhs);
-		}
-
-		// ω-between-single-line-types — single-axis kind tracker per info,
-		// kind=1 when the current element matches one of the named ctors
-		// AND the grammar-derived `multiline` predicate returns FALSE on
-		// its payload (inverted polarity via `resolveCtorBlankArgs(...,
-		// predicateInvert=true)`). Cascade fire consults BOTH prev and
-		// curr trackers — see the priority-wrap loop below.
-		for (i in 0...betweenIfNotInfos.length) {
-			final info: BetweenSameCtorIfNotInfo = betweenIfNotInfos[i];
-			prevVars.push({ name: '_prevKindBetweenIfNot' + i, type: macro :Int, expr: macro 0 });
-			currVars.push({ name: '_currKindBetweenIfNot' + i, type: macro :Int, expr: macro 0 });
-			final classifierAccess: Expr = { expr: EField(macro _t.node, info.classifierFieldName), pos: pos };
-			final switchExpr: Expr = { expr: ESwitch(classifierAccess, info.classifyCases, null), pos: pos };
-			final lhs: Expr = { expr: EConst(CIdent('_currKindBetweenIfNot' + i)), pos: pos };
-			currCompute.push(macro $lhs = $switchExpr);
-			final tlhs: Expr = { expr: EConst(CIdent('_prevKindBetweenIfNot' + i)), pos: pos };
-			final trhs: Expr = { expr: EConst(CIdent('_currKindBetweenIfNot' + i)), pos: pos };
-			trackPrev.push(macro $tlhs = $trhs);
-		}
-
-		// Cross-subset transition cascade — A/B subset trackers, head AND
-		// tail, transparent-wrapper support via head/tail adapter pair.
-		for (i in 0...transitionInfos.length) {
-			final info: TransitionAcrossInfo = transitionInfos[i];
-			prevVars.push({ name: '_prevTailKindAcrossA' + i, type: macro :Int, expr: macro 0 });
-			prevVars.push({ name: '_prevTailKindAcrossB' + i, type: macro :Int, expr: macro 0 });
-			currVars.push({ name: '_currTailKindAcrossA' + i, type: macro :Int, expr: macro 0 });
-			currVars.push({ name: '_currTailKindAcrossB' + i, type: macro :Int, expr: macro 0 });
-			currVars.push({ name: '_currHeadKindAcrossA' + i, type: macro :Int, expr: macro 0 });
-			currVars.push({ name: '_currHeadKindAcrossB' + i, type: macro :Int, expr: macro 0 });
-
-			final classifierAccess: Expr = { expr: EField(macro _t.node, info.classifierFieldName), pos: pos };
-			final tkaIdent: Expr = { expr: EConst(CIdent('_currTailKindAcrossA' + i)), pos: pos };
-			final tkbIdent: Expr = { expr: EConst(CIdent('_currTailKindAcrossB' + i)), pos: pos };
-			final hkaIdent: Expr = { expr: EConst(CIdent('_currHeadKindAcrossA' + i)), pos: pos };
-			final hkbIdent: Expr = { expr: EConst(CIdent('_currHeadKindAcrossB' + i)), pos: pos };
-			inline function buildAdapterMatchExpr(adapterField: Null<String>, names: Array<String>): Expr {
-				if (adapterField == null) return macro 0;
-				var acc: Expr = macro false;
-				for (cn in names) {
-					final lit: Expr = { expr: EConst(CString(cn)), pos: pos };
-					acc = macro $acc || _r.ctorName == $lit;
-				}
-				return macro (_r != null && $acc) ? 1 : 0;
-			}
-			final tailAdapterAccess: Null<Expr> = info.tailAdapterOptField == null
-				? null
-				: {
-					expr: EField(macro opt, info.tailAdapterOptField),
-					pos: pos
-				};
-			final headAdapterAccess: Null<Expr> = info.headAdapterOptField == null
-				? null
-				: {
-					expr: EField(macro opt, info.headAdapterOptField),
-					pos: pos
-				};
-			final tailMatchA: Expr = buildAdapterMatchExpr(info.tailAdapterOptField, info.matchedCtorNamesA);
-			final tailMatchB: Expr = buildAdapterMatchExpr(info.tailAdapterOptField, info.matchedCtorNamesB);
-			final headMatchA: Expr = buildAdapterMatchExpr(info.headAdapterOptField, info.matchedCtorNamesA);
-			final headMatchB: Expr = buildAdapterMatchExpr(info.headAdapterOptField, info.matchedCtorNamesB);
-			final transparentBody: Expr = if (tailAdapterAccess == null && headAdapterAccess == null)
-				macro {
-					$tkaIdent = 0;
-					$tkbIdent = 0;
-					$hkaIdent = 0;
-					$hkbIdent = 0;
-				}
-			else if (headAdapterAccess == null)
-				macro {
-					final _r = $tailAdapterAccess != null ? $tailAdapterAccess(_v0) : null;
-					$tkaIdent = $tailMatchA;
-					$tkbIdent = $tailMatchB;
-					$hkaIdent = 0;
-					$hkbIdent = 0;
-				}
-			else if (tailAdapterAccess == null)
-				macro {
-					final _r = $headAdapterAccess != null ? $headAdapterAccess(_v0) : null;
-					$hkaIdent = $headMatchA;
-					$hkbIdent = $headMatchB;
-					$tkaIdent = 0;
-					$tkbIdent = 0;
-				}
-			else
-				macro {
-					final _r = $tailAdapterAccess != null ? $tailAdapterAccess(_v0) : null;
-					$tkaIdent = $tailMatchA;
-					$tkbIdent = $tailMatchB;
-					{
-						final _r = $headAdapterAccess != null ? $headAdapterAccess(_v0) : null;
-						$hkaIdent = $headMatchA;
-						$hkbIdent = $headMatchB;
-					}
-				};
-			final cases: Array<Case> = [
-				for (cp in info.ctorPatterns)
-					{
-						values: [cp.pattern],
-						guard: null,
-						expr: switch cp.subset {
-							case 1: macro {
-								$tkaIdent = 1;
-								$tkbIdent = 0;
-								$hkaIdent = 1;
-								$hkbIdent = 0;
-							};
-							case 2: macro {
-								$tkaIdent = 0;
-								$tkbIdent = 1;
-								$hkaIdent = 0;
-								$hkbIdent = 1;
-							};
-							case 3: transparentBody;
-							case _: macro {
-								$tkaIdent = 0;
-								$tkbIdent = 0;
-								$hkaIdent = 0;
-								$hkbIdent = 0;
-							};
-						},
-					}
-			];
-			currCompute.push({ expr: ESwitch(classifierAccess, cases, null), pos: pos });
-
-			final pkaLhs: Expr = { expr: EConst(CIdent('_prevTailKindAcrossA' + i)), pos: pos };
-			final pkaRhs: Expr = { expr: EConst(CIdent('_currTailKindAcrossA' + i)), pos: pos };
-			final pkbLhs: Expr = { expr: EConst(CIdent('_prevTailKindAcrossB' + i)), pos: pos };
-			final pkbRhs: Expr = { expr: EConst(CIdent('_currTailKindAcrossB' + i)), pos: pos };
-			trackPrev.push(macro $pkaLhs = $pkaRhs);
-			trackPrev.push(macro $pkbLhs = $pkbRhs);
-		}
+		emitAfterCompute(acc, afterInfos, pos);
+		emitBeforeCompute(acc, beforeInfos, pos);
+		emitBetweenCompute(acc, betweenInfos, pos);
+		emitBetweenIfNotCompute(acc, betweenIfNotInfos, pos);
+		emitTransitionCompute(acc, transitionInfos, pos);
 
 		// Build cascade ternary from innermost (source-driven) outward —
 		// before in reverse, then between in reverse, then transition in
@@ -10053,144 +9734,17 @@ class WriterLowering {
 		// first): after[0..N] > between[0..N] > transition[0..N] >
 		// before[0..N] > source-driven `(_t.blankBefore ? 1 : 0)`.
 		var blanksCountExpr: Expr = macro (_t.blankBefore ? 1 : 0);
-		for (i in 0...beforeInfos.length) {
-			final idx: Int = beforeInfos.length - 1 - i;
-			final info: BeforeCtorBlankInfo = beforeInfos[idx];
-			final beforeAccess: Expr = { expr: EField(macro opt, info.optField), pos: pos };
-			final currIdent: Expr = { expr: EConst(CIdent('_currKindBefore' + idx)), pos: pos };
-			final prevIdent: Expr = { expr: EConst(CIdent('_prevKindBefore' + idx)), pos: pos };
-			final fallback: Expr = blanksCountExpr;
-			// ω-before-multiline-prev-not — gate construction: when the info
-			// carries `prevExcludeCases`, the fire condition gains a
-			// `_prevKindPrevExcl != 1` guard so the override falls through to
-			// the source-driven fallback when the previous sibling matched an
-			// excluded ctor (e.g. a cond-comp `#if … #end`). Without
-			// `prevExcludeCases` the gate is the original two-term form —
-			// byte-identical for every existing `blankLinesBeforeCtor{,If}`.
-			final gate: Expr = if (info.prevExcludeCases == null)
-				macro $currIdent == 1 && $prevIdent != 1;
-			else {
-				final prevExclIdent: Expr = { expr: EConst(CIdent('_prevKindPrevExcl' + idx)), pos: pos };
-				macro $currIdent == 1 && $prevIdent != 1 && $prevExclIdent != 1;
-			}
-			blanksCountExpr = macro ($gate ? $beforeAccess : $fallback);
-		}
-		// ω-between-single-line-types — splice in priority between `before`
-		// (just wrapped) and `between` (about to wrap). Fires `opt.<f>`
-		// blanks when both prev and curr kind trackers report 1 (matched
-		// ctor AND !multiline on both sides of the pair) AND `opt > 0`.
-		// The `opt > 0` gate keeps default `0` as "source-driven" (the
-		// fallback cascade runs unchanged), matching fork's
-		// `betweenSingleLineTypes` insertion-only semantic — `0` does NOT
-		// strip source blanks between single-line type pairs. `>0` forces
-		// exactly that many blanks regardless of source-captured count.
-		for (i in 0...betweenIfNotInfos.length) {
-			final idx: Int = betweenIfNotInfos.length - 1 - i;
-			final info: BetweenSameCtorIfNotInfo = betweenIfNotInfos[idx];
-			final optAccess: Expr = { expr: EField(macro opt, info.optField), pos: pos };
-			final currIdent: Expr = { expr: EConst(CIdent('_currKindBetweenIfNot' + idx)), pos: pos };
-			final prevIdent: Expr = { expr: EConst(CIdent('_prevKindBetweenIfNot' + idx)), pos: pos };
-			final fallback: Expr = blanksCountExpr;
-			blanksCountExpr = macro ($currIdent == 1 && $prevIdent == 1 && $optAccess > 0 ? $optAccess : $fallback);
-		}
-		for (i in 0...betweenInfos.length) {
-			final idx: Int = betweenInfos.length - 1 - i;
-			final info: BetweenCtorBlankInfo = betweenInfos[idx];
-			final countAccess: Expr = { expr: EField(macro opt, info.countOptField), pos: pos };
-			final levelAccess: Expr = { expr: EField(macro opt, info.levelOptField), pos: pos };
-			final adapterAccess: Expr = { expr: EField(macro opt, info.adapterOptField), pos: pos };
-			final currKindIdent: Expr = { expr: EConst(CIdent('_currHeadKindBetween' + idx)), pos: pos };
-			final prevKindIdent: Expr = { expr: EConst(CIdent('_prevTailKindBetween' + idx)), pos: pos };
-			final currPathIdent: Expr = { expr: EConst(CIdent('_currHeadPathBetween' + idx)), pos: pos };
-			final prevPathIdent: Expr = { expr: EConst(CIdent('_prevTailPathBetween' + idx)), pos: pos };
-			final differCall: Expr = { expr: ECall(adapterAccess, [prevPathIdent, currPathIdent, levelAccess]), pos: pos };
-			final fallback: Expr = blanksCountExpr;
-			// Null-guard the adapter call — `WriteOptions.<adapterOptField>` is
-			// declared `Null<(String,String,Int)->Bool>`, and the consuming
-			// writer files (HxModuleWriter / HaxeModuleTriviaWriter, both
-			// `@:nullSafety(Strict)`) reject a bare `opt.f(...)` call. The `&&`
-			// short-circuit on `$adapterAccess != null` keeps the path inert
-			// when no adapter is wired (cascade falls through to the fallback /
-			// source-driven blank count).
-			//
-			// ω-D12-keep-source-blank-across-conditional — when
-			// `opt.keepSourceBlankAcrossConditional` is opt-in `true` AND the
-			// current item has a captured source blank (`_t.blankBefore`), the
-			// emitted count is widened to `max(countAccess, 1)` so a real
-			// source blank around `(prevImport, #if … importB; #end)` survives
-			// the head/tail-transparency override path with `betweenImports=0`.
-			// Default `false` preserves fork byte-identical behaviour — the
-			// override emits `$countAccess` unchanged.
-			final betweenChosen: Expr = macro (opt.keepSourceBlankAcrossConditional && _t.blankBefore && $countAccess < 1 ? 1 : $countAccess);
-			blanksCountExpr = macro ($currKindIdent == 1 && $prevKindIdent == 1 && $adapterAccess != null && $differCall
-				? $betweenChosen
-				: $fallback);
-		}
-		for (i in 0...transitionInfos.length) {
-			final idx: Int = transitionInfos.length - 1 - i;
-			final info: TransitionAcrossInfo = transitionInfos[idx];
-			final countAccess: Expr = { expr: EField(macro opt, info.countOptField), pos: pos };
-			final currHKAIdent: Expr = { expr: EConst(CIdent('_currHeadKindAcrossA' + idx)), pos: pos };
-			final currHKBIdent: Expr = { expr: EConst(CIdent('_currHeadKindAcrossB' + idx)), pos: pos };
-			final prevTKAIdent: Expr = { expr: EConst(CIdent('_prevTailKindAcrossA' + idx)), pos: pos };
-			final prevTKBIdent: Expr = { expr: EConst(CIdent('_prevTailKindAcrossB' + idx)), pos: pos };
-			final fallback: Expr = blanksCountExpr;
-			blanksCountExpr = macro (($currHKAIdent == 1 && $prevTKBIdent == 1) || ($currHKBIdent == 1 && $prevTKAIdent == 1)
-				? $countAccess
-				: $fallback);
-		}
-		for (i in 0...afterInfos.length) {
-			final idx: Int = afterInfos.length - 1 - i;
-			final info: AfterCtorBlankInfo = afterInfos[idx];
-			final afterAccess: Expr = { expr: EField(macro opt, info.optField), pos: pos };
-			final prevIdent: Expr = { expr: EConst(CIdent('_prevKindAfter' + idx)), pos: pos };
-			final fallback: Expr = blanksCountExpr;
-			// ω-after-conditional-block — tail-adapter infos gain a
-			// `_prevTailNullAfter != 0` guard so the override fires only when
-			// the previous element matched the ctor AND its tail leaf was NOT
-			// an import / using (adapter returned null). Plain after-ctor infos
-			// keep the bare `_prevKind == 1` gate, byte-identical.
-			final gate: Expr = if (info.tailAdapterOptField == null)
-				macro $prevIdent == 1;
-			else {
-				final prevTailNullIdent: Expr = { expr: EConst(CIdent('_prevTailNullAfter' + idx)), pos: pos };
-				macro $prevIdent == 1 && $prevTailNullIdent == 1;
-			}
-			blanksCountExpr = macro ($gate ? $afterAccess : $fallback);
-		}
+		blanksCountExpr = foldBeforeCascade(blanksCountExpr, beforeInfos, pos);
+		blanksCountExpr = foldBetweenIfNotCascade(blanksCountExpr, betweenIfNotInfos, pos);
+		blanksCountExpr = foldBetweenCascade(blanksCountExpr, betweenInfos, pos);
+		blanksCountExpr = foldTransitionCascade(blanksCountExpr, transitionInfos, pos);
+		blanksCountExpr = foldAfterCascade(blanksCountExpr, afterInfos, pos);
 
-		// ω-before-package — head-of-Star cascade. Each info contributes a
-		// single `_arr[0].node.<classifier>` switch returning kind 1 / 0;
-		// the cascade ternary picks the first matching opt.<optField>
-		// (source order = priority), fallback `0`. Built bottom-up so info[0]
-		// is the outermost test. Reads `_arr[0]` directly — head emit fires
-		// once at the start of the Star body, before any `_t = _arr[_si]`
-		// binding exists. With empty `headInfos`, the emitted `headEmit`
-		// block is `macro {}` — non-opt-in callers stay byte-identical.
-		var headBlanksExpr: Expr = macro 0;
-		for (i in 0...headInfos.length) {
-			final idx: Int = headInfos.length - 1 - i;
-			final info: HeadCtorBlankInfo = headInfos[idx];
-			final classifierAccess: Expr = { expr: EField(macro _arr[0].node, info.classifierFieldName), pos: pos };
-			final switchExpr: Expr = { expr: ESwitch(classifierAccess, info.classifyCases, null), pos: pos };
-			final optAccess: Expr = { expr: EField(macro opt, info.optField), pos: pos };
-			final fallback: Expr = headBlanksExpr;
-			headBlanksExpr = macro ($switchExpr == 1 ? $optAccess : $fallback);
-		}
-		final headEmit: Expr = headInfos.length == 0
-			? (macro {})
-			: (macro if (_arr.length > 0) {
-				final _hb: Int = $headBlanksExpr;
-				var _hbi: Int = 0;
-				while (_hbi < _hb) {
-					_docs.push(_dhl());
-					_hbi++;
-				}
-			});
-		final initPrev: Expr = prevVars.length > 0 ? { expr: EVars(prevVars), pos: pos } : (macro {});
-		final initCurr: Expr = currVars.length > 0 ? { expr: EVars(currVars), pos: pos } : (macro {});
-		final currComputeExpr: Expr = currCompute.length > 0 ? { expr: EBlock(currCompute), pos: pos } : (macro {});
-		final trackPrevExpr: Expr = trackPrev.length > 0 ? { expr: EBlock(trackPrev), pos: pos } : (macro {});
+		final headEmit: Expr = buildHeadEmit(headInfos, pos);
+		final initPrev: Expr = acc.prevVars.length > 0 ? { expr: EVars(acc.prevVars), pos: pos } : (macro {});
+		final initCurr: Expr = acc.currVars.length > 0 ? { expr: EVars(acc.currVars), pos: pos } : (macro {});
+		final currComputeExpr: Expr = acc.currCompute.length > 0 ? { expr: EBlock(acc.currCompute), pos: pos } : (macro {});
+		final trackPrevExpr: Expr = acc.trackPrev.length > 0 ? { expr: EBlock(acc.trackPrev), pos: pos } : (macro {});
 		return {
 			initPrev: initPrev,
 			initCurr: initCurr,
@@ -14330,6 +13884,542 @@ class WriterLowering {
 		};
 	}
 
+	/**
+	 * After-ctor cascade compute — single-axis kind tracker per info (plus a
+	 * tail-null tracker for tail-adapter infos). Appends to `acc`. Extracted
+	 * from `buildCascadeEmit`.
+	 */
+	private static function emitAfterCompute(acc: CascadeAccum, afterInfos: Array<AfterCtorBlankInfo>, pos: Position): Void {
+		for (i in 0...afterInfos.length) {
+			final info: AfterCtorBlankInfo = afterInfos[i];
+			acc.prevVars.push({ name: '_prevKindAfter' + i, type: macro :Int, expr: macro 0 });
+			acc.currVars.push({ name: '_currKindAfter' + i, type: macro :Int, expr: macro 0 });
+			final classifierAccess: Expr = { expr: EField(macro _t.node, info.classifierFieldName), pos: pos };
+			final kindIdent: Expr = { expr: EConst(CIdent('_currKindAfter' + i)), pos: pos };
+			if (info.tailAdapterOptField == null) {
+				final switchExpr: Expr = { expr: ESwitch(classifierAccess, info.classifyCases, null), pos: pos };
+				acc.currCompute.push(macro $kindIdent = $switchExpr);
+			} else {
+				// ω-after-conditional-block — additionally track whether the
+				// matched element's tail-leaf classify returns null (tail is NOT
+				// import / using). The matched classify case binds `_v0` (the
+				// wrapper payload); run the adapter on it inside that case body so
+				// both trackers are set from one switch. `info.classifyCases` has
+				// `expr: 1` on the matched (`_v0`-binding) case and `expr: 0`
+				// elsewhere — rewrite each into a `{kind = …; tailNull = …}` block.
+				acc.currVars.push({ name: '_currTailNullAfter' + i, type: macro :Int, expr: macro 0 });
+				acc.prevVars.push({ name: '_prevTailNullAfter' + i, type: macro :Int, expr: macro 0 });
+				final tailNullIdent: Expr = { expr: EConst(CIdent('_currTailNullAfter' + i)), pos: pos };
+				final adapterAccess: Expr = { expr: EField(macro opt, info.tailAdapterOptField), pos: pos };
+				final dualCases: Array<Case> = [
+					for (c in info.classifyCases) {
+						// The builder marks the single matched (`_v0`-binding) case
+						// with `expr: macro 1`; every non-matched case is `macro 0`.
+						final isMatchCase: Bool = switch (c.expr != null ? c.expr.expr : null) {
+							case EConst(CInt('1', _)): true;
+							case _: false;
+						};
+						{
+							values: c.values,
+							guard: c.guard,
+							expr: isMatchCase
+								? macro {
+									$kindIdent = 1;
+									$tailNullIdent = ($adapterAccess == null || $adapterAccess(_v0) == null) ? 1 : 0;
+								}
+								: macro {
+									$kindIdent = 0;
+									$tailNullIdent = 0;
+								},
+						}
+					}
+				];
+				acc.currCompute.push({ expr: ESwitch(classifierAccess, dualCases, null), pos: pos });
+				final tnLhs: Expr = { expr: EConst(CIdent('_prevTailNullAfter' + i)), pos: pos };
+				final tnRhs: Expr = { expr: EConst(CIdent('_currTailNullAfter' + i)), pos: pos };
+				acc.trackPrev.push(macro $tnLhs = $tnRhs);
+			}
+			final tlhs: Expr = { expr: EConst(CIdent('_prevKindAfter' + i)), pos: pos };
+			final trhs: Expr = { expr: EConst(CIdent('_currKindAfter' + i)), pos: pos };
+			acc.trackPrev.push(macro $tlhs = $trhs);
+		}
+	}
+
+	/**
+	 * Before-ctor cascade compute — same single-axis shape as after-ctor with
+	 * separate idents, plus an optional `prevExcludeCases` binary tracker.
+	 * Appends to `acc`. Extracted from `buildCascadeEmit`.
+	 */
+	private static function emitBeforeCompute(acc: CascadeAccum, beforeInfos: Array<BeforeCtorBlankInfo>, pos: Position): Void {
+		for (i in 0...beforeInfos.length) {
+			final info: BeforeCtorBlankInfo = beforeInfos[i];
+			acc.prevVars.push({ name: '_prevKindBefore' + i, type: macro :Int, expr: macro 0 });
+			acc.currVars.push({ name: '_currKindBefore' + i, type: macro :Int, expr: macro 0 });
+			final classifierAccess: Expr = { expr: EField(macro _t.node, info.classifierFieldName), pos: pos };
+			final switchExpr: Expr = { expr: ESwitch(classifierAccess, info.classifyCases, null), pos: pos };
+			final lhs: Expr = { expr: EConst(CIdent('_currKindBefore' + i)), pos: pos };
+			acc.currCompute.push(macro $lhs = $switchExpr);
+			final tlhs: Expr = { expr: EConst(CIdent('_prevKindBefore' + i)), pos: pos };
+			final trhs: Expr = { expr: EConst(CIdent('_currKindBefore' + i)), pos: pos };
+			acc.trackPrev.push(macro $tlhs = $trhs);
+			// ω-before-multiline-prev-not — second binary classify-switch on
+			// the same classifier field, tracking whether the element matched
+			// an excluded-prev ctor (e.g. `Conditional`). Only built when the
+			// info carries `prevExcludeCases`; the ternary below adds a
+			// `_prevKindPrevExcl != 1` guard so the override is suppressed when
+			// the previous sibling was excluded (falls through to source).
+			final prevExcludeCases: Null<Array<Case>> = info.prevExcludeCases;
+			if (prevExcludeCases != null) {
+				acc.prevVars.push({ name: '_prevKindPrevExcl' + i, type: macro :Int, expr: macro 0 });
+				acc.currVars.push({ name: '_currKindPrevExcl' + i, type: macro :Int, expr: macro 0 });
+				final exclSwitch: Expr = { expr: ESwitch(classifierAccess, prevExcludeCases, null), pos: pos };
+				final exclLhs: Expr = { expr: EConst(CIdent('_currKindPrevExcl' + i)), pos: pos };
+				acc.currCompute.push(macro $exclLhs = $exclSwitch);
+				final exclTlhs: Expr = { expr: EConst(CIdent('_prevKindPrevExcl' + i)), pos: pos };
+				final exclTrhs: Expr = { expr: EConst(CIdent('_currKindPrevExcl' + i)), pos: pos };
+				acc.trackPrev.push(macro $exclTlhs = $exclTrhs);
+			}
+		}
+	}
+
+	/**
+	 * Between-ctor cascade compute — kind+path trackers on head AND tail axes,
+	 * transparent-wrapper support via the shared head/tail adapter pair.
+	 * Appends to `acc`. Extracted from `buildCascadeEmit`.
+	 */
+	private static function emitBetweenCompute(acc: CascadeAccum, betweenInfos: Array<BetweenCtorBlankInfo>, pos: Position): Void {
+		for (i in 0...betweenInfos.length) {
+			final info: BetweenCtorBlankInfo = betweenInfos[i];
+			acc.prevVars.push({ name: '_prevTailKindBetween' + i, type: macro :Int, expr: macro 0 });
+			acc.prevVars.push({ name: '_prevTailPathBetween' + i, type: macro :String, expr: macro '' });
+			acc.currVars.push({ name: '_currTailKindBetween' + i, type: macro :Int, expr: macro 0 });
+			acc.currVars.push({ name: '_currTailPathBetween' + i, type: macro :String, expr: macro '' });
+			acc.currVars.push({ name: '_currHeadKindBetween' + i, type: macro :Int, expr: macro 0 });
+			acc.currVars.push({ name: '_currHeadPathBetween' + i, type: macro :String, expr: macro '' });
+
+			final classifierAccess: Expr = { expr: EField(macro _t.node, info.classifierFieldName), pos: pos };
+			final tailKindIdent: Expr = { expr: EConst(CIdent('_currTailKindBetween' + i)), pos: pos };
+			final tailPathIdent: Expr = { expr: EConst(CIdent('_currTailPathBetween' + i)), pos: pos };
+			final headKindIdent: Expr = { expr: EConst(CIdent('_currHeadKindBetween' + i)), pos: pos };
+			final headPathIdent: Expr = { expr: EConst(CIdent('_currHeadPathBetween' + i)), pos: pos };
+
+			final ctorNameMatch: Expr = {
+				var acc2: Expr = macro false;
+				for (cn in info.matchedCtorNames) {
+					final lit: Expr = { expr: EConst(CString(cn)), pos: pos };
+					acc2 = macro $acc2 || _r.ctorName == $lit;
+				}
+				acc2;
+			};
+			final tailBody: Expr = if (info.tailAdapterOptField == null)
+				macro {
+					$tailKindIdent = 0;
+					$tailPathIdent = '';
+				}
+			else {
+				final adapterAccess: Expr = { expr: EField(macro opt, info.tailAdapterOptField), pos: pos };
+				macro {
+					final _r = $adapterAccess != null ? $adapterAccess(_v0) : null;
+					if (_r != null && $ctorNameMatch) {
+						$tailKindIdent = 1;
+						$tailPathIdent = _r.path;
+					} else {
+						$tailKindIdent = 0;
+						$tailPathIdent = '';
+					}
+				};
+			}
+			final headBody: Expr = if (info.headAdapterOptField == null)
+				macro {
+					$headKindIdent = 0;
+					$headPathIdent = '';
+				}
+			else {
+				final adapterAccess: Expr = { expr: EField(macro opt, info.headAdapterOptField), pos: pos };
+				macro {
+					final _r = $adapterAccess != null ? $adapterAccess(_v0) : null;
+					if (_r != null && $ctorNameMatch) {
+						$headKindIdent = 1;
+						$headPathIdent = _r.path;
+					} else {
+						$headKindIdent = 0;
+						$headPathIdent = '';
+					}
+				};
+			}
+			final transparentBody: Expr = macro {
+				$tailBody;
+				$headBody;
+			};
+			final cases: Array<Case> = [
+				for (cp in info.ctorPatterns)
+					{
+						values: [cp.pattern],
+						guard: null,
+						expr: cp.isMatch
+							? macro {
+								// `_v0` is the matched ctor's first positional
+								// arg. For ctors whose first arg is a leaf path
+								// terminal (`HxTypeName` / `HxWildPath` abstracts
+								// over `String`), `_v0` IS the path string and
+								// `Reflect.hasField` returns false. For ctors
+								// whose first arg is a struct sub-rule carrying
+								// a `.path` field (`HxImportAlias`), the lookup
+								// extracts the dotted-ident path. Multi-arg
+								// enum branches are unsupported by the PEG
+								// lowering so this is the only struct-payload
+								// shape the cascade has to recognise.
+								final _v0Path: String = Reflect.hasField(_v0, 'path') ? Std.string(Reflect.field(_v0, 'path')) : '$_v0';
+								$tailKindIdent = 1;
+								$tailPathIdent = _v0Path;
+								$headKindIdent = 1;
+								$headPathIdent = _v0Path;
+							}
+							: cp.isTransparent
+								? transparentBody
+								: macro {
+									$tailKindIdent = 0;
+									$tailPathIdent = '';
+									$headKindIdent = 0;
+									$headPathIdent = '';
+								},
+					}
+			];
+			acc.currCompute.push({ expr: ESwitch(classifierAccess, cases, null), pos: pos });
+
+			final pkLhs: Expr = { expr: EConst(CIdent('_prevTailKindBetween' + i)), pos: pos };
+			final pkRhs: Expr = { expr: EConst(CIdent('_currTailKindBetween' + i)), pos: pos };
+			final ppLhs: Expr = { expr: EConst(CIdent('_prevTailPathBetween' + i)), pos: pos };
+			final ppRhs: Expr = { expr: EConst(CIdent('_currTailPathBetween' + i)), pos: pos };
+			acc.trackPrev.push(macro $pkLhs = $pkRhs);
+			acc.trackPrev.push(macro $ppLhs = $ppRhs);
+		}
+	}
+
+	/**
+	 * Between-same-ctor-if-not cascade compute — single-axis kind tracker per
+	 * info (ω-between-single-line-types). Appends to `acc`. Extracted from
+	 * `buildCascadeEmit`.
+	 */
+	private static function emitBetweenIfNotCompute(
+		acc: CascadeAccum, betweenIfNotInfos: Array<BetweenSameCtorIfNotInfo>, pos: Position
+	): Void {
+		for (i in 0...betweenIfNotInfos.length) {
+			final info: BetweenSameCtorIfNotInfo = betweenIfNotInfos[i];
+			acc.prevVars.push({ name: '_prevKindBetweenIfNot' + i, type: macro :Int, expr: macro 0 });
+			acc.currVars.push({ name: '_currKindBetweenIfNot' + i, type: macro :Int, expr: macro 0 });
+			final classifierAccess: Expr = { expr: EField(macro _t.node, info.classifierFieldName), pos: pos };
+			final switchExpr: Expr = { expr: ESwitch(classifierAccess, info.classifyCases, null), pos: pos };
+			final lhs: Expr = { expr: EConst(CIdent('_currKindBetweenIfNot' + i)), pos: pos };
+			acc.currCompute.push(macro $lhs = $switchExpr);
+			final tlhs: Expr = { expr: EConst(CIdent('_prevKindBetweenIfNot' + i)), pos: pos };
+			final trhs: Expr = { expr: EConst(CIdent('_currKindBetweenIfNot' + i)), pos: pos };
+			acc.trackPrev.push(macro $tlhs = $trhs);
+		}
+	}
+
+	/**
+	 * Build the `(_r != null && (_r.ctorName == "A" || …)) ? 1 : 0` adapter
+	 * match Expr for the transition cascade — `macro 0` when no adapter is
+	 * wired. Extracted from `emitTransitionCompute`.
+	 */
+	private static function transitionAdapterMatchExpr(adapterField: Null<String>, names: Array<String>, pos: Position): Expr {
+		if (adapterField == null) return macro 0;
+		var acc: Expr = macro false;
+		for (cn in names) {
+			final lit: Expr = { expr: EConst(CString(cn)), pos: pos };
+			acc = macro $acc || _r.ctorName == $lit;
+		}
+		return macro (_r != null && $acc) ? 1 : 0;
+	}
+
+	/**
+	 * Cross-subset transition cascade compute — A/B subset trackers on head
+	 * AND tail axes, transparent-wrapper support via the head/tail adapter
+	 * pair. Appends to `acc`. Extracted from `buildCascadeEmit`.
+	 */
+	private static function emitTransitionCompute(acc: CascadeAccum, transitionInfos: Array<TransitionAcrossInfo>, pos: Position): Void {
+		for (i in 0...transitionInfos.length) {
+			final info: TransitionAcrossInfo = transitionInfos[i];
+			acc.prevVars.push({ name: '_prevTailKindAcrossA' + i, type: macro :Int, expr: macro 0 });
+			acc.prevVars.push({ name: '_prevTailKindAcrossB' + i, type: macro :Int, expr: macro 0 });
+			acc.currVars.push({ name: '_currTailKindAcrossA' + i, type: macro :Int, expr: macro 0 });
+			acc.currVars.push({ name: '_currTailKindAcrossB' + i, type: macro :Int, expr: macro 0 });
+			acc.currVars.push({ name: '_currHeadKindAcrossA' + i, type: macro :Int, expr: macro 0 });
+			acc.currVars.push({ name: '_currHeadKindAcrossB' + i, type: macro :Int, expr: macro 0 });
+
+			final classifierAccess: Expr = { expr: EField(macro _t.node, info.classifierFieldName), pos: pos };
+			final tkaIdent: Expr = { expr: EConst(CIdent('_currTailKindAcrossA' + i)), pos: pos };
+			final tkbIdent: Expr = { expr: EConst(CIdent('_currTailKindAcrossB' + i)), pos: pos };
+			final hkaIdent: Expr = { expr: EConst(CIdent('_currHeadKindAcrossA' + i)), pos: pos };
+			final hkbIdent: Expr = { expr: EConst(CIdent('_currHeadKindAcrossB' + i)), pos: pos };
+			final tailAdapterAccess: Null<Expr> = info.tailAdapterOptField == null
+				? null
+				: {
+					expr: EField(macro opt, info.tailAdapterOptField),
+					pos: pos
+				};
+			final headAdapterAccess: Null<Expr> = info.headAdapterOptField == null
+				? null
+				: {
+					expr: EField(macro opt, info.headAdapterOptField),
+					pos: pos
+				};
+			final tailMatchA: Expr = transitionAdapterMatchExpr(info.tailAdapterOptField, info.matchedCtorNamesA, pos);
+			final tailMatchB: Expr = transitionAdapterMatchExpr(info.tailAdapterOptField, info.matchedCtorNamesB, pos);
+			final headMatchA: Expr = transitionAdapterMatchExpr(info.headAdapterOptField, info.matchedCtorNamesA, pos);
+			final headMatchB: Expr = transitionAdapterMatchExpr(info.headAdapterOptField, info.matchedCtorNamesB, pos);
+			final transparentBody: Expr = if (tailAdapterAccess == null && headAdapterAccess == null)
+				macro {
+					$tkaIdent = 0;
+					$tkbIdent = 0;
+					$hkaIdent = 0;
+					$hkbIdent = 0;
+				}
+			else if (headAdapterAccess == null)
+				macro {
+					final _r = $tailAdapterAccess != null ? $tailAdapterAccess(_v0) : null;
+					$tkaIdent = $tailMatchA;
+					$tkbIdent = $tailMatchB;
+					$hkaIdent = 0;
+					$hkbIdent = 0;
+				}
+			else if (tailAdapterAccess == null)
+				macro {
+					final _r = $headAdapterAccess != null ? $headAdapterAccess(_v0) : null;
+					$hkaIdent = $headMatchA;
+					$hkbIdent = $headMatchB;
+					$tkaIdent = 0;
+					$tkbIdent = 0;
+				}
+			else
+				macro {
+					final _r = $tailAdapterAccess != null ? $tailAdapterAccess(_v0) : null;
+					$tkaIdent = $tailMatchA;
+					$tkbIdent = $tailMatchB;
+					{
+						final _r = $headAdapterAccess != null ? $headAdapterAccess(_v0) : null;
+						$hkaIdent = $headMatchA;
+						$hkbIdent = $headMatchB;
+					}
+				};
+			final cases: Array<Case> = [
+				for (cp in info.ctorPatterns)
+					{
+						values: [cp.pattern],
+						guard: null,
+						expr: switch cp.subset {
+							case 1: macro {
+								$tkaIdent = 1;
+								$tkbIdent = 0;
+								$hkaIdent = 1;
+								$hkbIdent = 0;
+							};
+							case 2: macro {
+								$tkaIdent = 0;
+								$tkbIdent = 1;
+								$hkaIdent = 0;
+								$hkbIdent = 1;
+							};
+							case 3: transparentBody;
+							case _: macro {
+								$tkaIdent = 0;
+								$tkbIdent = 0;
+								$hkaIdent = 0;
+								$hkbIdent = 0;
+							};
+						},
+					}
+			];
+			acc.currCompute.push({ expr: ESwitch(classifierAccess, cases, null), pos: pos });
+
+			final pkaLhs: Expr = { expr: EConst(CIdent('_prevTailKindAcrossA' + i)), pos: pos };
+			final pkaRhs: Expr = { expr: EConst(CIdent('_currTailKindAcrossA' + i)), pos: pos };
+			final pkbLhs: Expr = { expr: EConst(CIdent('_prevTailKindAcrossB' + i)), pos: pos };
+			final pkbRhs: Expr = { expr: EConst(CIdent('_currTailKindAcrossB' + i)), pos: pos };
+			acc.trackPrev.push(macro $pkaLhs = $pkaRhs);
+			acc.trackPrev.push(macro $pkbLhs = $pkbRhs);
+		}
+	}
+
+	/**
+	 * Fold the before-ctor cascade ternaries onto `blanksCountExpr` (reverse
+	 * order so info[0] is outermost). Optional `prevExcludeCases` adds a
+	 * `_prevKindPrevExcl != 1` guard. Extracted from `buildCascadeEmit`.
+	 */
+	private static function foldBeforeCascade(blanksCountExpr: Expr, beforeInfos: Array<BeforeCtorBlankInfo>, pos: Position): Expr {
+		var result: Expr = blanksCountExpr;
+		for (i in 0...beforeInfos.length) {
+			final idx: Int = beforeInfos.length - 1 - i;
+			final info: BeforeCtorBlankInfo = beforeInfos[idx];
+			final beforeAccess: Expr = { expr: EField(macro opt, info.optField), pos: pos };
+			final currIdent: Expr = { expr: EConst(CIdent('_currKindBefore' + idx)), pos: pos };
+			final prevIdent: Expr = { expr: EConst(CIdent('_prevKindBefore' + idx)), pos: pos };
+			final fallback: Expr = result;
+			// ω-before-multiline-prev-not — gate construction: when the info
+			// carries `prevExcludeCases`, the fire condition gains a
+			// `_prevKindPrevExcl != 1` guard so the override falls through to
+			// the source-driven fallback when the previous sibling matched an
+			// excluded ctor (e.g. a cond-comp `#if … #end`). Without
+			// `prevExcludeCases` the gate is the original two-term form —
+			// byte-identical for every existing `blankLinesBeforeCtor{,If}`.
+			final gate: Expr = if (info.prevExcludeCases == null)
+				macro $currIdent == 1 && $prevIdent != 1;
+			else {
+				final prevExclIdent: Expr = { expr: EConst(CIdent('_prevKindPrevExcl' + idx)), pos: pos };
+				macro $currIdent == 1 && $prevIdent != 1 && $prevExclIdent != 1;
+			}
+			result = macro ($gate ? $beforeAccess : $fallback);
+		}
+		return result;
+	}
+
+	/**
+	 * Fold the between-same-ctor-if-not cascade ternaries onto
+	 * `blanksCountExpr` — fires `opt.<f>` blanks when both prev and curr
+	 * trackers report 1 AND `opt > 0` (ω-between-single-line-types,
+	 * insertion-only). Extracted from `buildCascadeEmit`.
+	 */
+	private static function foldBetweenIfNotCascade(
+		blanksCountExpr: Expr, betweenIfNotInfos: Array<BetweenSameCtorIfNotInfo>, pos: Position
+	): Expr {
+		var result: Expr = blanksCountExpr;
+		for (i in 0...betweenIfNotInfos.length) {
+			final idx: Int = betweenIfNotInfos.length - 1 - i;
+			final info: BetweenSameCtorIfNotInfo = betweenIfNotInfos[idx];
+			final optAccess: Expr = { expr: EField(macro opt, info.optField), pos: pos };
+			final currIdent: Expr = { expr: EConst(CIdent('_currKindBetweenIfNot' + idx)), pos: pos };
+			final prevIdent: Expr = { expr: EConst(CIdent('_prevKindBetweenIfNot' + idx)), pos: pos };
+			final fallback: Expr = result;
+			result = macro ($currIdent == 1 && $prevIdent == 1 && $optAccess > 0 ? $optAccess : $fallback);
+		}
+		return result;
+	}
+
+	/**
+	 * Fold the between-ctor cascade ternaries onto `blanksCountExpr` —
+	 * head/tail kind+path match with a null-guarded `differ` adapter call and
+	 * the keep-source-blank-across-conditional widening. Extracted from
+	 * `buildCascadeEmit`.
+	 */
+	private static function foldBetweenCascade(blanksCountExpr: Expr, betweenInfos: Array<BetweenCtorBlankInfo>, pos: Position): Expr {
+		var result: Expr = blanksCountExpr;
+		for (i in 0...betweenInfos.length) {
+			final idx: Int = betweenInfos.length - 1 - i;
+			final info: BetweenCtorBlankInfo = betweenInfos[idx];
+			final countAccess: Expr = { expr: EField(macro opt, info.countOptField), pos: pos };
+			final levelAccess: Expr = { expr: EField(macro opt, info.levelOptField), pos: pos };
+			final adapterAccess: Expr = { expr: EField(macro opt, info.adapterOptField), pos: pos };
+			final currKindIdent: Expr = { expr: EConst(CIdent('_currHeadKindBetween' + idx)), pos: pos };
+			final prevKindIdent: Expr = { expr: EConst(CIdent('_prevTailKindBetween' + idx)), pos: pos };
+			final currPathIdent: Expr = { expr: EConst(CIdent('_currHeadPathBetween' + idx)), pos: pos };
+			final prevPathIdent: Expr = { expr: EConst(CIdent('_prevTailPathBetween' + idx)), pos: pos };
+			final differCall: Expr = { expr: ECall(adapterAccess, [prevPathIdent, currPathIdent, levelAccess]), pos: pos };
+			final fallback: Expr = result;
+			// Null-guard the adapter call — `WriteOptions.<adapterOptField>` is
+			// declared `Null<(String,String,Int)->Bool>`, and the consuming
+			// writer files (HxModuleWriter / HaxeModuleTriviaWriter, both
+			// `@:nullSafety(Strict)`) reject a bare `opt.f(...)` call. The `&&`
+			// short-circuit on `$adapterAccess != null` keeps the path inert
+			// when no adapter is wired (cascade falls through to the fallback /
+			// source-driven blank count).
+			//
+			// ω-D12-keep-source-blank-across-conditional — when
+			// `opt.keepSourceBlankAcrossConditional` is opt-in `true` AND the
+			// current item has a captured source blank (`_t.blankBefore`), the
+			// emitted count is widened to `max(countAccess, 1)` so a real
+			// source blank around `(prevImport, #if … importB; #end)` survives
+			// the head/tail-transparency override path with `betweenImports=0`.
+			// Default `false` preserves fork byte-identical behaviour — the
+			// override emits `$countAccess` unchanged.
+			final betweenChosen: Expr = macro (opt.keepSourceBlankAcrossConditional && _t.blankBefore && $countAccess < 1 ? 1 : $countAccess);
+			result = macro ($currKindIdent == 1 && $prevKindIdent == 1 && $adapterAccess != null && $differCall ? $betweenChosen : $fallback);
+		}
+		return result;
+	}
+
+	/**
+	 * Fold the cross-subset transition cascade ternaries onto
+	 * `blanksCountExpr` — fires `opt.<count>` blanks on an A→B or B→A
+	 * head/tail transition. Extracted from `buildCascadeEmit`.
+	 */
+	private static function foldTransitionCascade(blanksCountExpr: Expr, transitionInfos: Array<TransitionAcrossInfo>, pos: Position): Expr {
+		var result: Expr = blanksCountExpr;
+		for (i in 0...transitionInfos.length) {
+			final idx: Int = transitionInfos.length - 1 - i;
+			final info: TransitionAcrossInfo = transitionInfos[idx];
+			final countAccess: Expr = { expr: EField(macro opt, info.countOptField), pos: pos };
+			final currHKAIdent: Expr = { expr: EConst(CIdent('_currHeadKindAcrossA' + idx)), pos: pos };
+			final currHKBIdent: Expr = { expr: EConst(CIdent('_currHeadKindAcrossB' + idx)), pos: pos };
+			final prevTKAIdent: Expr = { expr: EConst(CIdent('_prevTailKindAcrossA' + idx)), pos: pos };
+			final prevTKBIdent: Expr = { expr: EConst(CIdent('_prevTailKindAcrossB' + idx)), pos: pos };
+			final fallback: Expr = result;
+			result = macro (($currHKAIdent == 1 && $prevTKBIdent == 1) || ($currHKBIdent == 1 && $prevTKAIdent == 1)
+				? $countAccess
+				: $fallback);
+		}
+		return result;
+	}
+
+	/**
+	 * Fold the after-ctor cascade ternaries onto `blanksCountExpr` — fires
+	 * `opt.<f>` blanks when the previous element matched the ctor (tail-adapter
+	 * infos additionally require the tail leaf was NOT import/using). Extracted
+	 * from `buildCascadeEmit`.
+	 */
+	private static function foldAfterCascade(blanksCountExpr: Expr, afterInfos: Array<AfterCtorBlankInfo>, pos: Position): Expr {
+		var result: Expr = blanksCountExpr;
+		for (i in 0...afterInfos.length) {
+			final idx: Int = afterInfos.length - 1 - i;
+			final info: AfterCtorBlankInfo = afterInfos[idx];
+			final afterAccess: Expr = { expr: EField(macro opt, info.optField), pos: pos };
+			final prevIdent: Expr = { expr: EConst(CIdent('_prevKindAfter' + idx)), pos: pos };
+			final fallback: Expr = result;
+			// ω-after-conditional-block — tail-adapter infos gain a
+			// `_prevTailNullAfter != 0` guard so the override fires only when
+			// the previous element matched the ctor AND its tail leaf was NOT
+			// an import / using (adapter returned null). Plain after-ctor infos
+			// keep the bare `_prevKind == 1` gate, byte-identical.
+			final gate: Expr = if (info.tailAdapterOptField == null)
+				macro $prevIdent == 1;
+			else {
+				final prevTailNullIdent: Expr = { expr: EConst(CIdent('_prevTailNullAfter' + idx)), pos: pos };
+				macro $prevIdent == 1 && $prevTailNullIdent == 1;
+			}
+			result = macro ($gate ? $afterAccess : $fallback);
+		}
+		return result;
+	}
+
+	/**
+	 * Build the head-of-Star blank-line emit block (ω-before-package). Each
+	 * info contributes a `_arr[0].node.<classifier>` switch; the cascade picks
+	 * the first matching `opt.<optField>` (source order = priority). Empty
+	 * `headInfos` → `macro {}`. Extracted from `buildCascadeEmit`.
+	 */
+	private static function buildHeadEmit(headInfos: Array<HeadCtorBlankInfo>, pos: Position): Expr {
+		var headBlanksExpr: Expr = macro 0;
+		for (i in 0...headInfos.length) {
+			final idx: Int = headInfos.length - 1 - i;
+			final info: HeadCtorBlankInfo = headInfos[idx];
+			final classifierAccess: Expr = { expr: EField(macro _arr[0].node, info.classifierFieldName), pos: pos };
+			final switchExpr: Expr = { expr: ESwitch(classifierAccess, info.classifyCases, null), pos: pos };
+			final optAccess: Expr = { expr: EField(macro opt, info.optField), pos: pos };
+			final fallback: Expr = headBlanksExpr;
+			headBlanksExpr = macro ($switchExpr == 1 ? $optAccess : $fallback);
+		}
+		return headInfos.length == 0
+			? (macro {})
+			: (macro if (_arr.length > 0) {
+				final _hb: Int = $headBlanksExpr;
+				var _hbi: Int = 0;
+				while (_hbi < _hb) {
+					_docs.push(_dhl());
+					_hbi++;
+				}
+			});
+	}
+
 }
 
 /** Output of WriterLowering for one rule. */
@@ -14740,6 +14830,20 @@ typedef CascadeEmit = {
 	trackPrev: Expr,
 	blanksCount: Expr,
 	headEmit: Expr
+};
+
+/**
+ * Mutable accumulators threaded through the `buildCascadeEmit` per-axis
+ * compute helpers (`emitAfterCompute` etc.). Each helper appends its
+ * `prev`/`curr` tracker var decls, its per-element compute statements, and
+ * its prev-tracking assignments. Bundled so the helpers take one
+ * destination param (the "pass the destination" pattern) instead of four.
+ */
+typedef CascadeAccum = {
+	final prevVars: Array<Var>;
+	final currVars: Array<Var>;
+	final currCompute: Array<Expr>;
+	final trackPrev: Array<Expr>;
 };
 
 /**
