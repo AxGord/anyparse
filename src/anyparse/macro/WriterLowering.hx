@@ -6855,130 +6855,18 @@ class WriterLowering {
 		final closeInsideDoc: Expr = bracketKindPad
 			? arrayBracketInsidePolicySpace(macro _arr[0].node, true)
 			: (closeInsideExpr ?? macro _de());
-		// ω-bropen-keep-sep: opt-in via `@:fmt(keepCurlyBlanks)` on a
-		// sep-Star (currently `HxType.Anon.fields`). Sister to the block-
-		// Star path's ω-bropen-keep at `triviaBlockStarExpr` (which
-		// channels through `emitBeginExtras = beginEndType || keepCurly-
-		// Blanks` and the shared `beginTypeExpr` / `endTypeExpr` blocks).
-		// The sep-Star's existing `_inner` per-iter leading `_dhl()` (or
-		// `blankBeforeExpr` for `_si > 0`) doesn't fire for the open-side
-		// blank because `blankBeforeExpr` is gated on `_si > 0`. Push one
-		// extra `_dhl()` at the head of `_inner` when source had a blank
-		// between `{` and the first element AND the runtime opted into
-		// Keep. Symmetric end-side push before `_trailLC` handling. Other
-		// sep-Star consumers default `keepCurlyBlanks=false` → both pushes
-		// are `macro {}` and the helper stays byte-identical for them.
-		final keepCurlyBeginExpr: Expr = keepCurlyBlanks
-			? macro {
-				if (opt.afterLeftCurly == anyparse.format.KeepEmptyLinesPolicy.Keep && _arr.length > 0 && _arr[0].blankBefore)
-					_inner.push(_dhl());
-			}
-			: macro {};
-		final keepCurlyEndExpr: Expr = keepCurlyBlanks
-			? macro {
-				if (opt.beforeRightCurly == anyparse.format.KeepEmptyLinesPolicy.Keep && _trailBB && _arr.length > 0) _inner.push(_dhl());
-			}
-			: macro {};
-		// ω-typedef-between-fields: typedef-RHS anon-body blank inserts.
-		// Active only when this Star opted into `@:fmt(typedefBodyBlanks)`
-		// (`HxType.Anon`) AND the parent `HxTypedefDecl.type` flipped
-		// `opt._inTypedefBody = true` via `propagateTypedefContext`. Inline
-		// anon-type uses (`var x:{a:Int}`) never see `_inTypedefBody`, so
-		// the inserts stay scoped to the typedef RHS even though both share
-		// the `HxType.Anon` ctor. Counts are explicit overrides: a positive
-		// `typedefBeginType` / `typedefEndType` pushes exactly that many
-		// blanks regardless of source. The non-typedef-body case is `macro
-		// {}` (compile-time gate), so every other sep-Star caller is
-		// byte-identical.
-		final typedefBeginExpr: Expr = typedefBodyBlanks
-			? macro {
-				if (opt._inTypedefBody && opt.typedefBeginType > 0 && _arr.length > 0) {
-					var _tbi: Int = 0;
-					while (_tbi < opt.typedefBeginType) {
-						_inner.push(_dhl());
-						_tbi++;
-					}
-				}
-			}
-			: macro {};
-		final typedefEndExpr: Expr = typedefBodyBlanks
-			? macro {
-				if (opt._inTypedefBody && opt.typedefEndType > 0 && _arr.length > 0) {
-					var _tei: Int = 0;
-					while (_tei < opt.typedefEndType) {
-						_inner.push(_dhl());
-						_tei++;
-					}
-				}
-			}
-			: macro {};
-		// Per-element between-fields blank: pushed before the element for
-		// `_si > 0`. `existingBetweenFields == Remove` (default-Keep) only
-		// governs the fall-through source-blank pass-through handled by the
-		// sister `blankBeforeExpr`; a positive `typedefBetweenFields` forces
-		// the exact count here.
-		final typedefBetweenExpr: Expr = typedefBodyBlanks
-			? macro {
-				if (_si > 0 && opt._inTypedefBody && opt.typedefBetweenFields > 0) {
-					var _tfi: Int = 0;
-					while (_tfi < opt.typedefBetweenFields) {
-						_inner.push(_dhl());
-						_tfi++;
-					}
-				}
-			}
-			: macro {};
-		// ω-trivia-sep-doc-comment-cascade (Phase B2): mirror the
-		// `_currHasDocComment` / `addByCurrDocExpr` machinery from
-		// `triviaBlockStarExpr` so sep-Stars (e.g. `HxType.Anon.fields`
-		// in trivia mode) honour the `beforeDocCommentEmptyLines` policy
-		// at inter-element slots. Compile-time gate keeps callers without
-		// the flag (`HxExpr.ArrayExpr.elems`, `HxObjectLit.fields`)
-		// byte-identical to pre-slice behaviour.
-		final stripByCurrDocExpr: Expr = beforeDocCommentEmptyLines
-			? macro (_currHasDocComment && opt.beforeDocCommentEmptyLines == anyparse.format.CommentEmptyLinesPolicy.None)
-			: macro false;
-		final addByCurrDocExpr: Expr = beforeDocCommentEmptyLines
-			? macro (_currHasDocComment && opt.beforeDocCommentEmptyLines == anyparse.format.CommentEmptyLinesPolicy.One)
-			: macro false;
-		final currHasDocComputeExpr: Expr = beforeDocCommentEmptyLines
-			? macro {
-				_currHasDocComment = false;
-				var _cdci: Int = 0;
-				while (_cdci < _t.leadingComments.length) {
-					if (StringTools.startsWith(_t.leadingComments[_cdci], '/**')) {
-						_currHasDocComment = true;
-						break;
-					}
-					_cdci++;
-				}
-			}
-			: macro {};
-		final initCurrDocCommentExpr: Expr = beforeDocCommentEmptyLines ? macro var _currHasDocComment: Bool = false : macro {};
-		// ω-typedef-between-fields: runtime predicate that strips the
-		// source-captured inter-field blank for a typedef RHS body. Fires
-		// when this Star opted into `@:fmt(typedefBodyBlanks)` AND the anon
-		// is in typedef context AND EITHER a forced `typedefBetweenFields`
-		// count owns the slot (the `$typedefBetweenExpr` pushes the exact
-		// count, so the source blank must not stack on top) OR
-		// `typedefExistingBetweenFields == Remove` collapses source blanks.
-		// `false` for every non-typedef caller (compile-time gate) → the
-		// existing source-blank pass-through is byte-identical.
-		final typedefStripBetweenExpr: Expr = typedefBodyBlanks
-			? macro (opt._inTypedefBody
-				&& (opt.typedefBetweenFields > 0 || opt.typedefExistingBetweenFields == anyparse.format.KeepEmptyLinesPolicy.Remove))
-			: macro false;
-		final blankBeforeExpr: Expr = beforeDocCommentEmptyLines
-			? macro {
-				$currHasDocComputeExpr;
-				final _stripBlank: Bool = $stripByCurrDocExpr || $typedefStripBetweenExpr;
-				final _addBlank: Bool = $addByCurrDocExpr;
-				final _sourceBlank: Bool = _t.blankBefore && !_stripBlank;
-				if (_si > 0 && (_sourceBlank || _addBlank)) _inner.push(_dhl());
-			}
-			: macro {
-				if (_t.blankBefore && _si > 0 && !($typedefStripBetweenExpr)) _inner.push(_dhl());
-			};
+		// ω-bropen-keep-sep / ω-typedef-between-fields / ω-trivia-sep-doc-comment-cascade:
+		// the typedef-blank + doc-comment-cascade Expr builders that the force-multi loop
+		// and `_sepCtx` consume. Extracted to `triviaSepTypedefBlanksExprs` so the
+		// orchestrator stays under the complexity gate; behaviour byte-identical.
+		final _blanks: SepStarBlanks = triviaSepTypedefBlanksExprs(beforeDocCommentEmptyLines, typedefBodyBlanks);
+		final keepCurlyBeginExpr: Expr = _blanks.keepCurlyBeginExpr;
+		final keepCurlyEndExpr: Expr = _blanks.keepCurlyEndExpr;
+		final typedefBeginExpr: Expr = _blanks.typedefBeginExpr;
+		final typedefEndExpr: Expr = _blanks.typedefEndExpr;
+		final typedefBetweenExpr: Expr = _blanks.typedefBetweenExpr;
+		final blankBeforeExpr: Expr = _blanks.blankBeforeExpr;
+		final initCurrDocCommentExpr: Expr = _blanks.initCurrDocCommentExpr;
 		// ω-typedef-anon-force-multi: when the Star carries
 		// `@:fmt(forceMultiInTypedef)`, the outermost typedef-RHS anon
 		// has flipped `opt._inTypedefBody=true` via the parent Ref's
@@ -14492,6 +14380,151 @@ class WriterLowering {
 		};
 	}
 
+	/**
+	 * Sep-Star typedef-blank + doc-comment-cascade Expr builders. Bundles the
+	 * seven spliced Expr fragments that the force-multi loop and `_sepCtx`
+	 * consume (`keepCurlyBegin/End`, `typedefBegin/End/Between`, `blankBefore`,
+	 * `initCurrDocComment`), with the four intermediate predicates
+	 * (`stripByCurrDoc`/`addByCurrDoc`/`currHasDocCompute`/`typedefStripBetween`)
+	 * kept local. Extracted from `triviaSepStarExpr` so the orchestrator stays
+	 * under the complexity gate.
+	 */
+	private static function triviaSepTypedefBlanksExprs(beforeDocCommentEmptyLines: Bool, typedefBodyBlanks: Bool): SepStarBlanks {
+		// ω-bropen-keep-sep: opt-in via `@:fmt(keepCurlyBlanks)` on a
+		// sep-Star (currently `HxType.Anon.fields`). Sister to the block-
+		// Star path's ω-bropen-keep at `triviaBlockStarExpr` (which
+		// channels through `emitBeginExtras = beginEndType || keepCurly-
+		// Blanks` and the shared `beginTypeExpr` / `endTypeExpr` blocks).
+		// The sep-Star's existing `_inner` per-iter leading `_dhl()` (or
+		// `blankBeforeExpr` for `_si > 0`) doesn't fire for the open-side
+		// blank because `blankBeforeExpr` is gated on `_si > 0`. Push one
+		// extra `_dhl()` at the head of `_inner` when source had a blank
+		// between `{` and the first element AND the runtime opted into
+		// Keep. Symmetric end-side push before `_trailLC` handling. Other
+		// sep-Star consumers default `keepCurlyBlanks=false` → both pushes
+		// are `macro {}` and the helper stays byte-identical for them.
+		final keepCurlyBeginExpr: Expr = typedefBodyBlanks
+			? macro {
+				if (opt.afterLeftCurly == anyparse.format.KeepEmptyLinesPolicy.Keep && _arr.length > 0 && _arr[0].blankBefore)
+					_inner.push(_dhl());
+			}
+			: macro {};
+		final keepCurlyEndExpr: Expr = typedefBodyBlanks
+			? macro {
+				if (opt.beforeRightCurly == anyparse.format.KeepEmptyLinesPolicy.Keep && _trailBB && _arr.length > 0) _inner.push(_dhl());
+			}
+			: macro {};
+		// ω-typedef-between-fields: typedef-RHS anon-body blank inserts.
+		// Active only when this Star opted into `@:fmt(typedefBodyBlanks)`
+		// (`HxType.Anon`) AND the parent `HxTypedefDecl.type` flipped
+		// `opt._inTypedefBody = true` via `propagateTypedefContext`. Inline
+		// anon-type uses (`var x:{a:Int}`) never see `_inTypedefBody`, so
+		// the inserts stay scoped to the typedef RHS even though both share
+		// the `HxType.Anon` ctor. Counts are explicit overrides: a positive
+		// `typedefBeginType` / `typedefEndType` pushes exactly that many
+		// blanks regardless of source. The non-typedef-body case is `macro
+		// {}` (compile-time gate), so every other sep-Star caller is
+		// byte-identical.
+		final typedefBeginExpr: Expr = typedefBodyBlanks
+			? macro {
+				if (opt._inTypedefBody && opt.typedefBeginType > 0 && _arr.length > 0) {
+					var _tbi: Int = 0;
+					while (_tbi < opt.typedefBeginType) {
+						_inner.push(_dhl());
+						_tbi++;
+					}
+				}
+			}
+			: macro {};
+		final typedefEndExpr: Expr = typedefBodyBlanks
+			? macro {
+				if (opt._inTypedefBody && opt.typedefEndType > 0 && _arr.length > 0) {
+					var _tei: Int = 0;
+					while (_tei < opt.typedefEndType) {
+						_inner.push(_dhl());
+						_tei++;
+					}
+				}
+			}
+			: macro {};
+		// Per-element between-fields blank: pushed before the element for
+		// `_si > 0`. `existingBetweenFields == Remove` (default-Keep) only
+		// governs the fall-through source-blank pass-through handled by the
+		// sister `blankBeforeExpr`; a positive `typedefBetweenFields` forces
+		// the exact count here.
+		final typedefBetweenExpr: Expr = typedefBodyBlanks
+			? macro {
+				if (_si > 0 && opt._inTypedefBody && opt.typedefBetweenFields > 0) {
+					var _tfi: Int = 0;
+					while (_tfi < opt.typedefBetweenFields) {
+						_inner.push(_dhl());
+						_tfi++;
+					}
+				}
+			}
+			: macro {};
+		// ω-trivia-sep-doc-comment-cascade (Phase B2): mirror the
+		// `_currHasDocComment` / `addByCurrDocExpr` machinery from
+		// `triviaBlockStarExpr` so sep-Stars (e.g. `HxType.Anon.fields`
+		// in trivia mode) honour the `beforeDocCommentEmptyLines` policy
+		// at inter-element slots. Compile-time gate keeps callers without
+		// the flag (`HxExpr.ArrayExpr.elems`, `HxObjectLit.fields`)
+		// byte-identical to pre-slice behaviour.
+		final stripByCurrDocExpr: Expr = beforeDocCommentEmptyLines
+			? macro (_currHasDocComment && opt.beforeDocCommentEmptyLines == anyparse.format.CommentEmptyLinesPolicy.None)
+			: macro false;
+		final addByCurrDocExpr: Expr = beforeDocCommentEmptyLines
+			? macro (_currHasDocComment && opt.beforeDocCommentEmptyLines == anyparse.format.CommentEmptyLinesPolicy.One)
+			: macro false;
+		final currHasDocComputeExpr: Expr = beforeDocCommentEmptyLines
+			? macro {
+				_currHasDocComment = false;
+				var _cdci: Int = 0;
+				while (_cdci < _t.leadingComments.length) {
+					if (StringTools.startsWith(_t.leadingComments[_cdci], '/**')) {
+						_currHasDocComment = true;
+						break;
+					}
+					_cdci++;
+				}
+			}
+			: macro {};
+		final initCurrDocCommentExpr: Expr = beforeDocCommentEmptyLines ? macro var _currHasDocComment: Bool = false : macro {};
+		// ω-typedef-between-fields: runtime predicate that strips the
+		// source-captured inter-field blank for a typedef RHS body. Fires
+		// when this Star opted into `@:fmt(typedefBodyBlanks)` AND the anon
+		// is in typedef context AND EITHER a forced `typedefBetweenFields`
+		// count owns the slot (the `$typedefBetweenExpr` pushes the exact
+		// count, so the source blank must not stack on top) OR
+		// `typedefExistingBetweenFields == Remove` collapses source blanks.
+		// `false` for every non-typedef caller (compile-time gate) → the
+		// existing source-blank pass-through is byte-identical.
+		final typedefStripBetweenExpr: Expr = typedefBodyBlanks
+			? macro (opt._inTypedefBody
+				&& (opt.typedefBetweenFields > 0 || opt.typedefExistingBetweenFields == anyparse.format.KeepEmptyLinesPolicy.Remove))
+			: macro false;
+		final blankBeforeExpr: Expr = beforeDocCommentEmptyLines
+			? macro {
+				$currHasDocComputeExpr;
+				final _stripBlank: Bool = $stripByCurrDocExpr || $typedefStripBetweenExpr;
+				final _addBlank: Bool = $addByCurrDocExpr;
+				final _sourceBlank: Bool = _t.blankBefore && !_stripBlank;
+				if (_si > 0 && (_sourceBlank || _addBlank)) _inner.push(_dhl());
+			}
+			: macro {
+				if (_t.blankBefore && _si > 0 && !($typedefStripBetweenExpr)) _inner.push(_dhl());
+			};
+		return {
+			keepCurlyBeginExpr: keepCurlyBeginExpr,
+			keepCurlyEndExpr: keepCurlyEndExpr,
+			typedefBeginExpr: typedefBeginExpr,
+			typedefEndExpr: typedefEndExpr,
+			typedefBetweenExpr: typedefBetweenExpr,
+			blankBeforeExpr: blankBeforeExpr,
+			initCurrDocCommentExpr: initCurrDocCommentExpr,
+		};
+	}
+
 }
 
 /** Output of WriterLowering for one rule. */
@@ -14959,6 +14992,19 @@ typedef SepStarCtx = {
 	final noTriviaBranch: Expr;
 	final reflowSourceMultiline: Bool;
 	final matrixWrap: Bool;
+};
+/**
+ * Output bundle of `triviaSepTypedefBlanksExprs` — the seven spliced Expr
+ * fragments the sep-Star force-multi loop and `_sepCtx` consume.
+ */
+typedef SepStarBlanks = {
+	final keepCurlyBeginExpr: Expr;
+	final keepCurlyEndExpr: Expr;
+	final typedefBeginExpr: Expr;
+	final typedefEndExpr: Expr;
+	final typedefBetweenExpr: Expr;
+	final blankBeforeExpr: Expr;
+	final initCurrDocCommentExpr: Expr;
 };
 /**
  * Shared setup locals bundled for the `triviaTryparseStarExpr` emission
