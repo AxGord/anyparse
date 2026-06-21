@@ -4189,41 +4189,24 @@ class WriterLowering {
 	 * tryparse / close / EOF trivia emit helper. Extracted to keep the orchestrator
 	 * under the complexity gate.
 	 */
-	private function emitTriviaStar(args: StarFieldArgs, parts: Array<Expr>): Void {
+	/**
+	 * Builds the trailing-slot accessors + the `TriviaStarCtx` for a `@:trivia`
+	 * Star, from the resolved `StarFieldArgs`. Extracted from `emitTriviaStar` so
+	 * the dispatch stays under the complexity gate.
+	 */
+	private function buildTriviaStarCtx(args: StarFieldArgs): TriviaStarCtx {
 		final starNode: ShapeNode = args.starNode;
 		final fieldAccess: Expr = args.fieldAccess;
 		final elemFn: String = args.elemFn;
 		final elemRefName: String = args.elemRefName;
 		final isFirstField: Bool = args.isFirstField;
 		final isLastField: Bool = args.isLastField;
-		final isRaw: Bool = args.isRaw;
 		final typePath: String = args.typePath;
 		final openText: Null<String> = args.openText;
 		final closeText: Null<String> = args.closeText;
 		final sepText: Null<String> = args.sepText;
 		final prevBareRefBody: Null<PrevBodyInfo> = args.prevBareRefBody;
 		final prevTrailFieldName: Null<String> = args.prevTrailFieldName;
-		if (isRaw) Context.fatalError('WriterLowering: @:trivia Star does not support @:raw', Context.currentPos());
-		// ω-blockended-trivia-tryparse (Session 3): @:trivia + @:sep +
-		// @:tryparse is now allowed when the `blockEnded` flag is
-		// present (sole consumer: HxCaseBranch.body / HxDefaultBranch.stmts).
-		// EOF mode (closeText == null, no @:tryparse) still rejects.
-		final writerBlockEnded: Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
-		if (sepText != null && closeText == null && !starNode.hasMeta(':tryparse'))
-			Context.fatalError('WriterLowering: @:trivia + @:sep requires close-peek (@:trail) or @:tryparse', Context.currentPos());
-		if (sepText != null && starNode.hasMeta(':tryparse') && !writerBlockEnded)
-			Context.fatalError(
-				'WriterLowering: @:trivia + @:sep + @:tryparse requires blockEnded flag (@:sep(text, tailRelax, blockEnded))',
-				Context.currentPos()
-			);
-		// ω-orphan-trivia / ω-close-trailing: Seq-struct call sites
-		// drive the trailing slots synthesised on the paired type.
-		// Alt-branch Star call sites (`HxStatement.BlockStmt`) have
-		// no synth slots and pass null — writer falls back to pre-
-		// slice behaviour. `TrailingClose` is only synthesised for
-		// close-peek Stars (those with `lit.trailText`); EOF-mode
-		// Stars forward null to preserve the post-loop emission
-		// shape without a dangling slot access.
 		final fieldName: Null<String> = starNode.annotations.get('base.fieldName');
 		final trailBBAccess: Null<Expr> = fieldName == null
 			? null
@@ -4304,6 +4287,44 @@ class WriterLowering {
 			trailBAAccess: trailBAAccess,
 			trailPresentAccess: trailPresentAccess,
 		};
+		return triviaCtx;
+	}
+
+	/**
+	 * `@:trivia` Star dispatch (the whole `if (isTriviaStar)` block of
+	 * `emitWriterStarField`). Validates the trivia sep/raw/tryparse combinations,
+	 * builds the `TriviaStarCtx` via `buildTriviaStarCtx`, then routes to the
+	 * tryparse / close / EOF trivia emit helper. Extracted to keep the orchestrator
+	 * under the complexity gate.
+	 */
+	private function emitTriviaStar(args: StarFieldArgs, parts: Array<Expr>): Void {
+		final starNode: ShapeNode = args.starNode;
+		final isLastField: Bool = args.isLastField;
+		final isRaw: Bool = args.isRaw;
+		final closeText: Null<String> = args.closeText;
+		final sepText: Null<String> = args.sepText;
+		if (isRaw) Context.fatalError('WriterLowering: @:trivia Star does not support @:raw', Context.currentPos());
+		// ω-blockended-trivia-tryparse (Session 3): @:trivia + @:sep +
+		// @:tryparse is now allowed when the `blockEnded` flag is
+		// present (sole consumer: HxCaseBranch.body / HxDefaultBranch.stmts).
+		// EOF mode (closeText == null, no @:tryparse) still rejects.
+		final writerBlockEnded: Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
+		if (sepText != null && closeText == null && !starNode.hasMeta(':tryparse'))
+			Context.fatalError('WriterLowering: @:trivia + @:sep requires close-peek (@:trail) or @:tryparse', Context.currentPos());
+		if (sepText != null && starNode.hasMeta(':tryparse') && !writerBlockEnded)
+			Context.fatalError(
+				'WriterLowering: @:trivia + @:sep + @:tryparse requires blockEnded flag (@:sep(text, tailRelax, blockEnded))',
+				Context.currentPos()
+			);
+		// ω-orphan-trivia / ω-close-trailing: Seq-struct call sites
+		// drive the trailing slots synthesised on the paired type.
+		// Alt-branch Star call sites (`HxStatement.BlockStmt`) have
+		// no synth slots and pass null — writer falls back to pre-
+		// slice behaviour. `TrailingClose` is only synthesised for
+		// close-peek Stars (those with `lit.trailText`); EOF-mode
+		// Stars forward null to preserve the post-loop emission
+		// shape without a dangling slot access.
+		final triviaCtx: TriviaStarCtx = buildTriviaStarCtx(args);
 		if (starNode.hasMeta(':tryparse')) {
 			emitTriviaTryparseStar(triviaCtx, parts);
 			return;
