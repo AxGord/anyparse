@@ -1327,135 +1327,12 @@ class Renderer {
 
 		while (local.length > 0 && budget >= 0) {
 			final f: Frame = local.pop();
-			switch (f.doc) {
-				case Empty:
-					// nothing
-				case Text(s):
-					budget -= s.length;
-				case Line(flat):
-					// A hard line (flat starts with "\n") forces the
-					// measurement to refuse flatten regardless of remaining
-					// budget — short hardline-bearing content (a switch
-					// with one case body) would otherwise pass the budget
-					// check by length alone and the parent Group would
-					// commit to MFlat, causing the renderer to emit
-					// hardlines without any indent. ω-break-group.
-					if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) {
-						budget = -1;
-						break;
-					}
-					budget -= flat.length;
-				case Nest(n, inner):
-					local.push(new Frame(f.indent + n, MFlat, inner));
-				case Concat(items):
-					var j: Int = items.length;
-					while (--j >= 0) local.push(new Frame(f.indent, MFlat, items[j]));
-				case Group(inner) | GroupWithRestProbe(inner):
-					local.push(new Frame(f.indent, MFlat, inner));
-				case BodyGroup(_):
-					// Defer nested BodyGroups out of the parent's flat
-					// measurement: a child BodyGroup decides its own
-					// flat/break independently when the renderer reaches
-					// it, so its content must not contribute to the parent
-					// Group's fit budget. This is what lets
-					// `bodyPolicyWrap`'s chained FitLines (e.g.
-					// `forBody=fitLine + ifBody=fitLine`) keep the outer
-					// body inline while the inner body breaks — and lets
-					// `triviaBlockStarExpr`'s BG-wrapped block bodies sit
-					// inside a call arg without forcing the call's parens
-					// onto separate lines (ω-break-group).
-				case IfBreak(_, flatDoc):
-					local.push(new Frame(f.indent, MFlat, flatDoc));
-				case IfWidthExceeds(_, _, flatDoc):
-					// Forward to flat side: an enclosing Group's flat-width
-					// measurement should ignore the column-aware decision.
-					// The flat shape is what would render in MFlat — same
-					// stable answer the IfBreak forward gives. Keeps wrap-
-					// engine width measurements decoupled from threshold
-					// probes that fire only at render time.
-					local.push(new Frame(f.indent, MFlat, flatDoc));
-				case IfFirstLineExceeds(_, _, flatDoc):
-					// Same forwarding as `IfWidthExceeds`: enclosing Group's
-					// `fitsFlat` measurement uses the flat shape; the first-
-					// line probe is a render-time decision, transparent to
-					// wrap-engine width measurement.
-					local.push(new Frame(f.indent, MFlat, flatDoc));
-				case IfLineExceeds(_, _, flatDoc):
-					// Mirror `IfWidthExceeds` / `IfFirstLineExceeds`: the
-					// rest-of-stack lookahead is a render-time decision.
-					// Static `fitsFlat` walks see only the flat shape so
-					// enclosing Group budget measurements stay stable.
-					local.push(new Frame(f.indent, MFlat, flatDoc));
-				case IfFullLineExceeds(_, _, flatDoc):
-					// Mirror `IfLineExceeds`: rest-of-stack BG-descend
-					// is a render-time decision. `fitsFlat` sees only
-					// the flat shape (slice ω-iffulllineexceeds-primitive).
-					local.push(new Frame(f.indent, MFlat, flatDoc));
-				case IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc) | IfArrowContinuationFits(
-					_, _, _, _, flatDoc
-				):
-					// Mirror the flat siblings: the natural-first-line
-					// probe is a render-time decision, transparent to an
-					// enclosing Group's `fitsFlat` measurement — which
-					// sees only the flat shape (slice
-					// ω-ifnaturalfirstlineexceeds-infra).
-					local.push(new Frame(f.indent, MFlat, flatDoc));
-				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
-					// Flat measurement of Fill: items joined by sep flat.
-					// `tailReserve` is a render-time per-item-fit knob, NOT
-					// a flat-width adjustment — irrelevant when the enclosing
-					// Group asks "does the whole Fill fit on one line".
-					// FillWithRestProbe shares semantic at static measurement —
-					// rest-probe is a render-time decision, identical to plain
-					// Fill in `fitsFlat`.
-					var k: Int = items.length;
-					while (k > 0) {
-						k--;
-						local.push(new Frame(f.indent, MFlat, items[k]));
-						if (k > 0)
-							local.push(new Frame(f.indent, MFlat, sep));
-					}
-				case OptSpace(s):
-					// In flat measurement, OptSpace contributes its length —
-					// flat layout always flushes the lead's optional trailing
-					// space (the suppression only happens at render time on
-					// break-mode `Line`).
-					budget -= s.length;
-				case OptSpaceSkipAfterHardline:
-					// In flat measurement, treat as a single-byte space —
-					// the runtime drop only fires when `lastEmit==Hardline`,
-					// which by definition cannot happen inside a `fitsFlat`
-					// probe (the probe walks pure flat shape).
-					budget -= 1;
-				case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
-					// All three opt-hardline variants are hardlines by intent
-					// and can never flatten. Mirror the `Line('\n')`
-					// budget=-1 path: any enclosing Group containing
-					// one must commit to MBreak.
-					budget = -1;
-					break;
-				case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(
-					inner
-				) | CollapseChainProbe(inner):
-					// ω-force-flat-engine slice A: pass-through. All four
-					// markers are render-time state, transparent to flat-
-					// width measurement — descend `inner` with the same
-					// MFlat frame. Slice B's `forceFlat` dispatch lives in
-					// `render()`, not in static `fitsFlat` walks.
-					local.push(new Frame(f.indent, MFlat, inner));
-				case ConditionalMarkerZero(inner):
-					// ω-cond-indent-policy FixedZero: render-time marker,
-					// transparent to flat-width measurement — descend `inner` at
-					// the same MFlat frame. The `#`-marker col-0 re-indent is
-					// render-only and never narrows the fit budget.
-					local.push(new Frame(f.indent, MFlat, inner));
-				case ConditionalMarkerDecrease(inner):
-					// ω-cond-indent-policy AlignedDecrease: render-time marker,
-					// transparent to flat-width measurement — descend `inner` at
-					// the same MFlat frame. The uniform -1 re-indent is render-only
-					// and never narrows the fit budget.
-					local.push(new Frame(f.indent, MFlat, inner));
+			final step: { spend: Int, broke: Bool } = fitsFlatStep(f, local);
+			if (step.broke) {
+				budget = -1;
+				break;
 			}
+			budget -= step.spend;
 		}
 
 		return budget >= 0;
@@ -2570,6 +2447,105 @@ class Renderer {
 				// into the one inner doc.
 				stack.push(inner);
 				return { add: 0, aborted: false };
+		}
+	}
+
+	/**
+	 * One step of `fitsFlat`'s flat-width measurement. Pushes structural
+	 * children (as `MFlat` frames) onto `local`. Returns the budget to spend
+	 * for `f.doc` and whether the frame forces a non-flat verdict (a hardline,
+	 * which can never flatten).
+	 */
+	private static function fitsFlatStep(f: Frame, local: Array<Frame>): { spend: Int, broke: Bool } {
+		switch (f.doc) {
+			case Empty:
+				// nothing
+				return { spend: 0, broke: false };
+			case BodyGroup(_):
+				// Defer nested BodyGroups out of the parent's flat
+				// measurement: a child BodyGroup decides its own
+				// flat/break independently when the renderer reaches
+				// it, so its content must not contribute to the parent
+				// Group's fit budget. This is what lets
+				// `bodyPolicyWrap`'s chained FitLines (e.g.
+				// `forBody=fitLine + ifBody=fitLine`) keep the outer
+				// body inline while the inner body breaks — and lets
+				// `triviaBlockStarExpr`'s BG-wrapped block bodies sit
+				// inside a call arg without forcing the call's parens
+				// onto separate lines (ω-break-group).
+				return { spend: 0, broke: false };
+			case Text(s):
+				return { spend: s.length, broke: false };
+			case OptSpace(s):
+				// In flat measurement, OptSpace contributes its length —
+				// flat layout always flushes the lead's optional trailing
+				// space (the suppression only happens at render time on
+				// break-mode `Line`).
+				return { spend: s.length, broke: false };
+			case OptSpaceSkipAfterHardline:
+				// In flat measurement, treat as a single-byte space —
+				// the runtime drop only fires when `lastEmit==Hardline`,
+				// which by definition cannot happen inside a `fitsFlat`
+				// probe (the probe walks pure flat shape).
+				return { spend: 1, broke: false };
+			case Line(flat):
+				// A hard line (flat starts with "\n") forces the
+				// measurement to refuse flatten regardless of remaining
+				// budget — short hardline-bearing content (a switch
+				// with one case body) would otherwise pass the budget
+				// check by length alone and the parent Group would
+				// commit to MFlat, causing the renderer to emit
+				// hardlines without any indent. ω-break-group.
+				if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) return { spend: 0, broke: true };
+				return { spend: flat.length, broke: false };
+			case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
+				// All three opt-hardline variants are hardlines by intent
+				// and can never flatten. Mirror the `Line('\n')`
+				// budget=-1 path: any enclosing Group containing
+				// one must commit to MBreak.
+				return { spend: 0, broke: true };
+			case Nest(n, inner):
+				local.push(new Frame(f.indent + n, MFlat, inner));
+				return { spend: 0, broke: false };
+			case Concat(items):
+				var j: Int = items.length;
+				while (--j >= 0) local.push(new Frame(f.indent, MFlat, items[j]));
+				return { spend: 0, broke: false };
+			case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
+				// Flat measurement of Fill: items joined by sep flat.
+				// `tailReserve` is a render-time per-item-fit knob, NOT
+				// a flat-width adjustment — irrelevant when the enclosing
+				// Group asks "does the whole Fill fit on one line".
+				// FillWithRestProbe shares semantic at static measurement —
+				// rest-probe is a render-time decision, identical to plain
+				// Fill in `fitsFlat`.
+				var k: Int = items.length;
+				while (k > 0) {
+					k--;
+					local.push(new Frame(f.indent, MFlat, items[k]));
+					if (k > 0) local.push(new Frame(f.indent, MFlat, sep));
+				}
+				return { spend: 0, broke: false };
+			case Group(inner) | GroupWithRestProbe(inner) | IfBreak(_, inner) | IfWidthExceeds(_, _, inner) | IfFirstLineExceeds(
+				_, _, inner
+			) | IfLineExceeds(_, _, inner) | IfFullLineExceeds(_, _, inner) | IfNaturalFirstLineExceeds(_, _, inner) | IfNaturalFirstLineFitsOpenDelim(
+				_, _, inner
+			) | IfArrowContinuationFits(_, _, _, _, inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(
+				inner
+			) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(
+				inner
+			):
+				// Single-child transparent descend at the same indent in MFlat.
+				// A `Group`'s nested flat content; the flat side of every
+				// render-time `If*` probe (the column/first-line/rest-of-stack/
+				// natural-first-line decisions are all render-time, transparent
+				// to an enclosing Group's static flat-width measurement); the
+				// ω-force-flat-engine markers (render-time state, slice B's
+				// dispatch lives in `render`, not here); and the cond-indent
+				// markers (col-0 / -1 re-indent is render-only and never
+				// narrows the fit budget) — all contribute their inner doc flat.
+				local.push(new Frame(f.indent, MFlat, inner));
+				return { spend: 0, broke: false };
 		}
 	}
 
