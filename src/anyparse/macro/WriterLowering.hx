@@ -930,100 +930,14 @@ class WriterLowering {
 				: null;
 
 			if (isStar) {
-				if (isOptional) {
-					// Optional close-peek Star (first consumer:
-					// `HxTypeRef.params`). Build the inner emission against
-					// a narrowed local `_optVal` so the strict-null
-					// `final _arr = _optVal` inside `emitWriterStarField`
-					// types as `Array<T>`, then wrap the whole thing in a
-					// `null` check at the field-access boundary. Empty Doc
-					// (`_de()`) is the absent shape — the surrounding Seq
-					// emits nothing for the missing list.
-					emitOptionalStarField(
-						child, parts, node, typePath, isFirstField, isRaw, stalePrevBareRefBody, prevTrailFieldName, kwLead, fieldName,
-						prevBodyField, prevPadTrailing, fieldAccess
-					);
-					// ω-pad-trailing-ref: optional Star with @:fmt(padTrailing)
-					// fires its trailing-pad ONLY when both `_optVal != null`
-					// AND `_optVal.length > 0` (the Star helper's empty branch
-					// returns `_de()` regardless of pad flags). Optional Star
-					// is transparent (no visible output) when absent OR empty,
-					// so propagate prev across that combined guard.
-					if (child.fmtHasFlag('padTrailing')) thisPadTrailing = macro $fieldAccess != null && $fieldAccess.length > 0;
-					thisTransparent = macro $fieldAccess == null || $fieldAccess.length == 0;
-					prevAnyStarNonEmpty = null;
-					prevBodyField = null;
-					prevTrailFieldName = null;
-					prevPadTrailing = composePadTrailing(prevPadTrailing, thisPadTrailing, thisTransparent);
-					isFirstField = false;
-					continue;
-				}
-				// ω-member-meta: inter-Star separator. When a non-first
-				// bare-tryparse Star follows another bare-tryparse Star
-				// that may have emitted content, emit a leading separator
-				// gated on BOTH previous non-empty AND this Star non-empty.
-				// Double-gating prevents `@:allow(...)  var x` (double
-				// space) when this Star is empty — the member field's own
-				// leading-separator check still runs afterwards against
-				// the propagated `prevAnyStarNonEmpty`.
-				//
-				// In trivia mode the separator picks `_dhl()` vs `_dt(' ')`
-				// at runtime from the first element's `newlineBefore`
-				// trivia, preserving source-shape across the cross-Star
-				// boundary (e.g. `@:final\n\tstatic` round-trips with the
-				// newline intact instead of collapsing to a space). Plain
-				// mode has no Trivial wrapper, so the double-gated branch
-				// emits a plain space (no newline recovery).
-				//
-				// ω-pad-trailing-ref / ω-cond-comp-stmt-blank-fix: when the
-				// immediately preceding field fired `@:fmt(padTrailing)`,
-				// drop THIS sep at runtime so the pad's emission owns the
-				// boundary alone. Without the gate, body→elseifs boundary
-				// in `HxConditionalStmt` / `HxConditionalDecl` doubled the
-				// hardline (body's padTrailing emits `_dhl()` because
-				// `body[0].newlineBefore=true`, then this sep emits
-				// `_dhl()` again because `elseifs[0].newlineBefore=true`)
-				// and produced a spurious blank line between the last body
-				// stmt and `#elseif`. Mirrors the `withPadTrailingDrop`
-				// wrapper in `sameLineSeparator` (kw-Ref / opt-Ref sep
-				// path); both consume the same macro-time `prevPadTrailing`
-				// signal at struct-field boundaries.
-				if (isBareTryparseStar(child) && !isFirstField && prevAnyStarNonEmpty != null) {
-					parts.push(buildInterStarSep(prevAnyStarNonEmpty, fieldAccess, prevPadTrailing));
-				}
-				// ω-multivar-wrap: gate the `<moreField>` Star emit on the
-				// runtime `_suppressMore` entry flag. A recursive head-only
-				// self-call (`writeHxVarDeclT(value, _setSuppressMore(opt))`,
-				// emitted in the return-fold below) sets the flag so this
-				// field drops to `_de()`, yielding the head binding alone.
-				// `_suppressMoreEntry` is the entry-captured local declared by
-				// the return-fold wrapper; it is in scope because that wrapper
-				// brackets the entire emitted body.
-				final isMultiVarMoreField: Bool = multiVarMoreField != null && fieldName == multiVarMoreField;
-				final multiVarPartsStart: Int = parts.length;
-				emitWriterStarField(
-					child, fieldAccess, parts, child == node.children[node.children.length - 1], typePath, isFirstField, isRaw,
-					stalePrevBareRefBody, prevTrailFieldName
+				final starResult = emitStarField(
+					child, parts, node, typePath, isFirstField, isRaw, stalePrevBareRefBody, prevTrailFieldName, kwLead, fieldName,
+					prevBodyField, prevPadTrailing, fieldAccess, prevAnyStarNonEmpty, multiVarMoreField, isOptional
 				);
-				if (isMultiVarMoreField) gateMultiVarMoreParts(parts, multiVarPartsStart);
-				prevAnyStarNonEmpty = isBareTryparseStar(child) ? orStarNonEmpty(prevAnyStarNonEmpty, fieldAccess) : null;
-				// ω-pad-trailing-ref: non-optional Star with @:fmt(padTrailing)
-				// fires its trailing-pad when `_arr.length > 0` (the helper's
-				// empty branch returns `_de()`). Non-opt Star is transparent
-				// when empty, so propagate prev across `length == 0`.
-				//
-				// ω-metadata-line-end-function: a Star carrying
-				// `@:fmt(metaLineEndPolicy('<optField>'))` ALSO fires a
-				// trailing-pad equivalent when the runtime knob is non-None
-				// AND the Star is non-empty. Reuse the `prevPadTrailing`
-				// channel so the next field's inter-Star sep
-				// (`withPadTrailingDrop`) drops its own emit, avoiding a
-				// double-hardline at the meta→modifiers boundary.
-				thisPadTrailing = starPadTrailing(child, fieldAccess);
-				thisTransparent = macro $fieldAccess.length == 0;
+				prevAnyStarNonEmpty = starResult.prevAnyStarNonEmpty;
 				prevBodyField = null;
 				prevTrailFieldName = null;
-				prevPadTrailing = composePadTrailing(prevPadTrailing, thisPadTrailing, thisTransparent);
+				prevPadTrailing = starResult.prevPadTrailing;
 				isFirstField = false;
 				continue;
 			}
@@ -15412,6 +15326,69 @@ class WriterLowering {
 				);
 			} else
 				_headPlusMore;
+		};
+	}
+
+	/**
+	 * Emit a Star struct field (the `if (isStar)` branch of `lowerStruct`).
+	 * Dispatches the optional close-peek Star (`emitOptionalStarField`) vs the
+	 * bare / `@:tryparse` Star (inter-Star separator + `emitWriterStarField` +
+	 * multiVar gate), then folds this field's padTrailing / metaLineEnd pad and
+	 * transparent guard into `prevPadTrailing` and recomputes the cumulative
+	 * `prevAnyStarNonEmpty` signal. Pushes into `parts`; returns the two
+	 * recomputed loop accumulators (the caller resets `prevBodyField` /
+	 * `prevTrailFieldName` to null and `isFirstField` to false). Extracted from
+	 * `lowerStruct`.
+	 */
+	private function emitStarField(
+		child: ShapeNode, parts: Array<Expr>, node: ShapeNode, typePath: String, isFirstField: Bool, isRaw: Bool,
+		stalePrevBareRefBody: Null<PrevBodyInfo>, prevTrailFieldName: Null<String>, kwLead: Null<String>, fieldName: String,
+		prevBodyField: Null<PrevBodyInfo>, prevPadTrailing: Null<Expr>, fieldAccess: Expr, prevAnyStarNonEmpty: Null<Expr>,
+		multiVarMoreField: Null<String>, isOptional: Bool
+	): { prevAnyStarNonEmpty: Null<Expr>, prevPadTrailing: Null<Expr> } {
+		if (isOptional) {
+			// Optional close-peek Star (first consumer: `HxTypeRef.params`).
+			// Empty Doc (`_de()`) is the absent shape.
+			emitOptionalStarField(
+				child, parts, node, typePath, isFirstField, isRaw, stalePrevBareRefBody, prevTrailFieldName, kwLead, fieldName,
+				prevBodyField, prevPadTrailing, fieldAccess
+			);
+			// ω-pad-trailing-ref: optional Star with @:fmt(padTrailing) fires
+			// its trailing-pad ONLY when both `_optVal != null` AND
+			// `_optVal.length > 0`; it is transparent when absent OR empty.
+			final thisPadTrailing: Null<Expr> = child.fmtHasFlag('padTrailing')
+				? (macro $fieldAccess != null && $fieldAccess.length > 0)
+				: null;
+			final thisTransparent: Expr = macro $fieldAccess == null || $fieldAccess.length == 0;
+			return {
+				prevAnyStarNonEmpty: null,
+				prevPadTrailing: composePadTrailing(prevPadTrailing, thisPadTrailing, thisTransparent),
+			};
+		}
+		// ω-member-meta: inter-Star separator — a non-first bare-tryparse Star
+		// following another that may have emitted content gets a leading
+		// separator double-gated on prev non-empty AND this non-empty (drops
+		// the next field's leading sep when prev fired padTrailing).
+		if (isBareTryparseStar(child) && !isFirstField && prevAnyStarNonEmpty != null)
+			parts.push(buildInterStarSep(prevAnyStarNonEmpty, fieldAccess, prevPadTrailing));
+		// ω-multivar-wrap: gate the `<moreField>` Star emit on the runtime
+		// `_suppressMore` entry flag (a head-only recursive self-call drops it
+		// to `_de()`).
+		final isMultiVarMoreField: Bool = multiVarMoreField != null && fieldName == multiVarMoreField;
+		final multiVarPartsStart: Int = parts.length;
+		emitWriterStarField(
+			child, fieldAccess, parts, child == node.children[node.children.length - 1], typePath, isFirstField, isRaw,
+			stalePrevBareRefBody, prevTrailFieldName
+		);
+		if (isMultiVarMoreField) gateMultiVarMoreParts(parts, multiVarPartsStart);
+		// ω-pad-trailing-ref / ω-metadata-line-end-function: non-optional Star
+		// pad fires when non-empty (and, for metaLineEndPolicy, the knob is
+		// non-None); the Star is transparent when empty.
+		final thisPadTrailing: Null<Expr> = starPadTrailing(child, fieldAccess);
+		final thisTransparent: Expr = macro $fieldAccess.length == 0;
+		return {
+			prevAnyStarNonEmpty: isBareTryparseStar(child) ? orStarNonEmpty(prevAnyStarNonEmpty, fieldAccess) : null,
+			prevPadTrailing: composePadTrailing(prevPadTrailing, thisPadTrailing, thisTransparent),
 		};
 	}
 
