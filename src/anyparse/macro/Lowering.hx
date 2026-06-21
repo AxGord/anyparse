@@ -784,338 +784,7 @@ class Lowering {
 		// Case 4's domain. The lead can be either a `@:kw("...")` keyword
 		// (word-boundary checked) or a plain `@:lead("...")` literal; only
 		// one of the two is emitted per branch.
-		if (litList == null && children.length == 1 && children[0].kind == Ref) {
-			final refName: String = children[0].annotations.get('base.ref');
-			// ω-cast-bind-tightness (Slice 46): `@:fmt(atomOperand)` on a
-			// single-Ref kw branch routes the operand parse to the
-			// `${parseFn}Atom` variant of the sub-rule instead of the
-			// full Pratt entry. The operand binds at atom level (atom
-			// wrapper — includes postfix loop and prefix, excludes infix
-			// Pratt), so a trailing binary operator stays for the outer
-			// Pratt loop instead of being swallowed into the operand.
-			// Mirrors `@:prefix` semantics for word-keyword unary operators
-			// without requiring the prefix-extension work. Consumed by
-			// `HxExpr.CastExpr` so `cast (x) is Bool` parses as
-			// `Is(CastExpr(ParenExpr(x)), Bool)` (Haxe-faithful), not as
-			// `CastExpr(Is(ParenExpr(x), Bool))`. The atom fn name pattern
-			// `${baseFn}Atom` matches all three pipeline-mode fn-name
-			// conventions (`parseHxExpr` / `parseHxExprS` / `parseHxExprT`
-			// → `parseHxExprAtom` / `parseHxExprSAtom` / `parseHxExprTAtom`).
-			final atomOperand: Bool = branch.fmtHasFlag('atomOperand');
-			final subFnName: String = atomOperand ? '${parseFnName(refName)}Atom' : parseFnName(refName);
-			final callSub: Expr = {
-				expr: ECall(macro $i{subFnName}, [macro ctx]),
-				pos: Context.currentPos(),
-			};
-			final trailOptional: Bool = branch.annotations.get('lit.trailOptional') == true;
-			// ω-trailopt-source-track: in trivia mode, paired Alt ctors
-			// of `@:trailOpt(...)` branches carry an extra positional
-			// `trailPresent:Bool` arg synthesised by `TriviaTypeSynth`.
-			// Pass the captured `matchLit` result through so the writer
-			// can preserve source presence of the trail literal.
-			final triviaTrailOpt: Bool = trailOptional && ctx.trivia && isTriviaBearing(typePath);
-			// ω-slice-V — parser-side shape-gated trail literal. A ctor
-			// carrying `@:fmt(trailOptParseGate('<adapter>'))` alongside
-			// `@:trailOpt(...)` makes the optional-trail decision depend on
-			// the just-parsed child `_raw`: `<adapter>(_raw)` true →
-			// `matchLit` (`;` optional, brace-terminated expr); false →
-			// `expectLit` (`;` required — THROWS to terminate the
-			// statement, preserving the Star-loop boundary). `<adapter>`
-			// is a plugin predicate reached via the schema instance, the
-			// same `formatInfo.schemaTypePath` `.instance.<m>` channel the
-			// generated parser already uses for `unescapeChar`. Strictly
-			// opt-in: `parseGate == null` → the unconditional emission
-			// below is byte-identical, so every other `@:trailOpt` ctor
-			// (`VarStmt` / `FinalStmt` / `ReturnStmt` / …) is untouched.
-			// Sole consumer: `HxStatement.ExprStmt` (the no-keyword
-			// catch-all, where a blanket optional `;` would break boundary
-			// detection — hence the shape gate instead).
-			final parseGate: Null<Array<String>> = branch.fmtReadStringArgs('trailOptParseGate');
-			final parseGateCall: Null<Expr> = if (parseGate != null && parseGate.length == 1) {
-				final fmtParts: Array<String> = formatInfo.schemaTypePath.split('.');
-				{
-					expr: ECall({ expr: EField(macro $p{fmtParts}.instance, parseGate[0]), pos: Context.currentPos() }, [macro _raw]),
-					pos: Context.currentPos(),
-				};
-			} else
-				null;
-			// ω-string-interp-noformat: ctors with `@:fmt(captureSource)` +
-			// `@:lead`/`@:trail` carry a positional `sourceText:String` arg
-			// in trivia mode. The parser captures the byte slice between
-			// lead and trail (inclusive of any interior whitespace) so the
-			// writer can emit verbatim under
-			// `opt.formatStringInterpolation == false`. Trivia-only because
-			// the synth-pair ctor is the carrier; plain pipelines keep the
-			// pre-slice ctor arity.
-			final triviaCaptureSource: Bool = ctx.trivia && isTriviaBearing(typePath) && TriviaTypeSynth.isCaptureSourceBranch(branch);
-			// ω-issue-257-firstline: ctors with `@:fmt(bodyPolicy(...))` on a
-			// single-Ref kw-led branch (e.g. `HxStatement.ReturnStmt`) carry
-			// a positional `bodyOnSameLine:Bool` arg in the synth pair. The
-			// parser captures whether the post-kw whitespace crossed a
-			// newline so `bodyPolicyWrap`'s `Keep` branch can dispatch
-			// source-shape-aware. Trivia-only — plain mode keeps the
-			// original ctor arity and falls back to width-driven layout
-			// via `widthAware`.
-			final triviaBodyPolicyKw: Bool = ctx.trivia && isTriviaBearing(typePath) && TriviaTypeSynth.isAltBodyPolicyKwBranch(branch);
-			// omega-paren-wrap-source-newline: ctors with @:fmt(captureWrapOpenNewline)
-			// on a single-Ref @:wrap branch carry a positional wrapOpenNewline:
-			// Bool arg in the synth pair. Parser captures whether the gap
-			// between the open lead literal and the inner sub-rule's first
-			// token crossed a newline so the writer can pick between
-			// `(\n<inner>\n)` (open broken; preserves authored shape on
-			// chain inners) and `(<inner>\n)` (glued; unchanged default).
-			// Trivia-only; plain mode keeps the original ctor arity.
-			final triviaWrapOpenNewline: Bool = ctx.trivia && isTriviaBearing(typePath) && TriviaTypeSynth.isAltWrapOpenNewlineBranch(
-				branch
-			);
-			// ω-keep-kw-newline (increment 1b): mandatory-`@:kw` VarStmt-family
-			// ctors with `@:fmt(captureKwNewline)` carry a positional
-			// `kwNewline:Bool` arg. The parser captures whether the gap between
-			// the LAST keyword / lead literal (`var` / `final`) and the inner
-			// `decl` Ref's first token crossed a newline, so the writer's
-			// `HxVarDecl` multiVar fold reproduces the source `var`→head newline
-			// under `WrapMode.Keep`. Trivia-only; plain mode keeps the original
-			// ctor arity (head always glued to `var `).
-			final triviaKwNewline: Bool = ctx.trivia && isTriviaBearing(typePath) && TriviaTypeSynth.isAltKwNewlineBranch(branch);
-			final ctorArgs: Array<Expr> = [macro _raw];
-			if (triviaTrailOpt) ctorArgs.push(macro _trailPresent);
-			if (triviaCaptureSource) ctorArgs.push(macro _sourceText);
-			if (triviaBodyPolicyKw) ctorArgs.push(macro _bodyOnSameLine);
-			if (triviaWrapOpenNewline) ctorArgs.push(macro _wrapOpenNewline);
-			if (triviaKwNewline) ctorArgs.push(macro _varKwNewline);
-			final ctorCall: Expr = { expr: ECall(ctorRef, ctorArgs), pos: Context.currentPos() };
-			final kwLead: Null<String> = branch.annotations.get('kw.leadText');
-			final steps: Array<Expr> = [macro skipWs(ctx)];
-			// `@:kw` and `@:wrap`/`@:lead` compose on the same single-Ref
-			// branch: emit kw (word-boundary checked) first, then the lead
-			// literal. The composed shape supports kw-led ctors that wrap
-			// their payload in matched delimiters — keyword commits the
-			// branch and the wrap pair delimits the structurally-parsed
-			// inner Ref. Either or both may be absent — the `@:kw('return')`
-			// -only ctors keep their pre-slice shape, and a bare `@:wrap`
-			// -only ctor (`ParenExpr`) stays a single-literal commit.
-			// ω-untyped-keep-trybody: branch-level `@:fmt(forwardNewlineForBody)`
-			// opt-in tells Case 3 to OMIT the post-kw `skipWs(ctx)` so the
-			// inner sub-rule's first-field `collectTrivia` can scan the gap
-			// itself and capture `newlineBefore` onto the synth
-			// `<field>BeforeNewline:Bool` slot. Pairs with field-level
-			// `@:fmt(beforeNewlineSlotFirst)` on the inner struct's first
-			// Ref field — both must be present for the channel to work.
-			// Without the flag the post-kw `skipWs` runs as before, which
-			// is the right default for every other Case 3 kw-branch (`if`,
-			// `while`, `for`, `do`, `switch`, `throw`, etc.). Currently
-			// consumed only by `HxStatement.TryCatchStmt` (issue_362
-			// _untyped_body_keep `try\n\tuntyped {…}` shape).
-			final forwardNewlineForBody: Bool = branch.fmtHasFlag('forwardNewlineForBody');
-			// `forwardNewlineForBody` omits the post-kw `skipWs`. The
-			// `triviaBodyPolicyKw` capture (`_bodyOnSameLine` from
-			// `hasNewlineIn(_kwEndPos, ctx.pos)`) would then scan an empty
-			// range and silently degenerate to `_bodyOnSameLine=true`. The
-			// two channels target the same data (post-kw newline) via
-			// different routes — combining them is a grammar error.
-			if (forwardNewlineForBody && triviaBodyPolicyKw)
-				Context.fatalError(
-					'Lowering: @:fmt(forwardNewlineForBody) on a @:fmt(bodyPolicy(...)) branch is a conflict — both channels capture the post-kw newline; pick one.',
-					Context.currentPos()
-				);
-			// ω-keep-kw-newline (increment 1b): track the byte position right
-			// after the LAST consumed keyword / lead literal (BEFORE its post-
-			// literal `skipWs`) so the `_varKwNewline` probe spans the gap up to
-			// the inner `decl` Ref's first token. Reassigned after each
-			// `expectKw` / `expectLit` so the last one wins (`static var` →
-			// after `var`). Declared only when the branch opts in.
-			if (triviaKwNewline) steps.push(macro var _lastLitEnd: Int = ctx.pos);
-			if (kwLead != null) {
-				steps.push(macro expectKw(ctx, $v{kwLead}));
-				if (triviaKwNewline) steps.push(macro _lastLitEnd = ctx.pos);
-				// ω-issue-257-firstline: capture `_kwEndPos` BEFORE the
-				// post-kw `skipWs` so `_bodyOnSameLine` can probe whether
-				// the gap up to the body's first token crossed a newline.
-				// Mirrors the struct-side `_bodyOnSameLine_<field>` capture
-				// in `lowerStruct`'s `@:optional @:kw` path.
-				if (triviaBodyPolicyKw) steps.push(macro final _kwEndPos: Int = ctx.pos);
-				if (!forwardNewlineForBody) steps.push(macro skipWs(ctx));
-				if (triviaBodyPolicyKw) steps.push(macro final _bodyOnSameLine: Bool = !hasNewlineIn(ctx.input, _kwEndPos, ctx.pos));
-			}
-			if (leadText != null) {
-				steps.push(macro expectLit(ctx, $v{leadText}));
-				if (triviaKwNewline) steps.push(macro _lastLitEnd = ctx.pos);
-				// omega-paren-wrap-source-newline: capture _leadEndPos BEFORE
-				// the post-lead skipWs so _wrapOpenNewline can probe whether
-				// the gap up to the inner sub-rule's first token crossed a
-				// newline. Mirrors the kw-led _kwEndPos / _bodyOnSameLine
-				// pattern above.
-				if (triviaWrapOpenNewline) steps.push(macro final _leadEndPos: Int = ctx.pos);
-				steps.push(macro skipWs(ctx));
-				if (triviaWrapOpenNewline) steps.push(macro final _wrapOpenNewline: Bool = hasNewlineIn(ctx.input, _leadEndPos, ctx.pos));
-			}
-			// ω-keep-kw-newline (increment 1b): the gap probe runs AFTER both the
-			// kw and lead skipWs but BEFORE `_raw = callSub`, so `ctx.pos` sits at
-			// the inner `decl` Ref's first token. `_lastLitEnd` holds the end of
-			// the last literal before its skipWs, so `hasNewlineIn` spans exactly
-			// the `var`→head gap.
-			if (triviaKwNewline) steps.push(macro final _varKwNewline: Bool = hasNewlineIn(ctx.input, _lastLitEnd, ctx.pos));
-			// Capture _start_pos AFTER any lead literal AND its skipWs, so
-			// the substring spans only what lives between lead and trail.
-			// In `@:raw` rules the `skipWs` call gets stripped by the rule-
-			// level post-process, but the capture still works — `ctx.pos`
-			// at this point is the position of the first byte after the
-			// lead literal.
-			if (triviaCaptureSource) steps.push(macro final _start_pos: Int = ctx.pos);
-			steps.push({
-				expr: EVars([
-					{
-						name: '_raw',
-						type: null,
-						expr: callSub,
-						isFinal: true,
-					}
-				]),
-				pos: Context.currentPos(),
-			});
-			if (trailText != null) {
-				// ω-trailopt-stash-trivia: in trivia mode + `@:trailOpt`, use
-				// `skipWsAndStash` so trailing comments between the body and
-				// the optional trail literal land in `ctx.pendingTrivia`.
-				// When the trail is ABSENT (e.g. `typedef Foo = Int\n/** doc
-				// **/\ntypedef Bar`), the parent Star's next `collectTrivia`
-				// drains the stash and the doc-comment becomes leading of the
-				// next decl. The plain `skipWs` path silently dropped it.
-				// Cases: issue_216 / issue_321 closures. Mandatory `@:trail`
-				// paths keep the original `skipWs` — comments before a
-				// required trail literal are intra-decl close trivia and the
-				// downstream writer handles them via close-trail slots.
-				if (triviaTrailOpt) {
-					// ω-trailopt-stash-trivia: capture the gap between the
-					// inner Ref's last byte and the (optional) trail literal
-					// via `collectTrivia` — captures `newlineBefore` /
-					// `blankBefore` AND any line/block comments. Re-stash
-					// into `ctx.pendingTrivia` when anything was captured so
-					// the parent Star's next `collectTrivia` drains them as
-					// leading of the next sibling decl (the trail literal
-					// was absent so there's no intra-decl trailing slot to
-					// route to). Plain `skipWsAndStash` would lose the
-					// blank/newline signal.
-					steps.push(macro {
-						final _trailOptCap = collectTrivia(ctx);
-						if (
-							_trailOptCap.newlineBefore || _trailOptCap.blankBefore || _trailOptCap.blankAfterLeadingComments
-							|| _trailOptCap.leadingComments.length > 0
-						) {
-							ctx.pendingTrivia = {
-								blankBefore: _trailOptCap.blankBefore,
-								blankAfterLeadingComments: _trailOptCap.blankAfterLeadingComments,
-								newlineBefore: _trailOptCap.newlineBefore,
-								leadingComments: _trailOptCap.leadingComments,
-							};
-						}
-					});
-				} else
-					steps.push(macro skipWs(ctx));
-				// Capture _end_pos AFTER the post-Ref skipWs but BEFORE the
-				// trail-literal match, so trailing whitespace inside the
-				// braces (e.g. `${ i + 1 }`) is included in the verbatim
-				// slice. In `@:raw` rules the skipWs is stripped at post-
-				// process time and the capture lands at the position of
-				// the trail literal directly.
-				if (triviaCaptureSource) {
-					steps.push(macro final _end_pos: Int = ctx.pos);
-					steps.push(macro final _sourceText: String = ctx.input.substring(_start_pos, _end_pos));
-				}
-				// `@:trailOpt` annotates `lit.trailOptional:true` alongside
-				// `lit.trailText`. The trail literal becomes optional on
-				// parse — `matchLit` peeks + consumes if present, but does
-				// NOT throw if absent. In trivia mode the captured presence
-				// flag flows into the synth ctor's extra `trailPresent:Bool`
-				// arg (slice ω-trailopt-source-track 2026-05-02). Plain
-				// mode keeps the original ctor arity and falls back to
-				// AST-shape gates such as `@:fmt(trailOptShapeGate(...))`
-				// in the writer.
-				// Consumers: `HxDecl.TypedefDecl` for `typedef Foo = T`
-				// without trailing `;` (slice ω-typedef-trailOpt);
-				// `HxStatement.VarStmt` / `FinalStmt` for `var foo =
-				// switch (x) { case _: 1 }` without trailing `;` (slice
-				// ω-vardecl-trailOpt — the `}`-terminated rhs idiom).
-				// ω-slice-V: when `@:fmt(trailOptParseGate(...))` is present
-				// (parseGateCall != null) the matchLit/expectLit choice is
-				// made at runtime from the parsed child shape, so a
-				// non-brace expr still hits `expectLit` (throws → statement
-				// boundary preserved). Without the gate the emission is
-				// exactly the pre-slice three-line form (byte-identical for
-				// every other ctor).
-				// ω-slice-X2: extend the Slice-V gate so the trail `;` is
-				// ALSO optional when an `else` keyword immediately follows.
-				// An `ExprStmt` followed by `else` is only ever an
-				// if-then-body in valid Haxe (a stray `else` after any other
-				// statement was already a parse error), so relaxing the `;`
-				// there only newly-accepts the valid `if (c) bareExpr else
-				// …` form — it cannot regress a previously-valid input. The
-				// `peekKw` is non-consuming (the `else` belongs to
-				// `HxIfStmt.elseBody`'s own `@:optional @:kw('else')`). Still
-				// `parseGateCall`-guarded (sole consumer `HxStatement.
-				// ExprStmt`) → byte-identical for every other ctor.
-				// ω-slice-X3 (Slice 44 — `}`-terminator): extend the gate
-				// further so the trail `;` is optional when the next non-
-				// trivia byte is `}`. An `ExprStmt` followed by `}` is only
-				// ever the last stmt of an enclosing block in valid Haxe —
-				// the closing brace itself is unambiguously the statement
-				// separator, regardless of the just-parsed expr's kind. This
-				// generalises the per-ctor extensions accumulated across
-				// Slices 19/28/30/39/42/43 (BlockExpr / MetaExpr-ReturnExpr /
-				// ObjectLit / ArrayExpr / DollarBlockExpr / Is) — each only
-				// got `;` elision because its OWN tail token happened to
-				// close a brace/bracket; the principled invariant is
-				// extrinsic, not intrinsic. Cascade-safe: `f(); g();` keeps
-				// the inter-stmt `;` because `peekLit("}")` only succeeds
-				// when `}` is genuinely next; `f() g()` (no `;`, no `}`)
-				// still throws on the missing `;`. The `peekLit` is
-				// non-consuming — the `}` belongs to the enclosing block's
-				// Star `@:trail('}')`. Sole consumer remains `HxStatement.
-				// ExprStmt`. Closes the `expected="//"` cluster's bare-call/
-				// bare-ident drivers (issue_357 array-comprehension etc.).
-				// ω-slice-X4 (Slice 51 — `case`/`default`-terminator): extend
-				// the gate further so the trail `;` is optional when the
-				// next non-trivia bytes form a word-boundary-checked
-				// `case` or `default` keyword. `case` and `default` are
-				// reserved in Haxe and legal ONLY as switch arm labels, so
-				// an `ExprStmt` followed by either keyword can only be the
-				// last stmt of a switch arm — the next `case`/`default`
-				// label itself is unambiguously the arm separator,
-				// regardless of the just-parsed expr's kind. Closes the
-				// `Cli.hx` dogfooding gap (try-expr-catch `try x = foo()
-				// catch (e:Exception) { … }` as the body of a switch arm
-				// followed by another `case`). Byte-twin of the `peekKw("else")`
-				// disjunct above — same word-boundary check, same
-				// non-consuming nature (the `case`/`default` belongs to the
-				// enclosing switch's `Star` of case clauses). Sole consumer
-				// remains `HxStatement.ExprStmt`. Cascade-safe: `f() g()`
-				// inside a switch arm still throws (`g` is neither `case`
-				// nor `default`).
-				final gateCond: Null<Expr> = parseGateCall != null
-					? (macro ($parseGateCall || peekKw(ctx, 'else') || peekLit(ctx, '}') || peekKw(ctx, 'case') || peekKw(ctx, 'default')))
-					: null;
-				if (parseGateCall != null && triviaTrailOpt)
-					steps.push(macro final _trailPresent: Bool = $gateCond
-						? matchLit(ctx, $v{trailText})
-						: {
-							expectLit(ctx, $v{trailText});
-							true;
-						});
-				else if (parseGateCall != null && trailOptional)
-					steps.push(macro if ($gateCond)
-matchLit(ctx, $v{trailText})
-else
-expectLit(ctx, $v{trailText}));
-				else if (triviaTrailOpt)
-					steps.push(macro final _trailPresent: Bool = matchLit(ctx, $v{trailText}));
-				else if (trailOptional)
-					steps.push(macro matchLit(ctx, $v{trailText}));
-				else
-					steps.push(macro expectLit(ctx, $v{trailText}));
-			}
-			steps.push(macro return $ctorCall);
-			return macro $b{steps};
-		}
+		if (litList == null && children.length == 1 && children[0].kind == Ref) return lowerKwRefBranch(branch, typePath, ctorRef);
 
 		Context.fatalError('Lowering: unsupported enum branch shape for ${simpleName(typePath)}.${ctor}', Context.currentPos());
 		throw 'unreachable';
@@ -5574,6 +5243,349 @@ expectLit(ctx, $v{trailText}));
 			expectLit(ctx, $v{trailText});
 			return $ctorCall;
 		};
+	}
+
+	/**
+	 * Case 3 (extended): single-arg ctor wrapping a Ref, with optional
+	 * kw/lit lead and optional lit trail. No separator loop — that's Case
+	 * 4's domain. Emits the kw (word-boundary checked) and/or lead literal,
+	 * the structurally-parsed inner Ref, and the optional trail literal,
+	 * threading the trivia-mode source-capture probes into the synth ctor.
+	 * Extracted from `lowerEnumBranch` so the dispatcher stays under the
+	 * complexity gate.
+	 */
+	private function lowerKwRefBranch(branch: ShapeNode, typePath: String, ctorRef: Expr): Expr {
+		final children: Array<ShapeNode> = branch.children;
+		final leadText: Null<String> = branch.annotations.get('lit.leadText');
+		final trailText: Null<String> = branch.annotations.get('lit.trailText');
+		final refName: String = children[0].annotations.get('base.ref');
+		// ω-cast-bind-tightness (Slice 46): `@:fmt(atomOperand)` on a
+		// single-Ref kw branch routes the operand parse to the
+		// `${parseFn}Atom` variant of the sub-rule instead of the
+		// full Pratt entry. The operand binds at atom level (atom
+		// wrapper — includes postfix loop and prefix, excludes infix
+		// Pratt), so a trailing binary operator stays for the outer
+		// Pratt loop instead of being swallowed into the operand.
+		// Mirrors `@:prefix` semantics for word-keyword unary operators
+		// without requiring the prefix-extension work. Consumed by
+		// `HxExpr.CastExpr` so `cast (x) is Bool` parses as
+		// `Is(CastExpr(ParenExpr(x)), Bool)` (Haxe-faithful), not as
+		// `CastExpr(Is(ParenExpr(x), Bool))`. The atom fn name pattern
+		// `${baseFn}Atom` matches all three pipeline-mode fn-name
+		// conventions (`parseHxExpr` / `parseHxExprS` / `parseHxExprT`
+		// → `parseHxExprAtom` / `parseHxExprSAtom` / `parseHxExprTAtom`).
+		final atomOperand: Bool = branch.fmtHasFlag('atomOperand');
+		final subFnName: String = atomOperand ? '${parseFnName(refName)}Atom' : parseFnName(refName);
+		final callSub: Expr = {
+			expr: ECall(macro $i{subFnName}, [macro ctx]),
+			pos: Context.currentPos(),
+		};
+		final trailOptional: Bool = branch.annotations.get('lit.trailOptional') == true;
+		// ω-trailopt-source-track: in trivia mode, paired Alt ctors
+		// of `@:trailOpt(...)` branches carry an extra positional
+		// `trailPresent:Bool` arg synthesised by `TriviaTypeSynth`.
+		// Pass the captured `matchLit` result through so the writer
+		// can preserve source presence of the trail literal.
+		final triviaTrailOpt: Bool = trailOptional && ctx.trivia && isTriviaBearing(typePath);
+		// ω-slice-V — parser-side shape-gated trail literal. A ctor
+		// carrying `@:fmt(trailOptParseGate('<adapter>'))` alongside
+		// `@:trailOpt(...)` makes the optional-trail decision depend on
+		// the just-parsed child `_raw`: `<adapter>(_raw)` true →
+		// `matchLit` (`;` optional, brace-terminated expr); false →
+		// `expectLit` (`;` required — THROWS to terminate the
+		// statement, preserving the Star-loop boundary). `<adapter>`
+		// is a plugin predicate reached via the schema instance, the
+		// same `formatInfo.schemaTypePath` `.instance.<m>` channel the
+		// generated parser already uses for `unescapeChar`. Strictly
+		// opt-in: `parseGate == null` → the unconditional emission
+		// below is byte-identical, so every other `@:trailOpt` ctor
+		// (`VarStmt` / `FinalStmt` / `ReturnStmt` / …) is untouched.
+		// Sole consumer: `HxStatement.ExprStmt` (the no-keyword
+		// catch-all, where a blanket optional `;` would break boundary
+		// detection — hence the shape gate instead).
+		final parseGate: Null<Array<String>> = branch.fmtReadStringArgs('trailOptParseGate');
+		final parseGateCall: Null<Expr> = if (parseGate != null && parseGate.length == 1) {
+			final fmtParts: Array<String> = formatInfo.schemaTypePath.split('.');
+			{
+				expr: ECall({ expr: EField(macro $p{fmtParts}.instance, parseGate[0]), pos: Context.currentPos() }, [macro _raw]),
+				pos: Context.currentPos(),
+			};
+		} else
+			null;
+		// ω-string-interp-noformat: ctors with `@:fmt(captureSource)` +
+		// `@:lead`/`@:trail` carry a positional `sourceText:String` arg
+		// in trivia mode. The parser captures the byte slice between
+		// lead and trail (inclusive of any interior whitespace) so the
+		// writer can emit verbatim under
+		// `opt.formatStringInterpolation == false`. Trivia-only because
+		// the synth-pair ctor is the carrier; plain pipelines keep the
+		// pre-slice ctor arity.
+		final triviaCaptureSource: Bool = ctx.trivia && isTriviaBearing(typePath) && TriviaTypeSynth.isCaptureSourceBranch(branch);
+		// ω-issue-257-firstline: ctors with `@:fmt(bodyPolicy(...))` on a
+		// single-Ref kw-led branch (e.g. `HxStatement.ReturnStmt`) carry
+		// a positional `bodyOnSameLine:Bool` arg in the synth pair. The
+		// parser captures whether the post-kw whitespace crossed a
+		// newline so `bodyPolicyWrap`'s `Keep` branch can dispatch
+		// source-shape-aware. Trivia-only — plain mode keeps the
+		// original ctor arity and falls back to width-driven layout
+		// via `widthAware`.
+		final triviaBodyPolicyKw: Bool = ctx.trivia && isTriviaBearing(typePath) && TriviaTypeSynth.isAltBodyPolicyKwBranch(branch);
+		// omega-paren-wrap-source-newline: ctors with @:fmt(captureWrapOpenNewline)
+		// on a single-Ref @:wrap branch carry a positional wrapOpenNewline:
+		// Bool arg in the synth pair. Parser captures whether the gap
+		// between the open lead literal and the inner sub-rule's first
+		// token crossed a newline so the writer can pick between
+		// `(\n<inner>\n)` (open broken; preserves authored shape on
+		// chain inners) and `(<inner>\n)` (glued; unchanged default).
+		// Trivia-only; plain mode keeps the original ctor arity.
+		final triviaWrapOpenNewline: Bool = ctx.trivia && isTriviaBearing(typePath) && TriviaTypeSynth.isAltWrapOpenNewlineBranch(branch);
+		// ω-keep-kw-newline (increment 1b): mandatory-`@:kw` VarStmt-family
+		// ctors with `@:fmt(captureKwNewline)` carry a positional
+		// `kwNewline:Bool` arg. The parser captures whether the gap between
+		// the LAST keyword / lead literal (`var` / `final`) and the inner
+		// `decl` Ref's first token crossed a newline, so the writer's
+		// `HxVarDecl` multiVar fold reproduces the source `var`→head newline
+		// under `WrapMode.Keep`. Trivia-only; plain mode keeps the original
+		// ctor arity (head always glued to `var `).
+		final triviaKwNewline: Bool = ctx.trivia && isTriviaBearing(typePath) && TriviaTypeSynth.isAltKwNewlineBranch(branch);
+		final ctorArgs: Array<Expr> = [macro _raw];
+		if (triviaTrailOpt) ctorArgs.push(macro _trailPresent);
+		if (triviaCaptureSource) ctorArgs.push(macro _sourceText);
+		if (triviaBodyPolicyKw) ctorArgs.push(macro _bodyOnSameLine);
+		if (triviaWrapOpenNewline) ctorArgs.push(macro _wrapOpenNewline);
+		if (triviaKwNewline) ctorArgs.push(macro _varKwNewline);
+		final ctorCall: Expr = { expr: ECall(ctorRef, ctorArgs), pos: Context.currentPos() };
+		final kwLead: Null<String> = branch.annotations.get('kw.leadText');
+		final steps: Array<Expr> = [macro skipWs(ctx)];
+		// `@:kw` and `@:wrap`/`@:lead` compose on the same single-Ref
+		// branch: emit kw (word-boundary checked) first, then the lead
+		// literal. The composed shape supports kw-led ctors that wrap
+		// their payload in matched delimiters — keyword commits the
+		// branch and the wrap pair delimits the structurally-parsed
+		// inner Ref. Either or both may be absent — the `@:kw('return')`
+		// -only ctors keep their pre-slice shape, and a bare `@:wrap`
+		// -only ctor (`ParenExpr`) stays a single-literal commit.
+		// ω-untyped-keep-trybody: branch-level `@:fmt(forwardNewlineForBody)`
+		// opt-in tells Case 3 to OMIT the post-kw `skipWs(ctx)` so the
+		// inner sub-rule's first-field `collectTrivia` can scan the gap
+		// itself and capture `newlineBefore` onto the synth
+		// `<field>BeforeNewline:Bool` slot. Pairs with field-level
+		// `@:fmt(beforeNewlineSlotFirst)` on the inner struct's first
+		// Ref field — both must be present for the channel to work.
+		// Without the flag the post-kw `skipWs` runs as before, which
+		// is the right default for every other Case 3 kw-branch (`if`,
+		// `while`, `for`, `do`, `switch`, `throw`, etc.). Currently
+		// consumed only by `HxStatement.TryCatchStmt` (issue_362
+		// _untyped_body_keep `try\n\tuntyped {…}` shape).
+		final forwardNewlineForBody: Bool = branch.fmtHasFlag('forwardNewlineForBody');
+		// `forwardNewlineForBody` omits the post-kw `skipWs`. The
+		// `triviaBodyPolicyKw` capture (`_bodyOnSameLine` from
+		// `hasNewlineIn(_kwEndPos, ctx.pos)`) would then scan an empty
+		// range and silently degenerate to `_bodyOnSameLine=true`. The
+		// two channels target the same data (post-kw newline) via
+		// different routes — combining them is a grammar error.
+		if (forwardNewlineForBody && triviaBodyPolicyKw)
+			Context.fatalError(
+				'Lowering: @:fmt(forwardNewlineForBody) on a @:fmt(bodyPolicy(...)) branch is a conflict — both channels capture the post-kw newline; pick one.',
+				Context.currentPos()
+			);
+		// ω-keep-kw-newline (increment 1b): track the byte position right
+		// after the LAST consumed keyword / lead literal (BEFORE its post-
+		// literal `skipWs`) so the `_varKwNewline` probe spans the gap up to
+		// the inner `decl` Ref's first token. Reassigned after each
+		// `expectKw` / `expectLit` so the last one wins (`static var` →
+		// after `var`). Declared only when the branch opts in.
+		if (triviaKwNewline) steps.push(macro var _lastLitEnd: Int = ctx.pos);
+		if (kwLead != null) {
+			steps.push(macro expectKw(ctx, $v{kwLead}));
+			if (triviaKwNewline) steps.push(macro _lastLitEnd = ctx.pos);
+			// ω-issue-257-firstline: capture `_kwEndPos` BEFORE the
+			// post-kw `skipWs` so `_bodyOnSameLine` can probe whether
+			// the gap up to the body's first token crossed a newline.
+			// Mirrors the struct-side `_bodyOnSameLine_<field>` capture
+			// in `lowerStruct`'s `@:optional @:kw` path.
+			if (triviaBodyPolicyKw) steps.push(macro final _kwEndPos: Int = ctx.pos);
+			if (!forwardNewlineForBody) steps.push(macro skipWs(ctx));
+			if (triviaBodyPolicyKw) steps.push(macro final _bodyOnSameLine: Bool = !hasNewlineIn(ctx.input, _kwEndPos, ctx.pos));
+		}
+		if (leadText != null) {
+			steps.push(macro expectLit(ctx, $v{leadText}));
+			if (triviaKwNewline) steps.push(macro _lastLitEnd = ctx.pos);
+			// omega-paren-wrap-source-newline: capture _leadEndPos BEFORE
+			// the post-lead skipWs so _wrapOpenNewline can probe whether
+			// the gap up to the inner sub-rule's first token crossed a
+			// newline. Mirrors the kw-led _kwEndPos / _bodyOnSameLine
+			// pattern above.
+			if (triviaWrapOpenNewline) steps.push(macro final _leadEndPos: Int = ctx.pos);
+			steps.push(macro skipWs(ctx));
+			if (triviaWrapOpenNewline) steps.push(macro final _wrapOpenNewline: Bool = hasNewlineIn(ctx.input, _leadEndPos, ctx.pos));
+		}
+		// ω-keep-kw-newline (increment 1b): the gap probe runs AFTER both the
+		// kw and lead skipWs but BEFORE `_raw = callSub`, so `ctx.pos` sits at
+		// the inner `decl` Ref's first token. `_lastLitEnd` holds the end of
+		// the last literal before its skipWs, so `hasNewlineIn` spans exactly
+		// the `var`→head gap.
+		if (triviaKwNewline) steps.push(macro final _varKwNewline: Bool = hasNewlineIn(ctx.input, _lastLitEnd, ctx.pos));
+		// Capture _start_pos AFTER any lead literal AND its skipWs, so
+		// the substring spans only what lives between lead and trail.
+		// In `@:raw` rules the `skipWs` call gets stripped by the rule-
+		// level post-process, but the capture still works — `ctx.pos`
+		// at this point is the position of the first byte after the
+		// lead literal.
+		if (triviaCaptureSource) steps.push(macro final _start_pos: Int = ctx.pos);
+		steps.push({
+			expr: EVars([
+				{
+					name: '_raw',
+					type: null,
+					expr: callSub,
+					isFinal: true,
+				}
+			]),
+			pos: Context.currentPos(),
+		});
+		if (trailText != null) {
+			// ω-trailopt-stash-trivia: in trivia mode + `@:trailOpt`, use
+			// `skipWsAndStash` so trailing comments between the body and
+			// the optional trail literal land in `ctx.pendingTrivia`.
+			// When the trail is ABSENT (e.g. `typedef Foo = Int\n/** doc
+			// **/\ntypedef Bar`), the parent Star's next `collectTrivia`
+			// drains the stash and the doc-comment becomes leading of the
+			// next decl. The plain `skipWs` path silently dropped it.
+			// Cases: issue_216 / issue_321 closures. Mandatory `@:trail`
+			// paths keep the original `skipWs` — comments before a
+			// required trail literal are intra-decl close trivia and the
+			// downstream writer handles them via close-trail slots.
+			if (triviaTrailOpt) {
+				// ω-trailopt-stash-trivia: capture the gap between the
+				// inner Ref's last byte and the (optional) trail literal
+				// via `collectTrivia` — captures `newlineBefore` /
+				// `blankBefore` AND any line/block comments. Re-stash
+				// into `ctx.pendingTrivia` when anything was captured so
+				// the parent Star's next `collectTrivia` drains them as
+				// leading of the next sibling decl (the trail literal
+				// was absent so there's no intra-decl trailing slot to
+				// route to). Plain `skipWsAndStash` would lose the
+				// blank/newline signal.
+				steps.push(macro {
+					final _trailOptCap = collectTrivia(ctx);
+					if (
+						_trailOptCap.newlineBefore || _trailOptCap.blankBefore || _trailOptCap.blankAfterLeadingComments
+						|| _trailOptCap.leadingComments.length > 0
+					) {
+						ctx.pendingTrivia = {
+							blankBefore: _trailOptCap.blankBefore,
+							blankAfterLeadingComments: _trailOptCap.blankAfterLeadingComments,
+							newlineBefore: _trailOptCap.newlineBefore,
+							leadingComments: _trailOptCap.leadingComments,
+						};
+					}
+				});
+			} else
+				steps.push(macro skipWs(ctx));
+			// Capture _end_pos AFTER the post-Ref skipWs but BEFORE the
+			// trail-literal match, so trailing whitespace inside the
+			// braces (e.g. `${ i + 1 }`) is included in the verbatim
+			// slice. In `@:raw` rules the skipWs is stripped at post-
+			// process time and the capture lands at the position of
+			// the trail literal directly.
+			if (triviaCaptureSource) {
+				steps.push(macro final _end_pos: Int = ctx.pos);
+				steps.push(macro final _sourceText: String = ctx.input.substring(_start_pos, _end_pos));
+			}
+			// `@:trailOpt` annotates `lit.trailOptional:true` alongside
+			// `lit.trailText`. The trail literal becomes optional on
+			// parse — `matchLit` peeks + consumes if present, but does
+			// NOT throw if absent. In trivia mode the captured presence
+			// flag flows into the synth ctor's extra `trailPresent:Bool`
+			// arg (slice ω-trailopt-source-track 2026-05-02). Plain
+			// mode keeps the original ctor arity and falls back to
+			// AST-shape gates such as `@:fmt(trailOptShapeGate(...))`
+			// in the writer.
+			// Consumers: `HxDecl.TypedefDecl` for `typedef Foo = T`
+			// without trailing `;` (slice ω-typedef-trailOpt);
+			// `HxStatement.VarStmt` / `FinalStmt` for `var foo =
+			// switch (x) { case _: 1 }` without trailing `;` (slice
+			// ω-vardecl-trailOpt — the `}`-terminated rhs idiom).
+			// ω-slice-V: when `@:fmt(trailOptParseGate(...))` is present
+			// (parseGateCall != null) the matchLit/expectLit choice is
+			// made at runtime from the parsed child shape, so a
+			// non-brace expr still hits `expectLit` (throws → statement
+			// boundary preserved). Without the gate the emission is
+			// exactly the pre-slice three-line form (byte-identical for
+			// every other ctor).
+			// ω-slice-X2: extend the Slice-V gate so the trail `;` is
+			// ALSO optional when an `else` keyword immediately follows.
+			// An `ExprStmt` followed by `else` is only ever an
+			// if-then-body in valid Haxe (a stray `else` after any other
+			// statement was already a parse error), so relaxing the `;`
+			// there only newly-accepts the valid `if (c) bareExpr else
+			// …` form — it cannot regress a previously-valid input. The
+			// `peekKw` is non-consuming (the `else` belongs to
+			// `HxIfStmt.elseBody`'s own `@:optional @:kw('else')`). Still
+			// `parseGateCall`-guarded (sole consumer `HxStatement.
+			// ExprStmt`) → byte-identical for every other ctor.
+			// ω-slice-X3 (Slice 44 — `}`-terminator): extend the gate
+			// further so the trail `;` is optional when the next non-
+			// trivia byte is `}`. An `ExprStmt` followed by `}` is only
+			// ever the last stmt of an enclosing block in valid Haxe —
+			// the closing brace itself is unambiguously the statement
+			// separator, regardless of the just-parsed expr's kind. This
+			// generalises the per-ctor extensions accumulated across
+			// Slices 19/28/30/39/42/43 (BlockExpr / MetaExpr-ReturnExpr /
+			// ObjectLit / ArrayExpr / DollarBlockExpr / Is) — each only
+			// got `;` elision because its OWN tail token happened to
+			// close a brace/bracket; the principled invariant is
+			// extrinsic, not intrinsic. Cascade-safe: `f(); g();` keeps
+			// the inter-stmt `;` because `peekLit("}")` only succeeds
+			// when `}` is genuinely next; `f() g()` (no `;`, no `}`)
+			// still throws on the missing `;`. The `peekLit` is
+			// non-consuming — the `}` belongs to the enclosing block's
+			// Star `@:trail('}')`. Sole consumer remains `HxStatement.
+			// ExprStmt`. Closes the `expected="//"` cluster's bare-call/
+			// bare-ident drivers (issue_357 array-comprehension etc.).
+			// ω-slice-X4 (Slice 51 — `case`/`default`-terminator): extend
+			// the gate further so the trail `;` is optional when the
+			// next non-trivia bytes form a word-boundary-checked
+			// `case` or `default` keyword. `case` and `default` are
+			// reserved in Haxe and legal ONLY as switch arm labels, so
+			// an `ExprStmt` followed by either keyword can only be the
+			// last stmt of a switch arm — the next `case`/`default`
+			// label itself is unambiguously the arm separator,
+			// regardless of the just-parsed expr's kind. Closes the
+			// `Cli.hx` dogfooding gap (try-expr-catch `try x = foo()
+			// catch (e:Exception) { … }` as the body of a switch arm
+			// followed by another `case`). Byte-twin of the `peekKw("else")`
+			// disjunct above — same word-boundary check, same
+			// non-consuming nature (the `case`/`default` belongs to the
+			// enclosing switch's `Star` of case clauses). Sole consumer
+			// remains `HxStatement.ExprStmt`. Cascade-safe: `f() g()`
+			// inside a switch arm still throws (`g` is neither `case`
+			// nor `default`).
+			final gateCond: Null<Expr> = parseGateCall != null
+				? (macro ($parseGateCall || peekKw(ctx, 'else') || peekLit(ctx, '}') || peekKw(ctx, 'case') || peekKw(ctx, 'default')))
+				: null;
+			if (parseGateCall != null && triviaTrailOpt)
+				steps.push(macro final _trailPresent: Bool = $gateCond
+					? matchLit(ctx, $v{trailText})
+					: {
+						expectLit(ctx, $v{trailText});
+						true;
+					});
+			else if (parseGateCall != null && trailOptional)
+				steps.push(macro if ($gateCond)
+matchLit(ctx, $v{trailText})
+else
+expectLit(ctx, $v{trailText}));
+			else if (triviaTrailOpt)
+				steps.push(macro final _trailPresent: Bool = matchLit(ctx, $v{trailText}));
+			else if (trailOptional)
+				steps.push(macro matchLit(ctx, $v{trailText}));
+			else
+				steps.push(macro expectLit(ctx, $v{trailText}));
+		}
+		steps.push(macro return $ctorCall);
+		return macro $b{steps};
 	}
 
 }
