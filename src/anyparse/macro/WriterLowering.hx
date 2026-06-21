@@ -1461,11 +1461,7 @@ class WriterLowering {
 						}
 						: null;
 					final optParts: Array<Expr> = [];
-					// ω-N-break-after-eq: when the meta-gated helper bundles the
-					// lead + RHS together (via the natural-first-line probe), the
-					// post-branch unconditional `optParts.push(writeCall)` must be
-					// skipped — the RHS is already inside the bundled Doc.
-					var breakAfterEqEmitted: Bool = false;
+					// ω-N-break-after-eq: lead+RHS bundle handled in emitOptionalRefLead.
 					if (kwLead != null) {
 						final sepBaseExpr: Expr = sameLineSeparator(child, prevBodyField, typePath, prevPadTrailing);
 						final sepWithBeforeKwExpr: Expr = beforeKwLeadingExpr != null
@@ -1519,94 +1515,11 @@ class WriterLowering {
 							optParts.push(writeCall);
 						}
 					} else if (leadText != null) {
-						final isFieldTight: Bool = child.fmtHasFlag('tightLead');
-						if (isTightLead(leadText)) {
-							// ω-E-whitespace: `@:fmt(typeHintColon)` on
-							// optional-Ref tight leads routes through the same
-							// WhitespacePolicy helper as mandatory leads.
-							// Without the flag the `None` default keeps the
-							// tight `_dt(leadText)` byte-identical to the pre-
-							// flag path (`f():Void`).
-							optParts.push(whitespacePolicyLead(child, leadText, ['typeHintColon']));
-						} else if (isFieldTight) {
-							// Slice 26 — per-field `@:fmt(tightLead)`: opts an
-							// optional Ref's `@:lead` into tight emission
-							// without joining the format-level `tightLeads`
-							// list. No leading separator, no trailing
-							// `_dop(' ')` — bare `_dt(leadText)` only.
-							// Consumer: `HxVarDecl.access` (`@:lead('(')` for
-							// property accessor clause). Format-level
-							// `tightLeads` can't carry `(` because other
-							// `@:lead('(')` sites (`HxFnDecl.params`,
-							// `HxIfStmt.cond`, etc.) have distinct handlers.
-							optParts.push(macro _dt($v{leadText}));
-						} else if (firstFmtFlag(child, ['typeParamDefaultEquals']) != null) {
-							// ω-typeparam-default-equals: optional non-tight lead with
-							// `@:fmt(typeParamDefaultEquals)` collapses the
-							// pre-slice `sameLineSeparator + leadText + ' '` pair
-							// into a single `whitespacePolicyLead` switch so
-							// `WhitespacePolicy.None` can produce a tight
-							// `<T=Int>` (matching `whitespace.binopPolicy: "none"`).
-							// The default `Both` branch emits ` = ` — byte-
-							// identical to the previous pair when the field has
-							// no `@:fmt(sameLine(...))` companion.
-							optParts.push(whitespacePolicyLead(child, leadText, ['typeParamDefaultEquals']));
-						} else {
-							optParts.push(sameLineSeparator(child, prevBodyField, typePath, prevPadTrailing));
-							// ω-N-break-after-eq: `@:fmt(breakAfterLeadIfLhsTypeParam('type'))`
-							// (today: `HxVarDecl.init`) bundles the lead + RHS through
-							// the natural-first-line probe so the `=`-break only fires
-							// when the RHS's NATURAL first line still overflows (a
-							// NoWrap-pinned RHS), NOT when the RHS wraps its own
-							// call-args. The bundled Doc already contains the RHS, so
-							// the post-branch unconditional `writeCall` push is skipped.
-							final breakAfterEqArg: Null<String> = child.fmtReadString('breakAfterLeadIfLhsTypeParam');
-							if (breakAfterEqArg != null && !isTightLead(leadText)) {
-								optParts.push(breakAfterLeadIfLhsTypeParamWrap(leadText, writeCall, breakAfterEqArg));
-								breakAfterEqEmitted = true;
-							} else {
-								// Trailing space after a non-tight optional lead
-								// is split into a literal `_dt(leadText)` plus an
-								// `_dop(' ')`. The optional space is dropped by
-								// the renderer when the value emits a leading
-								// hardline (e.g. `var x = {…}` with
-								// `leftCurly=Next` on the object literal),
-								// producing `var x =\n{…}` cleanly. For all
-								// other values the rendering is byte-identical
-								// to the pre-slice `_dt(leadText + ' ')` path.
-								optParts.push(macro _dt($v{leadText}));
-								optParts.push(macro _dop(' '));
-							}
-						}
-						if (!breakAfterEqEmitted) optParts.push(writeCall);
-						// ω-optional-ref-trail: bracket-pair close for an
-						// `@:optional @:lead(<open>) @:trail(<close>)` Ref.
-						// Pushed INSIDE optParts so the trail rides the
-						// `_optVal != null` runtime gate (absent value
-						// suppresses both lead and trail). Bracket-tight by
-						// design — no separator before the close, mirroring
-						// the mandatory-Ref trail emit (`!isOptional` arm
-						// below). First consumer: `HxAbstractDecl.
-						// underlyingType` (`(T)` group) for the bare-abstract
-						// shape (Slice 40).
-						if (trailText != null)
-							optParts.push(macro _dt($v{trailText}));
-						// ω-struct-trailopt-source-track (Session 14 Phase 4):
-						// optional Ref + kw/lead + `@:trailOpt(LIT)` lands here
-						// as a parallel push (`trailText` covers `@:trail`,
-						// `trailOptText` covers `@:trailOpt`; the two are
-						// mutually exclusive in the same field). Gate on
-						// `hasStructFieldTrailOptSlot` (trivia mode + bearing)
-						// so plain mode and non-bearing rules preserve pre-
-						// Phase-4 silent-drop behaviour for now (no slot to
-						// consult, no canonical answer either — earlier code
-						// simply never reached this trail at all). The
-						// `<field>TrailPresent` slot is `null` only on raw->
-						// paired upcasts from `Converters.rawToPaired_*`; the
-						// `==false` test degrades safely there — null falls
-						// through to canonical emit.
-						else if (hasStructFieldTrailOptSlot && trailOptText != null)
-							optParts.push(macro $structTrailOptAccess == false ? _de() : _dt($v{trailOptText}));
+						emitOptionalRefLead(
+							child, optParts, leadText, writeCall, prevBodyField, typePath, prevPadTrailing, trailText, trailOptText,
+							hasStructFieldTrailOptSlot, structTrailOptAccess
+						);
+						// (ω-optional-ref-trail / trailOpt pushes live in emitOptionalRefLead)
 					} else if (bodyPolicyFlag != null) {
 						// ω-absent-on-bodypolicy: optional Ref with no kw /
 						// lead but `@:fmt(bodyPolicy(...))`. The leftCurly
@@ -15358,6 +15271,113 @@ class WriterLowering {
 			} else
 				_dt(_condStr);
 		};
+	}
+
+	/**
+	 * Emit the lead + value + trail of an optional `@:lead`-bearing Ref struct
+	 * field into `optParts` (the `case Ref if (isOptional)` `leadText != null`
+	 * arm). Handles tight leads, `@:fmt(tightLead)`, `@:fmt(typeParamDefaultEquals)`,
+	 * the ω-N-break-after-eq bundle, and the optional-ref-trail / trailOpt pushes.
+	 * Extracted from `lowerStruct`.
+	 */
+	private function emitOptionalRefLead(
+		child: ShapeNode, optParts: Array<Expr>, leadText: String, writeCall: Expr, prevBodyField: Null<PrevBodyInfo>, typePath: String,
+		prevPadTrailing: Null<Expr>, trailText: Null<String>, trailOptText: Null<String>, hasStructFieldTrailOptSlot: Bool,
+		structTrailOptAccess: Null<Expr>
+	): Void {
+		// ω-N-break-after-eq: when the meta-gated helper bundles the
+		// lead + RHS together (via the natural-first-line probe), the
+		// post-branch unconditional `optParts.push(writeCall)` must be
+		// skipped — the RHS is already inside the bundled Doc.
+		var breakAfterEqEmitted: Bool = false;
+		final isFieldTight: Bool = child.fmtHasFlag('tightLead');
+		if (isTightLead(leadText)) {
+			// ω-E-whitespace: `@:fmt(typeHintColon)` on
+			// optional-Ref tight leads routes through the same
+			// WhitespacePolicy helper as mandatory leads.
+			// Without the flag the `None` default keeps the
+			// tight `_dt(leadText)` byte-identical to the pre-
+			// flag path (`f():Void`).
+			optParts.push(whitespacePolicyLead(child, leadText, ['typeHintColon']));
+		} else if (isFieldTight) {
+			// Slice 26 — per-field `@:fmt(tightLead)`: opts an
+			// optional Ref's `@:lead` into tight emission
+			// without joining the format-level `tightLeads`
+			// list. No leading separator, no trailing
+			// `_dop(' ')` — bare `_dt(leadText)` only.
+			// Consumer: `HxVarDecl.access` (`@:lead('(')` for
+			// property accessor clause). Format-level
+			// `tightLeads` can't carry `(` because other
+			// `@:lead('(')` sites (`HxFnDecl.params`,
+			// `HxIfStmt.cond`, etc.) have distinct handlers.
+			optParts.push(macro _dt($v{leadText}));
+		} else if (firstFmtFlag(child, ['typeParamDefaultEquals']) != null) {
+			// ω-typeparam-default-equals: optional non-tight lead with
+			// `@:fmt(typeParamDefaultEquals)` collapses the
+			// pre-slice `sameLineSeparator + leadText + ' '` pair
+			// into a single `whitespacePolicyLead` switch so
+			// `WhitespacePolicy.None` can produce a tight
+			// `<T=Int>` (matching `whitespace.binopPolicy: "none"`).
+			// The default `Both` branch emits ` = ` — byte-
+			// identical to the previous pair when the field has
+			// no `@:fmt(sameLine(...))` companion.
+			optParts.push(whitespacePolicyLead(child, leadText, ['typeParamDefaultEquals']));
+		} else {
+			optParts.push(sameLineSeparator(child, prevBodyField, typePath, prevPadTrailing));
+			// ω-N-break-after-eq: `@:fmt(breakAfterLeadIfLhsTypeParam('type'))`
+			// (today: `HxVarDecl.init`) bundles the lead + RHS through
+			// the natural-first-line probe so the `=`-break only fires
+			// when the RHS's NATURAL first line still overflows (a
+			// NoWrap-pinned RHS), NOT when the RHS wraps its own
+			// call-args. The bundled Doc already contains the RHS, so
+			// the post-branch unconditional `writeCall` push is skipped.
+			final breakAfterEqArg: Null<String> = child.fmtReadString('breakAfterLeadIfLhsTypeParam');
+			if (breakAfterEqArg != null && !isTightLead(leadText)) {
+				optParts.push(breakAfterLeadIfLhsTypeParamWrap(leadText, writeCall, breakAfterEqArg));
+				breakAfterEqEmitted = true;
+			} else {
+				// Trailing space after a non-tight optional lead
+				// is split into a literal `_dt(leadText)` plus an
+				// `_dop(' ')`. The optional space is dropped by
+				// the renderer when the value emits a leading
+				// hardline (e.g. `var x = {…}` with
+				// `leftCurly=Next` on the object literal),
+				// producing `var x =\n{…}` cleanly. For all
+				// other values the rendering is byte-identical
+				// to the pre-slice `_dt(leadText + ' ')` path.
+				optParts.push(macro _dt($v{leadText}));
+				optParts.push(macro _dop(' '));
+			}
+		}
+		if (!breakAfterEqEmitted) optParts.push(writeCall);
+		// ω-optional-ref-trail: bracket-pair close for an
+		// `@:optional @:lead(<open>) @:trail(<close>)` Ref.
+		// Pushed INSIDE optParts so the trail rides the
+		// `_optVal != null` runtime gate (absent value
+		// suppresses both lead and trail). Bracket-tight by
+		// design — no separator before the close, mirroring
+		// the mandatory-Ref trail emit (`!isOptional` arm
+		// below). First consumer: `HxAbstractDecl.
+		// underlyingType` (`(T)` group) for the bare-abstract
+		// shape (Slice 40).
+		if (trailText != null)
+			optParts.push(macro _dt($v{trailText}));
+		// ω-struct-trailopt-source-track (Session 14 Phase 4):
+		// optional Ref + kw/lead + `@:trailOpt(LIT)` lands here
+		// as a parallel push (`trailText` covers `@:trail`,
+		// `trailOptText` covers `@:trailOpt`; the two are
+		// mutually exclusive in the same field). Gate on
+		// `hasStructFieldTrailOptSlot` (trivia mode + bearing)
+		// so plain mode and non-bearing rules preserve pre-
+		// Phase-4 silent-drop behaviour for now (no slot to
+		// consult, no canonical answer either — earlier code
+		// simply never reached this trail at all). The
+		// `<field>TrailPresent` slot is `null` only on raw->
+		// paired upcasts from `Converters.rawToPaired_*`; the
+		// `==false` test degrades safely there — null falls
+		// through to canonical emit.
+		else if (hasStructFieldTrailOptSlot && trailOptText != null)
+			optParts.push(macro $structTrailOptAccess == false ? _de() : _dt($v{trailOptText}));
 	}
 
 }
