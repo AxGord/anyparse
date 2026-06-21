@@ -1001,76 +1001,10 @@ class WriterLowering {
 					// `null` check at the field-access boundary. Empty Doc
 					// (`_de()`) is the absent shape — the surrounding Seq
 					// emits nothing for the missing list.
-					final innerParts: Array<Expr> = [];
-					emitWriterStarField(
-						child, macro _optVal, innerParts, child == node.children[node.children.length - 1], typePath, isFirstField, isRaw,
-						stalePrevBareRefBody, prevTrailFieldName
+					emitOptionalStarField(
+						child, parts, node, typePath, isFirstField, isRaw, stalePrevBareRefBody, prevTrailFieldName, kwLead, fieldName,
+						prevBodyField, prevPadTrailing, fieldAccess
 					);
-					// ω-typeparam-spacing: when the typeParamOpen=Before/Both
-					// path injects a leading-space Doc into innerParts, the
-					// list grows to two elements. EBlock would evaluate to
-					// the last Doc only and silently drop the space — use
-					// `_dc([...])` so the writer concatenates both pieces.
-					final innerExpr: Expr = if (innerParts.length == 1)
-						innerParts[0]
-					else
-						dcCall(innerParts);
-					if (kwLead != null) {
-						// ω-cond-comp-engine: kw-led optional Star writer
-						// mirror. Splices the kw-Ref optional path's
-						// inter-field sep + kw-trivia layers (sameLineSeparator
-						// + kwBeforeDoc + kwBeforeTrailingDoc) with the Star
-						// body emitted by `emitWriterStarField`. The Star
-						// helper already honours `@:fmt(padLeading, padTrailing)`
-						// against the narrowed `_optVal:Array<T>`, so the gap
-						// between the kw and the first body element comes
-						// from the pad logic — no need for a literal trailing
-						// space on the kw token. Empty body degrades to `_de()`
-						// inside the helper, mirroring `HxConditionalMod.body`'s
-						// non-optional precedent. First consumer:
-						// `HxConditionalDecl.elseBody`.
-						final useTriviaGap: Bool = ctx.trivia;
-						final beforeKwLeadingExpr: Null<Expr> = useTriviaGap
-							? {
-								expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_LEADING_SUFFIX),
-								pos: Context.currentPos()
-							}
-							: null;
-						final beforeKwTrailingExpr: Null<Expr> = useTriviaGap
-							? {
-								expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_TRAILING_SUFFIX),
-								pos: Context.currentPos()
-							}
-							: null;
-						final sepBaseExpr: Expr = sameLineSeparator(child, prevBodyField, typePath, prevPadTrailing);
-						final sepWithBeforeKwExpr: Expr = beforeKwLeadingExpr != null
-							? macro kwBeforeDoc($beforeKwLeadingExpr, $sepBaseExpr, opt)
-							: sepBaseExpr;
-						final sepWithBeforeKwTrailingExpr: Expr = beforeKwTrailingExpr != null
-							? macro kwBeforeTrailingDoc($beforeKwTrailingExpr, $sepWithBeforeKwExpr, opt)
-							: sepWithBeforeKwExpr;
-						final kwOptParts: Array<Expr> = [
-							sepWithBeforeKwTrailingExpr,
-							macro _dt($v{kwLead}),
-							innerExpr,
-						];
-						final kwOptBody: Expr = dcCall(kwOptParts);
-						parts.push(macro {
-							final _optVal = $fieldAccess;
-							if (_optVal != null)
-								$kwOptBody
-							else
-								_de();
-						});
-					} else {
-						parts.push(macro {
-							final _optVal = $fieldAccess;
-							if (_optVal != null)
-								$innerExpr
-							else
-								_de();
-						});
-					}
 					// ω-pad-trailing-ref: optional Star with @:fmt(padTrailing)
 					// fires its trailing-pad ONLY when both `_optVal != null`
 					// AND `_optVal.length > 0` (the Star helper's empty branch
@@ -15384,6 +15318,90 @@ class WriterLowering {
 		}
 		for (lc in lcCtors) sepExpr = macro $ctorExpr == $v{lc} ? $lcSep : $sepExpr;
 		return sepExpr;
+	}
+
+	/**
+	 * Emit an optional close-peek Star struct field (first consumer:
+	 * `HxTypeRef.params`). Builds the inner Star emission against a narrowed
+	 * `_optVal`, optionally splices the kw-led sep + kw-trivia layers, and pushes
+	 * a `_optVal != null` runtime gate onto `parts`. The caller owns the post-push
+	 * accumulator resets. Extracted from `lowerStruct`.
+	 */
+	private function emitOptionalStarField(
+		child: ShapeNode, parts: Array<Expr>, node: ShapeNode, typePath: String, isFirstField: Bool, isRaw: Bool,
+		stalePrevBareRefBody: Null<PrevBodyInfo>, prevTrailFieldName: Null<String>, kwLead: Null<String>, fieldName: String,
+		prevBodyField: Null<PrevBodyInfo>, prevPadTrailing: Null<Expr>, fieldAccess: Expr
+	): Void {
+		final innerParts: Array<Expr> = [];
+		emitWriterStarField(
+			child, macro _optVal, innerParts, child == node.children[node.children.length - 1], typePath, isFirstField, isRaw,
+			stalePrevBareRefBody, prevTrailFieldName
+		);
+		// ω-typeparam-spacing: when the typeParamOpen=Before/Both
+		// path injects a leading-space Doc into innerParts, the
+		// list grows to two elements. EBlock would evaluate to
+		// the last Doc only and silently drop the space — use
+		// `_dc([...])` so the writer concatenates both pieces.
+		final innerExpr: Expr = if (innerParts.length == 1)
+			innerParts[0]
+		else
+			dcCall(innerParts);
+		if (kwLead != null) {
+			// ω-cond-comp-engine: kw-led optional Star writer
+			// mirror. Splices the kw-Ref optional path's
+			// inter-field sep + kw-trivia layers (sameLineSeparator
+			// + kwBeforeDoc + kwBeforeTrailingDoc) with the Star
+			// body emitted by `emitWriterStarField`. The Star
+			// helper already honours `@:fmt(padLeading, padTrailing)`
+			// against the narrowed `_optVal:Array<T>`, so the gap
+			// between the kw and the first body element comes
+			// from the pad logic — no need for a literal trailing
+			// space on the kw token. Empty body degrades to `_de()`
+			// inside the helper, mirroring `HxConditionalMod.body`'s
+			// non-optional precedent. First consumer:
+			// `HxConditionalDecl.elseBody`.
+			final useTriviaGap: Bool = ctx.trivia;
+			final beforeKwLeadingExpr: Null<Expr> = useTriviaGap
+				? {
+					expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_LEADING_SUFFIX),
+					pos: Context.currentPos()
+				}
+				: null;
+			final beforeKwTrailingExpr: Null<Expr> = useTriviaGap
+				? {
+					expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_TRAILING_SUFFIX),
+					pos: Context.currentPos()
+				}
+				: null;
+			final sepBaseExpr: Expr = sameLineSeparator(child, prevBodyField, typePath, prevPadTrailing);
+			final sepWithBeforeKwExpr: Expr = beforeKwLeadingExpr != null
+				? macro kwBeforeDoc($beforeKwLeadingExpr, $sepBaseExpr, opt)
+				: sepBaseExpr;
+			final sepWithBeforeKwTrailingExpr: Expr = beforeKwTrailingExpr != null
+				? macro kwBeforeTrailingDoc($beforeKwTrailingExpr, $sepWithBeforeKwExpr, opt)
+				: sepWithBeforeKwExpr;
+			final kwOptParts: Array<Expr> = [
+				sepWithBeforeKwTrailingExpr,
+				macro _dt($v{kwLead}),
+				innerExpr,
+			];
+			final kwOptBody: Expr = dcCall(kwOptParts);
+			parts.push(macro {
+				final _optVal = $fieldAccess;
+				if (_optVal != null)
+					$kwOptBody
+				else
+					_de();
+			});
+		} else {
+			parts.push(macro {
+				final _optVal = $fieldAccess;
+				if (_optVal != null)
+					$innerExpr
+				else
+					_de();
+			});
+		}
 	}
 
 }
