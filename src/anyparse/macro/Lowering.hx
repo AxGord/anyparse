@@ -941,37 +941,9 @@ class Lowering {
 			// terminal slot's read alone and the downstream signal walker
 			// in `WriterLowering.padTrailingDoc` would lose its primary
 			// (non-terminal) signal.
-			final hasNewlineAfterSlot: Bool = child.kind == Ref && !isStar && trailText == null && ctx.trivia && isTriviaBearing(typePath)
-				&& child.fmtHasFlag('captureSourceNewlineAfter');
-			final newlineAfterLocal: String = '_newlineAfter_$fieldName';
-			if (hasNewlineAfterSlot) {
-				parseSteps.push({
-					expr: EVars([
-						{
-							name: newlineAfterLocal,
-							type: (macro :Bool),
-							expr: macro false,
-							isFinal: false,
-						}
-					]),
-					pos: Context.currentPos(),
-				});
-				parseSteps.push(macro {
-					final _captured = collectTrivia(ctx);
-					$i{newlineAfterLocal} = _captured.newlineBefore;
-					if (
-						_captured.newlineBefore || _captured.blankBefore || _captured.blankAfterLeadingComments
-						|| _captured.leadingComments.length > 0
-					) {
-						ctx.pendingTrivia = {
-							blankBefore: _captured.blankBefore,
-							blankAfterLeadingComments: _captured.blankAfterLeadingComments,
-							newlineBefore: _captured.newlineBefore,
-							leadingComments: _captured.leadingComments,
-						};
-					}
-				});
-			}
+			final _newlineAfter = emitNewlineAfterCapture(child, typePath, fieldName, isStar, trailText, parseSteps);
+			final hasNewlineAfterSlot: Bool = _newlineAfter.hasNewlineAfterSlot;
+			final newlineAfterLocal: String = _newlineAfter.newlineAfterLocal;
 			pushStructFieldEntries(
 				structFields, fieldName, localName, child, hasStructFieldTrailOptSlot, trailPresentLocal, hasAfterTrailSlot,
 				afterTrailLocal, hasBeforeNewlineSlot, beforeNlLocal, hasBeforeLeadingSlot, beforeLeadingLocal, hasNewlineAfterSlot,
@@ -5853,6 +5825,52 @@ expectLit(ctx, $v{trailText}));
 			case _:
 				Context.fatalError('Lowering: struct field kind ${child.kind} not supported', Context.currentPos());
 		}
+	}
+
+	/**
+	 * ω-cond-comp-expr-multiline: terminal-slot newline capture for bare Ref
+	 * fields opted in via `@:fmt(captureSourceNewlineAfter)`. Computes the
+	 * `hasNewlineAfterSlot` flag and, when set, emits the `_newlineAfter_<field>`
+	 * decl + the collectTrivia capture (re-stashed into `ctx.pendingTrivia` so
+	 * the next field's leading-newline slot still sees it). Returns the flag +
+	 * capture-local name for the downstream struct-literal push. Lifted from
+	 * `lowerStruct`.
+	 */
+	private function emitNewlineAfterCapture(
+		child: ShapeNode, typePath: String, fieldName: Null<String>, isStar: Bool, trailText: Null<String>, parseSteps: Array<Expr>
+	): { hasNewlineAfterSlot: Bool, newlineAfterLocal: String } {
+		final hasNewlineAfterSlot: Bool = child.kind == Ref && !isStar && trailText == null && ctx.trivia && isTriviaBearing(typePath)
+			&& child.fmtHasFlag('captureSourceNewlineAfter');
+		final newlineAfterLocal: String = '_newlineAfter_$fieldName';
+		if (hasNewlineAfterSlot) {
+			parseSteps.push({
+				expr: EVars([
+					{
+						name: newlineAfterLocal,
+						type: (macro :Bool),
+						expr: macro false,
+						isFinal: false,
+					}
+				]),
+				pos: Context.currentPos(),
+			});
+			parseSteps.push(macro {
+				final _captured = collectTrivia(ctx);
+				$i{newlineAfterLocal} = _captured.newlineBefore;
+				if (
+					_captured.newlineBefore || _captured.blankBefore || _captured.blankAfterLeadingComments
+					|| _captured.leadingComments.length > 0
+				) {
+					ctx.pendingTrivia = {
+						blankBefore: _captured.blankBefore,
+						blankAfterLeadingComments: _captured.blankAfterLeadingComments,
+						newlineBefore: _captured.newlineBefore,
+						leadingComments: _captured.leadingComments,
+					};
+				}
+			});
+		}
+		return { hasNewlineAfterSlot: hasNewlineAfterSlot, newlineAfterLocal: newlineAfterLocal };
 	}
 
 }
