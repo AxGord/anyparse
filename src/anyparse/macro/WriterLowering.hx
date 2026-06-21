@@ -10667,174 +10667,20 @@ class WriterLowering {
 		// and the runtime locals (`_t`, `_v0`, `opt`) the emitted Exprs
 		// reference.
 		final emit: CascadeEmit = buildCascadeEmit(afterInfos, beforeInfos, betweenInfos, transitionInfos, headInfos, betweenIfNotInfos);
-		final blanksCountExpr: Expr = emit.blanksCount;
-		// ω-before-package — head-of-Star override (e.g. `beforePackage`).
-		// Spliced once at the start of `_docs` building, after `initPrev`,
-		// before any element emit. With no `blankLinesAtHeadIfCtor` meta on
-		// the Star, `headEmit` is `macro {}` — byte-identical to pre-slice.
-		final headEmitExpr: Expr = emit.headEmit;
-		// `emit.initPrev` / `emit.initCurr` are EVars statements with all
-		// per-info trackers folded into one — declared once at the
-		// surrounding-scope's top-level so subsequent siblings (compute,
-		// cascade fire, track) resolve their idents against the same
-		// lexical block. `emit.currCompute` / `emit.trackPrev` are EBlocks
-		// of pure assignments, fine to nest. `$blanksCountExpr` references
-		// the `_curr*` / `_prev*` idents at the cascade fire point.
-		final whileBodyParts: Array<Expr> = [];
-		whileBodyParts.push(macro final _t = _arr[_si]);
-		if (afterFileHeaderCommentBlanks || betweenMultilineCommentsBlanks) whileBodyParts.push(macro var _suppressBalc: Bool = false);
-		whileBodyParts.push(emit.initCurr);
-		whileBodyParts.push(emit.currCompute);
-		// ω-line-comment-led-blank: opt-in via `@:fmt(blankBeforeLineCommentLed)`
-		// on the EOF Star — when the next sibling's `leadingComments[0]` starts
-		// with `//`, force at least 1 blank line between previous element and
-		// the line-comment chain regardless of source-blank capture or cascade
-		// rules. Mirrors fork's `markLineCommentsAfter(typeToken, 1)` always-1
-		// rule (MarkEmptyLines.hx:823) for top-level type→line-comment-led-type
-		// boundaries. Only fires when the cascade-determined `_blanks` count
-		// is 0 — cascade priorities (afterCtor / betweenCtor / transition /
-		// beforeCtor / source-blank) are otherwise preserved.
-		final lineCommentLedExpr: Expr = lineCommentLedAddBlank
-			? macro (_t.leadingComments.length > 0 && StringTools.startsWith(_t.leadingComments[0], '//'))
-			: macro false;
-		whileBodyParts.push(macro if (_si > 0) {
-			_docs.push(_dhl());
-			final _blanks: Int = $blanksCountExpr;
-			final _bln: Int = ($lineCommentLedExpr && _blanks == 0) ? 1 : _blanks;
-			var _bli: Int = 0;
-			while (_bli < _bln) {
-				_docs.push(_dhl());
-				_bli++;
-			}
-		});
-		// ω-fileheader-multiline-comments: opt-in via
-		// `@:fmt(afterFileHeaderCommentBlanks)` and / or
-		// `@:fmt(betweenMultilineCommentsBlanks)` on the EOF Star.
-		// `_suppressBalc` (only declared when at least one of the two
-		// flags fires) replaces the source-driven `blankAfterLeadingComments`
-		// trail-blank with the policy override at the c[last]→decl slot
-		// when fileheader semantics applied during this iteration.
-		final fileheaderCommentBlanksExpr: Expr = (afterFileHeaderCommentBlanks || betweenMultilineCommentsBlanks)
-			? macro {
-				final _lc: String = _t.leadingComments[_ci];
-				final _isBlock: Bool = StringTools.startsWith(_lc, '/*');
-				final _isLast: Bool = _ci + 1 == _t.leadingComments.length;
-				var _override: Int = 0;
-				final _firstSlot: Bool = $v{afterFileHeaderCommentBlanks} && _si == 0 && _ci == 0 && _isBlock
-					&& (_hasPiu || _t.leadingComments.length >= 2);
-				if (_firstSlot) {
-					_override = opt.afterFileHeaderComment;
-					_suppressBalc = true;
-				} else if ($v{betweenMultilineCommentsBlanks} && !_isLast && _isBlock && StringTools.startsWith(
-					_t.leadingComments[_ci + 1], '/*'
-				)) {
-					_override = opt.betweenMultilineComments;
-				}
-				var _bi: Int = 0;
-				while (_bi < _override) {
-					_docs.push(_dhl());
-					_bi++;
-				}
-			}
-			: macro {};
-		final balcExpr: Expr = (afterFileHeaderCommentBlanks || betweenMultilineCommentsBlanks)
-			? macro if (_t.blankAfterLeadingComments && _t.leadingComments.length > 0 && !_suppressBalc) _docs.push(_dhl())
-			: macro if (_t.blankAfterLeadingComments && _t.leadingComments.length > 0) _docs.push(_dhl());
-		whileBodyParts.push(macro {
-			var _ci: Int = 0;
-			while (_ci < _t.leadingComments.length) {
-				_docs.push(leadingCommentDoc(_t.leadingComments[_ci], opt));
-				_docs.push(_dhl());
-				$fileheaderCommentBlanksExpr;
-				_ci++;
-			}
-		});
-		whileBodyParts.push(balcExpr);
-		whileBodyParts.push(macro final _elem: anyparse.core.Doc = $triviaElemCall);
-		whileBodyParts.push(macro final _tc: Null<String> = _t.trailingComment);
-		whileBodyParts.push(macro _docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDocVerbatim(_tc, opt)) : _elem));
-		whileBodyParts.push(emit.trackPrev);
-		whileBodyParts.push(macro _si++);
-		final whileBodyBlock: Expr = { expr: EBlock(whileBodyParts), pos: pos };
-		final whileExpr: Expr = {
-			expr: EWhile(macro _si < _arr.length, whileBodyBlock, true),
+		final c: EofStarCtx = {
+			fieldAccess: fieldAccess,
+			triviaElemCall: triviaElemCall,
+			trailBB: trailBB,
+			trailLC: trailLC,
+			emit: emit,
 			pos: pos,
+			lineCommentTrailBlank: lineCommentTrailBlank,
+			lineCommentLedAddBlank: lineCommentLedAddBlank,
+			afterFileHeaderCommentBlanks: afterFileHeaderCommentBlanks,
+			betweenMultilineCommentsBlanks: betweenMultilineCommentsBlanks,
 		};
-		final elseBodyParts: Array<Expr> = [];
-		elseBodyParts.push(macro final _docs: Array<anyparse.core.Doc> = []);
-		elseBodyParts.push(emit.initPrev);
-		// ω-fileheader-multiline-comments: `_hasPiu` flags whether the
-		// module contains any `package` / `import` / `using` decl (mirrors
-		// fork's `markFileHeader` packagesAndImports filter). When it is
-		// true OR when the first decl carries 2+ leading comments, the
-		// fileheader rule fires at `_si == 0 && _ci == 0` and replaces the
-		// source-driven blank slot with `opt.afterFileHeaderComment`.
-		// Top-level scan only — HxDecl's `Conditional` ctor wraps inner
-		// decls but fileheader fixtures never test that combination, so
-		// the simpler shallow scan stays in place until a fixture needs it.
-		if (afterFileHeaderCommentBlanks || betweenMultilineCommentsBlanks) elseBodyParts.push(macro var _hasPiu: Bool = false);
-		if (afterFileHeaderCommentBlanks) elseBodyParts.push(macro {
-			var _piuI: Int = 0;
-			while (_piuI < _arr.length) {
-				if (!_hasPiu) switch _arr[_piuI].node.decl {
-					case PackageDecl(_) | PackageEmpty | ImportDecl(_) | ImportAliasDecl(_) | ImportWildDecl(_) | UsingDecl(_) | UsingWildDecl(
-						_
-					):
-						_hasPiu = true;
-					case _:
-				}
-				_piuI++;
-			}
-		});
-		elseBodyParts.push(headEmitExpr);
-		elseBodyParts.push(macro var _si: Int = 0);
-		elseBodyParts.push(whileExpr);
-		// ω-orphan-trail-blank: opt-in via `@:fmt(blankBeforeOrphanLineCommentTrail)`
-		// on the EOF Star — when the orphan trail is led by a line-comment
-		// (`// …`), force the extra `_dhl()` blank between last decl and
-		// trail chain regardless of source-blank capture. Mirrors fork's
-		// `markLineCommentsAfter(typeToken, 1)` always-1 rule for top-level
-		// type→trailing-line-comment-chain boundaries. Without the flag the
-		// gate stays `_trailBB`-driven (source-blank-preserve).
-		final extraTrailBlankExpr: Expr = lineCommentTrailBlank
-			? macro (_arr.length > 0 && (_trailBB || (_trailLC.length > 0 && StringTools.startsWith(_trailLC[0], '//'))))
-			: macro (_trailBB && _arr.length > 0);
-		// ω-fileheader-multiline-comments: when the trail contains two or
-		// more block-style comments, fork's `markMultilineComments` fires
-		// `betweenMultilineComments` extra blanks between each block-block
-		// pair. Mirrors the leading-comments emit gate above.
-		final eofTrailBetweenExpr: Expr = betweenMultilineCommentsBlanks
-			? macro {
-				if (_ti < _trailLC.length - 1 && StringTools.startsWith(_trailLC[_ti], '/*') && StringTools.startsWith(
-					_trailLC[_ti + 1], '/*'
-				)) {
-					var _bbi: Int = 0;
-					while (_bbi < opt.betweenMultilineComments) {
-						_docs.push(_dhl());
-						_bbi++;
-					}
-				}
-			}
-			: macro {};
-		elseBodyParts.push(macro if (_trailLC.length > 0) {
-			if (_arr.length > 0) _docs.push(_dhl());
-			if ($extraTrailBlankExpr) _docs.push(_dhl());
-			var _ti: Int = 0;
-			while (_ti < _trailLC.length) {
-				_docs.push(leadingCommentDoc(_trailLC[_ti], opt));
-				if (_ti < _trailLC.length - 1) _docs.push(_dhl());
-				$eofTrailBetweenExpr;
-				_ti++;
-			}
-		});
-		// ω-force-flat-engine sister-coverage: EOF Star is top-level
-		// (`HxModule.decls`) so its parent frame is the document root,
-		// not a wrap-cascade Flatten. `_dwb` is a defensive no-op here —
-		// kept for invariant symmetry with the other trivia dispatchers
-		// so a future caller that places EOF-style emit under a Flatten
-		// parent doesn't silently lose its hand-rolled hardlines.
-		elseBodyParts.push(macro _dwb(_dc(_docs)));
-		final elseBody: Expr = { expr: EBlock(elseBodyParts), pos: pos };
+		final whileExpr: Expr = triviaEofWhileExpr(c);
+		final elseBody: Expr = triviaEofElseBody(c, whileExpr);
 		return macro {
 			final _arr = $fieldAccess;
 			final _trailLC: Array<String> = $trailLC;
@@ -13978,6 +13824,220 @@ class WriterLowering {
 		}
 	}
 
+	/**
+	 * EOF-Star per-element while-loop emit. Builds `whileBodyParts` and
+	 * returns the `EWhile` spliced into `triviaEofElseBody`. Extracted from
+	 * `triviaEofStarExpr` (cascade fire + leading-comment emit + element
+	 * emit + track) so the orchestrator stays under the complexity gate.
+	 */
+	private static function triviaEofWhileExpr(c: EofStarCtx): Expr {
+		final blanksCountExpr: Expr = c.emit.blanksCount;
+		final triviaElemCall: Expr = c.triviaElemCall;
+		final whileBodyParts: Array<Expr> = [];
+		whileBodyParts.push(macro final _t = _arr[_si]);
+		if (c.afterFileHeaderCommentBlanks || c.betweenMultilineCommentsBlanks) whileBodyParts.push(macro var _suppressBalc: Bool = false);
+		whileBodyParts.push(c.emit.initCurr);
+		whileBodyParts.push(c.emit.currCompute);
+		// ω-line-comment-led-blank: opt-in via `@:fmt(blankBeforeLineCommentLed)`
+		// on the EOF Star — when the next sibling's `leadingComments[0]` starts
+		// with `//`, force at least 1 blank line between previous element and
+		// the line-comment chain regardless of source-blank capture or cascade
+		// rules. Mirrors fork's `markLineCommentsAfter(typeToken, 1)` always-1
+		// rule (MarkEmptyLines.hx:823) for top-level type→line-comment-led-type
+		// boundaries. Only fires when the cascade-determined `_blanks` count
+		// is 0 — cascade priorities (afterCtor / betweenCtor / transition /
+		// beforeCtor / source-blank) are otherwise preserved.
+		final lineCommentLedExpr: Expr = triviaEofLineCommentLedExpr(c.lineCommentLedAddBlank);
+		whileBodyParts.push(macro if (_si > 0) {
+			_docs.push(_dhl());
+			final _blanks: Int = $blanksCountExpr;
+			final _bln: Int = ($lineCommentLedExpr && _blanks == 0) ? 1 : _blanks;
+			var _bli: Int = 0;
+			while (_bli < _bln) {
+				_docs.push(_dhl());
+				_bli++;
+			}
+		});
+		final fileheaderCommentBlanksExpr: Expr = triviaEofFileheaderBlanksExpr(
+			c.afterFileHeaderCommentBlanks, c.betweenMultilineCommentsBlanks
+		);
+		final balcExpr: Expr = triviaEofBalcExpr(c.afterFileHeaderCommentBlanks, c.betweenMultilineCommentsBlanks);
+		whileBodyParts.push(macro {
+			var _ci: Int = 0;
+			while (_ci < _t.leadingComments.length) {
+				_docs.push(leadingCommentDoc(_t.leadingComments[_ci], opt));
+				_docs.push(_dhl());
+				$fileheaderCommentBlanksExpr;
+				_ci++;
+			}
+		});
+		whileBodyParts.push(balcExpr);
+		whileBodyParts.push(macro final _elem: anyparse.core.Doc = $triviaElemCall);
+		whileBodyParts.push(macro final _tc: Null<String> = _t.trailingComment);
+		whileBodyParts.push(macro _docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDocVerbatim(_tc, opt)) : _elem));
+		whileBodyParts.push(c.emit.trackPrev);
+		whileBodyParts.push(macro _si++);
+		final whileBodyBlock: Expr = { expr: EBlock(whileBodyParts), pos: c.pos };
+		return {
+			expr: EWhile(macro _si < _arr.length, whileBodyBlock, true),
+			pos: c.pos,
+		};
+	}
+
+	/**
+	 * EOF-Star empty-and-trail emit. Builds `elseBodyParts` (the non-empty
+	 * branch) and returns its `EBlock`: `_docs` init, optional `_hasPiu`
+	 * fileheader scan, head emit, the per-element `$whileExpr`, and the
+	 * orphan-trail emit. Extracted from `triviaEofStarExpr`.
+	 */
+	private static function triviaEofElseBody(c: EofStarCtx, whileExpr: Expr): Expr {
+		final headEmitExpr: Expr = c.emit.headEmit;
+		final elseBodyParts: Array<Expr> = [];
+		elseBodyParts.push(macro final _docs: Array<anyparse.core.Doc> = []);
+		elseBodyParts.push(c.emit.initPrev);
+		// ω-fileheader-multiline-comments: `_hasPiu` flags whether the
+		// module contains any `package` / `import` / `using` decl (mirrors
+		// fork's `markFileHeader` packagesAndImports filter). When it is
+		// true OR when the first decl carries 2+ leading comments, the
+		// fileheader rule fires at `_si == 0 && _ci == 0` and replaces the
+		// source-driven blank slot with `opt.afterFileHeaderComment`.
+		// Top-level scan only — HxDecl's `Conditional` ctor wraps inner
+		// decls but fileheader fixtures never test that combination, so
+		// the simpler shallow scan stays in place until a fixture needs it.
+		if (c.afterFileHeaderCommentBlanks || c.betweenMultilineCommentsBlanks) elseBodyParts.push(macro var _hasPiu: Bool = false);
+		if (c.afterFileHeaderCommentBlanks) elseBodyParts.push(triviaEofHasPiuScanExpr());
+		elseBodyParts.push(headEmitExpr);
+		elseBodyParts.push(macro var _si: Int = 0);
+		elseBodyParts.push(whileExpr);
+		final extraTrailBlankExpr: Expr = triviaEofExtraTrailBlankExpr(c.lineCommentTrailBlank);
+		final eofTrailBetweenExpr: Expr = triviaEofTrailBetweenExpr(c.betweenMultilineCommentsBlanks);
+		elseBodyParts.push(macro if (_trailLC.length > 0) {
+			if (_arr.length > 0) _docs.push(_dhl());
+			if ($extraTrailBlankExpr) _docs.push(_dhl());
+			var _ti: Int = 0;
+			while (_ti < _trailLC.length) {
+				_docs.push(leadingCommentDoc(_trailLC[_ti], opt));
+				if (_ti < _trailLC.length - 1) _docs.push(_dhl());
+				$eofTrailBetweenExpr;
+				_ti++;
+			}
+		});
+		// ω-force-flat-engine sister-coverage: EOF Star is top-level
+		// (`HxModule.decls`) so its parent frame is the document root,
+		// not a wrap-cascade Flatten. `_dwb` is a defensive no-op here —
+		// kept for invariant symmetry with the other trivia dispatchers
+		// so a future caller that places EOF-style emit under a Flatten
+		// parent doesn't silently lose its hand-rolled hardlines.
+		elseBodyParts.push(macro _dwb(_dc(_docs)));
+		return { expr: EBlock(elseBodyParts), pos: c.pos };
+	}
+
+	/**
+	 * EOF-Star `lineCommentLedExpr` predicate (ω-line-comment-led-blank):
+	 * true when the next sibling's first leading comment is line-style.
+	 */
+	private static function triviaEofLineCommentLedExpr(lineCommentLedAddBlank: Bool): Expr {
+		return lineCommentLedAddBlank
+			? macro (_t.leadingComments.length > 0 && StringTools.startsWith(_t.leadingComments[0], '//'))
+			: macro false;
+	}
+
+	/**
+	 * EOF-Star `fileheaderCommentBlanksExpr` (ω-fileheader-multiline-comments):
+	 * opt-in via `@:fmt(afterFileHeaderCommentBlanks)` / `@:fmt(
+	 * betweenMultilineCommentsBlanks)`. Overrides the source-driven blank
+	 * slot at the c[last]→decl boundary; sets `_suppressBalc` when the
+	 * fileheader rule applied this iteration.
+	 */
+	private static function triviaEofFileheaderBlanksExpr(afterFileHeaderCommentBlanks: Bool, betweenMultilineCommentsBlanks: Bool): Expr {
+		return (afterFileHeaderCommentBlanks || betweenMultilineCommentsBlanks)
+			? macro {
+				final _lc: String = _t.leadingComments[_ci];
+				final _isBlock: Bool = StringTools.startsWith(_lc, '/*');
+				final _isLast: Bool = _ci + 1 == _t.leadingComments.length;
+				var _override: Int = 0;
+				final _firstSlot: Bool = $v{afterFileHeaderCommentBlanks} && _si == 0 && _ci == 0 && _isBlock
+					&& (_hasPiu || _t.leadingComments.length >= 2);
+				if (_firstSlot) {
+					_override = opt.afterFileHeaderComment;
+					_suppressBalc = true;
+				} else if ($v{betweenMultilineCommentsBlanks} && !_isLast && _isBlock && StringTools.startsWith(
+					_t.leadingComments[_ci + 1], '/*'
+				)) {
+					_override = opt.betweenMultilineComments;
+				}
+				var _bi: Int = 0;
+				while (_bi < _override) {
+					_docs.push(_dhl());
+					_bi++;
+				}
+			}
+			: macro {};
+	}
+
+	/**
+	 * EOF-Star `balcExpr` (blankAfterLeadingComments emit): pushes a hardline
+	 * after the leading-comment chain when the source captured a blank, with
+	 * the `_suppressBalc` fileheader override branch.
+	 */
+	private static function triviaEofBalcExpr(afterFileHeaderCommentBlanks: Bool, betweenMultilineCommentsBlanks: Bool): Expr {
+		return (afterFileHeaderCommentBlanks || betweenMultilineCommentsBlanks)
+			? macro if (_t.blankAfterLeadingComments && _t.leadingComments.length > 0 && !_suppressBalc) _docs.push(_dhl())
+			: macro if (_t.blankAfterLeadingComments && _t.leadingComments.length > 0) _docs.push(_dhl());
+	}
+
+	/**
+	 * EOF-Star `_hasPiu` package/import/using scan (ω-fileheader-multiline-
+	 * comments): a `while` over `_arr` flipping `_hasPiu` when any top-level
+	 * package/import/using decl is present.
+	 */
+	private static function triviaEofHasPiuScanExpr(): Expr {
+		return macro {
+			var _piuI: Int = 0;
+			while (_piuI < _arr.length) {
+				if (!_hasPiu) switch _arr[_piuI].node.decl {
+					case PackageDecl(_) | PackageEmpty | ImportDecl(_) | ImportAliasDecl(_) | ImportWildDecl(_) | UsingDecl(_) | UsingWildDecl(
+						_
+					):
+						_hasPiu = true;
+					case _:
+				}
+				_piuI++;
+			}
+		};
+	}
+
+	/**
+	 * EOF-Star `extraTrailBlankExpr` (ω-orphan-trail-blank): gate for the
+	 * extra blank between the last decl and a line-comment-led orphan trail.
+	 */
+	private static function triviaEofExtraTrailBlankExpr(lineCommentTrailBlank: Bool): Expr {
+		return lineCommentTrailBlank
+			? macro (_arr.length > 0 && (_trailBB || (_trailLC.length > 0 && StringTools.startsWith(_trailLC[0], '//'))))
+			: macro (_trailBB && _arr.length > 0);
+	}
+
+	/**
+	 * EOF-Star `eofTrailBetweenExpr` (ω-fileheader-multiline-comments): emits
+	 * `betweenMultilineComments` blanks between adjacent block-style comments
+	 * in the orphan trail.
+	 */
+	private static function triviaEofTrailBetweenExpr(betweenMultilineCommentsBlanks: Bool): Expr {
+		return betweenMultilineCommentsBlanks
+			? macro {
+				if (_ti < _trailLC.length - 1 && StringTools.startsWith(_trailLC[_ti], '/*') && StringTools.startsWith(
+					_trailLC[_ti + 1], '/*'
+				)) {
+					var _bbi: Int = 0;
+					while (_bbi < opt.betweenMultilineComments) {
+						_docs.push(_dhl());
+						_bbi++;
+					}
+				}
+			}
+			: macro {};
+	}
+
 }
 
 /** Output of WriterLowering for one rule. */
@@ -14324,6 +14384,24 @@ typedef CascadeInfos = {
  * Empty info arrays produce `macro {}` placeholders so non-cascade-
  * bearing consumers stay byte-identical.
  */
+/**
+ * Shared setup locals bundled for the `triviaEofStarExpr` emission
+ * helpers (`triviaEofWhileExpr` / `triviaEofElseBody` + the per-flag
+ * leaf Expr builders). Replaces a >5-scalar helper signature with one
+ * context struct.
+ */
+typedef EofStarCtx = {
+	final fieldAccess: Expr;
+	final triviaElemCall: Expr;
+	final trailBB: Expr;
+	final trailLC: Expr;
+	final emit: CascadeEmit;
+	final pos: Position;
+	final lineCommentTrailBlank: Bool;
+	final lineCommentLedAddBlank: Bool;
+	final afterFileHeaderCommentBlanks: Bool;
+	final betweenMultilineCommentsBlanks: Bool;
+};
 typedef CascadeEmit = {
 	initPrev: Expr,
 	initCurr: Expr,
