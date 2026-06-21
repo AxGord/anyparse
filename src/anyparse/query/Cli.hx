@@ -306,6 +306,9 @@ final class Cli {
 	 */
 	private static final HEUR_DEFAULT_CAP: Int = 20;
 
+	/** Cap on the cluster-key suggestion preview (top keys by frequency) shown when `--cluster` / `--from-cluster` finds no exact match. */
+	private static final CLUSTER_PREVIEW_LIMIT: Int = 10;
+
 	private static final RECON_TOP_N_DEFAULT: Int = 30;
 	private static final RECON_EXAMPLES_PER_CLUSTER: Int = 2;
 	private static final RECON_HEAD_LEN: Int = 70;
@@ -2978,7 +2981,7 @@ final class Cli {
 				for (k => v in walk.clusters) { key: k, count: v.count }
 			];
 			keyEntries.sort((a, b) -> b.count - a.count);
-			final preview: Int = keyEntries.length > 10 ? 10 : keyEntries.length;
+			final preview: Int = keyEntries.length > CLUSTER_PREVIEW_LIMIT ? CLUSTER_PREVIEW_LIMIT : keyEntries.length;
 			if (preview == 0) {
 				stderr('  (no skip-parse failures in this sweep)\n');
 			} else {
@@ -5839,7 +5842,7 @@ final class Cli {
 					for (k => v in clusters) { key: k, count: v.count }
 				];
 				keyEntries.sort((a, b) -> b.count - a.count);
-				final preview: Int = keyEntries.length > 10 ? 10 : keyEntries.length;
+				final preview: Int = keyEntries.length > CLUSTER_PREVIEW_LIMIT ? CLUSTER_PREVIEW_LIMIT : keyEntries.length;
 				if (preview == 0) {
 					stderr('  (no skip-parse failures in this sweep)\n');
 				} else {
