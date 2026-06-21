@@ -154,40 +154,8 @@ class MethodChainEmit {
 			return WrapBoundary(maybeTagReglue(ifFLE, modeBreak, modeFlat, segments, nestSuppress, segCallLeadingBreak));
 		}
 
-		if (extraThresholds.length == 1) {
-			final t: Int = extraThresholds[0];
-			if (t < opt.lineWidth) {
-				// 3 valid states (col+w<t implies col+w<lineWidth implies !exceeds):
-				//   (firing=∅,    exceeds=no)  → modeNN
-				//   (firing={t},  exceeds=no)  → modeYN
-				//   (firing={t},  exceeds=yes) → modeYY
-				final modeNN: WrapMode = evalAt(false, []);
-				final modeYN: WrapMode = evalAt(false, [t]);
-				final modeYY: WrapMode = evalAt(true, [t]);
-				if (modeNN == modeYN && modeYN == modeYY) return WrapBoundary(shapeAt(modeNN));
-				final brk: Doc = (modeYY == modeYN) ? shapeAt(modeYY) : IfFullLineExceeds(opt.lineWidth, shapeAt(modeYY), shapeAt(modeYN));
-				return WrapBoundary(Group(IfWidthExceeds(t, brk, shapeAt(modeNN))));
-			}
-			// t > lineWidth: 3 valid states (col+w>=t implies col+w>=lineWidth):
-			//   (firing=∅,    exceeds=no)  → modeNN
-			//   (firing=∅,    exceeds=yes) → modeNY
-			//   (firing={t},  exceeds=yes) → modeYY
-			final modeNN: WrapMode = evalAt(false, []);
-			final modeNY: WrapMode = evalAt(true, []);
-			final modeYY: WrapMode = evalAt(true, [t]);
-			if (modeNN == modeNY && modeNY == modeYY) return WrapBoundary(shapeAt(modeNN));
-			final brk: Doc = (modeNY == modeYY) ? shapeAt(modeYY) : Group(IfWidthExceeds(t, shapeAt(modeYY), shapeAt(modeNY)));
-			final ifFLE: Doc = IfFullLineExceeds(opt.lineWidth, brk, shapeAt(modeNN));
-			// ω-methodchain-reeval-after-callparam: re-glue tag also for the
-			// `t > lineWidth` extra-threshold case (the default cascade's
-			// `LineLengthLargerThan 160` against a maxLineLength < 160 — the #3
-			// `manager.getInstance().add(<wrapping-args>)` shape). The break side
-			// is a single dot-break only when `modeNY == modeYY` (no inner
-			// `IfWidthExceeds` split); tag using that break mode.
-			return WrapBoundary(
-				modeNY == modeYY ? maybeTagReglue(ifFLE, modeNY, modeNN, segments, nestSuppress, segCallLeadingBreak) : ifFLE
-			);
-		}
+		if (extraThresholds.length == 1)
+			return emitSingleThreshold(extraThresholds[0], opt, segments, nestSuppress, segCallLeadingBreak, evalAt, shapeAt);
 
 		// 2+ extra thresholds — full enumeration without impossibility
 		// filtering. Renderer's column-aware probe at each
@@ -482,6 +450,49 @@ class MethodChainEmit {
 			tail.push(s);
 		}
 		return Concat([receiver, Nest(cols, Concat(tail))]);
+	}
+
+	/**
+	 * Build the chain Doc for the single-extra-threshold case (`extraThresholds
+	 * == [t]`). The renderer's column-aware `IfWidthExceeds(t, …)` probe selects
+	 * between the impossibility-filtered 3-state leaves. Split out of `emit` for
+	 * the complexity threshold; `evalAt` / `shapeAt` are the same closures `emit`
+	 * builds, `segments` / `nestSuppress` / `segCallLeadingBreak` feed the
+	 * re-glue tag.
+	 */
+	private static function emitSingleThreshold(
+		t: Int, opt: WriteOptions, segments: Array<Doc>, nestSuppress: Bool, segCallLeadingBreak: Bool,
+		evalAt: (Bool, Array<Int>) -> WrapMode, shapeAt: (WrapMode) -> Doc
+	): Doc {
+		if (t < opt.lineWidth) {
+			// 3 valid states (col+w<t implies col+w<lineWidth implies !exceeds):
+			//   (firing=∅,    exceeds=no)  → modeNN
+			//   (firing={t},  exceeds=no)  → modeYN
+			//   (firing={t},  exceeds=yes) → modeYY
+			final modeNN: WrapMode = evalAt(false, []);
+			final modeYN: WrapMode = evalAt(false, [t]);
+			final modeYY: WrapMode = evalAt(true, [t]);
+			if (modeNN == modeYN && modeYN == modeYY) return WrapBoundary(shapeAt(modeNN));
+			final brk: Doc = (modeYY == modeYN) ? shapeAt(modeYY) : IfFullLineExceeds(opt.lineWidth, shapeAt(modeYY), shapeAt(modeYN));
+			return WrapBoundary(Group(IfWidthExceeds(t, brk, shapeAt(modeNN))));
+		}
+		// t > lineWidth: 3 valid states (col+w>=t implies col+w>=lineWidth):
+		//   (firing=∅,    exceeds=no)  → modeNN
+		//   (firing=∅,    exceeds=yes) → modeNY
+		//   (firing={t},  exceeds=yes) → modeYY
+		final modeNN: WrapMode = evalAt(false, []);
+		final modeNY: WrapMode = evalAt(true, []);
+		final modeYY: WrapMode = evalAt(true, [t]);
+		if (modeNN == modeNY && modeNY == modeYY) return WrapBoundary(shapeAt(modeNN));
+		final brk: Doc = (modeNY == modeYY) ? shapeAt(modeYY) : Group(IfWidthExceeds(t, shapeAt(modeYY), shapeAt(modeNY)));
+		final ifFLE: Doc = IfFullLineExceeds(opt.lineWidth, brk, shapeAt(modeNN));
+		// ω-methodchain-reeval-after-callparam: re-glue tag also for the
+		// `t > lineWidth` extra-threshold case (the default cascade's
+		// `LineLengthLargerThan 160` against a maxLineLength < 160 — the #3
+		// `manager.getInstance().add(<wrapping-args>)` shape). The break side
+		// is a single dot-break only when `modeNY == modeYY` (no inner
+		// `IfWidthExceeds` split); tag using that break mode.
+		return WrapBoundary(modeNY == modeYY ? maybeTagReglue(ifFLE, modeNY, modeNN, segments, nestSuppress, segCallLeadingBreak) : ifFLE);
 	}
 
 }
