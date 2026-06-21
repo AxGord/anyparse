@@ -3504,146 +3504,8 @@ expectLit(ctx, $v{trailText}));
 				pos: Context.currentPos(),
 			});
 		}
-		// Tryparse loop body — element parse in a try/catch, rewind to
-		// `_savedPos` on failure. Trivia mode wraps in `Trivial<T>` and
-		// scans `_lead` / `_trailing` per element; plain mode pushes the
-		// raw element. Mirrors the regular tryparse Star paths.
-		//
-		// Slice D4: with `@:sep`, mirror the non-nestBody branch of
-		// `emitTriviaStarFieldSteps` (line ~3616) — capture trailing-before-
-		// sep, h-ws skip, matchLit(sep), set `Trivial.sepAfter` from the
-		// match result so the writer's `triviaTryparseStarExpr` blockEnded
-		// gate consults the source-fidelity signal. Plain mode just
-		// consumes the optional sep so the next iteration's element parse
-		// doesn't match a bare `;` as `HxStatement.EmptyStmt`.
-		final loopBody: Expr = if (isTriviaCollects && sepText != null) {
-			macro {
-				while (true) {
-					final _savedPos: Int = ctx.pos;
-					final _lead = collectTrivia(ctx);
-					try {
-						final _node: $elemCT = $elemCall;
-						final _trailingBeforeSep: Null<String> = collectTrailingFull(ctx);
-						var _sepAfter: Bool = false;
-						while (ctx.pos < ctx.input.length) {
-							final _hwc: Int = ctx.input.charCodeAt(ctx.pos);
-							if (_hwc == ' '.code || _hwc == '\t'.code || _hwc == '\r'.code)
-								ctx.pos++;
-							else
-								break;
-						}
-						_sepAfter = matchLit(ctx, $v{sepText});
-						final _trailing: Null<String> = _trailingBeforeSep ?? (_sepAfter ? collectTrailingFull(ctx) : null);
-						_items.push({
-							blankBefore: _lead.blankBefore,
-							blankAfterLeadingComments: _lead.blankAfterLeadingComments,
-							newlineBefore: _lead.newlineBefore,
-							leadingComments: _lead.leadingComments,
-							trailingComment: _trailing,
-							trailingBeforeSep: _trailingBeforeSep != null,
-							sepAfter: _sepAfter,
-							node: _node,
-						});
-					} catch (_e: anyparse.runtime.ParseError) {
-						ctx.pos = _savedPos;
-						break;
-					}
-				}
-			};
-		} else if (isTriviaCollects) {
-			macro {
-				while (true) {
-					final _savedPos: Int = ctx.pos;
-					final _lead = collectTrivia(ctx);
-					try {
-						final _node: $elemCT = $elemCall;
-						final _trailing: Null<String> = collectTrailingFull(ctx);
-						_items.push({
-							blankBefore: _lead.blankBefore,
-							blankAfterLeadingComments: _lead.blankAfterLeadingComments,
-							newlineBefore: _lead.newlineBefore,
-							leadingComments: _lead.leadingComments,
-							trailingComment: _trailing,
-							trailingBeforeSep: false,
-							sepAfter: true,
-							node: _node,
-						});
-					} catch (_e: anyparse.runtime.ParseError) {
-						ctx.pos = _savedPos;
-						break;
-					}
-				}
-			};
-		} else if (sepText != null) {
-			macro {
-				while (true) {
-					final _savedPos: Int = ctx.pos;
-					try {
-						skipWs(ctx);
-						_items.push($elemCall);
-						while (ctx.pos < ctx.input.length) {
-							final _hwc: Int = ctx.input.charCodeAt(ctx.pos);
-							if (_hwc == ' '.code || _hwc == '\t'.code || _hwc == '\r'.code)
-								ctx.pos++;
-							else
-								break;
-						}
-						matchLit(ctx, $v{sepText});
-					} catch (_e: anyparse.runtime.ParseError) {
-						ctx.pos = _savedPos;
-						break;
-					}
-				}
-			};
-		} else {
-			macro {
-				while (true) {
-					final _savedPos: Int = ctx.pos;
-					try {
-						skipWs(ctx);
-						_items.push($elemCall);
-					} catch (_e: anyparse.runtime.ParseError) {
-						ctx.pos = _savedPos;
-						break;
-					}
-				}
-			};
-		}
-		// Post-commit kw-trivia capture — mirrors the optional-Ref path.
-		final innerCommitAction: Expr = if (hasKwTriviaSlots)
-			macro {
-				final _kwEndPos: Int = ctx.pos;
-				$i{afterKwLocal} = collectTrailing(ctx);
-				final _t = collectTrivia(ctx);
-				for (_c in _t.leadingComments) $i{kwLeadingLocal}.push(_c);
-				$i{bodyOnSameLineLocal} = !hasNewlineIn(ctx.input, _kwEndPos, ctx.pos);
-				// ω-cond-comp-elseBody-pad-stash: propagate the post-kw
-				// newline/blank signal forward so the loop's first-iteration
-				// `collectTrivia` (which drains `ctx.pendingTrivia`) sees it
-				// and sets `_arr[0].newlineBefore = true`. Without this stash
-				// the writer's `_padHardline` switch (`triviaTryparseStarExpr`)
-				// reads false on the first body element and `#else\nimport\n
-				// #end` round-trips flat as `#else import #end`. Sister non-kw
-				// branch below already does the equivalent stash; the kw
-				// branch lacked the producer despite sharing the downstream
-				// drainer (`Codegen.collectTriviaField`). leadingComments
-				// drained into kwLeading above — re-stashing would emit them
-				// twice (once attached to the kw, once on body[0]).
-				if (_t.newlineBefore || _t.blankBefore || _t.blankAfterLeadingComments) ctx.pendingTrivia = {
-					blankBefore: _t.blankBefore,
-					blankAfterLeadingComments: _t.blankAfterLeadingComments,
-					newlineBefore: _t.newlineBefore,
-					leadingComments: [],
-				};
-			}
-		else if (ctx.trivia)
-			macro {
-				final _t = collectTrivia(ctx);
-				if (_t.leadingComments.length > 0 || _t.blankBefore || _t.blankAfterLeadingComments || _t.newlineBefore)
-					ctx.pendingTrivia = _t;
-			}
-		else
-			macro skipWs(ctx);
+		final loopBody: Expr = buildOptKwStarLoopBody(elemCT, elemCall, isTriviaCollects, sepText);
+		final innerCommitAction: Expr = buildOptKwStarInnerCommit(hasKwTriviaSlots, afterKwLocal, kwLeadingLocal, bodyOnSameLineLocal);
 		final preCommitCapture: Expr = if (hasKwTriviaSlots)
 			macro $i{beforeKwNlLocal} = hasNewlineIn(ctx.input, _prevEnd, _kwStartPos);
 		else
@@ -5310,6 +5172,154 @@ expectLit(ctx, $v{trailText}));
 				}
 			}
 			break;
+		};
+	}
+
+	private function buildOptKwStarLoopBody(elemCT: ComplexType, elemCall: Expr, isTriviaCollects: Bool, sepText: Null<String>): Expr {
+		// Tryparse loop body — element parse in a try/catch, rewind to
+		// `_savedPos` on failure. Trivia mode wraps in `Trivial<T>` and
+		// scans `_lead` / `_trailing` per element; plain mode pushes the
+		// raw element. Mirrors the regular tryparse Star paths.
+		//
+		// Slice D4: with `@:sep`, mirror the non-nestBody branch of
+		// `emitTriviaStarFieldSteps` (line ~3616) — capture trailing-before-
+		// sep, h-ws skip, matchLit(sep), set `Trivial.sepAfter` from the
+		// match result so the writer's `triviaTryparseStarExpr` blockEnded
+		// gate consults the source-fidelity signal. Plain mode just
+		// consumes the optional sep so the next iteration's element parse
+		// doesn't match a bare `;` as `HxStatement.EmptyStmt`.
+		final hWsSkip: Expr = buildOptKwStarHWsSkipExpr();
+		if (isTriviaCollects && sepText != null) {
+			return macro {
+				while (true) {
+					final _savedPos: Int = ctx.pos;
+					final _lead = collectTrivia(ctx);
+					try {
+						final _node: $elemCT = $elemCall;
+						final _trailingBeforeSep: Null<String> = collectTrailingFull(ctx);
+						var _sepAfter: Bool = false;
+						$hWsSkip;
+						_sepAfter = matchLit(ctx, $v{sepText});
+						final _trailing: Null<String> = _trailingBeforeSep ?? (_sepAfter ? collectTrailingFull(ctx) : null);
+						_items.push({
+							blankBefore: _lead.blankBefore,
+							blankAfterLeadingComments: _lead.blankAfterLeadingComments,
+							newlineBefore: _lead.newlineBefore,
+							leadingComments: _lead.leadingComments,
+							trailingComment: _trailing,
+							trailingBeforeSep: _trailingBeforeSep != null,
+							sepAfter: _sepAfter,
+							node: _node,
+						});
+					} catch (_e: anyparse.runtime.ParseError) {
+						ctx.pos = _savedPos;
+						break;
+					}
+				}
+			};
+		}
+		if (isTriviaCollects) {
+			return macro {
+				while (true) {
+					final _savedPos: Int = ctx.pos;
+					final _lead = collectTrivia(ctx);
+					try {
+						final _node: $elemCT = $elemCall;
+						final _trailing: Null<String> = collectTrailingFull(ctx);
+						_items.push({
+							blankBefore: _lead.blankBefore,
+							blankAfterLeadingComments: _lead.blankAfterLeadingComments,
+							newlineBefore: _lead.newlineBefore,
+							leadingComments: _lead.leadingComments,
+							trailingComment: _trailing,
+							trailingBeforeSep: false,
+							sepAfter: true,
+							node: _node,
+						});
+					} catch (_e: anyparse.runtime.ParseError) {
+						ctx.pos = _savedPos;
+						break;
+					}
+				}
+			};
+		}
+		if (sepText != null) {
+			return macro {
+				while (true) {
+					final _savedPos: Int = ctx.pos;
+					try {
+						skipWs(ctx);
+						_items.push($elemCall);
+						$hWsSkip;
+						matchLit(ctx, $v{sepText});
+					} catch (_e: anyparse.runtime.ParseError) {
+						ctx.pos = _savedPos;
+						break;
+					}
+				}
+			};
+		}
+		return macro {
+			while (true) {
+				final _savedPos: Int = ctx.pos;
+				try {
+					skipWs(ctx);
+					_items.push($elemCall);
+				} catch (_e: anyparse.runtime.ParseError) {
+					ctx.pos = _savedPos;
+					break;
+				}
+			}
+		};
+	}
+
+	private function buildOptKwStarInnerCommit(
+		hasKwTriviaSlots: Bool, afterKwLocal: String, kwLeadingLocal: String, bodyOnSameLineLocal: String
+	): Expr {
+		// Post-commit kw-trivia capture — mirrors the optional-Ref path.
+		if (hasKwTriviaSlots)
+			return macro {
+				final _kwEndPos: Int = ctx.pos;
+				$i{afterKwLocal} = collectTrailing(ctx);
+				final _t = collectTrivia(ctx);
+				for (_c in _t.leadingComments) $i{kwLeadingLocal}.push(_c);
+				$i{bodyOnSameLineLocal} = !hasNewlineIn(ctx.input, _kwEndPos, ctx.pos);
+				// ω-cond-comp-elseBody-pad-stash: propagate the post-kw
+				// newline/blank signal forward so the loop's first-iteration
+				// `collectTrivia` (which drains `ctx.pendingTrivia`) sees it
+				// and sets `_arr[0].newlineBefore = true`. Without this stash
+				// the writer's `_padHardline` switch (`triviaTryparseStarExpr`)
+				// reads false on the first body element and `#else\nimport\n
+				// #end` round-trips flat as `#else import #end`. Sister non-kw
+				// branch below already does the equivalent stash; the kw
+				// branch lacked the producer despite sharing the downstream
+				// drainer (`Codegen.collectTriviaField`). leadingComments
+				// drained into kwLeading above — re-stashing would emit them
+				// twice (once attached to the kw, once on body[0]).
+				if (_t.newlineBefore || _t.blankBefore || _t.blankAfterLeadingComments) ctx.pendingTrivia = {
+					blankBefore: _t.blankBefore,
+					blankAfterLeadingComments: _t.blankAfterLeadingComments,
+					newlineBefore: _t.newlineBefore,
+					leadingComments: [],
+				};
+			}
+		else if (ctx.trivia)
+			return macro {
+				final _t = collectTrivia(ctx);
+				if (_t.leadingComments.length > 0 || _t.blankBefore || _t.blankAfterLeadingComments || _t.newlineBefore)
+					ctx.pendingTrivia = _t;
+			}
+		else
+			return macro skipWs(ctx);
+	}
+
+	private function buildOptKwStarHWsSkipExpr(): Expr {
+		return macro while (ctx.pos < ctx.input.length) {
+			final _hwc: Int = ctx.input.charCodeAt(ctx.pos);
+			if (_hwc == ' '.code || _hwc == '\t'.code || _hwc == '\r'.code)
+				ctx.pos++;
+			else
+				break;
 		};
 	}
 
