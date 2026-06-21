@@ -1822,45 +1822,7 @@ class WriterLowering {
 						expr: ECall(macro $i{writeFn}, [fieldAccess, optArgExpr]),
 						pos: Context.currentPos(),
 					};
-					final rawWriteCall: Expr = if (boolFlagArgs == null)
-						baseRawWriteCall;
-					else {
-						final pos: Position = Context.currentPos();
-						final optField: String = boolFlagArgs[0];
-						final starField: String = boolFlagArgs[1];
-						final ctorName: String = boolFlagArgs[2];
-						final starAccess: Expr = { expr: EField(macro value, starField), pos: pos };
-						final flagAccess: Expr = { expr: EField(macro _wo, optField), pos: pos };
-						final ctorIdent: Expr = { expr: EConst(CIdent(ctorName)), pos: pos };
-						final useNodeAccess: Bool = ctx.trivia && isTriviaBearing(typePath);
-						final probeBody: Expr = useNodeAccess
-							? macro for (_m in $starAccess)
-								if (_m.node.match($ctorIdent)) {
-									_f = true;
-									break;
-								}
-							: macro for (_m in $starAccess) if (_m.match($ctorIdent)) {
-								_f = true;
-								break;
-							};
-						final propagateExprStmt: Expr = propagateExpr ? (macro _wo._inExprPosition = true) : (macro {});
-						// Each `macro …` reification in an array literal must be
-						// parenthesised — bare `macro` after `[…,` mis-parses as
-						// "Keyword macro cannot be used as variable name". Plain
-						// identifiers (`propagateExprStmt`, `baseRawWriteCall`)
-						// are fine as-is.
-						final block: Array<Expr> = [
-							(macro final _wo = _copyOpt(opt)),
-							propagateExprStmt,
-							(macro {
-								var _f: Bool = false;
-								$probeBody;
-								$flagAccess = _f;
-							}),
-							baseRawWriteCall,
-						];
-						{ expr: EBlock(block), pos: pos };
-					};
+					final rawWriteCall: Expr = buildBoolFlagRawWriteCall(boolFlagArgs, baseRawWriteCall, typePath, propagateExpr);
 					// ω-indent-objectliteral: `@:fmt(indentValueIfCtor('<ctor>', '<optField>'))`
 					// wrap on mandatory Ref — currently used by
 					// `HxObjectField.value` so a nested ObjectLit on a `:` RHS
@@ -1894,28 +1856,7 @@ class WriterLowering {
 					// through unchanged. Null policies → no pad → byte-identical
 					// to the verbatim capture.
 					final sharpInsideArgs: Null<Array<String>> = child.fmtReadStringArgs('sharpCondParensInside');
-					final effRawWriteCall: Expr = if (sharpInsideArgs != null && sharpInsideArgs.length == 2) {
-						final openKnob: Expr = optFieldAccess(sharpInsideArgs[0]);
-						final closeKnob: Expr = optFieldAccess(sharpInsideArgs[1]);
-						final wpAfter: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'WhitespacePolicy', 'After']);
-						final wpBoth: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'WhitespacePolicy', 'Both']);
-						final wpBefore: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'WhitespacePolicy', 'Before']);
-						macro {
-							final _condStr: String = ($fieldAccess: String);
-							if (_condStr.length >= 2 && StringTools.fastCodeAt(_condStr, 0) == '('.code && StringTools.fastCodeAt(
-								_condStr, _condStr.length - 1
-							) == ')'.code) {
-								final _inner: String = _condStr.substr(1, _condStr.length - 2);
-								final _op: anyparse.format.WhitespacePolicy = $openKnob;
-								final _cp: anyparse.format.WhitespacePolicy = $closeKnob;
-								final _openPad: String = (_op == $wpAfter || _op == $wpBoth) ? ' ' : '';
-								final _closePad: String = (_cp == $wpBefore || _cp == $wpBoth) ? ' ' : '';
-								_dt('(' + _openPad + _inner + _closePad + ')');
-							} else
-								_dt(_condStr);
-						}
-					} else
-						rawWriteCall;
+					final effRawWriteCall: Expr = buildSharpInsideWriteCall(sharpInsideArgs, fieldAccess, rawWriteCall);
 					final writeCall: Expr = bodyPolicyFlag != null && indentObjArgs != null
 						? effRawWriteCall
 						: maybeIndentValueIfCtor(effRawWriteCall, fieldAccess, child);
@@ -15337,6 +15278,86 @@ class WriterLowering {
 			inlineBlockBodyArgs: inlineBlockBodyArgs,
 		}));
 		return { access: fieldAccess, typePath: refName };
+	}
+
+	/**
+	 * ω-extern-class-no-blanks: build the mandatory-Ref writeCall when
+	 * `@:fmt(setBoolFlagFromStarCtor(optField, starField, ctorName))` is present —
+	 * a block that allocates a fresh opt copy, probes the sibling Star for the
+	 * named ctor, sets `_wo.<optField>`, then issues `baseRawWriteCall`. Returns
+	 * `baseRawWriteCall` unchanged when the meta is absent. Extracted from the
+	 * mandatory `case Ref` branch of `lowerStruct`.
+	 */
+	private function buildBoolFlagRawWriteCall(
+		boolFlagArgs: Null<Array<String>>, baseRawWriteCall: Expr, typePath: String, propagateExpr: Bool
+	): Expr {
+		if (boolFlagArgs == null) return baseRawWriteCall;
+		final pos: Position = Context.currentPos();
+		final optField: String = boolFlagArgs[0];
+		final starField: String = boolFlagArgs[1];
+		final ctorName: String = boolFlagArgs[2];
+		final starAccess: Expr = { expr: EField(macro value, starField), pos: pos };
+		final flagAccess: Expr = { expr: EField(macro _wo, optField), pos: pos };
+		final ctorIdent: Expr = { expr: EConst(CIdent(ctorName)), pos: pos };
+		final useNodeAccess: Bool = ctx.trivia && isTriviaBearing(typePath);
+		final probeBody: Expr = useNodeAccess
+			? macro for (_m in $starAccess)
+				if (_m.node.match($ctorIdent)) {
+					_f = true;
+					break;
+				}
+			: macro for (_m in $starAccess) if (_m.match($ctorIdent)) {
+				_f = true;
+				break;
+			};
+		final propagateExprStmt: Expr = propagateExpr ? (macro _wo._inExprPosition = true) : (macro {});
+		// Each `macro …` reification in an array literal must be
+		// parenthesised — bare `macro` after `[…,` mis-parses as
+		// "Keyword macro cannot be used as variable name". Plain
+		// identifiers (`propagateExprStmt`, `baseRawWriteCall`)
+		// are fine as-is.
+		final block: Array<Expr> = [
+			(macro final _wo = _copyOpt(opt)),
+			propagateExprStmt,
+			(macro {
+				var _f: Bool = false;
+				$probeBody;
+				$flagAccess = _f;
+			}),
+			baseRawWriteCall,
+		];
+		return { expr: EBlock(block), pos: pos };
+	}
+
+	/**
+	 * ω-condition-parens (Stage C): build the mandatory-Ref writeCall when
+	 * `@:fmt(sharpCondParensInside('<openKnob>', '<closeKnob>'))` is present — a
+	 * runtime rewrite of the verbatim `#if (cond)` string that injects inner
+	 * parens padding per the named WhitespacePolicy knobs. Returns `rawWriteCall`
+	 * unchanged when the meta is absent. Extracted from the mandatory `case Ref`
+	 * branch of `lowerStruct`.
+	 */
+	private function buildSharpInsideWriteCall(sharpInsideArgs: Null<Array<String>>, fieldAccess: Expr, rawWriteCall: Expr): Expr {
+		if (sharpInsideArgs == null || sharpInsideArgs.length != 2) return rawWriteCall;
+		final openKnob: Expr = optFieldAccess(sharpInsideArgs[0]);
+		final closeKnob: Expr = optFieldAccess(sharpInsideArgs[1]);
+		final wpAfter: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'WhitespacePolicy', 'After']);
+		final wpBoth: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'WhitespacePolicy', 'Both']);
+		final wpBefore: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'WhitespacePolicy', 'Before']);
+		return macro {
+			final _condStr: String = ($fieldAccess: String);
+			if (_condStr.length >= 2 && StringTools.fastCodeAt(_condStr, 0) == '('.code && StringTools.fastCodeAt(
+				_condStr, _condStr.length - 1
+			) == ')'.code) {
+				final _inner: String = _condStr.substr(1, _condStr.length - 2);
+				final _op: anyparse.format.WhitespacePolicy = $openKnob;
+				final _cp: anyparse.format.WhitespacePolicy = $closeKnob;
+				final _openPad: String = (_op == $wpAfter || _op == $wpBoth) ? ' ' : '';
+				final _closePad: String = (_cp == $wpBefore || _cp == $wpBoth) ? ' ' : '';
+				_dt('(' + _openPad + _inner + _closePad + ')');
+			} else
+				_dt(_condStr);
+		};
 	}
 
 }
