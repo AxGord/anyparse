@@ -384,25 +384,9 @@ class WriterLowering {
 		// ---- Postfix ----
 		if (postfixOp != null) return lowerPostfixBranch(c);
 
-		// ---- Case 0: zero-arg kw ----
-		if (kwLead != null && children.length == 0 && litList == null) {
-			final trail: Null<String> = branch.annotations.get('lit.trailText');
-			final text: String = kwLead + (trail ?? '');
-			return macro _dt($v{text});
-		}
-
-		// ---- Case 1: zero-arg lit ----
-		if (litList != null && litList.length == 1 && children.length == 0) return macro _dt($v{litList[0]});
-
-		// ---- Case 2: multi-lit Bool ----
-		if (litList != null && litList.length > 1 && children.length == 1) {
-			final trueLit: String = litList[0];
-			final falseLit: String = litList[1];
-			return macro if (_v0)
-				_dt($v{trueLit})
-			else
-				_dt($v{falseLit});
-		}
+		// ---- Cases 0/1/2: zero-arg kw / zero-arg lit / multi-lit Bool ----
+		final litKwDoc: Null<Expr> = lowerLitKwBranch(c);
+		if (litKwDoc != null) return litKwDoc;
 
 		// ---- Case 4: single-arg Star with lead/trail ----
 		if (leadText != null && trailText != null && children.length == 1 && children[0].kind == Star)
@@ -14403,6 +14387,39 @@ class WriterLowering {
 				? _dcmz($case3Doc)
 				: (opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedDecrease ? _dcmd($case3Doc) : $case3Doc))
 			: case3Doc;
+	}
+
+	/**
+	 * Lit / kw zero-or-one-arg branches (Cases 0/1/2): zero-arg kw
+	 * (`@:kw` no children), zero-arg single lit, and the multi-lit Bool
+	 * (`true`/`false` pair). Returns the matched Doc Expr, or null when
+	 * the branch is none of these (the dispatcher then falls through to
+	 * the Star / Ref / wrap shapes). Extracted from `lowerEnumBranch` so
+	 * the dispatcher stays under the complexity gate.
+	 */
+	private function lowerLitKwBranch(c: LowerBranchCtx): Null<Expr> {
+		final branch: ShapeNode = c.branch;
+		final children: Array<ShapeNode> = branch.children;
+		final litList: Null<Array<String>> = branch.annotations.get('lit.litList');
+		final kwLead: Null<String> = branch.annotations.get('kw.leadText');
+		// ---- Case 0: zero-arg kw ----
+		if (kwLead != null && children.length == 0 && litList == null) {
+			final trail: Null<String> = branch.annotations.get('lit.trailText');
+			final text: String = kwLead + (trail ?? '');
+			return macro _dt($v{text});
+		}
+		// ---- Case 1: zero-arg lit ----
+		if (litList != null && litList.length == 1 && children.length == 0) return macro _dt($v{litList[0]});
+		// ---- Case 2: multi-lit Bool ----
+		if (litList != null && litList.length > 1 && children.length == 1) {
+			final trueLit: String = litList[0];
+			final falseLit: String = litList[1];
+			return macro if (_v0)
+				_dt($v{trueLit})
+			else
+				_dt($v{falseLit});
+		}
+		return null;
 	}
 
 }
