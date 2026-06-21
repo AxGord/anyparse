@@ -1087,79 +1087,22 @@ final class Cli {
 	 * regardless of findings — `lint` is a report, like `symbols`.
 	 */
 	private static function runLint(args: Array<String>): Int {
-		var lang: String = 'haxe';
-		var flat: Bool = false;
-		var includeInfo: Bool = false;
-		var fix: Bool = false;
-		var failOn: Null<Severity> = null;
-		var format: String = 'text';
-		final ruleFilters: Array<String> = [];
-		final inputSpecs: Array<String> = [];
-
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
-				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
-				case '--rule':
-					ruleFilters.push(expectValue(args, ++i, '--rule'));
-				case '--all', '-a':
-					includeInfo = true;
-				case '--flat':
-					flat = true;
-				case '--fix':
-					fix = true;
-				case '--fail-on':
-					final level: String = expectValue(args, ++i, '--fail-on');
-					failOn = Severity.fromName(level);
-					if (failOn == null) {
-						stderr('apq lint: unknown --fail-on value "$level" (expected error|warning|info)\n');
-						return EXIT_USAGE;
-					}
-				case '--format':
-					format = expectValue(args, ++i, '--format');
-					if (format != 'text' && format != 'json' && format != 'checkstyle') {
-						stderr('apq lint: unknown --format value "$format" (expected text|json|checkstyle)\n');
-						return EXIT_USAGE;
-					}
-				case '-h', '--help':
-					printLintUsage();
-					return EXIT_OK;
-				case _:
-					if (StringTools.startsWith(a, '--')) {
-						stderr('apq lint: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
-					inputSpecs.push(a);
-			}
-			i++;
-		}
-		if (inputSpecs.length == 0) {
+		final o: LintOpts = parseLintArgs(args);
+		if (o.errExit != null) return o.errExit;
+		if (o.inputSpecs.length == 0) {
 			stderr('apq lint: expected <scope> (one or more file/dir/glob specs)\n');
 			printLintUsage();
 			return EXIT_USAGE;
 		}
 
-		final checks: Array<Check> = [];
-		if (ruleFilters.length == 0) {
-			for (check in Linter.builtins()) checks.push(check);
-		} else {
-			for (id in ruleFilters) {
-				final check: Null<Check> = Linter.byId(id);
-				if (check == null) {
-					stderr('apq lint: unknown rule "$id"\n');
-					return EXIT_USAGE;
-				}
-				checks.push(check);
-			}
-		}
+		final checks: Null<Array<Check>> = resolveLintChecks(o.ruleFilters);
+		if (checks == null) return EXIT_USAGE;
 
-		final plugin: GrammarPlugin = pickPlugin(lang);
-		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
+		final plugin: GrammarPlugin = pickPlugin(o.lang);
+		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(o.inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq lint: ${inputSpecs.join(', ')} matched no .hx files\n');
+			stderr('apq lint: ${o.inputSpecs.join(', ')} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -1175,57 +1118,20 @@ final class Cli {
 		}
 
 		final lintConfig: LintConfig = LintConfig.discover(paths[0] ?? '.');
-		final activeChecks: Array<Check> = ruleFilters.length == 0
+		final activeChecks: Array<Check> = o.ruleFilters.length == 0
 			? [
 				for (c in checks) if (lintConfig.enabledFor(c.id())) c
 			]
 			: checks;
 		final all: Array<Violation> = Linter.run(files, plugin, activeChecks, lintConfig);
 
-		if (fix) return applyLintFixes(files, activeChecks, plugin, lintConfig);
+		if (o.fix) return applyLintFixes(files, activeChecks, plugin, lintConfig);
 
-		final shown: Array<Violation> = includeInfo ? all : all.filter(v -> v.severity != Severity.Info);
+		final shown: Array<Violation> = o.includeInfo ? all : all.filter(v -> v.severity != Severity.Info);
+		renderLintReport(paths, shown, sourceOf, o.format, o.flat);
+		lintSummary(all, paths, o.includeInfo);
 
-		// Order findings by input-file order, each file sorted by source
-		// position so the report reads top-to-bottom; shared by every format.
-		final ordered: Array<Violation> = [];
-		for (path in paths) {
-			final group: Array<Violation> = shown.filter(v -> v.file == path);
-			group.sort((a, b) -> spanStart(a.span) - spanStart(b.span));
-			for (v in group) ordered.push(v);
-		}
-
-		switch format {
-			case 'json':
-				sysPrint(LintFormat.json(ordered, sourceOf));
-			case 'checkstyle':
-				sysPrint(LintFormat.checkstyle(ordered, sourceOf));
-			case _:
-				for (path in paths) {
-					final group: Array<Violation> = ordered.filter(v -> v.file == path);
-					if (group.length == 0) continue;
-					sysPrint(Text.renderViolations(path, sourceOf[path] ?? '', group, flat));
-				}
-		}
-
-		var errors: Int = 0;
-		var warnings: Int = 0;
-		var infos: Int = 0;
-		for (v in all) switch v.severity {
-			case Severity.Error:
-				errors++;
-			case Severity.Warning:
-				warnings++;
-			case Severity.Info:
-				infos++;
-		}
-		if (all.length == 0) {
-			stderr('apq lint: no issues in ${paths.length} file(s)\n');
-		} else {
-			stderr('apq lint: $errors error(s), $warnings warning(s), $infos info(s) in ${paths.length} file(s)\n');
-			if (!includeInfo && infos > 0) stderr('apq lint: $infos info advisory(ies) hidden — pass --all to show\n');
-		}
-
+		final failOn: Null<Severity> = o.failOn;
 		if (failOn != null) {
 			final threshold: Int = (cast failOn: Int);
 			for (v in all) if ((cast v.severity: Int) <= threshold) return EXIT_RUNTIME;
@@ -11486,6 +11392,145 @@ final class Cli {
 		}
 	}
 
+	private static inline function lintParseExit(code: Int): LintOpts {
+		return {
+			lang: '',
+			flat: false,
+			includeInfo: false,
+			fix: false,
+			failOn: null,
+			format: 'text',
+			ruleFilters: [],
+			inputSpecs: [],
+			errExit: code
+		};
+	}
+
+	private static function parseLintArgs(args: Array<String>): LintOpts {
+		var lang: String = 'haxe';
+		var flat: Bool = false;
+		var includeInfo: Bool = false;
+		var fix: Bool = false;
+		var failOn: Null<Severity> = null;
+		var format: String = 'text';
+		final ruleFilters: Array<String> = [];
+		final inputSpecs: Array<String> = [];
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--rule':
+					ruleFilters.push(expectValue(args, ++i, '--rule'));
+				case '--all', '-a':
+					includeInfo = true;
+				case '--flat':
+					flat = true;
+				case '--fix':
+					fix = true;
+				case '--fail-on':
+					final level: String = expectValue(args, ++i, '--fail-on');
+					failOn = Severity.fromName(level);
+					if (failOn == null) {
+						stderr('apq lint: unknown --fail-on value "$level" (expected error|warning|info)\n');
+						return lintParseExit(EXIT_USAGE);
+					}
+				case '--format':
+					format = expectValue(args, ++i, '--format');
+					if (format != 'text' && format != 'json' && format != 'checkstyle') {
+						stderr('apq lint: unknown --format value "$format" (expected text|json|checkstyle)\n');
+						return lintParseExit(EXIT_USAGE);
+					}
+				case '-h', '--help':
+					printLintUsage();
+					return lintParseExit(EXIT_OK);
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq lint: unknown option "$a"\n');
+						return lintParseExit(EXIT_USAGE);
+					}
+					inputSpecs.push(a);
+			}
+			i++;
+		}
+		return {
+			lang: lang,
+			flat: flat,
+			includeInfo: includeInfo,
+			fix: fix,
+			failOn: failOn,
+			format: format,
+			ruleFilters: ruleFilters,
+			inputSpecs: inputSpecs,
+			errExit: null
+		};
+	}
+
+	private static function resolveLintChecks(ruleFilters: Array<String>): Null<Array<Check>> {
+		final checks: Array<Check> = [];
+		if (ruleFilters.length == 0) {
+			for (check in Linter.builtins()) checks.push(check);
+		} else {
+			for (id in ruleFilters) {
+				final check: Null<Check> = Linter.byId(id);
+				if (check == null) {
+					stderr('apq lint: unknown rule "$id"\n');
+					return null;
+				}
+				checks.push(check);
+			}
+		}
+		return checks;
+	}
+
+	private static function renderLintReport(
+		paths: Array<String>, shown: Array<Violation>, sourceOf: Map<String, String>, format: String, flat: Bool
+	): Void {
+		// Order findings by input-file order, each file sorted by source
+		// position so the report reads top-to-bottom; shared by every format.
+		final ordered: Array<Violation> = [];
+		for (path in paths) {
+			final group: Array<Violation> = shown.filter(v -> v.file == path);
+			group.sort((a, b) -> spanStart(a.span) - spanStart(b.span));
+			for (v in group) ordered.push(v);
+		}
+
+		switch format {
+			case 'json':
+				sysPrint(LintFormat.json(ordered, sourceOf));
+			case 'checkstyle':
+				sysPrint(LintFormat.checkstyle(ordered, sourceOf));
+			case _:
+				for (path in paths) {
+					final group: Array<Violation> = ordered.filter(v -> v.file == path);
+					if (group.length == 0) continue;
+					sysPrint(Text.renderViolations(path, sourceOf[path] ?? '', group, flat));
+				}
+		}
+	}
+
+	private static function lintSummary(all: Array<Violation>, paths: Array<String>, includeInfo: Bool): Void {
+		var errors: Int = 0;
+		var warnings: Int = 0;
+		var infos: Int = 0;
+		for (v in all) switch v.severity {
+			case Severity.Error:
+				errors++;
+			case Severity.Warning:
+				warnings++;
+			case Severity.Info:
+				infos++;
+		}
+		if (all.length == 0) {
+			stderr('apq lint: no issues in ${paths.length} file(s)\n');
+		} else {
+			stderr('apq lint: $errors error(s), $warnings warning(s), $infos info(s) in ${paths.length} file(s)\n');
+			if (!includeInfo && infos > 0) stderr('apq lint: $infos info advisory(ies) hidden — pass --all to show\n');
+		}
+	}
+
 }
 
 @:nullSafety(Strict)
@@ -11627,6 +11672,20 @@ typedef SearchOpts = {
 	var pattern: Null<String>;
 	var inputSpecs: Array<String>;
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
+	// the caller returns this immediately and ignores the rest of the struct.
+	var errExit: Null<Int>;
+};
+@:nullSafety(Strict)
+typedef LintOpts = {
+	var lang: String;
+	var flat: Bool;
+	var includeInfo: Bool;
+	var fix: Bool;
+	var failOn: Null<Severity>;
+	var format: String;
+	var ruleFilters: Array<String>;
+	var inputSpecs: Array<String>;
+	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag/value -> EXIT_USAGE);
 	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
 };
