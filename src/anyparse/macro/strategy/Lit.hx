@@ -123,66 +123,9 @@ class Lit implements Strategy {
 				node.annotations.set('lit.trailText', singleString(entry.params, ':trailOpt'));
 				node.annotations.set('lit.trailOptional', true);
 			case ':wrap':
-				if (entry.params.length != 2) {
-					Context.fatalError('@:wrap expects exactly two string arguments', entry.pos);
-				}
-				node.annotations.set('lit.leadText', stringOrFail(entry.params[0], ':wrap'));
-				node.annotations.set('lit.trailText', stringOrFail(entry.params[1], ':wrap'));
+				annotateWrap(node, entry);
 			case ':sep':
-				if (entry.params.length == 0 || entry.params.length > 3)
-					Context.fatalError(
-						'@:sep expects 1-3 arguments: @:sep("text"), @:sep("text", tailRelax), or @:sep("text", tailRelax, blockEnded[(\'<predicate>\'[, sepStartsElement])])',
-						entry.pos
-					);
-				node.annotations.set('lit.sepText', stringOrFail(entry.params[0], ':sep'));
-				if (entry.params.length >= 2) switch entry.params[1].expr {
-					case EConst(CIdent('tailRelax')):
-						node.annotations.set('lit.sepTailRelax', true);
-					case _:
-						Context.fatalError('@:sep second argument must be the ident `tailRelax`', entry.params[1].pos);
-				}
-				if (entry.params.length == 3)
-					switch entry.params[2].expr {
-						case EConst(CIdent('blockEnded')):
-							node.annotations.set('lit.sepBlockEnded', true);
-						// `blockEnded('predicateName')` — option (b2) AST-shape
-						// adapter: instead of (or in addition to) the byte-check
-						// `_prevEndPos - 1 == '}'`, the Star primitive calls
-						// `schema.instance.<predicateName>(_arr[_arr.length - 1])`
-						// to decide whether sep is elidable. The predicate is a
-						// schema-method on the plugin's HaxeFormat-shaped class,
-						// reached through the same channel as `trailOptParseGate`
-						// (see Lowering.hx L1552 for the sister mechanism).
-						case ECall({ expr: EConst(CIdent('blockEnded')) }, callArgs):
-							if (callArgs.length < 1 || callArgs.length > 2)
-								Context.fatalError(
-									'@:sep `blockEnded(...)` expects 1-2 arguments: predicate name [, sepStartsElement]',
-									entry.params[2].pos
-								);
-							node.annotations.set('lit.sepBlockEnded', true);
-							node.annotations.set('lit.sepBlockEndedPredicate', stringOrFail(callArgs[0], ':sep'));
-							// Optional 2nd arg `sepStartsElement` (Session 9 BlockBody Star) —
-							// flips byte-ambiguity policy: when block-ended is TRUE, the sep
-							// byte at pos belongs to the NEXT element, never a separator.
-							// Required for grammars where the sep char can ALSO be a valid
-							// element body (Haxe `EmptyStmt` whose body IS `;`). Without this
-							// flag the default permissive-sep semantics applies.
-							if (callArgs.length == 2)
-								switch callArgs[1].expr {
-									case EConst(CIdent('sepStartsElement')):
-										node.annotations.set('lit.sepStartsElement', true);
-									case _:
-										Context.fatalError(
-											'@:sep `blockEnded(...)` second argument must be the ident `sepStartsElement`',
-											callArgs[1].pos
-										);
-								}
-						case _:
-							Context.fatalError(
-								'@:sep third argument must be `blockEnded` or `blockEnded(\'<predicate>\'[, sepStartsElement])`',
-								entry.params[2].pos
-							);
-					}
+				annotateSep(node, entry);
 			case ':sepAlt':
 				node.annotations.set('lit.sepAltText', singleString(entry.params, ':sepAlt'));
 			case _:
@@ -213,6 +156,67 @@ class Lit implements Strategy {
 				Context.fatalError('$tag argument must be a string literal', e.pos);
 				throw 'unreachable';
 		};
+	}
+
+	private static function annotateWrap(node: ShapeNode, entry: MetadataEntry): Void {
+		if (entry.params.length != 2) {
+			Context.fatalError('@:wrap expects exactly two string arguments', entry.pos);
+		}
+		node.annotations.set('lit.leadText', stringOrFail(entry.params[0], ':wrap'));
+		node.annotations.set('lit.trailText', stringOrFail(entry.params[1], ':wrap'));
+	}
+
+	private static function annotateSep(node: ShapeNode, entry: MetadataEntry): Void {
+		if (entry.params.length == 0 || entry.params.length > 3)
+			Context.fatalError(
+				'@:sep expects 1-3 arguments: @:sep("text"), @:sep("text", tailRelax), or @:sep("text", tailRelax, blockEnded[(\'<predicate>\'[, sepStartsElement])])',
+				entry.pos
+			);
+		node.annotations.set('lit.sepText', stringOrFail(entry.params[0], ':sep'));
+		if (entry.params.length >= 2) switch entry.params[1].expr {
+			case EConst(CIdent('tailRelax')):
+				node.annotations.set('lit.sepTailRelax', true);
+			case _:
+				Context.fatalError('@:sep second argument must be the ident `tailRelax`', entry.params[1].pos);
+		}
+		if (entry.params.length == 3) switch entry.params[2].expr {
+			case EConst(CIdent('blockEnded')):
+				node.annotations.set('lit.sepBlockEnded', true);
+			// `blockEnded('predicateName')` — option (b2) AST-shape
+			// adapter: instead of (or in addition to) the byte-check
+			// `_prevEndPos - 1 == '}'`, the Star primitive calls
+			// `schema.instance.<predicateName>(_arr[_arr.length - 1])`
+			// to decide whether sep is elidable. The predicate is a
+			// schema-method on the plugin's HaxeFormat-shaped class,
+			// reached through the same channel as `trailOptParseGate`
+			// (see Lowering.hx L1552 for the sister mechanism).
+			case ECall({ expr: EConst(CIdent('blockEnded')) }, callArgs):
+				if (callArgs.length < 1 || callArgs.length > 2)
+					Context.fatalError(
+						'@:sep `blockEnded(...)` expects 1-2 arguments: predicate name [, sepStartsElement]', entry.params[2].pos
+					);
+				node.annotations.set('lit.sepBlockEnded', true);
+				node.annotations.set('lit.sepBlockEndedPredicate', stringOrFail(callArgs[0], ':sep'));
+				// Optional 2nd arg `sepStartsElement` (Session 9 BlockBody Star) —
+				// flips byte-ambiguity policy: when block-ended is TRUE, the sep
+				// byte at pos belongs to the NEXT element, never a separator.
+				// Required for grammars where the sep char can ALSO be a valid
+				// element body (Haxe `EmptyStmt` whose body IS `;`). Without this
+				// flag the default permissive-sep semantics applies.
+				if (callArgs.length == 2)
+					switch callArgs[1].expr {
+						case EConst(CIdent('sepStartsElement')):
+							node.annotations.set('lit.sepStartsElement', true);
+						case _:
+							Context.fatalError(
+								'@:sep `blockEnded(...)` second argument must be the ident `sepStartsElement`', callArgs[1].pos
+							);
+					}
+			case _:
+				Context.fatalError(
+					'@:sep third argument must be `blockEnded` or `blockEnded(\'<predicate>\'[, sepStartsElement])`', entry.params[2].pos
+				);
+		}
 	}
 
 }
