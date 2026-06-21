@@ -880,41 +880,15 @@ class WriterLowering {
 				continue;
 			}
 
-			// D61: kw prefix — space before kw (unless first), kw text with trailing space.
-			// @:fmt(sameLine(flagName)) on the child switches the leading space to a
-			// hardline when `opt.<flagName>` is false (τ₁).
-			//
-			// ω-untyped-leftCurly: `@:fmt(leftCurly)` on a kw-led mandatory Ref
-			// (currently `HxUntypedFnBody.block`) splits the kw emission so the
-			// trailing space is replaced by a runtime `BracePlacement` switch —
-			// `Same` (default) emits `_dt(' ')` (byte-identical to the unsplit
-			// `kwLead + ' '` form), `Next` emits `_dhl()` so the inner `{` lands
-			// on its own line at the current indent. The Ref-case body emits no
-			// further separator before its writeCall, so pushing leftCurlySeparator
-			// here owns the kw→`{` transition fully.
-			if (kwLead != null && !isOptional) {
-				emitKwPrefix(child, parts, kwLead, isFirstField, isRaw, prevBodyField, typePath, prevPadTrailing);
-			}
+			// D61: kw prefix + mandatory @:lead lead-in — see emitFieldLeadIn.
+			emitFieldLeadIn(
+				child, parts, kwLead, leadText, isOptional, isFirstField, isRaw, prevBodyField, typePath, prevPadTrailing, hasCondWrap,
+				hasCondWrapEnd
+			);
 
-			// D61: non-optional lead — no space before lead.
-			// ψ₇ / ω-E-whitespace: `@:fmt(objectFieldColon)` /
-			// `@:fmt(typeHintColon)` on the field switches the emission to
-			// a runtime-configurable spacing around the lead text; all
-			// other mandatory leads stay tight.
-			// ω-condwrap-forstmt: symmetric with the trail gate below — the
-			// end-field of a condWrap span cannot push its own `@:lead`
-			// literal (the open paren is owned by the start field and emitted
-			// via the splice's `emitCondition` wrap). No current consumer
-			// puts `@:lead` on the end field, but mirror the trail gate so a
-			// future end-field with `@:lead` does not silently leak the lead
-			// literal into the spanned cond Doc.
-			if (leadText != null && !isOptional && !hasCondWrap && !hasCondWrapEnd) emitMandatoryLead(child, parts, leadText);
-
-			// Field value
-			// ω-issue-257-else-in-return-switch: same dual-flag form as
-			// the ctor-level read above — `bodyPolicy('<stmtFlag>',
-			// '<exprFlag>')` dispatches at runtime on
-			// `opt._inExprPosition`.
+			// Field value.
+			// ω-issue-257-else-in-return-switch: `bodyPolicy('<stmtFlag>', '<exprFlag>')`
+			// dispatches at runtime on `opt._inExprPosition`.
 			final bodyPolicy: { stmt: Null<String>, expr: Null<String> } = readBodyPolicyDual(child);
 			final bodyPolicyFlag: Null<String> = bodyPolicy.stmt;
 			final bodyPolicyExprFlag: Null<String> = bodyPolicy.expr;
@@ -941,50 +915,13 @@ class WriterLowering {
 					);
 
 				case Ref:
-					final refName: String = child.annotations.get('base.ref');
-					final writeFn: String = writeFnFor(refName);
-					// (opt-fanout / writeCall assembly lives in buildMandatoryRefWriteCall.)
-					final indentObjArgs: Null<Array<String>> = child.fmtReadStringArgs('indentValueIfCtor');
-					final writeCall: Expr = buildMandatoryRefWriteCall(child, fieldAccess, typePath, writeFn, bodyPolicyFlag, indentObjArgs);
-					// (opt-fanout flags — propagateExprPosition / propagateAnonFnContext /
-					// propagateTypedefContext / switchSubjectNoWrap / propagateValueIfBranch /
-					// setBoolFlagFromStarCtor — plus sharpCondParensInside and the
-					// indentValueIfCtor additive-vs-subtractive wrap live in
-					// buildMandatoryRefWriteCall.)
-					// bodyPolicy on a first field: the parent enum-branch
-					// Case 3 strips its kwLead trailing space so the
-					// separator here is the sole transition token. Non-
-					// first-field case (HxIfStmt.thenBody after cond's
-					// `)` trail): the trail emits the token literally and
-					// bodyPolicyWrap replaces the default ` ` separator.
-					if (bodyPolicyFlag != null && kwLead == null && leadText == null && !isRaw)
-						// Bare-Ref body with @:fmt(bodyPolicy(...)) — see emitBodyPolicyBareRef.
-						justWrappedBody = emitBodyPolicyBareRef(
-							child, parts, prevTrailFieldName, isFirstField, fieldName, bodyPolicyFlag, bodyPolicyExprFlag, writeCall,
-							fieldAccess, refName, hasElseIf, elseFieldName, indentObjArgs, fallbackFlag
-						);
-					else
-						// Bare-Ref body without @:fmt(bodyPolicy) — leftCurly / bodyBreak /
-						// bareBodyBreaks / non-first-body / condWrap / arrowBodyLineWrap
-						// dispatch lives in emitBareRefNonBodyPolicy.
-						emitBareRefNonBodyPolicy(
-							child, parts, refName, fieldName, typePath, fieldAccess, writeCall, isFirstField, isRaw, kwLead, leadText,
-							hasCondWrap, condWrapArgs, spanInfo != null, trailText, prevAnyStarNonEmpty, prevPadTrailing
-						);
-					// ω-close-trailing-alt: track ANY bare-Ref body (with or
-					// without bodyPolicy wrap) so the next field can react to
-					// its runtime closeTrailing slot. Only matters when the
-					// target type is trivia-bearing — non-bearing types have
-					// no closeTrailing slot and the override degrades to a
-					// no-op switch returning the default sep.
-					//
-					// ω-block-shape-aware: track in plain mode too, gated only
-					// on bare-Ref-ness. Block-shape consumers
-					// (`bodyBreakWrap`, the Star sameLine handler) check
-					// `collectBlockCtorPatterns(refName)` themselves and
-					// degrade to a no-op when the target type has no block
-					// ctors, so the wider tracker is safe in both modes.
-					prevBareRefBody = { access: fieldAccess, typePath: refName };
+					final mandResult = emitMandatoryRefField(
+						child, parts, typePath, fieldAccess, fieldName, bodyPolicyFlag, bodyPolicyExprFlag, kwLead, leadText, isRaw,
+						isFirstField, hasElseIf, elseFieldName, fallbackFlag, hasCondWrap, condWrapArgs, spanInfo != null, trailText,
+						prevTrailFieldName, prevAnyStarNonEmpty, prevPadTrailing
+					);
+					justWrappedBody = mandResult.justWrappedBody;
+					prevBareRefBody = mandResult.prevBareRefBody;
 
 				case _:
 					Context.fatalError('WriterLowering: struct field kind ${child.kind} not supported', Context.currentPos());
@@ -15404,6 +15341,77 @@ class WriterLowering {
 			hasStructFieldTrailOptSlot: hasStructFieldTrailOptSlot,
 			structTrailOptAccess: structTrailOptAccess,
 		};
+	}
+
+	/**
+	 * Emit a bare mandatory Ref struct field (the `case Ref` arm of
+	 * `lowerStruct`). Builds the descendant writeCall, then dispatches the body
+	 * emission to `emitBodyPolicyBareRef` (when a bare-Ref `@:fmt(bodyPolicy)`
+	 * fires) or `emitBareRefNonBodyPolicy` (leftCurly / bodyBreak / non-first-body
+	 * / condWrap / arrowBodyLineWrap), and records the bare-Ref body tracker.
+	 * Pushes into `parts`; returns the `justWrappedBody` body-info (or null) and
+	 * the `prevBareRefBody` tracker. Extracted from `lowerStruct`.
+	 */
+	private function emitMandatoryRefField(
+		child: ShapeNode, parts: Array<Expr>, typePath: String, fieldAccess: Expr, fieldName: String, bodyPolicyFlag: Null<String>,
+		bodyPolicyExprFlag: Null<String>, kwLead: Null<String>, leadText: Null<String>, isRaw: Bool, isFirstField: Bool, hasElseIf: Bool,
+		elseFieldName: Null<String>, fallbackFlag: Null<String>, hasCondWrap: Bool, condWrapArgs: Null<Array<String>>,
+		spanInfoPresent: Bool, trailText: Null<String>, prevTrailFieldName: Null<String>, prevAnyStarNonEmpty: Null<Expr>,
+		prevPadTrailing: Null<Expr>
+	): { justWrappedBody: Null<PrevBodyInfo>, prevBareRefBody: PrevBodyInfo } {
+		final refName: String = child.annotations.get('base.ref');
+		final writeFn: String = writeFnFor(refName);
+		// (opt-fanout / writeCall assembly lives in buildMandatoryRefWriteCall.)
+		final indentObjArgs: Null<Array<String>> = child.fmtReadStringArgs('indentValueIfCtor');
+		final writeCall: Expr = buildMandatoryRefWriteCall(child, fieldAccess, typePath, writeFn, bodyPolicyFlag, indentObjArgs);
+		// bodyPolicy on a first field: the parent enum-branch Case 3 strips its
+		// kwLead trailing space so the separator here is the sole transition
+		// token. Non-first-field case (HxIfStmt.thenBody after cond's `)` trail):
+		// the trail emits the token literally and bodyPolicyWrap replaces the
+		// default ` ` separator.
+		final justWrappedBody: Null<PrevBodyInfo> = if (bodyPolicyFlag != null && kwLead == null && leadText == null && !isRaw)
+			// Bare-Ref body with @:fmt(bodyPolicy(...)) — see emitBodyPolicyBareRef.
+			emitBodyPolicyBareRef(
+				child, parts, prevTrailFieldName, isFirstField, fieldName, bodyPolicyFlag, bodyPolicyExprFlag, writeCall, fieldAccess,
+				refName, hasElseIf, elseFieldName, indentObjArgs, fallbackFlag
+			);
+		else {
+			// Bare-Ref body without @:fmt(bodyPolicy) — leftCurly / bodyBreak /
+			// bareBodyBreaks / non-first-body / condWrap / arrowBodyLineWrap
+			// dispatch lives in emitBareRefNonBodyPolicy.
+			emitBareRefNonBodyPolicy(
+				child, parts, refName, fieldName, typePath, fieldAccess, writeCall, isFirstField, isRaw, kwLead, leadText, hasCondWrap,
+				condWrapArgs, spanInfoPresent, trailText, prevAnyStarNonEmpty, prevPadTrailing
+			);
+			null;
+		};
+		// ω-close-trailing-alt / ω-block-shape-aware: track ANY bare-Ref body so
+		// the next field can react to its runtime closeTrailing slot; block-shape
+		// consumers degrade to a no-op when the target has no block ctors.
+		return { justWrappedBody: justWrappedBody, prevBareRefBody: { access: fieldAccess, typePath: refName } };
+	}
+
+	/**
+	 * Emit a non-Star field's lead-in before its value: the kw prefix
+	 * (`emitKwPrefix`, when `@:kw` is present on a non-optional field — incl. the
+	 * `@:fmt(leftCurly)` BracePlacement split) and the mandatory `@:lead` literal
+	 * (`emitMandatoryLead`, when present on a non-optional, non-condWrap field).
+	 * Pushes into `parts`. Extracted from `lowerStruct`.
+	 */
+	private function emitFieldLeadIn(
+		child: ShapeNode, parts: Array<Expr>, kwLead: Null<String>, leadText: Null<String>, isOptional: Bool, isFirstField: Bool,
+		isRaw: Bool, prevBodyField: Null<PrevBodyInfo>, typePath: String, prevPadTrailing: Null<Expr>, hasCondWrap: Bool,
+		hasCondWrapEnd: Bool
+	): Void {
+		// D61: kw prefix — space before kw (unless first), kw text with trailing
+		// space. @:fmt(sameLine(...)) switches the leading space to a hardline;
+		// @:fmt(leftCurly) splits the kw emission for a runtime BracePlacement.
+		if (kwLead != null && !isOptional)
+			emitKwPrefix(child, parts, kwLead, isFirstField, isRaw, prevBodyField, typePath, prevPadTrailing);
+		// D61: non-optional lead — no space before lead. The end-field of a
+		// condWrap span cannot push its own `@:lead` (the open paren is owned by
+		// the start field and emitted via the splice's emitCondition wrap).
+		if (leadText != null && !isOptional && !hasCondWrap && !hasCondWrapEnd) emitMandatoryLead(child, parts, leadText);
 	}
 
 }
