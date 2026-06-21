@@ -409,695 +409,7 @@ class WriterLowering {
 			return lowerEnumStar(branch, typePath, writeFnName, hasPratt, argNames);
 
 		// ---- Case 3: single-arg Ref ----
-		if (litList == null && children.length == 1 && children[0].kind == Ref) {
-			final refName: String = children[0].annotations.get('base.ref');
-			final subFn: String = writeFnFor(refName);
-			final isSelfRef: Bool = simpleName(refName) == simpleName(typePath);
-			// ω-issue-423-mech-a: when the kw-Ref ctor itself carries
-			// `@:fmt(propagateExprPosition)` (e.g. `HxStatement.ReturnStmt`,
-			// `HxExpr.ReturnExpr`), wrap the sub-call's opt arg in
-			// `_setExprPosition` so the `value:HxExpr` descendant sees the
-			// expression-position frame. Idempotent — already-true opt
-			// passes through.
-			final propagateExpr: Bool = branch.fmtHasFlag('propagateExprPosition');
-			// ω-value-yielded-if-tail-barrier (macro-block clear): when this kw-
-			// Ref ctor carries `@:fmt(clearExprPosition)` (HxExpr.MacroExpr), the
-			// sub-call's opt arg is wrapped in `_clearExprPosition` ONLY when the
-			// operand is a block (`macro { … }`) — gated at runtime via the
-			// plugin-supplied `opt.operandIsBlockExpr` adapter so a non-block
-			// `macro <expr>` (e.g. `macro if (1) 2 else 3`) stays transparent and
-			// keeps its inherited expression-position frame. The block's reified
-			// statements revert to statement-position body policy (dropping the
-			// SI-2 block-tail frame). Null adapter (non-opt-in formats) → never
-			// fires. Idempotent helper; allocation-free when already cleared.
-			final clearExpr: Bool = branch.fmtHasFlag('clearExprPosition');
-			// ω-string-interp-noformat-flat: the interpolation `${expr}` body
-			// (`@:fmt(captureSource(...))` ctor — `HxStringSegment.Block`)
-			// threads `_setChainModeOverride(opt, NoWrap)` into the sub-call
-			// so the descendant chain emit collapses its cascade to `NoWrap`
-			// — an inner `+`/`-`/`&&` chain stays flat regardless of the
-			// `opAddSubChain`/`opBoolChain` config (the fork never wraps
-			// expressions inside interpolations). Reuses the existing
-			// chain-override channel (no new opt field): `_setChainModeOverride`
-			// swaps `opBoolChainWrap`/`opAddSubChainWrap` to a degenerate
-			// `{rules: [], defaultMode: NoWrap}` cascade. `NoWrap` is distinct
-			// from the `FillLineWithLeadingBreak` cond-wrap mode, so the
-			// chain dispatch's `_condWrapForced` gate (== FLWLB) stays false —
-			// no interaction with the inc6 chain-unwrap path. The HardFlatten
-			// wrap at `bodyExpr` (below) covers width-conditional breaks +
-			// non-chain Groups; this NoWrap channel covers the unconditional
-			// `onePerLine` chain shape whose `Line('\n')` flat form would
-			// survive HardFlatten. Composes with `propagateExpr`. Gated on the
-			// `captureSource` flag alone (Haxe-only today, and `HxModuleWriteOptions`
-			// carries the chain-override channel) — mirrors the `@:fmt(condWrap)`
-			// site (L3592), which calls `_setChainModeOverride` ungated for the
-			// same reason: the flag's presence implies the grammar's channel.
-			final interpFlat: Bool = branch.fmtHasFlag('captureSource');
-			// ω-expr-paren-in-condition (cond F2): the `ParenExpr`
-			// (`@:fmt(expressionParenHardFlatten)`) inner chain is HardFlatten-
-			// collapsed by default. When this paren sits inside a condition
-			// (`opt._parenInCondition`, set at the `@:fmt(condWrap)` site) AND the
-			// user configured `expressionWrapping` to fillLine, thread the fillLine
-			// mode as a `_chainModeOverride` into the paren's OWN inner writeCall so
-			// its chain wraps fillLine — and CLEAR `_parenInCondition` so a nested
-			// expr paren inside this one does not re-trigger. Runtime-gated so a
-			// standalone expr paren (flag false, e.g. `expression_paren_wrapping`)
-			// is byte-identical (`opt` passed through unchanged).
-			final parenHardFlatten: Bool = branch.fmtHasFlag('expressionParenHardFlatten');
-			// ω-fieldlevel-var-value-expr-indent: when this kw-Ref ctor carries
-			// `@:fmt(propagateFieldLevelVar)` (class-member `var`/`final` —
-			// `HxClassMember.VarMember` / `FinalMember`), wrap the sub-call's opt
-			// arg in `_setFieldLevelVar` so the descendant `HxVarDecl.init` write
-			// forces the `indentComplexValueExpressions` value-expr indent for an
-			// if/switch/try value (fork's `Indenter.isFieldLevelVar`). Local-var
-			// inits route through `HxStatement.VarStmt` / `HxExpr.VarExpr` — never
-			// this ctor — so the flag stays false there and they remain
-			// knob-gated. Idempotent helper; allocation-free when already set.
-			final propagateFieldLevelVar: Bool = branch.fmtHasFlag('propagateFieldLevelVar');
-			// ω-keep-kw-newline (increment 1b): when this VarStmt-family ctor
-			// captured a `var`→head newline (the synth `kwNewline:Bool` slot),
-			// thread `_setVarKwNewline(opt, true)` into the inner `decl`
-			// writeCall so the `HxVarDecl` multiVar fold reproduces the head
-			// break under `WrapMode.Keep`. The helper is idempotent and
-			// allocation-free when the flag matches, so a same-line `var x = …`
-			// (kwNewline false) leaves `opt` unchanged — byte-inert. Trivia-
-			// only (the slot exists only on bearing trivia ctors); plain mode
-			// leaves `kwNewlineExpr` null and the head stays glued to `var `.
-			final kwNewlineExpr: Null<Expr> = (ctx.trivia && isTriviaBearing(typePath))
-				? altSlotAccess(branch, children.length, argNames, KwNewline)
-				: null;
-			final ctorOptArg: Expr = {
-				var _o: Expr = macro opt;
-				if (propagateExpr) _o = macro _setExprPosition($_o);
-				if (clearExpr) {
-					final _operandAccess: Expr = macro $i{argNames[0]};
-					_o = macro (opt.operandIsBlockExpr != null && opt.operandIsBlockExpr($_operandAccess) ? _clearExprPosition($_o) : $_o);
-				}
-				if (propagateFieldLevelVar) _o = macro _setFieldLevelVar($_o);
-				if (interpFlat) _o = macro _setChainModeOverride($_o, anyparse.format.wrap.WrapMode.NoWrap);
-				if (parenHardFlatten)
-					_o = macro (opt._parenInCondition
-						? _setChainModeOverride(
-							_clearParenInCondition($_o),
-							anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap)
-						)
-						: $_o);
-				// ω-keep-chain (increment: opadd_chain_keep): a `ParenExpr`
-				// (`@:fmt(expressionParenHardFlatten)`) wrapping a chain marks the
-				// inner opt `_keepChainInParen`. A `WrapMode.Keep` chain reads it to
-				// (a) SUPPRESS its own `_headBreak` — the `return`→value source
-				// newline is reproduced at the VALUE level (`returnBody` FitLine
-				// breaks `return\n\tvalue`), not inside the paren (`(\n head`); and
-				// (b) SUPPRESS its continuation `Nest` — the value-level break Nest
-				// already supplies the +cols, so the chain operators continue at that
-				// SAME indent (no compounding to +2cols). Mirrors fork keep2 keeping
-				// the `return`→`1` newline at the value and the chain ops co-indented
-				// with the head. Non-keep chains ignore the flag (gated on `isKeep`)
-				// → byte-inert. A BARE chain return value (opbool case-2) has NO
-				// enclosing `ParenExpr`, so the flag stays false and its chain keeps
-				// its own headBreak + Nest. Trivia-only.
-				if (parenHardFlatten && ctx.trivia) _o = macro _setKeepChainInParen($_o, true);
-				if (kwNewlineExpr != null) _o = macro _setVarKwNewline($_o, $kwNewlineExpr);
-				_o;
-			};
-			final subCall: Expr = if (isSelfRef && hasPratt)
-				{ expr: ECall(macro $i{subFn}, [macro $i{argNames[0]}, ctorOptArg, macro -1]), pos: Context.currentPos() }
-			else
-				{ expr: ECall(macro $i{subFn}, [macro $i{argNames[0]}, ctorOptArg]), pos: Context.currentPos() };
-
-			// ω-return-body: ctor-level `@:fmt(bodyPolicy(...))` on a kw-led
-			// single-Ref branch (e.g. `HxStatement.ReturnStmt(value:HxExpr)`)
-			// wraps the sub-call through `bodyPolicyWrap` so the kw→body
-			// separator is runtime-switchable. The wrap supplies the
-			// separator (`_dt(' ')` for `Same`, `_dn(_cols, _dhl + body)`
-			// for `Next`, etc.), so the kw must drop its trailing space —
-			// the existing `subStructStartsWithBodyPolicy` path covers the
-			// sub-struct case (`HxStatement.IfStmt(stmt:HxIfStmt)` where the
-			// `bodyPolicy` flag lives on a field of `HxIfStmt`); this new
-			// path covers the direct-Ref case where no wrapper struct hosts
-			// the field.
-			// ω-issue-257-else-in-return-switch: `bodyPolicy(...)` accepts
-			// 1 or 2 flag names. Two-arg form dispatches between the
-			// stmt-position knob (arg 0) and expr-position knob (arg 1)
-			// at runtime via `opt._inExprPosition`. Mirrors the dual-flag
-			// dispatch in `triviaTryparseStarExpr` for case-body Stars.
-			final ctorBodyPolicy: { stmt: Null<String>, expr: Null<String> } = readBodyPolicyDual(branch);
-			final ctorBodyPolicyFlag: Null<String> = ctorBodyPolicy.stmt;
-			final ctorBodyPolicyExprFlag: Null<String> = ctorBodyPolicy.expr;
-			// ω-returnbody-widthaware: read the parameterless `@:fmt(widthAware)`
-			// flag at the same call site so the runtime IfFirstLineExceeds
-			// wrap is opt-in per ctor (currently `HxStatement.ReturnStmt`).
-			final ctorWidthAware: Bool = branch.fmtHasFlag('widthAware');
-			// ω-return-body-single-line: read the
-			// `@:fmt(bodyPolicySingleLine('<flag>', '<multiCtor>'...))` knob
-			// (currently `HxStatement.ReturnStmt`) so `bodyPolicyWrap` can split
-			// the policy between single-line and multi-line value shapes. Arg 0
-			// is the single-line flag name; the remaining args name the value
-			// ctors treated as multi-line (control-flow / block), which keep the
-			// base `returnBody` policy.
-			final ctorSingleLineArgs: Null<Array<String>> = branch.fmtReadStringArgs('bodyPolicySingleLine');
-			final ctorSingleLineFlag: Null<String> = ctorSingleLineArgs == null ? null : ctorSingleLineArgs[0];
-			final ctorSingleLineMultiCtors: Null<Array<String>> = ctorSingleLineArgs == null ? null : ctorSingleLineArgs.slice(1);
-			// ω-issue-257-firstline: when the ctor is the bodyPolicy-kw-Ref
-			// shape (predicate matches `HxStatement.ReturnStmt`) and trivia
-			// mode + bearing typePath, the synth ctor carries a positional
-			// `bodyOnSameLine:Bool` arg captured by the parser. Forward its
-			// access expression so `bodyPolicyWrap`'s `Keep` branch can
-			// dispatch source-shape-aware. The arg index follows the same
-			// ordering as `TriviaTypeSynth.buildEnumCtor`: closeTrailing
-			// (+ openTrailing/trailingBlankBefore/trailingLeading) →
-			// trailPresent → sourceText → bodyOnSameLine → postfix
-			// closeTrailing. Plain mode keeps `null` and the wrap degrades
-			// to `sameLayoutExpr` (no Keep slot — falls through the same
-			// width-aware path as `Same`).
-			final bodyOnSameLineExpr: Null<Expr> = (ctx.trivia && isTriviaBearing(typePath))
-				? altSlotAccess(branch, children.length, argNames, BodyPolicyKw)
-				: null;
-			// omega-paren-wrap-source-newline: ctors carrying
-			// @:fmt(captureWrapOpenNewline) on a single-Ref @:wrap branch grow
-			// a positional `wrapOpenNewline:Bool` arg in the synth pair (see
-			// TriviaTypeSynth.buildEnumCtor push order). Compute its access
-			// expression here so the @:wrap shape below can switch break-mode
-			// shape based on source-shape capture. Plain mode (or trivia-mode
-			// without the opt-in flag) leaves `wrapOpenNewlineExpr` null and
-			// the shape falls back to the existing unconditional glue.
-			final wrapOpenNewlineExpr: Null<Expr> = (ctx.trivia && isTriviaBearing(typePath))
-				? altSlotAccess(branch, children.length, argNames, WrapOpenNewline)
-				: null;
-			// ω-issue-257-firstline regression-fix: forward `indentArgs` to
-			// `bodyPolicyWrap` so its `indentObjGuardedNext` rule fires for
-			// the ctor-level `Next`/`Keep`-bodyOnSameLine-false fallback path
-			// when the body is an ObjectLit and `indentObjectLiteral=false`.
-			// Without forwarding, the `Keep`-route nextLayoutExpr always
-			// emits `_dn(_cols, [_dhl, body])` and over-indents `{` by one
-			// step (`return\n\t\t\t{` instead of `return\n\t\t{` for
-			// `indentObjectLiteral=false` configs). The post-process wrap
-			// below at `indentWrapped` keeps overriding the SAME-policy case
-			// when `indentObjectLiteral=true`; the two layers are orthogonal
-			// — post-process handles `Same+true`, bodyPolicyWrap handles
-			// `Next+false` and `Keep+false`. Reads the meta once and reuses
-			// the result for both layers.
-			//
-			// ω-issue-257-return-same-indent-value-expr: split the
-			// `indentValueIfCtor` entries on this ctor by arity:
-			//   - 3-arg form `(ctorName, optField, leftCurlyField)` →
-			//     `indentArgs`, fed to `bodyPolicyWrap.indentObjGuardedNext`
-			//     (Next/Keep+false ObjectLit path) AND post-hoc
-			//     `indentWrapped` (Same+true ObjectLit path). At most one
-			//     entry per ctor.
-			//   - 2-arg form `(ctorName, optField)` → `ifExprIndentArgs`,
-			//     fed to `bodyPolicyWrap` as the new `ifExprIndentArgs`
-			//     param which conditionally wraps the writeCall in
-			//     `Nest(_cols, …)` ONLY in the Same flat-path (so multi-
-			//     line IfExpr-as-value picks up `+cols` on its internal
-			//     else-branch hardlines, mirroring the struct-field
-			//     `HxVarDecl.init` semantic). At most one entry per ctor.
-			// Mirrors the multi-entry pattern in `maybeIndentValueIfCtor`
-			// for struct-field path.
-			var indentArgs: Null<Array<String>> = null;
-			var ifExprIndentArgs: Null<Array<String>> = null;
-			final indentEntries: Array<Array<String>> = branch.fmtReadStringArgsAll('indentValueIfCtor');
-			for (entry in indentEntries) switch entry.length {
-				case 3:
-					if (indentArgs != null)
-						Context.fatalError(
-							'WriterLowering: at most one 3-arg @:fmt(indentValueIfCtor(ctorName, optField, leftCurlyField)) per ctor',
-							Context.currentPos()
-						);
-					indentArgs = entry;
-				case 2:
-					if (ifExprIndentArgs != null)
-						Context.fatalError(
-							'WriterLowering: at most one 2-arg @:fmt(indentValueIfCtor(ctorName, optField)) per ctor',
-							Context.currentPos()
-						);
-					ifExprIndentArgs = entry;
-				case _:
-					Context.fatalError(
-						'WriterLowering: @:fmt(indentValueIfCtor(...)) on ctor requires 2 or 3 args, got ${entry.length}',
-						Context.currentPos()
-					);
-			}
-			final policyWrapped: Expr = ctorBodyPolicyFlag != null
-				? bodyPolicyWrap({
-					flagName: ctorBodyPolicyFlag,
-					exprFlagName: ctorBodyPolicyExprFlag,
-					writeCall: subCall,
-					bodyValueExpr: macro $i{argNames[0]},
-					bodyTypePath: refName,
-					hasElseIf: false,
-					elseFieldName: null,
-					bodyOnSameLineExpr: bodyOnSameLineExpr,
-					indentObjArgs: indentArgs,
-					widthAware: ctorWidthAware,
-					ifExprIndentArgs: ifExprIndentArgs,
-					singleLineFlagName: ctorSingleLineFlag,
-					singleLineMultiCtors: ctorSingleLineMultiCtors,
-					kwNewlineExpr: kwNewlineExpr,
-				})
-				: subCall;
-
-			// ω-return-indent-objectliteral: ctor-level
-			// `@:fmt(indentValueIfCtor('<ctor>', '<optField>', '<leftCurlyField>'))`
-			// on a kw-led single-Ref branch (e.g. `HxStatement.ReturnStmt`)
-			// extends the RHS-style indent rule of `HxVarDecl.init` /
-			// `HxObjectField.value` to the ctor-arg form. When the runtime
-			// conditions match (named bool opt true AND named leftCurly opt
-			// `Next` AND `Type.enumConstructor(value) == ctorName`), bypass
-			// `bodyPolicyWrap`'s sameLayoutExpr fallback (which emits a
-			// trailing-space-before-hardline `_dt(' ') + writeCall`) and
-			// instead emit `Nest(_cols, subCall)` directly. The body's
-			// own leading `_dhl` (e.g. ObjectLit's `leftCurly=Next`) picks
-			// up `+cols` indent through the Nest so the `{` lands one step
-			// past the kw column. When the conditions don't match, falls
-			// through to `policyWrapped` unchanged. `indentArgs` is the
-			// 3-arg entry (guaranteed by the arity split above; null when
-			// only the 2-arg IfExpr form is present).
-			final indentWrapped: Expr = if (indentArgs == null)
-				policyWrapped
-			else {
-				final ctorName: String = indentArgs[0];
-				final optField: String = indentArgs[1];
-				final leftCurlyField: String = indentArgs[2];
-				final optAccess: Expr = optFieldAccess(optField);
-				final leftCurlyAccess: Expr = optFieldAccess(leftCurlyField);
-				final valueAccess: Expr = macro $i{argNames[0]};
-				macro {
-					final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-					if (
-						$optAccess && $leftCurlyAccess == anyparse.format.BracePlacement.Next
-						&& Type.enumConstructor($valueAccess) == $v{ctorName}
-					)
-						_dc([_dop(' '), _dn(_cols, $subCall)])
-					else
-						$policyWrapped;
-				};
-			}
-
-			// ω-string-interp-noformat: when the ctor opted into source-
-			// byte capture (`@:fmt(captureSource('<optName>'))` + trivia
-			// mode), the synth ctor's `argNames[1]` holds the verbatim
-			// slice between `@:lead` and `@:trail`. Gate emission on the
-			// named `Bool` runtime option: when `false`, emit the captured
-			// bytes via `_dt(sourceText)` instead of recursing into the
-			// parsed `expr`. The two modes are runtime-selectable per write
-			// — the same parsed AST can flip between formatted and verbatim
-			// by toggling the knob. The flag arg names the runtime field
-			// so format-neutrality is preserved (mirror of `bodyPolicy` /
-			// `wrapRules` parametric flags).
-			final captureSourceOpt: Null<String> = ctx.trivia ? branch.fmtReadString('captureSource') : null;
-			var bodyExpr: Expr = if (captureSourceOpt != null) {
-				final sourceAccess: Expr = macro $i{argNames[1]};
-				final optAccess: Expr = optFieldAccess(captureSourceOpt);
-				// Mirror haxe-formatter `MarkTokenText.printStringToken`
-				// (`MarkTokenText.hx:39-63`). Fork uses naive `text.indexOf('}',
-				// index + 2)` to find the close of `${…}`. Two failure modes
-				// both land at verbatim emission upstream:
-				//  - a literal `{` inside the body (nested string / anon
-				//    struct) trips the explicit `fragment.indexOf("{")` skip
-				//    (line 54);
-				//  - a literal `}` inside the body makes `indexOf("}")` match
-				//    too early; the truncated fragment fails `formatFragment`
-				//    tokenisation (line 110-113 catch) and the slot stays
-				//    verbatim.
-				// Our recursive-descent parser handles brace balance correctly,
-				// but to match fork's byte output we replicate both bail-outs
-				// at write time: any `{` OR `}` in the captured slice → emit
-				// verbatim. Closes `whitespace/issue_72_whitespace_in_string_interpolation`.
-				macro $optAccess && $sourceAccess.indexOf('{') < 0 && $sourceAccess.indexOf('}') < 0 ? $indentWrapped : _dt($sourceAccess);
-			} else
-				indentWrapped;
-
-			// ω-string-interp-noformat-flat: an interpolation `${expr}` body
-			// (the `@:fmt(captureSource(...))` ctor — `HxStringSegment.Block`)
-			// re-renders the inner expression when `formatStringInterpolation`
-			// is true, but the fork NEVER wraps expressions inside string
-			// interpolations — they stay on one line regardless of the chain
-			// wrap config (`opAddSubChain`/`opBoolChain` onePerLine/fillLine).
-			// Pin the re-rendered body force-flat through `HardFlatten` so an
-			// inner `+`/`-`/`&&` chain (or any nested Group) collapses to one
-			// line: `${topRightPointX - 7.5}` instead of breaking the chain
-			// one-per-line at the operator. Mirror of fork — `printStringToken`
-			// formats the fragment in isolation with no surrounding wrap
-			// context. HardFlatten survives the chain's inner `WrapBoundary`
-			// (Renderer.hx ω-hardflatten) where plain `Flatten` would re-float.
-			// The verbatim branch (`_dt(sourceAccess)`) is a single Text —
-			// HardFlatten is a no-op there. Closes `opadd_chain_string_concat`
-			// inner-interp breaks / `opadd_chain_trailing_indent`.
-			if (branch.fmtHasFlag('captureSource')) bodyExpr = macro _dhf($bodyExpr);
-
-			// When the sub-struct opens with a bare-Ref @:fmt(bodyPolicy(...)) field,
-			// the sub-struct's writer emits the header→body separator via
-			// bodyPolicyWrap (Same/Next/FitLine). Stripping the trailing
-			// space from kwLead here avoids a double space (Same) or
-			// trailing-space-before-hardline (Next/FitLine). Non-policy
-			// sub-structs keep the pre-ψ₅ `kw ` shape.
-			//
-			// Also strip when the sub-struct's first field has a tight
-			// `@:lead` (format-declared in `FormatInfo.tightLeads`, e.g.
-			// `:` for Haxe). HxDefaultBranch opens with `@:lead(':')` —
-			// without the strip we emit `default :` instead of `default:`.
-			// Non-tight leads (`(`, `{`) keep the space — `if (`, `else {`.
-			//
-			// ω-expression-try-body-break: also strip when the sub-struct's
-			// first field carries `@:fmt(bodyBreak(...))` — the field's own
-			// `bodyBreakWrap` provides the conditional space/hardline-Nest
-			// between the kw and the body, so leaving the trailing space in
-			// would yield `try  body` (`Same`) or `try \n…body` (`Next`).
-			//
-			// ω-statement-bare-break: same reasoning for `@:fmt(bareBodyBreaks)`
-			// — `bareBodyBreakWrap` provides the conditional inline-space /
-			// hardline-Nest based on body ctor shape. Statement-form
-			// `HxTryCatchStmt.body` opts into this; the parent kw `try` must
-			// drop its trailing space so the wrap is the sole separator.
-			// ω-kw-word-lead-spacing (Slice 37): a ctor-level `@:lead` whose
-			// first char is a word character is a second keyword, NOT a
-			// tight symbol delimiter. Word-word adjacency between kw and
-			// lead (e.g. `@:kw('static') @:lead('var')` → `static var`,
-			// `@:kw('inline') @:lead('function')` → `inline function`)
-			// requires a separating space on BOTH sides of the lead: kw
-			// keeps its trailing space, AND the lead emit appends a
-			// trailing space so the body's first token doesn't collide.
-			// Symbol leads (`(`, `{`, `<`, `:`, `?`, `->`, `${`, …) stay
-			// tight under the strip — `while (` vs `while(` is owned by
-			// the field-level path, and ctor-level symbol leads were the
-			// only consumers of the pre-slice `leadText != null` clause.
-			final leadIsWord: Bool = leadText != null && isWordStart(leadText);
-			final stripKwTrailingSpace: Bool = ctorBodyPolicyFlag != null || subStructStartsWithBodyPolicy(refName)
-				|| subStructStartsWithBodyBreak(refName) || subStructStartsWithBareBodyBreaks(refName)
-				|| subStructStartsWithTightLead(refName) || branch.fmtHasFlag('tightKw')
-				|| (leadText != null && !leadIsWord && !branch.fmtHasFlag('spaceBeforeLead'));
-			// ω-if-policy / ω-control-flow-policies / ω-try-policy /
-			// ω-anon-fn-paren-policy: an enum branch with `@:fmt(<flag>)`
-			// whose runtime value is `WhitespacePolicy` opts into a
-			// runtime-switched trailing space after the kw. Two semantic
-			// flavours feed the SAME slot:
-			//  - kw-side (`After`/`Both` → space) for control-flow knobs
-			//    `ifPolicy` / `forPolicy` / `whilePolicy` / `switchPolicy`
-			//    / `tryPolicy` — JSON name like `"onlyAfter"` reads as
-			//    "after the kw".
-			//  - paren-side (`Before`/`Both` → space) for `anonFuncParens`,
-			//    matching haxe-formatter's
-			//    `whitespace.parenConfig.anonFuncParamParens.openingPolicy`
-			//    naming (sibling of `funcParamParens` / `callParens`).
-			// `firstFmtFlag` partitions the lookup so a branch carries at
-			// most one of the two flag families. Both helpers return null
-			// when no flag matches, letting non-policy branches keep the
-			// pre-slice `kwLead + ' '` (or stripped) emission.
-			final kwSidePolicySpace: Null<Expr> = stripKwTrailingSpace
-				? null
-				: kwTrailingSpacePolicy(branch, [
-					'ifPolicy',
-					'forPolicy',
-					'whilePolicy',
-					'switchPolicy',
-					'tryPolicy',
-					'sharpCondParensGap'
-				]);
-			final parenSidePolicySpace: Null<Expr> = stripKwTrailingSpace ? null : kwTrailingSpacePolicyParenSide(
-				branch, ['anonFuncParens']
-			);
-			// ω-cast-tight-on-paren (Slice 46): `@:fmt(tightOnParenOperand('A',
-			// 'B', …))` on a kw-led single-Ref branch suppresses the kw's
-			// trailing space at runtime when the operand's enum ctor matches
-			// any name in the list. Consumed by `HxExpr.CastExpr`
-			// (alongside `@:fmt(atomOperand)`) so `cast (x)` / `cast (x:Int)`
-			// (operand = `ParenExpr` / `ECheckTypeExpr` at atom level) emit
-			// tight `cast(x)` / `cast(x : Int)` per haxe-formatter's
-			// cast-as-function-call convention, while bare `cast x` (operand
-			// = `IdentExpr`, anything not listed) keeps the existing
-			// `cast x` shape. Sub-call's `parseXxxAtom` routing ensures
-			// operand truly is the leading-`(` ctor, not a Pratt wrapper
-			// (`Is(ParenExpr, ...)`) that would slip past the ctor match.
-			final ctorTightSpace: Null<Expr> = stripKwTrailingSpace ? null : kwTrailingSpaceOnOperandCtor(branch, argNames);
-			final kwTrailSpace: Null<Expr> = kwSidePolicySpace ?? parenSidePolicySpace ?? ctorTightSpace;
-			final parts: Array<Expr> = [];
-			if (kwLead != null) {
-				if (kwTrailSpace != null) {
-					parts.push(macro _dt($v{kwLead}));
-					parts.push(kwTrailSpace);
-				} else if (branch.fmtHasFlag('deferKwSpace') && !stripKwTrailingSpace) {
-					// ω-multivar-wrap one_line: opt-in `@:fmt(deferKwSpace)` on a
-					// kw-led single-Ref ctor emits the kw's trailing space as a
-					// deferred `_dop(' ')` (OptSpace) instead of a hard `_dt(kw ')`.
-					// The renderer flushes it as a real space before the next Text
-					// (flat / head-inline cases — byte-identical), but DROPS it when
-					// the sub-call leads with a break-mode hardline. Used by
-					// `HxStatement.VarStmt` / `FinalStmt`: when the `HxVarDecl`
-					// body routes its `more` list through `multiVarWrap` with
-					// `defaultWrap: onePerLine`, the head binding breaks too
-					// (`var\n\trawRead,…`), so the `var `
-					// trailing space must collapse into the break — mirror of the
-					// assign-op `=`→`_dop(' ')` split (ω-binop-wraprules).
-					parts.push(macro _dt($v{kwLead}));
-					parts.push(macro _dop(' '));
-				} else {
-					final kwText: String = stripKwTrailingSpace ? kwLead : kwLead + ' ';
-					parts.push(macro _dt($v{kwText}));
-				}
-			}
-			if (leadText != null) {
-				// ω-kw-word-lead-spacing (Slice 37): word-keyword lead
-				// also gets a trailing space so it doesn't fuse with the
-				// body's first token (e.g. `static final @Test` —
-				// HxVarDecl's first field is a meta Star). Symbol leads
-				// stay tight as before — the open delim glues to whatever
-				// follows.
-				// Writer Slice 4: opt-in `@:fmt(spaceAfterLead)` on a
-				// symbol-lead enum ctor adds a trailing space — used by
-				// `HxAnonField.ExtendsField` (`@:lead('>')`) to emit
-				// `> Foo` matching haxe-formatter's structure-extension
-				// convention (`typedef Bar = { > Foo, ... }`).
-				final spaceAfterLead: Bool = branch.fmtHasFlag('spaceAfterLead');
-				final leadEmit: String = (leadIsWord || spaceAfterLead) ? leadText + ' ' : leadText;
-				parts.push(macro _dt($v{leadEmit}));
-			}
-			parts.push(bodyExpr);
-			if (trailText != null) {
-				// ω-trailopt-source-track: in trivia mode, the parser
-				// captures `matchLit`'s presence flag into the synth ctor's
-				// positional `trailPresent:Bool` arg (`argNames[1]`). The
-				// writer gates trail emission on it directly — `true` →
-				// emit literal; `false` → empty Doc. This bypasses the
-				// AST-shape gate `trailOptShapeGateWrap`, which is a Plain-
-				// mode workaround for missing source-presence info. Trivia
-				// mode preserves authored source verbatim.
-				final isTriviaTrailOpt: Bool = ctx.trivia && TriviaTypeSynth.isAltTrailOptBranch(branch);
-				// Writer Slice 9: opt-in `@:fmt(spaceBeforeTrail)` on the
-				// enum ctor inserts a leading space into the trail literal
-				// so a word-start trail (e.g. `#end`) does not fuse with
-				// the body's last word character. Mirror of Slice 4's
-				// `spaceAfterLead` for the trail emit. Used by
-				// `HxType.ConditionalType` (`@:kw('#if') @:trail('#end')`)
-				// so `#if cond WebGLContext #end` re-emits the leading
-				// space rather than `WebGLContext#end`.
-				final trailEmit: String = branch.fmtHasFlag('spaceBeforeTrail') ? ' ' + trailText : trailText;
-				final trailExpr: Expr = if (isTriviaTrailOpt) {
-					final flagAccess: Expr = macro $i{argNames[1]};
-					macro $flagAccess ? _dt($v{trailEmit}) : _de();
-				} else {
-					trailOptShapeGateWrap(branch, trailEmit, argNames[0]) ?? macro _dt($v{trailEmit});
-				};
-				parts.push(trailExpr);
-			}
-			// ω-paren-wrap-break: `@:wrap(open, close)` enum ctor (no kw,
-			// both lead and trail set) renders as a Group whose break
-			// shape adds a hardline before the close delimiter, so a
-			// multi-line inner Doc lands the close on its own line at
-			// the outer indent — matches haxe-formatter's
-			// `return !(\n\t\t\t...\n\t\t)` shape on issue_187_oneline.
-			// Gated at runtime on `WrapList.startsWithHardline(_inner)`
-			// so the close-on-own-line behavior is symmetric with the
-			// open-with-hardline behavior of the inner Doc:
-			//  - inner with leading hardline (e.g. `BinaryChainEmit`
-			//    `OnePerLine` shape — every operand on its own line):
-			//    close goes on its own line.
-			//  - inner without leading hardline (e.g.
-			//    `OnePerLineAfterFirst` keeps items[0] inline): close
-			//    stays glued to the last item — matches the
-			//    default-cascade `((items[0]\n\t…\n\titems[n-1]))`
-			//    shape on issue_187_multi_line_wrapped_assignment.
-			// The flat shape stays byte-identical to the pre-slice
-			// `lead + inner + trail` concat.
-			final isWrapShape: Bool = kwLead == null && leadText != null && trailText != null && parts.length == 3;
-			if (isWrapShape) {
-				final leadDoc: Expr = parts[0];
-				final innerDoc: Expr = parts[1];
-				final trailDoc: Expr = parts[2];
-				// ω-hardflatten (increment-2): expression-paren collapse
-				// consumer (C2a/B). Ctor opted into
-				// `@:fmt(expressionParenHardFlatten)` (HxExpr.ParenExpr).
-				// Emit `IfFullLineExceeds(opt.lineWidth, OPEN, GLUED)`:
-				//  - GLUED  `(<inner>)` — flat-side, byte-identical to the
-				//    pre-slice concat. Taken when the full rendered line
-				//    (paren + everything trailing it on the same source line)
-				//    fits within `lineWidth`.
-				//  - OPEN   `(\n\t<HardFlatten(inner)>\n)` — break-side. The
-				//    paren opens; the inner subtree is pinned force-flat via
-				//    `HardFlatten` so an inner opAddSub chain collapses to ONE
-				//    line UNCONDITIONALLY (fork `collapseInnerChainBreaks`).
-				// The enclosing op-chain's outer-collapse (`) / 2 - D` riding
-				// the close-paren line, fork `collapseChainBreaksAfter`) is
-				// resolved by `CollapsePass` — the Doc→Doc pre-render pass that
-				// reads which parens WOULD open (the `IfFullLineExceeds`
-				// decision) and commits the chain to its glued shape, breaking
-				// the branch-blind circular coupling.
-				if (branch.fmtHasFlag('expressionParenHardFlatten')) {
-					// Leading-hardline (opBool/ternary already one-per-line)
-					// defer-open shape. Honors `captureWrapOpenNewline`: when the
-					// source had a `\n` after the open delim, the break shape
-					// opens `(\n<inner>\n)` (first operand on its own line —
-					// fork issue_187_oneline `!(\n a.y…)`); otherwise the glued-
-					// open `(<inner>\n)`. Computed at macro time so the null-
-					// `wrapOpenNewlineExpr` case (plain mode / no opt-in) is not
-					// spliced.
-					final hardlineOpenShape: Expr = wrapOpenNewlineExpr != null
-						? macro ($wrapOpenNewlineExpr
-							? _dc([$leadDoc, _dhl(), _wrapInner, _dhl(), _wrapTrail])
-							: _dc([$leadDoc, _wrapInner, _dhl(), _wrapTrail]))
-						: macro _dc([$leadDoc, _wrapInner, _dhl(), _wrapTrail]);
-					// ω-keep-chain (increment: opbool-expr-paren-keep): an
-					// expression paren whose inner is a kept chain that DID NOT
-					// open with a leading hardline (head glued to the open delim,
-					// only INTERNAL operator gaps broke — the `return !(chain)`
-					// shape) is invisible to the `startsWithHardline` gate below,
-					// so it falls through to the width-driven `_dfle` collapse
-					// (glued head, no `(`-indent, glued `)`). When the source
-					// placed a newline right after the open delim
-					// (`wrapOpenNewlineExpr`) AND the inner already broke
-					// (`flatLength < 0`, the kept chain reproduced its source
-					// `||`/`+` gaps), open the paren condition-style:
-					// `( + Nest(cols, [hardline, inner]) + hardline + )`. The
-					// inner chain own continuation `Nest` is already suppressed
-					// (cols=0) and its `_headBreak` dropped via `_keepChainInParen`
-					// (set at the `ctorOptArg` site), so the PAREN `Nest(cols)`
-					// supplies the +cols indent (head + every `||` continuation at
-					// outer+cols) and the leading `Line` supplies the head break —
-					// mirroring `WrapList.emitCondition` `brkShape` for the
-					// `if (\n cond \n)` keep case. Computed at macro time so the
-					// null-`wrapOpenNewlineExpr` case (plain / no opt-in) is not
-					// spliced; the runtime `flatLength` gate keeps it byte-inert for a
-					// flat (non-broken) paren content and for non-keep configs (where
-					// the inner does not source-break). `_keepFlatInner` (operand of a
-					// kept chain) is excluded by the outer ternary below.
-					final keepOpenGate: Expr = wrapOpenNewlineExpr != null
-						? macro ($wrapOpenNewlineExpr && anyparse.format.wrap.WrapList.flatLength(_wrapInner) < 0)
-						: macro false;
-					return macro {
-						final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-						final _wrapInner: anyparse.core.Doc = $innerDoc;
-						final _wrapTrail: anyparse.core.Doc = $trailDoc;
-						// ω-keep-chain (increment: opadd_chain_keep): when this expr
-						// paren is an operand of a `WrapMode.Keep` chain
-						// (`opt._keepFlatInner`, set on the leaf-operand opt at the
-						// chain emit), the kept chain preserves source line structure
-						// verbatim — its operand lines may exceed `lineWidth`. The
-						// inner paren must therefore stay GLUED `(<inner>)`
-						// UNCONDITIONALLY, NOT re-open via the width-driven
-						// `IfFullLineExceeds` probe below (which would force
-						// `(\n\tHardFlatten(inner)\n)`). Mirrors fork `keep2`'s
-						// `noLineEndBefore` lock on operand-interior boundaries.
-						// Byte-identical to the existing GLUED flat side, so a
-						// standalone expr paren (flag false) is byte-inert.
-						opt._keepFlatInner
-							? _dc([$leadDoc, _wrapInner, _wrapTrail])
-							: anyparse.format.wrap.WrapList.startsWithHardline(_wrapInner)
-								? _dg(_dib($hardlineOpenShape, _dc([$leadDoc, _wrapInner, _wrapTrail])))
-								: $keepOpenGate
-									? _dc([$leadDoc, _dn(_cols, _dc([_dhl(), _wrapInner])), _dhl(), _wrapTrail])
-									: anyparse.format.wrap.WrapList.isPureOpAddSubChain(_wrapInner)
-										? (
-											opt._parenInCondition
-												&& anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
-												? _dfle(
-													opt.lineWidth, _dc([
-														$leadDoc,
-														_dn(_cols, _dc([_dhl(), _wrapInner])),
-														_dhl(),
-														_wrapTrail
-													]),
-													_dc([$leadDoc, _wrapInner, _wrapTrail])
-												)
-												: _dfle(
-													opt.lineWidth, _dc([
-														$leadDoc,
-														_dn(_cols, _dc([_dhl(), _dcp(_dhf(_wrapInner))])),
-														_dhl(),
-														_wrapTrail
-													]),
-													_dc([$leadDoc, _wrapInner, _wrapTrail])
-												)
-										)
-										: anyparse.format.wrap.WrapList.isTopLevelTernary(_wrapInner)
-											? _dc([$leadDoc, _wrapInner, _wrapTrail])
-											: _dfle(
-												opt.lineWidth, _dc([
-													$leadDoc,
-													_dn(_cols, _dc([_dhl(), _dcp(_wrapInner)])),
-													_dhl(),
-													_wrapTrail
-												]),
-												_dc([$leadDoc, _wrapInner, _wrapTrail])
-											);
-					};
-				}
-				// omega-paren-wrap-source-newline: when the ctor opted into
-				// `@:fmt(captureWrapOpenNewline)` and the parser captured a
-				// source `\n` between open delim and inner sub-rule's first
-				// token, route the break shape to `(\n<inner>\n)` (open
-				// followed by hardline + close on its own line). The inner's
-				// own leading `OptHardlineSkipAtOpenDelim` collides with the
-				// freshly-emitted hardline and drops via the renderer's
-				// hardline-collision branch -- net output is `(\n<item0>\n…\n)`.
-				// When the source had no leading newline (or the ctor didn't
-				// opt in / plain mode), fall back to the pre-slice shape
-				// `(<inner>\n)` from the chain emit's open-delim glue.
-				return wrapOpenNewlineExpr != null
-					? macro {
-						final _wrapInner: anyparse.core.Doc = $innerDoc;
-						final _wrapTrail: anyparse.core.Doc = $trailDoc;
-						anyparse.format.wrap.WrapList.startsWithHardline(_wrapInner)
-							? _dg(_dib(
-								$wrapOpenNewlineExpr
-									? _dc([$leadDoc, _dhl(), _wrapInner, _dhl(), _wrapTrail])
-									: _dc([$leadDoc, _wrapInner, _dhl(), _wrapTrail]),
-								_dc([$leadDoc, _wrapInner, _wrapTrail])
-							))
-							: _dc([$leadDoc, _wrapInner, _wrapTrail]);
-					}
-					: macro {
-						final _wrapInner: anyparse.core.Doc = $innerDoc;
-						final _wrapTrail: anyparse.core.Doc = $trailDoc;
-						anyparse.format.wrap.WrapList.startsWithHardline(_wrapInner)
-							? _dg(_dib(_dc([$leadDoc, _wrapInner, _dhl(), _wrapTrail]), _dc([$leadDoc, _wrapInner, _wrapTrail])))
-							: _dc([$leadDoc, _wrapInner, _wrapTrail]);
-					};
-			}
-
-			final case3Doc: Expr = if (parts.length == 1)
-				parts[0]
-			else
-				dcCall(parts);
-			// ω-cond-indent-policy FixedZero/AlignedDecrease: a cond-comp ctor
-			// opting into `@:fmt(conditionalMarkerDedent)` (the `#if … #end`
-			// `HxStatement`/`HxClassMember`/`HxDecl` `Conditional` ctors) wraps
-			// its whole construct Doc in a render-time marker scope:
-			//  - `FixedZero` → `_dcmz` (ConditionalMarkerZero): every `#`-leading
-			//    fresh line (`#if`/`#elseif`/`#else`/`#end`, incl. nested ones)
-			//    flushes at column 0 while body content keeps its frame indent.
-			//  - `AlignedDecrease` → `_dcmd` (ConditionalMarkerDecrease): EVERY
-			//    fresh line (markers AND body) shifts one indent level shallower,
-			//    moving the increase-style body accumulation (already applied via
-			//    `condIncreaseGateExpr`, which also fires for `AlignedDecrease`)
-			//    `-1` uniformly.
-			// Every other policy (`Aligned` default, `AlignedIncrease`, …) leaves
-			// the ctor unwrapped → byte-identical.
-			return branch.fmtHasFlag('conditionalMarkerDedent')
-				? macro (opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.FixedZero
-					? _dcmz($case3Doc)
-					: (opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedDecrease ? _dcmd($case3Doc) : $case3Doc))
-				: case3Doc;
-		}
+		if (litList == null && children.length == 1 && children[0].kind == Ref) return lowerKwRefBranch(c);
 
 		Context.fatalError('WriterLowering: unsupported enum branch shape for ${simpleName(typePath)}', Context.currentPos());
 		throw 'unreachable';
@@ -14390,6 +13702,707 @@ class WriterLowering {
 					_gather(_r);
 				case _: _items.push($leafCall);
 			};
+	}
+
+	/**
+	 * Case 3 — single-arg Ref branch (kw-led `T(value:Ref)`): the largest
+	 * enum-branch shape. Resolves the sub-call opt frame, the bodyPolicy /
+	 * indent wrap, the body-source-capture gate, the kw / lead / trail
+	 * parts, the `@:wrap` paren shape, and the conditional-marker scope.
+	 * Extracted from `lowerEnumBranch` so the dispatcher stays under the
+	 * complexity gate.
+	 */
+	private function lowerKwRefBranch(c: LowerBranchCtx): Expr {
+		final branch: ShapeNode = c.branch;
+		final typePath: String = c.typePath;
+		final hasPratt: Bool = c.hasPratt;
+		final argNames: Array<String> = c.argNames;
+		final children: Array<ShapeNode> = branch.children;
+		final leadText: Null<String> = branch.annotations.get('lit.leadText');
+		final trailText: Null<String> = branch.annotations.get('lit.trailText');
+		final kwLead: Null<String> = branch.annotations.get('kw.leadText');
+		final refName: String = children[0].annotations.get('base.ref');
+		final subFn: String = writeFnFor(refName);
+		final isSelfRef: Bool = simpleName(refName) == simpleName(typePath);
+		// ω-issue-423-mech-a: when the kw-Ref ctor itself carries
+		// `@:fmt(propagateExprPosition)` (e.g. `HxStatement.ReturnStmt`,
+		// `HxExpr.ReturnExpr`), wrap the sub-call's opt arg in
+		// `_setExprPosition` so the `value:HxExpr` descendant sees the
+		// expression-position frame. Idempotent — already-true opt
+		// passes through.
+		final propagateExpr: Bool = branch.fmtHasFlag('propagateExprPosition');
+		// ω-value-yielded-if-tail-barrier (macro-block clear): when this kw-
+		// Ref ctor carries `@:fmt(clearExprPosition)` (HxExpr.MacroExpr), the
+		// sub-call's opt arg is wrapped in `_clearExprPosition` ONLY when the
+		// operand is a block (`macro { … }`) — gated at runtime via the
+		// plugin-supplied `opt.operandIsBlockExpr` adapter so a non-block
+		// `macro <expr>` (e.g. `macro if (1) 2 else 3`) stays transparent and
+		// keeps its inherited expression-position frame. The block's reified
+		// statements revert to statement-position body policy (dropping the
+		// SI-2 block-tail frame). Null adapter (non-opt-in formats) → never
+		// fires. Idempotent helper; allocation-free when already cleared.
+		final clearExpr: Bool = branch.fmtHasFlag('clearExprPosition');
+		// ω-string-interp-noformat-flat: the interpolation `${expr}` body
+		// (`@:fmt(captureSource(...))` ctor — `HxStringSegment.Block`)
+		// threads `_setChainModeOverride(opt, NoWrap)` into the sub-call
+		// so the descendant chain emit collapses its cascade to `NoWrap`
+		// — an inner `+`/`-`/`&&` chain stays flat regardless of the
+		// `opAddSubChain`/`opBoolChain` config (the fork never wraps
+		// expressions inside interpolations). Reuses the existing
+		// chain-override channel (no new opt field): `_setChainModeOverride`
+		// swaps `opBoolChainWrap`/`opAddSubChainWrap` to a degenerate
+		// `{rules: [], defaultMode: NoWrap}` cascade. `NoWrap` is distinct
+		// from the `FillLineWithLeadingBreak` cond-wrap mode, so the
+		// chain dispatch's `_condWrapForced` gate (== FLWLB) stays false —
+		// no interaction with the inc6 chain-unwrap path. The HardFlatten
+		// wrap at `bodyExpr` (below) covers width-conditional breaks +
+		// non-chain Groups; this NoWrap channel covers the unconditional
+		// `onePerLine` chain shape whose `Line('\n')` flat form would
+		// survive HardFlatten. Composes with `propagateExpr`. Gated on the
+		// `captureSource` flag alone (Haxe-only today, and `HxModuleWriteOptions`
+		// carries the chain-override channel) — mirrors the `@:fmt(condWrap)`
+		// site (L3592), which calls `_setChainModeOverride` ungated for the
+		// same reason: the flag's presence implies the grammar's channel.
+		final interpFlat: Bool = branch.fmtHasFlag('captureSource');
+		// ω-expr-paren-in-condition (cond F2): the `ParenExpr`
+		// (`@:fmt(expressionParenHardFlatten)`) inner chain is HardFlatten-
+		// collapsed by default. When this paren sits inside a condition
+		// (`opt._parenInCondition`, set at the `@:fmt(condWrap)` site) AND the
+		// user configured `expressionWrapping` to fillLine, thread the fillLine
+		// mode as a `_chainModeOverride` into the paren's OWN inner writeCall so
+		// its chain wraps fillLine — and CLEAR `_parenInCondition` so a nested
+		// expr paren inside this one does not re-trigger. Runtime-gated so a
+		// standalone expr paren (flag false, e.g. `expression_paren_wrapping`)
+		// is byte-identical (`opt` passed through unchanged).
+		final parenHardFlatten: Bool = branch.fmtHasFlag('expressionParenHardFlatten');
+		// ω-fieldlevel-var-value-expr-indent: when this kw-Ref ctor carries
+		// `@:fmt(propagateFieldLevelVar)` (class-member `var`/`final` —
+		// `HxClassMember.VarMember` / `FinalMember`), wrap the sub-call's opt
+		// arg in `_setFieldLevelVar` so the descendant `HxVarDecl.init` write
+		// forces the `indentComplexValueExpressions` value-expr indent for an
+		// if/switch/try value (fork's `Indenter.isFieldLevelVar`). Local-var
+		// inits route through `HxStatement.VarStmt` / `HxExpr.VarExpr` — never
+		// this ctor — so the flag stays false there and they remain
+		// knob-gated. Idempotent helper; allocation-free when already set.
+		final propagateFieldLevelVar: Bool = branch.fmtHasFlag('propagateFieldLevelVar');
+		// ω-keep-kw-newline (increment 1b): when this VarStmt-family ctor
+		// captured a `var`→head newline (the synth `kwNewline:Bool` slot),
+		// thread `_setVarKwNewline(opt, true)` into the inner `decl`
+		// writeCall so the `HxVarDecl` multiVar fold reproduces the head
+		// break under `WrapMode.Keep`. The helper is idempotent and
+		// allocation-free when the flag matches, so a same-line `var x = …`
+		// (kwNewline false) leaves `opt` unchanged — byte-inert. Trivia-
+		// only (the slot exists only on bearing trivia ctors); plain mode
+		// leaves `kwNewlineExpr` null and the head stays glued to `var `.
+		final kwNewlineExpr: Null<Expr> = (ctx.trivia && isTriviaBearing(typePath))
+			? altSlotAccess(branch, children.length, argNames, KwNewline)
+			: null;
+		final ctorOptArg: Expr = {
+			var _o: Expr = macro opt;
+			if (propagateExpr) _o = macro _setExprPosition($_o);
+			if (clearExpr) {
+				final _operandAccess: Expr = macro $i{argNames[0]};
+				_o = macro (opt.operandIsBlockExpr != null && opt.operandIsBlockExpr($_operandAccess) ? _clearExprPosition($_o) : $_o);
+			}
+			if (propagateFieldLevelVar) _o = macro _setFieldLevelVar($_o);
+			if (interpFlat) _o = macro _setChainModeOverride($_o, anyparse.format.wrap.WrapMode.NoWrap);
+			if (parenHardFlatten)
+				_o = macro (opt._parenInCondition
+					? _setChainModeOverride(
+						_clearParenInCondition($_o), anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap)
+					)
+					: $_o);
+			// ω-keep-chain (increment: opadd_chain_keep): a `ParenExpr`
+			// (`@:fmt(expressionParenHardFlatten)`) wrapping a chain marks the
+			// inner opt `_keepChainInParen`. A `WrapMode.Keep` chain reads it to
+			// (a) SUPPRESS its own `_headBreak` — the `return`→value source
+			// newline is reproduced at the VALUE level (`returnBody` FitLine
+			// breaks `return\n\tvalue`), not inside the paren (`(\n head`); and
+			// (b) SUPPRESS its continuation `Nest` — the value-level break Nest
+			// already supplies the +cols, so the chain operators continue at that
+			// SAME indent (no compounding to +2cols). Mirrors fork keep2 keeping
+			// the `return`→`1` newline at the value and the chain ops co-indented
+			// with the head. Non-keep chains ignore the flag (gated on `isKeep`)
+			// → byte-inert. A BARE chain return value (opbool case-2) has NO
+			// enclosing `ParenExpr`, so the flag stays false and its chain keeps
+			// its own headBreak + Nest. Trivia-only.
+			if (parenHardFlatten && ctx.trivia) _o = macro _setKeepChainInParen($_o, true);
+			if (kwNewlineExpr != null) _o = macro _setVarKwNewline($_o, $kwNewlineExpr);
+			_o;
+		};
+		final subCall: Expr = if (isSelfRef && hasPratt)
+			{ expr: ECall(macro $i{subFn}, [macro $i{argNames[0]}, ctorOptArg, macro -1]), pos: Context.currentPos() }
+		else
+			{ expr: ECall(macro $i{subFn}, [macro $i{argNames[0]}, ctorOptArg]), pos: Context.currentPos() };
+
+		// ω-return-body: ctor-level `@:fmt(bodyPolicy(...))` on a kw-led
+		// single-Ref branch (e.g. `HxStatement.ReturnStmt(value:HxExpr)`)
+		// wraps the sub-call through `bodyPolicyWrap` so the kw→body
+		// separator is runtime-switchable. The wrap supplies the
+		// separator (`_dt(' ')` for `Same`, `_dn(_cols, _dhl + body)`
+		// for `Next`, etc.), so the kw must drop its trailing space —
+		// the existing `subStructStartsWithBodyPolicy` path covers the
+		// sub-struct case (`HxStatement.IfStmt(stmt:HxIfStmt)` where the
+		// `bodyPolicy` flag lives on a field of `HxIfStmt`); this new
+		// path covers the direct-Ref case where no wrapper struct hosts
+		// the field.
+		// ω-issue-257-else-in-return-switch: `bodyPolicy(...)` accepts
+		// 1 or 2 flag names. Two-arg form dispatches between the
+		// stmt-position knob (arg 0) and expr-position knob (arg 1)
+		// at runtime via `opt._inExprPosition`. Mirrors the dual-flag
+		// dispatch in `triviaTryparseStarExpr` for case-body Stars.
+		final ctorBodyPolicy: { stmt: Null<String>, expr: Null<String> } = readBodyPolicyDual(branch);
+		final ctorBodyPolicyFlag: Null<String> = ctorBodyPolicy.stmt;
+		final ctorBodyPolicyExprFlag: Null<String> = ctorBodyPolicy.expr;
+		// ω-returnbody-widthaware: read the parameterless `@:fmt(widthAware)`
+		// flag at the same call site so the runtime IfFirstLineExceeds
+		// wrap is opt-in per ctor (currently `HxStatement.ReturnStmt`).
+		final ctorWidthAware: Bool = branch.fmtHasFlag('widthAware');
+		// ω-return-body-single-line: read the
+		// `@:fmt(bodyPolicySingleLine('<flag>', '<multiCtor>'...))` knob
+		// (currently `HxStatement.ReturnStmt`) so `bodyPolicyWrap` can split
+		// the policy between single-line and multi-line value shapes. Arg 0
+		// is the single-line flag name; the remaining args name the value
+		// ctors treated as multi-line (control-flow / block), which keep the
+		// base `returnBody` policy.
+		final ctorSingleLineArgs: Null<Array<String>> = branch.fmtReadStringArgs('bodyPolicySingleLine');
+		final ctorSingleLineFlag: Null<String> = ctorSingleLineArgs == null ? null : ctorSingleLineArgs[0];
+		final ctorSingleLineMultiCtors: Null<Array<String>> = ctorSingleLineArgs == null ? null : ctorSingleLineArgs.slice(1);
+		// ω-issue-257-firstline: when the ctor is the bodyPolicy-kw-Ref
+		// shape (predicate matches `HxStatement.ReturnStmt`) and trivia
+		// mode + bearing typePath, the synth ctor carries a positional
+		// `bodyOnSameLine:Bool` arg captured by the parser. Forward its
+		// access expression so `bodyPolicyWrap`'s `Keep` branch can
+		// dispatch source-shape-aware. The arg index follows the same
+		// ordering as `TriviaTypeSynth.buildEnumCtor`: closeTrailing
+		// (+ openTrailing/trailingBlankBefore/trailingLeading) →
+		// trailPresent → sourceText → bodyOnSameLine → postfix
+		// closeTrailing. Plain mode keeps `null` and the wrap degrades
+		// to `sameLayoutExpr` (no Keep slot — falls through the same
+		// width-aware path as `Same`).
+		final bodyOnSameLineExpr: Null<Expr> = (ctx.trivia && isTriviaBearing(typePath))
+			? altSlotAccess(branch, children.length, argNames, BodyPolicyKw)
+			: null;
+		// omega-paren-wrap-source-newline: ctors carrying
+		// @:fmt(captureWrapOpenNewline) on a single-Ref @:wrap branch grow
+		// a positional `wrapOpenNewline:Bool` arg in the synth pair (see
+		// TriviaTypeSynth.buildEnumCtor push order). Compute its access
+		// expression here so the @:wrap shape below can switch break-mode
+		// shape based on source-shape capture. Plain mode (or trivia-mode
+		// without the opt-in flag) leaves `wrapOpenNewlineExpr` null and
+		// the shape falls back to the existing unconditional glue.
+		final wrapOpenNewlineExpr: Null<Expr> = (ctx.trivia && isTriviaBearing(typePath))
+			? altSlotAccess(branch, children.length, argNames, WrapOpenNewline)
+			: null;
+		// ω-issue-257-firstline regression-fix: forward `indentArgs` to
+		// `bodyPolicyWrap` so its `indentObjGuardedNext` rule fires for
+		// the ctor-level `Next`/`Keep`-bodyOnSameLine-false fallback path
+		// when the body is an ObjectLit and `indentObjectLiteral=false`.
+		// Without forwarding, the `Keep`-route nextLayoutExpr always
+		// emits `_dn(_cols, [_dhl, body])` and over-indents `{` by one
+		// step (`return\n\t\t\t{` instead of `return\n\t\t{` for
+		// `indentObjectLiteral=false` configs). The post-process wrap
+		// below at `indentWrapped` keeps overriding the SAME-policy case
+		// when `indentObjectLiteral=true`; the two layers are orthogonal
+		// — post-process handles `Same+true`, bodyPolicyWrap handles
+		// `Next+false` and `Keep+false`. Reads the meta once and reuses
+		// the result for both layers.
+		//
+		// ω-issue-257-return-same-indent-value-expr: split the
+		// `indentValueIfCtor` entries on this ctor by arity:
+		//   - 3-arg form `(ctorName, optField, leftCurlyField)` →
+		//     `indentArgs`, fed to `bodyPolicyWrap.indentObjGuardedNext`
+		//     (Next/Keep+false ObjectLit path) AND post-hoc
+		//     `indentWrapped` (Same+true ObjectLit path). At most one
+		//     entry per ctor.
+		//   - 2-arg form `(ctorName, optField)` → `ifExprIndentArgs`,
+		//     fed to `bodyPolicyWrap` as the new `ifExprIndentArgs`
+		//     param which conditionally wraps the writeCall in
+		//     `Nest(_cols, …)` ONLY in the Same flat-path (so multi-
+		//     line IfExpr-as-value picks up `+cols` on its internal
+		//     else-branch hardlines, mirroring the struct-field
+		//     `HxVarDecl.init` semantic). At most one entry per ctor.
+		// Mirrors the multi-entry pattern in `maybeIndentValueIfCtor`
+		// for struct-field path.
+		var indentArgs: Null<Array<String>> = null;
+		var ifExprIndentArgs: Null<Array<String>> = null;
+		final indentEntries: Array<Array<String>> = branch.fmtReadStringArgsAll('indentValueIfCtor');
+		for (entry in indentEntries) switch entry.length {
+			case 3:
+				if (indentArgs != null)
+					Context.fatalError(
+						'WriterLowering: at most one 3-arg @:fmt(indentValueIfCtor(ctorName, optField, leftCurlyField)) per ctor',
+						Context.currentPos()
+					);
+				indentArgs = entry;
+			case 2:
+				if (ifExprIndentArgs != null)
+					Context.fatalError(
+						'WriterLowering: at most one 2-arg @:fmt(indentValueIfCtor(ctorName, optField)) per ctor', Context.currentPos()
+					);
+				ifExprIndentArgs = entry;
+			case _:
+				Context.fatalError(
+					'WriterLowering: @:fmt(indentValueIfCtor(...)) on ctor requires 2 or 3 args, got ${entry.length}',
+					Context.currentPos()
+				);
+		}
+		final policyWrapped: Expr = ctorBodyPolicyFlag != null
+			? bodyPolicyWrap({
+				flagName: ctorBodyPolicyFlag,
+				exprFlagName: ctorBodyPolicyExprFlag,
+				writeCall: subCall,
+				bodyValueExpr: macro $i{argNames[0]},
+				bodyTypePath: refName,
+				hasElseIf: false,
+				elseFieldName: null,
+				bodyOnSameLineExpr: bodyOnSameLineExpr,
+				indentObjArgs: indentArgs,
+				widthAware: ctorWidthAware,
+				ifExprIndentArgs: ifExprIndentArgs,
+				singleLineFlagName: ctorSingleLineFlag,
+				singleLineMultiCtors: ctorSingleLineMultiCtors,
+				kwNewlineExpr: kwNewlineExpr,
+			})
+			: subCall;
+
+		// ω-return-indent-objectliteral: ctor-level
+		// `@:fmt(indentValueIfCtor('<ctor>', '<optField>', '<leftCurlyField>'))`
+		// on a kw-led single-Ref branch (e.g. `HxStatement.ReturnStmt`)
+		// extends the RHS-style indent rule of `HxVarDecl.init` /
+		// `HxObjectField.value` to the ctor-arg form. When the runtime
+		// conditions match (named bool opt true AND named leftCurly opt
+		// `Next` AND `Type.enumConstructor(value) == ctorName`), bypass
+		// `bodyPolicyWrap`'s sameLayoutExpr fallback (which emits a
+		// trailing-space-before-hardline `_dt(' ') + writeCall`) and
+		// instead emit `Nest(_cols, subCall)` directly. The body's
+		// own leading `_dhl` (e.g. ObjectLit's `leftCurly=Next`) picks
+		// up `+cols` indent through the Nest so the `{` lands one step
+		// past the kw column. When the conditions don't match, falls
+		// through to `policyWrapped` unchanged. `indentArgs` is the
+		// 3-arg entry (guaranteed by the arity split above; null when
+		// only the 2-arg IfExpr form is present).
+		final indentWrapped: Expr = if (indentArgs == null)
+			policyWrapped
+		else {
+			final ctorName: String = indentArgs[0];
+			final optField: String = indentArgs[1];
+			final leftCurlyField: String = indentArgs[2];
+			final optAccess: Expr = optFieldAccess(optField);
+			final leftCurlyAccess: Expr = optFieldAccess(leftCurlyField);
+			final valueAccess: Expr = macro $i{argNames[0]};
+			macro {
+				final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+				if (
+					$optAccess && $leftCurlyAccess == anyparse.format.BracePlacement.Next
+					&& Type.enumConstructor($valueAccess) == $v{ctorName}
+				)
+					_dc([_dop(' '), _dn(_cols, $subCall)])
+				else
+					$policyWrapped;
+			};
+		}
+
+		// ω-string-interp-noformat: when the ctor opted into source-
+		// byte capture (`@:fmt(captureSource('<optName>'))` + trivia
+		// mode), the synth ctor's `argNames[1]` holds the verbatim
+		// slice between `@:lead` and `@:trail`. Gate emission on the
+		// named `Bool` runtime option: when `false`, emit the captured
+		// bytes via `_dt(sourceText)` instead of recursing into the
+		// parsed `expr`. The two modes are runtime-selectable per write
+		// — the same parsed AST can flip between formatted and verbatim
+		// by toggling the knob. The flag arg names the runtime field
+		// so format-neutrality is preserved (mirror of `bodyPolicy` /
+		// `wrapRules` parametric flags).
+		final captureSourceOpt: Null<String> = ctx.trivia ? branch.fmtReadString('captureSource') : null;
+		var bodyExpr: Expr = if (captureSourceOpt != null) {
+			final sourceAccess: Expr = macro $i{argNames[1]};
+			final optAccess: Expr = optFieldAccess(captureSourceOpt);
+			// Mirror haxe-formatter `MarkTokenText.printStringToken`
+			// (`MarkTokenText.hx:39-63`). Fork uses naive `text.indexOf('}',
+			// index + 2)` to find the close of `${…}`. Two failure modes
+			// both land at verbatim emission upstream:
+			//  - a literal `{` inside the body (nested string / anon
+			//    struct) trips the explicit `fragment.indexOf("{")` skip
+			//    (line 54);
+			//  - a literal `}` inside the body makes `indexOf("}")` match
+			//    too early; the truncated fragment fails `formatFragment`
+			//    tokenisation (line 110-113 catch) and the slot stays
+			//    verbatim.
+			// Our recursive-descent parser handles brace balance correctly,
+			// but to match fork's byte output we replicate both bail-outs
+			// at write time: any `{` OR `}` in the captured slice → emit
+			// verbatim. Closes `whitespace/issue_72_whitespace_in_string_interpolation`.
+			macro $optAccess && $sourceAccess.indexOf('{') < 0 && $sourceAccess.indexOf('}') < 0 ? $indentWrapped : _dt($sourceAccess);
+		} else
+			indentWrapped;
+
+		// ω-string-interp-noformat-flat: an interpolation `${expr}` body
+		// (the `@:fmt(captureSource(...))` ctor — `HxStringSegment.Block`)
+		// re-renders the inner expression when `formatStringInterpolation`
+		// is true, but the fork NEVER wraps expressions inside string
+		// interpolations — they stay on one line regardless of the chain
+		// wrap config (`opAddSubChain`/`opBoolChain` onePerLine/fillLine).
+		// Pin the re-rendered body force-flat through `HardFlatten` so an
+		// inner `+`/`-`/`&&` chain (or any nested Group) collapses to one
+		// line: `${topRightPointX - 7.5}` instead of breaking the chain
+		// one-per-line at the operator. Mirror of fork — `printStringToken`
+		// formats the fragment in isolation with no surrounding wrap
+		// context. HardFlatten survives the chain's inner `WrapBoundary`
+		// (Renderer.hx ω-hardflatten) where plain `Flatten` would re-float.
+		// The verbatim branch (`_dt(sourceAccess)`) is a single Text —
+		// HardFlatten is a no-op there. Closes `opadd_chain_string_concat`
+		// inner-interp breaks / `opadd_chain_trailing_indent`.
+		if (branch.fmtHasFlag('captureSource')) bodyExpr = macro _dhf($bodyExpr);
+
+		// When the sub-struct opens with a bare-Ref @:fmt(bodyPolicy(...)) field,
+		// the sub-struct's writer emits the header→body separator via
+		// bodyPolicyWrap (Same/Next/FitLine). Stripping the trailing
+		// space from kwLead here avoids a double space (Same) or
+		// trailing-space-before-hardline (Next/FitLine). Non-policy
+		// sub-structs keep the pre-ψ₅ `kw ` shape.
+		//
+		// Also strip when the sub-struct's first field has a tight
+		// `@:lead` (format-declared in `FormatInfo.tightLeads`, e.g.
+		// `:` for Haxe). HxDefaultBranch opens with `@:lead(':')` —
+		// without the strip we emit `default :` instead of `default:`.
+		// Non-tight leads (`(`, `{`) keep the space — `if (`, `else {`.
+		//
+		// ω-expression-try-body-break: also strip when the sub-struct's
+		// first field carries `@:fmt(bodyBreak(...))` — the field's own
+		// `bodyBreakWrap` provides the conditional space/hardline-Nest
+		// between the kw and the body, so leaving the trailing space in
+		// would yield `try  body` (`Same`) or `try \n…body` (`Next`).
+		//
+		// ω-statement-bare-break: same reasoning for `@:fmt(bareBodyBreaks)`
+		// — `bareBodyBreakWrap` provides the conditional inline-space /
+		// hardline-Nest based on body ctor shape. Statement-form
+		// `HxTryCatchStmt.body` opts into this; the parent kw `try` must
+		// drop its trailing space so the wrap is the sole separator.
+		// ω-kw-word-lead-spacing (Slice 37): a ctor-level `@:lead` whose
+		// first char is a word character is a second keyword, NOT a
+		// tight symbol delimiter. Word-word adjacency between kw and
+		// lead (e.g. `@:kw('static') @:lead('var')` → `static var`,
+		// `@:kw('inline') @:lead('function')` → `inline function`)
+		// requires a separating space on BOTH sides of the lead: kw
+		// keeps its trailing space, AND the lead emit appends a
+		// trailing space so the body's first token doesn't collide.
+		// Symbol leads (`(`, `{`, `<`, `:`, `?`, `->`, `${`, …) stay
+		// tight under the strip — `while (` vs `while(` is owned by
+		// the field-level path, and ctor-level symbol leads were the
+		// only consumers of the pre-slice `leadText != null` clause.
+		final leadIsWord: Bool = leadText != null && isWordStart(leadText);
+		final stripKwTrailingSpace: Bool = ctorBodyPolicyFlag != null || subStructStartsWithBodyPolicy(refName)
+			|| subStructStartsWithBodyBreak(refName) || subStructStartsWithBareBodyBreaks(refName) || subStructStartsWithTightLead(refName)
+			|| branch.fmtHasFlag('tightKw') || (leadText != null && !leadIsWord && !branch.fmtHasFlag('spaceBeforeLead'));
+		// ω-if-policy / ω-control-flow-policies / ω-try-policy /
+		// ω-anon-fn-paren-policy: an enum branch with `@:fmt(<flag>)`
+		// whose runtime value is `WhitespacePolicy` opts into a
+		// runtime-switched trailing space after the kw. Two semantic
+		// flavours feed the SAME slot:
+		//  - kw-side (`After`/`Both` → space) for control-flow knobs
+		//    `ifPolicy` / `forPolicy` / `whilePolicy` / `switchPolicy`
+		//    / `tryPolicy` — JSON name like `"onlyAfter"` reads as
+		//    "after the kw".
+		//  - paren-side (`Before`/`Both` → space) for `anonFuncParens`,
+		//    matching haxe-formatter's
+		//    `whitespace.parenConfig.anonFuncParamParens.openingPolicy`
+		//    naming (sibling of `funcParamParens` / `callParens`).
+		// `firstFmtFlag` partitions the lookup so a branch carries at
+		// most one of the two flag families. Both helpers return null
+		// when no flag matches, letting non-policy branches keep the
+		// pre-slice `kwLead + ' '` (or stripped) emission.
+		final kwSidePolicySpace: Null<Expr> = stripKwTrailingSpace
+			? null
+			: kwTrailingSpacePolicy(branch, [
+				'ifPolicy',
+				'forPolicy',
+				'whilePolicy',
+				'switchPolicy',
+				'tryPolicy',
+				'sharpCondParensGap'
+			]);
+		final parenSidePolicySpace: Null<Expr> = stripKwTrailingSpace ? null : kwTrailingSpacePolicyParenSide(branch, ['anonFuncParens']);
+		// ω-cast-tight-on-paren (Slice 46): `@:fmt(tightOnParenOperand('A',
+		// 'B', …))` on a kw-led single-Ref branch suppresses the kw's
+		// trailing space at runtime when the operand's enum ctor matches
+		// any name in the list. Consumed by `HxExpr.CastExpr`
+		// (alongside `@:fmt(atomOperand)`) so `cast (x)` / `cast (x:Int)`
+		// (operand = `ParenExpr` / `ECheckTypeExpr` at atom level) emit
+		// tight `cast(x)` / `cast(x : Int)` per haxe-formatter's
+		// cast-as-function-call convention, while bare `cast x` (operand
+		// = `IdentExpr`, anything not listed) keeps the existing
+		// `cast x` shape. Sub-call's `parseXxxAtom` routing ensures
+		// operand truly is the leading-`(` ctor, not a Pratt wrapper
+		// (`Is(ParenExpr, ...)`) that would slip past the ctor match.
+		final ctorTightSpace: Null<Expr> = stripKwTrailingSpace ? null : kwTrailingSpaceOnOperandCtor(branch, argNames);
+		final kwTrailSpace: Null<Expr> = kwSidePolicySpace ?? parenSidePolicySpace ?? ctorTightSpace;
+		final parts: Array<Expr> = [];
+		if (kwLead != null) {
+			if (kwTrailSpace != null) {
+				parts.push(macro _dt($v{kwLead}));
+				parts.push(kwTrailSpace);
+			} else if (branch.fmtHasFlag('deferKwSpace') && !stripKwTrailingSpace) {
+				// ω-multivar-wrap one_line: opt-in `@:fmt(deferKwSpace)` on a
+				// kw-led single-Ref ctor emits the kw's trailing space as a
+				// deferred `_dop(' ')` (OptSpace) instead of a hard `_dt(kw ')`.
+				// The renderer flushes it as a real space before the next Text
+				// (flat / head-inline cases — byte-identical), but DROPS it when
+				// the sub-call leads with a break-mode hardline. Used by
+				// `HxStatement.VarStmt` / `FinalStmt`: when the `HxVarDecl`
+				// body routes its `more` list through `multiVarWrap` with
+				// `defaultWrap: onePerLine`, the head binding breaks too
+				// (`var\n\trawRead,…`), so the `var `
+				// trailing space must collapse into the break — mirror of the
+				// assign-op `=`→`_dop(' ')` split (ω-binop-wraprules).
+				parts.push(macro _dt($v{kwLead}));
+				parts.push(macro _dop(' '));
+			} else {
+				final kwText: String = stripKwTrailingSpace ? kwLead : kwLead + ' ';
+				parts.push(macro _dt($v{kwText}));
+			}
+		}
+		if (leadText != null) {
+			// ω-kw-word-lead-spacing (Slice 37): word-keyword lead
+			// also gets a trailing space so it doesn't fuse with the
+			// body's first token (e.g. `static final @Test` —
+			// HxVarDecl's first field is a meta Star). Symbol leads
+			// stay tight as before — the open delim glues to whatever
+			// follows.
+			// Writer Slice 4: opt-in `@:fmt(spaceAfterLead)` on a
+			// symbol-lead enum ctor adds a trailing space — used by
+			// `HxAnonField.ExtendsField` (`@:lead('>')`) to emit
+			// `> Foo` matching haxe-formatter's structure-extension
+			// convention (`typedef Bar = { > Foo, ... }`).
+			final spaceAfterLead: Bool = branch.fmtHasFlag('spaceAfterLead');
+			final leadEmit: String = (leadIsWord || spaceAfterLead) ? leadText + ' ' : leadText;
+			parts.push(macro _dt($v{leadEmit}));
+		}
+		parts.push(bodyExpr);
+		if (trailText != null) {
+			// ω-trailopt-source-track: in trivia mode, the parser
+			// captures `matchLit`'s presence flag into the synth ctor's
+			// positional `trailPresent:Bool` arg (`argNames[1]`). The
+			// writer gates trail emission on it directly — `true` →
+			// emit literal; `false` → empty Doc. This bypasses the
+			// AST-shape gate `trailOptShapeGateWrap`, which is a Plain-
+			// mode workaround for missing source-presence info. Trivia
+			// mode preserves authored source verbatim.
+			final isTriviaTrailOpt: Bool = ctx.trivia && TriviaTypeSynth.isAltTrailOptBranch(branch);
+			// Writer Slice 9: opt-in `@:fmt(spaceBeforeTrail)` on the
+			// enum ctor inserts a leading space into the trail literal
+			// so a word-start trail (e.g. `#end`) does not fuse with
+			// the body's last word character. Mirror of Slice 4's
+			// `spaceAfterLead` for the trail emit. Used by
+			// `HxType.ConditionalType` (`@:kw('#if') @:trail('#end')`)
+			// so `#if cond WebGLContext #end` re-emits the leading
+			// space rather than `WebGLContext#end`.
+			final trailEmit: String = branch.fmtHasFlag('spaceBeforeTrail') ? ' ' + trailText : trailText;
+			final trailExpr: Expr = if (isTriviaTrailOpt) {
+				final flagAccess: Expr = macro $i{argNames[1]};
+				macro $flagAccess ? _dt($v{trailEmit}) : _de();
+			} else {
+				trailOptShapeGateWrap(branch, trailEmit, argNames[0]) ?? macro _dt($v{trailEmit});
+			};
+			parts.push(trailExpr);
+		}
+		// ω-paren-wrap-break: `@:wrap(open, close)` enum ctor (no kw,
+		// both lead and trail set) renders as a Group whose break
+		// shape adds a hardline before the close delimiter, so a
+		// multi-line inner Doc lands the close on its own line at
+		// the outer indent — matches haxe-formatter's
+		// `return !(\n\t\t\t...\n\t\t)` shape on issue_187_oneline.
+		// Gated at runtime on `WrapList.startsWithHardline(_inner)`
+		// so the close-on-own-line behavior is symmetric with the
+		// open-with-hardline behavior of the inner Doc:
+		//  - inner with leading hardline (e.g. `BinaryChainEmit`
+		//    `OnePerLine` shape — every operand on its own line):
+		//    close goes on its own line.
+		//  - inner without leading hardline (e.g.
+		//    `OnePerLineAfterFirst` keeps items[0] inline): close
+		//    stays glued to the last item — matches the
+		//    default-cascade `((items[0]\n\t…\n\titems[n-1]))`
+		//    shape on issue_187_multi_line_wrapped_assignment.
+		// The flat shape stays byte-identical to the pre-slice
+		// `lead + inner + trail` concat.
+		final isWrapShape: Bool = kwLead == null && leadText != null && trailText != null && parts.length == 3;
+		if (isWrapShape) {
+			final leadDoc: Expr = parts[0];
+			final innerDoc: Expr = parts[1];
+			final trailDoc: Expr = parts[2];
+			// ω-hardflatten (increment-2): expression-paren collapse
+			// consumer (C2a/B). Ctor opted into
+			// `@:fmt(expressionParenHardFlatten)` (HxExpr.ParenExpr).
+			// Emit `IfFullLineExceeds(opt.lineWidth, OPEN, GLUED)`:
+			//  - GLUED  `(<inner>)` — flat-side, byte-identical to the
+			//    pre-slice concat. Taken when the full rendered line
+			//    (paren + everything trailing it on the same source line)
+			//    fits within `lineWidth`.
+			//  - OPEN   `(\n\t<HardFlatten(inner)>\n)` — break-side. The
+			//    paren opens; the inner subtree is pinned force-flat via
+			//    `HardFlatten` so an inner opAddSub chain collapses to ONE
+			//    line UNCONDITIONALLY (fork `collapseInnerChainBreaks`).
+			// The enclosing op-chain's outer-collapse (`) / 2 - D` riding
+			// the close-paren line, fork `collapseChainBreaksAfter`) is
+			// resolved by `CollapsePass` — the Doc→Doc pre-render pass that
+			// reads which parens WOULD open (the `IfFullLineExceeds`
+			// decision) and commits the chain to its glued shape, breaking
+			// the branch-blind circular coupling.
+			if (branch.fmtHasFlag('expressionParenHardFlatten')) {
+				// Leading-hardline (opBool/ternary already one-per-line)
+				// defer-open shape. Honors `captureWrapOpenNewline`: when the
+				// source had a `\n` after the open delim, the break shape
+				// opens `(\n<inner>\n)` (first operand on its own line —
+				// fork issue_187_oneline `!(\n a.y…)`); otherwise the glued-
+				// open `(<inner>\n)`. Computed at macro time so the null-
+				// `wrapOpenNewlineExpr` case (plain mode / no opt-in) is not
+				// spliced.
+				final hardlineOpenShape: Expr = wrapOpenNewlineExpr != null
+					? macro ($wrapOpenNewlineExpr
+						? _dc([$leadDoc, _dhl(), _wrapInner, _dhl(), _wrapTrail])
+						: _dc([$leadDoc, _wrapInner, _dhl(), _wrapTrail]))
+					: macro _dc([$leadDoc, _wrapInner, _dhl(), _wrapTrail]);
+				// ω-keep-chain (increment: opbool-expr-paren-keep): an
+				// expression paren whose inner is a kept chain that DID NOT
+				// open with a leading hardline (head glued to the open delim,
+				// only INTERNAL operator gaps broke — the `return !(chain)`
+				// shape) is invisible to the `startsWithHardline` gate below,
+				// so it falls through to the width-driven `_dfle` collapse
+				// (glued head, no `(`-indent, glued `)`). When the source
+				// placed a newline right after the open delim
+				// (`wrapOpenNewlineExpr`) AND the inner already broke
+				// (`flatLength < 0`, the kept chain reproduced its source
+				// `||`/`+` gaps), open the paren condition-style:
+				// `( + Nest(cols, [hardline, inner]) + hardline + )`. The
+				// inner chain own continuation `Nest` is already suppressed
+				// (cols=0) and its `_headBreak` dropped via `_keepChainInParen`
+				// (set at the `ctorOptArg` site), so the PAREN `Nest(cols)`
+				// supplies the +cols indent (head + every `||` continuation at
+				// outer+cols) and the leading `Line` supplies the head break —
+				// mirroring `WrapList.emitCondition` `brkShape` for the
+				// `if (\n cond \n)` keep case. Computed at macro time so the
+				// null-`wrapOpenNewlineExpr` case (plain / no opt-in) is not
+				// spliced; the runtime `flatLength` gate keeps it byte-inert for a
+				// flat (non-broken) paren content and for non-keep configs (where
+				// the inner does not source-break). `_keepFlatInner` (operand of a
+				// kept chain) is excluded by the outer ternary below.
+				final keepOpenGate: Expr = wrapOpenNewlineExpr != null
+					? macro ($wrapOpenNewlineExpr && anyparse.format.wrap.WrapList.flatLength(_wrapInner) < 0)
+					: macro false;
+				return macro {
+					final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+					final _wrapInner: anyparse.core.Doc = $innerDoc;
+					final _wrapTrail: anyparse.core.Doc = $trailDoc;
+					// ω-keep-chain (increment: opadd_chain_keep): when this expr
+					// paren is an operand of a `WrapMode.Keep` chain
+					// (`opt._keepFlatInner`, set on the leaf-operand opt at the
+					// chain emit), the kept chain preserves source line structure
+					// verbatim — its operand lines may exceed `lineWidth`. The
+					// inner paren must therefore stay GLUED `(<inner>)`
+					// UNCONDITIONALLY, NOT re-open via the width-driven
+					// `IfFullLineExceeds` probe below (which would force
+					// `(\n\tHardFlatten(inner)\n)`). Mirrors fork `keep2`'s
+					// `noLineEndBefore` lock on operand-interior boundaries.
+					// Byte-identical to the existing GLUED flat side, so a
+					// standalone expr paren (flag false) is byte-inert.
+					opt._keepFlatInner
+						? _dc([$leadDoc, _wrapInner, _wrapTrail])
+						: anyparse.format.wrap.WrapList.startsWithHardline(_wrapInner)
+							? _dg(_dib($hardlineOpenShape, _dc([$leadDoc, _wrapInner, _wrapTrail])))
+							: $keepOpenGate
+								? _dc([$leadDoc, _dn(_cols, _dc([_dhl(), _wrapInner])), _dhl(), _wrapTrail])
+								: anyparse.format.wrap.WrapList.isPureOpAddSubChain(_wrapInner)
+									? (
+										opt._parenInCondition
+											&& anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
+											? _dfle(
+												opt.lineWidth, _dc([
+													$leadDoc,
+													_dn(_cols, _dc([_dhl(), _wrapInner])),
+													_dhl(),
+													_wrapTrail
+												]),
+												_dc([$leadDoc, _wrapInner, _wrapTrail])
+											)
+											: _dfle(
+												opt.lineWidth, _dc([
+													$leadDoc,
+													_dn(_cols, _dc([_dhl(), _dcp(_dhf(_wrapInner))])),
+													_dhl(),
+													_wrapTrail
+												]),
+												_dc([$leadDoc, _wrapInner, _wrapTrail])
+											)
+									)
+									: anyparse.format.wrap.WrapList.isTopLevelTernary(_wrapInner)
+										? _dc([$leadDoc, _wrapInner, _wrapTrail])
+										: _dfle(
+											opt.lineWidth, _dc([
+												$leadDoc,
+												_dn(_cols, _dc([_dhl(), _dcp(_wrapInner)])),
+												_dhl(),
+												_wrapTrail
+											]),
+											_dc([$leadDoc, _wrapInner, _wrapTrail])
+										);
+				};
+			}
+			// omega-paren-wrap-source-newline: when the ctor opted into
+			// `@:fmt(captureWrapOpenNewline)` and the parser captured a
+			// source `\n` between open delim and inner sub-rule's first
+			// token, route the break shape to `(\n<inner>\n)` (open
+			// followed by hardline + close on its own line). The inner's
+			// own leading `OptHardlineSkipAtOpenDelim` collides with the
+			// freshly-emitted hardline and drops via the renderer's
+			// hardline-collision branch -- net output is `(\n<item0>\n…\n)`.
+			// When the source had no leading newline (or the ctor didn't
+			// opt in / plain mode), fall back to the pre-slice shape
+			// `(<inner>\n)` from the chain emit's open-delim glue.
+			return wrapOpenNewlineExpr != null
+				? macro {
+					final _wrapInner: anyparse.core.Doc = $innerDoc;
+					final _wrapTrail: anyparse.core.Doc = $trailDoc;
+					anyparse.format.wrap.WrapList.startsWithHardline(_wrapInner)
+						? _dg(_dib(
+							$wrapOpenNewlineExpr
+								? _dc([$leadDoc, _dhl(), _wrapInner, _dhl(), _wrapTrail])
+								: _dc([$leadDoc, _wrapInner, _dhl(), _wrapTrail]),
+							_dc([$leadDoc, _wrapInner, _wrapTrail])
+						))
+						: _dc([$leadDoc, _wrapInner, _wrapTrail]);
+				}
+				: macro {
+					final _wrapInner: anyparse.core.Doc = $innerDoc;
+					final _wrapTrail: anyparse.core.Doc = $trailDoc;
+					anyparse.format.wrap.WrapList.startsWithHardline(_wrapInner)
+						? _dg(_dib(_dc([$leadDoc, _wrapInner, _dhl(), _wrapTrail]), _dc([$leadDoc, _wrapInner, _wrapTrail])))
+						: _dc([$leadDoc, _wrapInner, _wrapTrail]);
+				};
+		}
+
+		final case3Doc: Expr = if (parts.length == 1)
+			parts[0]
+		else
+			dcCall(parts);
+		// ω-cond-indent-policy FixedZero/AlignedDecrease: a cond-comp ctor
+		// opting into `@:fmt(conditionalMarkerDedent)` (the `#if … #end`
+		// `HxStatement`/`HxClassMember`/`HxDecl` `Conditional` ctors) wraps
+		// its whole construct Doc in a render-time marker scope:
+		//  - `FixedZero` → `_dcmz` (ConditionalMarkerZero): every `#`-leading
+		//    fresh line (`#if`/`#elseif`/`#else`/`#end`, incl. nested ones)
+		//    flushes at column 0 while body content keeps its frame indent.
+		//  - `AlignedDecrease` → `_dcmd` (ConditionalMarkerDecrease): EVERY
+		//    fresh line (markers AND body) shifts one indent level shallower,
+		//    moving the increase-style body accumulation (already applied via
+		//    `condIncreaseGateExpr`, which also fires for `AlignedDecrease`)
+		//    `-1` uniformly.
+		// Every other policy (`Aligned` default, `AlignedIncrease`, …) leaves
+		// the ctor unwrapped → byte-identical.
+		return branch.fmtHasFlag('conditionalMarkerDedent')
+			? macro (opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.FixedZero
+				? _dcmz($case3Doc)
+				: (opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedDecrease ? _dcmd($case3Doc) : $case3Doc))
+			: case3Doc;
 	}
 
 }
