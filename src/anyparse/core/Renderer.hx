@@ -1486,73 +1486,9 @@ class Renderer {
 		var aborted: Bool = false;
 		while (stack.length > 0 && !aborted) {
 			final node: Doc = stack.pop();
-			switch (node) {
-				case Empty:
-				case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
-					aborted = true;
-				case Text(s):
-					total += s.length;
-				case Line(flat):
-					if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) {
-						aborted = true;
-					} else {
-						total += flat.length;
-					}
-				case Nest(_, inner):
-					stack.push(inner);
-				case Concat(items):
-					var i: Int = items.length;
-					while (--i >= 0) stack.push(items[i]);
-				case Group(inner) | GroupWithRestProbe(inner):
-					stack.push(inner);
-				case BodyGroup(_):
-					// Defer — BG decides its own flat/break independently.
-				case IfBreak(_, flatDoc):
-					stack.push(flatDoc);
-				case IfWidthExceeds(_, _, flatDoc):
-					stack.push(flatDoc);
-				case IfFirstLineExceeds(_, _, flatDoc):
-					stack.push(flatDoc);
-				case IfLineExceeds(_, _, flatDoc):
-					stack.push(flatDoc);
-				case IfFullLineExceeds(_, _, flatDoc):
-					stack.push(flatDoc);
-				case IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc) | IfArrowContinuationFits(
-					_, _, _, _, flatDoc
-				):
-					// Forward to flat side: the natural-first-line probe
-					// is a render-time decision; this static flat walk
-					// (the flat-side measurer of the sibling
-					// `IfFirstLineExceeds`) sees only the flat shape.
-					stack.push(flatDoc);
-				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
-					var k: Int = items.length;
-					while (k > 0) {
-						k--;
-						stack.push(items[k]);
-						if (k > 0)
-							stack.push(sep);
-					}
-				case OptSpace(s):
-					total += s.length;
-				case OptSpaceSkipAfterHardline:
-					total += 1;
-				case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(
-					inner
-				) | CollapseChainProbe(inner):
-					// ω-force-flat-engine slice A: transparent to first-
-					// line walk. All four markers are render-time state; the
-					// static first-line probe sees only structural width.
-					stack.push(inner);
-				case ConditionalMarkerZero(inner):
-					// ω-cond-indent-policy FixedZero: render-time marker,
-					// transparent to the first-line walk — descend `inner`.
-					stack.push(inner);
-				case ConditionalMarkerDecrease(inner):
-					// ω-cond-indent-policy AlignedDecrease: render-time marker,
-					// transparent to the first-line walk — descend `inner`.
-					stack.push(inner);
-			}
+			final step: { add: Int, aborted: Bool } = flatFirstLineStep(node, stack);
+			total += step.add;
+			aborted = step.aborted;
 		}
 		return total;
 	}
@@ -2582,6 +2518,59 @@ class Renderer {
 			return true;
 		}
 		return false;
+	}
+
+	/**
+	 * One step of `flatTokenWidthFirstLine`'s walk. Pushes structural children
+	 * onto `stack`. Returns the flat width contributed by `node` and whether
+	 * the first line is terminated (a hardline was reached).
+	 */
+	private static function flatFirstLineStep(node: Doc, stack: Array<Doc>): { add: Int, aborted: Bool } {
+		switch (node) {
+			case Empty | BodyGroup(_):
+				// Empty contributes nothing; BodyGroup is deferred — it decides
+				// its own flat/break independently.
+				return { add: 0, aborted: false };
+			case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
+				return { add: 0, aborted: true };
+			case Text(s):
+				return { add: s.length, aborted: false };
+			case OptSpace(s):
+				return { add: s.length, aborted: false };
+			case OptSpaceSkipAfterHardline:
+				return { add: 1, aborted: false };
+			case Line(flat):
+				if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) return { add: 0, aborted: true };
+				return { add: flat.length, aborted: false };
+			case Concat(items):
+				var i: Int = items.length;
+				while (--i >= 0) stack.push(items[i]);
+				return { add: 0, aborted: false };
+			case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
+				var k: Int = items.length;
+				while (k > 0) {
+					k--;
+					stack.push(items[k]);
+					if (k > 0) stack.push(sep);
+				}
+				return { add: 0, aborted: false };
+			case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner) | IfBreak(_, inner) | IfWidthExceeds(_, _, inner) | IfFirstLineExceeds(
+				_, _, inner
+			) | IfLineExceeds(_, _, inner) | IfFullLineExceeds(_, _, inner) | IfNaturalFirstLineExceeds(_, _, inner) | IfNaturalFirstLineFitsOpenDelim(
+				_, _, inner
+			) | IfArrowContinuationFits(_, _, _, _, inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(
+				inner
+			) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(
+				inner
+			):
+				// Single-child transparent descend: structural wrappers (Nest /
+				// Group), the flat side of every render-time `If*` probe, the
+				// force-flat markers, and the cond-indent markers all contribute
+				// no width of their own to the static first-line walk — descend
+				// into the one inner doc.
+				stack.push(inner);
+				return { add: 0, aborted: false };
+		}
 	}
 
 }
